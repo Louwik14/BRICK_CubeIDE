@@ -57,6 +57,29 @@ typedef struct
     uint8_t sampler_slice_mode_active;
 } audio_binding_snapshot_t;
 
+/* Value-only install command extracted from the transient scheduler event.
+ * It is suitable for a prepared bulk plan and contains no queue metadata. */
+typedef struct
+{
+    brick_entity_id_t entity_id;
+    uint8_t family;
+    uint8_t type;
+    uint8_t midi_channel_1_16;
+    uint8_t midi_source;
+    uint8_t flags;
+    uint8_t voice_count;
+    uint8_t reserved;
+    float voice_spread;
+} audio_note_engine_install_spec_t;
+
+#if defined(__cplusplus)
+static_assert(sizeof(audio_note_engine_install_spec_t) == 12U,
+              "prepared binding install ABI changed");
+#else
+_Static_assert(sizeof(audio_note_engine_install_spec_t) == 12U,
+               "prepared binding install ABI changed");
+#endif
+
 void audio_note_engine_adapter_init(void);
 void audio_note_engine_adapter_audio_publish_snapshot(void);
 void audio_note_engine_adapter_audio_publish_snapshot_entity(
@@ -94,6 +117,13 @@ uint8_t audio_note_engine_adapter_apply(
 
 void audio_note_engine_adapter_install_intent(
     const control_audio_event_t *event);
+uint8_t audio_note_engine_adapter_prepare_install_spec(
+    const control_audio_event_t *event,
+    audio_note_engine_install_spec_t *out_spec);
+track_runtime_engine_t audio_note_engine_adapter_choose_engine(
+    track_runtime_family_t family, track_runtime_type_t type);
+void audio_note_engine_adapter_install_prepared(
+    const audio_note_engine_install_spec_t *spec);
 uint8_t audio_note_engine_adapter_apply_polyphony(
     brick_entity_id_t entity_id, uint8_t voice_count, float spread);
 uint8_t audio_note_engine_adapter_set_mute(brick_entity_id_t entity_id,

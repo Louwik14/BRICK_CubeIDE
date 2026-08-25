@@ -160,6 +160,29 @@ uint8_t track_mute_set(uint8_t track, uint8_t muted)
     return 1U;
 }
 
+uint8_t track_mute_install_restored(uint8_t track,uint8_t muted)
+{
+    if (track >= SEQ_LANE_CAPACITY) return 0U;
+    uint8_t affected[BRICK_ENTITY_GROUP_CHILD_COUNT + 1U];
+    uint8_t affected_count=1U;affected[0]=track;
+    entity_topology_descriptor_t topology;
+    if ((entity_topology_get(track,&topology) != 0U)
+            && (topology.role == ENTITY_ROLE_GROUP_MASTER))
+        for (uint8_t member=0U;member<BRICK_ENTITY_GROUP_CHILD_COUNT;++member)
+        {
+            brick_entity_id_t child=BRICK_ENTITY_INVALID_ID;
+            if (entity_topology_group_child(track,member,&child) != 0U)
+                affected[affected_count++]=child;
+        }
+    track_sound_state_t *const sound=track_sound_state_get(track);
+    if (sound == NULL) return 0U;
+    sound->mix_mute=(muted != 0U)?1.0f:0.0f;
+    param_registry_control_shadow_set(track,PARAM_MIX_MUTE,sound->mix_mute);
+    for (uint8_t i=0U;i<affected_count;++i)
+        track_mute_transition_lane(affected[i],track_mute_is_effectively_muted(affected[i]));
+    return 1U;
+}
+
 uint8_t track_mute_should_suppress_note_on(uint8_t track)
 {
     return track_mute_is_effectively_muted(track);

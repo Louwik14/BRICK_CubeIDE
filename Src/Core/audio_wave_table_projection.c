@@ -143,3 +143,17 @@ void audio_wave_table_projection_publish_all(void)
     }
     audio_wave_table_projection_publish_entries(entries);
 }
+
+void audio_wave_table_projection_withdraw_slot(uint16_t wavetable_slot,
+                                               uint32_t generation)
+{
+    audio_wave_table_binding_t entries[AUDIO_WAVE_TABLE_BINDING_COUNT];
+    memcpy(entries, (const void *)g_audio_wave_table_projection.entry,
+           sizeof(entries));
+    for (uint16_t i = 0U; i < AUDIO_WAVE_TABLE_BINDING_COUNT; ++i)
+        if ((entries[i].wavetable_slot == wavetable_slot)
+            && (entries[i].generation == generation))
+            entries[i] = (audio_wave_table_binding_t){
+                .wavetable_slot = WAVETABLE_POOL_INVALID_SLOT };
+    audio_wave_table_projection_publish_entries(entries);
+}

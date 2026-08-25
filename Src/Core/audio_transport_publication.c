@@ -5,7 +5,7 @@
 #include "Seq/seq_runtime.h"
 #include "Storage/memory_layout.h"
 
-D3_IPC static audio_transport_publication_t g_audio_transport_publication;
+AUDIO_HOT static audio_transport_publication_t g_audio_transport_publication;
 
 void audio_transport_publication_init(void)
 {

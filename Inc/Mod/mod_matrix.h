@@ -42,7 +42,6 @@ typedef struct
 typedef struct
 {
     track_mod_matrix_slot_t slots[MOD_MATRIX_SLOT_COUNT];
-    float base_value[MOD_MATRIX_SLOT_COUNT];
     float min_value[MOD_MATRIX_SLOT_COUNT];
     float max_value[MOD_MATRIX_SLOT_COUNT];
     uint8_t multi_source[2][2];
@@ -88,12 +87,7 @@ uint8_t mod_matrix_set_slew_amount(uint8_t track, uint8_t op, float value);
 uint8_t mod_matrix_get_slew_amount(uint8_t track, uint8_t op, float *out_value);
 uint8_t mod_matrix_has_any_configured_route(void);
 uint8_t mod_matrix_track_has_configured_route(uint8_t track);
-uint8_t mod_matrix_track_has_configured_source(uint8_t track, mod_matrix_source_t source);
-uint8_t mod_matrix_source_has_active_route(uint8_t track,
-                                           mod_matrix_source_t source,
-                                           ui_track_family_t family,
-                                           ui_track_type_t type,
-                                           const track_audio_runtime_ctx_t *ctx);
+uint16_t mod_matrix_required_source_mask(uint8_t track);
 void mod_matrix_process_track(uint8_t track,
                               const track_audio_runtime_ctx_t *ctx,
                               const float source_values[MOD_MATRIX_SOURCE_COUNT],

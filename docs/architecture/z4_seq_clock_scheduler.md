@@ -1,21 +1,19 @@
-# Z4 — Séquence, clock et scheduler
+# Z4 - Sequence, clock, Note FX et evenements live
 
-Le séquenceur contient huit pistes identiques `0..7`. Chacune possède 64 steps avec trig, note, vélocité, durée, microtiming, roll et p-locks, plus un pool de 512 entrées. Il n'existe aucun modèle ou payload Special.
+`seq_model` contient seize lanes de 64 steps avec un pool de 512 p-locks par lane. Les lanes `0..7` sont top-level; `8..15` sont actives avec GROUP 7. Top-level/master portent jusqu'a huit PLAY par step, un child un seul. Seules les lanes actives sont jouees.
 
-La clock produit la cadence canonique; le scheduler transforme les occurrences en événements audio ou MIDI bornés. Live record, Note FX, output guard, mute, stop et panic partagent la même cardinalité de huit pistes.
+Chaque PLAY porte NOTE, VELOCITY, LENGTH et MICROTIMING avec masque de presence; une valeur absente herite de la base de lane. ROLL reste structurel. L'edition multi-step est atomique et une edition du playhead exige le gardien REC.
 
-L'Undo/Redo conserve huit transactions maximum pour les mutations structurelles de séquence. Une mutation no-op n'est pas enregistrée; une nouvelle mutation purge Redo. Paste prévalide destinations et capacité de pool, puis applique atomiquement. Les paramètres et modèles MIDI FX restent hors Undo/Redo, sans capture du runtime ni de ses overrides. Copy ne crée pas de transaction. Le remplacement réussi d'un Pattern ou Project invalide l'historique.
+Trois slots MIDI FX S1..S3 precedent un terminal explicite. Le terminal separe admissions internes et MIDI, ferme avant d'ouvrir au meme sample et conserve les retries Off. Le MIDI ne traverse pas l'admission des moteurs AUDIO.
 
-## Addendum 2026-08-05 - terminal et budget EUCLID
+Undo/Redo conserve huit transactions structurelles. No-op n'est pas capture, une nouvelle branche purge Redo, Copy ne cree pas de transaction et Paste pre-valide le pool avant mutation atomique. Pattern/Project reussis invalident l'historique.
 
-La chaine courante est source -> MIDI FX 1 -> MIDI FX 2 -> MIDI FX 3 ->
-terminal post-FX. Le stage 3 est un hand-off terminal explicite ; il n'existe
-pas de quatrième slot. Le terminal conserve au maximum 64 occurrences par
-piste, sépare les admissions internes et MIDI, mémorise les retries Off et
-expose son high-water.
+## Horodatage live
 
-Le scheduler et le pipeline refusent complètement une paire qui ne peut pas
-être admise, conservent les fermetures possédées lorsqu'un Off est refusé et
-traitent les fermetures avant les nouveaux On au même sample. Les compteurs et
-high-water sont disponibles pour la future mesure H743 ; aucune conclusion de
-charge CPU ou d'underrun n'est déduite sans cette mesure.
+Hall, USB MIDI Device, USB MIDI Host et encodeurs capturent TIM5 a l'ingestion avec un `ingress_serial` monotone. AUDIO convertit contre son ancrage SAI coherent et applique une garde fixe de 64 samples. La valeur effective n'est calculee qu'une fois.
+
+Hall publie un evenement fixe de 16 octets dans une FIFO bornee; Device conserve 128 paquets et Host 64. Les files rejettent deterministement le plus recent a saturation et incrementent leurs diagnostics.
+
+La file live AUDIO contient 31 occurrences fixes, triees par `(sample_time, ingress_serial)`. Une echeance future reste en attente; une echeance tardive est clampee au premier sample modifiable. Les deadlines live, sequence et Note FX segmentent le meme bloc audio. Aucun audio deja rendu n'est reecrit.
+
+Panic CC120/123 utilise une commande prioritaire separee et idempotente, invalide les anciennes epochs, ferme les admissions et retente toute fermeture refusee. Le Live Recording reutilise exactement l'heure effective entendue; la quantification ne modifie que la representation enregistree.

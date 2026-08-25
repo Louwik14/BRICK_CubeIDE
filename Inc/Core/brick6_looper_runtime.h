@@ -61,7 +61,7 @@ typedef struct
 
 void brick6_looper_runtime_init(void);
 void brick6_looper_runtime_service(uint32_t byte_budget);
-uint8_t brick6_looper_runtime_has_pending_sd_work(void);
+uint8_t brick6_looper_runtime_storage_has_pending_sd_work(void);
 void brick6_looper_runtime_notify_live_take_finalized(uint8_t track_id,
                                                       const char *wav_path,
                                                       uint32_t recorded_frames);
@@ -73,7 +73,8 @@ void brick6_looper_runtime_arm_live_record_start(uint8_t track_id,
                                                  uint8_t play_auto,
                                                  uint64_t request_sample);
 void brick6_looper_runtime_arm_record_stop(uint64_t request_sample);
-uint8_t brick6_looper_runtime_record_is_active_or_armed(void);
+/* Storage-side projection; never reads the AUDIO-owned Looper runtime. */
+uint8_t brick6_looper_runtime_storage_record_is_active_or_armed(void);
 uint8_t brick6_looper_runtime_get_record_capture_track(uint8_t *out_track);
 void brick6_looper_runtime_preroll_capture_from_irq(uint8_t track_id,
                                                     const int32_t *lr_interleaved,

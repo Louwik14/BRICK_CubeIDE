@@ -72,19 +72,44 @@ typedef struct
  * These buffers are CPU-managed, not DMA-owned. Keep them out of the D2 DMA
  * MPU window so startup remains within the explicit coverage check in main().
  */
-static AUDIO_COLD_SDRAM float g_sd_preview_ring[SD_PREVIEW_RING_FRAMES * 2U];
+static AUDIO_STORAGE_SHARED_SDRAM float
+    g_sd_preview_ring[SD_PREVIEW_RING_FRAMES * 2U];
 static AUDIO_COLD_SDRAM uint8_t g_sd_preview_io[SD_PREVIEW_IO_BYTES];
 STORAGE_STATE_SDRAM static sd_preview_ctx_t g_sd_preview;
 STORAGE_STATE_SDRAM static sd_preview_diag_t g_sd_preview_diag;
-static uint32_t g_sd_preview_ring_read;
-static uint32_t g_sd_preview_ring_write;
-static uint32_t g_sd_preview_ring_count;
+
+typedef struct
+{
+    volatile uint32_t epoch;
+    volatile uint32_t write_count;
+    volatile uint32_t read_count;
+    volatile float gain;
+    volatile uint8_t active;
+    uint8_t reserved[15];
+} sd_preview_ring_ipc_t;
+
+_Static_assert(sizeof(sd_preview_ring_ipc_t) == 32U,
+               "Preview ring IPC ABI changed");
+
+D3_IPC static sd_preview_ring_ipc_t g_sd_preview_ring_ipc;
 
 static void sd_preview_ring_reset(void)
 {
-    g_sd_preview_ring_read = 0U;
-    g_sd_preview_ring_write = 0U;
-    g_sd_preview_ring_count = 0U;
+    g_sd_preview_ring_ipc.active = 0U;
+    g_sd_preview_ring_ipc.write_count = 0U;
+    __DMB();
+    uint32_t epoch = g_sd_preview_ring_ipc.epoch + 1U;
+    if (epoch == 0U) epoch = 1U;
+    g_sd_preview_ring_ipc.epoch = epoch;
+    __DMB();
+}
+
+static uint32_t sd_preview_ring_producer_count(void)
+{
+    const uint32_t read_count = g_sd_preview_ring_ipc.read_count;
+    __DMB();
+    const uint32_t write_count = g_sd_preview_ring_ipc.write_count;
+    return (read_count <= write_count) ? (write_count - read_count) : 0U;
 }
 
 static void sd_preview_diag_record_open_fail(const char *path, FRESULT fr)
@@ -110,47 +135,39 @@ static void sd_preview_diag_record_open_fail(const char *path, FRESULT fr)
 
 static uint8_t sd_preview_ring_push(float left, float right)
 {
-    uint32_t primask = __get_PRIMASK();
-
-    __disable_irq();
-    if (g_sd_preview_ring_count >= SD_PREVIEW_RING_FRAMES)
-    {
-        __set_PRIMASK(primask);
+    const uint32_t write_count = g_sd_preview_ring_ipc.write_count;
+    const uint32_t read_count = g_sd_preview_ring_ipc.read_count;
+    if ((read_count <= write_count)
+            && ((write_count - read_count) >= SD_PREVIEW_RING_FRAMES))
         return 0U;
-    }
-
-    g_sd_preview_ring[g_sd_preview_ring_write * 2U] = left;
-    g_sd_preview_ring[g_sd_preview_ring_write * 2U + 1U] = right;
-    g_sd_preview_ring_write++;
-    if (g_sd_preview_ring_write >= SD_PREVIEW_RING_FRAMES)
-    {
-        g_sd_preview_ring_write = 0U;
-    }
-    g_sd_preview_ring_count++;
-    __set_PRIMASK(primask);
+    const uint32_t index = write_count % SD_PREVIEW_RING_FRAMES;
+    g_sd_preview_ring[index * 2U] = left;
+    g_sd_preview_ring[index * 2U + 1U] = right;
+    __DMB();
+    g_sd_preview_ring_ipc.write_count = write_count + 1U;
     return 1U;
 }
 
 static uint8_t sd_preview_ring_pop(float *left, float *right)
 {
-    uint32_t primask = __get_PRIMASK();
-
-    __disable_irq();
-    if ((g_sd_preview_ring_count == 0U) || (left == 0) || (right == 0))
+    static uint32_t consumer_epoch;
+    const uint32_t epoch = g_sd_preview_ring_ipc.epoch;
+    if (consumer_epoch != epoch)
     {
-        __set_PRIMASK(primask);
+        consumer_epoch = epoch;
+        g_sd_preview_ring_ipc.read_count = 0U;
+        __DMB();
+    }
+    const uint32_t read_count = g_sd_preview_ring_ipc.read_count;
+    const uint32_t write_count = g_sd_preview_ring_ipc.write_count;
+    __DMB();
+    if ((read_count == write_count) || (left == 0) || (right == 0))
         return 0U;
-    }
-
-    *left = g_sd_preview_ring[g_sd_preview_ring_read * 2U];
-    *right = g_sd_preview_ring[g_sd_preview_ring_read * 2U + 1U];
-    g_sd_preview_ring_read++;
-    if (g_sd_preview_ring_read >= SD_PREVIEW_RING_FRAMES)
-    {
-        g_sd_preview_ring_read = 0U;
-    }
-    g_sd_preview_ring_count--;
-    __set_PRIMASK(primask);
+    const uint32_t index = read_count % SD_PREVIEW_RING_FRAMES;
+    *left = g_sd_preview_ring[index * 2U];
+    *right = g_sd_preview_ring[index * 2U + 1U];
+    __DMB();
+    g_sd_preview_ring_ipc.read_count = read_count + 1U;
     return 1U;
 }
 
@@ -443,7 +460,7 @@ static uint8_t sd_preview_generate_one(float *out_l, float *out_r)
 
 static void sd_preview_fill_ring(void)
 {
-    while (g_sd_preview_ring_count < SD_PREVIEW_RING_FRAMES)
+    while (sd_preview_ring_producer_count() < SD_PREVIEW_RING_FRAMES)
     {
         float left = 0.0f;
         float right = 0.0f;
@@ -459,12 +476,16 @@ static void sd_preview_fill_ring(void)
         }
     }
 
-    if ((g_sd_preview.state == SD_PREVIEW_STATE_OPENING) && (g_sd_preview_ring_count != 0U))
+    if ((g_sd_preview.state == SD_PREVIEW_STATE_OPENING)
+            && (sd_preview_ring_producer_count() != 0U))
     {
         g_sd_preview.state = SD_PREVIEW_STATE_STREAMING;
+        g_sd_preview_ring_ipc.active = 1U;
+        __DMB();
     }
 
-    if ((g_sd_preview.stream_ended != 0U) && (g_sd_preview_ring_count == 0U))
+    if ((g_sd_preview.stream_ended != 0U)
+            && (sd_preview_ring_producer_count() == 0U))
     {
         g_sd_preview.state = SD_PREVIEW_STATE_STOPPING;
         sd_preview_clear_session(1U, 1U);
@@ -477,6 +498,7 @@ void sd_preview_init(void)
     g_sd_preview.state = SD_PREVIEW_STATE_IDLE;
     g_sd_preview.last_error = SD_PREVIEW_ERROR_NONE;
     g_sd_preview.gain = 1.0f;
+    g_sd_preview_ring_ipc.gain = 1.0f;
     sd_preview_ring_reset();
     sd_preview_reset_source_state();
 }
@@ -524,6 +546,8 @@ void sd_preview_set_gain(float gain)
     }
 
     g_sd_preview.gain = gain;
+    g_sd_preview_ring_ipc.gain = gain;
+    __DMB();
 }
 
 float sd_preview_get_gain(void)
@@ -715,8 +739,7 @@ uint8_t sd_preview_render_main(float *out_main_l, float *out_main_r, uint32_t fr
         return 0U;
     }
 
-    if ((g_sd_preview.state != SD_PREVIEW_STATE_OPENING)
-        && (g_sd_preview.state != SD_PREVIEW_STATE_STREAMING))
+    if (g_sd_preview_ring_ipc.active == 0U)
     {
         return 0U;
     }
@@ -731,7 +754,7 @@ uint8_t sd_preview_render_main(float *out_main_l, float *out_main_r, uint32_t fr
             break;
         }
 
-        const float gain = g_sd_preview.gain;
+        const float gain = g_sd_preview_ring_ipc.gain;
         out_main_l[i] += left * gain;
         out_main_r[i] += right * gain;
         mixed = 1U;

@@ -16,6 +16,7 @@ _Static_assert(sizeof(waveform_control_command_t) == 3U,
                "waveform CONTROL/AUDIO command must remain bounded and pointer-free");
 
 /* CONTROL producer: the most recent complete state supersedes older states. */
+void waveform_control_init(void);
 void waveform_control_publish(brick_entity_id_t entity_id,
                               uint8_t enabled,
                               uint8_t fast_refresh);

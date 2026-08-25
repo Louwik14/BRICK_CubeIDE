@@ -5,8 +5,8 @@
 #include "Sampler/multi_sample_index.h"
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_page_cache.h"
+#include "Sampler/sample_page_cache_port.h"
 #include "Sampler/sample_stream_manager.h"
-#include "Sampler/sample_stream_publish.h"
 #include "Sampler/sample_stream_transport.h"
 #include "Sampler/sample_cache.h"
 #include "Core/project_control.h"
@@ -394,10 +394,8 @@ static uint8_t multi_loader_bulk_prepare_plan_pages(
              page <= plan->range_last[range];
              ++page)
         {
-            if ((sample_page_cache_prepare_bulk_page_key_alloc(
-                     key, page, SAMPLE_PAGE_ALLOC_SLOT_PERMANENT) == 0U)
-                || (sample_page_cache_pin_page_key_alloc(
-                        key, page, SAMPLE_PAGE_ALLOC_SLOT_PERMANENT) == 0U))
+            if (sample_page_cache_port_reserve_pin(
+                    key, page, SAMPLE_PAGE_ALLOC_SLOT_PERMANENT) == 0U)
             {
                 return 0U;
             }
@@ -485,6 +483,11 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
         g_multi_load_diag.last_error = MULTI_SAMPLE_LOAD_ALREADY_READY;
         g_multi_load_diag.state = MULTI_SAMPLE_INSTRUMENT_READY;
         return MULTI_SAMPLE_LOAD_ALREADY_READY;
+    }
+    if (multi_sample_pool_get_state(instrument_id) == MULTI_SAMPLE_INSTRUMENT_RETIRING)
+    {
+        g_multi_load_diag.last_error = MULTI_SAMPLE_LOAD_SD_BUSY;
+        return MULTI_SAMPLE_LOAD_SD_BUSY;
     }
 
     if (multi_loader_bulk_runtime_stopped() == 0U)
@@ -611,11 +614,9 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
         const sample_audio_key_t key = sample_audio_key_multi(multi_sample_id);
         const wav_info_t info = multi_loader_wav_info_from_index_sample(sample);
         sample_stream_manager_release_key(key);
-        if (sample_page_cache_register_stream_sample_key(key,
-                                                        full_path,
-                                                        &info,
-                                                        sample->total_frames,
-                                                        sample->data_offset) == 0U)
+        if (sample_page_cache_port_register_path(key, full_path, &info,
+                                                sample->total_frames,
+                                                sample->data_offset) == 0U)
         {
             multi_loader_set_error(MULTI_SAMPLE_LOAD_REGISTER_FAIL, multi_sample_id);
             return MULTI_SAMPLE_LOAD_REGISTER_FAIL;
@@ -742,8 +743,7 @@ static void multi_loader_start_next_queued(void)
 static uint8_t multi_loader_bulk_read_batch(multi_sample_bulk_plan_t *plan,
                                             const multi_sample_desc_t *sample)
 {
-    sample_page_load_target_t targets[MULTI_SAMPLE_BULK_MAX_BATCH_PAGES];
-    sample_page_load_token_t tokens[MULTI_SAMPLE_BULK_MAX_BATCH_PAGES];
+    sample_stream_io_command_t commands[MULTI_SAMPLE_BULK_MAX_BATCH_PAGES];
     uint32_t batch_bytes = 0U;
     uint32_t target_count = 0U;
     uint32_t page = plan->next_page;
@@ -752,21 +752,27 @@ static uint8_t multi_loader_bulk_read_batch(multi_sample_bulk_plan_t *plan,
 
     while ((page <= range_last) && (target_count < MULTI_SAMPLE_BULK_MAX_BATCH_PAGES))
     {
-        sample_page_load_target_t target;
-        if (sample_page_cache_get_bulk_load_target_key(key, page, &target) == 0U)
-        {
-            return 0U;
-        }
-        const uint32_t bytes = target.frame_count * sample->block_align;
+        const uint32_t start_frame = page * sample->frames_per_page;
+        if (start_frame >= sample->total_frames) return 0U;
+        uint32_t frame_count = sample->total_frames - start_frame;
+        if (frame_count > sample->frames_per_page)
+            frame_count = sample->frames_per_page;
+        const uint32_t bytes = frame_count * sample->block_align;
         if ((bytes == 0U) || (bytes > MULTI_SAMPLE_BULK_READ_BYTES))
+            return 0U;
+        if ((target_count != 0U)
+            && (batch_bytes > (MULTI_SAMPLE_BULK_READ_BYTES - bytes)))
+            break;
+        sample_stream_io_command_t command;
+        if (sample_page_cache_port_prepare_page(
+                key, page, SAMPLE_PAGE_ALLOC_SLOT_PERMANENT, 0U,
+                &command) == 0U)
         {
+            for (uint32_t j = 0U; j < target_count; ++j)
+                sample_page_cache_port_abort(&commands[j]);
             return 0U;
         }
-        if ((target_count != 0U) && (batch_bytes > (MULTI_SAMPLE_BULK_READ_BYTES - bytes)))
-        {
-            break;
-        }
-        targets[target_count] = target;
+        commands[target_count] = command;
         batch_bytes += bytes;
         target_count++;
         page++;
@@ -779,45 +785,8 @@ static uint8_t multi_loader_bulk_read_batch(multi_sample_bulk_plan_t *plan,
 
     for (uint32_t i = 0U; i < target_count; ++i)
     {
-        if (sample_page_cache_begin_loading(&targets[i], &tokens[i]) == 0U)
-        {
-            for (uint32_t j = 0U; j < i; ++j)
-            {
-                (void)sample_page_cache_finish_loading(&tokens[j],
-                                                         SAMPLE_PAGE_FINISH_ERROR);
-            }
-            return 0U;
-        }
-    }
-
-    for (uint32_t i = 0U; i < target_count; ++i)
-    {
-        sample_page_stream_info_t stream_info;
-        if (sample_page_cache_get_stream_info_key(key, &stream_info) == 0U)
-        {
-            for (uint32_t j = i; j < target_count; ++j)
-            {
-                (void)sample_page_cache_finish_loading(&tokens[j],
-                                                         SAMPLE_PAGE_FINISH_ERROR);
-            }
-            return 0U;
-        }
-
-        sample_stream_io_command_t command;
-        if (sample_stream_io_command_init(&command,
-                                          &tokens[i],
-                                          &targets[i],
-                                          &stream_info) == 0U)
-        {
-            for (uint32_t j = i; j < target_count; ++j)
-            {
-                (void)sample_page_cache_finish_loading(&tokens[j],
-                                                       SAMPLE_PAGE_FINISH_ERROR);
-            }
-            return 0U;
-        }
         sample_stream_io_result_t result;
-        sample_stream_transport_execute_monocore(&command, &result);
+        sample_stream_transport_execute_monocore(&commands[i], &result);
         g_multi_load_diag.read_calls++;
         g_multi_load_diag.file_opens += result.file_opens;
         g_multi_load_diag.seeks += result.seeks;
@@ -832,14 +801,11 @@ static uint8_t multi_loader_bulk_read_batch(multi_sample_bulk_plan_t *plan,
             }
         }
         g_multi_load_diag.decode_cycles += result.decode_cycles;
-        const uint8_t published = sample_stream_publish_result(&result);
+        const uint8_t published = sample_page_cache_port_complete(&result);
         if ((result.load_result != SAMPLE_PAGE_LOAD_OK) || (published == 0U))
         {
             for (uint32_t j = i + 1U; j < target_count; ++j)
-            {
-                (void)sample_page_cache_finish_loading(&tokens[j],
-                                                         SAMPLE_PAGE_FINISH_ERROR);
-            }
+                sample_page_cache_port_abort(&commands[j]);
             return 0U;
         }
         if (plan->pages_remaining != 0U)

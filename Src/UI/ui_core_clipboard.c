@@ -84,7 +84,7 @@ static uint8_t ui_core_clipboard_note_fx_param_kind(param_id_t id, uint8_t *out_
 
 static uint8_t ui_core_clipboard_param_phase(param_id_t id)
 {
-    for (uint8_t order = 0U; order < 4U; ++order)
+    for (uint8_t order = 0U; order < 14U; ++order)
     {
         if (param_registry_get_audio_fx_param(order) == id)
         {

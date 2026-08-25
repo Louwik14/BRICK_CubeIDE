@@ -226,6 +226,10 @@ uint8_t track_runtime_tone_param_to_slot(track_runtime_type_t type,
                                          uint8_t *out_slot);
 track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_t *ctx);
 uint8_t track_runtime_is_track_prism_available(uint8_t track);
+track_runtime_family_t track_runtime_family_from_ui(ui_track_family_t family);
+track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type);
+uint8_t track_runtime_compute_flags(track_runtime_family_t family,
+                                    track_runtime_type_t type);
 
 #ifdef __cplusplus
 }

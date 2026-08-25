@@ -60,6 +60,9 @@ uint32_t sample_stream_io_active_reader_count(void);
 uint8_t sample_stream_io_set_read_chunk_kib(sample_stream_read_chunk_kib_t chunk_kib);
 sample_stream_read_chunk_kib_t sample_stream_io_get_read_chunk_kib(void);
 uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command);
+uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command,
+                                  float *decoded_frames,
+                                  uint32_t decoded_capacity_bytes);
 uint8_t sample_stream_io_poll(sample_stream_io_result_t *out_result);
 void sample_stream_io_cancel(void);
 uint8_t sample_stream_io_command_init(sample_stream_io_command_t *out_command,

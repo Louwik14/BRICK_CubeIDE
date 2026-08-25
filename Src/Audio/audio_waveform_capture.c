@@ -29,17 +29,17 @@ typedef struct
 } audio_waveform_capture_state_t;
 
 /* Full frames live outside scarce DTCM; AUDIO only keeps the state machine hot. */
-static CTRL_STATE int8_t g_scope_buffer[2][AUDIO_WAVEFORM_CAPTURE_FRAME_SAMPLES];
+static D3_IPC int8_t g_scope_buffer[2][AUDIO_WAVEFORM_CAPTURE_FRAME_SAMPLES];
 static AUDIO_HOT audio_waveform_capture_state_t g_capture;
-static CTRL_STATE volatile brick_entity_id_t g_requested_entity = BRICK_ENTITY_INVALID_ID;
-static CTRL_STATE volatile uint32_t g_publish_sequence;
-static CTRL_STATE volatile uint32_t g_generation;
-static CTRL_STATE volatile uint8_t g_published_buffer;
-static CTRL_STATE volatile brick_entity_id_t g_published_entity = BRICK_ENTITY_INVALID_ID;
-static CTRL_STATE volatile uint8_t g_published_valid;
-static CTRL_STATE volatile uint8_t g_published_triggered;
-static CTRL_STATE volatile uint8_t g_published_trigger_fraction_q8;
-static CTRL_STATE volatile uint8_t g_fast_refresh;
+static D3_IPC volatile brick_entity_id_t g_requested_entity = BRICK_ENTITY_INVALID_ID;
+static D3_IPC volatile uint32_t g_publish_sequence;
+static D3_IPC volatile uint32_t g_generation;
+static D3_IPC volatile uint8_t g_published_buffer;
+static D3_IPC volatile brick_entity_id_t g_published_entity = BRICK_ENTITY_INVALID_ID;
+static D3_IPC volatile uint8_t g_published_valid;
+static D3_IPC volatile uint8_t g_published_triggered;
+static D3_IPC volatile uint8_t g_published_trigger_fraction_q8;
+static D3_IPC volatile uint8_t g_fast_refresh;
 
 _Static_assert(sizeof(g_scope_buffer) == 3008U, "scope double buffer size changed");
 

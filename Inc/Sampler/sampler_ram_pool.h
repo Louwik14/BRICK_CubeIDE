@@ -21,6 +21,7 @@ typedef enum
     SAMPLER_RAM_SLOT_EMPTY = 0,
     SAMPLER_RAM_SLOT_LOADING,
     SAMPLER_RAM_SLOT_READY,
+    SAMPLER_RAM_SLOT_RETIRING,
     SAMPLER_RAM_SLOT_ERROR
 } sampler_ram_slot_state_t;
 
@@ -123,7 +124,16 @@ sampler_ram_result_t sampler_ram_pool_load_wav_at(uint16_t ram_slot,
 sampler_ram_result_t sampler_ram_pool_load_wav_auto(const char *path,
                                                     uint16_t *out_ram_slot,
                                                     uint16_t *out_global_slot);
+uint8_t sampler_ram_pool_load_async_begin(uint16_t ram_slot, const char *path);
+void sampler_ram_pool_load_async_service(void);
+uint8_t sampler_ram_pool_load_async_busy(void);
+uint8_t sampler_ram_pool_load_async_take_result(sampler_ram_result_t *out_result,
+                                                uint16_t *out_ram_slot,
+                                                uint16_t *out_global_slot,
+                                                const char **out_path);
 void sampler_ram_pool_clear(uint16_t ram_slot);
+void sampler_ram_pool_service_retire(void);
+void sampler_ram_pool_audio_ack_retire(uint16_t ram_slot, uint32_t generation);
 
 const sampler_ram_slot_t *sampler_ram_pool_get_slot(uint16_t ram_slot);
 sampler_ram_slot_state_t sampler_ram_pool_get_state(uint16_t ram_slot);

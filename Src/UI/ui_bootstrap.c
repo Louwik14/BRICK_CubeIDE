@@ -55,11 +55,11 @@ void ui_bootstrap_init(void)
     ui_page_manager_register(UI_PAGE_TEMPLATE_MOD, &g_ui_page_template_mod);
     ui_page_manager_register(UI_PAGE_TEMPLATE_KEYBOARD, &g_ui_page_template_keyboard);
     ui_page_manager_register(UI_PAGE_MIDI_FX, &g_ui_page_midi_fx);
+    ui_page_manager_register(UI_PAGE_AUDIO_FX, &g_ui_page_audio_fx);
     ui_page_manager_register(UI_PAGE_TEMPLATE_SEQ, &g_ui_page_template_seq);
     ui_page_manager_register(UI_PAGE_TEMPLATE_MACRO, &g_ui_page_template_macro);
     ui_page_manager_register(UI_PAGE_TEMPLATE_MIX, &g_ui_page_template_mix);
     ui_page_manager_register(UI_PAGE_TEMPLATE_PLAY, &g_ui_page_template_play);
-    ui_page_manager_register(UI_PAGE_RESERVED_LEGACY_SLOT, &g_ui_page_reserved_slot);
     ui_page_manager_register(UI_PAGE_AUDIO_REC, &g_ui_page_audio_rec);
     ui_page_manager_register(UI_PAGE_REC_EDIT, &g_ui_page_rec_edit);
     ui_page_manager_register(UI_PAGE_PATCH_ASSIGN, &g_ui_page_patch_assign);

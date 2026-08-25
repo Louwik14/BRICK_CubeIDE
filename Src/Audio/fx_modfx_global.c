@@ -1,36 +1,376 @@
 #include "Audio/fx_modfx_global.h"
-#include <limits.h>
+
 #include <math.h>
 #include <string.h>
-#include "Audio/deluge_tables.h"
+
 #include "Storage/memory_layout.h"
-#define RING 1024U
-#define MASK 1023U
-#define DAISY_N 2400U
-#define TEENSY_N 1115U
-typedef struct{int32_t l,r;} qst_t; typedef struct{float l,r;} fst_t;
-typedef union{qst_t q[RING];fst_t f[RING];float daisy[2][DAISY_N];int16_t teensy[2][TEENSY_N];float juno[512];} hist_t;
-typedef struct{float ff,fb,z;} jfilter_t;
-typedef struct{uint32_t w,phase,inc,jphase[2];int32_t depth,offset;float rate,feedback,dphase[2],dstep[2],ddelay,damp,jgain[2];jfilter_t jpre,jpost[2];uint16_t dw[2],tw[2];uint8_t model;} state_t;
-AUDIO_WARM static hist_t hist; AUDIO_WARM static state_t st;
-static inline int32_t addw(int32_t a,int32_t b){return(int32_t)((uint32_t)a+(uint32_t)b);} static inline int32_t shlw(int32_t a,unsigned n){return(int32_t)((uint32_t)a<<n);}
-static inline int32_t mul(int32_t a,int32_t b){return(int32_t)(((int64_t)a*b)>>32);} static inline int32_t mulr(int32_t a,int32_t b){return(int32_t)((((int64_t)a*b)+0x80000000LL)>>32);}
-static int32_t q(float x){if(x>=1)return INT32_MAX;if(x<=-1)return INT32_MIN;return(int32_t)(x*2147483647.f);} static int16_t q16(float x){if(x>=1)return INT16_MAX;if(x<=-1)return INT16_MIN;return(int16_t)(x*32767.f);}
-static int32_t sine(uint32_t p){uint32_t i=p>>24,f=(p>>8)&65535;return(int32_t)sineWaveSmall[i]*(int32_t)(65536-f)+(int32_t)sineWaveSmall[i+1]*(int32_t)f;}
-static int32_t triangle(uint32_t p){return p<0x80000000U?(int32_t)(2U*p+0x80000000U):(int32_t)((uint32_t)-2*p+0x7fffffffU);}
-static qst_t deluge_q(qst_t in,int32_t ll,int32_t lr,uint8_t dimension){uint32_t w=st.w;int32_t off=mul(511<<16,(st.offset>>1)+1073741824),amp=mul(off,st.depth)<<2,lfo[2]={ll,lr},ov[2];for(unsigned c=0;c<2;c++){int32_t d=mul(lfo[c],amp)+off;d=(int32_t)(((int64_t)d*71332)>>16);if(d<65536)d=65536;uint32_t frac=(uint32_t)d&65535,pos=(w-((uint32_t)d>>16))&MASK;int32_t s0=c?hist.q[pos].r:hist.q[pos].l,s1=c?hist.q[(pos-1)&MASK].r:hist.q[(pos-1)&MASK].l,b=(int32_t)(frac<<15),a=(int32_t)((65535U<<15)-(uint32_t)b),wet=addw(mulr(s0,a),mulr(s1,b));ov[c]=dimension?shlw(wet,2):shlw(wet,1);}hist.q[w]=in;st.w=(w+1)&MASK;return(qst_t){ov[0],ov[1]};}
-static fst_t deluge_f(fst_t in,float ll,float lr){uint32_t w=st.w;float oc=st.offset*(1.f/2147483648.f),dep=st.depth*(1.f/2147483648.f),off=511.f*(oc+1.f)*.25f,amp=off*dep*2.f,lfo[2]={ll,lr},ov[2];for(unsigned c=0;c<2;c++){float d=(off+lfo[c]*amp*.5f)*(160.f/147.f);if(d<1)d=1;uint32_t whole=(uint32_t)d,pos=(w-whole)&MASK;float frac=d-whole,s0=c?hist.f[pos].r:hist.f[pos].l,s1=c?hist.f[(pos-1)&MASK].r:hist.f[(pos-1)&MASK].l;ov[c]=s0+(s1-s0)*frac;}hist.f[w]=in;st.w=(w+1)&MASK;return(fst_t){ov[0],ov[1]};}
-static float dread(unsigned v,float d){uint32_t whole=(uint32_t)d,a=st.dw[v]+whole;if(a>=DAISY_N)a-=DAISY_N;uint32_t b=a+1;if(b>=DAISY_N)b=0;float x=hist.daisy[v][a];return x+(hist.daisy[v][b]-x)*(d-whole);}
-static float dengine(unsigned v,float in){float p=st.dphase[v]+st.dstep[v],s=st.dstep[v];if(p>1){p=2-p;s=-s;}else if(p< -1){p=-2-p;s=-s;}st.dphase[v]=p;st.dstep[v]=s;float out=dread(v,st.ddelay+p*st.damp);hist.daisy[v][st.dw[v]]=in+out*st.feedback;st.dw[v]=st.dw[v]?(uint16_t)(st.dw[v]-1):(DAISY_N-1);return out;}
-static fst_t daisy(fst_t in){float mono=(in.l+in.r)*.5f,a=dengine(0,mono),b=dengine(1,mono);return(fst_t){(a*.75f+b*.25f)*.5f,(a*.25f+b*.75f)*.5f};}
-static int16_t teensy(unsigned c,int16_t in,unsigned voices){uint32_t w=st.tw[c]+1;if(w>=TEENSY_N)w=0;st.tw[c]=(uint16_t)w;hist.teensy[c][w]=in;if(voices<=1)return 0;uint32_t spacing=TEENSY_N/(voices-1)-1,pos=w;int32_t sum=-(int32_t)in;for(unsigned k=0;k<voices;k++){sum+=hist.teensy[c][pos];pos=pos<spacing?pos+TEENSY_N-spacing:pos-spacing;}return(int16_t)(sum/(int32_t)voices);}
-static void jcoeff(jfilter_t*f,float hz){float k=tanf(3.14159265358979323846f*hz/48000.f),d=k+1.f;f->ff=k/d;f->fb=(k-1.f)/d;} static float jf(jfilter_t*f,float x){float y=f->ff*x+f->z;f->z=f->ff*x-f->fb*y;return y;}
-static void jcut(float x){float q=x*x;jcoeff(&st.jpre,2000.f+(23500.f-2000.f)*q);jcoeff(&st.jpost[0],6000.f+(23500.f-6000.f)*q);st.jpost[1].ff=st.jpost[0].ff;st.jpost[1].fb=st.jpost[0].fb;}
-static void jmode(float value){float s=value*2.9999f;unsigned mode=(unsigned)s;float f=s-mode;if(f<.1f&&mode>0){float x=.5f+f*5.f,a0=mode==1?1.f:.7071067811865475f,b0=mode==1?0.f:.7071067811865475f,a1=mode==1?.7071067811865475f:0.f,b1=mode==1?.7071067811865475f:1.f;st.jgain[0]=a0+(a1-a0)*x;st.jgain[1]=b0+(b1-b0)*x;jcut(1.f-x);}else if(f>.9f&&mode<2){float x=(f-.9f)*5.f,a0=mode==0?1.f:.7071067811865475f,b0=mode==0?0.f:.7071067811865475f,a1=.7071067811865475f,b1=.7071067811865475f;if(mode==1){a1=0;b1=1;}st.jgain[0]=a0+(a1-a0)*x;st.jgain[1]=b0+(b1-b0)*x;jcut(1.f-x);}else{st.jgain[0]=mode==0?1.f:(mode==1?.7071067811865475f:0.f);st.jgain[1]=mode==0?0.f:(mode==1?.7071067811865475f:1.f);float x=(f-.1f)*1.25f;if(x<0)x=0;if(x>1)x=1;jcut(x);}}
-static float jread(float p,float lo,float hi){float d=(lo+(hi-lo)*p)*48000.f;uint32_t b=(uint32_t)d;float f=d-b,a=hist.juno[(st.w+b)&511],z=hist.juno[(st.w+b+1)&511];return a+(z-a)*f;}
-static fst_t juno(fst_t in){float x=in.l+in.r,x2=x*x;x=x*(27.f+x2)/(27.f+9.f*x2);hist.juno[st.w]=jf(&st.jpre,x);st.w=(st.w-1)&511;st.jphase[0]+=45902U;st.jphase[1]+=77219U;float p0=fabsf((float)(int32_t)st.jphase[0]*(1.f/2147483648.f)),p1=fabsf((float)(int32_t)st.jphase[1]*(1.f/2147483648.f));float l=st.jgain[0]*jread(p0,.00154f,.00515f)+st.jgain[1]*jread(p1,.00154f,.00515f),r=st.jgain[0]*jread(1.f-p0,.00151f,.00540f)+st.jgain[1]*jread(1.f-p1,.00151f,.00540f);return(fst_t){jf(&st.jpost[0],l),jf(&st.jpost[1],r)};}
-static void refresh(void){if(st.model==FX_MODFX_DAISY_CHORUS){float o=st.offset*(1.f/2147483648.f),d=st.depth*(1.f/2147483648.f);if(d>.93f)d=.93f;st.ddelay=(.1f+(o+1.f)*3.95f)*48.f;st.damp=d*st.ddelay;for(unsigned i=0;i<2;i++){float sign=st.dstep[i]<0?-1.f:1.f;st.dstep[i]=sign*4.f*st.rate/48000.f;}}else if(st.model==FX_MODFX_JUNOLOGUE)jmode((st.offset*(1.f/2147483648.f)+1.f)*.5f);}
-void fx_modfx_global_init(void){memset(&st,0,sizeof st);memset(&hist,0,sizeof hist);st.feedback=.2f;fx_modfx_global_set_rate(.5f);st.depth=q(.5f);}
-void fx_modfx_global_set_model(uint8_t m){if(m>=FX_MODFX_MODEL_COUNT)m=0;if(st.model==m)return;st.w=st.phase=0;memset(&hist,0,sizeof hist);memset(st.dphase,0,sizeof st.dphase);memset(st.dstep,0,sizeof st.dstep);memset(st.dw,0,sizeof st.dw);memset(st.tw,0,sizeof st.tw);memset(&st.jpre,0,sizeof st.jpre);memset(st.jpost,0,sizeof st.jpost);st.jphase[0]=st.jphase[1]=0x80000000U;st.model=m;refresh();}
-void fx_modfx_global_set_rate(float v){if(v<.01f)v=.01f;if(v>12)v=12;st.rate=v;st.inc=(uint32_t)(v*(4294967296.f/48000.f));refresh();} void fx_modfx_global_set_depth(float v){if(v<0)v=0;if(v>1)v=1;st.depth=q(v);refresh();} void fx_modfx_global_set_feedback(float v){if(v<0)v=0;if(v>1)v=1;st.feedback=v;} void fx_modfx_global_set_offset(float v){if(v<0)v=0;if(v>1)v=1;st.offset=q(v*2-1);refresh();} uint8_t fx_modfx_global_is_active(void){return st.model!=0;}
-void fx_modfx_global_process_block(float*l,float*r,uint32_t n){if(!l||!r||!st.model)return;for(uint32_t i=0;i<n;i++){if(st.model==FX_MODFX_DAISY_CHORUS){fst_t x=daisy((fst_t){l[i],r[i]});l[i]=x.l;r[i]=x.r;}else if(st.model==FX_MODFX_JUNOLOGUE){fst_t x=juno((fst_t){l[i],r[i]});l[i]=x.l;r[i]=x.r;}else if(st.model==FX_MODFX_TEENSY_CHORUS){unsigned voices=1+(unsigned)((((uint64_t)(uint32_t)st.depth*7)+(1ULL<<30))>>31);l[i]=teensy(0,q16(l[i]),voices)*(1.f/32768.f);r[i]=teensy(1,q16(r[i]),voices)*(1.f/32768.f);}else{uint8_t dim=st.model==FX_MODFX_DELUGE_DIMENSION;int32_t lf=dim?triangle(st.phase):sine(st.phase);if(st.model==FX_MODFX_CHORUS_Q31||st.model==FX_MODFX_STEREO_CHORUS_Q31||dim){qst_t x=deluge_q((qst_t){q(l[i]),q(r[i])},lf,-lf,dim);l[i]=x.l*(1.f/2147483648.f);r[i]=x.r*(1.f/2147483648.f);}else{float f=lf*(1.f/2147483648.f);fst_t x=deluge_f((fst_t){l[i],r[i]},f,-f);l[i]=x.l;r[i]=x.r;}st.phase+=st.inc;}}}
+
+#define DAISY_RING_SIZE 1024U
+#define DAISY_RING_MASK (DAISY_RING_SIZE - 1U)
+#define JUNO_RING_SIZE 512U
+#define JUNO_RING_MASK (JUNO_RING_SIZE - 1U)
+#define DAISY_STEREO_FEEDBACK_TOTAL 0.95f
+
+/* At the exposed maxima: centre = 8 ms = 384 samples and
+ * modulation = 0.93 * 384 = 357.12 samples.  Linear interpolation
+ * therefore reads at most logical offsets 741 and 742. */
+_Static_assert(743U <= DAISY_RING_SIZE, "Daisy history cannot cover its maximum delay");
+
+typedef struct { float l, r; } stereo_float_t;
+
+typedef union {
+    float daisy[2][DAISY_RING_SIZE];
+    float juno[JUNO_RING_SIZE];
+} modfx_history_t;
+
+typedef struct { float ff, fb, z; } juno_filter_t;
+
+typedef struct {
+    float phase, step, delay, amplitude, feedback;
+    uint32_t write;
+} daisy_stereo_engine_t;
+
+typedef struct {
+    float rate_hz, depth, delay, feedback;
+} daisy_stereo_parameters_t;
+
+typedef struct {
+    uint32_t write, juno_phase[2];
+    int32_t offset;
+    daisy_stereo_engine_t daisy_stereo[2];
+    daisy_stereo_parameters_t daisy_stereo_target[2];
+    float daisy_stereo_matrix_main, daisy_stereo_matrix_main_target;
+    float juno_gain[2];
+    juno_filter_t juno_pre, juno_post[2];
+    uint8_t model;
+} modfx_state_t;
+
+AUDIO_WARM static modfx_history_t history;
+AUDIO_WARM static modfx_state_t state;
+
+static inline __attribute__((always_inline)) float lerp(float a, float b, float fraction)
+{
+    return a + (b - a) * fraction;
+}
+
+static inline __attribute__((always_inline)) float daisy_stereo_sample(
+    daisy_stereo_engine_t *engine, float *ring, float input,
+    float delay_increment, float amplitude_increment, float feedback_increment)
+{
+    float phase = engine->phase + engine->step;
+    float step = engine->step;
+    if (phase > 1.0f) {
+        phase = 2.0f - phase;
+        step = -step;
+    } else if (phase < -1.0f) {
+        phase = -2.0f - phase;
+        step = -step;
+    }
+    engine->phase = phase;
+    engine->step = step;
+    engine->delay += delay_increment;
+    engine->amplitude += amplitude_increment;
+    engine->feedback += feedback_increment;
+
+    const float delay = engine->delay + phase * engine->amplitude;
+    const uint32_t whole = (uint32_t)delay;
+    const uint32_t position = (engine->write + whole) & DAISY_RING_MASK;
+    const float output = lerp(ring[position],
+                              ring[(position + 1U) & DAISY_RING_MASK],
+                              delay - (float)whole);
+    ring[engine->write] = input + output * engine->feedback;
+    engine->write = (engine->write - 1U) & DAISY_RING_MASK;
+    return output;
+}
+
+static void daisy_stereo_set_feedback_target(float x)
+{
+    if (x < -1.0f) x = -1.0f;
+    if (x > 1.0f) x = 1.0f;
+    state.daisy_stereo_target[0].feedback =
+        0.5f * DAISY_STEREO_FEEDBACK_TOTAL * (1.0f - x);
+    state.daisy_stereo_target[1].feedback =
+        0.5f * DAISY_STEREO_FEEDBACK_TOTAL * (1.0f + x);
+}
+
+static void daisy_stereo_set_defaults(void)
+{
+    for (uint8_t engine = 0U; engine < 2U; ++engine) {
+        state.daisy_stereo_target[engine].rate_hz = 0.3f;
+        state.daisy_stereo_target[engine].depth = 0.9f;
+        state.daisy_stereo_target[engine].delay = 6.025f * 48.0f;
+    }
+    daisy_stereo_set_feedback_target(0.0f);
+    state.daisy_stereo_matrix_main = 0.75f;
+    state.daisy_stereo_matrix_main_target = 0.75f;
+    for (uint8_t engine = 0U; engine < 2U; ++engine) {
+        daisy_stereo_engine_t *const current = &state.daisy_stereo[engine];
+        const daisy_stereo_parameters_t *const target = &state.daisy_stereo_target[engine];
+        current->phase = 0.0f;
+        current->step = 4.0f * target->rate_hz / 48000.0f;
+        current->delay = target->delay;
+        current->amplitude = target->depth * target->delay;
+        current->feedback = target->feedback;
+        current->write = 0U;
+    }
+}
+
+static void juno_filter_coefficients(juno_filter_t *filter, float frequency)
+{
+    const float k = tanf(3.14159265358979323846f * frequency / 48000.0f);
+    const float denominator = k + 1.0f;
+    filter->ff = k / denominator;
+    filter->fb = (k - 1.0f) / denominator;
+}
+
+static inline __attribute__((always_inline)) float juno_filter(juno_filter_t *filter, float input)
+{
+    const float output = filter->ff * input + filter->z;
+    filter->z = filter->ff * input - filter->fb * output;
+    return output;
+}
+
+static void juno_cut(float value)
+{
+    const float squared = value * value;
+    juno_filter_coefficients(&state.juno_pre, 2000.0f + (23500.0f - 2000.0f) * squared);
+    juno_filter_coefficients(&state.juno_post[0], 6000.0f + (23500.0f - 6000.0f) * squared);
+    state.juno_post[1].ff = state.juno_post[0].ff;
+    state.juno_post[1].fb = state.juno_post[0].fb;
+}
+
+static void juno_mode(float value)
+{
+    const float scaled = value * 2.9999f;
+    const unsigned mode = (unsigned)scaled;
+    const float fraction = scaled - (float)mode;
+    if ((fraction < 0.1f) && (mode > 0U)) {
+        const float x = 0.5f + fraction * 5.0f;
+        const float a0 = (mode == 1U) ? 1.0f : 0.7071067811865475f;
+        const float b0 = (mode == 1U) ? 0.0f : 0.7071067811865475f;
+        const float a1 = (mode == 1U) ? 0.7071067811865475f : 0.0f;
+        const float b1 = (mode == 1U) ? 0.7071067811865475f : 1.0f;
+        state.juno_gain[0] = a0 + (a1 - a0) * x;
+        state.juno_gain[1] = b0 + (b1 - b0) * x;
+        juno_cut(1.0f - x);
+    } else if ((fraction > 0.9f) && (mode < 2U)) {
+        const float x = (fraction - 0.9f) * 5.0f;
+        const float a0 = (mode == 0U) ? 1.0f : 0.7071067811865475f;
+        const float b0 = (mode == 0U) ? 0.0f : 0.7071067811865475f;
+        float a1 = 0.7071067811865475f;
+        float b1 = 0.7071067811865475f;
+        if (mode == 1U) { a1 = 0.0f; b1 = 1.0f; }
+        state.juno_gain[0] = a0 + (a1 - a0) * x;
+        state.juno_gain[1] = b0 + (b1 - b0) * x;
+        juno_cut(1.0f - x);
+    } else {
+        state.juno_gain[0] = (mode == 0U) ? 1.0f
+            : ((mode == 1U) ? 0.7071067811865475f : 0.0f);
+        state.juno_gain[1] = (mode == 0U) ? 0.0f
+            : ((mode == 1U) ? 0.7071067811865475f : 1.0f);
+        float x = (fraction - 0.1f) * 1.25f;
+        if (x < 0.0f) x = 0.0f;
+        if (x > 1.0f) x = 1.0f;
+        juno_cut(x);
+    }
+}
+
+static inline __attribute__((always_inline)) float juno_read(float phase, float low, float high)
+{
+    const float delay = (low + (high - low) * phase) * 48000.0f;
+    const uint32_t whole = (uint32_t)delay;
+    return lerp(history.juno[(state.write + whole) & JUNO_RING_MASK],
+                history.juno[(state.write + whole + 1U) & JUNO_RING_MASK],
+                delay - (float)whole);
+}
+
+static inline __attribute__((always_inline)) stereo_float_t juno_sample(stereo_float_t input)
+{
+    float mono = input.l + input.r;
+    const float squared = mono * mono;
+    mono = mono * (27.0f + squared) / (27.0f + 9.0f * squared);
+    history.juno[state.write] = juno_filter(&state.juno_pre, mono);
+    state.write = (state.write - 1U) & JUNO_RING_MASK;
+    state.juno_phase[0] += 45902U;
+    state.juno_phase[1] += 77219U;
+    const float phase0 = fabsf((float)(int32_t)state.juno_phase[0]
+                               * (1.0f / 2147483648.0f));
+    const float phase1 = fabsf((float)(int32_t)state.juno_phase[1]
+                               * (1.0f / 2147483648.0f));
+    const float left = state.juno_gain[0] * juno_read(phase0, 0.00154f, 0.00515f)
+        + state.juno_gain[1] * juno_read(phase1, 0.00154f, 0.00515f);
+    const float right = state.juno_gain[0] * juno_read(1.0f - phase0, 0.00151f, 0.00540f)
+        + state.juno_gain[1] * juno_read(1.0f - phase1, 0.00151f, 0.00540f);
+    return (stereo_float_t){juno_filter(&state.juno_post[0], left),
+                            juno_filter(&state.juno_post[1], right)};
+}
+
+static void refresh(void)
+{
+    if (state.model == FX_MODFX_JUNOLOGUE) {
+        juno_mode((state.offset * (1.0f / 2147483648.0f) + 1.0f) * 0.5f);
+    }
+}
+
+void fx_modfx_global_init(void)
+{
+    memset(&state, 0, sizeof state);
+    memset(&history, 0, sizeof history);
+    daisy_stereo_set_defaults();
+}
+
+void fx_modfx_global_set_model(uint8_t model)
+{
+    if ((model != FX_MODFX_DAISY_STEREO) && (model != FX_MODFX_JUNOLOGUE))
+        model = FX_MODFX_OFF;
+    if (state.model == model) return;
+    state.write = 0U;
+    memset(&history, 0, sizeof history);
+    memset(&state.juno_pre, 0, sizeof state.juno_pre);
+    memset(state.juno_post, 0, sizeof state.juno_post);
+    state.juno_phase[0] = state.juno_phase[1] = 0x80000000U;
+    if (model == FX_MODFX_DAISY_STEREO) daisy_stereo_set_defaults();
+    state.model = model;
+    refresh();
+}
+
+void fx_modfx_global_set_rate(float value)
+{
+    if (value < 0.01f) value = 0.01f;
+    if (value > 12.0f) value = 12.0f;
+    state.daisy_stereo_target[0].rate_hz = value;
+}
+
+void fx_modfx_global_set_rate_b(float value)
+{
+    if (value < 0.01f) value = 0.01f;
+    if (value > 12.0f) value = 12.0f;
+    state.daisy_stereo_target[1].rate_hz = value;
+}
+
+void fx_modfx_global_set_depth(float value)
+{
+    if (value < 0.0f) value = 0.0f;
+    if (value > 0.93f) value = 0.93f;
+    state.daisy_stereo_target[0].depth = value;
+}
+
+void fx_modfx_global_set_depth_b(float value)
+{
+    if (value < 0.0f) value = 0.0f;
+    if (value > 0.93f) value = 0.93f;
+    state.daisy_stereo_target[1].depth = value;
+}
+
+void fx_modfx_global_set_feedback(float value)
+{
+    daisy_stereo_set_feedback_target(value);
+}
+
+void fx_modfx_global_set_offset(float value)
+{
+    if (state.model != FX_MODFX_JUNOLOGUE) {
+        if (value < 0.0f) value = 0.0f;
+        if (value > 1.0f) value = 1.0f;
+        state.daisy_stereo_target[0].delay = (0.1f + 7.9f * value) * 48.0f;
+        return;
+    }
+    if (value < 0.0f) value = 0.0f;
+    if (value > 1.0f) value = 1.0f;
+    state.offset = (int32_t)((value * 2.0f - 1.0f) * 2147483647.0f);
+    refresh();
+}
+
+void fx_modfx_global_set_offset_b(float value)
+{
+    if (value < 0.0f) value = 0.0f;
+    if (value > 1.0f) value = 1.0f;
+    state.daisy_stereo_target[1].delay = (0.1f + 7.9f * value) * 48.0f;
+}
+
+void fx_modfx_global_set_width(float value)
+{
+    if (value < 0.0f) value = 0.0f;
+    if (value > 1.0f) value = 1.0f;
+    state.daisy_stereo_matrix_main_target = 0.5f + 0.5f * value;
+}
+
+uint8_t fx_modfx_global_is_active(void) { return state.model != FX_MODFX_OFF; }
+
+void fx_modfx_global_process_block(float *left, float *right, uint32_t frames)
+{
+    if ((left == NULL) || (right == NULL) || (frames == 0U)
+        || (state.model == FX_MODFX_OFF)) return;
+    switch (state.model) {
+        case FX_MODFX_DAISY_STEREO: {
+            float delay_increment[2];
+            float amplitude_increment[2];
+            float feedback_increment[2];
+            const float inverse_frames = 1.0f / (float)frames;
+            const float matrix_main_increment =
+                (state.daisy_stereo_matrix_main_target
+                 - state.daisy_stereo_matrix_main) * inverse_frames;
+            for (uint8_t engine = 0U; engine < 2U; ++engine) {
+                daisy_stereo_engine_t *const current = &state.daisy_stereo[engine];
+                const daisy_stereo_parameters_t *const target =
+                    &state.daisy_stereo_target[engine];
+                const float target_amplitude = target->depth * target->delay;
+                delay_increment[engine] = (target->delay - current->delay) * inverse_frames;
+                amplitude_increment[engine] =
+                    (target_amplitude - current->amplitude) * inverse_frames;
+                feedback_increment[engine] =
+                    (target->feedback - current->feedback) * inverse_frames;
+                const float sign = (current->step < 0.0f) ? -1.0f : 1.0f;
+                current->step = sign * 4.0f * target->rate_hz / 48000.0f;
+            }
+            for (uint32_t i = 0U; i < frames; ++i) {
+                const float mono = (left[i] + right[i]) * 0.5f;
+                const float wet_a = daisy_stereo_sample(
+                    &state.daisy_stereo[0], history.daisy[0], mono,
+                    delay_increment[0], amplitude_increment[0], feedback_increment[0]);
+                const float wet_b = daisy_stereo_sample(
+                    &state.daisy_stereo[1], history.daisy[1], mono,
+                    delay_increment[1], amplitude_increment[1], feedback_increment[1]);
+                state.daisy_stereo_matrix_main += matrix_main_increment;
+                const float matrix_cross = 1.0f - state.daisy_stereo_matrix_main;
+                left[i] = (state.daisy_stereo_matrix_main * wet_a
+                           + matrix_cross * wet_b) * 0.5f;
+                right[i] = (matrix_cross * wet_a
+                            + state.daisy_stereo_matrix_main * wet_b) * 0.5f;
+            }
+            for (uint8_t engine = 0U; engine < 2U; ++engine) {
+                state.daisy_stereo[engine].delay = state.daisy_stereo_target[engine].delay;
+                state.daisy_stereo[engine].amplitude =
+                    state.daisy_stereo_target[engine].depth
+                    * state.daisy_stereo_target[engine].delay;
+                state.daisy_stereo[engine].feedback =
+                    state.daisy_stereo_target[engine].feedback;
+            }
+            state.daisy_stereo_matrix_main = state.daisy_stereo_matrix_main_target;
+            break;
+        }
+        case FX_MODFX_JUNOLOGUE:
+            for (uint32_t i = 0U; i < frames; ++i) {
+                const stereo_float_t output = juno_sample(
+                    (stereo_float_t){left[i], right[i]});
+                left[i] = output.l;
+                right[i] = output.r;
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+#if defined(BRICK6_DAISY_STEREO_TEST)
+void fx_modfx_global_daisy_stereo_debug(fx_modfx_daisy_stereo_debug_t *out)
+{
+    if (out == NULL) return;
+    for (uint8_t engine = 0U; engine < 2U; ++engine) {
+        out->rate_hz[engine] = state.daisy_stereo_target[engine].rate_hz;
+        out->depth[engine] = state.daisy_stereo_target[engine].depth;
+        out->delay_samples[engine] = state.daisy_stereo_target[engine].delay;
+        out->feedback[engine] = state.daisy_stereo_target[engine].feedback;
+    }
+}
+#endif

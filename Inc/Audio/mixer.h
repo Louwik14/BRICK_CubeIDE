@@ -67,6 +67,9 @@ void mixer_set_track_pan(uint32_t track_id, float pan);
 void mixer_set_track_mute(uint32_t track_id, uint8_t mute);
 uint8_t mixer_get_track_mute(uint32_t track_id);
 void mixer_set_track_send_level(uint32_t track_id, uint32_t send_idx, float level);
+void mixer_set_track_group_fx_level(uint32_t track_id,
+                                    uint32_t slot,
+                                    float level);
 void mixer_set_send_fx_slot(uint32_t send_idx, int8_t slot);
 void mixer_set_reverb_wet(float wet);
 void mixer_set_reverb_room_size(float room_size);

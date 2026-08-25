@@ -5,8 +5,8 @@
 
 #include "Storage/memory_layout.h"
 #include "Storage/sd_access_gate.h"
-#include "Storage/wav_audio_codec.h"
 #include "Sampler/sample_page_cache.h"
+#include "Sampler/sample_page_cache_port.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Sampler/sample_stream_needs.h"
 #include "Sampler/sample_stream_snapshot.h"
@@ -14,7 +14,6 @@
 #include "ff.h"
 
 #define SAMPLE_CACHE_MAX_VOICES (16U)
-#define SAMPLE_CACHE_IO_BYTES (4096U)
 #define SAMPLE_CACHE_STREAM_START_PAGES SAMPLE_PAGE_CLASSIC_FORWARD_WINDOW_PAGES
 #define SAMPLE_CACHE_STREAM_TAIL_PAGES SAMPLE_PAGE_CLASSIC_REVERSE_WINDOW_PAGES
 #define SAMPLE_CACHE_STREAM_FORWARD_LOOKAHEAD_PAGES SAMPLE_PAGE_CLASSIC_FORWARD_LOOKAHEAD_PAGES
@@ -25,7 +24,6 @@
 SDRAM_CLASSIC_POOL static sample_cache_desc_t g_sample_cache[SAMPLE_CACHE_HOT_SAMPLE_CAPACITY];
 static AUDIO_HOT sample_cache_voice_t g_sample_cache_voice[SAMPLE_CACHE_MAX_VOICES];
 static AUDIO_HOT sample_voice_reader_t g_sample_cache_readers[SAMPLE_CACHE_MAX_VOICES];
-static AUDIO_WARM uint8_t g_sample_cache_io_storage[SAMPLE_CACHE_IO_BYTES + 1U];
 static CTRL_STATE FRESULT g_sample_cache_last_fresult[SAMPLE_CACHE_HOT_SAMPLE_CAPACITY];
 static CTRL_STATE uint32_t g_sample_cache_voice_generation_counter;
 static uint8_t g_sample_cache_stream_gate_held;
@@ -80,16 +78,6 @@ static uint8_t sample_cache_stream_window_ready(uint16_t sample_id,
                                                 const sample_cache_desc_t *desc,
                                                 uint32_t frame_index,
                                                 int8_t direction);
-
-static uint8_t *sample_cache_io_buffer(void)
-{
-    /*
-     * Keep FatFs on the diskio scratch-buffer path. The preview path works
-     * through a non-direct destination; this avoids the direct multi-block DMA
-     * path for sample import while still decoding into the SDRAM cache after IO.
-     */
-    return &g_sample_cache_io_storage[1U];
-}
 
 static void sample_cache_clear_desc(sample_cache_desc_t *desc)
 {
@@ -350,7 +338,7 @@ static void sample_cache_release_slot(uint16_t sample_id)
 
     sample_cache_invalidate_voices_for_sample(sample_id);
     sample_stream_manager_release_sample(sample_id);
-    sample_page_cache_clear_sample(sample_id);
+    sample_page_cache_port_clear(sample_audio_key_classic(sample_id));
 }
 
 static uint8_t sample_cache_try_prepare_full_via_page_cache(uint16_t sample_id,
@@ -364,14 +352,10 @@ static uint8_t sample_cache_try_prepare_full_via_page_cache(uint16_t sample_id,
     }
 
     const sample_page_load_result_t page_result =
-        sample_page_cache_load_full_sample_key_alloc(sample_audio_key_classic(sample_id),
-                                                     fp,
-                                                     &desc->info,
-                                                     desc->total_frames,
-                                                     desc->data_offset,
-                                                     sample_cache_io_buffer(),
-                                                     SAMPLE_CACHE_IO_BYTES,
-                                                     SAMPLE_PAGE_ALLOC_SLOT_PERMANENT);
+        sample_page_cache_port_load_full(sample_audio_key_classic(sample_id),
+                                         desc->path, fp, &desc->info,
+                                         desc->total_frames, desc->data_offset,
+                                         SAMPLE_PAGE_ALLOC_SLOT_PERMANENT);
     if (page_result != SAMPLE_PAGE_LOAD_OK)
     {
         switch (page_result)
@@ -404,7 +388,7 @@ static uint8_t sample_cache_try_prepare_full_via_page_cache(uint16_t sample_id,
     const float *const full_base = sample_page_cache_get_full_sample_base(sample_id, &cached_frames);
     if ((full_base == 0) || (cached_frames < desc->total_frames))
     {
-        sample_page_cache_clear_sample(sample_id);
+        sample_page_cache_port_clear(sample_audio_key_classic(sample_id));
         desc->last_error = 12U;
         g_sample_cache_last_fresult[sample_id] = FR_INT_ERR;
         return 0U;
@@ -433,7 +417,7 @@ static uint8_t sample_cache_prepare_partial_via_page_cache(uint16_t sample_id,
         return 0U;
     }
 
-    if (sample_page_cache_register_stream_sample_key_from_file(
+    if (sample_page_cache_port_register_file(
             sample_audio_key_classic(sample_id),
             desc->path,
             &desc->info,
@@ -545,16 +529,9 @@ static uint8_t sample_cache_request_pin_page_span(uint16_t sample_id,
 
     for (uint32_t page_index = span->page_start; page_index <= span->page_end; ++page_index)
     {
-        if (sample_page_cache_reserve_page_key_alloc(
-                sample_audio_key_classic(sample_id),
-                page_index,
+        if (sample_page_cache_port_reserve_pin(
+                sample_audio_key_classic(sample_id), page_index,
                 SAMPLE_PAGE_ALLOC_MARGIN) == 0U)
-        {
-            return 0U;
-        }
-        if (sample_page_cache_pin_page_key_alloc(sample_audio_key_classic(sample_id),
-                                                 page_index,
-                                                 SAMPLE_PAGE_ALLOC_MARGIN) == 0U)
         {
             return 0U;
         }
@@ -1064,11 +1041,10 @@ static uint8_t sample_cache_reprepare_window(uint16_t sample_id, uint32_t byte_b
     desc->stream_active = 0U;
     desc->last_error = 0U;
 
-    if (sample_page_cache_register_stream_sample(sample_id,
-                                                 desc->path,
-                                                 &desc->info,
-                                                 desc->total_frames,
-                                                 desc->data_offset) == 0U)
+    if (sample_page_cache_port_register_path(sample_audio_key_classic(sample_id),
+                                             desc->path, &desc->info,
+                                             desc->total_frames,
+                                             desc->data_offset) == 0U)
     {
         desc->state = SAMPLE_CACHE_ERROR;
         desc->last_error = 12U;
@@ -1084,9 +1060,8 @@ static uint8_t sample_cache_reprepare_window(uint16_t sample_id, uint32_t byte_b
          i < sample_audio_format_presocle_pages(desc->format);
          ++i)
     {
-        if (sample_page_cache_reserve_page_key_alloc(cache_key,
-                                                     first_page + i,
-                                                     SAMPLE_PAGE_ALLOC_MARGIN) == 0U)
+        if (sample_page_cache_port_reserve(cache_key, first_page + i,
+                                          SAMPLE_PAGE_ALLOC_MARGIN) == 0U)
         {
             pages_reserved = 0U;
             break;
@@ -1098,16 +1073,15 @@ static uint8_t sample_cache_reprepare_window(uint16_t sample_id, uint32_t byte_b
         desc->last_error = 8U;
         return 0U;
     }
-    if (sample_page_cache_pin_page_key_alloc(sample_audio_key_classic(sample_id),
-                                                      sample_audio_format_page_index_from_frame(
-                                                          desc->format, start_frame),
-                                             SAMPLE_PAGE_ALLOC_MARGIN) == 0U)
+    if (sample_page_cache_port_reserve_pin(
+            cache_key,
+            sample_audio_format_page_index_from_frame(desc->format, start_frame),
+            SAMPLE_PAGE_ALLOC_MARGIN) == 0U)
     {
         desc->state = SAMPLE_CACHE_ERROR;
         desc->last_error = 8U;
         return 0U;
     }
-
     sample_stream_manager_service(byte_budget);
     if (sample_page_cache_get_page_state(
             sample_id,
@@ -1346,15 +1320,6 @@ void sample_cache_service(uint32_t byte_budget)
     sample_stream_manager_service(byte_budget);
     if (sample_stream_manager_has_pending_sd_work() != 0U)
     {
-        sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_STREAM);
-        g_sample_cache_stream_gate_held = 0U;
-        return;
-    }
-    if (sample_page_cache_has_reserved_range(0U, SAMPLE_CACHE_HOT_SAMPLE_CAPACITY) != 0U)
-    {
-        sample_page_cache_service_range(0U,
-                                        SAMPLE_CACHE_HOT_SAMPLE_CAPACITY,
-                                        byte_budget);
         sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_STREAM);
         g_sample_cache_stream_gate_held = 0U;
         return;

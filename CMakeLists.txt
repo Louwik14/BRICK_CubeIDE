@@ -238,6 +238,7 @@ file(GLOB SRC_PARAM_SRC
 )
 
 list(APPEND SRC_PARAM_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/audio_fx_param_catalog.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_transition.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_tone_backends.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_prism_labels.c"

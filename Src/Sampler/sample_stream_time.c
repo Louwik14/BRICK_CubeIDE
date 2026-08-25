@@ -1,6 +1,7 @@
 #include "Sampler/sample_stream_time.h"
 
 #include "stm32h7xx.h"
+#include "Storage/memory_layout.h"
 
 typedef struct
 {
@@ -9,7 +10,15 @@ typedef struct
     volatile uint32_t high;
 } sample_stream_audio_clock_t;
 
-static sample_stream_audio_clock_t g_sample_stream_audio_clock;
+D3_IPC static sample_stream_audio_clock_t g_sample_stream_audio_clock;
+
+void sample_stream_time_init(void)
+{
+    g_sample_stream_audio_clock.sequence = 0U;
+    g_sample_stream_audio_clock.low = 0U;
+    g_sample_stream_audio_clock.high = 0U;
+    __DMB();
+}
 
 void sample_stream_time_advance_from_audio_irq(uint32_t rendered_frames)
 {

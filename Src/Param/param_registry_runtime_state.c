@@ -56,14 +56,19 @@ void param_registry_control_shadow_set(uint8_t track, param_id_t id, float value
     g_param_runtime_track_flags[track][id] = PARAM_REGISTRY_RUNTIME_UI_VALUE_VALID;
 }
 
-void param_registry_control_shadow_set_pending(uint8_t track, param_id_t id, float value)
+void param_registry_control_shadow_mark_pending(uint8_t track, param_id_t id)
 {
     if ((track >= SEQ_LANE_CAPACITY) || (id >= PARAM_COUNT))
         return;
-    g_param_runtime_track_values[track][id] = value;
-    g_param_runtime_track_flags[track][id] =
+    g_param_runtime_track_flags[track][id] |=
         (uint8_t)(PARAM_REGISTRY_RUNTIME_UI_VALUE_VALID
                   | PARAM_REGISTRY_RUNTIME_AUDIO_PENDING);
+}
+
+void param_registry_control_shadow_set_pending(uint8_t track, param_id_t id, float value)
+{
+    param_registry_control_shadow_set(track, id, value);
+    param_registry_control_shadow_mark_pending(track, id);
 }
 
 void param_registry_control_shadow_set_pending_global(param_id_t id, float value)

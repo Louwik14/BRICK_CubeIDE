@@ -2,6 +2,7 @@
 
 #include "Board/board_audio_format.h"
 #include "Audio/audio_note_engine_adapter.h"
+#include "Storage/memory_layout.h"
 #include "stm32h7xx_hal.h"
 
 typedef struct
@@ -11,7 +12,7 @@ typedef struct
     volatile uint8_t valid;
 } live_clock_state_t;
 
-static live_clock_state_t g_live_clock;
+D3_IPC static live_clock_state_t g_live_clock;
 static uint32_t g_tim5_hz;
 static uint32_t g_samples_per_tim5_tick_q32;
 

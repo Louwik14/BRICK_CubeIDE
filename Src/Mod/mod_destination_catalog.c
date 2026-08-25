@@ -3,10 +3,13 @@
 #include <stdio.h>
 #include "Storage/memory_layout.h"
 #include "Audio/audio_note_engine_adapter.h"
+#include "Audio/audio_fx_runtime.h"
+#include "Audio/fx_audio_drift.h"
 
 #include "Audio/audio_xfade.h"
 #include "Audio/drum_synth.h"
 #include "Core/brick6_braids_runtime.h"
+#include "Core/brick6_fm_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/synth_polyphony.h"
 #include "Core/brick6_stack_runtime.h"
@@ -14,13 +17,17 @@
 #include "Core/track_runtime.h"
 #include "Core/entity_topology.h"
 #include "Core/track_tone_sound_state.h"
+#include "Core/track_sound_state.h"
 #include "Param/param_filter.h"
+#include "Param/audio_fx_param_catalog.h"
 #include "Param/param_registry.h"
 #include "Param/param_registry_backends.h"
 #include "Param/param_prism_labels.h"
 #include "Mod/mod_lfo_v1.h"
+#include "Mod/mod_env3.h"
 #include "Seq/seq_types.h"
 #include "mixer.h"
+#include "midi.h"
 
 /* Destination catalogs and MIDI-CC caches are lane-scoped. */
 #undef SEQ_TRACK_COUNT
@@ -35,6 +42,8 @@ typedef struct
     uint8_t rt_family;
     uint8_t rt_type;
     uint8_t rt_mix_track_id;
+    uint8_t audio_fx_model_a;
+    uint8_t audio_fx_model_b;
     uint16_t count;
     param_id_t index_to_param[PARAM_COUNT + 1U];
     uint16_t param_to_index[PARAM_COUNT];
@@ -270,18 +279,17 @@ static uint8_t mod_destination_is_direct_prism(param_id_t dest)
 {
     switch (dest)
     {
-        case PARAM_PRISM_COARSE:
-        case PARAM_PRISM_FM:
-        case PARAM_PRISM_TIMBRE:
-        case PARAM_PRISM_MODULATION:
-        case PARAM_PRISM_COLOR:
-        case PARAM_PRISM_LEVEL:
-        case PARAM_PRISM_OSC2_COARSE:
-        case PARAM_PRISM_OSC2_FM:
-        case PARAM_PRISM_OSC2_TIMBRE:
-        case PARAM_PRISM_OSC2_MODULATION:
-        case PARAM_PRISM_OSC2_COLOR:
-        case PARAM_PRISM_OSC2_LEVEL:
+        case PARAM_PRISM_TUNE:
+        case PARAM_PRISM_PITCH_MOD1:
+        case PARAM_PRISM_OSC1_PARAM1:
+        case PARAM_PRISM_OSC1_AMOD:
+        case PARAM_PRISM_OSC1_PARAM2:
+        case PARAM_PRISM_BALANCE:
+        case PARAM_PRISM_DETUNE:
+        case PARAM_PRISM_PITCH_MOD2:
+        case PARAM_PRISM_OSC2_PARAM1:
+        case PARAM_PRISM_OSC2_AMOD:
+        case PARAM_PRISM_OSC2_PARAM2:
             return 1U;
         default:
             return 0U;
@@ -316,11 +324,11 @@ static uint8_t mod_destination_is_direct_wave(param_id_t dest)
     switch (dest)
     {
         case PARAM_WAVE_OSC1_POS:
-        case PARAM_WAVE_OSC1_LEVEL:
-        case PARAM_WAVE_OSC1_TUNE:
         case PARAM_WAVE_OSC2_POS:
-        case PARAM_WAVE_OSC2_LEVEL:
-        case PARAM_WAVE_OSC2_TUNE:
+        case PARAM_WAVE_VOLUME:
+        case PARAM_WAVE_BALANCE:
+        case PARAM_WAVE_TUNE:
+        case PARAM_WAVE_DETUNE:
             return 1U;
         default:
             return 0U;
@@ -631,41 +639,38 @@ static uint8_t mod_destination_apply_prism_rt(uint8_t track,
 
     switch (dest)
     {
-        case PARAM_PRISM_COARSE:
-            brick6_braids_runtime_set_osc_coarse(ctx->audio_binding.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
+        case PARAM_PRISM_TUNE:
+            brick6_braids_runtime_set_tune(ctx->audio_binding.instance_id, mod_destination_clampf(value, -60.0f, 60.0f));
             return 1U;
-        case PARAM_PRISM_FM:
-            brick6_braids_runtime_set_osc_fm(ctx->audio_binding.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
+        case PARAM_PRISM_DETUNE:
+            brick6_braids_runtime_set_detune(ctx->audio_binding.instance_id, mod_destination_clampf(value, -24.0f, 24.0f));
             return 1U;
-        case PARAM_PRISM_TIMBRE:
+        case PARAM_PRISM_PITCH_MOD1:
+            brick6_braids_runtime_set_osc_pitch_mod(ctx->audio_binding.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
+            return 1U;
+        case PARAM_PRISM_OSC1_PARAM1:
             brick6_braids_runtime_set_osc_timbre(ctx->audio_binding.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
-        case PARAM_PRISM_MODULATION:
+        case PARAM_PRISM_OSC1_AMOD:
             brick6_braids_runtime_set_osc_modulation(ctx->audio_binding.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
-        case PARAM_PRISM_COLOR:
+        case PARAM_PRISM_OSC1_PARAM2:
             brick6_braids_runtime_set_osc_color(ctx->audio_binding.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
-        case PARAM_PRISM_LEVEL:
-            brick6_braids_runtime_set_osc_level(ctx->audio_binding.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
+        case PARAM_PRISM_BALANCE:
+            brick6_braids_runtime_set_balance(ctx->audio_binding.instance_id, mod_destination_clampf(value, -1.0f, 1.0f));
             return 1U;
-        case PARAM_PRISM_OSC2_COARSE:
-            brick6_braids_runtime_set_osc_coarse(ctx->audio_binding.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
+        case PARAM_PRISM_PITCH_MOD2:
+            brick6_braids_runtime_set_osc_pitch_mod(ctx->audio_binding.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
-        case PARAM_PRISM_OSC2_FM:
-            brick6_braids_runtime_set_osc_fm(ctx->audio_binding.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
-            return 1U;
-        case PARAM_PRISM_OSC2_TIMBRE:
+        case PARAM_PRISM_OSC2_PARAM1:
             brick6_braids_runtime_set_osc_timbre(ctx->audio_binding.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
-        case PARAM_PRISM_OSC2_MODULATION:
+        case PARAM_PRISM_OSC2_AMOD:
             brick6_braids_runtime_set_osc_modulation(ctx->audio_binding.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
-        case PARAM_PRISM_OSC2_COLOR:
+        case PARAM_PRISM_OSC2_PARAM2:
             brick6_braids_runtime_set_osc_color(ctx->audio_binding.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
-            return 1U;
-        case PARAM_PRISM_OSC2_LEVEL:
-            brick6_braids_runtime_set_osc_level(ctx->audio_binding.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         default:
             return 0U;
@@ -839,20 +844,20 @@ static uint8_t mod_destination_apply_wave_rt(uint8_t track,
         case PARAM_WAVE_OSC1_POS:
             brick6_wave_runtime_set_osc_pos(ctx->audio_binding.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
-        case PARAM_WAVE_OSC1_LEVEL:
-            brick6_wave_runtime_set_osc_level(ctx->audio_binding.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
-            return 1U;
-        case PARAM_WAVE_OSC1_TUNE:
-            brick6_wave_runtime_set_osc_tune(ctx->audio_binding.instance_id, 0U, mod_destination_clampf(value, -60.0f, 60.0f));
-            return 1U;
         case PARAM_WAVE_OSC2_POS:
             brick6_wave_runtime_set_osc_pos(ctx->audio_binding.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
-        case PARAM_WAVE_OSC2_LEVEL:
-            brick6_wave_runtime_set_osc_level(ctx->audio_binding.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
+        case PARAM_WAVE_VOLUME:
+            brick6_wave_runtime_set_volume(ctx->audio_binding.instance_id, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
-        case PARAM_WAVE_OSC2_TUNE:
-            brick6_wave_runtime_set_osc_tune(ctx->audio_binding.instance_id, 1U, mod_destination_clampf(value, -60.0f, 60.0f));
+        case PARAM_WAVE_BALANCE:
+            brick6_wave_runtime_set_balance(ctx->audio_binding.instance_id, mod_destination_clampf(value, -1.0f, 1.0f));
+            return 1U;
+        case PARAM_WAVE_TUNE:
+            brick6_wave_runtime_set_tune(ctx->audio_binding.instance_id, mod_destination_clampf(value, -60.0f, 60.0f));
+            return 1U;
+        case PARAM_WAVE_DETUNE:
+            brick6_wave_runtime_set_detune(ctx->audio_binding.instance_id, mod_destination_clampf(value, -24.0f, 24.0f));
             return 1U;
         default:
             return 0U;
@@ -942,6 +947,364 @@ static uint8_t mod_destination_apply_midi_cc_rt(uint8_t track,
     cache->valid = 1U;
     cache->value = cc_value;
     return 1U;
+}
+
+static uint8_t mod_destination_is_continuous_rampable(param_id_t dest);
+static uint8_t mod_destination_is_segment_rate(param_id_t dest);
+
+static uint8_t mod_destination_prepared_opcode(param_id_t dest,
+                                               uint8_t *out_opcode,
+                                               uint8_t *out_subindex)
+{
+    uint8_t opcode = MOD_DEST_APPLY_GENERIC;
+    uint8_t subindex = 0U;
+    switch (dest)
+    {
+        case PARAM_LFO1_RATE: case PARAM_LFO2_RATE: case PARAM_LFO3_RATE:
+            opcode = MOD_DEST_APPLY_LFO_RATE;
+            subindex = (uint8_t)(dest - PARAM_LFO1_RATE) / (uint8_t)MOD_LFO_PARAM_COUNT;
+            break;
+        case PARAM_MIX_LEVEL: opcode = MOD_DEST_APPLY_MIX_LEVEL; break;
+        case PARAM_MIX_PAN: opcode = MOD_DEST_APPLY_MIX_PAN; break;
+        case PARAM_MIX_SEND1: case PARAM_MIX_SEND2: case PARAM_MIX_SEND3:
+            opcode = MOD_DEST_APPLY_MIX_SEND;
+            subindex = (uint8_t)(dest - PARAM_MIX_SEND1);
+            break;
+        case PARAM_AUDIO_FX_P1:
+        case PARAM_AUDIO_FX_B_P1:
+        case PARAM_GROUP_FX_A_LEVEL:
+        case PARAM_GROUP_FX_B_LEVEL:
+            opcode = MOD_DEST_APPLY_AUDIO_FX_DELAY;
+            subindex = (dest == PARAM_AUDIO_FX_B_P1) ? 1U : 0U;
+            break;
+        case PARAM_FILTER_CUTOFF: opcode = MOD_DEST_APPLY_FILTER_CUTOFF; break;
+        case PARAM_FILTER_RESONANCE: opcode = MOD_DEST_APPLY_FILTER_RESONANCE; break;
+        case PARAM_FILTER_EG_AMT: opcode = MOD_DEST_APPLY_FILTER_EG_AMOUNT; break;
+        case PARAM_FILTER_ATTACK: opcode = MOD_DEST_APPLY_FILTER_ATTACK; break;
+        case PARAM_FILTER_DECAY: opcode = MOD_DEST_APPLY_FILTER_DECAY; break;
+        case PARAM_FILTER_SUSTAIN: opcode = MOD_DEST_APPLY_FILTER_SUSTAIN; break;
+        case PARAM_FILTER_RELEASE: opcode = MOD_DEST_APPLY_FILTER_RELEASE; break;
+        case PARAM_VCA_ATTACK: opcode = MOD_DEST_APPLY_VCA_ATTACK; break;
+        case PARAM_VCA_DECAY: opcode = MOD_DEST_APPLY_VCA_DECAY; break;
+        case PARAM_VCA_SUSTAIN: opcode = MOD_DEST_APPLY_VCA_SUSTAIN; break;
+        case PARAM_VCA_RELEASE: opcode = MOD_DEST_APPLY_VCA_RELEASE; break;
+        case PARAM_ENV3_ATTACK: case PARAM_ENV3_DECAY:
+        case PARAM_ENV3_SUSTAIN: case PARAM_ENV3_RELEASE:
+            opcode = MOD_DEST_APPLY_ENV3;
+            subindex = (uint8_t)(dest - PARAM_ENV3_ATTACK);
+            break;
+        case PARAM_SAMPLER_GAIN: opcode = MOD_DEST_APPLY_SAMPLER_GAIN; break;
+        case PARAM_SAMPLER_START: opcode = MOD_DEST_APPLY_SAMPLER_START; break;
+        case PARAM_SAMPLER_END: opcode = MOD_DEST_APPLY_SAMPLER_END; break;
+        case PARAM_SAMPLER_LOOP_START: opcode = MOD_DEST_APPLY_SAMPLER_LOOP_START; break;
+        case PARAM_SAMPLER_TUNE: opcode = MOD_DEST_APPLY_SAMPLER_TUNE; break;
+        case PARAM_LOOPER_XFADE: opcode = MOD_DEST_APPLY_LOOPER_XFADE; break;
+        case PARAM_PRISM_TUNE: opcode = MOD_DEST_APPLY_PRISM_TUNE; break;
+        case PARAM_PRISM_DETUNE: opcode = MOD_DEST_APPLY_PRISM_DETUNE; break;
+        case PARAM_PRISM_BALANCE: opcode = MOD_DEST_APPLY_PRISM_BALANCE; break;
+        case PARAM_PRISM_PITCH_MOD1: case PARAM_PRISM_PITCH_MOD2:
+            opcode = MOD_DEST_APPLY_PRISM_PITCH_MOD; subindex = (dest == PARAM_PRISM_PITCH_MOD2); break;
+        case PARAM_PRISM_OSC1_PARAM1: case PARAM_PRISM_OSC2_PARAM1:
+            opcode = MOD_DEST_APPLY_PRISM_TIMBRE; subindex = (dest == PARAM_PRISM_OSC2_PARAM1); break;
+        case PARAM_PRISM_OSC1_AMOD: case PARAM_PRISM_OSC2_AMOD:
+            opcode = MOD_DEST_APPLY_PRISM_MODULATION; subindex = (dest == PARAM_PRISM_OSC2_AMOD); break;
+        case PARAM_PRISM_OSC1_PARAM2: case PARAM_PRISM_OSC2_PARAM2:
+            opcode = MOD_DEST_APPLY_PRISM_COLOR; subindex = (dest == PARAM_PRISM_OSC2_PARAM2); break;
+        case PARAM_FM_RATIO: opcode = MOD_DEST_APPLY_FM_RATIO; break;
+        case PARAM_FM_BRIGHT: opcode = MOD_DEST_APPLY_FM_BRIGHT; break;
+        case PARAM_FM_BODY: opcode = MOD_DEST_APPLY_FM_BODY; break;
+        case PARAM_FM_DETAIL: opcode = MOD_DEST_APPLY_FM_DETAIL; break;
+        case PARAM_FM_METAL: opcode = MOD_DEST_APPLY_FM_METAL; break;
+        case PARAM_FM_ENV_ATTACK: case PARAM_FM_ENV_DECAY:
+        case PARAM_FM_ENV_SUSTAIN: case PARAM_FM_ENV_RELEASE:
+            opcode = MOD_DEST_APPLY_FM_ENV;
+            subindex = (uint8_t)(dest - PARAM_FM_ENV_ATTACK);
+            break;
+        case PARAM_STACK_NOISE_LEVEL: opcode = MOD_DEST_APPLY_STACK_NOISE; break;
+        case PARAM_WAVE_OSC1_POS: case PARAM_WAVE_OSC2_POS:
+            opcode = MOD_DEST_APPLY_WAVE_POSITION; subindex = (dest == PARAM_WAVE_OSC2_POS); break;
+        case PARAM_WAVE_VOLUME: opcode = MOD_DEST_APPLY_WAVE_VOLUME; break;
+        case PARAM_WAVE_BALANCE: opcode = MOD_DEST_APPLY_WAVE_BALANCE; break;
+        case PARAM_WAVE_TUNE: opcode = MOD_DEST_APPLY_WAVE_TUNE; break;
+        case PARAM_WAVE_DETUNE: opcode = MOD_DEST_APPLY_WAVE_DETUNE; break;
+        default:
+            if (mod_destination_is_direct_midi_cc(dest) != 0U)
+                opcode = MOD_DEST_APPLY_MIDI_CC;
+            else if (mod_destination_is_direct_drum(dest) != 0U)
+                opcode = MOD_DEST_APPLY_DRUM_PARAM;
+            else if (mod_destination_is_direct_stack(dest) != 0U)
+            {
+                uint8_t slot_param = 0U;
+                if (mod_destination_stack_slot_for_id(dest, &subindex, &slot_param) == 0U)
+                    return 0U;
+                if (slot_param == 0U) opcode = MOD_DEST_APPLY_STACK_LEVEL;
+                else if (slot_param == 2U) opcode = MOD_DEST_APPLY_STACK_TUNE;
+                else if (slot_param == 3U) opcode = MOD_DEST_APPLY_STACK_TIMBRE;
+                else if (slot_param == 4U) opcode = MOD_DEST_APPLY_STACK_COLOR;
+                else return 0U;
+            }
+            break;
+    }
+    *out_opcode = opcode;
+    *out_subindex = subindex;
+    return 1U;
+}
+
+uint8_t mod_destination_catalog_prepare(uint8_t target,
+                                        param_id_t dest,
+                                        const track_audio_runtime_ctx_t *ctx,
+                                        mod_destination_prepared_t *out)
+{
+    if ((target >= SEQ_TRACK_COUNT) || (dest >= PARAM_COUNT)
+            || (ctx == NULL) || (out == NULL)
+            || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND))
+        return 0U;
+
+    mod_destination_prepared_t prepared = {
+        .param = (uint16_t)dest,
+        .target = target,
+        .endpoint = ctx->audio_binding.instance_id,
+        .aux = ctx->audio_binding.engine
+    };
+    if (mod_destination_prepared_opcode(dest, &prepared.opcode,
+                                        &prepared.subindex) == 0U)
+        return 0U;
+    if (prepared.opcode == MOD_DEST_APPLY_AUDIO_FX_DELAY)
+    {
+        const track_sound_state_t *const state = track_sound_state_get_const(target);
+        const uint8_t model = (state == NULL) ? AUDIO_FX_MODEL_OFF
+            : (prepared.subindex != 0U) ? state->audio_fx_b_model
+                                       : state->audio_fx_model;
+        if (model != AUDIO_FX_MODEL_DRIFT)
+            prepared.opcode = MOD_DEST_APPLY_GENERIC;
+    }
+    if ((prepared.opcode >= MOD_DEST_APPLY_MIX_LEVEL)
+            && (prepared.opcode <= MOD_DEST_APPLY_VCA_RELEASE))
+        prepared.endpoint = ctx->audio_binding.mix_track_id;
+    if (prepared.opcode == MOD_DEST_APPLY_VCA_RELEASE)
+        prepared.subindex = ctx->audio_binding.instance_id;
+    if (prepared.opcode == MOD_DEST_APPLY_SAMPLER_GAIN)
+        prepared.aux = ctx->type;
+    else if (prepared.opcode == MOD_DEST_APPLY_MIDI_CC)
+    {
+        uint8_t channel = 0U;
+        uint8_t cache_index = 0U;
+        if ((audio_note_engine_adapter_audio_midi_channel_zero_based(ctx, &channel) == 0U)
+                || (mod_destination_midi_cc_cache_index(dest, &cache_index) == 0U))
+            return 0U;
+        prepared.endpoint = channel;
+        prepared.subindex = cache_index;
+        prepared.aux = param_backend_midi_cc_number_from_id(dest);
+    }
+    else if (prepared.opcode == MOD_DEST_APPLY_DRUM_PARAM)
+    {
+        prepared.aux = ((dest >= PARAM_DRUM_MD_P1) && (dest <= PARAM_DRUM_MD_P8)) ? 0U
+            : (dest == PARAM_DRUM_TRX_BD_PITCH) ? 1U
+            : (dest == PARAM_DRUM_TRX_BD_DECAY) ? 2U : 3U;
+    }
+    if (mod_destination_is_continuous_rampable(dest) != 0U)
+        prepared.flags |= MOD_DEST_PREPARED_RAMP_CONTINUOUS;
+    if (mod_destination_is_segment_rate(dest) != 0U)
+        prepared.flags |= MOD_DEST_PREPARED_RAMP_SEGMENT;
+    *out = prepared;
+    return 1U;
+}
+
+static float mod_destination_fm_macro_unit(float value)
+{
+    return 0.5f + 0.5f * mod_destination_clampf(value, -1.0f, 1.0f);
+}
+
+uint8_t mod_destination_catalog_apply_prepared(
+    const mod_destination_prepared_t *p, float value)
+{
+    if ((p == NULL) || (p->opcode == MOD_DEST_APPLY_NONE)) return 0U;
+    switch ((mod_destination_apply_opcode_t)p->opcode)
+    {
+        case MOD_DEST_APPLY_LFO_RATE: return mod_lfo_v1_apply_track_param_temp(p->target, p->subindex, MOD_LFO_PARAM_RATE, value);
+        case MOD_DEST_APPLY_MIX_LEVEL: mixer_set_track_gain(p->endpoint, mod_destination_clampf(value, 0.0f, 2.0f)); return 1U;
+        case MOD_DEST_APPLY_MIX_PAN: mixer_set_track_pan(p->endpoint, mod_destination_clampf(value, -1.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_MIX_SEND: mixer_set_track_send_level(p->endpoint, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_FILTER_CUTOFF: mixer_set_track_filter_cutoff_modulated(p->endpoint, param_filter_ui127_to_cutoff_hz(value)); return 1U;
+        case MOD_DEST_APPLY_FILTER_RESONANCE: mixer_set_track_filter_resonance(p->endpoint, param_filter_ui127_to_resonance(value)); return 1U;
+        case MOD_DEST_APPLY_FILTER_EG_AMOUNT: mixer_set_track_filter_eg_amount(p->endpoint, param_filter_ui127_to_eg_amount(value)); return 1U;
+        case MOD_DEST_APPLY_FILTER_ATTACK: mixer_set_track_filter_attack(p->endpoint, param_filter_ui127_to_attack_s(value)); return 1U;
+        case MOD_DEST_APPLY_FILTER_DECAY: mixer_set_track_filter_decay(p->endpoint, param_filter_ui127_to_decay_s(value)); return 1U;
+        case MOD_DEST_APPLY_FILTER_SUSTAIN: mixer_set_track_filter_sustain(p->endpoint, param_filter_ui127_to_sustain(value)); return 1U;
+        case MOD_DEST_APPLY_FILTER_RELEASE: mixer_set_track_filter_release(p->endpoint, param_filter_ui127_to_release_s(value)); return 1U;
+        case MOD_DEST_APPLY_VCA_ATTACK: mixer_set_track_vca_attack(p->endpoint, param_filter_ui127_to_attack_s(value)); return 1U;
+        case MOD_DEST_APPLY_VCA_DECAY: mixer_set_track_vca_decay(p->endpoint, param_filter_ui127_to_decay_s(value)); return 1U;
+        case MOD_DEST_APPLY_VCA_SUSTAIN: mixer_set_track_vca_sustain(p->endpoint, param_filter_ui127_to_sustain(value)); return 1U;
+        case MOD_DEST_APPLY_VCA_RELEASE:
+        {
+            const float seconds = param_filter_ui127_to_release_s(value);
+            mixer_set_track_vca_release(p->endpoint, seconds);
+            if (p->aux == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
+                brick6_braids_runtime_set_vca_release_seconds(p->subindex, seconds);
+            return 1U;
+        }
+        case MOD_DEST_APPLY_ENV3: return mod_env3_apply_track_param_temp(
+            p->target, (mod_env3_param_t)p->subindex, value);
+        case MOD_DEST_APPLY_SAMPLER_GAIN:
+            if (p->aux == (uint8_t)TRACK_RUNTIME_TYPE_MULTI) brick6_sampler_runtime_set_multi_gain(p->target, mod_destination_clampf(value, 0.0f, 2.0f));
+            else brick6_sampler_runtime_set_gain(p->target, mod_destination_clampf(value, 0.0f, 2.0f));
+            return 1U;
+        case MOD_DEST_APPLY_SAMPLER_START: brick6_sampler_runtime_set_start(p->target, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_SAMPLER_END: brick6_sampler_runtime_set_end(p->target, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_SAMPLER_LOOP_START: brick6_sampler_runtime_set_loop_start(p->target, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_SAMPLER_TUNE: brick6_sampler_runtime_set_tune(p->target, mod_destination_clampf(value, -24.0f, 24.0f)); return 1U;
+        case MOD_DEST_APPLY_LOOPER_XFADE: audio_xfade_set(mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_PRISM_TUNE: brick6_braids_runtime_set_tune(p->endpoint, mod_destination_clampf(value, -60.0f, 60.0f)); return 1U;
+        case MOD_DEST_APPLY_PRISM_DETUNE: brick6_braids_runtime_set_detune(p->endpoint, mod_destination_clampf(value, -24.0f, 24.0f)); return 1U;
+        case MOD_DEST_APPLY_PRISM_PITCH_MOD: brick6_braids_runtime_set_osc_pitch_mod(p->endpoint, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_PRISM_TIMBRE: brick6_braids_runtime_set_osc_timbre(p->endpoint, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_PRISM_MODULATION: brick6_braids_runtime_set_osc_modulation(p->endpoint, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_PRISM_COLOR: brick6_braids_runtime_set_osc_color(p->endpoint, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_PRISM_BALANCE: brick6_braids_runtime_set_balance(p->endpoint, mod_destination_clampf(value, -1.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_FM_RATIO: brick6_fm_runtime_set_ratio(p->endpoint, mod_destination_fm_macro_unit(value)); return 1U;
+        case MOD_DEST_APPLY_FM_BRIGHT: brick6_fm_runtime_set_bright(p->endpoint, mod_destination_fm_macro_unit(value)); return 1U;
+        case MOD_DEST_APPLY_FM_BODY: brick6_fm_runtime_set_body(p->endpoint, mod_destination_fm_macro_unit(value)); return 1U;
+        case MOD_DEST_APPLY_FM_DETAIL: brick6_fm_runtime_set_detail(p->endpoint, mod_destination_fm_macro_unit(value)); return 1U;
+        case MOD_DEST_APPLY_FM_METAL: brick6_fm_runtime_set_metal(p->endpoint, mod_destination_fm_macro_unit(value)); return 1U;
+        case MOD_DEST_APPLY_FM_ENV:
+        {
+            track_tone_fm_macros_t m;
+            if (brick6_fm_runtime_get_macros(p->endpoint, &m) == 0U) return 0U;
+            float a=m.env_attack, d=m.env_decay, s=m.env_sustain, r=m.env_release;
+            if (p->subindex == 0U) a=value; else if (p->subindex == 1U) d=value;
+            else if (p->subindex == 2U) s=value; else r=value;
+            brick6_fm_runtime_set_env(p->endpoint, mod_destination_fm_macro_unit(a), mod_destination_fm_macro_unit(d), mod_destination_fm_macro_unit(s), mod_destination_fm_macro_unit(r));
+            return 1U;
+        }
+        case MOD_DEST_APPLY_STACK_LEVEL: brick6_stack_runtime_set_slot_level(p->endpoint, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_STACK_TUNE: brick6_stack_runtime_set_slot_tune(p->endpoint, p->subindex, mod_destination_clampf(value, -24.0f, 24.0f)); return 1U;
+        case MOD_DEST_APPLY_STACK_TIMBRE: brick6_stack_runtime_set_slot_timbre(p->endpoint, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_STACK_COLOR: brick6_stack_runtime_set_slot_color(p->endpoint, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_STACK_NOISE: brick6_stack_runtime_set_noise_level(p->endpoint, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_WAVE_POSITION: brick6_wave_runtime_set_osc_pos(p->endpoint, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_WAVE_VOLUME: brick6_wave_runtime_set_volume(p->endpoint, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_WAVE_BALANCE: brick6_wave_runtime_set_balance(p->endpoint, mod_destination_clampf(value, -1.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_WAVE_TUNE: brick6_wave_runtime_set_tune(p->endpoint, mod_destination_clampf(value, -60.0f, 60.0f)); return 1U;
+        case MOD_DEST_APPLY_WAVE_DETUNE: brick6_wave_runtime_set_detune(p->endpoint, mod_destination_clampf(value, -24.0f, 24.0f)); return 1U;
+        case MOD_DEST_APPLY_DRUM_PARAM:
+        {
+            const float v = (p->aux == 0U) ? mod_destination_clampf(value, 0.0f, 127.0f)
+                : (p->aux == 1U) ? mod_destination_clampf(value, -48.0f, 24.0f)
+                : (p->aux == 2U) ? mod_destination_clampf(value, 0.01f, 2.0f)
+                : mod_destination_clampf(value, 0.0f, 1.0f);
+            return drum_synth_set_param_for_instance(p->endpoint, (param_id_t)p->param, v);
+        }
+        case MOD_DEST_APPLY_MIDI_CC:
+        {
+            const uint8_t v = (uint8_t)(mod_destination_clampf(value, 0.0f, 127.0f) + 0.5f);
+            mod_destination_midi_cc_cache_t *const cache = &g_mod_destination_midi_cc_cache[p->target][p->subindex];
+            if ((cache->valid != 0U) && (cache->value == v)) return 1U;
+            midi_cc(MIDI_DEST_BOTH, p->endpoint, p->aux, v);
+            cache->valid = 1U; cache->value = v; return 1U;
+        }
+        case MOD_DEST_APPLY_AUDIO_FX_DELAY:
+            return audio_fx_runtime_apply_drift_delay_modulated(
+                (brick_entity_id_t)p->target,
+                (p->subindex != 0U) ? PARAM_AUDIO_FX_B_P1 : PARAM_AUDIO_FX_P1,
+                mod_destination_clampf(value,0.0f,FX_AUDIO_DRIFT_DELAY_MOD_MAX_CONTROL));
+        case MOD_DEST_APPLY_GENERIC: return param_registry_apply_track_value_rt_fast((param_id_t)p->param, p->target, value);
+        default: return 0U;
+    }
+}
+
+uint8_t mod_destination_catalog_apply_ramp_prepared(
+    const mod_destination_prepared_t *p, const mod_destination_ramp_t *ramp)
+{
+    if ((p == NULL) || (ramp == NULL)) return 0U;
+    if ((ramp->discontinuous == 0U) && (ramp->frames > 1U)
+            && ((p->flags & MOD_DEST_PREPARED_RAMP_SEGMENT) != 0U))
+        return mod_destination_catalog_apply_prepared(p, ramp->end);
+    const uint8_t applied = mod_destination_catalog_apply_prepared(p, ramp->current);
+    if ((applied != 0U) && (ramp->discontinuous == 0U) && (ramp->frames > 1U)
+            && ((p->flags & MOD_DEST_PREPARED_RAMP_CONTINUOUS) != 0U))
+        return mod_destination_catalog_apply_prepared(p, ramp->end);
+    return applied;
+}
+
+uint8_t mod_destination_catalog_apply_poly_prepared(
+    const mod_destination_prepared_t *p, uint8_t voice_slot, float value)
+{
+    if (p == NULL) return 0U;
+    struct multi_voice_dsp_slot_t *multi_slot = NULL;
+    const uint8_t sampler_multi =
+        (p->aux == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER) ? 1U : 0U;
+    if (sampler_multi != 0U)
+    {
+        if (voice_slot < SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET) return 0U;
+        multi_slot = brick6_sampler_runtime_get_multi_voice_dsp(
+            (uint8_t)(voice_slot - SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET));
+        if (multi_slot == NULL) return 0U;
+    }
+    switch ((mod_destination_apply_opcode_t)p->opcode)
+    {
+        case MOD_DEST_APPLY_FILTER_CUTOFF:
+            if (sampler_multi != 0U) mixer_multi_filter_set_voice_cutoff(multi_slot, param_filter_ui127_to_cutoff_hz(value));
+            else mixer_poly_voice_set_cutoff(voice_slot, param_filter_ui127_to_cutoff_hz(value));
+            return 1U;
+        case MOD_DEST_APPLY_FILTER_RESONANCE:
+            if (sampler_multi != 0U) mixer_multi_filter_set_voice_resonance(multi_slot, param_filter_ui127_to_resonance(value));
+            else mixer_poly_voice_set_resonance(voice_slot, param_filter_ui127_to_resonance(value));
+            return 1U;
+        case MOD_DEST_APPLY_FILTER_EG_AMOUNT:
+            if (sampler_multi != 0U) mixer_multi_filter_set_voice_eg_amount(multi_slot, param_filter_ui127_to_eg_amount(value));
+            else mixer_poly_voice_set_eg_amount(voice_slot, param_filter_ui127_to_eg_amount(value));
+            return 1U;
+        case MOD_DEST_APPLY_FILTER_ATTACK:
+            if (sampler_multi != 0U) mixer_multi_filter_set_voice_env_attack(multi_slot, param_filter_ui127_to_attack_s(value));
+            else mixer_poly_voice_set_filter_attack(voice_slot, param_filter_ui127_to_attack_s(value));
+            return 1U;
+        case MOD_DEST_APPLY_FILTER_DECAY:
+            if (sampler_multi != 0U) mixer_multi_filter_set_voice_env_decay(multi_slot, param_filter_ui127_to_decay_s(value));
+            else mixer_poly_voice_set_filter_decay(voice_slot, param_filter_ui127_to_decay_s(value));
+            return 1U;
+        case MOD_DEST_APPLY_FILTER_SUSTAIN:
+            if (sampler_multi != 0U) mixer_multi_filter_set_voice_env_sustain(multi_slot, param_filter_ui127_to_sustain(value));
+            else mixer_poly_voice_set_filter_sustain(voice_slot, param_filter_ui127_to_sustain(value));
+            return 1U;
+        case MOD_DEST_APPLY_FILTER_RELEASE:
+            if (sampler_multi != 0U) mixer_multi_filter_set_voice_env_release(multi_slot, param_filter_ui127_to_release_s(value));
+            else mixer_poly_voice_set_filter_release(voice_slot, param_filter_ui127_to_release_s(value));
+            return 1U;
+        case MOD_DEST_APPLY_VCA_ATTACK:
+            if (sampler_multi != 0U) mixer_multi_filter_set_voice_vca_attack(multi_slot, param_filter_ui127_to_attack_s(value));
+            else mixer_poly_voice_set_vca_attack(voice_slot, param_filter_ui127_to_attack_s(value));
+            return 1U;
+        case MOD_DEST_APPLY_VCA_DECAY:
+            if (sampler_multi != 0U) mixer_multi_filter_set_voice_vca_decay(multi_slot, param_filter_ui127_to_decay_s(value));
+            else mixer_poly_voice_set_vca_decay(voice_slot, param_filter_ui127_to_decay_s(value));
+            return 1U;
+        case MOD_DEST_APPLY_VCA_SUSTAIN:
+            if (sampler_multi != 0U) mixer_multi_filter_set_voice_vca_sustain(multi_slot, param_filter_ui127_to_sustain(value));
+            else mixer_poly_voice_set_vca_sustain(voice_slot, param_filter_ui127_to_sustain(value));
+            return 1U;
+        case MOD_DEST_APPLY_VCA_RELEASE:
+            if (sampler_multi != 0U) mixer_multi_filter_set_voice_vca_release(multi_slot, param_filter_ui127_to_release_s(value));
+            else mixer_poly_voice_set_vca_release(voice_slot, param_filter_ui127_to_release_s(value));
+            return 1U;
+        case MOD_DEST_APPLY_PRISM_TUNE: brick6_braids_runtime_set_tune(voice_slot, mod_destination_clampf(value, -60.0f, 60.0f)); return 1U;
+        case MOD_DEST_APPLY_PRISM_DETUNE: brick6_braids_runtime_set_detune(voice_slot, mod_destination_clampf(value, -24.0f, 24.0f)); return 1U;
+        case MOD_DEST_APPLY_PRISM_PITCH_MOD: brick6_braids_runtime_set_osc_pitch_mod(voice_slot, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_PRISM_TIMBRE: brick6_braids_runtime_set_osc_timbre(voice_slot, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_PRISM_MODULATION: brick6_braids_runtime_set_osc_modulation(voice_slot, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_PRISM_COLOR: brick6_braids_runtime_set_osc_color(voice_slot, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_PRISM_BALANCE: brick6_braids_runtime_set_balance(voice_slot, mod_destination_clampf(value, -1.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_STACK_LEVEL: brick6_stack_runtime_set_slot_level(voice_slot, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_STACK_TUNE: brick6_stack_runtime_set_slot_tune(voice_slot, p->subindex, mod_destination_clampf(value, -24.0f, 24.0f)); return 1U;
+        case MOD_DEST_APPLY_STACK_TIMBRE: brick6_stack_runtime_set_slot_timbre(voice_slot, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_STACK_COLOR: brick6_stack_runtime_set_slot_color(voice_slot, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_STACK_NOISE: brick6_stack_runtime_set_noise_level(voice_slot, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_WAVE_POSITION: brick6_wave_runtime_set_osc_pos(voice_slot, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_WAVE_VOLUME: brick6_wave_runtime_set_volume(voice_slot, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_WAVE_BALANCE: brick6_wave_runtime_set_balance(voice_slot, mod_destination_clampf(value, -1.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_WAVE_TUNE: brick6_wave_runtime_set_tune(voice_slot, mod_destination_clampf(value, -60.0f, 60.0f)); return 1U;
+        case MOD_DEST_APPLY_WAVE_DETUNE: brick6_wave_runtime_set_detune(voice_slot, mod_destination_clampf(value, -24.0f, 24.0f)); return 1U;
+        default: return 0U;
+    }
 }
 
 uint8_t mod_destination_catalog_apply_rt(uint8_t track,
@@ -1151,14 +1514,15 @@ static uint8_t mod_destination_is_continuous_rampable(param_id_t dest)
         case PARAM_MIX_SEND1:
         case PARAM_MIX_SEND2:
         case PARAM_MIX_SEND3:
+        case PARAM_AUDIO_FX_P1:
+        case PARAM_AUDIO_FX_B_P1:
         case PARAM_FILTER_CUTOFF:
         case PARAM_FILTER_RESONANCE:
         case PARAM_SAMPLER_GAIN:
         case PARAM_SAMPLER_TUNE:
-        case PARAM_PRISM_COARSE:
-        case PARAM_PRISM_LEVEL:
-        case PARAM_PRISM_OSC2_COARSE:
-        case PARAM_PRISM_OSC2_LEVEL:
+        case PARAM_PRISM_TUNE:
+        case PARAM_PRISM_BALANCE:
+        case PARAM_PRISM_DETUNE:
         case PARAM_STACK_OSC1_LEVEL:
         case PARAM_STACK_OSC1_TUNE:
         case PARAM_STACK_OSC2_LEVEL:
@@ -1166,11 +1530,11 @@ static uint8_t mod_destination_is_continuous_rampable(param_id_t dest)
         case PARAM_STACK_OSC3_LEVEL:
         case PARAM_STACK_OSC3_TUNE:
         case PARAM_WAVE_OSC1_POS:
-        case PARAM_WAVE_OSC1_LEVEL:
-        case PARAM_WAVE_OSC1_TUNE:
         case PARAM_WAVE_OSC2_POS:
-        case PARAM_WAVE_OSC2_LEVEL:
-        case PARAM_WAVE_OSC2_TUNE:
+        case PARAM_WAVE_VOLUME:
+        case PARAM_WAVE_BALANCE:
+        case PARAM_WAVE_TUNE:
+        case PARAM_WAVE_DETUNE:
         case PARAM_DRUM_TRX_BD_PITCH:
         case PARAM_DRUM_TRX_BD_PITCH_SWEEP:
             return 1U;
@@ -1184,13 +1548,13 @@ static uint8_t mod_destination_is_segment_rate(param_id_t dest)
     switch (dest)
     {
         case PARAM_SAMPLER_TUNE:
-        case PARAM_PRISM_COARSE:
-        case PARAM_PRISM_OSC2_COARSE:
+        case PARAM_PRISM_TUNE:
+        case PARAM_PRISM_DETUNE:
         case PARAM_STACK_OSC1_TUNE:
         case PARAM_STACK_OSC2_TUNE:
         case PARAM_STACK_OSC3_TUNE:
-        case PARAM_WAVE_OSC1_TUNE:
-        case PARAM_WAVE_OSC2_TUNE:
+        case PARAM_WAVE_TUNE:
+        case PARAM_WAVE_DETUNE:
         case PARAM_DRUM_TRX_BD_PITCH:
         case PARAM_DRUM_TRX_BD_PITCH_SWEEP:
             return 1U;
@@ -1293,12 +1657,12 @@ static uint8_t mod_destination_param_matches_track_context(uint8_t track,
                                   < ctx->drum_md_slot_count);
             return 0U;
         }
-        if ((dest == PARAM_PRISM_EDIT)
-                || (dest == PARAM_PRISM_FINE)
-                || (dest == PARAM_PRISM_PHASE_RESET)
-                || (dest == PARAM_PRISM_OSC2_EDIT)
-                || (dest == PARAM_PRISM_OSC2_FINE)
-                || (dest == PARAM_PRISM_OSC2_PHASE_RESET)
+        if ((dest == PARAM_PRISM_OSC1_MODEL)
+                || (dest == PARAM_PRISM_VOLUME)
+                || (dest == PARAM_PRISM_PHASE1_RESET)
+                || (dest == PARAM_PRISM_OSC2_MODEL)
+                || (dest == PARAM_PRISM_DETUNE)
+                || (dest == PARAM_PRISM_PHASE2_RESET)
                 || (dest == PARAM_MIDI_PROGRAM)
                 || (dest == PARAM_STACK_OSC_DETUNE)
                 || (dest == PARAM_STACK_PHASE_RESET)
@@ -1357,6 +1721,33 @@ static uint8_t mod_destination_param_matches_track_context(uint8_t track,
                 || (dest == PARAM_MIX_SEND3)) ? 1U : 0U;
     }
 
+    if (domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX)
+    {
+        if (audio_fx_runtime_is_group_level_param(dest) != 0U)
+        {
+            entity_topology_descriptor_t topology;
+            return (uint8_t)((ctx != NULL)
+                && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
+                && (entity_topology_get((brick_entity_id_t)track, &topology) != 0U)
+                && (topology.active != 0U)
+                && (topology.role == ENTITY_ROLE_GROUP_CHILD));
+        }
+        const track_sound_state_t *const state = track_sound_state_get_const(track);
+        uint8_t slot = 0U;
+        uint8_t param_index = 0U;
+        const uint8_t is_fx_param = audio_fx_param_catalog_param_info(
+            dest, &slot, &param_index);
+        const uint8_t model = (state == NULL) ? AUDIO_FX_MODEL_OFF
+            : (slot != 0U) ? state->audio_fx_b_model : state->audio_fx_model;
+        const char *name = NULL;
+        return ((ctx != NULL)
+                && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
+                && (state != NULL)
+                && (is_fx_param != 0U)
+                && (audio_fx_param_catalog_resolve(
+                    model, param_index, &name) != 0U)) ? 1U : 0U;
+    }
+
     return 0U;
 }
 
@@ -1404,6 +1795,11 @@ static track_runtime_param_status_t mod_destination_effective_status_from_ctx(co
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
             }
             return TRACK_RUNTIME_PARAM_ALLOWED;
+        case TRACK_RUNTIME_RESOURCE_AUDIO_FX:
+            return ((ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
+                    && (ctx->audio_routable != 0U))
+                ? TRACK_RUNTIME_PARAM_ALLOWED
+                : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
         default:
             return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
     }
@@ -1437,7 +1833,8 @@ static uint8_t mod_destination_catalog_supported_view(
     }
     if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_ENV)
             && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-            && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX))
+            && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX)
+            && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX))
     {
         return 0U;
     }
@@ -1499,7 +1896,8 @@ uint8_t mod_destination_catalog_supported_audio(uint8_t track,
         track, dest, family, type, &view);
 }
 
-static uint8_t mod_destination_cache_matches_context(const mod_destination_cache_t *cache,
+static uint8_t mod_destination_cache_matches_context(uint8_t track,
+                                                     const mod_destination_cache_t *cache,
                                                      ui_track_family_t family,
                                                      ui_track_type_t type,
                                                      const audio_binding_snapshot_t *snapshot)
@@ -1513,13 +1911,20 @@ static uint8_t mod_destination_cache_matches_context(const mod_destination_cache
     const uint8_t ctx_family = (snapshot != NULL) ? snapshot->family : 0xFFU;
     const uint8_t ctx_type = (snapshot != NULL) ? snapshot->type : 0xFFU;
     const uint8_t ctx_mix_track_id = (snapshot != NULL) ? snapshot->binding.mix_track_id : 0xFFU;
+    const track_sound_state_t *const state = track_sound_state_get_const(track);
+    const uint8_t audio_fx_model_a = (state != NULL)
+        ? state->audio_fx_model : AUDIO_FX_MODEL_OFF;
+    const uint8_t audio_fx_model_b = (state != NULL)
+        ? state->audio_fx_b_model : AUDIO_FX_MODEL_OFF;
 
     return ((cache->ui_family == (uint8_t)family)
             && (cache->ui_type == (uint8_t)type)
             && (cache->rt_bind_state == ctx_bind_state)
             && (cache->rt_family == ctx_family)
             && (cache->rt_type == ctx_type)
-            && (cache->rt_mix_track_id == ctx_mix_track_id)) ? 1U : 0U;
+            && (cache->rt_mix_track_id == ctx_mix_track_id)
+            && (cache->audio_fx_model_a == audio_fx_model_a)
+            && (cache->audio_fx_model_b == audio_fx_model_b)) ? 1U : 0U;
 }
 
 static mod_destination_cache_t *mod_destination_cache_resolve(uint8_t track)
@@ -1555,7 +1960,7 @@ static mod_destination_cache_t *mod_destination_cache_resolve(uint8_t track)
     mod_destination_cache_t *const cache = &g_mod_destination_cache[track];
 
     if (mod_destination_cache_matches_context(
-            cache, family, type, &snapshot) != 0U)
+            track, cache, family, type, &snapshot) != 0U)
     {
         return cache;
     }
@@ -1569,19 +1974,31 @@ static mod_destination_cache_t *mod_destination_cache_resolve(uint8_t track)
     uint16_t count = 1U;
     for (uint16_t raw = 0U; raw < (uint16_t)PARAM_COUNT; ++raw)
     {
-        const param_id_t param = (param_id_t)raw;
-        if (mod_destination_catalog_supported_view(
-                track, param, family, type, &view) == 0U)
+        const param_id_t raw_param = (param_id_t)raw;
+        if (raw_param == PARAM_MIX_SEND3)
         {
             continue;
         }
-
-        if (count <= (uint16_t)PARAM_COUNT)
+        const param_id_t ordered[2] = {
+            raw_param,
+            (raw_param == PARAM_MIX_SEND2) ? PARAM_MIX_SEND3 : PARAM_COUNT
+        };
+        for (uint8_t candidate = 0U; candidate < 2U; ++candidate)
         {
-            cache->index_to_param[count] = param;
-            cache->param_to_index[raw] = count;
+            const param_id_t param = ordered[candidate];
+            if ((param >= PARAM_COUNT)
+                    || (mod_destination_catalog_supported_view(
+                        track, param, family, type, &view) == 0U))
+            {
+                continue;
+            }
+            if (count <= (uint16_t)PARAM_COUNT)
+            {
+                cache->index_to_param[count] = param;
+                cache->param_to_index[(uint16_t)param] = count;
+            }
+            ++count;
         }
-        ++count;
     }
 
     cache->count = count;
@@ -1591,6 +2008,11 @@ static mod_destination_cache_t *mod_destination_cache_resolve(uint8_t track)
     cache->rt_family = snapshot.family;
     cache->rt_type = snapshot.type;
     cache->rt_mix_track_id = snapshot.binding.mix_track_id;
+    const track_sound_state_t *const state = track_sound_state_get_const(track);
+    cache->audio_fx_model_a = (state != NULL)
+        ? state->audio_fx_model : AUDIO_FX_MODEL_OFF;
+    cache->audio_fx_model_b = (state != NULL)
+        ? state->audio_fx_b_model : AUDIO_FX_MODEL_OFF;
     cache->valid = 1U;
 
     return cache;
@@ -1751,11 +2173,11 @@ static const char *mod_destination_wave_label_for_param(param_id_t dest)
     switch (dest)
     {
         case PARAM_WAVE_OSC1_POS: return "OSC1 POS";
-        case PARAM_WAVE_OSC1_LEVEL: return "OSC1 LEVEL";
-        case PARAM_WAVE_OSC1_TUNE: return "OSC1 TUNE";
         case PARAM_WAVE_OSC2_POS: return "OSC2 POS";
-        case PARAM_WAVE_OSC2_LEVEL: return "OSC2 LEVEL";
-        case PARAM_WAVE_OSC2_TUNE: return "OSC2 TUNE";
+        case PARAM_WAVE_VOLUME: return "WAVE VOL";
+        case PARAM_WAVE_BALANCE: return "WAVE BAL";
+        case PARAM_WAVE_TUNE: return "WAVE TUNE";
+        case PARAM_WAVE_DETUNE: return "WAVE DETUNE";
         default: return NULL;
     }
 }
@@ -1764,18 +2186,17 @@ static const char *mod_destination_prism_label_for_param(param_id_t dest)
 {
     switch (dest)
     {
-        case PARAM_PRISM_TIMBRE: return "OSC1 PARAM1";
-        case PARAM_PRISM_COLOR: return "OSC1 PARAM2";
-        case PARAM_PRISM_MODULATION: return "OSC1 AMOD";
-        case PARAM_PRISM_COARSE: return "OSC1 TUNE";
-        case PARAM_PRISM_FM: return "OSC1 FM AMT";
-        case PARAM_PRISM_LEVEL: return "OSC1 LVL";
-        case PARAM_PRISM_OSC2_TIMBRE: return "OSC2 PARAM1";
-        case PARAM_PRISM_OSC2_COLOR: return "OSC2 PARAM2";
-        case PARAM_PRISM_OSC2_MODULATION: return "OSC2 AMOD";
-        case PARAM_PRISM_OSC2_COARSE: return "OSC2 TUNE";
-        case PARAM_PRISM_OSC2_FM: return "OSC2 FM AMT";
-        case PARAM_PRISM_OSC2_LEVEL: return "OSC2 LVL";
+        case PARAM_PRISM_OSC1_PARAM1: return "OSC1 PARAM1";
+        case PARAM_PRISM_OSC1_PARAM2: return "OSC1 PARAM2";
+        case PARAM_PRISM_OSC1_AMOD: return "OSC1 AMOD";
+        case PARAM_PRISM_TUNE: return "PRISM TUNE";
+        case PARAM_PRISM_PITCH_MOD1: return "OSC1 P.MOD";
+        case PARAM_PRISM_BALANCE: return "PRISM BAL";
+        case PARAM_PRISM_DETUNE: return "PRISM DETUNE";
+        case PARAM_PRISM_OSC2_PARAM1: return "OSC2 PARAM1";
+        case PARAM_PRISM_OSC2_PARAM2: return "OSC2 PARAM2";
+        case PARAM_PRISM_OSC2_AMOD: return "OSC2 AMOD";
+        case PARAM_PRISM_PITCH_MOD2: return "OSC2 P.MOD";
         default: return NULL;
     }
 }
@@ -1807,6 +2228,7 @@ uint8_t mod_destination_catalog_label(uint8_t track, uint16_t dest_index, char *
     }
 
     const char *name = NULL;
+    char audio_fx_name[24];
     if (dest == PARAM_LFO1_RATE)
     {
         name = "lfo1rate";
@@ -1819,14 +2241,34 @@ uint8_t mod_destination_catalog_label(uint8_t track, uint16_t dest_index, char *
     {
         name = "lfo3rate";
     }
-    else if ((name = mod_destination_prism_label_for_param(dest)) == NULL)
+    else
     {
-        if (mod_destination_stack_label_for_track_param(target, dest, &name) == 0U)
+        uint8_t fx_slot = 0U;
+        uint8_t fx_param = 0U;
+        const track_sound_state_t *const state = track_sound_state_get_const(target);
+        const uint8_t fx_model = (state == NULL) ? AUDIO_FX_MODEL_OFF
+            : (audio_fx_param_catalog_param_info(dest, &fx_slot, &fx_param) != 0U)
+                ? ((fx_slot != 0U) ? state->audio_fx_b_model : state->audio_fx_model)
+                : AUDIO_FX_MODEL_OFF;
+        const char *fx_param_name = NULL;
+        if ((audio_fx_param_catalog_param_info(dest, &fx_slot, &fx_param) != 0U)
+                && (audio_fx_param_catalog_resolve(
+                    fx_model, fx_param, &fx_param_name) != 0U))
         {
-            name = mod_destination_wave_label_for_param(dest);
-            if (name == NULL)
+            (void)snprintf(audio_fx_name, sizeof(audio_fx_name),
+                           "FX %c %s", (fx_slot != 0U) ? 'B' : 'A',
+                           fx_param_name);
+            name = audio_fx_name;
+        }
+        else if ((name = mod_destination_prism_label_for_param(dest)) == NULL)
+        {
+            if (mod_destination_stack_label_for_track_param(target, dest, &name) == 0U)
             {
-                name = param_registry[dest].name;
+                name = mod_destination_wave_label_for_param(dest);
+                if (name == NULL)
+                {
+                    name = param_registry[dest].name;
+                }
             }
         }
     }
@@ -1905,24 +2347,23 @@ static const char *mod_destination_short_label_for_param(param_id_t dest)
         case PARAM_STACK_OSC1_COLOR:
         case PARAM_STACK_OSC2_COLOR:
         case PARAM_STACK_OSC3_COLOR: return "Col";
-        case PARAM_PRISM_TIMBRE: return "O1P1";
-        case PARAM_PRISM_COLOR: return "O1P2";
-        case PARAM_PRISM_MODULATION: return "O1AM";
-        case PARAM_PRISM_COARSE: return "O1Tn";
-        case PARAM_PRISM_FM: return "O1FM";
-        case PARAM_PRISM_LEVEL: return "O1Lv";
-        case PARAM_PRISM_OSC2_TIMBRE: return "O2P1";
-        case PARAM_PRISM_OSC2_COLOR: return "O2P2";
-        case PARAM_PRISM_OSC2_MODULATION: return "O2AM";
-        case PARAM_PRISM_OSC2_COARSE: return "O2Tn";
-        case PARAM_PRISM_OSC2_FM: return "O2FM";
-        case PARAM_PRISM_OSC2_LEVEL: return "O2Lv";
+        case PARAM_PRISM_OSC1_PARAM1: return "O1P1";
+        case PARAM_PRISM_OSC1_PARAM2: return "O1P2";
+        case PARAM_PRISM_OSC1_AMOD: return "O1AM";
+        case PARAM_PRISM_TUNE: return "Tune";
+        case PARAM_PRISM_PITCH_MOD1: return "O1PM";
+        case PARAM_PRISM_BALANCE: return "Bal";
+        case PARAM_PRISM_DETUNE: return "Detn";
+        case PARAM_PRISM_OSC2_PARAM1: return "O2P1";
+        case PARAM_PRISM_OSC2_PARAM2: return "O2P2";
+        case PARAM_PRISM_OSC2_AMOD: return "O2AM";
+        case PARAM_PRISM_PITCH_MOD2: return "O2PM";
         case PARAM_WAVE_OSC1_POS: return "O1Ps";
-        case PARAM_WAVE_OSC1_LEVEL: return "O1Lv";
-        case PARAM_WAVE_OSC1_TUNE: return "O1Tn";
         case PARAM_WAVE_OSC2_POS: return "O2Ps";
-        case PARAM_WAVE_OSC2_LEVEL: return "O2Lv";
-        case PARAM_WAVE_OSC2_TUNE: return "O2Tn";
+        case PARAM_WAVE_VOLUME: return "Vol";
+        case PARAM_WAVE_BALANCE: return "Bal";
+        case PARAM_WAVE_TUNE: return "Tune";
+        case PARAM_WAVE_DETUNE: return "Detn";
         default: return NULL;
     }
 }
@@ -1972,7 +2413,26 @@ uint8_t mod_destination_catalog_short_label(uint8_t track, uint16_t dest_index, 
     }
 
     const char *label = NULL;
-    label = mod_destination_short_label_for_param(dest);
+    char audio_fx_label[8];
+    uint8_t fx_slot = 0U;
+    uint8_t fx_param = 0U;
+    const char *fx_param_name = NULL;
+    const track_sound_state_t *const fx_state = track_sound_state_get_const(target);
+    if ((fx_state != NULL)
+            && (audio_fx_param_catalog_param_info(dest, &fx_slot, &fx_param) != 0U)
+            && (audio_fx_param_catalog_resolve(
+                (fx_slot != 0U) ? fx_state->audio_fx_b_model
+                                : fx_state->audio_fx_model,
+                fx_param, &fx_param_name) != 0U))
+    {
+        (void)snprintf(audio_fx_label, sizeof(audio_fx_label), "%c %.2s",
+                       (fx_slot != 0U) ? 'B' : 'A', fx_param_name);
+        label = audio_fx_label;
+    }
+    else
+    {
+        label = mod_destination_short_label_for_param(dest);
+    }
     if (label == NULL)
     {
         if (mod_destination_stack_label_for_track_param(target, dest, &label) == 0U)

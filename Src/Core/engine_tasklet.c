@@ -24,7 +24,7 @@
  * Règles:
  * - Pas de malloc.
  * - Aucun traitement lourd en IRQ.
- * - Accès partagé IRQ/main protégé par section critique courte.
+ * - AUDIO publie un compteur monotone; CONTROL possede seul le curseur consomme.
  *
  * @note L’API publique est déclarée dans engine_tasklet.h.
  */
@@ -32,6 +32,7 @@
 #include "engine_tasklet.h"
 #include "stm32h7xx_hal.h"
 #include "Audio/audio.h"
+#include "Storage/memory_layout.h"
 
 #include "buttons.h"
 #include "encoders.h"
@@ -41,8 +42,9 @@
 
 volatile uint32_t engine_tick_count = 0U;
 
-/* Shared between IRQ + main */
-static volatile uint32_t engine_frames_accum = 0U;
+/* AUDIO publishes a monotonic total; CONTROL owns the consumed cursor. */
+D3_IPC static volatile uint32_t engine_audio_frames_published;
+static uint32_t engine_control_frames_consumed;
 
 /* Tick fixed = 32 frames */
 static uint32_t engine_frames_per_tick = 32U;
@@ -104,7 +106,8 @@ void engine_tasklet_init(uint32_t sample_rate)
   (void)sample_rate;
 
   engine_tick_count = 0U;
-  engine_frames_accum = 0U;
+  engine_audio_frames_published = 0U;
+  engine_control_frames_consumed = 0U;
 
   /* Tick aligned with AUDIO_FRAMES_PER_HALF = 32
      => 48kHz / 32 = 1500 Hz stable */
@@ -141,7 +144,8 @@ void engine_tasklet_init(uint32_t sample_rate)
  */
 void engine_tasklet_notify_frames(uint32_t frames)
 {
-  engine_frames_accum += frames;
+  engine_audio_frames_published += frames;
+  __DMB();
 }
 
 /* ============================================================
@@ -170,21 +174,13 @@ void engine_tasklet_poll(void)
 
   while (ticks_processed < ENGINE_TASKLET_MAX_TICKS_PER_POLL)
   {
-    uint32_t accum;
-
-    /* ---- Critical section: take one tick worth safely ---- */
-    __disable_irq();
-    accum = engine_frames_accum;
-
-    if (accum < engine_frames_per_tick)
+    __DMB();
+    const uint32_t published = engine_audio_frames_published;
+    if ((published - engine_control_frames_consumed) < engine_frames_per_tick)
     {
-      __enable_irq();
       break;
     }
-
-    engine_frames_accum = accum - engine_frames_per_tick;
-    __enable_irq();
-    /* ------------------------------------------------------ */
+    engine_control_frames_consumed += engine_frames_per_tick;
 
     uint32_t now_ms = HAL_GetTick();
     uint32_t dt_ms = now_ms - engine_last_poll_ms;

@@ -87,9 +87,10 @@ static void fx_saturation_update_bypass(fx_saturation_t *fx)
     fx->bypass = ((fx->pre_gain <= 1.0f) && (fx->decimator_enabled == 0U) && (fx->decimator_rate2_enabled == 0U)) ? 1U : 0U;
 }
 
-static inline float fx_trx_bd_drive_shape(float x, float drive_gain)
+static inline float fx_trx_bd_drive_shape(float x, float drive_gain, float asymmetry)
 {
-    return tanhf(x * drive_gain);
+    const float polarity_gain = (x >= 0.0f) ? asymmetry : (2.0f - asymmetry);
+    return tanhf(x * drive_gain * polarity_gain);
 }
 
 static inline float fx_saturation_onepole_lp(float x, float coeff, float *state)
@@ -161,12 +162,13 @@ void fx_saturation_init(fx_saturation_t *fx)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void fx_saturation_set_drive_ui(fx_saturation_t *fx, uint8_t drive_0_127)
+void fx_saturation_set_drive(fx_saturation_t *fx, float drive)
 {
     if(fx == 0)
         return;
 
-    if(drive_0_127 == 0U)
+    const float d = fx_clampf(drive, 0.0f, 1.0f);
+    if(d <= 0.0f)
     {
         fx->pre_gain = 1.0f;
         fx->k = 0.0f;
@@ -175,7 +177,6 @@ void fx_saturation_set_drive_ui(fx_saturation_t *fx, uint8_t drive_0_127)
         return;
     }
 
-    const float d = (float)drive_0_127 * (1.0f / 127.0f);
     fx->k = d;
     fx->pre_gain = 1.0f + (d * FX_SAT_TRX_BD_DRIVE_GAIN_AMOUNT);
     fx->post_gain = 1.0f;
@@ -233,12 +234,12 @@ void fx_saturation_set_decimator_rate2_ui(fx_saturation_t *fx, uint8_t rate_0_12
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void fx_saturation_set_mix_ui(fx_saturation_t *fx, uint8_t mix_0_127)
+void fx_saturation_set_mix(fx_saturation_t *fx, float mix)
 {
     if(fx == 0)
         return;
 
-    fx->mix = (float)mix_0_127 * (1.0f / 127.0f);
+    fx->mix = fx_clampf(mix, 0.0f, 1.0f);
     fx->dry = 1.0f - fx->mix;
 }
 
@@ -254,12 +255,12 @@ void fx_saturation_set_mix_ui(fx_saturation_t *fx, uint8_t mix_0_127)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void fx_saturation_set_tone_ui(fx_saturation_t *fx, uint8_t tone_0_127)
+void fx_saturation_set_tone(fx_saturation_t *fx, float tone)
 {
     if(fx == 0)
         return;
 
-    const float t = (float)tone_0_127 * (1.0f / 127.0f);
+    const float t = fx_clampf(tone, 0.0f, 1.0f);
     /* TONE is a post-shaper low-pass coefficient: low UI values darken,
      * 127 is near-neutral and costs only one multiply per sample.
      */
@@ -279,13 +280,12 @@ void fx_saturation_set_tone_ui(fx_saturation_t *fx, uint8_t tone_0_127)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void fx_saturation_set_bias_ui(fx_saturation_t *fx, uint8_t bias_0_127)
+void fx_saturation_set_bias(fx_saturation_t *fx, float bias)
 {
     if(fx == 0)
         return;
 
-    (void)bias_0_127;
-    fx->asym = 1.0f;
+    fx->asym = 0.5f + fx_clampf(bias, 0.0f, 1.0f);
 }
 
 /**
@@ -312,6 +312,7 @@ void fx_saturation_process_block(fx_saturation_t *fx,
 
     const float tone = fx->tone;
     const float pre = fx->pre_gain;
+    const float asym = fx->asym;
     const float level = fx->post_gain;
     const float wet = fx->mix;
     const float dry = fx->dry;
@@ -351,8 +352,8 @@ void fx_saturation_process_block(fx_saturation_t *fx,
         float yr = in_r;
         if(saturation_enabled != 0U)
         {
-            yl = fx_trx_bd_drive_shape(xl, pre);
-            yr = fx_trx_bd_drive_shape(xr, pre);
+            yl = fx_trx_bd_drive_shape(xl, pre, asym);
+            yr = fx_trx_bd_drive_shape(xr, pre, asym);
 
             yl = fx_saturation_onepole_lp(yl, tone, &tone_l) * level;
             yr = fx_saturation_onepole_lp(yr, tone, &tone_r) * level;
@@ -437,6 +438,7 @@ void fx_saturation_process_mono_block(fx_saturation_t *fx,
 
     const float tone = fx->tone;
     const float pre = fx->pre_gain;
+    const float asym = fx->asym;
     const float level = fx->post_gain;
     const float wet = fx->mix;
     const float dry = fx->dry;
@@ -463,7 +465,7 @@ void fx_saturation_process_mono_block(fx_saturation_t *fx,
         float y = in;
         if(saturation_enabled != 0U)
         {
-            y = fx_trx_bd_drive_shape(x, pre);
+            y = fx_trx_bd_drive_shape(x, pre, asym);
             y = fx_saturation_onepole_lp(y, tone, &tone_state) * level;
             y = in * dry + y * wet;
         }

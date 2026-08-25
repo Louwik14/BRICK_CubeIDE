@@ -33,6 +33,13 @@ static uint8_t live_parameter_audio_runtime_apply_target(
     {
         if ((event->flags & LIVE_PARAMETER_EVENT_FLAG_RUNTIME_TEMP) != 0U)
         {
+            if (event->matrix_operation
+                    == LIVE_PARAMETER_MATRIX_OPERATION_BASE_UPDATE)
+            {
+                audio_mod_matrix_base_update(
+                    event->track, event->parameter_id, value);
+                return 1U;
+            }
             uint8_t applied;
             if (event->matrix_operation == LIVE_PARAMETER_MATRIX_OPERATION_LFO_TEMP_CLEAR)
             {
@@ -95,7 +102,6 @@ static uint8_t live_parameter_audio_runtime_apply_target(
         {
             audio_mod_matrix_base_update(
                 event->track, event->parameter_id, value);
-            audio_mod_matrix_rebuild_track(event->track);
         }
         return applied;
     }
@@ -137,19 +143,35 @@ void live_parameter_audio_runtime_init(void)
 
 uint16_t live_parameter_audio_runtime_apply_due(uint64_t now)
 {
-    const uint16_t claimed = live_parameter_audio_queue_claim_due(now);
-    if (claimed == 0U)
-        return 0U;
-
     uint16_t applied = 0U;
-    for (uint16_t index = 0U; index < claimed; ++index)
+    for (;;)
     {
         live_parameter_audio_event_t event;
-        if (live_parameter_audio_queue_read_claimed(index, &event) == 0U)
+        if ((live_parameter_audio_queue_audio_peek(&event) == false)
+                || (event.effective_sample_time > now))
             break;
         if (live_parameter_audio_runtime_apply_event(&event) != 0U)
             ++applied;
+        (void)live_parameter_audio_queue_audio_pop();
     }
-    live_parameter_audio_queue_release_claimed();
     return applied;
+}
+
+uint8_t live_parameter_audio_runtime_apply_temp(param_id_t parameter,
+                                                uint8_t track,
+                                                float value,
+                                                uint8_t matrix_operation)
+{
+    const live_parameter_audio_event_t event = {
+        .parameter_id = (uint16_t)parameter,
+        .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
+        .track = track,
+        .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
+        .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
+                            | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS
+                            | LIVE_PARAMETER_EVENT_FLAG_RUNTIME_TEMP),
+        .value = live_parameter_event_encode_float(value),
+        .matrix_operation = matrix_operation
+    };
+    return live_parameter_audio_runtime_apply_event(&event);
 }

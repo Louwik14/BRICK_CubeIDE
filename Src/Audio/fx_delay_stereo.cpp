@@ -232,16 +232,25 @@ extern "C" uint8_t fx_delay_stereo_global_is_active(void)
 {
     return ((g_delay.volume_target > 0.0f)
          || (g_delay.volume > 0.0f)
-         || (g_delay.reverb_send_target > 0.0f)) ? 1U : 0U;
+         || (g_delay.reverb_send_target > 0.0f)
+         || (g_delay.reverb_send > 0.0f)
+         || (g_delay.reverb_send_smooth_remaining != 0U)) ? 1U : 0U;
 }
 
-extern "C" void fx_delay_stereo_global_process_block(const float *in_l,
-                                                     const float *in_r,
-                                                     float *out_l,
-                                                     float *out_r,
-                                                     float *rev_l,
-                                                     float *rev_r,
-                                                     uint32_t frames)
+extern "C" uint8_t fx_delay_stereo_global_reverb_send_is_active(void)
+{
+    return ((g_delay.reverb_send != 0.0f)
+         || (g_delay.reverb_send_target != 0.0f)
+         || (g_delay.reverb_send_smooth_remaining != 0U)) ? 1U : 0U;
+}
+
+extern "C" void fx_delay_stereo_global_process_block_add(const float *in_l,
+                                                         const float *in_r,
+                                                         float *out_l,
+                                                         float *out_r,
+                                                         float *rev_l,
+                                                         float *rev_r,
+                                                         uint32_t frames)
 {
     if((in_l == 0) || (in_r == 0) || (out_l == 0) || (out_r == 0))
         return;
@@ -380,8 +389,8 @@ extern "C" void fx_delay_stereo_global_process_block(const float *in_l,
         float wet_l = 0.0f;
         float wet_r = 0.0f;
         apply_width(dl, dr, width, &wet_l, &wet_r);
-        out_l[i] = wet_l * vol;
-        out_r[i] = wet_r * vol;
+        out_l[i] += wet_l * vol;
+        out_r[i] += wet_r * vol;
         if(has_rev != 0U)
         {
             rev_l[i] = wet_l * reverb_send;

@@ -170,10 +170,10 @@ void audio_float_set_dj_eq_mid_db(float db);
 void audio_float_set_dj_eq_high_db(float db);
 void audio_float_set_dj_eq_ui_params(uint8_t low, uint8_t mid, uint8_t high);
 uint8_t audio_float_is_dj_eq_ui_neutral(void);
-void audio_float_set_saturation_tone_ui(uint8_t tone_0_127);
-void audio_float_set_saturation_bias_ui(uint8_t bias_0_127);
-void audio_float_set_saturation_drive_ui(uint8_t drive_0_127);
-void audio_float_set_saturation_mix_ui(uint8_t mix_0_127);
+void audio_float_set_saturation_tone(float tone);
+void audio_float_set_saturation_bias(float bias);
+void audio_float_set_saturation_drive(float drive);
+void audio_float_set_saturation_mix(float mix);
 
 /* ============================================================
    Engine entry point called by audio.c

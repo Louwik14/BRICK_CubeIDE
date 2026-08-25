@@ -1,41 +1,35 @@
-# Streaming needs contract
+# Sampler, assets, streaming et page-cache
 
-Le streamer Release accepte uniquement la lecture forward, la loop forward et
-les préchargements start/loop. Reverse et ping-pong restent des modes du sampler
-RAM et ne sont jamais projetés dans le registre streamer.
+## Ownership
 
-Chaque voix Classic ou Multi publie un snapshot pointer-free puis remplace, en
-une seule opération, son entrée bornée de besoins persistants. Cette entrée est
-l'unique autorité logique : au plus six besoins mobiles, complétés par le
-pré-socle loop forward. L'arrêt, le vol ou le changement de sample retire
-uniquement l'entrée de la génération concernée.
+AUDIO possede besoins, admission des voix, page-cache, generations, pins, refcounts, eviction et publication READY. Storage possede SD, fichiers, maps physiques, lecture et decode. Les commandes et completions sont tokenisees, bornes et sans pointeur.
 
-`sample_stream_sequence_build()` est le générateur pur commun Classic/Multi. Il
-calcule les pages forward, le retour de loop et supprime les doublons. Les
-deadlines sont exprimées en frames de sortie à partir du ratio Q16 et ne servent
-qu'au diagnostic et à la calibration. Le scheduler inspecte seulement les
-entrées actives et sert leur premier besoin non READY dans l'ordre fixe des
-slots Classic puis Multi. Après chaque page, le curseur passe au slot suivant ;
-avance, pitch, deadline, backlog et ancienneté ne modifient jamais cet ordre.
+Une page suit `FREE -> RESERVED -> LOADING -> READY` ou `FAILED`. Une page LOADING n'est ni recyclable ni evictable. La completion valide key, slot, page generation, registration epoch et token; une completion tardive ne devient jamais visible.
 
-Une voix sans besoin chargeable est sautée sans I/O et le curseur poursuit son
-passage. Le curseur, le nombre de slots restant dans le passage et le nombre de
-passages restant dans le tour survivent à un retour superloop. Avec huit voix
-admises, une voix servie voit donc au plus les sept autres voix servies avant
-elle. `SAMPLE_STREAM_PAGES_PER_VOICE_PER_ROUND=N` signifie exactement N
-passages complets : `N=2` produit V1..V8 puis V1..V8, jamais deux pages
-consécutives pour une même voix et jamais un simple plafond global `8*N`.
+## Besoins et admission
 
-Le cache ne crée, ne détruit et ne reconstruit aucun besoin. Il possède seulement
-le cycle physique `FREE -> RESERVED -> LOADING -> READY`, ou `FAILED`. Une page
-READY correspondant à un besoin d'au moins une voix n'est pas évictable. Une
-page partagée n'a pas d'owner : une seule réservation physique suffit, et la
-suppression d'une voix ne l'annule pas tant qu'une autre entrée la demande.
+Chaque voix Classic/Multi publie un snapshot et jusqu'a six besoins mobiles, plus le pre-socle loop forward. Le generateur commun calcule pages forward et loop et supprime les doublons. Reverse et ping-pong restent propres au Sampler RAM.
 
-Une page LOADING n'est jamais recyclable. La publication READY valide le token,
-le slot, la génération de page et le registration epoch ; une complétion tardive
-échoue sans rendre la page visible.
+Le scheduler sert les voix admises en round-robin fixe Classic puis Multi. Une page par voix et par passe; une voix sans besoin chargeable est sautee. Le curseur survit aux retours superloop. Les deadlines sont diagnostiques et ne remplacent pas cet ordre.
 
-Le start preload et le bulk Multi sont des opérations d'amorçage explicites.
-Ils utilisent le même cache, le même transport et la même publication par token,
-mais ne constituent ni une fenêtre mobile ni une seconde file de demandes.
+L'admission calcule debit source, voix, sources distinctes et reserve de changement avant publication. Les seuils conservateurs doivent etre calibres sur carte; refus et liberations sont generationnels et traces.
+
+## I/O et cadence
+
+Le service Storage traite une commande bornee hors IRQ. Produit: tranche 32 KiB; page temporaire 16 KiB. Le backend physique resout des extents vers une FIFO DMA bornee; FatFs reste le fallback. Read-ahead ne change ni ordre, besoins ni lifecycle.
+
+Le transport contient geometrie source, format et token. Storage decode dans un payload partage; AUDIO invalide, copie dans la page finale et publie READY. H743 utilise l'adaptateur local `sample_page_cache_port`; H747 conserve le contrat avec M4 executant l'I/O et M7 possedant le cache.
+
+## Multi, Sampler RAM et Wavetable
+
+Le bulk Multi calcule et epingle l'union start/loop, utilise le cache, le transport et le scheduler communs, par lots de 64 KiB. Il ne possede ni FatFs, ni decodeur, ni arbitre SD parallele.
+
+Sample RAM charge par etapes, lectures de 4096 octets et conversion de 256 frames. Wavetable ajoute parse, CRC, mipmaps, cache `.B6WT` transactionnel et preview; une FFT/bande ou 256 samples sont traites par quantum. Le format WAVE interne est mono S16, 1024 samples par frame, avec mipmaps 1024/512/256/128/64/32/16/8. Les banques historiques en cycles de 2048 samples sont reduites cycle par cycle par filtrage sinc circulaire, sans changer leur nombre de frames; les sources natives 1024 ne sont pas converties. Le cache prepare reste en version physique 3 et sa revision de preparation est 5. L'ancien slot reste publie jusqu'au commit du candidat.
+
+Les payloads Sampler RAM/Wavetable sont des references `{region, offset, length}`. CONTROL clean avant publication, AUDIO invalidate avant installation. Un unload/remplacement suit `STOP -> invalidation voix + ACK AUDIO -> FREE CONTROL`.
+
+## Format audio
+
+Une page de 16 KiB porte 4096 frames mono FLOAT32 ou 2048 frames stereo. Format, stride et frames/page sont derives par `sample_audio_format.h` et restent immutables pendant la voix. Mono reste mono jusqu'au pan/spread final; aucune duplication droite de rejet n'est conservee.
+
+Preview est un ring PCM SPSC distinct. Les prises Looper actives utilisent la carte append-only du Recorder et ne lisent jamais au-dela du tail physiquement committed; le detail appartient a [recorder_sd.md](recorder_sd.md).

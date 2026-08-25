@@ -60,6 +60,24 @@ static void ui_hall_mode_flow_open_midi_fx(void)
     ui_navigation_request_page_with_availability(UI_PAGE_MIDI_FX);
 }
 
+static void ui_hall_mode_flow_open_audio_fx(void)
+{
+    ui_hall_mode_flow_leave_lowcost_modal_page();
+    ui_navigation_request_page_with_availability(UI_PAGE_AUDIO_FX);
+}
+
+static void ui_hall_mode_flow_cycle_fx(void)
+{
+    if (ui_page_get_id() == UI_PAGE_MIDI_FX)
+    {
+        ui_hall_mode_flow_open_audio_fx();
+    }
+    else
+    {
+        ui_hall_mode_flow_open_midi_fx();
+    }
+}
+
 static uint8_t ui_hall_mode_flow_open_looper_rout(void)
 {
     if (ui_hall_mode_resolve_rout_context(ui_get_active_track(), ui_get_hall_mode())
@@ -195,7 +213,7 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
             if (ui_hall_mode_resolve_rout_context(ui_get_active_track(), ui_get_hall_mode())
                     == UI_HALL_ROUT_CONTEXT_NONE)
             {
-                ui_hall_mode_flow_open_midi_fx();
+                ui_hall_mode_flow_cycle_fx();
             }
             return 1U;
 
@@ -344,7 +362,7 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
         if (ui_hall_mode_resolve_rout_context(ui_get_active_track(), ui_get_hall_mode())
                 == UI_HALL_ROUT_CONTEXT_NONE)
         {
-            ui_navigation_request_page_with_availability(UI_PAGE_MIDI_FX);
+            ui_hall_mode_flow_cycle_fx();
         }
         return;
     }

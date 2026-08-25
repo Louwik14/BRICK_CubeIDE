@@ -162,6 +162,45 @@ persist_codec_result_t persist_codec_decode_patch(const persist_codec_source_t *
 persist_codec_result_t persist_codec_encode_project(const persist_codec_project_source_t *project,
                                                      const persist_codec_sink_t *sink,
                                                      uint32_t *out_bytes);
+
+typedef enum
+{
+    PERSIST_CODEC_PROJECT_SECTION_CORE = 0,
+    PERSIST_CODEC_PROJECT_SECTION_ASSETS,
+    PERSIST_CODEC_PROJECT_SECTION_MACROS,
+    PERSIST_CODEC_PROJECT_SECTION_BANK,
+    PERSIST_CODEC_PROJECT_SECTION_COUNT
+} persist_codec_project_section_t;
+
+persist_codec_result_t persist_codec_encode_project_core_payload(
+    const persist_codec_project_metadata_t *metadata,
+    const persist_control_pattern_t *working_pattern,
+    const persist_codec_sink_t *sink,
+    uint32_t *out_bytes);
+persist_codec_result_t persist_codec_encode_project_assets_payload(
+    const persist_control_asset_ref_t *assets,
+    uint16_t asset_count,
+    const persist_codec_sink_t *sink,
+    uint32_t *out_bytes);
+persist_codec_result_t persist_codec_encode_project_macros_payload(
+    const persist_control_macros_t *macros,
+    const persist_codec_sink_t *sink,
+    uint32_t *out_bytes);
+persist_codec_result_t persist_codec_encode_project_pattern_record_payload(
+    const persist_control_pattern_record_t *record,
+    const persist_codec_sink_t *sink,
+    uint32_t *out_bytes);
+uint8_t persist_codec_build_project_section_header(
+    persist_codec_project_section_t section,
+    uint32_t payload_bytes,
+    uint8_t out_header[8]);
+uint8_t persist_codec_build_project_document_header(
+    uint32_t total_bytes,
+    uint32_t payload_crc,
+    uint8_t out_header[PERSIST_CODEC_HEADER_BYTES]);
+uint32_t persist_codec_crc32_update(uint32_t crc,
+                                    const uint8_t *data,
+                                    uint32_t length);
 persist_codec_result_t persist_codec_prevalidate_project(const persist_codec_source_t *source,
                                                           uint32_t *out_total_bytes);
 persist_codec_result_t persist_codec_decode_project_progressive(

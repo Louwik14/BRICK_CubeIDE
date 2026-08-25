@@ -30,6 +30,7 @@ typedef struct
     uint32_t age_counter;
     uint8_t active;
     uint8_t engine;
+    uint8_t most_recent_voice;
     uint8_t slots[SYNTH_POLYPHONY_MAX_VOICES];
     float voice_pan[SYNTH_POLYPHONY_MAX_VOICES];
 } synth_poly_track_t;
@@ -565,9 +566,25 @@ uint8_t synth_polyphony_note_on_occurrence_from(uint8_t track, uint8_t note,
     target->source = (uint8_t)source;
     target->occurrence_id = occurrence_id;
     target->age = ++poly->age_counter;
+    poly->most_recent_voice = selected;
     __DMB();
     poly->renderable_voice_mask |= (uint8_t)(1U << selected);
     return selected;
+}
+
+uint8_t synth_polyphony_get_most_recent_renderable_voice(uint8_t track)
+{
+    if (synth_poly_valid_track(track) == 0U) return SYNTH_POLYPHONY_NO_VOICE;
+    const synth_poly_track_t *const poly = &g_synth_poly[track];
+    const uint8_t recent = poly->most_recent_voice;
+    if ((recent < poly->render_voice_count)
+            && ((poly->renderable_voice_mask & (uint8_t)(1U << recent)) != 0U))
+    {
+        return recent;
+    }
+    return (poly->renderable_voice_mask != 0U)
+        ? (uint8_t)__builtin_ctz((unsigned int)poly->renderable_voice_mask)
+        : SYNTH_POLYPHONY_NO_VOICE;
 }
 
 uint8_t synth_polyphony_note_off(uint8_t track, uint8_t note)

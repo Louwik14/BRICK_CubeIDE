@@ -5,4 +5,4 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projec
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:84:9:ui_hall_allows_injection	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:94:9:ui_hall_is_seq_context	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:112:13:ui_get_hall_mode_short_label	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:158:13:ui_get_hall_mode_suffix_label	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_hall_mode_projection.c:161:13:ui_get_hall_mode_suffix_label	16	static

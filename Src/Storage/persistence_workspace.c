@@ -5,7 +5,9 @@
 typedef union
 {
     persist_codec_project_workspace_t project;
-    persist_control_pattern_t pattern_save;
+    persistence_project_save_workspace_t project_save;
+    persistence_project_restore_workspace_t project_restore;
+    persistence_pattern_io_workspace_t pattern_io;
 } persistence_workspace_storage_t;
 
 STORAGE_STATE_SDRAM static persistence_workspace_storage_t g_persistence_workspace;
@@ -22,15 +24,33 @@ persist_codec_project_workspace_t *persistence_workspace_acquire_project(void)
     return &g_persistence_workspace.project;
 }
 
-persist_control_pattern_t *persistence_workspace_acquire_pattern_save(void)
+persistence_project_save_workspace_t *persistence_workspace_acquire_project_save(void)
 {
     if (g_persistence_workspace_owner != PERSISTENCE_WORKSPACE_FREE)
     {
         return 0;
     }
 
-    g_persistence_workspace_owner = PERSISTENCE_WORKSPACE_PATTERN_SAVE;
-    return &g_persistence_workspace.pattern_save;
+    g_persistence_workspace_owner = PERSISTENCE_WORKSPACE_PROJECT_SAVE;
+    return &g_persistence_workspace.project_save;
+}
+
+persistence_project_restore_workspace_t *persistence_workspace_acquire_project_restore(void)
+{
+    if (g_persistence_workspace_owner != PERSISTENCE_WORKSPACE_FREE) return 0;
+    g_persistence_workspace_owner = PERSISTENCE_WORKSPACE_PROJECT_RESTORE;
+    return &g_persistence_workspace.project_restore;
+}
+
+persistence_pattern_io_workspace_t *persistence_workspace_acquire_pattern_io(void)
+{
+    if (g_persistence_workspace_owner != PERSISTENCE_WORKSPACE_FREE)
+    {
+        return 0;
+    }
+
+    g_persistence_workspace_owner = PERSISTENCE_WORKSPACE_PATTERN_IO;
+    return &g_persistence_workspace.pattern_io;
 }
 
 void persistence_workspace_release(persistence_workspace_owner_t owner)

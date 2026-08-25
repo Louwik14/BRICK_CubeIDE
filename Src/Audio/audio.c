@@ -32,7 +32,9 @@
 #include "Audio/audio_fx_runtime.h"
 #include "Audio/audio_waveform_capture.h"
 #include "Audio/waveform_control.h"
+#include "Audio/synth_waveform_snapshot.h"
 #include "Audio/audio_note_admission.h"
+#include "Core/project_load_quiesce.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_mod_matrix.h"
 #include "Audio/audio_modulation_projection.h"
@@ -45,6 +47,7 @@
 #include "Board/board_audio_format.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
+#include "Core/brick6_wave_runtime.h"
 #include "Sampler/sample_stream_time.h"
 #include "Core/brick6_stream_service_task.h"
 
@@ -166,10 +169,20 @@ static __attribute__((noinline)) void audio_apply_control_events_at_sample(uint6
         {
             brick6_sampler_runtime_stop_multi_instrument(event.param_id);
         }
+        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_RAM_STOP)
+        {
+            brick6_sampler_runtime_stop_ram_slot(event.param_id, event.source_generation);
+        }
+        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_WAVETABLE_STOP)
+        {
+            brick6_wave_runtime_stop_wavetable_slot(event.param_id,
+                                                    event.source_generation);
+        }
     }
 }
 static ITCM_TEXT void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t sample_time, uint32_t frames)
 {
+    const uint8_t project_load_quiescent = project_load_quiesce_audio_service();
     waveform_control_command_t waveform_command;
     if (waveform_control_audio_consume(&waveform_command) != 0U)
     {
@@ -190,10 +203,12 @@ static ITCM_TEXT void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t s
             mod_lfo_v1_audio_consume_snapshots();
             mod_env3_audio_consume_snapshots();
         }
-        audio_apply_control_events_at_sample(now);
+        if (project_load_quiescent == 0U)
+            audio_apply_control_events_at_sample(now);
         if (modulation_configuration_changed != 0U)
             audio_mod_matrix_consume_snapshots();
-        (void)live_parameter_audio_runtime_apply_due(now);
+        if (project_load_quiescent == 0U)
+            (void)live_parameter_audio_runtime_apply_due(now);
         const uint16_t remaining = (uint16_t)(frames - cursor);
         uint16_t span = remaining;
         if (span == 0U)
@@ -320,6 +335,8 @@ void audio_boot_init_binding_io(void)
     audio_mod_matrix_init();
     audio_fx_runtime_init();
     audio_waveform_capture_init();
+    waveform_control_init();
+    synth_waveform_init();
     board_audio_init();
     g_audio_init_state = AUDIO_INIT_NOT_STARTED;
     g_audio_sample_clock = 0U;

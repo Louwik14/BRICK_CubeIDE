@@ -75,6 +75,7 @@ void synth_polyphony_panic(void);
 uint8_t synth_polyphony_get_voice_count(uint8_t track);
 uint8_t synth_polyphony_get_render_voice_count(uint8_t track);
 uint8_t synth_polyphony_get_renderable_voice_mask(uint8_t track);
+uint8_t synth_polyphony_get_most_recent_renderable_voice(uint8_t track);
 uint8_t synth_polyphony_get_voice_snapshot(uint8_t track, uint8_t voice,
                                            synth_poly_voice_snapshot_t *out);
 void synth_polyphony_set_spread(uint8_t track, float spread);

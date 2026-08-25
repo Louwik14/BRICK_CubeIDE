@@ -21,7 +21,11 @@ uint8_t param_backend_apply_track_value_control(
     return 0U;
 }
 
-uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float value, uint8_t update_base_state)
+uint8_t param_backend_apply_prepared_track_value_audio(
+    uint8_t track,
+    param_id_t id,
+    float value,
+    uint8_t update_base_state)
 {
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
     const uint8_t uses_mix_backend = (uint8_t)(((rule.resource == TRACK_RUNTIME_RESOURCE_MIX)
@@ -99,4 +103,13 @@ uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float valu
     }
 
     return applied;
+}
+
+uint8_t param_backend_apply_track_value(uint8_t track,
+                                        param_id_t id,
+                                        float value,
+                                        uint8_t update_base_state)
+{
+    return param_backend_apply_prepared_track_value_audio(
+        track, id, value, update_base_state);
 }

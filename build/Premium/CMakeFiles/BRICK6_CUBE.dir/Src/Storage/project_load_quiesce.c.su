@@ -1,0 +1,4 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_load_quiesce.c:16:6:project_load_quiesce_request	8	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_load_quiesce.c:30:9:project_load_quiesce_audio_service	8	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_load_quiesce.c:52:9:project_load_quiesce_safe	8	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_load_quiesce.c:61:6:project_load_quiesce_end	4	static,ignoring_inline_asm

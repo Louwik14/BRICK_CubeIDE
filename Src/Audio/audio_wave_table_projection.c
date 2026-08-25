@@ -5,6 +5,7 @@
 #include "Core/brick6_wave_runtime.h"
 #include "Storage/memory_layout.h"
 #include "Sampler/wavetable_pool.h"
+#include "Audio/audio_wavetable_registry.h"
 #include "stm32h7xx.h"
 
 #define AUDIO_WAVE_TABLE_BINDING_COUNT \
@@ -82,17 +83,10 @@ void audio_wave_table_projection_audio_consume(void)
                     if (audio_wave_table_binding_equal(
                             binding, &g_audio_wave_table_applied[index]) != 0U)
                         continue;
-                    const wavetable_slot_t *const table =
-                        (binding->wavetable_slot < WAVETABLE_POOL_MAX_SLOTS)
-                        ? wavetable_pool_get_slot(binding->wavetable_slot) : NULL;
-                    const uint32_t generation = (table != NULL)
-                        ? table->generation : 0U;
-                    if ((table == NULL)
-                            || (table->state != WAVETABLE_SLOT_READY)
-                            || (table->data == NULL)
-                            || (table->frame_count == 0U)
-                            || (table->frame_sample_count != WAVETABLE_FRAME_SAMPLE_COUNT)
-                            || (generation != binding->generation))
+                    audio_wavetable_descriptor_t table;
+                    if (audio_wavetable_registry_resolve(
+                            binding->wavetable_slot, binding->generation,
+                            &table) == 0U)
                     {
                         brick6_wave_runtime_set_osc_table_wavetable_generation(
                             instance, osc, WAVETABLE_POOL_INVALID_SLOT, 0U);

@@ -92,6 +92,10 @@ class AnalogOscillator {
   inline uint32_t phase_increment() const {
     return phase_increment_;
   }
+
+  inline uint32_t phase() const {
+    return phase_;
+  }
   
   inline void Reset() {
     phase_ = -phase_increment_;

@@ -1,17 +1,27 @@
-# Z6 — État et persistance
+# Z6 - Persistance Pattern, Patch et Project
 
-Project, Pattern et Patch utilisent exclusivement le modèle CONTROL canonique et les codecs explicites de `persistent_control_codec`. Aucune famille V1, aucun dump de structure et aucune migration d'ancien format ne participent aux parcours produit.
+## Modele et format
 
-La base voice FM étendue reste persistée par les listes de paramètres entity ordinaires. Ses 81 octets cachés sont regroupés dans 27 valeurs FLOAT32 exactes de 24 bits ; il n'existe ni blob SysEx, ni asset DX7, ni format de preset FM parallèle. Patch remet d'abord la base FM à ses valeurs déterministes avant d'appliquer sa liste, tandis que Pattern/Project utilisent leur remise à zéro canonique globale existante.
+Pattern, Project et Patch utilisent exclusivement `persistent_control_model` et le codec explicite `B6CP` version 3. Les DTO ne sont ni des snapshots runtime ni une ABI disque; chaque champ est encode explicitement. Header, kind, sections, longueurs et CRC sont stricts. Aucune ancienne version ni dump de structure n'est lu.
 
-Pattern persiste les configurations, paramètres, routes, Note FX et séquences par entité logique. `pattern_live_ram` orchestre la sélection active, la queue différée et le Blank; capture, validation et application passent par `persistent_pattern_control`, et le stockage passe par `pattern_control_bank`.
+Les cles persistantes de famille, type, parametre, MIDI, clock, Note FX, modulation et asset sont explicites et independantes des ordinaux C. Les FLOAT32 conservent leurs bits. Les indices runtime, bindings, pointeurs, caches, voix, phases, playheads et UI sont exclus.
 
-La présence des slots Pattern est transactionnelle : Store, delete, clear et restauration Project construisent le namespace inactif puis publient son `COMMIT.BIN`. Un overwrite déjà présent emprunte le même corridor. Le bitmap committé décrit toujours exactement les fichiers du set récupérable.
+Pattern contient les seize identites. La configuration des children inactifs est conservee, mais pas leurs parametres, assets, routes, modulation, Note FX ou sequence dynamique. En GROUP, le master possede MOD et Audio FX; les children ont leur lane a un PLAY et leurs niveaux A/B.
 
-Patch est mono-entité et passe uniquement par `patch_product`, `persistent_patch_control` et le codec canonique. Project passe uniquement par `project_product`, `persistent_project_control`, les banks logiques d'assets et les commits transactionnels de Pattern.
+Patch contient une entite, ses parametres logiques et une reference d'asset. Project contient metadata, Pattern de travail, manifeste d'assets, macros/scenes et jusqu'a 256 records Pattern diffuses progressivement.
 
-Les identités persistées sont logiques. Les slots de pool, indices globaux AUDIO, handles et états de chargement runtime sont reconstruits après lecture et ne figurent dans aucun payload persistant.
+## Codec et application
 
-Toute prévalidation précède la mutation. Un rejet laisse l'état CONTROL courant intact; une application réussie reconstruit ensuite le runtime et l'AUDIO.
+Le decode effectue une passe structurelle puis semantique complete avant mutation. Les capacites topologiques sont derivees par `persistent_entity_topology`. Les providers/consumers Project evitent tout DTO Project complet et reutilisent un workspace borne sans allocation dynamique.
 
-Le Project est encodé et décodé progressivement par section. Metadata, assets, macros et records Pattern disposent de providers/consumers dédiés; aucun objet Project complet n'existe en staging et un seul Pattern de transit est réutilisé.
+`persistent_pattern_control`, `persistent_patch_control` et `persistent_project_control` sont les facades CONTROL. `pattern_control_bank`, `patch_product` et `project_product` sont les facades produit. Une reference asset persistante est `{N, kind, path}`; les entites conservent N et `project_control` publie les projections runtime apres chargement.
+
+## Transactions
+
+Toute prevalidation precede la mutation. Pattern Store/delete/clear et restauration de bank Project construisent le namespace inactif puis publient `COMMIT.BIN`. Les Save utilisent des tranches DATA de 4096 octets et des etapes METADATA separees; `.TMP` n'est publie qu'apres header final, sync et close, avec `.BAK` recuperable.
+
+Pattern Save/Load, Project Save, browser SD, Sample RAM, Wavetable et Clear Multi utilisent l'admission Background cooperative de `sd_scheduler_runtime`. Toute demande RT ou transaction active produit `NOT_NOW`; le client conserve son etat et rend la main.
+
+Project Load reste synchrone seulement apres fermeture transport/panic, arret Preview/Recorder, ACK SAFE AUDIO, drainage et exclusivite scheduler. Restore suit `PREPARE CONTROL -> REQUEST -> COMMIT AUDIO -> COMPLETE -> publication CONTROL`. CONTROL ne fabrique jamais SAFE et n'execute jamais le commit AUDIO.
+
+Une application Pattern ou Project reussie reconstruit runtime/AUDIO et invalide Undo/Redo. Un rejet conserve integralement l'etat courant.

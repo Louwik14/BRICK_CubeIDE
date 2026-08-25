@@ -27,6 +27,8 @@
 #include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
 #include "Sampler/sample_global_pool.h"
+#include "Audio/audio_wavetable_registry.h"
+#include "Sampler/sample_stream_time.h"
 #include "Storage/memory_layout.h"
 #include "brick6_audio_runtime.h"
 #include "brick6_looper_runtime.h"
@@ -37,9 +39,11 @@
 #include "Core/brick6_stream_service_task.h"
 #include "Core/track_mute.h"
 #include "Core/project_control.h"
+#include "Core/project_load_quiesce.h"
 #include "brick6_sampler_bootstrap.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/project_product.h"
+#include "Storage/restore_transaction.h"
 #include "Storage/patch_product.h"
 #include "Storage/undo_v2.h"
 #include "Storage/sd_access_gate.h"
@@ -91,6 +95,8 @@ void brick6_app_init(void)
     (void)crash_capsule_init();
 #endif
     SDRAM_Init();
+    restore_transaction_control_init();
+    project_load_quiesce_init();
 
     board_usb_device_init();
     //MX_USB_HOST_Init();
@@ -122,6 +128,7 @@ void brick6_app_init(void)
     sample_page_cache_init();
     sample_global_pool_init();
     sampler_ram_pool_init();
+    audio_wavetable_registry_init();
     wavetable_pool_init();
     multi_sample_pool_init();
 
@@ -138,6 +145,7 @@ void brick6_app_init(void)
     audio_set_float_callback(brick6_audio_runtime_dsp);
 
     engine_tasklet_init(48000);
+    sample_stream_time_init();
     param_store_init();
     seq_runtime_init();
     track_mute_init();
@@ -188,6 +196,7 @@ void brick6_app_init(void)
 static void brick6_app_service_storage(void)
 {
     audio_recorder_service();
+    project_product_save_service();
     if (multi_sample_load_has_pending() != 0U)
     {
         multi_sample_service_load(0U);
@@ -197,9 +206,13 @@ static void brick6_app_service_storage(void)
 #if BRICK_TEST_BUILD
 #endif
         brick6_sampler_runtime_service();
+        multi_sample_pool_service_retire();
+        sampler_ram_pool_service_retire();
+        wavetable_pool_service_retire();
+        sampler_ram_pool_load_async_service();
+        wavetable_pool_load_async_service();
         sampler_ram_pool_waveform_service(BRICK6_STREAM_OTHER_SD_QUANTUM_FRAMES);
-        brick6_looper_runtime_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
-        if (brick6_looper_runtime_has_pending_sd_work() == 0U)
+        if (brick6_looper_runtime_storage_has_pending_sd_work() == 0U)
         {
             multi_sample_service_load(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
         }
@@ -213,6 +226,8 @@ void brick6_app_process(void)
 {
     engine_tasklet_poll();
     brick6_stream_service_task_poll();
+    /* M7 background owner: never execute this Looper state service on M4. */
+    brick6_looper_runtime_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
     /*
      * Seq runtime core is serviced from superloop for both clock domains.
      * TIM12 IRQ only advances INTERNAL time ticks.

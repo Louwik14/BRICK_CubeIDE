@@ -26,8 +26,7 @@ enum
     UI_PAGE_TEMPLATE_MACRO,
     UI_PAGE_TEMPLATE_MIX,
     UI_PAGE_TEMPLATE_PLAY,
-    /* Historical slot retained for stable IDs; no page implementation is attached. */
-    UI_PAGE_RESERVED_LEGACY_SLOT = 15U,
+    UI_PAGE_AUDIO_FX = 15U,
     UI_PAGE_AUDIO_REC,
     UI_PAGE_REC_EDIT,
     UI_PAGE_PATCH_ASSIGN,

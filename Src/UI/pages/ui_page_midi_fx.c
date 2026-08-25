@@ -1,6 +1,7 @@
 #include "pages/ui_page_midi_fx.h"
 
 #include "Audio/audio_fx_runtime.h"
+#include "Param/audio_fx_param_catalog.h"
 #include "Audio/waveform_control.h"
 #include "Core/track_runtime.h"
 #include "NoteFx/note_fx_state.h"
@@ -8,14 +9,15 @@
 #include "drv_display.h"
 #include "font.h"
 #include "ui_core_runtime_bridge.h"
+#include "ui_page_manager.h"
 #include "ui_param.h"
 #include "ui_template_page.h"
 
 #include <stdio.h>
 
 static const ui_template_family_t g_ui_template_midi_fx_family = {
-    .family_title = "FX",
-    .nav_labels = { "MIDI FX 1", "MIDI FX 2", "MIDI FX 3", "AUDIO" },
+    .family_title = "FX 1/2",
+    .nav_labels = { "MIDI FX 1", "MIDI FX 2", "MIDI FX 3", "-" },
     .subpages = {
         {
             .title = "MIDI FX 1",
@@ -30,12 +32,77 @@ static const ui_template_family_t g_ui_template_midi_fx_family = {
             .param_bank = { .params = { PARAM_MIDI_FX_S3_PARAM1, PARAM_MIDI_FX_S3_PARAM2, PARAM_MIDI_FX_S3_PARAM3, PARAM_MIDI_FX_S3_MODEL } },
         },
         {
-            .title = "AUDIO",
-            .param_bank = { .params = { PARAM_AUDIO_FX_P1, PARAM_AUDIO_FX_P2, PARAM_AUDIO_FX_P3, PARAM_AUDIO_FX_MODEL } },
+            .title = "-",
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
     },
     .default_subpage = 0U,
 };
+
+static const ui_template_family_t g_ui_template_audio_fx_family = {
+    .family_title = "FX 2/2",
+    .nav_labels = { "FX A", "FX B", "ROUTING", "-" },
+    .subpages = {
+        { .title = "FX A", .param_bank = { .params = { PARAM_AUDIO_FX_P1, PARAM_AUDIO_FX_P2, PARAM_AUDIO_FX_P3, PARAM_AUDIO_FX_MODEL } } },
+        { .title = "FX B", .param_bank = { .params = { PARAM_AUDIO_FX_B_P1, PARAM_AUDIO_FX_B_P2, PARAM_AUDIO_FX_B_P3, PARAM_AUDIO_FX_B_MODEL } } },
+        { .title = "ROUTING", .param_bank = { .params = { PARAM_AUDIO_FX_FILTER_POS, PARAM_AUDIO_FX_ORDER, PARAM_AUDIO_FX_MODE_A, PARAM_AUDIO_FX_MODE_B } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_audio_fx_group_master_family = {
+    .family_title = "FX 2/2",
+    .nav_labels = { "FX A", "FX B", "SPATIAL", "-" },
+    .subpages = {
+        { .title = "FX A", .param_bank = { .params = { PARAM_AUDIO_FX_P1, PARAM_AUDIO_FX_P2, PARAM_AUDIO_FX_P3, PARAM_AUDIO_FX_MODEL } } },
+        { .title = "FX B", .param_bank = { .params = { PARAM_AUDIO_FX_B_P1, PARAM_AUDIO_FX_B_P2, PARAM_AUDIO_FX_B_P3, PARAM_AUDIO_FX_B_MODEL } } },
+        { .title = "SPATIAL", .param_bank = { .params = { PARAM_AUDIO_FX_MODE_A, PARAM_AUDIO_FX_MODE_B, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
+static const ui_template_family_t g_ui_template_audio_fx_group_child_family = {
+    .family_title = "FX 2/2",
+    .nav_labels = { "LOCAL SENDS", "-", "-", "-" },
+    .subpages = {
+        { .title = "GROUP FX", .param_bank = { .params = { PARAM_GROUP_FX_A_LEVEL, PARAM_GROUP_FX_B_LEVEL, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
+static brick_entity_id_t ui_page_audio_fx_selected_entity(void)
+{
+    ui_template_edit_context_t context;
+    if (ui_template_edit_context_resolve_active(&context) != 0U)
+        return (brick_entity_id_t)context.selected_entity;
+    return (brick_entity_id_t)ui_get_active_lane();
+}
+
+static const ui_template_family_t *ui_page_audio_fx_resolve_family(void)
+{
+    entity_topology_descriptor_t topology;
+    if (entity_topology_get(ui_page_audio_fx_selected_entity(), &topology) != 0U)
+    {
+        if (topology.role == ENTITY_ROLE_GROUP_CHILD)
+            return &g_ui_template_audio_fx_group_child_family;
+        if (topology.role == ENTITY_ROLE_GROUP_MASTER)
+            return &g_ui_template_audio_fx_group_master_family;
+    }
+    return &g_ui_template_audio_fx_family;
+}
+
+static uint8_t ui_page_audio_fx_subpage_enabled(uint8_t subpage_index)
+{
+    return (ui_page_audio_fx_resolve_family()
+            == &g_ui_template_audio_fx_group_child_family)
+        ? (uint8_t)(subpage_index == 0U)
+        : (uint8_t)(subpage_index < 3U);
+}
 
 static const ui_template_family_t g_ui_template_midi_fx_family_rout = {
     .family_title = "ROUT",
@@ -91,7 +158,7 @@ static uint8_t ui_page_midi_fx_subpage_enabled(uint8_t subpage_index)
         return (subpage_index == 0U) ? 1U : 0U;
     }
 
-    return (subpage_index < 4U) ? 1U : 0U;
+    return (subpage_index < 3U) ? 1U : 0U;
 }
 
 static uint8_t ui_page_midi_fx_virtual_slot_text(uint8_t slot,
@@ -122,15 +189,29 @@ static ui_template_page_state_t g_ui_template_midi_fx_state = {
     .has_visited = 0U,
 };
 
+static ui_template_page_state_t g_ui_template_audio_fx_state = {
+    .family = 0,
+    .family_resolver = ui_page_audio_fx_resolve_family,
+    .subpage_enabled = ui_page_audio_fx_subpage_enabled,
+    .virtual_slot_text = ui_page_midi_fx_virtual_slot_text,
+    .custom_widget_picker = ui_page_midi_fx_pick_custom_widget,
+    .param_text = ui_page_midi_fx_param_text,
+    .active_subpage = 0U,
+    .has_visited = 0U,
+};
+
+static ui_template_page_state_t *ui_page_fx_state(void)
+{
+    return (ui_page_get_id() == UI_PAGE_AUDIO_FX)
+        ? &g_ui_template_audio_fx_state : &g_ui_template_midi_fx_state;
+}
+
 static uint8_t ui_page_midi_fx_audio_subpage_active(void)
 {
     const ui_template_subpage_t *const subpage =
-        ui_template_page_get_active_subpage(&g_ui_template_midi_fx_state);
+        ui_template_page_get_active_subpage(ui_page_fx_state());
     return (uint8_t)((subpage != NULL)
-        && (subpage->param_bank.params[0] == PARAM_AUDIO_FX_P1)
-        && (subpage->param_bank.params[1] == PARAM_AUDIO_FX_P2)
-        && (subpage->param_bank.params[2] == PARAM_AUDIO_FX_P3)
-        && (subpage->param_bank.params[3] == PARAM_AUDIO_FX_MODEL));
+        && (audio_fx_runtime_param_slot(subpage->param_bank.params[0], NULL) != 0U));
 }
 
 static void ui_page_midi_fx_sync_waveform_capture(void)
@@ -146,7 +227,10 @@ static void ui_page_midi_fx_sync_waveform_capture(void)
     uint8_t fast_refresh = 0U;
     for (uint8_t slot = 0U; slot < 3U; ++slot)
     {
-        const param_id_t id = (param_id_t)(PARAM_AUDIO_FX_P1 + slot);
+        const ui_template_subpage_t *const subpage =
+            ui_template_page_get_active_subpage(ui_page_fx_state());
+        const param_id_t id = (subpage != NULL)
+            ? subpage->param_bank.params[slot] : PARAM_COUNT;
         if (ui_param_is_user_tweak_active(slot, id) != 0U)
         {
             fast_refresh = 1U;
@@ -164,12 +248,8 @@ static ui_template_custom_widget_kind_t ui_page_midi_fx_pick_custom_widget(
 {
     if ((subpage != NULL)
             && (slot < 3U)
-            && (id == ((slot == 0U) ? PARAM_AUDIO_FX_P1
-                      : (slot == 1U) ? PARAM_AUDIO_FX_P2 : PARAM_AUDIO_FX_P3))
-            && (subpage->param_bank.params[0] == PARAM_AUDIO_FX_P1)
-            && (subpage->param_bank.params[1] == PARAM_AUDIO_FX_P2)
-             && (subpage->param_bank.params[2] == PARAM_AUDIO_FX_P3)
-            && (subpage->param_bank.params[3] == PARAM_AUDIO_FX_MODEL))
+            && (id == subpage->param_bank.params[slot])
+            && (audio_fx_runtime_param_slot(id, NULL) != 0U))
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_AUDIO_FX_GROUP;
     }
@@ -190,85 +270,99 @@ static uint8_t ui_page_midi_fx_param_text(uint8_t slot,
         return 0U;
     }
 
-    if ((id != PARAM_AUDIO_FX_P1) && (id != PARAM_AUDIO_FX_P2)
-            && (id != PARAM_AUDIO_FX_P3))
+    if ((id == PARAM_GROUP_FX_A_LEVEL) || (id == PARAM_GROUP_FX_B_LEVEL))
+    {
+        (void)snprintf(out_name, out_name_len, "LEVEL %c",
+                       (id == PARAM_GROUP_FX_B_LEVEL) ? 'B' : 'A');
+        if ((out_value != NULL) && (out_value_len > 0U))
+            (void)snprintf(out_value, out_value_len, "%u %%",
+                           (unsigned)(value * 100.0f + 0.5f));
+        return 1U;
+    }
+
+    if (id == PARAM_AUDIO_FX_FILTER_POS)
+    {
+        static const char *const labels[] = {"PRE","MID","POST"};
+        brick_entity_id_t entity=(brick_entity_id_t)ui_get_active_lane();
+        ui_template_edit_context_t context;
+        if(ui_template_edit_context_resolve_active(&context)!=0U)
+            entity=(brick_entity_id_t)context.selected_entity;
+        const audio_fx_filter_pos_t pos=audio_fx_runtime_status_get_filter_pos(entity);
+        (void)snprintf(out_name,out_name_len,"FILTER POS");
+        if(out_value!=NULL&&out_value_len>0U)
+            (void)snprintf(out_value,out_value_len,"%s",labels[(uint8_t)pos]);
+        return 1U;
+    }
+    if (id == PARAM_AUDIO_FX_ORDER)
+    {
+        (void)snprintf(out_name,out_name_len,"FX ORDER");
+        if(out_value!=NULL&&out_value_len>0U)
+            (void)snprintf(out_value,out_value_len,"%s",value>=0.5f?"B>A":"A>B");
+        return 1U;
+    }
+    if ((id == PARAM_AUDIO_FX_MODE_A) || (id == PARAM_AUDIO_FX_MODE_B))
+    {
+        static const char *const labels[] = {"MONO","STEREO","MID","SIDE"};
+        const uint8_t mode=(value<0.5f)?0U:(value<1.5f)?1U:(value<2.5f)?2U:3U;
+        (void)snprintf(out_name,out_name_len,"MODE %c",(id==PARAM_AUDIO_FX_MODE_B)?'B':'A');
+        if(out_value!=NULL&&out_value_len>0U)
+            (void)snprintf(out_value,out_value_len,"%s",labels[mode]);
+        return 1U;
+    }
+
+    const uint8_t slot_b = (uint8_t)((id == PARAM_AUDIO_FX_B_P1)
+        || (id == PARAM_AUDIO_FX_B_P2) || (id == PARAM_AUDIO_FX_B_P3));
+    const param_id_t display_id = (id == PARAM_AUDIO_FX_B_P1) ? PARAM_AUDIO_FX_P1
+        : (id == PARAM_AUDIO_FX_B_P2) ? PARAM_AUDIO_FX_P2
+        : (id == PARAM_AUDIO_FX_B_P3) ? PARAM_AUDIO_FX_P3 : id;
+    if ((display_id != PARAM_AUDIO_FX_P1) && (display_id != PARAM_AUDIO_FX_P2)
+            && (display_id != PARAM_AUDIO_FX_P3))
     {
         return 1U;
     }
 
-    const uint8_t model = (uint8_t)(ui_param_get_active_track_display_value(
-        PARAM_AUDIO_FX_MODEL, ui_get_active_lane()) + 0.5f);
     brick_entity_id_t entity = (brick_entity_id_t)ui_get_active_lane();
     ui_template_edit_context_t context;
     if (ui_template_edit_context_resolve_active(&context) != 0U)
         entity = (brick_entity_id_t)context.selected_entity;
-    const uint8_t pre_supported = audio_fx_runtime_pre_filter_supported(entity);
+    const uint8_t model = (uint8_t)(ui_param_get_active_track_display_value(
+        slot_b != 0U ? PARAM_AUDIO_FX_B_MODEL : PARAM_AUDIO_FX_MODEL,
+        (uint8_t)entity) + 0.5f);
     const char *label = NULL;
-    if (id == PARAM_AUDIO_FX_P1)
+    id = display_id;
+    const uint8_t param_index = (uint8_t)(id - PARAM_AUDIO_FX_P1);
+    if (audio_fx_param_catalog_resolve(model, param_index, &label) == 0U)
     {
-        label = (model == 1U) ? "BIT" : (model == 2U) ? "FOLD"
-            : (model == 3U) ? "DRIVE" : (model == 5U) ? "AMOUNT" : "P1";
-        if (model == 8U || model == 11U) label = "SUB";
-        else if (model == 10U) label = "FREQ";
+        label = "-";
+        if ((out_value != NULL) && (out_value_len > 0U))
+            (void)snprintf(out_value, out_value_len, "-");
     }
-    else if (id == PARAM_AUDIO_FX_P2)
+    if (id == PARAM_AUDIO_FX_P2)
     {
-        label = (model == 1U) ? "SRR" : (model == 2U) ? "BIAS"
-            : (model == 3U) ? "INPUT" : (model == 5U) ? "POINT" : "P2";
-        if (model == 8U || model == 11U) label = "TONE";
-        else if (model == 10U){static const char *const w[]={"SINE","TRI","SAW","SQUARE"};label="WAVE";if(out_value&&out_value_len)(void)snprintf(out_value,out_value_len,"%s",w[audio_fx_ring_wave_index_from_control((uint8_t)(value*127.0f+0.5f))]);}
+        if (model == AUDIO_FX_MODEL_RING){static const char *const w[]={"SINE","TRI","SAW","SQUARE"};if(out_value&&out_value_len)(void)snprintf(out_value,out_value_len,"%s",w[audio_fx_ring_wave_index_from_control((uint8_t)(value*127.0f+0.5f))]);}
     }
-    else
+    else if (id == PARAM_AUDIO_FX_P3)
     {
-        if(model==2U) label="XMOD";
-        else if (model == 8U || model == 11U)
-            label = "MIX";
-        else if (model == 10U)
+        if (model == AUDIO_FX_MODEL_RING)
         {
-            static const char *const m[]={"CLASSIC","DIGITAL","ANALOG","XOR","CMP","ANLG-L1"};label = "MODEL";
+            static const char *const m[]={"CLASSIC","DIGITAL","ANALOG","XOR","CMP","ANLG-L1"};
             if ((out_value != NULL) && (out_value_len > 0U))
                 (void)snprintf(out_value,out_value_len,"%s",m[audio_fx_ring_model_index_from_control((uint8_t)(value+0.5f))]);
         }
-        else if ((model >= 7U) && (model <= 12U))
+        else if (model == AUDIO_FX_MODEL_LOFI)
         {
-            label = "-";
-            if ((out_value != NULL) && (out_value_len > 0U))
-                (void)snprintf(out_value,out_value_len,"-");
-        }
-        else if (model == 5U)
-        {
-            label = "SPEED";
-        }
-        else
-        {
-            if (model == 3U)
-            {
-                label="LEVEL";
-            }
             static const char *const engine_labels[] = {
                 "SOFT", "MID", "HARD"
             };
-            if (model == 1U)
-            {
-                const uint8_t engine =
-                    audio_fx_lofi_model_index_from_control(
-                        (uint8_t)((value <= 0.0f) ? 0.0f
-                            : (value >= 127.0f) ? 127.0f : value + 0.5f));
-                label = "ENG";
-                if ((out_value != NULL) && (out_value_len > 0U))
-                    (void)snprintf(out_value, out_value_len, "%s",
-                                   engine_labels[engine]);
-                (void)snprintf(out_name, out_name_len, "%s", label);
-                return 1U;
-            }
-            if (model != 3U)
-            {
-                const uint8_t effective_post = (uint8_t)((value >= 64.0f)
-                    || (pre_supported == 0U));
-                label = (effective_post != 0U) ? "POST" : "PRE";
-                if (out_value != NULL && out_value_len > 0U)
-                    (void)snprintf(out_value,out_value_len,"%s",effective_post?"POST":"PRE");
-            }
+            const uint8_t engine =
+                audio_fx_lofi_model_index_from_control(
+                    (uint8_t)((value <= 0.0f) ? 0.0f
+                        : (value >= 127.0f) ? 127.0f : value + 0.5f));
+            if ((out_value != NULL) && (out_value_len > 0U))
+                (void)snprintf(out_value, out_value_len, "%s",
+                               engine_labels[engine]);
+            (void)snprintf(out_name, out_name_len, "%s", label);
+            return 1U;
         }
     }
     if ((model == 5U) && (out_value != NULL) && (out_value_len > 0U))
@@ -281,7 +375,9 @@ static uint8_t ui_page_midi_fx_param_text(uint8_t slot,
                            (value * 2.0f) - 1.0f);
         else
             (void)snprintf(out_value, out_value_len, "%.2f",
-                           value / 127.0f);
+                           (double)param_value_policy_canonical_to_display(
+                               slot_b != 0U ? PARAM_AUDIO_FX_B_P3 : PARAM_AUDIO_FX_P3,
+                               (uint8_t)entity, value));
     }
     else if ((model == 3U) && (out_value != NULL) && (out_value_len > 0U))
     {
@@ -290,11 +386,34 @@ static uint8_t ui_page_midi_fx_param_text(uint8_t slot,
                            (value * 24.0f) - 12.0f);
         else if (id == PARAM_AUDIO_FX_P3)
         {
-            const float db = (value <= 64.0f)
-                ? -12.0f + value * (12.0f / 64.0f)
-                : (value - 64.0f) * (6.0f / 63.0f);
-            (void)snprintf(out_value, out_value_len, "%+.1f dB", db);
+            const float db = param_value_policy_canonical_to_display(
+                slot_b != 0U ? PARAM_AUDIO_FX_B_P3 : PARAM_AUDIO_FX_P3,
+                (uint8_t)entity, value);
+            (void)snprintf(out_value, out_value_len, "%+.2f dB", (double)db);
         }
+    }
+    else if ((model == AUDIO_FX_MODEL_VIBE)
+            && (out_value != NULL) && (out_value_len > 0U))
+    {
+        if (id == PARAM_AUDIO_FX_P1)
+            (void)snprintf(out_value,out_value_len,"%.2f Hz",.01f+11.99f*value);
+        else if (id == PARAM_AUDIO_FX_P2)
+            (void)snprintf(out_value,out_value_len,"%u %%",(unsigned)(value*100.0f+0.5f));
+        else
+            (void)snprintf(out_value,out_value_len,"%.2f",(double)value);
+    }
+    else if ((model == AUDIO_FX_MODEL_DRIFT)
+            && (out_value != NULL) && (out_value_len > 0U)
+            && (id != PARAM_AUDIO_FX_P3))
+    {
+        if (id == PARAM_AUDIO_FX_P1)
+            (void)snprintf(out_value,out_value_len,"%.2f ms",
+                           (double)param_value_policy_canonical_to_display(
+                               slot_b != 0U ? PARAM_AUDIO_FX_B_P1 : PARAM_AUDIO_FX_P1,
+                               (uint8_t)entity,
+                               value));
+        else
+            (void)snprintf(out_value,out_value_len,"%u",(unsigned)(value*127.0f+0.5f));
     }
     (void)snprintf(out_name, out_name_len, "%s", label);
     return 1U;
@@ -309,6 +428,10 @@ static uint8_t ui_page_midi_fx_virtual_slot_text(uint8_t slot,
     static const char *const style_labels[] = { "ORDER", "UP", "DOWN", "UP/DOWN", "RANDOM" };
     static const char *const arp_names[] = { "RATE", "STYLE", "RANGE", "MODEL" };
     static const char *const euclid_names[] = { "LENGTH", "PULSE", "DIV", "MODEL" };
+    if (ui_page_get_id() == UI_PAGE_AUDIO_FX)
+    {
+        return 0U;
+    }
     const uint8_t page_slot = g_ui_template_midi_fx_state.active_subpage;
     if ((slot >= NOTE_FX_PARAM_COUNT) || (page_slot >= NOTE_FX_SLOT_COUNT))
     {
@@ -377,7 +500,8 @@ static void ui_page_midi_fx_leave(void)
 
 static void ui_page_midi_fx_handle_event(const ui_event_t *ev)
 {
-    if ((ev != 0) && (ev->type == UI_EVENT_ENCODER)
+    if ((ui_page_get_id() == UI_PAGE_MIDI_FX)
+            && (ev != 0) && (ev->type == UI_EVENT_ENCODER)
             && (ev->id < 3U)
             && (g_ui_template_midi_fx_state.active_subpage < NOTE_FX_SLOT_COUNT))
     {
@@ -467,4 +591,13 @@ const ui_page_t g_ui_page_midi_fx = {
     .sync_active_context = ui_template_page_sync_active_track_context,
     .render = ui_page_midi_fx_render,
     .context = &g_ui_template_midi_fx_state,
+};
+
+const ui_page_t g_ui_page_audio_fx = {
+    .enter = ui_page_midi_fx_enter,
+    .leave = ui_page_midi_fx_leave,
+    .handle_event = ui_page_midi_fx_handle_event,
+    .tick = ui_page_midi_fx_tick,
+    .render = ui_page_midi_fx_render,
+    .context = &g_ui_template_audio_fx_state,
 };

@@ -111,15 +111,16 @@ typedef struct
     } looper;
     struct
     {
-        float edit[2];
-        float fine[2];
-        float coarse[2];
-        float fm[2];
-        float timbre[2];
-        float modulation[2];
-        float color[2];
+        float model[2];
+        float pitch_mod[2];
+        float param1[2];
+        float amod[2];
+        float param2[2];
         float phase_reset[2];
-        float level[2];
+        float volume;
+        float balance;
+        float tune;
+        float detune;
     } prism;
     struct
     {
@@ -136,14 +137,10 @@ typedef struct
     {
         float table[2];
         float pos[2];
-        float start[2];
-        float end[2];
-        float level[2];
-        float tune[2];
-        float frame_interp;
-        float sample_interp;
-        float pos_update;
-        float pos_smooth;
+        float volume;
+        float balance;
+        float tune;
+        float detune;
     } wave;
     struct
     {
@@ -172,10 +169,10 @@ typedef struct
 } track_tone_sound_state_t;
 
 #ifdef __cplusplus
-static_assert(sizeof(track_tone_sound_state_t) == 600U,
+static_assert(sizeof(track_tone_sound_state_t) == 560U,
               "track tone state layout changed");
 #else
-_Static_assert(sizeof(track_tone_sound_state_t) == 600U,
+_Static_assert(sizeof(track_tone_sound_state_t) == 560U,
                "track tone state layout changed");
 #endif
 

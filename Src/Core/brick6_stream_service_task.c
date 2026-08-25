@@ -7,11 +7,13 @@
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Sampler/sample_stream_time.h"
+#include "Sampler/sample_stream_transport.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/memory_layout.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "stm32h7xx.h"
 
-static volatile uint32_t g_brick6_stream_audio_wake_sequence;
+D3_IPC static volatile uint32_t g_brick6_stream_audio_wake_sequence;
 static uint32_t g_brick6_stream_serviced_wake_sequence;
 static sample_stream_audio_frame_t g_brick6_stream_last_service_frame;
 static brick6_stream_service_task_stats_t g_brick6_stream_service_stats;
@@ -45,6 +47,9 @@ void brick6_stream_service_task_notify_audio_irq(void)
 
 void brick6_stream_service_task_poll(void)
 {
+    /* H743 local worker adapter. On H747 this call belongs to the M4 loop;
+     * page-cache scheduling/completion remains on M7. */
+    sample_stream_transport_worker_poll();
     sd_scheduler_runtime_service();
     __DMB();
     const uint32_t requested_sequence = g_brick6_stream_audio_wake_sequence;
@@ -78,6 +83,7 @@ void brick6_stream_service_task_poll(void)
 
     brick6_sampler_runtime_queue_stream_pages();
     sample_cache_service(BRICK6_STREAM_SERVICE_BYTE_BUDGET);
+    sample_stream_transport_worker_poll();
     sd_scheduler_runtime_service();
     brick6_stream_service_task_update_gate();
     g_brick6_stream_serviced_wake_sequence = requested_sequence;

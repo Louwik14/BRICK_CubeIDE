@@ -108,7 +108,7 @@ typedef struct
     (MOD_LFO_SNAPSHOT_RESET_SHAPE | MOD_LFO_SNAPSHOT_RESET_TRIGGER)
 #define MOD_LFO_SNAPSHOT_CLEAR_ALL ((uint8_t)((1U << MOD_LFO_PARAM_COUNT) - 1U))
 
-CTRL_STATE static mod_lfo_control_mailbox_t
+D3_IPC static mod_lfo_control_mailbox_t
     g_mod_lfo_control_mailbox[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
 CTRL_STATE static uint32_t
     g_mod_lfo_control_pending_sequence[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
@@ -281,69 +281,6 @@ static const track_mod_lfo_state_t *mod_lfo_track_settings_const(uint8_t track, 
     }
 
     return &state->mod_lfo[lfo_index];
-}
-
-static ui_track_family_t mod_lfo_ui_family_from_ctx(const track_audio_runtime_ctx_t *ctx)
-{
-    if (ctx == NULL)
-    {
-        return UI_TRACK_FAMILY_OFF;
-    }
-
-    switch ((track_runtime_family_t)ctx->family)
-    {
-        case TRACK_RUNTIME_FAMILY_SYNTH:
-            return UI_TRACK_FAMILY_SYNTH;
-        case TRACK_RUNTIME_FAMILY_SAMPLER:
-            return UI_TRACK_FAMILY_SAMPLER;
-        case TRACK_RUNTIME_FAMILY_DRUM:
-            return UI_TRACK_FAMILY_DRUM;
-            return UI_TRACK_FAMILY_OFF;
-        case TRACK_RUNTIME_FAMILY_MIDI:
-            return UI_TRACK_FAMILY_MIDI;
-        case TRACK_RUNTIME_FAMILY_EXTERNAL:
-            return UI_TRACK_FAMILY_EXTERNAL;
-        case TRACK_RUNTIME_FAMILY_OFF:
-        default:
-            return UI_TRACK_FAMILY_OFF;
-    }
-}
-
-static ui_track_type_t mod_lfo_ui_type_from_ctx(const track_audio_runtime_ctx_t *ctx)
-{
-    if (ctx == NULL)
-    {
-        return UI_TRACK_TYPE_NONE;
-    }
-
-    switch ((track_runtime_type_t)ctx->type)
-    {
-        case TRACK_RUNTIME_TYPE_RAM:
-            return UI_TRACK_TYPE_RAM;
-        case TRACK_RUNTIME_TYPE_PRISM:
-            return UI_TRACK_TYPE_PRISM;
-        case TRACK_RUNTIME_TYPE_WAVE:
-            return UI_TRACK_TYPE_WAVE;
-        case TRACK_RUNTIME_TYPE_STACK:
-            return UI_TRACK_TYPE_STACK;
-        case TRACK_RUNTIME_TYPE_DRUM_MD:
-            return UI_TRACK_TYPE_DRUM_MD;
-        case TRACK_RUNTIME_TYPE_MIDI:
-            return UI_TRACK_TYPE_MIDI;
-        case TRACK_RUNTIME_TYPE_EXTERNAL:
-            return UI_TRACK_TYPE_EXTERNAL;
-        case TRACK_RUNTIME_TYPE_STREAM:
-            return UI_TRACK_TYPE_STREAM;
-        case TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG:
-            return UI_TRACK_TYPE_DRUM_BD_ANALOG;
-        case TRACK_RUNTIME_TYPE_LOOPER:
-            return UI_TRACK_TYPE_LOOPER;
-        case TRACK_RUNTIME_TYPE_MULTI:
-            return UI_TRACK_TYPE_MULTI;
-        case TRACK_RUNTIME_TYPE_NONE:
-        default:
-            return UI_TRACK_TYPE_NONE;
-    }
 }
 
 static uint8_t mod_lfo_runtime_param_mask(mod_lfo_param_t param)
@@ -965,14 +902,15 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames,
         g_mod_lfo_track_had_matrix_routes[track] = 1U;
 
         const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
-        const ui_track_family_t family = mod_lfo_ui_family_from_ctx(ctx);
-        const ui_track_type_t type = mod_lfo_ui_type_from_ctx(ctx);
+        const uint16_t required_source_mask =
+            mod_matrix_required_source_mask(track);
         float source_values[MOD_MATRIX_SOURCE_COUNT] = {0.0f};
         float source_end[MOD_MATRIX_SOURCE_COUNT] = {0.0f};
         uint8_t source_valid[MOD_MATRIX_SOURCE_COUNT] = {0U};
         uint8_t source_discontinuous[MOD_MATRIX_SOURCE_COUNT] = {0U};
 
-        if (mod_matrix_source_has_active_route(track, MOD_MATRIX_SOURCE_ENV3, family, type, ctx) != 0U)
+        if ((required_source_mask
+             & (uint16_t)(1U << (uint8_t)MOD_MATRIX_SOURCE_ENV3)) != 0U)
         {
             source_values[MOD_MATRIX_SOURCE_ENV3] = mod_env3_process_track(track, elapsed_frames);
             source_end[MOD_MATRIX_SOURCE_ENV3] = source_values[MOD_MATRIX_SOURCE_ENV3];
@@ -980,13 +918,15 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames,
         }
         if ((ctx != NULL)
                 && (ctx->audio_binding.mix_track_id < MIXER_MAX_TRACKS)
-                && (mod_matrix_source_has_active_route(track, MOD_MATRIX_SOURCE_ENV_VCA, family, type, ctx) != 0U))
+                && ((required_source_mask
+                     & (uint16_t)(1U << (uint8_t)MOD_MATRIX_SOURCE_ENV_VCA)) != 0U))
         {
             source_values[MOD_MATRIX_SOURCE_ENV_VCA] = mixer_get_track_vca_env_value(ctx->audio_binding.mix_track_id);
             source_end[MOD_MATRIX_SOURCE_ENV_VCA] = source_values[MOD_MATRIX_SOURCE_ENV_VCA];
             source_valid[MOD_MATRIX_SOURCE_ENV_VCA] = 1U;
         }
-        if (mod_matrix_source_has_active_route(track, MOD_MATRIX_SOURCE_ENV_FLT, family, type, ctx) != 0U)
+        if ((required_source_mask
+             & (uint16_t)(1U << (uint8_t)MOD_MATRIX_SOURCE_ENV_FLT)) != 0U)
         {
             if ((ctx != NULL)
                     && ((ctx->flags & 1U) != 0U)
@@ -1031,12 +971,8 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames,
                 phase_inc = mod_lfo_phase_inc_from_rate_with_bpm(rate, bpm_milli);
             }
             if ((phase_inc == 0U)
-                    || (mod_matrix_source_has_active_route(
-                        track,
-                        (mod_matrix_source_t)((uint8_t)MOD_MATRIX_SOURCE_LFO1 + lfo),
-                        family,
-                        type,
-                        ctx) == 0U))
+                    || ((required_source_mask
+                         & (uint16_t)(1U << ((uint8_t)MOD_MATRIX_SOURCE_LFO1 + lfo))) == 0U))
             {
                 rt->active = 0U;
                 continue;

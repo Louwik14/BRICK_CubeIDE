@@ -10,7 +10,7 @@ typedef struct
     volatile uint16_t tail;
 } control_audio_queue_state_t;
 
-CTRL_STATE static control_audio_queue_state_t g_control_audio_queue;
+D3_IPC static control_audio_queue_state_t g_control_audio_queue;
 
 static uint16_t control_audio_queue_advance(uint16_t index)
 {
@@ -60,7 +60,7 @@ uint8_t control_audio_queue_publish_batch(const control_audio_event_t *events,
         const uint8_t is_barrier = (uint8_t)(
             event->kind >= CONTROL_AUDIO_EVENT_CLOSE_ENTITY);
         if ((event->entity_id >= BRICK_ENTITY_CAPACITY)
-                || (event->kind > CONTROL_AUDIO_EVENT_MULTI_STOP)
+                || (event->kind > CONTROL_AUDIO_EVENT_WAVETABLE_STOP)
                 || ((event->kind <= CONTROL_AUDIO_EVENT_NOTE_ON)
                     && ((event->note >= 128U)
                         || (event->velocity >= 128U)
@@ -95,9 +95,9 @@ uint8_t control_audio_queue_audio_peek(control_audio_event_t *out_event)
     if (out_event == NULL)
         return 0U;
     const uint16_t tail = g_control_audio_queue.tail;
-    __DMB();
     if (tail == g_control_audio_queue.head)
         return 0U;
+    __DMB();
     *out_event = g_control_audio_queue.events[tail];
     return 1U;
 }
@@ -105,9 +105,9 @@ uint8_t control_audio_queue_audio_peek(control_audio_event_t *out_event)
 uint8_t control_audio_queue_audio_pop(void)
 {
     const uint16_t tail = g_control_audio_queue.tail;
-    __DMB();
     if (tail == g_control_audio_queue.head)
         return 0U;
+    __DMB();
     g_control_audio_queue.tail = control_audio_queue_advance(tail);
     __DMB();
     return 1U;
@@ -117,7 +117,6 @@ uint16_t control_audio_queue_audio_pending_count(void)
 {
     const uint16_t head = g_control_audio_queue.head;
     const uint16_t tail = g_control_audio_queue.tail;
-    __DMB();
     return (head >= tail)
         ? (uint16_t)(head - tail)
         : (uint16_t)(CONTROL_AUDIO_QUEUE_CAPACITY - tail + head);

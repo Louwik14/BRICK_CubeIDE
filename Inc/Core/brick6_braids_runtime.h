@@ -15,9 +15,7 @@ extern "C" {
 typedef struct
 {
     float edit;
-    float fine;
-    float coarse;
-    float fm;
+    float pitch_mod;
     float timbre;
     float modulation;
     float color;
@@ -38,23 +36,21 @@ void brick6_braids_runtime_init(void);
 void brick6_braids_runtime_reset_instance(uint8_t instance_id);
 
 void brick6_braids_runtime_set_edit(uint8_t instance_id, float edit);
-void brick6_braids_runtime_set_fine(uint8_t instance_id, float fine);
-void brick6_braids_runtime_set_coarse(uint8_t instance_id, float coarse);
-void brick6_braids_runtime_set_fm(uint8_t instance_id, float fm);
+void brick6_braids_runtime_set_pitch_mod(uint8_t instance_id, float amount);
 void brick6_braids_runtime_set_timbre(uint8_t instance_id, float timbre);
 void brick6_braids_runtime_set_modulation(uint8_t instance_id, float modulation);
 void brick6_braids_runtime_set_color(uint8_t instance_id, float color);
 void brick6_braids_runtime_set_phase_reset(uint8_t instance_id, uint8_t enabled);
-void brick6_braids_runtime_set_level(uint8_t instance_id, float level);
 void brick6_braids_runtime_set_osc_edit(uint8_t instance_id, uint8_t osc, float edit);
-void brick6_braids_runtime_set_osc_fine(uint8_t instance_id, uint8_t osc, float fine);
-void brick6_braids_runtime_set_osc_coarse(uint8_t instance_id, uint8_t osc, float coarse);
-void brick6_braids_runtime_set_osc_fm(uint8_t instance_id, uint8_t osc, float fm);
+void brick6_braids_runtime_set_osc_pitch_mod(uint8_t instance_id, uint8_t osc, float amount);
 void brick6_braids_runtime_set_osc_timbre(uint8_t instance_id, uint8_t osc, float timbre);
 void brick6_braids_runtime_set_osc_modulation(uint8_t instance_id, uint8_t osc, float modulation);
 void brick6_braids_runtime_set_osc_color(uint8_t instance_id, uint8_t osc, float color);
 void brick6_braids_runtime_set_osc_phase_reset(uint8_t instance_id, uint8_t osc, uint8_t enabled);
-void brick6_braids_runtime_set_osc_level(uint8_t instance_id, uint8_t osc, float level);
+void brick6_braids_runtime_set_volume(uint8_t instance_id, float volume);
+void brick6_braids_runtime_set_balance(uint8_t instance_id, float balance);
+void brick6_braids_runtime_set_tune(uint8_t instance_id, float semitones);
+void brick6_braids_runtime_set_detune(uint8_t instance_id, float semitones);
 void brick6_braids_runtime_set_vca_release_seconds(uint8_t instance_id, float release_s);
 
 void brick6_braids_runtime_note_on(uint8_t instance_id, float note, float velocity);

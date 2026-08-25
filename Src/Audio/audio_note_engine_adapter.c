@@ -1,5 +1,6 @@
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_mod_matrix.h"
+#include "Audio/audio_fx_runtime.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -22,8 +23,9 @@ static uint32_t g_audio_installed_generation[BRICK_ENTITY_CAPACITY];
 static track_audio_runtime_ctx_t g_audio_track_ctx[BRICK_ENTITY_CAPACITY];
 static uint16_t g_audio_entity_mask_by_engine[TRACK_RUNTIME_ENGINE_COUNT];
 static uint8_t g_audio_entity_by_mix_lane[MIXER_MAX_TRACKS];
-static audio_binding_snapshot_t g_audio_binding_snapshot[BRICK_ENTITY_CAPACITY];
-static volatile uint32_t g_audio_binding_snapshot_sequence;
+D3_IPC static audio_binding_snapshot_t
+    g_audio_binding_snapshot[BRICK_ENTITY_CAPACITY];
+D3_IPC static volatile uint32_t g_audio_binding_snapshot_sequence;
 
 static void audio_note_engine_adapter_rebuild_binding_projections(void)
 {
@@ -411,12 +413,6 @@ uint8_t audio_note_engine_adapter_apply(
     return 1U;
 }
 
-static float audio_note_engine_adapter_decode_float(uint32_t bits)
-{
-    union { uint32_t u; float f; } value = { .u = bits };
-    return value.f;
-}
-
 static uint8_t audio_note_engine_adapter_mix_target_available(
     brick_entity_id_t entity_id, uint8_t mix_track)
 {
@@ -455,45 +451,26 @@ static uint8_t audio_note_engine_adapter_choose_mix_target(
     return 0xFFU;
 }
 
-static track_runtime_engine_t audio_note_engine_adapter_choose_engine(
-    track_runtime_family_t family, track_runtime_type_t type)
-{
-    if ((family == TRACK_RUNTIME_FAMILY_EXTERNAL)
-            && (type == TRACK_RUNTIME_TYPE_EXTERNAL))
-        return TRACK_RUNTIME_ENGINE_AUDIO_TRACK;
-    if (family == TRACK_RUNTIME_FAMILY_DRUM)
-        return ((type == TRACK_RUNTIME_TYPE_DRUM_MD)
-                || (type == TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG))
-            ? TRACK_RUNTIME_ENGINE_DRUM : TRACK_RUNTIME_ENGINE_NONE;
-    if (family == TRACK_RUNTIME_FAMILY_SAMPLER)
-    {
-        if (type == TRACK_RUNTIME_TYPE_LOOPER)
-            return TRACK_RUNTIME_ENGINE_LOOPER;
-        if ((type == TRACK_RUNTIME_TYPE_RAM)
-                || (type == TRACK_RUNTIME_TYPE_STREAM)
-                || (type == TRACK_RUNTIME_TYPE_MULTI))
-            return TRACK_RUNTIME_ENGINE_SAMPLER;
-    }
-    if (family == TRACK_RUNTIME_FAMILY_SYNTH)
-    {
-        if (type == TRACK_RUNTIME_TYPE_PRISM) return TRACK_RUNTIME_ENGINE_PRISM;
-        if (type == TRACK_RUNTIME_TYPE_STACK) return TRACK_RUNTIME_ENGINE_STACK;
-        if (type == TRACK_RUNTIME_TYPE_WAVE) return TRACK_RUNTIME_ENGINE_WAVE;
-        if (type == TRACK_RUNTIME_TYPE_FM) return TRACK_RUNTIME_ENGINE_FM;
-    }
-    return TRACK_RUNTIME_ENGINE_NONE;
-}
-
 void audio_note_engine_adapter_install_intent(
     const control_audio_event_t *event)
 {
-    if ((event == NULL) || (event->entity_id >= BRICK_ENTITY_CAPACITY))
+    audio_note_engine_install_spec_t spec;
+    if (audio_note_engine_adapter_prepare_install_spec(event, &spec) == 0U)
         return;
 
-    const brick_entity_id_t entity_id = event->entity_id;
+    audio_note_engine_adapter_install_prepared(&spec);
+}
+
+void audio_note_engine_adapter_install_prepared(
+    const audio_note_engine_install_spec_t *spec)
+{
+    if ((spec == NULL) || (spec->entity_id >= BRICK_ENTITY_CAPACITY))
+        return;
+
+    const brick_entity_id_t entity_id = spec->entity_id;
     const track_runtime_family_t family =
-        (track_runtime_family_t)event->provenance;
-    const track_runtime_type_t type = (track_runtime_type_t)event->note;
+        (track_runtime_family_t)spec->family;
+    const track_runtime_type_t type = (track_runtime_type_t)spec->type;
     const track_runtime_engine_t requested_engine =
         audio_note_engine_adapter_choose_engine(family, type);
     track_audio_runtime_ctx_t *const ctx = &g_audio_track_ctx[entity_id];
@@ -507,11 +484,11 @@ void audio_note_engine_adapter_install_intent(
 
     (void)synth_polyphony_set_track_active(entity_id, 0U, 0U);
     *ctx = (track_audio_runtime_ctx_t){
-        .midi_channel_1_16 = event->velocity,
-        .midi_source = (uint8_t)event->param_value,
+        .midi_channel_1_16 = spec->midi_channel_1_16,
+        .midi_source = spec->midi_source,
         .family = (uint8_t)family,
         .type = (uint8_t)type,
-        .flags = event->flags
+        .flags = spec->flags
     };
     track_audio_binding_t installed = {
         .entity_id = entity_id,
@@ -526,7 +503,7 @@ void audio_note_engine_adapter_install_intent(
     if ((family == TRACK_RUNTIME_FAMILY_OFF)
             || (family == TRACK_RUNTIME_FAMILY_OTHER))
         installed.bind_reason = TRACK_RUNTIME_BIND_REASON_TRACK_OFF;
-    else if ((event->flags & AUDIO_RUNTIME_FLAG_GROUP_MASTER) != 0U)
+    else if ((spec->flags & AUDIO_RUNTIME_FLAG_GROUP_MASTER) != 0U)
     {
         installed.mix_track_id = MIXER_GROUP_BUS_TRACK;
         installed.bind_state = TRACK_RUNTIME_BIND_BOUND;
@@ -595,14 +572,11 @@ void audio_note_engine_adapter_install_intent(
         }
         else
         {
-            uint8_t voices = event->param_id != 0U
-                ? (uint8_t)event->param_id : 1U;
+            uint8_t voices = spec->voice_count;
             if (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
                 voices = 1U;
             (void)synth_polyphony_set_voice_count(entity_id, voices);
-            synth_polyphony_set_spread(
-                entity_id,
-                audio_note_engine_adapter_decode_float(event->source_generation));
+            synth_polyphony_set_spread(entity_id, spec->voice_spread);
             installed.instance_id = synth_polyphony_get_slot(entity_id, 0U);
         }
     }
@@ -624,6 +598,7 @@ void audio_note_engine_adapter_install_intent(
     mixer_rebuild_static_plan();
     audio_mod_matrix_rebuild_track(entity_id);
     audio_note_engine_adapter_publish_snapshots();
+    audio_fx_runtime_rebuild_entity_plan(entity_id);
 }
 
 uint8_t audio_note_engine_adapter_apply_polyphony(
@@ -643,7 +618,10 @@ uint8_t audio_note_engine_adapter_apply_polyphony(
         brick6_sampler_runtime_set_multi_spread(entity_id, spread);
         if (previous_voice_count
                 != brick6_sampler_runtime_get_multi_voice_count(entity_id))
+        {
             audio_note_engine_adapter_publish_snapshots();
+            audio_fx_runtime_rebuild_entity_plan(entity_id);
+        }
         return 1U;
     }
     if ((binding->engine != (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
@@ -659,7 +637,10 @@ uint8_t audio_note_engine_adapter_apply_polyphony(
     (void)synth_polyphony_set_voice_count(entity_id, voice_count);
     synth_polyphony_set_spread(entity_id, spread);
     if (previous_voice_count != synth_polyphony_get_voice_count(entity_id))
+    {
         audio_note_engine_adapter_publish_snapshots();
+        audio_fx_runtime_rebuild_entity_plan(entity_id);
+    }
     return 1U;
 }
 

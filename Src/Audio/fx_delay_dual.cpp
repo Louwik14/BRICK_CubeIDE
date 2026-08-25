@@ -535,8 +535,8 @@ __attribute__((noinline)) static void process_dual_kernel(const float *in_l,
             }
         }
         apply_width(wet_l, wet_r, width, &wet_l, &wet_r);
-        out_l[i] = sanitize_output_sample(wet_l * volume);
-        out_r[i] = sanitize_output_sample(wet_r * volume);
+        out_l[i] += sanitize_output_sample(wet_l * volume);
+        out_r[i] += sanitize_output_sample(wet_r * volume);
         if(cfg.has_rev != 0U)
         {
             rev_l[i] = sanitize_output_sample(wet_l * reverb_send);
@@ -698,16 +698,25 @@ extern "C" uint8_t fx_delay_dual_global_is_active(void)
 {
     return ((g_dual.volume_target > 0.0f)
          || (g_dual.volume > 0.0f)
-         || (g_dual.reverb_send_target > 0.0f)) ? 1U : 0U;
+         || (g_dual.reverb_send_target > 0.0f)
+         || (g_dual.reverb_send > 0.0f)
+         || (g_dual.reverb_send_smooth_remaining != 0U)) ? 1U : 0U;
 }
 
-extern "C" void fx_delay_dual_global_process_block(const float *in_l,
-                                                   const float *in_r,
-                                                   float *out_l,
-                                                   float *out_r,
-                                                   float *rev_l,
-                                                   float *rev_r,
-                                                   uint32_t frames)
+extern "C" uint8_t fx_delay_dual_global_reverb_send_is_active(void)
+{
+    return ((g_dual.reverb_send != 0.0f)
+         || (g_dual.reverb_send_target != 0.0f)
+         || (g_dual.reverb_send_smooth_remaining != 0U)) ? 1U : 0U;
+}
+
+extern "C" void fx_delay_dual_global_process_block_add(const float *in_l,
+                                                       const float *in_r,
+                                                       float *out_l,
+                                                       float *out_r,
+                                                       float *rev_l,
+                                                       float *rev_r,
+                                                       uint32_t frames)
 {
     if((in_l == 0) || (in_r == 0) || (out_l == 0) || (out_r == 0))
         return;

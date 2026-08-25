@@ -9,8 +9,18 @@ typedef struct
     waveform_control_command_t command;
 } waveform_control_mailbox_t;
 
-CTRL_STATE static waveform_control_mailbox_t g_waveform_control_mailbox;
+D3_IPC static waveform_control_mailbox_t g_waveform_control_mailbox;
 static uint32_t g_waveform_control_audio_sequence;
+
+void waveform_control_init(void)
+{
+    g_waveform_control_mailbox.sequence = 0U;
+    g_waveform_control_mailbox.command = (waveform_control_command_t){
+        .entity_id = BRICK_ENTITY_INVALID_ID
+    };
+    g_waveform_control_audio_sequence = 0U;
+    __DMB();
+}
 
 void waveform_control_publish(brick_entity_id_t entity_id,
                               uint8_t enabled,

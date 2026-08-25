@@ -70,6 +70,26 @@ class MacroOscillator {
 
   inline int16_t pitch() const { return pitch_; }
 
+  inline uint32_t carrier_phase() const {
+    if ((shape_ == MACRO_OSC_SHAPE_SQUARE_SUB)
+        || (shape_ == MACRO_OSC_SHAPE_SAW_SUB)) {
+      return analog_oscillator_[1].phase();
+    }
+    return (shape_ <= MACRO_OSC_SHAPE_TRIPLE_SINE)
+        ? analog_oscillator_[0].phase()
+        : digital_oscillator_.phase();
+  }
+
+  inline uint32_t carrier_phase_increment() const {
+    if ((shape_ == MACRO_OSC_SHAPE_SQUARE_SUB)
+        || (shape_ == MACRO_OSC_SHAPE_SAW_SUB)) {
+      return analog_oscillator_[1].phase_increment();
+    }
+    return (shape_ <= MACRO_OSC_SHAPE_TRIPLE_SINE)
+        ? analog_oscillator_[0].phase_increment()
+        : digital_oscillator_.phase_increment();
+  }
+
   inline void set_parameters(
       int16_t parameter_1,
       int16_t parameter_2) {

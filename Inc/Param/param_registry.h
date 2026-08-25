@@ -1,6 +1,7 @@
 #pragma once
 
 #include "param_store.h"
+#include "Param/param_value_policy.h"
 #include "UI/ui_core.h"
 
 #ifdef __cplusplus
@@ -28,7 +29,7 @@ typedef enum
     PARAM_TYPE_BIPOLAR
 } param_type_t;
 
-typedef struct
+typedef struct param_desc
 {
     param_id_t id;
 
@@ -47,6 +48,8 @@ typedef struct
     const char *unit;
     const char *const *labels;
 
+    param_value_policy_t value_policy;
+
     void (*apply)(float value);
 
 } param_desc_t;
@@ -59,6 +62,12 @@ typedef struct
     uint8_t track;
     float value;
 } param_registry_track_edit_cmd_t;
+
+typedef struct
+{
+    param_id_t id;
+    float value;
+} param_registry_prepared_value_t;
 
 typedef void (*param_registry_track_structure_mutation_fn_t)(void *ctx);
 
@@ -103,12 +112,33 @@ uint8_t param_registry_track_structure_transition_is_global_active(void);
 uint8_t param_registry_track_structure_transition_is_track_active(uint8_t track);
 uint8_t param_registry_apply_track_edit(const param_registry_track_edit_cmd_t *cmd);
 uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float value);
+/* Common validation/conversion seam.  Prepared values are clamped canonical
+ * values and contain no transport or runtime side effect. */
+uint8_t param_registry_prepare_value(param_id_t id,
+                                     float value,
+                                     param_registry_prepared_value_t *out_value);
+uint8_t param_registry_track_value_is_audio_command(param_id_t id,uint8_t track);
+/* CONTROL target-only seam used by bulk preparation/commit work.  It performs
+ * no queue publication, retry bookkeeping, transition or UI synchronization. */
+uint8_t param_registry_install_prepared_track_control_target(
+    const param_registry_prepared_value_t *prepared,
+    uint8_t track);
+/* Global counterpart used after an AUDIO-owned bulk restore commit. */
+uint8_t param_registry_install_prepared_global_control_target(
+    const param_registry_prepared_value_t *prepared);
+uint8_t param_registry_prepare_legacy_modfx_bank_values(
+    uint8_t model,const float packed[4],
+    param_registry_prepared_value_t out_values[8],uint8_t *out_count);
+uint8_t param_registry_install_legacy_modfx_control_targets(void);
 uint8_t param_registry_project_track_mute(uint8_t track, uint8_t effective_muted);
 uint8_t param_registry_apply_track_value_runtime_temp(param_id_t id, uint8_t track, float value);
 uint8_t param_registry_apply_track_value_runtime_temp_matrix(param_id_t id,
                                                               uint8_t track,
                                                               float value,
                                                               uint8_t matrix_operation);
+uint8_t param_registry_project_track_base_audio(param_id_t id,
+                                                uint8_t track,
+                                                float value);
 uint8_t param_registry_apply_track_value_runtime_temp_audio(param_id_t id, uint8_t track, float value);
 uint8_t param_registry_clear_track_value_runtime_temp_audio(param_id_t id, uint8_t track);
 uint8_t param_registry_is_lfo_param(param_id_t id);
@@ -119,6 +149,10 @@ uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, f
 /* Audio-owner track target path: updates the runtime backend and the
  * audio-authoritative track cache without UI/storage side effects. */
 uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, float value);
+/* AUDIO terminal seam for an already validated canonical value. */
+uint8_t param_registry_apply_prepared_track_value_audio(
+    const param_registry_prepared_value_t *prepared,
+    uint8_t track);
 /* Control-side projection: converts a canonical global value into the
  * complete command payload consumed by AUDIO. */
 uint8_t param_registry_prepare_global_audio_command(param_id_t id,
@@ -130,6 +164,7 @@ uint8_t param_registry_service_pending_audio_publications(void);
 
 void param_set(param_id_t id, float value);
 void param_reset(param_id_t id);
+uint8_t param_registry_migrate_legacy_modfx_banks(void);
 
 #ifdef __cplusplus
 }

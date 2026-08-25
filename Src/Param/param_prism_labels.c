@@ -86,7 +86,7 @@ uint8_t param_prism_edit_index_for_track(uint8_t track, uint8_t *out_index)
         return 0U;
     }
 
-    return param_prism_edit_index_from_value(tone->prism.edit[0], out_index);
+    return param_prism_edit_index_from_value(tone->prism.model[0], out_index);
 }
 
 const param_prism_param_label_t *param_prism_labels_for_edit_index(uint8_t edit_index)
@@ -109,43 +109,43 @@ uint8_t param_prism_label_for_track_param(uint8_t track, param_id_t id, const ch
 
     switch (id)
     {
-        case PARAM_PRISM_EDIT:
-        case PARAM_PRISM_OSC2_EDIT:
+        case PARAM_PRISM_OSC1_MODEL:
+        case PARAM_PRISM_OSC2_MODEL:
             *out_label = "MODEL";
             return 1U;
-        case PARAM_PRISM_FINE:
-        case PARAM_PRISM_OSC2_FINE:
-            *out_label = "FINE";
+        case PARAM_PRISM_VOLUME:
+            *out_label = "VOL";
             return 1U;
-        case PARAM_PRISM_COARSE:
-        case PARAM_PRISM_OSC2_COARSE:
+        case PARAM_PRISM_TUNE:
             *out_label = "TUNE";
             return 1U;
-        case PARAM_PRISM_FM:
-        case PARAM_PRISM_OSC2_FM:
-            *out_label = "FM AMT";
+        case PARAM_PRISM_DETUNE:
+            *out_label = "DETUNE";
             return 1U;
-        case PARAM_PRISM_MODULATION:
-        case PARAM_PRISM_OSC2_MODULATION:
+        case PARAM_PRISM_PITCH_MOD1:
+        case PARAM_PRISM_PITCH_MOD2:
+            *out_label = (id == PARAM_PRISM_PITCH_MOD1) ? "P.MOD1" : "P.MOD2";
+            return 1U;
+        case PARAM_PRISM_OSC1_AMOD:
+        case PARAM_PRISM_OSC2_AMOD:
             *out_label = "A MOD";
             return 1U;
-        case PARAM_PRISM_LEVEL:
-        case PARAM_PRISM_OSC2_LEVEL:
-            *out_label = "LVL";
+        case PARAM_PRISM_BALANCE:
+            *out_label = "BAL";
             return 1U;
-        case PARAM_PRISM_TIMBRE:
-        case PARAM_PRISM_COLOR:
-        case PARAM_PRISM_OSC2_TIMBRE:
-        case PARAM_PRISM_OSC2_COLOR:
+        case PARAM_PRISM_OSC1_PARAM1:
+        case PARAM_PRISM_OSC1_PARAM2:
+        case PARAM_PRISM_OSC2_PARAM1:
+        case PARAM_PRISM_OSC2_PARAM2:
             break;
         default:
             return 0U;
     }
 
     uint8_t edit_index = 0U;
-    const param_id_t edit_param = ((id == PARAM_PRISM_OSC2_TIMBRE) || (id == PARAM_PRISM_OSC2_COLOR))
-        ? PARAM_PRISM_OSC2_EDIT
-        : PARAM_PRISM_EDIT;
+    const param_id_t edit_param = ((id == PARAM_PRISM_OSC2_PARAM1) || (id == PARAM_PRISM_OSC2_PARAM2))
+        ? PARAM_PRISM_OSC2_MODEL
+        : PARAM_PRISM_OSC1_MODEL;
     float edit_value = 0.0f;
     if (param_registry_get_track_value(edit_param, track, &edit_value) == 0U)
     {
@@ -154,6 +154,6 @@ uint8_t param_prism_label_for_track_param(uint8_t track, param_id_t id, const ch
     (void)param_prism_edit_index_from_value(edit_value, &edit_index);
 
     const param_prism_param_label_t *const labels = param_prism_labels_for_edit_index(edit_index);
-    *out_label = ((id == PARAM_PRISM_TIMBRE) || (id == PARAM_PRISM_OSC2_TIMBRE)) ? labels->label_a : labels->label_b;
+    *out_label = ((id == PARAM_PRISM_OSC1_PARAM1) || (id == PARAM_PRISM_OSC2_PARAM1)) ? labels->label_a : labels->label_b;
     return 1U;
 }

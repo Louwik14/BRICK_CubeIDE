@@ -25,6 +25,7 @@ uint8_t param_registry_control_shadow_ui_value_get(uint8_t track,
                                             param_id_t id,
                                             param_registry_runtime_ui_value_t *out_value);
 void param_registry_control_shadow_set(uint8_t track, param_id_t id, float value);
+void param_registry_control_shadow_mark_pending(uint8_t track, param_id_t id);
 void param_registry_control_shadow_set_pending(uint8_t track, param_id_t id, float value);
 void param_registry_control_shadow_set_pending_global(param_id_t id, float value);
 void param_registry_control_shadow_mark_published(uint8_t track, param_id_t id);

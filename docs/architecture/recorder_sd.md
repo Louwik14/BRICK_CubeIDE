@@ -1,10 +1,20 @@
 # Recorder SD, Looper et streamer
 
+## Frontieres P0-4
+
+Le stop Looper cote AUDIO consulte uniquement la vue capture D3
+(`accepted/released/error/active/stop_generation`), jamais l'etat du writer M4.
+Le live stream publie aussi sequence, client, tails et chemin inline; sa carte
+physique reste le snapshot append-only de reservation. Inversement, les
+conflits Storage consultent un bit publie par le runtime Looper M7, jamais sa
+structure de boundary interne. Le service Looper/page-cache reste background
+M7 et ne s'execute plus dans le service Storage.
+
 ## Autorites
 
-`audio_recorder` est l'unique facade produit de capture SD. Ses deux clients exclusifs sont Audio Rec et Looper. Il convertit le PCM `int32` stereo 48 kHz en PCM24, configure `generic_recorder` et publie etats, erreurs, metriques et prise finalisee. `generic_recorder` ne connait ni UI, ni Looper, ni WAV: il possede le ring SPSC, les deux buffers d'ecriture, les descripteurs asynchrones et le tail accepte/engage.
+`audio_recorder` est l'unique facade produit de capture SD. Ses deux clients exclusifs sont Audio Rec et Looper. Il publie un endpoint SPSC generationnel dans D3, recoit le PCM `int32` stereo 48 kHz dans le ring Recorder non-cacheable, configure `generic_recorder` et publie etats, erreurs, metriques et prise finalisee. `generic_recorder` ne connait ni UI, ni Looper, ni WAV: Storage lui transmet le head accepte publie par AUDIO; il possede les deux buffers d'ecriture, les descripteurs asynchrones et le tail accepte/engage.
 
-Une seule capture peut etre preparee ou active. L'IRQ ne fait que copier dans le ring et ne touche jamais FatFs, le scheduler ou la SD. La superloop empaquette, reserve, soumet les ecritures et finalise. Audio Rec et Looper produisent directement un fichier temporaire `.REC`, renomme en `.WAV` apres drainage, liberation de la queue reservee et ecriture du header final de 512 octets. Il n'existe plus de reservoir RAW, d'export RAW vers WAV ni de second writer.
+Une seule capture peut etre preparee ou active. La preparation Storage cree la reservation et arme une generation; le start AUDIO ne fait que publier l'activation. L'IRQ copie dans le ring puis publie le head avec une barriere. Le stop publie un marqueur de la meme generation et ferme immediatement le producteur; Storage observe ce marqueur, draine jusqu'au head publie, puis seulement finalise. L'IRQ ne touche jamais FatFs, le scheduler, la SD ni l'etat mutable du writer. La superloop empaquette, reserve, soumet les ecritures et finalise. Audio Rec et Looper produisent directement un fichier temporaire `.REC`, renomme en `.WAV` apres drainage, liberation de la queue reservee et ecriture du header final de 512 octets. Il n'existe plus de reservoir RAW, d'export RAW vers WAV ni de second writer.
 
 ## Reservation et ecriture
 
@@ -16,7 +26,7 @@ Le block device n'autorise qu'un WRITE DMA actif. `begin/poll/take_result` publi
 
 ## Tails et reloop
 
-Les compteurs ont des sens distincts: `received` accepte par le ring, `packed` converti, `submitted` transmis au block device, `committed` confirme physiquement. Le streamer Looper ne peut lire que jusqu'au tail `committed`. Ses lectures de la prise active utilisent exclusivement la carte physique; aucun fallback FatFs n'est permis tant que le fichier est en cours de construction.
+Les compteurs ont des sens distincts: `received` publie par AUDIO dans le ring, `released` republi par Storage apres engagement physique, `packed` converti, `submitted` transmis au block device, `committed` confirme physiquement. Le producteur borne son occupation par `received - released`; Storage ne reutilise ni ne finalise au-dela du head publie. Le streamer Looper ne peut lire que jusqu'au tail `committed`. Ses lectures de la prise active utilisent exclusivement la carte physique; aucun fallback FatFs n'est permis tant que le fichier est en cours de construction.
 
 Le page-cache Looper remplace sa carte live uniquement lorsque la generation de reservation change et qu'aucune lecture Looper n'est en vol. Le remplacement construit d'abord une carte valide, la publie atomiquement, puis libere l'ancienne; le renommage seul ne change pas la generation.
 

@@ -295,6 +295,20 @@ SECTIONS
     *(.ram_d3_ctrl*)
     . = ALIGN(32);
   } >RAM_D3
+  ASSERT(SIZEOF(.ram_d3_ctrl) <= 32K,
+         "SRAM4 cacheable CONTROL half overflow")
+
+  .ram_d3_restore_ipc ORIGIN(RAM_D3) + 32K (NOLOAD) :
+  {
+    . = ALIGN(32);
+    __restore_ipc_start__ = .;
+    KEEP(*(.ram_d3_restore_ipc))
+    KEEP(*(.ram_d3_restore_ipc.*))
+    . = ALIGN(32);
+    __restore_ipc_end__ = .;
+  } >RAM_D3
+  ASSERT(SIZEOF(.ram_d3_restore_ipc) <= 64,
+         "Restore IPC exceeds its 64-byte contract")
 
   .ram_d3_ipc (NOLOAD) :
   {
@@ -303,8 +317,22 @@ SECTIONS
     *(.ram_d3_ipc*)
     . = ALIGN(32);
   } >RAM_D3
-  ASSERT(SIZEOF(.ram_d3_ctrl) + SIZEOF(.ram_d3_ipc) <= LENGTH(RAM_D3),
-         "SRAM4 D3 contract overflow")
+  ASSERT(SIZEOF(.ram_d3_restore_ipc) + SIZEOF(.ram_d3_ipc) <= 32K,
+         "SRAM4 non-cacheable IPC half overflow")
+
+  .restore_plan_sdram (NOLOAD) :
+  {
+    . = ALIGN(32);
+    __restore_plan_start__ = .;
+    KEEP(*(.restore_plan_sdram))
+    KEEP(*(.restore_plan_sdram.*))
+    . = ALIGN(32);
+    __restore_plan_end__ = .;
+  } >SDRAM
+  ASSERT(SIZEOF(.restore_plan_sdram) <= 48K,
+         "Restore plan exceeds its 48 KiB SDRAM contract")
+  ASSERT((__restore_plan_start__ & 31) == 0,
+         "Restore plan is not cache-line aligned")
 
   .audio_history_sdram (NOLOAD) :
   {

@@ -46,7 +46,7 @@ typedef struct
     mod_env3_control_snapshot_t snapshot;
 } mod_env3_control_mailbox_t;
 
-CTRL_STATE static mod_env3_control_mailbox_t
+D3_IPC static mod_env3_control_mailbox_t
     g_mod_env3_control_mailbox[SEQ_TRACK_COUNT];
 static volatile uint32_t g_mod_env3_audio_mailbox_sequence[SEQ_TRACK_COUNT];
 static uint8_t g_mod_env3_audio_initialized;

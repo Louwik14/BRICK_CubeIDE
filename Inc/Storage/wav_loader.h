@@ -31,6 +31,13 @@ typedef enum
 
 typedef enum
 {
+    WAV_LOADER_CATALOG_VIEW_PENDING = 0,
+    WAV_LOADER_CATALOG_VIEW_PUBLISHED,
+    WAV_LOADER_CATALOG_VIEW_ERROR
+} wav_loader_catalog_view_service_result_t;
+
+typedef enum
+{
     WAV_LOADER_CATALOG_ENTRY_FILE = 0,
     WAV_LOADER_CATALOG_ENTRY_DIR
 } wav_loader_catalog_entry_type_t;
@@ -74,6 +81,8 @@ uint8_t wav_loader_catalog_path_truncated(void);
 uint8_t wav_loader_catalog_loaded(void);
 uint8_t wav_loader_catalog_stale(void);
 void wav_loader_catalog_mark_stale(void);
+wav_loader_catalog_view_service_result_t wav_loader_catalog_view_service(void);
+uint8_t wav_loader_catalog_view_busy(void);
 uint8_t wav_loader_catalog_find_path(const char *path, uint16_t *out_index, wav_loader_catalog_entry_t *out_entry);
 const wav_loader_catalog_entry_t *wav_loader_catalog_get(uint16_t index);
 const wav_loader_catalog_entry_t *wav_loader_catalog_get_child(uint16_t parent_id, uint16_t child_index);

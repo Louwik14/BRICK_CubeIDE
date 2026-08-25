@@ -10,7 +10,7 @@ typedef struct
 {
     float k;     // UI drive normalized 0..1
     float tone;  // coefficient low-pass post-shaper
-    float asym;  // neutralized: TRX BD drive is symmetric
+    float asym;  // 1.0 is symmetric; 0.5..1.5 biases negative/positive drive
 
     float pre_gain;   // TRX BD driveGain = 1 + drive * 5
     float post_gain;
@@ -44,13 +44,13 @@ typedef struct
 } fx_saturation_t;
 
 void fx_saturation_init(fx_saturation_t *fx);
-void fx_saturation_set_drive_ui(fx_saturation_t *fx, uint8_t drive_0_127);
+void fx_saturation_set_drive(fx_saturation_t *fx, float drive);
 void fx_saturation_set_decimator_bits_ui(fx_saturation_t *fx, uint8_t bits_0_127);
 void fx_saturation_set_decimator_rate_ui(fx_saturation_t *fx, uint8_t rate_0_127);
 void fx_saturation_set_decimator_rate2_ui(fx_saturation_t *fx, uint8_t rate_0_127);
-void fx_saturation_set_mix_ui(fx_saturation_t *fx, uint8_t mix_0_127);
-void fx_saturation_set_tone_ui(fx_saturation_t *fx, uint8_t tone_0_127);
-void fx_saturation_set_bias_ui(fx_saturation_t *fx, uint8_t bias_0_127);
+void fx_saturation_set_mix(fx_saturation_t *fx, float mix);
+void fx_saturation_set_tone(fx_saturation_t *fx, float tone);
+void fx_saturation_set_bias(fx_saturation_t *fx, float bias);
 void fx_saturation_process_block(fx_saturation_t *fx,
                                  float *inout_l,
                                  float *inout_r,

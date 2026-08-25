@@ -559,6 +559,39 @@ void sd_scheduler_service(sd_scheduler_t *scheduler,
     scheduler->active_class = SD_SCHEDULER_CLASS_NONE;
 }
 
+uint8_t sd_scheduler_background_can_start(sd_scheduler_t *scheduler,
+                                          uint32_t media_epoch)
+{
+    (void)media_epoch;
+    if ((scheduler == 0) || (scheduler->owner != SD_SCHEDULER_OWNER_IDLE))
+    {
+        return 0U;
+    }
+
+    /*
+     * Background admission is deliberately stricter than deadline
+     * arbitration: any ready RT data or recorder-continuity request wins.
+     * Peeking is side-effect free by provider contract and does not alter the
+     * normal scheduler round-robin or wait accounting.
+     */
+    for (uint8_t raw_type = (uint8_t)SD_SCHEDULER_CLASS_READ;
+         raw_type < (uint8_t)SD_SCHEDULER_CLASS_COUNT;
+         ++raw_type)
+    {
+        const sd_scheduler_class_t type = (sd_scheduler_class_t)raw_type;
+        sd_scheduler_provider_t *const provider = &scheduler->providers[type];
+        sd_scheduler_candidate_t candidate;
+        memset(&candidate, 0, sizeof(candidate));
+        if ((provider->peek != 0)
+            && (provider->peek(provider->context, &candidate) != 0U)
+            && (candidate.ready != 0U))
+        {
+            return 0U;
+        }
+    }
+    return 1U;
+}
+
 sd_scheduler_owner_t sd_scheduler_owner(const sd_scheduler_t *scheduler)
 {
     return (scheduler != 0) ? scheduler->owner : SD_SCHEDULER_OWNER_IDLE;

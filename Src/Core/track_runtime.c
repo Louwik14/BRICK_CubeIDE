@@ -6,6 +6,7 @@
 #include "Storage/memory_layout.h"
 #include "Audio/control_audio_queue.h"
 #include "Audio/audio_note_engine_adapter.h"
+#include "Audio/audio_fx_runtime.h"
 #include "Core/live_clock.h"
 #include "Core/brick_build_config.h"
 #include "Core/track_input_ownership.h"
@@ -71,7 +72,7 @@ static void track_runtime_publish_intent(brick_entity_id_t entity_id,
     (void)control_audio_queue_publish(&command);
 }
 
-static track_runtime_family_t track_runtime_family_from_ui(ui_track_family_t family)
+track_runtime_family_t track_runtime_family_from_ui(ui_track_family_t family)
 {
     if (family == UI_TRACK_FAMILY_OFF)
     {
@@ -102,7 +103,7 @@ static track_runtime_family_t track_runtime_family_from_ui(ui_track_family_t fam
     return TRACK_RUNTIME_FAMILY_OTHER;
 }
 
-static track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
+track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
 {
     switch (type)
     {
@@ -151,7 +152,7 @@ static uint8_t track_runtime_logical_equal(const track_runtime_ctx_t *left,
             && (left->flags == right->flags));
 }
 
-static uint8_t track_runtime_compute_flags(track_runtime_family_t family,
+uint8_t track_runtime_compute_flags(track_runtime_family_t family,
                                            track_runtime_type_t type)
 {
     uint8_t flags = 0U;
@@ -242,22 +243,22 @@ static uint8_t track_runtime_ctx_is_sampler_clip_or_looper(const track_runtime_c
 }
 
 static const param_id_t g_track_runtime_tone_slots_prism[] = {
-    PARAM_PRISM_TIMBRE,
-    PARAM_PRISM_COLOR,
-    PARAM_PRISM_MODULATION,
-    PARAM_PRISM_EDIT,
-    PARAM_PRISM_LEVEL,
-    PARAM_PRISM_COARSE,
-    PARAM_PRISM_FM,
-    PARAM_PRISM_PHASE_RESET,
-    PARAM_PRISM_OSC2_TIMBRE,
-    PARAM_PRISM_OSC2_COLOR,
-    PARAM_PRISM_OSC2_MODULATION,
-    PARAM_PRISM_OSC2_EDIT,
-    PARAM_PRISM_OSC2_LEVEL,
-    PARAM_PRISM_OSC2_COARSE,
-    PARAM_PRISM_OSC2_FM,
-    PARAM_PRISM_OSC2_PHASE_RESET
+    PARAM_PRISM_OSC1_PARAM1,
+    PARAM_PRISM_OSC1_PARAM2,
+    PARAM_PRISM_OSC1_AMOD,
+    PARAM_PRISM_OSC1_MODEL,
+    PARAM_PRISM_VOLUME,
+    PARAM_PRISM_BALANCE,
+    PARAM_PRISM_TUNE,
+    PARAM_PRISM_DETUNE,
+    PARAM_PRISM_PITCH_MOD1,
+    PARAM_PRISM_PHASE1_RESET,
+    PARAM_PRISM_OSC2_PARAM1,
+    PARAM_PRISM_OSC2_PARAM2,
+    PARAM_PRISM_OSC2_AMOD,
+    PARAM_PRISM_OSC2_MODEL,
+    PARAM_PRISM_PITCH_MOD2,
+    PARAM_PRISM_PHASE2_RESET
 };
 
 static const param_id_t g_track_runtime_tone_slots_stack[] = {
@@ -284,20 +285,12 @@ static const param_id_t g_track_runtime_tone_slots_stack[] = {
 static const param_id_t g_track_runtime_tone_slots_wave[] = {
     PARAM_WAVE_OSC1_TABLE,
     PARAM_WAVE_OSC1_POS,
-    PARAM_WAVE_OSC1_START,
-    PARAM_WAVE_OSC1_END,
-    PARAM_WAVE_OSC1_LEVEL,
-    PARAM_WAVE_OSC1_TUNE,
     PARAM_WAVE_OSC2_TABLE,
     PARAM_WAVE_OSC2_POS,
-    PARAM_WAVE_OSC2_START,
-    PARAM_WAVE_OSC2_END,
-    PARAM_WAVE_OSC2_LEVEL,
-    PARAM_WAVE_OSC2_TUNE,
-    PARAM_WAVE_FRAME_INTERP,
-    PARAM_WAVE_SAMPLE_INTERP,
-    PARAM_WAVE_POS_UPDATE,
-    PARAM_WAVE_POS_SMOOTH
+    PARAM_WAVE_VOLUME,
+    PARAM_WAVE_BALANCE,
+    PARAM_WAVE_TUNE,
+    PARAM_WAVE_DETUNE
 };
 
 static const param_id_t g_track_runtime_tone_slots_fm[] = {
@@ -1207,22 +1200,21 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_DRUM_MD_P6:
         case PARAM_DRUM_MD_P7:
         case PARAM_DRUM_MD_P8:
-        case PARAM_PRISM_EDIT:
-        case PARAM_PRISM_FINE:
-        case PARAM_PRISM_COARSE:
-        case PARAM_PRISM_FM:
-        case PARAM_PRISM_TIMBRE:
-        case PARAM_PRISM_MODULATION:
-        case PARAM_PRISM_COLOR:
-        case PARAM_PRISM_PHASE_RESET:
-        case PARAM_PRISM_LEVEL:
-        case PARAM_PRISM_OSC2_EDIT:
-        case PARAM_PRISM_OSC2_FINE:
-        case PARAM_PRISM_OSC2_COARSE:
-        case PARAM_PRISM_OSC2_FM:
-        case PARAM_PRISM_OSC2_TIMBRE:
-        case PARAM_PRISM_OSC2_MODULATION:
-        case PARAM_PRISM_OSC2_COLOR:
+        case PARAM_PRISM_OSC1_MODEL:
+        case PARAM_PRISM_VOLUME:
+        case PARAM_PRISM_TUNE:
+        case PARAM_PRISM_PITCH_MOD1:
+        case PARAM_PRISM_OSC1_PARAM1:
+        case PARAM_PRISM_OSC1_AMOD:
+        case PARAM_PRISM_OSC1_PARAM2:
+        case PARAM_PRISM_PHASE1_RESET:
+        case PARAM_PRISM_BALANCE:
+        case PARAM_PRISM_OSC2_MODEL:
+        case PARAM_PRISM_DETUNE:
+        case PARAM_PRISM_PITCH_MOD2:
+        case PARAM_PRISM_OSC2_PARAM1:
+        case PARAM_PRISM_OSC2_AMOD:
+        case PARAM_PRISM_OSC2_PARAM2:
         case PARAM_FM_RATIO:
         case PARAM_FM_ALGORITHM:
         case PARAM_FM_FEEDBACK:
@@ -1240,8 +1232,7 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_FM_PLAY_PITCH_ENV:
         case PARAM_FM_PLAY_PITCH_TIME:
         case PARAM_FM_OPERATOR_SELECT:
-        case PARAM_PRISM_OSC2_PHASE_RESET:
-        case PARAM_PRISM_OSC2_LEVEL:
+        case PARAM_PRISM_PHASE2_RESET:
         case PARAM_STACK_OSC1_LEVEL:
         case PARAM_STACK_OSC2_LEVEL:
         case PARAM_STACK_OSC3_LEVEL:
@@ -1262,20 +1253,12 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_STACK_PHASE_RESET:
         case PARAM_WAVE_OSC1_TABLE:
         case PARAM_WAVE_OSC1_POS:
-        case PARAM_WAVE_OSC1_START:
-        case PARAM_WAVE_OSC1_END:
-        case PARAM_WAVE_OSC1_LEVEL:
-        case PARAM_WAVE_OSC1_TUNE:
         case PARAM_WAVE_OSC2_TABLE:
         case PARAM_WAVE_OSC2_POS:
-        case PARAM_WAVE_OSC2_START:
-        case PARAM_WAVE_OSC2_END:
-        case PARAM_WAVE_OSC2_LEVEL:
-        case PARAM_WAVE_OSC2_TUNE:
-        case PARAM_WAVE_FRAME_INTERP:
-        case PARAM_WAVE_SAMPLE_INTERP:
-        case PARAM_WAVE_POS_UPDATE:
-        case PARAM_WAVE_POS_SMOOTH:
+        case PARAM_WAVE_VOLUME:
+        case PARAM_WAVE_BALANCE:
+        case PARAM_WAVE_TUNE:
+        case PARAM_WAVE_DETUNE:
         case PARAM_MIDI_PROGRAM:
         case PARAM_MIDI_CC1_1:
         case PARAM_MIDI_CC1_2:
@@ -1419,6 +1402,16 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_AUDIO_FX_P2:
         case PARAM_AUDIO_FX_P3:
         case PARAM_AUDIO_FX_MODEL:
+        case PARAM_AUDIO_FX_B_P1:
+        case PARAM_AUDIO_FX_B_P2:
+        case PARAM_AUDIO_FX_B_P3:
+        case PARAM_AUDIO_FX_B_MODEL:
+        case PARAM_AUDIO_FX_FILTER_POS:
+        case PARAM_AUDIO_FX_ORDER:
+        case PARAM_AUDIO_FX_MODE_A:
+        case PARAM_AUDIO_FX_MODE_B:
+        case PARAM_GROUP_FX_A_LEVEL:
+        case PARAM_GROUP_FX_B_LEVEL:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX;
             rule.resource = TRACK_RUNTIME_RESOURCE_AUDIO_FX;
             return rule;
@@ -1579,6 +1572,24 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
     if (ctx == 0)
     {
         return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+    }
+
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX)
+    {
+        entity_topology_descriptor_t topology;
+        if ((entity_topology_get((brick_entity_id_t)track, &topology) == 0U)
+                || (topology.active == 0U))
+            return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+        const uint8_t group_level = audio_fx_runtime_is_group_level_param(param);
+        if (topology.role == ENTITY_ROLE_GROUP_CHILD)
+            return (group_level != 0U) ? TRACK_RUNTIME_PARAM_ALLOWED
+                                      : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+        if (group_level != 0U)
+            return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+        if ((topology.role == ENTITY_ROLE_GROUP_MASTER)
+                && ((param == PARAM_AUDIO_FX_FILTER_POS)
+                    || (param == PARAM_AUDIO_FX_ORDER)))
+            return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
     }
 
     if (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_GROUP)

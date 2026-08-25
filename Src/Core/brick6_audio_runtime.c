@@ -13,6 +13,7 @@
 #include "brick6_audio_runtime.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Storage/memory_layout.h"
+#include "Storage/restore_transaction.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -20,6 +21,7 @@
 #include "Audio/drum_synth.h"
 #include "Audio/audio_io.h"
 #include "Audio/metronome_runtime.h"
+#include "Audio/synth_waveform_snapshot.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
@@ -353,6 +355,18 @@ static __attribute__((noinline)) void brick6_render_prism_tracks(uint16_t entity
         const uint8_t voice_count = synth_polyphony_get_render_voice_count(track);
         if (voice_count == 0U)
             continue;
+        if (synth_waveform_audio_target_is(track, SYNTH_WAVEFORM_ENGINE_PRISM) != 0U)
+        {
+            uint8_t capture_instance = ctx->audio_binding.instance_id;
+            if (voice_count > 1U)
+            {
+                const uint8_t voice = synth_polyphony_get_most_recent_renderable_voice(track);
+                if (voice != SYNTH_POLYPHONY_NO_VOICE)
+                    capture_instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
+            }
+            synth_waveform_audio_select_instance(track, SYNTH_WAVEFORM_ENGINE_PRISM,
+                                                 capture_instance);
+        }
         if (voice_count > 1U)
         {
             const uint8_t poly_lfo_active = (mod_matrix_poly_route_mask(track) != 0U);
@@ -508,6 +522,18 @@ static __attribute__((noinline)) void brick6_render_wave_tracks(uint16_t entity_
         const uint8_t voice_count = synth_polyphony_get_render_voice_count(track);
         if (voice_count == 0U)
             continue;
+        if (synth_waveform_audio_target_is(track, SYNTH_WAVEFORM_ENGINE_WAVE) != 0U)
+        {
+            uint8_t capture_instance = ctx->audio_binding.instance_id;
+            if (voice_count > 1U)
+            {
+                const uint8_t voice = synth_polyphony_get_most_recent_renderable_voice(track);
+                if (voice != SYNTH_POLYPHONY_NO_VOICE)
+                    capture_instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
+            }
+            synth_waveform_audio_select_instance(track, SYNTH_WAVEFORM_ENGINE_WAVE,
+                                                 capture_instance);
+        }
         if (voice_count > 1U)
         {
             const uint8_t poly_lfo_active = (mod_matrix_poly_route_mask(track) != 0U);
@@ -683,6 +709,7 @@ ITCM_TEXT void brick6_audio_runtime_dsp(StereoTrack *tracks,
                               uint32_t track_count,
                               uint32_t frames)
 {
+    (void)restore_transaction_audio_service();
     audio_input_ownership_projection_audio_consume();
     brick6_publish_owned_physical_line(frames);
     const uint16_t drum_entity_mask = audio_note_engine_adapter_entity_mask(
@@ -742,6 +769,7 @@ ITCM_TEXT void brick6_audio_runtime_dsp(StereoTrack *tracks,
         (void)stack_tracks;
     }
 
+    synth_waveform_audio_begin_block(frames);
     const uint16_t wave_entity_mask = audio_note_engine_adapter_entity_mask(
         TRACK_RUNTIME_ENGINE_WAVE);
     if (wave_entity_mask != 0U)

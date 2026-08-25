@@ -272,71 +272,71 @@ uint8_t audio_float_is_dj_eq_ui_neutral(void)
 }
 
 /**
- * @brief Point d'entrée audio_float_set_saturation_tone_ui.
+ * @brief Point d'entrée audio_float_set_saturation_tone.
  *
  * Rôle:
- * - Exécuter le traitement associé à audio_float_set_saturation_tone_ui.
+ * - Exécuter le traitement associé à audio_float_set_saturation_tone.
  *
  * @param tone_0_127 Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void audio_float_set_saturation_tone_ui(uint8_t tone_0_127)
+void audio_float_set_saturation_tone(float tone)
 {
     fx_saturation_t *sat = fx_pool_sat_state();
-    if(sat) fx_saturation_set_tone_ui(sat, tone_0_127);
+    if(sat) fx_saturation_set_tone(sat, tone);
 }
 
 /**
- * @brief Point d'entrée audio_float_set_saturation_bias_ui.
+ * @brief Point d'entrée audio_float_set_saturation_bias.
  *
  * Rôle:
- * - Exécuter le traitement associé à audio_float_set_saturation_bias_ui.
+ * - Exécuter le traitement associé à audio_float_set_saturation_bias.
  *
  * @param bias_0_127 Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void audio_float_set_saturation_bias_ui(uint8_t bias_0_127)
+void audio_float_set_saturation_bias(float bias)
 {
     fx_saturation_t *sat = fx_pool_sat_state();
-    if(sat) fx_saturation_set_bias_ui(sat, bias_0_127);
+    if(sat) fx_saturation_set_bias(sat, bias);
 }
 
 /**
- * @brief Point d'entrée audio_float_set_saturation_drive_ui.
+ * @brief Point d'entrée audio_float_set_saturation_drive.
  *
  * Rôle:
- * - Exécuter le traitement associé à audio_float_set_saturation_drive_ui.
+ * - Exécuter le traitement associé à audio_float_set_saturation_drive.
  *
  * @param drive_0_127 Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void audio_float_set_saturation_drive_ui(uint8_t drive_0_127)
+void audio_float_set_saturation_drive(float drive)
 {
     fx_saturation_t *sat = fx_pool_sat_state();
-    if(sat) fx_saturation_set_drive_ui(sat, drive_0_127);
+    if(sat) fx_saturation_set_drive(sat, drive);
 }
 
 /**
- * @brief Point d'entrée audio_float_set_saturation_mix_ui.
+ * @brief Point d'entrée audio_float_set_saturation_mix.
  *
  * Rôle:
- * - Exécuter le traitement associé à audio_float_set_saturation_mix_ui.
+ * - Exécuter le traitement associé à audio_float_set_saturation_mix.
  *
  * @param mix_0_127 Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void audio_float_set_saturation_mix_ui(uint8_t mix_0_127)
+void audio_float_set_saturation_mix(float mix)
 {
     fx_saturation_t *sat = fx_pool_sat_state();
-    if(sat) fx_saturation_set_mix_ui(sat, mix_0_127);
+    if(sat) fx_saturation_set_mix(sat, mix);
 }
 
 

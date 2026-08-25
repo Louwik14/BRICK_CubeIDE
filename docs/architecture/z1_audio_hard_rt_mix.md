@@ -1,39 +1,27 @@
-# Z1 — Audio hard-RT et mix
+# Z1 - Audio hard-RT, moteurs et mix
 
-L'IRQ audio exécute des chemins bornés et préalloués. Une entité audio configurée obtient une voie physique; `Off` et `MIDI` n'en consomment pas. L'identité logique ne dépend jamais du numéro de voie.
+AUDIO est l'unique autorite d'admission des notes internes, d'allocation, de stealing, de rendu, de mixer et de page-cache. CONTROL publie des intentions fixes; aucun scheduler CONTROL n'appelle directement un moteur ou le mixer.
 
-Les moteurs locaux sont Synth, Drum, Sampler RAM/Stream/Multi/Looper et External. Looper possède son runtime par slot. External lit uniquement l'entrée physique dont le slot est propriétaire; les entrées sans propriétaire sont désactivées et aucun monitoring parallèle n'est créé.
+Les moteurs rendent dans les lanes externes associees aux bindings. Le pool synth maintient un mapping direct voix logique -> slot physique; les configurations de track sont versionnees et recopies seulement lors d'un changement. Les etats chauds des voix restent en DTCM et aucun chemin audio n'alloue dynamiquement.
 
-Les moteurs internes publient exclusivement dans les lanes externes du mixer associées aux pistes logiques. La track physique `tracks[3]`, sans entrée matérielle, reste désactivée : elle n'est ni une autorité d'activation des moteurs ni une source silencieuse de substitution.
+Le mixer applique filtre, VCA, niveau, pan, inserts, sends puis traitements globaux. Reverb, delay, compresseur et gain Master sont globaux. Send3 ne conserve que Daisy Stereo et Junologue; VIBE et DRIFT sont des inserts par entite. VIBE utilise le kernel Deluge Float avec politique `dry + wet` 1:1. DRIFT expose DELAY et FEEDBACK, sans LFO interne.
 
-Le pool synth maintient une table directe voix logique → slot physique; le rendu et les événements de note ne rescannent pas les owners globaux. Les configurations Prism, Stack et Wave sont versionnées : une voix ne recopie la configuration de sa track que lorsque cette version change. Stack inclut les primitives anti-alias Deluge retenues sans moteur Deluge distinct.
+La reverb globale utilise le kernel Mutable/Deluge, son buffer float de 32768 elements et ses cinq controles normalises ROOM SIZE, DAMPING, WIDTH, HPF et LPF. WET reste exterieur au moteur.
 
-Tous les états de voix des moteurs synthétiques, y compris les slots poly additionnels de Stack et Wave, résident en DTCM. Le coût d'accès d'une voix ne dépend donc plus de son index physique dans le pool global.
+## GROUP
 
-Le panorama de spread est précalculé lors des changements de configuration; la boucle audio lit directement le gain spatial de chaque voix sans division flottante par bloc.
+Le GROUP master 7 possede le bus AUDIO, les deux kernels Audio FX A/B, MOD et les traitements post-somme. Les children 8..15 gardent leur moteur, chemin mono/stereo, filtre, VCA, niveau, pan et mute locaux. Leur dry et leurs niveaux locaux A/B alimentent les bus GROUP; leurs sends globaux sont neutralises. Les sorties A/B sont reinjectees en parallele avant filtre et MIX master. Le mute parent coupe le bus et les contributions children sans reecrire leur mute local.
 
-Le runtime conserve un décompte par moteur synthétique. Les balayages Prism, Stack et Wave ne sont exécutés que si au moins une track liée utilise le moteur correspondant; la consommation fixe d'une configuration qui n'emploie pas ce moteur est ainsi évitée.
+## Sampler mono et stereo
 
-Le mixer applique niveau, pan, inserts valides, sends et traitements globaux. Reverb, delay, compresseur et gain Master sont globaux. Il n'existe plus de piste FX ni de chaîne MacroFX.
+Le format est immutable pendant la voix. Une page physique de 16 KiB contient 4096 frames mono FLOAT32 ou 2048 frames stereo entrelacees. Mono reste mono jusqu'au pan final; Multi applique filtre et VCA par voix avant spread/pan. Les inserts recoivent le signal stereo apres cette projection. Reverse et ping-pong appartiennent au Sampler RAM, pas au streamer.
 
-Le bus GROUP est une réalisation exclusivement AUDIO. Chaque child conserve
-son chemin mono ou stéréo, son filtre/MIX/inserts et ses sends pré-somme. Son
-dry est dirigé vers la somme GROUP au lieu de MAIN. Cette somme traverse une
-seule fois le filtre, le MIX, les inserts, les sends et le routing du master
-GROUP, puis rejoint MAIN. Le rôle GROUP est projeté dans le binding AUDIO par
-le contrat CONTROL→AUDIO; CONTROL et UI ne connaissent pas le slot du bus.
+## Wave
 
-Les quotas Low-Cost/Premium limitent les ressources physiques, jamais la topologie logique de huit pistes.
+Wave possede OSC1, OSC2 et COMMON. TABLE est un slot logique projete vers un slot/generation AUDIO. Les deux oscillateurs sont independants; WAVE ne possede aucun routage ou etat de modulation croisee. L'interpolation de frame et de sample est permanente, POS est mis a jour a chaque sample et aucun smoothing POS n'est applique; phase et pitch restent possedes par la voix.
 
-## Addendum 2026-08-05 - NoteFx EUCLID borne
+Le snapshot de waveform est une publication seqlock AUDIO->CONTROL fixe et sans pointeur. Il capture au plus 48 points par oscillateur, a 20 Hz maximum, sans second rendu. Desactive, il n'ajoute aucun cout par sample.
 
-EUCLID reste un runtime MIDI FX, pas un moteur audio ni une sortie physique.
-Chaque piste conserve trois instances ; chaque instance utilise un ledger fixe
-de 16 sources et 16 owned. Le maximum logique est donc 8 x 3 x 16 = 384
-sources et 384 owned avant les admissions aval. Le fan-out est fixe, sans
-allocation, et les refus On/Off ainsi que les high-water par slot sont exposes
-par les diagnostics NoteFx.
+## Integration d'un moteur
 
-Le budget de demi-buffer reste 64 frames, avec 8 On par piste, 32 Off reserves
-et 32 commandes. Ces valeurs sont des bornes de politique instrumentees, pas
-une mesure de marge CPU H743 ; les mesures DWT et underrun restent differees.
+Un nouveau moteur doit ajouter son type canonique, binding runtime, capacites, catalogue de parametres/backends, rendu borne, admission/fermeture, exposition UI et cles persistantes. Il ne doit contourner ni `track_runtime`, ni le registre de parametres, ni les files CONTROL/AUDIO.

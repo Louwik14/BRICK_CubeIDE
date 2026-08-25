@@ -6,7 +6,15 @@
 
 #include "ff.h"
 #include "Sampler/sample_page_cache.h"
+#include "Sampler/sample_page_cache_port.h"
+#include "Audio/audio_shared_memory.h"
+#include "Audio/audio_wavetable_registry.h"
+#include "Storage/cache_maintenance.h"
+#include "Audio/control_audio_queue.h"
+#include "Core/audio_wave_table_projection.h"
+#include "Core/live_clock.h"
 #include "Storage/sd_access_gate.h"
+#include "SD/sd_scheduler_runtime.h"
 #include "Storage/memory_layout.h"
 #include "Storage/wav_audio_codec.h"
 #include "Storage/wav_parser.h"
@@ -14,8 +22,8 @@
 
 #define WAVETABLE_POOL_IO_BYTES (8192U)
 #define WAVETABLE_POOL_CACHE_DIR "0:/WAVETABLES/.CACHE"
-#define WAVETABLE_MIPMAP_INITIAL_CYCLE_MAGNITUDE (11U)
-#define WAVETABLE_MIPMAP_INITIAL_MAX_PHASE_INCREMENT (2621438UL)
+#define WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT (2048U)
+#define WAVETABLE_MIPMAP_INITIAL_CYCLE_MAGNITUDE (10U)
 #define WAVETABLE_MIPMAP_MIN_CYCLE_MAGNITUDE (3U)
 
 typedef struct
@@ -45,8 +53,146 @@ static const uint8_t g_wavetable_mipmap_upstream_commit_sha1[20] = {
     0xccU, 0x1eU, 0xb0U, 0x19U, 0xb3U, 0x16U, 0x75U, 0x63U, 0x70U, 0x08U
 };
 
+typedef enum
+{
+    WAVETABLE_LOAD_IDLE = 0,
+    WAVETABLE_LOAD_MOUNT,
+    WAVETABLE_LOAD_STAT,
+    WAVETABLE_LOAD_OPEN,
+    WAVETABLE_LOAD_CRC_SEEK,
+    WAVETABLE_LOAD_CRC_READ,
+    WAVETABLE_LOAD_PARSE,
+    WAVETABLE_LOAD_ALLOCATE,
+    WAVETABLE_LOAD_DATA_SEEK,
+    WAVETABLE_LOAD_DATA_READ,
+    WAVETABLE_LOAD_DECODE,
+    WAVETABLE_LOAD_MIP_INIT,
+    WAVETABLE_LOAD_MIP_FORWARD_PREP,
+    WAVETABLE_LOAD_MIP_FORWARD_FFT,
+    WAVETABLE_LOAD_MIP_BAND,
+    WAVETABLE_LOAD_BASE_CRC,
+    WAVETABLE_LOAD_PAYLOAD_CRC,
+    WAVETABLE_LOAD_CACHE_DIR,
+    WAVETABLE_LOAD_CACHE_SUBDIR,
+    WAVETABLE_LOAD_CACHE_CLEAN,
+    WAVETABLE_LOAD_CACHE_OPEN,
+    WAVETABLE_LOAD_CACHE_HEADER,
+    WAVETABLE_LOAD_CACHE_BAND,
+    WAVETABLE_LOAD_CACHE_PAYLOAD,
+    WAVETABLE_LOAD_CACHE_SYNC,
+    WAVETABLE_LOAD_CACHE_CLOSE,
+    WAVETABLE_LOAD_CACHE_FINAL_CLEAN,
+    WAVETABLE_LOAD_CACHE_RENAME,
+    WAVETABLE_LOAD_SOURCE_CLOSE,
+    WAVETABLE_LOAD_PREVIEW_INIT,
+    WAVETABLE_LOAD_PREVIEW_FRAME,
+    WAVETABLE_LOAD_WAIT_RETIRE,
+    WAVETABLE_LOAD_PUBLISH,
+    WAVETABLE_LOAD_CLEANUP,
+    WAVETABLE_LOAD_DONE
+} wavetable_load_state_t;
+
+typedef struct
+{
+    wavetable_load_state_t state;
+    FIL source;
+    FIL cache;
+    FILINFO source_info;
+    wav_info_t wav_info;
+    char path[WAVETABLE_POOL_PATH_MAX];
+    char cache_path[WAVETABLE_POOL_PATH_MAX];
+    char temp_path[WAVETABLE_POOL_PATH_MAX];
+    uint32_t media_epoch;
+    uint32_t source_crc;
+    uint32_t base_crc;
+    uint32_t payload_crc;
+    uint32_t io_offset;
+    uint32_t buffered_samples;
+    uint32_t converted_samples;
+    uint32_t source_cycle_sample_count;
+    uint32_t source_cycle_offset;
+    uint32_t cycle;
+    uint16_t band;
+    uint16_t wavetable_slot;
+    uint16_t global_slot;
+    wavetable_result_t result;
+    uint8_t source_open;
+    uint8_t cache_open;
+    uint8_t cleanup_phase;
+} wavetable_load_job_t;
+
+STORAGE_STATE_SDRAM static wavetable_load_job_t g_wavetable_load_job;
+static CTRL_STATE volatile uint32_t
+    g_wavetable_retire_ack[WAVETABLE_POOL_MAX_SLOTS];
+
 static uint16_t wavetable_pool_mipmap_band_count(void);
 static uint32_t wavetable_pool_mipmap_samples_per_table_cycle(void);
+static int16_t wavetable_pool_float_to_s16(float value);
+
+static uint32_t wavetable_pool_source_cycle_sample_count(uint32_t source_samples)
+{
+    /* Legacy WAVE assets were authored as complete 2048-sample cycles.  A
+     * single 1024-sample cycle, or an odd number of native cycles, remains
+     * native.  The common legacy banks are exact multiples of 2048. */
+    return ((source_samples >= WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT)
+            && ((source_samples % WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT) == 0U))
+        ? WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT
+        : WAVETABLE_FRAME_SAMPLE_COUNT;
+}
+
+static void wavetable_pool_legacy_source_store(uint32_t index, float value)
+{
+    if (index < WAVETABLE_FRAME_SAMPLE_COUNT)
+        g_wavetable_fft_real[index] = value;
+    else
+        g_wavetable_fft_imag[index - WAVETABLE_FRAME_SAMPLE_COUNT] = value;
+}
+
+static float wavetable_pool_legacy_source_read(uint32_t index)
+{
+    return (index < WAVETABLE_FRAME_SAMPLE_COUNT)
+        ? g_wavetable_fft_real[index]
+        : g_wavetable_fft_imag[index - WAVETABLE_FRAME_SAMPLE_COUNT];
+}
+
+static void wavetable_pool_resample_legacy_cycle(int16_t *dst)
+{
+    /* Circular 31-tap Blackman-windowed sinc, cutoff at the new Nyquist.
+     * The symmetric zero-phase kernel preserves the cycle origin. */
+    enum { radius = 15 };
+    float coefficients[(radius * 2) + 1];
+    float coefficient_sum = 0.0f;
+    for (int32_t tap = -radius; tap <= radius; ++tap)
+    {
+        const float x = (float)tap;
+        const float sinc = (tap == 0) ? 0.5f
+            : (sinf(0.5f * 3.14159265358979323846f * x)
+                / (3.14159265358979323846f * x));
+        const float phase = (x + (float)radius) / (float)(radius * 2);
+        const float window = 0.42f
+            - 0.5f * cosf(2.0f * 3.14159265358979323846f * phase)
+            + 0.08f * cosf(4.0f * 3.14159265358979323846f * phase);
+        const float coefficient = sinc * window;
+        coefficients[tap + radius] = coefficient;
+        coefficient_sum += coefficient;
+    }
+    const float normalization = (coefficient_sum != 0.0f)
+        ? (1.0f / coefficient_sum) : 1.0f;
+    for (uint32_t i = 0U; i < WAVETABLE_FRAME_SAMPLE_COUNT; ++i)
+    {
+        float value = 0.0f;
+        const int32_t center = (int32_t)(i << 1U);
+        for (int32_t tap = -radius; tap <= radius; ++tap)
+        {
+            const uint32_t source_index = (uint32_t)(
+                (center + tap + (int32_t)WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT)
+                & (WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT - 1U));
+            value += wavetable_pool_legacy_source_read(source_index)
+                * coefficients[tap + radius];
+        }
+        dst[i] = wavetable_pool_float_to_s16(value * normalization);
+    }
+}
 
 static void wavetable_pool_set_last(wavetable_result_t result)
 {
@@ -334,13 +480,13 @@ static void wavetable_pool_slot_error_at(uint16_t wavetable_slot,
         g_wavetable_pool.slots[wavetable_slot].generation = wavetable_pool_next_generation();
         if (g_wavetable_pool.slots[wavetable_slot].page_count != 0U)
         {
-            sample_page_cache_release_slot_pool_allocation(
+            sample_page_cache_port_release_shared(
                 g_wavetable_pool.slots[wavetable_slot].first_page_slot,
                 g_wavetable_pool.slots[wavetable_slot].page_count);
         }
         if (g_wavetable_pool.slots[wavetable_slot].mipmap.page_count != 0U)
         {
-            sample_page_cache_release_slot_pool_allocation(
+            sample_page_cache_port_release_shared(
                 g_wavetable_pool.slots[wavetable_slot].mipmap.first_page_slot,
                 g_wavetable_pool.slots[wavetable_slot].mipmap.page_count);
         }
@@ -392,13 +538,13 @@ void wavetable_pool_reset(void)
         g_wavetable_pool.slots[i].generation = wavetable_pool_next_generation();
         if (g_wavetable_pool.slots[i].page_count != 0U)
         {
-            sample_page_cache_release_slot_pool_allocation(
+            sample_page_cache_port_release_shared(
                 g_wavetable_pool.slots[i].first_page_slot,
                 g_wavetable_pool.slots[i].page_count);
         }
         if (g_wavetable_pool.slots[i].mipmap.page_count != 0U)
         {
-            sample_page_cache_release_slot_pool_allocation(
+            sample_page_cache_port_release_shared(
                 g_wavetable_pool.slots[i].mipmap.first_page_slot,
                 g_wavetable_pool.slots[i].mipmap.page_count);
         }
@@ -752,12 +898,12 @@ static void wavetable_pool_candidate_release(wavetable_slot_t *candidate)
     }
     if (candidate->page_count != 0U)
     {
-        sample_page_cache_release_slot_pool_allocation(candidate->first_page_slot,
+        sample_page_cache_port_release_shared(candidate->first_page_slot,
                                                        candidate->page_count);
     }
     if (candidate->mipmap.page_count != 0U)
     {
-        sample_page_cache_release_slot_pool_allocation(
+        sample_page_cache_port_release_shared(
             candidate->mipmap.first_page_slot,
             candidate->mipmap.page_count);
     }
@@ -890,8 +1036,8 @@ static wavetable_result_t wavetable_pool_candidate_allocate(
     }
     const uint32_t brick_cost = brick_pages * SAMPLE_PAGE_BYTES;
     const uint32_t mipmap_cost = mipmap_pages * SAMPLE_PAGE_BYTES;
-    if ((brick_cost > sample_page_cache_slot_pool_total_bytes())
-        || (mipmap_cost > sample_page_cache_slot_pool_total_bytes())
+    if ((brick_cost > sample_page_cache_port_shared_total_bytes())
+        || (mipmap_cost > sample_page_cache_port_shared_total_bytes())
         || (brick_cost > (UINT32_MAX - mipmap_cost)))
     {
         return WAVETABLE_RESULT_TOO_LARGE;
@@ -903,19 +1049,19 @@ static wavetable_result_t wavetable_pool_candidate_allocate(
         return WAVETABLE_RESULT_GLOBAL_BUDGET_FULL;
     }
 
-    sample_page_raw_allocation_t brick_allocation;
-    sample_page_raw_allocation_t mipmap_allocation;
+    sample_page_loader_allocation_t brick_allocation;
+    sample_page_loader_allocation_t mipmap_allocation;
     memset(&brick_allocation, 0, sizeof(brick_allocation));
     memset(&mipmap_allocation, 0, sizeof(mipmap_allocation));
-    if (sample_page_cache_alloc_slot_pool_bytes(brick_bytes,
+    if (sample_page_cache_port_alloc_shared(brick_bytes,
                                                 &brick_allocation) == 0U)
     {
         return WAVETABLE_RESULT_RAM_POOL_FULL;
     }
-    if (sample_page_cache_alloc_slot_pool_bytes(mipmap_bytes,
+    if (sample_page_cache_port_alloc_shared(mipmap_bytes,
                                                 &mipmap_allocation) == 0U)
     {
-        sample_page_cache_release_slot_pool_allocation(
+        sample_page_cache_port_release_shared(
             brick_allocation.first_slot,
             brick_allocation.page_count);
         return WAVETABLE_RESULT_RAM_POOL_FULL;
@@ -926,10 +1072,10 @@ static wavetable_result_t wavetable_pool_candidate_allocate(
                                  sizeof(candidate->path),
                                  path) == 0U)
     {
-        sample_page_cache_release_slot_pool_allocation(
+        sample_page_cache_port_release_shared(
             brick_allocation.first_slot,
             brick_allocation.page_count);
-        sample_page_cache_release_slot_pool_allocation(
+        sample_page_cache_port_release_shared(
             mipmap_allocation.first_slot,
             mipmap_allocation.page_count);
         return WAVETABLE_RESULT_PATH_TOO_LONG;
@@ -942,10 +1088,12 @@ static wavetable_result_t wavetable_pool_candidate_allocate(
     candidate->first_page_slot = brick_allocation.first_slot;
     candidate->page_count = brick_allocation.page_count;
     candidate->data_bytes = brick_bytes;
-    candidate->data = (int16_t *)brick_allocation.data;
+    candidate->data = (int16_t *)sample_page_cache_port_resolve_shared(
+        &brick_allocation);
     candidate->cost_bytes_aligned =
         brick_allocation.capacity_bytes + mipmap_allocation.capacity_bytes;
-    candidate->mipmap.data = (int16_t *)mipmap_allocation.data;
+    candidate->mipmap.data = (int16_t *)sample_page_cache_port_resolve_shared(
+        &mipmap_allocation);
     candidate->mipmap.data_bytes = mipmap_bytes;
     candidate->mipmap.first_page_slot = mipmap_allocation.first_slot;
     candidate->mipmap.page_count = mipmap_allocation.page_count;
@@ -953,7 +1101,7 @@ static wavetable_result_t wavetable_pool_candidate_allocate(
     return WAVETABLE_RESULT_OK;
 }
 
-static void wavetable_pool_candidate_prepare_mipmap(wavetable_slot_t *candidate)
+static void wavetable_pool_candidate_mipmap_init(wavetable_slot_t *candidate)
 {
     wavetable_mipmap_view_t *const view = &candidate->mipmap;
     int16_t *const data = view->data;
@@ -1002,6 +1150,12 @@ static void wavetable_pool_candidate_prepare_mipmap(wavetable_slot_t *candidate)
         data_offset_samples += band->sample_count;
     }
 
+}
+
+static void wavetable_pool_candidate_prepare_mipmap(wavetable_slot_t *candidate)
+{
+    wavetable_pool_candidate_mipmap_init(candidate);
+    wavetable_mipmap_view_t *const view = &candidate->mipmap;
     for (uint32_t cycle = 0U; cycle < candidate->frame_count; ++cycle)
     {
         const int16_t *const src =
@@ -1091,9 +1245,14 @@ static wavetable_result_t wavetable_pool_candidate_decode_wav(
         return WAVETABLE_RESULT_READ_FAIL;
     }
 
+    const uint32_t source_cycle_sample_count =
+        wavetable_pool_source_cycle_sample_count(
+            wav_info->data_size / wav_info->block_align);
     const uint32_t sample_count = candidate->frame_count
-        * WAVETABLE_FRAME_SAMPLE_COUNT;
+        * source_cycle_sample_count;
     uint32_t frames_done = 0U;
+    uint32_t cycle = 0U;
+    uint32_t cycle_offset = 0U;
     while (frames_done < sample_count)
     {
         uint32_t frames_chunk = WAVETABLE_POOL_IO_BYTES / wav_info->block_align;
@@ -1115,7 +1274,6 @@ static wavetable_result_t wavetable_pool_candidate_decode_wav(
         }
 
         const uint8_t *src = g_wavetable_pool_io;
-        int16_t *const dst = &candidate->data[frames_done];
         for (uint32_t i = 0U; i < frames_chunk; ++i)
         {
             float left = 0.0f;
@@ -1125,8 +1283,24 @@ static wavetable_result_t wavetable_pool_candidate_decode_wav(
                                                 wav_info->bits_per_sample,
                                                 &left,
                                                 &right);
-            dst[i] = wavetable_pool_float_to_s16(
-                (wav_info->channels == 1U) ? left : ((left + right) * 0.5f));
+            const float mono = (wav_info->channels == 1U)
+                ? left : ((left + right) * 0.5f);
+            if (source_cycle_sample_count == WAVETABLE_FRAME_SAMPLE_COUNT)
+            {
+                candidate->data[frames_done + i] =
+                    wavetable_pool_float_to_s16(mono);
+            }
+            else
+            {
+                wavetable_pool_legacy_source_store(cycle_offset++, mono);
+                if (cycle_offset == WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT)
+                {
+                    wavetable_pool_resample_legacy_cycle(
+                        &candidate->data[cycle * WAVETABLE_FRAME_SAMPLE_COUNT]);
+                    cycle++;
+                    cycle_offset = 0U;
+                }
+            }
             src += wav_info->block_align;
         }
         frames_done += frames_chunk;
@@ -1367,15 +1541,51 @@ static void wavetable_pool_release_slot_allocations(
 {
     if (slot->page_count != 0U)
     {
-        sample_page_cache_release_slot_pool_allocation(slot->first_page_slot,
+        sample_page_cache_port_release_shared(slot->first_page_slot,
                                                        slot->page_count);
     }
     if (slot->mipmap.page_count != 0U)
     {
-        sample_page_cache_release_slot_pool_allocation(
+        sample_page_cache_port_release_shared(
             slot->mipmap.first_page_slot,
             slot->mipmap.page_count);
     }
+}
+
+static uint8_t wavetable_pool_publish_audio_descriptor(
+    uint16_t wavetable_slot, const wavetable_slot_t *slot)
+{
+    audio_wavetable_descriptor_t descriptor;
+    memset(&descriptor, 0, sizeof(descriptor));
+    descriptor.generation = slot->generation;
+    descriptor.frame_count = slot->frame_count;
+    descriptor.frame_sample_count = slot->frame_sample_count;
+    descriptor.wavetable_slot = wavetable_slot;
+    descriptor.global_slot = slot->global_slot;
+    descriptor.band_count = slot->mipmap.band_count;
+    descriptor.duplicate_sample_count = slot->mipmap.duplicate_sample_count;
+    if (audio_shared_memory_page_ref(slot->first_page_slot, 0U,
+                                     slot->data_bytes, &descriptor.base_data) == 0U)
+        return 0U;
+    dcache_clean_by_addr_aligned(slot->data, slot->data_bytes);
+    uint32_t mip_offset = 0U;
+    for (uint16_t i = 0U; i < descriptor.band_count; ++i)
+    {
+        const wavetable_mipmap_band_t *const src = &slot->mipmap.bands[i];
+        audio_wavetable_band_t *const dst = &descriptor.bands[i];
+        const uint32_t bytes = src->sample_count * sizeof(int16_t);
+        dst->max_phase_increment = src->max_phase_increment;
+        dst->cycle_sample_count = src->cycle_sample_count;
+        dst->sample_count = src->sample_count;
+        dst->cycle_magnitude = src->cycle_magnitude;
+        dst->flags = src->flags;
+        if (audio_shared_memory_page_ref(slot->mipmap.first_page_slot,
+                                         mip_offset, bytes, &dst->data) == 0U)
+            return 0U;
+        mip_offset += bytes;
+    }
+    dcache_clean_by_addr_aligned(slot->mipmap.data, slot->mipmap.data_bytes);
+    return audio_wavetable_registry_transport_install(&descriptor);
 }
 
 static wavetable_result_t wavetable_pool_commit_candidate(
@@ -1386,6 +1596,13 @@ static wavetable_result_t wavetable_pool_commit_candidate(
 {
     g_wavetable_old_commit_snapshot = g_wavetable_pool.slots[wavetable_slot];
     const wavetable_slot_t *const old = &g_wavetable_old_commit_snapshot;
+    if (old->state == WAVETABLE_SLOT_READY)
+    {
+        wavetable_pool_clear(wavetable_slot);
+        return WAVETABLE_RESULT_SD_BUSY;
+    }
+    if (old->state == WAVETABLE_SLOT_RETIRING)
+        return WAVETABLE_RESULT_SD_BUSY;
     uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     if (forced_global_slot < SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
     {
@@ -1415,7 +1632,14 @@ static wavetable_result_t wavetable_pool_commit_candidate(
     candidate->generation = wavetable_pool_next_generation();
     candidate->state = WAVETABLE_SLOT_READY;
     candidate->error = WAVETABLE_RESULT_OK;
-    wavetable_pool_preview_build(candidate);
+    if (candidate->preview.state != WAVETABLE_PREVIEW_READY)
+    {
+        wavetable_pool_preview_build(candidate);
+    }
+    else
+    {
+        candidate->preview.generation = candidate->generation;
+    }
 
     const uint32_t primask = __get_PRIMASK();
     __disable_irq();
@@ -1428,12 +1652,510 @@ static wavetable_result_t wavetable_pool_commit_candidate(
 
     candidate->page_count = 0U;
     candidate->mipmap.page_count = 0U;
+    if (wavetable_pool_publish_audio_descriptor(
+            wavetable_slot, &g_wavetable_pool.slots[wavetable_slot]) == 0U)
+        return WAVETABLE_RESULT_REGISTER_FAIL;
     wavetable_pool_release_slot_allocations(old);
     if (out_global_slot != 0)
     {
         *out_global_slot = global_slot;
     }
     return WAVETABLE_RESULT_OK;
+}
+
+static sd_scheduler_background_admission_t wavetable_load_sd_begin(
+    sd_scheduler_background_kind_t kind, uint32_t bytes)
+{
+    const sd_scheduler_background_request_t request = {
+        .byte_count = bytes,
+        .media_epoch = g_wavetable_load_job.media_epoch,
+        .kind = kind
+    };
+    return sd_scheduler_runtime_background_try_begin(&request);
+}
+
+static void wavetable_load_fail(wavetable_result_t result)
+{
+    g_wavetable_load_job.result = result;
+    g_wavetable_load_job.state = WAVETABLE_LOAD_CLEANUP;
+    wavetable_pool_set_last(result);
+}
+
+uint8_t wavetable_pool_load_async_begin(uint16_t wavetable_slot, const char *path)
+{
+    wavetable_load_job_t *const job = &g_wavetable_load_job;
+    if ((job->state != WAVETABLE_LOAD_IDLE)
+        || (wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)
+        || (path == 0) || (path[0] == '\0')
+        || (wavetable_pool_path_ext_is_wav(path) == 0U))
+    {
+        return 0U;
+    }
+    memset(job, 0, sizeof(*job));
+    wavetable_pool_candidate_init(&g_wavetable_candidate);
+    if (wavetable_pool_copy_path(job->path, sizeof(job->path), path) == 0U)
+    {
+        return 0U;
+    }
+    job->wavetable_slot = wavetable_slot;
+    job->global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    job->media_epoch = sd_access_media_epoch();
+    job->result = WAVETABLE_RESULT_OK;
+    job->state = WAVETABLE_LOAD_MOUNT;
+    return 1U;
+}
+
+uint8_t wavetable_pool_load_async_busy(void)
+{
+    return ((g_wavetable_load_job.state != WAVETABLE_LOAD_IDLE)
+            && (g_wavetable_load_job.state != WAVETABLE_LOAD_DONE)) ? 1U : 0U;
+}
+
+static void wavetable_load_process_band(wavetable_load_job_t *job)
+{
+    wavetable_slot_t *const candidate = &g_wavetable_candidate;
+    wavetable_mipmap_view_t *const view = &candidate->mipmap;
+    wavetable_mipmap_band_t *const band = &view->bands[job->band];
+    const uint32_t count = band->cycle_sample_count;
+    const int16_t *const src = &candidate->data[job->cycle * WAVETABLE_FRAME_SAMPLE_COUNT];
+    int16_t *const dst = (int16_t *)&band->data[
+        job->cycle * (count + WAVETABLE_MIPMAP_DUPLICATE_SAMPLES)];
+    if (job->band == 0U)
+    {
+        wavetable_pool_copy_s16_exact(dst, src, count);
+    }
+    else
+    {
+        memset(g_wavetable_fft_work_real, 0, count * sizeof(float));
+        memset(g_wavetable_fft_work_imag, 0, count * sizeof(float));
+        const float spectrum_scale = (float)count / (float)WAVETABLE_FRAME_SAMPLE_COUNT;
+        g_wavetable_fft_work_real[0] = g_wavetable_fft_real[0] * spectrum_scale;
+        for (uint32_t bin = 1U; bin < (count >> 1U); ++bin)
+        {
+            const float real = g_wavetable_fft_real[bin] * spectrum_scale;
+            const float imag = g_wavetable_fft_imag[bin] * spectrum_scale;
+            g_wavetable_fft_work_real[bin] = real;
+            g_wavetable_fft_work_imag[bin] = imag;
+            g_wavetable_fft_work_real[count - bin] = real;
+            g_wavetable_fft_work_imag[count - bin] = -imag;
+        }
+        const uint32_t nyquist = count >> 1U;
+        float nyquist_value = hypotf(g_wavetable_fft_real[nyquist],
+                                     g_wavetable_fft_imag[nyquist]) * spectrum_scale;
+        if (g_wavetable_fft_real[nyquist] < 0.0f) nyquist_value = -nyquist_value;
+        g_wavetable_fft_work_real[nyquist] = nyquist_value;
+        wavetable_pool_fft(g_wavetable_fft_work_real, g_wavetable_fft_work_imag,
+                           count, 1U);
+        for (uint32_t i = 0U; i < count; ++i)
+        {
+            float value = g_wavetable_fft_work_real[i];
+            if (value > 32767.0f) value = 32767.0f;
+            else if (value < -32768.0f) value = -32768.0f;
+            dst[i] = (int16_t)lrintf(value);
+        }
+    }
+    wavetable_pool_copy_s16_exact(&dst[count], dst, WAVETABLE_MIPMAP_DUPLICATE_SAMPLES);
+    job->band++;
+    if (job->band >= view->band_count)
+    {
+        job->band = 0U;
+        job->cycle++;
+        job->state = (job->cycle >= candidate->frame_count)
+            ? WAVETABLE_LOAD_BASE_CRC : WAVETABLE_LOAD_MIP_FORWARD_PREP;
+        job->io_offset = 0U;
+    }
+}
+
+void wavetable_pool_load_async_service(void)
+{
+    wavetable_load_job_t *const job = &g_wavetable_load_job;
+    wavetable_slot_t *const candidate = &g_wavetable_candidate;
+    if ((job->state == WAVETABLE_LOAD_IDLE) || (job->state == WAVETABLE_LOAD_DONE)) return;
+
+    switch (job->state)
+    {
+        case WAVETABLE_LOAD_ALLOCATE:
+        {
+            const uint32_t samples = job->wav_info.data_size / job->wav_info.block_align;
+            job->source_cycle_sample_count =
+                wavetable_pool_source_cycle_sample_count(samples);
+            const wavetable_result_t result = wavetable_pool_candidate_allocate(
+                job->wavetable_slot, job->path,
+                samples / job->source_cycle_sample_count, candidate);
+            if (result != WAVETABLE_RESULT_OK) wavetable_load_fail(result);
+            else job->state = WAVETABLE_LOAD_DATA_SEEK;
+            return;
+        }
+        case WAVETABLE_LOAD_DECODE:
+        {
+            uint32_t count = job->buffered_samples - job->converted_samples;
+            if (count > 256U) count = 256U;
+            const uint8_t *src = &g_wavetable_pool_io[
+                job->converted_samples * job->wav_info.block_align];
+            for (uint32_t i = 0U; i < count; ++i)
+            {
+                float left = 0.0f, right = 0.0f;
+                wav_audio_codec_decode_stereo_frame(src, job->wav_info.channels,
+                                                    job->wav_info.bits_per_sample,
+                                                    &left, &right);
+                const float mono = (job->wav_info.channels == 1U)
+                    ? left : ((left + right) * 0.5f);
+                if (job->source_cycle_sample_count == WAVETABLE_FRAME_SAMPLE_COUNT)
+                {
+                    candidate->data[job->io_offset
+                        + job->converted_samples + i] =
+                        wavetable_pool_float_to_s16(mono);
+                }
+                else
+                {
+                    wavetable_pool_legacy_source_store(
+                        job->source_cycle_offset++, mono);
+                    if (job->source_cycle_offset
+                            == WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT)
+                    {
+                        wavetable_pool_resample_legacy_cycle(
+                            &candidate->data[job->cycle
+                                * WAVETABLE_FRAME_SAMPLE_COUNT]);
+                        job->cycle++;
+                        job->source_cycle_offset = 0U;
+                    }
+                }
+                src += job->wav_info.block_align;
+            }
+            job->converted_samples += count;
+            if (job->converted_samples >= job->buffered_samples)
+            {
+                job->io_offset += job->buffered_samples;
+                job->buffered_samples = 0U;
+                job->converted_samples = 0U;
+                job->state = (job->io_offset >= candidate->frame_count
+                        * job->source_cycle_sample_count)
+                    ? WAVETABLE_LOAD_MIP_INIT : WAVETABLE_LOAD_DATA_READ;
+            }
+            return;
+        }
+        case WAVETABLE_LOAD_MIP_INIT:
+            wavetable_pool_candidate_mipmap_init(candidate);
+            job->cycle = 0U;
+            job->band = 0U;
+            job->state = WAVETABLE_LOAD_MIP_FORWARD_PREP;
+            return;
+        case WAVETABLE_LOAD_MIP_FORWARD_PREP:
+        {
+            const int16_t *src = &candidate->data[job->cycle * WAVETABLE_FRAME_SAMPLE_COUNT];
+            for (uint32_t i = 0U; i < WAVETABLE_FRAME_SAMPLE_COUNT; ++i)
+            {
+                g_wavetable_fft_real[i] = (float)src[i];
+                g_wavetable_fft_imag[i] = 0.0f;
+            }
+            job->state = WAVETABLE_LOAD_MIP_FORWARD_FFT;
+            return;
+        }
+        case WAVETABLE_LOAD_MIP_FORWARD_FFT:
+            wavetable_pool_fft(g_wavetable_fft_real, g_wavetable_fft_imag,
+                               WAVETABLE_FRAME_SAMPLE_COUNT, 0U);
+            job->state = WAVETABLE_LOAD_MIP_BAND;
+            return;
+        case WAVETABLE_LOAD_MIP_BAND:
+            wavetable_load_process_band(job);
+            return;
+        case WAVETABLE_LOAD_BASE_CRC:
+        case WAVETABLE_LOAD_PAYLOAD_CRC:
+        {
+            const uint8_t *data = (job->state == WAVETABLE_LOAD_BASE_CRC)
+                ? (const uint8_t *)candidate->data : (const uint8_t *)candidate->mipmap.data;
+            const uint32_t total = (job->state == WAVETABLE_LOAD_BASE_CRC)
+                ? candidate->data_bytes : candidate->mipmap.data_bytes;
+            uint32_t chunk = total - job->io_offset;
+            if (chunk > SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES) chunk = SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES;
+            if (job->state == WAVETABLE_LOAD_BASE_CRC)
+                job->base_crc = wavetable_pool_crc32_update(job->base_crc, &data[job->io_offset], chunk);
+            else
+                job->payload_crc = wavetable_pool_crc32_update(job->payload_crc, &data[job->io_offset], chunk);
+            job->io_offset += chunk;
+            if (job->io_offset >= total)
+            {
+                job->io_offset = 0U;
+                job->state = (job->state == WAVETABLE_LOAD_BASE_CRC)
+                    ? WAVETABLE_LOAD_PAYLOAD_CRC : WAVETABLE_LOAD_CACHE_DIR;
+            }
+            return;
+        }
+        case WAVETABLE_LOAD_PREVIEW_INIT:
+            memset(&candidate->preview, 0, sizeof(candidate->preview));
+            candidate->preview.state = WAVETABLE_PREVIEW_READY;
+            candidate->preview.generation = candidate->generation;
+            candidate->preview.frame_count = candidate->frame_count;
+            candidate->preview.columns = WAVETABLE_PREVIEW_COLUMNS;
+            for (uint16_t col = 0U; col < WAVETABLE_PREVIEW_COLUMNS; ++col)
+            {
+                candidate->preview.min[col] = 32767;
+                candidate->preview.max[col] = -32768;
+            }
+            job->cycle = 0U;
+            job->state = WAVETABLE_LOAD_PREVIEW_FRAME;
+            return;
+        case WAVETABLE_LOAD_PREVIEW_FRAME:
+        {
+            uint32_t col = (uint32_t)(((uint64_t)job->cycle * WAVETABLE_PREVIEW_COLUMNS)
+                                      / candidate->frame_count);
+            if (col >= WAVETABLE_PREVIEW_COLUMNS) col = WAVETABLE_PREVIEW_COLUMNS - 1U;
+            const int16_t *src = &candidate->data[job->cycle * WAVETABLE_FRAME_SAMPLE_COUNT];
+            int16_t min = 32767, max = -32768;
+            for (uint32_t i = 0U; i < WAVETABLE_FRAME_SAMPLE_COUNT; ++i)
+            {
+                if (src[i] < min) min = src[i];
+                if (src[i] > max) max = src[i];
+            }
+            if (min < candidate->preview.min[col]) candidate->preview.min[col] = min;
+            if (max > candidate->preview.max[col]) candidate->preview.max[col] = max;
+            const uint16_t min_peak = wavetable_pool_preview_abs_i16(min);
+            const uint16_t max_peak = wavetable_pool_preview_abs_i16(max);
+            if (min_peak > candidate->preview.global_peak) candidate->preview.global_peak = min_peak;
+            if (max_peak > candidate->preview.global_peak) candidate->preview.global_peak = max_peak;
+            job->cycle++;
+            if (job->cycle >= candidate->frame_count)
+            {
+                for (uint16_t i = 0U; i < WAVETABLE_PREVIEW_COLUMNS; ++i)
+                    if (candidate->preview.min[i] > candidate->preview.max[i])
+                        candidate->preview.min[i] = candidate->preview.max[i] = 0;
+                job->state = WAVETABLE_LOAD_PUBLISH;
+            }
+            return;
+        }
+        case WAVETABLE_LOAD_PUBLISH:
+        {
+            const wavetable_slot_state_t state =
+                g_wavetable_pool.slots[job->wavetable_slot].state;
+            if (state == WAVETABLE_SLOT_READY)
+            {
+                wavetable_pool_clear(job->wavetable_slot);
+                job->state = WAVETABLE_LOAD_WAIT_RETIRE;
+                return;
+            }
+            if (state == WAVETABLE_SLOT_RETIRING)
+            {
+                job->state = WAVETABLE_LOAD_WAIT_RETIRE;
+                return;
+            }
+            candidate->generation = wavetable_pool_next_generation();
+            candidate->preview.generation = candidate->generation;
+            const wavetable_result_t result = wavetable_pool_commit_candidate(
+                job->wavetable_slot, SAMPLE_GLOBAL_POOL_INVALID_INDEX,
+                candidate, &job->global_slot);
+            if (result != WAVETABLE_RESULT_OK) wavetable_load_fail(result);
+            else
+            {
+                job->result = WAVETABLE_RESULT_OK;
+                job->state = WAVETABLE_LOAD_DONE;
+                wavetable_pool_set_last(WAVETABLE_RESULT_OK);
+            }
+            return;
+        }
+        case WAVETABLE_LOAD_WAIT_RETIRE:
+            wavetable_pool_service_retire();
+            if (g_wavetable_pool.slots[job->wavetable_slot].state
+                == WAVETABLE_SLOT_EMPTY)
+                job->state = WAVETABLE_LOAD_PUBLISH;
+            return;
+        default:
+            break;
+    }
+
+    sd_scheduler_background_kind_t kind = SD_SCHEDULER_BACKGROUND_METADATA;
+    uint32_t bytes = 0U;
+    if ((job->state == WAVETABLE_LOAD_CRC_READ)
+        || (job->state == WAVETABLE_LOAD_PARSE)
+        || (job->state == WAVETABLE_LOAD_DATA_READ)
+        || (job->state == WAVETABLE_LOAD_CACHE_HEADER)
+        || (job->state == WAVETABLE_LOAD_CACHE_BAND)
+        || (job->state == WAVETABLE_LOAD_CACHE_PAYLOAD))
+    {
+        kind = SD_SCHEDULER_BACKGROUND_DATA;
+        if (job->state == WAVETABLE_LOAD_PARSE) bytes = SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES;
+        else if (job->state == WAVETABLE_LOAD_CACHE_HEADER) bytes = WAVETABLE_PREPARED_HEADER_SIZE;
+        else if (job->state == WAVETABLE_LOAD_CACHE_BAND) bytes = WAVETABLE_PREPARED_BAND_ENTRY_SIZE;
+        else
+        {
+            uint32_t remaining = 0U;
+            if (job->state == WAVETABLE_LOAD_CRC_READ)
+                remaining = (uint32_t)job->source_info.fsize - job->io_offset;
+            else if (job->state == WAVETABLE_LOAD_DATA_READ)
+                remaining = (candidate->frame_count * job->source_cycle_sample_count - job->io_offset)
+                            * job->wav_info.block_align;
+            else remaining = candidate->mipmap.data_bytes - job->io_offset;
+            bytes = (remaining > SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES)
+                ? SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES : remaining;
+        }
+    }
+    const sd_scheduler_background_admission_t admission = wavetable_load_sd_begin(kind, bytes);
+    if (admission == SD_SCHEDULER_BACKGROUND_NOT_NOW) return;
+    if (admission != SD_SCHEDULER_BACKGROUND_GO)
+    {
+        job->source_open = 0U;
+        job->cache_open = 0U;
+        wavetable_load_fail(WAVETABLE_RESULT_SD_MOUNT_FAIL);
+        wavetable_pool_candidate_release(candidate);
+        job->state = WAVETABLE_LOAD_DONE;
+        return;
+    }
+
+    switch (job->state)
+    {
+        case WAVETABLE_LOAD_MOUNT:
+            if (sd_access_fs_mount_if_needed() == 0U) wavetable_load_fail(WAVETABLE_RESULT_SD_MOUNT_FAIL);
+            else job->state = WAVETABLE_LOAD_STAT;
+            break;
+        case WAVETABLE_LOAD_STAT:
+            if (f_stat(job->path, &job->source_info) != FR_OK) wavetable_load_fail(WAVETABLE_RESULT_OPEN_FAIL);
+            else job->state = WAVETABLE_LOAD_OPEN;
+            break;
+        case WAVETABLE_LOAD_OPEN:
+            if (f_open(&job->source, job->path, FA_READ) != FR_OK) wavetable_load_fail(WAVETABLE_RESULT_OPEN_FAIL);
+            else { job->source_open = 1U; job->state = WAVETABLE_LOAD_CRC_SEEK; }
+            break;
+        case WAVETABLE_LOAD_CRC_SEEK:
+            if (f_lseek(&job->source, 0U) != FR_OK) wavetable_load_fail(WAVETABLE_RESULT_READ_FAIL);
+            else { job->io_offset = 0U; job->source_crc = 0U; job->state = WAVETABLE_LOAD_CRC_READ; }
+            break;
+        case WAVETABLE_LOAD_CRC_READ:
+        {
+            UINT read = 0U;
+            if ((f_read(&job->source, g_wavetable_pool_io, bytes, &read) != FR_OK) || (read != bytes))
+                wavetable_load_fail(WAVETABLE_RESULT_READ_FAIL);
+            else
+            {
+                job->source_crc = wavetable_pool_crc32_update(job->source_crc, g_wavetable_pool_io, read);
+                job->io_offset += read;
+                if (job->io_offset >= (uint32_t)job->source_info.fsize) job->state = WAVETABLE_LOAD_PARSE;
+            }
+            break;
+        }
+        case WAVETABLE_LOAD_PARSE:
+            if ((wav_parser_parse_info(&job->source, &job->wav_info) == 0)
+                || (wavetable_pool_wav_info_valid(&job->wav_info) == 0U))
+                wavetable_load_fail(WAVETABLE_RESULT_UNSUPPORTED);
+            else job->state = WAVETABLE_LOAD_ALLOCATE;
+            break;
+        case WAVETABLE_LOAD_DATA_SEEK:
+            if (f_lseek(&job->source, job->wav_info.data_offset) != FR_OK) wavetable_load_fail(WAVETABLE_RESULT_READ_FAIL);
+            else { job->io_offset = 0U; job->state = WAVETABLE_LOAD_DATA_READ; }
+            break;
+        case WAVETABLE_LOAD_DATA_READ:
+        {
+            uint32_t samples = bytes / job->wav_info.block_align;
+            UINT wanted = (UINT)(samples * job->wav_info.block_align), read = 0U;
+            if ((f_read(&job->source, g_wavetable_pool_io, wanted, &read) != FR_OK) || (read != wanted))
+                wavetable_load_fail(WAVETABLE_RESULT_READ_FAIL);
+            else { job->buffered_samples = samples; job->converted_samples = 0U; job->state = WAVETABLE_LOAD_DECODE; }
+            break;
+        }
+        case WAVETABLE_LOAD_CACHE_DIR:
+            (void)f_mkdir("0:/WAVETABLES");
+            job->state = WAVETABLE_LOAD_CACHE_SUBDIR;
+            break;
+        case WAVETABLE_LOAD_CACHE_SUBDIR:
+            (void)f_mkdir(WAVETABLE_POOL_CACHE_DIR);
+            if ((wavetable_pool_make_cache_path(job->cache_path, sizeof(job->cache_path),
+                                                job->path, &job->source_info) == 0U)
+                || (wavetable_pool_make_temp_path(job->temp_path, sizeof(job->temp_path),
+                                                  job->cache_path) == 0U))
+                wavetable_load_fail(WAVETABLE_RESULT_PATH_TOO_LONG);
+            else job->state = WAVETABLE_LOAD_CACHE_CLEAN;
+            break;
+        case WAVETABLE_LOAD_CACHE_CLEAN:
+            (void)f_unlink(job->temp_path);
+            job->state = WAVETABLE_LOAD_CACHE_OPEN;
+            break;
+        case WAVETABLE_LOAD_CACHE_OPEN:
+            if (f_open(&job->cache, job->temp_path, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK)
+                wavetable_load_fail(WAVETABLE_RESULT_WRITE_FAIL);
+            else { job->cache_open = 1U; job->state = WAVETABLE_LOAD_CACHE_HEADER; }
+            break;
+        case WAVETABLE_LOAD_CACHE_HEADER:
+        {
+            wavetable_pool_encode_prepared_header(g_wavetable_pool_io, candidate,
+                                                  &job->source_info, job->source_crc,
+                                                  job->base_crc, job->payload_crc);
+            UINT written = 0U;
+            if ((f_write(&job->cache, g_wavetable_pool_io, bytes, &written) != FR_OK) || (written != bytes))
+                wavetable_load_fail(WAVETABLE_RESULT_WRITE_FAIL);
+            else { job->band = 0U; job->io_offset = 0U; job->state = WAVETABLE_LOAD_CACHE_BAND; }
+            break;
+        }
+        case WAVETABLE_LOAD_CACHE_BAND:
+        {
+            const wavetable_mipmap_band_t *band = &candidate->mipmap.bands[job->band];
+            wavetable_pool_encode_prepared_band(g_wavetable_pool_io, band, job->io_offset);
+            UINT written = 0U;
+            if ((f_write(&job->cache, g_wavetable_pool_io, bytes, &written) != FR_OK) || (written != bytes))
+                wavetable_load_fail(WAVETABLE_RESULT_WRITE_FAIL);
+            else
+            {
+                job->io_offset += band->sample_count * sizeof(int16_t);
+                job->band++;
+                if (job->band >= candidate->mipmap.band_count) { job->io_offset = 0U; job->state = WAVETABLE_LOAD_CACHE_PAYLOAD; }
+            }
+            break;
+        }
+        case WAVETABLE_LOAD_CACHE_PAYLOAD:
+        {
+            UINT written = 0U;
+            const uint8_t *src = (const uint8_t *)candidate->mipmap.data;
+            if ((f_write(&job->cache, &src[job->io_offset], bytes, &written) != FR_OK) || (written != bytes))
+                wavetable_load_fail(WAVETABLE_RESULT_WRITE_FAIL);
+            else { job->io_offset += bytes; if (job->io_offset >= candidate->mipmap.data_bytes) job->state = WAVETABLE_LOAD_CACHE_SYNC; }
+            break;
+        }
+        case WAVETABLE_LOAD_CACHE_SYNC:
+            if (f_sync(&job->cache) != FR_OK) wavetable_load_fail(WAVETABLE_RESULT_WRITE_FAIL);
+            else job->state = WAVETABLE_LOAD_CACHE_CLOSE;
+            break;
+        case WAVETABLE_LOAD_CACHE_CLOSE:
+            if (f_close(&job->cache) != FR_OK) wavetable_load_fail(WAVETABLE_RESULT_WRITE_FAIL);
+            else { job->cache_open = 0U; job->state = WAVETABLE_LOAD_CACHE_FINAL_CLEAN; }
+            break;
+        case WAVETABLE_LOAD_CACHE_FINAL_CLEAN:
+            (void)f_unlink(job->cache_path);
+            job->state = WAVETABLE_LOAD_CACHE_RENAME;
+            break;
+        case WAVETABLE_LOAD_CACHE_RENAME:
+            if (f_rename(job->temp_path, job->cache_path) != FR_OK) wavetable_load_fail(WAVETABLE_RESULT_WRITE_FAIL);
+            else job->state = WAVETABLE_LOAD_SOURCE_CLOSE;
+            break;
+        case WAVETABLE_LOAD_SOURCE_CLOSE:
+            if (f_close(&job->source) != FR_OK) wavetable_load_fail(WAVETABLE_RESULT_READ_FAIL);
+            else { job->source_open = 0U; job->state = WAVETABLE_LOAD_PREVIEW_INIT; }
+            break;
+        case WAVETABLE_LOAD_CLEANUP:
+            if ((job->cleanup_phase == 0U) && (job->cache_open != 0U))
+            { (void)f_close(&job->cache); job->cache_open = 0U; job->cleanup_phase++; }
+            else if ((job->cleanup_phase <= 1U) && (job->source_open != 0U))
+            { (void)f_close(&job->source); job->source_open = 0U; job->cleanup_phase = 2U; }
+            else if ((job->cleanup_phase <= 2U) && (job->temp_path[0] != '\0'))
+            { (void)f_unlink(job->temp_path); job->cleanup_phase = 3U; }
+            else
+            { wavetable_pool_candidate_release(candidate); job->state = WAVETABLE_LOAD_DONE; }
+            break;
+        default:
+            break;
+    }
+    sd_scheduler_runtime_background_end();
+}
+
+uint8_t wavetable_pool_load_async_take_result(wavetable_result_t *out_result,
+                                              uint16_t *out_wavetable_slot,
+                                              uint16_t *out_global_slot,
+                                              const char **out_path)
+{
+    wavetable_load_job_t *const job = &g_wavetable_load_job;
+    if (job->state != WAVETABLE_LOAD_DONE) return 0U;
+    if (out_result != 0) *out_result = job->result;
+    if (out_wavetable_slot != 0) *out_wavetable_slot = job->wavetable_slot;
+    if (out_global_slot != 0) *out_global_slot = job->global_slot;
+    if (out_path != 0) *out_path = job->path;
+    job->state = WAVETABLE_LOAD_IDLE;
+    return 1U;
 }
 
 static wavetable_result_t wavetable_pool_load_wav_transactional(
@@ -1501,10 +2223,12 @@ static wavetable_result_t wavetable_pool_load_wav_transactional(
         goto done;
     }
     const uint32_t source_samples = wav_info.data_size / wav_info.block_align;
+    const uint32_t source_cycle_sample_count =
+        wavetable_pool_source_cycle_sample_count(source_samples);
     result = wavetable_pool_candidate_allocate(
         wavetable_slot,
         path,
-        source_samples / WAVETABLE_FRAME_SAMPLE_COUNT,
+        source_samples / source_cycle_sample_count,
         candidate);
     if (result != WAVETABLE_RESULT_OK)
     {
@@ -1637,7 +2361,7 @@ wavetable_result_t wavetable_pool_load_file_at(uint16_t wavetable_slot,
     return result;
 }
 
-void wavetable_pool_clear(uint16_t wavetable_slot)
+static void wavetable_pool_finalize_clear(uint16_t wavetable_slot)
 {
     if (wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)
     {
@@ -1658,12 +2382,12 @@ void wavetable_pool_clear(uint16_t wavetable_slot)
     }
     if (old.page_count != 0U)
     {
-        sample_page_cache_release_slot_pool_allocation(old.first_page_slot,
+        sample_page_cache_port_release_shared(old.first_page_slot,
                                                        old.page_count);
     }
     if (old.mipmap.page_count != 0U)
     {
-        sample_page_cache_release_slot_pool_allocation(old.mipmap.first_page_slot,
+        sample_page_cache_port_release_shared(old.mipmap.first_page_slot,
                                                        old.mipmap.page_count);
     }
     sample_global_pool_clear_backend(SAMPLE_GLOBAL_KIND_WAVETABLE, wavetable_slot);
@@ -1674,6 +2398,54 @@ void wavetable_pool_clear(uint16_t wavetable_slot)
     g_wavetable_pool.slots[wavetable_slot].mipmap.first_page_slot = UINT16_MAX;
     g_wavetable_pool.slots[wavetable_slot].generation = generation;
     wavetable_pool_preview_clear(&g_wavetable_pool.slots[wavetable_slot].preview);
+}
+
+void wavetable_pool_audio_ack_retire(uint16_t wavetable_slot,
+                                     uint32_t generation)
+{
+    if (wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS) return;
+    __DMB();
+    g_wavetable_retire_ack[wavetable_slot] = generation;
+    __DMB();
+}
+
+void wavetable_pool_clear(uint16_t wavetable_slot)
+{
+    if (wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS) return;
+    wavetable_slot_t *const slot = &g_wavetable_pool.slots[wavetable_slot];
+    if (slot->state == WAVETABLE_SLOT_RETIRING) return;
+    if (slot->state != WAVETABLE_SLOT_READY)
+    {
+        wavetable_pool_finalize_clear(wavetable_slot);
+        return;
+    }
+    uint64_t due_sample = 0U;
+    if (!live_clock_read_audio_sample(&due_sample)) return;
+    const uint32_t generation = slot->generation;
+    const control_audio_event_t event = {
+        .due_sample = due_sample,
+        .source_generation = generation,
+        .param_id = wavetable_slot,
+        .kind = (uint8_t)CONTROL_AUDIO_EVENT_WAVETABLE_STOP
+    };
+    if (control_audio_queue_publish(&event) == 0U) return;
+    audio_wave_table_projection_withdraw_slot(wavetable_slot, generation);
+    slot->state = WAVETABLE_SLOT_RETIRING;
+    __DMB();
+}
+
+void wavetable_pool_service_retire(void)
+{
+    for (uint16_t i = 0U; i < WAVETABLE_POOL_MAX_SLOTS; ++i)
+    {
+        wavetable_slot_t *const slot = &g_wavetable_pool.slots[i];
+        if ((slot->state == WAVETABLE_SLOT_RETIRING)
+            && (g_wavetable_retire_ack[i] == slot->generation))
+        {
+            g_wavetable_retire_ack[i] = 0U;
+            wavetable_pool_finalize_clear(i);
+        }
+    }
 }
 
 const wavetable_slot_t *wavetable_pool_get_slot(uint16_t wavetable_slot)
@@ -1735,14 +2507,14 @@ const wavetable_preview_t *wavetable_pool_get_preview_for_global(uint16_t global
 
 uint32_t wavetable_pool_get_used_bytes(void)
 {
-    const uint32_t total = sample_page_cache_slot_pool_total_bytes();
-    const uint32_t free_bytes = sample_page_cache_slot_pool_free_bytes();
+    const uint32_t total = sample_page_cache_port_shared_total_bytes();
+    const uint32_t free_bytes = sample_page_cache_port_shared_free_bytes();
     return (free_bytes >= total) ? 0U : (total - free_bytes);
 }
 
 uint32_t wavetable_pool_get_free_bytes(void)
 {
-    return sample_page_cache_slot_pool_free_bytes();
+    return sample_page_cache_port_shared_free_bytes();
 }
 
 wavetable_result_t wavetable_pool_get_last_result(void)

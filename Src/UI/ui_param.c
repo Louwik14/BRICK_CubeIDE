@@ -101,7 +101,6 @@ typedef struct
 static uint8_t ui_param_is_track_scoped(param_id_t param);
 static uint8_t ui_param_track_accepts_relative_param(uint8_t track, param_id_t param);
 static uint8_t ui_param_is_seq_runtime_track_param(param_id_t param);
-static uint8_t ui_param_is_prism_tune(param_id_t param, uint8_t track);
 static uint8_t ui_param_get_track_edit_value(param_id_t param, uint8_t track, float *out_value);
 static float ui_param_get_active_track_value(param_id_t param, uint8_t active_track);
 static uint8_t ui_param_resolve_seq_slot(uint8_t track,
@@ -259,8 +258,7 @@ void ui_param_publish_encoder_binding(uint8_t active_track, uint8_t shift_down)
                 scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK;
                 track = ui_param_resolve_effective_edit_track(parameter, active_track);
             }
-            if ((live_parameter_is_audio_owned(parameter) != 0U)
-                    && (ui_param_is_prism_tune(parameter, track) == 0U))
+            if (live_parameter_is_audio_owned(parameter) != 0U)
             {
                 route = ENCODER_BINDING_ROUTE_AUDIO;
             }
@@ -298,50 +296,6 @@ uint8_t ui_param_accept_audio_owned_command(param_id_t param,
                                            shadow_track,
                                            value,
                                            update_global_mirror);
-}
-
-static uint8_t ui_param_is_stack_osc_tune(param_id_t param)
-{
-    return ((param == PARAM_STACK_OSC1_TUNE)
-            || (param == PARAM_STACK_OSC2_TUNE)
-            || (param == PARAM_STACK_OSC3_TUNE)) ? 1U : 0U;
-}
-
-static uint8_t ui_param_is_prism_tune(param_id_t param, uint8_t track)
-{
-    return (uint8_t)(((param == PARAM_PRISM_COARSE) || (param == PARAM_PRISM_OSC2_COARSE))
-            && (track < BRICK_ENTITY_CAPACITY)
-            && (ui_get_track_family(track) == UI_TRACK_FAMILY_SYNTH)
-            && (ui_get_track_type(track) == UI_TRACK_TYPE_PRISM));
-}
-
-static param_id_t ui_param_prism_fine_for_tune(param_id_t param)
-{
-    return (param == PARAM_PRISM_OSC2_COARSE) ? PARAM_PRISM_OSC2_FINE : PARAM_PRISM_FINE;
-}
-
-static float ui_param_prism_tune_normalized_from_parts(float coarse, float fine)
-{
-    float semitones = ((coarse - 0.5f) * 48.0f) + ((fine - 0.5f) * 2.0f);
-    if (semitones < -24.0f)
-    {
-        semitones = -24.0f;
-    }
-    else if (semitones > 24.0f)
-    {
-        semitones = 24.0f;
-    }
-
-    float normalized = (semitones / 48.0f) + 0.5f;
-    if (normalized < 0.0f)
-    {
-        normalized = 0.0f;
-    }
-    else if (normalized > 1.0f)
-    {
-        normalized = 1.0f;
-    }
-    return normalized;
 }
 
 static uint8_t ui_param_bank_is_same(const ui_param_bank_t *bank)
@@ -1005,9 +959,11 @@ static uint8_t ui_param_resolve_edit_bounds(param_id_t param, uint8_t track, flo
     const param_desc_t *desc = &param_registry[param];
     *out_min = desc->min;
     *out_max = desc->max;
-    if ((param == PARAM_AUDIO_FX_P3)
+    if (((param == PARAM_AUDIO_FX_P3) || (param == PARAM_AUDIO_FX_B_P3))
             && ((uint8_t)(ui_param_get_active_track_value(
-                    PARAM_AUDIO_FX_MODEL, track) + 0.5f)
+                    (param == PARAM_AUDIO_FX_B_P3) ? PARAM_AUDIO_FX_B_MODEL
+                                                   : PARAM_AUDIO_FX_MODEL,
+                    track) + 0.5f)
                 == AUDIO_FX_MODEL_DRIVE))
     {
         *out_min = 0.0f;
@@ -1132,8 +1088,7 @@ static float ui_param_get_active_track_value(param_id_t param, uint8_t active_tr
     active_track = ui_param_resolve_effective_edit_track(param, active_track);
 
     float value = 0.0f;
-    if ((ui_param_is_prism_tune(param, active_track) == 0U)
-            && (ui_param_audio_owned_shadow_get(param, active_track, &value) != 0U))
+    if (ui_param_audio_owned_shadow_get(param, active_track, &value) != 0U)
     {
         return value;
     }
@@ -1177,8 +1132,7 @@ float ui_param_get_active_track_display_value(param_id_t param, uint8_t active_t
 
 static uint8_t ui_param_get_track_edit_value(param_id_t param, uint8_t track, float *out_value)
 {
-    if ((ui_param_is_prism_tune(param, track) == 0U)
-            && (ui_param_audio_owned_shadow_get(param, track, out_value) != 0U))
+    if (ui_param_audio_owned_shadow_get(param, track, out_value) != 0U)
     {
         return 1U;
     }
@@ -1186,25 +1140,6 @@ static uint8_t ui_param_get_track_edit_value(param_id_t param, uint8_t track, fl
     {
         return 1U;
     }
-    if (ui_param_is_prism_tune(param, track) != 0U)
-    {
-        float coarse = 0.5f;
-        float fine = 0.5f;
-        const param_id_t fine_param = ui_param_prism_fine_for_tune(param);
-        if ((ui_param_audio_owned_shadow_get(param, track, &coarse) == 0U)
-                && (param_registry_get_track_value(param, track, &coarse) == 0U))
-        {
-            return 0U;
-        }
-        if ((ui_param_audio_owned_shadow_get(fine_param, track, &fine) == 0U)
-                && (param_registry_get_track_value(fine_param, track, &fine) == 0U))
-        {
-            return 0U;
-        }
-        *out_value = ui_param_prism_tune_normalized_from_parts(coarse, fine);
-        return 1U;
-    }
-
     return param_registry_get_track_value(param, track, out_value);
 }
 
@@ -1340,8 +1275,7 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
                                         uint8_t track,
                                         uint8_t update_active_mirror)
 {
-    if ((live_parameter_is_audio_owned(param) != 0U)
-            && (ui_param_is_prism_tune(param, track) == 0U))
+    if (live_parameter_is_audio_owned(param) != 0U)
     {
         const param_desc_t *const desc = &param_registry[param];
         float edit_min = desc->min;
@@ -1403,82 +1337,6 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
         return 1U;
     }
 
-    if (ui_param_is_prism_tune(param, track) != 0U)
-    {
-        const float clamped = ui_param_clamp(value, 0.0f, 1.0f);
-        float current_value = 0.0f;
-        if (ui_param_get_track_edit_value(param, track, &current_value) == 0U)
-        {
-            return 0U;
-        }
-
-        if (ui_param_value_is_same(current_value, clamped) != 0U)
-        {
-            if (update_active_mirror != 0U)
-            {
-                param_store_set_active(param, clamped);
-                param_store_set_active(ui_param_prism_fine_for_tune(param), 0.5f);
-            }
-            return 1U;
-        }
-
-        const param_id_t fine_param = ui_param_prism_fine_for_tune(param);
-        live_parameter_audio_bulk_t bulk = {
-            .capture_tick = live_clock_capture_tick(),
-            .source = LIVE_PARAMETER_EVENT_SOURCE_ENCODER,
-            .count = 2U
-        };
-        bulk.item[0] = (live_parameter_audio_bulk_item_t){
-            .parameter_id = (uint16_t)fine_param,
-            .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
-            .track = track,
-            .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-            .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                                | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS
-                                | ((uint16_t)encoder << LIVE_PARAMETER_EVENT_FLAG_ENCODER_SHIFT)),
-            .value = live_parameter_event_encode_float(0.5f)
-        };
-        bulk.item[1] = (live_parameter_audio_bulk_item_t){
-            .parameter_id = (uint16_t)param,
-            .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
-            .track = track,
-            .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-            .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                                | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS
-                                | ((uint16_t)encoder << LIVE_PARAMETER_EVENT_FLAG_ENCODER_SHIFT)),
-            .value = live_parameter_event_encode_float(clamped)
-        };
-        if (live_parameter_audio_queue_submit_bulk(&bulk) == false)
-        {
-            return 0U;
-        }
-        (void)ui_param_audio_owned_shadow_set(fine_param, track, 0.5f, 0U);
-        (void)ui_param_audio_owned_shadow_set(param, track, clamped,
-                                              update_active_mirror);
-
-        uint8_t set_id = 0U;
-        seq_param_slot_t param_slot = 0U;
-        if (ui_param_resolve_seq_slot(track, param, &set_id, &param_slot) != 0U)
-        {
-            const seq_value16_t encoded = seq_param_iface_encode_param_value(param, clamped);
-            const seq_param_iface_base_commit_cmd_t cmd = {
-                .source = SEQ_PARAM_IFACE_COMMIT_SOURCE_UI_TRACK_EDIT,
-                .authoritative_apply_done = 1U,
-                .target_track = track,
-                .set_id = set_id,
-                .param_slot = param_slot,
-                .value16 = encoded
-            };
-            (void)seq_param_iface_commit_base_after_authoritative_apply(&cmd);
-        }
-
-        if (update_active_mirror != 0U)
-        {
-            param_store_set_active(fine_param, 0.5f);
-        }
-        return 1U;
-    }
-
     float edit_min = 0.0f;
     float edit_max = 0.0f;
     if (ui_param_resolve_edit_bounds(param, track, &edit_min, &edit_max) == 0U)
@@ -1534,65 +1392,6 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
 static uint8_t ui_param_set_active_track_value(uint8_t encoder, param_id_t param, float value, uint8_t active_track)
 {
     return ui_param_set_track_value(encoder, param, value, active_track, 1U);
-}
-
-static float ui_param_encoder_edit_step(const param_desc_t *desc, const ui_param_encoder_context_t *ctx)
-{
-    if ((desc == 0) || (ctx == 0))
-    {
-        return 0.0f;
-    }
-
-    if ((desc->id >= PARAM_FM_OPERATOR_FIRST) && (desc->id <= PARAM_FM_OPERATOR_LAST)
-            && ((((uint16_t)desc->id - (uint16_t)PARAM_FM_OPERATOR_FIRST)
-                 % PARAM_FM_OPERATOR_PARAM_COUNT) == BRICK6_FM_OPERATOR_FREQ))
-    {
-        return (ctx->shift_down != 0U) ? 0.01f : 1.0f;
-    }
-
-    if (ctx->shift_down != 0U)
-    {
-        if (ui_param_is_prism_tune(desc->id, ctx->active_track) != 0U)
-        {
-            return 0.01f / 48.0f;
-        }
-        if ((desc->type == PARAM_TYPE_FLOAT)
-                || ((desc->type == PARAM_TYPE_BIPOLAR)
-                    && ((desc->display_type != PARAM_DISPLAY_INT) || (ui_param_is_stack_osc_tune(desc->id) != 0U))))
-        {
-            return 0.01f;
-        }
-    }
-
-    if (ui_param_is_prism_tune(desc->id, ctx->active_track) != 0U)
-    {
-        return 1.0f / 48.0f;
-    }
-
-    if (desc->id == PARAM_FILTER_CUTOFF)
-    {
-        return 1.0f;
-    }
-
-    if ((desc->id == PARAM_MIX_DELAY_MOD_RATE) || (ui_param_is_stack_osc_tune(desc->id) != 0U))
-    {
-        return 1.0f;
-    }
-
-    if ((desc->display_type == PARAM_DISPLAY_PERCENT)
-            && (desc->type == PARAM_TYPE_FLOAT)
-            && (desc->max > desc->min))
-    {
-        const float range = desc->max - desc->min;
-        return range / 127.0f;
-    }
-
-    if (desc->id == PARAM_CFG_TEMPO)
-    {
-        return 1.0f;
-    }
-
-    return desc->step;
 }
 
 static uint8_t ui_param_desc_value_count_is_short(const param_desc_t *desc)
@@ -1667,62 +1466,44 @@ static int16_t ui_param_filter_stepped_encoder_delta(const ui_param_encoder_cont
     return stepped_delta;
 }
 
-static uint8_t ui_param_is_lfo_rate(param_id_t param)
-{
-    return ((param == PARAM_LFO1_RATE) || (param == PARAM_LFO2_RATE) || (param == PARAM_LFO3_RATE)) ? 1U : 0U;
-}
-
-static float ui_param_step_lfo_rate(float current_value, int16_t delta, uint8_t shift_down)
-{
-    if (delta == 0)
-    {
-        return current_value;
-    }
-
-    const int8_t dir = ui_param_signum(delta);
-    if (current_value > 0.0001f)
-    {
-        float next = current_value + (float)dir;
-        if (next < 0.5f)
-        {
-            next = 0.0f;
-        }
-        return ui_param_clamp(next, 0.0f, (float)MOD_LFO_SYNC_RATE_COUNT);
-    }
-
-    if (current_value < -0.0001f)
-    {
-        const float step = (shift_down != 0U) ? 0.01f : 1.0f;
-        float next = current_value + ((float)delta * step);
-        if (next > -0.0001f)
-        {
-            next = 0.0f;
-        }
-        return ui_param_clamp(next, -LFO_FREE_MAX_HZ, 0.0f);
-    }
-
-    if (dir > 0)
-    {
-        return 1.0f;
-    }
-    return (shift_down != 0U) ? -0.01f : -1.0f;
-}
-
 static float ui_param_apply_delta_value(param_id_t param,
                                         uint8_t track,
                                         float current_value,
                                         int16_t delta,
-                                        float edit_step,
                                         float min_value,
                                         float max_value,
                                         uint8_t shift_down)
 {
-    if(param==PARAM_AUDIO_FX_MODEL)
+    if((param==PARAM_AUDIO_FX_MODEL)||(param==PARAM_AUDIO_FX_B_MODEL))
     {
-        static const uint8_t valid[]={0U,1U,2U,3U,5U,8U,11U,10U};
-        uint8_t pos=0U;const uint8_t current=(uint8_t)(current_value+0.5f);
-        while(pos<8U&&valid[pos]!=current)++pos;
-        if(pos>=8U)pos=(delta>0)?0U:7U;else{int32_t next=(int32_t)pos+delta;if(next<0)next=0;if(next>7)next=7;pos=(uint8_t)next;}
+        static const uint8_t valid[]={0U,1U,2U,3U,5U,8U,10U,11U,12U,13U};
+        uint8_t pos = 0U;
+        const uint8_t current = (uint8_t)(current_value + 0.5f);
+        while ((pos < 10U) && (valid[pos] != current)) ++pos;
+        if (pos >= 10U)
+        {
+            pos = (delta > 0) ? 0U : 9U;
+        }
+        else
+        {
+            int32_t next = (int32_t)pos + delta;
+            if (next < 0) next = 0;
+            if (next > 9) next = 9;
+            pos = (uint8_t)next;
+        }
+        float peer_value = 0.0f;
+        const param_id_t peer = (param == PARAM_AUDIO_FX_MODEL)
+            ? PARAM_AUDIO_FX_B_MODEL : PARAM_AUDIO_FX_MODEL;
+        (void)param_registry_get_track_value(peer, track, &peer_value);
+        const uint8_t peer_model = (uint8_t)(peer_value + 0.5f);
+        if ((valid[pos] != 0U) && (valid[pos] == peer_model))
+        {
+            const int8_t direction = (delta >= 0) ? 1 : -1;
+            int32_t next = (int32_t)pos + direction;
+            if (next < 0) next = 0;
+            if (next > 9) next = 9;
+            pos = (uint8_t)next;
+        }
         return (float)valid[pos];
     }
     if ((param == PARAM_SAMPLER_SAMPLE)
@@ -1773,22 +1554,14 @@ static float ui_param_apply_delta_value(param_id_t param,
         else {int32_t next=(int32_t)pos+(int32_t)delta;if(next<0)next=0;if(next>=(int32_t)count)next=(int32_t)count-1;pos=(uint16_t)next;}
         return (float)logical[pos];
     }
-    if ((param == PARAM_WAVE_OSC1_TUNE) || (param == PARAM_WAVE_OSC2_TUNE))
-    {
-        const float step = (shift_down != 0U) ? 0.01f : 1.0f;
-        return ui_param_clamp(current_value + ((float)delta * step), min_value, max_value);
-    }
-    if (ui_param_is_lfo_rate(param) != 0U)
-    {
-        return ui_param_step_lfo_rate(current_value, delta, shift_down);
-    }
-    return ui_param_clamp(current_value + ((float)delta * edit_step), min_value, max_value);
+    return param_value_policy_apply_delta(param, track, current_value, delta,
+                                          shift_down, min_value, max_value);
 }
 
 static uint8_t ui_param_apply_relative_delta_to_other_tracks(uint8_t encoder,
                                                              param_id_t param,
                                                              int16_t delta,
-                                                             float edit_step,
+                                                             uint8_t fine,
                                                              uint8_t active_track)
 {
     if ((delta == 0) || (ui_is_track_modifier_held() == 0U)
@@ -1822,8 +1595,8 @@ static uint8_t ui_param_apply_relative_delta_to_other_tracks(uint8_t encoder,
         }
 
         float next_value = ui_param_apply_delta_value(param, track, current_value,
-                                                      delta, edit_step,
-                                                      min_value, max_value, 0U);
+                                                      delta,
+                                                      min_value, max_value, fine);
         if (ui_param_value_is_same(next_value, current_value) != 0U)
         {
             continue;
@@ -1842,7 +1615,6 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
                                             param_id_t param,
                                             const param_desc_t *desc,
                                             int16_t delta,
-                                            float edit_step,
                                             float min_value,
                                             float max_value,
                                             uint8_t active_track)
@@ -1893,7 +1665,7 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
             source_value = seq_param_iface_decode_param_value(param, prior_entries[i].value16);
         }
 
-        const float next_value = ui_param_apply_delta_value(param, param_track, source_value, delta, edit_step, min_value, max_value, button_down(BTN_SHIFT) != 0U);
+        const float next_value = ui_param_apply_delta_value(param, param_track, source_value, delta, min_value, max_value, button_down(BTN_SHIFT) != 0U);
         target_values[i] = seq_param_iface_encode_param_value(param, next_value);
     }
 
@@ -1957,7 +1729,6 @@ static uint8_t ui_param_try_apply_live_rec_plock(uint8_t encoder,
                                                  param_id_t param,
                                                  const param_desc_t *desc,
                                                  int16_t delta,
-                                                 float edit_step,
                                                  float min_value,
                                                  float max_value,
                                                  uint8_t active_track)
@@ -2000,7 +1771,6 @@ static uint8_t ui_param_try_apply_live_rec_plock(uint8_t encoder,
                                                   live_rec_ctx.track,
                                                   source_value,
                                                   delta,
-                                                  edit_step,
                                                   min_value,
                                                   max_value,
                                                   button_down(BTN_SHIFT) != 0U);
@@ -2126,17 +1896,16 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
     const uint8_t edit_track = ui_param_resolve_effective_edit_track(param, ctx->active_track);
 
     const param_desc_t *desc = &param_registry[param];
-    const float edit_step = ui_param_encoder_edit_step(desc, ctx);
     float min_value = 0.0f;
     float max_value = 0.0f;
     (void)ui_param_resolve_edit_bounds(param, edit_track, &min_value, &max_value);
 
-    if (ui_param_try_apply_seq_plock(encoder, param, desc, delta, edit_step, min_value, max_value, edit_track) != 0U)
+    if (ui_param_try_apply_seq_plock(encoder, param, desc, delta, min_value, max_value, edit_track) != 0U)
     {
         return 1U;
     }
 
-    if (ui_param_try_apply_live_rec_plock(encoder, param, desc, delta, edit_step, min_value, max_value, edit_track) != 0U)
+    if (ui_param_try_apply_live_rec_plock(encoder, param, desc, delta, min_value, max_value, edit_track) != 0U)
     {
         return 1U;
     }
@@ -2193,7 +1962,6 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
                                            edit_track,
                                            source_current_value,
                                            delta,
-                                           edit_step,
                                            min_value,
                                            max_value,
                                            ctx->shift_down);
@@ -2202,7 +1970,7 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
         {
             if ((param == PARAM_CFG_POLY_VOICES) && (delta > 0))
                 ui_core_feedback_set("VOICE MAX", HAL_GetTick());
-            const uint8_t applied = ui_param_apply_relative_delta_to_other_tracks(encoder, param, delta, edit_step, edit_track);
+            const uint8_t applied = ui_param_apply_relative_delta_to_other_tracks(encoder, param, delta, ctx->shift_down, edit_track);
             return applied;
         }
     }
@@ -2216,7 +1984,7 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
                                        value,
                                        UI_PARAM_VALUE_FLASH_DIRECT);
     }
-    (void)ui_param_apply_relative_delta_to_other_tracks(encoder, param, delta, edit_step, edit_track);
+    (void)ui_param_apply_relative_delta_to_other_tracks(encoder, param, delta, ctx->shift_down, edit_track);
     return 1U;
 }
 
@@ -2240,8 +2008,6 @@ uint8_t ui_param_resolve_encoder_detent(const ui_param_encoder_context_t *ctx,
     }
 
     const uint8_t edit_track = ui_param_resolve_effective_edit_track(param, ctx->active_track);
-    const param_desc_t *const desc = &param_registry[param];
-    const float edit_step = ui_param_encoder_edit_step(desc, ctx);
     float min_value = 0.0f;
     float max_value = 0.0f;
     if (ui_param_resolve_edit_bounds(param, edit_track, &min_value, &max_value) == 0U)
@@ -2253,7 +2019,6 @@ uint8_t ui_param_resolve_encoder_detent(const ui_param_encoder_context_t *ctx,
                                                    edit_track,
                                                    current_value,
                                                    direction,
-                                                   edit_step,
                                                    min_value,
                                                    max_value,
                                                    ctx->shift_down);
@@ -2292,8 +2057,6 @@ uint8_t ui_param_resolve_encoder_detent_from_binding(param_id_t param,
         .active_track = (scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK) ? track : 0U,
         .shift_down = (shift_down != 0U) ? 1U : 0U
     };
-    const param_desc_t *const desc = &param_registry[param];
-    const float edit_step = ui_param_encoder_edit_step(desc, &binding_context);
     float min_value = 0.0f;
     float max_value = 0.0f;
     if (ui_param_resolve_edit_bounds(param,
@@ -2312,7 +2075,6 @@ uint8_t ui_param_resolve_encoder_detent_from_binding(param_id_t param,
                                                    binding_context.active_track,
                                                    current_value,
                                                    direction,
-                                                   edit_step,
                                                    min_value,
                                                    max_value,
                                                    binding_context.shift_down);

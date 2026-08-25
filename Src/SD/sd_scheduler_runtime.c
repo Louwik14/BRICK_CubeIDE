@@ -17,6 +17,9 @@ static sd_scheduler_t g_sd_scheduler_runtime;
 static sd_scheduler_runtime_provider_t g_sd_scheduler_read;
 static sd_scheduler_runtime_provider_t g_sd_scheduler_write;
 static sd_scheduler_runtime_provider_t g_sd_scheduler_filesystem;
+static uint8_t g_sd_scheduler_background_active;
+static uint8_t g_sd_scheduler_exclusive_requested;
+static uint8_t g_sd_scheduler_exclusive_active;
 
 static uint8_t sd_scheduler_runtime_peek(void *context,
                                          sd_scheduler_candidate_t *candidate)
@@ -98,6 +101,9 @@ void sd_scheduler_runtime_init(void)
     sd_scheduler_config_t config;
     sd_scheduler_default_config(&config);
     sd_scheduler_init(&g_sd_scheduler_runtime, &config);
+    g_sd_scheduler_background_active = 0U;
+    g_sd_scheduler_exclusive_requested = 0U;
+    g_sd_scheduler_exclusive_active = 0U;
     const sd_scheduler_provider_t read_provider =
         sample_stream_backend_physical_read_provider();
     (void)sd_scheduler_runtime_bind_wrapped(
@@ -119,13 +125,105 @@ uint8_t sd_scheduler_runtime_bind_recorder(
 
 void sd_scheduler_runtime_service(void)
 {
+    if ((g_sd_scheduler_background_active != 0U)
+        || (g_sd_scheduler_exclusive_active != 0U)
+        || ((g_sd_scheduler_exclusive_requested != 0U)
+            && (sd_scheduler_owner(&g_sd_scheduler_runtime)
+                == SD_SCHEDULER_OWNER_IDLE)))
+    {
+        return;
+    }
     sd_scheduler_service(&g_sd_scheduler_runtime,
                          HAL_GetTick() * 1000U,
                          sd_access_media_epoch());
 }
 
+sd_scheduler_background_admission_t sd_scheduler_runtime_background_try_begin(
+    const sd_scheduler_background_request_t *request)
+{
+    if ((request == 0)
+        || (request->kind > SD_SCHEDULER_BACKGROUND_METADATA)
+        || ((request->kind == SD_SCHEDULER_BACKGROUND_DATA)
+            && ((request->byte_count == 0U)
+                || (request->byte_count
+                    > SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES)))
+        || ((request->kind == SD_SCHEDULER_BACKGROUND_METADATA)
+            && (request->byte_count != 0U))
+        || (request->media_epoch != sd_access_media_epoch()))
+    {
+        return SD_SCHEDULER_BACKGROUND_INVALID;
+    }
+    if ((g_sd_scheduler_background_active != 0U)
+        || (g_sd_scheduler_exclusive_requested != 0U)
+        || (g_sd_scheduler_exclusive_active != 0U)
+        || (sd_scheduler_background_can_start(
+                &g_sd_scheduler_runtime, request->media_epoch) == 0U))
+    {
+        return SD_SCHEDULER_BACKGROUND_NOT_NOW;
+    }
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_BACKGROUND) == 0U)
+    {
+        return SD_SCHEDULER_BACKGROUND_NOT_NOW;
+    }
+    g_sd_scheduler_background_active = 1U;
+    return SD_SCHEDULER_BACKGROUND_GO;
+}
+
+void sd_scheduler_runtime_background_end(void)
+{
+    if (g_sd_scheduler_background_active == 0U)
+    {
+        return;
+    }
+    sd_access_gate_release(SD_ACCESS_CLIENT_BACKGROUND);
+    g_sd_scheduler_background_active = 0U;
+}
+
+uint8_t sd_scheduler_runtime_background_active(void)
+{
+    return g_sd_scheduler_background_active;
+}
+
+void sd_scheduler_runtime_exclusive_request(void)
+{
+    g_sd_scheduler_exclusive_requested = 1U;
+}
+
+uint8_t sd_scheduler_runtime_exclusive_try_begin(void)
+{
+    if ((g_sd_scheduler_exclusive_requested == 0U)
+        || (g_sd_scheduler_exclusive_active != 0U)
+        || (g_sd_scheduler_background_active != 0U)
+        || (sd_scheduler_owner(&g_sd_scheduler_runtime)
+            != SD_SCHEDULER_OWNER_IDLE)
+        || (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U))
+    {
+        return 0U;
+    }
+    g_sd_scheduler_exclusive_active = 1U;
+    return 1U;
+}
+
+void sd_scheduler_runtime_exclusive_end(void)
+{
+    if (g_sd_scheduler_exclusive_active != 0U)
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+    }
+    g_sd_scheduler_exclusive_active = 0U;
+    g_sd_scheduler_exclusive_requested = 0U;
+}
+
 sd_scheduler_owner_t sd_scheduler_runtime_owner(void)
 {
+    if (g_sd_scheduler_background_active != 0U)
+    {
+        return SD_SCHEDULER_OWNER_BACKGROUND;
+    }
+    if (g_sd_scheduler_exclusive_active != 0U)
+    {
+        return SD_SCHEDULER_OWNER_FILESYSTEM;
+    }
     return sd_scheduler_owner(&g_sd_scheduler_runtime);
 }
 

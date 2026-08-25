@@ -4,6 +4,65 @@ project(brick6_note_fx_step1_tests C)
 enable_testing()
 
 if(NOT CMAKE_CROSSCOMPILING)
+    add_executable(restore_plan_contract_test
+        restore_plan_contract_test.c
+    )
+    target_include_directories(restore_plan_contract_test PRIVATE ../Inc)
+    add_test(NAME restore_plan_contract COMMAND restore_plan_contract_test)
+
+    add_executable(param_restore_pass1_contract_test
+        param_restore_pass1_contract_test.c
+        ../Src/Param/param_registry_value_contract.c
+        ../Src/Param/param_registry_runtime_state.c
+        ../Src/Audio/audio_note_engine_install_contract.c
+    )
+    target_include_directories(param_restore_pass1_contract_test PRIVATE
+        ../Inc
+        ../Inc/Param
+    )
+    add_test(NAME param_restore_pass1_contract
+             COMMAND param_restore_pass1_contract_test)
+
+    add_executable(param_value_policy_test
+        param_value_policy_test.c
+        ../Src/Param/param_value_policy.c
+    )
+    target_include_directories(param_value_policy_test PRIVATE ../Inc)
+    if(UNIX)
+        target_link_libraries(param_value_policy_test PRIVATE m)
+    endif()
+    add_test(NAME param_value_policy COMMAND param_value_policy_test)
+
+    add_executable(fx_modfx_daisy_stereo_test
+        fx_modfx_daisy_stereo_test.c
+        ../Src/Audio/fx_modfx_global.c
+    )
+    target_compile_definitions(fx_modfx_daisy_stereo_test PRIVATE
+        BRICK6_DAISY_STEREO_TEST
+    )
+    target_include_directories(fx_modfx_daisy_stereo_test PRIVATE ../Inc)
+    if(UNIX)
+        target_link_libraries(fx_modfx_daisy_stereo_test PRIVATE m)
+    endif()
+    add_test(NAME fx_modfx_daisy_stereo COMMAND fx_modfx_daisy_stereo_test)
+
+    add_executable(persistent_control_codec_roundtrip_test
+        persistent_control_codec_roundtrip_test.c
+        ../Src/Core/entity_topology.c
+        ../Src/Storage/persistent_control_codec.c
+        ../Src/Storage/persistent_entity_topology.c
+        ../Src/Storage/persistent_key_catalog.c
+    )
+    target_include_directories(persistent_control_codec_roundtrip_test PRIVATE ../Inc)
+    if(CMAKE_CROSSCOMPILING)
+        target_link_options(persistent_control_codec_roundtrip_test PRIVATE --specs=nosys.specs)
+    endif()
+    if(UNIX)
+        target_link_libraries(persistent_control_codec_roundtrip_test PRIVATE m)
+    endif()
+    add_test(NAME persistent_control_codec_roundtrip
+             COMMAND persistent_control_codec_roundtrip_test)
+
     add_executable(audio_recorder_wav_test
         audio_recorder_wav_test.c
         ../Src/Storage/audio_recorder_wav.c

@@ -23,6 +23,7 @@
 
 #include "mixer.h"
 #include "Audio/audio_float.h"
+#include "Audio/audio_fx_runtime.h"
 #include "Audio/audio_waveform_capture.h"
 
 #include "Audio/audio_xfade.h"
@@ -45,7 +46,7 @@
 
 #include "Storage/audio_recorder.h"
 #include "Storage/sample_capture.h"
-#include "UI/ui_core_runtime_bridge.h"
+#include "Core/control_routing.h"
 
 #include <math.h>
 #include <string.h>
@@ -67,7 +68,12 @@ typedef struct __attribute__((aligned(32))) {
     int8_t insert_slot[MIXER_INSERTS_PER_TRACK];
     float send_level[MIXER_NUM_SENDS];
     float send_level_current[MIXER_NUM_SENDS];
+    float group_fx_level[2];
+    float group_fx_level_current[2];
 } mixer_audio_track_runtime_t;
+
+_Static_assert(sizeof(mixer_audio_track_runtime_t) == 64U,
+               "GROUP local levels must stay inside mixer track padding");
 
 typedef enum
 {
@@ -232,10 +238,13 @@ void mixer_rebuild_static_plan(void)
                 && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))
             flags |= MIXER_STATIC_LOOPER;
         if ((entity < BRICK_ENTITY_CAPACITY)
+                && ((ctx == NULL)
+                    || ((ctx->flags & AUDIO_RUNTIME_FLAG_GROUP_MASTER) == 0U))
                 && (fx_chain_audio_fx_is_active(entity) != 0U))
         {
             flags |= MIXER_STATIC_AUDIO_FX_ACTIVE;
-            if (fx_chain_audio_fx_is_pre_filter(entity) != 0U)
+            if (audio_fx_runtime_get_filter_pos(entity)
+                    != AUDIO_FX_FILTER_POS_PRE)
                 flags |= MIXER_STATIC_AUDIO_FX_PRE_FILTER;
         }
         if ((entity < BRICK_ENTITY_CAPACITY)
@@ -573,8 +582,7 @@ static uint8_t mixer_lane_routes_to_looper(uint8_t looper_track,
         return 0U;
     }
 
-    return ui_core_runtime_bridge_get_looper_route_enabled(looper_track,
-                                                            source_track);
+    return control_routing_audio_get_looper_source(looper_track, source_track);
 }
 
 static float mixer_get_looper_xfade(void)
@@ -1000,6 +1008,10 @@ static void mixer_track_state_reset(mixer_audio_track_runtime_t *track)
         track->send_level[s] = 0.0f;
         track->send_level_current[s] = 0.0f;
     }
+    track->group_fx_level[0] = 0.0f;
+    track->group_fx_level[1] = 0.0f;
+    track->group_fx_level_current[0] = 0.0f;
+    track->group_fx_level_current[1] = 0.0f;
 }
 
 static void mixer_external_input_clear_lane(uint32_t lane)
@@ -1129,6 +1141,8 @@ void mixer_snap_track_runtime_state(uint32_t track_id)
     {
         track->send_level_current[s] = track->send_level[s];
     }
+    track->group_fx_level_current[0] = track->group_fx_level[0];
+    track->group_fx_level_current[1] = track->group_fx_level[1];
 
     filter->cutoff_hz = filter->cutoff_target_hz;
     filter->cutoff_mod_hz = filter->cutoff_mod_target_hz;
@@ -2272,6 +2286,10 @@ void mixer_reset_runtime_state(void)
             g_tracks[t].send_level[s] = 0.0f;
             g_tracks[t].send_level_current[s] = 0.0f;
         }
+        g_tracks[t].group_fx_level[0] = 0.0f;
+        g_tracks[t].group_fx_level[1] = 0.0f;
+        g_tracks[t].group_fx_level_current[0] = 0.0f;
+        g_tracks[t].group_fx_level_current[1] = 0.0f;
 
         mixer_track_filter_init(&g_track_filters[t], MIXER_FILTER_SAMPLE_RATE_DEFAULT);
 
@@ -2362,6 +2380,16 @@ void mixer_set_track_gain(uint32_t track_id, float gain)
         gain = 0.0f;
 
     g_tracks[track_id].gain = gain;
+}
+
+void mixer_set_track_group_fx_level(uint32_t track_id,
+                                    uint32_t slot,
+                                    float level)
+{
+    if ((track_id >= MIXER_MAX_TRACKS) || (slot >= 2U))
+        return;
+    g_tracks[track_id].group_fx_level[slot] =
+        (level <= 0.0f) ? 0.0f : (level >= 1.0f) ? 1.0f : level;
 }
 
 /**
@@ -3597,6 +3625,368 @@ static void mixer_copy_voice_envelope_state(mixer_track_filter_t *destination,
     destination->vca_gate = source->vca_gate;
 }
 
+#define MIXER_SEND_MASK_BIT(send_index) ((uint8_t)(1U << (send_index)))
+
+typedef struct
+{
+    uint8_t count;
+    uint8_t assign_mask;
+    uint8_t index[MIXER_NUM_SENDS];
+    float current[MIXER_NUM_SENDS];
+    float step[MIXER_NUM_SENDS];
+} mixer_send_plan_t;
+
+static inline uint8_t mixer_send_destination_process_mask(uint8_t reverb_active,
+                                                          uint8_t delay_active,
+                                                          uint8_t modfx_active)
+{
+    uint8_t mask = 0U;
+    if ((reverb_active != 0U) || (g_send_fx_slot[MIXER_REVERB_SEND_INDEX] >= 0))
+        mask |= MIXER_SEND_MASK_BIT(MIXER_REVERB_SEND_INDEX);
+    if (delay_active != 0U)
+        mask |= MIXER_SEND_MASK_BIT(MIXER_DELAY_SEND_INDEX);
+    if (modfx_active != 0U)
+        mask |= MIXER_SEND_MASK_BIT(MIXER_MODFX_SEND_INDEX);
+    return mask;
+}
+
+static inline uint8_t mixer_track_input_send_mask(
+    const mixer_audio_track_runtime_t *track,
+    uint8_t destination_mask)
+{
+    uint8_t mask = 0U;
+    for (uint32_t send = 0U; send < MIXER_NUM_SENDS; ++send)
+    {
+        const uint8_t bit = MIXER_SEND_MASK_BIT(send);
+        if (((destination_mask & bit) != 0U)
+                && ((track->send_level_current[send] != 0.0f)
+                    || (track->send_level[send] != 0.0f)))
+        {
+            mask |= bit;
+        }
+    }
+    return mask;
+}
+
+static uint8_t mixer_collect_input_send_masks(
+    uint32_t lane_mask,
+    uint8_t group_active,
+    uint8_t destination_mask,
+    uint8_t lane_send_masks[MIXER_MAX_TRACKS],
+    uint8_t *group_send_mask)
+{
+    uint8_t mask = 0U;
+    while (lane_mask != 0U)
+    {
+        const uint32_t lane = (uint32_t)__builtin_ctz(lane_mask);
+        lane_mask &= lane_mask - 1U;
+        const uint8_t lane_mask_value =
+            ((group_active != 0U)
+                && ((g_mixer_static_lane_flags[lane]
+                    & MIXER_STATIC_GROUP_CHILD) != 0U))
+            ? 0U
+            : mixer_track_input_send_mask(&g_tracks[lane], destination_mask);
+        lane_send_masks[lane] = lane_mask_value;
+        mask |= lane_mask_value;
+    }
+    if (group_active != 0U)
+    {
+        *group_send_mask = mixer_track_input_send_mask(
+            &g_tracks[MIXER_GROUP_BUS_TRACK], destination_mask);
+        mask |= *group_send_mask;
+    }
+    return mask;
+}
+
+static inline mixer_send_plan_t mixer_prepare_send_plan(
+    const mixer_audio_track_runtime_t *track,
+    uint8_t lane_send_mask,
+    uint8_t first_writer_mask,
+    float inv_frames)
+{
+    mixer_send_plan_t plan = {0};
+    for (uint32_t send = 0U; send < MIXER_NUM_SENDS; ++send)
+    {
+        if ((lane_send_mask & MIXER_SEND_MASK_BIT(send)) == 0U)
+            continue;
+
+        const uint8_t plan_index = plan.count++;
+        const float current = track->send_level_current[send];
+        const float target = track->send_level[send];
+        plan.index[plan_index] = (uint8_t)send;
+        if ((first_writer_mask & MIXER_SEND_MASK_BIT(send)) != 0U)
+            plan.assign_mask |= MIXER_SEND_MASK_BIT(plan_index);
+        plan.current[plan_index] = current;
+        if (target != current)
+            plan.step[plan_index] = (target - current) * inv_frames;
+    }
+    return plan;
+}
+
+static inline void mixer_finish_send_levels(mixer_audio_track_runtime_t *track)
+{
+    for (uint32_t send = 0U; send < MIXER_NUM_SENDS; ++send)
+        track->send_level_current[send] = track->send_level[send];
+}
+
+static inline uint8_t mixer_group_fx_input_mask(
+    const mixer_audio_track_runtime_t *track)
+{
+    uint8_t mask = 0U;
+    for (uint8_t slot = 0U; slot < 2U; ++slot)
+    {
+        if ((track->group_fx_level_current[slot] != 0.0f)
+                || (track->group_fx_level[slot] != 0.0f))
+            mask |= (uint8_t)(1U << slot);
+    }
+    return mask;
+}
+
+typedef struct
+{
+    float current[2];
+    float step[2];
+    uint8_t mask;
+    uint8_t assign_mask;
+} mixer_group_fx_plan_t;
+
+static inline mixer_group_fx_plan_t mixer_prepare_group_fx_plan(
+    const mixer_audio_track_runtime_t *track,
+    uint8_t group_child,
+    uint8_t *written_mask,
+    float inv_frames)
+{
+    mixer_group_fx_plan_t plan = {0};
+    if ((group_child == 0U) || (written_mask == NULL))
+        return plan;
+    plan.mask = mixer_group_fx_input_mask(track);
+    plan.assign_mask = (uint8_t)(plan.mask & (uint8_t)~*written_mask);
+    *written_mask |= plan.mask;
+    for (uint8_t slot = 0U; slot < 2U; ++slot)
+    {
+        plan.current[slot] = track->group_fx_level_current[slot];
+        plan.step[slot] = (track->group_fx_level[slot] - plan.current[slot])
+            * inv_frames;
+    }
+    return plan;
+}
+
+static inline void mixer_accumulate_group_fx_sample(
+    mixer_group_fx_plan_t *plan,
+    float bus_l[2][AUDIO_BLOCK_SIZE],
+    float bus_r[2][AUDIO_BLOCK_SIZE],
+    uint32_t frame,
+    float left_trimmed,
+    float right_trimmed)
+{
+    for (uint8_t slot = 0U; slot < 2U; ++slot)
+    {
+        const uint8_t bit = (uint8_t)(1U << slot);
+        if ((plan->mask & bit) == 0U)
+            continue;
+        const float left = left_trimmed * plan->current[slot];
+        const float right = right_trimmed * plan->current[slot];
+        if ((plan->assign_mask & bit) != 0U)
+        {
+            bus_l[slot][frame] = left;
+            bus_r[slot][frame] = right;
+        }
+        else
+        {
+            bus_l[slot][frame] += left;
+            bus_r[slot][frame] += right;
+        }
+        plan->current[slot] += plan->step[slot];
+    }
+}
+
+static inline void mixer_finish_group_fx_levels(
+    mixer_audio_track_runtime_t *track,
+    const mixer_group_fx_plan_t *plan)
+{
+    for (uint8_t slot = 0U; slot < 2U; ++slot)
+    {
+        if ((plan->mask & (uint8_t)(1U << slot)) != 0U)
+            track->group_fx_level_current[slot] = track->group_fx_level[slot];
+    }
+}
+
+static inline void mixer_accumulate_group_fx(
+    mixer_audio_track_runtime_t *track,
+    const float *left,
+    const float *right,
+    float bus_l[2][AUDIO_BLOCK_SIZE],
+    float bus_r[2][AUDIO_BLOCK_SIZE],
+    uint32_t frames,
+    uint8_t *written_mask)
+{
+    const uint8_t mask = mixer_group_fx_input_mask(track);
+    if ((mask == 0U) || (written_mask == NULL))
+        return;
+    const float inv_frames = (frames > 0U) ? (1.0f / (float)frames) : 0.0f;
+    for (uint8_t slot = 0U; slot < 2U; ++slot)
+    {
+        const uint8_t bit = (uint8_t)(1U << slot);
+        if ((mask & bit) == 0U)
+            continue;
+        float level = track->group_fx_level_current[slot];
+        const float target = track->group_fx_level[slot];
+        const float step = (target - level) * inv_frames;
+        if ((*written_mask & bit) == 0U)
+        {
+            for (uint32_t i = 0U; i < frames; ++i)
+            {
+                const float gain = level * MIXER_TRACK_NOMINAL_TRIM;
+                bus_l[slot][i] = left[i] * gain;
+                bus_r[slot][i] = right[i] * gain;
+                level += step;
+            }
+            *written_mask |= bit;
+        }
+        else
+        {
+            for (uint32_t i = 0U; i < frames; ++i)
+            {
+                const float gain = level * MIXER_TRACK_NOMINAL_TRIM;
+                bus_l[slot][i] += left[i] * gain;
+                bus_r[slot][i] += right[i] * gain;
+                level += step;
+            }
+        }
+        track->group_fx_level_current[slot] = target;
+    }
+}
+
+static void mixer_clear_send_buffers(uint8_t clear_mask,
+                                     float send_l[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE],
+                                     float send_r[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE],
+                                     uint32_t frames)
+{
+    for (uint32_t send = 0U; send < MIXER_NUM_SENDS; ++send)
+    {
+        if ((clear_mask & MIXER_SEND_MASK_BIT(send)) == 0U)
+            continue;
+        memset(send_l[send], 0, sizeof(float) * frames);
+        memset(send_r[send], 0, sizeof(float) * frames);
+    }
+}
+
+static void mixer_accumulate_send_plan_stereo(
+    mixer_send_plan_t *plan,
+    const float *left,
+    const float *right,
+    float send_l[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE],
+    float send_r[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE],
+    uint32_t frames,
+    float trim)
+{
+    if (plan->assign_mask == 0U)
+    {
+        switch (plan->count)
+        {
+        case 3U:
+        {
+            const uint8_t send0 = plan->index[0];
+            const uint8_t send1 = plan->index[1];
+            const uint8_t send2 = plan->index[2];
+            float gain0 = plan->current[0];
+            float gain1 = plan->current[1];
+            float gain2 = plan->current[2];
+            const float step0 = plan->step[0];
+            const float step1 = plan->step[1];
+            const float step2 = plan->step[2];
+            for (uint32_t frame = 0U; frame < frames; ++frame)
+            {
+                const float l = left[frame] * trim;
+                const float r = right[frame] * trim;
+                send_l[send0][frame] += l * gain0;
+                send_r[send0][frame] += r * gain0;
+                send_l[send1][frame] += l * gain1;
+                send_r[send1][frame] += r * gain1;
+                send_l[send2][frame] += l * gain2;
+                send_r[send2][frame] += r * gain2;
+                gain0 += step0;
+                gain1 += step1;
+                gain2 += step2;
+            }
+            plan->current[0] = gain0;
+            plan->current[1] = gain1;
+            plan->current[2] = gain2;
+            return;
+        }
+        case 2U:
+        {
+            const uint8_t send0 = plan->index[0];
+            const uint8_t send1 = plan->index[1];
+            float gain0 = plan->current[0];
+            float gain1 = plan->current[1];
+            const float step0 = plan->step[0];
+            const float step1 = plan->step[1];
+            for (uint32_t frame = 0U; frame < frames; ++frame)
+            {
+                const float l = left[frame] * trim;
+                const float r = right[frame] * trim;
+                send_l[send0][frame] += l * gain0;
+                send_r[send0][frame] += r * gain0;
+                send_l[send1][frame] += l * gain1;
+                send_r[send1][frame] += r * gain1;
+                gain0 += step0;
+                gain1 += step1;
+            }
+            plan->current[0] = gain0;
+            plan->current[1] = gain1;
+            return;
+        }
+        case 1U:
+        {
+            const uint8_t send = plan->index[0];
+            float gain = plan->current[0];
+            const float step = plan->step[0];
+            for (uint32_t frame = 0U; frame < frames; ++frame)
+            {
+                const float l = left[frame] * trim;
+                const float r = right[frame] * trim;
+                send_l[send][frame] += l * gain;
+                send_r[send][frame] += r * gain;
+                gain += step;
+            }
+            plan->current[0] = gain;
+            return;
+        }
+        default:
+            return;
+        }
+    }
+
+    /* First contributors initialize their bus; mixed first/later-writer plans
+     * stay outside the common all-accumulate hot kernels above. */
+    for (uint32_t active = 0U; active < plan->count; ++active)
+    {
+        const uint8_t send = plan->index[active];
+        float current = plan->current[active];
+        const float step = plan->step[active];
+        if ((plan->assign_mask & MIXER_SEND_MASK_BIT(active)) != 0U)
+        {
+            for (uint32_t frame = 0U; frame < frames; ++frame)
+            {
+                send_l[send][frame] = left[frame] * trim * current;
+                send_r[send][frame] = right[frame] * trim * current;
+                current += step;
+            }
+        }
+        else
+        {
+            for (uint32_t frame = 0U; frame < frames; ++frame)
+            {
+                send_l[send][frame] += left[frame] * trim * current;
+                send_r[send][frame] += right[frame] * trim * current;
+                current += step;
+            }
+        }
+        plan->current[active] = current;
+    }
+}
+
 void mixer_synth_voice_slot_copy(uint8_t source_slot, uint8_t destination_slot)
 {
     if ((source_slot >= SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
@@ -3661,10 +4051,10 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     AUDIO_HOT ALIGN32 static float bus_main_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float bus_group_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float bus_group_r[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float bus_group_fx_l[2][AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float bus_group_fx_r[2][AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float send_l[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float send_r[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE];
-    AUDIO_HOT ALIGN32 static float delay_return_l[AUDIO_BLOCK_SIZE];
-    AUDIO_HOT ALIGN32 static float delay_return_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float delay_reverb_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float delay_reverb_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float looper_record_l[AUDIO_BLOCK_SIZE];
@@ -3678,6 +4068,7 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     static uint8_t looper_output_active[MIXER_MAX_TRACKS];
 
     mixer_routing_audio_apply_publication();
+    control_routing_audio_apply_publication();
 
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
@@ -3688,26 +4079,33 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     const uint8_t group_active = g_mixer_static_group_active;
 
 
-    uint8_t send_fx_active = 0U;
-    for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
-    {
-        if(s == MIXER_DELAY_SEND_INDEX)
-        {
-            continue;
-        }
-        if(g_send_fx_slot[s] >= 0)
-        {
-            send_fx_active = 1U;
-            break;
-        }
-    }
     const uint8_t reverb_active = fx_reverb_global_is_active();
     const uint8_t delay_active = (g_delay_type == (uint8_t)MIXER_DELAY_TYPE_DUAL)
             ? fx_delay_dual_global_is_active()
             : fx_delay_stereo_global_is_active();
+    const uint8_t delay_reverb_send_active = (delay_active != 0U)
+        ? ((g_delay_type == (uint8_t)MIXER_DELAY_TYPE_DUAL)
+            ? fx_delay_dual_global_reverb_send_is_active()
+            : fx_delay_stereo_global_reverb_send_is_active())
+        : 0U;
     const uint8_t modfx_active = fx_modfx_global_is_active();
-    const uint8_t send_bus_active = ((send_fx_active != 0U) || (reverb_active != 0U)
-            || (delay_active != 0U) || (modfx_active != 0U)) ? 1U : 0U;
+    /* An enabled send FX remains in the process mask with zero input so its
+     * history/tail keeps advancing exactly as before. Input fanout is a
+     * separate decision based only on non-zero current/target lane gains. */
+    const uint8_t tail_process_mask = mixer_send_destination_process_mask(
+        reverb_active, delay_active, modfx_active);
+    const uint32_t valid_lane_mask = (MIXER_MAX_TRACKS >= 32U)
+        ? UINT32_MAX : ((uint32_t)(1UL << MIXER_MAX_TRACKS) - 1U);
+    uint32_t lane_mask = (g_external_lane_mask | audio_tracks_enabled_mask())
+        & valid_lane_mask;
+    uint8_t lane_send_masks[MIXER_MAX_TRACKS] = {0U};
+    uint8_t group_send_mask = 0U;
+    const uint8_t input_send_mask = mixer_collect_input_send_masks(
+        lane_mask, group_active, tail_process_mask,
+        lane_send_masks, &group_send_mask);
+    const uint8_t send_bus_active = (tail_process_mask != 0U) ? 1U : 0U;
+    uint8_t send_written_mask = 0U;
+    uint8_t group_fx_written_mask = 0U;
 
     memset(bus_main_l, 0, sizeof(bus_main_l));
     memset(bus_main_r, 0, sizeof(bus_main_r));
@@ -3715,11 +4113,6 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     {
         memset(bus_group_l, 0, sizeof(bus_group_l));
         memset(bus_group_r, 0, sizeof(bus_group_r));
-    }
-    if(send_bus_active != 0U)
-    {
-        memset(send_l, 0, sizeof(send_l));
-        memset(send_r, 0, sizeof(send_r));
     }
     const uint32_t ntracks = (track_count < MIXER_MAX_TRACKS) ? track_count : MIXER_MAX_TRACKS;
     const float looper_xfade_target = audio_xfade_get();
@@ -3799,10 +4192,6 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         memset(sample_capture_r, 0, sizeof(sample_capture_r));
     }
 
-    const uint32_t valid_lane_mask = (MIXER_MAX_TRACKS >= 32U)
-        ? UINT32_MAX : ((uint32_t)(1UL << MIXER_MAX_TRACKS) - 1U);
-    uint32_t lane_mask = (g_external_lane_mask | audio_tracks_enabled_mask())
-        & valid_lane_mask;
     while (lane_mask != 0U)
     {
         const uint32_t t = (uint32_t)__builtin_ctz(lane_mask);
@@ -3816,7 +4205,7 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         const brick_entity_id_t audio_fx_entity = source_entity;
         const uint8_t audio_fx_active = (uint8_t)(
             (static_flags & MIXER_STATIC_AUDIO_FX_ACTIVE) != 0U);
-        const uint8_t audio_fx_pre_filter = (uint8_t)(
+        const uint8_t filter_deferred = (uint8_t)(
             (static_flags & MIXER_STATIC_AUDIO_FX_PRE_FILTER) != 0U);
         const uint8_t route_main = (uint8_t)(
             (static_flags & MIXER_STATIC_ROUTE_MAIN) != 0U);
@@ -3828,8 +4217,10 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
             (static_flags & MIXER_STATIC_AUDIO_FX_COMP) != 0U);
         const uint8_t audio_fx_post = (uint8_t)(
             (audio_fx_active != 0U)
-            && (audio_fx_pre_filter == 0U)
             && (audio_fx_comp == 0U));
+        const audio_fx_sample_plan_handle_t audio_fx_sample_plan =
+            (audio_fx_post != 0U)
+                ? audio_fx_runtime_get_sample_plan(audio_fx_entity) : NULL;
         float *const dry_bus_l = (group_child != 0U) ? bus_group_l : bus_main_l;
         float *const dry_bus_r = (group_child != 0U) ? bus_group_r : bus_main_r;
         const uint8_t hw_enabled = (t < ntracks) ? tracks[t].enabled : 0U;
@@ -3868,22 +4259,13 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
             }
             else
             {
-                if (audio_fx_pre_filter != 0U)
-                {
-                    fx_chain_process_audio_fx_pre_filter_mono(
-                        audio_fx_entity,
-                        g_external_track_mono[t],
-                        frames);
-                }
-                buffers = mixer_lane_run_mono_native_path(t,
-                                                           mt,
-                                                           &g_track_filters[t],
-                                                           frames);
-            }
-            if ((multi_prefiltered != 0U) && (audio_fx_pre_filter != 0U))
-            {
-                fx_chain_process_audio_fx_pre_filter_mono(
-                    audio_fx_entity, buffers.mono, frames);
+                if (filter_deferred == 0U)
+                    buffers = mixer_lane_run_mono_native_path(t,
+                                                               mt,
+                                                               &g_track_filters[t],
+                                                               frames);
+                else
+                    buffers.mono = g_external_track_mono[t];
             }
             mono = buffers.mono;
         }
@@ -3899,12 +4281,8 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
             {
                 audio_waveform_capture_tap_reference_stereo_block(L, R, frames);
             }
-            if (audio_fx_pre_filter != 0U)
-            {
-                fx_chain_process_audio_fx_pre_filter_stereo(
-                    audio_fx_entity, L, R, frames);
-            }
-            if ((lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_POLY_STEREO)
+            if ((filter_deferred == 0U)
+                && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_POLY_STEREO)
                 && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_STEREO)
                 && (lane_plan.ext_format != MIXER_EXTERNAL_FORMAT_MULTI_MONO))
                 mixer_lane_run_stereo_path(t, mt, &g_track_filters[t], L, R, frames);
@@ -3966,23 +4344,12 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                     vca_segment_gain[i] = 0.0f;
                 }
             }
-            float send_cur[MIXER_NUM_SENDS] = {0.0f};
-            float send_step[MIXER_NUM_SENDS] = {0.0f};
-            uint8_t send_enabled[MIXER_NUM_SENDS] = {0U};
-
-            if (send_bus_active != 0U)
-            {
-                for (uint32_t s = 0U; s < MIXER_NUM_SENDS; ++s)
-                {
-                    send_cur[s] = mt->send_level_current[s];
-                    send_step[s] = (mt->send_level[s] - send_cur[s]) * inv_frames;
-                    send_enabled[s] = (((s != MIXER_DELAY_SEND_INDEX)
-                                        && (g_send_fx_slot[s] >= 0))
-                        || ((reverb_active != 0U) && (s == MIXER_REVERB_SEND_INDEX))
-                        || ((delay_active != 0U) && (s == MIXER_DELAY_SEND_INDEX))
-                        || ((modfx_active != 0U) && (s == MIXER_MODFX_SEND_INDEX))) ? 1U : 0U;
-                }
-            }
+            const uint8_t first_writer_mask = (uint8_t)(
+                lane_send_masks[t] & (uint8_t)~send_written_mask);
+            mixer_send_plan_t send_plan = mixer_prepare_send_plan(
+                mt, lane_send_masks[t], first_writer_mask, inv_frames);
+            mixer_group_fx_plan_t group_fx_plan = mixer_prepare_group_fx_plan(
+                mt, group_child, &group_fx_written_mask, inv_frames);
 
             for (uint32_t i = 0U; i < frames; ++i)
             {
@@ -4015,8 +4382,8 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                 float right = sample_processed * pan_r;
                 if (audio_fx_post != 0U)
                 {
-                    fx_chain_process_audio_fx_post_fader_stereo_sample(
-                        audio_fx_entity, &left, &right);
+                    audio_fx_runtime_process_stereo_sample_prepared(
+                        audio_fx_sample_plan, &left, &right);
                 }
                 if (waveform_capture_samples != 0U)
                 {
@@ -4024,18 +4391,59 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                 }
                 const float left_trimmed = left * MIXER_TRACK_NOMINAL_TRIM;
                 const float right_trimmed = right * MIXER_TRACK_NOMINAL_TRIM;
-                if (send_bus_active != 0U)
+                if (group_fx_plan.mask != 0U)
+                    mixer_accumulate_group_fx_sample(&group_fx_plan,
+                        bus_group_fx_l, bus_group_fx_r, i,
+                        left_trimmed, right_trimmed);
+                if (send_plan.assign_mask == 0U)
                 {
-                    for (uint32_t s = 0U; s < MIXER_NUM_SENDS; ++s)
+                    switch (send_plan.count)
                     {
-                        if ((send_enabled[s] != 0U)
-                                && !((send_cur[s] <= 0.0f)
-                                    && (mt->send_level[s] <= 0.0f)))
+                    case 3U:
+                    {
+                        const uint8_t send = send_plan.index[2];
+                        send_l[send][i] += left_trimmed * send_plan.current[2];
+                        send_r[send][i] += right_trimmed * send_plan.current[2];
+                        send_plan.current[2] += send_plan.step[2];
+                    }
+                    /* fall through */
+                    case 2U:
+                    {
+                        const uint8_t send = send_plan.index[1];
+                        send_l[send][i] += left_trimmed * send_plan.current[1];
+                        send_r[send][i] += right_trimmed * send_plan.current[1];
+                        send_plan.current[1] += send_plan.step[1];
+                    }
+                    /* fall through */
+                    case 1U:
+                    {
+                        const uint8_t send = send_plan.index[0];
+                        send_l[send][i] += left_trimmed * send_plan.current[0];
+                        send_r[send][i] += right_trimmed * send_plan.current[0];
+                        send_plan.current[0] += send_plan.step[0];
+                        break;
+                    }
+                    default:
+                        break;
+                    }
+                }
+                else
+                {
+                    for (uint32_t active = 0U; active < send_plan.count; ++active)
+                    {
+                        const uint8_t send = send_plan.index[active];
+                        const float send_gain = send_plan.current[active];
+                        if ((send_plan.assign_mask & MIXER_SEND_MASK_BIT(active)) != 0U)
                         {
-                            send_l[s][i] += left_trimmed * send_cur[s];
-                            send_r[s][i] += right_trimmed * send_cur[s];
-                            send_cur[s] += send_step[s];
+                            send_l[send][i] = left_trimmed * send_gain;
+                            send_r[send][i] = right_trimmed * send_gain;
                         }
+                        else
+                        {
+                            send_l[send][i] += left_trimmed * send_gain;
+                            send_r[send][i] += right_trimmed * send_gain;
+                        }
+                        send_plan.current[active] += send_plan.step[active];
                     }
                 }
 
@@ -4057,12 +4465,9 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
             mt->pan_current = mt->pan;
             mt->mute_gain_current = mute_gain_cur;
             if (send_bus_active != 0U)
-            {
-                for (uint32_t s = 0U; s < MIXER_NUM_SENDS; ++s)
-                {
-                    mt->send_level_current[s] = mt->send_level[s];
-                }
-            }
+                mixer_finish_send_levels(mt);
+            mixer_finish_group_fx_levels(mt, &group_fx_plan);
+            send_written_mask |= lane_send_masks[t];
             continue;
         }
         /*
@@ -4078,6 +4483,7 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                 && (looper_playback_mix_active == 0U)
                 && (route_main != 0U)
                 && (modfx_active == 0U)
+                && ((input_send_mask & MIXER_SEND_MASK_BIT(MIXER_MODFX_SEND_INDEX)) == 0U)
                 )
         {
             poly_stereo_fanout = (requires_stereo == 0U) ? 1U : 0U;
@@ -4116,24 +4522,24 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
             float send_cur[MIXER_NUM_SENDS] = {0.0f};
             float send_step[MIXER_NUM_SENDS] = {0.0f};
             uint8_t fanout_mode = POLY_FANOUT_MAIN;
+            uint8_t fanout_assign_mask = 0U;
+            mixer_group_fx_plan_t group_fx_plan = mixer_prepare_group_fx_plan(
+                mt, group_child, &group_fx_written_mask, inv_frames);
 
             if (send_bus_active != 0U)
             {
-                for (uint32_t s = 0U; s < MIXER_NUM_SENDS; ++s)
+                const mixer_send_plan_t send_plan = mixer_prepare_send_plan(
+                    mt, lane_send_masks[t],
+                    (uint8_t)(lane_send_masks[t] & (uint8_t)~send_written_mask),
+                    inv_frames);
+                fanout_assign_mask = send_plan.assign_mask;
+                for (uint32_t active = 0U; active < send_plan.count; ++active)
                 {
-                    const uint8_t send_enabled = (((s != MIXER_DELAY_SEND_INDEX)
-                                                    && (g_send_fx_slot[s] >= 0))
-                        || ((reverb_active != 0U) && (s == MIXER_REVERB_SEND_INDEX))
-                        || ((delay_active != 0U) && (s == MIXER_DELAY_SEND_INDEX))
-                        || ((modfx_active != 0U) && (s == MIXER_MODFX_SEND_INDEX))) ? 1U : 0U;
-                    send_cur[s] = mt->send_level_current[s];
-                    send_step[s] = (mt->send_level[s] - send_cur[s]) * inv_frames;
-                    if ((send_enabled != 0U)
-                            && !((send_cur[s] <= 0.0f) && (mt->send_level[s] <= 0.0f)))
-                    {
-                        fanout_mode |= (s == MIXER_REVERB_SEND_INDEX)
-                            ? POLY_FANOUT_REVERB : POLY_FANOUT_DELAY;
-                    }
+                    const uint8_t send = send_plan.index[active];
+                    send_cur[send] = send_plan.current[active];
+                    send_step[send] = send_plan.step[active];
+                    fanout_mode |= (send == MIXER_REVERB_SEND_INDEX)
+                        ? POLY_FANOUT_REVERB : POLY_FANOUT_DELAY;
                 }
             }
 
@@ -4161,8 +4567,8 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                         right *= gain_r;
                         if (audio_fx_post != 0U)
                         {
-                            fx_chain_process_audio_fx_post_fader_stereo_sample(
-                                audio_fx_entity, &left, &right);
+                            audio_fx_runtime_process_stereo_sample_prepared(
+                                audio_fx_sample_plan, &left, &right);
                         }
                         if (waveform_capture_samples != 0U)
                         {
@@ -4170,6 +4576,10 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                         }
                         const float left_trimmed = left * MIXER_TRACK_NOMINAL_TRIM;
                         const float right_trimmed = right * MIXER_TRACK_NOMINAL_TRIM;
+                        if (group_fx_plan.mask != 0U)
+                            mixer_accumulate_group_fx_sample(&group_fx_plan,
+                                bus_group_fx_l, bus_group_fx_r, i,
+                                left_trimmed, right_trimmed);
                         dry_bus_l[i] += left_trimmed;
                         dry_bus_r[i] += right_trimmed;
                         if (coefficient_plan.stable == 0U)
@@ -4203,8 +4613,8 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                         right *= gain_r;
                         if (audio_fx_post != 0U)
                         {
-                            fx_chain_process_audio_fx_post_fader_stereo_sample(
-                                audio_fx_entity, &left, &right);
+                            audio_fx_runtime_process_stereo_sample_prepared(
+                                audio_fx_sample_plan, &left, &right);
                         }
                         if (waveform_capture_samples != 0U)
                         {
@@ -4212,8 +4622,20 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                         }
                         const float left_trimmed = left * MIXER_TRACK_NOMINAL_TRIM;
                         const float right_trimmed = right * MIXER_TRACK_NOMINAL_TRIM;
-                        send_l[MIXER_REVERB_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
-                        send_r[MIXER_REVERB_SEND_INDEX][i] += right_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
+                        if (group_fx_plan.mask != 0U)
+                            mixer_accumulate_group_fx_sample(&group_fx_plan,
+                                bus_group_fx_l, bus_group_fx_r, i,
+                                left_trimmed, right_trimmed);
+                        if ((fanout_assign_mask & MIXER_SEND_MASK_BIT(0U)) != 0U)
+                        {
+                            send_l[MIXER_REVERB_SEND_INDEX][i] = left_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
+                            send_r[MIXER_REVERB_SEND_INDEX][i] = right_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
+                        }
+                        else
+                        {
+                            send_l[MIXER_REVERB_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
+                            send_r[MIXER_REVERB_SEND_INDEX][i] += right_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
+                        }
                         dry_bus_l[i] += left_trimmed;
                         dry_bus_r[i] += right_trimmed;
                         send_cur[MIXER_REVERB_SEND_INDEX] += send_step[MIXER_REVERB_SEND_INDEX];
@@ -4248,8 +4670,8 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                         right *= gain_r;
                         if (audio_fx_post != 0U)
                         {
-                            fx_chain_process_audio_fx_post_fader_stereo_sample(
-                                audio_fx_entity, &left, &right);
+                            audio_fx_runtime_process_stereo_sample_prepared(
+                                audio_fx_sample_plan, &left, &right);
                         }
                         if (waveform_capture_samples != 0U)
                         {
@@ -4257,8 +4679,20 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                         }
                         const float left_trimmed = left * MIXER_TRACK_NOMINAL_TRIM;
                         const float right_trimmed = right * MIXER_TRACK_NOMINAL_TRIM;
-                        send_l[MIXER_DELAY_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
-                        send_r[MIXER_DELAY_SEND_INDEX][i] += right_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
+                        if (group_fx_plan.mask != 0U)
+                            mixer_accumulate_group_fx_sample(&group_fx_plan,
+                                bus_group_fx_l, bus_group_fx_r, i,
+                                left_trimmed, right_trimmed);
+                        if ((fanout_assign_mask & MIXER_SEND_MASK_BIT(0U)) != 0U)
+                        {
+                            send_l[MIXER_DELAY_SEND_INDEX][i] = left_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
+                            send_r[MIXER_DELAY_SEND_INDEX][i] = right_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
+                        }
+                        else
+                        {
+                            send_l[MIXER_DELAY_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
+                            send_r[MIXER_DELAY_SEND_INDEX][i] += right_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
+                        }
                         dry_bus_l[i] += left_trimmed;
                         dry_bus_r[i] += right_trimmed;
                         send_cur[MIXER_DELAY_SEND_INDEX] += send_step[MIXER_DELAY_SEND_INDEX];
@@ -4293,8 +4727,8 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                         right *= gain_r;
                         if (audio_fx_post != 0U)
                         {
-                            fx_chain_process_audio_fx_post_fader_stereo_sample(
-                                audio_fx_entity, &left, &right);
+                            audio_fx_runtime_process_stereo_sample_prepared(
+                                audio_fx_sample_plan, &left, &right);
                         }
                         if (waveform_capture_samples != 0U)
                         {
@@ -4302,10 +4736,30 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                         }
                         const float left_trimmed = left * MIXER_TRACK_NOMINAL_TRIM;
                         const float right_trimmed = right * MIXER_TRACK_NOMINAL_TRIM;
-                        send_l[MIXER_REVERB_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
-                        send_r[MIXER_REVERB_SEND_INDEX][i] += right_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
-                        send_l[MIXER_DELAY_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
-                        send_r[MIXER_DELAY_SEND_INDEX][i] += right_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
+                        if (group_fx_plan.mask != 0U)
+                            mixer_accumulate_group_fx_sample(&group_fx_plan,
+                                bus_group_fx_l, bus_group_fx_r, i,
+                                left_trimmed, right_trimmed);
+                        if ((fanout_assign_mask & MIXER_SEND_MASK_BIT(0U)) != 0U)
+                        {
+                            send_l[MIXER_REVERB_SEND_INDEX][i] = left_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
+                            send_r[MIXER_REVERB_SEND_INDEX][i] = right_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
+                        }
+                        else
+                        {
+                            send_l[MIXER_REVERB_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
+                            send_r[MIXER_REVERB_SEND_INDEX][i] += right_trimmed * send_cur[MIXER_REVERB_SEND_INDEX];
+                        }
+                        if ((fanout_assign_mask & MIXER_SEND_MASK_BIT(1U)) != 0U)
+                        {
+                            send_l[MIXER_DELAY_SEND_INDEX][i] = left_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
+                            send_r[MIXER_DELAY_SEND_INDEX][i] = right_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
+                        }
+                        else
+                        {
+                            send_l[MIXER_DELAY_SEND_INDEX][i] += left_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
+                            send_r[MIXER_DELAY_SEND_INDEX][i] += right_trimmed * send_cur[MIXER_DELAY_SEND_INDEX];
+                        }
                         dry_bus_l[i] += left_trimmed;
                         dry_bus_r[i] += right_trimmed;
                         send_cur[MIXER_REVERB_SEND_INDEX] += send_step[MIXER_REVERB_SEND_INDEX];
@@ -4328,12 +4782,9 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
             mt->pan_current = mt->pan;
             mt->mute_gain_current = mute_gain_cur;
             if (send_bus_active != 0U)
-            {
-                for (uint32_t s = 0U; s < MIXER_NUM_SENDS; ++s)
-                {
-                    mt->send_level_current[s] = mt->send_level[s];
-                }
-            }
+                mixer_finish_send_levels(mt);
+            mixer_finish_group_fx_levels(mt, &group_fx_plan);
+            send_written_mask |= lane_send_masks[t];
             continue;
         }
 
@@ -4467,16 +4918,23 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
 
         /* engine -> filter -> VCA -> legacy inserts/COMP -> track fader/mute
          * -> pan -> remaining Audio FX -> sends/bus. */
-        if (audio_fx_post != 0U)
+        if ((audio_fx_post != 0U) || (filter_deferred != 0U))
         {
-            fx_chain_process_audio_fx_post_fader(audio_fx_entity,
-                                                 L,
-                                                 R,
-                                                 frames);
+            audio_fx_runtime_process_before_filter(audio_fx_entity,L,R,frames);
+            if (filter_deferred != 0U)
+                mixer_lane_run_stereo_path(t,mt,&g_track_filters[t],L,R,frames);
+            audio_fx_runtime_process_after_filter(audio_fx_entity,L,R,frames);
         }
         if (waveform_capture_samples != 0U)
         {
             audio_waveform_capture_tap_stereo_block(L, R, frames);
+        }
+
+        if (group_child != 0U)
+        {
+            mixer_accumulate_group_fx(mt, L, R,
+                                      bus_group_fx_l, bus_group_fx_r,
+                                      frames, &group_fx_written_mask);
         }
 
         {
@@ -4511,7 +4969,7 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
             if((looper_record_active != 0U)
                     && (source_track < MIXER_MAX_TRACKS)
                     && (source_track != looper_record_track)
-                    && (ui_core_runtime_bridge_get_looper_route_enabled(looper_record_track, source_track) != 0U))
+                    && (control_routing_audio_get_looper_source(looper_record_track, source_track) != 0U))
             {
                 for(uint32_t i = 0U; i < frames; ++i)
                 {
@@ -4534,37 +4992,15 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
 
         if(send_bus_active != 0U)
         {
-            float send_cur[MIXER_NUM_SENDS];
-            float send_step[MIXER_NUM_SENDS];
-            for(uint32_t s = 0U; s < MIXER_NUM_SENDS; ++s)
-            {
-                send_cur[s] = mt->send_level_current[s];
-                send_step[s] = (mt->send_level[s] - send_cur[s]) * ((frames > 0U) ? (1.0f / (float)frames) : 0.0f);
-            }
-
-            for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
-            {
-                const uint8_t send_enabled = (((s != MIXER_DELAY_SEND_INDEX) && (g_send_fx_slot[s] >= 0))
-                        || ((reverb_active != 0U) && (s == MIXER_REVERB_SEND_INDEX))
-                        || ((delay_active != 0U) && (s == MIXER_DELAY_SEND_INDEX))
-                        || ((modfx_active != 0U) && (s == MIXER_MODFX_SEND_INDEX))) ? 1U : 0U;
-                if(send_enabled != 0U)
-                {
-                    if((send_cur[s] <= 0.0f) && (mt->send_level[s] <= 0.0f))
-                        continue;
-
-                    for(uint32_t i = 0; i < frames; i++)
-                    {
-                        const float l_nom = L[i] * MIXER_TRACK_NOMINAL_TRIM;
-                        const float r_nom = R[i] * MIXER_TRACK_NOMINAL_TRIM;
-                        send_l[s][i] += l_nom * send_cur[s];
-                        send_r[s][i] += r_nom * send_cur[s];
-                        send_cur[s] += send_step[s];
-                    }
-                }
-
-                mt->send_level_current[s] = mt->send_level[s];
-            }
+            mixer_send_plan_t send_plan = mixer_prepare_send_plan(
+                mt, lane_send_masks[t],
+                (uint8_t)(lane_send_masks[t] & (uint8_t)~send_written_mask),
+                (frames > 0U) ? (1.0f / (float)frames) : 0.0f);
+            mixer_accumulate_send_plan_stereo(&send_plan, L, R,
+                                              send_l, send_r, frames,
+                                              MIXER_TRACK_NOMINAL_TRIM);
+            mixer_finish_send_levels(mt);
+            send_written_mask |= lane_send_masks[t];
         }
 
         if(route_main != 0U)
@@ -4586,9 +5022,27 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
             g_mixer_static_lane_flags[MIXER_GROUP_BUS_TRACK];
 
         /* AUDIO-owned GROUP order:
-         * child sends have already left pre-sum; child dry is summed here,
-         * then master filter -> master MIX -> inserts -> master sends/dry.
+         * child dry and local A/B sends are post child-MIX.  A/B are processed
+         * independently by the master's two kernels, reinjected into dry,
+         * then master filter -> master MIX -> inserts -> global sends/dry.
          */
+        for (uint8_t slot = 0U; slot < 2U; ++slot)
+        {
+            const uint8_t bit = (uint8_t)(1U << slot);
+            if (((group_fx_written_mask & bit) != 0U)
+                    && (audio_fx_runtime_process_parallel_slot(
+                        BRICK_ENTITY_GROUP_MASTER_ID,
+                        (audio_fx_slot_t)slot,
+                        bus_group_fx_l[slot], bus_group_fx_r[slot],
+                        frames) != 0U))
+            {
+                for (uint32_t i = 0U; i < frames; ++i)
+                {
+                    bus_group_l[i] += bus_group_fx_l[slot][i];
+                    bus_group_r[i] += bus_group_fx_r[slot][i];
+                }
+            }
+        }
         if (waveform_entity == BRICK_ENTITY_GROUP_MASTER_ID)
         {
             audio_waveform_capture_tap_reference_stereo_block(bus_group_l,
@@ -4681,28 +5135,15 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
 
         if (send_bus_active != 0U)
         {
-            for (uint32_t s = 0U; s < MIXER_NUM_SENDS; ++s)
-            {
-                float send_cur = group->send_level_current[s];
-                const float send_step =
-                    (group->send_level[s] - send_cur) * inv_frames;
-                const uint8_t send_enabled = (uint8_t)(
-                    (((s != MIXER_DELAY_SEND_INDEX) && (g_send_fx_slot[s] >= 0))
-                     || ((reverb_active != 0U) && (s == MIXER_REVERB_SEND_INDEX))
-                     || ((delay_active != 0U) && (s == MIXER_DELAY_SEND_INDEX))
-                     || ((modfx_active != 0U) && (s == MIXER_MODFX_SEND_INDEX))));
-                if ((send_enabled != 0U)
-                        && !((send_cur <= 0.0f) && (group->send_level[s] <= 0.0f)))
-                {
-                    for (uint32_t i = 0U; i < frames; ++i)
-                    {
-                        send_l[s][i] += bus_group_l[i] * send_cur;
-                        send_r[s][i] += bus_group_r[i] * send_cur;
-                        send_cur += send_step;
-                    }
-                }
-                group->send_level_current[s] = group->send_level[s];
-            }
+            mixer_send_plan_t send_plan = mixer_prepare_send_plan(
+                group, group_send_mask,
+                (uint8_t)(group_send_mask & (uint8_t)~send_written_mask),
+                inv_frames);
+            mixer_accumulate_send_plan_stereo(&send_plan,
+                                              bus_group_l, bus_group_r,
+                                              send_l, send_r, frames, 1.0f);
+            mixer_finish_send_levels(group);
+            send_written_mask |= group_send_mask;
         }
 
         if ((group_static_flags & MIXER_STATIC_ROUTE_MAIN) != 0U)
@@ -4732,34 +5173,47 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
 
     if(send_bus_active != 0U)
     {
+        uint8_t zero_input_mask = tail_process_mask;
+        if (delay_reverb_send_active != 0U)
+            zero_input_mask |= MIXER_SEND_MASK_BIT(MIXER_REVERB_SEND_INDEX);
+        const uint8_t clear_mask = (uint8_t)(
+            zero_input_mask & (uint8_t)~send_written_mask);
+        if (clear_mask != 0U)
+            mixer_clear_send_buffers(clear_mask, send_l, send_r, frames);
+
         if(delay_active != 0U)
         {
             if(g_delay_type == (uint8_t)MIXER_DELAY_TYPE_DUAL)
             {
-                fx_delay_dual_global_process_block(send_l[MIXER_DELAY_SEND_INDEX],
+                fx_delay_dual_global_process_block_add(send_l[MIXER_DELAY_SEND_INDEX],
                                                    send_r[MIXER_DELAY_SEND_INDEX],
-                                                   delay_return_l,
-                                                   delay_return_r,
-                                                   delay_reverb_l,
-                                                   delay_reverb_r,
+                                                   bus_main_l,
+                                                   bus_main_r,
+                                                   (delay_reverb_send_active != 0U)
+                                                       ? delay_reverb_l : NULL,
+                                                   (delay_reverb_send_active != 0U)
+                                                       ? delay_reverb_r : NULL,
                                                    frames);
             }
             else
             {
-                fx_delay_stereo_global_process_block(send_l[MIXER_DELAY_SEND_INDEX],
+                fx_delay_stereo_global_process_block_add(send_l[MIXER_DELAY_SEND_INDEX],
                                                      send_r[MIXER_DELAY_SEND_INDEX],
-                                                     delay_return_l,
-                                                     delay_return_r,
-                                                     delay_reverb_l,
-                                                     delay_reverb_r,
+                                                     bus_main_l,
+                                                     bus_main_r,
+                                                     (delay_reverb_send_active != 0U)
+                                                         ? delay_reverb_l : NULL,
+                                                     (delay_reverb_send_active != 0U)
+                                                         ? delay_reverb_r : NULL,
                                                      frames);
             }
-            for(uint32_t i = 0; i < frames; i++)
+            if (delay_reverb_send_active != 0U)
             {
-                bus_main_l[i] += delay_return_l[i];
-                bus_main_r[i] += delay_return_r[i];
-                send_l[MIXER_REVERB_SEND_INDEX][i] += delay_reverb_l[i];
-                send_r[MIXER_REVERB_SEND_INDEX][i] += delay_reverb_r[i];
+                for (uint32_t i = 0U; i < frames; ++i)
+                {
+                    send_l[MIXER_REVERB_SEND_INDEX][i] += delay_reverb_l[i];
+                    send_r[MIXER_REVERB_SEND_INDEX][i] += delay_reverb_r[i];
+                }
             }
         }
 
@@ -4784,24 +5238,17 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
             }
         }
 
-        for(uint32_t s = 0; s < MIXER_NUM_SENDS; s++)
+        const int8_t send_fx_slot = g_send_fx_slot[MIXER_REVERB_SEND_INDEX];
+        if (send_fx_slot >= 0)
         {
-            if((s == MIXER_DELAY_SEND_INDEX) || (s == MIXER_MODFX_SEND_INDEX))
+            fx_chain_process_global_slot((uint32_t)send_fx_slot,
+                                          send_l[MIXER_REVERB_SEND_INDEX],
+                                          send_r[MIXER_REVERB_SEND_INDEX],
+                                          frames);
+            for (uint32_t i = 0U; i < frames; ++i)
             {
-                continue;
-            }
-            const int8_t slot = g_send_fx_slot[s];
-            if(slot >= 0)
-            {
-                fx_chain_process_global_slot((uint32_t)slot,
-                                              send_l[s],
-                                              send_r[s],
-                                              frames);
-                for(uint32_t i = 0; i < frames; i++)
-                {
-                    bus_main_l[i] += send_l[s][i];
-                    bus_main_r[i] += send_r[s][i];
-                }
+                bus_main_l[i] += send_l[MIXER_REVERB_SEND_INDEX][i];
+                bus_main_r[i] += send_r[MIXER_REVERB_SEND_INDEX][i];
             }
         }
     }

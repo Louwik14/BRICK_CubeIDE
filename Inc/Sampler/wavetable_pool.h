@@ -13,7 +13,7 @@ extern "C" {
 #define WAVETABLE_POOL_MAX_SLOTS       (64U)
 #define WAVETABLE_POOL_PATH_MAX        SAMPLE_GLOBAL_POOL_PATH_MAX
 #define WAVETABLE_POOL_INVALID_SLOT    (0xFFFFU)
-#define WAVETABLE_FRAME_SAMPLE_COUNT   (2048U)
+#define WAVETABLE_FRAME_SAMPLE_COUNT   (1024U)
 #define WAVETABLE_PREVIEW_COLUMNS      (124U)
 
 _Static_assert(WAVETABLE_POOL_MAX_SLOTS <= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
@@ -24,6 +24,7 @@ typedef enum
     WAVETABLE_SLOT_EMPTY = 0,
     WAVETABLE_SLOT_LOADING,
     WAVETABLE_SLOT_READY,
+    WAVETABLE_SLOT_RETIRING,
     WAVETABLE_SLOT_ERROR
 } wavetable_slot_state_t;
 
@@ -113,7 +114,17 @@ wavetable_result_t wavetable_pool_load_file_at(uint16_t wavetable_slot,
 wavetable_result_t wavetable_pool_load_file_auto(const char *path,
                                                  uint16_t *out_wavetable_slot,
                                                  uint16_t *out_global_slot);
+uint8_t wavetable_pool_load_async_begin(uint16_t wavetable_slot, const char *path);
+void wavetable_pool_load_async_service(void);
+uint8_t wavetable_pool_load_async_busy(void);
+uint8_t wavetable_pool_load_async_take_result(wavetable_result_t *out_result,
+                                              uint16_t *out_wavetable_slot,
+                                              uint16_t *out_global_slot,
+                                              const char **out_path);
 void wavetable_pool_clear(uint16_t wavetable_slot);
+void wavetable_pool_service_retire(void);
+void wavetable_pool_audio_ack_retire(uint16_t wavetable_slot,
+                                     uint32_t generation);
 
 const wavetable_slot_t *wavetable_pool_get_slot(uint16_t wavetable_slot);
 wavetable_slot_state_t wavetable_pool_get_state(uint16_t wavetable_slot);

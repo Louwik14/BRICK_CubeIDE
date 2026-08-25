@@ -14,6 +14,7 @@ typedef uint64_t sample_stream_audio_frame_t;
  * Monotonic audio time owned by the audio domain. The IRQ is the only writer;
  * non-audio code consumes a coherent snapshot through the sequence counter.
  */
+void sample_stream_time_init(void);
 void sample_stream_time_advance_from_audio_irq(uint32_t rendered_frames);
 sample_stream_audio_frame_t sample_stream_time_now(void);
 

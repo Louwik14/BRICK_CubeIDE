@@ -75,7 +75,7 @@ typedef struct
 typedef struct
 {
     recorder_file_reservation_map_snapshot_t reservation;
-    const char *path;
+    char path[AUDIO_RECORDER_PATH_MAX];
     uint32_t accepted_frames;
     uint32_t committed_frames;
 } audio_recorder_live_stream_t;
@@ -111,6 +111,10 @@ uint8_t audio_recorder_get_live_stream(audio_recorder_client_t client,
                                        audio_recorder_live_stream_t *stream);
 uint8_t audio_recorder_client_is_active(audio_recorder_client_t client);
 uint8_t audio_recorder_client_is_recording(audio_recorder_client_t client);
+
+/* AUDIO-side view: reads only the pointer-free M7<->M4 capture transport. */
+uint8_t audio_recorder_capture_status_client(audio_recorder_client_t client,
+                                             audio_recorder_status_t *status);
 
 #ifdef __cplusplus
 }

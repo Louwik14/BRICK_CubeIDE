@@ -12,15 +12,11 @@
 SEQ_STATE_D2 static track_tone_sound_state_t g_track_tone_sound_state[SEQ_LANE_CAPACITY];
 
 #define TRACK_TONE_PRISM_DEFAULT_EDIT               0.0f
-#define TRACK_TONE_PRISM_DEFAULT_FINE               0.5f
-#define TRACK_TONE_PRISM_DEFAULT_COARSE             0.5f
-#define TRACK_TONE_PRISM_DEFAULT_FM                 0.0f
+#define TRACK_TONE_PRISM_DEFAULT_PITCH_MOD                 0.0f
 #define TRACK_TONE_PRISM_DEFAULT_TIMBRE             0.5f
 #define TRACK_TONE_PRISM_DEFAULT_MODULATION         0.5f
 #define TRACK_TONE_PRISM_DEFAULT_COLOR              0.5f
 #define TRACK_TONE_PRISM_DEFAULT_PHASE_RESET        0.0f
-#define TRACK_TONE_PRISM_DEFAULT_OSC1_LEVEL         1.0f
-#define TRACK_TONE_PRISM_DEFAULT_OSC2_LEVEL         0.0f
 #define TRACK_TONE_CLIP_DEFAULT_SOURCE_BPM           120.0f
 #define TRACK_TONE_CLIP_DEFAULT_SYNC_LENGTH          0.0f
 #define TRACK_TONE_CLIP_DEFAULT_PITCH                0.0f
@@ -77,24 +73,22 @@ void track_tone_sound_state_make_default(track_tone_sound_state_t *state)
     state->looper.stretch = param_registry[PARAM_LOOPER_STRETCH].default_value;
     state->looper.pitch = param_registry[PARAM_LOOPER_PITCH].default_value;
     state->looper.grain = param_registry[PARAM_LOOPER_GRAIN].default_value;
-    state->prism.edit[0] = TRACK_TONE_PRISM_DEFAULT_EDIT;
-    state->prism.fine[0] = TRACK_TONE_PRISM_DEFAULT_FINE;
-    state->prism.coarse[0] = TRACK_TONE_PRISM_DEFAULT_COARSE;
-    state->prism.fm[0] = TRACK_TONE_PRISM_DEFAULT_FM;
-    state->prism.timbre[0] = TRACK_TONE_PRISM_DEFAULT_TIMBRE;
-    state->prism.modulation[0] = TRACK_TONE_PRISM_DEFAULT_MODULATION;
-    state->prism.color[0] = TRACK_TONE_PRISM_DEFAULT_COLOR;
+    state->prism.model[0] = TRACK_TONE_PRISM_DEFAULT_EDIT;
+    state->prism.pitch_mod[0] = TRACK_TONE_PRISM_DEFAULT_PITCH_MOD;
+    state->prism.param1[0] = TRACK_TONE_PRISM_DEFAULT_TIMBRE;
+    state->prism.amod[0] = TRACK_TONE_PRISM_DEFAULT_MODULATION;
+    state->prism.param2[0] = TRACK_TONE_PRISM_DEFAULT_COLOR;
     state->prism.phase_reset[0] = TRACK_TONE_PRISM_DEFAULT_PHASE_RESET;
-    state->prism.level[0] = TRACK_TONE_PRISM_DEFAULT_OSC1_LEVEL;
-    state->prism.edit[1] = TRACK_TONE_PRISM_DEFAULT_EDIT;
-    state->prism.fine[1] = TRACK_TONE_PRISM_DEFAULT_FINE;
-    state->prism.coarse[1] = TRACK_TONE_PRISM_DEFAULT_COARSE;
-    state->prism.fm[1] = TRACK_TONE_PRISM_DEFAULT_FM;
-    state->prism.timbre[1] = TRACK_TONE_PRISM_DEFAULT_TIMBRE;
-    state->prism.modulation[1] = TRACK_TONE_PRISM_DEFAULT_MODULATION;
-    state->prism.color[1] = TRACK_TONE_PRISM_DEFAULT_COLOR;
+    state->prism.model[1] = TRACK_TONE_PRISM_DEFAULT_EDIT;
+    state->prism.pitch_mod[1] = TRACK_TONE_PRISM_DEFAULT_PITCH_MOD;
+    state->prism.param1[1] = TRACK_TONE_PRISM_DEFAULT_TIMBRE;
+    state->prism.amod[1] = TRACK_TONE_PRISM_DEFAULT_MODULATION;
+    state->prism.param2[1] = TRACK_TONE_PRISM_DEFAULT_COLOR;
     state->prism.phase_reset[1] = TRACK_TONE_PRISM_DEFAULT_PHASE_RESET;
-    state->prism.level[1] = TRACK_TONE_PRISM_DEFAULT_OSC2_LEVEL;
+    state->prism.volume = param_registry[PARAM_PRISM_VOLUME].default_value;
+    state->prism.balance = param_registry[PARAM_PRISM_BALANCE].default_value;
+    state->prism.tune = param_registry[PARAM_PRISM_TUNE].default_value;
+    state->prism.detune = param_registry[PARAM_PRISM_DETUNE].default_value;
     state->stack.level[0] = param_registry[PARAM_STACK_OSC1_LEVEL].default_value;
     state->stack.level[1] = param_registry[PARAM_STACK_OSC2_LEVEL].default_value;
     state->stack.level[2] = param_registry[PARAM_STACK_OSC3_LEVEL].default_value;
@@ -120,20 +114,12 @@ void track_tone_sound_state_make_default(track_tone_sound_state_t *state)
         : param_registry[PARAM_WAVE_OSC1_TABLE].default_value;
     state->wave.table[0] = default_table;
     state->wave.pos[0] = param_registry[PARAM_WAVE_OSC1_POS].default_value;
-    state->wave.start[0] = param_registry[PARAM_WAVE_OSC1_START].default_value;
-    state->wave.end[0] = param_registry[PARAM_WAVE_OSC1_END].default_value;
-    state->wave.level[0] = param_registry[PARAM_WAVE_OSC1_LEVEL].default_value;
-    state->wave.tune[0] = param_registry[PARAM_WAVE_OSC1_TUNE].default_value;
     state->wave.table[1] = default_table;
     state->wave.pos[1] = param_registry[PARAM_WAVE_OSC2_POS].default_value;
-    state->wave.start[1] = param_registry[PARAM_WAVE_OSC2_START].default_value;
-    state->wave.end[1] = param_registry[PARAM_WAVE_OSC2_END].default_value;
-    state->wave.level[1] = param_registry[PARAM_WAVE_OSC2_LEVEL].default_value;
-    state->wave.tune[1] = param_registry[PARAM_WAVE_OSC2_TUNE].default_value;
-    state->wave.frame_interp = param_registry[PARAM_WAVE_FRAME_INTERP].default_value;
-    state->wave.sample_interp = param_registry[PARAM_WAVE_SAMPLE_INTERP].default_value;
-    state->wave.pos_update = param_registry[PARAM_WAVE_POS_UPDATE].default_value;
-    state->wave.pos_smooth = param_registry[PARAM_WAVE_POS_SMOOTH].default_value;
+    state->wave.volume = param_registry[PARAM_WAVE_VOLUME].default_value;
+    state->wave.balance = param_registry[PARAM_WAVE_BALANCE].default_value;
+    state->wave.tune = param_registry[PARAM_WAVE_TUNE].default_value;
+    state->wave.detune = param_registry[PARAM_WAVE_DETUNE].default_value;
     state->fm.base.algorithm = (uint8_t)TRACK_TONE_FM_DEFAULT_ALGORITHM;
     state->fm.base.feedback = (uint8_t)TRACK_TONE_FM_DEFAULT_FEEDBACK;
     state->fm.base.key_sync = (uint8_t)TRACK_TONE_FM_DEFAULT_SYNC;

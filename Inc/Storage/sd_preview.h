@@ -65,10 +65,8 @@ void sd_preview_set_gain(float gain);
 float sd_preview_get_gain(void);
 
 /*
- * Future MAIN insertion point.
- * This is the stable contract for the audio runtime once the streaming
- * decoder/ring buffer lands. For this pass, the implementation remains a
- * no-op and returns 0 when no preview audio is available yet.
+ * AUDIO-side MAIN insertion point. Consumes only the shared SPSC ring and its
+ * pointer-free IPC metadata; it never reads the Storage decoder context.
  */
 uint8_t sd_preview_render_main(float *out_main_l, float *out_main_r, uint32_t frames);
 

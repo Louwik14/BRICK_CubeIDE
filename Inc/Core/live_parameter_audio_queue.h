@@ -59,7 +59,9 @@ typedef enum
     LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_SET = 1U,
     LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_CLEAR = 2U,
     /* AUDIO-only temporary LFO release; it must not touch Matrix state. */
-    LIVE_PARAMETER_MATRIX_OPERATION_LFO_TEMP_CLEAR = 3U
+    LIVE_PARAMETER_MATRIX_OPERATION_LFO_TEMP_CLEAR = 3U,
+    /* Seed a newly compiled destination from the CONTROL parameter base. */
+    LIVE_PARAMETER_MATRIX_OPERATION_BASE_UPDATE = 4U
 } live_parameter_matrix_operation_t;
 
 _Static_assert(sizeof(live_parameter_audio_event_t) == 32U,
@@ -87,13 +89,10 @@ bool live_parameter_audio_queue_submit_poly_pair(uint32_t capture_tick,
                                                  float spread);
 uint32_t live_parameter_audio_queue_publish_failure_count(void);
 
-/* Audio-side deadline and direct scheduled-prefix handoff.  A claim keeps the
- * prefix immutable while CONTROL continues to publish into the suffix. */
+/* AUDIO consumer side of the shared SPSC ring. */
 uint16_t live_parameter_audio_queue_frames_until_deadline(uint64_t block_start,
                                                           uint16_t max_frames);
-uint16_t live_parameter_audio_queue_claim_due(uint64_t now);
-bool live_parameter_audio_queue_read_claimed(
-    uint16_t index, live_parameter_audio_event_t *out_event);
-void live_parameter_audio_queue_release_claimed(void);
+bool live_parameter_audio_queue_audio_peek(live_parameter_audio_event_t *out_event);
+bool live_parameter_audio_queue_audio_pop(void);
 
 #endif /* BRICK6_LIVE_PARAMETER_AUDIO_QUEUE_H */

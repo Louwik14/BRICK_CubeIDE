@@ -1,4 +1,5 @@
 #include "Storage/persistent_control_codec.h"
+#include "Storage/persistent_entity_topology.h"
 #include "Storage/persistent_key_catalog.h"
 #include "Param/param_registry.h"
 #include "Seq/seq_model.h"
@@ -42,6 +43,13 @@ static uint32_t codec_crc32_update(uint32_t crc, const uint8_t *data, uint32_t l
             crc = (crc >> 1U) ^ (0xEDB88320UL & (0U - (crc & 1U)));
     }
     return crc;
+}
+
+uint32_t persist_codec_crc32_update(uint32_t crc,
+                                    const uint8_t *data,
+                                    uint32_t length)
+{
+    return codec_crc32_update(crc, data, length);
 }
 
 static void codec_bytes(codec_io_t *io, uint8_t *data, uint32_t length)
@@ -168,15 +176,23 @@ static void codec_asset(codec_io_t *io, persist_control_asset_ref_t *a)
 
 static void codec_sequence(codec_io_t *io, persist_control_entity_t *entity,uint8_t group_active)
 {
+    persist_entity_caps_t caps;
+    if (persist_entity_caps_resolve(group_active, entity->entity_id, &caps) == 0U)
+    {
+        io->result = PERSIST_CODEC_INVALID_ENTITY;
+        return;
+    }
     persist_control_sequence_t *s=&entity->sequence;
     codec_u8(io,&s->length); codec_u8(io,&s->division); codec_u8(io,&s->quantization); codec_u8(io,&s->swing);
     for(uint8_t step=0U;step<PERSIST_CONTROL_STEP_COUNT;++step)
     {
         persist_control_step_t *st=&s->steps[step];
         codec_u8(io,&st->trigger);codec_u8(io,&st->roll);codec_u8(io,&st->play_count);codec_u8(io,&st->lock_count);
-        if((st->play_count>persist_control_entity_play_limit(group_active,entity->entity_id))
+        const uint8_t play_limit = (io->mode == CODEC_READ)
+            ? PERSIST_CONTROL_PLAY_ITEM_COUNT : caps.play_limit;
+        if((st->play_count>play_limit)
                 ||(st->lock_count>PERSIST_CONTROL_STEP_LOCK_COUNT))
-        {io->result=(st->play_count>persist_control_entity_play_limit(group_active,entity->entity_id))?PERSIST_CODEC_INVALID_PLAY:PERSIST_CODEC_INVALID_PLOCK;return;}
+        {io->result=(st->play_count>play_limit)?PERSIST_CODEC_INVALID_PLAY:PERSIST_CODEC_INVALID_PLOCK;return;}
         for(uint8_t i=0U;i<st->play_count;++i)
         {
             persist_control_play_item_t *p=&st->play[i];
@@ -197,6 +213,12 @@ static void codec_modulation(codec_io_t *io, persist_control_modulation_t *m);
 
 static void codec_entity(codec_io_t *io, persist_control_entity_t *e,uint8_t group_active)
 {
+    persist_entity_caps_t caps;
+    if (persist_entity_caps_resolve(group_active, e->entity_id, &caps) == 0U)
+    {
+        io->result = PERSIST_CODEC_INVALID_ENTITY;
+        return;
+    }
     codec_u8(io,&e->entity_id);codec_u32(io,&e->family);codec_u32(io,&e->type);
     codec_u8(io,&e->midi_channel);codec_u32(io,&e->midi_source_key);codec_u32(io,&e->input_key);
     codec_u8(io,&e->muted);codec_u32(io,&e->asset);codec_u16(io,&e->parameter_count);
@@ -204,7 +226,7 @@ static void codec_entity(codec_io_t *io, persist_control_entity_t *e,uint8_t gro
     for(uint16_t i=0U;i<e->parameter_count;++i)codec_parameter(io,&e->parameters[i]);
     codec_u8(io,&e->note_fx_count);
     if((e->note_fx_count>PERSIST_CONTROL_NOTE_FX_COUNT)
-            ||((persist_control_entity_allows_note_fx(group_active,e->entity_id)==0U)&&(e->note_fx_count!=0U)))
+            ||((io->mode!=CODEC_READ)&&(caps.note_fx_owner==0U)&&(e->note_fx_count!=0U)))
     {io->result=PERSIST_CODEC_INVALID_ENTITY;return;}
     for(uint8_t i=0U;i<e->note_fx_count;++i)
     { codec_u32(io,&e->note_fx[i].model_key);codec_bytes(io,e->note_fx[i].values,PERSIST_CONTROL_NOTE_FX_VALUE_COUNT); }
@@ -302,22 +324,22 @@ persist_codec_result_t persist_codec_validate_pattern(const persist_control_patt
     if(p==NULL)return PERSIST_CODEC_INVALID_ARGUMENT;
     const uint8_t group_active=(p->entities[PERSIST_CONTROL_GROUP_MASTER_ID].type==PERSIST_TYPE_GROUP)?1U:0U;
     for(uint8_t e=0U;e<PERSIST_CONTROL_ENTITY_COUNT;++e)
-    { const persist_control_entity_t *x=&p->entities[e];uint8_t input=0U;if((x->entity_id!=e)||(codec_family_valid(x->family)==0U)||(codec_type_valid(x->type)==0U)||(x->midi_channel<1U)||(x->midi_channel>16U)||(codec_midi_source_valid(x->midi_source_key)==0U)||(persist_key_input_from_disk(x->input_key,&input)==0U)||(x->muted>1U)||((e>=PERSIST_CONTROL_FIRST_GROUP_CHILD_ID)&&(input!=0U))||((x->family==PERSIST_FAMILY_OFF)&&(x->muted!=0U)))return PERSIST_CODEC_INVALID_ENTITY;
-      if((group_active==0U)&&(e>=PERSIST_CONTROL_FIRST_GROUP_CHILD_ID)&&((x->family!=PERSIST_FAMILY_OFF)||(x->type!=PERSIST_TYPE_NONE)))return PERSIST_CODEC_INVALID_ENTITY;
+    { const persist_control_entity_t *x=&p->entities[e];persist_entity_caps_t caps;uint8_t input=0U;if((x->entity_id!=e)||(persist_entity_caps_resolve(group_active,e,&caps)==0U)||(caps.persistable==0U)||(codec_family_valid(x->family)==0U)||(codec_type_valid(x->type)==0U)||(x->midi_channel<1U)||(x->midi_channel>16U)||(codec_midi_source_valid(x->midi_source_key)==0U)||(persist_key_input_from_disk(x->input_key,&input)==0U)||(x->muted>1U)||((caps.input_owner==0U)&&(input!=0U))||((x->family==PERSIST_FAMILY_OFF)&&(x->muted!=0U)))return PERSIST_CODEC_INVALID_ENTITY;
+      if((caps.active==0U)&&((x->asset!=PERSIST_CONTROL_ASSET_NONE)||(x->muted!=0U)||(x->parameter_count!=0U)||(x->note_fx_count!=0U)||(x->modulation_present!=0U)))return PERSIST_CODEC_INVALID_ENTITY;
       if((x->parameter_count>PERSIST_CONTROL_ENTITY_PARAM_COUNT)||(x->note_fx_count>PERSIST_CONTROL_NOTE_FX_COUNT))return PERSIST_CODEC_CAPACITY_EXCEEDED;
-      if((persist_control_entity_allows_note_fx(group_active,e)==0U)&&(x->note_fx_count!=0U))return PERSIST_CODEC_INVALID_ENTITY;
+      if((caps.note_fx_owner==0U)&&(x->note_fx_count!=0U))return PERSIST_CODEC_INVALID_ENTITY;
       if((x->sequence.length<1U)||(x->sequence.length>PERSIST_CONTROL_STEP_COUNT)||((x->sequence.division!=1U)&&(x->sequence.division!=2U)&&(x->sequence.division!=4U)&&(x->sequence.division!=8U))||(x->sequence.quantization>100U)||(x->sequence.swing>100U))return PERSIST_CODEC_INVALID_ENTITY;
-      if(x->modulation_present>1U||x->modulation_present!=persist_control_entity_is_mod_owner(group_active,e))return PERSIST_CODEC_INVALID_MODULATION;
+      if(x->modulation_present>1U||x->modulation_present!=caps.modulation_owner)return PERSIST_CODEC_INVALID_MODULATION;
       persist_codec_result_t r=codec_validate_parameters(x->parameters,x->parameter_count,PERSIST_PARAM_SCOPE_ENTITY);if(r!=PERSIST_CODEC_OK)return r;
       for(uint8_t n=0U;n<x->note_fx_count;++n)if(codec_note_fx_valid(x->note_fx[n].model_key)==0U)return PERSIST_CODEC_UNKNOWN_KEY;
-      uint16_t locks=0U;for(uint8_t s=0U;s<PERSIST_CONTROL_STEP_COUNT;++s){const persist_control_step_t *st=&x->sequence.steps[s];if(st->trigger>1U||st->roll>=SEQ_STEP_ROLL_COUNT||(st->trigger==0U&&st->roll!=SEQ_STEP_ROLL_OFF)||st->play_count>persist_control_entity_play_limit(group_active,e))return PERSIST_CODEC_INVALID_PLAY;for(uint8_t v=0U;v<st->play_count;++v)if(codec_play_value_valid(&st->play[v])==0U)return PERSIST_CODEC_INVALID_PLAY;if(st->lock_count>PERSIST_CONTROL_STEP_LOCK_COUNT)return PERSIST_CODEC_INVALID_PLOCK;locks=(uint16_t)(locks+st->lock_count);for(uint8_t i=0U;i<st->lock_count;++i){param_id_t id=0U;persist_param_descriptor_t d;if((persist_key_param_from_disk(st->locks[i].parameter,&id)==0U)||(persist_key_param_descriptor(id,&d)==0U)||(d.plockable==0U)||(codec_plock_value_valid(id,&st->locks[i])==0U))return PERSIST_CODEC_INVALID_PLOCK;for(uint8_t j=0U;j<i;++j)if(st->locks[j].parameter==st->locks[i].parameter)return PERSIST_CODEC_DUPLICATE;}}if(locks>SEQ_PLOCK_POOL_CAP_PER_TRACK)return PERSIST_CODEC_INVALID_PLOCK; }
+      uint16_t locks=0U;for(uint8_t s=0U;s<PERSIST_CONTROL_STEP_COUNT;++s){const persist_control_step_t *st=&x->sequence.steps[s];if(st->trigger>1U||st->roll>=SEQ_STEP_ROLL_COUNT||(st->trigger==0U&&st->roll!=SEQ_STEP_ROLL_OFF)||(caps.sequence_owner==0U&&st->trigger!=0U)||st->play_count>caps.play_limit)return PERSIST_CODEC_INVALID_PLAY;for(uint8_t v=0U;v<st->play_count;++v)if(codec_play_value_valid(&st->play[v])==0U)return PERSIST_CODEC_INVALID_PLAY;if(st->lock_count>PERSIST_CONTROL_STEP_LOCK_COUNT||(caps.sequence_owner==0U&&st->lock_count!=0U))return PERSIST_CODEC_INVALID_PLOCK;locks=(uint16_t)(locks+st->lock_count);for(uint8_t i=0U;i<st->lock_count;++i){param_id_t id=0U;persist_param_descriptor_t d;if((persist_key_param_from_disk(st->locks[i].parameter,&id)==0U)||(persist_key_param_descriptor(id,&d)==0U)||(d.plockable==0U)||(codec_plock_value_valid(id,&st->locks[i])==0U))return PERSIST_CODEC_INVALID_PLOCK;for(uint8_t j=0U;j<i;++j)if(st->locks[j].parameter==st->locks[i].parameter)return PERSIST_CODEC_DUPLICATE;}}if(locks>SEQ_PLOCK_POOL_CAP_PER_TRACK)return PERSIST_CODEC_INVALID_PLOCK; }
     uint8_t record_mode=0U;if((p->route_count>(PERSIST_CONTROL_ENTITY_COUNT*PERSIST_CONTROL_ENTITY_COUNT))||(codec_clock_valid(p->globals.clock_source_key)==0U)||(persist_key_record_start_from_disk(p->globals.record_start_key,&record_mode)==0U)||(persist_key_record_length_from_disk(p->globals.record_length_key,&record_mode)==0U))return PERSIST_CODEC_CAPACITY_EXCEEDED;
-    for(uint16_t i=0U;i<p->route_count;++i){if((p->routes[i].kind!=PERSIST_ROUTE_LOOPER_SOURCE)||(p->routes[i].source>=PERSIST_CONTROL_ENTITY_COUNT)||(p->routes[i].destination>=PERSIST_CONTROL_ENTITY_COUNT)||(p->routes[i].source==p->routes[i].destination)||(p->routes[i].enabled>1U))return PERSIST_CODEC_INVALID_ENTITY;for(uint16_t j=0U;j<i;++j)if((p->routes[j].kind==p->routes[i].kind)&&(p->routes[j].source==p->routes[i].source)&&(p->routes[j].destination==p->routes[i].destination))return PERSIST_CODEC_DUPLICATE;}
+    for(uint16_t i=0U;i<p->route_count;++i){persist_entity_caps_t source_caps,destination_caps;if((p->routes[i].kind!=PERSIST_ROUTE_LOOPER_SOURCE)||(p->routes[i].source>=PERSIST_CONTROL_ENTITY_COUNT)||(p->routes[i].destination>=PERSIST_CONTROL_ENTITY_COUNT)||(p->routes[i].source==p->routes[i].destination)||(p->routes[i].enabled>1U)||(persist_entity_caps_resolve(group_active,p->routes[i].source,&source_caps)==0U)||(persist_entity_caps_resolve(group_active,p->routes[i].destination,&destination_caps)==0U)||(source_caps.active==0U)||(destination_caps.active==0U))return PERSIST_CODEC_INVALID_ENTITY;for(uint16_t j=0U;j<i;++j)if((p->routes[j].kind==p->routes[i].kind)&&(p->routes[j].source==p->routes[i].source)&&(p->routes[j].destination==p->routes[i].destination))return PERSIST_CODEC_DUPLICATE;}
     for(uint8_t e=0U;e<PERSIST_CONTROL_ENTITY_COUNT;++e){if(p->entities[e].modulation_present==0U)continue;const persist_control_modulation_t*m=&p->entities[e].modulation;
     for(uint8_t i=0U;i<PERSIST_CONTROL_MOD_LFO_COUNT;++i){mod_lfo_shape_t shape;mod_lfo_trig_mode_t trigger;if((persist_key_lfo_shape_from_disk(m->lfos[i].shape_key,&shape)==0U)||(persist_key_lfo_trigger_from_disk(m->lfos[i].trigger_key,&trigger)==0U)||!isfinite(m->lfos[i].rate)||!isfinite(m->lfos[i].phase_offset))return PERSIST_CODEC_INVALID_MODULATION;}
     if(m->envelope.retrigger_hard>1U||!isfinite(m->envelope.attack)||!isfinite(m->envelope.decay)||!isfinite(m->envelope.sustain)||!isfinite(m->envelope.release))return PERSIST_CODEC_INVALID_MODULATION;
     for(uint8_t i=0U;i<2U;++i){uint8_t source;if((persist_key_mod_source_from_disk(m->multi[i].source_a_key,&source)==0U)||(persist_key_mod_source_from_disk(m->multi[i].source_b_key,&source)==0U)||(persist_key_mod_source_from_disk(m->slew[i].source_key,&source)==0U)||!isfinite(m->slew[i].amount))return PERSIST_CODEC_INVALID_MODULATION;}
-    for(uint8_t i=0U;i<PERSIST_CONTROL_MOD_ROUTE_COUNT;++i){const persist_control_mod_route_t *route=&m->routes[i];uint8_t destination_entity;param_id_t destination;if((codec_mod_source_valid(route->source_key)==0U)||(route->enabled>1U)||!isfinite(route->depth))return PERSIST_CODEC_INVALID_MODULATION;if(route->destination_parameter==PERSIST_CONTROL_KEY_NONE){if(route->enabled!=0U||route->destination_entity!=e)return PERSIST_CODEC_INVALID_MODULATION;}else if((persist_key_mod_destination_from_disk(route->destination_entity,route->destination_parameter,group_active,&destination_entity,&destination)==0U)||((persist_control_entity_role(group_active,e)!=PERSIST_ENTITY_ROLE_GROUP_MASTER)&&(destination_entity!=e))||((persist_control_entity_role(group_active,e)==PERSIST_ENTITY_ROLE_GROUP_MASTER)&&(destination_entity<PERSIST_CONTROL_GROUP_MASTER_ID)))return PERSIST_CODEC_INVALID_MODULATION;}}
+    for(uint8_t i=0U;i<PERSIST_CONTROL_MOD_ROUTE_COUNT;++i){const persist_control_mod_route_t *route=&m->routes[i];uint8_t destination_entity;param_id_t destination;if((codec_mod_source_valid(route->source_key)==0U)||(route->enabled>1U)||!isfinite(route->depth))return PERSIST_CODEC_INVALID_MODULATION;if(route->destination_parameter==PERSIST_CONTROL_KEY_NONE){if(route->enabled!=0U||route->destination_entity!=e)return PERSIST_CODEC_INVALID_MODULATION;}else if((persist_key_mod_destination_from_disk(route->destination_entity,route->destination_parameter,group_active,&destination_entity,&destination)==0U)||(persist_entity_mod_destination_allowed(group_active,e,destination_entity)==0U))return PERSIST_CODEC_INVALID_MODULATION;}}
     return codec_validate_parameters(p->globals.parameters,p->globals.parameter_count,PERSIST_PARAM_SCOPE_GLOBAL);
 }
 
@@ -373,6 +395,159 @@ static void codec_patch_payload(codec_io_t *io,void *v){codec_section(io,SECTION
 persist_codec_result_t persist_codec_encode_pattern(const persist_control_pattern_t *p,const persist_codec_sink_t *s,uint32_t *n){persist_codec_result_t r=persist_codec_validate_pattern(p);return(r==PERSIST_CODEC_OK)?codec_write_document(PERSIST_CODEC_DOCUMENT_PATTERN,1U,codec_pattern_payload,(void *)p,s,n):r;}
 persist_codec_result_t persist_codec_encode_patch(const persist_control_patch_t *p,const persist_codec_sink_t *s,uint32_t *n){persist_codec_result_t r=persist_codec_validate_patch(p);return(r==PERSIST_CODEC_OK)?codec_write_document(PERSIST_CODEC_DOCUMENT_PATCH,1U,codec_patch_payload,(void *)p,s,n):r;}
 persist_codec_result_t persist_codec_encode_project(const persist_codec_project_source_t*p,const persist_codec_sink_t*s,uint32_t*n){if(p==NULL||p->working_pattern.get==NULL||p->assets.get==NULL||p->macros==NULL||p->patterns.get==NULL)return PERSIST_CODEC_INVALID_ARGUMENT;project_encode_ctx_t c={.source=p};return codec_write_document(PERSIST_CODEC_DOCUMENT_PROJECT,4U,codec_project_payload,&c,s,n);}
+
+static persist_codec_result_t codec_emit_project_fragment(codec_io_t *io,
+                                                          const persist_codec_sink_t *sink,
+                                                          uint32_t *out_bytes)
+{
+    if (io->result == PERSIST_CODEC_OK)
+    {
+        if (out_bytes != NULL) *out_bytes = io->count;
+        return PERSIST_CODEC_OK;
+    }
+    (void)sink;
+    return io->result;
+}
+
+persist_codec_result_t persist_codec_encode_project_core_payload(
+    const persist_codec_project_metadata_t *metadata,
+    const persist_control_pattern_t *working_pattern,
+    const persist_codec_sink_t *sink,
+    uint32_t *out_bytes)
+{
+    if ((metadata == NULL) || (working_pattern == NULL) || (sink == NULL)
+            || (sink->write == NULL))
+        return PERSIST_CODEC_INVALID_ARGUMENT;
+    if ((metadata->active_pattern_bank >= PERSIST_CONTROL_PATTERN_BANK_COUNT)
+            || (metadata->active_pattern >= PERSIST_CONTROL_PATTERN_PER_BANK)
+            || (metadata->pattern_count
+                > PERSIST_CONTROL_PATTERN_BANK_COUNT
+                    * PERSIST_CONTROL_PATTERN_PER_BANK))
+        return PERSIST_CODEC_INVALID_ENTITY;
+    persist_codec_result_t result = codec_validate_project_pattern(working_pattern);
+    if (result != PERSIST_CODEC_OK) return result;
+    codec_io_t io = {.mode=CODEC_WRITE,.sink=sink,
+                     .limit=PERSIST_CODEC_MAX_DOCUMENT_BYTES,
+                     .result=PERSIST_CODEC_OK};
+    persist_codec_project_metadata_t copy = *metadata;
+    codec_u8(&io, &copy.active_pattern_bank);
+    codec_u8(&io, &copy.active_pattern);
+    codec_u16(&io, &copy.pattern_count);
+    codec_pattern_body(&io, (persist_control_pattern_t *)working_pattern);
+    return codec_emit_project_fragment(&io, sink, out_bytes);
+}
+
+persist_codec_result_t persist_codec_encode_project_assets_payload(
+    const persist_control_asset_ref_t *assets,
+    uint16_t asset_count,
+    const persist_codec_sink_t *sink,
+    uint32_t *out_bytes)
+{
+    if ((sink == NULL) || (sink->write == NULL)
+            || ((asset_count != 0U) && (assets == NULL)))
+        return PERSIST_CODEC_INVALID_ARGUMENT;
+    if (asset_count > PERSIST_CONTROL_ASSET_COUNT)
+        return PERSIST_CODEC_CAPACITY_EXCEEDED;
+    codec_io_t io = {.mode=CODEC_WRITE,.sink=sink,
+                     .limit=PERSIST_CODEC_MAX_DOCUMENT_BYTES,
+                     .result=PERSIST_CODEC_OK};
+    uint16_t count = asset_count;
+    codec_u16(&io, &count);
+    for (uint16_t i = 0U; i < asset_count; ++i)
+    {
+        persist_codec_result_t result = codec_validate_asset_ref(&assets[i]);
+        if (result != PERSIST_CODEC_OK) return result;
+        codec_asset(&io, (persist_control_asset_ref_t *)&assets[i]);
+    }
+    return codec_emit_project_fragment(&io, sink, out_bytes);
+}
+
+persist_codec_result_t persist_codec_encode_project_macros_payload(
+    const persist_control_macros_t *macros,
+    const persist_codec_sink_t *sink,
+    uint32_t *out_bytes)
+{
+    if ((macros == NULL) || (sink == NULL) || (sink->write == NULL))
+        return PERSIST_CODEC_INVALID_ARGUMENT;
+    persist_codec_result_t result = codec_validate_project_macros(macros);
+    if (result != PERSIST_CODEC_OK) return result;
+    codec_io_t io = {.mode=CODEC_WRITE,.sink=sink,
+                     .limit=PERSIST_CODEC_MAX_DOCUMENT_BYTES,
+                     .result=PERSIST_CODEC_OK};
+    codec_macros(&io, (persist_control_macros_t *)macros);
+    return codec_emit_project_fragment(&io, sink, out_bytes);
+}
+
+persist_codec_result_t persist_codec_encode_project_pattern_record_payload(
+    const persist_control_pattern_record_t *record,
+    const persist_codec_sink_t *sink,
+    uint32_t *out_bytes)
+{
+    if ((record == NULL) || (sink == NULL) || (sink->write == NULL))
+        return PERSIST_CODEC_INVALID_ARGUMENT;
+    if ((record->bank >= PERSIST_CONTROL_PATTERN_BANK_COUNT)
+            || (record->pattern >= PERSIST_CONTROL_PATTERN_PER_BANK)
+            || (record->present != 1U))
+        return PERSIST_CODEC_INVALID_ENTITY;
+    persist_codec_result_t result = codec_validate_project_pattern(&record->content);
+    if (result != PERSIST_CODEC_OK) return result;
+    codec_io_t io = {.mode=CODEC_WRITE,.sink=sink,
+                     .limit=PERSIST_CODEC_MAX_DOCUMENT_BYTES,
+                     .result=PERSIST_CODEC_OK};
+    persist_control_pattern_record_t *copy = (persist_control_pattern_record_t *)record;
+    codec_u8(&io, &copy->bank);
+    codec_u8(&io, &copy->pattern);
+    codec_u8(&io, &copy->present);
+    codec_pattern_body(&io, &copy->content);
+    return codec_emit_project_fragment(&io, sink, out_bytes);
+}
+
+uint8_t persist_codec_build_project_section_header(
+    persist_codec_project_section_t section,
+    uint32_t payload_bytes,
+    uint8_t out_header[8])
+{
+    static const uint16_t types[PERSIST_CODEC_PROJECT_SECTION_COUNT] = {
+        SECTION_PROJECT_CORE, SECTION_PROJECT_ASSETS,
+        SECTION_PROJECT_MACROS, SECTION_PROJECT_BANK};
+    if ((section >= PERSIST_CODEC_PROJECT_SECTION_COUNT)
+            || (out_header == NULL))
+        return 0U;
+    const uint16_t type = types[section];
+    out_header[0] = (uint8_t)type;
+    out_header[1] = (uint8_t)(type >> 8U);
+    out_header[2] = 1U;
+    out_header[3] = 0U;
+    for (uint8_t i = 0U; i < 4U; ++i)
+        out_header[4U + i] = (uint8_t)(payload_bytes >> (8U * i));
+    return 1U;
+}
+
+uint8_t persist_codec_build_project_document_header(
+    uint32_t total_bytes,
+    uint32_t payload_crc,
+    uint8_t out_header[PERSIST_CODEC_HEADER_BYTES])
+{
+    if ((out_header == NULL) || (total_bytes < PERSIST_CODEC_HEADER_BYTES)
+            || (total_bytes > PERSIST_CODEC_MAX_DOCUMENT_BYTES))
+        return 0U;
+    memset(out_header, 0, PERSIST_CODEC_HEADER_BYTES);
+    out_header[0]=CODEC_MAGIC_0;out_header[1]=CODEC_MAGIC_1;
+    out_header[2]=CODEC_MAGIC_2;out_header[3]=CODEC_MAGIC_3;
+    out_header[4]=(uint8_t)PERSIST_CODEC_VERSION;
+    out_header[6]=PERSIST_CODEC_DOCUMENT_PROJECT;
+    out_header[8]=4U;
+    for(uint8_t i=0U;i<4U;++i)
+    {
+        out_header[12U+i]=(uint8_t)(total_bytes>>(8U*i));
+        out_header[16U+i]=(uint8_t)(payload_crc>>(8U*i));
+    }
+    const uint32_t header_crc = ~codec_crc32_update(0xFFFFFFFFUL,
+                                                    out_header, 20U);
+    for(uint8_t i=0U;i<4U;++i)
+        out_header[20U+i]=(uint8_t)(header_crc>>(8U*i));
+    return 1U;
+}
 
 static persist_codec_result_t codec_decode_begin(const persist_codec_source_t *s,uint8_t kind,uint16_t sections,codec_io_t *io,uint32_t *expected_crc)
 {uint8_t h[PERSIST_CODEC_HEADER_BYTES];if((s==NULL)||(s->read==NULL)||(s->read(s->context,h,sizeof(h))==0U))return PERSIST_CODEC_IO_ERROR;if((h[0]!=CODEC_MAGIC_0)||(h[1]!=CODEC_MAGIC_1)||(h[2]!=CODEC_MAGIC_2)||(h[3]!=CODEC_MAGIC_3))return PERSIST_CODEC_BAD_MAGIC;if((h[4]!=PERSIST_CODEC_VERSION)||(h[5]!=0U))return PERSIST_CODEC_BAD_VERSION;if((h[6]!=kind)||(h[7]!=0U))return PERSIST_CODEC_BAD_DOCUMENT_KIND;if((((uint16_t)h[8]|((uint16_t)h[9]<<8U))!=sections)||(h[10]!=0U)||(h[11]!=0U))return PERSIST_CODEC_BAD_SECTION;uint32_t total=(uint32_t)h[12]|((uint32_t)h[13]<<8U)|((uint32_t)h[14]<<16U)|((uint32_t)h[15]<<24U);if((total<PERSIST_CODEC_HEADER_BYTES)||(total>PERSIST_CODEC_MAX_DOCUMENT_BYTES))return PERSIST_CODEC_BAD_LENGTH;uint32_t hc=(uint32_t)h[20]|((uint32_t)h[21]<<8U)|((uint32_t)h[22]<<16U)|((uint32_t)h[23]<<24U);if(hc!=~codec_crc32_update(0xFFFFFFFFUL,h,20U))return PERSIST_CODEC_BAD_CRC;*expected_crc=(uint32_t)h[16]|((uint32_t)h[17]<<8U)|((uint32_t)h[18]<<16U)|((uint32_t)h[19]<<24U);*io=(codec_io_t){.mode=CODEC_READ,.source=s,.limit=total-PERSIST_CODEC_HEADER_BYTES,.crc=0xFFFFFFFFUL,.crc_enabled=1U,.result=PERSIST_CODEC_OK};return PERSIST_CODEC_OK;}

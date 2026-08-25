@@ -75,6 +75,16 @@ typedef struct
     float audio_fx_p1;
     float audio_fx_p2;
     float audio_fx_p3;
+    uint8_t audio_fx_b_model;
+    float audio_fx_b_p1;
+    float audio_fx_b_p2;
+    float audio_fx_b_p3;
+    uint8_t audio_fx_filter_pos;
+    uint8_t audio_fx_order;
+    uint8_t audio_fx_mode_a;
+    uint8_t audio_fx_mode_b;
+    float group_fx_a_level;
+    float group_fx_b_level;
 } track_sound_state_t;
 
 void track_sound_state_init(void);

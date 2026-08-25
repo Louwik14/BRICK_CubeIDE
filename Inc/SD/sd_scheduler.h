@@ -24,6 +24,7 @@ typedef enum
     SD_SCHEDULER_OWNER_READ_DMA,
     SD_SCHEDULER_OWNER_WRITE_DMA,
     SD_SCHEDULER_OWNER_FILESYSTEM,
+    SD_SCHEDULER_OWNER_BACKGROUND,
     SD_SCHEDULER_OWNER_RECOVERY_ABORT
 } sd_scheduler_owner_t;
 
@@ -138,6 +139,8 @@ uint8_t sd_scheduler_bind_provider(sd_scheduler_t *scheduler,
 void sd_scheduler_service(sd_scheduler_t *scheduler,
                           uint32_t now_us,
                           uint32_t media_epoch);
+uint8_t sd_scheduler_background_can_start(sd_scheduler_t *scheduler,
+                                          uint32_t media_epoch);
 sd_scheduler_owner_t sd_scheduler_owner(const sd_scheduler_t *scheduler);
 void sd_scheduler_metrics_get(const sd_scheduler_t *scheduler,
                               sd_scheduler_metrics_t *metrics);

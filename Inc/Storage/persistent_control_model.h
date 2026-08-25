@@ -56,39 +56,6 @@ typedef enum
     PERSIST_ENTITY_ROLE_GROUP_CHILD
 } persist_control_entity_role_t;
 
-static inline persist_control_entity_role_t persist_control_entity_role(
-    uint8_t group_active, persist_control_entity_id_t entity)
-{
-    if ((group_active != 0U) && (entity == PERSIST_CONTROL_GROUP_MASTER_ID))
-    {
-        return PERSIST_ENTITY_ROLE_GROUP_MASTER;
-    }
-    return ((group_active != 0U) && (entity >= PERSIST_CONTROL_FIRST_GROUP_CHILD_ID))
-        ? PERSIST_ENTITY_ROLE_GROUP_CHILD : PERSIST_ENTITY_ROLE_MAIN;
-}
-
-static inline uint8_t persist_control_entity_play_limit(
-    uint8_t group_active, persist_control_entity_id_t entity)
-{
-    return (persist_control_entity_role(group_active, entity) == PERSIST_ENTITY_ROLE_GROUP_CHILD)
-        ? PERSIST_CONTROL_CHILD_PLAY_ITEM_COUNT : PERSIST_CONTROL_PLAY_ITEM_COUNT;
-}
-
-static inline uint8_t persist_control_entity_allows_note_fx(
-    uint8_t group_active, persist_control_entity_id_t entity)
-{
-    return (persist_control_entity_role(group_active, entity) != PERSIST_ENTITY_ROLE_GROUP_MASTER)
-        ? 1U : 0U;
-}
-
-static inline uint8_t persist_control_entity_is_mod_owner(
-    uint8_t group_active, persist_control_entity_id_t entity)
-{
-    if (entity >= PERSIST_CONTROL_ENTITY_COUNT) return 0U;
-    if ((group_active != 0U) && (entity >= PERSIST_CONTROL_FIRST_GROUP_CHILD_ID)) return 0U;
-    return 1U;
-}
-
 /* Stable product keys. Their numeric values are explicit contracts and must
  * not be replaced by casts from internal C enums. */
 typedef enum

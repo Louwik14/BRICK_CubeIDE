@@ -14,6 +14,7 @@
 #include "Storage/memory_layout.h"
 #include "Core/track_runtime.h"
 #include "Core/live_parameter_audio_queue.h"
+#include "Core/live_parameter_audio_runtime.h"
 #include "param_registry.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include "NoteFx/note_fx_state.h"
@@ -106,6 +107,12 @@ static const param_id_t g_seq_param_mix_slot_to_id[SEQ_PARAM_MIX_SLOT_COUNT] = {
     ,PARAM_MIX_SEND3
 };
 
+static const param_id_t g_seq_param_audio_fx_slot_to_id[SEQ_PARAM_AUDIO_FX_SLOT_COUNT] = {
+    PARAM_AUDIO_FX_P1, PARAM_AUDIO_FX_P2, PARAM_AUDIO_FX_P3,
+    PARAM_AUDIO_FX_B_P1, PARAM_AUDIO_FX_B_P2, PARAM_AUDIO_FX_B_P3,
+    PARAM_GROUP_FX_A_LEVEL, PARAM_GROUP_FX_B_LEVEL
+};
+
 static const seq_param_compact_map_t g_seq_param_param_to_slot[PARAM_COUNT] = {
     [0 ... (PARAM_COUNT - 1U)] = { (uint8_t)SEQ_PLOCK_SET_COUNT, SEQ_PARAM_SLOT_UNMAPPED },
     [PARAM_FILTER_MORPH] = { (uint8_t)SEQ_PLOCK_SET_ENV, 0U },
@@ -162,6 +169,14 @@ static const seq_param_compact_map_t g_seq_param_param_to_slot[PARAM_COUNT] = {
     [PARAM_MIDI_FX_S3_PARAM2] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 9U },
     [PARAM_MIDI_FX_S3_PARAM3] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 10U },
     [PARAM_MIDI_FX_S3_MODEL] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 11U }
+    ,[PARAM_AUDIO_FX_P1] = { (uint8_t)SEQ_PLOCK_SET_AUDIO_FX, 0U }
+    ,[PARAM_AUDIO_FX_P2] = { (uint8_t)SEQ_PLOCK_SET_AUDIO_FX, 1U }
+    ,[PARAM_AUDIO_FX_P3] = { (uint8_t)SEQ_PLOCK_SET_AUDIO_FX, 2U }
+    ,[PARAM_AUDIO_FX_B_P1] = { (uint8_t)SEQ_PLOCK_SET_AUDIO_FX, 3U }
+    ,[PARAM_AUDIO_FX_B_P2] = { (uint8_t)SEQ_PLOCK_SET_AUDIO_FX, 4U }
+    ,[PARAM_AUDIO_FX_B_P3] = { (uint8_t)SEQ_PLOCK_SET_AUDIO_FX, 5U }
+    ,[PARAM_GROUP_FX_A_LEVEL] = { (uint8_t)SEQ_PLOCK_SET_AUDIO_FX, 6U }
+    ,[PARAM_GROUP_FX_B_LEVEL] = { (uint8_t)SEQ_PLOCK_SET_AUDIO_FX, 7U }
 };
 
 typedef struct
@@ -175,7 +190,8 @@ static const seq_param_inverse_table_t g_seq_param_inverse_tables[SEQ_PLOCK_SET_
     [SEQ_PLOCK_SET_TONE] = { NULL, 0U },
     [SEQ_PLOCK_SET_MOD] = { g_seq_param_mod_slot_to_id, SEQ_PARAM_MOD_SLOT_COUNT },
     [SEQ_PLOCK_SET_MIDI_FX] = { g_seq_param_midi_fx_slot_to_id, SEQ_PARAM_MIDI_FX_SLOT_COUNT },
-    [SEQ_PLOCK_SET_MIX] = { g_seq_param_mix_slot_to_id, SEQ_PARAM_MIX_SLOT_COUNT }
+    [SEQ_PLOCK_SET_MIX] = { g_seq_param_mix_slot_to_id, SEQ_PARAM_MIX_SLOT_COUNT },
+    [SEQ_PLOCK_SET_AUDIO_FX] = { g_seq_param_audio_fx_slot_to_id, SEQ_PARAM_AUDIO_FX_SLOT_COUNT }
 };
 
 _Static_assert((sizeof(g_seq_param_param_to_slot) / sizeof(g_seq_param_param_to_slot[0])) == PARAM_COUNT,
@@ -188,6 +204,8 @@ _Static_assert((sizeof(g_seq_param_midi_fx_slot_to_id) / sizeof(g_seq_param_midi
                "MIDI FX inverse p-lock mapping size changed");
 _Static_assert((sizeof(g_seq_param_mix_slot_to_id) / sizeof(g_seq_param_mix_slot_to_id[0])) == SEQ_PARAM_MIX_SLOT_COUNT,
                "MIX inverse p-lock mapping size changed");
+_Static_assert((sizeof(g_seq_param_audio_fx_slot_to_id) / sizeof(g_seq_param_audio_fx_slot_to_id[0])) == SEQ_PARAM_AUDIO_FX_SLOT_COUNT,
+               "Audio FX inverse p-lock mapping size changed");
 
 static const uint8_t g_seq_param_set_offsets[SEQ_PLOCK_SET_COUNT] = {
     SEQ_PARAM_ENV_SLOT_OFFSET,
@@ -195,7 +213,8 @@ static const uint8_t g_seq_param_set_offsets[SEQ_PLOCK_SET_COUNT] = {
     SEQ_PARAM_MOD_SLOT_OFFSET,
     SEQ_PARAM_MIDI_FX_SLOT_OFFSET,
     SEQ_PARAM_MIX_SLOT_OFFSET,
-    SEQ_PARAM_FM_OPERATOR_SLOT_OFFSET
+    SEQ_PARAM_FM_OPERATOR_SLOT_OFFSET,
+    SEQ_PARAM_AUDIO_FX_SLOT_OFFSET
 };
 
 static const uint8_t g_seq_param_set_capacities[SEQ_PLOCK_SET_COUNT] = {
@@ -204,7 +223,8 @@ static const uint8_t g_seq_param_set_capacities[SEQ_PLOCK_SET_COUNT] = {
     SEQ_PARAM_MOD_SLOT_COUNT,
     SEQ_PARAM_MIDI_FX_SLOT_COUNT,
     SEQ_PARAM_MIX_SLOT_COUNT,
-    SEQ_PARAM_FM_OPERATOR_SLOT_COUNT
+    SEQ_PARAM_FM_OPERATOR_SLOT_COUNT,
+    SEQ_PARAM_AUDIO_FX_SLOT_COUNT
 };
 
 _Static_assert(SEQ_PARAM_RUNTIME_SLOT_COUNT <= UINT8_MAX,
@@ -426,6 +446,7 @@ uint8_t seq_param_iface_is_param_plockable(param_id_t param_id)
                      || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
                      || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD)
                      || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIDI_FX)
+                     || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX)
                      || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX));
 }
 
@@ -449,7 +470,8 @@ static uint8_t seq_param_iface_param_matches_set_domain(seq_track_id_t track,
         && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
         && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MOD)
         && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX)
-        && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIDI_FX))
+        && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIDI_FX)
+        && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX))
     {
         return 0U;
     }
@@ -478,6 +500,11 @@ static uint8_t seq_param_iface_param_matches_set_domain(seq_track_id_t track,
         return 0U;
     }
     if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX) && (set_id != (uint8_t)SEQ_PLOCK_SET_MIX))
+    {
+        return 0U;
+    }
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX)
+            && (set_id != (uint8_t)SEQ_PLOCK_SET_AUDIO_FX))
     {
         return 0U;
     }
@@ -1093,7 +1120,7 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
     }
 
     const float decoded = seq_param_iface_decode_param_value(param, value16);
-    if (param_registry_apply_track_value_runtime_temp_matrix(
+    if (live_parameter_audio_runtime_apply_temp(
             param, track, decoded,
             LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_SET) == 0U)
     {
@@ -1144,7 +1171,7 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
     }
 
     const float decoded = seq_param_iface_decode_param_value(param, base_value16);
-    if (param_registry_apply_track_value_runtime_temp_matrix(
+    if (live_parameter_audio_runtime_apply_temp(
             param, track, decoded,
             LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_CLEAR) == 0U)
     {
@@ -1165,49 +1192,7 @@ seq_value16_t seq_param_iface_encode_param_value(param_id_t param, float value)
         return 0U;
     }
 
-    const param_desc_t *const desc = &param_registry[param];
-    float clamped = value;
-
-    if ((param == PARAM_PRISM_COARSE) || (param == PARAM_PRISM_OSC2_COARSE))
-    {
-        if (clamped < 0.0f)
-        {
-            clamped = 0.0f;
-        }
-        if (clamped > 1.0f)
-        {
-            clamped = 1.0f;
-        }
-        return (seq_value16_t)(clamped * 4800.0f + 0.5f);
-    }
-
-    if (clamped < desc->min)
-    {
-        clamped = desc->min;
-    }
-    if (clamped > desc->max)
-    {
-        clamped = desc->max;
-    }
-
-    float step = desc->step;
-    if (step <= 0.0f)
-    {
-        step = 1.0f;
-    }
-
-    const float encoded = (clamped - desc->min) / step;
-    if (encoded <= 0.0f)
-    {
-        return 0U;
-    }
-
-    if (encoded >= 65535.0f)
-    {
-        return 65535U;
-    }
-
-    return (seq_value16_t)(encoded + 0.5f);
+    return (seq_value16_t)param_value_policy_encode_u16(&param_registry[param], value);
 }
 
 float seq_param_iface_decode_param_value(param_id_t param, seq_value16_t value16)
@@ -1217,37 +1202,5 @@ float seq_param_iface_decode_param_value(param_id_t param, seq_value16_t value16
         return 0.0f;
     }
 
-    const param_desc_t *const desc = &param_registry[param];
-
-    if ((param == PARAM_PRISM_COARSE) || (param == PARAM_PRISM_OSC2_COARSE))
-    {
-        float value = (float)value16 / 4800.0f;
-        if (value < 0.0f)
-        {
-            value = 0.0f;
-        }
-        if (value > 1.0f)
-        {
-            value = 1.0f;
-        }
-        return value;
-    }
-
-    float step = desc->step;
-    if (step <= 0.0f)
-    {
-        step = 1.0f;
-    }
-
-    float value = desc->min + ((float)value16 * step);
-    if (value < desc->min)
-    {
-        value = desc->min;
-    }
-    if (value > desc->max)
-    {
-        value = desc->max;
-    }
-
-    return value;
+    return param_value_policy_decode_u16(&param_registry[param], value16);
 }

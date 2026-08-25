@@ -1,59 +1,34 @@
-# Z3 — Paramètres, modulation et contrôle
+# Z3 - Parametres, modulation et controle
 
-Le registre décrit chaque paramètre par ID, domaine, plage, affichage, persistance et backend. Les paramètres de piste reçoivent un index `0..7`; les paramètres Master sont globaux et n'empruntent aucun slot fictif.
+Le registre decrit chaque parametre par ID, domaine, plage, affichage, persistance, p-lockabilite, politique de valeur et backend. Les parametres d'entite sont appliques avec leur entity; les parametres Master sont globaux.
 
-La disponibilité dépend des capacités réelles du moteur projeté. Les p-locks stockent les valeurs complètes par step et utilisent le même catalogue pour les huit pistes. Les destinations incompatibles sont rejetées avant mutation.
+Autorites d'ecriture:
 
-Le p-lock générique est un override temporaire réservé aux paramètres p-lockables. Il est appliqué au runtime puis restauré vers la base. NOTE et les autres champs PLAY de step n’empruntent pas ce catalogue ni ce runtime : ils appartiennent au payload structurel PLAY et utilisent la base PLAY de piste comme fallback.
+- global: `param_set`;
+- entite: `param_registry_apply_track_value`;
+- configuration LFO: `mod_lfo_v1_set_track_param`;
+- override AUDIO temporaire: chemin RT/audio dedie.
 
-LFO, Matrix, ENV3, filtre et VCA gardent une seule autorité de contrôle. External et MIDI conservent leurs restrictions explicites. Aucun paramètre, backend ou état MacroFX n'appartient au produit courant.
+Pour un parametre d'entite, `param_store.active[]` est un miroir UI, pas la verite runtime. Une application batch pre-valide, coalesce les refresh et publie une projection unique.
 
-## Autorité MOD du GROUP
+`param_desc_t::value_policy` possede conversions canonique/affichee, pas normal/SHIFT et politique d'automation. Les p-locks continus utilisent toute la plage `uint16_t`; les discrets utilisent leur pas. La persistance stocke la valeur CONTROL typee, notamment FLOAT32, jamais une representation UI.
 
-Le GROUP master est l'unique autorité CONTROL de la Matrix, des trois LFO,
-d'ENV3 et des opérateurs partagés. Un accès MOD depuis un child résout donc le
-même owner master. Les sources sont exclusivement celles du master; aucun ENV
-child n'est une source. Une destination Matrix est une adresse logique
-`{entity_id, param_id}` : AUDIO résout cette adresse vers un seul master ou un
-seul SUB, sans fan-out et sans faire remonter un `mix_track_id` dans CONTROL.
+Un p-lock est un override temporaire d'un parametre p-lockable, restaure ensuite vers sa base. NOTE, VELOCITY, LENGTH et MICROTIMING sont des champs PLAY structurels et non des p-locks generiques.
 
-## Contrat LFO segmenté et interpolé
+## Modulation
 
-`mod_lfo_v1` reste l'autorité unique de phase, de forme, de déclenchement et de
-valeur sample-and-hold. La cadence de contrôle par défaut reste la fenêtre
-audio `BRICK6_AUDIO_EVENT_GRID_FRAMES` (64 frames dans la configuration
-courante), mais une fenêtre est planifiée en segments de longueur variable.
+LFO, Matrix, ENV3, filtre et VCA ont une autorite unique. Une destination Matrix est `{entity_id, param_id}`. En GROUP, le master possede Matrix, trois LFO, ENV3 et operateurs; un child peut etre destination mais ne devient pas owner. AUDIO compile les plans et masques de sources a la publication, sans relire la configuration CONTROL.
 
-Le planificateur retourne toujours `phase_after` comme autorité de continuité
-et produit un contrat `{start, step, frames}`. Les formes sine et triangle sont
-interpolées dans leur segment; saw, reverse saw et random-SH segmentent au
-wrap; triangle et square segmentent à leur demi-cycle. Square conserve ses
-transitions franches. Le mode one-shot force également la frontière de cycle.
+La valeur CONTROL du parametre est l'unique autorite de sa base. Elle est projetee par le chemin normal des commandes parametre et met a jour directement la destination AUDIO, y compris pendant une modulation. Le snapshot Matrix ne transporte que la topologie, les plages et la configuration des operateurs; il ne contient aucune base. Lorsqu'une nouvelle destination devient routee, sa valeur CONTROL courante est projetee avant rendu. Une recompilation conserve la base AUDIO deja projetee et ne peut donc pas restaurer une ancienne valeur.
 
-La Matrix consomme les bornes start/end une seule fois par fenêtre: les
-opérateurs multiplicatifs calculent leurs deux bornes, et le slew avance son
-état sur la durée écoulée. Les destinations continues déclarées par le
-catalogue reçoivent ensuite ces bornes via leur lissage moteur existant; les
-destinations structurelles, discrètes ou à transition marquée restent
-appliquées au début de la fenêtre. Aucun setter de destination ni calcul de
-forme n'est introduit dans une boucle sample.
+La resolution commune est `clamp(base_courante + somme(source * profondeur_normalisee * plage), min, max)`. Retirer le dernier slot restaure `base_courante`.
 
-### Transition d'un mode LFO POLY avec voix active
+Les LFO produisent des segments `{start, step, frames}`. Les formes continues sont interpolees; wraps et transitions discretes creent des frontieres. Un changement de mode poly invalide la source de la voix jusqu'au prochain trigger sans redemarrer la voix.
 
-Un passage entre `P.Trig`, `P.Hold` et `P.One` invalide l'état LFO de chaque voix
-concernée et la place en `pending_trigger`. La voix audio peut continuer son
-release, mais aucune source LFO POLY ni source globale de remplacement n'est
-consommée tant qu'un nouveau note-on/retrigger n'a pas réarmé cette voix.
-Le réarmement réinitialise phase, HOLD, ONE et l'état RNG/S&H selon le mode
-courant. Une restauration bornée des destinations POLY vers leur base est faite
-une seule fois lors de la transition; les fenêtres suivantes en attente restent
-sur un chemin court.
-## Base voice FM DX7
+## Parametres AUDIO dates
 
-L'autorité FM distingue une base voice compacte et les macros BRICK. La base conserve les huit points d'enveloppe de chaque opérateur, le keyboard/rate scaling, les codes natifs coarse/fine, le pitch EG complet et le transpose. Les macros TONE produisent une projection runtime non destructive au-dessus de cette base.
+Les detents encodeur valides capturent TIM5 et un binding pointer-free. CONTROL produit une commande finale `SET_TARGET`; AUDIO la planifie a l'`effective_sample_time`. Le ring est SPSC, borne et transactionnel pour les groupes. Saturation rejette le nouvel evenement ou le groupe complet; les valeurs latest-wins persistantes restent pending et sont retentees.
 
-Les 27 paramètres `PARAM_FM_DX7_*_PACK_*` sont des adaptateurs persistants UI-hidden de trois octets exactement représentables en `float`. Les projections UI `PARAM_FM_TRANSPOSE`, `PARAM_FM_PITCH_R1..R4` et `PARAM_FM_PITCH_L1..L4` lisent et écrivent directement cette base; elles sont non persistantes individuellement et sont donc restaurées par les packs canoniques. Elles ne figurent pas dans le catalogue des destinations MOD. Les huit slots Matrix restent exclusivement sous contrôle utilisateur. Aucun état LFO DX7 ne fait partie de cette base.
+AUDIO applique la cible avant le sample concerne. Le smoothing appartient au backend reel: mixer, voix ou effet. Le dispatcher date ne fabrique aucun lissage generique. Notes, panic et parametres gardent des capacites distinctes.
 
-La page FM `TONE 1/2` expose quatre pages `GLOBAL`, `OP QUICK`, `PITCH R` et `PITCH L`. `OP QUICK` réutilise `PARAM_FM_OPERATOR_SELECT` et projette les trois paramètres canoniques de l'opérateur choisi. `PITCH R` et `PITCH L` partagent une seule projection graphique de l'enveloppe Pitch EG complète. `TONE 2/2` conserve sa structure existante.
-
-Le renderer FM conserve six appels `Env::getsample`, un appel `PitchEnv::getsample` et six opérateurs par bloc. Le scaling, le transpose et les projections de macros sont préparés au Note-On ou lors d'un changement de paramètre.
+Les slots Audio FX A/B possedent MODEL/P1/P2/P3. Seuls P1/P2/P3 sont p-lockables. En GROUP, les models appartiennent au master et les children n'exposent que LEVEL A/B.

@@ -43,22 +43,34 @@ uint8_t live_parameter_is_audio_owned(param_id_t parameter)
         case PARAM_AUDIO_FX_P2:
         case PARAM_AUDIO_FX_P3:
         case PARAM_AUDIO_FX_MODEL:
+        case PARAM_AUDIO_FX_B_P1:
+        case PARAM_AUDIO_FX_B_P2:
+        case PARAM_AUDIO_FX_B_P3:
+        case PARAM_AUDIO_FX_B_MODEL:
+        case PARAM_AUDIO_FX_FILTER_POS:
+        case PARAM_AUDIO_FX_ORDER:
+        case PARAM_AUDIO_FX_MODE_A:
+        case PARAM_AUDIO_FX_MODE_B:
+        case PARAM_GROUP_FX_A_LEVEL:
+        case PARAM_GROUP_FX_B_LEVEL:
         case PARAM_WAVE_OSC1_POS:
         case PARAM_WAVE_OSC2_POS:
-        case PARAM_PRISM_FINE:
-        case PARAM_PRISM_COARSE:
-        case PARAM_PRISM_FM:
-        case PARAM_PRISM_TIMBRE:
-        case PARAM_PRISM_MODULATION:
-        case PARAM_PRISM_COLOR:
-        case PARAM_PRISM_LEVEL:
-        case PARAM_PRISM_OSC2_FINE:
-        case PARAM_PRISM_OSC2_COARSE:
-        case PARAM_PRISM_OSC2_FM:
-        case PARAM_PRISM_OSC2_TIMBRE:
-        case PARAM_PRISM_OSC2_MODULATION:
-        case PARAM_PRISM_OSC2_COLOR:
-        case PARAM_PRISM_OSC2_LEVEL:
+        case PARAM_WAVE_VOLUME:
+        case PARAM_WAVE_BALANCE:
+        case PARAM_WAVE_TUNE:
+        case PARAM_WAVE_DETUNE:
+        case PARAM_PRISM_VOLUME:
+        case PARAM_PRISM_TUNE:
+        case PARAM_PRISM_PITCH_MOD1:
+        case PARAM_PRISM_OSC1_PARAM1:
+        case PARAM_PRISM_OSC1_AMOD:
+        case PARAM_PRISM_OSC1_PARAM2:
+        case PARAM_PRISM_BALANCE:
+        case PARAM_PRISM_DETUNE:
+        case PARAM_PRISM_PITCH_MOD2:
+        case PARAM_PRISM_OSC2_PARAM1:
+        case PARAM_PRISM_OSC2_AMOD:
+        case PARAM_PRISM_OSC2_PARAM2:
         case PARAM_STACK_OSC1_LEVEL:
         case PARAM_STACK_OSC2_LEVEL:
         case PARAM_STACK_OSC3_LEVEL:
@@ -79,6 +91,10 @@ uint8_t live_parameter_is_audio_owned(param_id_t parameter)
         case PARAM_MODFX_DEPTH:
         case PARAM_MODFX_FEEDBACK:
         case PARAM_MODFX_OFFSET:
+        case PARAM_MODFX_RATE_B:
+        case PARAM_MODFX_DELAY_B:
+        case PARAM_MODFX_DEPTH_B:
+        case PARAM_MODFX_WIDTH:
         case PARAM_MIX_REVERB_ROOM_SIZE:
         case PARAM_MIX_REVERB_DAMPING:
         case PARAM_MIX_REVERB_WIDTH:

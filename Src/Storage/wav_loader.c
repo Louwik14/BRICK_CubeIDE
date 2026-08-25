@@ -25,6 +25,7 @@
 #include "Storage/looper_storage.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/sd_access_gate.h"
+#include "SD/sd_scheduler_runtime.h"
 #include "wav_parser.h"
 
 #define WAV_LOADER_CATALOG_MAGIC (0x314C3657UL) /* W6L1 */
@@ -111,6 +112,32 @@ static uint16_t g_wav_catalog_lookup_index = WAV_LOADER_CATALOG_ROOT_PARENT;
 static uint8_t g_wav_catalog_lookup_valid;
 static uint32_t g_wav_catalog_view_age;
 
+typedef enum
+{
+    WAV_CATALOG_VIEW_IDLE = 0,
+    WAV_CATALOG_VIEW_MOUNT,
+    WAV_CATALOG_VIEW_OPEN,
+    WAV_CATALOG_VIEW_HEADER,
+    WAV_CATALOG_VIEW_READ,
+    WAV_CATALOG_VIEW_CLOSE
+} wav_catalog_view_state_t;
+
+typedef struct
+{
+    wav_catalog_view_state_t state;
+    FIL file;
+    wav_loader_catalog_file_header_t header;
+    uint16_t parent_id;
+    uint16_t page_start;
+    uint16_t entry_index;
+    uint16_t child_ordinal;
+    uint32_t media_epoch;
+    uint8_t file_open;
+    uint8_t read_ok;
+} wav_catalog_view_load_t;
+
+STORAGE_STATE_SDRAM static wav_catalog_view_load_t g_wav_catalog_view_load;
+
 static void wav_loader_catalog_checksum_update(uint32_t *hash, const void *data, uint32_t len)
 {
     const uint8_t *bytes = (const uint8_t *)data;
@@ -129,6 +156,7 @@ static void wav_loader_catalog_views_clear(void)
     g_wav_catalog_lookup_index = WAV_LOADER_CATALOG_ROOT_PARENT;
     g_wav_catalog_lookup_valid = 0U;
     g_wav_catalog_view_age = 0U;
+    memset(&g_wav_catalog_view_load, 0, sizeof(g_wav_catalog_view_load));
 }
 
 static void wav_loader_catalog_diag_record_open_fail(FRESULT fr)
@@ -525,64 +553,192 @@ static wav_loader_catalog_view_t *wav_loader_catalog_load_view(uint16_t parent_i
         return 0;
     }
 
-    FIL file;
-    wav_loader_catalog_file_header_t header;
-    if (wav_loader_catalog_open_read(&file, &header) == 0U)
+    if (g_wav_catalog_view_load.state == WAV_CATALOG_VIEW_IDLE)
     {
-        g_wav_catalog_diag.catalog_view_preserved_on_error_count++;
-        return 0;
+        memset(&g_wav_catalog_view_load, 0, sizeof(g_wav_catalog_view_load));
+        memset(&g_wav_catalog_scratch_view, 0, sizeof(g_wav_catalog_scratch_view));
+        g_wav_catalog_view_load.parent_id = parent_id;
+        g_wav_catalog_view_load.page_start = page_start;
+        g_wav_catalog_view_load.media_epoch = sd_access_media_epoch();
+        g_wav_catalog_view_load.read_ok = 1U;
+        g_wav_catalog_view_load.state = WAV_CATALOG_VIEW_MOUNT;
+        g_wav_catalog_scratch_view.parent_id = parent_id;
+        g_wav_catalog_scratch_view.page_start = page_start;
+    }
+    return 0;
+}
+
+uint8_t wav_loader_catalog_view_busy(void)
+{
+    return (g_wav_catalog_view_load.state != WAV_CATALOG_VIEW_IDLE) ? 1U : 0U;
+}
+
+static sd_scheduler_background_admission_t wav_loader_catalog_view_begin(
+    sd_scheduler_background_kind_t kind, uint32_t bytes)
+{
+    const sd_scheduler_background_request_t request = {
+        .byte_count = bytes,
+        .media_epoch = g_wav_catalog_view_load.media_epoch,
+        .kind = kind
+    };
+    return sd_scheduler_runtime_background_try_begin(&request);
+}
+
+wav_loader_catalog_view_service_result_t wav_loader_catalog_view_service(void)
+{
+    wav_catalog_view_load_t *const load = &g_wav_catalog_view_load;
+    if (load->state == WAV_CATALOG_VIEW_IDLE)
+    {
+        return WAV_LOADER_CATALOG_VIEW_PENDING;
     }
 
-    wav_loader_catalog_view_t *const scratch = &g_wav_catalog_scratch_view;
-    memset(scratch, 0, sizeof(*scratch));
-    scratch->parent_id = parent_id;
-    scratch->page_start = page_start;
-
-    wav_loader_catalog_entry_t entry;
-    uint16_t child_ordinal = 0U;
-    uint8_t read_ok = 1U;
-    for (uint16_t i = 0U; i < header.count; ++i)
+    const uint32_t entries_per_slice =
+        SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES / (uint32_t)sizeof(wav_loader_catalog_entry_t);
+    const sd_scheduler_background_kind_t kind =
+        ((load->state == WAV_CATALOG_VIEW_HEADER) || (load->state == WAV_CATALOG_VIEW_READ))
+            ? SD_SCHEDULER_BACKGROUND_DATA
+            : SD_SCHEDULER_BACKGROUND_METADATA;
+    uint32_t bytes = 0U;
+    if (load->state == WAV_CATALOG_VIEW_HEADER)
     {
-        UINT read = 0U;
-        FRESULT fr = f_read(&file, &entry, sizeof(entry), &read);
-        if ((fr != FR_OK) || (read != sizeof(entry)))
+        bytes = sizeof(load->header);
+    }
+    else if (load->state == WAV_CATALOG_VIEW_READ)
+    {
+        const uint32_t remaining = (uint32_t)load->header.count - load->entry_index;
+        const uint32_t count = (remaining < entries_per_slice) ? remaining : entries_per_slice;
+        bytes = count * (uint32_t)sizeof(wav_loader_catalog_entry_t);
+    }
+
+    const sd_scheduler_background_admission_t admission =
+        wav_loader_catalog_view_begin(kind, bytes);
+    if (admission == SD_SCHEDULER_BACKGROUND_NOT_NOW)
+    {
+        return WAV_LOADER_CATALOG_VIEW_PENDING;
+    }
+    if (admission != SD_SCHEDULER_BACKGROUND_GO)
+    {
+        memset(load, 0, sizeof(*load));
+        g_wav_catalog_last_io_error = 1U;
+        return WAV_LOADER_CATALOG_VIEW_ERROR;
+    }
+
+    wav_loader_catalog_view_service_result_t result = WAV_LOADER_CATALOG_VIEW_PENDING;
+    switch (load->state)
+    {
+        case WAV_CATALOG_VIEW_MOUNT:
+            if (sd_access_fs_mount_if_needed() != 0U)
+            {
+                load->state = WAV_CATALOG_VIEW_OPEN;
+            }
+            else
+            {
+                load->read_ok = 0U;
+                load->state = WAV_CATALOG_VIEW_CLOSE;
+            }
+            break;
+
+        case WAV_CATALOG_VIEW_OPEN:
+            if (f_open(&load->file, WAV_LOADER_CATALOG_PATH, FA_READ) == FR_OK)
+            {
+                load->file_open = 1U;
+                load->state = WAV_CATALOG_VIEW_HEADER;
+            }
+            else
+            {
+                load->read_ok = 0U;
+                load->state = WAV_CATALOG_VIEW_CLOSE;
+            }
+            break;
+
+        case WAV_CATALOG_VIEW_HEADER:
         {
-            g_wav_catalog_last_io_error = 1U;
-            read_ok = 0U;
+            UINT read = 0U;
+            const FRESULT fr = f_read(&load->file, &load->header, sizeof(load->header), &read);
+            if ((fr == FR_OK) && (read == sizeof(load->header))
+                && (load->header.magic == WAV_LOADER_CATALOG_MAGIC)
+                && (load->header.version == WAV_LOADER_CATALOG_VERSION)
+                && (load->header.entry_size == sizeof(wav_loader_catalog_entry_t))
+                && (load->header.count <= WAV_LOADER_CATALOG_MAX))
+            {
+                load->state = (load->header.count == 0U)
+                    ? WAV_CATALOG_VIEW_CLOSE : WAV_CATALOG_VIEW_READ;
+            }
+            else
+            {
+                load->read_ok = 0U;
+                load->state = WAV_CATALOG_VIEW_CLOSE;
+            }
             break;
         }
-        if (entry.parent_id != parent_id)
+
+        case WAV_CATALOG_VIEW_READ:
         {
-            continue;
-        }
-        scratch->child_count++;
-        if (child_ordinal >= page_start)
-        {
-            if (scratch->loaded_count < WAV_LOADER_CATALOG_VIEW_MAX)
+            const uint32_t remaining = (uint32_t)load->header.count - load->entry_index;
+            const uint32_t count = (remaining < entries_per_slice) ? remaining : entries_per_slice;
+            for (uint32_t n = 0U; n < count; ++n)
             {
-                scratch->entries[scratch->loaded_count] = entry;
-                scratch->indices[scratch->loaded_count] = i;
-                scratch->loaded_count++;
+                wav_loader_catalog_entry_t entry;
+                UINT read = 0U;
+                const FRESULT fr = f_read(&load->file, &entry, sizeof(entry), &read);
+                if ((fr != FR_OK) || (read != sizeof(entry)))
+                {
+                    load->read_ok = 0U;
+                    break;
+                }
+                if (entry.parent_id == load->parent_id)
+                {
+                    g_wav_catalog_scratch_view.child_count++;
+                    if ((load->child_ordinal >= load->page_start)
+                        && (g_wav_catalog_scratch_view.loaded_count < WAV_LOADER_CATALOG_VIEW_MAX))
+                    {
+                        const uint16_t dst = g_wav_catalog_scratch_view.loaded_count++;
+                        g_wav_catalog_scratch_view.entries[dst] = entry;
+                        g_wav_catalog_scratch_view.indices[dst] = load->entry_index;
+                    }
+                    load->child_ordinal++;
+                }
+                load->entry_index++;
             }
+            if ((load->read_ok == 0U) || (load->entry_index >= load->header.count))
+            {
+                load->state = WAV_CATALOG_VIEW_CLOSE;
+            }
+            break;
         }
-        child_ordinal++;
-    }
 
-    if (read_ok == 0U)
-    {
-        g_wav_catalog_diag.catalog_view_preserved_on_error_count++;
-        (void)f_close(&file);
-        wav_loader_catalog_release_gate_on_error();
-        return 0;
-    }
+        case WAV_CATALOG_VIEW_CLOSE:
+            if (load->file_open != 0U)
+            {
+                if (f_close(&load->file) != FR_OK)
+                {
+                    load->read_ok = 0U;
+                }
+                load->file_open = 0U;
+            }
+            if (load->read_ok != 0U)
+            {
+                wav_loader_catalog_view_t *const view = wav_loader_catalog_alloc_view();
+                *view = g_wav_catalog_scratch_view;
+                view->valid = 1U;
+                view->age = ++g_wav_catalog_view_age;
+                result = WAV_LOADER_CATALOG_VIEW_PUBLISHED;
+            }
+            else
+            {
+                g_wav_catalog_last_io_error = 1U;
+                g_wav_catalog_diag.catalog_view_preserved_on_error_count++;
+                result = WAV_LOADER_CATALOG_VIEW_ERROR;
+            }
+            memset(load, 0, sizeof(*load));
+            break;
 
-    view = wav_loader_catalog_alloc_view();
-    *view = *scratch;
-    view->valid = 1U;
-    view->age = ++g_wav_catalog_view_age;
-    (void)f_close(&file);
-    sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
-    return view;
+        default:
+            memset(load, 0, sizeof(*load));
+            break;
+    }
+    sd_scheduler_runtime_background_end();
+    return result;
 }
 
 static uint8_t wav_loader_catalog_read_entry_by_index(uint16_t index, wav_loader_catalog_entry_t *out)

@@ -22,8 +22,43 @@ enum
     AUDIO_FX_MODEL_SUB = 8U,
     /* ID 9 is retired. */
     AUDIO_FX_MODEL_RING = 10U,
-    AUDIO_FX_MODEL_SUB_LIGHT = 11U
+    AUDIO_FX_MODEL_SUB_LIGHT = 11U,
+    AUDIO_FX_MODEL_VIBE = 12U,
+    AUDIO_FX_MODEL_DRIFT = 13U
 };
+
+typedef enum
+{
+    AUDIO_FX_SLOT_A = 0U,
+    AUDIO_FX_SLOT_B,
+    AUDIO_FX_SLOT_COUNT
+} audio_fx_slot_t;
+
+typedef const void *audio_fx_sample_plan_handle_t;
+
+typedef enum
+{
+    AUDIO_FX_FILTER_POS_PRE = 0U,
+    AUDIO_FX_FILTER_POS_MID,
+    AUDIO_FX_FILTER_POS_POST,
+    AUDIO_FX_FILTER_POS_COUNT
+} audio_fx_filter_pos_t;
+
+typedef enum
+{
+    AUDIO_FX_ORDER_A_B = 0U,
+    AUDIO_FX_ORDER_B_A,
+    AUDIO_FX_ORDER_COUNT
+} audio_fx_order_t;
+
+typedef enum
+{
+    AUDIO_FX_SPATIAL_MONO = 0U,
+    AUDIO_FX_SPATIAL_STEREO,
+    AUDIO_FX_SPATIAL_MID,
+    AUDIO_FX_SPATIAL_SIDE,
+    AUDIO_FX_SPATIAL_COUNT
+} audio_fx_spatial_mode_t;
 
 static inline uint8_t audio_fx_lofi_model_index_from_control(uint8_t p3_control)
 {
@@ -41,14 +76,26 @@ typedef enum
 
 void audio_fx_runtime_init(void);
 uint8_t audio_fx_runtime_is_param(param_id_t id);
+uint8_t audio_fx_runtime_param_slot(param_id_t id, audio_fx_slot_t *out_slot);
+uint8_t audio_fx_runtime_is_group_level_param(param_id_t id);
+uint8_t audio_fx_runtime_get_model(brick_entity_id_t entity_id,
+                                   audio_fx_slot_t slot);
 uint8_t audio_fx_runtime_is_active(brick_entity_id_t entity_id);
 uint8_t audio_fx_runtime_is_comp(brick_entity_id_t entity_id);
 uint8_t audio_fx_runtime_requires_stereo(brick_entity_id_t entity_id);
 uint8_t audio_fx_runtime_pre_filter_supported(brick_entity_id_t entity_id);
+audio_fx_filter_pos_t audio_fx_runtime_get_filter_pos(brick_entity_id_t entity_id);
+/* CONTROL/UI readback from the pointer-free AUDIO publication. */
+audio_fx_filter_pos_t audio_fx_runtime_status_get_filter_pos(
+    brick_entity_id_t entity_id);
+void audio_fx_runtime_rebuild_entity_plan(brick_entity_id_t entity_id);
 audio_fx_placement_t audio_fx_runtime_get_placement(brick_entity_id_t entity_id);
 uint8_t audio_fx_runtime_apply_param(brick_entity_id_t entity_id,
                                      param_id_t id,
                                      float value);
+uint8_t audio_fx_runtime_apply_drift_delay_modulated(brick_entity_id_t entity_id,
+                                                     param_id_t id,
+                                                     float value);
 void audio_fx_runtime_process_mono(brick_entity_id_t entity_id,
                                    float *buffer,
                                    uint32_t frames);
@@ -59,6 +106,25 @@ void audio_fx_runtime_process_stereo(brick_entity_id_t entity_id,
 void audio_fx_runtime_process_stereo_sample(brick_entity_id_t entity_id,
                                             float *left,
                                             float *right);
+audio_fx_sample_plan_handle_t audio_fx_runtime_get_sample_plan(
+    brick_entity_id_t entity_id);
+void audio_fx_runtime_process_stereo_sample_prepared(
+    audio_fx_sample_plan_handle_t plan,
+    float *left,
+    float *right);
+void audio_fx_runtime_process_before_filter(brick_entity_id_t entity_id,
+                                            float *left,
+                                            float *right,
+                                            uint32_t frames);
+void audio_fx_runtime_process_after_filter(brick_entity_id_t entity_id,
+                                           float *left,
+                                           float *right,
+                                           uint32_t frames);
+uint8_t audio_fx_runtime_process_parallel_slot(brick_entity_id_t entity_id,
+                                               audio_fx_slot_t slot,
+                                               float *left,
+                                               float *right,
+                                               uint32_t frames);
 float audio_fx_runtime_process_mono_sample(brick_entity_id_t entity_id,
                                            float sample);
 void audio_fx_runtime_process(brick_entity_id_t entity_id,

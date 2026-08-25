@@ -255,7 +255,8 @@ static uint8_t ui_template_family_from_page(uint8_t page_id,
         case UI_PAGE_TEMPLATE_TONE: *out_family_id = UI_TEMPLATE_FAMILY_TONE; return 1U;
         case UI_PAGE_TEMPLATE_MOD: *out_family_id = UI_TEMPLATE_FAMILY_MOD; return 1U;
         case UI_PAGE_TEMPLATE_KEYBOARD: *out_family_id = UI_TEMPLATE_FAMILY_KEYBOARD; return 1U;
-        case UI_PAGE_MIDI_FX: *out_family_id = UI_TEMPLATE_FAMILY_FX; return 1U;
+        case UI_PAGE_MIDI_FX:
+        case UI_PAGE_AUDIO_FX: *out_family_id = UI_TEMPLATE_FAMILY_FX; return 1U;
         case UI_PAGE_TEMPLATE_SEQ: *out_family_id = UI_TEMPLATE_FAMILY_SEQ; return 1U;
         case UI_PAGE_TEMPLATE_MIX: *out_family_id = UI_TEMPLATE_FAMILY_MIX; return 1U;
         case UI_PAGE_TEMPLATE_PLAY: *out_family_id = UI_TEMPLATE_FAMILY_PLAY; return 1U;

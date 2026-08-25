@@ -16,13 +16,14 @@ void fx_delay_stereo_global_set_width(float width);
 void fx_delay_stereo_global_set_reverb_send(float reverb_send);
 void fx_delay_stereo_global_set_volume(float volume);
 uint8_t fx_delay_stereo_global_is_active(void);
-void fx_delay_stereo_global_process_block(const float *in_l,
-                                          const float *in_r,
-                                          float *out_l,
-                                          float *out_r,
-                                          float *rev_l,
-                                          float *rev_r,
-                                          uint32_t frames);
+uint8_t fx_delay_stereo_global_reverb_send_is_active(void);
+void fx_delay_stereo_global_process_block_add(const float *in_l,
+                                              const float *in_r,
+                                              float *destination_l,
+                                              float *destination_r,
+                                              float *rev_l,
+                                              float *rev_r,
+                                              uint32_t frames);
 
 #ifdef __cplusplus
 }

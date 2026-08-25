@@ -24,11 +24,6 @@ static int8_t audio_global_slot(float value)
     return (int8_t)(audio_global_clamp(value, 0.0f, 127.0f) + 0.5f);
 }
 
-static uint8_t audio_global_ui127(float value)
-{
-    return (uint8_t)(audio_global_clamp(value, 0.0f, 1.0f) * 127.0f + 0.5f);
-}
-
 uint8_t audio_global_runtime_apply(uint16_t parameter_id, float value)
 {
     fx_comp_lab_t *comp;
@@ -61,19 +56,23 @@ uint8_t audio_global_runtime_apply(uint16_t parameter_id, float value)
         case PARAM_MIX_DELAY_REV: mixer_set_delay_reverb_send(audio_global_clamp(value, 0.0f, 1.0f)); return 1U;
         case PARAM_MIX_DELAY_VOL: mixer_set_delay_volume(audio_global_clamp(value, 0.0f, 1.0f)); return 1U;
 
-        case PARAM_MODFX_MODEL: fx_modfx_global_set_model((uint8_t)(audio_global_clamp(value, 0.0f, 8.0f) + 0.5f)); return 1U;
+        case PARAM_MODFX_MODEL: fx_modfx_global_set_model((uint8_t)(audio_global_clamp(value, 0.0f, (float)(FX_MODFX_MODEL_COUNT - 1U)) + 0.5f)); return 1U;
         case PARAM_MODFX_RATE: fx_modfx_global_set_rate(value); return 1U;
         case PARAM_MODFX_DEPTH: fx_modfx_global_set_depth(value); return 1U;
         case PARAM_MODFX_FEEDBACK: fx_modfx_global_set_feedback(value); return 1U;
         case PARAM_MODFX_OFFSET: fx_modfx_global_set_offset(value); return 1U;
+        case PARAM_MODFX_RATE_B: fx_modfx_global_set_rate_b(value); return 1U;
+        case PARAM_MODFX_DELAY_B: fx_modfx_global_set_offset_b(value); return 1U;
+        case PARAM_MODFX_DEPTH_B: fx_modfx_global_set_depth_b(value); return 1U;
+        case PARAM_MODFX_WIDTH: fx_modfx_global_set_width(value); return 1U;
 
         case PARAM_EQ_LOW_DB: audio_float_set_dj_eq_low_db(value); return 1U;
         case PARAM_EQ_MID_DB: audio_float_set_dj_eq_mid_db(value); return 1U;
         case PARAM_EQ_HIGH_DB: audio_float_set_dj_eq_high_db(value); return 1U;
-        case PARAM_SAT_TONE: audio_float_set_saturation_tone_ui(audio_global_ui127(value)); return 1U;
-        case PARAM_SAT_BIAS: audio_float_set_saturation_bias_ui(audio_global_ui127(value)); return 1U;
-        case PARAM_SAT_DRIVE: audio_float_set_saturation_drive_ui(audio_global_ui127(value)); return 1U;
-        case PARAM_SAT_MIX: audio_float_set_saturation_mix_ui(audio_global_ui127(value)); return 1U;
+        case PARAM_SAT_TONE: audio_float_set_saturation_tone(audio_global_clamp(value, 0.0f, 1.0f)); return 1U;
+        case PARAM_SAT_BIAS: audio_float_set_saturation_bias(audio_global_clamp(value, 0.0f, 1.0f)); return 1U;
+        case PARAM_SAT_DRIVE: audio_float_set_saturation_drive(audio_global_clamp(value, 0.0f, 1.0f)); return 1U;
+        case PARAM_SAT_MIX: audio_float_set_saturation_mix(audio_global_clamp(value, 0.0f, 1.0f)); return 1U;
         case PARAM_POST_GAIN: audio_float_set_postgain(value); return 1U;
         case PARAM_OUTPUT_COMP: audio_float_set_output_compensation(value); return 1U;
 

@@ -2215,7 +2215,7 @@ done:
 
 static uint8_t sample_capture_looper_record_conflict(void)
 {
-    if(brick6_looper_runtime_record_is_active_or_armed() != 0U)
+    if(brick6_looper_runtime_storage_record_is_active_or_armed() != 0U)
     {
         return 1U;
     }

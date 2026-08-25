@@ -311,7 +311,7 @@ static uint8_t track_snapshot_reapply_track_params(uint8_t track,
         .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
         .count = 0U
     };
-    for (uint8_t phase = 0U; phase < 5U; ++phase)
+    for (uint8_t phase = 0U; phase < 15U; ++phase)
     {
         for (uint8_t i = 0U; i < snapshot->audio_owned_count; ++i)
         {
@@ -329,7 +329,7 @@ static uint8_t track_snapshot_reapply_track_params(uint8_t track,
                 continue;
             }
             uint8_t selected = 0U;
-            if (phase < 4U)
+            if (phase < 14U)
             {
                 selected = (uint8_t)(param_registry_get_audio_fx_param(phase) == id);
             }

@@ -83,6 +83,7 @@ static void ui_page_param_test_format_value(param_id_t id, char *out, uint32_t o
 {
     const param_desc_t *desc = &param_registry[id];
     const float value = param_get(id);
+    const float display_value = param_value_policy_canonical_to_display(id, 0U, value);
 
     switch (desc->display_type)
     {
@@ -114,19 +115,19 @@ static void ui_page_param_test_format_value(param_id_t id, char *out, uint32_t o
         }
 
         case PARAM_DISPLAY_PERCENT:
-            ui_format_param_127_00(value, desc->min, desc->max, out, out_len);
+            (void)snprintf(out, out_len, "%.2f %s", (double)display_value, desc->unit);
             break;
 
         case PARAM_DISPLAY_DB:
-            (void)snprintf(out, out_len, "%.1f %s", (double)value, desc->unit);
+            (void)snprintf(out, out_len, "%.2f %s", (double)display_value, desc->unit);
             break;
 
         case PARAM_DISPLAY_TIME_MS:
-            (void)snprintf(out, out_len, "%.1f ms", (double)(value * 1000.0f));
+            (void)snprintf(out, out_len, "%.2f ms", (double)display_value);
             break;
 
         case PARAM_DISPLAY_RATIO:
-            (void)snprintf(out, out_len, "%.2f", (double)value);
+            (void)snprintf(out, out_len, "%.2f", (double)display_value);
             break;
 
         case PARAM_DISPLAY_INT:
@@ -136,11 +137,11 @@ static void ui_page_param_test_format_value(param_id_t id, char *out, uint32_t o
         default:
             if ((desc->unit != 0) && (desc->unit[0] != '\0'))
             {
-                (void)snprintf(out, out_len, "%.2f %s", (double)value, desc->unit);
+                (void)snprintf(out, out_len, "%.2f %s", (double)display_value, desc->unit);
             }
             else
             {
-                (void)snprintf(out, out_len, "%.2f", (double)value);
+                (void)snprintf(out, out_len, "%.2f", (double)display_value);
             }
             break;
     }

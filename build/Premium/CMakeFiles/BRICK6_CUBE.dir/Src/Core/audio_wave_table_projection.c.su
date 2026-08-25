@@ -3,3 +3,4 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_wave_table_
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_wave_table_projection.c:62:6:audio_wave_table_projection_init	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_wave_table_projection.c:86:9:audio_wave_table_projection_publish_track	304	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_wave_table_projection.c:116:6:audio_wave_table_projection_publish_all	304	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_wave_table_projection.c:147:6:audio_wave_table_projection_withdraw_slot	280	static

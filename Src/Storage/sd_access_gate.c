@@ -306,6 +306,8 @@ const char *sd_access_gate_client_label(sd_access_client_t client)
             return "PATCH";
         case SD_ACCESS_CLIENT_SCHEDULED_RECORDER:
             return "SREC";
+        case SD_ACCESS_CLIENT_BACKGROUND:
+            return "BG";
         default:
             return "NONE";
     }

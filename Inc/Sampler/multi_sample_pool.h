@@ -23,6 +23,7 @@ typedef enum
     MULTI_SAMPLE_INSTRUMENT_INDEXED,
     MULTI_SAMPLE_INSTRUMENT_LOADING,
     MULTI_SAMPLE_INSTRUMENT_READY,
+    MULTI_SAMPLE_INSTRUMENT_RETIRING,
     MULTI_SAMPLE_INSTRUMENT_ERROR
 } multi_sample_instrument_state_t;
 
@@ -106,6 +107,8 @@ uint8_t multi_sample_pool_set_index_path(uint16_t instrument_id, const char *pat
 uint8_t multi_sample_pool_set_instrument_format(uint16_t instrument_id,
                                                 sample_audio_format_t format);
 uint8_t multi_sample_pool_clear_instrument(uint16_t instrument_id);
+void multi_sample_pool_service_retire(void);
+void multi_sample_pool_audio_ack_retire(uint16_t instrument_id);
 uint8_t multi_sample_pool_resolve(uint16_t instrument_id,
                                   uint8_t note,
                                   uint8_t velocity,
@@ -120,6 +123,7 @@ uint8_t multi_sample_pool_resolve_source_from_result(
     uint8_t velocity,
     const multi_sample_resolve_result_t *resolved,
     sample_resolved_source_t *out_source);
+uint8_t multi_sample_pool_copy_zone(uint16_t zone_id, multi_sample_zone_t *out_zone);
 
 uint8_t multi_sample_pool_debug_define_instrument(uint16_t instrument_id,
                                                   const char *name,

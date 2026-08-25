@@ -70,6 +70,16 @@ void track_sound_state_make_default(track_sound_state_t *state)
     state->audio_fx_p1 = param_registry[PARAM_AUDIO_FX_P1].default_value;
     state->audio_fx_p2 = param_registry[PARAM_AUDIO_FX_P2].default_value;
     state->audio_fx_p3 = param_registry[PARAM_AUDIO_FX_P3].default_value;
+    state->audio_fx_b_model = (uint8_t)param_registry[PARAM_AUDIO_FX_B_MODEL].default_value;
+    state->audio_fx_b_p1 = param_registry[PARAM_AUDIO_FX_B_P1].default_value;
+    state->audio_fx_b_p2 = param_registry[PARAM_AUDIO_FX_B_P2].default_value;
+    state->audio_fx_b_p3 = param_registry[PARAM_AUDIO_FX_B_P3].default_value;
+    state->audio_fx_filter_pos = (uint8_t)param_registry[PARAM_AUDIO_FX_FILTER_POS].default_value;
+    state->audio_fx_order = (uint8_t)param_registry[PARAM_AUDIO_FX_ORDER].default_value;
+    state->audio_fx_mode_a = (uint8_t)param_registry[PARAM_AUDIO_FX_MODE_A].default_value;
+    state->audio_fx_mode_b = (uint8_t)param_registry[PARAM_AUDIO_FX_MODE_B].default_value;
+    state->group_fx_a_level = param_registry[PARAM_GROUP_FX_A_LEVEL].default_value;
+    state->group_fx_b_level = param_registry[PARAM_GROUP_FX_B_LEVEL].default_value;
 }
 
 void track_sound_state_init(void)

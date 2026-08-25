@@ -6,5 +6,6 @@
 void ui_page_template_midi_fx_register_families(void);
 
 extern const ui_page_t g_ui_page_midi_fx;
+extern const ui_page_t g_ui_page_audio_fx;
 
 #endif /* UI_PAGE_MIDI_FX_H */

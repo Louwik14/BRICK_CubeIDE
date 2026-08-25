@@ -126,6 +126,7 @@ void brick6_sampler_runtime_set_sample(uint8_t track_id, uint16_t sample_id);
 void brick6_sampler_runtime_set_gain(uint8_t track_id, float gain);
 void brick6_sampler_runtime_set_multi_instrument(uint8_t track_id, uint16_t instrument_id);
 void brick6_sampler_runtime_stop_multi_instrument(uint16_t instrument_id);
+void brick6_sampler_runtime_stop_ram_slot(uint16_t ram_slot, uint32_t generation);
 uint8_t brick6_sampler_runtime_get_multi_instrument(uint8_t track_id, uint16_t *out_instrument_id);
 void brick6_sampler_runtime_set_multi_gain(uint8_t track_id, float gain);
 float brick6_sampler_runtime_get_multi_gain(uint8_t track_id);

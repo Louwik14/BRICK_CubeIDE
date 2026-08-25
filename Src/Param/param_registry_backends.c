@@ -143,37 +143,6 @@ static uint8_t param_backend_is_vca_param(param_id_t id)
                      || (id == PARAM_ENV_RETRIG_VCA));
 }
 
-static uint8_t param_backend_prism_param_slot(param_id_t id, uint8_t *out_osc, uint8_t *out_param)
-{
-    if ((out_osc == NULL) || (out_param == NULL))
-    {
-        return 0U;
-    }
-
-    switch (id)
-    {
-        case PARAM_PRISM_EDIT: *out_osc = 0U; *out_param = 0U; return 1U;
-        case PARAM_PRISM_FINE: *out_osc = 0U; *out_param = 1U; return 1U;
-        case PARAM_PRISM_COARSE: *out_osc = 0U; *out_param = 2U; return 1U;
-        case PARAM_PRISM_FM: *out_osc = 0U; *out_param = 3U; return 1U;
-        case PARAM_PRISM_TIMBRE: *out_osc = 0U; *out_param = 4U; return 1U;
-        case PARAM_PRISM_MODULATION: *out_osc = 0U; *out_param = 5U; return 1U;
-        case PARAM_PRISM_COLOR: *out_osc = 0U; *out_param = 6U; return 1U;
-        case PARAM_PRISM_PHASE_RESET: *out_osc = 0U; *out_param = 7U; return 1U;
-        case PARAM_PRISM_LEVEL: *out_osc = 0U; *out_param = 8U; return 1U;
-        case PARAM_PRISM_OSC2_EDIT: *out_osc = 1U; *out_param = 0U; return 1U;
-        case PARAM_PRISM_OSC2_FINE: *out_osc = 1U; *out_param = 1U; return 1U;
-        case PARAM_PRISM_OSC2_COARSE: *out_osc = 1U; *out_param = 2U; return 1U;
-        case PARAM_PRISM_OSC2_FM: *out_osc = 1U; *out_param = 3U; return 1U;
-        case PARAM_PRISM_OSC2_TIMBRE: *out_osc = 1U; *out_param = 4U; return 1U;
-        case PARAM_PRISM_OSC2_MODULATION: *out_osc = 1U; *out_param = 5U; return 1U;
-        case PARAM_PRISM_OSC2_COLOR: *out_osc = 1U; *out_param = 6U; return 1U;
-        case PARAM_PRISM_OSC2_PHASE_RESET: *out_osc = 1U; *out_param = 7U; return 1U;
-        case PARAM_PRISM_OSC2_LEVEL: *out_osc = 1U; *out_param = 8U; return 1U;
-        default: return 0U;
-    }
-}
-
 static uint8_t param_backend_clip_size_index(float value)
 {
     const uint8_t index = (uint8_t)(param_backend_clamp_value(value, 0.0f, 5.0f) + 0.5f);
@@ -306,108 +275,78 @@ uint8_t param_backend_apply_tone_prism(uint8_t track, param_id_t id, float value
     const uint8_t instance_id = ctx->audio_binding.instance_id;
 
     uint8_t osc = 0U;
-    uint8_t param = 0U;
-    if (param_backend_prism_param_slot(id, &osc, &param) == 0U)
+    switch (id)
     {
-        return 0U;
-    }
-
-    switch (param)
-    {
-        case 0U:
+        case PARAM_PRISM_OSC1_MODEL:
+        case PARAM_PRISM_OSC2_MODEL:
         {
+            osc = (id == PARAM_PRISM_OSC2_MODEL) ? 1U : 0U;
             const float clamped = param_backend_clamp_value(value, 0.0f, (float)BRICK6_PRISM_LAST_MODEL);
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->prism.edit[osc] = (float)(uint8_t)(clamped + 0.5f);
-            }
+            if ((update_base_state != 0U) && (state != NULL)) state->prism.model[osc] = (float)(uint8_t)(clamped + 0.5f);
             brick6_braids_runtime_set_osc_edit(instance_id, osc, (float)(uint8_t)(clamped + 0.5f));
             return 1U;
         }
-        case 1U:
+        case PARAM_PRISM_PITCH_MOD1:
+        case PARAM_PRISM_PITCH_MOD2:
         {
+            osc = (id == PARAM_PRISM_PITCH_MOD2) ? 1U : 0U;
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->prism.fine[osc] = clamped;
-            }
-            brick6_braids_runtime_set_osc_fine(instance_id, osc, clamped);
+            if ((update_base_state != 0U) && (state != NULL)) state->prism.pitch_mod[osc] = clamped;
+            brick6_braids_runtime_set_osc_pitch_mod(instance_id, osc, clamped);
             return 1U;
         }
-        case 2U:
+        case PARAM_PRISM_OSC1_PARAM1:
+        case PARAM_PRISM_OSC2_PARAM1:
         {
+            osc = (id == PARAM_PRISM_OSC2_PARAM1) ? 1U : 0U;
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->prism.coarse[osc] = clamped;
-            }
-            else
-            {
-                brick6_braids_runtime_set_osc_fine(instance_id, osc, 0.5f);
-            }
-            brick6_braids_runtime_set_osc_coarse(instance_id, osc, clamped);
-            return 1U;
-        }
-        case 3U:
-        {
-            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->prism.fm[osc] = clamped;
-            }
-            brick6_braids_runtime_set_osc_fm(instance_id, osc, clamped);
-            return 1U;
-        }
-        case 4U:
-        {
-            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->prism.timbre[osc] = clamped;
-            }
+            if ((update_base_state != 0U) && (state != NULL)) state->prism.param1[osc] = clamped;
             brick6_braids_runtime_set_osc_timbre(instance_id, osc, clamped);
             return 1U;
         }
-        case 5U:
+        case PARAM_PRISM_OSC1_AMOD:
+        case PARAM_PRISM_OSC2_AMOD:
         {
+            osc = (id == PARAM_PRISM_OSC2_AMOD) ? 1U : 0U;
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->prism.modulation[osc] = clamped;
-            }
+            if ((update_base_state != 0U) && (state != NULL)) state->prism.amod[osc] = clamped;
             brick6_braids_runtime_set_osc_modulation(instance_id, osc, clamped);
             return 1U;
         }
-        case 6U:
+        case PARAM_PRISM_OSC1_PARAM2:
+        case PARAM_PRISM_OSC2_PARAM2:
         {
+            osc = (id == PARAM_PRISM_OSC2_PARAM2) ? 1U : 0U;
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->prism.color[osc] = clamped;
-            }
+            if ((update_base_state != 0U) && (state != NULL)) state->prism.param2[osc] = clamped;
             brick6_braids_runtime_set_osc_color(instance_id, osc, clamped);
             return 1U;
         }
-        case 7U:
+        case PARAM_PRISM_PHASE1_RESET:
+        case PARAM_PRISM_PHASE2_RESET:
         {
+            osc = (id == PARAM_PRISM_PHASE2_RESET) ? 1U : 0U;
             const float clamped = (value >= 0.5f) ? 1.0f : 0.0f;
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->prism.phase_reset[osc] = clamped;
-            }
+            if ((update_base_state != 0U) && (state != NULL)) state->prism.phase_reset[osc] = clamped;
             brick6_braids_runtime_set_osc_phase_reset(instance_id, osc, (clamped >= 0.5f) ? 1U : 0U);
             return 1U;
         }
-        case 8U:
-        {
-            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->prism.level[osc] = clamped;
-            }
-            brick6_braids_runtime_set_osc_level(instance_id, osc, clamped);
-            return 1U;
-        }
+        case PARAM_PRISM_VOLUME:
+            value = param_backend_clamp_value(value, 0.0f, 1.0f);
+            if ((update_base_state != 0U) && (state != NULL)) state->prism.volume = value;
+            brick6_braids_runtime_set_volume(instance_id, value); return 1U;
+        case PARAM_PRISM_BALANCE:
+            value = param_backend_clamp_value(value, -1.0f, 1.0f);
+            if ((update_base_state != 0U) && (state != NULL)) state->prism.balance = value;
+            brick6_braids_runtime_set_balance(instance_id, value); return 1U;
+        case PARAM_PRISM_TUNE:
+            value = param_backend_clamp_value(value, -60.0f, 60.0f);
+            if ((update_base_state != 0U) && (state != NULL)) state->prism.tune = value;
+            brick6_braids_runtime_set_tune(instance_id, value); return 1U;
+        case PARAM_PRISM_DETUNE:
+            value = param_backend_clamp_value(value, -24.0f, 24.0f);
+            if ((update_base_state != 0U) && (state != NULL)) state->prism.detune = value;
+            brick6_braids_runtime_set_detune(instance_id, value); return 1U;
         default:
             return 0U;
     }
@@ -766,14 +705,14 @@ static uint8_t param_backend_wave_slot_for_id(param_id_t id, uint8_t *out_osc, u
 {
     if ((out_osc == NULL) || (out_param == NULL)
             || (id < PARAM_WAVE_OSC1_TABLE)
-            || (id > PARAM_WAVE_OSC2_TUNE))
+            || (id > PARAM_RESERVED_WAVE_XMOD_3))
     {
         return 0U;
     }
 
     const uint8_t rel = (uint8_t)(id - PARAM_WAVE_OSC1_TABLE);
-    *out_osc = (uint8_t)(rel / 6U);
-    *out_param = (uint8_t)(rel % 6U);
+    *out_osc = (uint8_t)(rel / 4U);
+    *out_param = (uint8_t)(rel % 4U);
     return (*out_osc < BRICK6_WAVE_OSC_COUNT) ? 1U : 0U;
 }
 
@@ -790,45 +729,32 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
         return 0U;
     }
 
-    if (id == PARAM_WAVE_FRAME_INTERP)
+    if (id == PARAM_WAVE_VOLUME)
     {
-        const uint8_t enabled = (value >= 0.5f) ? 1U : 0U;
-        if ((update_base_state != 0U) && (state != NULL))
-        {
-            state->wave.frame_interp = (float)enabled;
-        }
-        brick6_wave_runtime_set_frame_interp(ctx->audio_binding.instance_id, enabled);
+        const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
+        if ((update_base_state != 0U) && (state != NULL)) state->wave.volume = clamped;
+        brick6_wave_runtime_set_volume(ctx->audio_binding.instance_id, clamped);
         return 1U;
     }
-    if (id == PARAM_WAVE_SAMPLE_INTERP)
+    if (id == PARAM_WAVE_BALANCE)
     {
-        const uint8_t enabled = (value >= 0.5f) ? 1U : 0U;
-        if ((update_base_state != 0U) && (state != NULL))
-        {
-            state->wave.sample_interp = (float)enabled;
-        }
-        brick6_wave_runtime_set_sample_interp(ctx->audio_binding.instance_id, enabled);
+        const float clamped = param_backend_clamp_value(value, -1.0f, 1.0f);
+        if ((update_base_state != 0U) && (state != NULL)) state->wave.balance = clamped;
+        brick6_wave_runtime_set_balance(ctx->audio_binding.instance_id, clamped);
         return 1U;
     }
-    if (id == PARAM_WAVE_POS_UPDATE)
+    if (id == PARAM_WAVE_TUNE)
     {
-        const brick6_wave_pos_update_t update =
-            (brick6_wave_pos_update_t)(uint8_t)(param_backend_clamp_value(value, 0.0f, 3.0f) + 0.5f);
-        if ((update_base_state != 0U) && (state != NULL))
-        {
-            state->wave.pos_update = (float)(uint8_t)update;
-        }
-        brick6_wave_runtime_set_pos_update(ctx->audio_binding.instance_id, update);
+        const float clamped = param_backend_clamp_value(value, -60.0f, 60.0f);
+        if ((update_base_state != 0U) && (state != NULL)) state->wave.tune = clamped;
+        brick6_wave_runtime_set_tune(ctx->audio_binding.instance_id, clamped);
         return 1U;
     }
-    if (id == PARAM_WAVE_POS_SMOOTH)
+    if (id == PARAM_WAVE_DETUNE)
     {
-        const uint8_t enabled = (value >= 0.5f) ? 1U : 0U;
-        if ((update_base_state != 0U) && (state != NULL))
-        {
-            state->wave.pos_smooth = (float)enabled;
-        }
-        brick6_wave_runtime_set_pos_smooth(ctx->audio_binding.instance_id, enabled);
+        const float clamped = param_backend_clamp_value(value, -24.0f, 24.0f);
+        if ((update_base_state != 0U) && (state != NULL)) state->wave.detune = clamped;
+        brick6_wave_runtime_set_detune(ctx->audio_binding.instance_id, clamped);
         return 1U;
     }
 
@@ -864,46 +790,6 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value,
                 state->wave.pos[osc] = clamped;
             }
             brick6_wave_runtime_set_osc_pos(ctx->audio_binding.instance_id, osc, clamped);
-            return 1U;
-        }
-        case 2U:
-        {
-            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->wave.start[osc] = clamped;
-            }
-            brick6_wave_runtime_set_osc_start(ctx->audio_binding.instance_id, osc, clamped);
-            return 1U;
-        }
-        case 3U:
-        {
-            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->wave.end[osc] = clamped;
-            }
-            brick6_wave_runtime_set_osc_end(ctx->audio_binding.instance_id, osc, clamped);
-            return 1U;
-        }
-        case 4U:
-        {
-            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->wave.level[osc] = clamped;
-            }
-            brick6_wave_runtime_set_osc_level(ctx->audio_binding.instance_id, osc, clamped);
-            return 1U;
-        }
-        case 5U:
-        {
-            const float clamped = param_backend_clamp_value(value, -60.0f, 60.0f);
-            if ((update_base_state != 0U) && (state != NULL))
-            {
-                state->wave.tune[osc] = clamped;
-            }
-            brick6_wave_runtime_set_osc_tune(ctx->audio_binding.instance_id, osc, clamped);
             return 1U;
         }
         default:

@@ -19,4 +19,6 @@ uint8_t track_mute_is_available(uint8_t track);
 uint8_t track_mute_get(uint8_t track);
 uint8_t track_mute_is_effectively_muted(uint8_t track);
 uint8_t track_mute_set(uint8_t track, uint8_t muted);
+/* CONTROL-only projection after the corresponding AUDIO restore plan. */
+uint8_t track_mute_install_restored(uint8_t track,uint8_t muted);
 uint8_t track_mute_should_suppress_note_on(uint8_t track);

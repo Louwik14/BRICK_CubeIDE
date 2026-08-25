@@ -131,11 +131,14 @@ const char *ui_get_hall_mode_short_label(void)
         return "PATCH";
     }
 
-    if (ui_page_get_id() == UI_PAGE_MIDI_FX)
+    if ((ui_page_get_id() == UI_PAGE_MIDI_FX)
+            || (ui_page_get_id() == UI_PAGE_AUDIO_FX))
     {
-        return (ui_hall_mode_resolve_rout_context(active_track, raw_mode) != UI_HALL_ROUT_CONTEXT_NONE)
-            ? "ROUT"
-            : "FX";
+        if (ui_hall_mode_resolve_rout_context(active_track, raw_mode) != UI_HALL_ROUT_CONTEXT_NONE)
+        {
+            return "ROUT";
+        }
+        return (ui_page_get_id() == UI_PAGE_AUDIO_FX) ? "FX 2/2" : "FX 1/2";
     }
 
     const ui_hall_mode_effective_view_t view =

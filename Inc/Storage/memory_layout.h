@@ -46,8 +46,15 @@
 /* CONTROL state local to SRAM2/D2, reserved for the future M4 owner. */
 #define CONTROL_M4_SRAM2 SEC_ATTR(".ram_control_m4_sram2")
 
-/* Explicit D3 IPC contract. Existing CTRL_STATE objects remain in legacy D3. */
+/* Explicit CONTROL/AUDIO IPC contract.  The linkers place this section in the
+ * upper 32 KiB of SRAM4 and both boards map that window shareable,
+ * non-cacheable.  Objects here must remain pointer-free and single-owner. */
 #define D3_IPC SEC_ATTR(".ram_d3_ipc") ALIGN32
+
+/* Bulk restore singleton: cacheable SDRAM payload plus pointer-free D3 doorbell.
+ * Publication/consumption must perform explicit D-cache maintenance. */
+#define RESTORE_PLAN_SDRAM SEC_ATTR(".restore_plan_sdram") ALIGN32
+#define RESTORE_IPC_D3 SEC_ATTR(".ram_d3_restore_ipc") ALIGN32
 
 /* Low-rate control/flags */
 #define CTRL_STATE SEC_ATTR(".ram_d3_ctrl")
@@ -100,6 +107,8 @@
 
 /* Dedicated SDRAM arena for recorder/master-buffer history. */
 #define SDRAM_RECORDER SEC_ATTR(".sdram_recorder") ALIGN32
+/* M7/M4 CPU bulk data in the same shareable, non-cacheable 256 KiB MPU region. */
+#define AUDIO_STORAGE_SHARED_SDRAM SEC_ATTR(".sdram_recorder") ALIGN32
 
 /* Large cold audio history (delay/grain/reverb tails) */
 #define AUDIO_COLD_SDRAM SEC_ATTR(".sdram_audio_cold") ALIGN32
