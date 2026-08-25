@@ -65,21 +65,6 @@ uint8_t audio_wavetable_registry_resolve(uint16_t wavetable_slot,
     return 1U;
 }
 
-uint8_t audio_wavetable_registry_resolve_global(uint16_t global_slot,
-                                                audio_wavetable_descriptor_t *out)
-{
-    for (uint16_t i = 0U; i < WAVETABLE_POOL_MAX_SLOTS; ++i)
-    {
-        const audio_wavetable_registry_slot_t snap = g_audio_wavetable_registry[i];
-        __DMB();
-        if ((snap.ready != 0U) && (snap.descriptor.global_slot == global_slot)
-            && (snap.sequence == g_audio_wavetable_registry[i].sequence)
-            && (g_audio_wavetable_registry[i].ready != 0U))
-        { if (out != NULL) *out = snap.descriptor; return (out != NULL); }
-    }
-    return 0U;
-}
-
 void audio_wavetable_registry_remove(uint16_t wavetable_slot,
                                      uint32_t generation)
 {

@@ -3420,13 +3420,14 @@ static float ui_renderer_template_wave_wavetable_sample(const wavetable_slot_t *
     uint32_t sample1 = (sample0 < (table->frame_sample_count - 1U)) ? (sample0 + 1U) : sample0;
     const float sample_frac = sample_position - (float)sample0;
 
-    const int16_t *const frame0_data = &table->data[frame0 * table->frame_sample_count];
-    const int16_t *const frame1_data = &table->data[frame1 * table->frame_sample_count];
-    const float frame0_sample = (float)frame0_data[sample0]
-        + (((float)frame0_data[sample1] - (float)frame0_data[sample0]) * sample_frac);
-    const float frame1_sample = (float)frame1_data[sample0]
-        + (((float)frame1_data[sample1] - (float)frame1_data[sample0]) * sample_frac);
-    return frame0_sample + ((frame1_sample - frame0_sample) * frame_frac);
+    const float *const frame0_data = &table->data[frame0 * table->frame_sample_count];
+    const float *const frame1_data = &table->data[frame1 * table->frame_sample_count];
+    const float frame0_sample = frame0_data[sample0]
+        + ((frame0_data[sample1] - frame0_data[sample0]) * sample_frac);
+    const float frame1_sample = frame1_data[sample0]
+        + ((frame1_data[sample1] - frame1_data[sample0]) * sample_frac);
+    return (frame0_sample + ((frame1_sample - frame0_sample) * frame_frac))
+        * 32767.0f;
 }
 
 static int ui_renderer_template_wave_wavetable_sample_to_y(float sample,

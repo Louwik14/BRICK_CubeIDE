@@ -31,13 +31,19 @@ typedef enum
 typedef enum
 {
     WAVETABLE_FORMAT_NONE = 0,
-    WAVETABLE_FORMAT_S16_MONO
+    WAVETABLE_FORMAT_FLOAT32_MONO
 } wavetable_format_t;
 
 typedef enum
 {
-    WAVETABLE_FILE_SAMPLE_S16 = 1
+    WAVETABLE_FILE_SAMPLE_FLOAT32 = 2
 } wavetable_file_sample_format_t;
+
+typedef enum
+{
+    WAVETABLE_SOURCE_GEOMETRY_1024 = 1024,
+    WAVETABLE_SOURCE_GEOMETRY_2048 = 2048
+} wavetable_source_geometry_t;
 
 typedef enum
 {
@@ -85,7 +91,7 @@ typedef struct
     wavetable_format_t format;
     uint32_t frame_sample_count;
     uint32_t frame_count;
-    int16_t *data;
+    float *data;
     uint32_t data_offset;
     uint16_t first_page_slot;
     uint16_t page_count;
@@ -108,6 +114,11 @@ wavetable_result_t wavetable_pool_load_file(uint16_t wavetable_slot,
 wavetable_result_t wavetable_pool_load_wav(uint16_t wavetable_slot,
                                            const char *path,
                                            uint16_t *out_global_slot);
+wavetable_result_t wavetable_pool_load_wav_with_geometry(
+    uint16_t wavetable_slot,
+    const char *path,
+    wavetable_source_geometry_t source_geometry,
+    uint16_t *out_global_slot);
 wavetable_result_t wavetable_pool_load_file_at(uint16_t wavetable_slot,
                                                uint16_t global_slot,
                                                const char *path);
@@ -115,6 +126,10 @@ wavetable_result_t wavetable_pool_load_file_auto(const char *path,
                                                  uint16_t *out_wavetable_slot,
                                                  uint16_t *out_global_slot);
 uint8_t wavetable_pool_load_async_begin(uint16_t wavetable_slot, const char *path);
+uint8_t wavetable_pool_load_async_begin_with_geometry(
+    uint16_t wavetable_slot,
+    const char *path,
+    wavetable_source_geometry_t source_geometry);
 void wavetable_pool_load_async_service(void);
 uint8_t wavetable_pool_load_async_busy(void);
 uint8_t wavetable_pool_load_async_take_result(wavetable_result_t *out_result,
@@ -128,7 +143,7 @@ void wavetable_pool_audio_ack_retire(uint16_t wavetable_slot,
 
 const wavetable_slot_t *wavetable_pool_get_slot(uint16_t wavetable_slot);
 wavetable_slot_state_t wavetable_pool_get_state(uint16_t wavetable_slot);
-const int16_t *wavetable_pool_get_data(uint16_t wavetable_slot);
+const float *wavetable_pool_get_data(uint16_t wavetable_slot);
 const wavetable_mipmap_view_t *wavetable_pool_get_mipmap_view(uint16_t wavetable_slot);
 const wavetable_preview_t *wavetable_pool_get_preview(uint16_t wavetable_slot);
 const wavetable_preview_t *wavetable_pool_get_preview_for_global(uint16_t global_slot);

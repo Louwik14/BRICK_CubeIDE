@@ -26,6 +26,17 @@
 #define WAVETABLE_MIPMAP_INITIAL_CYCLE_MAGNITUDE (10U)
 #define WAVETABLE_MIPMAP_MIN_CYCLE_MAGNITUDE (3U)
 
+/* Preparation-quality controls.  Ratios are relative to the positive-spectrum
+ * Nyquist bin of each generated cycle. */
+#define WAVETABLE_PREP_BASE_PASS_RATIO       (0.875f)
+#define WAVETABLE_PREP_BASE_STOP_RATIO       (0.96875f)
+#define WAVETABLE_PREP_MIP_PASS_RATIO        (0.80f)
+#define WAVETABLE_PREP_MIP_STOP_RATIO        (0.90f)
+#define WAVETABLE_PREP_RESAMPLE_PASS_RATIO   (0.95f)
+#define WAVETABLE_PREP_RESAMPLE_STOP_RATIO   (1.0f)
+#define WAVETABLE_PREP_PHASE_LIMIT_RATIO     (0.95)
+#define WAVETABLE_DEFAULT_SOURCE_GEOMETRY    WAVETABLE_SOURCE_GEOMETRY_2048
+
 typedef struct
 {
     wavetable_slot_t slots[WAVETABLE_POOL_MAX_SLOTS];
@@ -41,9 +52,9 @@ STORAGE_STATE_SDRAM static char
     g_wavetable_transaction_paths[2][WAVETABLE_POOL_PATH_MAX];
 AUDIO_WARM ALIGN32 static uint8_t g_wavetable_pool_io[WAVETABLE_POOL_IO_BYTES];
 STORAGE_STATE_SDRAM ALIGN32 static float
-    g_wavetable_fft_real[WAVETABLE_FRAME_SAMPLE_COUNT];
+    g_wavetable_fft_real[WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT];
 STORAGE_STATE_SDRAM ALIGN32 static float
-    g_wavetable_fft_imag[WAVETABLE_FRAME_SAMPLE_COUNT];
+    g_wavetable_fft_imag[WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT];
 STORAGE_STATE_SDRAM ALIGN32 static float
     g_wavetable_fft_work_real[WAVETABLE_FRAME_SAMPLE_COUNT];
 STORAGE_STATE_SDRAM ALIGN32 static float
@@ -119,6 +130,7 @@ typedef struct
     uint8_t source_open;
     uint8_t cache_open;
     uint8_t cleanup_phase;
+    wavetable_source_geometry_t source_geometry;
 } wavetable_load_job_t;
 
 STORAGE_STATE_SDRAM static wavetable_load_job_t g_wavetable_load_job;
@@ -127,71 +139,38 @@ static CTRL_STATE volatile uint32_t
 
 static uint16_t wavetable_pool_mipmap_band_count(void);
 static uint32_t wavetable_pool_mipmap_samples_per_table_cycle(void);
-static int16_t wavetable_pool_float_to_s16(float value);
+static float wavetable_pool_finite_float(float value);
 
-static uint32_t wavetable_pool_source_cycle_sample_count(uint32_t source_samples)
+static uint32_t wavetable_pool_mipmap_cycle_stride(uint32_t cycle_sample_count)
 {
-    /* Legacy WAVE assets were authored as complete 2048-sample cycles.  A
-     * single 1024-sample cycle, or an odd number of native cycles, remains
-     * native.  The common legacy banks are exact multiples of 2048. */
-    return ((source_samples >= WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT)
-            && ((source_samples % WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT) == 0U))
+    return (cycle_sample_count == 8U) ? 16U : cycle_sample_count;
+}
+
+static uint32_t wavetable_pool_source_cycle_sample_count(
+    wavetable_source_geometry_t source_geometry)
+{
+    return (source_geometry == WAVETABLE_SOURCE_GEOMETRY_2048)
         ? WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT
         : WAVETABLE_FRAME_SAMPLE_COUNT;
 }
 
 static void wavetable_pool_legacy_source_store(uint32_t index, float value)
 {
-    if (index < WAVETABLE_FRAME_SAMPLE_COUNT)
+    if (index < WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT)
         g_wavetable_fft_real[index] = value;
-    else
-        g_wavetable_fft_imag[index - WAVETABLE_FRAME_SAMPLE_COUNT] = value;
 }
 
-static float wavetable_pool_legacy_source_read(uint32_t index)
+static float wavetable_pool_spectral_gain(uint32_t bin,
+                                          uint32_t nyquist,
+                                          float pass_ratio,
+                                          float stop_ratio)
 {
-    return (index < WAVETABLE_FRAME_SAMPLE_COUNT)
-        ? g_wavetable_fft_real[index]
-        : g_wavetable_fft_imag[index - WAVETABLE_FRAME_SAMPLE_COUNT];
-}
-
-static void wavetable_pool_resample_legacy_cycle(int16_t *dst)
-{
-    /* Circular 31-tap Blackman-windowed sinc, cutoff at the new Nyquist.
-     * The symmetric zero-phase kernel preserves the cycle origin. */
-    enum { radius = 15 };
-    float coefficients[(radius * 2) + 1];
-    float coefficient_sum = 0.0f;
-    for (int32_t tap = -radius; tap <= radius; ++tap)
-    {
-        const float x = (float)tap;
-        const float sinc = (tap == 0) ? 0.5f
-            : (sinf(0.5f * 3.14159265358979323846f * x)
-                / (3.14159265358979323846f * x));
-        const float phase = (x + (float)radius) / (float)(radius * 2);
-        const float window = 0.42f
-            - 0.5f * cosf(2.0f * 3.14159265358979323846f * phase)
-            + 0.08f * cosf(4.0f * 3.14159265358979323846f * phase);
-        const float coefficient = sinc * window;
-        coefficients[tap + radius] = coefficient;
-        coefficient_sum += coefficient;
-    }
-    const float normalization = (coefficient_sum != 0.0f)
-        ? (1.0f / coefficient_sum) : 1.0f;
-    for (uint32_t i = 0U; i < WAVETABLE_FRAME_SAMPLE_COUNT; ++i)
-    {
-        float value = 0.0f;
-        const int32_t center = (int32_t)(i << 1U);
-        for (int32_t tap = -radius; tap <= radius; ++tap)
-        {
-            const uint32_t source_index = (uint32_t)(
-                (center + tap + (int32_t)WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT)
-                & (WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT - 1U));
-            value += wavetable_pool_legacy_source_read(source_index)
-                * coefficients[tap + radius];
-        }
-        dst[i] = wavetable_pool_float_to_s16(value * normalization);
-    }
+    const float position = (nyquist != 0U)
+        ? ((float)bin / (float)nyquist) : 1.0f;
+    if (position <= pass_ratio) return 1.0f;
+    if ((position >= stop_ratio) || (stop_ratio <= pass_ratio)) return 0.0f;
+    const float phase = (position - pass_ratio) / (stop_ratio - pass_ratio);
+    return 0.5f * (1.0f + cosf(3.14159265358979323846f * phase));
 }
 
 static void wavetable_pool_set_last(wavetable_result_t result)
@@ -233,15 +212,15 @@ static uint32_t wavetable_pool_crc32_memory(const void *data, uint32_t size)
         : 0U;
 }
 
-static void wavetable_pool_copy_s16_exact(int16_t *dst,
-                                          const int16_t *src,
-                                          uint32_t sample_count)
+static void wavetable_pool_copy_float_exact(float *dst,
+                                            const float *src,
+                                            uint32_t sample_count)
 {
-    volatile uint16_t *const dst16 = (volatile uint16_t *)dst;
-    const volatile uint16_t *const src16 = (const volatile uint16_t *)src;
+    volatile float *const dst_float = (volatile float *)dst;
+    const volatile float *const src_float = (const volatile float *)src;
     for (uint32_t i = 0U; i < sample_count; ++i)
     {
-        dst16[i] = src16[i];
+        dst_float[i] = src_float[i];
     }
 }
 
@@ -304,21 +283,16 @@ static uint16_t wavetable_pool_preview_abs_i16(int16_t value)
     return (value < 0) ? (uint16_t)(-value) : (uint16_t)value;
 }
 
-static int16_t wavetable_pool_float_to_s16(float value)
+static int16_t wavetable_pool_preview_float_to_i16(float value)
 {
-    if (value > 1.0f)
-    {
-        value = 1.0f;
-    }
-    else if (value < -1.0f)
-    {
-        value = -1.0f;
-    }
-    if (value != value)
-    {
-        return 0;
-    }
-    return (int16_t)(value * 32767.0f);
+    if (value >= 1.0f) return INT16_MAX;
+    if (value <= -1.0f) return INT16_MIN;
+    return (int16_t)lrintf(value * 32767.0f);
+}
+
+static float wavetable_pool_finite_float(float value)
+{
+    return isfinite(value) ? value : 0.0f;
 }
 
 static void wavetable_pool_preview_clear(wavetable_preview_t *preview)
@@ -361,12 +335,12 @@ static void wavetable_pool_preview_build(wavetable_slot_t *slot)
             col = WAVETABLE_PREVIEW_COLUMNS - 1U;
         }
 
-        const int16_t *const src = &slot->data[frame * WAVETABLE_FRAME_SAMPLE_COUNT];
-        int16_t frame_min = 32767;
-        int16_t frame_max = -32768;
+        const float *const src = &slot->data[frame * WAVETABLE_FRAME_SAMPLE_COUNT];
+        float frame_min = 1.0f;
+        float frame_max = -1.0f;
         for (uint32_t i = 0U; i < WAVETABLE_FRAME_SAMPLE_COUNT; ++i)
         {
-            const int16_t s = src[i];
+            const float s = src[i];
             if (s < frame_min)
             {
                 frame_min = s;
@@ -377,16 +351,20 @@ static void wavetable_pool_preview_build(wavetable_slot_t *slot)
             }
         }
 
-        if (frame_min < preview->min[col])
+        const int16_t frame_min_s16 =
+            wavetable_pool_preview_float_to_i16(frame_min);
+        const int16_t frame_max_s16 =
+            wavetable_pool_preview_float_to_i16(frame_max);
+        if (frame_min_s16 < preview->min[col])
         {
-            preview->min[col] = frame_min;
+            preview->min[col] = frame_min_s16;
         }
-        if (frame_max > preview->max[col])
+        if (frame_max_s16 > preview->max[col])
         {
-            preview->max[col] = frame_max;
+            preview->max[col] = frame_max_s16;
         }
-        const uint16_t min_peak = wavetable_pool_preview_abs_i16(frame_min);
-        const uint16_t max_peak = wavetable_pool_preview_abs_i16(frame_max);
+        const uint16_t min_peak = wavetable_pool_preview_abs_i16(frame_min_s16);
+        const uint16_t max_peak = wavetable_pool_preview_abs_i16(frame_max_s16);
         if (min_peak > preview->global_peak)
         {
             preview->global_peak = min_peak;
@@ -665,8 +643,8 @@ static void wavetable_pool_encode_prepared_header(uint8_t *dst,
     wavetable_pool_write_u16(&dst[4], WAVETABLE_PREPARED_FILE_VERSION);
     wavetable_pool_write_u16(&dst[6], WAVETABLE_PREPARED_HEADER_SIZE);
     wavetable_pool_write_u32(&dst[8], WAVETABLE_MIPMAP_FLAG_MULTIBAND);
-    wavetable_pool_write_u16(&dst[12], (uint16_t)WAVETABLE_FILE_SAMPLE_S16);
-    wavetable_pool_write_u16(&dst[14], view->duplicate_sample_count);
+    wavetable_pool_write_u16(&dst[12], (uint16_t)WAVETABLE_FILE_SAMPLE_FLOAT32);
+    wavetable_pool_write_u16(&dst[14], 0U);
     wavetable_pool_write_u32(&dst[16], WAVETABLE_FRAME_SAMPLE_COUNT);
     wavetable_pool_write_u32(&dst[20], view->cycle_count);
     wavetable_pool_write_u16(&dst[24], view->band_count);
@@ -713,7 +691,8 @@ static void wavetable_pool_encode_prepared_band(uint8_t *dst,
     wavetable_pool_write_u16(&dst[18], band->flags);
     wavetable_pool_write_u32(&dst[20], data_offset_bytes);
     wavetable_pool_write_u32(&dst[24], band->sample_count);
-    wavetable_pool_write_u32(&dst[28], 0U);
+    wavetable_pool_write_u32(
+        &dst[28], wavetable_pool_mipmap_cycle_stride(band->cycle_sample_count));
 }
 
 static uint8_t wavetable_pool_write_prepared_cache_file(const char *cache_path,
@@ -771,7 +750,7 @@ static uint8_t wavetable_pool_write_prepared_cache_file(const char *cache_path,
             (void)f_close(fp);
             return 0U;
         }
-        band_data_offset += band->sample_count * sizeof(int16_t);
+        band_data_offset += band->sample_count * sizeof(float);
     }
 
     const uint8_t *const src = (const uint8_t *)slot->mipmap.data;
@@ -923,7 +902,7 @@ static uint32_t wavetable_pool_mipmap_samples_per_table_cycle(void)
          magnitude >= WAVETABLE_MIPMAP_MIN_CYCLE_MAGNITUDE;
          --magnitude)
     {
-        samples += (1UL << magnitude) + WAVETABLE_MIPMAP_DUPLICATE_SAMPLES;
+        samples += wavetable_pool_mipmap_cycle_stride(1UL << magnitude);
     }
     return samples;
 }
@@ -995,6 +974,87 @@ static void wavetable_pool_fft(float *real, float *imag, uint32_t count, uint8_t
     }
 }
 
+static void wavetable_pool_resample_legacy_cycle_frequency(float *dst)
+{
+    for (uint32_t i = 0U; i < WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT; ++i)
+    {
+        g_wavetable_fft_imag[i] = 0.0f;
+    }
+    wavetable_pool_fft(g_wavetable_fft_real,
+                       g_wavetable_fft_imag,
+                       WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT,
+                       0U);
+
+    memset(g_wavetable_fft_work_real, 0, sizeof(g_wavetable_fft_work_real));
+    memset(g_wavetable_fft_work_imag, 0, sizeof(g_wavetable_fft_work_imag));
+    const float scale = (float)WAVETABLE_FRAME_SAMPLE_COUNT
+        / (float)WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT;
+    g_wavetable_fft_work_real[0] = g_wavetable_fft_real[0] * scale;
+    const uint32_t nyquist = WAVETABLE_FRAME_SAMPLE_COUNT >> 1U;
+    for (uint32_t bin = 1U; bin < nyquist; ++bin)
+    {
+        const float gain = wavetable_pool_spectral_gain(
+            bin,
+            nyquist,
+            WAVETABLE_PREP_RESAMPLE_PASS_RATIO,
+            WAVETABLE_PREP_RESAMPLE_STOP_RATIO);
+        const float real = g_wavetable_fft_real[bin] * scale * gain;
+        const float imag = g_wavetable_fft_imag[bin] * scale * gain;
+        g_wavetable_fft_work_real[bin] = real;
+        g_wavetable_fft_work_imag[bin] = imag;
+        g_wavetable_fft_work_real[WAVETABLE_FRAME_SAMPLE_COUNT - bin] = real;
+        g_wavetable_fft_work_imag[WAVETABLE_FRAME_SAMPLE_COUNT - bin] = -imag;
+    }
+    /* Nyquist has no phase-preserving representation after decimation. */
+    g_wavetable_fft_work_real[nyquist] = 0.0f;
+    g_wavetable_fft_work_imag[nyquist] = 0.0f;
+    wavetable_pool_fft(g_wavetable_fft_work_real,
+                       g_wavetable_fft_work_imag,
+                       WAVETABLE_FRAME_SAMPLE_COUNT,
+                       1U);
+    for (uint32_t i = 0U; i < WAVETABLE_FRAME_SAMPLE_COUNT; ++i)
+    {
+        dst[i] = wavetable_pool_finite_float(g_wavetable_fft_work_real[i]);
+    }
+}
+
+static void wavetable_pool_generate_band_from_fft(float *dst,
+                                                   uint32_t count,
+                                                   uint16_t band_index)
+{
+    memset(g_wavetable_fft_work_real, 0, count * sizeof(float));
+    memset(g_wavetable_fft_work_imag, 0, count * sizeof(float));
+    const float spectrum_scale =
+        (float)count / (float)WAVETABLE_FRAME_SAMPLE_COUNT;
+    const float pass_ratio = (band_index == 0U)
+        ? WAVETABLE_PREP_BASE_PASS_RATIO : WAVETABLE_PREP_MIP_PASS_RATIO;
+    const float stop_ratio = (band_index == 0U)
+        ? WAVETABLE_PREP_BASE_STOP_RATIO : WAVETABLE_PREP_MIP_STOP_RATIO;
+    g_wavetable_fft_work_real[0] = g_wavetable_fft_real[0] * spectrum_scale;
+    const uint32_t nyquist = count >> 1U;
+    for (uint32_t bin = 1U; bin < nyquist; ++bin)
+    {
+        const float gain = wavetable_pool_spectral_gain(
+            bin, nyquist, pass_ratio, stop_ratio);
+        const float real = g_wavetable_fft_real[bin] * spectrum_scale * gain;
+        const float imag = g_wavetable_fft_imag[bin] * spectrum_scale * gain;
+        g_wavetable_fft_work_real[bin] = real;
+        g_wavetable_fft_work_imag[bin] = imag;
+        g_wavetable_fft_work_real[count - bin] = real;
+        g_wavetable_fft_work_imag[count - bin] = -imag;
+    }
+    g_wavetable_fft_work_real[nyquist] = 0.0f;
+    g_wavetable_fft_work_imag[nyquist] = 0.0f;
+    wavetable_pool_fft(g_wavetable_fft_work_real,
+                       g_wavetable_fft_work_imag,
+                       count,
+                       1U);
+    for (uint32_t i = 0U; i < count; ++i)
+    {
+        dst[i] = wavetable_pool_finite_float(g_wavetable_fft_work_real[i]);
+    }
+}
+
 static wavetable_result_t wavetable_pool_candidate_allocate(
     uint16_t wavetable_slot,
     const char *path,
@@ -1012,18 +1072,18 @@ static wavetable_result_t wavetable_pool_candidate_allocate(
     const uint32_t mipmap_samples_per_cycle =
         wavetable_pool_mipmap_samples_per_table_cycle();
     if (frame_count > (UINT32_MAX / mipmap_samples_per_cycle)
-        || brick_samples > (UINT32_MAX / sizeof(int16_t)))
+        || brick_samples > (UINT32_MAX / sizeof(float)))
     {
         return WAVETABLE_RESULT_TOO_LARGE;
     }
     const uint32_t mipmap_samples = frame_count * mipmap_samples_per_cycle;
-    if (mipmap_samples > (UINT32_MAX / sizeof(int16_t)))
+    if (mipmap_samples > (UINT32_MAX / sizeof(float)))
     {
         return WAVETABLE_RESULT_TOO_LARGE;
     }
 
-    const uint32_t brick_bytes = brick_samples * sizeof(int16_t);
-    const uint32_t mipmap_bytes = mipmap_samples * sizeof(int16_t);
+    const uint32_t brick_bytes = brick_samples * sizeof(float);
+    const uint32_t mipmap_bytes = mipmap_samples * sizeof(float);
     const uint32_t brick_pages =
         (brick_bytes + SAMPLE_PAGE_BYTES - 1U) / SAMPLE_PAGE_BYTES;
     const uint32_t mipmap_pages =
@@ -1080,7 +1140,7 @@ static wavetable_result_t wavetable_pool_candidate_allocate(
             mipmap_allocation.page_count);
         return WAVETABLE_RESULT_PATH_TOO_LONG;
     }
-    candidate->format = WAVETABLE_FORMAT_S16_MONO;
+    candidate->format = WAVETABLE_FORMAT_FLOAT32_MONO;
     candidate->frame_sample_count = WAVETABLE_FRAME_SAMPLE_COUNT;
     candidate->frame_count = frame_count;
     candidate->data_offset =
@@ -1088,11 +1148,11 @@ static wavetable_result_t wavetable_pool_candidate_allocate(
     candidate->first_page_slot = brick_allocation.first_slot;
     candidate->page_count = brick_allocation.page_count;
     candidate->data_bytes = brick_bytes;
-    candidate->data = (int16_t *)sample_page_cache_port_resolve_shared(
+    candidate->data = (float *)sample_page_cache_port_resolve_shared(
         &brick_allocation);
     candidate->cost_bytes_aligned =
         brick_allocation.capacity_bytes + mipmap_allocation.capacity_bytes;
-    candidate->mipmap.data = (int16_t *)sample_page_cache_port_resolve_shared(
+    candidate->mipmap.data = (float *)sample_page_cache_port_resolve_shared(
         &mipmap_allocation);
     candidate->mipmap.data_bytes = mipmap_bytes;
     candidate->mipmap.first_page_slot = mipmap_allocation.first_slot;
@@ -1104,7 +1164,7 @@ static wavetable_result_t wavetable_pool_candidate_allocate(
 static void wavetable_pool_candidate_mipmap_init(wavetable_slot_t *candidate)
 {
     wavetable_mipmap_view_t *const view = &candidate->mipmap;
-    int16_t *const data = view->data;
+    float *const data = view->data;
     const uint32_t data_bytes = view->data_bytes;
     const uint16_t first_page_slot = view->first_page_slot;
     const uint16_t page_count = view->page_count;
@@ -1112,7 +1172,6 @@ static void wavetable_pool_candidate_mipmap_init(wavetable_slot_t *candidate)
 
     memset(view, 0, sizeof(*view));
     view->band_count = wavetable_pool_mipmap_band_count();
-    view->duplicate_sample_count = WAVETABLE_MIPMAP_DUPLICATE_SAMPLES;
     view->cycle_count = candidate->frame_count;
     view->cycle_transition_magnitude =
         wavetable_pool_mipmap_transition_magnitude(candidate->frame_count);
@@ -1138,7 +1197,8 @@ static void wavetable_pool_candidate_mipmap_init(wavetable_slot_t *candidate)
             WAVETABLE_MIPMAP_INITIAL_CYCLE_MAGNITUDE - band_index;
         const uint32_t cycle_samples = 1UL << magnitude;
         band->max_phase_increment =
-            (uint32_t)((double)(UINT32_MAX >> magnitude) * 1.25);
+            (uint32_t)((double)(UINT32_MAX >> magnitude)
+                * WAVETABLE_PREP_PHASE_LIMIT_RATIO);
         band->from_cycle = 0U;
         band->to_cycle = candidate->frame_count;
         band->cycle_sample_count = cycle_samples;
@@ -1146,7 +1206,7 @@ static void wavetable_pool_candidate_mipmap_init(wavetable_slot_t *candidate)
         band->flags = (uint16_t)WAVETABLE_MIPMAP_FLAG_MULTIBAND;
         band->data = &view->data[data_offset_samples];
         band->sample_count = candidate->frame_count
-            * (cycle_samples + WAVETABLE_MIPMAP_DUPLICATE_SAMPLES);
+            * wavetable_pool_mipmap_cycle_stride(cycle_samples);
         data_offset_samples += band->sample_count;
     }
 
@@ -1158,11 +1218,11 @@ static void wavetable_pool_candidate_prepare_mipmap(wavetable_slot_t *candidate)
     wavetable_mipmap_view_t *const view = &candidate->mipmap;
     for (uint32_t cycle = 0U; cycle < candidate->frame_count; ++cycle)
     {
-        const int16_t *const src =
+        const float *const src =
             &candidate->data[cycle * WAVETABLE_FRAME_SAMPLE_COUNT];
         for (uint32_t i = 0U; i < WAVETABLE_FRAME_SAMPLE_COUNT; ++i)
         {
-            g_wavetable_fft_real[i] = (float)src[i];
+            g_wavetable_fft_real[i] = src[i];
             g_wavetable_fft_imag[i] = 0.0f;
         }
         wavetable_pool_fft(g_wavetable_fft_real,
@@ -1176,68 +1236,27 @@ static void wavetable_pool_candidate_prepare_mipmap(wavetable_slot_t *candidate)
         {
             wavetable_mipmap_band_t *const band = &view->bands[band_index];
             const uint32_t count = band->cycle_sample_count;
-            int16_t *const dst = (int16_t *)&band->data[
-                cycle * (count + WAVETABLE_MIPMAP_DUPLICATE_SAMPLES)];
-            if (band_index == 0U)
+            const uint32_t cycle_stride =
+                wavetable_pool_mipmap_cycle_stride(count);
+            float *const dst = &band->data[cycle * cycle_stride];
+            wavetable_pool_generate_band_from_fft(dst, count, band_index);
+            if (cycle_stride > count)
             {
-                wavetable_pool_copy_s16_exact(dst, src, count);
+                memset(&dst[count], 0,
+                       (cycle_stride - count) * sizeof(float));
             }
-            else
-            {
-                memset(g_wavetable_fft_work_real, 0, count * sizeof(float));
-                memset(g_wavetable_fft_work_imag, 0, count * sizeof(float));
-                const float spectrum_scale =
-                    (float)count / (float)WAVETABLE_FRAME_SAMPLE_COUNT;
-                g_wavetable_fft_work_real[0] =
-                    g_wavetable_fft_real[0] * spectrum_scale;
-                for (uint32_t bin = 1U; bin < (count >> 1U); ++bin)
-                {
-                    const float real = g_wavetable_fft_real[bin] * spectrum_scale;
-                    const float imag = g_wavetable_fft_imag[bin] * spectrum_scale;
-                    g_wavetable_fft_work_real[bin] = real;
-                    g_wavetable_fft_work_imag[bin] = imag;
-                    g_wavetable_fft_work_real[count - bin] = real;
-                    g_wavetable_fft_work_imag[count - bin] = -imag;
-                }
-                const uint32_t nyquist = count >> 1U;
-                float nyquist_value = hypotf(g_wavetable_fft_real[nyquist],
-                                             g_wavetable_fft_imag[nyquist])
-                    * spectrum_scale;
-                if (g_wavetable_fft_real[nyquist] < 0.0f)
-                {
-                    nyquist_value = -nyquist_value;
-                }
-                g_wavetable_fft_work_real[nyquist] = nyquist_value;
-                g_wavetable_fft_work_imag[nyquist] = 0.0f;
-                wavetable_pool_fft(g_wavetable_fft_work_real,
-                                   g_wavetable_fft_work_imag,
-                                   count,
-                                   1U);
-                for (uint32_t i = 0U; i < count; ++i)
-                {
-                    float value = g_wavetable_fft_work_real[i];
-                    if (value > 32767.0f)
-                    {
-                        value = 32767.0f;
-                    }
-                    else if (value < -32768.0f)
-                    {
-                        value = -32768.0f;
-                    }
-                    dst[i] = (int16_t)lrintf(value);
-                }
-            }
-            wavetable_pool_copy_s16_exact(
-                &dst[count],
-                dst,
-                WAVETABLE_MIPMAP_DUPLICATE_SAMPLES);
         }
+        wavetable_pool_copy_float_exact(
+            &candidate->data[cycle * WAVETABLE_FRAME_SAMPLE_COUNT],
+            &view->bands[0].data[cycle * WAVETABLE_FRAME_SAMPLE_COUNT],
+            WAVETABLE_FRAME_SAMPLE_COUNT);
     }
 }
 
 static wavetable_result_t wavetable_pool_candidate_decode_wav(
     FIL *fp,
     const wav_info_t *wav_info,
+    wavetable_source_geometry_t source_geometry,
     wavetable_slot_t *candidate)
 {
     if (f_lseek(fp, wav_info->data_offset) != FR_OK)
@@ -1246,8 +1265,7 @@ static wavetable_result_t wavetable_pool_candidate_decode_wav(
     }
 
     const uint32_t source_cycle_sample_count =
-        wavetable_pool_source_cycle_sample_count(
-            wav_info->data_size / wav_info->block_align);
+        wavetable_pool_source_cycle_sample_count(source_geometry);
     const uint32_t sample_count = candidate->frame_count
         * source_cycle_sample_count;
     uint32_t frames_done = 0U;
@@ -1288,14 +1306,14 @@ static wavetable_result_t wavetable_pool_candidate_decode_wav(
             if (source_cycle_sample_count == WAVETABLE_FRAME_SAMPLE_COUNT)
             {
                 candidate->data[frames_done + i] =
-                    wavetable_pool_float_to_s16(mono);
+                    wavetable_pool_finite_float(mono);
             }
             else
             {
                 wavetable_pool_legacy_source_store(cycle_offset++, mono);
                 if (cycle_offset == WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT)
                 {
-                    wavetable_pool_resample_legacy_cycle(
+                    wavetable_pool_resample_legacy_cycle_frequency(
                         &candidate->data[cycle * WAVETABLE_FRAME_SAMPLE_COUNT]);
                     cycle++;
                     cycle_offset = 0U;
@@ -1428,8 +1446,8 @@ static uint8_t wavetable_pool_load_prepared_cache(
     }
 
     if ((header.flags != WAVETABLE_MIPMAP_FLAG_MULTIBAND)
-        || (header.sample_format != (uint16_t)WAVETABLE_FILE_SAMPLE_S16)
-        || (header.duplicate_sample_count != WAVETABLE_MIPMAP_DUPLICATE_SAMPLES)
+        || (header.sample_format != (uint16_t)WAVETABLE_FILE_SAMPLE_FLOAT32)
+        || (header.duplicate_sample_count != 0U)
         || (header.cycle_sample_count != WAVETABLE_FRAME_SAMPLE_COUNT)
         || (header.cycle_count != candidate->frame_count)
         || (header.band_count != band_count)
@@ -1458,7 +1476,6 @@ static uint8_t wavetable_pool_load_prepared_cache(
 
     wavetable_mipmap_view_t *const view = &candidate->mipmap;
     view->band_count = band_count;
-    view->duplicate_sample_count = WAVETABLE_MIPMAP_DUPLICATE_SAMPLES;
     view->cycle_count = candidate->frame_count;
     view->cycle_transition_magnitude = transition;
     view->wave_index_multiplier = wave_index_multiplier;
@@ -1481,16 +1498,21 @@ static uint8_t wavetable_pool_load_prepared_cache(
         band->flags = wavetable_pool_read_u16(&g_wavetable_pool_io[18]);
         const uint32_t file_offset = wavetable_pool_read_u32(&g_wavetable_pool_io[20]);
         band->sample_count = wavetable_pool_read_u32(&g_wavetable_pool_io[24]);
+        const uint32_t file_cycle_stride =
+            wavetable_pool_read_u32(&g_wavetable_pool_io[28]);
         const uint32_t magnitude = WAVETABLE_MIPMAP_INITIAL_CYCLE_MAGNITUDE - i;
         const uint32_t cycle_samples = 1UL << magnitude;
-        const uint32_t sample_count = candidate->frame_count
-            * (cycle_samples + WAVETABLE_MIPMAP_DUPLICATE_SAMPLES);
+        const uint32_t cycle_stride =
+            wavetable_pool_mipmap_cycle_stride(cycle_samples);
+        const uint32_t sample_count = candidate->frame_count * cycle_stride;
         const uint32_t max_inc =
-            (uint32_t)((double)(UINT32_MAX >> magnitude) * 1.25);
-        const uint32_t bytes = sample_count * sizeof(int16_t);
+            (uint32_t)((double)(UINT32_MAX >> magnitude)
+                * WAVETABLE_PREP_PHASE_LIMIT_RATIO);
+        const uint32_t bytes = sample_count * sizeof(float);
         if ((band->from_cycle != 0U)
             || (band->to_cycle != candidate->frame_count)
             || (band->cycle_sample_count != cycle_samples)
+            || (file_cycle_stride != cycle_stride)
             || (band->cycle_magnitude != magnitude)
             || (band->max_phase_increment != max_inc)
             || (band->flags != WAVETABLE_MIPMAP_FLAG_MULTIBAND)
@@ -1502,7 +1524,7 @@ static uint8_t wavetable_pool_load_prepared_cache(
             (void)f_close(fp);
             return 0U;
         }
-        band->data = &view->data[payload_offset / sizeof(int16_t)];
+        band->data = &view->data[payload_offset / sizeof(float)];
         payload_offset += bytes;
     }
     if ((payload_offset != view->data_bytes)
@@ -1523,10 +1545,10 @@ static uint8_t wavetable_pool_load_prepared_cache(
 
     const wavetable_mipmap_band_t *const base = &view->bands[0];
     const uint32_t stride =
-        base->cycle_sample_count + view->duplicate_sample_count;
+        wavetable_pool_mipmap_cycle_stride(base->cycle_sample_count);
     for (uint32_t frame = 0U; frame < candidate->frame_count; ++frame)
     {
-        wavetable_pool_copy_s16_exact(
+        wavetable_pool_copy_float_exact(
             &candidate->data[frame * WAVETABLE_FRAME_SAMPLE_COUNT],
             &base->data[frame * stride],
             WAVETABLE_FRAME_SAMPLE_COUNT);
@@ -1563,7 +1585,6 @@ static uint8_t wavetable_pool_publish_audio_descriptor(
     descriptor.wavetable_slot = wavetable_slot;
     descriptor.global_slot = slot->global_slot;
     descriptor.band_count = slot->mipmap.band_count;
-    descriptor.duplicate_sample_count = slot->mipmap.duplicate_sample_count;
     if (audio_shared_memory_page_ref(slot->first_page_slot, 0U,
                                      slot->data_bytes, &descriptor.base_data) == 0U)
         return 0U;
@@ -1573,7 +1594,7 @@ static uint8_t wavetable_pool_publish_audio_descriptor(
     {
         const wavetable_mipmap_band_t *const src = &slot->mipmap.bands[i];
         audio_wavetable_band_t *const dst = &descriptor.bands[i];
-        const uint32_t bytes = src->sample_count * sizeof(int16_t);
+        const uint32_t bytes = src->sample_count * sizeof(float);
         dst->max_phase_increment = src->max_phase_increment;
         dst->cycle_sample_count = src->cycle_sample_count;
         dst->sample_count = src->sample_count;
@@ -1681,13 +1702,18 @@ static void wavetable_load_fail(wavetable_result_t result)
     wavetable_pool_set_last(result);
 }
 
-uint8_t wavetable_pool_load_async_begin(uint16_t wavetable_slot, const char *path)
+uint8_t wavetable_pool_load_async_begin_with_geometry(
+    uint16_t wavetable_slot,
+    const char *path,
+    wavetable_source_geometry_t source_geometry)
 {
     wavetable_load_job_t *const job = &g_wavetable_load_job;
     if ((job->state != WAVETABLE_LOAD_IDLE)
         || (wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)
         || (path == 0) || (path[0] == '\0')
-        || (wavetable_pool_path_ext_is_wav(path) == 0U))
+        || (wavetable_pool_path_ext_is_wav(path) == 0U)
+        || ((source_geometry != WAVETABLE_SOURCE_GEOMETRY_1024)
+            && (source_geometry != WAVETABLE_SOURCE_GEOMETRY_2048)))
     {
         return 0U;
     }
@@ -1700,9 +1726,16 @@ uint8_t wavetable_pool_load_async_begin(uint16_t wavetable_slot, const char *pat
     job->wavetable_slot = wavetable_slot;
     job->global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     job->media_epoch = sd_access_media_epoch();
+    job->source_geometry = source_geometry;
     job->result = WAVETABLE_RESULT_OK;
     job->state = WAVETABLE_LOAD_MOUNT;
     return 1U;
+}
+
+uint8_t wavetable_pool_load_async_begin(uint16_t wavetable_slot, const char *path)
+{
+    return wavetable_pool_load_async_begin_with_geometry(
+        wavetable_slot, path, WAVETABLE_DEFAULT_SOURCE_GEOMETRY);
 }
 
 uint8_t wavetable_pool_load_async_busy(void)
@@ -1717,48 +1750,22 @@ static void wavetable_load_process_band(wavetable_load_job_t *job)
     wavetable_mipmap_view_t *const view = &candidate->mipmap;
     wavetable_mipmap_band_t *const band = &view->bands[job->band];
     const uint32_t count = band->cycle_sample_count;
-    const int16_t *const src = &candidate->data[job->cycle * WAVETABLE_FRAME_SAMPLE_COUNT];
-    int16_t *const dst = (int16_t *)&band->data[
-        job->cycle * (count + WAVETABLE_MIPMAP_DUPLICATE_SAMPLES)];
-    if (job->band == 0U)
+    const uint32_t cycle_stride = wavetable_pool_mipmap_cycle_stride(count);
+    float *const dst = &band->data[job->cycle * cycle_stride];
+    wavetable_pool_generate_band_from_fft(dst, count, job->band);
+    if (cycle_stride > count)
     {
-        wavetable_pool_copy_s16_exact(dst, src, count);
+        memset(&dst[count], 0,
+               (cycle_stride - count) * sizeof(float));
     }
-    else
-    {
-        memset(g_wavetable_fft_work_real, 0, count * sizeof(float));
-        memset(g_wavetable_fft_work_imag, 0, count * sizeof(float));
-        const float spectrum_scale = (float)count / (float)WAVETABLE_FRAME_SAMPLE_COUNT;
-        g_wavetable_fft_work_real[0] = g_wavetable_fft_real[0] * spectrum_scale;
-        for (uint32_t bin = 1U; bin < (count >> 1U); ++bin)
-        {
-            const float real = g_wavetable_fft_real[bin] * spectrum_scale;
-            const float imag = g_wavetable_fft_imag[bin] * spectrum_scale;
-            g_wavetable_fft_work_real[bin] = real;
-            g_wavetable_fft_work_imag[bin] = imag;
-            g_wavetable_fft_work_real[count - bin] = real;
-            g_wavetable_fft_work_imag[count - bin] = -imag;
-        }
-        const uint32_t nyquist = count >> 1U;
-        float nyquist_value = hypotf(g_wavetable_fft_real[nyquist],
-                                     g_wavetable_fft_imag[nyquist]) * spectrum_scale;
-        if (g_wavetable_fft_real[nyquist] < 0.0f) nyquist_value = -nyquist_value;
-        g_wavetable_fft_work_real[nyquist] = nyquist_value;
-        wavetable_pool_fft(g_wavetable_fft_work_real, g_wavetable_fft_work_imag,
-                           count, 1U);
-        for (uint32_t i = 0U; i < count; ++i)
-        {
-            float value = g_wavetable_fft_work_real[i];
-            if (value > 32767.0f) value = 32767.0f;
-            else if (value < -32768.0f) value = -32768.0f;
-            dst[i] = (int16_t)lrintf(value);
-        }
-    }
-    wavetable_pool_copy_s16_exact(&dst[count], dst, WAVETABLE_MIPMAP_DUPLICATE_SAMPLES);
     job->band++;
     if (job->band >= view->band_count)
     {
         job->band = 0U;
+        wavetable_pool_copy_float_exact(
+            &candidate->data[job->cycle * WAVETABLE_FRAME_SAMPLE_COUNT],
+            &view->bands[0].data[job->cycle * WAVETABLE_FRAME_SAMPLE_COUNT],
+            WAVETABLE_FRAME_SAMPLE_COUNT);
         job->cycle++;
         job->state = (job->cycle >= candidate->frame_count)
             ? WAVETABLE_LOAD_BASE_CRC : WAVETABLE_LOAD_MIP_FORWARD_PREP;
@@ -1778,7 +1785,12 @@ void wavetable_pool_load_async_service(void)
         {
             const uint32_t samples = job->wav_info.data_size / job->wav_info.block_align;
             job->source_cycle_sample_count =
-                wavetable_pool_source_cycle_sample_count(samples);
+                wavetable_pool_source_cycle_sample_count(job->source_geometry);
+            if ((samples % job->source_cycle_sample_count) != 0U)
+            {
+                wavetable_load_fail(WAVETABLE_RESULT_UNSUPPORTED);
+                return;
+            }
             const wavetable_result_t result = wavetable_pool_candidate_allocate(
                 job->wavetable_slot, job->path,
                 samples / job->source_cycle_sample_count, candidate);
@@ -1804,7 +1816,7 @@ void wavetable_pool_load_async_service(void)
                 {
                     candidate->data[job->io_offset
                         + job->converted_samples + i] =
-                        wavetable_pool_float_to_s16(mono);
+                        wavetable_pool_finite_float(mono);
                 }
                 else
                 {
@@ -1813,7 +1825,7 @@ void wavetable_pool_load_async_service(void)
                     if (job->source_cycle_offset
                             == WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT)
                     {
-                        wavetable_pool_resample_legacy_cycle(
+                        wavetable_pool_resample_legacy_cycle_frequency(
                             &candidate->data[job->cycle
                                 * WAVETABLE_FRAME_SAMPLE_COUNT]);
                         job->cycle++;
@@ -1842,10 +1854,10 @@ void wavetable_pool_load_async_service(void)
             return;
         case WAVETABLE_LOAD_MIP_FORWARD_PREP:
         {
-            const int16_t *src = &candidate->data[job->cycle * WAVETABLE_FRAME_SAMPLE_COUNT];
+            const float *src = &candidate->data[job->cycle * WAVETABLE_FRAME_SAMPLE_COUNT];
             for (uint32_t i = 0U; i < WAVETABLE_FRAME_SAMPLE_COUNT; ++i)
             {
-                g_wavetable_fft_real[i] = (float)src[i];
+                g_wavetable_fft_real[i] = src[i];
                 g_wavetable_fft_imag[i] = 0.0f;
             }
             job->state = WAVETABLE_LOAD_MIP_FORWARD_FFT;
@@ -1900,17 +1912,19 @@ void wavetable_pool_load_async_service(void)
             uint32_t col = (uint32_t)(((uint64_t)job->cycle * WAVETABLE_PREVIEW_COLUMNS)
                                       / candidate->frame_count);
             if (col >= WAVETABLE_PREVIEW_COLUMNS) col = WAVETABLE_PREVIEW_COLUMNS - 1U;
-            const int16_t *src = &candidate->data[job->cycle * WAVETABLE_FRAME_SAMPLE_COUNT];
-            int16_t min = 32767, max = -32768;
+            const float *src = &candidate->data[job->cycle * WAVETABLE_FRAME_SAMPLE_COUNT];
+            float min = 1.0f, max = -1.0f;
             for (uint32_t i = 0U; i < WAVETABLE_FRAME_SAMPLE_COUNT; ++i)
             {
                 if (src[i] < min) min = src[i];
                 if (src[i] > max) max = src[i];
             }
-            if (min < candidate->preview.min[col]) candidate->preview.min[col] = min;
-            if (max > candidate->preview.max[col]) candidate->preview.max[col] = max;
-            const uint16_t min_peak = wavetable_pool_preview_abs_i16(min);
-            const uint16_t max_peak = wavetable_pool_preview_abs_i16(max);
+            const int16_t min_s16 = wavetable_pool_preview_float_to_i16(min);
+            const int16_t max_s16 = wavetable_pool_preview_float_to_i16(max);
+            if (min_s16 < candidate->preview.min[col]) candidate->preview.min[col] = min_s16;
+            if (max_s16 > candidate->preview.max[col]) candidate->preview.max[col] = max_s16;
+            const uint16_t min_peak = wavetable_pool_preview_abs_i16(min_s16);
+            const uint16_t max_peak = wavetable_pool_preview_abs_i16(max_s16);
             if (min_peak > candidate->preview.global_peak) candidate->preview.global_peak = min_peak;
             if (max_peak > candidate->preview.global_peak) candidate->preview.global_peak = max_peak;
             job->cycle++;
@@ -2092,7 +2106,7 @@ void wavetable_pool_load_async_service(void)
                 wavetable_load_fail(WAVETABLE_RESULT_WRITE_FAIL);
             else
             {
-                job->io_offset += band->sample_count * sizeof(int16_t);
+                job->io_offset += band->sample_count * sizeof(float);
                 job->band++;
                 if (job->band >= candidate->mipmap.band_count) { job->io_offset = 0U; job->state = WAVETABLE_LOAD_CACHE_PAYLOAD; }
             }
@@ -2162,6 +2176,7 @@ static wavetable_result_t wavetable_pool_load_wav_transactional(
     uint16_t wavetable_slot,
     uint16_t forced_global_slot,
     const char *path,
+    wavetable_source_geometry_t source_geometry,
     uint16_t *out_global_slot)
 {
     FIL *const source_fp = &g_wavetable_transaction_files[0];
@@ -2176,7 +2191,9 @@ static wavetable_result_t wavetable_pool_load_wav_transactional(
     if ((wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)
         || ((forced_global_slot != SAMPLE_GLOBAL_POOL_INVALID_INDEX)
             && (forced_global_slot >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS))
-        || (path == 0) || (path[0] == '\0'))
+        || (path == 0) || (path[0] == '\0')
+        || ((source_geometry != WAVETABLE_SOURCE_GEOMETRY_1024)
+            && (source_geometry != WAVETABLE_SOURCE_GEOMETRY_2048)))
     {
         wavetable_pool_set_last(WAVETABLE_RESULT_INVALID_ARG);
         return WAVETABLE_RESULT_INVALID_ARG;
@@ -2224,7 +2241,12 @@ static wavetable_result_t wavetable_pool_load_wav_transactional(
     }
     const uint32_t source_samples = wav_info.data_size / wav_info.block_align;
     const uint32_t source_cycle_sample_count =
-        wavetable_pool_source_cycle_sample_count(source_samples);
+        wavetable_pool_source_cycle_sample_count(source_geometry);
+    if ((source_samples % source_cycle_sample_count) != 0U)
+    {
+        result = WAVETABLE_RESULT_UNSUPPORTED;
+        goto done;
+    }
     result = wavetable_pool_candidate_allocate(
         wavetable_slot,
         path,
@@ -2261,6 +2283,7 @@ static wavetable_result_t wavetable_pool_load_wav_transactional(
         (void)f_unlink(cache_path);
         result = wavetable_pool_candidate_decode_wav(source_fp,
                                                      &wav_info,
+                                                     source_geometry,
                                                      candidate);
         if (result != WAVETABLE_RESULT_OK)
         {
@@ -2308,10 +2331,24 @@ wavetable_result_t wavetable_pool_load_wav(uint16_t wavetable_slot,
                                            const char *path,
                                            uint16_t *out_global_slot)
 {
+    return wavetable_pool_load_wav_with_geometry(
+        wavetable_slot,
+        path,
+        WAVETABLE_DEFAULT_SOURCE_GEOMETRY,
+        out_global_slot);
+}
+
+wavetable_result_t wavetable_pool_load_wav_with_geometry(
+    uint16_t wavetable_slot,
+    const char *path,
+    wavetable_source_geometry_t source_geometry,
+    uint16_t *out_global_slot)
+{
     return wavetable_pool_load_wav_transactional(
         wavetable_slot,
         SAMPLE_GLOBAL_POOL_INVALID_INDEX,
         path,
+        source_geometry,
         out_global_slot);
 }
 
@@ -2331,6 +2368,7 @@ wavetable_result_t wavetable_pool_load_file_at(uint16_t wavetable_slot,
             wavetable_pool_load_wav_transactional(wavetable_slot,
                                                   global_slot,
                                                   path,
+                                                  WAVETABLE_DEFAULT_SOURCE_GEOMETRY,
                                                   &loaded_global);
         if ((result != WAVETABLE_RESULT_OK)
             && (wavetable_slot < WAVETABLE_POOL_MAX_SLOTS)
@@ -2463,7 +2501,7 @@ wavetable_slot_state_t wavetable_pool_get_state(uint16_t wavetable_slot)
     return (slot != 0) ? slot->state : WAVETABLE_SLOT_ERROR;
 }
 
-const int16_t *wavetable_pool_get_data(uint16_t wavetable_slot)
+const float *wavetable_pool_get_data(uint16_t wavetable_slot)
 {
     const wavetable_slot_t *const slot = wavetable_pool_get_slot(wavetable_slot);
     return ((slot != 0) && (slot->state == WAVETABLE_SLOT_READY)) ? slot->data : 0;

@@ -21,7 +21,6 @@
 #define WAVE_PHASE_FRAC_TO_FLOAT   (1.0f / (float)(1UL << WAVE_PHASE_FRAC_BITS))
 #define WAVE_PHASE_SAMPLE_ROUND    (1UL << (WAVE_PHASE_FRAC_BITS - 1U))
 #define WAVE_PHASE_SCALE           4294967296.0
-#define WAVE_S16_TO_FLOAT          (1.0f / 32768.0f)
 #define WAVE_GAIN_SILENCE_EPS      0.00001f
 #define BRICK6_WAVE_OUTPUT_GAIN    0.42169650f
 #if defined(BRICK6_VARIANT_LOWCOST)
@@ -58,16 +57,12 @@ typedef struct
 struct wave_osc_block_ctx_t
 {
     brick6_wave_runtime_osc_t *osc;
-    const int16_t *data;
-    const int16_t *frame0_data;
-    const int16_t *frame1_data;
-    uint32_t frame_count;
+    const float *frame0_data;
+    const float *frame1_data;
     uint32_t cycle_sample_count;
-    uint32_t cycle_stride;
     uint32_t phase_shift;
     uint32_t phase_mask;
     float phase_to_float;
-    float max_frame;
     float frame_frac;
     float balance_gain_current;
     float balance_gain_step;
@@ -136,45 +131,58 @@ static void wave_touch_continuous(brick6_wave_runtime_instance_t *instance,
     instance->continuous_epoch = g_wave_continuous_version;
 }
 
-static void wave_resolve_table(brick6_wave_runtime_osc_t *osc)
+static uint8_t wave_build_hot_table(
+    const audio_wavetable_descriptor_t *table,
+    brick6_wave_hot_table_t *out)
 {
-    if (osc == NULL)
+    if (out == NULL)
     {
-        return;
+        return 0U;
     }
-
-    audio_wavetable_descriptor_t table;
-    if (osc->table_global_slot < SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+    memset(out, 0, sizeof(*out));
+    if ((table == NULL)
+        || (table->generation == 0U)
+        || (table->wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)
+        || (table->frame_count == 0U)
+        || (table->frame_sample_count != WAVETABLE_FRAME_SAMPLE_COUNT)
+        || (table->band_count > WAVETABLE_MIPMAP_MAX_BANDS))
     {
-        if (audio_wavetable_registry_resolve_global(osc->table_global_slot,
-                                                    &table) != 0U)
+        return 0U;
+    }
+    out->generation = table->generation;
+    out->frame_count = table->frame_count;
+    out->wavetable_slot = table->wavetable_slot;
+    if (table->band_count == 0U)
+    {
+        const float *const data = (const float *)audio_shared_memory_resolve(
+            &table->base_data);
+        if (data == NULL) return 0U;
+        out->band_count = 1U;
+        out->bands[0].data = data;
+        out->bands[0].max_phase_increment = UINT32_MAX;
+    }
+    else
+    {
+        out->band_count = (uint8_t)table->band_count;
+        for (uint8_t i = 0U; i < out->band_count; ++i)
         {
-            osc->table_wavetable_slot = table.wavetable_slot;
-            osc->table_generation = table.generation;
-            return;
+            const audio_wavetable_band_t *const src = &table->bands[i];
+            const uint32_t expected_magnitude = WAVE_PHASE_INDEX_BITS - i;
+            const float *const data = (const float *)audio_shared_memory_resolve(
+                &src->data);
+            if ((data == NULL)
+                || (src->cycle_magnitude != expected_magnitude)
+                || (src->cycle_sample_count != (1UL << expected_magnitude)))
+            {
+                memset(out, 0, sizeof(*out));
+                return 0U;
+            }
+            out->bands[i].data = data;
+            out->bands[i].max_phase_increment = src->max_phase_increment;
         }
-
-        osc->table_wavetable_slot = WAVETABLE_POOL_INVALID_SLOT;
-        osc->table_generation = 0U;
-        return;
     }
-
-    if (osc->table_wavetable_slot < WAVETABLE_POOL_MAX_SLOTS)
-    {
-        if (audio_wavetable_registry_resolve(osc->table_wavetable_slot,
-                                             osc->table_generation, &table) == 0U)
-        {
-            osc->table_wavetable_slot = WAVETABLE_POOL_INVALID_SLOT;
-            osc->table_generation = 0U;
-            return;
-        }
-
-        osc->table_global_slot = table.global_slot;
-        return;
-    }
-
-    osc->table_wavetable_slot = WAVETABLE_POOL_INVALID_SLOT;
-    osc->table_generation = 0U;
+    out->valid = 1U;
+    return 1U;
 }
 
 static uint32_t wave_note_to_phase_inc(float note, float tune_semitones)
@@ -277,21 +285,19 @@ static void wave_reset_instance(brick6_wave_runtime_instance_t *instance)
 }
 
 static inline __attribute__((always_inline))
-float wave_read_frame_sample(const int16_t *frame_data,
+float wave_read_frame_sample(const float *frame_data,
                              uint32_t phase,
                              uint32_t cycle_sample_count,
                              uint32_t phase_shift,
                              uint32_t phase_mask,
                              float phase_to_float)
 {
-    uint32_t i0 = phase >> phase_shift;
-    uint32_t frac_q = phase & phase_mask;
-
+    const uint32_t i0 = phase >> phase_shift;
     const uint32_t i1 = (i0 + 1U) & (cycle_sample_count - 1U);
+    const uint32_t frac_q = phase & phase_mask;
     const float frac = (float)frac_q * phase_to_float;
-    const float a = (float)frame_data[i0];
-    const float b = (float)frame_data[i1];
-    return (a + ((b - a) * frac)) * WAVE_S16_TO_FLOAT;
+    const float a = frame_data[i0];
+    return a + ((frame_data[i1] - a) * frac);
 }
 
 static inline __attribute__((always_inline))
@@ -309,16 +315,22 @@ void wave_advance_phase(wave_osc_block_ctx_t *ctx)
     ctx->phase += ctx->phase_inc_value;
 }
 
-static void wave_select_frame_from_pos(wave_osc_block_ctx_t *ctx, float smoothed_pos)
+static inline __attribute__((always_inline))
+void wave_select_frame_from_pos(wave_osc_block_ctx_t *ctx,
+                                const float *data,
+                                uint32_t frame_count,
+                                uint32_t cycle_stride,
+                                float smoothed_pos)
 {
-    const float frame_f = smoothed_pos * ctx->max_frame;
+    const float max_frame = (frame_count > 1U) ? (float)(frame_count - 1U) : 0.0f;
+    const float frame_f = smoothed_pos * max_frame;
     uint32_t frame0 = (uint32_t)frame_f;
-    if (frame0 >= ctx->frame_count)
+    if (frame0 >= frame_count)
     {
-        frame0 = ctx->frame_count - 1U;
+        frame0 = frame_count - 1U;
     }
     uint32_t frame1 = frame0 + 1U;
-    if (frame1 >= ctx->frame_count)
+    if (frame1 >= frame_count)
     {
         frame1 = frame0;
     }
@@ -335,8 +347,8 @@ static void wave_select_frame_from_pos(wave_osc_block_ctx_t *ctx, float smoothed
     }
 
     ctx->frame_frac = frame_frac;
-    ctx->frame0_data = &ctx->data[frame0 * ctx->cycle_stride];
-    ctx->frame1_data = &ctx->data[frame1 * ctx->cycle_stride];
+    ctx->frame0_data = &data[frame0 * cycle_stride];
+    ctx->frame1_data = &data[frame1 * cycle_stride];
     ctx->frame_interp = ((frame1 != frame0) && (frame_frac != 0.0f)) ? 1U : 0U;
 }
 
@@ -372,66 +384,42 @@ static uint8_t wave_prepare_osc_block(brick6_wave_runtime_osc_t *osc,
         return 0U;
     }
 
-    const uint16_t previous_slot = osc->table_wavetable_slot;
-    const uint32_t previous_generation = osc->table_generation;
-    wave_resolve_table(osc);
-    if ((osc->table_wavetable_slot < WAVETABLE_POOL_MAX_SLOTS)
-            && ((osc->table_wavetable_slot != previous_slot)
-                || (osc->table_generation != previous_generation)))
+    const brick6_wave_hot_table_t *const mipmap = &osc->hot_table;
+    if (mipmap->valid == 0U)
     {
-        wave_snap_pos(osc);
-    }
-
-    audio_wavetable_descriptor_t table;
-    if (audio_wavetable_registry_resolve(osc->table_wavetable_slot,
-                                         osc->table_generation, &table) == 0U)
-    {
-        osc->table_wavetable_slot = WAVETABLE_POOL_INVALID_SLOT;
-        osc->table_generation = 0U;
         wave_advance_pos_silent_block(osc, frames);
         return 0U;
     }
-
-    const audio_wavetable_descriptor_t *const mipmap = &table;
-    const audio_wavetable_band_t *band = NULL;
     const uint32_t phase_inc = osc->phase_inc;
-    if ((mipmap != NULL) && (mipmap->band_count != 0U))
+    uint8_t selected = osc->mipmap_band;
+    if ((osc->mipmap_phase_inc != phase_inc)
+        || (selected >= mipmap->band_count))
     {
-        uint8_t selected = osc->mipmap_band;
-        if ((osc->mipmap_phase_inc != phase_inc)
-            || (selected >= mipmap->band_count))
+        selected = (uint8_t)(mipmap->band_count - 1U);
+        for (uint8_t i = 0U; i < mipmap->band_count; ++i)
         {
-            selected = (uint8_t)(mipmap->band_count - 1U);
-            for (uint8_t i = 0U; i < mipmap->band_count; ++i)
+            if (phase_inc <= mipmap->bands[i].max_phase_increment)
             {
-                if (phase_inc <= mipmap->bands[i].max_phase_increment)
-                {
-                    selected = i;
-                    break;
-                }
+                selected = i;
+                break;
             }
-            osc->mipmap_band = selected;
-            osc->mipmap_phase_inc = phase_inc;
         }
-        band = &mipmap->bands[selected];
+        osc->mipmap_band = selected;
+        osc->mipmap_phase_inc = phase_inc;
     }
-    ctx->data = (const int16_t *)audio_shared_memory_resolve(
-        (band != NULL) ? &band->data : &table.base_data);
-    if (ctx->data == NULL) return 0U;
-    ctx->frame_count = table.frame_count;
-    ctx->cycle_sample_count = (band != NULL) ? band->cycle_sample_count
-                                             : WAVETABLE_FRAME_SAMPLE_COUNT;
-    ctx->cycle_stride = ctx->cycle_sample_count
-        + ((band != NULL) ? mipmap->duplicate_sample_count : 0U);
-    ctx->phase_shift = 32U - ((band != NULL) ? band->cycle_magnitude : WAVE_PHASE_INDEX_BITS);
+    const brick6_wave_hot_band_t *const band = &mipmap->bands[selected];
+    const float *const data = band->data;
+    const uint32_t cycle_magnitude = WAVE_PHASE_INDEX_BITS - selected;
+    ctx->cycle_sample_count = 1UL << cycle_magnitude;
+    const uint32_t cycle_stride = (ctx->cycle_sample_count == 8U)
+        ? 16U : ctx->cycle_sample_count;
+    ctx->phase_shift = 32U - cycle_magnitude;
     ctx->phase_mask = (1UL << ctx->phase_shift) - 1UL;
     ctx->phase_to_float = 1.0f / (float)(1UL << ctx->phase_shift);
-    ctx->max_frame = (table.frame_count > 1U) ? (float)(table.frame_count - 1U) : 0.0f;
-
     const float target_pos = wave_clampf(osc->pos, 0.0f, 1.0f);
     ctx->pos_smoothed = target_pos;
     osc->pos_smoothed = target_pos;
-    wave_select_frame_from_pos(ctx, target_pos);
+    wave_select_frame_from_pos(ctx, data, mipmap->frame_count, cycle_stride, target_pos);
     return 1U;
 }
 
@@ -456,6 +444,94 @@ float wave_read_osc_sample_ctx(const wave_osc_block_ctx_t *ctx,
         out += (b - out) * ctx->frame_frac;
     }
     return out;
+}
+
+static inline __attribute__((always_inline))
+void wave_read_two_osc_morph_samples(const wave_osc_block_ctx_t *ctx0,
+                                     uint32_t phase0,
+                                     const wave_osc_block_ctx_t *ctx1,
+                                     uint32_t phase1,
+                                     float phase_to_float0,
+                                     float phase_to_float1,
+                                     float frame_frac0,
+                                     float frame_frac1,
+                                     float *out0,
+                                     float *out1)
+{
+    const uint32_t i00 = phase0 >> ctx0->phase_shift;
+    const uint32_t i10 = phase1 >> ctx1->phase_shift;
+    const uint32_t i01 = (i00 + 1U) & (ctx0->cycle_sample_count - 1U);
+    const uint32_t i11 = (i10 + 1U) & (ctx1->cycle_sample_count - 1U);
+    const float frac0 = (float)(phase0 & ctx0->phase_mask) * phase_to_float0;
+    const float frac1 = (float)(phase1 & ctx1->phase_mask) * phase_to_float1;
+
+    const float a00 = ctx0->frame0_data[i00];
+    const float a10 = ctx1->frame0_data[i10];
+    const float a01 = ctx0->frame0_data[i01];
+    const float a11 = ctx1->frame0_data[i11];
+    float sample0 = a00 + ((a01 - a00) * frac0);
+    float sample1 = a10 + ((a11 - a10) * frac1);
+
+    const float b00 = ctx0->frame1_data[i00];
+    const float b10 = ctx1->frame1_data[i10];
+    const float b01 = ctx0->frame1_data[i01];
+    const float b11 = ctx1->frame1_data[i11];
+    const float frame1_sample0 = b00 + ((b01 - b00) * frac0);
+    const float frame1_sample1 = b10 + ((b11 - b10) * frac1);
+    sample0 += (frame1_sample0 - sample0) * frame_frac0;
+    sample1 += (frame1_sample1 - sample1) * frame_frac1;
+    *out0 = sample0;
+    *out1 = sample1;
+}
+
+static ITCM_TEXT __attribute__((optimize("no-associative-math")))
+void wave_render_two_osc_morph_stable_block(
+    wave_osc_block_ctx_t *restrict ctx0,
+    wave_osc_block_ctx_t *restrict ctx1,
+    float *restrict out_mono,
+    uint32_t frames,
+    float volume_current,
+    float volume_step,
+    float output_scale)
+{
+    uint32_t phase0 = ctx0->phase;
+    uint32_t phase1 = ctx1->phase;
+    const uint32_t phase_inc0 = ctx0->osc->phase_inc;
+    const uint32_t phase_inc1 = ctx1->osc->phase_inc;
+    float gain0 = ctx0->balance_gain_current;
+    float gain1 = ctx1->balance_gain_current;
+    const float gain_step0 = ctx0->balance_gain_step;
+    const float gain_step1 = ctx1->balance_gain_step;
+    const float phase_to_float0 = ctx0->phase_to_float;
+    const float phase_to_float1 = ctx1->phase_to_float;
+    const float frame_frac0 = ctx0->frame_frac;
+    const float frame_frac1 = ctx1->frame_frac;
+
+    for (uint32_t frame = 0U; frame < frames; ++frame)
+    {
+        float raw0;
+        float raw1;
+        wave_read_two_osc_morph_samples(ctx0, phase0, ctx1, phase1,
+                                        phase_to_float0, phase_to_float1,
+                                        frame_frac0, frame_frac1,
+                                        &raw0, &raw1);
+        phase0 += phase_inc0;
+        phase1 += phase_inc1;
+        gain0 += gain_step0;
+        gain1 += gain_step1;
+        float mono = raw0 * gain0;
+        __asm__ volatile ("" : "+t" (mono));
+        mono += raw1 * gain1;
+        volume_current += volume_step;
+        out_mono[frame] = mono * output_scale * volume_current;
+    }
+
+    ctx0->phase = phase0;
+    ctx1->phase = phase1;
+    ctx0->phase_inc_value = phase_inc0;
+    ctx1->phase_inc_value = phase_inc1;
+    ctx0->balance_gain_current = gain0;
+    ctx1->balance_gain_current = gain1;
 }
 
 static inline __attribute__((always_inline))
@@ -502,16 +578,24 @@ void brick6_wave_runtime_set_osc_table_wavetable_generation(
     target->table_wavetable_slot = WAVETABLE_POOL_INVALID_SLOT;
     target->table_generation = 0U;
     target->table_global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    memset(&target->hot_table, 0, sizeof(target->hot_table));
     audio_wavetable_descriptor_t table;
     if (audio_wavetable_registry_resolve(wavetable_slot, generation, &table) != 0U)
     {
-        target->table_wavetable_slot = wavetable_slot;
-        target->table_generation = table.generation;
-        target->table_global_slot = table.global_slot;
-        if ((target->table_wavetable_slot != previous_slot)
-                || (target->table_generation != previous_generation))
+        brick6_wave_hot_table_t hot_table;
+        if (wave_build_hot_table(&table, &hot_table) != 0U)
         {
-            wave_snap_pos(target);
+            target->hot_table = hot_table;
+            target->table_wavetable_slot = wavetable_slot;
+            target->table_generation = table.generation;
+            target->table_global_slot = table.global_slot;
+            if ((target->table_wavetable_slot != previous_slot)
+                    || (target->table_generation != previous_generation))
+            {
+                target->mipmap_band = 0U;
+                target->mipmap_phase_inc = 0U;
+                wave_snap_pos(target);
+            }
         }
     }
     if ((target->table_wavetable_slot != previous_slot)
@@ -642,6 +726,7 @@ void brick6_wave_runtime_stop_wavetable_slot(uint16_t wavetable_slot,
                 osc->table_generation = 0U;
                 osc->mipmap_band = 0U;
                 osc->mipmap_phase_inc = 0U;
+                memset(&osc->hot_table, 0, sizeof(osc->hot_table));
                 wave_touch_config(instance);
             }
         }
@@ -687,6 +772,7 @@ void brick6_wave_runtime_sync_voice(uint8_t track_instance, uint8_t voice_instan
             voice_osc->table_global_slot = track_osc->table_global_slot;
             voice_osc->table_wavetable_slot = track_osc->table_wavetable_slot;
             voice_osc->table_generation = track_osc->table_generation;
+            voice_osc->hot_table = track_osc->hot_table;
             if (table_changed != 0U)
             {
                 voice_osc->mipmap_band = 0U;
@@ -797,6 +883,22 @@ static ITCM_TEXT uint8_t wave_render_instance_block(uint8_t instance_id,
     const float output_scale = instance->voice.velocity
         * WAVE_OUTPUT_TRIM * BRICK6_WAVE_OUTPUT_GAIN;
 
+    const uint8_t morph_mask = (uint8_t)(
+        (osc_ctx[0].frame_interp != 0U ? 1U : 0U)
+        | (osc_ctx[1].frame_interp != 0U ? 2U : 0U));
+    if ((morph_mask == 3U)
+        && (prepared_count == BRICK6_WAVE_OSC_COUNT)
+        && (waveform_mask == 0U)
+        && (osc_ctx[0].phase_inc_ramping == 0U)
+        && (osc_ctx[1].phase_inc_ramping == 0U))
+    {
+        wave_render_two_osc_morph_stable_block(
+            &osc_ctx[0], &osc_ctx[1], out_mono, frames,
+            volume_current, volume_step, output_scale);
+        volume_current = instance->volume;
+        goto wave_render_commit;
+    }
+
     for (uint32_t frame = 0U; frame < frames; ++frame)
     {
         float mono = 0.0f;
@@ -820,6 +922,7 @@ static ITCM_TEXT uint8_t wave_render_instance_block(uint8_t instance_id,
         out_mono[frame] = mono * volume_current * output_scale;
     }
 
+wave_render_commit:
     for (uint8_t osc = 0U; osc < BRICK6_WAVE_OSC_COUNT; ++osc)
     {
         if (prepared[osc] == 0U)

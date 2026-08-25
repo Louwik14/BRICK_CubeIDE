@@ -20,6 +20,22 @@ extern "C" {
 
 typedef struct
 {
+    const float *data;
+    uint32_t max_phase_increment;
+} brick6_wave_hot_band_t;
+
+typedef struct
+{
+    uint32_t generation;
+    uint32_t frame_count;
+    uint16_t wavetable_slot;
+    uint8_t band_count;
+    uint8_t valid;
+    brick6_wave_hot_band_t bands[8U];
+} brick6_wave_hot_table_t;
+
+typedef struct
+{
     uint16_t table_global_slot;
     uint16_t table_wavetable_slot;
     uint32_t table_generation;
@@ -32,6 +48,7 @@ typedef struct
     uint32_t phase_inc_current;
     uint32_t mipmap_phase_inc;
     uint8_t mipmap_band;
+    brick6_wave_hot_table_t hot_table;
 } brick6_wave_runtime_osc_t;
 
 typedef struct

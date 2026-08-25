@@ -1674,7 +1674,8 @@ static void ui_page_settings_wavetable_load_to_slot(uint16_t slot, const char *p
         ui_page_settings_status("ALREADY LOADED");
         return;
     }
-    if (wavetable_pool_load_async_begin(slot, path) != 0U)
+    if (wavetable_pool_load_async_begin_with_geometry(
+            slot, path, WAVETABLE_SOURCE_GEOMETRY_2048) != 0U)
     {
         ui_page_settings_status("LOADING");
     }

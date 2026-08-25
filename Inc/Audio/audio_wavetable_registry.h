@@ -23,7 +23,6 @@ typedef struct
     uint16_t wavetable_slot;
     uint16_t global_slot;
     uint16_t band_count;
-    uint16_t duplicate_sample_count;
     audio_shared_memory_ref_t base_data;
     audio_wavetable_band_t bands[WAVETABLE_MIPMAP_MAX_BANDS];
 } audio_wavetable_descriptor_t;
@@ -35,7 +34,5 @@ uint8_t audio_wavetable_registry_transport_install(
 uint8_t audio_wavetable_registry_resolve(uint16_t wavetable_slot,
                                          uint32_t generation,
                                          audio_wavetable_descriptor_t *out);
-uint8_t audio_wavetable_registry_resolve_global(uint16_t global_slot,
-                                                audio_wavetable_descriptor_t *out);
 void audio_wavetable_registry_remove(uint16_t wavetable_slot,
                                      uint32_t generation);
