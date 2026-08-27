@@ -14,7 +14,6 @@
 #include "Storage/memory_layout.h"
 #include "Core/track_runtime.h"
 #include "Core/live_parameter_audio_queue.h"
-#include "Core/live_parameter_audio_runtime.h"
 #include "param_registry.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include "NoteFx/note_fx_state.h"
@@ -1076,7 +1075,8 @@ uint8_t seq_param_iface_commit_base_after_authoritative_apply(const seq_param_if
 uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
                                    uint8_t set_id,
                                    seq_param_slot_t param_slot,
-                                   seq_value16_t value16)
+                                   seq_value16_t value16,
+                                   uint64_t due_sample)
 {
     track_runtime_refresh_track(track);
     if (seq_param_iface_slot_is_supported_internal(track, set_id,
@@ -1111,7 +1111,7 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
     {
         uint8_t slot = 0U, fx_param = 0U;
         if (note_fx_state_param_map(param, &slot, &fx_param) == 0U ||
-            note_fx_pipeline_apply_runtime_param(track, slot, fx_param,
+            note_fx_pipeline_apply_control_override(track, slot, fx_param,
                 (uint8_t)(seq_param_iface_decode_param_value(param, value16) + 0.5f)) == 0U)
             return 0U;
         state->runtime_value = value16;
@@ -1119,10 +1119,9 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
         return 1U;
     }
 
-    const float decoded = seq_param_iface_decode_param_value(param, value16);
-    if (live_parameter_audio_runtime_apply_temp(
-            param, track, decoded,
-            LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_SET) == 0U)
+    if (!live_parameter_audio_queue_submit_dated(
+            due_sample, param, track, value16,
+            LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_SET))
     {
         return 0U;
     }
@@ -1135,7 +1134,8 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
 uint8_t seq_param_iface_restore_base(seq_track_id_t track,
                                      uint8_t set_id,
                                      seq_param_slot_t param_slot,
-                                     seq_value16_t base_value16)
+                                     seq_value16_t base_value16,
+                                     uint64_t due_sample)
 {
     track_runtime_refresh_track(track);
     /* Restoring an already-active lock is not a new p-lock admission.  It
@@ -1161,7 +1161,7 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
     {
         uint8_t slot = 0U, fx_param = 0U;
         if (note_fx_state_param_map(param, &slot, &fx_param) == 0U ||
-            note_fx_pipeline_release_runtime_param(track, slot, fx_param) == 0U)
+            note_fx_pipeline_release_control_override(track, slot, fx_param) == 0U)
             return 0U;
         state->base_value = base_value16;
         state->runtime_value = base_value16;
@@ -1170,10 +1170,9 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
         return 1U;
     }
 
-    const float decoded = seq_param_iface_decode_param_value(param, base_value16);
-    if (live_parameter_audio_runtime_apply_temp(
-            param, track, decoded,
-            LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_CLEAR) == 0U)
+    if (!live_parameter_audio_queue_submit_dated(
+            due_sample, param, track, base_value16,
+            LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_CLEAR))
     {
         return 0U;
     }

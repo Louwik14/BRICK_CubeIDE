@@ -29,11 +29,12 @@
 #include "cache_maintenance.h"
 #include "Audio/metronome_runtime.h"
 #include "Audio/control_audio_queue.h"
+#include "Audio/control_music_queue.h"
 #include "Audio/audio_fx_runtime.h"
 #include "Audio/audio_waveform_capture.h"
 #include "Audio/waveform_control.h"
 #include "Audio/synth_waveform_snapshot.h"
-#include "Audio/audio_note_admission.h"
+#include "Audio/audio_music_action_executor.h"
 #include "Core/project_load_quiesce.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_mod_matrix.h"
@@ -50,6 +51,7 @@
 #include "Core/brick6_wave_runtime.h"
 #include "Sampler/sample_stream_time.h"
 #include "Core/brick6_stream_service_task.h"
+#include "Seq/seq_runtime_control.h"
 
 #include <string.h>
 #include <stdint.h>
@@ -103,7 +105,36 @@ static uint64_t g_audio_sample_clock;
    Hardware layer only: calls float engine
    ============================================================ */
 
-static __attribute__((noinline)) void audio_apply_control_events_at_sample(uint64_t sample_time)
+static __attribute__((noinline)) void audio_apply_music_stops_at_sample(uint64_t sample_time)
+{
+    control_music_action_t action;
+    uint16_t music_pending = control_music_queue_audio_pending_count();
+    while ((music_pending != 0U)
+            && (control_music_queue_audio_peek(&action) != 0U)
+            && (action.due_sample <= sample_time)
+            && (action.kind == (uint8_t)CONTROL_MUSIC_ACTION_STOP))
+    {
+        (void)control_music_queue_audio_pop(&action);
+        --music_pending;
+        (void)audio_music_action_execute(&action);
+    }
+}
+
+static __attribute__((noinline)) void audio_apply_music_starts_at_sample(uint64_t sample_time)
+{
+    control_music_action_t action;
+    uint16_t music_pending = control_music_queue_audio_pending_count();
+    while ((music_pending != 0U)
+            && (control_music_queue_audio_peek(&action) != 0U)
+            && (action.due_sample <= sample_time))
+    {
+        (void)control_music_queue_audio_pop(&action);
+        --music_pending;
+        (void)audio_music_action_execute(&action);
+    }
+}
+
+static __attribute__((noinline)) void audio_apply_general_control_events_at_sample(uint64_t sample_time)
 {
     control_audio_event_t event;
     /* Bound this pass to the queue occupancy observed at entry.  CONTROL
@@ -115,11 +146,7 @@ static __attribute__((noinline)) void audio_apply_control_events_at_sample(uint6
     {
         (void)control_audio_queue_audio_pop();
         --pending;
-        if (event.kind <= (uint8_t)CONTROL_AUDIO_EVENT_NOTE_ON)
-        {
-            (void)audio_note_admission_apply(&event);
-        }
-        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_BOUNDARY_EDGE)
+        if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_BOUNDARY_EDGE)
         {
             brick6_looper_runtime_on_boundary_edge(event.entity_id,
                                                    event.due_sample);
@@ -130,17 +157,8 @@ static __attribute__((noinline)) void audio_apply_control_events_at_sample(uint6
                 0U, (event.flags != 0U) ? METRONOME_CLICK_ACCENT
                                         : METRONOME_CLICK_NORMAL);
         }
-        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_CLOSE_ENTITY)
-        {
-            audio_note_admission_close_entity(event.entity_id);
-        }
-        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_CLOSE_ALL)
-        {
-            audio_note_admission_close_all();
-        }
         else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_BINDING_INTENT)
         {
-            audio_note_admission_close_entity(event.entity_id);
             audio_note_engine_adapter_install_intent(&event);
         }
         else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_LOOPER_TRANSPORT_START)
@@ -194,6 +212,8 @@ static ITCM_TEXT void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t s
     while (cursor < frames)
     {
         const uint64_t now = sample_time + cursor;
+        if (control_music_queue_audio_consume_panic() != 0U)
+            audio_music_action_force_close_all();
         audio_modulation_projection_audio_consume();
         audio_wave_table_projection_audio_consume();
         const uint8_t modulation_configuration_changed =
@@ -204,11 +224,17 @@ static ITCM_TEXT void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t s
             mod_env3_audio_consume_snapshots();
         }
         if (project_load_quiescent == 0U)
-            audio_apply_control_events_at_sample(now);
+        {
+            audio_apply_general_control_events_at_sample(now);
+            audio_apply_music_stops_at_sample(now);
+        }
         if (modulation_configuration_changed != 0U)
             audio_mod_matrix_consume_snapshots();
         if (project_load_quiescent == 0U)
+        {
             (void)live_parameter_audio_runtime_apply_due(now);
+            audio_apply_music_starts_at_sample(now);
+        }
         const uint16_t remaining = (uint16_t)(frames - cursor);
         uint16_t span = remaining;
         if (span == 0U)
@@ -264,6 +290,8 @@ static ITCM_TEXT void audio_process_half_common_hot(int32_t *rx, int32_t *tx)
         const uint16_t remaining = (uint16_t)(AUDIO_FRAMES_PER_HALF - half_cursor);
         uint16_t block_frames = remaining;
         block_frames = control_audio_queue_audio_frames_until_due(
+            g_audio_sample_clock, block_frames);
+        block_frames = control_music_queue_audio_frames_until_due(
             g_audio_sample_clock, block_frames);
         block_frames = live_parameter_audio_queue_frames_until_deadline(
             g_audio_sample_clock, block_frames);
@@ -327,7 +355,7 @@ void audio_boot_init_binding_io(void)
 {
     live_clock_init();
     control_audio_queue_init();
-    audio_note_admission_init();
+    control_music_queue_init();
     audio_note_engine_adapter_init();
     audio_input_ownership_projection_audio_init();
     audio_wave_table_projection_audio_init();
@@ -444,6 +472,9 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
         /* Tick scheduler en frames audio. */
         engine_tasklet_notify_frames(AUDIO_FRAMES_PER_HALF);
 
+        live_clock_audio_publish_anchor(g_audio_sample_clock);
+        seq_runtime_control_request_from_audio_irq();
+
         cpu_load_irq_end();
     }
 }
@@ -487,6 +518,9 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
 
         /* Tick scheduler en frames audio. */
         engine_tasklet_notify_frames(AUDIO_FRAMES_PER_HALF);
+
+        live_clock_audio_publish_anchor(g_audio_sample_clock);
+        seq_runtime_control_request_from_audio_irq();
 
         cpu_load_irq_end();
     }

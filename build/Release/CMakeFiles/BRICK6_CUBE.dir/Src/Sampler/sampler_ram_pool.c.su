@@ -20,8 +20,8 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sampler_ram_po
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sampler_ram_pool.c:629:9:sampler_ram_pool_load_async_begin	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sampler_ram_pool.c:653:9:sampler_ram_pool_load_async_busy	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sampler_ram_pool.c:942:9:sampler_ram_pool_load_async_take_result	4	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sampler_ram_pool.c:1272:6:sampler_ram_pool_audio_ack_retire	0	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sampler_ram_pool.c:1280:6:sampler_ram_pool_clear	56	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sampler_ram_pool.c:1272:6:sampler_ram_pool_control_ack_retire	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sampler_ram_pool.c:1280:6:sampler_ram_pool_clear	48	static,ignoring_inline_asm
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sampler_ram_pool.c:960:29:sampler_ram_pool_load_wav_impl	760	static,ignoring_inline_asm
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sampler_ram_pool.c:1203:22:sampler_ram_pool_load_wav	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sampler_ram_pool.c:576:22:sampler_ram_pool_load_wav_auto	24	static

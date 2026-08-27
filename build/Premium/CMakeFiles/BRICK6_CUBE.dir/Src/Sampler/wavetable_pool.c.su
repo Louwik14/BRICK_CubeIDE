@@ -30,8 +30,8 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/wavetable_pool
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/wavetable_pool.c:1735:9:wavetable_pool_load_async_begin	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/wavetable_pool.c:1741:9:wavetable_pool_load_async_busy	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/wavetable_pool.c:2160:9:wavetable_pool_load_async_take_result	4	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/wavetable_pool.c:2441:6:wavetable_pool_audio_ack_retire	0	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/wavetable_pool.c:2450:6:wavetable_pool_clear	56	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/wavetable_pool.c:2441:6:wavetable_pool_control_ack_retire	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/wavetable_pool.c:2450:6:wavetable_pool_clear	48	static,ignoring_inline_asm
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/wavetable_pool.c:1612:27:wavetable_pool_commit_candidate	72	static,ignoring_inline_asm
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/wavetable_pool.c:2175:27:wavetable_pool_load_wav_transactional	552	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/wavetable_pool.c:2341:20:wavetable_pool_load_wav_with_geometry	16	static

@@ -33,8 +33,8 @@ void control_audio_queue_init(void)
     __DMB();
 }
 
-uint8_t control_audio_queue_publish_batch(const control_audio_event_t *events,
-                                          uint16_t count)
+static uint8_t control_audio_queue_publish_one(const control_audio_event_t *events,
+                                               uint16_t count)
 {
     if ((events == NULL) || (count == 0U)
             || (count >= CONTROL_AUDIO_QUEUE_CAPACITY))
@@ -57,24 +57,20 @@ uint8_t control_audio_queue_publish_batch(const control_audio_event_t *events,
     for (uint16_t i = 0U; i < count; ++i)
     {
         const control_audio_event_t *const event = &events[i];
-        const uint8_t is_barrier = (uint8_t)(
-            event->kind >= CONTROL_AUDIO_EVENT_CLOSE_ENTITY);
+        const uint8_t is_state_command = (uint8_t)(
+            event->kind >= CONTROL_AUDIO_EVENT_BINDING_INTENT);
         if ((event->entity_id >= BRICK_ENTITY_CAPACITY)
                 || (event->kind > CONTROL_AUDIO_EVENT_WAVETABLE_STOP)
-                || ((event->kind <= CONTROL_AUDIO_EVENT_NOTE_ON)
-                    && ((event->note >= 128U)
-                        || (event->velocity >= 128U)
-                        || (event->occurrence_token == 0U)))
                 || ((i != 0U) && (event->due_sample < events[i - 1U].due_sample))
                 || ((head != tail) && (event->due_sample < previous_due)
-                    && (is_barrier == 0U)))
+                    && (is_state_command == 0U)))
             return 0U;
     }
 
     for (uint16_t i = 0U; i < count; ++i)
     {
         g_control_audio_queue.events[head] = events[i];
-        if ((events[i].kind >= CONTROL_AUDIO_EVENT_CLOSE_ENTITY)
+        if ((events[i].kind >= CONTROL_AUDIO_EVENT_BINDING_INTENT)
                 && (head != tail)
                 && (g_control_audio_queue.events[head].due_sample < previous_due))
             g_control_audio_queue.events[head].due_sample = previous_due;
@@ -87,7 +83,7 @@ uint8_t control_audio_queue_publish_batch(const control_audio_event_t *events,
 
 uint8_t control_audio_queue_publish(const control_audio_event_t *event)
 {
-    return control_audio_queue_publish_batch(event, 1U);
+    return control_audio_queue_publish_one(event, 1U);
 }
 
 uint8_t control_audio_queue_audio_peek(control_audio_event_t *out_event)

@@ -78,7 +78,7 @@ typedef struct
     float sample;
     float gain;
     float start;
-    float end;
+    float length;
     float mode;
     float tune;
     float slice_count;
@@ -116,7 +116,8 @@ typedef struct
         float param1[2];
         float amod[2];
         float param2[2];
-        float phase_reset[2];
+        float phase_reset;
+        float drift;
         float volume;
         float balance;
         float tune;
@@ -137,6 +138,8 @@ typedef struct
     {
         float table[2];
         float pos[2];
+        float start[2];
+        float len[2];
         float volume;
         float balance;
         float tune;
@@ -169,10 +172,10 @@ typedef struct
 } track_tone_sound_state_t;
 
 #ifdef __cplusplus
-static_assert(sizeof(track_tone_sound_state_t) == 560U,
+static_assert(sizeof(track_tone_sound_state_t) == 576U,
               "track tone state layout changed");
 #else
-_Static_assert(sizeof(track_tone_sound_state_t) == 560U,
+_Static_assert(sizeof(track_tone_sound_state_t) == 576U,
                "track tone state layout changed");
 #endif
 

@@ -87,6 +87,11 @@ void brick6_looper_runtime_set_stretch(uint8_t track_id,
                                        uint8_t mode,
                                        float pitch_semitones,
                                        uint16_t grain_frames);
+void brick6_looper_runtime_set_stretch_mode(uint8_t track_id, uint8_t mode);
+void brick6_looper_runtime_set_stretch_pitch(uint8_t track_id,
+                                              float pitch_semitones);
+void brick6_looper_runtime_set_stretch_grain(uint8_t track_id,
+                                              uint16_t grain_frames);
 void brick6_looper_runtime_on_transport_start(void);
 void brick6_looper_runtime_on_transport_stop(void);
 void brick6_looper_runtime_on_boundary_edge(uint8_t track_id, uint64_t sample_time);

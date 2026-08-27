@@ -91,7 +91,6 @@ void md_decay_env_prepare(md_decay_env_t *env, float seconds, float sample_rate)
     if (env != NULL)
     {
         env->coefficient = md_decay_coefficient(seconds, sample_rate);
-        env->end_threshold = 1.0e-5f;
     }
 }
 
@@ -100,22 +99,20 @@ void md_decay_env_trigger(md_decay_env_t *env, float level)
     if (env != NULL)
     {
         env->value = md_clampf(level, 0.0f, 1.0f);
-        env->active = (env->value > 0.0f) ? 1U : 0U;
     }
 }
 
 float md_decay_env_process(md_decay_env_t *env)
 {
-    if ((env == NULL) || (env->active == 0U))
+    if (env == NULL)
     {
         return 0.0f;
     }
     const float output = env->value;
     env->value *= env->coefficient;
-    if (env->value <= env->end_threshold)
+    if (env->value <= 1.0e-5f)
     {
         env->value = 0.0f;
-        env->active = 0U;
     }
     return output;
 }

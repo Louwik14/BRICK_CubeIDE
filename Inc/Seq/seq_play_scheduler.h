@@ -8,10 +8,10 @@
 #include <stdint.h>
 
 #include "Seq/seq_types.h"
+#include "Seq/seq_model.h"
 #include "NoteFx/note_fx_event.h"
 #include "Audio/control_audio_queue.h"
 
-#define SEQ_PLAY_SCHEDULER_HALF_EVENT_QUOTA 128U
 
 typedef struct
 {
@@ -48,8 +48,6 @@ uint8_t seq_play_scheduler_transition_tracks(const seq_track_id_t *tracks,
                                              uint8_t track_count,
                                              seq_play_transition_policy_t policy);
 uint8_t seq_play_scheduler_transition_all(seq_play_transition_policy_t policy);
-void seq_play_scheduler_control_begin_window(uint16_t event_quota);
-void seq_play_scheduler_control_end_window(void);
 /*
  * Contract surface:
  * - scheduling surface only: consumes step boundaries and queues sample-domain events.
@@ -60,11 +58,13 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
                                       uint16_t ticks_per_step,
                                       uint32_t step_tick,
                                       uint64_t step_sample_time,
-                                      uint32_t samples_per_step_q16);
+                                      uint32_t samples_per_step_q16,
+                                      uint8_t swing_phase);
 void seq_play_scheduler_schedule_step_lookahead_negative(seq_track_id_t track,
                                                          seq_step_id_t step,
                                                          uint64_t step_sample_time,
-                                                         uint32_t samples_per_step_q16);
+                                                         uint32_t samples_per_step_q16,
+                                                         uint8_t swing_phase);
 /*
  * Contract surface:
  * - audio-block projection of the scheduler queue.
@@ -79,7 +79,8 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
  * - apply surface only: dispatches a queued scheduler event to MIDI/engines/mixers.
  * - does not change transport or timeline ownership.
  */
-void seq_play_scheduler_control_apply_event(const seq_play_scheduler_event_t *event);
+uint8_t seq_play_scheduler_control_apply_event(
+    const seq_play_scheduler_event_t *event);
 /*
  * Contract surface:
  * - post-commit notifications from runtime/transport.
@@ -98,5 +99,14 @@ void seq_play_scheduler_emit_midi_program_on_transport_start(void);
  * - re-seeds scheduler-visible program state without changing timeline ownership.
  */
 void seq_play_scheduler_notify_track_pattern_change(seq_track_id_t track);
+void seq_play_scheduler_notify_play_changed(seq_track_id_t track,
+                                            seq_step_id_t step,
+                                            uint8_t voice,
+                                            seq_step_play_field_t field);
+void seq_play_scheduler_remove_play(seq_track_id_t track,
+                                    seq_step_id_t step,
+                                    int16_t voice);
+void seq_play_scheduler_notify_roll_changed(seq_track_id_t track,
+                                            seq_step_id_t step);
 
 #endif /* SEQ_PLAY_SCHEDULER_H */

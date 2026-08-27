@@ -353,8 +353,10 @@ static uint8_t mod_matrix_slot_is_effective(uint8_t track,
             return 0U;
     }
 
+    track_audio_runtime_ctx_t target_ctx_value;
     const track_audio_runtime_ctx_t *const target_ctx =
-        audio_note_engine_adapter_audio_ctx(target);
+        (audio_note_engine_adapter_audio_ctx_snapshot(
+            target, &target_ctx_value) != 0U) ? &target_ctx_value : NULL;
     return mod_destination_catalog_supported_audio(
         target, destination,
         mod_matrix_ui_family_from_ctx(target_ctx),
@@ -480,8 +482,10 @@ static uint8_t mod_matrix_runtime_destination_prepare(uint8_t track,
     }
 
     mod_matrix_runtime_destination_t *dst = mod_matrix_find_runtime_destination(rt, destination);
+    track_audio_runtime_ctx_t target_ctx_value;
     const track_audio_runtime_ctx_t *const target_ctx =
-        audio_note_engine_adapter_audio_ctx(target);
+        (audio_note_engine_adapter_audio_ctx_snapshot(
+            target, &target_ctx_value) != 0U) ? &target_ctx_value : NULL;
     mod_destination_prepared_t prepared;
     if ((target_ctx == NULL)
             || (mod_destination_catalog_prepare(target, param, target_ctx,
@@ -757,7 +761,10 @@ static void mod_matrix_audio_rebuild_route_cache_track(
 
     mod_matrix_poly_plan_t *const plan = &g_mod_matrix_poly_plan[track];
     memset(plan, 0, sizeof(*plan));
-    const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
+    track_audio_runtime_ctx_t ctx_value;
+    const track_audio_runtime_ctx_t *const ctx =
+        (audio_note_engine_adapter_audio_ctx_snapshot(track, &ctx_value) != 0U)
+            ? &ctx_value : NULL;
     const ui_track_family_t family = mod_matrix_ui_family_from_ctx(ctx);
     const ui_track_type_t type = mod_matrix_ui_type_from_ctx(ctx);
     mod_matrix_rebuild_track_plan(track, family, type, ctx, snapshot);

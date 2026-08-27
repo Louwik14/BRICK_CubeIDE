@@ -5,11 +5,10 @@
 #include "Audio/audio_float.h"
 #include "Core/brick6_clip_shifter.h"
 #include "Core/audio_transport_publication.h"
+#include "Core/live_clock.h"
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_stream_io.h"
 #include "Sampler/sample_stream_transport.h"
-#include "Seq/seq_runtime.h"
-#include "Seq/seq_runtime_exec.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/audio_recorder_wav.h"
 #include "Storage/memory_layout.h"
@@ -39,23 +38,23 @@
 
 static uint8_t looper_transport_running(void)
 {
-    const audio_transport_publication_t *const publication =
-        audio_transport_publication_get();
-    return (publication != NULL) ? publication->running : 0U;
+    audio_transport_publication_t publication;
+    return (audio_transport_publication_read(&publication) != 0U)
+        ? publication.running : 0U;
 }
 
 static uint32_t looper_transport_samples_per_step_q16(void)
 {
-    const audio_transport_publication_t *const publication =
-        audio_transport_publication_get();
-    return (publication != NULL) ? publication->samples_per_step_q16 : 1U;
+    audio_transport_publication_t publication;
+    return (audio_transport_publication_read(&publication) != 0U)
+        ? publication.samples_per_step_q16 : 1U;
 }
 
 static uint32_t looper_transport_tempo_bpm_milli(void)
 {
-    const audio_transport_publication_t *const publication =
-        audio_transport_publication_get();
-    return (publication != NULL) ? publication->tempo_effective_bpm_milli : 120000U;
+    audio_transport_publication_t publication;
+    return (audio_transport_publication_read(&publication) != 0U)
+        ? publication.tempo_effective_bpm_milli : 120000U;
 }
 
 #if ((BRICK6_LOOPER_CACHE_ID_BASE + BRICK6_LOOPER_TRACK_CAP) > SAMPLE_PAGE_CACHE_ID_CAPACITY)
@@ -949,7 +948,7 @@ static void looper_update_ready_state(brick6_looper_track_state_t *state)
 
         if(state->scheduled_start_valid != 0U)
         {
-            const uint64_t now_sample = seq_runtime_exec_get_sample_timeline();
+            const uint64_t now_sample = live_clock_audio_sample();
             if(now_sample < state->scheduled_start_sample)
             {
                 looper_set_state(state, BRICK6_LOOPER_RUNTIME_STATE_READY);
@@ -1397,7 +1396,7 @@ void brick6_looper_runtime_arm_record_stop(uint64_t request_sample)
         g_looper_record_boundary.request_stop_sample = request_sample;
         if(looper_transport_running() == 0U)
         {
-            looper_record_stop_at_boundary(seq_runtime_exec_get_sample_timeline());
+            looper_record_stop_at_boundary(live_clock_audio_sample());
         }
     }
     else if(g_looper_record_boundary.start_armed != 0U)
@@ -1564,6 +1563,35 @@ void brick6_looper_runtime_set_stretch(uint8_t track_id,
             slot->last_mode = 0xFFU;
         }
     }
+}
+
+void brick6_looper_runtime_set_stretch_mode(uint8_t track_id, uint8_t mode)
+{
+    if (looper_track_valid(track_id) == 0U)
+        return;
+    brick6_looper_runtime_set_stretch(
+        track_id, mode, g_looper_tracks[track_id].stretch_pitch_semitones,
+        g_looper_tracks[track_id].stretch_grain_frames);
+}
+
+void brick6_looper_runtime_set_stretch_pitch(uint8_t track_id,
+                                              float pitch_semitones)
+{
+    if (looper_track_valid(track_id) == 0U)
+        return;
+    brick6_looper_runtime_set_stretch(
+        track_id, g_looper_tracks[track_id].stretch_mode, pitch_semitones,
+        g_looper_tracks[track_id].stretch_grain_frames);
+}
+
+void brick6_looper_runtime_set_stretch_grain(uint8_t track_id,
+                                              uint16_t grain_frames)
+{
+    if (looper_track_valid(track_id) == 0U)
+        return;
+    brick6_looper_runtime_set_stretch(
+        track_id, g_looper_tracks[track_id].stretch_mode,
+        g_looper_tracks[track_id].stretch_pitch_semitones, grain_frames);
 }
 
 void brick6_looper_runtime_on_transport_start(void)
@@ -1994,7 +2022,7 @@ static uint32_t looper_expected_frame_from_timeline(const brick6_looper_track_st
         return 0U;
     }
 
-    const uint64_t now_sample = seq_runtime_exec_get_sample_timeline();
+    const uint64_t now_sample = live_clock_audio_sample();
     const uint64_t elapsed =
         (now_sample > state->playback_start_sample)
             ? (now_sample - state->playback_start_sample)

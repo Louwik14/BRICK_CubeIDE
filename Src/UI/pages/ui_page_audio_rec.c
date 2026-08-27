@@ -10,6 +10,7 @@
 #if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
 #include "stm32h7xx_hal.h"
 #endif
+#include <math.h>
 #include <stdio.h>
 
 typedef enum
@@ -22,6 +23,11 @@ typedef enum
 #define UI_AUDIO_REC_WAVE_Y      17
 #define UI_AUDIO_REC_WAVE_W      OLED_WIDTH
 #define UI_AUDIO_REC_WAVE_H      26
+#define UI_AUDIO_REC_METER_X     11U
+#define UI_AUDIO_REC_METER_Y     49U
+#define UI_AUDIO_REC_METER_W     49U
+#define UI_AUDIO_REC_METER_H     8U
+#define UI_AUDIO_REC_STATUS_X    64U
 #define UI_REC_EDIT_OVERVIEW_X   0
 #define UI_REC_EDIT_OVERVIEW_Y   45
 #define UI_REC_EDIT_OVERVIEW_W   OLED_WIDTH
@@ -33,6 +39,82 @@ typedef enum
 static uint32_t g_ui_page_audio_rec_last_waveform_ms;
 #endif
 static uint8_t g_ui_rec_edit_assign_popup;
+static uint32_t g_ui_audio_rec_smoothed_peak;
+
+static const char *ui_page_audio_rec_arm_label(sample_capture_arm_t arm)
+{
+    switch(arm)
+    {
+        case SAMPLE_CAPTURE_ARM_OFF: return "OFF";
+        case SAMPLE_CAPTURE_ARM_REC: return "REC";
+        case SAMPLE_CAPTURE_ARM_TRIG: return "TRIG";
+        default: return "?";
+    }
+}
+
+static uint8_t ui_page_audio_rec_peak_to_meter(uint32_t peak_abs_pcm24,
+                                               uint8_t width)
+{
+    if((peak_abs_pcm24 == 0U) || (width == 0U))
+    {
+        return 0U;
+    }
+    float dbfs = 20.0f * log10f((float)peak_abs_pcm24 / 8388607.0f);
+    if(dbfs < -60.0f)
+    {
+        dbfs = -60.0f;
+    }
+    if(dbfs > 0.0f)
+    {
+        dbfs = 0.0f;
+    }
+    return (uint8_t)(((dbfs + 60.0f) * (float)width / 60.0f) + 0.5f);
+}
+
+static void ui_page_audio_rec_update_meter(uint32_t peak_abs_pcm24)
+{
+    if(peak_abs_pcm24 >= g_ui_audio_rec_smoothed_peak)
+    {
+        g_ui_audio_rec_smoothed_peak = peak_abs_pcm24;
+        return;
+    }
+    uint32_t release = (g_ui_audio_rec_smoothed_peak - peak_abs_pcm24) >> 2U;
+    if(release == 0U)
+    {
+        release = 1U;
+    }
+    g_ui_audio_rec_smoothed_peak -= release;
+}
+
+static void ui_page_audio_rec_draw_live_meter(const sample_capture_state_t *state)
+{
+    if(state == 0)
+    {
+        return;
+    }
+    const uint8_t inner_w = UI_AUDIO_REC_METER_W - 2U;
+    const uint8_t fill_w = ui_page_audio_rec_peak_to_meter(
+        g_ui_audio_rec_smoothed_peak, inner_w);
+    drv_display_draw_text(0U, 50U, "IN");
+    drv_display_draw_rect(UI_AUDIO_REC_METER_X, UI_AUDIO_REC_METER_Y,
+                          UI_AUDIO_REC_METER_W, UI_AUDIO_REC_METER_H);
+    if(fill_w != 0U)
+    {
+        drv_display_fill_rect(UI_AUDIO_REC_METER_X + 1U,
+                              UI_AUDIO_REC_METER_Y + 1U,
+                              fill_w, UI_AUDIO_REC_METER_H - 2U);
+    }
+    if(state->arm == SAMPLE_CAPTURE_ARM_TRIG)
+    {
+        const int16_t threshold_from_floor =
+            (int16_t)state->threshold_dbfs + 60;
+        const uint8_t marker_x = (uint8_t)(UI_AUDIO_REC_METER_X + 1U
+            + ((uint16_t)threshold_from_floor * inner_w) / 60U);
+        drv_display_draw_line(marker_x, UI_AUDIO_REC_METER_Y - 1U,
+                              marker_x,
+                              UI_AUDIO_REC_METER_Y + UI_AUDIO_REC_METER_H);
+    }
+}
 
 static uint8_t ui_page_audio_rec_center_x(const char *label)
 {
@@ -79,6 +161,7 @@ static uint16_t ui_page_audio_rec_vzoom_scale_q8(uint8_t vzoom)
 static void ui_page_audio_rec_enter(void)
 {
     sample_capture_model_set_view(SAMPLE_CAPTURE_VIEW_AUDIO_REC);
+    g_ui_audio_rec_smoothed_peak = 0U;
 }
 
 static void ui_page_rec_edit_enter(void)
@@ -91,6 +174,19 @@ static void ui_page_audio_rec_handle_event(const ui_event_t *ev)
 {
     if(ev == 0)
     {
+        return;
+    }
+
+    if(ev->type == UI_EVENT_BUTTON_PRESS)
+    {
+        if(ev->id == (uint8_t)BTN_PAGE_3)
+        {
+            (void)sample_capture_model_toggle_line();
+        }
+        else if(ev->id == (uint8_t)BTN_PAGE_4)
+        {
+            (void)sample_capture_model_toggle_mic();
+        }
         return;
     }
 
@@ -169,6 +265,10 @@ static void ui_page_audio_rec_tick(void)
     sample_capture_model_service();
     sample_capture_state_t state;
     sample_capture_model_get_state(&state);
+    if(state.view == SAMPLE_CAPTURE_VIEW_AUDIO_REC)
+    {
+        ui_page_audio_rec_update_meter(state.live_peak_abs_pcm24);
+    }
     if(state.view == SAMPLE_CAPTURE_VIEW_REC_EDIT && ui_page_get_id() != UI_PAGE_REC_EDIT)
     {
         ui_page_set(UI_PAGE_REC_EDIT);
@@ -197,7 +297,7 @@ static const char *ui_page_audio_rec_quant_label(sample_capture_quant_t quant)
     {
         case SAMPLE_CAPTURE_QUANT_NOW: return "NOW";
         case SAMPLE_CAPTURE_QUANT_BAR: return "BAR";
-        case SAMPLE_CAPTURE_QUANT_PATTERN: return "PATTERN";
+        case SAMPLE_CAPTURE_QUANT_PATTERN: return "PAT";
         default: return "?";
     }
 }
@@ -1415,7 +1515,7 @@ static void ui_page_audio_rec_render(void)
 
     drv_display_set_font(&FONT_4X6);
     const uint8_t live_label_y = (uint8_t)(UI_AUDIO_REC_WAVE_Y - drv_display_font_height() - 2U);
-    (void)snprintf(line, sizeof(line), "ARM %s", (state.arm == SAMPLE_CAPTURE_ARM_REC) ? "REC" : "OFF");
+    (void)snprintf(line, sizeof(line), "ARM %s", ui_page_audio_rec_arm_label(state.arm));
     drv_display_draw_text(0U, live_label_y, line);
     if(state.len_bars == 0U)
     {
@@ -1425,10 +1525,18 @@ static void ui_page_audio_rec_render(void)
     {
         (void)snprintf(line, sizeof(line), "LEN %u", (unsigned)state.len_bars);
     }
-    drv_display_draw_text(43U, live_label_y, line);
+    drv_display_draw_text(34U, live_label_y, line);
     (void)snprintf(line, sizeof(line), "Q %s", ui_page_audio_rec_quant_label(state.quant));
-    drv_display_draw_text(86U, live_label_y, line);
+    drv_display_draw_text(68U, live_label_y, line);
+    (void)snprintf(line, sizeof(line), "THR %d", (int)state.threshold_dbfs);
+    drv_display_draw_text(96U, live_label_y, line);
     ui_page_audio_rec_draw_marker_bar(&state);
+    ui_page_audio_rec_draw_live_meter(&state);
+
+    (void)snprintf(line, sizeof(line), "LINE %s MIC %s",
+                   state.line_enabled ? "ON" : "OFF",
+                   state.mic_enabled ? "ON" : "OFF");
+    drv_display_draw_text(UI_AUDIO_REC_STATUS_X, 50U, line);
 
     if(state.error != SAMPLE_CAPTURE_ERROR_NONE)
     {
@@ -1531,8 +1639,10 @@ uint8_t ui_page_audio_rec_handle_encoder(uint8_t encoder, int16_t delta)
             return sample_capture_model_step_len(delta);
         case 2U:
             return sample_capture_model_step_quant(delta);
+        case 3U:
+            return sample_capture_model_step_threshold(delta);
         default:
-            return 1U;
+            return 0U;
     }
 }
 

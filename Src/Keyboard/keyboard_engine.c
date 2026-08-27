@@ -15,6 +15,7 @@
 #include "Keyboard/keyboard_engine.h"
 
 #include "Audio/control_audio_queue.h"
+#include "Core/control_music_output.h"
 #include "Keyboard/keyboard_params.h"
 #include "MIDI/midi.h"
 #include "ui_core.h"
@@ -140,22 +141,18 @@ static uint8_t keyboard_engine_get_track_midi_channel_zero_based(uint8_t track)
     return (uint8_t)((channel_1_16 > 0U) ? (channel_1_16 - 1U) : 0U);
 }
 
-static void keyboard_engine_all_notes_off_local_track(uint8_t track)
+static uint8_t keyboard_engine_all_notes_off_local_track(uint8_t track)
 {
     uint64_t due_sample = 0U;
     if (!live_clock_read_audio_sample(&due_sample))
-        return;
-    const control_audio_event_t close_entity = {
-        .due_sample = due_sample,
-        .entity_id = track,
-        .kind = (uint8_t)CONTROL_AUDIO_EVENT_CLOSE_ENTITY
-    };
-    (void)control_audio_queue_publish(&close_entity);
+        return 0U;
+    due_sample = control_music_output_first_unpublished_sample(due_sample);
+    return control_music_output_close_entity(track, due_sample);
 }
 
-static void keyboard_engine_all_notes_off_for_owner(uint8_t owner_track)
+static uint8_t keyboard_engine_all_notes_off_for_owner(uint8_t owner_track)
 {
-    keyboard_engine_all_notes_off_local_track(owner_track);
+    return keyboard_engine_all_notes_off_local_track(owner_track);
 }
 
 static uint32_t keyboard_engine_next_occurrence_id(void)
@@ -225,7 +222,9 @@ static void keyboard_engine_send_note_for_owner_track_with_capture(
             }
         }
         if (index < 0)
+        {
             return;
+        }
         const uint32_t counter = keyboard_engine_next_occurrence_id();
         if (counter == 0U)
             return;
@@ -237,7 +236,9 @@ static void keyboard_engine_send_note_for_owner_track_with_capture(
         index = keyboard_engine_find_source_occurrence(owner_track, note,
                                                         provenance);
         if (index < 0)
+        {
             return;
+        }
         occurrence_id =
             g_keyboard_engine_source_occurrence[(uint8_t)index].occurrence_id;
     }
@@ -250,7 +251,9 @@ static void keyboard_engine_send_note_for_owner_track_with_capture(
             owner_track, note, velocity, is_note_on,
             NOTE_FX_SAMPLE_TIME_CONTROL_ANCHOR, provenance, occurrence_id);
     if (result != NOTE_EVENT_RESULT_ACCEPTED)
+    {
         return;
+    }
 
     if (is_note_on != 0U)
     {
@@ -339,7 +342,8 @@ static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
     }
 }
 
-static void keyboard_engine_all_notes_off_matching_tracks(uint8_t channel, uint8_t source_internal)
+static uint8_t keyboard_engine_all_notes_off_matching_tracks(
+    uint8_t channel, uint8_t source_internal)
 {
     track_runtime_refresh_all();
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
@@ -372,8 +376,10 @@ static void keyboard_engine_all_notes_off_matching_tracks(uint8_t channel, uint8
             continue;
         }
 
-        keyboard_engine_all_notes_off_for_owner(track);
+        if (keyboard_engine_all_notes_off_for_owner(track) == 0U)
+            return 0U;
     }
+    return 1U;
 }
 
 static void keyboard_engine_live_rec_push_internal_channel(uint8_t note, uint8_t channel)
@@ -669,16 +675,17 @@ void keyboard_engine_note_off_for_track_timed(uint8_t track, uint8_t note,
                                                  ingress_serial);
 }
 
-void keyboard_engine_all_notes_off_for_track(uint8_t track)
+uint8_t keyboard_engine_all_notes_off_for_track(uint8_t track)
 {
     if ((track >= UI_TRACK_COUNT) || (entity_topology_is_active(track) == 0U))
     {
-        return;
+        return 0U;
     }
 
     const uint8_t owner_track = track;
 
-    keyboard_engine_all_notes_off_for_owner(owner_track);
+    if (keyboard_engine_all_notes_off_for_owner(owner_track) == 0U)
+        return 0U;
     const uint8_t channel = keyboard_engine_get_track_midi_channel_zero_based(owner_track);
     if (keyboard_engine_track_has_midi_note_path(owner_track))
     {
@@ -697,13 +704,16 @@ void keyboard_engine_all_notes_off_for_track(uint8_t track)
     memset(g_kbd_rec_track_note_count[owner_track],
            0,
            sizeof(g_kbd_rec_track_note_count[owner_track]));
+    return 1U;
 }
 
-void keyboard_engine_all_notes_off(void)
+uint8_t keyboard_engine_all_notes_off(void)
 {
-    keyboard_engine_mono_clear();
     const uint8_t active_channel = keyboard_engine_get_track_midi_channel_zero_based(keyboard_engine_get_play_owner_track());
-    keyboard_engine_all_notes_off_matching_tracks(active_channel, 1U);
+    if (keyboard_engine_all_notes_off_matching_tracks(
+            active_channel, 1U) == 0U)
+        return 0U;
+    keyboard_engine_mono_clear();
 
     if (keyboard_engine_active_track_has_midi_note_path())
     {
@@ -712,6 +722,7 @@ void keyboard_engine_all_notes_off(void)
 
     memset(g_kbd_rec_note_stack_count, 0, sizeof(g_kbd_rec_note_stack_count));
     memset(g_kbd_rec_track_note_count, 0, sizeof(g_kbd_rec_track_note_count));
+    return 1U;
 }
 
 void keyboard_engine_clear_source_occurrences_silent(void)
@@ -756,7 +767,8 @@ static void keyboard_engine_midi_receive_internal(const uint8_t *msg, size_t len
 
     if (is_all_notes_off != 0U)
     {
-        (void)note_fx_pipeline_request_panic();
+        if (note_fx_pipeline_request_panic() == 0U)
+            return;
         keyboard_engine_clear_source_occurrences_silent();
         return;
     }

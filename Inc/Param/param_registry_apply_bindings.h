@@ -44,7 +44,7 @@ void apply_midi_cc3_2(float v);
 void apply_midi_cc3_3(float v);
 void apply_midi_cc3_4(float v);
 void apply_midi_program(float v);
-void apply_sampler_end(float v);
+void apply_sampler_length(float v);
 void apply_sampler_gain(float v);
 void apply_sampler_clip_play_mode(float v);
 void apply_sampler_clip_loop(float v);

@@ -30,6 +30,17 @@ constexpr uint8_t kBraidsOscCount = 2U;
 constexpr float kBraidsOscActiveEpsilon = 1.0e-5f;
 constexpr uint8_t kBraidsFirstTexturalModel = 26U;
 constexpr uint32_t kBraidsTexturalWindowIncrement = 0x01000000U;
+constexpr uint32_t kBraidsDefaultRngSeed = 0x6D2B79F5UL;
+constexpr float kBraidsDetuneMaxSemitones = 0.12f;
+
+static_assert((48000U % kBraidsRenderBlockSize) == 0U,
+              "Braids block clock must divide the audio sample rate");
+static_assert((48000U / kBraidsRenderBlockSize) == 2000U,
+              "Braids block clock must run at the original 2 kHz cadence");
+static_assert(((3U * 64U) / kBraidsRenderBlockSize) == 8U,
+              "Three BRICK blocks must contain eight complete Braids blocks");
+static_assert(((3U * 64U) % kBraidsRenderBlockSize) == 0U,
+              "The 64/24 boundary sequence must close after three BRICK blocks");
 
 
 static const braids::MacroOscillatorShape kBraidsShapeMap[] = {
@@ -81,6 +92,7 @@ enum
     BRAIDS_CONT_BALANCE,
     BRAIDS_CONT_TUNE,
     BRAIDS_CONT_DETUNE,
+    BRAIDS_CONT_DRIFT,
     BRAIDS_CONT_COUNT
 };
 
@@ -95,6 +107,8 @@ typedef struct
     float parameter_color_current;
     float pitch_current_q7;
     uint32_t waveform_phase;
+    uint8_t output_cache_position;
+    uint8_t output_cache_textural;
     braids::MacroOscillator oscillator;
 } brick6_braids_runtime_osc_t;
 
@@ -113,6 +127,9 @@ typedef struct
     float balance;
     float tune;
     float detune;
+    float drift;
+    float detune_offset[kBraidsOscCount];
+    uint32_t rng;
     float vca_release_s;
     uint32_t tail_samples_remaining;
     uint32_t config_version;
@@ -125,6 +142,7 @@ AUDIO_HOT static brick6_braids_runtime_instance_t
     g_braids_runtime[BRICK6_BRAIDS_MAX_INSTANCES];
 AUDIO_HOT static brick6_braids_runtime_instance_t
     g_braids_poly_d2[BRICK6_BRAIDS_VOICE_INSTANCE_COUNT - BRICK6_BRAIDS_MAX_INSTANCES];
+AUDIO_HOT static braids::MacroOscillatorScratch g_braids_render_scratch;
 static uint32_t g_braids_continuous_version;
 
 static float brick6_braids_runtime_clamp(float value, float lo, float hi)
@@ -138,6 +156,27 @@ static float brick6_braids_runtime_clamp(float value, float lo, float hi)
         return hi;
     }
     return value;
+}
+
+static uint32_t brick6_braids_runtime_next_rng(brick6_braids_runtime_instance_t *instance)
+{
+    uint32_t x = instance->rng;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    instance->rng = x;
+    return x;
+}
+
+static void brick6_braids_runtime_generate_detune_offsets(
+    brick6_braids_runtime_instance_t *instance)
+{
+    for (uint8_t osc = 0U; osc < kBraidsOscCount; ++osc)
+    {
+        const int32_t bipolar = (int32_t)(brick6_braids_runtime_next_rng(instance) & 0xFFFFU)
+            - 32768L;
+        instance->detune_offset[osc] = (float)bipolar * (1.0f / 32768.0f);
+    }
 }
 
 static int16_t brick6_braids_runtime_float_to_u15(float value)
@@ -210,7 +249,8 @@ static void brick6_braids_runtime_touch_continuous(uint8_t instance_id,
     instance->continuous_epoch = g_braids_continuous_version;
 }
 
-static void brick6_braids_runtime_init_instance(brick6_braids_runtime_instance_t *instance)
+static void brick6_braids_runtime_init_instance(brick6_braids_runtime_instance_t *instance,
+                                                uint8_t instance_id)
 {
     if (instance == NULL)
     {
@@ -238,6 +278,8 @@ static void brick6_braids_runtime_init_instance(brick6_braids_runtime_instance_t
         osc->parameter_timbre_current = osc->voice.timbre;
         osc->parameter_color_current = osc->voice.color;
         osc->waveform_phase = 0U;
+        osc->output_cache_position = (uint8_t)kBraidsRenderBlockSize;
+        osc->output_cache_textural = 0U;
         osc->oscillator.Init();
         osc->oscillator.set_shape(brick6_braids_runtime_shape_from_edit(osc->voice.edit));
         osc->pitch_current_q7 = (float)brick6_braids_runtime_pitch_to_q7(&osc->voice, 0.0f);
@@ -258,6 +300,10 @@ static void brick6_braids_runtime_init_instance(brick6_braids_runtime_instance_t
     instance->balance = 0.0f;
     instance->tune = 0.0f;
     instance->detune = 0.0f;
+    instance->drift = 0.0f;
+    instance->detune_offset[0] = 0.0f;
+    instance->detune_offset[1] = 0.0f;
+    instance->rng = kBraidsDefaultRngSeed ^ ((uint32_t)instance_id * 0x9E3779B9UL);
     instance->vca_release_s = 0.001f;
     instance->tail_samples_remaining = 0U;
     instance->config_version = 1U;
@@ -273,13 +319,14 @@ void brick6_braids_runtime_init(void)
     for (uint8_t instance = 0U; instance < BRICK6_BRAIDS_VOICE_INSTANCE_COUNT; ++instance)
     {
         brick6_braids_runtime_init_instance(
-            brick6_braids_runtime_get_instance_mut(instance));
+            brick6_braids_runtime_get_instance_mut(instance), instance);
     }
 }
 
 void brick6_braids_runtime_reset_instance(uint8_t instance_id)
 {
-    brick6_braids_runtime_init_instance(brick6_braids_runtime_get_instance_mut(instance_id));
+    brick6_braids_runtime_init_instance(
+        brick6_braids_runtime_get_instance_mut(instance_id), instance_id);
 }
 
 void brick6_braids_runtime_sync_voice(uint8_t track_instance, uint8_t voice_instance)
@@ -306,8 +353,6 @@ void brick6_braids_runtime_sync_voice(uint8_t track_instance, uint8_t voice_inst
             dst->osc[osc].phase_reset_enabled = src->osc[osc].phase_reset_enabled;
             if (shape_changed)
             {
-                dst->osc[osc].oscillator.set_shape(
-                    brick6_braids_runtime_shape_from_edit(dst->osc[osc].voice.edit));
                 synth_waveform_audio_restart_instance(voice_instance);
             }
         }
@@ -353,6 +398,11 @@ void brick6_braids_runtime_sync_voice(uint8_t track_instance, uint8_t voice_inst
         dst->detune = src->detune;
         dst->continuous_version[BRAIDS_CONT_DETUNE] = src->continuous_version[BRAIDS_CONT_DETUNE];
     }
+    if (full || (dst->continuous_version[BRAIDS_CONT_DRIFT] != src->continuous_version[BRAIDS_CONT_DRIFT]))
+    {
+        dst->drift = src->drift;
+        dst->continuous_version[BRAIDS_CONT_DRIFT] = src->continuous_version[BRAIDS_CONT_DRIFT];
+    }
     if (full) dst->synced_config_version = src->config_version;
     dst->continuous_epoch = src->continuous_epoch;
 }
@@ -375,7 +425,6 @@ void brick6_braids_runtime_set_osc_edit(uint8_t instance_id, uint8_t osc_index, 
         const float next = brick6_braids_runtime_clamp(edit, 0.0f, kBraidsEditMax);
         if (osc->voice.edit == next) return;
         osc->voice.edit = next;
-        osc->oscillator.set_shape(brick6_braids_runtime_shape_from_edit(osc->voice.edit));
         synth_waveform_audio_restart_instance(instance_id);
         brick6_braids_runtime_touch_config(instance_id);
     }
@@ -433,7 +482,7 @@ void brick6_braids_runtime_set_osc_color(uint8_t instance_id, uint8_t osc_index,
     }
 }
 
-void brick6_braids_runtime_set_osc_phase_reset(uint8_t instance_id, uint8_t osc_index, uint8_t enabled)
+static void brick6_braids_runtime_set_osc_phase_reset(uint8_t instance_id, uint8_t osc_index, uint8_t enabled)
 {
     brick6_braids_runtime_osc_t *const osc = brick6_braids_runtime_get_osc_mut(instance_id, osc_index);
     if (osc != NULL)
@@ -491,12 +540,26 @@ void brick6_braids_runtime_set_detune(uint8_t instance_id, float semitones)
     brick6_braids_runtime_touch_continuous(instance_id, BRAIDS_CONT_DETUNE);
 }
 
+void brick6_braids_runtime_set_drift(uint8_t instance_id, float amount)
+{
+    brick6_braids_runtime_instance_t *const instance = brick6_braids_runtime_get_instance_mut(instance_id);
+    if (instance == NULL) return;
+    const float next = brick6_braids_runtime_clamp(amount, 0.0f, 1.0f);
+    if (instance->drift == next) return;
+    instance->drift = next;
+    brick6_braids_runtime_touch_continuous(instance_id, BRAIDS_CONT_DRIFT);
+}
+
 void brick6_braids_runtime_set_edit(uint8_t instance_id, float edit) { brick6_braids_runtime_set_osc_edit(instance_id, 0U, edit); }
 void brick6_braids_runtime_set_pitch_mod(uint8_t instance_id, float amount) { brick6_braids_runtime_set_osc_pitch_mod(instance_id, 0U, amount); }
 void brick6_braids_runtime_set_timbre(uint8_t instance_id, float timbre) { brick6_braids_runtime_set_osc_timbre(instance_id, 0U, timbre); }
 void brick6_braids_runtime_set_modulation(uint8_t instance_id, float modulation) { brick6_braids_runtime_set_osc_modulation(instance_id, 0U, modulation); }
 void brick6_braids_runtime_set_color(uint8_t instance_id, float color) { brick6_braids_runtime_set_osc_color(instance_id, 0U, color); }
-void brick6_braids_runtime_set_phase_reset(uint8_t instance_id, uint8_t enabled) { brick6_braids_runtime_set_osc_phase_reset(instance_id, 0U, enabled); }
+void brick6_braids_runtime_set_phase_reset(uint8_t instance_id, uint8_t enabled)
+{
+    brick6_braids_runtime_set_osc_phase_reset(instance_id, 0U, enabled);
+    brick6_braids_runtime_set_osc_phase_reset(instance_id, 1U, enabled);
+}
 
 void brick6_braids_runtime_set_vca_release_seconds(uint8_t instance_id, float release_s)
 {
@@ -533,6 +596,15 @@ void brick6_braids_runtime_note_on(uint8_t instance_id, float note, float veloci
     instance->has_active_note = 1U;
     instance->gate = 1U;
     instance->trigger = 1U;
+    if (instance->drift > 0.0f)
+    {
+        brick6_braids_runtime_generate_detune_offsets(instance);
+    }
+    else
+    {
+        instance->detune_offset[0] = 0.0f;
+        instance->detune_offset[1] = 0.0f;
+    }
     for (uint8_t osc = 0U; osc < kBraidsOscCount; ++osc)
     {
         instance->osc[osc].voice.note = instance->note;
@@ -544,7 +616,9 @@ void brick6_braids_runtime_note_on(uint8_t instance_id, float note, float veloci
         instance->osc[osc].pitch_current_q7 =
             (float)brick6_braids_runtime_pitch_to_q7(
                 &instance->osc[osc].voice,
-                instance->tune + ((osc == 1U) ? instance->detune : 0.0f));
+                instance->tune + ((osc == 1U) ? instance->detune : 0.0f)
+                    + (instance->detune_offset[osc]
+                        * instance->drift * kBraidsDetuneMaxSemitones));
         if (instance->osc[osc].phase_reset_enabled != 0U)
         {
             instance->osc[osc].phase_reset_pending = 1U;
@@ -630,6 +704,11 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
 
     if ((instance->has_note == 0U) && (instance->gate == 0U) && (instance->trigger == 0U) && (instance->level <= 1.0e-5f))
     {
+        for (uint8_t osc_index = 0U; osc_index < kBraidsOscCount; ++osc_index)
+        {
+            instance->osc[osc_index].output_cache_position =
+                (uint8_t)kBraidsRenderBlockSize;
+        }
         return 0U;
     }
 
@@ -669,6 +748,8 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
         for (uint8_t osc_index = 0U; osc_index < kBraidsOscCount; ++osc_index)
         {
             instance->osc[osc_index].voice.trigger = 0U;
+            instance->osc[osc_index].output_cache_position =
+                (uint8_t)kBraidsRenderBlockSize;
         }
         return 0U;
     }
@@ -684,6 +765,7 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
             osc->voice.color, 0.0f, 1.0f);
         if ((render_mask & (uint8_t)(1U << osc_index)) == 0U)
         {
+            osc->output_cache_position = (uint8_t)kBraidsRenderBlockSize;
             continue;
         }
         osc->voice.note = instance->note;
@@ -694,12 +776,12 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
         pitch_target_q7[osc_index] =
             (float)brick6_braids_runtime_pitch_to_q7(
                 &osc->voice,
-                instance->tune + ((osc_index == 1U) ? instance->detune : 0.0f));
+                instance->tune + ((osc_index == 1U) ? instance->detune : 0.0f)
+                    + (instance->detune_offset[osc_index]
+                        * instance->drift * kBraidsDetuneMaxSemitones));
     }
     uint32_t offset = 0U;
     uint8_t sync_block[kBraidsRenderBlockSize] = {};
-    int16_t sample_block[kBraidsOscCount][kBraidsRenderBlockSize];
-    uint8_t trigger_pending = instance->trigger;
     const uint8_t single_osc = (audible_mask == 1U) ? 0U : ((audible_mask == 2U) ? 1U : 0xffU);
     float stable_mix_norm = 1.0f;
     if ((single_osc == 0xffU) && (levels_stable != 0U))
@@ -714,48 +796,50 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
     while (offset < frames)
     {
         const uint32_t remaining = frames - offset;
-        const uint8_t render_count =
+        uint8_t render_count =
             (remaining > kBraidsRenderBlockSize)
                 ? (uint8_t)kBraidsRenderBlockSize
                 : (uint8_t)remaining;
+        uint8_t cache_start[kBraidsOscCount] = {};
         for (uint8_t osc_index = 0U; osc_index < kBraidsOscCount; ++osc_index)
         {
-            if ((render_mask & (uint8_t)(1U << osc_index)) == 0U)
-            {
-                continue;
-            }
+            if ((render_mask & (uint8_t)(1U << osc_index)) == 0U) continue;
             brick6_braids_runtime_osc_t *const osc = &instance->osc[osc_index];
-            if (osc->phase_reset_pending != 0U)
+            if (osc->output_cache_position >= kBraidsRenderBlockSize)
             {
-                sync_block[0] = 1U;
-                osc->phase_reset_pending = 0U;
+                sync_block[0] = 0U;
+                if (osc->phase_reset_pending != 0U)
+                {
+                    sync_block[0] = 1U;
+                    osc->phase_reset_pending = 0U;
+                }
+                osc->oscillator.set_shape(
+                    brick6_braids_runtime_shape_from_edit(osc->voice.edit));
+                if (osc->voice.trigger != 0U)
+                {
+                    osc->oscillator.Strike();
+                    osc->voice.trigger = 0U;
+                }
+                osc->pitch_current_q7 = pitch_target_q7[osc_index];
+                osc->parameter_timbre_current = parameter_timbre_target[osc_index];
+                osc->parameter_color_current = parameter_color_target[osc_index];
+                osc->oscillator.set_pitch((int16_t)(osc->pitch_current_q7 + 0.5f));
+                osc->oscillator.set_parameters(
+                    brick6_braids_runtime_float_to_u15(osc->parameter_timbre_current),
+                    brick6_braids_runtime_float_to_u15(osc->parameter_color_current));
+                const uint8_t *const sync_input =
+                    (osc->phase_reset_enabled != 0U) ? sync_block : NULL;
+                osc->oscillator.Render24(sync_input, &g_braids_render_scratch);
+                osc->output_cache_position = 0U;
+                osc->output_cache_textural =
+                    ((uint8_t)(osc->voice.edit + 0.5f) >= kBraidsFirstTexturalModel)
+                        ? 1U
+                        : 0U;
             }
-            if (trigger_pending != 0U)
-            {
-                osc->oscillator.Strike();
-            }
-            osc->voice.trigger = trigger_pending;
-            const float pitch_progress =
-                ((uint32_t)render_count >= remaining)
-                    ? 1.0f
-                    : ((float)render_count / (float)remaining);
-            osc->pitch_current_q7 +=
-                (pitch_target_q7[osc_index] - osc->pitch_current_q7) * pitch_progress;
-            osc->parameter_timbre_current +=
-                (parameter_timbre_target[osc_index] - osc->parameter_timbre_current)
-                * pitch_progress;
-            osc->parameter_color_current +=
-                (parameter_color_target[osc_index] - osc->parameter_color_current)
-                * pitch_progress;
-            osc->oscillator.set_pitch((int16_t)(osc->pitch_current_q7 + 0.5f));
-            osc->oscillator.set_parameters(
-                brick6_braids_runtime_float_to_u15(osc->parameter_timbre_current),
-                brick6_braids_runtime_float_to_u15(osc->parameter_color_current));
-            const uint8_t *const sync_input =
-                (osc->phase_reset_enabled != 0U) ? sync_block : NULL;
-            osc->oscillator.Render(
-                sync_input, sample_block[osc_index], (size_t)render_count);
-            sync_block[0] = 0U;
+            cache_start[osc_index] = osc->output_cache_position;
+            const uint8_t available =
+                (uint8_t)(kBraidsRenderBlockSize - osc->output_cache_position);
+            if (available < render_count) render_count = available;
         }
         if (capture_mask != 0U)
         {
@@ -764,29 +848,26 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
                 const uint8_t osc_bit = (uint8_t)(1U << osc_index);
                 if ((capture_mask & osc_bit) == 0U) continue;
                 brick6_braids_runtime_osc_t *const osc = &instance->osc[osc_index];
-                const uint8_t textural = (uint8_t)(osc->voice.edit + 0.5f)
-                    >= kBraidsFirstTexturalModel;
+                const uint8_t textural = osc->output_cache_textural;
                 const uint32_t phase_increment = textural
                     ? kBraidsTexturalWindowIncrement
                     : osc->oscillator.carrier_phase_increment();
                 uint32_t carrier_phase = textural
                     ? osc->waveform_phase
                     : (osc->oscillator.carrier_phase()
-                        - (phase_increment * (uint32_t)(render_count - 1U)));
+                        - (phase_increment
+                            * (uint32_t)((kBraidsRenderBlockSize - 1U)
+                                - cache_start[osc_index])));
+                const int16_t *const cached = osc->oscillator.output_buffer();
                 for (uint8_t i = 0U; i < render_count; ++i)
                 {
                     synth_waveform_audio_capture_sample(
                         instance_id, osc_index, carrier_phase,
-                        (float)sample_block[osc_index][i] / 32768.0f);
+                        (float)cached[cache_start[osc_index] + i] / 32768.0f);
                     carrier_phase += phase_increment;
                 }
                 if (textural != 0U) osc->waveform_phase = carrier_phase;
             }
-        }
-        if (trigger_pending != 0U)
-        {
-            trigger_pending = 0U;
-            instance->trigger = 0U;
         }
 
         for (uint8_t i = 0U; i < render_count; ++i)
@@ -807,7 +888,8 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
                 }
                 else
                 {
-                    const int16_t sample = sample_block[single_osc][i];
+                    const int16_t sample = osc->oscillator.output_buffer()[
+                        cache_start[single_osc] + i];
                     const float converted = (float)sample / 32768.0f;
                     mixed = converted * osc_level;
                 }
@@ -826,7 +908,8 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
                     {
                         continue;
                     }
-                    const int16_t sample = sample_block[osc_index][i];
+                    const int16_t sample = osc->oscillator.output_buffer()[
+                        cache_start[osc_index] + i];
                     const float converted = (float)sample / 32768.0f;
                     mixed += converted * osc_level;
                     osc_level_sum += osc_level;
@@ -844,8 +927,16 @@ uint8_t brick6_braids_runtime_render_instance(uint8_t instance_id, float *out_mo
             }
         }
 
+        for (uint8_t osc_index = 0U; osc_index < kBraidsOscCount; ++osc_index)
+        {
+            if ((render_mask & (uint8_t)(1U << osc_index)) == 0U) continue;
+            instance->osc[osc_index].output_cache_position =
+                (uint8_t)(instance->osc[osc_index].output_cache_position + render_count);
+        }
+
         offset += (uint32_t)render_count;
     }
+    instance->trigger = 0U;
     for (uint8_t osc_index = 0U; osc_index < kBraidsOscCount; ++osc_index)
     {
         instance->osc[osc_index].osc_level_current =

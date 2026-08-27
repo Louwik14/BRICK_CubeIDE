@@ -25,6 +25,8 @@
 #include "Audio/audio_float.h"
 #include "Audio/audio_fx_runtime.h"
 #include "Audio/audio_waveform_capture.h"
+#include "Audio/audio_io.h"
+#include "Audio/audio_rec_level_snapshot.h"
 
 #include "Audio/audio_xfade.h"
 #include "env_adsr.h"
@@ -41,6 +43,7 @@
 #include "Core/synth_polyphony.h"
 #include "Core/track_runtime.h"
 #include "Core/mixer_routing_publication.h"
+#include "Core/audio_rec_bus_projection.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/multi_voice_dsp.h"
 
@@ -227,9 +230,11 @@ void mixer_rebuild_static_plan(void)
             ? MIXER_STATIC_ROUTE_MAIN : 0U;
         const brick_entity_id_t entity =
             audio_note_engine_adapter_entity_for_mix_lane(lane);
+        track_audio_runtime_ctx_t ctx_value;
         const track_audio_runtime_ctx_t *const ctx =
             (entity < BRICK_ENTITY_CAPACITY)
-                ? audio_note_engine_adapter_audio_ctx(entity) : NULL;
+                && (audio_note_engine_adapter_audio_ctx_snapshot(
+                    entity, &ctx_value) != 0U) ? &ctx_value : NULL;
         if ((ctx != NULL)
                 && ((ctx->flags & AUDIO_RUNTIME_FLAG_GROUP_CHILD) != 0U))
             flags |= MIXER_STATIC_GROUP_CHILD;
@@ -263,8 +268,11 @@ void mixer_rebuild_static_plan(void)
         g_mixer_static_lane_flags[lane] = flags;
     }
 
+    track_audio_runtime_ctx_t group_master_ctx_value;
     const track_audio_runtime_ctx_t *const group_master_ctx =
-        audio_note_engine_adapter_audio_ctx(BRICK_ENTITY_GROUP_MASTER_ID);
+        (audio_note_engine_adapter_audio_ctx_snapshot(
+            BRICK_ENTITY_GROUP_MASTER_ID, &group_master_ctx_value) != 0U)
+            ? &group_master_ctx_value : NULL;
     g_mixer_static_group_active = (uint8_t)((group_master_ctx != NULL)
         && ((group_master_ctx->flags & AUDIO_RUNTIME_FLAG_GROUP_MASTER) != 0U));
 }
@@ -2306,11 +2314,12 @@ void mixer_reset_runtime_state(void)
         g_send_fx_slot[s] = -1;
 
     mixer_external_inputs_clear();
-    mixer_rebuild_static_plan();
 }
 
 void mixer_init(void)
 {
+    audio_rec_bus_projection_audio_init();
+    audio_rec_level_snapshot_audio_init();
     mixer_track_filter_init_time_lut();
     fx_modfx_global_init();
     mixer_reset_runtime_state();
@@ -4061,14 +4070,17 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     AUDIO_HOT ALIGN32 static float looper_record_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float looper_bus_main_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float looper_bus_main_r[AUDIO_BLOCK_SIZE];
-    AUDIO_HOT ALIGN32 static float sample_capture_l[AUDIO_BLOCK_SIZE];
-    AUDIO_HOT ALIGN32 static float sample_capture_r[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float audio_rec_bus_l[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float audio_rec_bus_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static int32_t looper_record_i32[AUDIO_BLOCK_SIZE * AUDIO_RECORDER_CHANNELS];
-    AUDIO_HOT ALIGN32 static int32_t sample_capture_i32[AUDIO_BLOCK_SIZE * AUDIO_RECORDER_CHANNELS];
+    AUDIO_HOT ALIGN32 static int32_t audio_rec_bus_i32[AUDIO_BLOCK_SIZE * AUDIO_RECORDER_CHANNELS];
     static uint8_t looper_output_active[MIXER_MAX_TRACKS];
 
     mixer_routing_audio_apply_publication();
     control_routing_audio_apply_publication();
+    audio_rec_bus_control_snapshot_t audio_rec_projection = {0};
+    const uint8_t audio_rec_projection_valid =
+        audio_rec_bus_projection_audio_read(&audio_rec_projection);
 
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
@@ -4154,7 +4166,10 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     {
         const uint8_t logical_track = (uint8_t)__builtin_ctz((unsigned)looper_mask);
         looper_mask &= (uint16_t)(looper_mask - 1U);
-        const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(logical_track);
+        track_audio_runtime_ctx_t ctx_value;
+        const track_audio_runtime_ctx_t *const ctx =
+            (audio_note_engine_adapter_audio_ctx_snapshot(
+                logical_track, &ctx_value) != 0U) ? &ctx_value : NULL;
         if((ctx != 0)
                 && (ctx->audio_binding.mix_track_id < MIXER_MAX_TRACKS)
                 && ((g_mixer_static_lane_flags[ctx->audio_binding.mix_track_id]
@@ -4175,7 +4190,19 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         ((looper_playback_active != 0U) && (looper_xfade_apply_active != 0U)) ? 1U : 0U;
     uint8_t looper_record_track = 0U;
     const uint8_t looper_record_active = mixer_looper_record_capture_is_active(&looper_record_track);
-    const uint8_t sample_capture_active = sample_capture_audio_hook_is_enabled();
+    const uint8_t audio_rec_capture_active = (uint8_t)(
+        (audio_rec_projection_valid != 0U)
+        && ((audio_rec_projection.source_flags & AUDIO_REC_BUS_CAPTURE_ENABLED) != 0U));
+    const uint8_t audio_rec_track_routes_active = (uint8_t)(
+        (audio_rec_projection_valid != 0U)
+        && (audio_rec_projection.source_entity_mask != 0U));
+    const uint8_t audio_rec_bus_active = (uint8_t)(
+        (audio_rec_projection_valid != 0U)
+        && ((audio_rec_capture_active != 0U)
+            || (audio_rec_projection.source_entity_mask != 0U)
+            || ((audio_rec_projection.source_flags
+                & (AUDIO_REC_BUS_SOURCE_LINE_DIRECT
+                    | AUDIO_REC_BUS_SOURCE_MIC_LOGICAL)) != 0U)));
     if((looper_playback_mix_active != 0U) && (looper_playback_routes_main != 0U))
     {
         memset(looper_bus_main_l, 0, sizeof(looper_bus_main_l));
@@ -4186,10 +4213,10 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         memset(looper_record_l, 0, sizeof(looper_record_l));
         memset(looper_record_r, 0, sizeof(looper_record_r));
     }
-    if(sample_capture_active != 0U)
+    if(audio_rec_bus_active != 0U)
     {
-        memset(sample_capture_l, 0, sizeof(sample_capture_l));
-        memset(sample_capture_r, 0, sizeof(sample_capture_r));
+        memset(audio_rec_bus_l, 0, sizeof(audio_rec_bus_l));
+        memset(audio_rec_bus_r, 0, sizeof(audio_rec_bus_r));
     }
 
     while (lane_mask != 0U)
@@ -4306,7 +4333,7 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                 : 0U;
         if ((is_mono_native_lane != 0U)
                 && (lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
-                && (sample_capture_active == 0U)
+                && (audio_rec_track_routes_active == 0U)
                 && (looper_record_route_active == 0U)
                 && (looper_playback_mix_active == 0U))
         {
@@ -4478,7 +4505,7 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
          */
         uint8_t poly_stereo_fanout = 0U;
         if ((lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_POLY_STEREO)
-                && (sample_capture_active == 0U)
+                && (audio_rec_track_routes_active == 0U)
                 && (looper_record_route_active == 0U)
                 && (looper_playback_mix_active == 0U)
                 && (route_main != 0U)
@@ -4943,13 +4970,15 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
             if((source_track < MIXER_MAX_TRACKS)
                     && ((static_flags & MIXER_STATIC_LOOPER) != 0U))
             {
-                if((sample_capture_active != 0U)
-                        && (sample_capture_model_source_track_is_enabled(source_track) != 0U))
+                if((audio_rec_bus_active != 0U)
+                        && (source_track < BRICK_ENTITY_CAPACITY)
+                        && ((audio_rec_projection.source_entity_mask
+                            & (uint16_t)(1U << source_track)) != 0U))
                 {
                     for(uint32_t i = 0U; i < frames; ++i)
                     {
-                        sample_capture_l[i] += L[i];
-                        sample_capture_r[i] += R[i];
+                        audio_rec_bus_l[i] += L[i];
+                        audio_rec_bus_r[i] += R[i];
                     }
                 }
 
@@ -4978,14 +5007,15 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                 }
             }
 
-            if((sample_capture_active != 0U)
-                    && (source_track < MIXER_MAX_TRACKS)
-                    && (sample_capture_model_source_track_is_enabled(source_track) != 0U))
+            if((audio_rec_bus_active != 0U)
+                    && (source_track < BRICK_ENTITY_CAPACITY)
+                    && ((audio_rec_projection.source_entity_mask
+                        & (uint16_t)(1U << source_track)) != 0U))
             {
                 for(uint32_t i = 0U; i < frames; ++i)
                 {
-                    sample_capture_l[i] += L[i];
-                    sample_capture_r[i] += R[i];
+                    audio_rec_bus_l[i] += L[i];
+                    audio_rec_bus_r[i] += R[i];
                 }
             }
         }
@@ -5335,16 +5365,49 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         fx_chain_process_global_slot(2U, bus_main_l, bus_main_r, frames);
     }
 
-    if(sample_capture_active != 0U)
+    if((audio_rec_bus_active != 0U)
+            && ((audio_rec_projection.source_flags
+                & AUDIO_REC_BUS_SOURCE_LINE_DIRECT) != 0U))
+    {
+        const audio_physical_inputs_t *const inputs =
+            audio_io_get_current_physical_inputs();
+        for(uint32_t i = 0U; i < frames; ++i)
+        {
+            audio_rec_bus_l[i] += inputs->line.left[i];
+            audio_rec_bus_r[i] += inputs->line.right[i];
+        }
+    }
+
+    uint32_t audio_rec_peak_abs_pcm24 = 0U;
+    if(audio_rec_bus_active != 0U)
     {
         for(uint32_t i = 0U; i < frames; ++i)
         {
             const uint32_t out = i * AUDIO_RECORDER_CHANNELS;
-            sample_capture_i32[out] = mixer_looper_float_to_pcm24(sample_capture_l[i]);
-            sample_capture_i32[out + 1U] = mixer_looper_float_to_pcm24(sample_capture_r[i]);
+            const int32_t pcm_l = mixer_looper_float_to_pcm24(audio_rec_bus_l[i]);
+            const int32_t pcm_r = mixer_looper_float_to_pcm24(audio_rec_bus_r[i]);
+            const uint32_t abs_l = (pcm_l < 0) ? (uint32_t)(-pcm_l) : (uint32_t)pcm_l;
+            const uint32_t abs_r = (pcm_r < 0) ? (uint32_t)(-pcm_r) : (uint32_t)pcm_r;
+            if(abs_l > audio_rec_peak_abs_pcm24)
+            {
+                audio_rec_peak_abs_pcm24 = abs_l;
+            }
+            if(abs_r > audio_rec_peak_abs_pcm24)
+            {
+                audio_rec_peak_abs_pcm24 = abs_r;
+            }
+            if(audio_rec_capture_active != 0U)
+            {
+                audio_rec_bus_i32[out] = pcm_l;
+                audio_rec_bus_i32[out + 1U] = pcm_r;
+            }
         }
-        (void)sample_capture_push_audio_block_from_irq(sample_capture_i32, frames);
+        if(audio_rec_capture_active != 0U)
+        {
+            (void)sample_capture_push_audio_block_from_irq(audio_rec_bus_i32, frames);
+        }
     }
+    audio_rec_level_snapshot_audio_publish(audio_rec_peak_abs_pcm24);
 
     if(track_count > 0U)
     {

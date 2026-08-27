@@ -39,7 +39,10 @@ uint8_t param_backend_apply_prepared_track_value_audio(
         return 0U;
     }
 
-    const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
+    track_audio_runtime_ctx_t ctx_value;
+    const track_audio_runtime_ctx_t *const ctx =
+        (audio_note_engine_adapter_audio_ctx_snapshot(track, &ctx_value) != 0U)
+            ? &ctx_value : NULL;
     if ((ctx == NULL) || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND))
     {
         return 0U;

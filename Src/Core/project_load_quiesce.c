@@ -1,8 +1,9 @@
 #include "Core/project_load_quiesce.h"
 
 #include "Audio/audio.h"
-#include "Audio/audio_note_admission.h"
+#include "Audio/audio_music_action_executor.h"
 #include "Audio/control_audio_queue.h"
+#include "Audio/control_music_queue.h"
 #include "Core/brick6_looper_runtime.h"
 #include "Core/live_parameter_audio_queue.h"
 #include "Seq/seq_output_guard.h"
@@ -71,10 +72,17 @@ uint8_t project_load_quiesce_audio_service(void)
         {
             (void)control_audio_queue_audio_pop();
         }
+        while (control_music_queue_audio_pending_count() != 0U)
+        {
+            control_music_action_t action;
+            if (control_music_queue_audio_peek(&action) == 0U)
+                break;
+            (void)control_music_queue_audio_pop(&action);
+        }
         while (live_parameter_audio_queue_audio_pop())
         {
         }
-        audio_note_admission_close_all();
+        audio_music_action_force_close_all();
         brick6_looper_runtime_arm_record_stop(0U);
         brick6_looper_runtime_on_transport_stop();
         __DMB();

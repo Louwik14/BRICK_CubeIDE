@@ -27,6 +27,7 @@
 #include "encoders_hw.h"
 #include "usbh_conf.h"
 #include "usb_role_manager.h"
+#include "Seq/seq_runtime_control.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -254,6 +255,7 @@ void DebugMon_Handler(void)
 void PendSV_Handler(void)
 {
   /* USER CODE BEGIN PendSV_IRQn 0 */
+  seq_runtime_control_service_from_pendsv();
   midi_usb_tx_deferred_service_from_isr();
 
   /* USER CODE END PendSV_IRQn 0 */

@@ -1,6 +1,7 @@
 #include "Core/project_control.h"
 
 #include "Core/track_state.h"
+#include "Core/track_runtime.h"
 #include "Core/audio_wave_table_projection.h"
 
 #include "Param/param_macro.h"
@@ -132,6 +133,57 @@ uint8_t project_control_get_logical_asset(uint32_t kind,uint16_t logical,persist
 uint8_t project_control_resolve_sample_runtime(uint16_t logical,uint16_t*out_runtime,uint32_t*out_kind){if(bank_resolve(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical,out_runtime)==0U)return 0U;const sample_global_slot_t*s=sample_global_pool_get_slot(*out_runtime);if(s==NULL||(s->kind!=SAMPLE_GLOBAL_KIND_STREAM&&s->kind!=SAMPLE_GLOBAL_KIND_RAM))return 0U;if(out_kind!=NULL)*out_kind=(s->kind==SAMPLE_GLOBAL_KIND_RAM)?PERSIST_ASSET_SAMPLE_RAM:PERSIST_ASSET_SAMPLE_STREAM;return 1U;}
 uint8_t project_control_resolve_wavetable_runtime(uint16_t logical,uint16_t*out_runtime){return bank_resolve(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical,out_runtime);}
 uint8_t project_control_resolve_multi_runtime(uint16_t logical,uint16_t*out_runtime){uint16_t runtime;if(out_runtime==NULL||logical>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS||bank_resolve(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,logical,&runtime)==0U)return 0U;const multi_sample_instrument_t*i=multi_sample_pool_get_instrument(runtime);if(i==NULL||multi_sample_pool_get_state(runtime)!=MULTI_SAMPLE_INSTRUMENT_READY||strcmp(i->index_path,g_multi_bank[logical].path)!=0)return 0U;*out_runtime=runtime;return 1U;}
+
+uint8_t project_control_resolve_audio_sampler_value(uint8_t track,
+                                                    float logical_value,
+                                                    float *out_runtime_value)
+{
+    track_runtime_resolved_track_t resolved;
+    if ((out_runtime_value == NULL)
+            || (track_runtime_resolve_track(track, &resolved) == 0U))
+        return 0U;
+
+    if (resolved.descriptor.type == TRACK_RUNTIME_TYPE_MULTI)
+    {
+        const uint16_t logical = (uint16_t)(
+            logical_value < 0.0f ? 0.0f
+                : (logical_value > (float)(MULTI_SAMPLE_POOL_MAX_INSTRUMENTS - 1U)
+                    ? (float)(MULTI_SAMPLE_POOL_MAX_INSTRUMENTS - 1U)
+                    : logical_value) + 0.5f);
+        uint16_t runtime = MULTI_SAMPLE_POOL_INVALID_ID;
+        if (project_control_resolve_multi_runtime(logical, &runtime) == 0U)
+            return 0U;
+        *out_runtime_value = (float)runtime;
+        return 1U;
+    }
+
+    const uint16_t logical = (uint16_t)(
+        logical_value < 0.0f ? 0.0f
+            : (logical_value > (float)(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS - 1U)
+                ? (float)(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS - 1U)
+                : logical_value) + 0.5f);
+    uint16_t global = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    uint32_t kind = 0U;
+    if (project_control_resolve_sample_runtime(logical, &global, &kind) == 0U)
+        return 0U;
+    if (resolved.descriptor.type == TRACK_RUNTIME_TYPE_STREAM)
+    {
+        uint16_t stream_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+        if ((kind != PERSIST_ASSET_SAMPLE_STREAM)
+                || (sample_global_pool_resolve_backend(
+                    global, SAMPLE_GLOBAL_KIND_STREAM, &stream_slot) == 0U))
+            return 0U;
+        *out_runtime_value = (float)stream_slot;
+    }
+    else
+    {
+        if ((resolved.descriptor.type != TRACK_RUNTIME_TYPE_RAM)
+                || (kind != PERSIST_ASSET_SAMPLE_RAM))
+            return 0U;
+        *out_runtime_value = (float)global;
+    }
+    return 1U;
+}
 
 static void apply_bank_asset(uint32_t kind,uint16_t logical,const char*path)
 {

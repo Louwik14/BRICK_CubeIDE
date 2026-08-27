@@ -39,6 +39,11 @@
 #include "braids/macro_oscillator_shape.h"
 
 namespace braids {
+
+struct MacroOscillatorScratch {
+  uint8_t sync_buffer[24];
+  int16_t temp_buffer[24];
+};
   
 class MacroOscillator {
  public:
@@ -101,7 +106,11 @@ class MacroOscillator {
     digital_oscillator_.Strike();
   }
   
-  void Render(const uint8_t* sync_buffer, int16_t* buffer, size_t size);
+  void Render24(
+      const uint8_t* sync_buffer,
+      MacroOscillatorScratch* scratch);
+  inline int16_t* output_buffer() { return output_buffer_; }
+  inline const int16_t* output_buffer() const { return output_buffer_; }
   
  private:
   void RenderCSaw(const uint8_t*, int16_t*, size_t);
@@ -119,8 +128,8 @@ class MacroOscillator {
   int16_t parameter_[2];
   int16_t previous_parameter_[2];
   int16_t pitch_;
-  uint8_t sync_buffer_[24];
-  int16_t temp_buffer_[24];
+  int16_t output_buffer_[24];
+  MacroOscillatorScratch* scratch_;
   int32_t lp_state_;
   
   AnalogOscillator analog_oscillator_[3];

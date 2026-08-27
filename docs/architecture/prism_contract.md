@@ -7,7 +7,24 @@ zero to a maximum positive offset of 24 semitones:
 `pitch offset = P.MOD * AMOD * 24 st`
 
 This control is not audio-rate FM and does not cross-modulate the two Prism
-oscillators. `PH1` and `PH2` remain independent trigger phase-reset switches.
+oscillators. `PHASE` is one global trigger phase-reset switch for both oscillators.
+
+`DETUNE` is the fixed bipolar pitch offset applied to OSC2 only (-24 to +24
+semitones). `DRIFT` adds an independent random pitch offset to each oscillator at NOTE ON.
+The offsets are held for the voice lifetime, are not mean-centred, and range up
+to approximately +/-12 cents per oscillator.
+
+## Braids block clock
+
+The BRICK callback remains 64 samples. Every Prism `MacroOscillator` generates
+an atomic 24-sample Braids block and retains its unconsumed output in a local
+24-sample cache. BRICK consumes that cache across callback boundaries; it never
+splits a Braids render. Model preparation, block-rate decisions and parameter
+interpolators therefore run only at the original 2 kHz cadence. In particular,
+the VOWEL consonant counter, WAVE_LINE smoothing/crossfade, GRANULAR_CLOUD grain
+renewal, and WAVETABLES/CLOCKED_NOISE hysteresis do not treat a BRICK boundary
+as a new Braids block. Model scratch storage is shared because oscillators are
+rendered sequentially; cached audio remains private to each oscillator.
 
 ## Live waveform pages
 

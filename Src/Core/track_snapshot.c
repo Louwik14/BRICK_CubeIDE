@@ -83,32 +83,37 @@ static void track_snapshot_collect_restore_tracks(uint8_t track,
     track_snapshot_add_restore_track(track, tracks, track_count);
 }
 
-static void track_snapshot_runtime_quiesce_engine(uint8_t track)
+static uint8_t track_snapshot_runtime_quiesce_engine(uint8_t track)
 {
     if (track >= SEQ_LANE_CAPACITY)
     {
-        return;
+        return 0U;
     }
 
-    note_fx_pipeline_reset_runtime_overrides(track);
-    keyboard_engine_all_notes_off_for_track(track);
+    if (keyboard_engine_all_notes_off_for_track(track) == 0U)
+        return 0U;
+    if (note_fx_pipeline_reset_runtime_overrides(track) == 0U)
+        return 0U;
     param_registry_clear_track_runtime_state(track);
+    return 1U;
 }
 
-static void track_snapshot_runtime_neutralize_note_state(uint8_t track)
+static uint8_t track_snapshot_runtime_neutralize_note_state(uint8_t track)
 {
     if (track >= SEQ_LANE_CAPACITY)
     {
-        return;
+        return 0U;
     }
 
     const seq_track_id_t transition_track = track;
     if (seq_play_scheduler_transition_tracks(
             &transition_track, 1U,
             SEQ_PLAY_TRANSITION_MODEL_RECONFIGURE) == 0U)
-        return;
-    keyboard_engine_all_notes_off_for_track(track);
+        return 0U;
+    if (keyboard_engine_all_notes_off_for_track(track) == 0U)
+        return 0U;
     param_registry_clear_track_runtime_state(track);
+    return 1U;
 }
 
 static uint8_t track_snapshot_apply_structure_mutation(void *ctx_ptr)
@@ -683,12 +688,14 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
                                               &restore_track_count);
     }
     seq_runtime_begin_track_restore(restore_tracks, restore_track_count);
+    uint8_t apply_ok = 0U;
     for (uint8_t i = 0U; i < restore_track_count; ++i)
     {
-        track_snapshot_runtime_quiesce_engine((uint8_t)restore_tracks[i]);
+        if (track_snapshot_runtime_quiesce_engine(
+                (uint8_t)restore_tracks[i]) == 0U)
+            goto restore_done;
     }
 
-    uint8_t apply_ok = 0U;
     track_snapshot_structure_apply_ctx_t structure_ctx = {
         .family = family,
         .type = type,
@@ -775,7 +782,9 @@ restore_done:
     }
     for (uint8_t i = 0U; i < restore_track_count; ++i)
     {
-        track_snapshot_runtime_neutralize_note_state((uint8_t)restore_tracks[i]);
+        if (track_snapshot_runtime_neutralize_note_state(
+                (uint8_t)restore_tracks[i]) == 0U)
+            goto restore_done;
     }
     seq_runtime_end_track_restore(restore_tracks, restore_track_count);
     return apply_ok;

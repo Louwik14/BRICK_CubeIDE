@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include "Seq/seq_types.h"
+#include "Core/entity_topology.h"
 
 void audio_transition_snapshot_init(void);
 void audio_transition_snapshot_publish(uint8_t global_active,

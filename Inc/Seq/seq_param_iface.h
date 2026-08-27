@@ -115,11 +115,13 @@ uint8_t seq_param_iface_commit_base_after_authoritative_apply(const seq_param_if
 uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
                                    uint8_t set_id,
                                    seq_param_slot_t param_slot,
-                                   seq_value16_t value16);
+                                   seq_value16_t value16,
+                                   uint64_t due_sample);
 uint8_t seq_param_iface_restore_base(seq_track_id_t track,
                                      uint8_t set_id,
                                      seq_param_slot_t param_slot,
-                                     seq_value16_t base_value16);
+                                     seq_value16_t base_value16,
+                                     uint64_t due_sample);
 
 seq_value16_t seq_param_iface_encode_param_value(param_id_t param, float value);
 float seq_param_iface_decode_param_value(param_id_t param, seq_value16_t value16);

@@ -11,6 +11,7 @@
 #include "Core/project_control.h"
 #include "Param/param_registry.h"
 #include "Param/param_prism_labels.h"
+#include "Param/param_stack_labels.h"
 #include "Sampler/sample_global_pool.h"
 #include "ui_core.h"
 #include "ui_renderer_template.h"
@@ -166,7 +167,7 @@ static const ui_template_family_t g_ui_template_tone_family_sampler = {
     .family_title = "TONE",
     .nav_labels = { "PLAY", "LOOP", "-", "-" },
     .subpages = {
-        { .title = "PLAY", .param_bank = { .params = { PARAM_SAMPLER_SAMPLE, PARAM_SAMPLER_MODE, PARAM_SAMPLER_START, PARAM_SAMPLER_END } } },
+        { .title = "PLAY", .param_bank = { .params = { PARAM_SAMPLER_SAMPLE, PARAM_SAMPLER_MODE, PARAM_SAMPLER_START, PARAM_SAMPLER_LENGTH } } },
         { .title = "LOOP", .param_bank = { .params = { PARAM_SAMPLER_GAIN, PARAM_SAMPLER_TUNE, PARAM_SAMPLER_LOOP_START, PARAM_SAMPLER_SLICE_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
@@ -230,7 +231,7 @@ static const ui_template_family_t g_ui_template_tone_family_prism = {
         { .title = "OSC1", .param_bank = { .params = { PARAM_PRISM_OSC1_MODEL, PARAM_PRISM_OSC1_PARAM1, PARAM_PRISM_OSC1_PARAM2, PARAM_PRISM_OSC1_AMOD } } },
         { .title = "OSC2", .param_bank = { .params = { PARAM_PRISM_OSC2_MODEL, PARAM_PRISM_OSC2_PARAM1, PARAM_PRISM_OSC2_PARAM2, PARAM_PRISM_OSC2_AMOD } } },
         { .title = "COMMON", .param_bank = { .params = { PARAM_PRISM_VOLUME, PARAM_PRISM_BALANCE, PARAM_PRISM_TUNE, PARAM_PRISM_DETUNE } } },
-        { .title = "MOD / PHASE", .param_bank = { .params = { PARAM_PRISM_PITCH_MOD1, PARAM_PRISM_PHASE1_RESET, PARAM_PRISM_PITCH_MOD2, PARAM_PRISM_PHASE2_RESET } } },
+        { .title = "MOD / PHASE", .param_bank = { .params = { PARAM_PRISM_PITCH_MOD1, PARAM_PRISM_PHASE1_RESET, PARAM_PRISM_PITCH_MOD2, PARAM_PRISM_DRIFT } } },
     },
     .default_subpage = 0U,
 };
@@ -242,7 +243,7 @@ static const ui_template_family_t g_ui_template_tone_family_prism_live = {
         { .title = "OSC1", .param_bank = { .params = { PARAM_PRISM_OSC1_MODEL, PARAM_PRISM_OSC1_PARAM1, PARAM_PRISM_OSC1_PARAM2, PARAM_PRISM_OSC1_AMOD } } },
         { .title = "OSC2", .param_bank = { .params = { PARAM_PRISM_OSC2_MODEL, PARAM_PRISM_OSC2_PARAM1, PARAM_PRISM_OSC2_PARAM2, PARAM_PRISM_OSC2_AMOD } } },
         { .title = "COMMON", .param_bank = { .params = { PARAM_PRISM_VOLUME, PARAM_PRISM_BALANCE, PARAM_PRISM_TUNE, PARAM_PRISM_DETUNE } } },
-        { .title = "MOD / PHASE", .param_bank = { .params = { PARAM_PRISM_PITCH_MOD1, PARAM_PRISM_PHASE1_RESET, PARAM_PRISM_PITCH_MOD2, PARAM_PRISM_PHASE2_RESET } } },
+        { .title = "MOD / PHASE", .param_bank = { .params = { PARAM_PRISM_PITCH_MOD1, PARAM_PRISM_PHASE1_RESET, PARAM_PRISM_PITCH_MOD2, PARAM_PRISM_DRIFT } } },
     },
     .default_subpage = 0U,
 };
@@ -251,8 +252,8 @@ static const ui_template_family_t g_ui_template_tone_family_wave = {
     .family_title = "TONE 1/2",
     .nav_labels = { "OSC1", "OSC2", "COMMON", "-" },
     .subpages = {
-        { .title = "OSC1", .param_bank = { .params = { PARAM_WAVE_OSC1_TABLE, PARAM_WAVE_OSC1_POS, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "OSC2", .param_bank = { .params = { PARAM_WAVE_OSC2_TABLE, PARAM_WAVE_OSC2_POS, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "OSC1", .param_bank = { .params = { PARAM_WAVE_OSC1_TABLE, PARAM_WAVE_OSC1_POS, PARAM_WAVE_OSC1_START, PARAM_WAVE_OSC1_LEN } } },
+        { .title = "OSC2", .param_bank = { .params = { PARAM_WAVE_OSC2_TABLE, PARAM_WAVE_OSC2_POS, PARAM_WAVE_OSC2_START, PARAM_WAVE_OSC2_LEN } } },
         { .title = "COMMON", .param_bank = { .params = { PARAM_WAVE_VOLUME, PARAM_WAVE_BALANCE, PARAM_WAVE_TUNE, PARAM_WAVE_DETUNE } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
@@ -263,8 +264,8 @@ static const ui_template_family_t g_ui_template_tone_family_wave_classic = {
     .family_title = "TONE 2/2",
     .nav_labels = { "OSC1", "OSC2", "COMMON", "-" },
     .subpages = {
-        { .title = "OSC1", .param_bank = { .params = { PARAM_WAVE_OSC1_TABLE, PARAM_WAVE_OSC1_POS, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "OSC2", .param_bank = { .params = { PARAM_WAVE_OSC2_TABLE, PARAM_WAVE_OSC2_POS, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "OSC1", .param_bank = { .params = { PARAM_WAVE_OSC1_TABLE, PARAM_WAVE_OSC1_POS, PARAM_WAVE_OSC1_START, PARAM_WAVE_OSC1_LEN } } },
+        { .title = "OSC2", .param_bank = { .params = { PARAM_WAVE_OSC2_TABLE, PARAM_WAVE_OSC2_POS, PARAM_WAVE_OSC2_START, PARAM_WAVE_OSC2_LEN } } },
         { .title = "COMMON", .param_bank = { .params = { PARAM_WAVE_VOLUME, PARAM_WAVE_BALANCE, PARAM_WAVE_TUNE, PARAM_WAVE_DETUNE } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
@@ -272,25 +273,13 @@ static const ui_template_family_t g_ui_template_tone_family_wave_classic = {
 };
 
 static const ui_template_family_t g_ui_template_tone_family_stack = {
-    .family_title = "TONE 1/2",
-    .nav_labels = { "OSC1", "OSC2", "OSC3", "LVL" },
+    .family_title = "TONE",
+    .nav_labels = { "OSC1/2", "OSC3", "MIX", "PHASE" },
     .subpages = {
-        { .title = "OSC1", .param_bank = { .params = { PARAM_STACK_OSC1_TIMBRE, PARAM_STACK_OSC1_COLOR, PARAM_STACK_OSC1_MODEL, PARAM_COUNT } } },
-        { .title = "OSC2", .param_bank = { .params = { PARAM_STACK_OSC2_TIMBRE, PARAM_STACK_OSC2_COLOR, PARAM_STACK_OSC2_MODEL, PARAM_COUNT } } },
-        { .title = "OSC3", .param_bank = { .params = { PARAM_STACK_OSC3_TIMBRE, PARAM_STACK_OSC3_COLOR, PARAM_STACK_OSC3_MODEL, PARAM_COUNT } } },
-        { .title = "LVL", .param_bank = { .params = { PARAM_STACK_OSC1_LEVEL, PARAM_STACK_OSC2_LEVEL, PARAM_STACK_OSC3_LEVEL, PARAM_STACK_NOISE_LEVEL } } },
-    },
-    .default_subpage = 0U,
-};
-
-static const ui_template_family_t g_ui_template_tone_family_stack_global = {
-    .family_title = "TONE 2/2",
-    .nav_labels = { "TUNE", "PHASE", "-", "-" },
-    .subpages = {
-        { .title = "TUNE", .param_bank = { .params = { PARAM_STACK_OSC1_TUNE, PARAM_STACK_OSC2_TUNE, PARAM_STACK_OSC3_TUNE, PARAM_STACK_OSC_DETUNE } } },
-        { .title = "PHASE", .param_bank = { .params = { PARAM_STACK_PHASE_RESET, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "OSC1 / OSC2", .param_bank = { .params = { PARAM_STACK_OSC1_MODEL, PARAM_STACK_OSC1_TUNE, PARAM_STACK_OSC2_MODEL, PARAM_STACK_OSC2_TUNE } } },
+        { .title = "OSC3", .param_bank = { .params = { PARAM_STACK_OSC3_MODEL, PARAM_STACK_OSC3_TIMBRE, PARAM_STACK_OSC3_COLOR, PARAM_STACK_OSC3_TUNE } } },
+        { .title = "MIX", .param_bank = { .params = { PARAM_STACK_OSC1_LEVEL, PARAM_STACK_OSC2_LEVEL, PARAM_STACK_OSC3_LEVEL, PARAM_STACK_NOISE_LEVEL } } },
+        { .title = "PHASE", .param_bank = { .params = { PARAM_STACK_PHASE_RESET, PARAM_STACK_OSC_DETUNE, PARAM_COUNT, PARAM_COUNT } } },
     },
     .default_subpage = 0U,
 };
@@ -394,10 +383,9 @@ const ui_template_family_t *ui_page_template_tone_resolve_for_track(uint8_t trac
             : &g_ui_template_tone_family_prism;
     }
     if ((ui_get_track_family(track) == UI_TRACK_FAMILY_SYNTH)
-            && (ui_get_track_type(track) == UI_TRACK_TYPE_STACK)
-            && (g_ui_template_tone_subset != 0U))
+            && (ui_get_track_type(track) == UI_TRACK_TYPE_STACK))
     {
-        return &g_ui_template_tone_family_stack_global;
+        return &g_ui_template_tone_family_stack;
     }
     if ((ui_get_track_family(track) == UI_TRACK_FAMILY_SYNTH)
             && (ui_get_track_type(track) == UI_TRACK_TYPE_FM)
@@ -532,10 +520,8 @@ static const ui_prism_param_label_t *ui_page_template_tone_prism_labels_for_para
     const param_id_t edit_param = ((id == PARAM_PRISM_OSC2_PARAM1)
                                    || (id == PARAM_PRISM_OSC2_PARAM2)
                                    || (id == PARAM_PRISM_OSC2_MODEL)
-                                   || (id == PARAM_PRISM_DETUNE)
                                    || (id == PARAM_PRISM_PITCH_MOD2)
-                                   || (id == PARAM_PRISM_OSC2_AMOD)
-                                   || (id == PARAM_PRISM_PHASE2_RESET))
+                                   || (id == PARAM_PRISM_OSC2_AMOD))
         ? PARAM_PRISM_OSC2_MODEL
         : PARAM_PRISM_OSC1_MODEL;
     float edit = 0.0f;
@@ -611,7 +597,7 @@ static void ui_page_template_tone_prism_format_q7_interval(int32_t q7,
                                                           uint32_t out_len)
 {
     const int32_t abs_q7 = (q7 < 0) ? -q7 : q7;
-    if (abs_q7 < 64L)
+    if (abs_q7 == 0L)
     {
         (void)snprintf(out, out_len, "0st");
         return;
@@ -674,6 +660,23 @@ static void ui_page_template_tone_prism_format_interval(uint8_t edit_index,
         q7 = ((int32_t)raw - 16384L) >> 2;
     }
     else if ((edit_index == 28U) && (id == PARAM_PRISM_OSC1_PARAM2))
+    {
+        q7 = ((int32_t)raw - 16384L) >> 1;
+    }
+    else if (((edit_index == 19U) || (edit_index == 20U) || (edit_index == 21U))
+            && ((id == PARAM_PRISM_OSC1_PARAM2) || (id == PARAM_PRISM_OSC2_PARAM2)))
+    {
+        uint8_t index = (uint8_t)(raw >> 8);
+        if (index >= (uint8_t)(sizeof(g_prism_fm_frequency_quantizer)
+                              / sizeof(g_prism_fm_frequency_quantizer[0])))
+        {
+            index = (uint8_t)((sizeof(g_prism_fm_frequency_quantizer)
+                              / sizeof(g_prism_fm_frequency_quantizer[0])) - 1U);
+        }
+        q7 = ((int32_t)g_prism_fm_frequency_quantizer[index] - 16384L) >> 1;
+    }
+    else if ((edit_index == 21U)
+            && ((id == PARAM_PRISM_OSC1_PARAM1) || (id == PARAM_PRISM_OSC2_PARAM1)))
     {
         q7 = ((int32_t)raw - 16384L) >> 1;
     }
@@ -965,6 +968,11 @@ static uint8_t ui_page_template_tone_prism_param_text(param_id_t id,
             if ((out_value != NULL) && (out_value_len > 0U)) (void)snprintf(out_value, out_value_len, "%+.2fst", (double)value);
             return 1U;
 
+        case PARAM_PRISM_DRIFT:
+            if ((out_name != NULL) && (out_name_len > 0U)) (void)snprintf(out_name, out_name_len, "DRIFT");
+            if ((out_value != NULL) && (out_value_len > 0U)) (void)snprintf(out_value, out_value_len, "%.0f%%", (double)(value * 100.0f));
+            return 1U;
+
         case PARAM_PRISM_PITCH_MOD1:
         case PARAM_PRISM_PITCH_MOD2:
             if ((out_name != NULL) && (out_name_len > 0U))
@@ -1002,7 +1010,6 @@ static uint8_t ui_page_template_tone_prism_param_text(param_id_t id,
             return 1U;
 
         case PARAM_PRISM_PHASE1_RESET:
-        case PARAM_PRISM_PHASE2_RESET:
             if ((out_name != NULL) && (out_name_len > 0U))
             {
                 (void)snprintf(out_name, out_name_len, "PHASE");
@@ -1058,27 +1065,6 @@ static uint8_t ui_page_template_tone_stack_slot_param(param_id_t id,
     return 0U;
 }
 
-static const char *ui_page_template_tone_stack_timbre_label(uint8_t model)
-{
-    switch ((brick6_stack_model_t)model)
-    {
-        case BRICK6_STACK_MODEL_SHAPE: return "SHAPE";
-        case BRICK6_STACK_MODEL_TRIPLE_SAW: return "OSC2";
-        case BRICK6_STACK_MODEL_SQUARE: return "PWM";
-        default: return NULL;
-    }
-}
-
-static const char *ui_page_template_tone_stack_color_label(uint8_t model)
-{
-    switch ((brick6_stack_model_t)model)
-    {
-        case BRICK6_STACK_MODEL_SHAPE: return "MORPH";
-        case BRICK6_STACK_MODEL_TRIPLE_SAW: return "OSC3";
-        default: return NULL;
-    }
-}
-
 static uint8_t ui_page_template_tone_stack_param_text(param_id_t id,
                                                       float value,
                                                       char *out_name,
@@ -1106,6 +1092,14 @@ static uint8_t ui_page_template_tone_stack_param_text(param_id_t id,
         }
         return 1U;
     }
+    if (id == PARAM_STACK_PHASE_RESET)
+    {
+        if ((out_name != NULL) && (out_name_len > 0U))
+        {
+            (void)snprintf(out_name, out_name_len, "PHASE");
+        }
+        return 1U;
+    }
     if (ui_page_template_tone_stack_slot_param(id, &stack_slot, &stack_param) == 0U)
     {
         return 0U;
@@ -1123,7 +1117,8 @@ static uint8_t ui_page_template_tone_stack_param_text(param_id_t id,
             }
             break;
         case 1U:
-            name = "MODEL";
+            name = (stack_slot == 0U) ? "OSC1"
+                : ((stack_slot == 1U) ? "OSC2" : "OSC3");
             break;
         case 2U:
             switch (stack_slot)
@@ -1138,7 +1133,8 @@ static uint8_t ui_page_template_tone_stack_param_text(param_id_t id,
             float model_value = 0.0f;
             const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 4U));
             (void)param_registry_get_track_value(model_param, active_track, &model_value);
-            name = ui_page_template_tone_stack_timbre_label((uint8_t)(model_value + 0.5f));
+            (void)param_stack_model_param_resolve(
+                (uint8_t)(model_value + 0.5f), 0U, &name);
             break;
         }
         case 4U:
@@ -1146,7 +1142,8 @@ static uint8_t ui_page_template_tone_stack_param_text(param_id_t id,
             float model_value = 0.0f;
             const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 4U));
             (void)param_registry_get_track_value(model_param, active_track, &model_value);
-            name = ui_page_template_tone_stack_color_label((uint8_t)(model_value + 0.5f));
+            (void)param_stack_model_param_resolve(
+                (uint8_t)(model_value + 0.5f), 1U, &name);
             break;
         }
         default: name = "PARAM"; break;
@@ -1180,10 +1177,17 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
         return UIW_WIDGET_ALGO_ICON;
     }
 
-    if ((id == PARAM_MIX_DELAY_SPECTRAL_POSITION)
-            || (id == PARAM_MIX_DELAY_SPECTRAL_WIDTH))
+    if ((id >= PARAM_MODFX_RATE) && (id <= PARAM_MODFX_WIDTH))
     {
-        return UI_TEMPLATE_CUSTOM_WIDGET_SPECTRAL_WINDOW_GROUP;
+        const uint8_t model = (uint8_t)(param_get(PARAM_MODFX_MODEL) + 0.5f);
+        if ((model == FX_MODFX_DAISY_STEREO) && (id == PARAM_MODFX_FEEDBACK))
+        {
+            return UIW_WIDGET_BIPOLAR_BAR;
+        }
+        if ((model == FX_MODFX_JUNOLOGUE) && (id == PARAM_MODFX_OFFSET))
+        {
+            return UIW_WIDGET_ENUM_TEXT;
+        }
     }
     (void)value_label;
 
@@ -1207,6 +1211,10 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
                 || (id == PARAM_PRISM_OSC2_AMOD))
         {
             return UIW_WIDGET_BIPOLAR_BAR;
+        }
+        if (id == PARAM_PRISM_DRIFT)
+        {
+            return UIW_WIDGET_BAR;
         }
         return suggested_widget;
     }
@@ -1257,12 +1265,12 @@ static ui_template_custom_widget_kind_t ui_page_template_tone_pick_custom_widget
             && (subpage != NULL)
             && (((subpage->param_bank.params[0] == PARAM_WAVE_OSC1_TABLE)
                     && (subpage->param_bank.params[1] == PARAM_WAVE_OSC1_POS)
-                    && (subpage->param_bank.params[2] == PARAM_COUNT)
-                    && (subpage->param_bank.params[3] == PARAM_COUNT))
+                    && (subpage->param_bank.params[2] == PARAM_WAVE_OSC1_START)
+                    && (subpage->param_bank.params[3] == PARAM_WAVE_OSC1_LEN))
                 || ((subpage->param_bank.params[0] == PARAM_WAVE_OSC2_TABLE)
                     && (subpage->param_bank.params[1] == PARAM_WAVE_OSC2_POS)
-                    && (subpage->param_bank.params[2] == PARAM_COUNT)
-                    && (subpage->param_bank.params[3] == PARAM_COUNT))))
+                    && (subpage->param_bank.params[2] == PARAM_WAVE_OSC2_START)
+                    && (subpage->param_bank.params[3] == PARAM_WAVE_OSC2_LEN))))
     {
         (void)id;
         return UI_TEMPLATE_CUSTOM_WIDGET_WAVE_WAVETABLE;
@@ -1317,7 +1325,15 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
             const float shown = param_value_policy_canonical_to_display(
                 id, active_track, value);
             const char *const unit = param_value_policy_display_unit(id, active_track);
-            if ((model == FX_MODFX_DAISY_STEREO)
+            if ((model == FX_MODFX_JUNOLOGUE) && (id == PARAM_MODFX_OFFSET))
+            {
+                static const char *const modes[] = { "I", "I+II", "II" };
+                int32_t mode = (int32_t)(shown + 0.5f);
+                if (mode < 0) mode = 0;
+                if (mode > 2) mode = 2;
+                (void)snprintf(out_value, out_value_len, "%s", modes[mode]);
+            }
+            else if ((model == FX_MODFX_DAISY_STEREO)
                     && (id == PARAM_MODFX_FEEDBACK))
                 (void)snprintf(out_value, out_value_len, "%+.2f%s",
                                (double)shown, unit);
@@ -1388,6 +1404,14 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
             case PARAM_WAVE_OSC2_POS:
                 name = "POS";
                 break;
+            case PARAM_WAVE_OSC1_START:
+            case PARAM_WAVE_OSC2_START:
+                name = "START";
+                break;
+            case PARAM_WAVE_OSC1_LEN:
+            case PARAM_WAVE_OSC2_LEN:
+                name = "LEN";
+                break;
             case PARAM_WAVE_VOLUME:
                 name = "VOL";
                 break;
@@ -1452,6 +1476,10 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                 }
                 else if ((id == PARAM_WAVE_OSC1_POS)
                         || (id == PARAM_WAVE_OSC2_POS)
+                        || (id == PARAM_WAVE_OSC1_START)
+                        || (id == PARAM_WAVE_OSC2_START)
+                        || (id == PARAM_WAVE_OSC1_LEN)
+                        || (id == PARAM_WAVE_OSC2_LEN)
                         || (id == PARAM_WAVE_VOLUME))
                 {
                     (void)snprintf(out_value, out_value_len, "%.0f%%", value * 100.0f);
@@ -1477,7 +1505,7 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
             case PARAM_SAMPLER_START:
                 name = "START";
                 break;
-            case PARAM_SAMPLER_END:
+            case PARAM_SAMPLER_LENGTH:
                 name = "END";
                 break;
             case PARAM_SAMPLER_GAIN:
@@ -1842,9 +1870,7 @@ void ui_page_template_tone_toggle_subset(void)
         return;
     }
 
-    g_ui_template_tone_subset = (g_ui_template_tone_subset == 0U) ? 1U : 0U;
-    g_ui_template_tone_state.navigation_subset = g_ui_template_tone_subset;
-    ui_navigation_restore_current_template_subpage();
+    ui_page_template_tone_open_primary();
 }
 
 static void ui_page_template_tone_update_synth_live_request(void);

@@ -20,6 +20,7 @@
 #include "Core/live_clock.h"
 #include "Core/audio_transport_publication.h"
 #include "Core/track_runtime.h"
+#include "Core/control_music_output.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "midi.h"
 
@@ -73,8 +74,10 @@ static volatile uint8_t g_seq_runtime_live_rec_tail;
 static volatile uint8_t g_seq_runtime_live_rec_count;
 static uint64_t g_seq_runtime_control_sample_cursor;
 static uint8_t g_seq_runtime_trigger_start_bypass;
+static volatile uint8_t g_seq_runtime_control_service_pending;
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic);
-static void seq_runtime_control_apply_event(
+static void seq_runtime_process_core(void);
+static uint8_t seq_runtime_control_apply_event(
     const seq_runtime_control_event_t *event);
 static uint32_t seq_runtime_get_now_tick_for_source(seq_clock_src_t source);
 static uint32_t seq_runtime_get_now_tick(void);
@@ -286,6 +289,7 @@ void seq_runtime_init(void)
     g_seq_runtime_live_rec_head = 0U;
     g_seq_runtime_live_rec_tail = 0U;
     g_seq_runtime_live_rec_count = 0U;
+    g_seq_runtime_control_service_pending = 0U;
     memset(g_seq_runtime_live_rec_queue, 0, sizeof(g_seq_runtime_live_rec_queue));
     g_seq_runtime.last_tick_count = seq_runtime_get_now_tick();
     seq_play_scheduler_init();
@@ -331,19 +335,19 @@ void seq_runtime_start(void)
         return;
     }
 
-    /* Project the canonical NoteFx configuration before new occurrences can
-     * enter the freshly reset temporal runtime. */
-    if (note_fx_pipeline_sync_all_tracks() == 0U)
-    {
-        seq_runtime_exit_critical(primask);
-        return;
-    }
-
     /* Orchestration seam: runtime asks clock policy to prepare cadence, then asks transport FSM for START. */
     seq_runtime_exec_prepare_start_lifecycle(&g_seq_runtime,
                                              &g_seq_clock_bridge,
                                              seq_runtime_get_now_tick());
     seq_runtime_update_samples_per_step_from_tempo();
+
+    /* The lifecycle panic advances the NoteFx epoch. Publish the canonical
+     * configuration afterwards so it survives that purge and precedes notes. */
+    if (note_fx_pipeline_sync_all_tracks() == 0U)
+    {
+        seq_runtime_exit_critical(primask);
+        return;
+    }
 
     /* Orchestration seam: transport FSM owns the start transition and count-in state. */
     if (seq_transport_fsm_request_start(&g_seq_transport_fsm,
@@ -357,11 +361,14 @@ void seq_runtime_start(void)
     begin_running_now = (seq_transport_fsm_is_running(&g_seq_transport_fsm) != 0U) ? 1U : 0U;
     if (begin_running_now != 0U)
     {
+        const uint64_t start_sample =
+            control_music_output_first_unpublished_sample(
+                seq_runtime_get_now_sample());
         seq_runtime_exec_begin_running_at_sample_q16(&g_seq_runtime,
                                                      &g_seq_transport_fsm,
                                                      &g_seq_clock_bridge,
                                                      seq_runtime_get_now_tick(),
-                                                     (uint64_t)seq_runtime_get_now_sample() << 16);
+                                                     start_sample << 16);
     }
     audio_transport_publication_refresh();
     seq_runtime_exit_critical(primask);
@@ -369,6 +376,7 @@ void seq_runtime_start(void)
     if (begin_running_now != 0U)
     {
         seq_runtime_send_transport_start();
+        seq_runtime_process_core();
     }
 }
 
@@ -436,48 +444,84 @@ static void seq_runtime_process_core(void)
     seq_clock_bridge_on_process(&g_seq_clock_bridge, seq_runtime_get_clock_source_internal(), now_tick);
 
     const uint64_t audio_sample = seq_runtime_get_now_sample();
-    if (g_seq_runtime_control_sample_cursor > audio_sample)
+    const uint64_t publish_limit = audio_sample + 64U;
+    if ((g_seq_runtime_control_sample_cursor < audio_sample)
+            || (g_seq_runtime_control_sample_cursor > publish_limit))
         g_seq_runtime_control_sample_cursor = audio_sample;
-    while (g_seq_runtime_control_sample_cursor < audio_sample)
+    const uint64_t first_unpublished =
+        control_music_output_first_unpublished_sample(
+            g_seq_runtime_control_sample_cursor);
+    if (g_seq_runtime_control_sample_cursor < first_unpublished)
+        g_seq_runtime_control_sample_cursor = first_unpublished;
+    while (g_seq_runtime_control_sample_cursor < publish_limit)
     {
-        const uint64_t remaining = audio_sample - g_seq_runtime_control_sample_cursor;
+        const uint64_t remaining = publish_limit - g_seq_runtime_control_sample_cursor;
         const uint16_t frames = (remaining > UINT16_MAX)
             ? UINT16_MAX : (uint16_t)remaining;
+        const uint64_t window_first = g_seq_runtime_control_sample_cursor;
+        if (control_music_output_begin_window(window_first, frames) == 0U)
+            return;
         seq_runtime_control_event_t events[128];
-        note_fx_pipeline_begin_control_window(frames);
-        seq_play_scheduler_control_begin_window(SEQ_PLAY_SCHEDULER_HALF_EVENT_QUOTA);
-        const uint16_t count = seq_runtime_exec_collect_block_events(
+        uint16_t count = seq_runtime_exec_collect_block_events(
             &g_seq_runtime, &g_seq_transport_fsm, &g_seq_clock_bridge,
             g_seq_track_loop_generation,
-            events, 128U, frames, seq_runtime_get_clock_source_internal(),
+            events, 128U, window_first, frames,
+            seq_runtime_get_clock_source_internal(),
             g_seq_runtime.running);
         g_seq_runtime_control_sample_cursor += frames;
-
-        for (uint16_t i = 0U; i < count; ++i)
+        const uint8_t panic_applied = note_fx_pipeline_prepare_control_window(
+            g_seq_runtime_control_sample_cursor - frames);
+        if (panic_applied > 1U)
         {
-            const seq_runtime_control_event_t *const event = &events[i];
-            if ((event->type == SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE)
-                    || (event->type == SEQ_RUNTIME_AUDIO_EVENT_METRO_CLICK))
-            {
-                const control_audio_event_t audio_event = {
-                    .due_sample = event->sample_abs,
-                    .entity_id = (brick_entity_id_t)event->track,
-                    .kind = (event->type == SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE)
-                        ? (uint8_t)CONTROL_AUDIO_EVENT_BOUNDARY_EDGE
-                        : (uint8_t)CONTROL_AUDIO_EVENT_METRONOME_CLICK,
-                    .flags = event->velocity
-                };
-                (void)control_audio_queue_publish(&audio_event);
-            }
-            else
-            {
-                seq_runtime_control_apply_event(event);
-            }
+            control_music_output_abort_window();
+            return;
         }
-        note_fx_pipeline_process(g_seq_runtime_control_sample_cursor - frames,
-                                 frames, g_seq_runtime.samples_per_step_q16);
-        note_fx_pipeline_end_control_window();
-        seq_play_scheduler_control_end_window();
+
+        for (;;)
+        {
+            for (uint16_t i = 0U; i < count; ++i)
+            {
+                const seq_runtime_control_event_t *const event = &events[i];
+                if ((event->type == SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE)
+                        || (event->type == SEQ_RUNTIME_AUDIO_EVENT_METRO_CLICK))
+                {
+                    const control_audio_event_t audio_event = {
+                        .due_sample = event->sample_abs,
+                        .entity_id = (brick_entity_id_t)event->track,
+                        .kind = (event->type == SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE)
+                            ? (uint8_t)CONTROL_AUDIO_EVENT_BOUNDARY_EDGE
+                            : (uint8_t)CONTROL_AUDIO_EVENT_METRONOME_CLICK,
+                        .flags = event->velocity
+                    };
+                    (void)control_audio_queue_publish(&audio_event);
+                }
+                else
+                {
+                    if (seq_runtime_control_apply_event(event) == 0U)
+                    {
+                        control_music_output_abort_window();
+                        return;
+                    }
+                }
+            }
+            if (count < 128U)
+                break;
+            count = seq_runtime_exec_collect_remaining_scheduler_events(
+                events, 128U, frames,
+                g_seq_runtime_control_sample_cursor - frames);
+        }
+        if (note_fx_pipeline_process(
+                g_seq_runtime_control_sample_cursor - frames,
+                frames, g_seq_runtime.samples_per_step_q16) == 0U)
+        {
+            control_music_output_abort_window();
+            return;
+        }
+        if (control_music_output_commit_window() == 0U)
+        {
+            control_music_output_abort_window();
+            return;
+        }
     }
 
     if (seq_transport_fsm_is_stopped(&g_seq_transport_fsm) != 0U)
@@ -503,11 +547,22 @@ static void seq_runtime_process_core(void)
 
 void seq_runtime_time_adapter_process(void)
 {
-    /*
-     * Runtime core is serviced from superloop for transport/external-clock
-     * state work. Internal step progression is driven from audio block domain.
-     */
-    /* Orchestration seam: superloop services clock policy and transport supervision only. */
+    /* Musical cadence is owned by the audio-anchored PendSV continuation. */
+}
+
+void seq_runtime_control_request_from_audio_irq(void)
+{
+    g_seq_runtime_control_service_pending = 1U;
+    __DMB();
+    SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
+}
+
+void seq_runtime_control_service_from_pendsv(void)
+{
+    if (g_seq_runtime_control_service_pending == 0U)
+        return;
+    g_seq_runtime_control_service_pending = 0U;
+    __DMB();
     seq_runtime_process_core();
 }
 
@@ -519,16 +574,15 @@ void seq_runtime_time_adapter_process_internal_from_irq(void)
     }
 }
 
-static void seq_runtime_control_apply_event(const seq_runtime_control_event_t *event)
+static uint8_t seq_runtime_control_apply_event(
+    const seq_runtime_control_event_t *event)
 {
     if (event == NULL)
-    {
-        return;
-    }
+        return 0U;
     /* Audio apply seam: runtime forwards collected events to scheduler/engines only. */
     seq_play_scheduler_event_t scheduler_event;
     seq_runtime_copy_control_event(&scheduler_event, event);
-    seq_play_scheduler_control_apply_event(&scheduler_event);
+    return seq_play_scheduler_control_apply_event(&scheduler_event);
 }
 
 void seq_runtime_set_clock_source(seq_clock_src_t src)
@@ -749,6 +803,27 @@ void seq_runtime_on_track_length_changed(seq_track_id_t track)
     }
     g_seq_runtime.prev_step[track] = g_seq_runtime.play_step[track];
     g_seq_runtime.prev_step_valid[track] = 0U;
+}
+
+void seq_runtime_on_step_play_changed(seq_track_id_t track,
+                                      seq_step_id_t step,
+                                      uint8_t voice,
+                                      seq_step_play_field_t field)
+{
+    seq_play_scheduler_notify_play_changed(track, step, voice, field);
+}
+
+void seq_runtime_on_step_play_removed(seq_track_id_t track,
+                                      seq_step_id_t step,
+                                      int16_t voice)
+{
+    seq_play_scheduler_remove_play(track, step, voice);
+}
+
+void seq_runtime_on_step_roll_changed(seq_track_id_t track,
+                                      seq_step_id_t step)
+{
+    seq_play_scheduler_notify_roll_changed(track, step);
 }
 
 void seq_runtime_set_track_div(seq_track_id_t track, uint8_t div)

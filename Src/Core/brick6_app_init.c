@@ -37,7 +37,9 @@
 #include "brick6_master_control.h"
 #include "brick6_sampler_runtime.h"
 #include "Core/brick6_stream_service_task.h"
+#include "Core/audio_retire_ack.h"
 #include "Core/track_mute.h"
+#include "Core/track_runtime.h"
 #include "Core/project_control.h"
 #include "Core/project_load_quiesce.h"
 #include "brick6_sampler_bootstrap.h"
@@ -61,6 +63,7 @@
 #include "App/Hall/hall_calibration.h"
 #include "App/Hall/hall_loop.h"
 #include "Seq/seq_runtime.h"
+#include "UI/ui_active_track_sync.h"
 
 static void brick6_process_hall_ui_keyboard_chain(void)
 {
@@ -95,6 +98,7 @@ void brick6_app_init(void)
     (void)crash_capsule_init();
 #endif
     SDRAM_Init();
+    audio_retire_ack_init();
     restore_transaction_control_init();
     project_load_quiesce_init();
 
@@ -136,8 +140,6 @@ void brick6_app_init(void)
     audio_recorder_init();
 
     (void)brick6_audio_boot_apply_drum(&audio_boot);
-    hall_keyboard_bridge_init();
-
     brick6_sampler_runtime_init();
     brick6_looper_runtime_init();
     (void)brick6_audio_boot_apply_engines(&audio_boot);
@@ -150,6 +152,8 @@ void brick6_app_init(void)
     seq_runtime_init();
     track_mute_init();
     ui_core_init();
+    track_runtime_invalidate_all();
+    track_runtime_refresh_all();
     param_set(PARAM_MASTER_GAIN, audio_boot.master_gain);
     param_set(PARAM_POST_GAIN, audio_boot.postgain);
     param_set(PARAM_OUTPUT_COMP, audio_boot.output_compensation);
@@ -161,6 +165,7 @@ void brick6_app_init(void)
     ui_boot_loading_begin();
     undo_v2_init();
     hall_loop_init();
+    hall_keyboard_bridge_init();
     if (hall_calibration_load() != 0U)
     {
         ui_page_set(UI_PAGE_TEMPLATE_CFG);
@@ -172,6 +177,7 @@ void brick6_app_init(void)
 #if LOWCOST_BUTTON_TEST_PAGE
     ui_page_set(UI_PAGE_LOWCOST_BUTTON_TEST);
 #endif
+    ui_active_track_sync_full_after_global_restore();
     brick6_stream_service_task_init();
     (void)audio_start();
 
@@ -195,6 +201,28 @@ void brick6_app_init(void)
  */
 static void brick6_app_service_storage(void)
 {
+    audio_retire_ack_t retire_ack[8];
+    const uint8_t retire_ack_count = audio_retire_ack_drain(
+        retire_ack, (uint8_t)(sizeof(retire_ack) / sizeof(retire_ack[0])));
+    for (uint8_t i = 0U; i < retire_ack_count; ++i)
+    {
+        switch ((audio_retire_ack_kind_t)retire_ack[i].kind)
+        {
+            case AUDIO_RETIRE_ACK_MULTI:
+                multi_sample_pool_control_ack_retire(retire_ack[i].slot);
+                break;
+            case AUDIO_RETIRE_ACK_RAM:
+                sampler_ram_pool_control_ack_retire(retire_ack[i].slot,
+                                                    retire_ack[i].generation);
+                break;
+            case AUDIO_RETIRE_ACK_WAVE:
+                wavetable_pool_control_ack_retire(retire_ack[i].slot,
+                                                  retire_ack[i].generation);
+                break;
+            default:
+                break;
+        }
+    }
     audio_recorder_service();
     project_product_save_service();
     if (multi_sample_load_has_pending() != 0U)

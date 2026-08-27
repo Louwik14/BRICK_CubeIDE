@@ -43,7 +43,7 @@ void apply_sampler_clip_grain(float v) { apply_tone_live_track(PARAM_SAMPLER_CLI
 void apply_sampler_clip_hop(float v) { apply_tone_live_track(PARAM_SAMPLER_CLIP_HOP, v); }
 void apply_sampler_clip_search(float v) { apply_tone_live_track(PARAM_SAMPLER_CLIP_SEARCH, v); }
 void apply_sampler_start(float v) { apply_tone_live_track(PARAM_SAMPLER_START, v); }
-void apply_sampler_end(float v) { apply_tone_live_track(PARAM_SAMPLER_END, v); }
+void apply_sampler_length(float v) { apply_tone_live_track(PARAM_SAMPLER_LENGTH, v); }
 void apply_sampler_mode(float v) { apply_tone_live_track(PARAM_SAMPLER_MODE, v); }
 void apply_sampler_loop_start(float v) { apply_tone_live_track(PARAM_SAMPLER_LOOP_START, v); }
 void apply_sampler_tune(float v) { apply_tone_live_track(PARAM_SAMPLER_TUNE, v); }

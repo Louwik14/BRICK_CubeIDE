@@ -6,6 +6,7 @@
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_mod_matrix.h"
 #include "Param/param_registry.h"
+#include "Param/param_value_policy.h"
 #include "memory_layout.h"
 
 SEQ_STATE_D2 static float g_live_parameter_audio_poly_voices[SEQ_LANE_CAPACITY];
@@ -154,24 +155,31 @@ uint16_t live_parameter_audio_runtime_apply_due(uint64_t now)
             ++applied;
         (void)live_parameter_audio_queue_audio_pop();
     }
+    for (;;)
+    {
+        live_parameter_audio_dated_event_t dated;
+        if (live_parameter_audio_queue_audio_peek_dated(&dated) == false)
+            break;
+        if ((int16_t)(dated.due_sample_low - (uint16_t)now) > 0)
+            break;
+        const live_parameter_audio_event_t event = {
+            .effective_sample_time = now,
+            .parameter_id = dated.parameter_id,
+            .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
+            .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
+            .track = dated.track,
+            .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
+            .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
+                                | LIVE_PARAMETER_EVENT_FLAG_RUNTIME_TEMP
+                                | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+            .value = live_parameter_event_encode_float(
+                param_value_policy_decode_u16(
+                    &param_registry[dated.parameter_id], dated.value16)),
+            .matrix_operation = dated.matrix_operation
+        };
+        if (live_parameter_audio_runtime_apply_event(&event) != 0U)
+            ++applied;
+        (void)live_parameter_audio_queue_audio_pop_dated();
+    }
     return applied;
-}
-
-uint8_t live_parameter_audio_runtime_apply_temp(param_id_t parameter,
-                                                uint8_t track,
-                                                float value,
-                                                uint8_t matrix_operation)
-{
-    const live_parameter_audio_event_t event = {
-        .parameter_id = (uint16_t)parameter,
-        .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
-        .track = track,
-        .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-        .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                            | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS
-                            | LIVE_PARAMETER_EVENT_FLAG_RUNTIME_TEMP),
-        .value = live_parameter_event_encode_float(value),
-        .matrix_operation = matrix_operation
-    };
-    return live_parameter_audio_runtime_apply_event(&event);
 }

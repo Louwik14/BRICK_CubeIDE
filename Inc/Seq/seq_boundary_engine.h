@@ -13,6 +13,7 @@ typedef struct
 {
     seq_track_id_t track;
     seq_step_id_t step;
+    uint8_t swing_phase;
 } seq_boundary_hit_t;
 
 void seq_boundary_engine_restore_all_active_locks(seq_runtime_state_t *state,

@@ -28,8 +28,13 @@ note_fx_result_t note_fx_engine_stage_source(const note_fx_event_t *event, uint8
                                              note_fx_emit_fn emit, void *context);
 uint8_t note_fx_engine_is_generated_occurrence_current(
     uint8_t track, uint32_t occurrence_id, uint32_t generation);
-void note_fx_engine_process(uint64_t block_start, uint16_t frames, uint32_t samples_per_step_q16, note_fx_emit_fn emit, void *context);
-void note_fx_engine_cleanup(uint8_t track, uint64_t sample, note_fx_emit_fn emit, void *context);
-uint64_t note_fx_engine_next_deadline(void);
+note_fx_result_t note_fx_engine_process(uint64_t block_start, uint16_t frames,
+                                        uint32_t samples_per_step_q16,
+                                        note_fx_emit_fn emit, void *context);
+/* Cleanup is transactional with respect to logical ownership: a refused STOP
+ * is returned immediately and the corresponding owner remains live. */
+note_fx_result_t note_fx_engine_cleanup(uint8_t track, uint64_t sample,
+                                        note_fx_emit_fn emit, void *context);
+void note_fx_engine_forget_output(uint8_t track, uint32_t output_id);
 
 #endif

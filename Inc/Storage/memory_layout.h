@@ -51,6 +51,9 @@
  * non-cacheable.  Objects here must remain pointer-free and single-owner. */
 #define D3_IPC SEC_ATTR(".ram_d3_ipc") ALIGN32
 
+/* Bulk pointer-free IPC registries use the existing shared SRAM3 window. */
+#define D2_IPC SEC_ATTR(".ram_d2_ipc") ALIGN32
+
 /* Bulk restore singleton: cacheable SDRAM payload plus pointer-free D3 doorbell.
  * Publication/consumption must perform explicit D-cache maintenance. */
 #define RESTORE_PLAN_SDRAM SEC_ATTR(".restore_plan_sdram") ALIGN32

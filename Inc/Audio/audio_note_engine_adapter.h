@@ -55,6 +55,11 @@ typedef struct
     uint8_t configured_voice_count;
     uint8_t physical_voice_capacity;
     uint8_t sampler_slice_mode_active;
+    uint8_t midi_channel_1_16;
+    uint8_t midi_source;
+    uint8_t has_filter_target;
+    uint8_t filter_track_id;
+    uint8_t supports_vca_gate;
 } audio_binding_snapshot_t;
 
 /* Value-only install command extracted from the transient scheduler event.
@@ -84,8 +89,9 @@ void audio_note_engine_adapter_init(void);
 void audio_note_engine_adapter_audio_publish_snapshot(void);
 void audio_note_engine_adapter_audio_publish_snapshot_entity(
     brick_entity_id_t entity_id);
-const track_audio_runtime_ctx_t *audio_note_engine_adapter_audio_ctx(
-    brick_entity_id_t entity_id);
+uint8_t audio_note_engine_adapter_audio_ctx_snapshot(
+    brick_entity_id_t entity_id,
+    track_audio_runtime_ctx_t *out_context);
 uint16_t audio_note_engine_adapter_entity_mask(
     track_runtime_engine_t engine);
 brick_entity_id_t audio_note_engine_adapter_entity_for_mix_lane(
@@ -113,7 +119,7 @@ uint8_t audio_note_engine_adapter_apply(
                                         uint8_t note,
                                         uint8_t velocity,
                                         uint8_t is_note_on,
-    uint32_t occurrence_token);
+    uint32_t output_id);
 
 void audio_note_engine_adapter_install_intent(
     const control_audio_event_t *event);

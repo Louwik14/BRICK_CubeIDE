@@ -19,7 +19,8 @@ typedef struct
 
 void audio_transport_publication_init(void);
 void audio_transport_publication_refresh(void);
-const audio_transport_publication_t *audio_transport_publication_get(void);
+uint8_t audio_transport_publication_read(
+    audio_transport_publication_t *out_publication);
 
 #ifdef __cplusplus
 }

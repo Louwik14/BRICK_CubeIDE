@@ -345,8 +345,10 @@ uint8_t param_filter_apply_value_audio(param_id_t id,
                                        uint8_t track,
                                        float clamped)
 {
+    track_audio_runtime_ctx_t ctx_value;
     const track_audio_runtime_ctx_t *const ctx =
-        audio_note_engine_adapter_audio_ctx(track);
+        (audio_note_engine_adapter_audio_ctx_snapshot(track, &ctx_value) != 0U)
+            ? &ctx_value : NULL;
     uint8_t target_track = 0U;
     if ((audio_note_engine_adapter_ctx_is_audio_routable(ctx) == 0U)
             || (audio_note_engine_adapter_ctx_filter_target(

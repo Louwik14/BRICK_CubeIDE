@@ -374,7 +374,7 @@ static uint8_t multi_sample_pool_finalize_clear_instrument(uint16_t instrument_i
     return 1U;
 }
 
-void multi_sample_pool_audio_ack_retire(uint16_t instrument_id)
+void multi_sample_pool_control_ack_retire(uint16_t instrument_id)
 {
     if (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS) return;
     __DMB();

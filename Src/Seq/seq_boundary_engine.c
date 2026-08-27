@@ -342,10 +342,12 @@ void seq_boundary_engine_restore_all_active_locks(seq_runtime_state_t *state,
             continue;
         }
 
-        seq_param_iface_restore_base(track,
-                                     active[i].set_id,
-                                     active[i].param_slot,
-                                     active[i].base_value16);
+        if (seq_param_iface_restore_base(track,
+                                         active[i].set_id,
+                                         active[i].param_slot,
+                                         active[i].base_value16,
+                                         state->step_sample_q16 >> 16) == 0U)
+            return;
     }
 
     memset(active,
@@ -399,10 +401,12 @@ static void seq_boundary_engine_step_apply_restore(seq_runtime_state_t *state,
 
             if (seq_boundary_engine_find_next_lock(next_locks, next_count, active[i].set_id, active[i].param_slot, 0) == 0U)
             {
-                seq_param_iface_restore_base(track,
-                                             active[i].set_id,
-                                             active[i].param_slot,
-                                             active[i].base_value16);
+                if (seq_param_iface_restore_base(track,
+                                                 active[i].set_id,
+                                                 active[i].param_slot,
+                                                 active[i].base_value16,
+                                                 state->step_sample_q16 >> 16) == 0U)
+                    return;
             }
         }
     }
@@ -433,10 +437,12 @@ static void seq_boundary_engine_step_apply_restore(seq_runtime_state_t *state,
             next_locks[i].base_value16 = base_value16;
         }
 
-        seq_param_iface_apply_lock(track,
-                                   next_locks[i].set_id,
-                                   next_locks[i].target_slot,
-                                   next_locks[i].value16);
+        if (seq_param_iface_apply_lock(track,
+                                      next_locks[i].set_id,
+                                      next_locks[i].target_slot,
+                                      next_locks[i].value16,
+                                      state->step_sample_q16 >> 16) == 0U)
+            return;
     }
 
     memset(active,
@@ -498,6 +504,7 @@ void seq_boundary_engine_process(seq_runtime_state_t *state,
             {
                 out_hits[hit_count].track = track;
                 out_hits[hit_count].step = current_step;
+                out_hits[hit_count].swing_phase = state->track_swing_phase[track];
                 hit_count++;
             }
         }
@@ -531,6 +538,7 @@ void seq_boundary_engine_advance_one_step(seq_runtime_state_t *state)
         if (phase >= (uint8_t)(div - 1U))
         {
             state->track_div_phase[track] = 0U;
+            state->track_swing_phase[track] ^= 1U;
         }
         else
         {

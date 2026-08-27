@@ -64,12 +64,12 @@ static inline void RenderAnalogSyncOut(
   }
 }
 
-void MacroOscillator::Render(
+void MacroOscillator::Render24(
     const uint8_t* sync,
-    int16_t* buffer,
-    size_t size) {
+    MacroOscillatorScratch* scratch) {
+  scratch_ = scratch;
   RenderFn fn = fn_table_[shape_];
-  (this->*fn)(sync, buffer, size);
+  (this->*fn)(sync, output_buffer_, 24);
 }
 
 void MacroOscillator::RenderCSaw(
@@ -117,7 +117,7 @@ void MacroOscillator::RenderMorph(
   }
   
   int16_t* shape_1 = buffer;
-  int16_t* shape_2 = temp_buffer_;
+  int16_t* shape_2 = scratch_->temp_buffer;
   RenderAnalogNoSyncOut(&analog_oscillator_[0], sync, shape_1, size);
   RenderAnalogNoSyncOut(&analog_oscillator_[1], sync, shape_2, size);
   
@@ -162,7 +162,7 @@ void MacroOscillator::RenderSawSquare(
   analog_oscillator_[1].set_shape(OSC_SHAPE_SQUARE);
   
   int16_t* saw_buffer = buffer;
-  int16_t* square_buffer = temp_buffer_;
+  int16_t* square_buffer = scratch_->temp_buffer;
   
   RenderAnalogNoSyncOut(&analog_oscillator_[0], sync, saw_buffer, size);
   RenderAnalogNoSyncOut(&analog_oscillator_[1], sync, square_buffer, size);
@@ -239,9 +239,9 @@ void MacroOscillator::RenderTriple(
 
   std::fill(&buffer[0], &buffer[size], 0);
   for (size_t i = 0; i < 3; ++i) {
-    RenderAnalogNoSyncOut(&analog_oscillator_[i], sync, temp_buffer_, size);
+    RenderAnalogNoSyncOut(&analog_oscillator_[i], sync, scratch_->temp_buffer, size);
     for (size_t j = 0; j < size; ++j) {
-      buffer[j] += temp_buffer_[j] * 21 >> 6;
+      buffer[j] += scratch_->temp_buffer[j] * 21 >> 6;
     }
   }
 }
@@ -262,11 +262,11 @@ void MacroOscillator::RenderSub(
   analog_oscillator_[1].set_pitch(pitch_ - octave);
 
   RenderAnalogNoSyncOut(&analog_oscillator_[0], sync, buffer, size);
-  RenderAnalogNoSyncOut(&analog_oscillator_[1], sync, temp_buffer_, size);
+  RenderAnalogNoSyncOut(&analog_oscillator_[1], sync, scratch_->temp_buffer, size);
   
   BEGIN_INTERPOLATE_PARAMETER_1
 
-  int16_t* temp_buffer = temp_buffer_;
+  int16_t* temp_buffer = scratch_->temp_buffer;
   while (size--) {
     INTERPOLATE_PARAMETER_1
     uint16_t sub_gain = (parameter_1 < 16384
@@ -293,12 +293,14 @@ void MacroOscillator::RenderDualSync(
   analog_oscillator_[1].set_shape(base_shape);
   analog_oscillator_[1].set_pitch(pitch_ + (parameter_[0] >> 2));
 
-  RenderAnalogSyncOut(&analog_oscillator_[0], sync, buffer, sync_buffer_, size);
-  analog_oscillator_[1].RenderNoSyncOut(sync_buffer_, temp_buffer_, size);
+  RenderAnalogSyncOut(
+      &analog_oscillator_[0], sync, buffer, scratch_->sync_buffer, size);
+  analog_oscillator_[1].RenderNoSyncOut(
+      scratch_->sync_buffer, scratch_->temp_buffer, size);
   
   BEGIN_INTERPOLATE_PARAMETER_1
 
-  int16_t* temp_buffer = temp_buffer_;
+  int16_t* temp_buffer = scratch_->temp_buffer;
   while (size--) {
     INTERPOLATE_PARAMETER_1
     uint16_t balance = parameter_1 << 1;
@@ -333,9 +335,9 @@ void MacroOscillator::RenderSineTriangle(
   analog_oscillator_[1].set_shape(OSC_SHAPE_TRIANGLE_FOLD);
 
   RenderAnalogNoSyncOut(&analog_oscillator_[0], sync, buffer, size);
-  RenderAnalogNoSyncOut(&analog_oscillator_[1], sync, temp_buffer_, size);
+  RenderAnalogNoSyncOut(&analog_oscillator_[1], sync, scratch_->temp_buffer, size);
 
-  int16_t* temp_buffer = temp_buffer_;
+  int16_t* temp_buffer = scratch_->temp_buffer;
   
   BEGIN_INTERPOLATE_PARAMETER_1
   
@@ -364,8 +366,8 @@ void MacroOscillator::RenderBuzz(
   analog_oscillator_[1].set_pitch(pitch_ + (parameter_[1] >> 8));
 
   RenderAnalogNoSyncOut(&analog_oscillator_[0], sync, buffer, size);
-  RenderAnalogNoSyncOut(&analog_oscillator_[1], sync, temp_buffer_, size);
-  int16_t* temp_buffer = temp_buffer_;
+  RenderAnalogNoSyncOut(&analog_oscillator_[1], sync, scratch_->temp_buffer, size);
+  int16_t* temp_buffer = scratch_->temp_buffer;
   while (size--) {
     *buffer >>= 1;
     *buffer += *temp_buffer >> 1;

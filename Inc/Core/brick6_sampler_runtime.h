@@ -31,13 +31,9 @@ typedef enum
 {
     BRICK6_SAMPLER_MULTI_DIAG_REASON_NONE = 0,
     BRICK6_SAMPLER_MULTI_DIAG_REASON_NO_INSTRUMENT,
-    BRICK6_SAMPLER_MULTI_DIAG_REASON_INSTRUMENT_NOT_READY,
     BRICK6_SAMPLER_MULTI_DIAG_REASON_NO_ZONE,
     BRICK6_SAMPLER_MULTI_DIAG_REASON_INVALID_SAMPLE,
     BRICK6_SAMPLER_MULTI_DIAG_REASON_PAGE0_MISSING,
-    BRICK6_SAMPLER_MULTI_DIAG_REASON_TRACK_VOICE_LIMIT,
-    BRICK6_SAMPLER_MULTI_DIAG_REASON_GLOBAL_VOICE_LIMIT,
-    BRICK6_SAMPLER_MULTI_DIAG_REASON_STEAL_SAME_TRACK,
     BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_DONE,
     BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_UNDERRUN,
     BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_STEAL,
@@ -62,47 +58,25 @@ typedef struct
     uint16_t sample_id;
     uint16_t multi_instrument_id;
     uint16_t multi_sample_id;
-    uint32_t multi_note_on_rejected_not_ready;
     uint32_t multi_resolve_fail;
     uint32_t multi_page0_missing;
     uint32_t multi_page_window_missing;
     uint32_t multi_page_underrun;
     uint32_t multi_voice_started;
-    uint32_t multi_voice_stolen_same_track;
-    uint32_t multi_voice_stolen_global;
-    uint32_t multi_voice_rejected_no_voice;
     uint32_t multi_no_instrument_assigned;
     uint32_t multi_invalid_instrument_id;
-    uint32_t multi_instrument_not_ready;
     uint32_t multi_need_update_count;
     uint32_t multi_stop_done;
     uint32_t multi_stop_underrun;
     uint32_t multi_stop_steal;
     uint32_t multi_stop_rel_done;
-    uint32_t multi_rejected_track_voice_limit;
-    uint32_t multi_rejected_global_voice_limit;
     uint32_t multi_last_current_frame;
     uint32_t multi_last_end_frame;
-    uint32_t multi_last_missing_page;
-    uint32_t multi_last_ready_mask;
     uint32_t common_plan_classic_build_fail;
     uint32_t common_plan_multi_build_fail;
     uint32_t common_plan_last_reason;
-    uint32_t start_gate_reject_count;
-    uint32_t start_gate_reject_classic_count;
-    uint32_t start_gate_reject_multi_count;
-    uint32_t start_gate_last_status;
-    uint32_t start_gate_last_missing_page;
-    uint32_t start_gate_last_pending_page;
-    uint32_t start_gate_invalid_plan_count;
-    uint32_t start_gate_missing_count;
-    uint32_t start_gate_pending_count;
-    uint32_t start_gate_partial_count;
-    uint8_t multi_last_stolen_kind;
-    uint8_t multi_last_stolen_track;
     uint8_t multi_last_reject_reason;
     uint8_t multi_last_stop_reason;
-    uint8_t multi_last_steal_reason;
     uint8_t multi_last_active_global;
     uint8_t multi_last_active_track;
     uint8_t multi_gain_applied;
@@ -133,7 +107,7 @@ float brick6_sampler_runtime_get_multi_gain(uint8_t track_id);
 void brick6_sampler_runtime_set_multi_loop(uint8_t track_id, uint8_t enabled);
 uint8_t brick6_sampler_runtime_multi_instrument_is_ready(uint8_t track_id);
 void brick6_sampler_runtime_set_start(uint8_t track_id, float start);
-void brick6_sampler_runtime_set_end(uint8_t track_id, float end);
+void brick6_sampler_runtime_set_length(uint8_t track_id, float length);
 void brick6_sampler_runtime_set_mode(uint8_t track_id, uint8_t mode);
 void brick6_sampler_runtime_set_tune(uint8_t track_id, float tune);
 void brick6_sampler_runtime_set_loop_start(uint8_t track_id, float loop_start);
@@ -153,19 +127,19 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity(uint8_t track_id,
                                                            uint8_t note,
                                                            uint8_t velocity,
                                                            float gain);
-uint8_t brick6_sampler_runtime_trigger_multi_note_velocity_token(uint8_t track_id,
+uint8_t brick6_sampler_runtime_trigger_multi_note_velocity_output(uint8_t track_id,
                                                                  uint16_t instrument_id,
                                                                  uint8_t note,
                                                                  uint8_t velocity,
                                                                  float gain,
-                                                                 uint32_t event_token);
+                                                                 uint32_t output_id);
 uint8_t brick6_sampler_runtime_trigger_multi_track_note_velocity(uint8_t track_id,
                                                                   uint8_t note,
                                                                   uint8_t velocity);
-uint8_t brick6_sampler_runtime_trigger_multi_track_note_velocity_token(uint8_t track_id,
+uint8_t brick6_sampler_runtime_trigger_multi_track_note_velocity_output(uint8_t track_id,
                                                                        uint8_t note,
                                                                        uint8_t velocity,
-                                                                       uint32_t event_token);
+                                                                       uint32_t output_id);
 void brick6_sampler_runtime_set_multi_voice_count(uint8_t track_id, uint8_t count);
 uint8_t brick6_sampler_runtime_get_multi_voice_count(uint8_t track_id);
 void brick6_sampler_runtime_set_multi_spread(uint8_t track_id, float spread);
@@ -175,9 +149,9 @@ float brick6_sampler_runtime_get_multi_spread(uint8_t track_id);
  * [track, note]. The normal scheduler path must use the tokenized API below.
  */
 void brick6_sampler_runtime_note_off_multi_track_note_all(uint8_t track_id, uint8_t note);
-void brick6_sampler_runtime_note_off_multi_track_note_token(uint8_t track_id,
+void brick6_sampler_runtime_note_off_multi_track_note_output(uint8_t track_id,
                                                             uint8_t note,
-                                                            uint32_t event_token);
+                                                            uint32_t output_id);
 void brick6_sampler_runtime_note_off_note(uint8_t track_id, uint8_t note);
 void brick6_sampler_runtime_note_off(uint8_t track_id);
 void brick6_sampler_runtime_stop(uint8_t track_id);
@@ -220,6 +194,7 @@ void brick6_sampler_runtime_diag_get_snapshot(brick6_sampler_runtime_diag_snapsh
 void brick6_sampler_runtime_get_health_snapshot(
     brick6_sampler_runtime_health_snapshot_t *out_snapshot);
 uint8_t brick6_sampler_runtime_ram_slice_mode_active(uint8_t track_id);
+uint8_t brick6_sampler_runtime_audio_slice_count(uint8_t track_id);
 #ifdef __cplusplus
 }
 #endif

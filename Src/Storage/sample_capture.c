@@ -1,6 +1,10 @@
 #include "Storage/sample_capture.h"
 
 #include "Core/brick6_looper_runtime.h"
+#include "Core/audio_rec_bus_projection.h"
+#include "Core/track_input_ownership.h"
+#include "Core/track_runtime.h"
+#include "Audio/audio_rec_level_snapshot.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_pool.h"
 #include "Seq/seq_runtime.h"
@@ -38,6 +42,9 @@
 #define SAMPLE_CAPTURE_EDIT_ZOOM_MAX 255U
 #define SAMPLE_CAPTURE_EDIT_MIN_VISIBLE_FRAMES 256U
 #define SAMPLE_CAPTURE_STEPS_PER_BAR 16U
+#define SAMPLE_CAPTURE_THRESHOLD_DBFS_MIN (-60)
+#define SAMPLE_CAPTURE_THRESHOLD_DBFS_MAX (-6)
+#define SAMPLE_CAPTURE_THRESHOLD_DBFS_DEFAULT (-36)
 #define SAMPLE_CAPTURE_PCM24_PEAK 8388607UL
 #define SAMPLE_CAPTURE_WAVEFORM_INITIAL_BUCKET_FRAMES 16U
 #define SAMPLE_CAPTURE_DETAIL_BUILD_CHUNK_FRAMES 2048U
@@ -97,6 +104,12 @@ typedef struct
     uint8_t wait_last_step;
     uint32_t wait_last_loop_generation;
     uint16_t final_counter;
+    uint16_t published_source_entity_mask;
+    uint8_t published_arm;
+    uint8_t published_source_flags;
+    uint8_t projection_valid;
+    uint32_t trigger_threshold_peak_abs_pcm24;
+    uint32_t trigger_last_level_generation;
 } sample_capture_model_t;
 
 typedef struct
@@ -267,6 +280,66 @@ STORAGE_STATE_SDRAM static sample_capture_debug_t g_sample_capture_debug;
 
 static void sample_capture_editor_cache_reset(void);
 static void sample_capture_global_overview_reset(void);
+static void sample_capture_set_audio_hook_enabled(uint8_t enabled);
+
+static uint32_t sample_capture_threshold_to_peak_abs_pcm24(int8_t threshold_dbfs)
+{
+    const float linear = powf(10.0f, (float)threshold_dbfs * 0.05f);
+    const float peak = linear * (float)SAMPLE_CAPTURE_PCM24_PEAK;
+    return (peak >= (float)SAMPLE_CAPTURE_PCM24_PEAK)
+        ? SAMPLE_CAPTURE_PCM24_PEAK : (uint32_t)(peak + 0.5f);
+}
+
+static void sample_capture_publish_audio_projection(void)
+{
+    uint16_t source_entity_mask = 0U;
+    for(uint8_t track = 0U; track < SAMPLE_CAPTURE_TRACK_COUNT; ++track)
+    {
+        if((g_sample_capture.route_mask[track] != 0U)
+                && (entity_topology_is_active((brick_entity_id_t)track) != 0U)
+                && (track_runtime_is_audio_routable(track) != 0U))
+        {
+            source_entity_mask |= (uint16_t)(1U << track);
+        }
+    }
+
+    uint8_t source_flags = 0U;
+    if(g_sample_capture.state.line_enabled != 0U)
+    {
+        uint8_t line_owner = TRACK_INPUT_OWNER_NONE;
+        const uint8_t owner_is_routed = (uint8_t)(
+            (track_input_ownership_get_external_owner(0U, &line_owner) != 0U)
+            && (line_owner < BRICK_ENTITY_CAPACITY)
+            && ((source_entity_mask & (uint16_t)(1U << line_owner)) != 0U));
+        if(owner_is_routed == 0U)
+        {
+            source_flags |= AUDIO_REC_BUS_SOURCE_LINE_DIRECT;
+        }
+    }
+    if(g_sample_capture.state.mic_enabled != 0U)
+    {
+        source_flags |= AUDIO_REC_BUS_SOURCE_MIC_LOGICAL;
+    }
+    if(g_sample_capture.audio_hook_enabled != 0U)
+    {
+        source_flags |= AUDIO_REC_BUS_CAPTURE_ENABLED;
+    }
+
+    if((g_sample_capture.projection_valid != 0U)
+            && (source_entity_mask == g_sample_capture.published_source_entity_mask)
+            && ((uint8_t)g_sample_capture.state.arm == g_sample_capture.published_arm)
+            && (source_flags == g_sample_capture.published_source_flags))
+    {
+        return;
+    }
+
+    audio_rec_bus_projection_control_publish(source_entity_mask,
+        (audio_rec_bus_arm_t)g_sample_capture.state.arm, source_flags);
+    g_sample_capture.published_source_entity_mask = source_entity_mask;
+    g_sample_capture.published_arm = (uint8_t)g_sample_capture.state.arm;
+    g_sample_capture.published_source_flags = source_flags;
+    g_sample_capture.projection_valid = 1U;
+}
 
 #if SAMPLE_CAPTURE_DEBUG_UART
 static void sample_capture_debug_log(const char *fmt, ...)
@@ -355,14 +428,12 @@ static uint8_t sample_capture_path_is_temp(const char *path)
 
 static uint8_t sample_capture_has_route(void)
 {
-    for(uint8_t track = 0U; track < SAMPLE_CAPTURE_TRACK_COUNT; ++track)
+    if((g_sample_capture.state.line_enabled != 0U)
+            || (g_sample_capture.state.mic_enabled != 0U))
     {
-        if(g_sample_capture.route_mask[track] != 0U)
-        {
-            return 1U;
-        }
+        return 1U;
     }
-    return 0U;
+    return (uint8_t)(g_sample_capture.published_source_entity_mask != 0U);
 }
 
 static uint32_t sample_capture_len_to_frames(uint8_t len_bars)
@@ -2694,6 +2765,8 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
         g_sample_capture.state.recording = 0U;
         g_sample_capture.state.armed_pending = 0U;
         g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
+        g_sample_capture.state.trigger_latched = 0U;
+        sample_capture_publish_audio_projection();
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
         g_sample_capture.last_take_notified = 1U;
         return;
@@ -2702,6 +2775,8 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
     g_sample_capture.state.recording = 0U;
     g_sample_capture.state.armed_pending = 0U;
     g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
+    g_sample_capture.state.trigger_latched = 0U;
+    sample_capture_publish_audio_projection();
 #if SAMPLE_CAPTURE_DEBUG_UART
     sample_capture_debug_log("REC_LIVE_DONE frames=%lu\r\n", (unsigned long)frames);
     sample_capture_debug_log("WRITER_FINAL_READY path=%s frames=%lu\r\n",
@@ -2796,14 +2871,10 @@ uint8_t sample_capture_get_status(audio_recorder_status_t *out_status)
     return audio_recorder_get_status(out_status);
 }
 
-void sample_capture_set_audio_hook_enabled(uint8_t enabled)
+static void sample_capture_set_audio_hook_enabled(uint8_t enabled)
 {
     g_sample_capture.audio_hook_enabled = (enabled != 0U) ? 1U : 0U;
-}
-
-uint8_t sample_capture_audio_hook_is_enabled(void)
-{
-    return g_sample_capture.audio_hook_enabled;
+    sample_capture_publish_audio_projection();
 }
 
 void sample_capture_model_init(void)
@@ -2814,10 +2885,16 @@ void sample_capture_model_init(void)
     g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
     g_sample_capture.state.len_bars = 1U;
     g_sample_capture.state.quant = SAMPLE_CAPTURE_QUANT_NOW;
+    g_sample_capture.state.threshold_dbfs = SAMPLE_CAPTURE_THRESHOLD_DBFS_DEFAULT;
+    g_sample_capture.trigger_threshold_peak_abs_pcm24 =
+        sample_capture_threshold_to_peak_abs_pcm24(
+            SAMPLE_CAPTURE_THRESHOLD_DBFS_DEFAULT);
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_IDLE;
     g_sample_capture.state.edit_vzoom = SAMPLE_CAPTURE_EDIT_VZOOM_DEFAULT;
     sample_capture_waveform_reset();
     sample_capture_detail_reset();
+    audio_rec_bus_projection_control_init();
+    sample_capture_publish_audio_projection();
 }
 
 void sample_capture_model_get_state(sample_capture_state_t *out_state)
@@ -2872,6 +2949,7 @@ uint8_t sample_capture_model_toggle_route(uint8_t track)
     }
 
     g_sample_capture.route_mask[track] = (g_sample_capture.route_mask[track] == 0U) ? 1U : 0U;
+    sample_capture_publish_audio_projection();
     return 1U;
 }
 
@@ -2886,10 +2964,15 @@ uint8_t sample_capture_model_source_track_is_enabled(uint8_t track)
 
 uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
 {
+    if(arm >= SAMPLE_CAPTURE_ARM_COUNT)
+    {
+        return 0U;
+    }
     if(arm == SAMPLE_CAPTURE_ARM_OFF)
     {
         g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
         g_sample_capture.state.armed_pending = 0U;
+        g_sample_capture.state.trigger_latched = 0U;
         if(g_sample_capture.state.recording != 0U)
         {
             sample_capture_set_audio_hook_enabled(0U);
@@ -2900,6 +2983,7 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
         {
             g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_IDLE;
         }
+        sample_capture_publish_audio_projection();
         return 1U;
     }
 
@@ -2914,10 +2998,19 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
         return 0U;
     }
 
-    g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_REC;
+    g_sample_capture.state.arm = arm;
     g_sample_capture.state.armed_pending = 0U;
+    g_sample_capture.state.trigger_latched = 0U;
+    if(arm == SAMPLE_CAPTURE_ARM_TRIG)
+    {
+        audio_rec_level_snapshot_t level;
+        g_sample_capture.trigger_last_level_generation =
+            (audio_rec_level_snapshot_control_read(&level) != 0U)
+                ? level.generation : 0U;
+    }
     g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_ARMED;
+    sample_capture_publish_audio_projection();
     return 1U;
 }
 
@@ -2927,20 +3020,20 @@ uint8_t sample_capture_model_step_arm(int16_t delta)
     {
         return 0U;
     }
-    if(delta > 0)
+    int16_t next = (int16_t)g_sample_capture.state.arm + ((delta > 0) ? 1 : -1);
+    if(next < (int16_t)SAMPLE_CAPTURE_ARM_OFF)
     {
-        if(g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_REC)
-        {
-            return 0U;
-        }
-        return sample_capture_model_set_arm(SAMPLE_CAPTURE_ARM_REC);
+        next = SAMPLE_CAPTURE_ARM_OFF;
     }
-
-    if(g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_OFF)
+    if(next >= (int16_t)SAMPLE_CAPTURE_ARM_COUNT)
+    {
+        next = (int16_t)SAMPLE_CAPTURE_ARM_COUNT - 1;
+    }
+    if(next == (int16_t)g_sample_capture.state.arm)
     {
         return 0U;
     }
-    return sample_capture_model_set_arm(SAMPLE_CAPTURE_ARM_OFF);
+    return sample_capture_model_set_arm((sample_capture_arm_t)next);
 }
 
 uint8_t sample_capture_model_step_len(int16_t delta)
@@ -2989,6 +3082,71 @@ uint8_t sample_capture_model_step_quant(int16_t delta)
     }
     g_sample_capture.state.quant = (sample_capture_quant_t)next;
     return 1U;
+}
+
+uint8_t sample_capture_model_set_threshold_dbfs(int8_t threshold_dbfs)
+{
+    if((threshold_dbfs < SAMPLE_CAPTURE_THRESHOLD_DBFS_MIN)
+            || (threshold_dbfs > SAMPLE_CAPTURE_THRESHOLD_DBFS_MAX))
+    {
+        return 0U;
+    }
+    g_sample_capture.state.threshold_dbfs = threshold_dbfs;
+    g_sample_capture.trigger_threshold_peak_abs_pcm24 =
+        sample_capture_threshold_to_peak_abs_pcm24(threshold_dbfs);
+    return 1U;
+}
+
+uint8_t sample_capture_model_step_threshold(int16_t delta)
+{
+    if(delta == 0)
+    {
+        return 0U;
+    }
+    int16_t next = (int16_t)g_sample_capture.state.threshold_dbfs
+        + ((delta > 0) ? 1 : -1);
+    if(next < SAMPLE_CAPTURE_THRESHOLD_DBFS_MIN)
+    {
+        next = SAMPLE_CAPTURE_THRESHOLD_DBFS_MIN;
+    }
+    if(next > SAMPLE_CAPTURE_THRESHOLD_DBFS_MAX)
+    {
+        next = SAMPLE_CAPTURE_THRESHOLD_DBFS_MAX;
+    }
+    if(next == (int16_t)g_sample_capture.state.threshold_dbfs)
+    {
+        return 0U;
+    }
+    g_sample_capture.state.threshold_dbfs = (int8_t)next;
+    g_sample_capture.trigger_threshold_peak_abs_pcm24 =
+        sample_capture_threshold_to_peak_abs_pcm24((int8_t)next);
+    return 1U;
+}
+
+uint8_t sample_capture_model_set_line_enabled(uint8_t enabled)
+{
+    g_sample_capture.state.line_enabled = (enabled != 0U) ? 1U : 0U;
+    sample_capture_publish_audio_projection();
+    return 1U;
+}
+
+uint8_t sample_capture_model_toggle_line(void)
+{
+    return sample_capture_model_set_line_enabled(
+        (uint8_t)(g_sample_capture.state.line_enabled == 0U));
+}
+
+uint8_t sample_capture_model_set_mic_enabled(uint8_t enabled)
+{
+    g_sample_capture.state.mic_enabled = (enabled != 0U) ? 1U : 0U;
+    sample_capture_publish_audio_projection();
+    return 1U;
+}
+
+uint8_t sample_capture_model_toggle_mic(void)
+{
+    return sample_capture_model_set_mic_enabled(
+        (uint8_t)(g_sample_capture.state.mic_enabled == 0U));
 }
 
 uint8_t sample_capture_model_step_edit(uint8_t encoder, int16_t delta, uint8_t alt_held)
@@ -3717,6 +3875,7 @@ static void sample_capture_waveform_cache_service_handle(void)
 
 void sample_capture_model_service(void)
 {
+    sample_capture_publish_audio_projection();
     audio_recorder_status_t status;
     if(sample_capture_get_status(&status) == 0U)
     {
@@ -3729,6 +3888,29 @@ void sample_capture_model_service(void)
         ((transport_running != 0U) && (g_sample_capture.transport_was_running == 0U)) ? 1U : 0U;
     g_sample_capture.transport_was_running = transport_running;
 
+    audio_rec_level_snapshot_t level;
+    if(audio_rec_level_snapshot_control_read(&level) != 0U)
+    {
+        g_sample_capture.state.live_peak_abs_pcm24 = level.peak_abs_pcm24;
+        g_sample_capture.state.live_peak_generation = level.generation;
+        if((g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_TRIG)
+                && (g_sample_capture.state.recording == 0U)
+                && (g_sample_capture.state.trigger_latched == 0U)
+                && (level.generation != g_sample_capture.trigger_last_level_generation))
+        {
+            g_sample_capture.trigger_last_level_generation = level.generation;
+            if(level.peak_abs_pcm24 >= g_sample_capture.trigger_threshold_peak_abs_pcm24)
+            {
+                g_sample_capture.state.trigger_latched = 1U;
+                g_sample_capture.state.armed_pending = 1U;
+                g_sample_capture.state.phase = (transport_running != 0U)
+                    ? SAMPLE_CAPTURE_PHASE_WAIT_QUANT
+                    : SAMPLE_CAPTURE_PHASE_ARMED;
+                sample_capture_capture_wait_baseline();
+            }
+        }
+    }
+
     if((status.state == AUDIO_RECORDER_STATE_FAILED)
             && ((g_sample_capture.state.recording != 0U) || (g_sample_capture.state.armed_pending != 0U)))
     {
@@ -3736,6 +3918,8 @@ void sample_capture_model_service(void)
         g_sample_capture.state.recording = 0U;
         g_sample_capture.state.armed_pending = 0U;
         g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
+        g_sample_capture.state.trigger_latched = 0U;
+        sample_capture_publish_audio_projection();
         sample_capture_set_error((status.error == AUDIO_RECORDER_ERROR_RING_OVERFLOW)
             ? SAMPLE_CAPTURE_ERROR_SAMPLE_ACTIVE
             : SAMPLE_CAPTURE_ERROR_SD_IO);
@@ -3743,6 +3927,7 @@ void sample_capture_model_service(void)
     }
 
     if((g_sample_capture.state.recording != 0U)
+            && (g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_REC)
             && (rec_global_armed == 0U))
     {
         sample_capture_set_audio_hook_enabled(0U);
@@ -3782,6 +3967,7 @@ void sample_capture_model_service(void)
 
     if((g_sample_capture.state.armed_pending != 0U)
             && (g_sample_capture.state.recording == 0U)
+            && (g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_REC)
             && (rec_global_armed == 0U))
     {
         g_sample_capture.state.armed_pending = 0U;
@@ -3793,7 +3979,10 @@ void sample_capture_model_service(void)
 
     if((g_sample_capture.state.armed_pending != 0U)
             && (g_sample_capture.state.recording == 0U)
-            && (rec_global_armed != 0U)
+            && (((g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_REC)
+                    && (rec_global_armed != 0U))
+                || ((g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_TRIG)
+                    && (g_sample_capture.state.trigger_latched != 0U)))
             && (transport_running != 0U)
             && (sample_capture_quant_is_due(transport_started) != 0U))
     {
@@ -3801,6 +3990,8 @@ void sample_capture_model_service(void)
         {
             g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
             g_sample_capture.state.armed_pending = 0U;
+            g_sample_capture.state.trigger_latched = 0U;
+            sample_capture_publish_audio_projection();
         }
     }
 

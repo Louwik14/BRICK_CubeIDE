@@ -9,12 +9,14 @@ typedef struct
 {
     volatile uint32_t sequence;
     volatile uint8_t global_active;
-    volatile uint8_t track_active[SEQ_LANE_CAPACITY];
+    volatile uint8_t track_active[BRICK_ENTITY_CAPACITY];
 } audio_transition_snapshot_mailbox_t;
 
 D3_IPC static audio_transition_snapshot_mailbox_t g_audio_transition_snapshot;
-static AUDIO_HOT uint8_t g_audio_transition_snapshot_candidate[SEQ_LANE_CAPACITY];
-static AUDIO_HOT uint8_t g_audio_transition_snapshot_last[SEQ_LANE_CAPACITY];
+static AUDIO_HOT uint8_t
+    g_audio_transition_snapshot_candidate[BRICK_ENTITY_CAPACITY];
+static AUDIO_HOT uint8_t
+    g_audio_transition_snapshot_last[BRICK_ENTITY_CAPACITY];
 static AUDIO_HOT uint8_t g_audio_transition_snapshot_candidate_global;
 static AUDIO_HOT uint8_t g_audio_transition_snapshot_last_global;
 static AUDIO_HOT uint8_t g_audio_transition_snapshot_last_valid;
@@ -63,7 +65,7 @@ uint8_t audio_transition_snapshot_read_all(uint8_t *out_global_active,
                                            uint8_t capacity)
 {
     if ((out_global_active == NULL) || (out_track_active == NULL)
-            || (capacity < SEQ_LANE_CAPACITY))
+            || (capacity == 0U) || (capacity > BRICK_ENTITY_CAPACITY))
         return 0U;
 
     for (uint8_t attempt = 0U;
@@ -92,7 +94,7 @@ uint8_t audio_transition_snapshot_read_all(uint8_t *out_global_active,
             *out_global_active = g_audio_transition_snapshot_last_global;
             memcpy(out_track_active,
                    g_audio_transition_snapshot_last,
-                   sizeof(g_audio_transition_snapshot_last));
+                   capacity);
             return 1U;
         }
     }
@@ -102,7 +104,7 @@ uint8_t audio_transition_snapshot_read_all(uint8_t *out_global_active,
         *out_global_active = g_audio_transition_snapshot_last_global;
         memcpy(out_track_active,
                g_audio_transition_snapshot_last,
-               sizeof(g_audio_transition_snapshot_last));
+               capacity);
         return 1U;
     }
 

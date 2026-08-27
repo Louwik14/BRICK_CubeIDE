@@ -19,8 +19,6 @@ typedef struct
 {
     float value;
     float coefficient;
-    float end_threshold;
-    uint8_t active;
 } md_decay_env_t;
 
 typedef struct

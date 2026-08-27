@@ -241,7 +241,8 @@ static void seq_runtime_exec_schedule_hit_play_and_lookahead(const seq_runtime_s
                                      state->ticks_per_step,
                                      now_tick,
                                      scheduled_sample_time,
-                                     state->samples_per_step_q16);
+                                     state->samples_per_step_q16,
+                                     hit->swing_phase);
 
     const seq_step_id_t next_step = seq_runtime_exec_next_play_step(hit->track, hit->step);
     const uint64_t next_step_sample_q16 = state->step_sample_q16
@@ -250,7 +251,8 @@ static void seq_runtime_exec_schedule_hit_play_and_lookahead(const seq_runtime_s
     seq_play_scheduler_schedule_step_lookahead_negative(hit->track,
                                                         next_step,
                                                         (next_step_sample_q16 >> 16),
-                                                        state->samples_per_step_q16);
+                                                        state->samples_per_step_q16,
+                                                        hit->swing_phase ^ 1U);
 }
 
 static void seq_runtime_exec_sort_control_events(seq_runtime_control_event_t *events, uint16_t count)
@@ -277,13 +279,6 @@ uint64_t seq_runtime_exec_get_sample_timeline(void)
 {
     /* Timeline projection only: callers read the execution clock, they do not own it. */
     return g_seq_runtime_exec_sample_timeline;
-}
-
-uint64_t seq_runtime_exec_begin_control_window(uint16_t block_frames)
-{
-    const uint64_t block_start_sample = g_seq_runtime_exec_sample_timeline;
-    g_seq_runtime_exec_sample_timeline = block_start_sample + (uint64_t)block_frames;
-    return block_start_sample;
 }
 
 void seq_runtime_exec_prepare_start_lifecycle(seq_runtime_state_t *state,
@@ -386,6 +381,7 @@ void seq_runtime_exec_begin_running_at_sample_q16(seq_runtime_state_t *state,
         state->prev_step_valid[track] = 0U;
         state->prev_step[track] = 0U;
         state->track_div_phase[track] = 0U;
+        state->track_swing_phase[track] = 0U;
         seq_boundary_engine_restore_all_active_locks(state, track);
     }
 
@@ -440,6 +436,7 @@ void seq_runtime_exec_stop_lifecycle_apply(seq_runtime_state_t *state)
         seq_boundary_engine_restore_all_active_locks(state, track);
         state->prev_step_valid[track] = 0U;
         state->track_div_phase[track] = 0U;
+        state->track_swing_phase[track] = 0U;
     }
 }
 
@@ -676,6 +673,7 @@ void seq_runtime_exec_drive_external_steps_for_block(seq_runtime_state_t *state,
                 ((uint32_t)state->play_step[track] + advances) / (uint32_t)length;
             state->track_div_phase[track] = (uint8_t)(((uint32_t)state->track_div_phase[track]
                                                        + skipped) % (uint32_t)div);
+            state->track_swing_phase[track] ^= (uint8_t)(advances & 1U);
             state->play_step[track] = (uint8_t)(((uint32_t)state->play_step[track]
                                                  + (advances % (uint32_t)length))
                                                 % (uint32_t)length);
@@ -692,6 +690,7 @@ uint16_t seq_runtime_exec_collect_block_events(seq_runtime_state_t *state,
                                                uint32_t *track_loop_generation,
                                                seq_runtime_control_event_t *out_events,
                                                uint16_t max_events,
+                                               uint64_t block_start_sample,
                                                uint16_t block_frames,
                                                seq_clock_src_t clock_src,
                                                uint8_t running)
@@ -703,7 +702,11 @@ uint16_t seq_runtime_exec_collect_block_events(seq_runtime_state_t *state,
         return 0U;
     }
 
-    const uint64_t block_start_sample = seq_runtime_exec_begin_control_window(block_frames);
+    /* The dated CONTROL publication window is the single block anchor.  Keeping
+     * a second independently advanced origin here shifts scheduler events one
+     * block behind their publication buckets after the first audio callback. */
+    g_seq_runtime_exec_sample_timeline =
+        block_start_sample + (uint64_t)block_frames;
     const uint32_t now_tick = 0U;
     /* Progression guard: audio block collection drives cadence first, then exports due events. */
     seq_runtime_exec_drive_external_steps_for_block(state,
@@ -755,5 +758,32 @@ uint16_t seq_runtime_exec_collect_block_events(seq_runtime_state_t *state,
 
     seq_runtime_exec_sort_control_events(out_events, total);
 
+    return total;
+}
+
+uint16_t seq_runtime_exec_collect_remaining_scheduler_events(
+    seq_runtime_control_event_t *out_events,
+    uint16_t max_events,
+    uint16_t block_frames,
+    uint64_t block_start_sample)
+{
+    uint16_t total = 0U;
+    seq_play_scheduler_event_t scheduler_events[16];
+    while (total < max_events)
+    {
+        const uint16_t request = (uint16_t)(((max_events - total) > 16U)
+            ? 16U : (max_events - total));
+        const uint16_t count = seq_play_scheduler_collect_due_events(
+            scheduler_events, request, block_frames, block_start_sample);
+        if (count == 0U)
+            break;
+        for (uint16_t i = 0U; i < count; ++i)
+            seq_runtime_exec_copy_scheduler_event(&out_events[total + i],
+                                                  &scheduler_events[i]);
+        total = (uint16_t)(total + count);
+        if (count < request)
+            break;
+    }
+    seq_runtime_exec_sort_control_events(out_events, total);
     return total;
 }

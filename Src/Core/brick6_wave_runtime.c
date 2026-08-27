@@ -9,6 +9,7 @@
 #include "Audio/audio_wavetable_registry.h"
 #include "Sampler/wavetable_pool.h"
 #include "Storage/memory_layout.h"
+#include "Core/audio_retire_ack.h"
 
 #define WAVE_DEFAULT_NOTE          60U
 #define WAVE_SAMPLE_RATE           48000.0f
@@ -33,7 +34,9 @@ typedef struct wave_osc_block_ctx_t wave_osc_block_ctx_t;
 enum
 {
     WAVE_CONT_POS_BASE = 0,
-    WAVE_CONT_VOLUME = WAVE_CONT_POS_BASE + BRICK6_WAVE_OSC_COUNT,
+    WAVE_CONT_START_BASE = WAVE_CONT_POS_BASE + BRICK6_WAVE_OSC_COUNT,
+    WAVE_CONT_LEN_BASE = WAVE_CONT_START_BASE + BRICK6_WAVE_OSC_COUNT,
+    WAVE_CONT_VOLUME = WAVE_CONT_LEN_BASE + BRICK6_WAVE_OSC_COUNT,
     WAVE_CONT_BALANCE,
     WAVE_CONT_TUNE,
     WAVE_CONT_DETUNE,
@@ -71,6 +74,8 @@ struct wave_osc_block_ctx_t
     double phase_inc_step;
     uint32_t phase;
     uint32_t phase_inc_value;
+    uint32_t start_phase;
+    uint32_t length_phase;
     uint8_t phase_inc_ramping;
     uint8_t frame_interp;
 };
@@ -91,6 +96,30 @@ static float wave_clampf(float value, float min_value, float max_value)
         return max_value;
     }
     return value;
+}
+
+static uint32_t wave_start_to_phase(float value)
+{
+    const double scaled = (double)wave_clampf(value, 0.0f, 1.0f) * WAVE_PHASE_SCALE;
+    return (scaled >= WAVE_PHASE_SCALE) ? UINT32_MAX : (uint32_t)(scaled + 0.5);
+}
+
+static uint32_t wave_length_to_phase(float value)
+{
+    const double scaled = (double)wave_clampf(value, 0.01f, 1.0f) * WAVE_PHASE_SCALE;
+    return (scaled >= WAVE_PHASE_SCALE) ? 0U : (uint32_t)(scaled + 0.5);
+}
+
+static inline __attribute__((always_inline))
+uint32_t wave_remap_read_phase(const wave_osc_block_ctx_t *ctx,
+                               uint32_t carrier_phase)
+{
+    const uint32_t length_phase = ctx->length_phase;
+    if ((ctx->start_phase == 0U) && (length_phase == 0U)) return carrier_phase;
+    const uint32_t scaled_phase = (length_phase != 0U)
+        ? (uint32_t)(((uint64_t)carrier_phase * (uint64_t)length_phase) >> 32U)
+        : 0U;
+    return ctx->start_phase + scaled_phase;
 }
 
 static brick6_wave_runtime_instance_t *wave_get_instance_mut(uint8_t instance_id)
@@ -259,6 +288,8 @@ static void wave_reset_osc(brick6_wave_runtime_osc_t *osc)
     osc->balance_gain_current = 1.0f;
     osc->pos = 0.0f;
     osc->pos_smoothed = 0.0f;
+    osc->start_phase = 0U;
+    osc->length_phase = 0U;
     osc->phase = 0U;
     osc->phase_inc = wave_note_to_phase_inc((float)WAVE_DEFAULT_NOTE, 0.0f);
     osc->phase_inc_current = osc->phase_inc;
@@ -369,6 +400,18 @@ static uint8_t wave_prepare_osc_block(brick6_wave_runtime_osc_t *osc,
         ? ((osc->balance_gain - osc->balance_gain_current) / (float)frames) : 0.0f;
     ctx->phase_inc_current = (double)osc->phase_inc_current;
     ctx->phase = osc->phase;
+    ctx->start_phase = osc->start_phase;
+    if ((osc->start_phase == 0U) && (osc->length_phase == 0U))
+    {
+        ctx->length_phase = 0U;
+    }
+    else
+    {
+        const uint32_t available = UINT32_MAX - osc->start_phase;
+        const uint32_t requested = (osc->length_phase == 0U)
+            ? UINT32_MAX : osc->length_phase;
+        ctx->length_phase = (requested < available) ? requested : available;
+    }
     ctx->phase_inc_value = osc->phase_inc_current;
     ctx->phase_inc_step = (frames != 0U)
         ? (((double)osc->phase_inc - (double)osc->phase_inc_current) / (double)frames)
@@ -615,6 +658,26 @@ void brick6_wave_runtime_set_osc_pos(uint8_t instance_id, uint8_t osc, float pos
     wave_touch_continuous(instance, (uint8_t)(WAVE_CONT_POS_BASE + osc));
 }
 
+void brick6_wave_runtime_set_osc_start(uint8_t instance_id, uint8_t osc, float start)
+{
+    brick6_wave_runtime_instance_t *const instance = wave_get_instance_mut(instance_id);
+    if ((instance == NULL) || (osc >= BRICK6_WAVE_OSC_COUNT)) return;
+    const uint32_t next = wave_start_to_phase(start);
+    if (instance->osc[osc].start_phase == next) return;
+    instance->osc[osc].start_phase = next;
+    wave_touch_continuous(instance, (uint8_t)(WAVE_CONT_START_BASE + osc));
+}
+
+void brick6_wave_runtime_set_osc_len(uint8_t instance_id, uint8_t osc, float len)
+{
+    brick6_wave_runtime_instance_t *const instance = wave_get_instance_mut(instance_id);
+    if ((instance == NULL) || (osc >= BRICK6_WAVE_OSC_COUNT)) return;
+    const uint32_t next = wave_length_to_phase(len);
+    if (instance->osc[osc].length_phase == next) return;
+    instance->osc[osc].length_phase = next;
+    wave_touch_continuous(instance, (uint8_t)(WAVE_CONT_LEN_BASE + osc));
+}
+
 void brick6_wave_runtime_set_volume(uint8_t instance_id, float volume)
 {
     brick6_wave_runtime_instance_t *const instance = wave_get_instance_mut(instance_id);
@@ -732,7 +795,7 @@ void brick6_wave_runtime_stop_wavetable_slot(uint16_t wavetable_slot,
         }
     }
     audio_wavetable_registry_remove(wavetable_slot, generation);
-    wavetable_pool_audio_ack_retire(wavetable_slot, generation);
+    (void)audio_retire_ack_publish(AUDIO_RETIRE_ACK_WAVE, wavetable_slot, generation);
 }
 
 void brick6_wave_runtime_clear_trigger(uint8_t instance_id)
@@ -786,6 +849,20 @@ void brick6_wave_runtime_sync_voice(uint8_t track_instance, uint8_t voice_instan
         {
             dst->osc[osc].pos = src->osc[osc].pos;
             dst->continuous_version[pos_param] = src->continuous_version[pos_param];
+        }
+        const uint8_t start_param = (uint8_t)(WAVE_CONT_START_BASE + osc);
+        if ((full != 0U) || (dst->continuous_version[start_param]
+                != src->continuous_version[start_param]))
+        {
+            dst->osc[osc].start_phase = src->osc[osc].start_phase;
+            dst->continuous_version[start_param] = src->continuous_version[start_param];
+        }
+        const uint8_t len_param = (uint8_t)(WAVE_CONT_LEN_BASE + osc);
+        if ((full != 0U) || (dst->continuous_version[len_param]
+                != src->continuous_version[len_param]))
+        {
+            dst->osc[osc].length_phase = src->osc[osc].length_phase;
+            dst->continuous_version[len_param] = src->continuous_version[len_param];
         }
     }
     if ((full != 0U) || (dst->continuous_version[WAVE_CONT_VOLUME]
@@ -890,7 +967,11 @@ static ITCM_TEXT uint8_t wave_render_instance_block(uint8_t instance_id,
         && (prepared_count == BRICK6_WAVE_OSC_COUNT)
         && (waveform_mask == 0U)
         && (osc_ctx[0].phase_inc_ramping == 0U)
-        && (osc_ctx[1].phase_inc_ramping == 0U))
+        && (osc_ctx[1].phase_inc_ramping == 0U)
+        && (osc_ctx[0].start_phase == 0U)
+        && (osc_ctx[0].length_phase == 0U)
+        && (osc_ctx[1].start_phase == 0U)
+        && (osc_ctx[1].length_phase == 0U))
     {
         wave_render_two_osc_morph_stable_block(
             &osc_ctx[0], &osc_ctx[1], out_mono, frames,
@@ -909,8 +990,10 @@ static ITCM_TEXT uint8_t wave_render_instance_block(uint8_t instance_id,
                 continue;
             }
             const uint32_t carrier_phase = osc_ctx[osc].phase;
-            const float raw = wave_render_osc_sample_stable_ctx(
+            const uint32_t read_phase = wave_remap_read_phase(
                 &osc_ctx[osc], carrier_phase);
+            const float raw = wave_render_osc_sample_stable_ctx(
+                &osc_ctx[osc], read_phase);
             if ((waveform_mask & (uint8_t)(1U << osc)) != 0U)
             {
                 synth_waveform_audio_capture_sample(

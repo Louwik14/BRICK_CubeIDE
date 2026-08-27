@@ -74,7 +74,7 @@ typedef struct
 
 typedef struct
 {
-    recorder_file_reservation_map_snapshot_t reservation;
+    recorder_file_reservation_map_owned_t reservation;
     char path[AUDIO_RECORDER_PATH_MAX];
     uint32_t accepted_frames;
     uint32_t committed_frames;

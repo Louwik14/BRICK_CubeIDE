@@ -560,6 +560,31 @@ uint8_t recorder_file_reservation_map_snapshot(
     return 0U;
 }
 
+uint8_t recorder_file_reservation_map_snapshot_owned(
+    const recorder_file_reservation_t *session,
+    recorder_file_reservation_map_owned_t *out_snapshot)
+{
+    if ((session == 0) || (out_snapshot == 0)) return 0U;
+    for (uint8_t attempt = 0U; attempt < 3U; ++attempt)
+    {
+        const uint32_t before = session->publish_sequence;
+        if ((before == 0U) || ((before & 1U) != 0U)) continue;
+        const uint16_t count = session->published_extent_count;
+        if (count > RECORDER_FILE_RESERVATION_MAX_EXTENTS) return 0U;
+        out_snapshot->reserved_file_bytes = session->published_reserved_file_bytes;
+        out_snapshot->valid_file_bytes = session->published_valid_file_bytes;
+        out_snapshot->generation = session->map_generation;
+        out_snapshot->media_epoch = session->published_media_epoch;
+        out_snapshot->extent_count = count;
+        out_snapshot->sector_size = RECORDER_FILE_RESERVATION_SECTOR_BYTES;
+        memcpy(out_snapshot->extents, session->physical_extents,
+               (size_t)count * sizeof(out_snapshot->extents[0]));
+        __DMB();
+        if (before == session->publish_sequence) return 1U;
+    }
+    return 0U;
+}
+
 uint8_t recorder_file_reservation_map_resolve(
     const recorder_file_reservation_map_snapshot_t *snapshot,
     uint64_t file_byte_offset,

@@ -39,6 +39,7 @@ param_value_policy_t param_value_policy_resolve(param_id_t id, uint8_t track);
 const char *param_value_policy_display_unit(param_id_t id, uint8_t track);
 float param_value_policy_canonical_to_display(param_id_t id, uint8_t track, float value);
 float param_value_policy_display_to_canonical(param_id_t id, uint8_t track, float value);
+float param_value_policy_canonicalize(param_id_t id, uint8_t track, float value);
 float param_value_policy_apply_delta(param_id_t id,
                                      uint8_t track,
                                      float canonical_value,

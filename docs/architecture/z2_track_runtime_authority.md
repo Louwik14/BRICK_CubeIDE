@@ -4,6 +4,8 @@
 
 Une mutation structurelle suit toujours: prevalidation globale, commit canonique, invalidation/refresh runtime puis synchronisation UI. Un getter runtime ne cree pas une seconde autorite.
 
+Le restore AUDIO-first installe d'abord les bindings prepares. Apres commit AUDIO, CONTROL reconstruit ensuite `track_runtime` depuis `track_state`, valide les entites actives contre le snapshot AUDIO et marque la projection propre sans republier de binding. Cette projection non emettrice precede tout filtrage de parametre et toute synchronisation UI.
+
 Le GROUP master est lie au bus post-somme, sans moteur de notes. Les children conservent leur configuration meme inactifs. Le mute CONTROL de chaque entite est local; le mute effectif child derive du local ou du parent.
 
 Looper est `Sampler / Looper` et peut occuper tout top-level `0..7`. Son quota global est une capacite de variante, pas une identite. Etat, prises, parametres, p-locks et routes restent indexes par l'entite.

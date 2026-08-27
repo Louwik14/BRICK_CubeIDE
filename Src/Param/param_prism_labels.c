@@ -26,9 +26,9 @@ static const param_prism_param_label_t g_prism_param_labels[] = {
     { "Formant 1", "Formant 2", PARAM_PRISM_LABEL_VALUE_PERCENT, PARAM_PRISM_LABEL_VALUE_PERCENT },
     { "Vowel", "FShift", PARAM_PRISM_LABEL_VALUE_MORPH, PARAM_PRISM_LABEL_VALUE_PERCENT },
     { "Formant Y", "Formant X", PARAM_PRISM_LABEL_VALUE_PERCENT, PARAM_PRISM_LABEL_VALUE_PERCENT },
-    { "Index", "Ratio", PARAM_PRISM_LABEL_VALUE_PERCENT, PARAM_PRISM_LABEL_VALUE_STEPPED },
-    { "Index", "Ratio", PARAM_PRISM_LABEL_VALUE_PERCENT, PARAM_PRISM_LABEL_VALUE_STEPPED },
-    { "Chaos", "Ratio", PARAM_PRISM_LABEL_VALUE_PERCENT, PARAM_PRISM_LABEL_VALUE_STEPPED },
+    { "Index", "Ratio", PARAM_PRISM_LABEL_VALUE_PERCENT, PARAM_PRISM_LABEL_VALUE_INTERVAL },
+    { "Index", "Ratio", PARAM_PRISM_LABEL_VALUE_PERCENT, PARAM_PRISM_LABEL_VALUE_INTERVAL },
+    { "Chaos", "Ratio", PARAM_PRISM_LABEL_VALUE_INTERVAL, PARAM_PRISM_LABEL_VALUE_INTERVAL },
     { "WTbl", "Bank", PARAM_PRISM_LABEL_VALUE_PERCENT, PARAM_PRISM_LABEL_VALUE_ENUM },
     { "X", "Y", PARAM_PRISM_LABEL_VALUE_PERCENT, PARAM_PRISM_LABEL_VALUE_PERCENT },
     { "WTbl", "Interp", PARAM_PRISM_LABEL_VALUE_PERCENT, PARAM_PRISM_LABEL_VALUE_STEPPED },
@@ -122,6 +122,9 @@ uint8_t param_prism_label_for_track_param(uint8_t track, param_id_t id, const ch
         case PARAM_PRISM_DETUNE:
             *out_label = "DETUNE";
             return 1U;
+        case PARAM_PRISM_DRIFT:
+            *out_label = "DRIFT";
+            return 1U;
         case PARAM_PRISM_PITCH_MOD1:
         case PARAM_PRISM_PITCH_MOD2:
             *out_label = (id == PARAM_PRISM_PITCH_MOD1) ? "P.MOD1" : "P.MOD2";
@@ -156,4 +159,32 @@ uint8_t param_prism_label_for_track_param(uint8_t track, param_id_t id, const ch
     const param_prism_param_label_t *const labels = param_prism_labels_for_edit_index(edit_index);
     *out_label = ((id == PARAM_PRISM_OSC1_PARAM1) || (id == PARAM_PRISM_OSC2_PARAM1)) ? labels->label_a : labels->label_b;
     return 1U;
+}
+
+uint8_t param_prism_param_is_active(uint8_t track, param_id_t id)
+{
+    if ((id != PARAM_PRISM_OSC1_PARAM1)
+            && (id != PARAM_PRISM_OSC1_PARAM2)
+            && (id != PARAM_PRISM_OSC2_PARAM1)
+            && (id != PARAM_PRISM_OSC2_PARAM2))
+    {
+        return 1U;
+    }
+
+    uint8_t edit_index = 0U;
+    const param_id_t edit_param = ((id == PARAM_PRISM_OSC2_PARAM1)
+            || (id == PARAM_PRISM_OSC2_PARAM2))
+        ? PARAM_PRISM_OSC2_MODEL : PARAM_PRISM_OSC1_MODEL;
+    float edit_value = 0.0f;
+    if (param_registry_get_track_value(edit_param, track, &edit_value) == 0U)
+    {
+        return 0U;
+    }
+    (void)param_prism_edit_index_from_value(edit_value, &edit_index);
+    const param_prism_param_label_t *const labels =
+        param_prism_labels_for_edit_index(edit_index);
+    return ((id == PARAM_PRISM_OSC1_PARAM1)
+            || (id == PARAM_PRISM_OSC2_PARAM1))
+        ? (uint8_t)(labels->kind_a != PARAM_PRISM_LABEL_VALUE_NONE)
+        : (uint8_t)(labels->kind_b != PARAM_PRISM_LABEL_VALUE_NONE);
 }

@@ -22,6 +22,6 @@ Toute prevalidation precede la mutation. Pattern Store/delete/clear et restaurat
 
 Pattern Save/Load, Project Save, browser SD, Sample RAM, Wavetable et Clear Multi utilisent l'admission Background cooperative de `sd_scheduler_runtime`. Toute demande RT ou transaction active produit `NOT_NOW`; le client conserve son etat et rend la main.
 
-Project Load reste synchrone seulement apres fermeture transport/panic, arret Preview/Recorder, ACK SAFE AUDIO, drainage et exclusivite scheduler. Restore suit `PREPARE CONTROL -> REQUEST -> COMMIT AUDIO -> COMPLETE -> publication CONTROL`. CONTROL ne fabrique jamais SAFE et n'execute jamais le commit AUDIO.
+Project Load reste synchrone seulement apres fermeture transport/panic, arret Preview/Recorder, ACK SAFE AUDIO, drainage et exclusivite scheduler. Restore suit `PREPARE CONTROL -> REQUEST -> COMMIT AUDIO -> COMPLETE -> etat canonique CONTROL -> projection runtime CONTROL sans emission -> publication UI`. CONTROL ne fabrique jamais SAFE et n'execute jamais le commit AUDIO.
 
 Une application Pattern ou Project reussie reconstruit runtime/AUDIO et invalide Undo/Redo. Un rejet conserve integralement l'etat courant.

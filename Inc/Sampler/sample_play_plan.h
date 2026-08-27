@@ -41,15 +41,6 @@ typedef enum
     SAMPLE_PLAY_PLAN_BUILD_USE_SOURCE_RATE = (1U << 3)
 } sample_play_plan_build_flags_t;
 
-typedef enum
-{
-    SAMPLE_PLAY_PLAN_READY_INVALID = 0,
-    SAMPLE_PLAY_PLAN_READY_MISSING,
-    SAMPLE_PLAY_PLAN_READY_PENDING,
-    SAMPLE_PLAY_PLAN_READY_PARTIAL,
-    SAMPLE_PLAY_PLAN_READY_COMPLETE
-} sample_play_plan_ready_status_t;
-
 typedef struct
 {
     sample_audio_key_t key;
@@ -108,7 +99,6 @@ typedef struct
     uint32_t target_window_frames;
     uint32_t diagnostics_page;
     uint8_t diagnostics_reason;
-    uint8_t start_gate_flags;
 } sample_play_plan_t;
 
 typedef struct
@@ -126,7 +116,6 @@ typedef struct
     uint8_t loop_mode;
     uint8_t stop_on_underrun;
     uint8_t diagnostics_reason;
-    uint8_t start_gate_flags;
 } sample_play_plan_build_options_t;
 
 typedef struct
@@ -142,37 +131,11 @@ typedef struct
     uint8_t valid;
 } sample_play_plan_page_span_t;
 
-typedef struct
-{
-    sample_play_plan_ready_status_t min_status;
-    sample_play_plan_ready_status_t window_status;
-    uint32_t first_required_page;
-    uint32_t first_missing_page;
-    uint32_t first_pending_page;
-    uint32_t min_required_pages;
-    uint32_t min_ready_pages;
-    uint32_t min_pending_pages;
-    uint32_t min_missing_pages;
-    uint32_t target_required_pages;
-    uint32_t target_ready_pages;
-    uint32_t target_pending_pages;
-    uint32_t target_missing_pages;
-    uint32_t min_page_start;
-    uint32_t min_page_end;
-    uint32_t target_page_start;
-    uint32_t target_page_end;
-    uint8_t min_ready;
-    uint8_t target_ready;
-} sample_play_plan_ready_result_t;
-
 uint8_t sample_play_plan_frames_to_page_span(const sample_play_plan_t *plan,
                                              uint32_t requested_frames,
                                              sample_play_plan_page_span_t *out_span);
 uint32_t sample_play_plan_required_pages_for_frames(const sample_play_plan_t *plan,
                                                     uint32_t requested_frames);
-sample_play_plan_ready_status_t sample_play_plan_check_ready_requirements(
-    const sample_play_plan_t *plan,
-    sample_play_plan_ready_result_t *out_result);
 
 static inline void sample_resolved_source_init(sample_resolved_source_t *source)
 {
@@ -318,7 +281,6 @@ static inline sample_play_plan_build_result_t sample_play_plan_build_from_source
     out_plan->target_window_frames = (options != 0) ? options->target_window_frames : 0U;
     out_plan->diagnostics_page = (options != 0) ? options->diagnostics_page : UINT32_MAX;
     out_plan->diagnostics_reason = (options != 0) ? options->diagnostics_reason : 0U;
-    out_plan->start_gate_flags = (options != 0) ? options->start_gate_flags : 0U;
     return sample_play_plan_is_valid(out_plan) != 0U
                ? SAMPLE_PLAY_PLAN_BUILD_OK
                : SAMPLE_PLAY_PLAN_BUILD_INVALID_REGION;

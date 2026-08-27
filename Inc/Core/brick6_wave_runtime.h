@@ -43,6 +43,8 @@ typedef struct
     float balance_gain_current;
     float pos;
     float pos_smoothed;
+    uint32_t start_phase;
+    uint32_t length_phase;
     uint32_t phase;
     uint32_t phase_inc;
     uint32_t phase_inc_current;
@@ -68,6 +70,8 @@ void brick6_wave_runtime_set_osc_table_wavetable_generation(
     uint8_t instance_id, uint8_t osc, uint16_t wavetable_slot,
     uint32_t generation);
 void brick6_wave_runtime_set_osc_pos(uint8_t instance_id, uint8_t osc, float pos);
+void brick6_wave_runtime_set_osc_start(uint8_t instance_id, uint8_t osc, float start);
+void brick6_wave_runtime_set_osc_len(uint8_t instance_id, uint8_t osc, float len);
 void brick6_wave_runtime_set_volume(uint8_t instance_id, float volume);
 void brick6_wave_runtime_set_balance(uint8_t instance_id, float balance);
 void brick6_wave_runtime_set_tune(uint8_t instance_id, float semitones);

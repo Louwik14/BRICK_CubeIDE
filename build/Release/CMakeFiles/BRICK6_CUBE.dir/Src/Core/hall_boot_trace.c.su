@@ -1,0 +1,6 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/hall_boot_trace.c:55:6:hall_boot_trace_init	8	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/hall_boot_trace.c:65:6:hall_boot_trace_record	24	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/hall_boot_trace.c:135:6:hall_boot_trace_record_hall	40	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/hall_boot_trace.c:165:6:hall_boot_trace_mark_ready	32	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/hall_boot_trace.c:181:6:hall_boot_trace_record_live_clock	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/hall_boot_trace.c:200:6:hall_boot_trace_get_snapshot	8	static,ignoring_inline_asm

@@ -605,10 +605,11 @@ static uint32_t mod_lfo_phase_inc_from_rate_with_bpm(float rate, uint32_t bpm_mi
 
 static uint32_t mod_lfo_phase_inc_from_rate(float rate)
 {
-    const audio_transport_publication_t *const transport =
-        audio_transport_publication_get();
+    audio_transport_publication_t transport;
+    const uint8_t transport_valid =
+        audio_transport_publication_read(&transport);
     return mod_lfo_phase_inc_from_rate_with_bpm(
-        rate, (transport != NULL) ? transport->tempo_effective_bpm_milli : 120000U);
+        rate, (transport_valid != 0U) ? transport.tempo_effective_bpm_milli : 120000U);
 }
 
 static uint32_t mod_lfo_phase_from_degrees(float degrees)
@@ -901,7 +902,10 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames,
         }
         g_mod_lfo_track_had_matrix_routes[track] = 1U;
 
-        const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
+        track_audio_runtime_ctx_t ctx_value;
+        const track_audio_runtime_ctx_t *const ctx =
+            (audio_note_engine_adapter_audio_ctx_snapshot(track, &ctx_value) != 0U)
+                ? &ctx_value : NULL;
         const uint16_t required_source_mask =
             mod_matrix_required_source_mask(track);
         float source_values[MOD_MATRIX_SOURCE_COUNT] = {0.0f};
@@ -1318,10 +1322,11 @@ ITCM_TEXT void mod_lfo_v1_process_block(uint32_t frames)
         return;
     }
 
-    const audio_transport_publication_t *const transport =
-        audio_transport_publication_get();
-    const uint32_t bpm_milli = (transport != NULL)
-        ? transport->tempo_effective_bpm_milli : 120000U;
+    audio_transport_publication_t transport;
+    const uint8_t transport_valid =
+        audio_transport_publication_read(&transport);
+    const uint32_t bpm_milli = (transport_valid != 0U)
+        ? transport.tempo_effective_bpm_milli : 120000U;
     mod_lfo_prepare_poly_segment(frames, bpm_milli);
 
 #if MOD_LFO_WINDOW_RATE_EXPERIMENT

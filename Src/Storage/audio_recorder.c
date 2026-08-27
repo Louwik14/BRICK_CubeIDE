@@ -69,9 +69,10 @@ typedef struct
     volatile uint8_t valid;
     uint8_t reserved[2];
     volatile char path[AUDIO_RECORDER_PATH_MAX];
+    recorder_file_reservation_map_owned_t reservation;
 } audio_recorder_live_publication_t;
 
-_Static_assert(sizeof(audio_recorder_live_publication_t) == 112U,
+_Static_assert(sizeof(audio_recorder_live_publication_t) == 1680U,
                "Recorder live publication ABI changed");
 
 _Static_assert(sizeof(audio_recorder_capture_transport_t) == 28U,
@@ -81,7 +82,8 @@ SDRAM_RECORDER static audio_recorder_runtime_t g_audio_recorder;
 SDRAM_RECORDER static int32_t
     g_audio_recorder_ring[AUDIO_RECORDER_RING_FRAMES * AUDIO_RECORDER_CHANNELS];
 D3_IPC static audio_recorder_capture_transport_t g_audio_recorder_capture;
-D3_IPC static audio_recorder_live_publication_t g_audio_recorder_live_publication;
+AUDIO_STORAGE_SHARED_SDRAM static audio_recorder_live_publication_t
+    g_audio_recorder_live_publication;
 RECORDER_SCRATCH_SDRAM static uint8_t
     g_audio_recorder_write_buffers[GENERIC_RECORDER_WRITE_BUFFER_COUNT]
                                   [AUDIO_RECORDER_WRITE_BUFFER_BYTES];
@@ -106,6 +108,10 @@ static uint8_t audio_recorder_copy_path(char *dst, const char *src)
 
 static void audio_recorder_publish_live_stream(void)
 {
+    recorder_file_reservation_map_owned_t reservation;
+    const uint8_t reservation_valid =
+        recorder_file_reservation_map_snapshot_owned(
+            &g_audio_recorder.reservation, &reservation);
     uint32_t sequence = g_audio_recorder_live_publication.sequence;
     if ((sequence & 1U) != 0U) ++sequence;
     g_audio_recorder_live_publication.sequence = sequence + 1U;
@@ -120,13 +126,18 @@ static void audio_recorder_publish_live_stream(void)
     g_audio_recorder_live_publication.valid = (uint8_t)(
         (g_audio_recorder.client != AUDIO_RECORDER_CLIENT_NONE)
         && (g_audio_recorder.state >= AUDIO_RECORDER_STATE_DRAINING)
-        && (g_audio_recorder.state != AUDIO_RECORDER_STATE_FAILED));
+        && (g_audio_recorder.state != AUDIO_RECORDER_STATE_FAILED)
+        && (reservation_valid != 0U));
     const char *const path = (g_audio_recorder.state == AUDIO_RECORDER_STATE_TAKE_READY)
         ? g_audio_recorder.final_path : g_audio_recorder.temporary_path;
     for (uint32_t i = 0U; i < AUDIO_RECORDER_PATH_MAX; ++i)
     {
         g_audio_recorder_live_publication.path[i] = path[i];
         if (path[i] == '\0') break;
+    }
+    if (reservation_valid != 0U)
+    {
+        g_audio_recorder_live_publication.reservation = reservation;
     }
     __DMB();
     g_audio_recorder_live_publication.sequence = sequence + 2U;
@@ -691,8 +702,10 @@ uint8_t audio_recorder_get_live_stream(audio_recorder_client_t client,
         __DMB();
         if (before == g_audio_recorder_live_publication.sequence)
         {
-            return recorder_file_reservation_map_snapshot(
-                &g_audio_recorder.reservation, &stream->reservation);
+            memcpy(&stream->reservation,
+                   &g_audio_recorder_live_publication.reservation,
+                   sizeof(stream->reservation));
+            return 1U;
         }
     }
     return 0U;

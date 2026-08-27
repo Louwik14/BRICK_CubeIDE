@@ -108,6 +108,7 @@ typedef struct
     float start_value;
     float end_value;
     uint8_t x_start[UI_TEMPLATE_WAVE_WT_MAX_LAYERS];
+    int8_t center_y[UI_TEMPLATE_WAVE_WT_MAX_LAYERS];
     int8_t y[UI_TEMPLATE_WAVE_WT_MAX_LAYERS][UI_TEMPLATE_WAVE_WT_TRACE_POINTS];
     uint8_t pos_valid;
     float pos_value;
@@ -792,6 +793,12 @@ static uint8_t ui_renderer_template_prepare_param_slot_texts(const ui_template_p
         || (id == PARAM_WAVE_BALANCE)
         || (id == PARAM_WAVE_TUNE)
         || (id == PARAM_WAVE_DETUNE)
+        || (id == PARAM_WAVE_OSC1_POS)
+        || (id == PARAM_WAVE_OSC2_POS)
+        || (id == PARAM_WAVE_OSC1_START)
+        || (id == PARAM_WAVE_OSC2_START)
+        || (id == PARAM_WAVE_OSC1_LEN)
+        || (id == PARAM_WAVE_OSC2_LEN)
         || (id == PARAM_PRISM_OSC1_PARAM1)
         || (id == PARAM_PRISM_OSC1_PARAM2)
         || (id == PARAM_PRISM_OSC1_AMOD)
@@ -802,6 +809,7 @@ static uint8_t ui_renderer_template_prepare_param_slot_texts(const ui_template_p
         || (id == PARAM_PRISM_BALANCE)
         || (id == PARAM_PRISM_TUNE)
         || (id == PARAM_PRISM_DETUNE)
+        || (id == PARAM_PRISM_DRIFT)
         || (id == PARAM_PRISM_PITCH_MOD1)
         || (id == PARAM_PRISM_PITCH_MOD2));
     const uint8_t flash_active = ((audio_fx_param != 0U) || (synth_immediate_param != 0U))
@@ -3241,12 +3249,12 @@ static uint8_t ui_renderer_template_is_wave_wavetable_subpage(const ui_template_
 
     return (uint8_t)(((subpage->param_bank.params[0] == PARAM_WAVE_OSC1_TABLE)
                 && (subpage->param_bank.params[1] == PARAM_WAVE_OSC1_POS)
-                && (subpage->param_bank.params[2] == PARAM_COUNT)
-                && (subpage->param_bank.params[3] == PARAM_COUNT))
+                && (subpage->param_bank.params[2] == PARAM_WAVE_OSC1_START)
+                && (subpage->param_bank.params[3] == PARAM_WAVE_OSC1_LEN))
             || ((subpage->param_bank.params[0] == PARAM_WAVE_OSC2_TABLE)
                 && (subpage->param_bank.params[1] == PARAM_WAVE_OSC2_POS)
-                && (subpage->param_bank.params[2] == PARAM_COUNT)
-                && (subpage->param_bank.params[3] == PARAM_COUNT)));
+                && (subpage->param_bank.params[2] == PARAM_WAVE_OSC2_START)
+                && (subpage->param_bank.params[3] == PARAM_WAVE_OSC2_LEN)));
 }
 
 static uint8_t ui_renderer_template_is_wave_common_subpage(const ui_template_subpage_t *subpage)
@@ -3517,6 +3525,7 @@ static uint8_t ui_renderer_template_build_wave_wavetable_cache(uint16_t global_s
             + ((end_frame_position - start_frame_position) * depth);
 
         cache->x_start[layer] = (uint8_t)x_start;
+        cache->center_y[layer] = (int8_t)center_y;
         for (uint8_t point = 0U; point < UI_TEMPLATE_WAVE_WT_TRACE_POINTS; ++point)
         {
             const float sample_position = ((float)(table->frame_sample_count - 1U)
@@ -3695,6 +3704,67 @@ static void ui_renderer_template_draw_wave_wavetable_pos_cache(void)
     }
 }
 
+static void ui_renderer_template_invert_wave_cycle_interval_projected(
+    float begin,
+    float end,
+    int x_start,
+    int x_width,
+    int y,
+    int h)
+{
+    if ((end <= begin) || (x_width <= 1) || (h <= 0)) return;
+    const float x_span = (float)(x_width - 1);
+    const int x0 = x_start + (int)(begin * x_span + 0.5f);
+    int x1 = x_start + (int)(end * x_span + 0.5f);
+    if (end >= 1.0f) x1++;
+    if (x1 > x0) drv_display_fill_rect(x0, y, x1 - x0, h);
+}
+
+static void ui_renderer_template_draw_wave_cycle_window_projected(
+    const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+    param_id_t start_id,
+    param_id_t len_id,
+    const int *layer_x,
+    const int *layer_width,
+    const int *layer_center_y,
+    uint8_t layer_count,
+    int top,
+    int bottom)
+{
+    if ((layer_x == NULL) || (layer_width == NULL) || (layer_center_y == NULL)
+            || (layer_count == 0U)) return;
+    float start = 0.0f;
+    float len = 1.0f;
+    (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx,
+                                                       start_id, &start, 0);
+    (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx,
+                                                       len_id, &len, 0);
+    if (start < 0.0f) start = 0.0f;
+    if (start > 1.0f) start = 1.0f;
+    if (len < 0.0f) len = 0.0f;
+    if (len > 1.0f) len = 1.0f;
+    float end = start + len;
+    if (end > 1.0f) end = 1.0f;
+    drv_display_set_draw_color(2U);
+    for (uint8_t layer = 0U; layer < layer_count; ++layer)
+    {
+        int band_top = (layer == 0U)
+            ? (layer_center_y[layer] - 3)
+            : ((layer_center_y[layer - 1U] + layer_center_y[layer] + 1) / 2);
+        int band_bottom = (layer + 1U == layer_count)
+            ? (layer_center_y[layer] + 3)
+            : ((layer_center_y[layer] + layer_center_y[layer + 1U] - 1) / 2);
+        band_top = ui_renderer_template_clamp_i32(band_top, top, bottom);
+        band_bottom = ui_renderer_template_clamp_i32(band_bottom, top, bottom);
+        const int band_h = band_bottom - band_top + 1;
+        ui_renderer_template_invert_wave_cycle_interval_projected(
+            0.0f, start, layer_x[layer], layer_width[layer], band_top, band_h);
+        ui_renderer_template_invert_wave_cycle_interval_projected(
+            end, 1.0f, layer_x[layer], layer_width[layer], band_top, band_h);
+    }
+    drv_display_set_draw_color(1U);
+}
+
 static uint16_t ui_renderer_template_sampler_ram_slice_divisions(float slice_value)
 {
     static const uint16_t k_slice_counts[] = {1U, 2U, 4U, 8U, 16U, 32U, 64U};
@@ -3807,7 +3877,8 @@ static void ui_renderer_template_draw_sampler_ram_playhead(uint16_t global_slot,
                                                            int inner_h)
 {
     float start = ui_renderer_template_get_param_display_value(PARAM_SAMPLER_START);
-    float end = ui_renderer_template_get_param_display_value(PARAM_SAMPLER_END);
+    const float length = ui_renderer_template_get_param_display_value(PARAM_SAMPLER_LENGTH);
+    float end = start + length;
     const float mode_value =
         ui_renderer_template_get_param_display_value(PARAM_SAMPLER_MODE);
     if (start < 0.0f) start = 0.0f;
@@ -3912,11 +3983,16 @@ static void ui_renderer_template_draw_sampler_ram_waveform(const ui_param_seq_pl
     }
 
     float start_value = 0.0f;
-    float end_value = 1.0f;
+    float length_value = 1.0f;
     float loop_value = 0.0f;
     float slice_value = 0.0f;
     (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_SAMPLER_START, &start_value, 0);
-    (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_SAMPLER_END, &end_value, 0);
+    (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_SAMPLER_LENGTH, &length_value, 0);
+    float end_value = start_value + length_value;
+    if (end_value > 1.0f)
+    {
+        end_value = 1.0f;
+    }
     (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_SAMPLER_LOOP_START, &loop_value, 0);
     (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_SAMPLER_SLICE_COUNT, &slice_value, 0);
     ui_renderer_template_draw_sampler_ram_slice_divisions(
@@ -4049,6 +4125,26 @@ static void ui_renderer_template_draw_wave_wavetable_preview(const ui_param_seq_
 
     ui_renderer_template_draw_wave_wavetable_cache();
     ui_renderer_template_draw_wave_wavetable_pos_cache();
+    int layer_x[UI_TEMPLATE_WAVE_WT_LAYER_TARGET];
+    int layer_width[UI_TEMPLATE_WAVE_WT_LAYER_TARGET];
+    int layer_center_y[UI_TEMPLATE_WAVE_WT_LAYER_TARGET];
+    for (uint8_t layer = 0U; layer < UI_TEMPLATE_WAVE_WT_LAYER_TARGET; ++layer)
+    {
+        layer_x[layer] = g_ui_renderer_template_wavetable_cache.x_start[layer];
+        layer_width[layer] = UI_TEMPLATE_WAVE_WT_INNER_W
+            - UI_TEMPLATE_WAVE_WT_DEPTH_X_PX;
+        layer_center_y[layer] = g_ui_renderer_template_wavetable_cache.center_y[layer];
+    }
+    ui_renderer_template_draw_wave_cycle_window_projected(
+        plock_frame_ctx,
+        subpage->param_bank.params[2],
+        subpage->param_bank.params[3],
+        layer_x,
+        layer_width,
+        layer_center_y,
+        UI_TEMPLATE_WAVE_WT_LAYER_TARGET,
+        UI_TEMPLATE_WAVE_WT_Y + 4,
+        UI_TEMPLATE_WAVE_WT_Y + UI_TEMPLATE_WAVE_WT_H - 2);
 }
 
 static void ui_renderer_template_draw_sampler_ram_slot_text(const ui_template_page_state_t *state,
@@ -4176,7 +4272,7 @@ static void ui_renderer_template_draw_synth_waveform_half(const int8_t *points,
                                                           uint8_t osc)
 {
     ui_renderer_template_draw_synth_waveform(points, (osc == 0U) ? 1 : 65,
-                                             15, 62, 31);
+                                             16, 62, 30);
 }
 
 static uint8_t ui_renderer_template_synth_live_snapshot(
@@ -4255,13 +4351,16 @@ static uint8_t ui_renderer_template_wave_table_for_param(
 
 static void ui_renderer_template_draw_wave_wavetable_compact(
     const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
-    param_id_t table_id, int x)
+    param_id_t table_id,
+    param_id_t start_id,
+    param_id_t len_id,
+    int x)
 {
     const wavetable_slot_t *table = NULL;
     const wavetable_preview_t *preview = NULL;
-    const int y = 14;
+    const int y = 15;
     const int w = 62;
-    const int h = 32;
+    const int h = 31;
     drv_display_draw_rect(x, y, w, h);
     if (ui_renderer_template_wave_table_for_param(plock_frame_ctx, table_id,
                                                   &table, &preview) == 0U) return;
@@ -4269,12 +4368,18 @@ static void ui_renderer_template_draw_wave_wavetable_compact(
     const uint8_t points = 40U;
     const int top = y + 2;
     const int bottom = y + h - 2;
+    int layer_x[5U];
+    int layer_width[5U];
+    int layer_center_y[5U];
     for (uint8_t layer = 0U; layer < layers; ++layer)
     {
         const float depth = (float)layer / (float)(layers - 1U);
         const int x0 = x + 2 + (int)((1.0f - depth) * 5.0f + 0.5f);
         const int width = w - 9;
         const int center = y + 8 + (int)(depth * 11.0f + 0.5f);
+        layer_x[layer] = x0;
+        layer_width[layer] = width;
+        layer_center_y[layer] = center;
         const float frame = depth * (float)(table->frame_count - 1U);
         int px0 = x0;
         float sample = ui_renderer_template_wave_wavetable_sample(table, frame, 0.0f);
@@ -4293,6 +4398,9 @@ static void ui_renderer_template_draw_wave_wavetable_compact(
             py0 = py;
         }
     }
+    ui_renderer_template_draw_wave_cycle_window_projected(
+        plock_frame_ctx, start_id, len_id,
+        layer_x, layer_width, layer_center_y, layers, top, bottom);
 }
 
 static void ui_renderer_template_draw_wave_classic_common(
@@ -4300,8 +4408,12 @@ static void ui_renderer_template_draw_wave_classic_common(
     const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
     const ui_template_subpage_t *subpage)
 {
-    ui_renderer_template_draw_wave_wavetable_compact(plock_frame_ctx, PARAM_WAVE_OSC1_TABLE, 1);
-    ui_renderer_template_draw_wave_wavetable_compact(plock_frame_ctx, PARAM_WAVE_OSC2_TABLE, 65);
+    ui_renderer_template_draw_wave_wavetable_compact(
+        plock_frame_ctx, PARAM_WAVE_OSC1_TABLE,
+        PARAM_WAVE_OSC1_START, PARAM_WAVE_OSC1_LEN, 1);
+    ui_renderer_template_draw_wave_wavetable_compact(
+        plock_frame_ctx, PARAM_WAVE_OSC2_TABLE,
+        PARAM_WAVE_OSC2_START, PARAM_WAVE_OSC2_LEN, 65);
     for (uint8_t slot = 0U; slot < 4U; ++slot)
         ui_renderer_template_draw_sampler_ram_slot_text(state, plock_frame_ctx, slot,
                                                         subpage->param_bank.params[slot]);
@@ -4733,7 +4845,19 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             {
                 drv_display_set_draw_color(0U);
             }
-            uiw_draw_bipolar_bar(widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H, value, desc->min, desc->max);
+            if (!((desc->min < 0.0f) && (desc->max > 0.0f)))
+            {
+                const uint8_t authority_track = ui_renderer_template_get_param_authority_track(id);
+                uiw_draw_bipolar_bar(
+                    widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H,
+                    param_value_policy_canonical_to_display(id, authority_track, value),
+                    param_value_policy_canonical_to_display(id, authority_track, desc->min),
+                    param_value_policy_canonical_to_display(id, authority_track, desc->max));
+            }
+            else
+            {
+                uiw_draw_bipolar_bar(widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H, value, desc->min, desc->max);
+            }
             ui_renderer_template_draw_bar_value_text(widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H, value_txt);
             if (slot_locked != 0U)
             {

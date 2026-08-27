@@ -187,6 +187,12 @@ void track_runtime_invalidate_track(uint8_t track);
 uint8_t track_runtime_refresh_if_dirty(void);
 void track_runtime_refresh_track(uint8_t track);
 void track_runtime_refresh_all(void);
+/* Rebuild CONTROL from canonical track_state after an AUDIO-first restore.
+ * This validates the already-installed AUDIO projection and emits no intent. */
+uint8_t track_runtime_install_restored_projection(void);
+/* READY gate: CONTROL and AUDIO describe the same active entity binding. */
+uint8_t track_runtime_active_projection_is_coherent(
+    brick_entity_id_t entity, uint32_t *out_binding_generation);
 /*
  * Revision guards:
  * - track_runtime_get_revision / track_runtime_get_track_revision are coherence markers only.

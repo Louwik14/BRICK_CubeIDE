@@ -18,6 +18,11 @@ typedef enum {
     PROJECT_PRODUCT_SAVE_ERROR_PATTERN,
     PROJECT_PRODUCT_SAVE_ERROR_MEDIA_CHANGED
 } project_product_save_error_t;
+typedef enum {
+    PROJECT_PRODUCT_BOOT_RESTORE_FAILED = 0,
+    PROJECT_PRODUCT_BOOT_RESTORE_DEFAULTS_READY,
+    PROJECT_PRODUCT_BOOT_RESTORE_PROJECT_READY
+} project_product_boot_restore_result_t;
 void project_product_init(void);
 void project_product_refresh_slots(void);
 uint8_t project_product_list_slots(uint8_t*out,uint8_t capacity);
@@ -31,6 +36,6 @@ int32_t project_product_save_last_detail(void);
 uint8_t project_product_load(uint8_t slot);
 uint8_t project_product_delete(uint8_t slot);
 uint8_t project_product_blank(void);
-uint8_t project_product_restore_boot(void);
+project_product_boot_restore_result_t project_product_restore_boot(void);
 uint8_t project_product_get_progress(project_product_progress_t*out);
 #endif

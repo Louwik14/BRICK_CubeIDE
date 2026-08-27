@@ -16,7 +16,8 @@
 #define STACK_DEFAULT_RNG_SEED 0x6D2B79F5UL
 #define STACK_DEFAULT_NOTE 60U
 #define STACK_BASE_C4_INC 23428135UL
-#define STACK_OSC_DETUNE_MAX_SHIFT 8U
+#define STACK_OSC_DETUNE_MAX_RATIO_Q15 228U
+#define STACK_OUTPUT_TRIM 0.30f
 #define STACK_SQUARE_COMPAT_BLOCK_SIZE 24U
 #define STACK_SOURCE_NOISE_BIT (1U << BRICK6_STACK_SLOT_COUNT)
 
@@ -116,19 +117,6 @@ static uint16_t brick6_stack_float_to_q15(float value)
         return 32767U;
     }
     return (uint16_t)(value * 32767.0f + 0.5f);
-}
-
-static int16_t brick6_stack_sat16(int32_t value)
-{
-    if (value > 32767)
-    {
-        return 32767;
-    }
-    if (value < -32768)
-    {
-        return -32768;
-    }
-    return (int16_t)value;
 }
 
 static brick6_stack_model_t brick6_stack_runtime_normalize_model(brick6_stack_model_t model)
@@ -270,7 +258,8 @@ static uint32_t brick6_stack_apply_osc_detune(uint32_t inc, uint16_t amount_q15,
         return inc;
     }
 
-    const uint32_t span = inc >> STACK_OSC_DETUNE_MAX_SHIFT;
+    const uint32_t span = (uint32_t)(((uint64_t)inc
+        * STACK_OSC_DETUNE_MAX_RATIO_Q15) >> 15);
     int32_t delta = (int32_t)(((uint64_t)span * (uint64_t)amount_q15) >> 15);
     delta = (delta * (int32_t)offset_q15) >> 15;
     if (delta < 0)
@@ -308,19 +297,11 @@ static void brick6_stack_runtime_generate_osc_detune_offsets(brick6_stack_runtim
         return;
     }
 
-    int32_t sum = 0;
     for (uint8_t slot = 0U; slot < BRICK6_STACK_SLOT_COUNT; ++slot)
     {
         const uint32_t r = brick6_stack_runtime_next_rng(instance);
         const int16_t offset = (int16_t)((int32_t)(r & 0xFFFFU) - 32768L);
         instance->osc_detune_offset_q15[slot] = offset;
-        sum += offset;
-    }
-
-    const int16_t mean = (int16_t)(sum / (int32_t)BRICK6_STACK_SLOT_COUNT);
-    for (uint8_t slot = 0U; slot < BRICK6_STACK_SLOT_COUNT; ++slot)
-    {
-        instance->osc_detune_offset_q15[slot] = brick6_stack_sat16((int32_t)instance->osc_detune_offset_q15[slot] - mean);
     }
 }
 
@@ -1006,9 +987,12 @@ void brick6_stack_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t vel
     instance->voice.trigger = 1U;
     instance->release_source_active = 0U;
     instance->voice.velocity_q15 = (uint16_t)(((uint32_t)velocity * 32767U) / 127U);
-    if (instance->phase_reset != 0U)
+    if (instance->osc_detune_q15 != 0U)
     {
         brick6_stack_runtime_generate_osc_detune_offsets(instance);
+    }
+    if (instance->phase_reset != 0U)
+    {
         for (uint8_t slot = 0U; slot < BRICK6_STACK_SLOT_COUNT; ++slot)
         {
             instance->slots[slot].phase = (uint32_t)slot * 0x55555555UL;
@@ -1200,7 +1184,8 @@ ITCM_TEXT uint8_t brick6_stack_runtime_render_instance(uint8_t instance_id,
     }
     for (uint32_t i = 0U; i < frames; ++i)
     {
-        out_mono[i] = (float)g_stack_acc_scratch[i] * (1.0f / 32768.0f);
+        out_mono[i] = (float)g_stack_acc_scratch[i]
+            * ((1.0f / 32768.0f) * STACK_OUTPUT_TRIM);
     }
     return 1U;
 }

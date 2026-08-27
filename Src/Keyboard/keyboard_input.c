@@ -30,6 +30,7 @@
 #include "ui_page_manager.h"
 #include "pages/ui_page_settings.h"
 #include "pages/ui_page_template_cfg.h"
+#include "Core/live_event.h"
 
 #include <string.h>
 

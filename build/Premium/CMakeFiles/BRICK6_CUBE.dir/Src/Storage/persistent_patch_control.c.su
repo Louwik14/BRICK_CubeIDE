@@ -2,4 +2,4 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_pat
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_patch_control.c:13:17:patch_asset_kind	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_patch_control.c:14:24:persistent_patch_control_capture	56	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_patch_control.c:15:24:persistent_patch_control_validate	80	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_patch_control.c:16:24:persistent_patch_control_apply	688	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_patch_control.c:16:24:persistent_patch_control_apply	704	static

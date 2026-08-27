@@ -1474,6 +1474,30 @@ static float ui_param_apply_delta_value(param_id_t param,
                                         float max_value,
                                         uint8_t shift_down)
 {
+    if ((param == PARAM_STACK_OSC1_MODEL)
+            || (param == PARAM_STACK_OSC2_MODEL)
+            || (param == PARAM_STACK_OSC3_MODEL))
+    {
+        static const uint8_t simple_models[] = {0U, 1U, 3U};
+        static const uint8_t parametric_models[] = {2U, 4U, 5U};
+        const uint8_t *const models = (param == PARAM_STACK_OSC3_MODEL)
+            ? parametric_models : simple_models;
+        uint8_t pos = 0U;
+        const uint8_t current = (uint8_t)(current_value + 0.5f);
+        while ((pos < 3U) && (models[pos] != current)) ++pos;
+        if (pos >= 3U)
+        {
+            pos = (delta > 0) ? 0U : 2U;
+        }
+        else
+        {
+            int32_t next = (int32_t)pos + (int32_t)delta;
+            if (next < 0) next = 0;
+            if (next > 2) next = 2;
+            pos = (uint8_t)next;
+        }
+        return (float)models[pos];
+    }
     if((param==PARAM_AUDIO_FX_MODEL)||(param==PARAM_AUDIO_FX_B_MODEL))
     {
         static const uint8_t valid[]={0U,1U,2U,3U,5U,8U,10U,11U,12U,13U};

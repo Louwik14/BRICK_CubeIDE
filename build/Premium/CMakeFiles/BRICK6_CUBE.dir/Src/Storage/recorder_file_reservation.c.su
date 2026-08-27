@@ -17,4 +17,5 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/recorder_file_
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/recorder_file_reservation.c:495:36:recorder_file_reservation_close	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/recorder_file_reservation.c:513:36:recorder_file_reservation_rename_closed	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/recorder_file_reservation.c:535:9:recorder_file_reservation_map_snapshot	24	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/recorder_file_reservation.c:563:9:recorder_file_reservation_map_resolve	192	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/recorder_file_reservation.c:563:9:recorder_file_reservation_map_snapshot_owned	32	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/recorder_file_reservation.c:588:9:recorder_file_reservation_map_resolve	192	static

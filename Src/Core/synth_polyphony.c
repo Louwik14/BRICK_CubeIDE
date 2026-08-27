@@ -18,7 +18,7 @@ typedef struct
     uint8_t state;
     uint8_t source;
     uint32_t age;
-    uint32_t occurrence_id;
+    uint32_t output_id;
 } synth_poly_voice_t;
 
 typedef struct
@@ -35,7 +35,8 @@ typedef struct
     float voice_pan[SYNTH_POLYPHONY_MAX_VOICES];
 } synth_poly_track_t;
 
-AUDIO_HOT static synth_poly_track_t g_synth_poly[SEQ_TRACK_COUNT];
+AUDIO_HOT static synth_poly_track_t
+    g_synth_poly[BRICK_ENTITY_TOP_LEVEL_COUNT];
 AUDIO_HOT static uint8_t g_synth_slot_owner[SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET];
 AUDIO_HOT static synth_poly_voice_t g_synth_voice[SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET];
 
@@ -111,7 +112,7 @@ static void synth_polyphony_silence_slot(uint8_t slot)
 
 static uint8_t synth_poly_valid_track(uint8_t track)
 {
-    return (track < SEQ_TRACK_COUNT) ? 1U : 0U;
+    return (track < BRICK_ENTITY_TOP_LEVEL_COUNT) ? 1U : 0U;
 }
 
 static void synth_polyphony_refresh_voice_pan(synth_poly_track_t *poly)
@@ -171,7 +172,7 @@ void synth_polyphony_init(void)
     memset(g_synth_poly, 0, sizeof(g_synth_poly));
     memset(g_synth_slot_owner, SYNTH_POLYPHONY_NO_VOICE, sizeof(g_synth_slot_owner));
     memset(g_synth_voice, 0, sizeof(g_synth_voice));
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < BRICK_ENTITY_TOP_LEVEL_COUNT; ++track)
     {
         g_synth_poly[track].voice_count = 1U;
         g_synth_poly[track].render_voice_count = 0U;
@@ -466,7 +467,7 @@ uint8_t synth_polyphony_get_voice_snapshot(uint8_t track, uint8_t voice,
         .note = g_synth_voice[slot].note,
         .state = g_synth_voice[slot].state,
         .source = g_synth_voice[slot].source,
-        .occurrence_id = g_synth_voice[slot].occurrence_id
+        .output_id = g_synth_voice[slot].output_id
     };
     return 1U;
 }
@@ -506,12 +507,12 @@ uint8_t synth_polyphony_note_on(uint8_t track, uint8_t note)
 
 uint8_t synth_polyphony_note_on_from(uint8_t track, uint8_t note, synth_poly_source_t source)
 {
-    return synth_polyphony_note_on_occurrence_from(track, note, source, 0U);
+    return synth_polyphony_note_on_output_from(track, note, source, 0U);
 }
 
-uint8_t synth_polyphony_note_on_occurrence_from(uint8_t track, uint8_t note,
-                                                synth_poly_source_t source,
-                                                uint32_t occurrence_id)
+uint8_t synth_polyphony_note_on_output_from(uint8_t track, uint8_t note,
+                                            synth_poly_source_t source,
+                                            uint32_t output_id)
 {
     if (synth_poly_valid_track(track) == 0U)
     {
@@ -544,27 +545,17 @@ uint8_t synth_polyphony_note_on_occurrence_from(uint8_t track, uint8_t note,
             }
         }
     }
+    /* CONTROL must have stopped the logical victim first. AUDIO may reuse a
+     * FREE or RELEASE slot, but never chooses a HELD musical victim. */
     if (selected == SYNTH_POLYPHONY_NO_VOICE)
-    {
-        oldest = UINT32_MAX;
-        for (uint8_t voice = 0U; voice < poly->voice_count; ++voice)
-        {
-            const uint8_t slot = synth_polyphony_find_slot(track, voice);
-            if ((slot < SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
-                    && (g_synth_voice[slot].age < oldest))
-            {
-                oldest = g_synth_voice[slot].age;
-                selected = voice;
-            }
-        }
-    }
+        return SYNTH_POLYPHONY_NO_VOICE;
     const uint8_t selected_slot = synth_polyphony_find_slot(track, selected);
     if (selected_slot >= SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET) return SYNTH_POLYPHONY_NO_VOICE;
     synth_poly_voice_t *const target = &g_synth_voice[selected_slot];
     target->note = note;
     target->state = SYNTH_POLY_VOICE_HELD;
     target->source = (uint8_t)source;
-    target->occurrence_id = occurrence_id;
+    target->output_id = output_id;
     target->age = ++poly->age_counter;
     poly->most_recent_voice = selected;
     __DMB();
@@ -624,11 +615,11 @@ uint8_t synth_polyphony_note_off_from(uint8_t track, uint8_t note, synth_poly_so
     return selected;
 }
 
-uint8_t synth_polyphony_note_off_occurrence_from(uint8_t track,
-                                                 synth_poly_source_t source,
-                                                 uint32_t occurrence_id)
+uint8_t synth_polyphony_note_off_output_from(uint8_t track,
+                                             synth_poly_source_t source,
+                                             uint32_t output_id)
 {
-    if ((synth_poly_valid_track(track) == 0U) || (occurrence_id == 0U))
+    if ((synth_poly_valid_track(track) == 0U) || (output_id == 0U))
         return SYNTH_POLYPHONY_NO_VOICE;
 
     synth_poly_track_t *const poly = &g_synth_poly[track];
@@ -638,7 +629,7 @@ uint8_t synth_polyphony_note_off_occurrence_from(uint8_t track,
         if ((slot < SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
                 && (g_synth_voice[slot].state == SYNTH_POLY_VOICE_HELD)
                 && (g_synth_voice[slot].source == (uint8_t)source)
-                && (g_synth_voice[slot].occurrence_id == occurrence_id))
+                && (g_synth_voice[slot].output_id == output_id))
         {
             g_synth_voice[slot].state = SYNTH_POLY_VOICE_RELEASE;
             return voice;
@@ -647,11 +638,11 @@ uint8_t synth_polyphony_note_off_occurrence_from(uint8_t track,
     return SYNTH_POLYPHONY_NO_VOICE;
 }
 
-uint8_t synth_polyphony_occurrence_is_active(uint8_t track,
-                                             synth_poly_source_t source,
-                                             uint32_t occurrence_id)
+uint8_t synth_polyphony_output_is_active(uint8_t track,
+                                         synth_poly_source_t source,
+                                         uint32_t output_id)
 {
-    if ((synth_poly_valid_track(track) == 0U) || (occurrence_id == 0U))
+    if ((synth_poly_valid_track(track) == 0U) || (output_id == 0U))
         return 0U;
 
     const synth_poly_track_t *const poly = &g_synth_poly[track];
@@ -661,7 +652,7 @@ uint8_t synth_polyphony_occurrence_is_active(uint8_t track,
         if ((slot < SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
                 && (g_synth_voice[slot].state == SYNTH_POLY_VOICE_HELD)
                 && (g_synth_voice[slot].source == (uint8_t)source)
-                && (g_synth_voice[slot].occurrence_id == occurrence_id))
+                && (g_synth_voice[slot].output_id == output_id))
         {
             return 1U;
         }

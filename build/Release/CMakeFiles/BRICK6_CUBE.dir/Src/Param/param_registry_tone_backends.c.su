@@ -1,3 +1,3 @@
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_tone_backends.c:7:9:param_backend_apply_track_value_control	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_tone_backends.c:24:9:param_backend_apply_prepared_track_value_audio	48	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_tone_backends.c:108:9:param_backend_apply_track_value	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_tone_backends.c:24:9:param_backend_apply_prepared_track_value_audio	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_tone_backends.c:111:9:param_backend_apply_track_value	8	static

@@ -482,5 +482,15 @@ uint8_t project_product_load(uint8_t slot)
 
 uint8_t project_product_delete(uint8_t slot){if(project_product_save_busy()!=0U||slot>=PROJECT_PRODUCT_SLOT_COUNT||!acquire())return 0U;char x[48];FRESULT r=FR_INVALID_NAME;if(path(x,sizeof(x),slot))r=f_unlink(x);sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);uint8_t ok=(r==FR_OK||r==FR_NO_FILE);if(ok){g_present[slot]=0U;if(g_active_valid&&g_active==slot)g_active_valid=0U;}return ok;}
 uint8_t project_product_blank(void){if(project_product_save_busy()!=0U)return 0U;persist_codec_project_workspace_t*w=persistence_workspace_acquire_project();if(w==NULL)return 0U;persist_control_pattern_t*p=&w->unit.pattern_record.content;uint8_t ok=(pattern_live_get_control_boot(p)&&project_control_begin_asset_restore())?1U:0U;if(ok){project_control_reset_macros();ok=pattern_control_bank_clear();}if(ok){g_active_valid=0U;ok=(persistent_pattern_restore_execute(p,0U)==PERSIST_CODEC_OK)?1U:0U;}if(ok){pattern_live_set_active_state(0U,0U,0U,0U,0U);boot_context_flash_clear();}persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT);return ok;}
-uint8_t project_product_restore_boot(void){boot_context_flash_data_t c;if(!boot_context_flash_load(&c)||c.active_project_slot>=PROJECT_PRODUCT_SLOT_COUNT)return 0U;return project_product_load(c.active_project_slot);}
+project_product_boot_restore_result_t project_product_restore_boot(void)
+{
+    boot_context_flash_data_t context;
+    if (!boot_context_flash_load(&context))
+        return PROJECT_PRODUCT_BOOT_RESTORE_DEFAULTS_READY;
+    if (context.active_project_slot >= PROJECT_PRODUCT_SLOT_COUNT)
+        return PROJECT_PRODUCT_BOOT_RESTORE_FAILED;
+    return (project_product_load(context.active_project_slot) != 0U)
+        ? PROJECT_PRODUCT_BOOT_RESTORE_PROJECT_READY
+        : PROJECT_PRODUCT_BOOT_RESTORE_FAILED;
+}
 uint8_t project_product_get_progress(project_product_progress_t*out){if(out==NULL)return 0U;if(project_product_save_busy()==0U&&g_progress.active&&multi_sample_load_has_pending()==0U){g_progress.active=0U;g_progress.complete=1U;}*out=g_progress;return 1U;}

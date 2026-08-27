@@ -631,11 +631,11 @@ static uint8_t param_registry_prism_param_slot(param_id_t id, uint8_t *out_osc, 
         case PARAM_PRISM_BALANCE: *out_osc = 0U; *out_param = 9U; return 1U;
         case PARAM_PRISM_OSC2_MODEL: *out_osc = 1U; *out_param = 0U; return 1U;
         case PARAM_PRISM_DETUNE: *out_osc = 1U; *out_param = 11U; return 1U;
+        case PARAM_PRISM_DRIFT: *out_osc = 0U; *out_param = 12U; return 1U;
         case PARAM_PRISM_PITCH_MOD2: *out_osc = 1U; *out_param = 3U; return 1U;
         case PARAM_PRISM_OSC2_PARAM1: *out_osc = 1U; *out_param = 4U; return 1U;
         case PARAM_PRISM_OSC2_AMOD: *out_osc = 1U; *out_param = 5U; return 1U;
         case PARAM_PRISM_OSC2_PARAM2: *out_osc = 1U; *out_param = 6U; return 1U;
-        case PARAM_PRISM_PHASE2_RESET: *out_osc = 1U; *out_param = 7U; return 1U;
         default: return 0U;
     }
 }
@@ -1068,8 +1068,8 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_SAMPLER_START:
             *out_value = state->start;
             return 1U;
-        case PARAM_SAMPLER_END:
-            *out_value = state->end;
+        case PARAM_SAMPLER_LENGTH:
+            *out_value = state->length;
             return 1U;
         case PARAM_SAMPLER_MODE:
             *out_value = state->mode;
@@ -1145,11 +1145,11 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_PRISM_BALANCE:
         case PARAM_PRISM_OSC2_MODEL:
         case PARAM_PRISM_DETUNE:
+        case PARAM_PRISM_DRIFT:
         case PARAM_PRISM_PITCH_MOD2:
         case PARAM_PRISM_OSC2_PARAM1:
         case PARAM_PRISM_OSC2_AMOD:
         case PARAM_PRISM_OSC2_PARAM2:
-        case PARAM_PRISM_PHASE2_RESET:
         {
             uint8_t osc = 0U;
             uint8_t param = 0U;
@@ -1164,11 +1164,12 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
                 case 4U: *out_value = state->prism.param1[osc]; return 1U;
                 case 5U: *out_value = state->prism.amod[osc]; return 1U;
                 case 6U: *out_value = state->prism.param2[osc]; return 1U;
-                case 7U: *out_value = state->prism.phase_reset[osc]; return 1U;
+                case 7U: *out_value = state->prism.phase_reset; return 1U;
                 case 8U: *out_value = state->prism.volume; return 1U;
                 case 9U: *out_value = state->prism.balance; return 1U;
                 case 10U: *out_value = state->prism.tune; return 1U;
                 case 11U: *out_value = state->prism.detune; return 1U;
+                case 12U: *out_value = state->prism.drift; return 1U;
                 default: return 0U;
             }
         }
@@ -1225,6 +1226,14 @@ static uint8_t param_registry_get_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_WAVE_OSC1_POS:
         case PARAM_WAVE_OSC2_POS:
             *out_value = state->wave.pos[(uint8_t)((id - PARAM_WAVE_OSC1_POS) / 4U)];
+            return 1U;
+        case PARAM_WAVE_OSC1_START:
+        case PARAM_WAVE_OSC2_START:
+            *out_value = state->wave.start[(uint8_t)((id - PARAM_WAVE_OSC1_START) / 4U)];
+            return 1U;
+        case PARAM_WAVE_OSC1_LEN:
+        case PARAM_WAVE_OSC2_LEN:
+            *out_value = state->wave.len[(uint8_t)((id - PARAM_WAVE_OSC1_LEN) / 4U)];
             return 1U;
         case PARAM_WAVE_VOLUME:
             *out_value = state->wave.volume;
@@ -1370,8 +1379,8 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_SAMPLER_START:
             state->start = value;
             return 1U;
-        case PARAM_SAMPLER_END:
-            state->end = value;
+        case PARAM_SAMPLER_LENGTH:
+            state->length = value;
             return 1U;
         case PARAM_SAMPLER_MODE:
             state->mode = (value >= 4.0f) ? 0.0f : value;
@@ -1447,11 +1456,11 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_PRISM_BALANCE:
         case PARAM_PRISM_OSC2_MODEL:
         case PARAM_PRISM_DETUNE:
+        case PARAM_PRISM_DRIFT:
         case PARAM_PRISM_PITCH_MOD2:
         case PARAM_PRISM_OSC2_PARAM1:
         case PARAM_PRISM_OSC2_AMOD:
         case PARAM_PRISM_OSC2_PARAM2:
-        case PARAM_PRISM_PHASE2_RESET:
         {
             uint8_t osc = 0U;
             uint8_t param = 0U;
@@ -1466,11 +1475,12 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
                 case 4U: state->prism.param1[osc] = clamp_value(value, 0.0f, 1.0f); return 1U;
                 case 5U: state->prism.amod[osc] = clamp_value(value, 0.0f, 1.0f); return 1U;
                 case 6U: state->prism.param2[osc] = clamp_value(value, 0.0f, 1.0f); return 1U;
-                case 7U: state->prism.phase_reset[osc] = clamp_value(value, 0.0f, 1.0f); return 1U;
+                case 7U: state->prism.phase_reset = clamp_value(value, 0.0f, 1.0f); return 1U;
                 case 8U: state->prism.volume = clamp_value(value, 0.0f, 1.0f); return 1U;
                 case 9U: state->prism.balance = clamp_value(value, -1.0f, 1.0f); return 1U;
                 case 10U: state->prism.tune = clamp_value(value, -60.0f, 60.0f); return 1U;
                 case 11U: state->prism.detune = clamp_value(value, -24.0f, 24.0f); return 1U;
+                case 12U: state->prism.drift = clamp_value(value, 0.0f, 1.0f); return 1U;
                 default: return 0U;
             }
         }
@@ -1546,6 +1556,14 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id, uint8_t track,
         case PARAM_WAVE_OSC1_POS:
         case PARAM_WAVE_OSC2_POS:
             state->wave.pos[(uint8_t)((id - PARAM_WAVE_OSC1_POS) / 4U)] = clamp_value(value, 0.0f, 1.0f);
+            return 1U;
+        case PARAM_WAVE_OSC1_START:
+        case PARAM_WAVE_OSC2_START:
+            state->wave.start[(uint8_t)((id - PARAM_WAVE_OSC1_START) / 4U)] = clamp_value(value, 0.0f, 1.0f);
+            return 1U;
+        case PARAM_WAVE_OSC1_LEN:
+        case PARAM_WAVE_OSC2_LEN:
+            state->wave.len[(uint8_t)((id - PARAM_WAVE_OSC1_LEN) / 4U)] = clamp_value(value, 0.01f, 1.0f);
             return 1U;
         case PARAM_WAVE_VOLUME:
             state->wave.volume = clamp_value(value, 0.0f, 1.0f);
@@ -1676,8 +1694,10 @@ static uint8_t param_apply_non_filter_track_value_audio(param_id_t id,
         return 0U;
     }
 
+    track_audio_runtime_ctx_t audio_ctx_value;
     const track_audio_runtime_ctx_t *const audio_ctx =
-        audio_note_engine_adapter_audio_ctx(track);
+        (audio_note_engine_adapter_audio_ctx_snapshot(track, &audio_ctx_value) != 0U)
+            ? &audio_ctx_value : NULL;
     if (audio_note_engine_adapter_ctx_is_audio_routable(audio_ctx) == 0U)
     {
         return 0U;
@@ -2085,7 +2105,8 @@ uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, f
         return 0U;
     }
 
-    const float clamped = prepared.value;
+    const float clamped = param_value_policy_canonicalize(prepared.id, track,
+                                                          prepared.value);
 
     if ((id == PARAM_CFG_POLY_VOICES) || (id == PARAM_CFG_POLY_SPREAD))
     {
@@ -2123,15 +2144,17 @@ uint8_t param_registry_apply_prepared_track_value_audio(
     }
 
     const param_id_t id = prepared->id;
-    const float clamped = prepared->value;
+    const float clamped = param_value_policy_canonicalize(id, track,
+                                                           prepared->value);
 
     if (param_registry_is_audio_fx_param(id) != 0U)
     {
         const float audio_value = ((id == PARAM_AUDIO_FX_P3)
                 || (id == PARAM_AUDIO_FX_B_P3))
             ? param_registry_audio_fx_clamp_p3(clamped) : clamped;
-        if (audio_note_engine_adapter_ctx_is_audio_routable(
-                audio_note_engine_adapter_audio_ctx(track)) == 0U)
+        track_audio_runtime_ctx_t audio_ctx;
+        if ((audio_note_engine_adapter_audio_ctx_snapshot(track, &audio_ctx) == 0U)
+                || (audio_note_engine_adapter_ctx_is_audio_routable(&audio_ctx) == 0U))
         {
             return 0U;
         }
@@ -2497,7 +2520,8 @@ uint8_t param_registry_install_prepared_track_control_target(
     }
 
     const param_id_t id = prepared->id;
-    const float value = prepared->value;
+    const float value = param_value_policy_canonicalize(prepared->id, track,
+                                                         prepared->value);
     if (id == PARAM_MIX_MUTE)
     {
         track_sound_state_t *const state = track_sound_state_get(track);
@@ -2571,6 +2595,15 @@ uint8_t param_registry_install_prepared_track_control_target(
         return 0U;
     }
     param_registry_control_shadow_set(track, id, value);
+    if ((id == PARAM_PRISM_OSC1_MODEL)
+            || (id == PARAM_PRISM_OSC2_MODEL)
+            || (id == PARAM_STACK_OSC1_MODEL)
+            || (id == PARAM_STACK_OSC2_MODEL)
+            || (id == PARAM_STACK_OSC3_MODEL))
+    {
+        mod_destination_catalog_invalidate_track(track);
+        mod_matrix_publish_control_snapshot_track(track);
+    }
     return 1U;
 }
 
@@ -2592,6 +2625,7 @@ uint8_t param_registry_install_prepared_global_control_target(
 uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float value)
 {
     param_registry_prepared_value_t prepared;
+    value = param_value_policy_canonicalize(id, track, value);
     if (param_registry_prepare_value(id, value, &prepared) == 0U)
     {
         return 0U;

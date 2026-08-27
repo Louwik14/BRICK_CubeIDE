@@ -55,6 +55,10 @@ uint8_t live_parameter_is_audio_owned(param_id_t parameter)
         case PARAM_GROUP_FX_B_LEVEL:
         case PARAM_WAVE_OSC1_POS:
         case PARAM_WAVE_OSC2_POS:
+        case PARAM_WAVE_OSC1_START:
+        case PARAM_WAVE_OSC2_START:
+        case PARAM_WAVE_OSC1_LEN:
+        case PARAM_WAVE_OSC2_LEN:
         case PARAM_WAVE_VOLUME:
         case PARAM_WAVE_BALANCE:
         case PARAM_WAVE_TUNE:
@@ -67,6 +71,7 @@ uint8_t live_parameter_is_audio_owned(param_id_t parameter)
         case PARAM_PRISM_OSC1_PARAM2:
         case PARAM_PRISM_BALANCE:
         case PARAM_PRISM_DETUNE:
+        case PARAM_PRISM_DRIFT:
         case PARAM_PRISM_PITCH_MOD2:
         case PARAM_PRISM_OSC2_PARAM1:
         case PARAM_PRISM_OSC2_AMOD:

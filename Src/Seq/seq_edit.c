@@ -162,6 +162,7 @@ void seq_edit_step_play_commit(seq_track_id_t track,
         seq_model_set_trig(track, step, 1U);
     }
     seq_edit_clear_auto_note_pending(track, step);
+    seq_runtime_on_step_play_changed(track, step, voice, field);
 }
 
 seq_plock_op_status_t seq_edit_step_play_delete(seq_track_id_t track,
@@ -172,8 +173,14 @@ seq_plock_op_status_t seq_edit_step_play_delete(seq_track_id_t track,
     {
         return SEQ_PLOCK_OP_INVALID;
     }
-    return (seq_model_play_param_delete(track, step, param) != 0U)
-        ? SEQ_PLOCK_OP_DELETED : SEQ_PLOCK_OP_NOT_FOUND;
+    uint8_t voice = 0U;
+    seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
+    if (seq_model_play_resolve_param(param, &voice, &field) == 0U)
+        return SEQ_PLOCK_OP_INVALID;
+    if (seq_model_play_param_delete(track, step, param) == 0U)
+        return SEQ_PLOCK_OP_NOT_FOUND;
+    seq_runtime_on_step_play_changed(track, step, voice, field);
+    return SEQ_PLOCK_OP_DELETED;
 }
 
 void seq_edit_step_play_clear_voice(seq_track_id_t track,
@@ -183,6 +190,7 @@ void seq_edit_step_play_clear_voice(seq_track_id_t track,
     if (seq_edit_track_sequence_is_locked(track) == 0U)
     {
         seq_model_play_clear_item(track, step, voice);
+        seq_runtime_on_step_play_removed(track, step, (int16_t)voice);
     }
 }
 
@@ -191,6 +199,7 @@ void seq_edit_step_play_clear(seq_track_id_t track, seq_step_id_t step)
     if (seq_edit_track_sequence_is_locked(track) == 0U)
     {
         seq_model_play_clear_step(track, step);
+        seq_runtime_on_step_play_removed(track, step, -1);
     }
 }
 
@@ -1174,6 +1183,7 @@ uint8_t seq_edit_adjust_held_step_roll(int8_t delta,
         }
 
         seq_model_set_step_roll(held_track, step, roll);
+        seq_runtime_on_step_roll_changed(held_track, step);
         seq_edit_mark_step_edited(held_track, step);
         seq_edit_clear_auto_note_pending(held_track, step);
 

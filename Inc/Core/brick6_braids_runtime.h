@@ -46,11 +46,11 @@ void brick6_braids_runtime_set_osc_pitch_mod(uint8_t instance_id, uint8_t osc, f
 void brick6_braids_runtime_set_osc_timbre(uint8_t instance_id, uint8_t osc, float timbre);
 void brick6_braids_runtime_set_osc_modulation(uint8_t instance_id, uint8_t osc, float modulation);
 void brick6_braids_runtime_set_osc_color(uint8_t instance_id, uint8_t osc, float color);
-void brick6_braids_runtime_set_osc_phase_reset(uint8_t instance_id, uint8_t osc, uint8_t enabled);
 void brick6_braids_runtime_set_volume(uint8_t instance_id, float volume);
 void brick6_braids_runtime_set_balance(uint8_t instance_id, float balance);
 void brick6_braids_runtime_set_tune(uint8_t instance_id, float semitones);
 void brick6_braids_runtime_set_detune(uint8_t instance_id, float semitones);
+void brick6_braids_runtime_set_drift(uint8_t instance_id, float amount);
 void brick6_braids_runtime_set_vca_release_seconds(uint8_t instance_id, float release_s);
 
 void brick6_braids_runtime_note_on(uint8_t instance_id, float note, float velocity);

@@ -4,6 +4,7 @@
 
 #include "Sampler/sample_audio_format.h"
 #include "Sampler/sample_stream_sequence.h"
+#include "Storage/memory_layout.h"
 #define SAMPLE_STREAM_NEEDS_CLASSIC_CAPACITY SAMPLE_STREAM_SNAPSHOT_CLASSIC_CAPACITY
 #define SAMPLE_STREAM_NEEDS_MULTI_CAPACITY   SAMPLE_STREAM_SNAPSHOT_MULTI_CAPACITY
 #define SAMPLE_STREAM_NEEDS_CAPACITY \
@@ -15,7 +16,7 @@ typedef struct
     sample_stream_target_voice_registry_entry_t value;
 } sample_stream_needs_slot_t;
 
-static sample_stream_needs_slot_t g_sample_stream_needs_slots[SAMPLE_STREAM_NEEDS_CAPACITY];
+D2_IPC static sample_stream_needs_slot_t g_sample_stream_needs_slots[SAMPLE_STREAM_NEEDS_CAPACITY];
 
 static uint8_t sample_stream_needs_slot_index(sample_stream_snapshot_source_t source,
                                               uint8_t voice_id,

@@ -7,21 +7,12 @@
 #include "NoteFx/note_fx_arp.h"
 #include "NoteFx/note_fx_state.h"
 
-#define NOTE_FX_HALF_BUFFER_FRAMES 64U
-#define NOTE_FX_HALF_ON_QUOTA_PER_TRACK 8U
-#define NOTE_FX_HALF_OFF_RESERVE 32U
-#define NOTE_FX_HALF_EMISSION_BUDGET \
-    ((NOTE_FX_TRACK_COUNT * NOTE_FX_HALF_ON_QUOTA_PER_TRACK) \
-     + NOTE_FX_HALF_OFF_RESERVE)
-#define NOTE_FX_HALF_COMMAND_QUOTA 32U
 #define NOTE_FX_PIPELINE_MAX_STAGE_FANOUT NOTE_FX_SLOT_COUNT
 #define NOTE_FX_PIPELINE_MAX_EUCLID_SOURCES_PER_TRACK \
     (NOTE_FX_SLOT_COUNT * NOTE_FX_ARP_MAX_SOURCES)
 
 _Static_assert(NOTE_FX_PIPELINE_MAX_STAGE_FANOUT == 3U,
                "NoteFx stage fan-out must match the three MIDI FX slots");
-_Static_assert(NOTE_FX_HALF_OFF_RESERVE >= NOTE_FX_HALF_ON_QUOTA_PER_TRACK,
-               "generated On quota must retain an Off reserve");
 
 /* A live source is queued by a non-audio producer.  The audio owner resolves
  * this marker at command consumption so the event sample is the application
@@ -29,6 +20,7 @@ _Static_assert(NOTE_FX_HALF_OFF_RESERVE >= NOTE_FX_HALF_ON_QUOTA_PER_TRACK,
 #define NOTE_FX_SAMPLE_TIME_CONTROL_ANCHOR UINT64_MAX
 
 void note_fx_pipeline_init(void);
+uint16_t note_fx_pipeline_diagnostic_queue_depth(void);
 /* Priority control path for MIDI panic (CC 120/123).  The request is
  * pointer-free and never consumes an ordinary NoteFx command slot; audio
  * owns the actual purge and terminal closure. */
@@ -57,26 +49,26 @@ note_fx_result_t note_fx_pipeline_submit_source_capture_tick(
     note_event_provenance_t provenance,
     uint32_t source_occurrence_id);
 
-/* Returns non-zero only while an FX-owned occurrence is still current in the
- * audio owner.  Terminal admission uses this to reject stale generated On. */
+/* Returns non-zero only while an FX-owned occurrence is still current. */
 uint8_t note_fx_pipeline_is_generated_occurrence_current(
     uint8_t track, uint32_t occurrence_id, uint32_t generation);
-void note_fx_pipeline_process(uint64_t block_start, uint16_t frames,
-                              uint32_t samples_per_step_q16);
-void note_fx_pipeline_begin_control_window(uint16_t frames);
-void note_fx_pipeline_end_control_window(void);
-uint16_t note_fx_pipeline_frames_until_deadline(uint64_t block_start,
-                                                uint16_t max_frames);
+uint8_t note_fx_pipeline_process(uint64_t block_start, uint16_t frames,
+                                 uint32_t samples_per_step_q16);
+/* 0: normal, 1: panic consumed, 2: invariant failure. */
+uint8_t note_fx_pipeline_prepare_control_window(uint64_t block_start);
 uint8_t note_fx_pipeline_sync_track(uint8_t track);
 uint8_t note_fx_pipeline_sync_all_tracks(void);
-void note_fx_pipeline_reset_runtime_overrides(uint8_t track);
-void note_fx_pipeline_reset_all_runtime_overrides(void);
+uint8_t note_fx_pipeline_reset_runtime_overrides(uint8_t track);
+uint8_t note_fx_pipeline_reset_all_runtime_overrides(void);
 uint8_t note_fx_pipeline_transition_track(uint8_t track,
                                           note_fx_transition_policy_t policy);
+uint8_t note_fx_pipeline_transition_tracks(
+    const uint8_t *tracks, uint8_t track_count,
+    note_fx_transition_policy_t policy);
 uint8_t note_fx_pipeline_transition_all(note_fx_transition_policy_t policy);
-uint8_t note_fx_pipeline_apply_runtime_param(uint8_t track, uint8_t slot,
-                                             uint8_t param, uint8_t value);
-uint8_t note_fx_pipeline_release_runtime_param(uint8_t track, uint8_t slot,
-                                               uint8_t param);
+uint8_t note_fx_pipeline_apply_control_override(uint8_t track, uint8_t slot,
+                                                uint8_t param, uint8_t value);
+uint8_t note_fx_pipeline_release_control_override(uint8_t track, uint8_t slot,
+                                                  uint8_t param);
 
 #endif

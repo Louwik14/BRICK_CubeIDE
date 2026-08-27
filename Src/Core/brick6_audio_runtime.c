@@ -48,7 +48,10 @@ static void brick6_publish_owned_physical_line(uint32_t frames)
         return;
     }
 
-    const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(owner);
+    track_audio_runtime_ctx_t ctx_value;
+    const track_audio_runtime_ctx_t *const ctx =
+        (audio_note_engine_adapter_audio_ctx_snapshot(owner, &ctx_value) != 0U)
+            ? &ctx_value : NULL;
     if ((ctx == NULL)
             || ((track_runtime_family_t)ctx->family != TRACK_RUNTIME_FAMILY_EXTERNAL)
             || (audio_note_engine_adapter_ctx_is_audio_routable(ctx) == 0U)
@@ -89,7 +92,10 @@ static __attribute__((noinline)) void brick6_render_synth_tracks(uint16_t entity
     {
         const uint8_t track = (uint8_t)__builtin_ctz((unsigned int)entity_mask);
         entity_mask &= (uint16_t)(entity_mask - 1U);
-        const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
+        track_audio_runtime_ctx_t ctx_value;
+        const track_audio_runtime_ctx_t *const ctx =
+            (audio_note_engine_adapter_audio_ctx_snapshot(track, &ctx_value) != 0U)
+                ? &ctx_value : NULL;
 
         {
             const drum_model_id_t model_id = brick6_map_runtime_type_to_drum_model(ctx->type);
@@ -143,7 +149,10 @@ static __attribute__((noinline)) void brick6_render_sampler_tracks(uint32_t fram
     {
         const uint8_t track = (uint8_t)__builtin_ctz(render_mask);
         render_mask &= render_mask - 1U;
-        const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
+        track_audio_runtime_ctx_t ctx_value;
+        const track_audio_runtime_ctx_t *const ctx =
+            (audio_note_engine_adapter_audio_ctx_snapshot(track, &ctx_value) != 0U)
+                ? &ctx_value : NULL;
         if ((ctx == NULL)
                 || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
                 || (ctx->audio_binding.engine != (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
@@ -301,7 +310,10 @@ static __attribute__((noinline)) void brick6_render_looper_tracks(uint32_t frame
     {
         const uint8_t track = (uint8_t)__builtin_ctz((unsigned)playing_mask);
         playing_mask &= (uint16_t)(playing_mask - 1U);
-        const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
+        track_audio_runtime_ctx_t ctx_value;
+        const track_audio_runtime_ctx_t *const ctx =
+            (audio_note_engine_adapter_audio_ctx_snapshot(track, &ctx_value) != 0U)
+                ? &ctx_value : NULL;
         if ((ctx == NULL)
                 || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
                 || (ctx->audio_binding.engine != (uint8_t)TRACK_RUNTIME_ENGINE_LOOPER)
@@ -350,7 +362,10 @@ static __attribute__((noinline)) void brick6_render_prism_tracks(uint16_t entity
     {
         const uint8_t track = (uint8_t)__builtin_ctz((unsigned int)entity_mask);
         entity_mask &= (uint16_t)(entity_mask - 1U);
-        const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
+        track_audio_runtime_ctx_t ctx_value;
+        const track_audio_runtime_ctx_t *const ctx =
+            (audio_note_engine_adapter_audio_ctx_snapshot(track, &ctx_value) != 0U)
+                ? &ctx_value : NULL;
 
         const uint8_t voice_count = synth_polyphony_get_render_voice_count(track);
         if (voice_count == 0U)
@@ -443,7 +458,10 @@ static __attribute__((noinline)) void brick6_render_fm_tracks(uint16_t entity_ma
     {
         const uint8_t track = (uint8_t)__builtin_ctz((unsigned int)entity_mask);
         entity_mask &= (uint16_t)(entity_mask - 1U);
-        const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
+        track_audio_runtime_ctx_t ctx_value;
+        const track_audio_runtime_ctx_t *const ctx =
+            (audio_note_engine_adapter_audio_ctx_snapshot(track, &ctx_value) != 0U)
+                ? &ctx_value : NULL;
 
         const uint8_t voice_count = synth_polyphony_get_render_voice_count(track);
         if (voice_count == 0U)
@@ -517,7 +535,10 @@ static __attribute__((noinline)) void brick6_render_wave_tracks(uint16_t entity_
     {
         const uint8_t track = (uint8_t)__builtin_ctz((unsigned int)entity_mask);
         entity_mask &= (uint16_t)(entity_mask - 1U);
-        const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
+        track_audio_runtime_ctx_t ctx_value;
+        const track_audio_runtime_ctx_t *const ctx =
+            (audio_note_engine_adapter_audio_ctx_snapshot(track, &ctx_value) != 0U)
+                ? &ctx_value : NULL;
 
         const uint8_t voice_count = synth_polyphony_get_render_voice_count(track);
         if (voice_count == 0U)
@@ -618,7 +639,10 @@ static __attribute__((noinline)) void brick6_render_stack_tracks(uint16_t entity
     {
         const uint8_t track = (uint8_t)__builtin_ctz((unsigned int)entity_mask);
         entity_mask &= (uint16_t)(entity_mask - 1U);
-        const track_audio_runtime_ctx_t *const ctx = audio_note_engine_adapter_audio_ctx(track);
+        track_audio_runtime_ctx_t ctx_value;
+        const track_audio_runtime_ctx_t *const ctx =
+            (audio_note_engine_adapter_audio_ctx_snapshot(track, &ctx_value) != 0U)
+                ? &ctx_value : NULL;
 
         const uint8_t voice_count = synth_polyphony_get_render_voice_count(track);
         if (voice_count == 0U)

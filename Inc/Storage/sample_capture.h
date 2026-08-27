@@ -31,7 +31,9 @@ extern "C" {
 typedef enum
 {
     SAMPLE_CAPTURE_ARM_OFF = 0,
-    SAMPLE_CAPTURE_ARM_REC
+    SAMPLE_CAPTURE_ARM_REC,
+    SAMPLE_CAPTURE_ARM_TRIG,
+    SAMPLE_CAPTURE_ARM_COUNT
 } sample_capture_arm_t;
 
 typedef enum
@@ -109,6 +111,12 @@ typedef struct
     sample_capture_arm_t arm;
     uint8_t len_bars; /* 0 = FREE, otherwise 1..64 steps */
     sample_capture_quant_t quant;
+    int8_t threshold_dbfs;
+    uint8_t line_enabled;
+    uint8_t mic_enabled;
+    uint8_t trigger_latched;
+    uint32_t live_peak_abs_pcm24;
+    uint32_t live_peak_generation;
     uint8_t route_enabled[SAMPLE_CAPTURE_TRACK_COUNT];
     uint8_t armed_pending;
     uint8_t recording;
@@ -151,9 +159,6 @@ uint8_t sample_capture_push_audio_block_from_irq(const int32_t *lr_interleaved,
 uint8_t sample_capture_request_stop(void);
 uint8_t sample_capture_get_status(audio_recorder_status_t *out_status);
 
-void sample_capture_set_audio_hook_enabled(uint8_t enabled);
-uint8_t sample_capture_audio_hook_is_enabled(void);
-
 void sample_capture_model_init(void);
 void sample_capture_model_service(void);
 void sample_capture_model_get_state(sample_capture_state_t *out_state);
@@ -164,6 +169,12 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm);
 uint8_t sample_capture_model_step_arm(int16_t delta);
 uint8_t sample_capture_model_step_len(int16_t delta);
 uint8_t sample_capture_model_step_quant(int16_t delta);
+uint8_t sample_capture_model_set_threshold_dbfs(int8_t threshold_dbfs);
+uint8_t sample_capture_model_step_threshold(int16_t delta);
+uint8_t sample_capture_model_set_line_enabled(uint8_t enabled);
+uint8_t sample_capture_model_toggle_line(void);
+uint8_t sample_capture_model_set_mic_enabled(uint8_t enabled);
+uint8_t sample_capture_model_toggle_mic(void);
 uint8_t sample_capture_model_step_edit(uint8_t encoder, int16_t delta, uint8_t alt_held);
 uint32_t sample_capture_model_visible_frames_for_zoom(uint32_t recorded_frames, uint8_t zoom);
 uint32_t sample_capture_model_tile_cache_capacity_frames(void);

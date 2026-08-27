@@ -5,6 +5,7 @@
 
 #include "Storage/memory_layout.h"
 #include "Audio/control_audio_queue.h"
+#include "Core/control_music_output.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_fx_runtime.h"
 #include "Core/live_clock.h"
@@ -42,6 +43,7 @@ static void track_runtime_publish_intent(brick_entity_id_t entity_id,
         return;
     uint64_t due_sample = 0U;
     (void)live_clock_read_audio_sample(&due_sample);
+    due_sample = control_music_output_first_unpublished_sample(due_sample);
     float voices = 1.0f;
     float spread = 0.0f;
     (void)param_registry_control_shadow_get(
@@ -58,7 +60,8 @@ static void track_runtime_publish_intent(brick_entity_id_t entity_id,
             audio_flags |= AUDIO_RUNTIME_FLAG_GROUP_CHILD;
     }
     const control_audio_event_t command = {
-        .due_sample = due_sample,
+        /* The preceding musical STOPs must execute against the old binding. */
+        .due_sample = due_sample + 1U,
         .source_generation = track_runtime_encode_float(spread),
         .param_id = (uint16_t)((voices >= 1.0f) ? (uint8_t)voices : 1U),
         .entity_id = entity_id,
@@ -69,6 +72,8 @@ static void track_runtime_publish_intent(brick_entity_id_t entity_id,
         .provenance = ctx->family,
         .flags = audio_flags
     };
+    if (control_music_output_close_entity(entity_id, due_sample) == 0U)
+        return;
     (void)control_audio_queue_publish(&command);
 }
 
@@ -251,14 +256,14 @@ static const param_id_t g_track_runtime_tone_slots_prism[] = {
     PARAM_PRISM_BALANCE,
     PARAM_PRISM_TUNE,
     PARAM_PRISM_DETUNE,
+    PARAM_PRISM_DRIFT,
     PARAM_PRISM_PITCH_MOD1,
     PARAM_PRISM_PHASE1_RESET,
     PARAM_PRISM_OSC2_PARAM1,
     PARAM_PRISM_OSC2_PARAM2,
     PARAM_PRISM_OSC2_AMOD,
     PARAM_PRISM_OSC2_MODEL,
-    PARAM_PRISM_PITCH_MOD2,
-    PARAM_PRISM_PHASE2_RESET
+    PARAM_PRISM_PITCH_MOD2
 };
 
 static const param_id_t g_track_runtime_tone_slots_stack[] = {
@@ -285,8 +290,12 @@ static const param_id_t g_track_runtime_tone_slots_stack[] = {
 static const param_id_t g_track_runtime_tone_slots_wave[] = {
     PARAM_WAVE_OSC1_TABLE,
     PARAM_WAVE_OSC1_POS,
+    PARAM_WAVE_OSC1_START,
+    PARAM_WAVE_OSC1_LEN,
     PARAM_WAVE_OSC2_TABLE,
     PARAM_WAVE_OSC2_POS,
+    PARAM_WAVE_OSC2_START,
+    PARAM_WAVE_OSC2_LEN,
     PARAM_WAVE_VOLUME,
     PARAM_WAVE_BALANCE,
     PARAM_WAVE_TUNE,
@@ -326,7 +335,7 @@ static const param_id_t g_track_runtime_tone_slots_sampler[] = {
     PARAM_SAMPLER_SAMPLE,
     PARAM_SAMPLER_GAIN,
     PARAM_SAMPLER_START,
-    PARAM_SAMPLER_END,
+    PARAM_SAMPLER_LENGTH,
     PARAM_SAMPLER_MODE,
     PARAM_SAMPLER_TUNE,
     PARAM_SAMPLER_LOOP_START,
@@ -755,6 +764,72 @@ void track_runtime_refresh_all(void)
         g_track_runtime_track_dirty[track] = 0U;
         g_track_runtime_track_revision[track] = g_track_runtime_revision;
     }
+}
+
+uint8_t track_runtime_install_restored_projection(void)
+{
+    track_runtime_ctx_t restored[SEQ_LANE_CAPACITY];
+
+    for (brick_entity_id_t entity = 0U;
+         entity < (brick_entity_id_t)SEQ_LANE_CAPACITY; ++entity)
+    {
+        track_runtime_prepare_ctx_base(entity, &restored[entity]);
+        if (entity_topology_is_active(entity) == 0U)
+            continue;
+
+        audio_binding_snapshot_t snapshot;
+        if ((audio_note_engine_adapter_snapshot_read(entity, &snapshot) == 0U)
+                || (snapshot.binding.generation == 0U)
+                || (snapshot.family != restored[entity].family)
+                || (snapshot.type != restored[entity].type)
+                || ((snapshot.flags & (TRACK_RUNTIME_FLAG_CAN_FILTER
+                                      | TRACK_RUNTIME_FLAG_CAN_SYNTH
+                                      | TRACK_RUNTIME_FLAG_CAN_PLAY))
+                    != restored[entity].flags)
+                || (snapshot.midi_channel_1_16
+                    != restored[entity].midi_channel_1_16)
+                || (snapshot.midi_source != restored[entity].midi_source))
+        {
+            return 0U;
+        }
+    }
+
+    memcpy(g_track_runtime_ctx, restored, sizeof(restored));
+    g_track_runtime_global_dirty = 0U;
+    ++g_track_runtime_revision;
+    for (uint8_t track = 0U; track < (uint8_t)SEQ_LANE_CAPACITY; ++track)
+    {
+        g_track_runtime_track_dirty[track] = 0U;
+        g_track_runtime_track_revision[track] = g_track_runtime_revision;
+    }
+    return 1U;
+}
+
+uint8_t track_runtime_active_projection_is_coherent(
+    brick_entity_id_t entity, uint32_t *out_binding_generation)
+{
+    if ((entity >= (brick_entity_id_t)SEQ_LANE_CAPACITY)
+            || (out_binding_generation == NULL)
+            || (entity_topology_is_active(entity) == 0U))
+        return 0U;
+
+    audio_binding_snapshot_t snapshot;
+    const track_runtime_ctx_t *const control = &g_track_runtime_ctx[entity];
+    if ((audio_note_engine_adapter_snapshot_read(entity, &snapshot) == 0U)
+            || (snapshot.binding.generation == 0U)
+            || (snapshot.binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (snapshot.family != control->family)
+            || (snapshot.type != control->type)
+            || ((snapshot.flags & (TRACK_RUNTIME_FLAG_CAN_FILTER
+                                  | TRACK_RUNTIME_FLAG_CAN_SYNTH
+                                  | TRACK_RUNTIME_FLAG_CAN_PLAY))
+                != control->flags)
+            || (snapshot.midi_channel_1_16 != control->midi_channel_1_16)
+            || (snapshot.midi_source != control->midi_source))
+        return 0U;
+
+    *out_binding_generation = snapshot.binding.generation;
+    return 1U;
 }
 
 uint8_t track_runtime_is_track_prism_available(uint8_t track)
@@ -1211,6 +1286,7 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_PRISM_BALANCE:
         case PARAM_PRISM_OSC2_MODEL:
         case PARAM_PRISM_DETUNE:
+        case PARAM_PRISM_DRIFT:
         case PARAM_PRISM_PITCH_MOD2:
         case PARAM_PRISM_OSC2_PARAM1:
         case PARAM_PRISM_OSC2_AMOD:
@@ -1232,7 +1308,6 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_FM_PLAY_PITCH_ENV:
         case PARAM_FM_PLAY_PITCH_TIME:
         case PARAM_FM_OPERATOR_SELECT:
-        case PARAM_PRISM_PHASE2_RESET:
         case PARAM_STACK_OSC1_LEVEL:
         case PARAM_STACK_OSC2_LEVEL:
         case PARAM_STACK_OSC3_LEVEL:
@@ -1253,8 +1328,12 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_STACK_PHASE_RESET:
         case PARAM_WAVE_OSC1_TABLE:
         case PARAM_WAVE_OSC1_POS:
+        case PARAM_WAVE_OSC1_START:
+        case PARAM_WAVE_OSC1_LEN:
         case PARAM_WAVE_OSC2_TABLE:
         case PARAM_WAVE_OSC2_POS:
+        case PARAM_WAVE_OSC2_START:
+        case PARAM_WAVE_OSC2_LEN:
         case PARAM_WAVE_VOLUME:
         case PARAM_WAVE_BALANCE:
         case PARAM_WAVE_TUNE:
@@ -1276,7 +1355,7 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_SAMPLER_SAMPLE:
         case PARAM_SAMPLER_GAIN:
         case PARAM_SAMPLER_START:
-        case PARAM_SAMPLER_END:
+        case PARAM_SAMPLER_LENGTH:
         case PARAM_SAMPLER_MODE:
         case PARAM_SAMPLER_TUNE:
         case PARAM_SAMPLER_SLICE_COUNT:

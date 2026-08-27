@@ -25,6 +25,7 @@ typedef struct
     uint8_t prev_step_valid[SEQ_LANE_CAPACITY];
     uint8_t active_lock_count[SEQ_LANE_CAPACITY];
     uint8_t track_div_phase[SEQ_LANE_CAPACITY];
+    uint8_t track_swing_phase[SEQ_LANE_CAPACITY];
     uint32_t last_tick_count;
     uint32_t tick_accum;
     uint16_t ticks_per_step;

@@ -1,3 +1,3 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_transport_publication.c:10:6:audio_transport_publication_init	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_transport_publication.c:18:6:audio_transport_publication_refresh	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_transport_publication.c:45:38:audio_transport_publication_get	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_transport_publication.c:12:6:audio_transport_publication_init	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_transport_publication.c:21:6:audio_transport_publication_refresh	40	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_transport_publication.c:58:9:audio_transport_publication_read	16	static,ignoring_inline_asm

@@ -69,10 +69,28 @@ _Static_assert(sizeof(live_parameter_audio_event_t) == 32U,
 
 #define LIVE_PARAMETER_AUDIO_QUEUE_CAPACITY 64U
 #define LIVE_PARAMETER_AUDIO_DRAIN_BUDGET LIVE_PARAMETER_AUDIO_QUEUE_CAPACITY
+/* One boundary may restore 32 disjoint locks and apply 32 new locks on each
+ * of the 16 lanes: 16 * (32 + 32) = 1024 final parameter writes. */
+#define LIVE_PARAMETER_AUDIO_DATED_CAPACITY 1024U
+
+typedef struct
+{
+    uint16_t due_sample_low;
+    uint16_t parameter_id;
+    uint16_t value16;
+    uint8_t track;
+    uint8_t matrix_operation;
+} live_parameter_audio_dated_event_t;
+
+_Static_assert(sizeof(live_parameter_audio_dated_event_t) == 8U,
+               "dated CONTROL/AUDIO parameter ABI must remain compact");
 
 _Static_assert((LIVE_PARAMETER_AUDIO_QUEUE_CAPACITY
                 & (LIVE_PARAMETER_AUDIO_QUEUE_CAPACITY - 1U)) == 0U,
                "live parameter audio queue capacity must be a power of two");
+_Static_assert((LIVE_PARAMETER_AUDIO_DATED_CAPACITY
+                & (LIVE_PARAMETER_AUDIO_DATED_CAPACITY - 1U)) == 0U,
+               "dated parameter capacity must be a power of two");
 
 void live_parameter_audio_queue_init(void);
 
@@ -87,6 +105,11 @@ bool live_parameter_audio_queue_submit_poly_pair(uint32_t capture_tick,
                                                  uint8_t track,
                                                  float voices,
                                                  float spread);
+bool live_parameter_audio_queue_submit_dated(uint64_t effective_sample_time,
+                                             uint16_t parameter_id,
+                                             uint8_t track,
+                                             uint16_t value16,
+                                             uint8_t matrix_operation);
 uint32_t live_parameter_audio_queue_publish_failure_count(void);
 
 /* AUDIO consumer side of the shared SPSC ring. */
@@ -94,5 +117,8 @@ uint16_t live_parameter_audio_queue_frames_until_deadline(uint64_t block_start,
                                                           uint16_t max_frames);
 bool live_parameter_audio_queue_audio_peek(live_parameter_audio_event_t *out_event);
 bool live_parameter_audio_queue_audio_pop(void);
+bool live_parameter_audio_queue_audio_peek_dated(
+    live_parameter_audio_dated_event_t *out_event);
+bool live_parameter_audio_queue_audio_pop_dated(void);
 
 #endif /* BRICK6_LIVE_PARAMETER_AUDIO_QUEUE_H */

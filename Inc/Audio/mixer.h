@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 #include "audio_float.h"
-#include "Seq/seq_types.h"
+#include "Core/entity_topology.h"
 
 /**
  * @file mixer.h
@@ -22,12 +22,12 @@
  */
 
 /*
- * Mixer runtime owns one logical lane per sequencer track. This is distinct
+ * Mixer runtime owns one logical lane per routed musical entity. This is distinct
  * from the 4 physical DSP ingress tracks exposed by audio_float.h.
  */
 /* 16 source lanes plus one post-sum GROUP bus. */
-#define MIXER_MAX_TRACKS (SEQ_LANE_CAPACITY + 1U)
-#define MIXER_GROUP_BUS_TRACK SEQ_LANE_CAPACITY
+#define MIXER_MAX_TRACKS (BRICK_ENTITY_CAPACITY + 1U)
+#define MIXER_GROUP_BUS_TRACK BRICK_ENTITY_CAPACITY
 #define MIXER_NUM_SENDS 3U
 #define MIXER_MODFX_SEND_INDEX 2U
 #define MIXER_INSERTS_PER_TRACK 2U

@@ -1,5 +1,5 @@
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:715:13:ui_core_runtime_bridge_sync_audio_runtime_enables	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:69:13:ui_core_runtime_bridge_publish_audio_command	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:69:13:ui_core_runtime_bridge_publish_audio_command	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:111:16:ui_core_runtime_bridge_track_is_sampler_looper	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:403:16:ui_core_runtime_bridge_looper_find_single_record_eligible	64	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_runtime_bridge.c:473:16:ui_core_runtime_bridge_looper_start_track	256	static

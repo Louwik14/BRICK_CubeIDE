@@ -1,6 +1,8 @@
 # Z1 - Audio hard-RT, moteurs et mix
 
-AUDIO est l'unique autorite d'admission des notes internes, d'allocation, de stealing, de rendu, de mixer et de page-cache. CONTROL publie des intentions fixes; aucun scheduler CONTROL n'appelle directement un moteur ou le mixer.
+CONTROL est l'unique autorite musicale: il cree les outputs, applique les quotas Multi per-track/global, choisit les victimes et publie atomiquement `STOP` puis `START`. Un `START` Multi legal est donc garanti par construction; AUDIO ne fait aucune admission ni stealing musical et traite un slot indisponible comme une rupture d'invariant. Il valide le binding, mappe `output_id` vers un slot DSP, rend les moteurs et possede FREE/RELEASE physique. Aucun scheduler CONTROL n'appelle directement un moteur ou le mixer.
+
+`STOP(output_id)` retire HELD cote AUDIO mais une tail RELEASE peut continuer. Sa fin ne produit aucun ACK musical. Si le slot doit etre reutilise, AUDIO le reinitialise physiquement avant le nouveau START.
 
 Les moteurs rendent dans les lanes externes associees aux bindings. Le pool synth maintient un mapping direct voix logique -> slot physique; les configurations de track sont versionnees et recopies seulement lors d'un changement. Les etats chauds des voix restent en DTCM et aucun chemin audio n'alloue dynamiquement.
 
@@ -18,10 +20,10 @@ Le format est immutable pendant la voix. Une page physique de 16 KiB contient 40
 
 ## Wave
 
-Wave possede OSC1, OSC2 et COMMON. TABLE est un slot logique projete vers un slot/generation AUDIO. Les deux oscillateurs sont independants; WAVE ne possede aucun routage ou etat de modulation croisee. L'interpolation de frame et de sample est permanente, POS est mis a jour a chaque sample et aucun smoothing POS n'est applique; phase et pitch restent possedes par la voix.
+Wave possede OSC1, OSC2 et COMMON. TABLE est un slot logique projete vers un slot/generation AUDIO. Les deux oscillateurs sont independants; WAVE ne possede aucun routage ou etat de modulation croisee. L'interpolation de frame et de sample est permanente, POS reste l'axe des frames et aucun smoothing POS n'est applique. START (0..100 %) et LEN (1..100 %) definissent une fenetre lineaire interne bornee a la fin du cycle : `effective_len = min(LEN, 1 - START)`, puis `read_phase = START + phase_porteuse * effective_len`. La phase porteuse et le pitch restent possedes par la voix, aucun wrap de lecture n'est applique, et START=0/LEN=100 conserve le chemin historique bit-identique.
 
 Le snapshot de waveform est une publication seqlock AUDIO->CONTROL fixe et sans pointeur. Il capture au plus 48 points par oscillateur, a 20 Hz maximum, sans second rendu. Desactive, il n'ajoute aucun cout par sample.
 
 ## Integration d'un moteur
 
-Un nouveau moteur doit ajouter son type canonique, binding runtime, capacites, catalogue de parametres/backends, rendu borne, admission/fermeture, exposition UI et cles persistantes. Il ne doit contourner ni `track_runtime`, ni le registre de parametres, ni les files CONTROL/AUDIO.
+Un nouveau moteur doit ajouter son type canonique, binding runtime, capacites, catalogue de parametres/backends, rendu borne, mapping/fermeture physique, exposition UI et cles persistantes. Il ne doit contourner ni `track_runtime`, ni le registre de parametres, ni les IPC CONTROL/AUDIO.

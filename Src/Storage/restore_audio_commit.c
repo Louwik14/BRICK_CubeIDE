@@ -3,6 +3,7 @@
 #include "Audio/audio_global_runtime.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Core/live_parameter_audio_queue.h"
+#include "Core/project_control.h"
 #include "Core/synth_polyphony.h"
 #include "Param/param_registry.h"
 #include "Storage/persistent_pattern_restore_prepare.h"
@@ -81,10 +82,9 @@ uint8_t restore_audio_commit_apply(const restore_audio_plan_t *plan)
             .voice_spread = (float)binding->voice_spread_q7 / 127.0f
         };
         audio_note_engine_adapter_install_prepared(&spec);
-        const track_audio_runtime_ctx_t *const installed =
-            audio_note_engine_adapter_audio_ctx(entity);
-        if ((installed == NULL)
-                || (installed->audio_binding.bind_state
+        audio_binding_snapshot_t installed;
+        if ((audio_note_engine_adapter_snapshot_read(entity, &installed) == 0U)
+                || (installed.binding.bind_state
                     == TRACK_RUNTIME_BIND_QUOTA_BLOCKED))
             return 0U;
     }
@@ -107,9 +107,20 @@ uint8_t restore_audio_commit_apply(const restore_audio_plan_t *plan)
             if (applied == 0U)
                 return 0U;
         }
-        else if (param_registry_apply_prepared_track_value_audio(
+        else
+        {
+            if (prepared.id == PARAM_SAMPLER_SAMPLE)
+            {
+                float runtime_value = 0.0f;
+                if (project_control_resolve_audio_sampler_value(
+                        item->entity, prepared.value, &runtime_value) == 0U)
+                    return 0U;
+                prepared.value = runtime_value;
+            }
+            if (param_registry_apply_prepared_track_value_audio(
                     &prepared, item->entity) == 0U)
-            return 0U;
+                return 0U;
+        }
     }
     audio_note_engine_adapter_audio_publish_snapshot();
     return 1U;

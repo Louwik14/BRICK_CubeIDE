@@ -230,7 +230,10 @@ void ui_navigation_handle_event(const ui_event_t *event)
             }
             if ((rule->target_page == UI_PAGE_TEMPLATE_TONE) && (current_page == UI_PAGE_TEMPLATE_TONE))
             {
-                ui_page_template_tone_toggle_subset();
+                if (ui_page_template_tone_is_global_master() == 0U)
+                {
+                    ui_page_template_tone_toggle_subset();
+                }
                 break;
             }
             if ((rule->target_page == UI_PAGE_TEMPLATE_PLAY) && (current_page == UI_PAGE_TEMPLATE_PLAY))

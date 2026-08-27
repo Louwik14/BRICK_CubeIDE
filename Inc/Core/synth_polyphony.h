@@ -24,7 +24,7 @@ typedef enum
 typedef enum
 {
     SYNTH_POLY_SOURCE_MANUAL = 0,
-    SYNTH_POLY_SOURCE_SEQUENCER
+    SYNTH_POLY_SOURCE_MUSICAL_OUTPUT
 } synth_poly_source_t;
 
 typedef struct
@@ -38,7 +38,7 @@ typedef struct
     uint8_t note;
     uint8_t state;
     uint8_t source;
-    uint32_t occurrence_id;
+    uint32_t output_id;
 } synth_poly_voice_snapshot_t;
 
 void synth_polyphony_init(void);
@@ -46,15 +46,15 @@ uint8_t synth_polyphony_note_on(uint8_t track, uint8_t note);
 uint8_t synth_polyphony_note_off(uint8_t track, uint8_t note);
 uint8_t synth_polyphony_note_on_from(uint8_t track, uint8_t note, synth_poly_source_t source);
 uint8_t synth_polyphony_note_off_from(uint8_t track, uint8_t note, synth_poly_source_t source);
-uint8_t synth_polyphony_note_on_occurrence_from(uint8_t track, uint8_t note,
-                                                synth_poly_source_t source,
-                                                uint32_t occurrence_id);
-uint8_t synth_polyphony_note_off_occurrence_from(uint8_t track,
-                                                 synth_poly_source_t source,
-                                                 uint32_t occurrence_id);
-uint8_t synth_polyphony_occurrence_is_active(uint8_t track,
+uint8_t synth_polyphony_note_on_output_from(uint8_t track, uint8_t note,
+                                            synth_poly_source_t source,
+                                            uint32_t output_id);
+uint8_t synth_polyphony_note_off_output_from(uint8_t track,
                                              synth_poly_source_t source,
-                                             uint32_t occurrence_id);
+                                             uint32_t output_id);
+uint8_t synth_polyphony_output_is_active(uint8_t track,
+                                         synth_poly_source_t source,
+                                         uint32_t output_id);
 uint8_t synth_polyphony_release_source(uint8_t track,
                                       synth_poly_source_t source,
                                       synth_poly_release_t *out,

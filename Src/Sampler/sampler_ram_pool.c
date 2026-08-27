@@ -1269,7 +1269,7 @@ static void sampler_ram_pool_finalize_clear(uint16_t ram_slot)
     sampler_ram_waveform_set_empty(&g_sampler_ram_pool.slots[ram_slot]);
 }
 
-void sampler_ram_pool_audio_ack_retire(uint16_t ram_slot, uint32_t generation)
+void sampler_ram_pool_control_ack_retire(uint16_t ram_slot, uint32_t generation)
 {
     if (ram_slot >= SAMPLER_RAM_POOL_MAX_SLOTS) return;
     __DMB();

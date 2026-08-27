@@ -31,7 +31,7 @@ typedef struct
     uint8_t start_step;
     int8_t start_mictim;
     uint64_t start_sample;
-    uint64_t start_sample_quantized;
+    uint64_t start_sample_effective;
     uint32_t occurrence_id;
 } seq_live_rec_session_pending_note_t;
 
@@ -114,72 +114,6 @@ static uint8_t seq_live_rec_session_track_accepts_source(seq_track_id_t track,
 
     return ((track_source == TRACK_RUNTIME_MIDI_SOURCE_EXTERNAL)
             || (track_source == TRACK_RUNTIME_MIDI_SOURCE_ALL)) ? 1U : 0U;
-}
-
-static uint64_t seq_live_rec_session_mictim_positive_offset_q16(int8_t mictim,
-                                                                uint32_t samples_per_step_q16)
-{
-    if ((mictim <= 0) || (samples_per_step_q16 == 0U))
-    {
-        return 0U;
-    }
-
-    return ((uint64_t)(uint32_t)mictim * (uint64_t)samples_per_step_q16) / 96ULL;
-}
-
-static uint64_t seq_live_rec_session_compute_quantized_on_sample(seq_step_id_t current_step,
-                                                                  seq_step_id_t write_step,
-                                                                  int8_t mictim,
-                                                                  uint32_t samples_per_step_q16,
-                                                                  uint64_t step_sample_q16)
-{
-    const uint32_t sps_q16 = (samples_per_step_q16 == 0U) ? 1U : samples_per_step_q16;
-    uint64_t write_step_sample_q16 = step_sample_q16;
-    if (write_step != current_step)
-    {
-        write_step_sample_q16 += (uint64_t)sps_q16;
-    }
-
-    write_step_sample_q16 += seq_live_rec_session_mictim_positive_offset_q16(mictim, sps_q16);
-    return write_step_sample_q16 >> 16;
-}
-
-static int8_t seq_live_rec_session_apply_track_quant(seq_track_id_t track,
-                                                     int8_t mictim)
-{
-    uint8_t quant = 0U;
-    (void)seq_runtime_get_track_quant(track, &quant);
-    if (quant == 0U)
-    {
-        return mictim;
-    }
-    if (quant >= 100U)
-    {
-        return 0;
-    }
-    return (int8_t)(((int32_t)mictim * (int32_t)(100U - quant)) / 100);
-}
-
-static uint64_t seq_live_rec_session_compute_recorded_sample(seq_track_id_t track,
-                                                             seq_step_id_t current_step,
-                                                             seq_step_id_t write_step,
-                                                             int8_t mictim,
-                                                             const seq_runtime_state_t *runtime_state,
-                                                             uint64_t effective_sample)
-{
-    uint8_t quant = 0U;
-    (void)seq_runtime_get_track_quant(track, &quant);
-    if (quant == 0U)
-    {
-        return effective_sample;
-    }
-
-    return seq_live_rec_session_compute_quantized_on_sample(
-        current_step,
-        write_step,
-        seq_live_rec_session_apply_track_quant(track, mictim),
-        runtime_state->samples_per_step_q16,
-        runtime_state->step_sample_q16);
 }
 
 static void seq_live_rec_session_compute_step_and_mictim(seq_track_id_t track,
@@ -373,7 +307,7 @@ static void seq_live_rec_session_finalize_pending(seq_live_rec_session_pending_n
         return;
     }
 
-    const uint64_t effective_start_sample = pending->start_sample_quantized;
+    const uint64_t effective_start_sample = pending->start_sample_effective;
     const uint64_t effective_stop_sample = (stop_sample >= effective_start_sample)
                                              ? stop_sample : effective_start_sample;
     const uint64_t duration_samples = (effective_stop_sample >= effective_start_sample)
@@ -1050,8 +984,6 @@ void seq_live_rec_session_live_rec_note_on(seq_live_rec_source_t source,
         const param_id_t vel_param = seq_live_rec_session_play_param_vel((uint8_t)voice);
         const param_id_t len_param = seq_live_rec_session_play_param_len((uint8_t)voice);
         const param_id_t mictim_param = seq_live_rec_session_play_param_mictim((uint8_t)voice);
-        const int8_t recorded_mictim = seq_live_rec_session_apply_track_quant(track, mictim);
-
         seq_live_rec_session_saved_param_t saved_note;
         seq_live_rec_session_saved_param_t saved_vel;
         seq_live_rec_session_saved_param_t saved_len;
@@ -1074,7 +1006,7 @@ void seq_live_rec_session_live_rec_note_on(seq_live_rec_source_t source,
         const uint8_t micro_ok = seq_live_rec_session_upsert_play_param(track,
                                                                          write_step,
                                                                          mictim_param,
-                                                                         (float)recorded_mictim);
+                                                                         (float)mictim);
         if ((note_ok == 0U) || (vel_ok == 0U) || (micro_ok == 0U))
         {
             (void)seq_live_rec_session_restore_play_param(track, write_step, note_param, &saved_note);
@@ -1096,13 +1028,7 @@ void seq_live_rec_session_live_rec_note_on(seq_live_rec_source_t source,
         g_seq_live_rec_pending[pending_slot].start_step = step;
         g_seq_live_rec_pending[pending_slot].start_mictim = mictim;
         g_seq_live_rec_pending[pending_slot].start_sample = now_sample;
-        g_seq_live_rec_pending[pending_slot].start_sample_quantized =
-                seq_live_rec_session_compute_recorded_sample(track,
-                                                              step,
-                                                              write_step,
-                                                              mictim,
-                                                              runtime_state,
-                                                              now_sample);
+        g_seq_live_rec_pending[pending_slot].start_sample_effective = now_sample;
         g_seq_live_rec_pending[pending_slot].occurrence_id = occurrence_id;
     }
 }
@@ -1142,23 +1068,8 @@ void seq_live_rec_session_live_rec_note_off(seq_live_rec_source_t source,
             continue;
         }
 
-        seq_step_id_t stop_step = runtime_state->play_step[track];
-        int8_t stop_mictim = 0;
-        seq_live_rec_session_compute_step_and_mictim(track,
-                                                     &stop_step,
-                                                     &stop_mictim,
-                                                     runtime_state->samples_per_step_q16,
-                                                     runtime_state->step_sample_q16,
-                                                     now_sample);
-        const uint64_t recorded_stop_sample =
-            seq_live_rec_session_compute_recorded_sample(track,
-                                                          runtime_state->play_step[track],
-                                                          stop_step,
-                                                          stop_mictim,
-                                                          runtime_state,
-                                                          now_sample);
         seq_live_rec_session_finalize_slot((int32_t)pending_index,
-                                           recorded_stop_sample,
+                                           now_sample,
                                            runtime_state->samples_per_step_q16);
     }
 }

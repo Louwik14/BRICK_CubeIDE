@@ -5,7 +5,6 @@
 #include <string.h>
 
 #include "Sampler/sample_page_cache.h"
-#include "Sampler/sample_stream_admission.h"
 #include "Sampler/sample_stream_io.h"
 #include "Sampler/sample_stream_publish.h"
 #include "Sampler/sample_stream_scheduler.h"
@@ -70,7 +69,6 @@ void sample_stream_manager_reset(void)
            sizeof(g_sample_stream_manager_pending_io));
     g_sample_stream_manager_pending_count = 0U;
     sample_stream_scheduler_init();
-    sample_stream_admission_init(0);
     sample_stream_needs_registry_reset();
     sample_stream_snapshot_registry_reset();
 }

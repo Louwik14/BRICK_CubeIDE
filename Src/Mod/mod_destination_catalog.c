@@ -8,6 +8,7 @@
 
 #include "Audio/audio_xfade.h"
 #include "Audio/drum_synth.h"
+#include "Audio/md_model.h"
 #include "Core/brick6_braids_runtime.h"
 #include "Core/brick6_fm_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
@@ -23,6 +24,7 @@
 #include "Param/param_registry.h"
 #include "Param/param_registry_backends.h"
 #include "Param/param_prism_labels.h"
+#include "Param/param_stack_labels.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_env3.h"
 #include "Seq/seq_types.h"
@@ -44,6 +46,9 @@ typedef struct
     uint8_t rt_mix_track_id;
     uint8_t audio_fx_model_a;
     uint8_t audio_fx_model_b;
+    uint8_t prism_model[2];
+    uint8_t stack_model[BRICK6_STACK_SLOT_COUNT];
+    uint8_t drum_md_slot_count;
     uint16_t count;
     param_id_t index_to_param[PARAM_COUNT + 1U];
     uint16_t param_to_index[PARAM_COUNT];
@@ -232,7 +237,7 @@ static uint8_t mod_destination_is_direct_sampler(param_id_t dest)
     {
         case PARAM_SAMPLER_GAIN:
         case PARAM_SAMPLER_START:
-        case PARAM_SAMPLER_END:
+        case PARAM_SAMPLER_LENGTH:
         case PARAM_SAMPLER_LOOP_START:
         case PARAM_SAMPLER_MODE:
         case PARAM_SAMPLER_TUNE:
@@ -286,6 +291,7 @@ static uint8_t mod_destination_is_direct_prism(param_id_t dest)
         case PARAM_PRISM_OSC1_PARAM2:
         case PARAM_PRISM_BALANCE:
         case PARAM_PRISM_DETUNE:
+        case PARAM_PRISM_DRIFT:
         case PARAM_PRISM_PITCH_MOD2:
         case PARAM_PRISM_OSC2_PARAM1:
         case PARAM_PRISM_OSC2_AMOD:
@@ -325,6 +331,10 @@ static uint8_t mod_destination_is_direct_wave(param_id_t dest)
     {
         case PARAM_WAVE_OSC1_POS:
         case PARAM_WAVE_OSC2_POS:
+        case PARAM_WAVE_OSC1_START:
+        case PARAM_WAVE_OSC2_START:
+        case PARAM_WAVE_OSC1_LEN:
+        case PARAM_WAVE_OSC2_LEN:
         case PARAM_WAVE_VOLUME:
         case PARAM_WAVE_BALANCE:
         case PARAM_WAVE_TUNE:
@@ -551,9 +561,9 @@ static uint8_t mod_destination_apply_sampler_rt(uint8_t track,
             if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_RAM) { return 0U; }
             brick6_sampler_runtime_set_start(track, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
-        case PARAM_SAMPLER_END:
+        case PARAM_SAMPLER_LENGTH:
             if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_RAM) { return 0U; }
-            brick6_sampler_runtime_set_end(track, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_sampler_runtime_set_length(track, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_SAMPLER_LOOP_START:
             if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_RAM) { return 0U; }
@@ -645,6 +655,9 @@ static uint8_t mod_destination_apply_prism_rt(uint8_t track,
         case PARAM_PRISM_DETUNE:
             brick6_braids_runtime_set_detune(ctx->audio_binding.instance_id, mod_destination_clampf(value, -24.0f, 24.0f));
             return 1U;
+        case PARAM_PRISM_DRIFT:
+            brick6_braids_runtime_set_drift(ctx->audio_binding.instance_id, mod_destination_clampf(value, 0.0f, 1.0f));
+            return 1U;
         case PARAM_PRISM_PITCH_MOD1:
             brick6_braids_runtime_set_osc_pitch_mod(ctx->audio_binding.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
@@ -714,63 +727,6 @@ static uint8_t mod_destination_stack_slot_for_id(param_id_t id, uint8_t *out_slo
     }
 
     return 0U;
-}
-
-static const char *mod_destination_stack_model_label(uint8_t model, uint8_t slot_param)
-{
-    switch (slot_param)
-    {
-        case 3U:
-            switch ((brick6_stack_model_t)model)
-            {
-                case BRICK6_STACK_MODEL_SHAPE: return "SHAPE";
-                case BRICK6_STACK_MODEL_TRIPLE_SAW: return "OSC2";
-                case BRICK6_STACK_MODEL_SQUARE: return "PWM";
-                default: return NULL;
-            }
-        case 4U:
-            switch ((brick6_stack_model_t)model)
-            {
-                case BRICK6_STACK_MODEL_SHAPE: return "MORPH";
-                case BRICK6_STACK_MODEL_TRIPLE_SAW: return "OSC3";
-                default: return NULL;
-            }
-        default:
-            return NULL;
-    }
-}
-
-static uint8_t mod_destination_stack_label_for_track_param(uint8_t track, param_id_t dest, const char **out_label)
-{
-    if (out_label == NULL)
-    {
-        return 0U;
-    }
-
-    uint8_t slot = 0U;
-    uint8_t slot_param = 0U;
-    if ((mod_destination_stack_slot_for_id(dest, &slot, &slot_param) == 0U)
-            || (slot >= BRICK6_STACK_SLOT_COUNT)
-            || (slot_param < 3U)
-            || (slot_param > 4U))
-    {
-        return 0U;
-    }
-
-    const track_tone_sound_state_t *const tone = track_tone_sound_state_get_const(track);
-    if (tone == NULL)
-    {
-        return 0U;
-    }
-
-    uint8_t model = (uint8_t)(tone->stack.model[slot] + 0.5f);
-    if (model >= (uint8_t)BRICK6_STACK_MODEL_COUNT)
-    {
-        model = (uint8_t)BRICK6_STACK_MODEL_SHAPE;
-    }
-
-    *out_label = mod_destination_stack_model_label(model, slot_param);
-    return (*out_label != NULL) ? 1U : 0U;
 }
 
 static uint8_t mod_destination_apply_stack_rt(uint8_t track,
@@ -846,6 +802,18 @@ static uint8_t mod_destination_apply_wave_rt(uint8_t track,
             return 1U;
         case PARAM_WAVE_OSC2_POS:
             brick6_wave_runtime_set_osc_pos(ctx->audio_binding.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
+            return 1U;
+        case PARAM_WAVE_OSC1_START:
+            brick6_wave_runtime_set_osc_start(ctx->audio_binding.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
+            return 1U;
+        case PARAM_WAVE_OSC2_START:
+            brick6_wave_runtime_set_osc_start(ctx->audio_binding.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
+            return 1U;
+        case PARAM_WAVE_OSC1_LEN:
+            brick6_wave_runtime_set_osc_len(ctx->audio_binding.instance_id, 0U, mod_destination_clampf(value, 0.01f, 1.0f));
+            return 1U;
+        case PARAM_WAVE_OSC2_LEN:
+            brick6_wave_runtime_set_osc_len(ctx->audio_binding.instance_id, 1U, mod_destination_clampf(value, 0.01f, 1.0f));
             return 1U;
         case PARAM_WAVE_VOLUME:
             brick6_wave_runtime_set_volume(ctx->audio_binding.instance_id, mod_destination_clampf(value, 0.0f, 1.0f));
@@ -995,12 +963,13 @@ static uint8_t mod_destination_prepared_opcode(param_id_t dest,
             break;
         case PARAM_SAMPLER_GAIN: opcode = MOD_DEST_APPLY_SAMPLER_GAIN; break;
         case PARAM_SAMPLER_START: opcode = MOD_DEST_APPLY_SAMPLER_START; break;
-        case PARAM_SAMPLER_END: opcode = MOD_DEST_APPLY_SAMPLER_END; break;
+        case PARAM_SAMPLER_LENGTH: opcode = MOD_DEST_APPLY_SAMPLER_LENGTH; break;
         case PARAM_SAMPLER_LOOP_START: opcode = MOD_DEST_APPLY_SAMPLER_LOOP_START; break;
         case PARAM_SAMPLER_TUNE: opcode = MOD_DEST_APPLY_SAMPLER_TUNE; break;
         case PARAM_LOOPER_XFADE: opcode = MOD_DEST_APPLY_LOOPER_XFADE; break;
         case PARAM_PRISM_TUNE: opcode = MOD_DEST_APPLY_PRISM_TUNE; break;
         case PARAM_PRISM_DETUNE: opcode = MOD_DEST_APPLY_PRISM_DETUNE; break;
+        case PARAM_PRISM_DRIFT: opcode = MOD_DEST_APPLY_PRISM_DRIFT; break;
         case PARAM_PRISM_BALANCE: opcode = MOD_DEST_APPLY_PRISM_BALANCE; break;
         case PARAM_PRISM_PITCH_MOD1: case PARAM_PRISM_PITCH_MOD2:
             opcode = MOD_DEST_APPLY_PRISM_PITCH_MOD; subindex = (dest == PARAM_PRISM_PITCH_MOD2); break;
@@ -1023,6 +992,10 @@ static uint8_t mod_destination_prepared_opcode(param_id_t dest,
         case PARAM_STACK_NOISE_LEVEL: opcode = MOD_DEST_APPLY_STACK_NOISE; break;
         case PARAM_WAVE_OSC1_POS: case PARAM_WAVE_OSC2_POS:
             opcode = MOD_DEST_APPLY_WAVE_POSITION; subindex = (dest == PARAM_WAVE_OSC2_POS); break;
+        case PARAM_WAVE_OSC1_START: case PARAM_WAVE_OSC2_START:
+            opcode = MOD_DEST_APPLY_WAVE_START; subindex = (dest == PARAM_WAVE_OSC2_START); break;
+        case PARAM_WAVE_OSC1_LEN: case PARAM_WAVE_OSC2_LEN:
+            opcode = MOD_DEST_APPLY_WAVE_LENGTH; subindex = (dest == PARAM_WAVE_OSC2_LEN); break;
         case PARAM_WAVE_VOLUME: opcode = MOD_DEST_APPLY_WAVE_VOLUME; break;
         case PARAM_WAVE_BALANCE: opcode = MOD_DEST_APPLY_WAVE_BALANCE; break;
         case PARAM_WAVE_TUNE: opcode = MOD_DEST_APPLY_WAVE_TUNE; break;
@@ -1150,12 +1123,13 @@ uint8_t mod_destination_catalog_apply_prepared(
             else brick6_sampler_runtime_set_gain(p->target, mod_destination_clampf(value, 0.0f, 2.0f));
             return 1U;
         case MOD_DEST_APPLY_SAMPLER_START: brick6_sampler_runtime_set_start(p->target, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
-        case MOD_DEST_APPLY_SAMPLER_END: brick6_sampler_runtime_set_end(p->target, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_SAMPLER_LENGTH: brick6_sampler_runtime_set_length(p->target, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_SAMPLER_LOOP_START: brick6_sampler_runtime_set_loop_start(p->target, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_SAMPLER_TUNE: brick6_sampler_runtime_set_tune(p->target, mod_destination_clampf(value, -24.0f, 24.0f)); return 1U;
         case MOD_DEST_APPLY_LOOPER_XFADE: audio_xfade_set(mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_PRISM_TUNE: brick6_braids_runtime_set_tune(p->endpoint, mod_destination_clampf(value, -60.0f, 60.0f)); return 1U;
         case MOD_DEST_APPLY_PRISM_DETUNE: brick6_braids_runtime_set_detune(p->endpoint, mod_destination_clampf(value, -24.0f, 24.0f)); return 1U;
+        case MOD_DEST_APPLY_PRISM_DRIFT: brick6_braids_runtime_set_drift(p->endpoint, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_PRISM_PITCH_MOD: brick6_braids_runtime_set_osc_pitch_mod(p->endpoint, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_PRISM_TIMBRE: brick6_braids_runtime_set_osc_timbre(p->endpoint, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_PRISM_MODULATION: brick6_braids_runtime_set_osc_modulation(p->endpoint, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
@@ -1182,6 +1156,8 @@ uint8_t mod_destination_catalog_apply_prepared(
         case MOD_DEST_APPLY_STACK_COLOR: brick6_stack_runtime_set_slot_color(p->endpoint, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_STACK_NOISE: brick6_stack_runtime_set_noise_level(p->endpoint, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_WAVE_POSITION: brick6_wave_runtime_set_osc_pos(p->endpoint, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_WAVE_START: brick6_wave_runtime_set_osc_start(p->endpoint, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_WAVE_LENGTH: brick6_wave_runtime_set_osc_len(p->endpoint, p->subindex, mod_destination_clampf(value, 0.01f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_WAVE_VOLUME: brick6_wave_runtime_set_volume(p->endpoint, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_WAVE_BALANCE: brick6_wave_runtime_set_balance(p->endpoint, mod_destination_clampf(value, -1.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_WAVE_TUNE: brick6_wave_runtime_set_tune(p->endpoint, mod_destination_clampf(value, -60.0f, 60.0f)); return 1U;
@@ -1288,6 +1264,7 @@ uint8_t mod_destination_catalog_apply_poly_prepared(
             return 1U;
         case MOD_DEST_APPLY_PRISM_TUNE: brick6_braids_runtime_set_tune(voice_slot, mod_destination_clampf(value, -60.0f, 60.0f)); return 1U;
         case MOD_DEST_APPLY_PRISM_DETUNE: brick6_braids_runtime_set_detune(voice_slot, mod_destination_clampf(value, -24.0f, 24.0f)); return 1U;
+        case MOD_DEST_APPLY_PRISM_DRIFT: brick6_braids_runtime_set_drift(voice_slot, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_PRISM_PITCH_MOD: brick6_braids_runtime_set_osc_pitch_mod(voice_slot, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_PRISM_TIMBRE: brick6_braids_runtime_set_osc_timbre(voice_slot, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_PRISM_MODULATION: brick6_braids_runtime_set_osc_modulation(voice_slot, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
@@ -1299,6 +1276,8 @@ uint8_t mod_destination_catalog_apply_poly_prepared(
         case MOD_DEST_APPLY_STACK_COLOR: brick6_stack_runtime_set_slot_color(voice_slot, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_STACK_NOISE: brick6_stack_runtime_set_noise_level(voice_slot, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_WAVE_POSITION: brick6_wave_runtime_set_osc_pos(voice_slot, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_WAVE_START: brick6_wave_runtime_set_osc_start(voice_slot, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_WAVE_LENGTH: brick6_wave_runtime_set_osc_len(voice_slot, p->subindex, mod_destination_clampf(value, 0.01f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_WAVE_VOLUME: brick6_wave_runtime_set_volume(voice_slot, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_WAVE_BALANCE: brick6_wave_runtime_set_balance(voice_slot, mod_destination_clampf(value, -1.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_WAVE_TUNE: brick6_wave_runtime_set_tune(voice_slot, mod_destination_clampf(value, -60.0f, 60.0f)); return 1U;
@@ -1523,6 +1502,7 @@ static uint8_t mod_destination_is_continuous_rampable(param_id_t dest)
         case PARAM_PRISM_TUNE:
         case PARAM_PRISM_BALANCE:
         case PARAM_PRISM_DETUNE:
+        case PARAM_PRISM_DRIFT:
         case PARAM_STACK_OSC1_LEVEL:
         case PARAM_STACK_OSC1_TUNE:
         case PARAM_STACK_OSC2_LEVEL:
@@ -1531,6 +1511,10 @@ static uint8_t mod_destination_is_continuous_rampable(param_id_t dest)
         case PARAM_STACK_OSC3_TUNE:
         case PARAM_WAVE_OSC1_POS:
         case PARAM_WAVE_OSC2_POS:
+        case PARAM_WAVE_OSC1_START:
+        case PARAM_WAVE_OSC2_START:
+        case PARAM_WAVE_OSC1_LEN:
+        case PARAM_WAVE_OSC2_LEN:
         case PARAM_WAVE_VOLUME:
         case PARAM_WAVE_BALANCE:
         case PARAM_WAVE_TUNE:
@@ -1550,6 +1534,7 @@ static uint8_t mod_destination_is_segment_rate(param_id_t dest)
         case PARAM_SAMPLER_TUNE:
         case PARAM_PRISM_TUNE:
         case PARAM_PRISM_DETUNE:
+        case PARAM_PRISM_DRIFT:
         case PARAM_STACK_OSC1_TUNE:
         case PARAM_STACK_OSC2_TUNE:
         case PARAM_STACK_OSC3_TUNE:
@@ -1633,6 +1618,17 @@ static uint8_t mod_destination_param_matches_track_context(uint8_t track,
         {
             return mod_destination_is_direct_fm(dest);
         }
+        if (((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_STACK)
+                && (param_stack_dynamic_param_info(dest, NULL, NULL) != 0U)
+                && (param_stack_param_is_active(track, dest) == 0U))
+        {
+            return 0U;
+        }
+        if (((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_PRISM)
+                && (param_prism_param_is_active(track, dest) == 0U))
+        {
+            return 0U;
+        }
         if ((dest == PARAM_LOOPER_ARM)
                 || (dest == PARAM_LOOPER_LEN)
                 || (dest == PARAM_LOOPER_PLAY)
@@ -1661,8 +1657,6 @@ static uint8_t mod_destination_param_matches_track_context(uint8_t track,
                 || (dest == PARAM_PRISM_VOLUME)
                 || (dest == PARAM_PRISM_PHASE1_RESET)
                 || (dest == PARAM_PRISM_OSC2_MODEL)
-                || (dest == PARAM_PRISM_DETUNE)
-                || (dest == PARAM_PRISM_PHASE2_RESET)
                 || (dest == PARAM_MIDI_PROGRAM)
                 || (dest == PARAM_STACK_OSC_DETUNE)
                 || (dest == PARAM_STACK_PHASE_RESET)
@@ -1916,6 +1910,8 @@ static uint8_t mod_destination_cache_matches_context(uint8_t track,
         ? state->audio_fx_model : AUDIO_FX_MODEL_OFF;
     const uint8_t audio_fx_model_b = (state != NULL)
         ? state->audio_fx_b_model : AUDIO_FX_MODEL_OFF;
+    const track_tone_sound_state_t *const tone =
+        track_tone_sound_state_get_const(track);
 
     return ((cache->ui_family == (uint8_t)family)
             && (cache->ui_type == (uint8_t)type)
@@ -1924,7 +1920,19 @@ static uint8_t mod_destination_cache_matches_context(uint8_t track,
             && (cache->rt_type == ctx_type)
             && (cache->rt_mix_track_id == ctx_mix_track_id)
             && (cache->audio_fx_model_a == audio_fx_model_a)
-            && (cache->audio_fx_model_b == audio_fx_model_b)) ? 1U : 0U;
+            && (cache->audio_fx_model_b == audio_fx_model_b)
+            && (cache->prism_model[0] == ((tone != NULL)
+                ? (uint8_t)(tone->prism.model[0] + 0.5f) : 0xFFU))
+            && (cache->prism_model[1] == ((tone != NULL)
+                ? (uint8_t)(tone->prism.model[1] + 0.5f) : 0xFFU))
+            && (cache->stack_model[0] == ((tone != NULL)
+                ? (uint8_t)(tone->stack.model[0] + 0.5f) : 0xFFU))
+            && (cache->stack_model[1] == ((tone != NULL)
+                ? (uint8_t)(tone->stack.model[1] + 0.5f) : 0xFFU))
+            && (cache->stack_model[2] == ((tone != NULL)
+                ? (uint8_t)(tone->stack.model[2] + 0.5f) : 0xFFU))
+            && (cache->drum_md_slot_count == ((tone != NULL)
+                ? track_tone_sound_state_md_slot_count(track) : 0U))) ? 1U : 0U;
 }
 
 static mod_destination_cache_t *mod_destination_cache_resolve(uint8_t track)
@@ -2013,6 +2021,20 @@ static mod_destination_cache_t *mod_destination_cache_resolve(uint8_t track)
         ? state->audio_fx_model : AUDIO_FX_MODEL_OFF;
     cache->audio_fx_model_b = (state != NULL)
         ? state->audio_fx_b_model : AUDIO_FX_MODEL_OFF;
+    const track_tone_sound_state_t *const tone =
+        track_tone_sound_state_get_const(track);
+    for (uint8_t osc = 0U; osc < 2U; ++osc)
+    {
+        cache->prism_model[osc] = (tone != NULL)
+            ? (uint8_t)(tone->prism.model[osc] + 0.5f) : 0xFFU;
+    }
+    for (uint8_t slot = 0U; slot < BRICK6_STACK_SLOT_COUNT; ++slot)
+    {
+        cache->stack_model[slot] = (tone != NULL)
+            ? (uint8_t)(tone->stack.model[slot] + 0.5f) : 0xFFU;
+    }
+    cache->drum_md_slot_count = (tone != NULL)
+        ? track_tone_sound_state_md_slot_count(track) : 0U;
     cache->valid = 1U;
 
     return cache;
@@ -2174,6 +2196,10 @@ static const char *mod_destination_wave_label_for_param(param_id_t dest)
     {
         case PARAM_WAVE_OSC1_POS: return "OSC1 POS";
         case PARAM_WAVE_OSC2_POS: return "OSC2 POS";
+        case PARAM_WAVE_OSC1_START: return "OSC1 START";
+        case PARAM_WAVE_OSC2_START: return "OSC2 START";
+        case PARAM_WAVE_OSC1_LEN: return "OSC1 LEN";
+        case PARAM_WAVE_OSC2_LEN: return "OSC2 LEN";
         case PARAM_WAVE_VOLUME: return "WAVE VOL";
         case PARAM_WAVE_BALANCE: return "WAVE BAL";
         case PARAM_WAVE_TUNE: return "WAVE TUNE";
@@ -2186,19 +2212,51 @@ static const char *mod_destination_prism_label_for_param(param_id_t dest)
 {
     switch (dest)
     {
-        case PARAM_PRISM_OSC1_PARAM1: return "OSC1 PARAM1";
-        case PARAM_PRISM_OSC1_PARAM2: return "OSC1 PARAM2";
         case PARAM_PRISM_OSC1_AMOD: return "OSC1 AMOD";
         case PARAM_PRISM_TUNE: return "PRISM TUNE";
         case PARAM_PRISM_PITCH_MOD1: return "OSC1 P.MOD";
         case PARAM_PRISM_BALANCE: return "PRISM BAL";
         case PARAM_PRISM_DETUNE: return "PRISM DETUNE";
-        case PARAM_PRISM_OSC2_PARAM1: return "OSC2 PARAM1";
-        case PARAM_PRISM_OSC2_PARAM2: return "OSC2 PARAM2";
+        case PARAM_PRISM_DRIFT: return "PRISM DRIFT";
         case PARAM_PRISM_OSC2_AMOD: return "OSC2 AMOD";
         case PARAM_PRISM_PITCH_MOD2: return "OSC2 P.MOD";
         default: return NULL;
     }
+}
+
+static uint8_t mod_destination_is_dynamic_prism_param(param_id_t dest)
+{
+    return (uint8_t)((dest == PARAM_PRISM_OSC1_PARAM1)
+        || (dest == PARAM_PRISM_OSC1_PARAM2)
+        || (dest == PARAM_PRISM_OSC2_PARAM1)
+        || (dest == PARAM_PRISM_OSC2_PARAM2));
+}
+
+static uint8_t mod_destination_md_label_for_track_param(
+    uint8_t track, param_id_t dest, const char **out_label)
+{
+    if ((out_label == NULL)
+            || (dest < PARAM_DRUM_MD_P1)
+            || (dest > PARAM_DRUM_MD_P8))
+    {
+        return 0U;
+    }
+    const track_tone_sound_state_t *const tone =
+        track_tone_sound_state_get_const(track);
+    if (tone == NULL)
+    {
+        return 0U;
+    }
+    const md_model_profile_t *const profile =
+        md_model_profile_get(md_model_validate(tone->md.model));
+    const uint8_t slot = (uint8_t)(dest - PARAM_DRUM_MD_P1);
+    if ((slot >= profile->slot_count)
+            || (profile->slot_labels[slot] == NULL))
+    {
+        return 0U;
+    }
+    *out_label = profile->slot_labels[slot];
+    return 1U;
 }
 
 uint8_t mod_destination_catalog_label(uint8_t track, uint16_t dest_index, char *out, uint32_t out_len)
@@ -2229,6 +2287,7 @@ uint8_t mod_destination_catalog_label(uint8_t track, uint16_t dest_index, char *
 
     const char *name = NULL;
     char audio_fx_name[24];
+    char prism_name[24];
     if (dest == PARAM_LFO1_RATE)
     {
         name = "lfo1rate";
@@ -2260,9 +2319,23 @@ uint8_t mod_destination_catalog_label(uint8_t track, uint16_t dest_index, char *
                            fx_param_name);
             name = audio_fx_name;
         }
+        else if ((mod_destination_is_dynamic_prism_param(dest) != 0U)
+                && (param_prism_label_for_track_param(
+                    target, dest, &name) != 0U))
+        {
+            const uint8_t osc2 = (uint8_t)((dest == PARAM_PRISM_OSC2_PARAM1)
+                || (dest == PARAM_PRISM_OSC2_PARAM2));
+            (void)snprintf(prism_name, sizeof(prism_name), "OSC%u %s",
+                           (unsigned int)osc2 + 1U, name);
+            name = prism_name;
+        }
+        else if (mod_destination_md_label_for_track_param(
+                    target, dest, &name) != 0U)
+        {
+        }
         else if ((name = mod_destination_prism_label_for_param(dest)) == NULL)
         {
-            if (mod_destination_stack_label_for_track_param(target, dest, &name) == 0U)
+            if (param_stack_label_for_track_param(target, dest, &name) == 0U)
             {
                 name = mod_destination_wave_label_for_param(dest);
                 if (name == NULL)
@@ -2341,12 +2414,6 @@ static const char *mod_destination_short_label_for_param(param_id_t dest)
         case PARAM_STACK_OSC1_TUNE:
         case PARAM_STACK_OSC2_TUNE:
         case PARAM_STACK_OSC3_TUNE: return "Tune";
-        case PARAM_STACK_OSC1_TIMBRE:
-        case PARAM_STACK_OSC2_TIMBRE:
-        case PARAM_STACK_OSC3_TIMBRE: return "Timb";
-        case PARAM_STACK_OSC1_COLOR:
-        case PARAM_STACK_OSC2_COLOR:
-        case PARAM_STACK_OSC3_COLOR: return "Col";
         case PARAM_PRISM_OSC1_PARAM1: return "O1P1";
         case PARAM_PRISM_OSC1_PARAM2: return "O1P2";
         case PARAM_PRISM_OSC1_AMOD: return "O1AM";
@@ -2354,12 +2421,17 @@ static const char *mod_destination_short_label_for_param(param_id_t dest)
         case PARAM_PRISM_PITCH_MOD1: return "O1PM";
         case PARAM_PRISM_BALANCE: return "Bal";
         case PARAM_PRISM_DETUNE: return "Detn";
+        case PARAM_PRISM_DRIFT: return "Drft";
         case PARAM_PRISM_OSC2_PARAM1: return "O2P1";
         case PARAM_PRISM_OSC2_PARAM2: return "O2P2";
         case PARAM_PRISM_OSC2_AMOD: return "O2AM";
         case PARAM_PRISM_PITCH_MOD2: return "O2PM";
         case PARAM_WAVE_OSC1_POS: return "O1Ps";
         case PARAM_WAVE_OSC2_POS: return "O2Ps";
+        case PARAM_WAVE_OSC1_START: return "O1St";
+        case PARAM_WAVE_OSC2_START: return "O2St";
+        case PARAM_WAVE_OSC1_LEN: return "O1Ln";
+        case PARAM_WAVE_OSC2_LEN: return "O2Ln";
         case PARAM_WAVE_VOLUME: return "Vol";
         case PARAM_WAVE_BALANCE: return "Bal";
         case PARAM_WAVE_TUNE: return "Tune";
@@ -2429,16 +2501,25 @@ uint8_t mod_destination_catalog_short_label(uint8_t track, uint16_t dest_index, 
                        (fx_slot != 0U) ? 'B' : 'A', fx_param_name);
         label = audio_fx_label;
     }
+    else if (param_stack_label_for_track_param(target, dest, &label) != 0U)
+    {
+    }
+    else if ((mod_destination_is_dynamic_prism_param(dest) != 0U)
+            && (param_prism_label_for_track_param(
+                target, dest, &label) != 0U))
+    {
+    }
+    else if (mod_destination_md_label_for_track_param(
+                target, dest, &label) != 0U)
+    {
+    }
     else
     {
         label = mod_destination_short_label_for_param(dest);
     }
     if (label == NULL)
     {
-        if (mod_destination_stack_label_for_track_param(target, dest, &label) == 0U)
-        {
-            (void)param_prism_label_for_track_param(target, dest, &label);
-        }
+        (void)param_prism_label_for_track_param(target, dest, &label);
     }
     if (label == NULL)
     {

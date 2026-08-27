@@ -1,0 +1,14 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/control_music_output.c:66:13:control_music_output_reset_window_buckets	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/control_music_output.c:283:13:control_music_output_mark_dead	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/control_music_output.c:426:15:control_music_output_find_oldest	12	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/control_music_output.c:334:16:control_music_output_is_multi	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/control_music_output.c:79:9:control_music_output_begin_window	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/control_music_output.c:106:10:control_music_output_first_unpublished_sample	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/control_music_output.c:112:6:control_music_output_abort_window	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/control_music_output.c:244:9:control_music_output_commit_window	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/control_music_output.c:182:16:control_music_output_publish_batch	280	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/control_music_output.c:298:9:control_music_output_register_death_observer	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/control_music_output.c:447:9:control_music_output_submit	336	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/control_music_output.c:587:9:control_music_output_close_entities	104	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/control_music_output.c:581:9:control_music_output_close_entity	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/control_music_output.c:687:6:control_music_output_panic_all	16	static

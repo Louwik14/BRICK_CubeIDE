@@ -33,5 +33,5 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_produc
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_product.c:459:9:project_product_load	800	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_product.c:483:9:project_product_delete	72	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_product.c:484:9:project_product_blank	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_product.c:485:9:project_product_restore_boot	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_product.c:486:9:project_product_get_progress	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_product.c:485:39:project_product_restore_boot	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/project_product.c:496:9:project_product_get_progress	16	static

@@ -1,6 +1,6 @@
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_clipboard.c:103:13:ui_core_clipboard_feedback	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_clipboard.c:165:16:ui_core_clipboard_collect_params_from_subpage	20	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_clipboard.c:526:16:ui_core_clipboard_clear_track	21144	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_clipboard.c:526:16:ui_core_clipboard_clear_track	21168	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_clipboard.c:601:16:ui_core_clipboard_copy_param_scope	56	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_clipboard.c:85:16:ui_core_clipboard_param_phase	24	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/ui_core_clipboard.c:370:16:ui_core_clipboard_bulk_add	40	static

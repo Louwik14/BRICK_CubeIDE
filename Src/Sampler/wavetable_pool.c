@@ -2438,8 +2438,8 @@ static void wavetable_pool_finalize_clear(uint16_t wavetable_slot)
     wavetable_pool_preview_clear(&g_wavetable_pool.slots[wavetable_slot].preview);
 }
 
-void wavetable_pool_audio_ack_retire(uint16_t wavetable_slot,
-                                     uint32_t generation)
+void wavetable_pool_control_ack_retire(uint16_t wavetable_slot,
+                                       uint32_t generation)
 {
     if (wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS) return;
     __DMB();

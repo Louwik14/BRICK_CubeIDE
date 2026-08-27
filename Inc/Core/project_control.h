@@ -60,5 +60,10 @@ uint8_t project_control_get_logical_asset(uint32_t kind,uint16_t logical,persist
 uint8_t project_control_resolve_sample_runtime(uint16_t logical,uint16_t*out_runtime_global,uint32_t*out_kind);
 uint8_t project_control_resolve_wavetable_runtime(uint16_t logical,uint16_t*out_runtime_global);
 uint8_t project_control_resolve_multi_runtime(uint16_t logical,uint16_t*out_runtime_instrument);
+/* CONTROL-side conversion of a logical sampler selector to the runtime
+ * backend identity consumed by AUDIO. */
+uint8_t project_control_resolve_audio_sampler_value(uint8_t track,
+                                                    float logical_value,
+                                                    float *out_runtime_value);
 
 #endif

@@ -2,7 +2,7 @@
 
 #include <string.h>
 
-#include "Sampler/sample_stream_admission.h"
+#include "Storage/memory_layout.h"
 
 typedef struct
 {
@@ -10,7 +10,7 @@ typedef struct
     sample_stream_snapshot_t value;
 } sample_stream_snapshot_slot_t;
 
-static sample_stream_snapshot_slot_t
+D2_IPC static sample_stream_snapshot_slot_t
     g_sample_stream_snapshot_slots[SAMPLE_STREAM_SNAPSHOT_CAPACITY];
 
 static uint8_t sample_stream_snapshot_slot_index(sample_stream_snapshot_source_t source,
@@ -81,17 +81,9 @@ uint8_t sample_stream_snapshot_publish(sample_stream_snapshot_source_t source,
         sequence++;
     }
     slot->sequence = sequence + 1U;
-    sample_stream_snapshot_t copy = *snapshot;
-    copy.source = (uint8_t)source;
-    copy.voice_id = voice_id;
-    if (sample_stream_admission_sync_snapshot(source, voice_id, &copy)
-        != SAMPLE_STREAM_ADMISSION_OK)
-    {
-        /* Keep the published slot readable when admission rejects a refresh. */
-        slot->sequence = sequence;
-        return 0U;
-    }
-    slot->value = copy;
+    slot->value = *snapshot;
+    slot->value.source = (uint8_t)source;
+    slot->value.voice_id = voice_id;
     slot->sequence = sequence + 2U;
     return 1U;
 }
