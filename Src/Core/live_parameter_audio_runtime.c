@@ -7,24 +7,8 @@
 #include "Param/param_registry.h"
 #include "Storage/memory_layout.h"
 
-#include <string.h>
-
 SEQ_STATE_D2 static float g_live_parameter_audio_poly_voices[SEQ_LANE_CAPACITY];
 SEQ_STATE_D2 static float g_live_parameter_audio_poly_spread[SEQ_LANE_CAPACITY];
-AUDIO_WARM static float
-    g_live_parameter_audio_track_value[SEQ_LANE_CAPACITY][PARAM_COUNT];
-AUDIO_WARM static uint32_t
-    g_live_parameter_audio_track_valid[SEQ_LANE_CAPACITY][(PARAM_COUNT + 31U) / 32U];
-
-static void live_parameter_audio_runtime_store(uint8_t entity,
-                                               param_id_t parameter,
-                                               float value)
-{
-    g_live_parameter_audio_track_value[entity][parameter] = value;
-    g_live_parameter_audio_track_valid[entity][parameter >> 5U] |=
-        (uint32_t)1U << (parameter & 31U);
-}
-
 static float live_parameter_audio_runtime_clamp(param_id_t parameter,
                                                 float value)
 {
@@ -53,31 +37,12 @@ static uint8_t live_parameter_audio_runtime_changes_matrix_context(param_id_t id
 
 void live_parameter_audio_runtime_init(void)
 {
-    memset(g_live_parameter_audio_track_value, 0,
-           sizeof(g_live_parameter_audio_track_value));
-    memset(g_live_parameter_audio_track_valid, 0,
-           sizeof(g_live_parameter_audio_track_valid));
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         g_live_parameter_audio_poly_voices[track] =
             param_registry[PARAM_CFG_POLY_VOICES].default_value;
         g_live_parameter_audio_poly_spread[track] =
             param_registry[PARAM_CFG_POLY_SPREAD].default_value;
-    }
-}
-
-void live_parameter_audio_runtime_initialize_program(uint8_t entity)
-{
-    if (entity >= SEQ_LANE_CAPACITY) return;
-    for (param_id_t id = 0U; id < PARAM_COUNT; ++id)
-    {
-        const uint32_t mask = (uint32_t)1U << (id & 31U);
-        if ((g_live_parameter_audio_track_valid[entity][id >> 5U] & mask) == 0U)
-            continue;
-        const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
-        if (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE) continue;
-        (void)param_registry_apply_track_value_audio(
-            id, entity, g_live_parameter_audio_track_value[entity][id]);
     }
 }
 
@@ -105,7 +70,6 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
 
     const float value = live_parameter_audio_runtime_clamp(
         (param_id_t)parameter_id, decoded);
-    live_parameter_audio_runtime_store(entity, (param_id_t)parameter_id, value);
     if ((parameter_id >= PARAM_MOD_MULTI_1_A)
             && (parameter_id <= PARAM_MOD_SLEW_2_AMOUNT))
         return audio_mod_matrix_apply_param(entity, UINT8_MAX,
