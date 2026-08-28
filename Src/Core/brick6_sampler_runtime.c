@@ -3100,6 +3100,18 @@ static void brick6_sampler_runtime_reset_track_internal(uint8_t track_id,
         return;
     }
 
+    /* These fields are track PARAM state, not renderer/voice state.  Keep the
+     * sole authoritative values while replacing the disposable reader. */
+    const uint16_t sample_id = g_sampler_voice[track_id].sample_id;
+    const float gain = g_sampler_voice[track_id].gain;
+    const float start = g_sampler_voice[track_id].start;
+    const float length = g_sampler_voice[track_id].length;
+    const float loop_start = g_sampler_voice[track_id].loop_start;
+    const float tune = g_sampler_voice[track_id].tune;
+    const uint8_t mode = g_sampler_voice[track_id].mode;
+    const uint8_t slice_count = g_sampler_voice[track_id].slice_count;
+    const uint8_t loop_mode = g_sampler_voice[track_id].loop_mode;
+
     if (renderer_replace == 0U)
         brick6_sampler_runtime_begin_declick_tail(track_id,
                                                   &g_sampler_voice[track_id]);
@@ -3135,8 +3147,23 @@ static void brick6_sampler_runtime_reset_track_internal(uint8_t track_id,
     g_sampler_voice[track_id].loop_begin = 0U;
     g_sampler_voice[track_id].slice_count = 0U;
     g_sampler_voice[track_id].release_pending = 0U;
-    brick6_sampler_runtime_multi_track_reset(track_id);
-    brick6_sampler_runtime_clip_reset(track_id);
+    if (renderer_replace == 0U)
+    {
+        brick6_sampler_runtime_multi_track_reset(track_id);
+        brick6_sampler_runtime_clip_reset(track_id);
+    }
+    else
+    {
+        g_sampler_voice[track_id].sample_id = sample_id;
+        g_sampler_voice[track_id].gain = gain;
+        g_sampler_voice[track_id].start = start;
+        g_sampler_voice[track_id].length = length;
+        g_sampler_voice[track_id].loop_start = loop_start;
+        g_sampler_voice[track_id].tune = tune;
+        g_sampler_voice[track_id].mode = mode;
+        g_sampler_voice[track_id].slice_count = slice_count;
+        g_sampler_voice[track_id].loop_mode = loop_mode;
+    }
     brick6_sampler_runtime_refresh_track_activity(track_id);
 }
 

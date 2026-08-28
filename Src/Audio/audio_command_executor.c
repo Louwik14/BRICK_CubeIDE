@@ -106,7 +106,6 @@ static uint8_t audio_command_apply_program(const control_audio_command_t *comman
     }
     if (audio_note_engine_adapter_install_prepared(&spec) == 0U)
         return 0U;
-    live_parameter_audio_runtime_initialize_program(command->entity);
     return (keep_notes != 0U)
         ? audio_note_engine_adapter_initialize_held_outputs(command->entity)
         : 1U;
