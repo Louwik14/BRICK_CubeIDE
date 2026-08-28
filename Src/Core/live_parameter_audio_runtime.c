@@ -133,8 +133,6 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
         if (live_parameter_audio_runtime_changes_matrix_context(
                 (param_id_t)parameter_id) != 0U)
         {
-            audio_mod_matrix_update_context_param(entity,
-                (param_id_t)parameter_id, value);
             audio_mod_matrix_rebuild_track(entity);
         }
     }

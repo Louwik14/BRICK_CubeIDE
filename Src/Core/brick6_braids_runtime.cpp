@@ -430,6 +430,13 @@ void brick6_braids_runtime_set_osc_edit(uint8_t instance_id, uint8_t osc_index, 
     }
 }
 
+uint8_t brick6_braids_runtime_get_osc_model(uint8_t instance_id, uint8_t osc_index)
+{
+    brick6_braids_runtime_osc_t *const osc =
+        brick6_braids_runtime_get_osc_mut(instance_id, osc_index);
+    return (osc != NULL) ? (uint8_t)(osc->voice.edit + 0.5f) : 0U;
+}
+
 void brick6_braids_runtime_set_osc_pitch_mod(uint8_t instance_id, uint8_t osc_index, float amount)
 {
     brick6_braids_runtime_osc_t *const osc = brick6_braids_runtime_get_osc_mut(instance_id, osc_index);

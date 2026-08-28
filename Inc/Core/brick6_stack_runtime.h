@@ -81,6 +81,7 @@ void brick6_stack_runtime_reset_instance(uint8_t instance_id);
 
 void brick6_stack_runtime_set_slot_level(uint8_t instance_id, uint8_t slot, float level);
 void brick6_stack_runtime_set_slot_model(uint8_t instance_id, uint8_t slot, brick6_stack_model_t model);
+brick6_stack_model_t brick6_stack_runtime_get_slot_model(uint8_t instance_id, uint8_t slot);
 void brick6_stack_runtime_set_slot_tune(uint8_t instance_id, uint8_t slot, float semitones);
 void brick6_stack_runtime_set_slot_timbre(uint8_t instance_id, uint8_t slot, float timbre);
 void brick6_stack_runtime_set_slot_color(uint8_t instance_id, uint8_t slot, float color);

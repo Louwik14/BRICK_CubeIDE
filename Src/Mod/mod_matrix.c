@@ -5,6 +5,8 @@
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/drum_synth.h"
 #include "Audio/md_model.h"
+#include "Core/brick6_braids_runtime.h"
+#include "Core/brick6_stack_runtime.h"
 #include <string.h>
 
 #include "Audio/mixer.h"
@@ -107,7 +109,6 @@ typedef struct
     uint8_t multi_source[2][2];
     uint8_t slew_source[2];
     float slew_amount[2];
-    mod_destination_audio_models_t models;
 } mod_matrix_audio_state_t;
 
 static mod_matrix_runtime_track_t g_mod_matrix_runtime[SEQ_TRACK_COUNT];
@@ -155,6 +156,30 @@ static uint8_t mod_matrix_audio_resolve_owner(uint8_t track, uint8_t *out_owner)
                 && ((ctx.flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER) != 0U))
         { *out_owner = entity; return 1U; }
     return 0U;
+}
+
+/* Read the model authorities that the AUDIO engines actually execute.  This is
+ * a short-lived projection used while building a Matrix plan, never Matrix
+ * state. */
+static void mod_matrix_audio_read_models(
+    uint8_t track, const track_audio_runtime_ctx_t *ctx,
+    mod_destination_audio_models_t *out)
+{
+    memset(out, 0, sizeof(*out));
+    out->audio_fx_model[0] = audio_fx_runtime_get_model(track, AUDIO_FX_SLOT_A);
+    out->audio_fx_model[1] = audio_fx_runtime_get_model(track, AUDIO_FX_SLOT_B);
+    if ((ctx == NULL) || (ctx->program_route.active == 0U)) return;
+    const uint8_t instance = ctx->program_route.instance_id;
+    if (ctx->program_route.engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
+        for (uint8_t osc = 0U; osc < 2U; ++osc)
+            out->prism_model[osc] = brick6_braids_runtime_get_osc_model(instance, osc);
+    else if (ctx->program_route.engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
+        for (uint8_t slot = 0U; slot < 3U; ++slot)
+            out->stack_model[slot] = (uint8_t)brick6_stack_runtime_get_slot_model(instance, slot);
+    else if (ctx->program_route.engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM
+             && ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_DRUM_MD)
+        out->drum_md_slot_count = md_model_profile_get(
+            drum_synth_get_md_model_for_instance(instance))->slot_count;
 }
 
 
@@ -375,11 +400,13 @@ static uint8_t mod_matrix_slot_is_effective(uint8_t track,
     const track_audio_runtime_ctx_t *const target_ctx =
         (audio_note_engine_adapter_current_ctx(
             target, &target_ctx_value) != 0U) ? &target_ctx_value : NULL;
+    mod_destination_audio_models_t models;
+    mod_matrix_audio_read_models(target, target_ctx, &models);
     return mod_destination_catalog_supported_audio(
         target, destination,
         mod_matrix_ui_family_from_ctx(target_ctx),
         mod_matrix_ui_type_from_ctx(target_ctx), target_ctx,
-        &g_mod_matrix_audio_state[target].models);
+        &models);
 }
 
 static void mod_matrix_release_destination(mod_matrix_runtime_destination_t *dst)
@@ -461,9 +488,11 @@ static uint8_t mod_matrix_runtime_destination_prepare(uint8_t track,
         (audio_note_engine_adapter_current_ctx(
             target, &target_ctx_value) != 0U) ? &target_ctx_value : NULL;
     mod_destination_prepared_t prepared;
+    mod_destination_audio_models_t models;
+    mod_matrix_audio_read_models(target, target_ctx, &models);
     if ((target_ctx == NULL)
             || (mod_destination_catalog_prepare(target, param, target_ctx,
-                                                &g_mod_matrix_audio_state[target].models,
+                                                &models,
                                                 &prepared) == 0U))
         return 0U;
     if (dst == NULL)
@@ -699,20 +728,6 @@ void audio_mod_matrix_init(void)
             param_registry[PARAM_MOD_SLEW_1_AMOUNT].default_value;
         g_mod_matrix_audio_state[track].slew_amount[1] =
             param_registry[PARAM_MOD_SLEW_2_AMOUNT].default_value;
-        g_mod_matrix_audio_state[track].models.audio_fx_model[0] =
-            (uint8_t)param_registry[PARAM_AUDIO_FX_MODEL].default_value;
-        g_mod_matrix_audio_state[track].models.audio_fx_model[1] =
-            (uint8_t)param_registry[PARAM_AUDIO_FX_B_MODEL].default_value;
-        g_mod_matrix_audio_state[track].models.prism_model[0] =
-            (uint8_t)param_registry[PARAM_PRISM_OSC1_MODEL].default_value;
-        g_mod_matrix_audio_state[track].models.prism_model[1] =
-            (uint8_t)param_registry[PARAM_PRISM_OSC2_MODEL].default_value;
-        g_mod_matrix_audio_state[track].models.stack_model[0] =
-            (uint8_t)param_registry[PARAM_STACK_OSC1_MODEL].default_value;
-        g_mod_matrix_audio_state[track].models.stack_model[1] =
-            (uint8_t)param_registry[PARAM_STACK_OSC2_MODEL].default_value;
-        g_mod_matrix_audio_state[track].models.stack_model[2] =
-            (uint8_t)param_registry[PARAM_STACK_OSC3_MODEL].default_value;
         for (uint8_t i = 0U; i < MOD_MATRIX_SLOT_COUNT; ++i)
         {
             g_mod_matrix_runtime[track].destinations[i].destination = (uint16_t)MOD_DESTINATION_NONE;
@@ -720,22 +735,6 @@ void audio_mod_matrix_init(void)
         }
     }
     audio_mod_destination_catalog_reset_runtime();
-}
-
-void audio_mod_matrix_update_context_param(uint8_t track, param_id_t id,
-                                           float value)
-{
-    if (track >= SEQ_TRACK_COUNT) return;
-    mod_destination_audio_models_t *const models =
-        &g_mod_matrix_audio_state[track].models;
-    const uint8_t model = (uint8_t)(value + 0.5f);
-    if (id == PARAM_AUDIO_FX_MODEL) models->audio_fx_model[0] = model;
-    else if (id == PARAM_AUDIO_FX_B_MODEL) models->audio_fx_model[1] = model;
-    else if (id == PARAM_PRISM_OSC1_MODEL) models->prism_model[0] = model;
-    else if (id == PARAM_PRISM_OSC2_MODEL) models->prism_model[1] = model;
-    else if (id == PARAM_STACK_OSC1_MODEL) models->stack_model[0] = model;
-    else if (id == PARAM_STACK_OSC2_MODEL) models->stack_model[1] = model;
-    else if (id == PARAM_STACK_OSC3_MODEL) models->stack_model[2] = model;
 }
 
 static uint16_t mod_matrix_required_mask_expand(uint8_t track,
@@ -1071,8 +1070,6 @@ void audio_mod_matrix_finalize_dirty(void)
             config->drum_md_slot_count = md_model_profile_get(
                 drum_synth_get_md_model_for_instance(
                     ctx.program_route.instance_id))->slot_count;
-        g_mod_matrix_audio_state[track].models.drum_md_slot_count =
-            config->drum_md_slot_count;
         mod_matrix_audio_rebuild_route_cache_track(track);
     }
 }

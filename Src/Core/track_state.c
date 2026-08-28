@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "Core/track_input_ownership.h"
+#include "Core/track_runtime.h"
 #include "UI/ui_track_catalog.h"
 
 static ui_track_config_t g_track_configs[TRACK_CONFIG_CAPACITY];
@@ -451,6 +452,20 @@ bool track_state_apply_entity_bulk_with_inputs(
     }
 
 
+    return true;
+}
+
+bool track_structure_apply_entity_bulk_with_inputs(
+    const uint8_t family[BRICK_ENTITY_CAPACITY],
+    const uint8_t type[BRICK_ENTITY_CAPACITY],
+    const uint8_t midi_channel[BRICK_ENTITY_CAPACITY],
+    const uint8_t midi_source[BRICK_ENTITY_CAPACITY],
+    const uint8_t external_input[UI_TRACK_COUNT])
+{
+    if (!track_state_apply_entity_bulk_with_inputs(
+            family, type, midi_channel, midi_source, external_input))
+        return false;
+    track_runtime_rebuild_all();
     return true;
 }
 

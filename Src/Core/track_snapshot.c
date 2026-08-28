@@ -127,16 +127,15 @@ static uint8_t track_snapshot_apply_structure_mutation(void *ctx_ptr)
         return 0U;
     }
 
-    if (ui_apply_entity_config_bulk_mutation_with_inputs(ctx->family,
-                                                        ctx->type,
-                                                        ctx->midi_channel,
-                                                        ctx->midi_source,
-                                                        ctx->external_input) == false)
+    if (track_structure_apply_entity_bulk_with_inputs(ctx->family,
+                                                      ctx->type,
+                                                      ctx->midi_channel,
+                                                      ctx->midi_source,
+                                                      ctx->external_input) == false)
     {
         return 0U;
     }
 
-    track_runtime_invalidate_all();
     return 1U;
 }
 
@@ -671,8 +670,6 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     {
         goto restore_done;
     }
-
-    track_runtime_invalidate_all();
 
     if ((target_family == UI_TRACK_FAMILY_SYNTH) || (target_family == UI_TRACK_FAMILY_DRUM)
             || (target_is_multi != 0U))
