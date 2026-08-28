@@ -67,35 +67,6 @@ static uint8_t g_looper_take_notified = 0U;
 static uint8_t g_looper_transport_was_running = 0U;
 static uint8_t g_looper_transport_start_prearmed = 0U;
 
-typedef enum {
-    UI_AUDIO_LOOPER_START = 0U,
-    UI_AUDIO_LOOPER_STOP,
-    UI_AUDIO_RECORD_STOP,
-    UI_AUDIO_PREPARE_REPLACE,
-    UI_AUDIO_RECORD_START
-} ui_audio_action_t;
-
-static void ui_core_runtime_bridge_publish_audio_command(
-    ui_audio_action_t action, uint8_t track, uint8_t arg0,
-    uint8_t arg1, uint32_t arg32, uint64_t due_sample)
-{
-    if (action == UI_AUDIO_LOOPER_START)
-        (void)control_audio_publish_param(0U, 0xFFF0U, 1U, 0U, due_sample);
-    else if (action == UI_AUDIO_LOOPER_STOP)
-        (void)control_audio_publish_param(0U, 0xFFF1U, 0U, 0U, due_sample);
-    else if (action == UI_AUDIO_PREPARE_REPLACE)
-        (void)control_audio_publish_param(track, 0xFFF3U, 0U, 0U, due_sample);
-    else
-    {
-        if (action == UI_AUDIO_RECORD_START)
-            (void)audio_recorder_control_arm_looper(
-                track, arg0, arg32, arg1, due_sample);
-        else
-            (void)audio_recorder_control_request_looper_stop(
-                due_sample, seq_runtime_is_running());
-    }
-}
-
 static uint8_t ui_core_runtime_bridge_looper_record_is_active(void);
 static uint8_t ui_core_runtime_bridge_looper_play_is_auto(uint8_t track);
 static uint8_t ui_core_runtime_bridge_looper_handle_stop(ui_core_runtime_bridge_feedback_fn feedback);
@@ -149,9 +120,6 @@ static uint8_t ui_core_runtime_bridge_transport_play_command(const ui_event_t *e
     if ((seq_runtime_is_running() == 0U) && (seq_runtime_is_start_pending() == 0U))
     {
         (void)ui_core_runtime_bridge_looper_prepare_record_pre_transport_start(feedback);
-        ui_core_runtime_bridge_publish_audio_command(
-            UI_AUDIO_LOOPER_START, 0U, 0U, 0U, 0U,
-            live_clock_audio_sample());
         g_looper_transport_was_running = 1U;
         g_looper_transport_start_prearmed = 1U;
     }
@@ -334,9 +302,8 @@ static uint8_t ui_core_runtime_bridge_looper_handle_stop(ui_core_runtime_bridge_
         return 0U;
     }
 
-    ui_core_runtime_bridge_publish_audio_command(
-        UI_AUDIO_RECORD_STOP, 0U, 0U, 0U, 0U,
-        live_clock_audio_sample());
+    (void)audio_recorder_control_request_looper_stop(
+        live_clock_audio_sample(), seq_runtime_is_running());
     if(audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_LOOPER) != 0U)
     {
         if (feedback != 0)
@@ -489,7 +456,6 @@ static uint8_t ui_core_runtime_bridge_looper_start_track(uint8_t track,
                                                          ui_core_runtime_bridge_feedback_fn feedback)
 {
     const uint8_t previous_take_track = g_looper_take_track;
-
     const uint32_t expected_frames = ui_core_runtime_bridge_looper_expected_record_frames(track);
     const uint64_t rec_request_sample = live_clock_audio_sample();
     char final_path[LOOPER_STORAGE_PATH_MAX];
@@ -518,27 +484,13 @@ static uint8_t ui_core_runtime_bridge_looper_start_track(uint8_t track,
         return 1U;
     }
 
-    if(previous_take_track < UI_TRACK_COUNT)
-    {
-        ui_core_runtime_bridge_publish_audio_command(
-            UI_AUDIO_PREPARE_REPLACE,
-            previous_take_track, 0U, 0U, 0U, rec_request_sample);
-    }
-    if(previous_take_track != track)
-    {
-        ui_core_runtime_bridge_publish_audio_command(
-            UI_AUDIO_PREPARE_REPLACE,
-            track, 0U, 0U, 0U, rec_request_sample);
-    }
     ui_core_runtime_bridge_looper_clear_take_metadata();
     g_active_looper_record_track = track;
     g_looper_take_track = track;
     g_looper_take_notified = 0U;
-    ui_core_runtime_bridge_publish_audio_command(
-        UI_AUDIO_RECORD_START, track,
-        ui_core_runtime_bridge_looper_len_mode(track),
-        ui_core_runtime_bridge_looper_play_is_auto(track),
-        expected_frames, rec_request_sample);
+    (void)audio_recorder_control_arm_looper(track, previous_take_track,
+        ui_core_runtime_bridge_looper_len_mode(track), expected_frames,
+        ui_core_runtime_bridge_looper_play_is_auto(track), rec_request_sample);
     (void)param_registry_apply_track_value(PARAM_LOOPER_ARM, track, 0.0f);
     if (feedback != 0)
     {
@@ -552,13 +504,7 @@ void ui_core_runtime_bridge_service_looper_record_control(ui_core_runtime_bridge
     const uint8_t transport_running = seq_runtime_is_running();
     const uint8_t transport_start_pending = seq_runtime_is_start_pending();
     uint8_t keep_prearmed_running_mirror = 0U;
-    if ((transport_running != 0U) && (g_looper_transport_was_running == 0U))
-    {
-        ui_core_runtime_bridge_publish_audio_command(
-            UI_AUDIO_LOOPER_START, 0U, 0U, 0U, 0U,
-            live_clock_audio_sample());
-    }
-    else if ((transport_running == 0U) && (g_looper_transport_was_running != 0U))
+    if ((transport_running == 0U) && (g_looper_transport_was_running != 0U))
     {
         if ((g_looper_transport_start_prearmed != 0U) && (transport_start_pending != 0U))
         {
@@ -566,9 +512,6 @@ void ui_core_runtime_bridge_service_looper_record_control(ui_core_runtime_bridge
         }
         else
         {
-            ui_core_runtime_bridge_publish_audio_command(
-                UI_AUDIO_LOOPER_STOP, 0U, 0U, 0U, 0U,
-                live_clock_audio_sample());
             g_looper_transport_start_prearmed = 0U;
         }
     }

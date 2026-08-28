@@ -984,7 +984,7 @@ static void looper_record_clear_boundary_state(void)
     g_looper_record_boundary.target_stop_sample = 0U;
 }
 
-static void looper_record_stop_at_boundary(uint64_t sample_time)
+void brick6_looper_runtime_on_record_stop(uint64_t sample_time)
 {
     if(g_looper_record_boundary.recording == 0U)
         return;
@@ -1061,9 +1061,18 @@ static void looper_record_stop_at_boundary(uint64_t sample_time)
     g_looper_record_boundary.recording = 0U;
     g_looper_record_boundary.stop_armed = 0U;
     g_looper_record_boundary.target_stop_sample = 0U;
+    if(track < BRICK6_LOOPER_TRACK_CAP)
+    {
+        brick6_looper_track_state_t *const state = &g_looper_tracks[track];
+        if((state->state == BRICK6_LOOPER_RUNTIME_STATE_READY)
+                && (state->play_auto != 0U)
+                && (state->want_play_when_ready != 0U)
+                && (looper_transport_running() != 0U))
+            looper_start_playback(state, sample_time, 0U);
+    }
 }
 
-static void looper_record_start_at_boundary(uint64_t sample_time)
+void brick6_looper_runtime_on_record_start(uint64_t sample_time)
 {
     if((g_looper_record_boundary.start_armed == 0U)
             || (g_looper_record_boundary.track_id >= BRICK6_LOOPER_TRACK_CAP))
@@ -1525,12 +1534,15 @@ void brick6_looper_runtime_set_stretch_grain(uint8_t track_id,
         g_looper_tracks[track_id].stretch_pitch_semitones, grain_frames);
 }
 
-void brick6_looper_runtime_on_transport_start(void)
+void brick6_looper_runtime_on_transport_start(uint64_t sample_time)
 {
     for(uint8_t track = 0U; track < BRICK6_LOOPER_TRACK_CAP; ++track)
     {
         brick6_looper_track_state_t *state = &g_looper_tracks[track];
         state->want_play_when_ready = (state->play_auto != 0U) ? 1U : 0U;
+        if ((state->state == BRICK6_LOOPER_RUNTIME_STATE_READY)
+                && (state->want_play_when_ready != 0U))
+            looper_start_playback(state, sample_time, 0U);
         looper_diag_update_take(track, state);
     }
 }
@@ -1540,35 +1552,6 @@ void brick6_looper_runtime_on_transport_stop(void)
     for(uint8_t track = 0U; track < BRICK6_LOOPER_TRACK_CAP; ++track)
     {
         brick6_looper_runtime_stop_playback(track);
-    }
-}
-
-void brick6_looper_runtime_on_boundary_edge(uint8_t track_id, uint64_t sample_time)
-{
-    if(looper_track_valid(track_id) == 0U)
-        return;
-
-    if(g_looper_record_boundary.start_armed != 0U)
-    {
-        looper_record_start_at_boundary(sample_time);
-    }
-    if((g_looper_record_boundary.recording != 0U)
-            && (((g_looper_record_boundary.target_stop_sample != 0U)
-                    && (sample_time >= g_looper_record_boundary.target_stop_sample)
-                    && (sample_time > g_looper_record_boundary.actual_start_sample))
-                || (g_looper_record_boundary.stop_armed != 0U)))
-    {
-        looper_record_stop_at_boundary(sample_time);
-    }
-
-    brick6_looper_track_state_t *state = &g_looper_tracks[track_id];
-    if((state->state == BRICK6_LOOPER_RUNTIME_STATE_READY)
-            && (state->play_auto != 0U)
-            && (state->want_play_when_ready != 0U)
-            && (state->scheduled_start_valid == 0U)
-            && (looper_transport_running() != 0U))
-    {
-        looper_start_playback(state, sample_time, 0U);
     }
 }
 

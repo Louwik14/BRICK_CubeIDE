@@ -590,6 +590,7 @@ uint8_t audio_recorder_request_stop_client(audio_recorder_client_t client)
 }
 
 uint8_t audio_recorder_control_arm_looper(uint8_t track,
+                                          uint8_t replace_track,
                                           uint8_t len_mode,
                                           uint32_t expected_frames,
                                           uint8_t play_auto,
@@ -598,8 +599,14 @@ uint8_t audio_recorder_control_arm_looper(uint8_t track,
     if ((g_audio_recorder.client != AUDIO_RECORDER_CLIENT_LOOPER)
             || (g_audio_recorder.state != AUDIO_RECORDER_STATE_PREPARED))
         return 0U;
-    const uint16_t config = (uint16_t)(0x8000U | len_mode
-        | ((uint16_t)(play_auto != 0U) << 8));
+    const uint16_t replace_config = (replace_track < BRICK_ENTITY_CAPACITY)
+        ? (uint16_t)(AUDIO_RECORDER_LOOPER_REPLACE_VALID_FLAG
+            | ((uint16_t)replace_track
+                << AUDIO_RECORDER_LOOPER_REPLACE_TRACK_SHIFT)) : 0U;
+    const uint16_t config = (uint16_t)(AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG
+        | replace_config | len_mode
+        | ((uint16_t)(play_auto != 0U)
+            << AUDIO_RECORDER_LOOPER_PLAY_AUTO_SHIFT));
     if (control_audio_publish_record(CONTROL_AUDIO_RECORD_START,
             expected_frames, config, track, request_sample) == 0U)
         return 0U;
@@ -618,33 +625,11 @@ uint8_t audio_recorder_control_request_looper_stop(uint64_t request_sample,
         &g_audio_recorder_looper_control;
     if ((control->start_armed == 0U) && (control->recording == 0U))
         return 0U;
-    const uint16_t config = 0x8000U;
+    const uint16_t config = AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG;
     if ((control->recording != 0U) && (wait_boundary == 0U))
     {
-        const control_audio_command_t commands[3] = {
-            {
-                .effective_sample_time = request_sample,
-                .id = config,
-                .entity = control->track,
-                .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(
-                    CONTROL_AUDIO_COMMAND_RECORD, CONTROL_AUDIO_RECORD_STOP)
-            },
-            {
-                .effective_sample_time = request_sample,
-                .value = g_audio_recorder_control_generation,
-                .entity = (uint8_t)AUDIO_RECORDER_CLIENT_LOOPER,
-                .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(
-                    CONTROL_AUDIO_COMMAND_RECORD, CONTROL_AUDIO_RECORD_STOP)
-            },
-            {
-                .effective_sample_time = request_sample,
-                .id = 0xFFF8U,
-                .entity = control->track,
-                .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(
-                    CONTROL_AUDIO_COMMAND_PARAM, 0U)
-            }
-        };
-        if (control_audio_publish_batch(commands, 3U) == 0U)
+        if (audio_recorder_publish_stop_client_at(
+                AUDIO_RECORDER_CLIENT_LOOPER, request_sample) == 0U)
             return 0U;
         control->recording = 0U;
         control->stop_armed = 0U;
@@ -668,9 +653,10 @@ uint8_t audio_recorder_control_request_looper_stop(uint64_t request_sample,
 void audio_recorder_control_on_looper_boundary(uint8_t track,
                                                uint64_t sample_time)
 {
-    (void)track;
     audio_recorder_looper_control_t *const control =
         &g_audio_recorder_looper_control;
+    if (track != control->track)
+        return;
     if ((control->start_armed == 0U) && (control->recording == 0U))
         return;
     if (control->start_armed != 0U)

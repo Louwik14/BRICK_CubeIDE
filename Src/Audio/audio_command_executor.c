@@ -27,13 +27,9 @@
 
 #define AUDIO_PARAM_TRANSPORT_TEMPO       0xFFDCU
 #define AUDIO_PARAM_TRANSPORT_STEP_Q16    0xFFDDU
-#define AUDIO_PARAM_LOOPER_PLAY_START     0xFFF0U
-#define AUDIO_PARAM_LOOPER_PLAY_STOP      0xFFF1U
-#define AUDIO_PARAM_LOOPER_PREPARE        0xFFF3U
 #define AUDIO_PARAM_MULTI_RESOURCE_STOP   0xFFF5U
 #define AUDIO_PARAM_RAM_RESOURCE_STOP     0xFFF6U
 #define AUDIO_PARAM_WAVE_RESOURCE_STOP    0xFFF7U
-#define AUDIO_PARAM_LOOPER_BOUNDARY        0xFFF8U
 
 static uint32_t g_audio_command_invariant_failures;
 static uint32_t g_audio_wavetable_generation[
@@ -164,21 +160,6 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
         return mixer_audio_set_insert_slot(command->entity,
             command->id - CONTROL_AUDIO_PARAM_MIX_INSERT_FIRST,
             (int8_t)(int32_t)command->value);
-    if (command->id == AUDIO_PARAM_LOOPER_PLAY_START)
-    {
-        brick6_looper_runtime_on_transport_start();
-        return 1U;
-    }
-    if (command->id == AUDIO_PARAM_LOOPER_PLAY_STOP)
-    {
-        brick6_looper_runtime_on_transport_stop();
-        return 1U;
-    }
-    if (command->id == AUDIO_PARAM_LOOPER_PREPARE)
-    {
-        brick6_looper_runtime_prepare_replace(command->entity);
-        return 1U;
-    }
     if (command->id == AUDIO_PARAM_MULTI_RESOURCE_STOP)
     {
         brick6_sampler_runtime_stop_multi_instrument(command->entity);
@@ -192,12 +173,6 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
     if (command->id == AUDIO_PARAM_WAVE_RESOURCE_STOP)
     {
         brick6_wave_runtime_stop_wavetable_slot(command->entity, command->value);
-        return 1U;
-    }
-    if (command->id == AUDIO_PARAM_LOOPER_BOUNDARY)
-    {
-        brick6_looper_runtime_on_boundary_edge(command->entity,
-            command->effective_sample_time);
         return 1U;
     }
     return live_parameter_audio_runtime_apply_param(command->entity,
@@ -229,7 +204,8 @@ static uint8_t audio_command_apply_transport(
     if (kind == CONTROL_AUDIO_TRANSPORT_START)
     {
         audio_transport_publication_audio_set_running(1U);
-        brick6_looper_runtime_on_transport_start();
+        brick6_looper_runtime_on_transport_start(
+            command->effective_sample_time);
         return 1U;
     }
     if (kind == CONTROL_AUDIO_TRANSPORT_STOP)
@@ -244,22 +220,46 @@ static uint8_t audio_command_apply_transport(
 
 static uint8_t audio_command_apply_record(const control_audio_command_t *command)
 {
-    if ((command->id & 0x8000U) != 0U)
+    if ((command->id & AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG) != 0U)
     {
         if (CONTROL_AUDIO_COMMAND_KIND(command) == CONTROL_AUDIO_RECORD_START)
+        {
+            const uint8_t replace_valid = (uint8_t)(
+                (command->id & AUDIO_RECORDER_LOOPER_REPLACE_VALID_FLAG) != 0U);
+            const uint8_t replace_track = (uint8_t)((command->id
+                >> AUDIO_RECORDER_LOOPER_REPLACE_TRACK_SHIFT)
+                & AUDIO_RECORDER_LOOPER_REPLACE_TRACK_MASK);
+            if (replace_valid != 0U)
+                brick6_looper_runtime_prepare_replace(replace_track);
+            if ((replace_valid == 0U) || (replace_track != command->entity))
+                brick6_looper_runtime_prepare_replace(command->entity);
             brick6_looper_runtime_arm_live_record_start(command->entity,
                 (uint8_t)command->id, command->value,
-                (uint8_t)(command->id >> 8) & 1U,
+                (uint8_t)(command->id
+                    >> AUDIO_RECORDER_LOOPER_PLAY_AUTO_SHIFT) & 1U,
                 command->effective_sample_time);
+        }
         else
             brick6_looper_runtime_arm_record_stop(
                 command->effective_sample_time);
         return 1U;
     }
-    return (CONTROL_AUDIO_COMMAND_KIND(command) == CONTROL_AUDIO_RECORD_START)
-        ? audio_recorder_audio_start(command->entity, command->value,
-                                     command->id)
-        : audio_recorder_audio_stop(command->entity, command->value);
+    if (CONTROL_AUDIO_COMMAND_KIND(command) == CONTROL_AUDIO_RECORD_START)
+    {
+        const uint8_t applied = audio_recorder_audio_start(command->entity,
+            command->value, command->id);
+        if ((applied != 0U)
+                && (command->entity == (uint8_t)AUDIO_RECORDER_CLIENT_LOOPER))
+            brick6_looper_runtime_on_record_start(
+                command->effective_sample_time);
+        return applied;
+    }
+    const uint8_t applied = audio_recorder_audio_stop(command->entity,
+        command->value);
+    if ((applied != 0U)
+            && (command->entity == (uint8_t)AUDIO_RECORDER_CLIENT_LOOPER))
+        brick6_looper_runtime_on_record_stop(command->effective_sample_time);
+    return applied;
 }
 
 static uint8_t audio_command_apply_panic(const control_audio_command_t *command)
