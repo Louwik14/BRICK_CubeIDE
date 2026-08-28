@@ -72,6 +72,8 @@ void brick6_looper_runtime_arm_live_record_start(uint8_t track_id,
                                                  uint8_t play_auto,
                                                  uint64_t request_sample);
 void brick6_looper_runtime_arm_record_stop(uint64_t request_sample);
+void brick6_looper_runtime_on_record_start(uint64_t sample_time);
+void brick6_looper_runtime_on_record_stop(uint64_t sample_time);
 /* Storage-side projection; never reads the AUDIO-owned Looper runtime. */
 uint8_t brick6_looper_runtime_get_record_capture_track(uint8_t *out_track);
 void brick6_looper_runtime_preroll_capture_from_irq(uint8_t track_id,
@@ -90,9 +92,8 @@ void brick6_looper_runtime_set_stretch_pitch(uint8_t track_id,
                                               float pitch_semitones);
 void brick6_looper_runtime_set_stretch_grain(uint8_t track_id,
                                               uint16_t grain_frames);
-void brick6_looper_runtime_on_transport_start(void);
+void brick6_looper_runtime_on_transport_start(uint64_t sample_time);
 void brick6_looper_runtime_on_transport_stop(void);
-void brick6_looper_runtime_on_boundary_edge(uint8_t track_id, uint64_t sample_time);
 uint8_t brick6_looper_runtime_next_start_offset(uint64_t block_start_sample,
                                                 uint32_t block_frames,
                                                 uint16_t *out_offset);

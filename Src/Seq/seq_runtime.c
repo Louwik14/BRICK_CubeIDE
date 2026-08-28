@@ -515,8 +515,7 @@ static void seq_runtime_process_core(void)
                     {
                         audio_recorder_control_on_looper_boundary(
                             event->track, event->sample_abs);
-                        published = control_audio_publish_param(event->track,
-                            0xFFF8U, 0U, 0U, event->sample_abs);
+                        published = 1U;
                     }
                     else
                         published = control_audio_publish_note(event->track,

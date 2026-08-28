@@ -22,6 +22,15 @@ typedef enum
     AUDIO_RECORDER_CLIENT_LOOPER
 } audio_recorder_client_t;
 
+/* Private RECORD id packing for Looper lifecycle commands. The high bit keeps
+ * those commands distinct from prepared Recorder config ids without adding a
+ * second opcode or transport. */
+#define AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG          0x8000U
+#define AUDIO_RECORDER_LOOPER_REPLACE_VALID_FLAG      0x2000U
+#define AUDIO_RECORDER_LOOPER_REPLACE_TRACK_SHIFT     9U
+#define AUDIO_RECORDER_LOOPER_REPLACE_TRACK_MASK      0x0FU
+#define AUDIO_RECORDER_LOOPER_PLAY_AUTO_SHIFT         8U
+
 typedef enum
 {
     AUDIO_RECORDER_STATE_IDLE = 0,
@@ -103,10 +112,11 @@ uint8_t audio_recorder_push_from_irq_client(audio_recorder_client_t client,
                                             uint32_t frames);
 uint8_t audio_recorder_request_stop_client(audio_recorder_client_t client);
 
-/* CONTROL-side Looper boundary policy. These APIs only publish RECORD/PARAM
- * commands; AUDIO reports the resulting PCM head and exact stop length through
- * the capture transport. */
+/* CONTROL-side Looper boundary policy. These APIs publish RECORD commands only;
+ * AUDIO reports the resulting PCM head and exact stop length through the
+ * capture transport. */
 uint8_t audio_recorder_control_arm_looper(uint8_t track,
+                                          uint8_t replace_track,
                                           uint8_t len_mode,
                                           uint32_t expected_frames,
                                           uint8_t play_auto,
