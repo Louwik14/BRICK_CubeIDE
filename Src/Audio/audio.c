@@ -9,7 +9,7 @@
  * Architecture:
  * - Appelé par: brick6_app_init.c (audio_init, audio_start).
  * - Appelle: audio_process_block_int32() (audio_float.c),
- *            engine_tasklet_notify_frames() (scheduler applicatif).
+ *            sans reveil direct du domaine CONTROL.
  *
  * Contraintes temps réel:
  * - Le traitement audio est exécuté dans les callbacks IRQ DMA RX.
@@ -20,27 +20,20 @@
 
 #include "audio.h"
 #include "audio_float.h"
-#include "engine_tasklet.h"
 #include "cpu_load.h"
 #include "Core/live_clock.h"
-#include "Core/live_parameter_audio_queue.h"
-#include "Core/live_parameter_audio_runtime.h"
 #include "memory_layout.h"
 #include "cache_maintenance.h"
 #include "Audio/metronome_runtime.h"
-#include "Audio/control_audio_queue.h"
-#include "Audio/control_music_queue.h"
+#include "Audio/control_audio_fifo.h"
+#include "Audio/audio_command_executor.h"
+#include "Core/control_audio_program.h"
 #include "Audio/audio_fx_runtime.h"
 #include "Audio/audio_waveform_capture.h"
 #include "Audio/waveform_control.h"
 #include "Audio/synth_waveform_snapshot.h"
-#include "Audio/audio_music_action_executor.h"
-#include "Core/project_load_quiesce.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_mod_matrix.h"
-#include "Audio/audio_modulation_projection.h"
-#include "Core/audio_wave_table_projection.h"
-#include "Core/audio_input_ownership_projection.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_env3.h"
 #include "Audio/audio_mod_matrix.h"
@@ -49,9 +42,7 @@
 #include "Core/brick6_looper_runtime.h"
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_wave_runtime.h"
-#include "Sampler/sample_stream_time.h"
 #include "Core/brick6_stream_service_task.h"
-#include "Seq/seq_runtime_control.h"
 
 #include <string.h>
 #include <stdint.h>
@@ -100,107 +91,21 @@ static AUDIO_DMA_BUFFER_NONCACHEABLE int32_t tx_buffer[AUDIO_BUFFER_WORDS];
 
 static volatile audio_init_state_t g_audio_init_state = AUDIO_INIT_NOT_STARTED;
 static uint64_t g_audio_sample_clock;
+D3_IPC static volatile uint32_t g_audio_boot_diag_word;
+
+static void audio_boot_diag_publish(audio_init_state_t state,
+                                    board_audio_boot_error_t error)
+{
+    g_audio_boot_diag_word = (uint32_t)state | ((uint32_t)error << 8);
+    __DMB();
+}
 /* ============================================================
    INTERNAL PROCESSING
    Hardware layer only: calls float engine
    ============================================================ */
 
-static __attribute__((noinline)) void audio_apply_music_stops_at_sample(uint64_t sample_time)
-{
-    control_music_action_t action;
-    uint16_t music_pending = control_music_queue_audio_pending_count();
-    while ((music_pending != 0U)
-            && (control_music_queue_audio_peek(&action) != 0U)
-            && (action.due_sample <= sample_time)
-            && (action.kind == (uint8_t)CONTROL_MUSIC_ACTION_STOP))
-    {
-        (void)control_music_queue_audio_pop(&action);
-        --music_pending;
-        (void)audio_music_action_execute(&action);
-    }
-}
-
-static __attribute__((noinline)) void audio_apply_music_starts_at_sample(uint64_t sample_time)
-{
-    control_music_action_t action;
-    uint16_t music_pending = control_music_queue_audio_pending_count();
-    while ((music_pending != 0U)
-            && (control_music_queue_audio_peek(&action) != 0U)
-            && (action.due_sample <= sample_time))
-    {
-        (void)control_music_queue_audio_pop(&action);
-        --music_pending;
-        (void)audio_music_action_execute(&action);
-    }
-}
-
-static __attribute__((noinline)) void audio_apply_general_control_events_at_sample(uint64_t sample_time)
-{
-    control_audio_event_t event;
-    /* Bound this pass to the queue occupancy observed at entry.  CONTROL
-     * publications racing with the drain remain queued for the next pass. */
-    uint16_t pending = control_audio_queue_audio_pending_count();
-    while ((pending != 0U)
-            && (control_audio_queue_audio_peek(&event) != 0U)
-            && (event.due_sample <= sample_time))
-    {
-        (void)control_audio_queue_audio_pop();
-        --pending;
-        if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_BOUNDARY_EDGE)
-        {
-            brick6_looper_runtime_on_boundary_edge(event.entity_id,
-                                                   event.due_sample);
-        }
-        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_METRONOME_CLICK)
-        {
-            metronome_runtime_trigger_at(
-                0U, (event.flags != 0U) ? METRONOME_CLICK_ACCENT
-                                        : METRONOME_CLICK_NORMAL);
-        }
-        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_BINDING_INTENT)
-        {
-            audio_note_engine_adapter_install_intent(&event);
-        }
-        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_LOOPER_TRANSPORT_START)
-        {
-            brick6_looper_runtime_on_transport_start();
-        }
-        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_LOOPER_TRANSPORT_STOP)
-        {
-            brick6_looper_runtime_on_transport_stop();
-        }
-        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_LOOPER_RECORD_STOP)
-        {
-            brick6_looper_runtime_arm_record_stop(event.due_sample);
-        }
-        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_LOOPER_PREPARE_REPLACE)
-        {
-            brick6_looper_runtime_prepare_replace(event.entity_id);
-        }
-        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_LOOPER_RECORD_START)
-        {
-            brick6_looper_runtime_arm_live_record_start(
-                event.entity_id, event.note, event.source_generation,
-                event.velocity, event.due_sample);
-        }
-        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_MULTI_STOP)
-        {
-            brick6_sampler_runtime_stop_multi_instrument(event.param_id);
-        }
-        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_RAM_STOP)
-        {
-            brick6_sampler_runtime_stop_ram_slot(event.param_id, event.source_generation);
-        }
-        else if (event.kind == (uint8_t)CONTROL_AUDIO_EVENT_WAVETABLE_STOP)
-        {
-            brick6_wave_runtime_stop_wavetable_slot(event.param_id,
-                                                    event.source_generation);
-        }
-    }
-}
 static ITCM_TEXT void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t sample_time, uint32_t frames)
 {
-    const uint8_t project_load_quiescent = project_load_quiesce_audio_service();
     waveform_control_command_t waveform_command;
     if (waveform_control_audio_consume(&waveform_command) != 0U)
     {
@@ -211,30 +116,6 @@ static ITCM_TEXT void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t s
     uint32_t cursor = 0U;
     while (cursor < frames)
     {
-        const uint64_t now = sample_time + cursor;
-        if (control_music_queue_audio_consume_panic() != 0U)
-            audio_music_action_force_close_all();
-        audio_modulation_projection_audio_consume();
-        audio_wave_table_projection_audio_consume();
-        const uint8_t modulation_configuration_changed =
-            audio_modulation_projection_audio_configuration_changed();
-        if (modulation_configuration_changed != 0U)
-        {
-            mod_lfo_v1_audio_consume_snapshots();
-            mod_env3_audio_consume_snapshots();
-        }
-        if (project_load_quiescent == 0U)
-        {
-            audio_apply_general_control_events_at_sample(now);
-            audio_apply_music_stops_at_sample(now);
-        }
-        if (modulation_configuration_changed != 0U)
-            audio_mod_matrix_consume_snapshots();
-        if (project_load_quiescent == 0U)
-        {
-            (void)live_parameter_audio_runtime_apply_due(now);
-            audio_apply_music_starts_at_sample(now);
-        }
         const uint16_t remaining = (uint16_t)(frames - cursor);
         uint16_t span = remaining;
         if (span == 0U)
@@ -284,21 +165,17 @@ static ITCM_TEXT void audio_process_event_segment(int32_t *rx,
 }
 static ITCM_TEXT void audio_process_half_common_hot(int32_t *rx, int32_t *tx)
 {
+    const uint32_t command_head_limit =
+        control_audio_fifo_audio_head_snapshot();
     uint32_t half_cursor = 0U;
     while (half_cursor < AUDIO_FRAMES_PER_HALF)
     {
+        (void)audio_command_executor_apply_due(g_audio_sample_clock,
+                                                command_head_limit);
         const uint16_t remaining = (uint16_t)(AUDIO_FRAMES_PER_HALF - half_cursor);
-        uint16_t block_frames = remaining;
-        block_frames = control_audio_queue_audio_frames_until_due(
-            g_audio_sample_clock, block_frames);
-        block_frames = control_music_queue_audio_frames_until_due(
-            g_audio_sample_clock, block_frames);
-        block_frames = live_parameter_audio_queue_frames_until_deadline(
-            g_audio_sample_clock, block_frames);
-        if (block_frames == 0U)
-        {
-            block_frames = 1U;
-        }
+        const uint16_t block_frames = control_audio_fifo_audio_frames_until_due(
+            g_audio_sample_clock, remaining, command_head_limit);
+        if (block_frames == 0U) continue;
 
         const uint64_t block_start_sample = g_audio_sample_clock;
         g_audio_sample_clock += (uint64_t)block_frames;
@@ -343,10 +220,10 @@ static void process_half(uint32_t half_index)
  * - Main loop (boot).
  */
 /**
- * @brief Point d'entrée AUDIO propriétaire pour le binding et l'I/O de boot.
+ * @brief Point d'entrée AUDIO propriétaire pour les programmes et l'I/O de boot.
  *
  * Rôle:
- * - Initialiser dans l'ordre historique les services AUDIO, le binding et l'I/O.
+ * - Initialiser dans l'ordre historique les services AUDIO, les programmes et l'I/O.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -354,12 +231,10 @@ static void process_half(uint32_t half_index)
 void audio_boot_init_binding_io(void)
 {
     live_clock_init();
-    control_audio_queue_init();
-    control_music_queue_init();
+    control_audio_fifo_init();
+    control_audio_program_init();
+    audio_command_executor_init();
     audio_note_engine_adapter_init();
-    audio_input_ownership_projection_audio_init();
-    audio_wave_table_projection_audio_init();
-    audio_modulation_projection_audio_init();
     audio_mod_matrix_init();
     audio_fx_runtime_init();
     audio_waveform_capture_init();
@@ -368,6 +243,7 @@ void audio_boot_init_binding_io(void)
     board_audio_init();
     g_audio_init_state = AUDIO_INIT_NOT_STARTED;
     g_audio_sample_clock = 0U;
+    audio_boot_diag_publish(AUDIO_INIT_NOT_STARTED, BOARD_AUDIO_BOOT_OK);
 
     memset(rx_buffer, 0, sizeof(rx_buffer));
     memset(tx_buffer, 0, sizeof(tx_buffer));
@@ -405,8 +281,12 @@ uint8_t audio_start(void)
                                  &g_audio_init_state) == 0U)
     {
         g_audio_init_state = AUDIO_INIT_ERROR;
+        board_audio_boot_diag_t diag;
+        board_audio_get_boot_diag(&diag);
+        audio_boot_diag_publish(AUDIO_INIT_ERROR, diag.last_error);
         return 0U;
     }
+    audio_boot_diag_publish(g_audio_init_state, BOARD_AUDIO_BOOT_OK);
     return (g_audio_init_state == AUDIO_INIT_READY) ? 1U : 0U;
 }
 
@@ -414,18 +294,17 @@ void audio_stop(void)
 {
     board_audio_stop_stream();
     g_audio_init_state = AUDIO_INIT_NOT_STARTED;
+    audio_boot_diag_publish(AUDIO_INIT_NOT_STARTED, BOARD_AUDIO_BOOT_OK);
 }
 
-audio_init_state_t audio_get_init_state(void)
+void audio_boot_diag_read(audio_boot_diag_snapshot_t *out_diag)
 {
-    return g_audio_init_state;
-}
-
-board_audio_boot_error_t audio_get_boot_error(void)
-{
-    board_audio_boot_diag_t diag;
-    board_audio_get_boot_diag(&diag);
-    return diag.last_error;
+    if (out_diag == NULL)
+        return;
+    const uint32_t word = g_audio_boot_diag_word;
+    __DMB();
+    out_diag->state = (audio_init_state_t)(word & 0xFFU);
+    out_diag->error = (board_audio_boot_error_t)((word >> 8) & 0xFFU);
 }
 
 /* ============================================================
@@ -466,15 +345,6 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
 
         process_half(0);
 
-        sample_stream_time_advance_from_audio_irq(AUDIO_FRAMES_PER_HALF);
-        brick6_stream_service_task_notify_audio_irq();
-
-        /* Tick scheduler en frames audio. */
-        engine_tasklet_notify_frames(AUDIO_FRAMES_PER_HALF);
-
-        live_clock_audio_publish_anchor(g_audio_sample_clock);
-        seq_runtime_control_request_from_audio_irq();
-
         cpu_load_irq_end();
     }
 }
@@ -512,15 +382,6 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
         cpu_load_irq_begin();
 
         process_half(1);
-
-        sample_stream_time_advance_from_audio_irq(AUDIO_FRAMES_PER_HALF);
-        brick6_stream_service_task_notify_audio_irq();
-
-        /* Tick scheduler en frames audio. */
-        engine_tasklet_notify_frames(AUDIO_FRAMES_PER_HALF);
-
-        live_clock_audio_publish_anchor(g_audio_sample_clock);
-        seq_runtime_control_request_from_audio_irq();
 
         cpu_load_irq_end();
     }

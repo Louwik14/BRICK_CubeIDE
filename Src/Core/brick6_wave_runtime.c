@@ -9,7 +9,6 @@
 #include "Audio/audio_wavetable_registry.h"
 #include "Sampler/wavetable_pool.h"
 #include "Storage/memory_layout.h"
-#include "Core/audio_retire_ack.h"
 
 #define WAVE_DEFAULT_NOTE          60U
 #define WAVE_SAMPLE_RATE           48000.0f
@@ -183,7 +182,7 @@ static uint8_t wave_build_hot_table(
     out->wavetable_slot = table->wavetable_slot;
     if (table->band_count == 0U)
     {
-        const float *const data = (const float *)audio_shared_memory_resolve(
+        const float *const data = (const float *)audio_shared_memory_consume(
             &table->base_data);
         if (data == NULL) return 0U;
         out->band_count = 1U;
@@ -197,7 +196,7 @@ static uint8_t wave_build_hot_table(
         {
             const audio_wavetable_band_t *const src = &table->bands[i];
             const uint32_t expected_magnitude = WAVE_PHASE_INDEX_BITS - i;
-            const float *const data = (const float *)audio_shared_memory_resolve(
+            const float *const data = (const float *)audio_shared_memory_consume(
                 &src->data);
             if ((data == NULL)
                 || (src->cycle_magnitude != expected_magnitude)
@@ -214,10 +213,27 @@ static uint8_t wave_build_hot_table(
     return 1U;
 }
 
+static float wave_pitch_ratio(float semitones)
+{
+    float octaves = semitones * (1.0f / 12.0f);
+    int32_t octave = (int32_t)octaves;
+    if ((octaves < 0.0f) && ((float)octave != octaves)) --octave;
+    if (octave < -30) octave = -30;
+    if (octave > 30) octave = 30;
+    const float x = octaves - (float)octave;
+    const float fraction = 1.0f + x * (0.6931471806f
+        + x * (0.2402265070f + x * (0.0555041087f
+        + x * (0.0096181291f + x * 0.0013333558f))));
+    union { uint32_t u; float f; } power = {
+        .u = (uint32_t)(octave + 127) << 23U
+    };
+    return power.f * fraction;
+}
+
 static uint32_t wave_note_to_phase_inc(float note, float tune_semitones)
 {
     const float semitone_from_a4 = (note + tune_semitones) - WAVE_A4_NOTE;
-    const float hz = WAVE_A4_FREQ * powf(2.0f, semitone_from_a4 * (1.0f / 12.0f));
+    const float hz = WAVE_A4_FREQ * wave_pitch_ratio(semitone_from_a4);
     float cycles_per_sample = hz * (1.0f / WAVE_SAMPLE_RATE);
     cycles_per_sample -= floorf(cycles_per_sample);
     if (cycles_per_sample < 0.0f)
@@ -742,6 +758,26 @@ void brick6_wave_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t velo
     }
 }
 
+void brick6_wave_runtime_initialize_held_note(uint8_t instance_id,
+                                              uint8_t note,
+                                              uint8_t velocity)
+{
+    brick6_wave_runtime_instance_t *const instance = wave_get_instance_mut(instance_id);
+    if (instance == NULL) return;
+    instance->voice.active_note = note;
+    instance->voice.has_active_note = 1U;
+    instance->voice.gate = 1U;
+    instance->voice.trigger = 0U;
+    instance->voice.velocity = wave_clampf(
+        (float)velocity * (1.0f / 127.0f), 0.0f, 1.0f);
+    for (uint8_t osc = 0U; osc < BRICK6_WAVE_OSC_COUNT; ++osc)
+    {
+        wave_snap_pos(&instance->osc[osc]);
+        wave_update_pitch(instance, osc);
+        instance->osc[osc].phase_inc_current = instance->osc[osc].phase_inc;
+    }
+}
+
 void brick6_wave_runtime_note_off(uint8_t instance_id, uint8_t note)
 {
     brick6_wave_runtime_instance_t *const instance = wave_get_instance_mut(instance_id);
@@ -795,7 +831,6 @@ void brick6_wave_runtime_stop_wavetable_slot(uint16_t wavetable_slot,
         }
     }
     audio_wavetable_registry_remove(wavetable_slot, generation);
-    (void)audio_retire_ack_publish(AUDIO_RETIRE_ACK_WAVE, wavetable_slot, generation);
 }
 
 void brick6_wave_runtime_clear_trigger(uint8_t instance_id)

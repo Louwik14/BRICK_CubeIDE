@@ -166,6 +166,9 @@ uint32_t sample_page_cache_cancel_reserved_domain(sample_audio_domain_t domain,
                                                 uint8_t reason);
 sample_page_state_t sample_page_cache_get_page_state_key(sample_audio_key_t key,
                                                          uint32_t page_index);
+/* AUDIO-side state snapshot with the same cache-consume contract as acquire. */
+sample_page_state_t sample_page_cache_audio_get_page_state_key(
+    sample_audio_key_t key, uint32_t page_index);
 uint8_t sample_page_cache_page_exists_key(sample_audio_key_t key,
                                           uint32_t page_index);
 sample_page_state_t sample_page_cache_get_page_state(uint16_t sample_id, uint32_t page_index);

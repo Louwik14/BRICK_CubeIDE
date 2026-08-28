@@ -3,7 +3,6 @@
 #include <string.h>
 
 #include "Sampler/wavetable_pool.h"
-#include "Storage/cache_maintenance.h"
 #include "Storage/memory_layout.h"
 #include "stm32h7xx.h"
 
@@ -15,12 +14,13 @@ typedef struct
     audio_wavetable_descriptor_t descriptor;
 } audio_wavetable_registry_slot_t;
 
-AUDIO_COLD_SDRAM static audio_wavetable_registry_slot_t
+AUDIO_SHARED_REGISTRY_SDRAM static audio_wavetable_registry_slot_t
     g_audio_wavetable_registry[WAVETABLE_POOL_MAX_SLOTS];
 
 void audio_wavetable_registry_init(void)
 {
     memset(g_audio_wavetable_registry, 0, sizeof(g_audio_wavetable_registry));
+    __DMB();
 }
 
 uint8_t audio_wavetable_registry_transport_install(
@@ -29,14 +29,12 @@ uint8_t audio_wavetable_registry_transport_install(
     if ((descriptor == NULL)
         || (descriptor->wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)
         || (descriptor->generation == 0U)) return 0U;
-    const void *base = audio_shared_memory_resolve(&descriptor->base_data);
+    const void *base = audio_shared_memory_consume(&descriptor->base_data);
     if (base == NULL) return 0U;
-    dcache_invalidate_by_addr_aligned(base, descriptor->base_data.length);
     for (uint16_t i = 0U; i < descriptor->band_count; ++i)
     {
-        const void *band = audio_shared_memory_resolve(&descriptor->bands[i].data);
+        const void *band = audio_shared_memory_consume(&descriptor->bands[i].data);
         if (band == NULL) return 0U;
-        dcache_invalidate_by_addr_aligned(band, descriptor->bands[i].data.length);
     }
     audio_wavetable_registry_slot_t *const dst =
         &g_audio_wavetable_registry[descriptor->wavetable_slot];
@@ -46,6 +44,7 @@ uint8_t audio_wavetable_registry_transport_install(
     dst->sequence++;
     __DMB();
     dst->ready = 1U;
+    __DMB();
     return 1U;
 }
 
@@ -55,6 +54,7 @@ uint8_t audio_wavetable_registry_resolve(uint16_t wavetable_slot,
 {
     if (out != NULL) memset(out, 0, sizeof(*out));
     if ((out == NULL) || (wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)) return 0U;
+    __DMB();
     const audio_wavetable_registry_slot_t snap = g_audio_wavetable_registry[wavetable_slot];
     __DMB();
     if ((snap.ready == 0U)
@@ -74,4 +74,5 @@ void audio_wavetable_registry_remove(uint16_t wavetable_slot,
     slot->ready = 0U;
     __DMB();
     slot->sequence++;
+    __DMB();
 }

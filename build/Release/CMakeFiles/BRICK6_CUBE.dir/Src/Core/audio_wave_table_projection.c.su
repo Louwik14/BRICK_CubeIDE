@@ -1,6 +1,4 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_wave_table_projection.c:30:16:audio_wave_table_resolve	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_wave_table_projection.c:71:13:audio_wave_table_projection_publish_entries	16	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_wave_table_projection.c:62:6:audio_wave_table_projection_init	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_wave_table_projection.c:86:9:audio_wave_table_projection_publish_track	296	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_wave_table_projection.c:116:6:audio_wave_table_projection_publish_all	304	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_wave_table_projection.c:147:6:audio_wave_table_projection_withdraw_slot	280	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_wave_table_projection.c:39:16:publish_selection	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_wave_table_projection.c:55:6:audio_wave_table_projection_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_wave_table_projection.c:62:9:audio_wave_table_projection_publish_track	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_wave_table_projection.c:81:6:audio_wave_table_projection_withdraw_slot	48	static

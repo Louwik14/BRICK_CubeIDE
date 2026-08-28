@@ -26,6 +26,8 @@
  * @note L’API publique est déclarée dans usbh_midi.h.
  */
 
+#include "Core/project_load_quiesce.h"
+
 /**
   ******************************************************************************
   * @file    usbh_midi.c
@@ -375,6 +377,8 @@ static void USBH_MIDI_PushRx(USBH_MIDI_HandleTypeDef *handle,
                             const uint8_t packet[USBH_MIDI_PACKET_SIZE],
                             uint32_t tim5_tick)
 {
+  if (project_load_ingress_is_open() == 0U)
+    return;
   if (handle->rx_count >= USBH_MIDI_RX_QUEUE_LEN)
   {
     ++g_usbh_midi_rx_overflow_count;

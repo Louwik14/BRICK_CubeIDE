@@ -3,7 +3,7 @@
 #include <stddef.h>
 
 #include "Core/brick6_stack_runtime.h"
-#include "Core/track_tone_sound_state.h"
+#include "Param/param_registry.h"
 
 typedef struct
 {
@@ -70,21 +70,18 @@ uint8_t param_stack_label_for_track_param(uint8_t track,
 {
     uint8_t slot = 0U;
     uint8_t param_index = 0U;
-    const track_tone_sound_state_t *const tone =
-        track_tone_sound_state_get_const(track);
-    if ((tone == NULL)
-            || (param_stack_dynamic_param_info(
+    if ((param_stack_dynamic_param_info(
                 id, &slot, &param_index) == 0U)
             || (slot >= BRICK6_STACK_SLOT_COUNT))
     {
         return 0U;
     }
-    const uint8_t model = (uint8_t)(tone->stack.model[slot] + 0.5f);
+    static const param_id_t model_ids[BRICK6_STACK_SLOT_COUNT] = {
+        PARAM_STACK_OSC1_MODEL, PARAM_STACK_OSC2_MODEL,
+        PARAM_STACK_OSC3_MODEL };
+    float model_value = 0.0f;
+    if (!param_registry_get_track_value(model_ids[slot], track, &model_value))
+        return 0U;
+    const uint8_t model = (uint8_t)(model_value + 0.5f);
     return param_stack_model_param_resolve(model, param_index, out_label);
-}
-
-uint8_t param_stack_param_is_active(uint8_t track, param_id_t id)
-{
-    const char *label = NULL;
-    return param_stack_label_for_track_param(track, id, &label);
 }

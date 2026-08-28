@@ -37,6 +37,11 @@ typedef enum
     LIVE_PARAMETER_EVENT_SCOPE_SLOT = 2U
 } live_parameter_event_scope_t;
 
+/* PARAM command kind values 2..9 address one canonical Matrix slot while
+ * preserving the public PARAM opcode and the 16-byte command ABI. */
+#define LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_BASE 2U
+#define LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_LAST 9U
+
 enum
 {
     LIVE_PARAMETER_EVENT_FLAG_SET_TARGET = (uint16_t)(1U << 0),

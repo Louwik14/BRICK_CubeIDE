@@ -85,9 +85,6 @@ uint8_t audio_fx_runtime_is_comp(brick_entity_id_t entity_id);
 uint8_t audio_fx_runtime_requires_stereo(brick_entity_id_t entity_id);
 uint8_t audio_fx_runtime_pre_filter_supported(brick_entity_id_t entity_id);
 audio_fx_filter_pos_t audio_fx_runtime_get_filter_pos(brick_entity_id_t entity_id);
-/* CONTROL/UI readback from the pointer-free AUDIO publication. */
-audio_fx_filter_pos_t audio_fx_runtime_status_get_filter_pos(
-    brick_entity_id_t entity_id);
 void audio_fx_runtime_rebuild_entity_plan(brick_entity_id_t entity_id);
 audio_fx_placement_t audio_fx_runtime_get_placement(brick_entity_id_t entity_id);
 uint8_t audio_fx_runtime_apply_param(brick_entity_id_t entity_id,

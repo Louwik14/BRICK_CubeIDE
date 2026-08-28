@@ -55,7 +55,6 @@ typedef enum
     UI_BOOT_LOADING_WAIT_FRAME,
     UI_BOOT_LOADING_RESTORE_PROJECT,
     UI_BOOT_LOADING_WAIT_SAMPLES,
-    UI_BOOT_LOADING_WAIT_MUSIC_READY,
     UI_BOOT_LOADING_FAILED
 } ui_boot_loading_phase_t;
 
@@ -556,7 +555,7 @@ void ui_boot_loading_service(void)
         else if (result == PROJECT_PRODUCT_BOOT_RESTORE_PROJECT_READY)
             g_ui_boot_loading_phase = UI_BOOT_LOADING_WAIT_SAMPLES;
         else
-            g_ui_boot_loading_phase = UI_BOOT_LOADING_WAIT_MUSIC_READY;
+            g_ui_boot_loading_phase = UI_BOOT_LOADING_INACTIVE;
     }
 
     if (g_ui_boot_loading_phase == UI_BOOT_LOADING_WAIT_SAMPLES)
@@ -564,21 +563,8 @@ void ui_boot_loading_service(void)
         if ((project_product_get_progress(&g_ui_boot_loading_progress) != 0U)
             && (g_ui_boot_loading_progress.complete != 0U))
         {
-            g_ui_boot_loading_phase = UI_BOOT_LOADING_WAIT_MUSIC_READY;
-        }
-    }
-
-    if (g_ui_boot_loading_phase == UI_BOOT_LOADING_WAIT_MUSIC_READY)
-    {
-        const brick_entity_id_t entity = ui_get_active_lane();
-        uint32_t installed_generation = 0U;
-        uint32_t visible_generation = 0U;
-        if ((track_runtime_active_projection_is_coherent(
-                entity, &installed_generation) != 0U)
-                && live_clock_read_binding_generation(
-                    entity, &visible_generation)
-                && (visible_generation == installed_generation))
             g_ui_boot_loading_phase = UI_BOOT_LOADING_INACTIVE;
+        }
     }
 }
 

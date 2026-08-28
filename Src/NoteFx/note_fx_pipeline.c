@@ -7,9 +7,8 @@
 #include "NoteFx/note_fx_engine.h"
 #include "NoteFx/note_fx_state.h"
 #include "Core/live_clock.h"
+#include "Core/project_load_quiesce.h"
 #include "Core/track_runtime.h"
-#include "Audio/control_audio_queue.h"
-#include "Audio/control_music_queue.h"
 #include "Core/control_music_output.h"
 #include "midi.h"
 #include "Seq/seq_output_guard.h"
@@ -37,6 +36,8 @@ static uint32_t g_note_fx_source_generation[NOTE_FX_TRACK_COUNT];
 static uint32_t g_note_fx_panic_epoch = 1U;
 static volatile uint8_t g_note_fx_panic_pending;
 static uint8_t g_note_fx_panic_active;
+static uint32_t g_note_fx_panic_staged_epoch;
+static volatile uint32_t g_note_fx_panic_failure_count;
 
 #define NOTE_FX_COMMAND_CAPACITY 32U
 #define NOTE_FX_LIVE_QUEUE_CAPACITY (NOTE_FX_COMMAND_CAPACITY - 1U)
@@ -239,30 +240,21 @@ static note_fx_result_t note_fx_pipeline_terminal(const note_fx_event_t *event, 
     const uint8_t channel = (terminal.destination_id == NOTE_EVENT_DESTINATION_DEFAULT)
         ? track_runtime_get_midi_channel_zero_based(terminal.track)
         : terminal.destination_id;
-    uint32_t binding_generation = 0U;
-    if (!live_clock_read_binding_generation(terminal.track,
-                                             &binding_generation)
-            || (binding_generation == 0U))
-    {
-        return NOTE_EVENT_RESULT_REJECTED_STALE;
-    }
-
+    const uint8_t external_flag = (uint8_t)(
+        (((terminal.occurrence_id
+            & (uint32_t)~NOTE_EVENT_OCCURRENCE_COUNTER_MASK)
+            == NOTE_EVENT_OCCURRENCE_NAMESPACE_KEY)
+        || ((terminal.occurrence_id
+            & (uint32_t)~NOTE_EVENT_OCCURRENCE_COUNTER_MASK)
+            == NOTE_EVENT_OCCURRENCE_NAMESPACE_MIDI))
+        ? CONTROL_MUSIC_ACTION_EXTERNAL_FLAG : 0U);
     const control_music_action_t audio_event = {
         .due_sample = terminal.sample_abs,
-        .binding_generation = binding_generation,
         .output_id = terminal.occurrence_id,
-        .trigger_id = terminal.generation
-            | ((((terminal.occurrence_id
-                    & (uint32_t)~NOTE_EVENT_OCCURRENCE_COUNTER_MASK)
-                    == NOTE_EVENT_OCCURRENCE_NAMESPACE_KEY)
-                || ((terminal.occurrence_id
-                    & (uint32_t)~NOTE_EVENT_OCCURRENCE_COUNTER_MASK)
-                    == NOTE_EVENT_OCCURRENCE_NAMESPACE_MIDI))
-                ? CONTROL_MUSIC_TRIGGER_EXTERNAL_FLAG : 0U),
+        .kind = (uint8_t)(((terminal.kind == NOTE_EVENT_KIND_ON)
+            ? CONTROL_MUSIC_ACTION_START : CONTROL_MUSIC_ACTION_STOP)
+            | external_flag),
         .entity_id = terminal.track,
-        .kind = (terminal.kind == NOTE_EVENT_KIND_ON)
-            ? (uint8_t)CONTROL_MUSIC_ACTION_START
-            : (uint8_t)CONTROL_MUSIC_ACTION_STOP,
         .note = terminal.note,
         .velocity = terminal.velocity
     };
@@ -347,6 +339,8 @@ void note_fx_pipeline_init(void)
     g_note_fx_panic_epoch = 1U;
     g_note_fx_panic_pending = 0U;
     g_note_fx_panic_active = 0U;
+    g_note_fx_panic_staged_epoch = 0U;
+    g_note_fx_panic_failure_count = 0U;
     for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track)
         g_note_fx_source_generation[track] = 1U;
     note_fx_engine_init();
@@ -538,6 +532,8 @@ note_fx_result_t note_fx_pipeline_submit_source_occurrence(
     uint64_t sample_time, note_event_provenance_t provenance,
     uint32_t source_occurrence_id)
 {
+    if (project_load_ingress_is_open() == 0U)
+        return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
     if ((track >= NOTE_FX_TRACK_COUNT) || (note >= 128U)
             || (provenance >= NOTE_EVENT_SOURCE_COUNT)
             || (source_occurrence_id == 0U))
@@ -566,6 +562,8 @@ note_fx_result_t note_fx_pipeline_submit_source_capture_tick(
     note_event_provenance_t provenance,
     uint32_t source_occurrence_id)
 {
+    if (project_load_ingress_is_open() == 0U)
+        return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
     if ((track >= NOTE_FX_TRACK_COUNT) || (note >= 128U)
             || (provenance >= NOTE_EVENT_SOURCE_COUNT)
             || (source_occurrence_id == 0U))
@@ -859,13 +857,15 @@ uint8_t note_fx_pipeline_request_panic(void)
 static void note_fx_pipeline_purge_for_panic_owner(uint32_t panic_epoch)
 {
     const uint32_t primask = note_fx_pipeline_enter_critical();
+    const uint32_t current_epoch = g_note_fx_panic_epoch;
     uint8_t read_index = g_note_fx_command_tail;
     uint8_t write_index = g_note_fx_command_tail;
     while (read_index != g_note_fx_command_head)
     {
         const note_fx_command_t command = g_note_fx_commands[read_index];
         read_index = (uint8_t)((read_index + 1U) % NOTE_FX_COMMAND_CAPACITY);
-        if (command.panic_epoch != panic_epoch)
+        if ((command.panic_epoch != panic_epoch)
+                && (command.panic_epoch != current_epoch))
             continue;
         g_note_fx_commands[write_index] = command;
         write_index = (uint8_t)((write_index + 1U) % NOTE_FX_COMMAND_CAPACITY);
@@ -880,7 +880,8 @@ static void note_fx_pipeline_purge_for_panic_owner(uint32_t panic_epoch)
     }
     memset(g_note_fx_live_queue, 0, sizeof(g_note_fx_live_queue));
     g_note_fx_live_queue_count = 0U;
-    g_note_fx_panic_pending = 0U;
+    if (current_epoch == panic_epoch)
+        g_note_fx_panic_pending = 0U;
     note_fx_pipeline_exit_critical(primask);
 }
 
@@ -903,23 +904,46 @@ static uint8_t note_fx_pipeline_apply_panic_owner(uint64_t first_renderable_samp
 
     if (requested == 0U)
         return 0U;
-    if (panic_epoch != 0U)
-        note_fx_pipeline_purge_for_panic_owner(panic_epoch);
+    (void)panic_epoch;
+    (void)first_renderable_sample;
+    if (control_music_output_panic_all() == 0U)
+    {
+        ++g_note_fx_panic_failure_count;
+        return 2U;
+    }
+    g_note_fx_panic_staged_epoch = panic_epoch;
+    return 1U;
+}
 
-    control_music_output_panic_all();
+uint8_t note_fx_pipeline_finalize_control_window(uint64_t first_renderable_sample)
+{
+    uint32_t panic_epoch = 0U;
+    const uint32_t primask = note_fx_pipeline_enter_critical();
+    if (g_note_fx_panic_active != 0U)
+        panic_epoch = g_note_fx_panic_staged_epoch;
+    note_fx_pipeline_exit_critical(primask);
+    if (panic_epoch == 0U)
+        return 1U;
 
-    /* Terminal admissions have already emitted their stops.  This cleanup
-     * only resets NoteFx/ARP ownership and cannot create a second voice path. */
     for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track)
         if (note_fx_engine_cleanup(track, first_renderable_sample,
                                    NULL, NULL)
                 != NOTE_EVENT_RESULT_ACCEPTED)
-            return 2U;
-
+        {
+            ++g_note_fx_panic_failure_count;
+            return 0U;
+        }
+    note_fx_pipeline_purge_for_panic_owner(panic_epoch);
     const uint32_t complete_primask = note_fx_pipeline_enter_critical();
     g_note_fx_panic_active = 0U;
+    g_note_fx_panic_staged_epoch = 0U;
     note_fx_pipeline_exit_critical(complete_primask);
     return 1U;
+}
+
+uint32_t note_fx_pipeline_diagnostic_panic_failure_count(void)
+{
+    return g_note_fx_panic_failure_count;
 }
 
 
@@ -1045,8 +1069,11 @@ uint8_t note_fx_pipeline_prepare_control_window(uint64_t block_start)
 {
     const uint8_t panic_result =
         note_fx_pipeline_apply_panic_owner(block_start);
-    if ((panic_result > 1U)
-            || (note_fx_pipeline_apply_pending_commands() == 0U))
+    if (panic_result > 1U)
+        return 2U;
+    if (panic_result != 0U)
+        return panic_result;
+    if (note_fx_pipeline_apply_pending_commands() == 0U)
         return 2U;
     return panic_result;
 }

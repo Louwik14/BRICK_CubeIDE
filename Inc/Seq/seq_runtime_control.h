@@ -25,9 +25,6 @@ void seq_runtime_clear_tracks(const seq_track_id_t *tracks, uint8_t track_count)
 void seq_runtime_set_tracks_muted(const seq_track_id_t *tracks, uint8_t track_count, uint8_t muted);
 void seq_runtime_begin_track_restore(const seq_track_id_t *tracks, uint8_t track_count);
 void seq_runtime_end_track_restore(const seq_track_id_t *tracks, uint8_t track_count);
-void seq_runtime_control_request_from_audio_irq(void);
-void seq_runtime_control_service_from_pendsv(void);
-
 void seq_runtime_set_track_div(seq_track_id_t track, uint8_t div);
 void seq_runtime_restore_track_div(seq_track_id_t track, uint8_t div);
 uint8_t seq_runtime_get_track_div(seq_track_id_t track, uint8_t *out_div);

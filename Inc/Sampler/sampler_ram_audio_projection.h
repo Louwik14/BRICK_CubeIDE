@@ -19,6 +19,9 @@ typedef struct
     sampler_ram_format_t format;
 } sampler_ram_audio_descriptor_t;
 
+_Static_assert(sizeof(sampler_ram_audio_descriptor_t) == 40U,
+               "Sample RAM AUDIO descriptor ABI changed");
+
 void sampler_ram_audio_projection_init(void);
 /* H743 local transport seam. H747 replaces the implementation, not the
  * region+offset descriptor consumed by AUDIO. */

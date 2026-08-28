@@ -94,6 +94,7 @@ brick6_stack_family_t brick6_stack_runtime_model_family(brick6_stack_model_t mod
 brick6_stack_kernel_id_t brick6_stack_runtime_model_kernel(brick6_stack_model_t model);
 
 void brick6_stack_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t velocity);
+void brick6_stack_runtime_initialize_held_note(uint8_t instance_id, uint8_t note, uint8_t velocity);
 void brick6_stack_runtime_note_off(uint8_t instance_id, uint8_t note);
 void brick6_stack_runtime_all_notes_off(uint8_t instance_id);
 void brick6_stack_runtime_clear_trigger(uint8_t instance_id);

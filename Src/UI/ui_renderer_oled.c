@@ -70,9 +70,11 @@ void ui_renderer_oled_draw(void)
 
     drv_display_clear();
 
-    if (audio_get_init_state() == AUDIO_INIT_ERROR)
+    audio_boot_diag_snapshot_t audio_diag;
+    audio_boot_diag_read(&audio_diag);
+    if (audio_diag.state == AUDIO_INIT_ERROR)
     {
-        const board_audio_boot_error_t error = audio_get_boot_error();
+        const board_audio_boot_error_t error = audio_diag.error;
         drv_display_set_font(&FONT_5X7);
         char error_text[24];
         drv_display_draw_text(8U, 10U, "AUDIO INIT ERROR");

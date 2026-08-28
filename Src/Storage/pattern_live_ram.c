@@ -9,6 +9,8 @@
 #include "UI/ui_core.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
+#include "Core/control_music_output.h"
+#include "Core/live_clock.h"
 #include "Storage/pattern_control_bank.h"
 #include "Storage/persistence_workspace.h"
 #include "Storage/persistent_pattern_control.h"
@@ -530,7 +532,18 @@ void pattern_live_service(void)
         return;
     }
 
-    if (current_generation == g_queued_boundary_generation)
+    uint8_t boundary_due = 0U;
+    uint64_t boundary_sample = 0U;
+    if (seq_runtime_get_track_next_loop_sample(
+            g_queued_boundary_track, &boundary_sample) != 0U)
+    {
+        uint64_t now_sample = 0U;
+        (void)live_clock_read_audio_sample(&now_sample);
+        boundary_due = (uint8_t)(boundary_sample
+            <= control_music_output_first_unpublished_sample(now_sample));
+    }
+    if ((current_generation == g_queued_boundary_generation)
+            && (boundary_due == 0U))
     {
         return;
     }
@@ -618,6 +631,18 @@ uint8_t pattern_live_get_queued(uint8_t *out_valid, uint8_t *out_bank, uint8_t *
     *out_valid = g_queued_valid;
     *out_bank = g_queued_bank;
     *out_pattern = g_queued_pattern;
+    return 1U;
+}
+
+uint8_t pattern_live_get_queued_boundary(uint8_t *out_track,
+                                         uint32_t *out_generation)
+{
+    if ((out_track == NULL) || (out_generation == NULL)
+            || (g_queued_valid == 0U)
+            || (g_queued_boundary_track >= SEQ_LANE_CAPACITY))
+        return 0U;
+    *out_track = g_queued_boundary_track;
+    *out_generation = g_queued_boundary_generation;
     return 1U;
 }
 

@@ -6,11 +6,19 @@ AUDIO possede consommation, besoins de pages, page-cache, generations, pins, ref
 
 Une page suit `FREE -> RESERVED -> LOADING -> READY` ou `FAILED`. Une page LOADING n'est ni recyclable ni evictable. La completion valide key, slot, page generation, registration epoch et token; une completion tardive ne devient jamais visible.
 
-## Besoins et service
+## Credits de fenetre et service
 
-Chaque voix Classic/Multi publie un snapshot et jusqu'a six besoins mobiles, plus le pre-socle loop forward. Le generateur commun calcule pages forward et loop et supprime les doublons. Reverse et ping-pong restent propres au Sampler RAM.
+M7 ne publie plus de snapshot de playhead, de frame cursor, de deadline ou de
+liste page-par-page. Chaque voix Classic/Multi expose un credit de fenetre
+compact: `{key, registration_epoch, owner_token, current_page,
+mobile_page_count, loop_first_page, loop_last_page, loop_preload_count}`.
+`current_page` est le seul curseur physique; les pages suivantes et le wrap
+forward sont derives. Reverse et ping-pong restent propres au Sampler RAM.
 
-Le scheduler sert les voix actives en round-robin fixe Classic puis Multi. Une page par voix et par passe; une voix sans besoin chargeable est sautee. Le curseur survit aux retours superloop. Les deadlines sont diagnostiques et ne remplacent pas cet ordre.
+Le scheduler M4 sert les fenetres actives en round-robin fixe Classic puis
+Multi. Une page par voix et par passe; une voix sans credit chargeable est
+sautee. Aucune horloge STREAM, wake AUDIO vers Storage, low-water dynamique ou
+prediction temporelle ne conditionne le service.
 
 Le contrat produit garantit le pre-socle `2 x 32 KiB` et les limites Stream/Multi publiees avant jeu. Il n'existe ni READY par note, ni ACK START, ni retry, rollback ou fallback musical. Un underrun dans ce workload est une rupture de contrat, pas une admission tardive.
 
@@ -26,9 +34,9 @@ Le bulk Multi calcule et epingle l'union start/loop, utilise le cache, le transp
 
 Sample RAM charge par etapes, lectures de 4096 octets et conversion de 256 frames. Wavetable ajoute parse, CRC, mipmaps, cache `.B6WT` transactionnel et preview; une FFT/bande ou 256 samples sont traites par quantum. Le format WAVE interne canonique est mono FLOAT32 normalise, 1024 samples par frame, avec mipmaps FLOAT32 band-major 1024/512/256/128/64/32/16/8. Les strides physiques sont egaux aux tailles logiques, sauf la bande 8 dont le stride est 16 samples avec 8 floats de padding; chaque frame commence ainsi sur une limite de 32 octets et aucune duplication cyclique n'est stockee. La geometrie source 1024/2048 est un choix explicite de l'importeur; les API historiques choisissent le contrat legacy 2048. Les cycles 2048 sont convertis en 1024 dans le domaine frequentiel. Chaque bande est ensuite generee directement depuis la FFT canonique 1024, avec transition raised-cosine, marge avant Nyquist et bin Nyquist nul; aucune cascade ni saturation post-IFFT n'est appliquee. Le cache prepare est en version physique 5 et sa revision de preparation est 9; les anciennes preparations sont rejetees et regenerees depuis le WAV source. L'ancien slot reste publie jusqu'au commit du candidat.
 
-Les payloads Sampler RAM/Wavetable sont des references `{region, offset, length}`. CONTROL clean avant publication, AUDIO invalidate avant installation. Un unload/remplacement suit `STOP -> invalidation voix + ACK scalaire dans le ring IPC -> FREE CONTROL`; le transport ACK ne fait aucun appel CONTROL depuis AUDIO.
+Les payloads Sampler RAM/Wavetable sont des references `{region, offset, length}`. CONTROL clean avant publication, AUDIO invalidate avant installation. Un unload/remplacement suit `STOP -> invalidation voix synchrone -> avancee du tail FIFO -> FREE CONTROL`. Les ACK Multi/RAM/Wavetable et leur ring IPC ont ete supprimes; seul le fence du consumer physique est lu.
 
-Les registres snapshot et needs Stream sont des tableaux fixes, pointer-free, seqlockes et places explicitement dans la fenetre IPC partagee SRAM3/D2. La projection live Recorder transporte une carte de reservation possedee, extents inclus, dans la zone partagee; AUDIO/Looper ne relisent jamais la reservation Storage.
+Le registre compact de credits Stream est fixe, pointer-free, seqlocke et place explicitement dans la fenetre IPC partagee SRAM3/D2. Le registre de snapshots complet a ete supprime. La projection live Recorder transporte une carte de reservation possedee, extents inclus, dans la zone partagee; AUDIO/Looper ne relisent jamais la reservation Storage.
 
 ## Format audio
 

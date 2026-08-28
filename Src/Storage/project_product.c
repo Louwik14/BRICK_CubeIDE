@@ -451,7 +451,7 @@ int32_t project_product_save_last_detail(void){return g_save_detail;}
 static uint8_t begin_assets(void*ctx){persistence_project_restore_workspace_t*w=ctx;if(w==NULL)return 0U;w->asset_count=0U;return 1U;}
 static uint8_t validate_asset(void*ctx,const persist_control_asset_ref_t*a){(void)ctx;return project_control_validate_asset(a);}
 static uint8_t put_asset(void*ctx,const persist_control_asset_ref_t*a){persistence_project_restore_workspace_t*w=ctx;if(w==NULL||a==NULL||w->asset_count>=PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY)return 0U;w->assets[w->asset_count++]=*a;return 1U;}
-static uint8_t apply_working(void*ctx,const persist_codec_project_metadata_t*m,const persist_control_pattern_t*p){persistence_project_restore_workspace_t*w=ctx;if(w==NULL||m==NULL||p==NULL||persistent_pattern_restore_prepare(p,&g_restore_audio_plan)!=PERSIST_CODEC_OK)return 0U;w->metadata=*m;w->working_pattern=*p;w->working_valid=1U;return 1U;}
+static uint8_t apply_working(void*ctx,const persist_codec_project_metadata_t*m,const persist_control_pattern_t*p){persistence_project_restore_workspace_t*w=ctx;if(w==NULL||m==NULL||p==NULL||persistent_pattern_control_validate(p)!=PERSIST_CODEC_OK)return 0U;w->metadata=*m;w->working_pattern=*p;w->working_valid=1U;return 1U;}
 static uint8_t apply_macros(void*ctx,const persist_control_macros_t*m){persistence_project_restore_workspace_t*w=ctx;if(w==NULL||m==NULL)return 0U;w->macros=*m;w->macros_valid=1U;return 1U;}
 static uint8_t begin_patterns(void*ctx){(void)ctx;return pattern_control_bank_begin_project();}
 static uint8_t put_pattern(void*ctx,const persist_control_pattern_record_t*r){(void)ctx;return pattern_control_bank_put_record_project(r);}

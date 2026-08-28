@@ -52,6 +52,7 @@ _Static_assert(sizeof(live_event_t) == 16U,
 #define LIVE_EVENT_QUEUE_CAPACITY 64U
 
 void live_event_init(void);
+void live_event_discard_pending(void);
 
 bool live_event_submit_from_hall(uint8_t key,
                                  bool pressed,

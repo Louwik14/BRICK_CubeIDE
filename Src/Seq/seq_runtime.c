@@ -14,13 +14,16 @@
 
 #include "Storage/memory_layout.h"
 #include "Audio/metronome_runtime.h"
-#include "Audio/control_audio_queue.h"
+#include "Audio/control_audio_command.h"
+#include "Core/control_audio_publication.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include "Core/engine_tasklet.h"
 #include "Core/live_clock.h"
 #include "Core/audio_transport_publication.h"
 #include "Core/track_runtime.h"
 #include "Core/control_music_output.h"
+#include "Storage/audio_recorder.h"
+#include "Storage/pattern_live_ram.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "midi.h"
 
@@ -74,7 +77,6 @@ static volatile uint8_t g_seq_runtime_live_rec_tail;
 static volatile uint8_t g_seq_runtime_live_rec_count;
 static uint64_t g_seq_runtime_control_sample_cursor;
 static uint8_t g_seq_runtime_trigger_start_bypass;
-static volatile uint8_t g_seq_runtime_control_service_pending;
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic);
 static void seq_runtime_process_core(void);
 static uint8_t seq_runtime_control_apply_event(
@@ -289,7 +291,6 @@ void seq_runtime_init(void)
     g_seq_runtime_live_rec_head = 0U;
     g_seq_runtime_live_rec_tail = 0U;
     g_seq_runtime_live_rec_count = 0U;
-    g_seq_runtime_control_service_pending = 0U;
     memset(g_seq_runtime_live_rec_queue, 0, sizeof(g_seq_runtime_live_rec_queue));
     g_seq_runtime.last_tick_count = seq_runtime_get_now_tick();
     seq_play_scheduler_init();
@@ -456,11 +457,35 @@ static void seq_runtime_process_core(void)
     while (g_seq_runtime_control_sample_cursor < publish_limit)
     {
         const uint64_t remaining = publish_limit - g_seq_runtime_control_sample_cursor;
-        const uint16_t frames = (remaining > UINT16_MAX)
+        uint16_t frames = (remaining > UINT16_MAX)
             ? UINT16_MAX : (uint16_t)remaining;
         const uint64_t window_first = g_seq_runtime_control_sample_cursor;
-        if (control_music_output_begin_window(window_first, frames) == 0U)
+        uint8_t pattern_boundary_track = 0U;
+        uint32_t pattern_boundary_generation = 0U;
+        uint64_t pattern_boundary_sample = 0U;
+        if ((pattern_live_get_queued_boundary(
+                 &pattern_boundary_track,
+                 &pattern_boundary_generation) != 0U)
+                && (g_seq_track_loop_generation[pattern_boundary_track]
+                    == pattern_boundary_generation)
+                && (seq_runtime_get_track_next_loop_sample(
+                    pattern_boundary_track, &pattern_boundary_sample) != 0U))
+        {
+            if (pattern_boundary_sample <= window_first)
+                return;
+            const uint64_t before_boundary =
+                pattern_boundary_sample - window_first;
+            if (before_boundary < frames)
+                frames = (uint16_t)before_boundary;
+        }
+        if (control_audio_publication_begin_horizon(
+                window_first, frames) == 0U)
             return;
+        if (control_music_output_begin_window(window_first, frames) == 0U)
+        {
+            control_audio_publication_abort_horizon();
+            return;
+        }
         seq_runtime_control_event_t events[128];
         uint16_t count = seq_runtime_exec_collect_block_events(
             &g_seq_runtime, &g_seq_transport_fsm, &g_seq_clock_bridge,
@@ -468,16 +493,16 @@ static void seq_runtime_process_core(void)
             events, 128U, window_first, frames,
             seq_runtime_get_clock_source_internal(),
             g_seq_runtime.running);
-        g_seq_runtime_control_sample_cursor += frames;
         const uint8_t panic_applied = note_fx_pipeline_prepare_control_window(
-            g_seq_runtime_control_sample_cursor - frames);
+            window_first);
         if (panic_applied > 1U)
         {
             control_music_output_abort_window();
+            control_audio_publication_abort_horizon();
             return;
         }
 
-        for (;;)
+        for (; panic_applied == 0U;)
         {
             for (uint16_t i = 0U; i < count; ++i)
             {
@@ -485,21 +510,32 @@ static void seq_runtime_process_core(void)
                 if ((event->type == SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE)
                         || (event->type == SEQ_RUNTIME_AUDIO_EVENT_METRO_CLICK))
                 {
-                    const control_audio_event_t audio_event = {
-                        .due_sample = event->sample_abs,
-                        .entity_id = (brick_entity_id_t)event->track,
-                        .kind = (event->type == SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE)
-                            ? (uint8_t)CONTROL_AUDIO_EVENT_BOUNDARY_EDGE
-                            : (uint8_t)CONTROL_AUDIO_EVENT_METRONOME_CLICK,
-                        .flags = event->velocity
-                    };
-                    (void)control_audio_queue_publish(&audio_event);
+                    uint8_t published;
+                    if (event->type == SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE)
+                    {
+                        audio_recorder_control_on_looper_boundary(
+                            event->track, event->sample_abs);
+                        published = control_audio_publish_param(event->track,
+                            0xFFF8U, 0U, 0U, event->sample_abs);
+                    }
+                    else
+                        published = control_audio_publish_note(event->track,
+                            CONTROL_AUDIO_NOTE_ON,
+                            0xFFFFFF00UL | (uint32_t)(event->velocity != 0U),
+                            0U, event->velocity, event->sample_abs);
+                    if (published == 0U)
+                    {
+                        control_music_output_abort_window();
+                        control_audio_publication_abort_horizon();
+                        return;
+                    }
                 }
                 else
                 {
                     if (seq_runtime_control_apply_event(event) == 0U)
                     {
                         control_music_output_abort_window();
+                        control_audio_publication_abort_horizon();
                         return;
                     }
                 }
@@ -508,20 +544,36 @@ static void seq_runtime_process_core(void)
                 break;
             count = seq_runtime_exec_collect_remaining_scheduler_events(
                 events, 128U, frames,
-                g_seq_runtime_control_sample_cursor - frames);
+                window_first);
         }
-        if (note_fx_pipeline_process(
-                g_seq_runtime_control_sample_cursor - frames,
-                frames, g_seq_runtime.samples_per_step_q16) == 0U)
+        if ((panic_applied == 0U) && (note_fx_pipeline_process(
+                window_first,
+                frames, g_seq_runtime.samples_per_step_q16) == 0U))
         {
             control_music_output_abort_window();
+            control_audio_publication_abort_horizon();
             return;
         }
         if (control_music_output_commit_window() == 0U)
         {
             control_music_output_abort_window();
+            control_audio_publication_abort_horizon();
             return;
         }
+        if (control_audio_publication_commit_horizon() == 0U)
+        {
+            control_music_output_abort_window();
+            control_audio_publication_abort_horizon();
+            return;
+        }
+        if (note_fx_pipeline_finalize_control_window(window_first) == 0U)
+        {
+            control_music_output_abort_window();
+            return;
+        }
+        if (control_music_output_finalize_window() == 0U)
+            return;
+        g_seq_runtime_control_sample_cursor = window_first + frames;
     }
 
     if (seq_transport_fsm_is_stopped(&g_seq_transport_fsm) != 0U)
@@ -547,22 +599,8 @@ static void seq_runtime_process_core(void)
 
 void seq_runtime_time_adapter_process(void)
 {
-    /* Musical cadence is owned by the audio-anchored PendSV continuation. */
-}
-
-void seq_runtime_control_request_from_audio_irq(void)
-{
-    g_seq_runtime_control_service_pending = 1U;
-    __DMB();
-    SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
-}
-
-void seq_runtime_control_service_from_pendsv(void)
-{
-    if (g_seq_runtime_control_service_pending == 0U)
-        return;
-    g_seq_runtime_control_service_pending = 0U;
-    __DMB();
+    /* CONTROL advances autonomously. TIM12 owns the internal musical tick;
+     * TIM5 plus the single boot anchor owns the absolute sample projection. */
     seq_runtime_process_core();
 }
 
@@ -776,6 +814,39 @@ uint8_t seq_runtime_get_track_loop_generation(seq_track_id_t track, uint32_t *ou
     }
 
     *out_generation = g_seq_track_loop_generation[track];
+    return 1U;
+}
+
+uint8_t seq_runtime_get_track_next_loop_sample(seq_track_id_t track,
+                                               uint64_t *out_sample)
+{
+    if ((out_sample == NULL) || (seq_runtime_track_is_valid(track) == 0U)
+            || (g_seq_runtime.running == 0U)
+            || (g_seq_runtime.samples_per_step_q16 == 0U))
+        return 0U;
+    const uint8_t div = seq_runtime_clamp_track_div(
+        g_seq_runtime_control.track_div[track]);
+    uint8_t length = seq_model_get_track_playback_length(track);
+    if (length == 0U) length = 1U;
+    const uint8_t step = (g_seq_runtime.play_step[track] < length)
+        ? g_seq_runtime.play_step[track] : 0U;
+    const uint32_t advances = (uint32_t)length - step;
+    const uint32_t first_pulses = (uint32_t)div
+        - g_seq_runtime.track_div_phase[track];
+    const uint32_t pulses = first_pulses
+        + ((advances - 1U) * (uint32_t)div);
+    if (seq_clock_bridge_is_external_source(
+            seq_runtime_get_clock_source_internal()) != 0U)
+    {
+        if (seq_runtime_exec_external_step_pulses_pending() < pulses)
+            return 0U;
+        *out_sample = control_music_output_first_unpublished_sample(
+            seq_runtime_get_now_sample());
+        return 1U;
+    }
+    const uint64_t boundary_q16 = g_seq_runtime.step_sample_q16
+        + ((uint64_t)pulses * g_seq_runtime.samples_per_step_q16);
+    *out_sample = boundary_q16 >> 16;
     return 1U;
 }
 

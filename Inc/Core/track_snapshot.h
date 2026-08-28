@@ -4,8 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "Core/track_sound_state.h"
-#include "Core/track_tone_sound_state.h"
+#include "Mod/mod_matrix.h"
+#include "Param/param_registry.h"
 #include "Seq/seq_model.h"
 #include "UI/ui_core.h"
 #include "NoteFx/note_fx_state.h"
@@ -28,15 +28,6 @@ typedef struct
     track_snapshot_step_locks_t step_locks[SEQ_MAX_STEPS];
 } track_snapshot_sequence_t;
 
-#define TRACK_SNAPSHOT_AUDIO_OWNED_MAX_ITEMS 64U
-
-typedef struct
-{
-    uint16_t parameter_id;
-    uint16_t reserved;
-    float value;
-} track_snapshot_audio_owned_item_t;
-
 typedef struct
 {
     uint8_t valid;
@@ -46,11 +37,8 @@ typedef struct
     ui_track_midi_source_t midi_source;
     uint8_t poly_voice_count;
     float poly_spread;
-    track_sound_state_t sound;
-    track_tone_sound_state_t tone;
-    uint8_t audio_owned_count;
-    uint8_t audio_owned_reserved[3];
-    track_snapshot_audio_owned_item_t audio_owned[TRACK_SNAPSHOT_AUDIO_OWNED_MAX_ITEMS];
+    float param_values[PARAM_COUNT];
+    track_mod_matrix_slot_t mod_matrix[MOD_MATRIX_SLOT_COUNT];
     note_fx_track_state_t note_fx;
     track_snapshot_sequence_t sequence;
     uint8_t seq_div;

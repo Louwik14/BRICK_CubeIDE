@@ -70,7 +70,6 @@ void sample_stream_manager_reset(void)
     g_sample_stream_manager_pending_count = 0U;
     sample_stream_scheduler_init();
     sample_stream_needs_registry_reset();
-    sample_stream_snapshot_registry_reset();
 }
 
 void sample_stream_manager_release_sample(uint16_t sample_id)
@@ -151,17 +150,18 @@ static uint32_t sample_stream_manager_collect_candidates(
             }
 
             uint8_t first_missing_seen = 0U;
+            const uint8_t need_count = (uint8_t)(entry.mobile_page_count
+                                                 + entry.loop_preload_count);
             for (uint8_t need_index = 0U;
-                 need_index < entry.need_count;
+                 need_index < need_count;
                  ++need_index)
             {
-                const sample_stream_target_voice_need_t *const need = &entry.needs[need_index];
-                if (need->valid == 0U)
-                {
+                uint32_t page_index = 0U;
+                if (sample_stream_needs_entry_page_at(
+                        &entry, need_index, &page_index) == 0U)
                     continue;
-                }
                 const sample_page_state_t state = sample_page_cache_get_page_state_key(
-                    need->key, need->page_index);
+                    entry.key, page_index);
                 if (state == SAMPLE_PAGE_READY)
                 {
                     continue;
@@ -189,12 +189,9 @@ static uint32_t sample_stream_manager_collect_candidates(
                 sample_stream_scheduler_candidate_t *const candidate =
                     &out_candidates[count++];
                 memset(candidate, 0, sizeof(*candidate));
-                candidate->key = need->key;
-                candidate->page_index = need->page_index;
-                candidate->registration_epoch = need->registration_epoch;
-                candidate->voice_generation = entry.generation;
-                candidate->diagnostic_deadline_audio_frame =
-                    need->consume_deadline_audio_frame;
+                candidate->key = entry.key;
+                candidate->page_index = page_index;
+                candidate->registration_epoch = entry.registration_epoch;
                 candidate->source = source;
                 candidate->voice_id = voice_id;
                 candidate->need_index = need_index;
@@ -410,14 +407,6 @@ void sample_stream_manager_service(uint32_t byte_budget)
 
         sample_page_load_token_t load_token;
         uint32_t consumed = target.frame_count * stream_info.info.block_align;
-        const sample_stream_audio_frame_t selected_frame = sample_stream_time_now();
-        const uint64_t remaining_64 =
-            (candidate.diagnostic_deadline_audio_frame > selected_frame)
-                ? (candidate.diagnostic_deadline_audio_frame - selected_frame)
-                : 0U;
-        const uint32_t remaining_frames = (remaining_64 > UINT32_MAX)
-                                              ? UINT32_MAX
-                                              : (uint32_t)remaining_64;
         if (sample_page_cache_begin_loading(&target, &load_token) == 0U)
         {
             continue;
@@ -432,9 +421,7 @@ void sample_stream_manager_service(uint32_t byte_budget)
                                                    SAMPLE_PAGE_FINISH_ERROR);
             continue;
         }
-        io_command.deadline_margin_us = (remaining_frames >= 206159U)
-            ? UINT32_MAX
-            : (uint32_t)(((uint64_t)remaining_frames * 1000000ULL) / 48000ULL);
+        io_command.deadline_margin_us = UINT32_MAX;
         sample_stream_manager_pending_io_t *pending =
             &g_sample_stream_manager_pending_io[g_sample_stream_manager_pending_count];
         memset(pending, 0, sizeof(*pending));

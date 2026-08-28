@@ -628,6 +628,45 @@ void brick6_braids_runtime_note_on(uint8_t instance_id, float note, float veloci
     instance->tail_samples_remaining = 0U;
 }
 
+void brick6_braids_runtime_initialize_held_note(uint8_t instance_id,
+                                                float note,
+                                                float velocity)
+{
+    brick6_braids_runtime_instance_t *const instance =
+        brick6_braids_runtime_get_instance_mut(instance_id);
+    if (instance == NULL) return;
+    const float clamped_velocity = brick6_braids_runtime_clamp(velocity, 0.0f, 1.0f);
+    const uint8_t midi_note = (uint8_t)brick6_braids_runtime_clamp(note, 0.0f, 127.0f);
+    instance->note = brick6_braids_runtime_clamp(note, 0.0f, 127.0f);
+    instance->velocity = clamped_velocity;
+    instance->active_note = midi_note;
+    instance->has_active_note = 1U;
+    instance->gate = 1U;
+    instance->trigger = 0U;
+    if (instance->drift > 0.0f)
+        brick6_braids_runtime_generate_detune_offsets(instance);
+    else
+        instance->detune_offset[0] = instance->detune_offset[1] = 0.0f;
+    for (uint8_t osc = 0U; osc < kBraidsOscCount; ++osc)
+    {
+        instance->osc[osc].voice.note = instance->note;
+        instance->osc[osc].voice.velocity = clamped_velocity;
+        instance->osc[osc].voice.active_note = midi_note;
+        instance->osc[osc].voice.has_active_note = 1U;
+        instance->osc[osc].voice.gate = 1U;
+        instance->osc[osc].voice.trigger = 0U;
+        instance->osc[osc].phase_reset_pending = 0U;
+        instance->osc[osc].pitch_current_q7 =
+            (float)brick6_braids_runtime_pitch_to_q7(
+                &instance->osc[osc].voice,
+                instance->tune + ((osc == 1U) ? instance->detune : 0.0f)
+                    + (instance->detune_offset[osc] * instance->drift
+                        * kBraidsDetuneMaxSemitones));
+    }
+    instance->has_note = 1U;
+    instance->tail_samples_remaining = 0U;
+}
+
 void brick6_braids_runtime_note_off(uint8_t instance_id, uint8_t note)
 {
     brick6_braids_runtime_instance_t *const instance = brick6_braids_runtime_get_instance_mut(instance_id);

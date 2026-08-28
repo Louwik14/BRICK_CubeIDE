@@ -2,8 +2,10 @@
 
 ## Frontieres P0-4
 
-Le stop Looper cote AUDIO consulte uniquement la vue capture D3
-(`accepted/released/error/active/stop_generation`), jamais l'etat du writer M4.
+Les decisions START/STOP Looper sont prises par CONTROL et publiees comme
+RECORD au sample de boundary. Le handler AUDIO de boundary ne rappelle aucune
+fonction CONTROL; il consulte uniquement la vue capture locale
+(`accepted/released/error/stop_generation`) pour figer la longueur physique.
 Le live stream publie aussi sequence, client, tails et chemin inline; sa carte
 physique reste le snapshot append-only de reservation. Inversement, les
 conflits Storage consultent un bit publie par le runtime Looper M7, jamais sa
@@ -14,11 +16,11 @@ M7 et ne s'execute plus dans le service Storage.
 
 `audio_recorder` est l'unique facade produit de capture SD. Ses deux clients exclusifs sont Audio Rec et Looper. Il publie un endpoint SPSC generationnel dans D3 et une projection live complete, extents de reservation inclus, dans la zone partagee Recorder; il recoit le PCM `int32` stereo 48 kHz dans le ring Recorder non-cacheable, configure `generic_recorder` et publie etats, erreurs, metriques et prise finalisee. `generic_recorder` ne connait ni UI, ni Looper, ni WAV: Storage lui transmet le head accepte publie par AUDIO; il possede les deux buffers d'ecriture, les descripteurs asynchrones et le tail accepte/engage. Looper ne lit jamais la reservation mutable Storage.
 
-Audio Rec possede un unique bus stereo AUDIO, somme des entites resolues par CONTROL et, si necessaire, de LINE directe. CONTROL publie vers AUDIO un snapshot D3 fixe et pointer-free contenant le masque d'entites, ARM et les sources effectives. LINE directe est exclue lorsque l'entree physique est deja representee par une track External routee vers REC; cette decision est derivee de `track_input_ownership`, `entity_topology` et `track_runtime`. MIC reste un etat logique silencieux: aucune source physique, configuration codec ou voie ADC ne lui est associee.
+Audio Rec possede un unique bus stereo AUDIO, somme des entites resolues par CONTROL et, si necessaire, de LINE directe. CONTROL publie le masque d'entites, ARM et les sources effectives comme PARAM final dans la FIFO unique; AUDIO conserve ensuite cette configuration privee. LINE directe est exclue lorsque l'entree physique est deja representee par une track External routee vers REC; cette decision est derivee de `track_input_ownership`, `entity_topology` et `track_runtime`. MIC reste un etat logique silencieux: aucune source physique, configuration codec ou voie ADC ne lui est associee.
 
-Le meme bus alimente la conversion PCM24 du Recorder et le peak brut par bloc. AUDIO publie seulement `{generation, peak_abs_pcm24}` dans un snapshot D3; CONTROL compare ce peak au seuil THR, latch ARM TRIG une fois puis reutilise la quantification NOW/BAR/PATTERN de `sample_capture`. Le writer n'est active qu'apres trigger et echeance. Le vu-metre applique son lissage uniquement dans l'UI et ne modifie ni le peak brut, ni la waveform de la prise, ni le WAV. La production du bus et du peak ne depend pas de la page visible.
+Le meme bus alimente la conversion PCM24 du Recorder et le peak brut par bloc. AUDIO publie seulement `{generation_io, peak_abs_pcm24}` avant capture; ce fait physique minimal est requis car le ring PCM ne recoit encore aucun sample avant THR. CONTROL compare le peak au seuil, latch ARM TRIG puis reutilise la quantification NOW/BAR/PATTERN de `sample_capture`. Le writer n'est active qu'apres trigger et echeance. Le vu-metre est diagnostique/UI et ne modifie ni le peak brut, ni la waveform de la prise, ni le WAV.
 
-Une seule capture peut etre preparee ou active. La preparation Storage cree la reservation et arme une generation; le start AUDIO ne fait que publier l'activation. L'IRQ copie dans le ring puis publie le head avec une barriere. Le stop publie un marqueur de la meme generation et ferme immediatement le producteur; Storage observe ce marqueur, draine jusqu'au head publie, puis seulement finalise. L'IRQ ne touche jamais FatFs, le scheduler, la SD ni l'etat mutable du writer. La superloop empaquette, reserve, soumet les ecritures et finalise. Audio Rec et Looper produisent directement un fichier temporaire `.REC`, renomme en `.WAV` apres drainage, liberation de la queue reservee et ecriture du header final de 512 octets. Il n'existe plus de reservoir RAW, d'export RAW vers WAV ni de second writer.
+Une seule capture peut etre preparee ou active. La preparation Storage cree la reservation et la configuration de session; CONTROL publie START/STOP sans attendre accepted/READY. L'IRQ copie dans le ring puis publie le head avec une barriere. Le stop fixe un marqueur de session et le head final; Storage draine jusqu'a ce fait physique puis finalise. `active`, `prepared` et la generation ne sont jamais des confirmations fonctionnelles CONTROL. L'IRQ ne touche jamais FatFs, le scheduler, la SD ni l'etat mutable du writer. La superloop empaquette, reserve, soumet les ecritures et finalise. Audio Rec et Looper produisent directement un fichier temporaire `.REC`, renomme en `.WAV` apres drainage, liberation de la queue reservee et ecriture du header final de 512 octets.
 
 ## Reservation et ecriture
 
@@ -45,3 +47,10 @@ Les `f_write` restants hors recorder servent l'editeur REC EDIT (copie Save/Assi
 ## Validation
 
 Les tests hote conserves couvrent le state machine generique, le WAV et ses erreurs produit, l'ecriture block-device asynchrone, l'arbitrage scheduler et la reservation FAT32/exFAT avec extension, preservation des voisins, liberation de queue et recovery. La validation cible doit compiler LowCost et Premium puis exercer capture longue, LEN, stop pendant charge streamer, carte lente/fragmentee, retrait media et reloop immediat.
+
+Le STOP Looper immediat est un lot fonctionnel unique de trois commandes au
+meme sample: armement STOP Looper, STOP du client Recorder et boundary Looper.
+Le head FIFO n'est publie qu'apres copie des trois commandes; en cas de manque
+de place, aucune n'est visible et le lifecycle CONTROL reste inchange. Le STOP
+attendant une boundary reste inclus dans le commit atomique de l'horizon qui
+porte deja le STOP Recorder et la boundary.

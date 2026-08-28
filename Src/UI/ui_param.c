@@ -38,13 +38,13 @@
 #include "Core/entity_topology.h"
 #include "Core/project_control.h"
 #include "Core/live_clock.h"
-#include "Core/live_parameter_audio_queue.h"
+#include "Core/live_parameter_audio_publication.h"
 #include "Core/live_parameter_migration.h"
 #include "Core/live_parameter_event.h"
 #include "Core/brick6_sampler_multi_contract.h"
 #include "Core/brick6_fm_runtime.h"
 #include "Audio/audio_fx_runtime.h"
-#include "Audio/audio_note_engine_adapter.h"
+#include "Core/synth_polyphony.h"
 #include "UI/ui_core_feedback.h"
 #include "Core/track_state.h"
 #include "encoders.h"
@@ -121,9 +121,9 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
                                         uint8_t track,
                                         uint8_t update_active_mirror);
 
-static uint8_t ui_param_audio_owned_shadow_get(param_id_t param,
-                                               uint8_t track,
-                                               float *out_value)
+static uint8_t ui_param_control_value_get(param_id_t param,
+                                          uint8_t track,
+                                          float *out_value)
 {
     if ((out_value == 0) || (param >= PARAM_COUNT)
             || (live_parameter_is_audio_owned(param) == 0U))
@@ -132,22 +132,13 @@ static uint8_t ui_param_audio_owned_shadow_get(param_id_t param,
     }
 
     const uint8_t scoped = ui_param_is_track_scoped(param);
-    const uint8_t shadow_track = (scoped != 0U) ? track : 0U;
-    if (shadow_track >= SEQ_LANE_CAPACITY)
+    const uint8_t control_track = (scoped != 0U) ? track : 0U;
+    if (control_track >= SEQ_LANE_CAPACITY)
     {
         return 0U;
     }
 
-    float value = 0.0f;
-    if (param_registry_control_shadow_get(shadow_track, param, &value) == 0U)
-    {
-        value = (scoped != 0U) ? param_registry[param].default_value
-                               : param_store_get_active(param);
-        param_registry_control_shadow_set(shadow_track, param, value);
-    }
-
-    *out_value = value;
-    return 1U;
+    return param_registry_control_value_get(control_track, param, out_value);
 }
 
 static uint8_t ui_param_step_value_find(seq_track_id_t track,
@@ -209,10 +200,10 @@ static seq_plock_op_status_t ui_param_step_value_delete(seq_track_id_t track,
         : seq_edit_step_plock_delete(track, step, set_id, param_slot);
 }
 
-static uint8_t ui_param_audio_owned_shadow_set(param_id_t param,
-                                               uint8_t track,
-                                               float value,
-                                               uint8_t update_active_mirror)
+static uint8_t ui_param_control_value_set(param_id_t param,
+                                          uint8_t track,
+                                          float value,
+                                          uint8_t update_active_mirror)
 {
     if ((param >= PARAM_COUNT)
             || (live_parameter_is_audio_owned(param) == 0U))
@@ -221,13 +212,13 @@ static uint8_t ui_param_audio_owned_shadow_set(param_id_t param,
     }
 
     const uint8_t scoped = ui_param_is_track_scoped(param);
-    const uint8_t shadow_track = (scoped != 0U) ? track : 0U;
-    if (shadow_track >= SEQ_LANE_CAPACITY)
+    const uint8_t control_track = (scoped != 0U) ? track : 0U;
+    if (control_track >= SEQ_LANE_CAPACITY)
     {
         return 0U;
     }
 
-    param_registry_control_shadow_set(shadow_track, param, value);
+    param_registry_control_value_set(control_track, param, value);
     if (update_active_mirror != 0U)
     {
         param_store_set_active(param, value);
@@ -281,7 +272,7 @@ uint8_t ui_param_get_audio_owned_command_value(param_id_t param,
                                                uint8_t track,
                                                float *out_value)
 {
-    return ui_param_audio_owned_shadow_get(param, track, out_value);
+    return ui_param_control_value_get(param, track, out_value);
 }
 
 uint8_t ui_param_accept_audio_owned_command(param_id_t param,
@@ -289,13 +280,13 @@ uint8_t ui_param_accept_audio_owned_command(param_id_t param,
                                             uint8_t track,
                                             float value)
 {
-    const uint8_t shadow_track = (scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK) ? track : 0U;
+    const uint8_t control_track = (scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK) ? track : 0U;
     const uint8_t update_global_mirror =
         (scope == LIVE_PARAMETER_EVENT_SCOPE_GLOBAL) ? 1U : 0U;
-    return ui_param_audio_owned_shadow_set(param,
-                                           shadow_track,
-                                           value,
-                                           update_global_mirror);
+    return ui_param_control_value_set(param,
+                                      control_track,
+                                      value,
+                                      update_global_mirror);
 }
 
 static uint8_t ui_param_bank_is_same(const ui_param_bank_t *bank)
@@ -704,7 +695,7 @@ void ui_param_sync_active_bank_values(void)
         if (live_parameter_is_audio_owned(id) != 0U)
         {
             float value = 0.0f;
-            if (ui_param_audio_owned_shadow_get(id, active_track, &value) != 0U)
+            if (ui_param_control_value_get(id, active_track, &value) != 0U)
             {
                 param_store_set_active(id, value);
             }
@@ -758,7 +749,7 @@ void ui_param_sync_active_track_mirror_from_runtime(void)
         if (live_parameter_is_audio_owned(id) != 0U)
         {
             float value = 0.0f;
-            if (ui_param_audio_owned_shadow_get(id, active_track, &value) != 0U)
+            if (ui_param_control_value_get(id, active_track, &value) != 0U)
             {
                 param_store_set_active(id, value);
             }
@@ -930,7 +921,6 @@ static uint8_t ui_param_track_accepts_relative_param(uint8_t track, param_id_t p
         return 0U;
     }
 
-    track_runtime_refresh_track(track);
     if (track_runtime_get_effective_param_status(track, param) != TRACK_RUNTIME_PARAM_ALLOWED)
     {
         return 0U;
@@ -1029,10 +1019,7 @@ static uint8_t ui_param_resolve_edit_bounds(param_id_t param, uint8_t track, flo
         }
         else
         {
-            audio_binding_snapshot_t snapshot;
-            *out_max = (audio_note_engine_adapter_snapshot_read(
-                    track, &snapshot) != 0U)
-                ? (float)snapshot.physical_voice_capacity : 0.0f;
+            *out_max = (float)SYNTH_POLYPHONY_MAX_VOICES;
         }
     }
     else if (param == PARAM_MOD_MATRIX_DEST)
@@ -1088,7 +1075,7 @@ static float ui_param_get_active_track_value(param_id_t param, uint8_t active_tr
     active_track = ui_param_resolve_effective_edit_track(param, active_track);
 
     float value = 0.0f;
-    if (ui_param_audio_owned_shadow_get(param, active_track, &value) != 0U)
+    if (ui_param_control_value_get(param, active_track, &value) != 0U)
     {
         return value;
     }
@@ -1132,7 +1119,7 @@ float ui_param_get_active_track_display_value(param_id_t param, uint8_t active_t
 
 static uint8_t ui_param_get_track_edit_value(param_id_t param, uint8_t track, float *out_value)
 {
-    if (ui_param_audio_owned_shadow_get(param, track, out_value) != 0U)
+    if (ui_param_control_value_get(param, track, out_value) != 0U)
     {
         return 1U;
     }
@@ -1285,10 +1272,10 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
             (void)ui_param_resolve_edit_bounds(param, track, &edit_min, &edit_max);
         }
         const float clamped = ui_param_clamp(value, edit_min, edit_max);
-        return ui_param_audio_owned_shadow_set(param,
-                                               track,
-                                               clamped,
-                                               update_active_mirror);
+        return ui_param_control_value_set(param,
+                                          track,
+                                          clamped,
+                                          update_active_mirror);
     }
 
     if (ui_param_is_seq_runtime_track_param(param) != 0U)

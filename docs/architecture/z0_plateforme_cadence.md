@@ -2,34 +2,29 @@
 
 ## Execution
 
-L'audio travaille par demi-buffer de 64 frames a 48 kHz. L'IRQ SAI possede la timeline audio, publie les reveils monotones et n'execute ni FatFs, ni scan de cache, ni travail Storage non borne. Apres chaque demi-buffer, elle publie le prochain `first_renderable_sample` et arme PendSV; cette continuation CONTROL est servie avant le retour en superloop et publie l'horizon musical suivant. Scheduler, lifecycle et Note FX contribuent d'abord a une fenetre CONTROL fixe; ses 64 buckets sample/kind finalisent ensuite la FIFO en ordre chronologique, avec STOP avant START a timestamp egal. Cette fenetre transitoire n'est ni une seconde FIFO, ni un chemin de recovery. La superloop orchestre les autres tasklets moteur, Storage et UI.
+L'audio travaille par demi-buffer de 64 frames a 48 kHz. L'IRQ SAI possede la timeline audio et n'execute ni FatFs, ni scan de cache, ni travail Storage non borne. CONTROL se cadence seul: TIM12 porte le tick musical interne, TIM5 porte le temps physique et l'unique ancre boot SAI permet sa conversion en samples. La superloop publie l'horizon musical glissant; aucun reveil AUDIO, compteur de frames periodique ou PendSV sequenceur ne traverse la frontiere. Scheduler, lifecycle et Note FX contribuent d'abord a une fenetre CONTROL fixe; ses 64 buckets sample/kind finalisent ensuite la FIFO en ordre chronologique, avec STOP avant START a timestamp egal.
 
 Hall Low-Cost et Premium executent la meme machine bornee depuis l'acquisition ADC. TIM5 est le compteur libre commun de capture. Le producteur ne lit jamais la timeline audio; AUDIO publie un ancrage coherent `{tim5_tick, first_renderable_sample}`.
 
 ## Frontiere CONTROL/AUDIO
 
-La frontiere suit `M4 CONTROL decide -> payload fixe IPC -> M7 AUDIO execute`. Aucun pointeur, callback ou contexte mutable ne la traverse.
+La frontiere suit `M4 CONTROL decide -> commande finale 16 octets -> M7 AUDIO execute`. La FIFO SPSC unique de 2048 commandes transporte exclusivement PROGRAM, PARAM, NOTE, TRANSPORT, RECORD et PANIC. Aucun pointeur, callback, contexte mutable, Pattern ou Project ne la traverse.
 
-- musical interne: ring SPSC de 257 slots physiques, 256 utilisables, reserve aux actions finales `START/STOP/RETRIGGER`; la borne GROUP reste `7 * (2 * 8 + 7) + 8 * (2 * 1 + 7) = 233`, expirations naturelles et fermetures CONTROL comprises, soit une marge de 23 actions. Une fermeture consomme le ledger de l'output et rejoint les memes buckets; elle n'ajoute donc pas de fan-out au pire cas;
-- musical externe Hall/MIDI: ingress SPSC distinct de 129 slots physiques afin qu'une saturation externe ne consomme jamais la garantie SEQ;
-- parametres: ring general `PARAM_SET` et transport date compact dedie de 1024 ecritures finales;
-- panic: publication generationnelle etroite, idempotente, independante des rings musicaux; AUDIO purge uniquement les actions anterieures a la generation puis ferme physiquement;
-- binding/routing/configuration: commandes et snapshots versionnes, jamais la FIFO musicale;
-- restore: plan immutable et completion dedies.
+Les ingress Hall/MIDI et les sources scheduler restent des buffers locaux CONTROL. CONTROL resout et fusionne leur fenetre, transforme un retrigger en NOTE OFF puis NOTE ON au meme sample, puis publie un lot atomique dans la FIFO unique. AUDIO ne fusionne aucune queue et l'ordre physique FIFO est l'ordre fonctionnel a timestamp egal.
 
-Les deux ingress musicaux sont fusionnes par AUDIO selon `(timestamp, STOP avant START)` sans melanger leurs capacites. Ils ne stockent que des actions resolues dans l'horizon publiable et ne portent ni decision, ni recovery, ni retry.
+PROGRAM remplace les anciennes commandes et projections d'installation. PARAM remplace les rings live/date et les mailboxes de routing. PANIC emprunte la meme FIFO; aucune generation musicale ou queue prioritaire separee n'existe. Le plan restore immutable reste uniquement un fence physique en attente de PASS 3; l'etat musical restore est republie par CONTROL avec le contrat final.
 
 Sur H743, les objets IPC resident dans la moitie haute de SRAM4 `0x38008000..0x3800FFFF`, shareable et non-cacheable; les registres Stream fixes resident dans la fenetre IPC partagee SRAM3/D2, et la projection complete du Recorder dans la zone SDRAM partagee non-cacheable. `DMB` ordonne la publication mais ne remplace pas le protocole d'ownership. Les payloads SDRAM cacheables exigent clean producteur puis invalidate consommateur. La zone Recorder de 256 KiB est shareable non-cacheable; les buffers DMA SAI sont en D2 non-cacheable.
 
 Les principaux sens sont:
 
 ```text
-CONTROL -> AUDIO : actions musicales finales, parametres dates, panic, routing, binding, MOD, restore
-AUDIO -> CONTROL : clock, cadence, ACK via ring partage, telemetrie, capture Recorder
+CONTROL -> AUDIO : PROGRAM, PARAM, NOTE, TRANSPORT, RECORD, PANIC; data planes volumineux separes
+AUDIO -> CONTROL : tail FIFO, credits STREAM, PCM/framing Recorder, ancre boot, diagnostic
 Storage <-> AUDIO : registration, token, completion de page et payloads bornes
 ```
 
-Preview est un ring PCM SPSC M4->M7. Recorder publie un ring append-only M7->M4. Le Looper AUDIO date son DSP avec le sample clock publie par AUDIO, jamais avec la timeline mutable du sequenceur CONTROL. Looper et Audio FX exposent seulement des statuts etroits. Aucun consommateur ne relit la structure interne de l'autre domaine.
+Preview est un ring PCM SPSC M4->M7. Recorder publie un ring append-only M7->M4. Le Looper AUDIO date son DSP avec sa timeline locale. FILTER POS affiche le shadow CONTROL; aucune valeur DSP n'est une autorite UI. Le boot ne publie qu'un diagnostic physique exceptionnel, sans READY musical ni dependance nominale.
 
 Au boot, `track_state` est initialise avant la projection finale `track_runtime`; le bridge Hall/keyboard et son focus sont ensuite initialises et synchronises depuis cette autorite canonique. PLAY/PAUSE ou une reconfiguration moteur ne font pas partie du protocole d'activation Hall.
 

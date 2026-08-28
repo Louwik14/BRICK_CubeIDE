@@ -1,9 +1,8 @@
 #include "Param/param_filter.h"
 #include "param_store.h"
 #include "ui_core.h"
-#include "Core/track_tone_sound_state.h"
 #include "Core/track_runtime.h"
-#include "Core/track_sound_state.h"
+#include "Param/param_registry_runtime_state.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Mod/mod_lfo_v1.h"
 #include "mixer.h"
@@ -137,14 +136,9 @@ static uint8_t filter_ui127_to_bool(float v)
     return (filter_ui127_clamp(v) >= 63.5f) ? 1U : 0U;
 }
 
-typedef track_sound_state_t filter_ui_state_t;
-
-
 void param_filter_init(void)
 {
     filter_init_exp2_lut();
-    track_sound_state_init();
-    track_tone_sound_state_init();
 }
 
 uint8_t param_filter_is_param(param_id_t id)
@@ -201,20 +195,15 @@ static uint8_t resolve_filter_target_track_for_ui_track(uint8_t ui_track, uint32
     return 1U;
 }
 
-static filter_ui_state_t *resolve_filter_ui_state_for_track(uint8_t track)
-{
-    return track_sound_state_get(track);
-}
-
 typedef struct
 {
     uint32_t target_track;
-    filter_ui_state_t *state;
+    uint8_t control_track;
 } param_filter_apply_target_t;
 
 static uint8_t param_filter_resolve_target(uint8_t track,
                                            param_id_t id,
-                                           uint8_t require_shadow_state,
+                                           uint8_t require_control_value,
                                            param_filter_apply_target_t *out_target)
 {
     if (out_target == NULL)
@@ -223,12 +212,8 @@ static uint8_t param_filter_resolve_target(uint8_t track,
     }
 
     memset(out_target, 0, sizeof(*out_target));
-    out_target->state = resolve_filter_ui_state_for_track(track);
-    if ((require_shadow_state != 0U) && (out_target->state == NULL))
-    {
-        return 0U;
-    }
-
+    out_target->control_track = track;
+    (void)require_control_value;
     (void)id;
     return resolve_filter_target_track_for_ui_track(track, &out_target->target_track);
 }
@@ -279,49 +264,29 @@ static uint8_t param_filter_apply_runtime(param_id_t id,
     }
 }
 
-static void param_filter_update_shadow_state(filter_ui_state_t *state, param_id_t id, float clamped)
+static void param_filter_update_control_value(uint8_t track, param_id_t id, float clamped)
 {
-    if (state == NULL)
-    {
-        return;
-    }
-
     switch (id)
     {
-        case PARAM_FILTER_MORPH: state->morph = clamp_value(clamped, 0.0f, 127.0f); break;
-        case PARAM_FILTER_CUTOFF: state->cutoff = filter_ui127_clamp(clamped); break;
-        case PARAM_FILTER_RESONANCE: state->resonance = filter_ui127_clamp(clamped); break;
-        case PARAM_FILTER_EG_AMT: state->eg_amount = filter_ui127_clamp(clamped); break;
-        case PARAM_FILTER_ATTACK: state->attack = filter_ui127_clamp(clamped); break;
-        case PARAM_FILTER_DECAY: state->decay = filter_ui127_clamp(clamped); break;
-        case PARAM_FILTER_SUSTAIN: state->sustain = filter_ui127_clamp(clamped); break;
-        case PARAM_FILTER_RELEASE: state->release = filter_ui127_clamp(clamped); break;
-        case PARAM_FILTER_KEYTRK: state->keytrack = filter_ui127_clamp(clamped); break;
-        case PARAM_FILTER_ENVRST: state->env_reset = filter_ui127_to_bool(clamped) ? 1.0f : 0.0f; break;
-        case PARAM_FILTER_ENVDLY: state->env_delay = filter_ui127_clamp(clamped); break;
-        default: break;
+        case PARAM_FILTER_MORPH:
+            clamped = clamp_value(clamped, 0.0f, 127.0f); break;
+        case PARAM_FILTER_ENVRST:
+            clamped = filter_ui127_to_bool(clamped) ? 1.0f : 0.0f; break;
+        default:
+            clamped = filter_ui127_clamp(clamped); break;
     }
+    param_registry_control_value_set(track, id, clamped);
 }
 
-uint8_t param_filter_control_set_value(param_id_t id, uint8_t track, float clamped)
-{
-    param_filter_apply_target_t target;
-    if (param_filter_resolve_target(track, id, 1U, &target) == 0U)
-    {
-        return 0U;
-    }
-    param_filter_update_shadow_state(target.state, id, clamped);
-    return 1U;
-}
 
 uint8_t param_filter_apply_value(param_id_t id,
                                         uint8_t track,
                                         float clamped,
-                                        uint8_t update_shadow_state,
+                                        uint8_t update_control_value,
                                         uint8_t resync_lfo_base)
 {
     param_filter_apply_target_t target;
-    if (param_filter_resolve_target(track, id, update_shadow_state, &target) == 0U)
+    if (param_filter_resolve_target(track, id, update_control_value, &target) == 0U)
     {
         return 0U;
     }
@@ -331,9 +296,9 @@ uint8_t param_filter_apply_value(param_id_t id,
         return 0U;
     }
 
-    if (update_shadow_state != 0U)
+    if (update_control_value != 0U)
     {
-        param_filter_update_shadow_state(target.state, id, clamped);
+        param_filter_update_control_value(track, id, clamped);
     }
 
     (void)resync_lfo_base;
@@ -347,7 +312,7 @@ uint8_t param_filter_apply_value_audio(param_id_t id,
 {
     track_audio_runtime_ctx_t ctx_value;
     const track_audio_runtime_ctx_t *const ctx =
-        (audio_note_engine_adapter_audio_ctx_snapshot(track, &ctx_value) != 0U)
+        (audio_note_engine_adapter_current_ctx(track, &ctx_value) != 0U)
             ? &ctx_value : NULL;
     uint8_t target_track = 0U;
     if ((audio_note_engine_adapter_ctx_is_audio_routable(ctx) == 0U)
@@ -359,7 +324,7 @@ uint8_t param_filter_apply_value_audio(param_id_t id,
 
     param_filter_apply_target_t target = {
         .target_track = target_track,
-        .state = NULL
+        .control_track = track
     };
     return param_filter_apply_runtime(id, clamped, &target);
 }
@@ -367,23 +332,16 @@ uint8_t param_filter_apply_value_audio(param_id_t id,
 void param_filter_sync_ui_for_active_track(void)
 {
     const uint8_t active_track = ui_get_active_track();
-    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
-    if (state == NULL)
+    const param_id_t ids[] = { PARAM_FILTER_MORPH, PARAM_FILTER_CUTOFF,
+        PARAM_FILTER_RESONANCE, PARAM_FILTER_EG_AMT, PARAM_FILTER_ATTACK,
+        PARAM_FILTER_DECAY, PARAM_FILTER_SUSTAIN, PARAM_FILTER_RELEASE,
+        PARAM_FILTER_KEYTRK, PARAM_FILTER_ENVRST, PARAM_FILTER_ENVDLY };
+    for (uint8_t i = 0U; i < (uint8_t)(sizeof(ids) / sizeof(ids[0])); ++i)
     {
-        return;
+        float value = 0.0f;
+        if (param_registry_control_value_get(active_track, ids[i], &value))
+            param_store_set_active(ids[i], value);
     }
-
-    param_store_set_active(PARAM_FILTER_MORPH, state->morph);
-    param_store_set_active(PARAM_FILTER_CUTOFF, state->cutoff);
-    param_store_set_active(PARAM_FILTER_RESONANCE, state->resonance);
-    param_store_set_active(PARAM_FILTER_EG_AMT, state->eg_amount);
-    param_store_set_active(PARAM_FILTER_ATTACK, state->attack);
-    param_store_set_active(PARAM_FILTER_DECAY, state->decay);
-    param_store_set_active(PARAM_FILTER_SUSTAIN, state->sustain);
-    param_store_set_active(PARAM_FILTER_RELEASE, state->release);
-    param_store_set_active(PARAM_FILTER_KEYTRK, state->keytrack);
-    param_store_set_active(PARAM_FILTER_ENVRST, state->env_reset);
-    param_store_set_active(PARAM_FILTER_ENVDLY, state->env_delay);
 
     if (filter_mod_locked_for_active_track() != 0U)
     {
@@ -402,11 +360,8 @@ void param_filter_sync_ui_for_active_track(void)
 void apply_filter_morph(float v)
 {
     const uint8_t active_track = ui_get_active_track();
-    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
-    if (state != NULL)
-    {
-        state->morph = clamp_value(v, 0.0f, 127.0f);
-    }
+    param_registry_control_value_set(active_track, PARAM_FILTER_MORPH,
+                                     clamp_value(v, 0.0f, 127.0f));
 
     uint32_t target_track = 0U;
     if (!resolve_filter_target_track(&target_track))
@@ -420,11 +375,8 @@ void apply_filter_morph(float v)
 void apply_filter_cutoff(float v)
 {
     const uint8_t active_track = ui_get_active_track();
-    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
-    if (state != NULL)
-    {
-        state->cutoff = filter_ui127_clamp(v);
-    }
+    param_registry_control_value_set(active_track, PARAM_FILTER_CUTOFF,
+                                     filter_ui127_clamp(v));
 
     uint32_t target_track = 0U;
     if (!resolve_filter_target_track(&target_track))
@@ -437,11 +389,8 @@ void apply_filter_cutoff(float v)
 void apply_filter_resonance(float v)
 {
     const uint8_t active_track = ui_get_active_track();
-    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
-    if (state != NULL)
-    {
-        state->resonance = filter_ui127_clamp(v);
-    }
+    param_registry_control_value_set(active_track, PARAM_FILTER_RESONANCE,
+                                     filter_ui127_clamp(v));
 
     uint32_t target_track = 0U;
     if (!resolve_filter_target_track(&target_track))
@@ -454,11 +403,8 @@ void apply_filter_resonance(float v)
 void apply_filter_eg_amount(float v)
 {
     const uint8_t active_track = ui_get_active_track();
-    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
-    if (state != NULL)
-    {
-        state->eg_amount = filter_ui127_clamp(v);
-    }
+    param_registry_control_value_set(active_track, PARAM_FILTER_EG_AMT,
+                                     filter_ui127_clamp(v));
 
     uint32_t target_track = 0U;
     if (!resolve_filter_target_track(&target_track))
@@ -471,11 +417,8 @@ void apply_filter_eg_amount(float v)
 void apply_filter_attack(float v)
 {
     const uint8_t active_track = ui_get_active_track();
-    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
-    if (state != NULL)
-    {
-        state->attack = filter_ui127_clamp(v);
-    }
+    param_registry_control_value_set(active_track, PARAM_FILTER_ATTACK,
+                                     filter_ui127_clamp(v));
 
     uint32_t target_track = 0U;
     if (!resolve_filter_target_track(&target_track))
@@ -488,11 +431,8 @@ void apply_filter_attack(float v)
 void apply_filter_decay(float v)
 {
     const uint8_t active_track = ui_get_active_track();
-    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
-    if (state != NULL)
-    {
-        state->decay = filter_ui127_clamp(v);
-    }
+    param_registry_control_value_set(active_track, PARAM_FILTER_DECAY,
+                                     filter_ui127_clamp(v));
 
     uint32_t target_track = 0U;
     if (!resolve_filter_target_track(&target_track))
@@ -505,11 +445,8 @@ void apply_filter_decay(float v)
 void apply_filter_sustain(float v)
 {
     const uint8_t active_track = ui_get_active_track();
-    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
-    if (state != NULL)
-    {
-        state->sustain = filter_ui127_clamp(v);
-    }
+    param_registry_control_value_set(active_track, PARAM_FILTER_SUSTAIN,
+                                     filter_ui127_clamp(v));
 
     uint32_t target_track = 0U;
     if (!resolve_filter_target_track(&target_track))
@@ -522,11 +459,8 @@ void apply_filter_sustain(float v)
 void apply_filter_release(float v)
 {
     const uint8_t active_track = ui_get_active_track();
-    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
-    if (state != NULL)
-    {
-        state->release = filter_ui127_clamp(v);
-    }
+    param_registry_control_value_set(active_track, PARAM_FILTER_RELEASE,
+                                     filter_ui127_clamp(v));
 
     uint32_t target_track = 0U;
     if (!resolve_filter_target_track(&target_track))
@@ -552,11 +486,8 @@ void apply_filter_keytrack(float v)
     }
 
     mixer_set_track_filter_keytrack(target_track, filter_ui127_to_keytrack(v));
-    filter_ui_state_t *state = resolve_filter_ui_state_for_track(active_track);
-    if (state != NULL)
-    {
-        state->keytrack = filter_ui127_clamp(v);
-    }
+    param_registry_control_value_set(active_track, PARAM_FILTER_KEYTRK,
+                                     filter_ui127_clamp(v));
 }
 
 void apply_filter_env_reset(float v)
@@ -567,11 +498,8 @@ void apply_filter_env_reset(float v)
         return;
     }
 
-    filter_ui_state_t *state = resolve_filter_ui_state_for_track(ui_get_active_track());
-    if (state != NULL)
-    {
-        state->env_reset = filter_ui127_to_bool(v) ? 1.0f : 0.0f;
-    }
+    param_registry_control_value_set(ui_get_active_track(), PARAM_FILTER_ENVRST,
+        filter_ui127_to_bool(v) ? 1.0f : 0.0f);
 }
 
 void apply_filter_env_delay(float v)
@@ -582,11 +510,8 @@ void apply_filter_env_delay(float v)
         return;
     }
 
-    filter_ui_state_t *state = resolve_filter_ui_state_for_track(ui_get_active_track());
-    if (state != NULL)
-    {
-        state->env_delay = filter_ui127_clamp(v);
-    }
+    param_registry_control_value_set(ui_get_active_track(), PARAM_FILTER_ENVDLY,
+                                     filter_ui127_clamp(v));
 }
 
 void apply_filter_drive(float v) { (void)v; }
@@ -594,35 +519,6 @@ void apply_filter_decimator_bits(float v) { (void)v; }
 void apply_filter_decimator_rate(float v) { (void)v; }
 void apply_filter_decimator_rate2(float v) { (void)v; }
 
-uint8_t param_filter_get_track_value(param_id_t id, uint8_t track, float *out_value)
-{
-    if ((out_value == NULL) || (track >= SEQ_LANE_CAPACITY) || (param_filter_is_param(id) == 0U))
-    {
-        return 0U;
-    }
-
-    filter_ui_state_t *state = resolve_filter_ui_state_for_track(track);
-    if (state == NULL)
-    {
-        return 0U;
-    }
-
-    switch (id)
-    {
-        case PARAM_FILTER_MORPH: *out_value = state->morph; return 1U;
-        case PARAM_FILTER_CUTOFF: *out_value = state->cutoff; return 1U;
-        case PARAM_FILTER_RESONANCE: *out_value = state->resonance; return 1U;
-        case PARAM_FILTER_EG_AMT: *out_value = state->eg_amount; return 1U;
-        case PARAM_FILTER_ATTACK: *out_value = state->attack; return 1U;
-        case PARAM_FILTER_DECAY: *out_value = state->decay; return 1U;
-        case PARAM_FILTER_SUSTAIN: *out_value = state->sustain; return 1U;
-        case PARAM_FILTER_RELEASE: *out_value = state->release; return 1U;
-        case PARAM_FILTER_KEYTRK: *out_value = state->keytrack; return 1U;
-        case PARAM_FILTER_ENVRST: *out_value = state->env_reset; return 1U;
-        case PARAM_FILTER_ENVDLY: *out_value = state->env_delay; return 1U;
-        default: return 0U;
-    }
-}
 
 float param_filter_ui127_to_attack_s(float v) { return filter_ui127_to_attack_s(v); }
 float param_filter_ui127_to_decay_s(float v) { return filter_ui127_to_decay_s(v); }

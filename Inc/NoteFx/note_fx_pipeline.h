@@ -56,6 +56,8 @@ uint8_t note_fx_pipeline_process(uint64_t block_start, uint16_t frames,
                                  uint32_t samples_per_step_q16);
 /* 0: normal, 1: panic consumed, 2: invariant failure. */
 uint8_t note_fx_pipeline_prepare_control_window(uint64_t block_start);
+uint8_t note_fx_pipeline_finalize_control_window(uint64_t block_start);
+uint32_t note_fx_pipeline_diagnostic_panic_failure_count(void);
 uint8_t note_fx_pipeline_sync_track(uint8_t track);
 uint8_t note_fx_pipeline_sync_all_tracks(void);
 uint8_t note_fx_pipeline_reset_runtime_overrides(uint8_t track);

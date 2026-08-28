@@ -16,7 +16,6 @@
 #include "Core/track_runtime.h"
 #include "Core/live_clock.h"
 #include "Core/track_mute.h"
-#include "Audio/control_audio_queue.h"
 #include "Core/control_music_output.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include "param_registry.h"
@@ -188,7 +187,6 @@ static const param_id_t g_seq_play_voice_mictim_ids[SEQ_PLAY_MAX_CAPACITY] = {
     PARAM_SEQ_PLAY_V1_MICTIM, PARAM_SEQ_PLAY_V2_MICTIM, PARAM_SEQ_PLAY_V3_MICTIM, PARAM_SEQ_PLAY_V4_MICTIM,
     PARAM_SEQ_PLAY_V5_MICTIM, PARAM_SEQ_PLAY_V6_MICTIM, PARAM_SEQ_PLAY_V7_MICTIM, PARAM_SEQ_PLAY_V8_MICTIM
 };
-static void seq_play_scheduler_refresh_track(uint8_t track);
 static uint32_t seq_play_scheduler_alloc_event_token(void);
 
 static uint32_t seq_play_scheduler_enter_critical(void)
@@ -301,7 +299,7 @@ static void seq_play_scheduler_send_program_if_needed(seq_track_id_t track,
 
 static uint8_t seq_play_scheduler_track_supports_program_change(const track_runtime_descriptor_t *descriptor)
 {
-    if ((descriptor == NULL) || (descriptor->bind_state != TRACK_RUNTIME_BIND_BOUND))
+    if ((descriptor == NULL) || (descriptor->active == 0U))
     {
         return 0U;
     }
@@ -373,11 +371,6 @@ static uint64_t seq_play_scheduler_resolve_first_on_sample(
 
     const uint64_t early = (uint64_t)(-effective_microtiming_samples);
     return (early < swung_sample) ? (swung_sample - early) : 0U;
-}
-
-static void seq_play_scheduler_refresh_track(uint8_t track)
-{
-    track_runtime_refresh_track(track);
 }
 
 static void seq_play_scheduler_deactivate_source_at(uint16_t active_position)
@@ -630,11 +623,7 @@ static uint8_t seq_play_scheduler_destructive_transition(
     if (!live_clock_read_audio_sample(&close_sample))
         return 0U;
     close_sample = control_music_output_first_unpublished_sample(close_sample);
-    if (policy == SEQ_PLAY_TRANSITION_PANIC_CLOSE_ALL)
-    {
-        control_music_output_panic_all();
-    }
-    else
+    if (policy != SEQ_PLAY_TRANSITION_PANIC_CLOSE_ALL)
     {
         brick_entity_id_t close_entities[SEQ_LANE_CAPACITY];
         uint8_t close_entity_count = 0U;
@@ -848,7 +837,6 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
         return;
     }
 
-    seq_play_scheduler_refresh_track(track);
 
     if (track_runtime_has_capability(track, TRACK_CAPABILITY_NOTES) == 0U)
     {
@@ -1101,7 +1089,7 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                                 && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI))))
                 {
                     float configured = 1.0f;
-                    (void)param_registry_control_shadow_get(
+                    (void)param_registry_control_value_get(
                         source->target_track, PARAM_CFG_POLY_VOICES, &configured);
                     voice_limit = (configured >= 1.0f) ? (uint8_t)configured : 1U;
                     if (voice_limit > SEQ_PLAY_MAX_CAPACITY)
@@ -1318,9 +1306,6 @@ uint8_t seq_play_scheduler_control_apply_event(
 
 void seq_play_scheduler_live_midi_program_changed(seq_track_id_t track, float program_value)
 {
-    /* Post-commit seam: runtime already committed the change; scheduler only refreshes emit mirrors. */
-    seq_play_scheduler_refresh_track(track);
-
     track_runtime_descriptor_t descriptor;
     if ((track_runtime_get_descriptor(track, &descriptor) == 0U)
             || (seq_play_scheduler_track_supports_program_change(&descriptor) == 0U))
@@ -1333,9 +1318,6 @@ void seq_play_scheduler_live_midi_program_changed(seq_track_id_t track, float pr
 
 void seq_play_scheduler_emit_midi_program_on_transport_start(void)
 {
-    /* Post-commit seam: transport start re-seeds scheduler-side program state only. */
-    track_runtime_refresh_all();
-
     for (seq_track_id_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         track_runtime_descriptor_t descriptor;
@@ -1364,7 +1346,6 @@ void seq_play_scheduler_notify_track_pattern_change(seq_track_id_t track)
             &track, 1U, SEQ_PLAY_TRANSITION_PATTERN_REPLACE) == 0U)
         return;
     /* Post-commit seam: pattern change re-seeds scheduler-side program state only. */
-    seq_play_scheduler_refresh_track(track);
 
     track_runtime_descriptor_t descriptor;
     if ((track_runtime_get_descriptor(track, &descriptor) == 0U)

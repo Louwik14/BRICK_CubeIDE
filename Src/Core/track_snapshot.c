@@ -3,8 +3,9 @@
 #include <string.h>
 
 #include "Core/track_runtime.h"
+#include "Core/track_sound_state.h"
 #include "Core/live_clock.h"
-#include "Core/live_parameter_audio_queue.h"
+#include "Core/live_parameter_audio_publication.h"
 #include "Core/live_parameter_migration.h"
 #include "Core/track_input_ownership.h"
 #include "Core/track_state.h"
@@ -299,7 +300,7 @@ static uint8_t track_snapshot_apply_sequence(uint8_t track, const track_snapshot
     return 1U;
 }
 
-static uint8_t track_snapshot_reapply_track_params(uint8_t track,
+static uint8_t track_snapshot_apply_track_params(uint8_t track,
                                                    const track_snapshot_t *snapshot)
 {
     if ((snapshot == 0) || (track >= SEQ_LANE_CAPACITY))
@@ -307,73 +308,7 @@ static uint8_t track_snapshot_reapply_track_params(uint8_t track,
         return 0U;
     }
 
-    track_runtime_refresh_track(track);
-    mod_lfo_v1_publish_control_snapshot_track(track);
-    mod_matrix_publish_control_snapshot_track(track);
-
-    live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
-        .count = 0U
-    };
-    for (uint8_t phase = 0U; phase < 15U; ++phase)
-    {
-        for (uint8_t i = 0U; i < snapshot->audio_owned_count; ++i)
-        {
-            const track_snapshot_audio_owned_item_t *const item =
-                &snapshot->audio_owned[i];
-            if (item->parameter_id >= PARAM_COUNT)
-                continue;
-            const param_id_t id = (param_id_t)item->parameter_id;
-            if ((id == PARAM_ENV3_ATTACK)
-                    || (id == PARAM_ENV3_DECAY)
-                    || (id == PARAM_ENV3_SUSTAIN)
-                    || (id == PARAM_ENV3_RELEASE)
-                    || (id == PARAM_ENV_RETRIG_MOD))
-            {
-                continue;
-            }
-            uint8_t selected = 0U;
-            if (phase < 14U)
-            {
-                selected = (uint8_t)(param_registry_get_audio_fx_param(phase) == id);
-            }
-            else
-            {
-                selected = (uint8_t)(param_registry_is_audio_fx_param(id) == 0U);
-            }
-            if ((selected == 0U)
-                    || (live_parameter_is_audio_owned(id) == 0U)
-                    || (track_runtime_get_effective_param_status(track, id)
-                        != TRACK_RUNTIME_PARAM_ALLOWED))
-                continue;
-            if (bulk.count >= LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS)
-                return 0U;
-            live_parameter_audio_bulk_item_t *const target = &bulk.item[bulk.count++];
-            target->parameter_id = item->parameter_id;
-            target->scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK;
-            target->track = track;
-            target->slot = LIVE_PARAMETER_EVENT_INVALID_INDEX;
-            target->reserved = 0U;
-            target->flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                                       | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS);
-            target->value = live_parameter_event_encode_float(item->value);
-        }
-    }
-
-    if ((bulk.count != 0U)
-            && (live_parameter_audio_queue_submit_bulk(&bulk) == false))
-    {
-        return 0U;
-    }
-    for (uint8_t i = 0U; i < bulk.count; ++i)
-    {
-        const live_parameter_audio_bulk_item_t *const item = &bulk.item[i];
-        (void)ui_param_accept_audio_owned_command((param_id_t)item->parameter_id,
-                                                  item->scope,
-                                                  item->track,
-                                                  live_parameter_event_decode_float(item->value));
-    }
+    track_runtime_rebuild_track(track);
 
     param_registry_batch_begin();
     for (uint16_t raw_id = 0U; raw_id < (uint16_t)PARAM_COUNT; ++raw_id)
@@ -383,12 +318,17 @@ static uint8_t track_snapshot_reapply_track_params(uint8_t track,
         if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_ENV)
                 && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
                 && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MOD)
-                && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX))
+                && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX)
+                && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
+                && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX))
         {
             continue;
         }
         if ((id == PARAM_LOOPER_PLAY)
-                || (live_parameter_is_audio_owned(id) != 0U))
+                || (id == PARAM_MOD_MATRIX_SOURCE)
+                || (id == PARAM_MOD_MATRIX_DEST)
+                || (id == PARAM_MOD_MATRIX_DEPTH)
+                || (id == PARAM_MOD_MATRIX_SLOT))
         {
             continue;
         }
@@ -397,52 +337,46 @@ static uint8_t track_snapshot_reapply_track_params(uint8_t track,
             continue;
         }
 
-        float value = 0.0f;
-        if (param_registry_get_track_value(id, track, &value) != 0U)
-        {
-            (void)param_registry_apply_track_value(id, track, value);
-        }
-    }
-    param_registry_batch_end();
-    mod_env3_control_publish_snapshot_track(track, 1U);
-    return 1U;
-}
-
-static void track_snapshot_capture_audio_owned_values(uint8_t track,
-                                                       track_snapshot_t *snapshot)
-{
-    snapshot->audio_owned_count = 0U;
-    for (uint16_t raw_id = 0U;
-         (raw_id < (uint16_t)PARAM_COUNT)
-             && (snapshot->audio_owned_count < TRACK_SNAPSHOT_AUDIO_OWNED_MAX_ITEMS);
-         ++raw_id)
-    {
-        const param_id_t id = (param_id_t)raw_id;
-        if (live_parameter_is_audio_owned(id) == 0U)
+        float current = 0.0f;
+        if ((param_registry_get_track_value(id, track, &current) != 0U)
+                && (current == snapshot->param_values[raw_id]))
         {
             continue;
         }
-        float value = param_registry[id].default_value;
-        (void)param_registry_get_track_value(id, track, &value);
-        snapshot->audio_owned[snapshot->audio_owned_count++] =
-            (track_snapshot_audio_owned_item_t){
-                .parameter_id = raw_id,
-                .reserved = 0U,
-                .value = value
-            };
+        if (param_registry_apply_track_value(id, track,
+                                             snapshot->param_values[raw_id]) == 0U)
+        {
+            param_registry_batch_end();
+            return 0U;
+        }
     }
+    param_registry_batch_end();
+    const track_sound_state_t *const current_sound =
+        track_sound_state_get_const(track);
+    if (current_sound == 0)
+        return 0U;
+    for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
+    {
+        const track_mod_matrix_slot_t *const current =
+            &current_sound->mod_matrix[slot];
+        const track_mod_matrix_slot_t *const final =
+            &snapshot->mod_matrix[slot];
+        if ((current->source == final->source)
+                && (current->destination == final->destination)
+                && (current->depth == final->depth)
+                && (current->enabled == final->enabled))
+            continue;
+        if (mod_matrix_set_slot_state(track, slot, final->source,
+                                      final->destination, final->depth,
+                                      final->enabled) == 0U)
+            return 0U;
+    }
+    return 1U;
 }
 
 uint8_t track_snapshot_capture(uint8_t track, track_snapshot_t *out_snapshot)
 {
     if ((track_snapshot_track_is_valid(track) == 0U) || (out_snapshot == 0))
-    {
-        return 0U;
-    }
-
-    const track_sound_state_t *const sound = track_sound_state_get_const(track);
-    const track_tone_sound_state_t *const tone = track_tone_sound_state_get_const(track);
-    if ((sound == 0) || (tone == 0))
     {
         return 0U;
     }
@@ -472,9 +406,17 @@ uint8_t track_snapshot_capture(uint8_t track, track_snapshot_t *out_snapshot)
         (void)param_registry_get_track_value(
             PARAM_CFG_POLY_SPREAD, track, &out_snapshot->poly_spread);
     }
-    memcpy(&out_snapshot->sound, sound, sizeof(out_snapshot->sound));
-    memcpy(&out_snapshot->tone, tone, sizeof(out_snapshot->tone));
-    track_snapshot_capture_audio_owned_values(track, out_snapshot);
+    for (param_id_t id = 0U; id < PARAM_COUNT; ++id)
+    {
+        out_snapshot->param_values[id] = param_registry[id].default_value;
+        (void)param_registry_get_track_value(
+            id, track, &out_snapshot->param_values[id]);
+    }
+    const track_sound_state_t *const sound = track_sound_state_get_const(track);
+    if (sound == 0)
+        return 0U;
+    memcpy(out_snapshot->mod_matrix, sound->mod_matrix,
+           sizeof(out_snapshot->mod_matrix));
     if ((track < NOTE_FX_TRACK_COUNT)
             && (note_fx_state_capture_track(track, &out_snapshot->note_fx) == 0U))
     {
@@ -505,14 +447,8 @@ uint8_t track_snapshot_make_default(uint8_t track, track_snapshot_t *out_snapsho
     out_snapshot->midi_source = UI_TRACK_MIDI_SRC_ALL;
     out_snapshot->poly_voice_count = 1U;
     out_snapshot->poly_spread = 0.0f;
-    track_sound_state_make_default(&out_snapshot->sound);
-    track_tone_sound_state_make_default(&out_snapshot->tone);
-    track_snapshot_capture_audio_owned_values(track, out_snapshot);
-    for (uint8_t i = 0U; i < out_snapshot->audio_owned_count; ++i)
-    {
-        out_snapshot->audio_owned[i].value =
-            param_registry[out_snapshot->audio_owned[i].parameter_id].default_value;
-    }
+    for (param_id_t id = 0U; id < PARAM_COUNT; ++id)
+        out_snapshot->param_values[id] = param_registry[id].default_value;
     for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
     {
         out_snapshot->note_fx.value[slot][0] = 2U;
@@ -577,6 +513,11 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
         ((options != 0) && (options->has_family_override != 0U))
             ? options->family_override
             : snapshot->config.family;
+    const ui_track_config_t current_target_config =
+        ui_get_track_config(target_track);
+    const uint8_t target_structure_changed = (uint8_t)(
+        (current_target_config.family != target_family)
+        || (current_target_config.type != snapshot->config.type));
 
     uint8_t applied_voice_count = snapshot->poly_voice_count;
     const uint8_t target_is_multi = (uint8_t)((target_family == UI_TRACK_FAMILY_SAMPLER)
@@ -662,7 +603,6 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
                                  (brick_entity_id_t)target_track,
                                  &target_entity) == 0U)
             || (target_entity.active == 0U)
-            || (snapshot->audio_owned_count > TRACK_SNAPSHOT_AUDIO_OWNED_MAX_ITEMS)
             || (track_snapshot_validate_sequence(target_track,
                                                  snapshot,
                                                  seq_model_track_can_store_play((seq_track_id_t)target_track),
@@ -691,8 +631,13 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     uint8_t apply_ok = 0U;
     for (uint8_t i = 0U; i < restore_track_count; ++i)
     {
-        if (track_snapshot_runtime_quiesce_engine(
-                (uint8_t)restore_tracks[i]) == 0U)
+        const uint8_t restore_track = (uint8_t)restore_tracks[i];
+        const uint8_t structure_changed = (uint8_t)(
+            ((restore_track == target_track) && (target_structure_changed != 0U))
+            || ((options != 0) && (options->clear_source_track != 0U)
+                && (restore_track == options->source_track)));
+        if ((structure_changed != 0U)
+                && (track_snapshot_runtime_quiesce_engine(restore_track) == 0U))
             goto restore_done;
     }
 
@@ -706,7 +651,6 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     const param_registry_track_transition_pipeline_cmd_t pipeline_cmd = {
         .prepare_fn = 0,
         .mutate_fn = track_snapshot_apply_structure_mutation,
-        .reapply_fn = 0,
         .seq_runtime_sync_fn = 0,
         .ui_sync_fn = 0,
         .resume_fn = 0,
@@ -717,14 +661,6 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
         goto restore_done;
     }
 
-    track_sound_state_t *const dst_sound = track_sound_state_get(target_track);
-    track_tone_sound_state_t *const dst_tone = track_tone_sound_state_get(target_track);
-    if ((dst_sound == 0) || (dst_tone == 0))
-    {
-        goto restore_done;
-    }
-    memcpy(dst_sound, &snapshot->sound, sizeof(*dst_sound));
-    memcpy(dst_tone, &snapshot->tone, sizeof(*dst_tone));
     if ((target_track < NOTE_FX_TRACK_COUNT)
             && (note_fx_state_restore_track(target_track, &snapshot->note_fx) == 0U))
     {
@@ -737,7 +673,6 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     }
 
     track_runtime_invalidate_all();
-    track_runtime_refresh_all();
 
     if ((target_family == UI_TRACK_FAMILY_SYNTH) || (target_family == UI_TRACK_FAMILY_DRUM)
             || (target_is_multi != 0U))
@@ -763,7 +698,7 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     {
         goto restore_done;
     }
-    if (track_snapshot_reapply_track_params(target_track, snapshot) == 0U)
+    if (track_snapshot_apply_track_params(target_track, snapshot) == 0U)
     {
         goto restore_done;
     }
@@ -771,19 +706,15 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     apply_ok = 1U;
 
 restore_done:
-    if (apply_ok == 0U)
-    {
-        /* The failure path still resets ENV3 through its AUDIO mailbox. */
-        for (uint8_t i = 0U; i < restore_track_count; ++i)
-        {
-            mod_env3_control_publish_snapshot_track(
-                (uint8_t)restore_tracks[i], 1U);
-        }
-    }
     for (uint8_t i = 0U; i < restore_track_count; ++i)
     {
-        if (track_snapshot_runtime_neutralize_note_state(
-                (uint8_t)restore_tracks[i]) == 0U)
+        const uint8_t restore_track = (uint8_t)restore_tracks[i];
+        const uint8_t structure_changed = (uint8_t)(
+            ((restore_track == target_track) && (target_structure_changed != 0U))
+            || ((options != 0) && (options->clear_source_track != 0U)
+                && (restore_track == options->source_track)));
+        if ((structure_changed != 0U)
+                && (track_snapshot_runtime_neutralize_note_state(restore_track) == 0U))
             goto restore_done;
     }
     seq_runtime_end_track_restore(restore_tracks, restore_track_count);

@@ -15,7 +15,7 @@
 #include "Core/engine_tasklet.h"
 #include "Core/track_snapshot.h"
 #include "Core/live_clock.h"
-#include "Core/live_parameter_audio_queue.h"
+#include "Core/live_parameter_audio_publication.h"
 #include "Core/live_parameter_migration.h"
 #include "NoteFx/note_fx_state.h"
 #include "param_registry.h"
@@ -394,14 +394,13 @@ static uint8_t ui_core_clipboard_bulk_add(live_parameter_audio_bulk_t *bulk,
     item->scope = scope;
     item->track = event_track;
     item->slot = LIVE_PARAMETER_EVENT_INVALID_INDEX;
-    item->reserved = 0U;
     item->flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
                              | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS);
     item->value = live_parameter_event_encode_float(command_value);
     return 1U;
 }
 
-static void ui_core_clipboard_bulk_accept_shadow(const live_parameter_audio_bulk_t *bulk)
+static void ui_core_clipboard_bulk_accept_control_values(const live_parameter_audio_bulk_t *bulk)
 {
     if (bulk == 0)
     {
@@ -430,7 +429,7 @@ static uint8_t ui_core_clipboard_clear_param_list_to_min(uint8_t track,
     }
 
     /* Consumer-edge refresh: clear-to-min applies on a refreshed projection. */
-    track_runtime_refresh_track(track);
+    track_runtime_rebuild_track(track);
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
         .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
@@ -481,11 +480,11 @@ static uint8_t ui_core_clipboard_clear_param_list_to_min(uint8_t track,
     }
     param_registry_batch_end();
     if ((bulk.count != 0U)
-            && (live_parameter_audio_queue_submit_bulk(&bulk) == false))
+            && (live_parameter_audio_publication_submit_bulk(&bulk) == false))
     {
         return direct_applied;
     }
-    ui_core_clipboard_bulk_accept_shadow(&bulk);
+    ui_core_clipboard_bulk_accept_control_values(&bulk);
     return (uint8_t)((direct_applied != 0U) || (bulk.count != 0U));
 }
 
@@ -495,7 +494,7 @@ static uint8_t ui_core_clipboard_copy_track(uint8_t track)
     memset(cb, 0, sizeof(*cb));
 
     cb->source_track = track;
-    track_runtime_refresh_track(track);
+    track_runtime_rebuild_track(track);
     entity_topology_descriptor_t topology;
     if ((entity_topology_get(track, &topology) == 0U)
             || (track_snapshot_capture(track, &cb->snapshot[0]) == 0U))
@@ -655,7 +654,7 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
     uint8_t applied = 0U;
     uint8_t common = 0U;
     /* Consumer-edge refresh: intersection apply uses a refreshed projection. */
-    track_runtime_refresh_track(track);
+    track_runtime_rebuild_track(track);
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
         .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
@@ -708,10 +707,10 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
         }
     }
     const uint8_t bulk_accepted = (bulk.count == 0U)
-        ? 1U : (live_parameter_audio_queue_submit_bulk(&bulk) != false);
+        ? 1U : (live_parameter_audio_publication_submit_bulk(&bulk) != false);
     if (bulk_accepted != 0U)
     {
-        ui_core_clipboard_bulk_accept_shadow(&bulk);
+        ui_core_clipboard_bulk_accept_control_values(&bulk);
         applied = (uint8_t)(applied + bulk.count);
     }
 

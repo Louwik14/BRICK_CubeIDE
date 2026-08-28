@@ -236,6 +236,36 @@ uint8_t synth_polyphony_set_track_active(uint8_t track, uint8_t active, uint8_t 
     return 1U;
 }
 
+uint8_t synth_polyphony_replace_renderer(uint8_t track, uint8_t engine)
+{
+    if ((synth_poly_valid_track(track) == 0U)
+            || (g_synth_poly[track].active == 0U))
+        return 0U;
+    synth_poly_track_t *const poly = &g_synth_poly[track];
+    poly->render_voice_count = 0U;
+    __DMB();
+    for (uint8_t voice = 0U; voice < poly->voice_count; ++voice)
+    {
+        const uint8_t slot = synth_polyphony_find_slot(track, voice);
+        if (slot >= SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
+            return 0U;
+        /* Renderer-local reset only.  Mixer envelopes, poly modulation and
+         * output identity remain attached to the physical voice slot. */
+        brick6_braids_runtime_all_notes_off(slot);
+        brick6_stack_runtime_all_notes_off(slot);
+        brick6_wave_runtime_all_notes_off(slot);
+        brick6_fm_runtime_all_notes_off(slot);
+        brick6_braids_runtime_reset_instance(slot);
+        brick6_stack_runtime_reset_instance(slot);
+        brick6_wave_runtime_reset_instance(slot);
+        brick6_fm_runtime_reset_instance(slot);
+    }
+    poly->engine = engine;
+    __DMB();
+    poly->render_voice_count = poly->voice_count;
+    return 1U;
+}
+
 uint8_t synth_polyphony_set_voice_count(uint8_t track, uint8_t count)
 {
     if (synth_poly_valid_track(track) == 0U)
@@ -248,7 +278,7 @@ uint8_t synth_polyphony_set_voice_count(uint8_t track, uint8_t count)
         return 0U;
     const uint8_t maximum = synth_polyphony_get_available_for_track(track);
     if (count > maximum)
-        count = maximum;
+        return 0U;
     synth_poly_track_t *const poly = &g_synth_poly[track];
     if (poly->engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM)
     {
@@ -271,7 +301,7 @@ uint8_t synth_polyphony_set_voice_count(uint8_t track, uint8_t count)
         for (uint8_t voice = old_count; voice < count; ++voice)
         {
             const uint8_t slot = synth_polyphony_acquire_slot(track);
-            if (slot == SYNTH_POLYPHONY_NO_VOICE) { count = voice; break; }
+            if (slot == SYNTH_POLYPHONY_NO_VOICE) return 0U;
             poly->slots[voice] = slot;
             synth_polyphony_reset_slot(slot);
             memset(&g_synth_voice[slot], 0, sizeof(g_synth_voice[slot]));
@@ -316,7 +346,7 @@ uint8_t synth_polyphony_set_voice_count(uint8_t track, uint8_t count)
         synth_polyphony_refresh_voice_pan(poly);
         __DMB();
         poly->render_voice_count = count;
-        return count;
+        return (g_synth_poly[track].voice_count == count) ? count : 0U;
     }
     g_synth_poly[track].render_voice_count = 0U;
     g_synth_poly[track].renderable_voice_mask = 0U;
@@ -325,7 +355,7 @@ uint8_t synth_polyphony_set_voice_count(uint8_t track, uint8_t count)
     for (uint8_t voice = g_synth_poly[track].voice_count; voice < count; ++voice)
     {
         const uint8_t slot = synth_polyphony_acquire_slot(track);
-        if (slot == SYNTH_POLYPHONY_NO_VOICE) { count = voice; break; }
+        if (slot == SYNTH_POLYPHONY_NO_VOICE) return 0U;
         g_synth_poly[track].slots[voice] = slot;
         synth_polyphony_reset_slot(slot);
         memset(&g_synth_voice[slot], 0, sizeof(g_synth_voice[slot]));
@@ -345,7 +375,7 @@ uint8_t synth_polyphony_set_voice_count(uint8_t track, uint8_t count)
     synth_polyphony_refresh_voice_pan(&g_synth_poly[track]);
     __DMB();
     g_synth_poly[track].render_voice_count = count;
-    return count;
+    return (g_synth_poly[track].voice_count == count) ? count : 0U;
 }
 
 uint8_t synth_polyphony_validate_ownership(void)
@@ -500,16 +530,6 @@ float synth_polyphony_get_voice_pan(uint8_t track, uint8_t voice)
     return g_synth_poly[track].voice_pan[voice];
 }
 
-uint8_t synth_polyphony_note_on(uint8_t track, uint8_t note)
-{
-    return synth_polyphony_note_on_from(track, note, SYNTH_POLY_SOURCE_MANUAL);
-}
-
-uint8_t synth_polyphony_note_on_from(uint8_t track, uint8_t note, synth_poly_source_t source)
-{
-    return synth_polyphony_note_on_output_from(track, note, source, 0U);
-}
-
 uint8_t synth_polyphony_note_on_output_from(uint8_t track, uint8_t note,
                                             synth_poly_source_t source,
                                             uint32_t output_id)
@@ -578,43 +598,6 @@ uint8_t synth_polyphony_get_most_recent_renderable_voice(uint8_t track)
         : SYNTH_POLYPHONY_NO_VOICE;
 }
 
-uint8_t synth_polyphony_note_off(uint8_t track, uint8_t note)
-{
-    return synth_polyphony_note_off_from(track, note, SYNTH_POLY_SOURCE_MANUAL);
-}
-
-uint8_t synth_polyphony_note_off_from(uint8_t track, uint8_t note, synth_poly_source_t source)
-{
-    if (synth_poly_valid_track(track) == 0U)
-    {
-        return SYNTH_POLYPHONY_NO_VOICE;
-    }
-    synth_poly_track_t *const poly = &g_synth_poly[track];
-    uint8_t selected = SYNTH_POLYPHONY_NO_VOICE;
-    uint32_t newest = 0U;
-    for (uint8_t voice = 0U; voice < poly->voice_count; ++voice)
-    {
-        const uint8_t slot = synth_polyphony_find_slot(track, voice);
-        if ((slot < SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
-                && (g_synth_voice[slot].state == SYNTH_POLY_VOICE_HELD)
-                && (g_synth_voice[slot].note == note)
-                && (g_synth_voice[slot].source == (uint8_t)source)
-                && ((selected == SYNTH_POLYPHONY_NO_VOICE)
-                    || (g_synth_voice[slot].age >= newest)))
-        {
-            selected = voice;
-            newest = g_synth_voice[slot].age;
-        }
-    }
-    if (selected != SYNTH_POLYPHONY_NO_VOICE)
-    {
-        const uint8_t slot = synth_polyphony_find_slot(track, selected);
-        if (slot < SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
-            g_synth_voice[slot].state = SYNTH_POLY_VOICE_RELEASE;
-    }
-    return selected;
-}
-
 uint8_t synth_polyphony_note_off_output_from(uint8_t track,
                                              synth_poly_source_t source,
                                              uint32_t output_id)
@@ -660,58 +643,23 @@ uint8_t synth_polyphony_output_is_active(uint8_t track,
     return 0U;
 }
 
-uint8_t synth_polyphony_release_source(uint8_t track,
-                                      synth_poly_source_t source,
-                                      synth_poly_release_t *out,
-                                      uint8_t capacity)
+uint8_t synth_polyphony_voice_for_output(uint8_t track,
+                                         synth_poly_source_t source,
+                                         uint32_t output_id)
 {
-    if ((synth_poly_valid_track(track) == 0U) || (out == NULL) || (capacity == 0U))
-    {
-        return 0U;
-    }
-
-    synth_poly_track_t *const poly = &g_synth_poly[track];
-    uint8_t count = 0U;
-    for (uint8_t voice = 0U; (voice < poly->voice_count) && (count < capacity); ++voice)
+    if ((synth_poly_valid_track(track) == 0U) || (output_id == 0U))
+        return SYNTH_POLYPHONY_NO_VOICE;
+    const synth_poly_track_t *const poly = &g_synth_poly[track];
+    for (uint8_t voice = 0U; voice < poly->voice_count; ++voice)
     {
         const uint8_t slot = synth_polyphony_find_slot(track, voice);
         if ((slot < SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
                 && (g_synth_voice[slot].state == SYNTH_POLY_VOICE_HELD)
-                && (g_synth_voice[slot].source == (uint8_t)source))
-        {
-            out[count].voice = voice;
-            out[count].note = g_synth_voice[slot].note;
-            g_synth_voice[slot].state = SYNTH_POLY_VOICE_RELEASE;
-            count++;
-        }
+                && (g_synth_voice[slot].source == (uint8_t)source)
+                && (g_synth_voice[slot].output_id == output_id))
+            return voice;
     }
-    return count;
-}
-
-uint8_t synth_polyphony_release_all(uint8_t track,
-                                   synth_poly_release_t *out,
-                                   uint8_t capacity)
-{
-    if ((synth_poly_valid_track(track) == 0U) || (out == NULL) || (capacity == 0U))
-    {
-        return 0U;
-    }
-
-    synth_poly_track_t *const poly = &g_synth_poly[track];
-    uint8_t count = 0U;
-    for (uint8_t voice = 0U; (voice < poly->voice_count) && (count < capacity); ++voice)
-    {
-        const uint8_t slot = synth_polyphony_find_slot(track, voice);
-        if ((slot < SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
-                && (g_synth_voice[slot].state == SYNTH_POLY_VOICE_HELD))
-        {
-            out[count].voice = voice;
-            out[count].note = g_synth_voice[slot].note;
-            g_synth_voice[slot].state = SYNTH_POLY_VOICE_RELEASE;
-            count++;
-        }
-    }
-    return count;
+    return SYNTH_POLYPHONY_NO_VOICE;
 }
 
 void synth_polyphony_all_notes_off(uint8_t track)

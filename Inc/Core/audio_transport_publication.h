@@ -21,6 +21,9 @@ void audio_transport_publication_init(void);
 void audio_transport_publication_refresh(void);
 uint8_t audio_transport_publication_read(
     audio_transport_publication_t *out_publication);
+uint8_t audio_transport_publication_audio_set_running(uint8_t running);
+uint8_t audio_transport_publication_audio_set_tempo(uint32_t tempo_milli);
+uint8_t audio_transport_publication_audio_set_step_q16(uint32_t samples_per_step_q16);
 
 #ifdef __cplusplus
 }

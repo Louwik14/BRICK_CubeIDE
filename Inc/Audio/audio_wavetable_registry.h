@@ -27,6 +27,11 @@ typedef struct
     audio_wavetable_band_t bands[WAVETABLE_MIPMAP_MAX_BANDS];
 } audio_wavetable_descriptor_t;
 
+_Static_assert(sizeof(audio_wavetable_band_t) == 28U,
+               "Wavetable band ABI changed");
+_Static_assert(sizeof(audio_wavetable_descriptor_t) == 256U,
+               "Wavetable descriptor ABI changed");
+
 void audio_wavetable_registry_init(void);
 /* Local H743 implementation of the future CONTROL->AUDIO install transport. */
 uint8_t audio_wavetable_registry_transport_install(

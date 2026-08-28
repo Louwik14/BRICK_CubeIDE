@@ -333,8 +333,12 @@ static void sample_capture_publish_audio_projection(void)
         return;
     }
 
-    audio_rec_bus_projection_control_publish(source_entity_mask,
-        (audio_rec_bus_arm_t)g_sample_capture.state.arm, source_flags);
+    if (audio_rec_bus_projection_control_publish(source_entity_mask,
+            (audio_rec_bus_arm_t)g_sample_capture.state.arm,
+            source_flags) == 0U)
+    {
+        return;
+    }
     g_sample_capture.published_source_entity_mask = source_entity_mask;
     g_sample_capture.published_arm = (uint8_t)g_sample_capture.state.arm;
     g_sample_capture.published_source_flags = source_flags;
@@ -2286,10 +2290,6 @@ done:
 
 static uint8_t sample_capture_looper_record_conflict(void)
 {
-    if(brick6_looper_runtime_storage_record_is_active_or_armed() != 0U)
-    {
-        return 1U;
-    }
     return audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_LOOPER);
 }
 

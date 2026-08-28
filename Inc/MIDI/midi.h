@@ -253,5 +253,6 @@ void midi_internal_receive_with_timestamp(const uint8_t *msg, size_t len,
  * @brief Alimente la file RX USB (appel depuis l'ISR USB OUT).
  */
 void midi_usb_rx_submit_from_isr(const uint8_t *packet, size_t len);
+void midi_rx_discard_pending(void);
 
 #endif /* MIDI_H */

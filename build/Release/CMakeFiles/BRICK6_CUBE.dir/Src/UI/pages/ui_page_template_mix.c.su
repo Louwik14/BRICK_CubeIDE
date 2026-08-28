@@ -1,5 +1,5 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mix.c:55:16:ui_page_template_mix_subpage_enabled	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mix.c:54:16:ui_page_template_mix_subpage_enabled	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mix.c:42:36:ui_page_template_mix_resolve_family	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mix.c:68:6:ui_page_template_mix_open_primary	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mix.c:74:6:ui_page_template_mix_toggle_subset	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mix.c:79:6:ui_page_template_mix_register_families	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mix.c:67:6:ui_page_template_mix_open_primary	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mix.c:73:6:ui_page_template_mix_toggle_subset	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_template_mix.c:78:6:ui_page_template_mix_register_families	32	static

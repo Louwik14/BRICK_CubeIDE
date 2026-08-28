@@ -21,16 +21,13 @@ typedef struct
 {
     uint32_t tim5_tick;
     uint64_t audio_sample;
-    uint32_t binding_generation[BRICK_ENTITY_CAPACITY];
 } live_clock_anchor_t;
 
 void live_clock_init(void);
 
 /*
- * Publish an anchor at the beginning of an SAI half callback, before the
- * corresponding half is rendered. audio_sample is therefore the first
- * sample of the TX half that the audio owner is about to write; it is not
- * the sample currently leaving the codec.
+ * Publish the one nominal boot phase anchor. Calls after the first coherent
+ * publication are no-ops; restart/xrun recovery must reinitialize explicitly.
  */
 void live_clock_audio_publish_anchor(uint64_t audio_sample);
 
@@ -38,8 +35,6 @@ void live_clock_audio_publish_anchor(uint64_t audio_sample);
 bool live_clock_read_anchor(live_clock_anchor_t *out_anchor);
 bool live_clock_read_audio_sample(uint64_t *out_audio_sample);
 uint64_t live_clock_audio_sample(void);
-bool live_clock_read_binding_generation(brick_entity_id_t entity_id,
-                                        uint32_t *out_generation);
 
 /* Convert a TIM5 capture tick to the absolute audio sample timeline. */
 bool live_clock_tim5_to_sample_time(uint32_t capture_tick,

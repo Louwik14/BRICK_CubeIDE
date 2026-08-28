@@ -27,10 +27,10 @@ typedef struct
     uint16_t multi_sample_id;
 } multi_audio_zone_t;
 
-CTRL_STATE static multi_audio_instrument_t
+D2_IPC static multi_audio_instrument_t
     g_audio_instruments[MULTI_SAMPLE_POOL_MAX_INSTRUMENTS];
-SDRAM_MULTI_POOL static multi_audio_zone_t g_audio_zones[MULTI_SAMPLE_POOL_MAX_ZONES];
-SDRAM_MULTI_POOL static multi_sample_audio_source_t
+AUDIO_SHARED_MULTI_SDRAM static multi_audio_zone_t g_audio_zones[MULTI_SAMPLE_POOL_MAX_ZONES];
+AUDIO_SHARED_MULTI_SDRAM static multi_sample_audio_source_t
     g_audio_samples[MULTI_SAMPLE_POOL_MAX_SAMPLES];
 
 void multi_sample_audio_projection_init(void)
@@ -38,6 +38,7 @@ void multi_sample_audio_projection_init(void)
     memset(g_audio_instruments, 0, sizeof(g_audio_instruments));
     memset(g_audio_zones, 0, sizeof(g_audio_zones));
     memset(g_audio_samples, 0, sizeof(g_audio_samples));
+    __DMB();
 }
 
 void multi_sample_audio_projection_withdraw(uint16_t instrument_id)
@@ -47,6 +48,7 @@ void multi_sample_audio_projection_withdraw(uint16_t instrument_id)
     g_audio_instruments[instrument_id].ready = 0U;
     __DMB();
     g_audio_instruments[instrument_id].sequence++;
+    __DMB();
 }
 
 uint8_t multi_sample_audio_projection_publish(uint16_t instrument_id)
@@ -101,6 +103,7 @@ uint8_t multi_sample_audio_projection_publish(uint16_t instrument_id)
     dst->sequence++;
     __DMB();
     dst->ready = 1U;
+    __DMB();
     return 1U;
 }
 
@@ -108,6 +111,7 @@ uint8_t multi_sample_audio_projection_is_ready(uint16_t instrument_id)
 {
     if (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
         return 0U;
+    __DMB();
     __DMB();
     return g_audio_instruments[instrument_id].ready;
 }
@@ -125,9 +129,12 @@ uint8_t multi_sample_audio_projection_resolve(uint16_t instrument_id,
     if (out != NULL) memset(out, 0, sizeof(*out));
     if ((out == NULL) || (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS))
         return 0U;
+    __DMB();
     const multi_audio_instrument_t snap = g_audio_instruments[instrument_id];
     __DMB();
     if (snap.ready == 0U) return 0U;
+
+    __DMB();
 
     const multi_audio_zone_t *best = NULL;
     const multi_audio_zone_t *fallback = NULL;

@@ -1,0 +1,145 @@
+# Contrat gele des data planes CONTROL/AUDIO (PASS D)
+
+Ce document est l'inventaire normatif des donnees volumineuses partagees. La
+FIFO fonctionnelle n'est pas un data plane. Les adresses C obtenues apres
+resolution locale d'un ID ne font jamais partie de l'ABI M4/M7.
+
+## Inventaire et ownership
+
+| Data plane | Producteur -> consommateur | Zone / taille bornee | Contenu ABI et pointeurs | Publication | Recyclage |
+|---|---|---|---|---|---|
+| Descripteurs PROGRAM | M4 -> M7 | `AUDIO_STORAGE_SHARED_SDRAM`, 256 x 8 octets (2048), credits dans `D2_IPC` | `program_id` et descriptor structurel fixe de 4 octets (`family`, `type`, role GROUP), sans pointeur | descriptor complet, DMB, `id`, puis commande `PROGRAM(id)` | M7 copie, avance le tail, publie le credit; M4 seul remet le slot libre |
+| Sample RAM | M4 loader -> M7 voices | payload dans le page pool; registry non-cacheable `AUDIO_SHARED_REGISTRY_SDRAM`; map ID dans `D2_IPC` | `global_slot`, `ram_slot`, generation et `{region, offset, length}` | payload clean, descriptor immutable, DMB, map `global_slot -> ram_slot` | stop PROGRAM/PARAM, fin des credits lecteurs, withdraw generation, puis pages libres |
+| Wavetable/mipmaps | M4 loader -> M7 Wave | payload dans le page pool; registry non-cacheable de 16 896 octets | slot, generation et refs `{region, offset, length}` par bande; aucun `float *` partage | payload clean, descriptor/bandes, DMB, `ready` publie en dernier | stop des voix + fence fonctionnelle, remove generation, puis pages libres |
+| Multi | M4 loader/projection -> M7 Sampler | projection non-cacheable `AUDIO_SHARED_MULTI_SDRAM` (47 104 octets) + instruments compacts `D2_IPC` | zones et sources numeriques, IDs sample/instrument, offsets fichier; aucun path/pointeur | samples/zones immutables, DMB, instrument `ready` publie en dernier | stop instrument + fin des credits page, withdraw, puis catalogue/pages recyclables |
+| STREAM pages | M4 Storage -> M7 voices | payload cacheable `.sdram_sample_page_pool`, 24 641 536 octets | descriptor M4 avec `data_offset`; token I/O pointer-free; resolution locale seulement | decode dans page, clean payload, clean descriptor, etat `READY` en dernier | M7 publie un credit par compteur de slot dans `D2_IPC`; M4 recycle seulement a zero |
+| Preview PCM | M4 Preview -> M7 MAIN | ring non-cacheable `AUDIO_STORAGE_SHARED_SDRAM`, 2048 x 2 floats (16 384) + head/tail/epoch `D3_IPC` | samples seulement, aucun pointeur | payload, DMB, `write_count` | M7 lit puis publie `read_count`; reset borne par epoch |
+| Recorder PCM | M7 AUDIO -> M4 Storage/SD | ring non-cacheable `SDRAM_RECORDER`, 12 001 x 2 x 32 bits (96 008) + transport `D3_IPC` | PCM, session/generation, head `accepted_frames`, tail `released_frames`, stop exact | PCM, DMB, head; STOP publie `stop_generation` et conserve la longueur du head | M4 publie tail apres copie/commit; M7 reutilise uniquement l'espace libere |
+| Looper live take | M7 capture -> M4 recorder, puis M4 map -> M7 reader | Recorder PCM ci-dessus; publication live non-cacheable 1680 octets | path borne et extents possedes en valeur; aucun pointeur. Le preroll (96 000 octets) est cacheable et M7-prive | meme head/STOP Recorder; map live par seqlock pair | tail Recorder, puis generation de map et credits pages; retrait apres stop/fence |
+
+Les contexts FatFs, loaders, diagnostics, paths de catalogue, pointeurs de
+buffers DMA et function pointers du generic recorder restent prives a M4. Les
+voices, pointeurs DSP chauds et le preroll Looper restent prives a M7. Les API
+`audio_shared_memory_resolve()` et `sample_page_cache_data_resolve()` creent une
+adresse locale seulement apres validation de region/offset; cette adresse ne
+traverse aucune commande ou mailbox.
+
+## Placement et coherence
+
+- `.ram_d3_ipc`, moitie haute de SRAM4: shareable non-cacheable, MPU region 5.
+- `.ram_d2_ipc`, SRAM3 complete: shareable non-cacheable, MPU region 6.
+- `.sdram_recorder`, derniers 256 KiB: shareable non-cacheable, MPU region 4.
+- registries RAM/Wavetable/Multi: `.sdram_recorder`, non-cacheable.
+- page pool: SDRAM cacheable. Le producteur nettoie le payload et le descriptor
+  avant le flag/ID; le consommateur invalide sa cache privee
+  avec `BRICK6_H747_DUAL_CORE` avant la copie. Sur H743, ces hooks sont des
+  barrieres seulement afin de ne pas invalider une ligne sale du meme coeur
+  interrompu.
+
+`volatile` exprime uniquement les acces aux index/doorbells. `DMB` impose
+l'ordre. Ni l'un ni l'autre ne remplace le placement non-cacheable ou le
+clean/invalidate explicite.
+
+## Synchronisation
+
+Les compteurs SPSC ont un seul writer par direction. Le page cache separe
+maintenant les metadata M4 des credits lecteurs M7: M7 ne modifie plus le
+descriptor cacheable, et M4 ne recycle pas un slot dont le credit est non nul.
+Les sections PRIMASK restantes dans `sample_page_cache.c` serialisent seulement
+des writers M4 locaux; elles ne fournissent aucune exclusion inter-core. Le
+Recorder n'installe plus de callback `__disable_irq()` dans le generic recorder.
+
+STREAM conserve sa politique de besoins/credits et son scheduler. Recorder,
+Preview et Looper conservent leurs semantiques, leur framing et leur longueur
+STOP. Les six opcodes et la cadence CONTROL ne changent pas.
+
+## Controle de purete PASS D
+
+`RESOURCE READY` ne vaut jamais `RESOURCE ACTIVE`. Les flags `ready`,
+generations, maps, compteurs et seqlocks publient une disponibilite ou un droit
+de reutilisation. L'activation audible reste ordonnee par PROGRAM/PARAM/NOTE,
+TRANSPORT, RECORD ou PANIC dans la FIFO.
+
+| Data plane | Pur data/ownership | Fonction cachee | Verdict |
+|---|---|---|---|
+| PROGRAM descriptors | oui | non; seul `PROGRAM(id)` applique le descriptor | DATA PLANE PUR |
+| Sample RAM | oui | non; registry/map rendent la ressource resolvable | DATA PLANE PUR |
+| Wavetable/mipmaps | oui | non; PARAM selectionne slot et generation | DATA PLANE PUR |
+| Multi | oui | non; PROGRAM/PARAM/NOTE selectionnent et declenchent | DATA PLANE PUR |
+| STREAM | oui | non; la fenetre est une projection physique d'execution | DATA PLANE PUR |
+| Preview PCM | oui | non; active et gain passent par PARAM | DATA PLANE PUR |
+| Recorder PCM | oui | non; start/stop passent par RECORD | DATA PLANE PUR |
+| Looper live take | oui | non; RECORD/TRANSPORT ordonnent le lifecycle | DATA PLANE PUR |
+| Mod Matrix | non | PARAM canoniques indexes par slot; etat et plans locaux M7 | COMMANDE PURE |
+Restore n'est plus un data plane: le Pattern decode est valide directement,
+puis installe comme etat CONTROL final. Les seules consequences AUDIO sont les
+PROGRAM structurellement differents et les PARAM dont la valeur finale change.
+
+### Retour STREAM exact
+
+M7 publie deux classes de credits physiques:
+
+- par slot de page: compteur d'utilisation, dont le retour a zero autorise le
+  recyclage;
+- par voix: `{key, registration_epoch, owner_token, current_page,
+  mobile_page_count, loop_first_page, loop_last_page, loop_preload_count,
+  loop_enabled, voice_index, active}`.
+
+Il ne publie ni low-water, ni deadline, ni vitesse, ni wake, ni demande I/O
+explicite. M4 derive les index de pages de la fenetre et reste seul proprietaire
+du scheduler, des reservations et des lectures SD. Ce retour n'est donc pas un
+simple index de capacite: `STREAM M7->M4 = CREDITS UNIQUEMENT : NON` dans la
+definition minimale demandee.
+
+Cette fenetre detaillee reste necessaire pour le cas musical d'une voix sample
+pitchee qui franchit une page ou reboucle au cours du rendu sample-accurate,
+avec vol de voix possible au meme bloc. La phase effective, le wrap et la voix
+survivante sont des faits physiques connus de M7. Un simple nombre de slots
+libres ne permet pas a M4 de choisir la prochaine page; les reconstruire cote
+M4 imposerait un second moteur de voix synchronise. La fenetre ne choisit ni le
+sample, ni le loop, ni le pitch: ceux-ci proviennent des commandes FIFO. Elle
+projette seulement les pages requises pour executer ces decisions.
+
+Les retours M7->M4 finaux sont limites au tail FIFO, aux credits/fenetres
+physiques STREAM, au PCM/framing Recorder, a l'ancre boot et aux diagnostics.
+Aucun ACK de commande, READY musical, binding, programme installe ou PARAM
+applique n'est retourne. H743 et H747 partagent exactement cette semantique;
+seuls placement, cache, barrieres et visibilite different.
+
+Verdict de gel: aucune decision fonctionnelle ne subsiste hors FIFO et aucun
+retour fonctionnel M7->M4 ne subsiste. L'architecture est prete a etre gelee.
+
+## RAM PASS C
+
+Mesures linker H743 Premium apres PASS C:
+
+| Region | Avant | Apres | Delta |
+|---|---:|---:|---:|
+| SRAM3/D2 | 17 216 | 23 840 | +6 624 |
+| RAM D3 | 16 480 | 14 272 | -2 208 |
+| SDRAM cacheable | 32 857 504 | 32 886 208 | +28 704 |
+| SDRAM shared non-cacheable | 253 376 | 224 672 | -28 704 |
+
+Le delta interne correspond aux credits page et maps ID non-cacheables. Les
+102 400 octets SDRAM sont sortis de la zone partagee (preroll M7 et runtime
+Recorder M4 avec FatFs/callbacks); 73 696 octets de registries pointer-free y
+sont entres. Aucun buffer n'a ete duplique.
+
+Builds H743 valides: Release Low-Cost, Premium et Test. Le port H747 doit
+placer les memes sections dans des regions visibles des deux coeurs, configurer
+MPU region 5/6 et `.sdram_recorder` sur les deux coeurs, puis definir
+`BRICK6_H747_DUAL_CORE` pour activer clean/invalidate des caches prives. Aucun
+scheduler, opcode, setter FM, cadence, chemin DMA live ou cleanup PASS 6 n'a
+ete modifie.
+
+## Correctifs de teardown et cache
+
+Preview publie desormais `PREVIEW_ACTIVE=0` avec une fence FIFO. Le producer ne
+remet `write_count` a zero et ne reutilise le ring qu'apres passage du tail; le
+prochain START du meme epoch force alors le consumer a repartir de
+`read_count=0`. RAM et Multi suivent le meme contrat: STOP fence, passage du
+tail, retrait de projection, puis recyclage.
+
+La reutilisation du dernier tombstone de l'index STREAM publie explicitement la
+ligne modifiee avec `intercore_cache_publish`. C'est le meme clean cache que les
+insertions ordinaires; le protocole de pages et de credits ne change pas.

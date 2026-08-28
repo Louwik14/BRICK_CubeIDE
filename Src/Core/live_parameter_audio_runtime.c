@@ -1,21 +1,34 @@
 #include "Core/live_parameter_audio_runtime.h"
 
-#include "Core/live_parameter_audio_queue.h"
-#include "Core/live_parameter_event.h"
 #include "Audio/audio_global_runtime.h"
-#include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_mod_matrix.h"
+#include "Audio/audio_note_engine_adapter.h"
+#include "Core/live_parameter_event.h"
 #include "Param/param_registry.h"
-#include "Param/param_value_policy.h"
-#include "memory_layout.h"
+#include "Storage/memory_layout.h"
+
+#include <string.h>
 
 SEQ_STATE_D2 static float g_live_parameter_audio_poly_voices[SEQ_LANE_CAPACITY];
 SEQ_STATE_D2 static float g_live_parameter_audio_poly_spread[SEQ_LANE_CAPACITY];
+AUDIO_WARM static float
+    g_live_parameter_audio_track_value[SEQ_LANE_CAPACITY][PARAM_COUNT];
+AUDIO_WARM static uint32_t
+    g_live_parameter_audio_track_valid[SEQ_LANE_CAPACITY][(PARAM_COUNT + 31U) / 32U];
 
-static float live_parameter_audio_runtime_clamp(param_id_t parameter, float value)
+static void live_parameter_audio_runtime_store(uint8_t entity,
+                                               param_id_t parameter,
+                                               float value)
 {
-    if (parameter >= PARAM_COUNT)
-        return value;
+    g_live_parameter_audio_track_value[entity][parameter] = value;
+    g_live_parameter_audio_track_valid[entity][parameter >> 5U] |=
+        (uint32_t)1U << (parameter & 31U);
+}
+
+static float live_parameter_audio_runtime_clamp(param_id_t parameter,
+                                                float value)
+{
+    if (parameter >= PARAM_COUNT) return value;
     if (value < param_registry[parameter].min)
         return param_registry[parameter].min;
     if (value > param_registry[parameter].max)
@@ -23,116 +36,27 @@ static float live_parameter_audio_runtime_clamp(param_id_t parameter, float valu
     return value;
 }
 
-static uint8_t live_parameter_audio_runtime_apply_target(
-    const live_parameter_audio_event_t *event,
-    float value)
+static uint8_t live_parameter_audio_runtime_changes_matrix_context(param_id_t id)
 {
-    if ((event == 0) || (event->parameter_id >= PARAM_COUNT))
-        return 0U;
-
-    if (event->scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK)
+    switch (id)
     {
-        if ((event->flags & LIVE_PARAMETER_EVENT_FLAG_RUNTIME_TEMP) != 0U)
-        {
-            if (event->matrix_operation
-                    == LIVE_PARAMETER_MATRIX_OPERATION_BASE_UPDATE)
-            {
-                audio_mod_matrix_base_update(
-                    event->track, event->parameter_id, value);
-                return 1U;
-            }
-            uint8_t applied;
-            if (event->matrix_operation == LIVE_PARAMETER_MATRIX_OPERATION_LFO_TEMP_CLEAR)
-            {
-                applied = param_registry_clear_track_value_runtime_temp_audio(
-                    event->parameter_id, event->track);
-            }
-            else if (event->matrix_operation == LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_CLEAR)
-            {
-                applied = param_registry_clear_track_value_runtime_temp_audio(
-                    event->parameter_id, event->track);
-                if (applied == 0U)
-                {
-                    applied = param_registry_apply_track_value_runtime_temp_audio(
-                        event->parameter_id, event->track, value);
-                }
-            }
-            else
-            {
-                applied = param_registry_apply_track_value_runtime_temp_audio(
-                    event->parameter_id, event->track, value);
-            }
-            if (applied == 0U)
-                return 0U;
-            if (event->matrix_operation == LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_SET)
-            {
-                audio_mod_matrix_set_base_override(
-                    event->track, event->parameter_id, value);
-            }
-            else if (event->matrix_operation
-                     == LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_CLEAR)
-            {
-                audio_mod_matrix_clear_base_override(
-                    event->track, event->parameter_id, value);
-            }
+        case PARAM_AUDIO_FX_MODEL: case PARAM_AUDIO_FX_B_MODEL:
+        case PARAM_DRUM_MD_MODEL:
+        case PARAM_PRISM_OSC1_MODEL: case PARAM_PRISM_OSC2_MODEL:
+        case PARAM_STACK_OSC1_MODEL: case PARAM_STACK_OSC2_MODEL:
+        case PARAM_STACK_OSC3_MODEL:
+        case PARAM_LFO1_TRIG: case PARAM_LFO2_TRIG: case PARAM_LFO3_TRIG:
             return 1U;
-        }
-        if ((event->parameter_id == PARAM_CFG_POLY_VOICES)
-                || (event->parameter_id == PARAM_CFG_POLY_SPREAD))
-        {
-            if (event->track >= SEQ_LANE_CAPACITY)
-                return 0U;
-            if (event->parameter_id == PARAM_CFG_POLY_VOICES)
-                g_live_parameter_audio_poly_voices[event->track] = value;
-            else
-                g_live_parameter_audio_poly_spread[event->track] = value;
-            const uint8_t applied = audio_note_engine_adapter_apply_polyphony(
-                event->track,
-                (uint8_t)g_live_parameter_audio_poly_voices[event->track],
-                g_live_parameter_audio_poly_spread[event->track]);
-            if (applied != 0U)
-            {
-                audio_mod_matrix_base_update(
-                    event->track, event->parameter_id, value);
-            }
-            return applied;
-        }
-        const uint8_t applied = param_registry_apply_track_value_audio(
-            event->parameter_id, event->track, value);
-        if (applied != 0U)
-        {
-            audio_mod_matrix_base_update(
-                event->track, event->parameter_id, value);
-        }
-        return applied;
+        default: return 0U;
     }
-    if (event->scope == LIVE_PARAMETER_EVENT_SCOPE_GLOBAL)
-    {
-        if (event->parameter_id == PARAM_MASTER_GAIN)
-            return audio_note_engine_adapter_set_master(value);
-        return audio_global_runtime_apply(event->parameter_id, value);
-    }
-    return 0U;
-}
-
-static uint8_t live_parameter_audio_runtime_apply_event(
-    const live_parameter_audio_event_t *event)
-{
-    if ((event == 0) || (event->parameter_id >= PARAM_COUNT))
-        return 0U;
-
-    float target = ((event->flags & LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS) != 0U)
-        ? live_parameter_event_decode_float(event->value)
-        : (float)event->value;
-    if (event->scope != LIVE_PARAMETER_EVENT_SCOPE_GLOBAL)
-        target = live_parameter_audio_runtime_clamp(event->parameter_id, target);
-    if (live_parameter_audio_runtime_apply_target(event, target) == 0U)
-        return 0U;
-    return 1U;
 }
 
 void live_parameter_audio_runtime_init(void)
 {
+    memset(g_live_parameter_audio_track_value, 0,
+           sizeof(g_live_parameter_audio_track_value));
+    memset(g_live_parameter_audio_track_valid, 0,
+           sizeof(g_live_parameter_audio_track_valid));
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         g_live_parameter_audio_poly_voices[track] =
@@ -142,44 +66,77 @@ void live_parameter_audio_runtime_init(void)
     }
 }
 
-uint16_t live_parameter_audio_runtime_apply_due(uint64_t now)
+void live_parameter_audio_runtime_initialize_program(uint8_t entity)
 {
-    uint16_t applied = 0U;
-    for (;;)
+    if (entity >= SEQ_LANE_CAPACITY) return;
+    for (param_id_t id = 0U; id < PARAM_COUNT; ++id)
     {
-        live_parameter_audio_event_t event;
-        if ((live_parameter_audio_queue_audio_peek(&event) == false)
-                || (event.effective_sample_time > now))
-            break;
-        if (live_parameter_audio_runtime_apply_event(&event) != 0U)
-            ++applied;
-        (void)live_parameter_audio_queue_audio_pop();
+        const uint32_t mask = (uint32_t)1U << (id & 31U);
+        if ((g_live_parameter_audio_track_valid[entity][id >> 5U] & mask) == 0U)
+            continue;
+        const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+        if (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE) continue;
+        (void)param_registry_apply_track_value_audio(
+            id, entity, g_live_parameter_audio_track_value[entity][id]);
     }
-    for (;;)
+}
+
+uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
+                                                 uint16_t parameter_id,
+                                                 uint32_t value_bits,
+                                                 uint8_t scope)
+{
+    if (parameter_id >= PARAM_COUNT) return 0U;
+    const float decoded = live_parameter_event_decode_float((int32_t)value_bits);
+    if ((scope >= LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_BASE)
+            && (scope <= LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_LAST))
+        return audio_mod_matrix_apply_param(entity,
+            (uint8_t)(scope - LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_BASE),
+            (param_id_t)parameter_id, decoded);
+    if (scope == LIVE_PARAMETER_EVENT_SCOPE_GLOBAL)
     {
-        live_parameter_audio_dated_event_t dated;
-        if (live_parameter_audio_queue_audio_peek_dated(&dated) == false)
-            break;
-        if ((int16_t)(dated.due_sample_low - (uint16_t)now) > 0)
-            break;
-        const live_parameter_audio_event_t event = {
-            .effective_sample_time = now,
-            .parameter_id = dated.parameter_id,
-            .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
-            .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
-            .track = dated.track,
-            .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-            .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                                | LIVE_PARAMETER_EVENT_FLAG_RUNTIME_TEMP
-                                | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
-            .value = live_parameter_event_encode_float(
-                param_value_policy_decode_u16(
-                    &param_registry[dated.parameter_id], dated.value16)),
-            .matrix_operation = dated.matrix_operation
-        };
-        if (live_parameter_audio_runtime_apply_event(&event) != 0U)
-            ++applied;
-        (void)live_parameter_audio_queue_audio_pop_dated();
+        if (parameter_id == PARAM_MASTER_GAIN)
+            return audio_note_engine_adapter_set_master(decoded);
+        return audio_global_runtime_apply(parameter_id, decoded);
+    }
+    if ((scope != LIVE_PARAMETER_EVENT_SCOPE_TRACK)
+            || (entity >= SEQ_LANE_CAPACITY))
+        return 0U;
+
+    const float value = live_parameter_audio_runtime_clamp(
+        (param_id_t)parameter_id, decoded);
+    live_parameter_audio_runtime_store(entity, (param_id_t)parameter_id, value);
+    if ((parameter_id >= PARAM_MOD_MULTI_1_A)
+            && (parameter_id <= PARAM_MOD_SLEW_2_AMOUNT))
+        return audio_mod_matrix_apply_param(entity, UINT8_MAX,
+                                            (param_id_t)parameter_id, value);
+    if ((parameter_id == PARAM_CFG_POLY_VOICES)
+            || (parameter_id == PARAM_CFG_POLY_SPREAD))
+    {
+        if (parameter_id == PARAM_CFG_POLY_VOICES)
+            g_live_parameter_audio_poly_voices[entity] = value;
+        else
+            g_live_parameter_audio_poly_spread[entity] = value;
+        const uint8_t applied = audio_note_engine_adapter_apply_polyphony(
+            entity, (uint8_t)g_live_parameter_audio_poly_voices[entity],
+            g_live_parameter_audio_poly_spread[entity]);
+        if (applied != 0U)
+            audio_mod_matrix_base_update(entity, parameter_id, value);
+        return applied;
+    }
+
+    const uint8_t applied = param_registry_apply_track_value_audio(
+        parameter_id, entity, value);
+    if (applied != 0U)
+    {
+        audio_mod_matrix_base_update(entity, parameter_id, value);
+        if (live_parameter_audio_runtime_changes_matrix_context(
+                (param_id_t)parameter_id) != 0U)
+        {
+            audio_mod_matrix_update_context_param(entity,
+                (param_id_t)parameter_id, value);
+            audio_mod_matrix_rebuild_track(entity);
+        }
     }
     return applied;
 }

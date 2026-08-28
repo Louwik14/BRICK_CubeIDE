@@ -37,6 +37,9 @@ typedef struct
     uint8_t has_loop;
 } multi_sample_audio_source_t;
 
+_Static_assert(sizeof(multi_sample_audio_source_t) == 60U,
+               "Multi AUDIO source ABI changed");
+
 void multi_sample_audio_projection_init(void);
 uint8_t multi_sample_audio_projection_publish(uint16_t instrument_id);
 void multi_sample_audio_projection_withdraw(uint16_t instrument_id);

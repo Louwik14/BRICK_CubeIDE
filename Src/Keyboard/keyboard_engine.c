@@ -14,7 +14,6 @@
 
 #include "Keyboard/keyboard_engine.h"
 
-#include "Audio/control_audio_queue.h"
 #include "Core/control_music_output.h"
 #include "Keyboard/keyboard_params.h"
 #include "MIDI/midi.h"
@@ -306,7 +305,6 @@ static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
                                                              uint8_t source_internal,
                                                              uint8_t is_note_on)
 {
-    track_runtime_refresh_all();
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         const ui_track_config_t cfg = ui_get_track_config(track);
@@ -345,7 +343,6 @@ static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
 static uint8_t keyboard_engine_all_notes_off_matching_tracks(
     uint8_t channel, uint8_t source_internal)
 {
-    track_runtime_refresh_all();
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         const ui_track_config_t cfg = ui_get_track_config(track);
@@ -790,7 +787,6 @@ static void keyboard_engine_midi_receive_internal(const uint8_t *msg, size_t len
         }
     }
 
-    track_runtime_refresh_all();
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         const ui_track_config_t cfg = ui_get_track_config(track);

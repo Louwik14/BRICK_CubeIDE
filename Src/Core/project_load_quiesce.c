@@ -1,115 +1,83 @@
 #include "Core/project_load_quiesce.h"
 
-#include "Audio/audio.h"
-#include "Audio/audio_music_action_executor.h"
-#include "Audio/control_audio_queue.h"
-#include "Audio/control_music_queue.h"
-#include "Core/brick6_looper_runtime.h"
-#include "Core/live_parameter_audio_queue.h"
+#include "Audio/control_audio_command.h"
+#include "Core/control_audio_publication.h"
+#include "Core/live_clock.h"
+#include "Core/live_event.h"
+#include "NoteFx/note_fx_pipeline.h"
 #include "Seq/seq_output_guard.h"
 #include "Seq/seq_runtime.h"
 #include "Storage/audio_recorder.h"
-#include "Storage/memory_layout.h"
 #include "Storage/sd_preview.h"
-#include "stm32h7xx.h"
-
-typedef struct
-{
-    volatile uint32_t request_seq;
-    volatile uint32_t audio_safe_seq;
-    volatile uint32_t resume_seq;
-    volatile uint32_t reserved[5];
-} project_load_quiesce_mailbox_t;
-
-_Static_assert(sizeof(project_load_quiesce_mailbox_t) == 32U,
-               "Project Load quiesce mailbox ABI changed");
-
-D3_IPC static project_load_quiesce_mailbox_t g_project_load_quiesce;
-
-static uint32_t project_load_quiesce_next_seq(uint32_t sequence)
-{
-    ++sequence;
-    return (sequence != 0U) ? sequence : 1U;
-}
+#include "midi.h"
+#include "midi_host.h"
+static uint32_t g_project_load_consumer_fence;
+static uint8_t g_project_load_fence_valid;
+static uint8_t g_project_load_requested;
+static volatile uint8_t g_project_load_ingress_open;
 
 void project_load_quiesce_init(void)
 {
-    g_project_load_quiesce.request_seq = 0U;
-    g_project_load_quiesce.audio_safe_seq = 0U;
-    g_project_load_quiesce.resume_seq = 0U;
-    for (uint8_t i = 0U; i < 5U; ++i)
-        g_project_load_quiesce.reserved[i] = 0U;
-    __DMB();
+    g_project_load_consumer_fence = 0U;
+    g_project_load_fence_valid = 0U;
+    g_project_load_requested = 0U;
+    g_project_load_ingress_open = 1U;
 }
 
 void project_load_quiesce_request(void)
 {
+    g_project_load_ingress_open = 0U;
+    __DMB();
+    live_event_discard_pending();
+    midi_rx_discard_pending();
+    midi_host_rx_discard_pending();
+    (void)note_fx_pipeline_request_panic();
     seq_runtime_stop();
     seq_output_guard_panic(1U);
     sd_preview_stop();
     (void)audio_recorder_request_stop_client(AUDIO_RECORDER_CLIENT_AUDIO_REC);
     (void)audio_recorder_request_stop_client(AUDIO_RECORDER_CLIENT_LOOPER);
-    const uint32_t request = project_load_quiesce_next_seq(
-        g_project_load_quiesce.request_seq);
-    if (audio_get_init_state() != AUDIO_INIT_READY)
-        g_project_load_quiesce.audio_safe_seq = request;
-    __DMB();
-    g_project_load_quiesce.request_seq = request;
-    __DMB();
-}
-
-uint8_t project_load_quiesce_audio_service(void)
-{
-    const uint32_t request = g_project_load_quiesce.request_seq;
-    __DMB();
-    if ((request == 0U) || (g_project_load_quiesce.resume_seq == request))
-    {
-        return 0U;
-    }
-    if (g_project_load_quiesce.audio_safe_seq != request)
-    {
-        while (control_audio_queue_audio_pending_count() != 0U)
-        {
-            (void)control_audio_queue_audio_pop();
-        }
-        while (control_music_queue_audio_pending_count() != 0U)
-        {
-            control_music_action_t action;
-            if (control_music_queue_audio_peek(&action) == 0U)
-                break;
-            (void)control_music_queue_audio_pop(&action);
-        }
-        while (live_parameter_audio_queue_audio_pop())
-        {
-        }
-        audio_music_action_force_close_all();
-        brick6_looper_runtime_arm_record_stop(0U);
-        brick6_looper_runtime_on_transport_stop();
-        __DMB();
-        g_project_load_quiesce.audio_safe_seq = request;
-        __DMB();
-    }
-    return 1U;
+    uint64_t sample_time = 0U;
+    g_project_load_requested = 1U;
+    g_project_load_fence_valid = 0U;
+    if (!live_clock_read_audio_sample(&sample_time))
+        return;
+    g_project_load_fence_valid = control_audio_publish_panic_fenced(
+        CONTROL_AUDIO_PANIC_GLOBAL, 0U, sample_time,
+        &g_project_load_consumer_fence);
 }
 
 uint8_t project_load_quiesce_safe(void)
 {
-    __DMB();
-    const uint32_t request = g_project_load_quiesce.request_seq;
-    const uint32_t audio_safe = g_project_load_quiesce.audio_safe_seq;
-    const uint32_t resume = g_project_load_quiesce.resume_seq;
-    __DMB();
-    return (uint8_t)((request != 0U)
-        && (audio_safe == request)
-        && (resume != request)
+    if ((g_project_load_requested != 0U)
+            && (g_project_load_fence_valid == 0U))
+    {
+        uint64_t sample_time = 0U;
+        if (live_clock_read_audio_sample(&sample_time))
+            g_project_load_fence_valid = control_audio_publish_panic_fenced(
+                CONTROL_AUDIO_PANIC_GLOBAL, 0U, sample_time,
+                &g_project_load_consumer_fence);
+    }
+    live_clock_anchor_t anchor;
+    const uint8_t audio_safe = (uint8_t)(
+        (live_clock_read_anchor(&anchor) == false)
+        || ((g_project_load_fence_valid != 0U)
+            && control_audio_consumer_fence_consumed(
+                g_project_load_consumer_fence)));
+    return (uint8_t)(audio_safe
         && (sd_preview_is_active() == 0U)
         && (audio_recorder_is_active() == 0U));
 }
 
 void project_load_quiesce_end(void)
 {
-    const uint32_t request = g_project_load_quiesce.request_seq;
+    g_project_load_fence_valid = 0U;
+    g_project_load_requested = 0U;
     __DMB();
-    g_project_load_quiesce.resume_seq = request;
-    __DMB();
+    g_project_load_ingress_open = 1U;
+}
+
+uint8_t project_load_ingress_is_open(void)
+{
+    return g_project_load_ingress_open;
 }

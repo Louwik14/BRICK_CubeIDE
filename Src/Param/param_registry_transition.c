@@ -1,604 +1,135 @@
 #include "Param/param_registry.h"
 
-#include <string.h>
+#include <stddef.h>
 
+#include "Audio/control_audio_command.h"
+#include "Audio/control_audio_fifo.h"
+#include "Core/control_audio_publication.h"
+#include "Core/control_music_output.h"
 #include "Core/live_clock.h"
-#include "Audio/audio_transition_snapshot.h"
-#include "Core/live_parameter_audio_queue.h"
-#include "Core/live_parameter_migration.h"
 #include "Core/track_runtime.h"
-#include "Core/track_mute.h"
-#include "Mod/mod_lfo_v1.h"
-#include "Param/param_filter.h"
-#include "Param/param_registry_backends.h"
-#include "Param/param_registry_runtime_state.h"
 #include "Seq/seq_runtime.h"
-#include "Storage/memory_layout.h"
 #include "UI/ui_track_catalog.h"
 
-#define FILTER_RUNTIME_REBIND_NONE 0xFFU
+static volatile uint8_t g_global_depth;
+static volatile uint8_t g_track_depth[SEQ_LANE_CAPACITY];
 
-static volatile uint8_t g_param_registry_track_structure_transition_depth = 0U;
-static volatile uint8_t g_param_registry_track_structure_transition_track_depth[SEQ_LANE_CAPACITY];
-
-static void param_registry_publish_transition_audio_snapshot(void)
+static uint8_t publish_transition(uint8_t track, uint8_t global, uint32_t active)
 {
-    uint8_t track_active[SEQ_LANE_CAPACITY];
-    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
-        track_active[track] =
-            (g_param_registry_track_structure_transition_track_depth[track] != 0U)
-                ? 1U : 0U;
-    audio_transition_snapshot_publish(
-        (g_param_registry_track_structure_transition_depth != 0U) ? 1U : 0U,
-        track_active);
+    uint64_t sample = 0U;
+    if (live_clock_read_audio_sample(&sample) == 0U) return 0U;
+    sample = control_music_output_first_unpublished_sample(sample);
+    return control_audio_publish_param(global != 0U ? 0U : track,
+        global != 0U ? CONTROL_AUDIO_PARAM_TRANSITION_GLOBAL
+                     : CONTROL_AUDIO_PARAM_TRANSITION_TRACK,
+        active, 0U, sample);
 }
 
-static uint8_t param_registry_get_reapply_lane_bound_track_value(param_id_t id,
-                                                                 uint8_t track,
-                                                                 float *out_value);
-static uint8_t param_registry_reapply_track_runtime_params(
-    uint8_t track,
-    live_parameter_audio_bulk_t *bulk);
-
-static uint8_t param_registry_audio_bulk_add(live_parameter_audio_bulk_t *bulk,
-                                             param_id_t id,
-                                             uint8_t track,
-                                             float value)
+static uint8_t begin_global(void)
 {
-    if ((bulk == NULL) || (id >= PARAM_COUNT) || (track >= SEQ_LANE_CAPACITY)
-            || (live_parameter_is_audio_owned(id) == 0U))
-    {
-        return 0U;
-    }
-
-    for (uint8_t i = 0U; i < bulk->count; ++i)
-    {
-        live_parameter_audio_bulk_item_t *const item = &bulk->item[i];
-        if ((item->parameter_id == (uint16_t)id)
-                && (item->scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK)
-                && (item->track == track)
-                && (item->slot == LIVE_PARAMETER_EVENT_INVALID_INDEX))
-        {
-            item->value = live_parameter_event_encode_float(value);
-            return 1U;
-        }
-    }
-
-    if (bulk->count >= LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS)
-    {
-        return 0U;
-    }
-
-    live_parameter_audio_bulk_item_t *const item = &bulk->item[bulk->count++];
-    *item = (live_parameter_audio_bulk_item_t){
-        .parameter_id = (uint16_t)id,
-        .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
-        .track = track,
-        .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-        .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                            | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
-        .value = live_parameter_event_encode_float(value)
-    };
+    if ((g_global_depth == 255U)
+            || ((g_global_depth == 0U) && (control_audio_publication_free()
+                < (CONTROL_AUDIO_FIFO_CONTRACT_BURST + 2U)))
+            || (publish_transition(0U, 1U, 1U) == 0U)) return 0U;
+    ++g_global_depth;
     return 1U;
 }
 
-static uint8_t param_registry_reapply_track_value(
-    param_id_t id,
-    uint8_t track,
-    float value,
-    live_parameter_audio_bulk_t *bulk)
+static uint8_t end_global(void)
 {
-    if (live_parameter_is_audio_owned(id) != 0U)
-    {
-        return param_registry_audio_bulk_add(bulk, id, track, value);
-    }
-
-    return (param_registry_apply_track_value(id, track, value) != 0U) ? 1U : 0U;
+    if (g_global_depth == 0U) return 0U;
+    const uint8_t next = (uint8_t)(g_global_depth - 1U);
+    if (publish_transition(0U, 1U, (uint32_t)(next != 0U)) == 0U) return 0U;
+    g_global_depth = next;
+    return 1U;
 }
 
-static void param_registry_track_structure_transition_begin_global(void)
+static uint8_t begin_track(uint8_t track)
 {
-    if (g_param_registry_track_structure_transition_depth < 255U)
-    {
-        g_param_registry_track_structure_transition_depth++;
-    }
-    param_registry_publish_transition_audio_snapshot();
+    if ((track >= SEQ_LANE_CAPACITY) || (g_track_depth[track] == 255U)
+            || ((g_track_depth[track] == 0U) && (control_audio_publication_free()
+                < (CONTROL_AUDIO_FIFO_CONTRACT_BURST + 2U)))
+            || (publish_transition(track, 0U, 1U) == 0U)) return 0U;
+    ++g_track_depth[track];
+    return 1U;
 }
 
-static void param_registry_track_structure_transition_end_global(void)
+static uint8_t end_track(uint8_t track)
 {
-    if (g_param_registry_track_structure_transition_depth > 0U)
-    {
-        g_param_registry_track_structure_transition_depth--;
-    }
-    param_registry_publish_transition_audio_snapshot();
+    if ((track >= SEQ_LANE_CAPACITY) || (g_track_depth[track] == 0U)) return 0U;
+    const uint8_t next = (uint8_t)(g_track_depth[track] - 1U);
+    if (publish_transition(track, 0U, (uint32_t)(next != 0U)) == 0U) return 0U;
+    g_track_depth[track] = next;
+    return 1U;
 }
 
 uint8_t param_registry_track_structure_transition_is_active(void)
 {
-    if (g_param_registry_track_structure_transition_depth != 0U)
-    {
-        return 1U;
-    }
-
+    if (g_global_depth != 0U) return 1U;
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
-    {
-        if (g_param_registry_track_structure_transition_track_depth[track] != 0U)
-        {
-            return 1U;
-        }
-    }
-
+        if (g_track_depth[track] != 0U) return 1U;
     return 0U;
 }
 
 uint8_t param_registry_track_structure_transition_is_global_active(void)
 {
-    return (g_param_registry_track_structure_transition_depth != 0U) ? 1U : 0U;
+    return (uint8_t)(g_global_depth != 0U);
 }
 
 uint8_t param_registry_track_structure_transition_is_track_active(uint8_t track)
 {
-    if (track >= SEQ_LANE_CAPACITY)
-    {
-        return 0U;
-    }
-
-    return (g_param_registry_track_structure_transition_track_depth[track] != 0U) ? 1U : 0U;
+    return (uint8_t)((track < SEQ_LANE_CAPACITY) && (g_track_depth[track] != 0U));
 }
 
-static void param_registry_track_structure_transition_begin_track(uint8_t track)
+static uint8_t run_tail(const param_registry_track_transition_pipeline_cmd_t *cmd)
 {
-    if (track >= SEQ_LANE_CAPACITY)
-    {
-        return;
-    }
-
-    if (g_param_registry_track_structure_transition_track_depth[track] < 255U)
-    {
-        g_param_registry_track_structure_transition_track_depth[track]++;
-    }
-    param_registry_publish_transition_audio_snapshot();
-}
-
-static void param_registry_track_structure_transition_end_track(uint8_t track)
-{
-    if (track >= SEQ_LANE_CAPACITY)
-    {
-        return;
-    }
-
-    if (g_param_registry_track_structure_transition_track_depth[track] > 0U)
-    {
-        g_param_registry_track_structure_transition_track_depth[track]--;
-    }
-    param_registry_publish_transition_audio_snapshot();
-}
-
-static void param_registry_capture_runtime_mix_targets(uint8_t *out_mix_tracks)
-{
-    if (out_mix_tracks == NULL)
-    {
-        return;
-    }
-
-    track_runtime_refresh_all();
-    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
-    {
-        out_mix_tracks[track] = FILTER_RUNTIME_REBIND_NONE;
-
-        uint8_t mix_track = FILTER_RUNTIME_REBIND_NONE;
-        if ((track_runtime_get_mix_target_track(track, &mix_track) == 0U)
-                || (mix_track >= SEQ_LANE_CAPACITY))
-        {
-            continue;
-        }
-
-        out_mix_tracks[track] = mix_track;
-    }
-}
-
-static uint8_t param_registry_reapply_lane_bound_runtime_for_track(
-    uint8_t track,
-    uint8_t force_reapply_filters,
-    live_parameter_audio_bulk_t *bulk)
-{
-    static const param_id_t k_lane_bound_params[] = {
-        PARAM_FILTER_MORPH,
-        PARAM_FILTER_CUTOFF,
-        PARAM_FILTER_RESONANCE,
-        PARAM_FILTER_EG_AMT,
-        PARAM_FILTER_ATTACK,
-        PARAM_FILTER_DECAY,
-        PARAM_FILTER_SUSTAIN,
-        PARAM_FILTER_RELEASE,
-        PARAM_FILTER_KEYTRK,
-        PARAM_FILTER_ENVRST,
-        PARAM_FILTER_ENVDLY,
-        PARAM_ENV_RETRIG_FILTER,
-        PARAM_MIX_LEVEL,
-        PARAM_MIX_PAN,
-        PARAM_MIX_SEND1,
-        PARAM_MIX_SEND2,
-        PARAM_MIX_SEND3,
-        PARAM_MIX_MUTE,
-        PARAM_VCA_ATTACK,
-        PARAM_VCA_DECAY,
-        PARAM_VCA_SUSTAIN,
-        PARAM_VCA_RELEASE,
-        PARAM_FILTER_MODE,
-        PARAM_ENV_RETRIG_VCA
-    };
-
-    if (track >= SEQ_LANE_CAPACITY)
-    {
-        return 0U;
-    }
-
-    for (uint8_t i = 0U; i < (uint8_t)(sizeof(k_lane_bound_params) / sizeof(k_lane_bound_params[0])); ++i)
-    {
-        if ((force_reapply_filters == 0U)
-                && (param_filter_is_param(k_lane_bound_params[i]) != 0U))
-        {
-            continue;
-        }
-
-        float value = 0.0f;
-        if (param_registry_get_reapply_lane_bound_track_value(k_lane_bound_params[i], track, &value) == 0U)
-        {
-            continue;
-        }
-        if (k_lane_bound_params[i] == PARAM_MIX_MUTE)
-            value = (float)track_mute_is_effectively_muted(track);
-
-        if (param_registry_reapply_track_value(k_lane_bound_params[i],
-                                               track,
-                                               value,
-                                               bulk) == 0U)
-        {
-            return 0U;
-        }
-    }
-
+    if ((cmd->seq_runtime_sync_fn != NULL)
+            && (cmd->seq_runtime_sync_fn(cmd->ctx) == 0U)) return 0U;
+    if ((cmd->ui_sync_fn != NULL) && (cmd->ui_sync_fn(cmd->ctx) == 0U)) return 0U;
+    if ((cmd->resume_fn != NULL) && (cmd->resume_fn(cmd->ctx) == 0U)) return 0U;
     return 1U;
 }
 
-static uint8_t param_registry_reapply_tone_runtime_for_track(
-    uint8_t track,
-    live_parameter_audio_bulk_t *bulk)
+uint8_t param_registry_run_track_transition_pipeline(
+    const param_registry_track_transition_pipeline_cmd_t *cmd)
 {
-    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    if (ctx == NULL)
-    {
-        return 1U;
-    }
-
-    for (uint8_t slot = 0U; slot < 32U; ++slot)
-    {
-        param_id_t id = PARAM_COUNT;
-        float value = 0.0f;
-
-        if (track_runtime_tone_slot_to_param(
-                (track_runtime_type_t)ctx->type, slot, &id) == 0U)
-        {
-            break;
-        }
-
-        if (param_registry_get_track_value(id, track, &value) == 0U)
-        {
-            continue;
-        }
-
-        if (param_registry_reapply_track_value(id, track, value, bulk) == 0U)
-        {
-            return 0U;
-        }
-    }
-
-    return 1U;
+    if ((cmd == NULL) || (cmd->mutate_fn == NULL) || (begin_global() == 0U))
+        return 0U;
+    uint8_t ok = (uint8_t)(((cmd->prepare_fn == NULL)
+            || (cmd->prepare_fn(cmd->ctx) != 0U))
+        && (cmd->mutate_fn(cmd->ctx) != 0U));
+    if (ok != 0U) track_runtime_rebuild_all();
+    if (end_global() == 0U) ok = 0U;
+    return (ok != 0U) ? run_tail(cmd) : 0U;
 }
 
-static uint8_t param_registry_reapply_track_runtime_params(
-    uint8_t track,
-    live_parameter_audio_bulk_t *bulk)
+uint8_t param_registry_run_track_transition_pipeline_for_track(
+    const param_registry_track_transition_pipeline_cmd_t *cmd, uint8_t track)
 {
-    if (track >= SEQ_LANE_CAPACITY)
-    {
-        return 0U;
-    }
-
-    if (param_registry_reapply_lane_bound_runtime_for_track(track, 1U, bulk) == 0U)
-    {
-        return 0U;
-    }
-    if (param_registry_reapply_tone_runtime_for_track(track, bulk) == 0U)
-    {
-        return 0U;
-    }
-    mod_lfo_v1_publish_control_snapshot_track(track);
-    return 1U;
+    if ((cmd == NULL) || (cmd->mutate_fn == NULL)
+            || (begin_track(track) == 0U)) return 0U;
+    uint8_t ok = (uint8_t)(((cmd->prepare_fn == NULL)
+            || (cmd->prepare_fn(cmd->ctx) != 0U))
+        && (cmd->mutate_fn(cmd->ctx) != 0U));
+    if (ok != 0U) track_runtime_rebuild_track(track);
+    if (end_track(track) == 0U) ok = 0U;
+    return (ok != 0U) ? run_tail(cmd) : 0U;
 }
 
-static uint8_t param_registry_get_reapply_lane_bound_track_value(param_id_t id,
-                                                                 uint8_t track,
-                                                                 float *out_value)
-{
-    /*
-     * Reapply path contract:
-     * - prefer pure query values
-     * - fall back to runtime cache
-     * - never seed defaults or mutate runtime state here
-     */
-    if ((id >= PARAM_COUNT) || (track >= SEQ_LANE_CAPACITY) || (out_value == NULL))
-    {
-        return 0U;
-    }
-
-    if (param_filter_is_param(id) != 0U)
-    {
-        /* FILTER, MIX and VCA authority is shadow-state per logical track, not runtime cache. */
-        return param_registry_get_track_value(id, track, out_value);
-    }
-
-    if (param_registry_get_track_value(id, track, out_value) != 0U)
-    {
-        return 1U;
-    }
-
-    /*
-     * Lane-bound reapply runs after mixer lane rebind already restored runtime states.
-     * On non-FILTER/VCA params, a cache miss is not authoritative and must not promote
-     * descriptor defaults that would overwrite the freshly rebound runtime values.
-     */
-    return param_registry_control_shadow_get(track, id, out_value);
-}
-
-static uint8_t param_registry_reapply_lane_bound_runtime_for_changed_tracks(
-    const uint8_t *previous_mix_tracks,
-    live_parameter_audio_bulk_t *bulk)
-{
-    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
-    {
-        uint8_t previous_mix_track = FILTER_RUNTIME_REBIND_NONE;
-        uint8_t current_mix_track = FILTER_RUNTIME_REBIND_NONE;
-        uint8_t migrated_existing_lane = 0U;
-
-        uint8_t projected_mix_track = 0U;
-        if ((track_runtime_get_mix_target_track(
-                track, &projected_mix_track) != 0U)
-                && (projected_mix_track < SEQ_LANE_CAPACITY))
-            current_mix_track = projected_mix_track;
-
-        if (previous_mix_tracks != NULL)
-        {
-            previous_mix_track = previous_mix_tracks[track];
-
-            if (previous_mix_track == current_mix_track)
-            {
-                continue;
-            }
-
-            migrated_existing_lane = ((previous_mix_track < SEQ_LANE_CAPACITY)
-                    && (current_mix_track < SEQ_LANE_CAPACITY)) ? 1U : 0U;
-        }
-
-        if (param_registry_reapply_lane_bound_runtime_for_track(
-                track,
-                (migrated_existing_lane == 0U) ? 1U : 0U,
-                bulk) == 0U)
-        {
-            return 0U;
-        }
-    }
-
-    return 1U;
-}
-
-static uint8_t param_registry_finalize_track_structure_change(
-    const uint8_t *previous_mix_tracks)
-{
-    live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
-        .count = 0U
-    };
-
-    if (previous_mix_tracks == NULL)
-    {
-        return 0U;
-    }
-
-    if (param_registry_reapply_lane_bound_runtime_for_changed_tracks(
-            previous_mix_tracks,
-            &bulk) == 0U)
-    {
-        return 0U;
-    }
-    track_runtime_refresh_all();
-
-    if ((bulk.count != 0U)
-            && (live_parameter_audio_queue_submit_bulk(&bulk) == false))
-    {
-        return 0U;
-    }
-
-    return 1U;
-}
-
-static uint8_t param_registry_finalize_track_structure_change_track(uint8_t track)
-{
-    live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
-        .count = 0U
-    };
-
-    if (track >= SEQ_LANE_CAPACITY)
-    {
-        return 0U;
-    }
-
-    track_runtime_refresh_track(track);
-    if (param_registry_reapply_track_runtime_params(track, &bulk) == 0U)
-    {
-        return 0U;
-    }
-
-    if ((bulk.count != 0U)
-            && (live_parameter_audio_queue_submit_bulk(&bulk) == false))
-    {
-        return 0U;
-    }
-
-    return 1U;
-}
-
-static uint8_t param_registry_apply_track_structure_transition_mutate(void *ctx)
+static uint8_t mutate_legacy(void *opaque)
 {
     const param_registry_track_structure_transition_cmd_t *const cmd =
-            (const param_registry_track_structure_transition_cmd_t *)ctx;
-
-    if ((cmd == NULL) || (cmd->mutation_fn == NULL))
-    {
-        return 0U;
-    }
-
+        (const param_registry_track_structure_transition_cmd_t *)opaque;
+    if ((cmd == NULL) || (cmd->mutation_fn == NULL)) return 0U;
     cmd->mutation_fn(cmd->mutation_ctx);
     return 1U;
 }
 
-uint8_t param_registry_run_track_transition_pipeline(const param_registry_track_transition_pipeline_cmd_t *cmd)
+void param_registry_apply_track_structure_transition(
+    const param_registry_track_structure_transition_cmd_t *cmd)
 {
-    /* Internal structural pipeline: no query semantics, only ordered mutation/reapply/sync callbacks. */
-    uint8_t previous_mix_tracks[SEQ_LANE_CAPACITY];
-
-    if ((cmd == NULL) || (cmd->mutate_fn == NULL))
-    {
-        return 0U;
-    }
-
-    param_registry_capture_runtime_mix_targets(previous_mix_tracks);
-    param_registry_track_structure_transition_begin_global();
-
-    uint8_t ok = 1U;
-    if ((cmd->prepare_fn != NULL) && (cmd->prepare_fn(cmd->ctx) == 0U))
-    {
-        ok = 0U;
-    }
-
-    if ((ok != 0U) && (cmd->mutate_fn(cmd->ctx) == 0U))
-    {
-        ok = 0U;
-    }
-
-    if (ok != 0U)
-    {
-        if (param_registry_finalize_track_structure_change(previous_mix_tracks) == 0U)
-        {
-            ok = 0U;
-        }
-    }
-
-    param_registry_track_structure_transition_end_global();
-
-    if (ok == 0U)
-    {
-        return 0U;
-    }
-
-    if ((cmd->reapply_fn != NULL) && (cmd->reapply_fn(cmd->ctx) == 0U))
-    {
-        return 0U;
-    }
-
-    if ((cmd->seq_runtime_sync_fn != NULL) && (cmd->seq_runtime_sync_fn(cmd->ctx) == 0U))
-    {
-        return 0U;
-    }
-
-    if ((cmd->ui_sync_fn != NULL) && (cmd->ui_sync_fn(cmd->ctx) == 0U))
-    {
-        return 0U;
-    }
-
-    if ((cmd->resume_fn != NULL) && (cmd->resume_fn(cmd->ctx) == 0U))
-    {
-        return 0U;
-    }
-
-    return 1U;
-}
-
-uint8_t param_registry_run_track_transition_pipeline_for_track(const param_registry_track_transition_pipeline_cmd_t *cmd,
-                                                              uint8_t track)
-{
-    if ((cmd == NULL) || (cmd->mutate_fn == NULL) || (track >= SEQ_LANE_CAPACITY))
-    {
-        return 0U;
-    }
-
-    param_registry_track_structure_transition_begin_track(track);
-
-    uint8_t ok = 1U;
-    if ((cmd->prepare_fn != NULL) && (cmd->prepare_fn(cmd->ctx) == 0U))
-    {
-        ok = 0U;
-    }
-
-    if ((ok != 0U) && (cmd->mutate_fn(cmd->ctx) == 0U))
-    {
-        ok = 0U;
-    }
-
-    if (ok != 0U)
-    {
-        if (param_registry_finalize_track_structure_change_track(track) == 0U)
-        {
-            ok = 0U;
-        }
-    }
-
-    param_registry_track_structure_transition_end_track(track);
-
-    if (ok == 0U)
-    {
-        return 0U;
-    }
-
-    if ((cmd->reapply_fn != NULL) && (cmd->reapply_fn(cmd->ctx) == 0U))
-    {
-        return 0U;
-    }
-
-    if ((cmd->seq_runtime_sync_fn != NULL) && (cmd->seq_runtime_sync_fn(cmd->ctx) == 0U))
-    {
-        return 0U;
-    }
-
-    if ((cmd->ui_sync_fn != NULL) && (cmd->ui_sync_fn(cmd->ctx) == 0U))
-    {
-        return 0U;
-    }
-
-    if ((cmd->resume_fn != NULL) && (cmd->resume_fn(cmd->ctx) == 0U))
-    {
-        return 0U;
-    }
-
-    return 1U;
-}
-
-void param_registry_apply_track_structure_transition(const param_registry_track_structure_transition_cmd_t *cmd)
-{
-    const param_registry_track_transition_pipeline_cmd_t pipeline_cmd = {
-        .prepare_fn = NULL,
-        .mutate_fn = param_registry_apply_track_structure_transition_mutate,
-        .reapply_fn = NULL,
-        .seq_runtime_sync_fn = NULL,
-        .ui_sync_fn = NULL,
-        .resume_fn = NULL,
-        .ctx = (void *)cmd
+    const param_registry_track_transition_pipeline_cmd_t pipeline = {
+        .mutate_fn = mutate_legacy, .ctx = (void *)cmd
     };
-
-    (void)param_registry_run_track_transition_pipeline(&pipeline_cmd);
+    (void)param_registry_run_track_transition_pipeline(&pipeline);
 }

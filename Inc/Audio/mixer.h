@@ -221,6 +221,8 @@ void mixer_track_poly_note_off(uint32_t poly_track_id,
                                uint8_t voice,
                                uint8_t note);
 void mixer_track_poly_all_notes_off(uint32_t poly_track_id);
+uint8_t mixer_audio_set_route(uint8_t track, uint32_t route);
+uint8_t mixer_audio_set_insert_slot(uint8_t track, uint8_t insert, int8_t slot);
 void mixer_synth_voice_slot_reset(uint8_t slot);
 void mixer_synth_voice_slot_copy(uint8_t source_slot, uint8_t destination_slot);
 void mixer_track_voice_state_to_poly(uint32_t mix_track_id,

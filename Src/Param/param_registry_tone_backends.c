@@ -1,7 +1,6 @@
 #include "Param/param_registry_backends.h"
 #include "Audio/audio_note_engine_adapter.h"
 
-#include "Core/track_tone_sound_state.h"
 #include <stddef.h>
 
 uint8_t param_backend_apply_track_value_control(
@@ -41,9 +40,9 @@ uint8_t param_backend_apply_prepared_track_value_audio(
 
     track_audio_runtime_ctx_t ctx_value;
     const track_audio_runtime_ctx_t *const ctx =
-        (audio_note_engine_adapter_audio_ctx_snapshot(track, &ctx_value) != 0U)
+        (audio_note_engine_adapter_current_ctx(track, &ctx_value) != 0U)
             ? &ctx_value : NULL;
-    if ((ctx == NULL) || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND))
+    if ((ctx == NULL) || (ctx->program_route.active == 0U))
     {
         return 0U;
     }
@@ -80,27 +79,27 @@ uint8_t param_backend_apply_prepared_track_value_audio(
     {
         applied = param_backend_apply_tone_looper(track, id, effective_value, update_base_state);
     }
-    else if (ctx->audio_binding.engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
+    else if (ctx->program_route.engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
     {
         applied = param_backend_apply_tone_sampler(track, id, effective_value, update_base_state);
     }
-    else if (ctx->audio_binding.engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
+    else if (ctx->program_route.engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
     {
         applied = param_backend_apply_tone_prism(track, id, effective_value, update_base_state);
     }
-    else if (ctx->audio_binding.engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM)
+    else if (ctx->program_route.engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM)
     {
         applied = param_backend_apply_tone_fm(track, id, effective_value, update_base_state);
     }
-    else if (ctx->audio_binding.engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
+    else if (ctx->program_route.engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
     {
         applied = param_backend_apply_tone_stack(track, id, effective_value, update_base_state);
     }
-    else if (ctx->audio_binding.engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+    else if (ctx->program_route.engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
     {
         applied = param_backend_apply_tone_wave(track, id, effective_value, update_base_state);
     }
-    else if (ctx->audio_binding.engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
+    else if (ctx->program_route.engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
     {
         applied = param_backend_apply_tone_drum(track, ctx, id, effective_value, update_base_state);
     }

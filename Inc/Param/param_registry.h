@@ -83,7 +83,6 @@ typedef struct
 {
     param_registry_track_transition_stage_fn_t prepare_fn;
     param_registry_track_transition_stage_fn_t mutate_fn;
-    param_registry_track_transition_stage_fn_t reapply_fn;
     param_registry_track_transition_stage_fn_t seq_runtime_sync_fn;
     param_registry_track_transition_stage_fn_t ui_sync_fn;
     param_registry_track_transition_stage_fn_t resume_fn;
@@ -102,7 +101,7 @@ param_id_t param_registry_get_audio_fx_param(uint8_t order);
 void param_registry_sync_filter_ui_for_active_track(void);
 void param_registry_batch_begin(void);
 void param_registry_batch_end(void);
-/* Internal transition pipeline: structural mutation + reapply/sync callbacks. */
+/* Internal transition pipeline: structural mutation + runtime/UI synchronization. */
 uint8_t param_registry_run_track_transition_pipeline(const param_registry_track_transition_pipeline_cmd_t *cmd);
 uint8_t param_registry_run_track_transition_pipeline_for_track(const param_registry_track_transition_pipeline_cmd_t *cmd,
                                                               uint8_t track);
@@ -131,11 +130,6 @@ uint8_t param_registry_prepare_legacy_modfx_bank_values(
     param_registry_prepared_value_t out_values[8],uint8_t *out_count);
 uint8_t param_registry_install_legacy_modfx_control_targets(void);
 uint8_t param_registry_project_track_mute(uint8_t track, uint8_t effective_muted);
-uint8_t param_registry_apply_track_value_runtime_temp(param_id_t id, uint8_t track, float value);
-uint8_t param_registry_apply_track_value_runtime_temp_matrix(param_id_t id,
-                                                              uint8_t track,
-                                                              float value,
-                                                              uint8_t matrix_operation);
 uint8_t param_registry_project_track_base_audio(param_id_t id,
                                                 uint8_t track,
                                                 float value);
@@ -160,7 +154,6 @@ uint8_t param_registry_prepare_global_audio_command(param_id_t id,
                                                     float *out_command_value);
 /* CONTROL service: retries latest-wins state publications rejected before
  * AUDIO had a clock anchor or while its bounded queue was full. */
-uint8_t param_registry_service_pending_audio_publications(void);
 
 void param_set(param_id_t id, float value);
 void param_reset(param_id_t id);

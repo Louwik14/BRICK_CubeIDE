@@ -852,7 +852,6 @@ void ui_core_tick(void)
     ui_param_encoder_context_t encoder_ctx;
 
     ui_param_capture_encoder_context(&encoder_ctx);
-    track_runtime_refresh_track(encoder_ctx.active_track);
     param_registry_batch_begin();
     ui_param_begin_encoder_edit_group(&encoder_ctx);
 
@@ -970,8 +969,6 @@ uint8_t ui_get_active_lane(void)
 
 bool ui_resolve_filter_target_track(uint8_t *out_track_id)
 {
-    /* Consumer-edge refresh: filter routing uses a refreshed projection before the runtime resolver. */
-    track_runtime_refresh_track(ui_get_active_lane());
     if (ui_core_runtime_bridge_resolve_filter_target_track(out_track_id) == 0U)
     {
         return false;

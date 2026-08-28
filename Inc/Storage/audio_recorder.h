@@ -102,6 +102,22 @@ uint8_t audio_recorder_push_from_irq_client(audio_recorder_client_t client,
                                             const int32_t *lr_interleaved,
                                             uint32_t frames);
 uint8_t audio_recorder_request_stop_client(audio_recorder_client_t client);
+
+/* CONTROL-side Looper boundary policy. These APIs only publish RECORD/PARAM
+ * commands; AUDIO reports the resulting PCM head and exact stop length through
+ * the capture transport. */
+uint8_t audio_recorder_control_arm_looper(uint8_t track,
+                                          uint8_t len_mode,
+                                          uint32_t expected_frames,
+                                          uint8_t play_auto,
+                                          uint64_t request_sample);
+uint8_t audio_recorder_control_request_looper_stop(uint64_t request_sample,
+                                                   uint8_t wait_boundary);
+void audio_recorder_control_on_looper_boundary(uint8_t track,
+                                               uint64_t sample_time);
+uint8_t audio_recorder_audio_start(uint8_t client, uint32_t session_id,
+                                   uint16_t config_id);
+uint8_t audio_recorder_audio_stop(uint8_t client, uint32_t session_id);
 uint8_t audio_recorder_get_status_client(audio_recorder_client_t client,
                                          audio_recorder_status_t *status);
 uint8_t audio_recorder_get_last_take_client(audio_recorder_client_t client,

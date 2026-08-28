@@ -96,6 +96,7 @@ typedef struct
 
 void brick6_sampler_runtime_init(void);
 void brick6_sampler_runtime_reset_track(uint8_t track_id);
+void brick6_sampler_runtime_replace_track_renderer(uint8_t track_id);
 void brick6_sampler_runtime_set_sample(uint8_t track_id, uint16_t sample_id);
 void brick6_sampler_runtime_set_gain(uint8_t track_id, float gain);
 void brick6_sampler_runtime_set_multi_instrument(uint8_t track_id, uint16_t instrument_id);
@@ -122,6 +123,11 @@ void brick6_sampler_runtime_set_clip_grain_size(uint8_t track_id, uint16_t grain
 void brick6_sampler_runtime_trigger(uint8_t track_id);
 void brick6_sampler_runtime_trigger_note(uint8_t track_id, uint8_t note);
 void brick6_sampler_runtime_trigger_note_velocity(uint8_t track_id, uint8_t note, uint8_t velocity);
+uint8_t brick6_sampler_runtime_initialize_held_note(uint8_t track_id,
+                                                    uint8_t note,
+                                                    uint8_t velocity,
+                                                    uint32_t output_id,
+                                                    uint8_t multi);
 uint8_t brick6_sampler_runtime_trigger_multi_note_velocity(uint8_t track_id,
                                                            uint16_t instrument_id,
                                                            uint8_t note,

@@ -10,7 +10,7 @@
 #include "Audio/audio_shared_memory.h"
 #include "Audio/audio_wavetable_registry.h"
 #include "Storage/cache_maintenance.h"
-#include "Audio/control_audio_queue.h"
+#include "Core/control_audio_publication.h"
 #include "Core/audio_wave_table_projection.h"
 #include "Core/live_clock.h"
 #include "Storage/sd_access_gate.h"
@@ -134,8 +134,8 @@ typedef struct
 } wavetable_load_job_t;
 
 STORAGE_STATE_SDRAM static wavetable_load_job_t g_wavetable_load_job;
-static CTRL_STATE volatile uint32_t
-    g_wavetable_retire_ack[WAVETABLE_POOL_MAX_SLOTS];
+static CTRL_STATE uint32_t
+    g_wavetable_retire_fence[WAVETABLE_POOL_MAX_SLOTS];
 
 static uint16_t wavetable_pool_mipmap_band_count(void);
 static uint32_t wavetable_pool_mipmap_samples_per_table_cycle(void);
@@ -510,6 +510,7 @@ void wavetable_pool_init(void)
 
 void wavetable_pool_reset(void)
 {
+    memset(g_wavetable_retire_fence, 0, sizeof(g_wavetable_retire_fence));
     uint32_t generation_seed = g_wavetable_pool.generation_counter;
     for (uint16_t i = 0U; i < WAVETABLE_POOL_MAX_SLOTS; ++i)
     {
@@ -2438,15 +2439,6 @@ static void wavetable_pool_finalize_clear(uint16_t wavetable_slot)
     wavetable_pool_preview_clear(&g_wavetable_pool.slots[wavetable_slot].preview);
 }
 
-void wavetable_pool_control_ack_retire(uint16_t wavetable_slot,
-                                       uint32_t generation)
-{
-    if (wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS) return;
-    __DMB();
-    g_wavetable_retire_ack[wavetable_slot] = generation;
-    __DMB();
-}
-
 void wavetable_pool_clear(uint16_t wavetable_slot)
 {
     if (wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS) return;
@@ -2460,13 +2452,10 @@ void wavetable_pool_clear(uint16_t wavetable_slot)
     uint64_t due_sample = 0U;
     if (!live_clock_read_audio_sample(&due_sample)) return;
     const uint32_t generation = slot->generation;
-    const control_audio_event_t event = {
-        .due_sample = due_sample,
-        .source_generation = generation,
-        .param_id = wavetable_slot,
-        .kind = (uint8_t)CONTROL_AUDIO_EVENT_WAVETABLE_STOP
-    };
-    if (control_audio_queue_publish(&event) == 0U) return;
+    if (control_audio_publish_param_fenced((uint8_t)wavetable_slot, 0xFFF7U,
+                                           generation, 0U, due_sample,
+                                           &g_wavetable_retire_fence[wavetable_slot]) == 0U)
+        return;
     audio_wave_table_projection_withdraw_slot(wavetable_slot, generation);
     slot->state = WAVETABLE_SLOT_RETIRING;
     __DMB();
@@ -2478,9 +2467,10 @@ void wavetable_pool_service_retire(void)
     {
         wavetable_slot_t *const slot = &g_wavetable_pool.slots[i];
         if ((slot->state == WAVETABLE_SLOT_RETIRING)
-            && (g_wavetable_retire_ack[i] == slot->generation))
+            && (control_audio_consumer_fence_consumed(
+                    g_wavetable_retire_fence[i]) != 0U))
         {
-            g_wavetable_retire_ack[i] = 0U;
+            g_wavetable_retire_fence[i] = 0U;
             wavetable_pool_finalize_clear(i);
         }
     }

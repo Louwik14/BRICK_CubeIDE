@@ -115,10 +115,9 @@ static void sample_cache_voice_release(sample_cache_voice_t *voice)
 
     if ((voice->active != 0U) || (voice->stream_release_pending != 0U))
     {
-        (void)sample_stream_needs_registry_drop_generation(
+        (void)sample_stream_needs_registry_drop_owner(
             SAMPLE_STREAM_SNAPSHOT_CLASSIC, voice->voice_id, voice->generation);
     }
-    sample_stream_snapshot_clear(SAMPLE_STREAM_SNAPSHOT_CLASSIC, voice->voice_id);
     sample_stream_needs_registry_drop(SAMPLE_STREAM_SNAPSHOT_CLASSIC, voice->voice_id);
     if (voice->voice_id < SAMPLE_CACHE_MAX_VOICES)
     {
@@ -240,25 +239,18 @@ static uint8_t sample_cache_publish_stream_snapshot(const sample_cache_voice_t *
     out_snapshot->stride_floats = desc->stride_floats;
     out_snapshot->frames_per_page = desc->frames_per_page;
     out_snapshot->registration_epoch = desc->registration_epoch;
-    out_snapshot->generation = voice->generation;
+    out_snapshot->owner_token = voice->generation;
     out_snapshot->current_frame = voice->frame_pos;
     out_snapshot->region_begin = 0U;
     out_snapshot->region_end = desc->total_frames;
     out_snapshot->loop_begin = 0U;
     out_snapshot->loop_end = desc->total_frames;
-    out_snapshot->step_q16 = SAMPLE_STREAM_STEP_Q16_ONE;
     out_snapshot->direction = (voice->direction < 0) ? -1 : 1;
     out_snapshot->active = voice->active;
     out_snapshot->loop_enabled = 0U;
-    if (sample_stream_snapshot_publish(SAMPLE_STREAM_SNAPSHOT_CLASSIC,
-                                       voice->voice_id,
-                                       out_snapshot) == 0U)
-    {
-        return 0U;
-    }
-    return sample_stream_snapshot_read(SAMPLE_STREAM_SNAPSHOT_CLASSIC,
-                                       voice->voice_id,
-                                       out_snapshot);
+    out_snapshot->source = (uint8_t)SAMPLE_STREAM_SNAPSHOT_CLASSIC;
+    out_snapshot->voice_id = voice->voice_id;
+    return 1U;
 }
 
 static uint8_t sample_cache_update_stream_needs(const sample_cache_voice_t *voice,
@@ -269,10 +261,7 @@ static uint8_t sample_cache_update_stream_needs(const sample_cache_voice_t *voic
         return 0U;
     }
     return sample_stream_needs_registry_update(
-        SAMPLE_STREAM_SNAPSHOT_CLASSIC,
-        voice->voice_id,
-        snapshot,
-        sample_stream_time_now());
+        SAMPLE_STREAM_SNAPSHOT_CLASSIC, voice->voice_id, snapshot);
 }
 
 static void sample_cache_voice_seek(sample_cache_voice_t *voice, uint32_t frame_pos)

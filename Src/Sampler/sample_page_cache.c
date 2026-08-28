@@ -3,6 +3,8 @@
 #include <string.h>
 
 #include "Storage/memory_layout.h"
+#include "Storage/cache_maintenance.h"
+#include "Core/intercore_cache.h"
 #include "Storage/audio_recorder.h"
 #include "Sampler/sample_stream_fatfs_map.h"
 #include "Sampler/sample_stream_needs.h"
@@ -30,10 +32,9 @@ typedef struct
     uint32_t frame_count;
     uint32_t frames_per_page;
     uint32_t registration_epoch;
-    float *data;
+    uint32_t data_offset;
     volatile sample_page_state_t state;
     uint16_t pin_count;
-    uint16_t use_count;
     uint16_t reserved;
     uint32_t generation;
     uint8_t load_cancel_requested;
@@ -79,12 +80,15 @@ typedef struct
     uint32_t page_index;
 } sample_page_index_entry_t;
 
-SDRAM_PAGE_META static sample_page_desc_t g_sample_page_desc[SAMPLE_PAGE_MAX_COUNT];
-SDRAM_PAGE_POOL static float g_sample_page_data[SAMPLE_PAGE_MAX_COUNT][SAMPLE_PAGE_SLOT_FLOAT_CAPACITY];
+CONTROL_STREAM_META_SDRAM static sample_page_desc_t g_sample_page_desc[SAMPLE_PAGE_MAX_COUNT];
+AUDIO_SHARED_PAGE_PAYLOAD_SDRAM static float g_sample_page_data[SAMPLE_PAGE_MAX_COUNT][SAMPLE_PAGE_SLOT_FLOAT_CAPACITY];
+/* M7 owns increments/decrements; M4 only reads the credit before recycling.
+ * SRAM3 is shareable non-cacheable, so no cache line is written by both cores. */
+D2_IPC static volatile uint32_t g_sample_page_audio_use_count[SAMPLE_PAGE_MAX_COUNT];
 static CTRL_STATE sample_page_cache_state_t g_sample_page_cache_state;
-SDRAM_PAGE_META static sample_page_sample_desc_t g_sample_page_sample_desc[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
-static CTRL_STATE uint16_t g_sample_page_last_slot[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
-SDRAM_PAGE_INDEX static sample_page_index_entry_t g_sample_page_index[SAMPLE_PAGE_INDEX_SIZE];
+CONTROL_STREAM_META_SDRAM static sample_page_sample_desc_t g_sample_page_sample_desc[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
+D2_IPC static volatile uint16_t g_sample_page_last_slot[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
+CONTROL_STREAM_INDEX_SDRAM static sample_page_index_entry_t g_sample_page_index[SAMPLE_PAGE_INDEX_SIZE];
 static CTRL_STATE uint16_t g_sample_page_reserved_count[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
 static CTRL_STATE uint16_t g_sample_page_free_cursor;
 static CTRL_STATE uint16_t g_sample_page_evict_cursor;
@@ -93,6 +97,23 @@ static uint16_t sample_page_cache_key_slot(sample_audio_key_t key);
 static uint8_t sample_page_cache_page_is_contractual(const sample_page_desc_t *page);
 static uint8_t sample_page_cache_can_evict_for_request(sample_audio_key_t request_key,
                                                        sample_audio_key_t victim_key);
+
+static float *sample_page_cache_data_resolve(const sample_page_desc_t *page)
+{
+    if ((page == 0) || (page->data_offset >= sizeof(g_sample_page_data))
+        || ((page->data_offset % SAMPLE_PAGE_BYTES) != 0U))
+        return 0;
+    return (float *)((uint8_t *)g_sample_page_data + page->data_offset);
+}
+
+static uint32_t sample_page_cache_audio_use_count(const sample_page_desc_t *page)
+{
+    if (page == 0) return 0U;
+    const uint32_t slot = (uint32_t)(page - g_sample_page_desc);
+    return (slot < SAMPLE_PAGE_MAX_COUNT)
+        ? __atomic_load_n(&g_sample_page_audio_use_count[slot], __ATOMIC_ACQUIRE)
+        : 0U;
+}
 
 static sample_audio_format_t sample_page_cache_format_key(sample_audio_key_t key)
 {
@@ -245,7 +266,7 @@ static uint8_t sample_page_cache_page_is_contractual(const sample_page_desc_t *p
         return 0U;
     }
 
-    return ((page->use_count != 0U)
+    return ((sample_page_cache_audio_use_count(page) != 0U)
             || (page->pin_count != 0U)
             || (sample_stream_needs_registry_contains_any(page->key,
                                                           page->page_index,
@@ -302,6 +323,7 @@ static void sample_page_cache_index_put_key(sample_audio_key_t key, uint32_t pag
             && (entry->page_index == page_index))
         {
             entry->slot_index = slot_index;
+            intercore_cache_publish(entry, sizeof(*entry));
             return;
         }
         if ((entry->used == 2U) && (first_deleted == UINT32_MAX))
@@ -315,8 +337,9 @@ static void sample_page_cache_index_put_key(sample_audio_key_t key, uint32_t pag
             dst->used = 1U;
             dst->key.domain = key.domain;
             dst->key.object_id = key.object_id;
-            dst->page_index = page_index;
-            dst->slot_index = slot_index;
+    dst->page_index = page_index;
+    dst->slot_index = slot_index;
+    intercore_cache_publish(dst, sizeof(*dst));
             return;
         }
     }
@@ -329,6 +352,7 @@ static void sample_page_cache_index_put_key(sample_audio_key_t key, uint32_t pag
         dst->key.object_id = key.object_id;
         dst->page_index = page_index;
         dst->slot_index = slot_index;
+        intercore_cache_publish(dst, sizeof(*dst));
     }
 }
 
@@ -347,6 +371,7 @@ static void sample_page_cache_index_remove_key(sample_audio_key_t key, uint32_t 
             && (entry->page_index == page_index))
         {
             entry->used = 2U;
+            intercore_cache_publish(entry, sizeof(*entry));
             return;
         }
     }
@@ -374,9 +399,13 @@ static void sample_page_cache_set_state(sample_page_desc_t *page, sample_page_st
 
     if (state == SAMPLE_PAGE_READY)
     {
-        __DMB();
+        const float *const payload = sample_page_cache_data_resolve(page);
+        const size_t payload_bytes = (size_t)page->frame_count
+            * page->stride_floats * sizeof(float);
+        intercore_cache_publish(payload, payload_bytes);
     }
     page->state = state;
+    intercore_cache_publish(page, sizeof(*page));
 }
 
 static uint8_t sample_page_cache_claim_for_recycle(sample_page_desc_t *page)
@@ -417,7 +446,7 @@ static void sample_page_cache_clear_desc(sample_page_desc_t *page, uint32_t slot
     page->key = sample_audio_key_classic(UINT16_MAX);
     page->page_index = UINT32_MAX;
     page->start_frame = UINT32_MAX;
-    page->data = &g_sample_page_data[slot_index][0];
+    page->data_offset = slot_index * SAMPLE_PAGE_BYTES;
     page->state = SAMPLE_PAGE_FREE;
 }
 
@@ -457,6 +486,62 @@ static sample_page_desc_t *sample_page_cache_find_page_mut_key(sample_audio_key_
 static const sample_page_desc_t *sample_page_cache_find_page_key(sample_audio_key_t key, uint32_t page_index)
 {
     return sample_page_cache_find_page_mut_key(key, page_index);
+}
+
+/* AUDIO-side lookup. CONTROL owns the cacheable index/descriptor bytes; AUDIO
+ * only consumes published snapshots and owns the non-cacheable use credit. */
+static sample_page_desc_t *sample_page_cache_audio_find_page_key(
+    sample_audio_key_t key, uint32_t page_index)
+{
+    const uint16_t key_slot = sample_page_cache_key_slot(key);
+    if (key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES) return 0;
+    const uint16_t last_slot = g_sample_page_last_slot[key_slot];
+    __DMB();
+    if (last_slot < SAMPLE_PAGE_MAX_COUNT)
+    {
+        sample_page_desc_t *const page = &g_sample_page_desc[last_slot];
+        intercore_cache_consume(page, sizeof(*page));
+        if ((sample_audio_key_equal(&page->key, &key) != 0U)
+            && (page->page_index == page_index)
+            && (page->state != SAMPLE_PAGE_FREE))
+            return page;
+    }
+
+    const uint32_t start = sample_page_cache_hash_key(key, page_index);
+    for (uint32_t probe = 0U; probe < SAMPLE_PAGE_INDEX_SIZE; ++probe)
+    {
+        sample_page_index_entry_t *const entry =
+            &g_sample_page_index[(start + probe) % SAMPLE_PAGE_INDEX_SIZE];
+        intercore_cache_consume(entry, sizeof(*entry));
+        if (entry->used == 0U) return 0;
+        if ((entry->used == 1U)
+            && (sample_audio_key_equal(&entry->key, &key) != 0U)
+            && (entry->page_index == page_index)
+            && (entry->slot_index < SAMPLE_PAGE_MAX_COUNT))
+        {
+            sample_page_desc_t *const page =
+                &g_sample_page_desc[entry->slot_index];
+            intercore_cache_consume(page, sizeof(*page));
+            if ((sample_audio_key_equal(&page->key, &key) != 0U)
+                && (page->page_index == page_index)
+                && (page->state != SAMPLE_PAGE_FREE))
+                return page;
+            return 0;
+        }
+    }
+    return 0;
+}
+
+static void sample_page_cache_audio_release_slot(uint32_t slot)
+{
+    if (slot >= SAMPLE_PAGE_MAX_COUNT) return;
+    uint32_t count = __atomic_load_n(&g_sample_page_audio_use_count[slot],
+                                     __ATOMIC_ACQUIRE);
+    while ((count != 0U)
+        && (__atomic_compare_exchange_n(&g_sample_page_audio_use_count[slot],
+                &count, count - 1U, 0, __ATOMIC_RELEASE, __ATOMIC_ACQUIRE) == 0))
+    {
+    }
 }
 
 static uint8_t sample_page_cache_fill_ref(const sample_page_desc_t *page,
@@ -611,7 +696,8 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
             page->generation = ++g_sample_page_cache_state.generation_counter;
             page->last_touch = ++g_sample_page_cache_state.touch_counter;
             page->pin_count = 0U;
-            page->use_count = 0U;
+            __atomic_store_n(&g_sample_page_audio_use_count[i], 0U,
+                             __ATOMIC_RELEASE);
             sample_page_cache_set_state(page, SAMPLE_PAGE_RESERVED);
             const uint16_t key_slot = sample_page_cache_key_slot(key);
             if (key_slot < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
@@ -668,7 +754,8 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
     evict_page->generation = ++g_sample_page_cache_state.generation_counter;
     evict_page->last_touch = ++g_sample_page_cache_state.touch_counter;
     evict_page->pin_count = 0U;
-    evict_page->use_count = 0U;
+    __atomic_store_n(&g_sample_page_audio_use_count[slot_index], 0U,
+                     __ATOMIC_RELEASE);
     sample_page_cache_set_state(evict_page, SAMPLE_PAGE_RESERVED);
     const uint16_t key_slot = sample_page_cache_key_slot(key);
     if (key_slot < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
@@ -821,6 +908,8 @@ void sample_page_cache_reset(void)
     memset(&g_sample_page_cache_state, 0, sizeof(g_sample_page_cache_state));
     memset(g_sample_page_sample_desc, 0, sizeof(g_sample_page_sample_desc));
     memset(g_sample_page_index, 0, sizeof(g_sample_page_index));
+    memset((void *)g_sample_page_audio_use_count, 0,
+           sizeof(g_sample_page_audio_use_count));
     memset(g_sample_page_reserved_count, 0, sizeof(g_sample_page_reserved_count));
     g_sample_page_free_cursor = 0U;
     g_sample_page_evict_cursor = 0U;
@@ -886,7 +975,8 @@ uint8_t sample_page_cache_cancel_reserved_page_key(sample_audio_key_t key,
     {
         return 0U;
     }
-    if ((page->pin_count != 0U) || (page->use_count != 0U))
+    if ((page->pin_count != 0U)
+        || (sample_page_cache_audio_use_count(page) != 0U))
     {
         return 0U;
     }
@@ -910,7 +1000,7 @@ uint32_t sample_page_cache_cancel_reserved_key(sample_audio_key_t key, uint8_t r
         if ((page->state == SAMPLE_PAGE_RESERVED)
             && (sample_audio_key_equal(&page->key, &key) != 0U)
             && (page->pin_count == 0U)
-            && (page->use_count == 0U))
+            && (sample_page_cache_audio_use_count(page) == 0U))
         {
             sample_page_cache_clear_desc(page, i);
             count++;
@@ -929,7 +1019,7 @@ uint32_t sample_page_cache_cancel_reserved_domain(sample_audio_domain_t domain, 
         if ((page->state == SAMPLE_PAGE_RESERVED)
             && (page->key.domain == domain)
             && (page->pin_count == 0U)
-            && (page->use_count == 0U))
+            && (sample_page_cache_audio_use_count(page) == 0U))
         {
             sample_page_cache_clear_desc(page, i);
             count++;
@@ -953,6 +1043,14 @@ sample_page_state_t sample_page_cache_get_page_state_key(sample_audio_key_t key,
         __DMB();
     }
     return state;
+}
+
+sample_page_state_t sample_page_cache_audio_get_page_state_key(
+    sample_audio_key_t key, uint32_t page_index)
+{
+    const sample_page_desc_t *const page =
+        sample_page_cache_audio_find_page_key(key, page_index);
+    return (page != 0) ? page->state : SAMPLE_PAGE_FREE;
 }
 
 uint8_t sample_page_cache_page_exists_key(sample_audio_key_t key,
@@ -981,30 +1079,36 @@ uint8_t sample_page_cache_try_acquire_page_key(sample_audio_key_t key,
 
     memset(out_span, 0, sizeof(*out_span));
 
-    const uint32_t primask = sample_page_cache_lock();
-    sample_page_desc_t *const page = sample_page_cache_find_page_mut_key(key, page_index);
-    if ((page == 0) || (page->state != SAMPLE_PAGE_READY) || (page->data == 0))
+    sample_page_desc_t *const page =
+        sample_page_cache_audio_find_page_key(key, page_index);
+    if ((page == 0) || (page->state != SAMPLE_PAGE_READY)) return 0U;
+    const uint32_t slot = (uint32_t)(page - g_sample_page_desc);
+    const sample_page_desc_t snapshot = *page;
+    float *const payload = sample_page_cache_data_resolve(&snapshot);
+    if (payload == 0) return 0U;
+    (void)__atomic_fetch_add(&g_sample_page_audio_use_count[slot], 1U,
+                             __ATOMIC_ACQ_REL);
+    intercore_cache_consume(page, sizeof(*page));
+    if ((page->state != SAMPLE_PAGE_READY)
+        || (page->generation != snapshot.generation)
+        || (page->page_index != snapshot.page_index))
     {
-        sample_page_cache_unlock(primask);
+        sample_page_cache_audio_release_slot(slot);
         return 0U;
     }
-
-    __DMB();
-    page->use_count++;
-    page->last_touch = ++g_sample_page_cache_state.touch_counter;
-
-    out_span->frames_interleaved = page->data;
-    out_span->frame_count = page->frame_count;
-    out_span->start_frame = page->start_frame;
-    out_span->page_index = page->page_index;
-    out_span->page_generation = page->generation;
-    out_span->key = page->key;
-    out_span->format = page->format;
-    out_span->stride_floats = page->stride_floats;
-    out_span->frames_per_page = page->frames_per_page;
-    out_span->registration_epoch = page->registration_epoch;
-    out_span->slot_index = (uint32_t)(page - g_sample_page_desc);
-    sample_page_cache_unlock(primask);
+    intercore_cache_consume(payload, (size_t)snapshot.frame_count
+        * snapshot.stride_floats * sizeof(float));
+    out_span->frames_interleaved = payload;
+    out_span->frame_count = snapshot.frame_count;
+    out_span->start_frame = snapshot.start_frame;
+    out_span->page_index = snapshot.page_index;
+    out_span->page_generation = snapshot.generation;
+    out_span->key = snapshot.key;
+    out_span->format = snapshot.format;
+    out_span->stride_floats = snapshot.stride_floats;
+    out_span->frames_per_page = snapshot.frames_per_page;
+    out_span->registration_epoch = snapshot.registration_epoch;
+    out_span->slot_index = slot;
     return 1U;
 }
 
@@ -1028,12 +1132,11 @@ uint8_t sample_page_cache_try_acquire_page_ref_key(sample_audio_key_t key,
 
     memset(out_span, 0, sizeof(*out_span));
 
-    const uint32_t primask = sample_page_cache_lock();
     sample_page_desc_t *const page = &g_sample_page_desc[ref->slot_index];
+    intercore_cache_consume(page, sizeof(*page));
     if ((sample_audio_key_equal(&page->key, &key) == 0U)
         || (page->page_index != ref->page_index)
         || (page->generation != ref->page_generation) || (page->state != SAMPLE_PAGE_READY)
-        || (page->data == 0)
         || (sample_audio_key_equal(&ref->key, &key) == 0U)
         || (sample_audio_format_is_valid(ref->format) == 0U)
         || (page->format != ref->format)
@@ -1042,24 +1145,33 @@ uint8_t sample_page_cache_try_acquire_page_ref_key(sample_audio_key_t key,
         || (ref->stride_floats != page->stride_floats)
         || (ref->frames_per_page != page->frames_per_page))
     {
-        sample_page_cache_unlock(primask);
         return 0U;
     }
-
-    __DMB();
-    page->use_count++;
-    out_span->frames_interleaved = page->data;
-    out_span->frame_count = page->frame_count;
-    out_span->start_frame = page->start_frame;
-    out_span->page_index = page->page_index;
-    out_span->page_generation = page->generation;
-    out_span->key = page->key;
-    out_span->format = page->format;
-    out_span->stride_floats = page->stride_floats;
-    out_span->frames_per_page = page->frames_per_page;
-    out_span->registration_epoch = page->registration_epoch;
+    const sample_page_desc_t snapshot = *page;
+    float *const payload = sample_page_cache_data_resolve(&snapshot);
+    if (payload == 0) return 0U;
+    (void)__atomic_fetch_add(&g_sample_page_audio_use_count[ref->slot_index],
+                             1U, __ATOMIC_ACQ_REL);
+    intercore_cache_consume(page, sizeof(*page));
+    if ((page->state != SAMPLE_PAGE_READY)
+        || (page->generation != snapshot.generation))
+    {
+        sample_page_cache_audio_release_slot(ref->slot_index);
+        return 0U;
+    }
+    intercore_cache_consume(payload, (size_t)snapshot.frame_count
+        * snapshot.stride_floats * sizeof(float));
+    out_span->frames_interleaved = payload;
+    out_span->frame_count = snapshot.frame_count;
+    out_span->start_frame = snapshot.start_frame;
+    out_span->page_index = snapshot.page_index;
+    out_span->page_generation = snapshot.generation;
+    out_span->key = snapshot.key;
+    out_span->format = snapshot.format;
+    out_span->stride_floats = snapshot.stride_floats;
+    out_span->frames_per_page = snapshot.frames_per_page;
+    out_span->registration_epoch = snapshot.registration_epoch;
     out_span->slot_index = ref->slot_index;
-    sample_page_cache_unlock(primask);
     return 1U;
 }
 
@@ -1070,20 +1182,11 @@ void sample_page_cache_release_page(uint16_t sample_id, uint32_t page_index)
 
 void sample_page_cache_release_page_key(sample_audio_key_t key, uint32_t page_index)
 {
-    const uint32_t primask = sample_page_cache_lock();
-    sample_page_desc_t *const page = sample_page_cache_find_page_mut_key(key, page_index);
-    if (page == 0)
-    {
-        sample_page_cache_unlock(primask);
-        return;
-    }
-
-    if (page->use_count != 0U)
-    {
-        page->use_count--;
-    }
-    page->last_touch = ++g_sample_page_cache_state.touch_counter;
-    sample_page_cache_unlock(primask);
+    sample_page_desc_t *const page =
+        sample_page_cache_audio_find_page_key(key, page_index);
+    if (page != 0)
+        sample_page_cache_audio_release_slot(
+            (uint32_t)(page - g_sample_page_desc));
 }
 
 void sample_page_cache_release_page_ref(uint16_t sample_id, const sample_page_ref_t *ref)
@@ -1098,8 +1201,8 @@ void sample_page_cache_release_page_ref_key(sample_audio_key_t key, const sample
         return;
     }
 
-    const uint32_t primask = sample_page_cache_lock();
     sample_page_desc_t *const page = &g_sample_page_desc[ref->slot_index];
+    intercore_cache_consume(page, sizeof(*page));
     if ((sample_audio_key_equal(&page->key, &key) == 0U)
         || (page->page_index != ref->page_index)
         || (page->generation != ref->page_generation)
@@ -1111,15 +1214,9 @@ void sample_page_cache_release_page_ref_key(sample_audio_key_t key, const sample
         || (ref->stride_floats != page->stride_floats)
         || (ref->frames_per_page != page->frames_per_page))
     {
-        sample_page_cache_unlock(primask);
         return;
     }
-
-    if (page->use_count != 0U)
-    {
-        page->use_count--;
-    }
-    sample_page_cache_unlock(primask);
+    sample_page_cache_audio_release_slot(ref->slot_index);
 }
 
 uint8_t sample_page_cache_alloc_slot_pool_bytes(uint32_t bytes,
@@ -1200,7 +1297,8 @@ void sample_page_cache_release_slot_pool_allocation(uint16_t first_slot,
         /* pin_count==1 is the allocation owner's lifetime pin. Releasing the
          * allocation removes that contract; foreign users still defer reuse. */
         if (page->pin_count != 0U) page->pin_count--;
-        if ((page->use_count == 0U) && (page->pin_count == 0U))
+        if ((sample_page_cache_audio_use_count(page) == 0U)
+            && (page->pin_count == 0U))
             sample_page_cache_clear_desc(page, slot_index);
         else
         {
@@ -1282,7 +1380,8 @@ const float *sample_page_cache_get_full_sample_base_key(sample_audio_key_t key,
         *out_frames = sample->total_frames;
     }
 
-    return g_sample_page_desc[sample->first_slot].data;
+    return sample_page_cache_data_resolve(
+        &g_sample_page_desc[sample->first_slot]);
 }
 
 uint8_t sample_page_cache_begin_read_block(uint16_t sample_id,
@@ -1564,7 +1663,8 @@ uint8_t sample_page_cache_get_load_target_key(sample_audio_key_t key,
     }
 
     sample_page_desc_t *const page = sample_page_cache_find_page_mut_key(key, page_index);
-    if ((page == 0) || (page->state != SAMPLE_PAGE_RESERVED) || (page->data == 0))
+    float *const data = sample_page_cache_data_resolve(page);
+    if ((page == 0) || (page->state != SAMPLE_PAGE_RESERVED) || (data == 0))
     {
         return 0U;
     }
@@ -1581,7 +1681,7 @@ uint8_t sample_page_cache_get_load_target_key(sample_audio_key_t key,
     out_target->frames_per_page = page->frames_per_page;
     out_target->registration_epoch = page->registration_epoch;
     out_target->page_generation = page->generation;
-    out_target->frames_interleaved = page->data;
+    out_target->frames_interleaved = data;
     return 1U;
 }
 
@@ -1596,7 +1696,7 @@ uint8_t sample_page_cache_begin_loading(const sample_page_load_target_t *target,
     const uint32_t primask = sample_page_cache_lock();
     sample_page_desc_t *const page = &g_sample_page_desc[target->slot_index];
     const uint8_t valid = (uint8_t)((page->state == SAMPLE_PAGE_RESERVED)
-        && (page->data == target->frames_interleaved)
+        && (sample_page_cache_data_resolve(page) == target->frames_interleaved)
         && (page->page_index == target->page_index)
         && (page->generation == target->page_generation)
         && (page->registration_epoch == target->registration_epoch)
@@ -1625,13 +1725,14 @@ uint8_t sample_page_cache_resolve_loading_target(const sample_page_load_token_t 
     }
     const uint32_t primask = sample_page_cache_lock();
     const sample_page_desc_t *const page = &g_sample_page_desc[token->slot_index];
+    float *const data = sample_page_cache_data_resolve(page);
     const uint8_t valid = (uint8_t)((page->state == SAMPLE_PAGE_LOADING)
         && (page->load_cancel_requested == 0U)
         && (page->page_index == token->page_index)
         && (page->generation == token->page_generation)
         && (page->registration_epoch == token->registration_epoch)
         && (sample_audio_key_equal(&page->key, &token->key) != 0U)
-        && (page->data != 0));
+        && (data != 0));
     if (valid != 0U)
     {
         memset(out_target, 0, sizeof(*out_target));
@@ -1646,7 +1747,7 @@ uint8_t sample_page_cache_resolve_loading_target(const sample_page_load_token_t 
         out_target->frames_per_page = page->frames_per_page;
         out_target->registration_epoch = page->registration_epoch;
         out_target->page_generation = page->generation;
-        out_target->frames_interleaved = page->data;
+        out_target->frames_interleaved = data;
     }
     sample_page_cache_unlock(primask);
     return valid;
@@ -1677,7 +1778,8 @@ uint8_t sample_page_cache_finish_loading(const sample_page_load_token_t *token,
                 ? SAMPLE_PAGE_READY
                 : SAMPLE_PAGE_FAILED;
         page->load_cancel_requested = 0U;
-        if ((cancelled != 0U) && (page->pin_count == 0U) && (page->use_count == 0U))
+        if ((cancelled != 0U) && (page->pin_count == 0U)
+            && (sample_page_cache_audio_use_count(page) == 0U))
         {
             sample_page_cache_clear_desc(page, token->slot_index);
         }
@@ -1719,7 +1821,8 @@ uint8_t sample_page_cache_prepare_bulk_page_key_alloc(
     }
 
     sample_page_desc_t *const page = sample_page_cache_find_page_mut_key(key, page_index);
-    if ((page == 0) || (page->data == 0) || (page->frame_count == 0U))
+    if ((page == 0) || (sample_page_cache_data_resolve(page) == 0)
+        || (page->frame_count == 0U))
     {
         return 0U;
     }
@@ -1741,7 +1844,8 @@ uint8_t sample_page_cache_get_bulk_load_target_key(
     }
 
     sample_page_desc_t *const page = sample_page_cache_find_page_mut_key(key, page_index);
-    if ((page == 0) || (page->state != SAMPLE_PAGE_RESERVED) || (page->data == 0))
+    float *const data = sample_page_cache_data_resolve(page);
+    if ((page == 0) || (page->state != SAMPLE_PAGE_RESERVED) || (data == 0))
     {
         return 0U;
     }
@@ -1758,7 +1862,7 @@ uint8_t sample_page_cache_get_bulk_load_target_key(
     out_target->frames_per_page = page->frames_per_page;
     out_target->registration_epoch = page->registration_epoch;
     out_target->page_generation = page->generation;
-    out_target->frames_interleaved = page->data;
+    out_target->frames_interleaved = data;
     return 1U;
 }
 
@@ -1822,7 +1926,7 @@ uint8_t sample_page_cache_reserve_page_key_alloc(sample_audio_key_t key,
     if ((page->state == SAMPLE_PAGE_FREE)
         || ((page->state == SAMPLE_PAGE_FAILED)
             && (page->pin_count == 0U)
-            && (page->use_count == 0U)))
+            && (sample_page_cache_audio_use_count(page) == 0U)))
     {
         page->load_cancel_requested = 0U;
         sample_page_cache_set_state(page, SAMPLE_PAGE_RESERVED);

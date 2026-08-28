@@ -1,10 +1,17 @@
 # Z1 - Audio hard-RT, moteurs et mix
 
-CONTROL est l'unique autorite musicale: il cree les outputs, applique les quotas Multi per-track/global, choisit les victimes et publie atomiquement `STOP` puis `START`. Un `START` Multi legal est donc garanti par construction; AUDIO ne fait aucune admission ni stealing musical et traite un slot indisponible comme une rupture d'invariant. Il valide le binding, mappe `output_id` vers un slot DSP, rend les moteurs et possede FREE/RELEASE physique. Aucun scheduler CONTROL n'appelle directement un moteur ou le mixer.
+CONTROL est l'unique autorite musicale: il cree les outputs, applique les quotas Multi per-track/global, choisit les victimes et publie atomiquement NOTE OFF puis NOTE ON. Une commande legale est garantie par construction; AUDIO ne fait aucune admission ni stealing musical et traite une ressource indisponible comme une rupture d'invariant. Il mappe `output_id` vers un slot DSP, rend les moteurs et possede FREE/RELEASE physique. Aucun scheduler CONTROL n'appelle directement un moteur ou le mixer.
 
 `STOP(output_id)` retire HELD cote AUDIO mais une tail RELEASE peut continuer. Sa fin ne produit aucun ACK musical. Si le slot doit etre reutilise, AUDIO le reinitialise physiquement avant le nouveau START.
 
-Les moteurs rendent dans les lanes externes associees aux bindings. Le pool synth maintient un mapping direct voix logique -> slot physique; les configurations de track sont versionnees et recopies seulement lors d'un changement. Les etats chauds des voix restent en DTCM et aucun chemin audio n'alloue dynamiquement.
+Les moteurs rendent dans les lanes du programme courant de chaque entite. Le
+mapping d'execution AUDIO porte `output_id`, note, velocity et gate sans devenir
+une autorite d'admission. Le pool synth maintient son mapping vers les slots
+physiques. Un PROGRAM compatible remplace synchroniquement le renderer au
+sample commande, conserve les outputs et initialise le nouveau DSP depuis ce
+mapping; aucun NOTE OFF/ON n'est fabrique. Un PROGRAM incompatible ferme les
+outputs par le chemin NOTE normal avant remplacement. Les etats chauds des voix
+restent en DTCM et aucun chemin audio n'alloue dynamiquement.
 
 Le mixer applique filtre, VCA, niveau, pan, inserts, sends puis traitements globaux. Reverb, delay, compresseur et gain Master sont globaux. Send3 ne conserve que Daisy Stereo et Junologue; VIBE et DRIFT sont des inserts par entite. VIBE utilise le kernel Deluge Float avec politique `dry + wet` 1:1. DRIFT expose DELAY et FEEDBACK, sans LFO interne.
 
@@ -26,4 +33,4 @@ Le snapshot de waveform est une publication seqlock AUDIO->CONTROL fixe et sans 
 
 ## Integration d'un moteur
 
-Un nouveau moteur doit ajouter son type canonique, binding runtime, capacites, catalogue de parametres/backends, rendu borne, mapping/fermeture physique, exposition UI et cles persistantes. Il ne doit contourner ni `track_runtime`, ni le registre de parametres, ni les IPC CONTROL/AUDIO.
+Un nouveau moteur doit ajouter son type canonique, installation PROGRAM, capacites, catalogue de parametres/backends, rendu borne, mapping/fermeture physique, exposition UI et cles persistantes. Il ne doit contourner ni `track_runtime`, ni le registre de parametres, ni la FIFO fonctionnelle CONTROL/AUDIO.

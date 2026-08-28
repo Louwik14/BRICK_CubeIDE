@@ -12,6 +12,7 @@
 
 void midi_host_poll(void);
 void midi_host_poll_bounded(uint32_t max_msgs);
+void midi_host_rx_discard_pending(void);
 
 bool midi_host_send(const uint8_t *msg, size_t len);
 

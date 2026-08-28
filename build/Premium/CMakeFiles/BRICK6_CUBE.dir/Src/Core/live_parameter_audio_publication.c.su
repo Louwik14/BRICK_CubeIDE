@@ -1,0 +1,7 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_publication.c:15:13:live_parameter_audio_publish_failed	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_publication.c:46:16:live_parameter_audio_make_command	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_publication.c:75:6:live_parameter_audio_publication_init	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_publication.c:80:10:live_parameter_audio_publication_drain	88	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_publication.c:105:6:live_parameter_audio_publication_submit_bulk	1080	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_publication.c:139:6:live_parameter_audio_publication_submit_poly_pair	800	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_publication.c:168:6:live_parameter_audio_publication_submit_dated	40	static

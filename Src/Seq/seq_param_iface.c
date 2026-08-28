@@ -13,7 +13,7 @@
 
 #include "Storage/memory_layout.h"
 #include "Core/track_runtime.h"
-#include "Core/live_parameter_audio_queue.h"
+#include "Core/live_parameter_audio_publication.h"
 #include "param_registry.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include "NoteFx/note_fx_state.h"
@@ -527,7 +527,7 @@ static uint8_t seq_param_iface_resolve_runtime_tone_type(seq_track_id_t track, t
 
     track_runtime_descriptor_t descriptor;
     if ((track_runtime_get_descriptor(track, &descriptor) == 0U)
-            || (descriptor.bind_state != TRACK_RUNTIME_BIND_BOUND))
+            || (descriptor.active == 0U))
     {
         return 0U;
     }
@@ -975,7 +975,6 @@ uint8_t seq_param_iface_set_base_value(seq_track_id_t track,
                                        seq_param_slot_t param_slot,
                                        seq_value16_t value16)
 {
-    track_runtime_refresh_track(track);
     if (seq_param_iface_is_param_supported(track, set_id, param_slot) == 0U)
     {
         return 0U;
@@ -1078,7 +1077,6 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
                                    seq_value16_t value16,
                                    uint64_t due_sample)
 {
-    track_runtime_refresh_track(track);
     if (seq_param_iface_slot_is_supported_internal(track, set_id,
                                                     param_slot, 0U) == 0U)
     {
@@ -1119,9 +1117,8 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
         return 1U;
     }
 
-    if (!live_parameter_audio_queue_submit_dated(
-            due_sample, param, track, value16,
-            LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_SET))
+    if (!live_parameter_audio_publication_submit_dated(
+            due_sample, param, track, value16))
     {
         return 0U;
     }
@@ -1137,7 +1134,6 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
                                      seq_value16_t base_value16,
                                      uint64_t due_sample)
 {
-    track_runtime_refresh_track(track);
     /* Restoring an already-active lock is not a new p-lock admission.  It
      * must remain possible when the target model is EUCLID and the old lock
      * was created while the slot was ARP/OFF. */
@@ -1170,9 +1166,8 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
         return 1U;
     }
 
-    if (!live_parameter_audio_queue_submit_dated(
-            due_sample, param, track, base_value16,
-            LIVE_PARAMETER_MATRIX_OPERATION_OVERRIDE_CLEAR))
+    if (!live_parameter_audio_publication_submit_dated(
+            due_sample, param, track, base_value16))
     {
         return 0U;
     }

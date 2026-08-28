@@ -133,7 +133,6 @@ uint8_t sampler_ram_pool_load_async_take_result(sampler_ram_result_t *out_result
                                                 const char **out_path);
 void sampler_ram_pool_clear(uint16_t ram_slot);
 void sampler_ram_pool_service_retire(void);
-void sampler_ram_pool_control_ack_retire(uint16_t ram_slot, uint32_t generation);
 
 const sampler_ram_slot_t *sampler_ram_pool_get_slot(uint16_t ram_slot);
 sampler_ram_slot_state_t sampler_ram_pool_get_state(uint16_t ram_slot);

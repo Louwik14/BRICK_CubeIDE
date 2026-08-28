@@ -14,7 +14,6 @@ if(NOT CMAKE_CROSSCOMPILING)
         param_restore_pass1_contract_test.c
         ../Src/Param/param_registry_value_contract.c
         ../Src/Param/param_registry_runtime_state.c
-        ../Src/Audio/audio_note_engine_install_contract.c
     )
     target_include_directories(param_restore_pass1_contract_test PRIVATE
         ../Inc

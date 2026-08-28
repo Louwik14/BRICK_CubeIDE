@@ -383,20 +383,6 @@ SECTIONS
   ASSERT((__backup_sram_end__ - __backup_sram_start__) <= LENGTH(BKPSRAM),
          "Backup SRAM overflow")
 
-  .restore_plan_sdram (NOLOAD) :
-  {
-    . = ALIGN(32);
-    __restore_plan_start__ = .;
-    KEEP(*(.restore_plan_sdram))
-    KEEP(*(.restore_plan_sdram.*))
-    . = ALIGN(32);
-    __restore_plan_end__ = .;
-  } >SDRAM
-  ASSERT(SIZEOF(.restore_plan_sdram) <= 48K,
-         "Restore plan exceeds its 48 KiB SDRAM contract")
-  ASSERT((__restore_plan_start__ & 31) == 0,
-         "Restore plan is not cache-line aligned")
-
   .multi_load_sdram (NOLOAD) :
   {
     . = ALIGN(32);

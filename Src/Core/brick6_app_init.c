@@ -28,7 +28,6 @@
 #include "Sampler/wavetable_pool.h"
 #include "Sampler/sample_global_pool.h"
 #include "Audio/audio_wavetable_registry.h"
-#include "Sampler/sample_stream_time.h"
 #include "Storage/memory_layout.h"
 #include "brick6_audio_runtime.h"
 #include "brick6_looper_runtime.h"
@@ -37,7 +36,6 @@
 #include "brick6_master_control.h"
 #include "brick6_sampler_runtime.h"
 #include "Core/brick6_stream_service_task.h"
-#include "Core/audio_retire_ack.h"
 #include "Core/track_mute.h"
 #include "Core/track_runtime.h"
 #include "Core/project_control.h"
@@ -45,7 +43,6 @@
 #include "brick6_sampler_bootstrap.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/project_product.h"
-#include "Storage/restore_transaction.h"
 #include "Storage/patch_product.h"
 #include "Storage/undo_v2.h"
 #include "Storage/sd_access_gate.h"
@@ -98,8 +95,6 @@ void brick6_app_init(void)
     (void)crash_capsule_init();
 #endif
     SDRAM_Init();
-    audio_retire_ack_init();
-    restore_transaction_control_init();
     project_load_quiesce_init();
 
     board_usb_device_init();
@@ -147,13 +142,11 @@ void brick6_app_init(void)
     audio_set_float_callback(brick6_audio_runtime_dsp);
 
     engine_tasklet_init(48000);
-    sample_stream_time_init();
     param_store_init();
     seq_runtime_init();
     track_mute_init();
     ui_core_init();
     track_runtime_invalidate_all();
-    track_runtime_refresh_all();
     param_set(PARAM_MASTER_GAIN, audio_boot.master_gain);
     param_set(PARAM_POST_GAIN, audio_boot.postgain);
     param_set(PARAM_OUTPUT_COMP, audio_boot.output_compensation);
@@ -201,28 +194,6 @@ void brick6_app_init(void)
  */
 static void brick6_app_service_storage(void)
 {
-    audio_retire_ack_t retire_ack[8];
-    const uint8_t retire_ack_count = audio_retire_ack_drain(
-        retire_ack, (uint8_t)(sizeof(retire_ack) / sizeof(retire_ack[0])));
-    for (uint8_t i = 0U; i < retire_ack_count; ++i)
-    {
-        switch ((audio_retire_ack_kind_t)retire_ack[i].kind)
-        {
-            case AUDIO_RETIRE_ACK_MULTI:
-                multi_sample_pool_control_ack_retire(retire_ack[i].slot);
-                break;
-            case AUDIO_RETIRE_ACK_RAM:
-                sampler_ram_pool_control_ack_retire(retire_ack[i].slot,
-                                                    retire_ack[i].generation);
-                break;
-            case AUDIO_RETIRE_ACK_WAVE:
-                wavetable_pool_control_ack_retire(retire_ack[i].slot,
-                                                  retire_ack[i].generation);
-                break;
-            default:
-                break;
-        }
-    }
     audio_recorder_service();
     project_product_save_service();
     if (multi_sample_load_has_pending() != 0U)
@@ -240,10 +211,7 @@ static void brick6_app_service_storage(void)
         sampler_ram_pool_load_async_service();
         wavetable_pool_load_async_service();
         sampler_ram_pool_waveform_service(BRICK6_STREAM_OTHER_SD_QUANTUM_FRAMES);
-        if (brick6_looper_runtime_storage_has_pending_sd_work() == 0U)
-        {
-            multi_sample_service_load(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
-        }
+        multi_sample_service_load(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
         pattern_load_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES / 2U);
         waveform_cache_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
         sd_preview_process();

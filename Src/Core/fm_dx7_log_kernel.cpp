@@ -115,6 +115,17 @@ void dx7_log_kernel_note_on(dx7_log_kernel_voice_t *voice, bool sync)
     }
 }
 
+void dx7_log_kernel_initialize_held(dx7_log_kernel_voice_t *voice)
+{
+    if (voice == nullptr) return;
+    for (uint32_t op = 0U; op < kOperatorCount; ++op)
+    {
+        voice->operators[op].attenuation_q16 = kSilentAttenuationQ16;
+        voice->operators[op].attenuation_delta_q16 = 0;
+        voice->attenuation_target_q16[op] = kSilentAttenuationQ16;
+    }
+}
+
 void dx7_log_kernel_set_phase_increment(dx7_log_kernel_voice_t *voice,
                                         uint32_t operator_index,
                                         uint32_t phase_increment)

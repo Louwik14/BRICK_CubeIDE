@@ -55,15 +55,14 @@ typedef enum
 
 void mod_lfo_v1_init(void);
 
-/* CONTROL publishes canonical configuration; AUDIO consumes it at block boundaries. */
-void mod_lfo_v1_publish_control_snapshot_track(uint8_t track);
-void mod_lfo_v1_publish_control_snapshot_all(void);
-void mod_lfo_v1_audio_consume_snapshots(void);
-
 uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param, float value);
+uint8_t mod_lfo_v1_set_track_param_audio(uint8_t track, uint8_t lfo_index,
+                                         mod_lfo_param_t param, float value);
 uint8_t mod_lfo_v1_get_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param, float *out_value);
 uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param, float value);
 uint8_t mod_lfo_v1_clear_track_param_temp_audio(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param);
+uint8_t mod_lfo_v1_audio_set_transition_global(uint8_t active);
+uint8_t mod_lfo_v1_audio_set_transition_track(uint8_t track, uint8_t active);
 
 uint16_t mod_lfo_v1_dest_count(uint8_t track);
 uint8_t mod_lfo_v1_dest_param_at(uint8_t track, uint16_t dest_index, param_id_t *out_param);

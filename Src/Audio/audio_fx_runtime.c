@@ -14,6 +14,8 @@
 #include "Audio/fx_audio_vibe.h"
 #include "Audio/mixer.h"
 #include "Board/board_audio_format.h"
+#include "Core/synth_polyphony.h"
+#include "Core/control_audio_program.h"
 #include "Storage/memory_layout.h"
 #include "stm32h7xx_hal.h"
 
@@ -74,7 +76,6 @@ _Static_assert(sizeof(audio_fx_runtime_slot_t) == 108U,
 AUDIO_HOT static audio_fx_runtime_slot_t
     g_audio_fx_runtime[AUDIO_FX_OWNER_COUNT][AUDIO_FX_SLOT_COUNT];
 AUDIO_HOT static audio_fx_runtime_plan_t g_audio_fx_plan[AUDIO_FX_OWNER_COUNT];
-D3_IPC static volatile uint8_t g_audio_fx_filter_pos_status[AUDIO_FX_OWNER_COUNT];
 _Static_assert(sizeof(g_audio_fx_runtime) == 1728U,
                "Audio FX light-state bank size changed");
 _Static_assert(sizeof(g_audio_fx_plan) == 544U,
@@ -325,14 +326,14 @@ static audio_fx_stereo_block_fn spatial_block_kernel(uint8_t model,uint8_t mode)
 
 static uint8_t filter_is_per_voice(uint8_t owner)
 {
-    audio_binding_snapshot_t s;
-    if(!audio_note_engine_adapter_snapshot_read(owner,&s)
-            ||s.binding.bind_state!=TRACK_RUNTIME_BIND_BOUND)return 0U;
-    if((s.flags&AUDIO_RUNTIME_FLAG_GROUP_MASTER)!=0U)return 1U;
+    track_audio_runtime_ctx_t s;
+    if(!audio_note_engine_adapter_current_ctx(owner,&s)
+            ||s.program_route.active==0U)return 0U;
+    if((s.flags&CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER)!=0U)return 1U;
     if(s.family==(uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER
             &&s.type==(uint8_t)TRACK_RUNTIME_TYPE_MULTI)return 1U;
     return (uint8_t)((s.family==(uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
-            &&(s.configured_voice_count>1U));
+            &&(synth_polyphony_get_voice_count(owner)>1U));
 }
 
 static void rebuild_plan(uint8_t owner)
@@ -374,7 +375,6 @@ static void rebuild_plan(uint8_t owner)
     }
     plan->after_filter_sample=(plan->after_filter_count==2U)?sample_chain_two
         :(plan->after_filter_count==1U)?sample_chain_one:sample_chain_none;
-    g_audio_fx_filter_pos_status[owner]=plan->filter_pos;
     __DMB();
 }
 
@@ -394,34 +394,33 @@ uint8_t audio_fx_runtime_is_comp(brick_entity_id_t e){(void)e;return 0U;}
 uint8_t audio_fx_runtime_requires_stereo(brick_entity_id_t e){uint8_t owner;return(audio_fx_owner(e,&owner)&&g_audio_fx_plan[owner].filter_pos!=AUDIO_FX_FILTER_POS_PRE)?1U:0U;}
 uint8_t audio_fx_runtime_pre_filter_supported(brick_entity_id_t e)
 {
-    audio_binding_snapshot_t s;if(e>=BRICK_ENTITY_CAPACITY||!audio_note_engine_adapter_snapshot_read(e,&s)||s.binding.bind_state!=TRACK_RUNTIME_BIND_BOUND)return 0U;
-    if((s.flags&AUDIO_RUNTIME_FLAG_GROUP_MASTER)!=0U)return 1U;
+    track_audio_runtime_ctx_t s;if(e>=BRICK_ENTITY_CAPACITY||!audio_note_engine_adapter_current_ctx(e,&s)||s.program_route.active==0U)return 0U;
+    if((s.flags&CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER)!=0U)return 1U;
     if(s.family==(uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER&&s.type==(uint8_t)TRACK_RUNTIME_TYPE_MULTI)return 0U;
-    if(s.family==(uint8_t)TRACK_RUNTIME_FAMILY_SYNTH&&s.configured_voice_count>1U)return 0U;
+    if(s.family==(uint8_t)TRACK_RUNTIME_FAMILY_SYNTH&&synth_polyphony_get_voice_count(e)>1U)return 0U;
     return 1U;
 }
 audio_fx_placement_t audio_fx_runtime_get_placement(brick_entity_id_t e){(void)e;return AUDIO_FX_PLACEMENT_POST_FILTER;}
 audio_fx_filter_pos_t audio_fx_runtime_get_filter_pos(brick_entity_id_t e){uint8_t owner;return audio_fx_owner(e,&owner)?(audio_fx_filter_pos_t)g_audio_fx_plan[owner].filter_pos:AUDIO_FX_FILTER_POS_PRE;}
-audio_fx_filter_pos_t audio_fx_runtime_status_get_filter_pos(brick_entity_id_t e){uint8_t owner;if(!audio_fx_owner(e,&owner))return AUDIO_FX_FILTER_POS_PRE;const uint8_t pos=g_audio_fx_filter_pos_status[owner];__DMB();return(pos<AUDIO_FX_FILTER_POS_COUNT)?(audio_fx_filter_pos_t)pos:AUDIO_FX_FILTER_POS_PRE;}
 void audio_fx_runtime_rebuild_entity_plan(brick_entity_id_t e){uint8_t owner;if(audio_fx_owner(e,&owner)){rebuild_plan(owner);mixer_rebuild_static_plan();}}
 
 uint8_t audio_fx_runtime_apply_param(brick_entity_id_t e,param_id_t id,float value)
 {
     if(audio_fx_runtime_is_group_level_param(id)!=0U)
     {
-        audio_binding_snapshot_t s;
-        if(!audio_note_engine_adapter_snapshot_read(e,&s)
-                ||s.binding.bind_state!=TRACK_RUNTIME_BIND_BOUND
-                ||(s.flags&AUDIO_RUNTIME_FLAG_GROUP_CHILD)==0U
-                ||s.binding.mix_track_id>=MIXER_MAX_TRACKS)return 0U;
-        mixer_set_track_group_fx_level(s.binding.mix_track_id,
+        track_audio_runtime_ctx_t s;
+        if(!audio_note_engine_adapter_current_ctx(e,&s)
+                ||s.program_route.active==0U
+                ||(s.flags&CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD)==0U
+                ||s.program_route.mix_track_id>=MIXER_MAX_TRACKS)return 0U;
+        mixer_set_track_group_fx_level(s.program_route.mix_track_id,
             (id==PARAM_GROUP_FX_B_LEVEL)?1U:0U,clamp01(value));
         return 1U;
     }
     uint8_t owner;audio_fx_slot_t si;if(!audio_fx_owner(e,&owner))return 0U;
-    audio_binding_snapshot_t topology;
-    const uint8_t group_master=(uint8_t)(audio_note_engine_adapter_snapshot_read(e,&topology)
-        &&((topology.flags&AUDIO_RUNTIME_FLAG_GROUP_MASTER)!=0U));
+    track_audio_runtime_ctx_t topology;
+    const uint8_t group_master=(uint8_t)(audio_note_engine_adapter_current_ctx(e,&topology)
+        &&((topology.flags&CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER)!=0U));
     if(group_master!=0U&&(id==PARAM_AUDIO_FX_FILTER_POS||id==PARAM_AUDIO_FX_ORDER))return 0U;
     if(id==PARAM_AUDIO_FX_FILTER_POS){g_audio_fx_plan[owner].filter_pos=(value<0.5f)?0U:(value<1.5f)?1U:2U;rebuild_plan(owner);mixer_rebuild_static_plan();return 1U;}
     if(id==PARAM_AUDIO_FX_ORDER){g_audio_fx_plan[owner].order=(value<0.5f)?0U:1U;rebuild_plan(owner);mixer_rebuild_static_plan();return 1U;}

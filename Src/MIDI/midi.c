@@ -33,6 +33,7 @@
 #include "Keyboard/keyboard_runtime.h"
 #include "Seq/seq_runtime.h"
 #include "Core/live_clock.h"
+#include "Core/project_load_quiesce.h"
 #include <string.h>
 
 extern USBD_HandleTypeDef hUsbDeviceFS;
@@ -496,6 +497,13 @@ static bool usb_rx_queue_pop(midi_usb_packet_t *out) {
   return true;
 }
 
+void midi_rx_discard_pending(void) {
+  uint32_t primask = midi_enter_critical();
+  midi_usb_rx_tail = midi_usb_rx_head;
+  midi_usb_rx_count = 0U;
+  midi_exit_critical(primask);
+}
+
 /**
  * @brief Point d'entrée midi_usb_try_flush.
  *
@@ -924,6 +932,9 @@ void midi_internal_receive_with_timestamp(const uint8_t *msg, size_t len,
                                            uint32_t tim5_tick,
                                            uint32_t ingress_serial) {
   if ((msg == NULL) || (len == 0U)) {
+    return;
+  }
+  if (project_load_ingress_is_open() == 0U) {
     return;
   }
 
@@ -1924,6 +1935,9 @@ void midi_clock_tx_probe_snapshot(midi_clock_tx_probe_t *out) {
  */
 void midi_usb_rx_submit_from_isr(const uint8_t *packet, size_t len) {
   if ((packet == NULL) || (len < 4U)) {
+    return;
+  }
+  if (project_load_ingress_is_open() == 0U) {
     return;
   }
 

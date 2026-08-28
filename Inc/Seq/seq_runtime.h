@@ -154,4 +154,6 @@ uint32_t seq_runtime_get_rec_count_in_remaining_steps(void);
 uint32_t seq_runtime_get_tempo_bpm_milli(void);
 uint8_t seq_runtime_rec_is_pattern_pending_start(void);
 uint8_t seq_runtime_get_track_loop_generation(seq_track_id_t track, uint32_t *out_generation);
+uint8_t seq_runtime_get_track_next_loop_sample(seq_track_id_t track,
+                                               uint64_t *out_sample);
 #endif /* SEQ_RUNTIME_H */

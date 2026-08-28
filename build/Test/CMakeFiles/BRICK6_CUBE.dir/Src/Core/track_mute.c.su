@@ -1,0 +1,8 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_mute.c:26:6:track_mute_init	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_mute.c:30:19:track_mute_get_kind	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_mute.c:58:9:track_mute_is_available	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_mute.c:73:9:track_mute_get	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_mute.c:79:9:track_mute_is_effectively_muted	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_mute.c:108:9:track_mute_set	72	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_mute.c:163:9:track_mute_install_restored	48	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_mute.c:186:9:track_mute_should_suppress_note_on	8	static

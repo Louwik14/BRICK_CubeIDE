@@ -3,7 +3,7 @@
 #include <string.h>
 
 #include "Core/live_clock.h"
-#include "Core/live_parameter_audio_queue.h"
+#include "Core/live_parameter_audio_publication.h"
 #include "Core/live_parameter_migration.h"
 #include "Core/track_runtime.h"
 #include "Param/param_filter.h"
@@ -244,7 +244,7 @@ static uint8_t param_macro_apply_backend_value(uint8_t track, param_id_t param, 
         return 0U;
     }
 
-    if (resolved.descriptor.bind_state != TRACK_RUNTIME_BIND_BOUND)
+    if (resolved.descriptor.active == 0U)
     {
         return 0U;
     }
@@ -489,7 +489,7 @@ static void param_macro_recompute_sources(void)
     }
 
     if ((bulk.count != 0U)
-            && (live_parameter_audio_queue_submit_bulk(&bulk) == false))
+            && (live_parameter_audio_publication_submit_bulk(&bulk) == false))
     {
         return;
     }
@@ -596,7 +596,7 @@ uint8_t param_macro_apply_resolution(const param_macro_resolution_t *resolution)
                               resolution->param,
                               resolution->track,
                               resolution->resolved_value) == 0U)
-            || (live_parameter_audio_queue_submit_bulk(&bulk) == false))
+            || (live_parameter_audio_publication_submit_bulk(&bulk) == false))
     {
         return 0U;
     }

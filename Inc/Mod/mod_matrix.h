@@ -39,24 +39,11 @@ typedef struct
     float depth;
 } track_mod_matrix_slot_t;
 
-typedef struct
-{
-    track_mod_matrix_slot_t slots[MOD_MATRIX_SLOT_COUNT];
-    float min_value[MOD_MATRIX_SLOT_COUNT];
-    float max_value[MOD_MATRIX_SLOT_COUNT];
-    uint8_t multi_source[2][2];
-    uint8_t slew_source[2];
-    float slew_amount[2];
-    uint32_t slew_generation[2];
-    uint8_t drum_md_slot_count;
-} mod_matrix_control_snapshot_t;
-
-_Static_assert(sizeof(mod_matrix_control_snapshot_t) <= 256U,
-               "Matrix CONTROL/AUDIO snapshot must remain bounded and pointer-free");
-
 void mod_matrix_set_defaults(track_mod_matrix_slot_t slots[MOD_MATRIX_SLOT_COUNT], uint8_t *selected_slot);
-void mod_matrix_publish_control_snapshot_track(uint8_t track);
-void mod_matrix_publish_control_snapshot_all(void);
+uint8_t mod_matrix_publish_control_state_track(uint8_t track);
+void mod_matrix_control_batch_begin(void);
+uint8_t mod_matrix_control_batch_end(void);
+void mod_matrix_control_batch_abort(void);
 uint8_t mod_matrix_poly_route_mask(uint8_t track);
 
 uint8_t mod_matrix_set_selected_slot(uint8_t track, float value);
@@ -70,6 +57,7 @@ uint8_t mod_matrix_get_selected_slot_source(uint8_t track, float *out_value);
 uint8_t mod_matrix_set_slot_destination_index(uint8_t track, uint8_t slot, float value);
 uint8_t mod_matrix_set_slot_depth(uint8_t track, uint8_t slot, float value);
 uint8_t mod_matrix_set_slot_source(uint8_t track, uint8_t slot, float value);
+uint8_t mod_matrix_set_slot_enabled(uint8_t track, uint8_t slot, float value);
 uint8_t mod_matrix_set_slot_state(uint8_t track,
                                   uint8_t slot,
                                   uint8_t source,

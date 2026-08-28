@@ -138,8 +138,6 @@ uint8_t wavetable_pool_load_async_take_result(wavetable_result_t *out_result,
                                               const char **out_path);
 void wavetable_pool_clear(uint16_t wavetable_slot);
 void wavetable_pool_service_retire(void);
-void wavetable_pool_control_ack_retire(uint16_t wavetable_slot,
-                                       uint32_t generation);
 
 const wavetable_slot_t *wavetable_pool_get_slot(uint16_t wavetable_slot);
 wavetable_slot_state_t wavetable_pool_get_state(uint16_t wavetable_slot);

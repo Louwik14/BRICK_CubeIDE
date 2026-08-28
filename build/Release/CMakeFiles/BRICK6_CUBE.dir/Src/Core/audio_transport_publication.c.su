@@ -1,3 +1,6 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_transport_publication.c:12:6:audio_transport_publication_init	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_transport_publication.c:21:6:audio_transport_publication_refresh	40	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_transport_publication.c:58:9:audio_transport_publication_read	16	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_transport_publication.c:15:6:audio_transport_publication_init	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_transport_publication.c:25:6:audio_transport_publication_refresh	96	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_transport_publication.c:86:9:audio_transport_publication_read	16	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_transport_publication.c:105:9:audio_transport_publication_audio_set_running	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_transport_publication.c:113:9:audio_transport_publication_audio_set_tempo	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_transport_publication.c:121:9:audio_transport_publication_audio_set_step_q16	0	static

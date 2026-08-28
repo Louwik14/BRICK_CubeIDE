@@ -47,5 +47,13 @@ void audio_boot_init_binding_io(void);
  */
 uint8_t audio_start(void);
 void audio_stop(void);
-audio_init_state_t audio_get_init_state(void);
-board_audio_boot_error_t audio_get_boot_error(void);
+
+/* Exceptional physical boot diagnostic. Nominal CONTROL behavior must not
+ * depend on this publication. */
+typedef struct
+{
+    audio_init_state_t state;
+    board_audio_boot_error_t error;
+} audio_boot_diag_snapshot_t;
+
+void audio_boot_diag_read(audio_boot_diag_snapshot_t *out_diag);

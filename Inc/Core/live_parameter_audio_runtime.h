@@ -5,7 +5,12 @@
 
 void live_parameter_audio_runtime_init(void);
 
-/* Apply all events already due at the current audio sample. */
-uint16_t live_parameter_audio_runtime_apply_due(uint64_t now);
+/* Apply one final PARAM command at the current audio sample. */
+uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
+                                                 uint16_t parameter_id,
+                                                 uint32_t value_bits,
+                                                 uint8_t scope);
+
+void live_parameter_audio_runtime_initialize_program(uint8_t entity);
 
 #endif /* BRICK6_LIVE_PARAMETER_AUDIO_RUNTIME_H */

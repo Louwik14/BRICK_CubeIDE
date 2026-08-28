@@ -27,6 +27,7 @@
 #include "Audio/audio_waveform_capture.h"
 #include "Audio/audio_io.h"
 #include "Audio/audio_rec_level_snapshot.h"
+#include "Core/control_audio_program.h"
 
 #include "Audio/audio_xfade.h"
 #include "env_adsr.h"
@@ -42,7 +43,6 @@
 #include "Core/brick6_fm_runtime.h"
 #include "Core/synth_polyphony.h"
 #include "Core/track_runtime.h"
-#include "Core/mixer_routing_publication.h"
 #include "Core/audio_rec_bus_projection.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/multi_voice_dsp.h"
@@ -183,7 +183,6 @@ typedef struct
 } mixer_lane_plan_t;
 
 static mixer_audio_track_runtime_t g_tracks[MIXER_MAX_TRACKS];
-static uint32_t g_mixer_routing_audio_generation;
 static int8_t g_send_fx_slot[MIXER_NUM_SENDS];
 static AUDIO_HOT mixer_track_filter_t g_track_filters[MIXER_MAX_TRACKS];
 static uint32_t g_mixer_filter_config_version;
@@ -233,10 +232,10 @@ void mixer_rebuild_static_plan(void)
         track_audio_runtime_ctx_t ctx_value;
         const track_audio_runtime_ctx_t *const ctx =
             (entity < BRICK_ENTITY_CAPACITY)
-                && (audio_note_engine_adapter_audio_ctx_snapshot(
+                && (audio_note_engine_adapter_current_ctx(
                     entity, &ctx_value) != 0U) ? &ctx_value : NULL;
         if ((ctx != NULL)
-                && ((ctx->flags & AUDIO_RUNTIME_FLAG_GROUP_CHILD) != 0U))
+                && ((ctx->flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD) != 0U))
             flags |= MIXER_STATIC_GROUP_CHILD;
         if ((ctx != NULL)
                 && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
@@ -244,7 +243,7 @@ void mixer_rebuild_static_plan(void)
             flags |= MIXER_STATIC_LOOPER;
         if ((entity < BRICK_ENTITY_CAPACITY)
                 && ((ctx == NULL)
-                    || ((ctx->flags & AUDIO_RUNTIME_FLAG_GROUP_MASTER) == 0U))
+                    || ((ctx->flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER) == 0U))
                 && (fx_chain_audio_fx_is_active(entity) != 0U))
         {
             flags |= MIXER_STATIC_AUDIO_FX_ACTIVE;
@@ -270,27 +269,28 @@ void mixer_rebuild_static_plan(void)
 
     track_audio_runtime_ctx_t group_master_ctx_value;
     const track_audio_runtime_ctx_t *const group_master_ctx =
-        (audio_note_engine_adapter_audio_ctx_snapshot(
+        (audio_note_engine_adapter_current_ctx(
             BRICK_ENTITY_GROUP_MASTER_ID, &group_master_ctx_value) != 0U)
             ? &group_master_ctx_value : NULL;
     g_mixer_static_group_active = (uint8_t)((group_master_ctx != NULL)
-        && ((group_master_ctx->flags & AUDIO_RUNTIME_FLAG_GROUP_MASTER) != 0U));
+        && ((group_master_ctx->flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER) != 0U));
 }
 
-static __attribute__((noinline)) void mixer_routing_audio_apply_publication(void)
+uint8_t mixer_audio_set_route(uint8_t track, uint32_t route)
 {
-    mixer_routing_snapshot_t snapshot;
-    if (mixer_routing_publication_audio_read(
-            g_mixer_routing_audio_generation, &snapshot) == 0U)
-        return;
-    for (uint32_t track = 0U; track < MIXER_MAX_TRACKS; ++track)
-    {
-        g_tracks[track].route_master = snapshot.route_master[track];
-        for (uint32_t insert = 0U; insert < MIXER_INSERTS_PER_TRACK; ++insert)
-            g_tracks[track].insert_slot[insert] = snapshot.insert_slot[track][insert];
-    }
-    g_mixer_routing_audio_generation = snapshot.generation;
+    if (track >= MIXER_MAX_TRACKS) return 0U;
+    g_tracks[track].route_master = ((route & MIXER_ROUTE_MASTER) != 0U);
     mixer_rebuild_static_plan();
+    return 1U;
+}
+
+uint8_t mixer_audio_set_insert_slot(uint8_t track, uint8_t insert, int8_t slot)
+{
+    if ((track >= MIXER_MAX_TRACKS) || (insert >= MIXER_INSERTS_PER_TRACK))
+        return 0U;
+    g_tracks[track].insert_slot[insert] = slot;
+    mixer_rebuild_static_plan();
+    return 1U;
 }
 
 static void mixer_track_filter_process_biquad_stereo_block(mixer_track_filter_t *filter,
@@ -1076,7 +1076,6 @@ void mixer_rebind_track_states(const uint8_t *previous_mix_tracks,
         mixer_track_filter_rebind_dsp_storage(&g_track_filters[next_mix]);
     }
 
-    g_mixer_routing_audio_generation = 0U;
     mixer_external_inputs_clear();
     mixer_rebuild_static_plan();
 }
@@ -1129,7 +1128,6 @@ void mixer_rebind_track_state(uint8_t previous_mix_track, uint8_t next_mix_track
     {
         g_mixer_lane_rebind_count[previous_mix_track]++;
     }
-    g_mixer_routing_audio_generation = 0U;
     mixer_rebuild_static_plan();
 }
 
@@ -2257,7 +2255,6 @@ static void mixer_apply_delay_spectral_window(void)
 
 void mixer_reset_runtime_state(void)
 {
-    g_mixer_routing_audio_generation = 0U;
     mixer_reverb_state_reset_defaults();
     fx_reverb_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
     fx_reverb_global_set_wet(g_reverb.wet);
@@ -4076,8 +4073,6 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     AUDIO_HOT ALIGN32 static int32_t audio_rec_bus_i32[AUDIO_BLOCK_SIZE * AUDIO_RECORDER_CHANNELS];
     static uint8_t looper_output_active[MIXER_MAX_TRACKS];
 
-    mixer_routing_audio_apply_publication();
-    control_routing_audio_apply_publication();
     audio_rec_bus_control_snapshot_t audio_rec_projection = {0};
     const uint8_t audio_rec_projection_valid =
         audio_rec_bus_projection_audio_read(&audio_rec_projection);
@@ -4168,18 +4163,18 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         looper_mask &= (uint16_t)(looper_mask - 1U);
         track_audio_runtime_ctx_t ctx_value;
         const track_audio_runtime_ctx_t *const ctx =
-            (audio_note_engine_adapter_audio_ctx_snapshot(
+            (audio_note_engine_adapter_current_ctx(
                 logical_track, &ctx_value) != 0U) ? &ctx_value : NULL;
         if((ctx != 0)
-                && (ctx->audio_binding.mix_track_id < MIXER_MAX_TRACKS)
-                && ((g_mixer_static_lane_flags[ctx->audio_binding.mix_track_id]
+                && (ctx->program_route.mix_track_id < MIXER_MAX_TRACKS)
+                && ((g_mixer_static_lane_flags[ctx->program_route.mix_track_id]
                     & MIXER_STATIC_LOOPER) != 0U)
-                && (g_tracks[ctx->audio_binding.mix_track_id].mute == 0U)
+                && (g_tracks[ctx->program_route.mix_track_id].mute == 0U)
                 && (brick6_looper_runtime_is_playing(logical_track) != 0U))
         {
             looper_output_active[logical_track] = 1U;
             looper_playback_active = 1U;
-            if((g_mixer_static_lane_flags[ctx->audio_binding.mix_track_id]
+            if((g_mixer_static_lane_flags[ctx->program_route.mix_track_id]
                     & MIXER_STATIC_ROUTE_MAIN) != 0U)
             {
                 looper_playback_routes_main = 1U;

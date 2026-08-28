@@ -1,7 +1,6 @@
 #include "Core/live_clock.h"
 
 #include "Board/board_audio_format.h"
-#include "Audio/audio_note_engine_adapter.h"
 #include "Storage/memory_layout.h"
 #include "stm32h7xx_hal.h"
 
@@ -14,7 +13,9 @@ typedef struct
 
 D3_IPC static live_clock_state_t g_live_clock;
 static uint32_t g_tim5_hz;
-static uint32_t g_samples_per_tim5_tick_q32;
+static uint32_t g_tim5_origin_tick;
+static uint32_t g_tim5_last_tick;
+static uint64_t g_tim5_extended_ticks;
 
 static uint32_t live_clock_tim5_frequency(void)
 {
@@ -49,15 +50,27 @@ static void live_clock_exit_critical(uint32_t primask)
     __set_PRIMASK(primask);
 }
 
-static int64_t live_clock_round_q32(int64_t value)
+static int64_t live_clock_ticks_to_samples(int64_t ticks)
 {
-    const int64_t half = (int64_t)1 << 31;
-    if (value >= 0)
-    {
-        return (value + half) >> 32;
-    }
+    if (g_tim5_hz == 0U) return 0;
+    const int64_t whole = ticks / (int64_t)g_tim5_hz;
+    const int64_t remainder = ticks % (int64_t)g_tim5_hz;
+    const int64_t rounded = (remainder >= 0)
+        ? ((remainder * BOARD_AUDIO_SAMPLE_RATE_HZ + (g_tim5_hz / 2U))
+           / g_tim5_hz)
+        : -(((-remainder * BOARD_AUDIO_SAMPLE_RATE_HZ) + (g_tim5_hz / 2U))
+            / g_tim5_hz);
+    return whole * BOARD_AUDIO_SAMPLE_RATE_HZ + rounded;
+}
 
-    return -(((-value) + half) >> 32);
+static uint64_t live_clock_extend_tim5_now(uint32_t now_tick)
+{
+    const uint32_t primask = live_clock_enter_critical();
+    g_tim5_extended_ticks += (uint32_t)(now_tick - g_tim5_last_tick);
+    g_tim5_last_tick = now_tick;
+    const uint64_t extended = g_tim5_extended_ticks;
+    live_clock_exit_critical(primask);
+    return extended;
 }
 
 void live_clock_init(void)
@@ -66,31 +79,27 @@ void live_clock_init(void)
     const uint32_t primask = live_clock_enter_critical();
 
     g_tim5_hz = tim5_hz;
-    g_samples_per_tim5_tick_q32 = (tim5_hz != 0U)
-        ? ((((uint64_t)BOARD_AUDIO_SAMPLE_RATE_HZ << 32)
-            + ((uint64_t)tim5_hz / 2ULL)) / (uint64_t)tim5_hz)
-        : 0ULL;
     g_live_clock.value = (live_clock_anchor_t){0};
     g_live_clock.sequence = 0U;
     g_live_clock.valid = 0U;
+    g_tim5_origin_tick = TIM5->CNT;
+    g_tim5_last_tick = g_tim5_origin_tick;
+    g_tim5_extended_ticks = 0U;
 
     live_clock_exit_critical(primask);
 }
 
 void live_clock_audio_publish_anchor(uint64_t audio_sample)
 {
+    /* TIM5 and SAI share the HSE-derived clock tree.  The nominal contract is
+     * therefore one boot phase anchor; later IRQs only ensure it exists. */
+    if (g_live_clock.valid != 0U)
+        return;
     const uint32_t tim5_tick = TIM5->CNT;
     ++g_live_clock.sequence;
     __DMB();
     g_live_clock.value.tim5_tick = tim5_tick;
     g_live_clock.value.audio_sample = audio_sample;
-    for (brick_entity_id_t entity_id = 0U;
-         entity_id < (brick_entity_id_t)BRICK_ENTITY_CAPACITY;
-         ++entity_id)
-    {
-        g_live_clock.value.binding_generation[entity_id] =
-            audio_note_engine_adapter_installed_generation(entity_id);
-    }
     __DMB();
     g_live_clock.valid = 1U;
     ++g_live_clock.sequence;
@@ -130,13 +139,7 @@ bool live_clock_read_anchor(live_clock_anchor_t *out_anchor)
 
 bool live_clock_read_audio_sample(uint64_t *out_audio_sample)
 {
-    if (out_audio_sample == NULL)
-        return false;
-    live_clock_anchor_t anchor;
-    if (!live_clock_read_anchor(&anchor))
-        return false;
-    *out_audio_sample = anchor.audio_sample;
-    return true;
+    return live_clock_tim5_to_sample_time(TIM5->CNT, out_audio_sample);
 }
 
 uint64_t live_clock_audio_sample(void)
@@ -146,22 +149,10 @@ uint64_t live_clock_audio_sample(void)
     return sample;
 }
 
-bool live_clock_read_binding_generation(brick_entity_id_t entity_id,
-                                        uint32_t *out_generation)
-{
-    if ((out_generation == NULL) || (entity_id >= BRICK_ENTITY_CAPACITY))
-        return false;
-    live_clock_anchor_t anchor;
-    if (!live_clock_read_anchor(&anchor))
-        return false;
-    *out_generation = anchor.binding_generation[entity_id];
-    return true;
-}
-
 bool live_clock_tim5_to_sample_time(uint32_t capture_tick,
                                     uint64_t *out_sample_time)
 {
-    if ((out_sample_time == NULL) || (g_samples_per_tim5_tick_q32 == 0ULL))
+    if ((out_sample_time == NULL) || (g_tim5_hz == 0U))
     {
         return false;
     }
@@ -172,12 +163,17 @@ bool live_clock_tim5_to_sample_time(uint32_t capture_tick,
         return false;
     }
 
-    /* Signed modulo arithmetic handles captures immediately before or after
-     * the latest audio boundary, including a TIM5 wrap. */
-    const int32_t delta_ticks = (int32_t)(capture_tick - anchor.tim5_tick);
-    const int64_t delta_q32 = (int64_t)delta_ticks
-                            * (int64_t)g_samples_per_tim5_tick_q32;
-    const int64_t delta_samples = live_clock_round_q32(delta_q32);
+    /* CONTROL extends TIM5 monotonically; capture_tick only needs to be near
+     * the current tick. This keeps a single boot anchor valid across wraps. */
+    const uint32_t now_tick = TIM5->CNT;
+    const uint64_t now_extended = live_clock_extend_tim5_now(now_tick);
+    const int32_t capture_from_now = (int32_t)(capture_tick - now_tick);
+    const uint64_t anchor_extended = (uint32_t)(anchor.tim5_tick
+                                                - g_tim5_origin_tick);
+    const int64_t delta_ticks = (int64_t)now_extended
+                              + (int64_t)capture_from_now
+                              - (int64_t)anchor_extended;
+    const int64_t delta_samples = live_clock_ticks_to_samples(delta_ticks);
 
     *out_sample_time = (delta_samples >= 0)
         ? anchor.audio_sample + (uint64_t)delta_samples

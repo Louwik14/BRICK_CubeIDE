@@ -1,12 +1,4 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:10:6:param_registry_control_shadow_init	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:16:9:param_registry_control_shadow_ui_value_get	4	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:36:9:param_registry_control_shadow_get	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:48:6:param_registry_control_shadow_set	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:59:6:param_registry_control_shadow_mark_pending	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:68:6:param_registry_control_shadow_set_pending	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:74:6:param_registry_control_shadow_set_pending_global	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:85:6:param_registry_control_shadow_mark_published	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:94:9:param_registry_control_shadow_is_pending	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:102:9:param_registry_control_shadow_is_pending_global	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:110:6:param_registry_control_shadow_clear_track	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:121:9:param_registry_control_shadow_get_or_default	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:15:9:param_registry_control_value_get	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:24:6:param_registry_control_value_set	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:31:6:param_registry_control_values_reset_track	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:9:6:param_registry_control_values_init	8	static

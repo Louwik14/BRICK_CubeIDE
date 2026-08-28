@@ -8,7 +8,6 @@
 #include "Core/track_mute.h"
 #include "Core/track_runtime.h"
 #include "Core/track_sound_state.h"
-#include "Core/track_tone_sound_state.h"
 #include "Core/track_state.h"
 #include "Mod/mod_destination_catalog.h"
 #include "Mod/mod_env3.h"
@@ -17,6 +16,7 @@
 #include "NoteFx/note_fx_pipeline.h"
 #include "NoteFx/note_fx_state.h"
 #include "Param/param_registry.h"
+#include "Param/param_registry_runtime_state.h"
 #include "Seq/seq_model.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_runtime.h"
@@ -27,9 +27,6 @@
 #include <math.h>
 #include <string.h>
 
-static uint8_t g_restore_control_install;
-static uint8_t g_restore_control_projection_valid;
-
 static uint8_t capture_play(uint8_t entity,uint8_t step,persist_control_step_t*out){uint8_t cap=seq_model_play_capacity(entity);out->play_count=0U;for(uint8_t v=0U;v<cap;++v){persist_control_play_item_t*p=&out->play[v];int16_t x;if(seq_model_play_get(entity,step,v,SEQ_STEP_PLAY_FIELD_NOTE,&x)!=0U){p->note=(uint8_t)x;p->present_mask|=SEQ_STEP_PLAY_PRESENT_NOTE;}if(seq_model_play_get(entity,step,v,SEQ_STEP_PLAY_FIELD_VELOCITY,&x)!=0U){p->velocity=(uint8_t)x;p->present_mask|=SEQ_STEP_PLAY_PRESENT_VELOCITY;}if(seq_model_play_get(entity,step,v,SEQ_STEP_PLAY_FIELD_LENGTH,&x)!=0U){p->length=(uint8_t)x;p->present_mask|=SEQ_STEP_PLAY_PRESENT_LENGTH;}if(seq_model_play_get(entity,step,v,SEQ_STEP_PLAY_FIELD_MICROTIMING,&x)!=0U){p->microtiming=(int8_t)x;p->present_mask|=SEQ_STEP_PLAY_PRESENT_MICROTIMING;}if(p->present_mask!=0U)out->play_count=(uint8_t)(v+1U);}return 1U;}
 static uint8_t capture_plock_value(param_id_t id,seq_value16_t raw,persist_control_step_lock_t*out){const float value=seq_param_iface_decode_param_value(id,raw);out->kind=PERSIST_VALUE_FLOAT32;out->value.f32=value;if(id==PARAM_LFO1_SHAPE||id==PARAM_LFO2_SHAPE||id==PARAM_LFO3_SHAPE){out->kind=PERSIST_VALUE_U32;return persist_key_lfo_shape_to_disk((mod_lfo_shape_t)(uint8_t)(value+0.5f),&out->value.u32);}if(id==PARAM_LFO1_TRIG||id==PARAM_LFO2_TRIG||id==PARAM_LFO3_TRIG){out->kind=PERSIST_VALUE_U32;return persist_key_lfo_trigger_to_disk((mod_lfo_trig_mode_t)(uint8_t)(value+0.5f),&out->value.u32);}if(id==PARAM_MIDI_FX_S1_MODEL||id==PARAM_MIDI_FX_S2_MODEL||id==PARAM_MIDI_FX_S3_MODEL){out->kind=PERSIST_VALUE_U32;return persist_key_note_fx_to_disk((note_fx_model_t)(uint8_t)(value+0.5f),&out->value.u32);}return 1U;}
 static uint8_t capture_sequence(uint8_t entity,persist_control_entity_t*out){out->sequence.length=seq_model_get_track_length(entity);(void)seq_runtime_get_track_div(entity,&out->sequence.division);(void)seq_runtime_get_track_quant(entity,&out->sequence.quantization);(void)seq_runtime_get_track_swing(entity,&out->sequence.swing);for(uint8_t s=0U;s<PERSIST_CONTROL_STEP_COUNT;++s){persist_control_step_t*step=&out->sequence.steps[s];step->trigger=seq_model_get_trig(entity,s);step->roll=seq_model_get_step_roll(entity,s);if(capture_play(entity,s,step)==0U)return 0U;step->lock_count=seq_model_step_param_plock_count(entity,s);for(uint8_t i=0U;i<step->lock_count;++i){seq_plock_entry_t raw;param_id_t id;if(seq_model_step_param_plock_get_at(entity,s,i,&raw)==0U||seq_param_iface_slot_to_param(entity,raw.set_id,raw.param_slot,&id)==0U||persist_key_param_to_disk(id,&step->locks[i].parameter)==0U||capture_plock_value(id,raw.value16,&step->locks[i])==0U)return 0U;step->locks[i].flags=raw.flags;}}return 1U;}
@@ -38,17 +35,11 @@ static uint8_t capture_one_param(uint8_t entity,persist_control_entity_t*out,par
 static uint8_t capture_params(uint8_t entity,persist_control_entity_t*out){for(uint8_t order=0U;order<14U;++order)if(capture_one_param(entity,out,param_registry_get_audio_fx_param(order))==0U)return 0U;for(param_id_t id=0U;id<PARAM_COUNT;++id)if(param_registry_is_audio_fx_param(id)==0U&&capture_one_param(entity,out,id)==0U)return 0U;return 1U;}
 static uint8_t capture_mod(uint8_t owner,persist_control_modulation_t*out)
 {
-    track_sound_state_t defaults;
     const track_sound_state_t*s=track_sound_state_get_const(owner);
-    if(track_state_get_family(owner)==UI_TRACK_FAMILY_OFF)
-    {
-        track_sound_state_make_default(&defaults);
-        s=&defaults;
-    }
     if(s==NULL)return 0U;
-    for(uint8_t i=0U;i<PERSIST_CONTROL_MOD_LFO_COUNT;++i){out->lfos[i].rate=s->mod_lfo[i].rate;out->lfos[i].phase_offset=s->mod_lfo[i].phase;if(persist_key_lfo_shape_to_disk((mod_lfo_shape_t)(uint8_t)s->mod_lfo[i].shape,&out->lfos[i].shape_key)==0U||persist_key_lfo_trigger_to_disk((mod_lfo_trig_mode_t)(uint8_t)s->mod_lfo[i].trig,&out->lfos[i].trigger_key)==0U)return 0U;}
-    for(uint8_t i=0U;i<2U;++i){if(persist_key_mod_source_to_disk(s->mod_multi[i].source_a,&out->multi[i].source_a_key)==0U||persist_key_mod_source_to_disk(s->mod_multi[i].source_b,&out->multi[i].source_b_key)==0U||persist_key_mod_source_to_disk(s->mod_slew[i].source,&out->slew[i].source_key)==0U)return 0U;out->slew[i].amount=s->mod_slew[i].amount;}
-    out->envelope=(persist_control_mod_envelope_t){s->mod_env3.attack,s->mod_env3.decay,s->mod_env3.sustain,s->mod_env3.release,(uint8_t)(s->env_retrig_mod>=0.5f)};
+    for(uint8_t i=0U;i<PERSIST_CONTROL_MOD_LFO_COUNT;++i){float shape=0.0f,trig=0.0f;const param_id_t base=(param_id_t)(PARAM_LFO1_RATE+i*4U);if(param_registry_get_track_value(base,owner,&out->lfos[i].rate)==0U||param_registry_get_track_value((param_id_t)(base+1U),owner,&shape)==0U||param_registry_get_track_value((param_id_t)(base+2U),owner,&trig)==0U||param_registry_get_track_value((param_id_t)(base+3U),owner,&out->lfos[i].phase_offset)==0U||persist_key_lfo_shape_to_disk((mod_lfo_shape_t)(uint8_t)shape,&out->lfos[i].shape_key)==0U||persist_key_lfo_trigger_to_disk((mod_lfo_trig_mode_t)(uint8_t)trig,&out->lfos[i].trigger_key)==0U)return 0U;}
+    for(uint8_t i=0U;i<2U;++i){float a=0.0f,b=0.0f,source=0.0f;const param_id_t multi=(param_id_t)(PARAM_MOD_MULTI_1_A+i*2U);const param_id_t slew=(param_id_t)(PARAM_MOD_SLEW_1_SOURCE+i*2U);if(param_registry_get_track_value(multi,owner,&a)==0U||param_registry_get_track_value((param_id_t)(multi+1U),owner,&b)==0U||param_registry_get_track_value(slew,owner,&source)==0U||param_registry_get_track_value((param_id_t)(slew+1U),owner,&out->slew[i].amount)==0U||persist_key_mod_source_to_disk((uint8_t)a,&out->multi[i].source_a_key)==0U||persist_key_mod_source_to_disk((uint8_t)b,&out->multi[i].source_b_key)==0U||persist_key_mod_source_to_disk((uint8_t)source,&out->slew[i].source_key)==0U)return 0U;}
+    float retrig=0.0f; if(param_registry_get_track_value(PARAM_ENV3_ATTACK,owner,&out->envelope.attack)==0U||param_registry_get_track_value(PARAM_ENV3_DECAY,owner,&out->envelope.decay)==0U||param_registry_get_track_value(PARAM_ENV3_SUSTAIN,owner,&out->envelope.sustain)==0U||param_registry_get_track_value(PARAM_ENV3_RELEASE,owner,&out->envelope.release)==0U||param_registry_get_track_value(PARAM_ENV_RETRIG_MOD,owner,&retrig)==0U)return 0U;out->envelope.retrigger_hard=(uint8_t)(retrig>=0.5f);
     for(uint8_t i=0U;i<PERSIST_CONTROL_MOD_ROUTE_COUNT;++i){const track_mod_matrix_slot_t*r=&s->mod_matrix[i];persist_control_mod_route_t*d=&out->routes[i];if(persist_key_mod_source_to_disk(r->source,&d->source_key)==0U)return 0U;uint8_t entity;param_id_t param;if(r->destination==MOD_DESTINATION_NONE){d->destination_entity=owner;d->destination_parameter=PERSIST_CONTROL_KEY_NONE;d->enabled=0U;}else if(mod_destination_address_resolve(r->destination,&entity,&param)==0U||persist_key_mod_destination_to_disk(entity,param,&d->destination_entity,&d->destination_parameter)==0U)return 0U;d->depth=r->depth;d->enabled=r->enabled;}
     return 1U;
 }
@@ -70,114 +61,21 @@ static uint8_t apply_sequence(uint8_t e,const persist_control_entity_t*x){seq_mo
 static uint8_t apply_note_fx(uint8_t e,uint8_t active,const persist_control_entity_t*x){persist_entity_caps_t caps;if(persist_entity_caps_resolve(active,e,&caps)==0U)return 0U;if(caps.note_fx_owner==0U)return x->note_fx_count==0U;note_fx_track_state_t state;memset(&state,0,sizeof(state));for(uint8_t slot=0U;slot<x->note_fx_count;++slot){note_fx_model_t model;if(persist_key_note_fx_from_disk(x->note_fx[slot].model_key,&model)==0U)return 0U;memcpy(state.value[slot],x->note_fx[slot].values,NOTE_FX_PARAM_COUNT);state.value[slot][3U]=(uint8_t)model;}if(note_fx_state_restore_track(e,&state)==0U)return 0U;return note_fx_pipeline_sync_track(e);}
 static uint8_t apply_track_param(uint8_t entity,param_id_t id,float value)
 {
-    if ((g_restore_control_install != 0U)
-            && (param_registry_track_value_is_audio_command(id,entity) != 0U))
-    {
-        param_registry_prepared_value_t prepared;
-        return (uint8_t)((param_registry_prepare_value(id,value,&prepared) != 0U)
-            && (param_registry_install_prepared_track_control_target(
-                    &prepared,entity) != 0U));
-    }
+    param_registry_prepared_value_t prepared;
+    float current=0.0f;
+    if(param_registry_prepare_value(id,value,&prepared)==0U)return 0U;
+    if(param_registry_get_track_value(id,entity,&current)!=0U
+            && current==prepared.value)return 1U;
     return param_registry_apply_track_value(id,entity,value);
 }
 static uint8_t apply_one_entity_param(uint8_t entity,const persist_control_entity_t*x,param_id_t wanted){for(uint16_t i=0U;i<x->parameter_count;++i){param_id_t id;if(persist_key_param_from_disk(x->parameters[i].key,&id)==0U)return 0U;if(id==wanted){if(track_runtime_get_effective_param_status(entity,id)!=TRACK_RUNTIME_PARAM_ALLOWED)return 1U;return apply_track_param(entity,id,x->parameters[i].value.f32);}}return 1U;}
 static uint8_t apply_entity_params(uint8_t entity,const persist_control_entity_t*x){for(uint8_t order=0U;order<14U;++order)if(apply_one_entity_param(entity,x,param_registry_get_audio_fx_param(order))==0U)return 0U;for(uint16_t i=0U;i<x->parameter_count;++i){param_id_t id;if(persist_key_param_from_disk(x->parameters[i].key,&id)==0U)return 0U;if(param_registry_is_audio_fx_param(id)!=0U)continue;if(apply_track_param(entity,id,x->parameters[i].value.f32)==0U)return 0U;}return 1U;}
-static uint8_t apply_mod(uint8_t owner,uint8_t active,const persist_control_modulation_t*m){for(uint8_t i=0U;i<3U;++i){mod_lfo_shape_t shape;mod_lfo_trig_mode_t trig;if(persist_key_lfo_shape_from_disk(m->lfos[i].shape_key,&shape)==0U||persist_key_lfo_trigger_from_disk(m->lfos[i].trigger_key,&trig)==0U||mod_lfo_v1_set_track_param(owner,i,MOD_LFO_PARAM_RATE,m->lfos[i].rate)==0U||mod_lfo_v1_set_track_param(owner,i,MOD_LFO_PARAM_SHAPE,(float)shape)==0U||mod_lfo_v1_set_track_param(owner,i,MOD_LFO_PARAM_TRIG,(float)trig)==0U||mod_lfo_v1_set_track_param(owner,i,MOD_LFO_PARAM_PHASE,m->lfos[i].phase_offset)==0U)return 0U;}for(uint8_t i=0U;i<2U;++i){uint8_t a,b,s;if(persist_key_mod_source_from_disk(m->multi[i].source_a_key,&a)==0U||persist_key_mod_source_from_disk(m->multi[i].source_b_key,&b)==0U||persist_key_mod_source_from_disk(m->slew[i].source_key,&s)==0U||mod_matrix_set_multi_source(owner,i,0U,(float)a)==0U||mod_matrix_set_multi_source(owner,i,1U,(float)b)==0U||mod_matrix_set_slew_source(owner,i,(float)s)==0U||mod_matrix_set_slew_amount(owner,i,m->slew[i].amount)==0U)return 0U;}if(apply_track_param(owner,PARAM_ENV3_ATTACK,m->envelope.attack)==0U||apply_track_param(owner,PARAM_ENV3_DECAY,m->envelope.decay)==0U||apply_track_param(owner,PARAM_ENV3_SUSTAIN,m->envelope.sustain)==0U||apply_track_param(owner,PARAM_ENV3_RELEASE,m->envelope.release)==0U||apply_track_param(owner,PARAM_ENV_RETRIG_MOD,(float)m->envelope.retrigger_hard)==0U)return 0U;for(uint8_t i=0U;i<8U;++i){const persist_control_mod_route_t*r=&m->routes[i];mod_destination_address_t address=MOD_DESTINATION_NONE;uint8_t source;if(persist_key_mod_source_from_disk(r->source_key,&source)==0U)return 0U;if(r->destination_parameter!=PERSIST_CONTROL_KEY_NONE){uint8_t entity;param_id_t param;if(persist_key_mod_destination_from_disk(r->destination_entity,r->destination_parameter,active,&entity,&param)==0U)return 0U;address=mod_destination_address_make(entity,param);}if(mod_matrix_set_slot_state(owner,i,source,address,r->depth,r->enabled)==0U)return 0U;}return 1U;}
+static uint8_t apply_mod(uint8_t owner,uint8_t active,const persist_control_modulation_t*m){for(uint8_t i=0U;i<3U;++i){mod_lfo_shape_t shape;mod_lfo_trig_mode_t trig;const param_id_t base=(param_id_t)(PARAM_LFO1_RATE+(i*4U));if(persist_key_lfo_shape_from_disk(m->lfos[i].shape_key,&shape)==0U||persist_key_lfo_trigger_from_disk(m->lfos[i].trigger_key,&trig)==0U||apply_track_param(owner,base,m->lfos[i].rate)==0U||apply_track_param(owner,(param_id_t)(base+1U),(float)shape)==0U||apply_track_param(owner,(param_id_t)(base+2U),(float)trig)==0U||apply_track_param(owner,(param_id_t)(base+3U),m->lfos[i].phase_offset)==0U)return 0U;}for(uint8_t i=0U;i<2U;++i){uint8_t a,b,s;if(persist_key_mod_source_from_disk(m->multi[i].source_a_key,&a)==0U||persist_key_mod_source_from_disk(m->multi[i].source_b_key,&b)==0U||persist_key_mod_source_from_disk(m->slew[i].source_key,&s)==0U||mod_matrix_set_multi_source(owner,i,0U,(float)a)==0U||mod_matrix_set_multi_source(owner,i,1U,(float)b)==0U||mod_matrix_set_slew_source(owner,i,(float)s)==0U||mod_matrix_set_slew_amount(owner,i,m->slew[i].amount)==0U)return 0U;}if(apply_track_param(owner,PARAM_ENV3_ATTACK,m->envelope.attack)==0U||apply_track_param(owner,PARAM_ENV3_DECAY,m->envelope.decay)==0U||apply_track_param(owner,PARAM_ENV3_SUSTAIN,m->envelope.sustain)==0U||apply_track_param(owner,PARAM_ENV3_RELEASE,m->envelope.release)==0U||apply_track_param(owner,PARAM_ENV_RETRIG_MOD,(float)m->envelope.retrigger_hard)==0U)return 0U;for(uint8_t i=0U;i<8U;++i){const persist_control_mod_route_t*r=&m->routes[i];mod_destination_address_t address=MOD_DESTINATION_NONE;uint8_t source;if(persist_key_mod_source_from_disk(r->source_key,&source)==0U)return 0U;if(r->destination_parameter!=PERSIST_CONTROL_KEY_NONE){uint8_t entity;param_id_t param;if(persist_key_mod_destination_from_disk(r->destination_entity,r->destination_parameter,active,&entity,&param)==0U)return 0U;address=mod_destination_address_make(entity,param);}if(mod_matrix_set_slot_state(owner,i,source,address,r->depth,r->enabled)==0U)return 0U;}return 1U;}
 
-static void reset_control_defaults(void)
-{
-    for(uint8_t e=0U;e<PERSIST_CONTROL_ENTITY_COUNT;++e)
-    {
-        track_sound_state_t *sound=track_sound_state_get(e);
-        track_tone_sound_state_t *tone=track_tone_sound_state_get(e);
-        param_registry_clear_track_runtime_state(e);
-        if(sound!=NULL)track_sound_state_make_default(sound);
-        if(tone!=NULL)track_tone_sound_state_make_default(tone);
-        mod_lfo_v1_publish_control_snapshot_track(e);
-        mod_env3_control_publish_snapshot_track(e, 1U);
-    }
-    for(param_id_t id=0U;id<PARAM_COUNT;++id)
-    {
-        persist_param_descriptor_t d;
-        if(persist_key_param_descriptor(id,&d)==0U||d.persistent==0U)continue;
-        if(d.scope==PERSIST_PARAM_SCOPE_GLOBAL)
-        {
-            if ((g_restore_control_install != 0U)
-                    && ((live_parameter_is_audio_owned(id) != 0U)
-                        || (id == PARAM_MASTER_GAIN)))
-            {
-                param_registry_prepared_value_t prepared;
-                if (param_registry_prepare_value(id,param_registry[id].default_value,
-                                                 &prepared) != 0U)
-                    (void)param_registry_install_prepared_global_control_target(&prepared);
-            }
-            else param_set(id,param_registry[id].default_value);
-        }
-    }
-}
-
-static void persistent_restore_track_runtime_invalidate_all(void)
-{
-    if (g_restore_control_install == 0U) track_runtime_invalidate_all();
-}
-
-static void persistent_restore_track_runtime_refresh_all(void)
-{
-    if (g_restore_control_install == 0U) track_runtime_refresh_all();
-    else g_restore_control_projection_valid=
-        track_runtime_install_restored_projection();
-}
-
-static void persistent_restore_param_set(param_id_t id,float value)
-{
-    if ((g_restore_control_install != 0U)
-            && ((live_parameter_is_audio_owned(id) != 0U)
-                || (id == PARAM_MASTER_GAIN)))
-    {
-        param_registry_prepared_value_t prepared;
-        if (param_registry_prepare_value(id,value,&prepared) != 0U)
-            (void)param_registry_install_prepared_global_control_target(&prepared);
-        return;
-    }
-    param_set(id,value);
-}
-
-static uint8_t persistent_restore_track_mute_set(uint8_t track,uint8_t muted)
-{
-    if (g_restore_control_install != 0U)
-        return track_mute_install_restored(track,muted);
-    return track_mute_set(track,muted);
-}
-
-static uint8_t persistent_restore_migrate_legacy_modfx_banks(void)
-{
-    return (g_restore_control_install != 0U)
-        ? param_registry_install_legacy_modfx_control_targets()
-        : param_registry_migrate_legacy_modfx_banks();
-}
-
-#define track_runtime_invalidate_all persistent_restore_track_runtime_invalidate_all
-#define track_runtime_refresh_all persistent_restore_track_runtime_refresh_all
-#define param_set persistent_restore_param_set
-#define track_mute_set persistent_restore_track_mute_set
-#define param_registry_migrate_legacy_modfx_banks persistent_restore_migrate_legacy_modfx_banks
-
-persist_codec_result_t persistent_pattern_control_apply(const persist_control_pattern_t*p,uint8_t resume){persist_codec_result_t vr=persistent_pattern_control_validate(p);if(vr!=PERSIST_CODEC_OK)return vr;uint8_t was=seq_runtime_is_running();seq_runtime_stop();const uint8_t active=(p->entities[7].type==PERSIST_TYPE_GROUP)?1U:0U;uint8_t fam[16],type[16],midi[16],src[16],input[8];for(uint8_t e=0U;e<16U;++e){ui_track_family_t f;ui_track_type_t t;ui_track_midi_source_t ms;(void)persist_key_family_from_disk(p->entities[e].family,&f);(void)persist_key_type_from_disk(p->entities[e].type,&t);(void)persist_key_midi_source_from_disk(p->entities[e].midi_source_key,&ms);fam[e]=(uint8_t)f;type[e]=(uint8_t)t;midi[e]=p->entities[e].midi_channel;src[e]=(uint8_t)ms;if(e<8U)(void)persist_key_input_from_disk(p->entities[e].input_key,&input[e]);}if(!track_state_apply_entity_bulk_with_inputs(fam,type,midi,src,input))return PERSIST_CODEC_INVALID_ENTITY;reset_control_defaults();track_runtime_invalidate_all();track_runtime_refresh_all();if(g_restore_control_install!=0U&&g_restore_control_projection_valid==0U)return PERSIST_CODEC_INVALID_ENTITY;note_fx_state_init();if(note_fx_pipeline_reset_all_runtime_overrides()==0U)return PERSIST_CODEC_INVALID_ENTITY;seq_model_init_defaults();param_registry_batch_begin();for(uint8_t e=0U;e<16U;++e){entity_topology_descriptor_t topo;(void)entity_topology_resolve(active,e,&topo);if(topo.active==0U)continue;const persist_control_entity_t*x=&p->entities[e];if(apply_entity_params(e,x)==0U){param_registry_batch_end();return PERSIST_CODEC_UNKNOWN_KEY;}if(track_mute_set(e,x->muted)==0U||apply_sequence(e,x)==0U||apply_note_fx(e,active,x)==0U){param_registry_batch_end();return PERSIST_CODEC_INVALID_ENTITY;}}uint8_t has_modfx_precise=0U,has_modfx_legacy=0U;for(uint16_t i=0U;i<p->globals.parameter_count;++i){param_id_t id;if(persist_key_param_from_disk(p->globals.parameters[i].key,&id)==0U){param_registry_batch_end();return PERSIST_CODEC_UNKNOWN_KEY;}if(id>=PARAM_MODFX_RATE&&id<=PARAM_MODFX_WIDTH)has_modfx_precise=1U;if(id>=PARAM_MODFX_BANK_DAISY_STEREO_AB&&id<=PARAM_MODFX_BANK_JUNOLOGUE_CD)has_modfx_legacy=1U;param_set(id,p->globals.parameters[i].value.f32);}if(has_modfx_legacy!=0U&&has_modfx_precise==0U)(void)param_registry_migrate_legacy_modfx_banks();param_registry_batch_end();for(uint8_t e=0U;e<16U;++e)if(p->entities[e].modulation_present!=0U&&apply_mod(e,active,&p->entities[e].modulation)==0U)return PERSIST_CODEC_INVALID_MODULATION;for(uint8_t d=0U;d<16U;++d)for(uint8_t s=0U;s<16U;++s)(void)control_routing_set_looper_source(d,s,0U);for(uint16_t i=0U;i<p->route_count;++i)if(control_routing_set_looper_source(p->routes[i].destination,p->routes[i].source,p->routes[i].enabled)==0U)return PERSIST_CODEC_INVALID_ENTITY;seq_runtime_set_tempo_bpm_milli(p->globals.tempo_milli_bpm);seq_clock_src_t clock;uint8_t mode;if(persist_key_clock_from_disk(p->globals.clock_source_key,&clock)==0U||persist_key_record_start_from_disk(p->globals.record_start_key,&mode)==0U)return PERSIST_CODEC_UNKNOWN_KEY;seq_runtime_set_clock_source(clock);seq_runtime_set_rec_start_mode(mode);if(persist_key_record_length_from_disk(p->globals.record_length_key,&mode)==0U)return PERSIST_CODEC_UNKNOWN_KEY;seq_runtime_set_rec_len_mode(mode);ui_active_track_sync_full_after_global_restore();undo_v2_invalidate_history();if(resume!=0U&&was!=0U)seq_runtime_start();return PERSIST_CODEC_OK;}
-
-#undef track_runtime_invalidate_all
-#undef track_runtime_refresh_all
-#undef param_set
-#undef track_mute_set
-#undef param_registry_migrate_legacy_modfx_banks
+persist_codec_result_t persistent_pattern_control_apply(const persist_control_pattern_t*p,uint8_t resume){persist_codec_result_t vr=persistent_pattern_control_validate(p);if(vr!=PERSIST_CODEC_OK)return vr;uint8_t was=seq_runtime_is_running();seq_runtime_stop();const uint8_t active=(p->entities[7].type==PERSIST_TYPE_GROUP)?1U:0U;uint8_t fam[16],type[16],midi[16],src[16],input[8];for(uint8_t e=0U;e<16U;++e){ui_track_family_t f;ui_track_type_t t;ui_track_midi_source_t ms;(void)persist_key_family_from_disk(p->entities[e].family,&f);(void)persist_key_type_from_disk(p->entities[e].type,&t);(void)persist_key_midi_source_from_disk(p->entities[e].midi_source_key,&ms);fam[e]=(uint8_t)f;type[e]=(uint8_t)t;midi[e]=p->entities[e].midi_channel;src[e]=(uint8_t)ms;if(e<8U)(void)persist_key_input_from_disk(p->entities[e].input_key,&input[e]);}if(!track_state_apply_entity_bulk_with_inputs(fam,type,midi,src,input))return PERSIST_CODEC_INVALID_ENTITY;track_runtime_rebuild_all();param_registry_batch_begin();for(uint8_t e=0U;e<16U;++e){entity_topology_descriptor_t topo;(void)entity_topology_resolve(active,e,&topo);if(topo.active==0U)continue;const persist_control_entity_t*x=&p->entities[e];if(apply_entity_params(e,x)==0U){param_registry_batch_end();return PERSIST_CODEC_UNKNOWN_KEY;}if(track_mute_set(e,x->muted)==0U||apply_sequence(e,x)==0U||apply_note_fx(e,active,x)==0U){param_registry_batch_end();return PERSIST_CODEC_INVALID_ENTITY;}}uint8_t has_modfx_precise=0U,has_modfx_legacy=0U;for(uint16_t i=0U;i<p->globals.parameter_count;++i){param_id_t id;if(persist_key_param_from_disk(p->globals.parameters[i].key,&id)==0U){param_registry_batch_end();return PERSIST_CODEC_UNKNOWN_KEY;}if(id>=PARAM_MODFX_RATE&&id<=PARAM_MODFX_WIDTH)has_modfx_precise=1U;if(id>=PARAM_MODFX_BANK_DAISY_STEREO_AB&&id<=PARAM_MODFX_BANK_JUNOLOGUE_CD)has_modfx_legacy=1U;param_registry_prepared_value_t prepared;if(param_registry_prepare_value(id,p->globals.parameters[i].value.f32,&prepared)==0U){param_registry_batch_end();return PERSIST_CODEC_INVALID_ENTITY;}if(param_get(id)!=prepared.value)param_set(id,prepared.value);}if(has_modfx_legacy!=0U&&has_modfx_precise==0U&&param_registry_migrate_legacy_modfx_banks()==0U){param_registry_batch_end();return PERSIST_CODEC_INVALID_ENTITY;}param_registry_batch_end();for(uint8_t e=0U;e<16U;++e){entity_topology_descriptor_t topo;(void)entity_topology_resolve(active,e,&topo);if(topo.active==0U)continue;if(p->entities[e].modulation_present!=0U&&apply_mod(e,active,&p->entities[e].modulation)==0U)return PERSIST_CODEC_INVALID_MODULATION;}uint8_t routes[BRICK_ENTITY_CAPACITY][BRICK_ENTITY_CAPACITY]={0};for(uint16_t i=0U;i<p->route_count;++i){const persist_control_route_t*r=&p->routes[i];if((r->destination>=BRICK_ENTITY_CAPACITY)||(r->source>=BRICK_ENTITY_CAPACITY)||(r->destination==r->source))return PERSIST_CODEC_INVALID_ENTITY;routes[r->destination][r->source]=(r->enabled!=0U)?1U:0U;}if(control_routing_apply_bulk(routes)==0U)return PERSIST_CODEC_INVALID_ENTITY;seq_runtime_set_tempo_bpm_milli(p->globals.tempo_milli_bpm);seq_clock_src_t clock;uint8_t mode;if(persist_key_clock_from_disk(p->globals.clock_source_key,&clock)==0U||persist_key_record_start_from_disk(p->globals.record_start_key,&mode)==0U)return PERSIST_CODEC_UNKNOWN_KEY;seq_runtime_set_clock_source(clock);seq_runtime_set_rec_start_mode(mode);if(persist_key_record_length_from_disk(p->globals.record_length_key,&mode)==0U)return PERSIST_CODEC_UNKNOWN_KEY;seq_runtime_set_rec_len_mode(mode);ui_active_track_sync_full_after_global_restore();undo_v2_invalidate_history();if(resume!=0U&&was!=0U)seq_runtime_start();return PERSIST_CODEC_OK;}
 
 persist_codec_result_t persistent_pattern_control_install_restored(
     const persist_control_pattern_t *pattern,uint8_t resume_transport)
 {
-    if (g_restore_control_install != 0U) return PERSIST_CODEC_INVALID_ARGUMENT;
-    g_restore_control_projection_valid=0U;
-    g_restore_control_install=1U;
-    const persist_codec_result_t result=
-        persistent_pattern_control_apply(pattern,resume_transport);
-    g_restore_control_install=0U;
-    return result;
+    return persistent_pattern_control_apply(pattern,resume_transport);
 }

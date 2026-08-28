@@ -1134,11 +1134,6 @@ uint8_t drum_synth_set_param_for_instance(uint8_t instance_id, param_id_t param,
             if (instance->md_model != model)
             {
                 instance->md_model = model;
-                const md_model_profile_t *const profile = md_model_profile_get(instance->md_model);
-                for (uint8_t slot = 0U; slot < 8U; ++slot)
-                {
-                    instance->md_slots[slot] = profile->defaults[slot];
-                }
                 md_model_reset(instance);
                 instance->triggered = 0U;
             }
@@ -1196,6 +1191,14 @@ uint8_t drum_synth_set_param_for_instance(uint8_t instance_id, param_id_t param,
         default:
             return 0U;
     }
+}
+
+uint8_t drum_synth_get_md_model_for_instance(uint8_t instance_id)
+{
+    drum_synth_instance_t *const instance = drum_instance(instance_id);
+    if (instance == nullptr) return (uint8_t)MD_MODEL_TRX_BD;
+    drum_instance_ensure_init(instance);
+    return instance->md_model;
 }
 
 void drum_synth_all_notes_off_all(void)

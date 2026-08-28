@@ -1,15 +1,34 @@
-# Z2 - Autorite des pistes et ressources
+# Z2 - Autorite des pistes et programmes
 
-`track_state` est l'autorite canonique des seize configurations `brick_entity_id_t`. `entity_topology` est l'unique autorite d'activite, role MAIN/GROUP_MASTER/GROUP_CHILD, parent, membre et capacites. `track_runtime` projette cette identite vers `track_audio_binding_t`: entite, moteur, instance, cible mixer, etat et generation.
+`track_state` est l'autorite canonique des seize configurations
+`brick_entity_id_t`. `entity_topology` possede l'activite, les roles
+MAIN/GROUP_MASTER/GROUP_CHILD, le parent, le membre et les capacites.
+`track_runtime` derive uniquement l'etat CONTROL necessaire aux catalogues,
+routes et descripteurs PROGRAM.
 
-Une mutation structurelle suit toujours: prevalidation globale, commit canonique, invalidation/refresh runtime puis synchronisation UI. Un getter runtime ne cree pas une seconde autorite.
+Une mutation structurelle suit: prevalidation globale, commit canonique,
+reconstruction synchrone de `track_runtime`, publication PROGRAM, puis
+synchronisation UI. Les getters sont de pures lectures. Navigation, keyboard,
+scheduler et PLAY ne reconstruisent rien et ne declenchent aucune publication.
 
-Le restore AUDIO-first installe d'abord les bindings prepares. Apres commit AUDIO, CONTROL reconstruit ensuite `track_runtime` depuis `track_state`, valide les entites actives contre le snapshot AUDIO et marque la projection propre sans republier de binding. Cette projection non emettrice precede tout filtrage de parametre et toute synchronisation UI.
+AUDIO conserve seulement son contexte local d'execution par entite. Il ne le
+republie pas vers CONTROL. Il n'existe aucun etat public d'installation, aucune
+generation musicale, aucun ACK, aucune comparaison desired/applied et aucun
+retry. Un PROGRAM pre-valide est obligatoire; un echec interne est un diagnostic
+d'invariant.
 
-Le GROUP master est lie au bus post-somme, sans moteur de notes. Les children conservent leur configuration meme inactifs. Le mute CONTROL de chaque entite est local; le mute effectif child derive du local ou du parent.
+Le restore valide d'abord son plan au fence physique existant, puis CONTROL
+reconstruit son etat et publie PROGRAM/PARAM/TRANSPORT. AUDIO ne reconstruit ni
+Project, ni Pattern, ni projection de piste.
 
-Looper est `Sampler / Looper` et peut occuper tout top-level `0..7`. Son quota global est une capacite de variante, pas une identite. Etat, prises, parametres, p-locks et routes restent indexes par l'entite.
+Le GROUP master utilise le bus post-somme sans moteur de notes. Les children
+conservent leur configuration meme inactifs. Le mute CONTROL de chaque entite
+est local; le mute effectif child derive du local ou du parent.
 
-External est l'unique proprietaire possible de l'entree physique selectionnee. `track_input_ownership` interdit deux proprietaires pour une entree. L'identite d'entree est independante de la voie mixer et aucune voie fixe n'est reservee au boot.
+Looper est `Sampler / Looper` et peut occuper tout top-level `0..7`. Son quota
+global est pre-valide par CONTROL. Etat, prises, parametres, p-locks et routes
+restent indexes par l'entite.
 
-Les snapshots et clipboards transportent des etats logiques. Un child se copie localement; le GROUP master capture ou restaure le master et ses huit children. Pattern et Project utilisent directement les seize identites.
+External est l'unique proprietaire possible de l'entree physique selectionnee.
+`track_input_ownership` interdit deux proprietaires pour une entree. Les
+snapshots et clipboards transportent uniquement des etats logiques CONTROL.

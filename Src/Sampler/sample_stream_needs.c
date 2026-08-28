@@ -68,102 +68,62 @@ static uint8_t sample_stream_needs_loop_valid(const sample_stream_snapshot_t *sn
                : 0U;
 }
 
-static uint32_t sample_stream_needs_source_distance(const sample_stream_snapshot_t *snapshot,
-                                                    uint32_t page,
-                                                    uint8_t page_order,
-                                                    uint32_t current)
-{
-    const uint32_t frames_per_page = sample_stream_needs_frames_per_page(snapshot);
-    if ((frames_per_page == 0U) || (page_order == 0U))
-    {
-        return 0U;
-    }
-
-    const uint32_t page_start = page * frames_per_page;
-    if (page_start >= current)
-    {
-        return page_start - current;
-    }
-    if (sample_stream_needs_loop_valid(snapshot) != 0U)
-    {
-        const uint32_t to_loop = snapshot->loop_end - current;
-        const uint32_t loop_offset = (page_start >= snapshot->loop_begin)
-                                          ? (page_start - snapshot->loop_begin)
-                                          : 0U;
-        return to_loop + loop_offset;
-    }
-    return 0U;
-}
-
-static sample_stream_audio_frame_t sample_stream_needs_deadline(
-    const sample_stream_snapshot_t *snapshot,
-    sample_stream_audio_frame_t now_audio_frame,
-    uint32_t source_distance)
-{
-    const uint32_t step_q16 = (snapshot->step_q16 != 0U) ? snapshot->step_q16 : 65536U;
-    const uint32_t output_distance = sample_stream_time_source_to_output_frames(
-        source_distance,
-        step_q16);
-    return sample_stream_time_deadline_after(now_audio_frame, output_distance);
-}
-
 static uint8_t sample_stream_needs_contains(
     const sample_stream_target_voice_registry_entry_t *entry,
     const sample_audio_key_t *key,
     uint32_t page_index,
     uint32_t registration_epoch)
 {
-    for (uint8_t i = 0U; i < entry->need_count; ++i)
+    if ((entry->active == 0U)
+        || (entry->registration_epoch != registration_epoch)
+        || (entry->key.domain != key->domain)
+        || (entry->key.object_id != key->object_id))
+        return 0U;
+    const uint8_t count = (uint8_t)(entry->mobile_page_count
+                                    + entry->loop_preload_count);
+    for (uint8_t i = 0U; i < count; ++i)
     {
-        const sample_stream_target_voice_need_t *const need = &entry->needs[i];
-        if ((need->valid != 0U)
-            && (need->page_index == page_index)
-            && (need->registration_epoch == registration_epoch)
-            && (need->key.domain == key->domain)
-            && (need->key.object_id == key->object_id))
-        {
+        uint32_t published_page = 0U;
+        if ((sample_stream_needs_entry_page_at(entry, i, &published_page) != 0U)
+            && (published_page == page_index))
             return 1U;
-        }
     }
     return 0U;
 }
 
-static uint8_t sample_stream_needs_append(
-    sample_stream_target_voice_registry_entry_t *entry,
-    const sample_stream_snapshot_t *snapshot,
-    uint32_t page_index,
-    sample_stream_need_role_t role,
-    sample_stream_audio_frame_t deadline)
+uint8_t sample_stream_needs_entry_page_at(
+    const sample_stream_target_voice_registry_entry_t *entry,
+    uint8_t index,
+    uint32_t *out_page_index)
 {
-    if (sample_stream_needs_contains(entry,
-                                     &snapshot->key,
-                                     page_index,
-                                     snapshot->registration_epoch) != 0U)
+    if ((entry == NULL) || (out_page_index == NULL) || (entry->active == 0U))
+        return 0U;
+    if (index < entry->mobile_page_count)
     {
+        uint32_t page = entry->current_page + index;
+        if ((entry->loop_enabled != 0U) && (page > entry->loop_last_page))
+            page = entry->loop_first_page
+                 + ((page - entry->loop_last_page - 1U)
+                    % (entry->loop_last_page - entry->loop_first_page + 1U));
+        *out_page_index = page;
         return 1U;
     }
-    if (entry->need_count >= SAMPLE_STREAM_TARGET_NEEDS_PER_VOICE)
+    index = (uint8_t)(index - entry->mobile_page_count);
+    if (index < entry->loop_preload_count)
     {
-        return 0U;
+        *out_page_index = entry->loop_first_page + index;
+        return 1U;
     }
-    sample_stream_target_voice_need_t *const need = &entry->needs[entry->need_count++];
-    need->key = snapshot->key;
-    need->page_index = page_index;
-    need->registration_epoch = snapshot->registration_epoch;
-    need->consume_deadline_audio_frame = deadline;
-    need->role = (uint8_t)role;
-    need->valid = 1U;
-    return 1U;
+    return 0U;
 }
 
 uint8_t sample_stream_needs_build(
     const sample_stream_snapshot_t *snapshot,
-    sample_stream_audio_frame_t now_audio_frame,
     sample_stream_target_voice_registry_entry_t *out_entry)
 {
     if ((snapshot == NULL) || (out_entry == NULL)
         || (snapshot->active == 0U)
-        || (snapshot->generation == 0U)
+        || (snapshot->owner_token == 0U)
         || (snapshot->region_end <= snapshot->region_begin)
         || (snapshot->current_frame >= snapshot->region_end)
         || (snapshot->key.domain > SAMPLE_AUDIO_DOMAIN_MULTI)
@@ -176,7 +136,9 @@ uint8_t sample_stream_needs_build(
     memset(out_entry, 0, sizeof(*out_entry));
     out_entry->active = 1U;
     out_entry->voice_index = snapshot->voice_id;
-    out_entry->generation = snapshot->generation;
+    out_entry->owner_token = snapshot->owner_token;
+    out_entry->key = snapshot->key;
+    out_entry->registration_epoch = snapshot->registration_epoch;
 
     sample_stream_sequence_input_t sequence_input = {
         .current_frame = snapshot->current_frame,
@@ -201,43 +163,10 @@ uint8_t sample_stream_needs_build(
         return 0U;
     }
 
-    uint32_t current = snapshot->current_frame;
-    if (current < snapshot->region_begin)
-    {
-        current = snapshot->region_begin;
-    }
-    if (current >= snapshot->region_end)
-    {
-        current = snapshot->region_end - 1U;
-    }
-
     const uint8_t loop_valid = sample_stream_needs_loop_valid(snapshot);
-#if BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES == 0U
-    if (loop_valid != 0U)
-    {
-        if (current >= snapshot->loop_end)
-        {
-            current = snapshot->loop_begin;
-        }
-    }
-#endif
-    for (uint8_t i = 0U; i < page_count; ++i)
-    {
-        const sample_stream_audio_frame_t deadline = sample_stream_needs_deadline(
-            snapshot,
-            now_audio_frame,
-            sample_stream_needs_source_distance(snapshot, pages[i], i, current));
-        if (sample_stream_needs_append(
-                out_entry,
-                snapshot,
-                pages[i],
-                (i == 0U) ? SAMPLE_STREAM_NEED_ROLE_CURRENT
-                          : SAMPLE_STREAM_NEED_ROLE_ANTICIPATION,
-                deadline) == 0U)
-        {
-            return 0U;
-        }
-    }
+    out_entry->current_page = pages[0];
+    out_entry->mobile_page_count = page_count;
+    out_entry->loop_enabled = loop_valid;
 
     /* Forward-loop preload is part of the voice-owned need set. It is kept
      * after the mobile horizon, so it cannot outrank current playback. */
@@ -246,23 +175,15 @@ uint8_t sample_stream_needs_build(
         const uint32_t frames_per_page = sample_stream_needs_frames_per_page(snapshot);
         const uint32_t first_loop_page = snapshot->loop_begin / frames_per_page;
         const uint32_t last_loop_page = (snapshot->loop_end - 1U) / frames_per_page;
-        const uint32_t preload_pages = sample_audio_format_presocle_pages(
+        uint32_t preload_pages = sample_audio_format_presocle_pages(
             sample_audio_format_or_stereo(snapshot->format));
-        for (uint32_t ahead = 0U;
-             (ahead < preload_pages) && ((first_loop_page + ahead) <= last_loop_page);
-             ++ahead)
-        {
-            if (sample_stream_needs_append(out_entry,
-                                           snapshot,
-                                           first_loop_page + ahead,
-                                           SAMPLE_STREAM_NEED_ROLE_LOOP,
-                                           SAMPLE_STREAM_AUDIO_FRAME_NEVER) == 0U)
-            {
-                return 0U;
-            }
-        }
+        const uint32_t loop_pages = last_loop_page - first_loop_page + 1U;
+        if (preload_pages > loop_pages) preload_pages = loop_pages;
+        out_entry->loop_first_page = first_loop_page;
+        out_entry->loop_last_page = last_loop_page;
+        out_entry->loop_preload_count = (uint8_t)preload_pages;
     }
-    return (out_entry->need_count != 0U) ? 1U : 0U;
+    return (out_entry->mobile_page_count != 0U) ? 1U : 0U;
 }
 
 void sample_stream_needs_registry_reset(void)
@@ -273,8 +194,7 @@ void sample_stream_needs_registry_reset(void)
 uint8_t sample_stream_needs_registry_update(
     sample_stream_snapshot_source_t source,
     uint8_t voice_id,
-    const sample_stream_snapshot_t *snapshot,
-    sample_stream_audio_frame_t now_audio_frame)
+    const sample_stream_snapshot_t *snapshot)
 {
     uint8_t index = 0U;
     if ((snapshot == NULL)
@@ -284,7 +204,7 @@ uint8_t sample_stream_needs_registry_update(
     }
 
     sample_stream_target_voice_registry_entry_t entry;
-    if (sample_stream_needs_build(snapshot, now_audio_frame, &entry) == 0U)
+    if (sample_stream_needs_build(snapshot, &entry) == 0U)
     {
         return 0U;
     }
@@ -356,15 +276,15 @@ void sample_stream_needs_registry_drop(sample_stream_snapshot_source_t source,
     }
 }
 
-uint8_t sample_stream_needs_registry_drop_generation(
+uint8_t sample_stream_needs_registry_drop_owner(
     sample_stream_snapshot_source_t source,
     uint8_t voice_id,
-    uint32_t generation)
+    uint32_t owner_token)
 {
     sample_stream_target_voice_registry_entry_t entry;
-    if ((generation == 0U)
+    if ((owner_token == 0U)
         || (sample_stream_needs_registry_read(source, voice_id, &entry) == 0U)
-        || (entry.generation != generation))
+        || (entry.owner_token != owner_token))
     {
         return 0U;
     }
@@ -377,14 +297,14 @@ uint8_t sample_stream_needs_registry_contains(sample_stream_snapshot_source_t so
                                                sample_audio_key_t key,
                                                uint32_t page_index,
                                                uint32_t registration_epoch,
-                                               uint32_t generation)
+                                               uint32_t owner_token)
 {
     sample_stream_target_voice_registry_entry_t entry;
     if (sample_stream_needs_registry_read(source, voice_id, &entry) == 0U)
     {
         return 0U;
     }
-    if ((generation != 0U) && (entry.generation != generation))
+    if ((owner_token != 0U) && (entry.owner_token != owner_token))
     {
         return 0U;
     }
@@ -445,15 +365,9 @@ uint8_t sample_stream_needs_registry_contains_key(sample_audio_key_t key)
             {
                 continue;
             }
-            for (uint8_t i = 0U; i < entry.need_count; ++i)
-            {
-                if ((entry.needs[i].valid != 0U)
-                    && (entry.needs[i].key.domain == key.domain)
-                    && (entry.needs[i].key.object_id == key.object_id))
-                {
-                    return 1U;
-                }
-            }
+            if ((entry.key.domain == key.domain)
+                && (entry.key.object_id == key.object_id))
+                return 1U;
         }
     }
     return 0U;

@@ -54,6 +54,7 @@ void brick6_braids_runtime_set_drift(uint8_t instance_id, float amount);
 void brick6_braids_runtime_set_vca_release_seconds(uint8_t instance_id, float release_s);
 
 void brick6_braids_runtime_note_on(uint8_t instance_id, float note, float velocity);
+void brick6_braids_runtime_initialize_held_note(uint8_t instance_id, float note, float velocity);
 void brick6_braids_runtime_note_off(uint8_t instance_id, uint8_t note);
 void brick6_braids_runtime_all_notes_off(uint8_t instance_id);
 void brick6_braids_runtime_clear_trigger(uint8_t instance_id);

@@ -11,7 +11,7 @@
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_page_cache_port.h"
 #include "Sampler/sampler_ram_audio_projection.h"
-#include "Audio/control_audio_queue.h"
+#include "Core/control_audio_publication.h"
 #include "Core/live_clock.h"
 
 #define SAMPLER_RAM_IO_BYTES (8192U)
@@ -63,8 +63,8 @@ typedef struct
 } sampler_ram_load_job_t;
 
 STORAGE_STATE_SDRAM static sampler_ram_load_job_t g_sampler_ram_load_job;
-static CTRL_STATE volatile uint32_t
-    g_sampler_ram_retire_ack[SAMPLER_RAM_POOL_MAX_SLOTS];
+static CTRL_STATE uint32_t
+    g_sampler_ram_retire_fence[SAMPLER_RAM_POOL_MAX_SLOTS];
 
 uint16_t sampler_ram_format_channels(sampler_ram_format_t format)
 {
@@ -534,7 +534,7 @@ void sampler_ram_pool_init(void)
 void sampler_ram_pool_reset(void)
 {
     sampler_ram_audio_projection_init();
-    memset((void *)g_sampler_ram_retire_ack, 0, sizeof(g_sampler_ram_retire_ack));
+    memset(g_sampler_ram_retire_fence, 0, sizeof(g_sampler_ram_retire_fence));
     uint32_t generation_seed = g_sampler_ram_pool.generation_counter;
     for (uint16_t i = 0U; i < SAMPLER_RAM_POOL_MAX_SLOTS; ++i)
     {
@@ -1269,14 +1269,6 @@ static void sampler_ram_pool_finalize_clear(uint16_t ram_slot)
     sampler_ram_waveform_set_empty(&g_sampler_ram_pool.slots[ram_slot]);
 }
 
-void sampler_ram_pool_control_ack_retire(uint16_t ram_slot, uint32_t generation)
-{
-    if (ram_slot >= SAMPLER_RAM_POOL_MAX_SLOTS) return;
-    __DMB();
-    g_sampler_ram_retire_ack[ram_slot] = generation;
-    __DMB();
-}
-
 void sampler_ram_pool_clear(uint16_t ram_slot)
 {
     if (ram_slot >= SAMPLER_RAM_POOL_MAX_SLOTS) return;
@@ -1291,14 +1283,10 @@ void sampler_ram_pool_clear(uint16_t ram_slot)
     uint64_t due_sample = 0U;
     if (!live_clock_read_audio_sample(&due_sample)) return;
     const uint32_t generation = slot->generation;
-    const control_audio_event_t event = {
-        .due_sample = due_sample,
-        .source_generation = generation,
-        .param_id = ram_slot,
-        .kind = (uint8_t)CONTROL_AUDIO_EVENT_RAM_STOP
-    };
-    if (control_audio_queue_publish(&event) == 0U) return;
-    sampler_ram_audio_projection_withdraw(ram_slot, generation);
+    if (control_audio_publish_param_fenced((uint8_t)ram_slot, 0xFFF6U,
+                                           generation, 0U, due_sample,
+                                           &g_sampler_ram_retire_fence[ram_slot]) == 0U)
+        return;
     slot->state = SAMPLER_RAM_SLOT_RETIRING;
     __DMB();
 }
@@ -1309,9 +1297,10 @@ void sampler_ram_pool_service_retire(void)
     {
         sampler_ram_slot_t *const slot = &g_sampler_ram_pool.slots[i];
         if ((slot->state == SAMPLER_RAM_SLOT_RETIRING)
-            && (g_sampler_ram_retire_ack[i] == slot->generation))
+            && (control_audio_consumer_fence_consumed(
+                    g_sampler_ram_retire_fence[i]) != 0U))
         {
-            g_sampler_ram_retire_ack[i] = 0U;
+            g_sampler_ram_retire_fence[i] = 0U;
             sampler_ram_pool_finalize_clear(i);
         }
     }

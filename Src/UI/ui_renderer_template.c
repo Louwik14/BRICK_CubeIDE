@@ -18,7 +18,6 @@
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_stack_waveform.h"
 #include "Core/project_control.h"
-#include "Audio/audio_note_engine_adapter.h"
 #include "Core/live_clock.h"
 #include "UI/ui_sampler_playhead.h"
 #include "Core/track_runtime.h"
@@ -26,7 +25,6 @@
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_model.h"
-#include "Core/track_sound_state.h"
 #include "Mod/mod_destination_catalog.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_matrix.h"
@@ -4026,10 +4024,7 @@ static void ui_renderer_template_draw_sampler_ram_waveform(const ui_param_seq_pl
                                                  inner_h,
                                                  'E',
                                                  0U);
-    audio_binding_snapshot_t snapshot;
-    if ((audio_note_engine_adapter_snapshot_read(
-            ui_renderer_template_get_edit_owner_track(), &snapshot) == 0U)
-            || (snapshot.sampler_slice_mode_active == 0U))
+    if (slice_value < 0.5f)
     {
         ui_renderer_template_draw_sampler_ram_marker(loop_value,
                                                      overview->frame_count,

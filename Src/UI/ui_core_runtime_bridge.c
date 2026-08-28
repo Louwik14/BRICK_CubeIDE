@@ -2,7 +2,8 @@
 #include "ui_page_manager.h"
 
 #include "App/Hall/hall_engine.h"
-#include "Audio/control_audio_queue.h"
+#include "Audio/control_audio_command.h"
+#include "Core/control_audio_publication.h"
 #include "Core/live_clock.h"
 #include "Core/control_routing.h"
 #include "Core/track_input_ownership.h"
@@ -66,19 +67,33 @@ static uint8_t g_looper_take_notified = 0U;
 static uint8_t g_looper_transport_was_running = 0U;
 static uint8_t g_looper_transport_start_prearmed = 0U;
 
+typedef enum {
+    UI_AUDIO_LOOPER_START = 0U,
+    UI_AUDIO_LOOPER_STOP,
+    UI_AUDIO_RECORD_STOP,
+    UI_AUDIO_PREPARE_REPLACE,
+    UI_AUDIO_RECORD_START
+} ui_audio_action_t;
+
 static void ui_core_runtime_bridge_publish_audio_command(
-    control_audio_event_kind_t kind, uint8_t track, uint8_t arg0,
+    ui_audio_action_t action, uint8_t track, uint8_t arg0,
     uint8_t arg1, uint32_t arg32, uint64_t due_sample)
 {
-    const control_audio_event_t command = {
-        .due_sample = due_sample,
-        .source_generation = arg32,
-        .entity_id = track,
-        .kind = (uint8_t)kind,
-        .note = arg0,
-        .velocity = arg1
-    };
-    (void)control_audio_queue_publish(&command);
+    if (action == UI_AUDIO_LOOPER_START)
+        (void)control_audio_publish_param(0U, 0xFFF0U, 1U, 0U, due_sample);
+    else if (action == UI_AUDIO_LOOPER_STOP)
+        (void)control_audio_publish_param(0U, 0xFFF1U, 0U, 0U, due_sample);
+    else if (action == UI_AUDIO_PREPARE_REPLACE)
+        (void)control_audio_publish_param(track, 0xFFF3U, 0U, 0U, due_sample);
+    else
+    {
+        if (action == UI_AUDIO_RECORD_START)
+            (void)audio_recorder_control_arm_looper(
+                track, arg0, arg32, arg1, due_sample);
+        else
+            (void)audio_recorder_control_request_looper_stop(
+                due_sample, seq_runtime_is_running());
+    }
 }
 
 static uint8_t ui_core_runtime_bridge_looper_record_is_active(void);
@@ -135,7 +150,7 @@ static uint8_t ui_core_runtime_bridge_transport_play_command(const ui_event_t *e
     {
         (void)ui_core_runtime_bridge_looper_prepare_record_pre_transport_start(feedback);
         ui_core_runtime_bridge_publish_audio_command(
-            CONTROL_AUDIO_EVENT_LOOPER_TRANSPORT_START, 0U, 0U, 0U, 0U,
+            UI_AUDIO_LOOPER_START, 0U, 0U, 0U, 0U,
             live_clock_audio_sample());
         g_looper_transport_was_running = 1U;
         g_looper_transport_start_prearmed = 1U;
@@ -320,7 +335,7 @@ static uint8_t ui_core_runtime_bridge_looper_handle_stop(ui_core_runtime_bridge_
     }
 
     ui_core_runtime_bridge_publish_audio_command(
-        CONTROL_AUDIO_EVENT_LOOPER_RECORD_STOP, 0U, 0U, 0U, 0U,
+        UI_AUDIO_RECORD_STOP, 0U, 0U, 0U, 0U,
         live_clock_audio_sample());
     if(audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_LOOPER) != 0U)
     {
@@ -506,13 +521,13 @@ static uint8_t ui_core_runtime_bridge_looper_start_track(uint8_t track,
     if(previous_take_track < UI_TRACK_COUNT)
     {
         ui_core_runtime_bridge_publish_audio_command(
-            CONTROL_AUDIO_EVENT_LOOPER_PREPARE_REPLACE,
+            UI_AUDIO_PREPARE_REPLACE,
             previous_take_track, 0U, 0U, 0U, rec_request_sample);
     }
     if(previous_take_track != track)
     {
         ui_core_runtime_bridge_publish_audio_command(
-            CONTROL_AUDIO_EVENT_LOOPER_PREPARE_REPLACE,
+            UI_AUDIO_PREPARE_REPLACE,
             track, 0U, 0U, 0U, rec_request_sample);
     }
     ui_core_runtime_bridge_looper_clear_take_metadata();
@@ -520,7 +535,7 @@ static uint8_t ui_core_runtime_bridge_looper_start_track(uint8_t track,
     g_looper_take_track = track;
     g_looper_take_notified = 0U;
     ui_core_runtime_bridge_publish_audio_command(
-        CONTROL_AUDIO_EVENT_LOOPER_RECORD_START, track,
+        UI_AUDIO_RECORD_START, track,
         ui_core_runtime_bridge_looper_len_mode(track),
         ui_core_runtime_bridge_looper_play_is_auto(track),
         expected_frames, rec_request_sample);
@@ -540,7 +555,7 @@ void ui_core_runtime_bridge_service_looper_record_control(ui_core_runtime_bridge
     if ((transport_running != 0U) && (g_looper_transport_was_running == 0U))
     {
         ui_core_runtime_bridge_publish_audio_command(
-            CONTROL_AUDIO_EVENT_LOOPER_TRANSPORT_START, 0U, 0U, 0U, 0U,
+            UI_AUDIO_LOOPER_START, 0U, 0U, 0U, 0U,
             live_clock_audio_sample());
     }
     else if ((transport_running == 0U) && (g_looper_transport_was_running != 0U))
@@ -552,7 +567,7 @@ void ui_core_runtime_bridge_service_looper_record_control(ui_core_runtime_bridge
         else
         {
             ui_core_runtime_bridge_publish_audio_command(
-                CONTROL_AUDIO_EVENT_LOOPER_TRANSPORT_STOP, 0U, 0U, 0U, 0U,
+                UI_AUDIO_LOOPER_STOP, 0U, 0U, 0U, 0U,
                 live_clock_audio_sample());
             g_looper_transport_start_prearmed = 0U;
         }
@@ -884,7 +899,6 @@ static uint8_t ui_core_runtime_bridge_run_track_transition_pipeline(
     const param_registry_track_transition_pipeline_cmd_t transition_cmd = {
         .prepare_fn = NULL,
         .mutate_fn = mutate_fn,
-        .reapply_fn = NULL,
         .seq_runtime_sync_fn = NULL,
         .ui_sync_fn = ui_core_runtime_bridge_track_transition_ui_sync_apply,
         .resume_fn = NULL,
@@ -1002,7 +1016,6 @@ bool ui_core_runtime_bridge_restore_track_config_bulk(const uint8_t family[UI_TR
     if (param_registry_run_track_transition_pipeline(&(const param_registry_track_transition_pipeline_cmd_t){
             .prepare_fn = NULL,
             .mutate_fn = ui_core_runtime_bridge_track_transition_mutate_bulk_restore,
-            .reapply_fn = NULL,
             .seq_runtime_sync_fn = NULL,
             .ui_sync_fn = ui_core_runtime_bridge_track_transition_ui_sync_apply,
             .resume_fn = NULL,

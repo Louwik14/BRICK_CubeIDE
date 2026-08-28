@@ -19,8 +19,6 @@ typedef struct
     sample_audio_key_t key;
     uint32_t page_index;
     uint32_t registration_epoch;
-    uint32_t voice_generation;
-    sample_stream_audio_frame_t diagnostic_deadline_audio_frame;
     uint8_t source;
     uint8_t voice_id;
     uint8_t need_index;

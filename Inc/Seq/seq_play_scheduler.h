@@ -10,7 +10,6 @@
 #include "Seq/seq_types.h"
 #include "Seq/seq_model.h"
 #include "NoteFx/note_fx_event.h"
-#include "Audio/control_audio_queue.h"
 
 
 typedef struct

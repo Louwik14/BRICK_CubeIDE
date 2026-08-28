@@ -13,6 +13,14 @@ extern "C" {
 
 typedef uint16_t mod_destination_address_t;
 
+typedef struct
+{
+    uint8_t audio_fx_model[2];
+    uint8_t prism_model[2];
+    uint8_t stack_model[3];
+    uint8_t drum_md_slot_count;
+} mod_destination_audio_models_t;
+
 typedef enum
 {
     MOD_DEST_APPLY_NONE = 0,
@@ -100,6 +108,7 @@ void audio_mod_destination_catalog_reset_runtime(void);
 uint8_t mod_destination_catalog_prepare(uint8_t target,
                                         param_id_t dest,
                                         const track_audio_runtime_ctx_t *ctx,
+                                        const mod_destination_audio_models_t *models,
                                         mod_destination_prepared_t *out);
 uint8_t mod_destination_catalog_apply_prepared(
     const mod_destination_prepared_t *prepared, float value);
@@ -118,17 +127,12 @@ uint8_t mod_destination_catalog_apply_ramp_rt(uint8_t track,
                                               param_id_t dest,
                                               const track_audio_runtime_ctx_t *ctx,
                                               const mod_destination_ramp_t *ramp);
-uint8_t mod_destination_catalog_supported_fast(uint8_t track,
-                                               param_id_t dest,
-                                               ui_track_family_t family,
-                                               ui_track_type_t type,
-                                               const track_audio_runtime_ctx_t *ctx);
 uint8_t mod_destination_catalog_supported_audio(uint8_t track,
                                                 param_id_t dest,
                                                 ui_track_family_t family,
                                                 ui_track_type_t type,
                                                 const track_audio_runtime_ctx_t *ctx,
-                                                uint8_t drum_md_slot_count);
+                                                const mod_destination_audio_models_t *models);
 uint8_t mod_destination_catalog_apply_poly_voice_rt(uint8_t track,
                                                     uint8_t voice_slot,
                                                     param_id_t dest,

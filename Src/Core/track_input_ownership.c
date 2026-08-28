@@ -1,9 +1,12 @@
 #include "Core/track_input_ownership.h"
 
 #include <string.h>
+#include <assert.h>
 
 #include "Core/entity_topology.h"
-#include "Core/audio_input_ownership_projection.h"
+#include "Audio/control_audio_command.h"
+#include "Core/control_audio_publication.h"
+#include "Core/live_clock.h"
 
 static uint8_t g_external_input[UI_TRACK_COUNT];
 static uint8_t g_external_owner[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT];
@@ -46,7 +49,6 @@ static uint8_t track_input_ownership_build(
 
 void track_input_ownership_init(const ui_track_config_t configs[UI_TRACK_COUNT])
 {
-    audio_input_ownership_projection_init();
     for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
     {
         g_external_input[track] = (uint8_t)(track % ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT);
@@ -86,9 +88,31 @@ uint8_t track_input_ownership_apply_bulk(
         return 0U;
     }
 
+    uint64_t sample_time = 0U;
+    if (!live_clock_read_audio_sample(&sample_time)) return 0U;
+    control_audio_command_t commands[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT];
+    uint8_t command_count = 0U;
+    for (uint8_t input = 0U;
+         input < ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT; ++input)
+    {
+        if (next_owners[input] == g_external_owner[input]) continue;
+        commands[command_count++] = (control_audio_command_t){
+            .effective_sample_time = sample_time,
+            .value = next_owners[input],
+            .id = CONTROL_AUDIO_PARAM_INPUT_OWNER,
+            .entity = input,
+            .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(
+                CONTROL_AUDIO_COMMAND_PARAM, 0U)
+        };
+    }
+    if ((command_count != 0U)
+            && (control_audio_publish_batch(commands, command_count) == 0U))
+    {
+        assert(0 && "input ownership publication capacity invariant");
+        return 0U;
+    }
     memcpy(g_external_input, next_selected, sizeof(g_external_input));
     memcpy(g_external_owner, next_owners, sizeof(g_external_owner));
-    audio_input_ownership_projection_publish();
     return 1U;
 }
 

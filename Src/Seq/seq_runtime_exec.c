@@ -460,6 +460,11 @@ uint32_t seq_runtime_exec_consume_external_step_pulses_pending(void)
     return pending;
 }
 
+uint32_t seq_runtime_exec_external_step_pulses_pending(void)
+{
+    return g_seq_runtime_exec_external_step_pulses_pending;
+}
+
 void seq_runtime_exec_process_step_pulse_at_sample_q16(seq_runtime_state_t *state,
                                                        seq_transport_fsm_t *transport_fsm,
                                                        seq_clock_bridge_t *clock_bridge,

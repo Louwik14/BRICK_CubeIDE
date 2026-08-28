@@ -283,14 +283,10 @@ static uint8_t ui_page_midi_fx_param_text(uint8_t slot,
     if (id == PARAM_AUDIO_FX_FILTER_POS)
     {
         static const char *const labels[] = {"PRE","MID","POST"};
-        brick_entity_id_t entity=(brick_entity_id_t)ui_get_active_lane();
-        ui_template_edit_context_t context;
-        if(ui_template_edit_context_resolve_active(&context)!=0U)
-            entity=(brick_entity_id_t)context.selected_entity;
-        const audio_fx_filter_pos_t pos=audio_fx_runtime_status_get_filter_pos(entity);
+        const uint8_t pos=(value<0.5f)?0U:(value<1.5f)?1U:2U;
         (void)snprintf(out_name,out_name_len,"FILTER POS");
         if(out_value!=NULL&&out_value_len>0U)
-            (void)snprintf(out_value,out_value_len,"%s",labels[(uint8_t)pos]);
+            (void)snprintf(out_value,out_value_len,"%s",labels[pos]);
         return 1U;
     }
     if (id == PARAM_AUDIO_FX_ORDER)

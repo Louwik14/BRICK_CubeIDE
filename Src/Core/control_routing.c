@@ -1,77 +1,72 @@
 #include "Core/control_routing.h"
-#include "Storage/memory_layout.h"
-#include "stm32h7xx_hal.h"
+#include "Audio/control_audio_command.h"
+#include "Core/control_audio_publication.h"
+#include "Core/live_clock.h"
 #include <string.h>
 
-typedef struct
-{
-    volatile uint32_t sequence;
-    volatile uint16_t source_mask[BRICK_ENTITY_CAPACITY];
-} control_routing_mailbox_t;
-
-_Static_assert(sizeof(control_routing_mailbox_t) == 36U,
-               "Looper routing mailbox ABI changed");
-
 static uint8_t g_looper_sources[BRICK_ENTITY_CAPACITY][BRICK_ENTITY_CAPACITY];
-D3_IPC static control_routing_mailbox_t g_control_routing_mailbox;
-AUDIO_HOT static uint16_t g_audio_looper_source_mask[BRICK_ENTITY_CAPACITY];
-AUDIO_HOT static uint32_t g_audio_looper_source_generation;
+static uint16_t g_audio_looper_source_mask[BRICK_ENTITY_CAPACITY];
 
-static void control_routing_publish(void)
+static uint8_t control_routing_publish(brick_entity_id_t looper)
 {
-    uint32_t sequence = g_control_routing_mailbox.sequence;
-    if ((sequence & 1U) != 0U) ++sequence;
-    g_control_routing_mailbox.sequence = sequence + 1U;
-    __DMB();
-    for (uint32_t looper = 0U; looper < BRICK_ENTITY_CAPACITY; ++looper)
-    {
-        uint16_t mask = 0U;
-        for (uint32_t source = 0U; source < BRICK_ENTITY_CAPACITY; ++source)
-        {
-            if (g_looper_sources[looper][source] != 0U)
-                mask |= (uint16_t)(1U << source);
-        }
-        g_control_routing_mailbox.source_mask[looper] = mask;
-    }
-    __DMB();
-    g_control_routing_mailbox.sequence = sequence + 2U;
-    if (g_control_routing_mailbox.sequence == 0U)
-        g_control_routing_mailbox.sequence = 2U;
-    __DMB();
+    uint16_t mask = 0U;
+    uint64_t sample_time = 0U;
+    for (uint8_t source = 0U; source < BRICK_ENTITY_CAPACITY; ++source)
+        if (g_looper_sources[looper][source] != 0U)
+            mask |= (uint16_t)(1U << source);
+    if (!live_clock_read_audio_sample(&sample_time)) return 0U;
+    return control_audio_publish_param(looper,
+        CONTROL_AUDIO_PARAM_LOOPER_ROUTE,
+        mask, 0U, sample_time);
 }
 
 void control_routing_init(void)
 {
     memset(g_looper_sources, 0, sizeof(g_looper_sources));
     memset(g_audio_looper_source_mask, 0, sizeof(g_audio_looper_source_mask));
-    g_audio_looper_source_generation = 0U;
-    g_control_routing_mailbox.sequence = 0U;
-    control_routing_publish();
 }
 uint8_t control_routing_get_looper_source(brick_entity_id_t looper,brick_entity_id_t source){return(looper<BRICK_ENTITY_CAPACITY&&source<BRICK_ENTITY_CAPACITY)?g_looper_sources[looper][source]:0U;}
-uint8_t control_routing_set_looper_source(brick_entity_id_t looper,brick_entity_id_t source,uint8_t enabled){if(looper>=BRICK_ENTITY_CAPACITY||source>=BRICK_ENTITY_CAPACITY||looper==source)return 0U;g_looper_sources[looper][source]=(enabled!=0U)?1U:0U;control_routing_publish();return 1U;}
+uint8_t control_routing_set_looper_source(brick_entity_id_t looper,brick_entity_id_t source,uint8_t enabled){if(looper>=BRICK_ENTITY_CAPACITY||source>=BRICK_ENTITY_CAPACITY||looper==source)return 0U;const uint8_t old=g_looper_sources[looper][source];g_looper_sources[looper][source]=(enabled!=0U)?1U:0U;if(control_routing_publish(looper)==0U){g_looper_sources[looper][source]=old;return 0U;}return 1U;}
 
-void control_routing_audio_apply_publication(void)
+uint8_t control_routing_apply_bulk(
+    const uint8_t sources[BRICK_ENTITY_CAPACITY][BRICK_ENTITY_CAPACITY])
 {
-    for (uint8_t attempt = 0U; attempt < 2U; ++attempt)
+    if (sources == NULL) return 0U;
+    uint64_t sample_time = 0U;
+    if (!live_clock_read_audio_sample(&sample_time)) return 0U;
+    control_audio_command_t commands[BRICK_ENTITY_CAPACITY];
+    for (uint8_t looper = 0U; looper < BRICK_ENTITY_CAPACITY; ++looper)
     {
-        const uint32_t before = g_control_routing_mailbox.sequence;
-        if ((before == 0U) || (before == g_audio_looper_source_generation)
-                || ((before & 1U) != 0U))
-            return;
-        __DMB();
-        uint16_t next[BRICK_ENTITY_CAPACITY];
-        for (uint32_t i = 0U; i < BRICK_ENTITY_CAPACITY; ++i)
-            next[i] = g_control_routing_mailbox.source_mask[i];
-        __DMB();
-        const uint32_t after = g_control_routing_mailbox.sequence;
-        if ((before == after) && ((after & 1U) == 0U))
+        uint16_t mask = 0U;
+        for (uint8_t source = 0U; source < BRICK_ENTITY_CAPACITY; ++source)
         {
-            memcpy(g_audio_looper_source_mask, next, sizeof(next));
-            g_audio_looper_source_generation = after;
-            return;
+            if ((source != looper) && (sources[looper][source] != 0U))
+                mask |= (uint16_t)(1U << source);
         }
+        commands[looper] = (control_audio_command_t){
+            .effective_sample_time = sample_time,
+            .value = mask,
+            .id = CONTROL_AUDIO_PARAM_LOOPER_ROUTE,
+            .entity = looper,
+            .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(
+                CONTROL_AUDIO_COMMAND_PARAM, 0U)
+        };
     }
+    if (control_audio_publish_batch(commands, BRICK_ENTITY_CAPACITY) == 0U)
+        return 0U;
+    for (uint8_t looper = 0U; looper < BRICK_ENTITY_CAPACITY; ++looper)
+        for (uint8_t source = 0U; source < BRICK_ENTITY_CAPACITY; ++source)
+            g_looper_sources[looper][source] = (uint8_t)(
+                (source != looper) && (sources[looper][source] != 0U));
+    return 1U;
+}
+
+uint8_t control_routing_audio_set_mask(brick_entity_id_t looper,
+                                       uint16_t source_mask)
+{
+    if (looper >= BRICK_ENTITY_CAPACITY) return 0U;
+    g_audio_looper_source_mask[looper] = source_mask;
+    return 1U;
 }
 
 uint8_t control_routing_audio_get_looper_source(brick_entity_id_t looper,

@@ -17,6 +17,8 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern);
 uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern);
 uint8_t pattern_live_get_active(uint8_t *out_bank, uint8_t *out_pattern);
 uint8_t pattern_live_get_queued(uint8_t *out_valid, uint8_t *out_bank, uint8_t *out_pattern);
+uint8_t pattern_live_get_queued_boundary(uint8_t *out_track,
+                                         uint32_t *out_generation);
 void pattern_live_set_active_state(uint8_t active_bank,
                                    uint8_t active_pattern,
                                    uint8_t queued_valid,

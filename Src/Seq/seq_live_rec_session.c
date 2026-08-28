@@ -840,7 +840,6 @@ uint8_t seq_live_rec_session_live_rec_param_can_write(seq_track_id_t track,
         return 0U;
     }
 
-    track_runtime_refresh_track(track);
     if (((is_dedicated_play != 0U) && (seq_model_track_can_store_play(track) == 0U))
         || ((is_dedicated_play == 0U)
             && (seq_param_iface_slot_is_supported(track, set_id, param_slot) == 0U)))
@@ -910,7 +909,6 @@ void seq_live_rec_session_live_rec_note_on(seq_live_rec_source_t source,
 
     for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        track_runtime_refresh_track(track);
         const uint8_t track_ch = track_runtime_get_midi_channel_zero_based(track);
         if (track_ch != channel_zero_based)
         {

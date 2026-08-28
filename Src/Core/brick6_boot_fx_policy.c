@@ -12,14 +12,18 @@
 
 #include "brick6_boot_fx_policy.h"
 
-#include "Core/mixer_routing_publication.h"
+#include "Audio/control_audio_command.h"
+#include "Core/control_audio_publication.h"
+#include "Core/live_clock.h"
 
 void brick6_boot_fx_policy_init(void)
 {
-    mixer_routing_control_init();
-
     /* Keep compressor slot available but do not insert it by default.
      * A permanent default insert on track 0 colors transients/dynamics even
      * with neutral user mix settings, which biases "flat/reference" listening. */
-    (void)mixer_routing_control_set_insert_slot(0U, 0U, -1);
+    uint64_t sample_time = 0U;
+    if (live_clock_read_audio_sample(&sample_time))
+        (void)control_audio_publish_param(
+            0U, CONTROL_AUDIO_PARAM_MIX_INSERT_FIRST,
+            (uint32_t)(int32_t)-1, 0U, sample_time);
 }

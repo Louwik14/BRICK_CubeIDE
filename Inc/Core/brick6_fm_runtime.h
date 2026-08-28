@@ -30,6 +30,7 @@ void brick6_fm_runtime_init(void);
 void brick6_fm_runtime_reset_instance(uint8_t instance_id);
 void brick6_fm_runtime_all_notes_off(uint8_t instance_id);
 void brick6_fm_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t velocity);
+void brick6_fm_runtime_initialize_held_note(uint8_t instance_id, uint8_t note, uint8_t velocity);
 void brick6_fm_runtime_note_off(uint8_t instance_id, uint8_t note);
 void brick6_fm_runtime_set_ratio(uint8_t instance_id, float value);
 void brick6_fm_runtime_set_algorithm(uint8_t instance_id, uint8_t algorithm);
@@ -55,6 +56,9 @@ void brick6_fm_runtime_set_operator(uint8_t instance_id,
                                     float value);
 void brick6_fm_runtime_set_base_voice(uint8_t instance_id,
                                       const track_tone_fm_base_voice_t *base);
+/* AUDIO-private sample-boundary commit. Setters only update target state and
+ * dirty masks; this performs each bounded derived-state rebuild once. */
+void brick6_fm_runtime_finalize_pending(void);
 uint8_t brick6_fm_runtime_get_base_voice(uint8_t instance_id,
                                          track_tone_fm_base_voice_t *out_base);
 uint8_t brick6_fm_runtime_get_macros(uint8_t instance_id,

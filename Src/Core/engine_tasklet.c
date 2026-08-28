@@ -1,38 +1,35 @@
 /**
  * @file engine_tasklet.c
- * @brief Cadence moteur basée sur les frames audio
- *        (tick aligné sur le block audio : 32 frames = 1500 Hz @48 kHz).
+ * @brief Cadence moteur CONTROL autonome derivee de TIM5.
  *
- * Ce module accumule les frames audio notifiées depuis l'IRQ DMA,
- * puis déclenche un tick logique stable hors IRQ dans la boucle principale.
+ * TIM5 et SAI derivent du meme HSE. CONTROL convertit donc directement les
+ * ticks TIM5 en frames nominales, sans reveil ni compteur publie par AUDIO.
  *
  * Rôle dans le système:
- * - Fournit une base de temps déterministe dérivée de l'audio.
+ * - Fournit une base de temps deterministe dans le domaine CONTROL.
  * - Cadence l'engine (séquenceur, UI, automation) sans perturber l'IRQ audio.
  *
  * Contraintes temps réel:
- * - Critique audio: oui indirectement (appel notify_frames en IRQ, ultra cheap).
- * - IRQ: oui (engine_tasklet_notify_frames appelé dans callbacks audio).
+ * - Critique audio: non.
+ * - IRQ: non.
  * - Tasklet: oui (engine_tasklet_poll appelé dans la main loop).
  * - Borné: oui (consommation tick par tick, section critique minimale).
  *
  * Architecture:
- * - Appelé par: callbacks audio DMA (notify_frames),
- *              main loop (engine_tasklet_poll).
+ * - Appele par: main loop (engine_tasklet_poll).
  * - Appelle: aucun module externe.
  *
  * Règles:
  * - Pas de malloc.
  * - Aucun traitement lourd en IRQ.
- * - AUDIO publie un compteur monotone; CONTROL possede seul le curseur consomme.
+ * - Aucun etat AUDIO n'est lu ou publie pour cette cadence.
  *
  * @note L’API publique est déclarée dans engine_tasklet.h.
  */
 
 #include "engine_tasklet.h"
 #include "stm32h7xx_hal.h"
-#include "Audio/audio.h"
-#include "Storage/memory_layout.h"
+#include "Core/live_clock.h"
 
 #include "buttons.h"
 #include "encoders.h"
@@ -42,13 +39,14 @@
 
 volatile uint32_t engine_tick_count = 0U;
 
-/* AUDIO publishes a monotonic total; CONTROL owns the consumed cursor. */
-D3_IPC static volatile uint32_t engine_audio_frames_published;
-static uint32_t engine_control_frames_consumed;
-
 /* Tick fixed = 32 frames */
 static uint32_t engine_frames_per_tick = 32U;
 static uint32_t engine_last_poll_ms = 0U;
+static uint32_t engine_sample_rate_hz = 48000U;
+static uint32_t engine_tim5_hz;
+static uint32_t engine_tim5_last_tick;
+static uint64_t engine_tim5_frame_remainder;
+static uint64_t engine_control_frames_pending;
 
 /* ============================================================
    Internal tick
@@ -103,11 +101,12 @@ static void engine_tick(uint32_t dt_ms)
  */
 void engine_tasklet_init(uint32_t sample_rate)
 {
-  (void)sample_rate;
-
   engine_tick_count = 0U;
-  engine_audio_frames_published = 0U;
-  engine_control_frames_consumed = 0U;
+  engine_sample_rate_hz = (sample_rate != 0U) ? sample_rate : 48000U;
+  engine_tim5_hz = live_clock_get_tim5_hz();
+  engine_tim5_last_tick = live_clock_capture_tick();
+  engine_tim5_frame_remainder = 0U;
+  engine_control_frames_pending = 0U;
 
   /* Tick aligned with AUDIO_FRAMES_PER_HALF = 32
      => 48kHz / 32 = 1500 Hz stable */
@@ -117,35 +116,6 @@ void engine_tasklet_init(uint32_t sample_rate)
   buttons_init();
   encoders_init();
   mux_pots_init();
-}
-
-/* ============================================================
-   Called from audio IRQ (cheap)
-   ============================================================ */
-
-/**
- * @brief Notifie le tasklet du nombre de frames audio traitées.
- *
- * @param frames Frames traitées par l'IRQ audio.
- *
- * Contexte d'appel:
- * - IRQ audio uniquement, chemin ultra court.
- */
-/**
- * @brief Point d'entrée engine_tasklet_notify_frames.
- *
- * Rôle:
- * - Exécuter le traitement associé à engine_tasklet_notify_frames.
- *
- * @param frames Paramètre d'entrée de l'API.
- *
- * Contexte d'appel:
- * - init / main loop / tasklet selon le module.
- */
-void engine_tasklet_notify_frames(uint32_t frames)
-{
-  engine_audio_frames_published += frames;
-  __DMB();
 }
 
 /* ============================================================
@@ -172,15 +142,24 @@ void engine_tasklet_poll(void)
 {
   uint32_t ticks_processed = 0U;
 
+  if (engine_tim5_hz != 0U)
+  {
+    const uint32_t now_tick = live_clock_capture_tick();
+    const uint32_t elapsed_ticks = now_tick - engine_tim5_last_tick;
+    engine_tim5_last_tick = now_tick;
+    const uint64_t scaled = engine_tim5_frame_remainder
+      + (uint64_t)elapsed_ticks * engine_sample_rate_hz;
+    engine_control_frames_pending += scaled / engine_tim5_hz;
+    engine_tim5_frame_remainder = scaled % engine_tim5_hz;
+  }
+
   while (ticks_processed < ENGINE_TASKLET_MAX_TICKS_PER_POLL)
   {
-    __DMB();
-    const uint32_t published = engine_audio_frames_published;
-    if ((published - engine_control_frames_consumed) < engine_frames_per_tick)
+    if (engine_control_frames_pending < engine_frames_per_tick)
     {
       break;
     }
-    engine_control_frames_consumed += engine_frames_per_tick;
+    engine_control_frames_pending -= engine_frames_per_tick;
 
     uint32_t now_ms = HAL_GetTick();
     uint32_t dt_ms = now_ms - engine_last_poll_ms;
@@ -194,8 +173,8 @@ void engine_tasklet_poll(void)
     ticks_processed++;
   }
 
-  /* Keep controls/UI alive when audio boot failed and no DMA frames can tick us. */
-  if ((ticks_processed == 0U) && (audio_get_init_state() == AUDIO_INIT_ERROR))
+  /* Defensive fallback if TIM5 was not configured by the board image. */
+  if ((ticks_processed == 0U) && (engine_tim5_hz == 0U))
   {
     const uint32_t now_ms = HAL_GetTick();
     const uint32_t dt_ms = now_ms - engine_last_poll_ms;

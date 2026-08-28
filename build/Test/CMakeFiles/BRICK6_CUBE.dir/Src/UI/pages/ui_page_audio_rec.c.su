@@ -1,0 +1,16 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:305:20:ui_page_audio_rec_error_label	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:452:13:ui_page_audio_rec_draw_minmax_column	56	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:787:16:ui_page_audio_rec_wavecache_request_visible	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:263:13:ui_page_audio_rec_tick	11824	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:173:13:ui_page_audio_rec_handle_event	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:161:13:ui_page_audio_rec_enter	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:167:13:ui_page_rec_edit_enter	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:129:13:ui_page_audio_rec_draw_label	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:199:13:ui_page_rec_edit_handle_event	11824	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:560:13:ui_page_audio_rec_draw_line_waveform	104	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:438:17:ui_page_audio_rec_edit_vertical_ref	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:1239:13:ui_page_audio_rec_draw_marker_bar	11952	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:1503:13:ui_page_audio_rec_render	11872	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:1554:13:ui_page_rec_edit_render	11832	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:1616:9:ui_page_audio_rec_handle_encoder	11832	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c:1649:9:ui_page_audio_rec_is_open	8	static

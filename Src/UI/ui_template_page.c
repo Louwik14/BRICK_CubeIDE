@@ -346,7 +346,6 @@ const ui_template_family_t *ui_template_family_resolve_effective_for_track(ui_te
     }
 
     track_runtime_ui_ensemble_t ensemble = TRACK_RUNTIME_UI_ENSEMBLE_COUNT;
-    track_runtime_refresh_track(owner_track);
     if ((ui_template_family_to_runtime_ensemble(family_id, &ensemble) == 0U)
             || (track_runtime_is_ui_ensemble_available(owner_track, ensemble) == 0U))
     {

@@ -18,6 +18,10 @@
 #include "Storage/audio_recorder.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/wav_audio_codec.h"
+#include "Audio/control_audio_command.h"
+#include "Audio/control_audio_fifo.h"
+#include "Core/control_audio_publication.h"
+#include "Core/live_clock.h"
 #include "stm32h7xx_hal.h"
 
 #if defined(__has_include)
@@ -92,16 +96,56 @@ _Static_assert(sizeof(sd_preview_ring_ipc_t) == 32U,
                "Preview ring IPC ABI changed");
 
 D3_IPC static sd_preview_ring_ipc_t g_sd_preview_ring_ipc;
+static uint32_t g_sd_preview_control_epoch;
+static uint32_t g_sd_preview_reset_fence;
+static uint8_t g_sd_preview_reset_pending;
+static uint8_t g_sd_preview_reset_publish_failed;
 
-static void sd_preview_ring_reset(void)
+static void sd_preview_publish_active(uint8_t active)
 {
-    g_sd_preview_ring_ipc.active = 0U;
+    uint64_t sample_time = 0U;
+    if (live_clock_read_audio_sample(&sample_time))
+        (void)control_audio_publish_param(active, CONTROL_AUDIO_PARAM_PREVIEW_ACTIVE,
+                                          g_sd_preview_control_epoch, 0U,
+                                          sample_time);
+}
+
+static void sd_preview_ring_request_reset(void)
+{
+    if (g_sd_preview_reset_pending != 0U) return;
+    ++g_sd_preview_control_epoch;
+    if (g_sd_preview_control_epoch == 0U) g_sd_preview_control_epoch = 1U;
+    g_sd_preview_reset_fence = 0U;
+    g_sd_preview_reset_publish_failed = 0U;
+    g_sd_preview_reset_pending = 1U;
+}
+
+static uint8_t sd_preview_ring_service_reset(void)
+{
+    if (g_sd_preview_reset_pending == 0U) return 1U;
+    if (g_sd_preview_reset_publish_failed != 0U) return 0U;
+    if (g_sd_preview_reset_fence == 0U)
+    {
+        uint64_t sample_time = 0U;
+        if (!live_clock_read_audio_sample(&sample_time)
+                || (control_audio_fifo_control_free() == 0U))
+            return 0U;
+        if (!control_audio_publish_param_fenced(
+                0U, CONTROL_AUDIO_PARAM_PREVIEW_ACTIVE,
+                g_sd_preview_control_epoch, 0U, sample_time,
+                &g_sd_preview_reset_fence))
+        {
+            g_sd_preview_reset_publish_failed = 1U;
+            return 0U;
+        }
+    }
+    if (!control_audio_consumer_fence_consumed(g_sd_preview_reset_fence))
+        return 0U;
     g_sd_preview_ring_ipc.write_count = 0U;
     __DMB();
-    uint32_t epoch = g_sd_preview_ring_ipc.epoch + 1U;
-    if (epoch == 0U) epoch = 1U;
-    g_sd_preview_ring_ipc.epoch = epoch;
-    __DMB();
+    g_sd_preview_reset_fence = 0U;
+    g_sd_preview_reset_pending = 0U;
+    return 1U;
 }
 
 static uint32_t sd_preview_ring_producer_count(void)
@@ -212,7 +256,7 @@ static void sd_preview_clear_session(uint8_t clear_error, uint8_t clear_state)
         g_sd_preview.gate_held = 0U;
     }
 
-    sd_preview_ring_reset();
+    sd_preview_ring_request_reset();
     sd_preview_reset_source_state();
 
     if (clear_state != 0U)
@@ -338,7 +382,6 @@ static uint8_t sd_preview_prepare_stream(void)
     }
 #endif
 
-    sd_preview_ring_reset();
     sd_preview_reset_source_state();
     const uint32_t aligned_data_size = g_sd_preview.info.data_size
                                      - (g_sd_preview.info.data_size % g_sd_preview.info.block_align);
@@ -480,8 +523,7 @@ static void sd_preview_fill_ring(void)
             && (sd_preview_ring_producer_count() != 0U))
     {
         g_sd_preview.state = SD_PREVIEW_STATE_STREAMING;
-        g_sd_preview_ring_ipc.active = 1U;
-        __DMB();
+        sd_preview_publish_active(1U);
     }
 
     if ((g_sd_preview.stream_ended != 0U)
@@ -498,8 +540,15 @@ void sd_preview_init(void)
     g_sd_preview.state = SD_PREVIEW_STATE_IDLE;
     g_sd_preview.last_error = SD_PREVIEW_ERROR_NONE;
     g_sd_preview.gain = 1.0f;
+    g_sd_preview_control_epoch = 0U;
+    g_sd_preview_reset_fence = 0U;
+    g_sd_preview_reset_pending = 0U;
+    g_sd_preview_reset_publish_failed = 0U;
+    g_sd_preview_ring_ipc.write_count = 0U;
+    g_sd_preview_ring_ipc.read_count = 0U;
+    g_sd_preview_ring_ipc.epoch = 0U;
+    g_sd_preview_ring_ipc.active = 0U;
     g_sd_preview_ring_ipc.gain = 1.0f;
-    sd_preview_ring_reset();
     sd_preview_reset_source_state();
 }
 
@@ -546,8 +595,11 @@ void sd_preview_set_gain(float gain)
     }
 
     g_sd_preview.gain = gain;
-    g_sd_preview_ring_ipc.gain = gain;
-    __DMB();
+    union { float f; uint32_t u; } encoded = { .f = gain };
+    uint64_t sample_time = 0U;
+    if (live_clock_read_audio_sample(&sample_time))
+        (void)control_audio_publish_param(0U, CONTROL_AUDIO_PARAM_PREVIEW_GAIN,
+                                          encoded.u, 0U, sample_time);
 }
 
 float sd_preview_get_gain(void)
@@ -696,6 +748,8 @@ void sd_preview_stop(void)
 
 void sd_preview_process(void)
 {
+    if (sd_preview_ring_service_reset() == 0U)
+        return;
     if ((g_sd_preview.state != SD_PREVIEW_STATE_OPENING)
         && (g_sd_preview.state != SD_PREVIEW_STATE_STREAMING))
     {
@@ -761,4 +815,18 @@ uint8_t sd_preview_render_main(float *out_main_l, float *out_main_r, uint32_t fr
     }
 
     return mixed;
+}
+
+uint8_t sd_preview_audio_apply_active(uint8_t active, uint32_t epoch)
+{
+    g_sd_preview_ring_ipc.epoch = epoch;
+    g_sd_preview_ring_ipc.active = (uint8_t)(active != 0U);
+    return 1U;
+}
+
+uint8_t sd_preview_audio_apply_gain(uint32_t gain_bits)
+{
+    union { uint32_t u; float f; } decoded = { .u = gain_bits };
+    g_sd_preview_ring_ipc.gain = decoded.f;
+    return 1U;
 }

@@ -1,103 +1,26 @@
 #include "Core/track_sound_state.h"
 
 #include <stddef.h>
-
-#include "Param/param_registry.h"
-#include "Storage/memory_layout.h"
 #include "Seq/seq_types.h"
+#include "Storage/memory_layout.h"
 
 SEQ_STATE_D2 static track_sound_state_t g_track_sound_state[SEQ_LANE_CAPACITY];
 
-static const param_id_t g_track_sound_lfo_default_params[MOD_LFO_COUNT_PER_TRACK][MOD_LFO_PARAM_COUNT] = {
-    { PARAM_LFO1_RATE, PARAM_LFO1_SHAPE, PARAM_LFO1_TRIG, PARAM_LFO1_PHASE },
-    { PARAM_LFO2_RATE, PARAM_LFO2_SHAPE, PARAM_LFO2_TRIG, PARAM_LFO2_PHASE },
-    { PARAM_LFO3_RATE, PARAM_LFO3_SHAPE, PARAM_LFO3_TRIG, PARAM_LFO3_PHASE },
-};
-
 void track_sound_state_make_default(track_sound_state_t *state)
 {
-    if (state == NULL)
-    {
-        return;
-    }
-
-    state->mix_level = param_registry[PARAM_MIX_LEVEL].default_value;
-    state->mix_pan = param_registry[PARAM_MIX_PAN].default_value;
-    state->mix_send1 = param_registry[PARAM_MIX_SEND1].default_value;
-    state->mix_send2 = param_registry[PARAM_MIX_SEND2].default_value;
-    state->mix_send3 = param_registry[PARAM_MIX_SEND3].default_value;
-    state->mix_mute = param_registry[PARAM_MIX_MUTE].default_value;
-    state->morph = param_registry[PARAM_FILTER_MORPH].default_value;
-    state->cutoff = param_registry[PARAM_FILTER_CUTOFF].default_value;
-    state->resonance = param_registry[PARAM_FILTER_RESONANCE].default_value;
-    state->eg_amount = param_registry[PARAM_FILTER_EG_AMT].default_value;
-    state->attack = param_registry[PARAM_FILTER_ATTACK].default_value;
-    state->decay = param_registry[PARAM_FILTER_DECAY].default_value;
-    state->sustain = param_registry[PARAM_FILTER_SUSTAIN].default_value;
-    state->release = param_registry[PARAM_FILTER_RELEASE].default_value;
-    state->keytrack = param_registry[PARAM_FILTER_KEYTRK].default_value;
-    state->env_reset = param_registry[PARAM_FILTER_ENVRST].default_value;
-    state->env_delay = param_registry[PARAM_FILTER_ENVDLY].default_value;
-    state->vca_attack = param_registry[PARAM_VCA_ATTACK].default_value;
-    state->vca_decay = param_registry[PARAM_VCA_DECAY].default_value;
-    state->vca_sustain = param_registry[PARAM_VCA_SUSTAIN].default_value;
-    state->vca_release = param_registry[PARAM_VCA_RELEASE].default_value;
-    state->filter_mode = param_registry[PARAM_FILTER_MODE].default_value;
-    state->env_retrig_filter = param_registry[PARAM_ENV_RETRIG_FILTER].default_value;
-    state->env_retrig_vca = param_registry[PARAM_ENV_RETRIG_VCA].default_value;
-    state->env_retrig_mod = param_registry[PARAM_ENV_RETRIG_MOD].default_value;
-    for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
-    {
-        state->mod_lfo[lfo].rate = param_registry[g_track_sound_lfo_default_params[lfo][MOD_LFO_PARAM_RATE]].default_value;
-        state->mod_lfo[lfo].shape = param_registry[g_track_sound_lfo_default_params[lfo][MOD_LFO_PARAM_SHAPE]].default_value;
-        state->mod_lfo[lfo].trig = param_registry[g_track_sound_lfo_default_params[lfo][MOD_LFO_PARAM_TRIG]].default_value;
-        state->mod_lfo[lfo].phase = param_registry[g_track_sound_lfo_default_params[lfo][MOD_LFO_PARAM_PHASE]].default_value;
-    }
-    state->mod_multi[0].source_a = (uint8_t)param_registry[PARAM_MOD_MULTI_1_A].default_value;
-    state->mod_multi[0].source_b = (uint8_t)param_registry[PARAM_MOD_MULTI_1_B].default_value;
-    state->mod_multi[1].source_a = (uint8_t)param_registry[PARAM_MOD_MULTI_2_A].default_value;
-    state->mod_multi[1].source_b = (uint8_t)param_registry[PARAM_MOD_MULTI_2_B].default_value;
-    state->mod_slew[0].source = (uint8_t)param_registry[PARAM_MOD_SLEW_1_SOURCE].default_value;
-    state->mod_slew[0].amount = param_registry[PARAM_MOD_SLEW_1_AMOUNT].default_value;
-    state->mod_slew[1].source = (uint8_t)param_registry[PARAM_MOD_SLEW_2_SOURCE].default_value;
-    state->mod_slew[1].amount = param_registry[PARAM_MOD_SLEW_2_AMOUNT].default_value;
-    state->mod_env3.attack = 0.0f;
-    state->mod_env3.decay = 32.0f;
-    state->mod_env3.sustain = 127.0f;
-    state->mod_env3.release = 32.0f;
-    mod_matrix_set_defaults(state->mod_matrix, &state->mod_matrix_selected_slot);
-    state->audio_fx_model = (uint8_t)param_registry[PARAM_AUDIO_FX_MODEL].default_value;
-    state->audio_fx_p1 = param_registry[PARAM_AUDIO_FX_P1].default_value;
-    state->audio_fx_p2 = param_registry[PARAM_AUDIO_FX_P2].default_value;
-    state->audio_fx_p3 = param_registry[PARAM_AUDIO_FX_P3].default_value;
-    state->audio_fx_b_model = (uint8_t)param_registry[PARAM_AUDIO_FX_B_MODEL].default_value;
-    state->audio_fx_b_p1 = param_registry[PARAM_AUDIO_FX_B_P1].default_value;
-    state->audio_fx_b_p2 = param_registry[PARAM_AUDIO_FX_B_P2].default_value;
-    state->audio_fx_b_p3 = param_registry[PARAM_AUDIO_FX_B_P3].default_value;
-    state->audio_fx_filter_pos = (uint8_t)param_registry[PARAM_AUDIO_FX_FILTER_POS].default_value;
-    state->audio_fx_order = (uint8_t)param_registry[PARAM_AUDIO_FX_ORDER].default_value;
-    state->audio_fx_mode_a = (uint8_t)param_registry[PARAM_AUDIO_FX_MODE_A].default_value;
-    state->audio_fx_mode_b = (uint8_t)param_registry[PARAM_AUDIO_FX_MODE_B].default_value;
-    state->group_fx_a_level = param_registry[PARAM_GROUP_FX_A_LEVEL].default_value;
-    state->group_fx_b_level = param_registry[PARAM_GROUP_FX_B_LEVEL].default_value;
+    if (state != NULL)
+        mod_matrix_set_defaults(state->mod_matrix, &state->mod_matrix_selected_slot);
 }
 
 void track_sound_state_init(void)
 {
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
-    {
         track_sound_state_make_default(&g_track_sound_state[track]);
-    }
 }
 
 track_sound_state_t *track_sound_state_get(uint8_t track)
 {
-    if (track >= SEQ_LANE_CAPACITY)
-    {
-        return NULL;
-    }
-
-    return &g_track_sound_state[track];
+    return (track < SEQ_LANE_CAPACITY) ? &g_track_sound_state[track] : NULL;
 }
 
 const track_sound_state_t *track_sound_state_get_const(uint8_t track)

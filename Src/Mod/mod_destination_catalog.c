@@ -15,10 +15,9 @@
 #include "Core/synth_polyphony.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
+#include "Core/control_audio_program.h"
 #include "Core/track_runtime.h"
 #include "Core/entity_topology.h"
-#include "Core/track_tone_sound_state.h"
-#include "Core/track_sound_state.h"
 #include "Param/param_filter.h"
 #include "Param/audio_fx_param_catalog.h"
 #include "Param/param_registry.h"
@@ -35,12 +34,29 @@
 #undef SEQ_TRACK_COUNT
 #define SEQ_TRACK_COUNT SEQ_LANE_CAPACITY
 
+static uint8_t mod_destination_control_u8(uint8_t track, param_id_t id,
+                                          uint8_t fallback)
+{
+    float value = (float)fallback;
+    (void)param_registry_get_track_value(id, track, &value);
+    return (uint8_t)(value + 0.5f);
+}
+
+static uint8_t mod_destination_md_slot_count(uint8_t track)
+{
+    const uint8_t model = mod_destination_control_u8(
+        track, PARAM_DRUM_MD_MODEL, 0U);
+    return md_model_profile_get(md_model_validate((float)model))->slot_count;
+}
+
+static uint8_t mod_destination_is_dynamic_prism_param(param_id_t dest);
+
 typedef struct
 {
     uint8_t valid;
     uint8_t ui_family;
     uint8_t ui_type;
-    uint8_t rt_bind_state;
+    uint8_t rt_active;
     uint8_t rt_family;
     uint8_t rt_type;
     uint8_t rt_mix_track_id;
@@ -56,13 +72,17 @@ typedef struct
 
 typedef struct
 {
-    uint8_t bind_state;
+    uint8_t active;
     uint8_t family;
     uint8_t type;
     uint8_t mix_track_id;
     uint8_t audio_routable;
     uint8_t supports_vca_gate;
     uint8_t drum_md_slot_count;
+    uint8_t group_child;
+    uint8_t audio_fx_model[2];
+    uint8_t prism_model[2];
+    uint8_t stack_model[BRICK6_STACK_SLOT_COUNT];
 } mod_destination_context_view_t;
 
 typedef struct
@@ -166,7 +186,7 @@ static uint8_t mod_destination_is_poly_filter_voice_local(param_id_t dest)
 }
 
 static ui_track_family_t mod_destination_family_for_track(
-    uint8_t track, const audio_binding_snapshot_t *ctx)
+    uint8_t track, const track_runtime_ctx_t *ctx)
 {
     entity_topology_descriptor_t entity;
     if ((entity_topology_get((brick_entity_id_t)track, &entity) != 0U)
@@ -199,7 +219,7 @@ static ui_track_family_t mod_destination_family_for_track(
 }
 
 static ui_track_type_t mod_destination_type_for_track(
-    uint8_t track, const audio_binding_snapshot_t *ctx)
+    uint8_t track, const track_runtime_ctx_t *ctx)
 {
     entity_topology_descriptor_t entity;
     if ((entity_topology_get((brick_entity_id_t)track, &entity) != 0U)
@@ -414,9 +434,9 @@ static uint8_t mod_destination_apply_simple_mix_rt(uint8_t track,
 {
     if ((track >= SEQ_TRACK_COUNT)
             || (ctx == NULL)
-            || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->program_route.active == 0U)
             || (audio_note_engine_adapter_ctx_is_audio_routable(ctx) == 0U)
-            || (ctx->audio_binding.mix_track_id >= MIXER_MAX_TRACKS))
+            || (ctx->program_route.mix_track_id >= MIXER_MAX_TRACKS))
     {
         return 0U;
     }
@@ -424,19 +444,19 @@ static uint8_t mod_destination_apply_simple_mix_rt(uint8_t track,
     switch (dest)
     {
         case PARAM_MIX_LEVEL:
-            mixer_set_track_gain(ctx->audio_binding.mix_track_id, mod_destination_clampf(value, 0.0f, 2.0f));
+            mixer_set_track_gain(ctx->program_route.mix_track_id, mod_destination_clampf(value, 0.0f, 2.0f));
             return 1U;
         case PARAM_MIX_PAN:
-            mixer_set_track_pan(ctx->audio_binding.mix_track_id, mod_destination_clampf(value, -1.0f, 1.0f));
+            mixer_set_track_pan(ctx->program_route.mix_track_id, mod_destination_clampf(value, -1.0f, 1.0f));
             return 1U;
         case PARAM_MIX_SEND1:
-            mixer_set_track_send_level(ctx->audio_binding.mix_track_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
+            mixer_set_track_send_level(ctx->program_route.mix_track_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_MIX_SEND2:
-            mixer_set_track_send_level(ctx->audio_binding.mix_track_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
+            mixer_set_track_send_level(ctx->program_route.mix_track_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_MIX_SEND3:
-            mixer_set_track_send_level(ctx->audio_binding.mix_track_id, 2U, mod_destination_clampf(value, 0.0f, 1.0f));
+            mixer_set_track_send_level(ctx->program_route.mix_track_id, 2U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         default:
             return 0U;
@@ -449,9 +469,9 @@ static uint8_t mod_destination_apply_filter_rt(uint8_t track,
                                                float value)
 {
     if ((ctx == NULL)
-            || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->program_route.active == 0U)
             || (audio_note_engine_adapter_ctx_is_audio_routable(ctx) == 0U)
-            || (ctx->audio_binding.mix_track_id >= MIXER_MAX_TRACKS)
+            || (ctx->program_route.mix_track_id >= MIXER_MAX_TRACKS)
             || ((ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_EXTERNAL)
                 && (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
                 && (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
@@ -463,29 +483,29 @@ static uint8_t mod_destination_apply_filter_rt(uint8_t track,
     switch (dest)
     {
         case PARAM_FILTER_CUTOFF:
-            mixer_set_track_filter_cutoff_modulated(ctx->audio_binding.mix_track_id,
+            mixer_set_track_filter_cutoff_modulated(ctx->program_route.mix_track_id,
                                                     param_filter_ui127_to_cutoff_hz(value));
             return 1U;
         case PARAM_FILTER_RESONANCE:
-            mixer_set_track_filter_resonance(ctx->audio_binding.mix_track_id, param_filter_ui127_to_resonance(value));
+            mixer_set_track_filter_resonance(ctx->program_route.mix_track_id, param_filter_ui127_to_resonance(value));
             return 1U;
         case PARAM_FILTER_EG_AMT:
-            mixer_set_track_filter_eg_amount(ctx->audio_binding.mix_track_id, param_filter_ui127_to_eg_amount(value));
+            mixer_set_track_filter_eg_amount(ctx->program_route.mix_track_id, param_filter_ui127_to_eg_amount(value));
             return 1U;
         case PARAM_FILTER_ATTACK:
-            mixer_set_track_filter_attack(ctx->audio_binding.mix_track_id, param_filter_ui127_to_attack_s(value));
+            mixer_set_track_filter_attack(ctx->program_route.mix_track_id, param_filter_ui127_to_attack_s(value));
             return 1U;
         case PARAM_FILTER_DECAY:
-            mixer_set_track_filter_decay(ctx->audio_binding.mix_track_id, param_filter_ui127_to_decay_s(value));
+            mixer_set_track_filter_decay(ctx->program_route.mix_track_id, param_filter_ui127_to_decay_s(value));
             return 1U;
         case PARAM_FILTER_SUSTAIN:
-            mixer_set_track_filter_sustain(ctx->audio_binding.mix_track_id, param_filter_ui127_to_sustain(value));
+            mixer_set_track_filter_sustain(ctx->program_route.mix_track_id, param_filter_ui127_to_sustain(value));
             return 1U;
         case PARAM_FILTER_RELEASE:
-            mixer_set_track_filter_release(ctx->audio_binding.mix_track_id, param_filter_ui127_to_release_s(value));
+            mixer_set_track_filter_release(ctx->program_route.mix_track_id, param_filter_ui127_to_release_s(value));
             return 1U;
         case PARAM_FILTER_KEYTRK:
-            mixer_set_track_filter_keytrack(ctx->audio_binding.mix_track_id, param_filter_ui127_to_keytrack(value));
+            mixer_set_track_filter_keytrack(ctx->program_route.mix_track_id, param_filter_ui127_to_keytrack(value));
             return 1U;
         default:
             return 0U;
@@ -498,9 +518,9 @@ static uint8_t mod_destination_apply_vca_rt(uint8_t track,
                                             float value)
 {
     if ((ctx == NULL)
-            || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->program_route.active == 0U)
             || (audio_note_engine_adapter_ctx_is_audio_routable(ctx) == 0U)
-            || (ctx->audio_binding.mix_track_id >= MIXER_MAX_TRACKS)
+            || (ctx->program_route.mix_track_id >= MIXER_MAX_TRACKS)
             || (audio_note_engine_adapter_ctx_supports_vca_gate(ctx) == 0U))
     {
         return 0U;
@@ -509,21 +529,21 @@ static uint8_t mod_destination_apply_vca_rt(uint8_t track,
     switch (dest)
     {
         case PARAM_VCA_ATTACK:
-            mixer_set_track_vca_attack(ctx->audio_binding.mix_track_id, param_filter_ui127_to_attack_s(value));
+            mixer_set_track_vca_attack(ctx->program_route.mix_track_id, param_filter_ui127_to_attack_s(value));
             return 1U;
         case PARAM_VCA_DECAY:
-            mixer_set_track_vca_decay(ctx->audio_binding.mix_track_id, param_filter_ui127_to_decay_s(value));
+            mixer_set_track_vca_decay(ctx->program_route.mix_track_id, param_filter_ui127_to_decay_s(value));
             return 1U;
         case PARAM_VCA_SUSTAIN:
-            mixer_set_track_vca_sustain(ctx->audio_binding.mix_track_id, param_filter_ui127_to_sustain(value));
+            mixer_set_track_vca_sustain(ctx->program_route.mix_track_id, param_filter_ui127_to_sustain(value));
             return 1U;
         case PARAM_VCA_RELEASE:
         {
             const float release_s = param_filter_ui127_to_release_s(value);
-            mixer_set_track_vca_release(ctx->audio_binding.mix_track_id, release_s);
-            if (ctx->audio_binding.engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
+            mixer_set_track_vca_release(ctx->program_route.mix_track_id, release_s);
+            if (ctx->program_route.engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
             {
-                brick6_braids_runtime_set_vca_release_seconds(ctx->audio_binding.instance_id, release_s);
+                brick6_braids_runtime_set_vca_release_seconds(ctx->program_route.instance_id, release_s);
             }
             return 1U;
         }
@@ -539,7 +559,7 @@ static uint8_t mod_destination_apply_sampler_rt(uint8_t track,
 {
     if ((track >= SEQ_TRACK_COUNT)
             || (ctx == NULL)
-            || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->program_route.active == 0U)
             || (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER))
     {
         return 0U;
@@ -641,8 +661,8 @@ static uint8_t mod_destination_apply_prism_rt(uint8_t track,
     (void)track;
 
     if ((ctx == NULL)
-            || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->audio_binding.engine != (uint8_t)TRACK_RUNTIME_ENGINE_PRISM))
+            || (ctx->program_route.active == 0U)
+            || (ctx->program_route.engine != (uint8_t)TRACK_RUNTIME_ENGINE_PRISM))
     {
         return 0U;
     }
@@ -650,40 +670,40 @@ static uint8_t mod_destination_apply_prism_rt(uint8_t track,
     switch (dest)
     {
         case PARAM_PRISM_TUNE:
-            brick6_braids_runtime_set_tune(ctx->audio_binding.instance_id, mod_destination_clampf(value, -60.0f, 60.0f));
+            brick6_braids_runtime_set_tune(ctx->program_route.instance_id, mod_destination_clampf(value, -60.0f, 60.0f));
             return 1U;
         case PARAM_PRISM_DETUNE:
-            brick6_braids_runtime_set_detune(ctx->audio_binding.instance_id, mod_destination_clampf(value, -24.0f, 24.0f));
+            brick6_braids_runtime_set_detune(ctx->program_route.instance_id, mod_destination_clampf(value, -24.0f, 24.0f));
             return 1U;
         case PARAM_PRISM_DRIFT:
-            brick6_braids_runtime_set_drift(ctx->audio_binding.instance_id, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_braids_runtime_set_drift(ctx->program_route.instance_id, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_PRISM_PITCH_MOD1:
-            brick6_braids_runtime_set_osc_pitch_mod(ctx->audio_binding.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_braids_runtime_set_osc_pitch_mod(ctx->program_route.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_PRISM_OSC1_PARAM1:
-            brick6_braids_runtime_set_osc_timbre(ctx->audio_binding.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_braids_runtime_set_osc_timbre(ctx->program_route.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_PRISM_OSC1_AMOD:
-            brick6_braids_runtime_set_osc_modulation(ctx->audio_binding.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_braids_runtime_set_osc_modulation(ctx->program_route.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_PRISM_OSC1_PARAM2:
-            brick6_braids_runtime_set_osc_color(ctx->audio_binding.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_braids_runtime_set_osc_color(ctx->program_route.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_PRISM_BALANCE:
-            brick6_braids_runtime_set_balance(ctx->audio_binding.instance_id, mod_destination_clampf(value, -1.0f, 1.0f));
+            brick6_braids_runtime_set_balance(ctx->program_route.instance_id, mod_destination_clampf(value, -1.0f, 1.0f));
             return 1U;
         case PARAM_PRISM_PITCH_MOD2:
-            brick6_braids_runtime_set_osc_pitch_mod(ctx->audio_binding.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_braids_runtime_set_osc_pitch_mod(ctx->program_route.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_PRISM_OSC2_PARAM1:
-            brick6_braids_runtime_set_osc_timbre(ctx->audio_binding.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_braids_runtime_set_osc_timbre(ctx->program_route.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_PRISM_OSC2_AMOD:
-            brick6_braids_runtime_set_osc_modulation(ctx->audio_binding.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_braids_runtime_set_osc_modulation(ctx->program_route.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_PRISM_OSC2_PARAM2:
-            brick6_braids_runtime_set_osc_color(ctx->audio_binding.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_braids_runtime_set_osc_color(ctx->program_route.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         default:
             return 0U;
@@ -696,8 +716,8 @@ static uint8_t mod_destination_apply_fm_rt(uint8_t track,
                                           float value)
 {
     if ((ctx == NULL)
-            || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->audio_binding.engine != (uint8_t)TRACK_RUNTIME_ENGINE_FM)
+            || (ctx->program_route.active == 0U)
+            || (ctx->program_route.engine != (uint8_t)TRACK_RUNTIME_ENGINE_FM)
             || (mod_destination_is_direct_fm(dest) == 0U))
     {
         return 0U;
@@ -737,16 +757,16 @@ static uint8_t mod_destination_apply_stack_rt(uint8_t track,
     (void)track;
 
     if ((ctx == NULL)
-            || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->audio_binding.engine != (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
-            || (ctx->audio_binding.instance_id >= BRICK6_STACK_MAX_INSTANCES))
+            || (ctx->program_route.active == 0U)
+            || (ctx->program_route.engine != (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
+            || (ctx->program_route.instance_id >= BRICK6_STACK_MAX_INSTANCES))
     {
         return 0U;
     }
 
     if (dest == PARAM_STACK_NOISE_LEVEL)
     {
-        brick6_stack_runtime_set_noise_level(ctx->audio_binding.instance_id, mod_destination_clampf(value, 0.0f, 1.0f));
+        brick6_stack_runtime_set_noise_level(ctx->program_route.instance_id, mod_destination_clampf(value, 0.0f, 1.0f));
         return 1U;
     }
     uint8_t slot = 0U;
@@ -759,21 +779,21 @@ static uint8_t mod_destination_apply_stack_rt(uint8_t track,
     switch (slot_param)
     {
         case 0U:
-            brick6_stack_runtime_set_slot_level(ctx->audio_binding.instance_id, slot, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_stack_runtime_set_slot_level(ctx->program_route.instance_id, slot, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case 2U:
         {
             const float clamped = mod_destination_clampf(value, -24.0f, 24.0f);
-            brick6_stack_runtime_set_slot_tune(ctx->audio_binding.instance_id,
+            brick6_stack_runtime_set_slot_tune(ctx->program_route.instance_id,
                                                slot,
                                                clamped);
             return 1U;
         }
         case 3U:
-            brick6_stack_runtime_set_slot_timbre(ctx->audio_binding.instance_id, slot, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_stack_runtime_set_slot_timbre(ctx->program_route.instance_id, slot, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case 4U:
-            brick6_stack_runtime_set_slot_color(ctx->audio_binding.instance_id, slot, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_stack_runtime_set_slot_color(ctx->program_route.instance_id, slot, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         default:
             return 0U;
@@ -788,9 +808,9 @@ static uint8_t mod_destination_apply_wave_rt(uint8_t track,
     (void)track;
 
     if ((ctx == NULL)
-            || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->audio_binding.engine != (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
-            || (ctx->audio_binding.instance_id >= BRICK6_WAVE_MAX_INSTANCES))
+            || (ctx->program_route.active == 0U)
+            || (ctx->program_route.engine != (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+            || (ctx->program_route.instance_id >= BRICK6_WAVE_MAX_INSTANCES))
     {
         return 0U;
     }
@@ -798,34 +818,34 @@ static uint8_t mod_destination_apply_wave_rt(uint8_t track,
     switch (dest)
     {
         case PARAM_WAVE_OSC1_POS:
-            brick6_wave_runtime_set_osc_pos(ctx->audio_binding.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_wave_runtime_set_osc_pos(ctx->program_route.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_WAVE_OSC2_POS:
-            brick6_wave_runtime_set_osc_pos(ctx->audio_binding.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_wave_runtime_set_osc_pos(ctx->program_route.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_WAVE_OSC1_START:
-            brick6_wave_runtime_set_osc_start(ctx->audio_binding.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_wave_runtime_set_osc_start(ctx->program_route.instance_id, 0U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_WAVE_OSC2_START:
-            brick6_wave_runtime_set_osc_start(ctx->audio_binding.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_wave_runtime_set_osc_start(ctx->program_route.instance_id, 1U, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_WAVE_OSC1_LEN:
-            brick6_wave_runtime_set_osc_len(ctx->audio_binding.instance_id, 0U, mod_destination_clampf(value, 0.01f, 1.0f));
+            brick6_wave_runtime_set_osc_len(ctx->program_route.instance_id, 0U, mod_destination_clampf(value, 0.01f, 1.0f));
             return 1U;
         case PARAM_WAVE_OSC2_LEN:
-            brick6_wave_runtime_set_osc_len(ctx->audio_binding.instance_id, 1U, mod_destination_clampf(value, 0.01f, 1.0f));
+            brick6_wave_runtime_set_osc_len(ctx->program_route.instance_id, 1U, mod_destination_clampf(value, 0.01f, 1.0f));
             return 1U;
         case PARAM_WAVE_VOLUME:
-            brick6_wave_runtime_set_volume(ctx->audio_binding.instance_id, mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_wave_runtime_set_volume(ctx->program_route.instance_id, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         case PARAM_WAVE_BALANCE:
-            brick6_wave_runtime_set_balance(ctx->audio_binding.instance_id, mod_destination_clampf(value, -1.0f, 1.0f));
+            brick6_wave_runtime_set_balance(ctx->program_route.instance_id, mod_destination_clampf(value, -1.0f, 1.0f));
             return 1U;
         case PARAM_WAVE_TUNE:
-            brick6_wave_runtime_set_tune(ctx->audio_binding.instance_id, mod_destination_clampf(value, -60.0f, 60.0f));
+            brick6_wave_runtime_set_tune(ctx->program_route.instance_id, mod_destination_clampf(value, -60.0f, 60.0f));
             return 1U;
         case PARAM_WAVE_DETUNE:
-            brick6_wave_runtime_set_detune(ctx->audio_binding.instance_id, mod_destination_clampf(value, -24.0f, 24.0f));
+            brick6_wave_runtime_set_detune(ctx->program_route.instance_id, mod_destination_clampf(value, -24.0f, 24.0f));
             return 1U;
         default:
             return 0U;
@@ -840,8 +860,8 @@ static uint8_t mod_destination_apply_drum_rt(uint8_t track,
     (void)track;
 
     if ((ctx == NULL)
-            || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (ctx->audio_binding.engine != (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
+            || (ctx->program_route.active == 0U)
+            || (ctx->program_route.engine != (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
             || ((ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG)
                 && (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_DRUM_MD)))
     {
@@ -858,20 +878,20 @@ static uint8_t mod_destination_apply_drum_rt(uint8_t track,
         case PARAM_DRUM_MD_P6:
         case PARAM_DRUM_MD_P7:
         case PARAM_DRUM_MD_P8:
-            return drum_synth_set_param_for_instance(ctx->audio_binding.instance_id,
+            return drum_synth_set_param_for_instance(ctx->program_route.instance_id,
                                                      dest,
                                                      mod_destination_clampf(value, 0.0f, 127.0f));
         case PARAM_DRUM_TRX_BD_PITCH:
-            return drum_synth_set_param_for_instance(ctx->audio_binding.instance_id,
+            return drum_synth_set_param_for_instance(ctx->program_route.instance_id,
                                                      dest,
                                                      mod_destination_clampf(value, -48.0f, 24.0f));
         case PARAM_DRUM_TRX_BD_DECAY:
-            return drum_synth_set_param_for_instance(ctx->audio_binding.instance_id,
+            return drum_synth_set_param_for_instance(ctx->program_route.instance_id,
                                                      dest,
                                                      mod_destination_clampf(value, 0.01f, 2.0f));
         case PARAM_DRUM_TRX_BD_HARMONICS:
         case PARAM_DRUM_TRX_BD_PITCH_SWEEP:
-            return drum_synth_set_param_for_instance(ctx->audio_binding.instance_id,
+            return drum_synth_set_param_for_instance(ctx->program_route.instance_id,
                                                      dest,
                                                      mod_destination_clampf(value, 0.0f, 1.0f));
         default:
@@ -887,7 +907,7 @@ static uint8_t mod_destination_apply_midi_cc_rt(uint8_t track,
     const uint8_t midi_track = ((ctx != NULL) && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MIDI)) ? 1U : 0U;
     if ((track >= SEQ_TRACK_COUNT)
             || (ctx == NULL)
-            || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
+            || (ctx->program_route.active == 0U)
             || (midi_track == 0U)
             || (mod_destination_is_direct_midi_cc(dest) == 0U))
     {
@@ -1026,36 +1046,36 @@ static uint8_t mod_destination_prepared_opcode(param_id_t dest,
 uint8_t mod_destination_catalog_prepare(uint8_t target,
                                         param_id_t dest,
                                         const track_audio_runtime_ctx_t *ctx,
+                                        const mod_destination_audio_models_t *models,
                                         mod_destination_prepared_t *out)
 {
     if ((target >= SEQ_TRACK_COUNT) || (dest >= PARAM_COUNT)
             || (ctx == NULL) || (out == NULL)
-            || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND))
+            || (ctx->program_route.active == 0U))
         return 0U;
 
     mod_destination_prepared_t prepared = {
         .param = (uint16_t)dest,
         .target = target,
-        .endpoint = ctx->audio_binding.instance_id,
-        .aux = ctx->audio_binding.engine
+        .endpoint = ctx->program_route.instance_id,
+        .aux = ctx->program_route.engine
     };
     if (mod_destination_prepared_opcode(dest, &prepared.opcode,
                                         &prepared.subindex) == 0U)
         return 0U;
     if (prepared.opcode == MOD_DEST_APPLY_AUDIO_FX_DELAY)
     {
-        const track_sound_state_t *const state = track_sound_state_get_const(target);
-        const uint8_t model = (state == NULL) ? AUDIO_FX_MODEL_OFF
-            : (prepared.subindex != 0U) ? state->audio_fx_b_model
-                                       : state->audio_fx_model;
+        const uint8_t model = (models != NULL)
+            ? models->audio_fx_model[(prepared.subindex != 0U) ? 1U : 0U]
+            : AUDIO_FX_MODEL_OFF;
         if (model != AUDIO_FX_MODEL_DRIFT)
             prepared.opcode = MOD_DEST_APPLY_GENERIC;
     }
     if ((prepared.opcode >= MOD_DEST_APPLY_MIX_LEVEL)
             && (prepared.opcode <= MOD_DEST_APPLY_VCA_RELEASE))
-        prepared.endpoint = ctx->audio_binding.mix_track_id;
+        prepared.endpoint = ctx->program_route.mix_track_id;
     if (prepared.opcode == MOD_DEST_APPLY_VCA_RELEASE)
-        prepared.subindex = ctx->audio_binding.instance_id;
+        prepared.subindex = ctx->program_route.instance_id;
     if (prepared.opcode == MOD_DEST_APPLY_SAMPLER_GAIN)
         prepared.aux = ctx->type;
     else if (prepared.opcode == MOD_DEST_APPLY_MIDI_CC)
@@ -1353,14 +1373,14 @@ uint8_t mod_destination_catalog_apply_poly_voice_rt(uint8_t track,
                                                     const track_audio_runtime_ctx_t *ctx,
                                                     float value)
 {
-    if ((ctx == NULL) || (ctx->audio_binding.bind_state != TRACK_RUNTIME_BIND_BOUND))
+    if ((ctx == NULL) || (ctx->program_route.active == 0U))
     {
         return 0U;
     }
 
     track_audio_runtime_ctx_t voice_ctx = *ctx;
-    voice_ctx.audio_binding.instance_id = voice_slot;
-    if ((ctx->audio_binding.engine != (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
+    voice_ctx.program_route.instance_id = voice_slot;
+    if ((ctx->program_route.engine != (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
             && (mod_destination_is_direct_filter(dest) != 0U
                 || mod_destination_is_direct_vca(dest) != 0U))
     {
@@ -1395,7 +1415,7 @@ uint8_t mod_destination_catalog_apply_poly_voice_rt(uint8_t track,
             default: return 0U;
         }
     }
-    switch ((track_runtime_engine_t)ctx->audio_binding.engine)
+    switch ((track_runtime_engine_t)ctx->program_route.engine)
     {
         case TRACK_RUNTIME_ENGINE_PRISM:
             return (mod_destination_is_direct_prism(dest) != 0U)
@@ -1468,13 +1488,13 @@ uint8_t mod_destination_catalog_poly_voice_supported(param_id_t dest,
     if ((mod_destination_is_poly_filter_voice_local(dest) != 0U)
             || (mod_destination_is_direct_vca(dest) != 0U))
     {
-        return ((ctx->audio_binding.engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
-                || (ctx->audio_binding.engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
-                || (ctx->audio_binding.engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
-                || ((ctx->audio_binding.engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
+        return ((ctx->program_route.engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
+                || (ctx->program_route.engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
+                || (ctx->program_route.engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
+                || ((ctx->program_route.engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
                     && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI))) ? 1U : 0U;
     }
-    switch ((track_runtime_engine_t)ctx->audio_binding.engine)
+    switch ((track_runtime_engine_t)ctx->program_route.engine)
     {
         case TRACK_RUNTIME_ENGINE_PRISM: return mod_destination_is_direct_prism(dest);
         case TRACK_RUNTIME_ENGINE_STACK: return mod_destination_is_direct_stack(dest);
@@ -1606,7 +1626,7 @@ static uint8_t mod_destination_param_matches_track_context(uint8_t track,
 {
     if (domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
     {
-        if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+        if ((ctx == NULL) || (ctx->active == 0U))
         {
             return 0U;
         }
@@ -1618,16 +1638,34 @@ static uint8_t mod_destination_param_matches_track_context(uint8_t track,
         {
             return mod_destination_is_direct_fm(dest);
         }
+        uint8_t dynamic_slot = 0U;
+        uint8_t dynamic_param = 0U;
+        const char *dynamic_label = NULL;
         if (((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_STACK)
-                && (param_stack_dynamic_param_info(dest, NULL, NULL) != 0U)
-                && (param_stack_param_is_active(track, dest) == 0U))
+                && (param_stack_dynamic_param_info(dest, &dynamic_slot,
+                                                   &dynamic_param) != 0U)
+                && ((dynamic_slot >= BRICK6_STACK_SLOT_COUNT)
+                    || (param_stack_model_param_resolve(
+                        ctx->stack_model[dynamic_slot], dynamic_param,
+                        &dynamic_label) == 0U)))
         {
             return 0U;
         }
         if (((track_runtime_type_t)ctx->type == TRACK_RUNTIME_TYPE_PRISM)
-                && (param_prism_param_is_active(track, dest) == 0U))
+                && (mod_destination_is_dynamic_prism_param(dest) != 0U))
         {
-            return 0U;
+            const uint8_t osc = (uint8_t)((dest == PARAM_PRISM_OSC2_PARAM1)
+                || (dest == PARAM_PRISM_OSC2_PARAM2));
+            uint8_t edit_index = 0U;
+            (void)param_prism_edit_index_from_value(
+                (float)ctx->prism_model[osc], &edit_index);
+            const param_prism_param_label_t *const labels =
+                param_prism_labels_for_edit_index(edit_index);
+            const uint8_t param2 = (uint8_t)((dest == PARAM_PRISM_OSC1_PARAM2)
+                || (dest == PARAM_PRISM_OSC2_PARAM2));
+            if ((!param2 && (labels->kind_a == PARAM_PRISM_LABEL_VALUE_NONE))
+                    || (param2 && (labels->kind_b == PARAM_PRISM_LABEL_VALUE_NONE)))
+                return 0U;
         }
         if ((dest == PARAM_LOOPER_ARM)
                 || (dest == PARAM_LOOPER_LEN)
@@ -1692,7 +1730,7 @@ static uint8_t mod_destination_param_matches_track_context(uint8_t track,
 
         if (mod_destination_is_direct_vca(dest) != 0U)
         {
-            return ((ctx != NULL) && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND))
+            return ((ctx != NULL) && (ctx->active != 0U))
                 ? ctx->supports_vca_gate
                 : 0U;
         }
@@ -1703,7 +1741,7 @@ static uint8_t mod_destination_param_matches_track_context(uint8_t track,
 
     if (domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
     {
-        if ((ctx == NULL) || (ctx->bind_state != TRACK_RUNTIME_BIND_BOUND))
+        if ((ctx == NULL) || (ctx->active == 0U))
         {
             return 0U;
         }
@@ -1719,24 +1757,18 @@ static uint8_t mod_destination_param_matches_track_context(uint8_t track,
     {
         if (audio_fx_runtime_is_group_level_param(dest) != 0U)
         {
-            entity_topology_descriptor_t topology;
             return (uint8_t)((ctx != NULL)
-                && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
-                && (entity_topology_get((brick_entity_id_t)track, &topology) != 0U)
-                && (topology.active != 0U)
-                && (topology.role == ENTITY_ROLE_GROUP_CHILD));
+                && (ctx->active != 0U)
+                && (ctx->group_child != 0U));
         }
-        const track_sound_state_t *const state = track_sound_state_get_const(track);
         uint8_t slot = 0U;
         uint8_t param_index = 0U;
         const uint8_t is_fx_param = audio_fx_param_catalog_param_info(
             dest, &slot, &param_index);
-        const uint8_t model = (state == NULL) ? AUDIO_FX_MODEL_OFF
-            : (slot != 0U) ? state->audio_fx_b_model : state->audio_fx_model;
+        const uint8_t model = ctx->audio_fx_model[(slot != 0U) ? 1U : 0U];
         const char *name = NULL;
         return ((ctx != NULL)
-                && (ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
-                && (state != NULL)
+                && (ctx->active != 0U)
                 && (is_fx_param != 0U)
                 && (audio_fx_param_catalog_resolve(
                     model, param_index, &name) != 0U)) ? 1U : 0U;
@@ -1758,7 +1790,7 @@ static track_runtime_param_status_t mod_destination_effective_status_from_ctx(co
         case TRACK_RUNTIME_RESOURCE_NONE:
             return TRACK_RUNTIME_PARAM_ALLOWED;
         case TRACK_RUNTIME_RESOURCE_FILTER:
-            if ((ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            if ((ctx->active == 0U)
                     || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_OFF)
                     || (ctx->audio_routable == 0U))
             {
@@ -1766,7 +1798,7 @@ static track_runtime_param_status_t mod_destination_effective_status_from_ctx(co
             }
             return TRACK_RUNTIME_PARAM_ALLOWED;
         case TRACK_RUNTIME_RESOURCE_SYNTH:
-            if ((ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            if ((ctx->active == 0U)
                     || ((ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
                         && (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)))
             {
@@ -1782,7 +1814,7 @@ static track_runtime_param_status_t mod_destination_effective_status_from_ctx(co
                     ? TRACK_RUNTIME_PARAM_ALLOWED
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
         case TRACK_RUNTIME_RESOURCE_MIX:
-            if ((ctx->bind_state != TRACK_RUNTIME_BIND_BOUND)
+            if ((ctx->active == 0U)
                     || (ctx->audio_routable == 0U)
                     || (ctx->mix_track_id >= SEQ_TRACK_COUNT))
             {
@@ -1790,7 +1822,7 @@ static track_runtime_param_status_t mod_destination_effective_status_from_ctx(co
             }
             return TRACK_RUNTIME_PARAM_ALLOWED;
         case TRACK_RUNTIME_RESOURCE_AUDIO_FX:
-            return ((ctx->bind_state == TRACK_RUNTIME_BIND_BOUND)
+            return ((ctx->active != 0U)
                     && (ctx->audio_routable != 0U))
                 ? TRACK_RUNTIME_PARAM_ALLOWED
                 : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
@@ -1844,47 +1876,31 @@ static uint8_t mod_destination_catalog_supported_view(
     return ((status == TRACK_RUNTIME_PARAM_ALLOWED) || (status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)) ? 1U : 0U;
 }
 
-uint8_t mod_destination_catalog_supported_fast(uint8_t track,
-                                               param_id_t dest,
-                                               ui_track_family_t family,
-                                               ui_track_type_t type,
-                                               const track_audio_runtime_ctx_t *ctx)
-{
-    if (ctx == NULL)
-        return mod_destination_catalog_supported_view(
-            track, dest, family, type, NULL);
-    const mod_destination_context_view_t view = {
-        .bind_state = ctx->audio_binding.bind_state,
-        .family = ctx->family,
-        .type = ctx->type,
-        .mix_track_id = ctx->audio_binding.mix_track_id,
-        .audio_routable = audio_note_engine_adapter_ctx_is_audio_routable(ctx),
-        .supports_vca_gate = audio_note_engine_adapter_ctx_supports_vca_gate(ctx),
-        .drum_md_slot_count = track_tone_sound_state_md_slot_count(track)
-    };
-    return mod_destination_catalog_supported_view(
-        track, dest, family, type, &view);
-}
-
 uint8_t mod_destination_catalog_supported_audio(uint8_t track,
                                                 param_id_t dest,
                                                 ui_track_family_t family,
                                                 ui_track_type_t type,
                                                 const track_audio_runtime_ctx_t *ctx,
-                                                uint8_t drum_md_slot_count)
+                                                const mod_destination_audio_models_t *models)
 {
-    if (ctx == NULL)
+    if ((ctx == NULL) || (models == NULL))
     {
         return 0U;
     }
     const mod_destination_context_view_t view = {
-        .bind_state = ctx->audio_binding.bind_state,
+        .active = ctx->program_route.active,
         .family = ctx->family,
         .type = ctx->type,
-        .mix_track_id = ctx->audio_binding.mix_track_id,
+        .mix_track_id = ctx->program_route.mix_track_id,
         .audio_routable = audio_note_engine_adapter_ctx_is_audio_routable(ctx),
         .supports_vca_gate = audio_note_engine_adapter_ctx_supports_vca_gate(ctx),
-        .drum_md_slot_count = drum_md_slot_count
+        .drum_md_slot_count = models->drum_md_slot_count,
+        .group_child = (uint8_t)((ctx->flags
+            & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD) != 0U),
+        .audio_fx_model = { models->audio_fx_model[0], models->audio_fx_model[1] },
+        .prism_model = { models->prism_model[0], models->prism_model[1] },
+        .stack_model = { models->stack_model[0], models->stack_model[1],
+                         models->stack_model[2] }
     };
     return mod_destination_catalog_supported_view(
         track, dest, family, type, &view);
@@ -1894,45 +1910,41 @@ static uint8_t mod_destination_cache_matches_context(uint8_t track,
                                                      const mod_destination_cache_t *cache,
                                                      ui_track_family_t family,
                                                      ui_track_type_t type,
-                                                     const audio_binding_snapshot_t *snapshot)
+                                                     const track_runtime_descriptor_t *descriptor)
 {
     if ((cache == NULL) || (cache->valid == 0U))
     {
         return 0U;
     }
 
-    const uint8_t ctx_bind_state = (snapshot != NULL) ? snapshot->binding.bind_state : 0xFFU;
-    const uint8_t ctx_family = (snapshot != NULL) ? snapshot->family : 0xFFU;
-    const uint8_t ctx_type = (snapshot != NULL) ? snapshot->type : 0xFFU;
-    const uint8_t ctx_mix_track_id = (snapshot != NULL) ? snapshot->binding.mix_track_id : 0xFFU;
-    const track_sound_state_t *const state = track_sound_state_get_const(track);
-    const uint8_t audio_fx_model_a = (state != NULL)
-        ? state->audio_fx_model : AUDIO_FX_MODEL_OFF;
-    const uint8_t audio_fx_model_b = (state != NULL)
-        ? state->audio_fx_b_model : AUDIO_FX_MODEL_OFF;
-    const track_tone_sound_state_t *const tone =
-        track_tone_sound_state_get_const(track);
+    const uint8_t ctx_active = (descriptor != NULL) ? descriptor->active : 0xFFU;
+    const uint8_t ctx_family = (descriptor != NULL) ? descriptor->family : 0xFFU;
+    const uint8_t ctx_type = (descriptor != NULL) ? descriptor->type : 0xFFU;
+    const uint8_t ctx_mix_track_id = (descriptor != NULL) ? descriptor->mix_track_id : 0xFFU;
+    const uint8_t audio_fx_model_a = mod_destination_control_u8(
+        track, PARAM_AUDIO_FX_MODEL, AUDIO_FX_MODEL_OFF);
+    const uint8_t audio_fx_model_b = mod_destination_control_u8(
+        track, PARAM_AUDIO_FX_B_MODEL, AUDIO_FX_MODEL_OFF);
+    static const param_id_t prism_ids[2] = {
+        PARAM_PRISM_OSC1_MODEL, PARAM_PRISM_OSC2_MODEL };
+    static const param_id_t stack_ids[3] = {
+        PARAM_STACK_OSC1_MODEL, PARAM_STACK_OSC2_MODEL,
+        PARAM_STACK_OSC3_MODEL };
 
     return ((cache->ui_family == (uint8_t)family)
             && (cache->ui_type == (uint8_t)type)
-            && (cache->rt_bind_state == ctx_bind_state)
+            && (cache->rt_active == ctx_active)
             && (cache->rt_family == ctx_family)
             && (cache->rt_type == ctx_type)
             && (cache->rt_mix_track_id == ctx_mix_track_id)
             && (cache->audio_fx_model_a == audio_fx_model_a)
             && (cache->audio_fx_model_b == audio_fx_model_b)
-            && (cache->prism_model[0] == ((tone != NULL)
-                ? (uint8_t)(tone->prism.model[0] + 0.5f) : 0xFFU))
-            && (cache->prism_model[1] == ((tone != NULL)
-                ? (uint8_t)(tone->prism.model[1] + 0.5f) : 0xFFU))
-            && (cache->stack_model[0] == ((tone != NULL)
-                ? (uint8_t)(tone->stack.model[0] + 0.5f) : 0xFFU))
-            && (cache->stack_model[1] == ((tone != NULL)
-                ? (uint8_t)(tone->stack.model[1] + 0.5f) : 0xFFU))
-            && (cache->stack_model[2] == ((tone != NULL)
-                ? (uint8_t)(tone->stack.model[2] + 0.5f) : 0xFFU))
-            && (cache->drum_md_slot_count == ((tone != NULL)
-                ? track_tone_sound_state_md_slot_count(track) : 0U))) ? 1U : 0U;
+            && (cache->prism_model[0] == mod_destination_control_u8(track, prism_ids[0], 0xFFU))
+            && (cache->prism_model[1] == mod_destination_control_u8(track, prism_ids[1], 0xFFU))
+            && (cache->stack_model[0] == mod_destination_control_u8(track, stack_ids[0], 0xFFU))
+            && (cache->stack_model[1] == mod_destination_control_u8(track, stack_ids[1], 0xFFU))
+            && (cache->stack_model[2] == mod_destination_control_u8(track, stack_ids[2], 0xFFU))
+            && (cache->drum_md_slot_count == mod_destination_md_slot_count(track))) ? 1U : 0U;
 }
 
 static mod_destination_cache_t *mod_destination_cache_resolve(uint8_t track)
@@ -1942,33 +1954,41 @@ static mod_destination_cache_t *mod_destination_cache_resolve(uint8_t track)
         return NULL;
     }
 
-    audio_binding_snapshot_t snapshot;
-    if (audio_note_engine_adapter_snapshot_read(track, &snapshot) == 0U)
+    const track_runtime_ctx_t *const runtime = track_runtime_get_ctx(track);
+    track_runtime_descriptor_t descriptor;
+    if ((runtime == NULL)
+            || (track_runtime_get_descriptor(track, &descriptor) == 0U))
         return NULL;
     const ui_track_family_t family =
-        mod_destination_family_for_track(track, &snapshot);
+        mod_destination_family_for_track(track, runtime);
     const ui_track_type_t type =
-        mod_destination_type_for_track(track, &snapshot);
+        mod_destination_type_for_track(track, runtime);
+    entity_topology_descriptor_t topology = {0};
+    (void)entity_topology_get(track, &topology);
     const mod_destination_context_view_t view = {
-        .bind_state = snapshot.binding.bind_state,
-        .family = snapshot.family,
-        .type = snapshot.type,
-        .mix_track_id = snapshot.binding.mix_track_id,
-        .audio_routable = (uint8_t)(
-            (snapshot.binding.bind_state == TRACK_RUNTIME_BIND_BOUND)
-            && (snapshot.binding.mix_track_id != 0xFFU)
-            ),
-        .supports_vca_gate = (uint8_t)(
-            (snapshot.binding.bind_state == TRACK_RUNTIME_BIND_BOUND)
-            && ((snapshot.family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
-                || (snapshot.family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-                || (snapshot.family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM))),
-        .drum_md_slot_count = track_tone_sound_state_md_slot_count(track)
+        .active = descriptor.active,
+        .family = runtime->family,
+        .type = runtime->type,
+        .mix_track_id = descriptor.mix_track_id,
+        .audio_routable = track_runtime_is_audio_routable(track),
+        .supports_vca_gate = track_runtime_supports_vca_gate(runtime),
+        .drum_md_slot_count = mod_destination_md_slot_count(track),
+        .group_child = (uint8_t)(topology.role == ENTITY_ROLE_GROUP_CHILD),
+        .audio_fx_model = {
+            mod_destination_control_u8(track, PARAM_AUDIO_FX_MODEL, 0U),
+            mod_destination_control_u8(track, PARAM_AUDIO_FX_B_MODEL, 0U) },
+        .prism_model = {
+            mod_destination_control_u8(track, PARAM_PRISM_OSC1_MODEL, 0U),
+            mod_destination_control_u8(track, PARAM_PRISM_OSC2_MODEL, 0U) },
+        .stack_model = {
+            mod_destination_control_u8(track, PARAM_STACK_OSC1_MODEL, 0U),
+            mod_destination_control_u8(track, PARAM_STACK_OSC2_MODEL, 0U),
+            mod_destination_control_u8(track, PARAM_STACK_OSC3_MODEL, 0U) }
     };
     mod_destination_cache_t *const cache = &g_mod_destination_cache[track];
 
     if (mod_destination_cache_matches_context(
-            track, cache, family, type, &snapshot) != 0U)
+            track, cache, family, type, &descriptor) != 0U)
     {
         return cache;
     }
@@ -2012,29 +2032,30 @@ static mod_destination_cache_t *mod_destination_cache_resolve(uint8_t track)
     cache->count = count;
     cache->ui_family = (uint8_t)family;
     cache->ui_type = (uint8_t)type;
-    cache->rt_bind_state = snapshot.binding.bind_state;
-    cache->rt_family = snapshot.family;
-    cache->rt_type = snapshot.type;
-    cache->rt_mix_track_id = snapshot.binding.mix_track_id;
-    const track_sound_state_t *const state = track_sound_state_get_const(track);
-    cache->audio_fx_model_a = (state != NULL)
-        ? state->audio_fx_model : AUDIO_FX_MODEL_OFF;
-    cache->audio_fx_model_b = (state != NULL)
-        ? state->audio_fx_b_model : AUDIO_FX_MODEL_OFF;
-    const track_tone_sound_state_t *const tone =
-        track_tone_sound_state_get_const(track);
+    cache->rt_active = descriptor.active;
+    cache->rt_family = runtime->family;
+    cache->rt_type = runtime->type;
+    cache->rt_mix_track_id = descriptor.mix_track_id;
+    cache->audio_fx_model_a = mod_destination_control_u8(
+        track, PARAM_AUDIO_FX_MODEL, AUDIO_FX_MODEL_OFF);
+    cache->audio_fx_model_b = mod_destination_control_u8(
+        track, PARAM_AUDIO_FX_B_MODEL, AUDIO_FX_MODEL_OFF);
+    static const param_id_t prism_ids[2] = {
+        PARAM_PRISM_OSC1_MODEL, PARAM_PRISM_OSC2_MODEL };
+    static const param_id_t stack_ids[3] = {
+        PARAM_STACK_OSC1_MODEL, PARAM_STACK_OSC2_MODEL,
+        PARAM_STACK_OSC3_MODEL };
     for (uint8_t osc = 0U; osc < 2U; ++osc)
     {
-        cache->prism_model[osc] = (tone != NULL)
-            ? (uint8_t)(tone->prism.model[osc] + 0.5f) : 0xFFU;
+        cache->prism_model[osc] = mod_destination_control_u8(
+            track, prism_ids[osc], 0xFFU);
     }
     for (uint8_t slot = 0U; slot < BRICK6_STACK_SLOT_COUNT; ++slot)
     {
-        cache->stack_model[slot] = (tone != NULL)
-            ? (uint8_t)(tone->stack.model[slot] + 0.5f) : 0xFFU;
+        cache->stack_model[slot] = mod_destination_control_u8(
+            track, stack_ids[slot], 0xFFU);
     }
-    cache->drum_md_slot_count = (tone != NULL)
-        ? track_tone_sound_state_md_slot_count(track) : 0U;
+    cache->drum_md_slot_count = mod_destination_md_slot_count(track);
     cache->valid = 1U;
 
     return cache;
@@ -2241,14 +2262,9 @@ static uint8_t mod_destination_md_label_for_track_param(
     {
         return 0U;
     }
-    const track_tone_sound_state_t *const tone =
-        track_tone_sound_state_get_const(track);
-    if (tone == NULL)
-    {
-        return 0U;
-    }
     const md_model_profile_t *const profile =
-        md_model_profile_get(md_model_validate(tone->md.model));
+        md_model_profile_get(md_model_validate((float)mod_destination_control_u8(
+            track, PARAM_DRUM_MD_MODEL, 0U)));
     const uint8_t slot = (uint8_t)(dest - PARAM_DRUM_MD_P1);
     if ((slot >= profile->slot_count)
             || (profile->slot_labels[slot] == NULL))
@@ -2304,10 +2320,12 @@ uint8_t mod_destination_catalog_label(uint8_t track, uint16_t dest_index, char *
     {
         uint8_t fx_slot = 0U;
         uint8_t fx_param = 0U;
-        const track_sound_state_t *const state = track_sound_state_get_const(target);
-        const uint8_t fx_model = (state == NULL) ? AUDIO_FX_MODEL_OFF
-            : (audio_fx_param_catalog_param_info(dest, &fx_slot, &fx_param) != 0U)
-                ? ((fx_slot != 0U) ? state->audio_fx_b_model : state->audio_fx_model)
+        const uint8_t fx_model =
+            (audio_fx_param_catalog_param_info(dest, &fx_slot, &fx_param) != 0U)
+                ? mod_destination_control_u8(target,
+                    (fx_slot != 0U) ? PARAM_AUDIO_FX_B_MODEL
+                                    : PARAM_AUDIO_FX_MODEL,
+                    AUDIO_FX_MODEL_OFF)
                 : AUDIO_FX_MODEL_OFF;
         const char *fx_param_name = NULL;
         if ((audio_fx_param_catalog_param_info(dest, &fx_slot, &fx_param) != 0U)
@@ -2489,12 +2507,12 @@ uint8_t mod_destination_catalog_short_label(uint8_t track, uint16_t dest_index, 
     uint8_t fx_slot = 0U;
     uint8_t fx_param = 0U;
     const char *fx_param_name = NULL;
-    const track_sound_state_t *const fx_state = track_sound_state_get_const(target);
-    if ((fx_state != NULL)
-            && (audio_fx_param_catalog_param_info(dest, &fx_slot, &fx_param) != 0U)
+    if ((audio_fx_param_catalog_param_info(dest, &fx_slot, &fx_param) != 0U)
             && (audio_fx_param_catalog_resolve(
-                (fx_slot != 0U) ? fx_state->audio_fx_b_model
-                                : fx_state->audio_fx_model,
+                mod_destination_control_u8(target,
+                    (fx_slot != 0U) ? PARAM_AUDIO_FX_B_MODEL
+                                    : PARAM_AUDIO_FX_MODEL,
+                    AUDIO_FX_MODEL_OFF),
                 fx_param, &fx_param_name) != 0U))
     {
         (void)snprintf(audio_fx_label, sizeof(audio_fx_label), "%c %.2s",

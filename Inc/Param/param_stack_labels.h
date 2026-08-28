@@ -17,7 +17,6 @@ uint8_t param_stack_dynamic_param_info(param_id_t id,
 uint8_t param_stack_label_for_track_param(uint8_t track,
                                           param_id_t id,
                                           const char **out_label);
-uint8_t param_stack_param_is_active(uint8_t track, param_id_t id);
 
 #ifdef __cplusplus
 }

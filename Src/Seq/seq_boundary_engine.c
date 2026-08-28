@@ -151,33 +151,6 @@ static uint8_t seq_boundary_engine_lock_is_euclid_dependent(
     return 1U;
 }
 
-static void seq_boundary_engine_prioritize_md_model(seq_track_id_t target_track,
-                                                    seq_boundary_engine_step_lock_t *locks,
-                                                    uint8_t count)
-{
-    for (uint8_t i = 0U; i < count; ++i)
-    {
-        param_id_t param = PARAM_COUNT;
-        if ((locks[i].set_id != (uint8_t)SEQ_PLOCK_SET_TONE)
-                || (seq_param_iface_slot_to_param(target_track,
-                                                  locks[i].set_id,
-                                                  locks[i].target_slot,
-                                                  &param) == 0U)
-                || (param != PARAM_DRUM_MD_MODEL))
-        {
-            continue;
-        }
-
-        const seq_boundary_engine_step_lock_t model_lock = locks[i];
-        for (uint8_t move = i; move > 0U; --move)
-        {
-            locks[move] = locks[move - 1U];
-        }
-        locks[0] = model_lock;
-        return;
-    }
-}
-
 static uint8_t seq_boundary_engine_lock_is_midi_fx_model(
     seq_track_id_t target_track,
     const seq_boundary_engine_step_lock_t *lock)
@@ -238,7 +211,6 @@ static uint8_t seq_boundary_engine_collect_non_play_locks(seq_track_id_t track,
     }
 
     *out_count = 0U;
-    track_runtime_refresh_track(track);
 
     if (seq_model_step_is_active(track, step) == 0U)
     {
@@ -314,7 +286,6 @@ static uint8_t seq_boundary_engine_collect_non_play_locks(seq_track_id_t track,
     }
     count = write;
 
-    seq_boundary_engine_prioritize_md_model(track, out_locks, count);
     seq_boundary_engine_prioritize_midi_fx_models(track, out_locks, count);
     *out_count = count;
     return 1U;

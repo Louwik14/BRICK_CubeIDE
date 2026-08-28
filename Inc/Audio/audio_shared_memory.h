@@ -21,4 +21,5 @@ uint8_t audio_shared_memory_page_ref(uint16_t first_page_slot,
                                      uint32_t length,
                                      audio_shared_memory_ref_t *out);
 const void *audio_shared_memory_resolve(const audio_shared_memory_ref_t *ref);
-
+/* AUDIO consumer resolution for cacheable bulk payload. */
+const void *audio_shared_memory_consume(const audio_shared_memory_ref_t *ref);

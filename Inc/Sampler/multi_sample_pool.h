@@ -108,7 +108,6 @@ uint8_t multi_sample_pool_set_instrument_format(uint16_t instrument_id,
                                                 sample_audio_format_t format);
 uint8_t multi_sample_pool_clear_instrument(uint16_t instrument_id);
 void multi_sample_pool_service_retire(void);
-void multi_sample_pool_control_ack_retire(uint16_t instrument_id);
 uint8_t multi_sample_pool_resolve(uint16_t instrument_id,
                                   uint8_t note,
                                   uint8_t velocity,

@@ -4,77 +4,146 @@
 #include <string.h>
 
 #include "Storage/memory_layout.h"
-#include "Audio/control_audio_queue.h"
+#include "Core/control_audio_program.h"
+#include "Core/control_audio_publication.h"
 #include "Core/control_music_output.h"
-#include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_fx_runtime.h"
+#include "Audio/mixer.h"
 #include "Core/live_clock.h"
 #include "Core/brick_build_config.h"
 #include "Core/track_input_ownership.h"
 #include "Core/track_state.h"
+#include "Core/synth_polyphony.h"
 #include "Param/param_registry_runtime_state.h"
 #include "Seq/seq_model.h"
 #include "UI/ui_track_catalog.h"
 #include "stm32h7xx_hal.h"
+#include "main.h"
 
 #define TRACK_RUNTIME_FLAG_CAN_FILTER  (1U << 0)
 #define TRACK_RUNTIME_FLAG_CAN_SYNTH   (1U << 1)
 #define TRACK_RUNTIME_FLAG_CAN_PLAY    (1U << 2)
 SEQ_STATE_D2 static track_runtime_ctx_t g_track_runtime_ctx[SEQ_LANE_CAPACITY];
-static volatile uint8_t g_track_runtime_global_dirty = 1U;
-static volatile uint8_t g_track_runtime_track_dirty[SEQ_LANE_CAPACITY];
 static uint32_t g_track_runtime_revision = 0U;
 static uint32_t g_track_runtime_track_revision[SEQ_LANE_CAPACITY];
+static uint8_t g_track_runtime_program_topology_flags[BRICK_ENTITY_CAPACITY];
 
-static uint8_t track_runtime_snapshot_for_ctx(
+static uint8_t track_runtime_ctx_entity(
     const track_runtime_ctx_t *ctx,
-    audio_binding_snapshot_t *out_snapshot);
+    brick_entity_id_t *out_entity);
 
-static uint32_t track_runtime_encode_float(float value)
+static uint8_t track_runtime_ctx_is_active(const track_runtime_ctx_t *ctx)
 {
-    union { float f; uint32_t u; } bits = { .f = value };
-    return bits.u;
+    if ((ctx == NULL)
+            || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_OFF)
+            || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_OTHER))
+        return 0U;
+    if (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MIDI)
+        return 1U;
+    if (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_GROUP)
+        return 1U;
+    return (track_runtime_choose_engine(
+        (track_runtime_family_t)ctx->family,
+        (track_runtime_type_t)ctx->type) != TRACK_RUNTIME_ENGINE_NONE);
 }
 
-static void track_runtime_publish_intent(brick_entity_id_t entity_id,
-                                         const track_runtime_ctx_t *ctx)
+static uint8_t track_runtime_type_keeps_notes(track_runtime_family_t family,
+                                              track_runtime_type_t type)
+{
+    if (family == TRACK_RUNTIME_FAMILY_SYNTH)
+        return (uint8_t)((type == TRACK_RUNTIME_TYPE_PRISM)
+            || (type == TRACK_RUNTIME_TYPE_STACK)
+            || (type == TRACK_RUNTIME_TYPE_WAVE)
+            || (type == TRACK_RUNTIME_TYPE_FM));
+    if (family == TRACK_RUNTIME_FAMILY_SAMPLER)
+        return (uint8_t)((type == TRACK_RUNTIME_TYPE_RAM)
+            || (type == TRACK_RUNTIME_TYPE_STREAM)
+            || (type == TRACK_RUNTIME_TYPE_MULTI));
+    return 0U;
+}
+
+static uint8_t track_runtime_publish_program(brick_entity_id_t entity_id,
+                                             const track_runtime_ctx_t *ctx)
 {
     if ((ctx == NULL) || (entity_id >= BRICK_ENTITY_CAPACITY))
-        return;
+        return 0U;
     uint64_t due_sample = 0U;
     (void)live_clock_read_audio_sample(&due_sample);
     due_sample = control_music_output_first_unpublished_sample(due_sample);
-    float voices = 1.0f;
-    float spread = 0.0f;
-    (void)param_registry_control_shadow_get(
-        entity_id, PARAM_CFG_POLY_VOICES, &voices);
-    (void)param_registry_control_shadow_get(
-        entity_id, PARAM_CFG_POLY_SPREAD, &spread);
     entity_topology_descriptor_t topology;
-    uint8_t audio_flags = ctx->flags;
+    uint8_t topology_flags = 0U;
     if (entity_topology_get(entity_id, &topology) != 0U)
     {
         if (topology.role == ENTITY_ROLE_GROUP_MASTER)
-            audio_flags |= AUDIO_RUNTIME_FLAG_GROUP_MASTER;
+            topology_flags |= CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER;
         else if (topology.role == ENTITY_ROLE_GROUP_CHILD)
-            audio_flags |= AUDIO_RUNTIME_FLAG_GROUP_CHILD;
+            topology_flags |= CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD;
     }
-    const control_audio_event_t command = {
-        /* The preceding musical STOPs must execute against the old binding. */
-        .due_sample = due_sample + 1U,
-        .source_generation = track_runtime_encode_float(spread),
-        .param_id = (uint16_t)((voices >= 1.0f) ? (uint8_t)voices : 1U),
-        .entity_id = entity_id,
-        .kind = (uint8_t)CONTROL_AUDIO_EVENT_BINDING_INTENT,
-        .note = ctx->type,
-        .velocity = ctx->midi_channel_1_16,
-        .param_value = ctx->midi_source,
-        .provenance = ctx->family,
-        .flags = audio_flags
+    const track_runtime_ctx_t *const previous = &g_track_runtime_ctx[entity_id];
+    const uint8_t keep_notes = (uint8_t)(
+        track_runtime_type_keeps_notes((track_runtime_family_t)previous->family,
+                                       (track_runtime_type_t)previous->type)
+        && track_runtime_type_keeps_notes((track_runtime_family_t)ctx->family,
+                                          (track_runtime_type_t)ctx->type));
+    const control_audio_program_descriptor_t descriptor = {
+        .family = ctx->family,
+        .type = ctx->type,
+        .topology_flags = topology_flags
     };
-    if (control_music_output_close_entity(entity_id, due_sample) == 0U)
-        return;
-    (void)control_audio_queue_publish(&command);
+    const uint32_t program_id = control_audio_program_prepare(&descriptor);
+    if (program_id == 0U)
+        return 0U;
+    if (control_audio_publication_reserve_program() == 0U)
+    {
+        control_audio_program_cancel(program_id);
+        return 0U;
+    }
+    if ((keep_notes == 0U)
+            && (control_music_output_close_entity(entity_id, due_sample) == 0U))
+    {
+        control_audio_publication_cancel_program_reservation();
+        control_audio_program_cancel(program_id);
+        return 0U;
+    }
+    /* Descriptor and FIFO credit are now owned by this transaction.  With
+     * CONTROL as the sole producer, publication cannot fail nominally. */
+    if (control_audio_publish_reserved_program(entity_id, program_id,
+                                               due_sample + 1U) == 0U)
+    {
+        /* Invariant failure: no rollback is valid after close. */
+        Error_Handler();
+        return 0U;
+    }
+    control_music_output_set_multi(entity_id,
+        (uint8_t)((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
+            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI)));
+    return 1U;
+}
+
+static uint8_t track_runtime_topology_flags(brick_entity_id_t entity_id)
+{
+    entity_topology_descriptor_t topology;
+    if (entity_topology_get(entity_id, &topology) == 0U)
+        return 0U;
+    if (topology.role == ENTITY_ROLE_GROUP_MASTER)
+        return CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER;
+    if (topology.role == ENTITY_ROLE_GROUP_CHILD)
+        return CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD;
+    return 0U;
+}
+
+static uint8_t track_runtime_publish_midi_config(
+    brick_entity_id_t entity_id, const track_runtime_ctx_t *ctx)
+{
+    if ((ctx == NULL) || (entity_id >= BRICK_ENTITY_CAPACITY))
+        return 0U;
+    uint64_t due_sample = 0U;
+    (void)live_clock_read_audio_sample(&due_sample);
+    due_sample = control_music_output_first_unpublished_sample(due_sample);
+    const uint32_t packed = (uint32_t)ctx->midi_channel_1_16
+        | ((uint32_t)ctx->midi_source << 8);
+    return control_audio_publish_param(entity_id,
+        CONTROL_AUDIO_PARAM_MIDI_CONFIG, packed, 0U, due_sample);
 }
 
 track_runtime_family_t track_runtime_family_from_ui(ui_track_family_t family)
@@ -146,6 +215,33 @@ track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
         default:
             return TRACK_RUNTIME_TYPE_OTHER;
     }
+}
+
+track_runtime_engine_t track_runtime_choose_engine(
+    track_runtime_family_t family, track_runtime_type_t type)
+{
+    if ((family == TRACK_RUNTIME_FAMILY_EXTERNAL)
+            && (type == TRACK_RUNTIME_TYPE_EXTERNAL))
+        return TRACK_RUNTIME_ENGINE_AUDIO_TRACK;
+    if (family == TRACK_RUNTIME_FAMILY_DRUM)
+        return ((type == TRACK_RUNTIME_TYPE_DRUM_MD)
+                || (type == TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG))
+            ? TRACK_RUNTIME_ENGINE_DRUM : TRACK_RUNTIME_ENGINE_NONE;
+    if (family == TRACK_RUNTIME_FAMILY_SAMPLER)
+    {
+        if (type == TRACK_RUNTIME_TYPE_LOOPER) return TRACK_RUNTIME_ENGINE_LOOPER;
+        if ((type == TRACK_RUNTIME_TYPE_RAM) || (type == TRACK_RUNTIME_TYPE_STREAM)
+                || (type == TRACK_RUNTIME_TYPE_MULTI))
+            return TRACK_RUNTIME_ENGINE_SAMPLER;
+    }
+    if (family == TRACK_RUNTIME_FAMILY_SYNTH)
+    {
+        if (type == TRACK_RUNTIME_TYPE_PRISM) return TRACK_RUNTIME_ENGINE_PRISM;
+        if (type == TRACK_RUNTIME_TYPE_STACK) return TRACK_RUNTIME_ENGINE_STACK;
+        if (type == TRACK_RUNTIME_TYPE_WAVE) return TRACK_RUNTIME_ENGINE_WAVE;
+        if (type == TRACK_RUNTIME_TYPE_FM) return TRACK_RUNTIME_ENGINE_FM;
+    }
+    return TRACK_RUNTIME_ENGINE_NONE;
 }
 
 static uint8_t track_runtime_logical_equal(const track_runtime_ctx_t *left,
@@ -525,7 +621,7 @@ static uint8_t track_runtime_tone_drum_range(track_runtime_type_t type, param_id
 static uint16_t track_runtime_compute_ui_ensemble_mask(
     brick_entity_id_t entity_id,
     const track_runtime_ctx_t *ctx,
-    track_runtime_bind_state_t bind_state)
+    uint8_t active)
 {
     if (ctx == NULL)
     {
@@ -546,7 +642,7 @@ static uint16_t track_runtime_compute_ui_ensemble_mask(
     mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_SEQ);
     if (topology.role == ENTITY_ROLE_GROUP_MASTER)
     {
-        if (bind_state == TRACK_RUNTIME_BIND_BOUND)
+        if (active != 0U)
         {
             mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_TONE);
             mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_ENV);
@@ -568,7 +664,7 @@ static uint16_t track_runtime_compute_ui_ensemble_mask(
         mask |= (uint16_t)(1U << (uint8_t)TRACK_RUNTIME_UI_ENSEMBLE_MIDI_FX);
     }
 
-    if (bind_state != TRACK_RUNTIME_BIND_BOUND)
+    if (active == 0U)
     {
         return mask;
     }
@@ -619,37 +715,22 @@ track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_
 
 uint8_t track_runtime_supports_vca_gate(const track_runtime_ctx_t *ctx)
 {
-    if (ctx == NULL)
+    if (track_runtime_ctx_is_active(ctx) == 0U)
+        return 0U;
+    if ((track_runtime_ctx_is_sampler_clip_or_looper(ctx) != 0U)
+            && (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
     {
         return 0U;
     }
 
-    audio_binding_snapshot_t snapshot;
-    if ((track_runtime_snapshot_for_ctx(ctx, &snapshot) == 0U)
-            || (snapshot.binding.bind_state != TRACK_RUNTIME_BIND_BOUND))
-    {
-        return 0U;
-    }
-
-    const track_runtime_ctx_t installed = {
-        .family = snapshot.family,
-        .type = snapshot.type,
-        .flags = snapshot.flags
-    };
-    if ((track_runtime_ctx_is_sampler_clip_or_looper(&installed) != 0U)
-            && (installed.type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
-    {
-        return 0U;
-    }
-
-    if ((installed.family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)
-            || (installed.family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-            || (installed.family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH))
+    if ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)
+            || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
+            || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH))
     {
         return 1U;
     }
 
-    if (installed.family == (uint8_t)TRACK_RUNTIME_FAMILY_EXTERNAL)
+    if (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_EXTERNAL)
     {
         return 1U;
     }
@@ -693,15 +774,14 @@ static void track_runtime_prepare_ctx_base(uint8_t track, track_runtime_ctx_t *c
 void track_runtime_init(void)
 {
     memset(&g_track_runtime_ctx, 0, sizeof(g_track_runtime_ctx));
-    memset((void *)g_track_runtime_track_dirty, 1, sizeof(g_track_runtime_track_dirty));
-    g_track_runtime_global_dirty = 1U;
-    track_runtime_refresh_all();
+    memset(g_track_runtime_program_topology_flags, 0,
+           sizeof(g_track_runtime_program_topology_flags));
+    track_runtime_rebuild_all();
 }
 
 void track_runtime_invalidate_all(void)
 {
-    g_track_runtime_global_dirty = 1U;
-    memset((void *)g_track_runtime_track_dirty, 1, sizeof(g_track_runtime_track_dirty));
+    track_runtime_rebuild_all();
 }
 
 void track_runtime_invalidate_track(uint8_t track)
@@ -711,125 +791,49 @@ void track_runtime_invalidate_track(uint8_t track)
         return;
     }
 
-    g_track_runtime_track_dirty[track] = 1U;
+    track_runtime_rebuild_track(track);
 }
 
-uint8_t track_runtime_refresh_if_dirty(void)
-{
-    const uint8_t in_irq = (__get_IPSR() != 0U) ? 1U : 0U;
-
-    if (g_track_runtime_global_dirty != 0U)
-    {
-        if (in_irq != 0U)
-        {
-            return 0U;
-        }
-        track_runtime_refresh_all();
-        return 1U;
-    }
-
-    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
-    {
-        if (g_track_runtime_track_dirty[track] != 0U)
-        {
-            if (in_irq != 0U)
-            {
-                return 0U;
-            }
-            track_runtime_refresh_track(track);
-            return 1U;
-        }
-    }
-
-    return 0U;
-}
-
-void track_runtime_refresh_all(void)
+void track_runtime_rebuild_all(void)
 {
     track_runtime_ctx_t previous[SEQ_LANE_CAPACITY];
+    track_runtime_ctx_t prepared[SEQ_LANE_CAPACITY];
     memcpy(previous, g_track_runtime_ctx, sizeof(previous));
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
-        track_runtime_prepare_ctx_base(track, &g_track_runtime_ctx[track]);
-
-    for (brick_entity_id_t entity = 0U;
-         entity < (brick_entity_id_t)SEQ_LANE_CAPACITY; ++entity)
-        if (track_runtime_logical_equal(
-                &g_track_runtime_ctx[entity], &previous[entity]) == 0U)
-            track_runtime_publish_intent(entity, &g_track_runtime_ctx[entity]);
-
-    g_track_runtime_global_dirty = 0U;
-    ++g_track_runtime_revision;
-    for (uint8_t track = 0U; track < (uint8_t)SEQ_LANE_CAPACITY; ++track)
-    {
-        g_track_runtime_track_dirty[track] = 0U;
-        g_track_runtime_track_revision[track] = g_track_runtime_revision;
-    }
-}
-
-uint8_t track_runtime_install_restored_projection(void)
-{
-    track_runtime_ctx_t restored[SEQ_LANE_CAPACITY];
+        track_runtime_prepare_ctx_base(track, &prepared[track]);
 
     for (brick_entity_id_t entity = 0U;
          entity < (brick_entity_id_t)SEQ_LANE_CAPACITY; ++entity)
     {
-        track_runtime_prepare_ctx_base(entity, &restored[entity]);
-        if (entity_topology_is_active(entity) == 0U)
-            continue;
-
-        audio_binding_snapshot_t snapshot;
-        if ((audio_note_engine_adapter_snapshot_read(entity, &snapshot) == 0U)
-                || (snapshot.binding.generation == 0U)
-                || (snapshot.family != restored[entity].family)
-                || (snapshot.type != restored[entity].type)
-                || ((snapshot.flags & (TRACK_RUNTIME_FLAG_CAN_FILTER
-                                      | TRACK_RUNTIME_FLAG_CAN_SYNTH
-                                      | TRACK_RUNTIME_FLAG_CAN_PLAY))
-                    != restored[entity].flags)
-                || (snapshot.midi_channel_1_16
-                    != restored[entity].midi_channel_1_16)
-                || (snapshot.midi_source != restored[entity].midi_source))
+        const uint8_t next_topology_flags =
+            track_runtime_topology_flags(entity);
+        const uint8_t structure_changed = (uint8_t)(
+            (track_runtime_logical_equal(
+                &prepared[entity], &previous[entity]) == 0U)
+            || (next_topology_flags
+                != g_track_runtime_program_topology_flags[entity]));
+        const uint8_t midi_changed = (uint8_t)(
+            (prepared[entity].midi_channel_1_16
+                != previous[entity].midi_channel_1_16)
+            || (prepared[entity].midi_source != previous[entity].midi_source));
+        if (structure_changed != 0U)
         {
-            return 0U;
+            if (track_runtime_publish_program(entity, &prepared[entity]) != 0U)
+            {
+                g_track_runtime_ctx[entity] = prepared[entity];
+                g_track_runtime_program_topology_flags[entity] =
+                    next_topology_flags;
+            }
         }
+        else if (midi_changed != 0U)
+            g_track_runtime_ctx[entity] = prepared[entity];
+        if (midi_changed != 0U)
+            (void)track_runtime_publish_midi_config(entity, &prepared[entity]);
     }
 
-    memcpy(g_track_runtime_ctx, restored, sizeof(restored));
-    g_track_runtime_global_dirty = 0U;
     ++g_track_runtime_revision;
     for (uint8_t track = 0U; track < (uint8_t)SEQ_LANE_CAPACITY; ++track)
-    {
-        g_track_runtime_track_dirty[track] = 0U;
         g_track_runtime_track_revision[track] = g_track_runtime_revision;
-    }
-    return 1U;
-}
-
-uint8_t track_runtime_active_projection_is_coherent(
-    brick_entity_id_t entity, uint32_t *out_binding_generation)
-{
-    if ((entity >= (brick_entity_id_t)SEQ_LANE_CAPACITY)
-            || (out_binding_generation == NULL)
-            || (entity_topology_is_active(entity) == 0U))
-        return 0U;
-
-    audio_binding_snapshot_t snapshot;
-    const track_runtime_ctx_t *const control = &g_track_runtime_ctx[entity];
-    if ((audio_note_engine_adapter_snapshot_read(entity, &snapshot) == 0U)
-            || (snapshot.binding.generation == 0U)
-            || (snapshot.binding.bind_state != TRACK_RUNTIME_BIND_BOUND)
-            || (snapshot.family != control->family)
-            || (snapshot.type != control->type)
-            || ((snapshot.flags & (TRACK_RUNTIME_FLAG_CAN_FILTER
-                                  | TRACK_RUNTIME_FLAG_CAN_SYNTH
-                                  | TRACK_RUNTIME_FLAG_CAN_PLAY))
-                != control->flags)
-            || (snapshot.midi_channel_1_16 != control->midi_channel_1_16)
-            || (snapshot.midi_source != control->midi_source))
-        return 0U;
-
-    *out_binding_generation = snapshot.binding.generation;
-    return 1U;
 }
 
 uint8_t track_runtime_is_track_prism_available(uint8_t track)
@@ -837,7 +841,7 @@ uint8_t track_runtime_is_track_prism_available(uint8_t track)
     return entity_topology_is_active((brick_entity_id_t)track);
 }
 
-void track_runtime_refresh_track(uint8_t track)
+void track_runtime_rebuild_track(uint8_t track)
 {
     if (track >= SEQ_LANE_CAPACITY)
     {
@@ -846,40 +850,39 @@ void track_runtime_refresh_track(uint8_t track)
 
     entity_topology_descriptor_t topology;
     if ((entity_topology_get((brick_entity_id_t)track, &topology) != 0U)
-            && (topology.role == ENTITY_ROLE_GROUP_MASTER)
-            && (g_track_runtime_track_dirty[track] != 0U))
+            && (topology.role == ENTITY_ROLE_GROUP_MASTER))
     {
-        if (__get_IPSR() != 0U)
-        {
-            return;
-        }
-        track_runtime_refresh_all();
+        track_runtime_rebuild_all();
         return;
     }
 
-    if (g_track_runtime_global_dirty != 0U)
+    const track_runtime_ctx_t previous = g_track_runtime_ctx[track];
+    track_runtime_ctx_t next_ctx;
+
+    track_runtime_prepare_ctx_base(track, &next_ctx);
+    const uint8_t next_topology_flags = track_runtime_topology_flags(track);
+    const uint8_t structure_changed = (uint8_t)(
+        (track_runtime_logical_equal(&next_ctx, &previous) == 0U)
+        || (next_topology_flags
+            != g_track_runtime_program_topology_flags[track]));
+    const uint8_t midi_changed = (uint8_t)(
+        (next_ctx.midi_channel_1_16 != previous.midi_channel_1_16)
+        || (next_ctx.midi_source != previous.midi_source));
+    if (structure_changed != 0U)
     {
-        if (__get_IPSR() != 0U)
+        if (track_runtime_publish_program(track, &next_ctx) != 0U)
         {
-            return;
+            g_track_runtime_ctx[track] = next_ctx;
+            g_track_runtime_program_topology_flags[track] =
+                next_topology_flags;
         }
-        track_runtime_refresh_all();
-        return;
     }
-
-    if (g_track_runtime_track_dirty[track] != 0U)
-    {
-        const track_runtime_ctx_t previous = g_track_runtime_ctx[track];
-        track_runtime_ctx_t next_ctx;
-
-        track_runtime_prepare_ctx_base(track, &next_ctx);
+    else if (midi_changed != 0U)
         g_track_runtime_ctx[track] = next_ctx;
-        if (track_runtime_logical_equal(&next_ctx, &previous) == 0U)
-            track_runtime_publish_intent(track, &next_ctx);
-        g_track_runtime_track_dirty[track] = 0U;
-        ++g_track_runtime_revision;
-        g_track_runtime_track_revision[track] = g_track_runtime_revision;
-    }
+    if (midi_changed != 0U)
+        (void)track_runtime_publish_midi_config(track, &next_ctx);
+    ++g_track_runtime_revision;
+    g_track_runtime_track_revision[track] = g_track_runtime_revision;
 }
 
 uint32_t track_runtime_get_revision(void)
@@ -907,40 +910,34 @@ const track_runtime_ctx_t *track_runtime_get_ctx(uint8_t track)
     return &g_track_runtime_ctx[track];
 }
 
-static uint8_t track_runtime_snapshot_for_ctx(
+static uint8_t track_runtime_ctx_entity(
     const track_runtime_ctx_t *ctx,
-    audio_binding_snapshot_t *out_snapshot)
+    brick_entity_id_t *out_entity)
 {
-    if ((ctx == NULL) || (out_snapshot == NULL))
+    if ((ctx == NULL) || (out_entity == NULL))
         return 0U;
     for (brick_entity_id_t entity = 0U;
          entity < (brick_entity_id_t)SEQ_LANE_CAPACITY; ++entity)
         if (ctx == &g_track_runtime_ctx[entity])
-            return audio_note_engine_adapter_snapshot_read(
-                entity, out_snapshot);
+        {
+            *out_entity = entity;
+            return 1U;
+        }
     return 0U;
 }
 
 uint8_t track_runtime_is_audio_routable_ctx(const track_runtime_ctx_t *ctx)
 {
-    /* Logical track can exist without any physical mixer lane. */
-    audio_binding_snapshot_t snapshot;
-    if ((track_runtime_snapshot_for_ctx(ctx, &snapshot) == 0U)
-            || (snapshot.binding.bind_state != TRACK_RUNTIME_BIND_BOUND))
-    {
+    brick_entity_id_t entity;
+    if ((track_runtime_ctx_is_active(ctx) == 0U)
+            || (track_runtime_ctx_entity(ctx, &entity) == 0U)
+            || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MIDI))
         return 0U;
-    }
-
-    if (snapshot.binding.mix_track_id == 0xFFU)
-    {
-        return 0U;
-    }
-    if ((track_runtime_family_t)snapshot.family
+    if ((track_runtime_family_t)ctx->family
             == TRACK_RUNTIME_FAMILY_EXTERNAL)
     {
         return track_input_ownership_track_owns_input(
-            snapshot.binding.entity_id,
-            track_input_ownership_get_external_input(snapshot.binding.entity_id));
+            entity, track_input_ownership_get_external_input(entity));
     }
     return 1U;
 }
@@ -985,12 +982,7 @@ uint8_t track_runtime_has_capability(uint8_t track, track_capability_t capabilit
             return 0U;
 
         case TRACK_CAPABILITY_MUTE:
-        {
-            audio_binding_snapshot_t snapshot;
-            return (uint8_t)((audio_note_engine_adapter_snapshot_read(
-                    track, &snapshot) != 0U)
-                && (snapshot.binding.bind_state == TRACK_RUNTIME_BIND_BOUND));
-        }
+            return track_runtime_ctx_is_active(ctx);
 
         case TRACK_CAPABILITY_INPUT_RESERVATION:
             return (uint8_t)(((track_runtime_family_t)ctx->family == TRACK_RUNTIME_FAMILY_EXTERNAL)
@@ -1004,23 +996,14 @@ uint8_t track_runtime_has_capability(uint8_t track, track_capability_t capabilit
 uint8_t track_runtime_get_mix_target_track(uint8_t track, uint8_t *out_mix_track)
 {
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
-    audio_binding_snapshot_t snapshot;
-    if ((ctx == NULL)
-            || (audio_note_engine_adapter_snapshot_read(track, &snapshot) == 0U)
-            || (snapshot.binding.mix_track_id == 0xFFU))
-    {
-        return 0U;
-    }
-
-    if (track_runtime_is_audio_routable(track) == 0U)
+    if ((ctx == NULL) || (track_runtime_is_audio_routable(track) == 0U))
     {
         return 0U;
     }
 
     if (out_mix_track != NULL)
-    {
-        *out_mix_track = snapshot.binding.mix_track_id;
-    }
+        *out_mix_track = (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_GROUP)
+            ? MIXER_GROUP_BUS_TRACK : track;
 
     return 1U;
 }
@@ -1033,16 +1016,12 @@ uint8_t track_runtime_resolve_filter_target_track(uint8_t ui_track, uint8_t *out
     }
 
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(ui_track);
-    audio_binding_snapshot_t snapshot;
-    if ((ctx == NULL)
-            || (audio_note_engine_adapter_snapshot_read(
-                    ui_track, &snapshot) == 0U)
-            || (snapshot.binding.bind_state != TRACK_RUNTIME_BIND_BOUND))
+    if ((ctx == NULL) || (track_runtime_ctx_is_active(ctx) == 0U))
     {
         return 0U;
     }
 
-    if ((snapshot.flags & TRACK_RUNTIME_FLAG_CAN_FILTER) == 0U)
+    if ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_FILTER) == 0U)
     {
         return 0U;
     }
@@ -1113,27 +1092,22 @@ uint8_t track_runtime_get_descriptor(uint8_t track, track_runtime_descriptor_t *
     const uint16_t topology_capabilities =
         entity_topology_get_capabilities(&topology);
 
-    audio_binding_snapshot_t snapshot;
-    if (audio_note_engine_adapter_snapshot_read(track, &snapshot) == 0U)
-        return 0U;
-    const track_runtime_ctx_t installed = {
-        .midi_channel_1_16 = ctx->midi_channel_1_16,
-        .midi_source = ctx->midi_source,
-        .family = snapshot.family,
-        .type = snapshot.type,
-        .flags = snapshot.flags
-    };
-    out_descriptor->family = (track_runtime_family_t)snapshot.family;
-    out_descriptor->type = (track_runtime_type_t)snapshot.type;
-    out_descriptor->engine = (track_runtime_engine_t)snapshot.binding.engine;
-    out_descriptor->bind_state = snapshot.binding.bind_state;
-    out_descriptor->bind_reason = snapshot.binding.bind_reason;
-    out_descriptor->instance_id = snapshot.binding.instance_id;
-    out_descriptor->mix_track_id = snapshot.binding.mix_track_id;
-    out_descriptor->flags = snapshot.flags;
+    const uint8_t active = track_runtime_ctx_is_active(ctx);
+    out_descriptor->family = (track_runtime_family_t)ctx->family;
+    out_descriptor->type = (track_runtime_type_t)ctx->type;
+    out_descriptor->engine = track_runtime_choose_engine(
+        out_descriptor->family, out_descriptor->type);
+    out_descriptor->active = active;
+    out_descriptor->instance_id = active != 0U ? track : 0xFFU;
+    out_descriptor->mix_track_id = (active == 0U)
+        || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MIDI)
+        ? 0xFFU
+        : ((topology.role == ENTITY_ROLE_GROUP_MASTER)
+            ? MIXER_GROUP_BUS_TRACK : track);
+    out_descriptor->flags = ctx->flags;
     out_descriptor->midi_channel_1_16 = track_runtime_get_midi_channel_1_16(track);
     out_descriptor->ui_ensemble_mask = track_runtime_compute_ui_ensemble_mask(
-        track, &installed, snapshot.binding.bind_state);
+        track, ctx, active);
     out_descriptor->topology_capabilities = topology_capabilities;
     return 1U;
 }
@@ -1636,11 +1610,6 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
     {
         return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
     }
-    audio_binding_snapshot_t snapshot;
-    if (audio_note_engine_adapter_snapshot_read(track, &snapshot) == 0U)
-        return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
-    const track_runtime_bind_state_t bind_state = snapshot.binding.bind_state;
-
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
     if (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
     {
@@ -1652,6 +1621,7 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
     {
         return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
     }
+    const uint8_t active = track_runtime_ctx_is_active(ctx);
 
     if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX)
     {
@@ -1673,7 +1643,7 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
 
     if (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_GROUP)
     {
-        if (bind_state != TRACK_RUNTIME_BIND_BOUND)
+        if (active == 0U)
         {
             return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
         }
@@ -1706,11 +1676,7 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
             return TRACK_RUNTIME_PARAM_ALLOWED;
 
         case TRACK_RUNTIME_RESOURCE_FILTER:
-            if (bind_state == TRACK_RUNTIME_BIND_QUOTA_BLOCKED)
-            {
-                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
-            }
-            if (bind_state != TRACK_RUNTIME_BIND_BOUND)
+            if (active == 0U)
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
             }
@@ -1723,11 +1689,7 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
 
         case TRACK_RUNTIME_RESOURCE_SYNTH:
-            if (bind_state == TRACK_RUNTIME_BIND_QUOTA_BLOCKED)
-            {
-                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
-            }
-            if (bind_state != TRACK_RUNTIME_BIND_BOUND)
+            if (active == 0U)
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
             }
@@ -1736,11 +1698,7 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
                     : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
 
         case TRACK_RUNTIME_RESOURCE_POLYPHONY:
-            if (bind_state == TRACK_RUNTIME_BIND_QUOTA_BLOCKED)
-            {
-                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
-            }
-            if (bind_state != TRACK_RUNTIME_BIND_BOUND)
+            if (active == 0U)
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
             }
@@ -1816,10 +1774,6 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
             return TRACK_RUNTIME_PARAM_ALLOWED;
 
         case TRACK_RUNTIME_RESOURCE_MIX:
-            if (bind_state == TRACK_RUNTIME_BIND_QUOTA_BLOCKED)
-            {
-                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
-            }
             if (track_runtime_is_audio_routable(track) == 0U)
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
@@ -1840,7 +1794,7 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
                 : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
 
         case TRACK_RUNTIME_RESOURCE_AUDIO_FX:
-            if (bind_state != TRACK_RUNTIME_BIND_BOUND)
+            if (active == 0U)
             {
                 return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
             }

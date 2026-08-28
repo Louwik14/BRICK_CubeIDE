@@ -34,7 +34,6 @@ uint8_t param_prism_edit_index_from_value(float value, uint8_t *out_index);
 uint8_t param_prism_edit_index_for_track(uint8_t track, uint8_t *out_index);
 const param_prism_param_label_t *param_prism_labels_for_edit_index(uint8_t edit_index);
 uint8_t param_prism_label_for_track_param(uint8_t track, param_id_t id, const char **out_label);
-uint8_t param_prism_param_is_active(uint8_t track, param_id_t id);
 
 #ifdef __cplusplus
 }

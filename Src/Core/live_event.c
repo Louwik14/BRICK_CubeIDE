@@ -1,4 +1,5 @@
 #include "Core/live_event.h"
+#include "Core/project_load_quiesce.h"
 
 #include "stm32h7xx_hal.h"
 
@@ -36,12 +37,26 @@ void live_event_init(void)
     live_event_exit_critical(primask);
 }
 
+void live_event_discard_pending(void)
+{
+    const uint32_t primask = live_event_enter_critical();
+    g_live_event_tail = g_live_event_head;
+    live_event_exit_critical(primask);
+}
+
 bool live_event_submit_from_hall(uint8_t key,
                                  bool pressed,
                                  uint8_t velocity,
                                  uint32_t tim5_tick)
 {
+    if (project_load_ingress_is_open() == 0U)
+        return false;
     const uint32_t primask = live_event_enter_critical();
+    if (project_load_ingress_is_open() == 0U)
+    {
+        live_event_exit_critical(primask);
+        return false;
+    }
     const uint16_t head = g_live_event_head;
     const uint16_t next = (uint16_t)((head + 1U) & LIVE_EVENT_QUEUE_MASK);
 

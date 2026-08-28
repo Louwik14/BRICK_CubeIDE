@@ -48,7 +48,6 @@ static uint8_t ui_page_template_play_subpage_enabled(uint8_t subpage_index)
 {
     const uint8_t active_track = ui_get_active_lane();
     /* Consumer-edge refresh: subpage availability is a pure projection read after refresh. */
-    track_runtime_refresh_track(active_track);
     track_runtime_resolved_track_t resolved;
     if (track_runtime_resolve_track(active_track, &resolved) == 0U)
     {

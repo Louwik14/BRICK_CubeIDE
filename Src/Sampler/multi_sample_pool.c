@@ -7,7 +7,7 @@
 #include "Sampler/sample_stream_needs.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Sampler/multi_sample_audio_projection.h"
-#include "Audio/control_audio_queue.h"
+#include "Core/control_audio_publication.h"
 #include "Core/live_clock.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/memory_layout.h"
@@ -25,8 +25,8 @@ SDRAM_MULTI_POOL static multi_sample_desc_t g_multi_samples[MULTI_SAMPLE_POOL_MA
 SDRAM_MULTI_POOL static multi_sample_zone_t g_multi_zones[MULTI_SAMPLE_POOL_MAX_ZONES];
 static CTRL_STATE uint16_t g_multi_sample_count;
 static CTRL_STATE uint16_t g_multi_zone_count;
-static CTRL_STATE volatile uint8_t
-    g_multi_retire_ack[MULTI_SAMPLE_POOL_MAX_INSTRUMENTS];
+static CTRL_STATE uint32_t
+    g_multi_retire_fence[MULTI_SAMPLE_POOL_MAX_INSTRUMENTS];
 
 static uint8_t multi_sample_instrument_id_valid(uint16_t instrument_id)
 {
@@ -148,7 +148,7 @@ void multi_sample_pool_init(void)
 void multi_sample_pool_reset(void)
 {
     multi_sample_audio_projection_init();
-    memset((void *)g_multi_retire_ack, 0, sizeof(g_multi_retire_ack));
+    memset(g_multi_retire_fence, 0, sizeof(g_multi_retire_fence));
     memset(g_multi_instruments, 0, sizeof(g_multi_instruments));
     memset(g_multi_samples, 0, sizeof(g_multi_samples));
     memset(g_multi_zones, 0, sizeof(g_multi_zones));
@@ -374,14 +374,6 @@ static uint8_t multi_sample_pool_finalize_clear_instrument(uint16_t instrument_i
     return 1U;
 }
 
-void multi_sample_pool_control_ack_retire(uint16_t instrument_id)
-{
-    if (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS) return;
-    __DMB();
-    g_multi_retire_ack[instrument_id] = 1U;
-    __DMB();
-}
-
 uint8_t multi_sample_pool_clear_instrument(uint16_t instrument_id)
 {
     if ((multi_sample_instrument_id_valid(instrument_id) == 0U)
@@ -393,12 +385,10 @@ uint8_t multi_sample_pool_clear_instrument(uint16_t instrument_id)
 
     uint64_t due_sample = 0U;
     if (!live_clock_read_audio_sample(&due_sample)) return 0U;
-    const control_audio_event_t event = {
-        .due_sample = due_sample, .param_id = instrument_id,
-        .kind = (uint8_t)CONTROL_AUDIO_EVENT_MULTI_STOP
-    };
-    if (control_audio_queue_publish(&event) == 0U) return 0U;
-    multi_sample_audio_projection_withdraw(instrument_id);
+    if (control_audio_publish_param_fenced((uint8_t)instrument_id, 0xFFF5U,
+                                           0U, 0U, due_sample,
+                                           &g_multi_retire_fence[instrument_id]) == 0U)
+        return 0U;
     instrument->state = MULTI_SAMPLE_INSTRUMENT_RETIRING;
     __DMB();
     return 1U;
@@ -410,9 +400,10 @@ void multi_sample_pool_service_retire(void)
     {
         if ((g_multi_instruments[i].used != 0U)
             && (g_multi_instruments[i].desc.state == MULTI_SAMPLE_INSTRUMENT_RETIRING)
-            && (g_multi_retire_ack[i] != 0U))
+            && (control_audio_consumer_fence_consumed(
+                    g_multi_retire_fence[i]) != 0U))
         {
-            g_multi_retire_ack[i] = 0U;
+            g_multi_retire_fence[i] = 0U;
             (void)multi_sample_pool_finalize_clear_instrument(i);
         }
     }

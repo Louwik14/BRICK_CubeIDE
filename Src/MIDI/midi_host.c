@@ -74,6 +74,16 @@ void midi_host_poll(void)
   midi_host_poll_bounded(8); // budget fixe simple
 }
 
+void midi_host_rx_discard_pending(void)
+{
+  uint8_t packet[USBH_MIDI_PACKET_SIZE];
+  for (uint32_t i = 0U; i < USBH_MIDI_RX_QUEUE_LEN; ++i)
+  {
+    if (USBH_MIDI_ReadPacket(&hUsbHostHS, packet) != USBH_OK)
+      break;
+  }
+}
+
 /**
  * @brief Point d'entrée midi_host_poll_bounded.
  *

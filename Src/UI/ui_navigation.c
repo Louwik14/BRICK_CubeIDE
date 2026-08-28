@@ -32,12 +32,6 @@ static uint8_t g_ui_requested_ensemble_page = UI_PAGE_TEMPLATE_CFG;
 #define UI_NAVIGATION_MAX_TEMPLATE_SUBSETS 4U
 static uint8_t g_ui_last_subpage_by_subset[UI_PAGE_COUNT][UI_NAVIGATION_MAX_TEMPLATE_SUBSETS];
 
-static void ui_navigation_refresh_active_track_runtime(void)
-{
-    /* Consumer-edge refresh: navigation reads projection only after an explicit refresh. */
-    track_runtime_refresh_track(ui_get_active_lane());
-}
-
 static uint8_t ui_navigation_is_ensemble_page(uint8_t page_id)
 {
     switch (page_id)
@@ -138,7 +132,6 @@ static uint8_t ui_navigation_resolve_effective_ensemble_page(void)
 
 void ui_navigation_request_ensemble_page(uint8_t page_id)
 {
-    ui_navigation_refresh_active_track_runtime();
 
     if (page_id == UI_PAGE_TEMPLATE_CFG)
     {
@@ -169,7 +162,6 @@ void ui_navigation_request_ensemble_page(uint8_t page_id)
 
 void ui_navigation_request_page_with_availability(uint8_t page_id)
 {
-    ui_navigation_refresh_active_track_runtime();
 
     if (page_id == UI_PAGE_TEMPLATE_CFG)
     {
@@ -200,7 +192,6 @@ void ui_navigation_handle_event(const ui_event_t *event)
         return;
     }
 
-    ui_navigation_refresh_active_track_runtime();
 
     const uint8_t current_page = ui_page_get_id();
 
@@ -255,7 +246,6 @@ void ui_navigation_handle_event(const ui_event_t *event)
 
 uint8_t ui_navigation_is_ensemble_button_available(button_id_t button)
 {
-    ui_navigation_refresh_active_track_runtime();
 
     for (uint8_t i = 0U; i < (uint8_t)(sizeof(g_ui_nav_rules) / sizeof(g_ui_nav_rules[0])); i++)
     {
@@ -277,7 +267,6 @@ uint8_t ui_navigation_is_ensemble_button_available(button_id_t button)
 
 button_id_t ui_navigation_get_button_for_page(uint8_t page_id)
 {
-    ui_navigation_refresh_active_track_runtime();
 
     for (uint8_t i = 0U; i < (uint8_t)(sizeof(g_ui_nav_rules) / sizeof(g_ui_nav_rules[0])); i++)
     {
@@ -298,7 +287,6 @@ button_id_t ui_navigation_get_button_for_page(uint8_t page_id)
 
 void ui_navigation_sync_active_track_ensemble(void)
 {
-    ui_navigation_refresh_active_track_runtime();
 
     const uint8_t current_page = ui_page_get_id();
     if ((current_page == UI_PAGE_TEMPLATE_CFG) || (ui_navigation_is_ensemble_page(current_page) != 0U))
@@ -327,7 +315,6 @@ void ui_navigation_sync_active_track_ensemble(void)
 void ui_navigation_sync_created_track_destination(void)
 {
     g_ui_requested_ensemble_page = UI_PAGE_TEMPLATE_CFG;
-    ui_navigation_refresh_active_track_runtime();
 
     if (ui_page_get_id() != UI_PAGE_TEMPLATE_CFG)
     {

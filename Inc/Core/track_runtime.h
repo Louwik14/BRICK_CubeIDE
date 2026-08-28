@@ -12,21 +12,6 @@ extern "C" {
 
 typedef enum
 {
-    TRACK_RUNTIME_BIND_UNBOUND = 0,
-    TRACK_RUNTIME_BIND_BOUND,
-    TRACK_RUNTIME_BIND_QUOTA_BLOCKED
-} track_runtime_bind_state_t;
-
-typedef enum
-{
-    TRACK_RUNTIME_BIND_REASON_NONE = 0,
-    TRACK_RUNTIME_BIND_REASON_TRACK_OFF,
-    TRACK_RUNTIME_BIND_REASON_UNSUPPORTED,
-    TRACK_RUNTIME_BIND_REASON_QUOTA_EXCEEDED
-} track_runtime_bind_reason_t;
-
-typedef enum
-{
     TRACK_RUNTIME_ENGINE_NONE = 0,
     TRACK_RUNTIME_ENGINE_AUDIO_TRACK,
     TRACK_RUNTIME_ENGINE_SAMPLER,
@@ -151,8 +136,7 @@ typedef struct
     track_runtime_family_t family;
     track_runtime_type_t type;
     track_runtime_engine_t engine;
-    track_runtime_bind_state_t bind_state;
-    track_runtime_bind_reason_t bind_reason;
+    uint8_t active;
     uint8_t instance_id;
     uint8_t mix_track_id;
     uint8_t flags;
@@ -184,19 +168,12 @@ typedef struct
 void track_runtime_init(void);
 void track_runtime_invalidate_all(void);
 void track_runtime_invalidate_track(uint8_t track);
-uint8_t track_runtime_refresh_if_dirty(void);
-void track_runtime_refresh_track(uint8_t track);
-void track_runtime_refresh_all(void);
-/* Rebuild CONTROL from canonical track_state after an AUDIO-first restore.
- * This validates the already-installed AUDIO projection and emits no intent. */
-uint8_t track_runtime_install_restored_projection(void);
-/* READY gate: CONTROL and AUDIO describe the same active entity binding. */
-uint8_t track_runtime_active_projection_is_coherent(
-    brick_entity_id_t entity, uint32_t *out_binding_generation);
+void track_runtime_rebuild_track(uint8_t track);
+void track_runtime_rebuild_all(void);
 /*
  * Revision guards:
  * - track_runtime_get_revision / track_runtime_get_track_revision are coherence markers only.
- * - they are valid after an explicit refresh at the consumer edge.
+ * - they are updated synchronously at the CONTROL mutation edge.
  * - they must not become UI business logic or hidden refresh triggers.
  */
 uint32_t track_runtime_get_revision(void);
@@ -204,7 +181,7 @@ uint32_t track_runtime_get_track_revision(uint8_t track);
 /*
  * Projection surface:
  * - pure reads of runtime state / descriptor / routing / gating / ensemble availability.
- * - refresh remains explicit at the call site; getters never auto-refresh.
+ * - getters are pure reads and never trigger reconstruction or publication.
  * - track_runtime_get_ctx is an escape hatch for consumers that need the full runtime ctx.
  */
 const track_runtime_ctx_t *track_runtime_get_ctx(uint8_t track);
@@ -234,6 +211,8 @@ track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_
 uint8_t track_runtime_is_track_prism_available(uint8_t track);
 track_runtime_family_t track_runtime_family_from_ui(ui_track_family_t family);
 track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type);
+track_runtime_engine_t track_runtime_choose_engine(
+    track_runtime_family_t family, track_runtime_type_t type);
 uint8_t track_runtime_compute_flags(track_runtime_family_t family,
                                     track_runtime_type_t type);
 

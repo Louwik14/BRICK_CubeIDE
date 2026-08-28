@@ -29,6 +29,7 @@ static_assert(sizeof(dx7_log_kernel_voice_t) == 176U,
 void dx7_log_kernel_init(void);
 void dx7_log_kernel_reset(dx7_log_kernel_voice_t *voice);
 void dx7_log_kernel_note_on(dx7_log_kernel_voice_t *voice, bool sync);
+void dx7_log_kernel_initialize_held(dx7_log_kernel_voice_t *voice);
 void dx7_log_kernel_set_phase_increment(dx7_log_kernel_voice_t *voice,
                                         uint32_t operator_index,
                                         uint32_t phase_increment);

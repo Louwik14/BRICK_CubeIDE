@@ -33,11 +33,12 @@ _Static_assert(sizeof(audio_rec_bus_control_snapshot_t) == 8U,
                "AUDIO REC CONTROL snapshot ABI changed");
 
 void audio_rec_bus_projection_control_init(void);
-void audio_rec_bus_projection_control_publish(uint16_t source_entity_mask,
-                                              audio_rec_bus_arm_t arm,
-                                              uint8_t source_flags);
+uint8_t audio_rec_bus_projection_control_publish(uint16_t source_entity_mask,
+                                                 audio_rec_bus_arm_t arm,
+                                                 uint8_t source_flags);
 
 void audio_rec_bus_projection_audio_init(void);
+uint8_t audio_rec_bus_projection_audio_apply(uint32_t packed);
 uint8_t audio_rec_bus_projection_audio_read(
     audio_rec_bus_control_snapshot_t *out_snapshot);
 

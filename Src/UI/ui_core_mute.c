@@ -43,7 +43,6 @@ static uint8_t ui_core_get_track_runtime_mute(uint8_t track, uint8_t *out_muted,
     *out_muted = 0U;
     *out_available = 0U;
 
-    track_runtime_refresh_track(track);
     *out_available = track_mute_is_available(track);
     *out_muted = (*out_available != 0U) ? track_mute_get(track) : 0U;
     return 1U;
@@ -56,7 +55,6 @@ static uint8_t ui_core_apply_track_runtime_mute(uint8_t track, uint8_t muted)
         return 0U;
     }
 
-    track_runtime_refresh_track(track);
     return track_mute_set(track, muted);
 }
 

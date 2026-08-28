@@ -1008,6 +1008,28 @@ void brick6_stack_runtime_note_on(uint8_t instance_id, uint8_t note, uint8_t vel
     brick6_stack_runtime_refresh_masks(instance);
 }
 
+void brick6_stack_runtime_initialize_held_note(uint8_t instance_id,
+                                               uint8_t note,
+                                               uint8_t velocity)
+{
+    brick6_stack_runtime_instance_t *const instance =
+        brick6_stack_runtime_get_instance_mut(instance_id);
+    if (instance == NULL) return;
+    instance->voice.active_note = note;
+    instance->voice.has_active_note = 1U;
+    instance->voice.gate = 1U;
+    instance->voice.trigger = 0U;
+    instance->release_source_active = 0U;
+    instance->voice.velocity_q15 =
+        (uint16_t)(((uint32_t)velocity * 32767U) / 127U);
+    if (instance->osc_detune_q15 != 0U)
+        brick6_stack_runtime_generate_osc_detune_offsets(instance);
+    brick6_stack_runtime_update_all_pitches(instance);
+    for (uint8_t slot = 0U; slot < BRICK6_STACK_SLOT_COUNT; ++slot)
+        instance->slots[slot].phase_inc_current = instance->slots[slot].phase_inc;
+    brick6_stack_runtime_refresh_masks(instance);
+}
+
 void brick6_stack_runtime_note_off(uint8_t instance_id, uint8_t note)
 {
     brick6_stack_runtime_instance_t *const instance = brick6_stack_runtime_get_instance_mut(instance_id);

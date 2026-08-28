@@ -3,25 +3,41 @@
 #include "Audio/audio_fx_runtime.h"
 #include "Audio/fx_audio_drift.h"
 #include "Audio/audio_note_engine_adapter.h"
-#include "Audio/audio_modulation_projection.h"
-#include "Storage/memory_layout.h"
-#include "stm32h7xx.h"
-
+#include "Audio/drum_synth.h"
+#include "Audio/md_model.h"
 #include <string.h>
 
 #include "Audio/mixer.h"
 #include "Core/track_sound_state.h"
-#include "Core/track_tone_sound_state.h"
 #include "Core/entity_topology.h"
+#include "Core/control_audio_program.h"
+#include "Audio/control_audio_command.h"
+#include "Audio/control_audio_fifo.h"
+#include "Core/control_audio_publication.h"
+#include "Core/live_clock.h"
+#include "Core/live_parameter_audio_publication.h"
+#include "Core/live_parameter_event.h"
 #include "Core/track_state.h"
 #include "Mod/mod_destination_catalog.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Param/param_registry.h"
+#include "Param/param_registry_runtime_state.h"
 #include "Seq/seq_types.h"
 
 /* Runtime remains entity-scoped; GROUP control state is owned by the master. */
 #undef SEQ_TRACK_COUNT
 #define SEQ_TRACK_COUNT SEQ_LANE_CAPACITY
+
+#define MOD_MATRIX_PARAM_COMMANDS_PER_OWNER 40U
+#define MOD_MATRIX_RESTORE_OWNER_MAX BRICK_ENTITY_TOP_LEVEL_COUNT
+#define MOD_MATRIX_RESTORE_COMMAND_MAX \
+    (MOD_MATRIX_PARAM_COMMANDS_PER_OWNER * MOD_MATRIX_RESTORE_OWNER_MAX)
+_Static_assert(MOD_MATRIX_RESTORE_COMMAND_MAX == 320U,
+               "Eight Matrix owners restore as 320 PARAM commands");
+_Static_assert(MOD_MATRIX_RESTORE_COMMAND_MAX <= CONTROL_AUDIO_FIFO_MAX_PARAM_BURST,
+               "Matrix restore must fit the contractual PARAM burst");
+_Static_assert(LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_LAST < 32U,
+               "Matrix slot scope must fit command kind");
 
 typedef struct
 {
@@ -79,19 +95,20 @@ typedef struct
 
 typedef struct
 {
-    uint8_t valid;
-    uint16_t destination;
-    float value;
-} mod_matrix_base_override_t;
-
-typedef struct
-{
     float slew_amount[2];
-    uint32_t slew_generation[2];
     uint8_t multi_source[2][2];
     uint8_t slew_source[2];
     uint8_t drum_md_slot_count;
 } mod_matrix_operator_config_t;
+
+typedef struct
+{
+    track_mod_matrix_slot_t slots[MOD_MATRIX_SLOT_COUNT];
+    uint8_t multi_source[2][2];
+    uint8_t slew_source[2];
+    float slew_amount[2];
+    mod_destination_audio_models_t models;
+} mod_matrix_audio_state_t;
 
 static mod_matrix_runtime_track_t g_mod_matrix_runtime[SEQ_TRACK_COUNT];
 static mod_matrix_operator_config_t g_mod_matrix_operator_config[SEQ_TRACK_COUNT];
@@ -120,25 +137,26 @@ typedef struct
 static mod_matrix_poly_plan_t g_mod_matrix_poly_plan[SEQ_TRACK_COUNT];
 static mod_matrix_track_plan_t g_mod_matrix_track_plan[SEQ_TRACK_COUNT];
 static mod_matrix_operator_runtime_t g_mod_matrix_operator_runtime[SEQ_TRACK_COUNT];
-static mod_matrix_base_override_t
-    g_mod_matrix_base_overrides[SEQ_TRACK_COUNT][MOD_MATRIX_SLOT_COUNT];
+static mod_matrix_audio_state_t g_mod_matrix_audio_state[SEQ_TRACK_COUNT];
+static uint16_t g_mod_matrix_audio_dirty_mask;
+static uint16_t g_mod_matrix_control_batch_dirty_mask;
+static uint8_t g_mod_matrix_control_batch_depth;
 static uint8_t g_mod_matrix_any_route = 0U;
 
-typedef struct
+static uint8_t mod_matrix_audio_resolve_owner(uint8_t track, uint8_t *out_owner)
 {
-    volatile uint32_t sequence;
-    mod_matrix_control_snapshot_t snapshot;
-} mod_matrix_control_mailbox_t;
+    track_audio_runtime_ctx_t ctx;
+    if ((out_owner == NULL) || !audio_note_engine_adapter_current_ctx(track, &ctx))
+        return 0U;
+    if ((ctx.flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD) == 0U)
+    { *out_owner = track; return 1U; }
+    for (uint8_t entity = 0U; entity < SEQ_TRACK_COUNT; ++entity)
+        if (audio_note_engine_adapter_current_ctx(entity, &ctx)
+                && ((ctx.flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER) != 0U))
+        { *out_owner = entity; return 1U; }
+    return 0U;
+}
 
-D3_IPC static mod_matrix_control_mailbox_t
-    g_mod_matrix_control_mailbox[SEQ_TRACK_COUNT];
-CTRL_STATE static uint8_t
-    g_mod_matrix_control_slew_source[SEQ_TRACK_COUNT][2];
-CTRL_STATE static uint8_t
-    g_mod_matrix_control_slew_source_valid[SEQ_TRACK_COUNT][2];
-CTRL_STATE static uint32_t
-    g_mod_matrix_control_slew_generation[SEQ_TRACK_COUNT][2];
-static uint32_t g_mod_matrix_audio_mailbox_sequence[SEQ_TRACK_COUNT];
 
 static float mod_matrix_clampf(float v, float lo, float hi)
 {
@@ -297,8 +315,8 @@ static uint8_t mod_matrix_slot_is_effective(uint8_t track,
 {
     uint8_t target = 0U;
     param_id_t destination = PARAM_COUNT;
-    const uint8_t is_group_master =
-        audio_modulation_projection_audio_is_group_master(track);
+    const uint8_t is_group_master = (uint8_t)((ctx != NULL)
+        && ((ctx->flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER) != 0U));
     if ((slot == NULL)
             || (slot->enabled == 0U)
             || (slot->source == (uint8_t)MOD_MATRIX_SOURCE_NONE)
@@ -328,7 +346,7 @@ static uint8_t mod_matrix_slot_is_effective(uint8_t track,
                 return 0U;
             }
             if ((ctx == NULL)
-                    || (ctx->audio_binding.mix_track_id >= MIXER_MAX_TRACKS)
+                    || (ctx->program_route.mix_track_id >= MIXER_MAX_TRACKS)
                     || (audio_note_engine_adapter_ctx_supports_vca_gate(ctx) == 0U))
             {
                 return 0U;
@@ -342,7 +360,7 @@ static uint8_t mod_matrix_slot_is_effective(uint8_t track,
             }
             if ((ctx == NULL)
                     || (audio_note_engine_adapter_ctx_is_audio_routable(ctx) == 0U)
-                    || ((ctx->flags & AUDIO_RUNTIME_FLAG_CAN_FILTER) == 0U)
+                    || ((ctx->flags & CONTROL_AUDIO_PROGRAM_FLAG_CAN_FILTER) == 0U)
                     || (ctx->has_filter_target == 0U))
             {
                 return 0U;
@@ -355,25 +373,17 @@ static uint8_t mod_matrix_slot_is_effective(uint8_t track,
 
     track_audio_runtime_ctx_t target_ctx_value;
     const track_audio_runtime_ctx_t *const target_ctx =
-        (audio_note_engine_adapter_audio_ctx_snapshot(
+        (audio_note_engine_adapter_current_ctx(
             target, &target_ctx_value) != 0U) ? &target_ctx_value : NULL;
     return mod_destination_catalog_supported_audio(
         target, destination,
         mod_matrix_ui_family_from_ctx(target_ctx),
         mod_matrix_ui_type_from_ctx(target_ctx), target_ctx,
-        g_mod_matrix_operator_config[target].drum_md_slot_count);
+        &g_mod_matrix_audio_state[target].models);
 }
 
-static void mod_matrix_release_destination(uint8_t track,
-                                           mod_matrix_runtime_destination_t *dst,
-                                           ui_track_family_t family,
-                                           ui_track_type_t type,
-                                           const track_audio_runtime_ctx_t *ctx)
+static void mod_matrix_release_destination(mod_matrix_runtime_destination_t *dst)
 {
-    (void)track;
-    (void)family;
-    (void)type;
-    (void)ctx;
     if ((dst == NULL) || (dst->valid == 0U))
     {
         return;
@@ -430,42 +440,6 @@ static mod_matrix_runtime_destination_t *mod_matrix_alloc_runtime_destination(mo
     return NULL;
 }
 
-static mod_matrix_base_override_t *mod_matrix_find_base_override(uint8_t track,
-                                                                 param_id_t destination)
-{
-    if ((track >= SEQ_TRACK_COUNT) || (destination >= PARAM_COUNT))
-    {
-        return NULL;
-    }
-    for (uint8_t i = 0U; i < MOD_MATRIX_SLOT_COUNT; ++i)
-    {
-        mod_matrix_base_override_t *const entry =
-            &g_mod_matrix_base_overrides[track][i];
-        if ((entry->valid != 0U)
-                && (entry->destination == (uint16_t)destination))
-        {
-            return entry;
-        }
-    }
-    return NULL;
-}
-
-static mod_matrix_base_override_t *mod_matrix_alloc_base_override(uint8_t track)
-{
-    if (track >= SEQ_TRACK_COUNT)
-    {
-        return NULL;
-    }
-    for (uint8_t i = 0U; i < MOD_MATRIX_SLOT_COUNT; ++i)
-    {
-        if (g_mod_matrix_base_overrides[track][i].valid == 0U)
-        {
-            return &g_mod_matrix_base_overrides[track][i];
-        }
-    }
-    return NULL;
-}
-
 static uint8_t mod_matrix_runtime_destination_prepare(uint8_t track,
                                                       mod_matrix_runtime_track_t *rt,
                                                       mod_destination_address_t destination,
@@ -484,11 +458,12 @@ static uint8_t mod_matrix_runtime_destination_prepare(uint8_t track,
     mod_matrix_runtime_destination_t *dst = mod_matrix_find_runtime_destination(rt, destination);
     track_audio_runtime_ctx_t target_ctx_value;
     const track_audio_runtime_ctx_t *const target_ctx =
-        (audio_note_engine_adapter_audio_ctx_snapshot(
+        (audio_note_engine_adapter_current_ctx(
             target, &target_ctx_value) != 0U) ? &target_ctx_value : NULL;
     mod_destination_prepared_t prepared;
     if ((target_ctx == NULL)
             || (mod_destination_catalog_prepare(target, param, target_ctx,
+                                                &g_mod_matrix_audio_state[target].models,
                                                 &prepared) == 0U))
         return 0U;
     if (dst == NULL)
@@ -503,12 +478,6 @@ static uint8_t mod_matrix_runtime_destination_prepare(uint8_t track,
          * accompanies a newly routed destination seeds the authoritative
          * value before the next render. */
         float base_value = param_registry[param].default_value;
-        const mod_matrix_base_override_t *const override =
-            mod_matrix_find_base_override(target, param);
-        if (override != NULL)
-        {
-            base_value = override->value;
-        }
         dst->valid = 1U;
         dst->modulation_active = 0U;
         dst->destination = destination;
@@ -542,11 +511,8 @@ static void mod_matrix_rebuild_track_plan(uint8_t track,
                                           ui_track_family_t family,
                                           ui_track_type_t type,
                                           const track_audio_runtime_ctx_t *ctx,
-                                          const mod_matrix_control_snapshot_t *snapshot)
+                                          const mod_matrix_audio_state_t *state)
 {
-    (void)family;
-    (void)type;
-    (void)ctx;
     typedef struct
     {
         uint8_t source;
@@ -565,15 +531,33 @@ static void mod_matrix_rebuild_track_plan(uint8_t track,
 
     for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
     {
-        const track_mod_matrix_slot_t *const s = &snapshot->slots[slot];
+        const track_mod_matrix_slot_t *const s = &state->slots[slot];
         if ((mod_matrix_slot_is_effective(track, s, family, type, ctx) != 0U)
                 && (candidate_count < MOD_MATRIX_SLOT_COUNT))
         {
             candidates[candidate_count].source = s->source;
             candidates[candidate_count].destination = s->destination;
             candidates[candidate_count].depth = s->depth;
-            candidates[candidate_count].min_value = snapshot->min_value[slot];
-            candidates[candidate_count].max_value = snapshot->max_value[slot];
+            uint8_t target = 0U;
+            param_id_t destination = PARAM_COUNT;
+            candidates[candidate_count].min_value = 0.0f;
+            candidates[candidate_count].max_value = 127.0f;
+            if (mod_destination_address_resolve(s->destination,
+                                                &target, &destination) != 0U)
+            {
+                candidates[candidate_count].min_value = param_registry[destination].min;
+                candidates[candidate_count].max_value = param_registry[destination].max;
+                if ((destination == PARAM_AUDIO_FX_P1)
+                        || (destination == PARAM_AUDIO_FX_B_P1))
+                {
+                    const uint8_t model = (destination == PARAM_AUDIO_FX_B_P1)
+                        ? audio_fx_runtime_get_model(target, AUDIO_FX_SLOT_B)
+                        : audio_fx_runtime_get_model(target, AUDIO_FX_SLOT_A);
+                    if (model == AUDIO_FX_MODEL_DRIFT)
+                        candidates[candidate_count].max_value =
+                            FX_AUDIO_DRIFT_DELAY_MOD_MAX_CONTROL;
+                }
+            }
             ++candidate_count;
         }
     }
@@ -595,7 +579,7 @@ static void mod_matrix_rebuild_track_plan(uint8_t track,
         }
         if ((dst->valid != 0U) && (still_used == 0U))
         {
-            mod_matrix_release_destination(track, dst, family, type, ctx);
+            mod_matrix_release_destination(dst);
         }
     }
 
@@ -690,12 +674,45 @@ void audio_mod_matrix_init(void)
     memset(g_mod_matrix_track_plan, 0, sizeof(g_mod_matrix_track_plan));
     memset(g_mod_matrix_poly_plan, 0, sizeof(g_mod_matrix_poly_plan));
     memset(g_mod_matrix_operator_runtime, 0, sizeof(g_mod_matrix_operator_runtime));
-    memset(g_mod_matrix_base_overrides, 0, sizeof(g_mod_matrix_base_overrides));
-    memset(g_mod_matrix_audio_mailbox_sequence, 0,
-           sizeof(g_mod_matrix_audio_mailbox_sequence));
+    memset(g_mod_matrix_audio_state, 0, sizeof(g_mod_matrix_audio_state));
+    g_mod_matrix_audio_dirty_mask = 0U;
+    g_mod_matrix_control_batch_dirty_mask = 0U;
+    g_mod_matrix_control_batch_depth = 0U;
     g_mod_matrix_any_route = 0U;
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
+        uint8_t selected = 0U;
+        mod_matrix_set_defaults(g_mod_matrix_audio_state[track].slots, &selected);
+        g_mod_matrix_audio_state[track].multi_source[0][0] =
+            (uint8_t)param_registry[PARAM_MOD_MULTI_1_A].default_value;
+        g_mod_matrix_audio_state[track].multi_source[0][1] =
+            (uint8_t)param_registry[PARAM_MOD_MULTI_1_B].default_value;
+        g_mod_matrix_audio_state[track].multi_source[1][0] =
+            (uint8_t)param_registry[PARAM_MOD_MULTI_2_A].default_value;
+        g_mod_matrix_audio_state[track].multi_source[1][1] =
+            (uint8_t)param_registry[PARAM_MOD_MULTI_2_B].default_value;
+        g_mod_matrix_audio_state[track].slew_source[0] =
+            (uint8_t)param_registry[PARAM_MOD_SLEW_1_SOURCE].default_value;
+        g_mod_matrix_audio_state[track].slew_source[1] =
+            (uint8_t)param_registry[PARAM_MOD_SLEW_2_SOURCE].default_value;
+        g_mod_matrix_audio_state[track].slew_amount[0] =
+            param_registry[PARAM_MOD_SLEW_1_AMOUNT].default_value;
+        g_mod_matrix_audio_state[track].slew_amount[1] =
+            param_registry[PARAM_MOD_SLEW_2_AMOUNT].default_value;
+        g_mod_matrix_audio_state[track].models.audio_fx_model[0] =
+            (uint8_t)param_registry[PARAM_AUDIO_FX_MODEL].default_value;
+        g_mod_matrix_audio_state[track].models.audio_fx_model[1] =
+            (uint8_t)param_registry[PARAM_AUDIO_FX_B_MODEL].default_value;
+        g_mod_matrix_audio_state[track].models.prism_model[0] =
+            (uint8_t)param_registry[PARAM_PRISM_OSC1_MODEL].default_value;
+        g_mod_matrix_audio_state[track].models.prism_model[1] =
+            (uint8_t)param_registry[PARAM_PRISM_OSC2_MODEL].default_value;
+        g_mod_matrix_audio_state[track].models.stack_model[0] =
+            (uint8_t)param_registry[PARAM_STACK_OSC1_MODEL].default_value;
+        g_mod_matrix_audio_state[track].models.stack_model[1] =
+            (uint8_t)param_registry[PARAM_STACK_OSC2_MODEL].default_value;
+        g_mod_matrix_audio_state[track].models.stack_model[2] =
+            (uint8_t)param_registry[PARAM_STACK_OSC3_MODEL].default_value;
         for (uint8_t i = 0U; i < MOD_MATRIX_SLOT_COUNT; ++i)
         {
             g_mod_matrix_runtime[track].destinations[i].destination = (uint16_t)MOD_DESTINATION_NONE;
@@ -703,6 +720,22 @@ void audio_mod_matrix_init(void)
         }
     }
     audio_mod_destination_catalog_reset_runtime();
+}
+
+void audio_mod_matrix_update_context_param(uint8_t track, param_id_t id,
+                                           float value)
+{
+    if (track >= SEQ_TRACK_COUNT) return;
+    mod_destination_audio_models_t *const models =
+        &g_mod_matrix_audio_state[track].models;
+    const uint8_t model = (uint8_t)(value + 0.5f);
+    if (id == PARAM_AUDIO_FX_MODEL) models->audio_fx_model[0] = model;
+    else if (id == PARAM_AUDIO_FX_B_MODEL) models->audio_fx_model[1] = model;
+    else if (id == PARAM_PRISM_OSC1_MODEL) models->prism_model[0] = model;
+    else if (id == PARAM_PRISM_OSC2_MODEL) models->prism_model[1] = model;
+    else if (id == PARAM_STACK_OSC1_MODEL) models->stack_model[0] = model;
+    else if (id == PARAM_STACK_OSC2_MODEL) models->stack_model[1] = model;
+    else if (id == PARAM_STACK_OSC3_MODEL) models->stack_model[2] = model;
 }
 
 static uint16_t mod_matrix_required_mask_expand(uint8_t track,
@@ -751,10 +784,9 @@ static uint16_t mod_matrix_required_mask_expand(uint8_t track,
 }
 
 static void mod_matrix_audio_rebuild_route_cache_track(
-    uint8_t track,
-    const mod_matrix_control_snapshot_t *snapshot)
+    uint8_t track)
 {
-    if ((track >= SEQ_TRACK_COUNT) || (snapshot == NULL))
+    if (track >= SEQ_TRACK_COUNT)
     {
         return;
     }
@@ -763,16 +795,17 @@ static void mod_matrix_audio_rebuild_route_cache_track(
     memset(plan, 0, sizeof(*plan));
     track_audio_runtime_ctx_t ctx_value;
     const track_audio_runtime_ctx_t *const ctx =
-        (audio_note_engine_adapter_audio_ctx_snapshot(track, &ctx_value) != 0U)
+        (audio_note_engine_adapter_current_ctx(track, &ctx_value) != 0U)
             ? &ctx_value : NULL;
     const ui_track_family_t family = mod_matrix_ui_family_from_ctx(ctx);
     const ui_track_type_t type = mod_matrix_ui_type_from_ctx(ctx);
-    mod_matrix_rebuild_track_plan(track, family, type, ctx, snapshot);
+    const mod_matrix_audio_state_t *const state = &g_mod_matrix_audio_state[track];
+    mod_matrix_rebuild_track_plan(track, family, type, ctx, state);
     if (ctx != NULL)
     {
         for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
         {
-            const track_mod_matrix_slot_t *const s = &snapshot->slots[slot];
+            const track_mod_matrix_slot_t *const s = &state->slots[slot];
             uint8_t target = 0U;
             param_id_t destination = PARAM_COUNT;
             if ((mod_matrix_slot_is_effective(track, s, family, type, ctx) == 0U)
@@ -837,264 +870,210 @@ static void mod_matrix_audio_rebuild_route_cache_track(
     mod_matrix_recompute_global_route_flag();
 }
 
-void mod_matrix_publish_control_snapshot_track(uint8_t track)
+static uint8_t mod_matrix_make_command(uint8_t track, uint8_t slot,
+                                       param_id_t id, float value,
+                                       uint64_t sample,
+                                       control_audio_command_t *out)
 {
-    brick_entity_id_t owner = track;
-    if ((entity_topology_mod_owner(track, &owner) == 0U)
-            || (owner >= SEQ_TRACK_COUNT))
-        return;
-    track = owner;
-
-    for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
-        (void)mod_matrix_track_slot_mut(track, slot);
-
-    mod_matrix_control_snapshot_t snapshot;
-    memset(&snapshot, 0, sizeof(snapshot));
-    if (track_state_get_type(track) == UI_TRACK_TYPE_DRUM_MD)
-        snapshot.drum_md_slot_count =
-            track_tone_sound_state_md_slot_count(track);
-    const track_sound_state_t *const control_state =
-        mod_matrix_control_state_const(track);
-    if (control_state != NULL)
-    {
-        for (uint8_t op = 0U; op < 2U; ++op)
-        {
-            snapshot.multi_source[op][0] = control_state->mod_multi[op].source_a;
-            snapshot.multi_source[op][1] = control_state->mod_multi[op].source_b;
-            snapshot.slew_source[op] = control_state->mod_slew[op].source;
-            snapshot.slew_amount[op] = control_state->mod_slew[op].amount;
-            if ((g_mod_matrix_control_slew_source_valid[track][op] == 0U)
-                    || (g_mod_matrix_control_slew_source[track][op]
-                        != snapshot.slew_source[op]))
-            {
-                uint32_t generation =
-                    g_mod_matrix_control_slew_generation[track][op] + 1U;
-                if (generation == 0U)
-                    generation = 1U;
-                g_mod_matrix_control_slew_generation[track][op] = generation;
-                g_mod_matrix_control_slew_source[track][op] =
-                    snapshot.slew_source[op];
-                g_mod_matrix_control_slew_source_valid[track][op] = 1U;
-            }
-            snapshot.slew_generation[op] =
-                g_mod_matrix_control_slew_generation[track][op];
-        }
-    }
-    for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
-    {
-        const track_mod_matrix_slot_t *const source =
-            mod_matrix_track_slot_const(track, slot);
-        if (source == NULL)
-            continue;
-        snapshot.slots[slot] = *source;
-        snapshot.min_value[slot] = 0.0f;
-        snapshot.max_value[slot] = 127.0f;
-        uint8_t target = 0U;
-        param_id_t destination = PARAM_COUNT;
-        if (mod_destination_address_resolve(source->destination,
-                                            &target, &destination) != 0U)
-        {
-            snapshot.min_value[slot] = param_registry[destination].min;
-            snapshot.max_value[slot] = param_registry[destination].max;
-            if ((destination == PARAM_AUDIO_FX_P1)
-                    || (destination == PARAM_AUDIO_FX_B_P1))
-            {
-                const track_sound_state_t *const target_state =
-                    track_sound_state_get_const(target);
-                const uint8_t model = (destination == PARAM_AUDIO_FX_B_P1)
-                    ? ((target_state != NULL) ? target_state->audio_fx_b_model : AUDIO_FX_MODEL_OFF)
-                    : ((target_state != NULL) ? target_state->audio_fx_model : AUDIO_FX_MODEL_OFF);
-                if (model == AUDIO_FX_MODEL_DRIFT)
-                    snapshot.max_value[slot] = FX_AUDIO_DRIFT_DELAY_MOD_MAX_CONTROL;
-            }
-        }
-    }
-
-    mod_matrix_control_mailbox_t *const mailbox =
-        &g_mod_matrix_control_mailbox[track];
-
-    /* A topology publication never carries parameter state.  When a
-     * destination becomes routed for the first time, project its current
-     * CONTROL value through the normal parameter command path.  AUDIO
-     * consumes that command after the topology mailbox and before rendering,
-     * so the newly allocated runtime destination is seeded by the same
-     * authority as every later manual edit. */
-    for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
-    {
-        const track_mod_matrix_slot_t *const configured = &snapshot.slots[slot];
-        if ((configured->enabled == 0U)
-                || (configured->source == (uint8_t)MOD_MATRIX_SOURCE_NONE)
-                || (configured->source >= (uint8_t)MOD_MATRIX_SOURCE_COUNT)
-                || (configured->depth == 0.0f))
-            continue;
-
-        uint8_t was_routed = 0U;
-        for (uint8_t previous = 0U; previous < MOD_MATRIX_SLOT_COUNT; ++previous)
-        {
-            const track_mod_matrix_slot_t *const old =
-                &mailbox->snapshot.slots[previous];
-            if ((old->enabled != 0U)
-                    && (old->source != (uint8_t)MOD_MATRIX_SOURCE_NONE)
-                    && (old->source < (uint8_t)MOD_MATRIX_SOURCE_COUNT)
-                    && (old->depth != 0.0f)
-                    && (old->destination == configured->destination))
-            {
-                was_routed = 1U;
-                break;
-            }
-        }
-        if (was_routed != 0U)
-            continue;
-
-        for (uint8_t current = 0U; current < slot; ++current)
-        {
-            const track_mod_matrix_slot_t *const earlier =
-                &snapshot.slots[current];
-            if ((earlier->enabled != 0U)
-                    && (earlier->source != (uint8_t)MOD_MATRIX_SOURCE_NONE)
-                    && (earlier->source < (uint8_t)MOD_MATRIX_SOURCE_COUNT)
-                    && (earlier->depth != 0.0f)
-                    && (earlier->destination == configured->destination))
-            {
-                was_routed = 1U;
-                break;
-            }
-        }
-        if (was_routed != 0U)
-            continue;
-
-        uint8_t target = 0U;
-        param_id_t destination = PARAM_COUNT;
-        float base_value = 0.0f;
-        if ((mod_destination_address_resolve(configured->destination,
-                                             &target, &destination) != 0U)
-                && (param_registry_get_track_value(destination, target,
-                                                   &base_value) != 0U))
-        {
-            (void)param_registry_project_track_base_audio(destination, target,
-                                                          base_value);
-        }
-    }
-
-    uint32_t sequence = mailbox->sequence;
-    if ((sequence & 1U) != 0U)
-        ++sequence;
-    mailbox->sequence = sequence + 1U;
-    __DMB();
-    mailbox->snapshot = snapshot;
-    __DMB();
-    mailbox->sequence = sequence + 2U;
-    audio_modulation_configuration_publish();
-}
-
-void audio_mod_matrix_apply_snapshot(uint8_t track,
-                                     const mod_matrix_control_snapshot_t *snapshot)
-{
-    if ((snapshot == NULL) || (track >= SEQ_TRACK_COUNT))
-        return;
-
-    mod_matrix_operator_config_t *const config =
-        &g_mod_matrix_operator_config[track];
-    const uint32_t previous_slew_generation[2] = {
-        config->slew_generation[0], config->slew_generation[1]
+    if ((out == NULL) || (track >= SEQ_TRACK_COUNT)) return 0U;
+    const uint8_t scope = (slot < MOD_MATRIX_SLOT_COUNT)
+        ? (uint8_t)(LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_BASE + slot)
+        : (uint8_t)LIVE_PARAMETER_EVENT_SCOPE_TRACK;
+    *out = (control_audio_command_t){
+        .effective_sample_time = sample,
+        .value = (uint32_t)live_parameter_event_encode_float(value),
+        .id = (uint16_t)id,
+        .entity = track,
+        .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM,
+                                                  scope)
     };
-    memset(config, 0, sizeof(*config));
-    config->drum_md_slot_count = snapshot->drum_md_slot_count;
-    for (uint8_t op = 0U; op < 2U; ++op)
-    {
-        config->multi_source[op][0] = snapshot->multi_source[op][0];
-        config->multi_source[op][1] = snapshot->multi_source[op][1];
-        config->slew_source[op] = snapshot->slew_source[op];
-        config->slew_amount[op] = snapshot->slew_amount[op];
-        config->slew_generation[op] = snapshot->slew_generation[op];
-        if (previous_slew_generation[op] != snapshot->slew_generation[op])
-        {
-            g_mod_matrix_operator_runtime[track].slew[op] = 0.0f;
-            g_mod_matrix_operator_runtime[track].slew_valid[op] = 0U;
-        }
-    }
-    mod_matrix_audio_rebuild_route_cache_track(track, snapshot);
-}
-
-static uint8_t mod_matrix_audio_read_mailbox(
-    uint8_t track,
-    mod_matrix_control_snapshot_t *out_snapshot,
-    uint32_t *out_sequence)
-{
-    if ((track >= SEQ_TRACK_COUNT) || (out_snapshot == NULL))
-        return 0U;
-    const mod_matrix_control_mailbox_t *const mailbox =
-        &g_mod_matrix_control_mailbox[track];
-    const uint32_t before = mailbox->sequence;
-    if ((before & 1U) != 0U)
-        return 0U;
-    __DMB();
-    *out_snapshot = mailbox->snapshot;
-    __DMB();
-    const uint32_t after = mailbox->sequence;
-    if ((before != after) || ((after & 1U) != 0U))
-        return 0U;
-    if (out_sequence != NULL)
-        *out_sequence = after;
     return 1U;
 }
 
-void audio_mod_matrix_consume_snapshots(void)
+static uint8_t mod_matrix_publish_state_mask(uint16_t owner_mask)
 {
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    uint16_t count = 0U;
+    for (uint8_t owner = 0U; owner < SEQ_TRACK_COUNT; ++owner)
+        if ((owner_mask & (uint16_t)(1U << owner)) != 0U)
+            count += MOD_MATRIX_PARAM_COMMANDS_PER_OWNER;
+    if (count == 0U) return 1U;
+    if (count > MOD_MATRIX_RESTORE_COMMAND_MAX) return 0U;
+    uint64_t sample = 0U;
+    control_audio_fifo_batch_writer_t writer;
+    if (!live_clock_read_audio_sample(&sample)
+            || (control_audio_fifo_batch_begin(&writer, count) == 0U)) return 0U;
+    static const param_id_t operator_ids[8] = {
+        PARAM_MOD_MULTI_1_A, PARAM_MOD_MULTI_1_B,
+        PARAM_MOD_MULTI_2_A, PARAM_MOD_MULTI_2_B,
+        PARAM_MOD_SLEW_1_SOURCE, PARAM_MOD_SLEW_1_AMOUNT,
+        PARAM_MOD_SLEW_2_SOURCE, PARAM_MOD_SLEW_2_AMOUNT
+    };
+    for (uint8_t owner = 0U; owner < SEQ_TRACK_COUNT; ++owner)
     {
-        const uint32_t before = g_mod_matrix_control_mailbox[track].sequence;
-        if (((before & 1U) != 0U)
-                || (before == g_mod_matrix_audio_mailbox_sequence[track]))
-            continue;
-        mod_matrix_control_snapshot_t snapshot;
-        uint32_t sequence = 0U;
-        if (mod_matrix_audio_read_mailbox(track, &snapshot, &sequence) == 0U)
-            continue;
-        audio_mod_matrix_apply_snapshot(track, &snapshot);
-        g_mod_matrix_audio_mailbox_sequence[track] = sequence;
+        if ((owner_mask & (uint16_t)(1U << owner)) == 0U) continue;
+        const track_sound_state_t *const state = mod_matrix_control_state_const(owner);
+        if (state == NULL) goto fail;
+        for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
+        {
+            const track_mod_matrix_slot_t *const s = &state->mod_matrix[slot];
+            const param_id_t ids[4] = { PARAM_MOD_MATRIX_SOURCE,
+                PARAM_MOD_MATRIX_DEST, PARAM_MOD_MATRIX_DEPTH,
+                PARAM_MOD_MATRIX_SLOT };
+            const float values[4] = { (float)s->source, (float)s->destination,
+                s->depth, (float)(s->enabled != 0U) };
+            for (uint8_t field = 0U; field < 4U; ++field)
+            {
+                control_audio_command_t command;
+                if ((mod_matrix_make_command(owner, slot, ids[field],
+                                             values[field], sample, &command) == 0U)
+                        || (control_audio_fifo_batch_append(&writer, &command) == 0U))
+                    goto fail;
+            }
+        }
+        float operator_values[8];
+        for (uint8_t field = 0U; field < 8U; ++field)
+            (void)param_registry_control_value_get(
+                owner, operator_ids[field], &operator_values[field]);
+        for (uint8_t field = 0U; field < 8U; ++field)
+        {
+            control_audio_command_t command;
+            if ((mod_matrix_make_command(owner, UINT8_MAX, operator_ids[field],
+                                         operator_values[field], sample, &command) == 0U)
+                    || (control_audio_fifo_batch_append(&writer, &command) == 0U))
+                goto fail;
+        }
     }
+    return control_audio_fifo_batch_commit(&writer);
+fail:
+    control_audio_fifo_batch_abort(&writer);
+    return 0U;
+}
+
+uint8_t mod_matrix_publish_control_state_track(uint8_t track)
+{
+    brick_entity_id_t owner = track;
+    if ((entity_topology_mod_owner(track, &owner) == 0U)
+            || (owner >= SEQ_TRACK_COUNT)) return 0U;
+    if (g_mod_matrix_control_batch_depth != 0U)
+    {
+        g_mod_matrix_control_batch_dirty_mask |= (uint16_t)(1U << owner);
+        return 1U;
+    }
+    return mod_matrix_publish_state_mask((uint16_t)(1U << owner));
+}
+
+void mod_matrix_control_batch_begin(void)
+{
+    if (g_mod_matrix_control_batch_depth++ == 0U)
+        g_mod_matrix_control_batch_dirty_mask = 0U;
+}
+
+uint8_t mod_matrix_control_batch_end(void)
+{
+    if (g_mod_matrix_control_batch_depth == 0U) return 0U;
+    if (--g_mod_matrix_control_batch_depth != 0U) return 1U;
+    const uint16_t mask = g_mod_matrix_control_batch_dirty_mask;
+    g_mod_matrix_control_batch_dirty_mask = 0U;
+    return mod_matrix_publish_state_mask(mask);
+}
+
+void mod_matrix_control_batch_abort(void)
+{
+    g_mod_matrix_control_batch_depth = 0U;
+    g_mod_matrix_control_batch_dirty_mask = 0U;
+}
+
+uint8_t audio_mod_matrix_apply_param(uint8_t track, uint8_t slot,
+                                     param_id_t id, float value)
+{
+    if (track >= SEQ_TRACK_COUNT) return 0U;
+    mod_matrix_audio_state_t *const state = &g_mod_matrix_audio_state[track];
+    if (slot < MOD_MATRIX_SLOT_COUNT)
+    {
+        track_mod_matrix_slot_t *const s = &state->slots[slot];
+        if (id == PARAM_MOD_MATRIX_SOURCE)
+            s->source = (uint8_t)mod_matrix_clampf(value, 0.0f,
+                (float)(MOD_MATRIX_SOURCE_COUNT - 1U));
+        else if (id == PARAM_MOD_MATRIX_DEST)
+            s->destination = (mod_destination_address_t)value;
+        else if (id == PARAM_MOD_MATRIX_DEPTH)
+            s->depth = mod_matrix_clampf(value, -127.0f, 127.0f);
+        else if (id == PARAM_MOD_MATRIX_SLOT)
+            s->enabled = (value >= 0.5f) ? 1U : 0U;
+        else return 0U;
+    }
+    else
+    {
+        uint8_t op = 0U;
+        if (id == PARAM_MOD_MULTI_1_A) state->multi_source[0][0] = (uint8_t)value;
+        else if (id == PARAM_MOD_MULTI_1_B) state->multi_source[0][1] = (uint8_t)value;
+        else if (id == PARAM_MOD_MULTI_2_A) state->multi_source[1][0] = (uint8_t)value;
+        else if (id == PARAM_MOD_MULTI_2_B) state->multi_source[1][1] = (uint8_t)value;
+        else if ((id == PARAM_MOD_SLEW_1_SOURCE)
+                || (id == PARAM_MOD_SLEW_2_SOURCE))
+        {
+            op = (id == PARAM_MOD_SLEW_2_SOURCE) ? 1U : 0U;
+            const uint8_t source = (uint8_t)value;
+            if (state->slew_source[op] != source)
+            {
+                state->slew_source[op] = source;
+                g_mod_matrix_operator_runtime[track].slew[op] = 0.0f;
+                g_mod_matrix_operator_runtime[track].slew_valid[op] = 0U;
+            }
+        }
+        else if (id == PARAM_MOD_SLEW_1_AMOUNT) state->slew_amount[0] = value;
+        else if (id == PARAM_MOD_SLEW_2_AMOUNT) state->slew_amount[1] = value;
+        else return 0U;
+    }
+    g_mod_matrix_audio_dirty_mask |= (uint16_t)(1U << track);
+    return 1U;
 }
 
 void audio_mod_matrix_rebuild_track(uint8_t track)
 {
-    if (track >= SEQ_TRACK_COUNT)
-        return;
+    if (track >= SEQ_TRACK_COUNT) return;
     for (uint8_t owner = 0U; owner < SEQ_TRACK_COUNT; ++owner)
     {
-        mod_matrix_control_snapshot_t snapshot;
-        if (mod_matrix_audio_read_mailbox(owner, &snapshot, NULL) == 0U)
-            continue;
-        uint8_t depends_on_track = (owner == track) ? 1U : 0U;
-        for (uint8_t slot = 0U;
-             (slot < MOD_MATRIX_SLOT_COUNT) && (depends_on_track == 0U);
-             ++slot)
+        uint8_t depends = (owner == track) ? 1U : 0U;
+        for (uint8_t slot = 0U; (slot < MOD_MATRIX_SLOT_COUNT) && !depends; ++slot)
         {
-            uint8_t target = 0U;
-            param_id_t destination = PARAM_COUNT;
-            const track_mod_matrix_slot_t *const configured =
-                &snapshot.slots[slot];
-            if ((configured->enabled != 0U)
-                    && (configured->source != (uint8_t)MOD_MATRIX_SOURCE_NONE)
-                    && (configured->source < (uint8_t)MOD_MATRIX_SOURCE_COUNT)
-                    && (configured->depth != 0.0f)
-                    && (mod_destination_address_resolve(
-                        configured->destination, &target, &destination) != 0U)
-                    && (target == track))
-                depends_on_track = 1U;
+            uint8_t target = 0U; param_id_t destination = PARAM_COUNT;
+            const track_mod_matrix_slot_t *const s =
+                &g_mod_matrix_audio_state[owner].slots[slot];
+            if (s->enabled && mod_destination_address_resolve(
+                    s->destination, &target, &destination) && (target == track))
+                depends = 1U;
         }
-        if (depends_on_track != 0U)
-            audio_mod_matrix_apply_snapshot(owner, &snapshot);
+        if (depends) g_mod_matrix_audio_dirty_mask |= (uint16_t)(1U << owner);
     }
 }
 
-void mod_matrix_publish_control_snapshot_all(void)
+void audio_mod_matrix_finalize_dirty(void)
 {
+    const uint16_t dirty = g_mod_matrix_audio_dirty_mask;
+    g_mod_matrix_audio_dirty_mask = 0U;
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        brick_entity_id_t owner = track;
-        if ((entity_topology_mod_owner(track, &owner) != 0U) && (owner == track))
-            mod_matrix_publish_control_snapshot_track(track);
+        if ((dirty & (uint16_t)(1U << track)) == 0U) continue;
+        mod_matrix_operator_config_t *const config = &g_mod_matrix_operator_config[track];
+        const mod_matrix_audio_state_t *const state = &g_mod_matrix_audio_state[track];
+        for (uint8_t op = 0U; op < 2U; ++op)
+        {
+            config->multi_source[op][0] = state->multi_source[op][0];
+            config->multi_source[op][1] = state->multi_source[op][1];
+            config->slew_source[op] = state->slew_source[op];
+            config->slew_amount[op] = state->slew_amount[op];
+        }
+        track_audio_runtime_ctx_t ctx;
+        config->drum_md_slot_count = 0U;
+        if ((audio_note_engine_adapter_current_ctx(track, &ctx) != 0U)
+                && (ctx.type == (uint8_t)TRACK_RUNTIME_TYPE_DRUM_MD))
+            config->drum_md_slot_count = md_model_profile_get(
+                drum_synth_get_md_model_for_instance(
+                    ctx.program_route.instance_id))->slot_count;
+        g_mod_matrix_audio_state[track].models.drum_md_slot_count =
+            config->drum_md_slot_count;
+        mod_matrix_audio_rebuild_route_cache_track(track);
     }
 }
 
@@ -1175,6 +1154,70 @@ uint8_t mod_matrix_get_selected_slot_source(uint8_t track, float *out_value)
         : 0U;
 }
 
+enum { MOD_MATRIX_FIELD_SOURCE = 1U, MOD_MATRIX_FIELD_DEST = 2U,
+       MOD_MATRIX_FIELD_DEPTH = 4U, MOD_MATRIX_FIELD_ENABLED = 8U };
+
+static uint8_t mod_matrix_publish_slot_fields(uint8_t track, uint8_t slot,
+                                              uint8_t fields)
+{
+    brick_entity_id_t owner = track;
+    if ((entity_topology_mod_owner(track, &owner) == 0U)
+            || (owner >= SEQ_TRACK_COUNT) || (slot >= MOD_MATRIX_SLOT_COUNT)) return 0U;
+    if (g_mod_matrix_control_batch_depth != 0U)
+    {
+        g_mod_matrix_control_batch_dirty_mask |= (uint16_t)(1U << owner);
+        return 1U;
+    }
+    const track_mod_matrix_slot_t *const s = mod_matrix_track_slot_const(owner, slot);
+    if (s == NULL) return 0U;
+    live_parameter_audio_bulk_t bulk = {
+        .capture_tick = live_clock_capture_tick(),
+        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK, .count = 0U
+    };
+#define ADD_MATRIX_FIELD(condition, parameter, field_value) do { \
+    if (condition) bulk.item[bulk.count++] = (live_parameter_audio_bulk_item_t){ \
+        .parameter_id = (uint16_t)(parameter), .scope = LIVE_PARAMETER_EVENT_SCOPE_SLOT, \
+        .track = owner, .slot = slot, \
+        .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET \
+            | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS), \
+        .value = live_parameter_event_encode_float(field_value) }; \
+} while (0)
+    ADD_MATRIX_FIELD((fields & MOD_MATRIX_FIELD_SOURCE) != 0U,
+                     PARAM_MOD_MATRIX_SOURCE, (float)s->source);
+    ADD_MATRIX_FIELD((fields & MOD_MATRIX_FIELD_DEST) != 0U,
+                     PARAM_MOD_MATRIX_DEST, (float)s->destination);
+    ADD_MATRIX_FIELD((fields & MOD_MATRIX_FIELD_DEPTH) != 0U,
+                     PARAM_MOD_MATRIX_DEPTH, s->depth);
+    ADD_MATRIX_FIELD((fields & MOD_MATRIX_FIELD_ENABLED) != 0U,
+                     PARAM_MOD_MATRIX_SLOT, (float)(s->enabled != 0U));
+#undef ADD_MATRIX_FIELD
+    return live_parameter_audio_publication_submit_bulk(&bulk) ? 1U : 0U;
+}
+
+static uint8_t mod_matrix_publish_operator(uint8_t track, param_id_t id,
+                                           float value)
+{
+    brick_entity_id_t owner = track;
+    if ((entity_topology_mod_owner(track, &owner) == 0U)
+            || (owner >= SEQ_TRACK_COUNT)) return 0U;
+    if (g_mod_matrix_control_batch_depth != 0U)
+    {
+        g_mod_matrix_control_batch_dirty_mask |= (uint16_t)(1U << owner);
+        return 1U;
+    }
+    live_parameter_audio_bulk_t bulk = {
+        .capture_tick = live_clock_capture_tick(),
+        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK, .count = 1U,
+        .item = {{ .parameter_id = (uint16_t)id,
+            .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK, .track = owner,
+            .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
+            .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
+                | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+            .value = live_parameter_event_encode_float(value) }}
+    };
+    return live_parameter_audio_publication_submit_bulk(&bulk) ? 1U : 0U;
+}
+
 uint8_t mod_matrix_set_slot_destination_index(uint8_t track, uint8_t slot, float value)
 {
     brick_entity_id_t owner = track;
@@ -1193,8 +1236,14 @@ uint8_t mod_matrix_set_slot_destination_index(uint8_t track, uint8_t slot, float
     s->destination = mod_destination_catalog_address_from_index(owner, index);
     s->enabled = ((s->destination != MOD_DESTINATION_NONE)
                   && (s->source != (uint8_t)MOD_MATRIX_SOURCE_NONE)) ? 1U : 0U;
-    mod_matrix_publish_control_snapshot_track(track);
-    return 1U;
+    uint8_t target = 0U;
+    param_id_t destination = PARAM_COUNT;
+    float base = 0.0f;
+    if ((mod_destination_address_resolve(s->destination, &target, &destination) != 0U)
+            && (param_registry_get_track_value(destination, target, &base) != 0U))
+        (void)param_registry_project_track_base_audio(destination, target, base);
+    return mod_matrix_publish_slot_fields(owner, slot,
+        MOD_MATRIX_FIELD_DEST | MOD_MATRIX_FIELD_ENABLED);
 }
 
 uint8_t mod_matrix_set_slot_depth(uint8_t track, uint8_t slot, float value)
@@ -1206,8 +1255,7 @@ uint8_t mod_matrix_set_slot_depth(uint8_t track, uint8_t slot, float value)
     }
 
     s->depth = mod_matrix_clampf(value, -127.0f, 127.0f);
-    mod_matrix_publish_control_snapshot_track(track);
-    return 1U;
+    return mod_matrix_publish_slot_fields(track, slot, MOD_MATRIX_FIELD_DEPTH);
 }
 
 uint8_t mod_matrix_set_slot_source(uint8_t track, uint8_t slot, float value)
@@ -1221,8 +1269,18 @@ uint8_t mod_matrix_set_slot_source(uint8_t track, uint8_t slot, float value)
     s->source = (uint8_t)mod_matrix_clampf(value, 0.0f, (float)(MOD_MATRIX_SOURCE_COUNT - 1U));
     s->enabled = ((s->destination != (uint16_t)MOD_DESTINATION_NONE)
                   && (s->source != (uint8_t)MOD_MATRIX_SOURCE_NONE)) ? 1U : 0U;
-    mod_matrix_publish_control_snapshot_track(track);
-    return 1U;
+    return mod_matrix_publish_slot_fields(track, slot,
+        MOD_MATRIX_FIELD_SOURCE | MOD_MATRIX_FIELD_ENABLED);
+}
+
+uint8_t mod_matrix_set_slot_enabled(uint8_t track, uint8_t slot, float value)
+{
+    track_mod_matrix_slot_t *const s = mod_matrix_track_slot_mut(track, slot);
+    if (s == NULL) return 0U;
+    s->enabled = ((value >= 0.5f)
+            && (s->source != (uint8_t)MOD_MATRIX_SOURCE_NONE)
+            && (s->destination != MOD_DESTINATION_NONE)) ? 1U : 0U;
+    return mod_matrix_publish_slot_fields(track, slot, MOD_MATRIX_FIELD_ENABLED);
 }
 
 uint8_t mod_matrix_set_slot_state(uint8_t track,
@@ -1251,8 +1309,9 @@ uint8_t mod_matrix_set_slot_state(uint8_t track,
     state->enabled = ((enabled != 0U)
             && (source != (uint8_t)MOD_MATRIX_SOURCE_NONE)
             && (destination != MOD_DESTINATION_NONE)) ? 1U : 0U;
-    mod_matrix_publish_control_snapshot_track(owner);
-    return 1U;
+    return mod_matrix_publish_slot_fields(owner, slot,
+        MOD_MATRIX_FIELD_SOURCE | MOD_MATRIX_FIELD_DEST
+        | MOD_MATRIX_FIELD_DEPTH | MOD_MATRIX_FIELD_ENABLED);
 }
 
 uint8_t mod_matrix_get_slot_destination_index(uint8_t track, uint8_t slot, float *out_value)
@@ -1298,93 +1357,83 @@ uint8_t mod_matrix_get_slot_source(uint8_t track, uint8_t slot, float *out_value
 
 uint8_t mod_matrix_set_multi_source(uint8_t track, uint8_t op, uint8_t input, float value)
 {
-    track_sound_state_t *const state = mod_matrix_control_state(track);
-    if ((state == NULL) || (op >= 2U) || (input >= 2U))
+    if ((op >= 2U) || (input >= 2U))
     {
         return 0U;
     }
 
     const uint8_t source = (uint8_t)mod_matrix_clampf(value, 0.0f, (float)(MOD_MATRIX_SOURCE_COUNT - 1U));
-    if (input == 0U)
-    {
-        state->mod_multi[op].source_a = source;
-    }
-    else
-    {
-        state->mod_multi[op].source_b = source;
-    }
-    mod_matrix_publish_control_snapshot_track(track);
-    return 1U;
+    static const param_id_t ids[2][2] = {
+        { PARAM_MOD_MULTI_1_A, PARAM_MOD_MULTI_1_B },
+        { PARAM_MOD_MULTI_2_A, PARAM_MOD_MULTI_2_B }
+    };
+    param_registry_control_value_set(track, ids[op][input], (float)source);
+    return mod_matrix_publish_operator(track, ids[op][input], (float)source);
 }
 
 uint8_t mod_matrix_get_multi_source(uint8_t track, uint8_t op, uint8_t input, float *out_value)
 {
-    const track_sound_state_t *const state = mod_matrix_control_state_const(track);
-    if ((state == NULL) || (op >= 2U) || (input >= 2U) || (out_value == NULL))
+    if ((op >= 2U) || (input >= 2U) || (out_value == NULL))
     {
         return 0U;
     }
 
-    *out_value = (float)((input == 0U) ? state->mod_multi[op].source_a : state->mod_multi[op].source_b);
-    return 1U;
+    static const param_id_t ids[2][2] = {
+        { PARAM_MOD_MULTI_1_A, PARAM_MOD_MULTI_1_B },
+        { PARAM_MOD_MULTI_2_A, PARAM_MOD_MULTI_2_B } };
+    return param_registry_control_value_get(track, ids[op][input], out_value);
 }
 
 uint8_t mod_matrix_set_slew_source(uint8_t track, uint8_t op, float value)
 {
-    track_sound_state_t *const state = mod_matrix_control_state(track);
-    if ((state == NULL) || (op >= 2U))
+    if (op >= 2U)
     {
         return 0U;
     }
 
     const uint8_t source = (uint8_t)mod_matrix_clampf(value, 0.0f, (float)(MOD_MATRIX_SOURCE_COUNT - 1U));
-    if (state->mod_slew[op].source != source)
-    {
-        state->mod_slew[op].source = source;
-    }
-    mod_matrix_publish_control_snapshot_track(track);
-    return 1U;
+    const param_id_t id = (op == 0U) ? PARAM_MOD_SLEW_1_SOURCE
+                                      : PARAM_MOD_SLEW_2_SOURCE;
+    param_registry_control_value_set(track, id, (float)source);
+    return mod_matrix_publish_operator(track, id, (float)source);
 }
 
 uint8_t mod_matrix_get_slew_source(uint8_t track, uint8_t op, float *out_value)
 {
-    const track_sound_state_t *const state = mod_matrix_control_state_const(track);
-    if ((state == NULL) || (op >= 2U) || (out_value == NULL))
+    if ((op >= 2U) || (out_value == NULL))
     {
         return 0U;
     }
 
-    *out_value = (float)state->mod_slew[op].source;
-    return 1U;
+    return param_registry_control_value_get(track,
+        (op == 0U) ? PARAM_MOD_SLEW_1_SOURCE : PARAM_MOD_SLEW_2_SOURCE,
+        out_value);
 }
 
 uint8_t mod_matrix_set_slew_amount(uint8_t track, uint8_t op, float value)
 {
-    track_sound_state_t *const state = mod_matrix_control_state(track);
-    if ((state == NULL) || (op >= 2U))
+    if (op >= 2U)
     {
         return 0U;
     }
 
     const float amount = mod_matrix_clampf(value, 0.0f, 1.0f);
-    if (state->mod_slew[op].amount != amount)
-    {
-        state->mod_slew[op].amount = amount;
-    }
-    mod_matrix_publish_control_snapshot_track(track);
-    return 1U;
+    const param_id_t id = (op == 0U) ? PARAM_MOD_SLEW_1_AMOUNT
+                                      : PARAM_MOD_SLEW_2_AMOUNT;
+    param_registry_control_value_set(track, id, amount);
+    return mod_matrix_publish_operator(track, id, amount);
 }
 
 uint8_t mod_matrix_get_slew_amount(uint8_t track, uint8_t op, float *out_value)
 {
-    const track_sound_state_t *const state = mod_matrix_control_state_const(track);
-    if ((state == NULL) || (op >= 2U) || (out_value == NULL))
+    if ((op >= 2U) || (out_value == NULL))
     {
         return 0U;
     }
 
-    *out_value = state->mod_slew[op].amount;
-    return 1U;
+    return param_registry_control_value_get(track,
+        (op == 0U) ? PARAM_MOD_SLEW_1_AMOUNT : PARAM_MOD_SLEW_2_AMOUNT,
+        out_value);
 }
 
 uint8_t mod_matrix_has_any_configured_route(void)
@@ -1834,7 +1883,7 @@ uint8_t mod_matrix_get_destination_ramp(uint8_t track,
     }
 
     uint8_t owner = 0U;
-    if (audio_modulation_projection_audio_resolve_owner(track, &owner) == 0U)
+    if (mod_matrix_audio_resolve_owner(track, &owner) == 0U)
     {
         return 0U;
     }
@@ -1859,79 +1908,12 @@ void audio_mod_matrix_base_update(uint8_t track, param_id_t id, float value)
 
     audio_mod_destination_catalog_invalidate_runtime_value(track, id);
     uint8_t owner = 0U;
-    if (audio_modulation_projection_audio_resolve_owner(track, &owner) == 0U) return;
+    if (mod_matrix_audio_resolve_owner(track, &owner) == 0U) return;
     const mod_destination_address_t address = mod_destination_address_make(track, id);
-    mod_matrix_runtime_destination_t *const dst =
-        mod_matrix_find_runtime_destination(&g_mod_matrix_runtime[owner], address);
-    if ((dst != NULL) && (mod_matrix_find_base_override(track, id) == NULL))
-    {
-        dst->base_value = value;
-    }
-}
-
-void audio_mod_matrix_set_base_override(uint8_t track, param_id_t id, float value)
-{
-    if ((track >= SEQ_TRACK_COUNT) || (id >= PARAM_COUNT))
-    {
-        return;
-    }
-
-    uint8_t owner = 0U;
-    if (audio_modulation_projection_audio_resolve_owner(track, &owner) == 0U) return;
-    const mod_destination_address_t address = mod_destination_address_make(track, id);
-    if (mod_matrix_find_runtime_destination(
-            &g_mod_matrix_runtime[owner], address) == NULL)
-    {
-        return;
-    }
-
-    mod_matrix_base_override_t *entry = mod_matrix_find_base_override(track, id);
-    if (entry == NULL)
-    {
-        entry = mod_matrix_alloc_base_override(track);
-    }
-    if (entry == NULL)
-    {
-        return;
-    }
-
-    entry->valid = 1U;
-    entry->destination = (uint16_t)id;
-    entry->value = value;
-
     mod_matrix_runtime_destination_t *const dst =
         mod_matrix_find_runtime_destination(&g_mod_matrix_runtime[owner], address);
     if (dst != NULL)
     {
         dst->base_value = value;
-    }
-}
-
-void audio_mod_matrix_clear_base_override(uint8_t track,
-                                          param_id_t id,
-                                          float base_value)
-{
-    if ((track >= SEQ_TRACK_COUNT) || (id >= PARAM_COUNT))
-    {
-        return;
-    }
-
-    uint8_t owner = 0U;
-    if (audio_modulation_projection_audio_resolve_owner(track, &owner) == 0U) return;
-    const mod_destination_address_t address = mod_destination_address_make(track, id);
-    mod_matrix_base_override_t *const entry =
-        mod_matrix_find_base_override(track, id);
-    if (entry != NULL)
-    {
-        entry->valid = 0U;
-        entry->destination = (uint16_t)MOD_DESTINATION_NONE;
-        entry->value = 0.0f;
-    }
-
-    mod_matrix_runtime_destination_t *const dst =
-        mod_matrix_find_runtime_destination(&g_mod_matrix_runtime[owner], address);
-    if (dst != NULL)
-    {
-        dst->base_value = base_value;
     }
 }
