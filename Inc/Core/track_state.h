@@ -43,6 +43,15 @@ bool track_state_apply_entity_bulk_with_inputs(
     const uint8_t midi_source[BRICK_ENTITY_CAPACITY],
     const uint8_t external_input[UI_TRACK_COUNT]);
 
+/* Sole CONTROL commit for a final structural state: validate/commit state,
+ * then rebuild/publish the changed runtime PROGRAM descriptors. */
+bool track_structure_apply_entity_bulk_with_inputs(
+    const uint8_t family[BRICK_ENTITY_CAPACITY],
+    const uint8_t type[BRICK_ENTITY_CAPACITY],
+    const uint8_t midi_channel[BRICK_ENTITY_CAPACITY],
+    const uint8_t midi_source[BRICK_ENTITY_CAPACITY],
+    const uint8_t external_input[UI_TRACK_COUNT]);
+
 uint8_t track_state_count_tracks_with_family(ui_track_family_t family);
 uint32_t track_state_get_revision(uint8_t track);
 uint32_t track_state_get_global_revision(void);

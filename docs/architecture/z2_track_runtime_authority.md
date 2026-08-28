@@ -6,9 +6,13 @@ MAIN/GROUP_MASTER/GROUP_CHILD, le parent, le membre et les capacites.
 `track_runtime` derive uniquement l'etat CONTROL necessaire aux catalogues,
 routes et descripteurs PROGRAM.
 
-Une mutation structurelle suit: prevalidation globale, commit canonique,
-reconstruction synchrone de `track_runtime`, publication PROGRAM, puis
-synchronisation UI. Les getters sont de pures lectures. Navigation, keyboard,
+Une mutation structurelle suit un unique commit CONTROL,
+`track_structure_apply_entity_bulk_with_inputs`: prevalidation globale, commit
+canonique, reconstruction synchrone de `track_runtime` et publication PROGRAM
+uniquement pour les descripteurs dont family/type/role GROUP a change. UI,
+Patch, Pattern, Project et clipboard fournissent tous leur etat final a ce meme
+point d'entree; leurs PARAM, sequences, Note FX, Matrix et routes restent des
+applications ulterieures distinctes. Les getters sont de pures lectures. Navigation, keyboard,
 scheduler et PLAY ne reconstruisent rien et ne declenchent aucune publication.
 
 AUDIO conserve seulement son contexte local d'execution par entite. Il ne le

@@ -810,10 +810,24 @@ static uint8_t ui_core_runtime_bridge_track_family_change_mutate(void *ctx_ptr)
         return 0U;
     }
 
-    if (track_state_set_track_family(ctx->track, ctx->family) == false)
-    {
-        return 0U;
+    uint8_t family[BRICK_ENTITY_CAPACITY], type[BRICK_ENTITY_CAPACITY];
+    uint8_t midi[BRICK_ENTITY_CAPACITY], source[BRICK_ENTITY_CAPACITY];
+    uint8_t input[UI_TRACK_COUNT];
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity) {
+        family[entity] = (uint8_t)track_state_get_family(entity);
+        type[entity] = (uint8_t)track_state_get_type(entity);
+        midi[entity] = track_state_get_midi_channel(entity);
+        source[entity] = (uint8_t)track_state_get_midi_source(entity);
+        if (entity < UI_TRACK_COUNT) input[entity] = track_state_get_external_input(entity);
     }
+    family[ctx->track] = (uint8_t)ctx->family;
+    if (ctx->family == UI_TRACK_FAMILY_OFF) type[ctx->track] = (uint8_t)UI_TRACK_TYPE_NONE;
+    else if (!ui_track_catalog_type_is_valid_for_family(ctx->family,
+                                                        (ui_track_type_t)type[ctx->track]))
+        type[ctx->track] = (uint8_t)ui_track_catalog_first_available_type(
+            ctx->family, ctx->track, track_state_get_configs());
+    if (!track_structure_apply_entity_bulk_with_inputs(
+            family, type, midi, source, input)) return 0U;
 
     ui_system_sync_apply_track_context_change(ctx->request, &g_ui_core_runtime_bridge_system_sync_adapter);
     return 1U;
@@ -828,10 +842,19 @@ static uint8_t ui_core_runtime_bridge_track_type_change_mutate(void *ctx_ptr)
         return 0U;
     }
 
-    if (track_state_set_track_type(ctx->track, ctx->type) == false)
-    {
-        return 0U;
+    uint8_t family[BRICK_ENTITY_CAPACITY], type[BRICK_ENTITY_CAPACITY];
+    uint8_t midi[BRICK_ENTITY_CAPACITY], source[BRICK_ENTITY_CAPACITY];
+    uint8_t input[UI_TRACK_COUNT];
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity) {
+        family[entity] = (uint8_t)track_state_get_family(entity);
+        type[entity] = (uint8_t)track_state_get_type(entity);
+        midi[entity] = track_state_get_midi_channel(entity);
+        source[entity] = (uint8_t)track_state_get_midi_source(entity);
+        if (entity < UI_TRACK_COUNT) input[entity] = track_state_get_external_input(entity);
     }
+    type[ctx->track] = (uint8_t)ctx->type;
+    if (!track_structure_apply_entity_bulk_with_inputs(
+            family, type, midi, source, input)) return 0U;
 
     ui_system_sync_apply_track_context_change(ctx->request, &g_ui_core_runtime_bridge_system_sync_adapter);
     return 1U;

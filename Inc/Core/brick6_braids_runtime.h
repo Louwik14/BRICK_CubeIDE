@@ -46,6 +46,7 @@ void brick6_braids_runtime_set_osc_pitch_mod(uint8_t instance_id, uint8_t osc, f
 void brick6_braids_runtime_set_osc_timbre(uint8_t instance_id, uint8_t osc, float timbre);
 void brick6_braids_runtime_set_osc_modulation(uint8_t instance_id, uint8_t osc, float modulation);
 void brick6_braids_runtime_set_osc_color(uint8_t instance_id, uint8_t osc, float color);
+uint8_t brick6_braids_runtime_get_osc_model(uint8_t instance_id, uint8_t osc);
 void brick6_braids_runtime_set_volume(uint8_t instance_id, float volume);
 void brick6_braids_runtime_set_balance(uint8_t instance_id, float balance);
 void brick6_braids_runtime_set_tune(uint8_t instance_id, float semitones);

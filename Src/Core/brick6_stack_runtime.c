@@ -860,6 +860,15 @@ void brick6_stack_runtime_set_slot_model(uint8_t instance_id, uint8_t slot, bric
     brick6_stack_runtime_touch_config(instance);
 }
 
+brick6_stack_model_t brick6_stack_runtime_get_slot_model(uint8_t instance_id, uint8_t slot)
+{
+    brick6_stack_runtime_instance_t *const instance =
+        brick6_stack_runtime_get_instance_mut(instance_id);
+    return ((instance != NULL) && (slot < BRICK6_STACK_SLOT_COUNT))
+        ? (brick6_stack_model_t)instance->slots[slot].model
+        : BRICK6_STACK_MODEL_SINE;
+}
+
 void brick6_stack_runtime_set_slot_tune(uint8_t instance_id, uint8_t slot, float semitones)
 {
     brick6_stack_runtime_instance_t *const instance = brick6_stack_runtime_get_instance_mut(instance_id);
