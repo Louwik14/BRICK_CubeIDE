@@ -7,11 +7,12 @@ CONTROL est l'unique autorite musicale: il cree les outputs, applique les quotas
 Les moteurs rendent dans les lanes du programme courant de chaque entite. Le
 mapping d'execution AUDIO porte `output_id`, note, velocity et gate sans devenir
 une autorite d'admission. Le pool synth maintient son mapping vers les slots
-physiques. Un PROGRAM compatible remplace synchroniquement le renderer au
-sample commande, conserve les outputs et initialise le nouveau DSP depuis ce
-mapping; aucun NOTE OFF/ON n'est fabrique. Un PROGRAM incompatible ferme les
-outputs par le chemin NOTE normal avant remplacement. Les etats chauds des voix
-restent en DTCM et aucun chemin audio n'alloue dynamiquement.
+physiques. Tout PROGRAM remplace synchroniquement le renderer au sample
+commande, conserve les outputs logiques et initialise localement le nouveau DSP
+pour les notes rendables; aucun NOTE OFF/ON n'est fabrique. Un moteur incompatible
+peut donc rester silencieux sans fermer le ledger; son retour compatible
+reprojette les notes encore vivantes. Les etats chauds des voix restent en DTCM
+et aucun chemin audio n'alloue dynamiquement.
 
 Le mixer applique filtre, VCA, niveau, pan, inserts, sends puis traitements globaux. Reverb, delay, compresseur et gain Master sont globaux. Send3 ne conserve que Daisy Stereo et Junologue; VIBE et DRIFT sont des inserts par entite. VIBE utilise le kernel Deluge Float avec politique `dry + wet` 1:1. DRIFT expose DELAY et FEEDBACK, sans LFO interne.
 

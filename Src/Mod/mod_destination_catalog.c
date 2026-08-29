@@ -15,7 +15,7 @@
 #include "Core/synth_polyphony.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
-#include "Core/control_audio_program.h"
+#include "Audio/control_audio_command.h"
 #include "Core/track_runtime.h"
 #include "Core/entity_topology.h"
 #include "Param/param_filter.h"
@@ -1782,7 +1782,7 @@ static track_runtime_param_status_t mod_destination_effective_status_from_ctx(co
 {
     if (ctx == NULL)
     {
-        return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+        return TRACK_RUNTIME_PARAM_UNAVAILABLE;
     }
 
     switch (resource)
@@ -1794,7 +1794,7 @@ static track_runtime_param_status_t mod_destination_effective_status_from_ctx(co
                     || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_OFF)
                     || (ctx->audio_routable == 0U))
             {
-                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                return TRACK_RUNTIME_PARAM_UNAVAILABLE;
             }
             return TRACK_RUNTIME_PARAM_ALLOWED;
         case TRACK_RUNTIME_RESOURCE_SYNTH:
@@ -1802,7 +1802,7 @@ static track_runtime_param_status_t mod_destination_effective_status_from_ctx(co
                     || ((ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
                         && (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)))
             {
-                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                return TRACK_RUNTIME_PARAM_UNAVAILABLE;
             }
             return TRACK_RUNTIME_PARAM_ALLOWED;
         case TRACK_RUNTIME_RESOURCE_PLAY:
@@ -1812,22 +1812,22 @@ static track_runtime_param_status_t mod_destination_effective_status_from_ctx(co
                     || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MIDI)
                     || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_EXTERNAL))
                     ? TRACK_RUNTIME_PARAM_ALLOWED
-                    : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                    : TRACK_RUNTIME_PARAM_UNAVAILABLE;
         case TRACK_RUNTIME_RESOURCE_MIX:
             if ((ctx->active == 0U)
                     || (ctx->audio_routable == 0U)
                     || (ctx->mix_track_id >= SEQ_TRACK_COUNT))
             {
-                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                return TRACK_RUNTIME_PARAM_UNAVAILABLE;
             }
             return TRACK_RUNTIME_PARAM_ALLOWED;
         case TRACK_RUNTIME_RESOURCE_AUDIO_FX:
             return ((ctx->active != 0U)
                     && (ctx->audio_routable != 0U))
                 ? TRACK_RUNTIME_PARAM_ALLOWED
-                : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                : TRACK_RUNTIME_PARAM_UNAVAILABLE;
         default:
-            return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            return TRACK_RUNTIME_PARAM_UNAVAILABLE;
     }
 }
 

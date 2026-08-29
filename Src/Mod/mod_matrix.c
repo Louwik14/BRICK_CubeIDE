@@ -12,10 +12,7 @@
 #include "Audio/mixer.h"
 #include "Core/track_sound_state.h"
 #include "Core/entity_topology.h"
-#include "Core/control_audio_program.h"
 #include "Audio/control_audio_command.h"
-#include "Audio/control_audio_fifo.h"
-#include "Core/control_audio_publication.h"
 #include "Core/live_clock.h"
 #include "Core/live_parameter_audio_publication.h"
 #include "Core/live_parameter_event.h"
@@ -30,16 +27,6 @@
 #undef SEQ_TRACK_COUNT
 #define SEQ_TRACK_COUNT SEQ_LANE_CAPACITY
 
-#define MOD_MATRIX_PARAM_COMMANDS_PER_OWNER 40U
-#define MOD_MATRIX_RESTORE_OWNER_MAX BRICK_ENTITY_TOP_LEVEL_COUNT
-#define MOD_MATRIX_RESTORE_COMMAND_MAX \
-    (MOD_MATRIX_PARAM_COMMANDS_PER_OWNER * MOD_MATRIX_RESTORE_OWNER_MAX)
-_Static_assert(MOD_MATRIX_RESTORE_COMMAND_MAX == 320U,
-               "Eight Matrix owners restore as 320 PARAM commands");
-_Static_assert(MOD_MATRIX_RESTORE_COMMAND_MAX <= CONTROL_AUDIO_FIFO_MAX_PARAM_BURST,
-               "Matrix restore must fit the contractual PARAM burst");
-_Static_assert(LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_LAST < 32U,
-               "Matrix slot scope must fit command kind");
 
 typedef struct
 {
@@ -140,8 +127,6 @@ static mod_matrix_track_plan_t g_mod_matrix_track_plan[SEQ_TRACK_COUNT];
 static mod_matrix_operator_runtime_t g_mod_matrix_operator_runtime[SEQ_TRACK_COUNT];
 static mod_matrix_audio_state_t g_mod_matrix_audio_state[SEQ_TRACK_COUNT];
 static uint16_t g_mod_matrix_audio_dirty_mask;
-static uint16_t g_mod_matrix_control_batch_dirty_mask;
-static uint8_t g_mod_matrix_control_batch_depth;
 static uint8_t g_mod_matrix_any_route = 0U;
 
 static uint8_t mod_matrix_audio_resolve_owner(uint8_t track, uint8_t *out_owner)
@@ -705,8 +690,6 @@ void audio_mod_matrix_init(void)
     memset(g_mod_matrix_operator_runtime, 0, sizeof(g_mod_matrix_operator_runtime));
     memset(g_mod_matrix_audio_state, 0, sizeof(g_mod_matrix_audio_state));
     g_mod_matrix_audio_dirty_mask = 0U;
-    g_mod_matrix_control_batch_dirty_mask = 0U;
-    g_mod_matrix_control_batch_depth = 0U;
     g_mod_matrix_any_route = 0U;
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
@@ -867,119 +850,6 @@ static void mod_matrix_audio_rebuild_route_cache_track(
         (track_plan->route_count != 0U) ? 1U : 0U;
     mixer_invalidate_external_poly_track(track);
     mod_matrix_recompute_global_route_flag();
-}
-
-static uint8_t mod_matrix_make_command(uint8_t track, uint8_t slot,
-                                       param_id_t id, float value,
-                                       uint64_t sample,
-                                       control_audio_command_t *out)
-{
-    if ((out == NULL) || (track >= SEQ_TRACK_COUNT)) return 0U;
-    const uint8_t scope = (slot < MOD_MATRIX_SLOT_COUNT)
-        ? (uint8_t)(LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_BASE + slot)
-        : (uint8_t)LIVE_PARAMETER_EVENT_SCOPE_TRACK;
-    *out = (control_audio_command_t){
-        .effective_sample_time = sample,
-        .value = (uint32_t)live_parameter_event_encode_float(value),
-        .id = (uint16_t)id,
-        .entity = track,
-        .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM,
-                                                  scope)
-    };
-    return 1U;
-}
-
-static uint8_t mod_matrix_publish_state_mask(uint16_t owner_mask)
-{
-    uint16_t count = 0U;
-    for (uint8_t owner = 0U; owner < SEQ_TRACK_COUNT; ++owner)
-        if ((owner_mask & (uint16_t)(1U << owner)) != 0U)
-            count += MOD_MATRIX_PARAM_COMMANDS_PER_OWNER;
-    if (count == 0U) return 1U;
-    if (count > MOD_MATRIX_RESTORE_COMMAND_MAX) return 0U;
-    uint64_t sample = 0U;
-    control_audio_fifo_batch_writer_t writer;
-    if (!live_clock_read_audio_sample(&sample)
-            || (control_audio_fifo_batch_begin(&writer, count) == 0U)) return 0U;
-    static const param_id_t operator_ids[8] = {
-        PARAM_MOD_MULTI_1_A, PARAM_MOD_MULTI_1_B,
-        PARAM_MOD_MULTI_2_A, PARAM_MOD_MULTI_2_B,
-        PARAM_MOD_SLEW_1_SOURCE, PARAM_MOD_SLEW_1_AMOUNT,
-        PARAM_MOD_SLEW_2_SOURCE, PARAM_MOD_SLEW_2_AMOUNT
-    };
-    for (uint8_t owner = 0U; owner < SEQ_TRACK_COUNT; ++owner)
-    {
-        if ((owner_mask & (uint16_t)(1U << owner)) == 0U) continue;
-        const track_sound_state_t *const state = mod_matrix_control_state_const(owner);
-        if (state == NULL) goto fail;
-        for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
-        {
-            const track_mod_matrix_slot_t *const s = &state->mod_matrix[slot];
-            const param_id_t ids[4] = { PARAM_MOD_MATRIX_SOURCE,
-                PARAM_MOD_MATRIX_DEST, PARAM_MOD_MATRIX_DEPTH,
-                PARAM_MOD_MATRIX_SLOT };
-            const float values[4] = { (float)s->source, (float)s->destination,
-                s->depth, (float)(s->enabled != 0U) };
-            for (uint8_t field = 0U; field < 4U; ++field)
-            {
-                control_audio_command_t command;
-                if ((mod_matrix_make_command(owner, slot, ids[field],
-                                             values[field], sample, &command) == 0U)
-                        || (control_audio_fifo_batch_append(&writer, &command) == 0U))
-                    goto fail;
-            }
-        }
-        float operator_values[8];
-        for (uint8_t field = 0U; field < 8U; ++field)
-            (void)param_registry_control_value_get(
-                owner, operator_ids[field], &operator_values[field]);
-        for (uint8_t field = 0U; field < 8U; ++field)
-        {
-            control_audio_command_t command;
-            if ((mod_matrix_make_command(owner, UINT8_MAX, operator_ids[field],
-                                         operator_values[field], sample, &command) == 0U)
-                    || (control_audio_fifo_batch_append(&writer, &command) == 0U))
-                goto fail;
-        }
-    }
-    return control_audio_fifo_batch_commit(&writer);
-fail:
-    control_audio_fifo_batch_abort(&writer);
-    return 0U;
-}
-
-uint8_t mod_matrix_publish_control_state_track(uint8_t track)
-{
-    brick_entity_id_t owner = track;
-    if ((entity_topology_mod_owner(track, &owner) == 0U)
-            || (owner >= SEQ_TRACK_COUNT)) return 0U;
-    if (g_mod_matrix_control_batch_depth != 0U)
-    {
-        g_mod_matrix_control_batch_dirty_mask |= (uint16_t)(1U << owner);
-        return 1U;
-    }
-    return mod_matrix_publish_state_mask((uint16_t)(1U << owner));
-}
-
-void mod_matrix_control_batch_begin(void)
-{
-    if (g_mod_matrix_control_batch_depth++ == 0U)
-        g_mod_matrix_control_batch_dirty_mask = 0U;
-}
-
-uint8_t mod_matrix_control_batch_end(void)
-{
-    if (g_mod_matrix_control_batch_depth == 0U) return 0U;
-    if (--g_mod_matrix_control_batch_depth != 0U) return 1U;
-    const uint16_t mask = g_mod_matrix_control_batch_dirty_mask;
-    g_mod_matrix_control_batch_dirty_mask = 0U;
-    return mod_matrix_publish_state_mask(mask);
-}
-
-void mod_matrix_control_batch_abort(void)
-{
-    g_mod_matrix_control_batch_depth = 0U;
-    g_mod_matrix_control_batch_dirty_mask = 0U;
 }
 
 uint8_t audio_mod_matrix_apply_param(uint8_t track, uint8_t slot,
@@ -1160,11 +1030,6 @@ static uint8_t mod_matrix_publish_slot_fields(uint8_t track, uint8_t slot,
     brick_entity_id_t owner = track;
     if ((entity_topology_mod_owner(track, &owner) == 0U)
             || (owner >= SEQ_TRACK_COUNT) || (slot >= MOD_MATRIX_SLOT_COUNT)) return 0U;
-    if (g_mod_matrix_control_batch_depth != 0U)
-    {
-        g_mod_matrix_control_batch_dirty_mask |= (uint16_t)(1U << owner);
-        return 1U;
-    }
     const track_mod_matrix_slot_t *const s = mod_matrix_track_slot_const(owner, slot);
     if (s == NULL) return 0U;
     live_parameter_audio_bulk_t bulk = {
@@ -1197,11 +1062,6 @@ static uint8_t mod_matrix_publish_operator(uint8_t track, param_id_t id,
     brick_entity_id_t owner = track;
     if ((entity_topology_mod_owner(track, &owner) == 0U)
             || (owner >= SEQ_TRACK_COUNT)) return 0U;
-    if (g_mod_matrix_control_batch_depth != 0U)
-    {
-        g_mod_matrix_control_batch_dirty_mask |= (uint16_t)(1U << owner);
-        return 1U;
-    }
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
         .source = LIVE_PARAMETER_EVENT_SOURCE_BULK, .count = 1U,
@@ -1230,9 +1090,14 @@ uint8_t mod_matrix_set_slot_destination_index(uint8_t track, uint8_t slot, float
 
     const uint16_t max_index = (uint16_t)(mod_destination_catalog_count(owner) - 1U);
     const uint16_t index = (uint16_t)mod_matrix_clampf(value, 0.0f, (float)max_index);
-    s->destination = mod_destination_catalog_address_from_index(owner, index);
-    s->enabled = ((s->destination != MOD_DESTINATION_NONE)
+    const mod_destination_address_t new_destination =
+        mod_destination_catalog_address_from_index(owner, index);
+    const uint8_t enabled = ((new_destination != MOD_DESTINATION_NONE)
                   && (s->source != (uint8_t)MOD_MATRIX_SOURCE_NONE)) ? 1U : 0U;
+    if ((s->destination == new_destination) && (s->enabled == enabled))
+        return 1U;
+    s->destination = new_destination;
+    s->enabled = enabled;
     uint8_t target = 0U;
     param_id_t destination = PARAM_COUNT;
     float base = 0.0f;
@@ -1251,7 +1116,10 @@ uint8_t mod_matrix_set_slot_depth(uint8_t track, uint8_t slot, float value)
         return 0U;
     }
 
-    s->depth = mod_matrix_clampf(value, -127.0f, 127.0f);
+    const float depth = mod_matrix_clampf(value, -127.0f, 127.0f);
+    if (s->depth == depth)
+        return 1U;
+    s->depth = depth;
     return mod_matrix_publish_slot_fields(track, slot, MOD_MATRIX_FIELD_DEPTH);
 }
 
@@ -1263,7 +1131,12 @@ uint8_t mod_matrix_set_slot_source(uint8_t track, uint8_t slot, float value)
         return 0U;
     }
 
-    s->source = (uint8_t)mod_matrix_clampf(value, 0.0f, (float)(MOD_MATRIX_SOURCE_COUNT - 1U));
+    const uint8_t source = (uint8_t)mod_matrix_clampf(value, 0.0f, (float)(MOD_MATRIX_SOURCE_COUNT - 1U));
+    const uint8_t enabled = ((s->destination != (uint16_t)MOD_DESTINATION_NONE)
+                  && (s->source != (uint8_t)MOD_MATRIX_SOURCE_NONE)) ? 1U : 0U;
+    if ((s->source == source) && (s->enabled == enabled))
+        return 1U;
+    s->source = source;
     s->enabled = ((s->destination != (uint16_t)MOD_DESTINATION_NONE)
                   && (s->source != (uint8_t)MOD_MATRIX_SOURCE_NONE)) ? 1U : 0U;
     return mod_matrix_publish_slot_fields(track, slot,
@@ -1274,9 +1147,12 @@ uint8_t mod_matrix_set_slot_enabled(uint8_t track, uint8_t slot, float value)
 {
     track_mod_matrix_slot_t *const s = mod_matrix_track_slot_mut(track, slot);
     if (s == NULL) return 0U;
-    s->enabled = ((value >= 0.5f)
+    const uint8_t enabled = ((value >= 0.5f)
             && (s->source != (uint8_t)MOD_MATRIX_SOURCE_NONE)
             && (s->destination != MOD_DESTINATION_NONE)) ? 1U : 0U;
+    if (s->enabled == enabled)
+        return 1U;
+    s->enabled = enabled;
     return mod_matrix_publish_slot_fields(track, slot, MOD_MATRIX_FIELD_ENABLED);
 }
 
@@ -1300,12 +1176,18 @@ uint8_t mod_matrix_set_slot_state(uint8_t track,
     {
         return 0U;
     }
-    state->source = source;
-    state->destination = destination;
-    state->depth = mod_matrix_clampf(depth, -127.0f, 127.0f);
-    state->enabled = ((enabled != 0U)
+    const float clamped_depth = mod_matrix_clampf(depth, -127.0f, 127.0f);
+    const uint8_t effective_enabled = ((enabled != 0U)
             && (source != (uint8_t)MOD_MATRIX_SOURCE_NONE)
             && (destination != MOD_DESTINATION_NONE)) ? 1U : 0U;
+    if ((state->source == source) && (state->destination == destination)
+            && (state->depth == clamped_depth)
+            && (state->enabled == effective_enabled))
+        return 1U;
+    state->source = source;
+    state->destination = destination;
+    state->depth = clamped_depth;
+    state->enabled = effective_enabled;
     return mod_matrix_publish_slot_fields(owner, slot,
         MOD_MATRIX_FIELD_SOURCE | MOD_MATRIX_FIELD_DEST
         | MOD_MATRIX_FIELD_DEPTH | MOD_MATRIX_FIELD_ENABLED);
@@ -1364,6 +1246,9 @@ uint8_t mod_matrix_set_multi_source(uint8_t track, uint8_t op, uint8_t input, fl
         { PARAM_MOD_MULTI_1_A, PARAM_MOD_MULTI_1_B },
         { PARAM_MOD_MULTI_2_A, PARAM_MOD_MULTI_2_B }
     };
+    float current = 0.0f;
+    if ((param_registry_control_value_get(track, ids[op][input], &current) != 0U)
+            && ((uint8_t)(current + 0.5f) == source)) return 1U;
     param_registry_control_value_set(track, ids[op][input], (float)source);
     return mod_matrix_publish_operator(track, ids[op][input], (float)source);
 }
@@ -1391,6 +1276,9 @@ uint8_t mod_matrix_set_slew_source(uint8_t track, uint8_t op, float value)
     const uint8_t source = (uint8_t)mod_matrix_clampf(value, 0.0f, (float)(MOD_MATRIX_SOURCE_COUNT - 1U));
     const param_id_t id = (op == 0U) ? PARAM_MOD_SLEW_1_SOURCE
                                       : PARAM_MOD_SLEW_2_SOURCE;
+    float current = 0.0f;
+    if ((param_registry_control_value_get(track, id, &current) != 0U)
+            && ((uint8_t)(current + 0.5f) == source)) return 1U;
     param_registry_control_value_set(track, id, (float)source);
     return mod_matrix_publish_operator(track, id, (float)source);
 }
@@ -1417,6 +1305,9 @@ uint8_t mod_matrix_set_slew_amount(uint8_t track, uint8_t op, float value)
     const float amount = mod_matrix_clampf(value, 0.0f, 1.0f);
     const param_id_t id = (op == 0U) ? PARAM_MOD_SLEW_1_AMOUNT
                                       : PARAM_MOD_SLEW_2_AMOUNT;
+    float current = 0.0f;
+    if ((param_registry_control_value_get(track, id, &current) != 0U)
+            && (current == amount)) return 1U;
     param_registry_control_value_set(track, id, amount);
     return mod_matrix_publish_operator(track, id, amount);
 }

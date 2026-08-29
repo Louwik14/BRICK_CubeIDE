@@ -6,7 +6,7 @@
 #include "Core/track_runtime.h"
 #include "Audio/audio_rec_level_snapshot.h"
 #include "Sampler/sample_cache.h"
-#include "Sampler/sample_pool.h"
+#include "Sampler/sample_global_pool.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Storage/audio_recorder_wav.h"
@@ -4259,17 +4259,9 @@ uint8_t sample_capture_model_assign_trimmed(void)
         return 0U;
     }
 
-    uint16_t slot = SAMPLE_POOL_SIZE;
-    for(uint16_t i = 0U; i < SAMPLE_POOL_SIZE; ++i)
-    {
-        if(sample_pool_get_state(i) == SAMPLE_POOL_SLOT_EMPTY)
-        {
-            slot = i;
-            break;
-        }
-    }
+    const uint16_t slot = sample_global_pool_find_free_slot();
 
-    if(slot >= SAMPLE_POOL_SIZE)
+    if(slot >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_NO_SLOT);
         return 0U;
@@ -4280,7 +4272,7 @@ uint8_t sample_capture_model_assign_trimmed(void)
         return 0U;
     }
 
-    if(sample_pool_load(slot, g_sample_capture.state.final_path) == false)
+    if(sample_global_pool_load_classic(slot, g_sample_capture.state.final_path) == false)
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_LOAD_FAIL);
         return 0U;
@@ -4297,23 +4289,15 @@ uint8_t sample_capture_model_assign_saved_take_to_pool(void)
         return 0U;
     }
 
-    uint16_t slot = SAMPLE_POOL_SIZE;
-    for(uint16_t i = 0U; i < SAMPLE_POOL_SIZE; ++i)
-    {
-        if(sample_pool_get_state(i) == SAMPLE_POOL_SLOT_EMPTY)
-        {
-            slot = i;
-            break;
-        }
-    }
+    const uint16_t slot = sample_global_pool_find_free_slot();
 
-    if(slot >= SAMPLE_POOL_SIZE)
+    if(slot >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_NO_SLOT);
         return 0U;
     }
 
-    if(sample_pool_load(slot, g_sample_capture.state.final_path) == false)
+    if(sample_global_pool_load_classic(slot, g_sample_capture.state.final_path) == false)
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_LOAD_FAIL);
         return 0U;

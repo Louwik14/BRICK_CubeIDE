@@ -32,7 +32,6 @@
 #include "Core/entity_topology.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_play_scheduler.h"
-#include "Seq/seq_output_guard.h"
 #include "Seq/seq_boundary_engine.h"
 #include "Seq/seq_runtime_exec.h"
 #include "Seq/seq_live_rec_session.h"
@@ -233,7 +232,14 @@ static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_pan
     metronome_runtime_stop();
     if (emit_transport_stop_and_panic != 0U)
     {
-        seq_output_guard_panic((seq_clock_bridge_is_external_source(seq_runtime_get_clock_source_internal()) == 0U) ? 1U : 0U);
+        const uint8_t send_stop = (uint8_t)(
+            seq_clock_bridge_is_external_source(
+                seq_runtime_get_clock_source_internal()) == 0U);
+        if (control_music_output_has_alive() != 0U)
+            (void)control_music_output_panic_all(send_stop);
+        else if (send_stop != 0U)
+            midi_stop(MIDI_DEST_BOTH);
+        note_fx_pipeline_panic();
     }
 }
 
@@ -294,7 +300,6 @@ void seq_runtime_init(void)
     memset(g_seq_runtime_live_rec_queue, 0, sizeof(g_seq_runtime_live_rec_queue));
     g_seq_runtime.last_tick_count = seq_runtime_get_now_tick();
     seq_play_scheduler_init();
-    seq_output_guard_init();
     seq_live_rec_session_init();
     seq_transport_fsm_init(&g_seq_transport_fsm);
     seq_clock_bridge_init(&g_seq_clock_bridge,
@@ -341,14 +346,6 @@ void seq_runtime_start(void)
                                              &g_seq_clock_bridge,
                                              seq_runtime_get_now_tick());
     seq_runtime_update_samples_per_step_from_tempo();
-
-    /* The lifecycle panic advances the NoteFx epoch. Publish the canonical
-     * configuration afterwards so it survives that purge and precedes notes. */
-    if (note_fx_pipeline_sync_all_tracks() == 0U)
-    {
-        seq_runtime_exit_critical(primask);
-        return;
-    }
 
     /* Orchestration seam: transport FSM owns the start transition and count-in state. */
     if (seq_transport_fsm_request_start(&g_seq_transport_fsm,
@@ -493,16 +490,14 @@ static void seq_runtime_process_core(void)
             events, 128U, window_first, frames,
             seq_runtime_get_clock_source_internal(),
             g_seq_runtime.running);
-        const uint8_t panic_applied = note_fx_pipeline_prepare_control_window(
-            window_first);
-        if (panic_applied > 1U)
+        if (note_fx_pipeline_apply_pending() == 0U)
         {
             control_music_output_abort_window();
             control_audio_publication_abort_horizon();
             return;
         }
 
-        for (; panic_applied == 0U;)
+        for (;;)
         {
             for (uint16_t i = 0U; i < count; ++i)
             {
@@ -520,7 +515,8 @@ static void seq_runtime_process_core(void)
                     else
                         published = control_audio_publish_note(event->track,
                             CONTROL_AUDIO_NOTE_ON,
-                            0xFFFFFF00UL | (uint32_t)(event->velocity != 0U),
+                            CONTROL_AUDIO_NOTE_METRONOME_PREFIX
+                                | (uint32_t)(event->velocity != 0U),
                             0U, event->velocity, event->sample_abs);
                     if (published == 0U)
                     {
@@ -545,9 +541,9 @@ static void seq_runtime_process_core(void)
                 events, 128U, frames,
                 window_first);
         }
-        if ((panic_applied == 0U) && (note_fx_pipeline_process(
+        if (note_fx_pipeline_process(
                 window_first,
-                frames, g_seq_runtime.samples_per_step_q16) == 0U))
+                frames, g_seq_runtime.samples_per_step_q16) == 0U)
         {
             control_music_output_abort_window();
             control_audio_publication_abort_horizon();
@@ -563,11 +559,6 @@ static void seq_runtime_process_core(void)
         {
             control_music_output_abort_window();
             control_audio_publication_abort_horizon();
-            return;
-        }
-        if (note_fx_pipeline_finalize_control_window(window_first) == 0U)
-        {
-            control_music_output_abort_window();
             return;
         }
         if (control_music_output_finalize_window() == 0U)
@@ -628,10 +619,6 @@ void seq_runtime_set_clock_source(seq_clock_src_t src)
         return;
     if (src == seq_runtime_get_clock_source_internal())
         return;
-    if (seq_play_scheduler_transition_all(
-            SEQ_PLAY_TRANSITION_SOURCE_SWITCH) == 0U)
-        return;
-
     const uint32_t primask = seq_runtime_enter_critical();
     g_seq_runtime_control.clock_src = src;
     seq_clock_bridge_set_source(&g_seq_clock_bridge, &g_seq_runtime, src);

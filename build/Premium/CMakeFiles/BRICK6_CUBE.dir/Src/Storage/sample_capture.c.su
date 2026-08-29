@@ -115,5 +115,5 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c:4075:16:sample_capture_copy_trimmed_take	1784	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c:4208:9:sample_capture_model_save_trimmed	104	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c:4249:9:sample_capture_model_assign_trimmed	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c:4292:9:sample_capture_model_assign_saved_take_to_pool	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c:4330:9:sample_capture_model_toggle_zcross	4	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c:4284:9:sample_capture_model_assign_saved_take_to_pool	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/sample_capture.c:4314:9:sample_capture_model_toggle_zcross	4	static

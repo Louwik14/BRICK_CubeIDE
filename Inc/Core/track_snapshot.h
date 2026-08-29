@@ -37,6 +37,7 @@ typedef struct
     ui_track_midi_source_t midi_source;
     uint8_t poly_voice_count;
     float poly_spread;
+    float tone_values[SEQ_PARAM_TONE_SLOT_COUNT];
     float param_values[PARAM_COUNT];
     track_mod_matrix_slot_t mod_matrix[MOD_MATRIX_SLOT_COUNT];
     note_fx_track_state_t note_fx;

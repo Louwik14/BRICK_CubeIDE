@@ -18,14 +18,12 @@ typedef struct
 
 CONTROL_STATE_SDRAM static control_audio_horizon_t g_control_audio_horizon;
 static volatile uint32_t g_control_audio_horizon_capacity_failure_count;
-static uint16_t g_control_audio_reserved_program_slots;
 
 uint8_t control_audio_publication_begin_horizon(uint64_t first_sample,
                                                 uint16_t frames)
 {
     if ((g_control_audio_horizon.active != 0U) || (frames == 0U)
-            || (frames > 64U)
-            || (g_control_audio_reserved_program_slots != 0U))
+            || (frames > 64U))
         return 0U;
     uint16_t free = control_audio_fifo_control_free();
     if (free < CONTROL_AUDIO_FIFO_CONTRACT_BURST)
@@ -53,8 +51,7 @@ uint16_t control_audio_publication_free(void)
         ? (uint16_t)(g_control_audio_horizon.limit
             - g_control_audio_horizon.count)
         : control_audio_fifo_control_free();
-    return (available > g_control_audio_reserved_program_slots)
-        ? (uint16_t)(available - g_control_audio_reserved_program_slots) : 0U;
+    return available;
 }
 
 uint32_t control_audio_publication_capacity_failure_count(void)
@@ -127,35 +124,13 @@ uint8_t control_audio_publish_batch(const control_audio_command_t *commands,
         : control_audio_fifo_publish_batch(commands, count);
 }
 
-uint8_t control_audio_publication_reserve_program(void)
+uint8_t control_audio_publish_program(uint8_t entity, uint32_t descriptor,
+                                      uint64_t sample_time)
 {
-    if ((g_control_audio_horizon.active != 0U)
-            || (control_audio_publication_free() == 0U))
-        return 0U;
-    ++g_control_audio_reserved_program_slots;
-    return 1U;
-}
-
-void control_audio_publication_cancel_program_reservation(void)
-{
-    if (g_control_audio_reserved_program_slots != 0U)
-        --g_control_audio_reserved_program_slots;
-}
-
-uint8_t control_audio_publish_reserved_program(uint8_t entity,
-                                               uint32_t program_id,
-                                               uint64_t sample_time)
-{
-    if ((g_control_audio_reserved_program_slots == 0U)
-            || (g_control_audio_horizon.active != 0U))
-        return 0U;
     const control_audio_command_t c = { .effective_sample_time = sample_time,
-        .value = program_id, .entity = entity,
+        .value = descriptor, .entity = entity,
         .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PROGRAM, 0U) };
-    const uint8_t published = control_audio_fifo_publish(&c);
-    if (published != 0U)
-        --g_control_audio_reserved_program_slots;
-    return published;
+    return control_audio_publish(&c);
 }
 
 uint8_t control_audio_publish_param(uint8_t entity, uint16_t param_id,

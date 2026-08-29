@@ -43,7 +43,7 @@ typedef struct
 {
     sd_preview_state_t state;
     sd_preview_error_t last_error;
-    char path[SAMPLE_POOL_PATH_MAX];
+    char path[SAMPLE_CLASSIC_PATH_MAX];
     wav_info_t info;
     uint8_t gate_held;
     uint8_t file_open;

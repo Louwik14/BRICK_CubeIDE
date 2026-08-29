@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "Core/live_parameter_event.h"
+#include "Seq/seq_types.h"
 
 #define LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS 64U
 
@@ -48,6 +49,8 @@ bool live_parameter_audio_publication_submit_poly_pair(uint32_t capture_tick,
                                                  uint8_t track,
                                                  float voices,
                                                  float spread);
+bool live_parameter_audio_publication_submit_tone_state(
+    uint8_t track, const float values[SEQ_PARAM_TONE_SLOT_COUNT]);
 bool live_parameter_audio_publication_submit_dated(uint64_t effective_sample_time,
                                              uint16_t parameter_id,
                                              uint8_t track,

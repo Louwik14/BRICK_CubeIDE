@@ -40,10 +40,6 @@ typedef struct
 } track_mod_matrix_slot_t;
 
 void mod_matrix_set_defaults(track_mod_matrix_slot_t slots[MOD_MATRIX_SLOT_COUNT], uint8_t *selected_slot);
-uint8_t mod_matrix_publish_control_state_track(uint8_t track);
-void mod_matrix_control_batch_begin(void);
-uint8_t mod_matrix_control_batch_end(void);
-void mod_matrix_control_batch_abort(void);
 uint8_t mod_matrix_poly_route_mask(uint8_t track);
 
 uint8_t mod_matrix_set_selected_slot(uint8_t track, float value);

@@ -69,26 +69,6 @@ typedef struct
     float value;
 } param_registry_prepared_value_t;
 
-typedef void (*param_registry_track_structure_mutation_fn_t)(void *ctx);
-
-typedef struct
-{
-    param_registry_track_structure_mutation_fn_t mutation_fn;
-    void *mutation_ctx;
-} param_registry_track_structure_transition_cmd_t;
-
-typedef uint8_t (*param_registry_track_transition_stage_fn_t)(void *ctx);
-
-typedef struct
-{
-    param_registry_track_transition_stage_fn_t prepare_fn;
-    param_registry_track_transition_stage_fn_t mutate_fn;
-    param_registry_track_transition_stage_fn_t seq_runtime_sync_fn;
-    param_registry_track_transition_stage_fn_t ui_sync_fn;
-    param_registry_track_transition_stage_fn_t resume_fn;
-    void *ctx;
-} param_registry_track_transition_pipeline_cmd_t;
-
 void param_registry_init(void);
 
 /* Query surface: pure reads only. */
@@ -97,18 +77,10 @@ float param_get(param_id_t id);
 uint8_t param_registry_is_audio_fx_param(param_id_t id);
 param_id_t param_registry_get_audio_fx_param(uint8_t order);
 
-/* Command / apply / transition / post-commit surface. */
+/* Command / apply / post-commit surface. */
 void param_registry_sync_filter_ui_for_active_track(void);
 void param_registry_batch_begin(void);
 void param_registry_batch_end(void);
-/* Internal transition pipeline: structural mutation + runtime/UI synchronization. */
-uint8_t param_registry_run_track_transition_pipeline(const param_registry_track_transition_pipeline_cmd_t *cmd);
-uint8_t param_registry_run_track_transition_pipeline_for_track(const param_registry_track_transition_pipeline_cmd_t *cmd,
-                                                              uint8_t track);
-void param_registry_apply_track_structure_transition(const param_registry_track_structure_transition_cmd_t *cmd);
-uint8_t param_registry_track_structure_transition_is_active(void);
-uint8_t param_registry_track_structure_transition_is_global_active(void);
-uint8_t param_registry_track_structure_transition_is_track_active(uint8_t track);
 uint8_t param_registry_apply_track_edit(const param_registry_track_edit_cmd_t *cmd);
 uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float value);
 /* Common validation/conversion seam.  Prepared values are clamped canonical
@@ -125,11 +97,10 @@ uint8_t param_registry_install_prepared_track_control_target(
 /* Global counterpart used after an AUDIO-owned bulk restore commit. */
 uint8_t param_registry_install_prepared_global_control_target(
     const param_registry_prepared_value_t *prepared);
-uint8_t param_registry_prepare_legacy_modfx_bank_values(
-    uint8_t model,const float packed[4],
-    param_registry_prepared_value_t out_values[8],uint8_t *out_count);
-uint8_t param_registry_install_legacy_modfx_control_targets(void);
-uint8_t param_registry_project_track_mute(uint8_t track, uint8_t effective_muted);
+/* AUDIO projection only.  effective_muted is derived from local ownership and
+ * must never be written back into the local CONTROL mute authority. */
+uint8_t param_registry_project_track_effective_mute(uint8_t track,
+                                                    uint8_t effective_muted);
 uint8_t param_registry_project_track_base_audio(param_id_t id,
                                                 uint8_t track,
                                                 float value);
@@ -157,8 +128,6 @@ uint8_t param_registry_prepare_global_audio_command(param_id_t id,
 
 void param_set(param_id_t id, float value);
 void param_reset(param_id_t id);
-uint8_t param_registry_migrate_legacy_modfx_banks(void);
-
 #ifdef __cplusplus
 }
 #endif

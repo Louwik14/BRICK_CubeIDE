@@ -12,9 +12,8 @@
 #include "Core/brick6_sampler_runtime.h"
 #include "Core/brick6_stack_runtime.h"
 #include "Core/brick6_wave_runtime.h"
-#include "Core/brick6_looper_runtime.h"
 #include "Core/brick_build_config.h"
-#include "Core/control_audio_program.h"
+#include "Audio/control_audio_command.h"
 #include "Core/synth_polyphony.h"
 #include "Mod/mod_lfo_v1.h"
 
@@ -47,21 +46,6 @@ _Static_assert(sizeof(audio_physical_output_t) == 8U,
  * mapping synchronously; it never creates or kills an output here. */
 static audio_physical_output_t
     g_audio_physical_output[BRICK_ENTITY_CAPACITY][AUDIO_PHYSICAL_OUTPUT_CAPACITY];
-
-static uint8_t audio_note_engine_type_keeps_notes(track_runtime_family_t family,
-                                                  track_runtime_type_t type)
-{
-    if (family == TRACK_RUNTIME_FAMILY_SYNTH)
-        return (uint8_t)((type == TRACK_RUNTIME_TYPE_PRISM)
-            || (type == TRACK_RUNTIME_TYPE_STACK)
-            || (type == TRACK_RUNTIME_TYPE_WAVE)
-            || (type == TRACK_RUNTIME_TYPE_FM));
-    if (family == TRACK_RUNTIME_FAMILY_SAMPLER)
-        return (uint8_t)((type == TRACK_RUNTIME_TYPE_RAM)
-            || (type == TRACK_RUNTIME_TYPE_STREAM)
-            || (type == TRACK_RUNTIME_TYPE_MULTI));
-    return 0U;
-}
 
 static int8_t audio_note_engine_find_output(brick_entity_id_t entity_id,
                                             uint32_t output_id)
@@ -255,7 +239,7 @@ static uint8_t audio_note_engine_adapter_initialize_held_renderer(
             entity_id, SYNTH_POLY_SOURCE_MUSICAL_OUTPUT, output_id)
         : SYNTH_POLYPHONY_NO_VOICE;
     if ((engine != TRACK_RUNTIME_ENGINE_SAMPLER)
-            && (voice == SYNTH_POLYPHONY_NO_VOICE)) return 0U;
+            && (voice == SYNTH_POLYPHONY_NO_VOICE)) return 1U;
     const uint8_t instance = (voice == SYNTH_POLYPHONY_NO_VOICE)
         ? program->program_route.instance_id
         : SYNTH_POLYPHONY_INSTANCE(entity_id, voice);
@@ -333,7 +317,8 @@ static uint8_t audio_note_engine_adapter_apply_physical(
                 entity_id, SYNTH_POLY_SOURCE_MUSICAL_OUTPUT,
                 output_id));
     if ((uses_voice_allocator != 0U) && (voice == SYNTH_POLYPHONY_NO_VOICE))
-        return 0U;
+        return audio_note_engine_commit_output(entity_id, output_id,
+            note, velocity, is_note_on);
 
     if (is_note_on != 0U)
         mod_lfo_v1_note_trigger(entity_id);
@@ -444,10 +429,9 @@ static uint8_t audio_note_engine_adapter_apply_physical(
                     entity_id, note, output_id);
                 sampler_result = 1U;
             }
-            if (sampler_result == 0U)
-                return 0U;
-            return audio_note_engine_commit_output(entity_id, output_id,
-                note, velocity, is_note_on);
+            const uint8_t committed = audio_note_engine_commit_output(
+                entity_id, output_id, note, velocity, is_note_on);
+            return (uint8_t)((committed != 0U) && (sampler_result != 0U));
         }
         if (is_note_on != 0U)
             brick6_sampler_runtime_trigger_note_velocity(entity_id, note,
@@ -460,14 +444,17 @@ static uint8_t audio_note_engine_adapter_apply_physical(
         note, velocity, is_note_on);
 }
 
-uint8_t audio_note_engine_adapter_apply(
-    const audio_note_engine_program_t *program,
-    uint8_t note,
-    uint8_t velocity,
-    uint8_t is_note_on,
-    uint32_t output_id)
+uint8_t audio_note_engine_adapter_apply_output(
+    brick_entity_id_t entity_id, uint8_t note, uint8_t velocity,
+    uint8_t is_note_on, uint32_t output_id)
 {
-    return audio_note_engine_adapter_apply_physical(program, note, velocity,
+    if (entity_id >= BRICK_ENTITY_CAPACITY)
+        return 0U;
+    audio_note_engine_program_t program;
+    if (audio_note_engine_adapter_current(entity_id, &program) == 0U)
+        return audio_note_engine_commit_output(entity_id, output_id,
+            note, velocity, is_note_on);
+    return audio_note_engine_adapter_apply_physical(&program, note, velocity,
         is_note_on, output_id);
 }
 
@@ -530,9 +517,6 @@ uint8_t audio_note_engine_adapter_install_prepared(
         && (family == TRACK_RUNTIME_FAMILY_SYNTH)
         && (synth_polyphony_get_voice_count(entity_id) == requested_voices));
     const uint8_t previous_mix = ctx->program_route.mix_track_id;
-    if (requested_engine != TRACK_RUNTIME_ENGINE_LOOPER)
-        brick6_looper_runtime_prepare_replace(entity_id);
-
     if (preserve_synth_slots == 0U)
         (void)synth_polyphony_set_track_active(entity_id, 0U, 0U);
     const uint8_t midi_channel = ctx->midi_channel_1_16;
@@ -672,37 +656,32 @@ uint8_t audio_note_engine_adapter_apply_midi_config(
     return 1U;
 }
 
-uint8_t audio_note_engine_adapter_program_keeps_notes(
-    brick_entity_id_t entity_id,
-    const audio_note_engine_install_spec_t *spec)
-{
-    if ((entity_id >= BRICK_ENTITY_CAPACITY) || (spec == NULL))
-        return 0U;
-    const track_audio_runtime_ctx_t *const current = &g_audio_track_ctx[entity_id];
-    return (uint8_t)((current->program_route.active != 0U)
-        && audio_note_engine_type_keeps_notes(
-            (track_runtime_family_t)current->family,
-            (track_runtime_type_t)current->type)
-        && audio_note_engine_type_keeps_notes(
-            (track_runtime_family_t)spec->family,
-            (track_runtime_type_t)spec->type));
-}
-
 uint8_t audio_note_engine_adapter_initialize_held_outputs(
     brick_entity_id_t entity_id)
 {
     audio_note_engine_program_t program;
     if (audio_note_engine_adapter_current(entity_id, &program) == 0U)
-        return 0U;
+        return 1U;
+    const track_runtime_engine_t engine =
+        (track_runtime_engine_t)program.program_route.engine;
+    const uint8_t synth_engine = (uint8_t)((engine == TRACK_RUNTIME_ENGINE_PRISM)
+        || (engine == TRACK_RUNTIME_ENGINE_STACK)
+        || (engine == TRACK_RUNTIME_ENGINE_WAVE)
+        || (engine == TRACK_RUNTIME_ENGINE_FM));
     for (uint8_t i = 0U; i < AUDIO_PHYSICAL_OUTPUT_CAPACITY; ++i)
     {
         const audio_physical_output_t held =
             g_audio_physical_output[entity_id][i];
         if (held.gate == 0U)
             continue;
+        if (synth_engine != 0U)
+        {
+            (void)synth_polyphony_bind_held_output(entity_id, held.note,
+                SYNTH_POLY_SOURCE_MUSICAL_OUTPUT, held.output_id);
+        }
         if (audio_note_engine_adapter_initialize_held_renderer(&program,
                 held.note, held.velocity, held.output_id) == 0U)
-            return 0U;
+            continue;
     }
     return 1U;
 }

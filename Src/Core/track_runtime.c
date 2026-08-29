@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "Storage/memory_layout.h"
-#include "Core/control_audio_program.h"
+#include "Audio/control_audio_command.h"
 #include "Core/control_audio_publication.h"
 #include "Core/control_music_output.h"
 #include "Audio/audio_fx_runtime.h"
@@ -79,38 +79,26 @@ static uint8_t track_runtime_publish_program(brick_entity_id_t entity_id,
         else if (topology.role == ENTITY_ROLE_GROUP_CHILD)
             topology_flags |= CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD;
     }
+    const control_audio_program_descriptor_t descriptor = {
+        .family = ctx->family,
+        .type = ctx->type,
+        .topology_flags = topology_flags
+    };
     const track_runtime_ctx_t *const previous = &g_track_runtime_ctx[entity_id];
     const uint8_t keep_notes = (uint8_t)(
         track_runtime_type_keeps_notes((track_runtime_family_t)previous->family,
                                        (track_runtime_type_t)previous->type)
         && track_runtime_type_keeps_notes((track_runtime_family_t)ctx->family,
                                           (track_runtime_type_t)ctx->type));
-    const control_audio_program_descriptor_t descriptor = {
-        .family = ctx->family,
-        .type = ctx->type,
-        .topology_flags = topology_flags
-    };
-    const uint32_t program_id = control_audio_program_prepare(&descriptor);
-    if (program_id == 0U)
-        return 0U;
-    if (control_audio_publication_reserve_program() == 0U)
-    {
-        control_audio_program_cancel(program_id);
-        return 0U;
-    }
     if ((keep_notes == 0U)
             && (control_music_output_close_entity(entity_id, due_sample) == 0U))
-    {
-        control_audio_publication_cancel_program_reservation();
-        control_audio_program_cancel(program_id);
         return 0U;
-    }
-    /* Descriptor and FIFO credit are now owned by this transaction.  With
-     * CONTROL as the sole producer, publication cannot fail nominally. */
-    if (control_audio_publish_reserved_program(entity_id, program_id,
-                                               due_sample + 1U) == 0U)
+    if (control_audio_publish_program(entity_id,
+                                      control_audio_program_pack(&descriptor),
+                                      due_sample + 1U) == 0U)
     {
-        /* Invariant failure: no rollback is valid after close. */
+        /* A legal structural change is covered by the FIFO dimensioning
+         * contract.  Refusal is an invariant failure, not a runtime mode. */
         Error_Handler();
         return 0U;
     }
@@ -777,21 +765,6 @@ void track_runtime_init(void)
     memset(g_track_runtime_program_topology_flags, 0,
            sizeof(g_track_runtime_program_topology_flags));
     track_runtime_rebuild_all();
-}
-
-void track_runtime_invalidate_all(void)
-{
-    track_runtime_rebuild_all();
-}
-
-void track_runtime_invalidate_track(uint8_t track)
-{
-    if (track >= SEQ_LANE_CAPACITY)
-    {
-        return;
-    }
-
-    track_runtime_rebuild_track(track);
 }
 
 void track_runtime_rebuild_all(void)
@@ -1608,7 +1581,7 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
 {
     if ((track >= SEQ_LANE_CAPACITY) || (param >= PARAM_COUNT))
     {
-        return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+        return TRACK_RUNTIME_PARAM_UNAVAILABLE;
     }
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
     if (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
@@ -1619,7 +1592,7 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
     if (ctx == 0)
     {
-        return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+        return TRACK_RUNTIME_PARAM_UNAVAILABLE;
     }
     const uint8_t active = track_runtime_ctx_is_active(ctx);
 
@@ -1628,24 +1601,24 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
         entity_topology_descriptor_t topology;
         if ((entity_topology_get((brick_entity_id_t)track, &topology) == 0U)
                 || (topology.active == 0U))
-            return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            return TRACK_RUNTIME_PARAM_UNAVAILABLE;
         const uint8_t group_level = audio_fx_runtime_is_group_level_param(param);
         if (topology.role == ENTITY_ROLE_GROUP_CHILD)
             return (group_level != 0U) ? TRACK_RUNTIME_PARAM_ALLOWED
-                                      : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                                      : TRACK_RUNTIME_PARAM_UNAVAILABLE;
         if (group_level != 0U)
-            return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            return TRACK_RUNTIME_PARAM_UNAVAILABLE;
         if ((topology.role == ENTITY_ROLE_GROUP_MASTER)
                 && ((param == PARAM_AUDIO_FX_FILTER_POS)
                     || (param == PARAM_AUDIO_FX_ORDER)))
-            return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            return TRACK_RUNTIME_PARAM_UNAVAILABLE;
     }
 
     if (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_GROUP)
     {
         if (active == 0U)
         {
-            return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            return TRACK_RUNTIME_PARAM_UNAVAILABLE;
         }
         if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD)
                 || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
@@ -1666,7 +1639,7 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
             case PARAM_ENV_RETRIG_MOD:
                 return TRACK_RUNTIME_PARAM_ALLOWED;
             default:
-                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                return TRACK_RUNTIME_PARAM_UNAVAILABLE;
         }
     }
 
@@ -1678,29 +1651,29 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
         case TRACK_RUNTIME_RESOURCE_FILTER:
             if (active == 0U)
             {
-                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                return TRACK_RUNTIME_PARAM_UNAVAILABLE;
             }
             if (track_runtime_is_audio_routable(track) == 0U)
             {
-                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                return TRACK_RUNTIME_PARAM_UNAVAILABLE;
             }
             return ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_FILTER) != 0U)
                     ? TRACK_RUNTIME_PARAM_ALLOWED
-                    : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                    : TRACK_RUNTIME_PARAM_UNAVAILABLE;
 
         case TRACK_RUNTIME_RESOURCE_SYNTH:
             if (active == 0U)
             {
-                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                return TRACK_RUNTIME_PARAM_UNAVAILABLE;
             }
             return ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_SYNTH) != 0U)
                     ? TRACK_RUNTIME_PARAM_ALLOWED
-                    : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                    : TRACK_RUNTIME_PARAM_UNAVAILABLE;
 
         case TRACK_RUNTIME_RESOURCE_POLYPHONY:
             if (active == 0U)
             {
-                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                return TRACK_RUNTIME_PARAM_UNAVAILABLE;
             }
             if ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_SYNTH) != 0U)
             {
@@ -1709,7 +1682,7 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
             return ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
                     && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI))
                     ? TRACK_RUNTIME_PARAM_ALLOWED
-                    : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                    : TRACK_RUNTIME_PARAM_UNAVAILABLE;
 
         case TRACK_RUNTIME_RESOURCE_PLAY:
         {
@@ -1718,7 +1691,7 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
             {
                 return (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_FM)
                     ? TRACK_RUNTIME_PARAM_ALLOWED
-                    : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                    : TRACK_RUNTIME_PARAM_UNAVAILABLE;
             }
             uint8_t play_index = 0U;
             seq_step_play_field_t play_field = SEQ_STEP_PLAY_FIELD_NOTE;
@@ -1729,7 +1702,7 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
                 (void)play_field;
                 return (play_index < seq_model_play_capacity((seq_track_id_t)track))
                     ? TRACK_RUNTIME_PARAM_ALLOWED
-                    : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                    : TRACK_RUNTIME_PARAM_UNAVAILABLE;
             }
         }
             if (track_runtime_param_is_looper_only(param) != 0U)
@@ -1737,20 +1710,20 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
                 if ((ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
                         || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))
                 {
-                    return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                    return TRACK_RUNTIME_PARAM_UNAVAILABLE;
                 }
                 return TRACK_RUNTIME_PARAM_ALLOWED;
             }
             if ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_PLAY) == 0U)
             {
-                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                return TRACK_RUNTIME_PARAM_UNAVAILABLE;
             }
             if (track_runtime_param_is_clip_only(param) != 0U)
             {
                 if ((ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
                         || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
                 {
-                    return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                    return TRACK_RUNTIME_PARAM_UNAVAILABLE;
                 }
             }
             if ((param >= PARAM_MIDI_PROGRAM) && (param <= PARAM_MIDI_CC3_4))
@@ -1761,7 +1734,7 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
                      && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_EXTERNAL)) ? 1U : 0U;
                 if ((midi_track == 0U) && (external_track == 0U))
                 {
-                    return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                    return TRACK_RUNTIME_PARAM_UNAVAILABLE;
                 }
             }
             if (param == PARAM_EXTERNAL_INPUT)
@@ -1769,40 +1742,40 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
                 return ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_EXTERNAL)
                         && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_EXTERNAL))
                     ? TRACK_RUNTIME_PARAM_ALLOWED
-                    : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                    : TRACK_RUNTIME_PARAM_UNAVAILABLE;
             }
             return TRACK_RUNTIME_PARAM_ALLOWED;
 
         case TRACK_RUNTIME_RESOURCE_MIX:
             if (track_runtime_is_audio_routable(track) == 0U)
             {
-                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                return TRACK_RUNTIME_PARAM_UNAVAILABLE;
             }
             if ((track_runtime_param_is_vca(param) != 0U)
                     && (track_runtime_supports_vca_gate(ctx) == 0U))
             {
-                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                return TRACK_RUNTIME_PARAM_UNAVAILABLE;
             }
             return (track_runtime_is_audio_routable(track) != 0U)
                     ? TRACK_RUNTIME_PARAM_ALLOWED
-                    : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                    : TRACK_RUNTIME_PARAM_UNAVAILABLE;
 
         case TRACK_RUNTIME_RESOURCE_MIDI_FX:
             return (track_runtime_is_ui_ensemble_available(track,
                                                             TRACK_RUNTIME_UI_ENSEMBLE_MIDI_FX) != 0U)
                 ? TRACK_RUNTIME_PARAM_ALLOWED
-                : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                : TRACK_RUNTIME_PARAM_UNAVAILABLE;
 
         case TRACK_RUNTIME_RESOURCE_AUDIO_FX:
             if (active == 0U)
             {
-                return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                return TRACK_RUNTIME_PARAM_UNAVAILABLE;
             }
             return (track_runtime_is_audio_routable(track) != 0U)
                     ? TRACK_RUNTIME_PARAM_ALLOWED
-                    : TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+                    : TRACK_RUNTIME_PARAM_UNAVAILABLE;
 
         default:
-            return TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL;
+            return TRACK_RUNTIME_PARAM_UNAVAILABLE;
     }
 }

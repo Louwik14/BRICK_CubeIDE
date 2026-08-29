@@ -97,7 +97,7 @@ uint8_t encoder_control_dispatcher_service(void)
         if ((encoder_binding_valid(binding) == 0U)
                 || (encoder_binding_route(binding) != ENCODER_BINDING_ROUTE_AUDIO))
         {
-            /* Legacy/navigation bindings stay exclusively on the UI path. */
+            /* Navigation and CONTROL-owned bindings stay on the UI path. */
             continue;
         }
 

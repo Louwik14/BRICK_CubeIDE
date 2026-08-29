@@ -28,6 +28,16 @@ Le service Storage traite une commande bornee hors IRQ. Produit: tranche 32 KiB;
 
 Le transport contient geometrie source, format et token. Storage decode dans un payload partage; AUDIO invalide, copie dans la page finale et publie READY. H743 utilise l'adaptateur local `sample_page_cache_port`; H747 conserve le contrat avec M4 executant l'I/O et M7 possedant le cache.
 
+## Catalogue Classic unique
+
+`sample_global_pool` est l'unique catalogue produit pour Classic, RAM, Multi et
+Wavetable. Une ressource Classic est adressee directement par son index global :
+le chemin n'existe que dans cette entree et sa description WAV n'existe que dans
+le backend Classic. Le chargement analyse le WAV une seule fois puis choisit
+FULL ou STREAM. Les pages, readers, besoins, generations, pins, refcounts,
+scheduler SD et politiques de recyclage forment le plan physique Stream; ils
+ne constituent pas un second catalogue produit.
+
 ## Multi, Sampler RAM et Wavetable
 
 Le bulk Multi calcule et epingle l'union start/loop, utilise le cache, le transport et le scheduler communs, par lots de 64 KiB. Il ne possede ni FatFs, ni decodeur, ni arbitre SD parallele.

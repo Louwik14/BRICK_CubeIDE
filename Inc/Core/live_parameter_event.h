@@ -41,6 +41,7 @@ typedef enum
  * preserving the public PARAM opcode and the 16-byte command ABI. */
 #define LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_BASE 2U
 #define LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_LAST 9U
+#define LIVE_PARAMETER_AUDIO_SCOPE_RUNTIME_TEMP     10U
 
 enum
 {

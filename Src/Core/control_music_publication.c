@@ -37,12 +37,6 @@ static uint16_t control_music_convert(const control_music_action_t *action,
     return 2U;
 }
 
-uint8_t control_music_publication_request_panic(uint64_t due_sample)
-{
-    return control_audio_publish_panic(
-        CONTROL_AUDIO_PANIC_GLOBAL, 0U, due_sample);
-}
-
 uint16_t control_music_publication_free(void)
 {
     return (uint16_t)(control_audio_publication_free() / 2U);

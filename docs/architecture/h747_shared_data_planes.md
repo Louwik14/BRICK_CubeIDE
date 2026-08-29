@@ -1,4 +1,4 @@
-# Contrat gele des data planes CONTROL/AUDIO (PASS D)
+# Contrat des data planes CONTROL/AUDIO
 
 Ce document est l'inventaire normatif des donnees volumineuses partagees. La
 FIFO fonctionnelle n'est pas un data plane. Les adresses C obtenues apres
@@ -8,7 +8,6 @@ resolution locale d'un ID ne font jamais partie de l'ABI M4/M7.
 
 | Data plane | Producteur -> consommateur | Zone / taille bornee | Contenu ABI et pointeurs | Publication | Recyclage |
 |---|---|---|---|---|---|
-| Descripteurs PROGRAM | M4 -> M7 | `AUDIO_STORAGE_SHARED_SDRAM`, 256 x 8 octets (2048), credits dans `D2_IPC` | `program_id` et descriptor structurel fixe de 4 octets (`family`, `type`, role GROUP), sans pointeur | descriptor complet, DMB, `id`, puis commande `PROGRAM(id)` | M7 copie, avance le tail, publie le credit; M4 seul remet le slot libre |
 | Sample RAM | M4 loader -> M7 voices | payload dans le page pool; registry non-cacheable `AUDIO_SHARED_REGISTRY_SDRAM`; map ID dans `D2_IPC` | `global_slot`, `ram_slot`, generation et `{region, offset, length}` | payload clean, descriptor immutable, DMB, map `global_slot -> ram_slot` | stop PROGRAM/PARAM, fin des credits lecteurs, withdraw generation, puis pages libres |
 | Wavetable/mipmaps | M4 loader -> M7 Wave | payload dans le page pool; registry non-cacheable de 16 896 octets | slot, generation et refs `{region, offset, length}` par bande; aucun `float *` partage | payload clean, descriptor/bandes, DMB, `ready` publie en dernier | stop des voix + fence fonctionnelle, remove generation, puis pages libres |
 | Multi | M4 loader/projection -> M7 Sampler | projection non-cacheable `AUDIO_SHARED_MULTI_SDRAM` (47 104 octets) + instruments compacts `D2_IPC` | zones et sources numeriques, IDs sample/instrument, offsets fichier; aucun path/pointeur | samples/zones immutables, DMB, instrument `ready` publie en dernier | stop instrument + fin des credits page, withdraw, puis catalogue/pages recyclables |
@@ -53,7 +52,7 @@ STREAM conserve sa politique de besoins/credits et son scheduler. Recorder,
 Preview et Looper conservent leurs semantiques, leur framing et leur longueur
 STOP. Les six opcodes et la cadence CONTROL ne changent pas.
 
-## Controle de purete PASS D
+## Controle de purete
 
 `RESOURCE READY` ne vaut jamais `RESOURCE ACTIVE`. Les flags `ready`,
 generations, maps, compteurs et seqlocks publient une disponibilite ou un droit
@@ -62,7 +61,6 @@ TRANSPORT, RECORD ou PANIC dans la FIFO.
 
 | Data plane | Pur data/ownership | Fonction cachee | Verdict |
 |---|---|---|---|
-| PROGRAM descriptors | oui | non; seul `PROGRAM(id)` applique le descriptor | DATA PLANE PUR |
 | Sample RAM | oui | non; registry/map rendent la ressource resolvable | DATA PLANE PUR |
 | Wavetable/mipmaps | oui | non; PARAM selectionne slot et generation | DATA PLANE PUR |
 | Multi | oui | non; PROGRAM/PARAM/NOTE selectionnent et declenchent | DATA PLANE PUR |
@@ -106,33 +104,20 @@ Aucun ACK de commande, READY musical, binding, programme installe ou PARAM
 applique n'est retourne. H743 et H747 partagent exactement cette semantique;
 seuls placement, cache, barrieres et visibilite different.
 
-Verdict de gel: aucune decision fonctionnelle ne subsiste hors FIFO et aucun
-retour fonctionnel M7->M4 ne subsiste. L'architecture est prete a etre gelee.
+PROGRAM transporte directement son descripteur structurel de quatre octets
+dans `command.value`; il ne possede donc ni registre, ni ID, ni data plane.
+Aucune decision fonctionnelle ne subsiste hors FIFO et aucun retour fonctionnel
+M7->M4 ne subsiste.
 
-## RAM PASS C
+## Port H747
 
-Mesures linker H743 Premium apres PASS C:
+Le port H747 place les memes sections dans des regions visibles des deux
+coeurs, configure MPU region 5/6 et `.sdram_recorder` sur les deux coeurs, puis
+definit `BRICK6_H747_DUAL_CORE` pour activer clean/invalidate des caches prives.
+Aucun scheduler, opcode, setter FM, cadence ou chemin DMA live n'est specifique
+au port H747.
 
-| Region | Avant | Apres | Delta |
-|---|---:|---:|---:|
-| SRAM3/D2 | 17 216 | 23 840 | +6 624 |
-| RAM D3 | 16 480 | 14 272 | -2 208 |
-| SDRAM cacheable | 32 857 504 | 32 886 208 | +28 704 |
-| SDRAM shared non-cacheable | 253 376 | 224 672 | -28 704 |
-
-Le delta interne correspond aux credits page et maps ID non-cacheables. Les
-102 400 octets SDRAM sont sortis de la zone partagee (preroll M7 et runtime
-Recorder M4 avec FatFs/callbacks); 73 696 octets de registries pointer-free y
-sont entres. Aucun buffer n'a ete duplique.
-
-Builds H743 valides: Release Low-Cost, Premium et Test. Le port H747 doit
-placer les memes sections dans des regions visibles des deux coeurs, configurer
-MPU region 5/6 et `.sdram_recorder` sur les deux coeurs, puis definir
-`BRICK6_H747_DUAL_CORE` pour activer clean/invalidate des caches prives. Aucun
-scheduler, opcode, setter FM, cadence, chemin DMA live ou cleanup PASS 6 n'a
-ete modifie.
-
-## Correctifs de teardown et cache
+## Teardown et cache
 
 Preview publie desormais `PREVIEW_ACTIVE=0` avec une fence FIFO. Le producer ne
 remet `write_count` a zero et ne reutilise le ring qu'apres passage du tail; le

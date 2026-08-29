@@ -70,12 +70,14 @@ void brick6_looper_runtime_arm_live_record_start(uint8_t track_id,
                                                  uint8_t len_mode,
                                                  uint32_t expected_frames,
                                                  uint8_t play_auto,
+                                                 uint8_t overdub,
                                                  uint64_t request_sample);
 void brick6_looper_runtime_arm_record_stop(uint64_t request_sample);
 void brick6_looper_runtime_on_record_start(uint64_t sample_time);
 void brick6_looper_runtime_on_record_stop(uint64_t sample_time);
 /* Storage-side projection; never reads the AUDIO-owned Looper runtime. */
 uint8_t brick6_looper_runtime_get_record_capture_track(uint8_t *out_track);
+uint8_t brick6_looper_runtime_is_overdub_recording(uint8_t track_id);
 void brick6_looper_runtime_preroll_capture_from_irq(uint8_t track_id,
                                                     const int32_t *lr_interleaved,
                                                     uint32_t frames);

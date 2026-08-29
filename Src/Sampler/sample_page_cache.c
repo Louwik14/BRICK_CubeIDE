@@ -200,7 +200,7 @@ static uint16_t sample_page_cache_key_slot(sample_audio_key_t key)
     switch (key.domain)
     {
         case SAMPLE_AUDIO_DOMAIN_CLASSIC:
-            return (key.object_id < SAMPLE_CACHE_HOT_SAMPLE_CAPACITY) ? key.object_id : UINT16_MAX;
+            return (key.object_id < SAMPLE_CLASSIC_CAPACITY) ? key.object_id : UINT16_MAX;
 
         case SAMPLE_AUDIO_DOMAIN_LOOPER:
         {

@@ -1,12 +1,13 @@
 #include "Core/project_load_quiesce.h"
 
-#include "Audio/control_audio_command.h"
 #include "Core/control_audio_publication.h"
 #include "Core/live_clock.h"
 #include "Core/live_event.h"
-#include "NoteFx/note_fx_pipeline.h"
-#include "Seq/seq_output_guard.h"
+#define SEQ_RUNTIME_INTERNAL_USE 1
+#include "Seq/seq_play_scheduler.h"
 #include "Seq/seq_runtime.h"
+#include "Core/control_music_output.h"
+#include "NoteFx/note_fx_pipeline.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/sd_preview.h"
 #include "midi.h"
@@ -15,6 +16,13 @@ static uint32_t g_project_load_consumer_fence;
 static uint8_t g_project_load_fence_valid;
 static uint8_t g_project_load_requested;
 static volatile uint8_t g_project_load_ingress_open;
+
+static void project_load_close_old_sources(void)
+{
+    note_fx_pipeline_panic();
+    seq_play_scheduler_clear();
+    seq_runtime_stop();
+}
 
 void project_load_quiesce_init(void)
 {
@@ -31,20 +39,15 @@ void project_load_quiesce_request(void)
     live_event_discard_pending();
     midi_rx_discard_pending();
     midi_host_rx_discard_pending();
-    (void)note_fx_pipeline_request_panic();
-    seq_runtime_stop();
-    seq_output_guard_panic(1U);
     sd_preview_stop();
     (void)audio_recorder_request_stop_client(AUDIO_RECORDER_CLIENT_AUDIO_REC);
     (void)audio_recorder_request_stop_client(AUDIO_RECORDER_CLIENT_LOOPER);
-    uint64_t sample_time = 0U;
     g_project_load_requested = 1U;
     g_project_load_fence_valid = 0U;
-    if (!live_clock_read_audio_sample(&sample_time))
-        return;
-    g_project_load_fence_valid = control_audio_publish_panic_fenced(
-        CONTROL_AUDIO_PANIC_GLOBAL, 0U, sample_time,
+    g_project_load_fence_valid = control_music_output_panic_all_fenced(
         &g_project_load_consumer_fence);
+    if (g_project_load_fence_valid != 0U)
+        project_load_close_old_sources();
 }
 
 uint8_t project_load_quiesce_safe(void)
@@ -52,11 +55,10 @@ uint8_t project_load_quiesce_safe(void)
     if ((g_project_load_requested != 0U)
             && (g_project_load_fence_valid == 0U))
     {
-        uint64_t sample_time = 0U;
-        if (live_clock_read_audio_sample(&sample_time))
-            g_project_load_fence_valid = control_audio_publish_panic_fenced(
-                CONTROL_AUDIO_PANIC_GLOBAL, 0U, sample_time,
-                &g_project_load_consumer_fence);
+        g_project_load_fence_valid = control_music_output_panic_all_fenced(
+            &g_project_load_consumer_fence);
+        if (g_project_load_fence_valid != 0U)
+            project_load_close_old_sources();
     }
     live_clock_anchor_t anchor;
     const uint8_t audio_safe = (uint8_t)(

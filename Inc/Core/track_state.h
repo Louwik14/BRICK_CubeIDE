@@ -36,6 +36,10 @@ bool track_state_apply_bulk_with_inputs(const uint8_t family[UI_TRACK_COUNT],
                                         const uint8_t midi_channel[UI_TRACK_COUNT],
                                         const uint8_t midi_source[UI_TRACK_COUNT],
                                         const uint8_t external_input[UI_TRACK_COUNT]);
+bool track_structure_apply_bulk(const uint8_t family[UI_TRACK_COUNT],
+                                const uint8_t type[UI_TRACK_COUNT],
+                                const uint8_t midi_channel[UI_TRACK_COUNT],
+                                const uint8_t midi_source[UI_TRACK_COUNT]);
 bool track_state_apply_entity_bulk_with_inputs(
     const uint8_t family[BRICK_ENTITY_CAPACITY],
     const uint8_t type[BRICK_ENTITY_CAPACITY],

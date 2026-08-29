@@ -14,7 +14,7 @@
 #include "Core/track_state.h"
 
 #include "Seq/seq_edit.h"
-#include "Seq/seq_output_guard.h"
+#include "Core/control_music_output.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_model.h"
 #include "Seq/seq_runtime_control.h"
@@ -902,7 +902,8 @@ void seq_live_rec_session_live_rec_note_on(seq_live_rec_source_t source,
     }
 
     if ((source == SEQ_LIVE_REC_SRC_EXTERNAL)
-        && (seq_output_guard_is_note_active_on_channel(channel_zero_based, note) != 0U))
+        && (control_music_output_is_note_active_on_channel(
+                channel_zero_based, note) != 0U))
     {
         return;
     }

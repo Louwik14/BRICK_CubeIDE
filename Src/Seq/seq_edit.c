@@ -19,6 +19,8 @@
 #include "Core/track_runtime.h"
 #include "Storage/undo_v2.h"
 #include "Seq/seq_runtime_control.h"
+#define SEQ_RUNTIME_INTERNAL_USE 1
+#include "Seq/seq_play_scheduler.h"
 
 #define SEQ_EDIT_ENGINE_TICKS_PER_SECOND 1500U
 
@@ -1412,13 +1414,16 @@ uint8_t seq_edit_paste_steps(seq_track_id_t track,
         : 0U;
     const uint8_t ok = seq_clipboard_paste(track, dest_steps, dest_count, out_result);
     seq_edit_finish_snapshot_undo(undo_started);
+    if ((ok != 0U) && (dest_count != 0U))
+        seq_play_scheduler_notify_track_pattern_change(track);
     return ok;
 }
 
-static void seq_edit_clear_steps_impl(seq_track_id_t track,
-                                      const seq_step_id_t *steps,
-                                      uint8_t step_count)
+static uint8_t seq_edit_clear_steps_impl(seq_track_id_t track,
+                                         const seq_step_id_t *steps,
+                                         uint8_t step_count)
 {
+    uint8_t changed = 0U;
     for (uint8_t i = 0U; i < step_count; ++i)
     {
         const seq_step_id_t step = steps[i];
@@ -1427,10 +1432,13 @@ static void seq_edit_clear_steps_impl(seq_track_id_t track,
             continue;
         }
 
+        if (seq_model_step_is_empty(track, step) == 0U)
+            changed = 1U;
         seq_model_set_trig(track, step, 0U);
         seq_model_step_plock_clear(track, step);
         seq_model_play_clear_step(track, step);
     }
+    return changed;
 }
 
 void seq_edit_clear_steps_without_undo(seq_track_id_t track,
@@ -1442,7 +1450,8 @@ void seq_edit_clear_steps_without_undo(seq_track_id_t track,
         return;
     }
 
-    seq_edit_clear_steps_impl(track, steps, step_count);
+    if (seq_edit_clear_steps_impl(track, steps, step_count) != 0U)
+        seq_play_scheduler_notify_track_pattern_change(track);
 }
 
 void seq_edit_clear_steps(seq_track_id_t track,
@@ -1457,6 +1466,7 @@ void seq_edit_clear_steps(seq_track_id_t track,
     const uint8_t undo_started = seq_edit_begin_snapshot_undo(track,
                                                               steps,
                                                               step_count);
-    seq_edit_clear_steps_impl(track, steps, step_count);
+    if (seq_edit_clear_steps_impl(track, steps, step_count) != 0U)
+        seq_play_scheduler_notify_track_pattern_change(track);
     seq_edit_finish_snapshot_undo(undo_started);
 }

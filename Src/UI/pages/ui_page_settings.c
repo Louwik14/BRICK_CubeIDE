@@ -21,7 +21,7 @@
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
-#include "Sampler/sample_pool.h"
+#include "Sampler/sample_cache.h"
 #include "Sampler/sample_page_cache_config.h"
 #include "Sampler/multi_sample_import.h"
 #include "Sampler/multi_sample_index.h"
@@ -200,7 +200,7 @@ typedef struct
     ui_settings_multi_entry_t multi_entries[UI_SETTINGS_MULTI_BROWSER_MAX];
     char sample_dir[WAV_LOADER_CATALOG_PATH_MAX];
     char confirm_path[MULTI_SAMPLE_POOL_PATH_MAX];
-    char convert_path[SAMPLE_POOL_PATH_MAX];
+    char convert_path[SAMPLE_CLASSIC_PATH_MAX];
     char status_line[24];
     ui_settings_menu_level_t levels[UI_SETTINGS_MAX_LEVELS];
     uint8_t depth;
@@ -313,43 +313,43 @@ static void ui_page_settings_draw_sample_header(const char *title,
 
 static const char *ui_page_settings_sampler_load_error_label(void)
 {
-    switch (sample_pool_get_last_load_error())
+    switch (sample_global_pool_get_last_classic_load_error())
     {
-        case SAMPLE_POOL_LOAD_INVALID_PATH:
+        case SAMPLE_CLASSIC_LOAD_INVALID_PATH:
             return "BAD PATH";
-        case SAMPLE_POOL_LOAD_PATH_TOO_LONG:
+        case SAMPLE_CLASSIC_LOAD_PATH_TOO_LONG:
             return "PATH LONG";
-        case SAMPLE_POOL_LOAD_SD_MOUNT_FAIL:
+        case SAMPLE_CLASSIC_LOAD_SD_MOUNT_FAIL:
             return "SD UNAVAILABLE";
-        case SAMPLE_POOL_LOAD_SD_GATE_REFUSED:
+        case SAMPLE_CLASSIC_LOAD_SD_GATE_REFUSED:
             return "SD BUSY";
-        case SAMPLE_POOL_LOAD_SD_FILE_NOT_FOUND:
+        case SAMPLE_CLASSIC_LOAD_SD_FILE_NOT_FOUND:
             return "NO FILE";
-        case SAMPLE_POOL_LOAD_SD_OPEN_FAIL:
+        case SAMPLE_CLASSIC_LOAD_SD_OPEN_FAIL:
             return "READ ERR";
-        case SAMPLE_POOL_LOAD_WAV_PARSE_FAIL:
+        case SAMPLE_CLASSIC_LOAD_WAV_PARSE_FAIL:
             return "BAD WAV";
-        case SAMPLE_POOL_LOAD_WAV_UNSUPPORTED_FORMAT:
+        case SAMPLE_CLASSIC_LOAD_WAV_UNSUPPORTED_FORMAT:
             return "UNSUPPORTED";
-        case SAMPLE_POOL_LOAD_WAV_48K_REQUIRED:
+        case SAMPLE_CLASSIC_LOAD_WAV_48K_REQUIRED:
             return "48K ONLY";
-        case SAMPLE_POOL_LOAD_MEMORY_LIMIT:
+        case SAMPLE_CLASSIC_LOAD_MEMORY_LIMIT:
             return "NO CACHE";
-        case SAMPLE_POOL_LOAD_SD_READ_FAIL:
+        case SAMPLE_CLASSIC_LOAD_SD_READ_FAIL:
             return "READ ERR";
-        case SAMPLE_POOL_LOAD_SD_SEEK_FAIL:
+        case SAMPLE_CLASSIC_LOAD_SD_SEEK_FAIL:
             return "READ ERR";
-        case SAMPLE_POOL_LOAD_SD_SHORT_READ:
+        case SAMPLE_CLASSIC_LOAD_SD_SHORT_READ:
             return "READ ERR";
-        case SAMPLE_POOL_LOAD_SD_READ_INT_ERR:
+        case SAMPLE_CLASSIC_LOAD_SD_READ_INT_ERR:
             return "READ ERR";
-        case SAMPLE_POOL_LOAD_SD_NOT_READY:
+        case SAMPLE_CLASSIC_LOAD_SD_NOT_READY:
             return "SD BUSY";
-        case SAMPLE_POOL_LOAD_SD_INVALID_OBJECT:
+        case SAMPLE_CLASSIC_LOAD_SD_INVALID_OBJECT:
             return "READ ERR";
-        case SAMPLE_POOL_LOAD_SD_TIMEOUT:
+        case SAMPLE_CLASSIC_LOAD_SD_TIMEOUT:
             return "SD BUSY";
-        case SAMPLE_POOL_LOAD_SD_NOT_ENOUGH_CORE:
+        case SAMPLE_CLASSIC_LOAD_SD_NOT_ENOUGH_CORE:
             return "READ ERR";
         default:
             return "LOAD FAIL";
@@ -425,7 +425,7 @@ static void ui_page_settings_refresh_global_kind_slots(sample_global_kind_t kind
 {
     uint16_t count = 0U;
     const uint16_t capacity = SAMPLE_GLOBAL_POOL_FINAL_SLOTS;
-    if (kind == SAMPLE_GLOBAL_KIND_STREAM)
+    if (kind == SAMPLE_GLOBAL_KIND_CLASSIC)
         count = project_control_list_samples(PERSIST_ASSET_SAMPLE_STREAM,g_ui_settings.sampler_slots,capacity);
     else if (kind == SAMPLE_GLOBAL_KIND_RAM)
         count = project_control_list_samples(PERSIST_ASSET_SAMPLE_RAM,g_ui_settings.sampler_slots,capacity);
@@ -473,7 +473,7 @@ static void ui_page_settings_select_neighbor_before_delete(void)
 
 static void ui_page_settings_refresh_sampler_slots(void)
 {
-    ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_STREAM);
+    ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_CLASSIC);
 }
 
 static void ui_page_settings_refresh_ram_slots(void)
@@ -496,7 +496,6 @@ static void ui_page_settings_sd_busy_status(void)
 static uint8_t ui_page_settings_stream_backend_from_global(uint16_t global_slot,
                                                            uint16_t *out_backend_slot)
 {
-    uint16_t backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     if (out_backend_slot != 0)
     {
         *out_backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
@@ -507,18 +506,15 @@ static uint8_t ui_page_settings_stream_backend_from_global(uint16_t global_slot,
     if(project_control_resolve_sample_runtime(global_slot,&runtime_global,&runtime_kind)==0U||runtime_kind!=PERSIST_ASSET_SAMPLE_STREAM)return 0U;
     const sample_global_slot_t *const slot = sample_global_pool_get_slot(runtime_global);
     if ((slot == 0)
-        || (slot->kind != SAMPLE_GLOBAL_KIND_STREAM)
-        || (sample_global_pool_resolve_backend(runtime_global,
-                                               SAMPLE_GLOBAL_KIND_STREAM,
-                                               &backend_slot) == 0U)
-        || (backend_slot >= SAMPLE_POOL_SIZE))
+        || (slot->kind != SAMPLE_GLOBAL_KIND_CLASSIC)
+        || (runtime_global >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS))
     {
         return 0U;
     }
 
     if (out_backend_slot != 0)
     {
-        *out_backend_slot = backend_slot;
+        *out_backend_slot = runtime_global;
     }
     return 1U;
 }
@@ -618,14 +614,8 @@ static uint8_t ui_page_settings_wavetable_backend_from_global(uint16_t global_sl
 
 static int16_t ui_page_settings_stream_find_free_backend_slot(void)
 {
-    for (uint16_t slot = 0U; slot < SAMPLE_POOL_SIZE; ++slot)
-    {
-        if (sample_pool_get_state(slot) == SAMPLE_POOL_SLOT_EMPTY)
-        {
-            return (int16_t)slot;
-        }
-    }
-    return -1;
+    const uint16_t slot = sample_global_pool_find_free_slot();
+    return (slot == SAMPLE_GLOBAL_POOL_INVALID_INDEX) ? -1 : (int16_t)slot;
 }
 
 static int16_t ui_page_settings_ram_find_free_backend_slot(void)
@@ -1606,12 +1596,10 @@ static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path
         return;
     }
     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
-    if (sample_pool_load(slot, path) != 0U)
+    if (sample_global_pool_load_classic(slot, path) != 0U)
     {
-        uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-        if (sample_global_pool_find_by_backend(SAMPLE_GLOBAL_KIND_STREAM,
-                                               slot,
-                                               &global_slot) != 0U)
+        const uint16_t global_slot = slot;
+        if (sample_global_pool_get_classic_state(global_slot) == SAMPLE_CLASSIC_SLOT_LOADED)
         {
             uint16_t logical=0U;
             if(project_control_register_sample_runtime(PERSIST_ASSET_SAMPLE_STREAM,path,global_slot,&logical)!=0U)
@@ -1622,14 +1610,14 @@ static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path
                 return;
             }
         }
-        sample_pool_clear(slot);
+        sample_global_pool_clear_classic(slot);
         ui_page_settings_refresh_sampler_slots();
         ui_page_settings_status("BANK FAIL");
     }
     else
     {
-        if (((sample_pool_get_last_load_error() == SAMPLE_POOL_LOAD_WAV_UNSUPPORTED_FORMAT)
-             || (sample_pool_get_last_load_error() == SAMPLE_POOL_LOAD_WAV_48K_REQUIRED))
+        if (((sample_global_pool_get_last_classic_load_error() == SAMPLE_CLASSIC_LOAD_WAV_UNSUPPORTED_FORMAT)
+             || (sample_global_pool_get_last_classic_load_error() == SAMPLE_CLASSIC_LOAD_WAV_48K_REQUIRED))
             && (wav_convert_path_needs_48k(path, 0) != 0U))
         {
             ui_page_settings_sample_confirm_convert(slot, path);
@@ -1722,28 +1710,28 @@ static void ui_page_settings_sample_preview_right(void)
         return;
     }
 
-    const sample_pool_slot_state_t state = sample_pool_get_state(backend_slot);
-    if (state == SAMPLE_POOL_SLOT_EMPTY)
+    const sample_classic_slot_state_t state = sample_global_pool_get_classic_state(backend_slot);
+    if (state == SAMPLE_CLASSIC_SLOT_EMPTY)
     {
         ui_page_settings_status("SLOT EMPTY");
         return;
     }
 
-    const sample_desc_t *const desc = sample_pool_get(backend_slot);
-    if ((desc == 0) || (desc->path[0] == '\0'))
+    const sample_global_slot_t *const slot = sample_global_pool_get_slot(backend_slot);
+    if ((slot == 0) || (slot->path[0] == '\0'))
     {
         ui_page_settings_status("NO PATH");
         return;
     }
 
-    if ((sd_preview_is_active() != 0U) && (strcmp(sd_preview_get_path(), desc->path) == 0))
+    if ((sd_preview_is_active() != 0U) && (strcmp(sd_preview_get_path(), slot->path) == 0))
     {
         ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_USER);
         return;
     }
 
     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
-    if (sd_preview_begin(desc->path) != 0U)
+    if (sd_preview_begin(slot->path) != 0U)
     {
         g_ui_settings.preview_stop_origin = UI_SETTINGS_PREVIEW_STOP_ORIGIN_NONE;
         g_ui_settings.preview_was_active = sd_preview_is_active();
@@ -1800,7 +1788,7 @@ static void ui_page_settings_sample_confirm_clear(uint16_t slot)
 {
     uint16_t backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     if ((ui_page_settings_stream_backend_from_global(slot, &backend_slot) == 0U)
-        || (sample_pool_get_state(backend_slot) == SAMPLE_POOL_SLOT_EMPTY))
+        || (sample_global_pool_get_classic_state(backend_slot) == SAMPLE_CLASSIC_SLOT_EMPTY))
     {
         ui_page_settings_status("SLOT EMPTY");
         return;
@@ -1817,7 +1805,7 @@ static void ui_page_settings_sample_confirm_accept(void)
     if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_CONVERT)
     {
         const uint16_t slot = g_ui_settings.confirm_slot;
-        char path[SAMPLE_POOL_PATH_MAX];
+        char path[SAMPLE_CLASSIC_PATH_MAX];
         if (strlen(g_ui_settings.confirm_path) >= sizeof(path))
         {
             g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
@@ -1854,7 +1842,7 @@ static void ui_page_settings_sample_confirm_accept(void)
     if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_REPLACE)
     {
         const uint16_t slot = g_ui_settings.confirm_slot;
-        char path[SAMPLE_POOL_PATH_MAX];
+        char path[SAMPLE_CLASSIC_PATH_MAX];
         if (strlen(g_ui_settings.confirm_path) >= sizeof(path))
         {
             g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
@@ -1874,7 +1862,7 @@ static void ui_page_settings_sample_confirm_accept(void)
         const uint16_t deleted_logical = g_ui_settings.sample_slot_selected;
         ui_page_settings_select_neighbor_before_delete();
         (void)project_control_remove_sample(deleted_logical);
-        sample_pool_clear(g_ui_settings.confirm_slot);
+        sample_global_pool_clear_classic(g_ui_settings.confirm_slot);
         ui_page_settings_refresh_sampler_slots();
         g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
         ui_page_settings_status("CLEAR OK");
@@ -3330,24 +3318,24 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
             {
                 uint16_t backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
                 const uint16_t global_slot = g_ui_settings.sampler_slots[index];
-                const sample_pool_slot_state_t state =
+                const sample_classic_slot_state_t state =
                     (ui_page_settings_stream_backend_from_global(global_slot, &backend_slot) != 0U)
-                        ? sample_pool_get_state(backend_slot)
-                        : SAMPLE_POOL_SLOT_ERROR;
+                        ? sample_global_pool_get_classic_state(backend_slot)
+                        : SAMPLE_CLASSIC_SLOT_ERROR;
                 const char *state_label = "EMPTY";
-                if (state == SAMPLE_POOL_SLOT_LOADED)
+                if (state == SAMPLE_CLASSIC_SLOT_LOADED)
                 {
                     state_label = "LOADED";
                 }
-                else if (state == SAMPLE_POOL_SLOT_PREPARING)
+                else if (state == SAMPLE_CLASSIC_SLOT_PREPARING)
                 {
                     state_label = "PREP";
                 }
-                else if (state == SAMPLE_POOL_SLOT_ERROR)
+                else if (state == SAMPLE_CLASSIC_SLOT_ERROR)
                 {
                     state_label = "ERROR";
                 }
-                else if (state == SAMPLE_POOL_SLOT_MISSING)
+                else if (state == SAMPLE_CLASSIC_SLOT_MISSING)
                 {
                     state_label = "MISSING";
                 }
@@ -3357,7 +3345,7 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
         case UI_SETTINGS_VIEW_SAMPLER_SLOT:
             if (index == (uint8_t)UI_SETTINGS_SAMPLER_ACTION_LOAD_OR_REPLACE)
             {
-                return (sample_pool_get_state(g_ui_settings.selected_slot) == SAMPLE_POOL_SLOT_EMPTY) ? "LOAD FROM SD" : "REPLACE FROM SD";
+                return (sample_global_pool_get_classic_state(g_ui_settings.selected_slot) == SAMPLE_CLASSIC_SLOT_EMPTY) ? "LOAD FROM SD" : "REPLACE FROM SD";
             }
             if (index == (uint8_t)UI_SETTINGS_SAMPLER_ACTION_PREVIEW_OR_STOP)
             {
@@ -3790,7 +3778,7 @@ static void ui_page_settings_apply_action(void)
             {
                 ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
                 (void)project_control_remove_sample(g_ui_settings.sample_slot_selected);
-                sample_pool_clear(g_ui_settings.selected_slot);
+                sample_global_pool_clear_classic(g_ui_settings.selected_slot);
                 ui_page_settings_refresh_sampler_slots();
                 ui_page_settings_status("CLEAR OK");
             }
@@ -4168,7 +4156,7 @@ static void ui_page_settings_tick(void)
         if (convert_state == WAV_CONVERT_STATE_DONE)
         {
             const uint16_t slot = g_ui_settings.convert_slot;
-            char path[SAMPLE_POOL_PATH_MAX];
+            char path[SAMPLE_CLASSIC_PATH_MAX];
             (void)snprintf(path, sizeof(path), "%s", g_ui_settings.convert_path);
             g_ui_settings.convert_slot_valid = 0U;
             g_ui_settings.convert_path[0] = '\0';
@@ -4318,7 +4306,7 @@ static void ui_page_settings_fit_label(char *out, uint32_t out_size, const char 
 
 static void ui_page_settings_sample_slot_label(uint16_t global_slot, char *out, uint32_t out_size, uint8_t max_px)
 {
-    char sample_name[SAMPLE_POOL_PATH_MAX];
+    char sample_name[SAMPLE_CLASSIC_PATH_MAX];
     static const char k_loaded[] = "LOADED";
     static const char k_prep[] = "PREP";
     static const char k_error[] = "ERROR";
@@ -4347,17 +4335,17 @@ static void ui_page_settings_sample_slot_label(uint16_t global_slot, char *out, 
         return;
     }
 
-    const sample_pool_slot_state_t state = sample_pool_get_state(backend_slot);
-    const sample_desc_t *const desc = sample_pool_get(backend_slot);
-    const char *name = (desc != 0) ? strrchr(desc->path, '/') : 0;
-    name = (name != 0) ? (name + 1) : ((desc != 0) ? desc->path : "");
+    const sample_classic_slot_state_t state = sample_global_pool_get_classic_state(backend_slot);
+    const sample_global_slot_t *const slot = sample_global_pool_get_slot(global_slot);
+    const char *name = (slot != 0) ? strrchr(slot->path, '/') : 0;
+    name = (name != 0) ? (name + 1) : ((slot != 0) ? slot->path : "");
 
     ui_page_settings_make_sample_label(sample_name, sizeof(sample_name), name, 0U);
     if (sample_name[0] == '\0')
     {
-        const char *state_label = (state == SAMPLE_POOL_SLOT_LOADED) ? k_loaded
-                                 : (state == SAMPLE_POOL_SLOT_PREPARING) ? k_prep
-                                 : (state == SAMPLE_POOL_SLOT_ERROR) ? k_error
+        const char *state_label = (state == SAMPLE_CLASSIC_SLOT_LOADED) ? k_loaded
+                                 : (state == SAMPLE_CLASSIC_SLOT_PREPARING) ? k_prep
+                                 : (state == SAMPLE_CLASSIC_SLOT_ERROR) ? k_error
                                  : k_missing;
         ui_page_settings_fit_label(&out[4], (out_size > 4U) ? (out_size - 4U) : 0U, state_label, name_px);
         return;
@@ -4716,13 +4704,13 @@ static void ui_page_settings_draw_stream_name_label(void)
     if (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_SLOTS)
     {
         uint16_t backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-        const sample_desc_t *const desc =
+        const sample_global_slot_t *const slot =
             (ui_page_settings_stream_backend_from_global(g_ui_settings.sample_slot_selected,
                                                          &backend_slot) != 0U)
-                ? sample_pool_get(backend_slot)
+                ? sample_global_pool_get_slot(g_ui_settings.sample_slot_selected)
                 : 0;
-        const char *name = (desc != 0) ? strrchr(desc->path, '/') : 0;
-        name = (name != 0) ? (name + 1) : ((desc != 0) ? desc->path : "");
+        const char *name = (slot != 0) ? strrchr(slot->path, '/') : 0;
+        name = (name != 0) ? (name + 1) : ((slot != 0) ? slot->path : "");
         ui_page_settings_make_sample_label(slot_label, sizeof(slot_label), name, 0U);
         label = (slot_label[0] != '\0') ? slot_label : "EMPTY";
         tag = "SLOT";
@@ -5422,11 +5410,11 @@ static void ui_page_settings_render(void)
     else if (level->view == UI_SETTINGS_VIEW_SAMPLER_SLOT)
     {
         char slot_line[24];
-        const sample_pool_slot_state_t state = sample_pool_get_state(g_ui_settings.selected_slot);
-        const char *state_label = (state == SAMPLE_POOL_SLOT_LOADED) ? "LOADED"
-                                 : (state == SAMPLE_POOL_SLOT_PREPARING) ? "PREP"
-                                 : (state == SAMPLE_POOL_SLOT_ERROR) ? "ERROR"
-                                 : (state == SAMPLE_POOL_SLOT_MISSING) ? "MISSING"
+        const sample_classic_slot_state_t state = sample_global_pool_get_classic_state(g_ui_settings.selected_slot);
+        const char *state_label = (state == SAMPLE_CLASSIC_SLOT_LOADED) ? "LOADED"
+                                 : (state == SAMPLE_CLASSIC_SLOT_PREPARING) ? "PREP"
+                                 : (state == SAMPLE_CLASSIC_SLOT_ERROR) ? "ERROR"
+                                 : (state == SAMPLE_CLASSIC_SLOT_MISSING) ? "MISSING"
                                  : "EMPTY";
         (void)snprintf(slot_line, sizeof(slot_line), "SLOT %02u %s",
                        (unsigned)g_ui_settings.selected_slot,

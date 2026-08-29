@@ -48,10 +48,16 @@ static uint8_t live_parameter_audio_make_command(
     uint8_t track, uint8_t slot, uint16_t flags, int32_t raw_value,
     control_audio_command_t *out_command)
 {
-    if ((out_command == NULL) || (parameter_id >= PARAM_COUNT)) return 0U;
+    const uint8_t tone_slot_command = (uint8_t)(
+        (parameter_id >= CONTROL_AUDIO_PARAM_TONE_SLOT_FIRST)
+        && (parameter_id <= CONTROL_AUDIO_PARAM_TONE_SLOT_LAST));
+    if ((out_command == NULL)
+            || ((parameter_id >= PARAM_COUNT) && (tone_slot_command == 0U)))
+        return 0U;
     float value = ((flags & LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS) != 0U)
         ? live_parameter_event_decode_float(raw_value) : (float)raw_value;
-    if ((scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK)
+    if ((tone_slot_command == 0U)
+            && (scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK)
             && (live_parameter_audio_project_sampler_value(
                 parameter_id, track, value, &value) == 0U))
         return 0U;
@@ -70,6 +76,31 @@ static uint8_t live_parameter_audio_make_command(
             CONTROL_AUDIO_COMMAND_PARAM, command_scope & 0x1FU)
     };
     return 1U;
+}
+
+bool live_parameter_audio_publication_submit_tone_state(
+    uint8_t track, const float values[SEQ_PARAM_TONE_SLOT_COUNT])
+{
+    if ((track >= SEQ_LANE_CAPACITY) || (values == NULL))
+        return live_parameter_audio_publish_failed();
+    live_parameter_audio_bulk_t bulk = {
+        .capture_tick = live_clock_capture_tick(),
+        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
+        .count = SEQ_PARAM_TONE_SLOT_COUNT
+    };
+    for (uint8_t slot = 0U; slot < SEQ_PARAM_TONE_SLOT_COUNT; ++slot)
+    {
+        bulk.item[slot] = (live_parameter_audio_bulk_item_t){
+            .parameter_id = (uint16_t)(CONTROL_AUDIO_PARAM_TONE_SLOT_FIRST + slot),
+            .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
+            .track = track,
+            .slot = slot,
+            .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
+                                | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+            .value = live_parameter_event_encode_float(values[slot])
+        };
+    }
+    return live_parameter_audio_publication_submit_bulk(&bulk);
 }
 
 void live_parameter_audio_publication_init(void)
@@ -178,6 +209,6 @@ bool live_parameter_audio_publication_submit_dated(
         return live_parameter_audio_publish_failed();
     return control_audio_publish_param(track, parameter_id,
         (uint32_t)live_parameter_event_encode_float(final_value),
-        LIVE_PARAMETER_EVENT_SCOPE_TRACK, effective_sample_time) != 0U
+        LIVE_PARAMETER_AUDIO_SCOPE_RUNTIME_TEMP, effective_sample_time) != 0U
         ? true : live_parameter_audio_publish_failed();
 }

@@ -89,10 +89,6 @@ static void synth_polyphony_reset_slot(uint8_t slot)
     brick6_stack_runtime_all_notes_off(slot);
     brick6_wave_runtime_all_notes_off(slot);
     brick6_fm_runtime_all_notes_off(slot);
-    brick6_braids_runtime_reset_instance(slot);
-    brick6_stack_runtime_reset_instance(slot);
-    brick6_wave_runtime_reset_instance(slot);
-    brick6_fm_runtime_reset_instance(slot);
     mixer_synth_voice_slot_reset(slot);
     mod_lfo_v1_poly_voice_reset(slot);
 }
@@ -255,10 +251,6 @@ uint8_t synth_polyphony_replace_renderer(uint8_t track, uint8_t engine)
         brick6_stack_runtime_all_notes_off(slot);
         brick6_wave_runtime_all_notes_off(slot);
         brick6_fm_runtime_all_notes_off(slot);
-        brick6_braids_runtime_reset_instance(slot);
-        brick6_stack_runtime_reset_instance(slot);
-        brick6_wave_runtime_reset_instance(slot);
-        brick6_fm_runtime_reset_instance(slot);
     }
     poly->engine = engine;
     __DMB();
@@ -660,6 +652,20 @@ uint8_t synth_polyphony_voice_for_output(uint8_t track,
             return voice;
     }
     return SYNTH_POLYPHONY_NO_VOICE;
+}
+
+uint8_t synth_polyphony_bind_held_output(uint8_t track,
+                                         uint8_t note,
+                                         synth_poly_source_t source,
+                                         uint32_t output_id)
+{
+    if ((synth_poly_valid_track(track) == 0U) || (output_id == 0U))
+        return 0U;
+    if (synth_polyphony_voice_for_output(track, source, output_id)
+            != SYNTH_POLYPHONY_NO_VOICE)
+        return 1U;
+    return synth_polyphony_note_on_output_from(track, note, source, output_id)
+        != SYNTH_POLYPHONY_NO_VOICE;
 }
 
 void synth_polyphony_all_notes_off(uint8_t track)

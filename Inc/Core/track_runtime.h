@@ -104,7 +104,7 @@ typedef enum
 typedef enum
 {
     TRACK_RUNTIME_PARAM_ALLOWED = 0,
-    TRACK_RUNTIME_PARAM_BLOCKED_TRANSITIONAL,
+    TRACK_RUNTIME_PARAM_UNAVAILABLE,
     TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED
 } track_runtime_param_status_t;
 
@@ -166,8 +166,6 @@ typedef struct
 } track_runtime_resolved_track_t;
 
 void track_runtime_init(void);
-void track_runtime_invalidate_all(void);
-void track_runtime_invalidate_track(uint8_t track);
 void track_runtime_rebuild_track(uint8_t track);
 void track_runtime_rebuild_all(void);
 /*

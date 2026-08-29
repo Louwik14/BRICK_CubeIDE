@@ -22,10 +22,6 @@ static uint8_t track_mute_resolve_mix_target(uint8_t track, uint8_t *out_mix_tra
     return 1U;
 }
 
-void track_mute_init(void)
-{
-}
-
 track_mute_kind_t track_mute_get_kind(uint8_t track)
 {
     track_runtime_descriptor_t descriptor;
@@ -150,33 +146,30 @@ uint8_t track_mute_set(uint8_t track, uint8_t muted)
                     || kind == TRACK_MUTE_KIND_MIDI
                     || kind == TRACK_MUTE_KIND_EXTERNAL))
             track_mute_transition_lane(affected[i], effective_after);
-        (void)param_registry_project_track_mute(affected[i], effective_after);
+        (void)param_registry_project_track_effective_mute(
+            affected[i], effective_after);
     }
-    return 1U;
-}
-
-uint8_t track_mute_install_restored(uint8_t track,uint8_t muted)
-{
-    if (track >= SEQ_LANE_CAPACITY) return 0U;
-    uint8_t affected[BRICK_ENTITY_GROUP_CHILD_COUNT + 1U];
-    uint8_t affected_count=1U;affected[0]=track;
-    entity_topology_descriptor_t topology;
-    if ((entity_topology_get(track,&topology) != 0U)
-            && (topology.role == ENTITY_ROLE_GROUP_MASTER))
-        for (uint8_t member=0U;member<BRICK_ENTITY_GROUP_CHILD_COUNT;++member)
-        {
-            brick_entity_id_t child=BRICK_ENTITY_INVALID_ID;
-            if (entity_topology_group_child(track,member,&child) != 0U)
-                affected[affected_count++]=child;
-        }
-    param_registry_control_value_set(track, PARAM_MIX_MUTE,
-                                     (muted != 0U) ? 1.0f : 0.0f);
-    for (uint8_t i=0U;i<affected_count;++i)
-        track_mute_transition_lane(affected[i],track_mute_is_effectively_muted(affected[i]));
     return 1U;
 }
 
 uint8_t track_mute_should_suppress_note_on(uint8_t track)
 {
     return track_mute_is_effectively_muted(track);
+}
+
+void track_mute_reproject_after_topology_change(
+    const uint8_t effective_before[SEQ_LANE_CAPACITY])
+{
+    if (effective_before == NULL)
+        return;
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
+    {
+        const uint8_t effective_after =
+            track_mute_is_effectively_muted(track);
+        if (effective_before[track] == effective_after)
+            continue;
+        track_mute_transition_lane(track, effective_after);
+        (void)param_registry_project_track_effective_mute(
+            track, effective_after);
+    }
 }

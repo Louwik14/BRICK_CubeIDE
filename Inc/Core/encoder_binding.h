@@ -8,7 +8,7 @@
 
 typedef enum
 {
-    ENCODER_BINDING_ROUTE_LEGACY = 0U,
+    ENCODER_BINDING_ROUTE_UI = 0U,
     ENCODER_BINDING_ROUTE_AUDIO = 1U
 } encoder_binding_route_t;
 

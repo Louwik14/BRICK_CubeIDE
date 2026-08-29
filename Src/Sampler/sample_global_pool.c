@@ -2,17 +2,17 @@
 
 #include <string.h>
 
+#include "Sampler/sample_cache.h"
 #include "Storage/memory_layout.h"
 
 STORAGE_STATE_SDRAM static sample_global_slot_t
     g_sample_global_pool[SAMPLE_GLOBAL_POOL_MAX_SLOTS];
 
-_Static_assert(SAMPLE_POOL_SIZE >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
-               "stream backend must cover active global sample slots");
+static sample_classic_load_error_t g_sample_classic_last_error;
 
 static uint8_t sample_global_kind_valid(sample_global_kind_t kind)
 {
-    return ((kind == SAMPLE_GLOBAL_KIND_STREAM)
+    return ((kind == SAMPLE_GLOBAL_KIND_CLASSIC)
             || (kind == SAMPLE_GLOBAL_KIND_MULTI)
             || (kind == SAMPLE_GLOBAL_KIND_RAM)
             || (kind == SAMPLE_GLOBAL_KIND_WAVETABLE)) ? 1U : 0U;
@@ -57,7 +57,9 @@ static uint32_t sample_global_used_bytes_without(sample_global_kind_t kind,
         {
             continue;
         }
-        if ((slot->kind == kind) && (slot->backend_index == backend_index))
+        if ((slot->kind == kind)
+            && (((kind == SAMPLE_GLOBAL_KIND_CLASSIC) && (i == backend_index))
+                || (slot->backend_index == backend_index)))
         {
             continue;
         }
@@ -87,7 +89,9 @@ static uint16_t sample_global_used_entries_without(sample_global_kind_t kind,
         {
             continue;
         }
-        if ((slot->kind == kind) && (slot->backend_index == backend_index))
+        if ((slot->kind == kind)
+            && (((kind == SAMPLE_GLOBAL_KIND_CLASSIC) && (i == backend_index))
+                || (slot->backend_index == backend_index)))
         {
             continue;
         }
@@ -112,6 +116,7 @@ void sample_global_pool_reset(void)
         g_sample_global_pool[i].backend_index = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
         g_sample_global_pool[i].entry_count = 0U;
     }
+    g_sample_classic_last_error = SAMPLE_CLASSIC_LOAD_OK;
 }
 
 uint16_t sample_global_pool_find_free_slot(void)
@@ -168,6 +173,16 @@ uint8_t sample_global_pool_find_by_backend(sample_global_kind_t kind,
     {
         return 0U;
     }
+    if (kind == SAMPLE_GLOBAL_KIND_CLASSIC)
+    {
+        if ((backend_index < SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+            && (g_sample_global_pool[backend_index].kind == SAMPLE_GLOBAL_KIND_CLASSIC))
+        {
+            if (out_global_index != 0) *out_global_index = backend_index;
+            return 1U;
+        }
+        return 0U;
+    }
 
     for (uint16_t i = 0U; i < SAMPLE_GLOBAL_POOL_MAX_SLOTS; ++i)
     {
@@ -199,8 +214,16 @@ uint8_t sample_global_pool_resolve_backend(uint16_t global_index,
     }
 
     const sample_global_slot_t *const slot = &g_sample_global_pool[global_index];
-    if ((slot->kind != expected_kind)
-        || (slot->backend_index == SAMPLE_GLOBAL_POOL_INVALID_INDEX))
+    if (slot->kind != expected_kind)
+    {
+        return 0U;
+    }
+    if (expected_kind == SAMPLE_GLOBAL_KIND_CLASSIC)
+    {
+        if (out_backend_index != 0) *out_backend_index = global_index;
+        return 1U;
+    }
+    if (slot->backend_index == SAMPLE_GLOBAL_POOL_INVALID_INDEX)
     {
         return 0U;
     }
@@ -326,32 +349,121 @@ static uint8_t sample_global_pool_register_at(sample_global_kind_t kind,
     return 1U;
 }
 
-uint8_t sample_global_pool_register_stream(uint16_t stream_slot,
-                                           const char *path,
-                                           uint32_t cost_bytes,
-                                           uint16_t *out_global_index)
+uint8_t sample_global_pool_register_classic_at(uint16_t global_index,
+                                               const char *path,
+                                               uint32_t cost_bytes)
 {
-    return sample_global_pool_register(SAMPLE_GLOBAL_KIND_STREAM,
-                                       SAMPLE_GLOBAL_STATE_READY,
-                                       stream_slot,
-                                       path,
-                                       cost_bytes,
-                                       1U,
-                                       out_global_index);
+    if ((global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+        || ((g_sample_global_pool[global_index].kind != SAMPLE_GLOBAL_KIND_EMPTY)
+            && (g_sample_global_pool[global_index].kind != SAMPLE_GLOBAL_KIND_CLASSIC))
+        || (sample_global_pool_validate_entries(SAMPLE_GLOBAL_KIND_CLASSIC,
+                                                global_index, 1U) == 0U)
+        || (sample_global_pool_validate_budget(SAMPLE_GLOBAL_KIND_CLASSIC,
+                                               global_index, cost_bytes) == 0U))
+        return 0U;
+    sample_global_slot_t *const slot = &g_sample_global_pool[global_index];
+    memset(slot, 0, sizeof(*slot));
+    slot->kind = SAMPLE_GLOBAL_KIND_CLASSIC;
+    slot->state = SAMPLE_GLOBAL_STATE_READY;
+    slot->backend_index = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    slot->entry_count = 1U;
+    slot->cost_bytes = cost_bytes;
+    if (sample_global_copy_path(slot->path, sizeof(slot->path), path) == 0U)
+    {
+        sample_global_pool_clear_slot(global_index);
+        return 0U;
+    }
+    return 1U;
 }
 
-uint8_t sample_global_pool_register_stream_at(uint16_t global_index,
-                                              uint16_t stream_slot,
-                                              const char *path,
-                                              uint32_t cost_bytes)
+static sample_classic_load_error_t sample_global_classic_error_from_cache(uint16_t id)
 {
-    return sample_global_pool_register_at(SAMPLE_GLOBAL_KIND_STREAM,
-                                          SAMPLE_GLOBAL_STATE_READY,
-                                          global_index,
-                                           stream_slot,
-                                           path,
-                                           cost_bytes,
-                                           1U);
+    const uint8_t error = sample_cache_get_last_error(id);
+    const FRESULT fr = (FRESULT)sample_cache_get_last_fresult(id);
+    if (fr == FR_TIMEOUT) return SAMPLE_CLASSIC_LOAD_SD_GATE_REFUSED;
+    if (fr == FR_DISK_ERR) return SAMPLE_CLASSIC_LOAD_SD_MOUNT_FAIL;
+    if (fr == FR_NO_FILE) return SAMPLE_CLASSIC_LOAD_SD_FILE_NOT_FOUND;
+    if (fr == FR_INVALID_NAME) return SAMPLE_CLASSIC_LOAD_INVALID_PATH;
+    if (fr == FR_NOT_ENOUGH_CORE) return SAMPLE_CLASSIC_LOAD_SD_NOT_ENOUGH_CORE;
+    switch (error)
+    {
+        case 4U: return SAMPLE_CLASSIC_LOAD_SD_OPEN_FAIL;
+        case 5U: return SAMPLE_CLASSIC_LOAD_WAV_PARSE_FAIL;
+        case 6U: return SAMPLE_CLASSIC_LOAD_WAV_UNSUPPORTED_FORMAT;
+        case 7U: return SAMPLE_CLASSIC_LOAD_WAV_UNSUPPORTED_FORMAT;
+        case 8U: return SAMPLE_CLASSIC_LOAD_MEMORY_LIMIT;
+        case 9U: return SAMPLE_CLASSIC_LOAD_SD_SEEK_FAIL;
+        case 15U: return SAMPLE_CLASSIC_LOAD_WAV_48K_REQUIRED;
+        case 13U:
+        case 14U: return SAMPLE_CLASSIC_LOAD_SD_SHORT_READ;
+        default: return SAMPLE_CLASSIC_LOAD_SD_READ_FAIL;
+    }
+}
+
+uint8_t sample_global_pool_load_classic(uint16_t global_index, const char *path)
+{
+    if (global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+    {
+        g_sample_classic_last_error = SAMPLE_CLASSIC_LOAD_INVALID_ID;
+        return 0U;
+    }
+    if ((g_sample_global_pool[global_index].kind != SAMPLE_GLOBAL_KIND_EMPTY)
+        && (g_sample_global_pool[global_index].kind != SAMPLE_GLOBAL_KIND_CLASSIC))
+    {
+        g_sample_classic_last_error = SAMPLE_CLASSIC_LOAD_NO_FREE_SLOT;
+        return 0U;
+    }
+    if ((path == 0) || (path[0] == '\0'))
+    {
+        g_sample_classic_last_error = SAMPLE_CLASSIC_LOAD_INVALID_PATH;
+        return 0U;
+    }
+    if (strlen(path) >= SAMPLE_GLOBAL_POOL_PATH_MAX)
+    {
+        g_sample_classic_last_error = SAMPLE_CLASSIC_LOAD_PATH_TOO_LONG;
+        return 0U;
+    }
+    if (sample_cache_prepare(global_index, path) == 0U)
+    {
+        g_sample_classic_last_error = sample_global_classic_error_from_cache(global_index);
+        return 0U;
+    }
+    g_sample_classic_last_error = SAMPLE_CLASSIC_LOAD_OK;
+    return 1U;
+}
+
+void sample_global_pool_clear_classic(uint16_t global_index)
+{
+    if (global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS) return;
+    if (g_sample_global_pool[global_index].kind == SAMPLE_GLOBAL_KIND_CLASSIC)
+    {
+        sample_global_pool_clear_slot(global_index);
+    }
+}
+
+sample_classic_slot_state_t sample_global_pool_get_classic_state(uint16_t global_index)
+{
+    if (global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+        return SAMPLE_CLASSIC_SLOT_EMPTY;
+    const sample_global_slot_t *const slot = &g_sample_global_pool[global_index];
+    if (slot->kind != SAMPLE_GLOBAL_KIND_CLASSIC)
+        return SAMPLE_CLASSIC_SLOT_EMPTY;
+    switch (sample_cache_get_slot_readiness(global_index))
+    {
+        case SAMPLE_CACHE_SLOT_PLAYABLE: return SAMPLE_CLASSIC_SLOT_LOADED;
+        case SAMPLE_CACHE_SLOT_PREPARING:
+        case SAMPLE_CACHE_SLOT_START_PENDING:
+        case SAMPLE_CACHE_SLOT_NEEDS_REPREPARE: return SAMPLE_CLASSIC_SLOT_PREPARING;
+        case SAMPLE_CACHE_SLOT_ERROR: return SAMPLE_CLASSIC_SLOT_ERROR;
+        default: return (slot->path[0] != '\0')
+                            ? SAMPLE_CLASSIC_SLOT_MISSING
+                            : SAMPLE_CLASSIC_SLOT_EMPTY;
+    }
+}
+
+sample_classic_load_error_t sample_global_pool_get_last_classic_load_error(void)
+{
+    return g_sample_classic_last_error;
 }
 
 uint8_t sample_global_pool_register_multi(uint16_t instrument_id,
@@ -526,6 +638,10 @@ void sample_global_pool_clear_slot(uint16_t global_index)
         return;
     }
 
+    if (g_sample_global_pool[global_index].kind == SAMPLE_GLOBAL_KIND_CLASSIC)
+    {
+        sample_cache_clear(global_index);
+    }
     memset(&g_sample_global_pool[global_index], 0, sizeof(g_sample_global_pool[global_index]));
     g_sample_global_pool[global_index].kind = SAMPLE_GLOBAL_KIND_EMPTY;
     g_sample_global_pool[global_index].state = SAMPLE_GLOBAL_STATE_EMPTY;
@@ -535,6 +651,11 @@ void sample_global_pool_clear_slot(uint16_t global_index)
 
 void sample_global_pool_clear_backend(sample_global_kind_t kind, uint16_t backend_index)
 {
+    if (kind == SAMPLE_GLOBAL_KIND_CLASSIC)
+    {
+        sample_global_pool_clear_classic(backend_index);
+        return;
+    }
     uint16_t global_index = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     if (sample_global_pool_find_by_backend(kind, backend_index, &global_index) != 0U)
     {

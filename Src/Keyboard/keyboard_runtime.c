@@ -20,6 +20,7 @@
 #include "Keyboard/keyboard_input.h"
 #include "Seq/seq_edit.h"
 #include "NoteFx/note_fx_pipeline.h"
+#include "Core/control_music_output.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_play_scheduler.h"
@@ -289,11 +290,10 @@ void keyboard_runtime_all_notes_off(void)
     keyboard_runtime_reset_midi_state();
     ui_keyboard_app_all_notes_off();
     seq_edit_note_capture_reset();
-    if (seq_play_scheduler_transition_all(
-            SEQ_PLAY_TRANSITION_PANIC_CLOSE_ALL) != 0U)
-    {
-        keyboard_engine_clear_source_occurrences_silent();
-    }
+    (void)control_music_output_panic_all(0U);
+    note_fx_pipeline_panic();
+    seq_play_scheduler_clear();
+    keyboard_engine_clear_source_occurrences_silent();
 }
 
 void keyboard_runtime_sync_track_focus_context(void)

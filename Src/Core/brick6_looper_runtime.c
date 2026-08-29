@@ -125,6 +125,7 @@ typedef struct
     uint8_t track_id;
     uint8_t len_mode;
     uint8_t play_auto;
+    uint8_t overdub;
     uint8_t reserved;
     uint32_t expected_frames;
     uint32_t expected_steps_q16;
@@ -974,6 +975,7 @@ static void looper_record_clear_boundary_state(void)
     g_looper_record_boundary.track_id = 0xFFU;
     g_looper_record_boundary.len_mode = 0U;
     g_looper_record_boundary.play_auto = 0U;
+    g_looper_record_boundary.overdub = 0U;
     g_looper_record_boundary.expected_frames = 0U;
     g_looper_record_boundary.expected_steps_q16 = 0U;
     g_looper_record_boundary.source_samples_per_step_q16 = 0U;
@@ -1321,6 +1323,7 @@ void brick6_looper_runtime_arm_live_record_start(uint8_t track_id,
                                                  uint8_t len_mode,
                                                  uint32_t expected_frames,
                                                  uint8_t play_auto,
+                                                 uint8_t overdub,
                                                  uint64_t request_sample)
 {
     if(looper_track_valid(track_id) == 0U)
@@ -1332,6 +1335,7 @@ void brick6_looper_runtime_arm_live_record_start(uint8_t track_id,
     g_looper_record_boundary.track_id = track_id;
     g_looper_record_boundary.len_mode = len_mode;
     g_looper_record_boundary.play_auto = (play_auto != 0U) ? 1U : 0U;
+    g_looper_record_boundary.overdub = (overdub != 0U) ? 1U : 0U;
     g_looper_record_boundary.expected_frames = expected_frames;
     const uint32_t expected_steps = looper_len_mode_to_steps(len_mode);
     g_looper_record_boundary.expected_steps_q16 =
@@ -1368,6 +1372,13 @@ uint8_t brick6_looper_runtime_get_record_capture_track(uint8_t *out_track)
 
     *out_track = g_looper_record_boundary.track_id;
     return 1U;
+}
+
+uint8_t brick6_looper_runtime_is_overdub_recording(uint8_t track_id)
+{
+    return (uint8_t)((g_looper_record_boundary.recording != 0U)
+        && (g_looper_record_boundary.overdub != 0U)
+        && (g_looper_record_boundary.track_id == track_id));
 }
 
 void brick6_looper_runtime_preroll_capture_from_irq(uint8_t track_id,

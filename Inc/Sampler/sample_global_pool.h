@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 
+#include "Sampler/sample_classic_config.h"
 #include "Sampler/sample_page_cache_config.h"
 
 #ifdef __cplusplus
@@ -19,7 +20,7 @@ extern "C" {
 #endif
 #define SAMPLE_GLOBAL_POOL_BUDGET_BYTES \
     (SAMPLE_PAGE_SLOT_POOL_COUNT * SAMPLE_PAGE_BYTES)
-#define SAMPLE_GLOBAL_POOL_PATH_MAX       (160U)
+#define SAMPLE_GLOBAL_POOL_PATH_MAX       SAMPLE_CLASSIC_PATH_MAX
 #define SAMPLE_GLOBAL_POOL_INVALID_INDEX  (0xFFFFU)
 
 _Static_assert(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS <= SAMPLE_GLOBAL_POOL_FINAL_SLOTS,
@@ -28,7 +29,7 @@ _Static_assert(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS <= SAMPLE_GLOBAL_POOL_FINAL_SLOTS
 typedef enum
 {
     SAMPLE_GLOBAL_KIND_EMPTY = 0,
-    SAMPLE_GLOBAL_KIND_STREAM,
+    SAMPLE_GLOBAL_KIND_CLASSIC,
     SAMPLE_GLOBAL_KIND_MULTI,
     SAMPLE_GLOBAL_KIND_RAM,
     SAMPLE_GLOBAL_KIND_WAVETABLE
@@ -43,6 +44,40 @@ typedef enum
     SAMPLE_GLOBAL_STATE_MISSING,
     SAMPLE_GLOBAL_STATE_RESERVED
 } sample_global_state_t;
+
+typedef enum
+{
+    SAMPLE_CLASSIC_SLOT_EMPTY = 0,
+    SAMPLE_CLASSIC_SLOT_LOADED,
+    SAMPLE_CLASSIC_SLOT_PREPARING,
+    SAMPLE_CLASSIC_SLOT_ERROR,
+    SAMPLE_CLASSIC_SLOT_MISSING
+} sample_classic_slot_state_t;
+
+typedef enum
+{
+    SAMPLE_CLASSIC_LOAD_OK = 0,
+    SAMPLE_CLASSIC_LOAD_INVALID_ID,
+    SAMPLE_CLASSIC_LOAD_INVALID_PATH,
+    SAMPLE_CLASSIC_LOAD_PATH_TOO_LONG,
+    SAMPLE_CLASSIC_LOAD_NO_FREE_SLOT,
+    SAMPLE_CLASSIC_LOAD_SD_GATE_REFUSED,
+    SAMPLE_CLASSIC_LOAD_SD_MOUNT_FAIL,
+    SAMPLE_CLASSIC_LOAD_SD_FILE_NOT_FOUND,
+    SAMPLE_CLASSIC_LOAD_SD_OPEN_FAIL,
+    SAMPLE_CLASSIC_LOAD_WAV_PARSE_FAIL,
+    SAMPLE_CLASSIC_LOAD_WAV_UNSUPPORTED_FORMAT,
+    SAMPLE_CLASSIC_LOAD_WAV_48K_REQUIRED,
+    SAMPLE_CLASSIC_LOAD_MEMORY_LIMIT,
+    SAMPLE_CLASSIC_LOAD_SD_READ_FAIL,
+    SAMPLE_CLASSIC_LOAD_SD_SEEK_FAIL,
+    SAMPLE_CLASSIC_LOAD_SD_SHORT_READ,
+    SAMPLE_CLASSIC_LOAD_SD_READ_INT_ERR,
+    SAMPLE_CLASSIC_LOAD_SD_NOT_READY,
+    SAMPLE_CLASSIC_LOAD_SD_INVALID_OBJECT,
+    SAMPLE_CLASSIC_LOAD_SD_TIMEOUT,
+    SAMPLE_CLASSIC_LOAD_SD_NOT_ENOUGH_CORE
+} sample_classic_load_error_t;
 
 typedef struct
 {
@@ -71,14 +106,13 @@ uint8_t sample_global_pool_resolve_backend(uint16_t global_index,
                                            sample_global_kind_t expected_kind,
                                            uint16_t *out_backend_index);
 
-uint8_t sample_global_pool_register_stream(uint16_t stream_slot,
-                                           const char *path,
-                                           uint32_t cost_bytes,
-                                           uint16_t *out_global_index);
-uint8_t sample_global_pool_register_stream_at(uint16_t global_index,
-                                              uint16_t stream_slot,
-                                              const char *path,
-                                              uint32_t cost_bytes);
+uint8_t sample_global_pool_register_classic_at(uint16_t global_index,
+                                               const char *path,
+                                               uint32_t cost_bytes);
+uint8_t sample_global_pool_load_classic(uint16_t global_index, const char *path);
+void sample_global_pool_clear_classic(uint16_t global_index);
+sample_classic_slot_state_t sample_global_pool_get_classic_state(uint16_t global_index);
+sample_classic_load_error_t sample_global_pool_get_last_classic_load_error(void);
 uint8_t sample_global_pool_register_multi(uint16_t instrument_id,
                                           const char *path,
                                           uint32_t cost_bytes,

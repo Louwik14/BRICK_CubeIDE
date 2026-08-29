@@ -36,8 +36,7 @@
 #include "brick6_master_control.h"
 #include "brick6_sampler_runtime.h"
 #include "Core/brick6_stream_service_task.h"
-#include "Core/track_mute.h"
-#include "Core/track_runtime.h"
+#include "Core/track_state.h"
 #include "Core/project_control.h"
 #include "Core/project_load_quiesce.h"
 #include "brick6_sampler_bootstrap.h"
@@ -143,10 +142,9 @@ void brick6_app_init(void)
 
     engine_tasklet_init(48000);
     param_store_init();
+    track_state_init();
     seq_runtime_init();
-    track_mute_init();
     ui_core_init();
-    track_runtime_invalidate_all();
     param_set(PARAM_MASTER_GAIN, audio_boot.master_gain);
     param_set(PARAM_POST_GAIN, audio_boot.postgain);
     param_set(PARAM_OUTPUT_COMP, audio_boot.output_compensation);

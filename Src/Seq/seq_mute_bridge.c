@@ -5,15 +5,7 @@
 void seq_runtime_set_tracks_muted(const seq_track_id_t *tracks, uint8_t track_count, uint8_t muted)
 {
     if (muted != 0U)
-    {
-        if (seq_play_scheduler_transition_tracks(
-                tracks, track_count, SEQ_PLAY_TRANSITION_MUTE_TRIGS) == 0U)
-            return;
-    }
+        seq_play_scheduler_suspend_tracks(tracks, track_count);
     else
-    {
-        if (seq_play_scheduler_transition_tracks(
-                tracks, track_count, SEQ_PLAY_TRANSITION_RESUME_TRIGS) == 0U)
-            return;
-    }
+        seq_play_scheduler_resume_tracks(tracks, track_count);
 }

@@ -236,7 +236,7 @@ void ui_param_publish_encoder_binding(uint8_t active_track, uint8_t shift_down)
         uint8_t scope = LIVE_PARAMETER_EVENT_SCOPE_GLOBAL;
         uint8_t track = 0U;
         const uint8_t slot = 0xFFU;
-        encoder_binding_route_t route = ENCODER_BINDING_ROUTE_LEGACY;
+        encoder_binding_route_t route = ENCODER_BINDING_ROUTE_UI;
         uint8_t valid = 0U;
         const uint8_t track_modifier_down = (ui_is_track_modifier_held() != 0U) ? 1U : 0U;
 
@@ -673,11 +673,6 @@ void ui_param_invalidate_bank(void)
 void ui_param_sync_active_bank_values(void)
 {
     const uint8_t active_track = ui_get_active_lane();
-    if ((param_registry_track_structure_transition_is_global_active() != 0U)
-            || (param_registry_track_structure_transition_is_track_active(active_track) != 0U))
-    {
-        return;
-    }
 
     if (g_ui_param.valid == 0U)
     {
@@ -720,11 +715,6 @@ void ui_param_sync_active_bank_values(void)
 void ui_param_sync_active_track_mirror_from_runtime(void)
 {
     const uint8_t active_track = ui_get_active_lane();
-    if ((param_registry_track_structure_transition_is_global_active() != 0U)
-            || (param_registry_track_structure_transition_is_track_active(active_track) != 0U))
-    {
-        return;
-    }
 
     const float seq_length = (float)seq_model_get_track_length(active_track);
     uint8_t track_div = 1U;

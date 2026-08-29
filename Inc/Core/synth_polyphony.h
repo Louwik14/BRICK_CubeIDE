@@ -51,6 +51,10 @@ uint8_t synth_polyphony_replace_renderer(uint8_t track, uint8_t engine);
 uint8_t synth_polyphony_voice_for_output(uint8_t track,
                                          synth_poly_source_t source,
                                          uint32_t output_id);
+uint8_t synth_polyphony_bind_held_output(uint8_t track,
+                                         uint8_t note,
+                                         synth_poly_source_t source,
+                                         uint32_t output_id);
 uint8_t synth_polyphony_get_track_active(uint8_t track);
 uint8_t synth_polyphony_get_slot(uint8_t track, uint8_t voice);
 uint8_t synth_polyphony_get_available_for_track(uint8_t track);

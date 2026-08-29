@@ -7,7 +7,6 @@
 #define CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST 233U
 #define CONTROL_MUSIC_EXTERNAL_STAGING_CAPACITY 128U
 
-uint8_t control_music_publication_request_panic(uint64_t due_sample);
 uint16_t control_music_publication_free(void);
 uint8_t control_music_publication_publish_merged_window(
     const control_music_action_t *internal_actions,

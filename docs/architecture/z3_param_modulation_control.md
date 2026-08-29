@@ -27,9 +27,9 @@ Le selector Sampler est resolu par CONTROL en slot runtime Multi/Stream/RAM avan
 
 La resolution commune est `clamp(base_courante + somme(source * profondeur_normalisee * plage), min, max)`. Retirer le dernier slot restaure `base_courante`.
 
-Le restore complet transporte 40 PARAM par owner, donc 320 pour les huit
-owners maximaux. Le writer FIFO reserve et remplit le lot avant de publier le
-head: les 320 commandes ont le meme sample et deviennent visibles ensemble.
+Le restore compare l'autorite CONTROL et ne transporte que les champs Matrix et
+operateurs effectivement modifies. Les changements reels d'un owner peuvent
+rester atomiques dans un lot; un restore deja identique ne publie rien.
 La suppression du pool de 2048 snapshots (156 octets), de ses 2048 IDs, des
 32 projections, des compteurs d'allocation et des generations CONTROL retire
 332870 octets. La disparition des generations dans la configuration runtime
@@ -46,11 +46,20 @@ Les detents encodeur valides capturent TIM5 et leur cible CONTROL. CONTROL produ
 
 AUDIO applique la cible avant le sample concerne. Le smoothing appartient au backend reel: mixer, voix ou effet. Le dispatcher date ne fabrique aucun lissage generique.
 
-AUDIO conserve aussi une image d'execution par entite, alimentee uniquement par
-les commandes PARAM. PROGRAM remplace le renderer puis initialise ses seuls
-parametres TONE depuis cette image locale; CONTROL ne republie aucun PARAM et
-reste l'unique autorite produit. Une NOTE deja tenue garde son output, sa note,
+AUDIO conserve par piste les 26 positions TONE canoniques normalisees,
+alimentees directement par PARAM. Elles ne sont ni une image PARAM, ni un
+profil moteur: chaque renderer lit les slots qu'il connait dans sa propre
+plage et ignore les autres. PROGRAM ne charge aucun default et CONTROL ne
+republie aucun PARAM. Une NOTE deja tenue garde son output, sa note,
 sa velocite et son gate: le nouveau renderer utilise `initialize_held_note`,
 sans allocation musicale, `note_on`, retrigger LFO, VCA ou filtre commun.
+
+CONTROL utilise les memes 26 ordinaux normalises comme unique autorite TONE;
+les identifiants PARAM moteur ne sont que le catalogue de label, plage et
+conversion du moteur courant. Snapshot, Clipboard, Patch, Pattern et Project
+serialisent ces 26 ordinaux, y compris les slots dormants. Les p-locks TONE
+serialisent egalement l'ordinal normalise, sans dependance au moteur actif.
+Les runtimes moteur et voix ne conservent que leurs projections natives ou
+leurs etats DSP.
 
 Les slots Audio FX A/B possedent MODEL/P1/P2/P3. Un changement de MODEL conserve P1/P2/P3 et ne publie que MODEL; AUDIO recalcule seulement son etat derive local. Les restores installent puis publient directement l'etat final, sans passer par les defaults du modele. Seuls P1/P2/P3 sont p-lockables. En GROUP, les models appartiennent au master et les children n'exposent que LEVEL A/B.

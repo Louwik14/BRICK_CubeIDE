@@ -16,9 +16,9 @@
 #define SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED (6U)
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
-_Static_assert(SAMPLE_CACHE_HOT_SAMPLE_CAPACITY <= SAMPLE_PAGE_CACHE_ID_CAPACITY,
+_Static_assert(SAMPLE_CLASSIC_CAPACITY <= SAMPLE_PAGE_CACHE_ID_CAPACITY,
                "stream manager hot scan range must fit in page-cache ids");
-_Static_assert(SAMPLE_STREAM_IO_MAX_READERS <= SAMPLE_CACHE_HOT_SAMPLE_CAPACITY,
+_Static_assert(SAMPLE_STREAM_IO_MAX_READERS <= SAMPLE_CLASSIC_CAPACITY,
                "active stream readers must be bounded below hot sample capacity");
 #endif
 static uint8_t g_sample_stream_manager_initialized;
@@ -288,7 +288,7 @@ static uint8_t sample_stream_manager_submit_classic_prefill(void)
     if ((g_sample_stream_manager_pending_count >= 2U)
         || (sample_page_cache_get_reserved_load_target_domain_range(
                 SAMPLE_AUDIO_DOMAIN_CLASSIC, 0U,
-                SAMPLE_CACHE_HOT_SAMPLE_CAPACITY, &target) == 0U))
+                SAMPLE_CLASSIC_CAPACITY, &target) == 0U))
     {
         return 0U;
     }

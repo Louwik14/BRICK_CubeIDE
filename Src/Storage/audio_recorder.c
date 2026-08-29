@@ -11,6 +11,7 @@
 #include "Core/control_audio_publication.h"
 #include "Core/intercore_cache.h"
 #include "Core/live_clock.h"
+#include "Param/param_registry.h"
 #include "ff.h"
 #include "stm32h7xx_hal.h"
 
@@ -116,6 +117,7 @@ typedef struct
     uint8_t start_armed;
     uint8_t stop_armed;
     uint8_t recording;
+    uint8_t overdub;
 } audio_recorder_looper_control_t;
 
 static audio_recorder_looper_control_t g_audio_recorder_looper_control;
@@ -594,6 +596,7 @@ uint8_t audio_recorder_control_arm_looper(uint8_t track,
                                           uint8_t len_mode,
                                           uint32_t expected_frames,
                                           uint8_t play_auto,
+                                          uint8_t overdub,
                                           uint64_t request_sample)
 {
     if ((g_audio_recorder.client != AUDIO_RECORDER_CLIENT_LOOPER)
@@ -604,6 +607,7 @@ uint8_t audio_recorder_control_arm_looper(uint8_t track,
             | ((uint16_t)replace_track
                 << AUDIO_RECORDER_LOOPER_REPLACE_TRACK_SHIFT)) : 0U;
     const uint16_t config = (uint16_t)(AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG
+        | ((uint16_t)(overdub != 0U) * AUDIO_RECORDER_LOOPER_OVERDUB_FLAG)
         | replace_config | len_mode
         | ((uint16_t)(play_auto != 0U)
             << AUDIO_RECORDER_LOOPER_PLAY_AUTO_SHIFT));
@@ -613,7 +617,8 @@ uint8_t audio_recorder_control_arm_looper(uint8_t track,
     g_audio_recorder_looper_control = (audio_recorder_looper_control_t){
         .expected_frames = expected_frames,
         .track = track,
-        .start_armed = 1U
+        .start_armed = 1U,
+        .overdub = (overdub != 0U) ? 1U : 0U
     };
     return 1U;
 }
@@ -669,6 +674,8 @@ void audio_recorder_control_on_looper_boundary(uint8_t track,
         control->actual_start_sample = sample_time;
         control->target_stop_sample = (control->expected_frames != 0U)
             ? sample_time + control->expected_frames : 0U;
+        (void)param_registry_apply_track_value(PARAM_LOOPER_ARM,
+                                                control->track, 0.0f);
     }
     if ((control->recording != 0U)
             && (((control->target_stop_sample != 0U)

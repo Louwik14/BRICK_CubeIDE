@@ -12,7 +12,7 @@
 #include "Core/track_runtime.h"
 #include "Audio/mixer.h"
 #include "Audio/audio_note_engine_adapter.h"
-#include "Core/control_audio_program.h"
+#include "Audio/control_audio_command.h"
 #include "Mod/mod_destination_catalog.h"
 #include "Mod/mod_env3.h"
 #include "Mod/mod_matrix.h"
@@ -107,8 +107,6 @@ static track_mod_lfo_state_t
 #define MOD_LFO_SNAPSHOT_RESET_SHAPE  (1U << 0)
 #define MOD_LFO_SNAPSHOT_RESET_TRIGGER (1U << 1)
 static uint8_t g_mod_lfo_audio_initialized;
-static uint8_t g_mod_lfo_audio_transition_global;
-static uint8_t g_mod_lfo_audio_transition_track[SEQ_TRACK_COUNT];
 
 static const track_mod_lfo_state_t *mod_lfo_audio_settings_const(uint8_t track,
                                                                   uint8_t lfo_index)
@@ -299,9 +297,6 @@ static void mod_lfo_v1_audio_init(void)
     memset(g_mod_lfo_poly_prepared_entries,
            0,
            sizeof(g_mod_lfo_poly_prepared_entries));
-    g_mod_lfo_audio_transition_global = 0U;
-    memset(g_mod_lfo_audio_transition_track, 0,
-           sizeof(g_mod_lfo_audio_transition_track));
     g_mod_lfo_poly_prepared_entry_count = 0U;
     g_mod_lfo_control_counter = 0U;
     g_mod_lfo_had_matrix_routes = 0U;
@@ -646,19 +641,9 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames,
         return;
     }
 
-    if (g_mod_lfo_audio_transition_global != 0U)
-    {
-        return;
-    }
-
     g_mod_lfo_had_matrix_routes = 1U;
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
-        if (g_mod_lfo_audio_transition_track[track] != 0U)
-        {
-            continue;
-        }
-
         if (mod_matrix_track_has_configured_route(track) == 0U)
         {
             if (g_mod_lfo_track_had_matrix_routes[track] != 0U)
@@ -965,24 +950,6 @@ uint8_t mod_lfo_v1_set_track_param_audio(uint8_t track, uint8_t lfo_index,
         if (old_trig != new_trig)
             mod_lfo_poly_mode_changed(track, lfo_index, old_trig, new_trig);
     }
-    return 1U;
-}
-
-uint8_t mod_lfo_v1_audio_set_transition_global(uint8_t active)
-{
-    if (g_mod_lfo_audio_initialized == 0U)
-        mod_lfo_v1_audio_init();
-    g_mod_lfo_audio_transition_global = (uint8_t)(active != 0U);
-    return 1U;
-}
-
-uint8_t mod_lfo_v1_audio_set_transition_track(uint8_t track, uint8_t active)
-{
-    if (g_mod_lfo_audio_initialized == 0U)
-        mod_lfo_v1_audio_init();
-    if (track >= SEQ_TRACK_COUNT)
-        return 0U;
-    g_mod_lfo_audio_transition_track[track] = (uint8_t)(active != 0U);
     return 1U;
 }
 

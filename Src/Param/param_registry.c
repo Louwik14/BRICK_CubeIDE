@@ -294,10 +294,10 @@ static uint8_t param_registry_apply_audio_fx_control(param_id_t id,
     return 1U;
 }
 
-uint8_t param_registry_project_track_mute(uint8_t track, uint8_t effective_muted)
+uint8_t param_registry_project_track_effective_mute(
+    uint8_t track, uint8_t effective_muted)
 {
     const float value = (effective_muted != 0U) ? 1.0f : 0.0f;
-    param_registry_control_value_set(track, PARAM_MIX_MUTE, value);
     return param_registry_submit_audio_value(
         PARAM_MIX_MUTE, track, value, LIVE_PARAMETER_EVENT_SCOPE_TRACK);
 }
@@ -608,7 +608,7 @@ static uint8_t param_apply_non_filter_track_value_audio(param_id_t id,
     }
 
     return param_backend_apply_prepared_track_value_audio(
-        track, id, clamped, 0U);
+        track, id, clamped);
 }
 
 typedef struct param_track_exec_ctx_t
@@ -705,8 +705,7 @@ static uint8_t param_track_exec_authorize(const param_track_exec_ctx_t *ctx)
     return param_backend_track_supports_midi_tone_descriptor(&ctx->resolved.descriptor);
 }
 
-static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx,
-                                              uint8_t update_base_state)
+static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx)
 {
     if (ctx == NULL)
     {
@@ -751,12 +750,11 @@ static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx,
     const uint8_t applied = (ctx->rt_fast != 0U)
         ? param_backend_apply_prepared_track_value_audio(ctx->track,
                                                         ctx->id,
-                                                        ctx->clamped,
-                                                        update_base_state)
+                                                        ctx->clamped)
         : param_backend_apply_track_value_control(ctx->track,
                                                   ctx->id,
                                                   ctx->clamped);
-    if ((applied != 0U) && (update_base_state != 0U))
+    if ((applied != 0U) && (ctx->rt_fast == 0U))
         param_registry_control_value_set(ctx->track, ctx->id, ctx->clamped);
     return applied;
 }
@@ -828,9 +826,7 @@ static uint8_t param_apply_non_filter_track_value_core(param_id_t id,
     }
 
     return param_track_exec_sync_after_apply(&ctx,
-                                             param_track_exec_apply_backend(
-                                                 &ctx,
-                                                 (ctx.rt_fast == 0U) ? 1U : 0U));
+                                             param_track_exec_apply_backend(&ctx));
 }
 
 static uint8_t param_apply_non_filter_track_value(param_id_t id, uint8_t track, float clamped)
@@ -1190,6 +1186,8 @@ uint8_t param_registry_track_value_is_audio_command(param_id_t id,
         || (id == PARAM_CFG_POLY_SPREAD)
         || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
         || ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+            && (id != PARAM_FM_OPERATOR_SELECT)
+            && (id != PARAM_LOOPER_ARM)
             && (midi_tone == 0U))
         || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX));
 }
@@ -1299,55 +1297,16 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         {
             return 0U;
         }
-        if (note_fx_param == 3U)
-        {
-            float previous = 0.0f;
-            uint8_t requested_model = NOTE_FX_MODEL_OFF;
-            if ((value > 0.0f) && (value < 255.0f))
-            {
-                const uint8_t rounded = (uint8_t)(value + 0.5f);
-                requested_model = (rounded < NOTE_FX_MODEL_COUNT)
-                    ? rounded : NOTE_FX_MODEL_OFF;
-            }
-            if ((note_fx_state_get_param(track, id, &previous) != 0U)
-                    && ((uint8_t)(previous + 0.5f) != requested_model))
-            {
-                const seq_track_id_t transition_track = track;
-                if (seq_play_scheduler_transition_tracks(
-                        &transition_track, 1U,
-                        SEQ_PLAY_TRANSITION_MODEL_RECONFIGURE) == 0U)
-                    return 0U;
-            }
-        }
         /* NoteFx owns the model-aware schema.  The static catalog is only the
          * legacy ARP/p-lock descriptor and cannot clamp EUCLID LENGTH/PULSE. */
         if (note_fx_state_set_param(track, id, value) == 0U)
         {
-            if (note_fx_param == 3U)
-            {
-                const seq_track_id_t transition_track = track;
-                (void)seq_play_scheduler_transition_tracks(
-                    &transition_track, 1U,
-                    SEQ_PLAY_TRANSITION_RESUME_TRIGS);
-            }
             return 0U;
         }
-        if (note_fx_pipeline_sync_track(track) == 0U)
+        if (note_fx_pipeline_configure_track(track) == 0U)
         {
             (void)note_fx_state_restore_track_exact(track, &previous_note_fx_state);
-            if (note_fx_param == 3U)
-            {
-                const seq_track_id_t transition_track = track;
-                (void)seq_play_scheduler_transition_tracks(
-                    &transition_track, 1U, SEQ_PLAY_TRANSITION_RESUME_TRIGS);
-            }
             return 0U;
-        }
-        if (note_fx_param == 3U)
-        {
-            const seq_track_id_t transition_track = track;
-            (void)seq_play_scheduler_transition_tracks(
-                &transition_track, 1U, SEQ_PLAY_TRANSITION_RESUME_TRIGS);
         }
         return 1U;
     }
@@ -1372,11 +1331,6 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
 
     if ((id == PARAM_CFG_TRACK) || (id == PARAM_CFG_TRACK_TYPE))
     {
-        const seq_track_id_t transition_track = track;
-        if (seq_play_scheduler_transition_tracks(
-                &transition_track, 1U,
-                SEQ_PLAY_TRANSITION_STOP_CLOSE) == 0U)
-            return 0U;
         const uint8_t ok = param_apply_cfg_track_value(id, track, clamped);
         return ok;
     }
@@ -1496,89 +1450,6 @@ float param_get(param_id_t id)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-static uint8_t modfx_bank_ids(uint8_t model,param_id_t packed[4])
-{
-    switch(model){case FX_MODFX_DAISY_STEREO:packed[0]=PARAM_MODFX_BANK_DAISY_STEREO_AB;packed[1]=PARAM_MODFX_BANK_DAISY_STEREO_CD;packed[2]=PARAM_MODFX_BANK_DAISY_STEREO_EF;packed[3]=PARAM_MODFX_BANK_DAISY_STEREO_G;return 4U;case FX_MODFX_JUNOLOGUE:packed[0]=PARAM_MODFX_BANK_JUNOLOGUE_AB;packed[1]=PARAM_MODFX_BANK_JUNOLOGUE_CD;return 2U;default:return 0U;}
-}
-
-static uint8_t modfx_control_ids(uint8_t model,const param_id_t **out)
-{
-    static const param_id_t standard[4]={PARAM_MODFX_RATE,PARAM_MODFX_DEPTH,PARAM_MODFX_FEEDBACK,PARAM_MODFX_OFFSET};
-    static const param_id_t daisy_stereo[8]={PARAM_MODFX_RATE,PARAM_MODFX_RATE_B,PARAM_MODFX_OFFSET,PARAM_MODFX_DELAY_B,PARAM_MODFX_DEPTH,PARAM_MODFX_DEPTH_B,PARAM_MODFX_FEEDBACK,PARAM_MODFX_WIDTH};
-    if(model==FX_MODFX_DAISY_STEREO){*out=daisy_stereo;return 8U;}*out=standard;return 4U;
-}
-
-uint8_t param_registry_prepare_legacy_modfx_bank_values(
-    uint8_t model,const float packed_values[4],
-    param_registry_prepared_value_t out_values[8],uint8_t *out_count)
-{
-    if ((packed_values == NULL) || (out_values == NULL) || (out_count == NULL))
-        return 0U;
-    param_id_t banks[4];
-    if (modfx_bank_ids(model,banks) == 0U) return 0U;
-    const param_id_t *ids;
-    const uint8_t count=modfx_control_ids(model,&ids);
-    uint16_t packed[4];
-    for (uint8_t i=0U;i<4U;++i) packed[i]=(uint16_t)(packed_values[i]+0.5f);
-    for (uint8_t slot=0U;slot<count;++slot)
-    {
-        const float value=(float)((packed[slot>>1U]>>((slot&1U)*7U))&127U);
-        if (param_registry_prepare_value(ids[slot],value,&out_values[slot]) == 0U)
-            return 0U;
-    }
-    *out_count=count;
-    return 1U;
-}
-
-uint8_t param_registry_install_legacy_modfx_control_targets(void)
-{
-    const uint8_t model=(uint8_t)(param_get(PARAM_MODFX_MODEL)+0.5f);
-    param_id_t banks[4];
-    const uint8_t bank_count=modfx_bank_ids(model,banks);
-    if (bank_count == 0U) return 0U;
-    float packed[4]={0.0f,0.0f,0.0f,0.0f};
-    for (uint8_t i=0U;i<bank_count;++i) packed[i]=param_get(banks[i]);
-    param_registry_prepared_value_t values[8];uint8_t count=0U;
-    if (param_registry_prepare_legacy_modfx_bank_values(
-            model,packed,values,&count) == 0U) return 0U;
-    for (uint8_t i=0U;i<count;++i)
-        if (param_registry_install_prepared_global_control_target(&values[i]) == 0U)
-            return 0U;
-    return 1U;
-}
-
-static uint8_t modfx_bank_project_model(uint8_t model)
-{
-    const param_id_t *ids;const uint8_t control_count=modfx_control_ids(model,&ids);
-    param_id_t banks[4];uint16_t packed[4]={0U,0U,0U,0U};const uint8_t bank_count=modfx_bank_ids(model,banks);for(uint8_t i=0U;i<bank_count;++i)packed[i]=(uint16_t)(param_get(banks[i])+0.5f);
-    live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),.source=LIVE_PARAMETER_EVENT_SOURCE_BULK,.count=control_count};
-    for(uint8_t slot=0U;slot<control_count;++slot)
-    {
-        const float value=(float)((packed[slot>>1U]>>((slot&1U)*7U))&127U);
-        float command_value = value;
-        if (param_registry_prepare_global_audio_command(
-                ids[slot], value, &command_value) == 0U)
-            return 0U;
-        bulk.item[slot]=(live_parameter_audio_bulk_item_t){.parameter_id=(uint16_t)ids[slot],.scope=LIVE_PARAMETER_EVENT_SCOPE_GLOBAL,.track=0U,.slot=LIVE_PARAMETER_EVENT_INVALID_INDEX,.flags=(uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET|LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),.value=live_parameter_event_encode_float(command_value)};
-    }
-    if (!live_parameter_audio_publication_submit_bulk(&bulk))
-        return 0U;
-    for(uint8_t slot=0U;slot<control_count;++slot)
-    {
-        const float value=(float)((packed[slot>>1U]>>((slot&1U)*7U))&127U);
-        param_store_set_active(ids[slot],value);
-    }
-    return 1U;
-}
-
-uint8_t param_registry_migrate_legacy_modfx_banks(void)
-{
-    const uint8_t model=(uint8_t)(param_get(PARAM_MODFX_MODEL)+0.5f);
-    param_id_t banks[4];
-    if(modfx_bank_ids(model,banks)==0U)return 0U;
-    return modfx_bank_project_model(model);
-}
-
 /* Command surface: global canonical write. */
 void param_set(param_id_t id, float value)
 {

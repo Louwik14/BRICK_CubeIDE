@@ -1,7 +1,6 @@
-#ifndef TRACK_TONE_SOUND_STATE_H
-#define TRACK_TONE_SOUND_STATE_H
+#ifndef BRICK6_FM_DSP_PROJECTION_H
+#define BRICK6_FM_DSP_PROJECTION_H
 
-#include <stddef.h>
 #include <stdint.h>
 
 #define TRACK_TONE_FM_OPERATOR_COUNT 6U
@@ -42,28 +41,6 @@ typedef struct
     float env_attack, env_decay, env_sustain, env_release;
     float play_vel, play_key, pitch_env, pitch_time;
 } track_tone_fm_macros_t;
-
-/* Local derived view used by AUDIO backend adapters; never stored by CONTROL. */
-typedef struct
-{
-    float sample, gain, start, length, mode, tune, slice_count, loop_start;
-    struct { float source_bpm, sync_length, pitch, play_mode, loop,
-                   stretch_mode, grain_size, hop_size, search_size; } clip;
-    struct { float loop; } multi;
-    struct { float arm, len, play, xfade, stretch, pitch, grain; } looper;
-    struct { float model[2], pitch_mod[2], param1[2], amod[2], param2[2];
-             float phase_reset, drift, volume, balance, tune, detune; } prism;
-    struct { float level[3], model[3], tune[3], timbre[3], color[3];
-             float noise_level, osc_detune, phase_reset; } stack;
-    struct { float table[2], pos[2], start[2], len[2];
-             float volume, balance, tune, detune; } wave;
-    struct { track_tone_fm_base_voice_t base; track_tone_fm_macros_t macros;
-             float operator_select; } fm;
-    float midi_program, midi_cc[12];
-    struct { float pitch, decay, pitch_sweep, sweep_decay, attack, noise,
-                   harmonics, drive; } trx_bd;
-    struct { uint8_t model, slot[8]; } md;
-} track_tone_sound_state_t;
 
 #ifdef __cplusplus
 static_assert(sizeof(track_tone_fm_operator_base_t) == 21U, "FM operator layout changed");

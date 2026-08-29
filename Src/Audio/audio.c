@@ -27,7 +27,6 @@
 #include "Audio/metronome_runtime.h"
 #include "Audio/control_audio_fifo.h"
 #include "Audio/audio_command_executor.h"
-#include "Core/control_audio_program.h"
 #include "Audio/audio_fx_runtime.h"
 #include "Audio/audio_waveform_capture.h"
 #include "Audio/waveform_control.h"
@@ -232,7 +231,6 @@ void audio_boot_init_binding_io(void)
 {
     live_clock_init();
     control_audio_fifo_init();
-    control_audio_program_init();
     audio_command_executor_init();
     audio_note_engine_adapter_init();
     audio_mod_matrix_init();

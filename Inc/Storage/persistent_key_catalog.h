@@ -15,6 +15,10 @@ typedef struct { persist_control_parameter_key_t key; persist_control_value_kind
 uint8_t persist_key_param_descriptor(param_id_t id,persist_param_descriptor_t *out);
 uint8_t persist_key_param_to_disk(param_id_t id,persist_control_parameter_key_t *out);
 uint8_t persist_key_param_from_disk(persist_control_parameter_key_t key,param_id_t *out);
+uint8_t persist_key_tone_slot_to_disk(uint8_t slot,
+                                      persist_control_parameter_key_t *out);
+uint8_t persist_key_tone_slot_from_disk(persist_control_parameter_key_t key,
+                                        uint8_t *out_slot);
 uint8_t persist_key_family_to_disk(ui_track_family_t value,persist_control_family_key_t *out);
 uint8_t persist_key_family_from_disk(persist_control_family_key_t key,ui_track_family_t *out);
 uint8_t persist_key_type_to_disk(ui_track_type_t value,persist_control_type_key_t *out);

@@ -5,22 +5,31 @@
 
 #include "Core/track_runtime.h"
 #include "Core/brick6_sampler_multi_contract.h"
+#include "Core/control_audio_publication.h"
 #include "Core/control_music_publication.h"
+#include "Audio/control_audio_command.h"
 #include "Core/live_clock.h"
 #include "Param/param_registry.h"
 #include "Param/param_registry_runtime_state.h"
 #include "Storage/memory_layout.h"
+#include "midi.h"
 
 typedef struct
 {
     uint32_t output_id;
+    uint32_t causal_source_id;
+    uint32_t generation;
     uint32_t age;
     uint8_t note;
     uint8_t velocity;
-    uint8_t alive;
-    uint8_t multi;
-    uint8_t reserved;
+    uint8_t alive : 1;
+    uint8_t multi : 1;
+    uint8_t midi_channel : 4;
+    uint8_t midi_dest_mask : 2;
 } control_music_output_t;
+
+_Static_assert(sizeof(control_music_output_t) == 20U,
+               "terminal NOTE record must remain compact");
 
 CONTROL_M4_SRAM2 static control_music_output_t
     g_control_music_outputs[BRICK_ENTITY_CAPACITY][CONTROL_MUSIC_OUTPUTS_PER_ENTITY];
@@ -491,7 +500,27 @@ static int8_t control_music_output_find_oldest(brick_entity_id_t entity_id,
     return oldest_index;
 }
 
-uint8_t control_music_output_submit(const control_music_action_t *action)
+static uint8_t control_music_output_cause_is_external(uint32_t causal_source_id)
+{
+    const uint32_t name_space = causal_source_id & UINT32_C(0xC0000000);
+    return (uint8_t)((name_space == UINT32_C(0x40000000))
+        || (name_space == UINT32_C(0x80000000)));
+}
+
+static void control_music_output_send_midi_off(
+    const control_music_output_t *output)
+{
+    if ((output->midi_dest_mask & MIDI_ADMISSION_UART) != 0U)
+        (void)midi_note_off_admit(MIDI_DEST_UART, output->midi_channel,
+                                  output->note, 0U);
+    if ((output->midi_dest_mask & MIDI_ADMISSION_USB) != 0U)
+        (void)midi_note_off_admit(MIDI_DEST_USB, output->midi_channel,
+                                  output->note, 0U);
+}
+
+uint8_t control_music_output_submit(const control_music_action_t *action,
+                                    uint32_t causal_source_id,
+                                    uint32_t generation)
 {
     if ((action == NULL) || (action->entity_id >= BRICK_ENTITY_CAPACITY)
             || (control_music_action_kind(action)
@@ -509,10 +538,15 @@ uint8_t control_music_output_submit(const control_music_action_t *action)
         {
             return 1U;
         }
+        if (control_music_output_ledger()[entity_id][(uint8_t)existing]
+                .generation != generation)
+            return 1U;
         if (control_music_output_publish(action) == 0U)
         {
             return 0U;
         }
+        control_music_output_send_midi_off(
+            &control_music_output_ledger()[entity_id][(uint8_t)existing]);
         control_music_output_mark_dead(entity_id, (uint8_t)existing);
         return 1U;
     }
@@ -521,16 +555,24 @@ uint8_t control_music_output_submit(const control_music_action_t *action)
     {
         control_music_action_t retrigger = *action;
         retrigger.kind = (uint8_t)(CONTROL_MUSIC_ACTION_RETRIGGER
-            | (action->kind & CONTROL_MUSIC_ACTION_EXTERNAL_FLAG));
+            | (action->kind & (CONTROL_MUSIC_ACTION_EXTERNAL_FLAG
+                | CONTROL_MUSIC_ACTION_CHANNEL_MASK)));
         if (control_music_output_publish(&retrigger) == 0U)
             return 0U;
         control_music_output_t *const output =
             &control_music_output_ledger()[entity_id][(uint8_t)existing];
+        control_music_output_send_midi_off(output);
         output->age = (g_control_music_window_active != 0U)
             ? ++g_control_music_output_age_staged
             : ++g_control_music_output_age;
         output->note = action->note;
         output->velocity = action->velocity;
+        output->causal_source_id = causal_source_id;
+        output->generation = generation;
+        output->midi_channel = control_music_action_channel(action);
+        output->midi_dest_mask = midi_note_on_admit(
+            MIDI_DEST_BOTH, output->midi_channel, output->note,
+            output->velocity);
         return 1U;
     }
 
@@ -596,7 +638,9 @@ uint8_t control_music_output_submit(const control_music_action_t *action)
             .due_sample = action->due_sample,
             .output_id = victim->output_id,
             .kind = (uint8_t)(CONTROL_MUSIC_ACTION_STOP
-                | (action->kind & CONTROL_MUSIC_ACTION_EXTERNAL_FLAG)),
+                | (control_music_output_cause_is_external(
+                    victim->causal_source_id)
+                    ? CONTROL_MUSIC_ACTION_EXTERNAL_FLAG : 0U)),
             .entity_id = victim_entity,
             .note = victim->note
         };
@@ -608,7 +652,12 @@ uint8_t control_music_output_submit(const control_music_action_t *action)
     }
 
     for (uint8_t i = 0U; i < victim_count; ++i)
+    {
+        control_music_output_send_midi_off(
+            &control_music_output_ledger()[victim_entities[i]]
+                [victim_indices[i]]);
         control_music_output_mark_dead(victim_entities[i], victim_indices[i]);
+    }
     const int8_t target = control_music_output_find_free(entity_id);
     if (target < 0)
         return 0U;
@@ -616,6 +665,8 @@ uint8_t control_music_output_submit(const control_music_action_t *action)
     control_music_output_ledger()[entity_id][(uint8_t)target] =
         (control_music_output_t){
             .output_id = action->output_id,
+            .causal_source_id = causal_source_id,
+            .generation = generation,
             .age = (g_control_music_window_active != 0U)
                 ? ++g_control_music_output_age_staged
                 : ++g_control_music_output_age,
@@ -623,7 +674,10 @@ uint8_t control_music_output_submit(const control_music_action_t *action)
             .velocity = action->velocity,
             .alive = 1U,
             .multi = (control_music_output_is_multi(entity_id) != 0U),
-            .reserved = control_music_action_is_external(action)
+            .midi_channel = control_music_action_channel(action),
+            .midi_dest_mask = midi_note_on_admit(
+                MIDI_DEST_BOTH, control_music_action_channel(action),
+                action->note, action->velocity),
         };
     return 1U;
 }
@@ -651,35 +705,27 @@ uint8_t control_music_output_count(brick_entity_id_t entity_id)
         ? control_music_output_live_count(entity_id) : 0U;
 }
 
-uint8_t control_music_output_close_entities(
-    const brick_entity_id_t *entity_ids, uint8_t entity_count,
+static uint8_t control_music_output_close_selected(
+    const uint8_t selected[BRICK_ENTITY_CAPACITY]
+                          [CONTROL_MUSIC_OUTPUTS_PER_ENTITY],
     uint64_t due_sample)
 {
-    if ((entity_ids == NULL) || (entity_count == 0U)
-            || (entity_count > BRICK_ENTITY_CAPACITY))
+    if (selected == NULL)
         return 0U;
-
-    uint8_t selected[BRICK_ENTITY_CAPACITY] = { 0U };
     uint16_t counts[2U] = { 0U, 0U };
-    for (uint8_t entity_index = 0U;
-         entity_index < entity_count; ++entity_index)
-    {
-        const brick_entity_id_t entity_id = entity_ids[entity_index];
-        if (entity_id >= BRICK_ENTITY_CAPACITY)
-            return 0U;
-        if (selected[entity_id] != 0U)
-            continue;
-        selected[entity_id] = 1U;
+    for (brick_entity_id_t entity_id = 0U;
+         entity_id < BRICK_ENTITY_CAPACITY; ++entity_id)
         for (uint8_t i = 0U; i < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++i)
         {
             const control_music_output_t *const output =
                 &control_music_output_ledger()[entity_id][i];
-            if (output->alive == 0U)
+            if ((selected[entity_id][i] == 0U) || (output->alive == 0U))
                 continue;
-            const uint8_t external = output->reserved;
+            const uint8_t external =
+                control_music_output_cause_is_external(
+                    output->causal_source_id);
             ++counts[external];
         }
-    }
 
     if ((counts[0U] == 0U) && (counts[1U] == 0U))
         return 1U;
@@ -706,20 +752,20 @@ uint8_t control_music_output_close_entities(
     for (brick_entity_id_t entity_id = 0U;
          entity_id < BRICK_ENTITY_CAPACITY; ++entity_id)
     {
-        if (selected[entity_id] == 0U)
-            continue;
         for (uint8_t i = 0U; i < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++i)
         {
             const control_music_output_t *const output =
                 &control_music_output_ledger()[entity_id][i];
-            if (output->alive == 0U)
+            if ((selected[entity_id][i] == 0U) || (output->alive == 0U))
                 continue;
             const control_music_action_t action = {
                 .due_sample = due_sample,
                 .output_id = output->output_id,
                 .entity_id = entity_id,
                 .kind = (uint8_t)(CONTROL_MUSIC_ACTION_STOP
-                    | (output->reserved ? CONTROL_MUSIC_ACTION_EXTERNAL_FLAG : 0U)),
+                    | (control_music_output_cause_is_external(
+                        output->causal_source_id)
+                        ? CONTROL_MUSIC_ACTION_EXTERNAL_FLAG : 0U)),
                 .note = output->note
             };
             if (control_music_output_publish(&action) == 0U)
@@ -733,11 +779,15 @@ uint8_t control_music_output_close_entities(
 
     for (brick_entity_id_t entity_id = 0U;
          entity_id < BRICK_ENTITY_CAPACITY; ++entity_id)
-        if (selected[entity_id] != 0U)
-            for (uint8_t i = 0U;
-                 i < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++i)
-                if (control_music_output_ledger()[entity_id][i].alive != 0U)
-                    control_music_output_mark_dead(entity_id, i);
+        for (uint8_t i = 0U;
+             i < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++i)
+            if ((selected[entity_id][i] != 0U)
+                    && (control_music_output_ledger()[entity_id][i].alive != 0U))
+            {
+                control_music_output_send_midi_off(
+                    &control_music_output_ledger()[entity_id][i]);
+                control_music_output_mark_dead(entity_id, i);
+            }
 
     if ((opened_window != 0U)
             && (control_music_output_commit_window() == 0U))
@@ -753,16 +803,127 @@ uint8_t control_music_output_close_entities(
     return 1U;
 }
 
-uint8_t control_music_output_panic_all(void)
+uint8_t control_music_output_close_entities(
+    const brick_entity_id_t *entity_ids, uint8_t entity_count,
+    uint64_t due_sample)
+{
+    if ((entity_ids == NULL) || (entity_count == 0U)
+            || (entity_count > BRICK_ENTITY_CAPACITY))
+        return 0U;
+    uint8_t selected[BRICK_ENTITY_CAPACITY]
+                    [CONTROL_MUSIC_OUTPUTS_PER_ENTITY] = {{0U}};
+    for (uint8_t entity_index = 0U;
+         entity_index < entity_count; ++entity_index)
+    {
+        const brick_entity_id_t entity_id = entity_ids[entity_index];
+        if (entity_id >= BRICK_ENTITY_CAPACITY)
+            return 0U;
+        for (uint8_t i = 0U; i < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++i)
+            selected[entity_id][i] = 1U;
+    }
+    return control_music_output_close_selected(selected, due_sample);
+}
+
+uint8_t control_music_output_close_causal_sources(
+    const uint32_t *causal_source_ids, uint16_t source_count,
+    uint64_t due_sample)
+{
+    if ((causal_source_ids == NULL) || (source_count == 0U))
+        return 0U;
+    uint8_t selected[BRICK_ENTITY_CAPACITY]
+                    [CONTROL_MUSIC_OUTPUTS_PER_ENTITY] = {{0U}};
+    for (brick_entity_id_t entity_id = 0U;
+         entity_id < BRICK_ENTITY_CAPACITY; ++entity_id)
+        for (uint8_t output_index = 0U;
+             output_index < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++output_index)
+        {
+            const control_music_output_t *const output =
+                &control_music_output_ledger()[entity_id][output_index];
+            if (output->alive == 0U)
+                continue;
+            for (uint16_t source_index = 0U;
+                 source_index < source_count; ++source_index)
+                if (output->causal_source_id
+                        == causal_source_ids[source_index])
+                {
+                    selected[entity_id][output_index] = 1U;
+                    break;
+                }
+        }
+    return control_music_output_close_selected(selected, due_sample);
+}
+
+static void control_music_output_close_all_midi(void)
+{
+    for (brick_entity_id_t entity_id = 0U;
+         entity_id < BRICK_ENTITY_CAPACITY; ++entity_id)
+        for (uint8_t i = 0U; i < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++i)
+            if (control_music_output_ledger()[entity_id][i].alive != 0U)
+                control_music_output_send_midi_off(
+                    &control_music_output_ledger()[entity_id][i]);
+}
+
+uint8_t control_music_output_panic_all(uint8_t send_transport_stop)
 {
     uint64_t due_sample = 0U;
     (void)live_clock_read_audio_sample(&due_sample);
-    if (control_music_publication_request_panic(
+    if (control_audio_publish_panic(CONTROL_AUDIO_PANIC_GLOBAL, 0U,
             control_music_output_first_unpublished_sample(due_sample)) == 0U)
         return 0U;
+    control_music_output_close_all_midi();
+    for (brick_entity_id_t entity_id = 0U;
+         entity_id < BRICK_ENTITY_CAPACITY; ++entity_id)
+        for (uint8_t i = 0U; i < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++i)
+            control_music_output_mark_dead(entity_id, i);
+    if (send_transport_stop != 0U)
+        midi_stop(MIDI_DEST_BOTH);
+    return 1U;
+}
+
+uint8_t control_music_output_panic_all_fenced(uint32_t *out_consumer_fence)
+{
+    if (out_consumer_fence == NULL)
+        return 0U;
+    uint64_t due_sample = 0U;
+    (void)live_clock_read_audio_sample(&due_sample);
+    if (control_audio_publish_panic_fenced(CONTROL_AUDIO_PANIC_GLOBAL, 0U,
+            control_music_output_first_unpublished_sample(due_sample),
+            out_consumer_fence) == 0U)
+        return 0U;
+    control_music_output_close_all_midi();
     for (brick_entity_id_t entity_id = 0U;
          entity_id < BRICK_ENTITY_CAPACITY; ++entity_id)
         for (uint8_t i = 0U; i < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++i)
             control_music_output_mark_dead(entity_id, i);
     return 1U;
+}
+
+uint8_t control_music_output_has_alive(void)
+{
+    for (brick_entity_id_t entity_id = 0U;
+         entity_id < BRICK_ENTITY_CAPACITY; ++entity_id)
+        for (uint8_t i = 0U; i < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++i)
+            if (control_music_output_ledger()[entity_id][i].alive != 0U)
+                return 1U;
+    return 0U;
+}
+
+uint8_t control_music_output_is_note_active_on_channel(
+    uint8_t channel_zero_based, uint8_t note)
+{
+    if ((channel_zero_based >= 16U) || (note >= 128U))
+        return 0U;
+    for (brick_entity_id_t entity_id = 0U;
+         entity_id < BRICK_ENTITY_CAPACITY; ++entity_id)
+        for (uint8_t i = 0U; i < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++i)
+        {
+            const control_music_output_t *const output =
+                &control_music_output_ledger()[entity_id][i];
+            if ((output->alive != 0U)
+                    && (output->midi_dest_mask != 0U)
+                    && (output->midi_channel == channel_zero_based)
+                    && (output->note == note))
+                return 1U;
+        }
+    return 0U;
 }

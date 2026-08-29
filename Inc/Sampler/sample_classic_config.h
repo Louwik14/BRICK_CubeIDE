@@ -1,0 +1,5 @@
+#pragma once
+
+#define SAMPLE_CLASSIC_CAPACITY (256U)
+#define SAMPLE_CLASSIC_PATH_MAX (160U)
+

@@ -428,8 +428,6 @@ static uint8_t ui_core_clipboard_clear_param_list_to_min(uint8_t track,
         return 0U;
     }
 
-    /* Consumer-edge refresh: clear-to-min applies on a refreshed projection. */
-    track_runtime_rebuild_track(track);
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
         .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
@@ -494,7 +492,6 @@ static uint8_t ui_core_clipboard_copy_track(uint8_t track)
     memset(cb, 0, sizeof(*cb));
 
     cb->source_track = track;
-    track_runtime_rebuild_track(track);
     entity_topology_descriptor_t topology;
     if ((entity_topology_get(track, &topology) == 0U)
             || (track_snapshot_capture(track, &cb->snapshot[0]) == 0U))
@@ -653,8 +650,6 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
 
     uint8_t applied = 0U;
     uint8_t common = 0U;
-    /* Consumer-edge refresh: intersection apply uses a refreshed projection. */
-    track_runtime_rebuild_track(track);
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
         .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,

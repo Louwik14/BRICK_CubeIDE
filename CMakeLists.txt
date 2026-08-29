@@ -239,7 +239,6 @@ file(GLOB SRC_PARAM_SRC
 
 list(APPEND SRC_PARAM_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/audio_fx_param_catalog.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_transition.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_tone_backends.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_prism_labels.c"
 )
@@ -288,7 +287,6 @@ file(GLOB SRC_UI_SRC CONFIGURE_DEPENDS
 set(UI_ROLL_POPUP_SRC "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_roll_popup.c")
 
 list(APPEND SRC_UI_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_system_sync_internal.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_edit_context_sync.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_active_track_sync.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_core_clipboard.c"

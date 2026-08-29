@@ -26,27 +26,11 @@ typedef struct
     uint32_t event_token;
 } seq_play_scheduler_event_t;
 
-typedef enum
-{
-    SEQ_PLAY_TRANSITION_MUTE_TRIGS = 0,
-    SEQ_PLAY_TRANSITION_RESUME_TRIGS,
-    SEQ_PLAY_TRANSITION_STOP_CLOSE,
-    SEQ_PLAY_TRANSITION_PANIC_CLOSE_ALL,
-    SEQ_PLAY_TRANSITION_PATTERN_REPLACE,
-    SEQ_PLAY_TRANSITION_MODEL_RECONFIGURE,
-    SEQ_PLAY_TRANSITION_DESTINATION_REBIND,
-    SEQ_PLAY_TRANSITION_SOURCE_SWITCH
-} seq_play_transition_policy_t;
-
 void seq_play_scheduler_init(void);
 void seq_play_scheduler_clear(void);
 void seq_play_scheduler_clear_tracks(const seq_track_id_t *tracks, uint8_t track_count);
 void seq_play_scheduler_suspend_tracks(const seq_track_id_t *tracks, uint8_t track_count);
 void seq_play_scheduler_resume_tracks(const seq_track_id_t *tracks, uint8_t track_count);
-uint8_t seq_play_scheduler_transition_tracks(const seq_track_id_t *tracks,
-                                             uint8_t track_count,
-                                             seq_play_transition_policy_t policy);
-uint8_t seq_play_scheduler_transition_all(seq_play_transition_policy_t policy);
 /*
  * Contract surface:
  * - scheduling surface only: consumes step boundaries and queues sample-domain events.
@@ -94,8 +78,7 @@ void seq_play_scheduler_live_midi_program_changed(seq_track_id_t track, float pr
 void seq_play_scheduler_emit_midi_program_on_transport_start(void);
 /*
  * Contract surface:
- * - post-commit notification on pattern change.
- * - re-seeds scheduler-visible program state without changing timeline ownership.
+ * - closes the removed sequence source and invalidates its future events.
  */
 void seq_play_scheduler_notify_track_pattern_change(seq_track_id_t track);
 void seq_play_scheduler_notify_play_changed(seq_track_id_t track,

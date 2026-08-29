@@ -4,7 +4,7 @@
 
 #include "Sampler/sample_audio_key.h"
 #include "Sampler/sample_page_cache_config.h"
-#include "Sampler/sample_pool.h"
+#include "Sampler/sample_classic_config.h"
 #include "Sampler/sample_stream_fatfs_map.h"
 #include "Storage/wav_parser.h"
 

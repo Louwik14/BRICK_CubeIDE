@@ -27,6 +27,7 @@ typedef enum
  * second opcode or transport. */
 #define AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG          0x8000U
 #define AUDIO_RECORDER_LOOPER_REPLACE_VALID_FLAG      0x2000U
+#define AUDIO_RECORDER_LOOPER_OVERDUB_FLAG            0x4000U
 #define AUDIO_RECORDER_LOOPER_REPLACE_TRACK_SHIFT     9U
 #define AUDIO_RECORDER_LOOPER_REPLACE_TRACK_MASK      0x0FU
 #define AUDIO_RECORDER_LOOPER_PLAY_AUTO_SHIFT         8U
@@ -120,6 +121,7 @@ uint8_t audio_recorder_control_arm_looper(uint8_t track,
                                           uint8_t len_mode,
                                           uint32_t expected_frames,
                                           uint8_t play_auto,
+                                          uint8_t overdub,
                                           uint64_t request_sample);
 uint8_t audio_recorder_control_request_looper_stop(uint64_t request_sample,
                                                    uint8_t wait_boundary);

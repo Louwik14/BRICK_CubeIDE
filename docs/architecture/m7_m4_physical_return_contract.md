@@ -1,4 +1,4 @@
-# Contrat physique M7 vers M4 — PASS B
+# Contrat physique AUDIO vers CONTROL
 
 ## Verdict architectural
 
@@ -15,12 +15,11 @@ retours M7 vers M4 restants ne transportent aucune decision musicale:
 - diagnostic: BOOT_FAULT, compteurs, xrun/underrun, CPU, waveform, VU et erreurs. Le couper
   ne modifie aucune commande, voix, page ou decision CONTROL.
 
-Il n'existe plus de live clock periodique, wake AUDIO/PendSV vers CONTROL,
-cadence frames AUDIO, appel Looper vers Recorder CONTROL, getter FILTER POS,
-snapshot de playhead, deadline STREAM, ACK Multi/RAM/Wavetable, ring de retire
-ACK, READY, binding ou generation musicale. Les boundaries Recorder/Looper ne
-necessitent aucun evenement M7 vers M4 separe: CONTROL publie directement le
-RECORD date; le head final et le framing de session sont le fait physique.
+Les retours sont limites au `tail` FIFO, aux credits STREAM, au PCM/framing
+Recorder, a l'ancre boot et aux diagnostics. Les boundaries Recorder/Looper ne
+necessitent aucun evenement AUDIO vers CONTROL separe: CONTROL publie
+directement le RECORD date; le head final et le framing de session sont des
+faits physiques.
 
 ## Cadence et boot
 
@@ -46,7 +45,7 @@ CONTROL. La valeur DSP privee n'est plus publiee ni relue par UI/CONTROL.
 | Wavetable/mipmaps | M4/Storage | M7/AUDIO | projection immutable; pages liberees apres fence `tail`; generation de load/registry physique conservee |
 | Multi descriptors/pages | M4/Storage | M7/AUDIO | descripteurs publies puis pages protegees par le credit de fenetre; retrait apres fence `tail` |
 | STREAM pages | M4/Storage | M7/AUDIO | cache partage; M7 publie le credit compact, M4 ne reutilise pas une page encore dans une fenetre/pin/use-count |
-| Preview PCM | M4/Storage | M4/UI/audio preview | ring SPSC separe; reutilisation par consumer tail |
+| Preview PCM | M4/Storage | M7/AUDIO | ring SPSC separe; reutilisation par consumer tail |
 | Recorder PCM | M7/AUDIO | M4/Storage | ring SPSC; M7 head `accepted_frames`, M4 tail `released_frames`; stop fixe le head final |
 | Looper preroll/live map | M7/AUDIO puis M4/Storage | M7/AUDIO | preroll borne puis carte physique append-only; lecture limitee au tail SD committed |
 
@@ -59,11 +58,3 @@ ne valident jamais PROGRAM/PARAM/NOTE et ne reconstruisent aucun etat musical.
 H743 utilise exactement les memes contrats via les adaptateurs locaux. H747
 place M4 et M7 de part et d'autre des memes structures pointer-free. Aucun
 handshake, peripheral ou service H747-only n'est requis au nominal.
-
-## Empreinte et validation
-
-Par rapport a la fin PASS A, RAM D3 passe de 16 480 a 16 448 octets (-32) sur
-Low-Cost et Premium; RAM D1 passe de 483 872 a 483 936 octets (+64). DTCM,
-ITCM, D2, SDRAM et la zone Recorder sont inchanges. Les builds H743 Release
-Low-Cost, Premium et Test passent. La FIFO M4 vers M7, son ABI, STREAM, les
-pointeurs/data planes, le cache, la latence live et le DMA ne sont pas modifies.

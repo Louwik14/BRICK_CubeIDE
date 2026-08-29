@@ -11,15 +11,18 @@ void note_fx_arp_init(note_fx_arp_t *arp, uint32_t seed)
 }
 
 uint8_t note_fx_arp_note_on(note_fx_arp_t *arp, uint8_t note, uint8_t velocity,
-                            uint32_t source_token, uint32_t source_generation)
+                            uint32_t source_token, uint32_t source_generation,
+                            uint32_t causal_source_token)
 {
     if ((arp == 0) || (note > 127U) || (source_token == 0U)
-            || (source_generation == 0U)) return 0U;
+            || (source_generation == 0U) || (causal_source_token == 0U))
+        return 0U;
     for (uint8_t i = 0U; i < arp->count; ++i) {
         if ((arp->source_token[i] == source_token)
                 && (arp->source_generation[i] == source_generation)) {
             arp->note[i] = note;
             arp->velocity[i] = velocity;
+            arp->causal_source_token[i] = causal_source_token;
             return 1U;
         }
     }
@@ -28,6 +31,7 @@ uint8_t note_fx_arp_note_on(note_fx_arp_t *arp, uint8_t note, uint8_t velocity,
     arp->note[arp->count] = note;
     arp->velocity[arp->count] = velocity;
     arp->source_token[arp->count] = source_token;
+    arp->causal_source_token[arp->count] = causal_source_token;
     arp->source_generation[arp->count] = source_generation;
     arp->count++;
     return 1U;
@@ -44,6 +48,8 @@ uint8_t note_fx_arp_note_off(note_fx_arp_t *arp, uint32_t source_token,
                 arp->note[j - 1U] = arp->note[j];
                 arp->velocity[j - 1U] = arp->velocity[j];
                 arp->source_token[j - 1U] = arp->source_token[j];
+                arp->causal_source_token[j - 1U] =
+                    arp->causal_source_token[j];
                 arp->source_generation[j - 1U] = arp->source_generation[j];
             }
             --arp->count;
@@ -92,6 +98,7 @@ uint8_t note_fx_arp_next(note_fx_arp_t *arp, note_fx_arp_style_t style,
     *note = (uint8_t)out; *velocity = arp->velocity[idx];
     arp->last_source_note = arp->note[idx];
     arp->last_source_token = arp->source_token[idx];
+    arp->last_causal_source_token = arp->causal_source_token[idx];
     arp->last_source_generation = arp->source_generation[idx];
     arp->cursor = rank;
     return 1U;

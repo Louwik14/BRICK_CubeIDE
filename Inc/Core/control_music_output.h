@@ -8,6 +8,8 @@
 #define CONTROL_MUSIC_ACTION_CAPACITY 384U
 #define CONTROL_MUSIC_ACTION_EXTERNAL_FLAG 0x80U
 #define CONTROL_MUSIC_ACTION_KIND_MASK 0x03U
+#define CONTROL_MUSIC_ACTION_CHANNEL_SHIFT 2U
+#define CONTROL_MUSIC_ACTION_CHANNEL_MASK  0x3CU
 
 typedef enum
 {
@@ -41,6 +43,13 @@ static inline uint8_t control_music_action_is_external(
     return (action->kind & CONTROL_MUSIC_ACTION_EXTERNAL_FLAG) != 0U;
 }
 
+static inline uint8_t control_music_action_channel(
+    const control_music_action_t *action)
+{
+    return (uint8_t)((action->kind & CONTROL_MUSIC_ACTION_CHANNEL_MASK)
+        >> CONTROL_MUSIC_ACTION_CHANNEL_SHIFT);
+}
+
 #define CONTROL_MUSIC_OUTPUTS_PER_ENTITY 8U
 #define CONTROL_MUSIC_OUTPUT_DEATH_OBSERVER_CAPACITY 2U
 
@@ -64,15 +73,24 @@ uint64_t control_music_output_first_unpublished_sample(uint64_t audio_sample);
  * logical victim (including the global Multi pool victim). Calls made between
  * windows are staged and committed through the same dated buckets. AUDIO only
  * receives final, dated actions. */
-uint8_t control_music_output_submit(const control_music_action_t *action);
+uint8_t control_music_output_submit(const control_music_action_t *action,
+                                    uint32_t causal_source_id,
+                                    uint32_t generation);
 uint8_t control_music_output_close_entity(brick_entity_id_t entity_id,
                                           uint64_t due_sample);
 uint8_t control_music_output_close_entities(
     const brick_entity_id_t *entity_ids, uint8_t entity_count,
     uint64_t due_sample);
+uint8_t control_music_output_close_causal_sources(
+    const uint32_t *causal_source_ids, uint16_t source_count,
+    uint64_t due_sample);
 void control_music_output_set_multi(brick_entity_id_t entity_id,
                                     uint8_t is_multi);
 uint8_t control_music_output_count(brick_entity_id_t entity_id);
-uint8_t control_music_output_panic_all(void);
+uint8_t control_music_output_panic_all(uint8_t send_transport_stop);
+uint8_t control_music_output_panic_all_fenced(uint32_t *out_consumer_fence);
+uint8_t control_music_output_has_alive(void);
+uint8_t control_music_output_is_note_active_on_channel(
+    uint8_t channel_zero_based, uint8_t note);
 
 #endif /* CONTROL_MUSIC_OUTPUT_H */

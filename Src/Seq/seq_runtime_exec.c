@@ -17,7 +17,6 @@
 #include "Seq/seq_live_rec_session.h"
 #include "Seq/seq_model.h"
 #include "Core/entity_topology.h"
-#include "Seq/seq_output_guard.h"
 #include "Seq/seq_play_scheduler.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_transport_fsm.h"
@@ -298,7 +297,6 @@ void seq_runtime_exec_prepare_start_lifecycle(seq_runtime_state_t *state,
     state->step_sample_q16 = seq_runtime_exec_get_sample_timeline() << 16;
     seq_runtime_exec_set_external_step_pulses_pending(0U);
     seq_play_scheduler_clear();
-    seq_output_guard_reset();
     seq_live_rec_session_reset_capture();
     seq_runtime_exec_set_midi_clock_enabled(0U);
     g_seq_runtime_exec_metronome_step = 0U;

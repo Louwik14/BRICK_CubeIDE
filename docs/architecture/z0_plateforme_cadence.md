@@ -12,7 +12,10 @@ La frontiere suit `M4 CONTROL decide -> commande finale 16 octets -> M7 AUDIO ex
 
 Les ingress Hall/MIDI et les sources scheduler restent des buffers locaux CONTROL. CONTROL resout et fusionne leur fenetre, transforme un retrigger en NOTE OFF puis NOTE ON au meme sample, puis publie un lot atomique dans la FIFO unique. AUDIO ne fusionne aucune queue et l'ordre physique FIFO est l'ordre fonctionnel a timestamp egal.
 
-PROGRAM remplace les anciennes commandes et projections d'installation. PARAM remplace les rings live/date et les mailboxes de routing. PANIC emprunte la meme FIFO; aucune generation musicale ou queue prioritaire separee n'existe. Le plan restore immutable reste uniquement un fence physique en attente de PASS 3; l'etat musical restore est republie par CONTROL avec le contrat final.
+PROGRAM porte directement la structure moteur. PARAM porte les proprietes
+finales et PANIC emprunte la meme FIFO; aucune generation musicale, queue
+prioritaire ou plan fonctionnel de restore ne traverse la frontiere. L'etat
+restore est valide puis republie par CONTROL avec le contrat final.
 
 Sur H743, les objets IPC resident dans la moitie haute de SRAM4 `0x38008000..0x3800FFFF`, shareable et non-cacheable; les registres Stream fixes resident dans la fenetre IPC partagee SRAM3/D2, et la projection complete du Recorder dans la zone SDRAM partagee non-cacheable. `DMB` ordonne la publication mais ne remplace pas le protocole d'ownership. Les payloads SDRAM cacheables exigent clean producteur puis invalidate consommateur. La zone Recorder de 256 KiB est shareable non-cacheable; les buffers DMA SAI sont en D2 non-cacheable.
 

@@ -165,6 +165,14 @@ static int pattern_roundtrip(uint8_t group_active)
         (void)persist_key_param_to_disk(audio_fx_params[i], &parameter->key);
         parameter->kind = PERSIST_VALUE_FLOAT32;
     }
+    for (uint8_t slot = 0U; slot < SEQ_PARAM_TONE_SLOT_COUNT; ++slot)
+    {
+        persist_control_parameter_t *parameter =
+            &input->entities[0].parameters[input->entities[0].parameter_count++];
+        if (persist_key_tone_slot_to_disk(slot, &parameter->key) == 0U) return 2;
+        parameter->kind = PERSIST_VALUE_FLOAT32;
+        parameter->value.f32 = (float)slot / (float)(SEQ_PARAM_TONE_SLOT_COUNT - 1U);
+    }
     input->entities[0].sequence.steps[0].trigger = 1U;
     input->entities[0].sequence.steps[0].play_count = PERSIST_CONTROL_PLAY_ITEM_COUNT;
     for (uint8_t item = 0U; item < PERSIST_CONTROL_PLAY_ITEM_COUNT; ++item)
@@ -187,6 +195,11 @@ static int pattern_roundtrip(uint8_t group_active)
         }
     }
     if (lock_count != SEQ_PLOCK_POOL_CAP_PER_TRACK) return 3;
+    if (persist_key_tone_slot_to_disk(25U,
+            &input->entities[0].sequence.steps[0].locks[0].parameter) == 0U)
+        return 3;
+    input->entities[0].sequence.steps[0].locks[0].kind = PERSIST_VALUE_FLOAT32;
+    input->entities[0].sequence.steps[0].locks[0].value.f32 = 0.625f;
     if (group_active != 0U)
     {
         persist_control_entity_t *child =

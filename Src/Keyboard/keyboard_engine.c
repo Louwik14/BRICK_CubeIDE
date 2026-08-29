@@ -24,6 +24,8 @@
 #include "Mod/mod_lfo_v1.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
+#define SEQ_RUNTIME_INTERNAL_USE 1
+#include "Seq/seq_play_scheduler.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include <string.h>
 
@@ -138,20 +140,6 @@ static uint8_t keyboard_engine_get_track_midi_channel_zero_based(uint8_t track)
 {
     const uint8_t channel_1_16 = ui_get_track_midi_channel(track);
     return (uint8_t)((channel_1_16 > 0U) ? (channel_1_16 - 1U) : 0U);
-}
-
-static uint8_t keyboard_engine_all_notes_off_local_track(uint8_t track)
-{
-    uint64_t due_sample = 0U;
-    if (!live_clock_read_audio_sample(&due_sample))
-        return 0U;
-    due_sample = control_music_output_first_unpublished_sample(due_sample);
-    return control_music_output_close_entity(track, due_sample);
-}
-
-static uint8_t keyboard_engine_all_notes_off_for_owner(uint8_t owner_track)
-{
-    return keyboard_engine_all_notes_off_local_track(owner_track);
 }
 
 static uint32_t keyboard_engine_next_occurrence_id(void)
@@ -338,45 +326,6 @@ static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
         keyboard_engine_send_note_for_current_context(
             track, note, velocity, is_note_on, NOTE_EVENT_SOURCE_KEY);
     }
-}
-
-static uint8_t keyboard_engine_all_notes_off_matching_tracks(
-    uint8_t channel, uint8_t source_internal)
-{
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
-    {
-        const ui_track_config_t cfg = ui_get_track_config(track);
-        if ((ui_track_family_is_engine(cfg.family) == 0)
-                && (cfg.family != UI_TRACK_FAMILY_EXTERNAL))
-        {
-            continue;
-        }
-
-        const ui_track_midi_source_t source = ui_get_track_midi_source(track);
-        if (source_internal != 0U)
-        {
-            if ((source != UI_TRACK_MIDI_SRC_INT) && (source != UI_TRACK_MIDI_SRC_ALL))
-            {
-                continue;
-            }
-        }
-        else
-        {
-            if ((source != UI_TRACK_MIDI_SRC_EXT) && (source != UI_TRACK_MIDI_SRC_ALL))
-            {
-                continue;
-            }
-        }
-
-        if (keyboard_engine_get_track_midi_channel_zero_based(track) != channel)
-        {
-            continue;
-        }
-
-        if (keyboard_engine_all_notes_off_for_owner(track) == 0U)
-            return 0U;
-    }
-    return 1U;
 }
 
 static void keyboard_engine_live_rec_push_internal_channel(uint8_t note, uint8_t channel)
@@ -672,56 +621,6 @@ void keyboard_engine_note_off_for_track_timed(uint8_t track, uint8_t note,
                                                  ingress_serial);
 }
 
-uint8_t keyboard_engine_all_notes_off_for_track(uint8_t track)
-{
-    if ((track >= UI_TRACK_COUNT) || (entity_topology_is_active(track) == 0U))
-    {
-        return 0U;
-    }
-
-    const uint8_t owner_track = track;
-
-    if (keyboard_engine_all_notes_off_for_owner(owner_track) == 0U)
-        return 0U;
-    const uint8_t channel = keyboard_engine_get_track_midi_channel_zero_based(owner_track);
-    if (keyboard_engine_track_has_midi_note_path(owner_track))
-    {
-        for (uint16_t note = 0U; note < 128U; ++note)
-        {
-            if (g_kbd_rec_track_note_count[owner_track][note] != 0U)
-            {
-                midi_note_off(MIDI_DEST_USB,
-                              g_kbd_rec_track_note_channel[owner_track][note],
-                              (uint8_t)note,
-                              0U);
-            }
-        }
-        midi_all_notes_off(MIDI_DEST_USB, channel);
-    }
-    memset(g_kbd_rec_track_note_count[owner_track],
-           0,
-           sizeof(g_kbd_rec_track_note_count[owner_track]));
-    return 1U;
-}
-
-uint8_t keyboard_engine_all_notes_off(void)
-{
-    const uint8_t active_channel = keyboard_engine_get_track_midi_channel_zero_based(keyboard_engine_get_play_owner_track());
-    if (keyboard_engine_all_notes_off_matching_tracks(
-            active_channel, 1U) == 0U)
-        return 0U;
-    keyboard_engine_mono_clear();
-
-    if (keyboard_engine_active_track_has_midi_note_path())
-    {
-        midi_all_notes_off(MIDI_DEST_USB, active_channel);
-    }
-
-    memset(g_kbd_rec_note_stack_count, 0, sizeof(g_kbd_rec_note_stack_count));
-    memset(g_kbd_rec_track_note_count, 0, sizeof(g_kbd_rec_track_note_count));
-    return 1U;
-}
-
 void keyboard_engine_clear_source_occurrences_silent(void)
 {
     memset(g_keyboard_engine_source_occurrence, 0,
@@ -764,8 +663,9 @@ static void keyboard_engine_midi_receive_internal(const uint8_t *msg, size_t len
 
     if (is_all_notes_off != 0U)
     {
-        if (note_fx_pipeline_request_panic() == 0U)
-            return;
+        (void)control_music_output_panic_all(0U);
+        note_fx_pipeline_panic();
+        seq_play_scheduler_clear();
         keyboard_engine_clear_source_occurrences_silent();
         return;
     }

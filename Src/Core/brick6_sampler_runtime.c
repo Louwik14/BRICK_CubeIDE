@@ -26,7 +26,7 @@
 #include "Sampler/multi_sample_audio_projection.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_page_cache.h"
-#include "Sampler/sample_pool.h"
+#include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Sampler/sample_stream_needs.h"
 #include "Sampler/sample_stream_snapshot.h"
@@ -2052,7 +2052,7 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     uint32_t region_begin = 0U;
     uint32_t region_end = 0U;
 
-    if ((clip->sample_id >= SAMPLE_POOL_SIZE)
+    if ((clip->sample_id >= SAMPLE_CLASSIC_CAPACITY)
             || (sample_cache_resolve_classic_source(clip->sample_id, &source) == 0U)
             || (source.total_frames == 0U)
             || (sample_cache_is_ready(clip->sample_id) == 0U))
@@ -3100,18 +3100,6 @@ static void brick6_sampler_runtime_reset_track_internal(uint8_t track_id,
         return;
     }
 
-    /* These fields are track PARAM state, not renderer/voice state.  Keep the
-     * sole authoritative values while replacing the disposable reader. */
-    const uint16_t sample_id = g_sampler_voice[track_id].sample_id;
-    const float gain = g_sampler_voice[track_id].gain;
-    const float start = g_sampler_voice[track_id].start;
-    const float length = g_sampler_voice[track_id].length;
-    const float loop_start = g_sampler_voice[track_id].loop_start;
-    const float tune = g_sampler_voice[track_id].tune;
-    const uint8_t mode = g_sampler_voice[track_id].mode;
-    const uint8_t slice_count = g_sampler_voice[track_id].slice_count;
-    const uint8_t loop_mode = g_sampler_voice[track_id].loop_mode;
-
     if (renderer_replace == 0U)
         brick6_sampler_runtime_begin_declick_tail(track_id,
                                                   &g_sampler_voice[track_id]);
@@ -3151,18 +3139,6 @@ static void brick6_sampler_runtime_reset_track_internal(uint8_t track_id,
     {
         brick6_sampler_runtime_multi_track_reset(track_id);
         brick6_sampler_runtime_clip_reset(track_id);
-    }
-    else
-    {
-        g_sampler_voice[track_id].sample_id = sample_id;
-        g_sampler_voice[track_id].gain = gain;
-        g_sampler_voice[track_id].start = start;
-        g_sampler_voice[track_id].length = length;
-        g_sampler_voice[track_id].loop_start = loop_start;
-        g_sampler_voice[track_id].tune = tune;
-        g_sampler_voice[track_id].mode = mode;
-        g_sampler_voice[track_id].slice_count = slice_count;
-        g_sampler_voice[track_id].loop_mode = loop_mode;
     }
     brick6_sampler_runtime_refresh_track_activity(track_id);
 }
@@ -7323,7 +7299,7 @@ void brick6_sampler_runtime_render_track(const track_audio_runtime_ctx_t *ctx,
         return;
     }
 
-    if ((voice->active == 0U) || (voice->sample_id >= SAMPLE_POOL_SIZE))
+    if ((voice->active == 0U) || (voice->sample_id >= SAMPLE_CLASSIC_CAPACITY))
     {
         brick6_sampler_runtime_mix_declick_tails(ctx->program_route.entity_id, out_l, out_r, frames);
         return;

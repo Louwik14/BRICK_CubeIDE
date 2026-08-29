@@ -27,7 +27,7 @@
 #include "Audio/audio_waveform_capture.h"
 #include "Audio/audio_io.h"
 #include "Audio/audio_rec_level_snapshot.h"
-#include "Core/control_audio_program.h"
+#include "Audio/control_audio_command.h"
 
 #include "Audio/audio_xfade.h"
 #include "env_adsr.h"
@@ -822,11 +822,6 @@ static float mixer_track_filter_static_env_value(mixer_track_filter_t *filter,
     return (float)value * (1.0f / 32767.0f);
 }
 
-static void mixer_track_filter_rebind_dsp_storage(mixer_track_filter_t *filter)
-{
-    (void)filter;
-}
-
 static void mixer_track_filter_convert_biquad_to_mono(mixer_track_filter_t *filter)
 {
     const fx_biquad_filter_t *const stereo = &filter->biquad;
@@ -886,7 +881,6 @@ static void mixer_track_filter_set_dsp_format(mixer_track_filter_t *filter,
         mixer_track_filter_convert_biquad_to_stereo(filter);
     }
     filter->dsp_format = (uint8_t)format;
-    mixer_track_filter_rebind_dsp_storage(filter);
 }
 
 static void mixer_track_filter_apply_core_params(mixer_track_filter_t *filter)
@@ -1073,7 +1067,6 @@ void mixer_rebind_track_states(const uint8_t *previous_mix_tracks,
 
         g_tracks[next_mix] = previous_tracks[previous_mix];
         g_track_filters[next_mix] = previous_filters[previous_mix];
-        mixer_track_filter_rebind_dsp_storage(&g_track_filters[next_mix]);
     }
 
     mixer_external_inputs_clear();
@@ -1115,7 +1108,6 @@ void mixer_rebind_track_state(uint8_t previous_mix_track, uint8_t next_mix_track
     {
         g_tracks[next_mix_track] = previous_track;
         g_track_filters[next_mix_track] = previous_filter;
-        mixer_track_filter_rebind_dsp_storage(&g_track_filters[next_mix_track]);
         mixer_track_filter_all_notes_off(next_mix_track);
         mixer_track_vca_all_notes_off(next_mix_track);
     }
@@ -4986,6 +4978,17 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                             looper_bus_main_l[i] += L[i] * MIXER_TRACK_NOMINAL_TRIM;
                             looper_bus_main_r[i] += R[i] * MIXER_TRACK_NOMINAL_TRIM;
                         }
+                    }
+                }
+                if((looper_record_active != 0U)
+                        && (source_track == looper_record_track)
+                        && (brick6_looper_runtime_is_overdub_recording(
+                            looper_record_track) != 0U))
+                {
+                    for(uint32_t i = 0U; i < frames; ++i)
+                    {
+                        looper_record_l[i] += L[i];
+                        looper_record_r[i] += R[i];
                     }
                 }
                 continue;

@@ -12,10 +12,10 @@
 
 #include "brick6_sampler_bootstrap.h"
 
-#include "Sampler/sample_pool.h"
+#include "Sampler/sample_cache.h"
 
 void brick6_sampler_bootstrap_load_pool(void)
 {
     /* Toujours remettre le sample pool dans un état déterministe au boot. */
-    sample_pool_init();
+    sample_cache_init();
 }

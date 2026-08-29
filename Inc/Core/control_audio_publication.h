@@ -14,11 +14,8 @@ void control_audio_publication_abort_horizon(void);
 uint8_t control_audio_publication_commit_horizon(void);
 uint16_t control_audio_publication_free(void);
 uint32_t control_audio_publication_capacity_failure_count(void);
-uint8_t control_audio_publication_reserve_program(void);
-void control_audio_publication_cancel_program_reservation(void);
-uint8_t control_audio_publish_reserved_program(uint8_t entity,
-                                               uint32_t program_id,
-                                               uint64_t sample_time);
+uint8_t control_audio_publish_program(uint8_t entity, uint32_t descriptor,
+                                      uint64_t sample_time);
 uint8_t control_audio_publish_param(uint8_t entity, uint16_t param_id,
                                     uint32_t value, uint32_t target_detail,
                                     uint64_t sample_time);

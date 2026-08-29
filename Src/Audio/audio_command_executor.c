@@ -17,8 +17,9 @@
 #include "Core/brick6_audio_runtime.h"
 #include "Core/control_routing.h"
 #include "Core/audio_rec_bus_projection.h"
-#include "Core/control_audio_program.h"
 #include "Core/live_parameter_audio_runtime.h"
+#include "Core/live_parameter_event.h"
+#include "Param/param_registry_backends.h"
 #include "Core/synth_polyphony.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_env3.h"
@@ -77,38 +78,41 @@ static void audio_command_close_external_entities(void)
 
 static uint8_t audio_command_apply_program(const control_audio_command_t *command)
 {
-    control_audio_program_descriptor_t descriptor;
-    if (control_audio_program_resolve(command->value, &descriptor) == 0U)
-        return 0U;
+    const control_audio_program_descriptor_t descriptor =
+        control_audio_program_unpack(command->value);
     const audio_note_engine_install_spec_t spec = {
         .entity_id = command->entity,
         .family = descriptor.family,
         .type = descriptor.type,
         .topology_flags = descriptor.topology_flags
     };
-    const uint8_t keep_notes =
-        audio_note_engine_adapter_program_keeps_notes(command->entity, &spec);
-    if (keep_notes != 0U)
-    {
-        /* PROGRAM replaces only the renderer.  The execution mapping in the
-         * adapter remains the identity/gate source for the synchronous local
-         * initialization below. */
+    track_audio_runtime_ctx_t current;
+    const uint8_t have_current =
+        audio_note_engine_adapter_current_ctx(command->entity, &current);
+    if ((have_current != 0U)
+            && ((current.program_route.engine
+                    == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
+                || (track_runtime_choose_engine(
+                    (track_runtime_family_t)spec.family,
+                    (track_runtime_type_t)spec.type)
+                    == TRACK_RUNTIME_ENGINE_SAMPLER)))
         brick6_sampler_runtime_replace_track_renderer(command->entity);
-    }
-    else
-    {
-        audio_command_close_entity(command->entity);
-        audio_note_engine_adapter_forget_outputs(command->entity);
-    }
     if (audio_note_engine_adapter_install_prepared(&spec) == 0U)
         return 0U;
-    return (keep_notes != 0U)
-        ? audio_note_engine_adapter_initialize_held_outputs(command->entity)
-        : 1U;
+    if (param_backend_prepare_current_tone_projection(command->entity,
+                                                      descriptor.type) == 0U)
+        return 0U;
+    return audio_note_engine_adapter_initialize_held_outputs(command->entity);
 }
 
 static uint8_t audio_command_apply_param(const control_audio_command_t *command)
 {
+    if ((command->id >= CONTROL_AUDIO_PARAM_TONE_SLOT_FIRST)
+            && (command->id <= CONTROL_AUDIO_PARAM_TONE_SLOT_LAST))
+        return live_parameter_audio_runtime_apply_tone_slot(
+            command->entity,
+            (uint8_t)(command->id - CONTROL_AUDIO_PARAM_TONE_SLOT_FIRST),
+            live_parameter_event_decode_float((int32_t)command->value));
     if (command->id == CONTROL_AUDIO_PARAM_PREVIEW_GAIN)
         return sd_preview_audio_apply_gain(command->value);
     if (command->id == CONTROL_AUDIO_PARAM_PREVIEW_ACTIVE)
@@ -143,12 +147,6 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
         return audio_note_engine_adapter_apply_midi_config(command->entity,
             (uint8_t)(command->value & 0xFFU),
             (uint8_t)((command->value >> 8) & 0xFFU));
-    if (command->id == CONTROL_AUDIO_PARAM_TRANSITION_GLOBAL)
-        return mod_lfo_v1_audio_set_transition_global(
-            (uint8_t)(command->value != 0U));
-    if (command->id == CONTROL_AUDIO_PARAM_TRANSITION_TRACK)
-        return mod_lfo_v1_audio_set_transition_track(command->entity,
-            (uint8_t)(command->value != 0U));
     if (command->id == AUDIO_PARAM_TRANSPORT_TEMPO)
         return audio_transport_publication_audio_set_tempo(command->value);
     if (command->id == AUDIO_PARAM_TRANSPORT_STEP_Q16)
@@ -181,17 +179,15 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
 
 static uint8_t audio_command_apply_note(const control_audio_command_t *command)
 {
-    if ((command->value & 0xFFFFFF00UL) == 0xFFFFFF00UL)
+    if ((command->value & CONTROL_AUDIO_NOTE_METRONOME_MASK)
+            == CONTROL_AUDIO_NOTE_METRONOME_PREFIX)
     {
         metronome_runtime_trigger_at(0U,
             (command->value & 1U) ? METRONOME_CLICK_ACCENT
                                   : METRONOME_CLICK_NORMAL);
         return 1U;
     }
-    audio_note_engine_program_t program;
-    if (audio_note_engine_adapter_current(command->entity, &program) == 0U)
-        return 0U;
-    return audio_note_engine_adapter_apply(&program,
+    return audio_note_engine_adapter_apply_output(command->entity,
         (uint8_t)command->id, (uint8_t)(command->id >> 8),
         CONTROL_AUDIO_COMMAND_KIND(command) == CONTROL_AUDIO_NOTE_ON,
         command->value);
@@ -226,17 +222,21 @@ static uint8_t audio_command_apply_record(const control_audio_command_t *command
         {
             const uint8_t replace_valid = (uint8_t)(
                 (command->id & AUDIO_RECORDER_LOOPER_REPLACE_VALID_FLAG) != 0U);
+            const uint8_t overdub = (uint8_t)(
+                (command->id & AUDIO_RECORDER_LOOPER_OVERDUB_FLAG) != 0U);
             const uint8_t replace_track = (uint8_t)((command->id
                 >> AUDIO_RECORDER_LOOPER_REPLACE_TRACK_SHIFT)
                 & AUDIO_RECORDER_LOOPER_REPLACE_TRACK_MASK);
-            if (replace_valid != 0U)
+            if ((replace_valid != 0U) && (replace_track != command->entity))
                 brick6_looper_runtime_prepare_replace(replace_track);
-            if ((replace_valid == 0U) || (replace_track != command->entity))
+            if ((overdub == 0U)
+                    && ((replace_valid == 0U) || (replace_track != command->entity)))
                 brick6_looper_runtime_prepare_replace(command->entity);
             brick6_looper_runtime_arm_live_record_start(command->entity,
                 (uint8_t)command->id, command->value,
                 (uint8_t)(command->id
                     >> AUDIO_RECORDER_LOOPER_PLAY_AUTO_SHIFT) & 1U,
+                overdub,
                 command->effective_sample_time);
         }
         else
@@ -319,11 +319,6 @@ uint16_t __attribute__((noinline)) audio_command_executor_apply_due(
         if (audio_command_apply(&command) == 0U)
             ++g_audio_command_invariant_failures;
         (void)control_audio_fifo_audio_pop();
-        /* PROGRAM storage becomes reusable only after the FIFO consumer tail
-         * has passed the command that names it. */
-        if (CONTROL_AUDIO_COMMAND_OPCODE(&command)
-                == CONTROL_AUDIO_COMMAND_PROGRAM)
-            control_audio_program_consumer_release(command.value);
         ++applied;
     }
     brick6_fm_runtime_finalize_pending();

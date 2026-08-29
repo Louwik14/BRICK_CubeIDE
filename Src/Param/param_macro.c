@@ -45,13 +45,18 @@ CONTROL_STATE_SDRAM static param_macro_pending_resolution_t
 static uint8_t param_macro_target_is_audio_owned(uint8_t track,
                                                  param_id_t param)
 {
+    if ((param == PARAM_FM_OPERATOR_SELECT)
+            || (param == PARAM_LOOPER_ARM))
+        return 0U;
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
     if ((live_parameter_is_audio_owned(param) != 0U)
             || (param == PARAM_CFG_POLY_VOICES)
             || (param == PARAM_CFG_POLY_SPREAD)
             || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
             || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX))
+    {
         return 1U;
+    }
     if (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
         return 0U;
     return (param_backend_track_supports_midi_tone_ctx(

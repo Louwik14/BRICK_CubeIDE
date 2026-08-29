@@ -21,20 +21,7 @@ _Static_assert(NOTE_FX_PIPELINE_MAX_STAGE_FANOUT == 3U,
 
 void note_fx_pipeline_init(void);
 uint16_t note_fx_pipeline_diagnostic_queue_depth(void);
-/* Priority control path for MIDI panic (CC 120/123).  The request is
- * pointer-free and never consumes an ordinary NoteFx command slot; audio
- * owns the actual purge and terminal closure. */
-uint8_t note_fx_pipeline_request_panic(void);
-typedef enum
-{
-    NOTE_FX_TRANSITION_MUTE_TRIGS = 0,
-    NOTE_FX_TRANSITION_STOP_CLOSE,
-    NOTE_FX_TRANSITION_PANIC_CLOSE_ALL,
-    NOTE_FX_TRANSITION_MODEL_RECONFIGURE,
-    NOTE_FX_TRANSITION_PATTERN_REPLACE,
-    NOTE_FX_TRANSITION_DESTINATION_REBIND,
-    NOTE_FX_TRANSITION_SOURCE_CLOCK_CHANGE
-} note_fx_transition_policy_t;
+void note_fx_pipeline_panic(void);
 
 note_fx_result_t note_fx_pipeline_submit(const note_fx_event_t *event);
 /* CONTROL-owned direct submission seam. */
@@ -52,22 +39,12 @@ note_fx_result_t note_fx_pipeline_submit_source_capture_tick(
 /* Returns non-zero only while an FX-owned occurrence is still current. */
 uint8_t note_fx_pipeline_is_generated_occurrence_current(
     uint8_t track, uint32_t occurrence_id, uint32_t generation);
+uint8_t note_fx_pipeline_forget_causal_sources(
+    uint8_t track, const uint32_t *causal_source_ids, uint16_t source_count);
 uint8_t note_fx_pipeline_process(uint64_t block_start, uint16_t frames,
                                  uint32_t samples_per_step_q16);
-/* 0: normal, 1: panic consumed, 2: invariant failure. */
-uint8_t note_fx_pipeline_prepare_control_window(uint64_t block_start);
-uint8_t note_fx_pipeline_finalize_control_window(uint64_t block_start);
-uint32_t note_fx_pipeline_diagnostic_panic_failure_count(void);
-uint8_t note_fx_pipeline_sync_track(uint8_t track);
-uint8_t note_fx_pipeline_sync_all_tracks(void);
-uint8_t note_fx_pipeline_reset_runtime_overrides(uint8_t track);
-uint8_t note_fx_pipeline_reset_all_runtime_overrides(void);
-uint8_t note_fx_pipeline_transition_track(uint8_t track,
-                                          note_fx_transition_policy_t policy);
-uint8_t note_fx_pipeline_transition_tracks(
-    const uint8_t *tracks, uint8_t track_count,
-    note_fx_transition_policy_t policy);
-uint8_t note_fx_pipeline_transition_all(note_fx_transition_policy_t policy);
+uint8_t note_fx_pipeline_apply_pending(void);
+uint8_t note_fx_pipeline_configure_track(uint8_t track);
 uint8_t note_fx_pipeline_apply_control_override(uint8_t track, uint8_t slot,
                                                 uint8_t param, uint8_t value);
 uint8_t note_fx_pipeline_release_control_override(uint8_t track, uint8_t slot,

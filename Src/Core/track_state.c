@@ -4,6 +4,7 @@
 
 #include "Core/track_input_ownership.h"
 #include "Core/track_runtime.h"
+#include "Core/track_mute.h"
 #include "UI/ui_track_catalog.h"
 
 static ui_track_config_t g_track_configs[TRACK_CONFIG_CAPACITY];
@@ -321,6 +322,38 @@ bool track_state_apply_bulk(const uint8_t family[UI_TRACK_COUNT],
         family, type, midi_channel, midi_source, external_input);
 }
 
+bool track_structure_apply_bulk(const uint8_t family[UI_TRACK_COUNT],
+                                const uint8_t type[UI_TRACK_COUNT],
+                                const uint8_t midi_channel[UI_TRACK_COUNT],
+                                const uint8_t midi_source[UI_TRACK_COUNT])
+{
+    uint8_t entity_family[BRICK_ENTITY_CAPACITY];
+    uint8_t entity_type[BRICK_ENTITY_CAPACITY];
+    uint8_t entity_channel[BRICK_ENTITY_CAPACITY];
+    uint8_t entity_source[BRICK_ENTITY_CAPACITY];
+    uint8_t external_input[UI_TRACK_COUNT];
+    if ((family == NULL) || (type == NULL) || (midi_channel == NULL)
+            || (midi_source == NULL))
+        return false;
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        const ui_track_config_t config = track_state_get_config(entity);
+        entity_family[entity] = (entity < UI_TRACK_COUNT)
+            ? family[entity] : (uint8_t)config.family;
+        entity_type[entity] = (entity < UI_TRACK_COUNT)
+            ? type[entity] : (uint8_t)config.type;
+        entity_channel[entity] = (entity < UI_TRACK_COUNT)
+            ? midi_channel[entity] : track_state_get_midi_channel(entity);
+        entity_source[entity] = (entity < UI_TRACK_COUNT)
+            ? midi_source[entity] : (uint8_t)track_state_get_midi_source(entity);
+        if (entity < UI_TRACK_COUNT)
+            external_input[entity] = track_state_get_external_input(entity);
+    }
+    return track_structure_apply_entity_bulk_with_inputs(
+        entity_family, entity_type, entity_channel, entity_source,
+        external_input);
+}
+
 bool track_state_apply_bulk_with_inputs(const uint8_t family[UI_TRACK_COUNT],
                                         const uint8_t type[UI_TRACK_COUNT],
                                         const uint8_t midi_channel[UI_TRACK_COUNT],
@@ -462,10 +495,29 @@ bool track_structure_apply_entity_bulk_with_inputs(
     const uint8_t midi_source[BRICK_ENTITY_CAPACITY],
     const uint8_t external_input[UI_TRACK_COUNT])
 {
+    uint8_t effective_mute_before[BRICK_ENTITY_CAPACITY];
+    uint32_t revision_before[BRICK_ENTITY_CAPACITY];
+    const uint8_t group_active_before = entity_topology_group_is_active();
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        effective_mute_before[entity] =
+            track_mute_is_effectively_muted(entity);
+        revision_before[entity] = track_state_get_revision(entity);
+    }
     if (!track_state_apply_entity_bulk_with_inputs(
             family, type, midi_channel, midi_source, external_input))
         return false;
-    track_runtime_rebuild_all();
+    if (group_active_before != entity_topology_group_is_active())
+    {
+        track_runtime_rebuild_all();
+    }
+    else
+    {
+        for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+            if (revision_before[entity] != track_state_get_revision(entity))
+                track_runtime_rebuild_track(entity);
+    }
+    track_mute_reproject_after_topology_change(effective_mute_before);
     return true;
 }
 
