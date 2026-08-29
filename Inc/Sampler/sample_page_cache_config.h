@@ -5,7 +5,7 @@
 #include "Sampler/multi_sample_pool.h"
 #include "Sampler/sample_classic_config.h"
 #include "Sampler/sample_audio_format.h"
-#include "Core/brick6_sampler_multi_contract.h"
+#include "Sampler/brick6_sampler_multi_contract.h"
 
 /*
  * Product page-cache sizing.

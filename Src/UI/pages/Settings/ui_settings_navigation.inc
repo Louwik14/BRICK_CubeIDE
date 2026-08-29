@@ -688,6 +688,9 @@ static void ui_page_settings_apply_action(void)
 
 static void ui_page_settings_enter(void)
 {
+    const uint8_t return_page_id = g_ui_settings.return_page_id;
+    memset(&g_ui_settings, 0, sizeof(g_ui_settings));
+    g_ui_settings.return_page_id = return_page_id;
     g_ui_settings.depth = 0U;
     g_ui_settings.selected_slot = 0U;
 #if defined(BRICK6_VARIANT_LOWCOST)

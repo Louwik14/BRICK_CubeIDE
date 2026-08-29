@@ -55,6 +55,7 @@ typedef struct
     uint32_t saved_page_checks;
 } multi_sample_load_diag_t;
 
+void multi_sample_loader_init(void);
 multi_sample_load_result_t multi_sample_load_instrument(uint16_t logical_id,
                                                         const char *index_path,
                                                         uint16_t instrument_id);

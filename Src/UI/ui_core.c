@@ -54,7 +54,8 @@
 #include "ui_core_runtime_bridge.h"
 #include "ui_page_manager.h"
 #include "ui_param.h"
-#include "Core/encoder_control_dispatcher.h"
+#include "UI/ui_sampler_playhead.h"
+#include "App/encoder_control_dispatcher.h"
 #include "Track/track_runtime.h"
 #include "Track/track_state.h"
 #include "App/Hall/hall_surface.h"
@@ -332,54 +333,6 @@ bool ui_set_track_midi_source(uint8_t track, ui_track_midi_source_t source)
         ui_core_runtime_bridge_sync_active_track_midi_source();
     }
     return true;
-}
-
-static bool ui_apply_track_config_bulk_mutation_internal(const uint8_t family[UI_TRACK_COUNT],
-                                                         const uint8_t type[UI_TRACK_COUNT],
-                                                         const uint8_t midi_channel[UI_TRACK_COUNT],
-                                                         const uint8_t midi_source[UI_TRACK_COUNT])
-{
-    if ((family == 0) || (type == 0) || (midi_channel == 0) || (midi_source == 0))
-    {
-        return false;
-    }
-
-    return track_state_apply_bulk(family, type, midi_channel, midi_source);
-}
-
-bool ui_apply_track_config_bulk_mutation(const uint8_t family[UI_TRACK_COUNT],
-                                         const uint8_t type[UI_TRACK_COUNT],
-                                         const uint8_t midi_channel[UI_TRACK_COUNT],
-                                         const uint8_t midi_source[UI_TRACK_COUNT])
-{
-    return ui_apply_track_config_bulk_mutation_internal(family, type, midi_channel, midi_source);
-}
-
-bool ui_apply_track_config_bulk_mutation_with_inputs(
-    const uint8_t family[UI_TRACK_COUNT],
-    const uint8_t type[UI_TRACK_COUNT],
-    const uint8_t midi_channel[UI_TRACK_COUNT],
-    const uint8_t midi_source[UI_TRACK_COUNT],
-    const uint8_t external_input[UI_TRACK_COUNT])
-{
-    if ((family == 0) || (type == 0) || (midi_channel == 0)
-            || (midi_source == 0) || (external_input == 0))
-    {
-        return false;
-    }
-    return track_state_apply_bulk_with_inputs(
-        family, type, midi_channel, midi_source, external_input);
-}
-
-bool ui_apply_entity_config_bulk_mutation_with_inputs(
-    const uint8_t family[BRICK_ENTITY_CAPACITY],
-    const uint8_t type[BRICK_ENTITY_CAPACITY],
-    const uint8_t midi_channel[BRICK_ENTITY_CAPACITY],
-    const uint8_t midi_source[BRICK_ENTITY_CAPACITY],
-    const uint8_t external_input[UI_TRACK_COUNT])
-{
-    return track_structure_apply_entity_bulk_with_inputs(
-        family, type, midi_channel, midi_source, external_input);
 }
 
 bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
@@ -698,6 +651,7 @@ static uint8_t ui_core_handle_macro_mode_event(const ui_event_t *ev)
 
 void ui_core_init(void)
 {
+    ui_sampler_playhead_init();
     ui_core_clipboard_init();
     ui_core_feedback_init();
     ui_core_pattern_init();
@@ -920,7 +874,6 @@ next_event:
         ;
     }
 
-    ui_core_runtime_bridge_service_looper_record_control(0);
     sample_capture_model_service();
     ui_hall_mode_flow_service_pending(HAL_GetTick());
 

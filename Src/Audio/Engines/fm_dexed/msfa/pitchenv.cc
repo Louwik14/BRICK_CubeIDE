@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "Audio/Engines/fm_dexed/msfa/synth.h"
-#include "Audio/Engines/fm_dexed/msfa/pitchenv.h"
+#include "synth.h"
+#include "pitchenv.h"
 
 int PitchEnv::unit_;
 

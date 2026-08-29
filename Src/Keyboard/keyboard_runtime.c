@@ -20,7 +20,7 @@
 #include "Keyboard/keyboard_input.h"
 #include "Seq/seq_edit.h"
 #include "NoteFx/note_fx_pipeline.h"
-#include "Core/control_music_output.h"
+#include "Track/control_music_output.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_play_scheduler.h"

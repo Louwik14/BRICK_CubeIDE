@@ -1,5 +1,0 @@
-#ifndef PERSISTENT_PROJECT_CONTROL_H
-#define PERSISTENT_PROJECT_CONTROL_H
-#include "Storage/persistent_control_codec.h"
-void persistent_project_control_capture_metadata(persist_codec_project_metadata_t*out);
-#endif

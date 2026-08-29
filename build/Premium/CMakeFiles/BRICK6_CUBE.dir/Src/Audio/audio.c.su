@@ -1,8 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:91:13:audio_apply_seq_event_at_sample	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:254:13:process_half	3168	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:336:6:audio_init	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:367:6:audio_start	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:372:6:audio_seq_diag_reset	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:377:6:audio_seq_diag_snapshot	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:414:6:HAL_SAI_RxHalfCpltCallback	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio.c:452:6:HAL_SAI_RxCpltCallback	8	static

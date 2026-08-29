@@ -22,9 +22,9 @@
 #include <cpu-features.h>
 #endif
 
-#include "Audio/Engines/fm_dexed/msfa/synth.h"
-#include "Audio/Engines/fm_dexed/msfa/sin.h"
-#include "Audio/Engines/fm_dexed/msfa/fm_op_kernel.h"
+#include "synth.h"
+#include "sin.h"
+#include "fm_op_kernel.h"
 
 #ifdef HAVE_NEONx
 static bool hasNeon() {

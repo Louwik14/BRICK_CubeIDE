@@ -6,7 +6,7 @@
 
 #include <string.h>
 
-#include "Core/brick6_audio_event_grid.h"
+#include "Audio/brick6_audio_event_grid.h"
 #include "Track/entity_topology.h"
 #include "Track/synth_polyphony.h"
 #include "Track/track_runtime.h"

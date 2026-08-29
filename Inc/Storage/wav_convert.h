@@ -33,6 +33,7 @@ typedef enum
     WAV_CONVERT_ERROR_NO_SPACE
 } wav_convert_error_t;
 
+void wav_convert_init(void);
 uint8_t wav_convert_path_needs_48k(const char *path, wav_info_t *out_info);
 uint8_t wav_convert_start_destructive_48k(const char *path);
 void wav_convert_service(uint32_t byte_budget);

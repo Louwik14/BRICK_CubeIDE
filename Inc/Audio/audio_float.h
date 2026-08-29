@@ -99,6 +99,10 @@ void audio_set_float_callback(audio_dsp_cb cb);
  */
 void audio_tracks_init(void);
 
+/** Initialise synchronously le gain staging AUDIO avant le démarrage du flux. */
+void audio_float_init_gain_staging(float postgain,
+                                   float output_compensation);
+
 /**
  * @brief Active/désactive une track.
  *

@@ -4,8 +4,8 @@
 
 #include "IPC/control_audio_command.h"
 #include "IPC/control_audio_publication.h"
-#include "Core/live_clock.h"
-#include "Core/project_control.h"
+#include "IPC/live_clock.h"
+#include "Storage/project_control.h"
 #include "Track/track_runtime.h"
 #include "Param/param_registry.h"
 #include "Sampler/sample_global_pool.h"

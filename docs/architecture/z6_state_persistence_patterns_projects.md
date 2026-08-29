@@ -14,7 +14,7 @@ Patch contient une entite, ses parametres logiques et une reference d'asset. Pro
 
 Le decode effectue une passe structurelle puis semantique complete avant mutation. Les capacites topologiques sont derivees par `persistent_entity_topology`. Les providers/consumers Project evitent tout DTO Project complet et reutilisent un workspace borne sans allocation dynamique.
 
-`persistent_pattern_control`, `persistent_patch_control` et `persistent_project_control` sont les facades CONTROL. `pattern_control_bank`, `patch_product` et `project_product` sont les facades produit. Une reference asset persistante est `{N, kind, path}`; les entites conservent N et `project_control` publie les selections runtime par la FIFO fonctionnelle apres chargement. Les tables et mipmaps restent des data planes immutables hors FIFO.
+`persistent_pattern_control` et `persistent_patch_control` sont les facades CONTROL. `pattern_control_bank`, `patch_product` et `project_product` sont les facades produit. Une reference asset persistante est `{N, kind, path}`; les entites conservent N et `project_control` publie les selections runtime par la FIFO fonctionnelle apres chargement. Les tables et mipmaps restent des data planes immutables hors FIFO.
 
 ## Transactions
 

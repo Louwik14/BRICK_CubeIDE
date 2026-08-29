@@ -26,10 +26,10 @@
 #include "Audio/audio_fx_runtime.h"
 #include "Audio/audio_waveform_capture.h"
 #include "Audio/audio_io.h"
+#include "Audio/audio_diag_capture.h"
 #include "Audio/audio_rec_level_snapshot.h"
 #include "IPC/control_audio_command.h"
 
-#include "Audio/audio_xfade.h"
 #include "env_adsr.h"
 #include "vca_env.h"
 #include "fx_biquad_filter.h"
@@ -39,7 +39,7 @@
 #include "Audio/fx_modfx_global.h"
 #include "fx_reverb.h"
 #include "Audio/spectral_window.h"
-#include "Core/brick6_looper_runtime.h"
+#include "Audio/brick6_looper_runtime.h"
 #include "Audio/Engines/fm_engine.h"
 #include "Track/synth_polyphony.h"
 #include "Track/track_runtime.h"
@@ -49,7 +49,7 @@
 
 #include "Storage/audio_recorder.h"
 #include "Storage/sample_capture.h"
-#include "Core/control_routing.h"
+#include "Track/control_routing.h"
 
 #include <math.h>
 #include <string.h>

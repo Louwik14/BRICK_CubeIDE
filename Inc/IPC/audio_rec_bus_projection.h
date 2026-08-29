@@ -36,6 +36,10 @@ void audio_rec_bus_projection_control_init(void);
 uint8_t audio_rec_bus_projection_control_publish(uint16_t source_entity_mask,
                                                  audio_rec_bus_arm_t arm,
                                                  uint8_t source_flags);
+uint8_t audio_rec_bus_projection_control_publish_at(uint16_t source_entity_mask,
+                                                    audio_rec_bus_arm_t arm,
+                                                    uint8_t source_flags,
+                                                    uint64_t sample_time);
 
 void audio_rec_bus_projection_audio_init(void);
 uint8_t audio_rec_bus_projection_audio_apply(uint32_t packed);

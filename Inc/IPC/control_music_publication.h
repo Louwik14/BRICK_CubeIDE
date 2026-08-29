@@ -2,7 +2,7 @@
 #define CONTROL_MUSIC_PUBLICATION_H
 
 #include <stdint.h>
-#include "Core/control_music_output.h"
+#include "Track/control_music_output.h"
 
 #define CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST 233U
 #define CONTROL_MUSIC_EXTERNAL_STAGING_CAPACITY 128U

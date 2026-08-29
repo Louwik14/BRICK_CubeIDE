@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdint.h>
-#include "Core/fm_dsp_projection.h"
+#include "Audio/Engines/fm_dsp_projection.h"
 
 #ifdef __cplusplus
 extern "C" {

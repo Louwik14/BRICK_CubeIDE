@@ -71,36 +71,13 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         memset(bus_group_r, 0, sizeof(bus_group_r));
     }
     const uint32_t ntracks = (track_count < MIXER_MAX_TRACKS) ? track_count : MIXER_MAX_TRACKS;
-    const float looper_xfade_target = audio_xfade_get();
-    const uint8_t looper_xfade_process_active =
-        ((looper_xfade_target > MIXER_LOOPER_XFADE_EPS)
-                || (g_looper_xfade_prev > MIXER_LOOPER_XFADE_EPS)
-                || (g_looper_xfade_smoothed > MIXER_LOOPER_XFADE_EPS)) ? 1U : 0U;
     float looper_xfade_start = g_looper_xfade_prev;
     float looper_xfade_end = g_looper_xfade_prev;
     uint8_t looper_xfade_apply_active = 0U;
-    if(looper_xfade_process_active != 0U)
-    {
-        looper_xfade_end = mixer_get_looper_xfade();
-        looper_xfade_start = g_looper_xfade_prev;
-        g_looper_xfade_prev = looper_xfade_end;
-
-        if((mixer_looper_xfade_value_is_zero(looper_xfade_start) == 0U)
-                || (mixer_looper_xfade_value_is_zero(looper_xfade_end) == 0U))
-        {
-            looper_xfade_apply_active = 1U;
-        }
-        else
-        {
-            g_looper_xfade_prev = 0.0f;
-            g_looper_xfade_smoothed = 0.0f;
-            looper_xfade_start = 0.0f;
-            looper_xfade_end = 0.0f;
-        }
-    }
     uint8_t looper_playback_active = 0U;
     uint8_t looper_playback_mix_active = 0U;
     uint8_t looper_playback_routes_main = 0U;
+    uint8_t looper_playback_main_track = 0U;
     uint16_t looper_mask = brick6_looper_runtime_playing_mask();
     if (looper_mask != 0U)
     {
@@ -127,8 +104,27 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                     & MIXER_STATIC_ROUTE_MAIN) != 0U)
             {
                 looper_playback_routes_main = 1U;
+                looper_playback_main_track = logical_track;
             }
         }
+    }
+    if ((looper_playback_active != 0U) && (looper_playback_routes_main != 0U))
+    {
+        const float looper_xfade_target =
+            brick6_looper_runtime_get_main_xfade(looper_playback_main_track);
+        looper_xfade_end = mixer_get_looper_xfade(looper_xfade_target);
+        looper_xfade_start = g_looper_xfade_prev;
+        g_looper_xfade_prev = looper_xfade_end;
+        looper_xfade_apply_active = (uint8_t)(
+            (mixer_looper_xfade_value_is_zero(looper_xfade_start) == 0U)
+            || (mixer_looper_xfade_value_is_zero(looper_xfade_end) == 0U));
+    }
+    else
+    {
+        g_looper_xfade_prev = 0.0f;
+        g_looper_xfade_smoothed = 0.0f;
+        looper_xfade_start = 0.0f;
+        looper_xfade_end = 0.0f;
     }
     looper_playback_mix_active =
         ((looper_playback_active != 0U) && (looper_xfade_apply_active != 0U)) ? 1U : 0U;
@@ -1154,6 +1150,7 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                                                      frames);
     }
 
+    audio_diag_capture_post_track(bus_main_l, bus_main_r, frames);
     mixer_external_inputs_clear();
 
     if(send_bus_active != 0U)

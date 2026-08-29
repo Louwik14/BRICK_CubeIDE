@@ -50,6 +50,8 @@ uint8_t brick6_audio_boot_apply_early(const brick6_audio_boot_intent_t *intent)
 uint8_t brick6_audio_boot_apply_output_tracks(const brick6_audio_boot_intent_t *intent)
 {
     if (brick6_audio_boot_intent_valid(intent) == 0U) return 0U;
+    audio_float_init_gain_staging(intent->postgain,
+                                  intent->output_compensation);
     audio_tracks_init();
     return 1U;
 }

@@ -120,6 +120,18 @@ static void seq_runtime_exec_push_boundary_edge(seq_track_id_t track, uint64_t d
     event->click_type = 0U;
 }
 
+void seq_runtime_exec_enqueue_transport_start(uint64_t sample_time)
+{
+    if (g_seq_runtime_exec_boundary_event_count >= SEQ_RUNTIME_EXEC_BOUNDARY_EVENT_CAP)
+        return;
+    seq_runtime_exec_boundary_event_t *const event =
+        &g_seq_runtime_exec_boundary_events[g_seq_runtime_exec_boundary_event_count++];
+    event->due_sample_time = sample_time;
+    event->track = 0U;
+    event->type = SEQ_RUNTIME_AUDIO_EVENT_TRANSPORT_START;
+    event->click_type = 0U;
+}
+
 static void seq_runtime_exec_push_metronome_click(uint64_t due_sample_time, uint8_t accent)
 {
     if (g_seq_runtime_exec_boundary_event_count >= SEQ_RUNTIME_EXEC_BOUNDARY_EVENT_CAP)
@@ -388,6 +400,7 @@ void seq_runtime_exec_begin_running_at_sample_q16(seq_runtime_state_t *state,
                                            : clock_bridge->internal_next_step_ticks);
     state->step_sample_q16 = start_sample_q16;
     state->running = 1U;
+    seq_runtime_exec_enqueue_transport_start(state->step_sample_q16 >> 16);
     g_seq_runtime_exec_metronome_step = 0U;
     seq_runtime_exec_push_metronome_for_step(state->step_sample_q16 >> 16);
 

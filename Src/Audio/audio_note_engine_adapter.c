@@ -12,7 +12,7 @@
 #include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
 #include "Audio/Engines/stack_engine.h"
 #include "Audio/Engines/wavetable_engine.h"
-#include "Core/brick_build_config.h"
+#include "Platform/brick_build_config.h"
 #include "IPC/control_audio_command.h"
 #include "Track/synth_polyphony.h"
 #include "Mod/mod_lfo_v1.h"

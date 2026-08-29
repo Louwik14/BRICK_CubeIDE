@@ -12,11 +12,12 @@ La frontiere suit `M4 CONTROL decide -> commande finale 16 octets -> M7 AUDIO ex
 
 Les ingress Hall/MIDI et les sources scheduler restent des buffers locaux CONTROL. CONTROL resout et fusionne leur fenetre, transforme un retrigger en NOTE OFF puis NOTE ON au meme sample, puis publie un lot atomique dans la FIFO unique. AUDIO ne fusionne aucune queue et l'ordre physique FIFO est l'ordre fonctionnel a timestamp egal.
 
-La frontiere physique est regroupee dans `Inc/IPC` et `Src/IPC`: contrats de
+La frontiere physique de plateforme est regroupee dans `Inc/Platform` et
+`Src/Platform`; `Inc/IPC` et `Src/IPC` portent les contrats de
 commande, FIFO, publications, transport et projections CONTROL/AUDIO. Les
 fichiers de metier CONTROL, les runtimes et DSP AUDIO, ainsi que les pools
 Storage/Sampler, restent dans leurs domaines; `live_parameter_audio_runtime`
-reste un runtime AUDIO et n'est pas une projection IPC.
+reste dans `Inc/Audio` et `Src/Audio` et n'est pas une projection IPC.
 
 PROGRAM porte directement la structure moteur. PARAM porte les proprietes
 finales et PANIC emprunte la meme FIFO; aucune generation musicale, queue

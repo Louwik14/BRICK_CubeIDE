@@ -8,7 +8,7 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "Core/brick6_stack_waveform.h"
+#include "Audio/brick6_stack_waveform.h"
 #include "Audio/audio_float.h"
 #include "Audio/deluge_oscillator.h"
 #include "Platform/memory_layout.h"

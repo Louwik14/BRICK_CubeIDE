@@ -17,12 +17,13 @@
 #include "IPC/control_audio_command.h"
 #include "IPC/control_audio_publication.h"
 #include "NoteFx/note_fx_pipeline.h"
-#include "Core/engine_tasklet.h"
-#include "Core/live_clock.h"
+#include "App/engine_tasklet.h"
+#include "IPC/live_clock.h"
 #include "IPC/audio_transport_publication.h"
 #include "Track/track_runtime.h"
-#include "Core/control_music_output.h"
+#include "Track/control_music_output.h"
 #include "Storage/audio_recorder.h"
+#include "Storage/sample_capture.h"
 #include "Storage/pattern_live_ram.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "midi.h"
@@ -227,6 +228,11 @@ static uint8_t seq_runtime_track_is_valid(seq_track_id_t track)
 
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic)
 {
+    const uint64_t stop_sample =
+        control_music_output_first_unpublished_sample(
+            seq_runtime_get_now_sample());
+    sample_capture_control_on_transport_stop(stop_sample);
+    (void)audio_recorder_control_request_looper_stop(stop_sample, 0U);
     seq_edit_note_capture_reset();
     seq_runtime_exec_stop_lifecycle_apply(&g_seq_runtime);
     metronome_runtime_stop();
@@ -503,6 +509,7 @@ static void seq_runtime_process_core(void)
             {
                 const seq_runtime_control_event_t *const event = &events[i];
                 if ((event->type == SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE)
+                        || (event->type == SEQ_RUNTIME_AUDIO_EVENT_TRANSPORT_START)
                         || (event->type == SEQ_RUNTIME_AUDIO_EVENT_METRO_CLICK))
                 {
                     uint8_t published;
@@ -510,6 +517,16 @@ static void seq_runtime_process_core(void)
                     {
                         audio_recorder_control_on_looper_boundary(
                             event->track, event->sample_abs);
+                        sample_capture_control_on_musical_boundary(
+                            event->track, event->sample_abs);
+                        published = 1U;
+                    }
+                    else if (event->type == SEQ_RUNTIME_AUDIO_EVENT_TRANSPORT_START)
+                    {
+                        audio_recorder_control_on_transport_start(
+                            event->sample_abs);
+                        sample_capture_control_on_transport_start(
+                            event->sample_abs);
                         published = 1U;
                     }
                     else
@@ -715,6 +732,9 @@ void seq_runtime_midi_continue_from_source(seq_clock_src_t source)
         return;
     }
 
+    const uint64_t transition_sample =
+        control_music_output_first_unpublished_sample(
+            seq_runtime_get_now_sample());
     g_seq_runtime.running = 1U;
     g_seq_runtime.tick_accum = 0U;
     g_seq_runtime.ext_clock_tick_accum = 0U;
@@ -728,9 +748,11 @@ void seq_runtime_midi_continue_from_source(seq_clock_src_t source)
          * Without this rebase, step_sample_q16 can remain at 0 while
          * audio_timeline_sample is monotonic, causing boundary misalignment.
          */
-        g_seq_runtime.step_sample_q16 = (uint64_t)seq_runtime_get_now_sample() << 16;
+        g_seq_runtime.step_sample_q16 = transition_sample << 16;
         /* Boundary advance is driven from the execution block path. */
     }
+    seq_runtime_exec_enqueue_transport_start(transition_sample);
+    seq_runtime_process_core();
 
     if (seq_clock_bridge_is_external_source(source) != 0U)
     {
@@ -962,6 +984,11 @@ void seq_runtime_rec_toggle_arm(void)
     const uint8_t pending_before = seq_live_rec_session_rec_is_pattern_pending_start();
     const uint8_t armed_before = seq_live_rec_session_rec_is_armed();
     seq_live_rec_session_toggle_arm(seq_runtime_get_now_sample(), g_seq_runtime.samples_per_step_q16);
+    (void)audio_recorder_control_sync_looper_arm(
+        seq_live_rec_session_rec_is_armed(),
+        g_seq_runtime.samples_per_step_q16);
+    sample_capture_control_on_global_rec_arm(
+        seq_live_rec_session_rec_is_armed());
 
     if ((armed_before != 0U)
         && (pending_before == 0U)

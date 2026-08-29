@@ -1,13 +1,12 @@
 #include "Param/param_registry_backends.h"
 #include "Audio/audio_note_engine_adapter.h"
 
-#include "Audio/audio_xfade.h"
 #include "Audio/drum_synth.h"
 #include "Audio/Engines/prism_engine.h"
 #include "Audio/Engines/fm_engine.h"
-#include "Core/brick6_looper_runtime.h"
+#include "Audio/brick6_looper_runtime.h"
 #include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
-#include "Core/project_control.h"
+#include "Storage/project_control.h"
 #include "Audio/Engines/stack_engine.h"
 #include "Audio/Engines/wavetable_engine.h"
 #include "Audio/md_model.h"
@@ -18,7 +17,6 @@
 #include "Mod/mod_matrix.h"
 #include "Param/param_filter.h"
 #include "Sampler/multi_sample_pool.h"
-#include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_global_pool.h"
 #include "midi.h"
 #include "mixer.h"
@@ -828,7 +826,7 @@ uint8_t param_backend_apply_tone_looper(uint8_t track, param_id_t id, float valu
         case PARAM_LOOPER_XFADE:
         {
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
-            audio_xfade_set(clamped);
+            brick6_looper_runtime_set_main_xfade(track, clamped);
             return 1U;
         }
         case PARAM_LOOPER_STRETCH:

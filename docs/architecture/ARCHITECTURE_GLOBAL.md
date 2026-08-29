@@ -33,6 +33,29 @@ des decisions CONTROL ordonnancees dans cette meme FIFO. Les rings PCM,
 tables/mipmaps et compteurs de data plane restent separes; ils ne portent
 aucune seconde chronologie fonctionnelle.
 
+## Arborescence physique
+
+```text
+Inc/ et Src/
+|-- App/                 bootstrap et orchestration produit
+|-- Audio/               runtime AUDIO, mixer, DSP et effets
+|   `-- Engines/         moteurs Prism, Stack, FM, Wavetable et Sampler AUDIO
+|-- IPC/                 contrats, transports et projections CONTROL/AUDIO
+|-- Platform/            configuration physique, memoire, faults et diagnostics
+|-- Track/               identites, topologie et etat/runtime de piste
+|-- Param/               catalogue, valeurs CONTROL et migration PARAM
+|-- Mod/                 configuration Matrix/LFO et projection AUDIO derivee
+|-- Seq/                 modele, edition, scheduler et runtime sequenceur
+|-- NoteFx/              transformations musicales CONTROL
+|-- Sampler/             pools, caches, readers et preparation de ressources
+|-- Storage/             persistence, projets, capture et services I/O
+`-- UI/                  navigation, pages, interactions et rendu
+```
+
+Les contrats publics vivent sous `Inc/<domaine>` et les implementations sous
+`Src/<domaine>`. Les headers strictement internes restent pres de leur
+implementation dans `Src`. Aucun domaine generique `Core` ne subsiste.
+
 ## Documents proprietaires
 
 - [z0_plateforme_cadence.md](z0_plateforme_cadence.md): plateforme, memoire, cache, cadence et IPC CONTROL/AUDIO.

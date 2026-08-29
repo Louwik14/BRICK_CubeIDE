@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #include "buttons_ids.h"
-#include "Core/brick_build_config.h"
+#include "Platform/brick_build_config.h"
 
 typedef struct
 {

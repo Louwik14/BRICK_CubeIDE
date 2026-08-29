@@ -46,9 +46,7 @@ typedef struct
 
 D3_IPC static synth_waveform_request_mailbox_t g_request_mailbox;
 D3_IPC static synth_waveform_snapshot_mailbox_t g_snapshot_mailbox;
-AUDIO_HOT static synth_waveform_audio_state_t g_audio_state = {
-    .selected_instance = SYNTH_WAVEFORM_INVALID_INSTANCE
-};
+AUDIO_HOT static synth_waveform_audio_state_t g_audio_state;
 
 void synth_waveform_init(void)
 {

@@ -1,4 +1,4 @@
-#include "Audio/Engines/fm_dx7_log_kernel.h"
+#include "fm_dx7_log_kernel.h"
 
 #include <string.h>
 #include "Platform/memory_layout.h"

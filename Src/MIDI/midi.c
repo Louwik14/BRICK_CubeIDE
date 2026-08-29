@@ -32,8 +32,8 @@
 #include "usbd_midi.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "Seq/seq_runtime.h"
-#include "Core/live_clock.h"
-#include "Core/project_load_quiesce.h"
+#include "IPC/live_clock.h"
+#include "Storage/project_load_quiesce.h"
 #include <string.h>
 
 extern USBD_HandleTypeDef hUsbDeviceFS;

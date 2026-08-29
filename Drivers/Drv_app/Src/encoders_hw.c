@@ -1,7 +1,7 @@
 #include "encoders_hw.h"
 
 #include "Board/board_controls.h"
-#include "Core/live_clock.h"
+#include "IPC/live_clock.h"
 
 #include "cmsis_gcc.h"
 

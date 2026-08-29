@@ -9,7 +9,7 @@ Autorites d'ecriture:
 - configuration LFO: `mod_lfo_v1_set_track_param`;
 - override AUDIO temporaire: chemin RT/audio dedie.
 
-Pour un parametre d'entite, `param_store.active[]` est un miroir UI, pas la verite runtime. Une application batch pre-valide et publie atomiquement ses PARAM finaux.
+`param_store.active[]` a deux usages selon le contrat du parametre: valeur CONTROL canonique pour un parametre global, projection de la piste UI active pour un parametre d'entite. Cette projection d'entite n'est pas la verite runtime. La separer exige de modifier le contrat `param_get`/`param_set` et les synchronisations UI; aucun second cache ou proprietaire n'est introduit ici. Une application batch pre-valide et publie atomiquement ses PARAM finaux.
 
 `param_desc_t::value_policy` possede conversions canonique/affichee, pas normal/SHIFT et politique d'automation. Les p-locks continus utilisent toute la plage `uint16_t`; les discrets utilisent leur pas. La persistance stocke la valeur CONTROL typee, notamment FLOAT32, jamais une representation UI.
 

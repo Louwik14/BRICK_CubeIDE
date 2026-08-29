@@ -1,5 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_patch_control.c:13:16:patch_name	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_patch_control.c:14:17:patch_asset_kind	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_patch_control.c:15:24:persistent_patch_control_capture	64	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_patch_control.c:16:24:persistent_patch_control_validate	80	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistent_patch_control.c:17:24:persistent_patch_control_apply	416	static

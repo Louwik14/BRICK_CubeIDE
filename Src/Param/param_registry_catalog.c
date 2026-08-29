@@ -1,4 +1,4 @@
-#include "Param/param_registry_catalog.h"
+#include "param_registry_catalog.h"
 #include "Audio/fx_modfx_global.h"
 #include "Audio/Engines/prism_engine.h"
 #include "Audio/Engines/stack_engine.h"
@@ -8,7 +8,7 @@
 #include "Sampler/sample_global_pool.h"
 #include "Seq/seq_types.h"
 #include "Seq/seq_division_catalog.h"
-#include "ui_core.h"
+#include "Track/track_types.h"
 #include <stddef.h>
 static const char *const g_modfx_model_labels[] = {
     "Off", "-", "-", "Daisy Stereo", "Junologue", NULL

@@ -289,7 +289,7 @@ endif()
 
 add_executable(live_parameter_event_test
     live_parameter_event_test.c
-    ../Src/Core/live_parameter_event.c
+    ../Src/IPC/live_parameter_event.c
 )
 target_include_directories(live_parameter_event_test PRIVATE stubs)
 target_include_directories(live_parameter_event_test PRIVATE ../Inc)

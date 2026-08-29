@@ -1,6 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistence_workspace.c:16:36:persistence_workspace_acquire_project	4	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistence_workspace.c:27:39:persistence_workspace_acquire_project_save	4	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistence_workspace.c:38:42:persistence_workspace_acquire_project_restore	4	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistence_workspace.c:45:37:persistence_workspace_acquire_pattern_io	4	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistence_workspace.c:56:6:persistence_workspace_release	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/persistence_workspace.c:65:31:persistence_workspace_owner	4	static

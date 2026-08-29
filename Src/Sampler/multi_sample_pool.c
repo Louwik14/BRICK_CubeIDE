@@ -8,7 +8,7 @@
 #include "Sampler/sample_stream_manager.h"
 #include "IPC/multi_sample_audio_projection.h"
 #include "IPC/control_audio_publication.h"
-#include "Core/live_clock.h"
+#include "IPC/live_clock.h"
 #include "Storage/sd_access_gate.h"
 #include "Platform/memory_layout.h"
 #include "stm32h7xx.h"

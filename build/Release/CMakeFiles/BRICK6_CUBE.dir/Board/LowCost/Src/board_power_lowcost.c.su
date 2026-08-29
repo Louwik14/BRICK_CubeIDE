@@ -1,5 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_power_lowcost.c:10:6:board_power_delay_ms	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_power_lowcost.c:15:9:board_power_shutdown_request_poll	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_power_lowcost.c:78:6:board_power_usb_host_off	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_power_lowcost.c:83:6:board_power_shutdown_cut	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/LowCost/Src/board_power_lowcost.c:88:6:board_power_hold_enable_after_boot_press	32	static

@@ -1,7 +1,7 @@
 #include "App/Hall/hall_engine.h"
 
-#include "Core/live_clock.h"
-#include "Core/live_event.h"
+#include "IPC/live_clock.h"
+#include "IPC/live_event.h"
 #include "stm32h7xx_hal.h"
 
 #if defined(BRICK6_VARIANT_LOWCOST)

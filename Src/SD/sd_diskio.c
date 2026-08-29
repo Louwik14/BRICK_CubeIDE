@@ -33,7 +33,7 @@
 #include "sd_diskio.h"
 
 #include <string.h>
-#include "Core/brick6_sd_config.h"
+#include "Platform/brick6_sd_config.h"
 #include "Platform/cache_maintenance.h"
 #include "Storage/sd_access_gate.h"
 

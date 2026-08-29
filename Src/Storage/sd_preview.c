@@ -21,7 +21,7 @@
 #include "IPC/control_audio_command.h"
 #include "IPC/control_audio_fifo.h"
 #include "IPC/control_audio_publication.h"
-#include "Core/live_clock.h"
+#include "IPC/live_clock.h"
 #include "stm32h7xx_hal.h"
 
 #if defined(__has_include)
@@ -537,6 +537,7 @@ static void sd_preview_fill_ring(void)
 void sd_preview_init(void)
 {
     memset(&g_sd_preview, 0, sizeof(g_sd_preview));
+    memset(&g_sd_preview_diag, 0, sizeof(g_sd_preview_diag));
     g_sd_preview.state = SD_PREVIEW_STATE_IDLE;
     g_sd_preview.last_error = SD_PREVIEW_ERROR_NONE;
     g_sd_preview.gain = 1.0f;

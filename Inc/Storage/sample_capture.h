@@ -150,17 +150,16 @@ typedef struct
     char final_path[SAMPLE_CAPTURE_PATH_MAX];
 } sample_capture_state_t;
 
-uint8_t sample_capture_prepare_temp(const char *temp_path,
-                                    const char *final_path,
-                                    uint32_t frame_limit);
-uint8_t sample_capture_start(void);
 uint8_t sample_capture_push_audio_block_from_irq(const int32_t *lr_interleaved,
                                                  uint32_t frames);
-uint8_t sample_capture_request_stop(void);
-uint8_t sample_capture_get_status(audio_recorder_status_t *out_status);
 
 void sample_capture_model_init(void);
 void sample_capture_model_service(void);
+void sample_capture_control_on_transport_start(uint64_t sample_time);
+void sample_capture_control_on_musical_boundary(uint8_t track,
+                                                uint64_t sample_time);
+void sample_capture_control_on_transport_stop(uint64_t sample_time);
+void sample_capture_control_on_global_rec_arm(uint8_t armed);
 void sample_capture_model_get_state(sample_capture_state_t *out_state);
 void sample_capture_model_set_view(sample_capture_view_t view);
 uint8_t sample_capture_model_toggle_route(uint8_t track);

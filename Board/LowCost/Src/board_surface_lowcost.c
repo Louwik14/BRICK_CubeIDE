@@ -8,7 +8,6 @@
 static board_surface_snapshot_t g_surface_snapshot;
 static volatile uint16_t *g_adc1_mailbox;
 static volatile uint8_t g_master_volume_valid;
-static volatile uint8_t g_master_volume_nonzero_seen;
 
 static uint32_t read_shift_register_bits(void)
 {
@@ -90,7 +89,6 @@ uint8_t board_surface_start_hall_adc_dma(volatile uint16_t *adc1_mailbox,
 
     g_adc1_mailbox = adc1_mailbox;
     g_master_volume_valid = 0U;
-    g_master_volume_nonzero_seen = 0U;
 
     if (hadc1.DMA_Handle == NULL)
     {
@@ -113,7 +111,6 @@ uint8_t board_surface_start_hall_adc_dma(volatile uint16_t *adc1_mailbox,
     {
         g_adc1_mailbox = 0;
         g_master_volume_valid = 0U;
-        g_master_volume_nonzero_seen = 0U;
         return 0U;
     }
 
@@ -179,17 +176,7 @@ uint8_t board_surface_read_master_volume_raw(uint16_t *raw)
         return 0U;
     }
 
-    const uint16_t sample = g_adc1_mailbox[2U];
-    if (sample != 0U)
-    {
-        g_master_volume_nonzero_seen = 1U;
-    }
-    else if (g_master_volume_nonzero_seen == 0U)
-    {
-        return 0U;
-    }
-
-    *raw = sample;
+    *raw = g_adc1_mailbox[2U];
     return 1U;
 }
 

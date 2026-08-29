@@ -116,22 +116,6 @@ ui_track_midi_source_t ui_get_track_midi_source(uint8_t track);
 bool ui_set_track_midi_source(uint8_t track, ui_track_midi_source_t source);
 uint8_t ui_get_track_external_input(uint8_t track);
 bool ui_set_track_external_input(uint8_t track, uint8_t input);
-bool ui_apply_track_config_bulk_mutation(const uint8_t family[UI_TRACK_COUNT],
-                                         const uint8_t type[UI_TRACK_COUNT],
-                                         const uint8_t midi_channel[UI_TRACK_COUNT],
-                                         const uint8_t midi_source[UI_TRACK_COUNT]);
-bool ui_apply_track_config_bulk_mutation_with_inputs(
-    const uint8_t family[UI_TRACK_COUNT],
-    const uint8_t type[UI_TRACK_COUNT],
-    const uint8_t midi_channel[UI_TRACK_COUNT],
-    const uint8_t midi_source[UI_TRACK_COUNT],
-    const uint8_t external_input[UI_TRACK_COUNT]);
-bool ui_apply_entity_config_bulk_mutation_with_inputs(
-    const uint8_t family[BRICK_ENTITY_CAPACITY],
-    const uint8_t type[BRICK_ENTITY_CAPACITY],
-    const uint8_t midi_channel[BRICK_ENTITY_CAPACITY],
-    const uint8_t midi_source[BRICK_ENTITY_CAPACITY],
-    const uint8_t external_input[UI_TRACK_COUNT]);
 bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
                                   const uint8_t type[UI_TRACK_COUNT],
                                   const uint8_t midi_channel[UI_TRACK_COUNT],

@@ -1,9 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:16:13:live_parameter_audio_publish_failed	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:69:16:live_parameter_audio_convert_capture	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:38:16:live_parameter_audio_schedule_bulk	1040	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:86:6:live_parameter_audio_queue_init	0	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:93:10:live_parameter_audio_queue_drain	96	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:142:6:live_parameter_audio_queue_submit_bulk	2152	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:212:6:live_parameter_audio_queue_submit_poly_pair	96	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:264:6:live_parameter_audio_queue_submit_dated	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_queue.c:291:10:live_parameter_audio_queue_publish_failure_count	0	static

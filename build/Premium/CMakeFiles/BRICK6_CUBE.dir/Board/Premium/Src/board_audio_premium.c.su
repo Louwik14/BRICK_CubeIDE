@@ -1,8 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_audio_premium.c:86:6:board_audio_codec_init	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_audio_premium.c:91:6:board_audio_init	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_audio_premium.c:95:9:board_audio_start_stream	96	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_audio_premium.c:212:6:board_audio_stop_stream	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_audio_premium.c:221:6:board_audio_get_boot_diag	4	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_audio_premium.c:229:9:board_audio_is_rx_callback_handle	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_audio_premium.c:258:16:board_audio_unpack_input	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Board/Premium/Src/board_audio_premium.c:278:16:board_audio_pack_output	4	static

@@ -22,7 +22,7 @@
 #include <stdint.h>
 #include <math.h>
 
-#include "Audio/Engines/fm_dexed/msfa/freqlut.h"
+#include "freqlut.h"
 
 #define LG_N_SAMPLES 10
 #define N_SAMPLES (1 << LG_N_SAMPLES)

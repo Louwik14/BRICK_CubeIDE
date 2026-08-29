@@ -9,7 +9,7 @@
 
 #include <string.h>
 
-#include "Core/engine_tasklet.h"
+#include "App/engine_tasklet.h"
 #include "Platform/memory_layout.h"
 #include "Seq/seq_model.h"
 #include "Track/entity_topology.h"

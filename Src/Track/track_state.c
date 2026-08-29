@@ -37,25 +37,6 @@ static ui_track_config_t track_state_initial_config(uint8_t track)
     return track_state_default_config();
 }
 
-static void track_state_normalize_config(ui_track_config_t *config)
-{
-    if (config == NULL)
-    {
-        return;
-    }
-
-    if ((config->family == UI_TRACK_FAMILY_SAMPLER)
-            && ((config->type == UI_TRACK_TYPE_RAM)
-                || (config->type == UI_TRACK_TYPE_STREAM)
-                || (config->type == UI_TRACK_TYPE_LOOPER)
-                || (config->type == UI_TRACK_TYPE_MULTI)
-                || (config->type == UI_TRACK_TYPE_GROUP)))
-    {
-        return;
-    }
-
-}
-
 static void track_state_bump_revision(uint8_t track)
 {
     if (track >= TRACK_CONFIG_CAPACITY)
@@ -155,107 +136,6 @@ ui_track_midi_source_t track_state_get_midi_source(uint8_t track)
     return (ui_track_midi_source_t)source;
 }
 
-bool track_state_set_track_family(uint8_t track, ui_track_family_t family)
-{
-    if ((track >= TRACK_CONFIG_CAPACITY) || ((uint8_t)family >= (uint8_t)UI_TRACK_FAMILY_COUNT))
-    {
-        return false;
-    }
-
-    if (entity_topology_is_active(track) == 0U)
-    {
-        return false;
-    }
-
-    ui_track_config_t next_configs[TRACK_CONFIG_CAPACITY];
-    memcpy(next_configs, track_state_get_configs(), sizeof(next_configs));
-
-    ui_track_config_t next_config = next_configs[track];
-    next_config.family = family;
-
-    if (family == UI_TRACK_FAMILY_OFF)
-    {
-        next_config.type = UI_TRACK_TYPE_NONE;
-    }
-    else if (!ui_track_catalog_type_is_available(track, family, next_config.type, next_configs))
-    {
-        next_config.type = ui_track_catalog_first_available_type(family, track, next_configs);
-    }
-
-    next_configs[track] = next_config;
-
-    if ((family != UI_TRACK_FAMILY_OFF)
-            && !ui_track_catalog_family_is_available(track, family, next_configs))
-    {
-        return false;
-    }
-
-    if ((family != UI_TRACK_FAMILY_OFF)
-            && !ui_track_catalog_type_is_available(track, family, next_config.type, next_configs))
-    {
-        return false;
-    }
-
-    if (track_input_ownership_apply_configs(next_configs) == 0U)
-    {
-        return false;
-    }
-
-    track_state_commit_entry(track,
-                             &next_config,
-                             track_state_get_midi_channel(track),
-                             track_state_get_midi_source(track));
-    return true;
-}
-
-bool track_state_set_track_type(uint8_t track, ui_track_type_t type)
-{
-    if ((track >= TRACK_CONFIG_CAPACITY) || ((uint8_t)type >= (uint8_t)UI_TRACK_TYPE_COUNT))
-    {
-        return false;
-    }
-
-
-    if (entity_topology_is_active(track) == 0U)
-    {
-        return false;
-    }
-
-    const ui_track_family_t family = track_state_get_family(track);
-    if (!ui_track_catalog_type_is_valid_for_family(family, type))
-    {
-        return false;
-    }
-
-    ui_track_config_t next_configs[TRACK_CONFIG_CAPACITY];
-    memcpy(next_configs, track_state_get_configs(), sizeof(next_configs));
-
-    if (!ui_track_catalog_type_is_available(track, family, type, next_configs))
-    {
-        return false;
-    }
-
-    ui_track_config_t next_config = next_configs[track];
-    next_config.type = type;
-    track_state_normalize_config(&next_config);
-    if (family == UI_TRACK_FAMILY_OFF)
-    {
-        next_config.type = UI_TRACK_TYPE_NONE;
-    }
-
-    next_configs[track] = next_config;
-    if (track_input_ownership_apply_configs(next_configs) == 0U)
-    {
-        return false;
-    }
-
-    track_state_commit_entry(track,
-                             &next_config,
-                             track_state_get_midi_channel(track),
-                             track_state_get_midi_source(track));
-    return true;
-}
-
 bool track_state_set_track_midi_channel(uint8_t track, uint8_t channel_1_16)
 {
     if ((track >= TRACK_CONFIG_CAPACITY) || (channel_1_16 < 1U) || (channel_1_16 > 16U))
@@ -308,20 +188,6 @@ bool track_state_set_external_input(uint8_t track, uint8_t input)
     return true;
 }
 
-bool track_state_apply_bulk(const uint8_t family[UI_TRACK_COUNT],
-                            const uint8_t type[UI_TRACK_COUNT],
-                            const uint8_t midi_channel[UI_TRACK_COUNT],
-                            const uint8_t midi_source[UI_TRACK_COUNT])
-{
-    uint8_t external_input[UI_TRACK_COUNT];
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
-    {
-        external_input[track] = track_state_get_external_input(track);
-    }
-    return track_state_apply_bulk_with_inputs(
-        family, type, midi_channel, midi_source, external_input);
-}
-
 bool track_structure_apply_bulk(const uint8_t family[UI_TRACK_COUNT],
                                 const uint8_t type[UI_TRACK_COUNT],
                                 const uint8_t midi_channel[UI_TRACK_COUNT],
@@ -354,34 +220,7 @@ bool track_structure_apply_bulk(const uint8_t family[UI_TRACK_COUNT],
         external_input);
 }
 
-bool track_state_apply_bulk_with_inputs(const uint8_t family[UI_TRACK_COUNT],
-                                        const uint8_t type[UI_TRACK_COUNT],
-                                        const uint8_t midi_channel[UI_TRACK_COUNT],
-                                        const uint8_t midi_source[UI_TRACK_COUNT],
-                                        const uint8_t external_input[UI_TRACK_COUNT])
-{
-    uint8_t entity_family[BRICK_ENTITY_CAPACITY];
-    uint8_t entity_type[BRICK_ENTITY_CAPACITY];
-    uint8_t entity_channel[BRICK_ENTITY_CAPACITY];
-    uint8_t entity_source[BRICK_ENTITY_CAPACITY];
-    if ((family == NULL) || (type == NULL) || (midi_channel == NULL) || (midi_source == NULL))
-    {
-        return false;
-    }
-    for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
-    {
-        const ui_track_config_t config = track_state_get_config(track);
-        entity_family[track] = (track < UI_TRACK_COUNT) ? family[track] : (uint8_t)config.family;
-        entity_type[track] = (track < UI_TRACK_COUNT) ? type[track] : (uint8_t)config.type;
-        entity_channel[track] = (track < UI_TRACK_COUNT) ? midi_channel[track] : track_state_get_midi_channel(track);
-        entity_source[track] = (track < UI_TRACK_COUNT) ? midi_source[track] : (uint8_t)track_state_get_midi_source(track);
-    }
-    return track_state_apply_entity_bulk_with_inputs(entity_family, entity_type,
-                                                       entity_channel, entity_source,
-                                                       external_input);
-}
-
-bool track_state_apply_entity_bulk_with_inputs(
+static bool track_state_apply_entity_bulk_with_inputs(
     const uint8_t family[BRICK_ENTITY_CAPACITY],
     const uint8_t type[BRICK_ENTITY_CAPACITY],
     const uint8_t midi_channel[BRICK_ENTITY_CAPACITY],
@@ -428,7 +267,6 @@ bool track_state_apply_entity_bulk_with_inputs(
                 .family = fam,
                 .type = typ
             };
-            track_state_normalize_config(&normalized);
             if ((normalized.family != UI_TRACK_FAMILY_OFF)
                     && !ui_track_catalog_type_is_valid_for_family(normalized.family, normalized.type))
             {

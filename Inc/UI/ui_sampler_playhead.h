@@ -11,6 +11,8 @@ typedef struct
     float normalized_position;
 } ui_sampler_playhead_view_t;
 
+void ui_sampler_playhead_init(void);
+
 /* CONTROL-side notification emitted only after the logical note event has
  * been accepted for AUDIO projection. */
 void ui_sampler_playhead_note_trigger(brick_entity_id_t entity_id,

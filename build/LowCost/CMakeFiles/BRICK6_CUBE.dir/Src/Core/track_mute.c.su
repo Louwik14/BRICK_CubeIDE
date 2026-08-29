@@ -1,7 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_mute.c:25:19:track_mute_get_kind	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_mute.c:53:9:track_mute_is_available	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_mute.c:68:9:track_mute_get	16	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_mute.c:75:9:track_mute_is_effectively_muted	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_mute.c:104:9:track_mute_set	80	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_mute.c:155:9:track_mute_should_suppress_note_on	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_mute.c:160:6:track_mute_reproject_after_topology_change	32	static

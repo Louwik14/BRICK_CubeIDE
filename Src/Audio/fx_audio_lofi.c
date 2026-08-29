@@ -1,4 +1,4 @@
-#include "Audio/fx_audio_lofi.h"
+#include "fx_audio_lofi.h"
 #include <limits.h>
 #include <math.h>
 #include <stddef.h>

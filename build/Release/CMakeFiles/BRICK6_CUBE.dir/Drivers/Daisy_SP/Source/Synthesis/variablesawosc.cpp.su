@@ -1,6 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/variablesawosc.cpp:7:6:void daisysp::VariableSawOscillator::Init(float)	0	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/variablesawosc.cpp:21:7:float daisysp::VariableSawOscillator::Process()	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/variablesawosc.cpp:70:6:void daisysp::VariableSawOscillator::SetFreq(float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/variablesawosc.cpp:78:6:void daisysp::VariableSawOscillator::SetPW(float)	0	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/variablesawosc.cpp:90:6:void daisysp::VariableSawOscillator::SetWaveshape(float)	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Drivers/Daisy_SP/Source/Synthesis/variablesawosc.cpp:95:7:float daisysp::VariableSawOscillator::ComputeNaiveSample(float, float, float, float, float, float)	0	static

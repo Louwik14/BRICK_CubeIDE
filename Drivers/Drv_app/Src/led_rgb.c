@@ -33,7 +33,7 @@
 #include "led_remap.h"
 #include "led_anim.h"
 #include "led_layer.h"
-#include "Core/project_control.h"
+#include "Storage/project_control.h"
 #include "Storage/sample_capture.h"
 #include "UI/ui_core.h"
 #include "UI/ui_core_runtime_bridge.h"

@@ -1,4 +1,4 @@
-#include "Audio/fx_audio_sub.h"
+#include "fx_audio_sub.h"
 #include <math.h>
 #include <stddef.h>
 __attribute__((always_inline)) static inline float one(fx_audio_sub_state_t*s,fx_audio_sub_channel_t*c,float x){const float dry=x,eq=s->eq,remain=s->one_minus_eq;if(x>0.0f){if(c->was_negative)c->sub_octave^=1U;c->was_negative=0U;}else c->was_negative=1U;c->d=c->d*remain+x*eq;float t=(c->sub_octave?fabsf(c->d):-fabsf(c->d))*s->sub+x*s->fundamental;c->a+=t*eq;const float a2=c->a*c->a;c->a-=a2*c->a*eq;c->a+=(c->a>0.0f)?-s->dcblock:s->dcblock;t=c->a*s->basstrim;c->b=c->b*remain+t*eq;c->c=c->c*remain+c->b*eq;if(s->wet_only)return c->c;return dry*s->dry+c->c*s->wet;}

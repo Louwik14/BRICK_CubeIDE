@@ -228,14 +228,7 @@ typedef struct
     float lpf;
 } mixer_reverb_state_t;
 
-static AUDIO_HOT mixer_reverb_state_t g_reverb = {
-    .wet = 0.0f,
-    .room_size = 0.60f,
-    .damping = 0.72f,
-    .width = 1.0f,
-    .hpf = 0.0f,
-    .lpf = 1.0f,
-};
+static AUDIO_HOT mixer_reverb_state_t g_reverb;
 
 static float g_delay_spectral_position = 0.50f;
 static float g_delay_spectral_width = 1.0f;
@@ -286,10 +279,14 @@ static uint8_t mixer_lane_routes_to_looper(uint8_t looper_track,
     return control_routing_audio_get_looper_source(looper_track, source_track);
 }
 
-static float mixer_get_looper_xfade(void)
+static float mixer_get_looper_xfade(float target)
 {
-    const float target = audio_xfade_get();
-    return audio_xfade_smooth_next(target, &g_looper_xfade_smoothed);
+    float value = g_looper_xfade_smoothed;
+    value += (target - value) * 0.25f;
+    if (value < 0.0f) value = 0.0f;
+    else if (value > 1.0f) value = 1.0f;
+    g_looper_xfade_smoothed = value;
+    return value;
 }
 
 static uint8_t mixer_looper_xfade_value_is_zero(float value)

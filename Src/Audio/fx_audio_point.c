@@ -1,4 +1,4 @@
-#include "Audio/fx_audio_point.h"
+#include "fx_audio_point.h"
 
 #include <math.h>
 #include <stddef.h>

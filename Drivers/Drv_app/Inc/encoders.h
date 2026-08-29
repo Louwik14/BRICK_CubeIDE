@@ -3,8 +3,8 @@
 
 #include <stdint.h>
 
-#include "Core/brick_build_config.h"
-#include "Core/encoder_binding.h"
+#include "Platform/brick_build_config.h"
+#include "App/encoder_binding.h"
 
 typedef enum
 {

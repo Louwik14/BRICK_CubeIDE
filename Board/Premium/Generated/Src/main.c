@@ -36,12 +36,12 @@
 #include "midi.h"
 #include "midi_host.h"
 #include "sdram.h"
-#include "engine_tasklet.h"
+#include "App/engine_tasklet.h"
 #include "ui_tasklet.h"
-#include "brick6_app_init.h"
+#include "App/brick6_app_init.h"
 #if BRICK_TEST_BUILD
-#include "Core/crash_capsule.h"
-#include "Core/diagnostic_watchdog.h"
+#include "Platform/crash_capsule.h"
+#include "Platform/diagnostic_watchdog.h"
 #endif
 #include "audio.h"
 #include "audio_float.h"
@@ -50,7 +50,7 @@
 #include "led_ids.h"
 #include "display_flush_service.h"
 #include "ui_renderer_oled.h"
-#include "Core/power_shutdown.h"
+#include "App/power_shutdown.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/

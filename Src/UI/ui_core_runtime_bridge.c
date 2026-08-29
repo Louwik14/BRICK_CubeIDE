@@ -4,8 +4,8 @@
 #include "App/Hall/hall_engine.h"
 #include "IPC/control_audio_command.h"
 #include "IPC/control_audio_publication.h"
-#include "Core/live_clock.h"
-#include "Core/control_routing.h"
+#include "IPC/live_clock.h"
+#include "Track/control_routing.h"
 #include "Track/track_input_ownership.h"
 #include "Track/track_runtime.h"
 #include "Track/track_state.h"
@@ -37,28 +37,11 @@
 #include <stdio.h>
 #include <string.h>
 
-#define UI_LOOPER_LEN_STEPS_PER_BAR 16U
-#define UI_LOOPER_LEN_UNLIMITED_STEPS 0U
-
 /*
  * Runtime bridge for ui_core:
  * - ui_core keeps arbitration and UI state.
  * - this module owns the explicit UI -> runtime execution seam.
  */
-static uint8_t g_active_looper_record_track = 0xFFU;
-static uint8_t g_looper_take_track = 0xFFU;
-static uint8_t g_looper_record_auto_stop_latched = 0U;
-static uint8_t g_looper_take_notified = 0U;
-static uint8_t g_looper_transport_was_running = 0U;
-static uint8_t g_looper_transport_start_prearmed = 0U;
-
-static uint8_t ui_core_runtime_bridge_looper_record_is_active(void);
-static uint8_t ui_core_runtime_bridge_looper_play_is_auto(uint8_t track);
-static uint8_t ui_core_runtime_bridge_looper_handle_stop(ui_core_runtime_bridge_feedback_fn feedback);
-static uint8_t ui_core_runtime_bridge_looper_prepare_record_pre_transport_start(
-    ui_core_runtime_bridge_feedback_fn feedback);
-static uint8_t ui_core_runtime_bridge_looper_start_track(uint8_t track,
-                                                         ui_core_runtime_bridge_feedback_fn feedback);
 static uint8_t ui_core_runtime_bridge_looper_handle_save(ui_core_runtime_bridge_feedback_fn feedback);
 
 void ui_core_runtime_bridge_init(void)
@@ -88,14 +71,7 @@ static uint8_t ui_core_runtime_bridge_transport_play_command(const ui_event_t *e
 
     (void)shift_down;
     (void)track_select_armed;
-    if ((seq_runtime_is_running() == 0U) && (seq_runtime_is_start_pending() == 0U))
-    {
-        (void)ui_core_runtime_bridge_looper_prepare_record_pre_transport_start(feedback);
-        g_looper_transport_was_running = 1U;
-        g_looper_transport_start_prearmed = 1U;
-    }
     seq_runtime_toggle_play_stop();
-    ui_core_runtime_bridge_service_looper_record_control(feedback);
     return 1U;
 }
 
@@ -151,143 +127,6 @@ static uint8_t ui_core_runtime_bridge_transport_rec_command(const ui_event_t *ev
     const uint8_t rec_target_track = ui_get_active_lane();
     seq_runtime_set_pattern_rec_target_track(rec_target_track);
     seq_runtime_rec_toggle_arm();
-    ui_core_runtime_bridge_service_looper_record_control(feedback);
-    return 1U;
-}
-
-static uint32_t ui_core_runtime_bridge_looper_len_to_steps(float len)
-{
-    const uint8_t len_index = (uint8_t)(len + 0.5f);
-    uint32_t bars = 0U;
-
-    switch (len_index)
-    {
-        case 1U:
-            bars = 1U;
-            break;
-        case 2U:
-            bars = 2U;
-            break;
-        case 3U:
-            bars = 4U;
-            break;
-        case 4U:
-            bars = 8U;
-            break;
-        case 5U:
-            bars = 16U;
-            break;
-        default:
-            return UI_LOOPER_LEN_UNLIMITED_STEPS;
-    }
-
-    return bars * UI_LOOPER_LEN_STEPS_PER_BAR;
-}
-
-static uint32_t ui_core_runtime_bridge_looper_track_len_steps(uint8_t track)
-{
-    float len = 0.0f;
-    if (param_registry_get_track_value(PARAM_LOOPER_LEN, track, &len) == 0U)
-    {
-        return UI_LOOPER_LEN_UNLIMITED_STEPS;
-    }
-
-    return ui_core_runtime_bridge_looper_len_to_steps(len);
-}
-
-static uint8_t ui_core_runtime_bridge_looper_len_mode(uint8_t track)
-{
-    float len = 0.0f;
-    if (param_registry_get_track_value(PARAM_LOOPER_LEN, track, &len) == 0U)
-    {
-        return 0U;
-    }
-
-    return (uint8_t)(len + 0.5f);
-}
-
-static uint32_t ui_core_runtime_bridge_looper_expected_record_frames(uint8_t track)
-{
-    const uint32_t target_steps = ui_core_runtime_bridge_looper_track_len_steps(track);
-    if (target_steps == UI_LOOPER_LEN_UNLIMITED_STEPS)
-    {
-        return 0U;
-    }
-
-    const uint32_t samples_per_step_q16 = seq_runtime_get_samples_per_step_q16();
-    if (samples_per_step_q16 == 0U)
-    {
-        return 0U;
-    }
-
-    const uint64_t frames_q16 = (uint64_t)target_steps * (uint64_t)samples_per_step_q16;
-    uint64_t frames = (frames_q16 + 0xFFFFULL) >> 16;
-    if (frames > 0xFFFFFFFFULL)
-    {
-        frames = 0xFFFFFFFFULL;
-    }
-    return (uint32_t)frames;
-}
-
-static uint8_t ui_core_runtime_bridge_looper_play_is_auto(uint8_t track)
-{
-    float play = 0.0f;
-    return (uint8_t)(((param_registry_get_track_value(PARAM_LOOPER_PLAY, track, &play) != 0U)
-            && ((uint8_t)(play + 0.5f) == 1U)) ? 1U : 0U);
-}
-
-static uint8_t ui_core_runtime_bridge_looper_record_is_active(void)
-{
-    return audio_recorder_client_is_active(
-        AUDIO_RECORDER_CLIENT_LOOPER);
-}
-
-static uint8_t ui_core_runtime_bridge_looper_track_has_route(uint8_t track)
-{
-    if (track >= UI_TRACK_COUNT)
-    {
-        return 0U;
-    }
-
-    for (uint8_t source = 0U; source < UI_TRACK_COUNT; ++source)
-    {
-        if ((source != track) && (control_routing_get_looper_source(track,source) != 0U))
-        {
-            return 1U;
-        }
-    }
-
-    return 0U;
-}
-
-static void ui_core_runtime_bridge_looper_clear_take_metadata(void)
-{
-    g_looper_take_track = 0xFFU;
-    g_looper_take_notified = 0U;
-}
-
-static uint8_t ui_core_runtime_bridge_looper_handle_stop(ui_core_runtime_bridge_feedback_fn feedback)
-{
-    if (ui_core_runtime_bridge_looper_record_is_active() == 0U)
-    {
-        return 0U;
-    }
-
-    (void)audio_recorder_control_request_looper_stop(
-        live_clock_audio_sample(), seq_runtime_is_running());
-    if(audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_LOOPER) != 0U)
-    {
-        if (feedback != 0)
-        {
-            feedback("LOOP STOP");
-        }
-        return 1U;
-    }
-
-    if (feedback != 0)
-    {
-        feedback("LOOP ERR");
-    }
     return 1U;
 }
 
@@ -319,13 +158,16 @@ static uint8_t ui_core_runtime_bridge_looper_handle_save(ui_core_runtime_bridge_
         if(feedback != 0) feedback("LOOP FAIL");
         return 1U;
     }
+    uint8_t take_track = 0xFFU;
+    (void)audio_recorder_control_looper_take_track(&take_track);
     if(feedback != 0)
         feedback(((live_status.state == AUDIO_RECORDER_STATE_TAKE_READY)
                 && (live_status.frames_committed != 0U)
-                && (g_looper_take_track == track)) ? "LOOP SAVED" : "NO LOOP");
+                && (take_track == track)) ? "LOOP SAVED" : "NO LOOP");
     return 1U;
 }
 
+#if 0 /* Removed transport-origin Looper start path; retained temporarily only as diff context. */
 static uint8_t ui_core_runtime_bridge_looper_track_is_record_eligible(uint8_t track)
 {
     if (ui_core_runtime_bridge_track_is_sampler_looper(track) == 0U)
@@ -572,6 +414,7 @@ void ui_core_runtime_bridge_service_looper_record_control(ui_core_runtime_bridge
 
     (void)ui_core_runtime_bridge_looper_start_track(eligible_track, feedback);
 }
+#endif
 
 static void ui_core_runtime_bridge_notify_keyboard_active_track_changed(void)
 {
@@ -747,17 +590,6 @@ void ui_core_runtime_bridge_set_looper_route_enabled(uint8_t looper_track, uint8
     }
 
     (void)control_routing_set_looper_source(looper_track,source_track,enabled);
-}
-
-uint8_t ui_core_runtime_bridge_get_active_looper_record_track(uint8_t *out_track)
-{
-    if ((out_track == 0) || (g_active_looper_record_track >= UI_TRACK_COUNT))
-    {
-        return 0U;
-    }
-
-    *out_track = g_active_looper_record_track;
-    return 1U;
 }
 
 uint8_t ui_core_runtime_bridge_handle_transport_event(const ui_event_t *ev,

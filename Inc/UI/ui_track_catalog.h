@@ -4,10 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "ui_core.h"
-#include "Core/brick_build_config.h"
-
-#define BRICK6_MAX_CLIP_TRACKS 4U
+#include "Track/track_types.h"
+#include "Platform/brick_build_config.h"
 
 bool ui_track_catalog_family_is_engine(ui_track_family_t family);
 bool ui_track_catalog_type_is_valid_for_family(ui_track_family_t family, ui_track_type_t type);

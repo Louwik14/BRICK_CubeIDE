@@ -14,7 +14,7 @@
 #include "Track/track_state.h"
 
 #include "Seq/seq_edit.h"
-#include "Core/control_music_output.h"
+#include "Track/control_music_output.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_model.h"
 #include "Seq/seq_runtime_control.h"

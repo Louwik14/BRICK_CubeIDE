@@ -35,6 +35,7 @@
 #include "fx_saturation.h"
 #include "Platform/memory_layout.h"
 #include "audio_io.h"
+#include "Audio/audio_diag_capture.h"
 #include "dsp_engine.h"
 #include "fx_pool.h"
 #include "fx_comp_lab.h"
@@ -47,10 +48,11 @@
    master_gain    : gain master appliqué après somme des tracks.
    ============================================================ */
 
-static AUDIO_HOT float postgain_recip = 1.0f;
-static AUDIO_HOT float output_adjust = 1.0f;
-static AUDIO_HOT float master_gain_smoothed = 1.0f;
-static AUDIO_HOT float master_gain_target = 1.0f;
+static AUDIO_HOT float postgain_recip;
+static AUDIO_HOT float output_adjust;
+static AUDIO_HOT float master_gain_smoothed;
+static AUDIO_HOT float master_gain_target;
+static AUDIO_HOT float master_gain;
 
 static float postgain = 1.0f;
 static float output_comp = 1.0f;
@@ -157,6 +159,24 @@ void audio_float_set_output_compensation(float comp)
 {
     output_comp = comp;
     output_adjust = postgain * output_comp;
+}
+
+void audio_float_init_gain_staging(float boot_postgain,
+                                   float boot_output_compensation)
+{
+    if (boot_postgain <= 0.0f)
+        boot_postgain = 1.0f;
+
+    postgain = boot_postgain;
+    postgain_recip = 1.0f / boot_postgain;
+    output_comp = boot_output_compensation;
+    output_adjust = boot_postgain * boot_output_compensation;
+
+    /* Master remains silent until the physical pot value is published after
+     * the AUDIO timeline anchor has been established. */
+    master_gain = 0.0f;
+    master_gain_target = 0.0f;
+    master_gain_smoothed = 0.0f;
 }
 
 /**
@@ -423,7 +443,6 @@ volatile uint32_t g_audio_block_counter = 0U;
 volatile uint32_t g_audio_dsp_frames_counter = 0U;
 
 /* Gain master global (après somme des tracks). */
-static AUDIO_HOT float master_gain = 1.0f;
 static AUDIO_HOT uint32_t g_audio_tracks_enabled_mask;
 
 /* ============================================================
@@ -453,10 +472,6 @@ void audio_tracks_init(void)
     if(eq) fx_dj_eq3_init(eq, 48000.0f, 200.0f, 1000.0f, 1.0f, 6000.0f);
 
     if(sat) fx_saturation_init(sat);
-
-    master_gain = 1.0f;
-    master_gain_target = 1.0f;
-    master_gain_smoothed = 1.0f;
 
     fx_comp_lab_t *comp = fx_pool_comp_lab_state();
     if(comp) fx_comp_lab_init(comp, 48000.0f);
@@ -566,6 +581,7 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
                                int32_t *AUDIO_RESTRICT tx,
                                uint32_t frames)
 {
+    audio_diag_capture_begin_block(frames);
     g_audio_block_counter++;
     g_audio_dsp_frames_counter += frames;
 
@@ -584,6 +600,7 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
                          frames,
                          out_gain_start,
                          out_gain_end);
+    audio_diag_capture_end_block(frames);
 }
 
 /**

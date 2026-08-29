@@ -18,10 +18,10 @@
 #include <iostream>
 #endif
 
-#include "Audio/Engines/fm_dexed/msfa/synth.h"
-#include "Audio/Engines/fm_dexed/msfa/exp2.h"
-#include "Audio/Engines/fm_dexed/msfa/fm_op_kernel.h"
-#include "Audio/Engines/fm_dexed/msfa/fm_core.h"
+#include "synth.h"
+#include "exp2.h"
+#include "fm_op_kernel.h"
+#include "fm_core.h"
 #include "Platform/memory_layout.h"
 
 

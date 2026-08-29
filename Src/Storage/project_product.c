@@ -1,9 +1,8 @@
 #include "Storage/project_product.h"
-#include "Core/project_load_quiesce.h"
+#include "Storage/project_load_quiesce.h"
 #include "Storage/audio_recorder.h"
 #include "Sampler/sample_stream_transport.h"
 #include "SD/sd_scheduler_runtime.h"
-#include "Storage/persistent_project_control.h"
 #include "Storage/persistent_pattern_control.h"
 #include "Storage/persistent_fatfs_io.h"
 #include "Storage/pattern_control_bank.h"
@@ -12,8 +11,7 @@
 #include "Platform/memory_layout.h"
 #include "Storage/boot_context_flash.h"
 #include "Storage/pattern_live_ram.h"
-#include "Storage/persistent_pattern_restore_prepare.h"
-#include "Core/project_control.h"
+#include "Storage/project_control.h"
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/multi_sample_pool.h"
 #include "Sampler/sample_global_pool.h"
@@ -30,6 +28,15 @@ static uint8_t g_present[PROJECT_PRODUCT_SLOT_COUNT],g_active_valid,g_active;
 static project_product_progress_t g_progress;
 static project_product_save_error_t g_save_error;
 static int32_t g_save_detail;
+
+static void project_capture_metadata(persist_codec_project_metadata_t *out)
+{
+    if (out == NULL) return;
+    out->active_pattern_bank = 0U;
+    out->active_pattern = 0U;
+    (void)pattern_live_get_active(&out->active_pattern_bank,
+                                  &out->active_pattern);
+}
 
 typedef enum
 {
@@ -221,7 +228,7 @@ uint8_t project_product_save(uint8_t slot)
     persist_codec_result_t codec_result=persistent_pattern_control_capture(&workspace->working_pattern);
     if(codec_result!=PERSIST_CODEC_OK){g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SNAPSHOT;g_save_detail=(int32_t)codec_result;persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);return 0U;}
     memset(&g_project_save,0,sizeof(g_project_save));g_project_save.workspace=workspace;g_project_save.slot=slot;
-    persistent_project_control_capture_metadata(&g_project_save.metadata);
+    project_capture_metadata(&g_project_save.metadata);
     g_project_save.metadata.pattern_count=pattern_control_bank_count();
     g_project_save.metadata.asset_count=project_control_asset_count();
     if(g_project_save.metadata.asset_count>PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY
@@ -474,14 +481,14 @@ uint8_t project_product_load(uint8_t slot)
     ok=(ok&&r==PERSIST_CODEC_OK&&restore->working_valid!=0U&&restore->macros_valid!=0U);if(source.context!=NULL)persistent_fatfs_close(&f);sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
     if(ok)ok=project_control_begin_asset_restore();
     for(uint16_t i=0U;ok&&i<restore->asset_count;++i)ok=project_control_put_asset(&restore->assets[i]);
-    if(ok)ok=(persistent_pattern_restore_execute(&restore->working_pattern,0U)==PERSIST_CODEC_OK)?1U:0U;
+    if(ok)ok=(persistent_pattern_control_install_restored(&restore->working_pattern,0U)==PERSIST_CODEC_OK)?1U:0U;
     if(ok)ok=project_control_apply_macros(&restore->macros);
     if(ok)pattern_live_set_active_state(restore->metadata.active_pattern_bank,restore->metadata.active_pattern,0U,0U,0U);
     persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_RESTORE);g_progress.done=1U;g_progress.complete=(ok&&multi_sample_load_has_pending()!=0U)?0U:1U;g_progress.active=(ok&&g_progress.complete==0U)?1U:0U;if(ok){g_active=slot;g_active_valid=1U;(void)boot_context_flash_commit(slot);}sd_scheduler_runtime_exclusive_end();project_load_quiesce_end();return ok;
 }
 
 uint8_t project_product_delete(uint8_t slot){if(project_product_save_busy()!=0U||slot>=PROJECT_PRODUCT_SLOT_COUNT||!acquire())return 0U;char x[48];FRESULT r=FR_INVALID_NAME;if(path(x,sizeof(x),slot))r=f_unlink(x);sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);uint8_t ok=(r==FR_OK||r==FR_NO_FILE);if(ok){g_present[slot]=0U;if(g_active_valid&&g_active==slot)g_active_valid=0U;}return ok;}
-uint8_t project_product_blank(void){if(project_product_save_busy()!=0U)return 0U;persist_codec_project_workspace_t*w=persistence_workspace_acquire_project();if(w==NULL)return 0U;persist_control_pattern_t*p=&w->unit.pattern_record.content;uint8_t ok=(pattern_live_get_control_boot(p)&&project_control_begin_asset_restore())?1U:0U;if(ok){project_control_reset_macros();ok=pattern_control_bank_clear();}if(ok){g_active_valid=0U;ok=(persistent_pattern_restore_execute(p,0U)==PERSIST_CODEC_OK)?1U:0U;}if(ok){pattern_live_set_active_state(0U,0U,0U,0U,0U);boot_context_flash_clear();}persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT);return ok;}
+uint8_t project_product_blank(void){if(project_product_save_busy()!=0U)return 0U;persist_codec_project_workspace_t*w=persistence_workspace_acquire_project();if(w==NULL)return 0U;persist_control_pattern_t*p=&w->unit.pattern_record.content;uint8_t ok=(pattern_live_get_control_boot(p)&&project_control_begin_asset_restore())?1U:0U;if(ok){project_control_reset_macros();ok=pattern_control_bank_clear();}if(ok){g_active_valid=0U;ok=(persistent_pattern_control_install_restored(p,0U)==PERSIST_CODEC_OK)?1U:0U;}if(ok){pattern_live_set_active_state(0U,0U,0U,0U,0U);boot_context_flash_clear();}persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT);return ok;}
 project_product_boot_restore_result_t project_product_restore_boot(void)
 {
     boot_context_flash_data_t context;

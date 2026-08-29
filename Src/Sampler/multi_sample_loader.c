@@ -9,7 +9,7 @@
 #include "Sampler/sample_stream_manager.h"
 #include "Sampler/sample_stream_transport.h"
 #include "Sampler/sample_cache.h"
-#include "Core/project_control.h"
+#include "Storage/project_control.h"
 #include "Seq/seq_runtime.h"
 #include "Platform/memory_layout.h"
 #include "Storage/audio_recorder.h"
@@ -73,6 +73,16 @@ typedef struct
 SDRAM_MULTI_LOAD static multi_sample_bulk_plan_t
     g_multi_bulk_plans[MULTI_SAMPLE_MAX_SAMPLES];
 static multi_sample_bulk_state_t g_multi_bulk;
+
+void multi_sample_loader_init(void)
+{
+    memset(&g_multi_load_diag, 0, sizeof(g_multi_load_diag));
+    g_multi_load_active = 0U;
+    g_multi_load_first_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
+    memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
+    memset(g_multi_load_queue, 0, sizeof(g_multi_load_queue));
+    memset(&g_multi_bulk, 0, sizeof(g_multi_bulk));
+}
 
 static uint8_t multi_loader_copy_text(char *dst, uint32_t dst_size, const char *src)
 {

@@ -14,12 +14,12 @@
 
 #include "Keyboard/keyboard_engine.h"
 
-#include "Core/control_music_output.h"
+#include "Track/control_music_output.h"
 #include "Keyboard/keyboard_params.h"
 #include "MIDI/midi.h"
 #include "ui_core.h"
 #include "Track/track_runtime.h"
-#include "Core/live_clock.h"
+#include "IPC/live_clock.h"
 #include "Track/track_mute.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Seq/seq_runtime.h"

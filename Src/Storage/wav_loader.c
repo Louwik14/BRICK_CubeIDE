@@ -842,6 +842,7 @@ static uint8_t wav_loader_catalog_save(void)
 
 void wav_loader_catalog_init_load(void)
 {
+    memset(&g_wav_catalog_diag, 0, sizeof(g_wav_catalog_diag));
 #if WAV_LOADER_HAS_FATFS
     wav_loader_catalog_file_header_t header;
 

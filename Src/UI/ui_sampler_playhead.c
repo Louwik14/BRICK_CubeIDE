@@ -5,6 +5,16 @@
 CTRL_STATE static uint64_t
     g_ui_sampler_playhead[BRICK_ENTITY_CAPACITY];
 
+void ui_sampler_playhead_init(void)
+{
+    for (brick_entity_id_t entity_id = 0U;
+         entity_id < BRICK_ENTITY_CAPACITY;
+         ++entity_id)
+    {
+        g_ui_sampler_playhead[entity_id] = 0ULL;
+    }
+}
+
 void ui_sampler_playhead_note_trigger(brick_entity_id_t entity_id,
                                       uint64_t due_sample)
 {

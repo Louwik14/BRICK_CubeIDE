@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include "Core/brick6_looper_runtime.h"
+#include "Audio/brick6_looper_runtime.h"
 #include "ui_core.h"
 #include "ui_event.h"
 
@@ -42,7 +42,6 @@ uint8_t ui_core_runtime_bridge_handle_routing_event(const ui_event_t *ev,
                                                     ui_core_runtime_bridge_suppress_hall_note_fn suppress_hall_note);
 uint8_t ui_core_runtime_bridge_get_looper_route_enabled(uint8_t looper_track, uint8_t source_track);
 void ui_core_runtime_bridge_set_looper_route_enabled(uint8_t looper_track, uint8_t source_track, uint8_t enabled);
-uint8_t ui_core_runtime_bridge_get_active_looper_record_track(uint8_t *out_track);
 
 uint8_t ui_core_runtime_bridge_handle_transport_event(const ui_event_t *ev,
                                                       uint8_t mute_active,
@@ -50,7 +49,6 @@ uint8_t ui_core_runtime_bridge_handle_transport_event(const ui_event_t *ev,
                                                       uint8_t track_select_armed,
                                                       ui_core_runtime_bridge_pattern_enter_fn pattern_enter,
                                                       ui_core_runtime_bridge_feedback_fn feedback);
-void ui_core_runtime_bridge_service_looper_record_control(ui_core_runtime_bridge_feedback_fn feedback);
 
 uint8_t ui_core_runtime_bridge_request_undo(ui_core_runtime_bridge_feedback_fn feedback);
 

@@ -4,7 +4,7 @@
 #include <string.h>
 #include <math.h>
 
-#include "cpu_load.h"
+#include "Platform/cpu_load.h"
 #include "drv_display.h"
 #include "font.h"
 #include "Keyboard/keyboard_runtime.h"
@@ -16,9 +16,9 @@
 #include "ui_widgets.h"
 #include "pages/ui_page_template_play.h"
 #include "Audio/Engines/stack_engine.h"
-#include "Core/brick6_stack_waveform.h"
-#include "Core/project_control.h"
-#include "Core/live_clock.h"
+#include "Audio/brick6_stack_waveform.h"
+#include "Storage/project_control.h"
+#include "IPC/live_clock.h"
 #include "UI/ui_sampler_playhead.h"
 #include "Track/track_runtime.h"
 #include "Track/track_state.h"

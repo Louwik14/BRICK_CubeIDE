@@ -1,7 +1,7 @@
 #include "Param/param_registry_backends.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_mod_matrix.h"
-#include "Core/live_parameter_audio_runtime.h"
+#include "Audio/live_parameter_audio_runtime.h"
 #include "Param/param_registry.h"
 
 #include <stddef.h>

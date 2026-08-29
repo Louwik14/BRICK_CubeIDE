@@ -8,7 +8,7 @@
 #include "Audio/synth_waveform_snapshot.h"
 #include "Audio/Engines/fm_engine.h"
 #include "Audio/Engines/stack_engine.h"
-#include "Core/project_control.h"
+#include "Storage/project_control.h"
 #include "Param/param_registry.h"
 #include "Param/param_prism_labels.h"
 #include "Param/param_stack_labels.h"

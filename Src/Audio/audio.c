@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file audio.c
  * @brief Couche matérielle audio STM32H743 (SAI stereo 24-bit + DMA double buffer).
  *
@@ -20,12 +20,13 @@
 
 #include "audio.h"
 #include "audio_float.h"
-#include "cpu_load.h"
-#include "Core/live_clock.h"
+#include "Platform/cpu_load.h"
+#include "IPC/live_clock.h"
 #include "Platform/memory_layout.h"
 #include "Platform/cache_maintenance.h"
 #include "Audio/metronome_runtime.h"
 #include "IPC/control_audio_fifo.h"
+#include "IPC/control_audio_publication.h"
 #include "Audio/audio_command_executor.h"
 #include "Audio/audio_fx_runtime.h"
 #include "Audio/audio_waveform_capture.h"
@@ -35,13 +36,12 @@
 #include "Audio/audio_mod_matrix.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_env3.h"
-#include "Audio/audio_mod_matrix.h"
 #include "Board/board_audio.h"
 #include "Board/board_audio_format.h"
-#include "Core/brick6_looper_runtime.h"
+#include "Audio/brick6_looper_runtime.h"
 #include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
 #include "Audio/Engines/wavetable_engine.h"
-#include "Core/brick6_stream_service_task.h"
+#include "Storage/brick6_stream_service_task.h"
 
 #include <string.h>
 #include <stdint.h>
@@ -231,6 +231,7 @@ void audio_boot_init_binding_io(void)
 {
     live_clock_init();
     control_audio_fifo_init();
+    control_audio_publication_init();
     audio_command_executor_init();
     audio_note_engine_adapter_init();
     audio_mod_matrix_init();

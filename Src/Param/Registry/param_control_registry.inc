@@ -375,16 +375,6 @@ static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx)
     return applied;
 }
 
-static uint8_t param_track_exec_sync_after_apply(const param_track_exec_ctx_t *ctx, uint8_t applied)
-{
-    if ((ctx == NULL) || (applied == 0U))
-    {
-        return 0U;
-    }
-
-    return applied;
-}
-
 static uint8_t param_apply_non_filter_track_value_core(param_id_t id,
                                                        uint8_t track,
                                                        float clamped,
@@ -441,8 +431,7 @@ static uint8_t param_apply_non_filter_track_value_core(param_id_t id,
         return 0U;
     }
 
-    return param_track_exec_sync_after_apply(&ctx,
-                                             param_track_exec_apply_backend(&ctx));
+    return param_track_exec_apply_backend(&ctx);
 }
 
 static uint8_t param_apply_non_filter_track_value(param_id_t id, uint8_t track, float clamped)

@@ -1,4 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_runtime.c:65:6:live_parameter_audio_runtime_init	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_runtime.c:77:9:live_parameter_audio_runtime_tone_get	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_runtime.c:86:9:live_parameter_audio_runtime_apply_tone_slot	48	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/live_parameter_audio_runtime.c:111:9:live_parameter_audio_runtime_apply_param	56	static

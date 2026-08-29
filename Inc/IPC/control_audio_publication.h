@@ -6,6 +6,7 @@
 
 /* Sole M4 writer API.  Producers may stage locally, but only this module owns
  * final ordering and the shared FIFO head. */
+void control_audio_publication_init(void);
 uint8_t control_audio_publish_batch(const control_audio_command_t *commands,
                                     uint16_t count);
 uint8_t control_audio_publication_begin_horizon(uint64_t first_sample,

@@ -14,13 +14,13 @@
 #include "Audio/audio_float.h"
 #include "Audio/mixer.h"
 #include "Board/board_audio_format.h"
-#include "Core/brick6_clip_shifter.h"
+#include "Audio/brick6_clip_shifter.h"
 #include "IPC/audio_transport_publication.h"
 #include "Track/synth_polyphony.h"
+#include "Track/track_types.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_matrix.h"
 #include "Platform/memory_layout.h"
-#include "Audio/audio_note_engine_adapter.h"
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/multi_sample_pool.h"
 #include "IPC/multi_sample_audio_projection.h"
@@ -35,7 +35,6 @@
 #include "IPC/sampler_ram_audio_projection.h"
 #include "Audio/audio_shared_memory.h"
 #include "Seq/seq_runtime.h"
-#include "UI/ui_track_catalog.h"
 
 /* The sampler voice table is a lane resource.  GROUP children reuse this
  * table; they do not allocate a second sampler pool. */

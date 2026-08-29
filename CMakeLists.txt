@@ -20,6 +20,7 @@ message("BRICK6 variant: ${BRICK6_VARIANT}")
 
 option(BRICK_TEST_BUILD "Include diagnostic-only firmware features" OFF)
 message("BRICK test build: ${BRICK_TEST_BUILD}")
+option(BRICK6_AUDIO_DIAG_CAPTURE "Temporary bounded audio-path capture" OFF)
 
 set(FM_KERNEL_BENCH "0" CACHE STRING
     "Experimental DX7 algorithm-1 renderer: 0=MSFA, 1=sample-centric log kernel")
@@ -204,9 +205,9 @@ file(GLOB SRC_IPC_SRC CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/*.cpp"
 )
 
-file(GLOB SRC_CORE_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/*.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/*.cpp"
+file(GLOB SRC_PLATFORM_SRC CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/*.cpp"
 )
 
 file(GLOB SRC_TRACK_SRC CONFIGURE_DEPENDS
@@ -214,13 +215,8 @@ file(GLOB SRC_TRACK_SRC CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/*.cpp"
 )
 
-list(APPEND SRC_CORE_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/encoder_control_dispatcher.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/live_parameter_audio_runtime.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/live_parameter_event.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/live_parameter_migration.c"
+list(APPEND SRC_AUDIO_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/Sampler/brick6_sampler_runtime.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_waveform.c"
 )
 
 file(GLOB SRC_KEYBOARD_SRC
@@ -409,8 +405,8 @@ file(GLOB SRC_NOTE_FX_SRC CONFIGURE_DEPENDS
 )
 
 set(BRICK_TEST_ONLY_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/crash_capsule.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/diagnostic_watchdog.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/crash_capsule.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/diagnostic_watchdog.c"
 )
 
 if(NOT BRICK_TEST_BUILD)
@@ -429,7 +425,7 @@ set(ALL_USER_SOURCES
     ${SRC_APP_SRC}
     ${SRC_AUDIO_SRC}
     ${SRC_IPC_SRC}
-    ${SRC_CORE_SRC}
+    ${SRC_PLATFORM_SRC}
     ${SRC_TRACK_SRC}
     ${SRC_KEYBOARD_SRC}
     ${SRC_MIDI_SRC}
@@ -480,11 +476,11 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Board
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Audio
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Core
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/MIDI
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Param
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Storage
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/UI
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/UI
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/SD
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Inc
     ${BRICK6_VARIANT_DRIVER_INC_DIRS}
@@ -522,6 +518,7 @@ target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     $<$<CONFIG:Debug>:DEBUG>
     FM_KERNEL_BENCH=${FM_KERNEL_BENCH}
+    $<$<BOOL:${BRICK6_AUDIO_DIAG_CAPTURE}>:BRICK6_AUDIO_DIAG_CAPTURE=1>
 )
 
 if(BRICK6_VARIANT STREQUAL "premium")
@@ -587,12 +584,25 @@ set_source_files_properties(${BRAIDS_O3_SOURCES} PROPERTIES
     COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
 )
 
-# Common audio engine: keep LTO scoped to audio, DSP/modulation and synth runtime.
-set(AUDIO_ALL_SOURCES ${SRC_AUDIO_SRC})
-list(FILTER AUDIO_ALL_SOURCES INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
+# Optimization classes are role-based. Directory globs only assemble the
+# target; these explicit exceptions retain their historical CONTROL/runtime O1
+# non-LTO policy regardless of their Audio or Storage location.
+set(CONTROL_RUNTIME_O1_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/brick6_clip_shifter.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/live_parameter_audio_runtime.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/brick6_stream_service_task.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/project_control.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/project_load_quiesce.c"
+)
+
+# Common audio engine: keep LTO scoped to audio DSP/modulation and synth
+# runtime, excluding CONTROL/runtime units hosted physically by Audio.
+set(AUDIO_DSP_O3_LTO_SOURCES ${SRC_AUDIO_SRC})
+list(FILTER AUDIO_DSP_O3_LTO_SOURCES INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
+list(REMOVE_ITEM AUDIO_DSP_O3_LTO_SOURCES ${CONTROL_RUNTIME_O1_SOURCES})
 
 set(AUDIO_LTO_SOURCES
-    ${AUDIO_ALL_SOURCES} ${CMSIS_DSP_SRC} ${SRC_MOD_SRC}
+    ${AUDIO_DSP_O3_LTO_SOURCES} ${CMSIS_DSP_SRC} ${SRC_MOD_SRC}
     ${MUTABLE_BRAIDS_SRC} ${MUTABLE_PLAITS_CHORDS_SRC} ${MUTABLE_PLAITS_ENGINE_SRC}
     ${MUTABLE_PLAITS_ENGINE2_SRC} ${MUTABLE_PLAITS_FM_SRC} ${MUTABLE_PLAITS_PM_SRC}
     ${MUTABLE_PLAITS_SPEECH_SRC} ${MUTABLE_STMLIB_DSP_SRC}
@@ -602,10 +612,10 @@ set(AUDIO_LTO_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/audio_engine_dispatch.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/prism_engine.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/stack_engine.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_waveform.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/brick6_stack_waveform.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/wavetable_engine.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/Sampler/brick6_sampler_runtime.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_looper_runtime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/brick6_looper_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/synth_polyphony.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_apply_wrappers.c
 )
@@ -624,17 +634,17 @@ set_source_files_properties(${MOD_LFO_O3_SOURCES} PROPERTIES
 )
 
 set(AUDIO_O3_SOURCES
-    ${AUDIO_ALL_SOURCES}
+    ${AUDIO_DSP_O3_LTO_SOURCES}
     ${DEXED_FM_CORE_SRC}
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/fm_dx7_log_kernel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/fm_engine.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/audio_engine_dispatch.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/prism_engine.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/stack_engine.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_waveform.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/brick6_stack_waveform.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/wavetable_engine.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/Sampler/brick6_sampler_runtime.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_looper_runtime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/brick6_looper_runtime.c
     ${MUTABLE_BRAIDS_SRC} ${MUTABLE_PLAITS_CHORDS_SRC} ${MUTABLE_PLAITS_ENGINE_SRC}
     ${MUTABLE_PLAITS_ENGINE2_SRC} ${MUTABLE_PLAITS_FM_SRC} ${MUTABLE_PLAITS_PM_SRC}
     ${MUTABLE_PLAITS_SPEECH_SRC} ${MUTABLE_STMLIB_DSP_SRC}
@@ -643,7 +653,7 @@ set_source_files_properties(${AUDIO_O3_SOURCES} PROPERTIES
     COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
 )
 set_property(SOURCE
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_looper_runtime.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/brick6_looper_runtime.c"
     APPEND PROPERTY COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-g3>"
 )
 
@@ -675,12 +685,18 @@ set_source_files_properties(${SAMPLE_RENDER_HOT_SOURCES} PROPERTIES
     COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
 )
 
-# Storage en O0 : fichiers C et C++ du dossier Src/Storage
-set(STORAGE_ALL_SOURCES ${SRC_STORAGE_SRC})
-list(FILTER STORAGE_ALL_SOURCES INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
+# Storage I/O/persistence implementation in O0, excluding CONTROL/runtime
+# orchestration hosted physically by Storage.
+set(STORAGE_IO_O0_SOURCES ${SRC_STORAGE_SRC})
+list(FILTER STORAGE_IO_O0_SOURCES INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
+list(REMOVE_ITEM STORAGE_IO_O0_SOURCES ${CONTROL_RUNTIME_O1_SOURCES})
 
-set_source_files_properties(${STORAGE_ALL_SOURCES} PROPERTIES
+set_source_files_properties(${STORAGE_IO_O0_SOURCES} PROPERTIES
     COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O0>"
+)
+
+set_source_files_properties(${CONTROL_RUNTIME_O1_SOURCES} PROPERTIES
+    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O1>"
 )
 
 # U8g2 en O0

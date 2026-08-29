@@ -1,5 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/audio_rec_bus_projection.c:15:9:audio_rec_bus_projection_control_publish	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/audio_rec_bus_projection.c:9:6:audio_rec_bus_projection_control_init	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/audio_rec_bus_projection.c:32:9:audio_rec_bus_projection_audio_apply	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/audio_rec_bus_projection.c:41:6:audio_rec_bus_projection_audio_init	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/audio_rec_bus_projection.c:46:9:audio_rec_bus_projection_audio_read	0	static

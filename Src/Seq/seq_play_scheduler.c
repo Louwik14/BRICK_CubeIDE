@@ -14,9 +14,9 @@
 #include <string.h>
 #include "stm32h7xx_hal.h"
 #include "Track/track_runtime.h"
-#include "Core/live_clock.h"
+#include "IPC/live_clock.h"
 #include "Track/track_mute.h"
-#include "Core/control_music_output.h"
+#include "Track/control_music_output.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include "param_registry.h"
 #include "Param/param_registry_runtime_state.h"

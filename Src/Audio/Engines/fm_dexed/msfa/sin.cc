@@ -17,8 +17,8 @@
 #define _USE_MATH_DEFINES
 #include <math.h>
 
-#include "Audio/Engines/fm_dexed/msfa/synth.h"
-#include "Audio/Engines/fm_dexed/msfa/sin.h"
+#include "synth.h"
+#include "sin.h"
 
 #define R (1 << 29)
 

@@ -6,12 +6,12 @@
 #include "Audio/audio_fx_runtime.h"
 #include "Audio/fx_audio_drift.h"
 
-#include "Audio/audio_xfade.h"
 #include "Audio/drum_synth.h"
 #include "Audio/md_model.h"
 #include "Audio/Engines/prism_engine.h"
 #include "Audio/Engines/fm_engine.h"
 #include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
+#include "Audio/brick6_looper_runtime.h"
 #include "Track/synth_polyphony.h"
 #include "Audio/Engines/stack_engine.h"
 #include "Audio/Engines/wavetable_engine.h"
@@ -646,7 +646,7 @@ static uint8_t mod_destination_apply_sampler_rt(uint8_t track,
             return 1U;
         case PARAM_LOOPER_XFADE:
             if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_LOOPER) { return 0U; }
-            audio_xfade_set(mod_destination_clampf(value, 0.0f, 1.0f));
+            brick6_looper_runtime_set_main_xfade(track, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         default:
             return 0U;
@@ -1146,7 +1146,7 @@ uint8_t mod_destination_catalog_apply_prepared(
         case MOD_DEST_APPLY_SAMPLER_LENGTH: brick6_sampler_runtime_set_length(p->target, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_SAMPLER_LOOP_START: brick6_sampler_runtime_set_loop_start(p->target, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_SAMPLER_TUNE: brick6_sampler_runtime_set_tune(p->target, mod_destination_clampf(value, -24.0f, 24.0f)); return 1U;
-        case MOD_DEST_APPLY_LOOPER_XFADE: audio_xfade_set(mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_LOOPER_XFADE: brick6_looper_runtime_set_main_xfade(p->target, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_PRISM_TUNE: brick6_braids_runtime_set_tune(p->endpoint, mod_destination_clampf(value, -60.0f, 60.0f)); return 1U;
         case MOD_DEST_APPLY_PRISM_DETUNE: brick6_braids_runtime_set_detune(p->endpoint, mod_destination_clampf(value, -24.0f, 24.0f)); return 1U;
         case MOD_DEST_APPLY_PRISM_DRIFT: brick6_braids_runtime_set_drift(p->endpoint, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;

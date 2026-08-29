@@ -19,6 +19,16 @@ typedef struct
 CONTROL_STATE_SDRAM static control_audio_horizon_t g_control_audio_horizon;
 static volatile uint32_t g_control_audio_horizon_capacity_failure_count;
 
+void control_audio_publication_init(void)
+{
+    g_control_audio_horizon.count = 0U;
+    g_control_audio_horizon.limit = 0U;
+    g_control_audio_horizon.frames = 0U;
+    g_control_audio_horizon.first_sample = 0U;
+    g_control_audio_horizon.active = 0U;
+    g_control_audio_horizon_capacity_failure_count = 0U;
+}
+
 uint8_t control_audio_publication_begin_horizon(uint64_t first_sample,
                                                 uint16_t frames)
 {

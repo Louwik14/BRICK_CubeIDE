@@ -4,9 +4,9 @@
 
 #include "IPC/control_audio_command.h"
 #include "IPC/control_audio_publication.h"
-#include "Core/live_clock.h"
-#include "Core/live_parameter_event.h"
-#include "Core/project_control.h"
+#include "IPC/live_clock.h"
+#include "IPC/live_parameter_event.h"
+#include "Storage/project_control.h"
 #include "Param/param_value_policy.h"
 #include "Seq/seq_runtime_exec.h"
 

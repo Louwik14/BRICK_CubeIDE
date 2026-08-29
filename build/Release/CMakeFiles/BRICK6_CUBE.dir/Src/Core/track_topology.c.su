@@ -1,5 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_topology.c:13:9:track_topology_get_descriptor	24	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_topology.c:30:9:track_topology_has_capability	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_topology.c:38:9:track_topology_is_active	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_topology.c:42:9:track_topology_get_logical_track_count	8	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/track_topology.c:43:9:track_topology_get_physical_input_count	8	static

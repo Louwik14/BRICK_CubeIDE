@@ -1,4 +1,4 @@
-#include "Audio/fx_audio_vibe.h"
+#include "fx_audio_vibe.h"
 #include <limits.h>
 #include <stddef.h>
 #include <string.h>

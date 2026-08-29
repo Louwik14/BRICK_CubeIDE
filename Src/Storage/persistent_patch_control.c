@@ -1,6 +1,6 @@
 #include "Storage/persistent_patch_control.h"
 #include "Storage/persistent_key_catalog.h"
-#include "Core/project_control.h"
+#include "Storage/project_control.h"
 #include "IPC/live_parameter_audio_publication.h"
 #include "Track/track_runtime.h"
 #include "Track/track_state.h"

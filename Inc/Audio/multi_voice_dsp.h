@@ -14,7 +14,7 @@
 #include "Audio/fx_biquad_filter.h"
 #include "Audio/fx_deluge_filter.h"
 #include "Audio/mixer.h"
-#include "Core/brick6_sampler_multi_contract.h"
+#include "Sampler/brick6_sampler_multi_contract.h"
 
 #ifdef __cplusplus
 extern "C" {

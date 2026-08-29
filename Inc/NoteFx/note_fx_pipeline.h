@@ -2,7 +2,7 @@
 #define NOTE_FX_PIPELINE_H
 
 #include <stdint.h>
-#include "Core/live_event.h"
+#include "IPC/live_event.h"
 #include "NoteFx/note_fx_event.h"
 #include "NoteFx/note_fx_arp.h"
 #include "NoteFx/note_fx_state.h"

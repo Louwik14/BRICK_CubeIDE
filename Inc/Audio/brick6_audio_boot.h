@@ -23,14 +23,13 @@ typedef struct
 typedef struct
 {
     float sample_rate_hz;
-    float master_gain;
     float postgain;
     float output_compensation;
     uint8_t fx_slot_count;
     brick6_audio_boot_fx_slot_t fx_slots[BRICK6_AUDIO_BOOT_FX_SLOT_COUNT];
 } brick6_audio_boot_intent_t;
 
-_Static_assert(sizeof(brick6_audio_boot_intent_t) == 24U,
+_Static_assert(sizeof(brick6_audio_boot_intent_t) == 20U,
                "Audio boot intent ABI changed");
 
 uint8_t brick6_audio_boot_apply_early(const brick6_audio_boot_intent_t *intent);

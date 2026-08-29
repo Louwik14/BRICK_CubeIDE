@@ -4,9 +4,9 @@
 
 #include "Track/track_runtime.h"
 #include "Track/track_sound_state.h"
-#include "Core/live_clock.h"
+#include "IPC/live_clock.h"
 #include "IPC/live_parameter_audio_publication.h"
-#include "Core/live_parameter_migration.h"
+#include "Param/live_parameter_migration.h"
 #include "Track/track_input_ownership.h"
 #include "Track/track_state.h"
 #include "NoteFx/note_fx_pipeline.h"
@@ -422,10 +422,10 @@ uint8_t track_snapshot_capture(uint8_t track, track_snapshot_t *out_snapshot)
     }
 
     memset(out_snapshot, 0, sizeof(*out_snapshot));
-    out_snapshot->config = ui_get_track_config(track);
-    out_snapshot->external_input = ui_get_track_external_input(track);
-    out_snapshot->midi_channel = ui_get_track_midi_channel(track);
-    out_snapshot->midi_source = ui_get_track_midi_source(track);
+    out_snapshot->config = track_state_get_config(track);
+    out_snapshot->external_input = track_state_get_external_input(track);
+    out_snapshot->midi_channel = track_state_get_midi_channel(track);
+    out_snapshot->midi_source = track_state_get_midi_source(track);
     if ((out_snapshot->config.family == UI_TRACK_FAMILY_SYNTH)
             || (out_snapshot->config.family == UI_TRACK_FAMILY_DRUM))
     {
@@ -535,15 +535,15 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
 
     for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
     {
-        const ui_track_config_t cfg = ui_get_track_config(track);
+        const ui_track_config_t cfg = track_state_get_config(track);
         family[track] = (uint8_t)cfg.family;
         type[track] = (uint8_t)cfg.type;
         if (track < UI_TRACK_COUNT)
         {
-            external_input[track] = ui_get_track_external_input(track);
+            external_input[track] = track_state_get_external_input(track);
         }
-        midi_channel[track] = ui_get_track_midi_channel(track);
-        midi_source[track] = (uint8_t)ui_get_track_midi_source(track);
+        midi_channel[track] = track_state_get_midi_channel(track);
+        midi_source[track] = (uint8_t)track_state_get_midi_source(track);
     }
 
     if ((options != 0)

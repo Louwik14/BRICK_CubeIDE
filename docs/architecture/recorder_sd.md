@@ -12,6 +12,15 @@ conflits Storage consultent un bit publie par le runtime Looper M7, jamais sa
 structure de boundary interne. Le service Looper/page-cache reste background
 M7 et ne s'execute plus dans le service Storage.
 
+ARM prepare integralement la session Recorder avant toute echeance musicale:
+chemins, nettoyage, reservation, writer et configuration AUDIO sont deja en
+etat `PREPARED`. `seq_runtime` reste l'autorite du transport et injecte une
+unique transition datee avant la publication du premier horizon. PLAY UI,
+MIDI START/CONTINUE et le demarrage par note convergent sur cette transition;
+`audio_recorder` effectue alors `PREPARED -> RECORDING` au meme sample que
+l'activation du bus. Aucun acces FatFs/SD, polling UI ou deduction depuis le
+playhead n'appartient au START.
+
 ## Autorites
 
 `audio_recorder` est l'unique facade produit de capture SD. Ses deux clients exclusifs sont Audio Rec et Looper. Il publie un endpoint SPSC generationnel dans D3 et une projection live complete, extents de reservation inclus, dans la zone partagee Recorder; il recoit le PCM `int32` stereo 48 kHz dans le ring Recorder non-cacheable, configure `generic_recorder` et publie etats, erreurs, metriques et prise finalisee. `generic_recorder` ne connait ni UI, ni Looper, ni WAV: Storage lui transmet le head accepte publie par AUDIO; il possede les deux buffers d'ecriture, les descripteurs asynchrones et le tail accepte/engage. Looper ne lit jamais la reservation mutable Storage.

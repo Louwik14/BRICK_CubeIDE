@@ -9,12 +9,11 @@
 #include "UI/ui_core.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
-#include "Core/control_music_output.h"
-#include "Core/live_clock.h"
+#include "Track/control_music_output.h"
+#include "IPC/live_clock.h"
 #include "Storage/pattern_control_bank.h"
 #include "Storage/persistence_workspace.h"
 #include "Storage/persistent_pattern_control.h"
-#include "Storage/persistent_pattern_restore_prepare.h"
 
 #define PATTERN_BANK_COUNT 16U
 #define PATTERN_PER_BANK   16U
@@ -105,7 +104,7 @@ static uint8_t pattern_live_arm_ready_queue(uint8_t bank,
 
 uint8_t pattern_live_apply_boot_snapshot(uint8_t resume_transport)
 {
-    if (persistent_pattern_restore_execute(&g_boot_control_pattern, resume_transport) != PERSIST_CODEC_OK)
+    if (persistent_pattern_control_install_restored(&g_boot_control_pattern, resume_transport) != PERSIST_CODEC_OK)
     {
         return 0U;
     }
@@ -428,7 +427,7 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern)
             return 1U;
         }
 
-        if (persistent_pattern_restore_execute(&g_next_pattern, 0U) != PERSIST_CODEC_OK)
+        if (persistent_pattern_control_install_restored(&g_next_pattern, 0U) != PERSIST_CODEC_OK)
         {
             return 0U;
         }
@@ -493,7 +492,7 @@ static uint8_t pattern_live_try_take_pending_ready(void)
 
     if (seq_runtime_is_running() == 0U)
     {
-        if (persistent_pattern_restore_execute(&g_next_pattern, 0U) != PERSIST_CODEC_OK)
+        if (persistent_pattern_control_install_restored(&g_next_pattern, 0U) != PERSIST_CODEC_OK)
         {
             return 0U;
         }
@@ -548,7 +547,7 @@ void pattern_live_service(void)
         return;
     }
 
-    if (persistent_pattern_restore_execute(&g_next_pattern, 1U) == PERSIST_CODEC_OK)
+    if (persistent_pattern_control_install_restored(&g_next_pattern, 1U) == PERSIST_CODEC_OK)
     {
         g_active_bank = g_queued_bank;
         g_active_pattern = g_queued_pattern;

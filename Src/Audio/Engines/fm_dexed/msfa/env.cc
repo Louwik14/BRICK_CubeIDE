@@ -17,8 +17,8 @@
 
 #include <math.h>
 
-#include "Audio/Engines/fm_dexed/msfa/synth.h"
-#include "Audio/Engines/fm_dexed/msfa/env.h"
+#include "synth.h"
+#include "env.h"
 
 //using namespace std;
 

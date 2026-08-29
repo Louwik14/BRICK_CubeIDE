@@ -5,7 +5,7 @@
 #endif
 #include "App/Hall/hall_keymap.h"
 #include "Board/board_surface.h"
-#include "Core/live_clock.h"
+#include "IPC/live_clock.h"
 #include "Platform/memory_layout.h"
 #include "stm32h7xx_hal.h"
 

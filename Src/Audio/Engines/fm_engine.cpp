@@ -4,14 +4,14 @@
 #include <string.h>
 
 #include "Platform/memory_layout.h"
-#include "Audio/Engines/fm_dexed/msfa/env.h"
-#include "Audio/Engines/fm_dexed/msfa/exp2.h"
-#include "Audio/Engines/fm_dexed/msfa/fm_core.h"
-#include "Audio/Engines/fm_dexed/msfa/fm_op_kernel.h"
-#include "Audio/Engines/fm_dexed/msfa/freqlut.h"
-#include "Audio/Engines/fm_dexed/msfa/pitchenv.h"
-#include "Audio/Engines/fm_dexed/msfa/sin.h"
-#include "Audio/Engines/fm_dx7_log_kernel.h"
+#include "fm_dexed/msfa/env.h"
+#include "fm_dexed/msfa/exp2.h"
+#include "fm_dexed/msfa/fm_core.h"
+#include "fm_dexed/msfa/fm_op_kernel.h"
+#include "fm_dexed/msfa/freqlut.h"
+#include "fm_dexed/msfa/pitchenv.h"
+#include "fm_dexed/msfa/sin.h"
+#include "fm_dx7_log_kernel.h"
 
 #ifndef FM_KERNEL_BENCH
 #define FM_KERNEL_BENCH 0

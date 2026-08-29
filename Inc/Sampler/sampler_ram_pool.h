@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdint.h>
-#include "Core/brick_build_config.h"
+#include "Platform/brick_build_config.h"
 
 #include "Sampler/sample_global_pool.h"
 
@@ -127,6 +127,7 @@ sampler_ram_result_t sampler_ram_pool_load_wav_auto(const char *path,
 uint8_t sampler_ram_pool_load_async_begin(uint16_t ram_slot, const char *path);
 void sampler_ram_pool_load_async_service(void);
 uint8_t sampler_ram_pool_load_async_busy(void);
+void sampler_ram_pool_load_async_cancel(void);
 uint8_t sampler_ram_pool_load_async_take_result(sampler_ram_result_t *out_result,
                                                 uint16_t *out_ram_slot,
                                                 uint16_t *out_global_slot,

@@ -26,7 +26,7 @@
  * @note L’API publique est déclarée dans usbh_midi.h.
  */
 
-#include "Core/project_load_quiesce.h"
+#include "Storage/project_load_quiesce.h"
 
 /**
   ******************************************************************************
@@ -36,7 +36,7 @@
   */
 
 #include "usbh_midi.h"
-#include "Core/live_clock.h"
+#include "IPC/live_clock.h"
 
 static volatile uint32_t g_usbh_midi_rx_overflow_count;
 

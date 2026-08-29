@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdint.h>
-#include "Core/brick_build_config.h"
+#include "Platform/brick_build_config.h"
 
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/wavetable_prepared_format.h"
@@ -132,6 +132,7 @@ uint8_t wavetable_pool_load_async_begin_with_geometry(
     wavetable_source_geometry_t source_geometry);
 void wavetable_pool_load_async_service(void);
 uint8_t wavetable_pool_load_async_busy(void);
+void wavetable_pool_load_async_cancel(void);
 uint8_t wavetable_pool_load_async_take_result(wavetable_result_t *out_result,
                                               uint16_t *out_wavetable_slot,
                                               uint16_t *out_global_slot,

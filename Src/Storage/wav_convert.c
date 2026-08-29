@@ -65,6 +65,13 @@ typedef struct
 
 STORAGE_SCRATCH_SDRAM static wav_convert_ctx_t g_wav_convert;
 
+void wav_convert_init(void)
+{
+    memset(&g_wav_convert, 0, sizeof(g_wav_convert));
+    g_wav_convert.state = WAV_CONVERT_STATE_IDLE;
+    g_wav_convert.phase = WAV_CONVERT_PHASE_IDLE;
+}
+
 static void wav_convert_write_le16(uint8_t *dst, uint16_t value)
 {
     dst[0] = (uint8_t)(value & 0xFFU);

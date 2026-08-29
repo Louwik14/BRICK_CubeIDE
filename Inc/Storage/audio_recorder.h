@@ -91,27 +91,22 @@ typedef struct
 } audio_recorder_live_stream_t;
 
 void audio_recorder_init(void);
-uint8_t audio_recorder_prepare(const char *temporary_rec_path,
-                               const char *final_wav_path,
-                               uint32_t frame_limit);
-uint8_t audio_recorder_start(void);
-uint8_t audio_recorder_push_from_irq(const int32_t *lr_interleaved,
-                                     uint32_t frames);
-uint8_t audio_recorder_request_stop(void);
 void audio_recorder_service(void);
-uint8_t audio_recorder_get_status(audio_recorder_status_t *status);
-uint8_t audio_recorder_get_last_take(const char **path, uint32_t *frames);
 void audio_recorder_get_metrics(audio_recorder_metrics_t *metrics);
 uint8_t audio_recorder_is_active(void);
 uint8_t audio_recorder_prepare_client(audio_recorder_client_t client,
                                       const char *temporary_rec_path,
                                       const char *final_wav_path,
                                       uint32_t frame_limit);
-uint8_t audio_recorder_start_client(audio_recorder_client_t client);
+uint8_t audio_recorder_start_client_at(audio_recorder_client_t client,
+                                       uint64_t sample_time);
+uint8_t audio_recorder_cancel_prepared_client(audio_recorder_client_t client);
 uint8_t audio_recorder_push_from_irq_client(audio_recorder_client_t client,
                                             const int32_t *lr_interleaved,
                                             uint32_t frames);
 uint8_t audio_recorder_request_stop_client(audio_recorder_client_t client);
+uint8_t audio_recorder_request_stop_client_at(audio_recorder_client_t client,
+                                              uint64_t sample_time);
 
 /* CONTROL-side Looper boundary policy. These APIs publish RECORD commands only;
  * AUDIO reports the resulting PCM head and exact stop length through the
@@ -123,10 +118,14 @@ uint8_t audio_recorder_control_arm_looper(uint8_t track,
                                           uint8_t play_auto,
                                           uint8_t overdub,
                                           uint64_t request_sample);
+uint8_t audio_recorder_control_sync_looper_arm(uint8_t rec_armed,
+                                               uint32_t samples_per_step_q16);
+uint8_t audio_recorder_control_looper_take_track(uint8_t *out_track);
 uint8_t audio_recorder_control_request_looper_stop(uint64_t request_sample,
                                                    uint8_t wait_boundary);
 void audio_recorder_control_on_looper_boundary(uint8_t track,
                                                uint64_t sample_time);
+void audio_recorder_control_on_transport_start(uint64_t sample_time);
 uint8_t audio_recorder_audio_start(uint8_t client, uint32_t session_id,
                                    uint16_t config_id);
 uint8_t audio_recorder_audio_stop(uint8_t client, uint32_t session_id);

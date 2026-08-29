@@ -91,6 +91,7 @@ void seq_runtime_exec_drive_external_steps_for_block(seq_runtime_state_t *state,
                                                      uint64_t block_start_sample,
                                                      uint16_t block_frames);
 void seq_runtime_exec_set_external_step_pulses_pending(uint32_t pending);
+void seq_runtime_exec_enqueue_transport_start(uint64_t sample_time);
 void seq_runtime_exec_increment_external_step_pulses_pending(void);
 uint32_t seq_runtime_exec_consume_external_step_pulses_pending(void);
 uint32_t seq_runtime_exec_external_step_pulses_pending(void);

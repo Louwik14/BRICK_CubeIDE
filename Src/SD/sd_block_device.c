@@ -2,7 +2,7 @@
 
 #include <string.h>
 
-#include "Core/brick6_sd_config.h"
+#include "Platform/brick6_sd_config.h"
 #include "SD/bsp_driver_sd.h"
 #include "SD/sd_io_hooks.h"
 #include "Platform/cache_maintenance.h"

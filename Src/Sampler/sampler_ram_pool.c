@@ -12,7 +12,7 @@
 #include "Sampler/sample_page_cache_port.h"
 #include "IPC/sampler_ram_audio_projection.h"
 #include "IPC/control_audio_publication.h"
-#include "Core/live_clock.h"
+#include "IPC/live_clock.h"
 
 #define SAMPLER_RAM_IO_BYTES (8192U)
 #define SAMPLER_RAM_WAVEFORM_DEFAULT_SERVICE_FRAMES (4096U)
@@ -63,6 +63,29 @@ typedef struct
 } sampler_ram_load_job_t;
 
 STORAGE_STATE_SDRAM static sampler_ram_load_job_t g_sampler_ram_load_job;
+
+static void sampler_ram_load_job_boot_init(void)
+{
+    memset(&g_sampler_ram_load_job, 0, sizeof(g_sampler_ram_load_job));
+    g_sampler_ram_load_job.state = SAMPLER_RAM_LOAD_IDLE;
+}
+
+void sampler_ram_pool_load_async_cancel(void)
+{
+    sampler_ram_load_job_t *const job = &g_sampler_ram_load_job;
+    if (job->file_open != 0U)
+    {
+        (void)f_close(&job->file);
+        job->file_open = 0U;
+    }
+    if (job->allocation.page_count != 0U)
+    {
+        sample_page_cache_port_release_shared(job->allocation.first_slot,
+                                              job->allocation.page_count);
+    }
+    memset(job, 0, sizeof(*job));
+    job->state = SAMPLER_RAM_LOAD_IDLE;
+}
 static CTRL_STATE uint32_t
     g_sampler_ram_retire_fence[SAMPLER_RAM_POOL_MAX_SLOTS];
 
@@ -528,11 +551,13 @@ static void sampler_ram_slot_error_at(uint16_t ram_slot,
 
 void sampler_ram_pool_init(void)
 {
+    sampler_ram_load_job_boot_init();
     sampler_ram_pool_reset();
 }
 
 void sampler_ram_pool_reset(void)
 {
+    sampler_ram_pool_load_async_cancel();
     sampler_ram_audio_projection_init();
     memset(g_sampler_ram_retire_fence, 0, sizeof(g_sampler_ram_retire_fence));
     uint32_t generation_seed = g_sampler_ram_pool.generation_counter;

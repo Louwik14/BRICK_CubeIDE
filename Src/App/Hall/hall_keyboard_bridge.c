@@ -2,7 +2,7 @@
 
 #include "App/Hall/hall_engine.h"
 #include "Board/board_product.h"
-#include "Core/live_event.h"
+#include "IPC/live_event.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "pages/ui_page_audio_rec.h"
 #include "pages/ui_page_patch_assign.h"

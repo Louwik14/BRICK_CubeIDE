@@ -1,3 +1,0 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_retire_ack.c:17:6:audio_retire_ack_init	0	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_retire_ack.c:24:9:audio_retire_ack_publish	8	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Core/audio_retire_ack.c:40:9:audio_retire_ack_drain	20	static,ignoring_inline_asm
