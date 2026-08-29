@@ -7,10 +7,10 @@
 #include "stm32h7xx.h"
 #include "Audio/env_adsr.h"
 #include "Audio/audio_note_engine_adapter.h"
-#include "Audio/control_audio_command.h"
+#include "IPC/control_audio_command.h"
 #include "Param/param_filter.h"
 #include "Seq/seq_types.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 
 /* GROUP ENV3 configuration is owned by its master entity. */
 #undef SEQ_TRACK_COUNT

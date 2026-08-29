@@ -2,7 +2,7 @@
 
 #include <math.h>
 #include <stddef.h>
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 
 #define ENV_ADSR_Q15_MAX 32767
 #define ENV_ADSR_PHASE_MAX 0xFFFFFFFFu

@@ -1,7 +1,7 @@
 #include "Board/board_led_transport.h"
 
-#include "Storage/cache_maintenance.h"
-#include "Storage/memory_layout.h"
+#include "Platform/cache_maintenance.h"
+#include "Platform/memory_layout.h"
 #include "tim.h"
 
 #include <stddef.h>

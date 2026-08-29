@@ -2,8 +2,8 @@
 
 #include <stddef.h>
 
-#include "Core/entity_topology.h"
-#include "Core/track_state.h"
+#include "Track/entity_topology.h"
+#include "Track/track_state.h"
 #include "UI/ui_core.h"
 
 uint8_t ui_track_led_project_hall(uint8_t hall,

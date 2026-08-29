@@ -8,10 +8,10 @@
 #include "NoteFx/note_fx_state.h"
 #include "Core/live_clock.h"
 #include "Core/project_load_quiesce.h"
-#include "Core/track_runtime.h"
+#include "Track/track_runtime.h"
 #include "Core/control_music_output.h"
 #include "Seq/seq_runtime_exec.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "UI/ui_sampler_playhead.h"
 
 static uint8_t g_note_fx_override_valid[NOTE_FX_TRACK_COUNT][NOTE_FX_SLOT_COUNT][NOTE_FX_PARAM_COUNT];
@@ -53,7 +53,7 @@ typedef struct
     uint32_t ingress_serial;
     uint32_t capture_tick;
     uint8_t capture_tick_valid;
-    note_fx_event_t event;
+    note_event_t event;
     uint8_t note;
     uint8_t velocity;
     uint8_t track_state_valid;
@@ -100,7 +100,7 @@ static void note_fx_pipeline_exit_critical(uint32_t primask)
     __set_PRIMASK(primask);
 }
 
-static note_fx_result_t note_fx_pipeline_stage_emit(const note_event_t *event,
+static note_event_result_t note_fx_pipeline_stage_emit(const note_event_t *event,
                                                      void *context);
 
 static uint8_t note_fx_pipeline_enqueue(const note_fx_command_t *command)
@@ -207,7 +207,7 @@ uint8_t note_fx_pipeline_forget_causal_sources(
     return 1U;
 }
 
-static note_fx_result_t note_fx_pipeline_terminal(const note_fx_event_t *event, void *context)
+static note_event_result_t note_fx_pipeline_terminal(const note_event_t *event, void *context)
 {
     (void)context;
     if (!note_event_is_valid(event)
@@ -216,7 +216,7 @@ static note_fx_result_t note_fx_pipeline_terminal(const note_fx_event_t *event, 
     {
         return NOTE_EVENT_RESULT_DROPPED_POLICY;
     }
-    note_fx_event_t terminal = *event;
+    note_event_t terminal = *event;
     terminal.stage = NOTE_EVENT_STAGE_TERMINAL;
     terminal.flags |= NOTE_EVENT_FLAG_TERMINAL;
     const uint8_t channel = (terminal.destination_id == NOTE_EVENT_DESTINATION_DEFAULT)
@@ -251,7 +251,7 @@ static note_fx_result_t note_fx_pipeline_terminal(const note_fx_event_t *event, 
     return NOTE_EVENT_RESULT_ACCEPTED;
 }
 
-static note_fx_result_t note_fx_pipeline_stage_emit(const note_event_t *event,
+static note_event_result_t note_fx_pipeline_stage_emit(const note_event_t *event,
                                                      void *context)
 {
     (void)context;
@@ -259,9 +259,9 @@ static note_fx_result_t note_fx_pipeline_stage_emit(const note_event_t *event,
     {
         return NOTE_EVENT_RESULT_DROPPED_POLICY;
     }
-    note_fx_event_t admitted = *event;
+    note_event_t admitted = *event;
 
-    note_fx_result_t result;
+    note_event_result_t result;
     /* Stage 3 is emitted after the third slot and must enter the common
      * terminal ledger; there is no fourth engine slot. */
     if (note_event_is_terminal_handoff(&admitted) != 0U)
@@ -365,24 +365,24 @@ uint8_t note_fx_pipeline_release_control_override(uint8_t track, uint8_t slot,
     return note_fx_pipeline_configure_track_owner(track, &state);
 }
 
-note_fx_result_t note_fx_pipeline_submit_control(const note_fx_event_t *event)
+note_event_result_t note_fx_pipeline_submit_control(const note_event_t *event)
 {
     if (!note_event_is_valid(event) || (event->track >= NOTE_FX_TRACK_COUNT))
     {
         return NOTE_EVENT_RESULT_DROPPED_POLICY;
     }
 
-    note_fx_event_t source = *event;
+    note_event_t source = *event;
     if (source.destination_id == NOTE_EVENT_DESTINATION_DEFAULT)
     {
         source.destination_id = track_runtime_get_midi_channel_zero_based(source.track);
     }
-    const note_fx_result_t result =
+    const note_event_result_t result =
         note_fx_engine_stage_source(&source, 0U, note_fx_pipeline_stage_emit, 0);
     return result;
 }
 
-note_fx_result_t note_fx_pipeline_submit(const note_fx_event_t *event)
+note_event_result_t note_fx_pipeline_submit(const note_event_t *event)
 {
     if (!note_event_is_valid(event) || (event->track >= NOTE_FX_TRACK_COUNT))
     {
@@ -404,7 +404,7 @@ note_fx_result_t note_fx_pipeline_submit(const note_fx_event_t *event)
         : NOTE_EVENT_RESULT_REJECTED_CAPACITY;
 }
 
-static note_fx_result_t note_fx_pipeline_submit_source_control(uint8_t track, uint8_t note,
+static note_event_result_t note_fx_pipeline_submit_source_control(uint8_t track, uint8_t note,
                                                               uint8_t velocity, uint8_t is_note_on,
                                                               uint64_t sample_time,
                                                               note_event_provenance_t provenance,
@@ -466,7 +466,7 @@ static note_fx_result_t note_fx_pipeline_submit_source_control(uint8_t track, ui
         generation = g_note_fx_source_ledger[track][(uint8_t)source_index].generation;
     }
 
-    const note_fx_event_t event = {
+    const note_event_t event = {
         .sample_abs = sample_time,
         .track = track,
         .destination_id = NOTE_EVENT_DESTINATION_DEFAULT,
@@ -480,7 +480,7 @@ static note_fx_result_t note_fx_pipeline_submit_source_control(uint8_t track, ui
         .occurrence_id = token,
         .generation = generation
     };
-    const note_fx_result_t result = note_fx_pipeline_submit_control(&event);
+    const note_event_result_t result = note_fx_pipeline_submit_control(&event);
     if (is_note_on == 0U)
     {
         if ((result == NOTE_EVENT_RESULT_ACCEPTED) && (source_index >= 0))
@@ -495,7 +495,7 @@ static note_fx_result_t note_fx_pipeline_submit_source_control(uint8_t track, ui
     return result;
 }
 
-note_fx_result_t note_fx_pipeline_submit_source_occurrence(
+note_event_result_t note_fx_pipeline_submit_source_occurrence(
     uint8_t track, uint8_t note, uint8_t velocity, uint8_t is_note_on,
     uint64_t sample_time, note_event_provenance_t provenance,
     uint32_t source_occurrence_id)
@@ -524,7 +524,7 @@ note_fx_result_t note_fx_pipeline_submit_source_occurrence(
         : NOTE_EVENT_RESULT_REJECTED_CAPACITY;
 }
 
-note_fx_result_t note_fx_pipeline_submit_source_capture_tick(
+note_event_result_t note_fx_pipeline_submit_source_capture_tick(
     uint8_t track, uint8_t note, uint8_t velocity, uint8_t is_note_on,
     uint32_t capture_tick, uint32_t ingress_serial,
     note_event_provenance_t provenance,
@@ -595,7 +595,7 @@ static uint8_t note_fx_pipeline_live_enqueue(
     return 1U;
 }
 
-static note_fx_result_t note_fx_pipeline_submit_live_command(
+static note_event_result_t note_fx_pipeline_submit_live_command(
     const note_fx_command_t *command, uint64_t now)
 {
     if (command->capture_tick_valid == 0U)
@@ -687,7 +687,7 @@ static uint8_t note_fx_pipeline_apply_due_live_events(uint64_t now)
     return 1U;
 }
 
-static note_fx_result_t note_fx_pipeline_apply_source_raw_command(
+static note_event_result_t note_fx_pipeline_apply_source_raw_command(
     const note_fx_command_t *command)
 {
     const uint64_t now = live_clock_audio_sample();

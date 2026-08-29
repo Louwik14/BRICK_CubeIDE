@@ -1,6 +1,6 @@
 #include "Core/project_load_quiesce.h"
 
-#include "Core/control_audio_publication.h"
+#include "IPC/control_audio_publication.h"
 #include "Core/live_clock.h"
 #include "Core/live_event.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1

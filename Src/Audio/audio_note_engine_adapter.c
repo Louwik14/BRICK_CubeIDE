@@ -7,14 +7,14 @@
 
 #include "Audio/drum_synth.h"
 #include "Audio/mixer.h"
-#include "Core/brick6_braids_runtime.h"
-#include "Core/brick6_fm_runtime.h"
-#include "Core/brick6_sampler_runtime.h"
-#include "Core/brick6_stack_runtime.h"
-#include "Core/brick6_wave_runtime.h"
+#include "Audio/Engines/prism_engine.h"
+#include "Audio/Engines/fm_engine.h"
+#include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
+#include "Audio/Engines/stack_engine.h"
+#include "Audio/Engines/wavetable_engine.h"
 #include "Core/brick_build_config.h"
-#include "Audio/control_audio_command.h"
-#include "Core/synth_polyphony.h"
+#include "IPC/control_audio_command.h"
+#include "Track/synth_polyphony.h"
 #include "Mod/mod_lfo_v1.h"
 
 static track_audio_runtime_ctx_t g_audio_track_ctx[BRICK_ENTITY_CAPACITY];

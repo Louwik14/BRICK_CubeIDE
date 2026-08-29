@@ -1,7 +1,7 @@
 #include "fx_delay_dual.h"
 
 #include "Audio/fx_delay_shared_pool.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 
 #include <math.h>
 #include <string.h>

@@ -1,8 +1,8 @@
 #include "Param/param_registry_runtime_state.h"
 
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "Seq/seq_types.h"
-#include "Core/track_runtime.h"
+#include "Track/track_runtime.h"
 #include <stddef.h>
 
 #define PARAM_CONTROL_NON_TONE_CAPACITY 256U

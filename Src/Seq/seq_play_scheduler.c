@@ -8,14 +8,14 @@
 #define SEQ_PLAY_SCHEDULER_IMPLEMENTATION 1
 #include "Seq/seq_play_scheduler.h"
 
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 
 #include <stdint.h>
 #include <string.h>
 #include "stm32h7xx_hal.h"
-#include "Core/track_runtime.h"
+#include "Track/track_runtime.h"
 #include "Core/live_clock.h"
-#include "Core/track_mute.h"
+#include "Track/track_mute.h"
 #include "Core/control_music_output.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include "param_registry.h"
@@ -1174,7 +1174,7 @@ static uint8_t seq_play_scheduler_control_apply_internal(
     {
         return 1U;
     }
-    const note_fx_event_t note_event = {
+    const note_event_t note_event = {
         .sample_abs = event->sample_abs,
         .track = event->track,
         .destination_id = track_runtime_get_midi_channel_zero_based(event->track),

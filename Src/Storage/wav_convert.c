@@ -4,7 +4,7 @@
 
 #include "Sampler/sample_cache.h"
 #include "Storage/looper_storage.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/storage_shared_io.h"

@@ -111,11 +111,11 @@ void fx_chain_process_global_slot(uint32_t slot, float* L, float* R, uint32_t fr
     fx_chain_process_fx_slot(fx_pool_get_slot(slot), L, R, frames);
 }
 
-static void fx_chain_process_legacy_track_slot(uint32_t track,
-                                               uint32_t slot,
-                                               float* L,
-                                               float* R,
-                                               uint32_t frames)
+static void fx_chain_process_pool_track_slot(uint32_t track,
+                                              uint32_t slot,
+                                              float* L,
+                                              float* R,
+                                              uint32_t frames)
 {
     fx_slot_t* s = fx_pool_get_slot(slot);
     if (!s || !s->active)
@@ -130,12 +130,12 @@ static void fx_chain_process_legacy_track_slot(uint32_t track,
     fx_chain_process_fx_slot(s, L, R, frames);
 }
 
-static void fx_chain_process_legacy_track_inserts(uint32_t legacy_track,
-                                                   const int8_t *legacy_slots,
-                                                   size_t legacy_slot_count,
-                                                   float* L,
-                                                   float* R,
-                                                   uint32_t frames)
+static void fx_chain_process_pool_track_inserts(uint32_t pool_track,
+                                                const int8_t *pool_slots,
+                                                size_t pool_slot_count,
+                                                float* L,
+                                                float* R,
+                                                uint32_t frames)
 {
     if ((L == NULL) || (R == NULL))
     {
@@ -143,13 +143,13 @@ static void fx_chain_process_legacy_track_inserts(uint32_t legacy_track,
     }
 
     for (size_t insert = 0U;
-         (legacy_slots != NULL) && (insert < legacy_slot_count);
+         (pool_slots != NULL) && (insert < pool_slot_count);
          ++insert)
     {
-        const int8_t slot = legacy_slots[insert];
+        const int8_t slot = pool_slots[insert];
         if (slot >= 0)
         {
-            fx_chain_process_legacy_track_slot(legacy_track,
+            fx_chain_process_pool_track_slot(pool_track,
                                                 (uint32_t)slot,
                                                 L,
                                                 R,
@@ -160,20 +160,20 @@ static void fx_chain_process_legacy_track_inserts(uint32_t legacy_track,
 }
 
 void fx_chain_process_track_inserts_pre_fader(brick_entity_id_t entity_id,
-                                              uint32_t legacy_track,
-                                              const int8_t *legacy_slots,
-                                              size_t legacy_slot_count,
+                                              uint32_t pool_track,
+                                              const int8_t *pool_slots,
+                                              size_t pool_slot_count,
                                               uint8_t process_audio_fx_comp,
                                               float* L,
                                               float* R,
                                               uint32_t frames)
 {
-    fx_chain_process_legacy_track_inserts(legacy_track,
-                                          legacy_slots,
-                                          legacy_slot_count,
-                                          L,
-                                          R,
-                                          frames);
+    fx_chain_process_pool_track_inserts(pool_track,
+                                        pool_slots,
+                                        pool_slot_count,
+                                        L,
+                                        R,
+                                        frames);
     if (process_audio_fx_comp != 0U)
     {
         audio_fx_runtime_process(entity_id, L, R, frames);
@@ -189,14 +189,14 @@ void fx_chain_process_audio_fx_post_fader(brick_entity_id_t entity_id,
 }
 
 uint8_t fx_chain_track_inserts_require_stereo(brick_entity_id_t entity_id,
-                                              const int8_t *legacy_slots,
-                                              size_t legacy_slot_count)
+                                              const int8_t *pool_slots,
+                                              size_t pool_slot_count)
 {
-    if (legacy_slots != NULL)
+    if (pool_slots != NULL)
     {
-        for (size_t insert = 0U; insert < legacy_slot_count; ++insert)
+        for (size_t insert = 0U; insert < pool_slot_count; ++insert)
         {
-            if (legacy_slots[insert] >= 0)
+            if (pool_slots[insert] >= 0)
             {
                 return 1U;
             }
@@ -207,14 +207,14 @@ uint8_t fx_chain_track_inserts_require_stereo(brick_entity_id_t entity_id,
 }
 
 uint8_t fx_chain_track_has_pre_fader_insert(brick_entity_id_t entity_id,
-                                            const int8_t *legacy_slots,
-                                            size_t legacy_slot_count)
+                                            const int8_t *pool_slots,
+                                            size_t pool_slot_count)
 {
-    if (legacy_slots != NULL)
+    if (pool_slots != NULL)
     {
-        for (size_t insert = 0U; insert < legacy_slot_count; ++insert)
+        for (size_t insert = 0U; insert < pool_slot_count; ++insert)
         {
-            if (legacy_slots[insert] >= 0)
+            if (pool_slots[insert] >= 0)
                 return 1U;
         }
     }

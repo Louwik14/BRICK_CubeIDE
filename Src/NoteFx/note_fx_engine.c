@@ -190,7 +190,7 @@ uint8_t note_fx_engine_is_generated_occurrence_current(
     return 0U;
 }
 
-static uint8_t closure_is_settled(note_fx_result_t result)
+static uint8_t closure_is_settled(note_event_result_t result)
 {
     return (result == NOTE_EVENT_RESULT_ACCEPTED) ? 1U : 0U;
 }
@@ -236,7 +236,7 @@ static void note_fx_slot_reset_temporal_state(note_fx_slot_runtime_t *runtime,
     }
 }
 
-static note_fx_result_t close_owned(uint8_t track, uint8_t slot,
+static note_event_result_t close_owned(uint8_t track, uint8_t slot,
                                     uint64_t sample,
                                     note_fx_emit_fn emit, void *context)
 {
@@ -247,7 +247,7 @@ static note_fx_result_t close_owned(uint8_t track, uint8_t slot,
     for (uint8_t i = 0U; i < NOTE_FX_MAX_OUTPUTS; ++i) {
         note_fx_owned_t *const owned = &runtime->common.owned[i];
         if (owned->active == 0U) continue;
-        const note_fx_event_t event = {
+        const note_event_t event = {
             .sample_abs = sample,
             .track = track,
             .destination_id = owned->destination,
@@ -261,7 +261,7 @@ static note_fx_result_t close_owned(uint8_t track, uint8_t slot,
             .occurrence_id = owned->token,
             .generation = owned->generation
         };
-        const note_fx_result_t result = (emit != 0)
+        const note_event_result_t result = (emit != 0)
             ? emit(&event, context) : NOTE_EVENT_RESULT_ACCEPTED;
         if (closure_is_settled(result) == 0U)
             return result;
@@ -270,12 +270,12 @@ static note_fx_result_t close_owned(uint8_t track, uint8_t slot,
     return NOTE_EVENT_RESULT_ACCEPTED;
 }
 
-static note_fx_result_t release_slot(uint8_t track, uint8_t slot,
+static note_event_result_t release_slot(uint8_t track, uint8_t slot,
                                      uint64_t sample,
                                      note_fx_emit_fn emit, void *context)
 {
     note_fx_slot_runtime_t *const runtime = &g_slot[track][slot];
-    const note_fx_result_t result = close_owned(
+    const note_event_result_t result = close_owned(
         track, slot, sample, emit, context);
     if (result != NOTE_EVENT_RESULT_ACCEPTED)
         return result;
@@ -368,7 +368,7 @@ void note_fx_engine_forget_causal_source(uint8_t track,
     }
 }
 
-note_fx_result_t note_fx_engine_configure(
+note_event_result_t note_fx_engine_configure(
     uint8_t track, uint8_t slot, uint8_t model, uint8_t rate,
     uint8_t style, uint8_t range, uint64_t sample,
     note_fx_emit_fn emit, void *context)
@@ -397,7 +397,7 @@ note_fx_result_t note_fx_engine_configure(
 
         if (previous_model != NOTE_FX_MODEL_EUCLID)
         {
-            const note_fx_result_t result = release_slot(
+            const note_event_result_t result = release_slot(
                 track, slot, sample, emit, context);
             if (result != NOTE_EVENT_RESULT_ACCEPTED)
                 return result;
@@ -406,7 +406,7 @@ note_fx_result_t note_fx_engine_configure(
         }
         else if (changed != 0U)
         {
-            const note_fx_result_t result = close_owned(
+            const note_event_result_t result = close_owned(
                 track, slot, sample, emit, context);
             if (result != NOTE_EVENT_RESULT_ACCEPTED)
                 return result;
@@ -427,7 +427,7 @@ note_fx_result_t note_fx_engine_configure(
 
     if (previous_model != target_model)
     {
-        const note_fx_result_t result = release_slot(
+        const note_event_result_t result = release_slot(
             track, slot, sample, emit, context);
         if (result != NOTE_EVENT_RESULT_ACCEPTED)
             return result;
@@ -444,12 +444,12 @@ note_fx_result_t note_fx_engine_configure(
     return NOTE_EVENT_RESULT_ACCEPTED;
 }
 
-static note_fx_result_t euclid_emit_source_off(
+static note_event_result_t euclid_emit_source_off(
     note_fx_slot_runtime_t *runtime, uint8_t track, uint8_t slot,
     note_fx_euclid_source_t *source, uint64_t sample,
     note_fx_emit_fn emit, void *context)
 {
-    note_fx_result_t close_result = NOTE_EVENT_RESULT_ACCEPTED;
+    note_event_result_t close_result = NOTE_EVENT_RESULT_ACCEPTED;
     for (uint8_t i = 0U; i < NOTE_FX_MAX_OUTPUTS; ++i)
     {
         note_fx_owned_t *const owned = &runtime->common.owned[i];
@@ -461,7 +461,7 @@ static note_fx_result_t euclid_emit_source_off(
         {
             continue;
         }
-        const note_fx_event_t off = {
+        const note_event_t off = {
             .sample_abs = sample,
             .track = track,
             .destination_id = owned->destination,
@@ -475,7 +475,7 @@ static note_fx_result_t euclid_emit_source_off(
             .occurrence_id = owned->token,
             .generation = owned->generation
         };
-        const note_fx_result_t result = (emit != 0)
+        const note_event_result_t result = (emit != 0)
             ? emit(&off, context) : NOTE_EVENT_RESULT_ACCEPTED;
         if (closure_is_settled(result) != 0U)
             owned->active = 0U;
@@ -485,8 +485,8 @@ static note_fx_result_t euclid_emit_source_off(
     return close_result;
 }
 
-static note_fx_result_t euclid_stage_source(
-    note_fx_slot_runtime_t *runtime, const note_fx_event_t *event,
+static note_event_result_t euclid_stage_source(
+    note_fx_slot_runtime_t *runtime, const note_event_t *event,
     uint8_t slot, note_fx_emit_fn emit, void *context)
 {
     const int8_t source_index = euclid_source_find(
@@ -504,7 +504,7 @@ static note_fx_result_t euclid_stage_source(
         {
             runtime->common.next_sample = event->sample_abs;
         }
-        const note_fx_result_t result = euclid_emit_source_off(
+        const note_event_result_t result = euclid_emit_source_off(
             runtime, event->track, slot, source, event->sample_abs, emit, context);
         uint8_t pending_owned = 0U;
         for (uint8_t i = 0U; i < NOTE_FX_EUCLID_MAX_OWNED; ++i)
@@ -563,8 +563,8 @@ static note_fx_result_t euclid_stage_source(
     return NOTE_EVENT_RESULT_ACCEPTED;
 }
 
-static note_fx_result_t note_fx_engine_stage_source_impl(
-    const note_fx_event_t *event, uint8_t slot,
+static note_event_result_t note_fx_engine_stage_source_impl(
+    const note_event_t *event, uint8_t slot,
     note_fx_emit_fn emit, void *context)
 {
     if (!note_event_is_valid(event) || event->track >= NOTE_FX_TRACK_COUNT
@@ -578,7 +578,7 @@ static note_fx_result_t note_fx_engine_stage_source_impl(
     }
     if (runtime->common.model != NOTE_FX_MODEL_ARP)
     {
-        note_fx_event_t forwarded = *event;
+        note_event_t forwarded = *event;
         forwarded.stage = (uint8_t)(slot + 1U);
         return (emit != 0) ? emit(&forwarded, context)
                            : NOTE_EVENT_RESULT_ACCEPTED;
@@ -591,7 +591,7 @@ static note_fx_result_t note_fx_engine_stage_source_impl(
                     || (owned->source_token != event->occurrence_id)
                     || (owned->source_generation != event->generation)) continue;
             matched_owned = 1U;
-            note_fx_event_t off = *event;
+            note_event_t off = *event;
             off.note = owned->note;
             off.velocity = 0U;
             off.kind = NOTE_EVENT_KIND_OFF;
@@ -602,7 +602,7 @@ static note_fx_result_t note_fx_engine_stage_source_impl(
             off.occurrence_id = owned->token;
             off.generation = owned->generation;
             off.destination_id = owned->destination;
-            const note_fx_result_t result = (emit != 0)
+            const note_event_result_t result = (emit != 0)
                 ? emit(&off, context) : NOTE_EVENT_RESULT_ACCEPTED;
             if (closure_is_settled(result) == 0U)
                 return result;
@@ -631,12 +631,12 @@ static note_fx_result_t note_fx_engine_stage_source_impl(
     return 1U;
 }
 
-note_fx_result_t note_fx_engine_stage_source(const note_fx_event_t *event,
+note_event_result_t note_fx_engine_stage_source(const note_event_t *event,
                                              uint8_t slot,
                                              note_fx_emit_fn emit,
                                              void *context)
 {
-    const note_fx_result_t result = note_fx_engine_stage_source_impl(
+    const note_event_result_t result = note_fx_engine_stage_source_impl(
         event, slot, emit, context);
     if ((event != 0) && (event->track < NOTE_FX_TRACK_COUNT)
             && (slot < NOTE_FX_SLOT_COUNT))
@@ -646,7 +646,7 @@ note_fx_result_t note_fx_engine_stage_source(const note_fx_event_t *event,
     return result;
 }
 
-note_fx_result_t note_fx_engine_source(const note_fx_event_t *event,
+note_event_result_t note_fx_engine_source(const note_event_t *event,
                                        note_fx_emit_fn emit, void *context)
 {
     return note_fx_engine_stage_source(event, 0U, emit, context);
@@ -657,12 +657,12 @@ static uint64_t rate_period(uint8_t rate, uint32_t samples_per_step_q16)
     return seq_division_period_samples(rate, samples_per_step_q16);
 }
 
-static note_fx_result_t euclid_emit_owned_off(
+static note_event_result_t euclid_emit_owned_off(
     note_fx_slot_runtime_t *runtime, uint8_t track, uint8_t slot,
     note_fx_owned_t *owned, uint64_t sample,
     note_fx_emit_fn emit, void *context)
 {
-    const note_fx_event_t off = {
+    const note_event_t off = {
         .sample_abs = sample,
         .track = track,
         .destination_id = owned->destination,
@@ -676,7 +676,7 @@ static note_fx_result_t euclid_emit_owned_off(
         .occurrence_id = owned->token,
         .generation = owned->generation
     };
-    const note_fx_result_t result = (emit != 0)
+    const note_event_result_t result = (emit != 0)
         ? emit(&off, context) : NOTE_EVENT_RESULT_ACCEPTED;
     if (closure_is_settled(result) != 0U)
         owned->active = 0U;
@@ -703,7 +703,7 @@ static uint8_t euclid_owned_source_is_closing(
     return 0U;
 }
 
-static note_fx_result_t euclid_process_closures(
+static note_event_result_t euclid_process_closures(
     note_fx_slot_runtime_t *runtime, uint8_t track, uint8_t slot,
     uint64_t start, uint64_t end, note_fx_emit_fn emit, void *context)
 {
@@ -719,7 +719,7 @@ static note_fx_result_t euclid_process_closures(
         }
         const uint64_t close_sample = (source->close_sample < start)
             ? start : source->close_sample;
-        const note_fx_result_t result = euclid_emit_source_off(
+        const note_event_result_t result = euclid_emit_source_off(
             runtime, track, slot, source, close_sample, emit, context);
         if (closure_is_settled(result) == 0U)
             return result;
@@ -760,7 +760,7 @@ static note_fx_result_t euclid_process_closures(
         }
         const uint64_t off_sample = (owned->off_sample < start)
             ? start : owned->off_sample;
-        const note_fx_result_t result = euclid_emit_owned_off(
+        const note_event_result_t result = euclid_emit_owned_off(
             runtime, track, slot, owned, off_sample, emit, context);
         if (closure_is_settled(result) == 0U)
             return result;
@@ -823,7 +823,7 @@ static void euclid_generate_at_deadline(
                 .generation = runtime->common.generation,
                 .off_sample = sample + period
             };
-            const note_fx_event_t on = {
+            const note_event_t on = {
                 .sample_abs = sample,
                 .track = track,
                 .destination_id = source->destination,
@@ -837,7 +837,7 @@ static void euclid_generate_at_deadline(
                 .occurrence_id = token,
                 .generation = runtime->common.generation
             };
-            const note_fx_result_t result = (emit != 0)
+            const note_event_result_t result = (emit != 0)
                 ? emit(&on, context) : NOTE_EVENT_RESULT_ACCEPTED;
             if (result != NOTE_EVENT_RESULT_ACCEPTED)
             {
@@ -853,7 +853,7 @@ static void euclid_generate_at_deadline(
     runtime->common.next_sample = sample + period;
 }
 
-note_fx_result_t note_fx_engine_process(uint64_t start, uint16_t frames,
+note_event_result_t note_fx_engine_process(uint64_t start, uint16_t frames,
                                         uint32_t step_q16,
                                         note_fx_emit_fn emit, void *context)
 {
@@ -870,7 +870,7 @@ note_fx_result_t note_fx_engine_process(uint64_t start, uint16_t frames,
             note_fx_slot_runtime_t *const runtime = &g_slot[track][slot];
             if (runtime->common.model == NOTE_FX_MODEL_EUCLID)
             {
-                const note_fx_result_t result = euclid_process_closures(
+                const note_event_result_t result = euclid_process_closures(
                     runtime, track, slot, start, end, emit, context);
                 if (closure_is_settled(result) == 0U)
                     return result;
@@ -885,7 +885,7 @@ note_fx_result_t note_fx_engine_process(uint64_t start, uint16_t frames,
             for (uint8_t i = 0U; i < NOTE_FX_MAX_OUTPUTS; ++i) {
                 note_fx_owned_t *const owned = &runtime->common.owned[i];
                 if (owned->active == 0U) continue;
-                const note_fx_event_t off = {
+                const note_event_t off = {
                     .sample_abs = runtime->common.next_sample,
                     .track = track,
                     .destination_id = owned->destination,
@@ -899,7 +899,7 @@ note_fx_result_t note_fx_engine_process(uint64_t start, uint16_t frames,
                     .occurrence_id = owned->token,
                     .generation = owned->generation
                 };
-                const note_fx_result_t result = (emit != 0)
+                const note_event_result_t result = (emit != 0)
                     ? emit(&off, context) : NOTE_EVENT_RESULT_ACCEPTED;
                 if (closure_is_settled(result) == 0U)
                     return result;
@@ -943,7 +943,7 @@ note_fx_result_t note_fx_engine_process(uint64_t start, uint16_t frames,
                 (note_fx_arp_style_t)runtime->fx.arp.style,
                 runtime->fx.arp.range,
                 &note, &velocity) == 0U) {
-                const note_fx_result_t result = release_slot(
+                const note_event_result_t result = release_slot(
                     track, slot, runtime->common.next_sample, emit, context);
                 if (closure_is_settled(result) == 0U)
                     return result;
@@ -960,7 +960,7 @@ note_fx_result_t note_fx_engine_process(uint64_t start, uint16_t frames,
             owned->token = next_fx_token(
                 runtime->fx.arp.arp.last_source_token);
             owned->generation = runtime->common.generation;
-            const note_fx_event_t on = {
+            const note_event_t on = {
                 .sample_abs = runtime->common.next_sample,
                 .track = track,
                 .destination_id = owned->destination,
@@ -974,7 +974,7 @@ note_fx_result_t note_fx_engine_process(uint64_t start, uint16_t frames,
                 .occurrence_id = owned->token,
                 .generation = owned->generation
             };
-            const note_fx_result_t result = (emit != 0)
+            const note_event_result_t result = (emit != 0)
                 ? emit(&on, context) : NOTE_EVENT_RESULT_ACCEPTED;
             if (result != NOTE_EVENT_RESULT_ACCEPTED)
             {
@@ -987,14 +987,14 @@ note_fx_result_t note_fx_engine_process(uint64_t start, uint16_t frames,
     return NOTE_EVENT_RESULT_ACCEPTED;
 }
 
-note_fx_result_t note_fx_engine_cleanup(uint8_t track, uint64_t sample,
+note_event_result_t note_fx_engine_cleanup(uint8_t track, uint64_t sample,
                                         note_fx_emit_fn emit, void *context)
 {
     if (track >= NOTE_FX_TRACK_COUNT)
         return NOTE_EVENT_RESULT_DROPPED_POLICY;
     for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
     {
-        const note_fx_result_t result = release_slot(
+        const note_event_result_t result = release_slot(
             track, slot, sample, emit, context);
         if (closure_is_settled(result) == 0U)
             return result;

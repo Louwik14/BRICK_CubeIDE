@@ -21,7 +21,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "Storage/looper_storage.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/sd_access_gate.h"

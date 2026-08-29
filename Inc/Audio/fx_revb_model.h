@@ -29,7 +29,7 @@
 #pragma once
 
 #include "stmlib/stmlib.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 
 #include "fx_revb_engine.h"
 

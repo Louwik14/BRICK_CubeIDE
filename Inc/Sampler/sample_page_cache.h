@@ -132,7 +132,7 @@ typedef enum
 
 typedef enum
 {
-    SAMPLE_PAGE_ALLOC_LEGACY_DEFAULT = 0,
+    SAMPLE_PAGE_ALLOC_GENERAL = 0,
     SAMPLE_PAGE_ALLOC_SLOT_PERMANENT,
     SAMPLE_PAGE_ALLOC_VOICE_WINDOW,
     SAMPLE_PAGE_ALLOC_MARGIN
@@ -320,7 +320,7 @@ uint8_t sample_page_cache_update_stream_path_key(sample_audio_key_t key,
                                                   const char *path);
 
 /*
- * Legacy/transient range service kept for non-Sampler-pool users.
+ * General transient range service kept for non-Sampler-pool users.
  * Sampler STREAM pool service is owned by sample_stream_manager.
  */
 

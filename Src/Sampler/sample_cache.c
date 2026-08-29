@@ -3,7 +3,7 @@
 #include <ctype.h>
 #include <string.h>
 
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "Storage/sd_access_gate.h"
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_page_cache.h"

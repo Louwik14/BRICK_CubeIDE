@@ -3,48 +3,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include "Core/entity_topology.h"
-
-#define UI_TRACK_COUNT BRICK_ENTITY_TOP_LEVEL_COUNT
-#define UI_ACTIVE_TRACK_COUNT BRICK_ENTITY_TOP_LEVEL_COUNT
-#define UI_AUDIO_INPUT_RESOURCE_COUNT ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT
-#define UI_AUDIO_INPUT_PROTO_WIRED_COUNT ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT
-
-typedef enum
-{
-    UI_TRACK_FAMILY_OFF = 0,
-    UI_TRACK_FAMILY_SYNTH = 4,
-    UI_TRACK_FAMILY_DRUM = 5,
-    UI_TRACK_FAMILY_MIDI = 6,
-    UI_TRACK_FAMILY_SAMPLER = 7,
-    UI_TRACK_FAMILY_EXTERNAL = 8,
-    UI_TRACK_FAMILY_COUNT
-} ui_track_family_t;
-
-typedef enum
-{
-    UI_TRACK_TYPE_NONE = 0,
-    UI_TRACK_TYPE_RAM,
-    UI_TRACK_TYPE_PRISM,
-    UI_TRACK_TYPE_DRUM_MD,
-    UI_TRACK_TYPE_MIDI,
-    UI_TRACK_TYPE_STREAM,
-    UI_TRACK_TYPE_DRUM_BD_ANALOG,
-    UI_TRACK_TYPE_LOOPER,
-    UI_TRACK_TYPE_MULTI,
-    UI_TRACK_TYPE_STACK,
-    UI_TRACK_TYPE_WAVE,
-    UI_TRACK_TYPE_EXTERNAL,
-    UI_TRACK_TYPE_GROUP,
-    UI_TRACK_TYPE_FM,
-    UI_TRACK_TYPE_COUNT
-} ui_track_type_t;
-
-typedef struct
-{
-    ui_track_family_t family;
-    ui_track_type_t type;
-} ui_track_config_t;
+#include "Track/track_types.h"
 
 typedef enum
 {
@@ -122,14 +81,6 @@ typedef struct
     uint8_t selected_bank;
     ui_pattern_mode_t mode;
 } ui_pattern_stub_state_t;
-
-typedef enum
-{
-    UI_TRACK_MIDI_SRC_INT = 0,
-    UI_TRACK_MIDI_SRC_EXT,
-    UI_TRACK_MIDI_SRC_ALL,
-    UI_TRACK_MIDI_SRC_COUNT
-} ui_track_midi_source_t;
 
 #include "ui_hall_mode_projection.h"
 #include "ui_hall_mode_state.h"

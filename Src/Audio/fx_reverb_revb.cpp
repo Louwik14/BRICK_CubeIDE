@@ -1,7 +1,7 @@
 #include "fx_reverb_revb.h"
 
 #include "audio_float.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "fx_revb_model.h"
 
 #include <cmath>

@@ -1,7 +1,7 @@
 #include "Audio/audio_waveform_capture.h"
 
 #include "Board/board_audio_format.h"
-#include "memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "stm32h7xx.h"
 
 #include <string.h>

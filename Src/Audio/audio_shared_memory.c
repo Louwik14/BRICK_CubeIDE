@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "Sampler/sample_page_cache.h"
-#include "Core/intercore_cache.h"
+#include "Platform/intercore_cache.h"
 
 uint8_t audio_shared_memory_page_ref(uint16_t first_page_slot,
                                      uint32_t byte_offset,

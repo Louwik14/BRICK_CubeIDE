@@ -2,13 +2,13 @@
 
 #include <string.h>
 
-#include "Core/brick6_sampler_runtime.h"
+#include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Sampler/sample_stream_transport.h"
 #include "Storage/sd_access_gate.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "stm32h7xx.h"
 

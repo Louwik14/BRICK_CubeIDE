@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include "Storage/persistent_control_model.h"
 #include "Param/param_store.h"
-#include "UI/ui_core.h"
+#include "Track/track_types.h"
 #include "Seq/seq_types.h"
 #include "Mod/mod_lfo_v1.h"
 #include "NoteFx/note_fx_state.h"
@@ -19,12 +19,12 @@ uint8_t persist_key_tone_slot_to_disk(uint8_t slot,
                                       persist_control_parameter_key_t *out);
 uint8_t persist_key_tone_slot_from_disk(persist_control_parameter_key_t key,
                                         uint8_t *out_slot);
-uint8_t persist_key_family_to_disk(ui_track_family_t value,persist_control_family_key_t *out);
-uint8_t persist_key_family_from_disk(persist_control_family_key_t key,ui_track_family_t *out);
-uint8_t persist_key_type_to_disk(ui_track_type_t value,persist_control_type_key_t *out);
-uint8_t persist_key_type_from_disk(persist_control_type_key_t key,ui_track_type_t *out);
-uint8_t persist_key_midi_source_to_disk(ui_track_midi_source_t value,uint32_t *out);
-uint8_t persist_key_midi_source_from_disk(uint32_t key,ui_track_midi_source_t *out);
+uint8_t persist_key_family_to_disk(track_family_t value,persist_control_family_key_t *out);
+uint8_t persist_key_family_from_disk(persist_control_family_key_t key,track_family_t *out);
+uint8_t persist_key_type_to_disk(track_type_t value,persist_control_type_key_t *out);
+uint8_t persist_key_type_from_disk(persist_control_type_key_t key,track_type_t *out);
+uint8_t persist_key_midi_source_to_disk(track_midi_source_t value,uint32_t *out);
+uint8_t persist_key_midi_source_from_disk(uint32_t key,track_midi_source_t *out);
 uint8_t persist_key_clock_to_disk(seq_clock_src_t value,uint32_t *out);
 uint8_t persist_key_clock_from_disk(uint32_t key,seq_clock_src_t *out);
 uint8_t persist_key_note_fx_to_disk(note_fx_model_t value,uint32_t *out);

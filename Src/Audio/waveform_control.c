@@ -1,6 +1,6 @@
 #include "Audio/waveform_control.h"
 
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "stm32h7xx.h"
 
 typedef struct

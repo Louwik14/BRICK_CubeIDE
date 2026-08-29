@@ -6,14 +6,14 @@
  * Integration: couche d'abstraction entre seq_model et track_runtime/param_registry.
  */
 #include "Seq/seq_param_iface.h"
-#include "Core/entity_topology.h"
+#include "Track/entity_topology.h"
 #include "Seq/seq_model.h"
 
 #include <string.h>
 
-#include "Storage/memory_layout.h"
-#include "Core/track_runtime.h"
-#include "Core/live_parameter_audio_publication.h"
+#include "Platform/memory_layout.h"
+#include "Track/track_runtime.h"
+#include "IPC/live_parameter_audio_publication.h"
 #include "param_registry.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include "NoteFx/note_fx_state.h"
@@ -703,11 +703,6 @@ uint8_t seq_param_iface_key_to_address(seq_plock_key_t key,
     return 0U;
 }
 
-uint8_t seq_param_iface_is_param_supported(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot)
-{
-    return seq_param_iface_slot_is_supported(track, set_id, param_slot);
-}
-
 uint8_t seq_param_iface_slot_to_param(seq_track_id_t track,
                                       uint8_t set_id,
                                       seq_param_slot_t param_slot,
@@ -914,7 +909,7 @@ uint8_t seq_param_iface_get_base_value(seq_track_id_t track,
                                        seq_param_slot_t param_slot,
                                        seq_value16_t *out_value16)
 {
-    if ((out_value16 == 0) || (seq_param_iface_is_param_supported(track, set_id, param_slot) == 0U))
+    if ((out_value16 == 0) || (seq_param_iface_slot_is_supported(track, set_id, param_slot) == 0U))
     {
         return 0U;
     }
@@ -975,7 +970,7 @@ uint8_t seq_param_iface_set_base_value(seq_track_id_t track,
                                        seq_param_slot_t param_slot,
                                        seq_value16_t value16)
 {
-    if (seq_param_iface_is_param_supported(track, set_id, param_slot) == 0U)
+    if (seq_param_iface_slot_is_supported(track, set_id, param_slot) == 0U)
     {
         return 0U;
     }

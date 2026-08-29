@@ -8,4 +8,3 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_state.c
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_state.c:180:9:note_fx_state_set_param	48	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_state.c:215:9:note_fx_state_capture_track	0	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_state.c:225:9:note_fx_state_restore_track	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_state.c:253:9:note_fx_state_restore_track_exact	32	static

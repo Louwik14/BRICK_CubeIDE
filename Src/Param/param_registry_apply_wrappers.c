@@ -1,6 +1,6 @@
 #include "Param/param_registry_apply_bindings.h"
 #include "Param/param_registry.h"
-#include "Core/track_state.h"
+#include "Track/track_state.h"
 #include "Audio/metronome_runtime.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "ui_core.h"

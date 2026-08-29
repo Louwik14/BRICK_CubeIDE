@@ -12,15 +12,15 @@
 
 #define SEQ_RUNTIME_INTERNAL_USE 1
 
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "Audio/metronome_runtime.h"
-#include "Audio/control_audio_command.h"
-#include "Core/control_audio_publication.h"
+#include "IPC/control_audio_command.h"
+#include "IPC/control_audio_publication.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include "Core/engine_tasklet.h"
 #include "Core/live_clock.h"
-#include "Core/audio_transport_publication.h"
-#include "Core/track_runtime.h"
+#include "IPC/audio_transport_publication.h"
+#include "Track/track_runtime.h"
 #include "Core/control_music_output.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/pattern_live_ram.h"
@@ -29,7 +29,7 @@
 
 #include "Seq/seq_model.h"
 #include "Seq/seq_edit.h"
-#include "Core/entity_topology.h"
+#include "Track/entity_topology.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_play_scheduler.h"
 #include "Seq/seq_boundary_engine.h"

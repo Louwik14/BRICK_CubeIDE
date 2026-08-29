@@ -195,6 +195,13 @@ list(APPEND SRC_APP_SRC
 file(GLOB SRC_AUDIO_SRC CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/*.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/*.cpp"
+)
+
+file(GLOB SRC_IPC_SRC CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/*.cpp"
 )
 
 file(GLOB SRC_CORE_SRC
@@ -202,18 +209,17 @@ file(GLOB SRC_CORE_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/*.cpp"
 )
 
+file(GLOB SRC_TRACK_SRC CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/*.cpp"
+)
+
 list(APPEND SRC_CORE_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/audio_transport_publication.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/encoder_control_dispatcher.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/live_parameter_audio_publication.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/live_parameter_audio_runtime.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/live_parameter_event.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/live_parameter_migration.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/track_state.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/track_snapshot.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/track_sound_state.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_sampler_runtime.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_runtime.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/Sampler/brick6_sampler_runtime.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_waveform.c"
 )
 
@@ -371,13 +377,13 @@ set(MUTABLE_BRAIDS_SRC
 )
 
 set(DEXED_FM_CORE_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dexed/msfa/env.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dexed/msfa/exp2.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dexed/msfa/fm_core.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dexed/msfa/fm_op_kernel.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dexed/msfa/freqlut.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dexed/msfa/pitchenv.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dexed/msfa/sin.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/fm_dexed/msfa/env.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/fm_dexed/msfa/exp2.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/fm_dexed/msfa/fm_core.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/fm_dexed/msfa/fm_op_kernel.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/fm_dexed/msfa/freqlut.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/fm_dexed/msfa/pitchenv.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/fm_dexed/msfa/sin.cc"
 )
 
 file(GLOB MUTABLE_STMLIB_DSP_SRC
@@ -422,7 +428,9 @@ set(ALL_USER_SOURCES
     ${U8G2_SRC}
     ${SRC_APP_SRC}
     ${SRC_AUDIO_SRC}
+    ${SRC_IPC_SRC}
     ${SRC_CORE_SRC}
+    ${SRC_TRACK_SRC}
     ${SRC_KEYBOARD_SRC}
     ${SRC_MIDI_SRC}
     ${SRC_MOD_SRC}
@@ -471,6 +479,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Board
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Audio
+    ${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Core
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/MIDI
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/Param
@@ -572,7 +581,7 @@ set(BRAIDS_O3_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/braids/digital_oscillator.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/braids/macro_oscillator.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/braids/resources.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_braids_runtime.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/prism_engine.cpp"
 )
 set_source_files_properties(${BRAIDS_O3_SOURCES} PROPERTIES
     COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
@@ -588,16 +597,16 @@ set(AUDIO_LTO_SOURCES
     ${MUTABLE_PLAITS_ENGINE2_SRC} ${MUTABLE_PLAITS_FM_SRC} ${MUTABLE_PLAITS_PM_SRC}
     ${MUTABLE_PLAITS_SPEECH_SRC} ${MUTABLE_STMLIB_DSP_SRC}
     ${DEXED_FM_CORE_SRC}
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dx7_log_kernel.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_fm_runtime.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_audio_runtime.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_braids_runtime.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_runtime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/fm_dx7_log_kernel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/fm_engine.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/audio_engine_dispatch.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/prism_engine.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/stack_engine.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_waveform.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_wave_runtime.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_sampler_runtime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/wavetable_engine.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/Sampler/brick6_sampler_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_looper_runtime.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/synth_polyphony.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/synth_polyphony.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_apply_wrappers.c
 )
 set_source_files_properties(${AUDIO_LTO_SOURCES} PROPERTIES
@@ -617,14 +626,14 @@ set_source_files_properties(${MOD_LFO_O3_SOURCES} PROPERTIES
 set(AUDIO_O3_SOURCES
     ${AUDIO_ALL_SOURCES}
     ${DEXED_FM_CORE_SRC}
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/fm_dx7_log_kernel.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_fm_runtime.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_audio_runtime.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_braids_runtime.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_runtime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/fm_dx7_log_kernel.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/fm_engine.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/audio_engine_dispatch.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/prism_engine.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/stack_engine.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_stack_waveform.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_wave_runtime.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_sampler_runtime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/wavetable_engine.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/Sampler/brick6_sampler_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_looper_runtime.c
     ${MUTABLE_BRAIDS_SRC} ${MUTABLE_PLAITS_CHORDS_SRC} ${MUTABLE_PLAITS_ENGINE_SRC}
     ${MUTABLE_PLAITS_ENGINE2_SRC} ${MUTABLE_PLAITS_FM_SRC} ${MUTABLE_PLAITS_PM_SRC}
@@ -644,7 +653,7 @@ set_source_files_properties(
 )
 
 set_source_files_properties(
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Core/brick6_audio_runtime.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/audio_engine_dispatch.c"
     PROPERTIES COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
 )
 

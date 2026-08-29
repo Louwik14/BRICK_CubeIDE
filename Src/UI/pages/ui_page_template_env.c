@@ -5,7 +5,7 @@
 #include "ui_core.h"
 #include "ui_navigation.h"
 #include "ui_template_page.h"
-#include "Core/track_runtime.h"
+#include "Track/track_runtime.h"
 
 static uint8_t g_ui_template_env_subset = 0U;
 

@@ -3,7 +3,7 @@
 #include <string.h>
 
 #include "Sampler/sample_stream_limits.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 
 #define SAMPLE_Q16_ONE (65536U)
 

@@ -3,14 +3,15 @@
 #include <string.h>
 
 #include "Core/live_clock.h"
-#include "Core/live_parameter_audio_publication.h"
+#include "IPC/live_parameter_audio_publication.h"
+#include "Core/live_parameter_event.h"
 #include "Core/live_parameter_migration.h"
-#include "Core/track_runtime.h"
+#include "Track/track_runtime.h"
 #include "Param/param_filter.h"
 #include "Param/param_registry_backends.h"
 #include "Param/param_registry.h"
 #include "Seq/seq_param_iface.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "Core/project_control.h"
 
 typedef struct

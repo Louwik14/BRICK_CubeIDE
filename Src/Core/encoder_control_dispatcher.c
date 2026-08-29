@@ -1,10 +1,11 @@
 #include "Core/encoder_control_dispatcher.h"
 
-#include "Core/live_parameter_audio_publication.h"
+#include "IPC/live_parameter_audio_publication.h"
 #include "Core/live_parameter_audio_runtime.h"
 #include "Core/live_parameter_event.h"
 #include "Core/live_parameter_migration.h"
 #include "Param/param_registry.h"
+#include "UI/ui_param.h"
 #include "encoders.h"
 
 #define ENCODER_CONTROL_DISPATCH_MAX_EVENTS_PER_TICK ENCODER_DETENT_QUEUE_CAPACITY

@@ -4,14 +4,14 @@
 #include "stm32h7xx.h"
 
 #include "ff.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "Storage/sd_access_gate.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "Storage/wav_parser.h"
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_page_cache_port.h"
-#include "Sampler/sampler_ram_audio_projection.h"
-#include "Core/control_audio_publication.h"
+#include "IPC/sampler_ram_audio_projection.h"
+#include "IPC/control_audio_publication.h"
 #include "Core/live_clock.h"
 
 #define SAMPLER_RAM_IO_BYTES (8192U)

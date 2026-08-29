@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #include "Board/board_audio_format.h"
-#include "Core/entity_topology.h"
+#include "Track/entity_topology.h"
 
 /* One complete SAI half is the bounded normal transport guard: an input
  * captured just after an anchor is consumed at the following audio boundary.

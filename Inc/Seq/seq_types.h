@@ -2,7 +2,7 @@
 #define SEQ_TYPES_H
 
 #include <stdint.h>
-#include "Core/entity_topology.h"
+#include "Track/entity_topology.h"
 #include "Param/param_store.h"
 
 #define SEQ_TRACK_COUNT        BRICK_ENTITY_TOP_LEVEL_COUNT
@@ -19,7 +19,7 @@
 #define SEQ_PLOCK_BUDGET_PER_TRACK SEQ_PLOCK_POOL_CAP_PER_TRACK
 
 /* Current firmware p-lock contract.  These slots are the compact identity
- * used by the runtime and the current Pattern format; no legacy slot range
+ * used by the runtime and the current Pattern format; no obsolete slot range
  * is part of the contract. */
 #define SEQ_PARAM_ENV_SLOT_COUNT       25U
 #define SEQ_PARAM_TONE_SLOT_COUNT      26U

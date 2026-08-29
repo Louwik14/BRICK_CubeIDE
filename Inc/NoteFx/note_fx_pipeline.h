@@ -23,14 +23,14 @@ void note_fx_pipeline_init(void);
 uint16_t note_fx_pipeline_diagnostic_queue_depth(void);
 void note_fx_pipeline_panic(void);
 
-note_fx_result_t note_fx_pipeline_submit(const note_fx_event_t *event);
+note_event_result_t note_fx_pipeline_submit(const note_event_t *event);
 /* CONTROL-owned direct submission seam. */
-note_fx_result_t note_fx_pipeline_submit_control(const note_fx_event_t *event);
-note_fx_result_t note_fx_pipeline_submit_source_occurrence(
+note_event_result_t note_fx_pipeline_submit_control(const note_event_t *event);
+note_event_result_t note_fx_pipeline_submit_source_occurrence(
     uint8_t track, uint8_t note, uint8_t velocity, uint8_t is_note_on,
     uint64_t sample_time, note_event_provenance_t provenance,
     uint32_t source_occurrence_id);
-note_fx_result_t note_fx_pipeline_submit_source_capture_tick(
+note_event_result_t note_fx_pipeline_submit_source_capture_tick(
     uint8_t track, uint8_t note, uint8_t velocity, uint8_t is_note_on,
     uint32_t capture_tick, uint32_t ingress_serial,
     note_event_provenance_t provenance,

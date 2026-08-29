@@ -7,7 +7,7 @@
 #include <arm_acle.h>
 #include "stm32h743xx.h"
 #include <string.h>
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 
 #define BOARD_AUDIO_INIT_ATTEMPTS 3U
 #define BOARD_AUDIO_RETRY_DELAY_MS 10U

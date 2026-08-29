@@ -28,8 +28,6 @@ uint8_t param_backend_apply_prepared_track_value_audio(
     uint8_t track,
     param_id_t id,
     float value);
-/* Compatibility name for existing RT modulation callers. */
-uint8_t param_backend_apply_track_value(uint8_t track, param_id_t id, float value);
 
 uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float value);
 uint8_t param_backend_apply_tone_looper(uint8_t track, param_id_t id, float value);

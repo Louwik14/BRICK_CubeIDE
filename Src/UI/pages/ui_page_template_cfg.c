@@ -3,8 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "Core/track_runtime.h"
-#include "Core/track_input_ownership.h"
+#include "Track/track_runtime.h"
+#include "Track/track_input_ownership.h"
 #include "ui_template_page.h"
 
 static const ui_template_family_t g_ui_template_cfg_family = {

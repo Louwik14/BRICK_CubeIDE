@@ -9,7 +9,7 @@
 #include "Storage/pattern_control_bank.h"
 #include "Storage/persistence_workspace.h"
 #include "Storage/sd_access_gate.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "Storage/boot_context_flash.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/persistent_pattern_restore_prepare.h"

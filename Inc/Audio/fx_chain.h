@@ -2,7 +2,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "Core/entity_topology.h"
+#include "Track/entity_topology.h"
 
 /**
  * @file fx_chain.h
@@ -24,12 +24,12 @@ void fx_chain_process_global_slot(
     uint32_t frames
 );
 
-/* Legacy inserts and the fixed COMP stage run before the track fader. */
+/* Pooled inserts and the fixed COMP stage run before the track fader. */
 void fx_chain_process_track_inserts_pre_fader(
     brick_entity_id_t entity_id,
-    uint32_t legacy_track,
-    const int8_t *legacy_slots,
-    size_t legacy_slot_count,
+    uint32_t pool_track,
+    const int8_t *pool_slots,
+    size_t pool_slot_count,
     uint8_t process_audio_fx_comp,
     float* in_l,
     float* in_r,
@@ -47,13 +47,13 @@ void fx_chain_process_audio_fx_post_fader(
 /* Keeps mono/poly fan-out optimizations inside the insert abstraction. */
 uint8_t fx_chain_track_inserts_require_stereo(
     brick_entity_id_t entity_id,
-    const int8_t *legacy_slots,
-    size_t legacy_slot_count
+    const int8_t *pool_slots,
+    size_t pool_slot_count
 );
 uint8_t fx_chain_track_has_pre_fader_insert(
     brick_entity_id_t entity_id,
-    const int8_t *legacy_slots,
-    size_t legacy_slot_count
+    const int8_t *pool_slots,
+    size_t pool_slot_count
 );
 
 uint8_t fx_chain_audio_fx_is_pre_filter(brick_entity_id_t entity_id);

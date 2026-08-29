@@ -12,8 +12,8 @@
 
 #include "brick6_boot_fx_policy.h"
 
-#include "Audio/control_audio_command.h"
-#include "Core/control_audio_publication.h"
+#include "IPC/control_audio_command.h"
+#include "IPC/control_audio_publication.h"
 #include "Core/live_clock.h"
 
 void brick6_boot_fx_policy_init(void)

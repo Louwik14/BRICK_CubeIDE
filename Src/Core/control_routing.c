@@ -1,6 +1,6 @@
 #include "Core/control_routing.h"
-#include "Audio/control_audio_command.h"
-#include "Core/control_audio_publication.h"
+#include "IPC/control_audio_command.h"
+#include "IPC/control_audio_publication.h"
 #include "Core/live_clock.h"
 #include <string.h>
 

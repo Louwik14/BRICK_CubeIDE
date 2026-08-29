@@ -26,9 +26,9 @@
 
 #include "App/Hall/hall_engine.h"
 #include "Keyboard/keyboard_runtime.h"
-#include "Core/entity_topology.h"
-#include "Core/track_runtime.h"
-#include "Core/track_state.h"
+#include "Track/entity_topology.h"
+#include "Track/track_runtime.h"
+#include "Track/track_state.h"
 #include "buttons.h"
 #include "led_remap.h"
 #include "led_anim.h"

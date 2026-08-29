@@ -10,13 +10,13 @@
 #include <string.h>
 
 #include "Core/engine_tasklet.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "Seq/seq_model.h"
-#include "Core/entity_topology.h"
+#include "Track/entity_topology.h"
 #include "Seq/seq_clipboard.h"
 #include "Seq/seq_param_iface.h"
 #include "App/Hall/hall_surface.h"
-#include "Core/track_runtime.h"
+#include "Track/track_runtime.h"
 #include "Storage/undo_v2.h"
 #include "Seq/seq_runtime_control.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1

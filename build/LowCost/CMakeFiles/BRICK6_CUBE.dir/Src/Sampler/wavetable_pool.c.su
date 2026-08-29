@@ -15,7 +15,7 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/wavetable_pool
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/wavetable_pool.c:1059:27:wavetable_pool_candidate_allocate	80	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/wavetable_pool.c:163:14:wavetable_pool_spectral_gain	16	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/wavetable_pool.c:911:13:wavetable_pool_fft	72	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/wavetable_pool.c:978:13:wavetable_pool_resample_legacy_cycle_frequency	64	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/wavetable_pool.c:978:13:wavetable_pool_resample_2048_cycle_frequency	64	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/wavetable_pool.c:286:16:wavetable_pool_preview_float_to_i16	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/wavetable_pool.c:1578:16:wavetable_pool_publish_audio_descriptor	288	static,ignoring_inline_asm
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/wavetable_pool.c:1022:13:wavetable_pool_generate_band_from_fft	72	static

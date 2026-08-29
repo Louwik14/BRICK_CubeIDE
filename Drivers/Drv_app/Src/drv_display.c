@@ -2,7 +2,7 @@
 
 #include "Board/board_display_transport.h"
 #include "sdram.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "../../U8g2/u8g2.h"
 
 #include <string.h>

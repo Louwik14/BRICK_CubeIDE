@@ -10,7 +10,7 @@
 
 #include <string.h>
 
-#include "Core/track_runtime.h"
+#include "Track/track_runtime.h"
 #include "NoteFx/note_fx_state.h"
 #include "Seq/seq_model.h"
 #include "Seq/seq_param_iface.h"

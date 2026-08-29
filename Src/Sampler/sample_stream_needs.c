@@ -4,7 +4,7 @@
 
 #include "Sampler/sample_audio_format.h"
 #include "Sampler/sample_stream_sequence.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #define SAMPLE_STREAM_NEEDS_CLASSIC_CAPACITY SAMPLE_STREAM_SNAPSHOT_CLASSIC_CAPACITY
 #define SAMPLE_STREAM_NEEDS_MULTI_CAPACITY   SAMPLE_STREAM_SNAPSHOT_MULTI_CAPACITY
 #define SAMPLE_STREAM_NEEDS_CAPACITY \

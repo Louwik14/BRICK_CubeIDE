@@ -7,7 +7,7 @@
 #include "ui_core_runtime_bridge.h"
 #include "ui_macro_interaction.h"
 #include "ui_hall_mode_flow.h"
-#include "Core/entity_topology.h"
+#include "Track/entity_topology.h"
 #if defined(BRICK6_VARIANT_LOWCOST)
 #include "Seq/seq_edit.h"
 #include "ui_core.h"

@@ -1,12 +1,12 @@
 #include "ui_template_page.h"
-#include "Core/entity_topology.h"
+#include "Track/entity_topology.h"
 
 #include <stddef.h>
 #include <string.h>
 
 #include "buttons.h"
-#include "Core/track_runtime.h"
-#include "Storage/memory_layout.h"
+#include "Track/track_runtime.h"
+#include "Platform/memory_layout.h"
 #include "pages/ui_page_template_tone.h"
 #include "ui_page_manager.h"
 #include "ui_navigation.h"

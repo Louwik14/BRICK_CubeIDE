@@ -2,9 +2,9 @@
 
 #include <string.h>
 
-#include "Storage/memory_layout.h"
-#include "Storage/cache_maintenance.h"
-#include "Core/intercore_cache.h"
+#include "Platform/memory_layout.h"
+#include "Platform/cache_maintenance.h"
+#include "Platform/intercore_cache.h"
 #include "Storage/audio_recorder.h"
 #include "Sampler/sample_stream_fatfs_map.h"
 #include "Sampler/sample_stream_needs.h"
@@ -635,7 +635,7 @@ static void sample_page_cache_alloc_range(sample_page_alloc_type_t alloc_type,
             count = SAMPLE_PAGE_MARGIN_POOL_COUNT;
             break;
 
-        case SAMPLE_PAGE_ALLOC_LEGACY_DEFAULT:
+        case SAMPLE_PAGE_ALLOC_GENERAL:
         default:
             break;
     }
@@ -1906,7 +1906,7 @@ uint8_t sample_page_cache_reserve_page_key(sample_audio_key_t key, uint32_t page
 {
     return sample_page_cache_reserve_page_key_alloc(key,
                                                     page_index,
-                                                    SAMPLE_PAGE_ALLOC_LEGACY_DEFAULT);
+                                                    SAMPLE_PAGE_ALLOC_GENERAL);
 }
 
 uint8_t sample_page_cache_reserve_page_key_alloc(sample_audio_key_t key,
@@ -1963,7 +1963,7 @@ uint8_t sample_page_cache_reserve_page_ref_key(sample_audio_key_t key,
     {
         page = sample_page_cache_alloc_empty_slot_key(key,
                                                       page_index,
-                                                      SAMPLE_PAGE_ALLOC_LEGACY_DEFAULT);
+                                                      SAMPLE_PAGE_ALLOC_GENERAL);
         if (page == 0)
         {
             return 0U;
@@ -2009,7 +2009,7 @@ uint8_t sample_page_cache_reserve_start_pages_key(sample_audio_key_t key,
         key,
         start_frame,
         page_count,
-        SAMPLE_PAGE_ALLOC_LEGACY_DEFAULT);
+        SAMPLE_PAGE_ALLOC_GENERAL);
 }
 
 uint8_t sample_page_cache_reserve_start_pages_key_alloc(sample_audio_key_t key,
@@ -2042,7 +2042,7 @@ uint8_t sample_page_cache_pin_page_key(sample_audio_key_t key, uint32_t page_ind
 {
     return sample_page_cache_pin_page_key_alloc(key,
                                                 page_index,
-                                                SAMPLE_PAGE_ALLOC_LEGACY_DEFAULT);
+                                                SAMPLE_PAGE_ALLOC_GENERAL);
 }
 
 uint8_t sample_page_cache_pin_page_key_alloc(sample_audio_key_t key,

@@ -1,7 +1,7 @@
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:146:15:note_fx_pipeline_find_source	4	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:70:13:note_fx_pipeline_output_died	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:279:16:note_fx_pipeline_configure_track_owner	80	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:254:25:note_fx_pipeline_stage_emit	88	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:254:28:note_fx_pipeline_stage_emit	88	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:106:16:note_fx_pipeline_enqueue	16	static,ignoring_inline_asm
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:76:9:note_fx_pipeline_is_generated_occurrence_current	8	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:170:9:note_fx_pipeline_forget_causal_sources	128	static,ignoring_inline_asm
@@ -9,11 +9,11 @@ C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipelin
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:327:10:note_fx_pipeline_diagnostic_queue_depth	0	static,ignoring_inline_asm
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:337:9:note_fx_pipeline_apply_control_override	40	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:353:9:note_fx_pipeline_release_control_override	32	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:368:18:note_fx_pipeline_submit_control	40	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:407:25:note_fx_pipeline_submit_source_control	80	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:385:18:note_fx_pipeline_submit	96	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:498:18:note_fx_pipeline_submit_source_occurrence	112	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:527:18:note_fx_pipeline_submit_source_capture_tick	112	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:368:21:note_fx_pipeline_submit_control	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:407:28:note_fx_pipeline_submit_source_control	80	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:385:21:note_fx_pipeline_submit	96	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:498:21:note_fx_pipeline_submit_source_occurrence	112	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:527:21:note_fx_pipeline_submit_source_capture_tick	112	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:727:6:note_fx_pipeline_panic	32	static,ignoring_inline_asm
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:747:9:note_fx_pipeline_configure_track	88	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_pipeline.c:764:9:note_fx_pipeline_process	104	static

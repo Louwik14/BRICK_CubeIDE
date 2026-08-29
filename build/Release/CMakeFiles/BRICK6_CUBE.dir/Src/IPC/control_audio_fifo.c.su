@@ -1,0 +1,16 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/control_audio_fifo.c:35:16:control_audio_command_valid	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/control_audio_fifo.c:19:6:control_audio_fifo_init	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/control_audio_fifo.c:28:10:control_audio_fifo_control_free	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/control_audio_fifo.c:49:9:control_audio_fifo_batch_begin	4	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/control_audio_fifo.c:73:9:control_audio_fifo_batch_append	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/control_audio_fifo.c:92:9:control_audio_fifo_batch_commit	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/control_audio_fifo.c:102:6:control_audio_fifo_batch_abort	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/control_audio_fifo.c:107:9:control_audio_fifo_publish_batch	56	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/control_audio_fifo.c:147:9:control_audio_fifo_publish	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/control_audio_fifo.c:152:9:control_audio_fifo_publish_fenced	8	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/control_audio_fifo.c:163:9:control_audio_fifo_control_fence_consumed	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/control_audio_fifo.c:170:9:control_audio_fifo_audio_peek	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/control_audio_fifo.c:180:9:control_audio_fifo_audio_pop	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/control_audio_fifo.c:189:10:control_audio_fifo_audio_head_snapshot	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/control_audio_fifo.c:196:9:control_audio_fifo_audio_tail_before	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/control_audio_fifo.c:202:10:control_audio_fifo_audio_frames_until_due	32	static

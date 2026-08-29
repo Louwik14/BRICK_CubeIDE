@@ -13,14 +13,14 @@
 #include <string.h>
 
 #include "Sampler/sample_cache.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "Storage/looper_storage.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/wav_audio_codec.h"
-#include "Audio/control_audio_command.h"
-#include "Audio/control_audio_fifo.h"
-#include "Core/control_audio_publication.h"
+#include "IPC/control_audio_command.h"
+#include "IPC/control_audio_fifo.h"
+#include "IPC/control_audio_publication.h"
 #include "Core/live_clock.h"
 #include "stm32h7xx_hal.h"
 

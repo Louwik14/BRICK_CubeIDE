@@ -2,7 +2,7 @@
 
 #include <string.h>
 
-#include "Core/entity_topology.h"
+#include "Track/entity_topology.h"
 #include "Seq/seq_param_iface.h"
 
 static uint8_t seq_step_snapshot_track_is_valid(seq_track_id_t track)

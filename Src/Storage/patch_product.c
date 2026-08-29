@@ -3,9 +3,9 @@
 #include "Storage/persistent_fatfs_io.h"
 #include "Storage/persistent_key_catalog.h"
 #include "Storage/sd_access_gate.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "UI/ui_track_catalog.h"
-#include "Core/track_state.h"
+#include "Track/track_state.h"
 #include "ff.h"
 #include <stdio.h>
 #include <string.h>

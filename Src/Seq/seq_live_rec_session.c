@@ -9,9 +9,9 @@
 
 #include <string.h>
 
-#include "Storage/memory_layout.h"
-#include "Core/track_runtime.h"
-#include "Core/track_state.h"
+#include "Platform/memory_layout.h"
+#include "Track/track_runtime.h"
+#include "Track/track_state.h"
 
 #include "Seq/seq_edit.h"
 #include "Core/control_music_output.h"

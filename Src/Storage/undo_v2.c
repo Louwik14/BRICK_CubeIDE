@@ -9,9 +9,9 @@
 #include <string.h>
 
 #include "Core/engine_tasklet.h"
-#include "Core/entity_topology.h"
+#include "Track/entity_topology.h"
 #include "Seq/seq_edit.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "main.h"
 
 typedef struct

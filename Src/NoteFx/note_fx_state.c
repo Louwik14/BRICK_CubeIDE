@@ -2,7 +2,7 @@
 
 #include <string.h>
 
-#include "Core/entity_topology.h"
+#include "Track/entity_topology.h"
 #include "Seq/seq_division_catalog.h"
 
 static note_fx_track_state_t g_note_fx_state[NOTE_FX_TRACK_COUNT];
@@ -246,19 +246,6 @@ uint8_t note_fx_state_restore_track(uint8_t track, const note_fx_track_state_t *
                     note_fx_state_default_for_model(model, param);
         }
     }
-    g_note_fx_state[track] = normalized;
-    return 1U;
-}
-
-uint8_t note_fx_state_restore_track_exact(uint8_t track,
-                                          const note_fx_track_state_t *state)
-{
-    if ((track >= NOTE_FX_TRACK_COUNT) || (state == 0))
-    {
-        return 0U;
-    }
-    note_fx_track_state_t normalized = *state;
-    (void)note_fx_state_normalize_track(&normalized);
     g_note_fx_state[track] = normalized;
     return 1U;
 }

@@ -3,7 +3,7 @@
 #include "Audio/audio_fx_runtime.h"
 #include "Param/audio_fx_param_catalog.h"
 #include "Audio/waveform_control.h"
-#include "Core/track_runtime.h"
+#include "Track/track_runtime.h"
 #include "NoteFx/note_fx_state.h"
 #include "Seq/seq_division_catalog.h"
 #include "drv_display.h"

@@ -2,7 +2,7 @@
 
 #include <string.h>
 
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/sd_preview.h"
 #include "Storage/undo_v2.h"

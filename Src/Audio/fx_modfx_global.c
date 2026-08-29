@@ -3,7 +3,7 @@
 #include <math.h>
 #include <string.h>
 
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 
 #define DAISY_RING_SIZE 1024U
 #define DAISY_RING_MASK (DAISY_RING_SIZE - 1U)

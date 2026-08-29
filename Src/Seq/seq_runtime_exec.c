@@ -11,12 +11,12 @@
 
 #include "Seq/seq_runtime_exec.h"
 
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "Seq/seq_boundary_engine.h"
 #include "Seq/seq_clock_bridge.h"
 #include "Seq/seq_live_rec_session.h"
 #include "Seq/seq_model.h"
-#include "Core/entity_topology.h"
+#include "Track/entity_topology.h"
 #include "Seq/seq_play_scheduler.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_transport_fsm.h"

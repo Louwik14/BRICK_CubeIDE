@@ -1,5 +1,5 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inc/Core/intercore_cache.h:12:20:intercore_cache_publish	16	static,ignoring_inline_asm
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inc/Core/intercore_cache.h:23:20:intercore_cache_consume	16	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inc/Platform/intercore_cache.h:12:20:intercore_cache_publish	16	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Inc/Platform/intercore_cache.h:23:20:intercore_cache_consume	16	static,ignoring_inline_asm
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder.c:125:16:audio_recorder_publish_start_client_at	48	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder.c:140:16:audio_recorder_publish_stop_client_at	32	static
 C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder.c:150:17:audio_recorder_prepare_audio_config	40	static,ignoring_inline_asm

@@ -5,8 +5,8 @@
 #include "Core/brick6_sd_config.h"
 #include "SD/bsp_driver_sd.h"
 #include "SD/sd_io_hooks.h"
-#include "Storage/cache_maintenance.h"
-#include "Storage/memory_layout.h"
+#include "Platform/cache_maintenance.h"
+#include "Platform/memory_layout.h"
 #include "Storage/sd_access_gate.h"
 
 #include "sdmmc.h"

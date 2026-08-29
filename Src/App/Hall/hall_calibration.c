@@ -5,7 +5,7 @@
 
 #include "App/Hall/hall_engine.h"
 #include "App/Hall/hall_adc.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 
 #define CALIBRATION_PRESS_ADC                 50000U
 #define CALIBRATION_RELEASE_ADC               48000U
@@ -779,7 +779,8 @@ uint8_t hall_calibration_load(void)
     const hall_calibration_storage_v1_blob_t *stored_v1 =
         (const hall_calibration_storage_v1_blob_t *)HALL_CAL_FLASH_ADDRESS;
 #endif
-    const hall_calibration_blob_t *legacy = (const hall_calibration_blob_t *)HALL_CAL_FLASH_ADDRESS;
+    const hall_calibration_blob_t *previous_format =
+        (const hall_calibration_blob_t *)HALL_CAL_FLASH_ADDRESS;
 
     memset(&g_user_profile, 0, sizeof(g_user_profile));
     hall_engine_set_user_velocity_profile(0);
@@ -819,12 +820,12 @@ uint8_t hall_calibration_load(void)
     }
 #endif
 
-    if (hall_calibration_blob_is_valid(legacy) == 0U)
+    if (hall_calibration_blob_is_valid(previous_format) == 0U)
     {
         return 0U;
     }
 
-    g_cal_blob = *legacy;
+    g_cal_blob = *previous_format;
     hall_engine_set_calibration(g_cal_blob.min, g_cal_blob.max);
 
     return 1U;

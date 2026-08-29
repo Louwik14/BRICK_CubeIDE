@@ -2,7 +2,7 @@
 
 #include <string.h>
 
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "stm32h7xx.h"
 
 #define SYNTH_WAVEFORM_PUBLISH_PERIOD_SAMPLES 2400U

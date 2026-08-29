@@ -11,7 +11,7 @@
 #include "Sampler/sample_cache.h"
 #include "Core/project_control.h"
 #include "Seq/seq_runtime.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/wav_parser.h"
 #include "stm32h7xx_hal.h"

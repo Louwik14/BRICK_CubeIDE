@@ -33,7 +33,7 @@
 #include "stm32h743xx.h"
 #include "arm_math.h"
 #include "fx_saturation.h"
-#include "memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "audio_io.h"
 #include "dsp_engine.h"
 #include "fx_pool.h"

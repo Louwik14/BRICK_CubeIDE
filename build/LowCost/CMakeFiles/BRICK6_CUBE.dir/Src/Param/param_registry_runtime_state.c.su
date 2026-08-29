@@ -1,4 +1,6 @@
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:15:9:param_registry_control_value_get	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:24:6:param_registry_control_value_set	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:31:6:param_registry_control_values_reset_track	0	static
-C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:9:6:param_registry_control_values_init	8	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:60:9:param_registry_control_value_get	24	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:77:6:param_registry_control_value_set	32	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:92:6:param_registry_control_values_reset_track	16	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:43:6:param_registry_control_values_init	40	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:107:9:param_registry_control_tone_get	0	static
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Param/param_registry_runtime_state.c:116:9:param_registry_control_tone_set	0	static

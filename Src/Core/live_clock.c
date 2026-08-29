@@ -1,7 +1,7 @@
 #include "Core/live_clock.h"
 
 #include "Board/board_audio_format.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "stm32h7xx_hal.h"
 
 typedef struct

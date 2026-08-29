@@ -7,7 +7,7 @@
 
 #include "Audio/metronome_runtime.h"
 #include "Board/board_audio.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 
 static AUDIO_HOT ALIGN32 audio_physical_inputs_t g_audio_physical_inputs;
 

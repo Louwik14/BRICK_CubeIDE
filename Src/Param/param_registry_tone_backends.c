@@ -109,14 +109,6 @@ uint8_t param_backend_apply_prepared_track_value_audio(
     return applied;
 }
 
-uint8_t param_backend_apply_track_value(uint8_t track,
-                                        param_id_t id,
-                                        float value)
-{
-    return param_backend_apply_prepared_track_value_audio(
-        track, id, value);
-}
-
 uint8_t param_backend_prepare_current_tone_projection(uint8_t track,
                                                        uint8_t runtime_type)
 {

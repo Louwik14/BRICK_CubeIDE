@@ -9,20 +9,20 @@
 #include "Sampler/sample_page_cache_port.h"
 #include "Audio/audio_shared_memory.h"
 #include "Audio/audio_wavetable_registry.h"
-#include "Storage/cache_maintenance.h"
-#include "Core/control_audio_publication.h"
-#include "Core/audio_wave_table_projection.h"
+#include "Platform/cache_maintenance.h"
+#include "IPC/control_audio_publication.h"
+#include "IPC/audio_wave_table_projection.h"
 #include "Core/live_clock.h"
 #include "Storage/sd_access_gate.h"
 #include "SD/sd_scheduler_runtime.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "Storage/wav_audio_codec.h"
 #include "Storage/wav_parser.h"
 #include "stm32h7xx.h"
 
 #define WAVETABLE_POOL_IO_BYTES (8192U)
 #define WAVETABLE_POOL_CACHE_DIR "0:/WAVETABLES/.CACHE"
-#define WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT (2048U)
+#define WAVETABLE_SOURCE_2048_SAMPLE_COUNT (2048U)
 #define WAVETABLE_MIPMAP_INITIAL_CYCLE_MAGNITUDE (10U)
 #define WAVETABLE_MIPMAP_MIN_CYCLE_MAGNITUDE (3U)
 
@@ -52,9 +52,9 @@ STORAGE_STATE_SDRAM static char
     g_wavetable_transaction_paths[2][WAVETABLE_POOL_PATH_MAX];
 AUDIO_WARM ALIGN32 static uint8_t g_wavetable_pool_io[WAVETABLE_POOL_IO_BYTES];
 STORAGE_STATE_SDRAM ALIGN32 static float
-    g_wavetable_fft_real[WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT];
+    g_wavetable_fft_real[WAVETABLE_SOURCE_2048_SAMPLE_COUNT];
 STORAGE_STATE_SDRAM ALIGN32 static float
-    g_wavetable_fft_imag[WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT];
+    g_wavetable_fft_imag[WAVETABLE_SOURCE_2048_SAMPLE_COUNT];
 STORAGE_STATE_SDRAM ALIGN32 static float
     g_wavetable_fft_work_real[WAVETABLE_FRAME_SAMPLE_COUNT];
 STORAGE_STATE_SDRAM ALIGN32 static float
@@ -150,13 +150,13 @@ static uint32_t wavetable_pool_source_cycle_sample_count(
     wavetable_source_geometry_t source_geometry)
 {
     return (source_geometry == WAVETABLE_SOURCE_GEOMETRY_2048)
-        ? WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT
+        ? WAVETABLE_SOURCE_2048_SAMPLE_COUNT
         : WAVETABLE_FRAME_SAMPLE_COUNT;
 }
 
-static void wavetable_pool_legacy_source_store(uint32_t index, float value)
+static void wavetable_pool_source_2048_store(uint32_t index, float value)
 {
-    if (index < WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT)
+    if (index < WAVETABLE_SOURCE_2048_SAMPLE_COUNT)
         g_wavetable_fft_real[index] = value;
 }
 
@@ -975,21 +975,21 @@ static void wavetable_pool_fft(float *real, float *imag, uint32_t count, uint8_t
     }
 }
 
-static void wavetable_pool_resample_legacy_cycle_frequency(float *dst)
+static void wavetable_pool_resample_2048_cycle_frequency(float *dst)
 {
-    for (uint32_t i = 0U; i < WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT; ++i)
+    for (uint32_t i = 0U; i < WAVETABLE_SOURCE_2048_SAMPLE_COUNT; ++i)
     {
         g_wavetable_fft_imag[i] = 0.0f;
     }
     wavetable_pool_fft(g_wavetable_fft_real,
                        g_wavetable_fft_imag,
-                       WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT,
+                       WAVETABLE_SOURCE_2048_SAMPLE_COUNT,
                        0U);
 
     memset(g_wavetable_fft_work_real, 0, sizeof(g_wavetable_fft_work_real));
     memset(g_wavetable_fft_work_imag, 0, sizeof(g_wavetable_fft_work_imag));
     const float scale = (float)WAVETABLE_FRAME_SAMPLE_COUNT
-        / (float)WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT;
+        / (float)WAVETABLE_SOURCE_2048_SAMPLE_COUNT;
     g_wavetable_fft_work_real[0] = g_wavetable_fft_real[0] * scale;
     const uint32_t nyquist = WAVETABLE_FRAME_SAMPLE_COUNT >> 1U;
     for (uint32_t bin = 1U; bin < nyquist; ++bin)
@@ -1311,10 +1311,10 @@ static wavetable_result_t wavetable_pool_candidate_decode_wav(
             }
             else
             {
-                wavetable_pool_legacy_source_store(cycle_offset++, mono);
-                if (cycle_offset == WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT)
+                wavetable_pool_source_2048_store(cycle_offset++, mono);
+                if (cycle_offset == WAVETABLE_SOURCE_2048_SAMPLE_COUNT)
                 {
-                    wavetable_pool_resample_legacy_cycle_frequency(
+                    wavetable_pool_resample_2048_cycle_frequency(
                         &candidate->data[cycle * WAVETABLE_FRAME_SAMPLE_COUNT]);
                     cycle++;
                     cycle_offset = 0U;
@@ -1821,12 +1821,12 @@ void wavetable_pool_load_async_service(void)
                 }
                 else
                 {
-                    wavetable_pool_legacy_source_store(
+                    wavetable_pool_source_2048_store(
                         job->source_cycle_offset++, mono);
                     if (job->source_cycle_offset
-                            == WAVETABLE_LEGACY_FRAME_SAMPLE_COUNT)
+                            == WAVETABLE_SOURCE_2048_SAMPLE_COUNT)
                     {
-                        wavetable_pool_resample_legacy_cycle_frequency(
+                        wavetable_pool_resample_2048_cycle_frequency(
                             &candidate->data[job->cycle
                                 * WAVETABLE_FRAME_SAMPLE_COUNT]);
                         job->cycle++;

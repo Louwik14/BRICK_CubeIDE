@@ -1,7 +1,7 @@
 #include "Storage/waveform_cache.h"
 
 #include "Sampler/sample_cache.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/sample_capture.h"

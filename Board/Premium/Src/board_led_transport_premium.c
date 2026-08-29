@@ -1,7 +1,7 @@
 #include "Board/board_led_transport.h"
 
-#include "Storage/cache_maintenance.h"
-#include "Storage/memory_layout.h"
+#include "Platform/cache_maintenance.h"
+#include "Platform/memory_layout.h"
 #include "tim.h"
 
 #include <stddef.h>
@@ -88,4 +88,3 @@ uint8_t board_led_transport_handle_pwm_callback(void *handle)
     dma_busy = 0U;
     return 1U;
 }
-

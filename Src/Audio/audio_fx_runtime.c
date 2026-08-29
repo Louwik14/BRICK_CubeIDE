@@ -14,9 +14,9 @@
 #include "Audio/fx_audio_vibe.h"
 #include "Audio/mixer.h"
 #include "Board/board_audio_format.h"
-#include "Core/synth_polyphony.h"
-#include "Audio/control_audio_command.h"
-#include "Storage/memory_layout.h"
+#include "Track/synth_polyphony.h"
+#include "IPC/control_audio_command.h"
+#include "Platform/memory_layout.h"
 #include "stm32h7xx_hal.h"
 
 #define AUDIO_FX_OWNER_COUNT BRICK_ENTITY_TOP_LEVEL_COUNT

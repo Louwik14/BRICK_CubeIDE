@@ -2,7 +2,7 @@
 
 #include <string.h>
 
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "Storage/sd_access_gate.h"
 
 #include "ff.h"

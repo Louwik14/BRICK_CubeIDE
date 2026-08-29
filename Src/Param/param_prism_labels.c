@@ -2,7 +2,7 @@
 
 #include <stddef.h>
 
-#include "Core/brick6_braids_runtime.h"
+#include "Audio/Engines/prism_engine.h"
 #include "Param/param_registry.h"
 
 static const param_prism_param_label_t g_prism_param_labels[] = {

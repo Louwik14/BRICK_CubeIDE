@@ -4,11 +4,11 @@
 
 #include "buttons.h"
 #include "App/Hall/hall_engine.h"
-#include "Core/track_mute.h"
-#include "Core/track_runtime.h"
+#include "Track/track_mute.h"
+#include "Track/track_runtime.h"
 #include "ui_page_manager.h"
 #include "ui_step_led_ownership.h"
-#include "Core/entity_topology.h"
+#include "Track/entity_topology.h"
 
 #define UI_TRACK_MOD_BUTTON BTN_TRACK
 

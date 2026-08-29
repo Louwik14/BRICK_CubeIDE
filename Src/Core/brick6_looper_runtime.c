@@ -4,14 +4,14 @@
 
 #include "Audio/audio_float.h"
 #include "Core/brick6_clip_shifter.h"
-#include "Core/audio_transport_publication.h"
+#include "IPC/audio_transport_publication.h"
 #include "Core/live_clock.h"
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_stream_io.h"
 #include "Sampler/sample_stream_transport.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/audio_recorder_wav.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 
 #include <math.h>
 #include <string.h>

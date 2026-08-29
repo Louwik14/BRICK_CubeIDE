@@ -8,7 +8,7 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 
 AUDIO_WARM ALIGN32 static multi_voice_dsp_slot_t
     g_multi_voice_dsp_pool[MULTI_VOICE_DSP_SLOT_COUNT];

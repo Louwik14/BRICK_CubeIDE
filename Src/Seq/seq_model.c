@@ -10,7 +10,7 @@
 #include <string.h>
 
 #include "stm32h7xx_hal.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "Seq/seq_param_iface.h"
 
 #define SEQ_LOCK_NONE 0xFFFFU

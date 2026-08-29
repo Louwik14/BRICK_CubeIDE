@@ -66,7 +66,8 @@ AUDIO conserve le mapping `{output_id,note,velocity,gate}` pendant un changement
 de moteur. A la date PROGRAM, AUDIO detruit l'ancien renderer, installe le
 nouveau et reprojette localement les notes compatibles sans fabriquer NOTE
 OFF/ON. Un renderer incompatible reste silencieux; un retour compatible rend de
-nouveau les notes encore vivantes. PROGRAM ne reset ni NOTE ni TONE.
+nouveau les notes encore vivantes. Toute NOTE fermee pendant cette phase reste
+morte au retour d'un renderer compatible. PROGRAM ne reset ni NOTE ni TONE.
 
 PARAM est applique directement au backend final. Les setters FM se limitent au
 clamp, a l'ecriture de cible et aux masques dirty; les conversions et projections

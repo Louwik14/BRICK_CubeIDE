@@ -1,6 +1,6 @@
 #include "Storage/sd_access_gate.h"
 
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "stm32h7xx_hal.h"
 
 static volatile uint8_t g_sd_access_owner;

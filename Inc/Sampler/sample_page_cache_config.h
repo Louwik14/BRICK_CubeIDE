@@ -151,7 +151,7 @@ static inline uint8_t sample_page_slot_is_margin_pool(uint32_t slot)
 #endif
 
 #if (SAMPLE_PAGE_FRAMES * SAMPLE_PAGE_BYTES_PER_FRAME != SAMPLE_PAGE_BYTES)
-#error "legacy stereo page aliases must describe one physical page"
+#error "stereo page aliases must describe one physical page"
 #endif
 
 #if (SAMPLE_AUDIO_FORMAT_MONO_FRAMES_PER_PAGE * SAMPLE_AUDIO_FORMAT_FLOAT_BYTES \

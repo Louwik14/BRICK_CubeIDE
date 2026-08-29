@@ -18,7 +18,6 @@ set(OLD_GLOB
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_wavetable_registry.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/audio_xfade.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/brick6_audio_boot.c"
-  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/control_audio_fifo.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/dsp_engine.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/env_adsr_peaks.c"
@@ -45,7 +44,6 @@ set(OLD_GLOB
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/metronome_runtime.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/mixer.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/multi_voice_dsp.c"
-  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/sampler.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/spectral_window.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/synth_waveform_snapshot.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/vca_env.c"
@@ -79,7 +77,58 @@ if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
 endif()
 
-# SRC_NOTE_FX_SRC at CMakeLists.txt:400 (file)
+# SRC_AUDIO_SRC at CMakeLists.txt:195 (file)
+file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/Engines/*.c")
+set(OLD_GLOB
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/Engines/audio_engine_dispatch.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/Engines/stack_engine.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/Engines/wavetable_engine.c"
+  )
+if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
+  message("-- GLOB mismatch!")
+  file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
+endif()
+
+# SRC_AUDIO_SRC at CMakeLists.txt:195 (file)
+file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/Engines/*.cpp")
+set(OLD_GLOB
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/Engines/fm_dx7_log_kernel.cpp"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/Engines/fm_engine.cpp"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Audio/Engines/prism_engine.cpp"
+  )
+if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
+  message("-- GLOB mismatch!")
+  file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
+endif()
+
+# SRC_IPC_SRC at CMakeLists.txt:202 (file)
+file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/*.c")
+set(OLD_GLOB
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/audio_rec_bus_projection.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/audio_transport_publication.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/audio_wave_table_projection.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/control_audio_fifo.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/control_audio_publication.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/control_music_publication.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/live_parameter_audio_publication.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/multi_sample_audio_projection.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/sampler_ram_audio_projection.c"
+  )
+if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
+  message("-- GLOB mismatch!")
+  file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
+endif()
+
+# SRC_IPC_SRC at CMakeLists.txt:202 (file)
+file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/*.cpp")
+set(OLD_GLOB
+  )
+if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
+  message("-- GLOB mismatch!")
+  file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
+endif()
+
+# SRC_NOTE_FX_SRC at CMakeLists.txt:406 (file)
 file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/*.c")
 set(OLD_GLOB
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/note_fx_arp.c"
@@ -93,7 +142,7 @@ if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
 endif()
 
-# SRC_NOTE_FX_SRC at CMakeLists.txt:400 (file)
+# SRC_NOTE_FX_SRC at CMakeLists.txt:406 (file)
 file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/NoteFx/*.cpp")
 set(OLD_GLOB
   )
@@ -102,10 +151,9 @@ if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
 endif()
 
-# SRC_SAMPLER_SRC at CMakeLists.txt:251 (file)
+# SRC_SAMPLER_SRC at CMakeLists.txt:257 (file)
 file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/*.c")
 set(OLD_GLOB
-  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_audio_projection.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_import.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_index.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/multi_sample_loader.c"
@@ -126,7 +174,6 @@ set(OLD_GLOB
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_sequence.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_stream_transport.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sample_voice_reader.c"
-  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sampler_ram_audio_projection.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/sampler_ram_pool.c"
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/wavetable_pool.c"
   )
@@ -135,7 +182,7 @@ if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
 endif()
 
-# SRC_SAMPLER_SRC at CMakeLists.txt:251 (file)
+# SRC_SAMPLER_SRC at CMakeLists.txt:257 (file)
 file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Sampler/*.cpp")
 set(OLD_GLOB
   )
@@ -144,7 +191,7 @@ if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
 endif()
 
-# SRC_SEQ_SRC at CMakeLists.txt:260 (file)
+# SRC_SEQ_SRC at CMakeLists.txt:266 (file)
 file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/*.c")
 set(OLD_GLOB
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/seq_boundary_engine.c"
@@ -169,7 +216,7 @@ if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
 endif()
 
-# SRC_SEQ_SRC at CMakeLists.txt:260 (file)
+# SRC_SEQ_SRC at CMakeLists.txt:266 (file)
 file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Seq/*.cpp")
 set(OLD_GLOB
   )
@@ -178,7 +225,7 @@ if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
 endif()
 
-# SRC_STORAGE_SRC at CMakeLists.txt:265 (file)
+# SRC_STORAGE_SRC at CMakeLists.txt:271 (file)
 file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/*.c")
 set(OLD_GLOB
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/audio_recorder.c"
@@ -218,7 +265,7 @@ if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
 endif()
 
-# SRC_STORAGE_SRC at CMakeLists.txt:265 (file)
+# SRC_STORAGE_SRC at CMakeLists.txt:271 (file)
 file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Storage/*.cpp")
 set(OLD_GLOB
   )
@@ -227,7 +274,33 @@ if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
 endif()
 
-# SRC_UI_SRC at CMakeLists.txt:280 (file)
+# SRC_TRACK_SRC at CMakeLists.txt:212 (file)
+file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Track/*.c")
+set(OLD_GLOB
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Track/entity_topology.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Track/synth_polyphony.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Track/track_input_ownership.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Track/track_mute.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Track/track_runtime.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Track/track_snapshot.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Track/track_sound_state.c"
+  "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Track/track_state.c"
+  )
+if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
+  message("-- GLOB mismatch!")
+  file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
+endif()
+
+# SRC_TRACK_SRC at CMakeLists.txt:212 (file)
+file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/Track/*.cpp")
+set(OLD_GLOB
+  )
+if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
+  message("-- GLOB mismatch!")
+  file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
+endif()
+
+# SRC_UI_SRC at CMakeLists.txt:286 (file)
 file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/*.c")
 set(OLD_GLOB
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/display_flush_service.c"
@@ -270,7 +343,7 @@ if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
 endif()
 
-# SRC_UI_SRC at CMakeLists.txt:280 (file)
+# SRC_UI_SRC at CMakeLists.txt:286 (file)
 file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/*.cpp")
 set(OLD_GLOB
   )
@@ -279,7 +352,7 @@ if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
 endif()
 
-# SRC_UI_SRC at CMakeLists.txt:280 (file)
+# SRC_UI_SRC at CMakeLists.txt:286 (file)
 file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/*.c")
 set(OLD_GLOB
   "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/ui_page_audio_rec.c"
@@ -306,7 +379,7 @@ if(NOT "${NEW_GLOB}" STREQUAL "${OLD_GLOB}")
   file(TOUCH_NOCREATE "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/build/Release/CMakeFiles/cmake.verify_globs")
 endif()
 
-# SRC_UI_SRC at CMakeLists.txt:280 (file)
+# SRC_UI_SRC at CMakeLists.txt:286 (file)
 file(GLOB NEW_GLOB LIST_DIRECTORIES true "C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/UI/pages/*.cpp")
 set(OLD_GLOB
   )

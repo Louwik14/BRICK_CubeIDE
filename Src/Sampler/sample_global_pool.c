@@ -3,7 +3,7 @@
 #include <string.h>
 
 #include "Sampler/sample_cache.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 
 STORAGE_STATE_SDRAM static sample_global_slot_t
     g_sample_global_pool[SAMPLE_GLOBAL_POOL_MAX_SLOTS];

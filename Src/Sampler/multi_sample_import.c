@@ -5,7 +5,7 @@
 
 #include "Sampler/multi_sample_index.h"
 #include "Sampler/sample_cache.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/wav_audio_codec.h"

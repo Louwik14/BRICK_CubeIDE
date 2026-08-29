@@ -1,0 +1,5 @@
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/multi_sample_audio_projection.c:36:6:multi_sample_audio_projection_init	8	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/multi_sample_audio_projection.c:44:6:multi_sample_audio_projection_withdraw	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/multi_sample_audio_projection.c:54:9:multi_sample_audio_projection_publish	104	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/multi_sample_audio_projection.c:110:9:multi_sample_audio_projection_is_ready	0	static,ignoring_inline_asm
+C:/Users/developpeur/Documents/BRICK5_H743_176/BRICK6/Src/IPC/multi_sample_audio_projection.c:124:9:multi_sample_audio_projection_resolve	72	static,ignoring_inline_asm

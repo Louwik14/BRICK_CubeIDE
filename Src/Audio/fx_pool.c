@@ -25,7 +25,7 @@
 #include "fx_saturation.h"
 #include "fx_comp_lab.h"
 #include "mixer.h"
-#include "memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "stm32h7xx.h"
 
 #define FX_POOL_SIZE 3u

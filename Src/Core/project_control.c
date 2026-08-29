@@ -1,8 +1,8 @@
 #include "Core/project_control.h"
 
-#include "Core/track_state.h"
-#include "Core/track_runtime.h"
-#include "Core/audio_wave_table_projection.h"
+#include "Track/track_state.h"
+#include "Track/track_runtime.h"
+#include "IPC/audio_wave_table_projection.h"
 
 #include "Param/param_macro.h"
 #include "Sampler/multi_sample_loader.h"
@@ -11,7 +11,7 @@
 #include "Sampler/sample_cache.h"
 #include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "Storage/persistent_key_catalog.h"
 
 #include <string.h>

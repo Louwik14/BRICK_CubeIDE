@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include "Core/entity_topology.h"
+#include "Track/entity_topology.h"
 
 #define CONTROL_MUSIC_ACTION_CAPACITY 384U
 #define CONTROL_MUSIC_ACTION_EXTERNAL_FLAG 0x80U
@@ -76,11 +76,6 @@ uint64_t control_music_output_first_unpublished_sample(uint64_t audio_sample);
 uint8_t control_music_output_submit(const control_music_action_t *action,
                                     uint32_t causal_source_id,
                                     uint32_t generation);
-uint8_t control_music_output_close_entity(brick_entity_id_t entity_id,
-                                          uint64_t due_sample);
-uint8_t control_music_output_close_entities(
-    const brick_entity_id_t *entity_ids, uint8_t entity_count,
-    uint64_t due_sample);
 uint8_t control_music_output_close_causal_sources(
     const uint32_t *causal_source_ids, uint16_t source_count,
     uint64_t due_sample);

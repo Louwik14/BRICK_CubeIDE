@@ -1,25 +1,25 @@
 #include "Mod/mod_lfo_v1.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Mod/mod_lfo_segment.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "stm32h7xx.h"
 
 #include <string.h>
 
 #include "Core/brick6_audio_event_grid.h"
-#include "Core/entity_topology.h"
-#include "Core/synth_polyphony.h"
-#include "Core/track_runtime.h"
+#include "Track/entity_topology.h"
+#include "Track/synth_polyphony.h"
+#include "Track/track_runtime.h"
 #include "Audio/mixer.h"
 #include "Audio/audio_note_engine_adapter.h"
-#include "Audio/control_audio_command.h"
+#include "IPC/control_audio_command.h"
 #include "Mod/mod_destination_catalog.h"
 #include "Mod/mod_env3.h"
 #include "Mod/mod_matrix.h"
 #include "Param/param_registry.h"
 #include "Param/param_registry_runtime_state.h"
 #include "Seq/seq_runtime.h"
-#include "Core/audio_transport_publication.h"
+#include "IPC/audio_transport_publication.h"
 #include "Seq/seq_runtime_control.h"
 #include "ui_core.h"
 
@@ -29,7 +29,7 @@
 
 #define MOD_LFO_AUDIO_SAMPLE_RATE 48000.0f
 #define MOD_LFO_CONTROL_RATE_HZ 3000.0f
-#define MOD_LFO_LEGACY_CONTROL_STRIDE ((uint32_t)(MOD_LFO_AUDIO_SAMPLE_RATE / MOD_LFO_CONTROL_RATE_HZ))
+#define MOD_LFO_BASE_CONTROL_STRIDE ((uint32_t)(MOD_LFO_AUDIO_SAMPLE_RATE / MOD_LFO_CONTROL_RATE_HZ))
 #define MOD_LFO_WINDOW_RATE_EXPERIMENT 1U
 #ifndef MOD_LFO_WINDOW_RATE_FRAMES
 #define MOD_LFO_WINDOW_RATE_FRAMES BRICK6_AUDIO_EVENT_GRID_FRAMES
@@ -38,7 +38,7 @@
 #define MOD_LFO_CONTROL_STRIDE ((uint32_t)MOD_LFO_WINDOW_RATE_FRAMES)
 #define MOD_LFO_PHASE_DT (1.0f / MOD_LFO_AUDIO_SAMPLE_RATE)
 #else
-#define MOD_LFO_CONTROL_STRIDE MOD_LFO_LEGACY_CONTROL_STRIDE
+#define MOD_LFO_CONTROL_STRIDE MOD_LFO_BASE_CONTROL_STRIDE
 #define MOD_LFO_PHASE_DT (1.0f / MOD_LFO_CONTROL_RATE_HZ)
 #endif
 #define MOD_LFO_RATE_OFF_EPS 0.0001f

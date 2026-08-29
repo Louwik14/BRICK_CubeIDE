@@ -2,7 +2,7 @@
 
 #include "param_store.h"
 #include "Param/param_value_policy.h"
-#include "UI/ui_core.h"
+#include "Track/track_types.h"
 
 #ifdef __cplusplus
 extern "C" {

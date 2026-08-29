@@ -3,8 +3,6 @@
 
 #include <stdint.h>
 
-#include "UI/ui_param.h"
-
 void encoder_control_dispatcher_init(void);
 uint8_t encoder_control_dispatcher_service(void);
 

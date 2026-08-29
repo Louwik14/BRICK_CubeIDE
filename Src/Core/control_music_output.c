@@ -3,15 +3,15 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "Core/track_runtime.h"
+#include "Track/track_runtime.h"
 #include "Core/brick6_sampler_multi_contract.h"
-#include "Core/control_audio_publication.h"
-#include "Core/control_music_publication.h"
-#include "Audio/control_audio_command.h"
+#include "IPC/control_audio_publication.h"
+#include "IPC/control_music_publication.h"
+#include "IPC/control_audio_command.h"
 #include "Core/live_clock.h"
 #include "Param/param_registry.h"
 #include "Param/param_registry_runtime_state.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "midi.h"
 
 typedef struct
@@ -682,12 +682,6 @@ uint8_t control_music_output_submit(const control_music_action_t *action,
     return 1U;
 }
 
-uint8_t control_music_output_close_entity(brick_entity_id_t entity_id,
-                                          uint64_t due_sample)
-{
-    return control_music_output_close_entities(&entity_id, 1U, due_sample);
-}
-
 void control_music_output_set_multi(brick_entity_id_t entity_id,
                                     uint8_t is_multi)
 {
@@ -801,27 +795,6 @@ static uint8_t control_music_output_close_selected(
         return 0U;
 
     return 1U;
-}
-
-uint8_t control_music_output_close_entities(
-    const brick_entity_id_t *entity_ids, uint8_t entity_count,
-    uint64_t due_sample)
-{
-    if ((entity_ids == NULL) || (entity_count == 0U)
-            || (entity_count > BRICK_ENTITY_CAPACITY))
-        return 0U;
-    uint8_t selected[BRICK_ENTITY_CAPACITY]
-                    [CONTROL_MUSIC_OUTPUTS_PER_ENTITY] = {{0U}};
-    for (uint8_t entity_index = 0U;
-         entity_index < entity_count; ++entity_index)
-    {
-        const brick_entity_id_t entity_id = entity_ids[entity_index];
-        if (entity_id >= BRICK_ENTITY_CAPACITY)
-            return 0U;
-        for (uint8_t i = 0U; i < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++i)
-            selected[entity_id][i] = 1U;
-    }
-    return control_music_output_close_selected(selected, due_sample);
 }
 
 uint8_t control_music_output_close_causal_sources(

@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #include "Seq/seq_types.h"
-#include "Core/entity_topology.h"
+#include "Track/entity_topology.h"
 #include "Param/param_store.h"
 
 #define SEQ_PLAY_MAX_CAPACITY 8U

@@ -8,7 +8,7 @@
 #include "Sampler/sample_stream_limits.h"
 #include "SD/sd_block_device.h"
 #include "SD/sd_scheduler_runtime.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "Storage/sd_access_gate.h"
 #include "stm32h7xx_hal.h"
 #include "ff.h"

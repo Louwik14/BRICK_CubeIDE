@@ -5,7 +5,7 @@
 #include "buttons.h"
 #include "ui_page_manager.h"
 #include "pages/ui_page_template_cfg.h"
-#include "Core/track_runtime.h"
+#include "Track/track_runtime.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"

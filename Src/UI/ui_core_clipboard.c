@@ -11,15 +11,16 @@
 #include "ui_edit_context_sync.h"
 #include "ui_macro_interaction.h"
 #include "Core/project_control.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "Core/engine_tasklet.h"
-#include "Core/track_snapshot.h"
+#include "Track/track_snapshot.h"
 #include "Core/live_clock.h"
-#include "Core/live_parameter_audio_publication.h"
+#include "IPC/live_parameter_audio_publication.h"
+#include "Core/live_parameter_event.h"
 #include "Core/live_parameter_migration.h"
 #include "NoteFx/note_fx_state.h"
 #include "param_registry.h"
-#include "Core/track_runtime.h"
+#include "Track/track_runtime.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_model.h"
 #include "Seq/seq_runtime.h"
@@ -709,8 +710,8 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
         applied = (uint8_t)(applied + bulk.count);
     }
 
-    /* Structural/non-audio values keep their existing transition contract and
-     * are deliberately applied outside the continuous audio transaction. */
+    /* Structural/non-audio values are applied outside the continuous audio
+     * transaction. */
     param_registry_batch_begin();
     for (uint8_t pass = 0U; pass < 6U; ++pass)
     {

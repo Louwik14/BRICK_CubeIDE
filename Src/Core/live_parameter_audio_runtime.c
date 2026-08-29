@@ -9,7 +9,7 @@
 #include "Param/param_registry.h"
 #include "Param/param_registry_backends.h"
 #include "Seq/seq_types.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 
 SEQ_STATE_D2 static float g_live_parameter_audio_poly_voices[SEQ_LANE_CAPACITY];
 SEQ_STATE_D2 static float g_live_parameter_audio_poly_spread[SEQ_LANE_CAPACITY];

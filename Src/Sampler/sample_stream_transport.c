@@ -4,7 +4,7 @@
 #include <stddef.h>
 
 #include "SD/sd_scheduler_runtime.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "stm32h7xx.h"
 
 typedef enum

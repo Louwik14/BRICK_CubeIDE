@@ -47,7 +47,7 @@ if(NOT CMAKE_CROSSCOMPILING)
 
     add_executable(persistent_control_codec_roundtrip_test
         persistent_control_codec_roundtrip_test.c
-        ../Src/Core/entity_topology.c
+        ../Src/Track/entity_topology.c
         ../Src/Storage/persistent_control_codec.c
         ../Src/Storage/persistent_entity_topology.c
         ../Src/Storage/persistent_key_catalog.c

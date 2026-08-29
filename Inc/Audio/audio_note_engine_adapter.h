@@ -3,8 +3,8 @@
 
 #include <stdint.h>
 
-#include "Core/entity_topology.h"
-#include "Core/track_runtime.h"
+#include "Track/entity_topology.h"
+#include "Track/track_runtime.h"
 
 typedef struct
 {

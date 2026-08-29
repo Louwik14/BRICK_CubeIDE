@@ -2,7 +2,7 @@
 
 #include <stddef.h>
 
-#include "Core/brick6_stack_runtime.h"
+#include "Audio/Engines/stack_engine.h"
 #include "Param/param_registry.h"
 
 typedef struct

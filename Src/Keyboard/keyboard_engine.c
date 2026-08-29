@@ -18,9 +18,9 @@
 #include "Keyboard/keyboard_params.h"
 #include "MIDI/midi.h"
 #include "ui_core.h"
-#include "Core/track_runtime.h"
+#include "Track/track_runtime.h"
 #include "Core/live_clock.h"
-#include "Core/track_mute.h"
+#include "Track/track_mute.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
@@ -230,7 +230,7 @@ static void keyboard_engine_send_note_for_owner_track_with_capture(
             g_keyboard_engine_source_occurrence[(uint8_t)index].occurrence_id;
     }
 
-    const note_fx_result_t result = (capture_tick_valid != 0U)
+    const note_event_result_t result = (capture_tick_valid != 0U)
         ? note_fx_pipeline_submit_source_capture_tick(
             owner_track, note, velocity, is_note_on, capture_tick,
             ingress_serial, provenance, occurrence_id)

@@ -6,12 +6,12 @@
  * Integration: service utilisé par seq_edit; ne gère pas l'UI ni l'exécution temps réel.
  */
 #include "Seq/seq_clipboard.h"
-#include "Core/entity_topology.h"
+#include "Track/entity_topology.h"
 #include "Seq/seq_step_snapshot.h"
 
 #include <string.h>
 
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 
 typedef struct
 {

@@ -6,7 +6,7 @@
 #include "App/Hall/hall_keymap.h"
 #include "Board/board_surface.h"
 #include "Core/live_clock.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "stm32h7xx_hal.h"
 
 #define HALL_MUX_COUNT         8U

@@ -5,7 +5,7 @@
 #include <cstring>
 #include <new>
 
-#include "Core/entity_topology.h"
+#include "Track/entity_topology.h"
 
 #include "plaits/dsp/drums/analog_bass_drum.h"
 #include "plaits/dsp/engine/engine.h"

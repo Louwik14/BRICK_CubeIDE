@@ -37,7 +37,7 @@
 #include "pages/ui_page_template_keyboard.h"
 #endif
 #include "Storage/sample_capture.h"
-#include "Core/track_input_ownership.h"
+#include "Track/track_input_ownership.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1
 #include "ui_bootstrap.h"
 #include "ui_event.h"
@@ -55,10 +55,10 @@
 #include "ui_page_manager.h"
 #include "ui_param.h"
 #include "Core/encoder_control_dispatcher.h"
-#include "Core/track_runtime.h"
-#include "Core/track_state.h"
+#include "Track/track_runtime.h"
+#include "Track/track_state.h"
 #include "App/Hall/hall_surface.h"
-#include "Core/entity_topology.h"
+#include "Track/entity_topology.h"
 
 #define UI_TRACK_MOD_BUTTON BTN_TRACK
 

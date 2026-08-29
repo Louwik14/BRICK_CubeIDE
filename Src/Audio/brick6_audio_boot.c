@@ -5,11 +5,11 @@
 #include "Audio/drum_synth.h"
 #include "Audio/fx_pool.h"
 #include "Audio/mixer.h"
-#include "Core/brick6_audio_runtime.h"
-#include "Core/brick6_braids_runtime.h"
-#include "Core/brick6_fm_runtime.h"
-#include "Core/brick6_stack_runtime.h"
-#include "Core/brick6_wave_runtime.h"
+#include "Audio/Engines/audio_engine_dispatch.h"
+#include "Audio/Engines/prism_engine.h"
+#include "Audio/Engines/fm_engine.h"
+#include "Audio/Engines/stack_engine.h"
+#include "Audio/Engines/wavetable_engine.h"
 
 static uint8_t brick6_audio_boot_intent_valid(const brick6_audio_boot_intent_t *intent)
 {

@@ -9,7 +9,7 @@
 #include "Sampler/sample_stream_publish.h"
 #include "Sampler/sample_stream_scheduler.h"
 #include "Sampler/sample_stream_transport.h"
-#include "Storage/memory_layout.h"
+#include "Platform/memory_layout.h"
 #include "stm32h7xx_hal.h"
 
 #define SAMPLE_STREAM_CANCEL_REASON_RELEASE_KEY (3U)

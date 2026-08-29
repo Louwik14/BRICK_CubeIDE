@@ -60,11 +60,6 @@ typedef struct
 
 _Static_assert(sizeof(note_event_t) == 32U, "note_event_t layout must remain fixed");
 
-/* Existing NoteFx names remain source-compatible while using the canonical layout. */
-typedef note_event_t note_fx_event_t;
-typedef note_event_kind_t note_fx_event_type_t;
-typedef note_event_result_t note_fx_result_t;
-
 static inline uint32_t note_event_occurrence_namespace(
     note_event_provenance_t provenance)
 {

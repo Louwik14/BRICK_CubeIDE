@@ -90,8 +90,6 @@ uint8_t seq_param_iface_slot_is_storable_for_type(uint8_t runtime_type,
 uint8_t seq_param_iface_param_is_supported(seq_track_id_t track,
                                            uint8_t set_id,
                                            param_id_t param_id);
-/* Legacy name kept for compatibility: uses slot semantics (set_id + param_slot slot). */
-uint8_t seq_param_iface_is_param_supported(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot);
 
 uint8_t seq_param_iface_get_base_value(seq_track_id_t track,
                                        uint8_t set_id,

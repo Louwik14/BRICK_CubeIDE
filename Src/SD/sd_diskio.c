@@ -34,7 +34,7 @@
 
 #include <string.h>
 #include "Core/brick6_sd_config.h"
-#include "Storage/cache_maintenance.h"
+#include "Platform/cache_maintenance.h"
 #include "Storage/sd_access_gate.h"
 
 /* Private typedef -----------------------------------------------------------*/
