@@ -31,7 +31,6 @@ set(MX_Application_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/spi.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/tim.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/usart.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/usb_otg.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/stm32h7xx_it.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/stm32h7xx_hal_msp.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Src/sysmem.c

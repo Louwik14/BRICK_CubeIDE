@@ -22,7 +22,6 @@
 #include "gpio.h"
 
 /* USER CODE BEGIN 0 */
-#include "Board/board_power.h"
 
 /* USER CODE END 0 */
 
@@ -148,10 +147,6 @@ void MX_GPIO_Init(void)
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI4_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI4_IRQn);
-
-  /* USER CODE BEGIN 2 */
-  board_power_hold_enable_after_boot_press();
-  /* USER CODE END 2 */
 
 }
 

@@ -80,7 +80,6 @@ extern DMA_HandleTypeDef hdma_tim2_ch4;
 extern TIM_HandleTypeDef htim5;
 extern TIM_HandleTypeDef htim7;
 extern TIM_HandleTypeDef htim12;
-extern PCD_HandleTypeDef hpcd_USB_OTG_FS;
 /* USER CODE BEGIN EV */
 extern PCD_HandleTypeDef hpcd_USB_OTG_FS;
 extern HCD_HandleTypeDef hhcd_USB_OTG_FS;
@@ -506,7 +505,6 @@ void OTG_FS_IRQHandler(void)
   usb_role_irq_dispatch();
   return;
   /* USER CODE END OTG_FS_IRQn 0 */
-  HAL_PCD_IRQHandler(&hpcd_USB_OTG_FS);
   /* USER CODE BEGIN OTG_FS_IRQn 1 */
 
   /* USER CODE END OTG_FS_IRQn 1 */

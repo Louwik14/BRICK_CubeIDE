@@ -26,7 +26,6 @@
 #include "spi.h"
 #include "tim.h"
 #include "usart.h"
-#include "usb_otg.h"
 #include "gpio.h"
 #include "fmc.h"
 
@@ -321,6 +320,7 @@ int main(void)
   MX_TIM12_Init();
   MX_SDMMC1_SD_Init();
   /* USER CODE BEGIN 2 */
+  board_power_hold_enable_after_boot_press();
   HAL_TIM_Base_Start(&htim5);
   HAL_TIM_OC_Start(&htim5, TIM_CHANNEL_1);
   HAL_TIM_Base_Start_IT(&htim12);
