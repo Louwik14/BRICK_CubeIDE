@@ -35,7 +35,6 @@
 #include "fx_saturation.h"
 #include "Platform/memory_layout.h"
 #include "audio_io.h"
-#include "Audio/audio_diag_capture.h"
 #include "dsp_engine.h"
 #include "fx_pool.h"
 #include "fx_comp_lab.h"
@@ -581,7 +580,6 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
                                int32_t *AUDIO_RESTRICT tx,
                                uint32_t frames)
 {
-    audio_diag_capture_begin_block(frames);
     g_audio_block_counter++;
     g_audio_dsp_frames_counter += frames;
 
@@ -600,7 +598,6 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
                          frames,
                          out_gain_start,
                          out_gain_end);
-    audio_diag_capture_end_block(frames);
 }
 
 /**

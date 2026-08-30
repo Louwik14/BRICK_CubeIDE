@@ -20,7 +20,6 @@ message("BRICK6 variant: ${BRICK6_VARIANT}")
 
 option(BRICK_TEST_BUILD "Include diagnostic-only firmware features" OFF)
 message("BRICK test build: ${BRICK_TEST_BUILD}")
-option(BRICK6_AUDIO_DIAG_CAPTURE "Temporary bounded audio-path capture" OFF)
 
 set(FM_KERNEL_BENCH "0" CACHE STRING
     "Experimental DX7 algorithm-1 renderer: 0=MSFA, 1=sample-centric log kernel")
@@ -518,7 +517,6 @@ target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     $<$<CONFIG:Debug>:DEBUG>
     FM_KERNEL_BENCH=${FM_KERNEL_BENCH}
-    $<$<BOOL:${BRICK6_AUDIO_DIAG_CAPTURE}>:BRICK6_AUDIO_DIAG_CAPTURE=1>
 )
 
 if(BRICK6_VARIANT STREQUAL "premium")

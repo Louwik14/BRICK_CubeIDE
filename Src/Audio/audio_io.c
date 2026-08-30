@@ -4,7 +4,6 @@
  */
 
 #include "audio_io.h"
-#include "Audio/audio_diag_capture.h"
 
 #include "Audio/metronome_runtime.h"
 #include "Board/board_audio.h"
@@ -71,10 +70,8 @@ void audio_io_pack_ramped(int32_t *AUDIO_RESTRICT tx,
     }
 
     metronome_runtime_render_main_monitor(monitor_main_l, monitor_main_r, frames);
-    audio_diag_capture_pre_pcm(monitor_main_l, monitor_main_r, frames);
     board_audio_pack_output(tx,
                             monitor_main_l,
                             monitor_main_r,
                             frames);
-    audio_diag_capture_tx_pcm(tx, frames, BOARD_AUDIO_TDM_SLOTS);
 }

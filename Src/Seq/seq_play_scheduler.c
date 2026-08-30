@@ -27,6 +27,7 @@
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_runtime_exec.h"
+#include "Seq/seq_note_trace.h"
 
 #define SEQ_PLAY_SCHEDULER_SOURCE_CAPACITY \
     (SEQ_LANE_CAPACITY * SEQ_PLAY_MAX_CAPACITY * 3U)
@@ -78,6 +79,7 @@ typedef struct
     uint8_t track_generation;
     uint8_t active;
     uint8_t swing_phase;
+    uint8_t trace_sample_logged;
     uint32_t generation;
 } seq_play_scheduler_source_t;
 
@@ -158,6 +160,12 @@ static void seq_play_scheduler_output_died(brick_entity_id_t entity_id,
                                            uint32_t output_id)
 {
     (void)entity_id;
+    uint8_t trace_track = 0U;
+    uint8_t trace_step = 0U;
+    if (seq_note_trace_output_is_watched(output_id,
+                                         &trace_track, &trace_step) != 0U)
+        seq_note_trace_record(SEQ_NOTE_TRACE_SKIP_INVALIDATED,
+            trace_track, trace_step, 0U, 0U, output_id, entity_id);
     for (uint16_t i = 0U;
          i < SEQ_PLAY_SCHEDULER_ACTIVE_OUTPUT_CAPACITY; ++i)
         if ((g_seq_play_active_occurrence[i].active != 0U)
@@ -417,6 +425,11 @@ static uint8_t seq_play_scheduler_register_source(
             .swing_phase = swing_phase & 1U
         };
         g_seq_play_active_source[g_seq_play_active_source_count++] = i;
+        if (seq_note_trace_target(item->source_track,
+                                  item->source_step) != 0U)
+            seq_note_trace_record(SEQ_NOTE_TRACE_PLAY_EXPECTED,
+                item->source_track, item->source_step,
+                step_origin_sample, 0U, 0U, i);
         g_seq_play_imminent_valid = 0U;
         return 1U;
     }
@@ -948,6 +961,13 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                     &item, SEQ_PLAY_SCHEDULER_PLAY_PARAM_MICTIM));
             if ((note >= 128U) || (velocity == 0U))
             {
+                if (seq_note_trace_target(source->source_track,
+                                          source->source_step) != 0U)
+                    seq_note_trace_record(
+                        SEQ_NOTE_TRACE_REJECT_INVALID_SOURCE,
+                        source->source_track, source->source_step,
+                        block_start_sample, 0U, 0U,
+                        (uint32_t)note | ((uint32_t)velocity << 8));
                 seq_play_scheduler_deactivate_source_at(source_position);
                 continue;
             }
@@ -960,6 +980,16 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                     source->target_track, source->swing_phase,
                     source->step_origin_sample, source->step_span_q16,
                     source->samples_per_step_q16, mictim);
+            if ((source->trace_sample_logged == 0U)
+                    && (seq_note_trace_target(source->source_track,
+                                              source->source_step) != 0U))
+            {
+                seq_note_trace_record(SEQ_NOTE_TRACE_SAMPLE_PLANNED,
+                    source->source_track, source->source_step,
+                    first_on, source->committed_until_sample, 0U,
+                    source_index);
+                source->trace_sample_logged = 1U;
+            }
             const uint8_t roll = seq_model_get_step_roll(
                 source->source_track, source->source_step);
             const uint16_t divisor = seq_model_step_roll_divisor(roll);
@@ -990,13 +1020,32 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                             && (source->step_origin_sample >= commit_floor))
                         on_sample = commit_floor;
                     else
+                    {
+                        if ((offset_q16 == 0U)
+                                && (seq_note_trace_target(
+                                    source->source_track,
+                                    source->source_step) != 0U))
+                            seq_note_trace_record(
+                                SEQ_NOTE_TRACE_SKIP_COMMIT_FLOOR,
+                                source->source_track, source->source_step,
+                                on_sample, commit_floor, 0U, source_index);
                         continue;
+                    }
                 }
                 if (on_sample >= block_end_sample)
                     continue;
                 if ((g_seq_play_imminent_count + 2U)
                         > SEQ_PLAY_SCHEDULER_IMMINENT_CAPACITY)
+                {
+                    if (seq_note_trace_target(source->source_track,
+                                              source->source_step) != 0U)
+                        seq_note_trace_record(
+                            SEQ_NOTE_TRACE_REJECT_SCHED_CAPACITY,
+                            source->source_track, source->source_step,
+                            on_sample, g_seq_play_imminent_count,
+                            0U, SEQ_PLAY_SCHEDULER_IMMINENT_CAPACITY);
                     break;
+                }
 
                 uint8_t active_count = 0U;
                 int16_t free_index = -1;
@@ -1045,9 +1094,27 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                 if (active_count >= voice_limit)
                     active_index = oldest_index;
                 if (active_index < 0)
+                {
+                    if (seq_note_trace_target(source->source_track,
+                                              source->source_step) != 0U)
+                        seq_note_trace_record(
+                            SEQ_NOTE_TRACE_REJECT_SCHED_CAPACITY,
+                            source->source_track, source->source_step,
+                            on_sample, active_count, 0U, voice_limit);
                     break;
+                }
                 seq_play_active_occurrence_t *const active =
                     &g_seq_play_active_occurrence[(uint16_t)active_index];
+                const uint32_t replaced_output_id =
+                    (active->active != 0U) ? active->output_id : 0U;
+                if ((replaced_output_id != 0U)
+                        && (seq_note_trace_target(source->source_track,
+                                                  source->source_step) != 0U))
+                    seq_note_trace_record(
+                        SEQ_NOTE_TRACE_VICTIM_OFF_MISSING,
+                        source->source_track, source->source_step,
+                        on_sample, active->deadline_sample,
+                        replaced_output_id, 0U);
                 const uint32_t output_id = seq_play_scheduler_alloc_event_token();
                 *active = (seq_play_active_occurrence_t){
                     .active = 1U,
@@ -1065,6 +1132,20 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                         + ((length_samples != 0U) ? length_samples : 1U),
                     .samples_per_step_q16 = source->samples_per_step_q16
                 };
+                if (seq_note_trace_target(source->source_track,
+                                          source->source_step) != 0U)
+                {
+                    seq_note_trace_watch_output(source->source_track,
+                                                source->source_step,
+                                                output_id);
+                    seq_note_trace_record(
+                        (replaced_output_id != 0U)
+                            ? SEQ_NOTE_TRACE_ACTIVE_REPLACED
+                            : SEQ_NOTE_TRACE_ACTIVE_CREATED,
+                        source->source_track, source->source_step,
+                        on_sample, active->deadline_sample,
+                        output_id, replaced_output_id);
+                }
                 g_seq_play_imminent[g_seq_play_imminent_count++] =
                     (seq_play_scheduler_evt_t){
                         .due_sample_time = on_sample,
@@ -1128,7 +1209,9 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
         g_seq_play_imminent_cursor =
             g_seq_play_imminent_next[g_seq_play_imminent_cursor];
         if (event->event_token == 0U)
+        {
             continue;
+        }
         out_events[count++] = (seq_play_scheduler_event_t){
             .type = event->type,
             .track = event->track,
@@ -1160,6 +1243,18 @@ static uint8_t seq_play_scheduler_control_apply_internal(
             || ((g_seq_play_track_suspended[event->track] != 0U)
                 && (event->type != (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF)))
     {
+        uint8_t trace_track = 0U;
+        uint8_t trace_step = 0U;
+        if (seq_note_trace_output_is_watched(event->event_token,
+                                             &trace_track,
+                                             &trace_step) != 0U)
+            seq_note_trace_record(SEQ_NOTE_TRACE_REJECT_STALE_SCHEDULER,
+                trace_track, trace_step, event->sample_abs,
+                event->generation, event->event_token,
+                ((uint32_t)g_seq_play_generation << 16)
+                    | ((uint32_t)event->track_generation << 8)
+                    | ((event->track < SEQ_LANE_CAPACITY)
+                        ? g_seq_play_track_generation[event->track] : 0U));
         return 1U;
     }
 
@@ -1172,6 +1267,14 @@ static uint8_t seq_play_scheduler_control_apply_internal(
     const uint8_t is_note_on = (event->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON) ? 1U : 0U;
     if ((is_note_on != 0U) && (track_mute_should_suppress_note_on(event->track) != 0U))
     {
+        uint8_t trace_track = 0U;
+        uint8_t trace_step = 0U;
+        if (seq_note_trace_output_is_watched(event->event_token,
+                                             &trace_track,
+                                             &trace_step) != 0U)
+            seq_note_trace_record(SEQ_NOTE_TRACE_SUPPRESS_MUTED,
+                trace_track, trace_step, event->sample_abs, 0U,
+                event->event_token, event->track);
         return 1U;
     }
     const note_event_t note_event = {
@@ -1188,8 +1291,20 @@ static uint8_t seq_play_scheduler_control_apply_internal(
         .occurrence_id = event->event_token,
         .generation = event->generation
     };
-    return (note_fx_pipeline_submit_control(&note_event)
-            == NOTE_EVENT_RESULT_ACCEPTED) ? 1U : 0U;
+    const note_event_result_t result =
+        note_fx_pipeline_submit_control(&note_event);
+    if (result != NOTE_EVENT_RESULT_ACCEPTED)
+    {
+        uint8_t trace_track = 0U;
+        uint8_t trace_step = 0U;
+        if (seq_note_trace_output_is_watched(event->event_token,
+                                             &trace_track,
+                                             &trace_step) != 0U)
+            seq_note_trace_record(SEQ_NOTE_TRACE_REJECT_NOTE_FX,
+                trace_track, trace_step, event->sample_abs, 0U,
+                event->event_token, result);
+    }
+    return (result == NOTE_EVENT_RESULT_ACCEPTED) ? 1U : 0U;
 }
 
 uint8_t seq_play_scheduler_control_apply_event(

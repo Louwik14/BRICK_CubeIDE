@@ -1150,7 +1150,6 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                                                      frames);
     }
 
-    audio_diag_capture_post_track(bus_main_l, bus_main_r, frames);
     mixer_external_inputs_clear();
 
     if(send_bus_active != 0U)

@@ -12,7 +12,6 @@
 
 #include "Audio/Engines/audio_engine_dispatch.h"
 #include "Audio/audio_note_engine_adapter.h"
-#include "Audio/audio_diag_capture.h"
 #include "Platform/memory_layout.h"
 
 #include <stddef.h>
@@ -412,7 +411,6 @@ static __attribute__((noinline)) void brick6_render_prism_tracks(uint16_t entity
                 }
                 if (brick6_braids_runtime_render_instance(instance, prism_tmp, frames) == 0U)
                     memset(prism_tmp, 0, frames * sizeof(float));
-                audio_diag_capture_engine_mono(track, voice, prism_tmp, frames);
                 const uint8_t running = (poly_lfo_active != 0U)
                     ? mixer_process_external_poly_voice_prepared(
                         ctx->program_route.mix_track_id, track, voice, prism_tmp, frames,
@@ -437,7 +435,6 @@ static __attribute__((noinline)) void brick6_render_prism_tracks(uint16_t entity
         {
             if (brick6_braids_runtime_render_instance(ctx->program_route.instance_id, direct_mono, frames) != 0U)
             {
-                audio_diag_capture_engine_mono(track, 0U, direct_mono, frames);
                 mixer_commit_external_mono_native(ctx->program_route.mix_track_id, frames);
                 prism_tracks++;
             }
@@ -446,7 +443,6 @@ static __attribute__((noinline)) void brick6_render_prism_tracks(uint16_t entity
 
         if (brick6_braids_runtime_render_instance(ctx->program_route.instance_id, prism_tmp, frames) != 0U)
         {
-            audio_diag_capture_engine_mono(track, 0U, prism_tmp, frames);
             mixer_submit_external_mono_native(ctx->program_route.mix_track_id, prism_tmp, frames);
             prism_tracks++;
         }

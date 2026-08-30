@@ -26,7 +26,6 @@
 #include "Audio/audio_fx_runtime.h"
 #include "Audio/audio_waveform_capture.h"
 #include "Audio/audio_io.h"
-#include "Audio/audio_diag_capture.h"
 #include "Audio/audio_rec_level_snapshot.h"
 #include "IPC/control_audio_command.h"
 
