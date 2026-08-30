@@ -1,5 +1,7 @@
 #include "IPC/multi_sample_audio_projection.h"
 
+#include "Sampler/multi_sample_pool.h"
+
 #include <string.h>
 
 #include "Platform/memory_layout.h"

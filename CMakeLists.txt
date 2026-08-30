@@ -412,30 +412,93 @@ if(NOT BRICK_TEST_BUILD)
     list(APPEND EXCLUDED_SOURCES ${BRICK_TEST_ONLY_SOURCES})
 endif()
 
-set(ALL_USER_SOURCES
-    ${APP_USB_STACK_SRC}
-    ${USB_DEVICE_LIB_SRC}
-    ${USB_HOST_LIB_SRC}
-    ${FATFS_SRC}
-    ${CMSIS_DSP_SRC}
-    ${DRV_APP_SRC}
-    ${BRICK6_VARIANT_DRIVER_SOURCES}
-    ${U8G2_SRC}
-    ${SRC_APP_SRC}
-    ${SRC_AUDIO_SRC}
+# --------------------------------------------------------------------------
+# Future execution domains
+#
+# DOMAIN_TRANSITION_MIXED is deliberately not a fifth architectural domain.
+# It is the explicit debt list for translation units which cannot yet be put
+# in a CM4 or CM7 image without first separating responsibilities.
+# --------------------------------------------------------------------------
+set(DOMAIN_CONTRACTS
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_rec_bus_projection.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_transport_publication.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_wave_table_projection.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/control_audio_command.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/control_audio_fifo.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/live_clock.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/live_event.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/live_parameter_event.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/multi_sample_audio_projection.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_audio_format.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_audio_key.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_stream_arch_contract.h"
+)
+
+set(DOMAIN_TRANSITION_MIXED
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/sampler_ram_audio_projection.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/brick6_app_init.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/encoder_control_dispatcher.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/power_shutdown.c"
     ${SRC_IPC_SRC}
-    ${SRC_PLATFORM_SRC}
-    ${SRC_TRACK_SRC}
-    ${SRC_KEYBOARD_SRC}
-    ${SRC_MIDI_SRC}
-    ${SRC_MOD_SRC}
-    ${SRC_NOTE_FX_SRC}
-    ${SRC_PARAM_SRC}
-    ${SRC_SD_SRC}
-    ${SRC_SAMPLER_SRC}
-    ${SRC_SEQ_SRC}
-    ${SRC_STORAGE_SRC}
-    ${SRC_UI_SRC}
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_destination_catalog.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_env3.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_lfo_v1.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_matrix.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/audio_fx_param_catalog.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_filter.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_macro.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_prism_labels.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_apply_wrappers.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_backends.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_catalog.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_tone_backends.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_stack_labels.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_value_policy.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/multi_sample_loader.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_cache.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_page_cache.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_page_cache_port.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_transport.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sampler_ram_pool.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/wavetable_pool.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_runtime.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/audio_recorder.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/brick6_stream_service_task.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/persistent_pattern_control.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/project_control.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/sample_capture.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/track_runtime.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/track_snapshot.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/track_sound_state.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_midi_fx.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_template_env.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_template_tone.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_core.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_core_clipboard.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_core_runtime_bridge.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_hall_input_service.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_hall_mode_projection.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_hall_mode_state.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_param.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_renderer_oled.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_renderer_template.c"
+)
+
+set(DOMAIN_AUDIO
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Audio/audio_domain.h"
+    ${CMSIS_DSP_SRC}
+    ${SRC_AUDIO_SRC}
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_lfo_segment.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_ramp.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_play_plan.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_manager.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_needs.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_publish.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_scheduler.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_sequence.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_voice_reader.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/synth_polyphony.c"
     ${MUTABLE_CLOUDS_SRC}
     ${MUTABLE_CLOUDS_DSP_SRC}
     ${MUTABLE_CLOUDS_PVOC_SRC}
@@ -452,13 +515,154 @@ set(ALL_USER_SOURCES
     ${DEXED_FM_CORE_SRC}
 )
 
-list(REMOVE_ITEM ALL_USER_SOURCES ${EXCLUDED_SOURCES})
+set(DOMAIN_CONTROL
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/App/control_domain.h"
+    ${USB_DEVICE_LIB_SRC}
+    ${USB_HOST_LIB_SRC}
+    ${FATFS_SRC}
+    ${U8G2_SRC}
+    ${SRC_APP_SRC}
+    ${SRC_TRACK_SRC}
+    ${SRC_KEYBOARD_SRC}
+    ${SRC_MIDI_SRC}
+    ${SRC_MOD_SRC}
+    ${SRC_NOTE_FX_SRC}
+    ${SRC_PARAM_SRC}
+    ${SRC_SD_SRC}
+    ${SRC_SAMPLER_SRC}
+    ${SRC_SEQ_SRC}
+    ${SRC_STORAGE_SRC}
+    ${SRC_UI_SRC}
+    "${UI_ROLL_POPUP_SRC}"
+)
+
+set(PLATFORM_H743
+    ${APP_USB_STACK_SRC}
+    ${DRV_APP_SRC}
+    ${BRICK6_VARIANT_DRIVER_SOURCES}
+    ${SRC_PLATFORM_SRC}
+)
+
+# A source has exactly one build owner. Mixed units stay buildable on H743,
+# but are kept out of both future core domains until their dedicated split.
+list(REMOVE_ITEM DOMAIN_CONTROL ${DOMAIN_AUDIO} ${DOMAIN_TRANSITION_MIXED})
+foreach(domain_list
+        DOMAIN_CONTROL
+        DOMAIN_AUDIO
+        DOMAIN_CONTRACTS
+        PLATFORM_H743
+        DOMAIN_TRANSITION_MIXED)
+    list(REMOVE_ITEM ${domain_list} ${EXCLUDED_SOURCES})
+    list(REMOVE_DUPLICATES ${domain_list})
+endforeach()
+
+set(ALL_USER_SOURCES
+    ${DOMAIN_CONTROL}
+    ${DOMAIN_AUDIO}
+    ${DOMAIN_CONTRACTS}
+    ${PLATFORM_H743}
+    ${DOMAIN_TRANSITION_MIXED}
+)
 list(REMOVE_DUPLICATES ALL_USER_SOURCES)
 
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${ALL_USER_SOURCES}
+)
+
+source_group("Domains/CONTROL" FILES ${DOMAIN_CONTROL})
+source_group("Domains/AUDIO" FILES ${DOMAIN_AUDIO})
+source_group("Domains/CONTRACTS" FILES ${DOMAIN_CONTRACTS})
+source_group("Domains/PLATFORM_H743" FILES ${PLATFORM_H743})
+source_group("Domains/TRANSITION_MIXED" FILES ${DOMAIN_TRANSITION_MIXED})
+
+# Cortex-M4 compilation firewall. PLATFORM_H743 implementations are
+# deliberately outside this target: it validates DOMAIN_CONTROL and its
+# middleware, not a linkable firmware image.
+set(DOMAIN_CONTROL_CM4
+    ${USB_DEVICE_LIB_SRC}
+    ${USB_HOST_LIB_SRC}
+    ${FATFS_SRC}
+    ${U8G2_SRC}
+    ${SRC_APP_SRC}
+    ${SRC_TRACK_SRC}
+    ${SRC_KEYBOARD_SRC}
+    ${SRC_MIDI_SRC}
+    ${SRC_MOD_SRC}
+    ${SRC_NOTE_FX_SRC}
+    ${SRC_PARAM_SRC}
+    ${SRC_SD_SRC}
+    ${SRC_SAMPLER_SRC}
+    ${SRC_SEQ_SRC}
+    ${SRC_STORAGE_SRC}
+    ${SRC_UI_SRC}
     "${UI_ROLL_POPUP_SRC}"
 )
+list(REMOVE_ITEM DOMAIN_CONTROL_CM4
+    ${DOMAIN_AUDIO}
+    ${DOMAIN_TRANSITION_MIXED}
+    ${EXCLUDED_SOURCES})
+list(FILTER DOMAIN_CONTROL_CM4 INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
+list(REMOVE_DUPLICATES DOMAIN_CONTROL_CM4)
+
+set(CONTROL_CM4_INCLUDE_DIRS
+    "${CMAKE_CURRENT_SOURCE_DIR}/App"
+    "${BRICK6_VARIANT_USB_INC_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Host_Library/Core/Inc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Device_Library/Core/Inc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Device_Library/Class/MIDI/Inc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/Third_Party/FatFs/src"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/App"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Board"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Keyboard"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/MIDI"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Mod"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/NoteFx"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Param"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Platform"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/SD"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Seq"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Storage"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Track"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/UI"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Inc"
+    ${BRICK6_VARIANT_DRIVER_INC_DIRS}
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/U8g2"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/STM32H7xx_HAL_Driver/Inc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/STM32H7xx_HAL_Driver/Inc/Legacy"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS/Device/ST/STM32H7xx/Include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS/Include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb"
+)
+
+if(BRICK6_VARIANT STREQUAL "premium")
+    set(CONTROL_CM4_VARIANT_DEFINE BRICK6_VARIANT_PREMIUM)
+    set(CONTROL_CM4_GENERATED_INC
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Generated/Inc")
+else()
+    set(CONTROL_CM4_VARIANT_DEFINE BRICK6_VARIANT_LOWCOST)
+    set(CONTROL_CM4_GENERATED_INC
+        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Generated/Inc")
+endif()
+list(APPEND CONTROL_CM4_INCLUDE_DIRS "${CONTROL_CM4_GENERATED_INC}")
+
+set(CONTROL_CM4_MANIFEST
+    "${CMAKE_CURRENT_BINARY_DIR}/control_cm4_compile_manifest.cmake")
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/control_cm4_compile_manifest.cmake.in"
+    "${CONTROL_CM4_MANIFEST}"
+    @ONLY)
+
+add_custom_target(control_cm4_compile_check
+    COMMAND "${CMAKE_COMMAND}"
+        -DMANIFEST=${CONTROL_CM4_MANIFEST}
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/control_cm4_compile_check.cmake"
+    SOURCES ${DOMAIN_CONTROL_CM4} ${DOMAIN_CONTRACTS}
+    COMMENT "Compile-check DOMAIN_CONTROL for Cortex-M4"
+    VERBATIM)
 
 # --------------------------------------------------------------------------
 # Include directories

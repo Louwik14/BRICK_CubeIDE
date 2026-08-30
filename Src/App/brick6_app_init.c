@@ -4,53 +4,28 @@
 
 #include "App/brick6_app_init.h"
 
+#include "App/control_domain.h"
 #include "App/engine_tasklet.h"
+#include "Audio/audio_domain.h"
 #include "midi.h"
 #include "midi_host.h"
 #include "sdram.h"
-#include "audio.h"
-#include "audio_float.h"
-#include "Audio/brick6_audio_boot.h"
-#include "Board/board_audio.h"
-#include "Board/board_usb.h"
-#include "param_store.h"
-#include "Platform/cpu_load.h"
 #include "ui_core.h"
 #include "ui_boot_loading.h"
-#include "ui_page_manager.h"
-#include "lowcost_button_test_config.h"
 
-#include "Sampler/sample_cache.h"
-#include "Sampler/sample_page_cache.h"
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/multi_sample_pool.h"
 #include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
-#include "Sampler/sample_global_pool.h"
-#include "Audio/audio_wavetable_registry.h"
-#include "Platform/memory_layout.h"
-#include "Audio/Engines/audio_engine_dispatch.h"
-#include "Audio/brick6_looper_runtime.h"
-#include "App/brick6_boot_defaults.h"
-#include "App/brick6_boot_fx_policy.h"
 #include "App/brick6_master_control.h"
 #include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
 #include "Storage/brick6_stream_service_task.h"
-#include "Track/track_state.h"
-#include "Storage/project_control.h"
-#include "Storage/project_load_quiesce.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/project_product.h"
-#include "Storage/patch_product.h"
-#include "Storage/undo_v2.h"
-#include "Storage/sd_access_gate.h"
 #include "Storage/sd_preview.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/waveform_cache.h"
-#include "Storage/wav_loader.h"
-#include "Storage/wav_convert.h"
 #include "IPC/live_clock.h"
-#include "Platform/brick_build_config.h"
 #if BRICK_TEST_BUILD
 #include "Platform/crash_capsule.h"
 #endif
@@ -105,12 +80,6 @@ void brick6_app_init(void)
     (void)crash_capsule_init();
 #endif
     SDRAM_Init();
-    project_load_quiesce_init();
-
-    board_usb_device_init();
-    //MX_USB_HOST_Init();
-
-    board_audio_codec_init();
 
     static const brick6_audio_boot_intent_t audio_boot = {
         .sample_rate_hz = 48000.0f,
@@ -122,72 +91,10 @@ void brick6_app_init(void)
             { .slot = 2U, .type = (uint8_t)BRICK6_AUDIO_BOOT_FX_COMP_LAB },
         },
     };
-    (void)brick6_audio_boot_apply_early(&audio_boot);
-    brick6_boot_fx_policy_init();
-    (void)brick6_audio_boot_apply_output_tracks(&audio_boot);
-
-    sd_access_gate_init();
-    wav_convert_init();
-#if BRICK_TEST_BUILD
-#endif
-    waveform_cache_init();
-    (void)waveform_cache_ensure_dirs();
-    wav_loader_catalog_init_load();
-    sd_preview_init();
-    sample_page_cache_init();
-    sample_global_pool_init();
-    sampler_ram_pool_init();
-    audio_wavetable_registry_init();
-    wavetable_pool_init();
-    multi_sample_pool_init();
-    multi_sample_loader_init();
-
-    sample_cache_init();
-    audio_recorder_init();
-
-    (void)brick6_audio_boot_apply_drum(&audio_boot);
-    brick6_sampler_runtime_init();
-    brick6_looper_runtime_init();
-    (void)brick6_audio_boot_apply_engines(&audio_boot);
-    brick6_audio_boot_apply_binding_io();
-    audio_set_float_callback(brick6_audio_runtime_dsp);
-
-    engine_tasklet_init(48000);
-    param_store_init();
-    track_state_init();
-    seq_runtime_init();
-    ui_core_init();
-    param_set(PARAM_POST_GAIN, audio_boot.postgain);
-    param_set(PARAM_OUTPUT_COMP, audio_boot.output_compensation);
-    brick6_boot_apply_param_defaults();
-    project_control_init();
-    pattern_live_init();
-    patch_product_init();
-    project_product_init();
-    ui_boot_loading_begin();
-    undo_v2_init();
-    hall_loop_init();
-    hall_keyboard_bridge_init();
-    if (hall_calibration_load() != 0U)
-    {
-        ui_page_set(UI_PAGE_TEMPLATE_CFG);
-    }
-    else
-    {
-        ui_page_set(UI_PAGE_CALIBRATION);
-    }
-#if LOWCOST_BUTTON_TEST_PAGE
-    ui_page_set(UI_PAGE_LOWCOST_BUTTON_TEST);
-#endif
-    ui_active_track_sync_full_after_global_restore();
-    brick6_stream_service_task_init();
+    control_domain_init();
+    audio_domain_init(&audio_boot);
+    control_domain_start(audio_boot.postgain, audio_boot.output_compensation);
     g_boot_audio_state = BRICK6_BOOT_WAIT_MASTER;
-
-    cpu_load_reset_peak();
-
-    midi_init();
-
-
 }
 
 
@@ -231,8 +138,7 @@ void brick6_app_process(void)
 {
     engine_tasklet_poll();
     brick6_stream_service_task_poll();
-    /* M7 background owner: never execute this Looper state service on M4. */
-    brick6_looper_runtime_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
+    audio_domain_background_poll(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
     /*
      * Seq runtime core is serviced from superloop for both clock domains.
      * TIM12 IRQ only advances INTERNAL time ticks.
@@ -244,7 +150,7 @@ void brick6_app_process(void)
     {
         if (brick6_master_control_boot_capture() != 0U)
         {
-            g_boot_audio_state = (audio_start() != 0U)
+            g_boot_audio_state = (audio_domain_start() != 0U)
                 ? BRICK6_BOOT_WAIT_AUDIO_ANCHOR
                 : BRICK6_BOOT_AUDIO_FAILED;
         }

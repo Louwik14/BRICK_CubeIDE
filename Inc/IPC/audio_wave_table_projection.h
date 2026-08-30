@@ -3,8 +3,6 @@
 
 #include <stdint.h>
 
-#include "Audio/Engines/wavetable_engine.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif

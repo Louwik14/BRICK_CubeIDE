@@ -1,5 +1,7 @@
 #include "IPC/audio_wave_table_projection.h"
 
+#include "Audio/Engines/wavetable_engine.h"
+
 #include <string.h>
 
 #include "IPC/control_audio_command.h"

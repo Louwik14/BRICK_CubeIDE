@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-#include "Sampler/multi_sample_pool.h"
+#include "Sampler/sample_audio_format.h"
 
 #ifdef __cplusplus
 extern "C" {
