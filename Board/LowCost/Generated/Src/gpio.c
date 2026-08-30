@@ -22,6 +22,7 @@
 #include "gpio.h"
 
 /* USER CODE BEGIN 0 */
+#include "Board/board_power.h"
 
 /* USER CODE END 0 */
 
@@ -52,17 +53,14 @@ void MX_GPIO_Init(void)
   __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, OLED_DC_Pin|OLED_CS_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOC, OLED_DC_Pin|OLED_CS_Pin|HOST_EN_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(OLED_RES_GPIO_Port, OLED_RES_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(HOST_EN_GPIO_Port, HOST_EN_Pin, GPIO_PIN_SET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, SYNC_OUT_Pin|MUX_HALL_S2_Pin|MUX_HALL_S1_Pin
-                          |MUX_HALL_S0_Pin|SCK_SR_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, SYNC_OUT_Pin|MUX_HALL_S2_Pin|MUX_HALL_S1_Pin|MUX_HALL_S0_Pin
+                          |SCK_SR_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(POWER_HOLD_GPIO_Port, POWER_HOLD_Pin, GPIO_PIN_RESET);
@@ -80,26 +78,32 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : SYNC_OUT_Pin MUX_HALL_S2_Pin MUX_HALL_S1_Pin
-                           MUX_HALL_S0_Pin SCK_SR_Pin */
-  GPIO_InitStruct.Pin = SYNC_OUT_Pin|MUX_HALL_S2_Pin|MUX_HALL_S1_Pin
-                          |MUX_HALL_S0_Pin|SCK_SR_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
   /*Configure GPIO pin : SR_DATA_Pin */
   GPIO_InitStruct.Pin = SR_DATA_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(SR_DATA_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pins : SYNC_OUT_Pin MUX_HALL_S2_Pin MUX_HALL_S1_Pin MUX_HALL_S0_Pin
+                           SCK_SR_Pin */
+  GPIO_InitStruct.Pin = SYNC_OUT_Pin|MUX_HALL_S2_Pin|MUX_HALL_S1_Pin|MUX_HALL_S0_Pin
+                          |SCK_SR_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
   /*Configure GPIO pin : FUSB302_INT_N_Pin */
   GPIO_InitStruct.Pin = FUSB302_INT_N_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(FUSB302_INT_N_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : POT_VOLUME_Pin */
+  GPIO_InitStruct.Pin = POT_VOLUME_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(POT_VOLUME_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : HOST_FLAG_Pin */
   GPIO_InitStruct.Pin = HOST_FLAG_Pin;
@@ -120,8 +124,8 @@ void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : ENC3_B_Pin ENC3_A_Pin ENC2_B_Pin ENC2_A_Pin ENC1_B_Pin
-                           ENC1_A_Pin */
+  /*Configure GPIO pins : ENC3_B_Pin ENC3_A_Pin ENC2_B_Pin ENC2_A_Pin
+                           ENC1_B_Pin ENC1_A_Pin */
   GPIO_InitStruct.Pin = ENC3_B_Pin|ENC3_A_Pin|ENC2_B_Pin|ENC2_A_Pin
                           |ENC1_B_Pin|ENC1_A_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
@@ -144,6 +148,10 @@ void MX_GPIO_Init(void)
   /* EXTI interrupt init*/
   HAL_NVIC_SetPriority(EXTI4_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI4_IRQn);
+
+  /* USER CODE BEGIN 2 */
+  board_power_hold_enable_after_boot_press();
+  /* USER CODE END 2 */
 
 }
 

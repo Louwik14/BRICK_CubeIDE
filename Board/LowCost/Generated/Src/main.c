@@ -306,7 +306,6 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  board_power_hold_enable_after_boot_press();
   MX_DMA_Init();
   MX_UART4_Init();
   MX_FMC_Init();

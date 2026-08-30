@@ -27,6 +27,9 @@
 #include "encoders_hw.h"
 #include "usbh_conf.h"
 #include "usb_role_manager.h"
+#if BRICK_TEST_BUILD
+#include "Platform/crash_capsule.h"
+#endif
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -57,6 +60,10 @@ void midi_usb_tx_deferred_service_from_isr(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+#define HardFault_Handler __attribute__((naked)) HardFault_Handler
+#define MemManage_Handler __attribute__((naked)) MemManage_Handler
+#define BusFault_Handler __attribute__((naked)) BusFault_Handler
+#define UsageFault_Handler __attribute__((naked)) UsageFault_Handler
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
@@ -101,9 +108,10 @@ void NMI_Handler(void)
 /**
   * @brief This function handles Hard fault interrupt.
   */
-#if BRICK_TEST_BUILD
-__attribute__((naked)) void HardFault_Handler(void)
+void HardFault_Handler(void)
 {
+  /* USER CODE BEGIN HardFault_IRQn 0 */
+#if BRICK_TEST_BUILD
   __asm volatile(
     "tst lr, #4\n"
     "ite eq\n"
@@ -115,10 +123,7 @@ __attribute__((naked)) void HardFault_Handler(void)
     "add.w r3, r3, #1024\n"
     "msr msp, r3\n"
     "b crash_capsule_fault_capture_and_reset\n");
-}
 #else
-__attribute__((naked)) void HardFault_Handler(void)
-{
   __asm volatile(
     "ldr r0, =0xE000ED0C\n"
     "ldr r1, =0x05FA0004\n"
@@ -126,15 +131,22 @@ __attribute__((naked)) void HardFault_Handler(void)
     "str r1, [r0]\n"
     "dsb\n"
     "b .\n");
-}
 #endif
+  /* USER CODE END HardFault_IRQn 0 */
+  while (1)
+  {
+    /* USER CODE BEGIN W1_HardFault_IRQn 0 */
+    /* USER CODE END W1_HardFault_IRQn 0 */
+  }
+}
 
 /**
   * @brief This function handles Memory management fault.
   */
-#if BRICK_TEST_BUILD
-__attribute__((naked)) void MemManage_Handler(void)
+void MemManage_Handler(void)
 {
+  /* USER CODE BEGIN MemoryManagement_IRQn 0 */
+#if BRICK_TEST_BUILD
   __asm volatile(
     "tst lr, #4\n"
     "ite eq\n"
@@ -146,10 +158,7 @@ __attribute__((naked)) void MemManage_Handler(void)
     "add.w r3, r3, #1024\n"
     "msr msp, r3\n"
     "b crash_capsule_fault_capture_and_reset\n");
-}
 #else
-__attribute__((naked)) void MemManage_Handler(void)
-{
   __asm volatile(
     "ldr r0, =0xE000ED0C\n"
     "ldr r1, =0x05FA0004\n"
@@ -157,15 +166,22 @@ __attribute__((naked)) void MemManage_Handler(void)
     "str r1, [r0]\n"
     "dsb\n"
     "b .\n");
-}
 #endif
+  /* USER CODE END MemoryManagement_IRQn 0 */
+  while (1)
+  {
+    /* USER CODE BEGIN W1_MemoryManagement_IRQn 0 */
+    /* USER CODE END W1_MemoryManagement_IRQn 0 */
+  }
+}
 
 /**
   * @brief This function handles Pre-fetch fault, memory access fault.
   */
-#if BRICK_TEST_BUILD
-__attribute__((naked)) void BusFault_Handler(void)
+void BusFault_Handler(void)
 {
+  /* USER CODE BEGIN BusFault_IRQn 0 */
+#if BRICK_TEST_BUILD
   __asm volatile(
     "tst lr, #4\n"
     "ite eq\n"
@@ -177,10 +193,7 @@ __attribute__((naked)) void BusFault_Handler(void)
     "add.w r3, r3, #1024\n"
     "msr msp, r3\n"
     "b crash_capsule_fault_capture_and_reset\n");
-}
 #else
-__attribute__((naked)) void BusFault_Handler(void)
-{
   __asm volatile(
     "ldr r0, =0xE000ED0C\n"
     "ldr r1, =0x05FA0004\n"
@@ -188,15 +201,22 @@ __attribute__((naked)) void BusFault_Handler(void)
     "str r1, [r0]\n"
     "dsb\n"
     "b .\n");
-}
 #endif
+  /* USER CODE END BusFault_IRQn 0 */
+  while (1)
+  {
+    /* USER CODE BEGIN W1_BusFault_IRQn 0 */
+    /* USER CODE END W1_BusFault_IRQn 0 */
+  }
+}
 
 /**
   * @brief This function handles Undefined instruction or illegal state.
   */
-#if BRICK_TEST_BUILD
-__attribute__((naked)) void UsageFault_Handler(void)
+void UsageFault_Handler(void)
 {
+  /* USER CODE BEGIN UsageFault_IRQn 0 */
+#if BRICK_TEST_BUILD
   __asm volatile(
     "tst lr, #4\n"
     "ite eq\n"
@@ -208,10 +228,7 @@ __attribute__((naked)) void UsageFault_Handler(void)
     "add.w r3, r3, #1024\n"
     "msr msp, r3\n"
     "b crash_capsule_fault_capture_and_reset\n");
-}
 #else
-__attribute__((naked)) void UsageFault_Handler(void)
-{
   __asm volatile(
     "ldr r0, =0xE000ED0C\n"
     "ldr r1, =0x05FA0004\n"
@@ -219,8 +236,14 @@ __attribute__((naked)) void UsageFault_Handler(void)
     "str r1, [r0]\n"
     "dsb\n"
     "b .\n");
-}
 #endif
+  /* USER CODE END UsageFault_IRQn 0 */
+  while (1)
+  {
+    /* USER CODE BEGIN W1_UsageFault_IRQn 0 */
+    /* USER CODE END W1_UsageFault_IRQn 0 */
+  }
+}
 
 /**
   * @brief This function handles System service call via SWI instruction.
@@ -490,6 +513,11 @@ void OTG_FS_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+
+#undef HardFault_Handler
+#undef MemManage_Handler
+#undef BusFault_Handler
+#undef UsageFault_Handler
 
 void hardfault_c(uint32_t *sp)
 {
