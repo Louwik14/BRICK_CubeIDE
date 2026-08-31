@@ -10,9 +10,9 @@
 #include "Storage/wav_parser.h"
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_page_cache_port.h"
-#include "IPC/sampler_ram_audio_projection.h"
+#include "IPC/sampler_ram_audio_projection_control.h"
 #include "IPC/control_audio_publication.h"
-#include "IPC/live_clock.h"
+#include "IPC/live_clock_control.h"
 
 #define SAMPLER_RAM_IO_BYTES (8192U)
 #define SAMPLER_RAM_WAVEFORM_DEFAULT_SERVICE_FRAMES (4096U)

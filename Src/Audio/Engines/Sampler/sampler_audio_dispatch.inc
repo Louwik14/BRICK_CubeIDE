@@ -4,7 +4,6 @@ void brick6_sampler_runtime_init(void)
     brick6_sampler_runtime_diag_reset();
     memset(g_sampler_voice, 0, sizeof(g_sampler_voice));
     memset(g_sampler_multi_voice, 0, sizeof(g_sampler_multi_voice));
-    sample_stream_needs_registry_reset();
     memset(g_sampler_multi_track_state, 0, sizeof(g_sampler_multi_track_state));
     memset(g_sampler_clip_runtime, 0, sizeof(g_sampler_clip_runtime));
     memset(g_sampler_clip_slots, 0, sizeof(g_sampler_clip_slots));
@@ -19,7 +18,7 @@ void brick6_sampler_runtime_init(void)
         g_sampler_multi_voice[i].owner_track_id = UINT8_MAX;
         g_sampler_multi_voice[i].multi_instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
         g_sampler_multi_voice[i].multi_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
-        g_sampler_multi_voice[i].ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
+        g_sampler_multi_voice[i].ram_slot = SAMPLER_RAM_AUDIO_INVALID_SLOT;
         g_sampler_multi_voice[i].ram_step_q16 = BRICK6_SAMPLER_Q16_ONE;
         g_sampler_multi_voice[i].dsp_slot = MULTI_VOICE_DSP_SLOT_INDEX_INVALID;
         g_sampler_multi_voice[i].spread_index = BRICK6_SAMPLER_MULTI_VOICE_INDEX_INVALID;
@@ -30,7 +29,7 @@ void brick6_sampler_runtime_init(void)
         g_sampler_voice[i].source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
         g_sampler_voice[i].multi_instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
         g_sampler_voice[i].multi_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
-        g_sampler_voice[i].ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
+        g_sampler_voice[i].ram_slot = SAMPLER_RAM_AUDIO_INVALID_SLOT;
         g_sampler_voice[i].velocity = 127U;
         g_sampler_voice[i].gain = 1.0f;
         g_sampler_voice[i].trigger_velocity_gain = 1.0f;
@@ -71,13 +70,12 @@ static void brick6_sampler_runtime_reset_track_internal(uint8_t track_id,
                 memset(&g_sampler_declick_tail[i], 0,
                        sizeof(g_sampler_declick_tail[i]));
     memset(&g_sampler_voice[track_id], 0, sizeof(g_sampler_voice[track_id]));
-    sample_cache_stop_voice(brick6_sampler_runtime_cache_voice_id(track_id));
     sample_voice_reader_reset(&g_sampler_voice[track_id].reader);
     g_sampler_voice[track_id].note = 60U;
     g_sampler_voice[track_id].source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
     g_sampler_voice[track_id].multi_instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
     g_sampler_voice[track_id].multi_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
-    g_sampler_voice[track_id].ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
+    g_sampler_voice[track_id].ram_slot = SAMPLER_RAM_AUDIO_INVALID_SLOT;
     g_sampler_voice[track_id].ram_generation = 0U;
     g_sampler_voice[track_id].ram_data = NULL;
     g_sampler_voice[track_id].ram_channels = 0U;
@@ -128,7 +126,6 @@ void brick6_sampler_runtime_set_sample(uint8_t track_id, uint16_t sample_id)
         }
         else if (clip->sample_id != sample_id)
         {
-            sample_cache_stop_voice(brick6_sampler_runtime_cache_voice_id(track_id));
         }
         clip->sample_id = sample_id;
         return;
@@ -195,13 +192,13 @@ void brick6_sampler_runtime_stop_multi_instrument(uint16_t instrument_id)
                 (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_STEAL);
         }
     }
-    /* All reader refs, pinned windows and DSP slots are released synchronously
+    /* All reader leases and DSP slots are released synchronously
      * before the command consumer advances its physical tail. */
 }
 
 void brick6_sampler_runtime_stop_ram_slot(uint16_t ram_slot, uint32_t generation)
 {
-    if (ram_slot >= SAMPLER_RAM_POOL_MAX_SLOTS) return;
+    if (ram_slot >= SAMPLER_RAM_AUDIO_MAX_SLOTS) return;
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         brick6_sampler_voice_t *const voice = &g_sampler_voice[track];
@@ -483,14 +480,13 @@ void brick6_sampler_runtime_trigger(uint8_t track_id)
     }
 
     brick6_sampler_runtime_begin_declick_tail(track_id, voice);
-    sample_cache_stop_voice(brick6_sampler_runtime_cache_voice_id(track_id));
     sample_voice_reader_reset(&voice->reader);
     voice->active = 0U;
     voice->position = 0.0f;
     voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
     voice->multi_instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
     voice->multi_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
-    voice->ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
+    voice->ram_slot = SAMPLER_RAM_AUDIO_INVALID_SLOT;
     voice->ram_generation = 0U;
     voice->ram_data = NULL;
     voice->ram_channels = 0U;
@@ -526,4 +522,3 @@ void brick6_sampler_runtime_trigger_note_velocity(uint8_t track_id, uint8_t note
 
     brick6_sampler_runtime_trigger(track_id);
 }
-

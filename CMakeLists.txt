@@ -101,18 +101,22 @@ set(CMSIS_DSP_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS_DSP/Source/FilteringFunctions/arm_biquad_cascade_df1_init_f32.c"
 )
 
-set(DRV_APP_SRC
+set(DRV_APP_CONTROL_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/buttons.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/buttons_hw.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/drv_display.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/drv_encoders.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/encoders.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/encoders_hw.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/led_anim.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/led_framebuffer.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/led_hw.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/led_layer.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/led_rgb.c"
+)
+
+# Physical acquisition/display/memory and the final LED staging/remap only.
+set(DRV_APP_PLATFORM_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/buttons_hw.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/drv_display.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/led_framebuffer.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/led_hw.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/sdram.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/sdram_alloc.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/w9825g6kh.c"
@@ -199,14 +203,9 @@ file(GLOB SRC_AUDIO_SRC CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/*.cpp"
 )
 
-file(GLOB SRC_IPC_SRC CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/*.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/*.cpp"
-)
-
-file(GLOB SRC_PLATFORM_SRC CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/*.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/*.cpp"
+set(SRC_PLATFORM_H743_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/crash_capsule.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/diagnostic_watchdog.c"
 )
 
 file(GLOB SRC_TRACK_SRC CONFIGURE_DEPENDS
@@ -414,91 +413,95 @@ endif()
 
 # --------------------------------------------------------------------------
 # Future execution domains
-#
-# DOMAIN_TRANSITION_MIXED is deliberately not a fifth architectural domain.
-# It is the explicit debt list for translation units which cannot yet be put
-# in a CM4 or CM7 image without first separating responsibilities.
 # --------------------------------------------------------------------------
-set(DOMAIN_CONTRACTS
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_rec_bus_projection.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_transport_publication.h"
+set(DOMAIN_CONTRACT_HEADERS
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Param/param_ids.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Param/param_spec.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Mod/mod_lfo_types.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Mod/mod_destination_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_rec_bus_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_recorder_capture.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_recorder_capture_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_rec_level_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_boot_diagnostic.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_boot_diagnostic_layout.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_waveform_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_wave_table_projection.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_wavetable_registry_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/control_audio_command.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/control_audio_fifo.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/live_clock.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/live_event.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/control_audio_fifo_layout.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/live_parameter_event.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/multi_sample_audio_projection.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/multi_sample_audio_projection_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/sample_classic_audio_projection_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/sampler_ram_audio_projection.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/sampler_ram_audio_projection_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/shared_memory_ref.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/synth_waveform_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/sd_preview_ring_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_audio_format.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/wavetable_config.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_audio_key.h"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_stream_arch_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/multi_sample_config.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_play_plan.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_reader_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_page_cache_config.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_page_cache_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_page_cache_shared_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_page_lease.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Track/entity_types.h"
 )
 
-set(DOMAIN_TRANSITION_MIXED
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/sampler_ram_audio_projection.h"
+set(DOMAIN_CONTRACT_UNITS
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/audio_boot_diagnostic.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/audio_rec_level_layout.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/audio_recorder_capture.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/audio_waveform_layout.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/control_audio_fifo.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/sd_preview_ring.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/synth_waveform_layout.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_play_plan.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/audio_fx_param_catalog.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/md_model_catalog.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/spectral_window.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/stack_waveform.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_spec.c"
+)
+
+set(DOMAIN_CONTRACTS ${DOMAIN_CONTRACT_HEADERS} ${DOMAIN_CONTRACT_UNITS})
+
+set(DOMAIN_IPC_CONTROL
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/control_audio_publication.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/control_music_publication.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/live_event.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/live_parameter_audio_publication.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/live_parameter_event.c"
+)
+
+set(DOMAIN_H743_COMPOSITION
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/brick6_app_init.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/encoder_control_dispatcher.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/power_shutdown.c"
-    ${SRC_IPC_SRC}
+)
+
+set(DOMAIN_AUDIO_OWNED
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_destination_catalog.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_env3.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_lfo_v1.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_matrix.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/audio_fx_param_catalog.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_filter.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_macro.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_prism_labels.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_apply_wrappers.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_backends.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_catalog.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_tone_backends.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_stack_labels.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_value_policy.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/multi_sample_loader.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_cache.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_page_cache.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_page_cache_port.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_transport.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sampler_ram_pool.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/wavetable_pool.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_runtime.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/audio_recorder.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/brick6_stream_service_task.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/persistent_pattern_control.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/project_control.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/sample_capture.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/track_runtime.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/track_snapshot.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/track_sound_state.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_midi_fx.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_template_env.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_template_tone.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_core.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_core_clipboard.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_core_runtime_bridge.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_hall_input_service.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_hall_mode_projection.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_hall_mode_state.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_param.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_renderer_oled.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_renderer_template.c"
 )
 
 set(DOMAIN_AUDIO
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Audio/audio_domain.h"
     ${CMSIS_DSP_SRC}
     ${SRC_AUDIO_SRC}
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/cpu_load.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_lfo_segment.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_ramp.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_play_plan.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_manager.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_needs.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_publish.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_scheduler.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_sequence.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_voice_reader.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/synth_polyphony.c"
+    ${DOMAIN_AUDIO_OWNED}
     ${MUTABLE_CLOUDS_SRC}
     ${MUTABLE_CLOUDS_DSP_SRC}
     ${MUTABLE_CLOUDS_PVOC_SRC}
@@ -534,24 +537,31 @@ set(DOMAIN_CONTROL
     ${SRC_STORAGE_SRC}
     ${SRC_UI_SRC}
     "${UI_ROLL_POPUP_SRC}"
+    ${DRV_APP_CONTROL_SRC}
+    ${DOMAIN_IPC_CONTROL}
 )
 
 set(PLATFORM_H743
     ${APP_USB_STACK_SRC}
-    ${DRV_APP_SRC}
+    ${DRV_APP_PLATFORM_SRC}
     ${BRICK6_VARIANT_DRIVER_SOURCES}
-    ${SRC_PLATFORM_SRC}
+    ${SRC_PLATFORM_H743_SRC}
+    ${DOMAIN_H743_COMPOSITION}
 )
 
-# A source has exactly one build owner. Mixed units stay buildable on H743,
-# but are kept out of both future core domains until their dedicated split.
-list(REMOVE_ITEM DOMAIN_CONTROL ${DOMAIN_AUDIO} ${DOMAIN_TRANSITION_MIXED})
+foreach(platform_source IN LISTS PLATFORM_H743)
+    if(platform_source MATCHES "/Src/IPC/")
+        message(FATAL_ERROR "Src/IPC unit classified as PLATFORM_H743: ${platform_source}")
+    endif()
+endforeach()
+
+# A source has exactly one build owner.
+list(REMOVE_ITEM DOMAIN_CONTROL ${DOMAIN_AUDIO} ${DOMAIN_CONTRACTS} ${PLATFORM_H743})
 foreach(domain_list
         DOMAIN_CONTROL
         DOMAIN_AUDIO
         DOMAIN_CONTRACTS
-        PLATFORM_H743
-        DOMAIN_TRANSITION_MIXED)
+        PLATFORM_H743)
     list(REMOVE_ITEM ${domain_list} ${EXCLUDED_SOURCES})
     list(REMOVE_DUPLICATES ${domain_list})
 endforeach()
@@ -561,9 +571,13 @@ set(ALL_USER_SOURCES
     ${DOMAIN_AUDIO}
     ${DOMAIN_CONTRACTS}
     ${PLATFORM_H743}
-    ${DOMAIN_TRANSITION_MIXED}
 )
+list(LENGTH ALL_USER_SOURCES DOMAIN_OWNERSHIP_ENTRY_COUNT)
 list(REMOVE_DUPLICATES ALL_USER_SOURCES)
+list(LENGTH ALL_USER_SOURCES DOMAIN_OWNERSHIP_UNIQUE_COUNT)
+if(NOT DOMAIN_OWNERSHIP_ENTRY_COUNT EQUAL DOMAIN_OWNERSHIP_UNIQUE_COUNT)
+    message(FATAL_ERROR "A build unit has more than one domain owner")
+endif()
 
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${ALL_USER_SOURCES}
@@ -573,7 +587,6 @@ source_group("Domains/CONTROL" FILES ${DOMAIN_CONTROL})
 source_group("Domains/AUDIO" FILES ${DOMAIN_AUDIO})
 source_group("Domains/CONTRACTS" FILES ${DOMAIN_CONTRACTS})
 source_group("Domains/PLATFORM_H743" FILES ${PLATFORM_H743})
-source_group("Domains/TRANSITION_MIXED" FILES ${DOMAIN_TRANSITION_MIXED})
 
 # Cortex-M4 compilation firewall. PLATFORM_H743 implementations are
 # deliberately outside this target: it validates DOMAIN_CONTROL and its
@@ -596,10 +609,13 @@ set(DOMAIN_CONTROL_CM4
     ${SRC_STORAGE_SRC}
     ${SRC_UI_SRC}
     "${UI_ROLL_POPUP_SRC}"
+    ${DRV_APP_CONTROL_SRC}
+    ${DOMAIN_IPC_CONTROL}
 )
 list(REMOVE_ITEM DOMAIN_CONTROL_CM4
     ${DOMAIN_AUDIO}
-    ${DOMAIN_TRANSITION_MIXED}
+    ${DOMAIN_CONTRACTS}
+    ${PLATFORM_H743}
     ${EXCLUDED_SOURCES})
 list(FILTER DOMAIN_CONTROL_CM4 INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
 list(REMOVE_DUPLICATES DOMAIN_CONTROL_CM4)
@@ -648,6 +664,8 @@ else()
         "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Generated/Inc")
 endif()
 list(APPEND CONTROL_CM4_INCLUDE_DIRS "${CONTROL_CM4_GENERATED_INC}")
+
+set(CONTROL_CM4_CONTRACT_HEADERS ${DOMAIN_CONTRACT_HEADERS})
 
 set(CONTROL_CM4_MANIFEST
     "${CMAKE_CURRENT_BINARY_DIR}/control_cm4_compile_manifest.cmake")
@@ -814,7 +832,6 @@ set(AUDIO_LTO_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/audio_engine_dispatch.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/prism_engine.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/stack_engine.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/brick6_stack_waveform.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/wavetable_engine.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/Sampler/brick6_sampler_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/brick6_looper_runtime.c
@@ -843,7 +860,6 @@ set(AUDIO_O3_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/audio_engine_dispatch.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/prism_engine.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/stack_engine.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/brick6_stack_waveform.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/wavetable_engine.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/Sampler/brick6_sampler_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/brick6_looper_runtime.c

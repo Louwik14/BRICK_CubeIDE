@@ -6,6 +6,7 @@
 #pragma once
 
 #include <stdint.h>
+#include "Param/engine_model_catalog.h"
 #include "Seq/seq_types.h"
 
 #ifdef __cplusplus
@@ -14,34 +15,6 @@ extern "C" {
 
 #define BRICK6_STACK_MAX_INSTANCES 8U
 #define BRICK6_STACK_VOICE_INSTANCE_COUNT 16U
-#define BRICK6_STACK_SLOT_COUNT 3U
-
-typedef enum
-{
-    BRICK6_STACK_MODEL_SINE = 0,
-    BRICK6_STACK_MODEL_TRI,
-    BRICK6_STACK_MODEL_SQUARE,
-    BRICK6_STACK_MODEL_SAW,
-    BRICK6_STACK_MODEL_SHAPE,
-    BRICK6_STACK_MODEL_TRIPLE_SAW,
-    BRICK6_STACK_MODEL_COUNT
-} brick6_stack_model_t;
-
-typedef enum
-{
-    BRICK6_STACK_FAMILY_PHASE = 0,
-    BRICK6_STACK_FAMILY_ENSEMBLE,
-    BRICK6_STACK_FAMILY_DELUGE
-} brick6_stack_family_t;
-
-typedef enum
-{
-    BRICK6_STACK_KERNEL_PHASE_BASIC = 0,
-    BRICK6_STACK_KERNEL_TRIPLE_ANALOG,
-    BRICK6_STACK_KERNEL_DELUGE,
-    BRICK6_STACK_KERNEL_COUNT
-} brick6_stack_kernel_id_t;
-
 typedef struct
 {
     uint8_t model;

@@ -3,8 +3,8 @@
 
 #include <stdint.h>
 
-#include "Track/entity_topology.h"
-#include "Track/track_runtime.h"
+#include "Track/entity_types.h"
+#include "Track/track_types.h"
 
 typedef struct
 {
@@ -44,16 +44,17 @@ typedef struct
 typedef struct
 {
     brick_entity_id_t entity_id;
+    uint8_t engine;
     uint8_t family;
     uint8_t type;
-    uint8_t topology_flags;
+    uint8_t flags;
 } audio_note_engine_install_spec_t;
 
 #if defined(__cplusplus)
-static_assert(sizeof(audio_note_engine_install_spec_t) == 4U,
+static_assert(sizeof(audio_note_engine_install_spec_t) == 5U,
               "prepared program install ABI changed");
 #else
-_Static_assert(sizeof(audio_note_engine_install_spec_t) == 4U,
+_Static_assert(sizeof(audio_note_engine_install_spec_t) == 5U,
                "prepared program install ABI changed");
 #endif
 

@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 
-#include "Audio/brick6_looper_runtime.h"
 #include "ui_core.h"
 #include "ui_event.h"
 

@@ -4,23 +4,17 @@
 #include "Audio/fx_audio_drift.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/drum_synth.h"
-#include "Audio/md_model.h"
+#include "Param/md_model_catalog.h"
 #include "Audio/Engines/prism_engine.h"
 #include "Audio/Engines/stack_engine.h"
 #include <string.h>
 
 #include "Audio/mixer.h"
-#include "Track/track_sound_state.h"
-#include "Track/entity_topology.h"
 #include "IPC/control_audio_command.h"
-#include "IPC/live_clock.h"
-#include "IPC/live_parameter_audio_publication.h"
 #include "IPC/live_parameter_event.h"
-#include "Track/track_state.h"
-#include "Mod/mod_destination_catalog.h"
+#include "Mod/mod_destination_audio.h"
 #include "Mod/mod_lfo_v1.h"
-#include "Param/param_registry.h"
-#include "Param/param_registry_runtime_state.h"
+#include "Param/param_spec.h"
 #include "Seq/seq_types.h"
 
 /* Runtime remains entity-scoped; GROUP control state is owned by the master. */
@@ -129,18 +123,47 @@ static mod_matrix_audio_state_t g_mod_matrix_audio_state[SEQ_TRACK_COUNT];
 static uint16_t g_mod_matrix_audio_dirty_mask;
 static uint8_t g_mod_matrix_any_route = 0U;
 
+static float mod_matrix_clampf(float value, float minimum, float maximum)
+{
+    if (value < minimum) return minimum;
+    if (value > maximum) return maximum;
+    return value;
+}
 
-/* Private CONTROL/AUDIO fragments share this translation unit to preserve
- * the existing canonical state, derived caches and symbol visibility. */
+static void mod_matrix_recompute_global_route_flag(void)
+{
+    g_mod_matrix_any_route = 0U;
+    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    {
+        if (g_mod_matrix_route_cache[track].any_route != 0U)
+        {
+            g_mod_matrix_any_route = 1U;
+            return;
+        }
+    }
+}
 
-#include "Matrix/mod_matrix_control_state.inc"
+uint8_t mod_matrix_poly_route_mask(uint8_t track)
+{
+    return (track < SEQ_TRACK_COUNT) ? g_mod_matrix_poly_plan[track].source_mask : 0U;
+}
+
+uint8_t mod_matrix_has_any_configured_route(void)
+{
+    return g_mod_matrix_any_route;
+}
+
+uint8_t mod_matrix_track_has_configured_route(uint8_t track)
+{
+    return (track < SEQ_TRACK_COUNT) ? g_mod_matrix_route_cache[track].any_route : 0U;
+}
+
+uint16_t mod_matrix_required_source_mask(uint8_t track)
+{
+    return (track < SEQ_TRACK_COUNT)
+        ? g_mod_matrix_route_cache[track].required_source_mask : 0U;
+}
 
 #include "Matrix/audio_mod_matrix_resolution.inc"
-
-#include "Matrix/mod_matrix_control_defaults.inc"
-
 #include "Matrix/audio_mod_matrix_plan.inc"
-
-#include "Matrix/mod_matrix_control_routes.inc"
-
 #include "Matrix/audio_mod_matrix_process.inc"

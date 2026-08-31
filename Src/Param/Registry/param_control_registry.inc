@@ -56,23 +56,6 @@ static uint8_t param_lfo_map(param_id_t id, uint8_t *out_lfo_index, mod_lfo_para
     return 0U;
 }
 
-static uint8_t param_env3_map(param_id_t id, mod_env3_param_t *out_env_param)
-{
-    if (out_env_param == NULL)
-    {
-        return 0U;
-    }
-
-    switch (id)
-    {
-        case PARAM_ENV3_ATTACK: *out_env_param = MOD_ENV3_PARAM_ATTACK; return 1U;
-        case PARAM_ENV3_DECAY: *out_env_param = MOD_ENV3_PARAM_DECAY; return 1U;
-        case PARAM_ENV3_SUSTAIN: *out_env_param = MOD_ENV3_PARAM_SUSTAIN; return 1U;
-        case PARAM_ENV3_RELEASE: *out_env_param = MOD_ENV3_PARAM_RELEASE; return 1U;
-        default: return 0U;
-    }
-}
-
 static uint8_t param_matrix_get_track_value(param_id_t id, uint8_t track, float *out_value)
 {
     switch (id)
@@ -178,53 +161,14 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id,
         return 0U;
     if (id == PARAM_DRUM_MD_MODEL)
     {
-        const uint8_t model = md_model_validate(value);
+        const uint8_t raw_model = (uint8_t)(value + 0.5f);
+        const uint8_t model = (raw_model < (uint8_t)MD_MODEL_COUNT)
+            ? raw_model : (uint8_t)MD_MODEL_TRX_BD;
         value = (float)model;
         mod_destination_catalog_invalidate_track(track);
     }
     param_registry_control_value_set(track, id, value);
     return 1U;
-}
-
-static uint8_t param_apply_non_filter_track_value_audio(param_id_t id,
-                                                        uint8_t track,
-                                                        float clamped)
-{
-    if ((track >= SEQ_LANE_CAPACITY) || (id == PARAM_EXTERNAL_INPUT)
-            || (id == PARAM_MIDI_PROGRAM))
-    {
-        return 0U;
-    }
-
-    {
-        uint8_t lfo_index = 0U;
-        mod_lfo_param_t lfo_param = MOD_LFO_PARAM_RATE;
-        if (param_lfo_map(id, &lfo_index, &lfo_param) != 0U)
-            return mod_lfo_v1_set_track_param_audio(
-                track, lfo_index, lfo_param, clamped);
-    }
-
-    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
-    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
-            || (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
-            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
-            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_CFG)
-            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD))
-    {
-        return 0U;
-    }
-
-    track_audio_runtime_ctx_t audio_ctx_value;
-    const track_audio_runtime_ctx_t *const audio_ctx =
-        (audio_note_engine_adapter_current_ctx(track, &audio_ctx_value) != 0U)
-            ? &audio_ctx_value : NULL;
-    if (audio_note_engine_adapter_ctx_is_audio_routable(audio_ctx) == 0U)
-    {
-        return 0U;
-    }
-
-    return param_backend_apply_prepared_track_value_audio(
-        track, id, clamped);
 }
 
 typedef struct param_track_exec_ctx_t
@@ -363,13 +307,10 @@ static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx)
         }
     }
 
-    const uint8_t applied = (ctx->rt_fast != 0U)
-        ? param_backend_apply_prepared_track_value_audio(ctx->track,
-                                                        ctx->id,
-                                                        ctx->clamped)
-        : param_backend_apply_track_value_control(ctx->track,
-                                                  ctx->id,
-                                                  ctx->clamped);
+    if (ctx->rt_fast != 0U)
+        return 0U;
+    const uint8_t applied = param_backend_apply_track_value_control(
+        ctx->track, ctx->id, ctx->clamped);
     if ((applied != 0U) && (ctx->rt_fast == 0U))
         param_registry_control_value_set(ctx->track, ctx->id, ctx->clamped);
     return applied;

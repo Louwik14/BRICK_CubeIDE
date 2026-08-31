@@ -377,13 +377,15 @@ static void ui_renderer_template_format_cpu_avg(char *out, uint32_t out_len)
         return;
     }
 
-    if (cpu_load_is_valid() == 0U)
+    audio_boot_diag_snapshot_t audio_diag = {0};
+    audio_boot_diag_read(&audio_diag);
+    if (audio_diag.cpu_load_valid == 0U)
     {
         (void)snprintf(out, out_len, "--%%T---M---C0");
         return;
     }
 
-    const uint32_t avg_permille = cpu_load_get_avg_permille();
+    const uint32_t avg_permille = audio_diag.avg_permille;
     const uint32_t percent = avg_permille / 10U;
     const uint32_t hundredths = (avg_permille % 10U) * 10U;
     (void)snprintf(out,

@@ -1,19 +1,11 @@
 #pragma once
 
 #include <stdint.h>
+#include "Param/engine_model_catalog.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-typedef enum {
-    FX_MODFX_OFF = 0,
-    FX_MODFX_RETIRED_VIBE,
-    FX_MODFX_RETIRED_DRIFT,
-    FX_MODFX_DAISY_STEREO,
-    FX_MODFX_JUNOLOGUE,
-    FX_MODFX_MODEL_COUNT
-} fx_modfx_model_t;
 
 void fx_modfx_global_init(void);
 void fx_modfx_global_set_model(uint8_t model);

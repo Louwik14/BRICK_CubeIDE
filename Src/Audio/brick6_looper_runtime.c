@@ -4,14 +4,16 @@
 
 #include "Audio/audio_float.h"
 #include "Audio/brick6_clip_shifter.h"
-#include "IPC/audio_transport_publication.h"
-#include "IPC/live_clock.h"
-#include "Sampler/sample_page_cache.h"
-#include "Sampler/sample_stream_io.h"
-#include "Sampler/sample_stream_transport.h"
-#include "Storage/audio_recorder.h"
-#include "Storage/audio_recorder_wav.h"
+#include "Audio/audio_transport_runtime.h"
+#include "Audio/audio.h"
+#include "Sampler/sample_page_cache_audio.h"
+#include "Sampler/sample_page_cache_config.h"
+#include "Audio/sample_page_lease_audio.h"
+#include "IPC/audio_recorder_capture.h"
+#include "Audio/audio_recorder_capture_audio.h"
 #include "Platform/memory_layout.h"
+#include "Seq/seq_types.h"
+#include "stm32h7xx.h"
 
 #include <math.h>
 #include <string.h>
@@ -38,23 +40,17 @@
 
 static uint8_t looper_transport_running(void)
 {
-    audio_transport_publication_t publication;
-    return (audio_transport_publication_read(&publication) != 0U)
-        ? publication.running : 0U;
+    return audio_transport_runtime_get()->running;
 }
 
 static uint32_t looper_transport_samples_per_step_q16(void)
 {
-    audio_transport_publication_t publication;
-    return (audio_transport_publication_read(&publication) != 0U)
-        ? publication.samples_per_step_q16 : 1U;
+    return audio_transport_runtime_get()->samples_per_step_q16;
 }
 
 static uint32_t looper_transport_tempo_bpm_milli(void)
 {
-    audio_transport_publication_t publication;
-    return (audio_transport_publication_read(&publication) != 0U)
-        ? publication.tempo_effective_bpm_milli : 120000U;
+    return audio_transport_runtime_get()->tempo_effective_bpm_milli;
 }
 
 #if ((BRICK6_LOOPER_CACHE_ID_BASE + BRICK6_LOOPER_TRACK_CAP) > SAMPLE_PAGE_CACHE_ID_CAPACITY)
@@ -69,7 +65,6 @@ _Static_assert((SAMPLE_PAGE_CACHE_LOOPER_ID_BASE + SEQ_TRACK_COUNT) <= SAMPLE_PA
 typedef struct
 {
     brick6_looper_runtime_state_t state;
-    char path[AUDIO_RECORDER_PATH_MAX];
     uint16_t cache_id;
     uint32_t frames_total;
     uint32_t recorded_steps_q16;
@@ -83,7 +78,7 @@ typedef struct
     uint32_t resync_old_playhead;
     uint32_t resync_old_frac_q16;
     sample_audio_key_t cache_key;
-    uint32_t stream_map_generation;
+    uint32_t registration_epoch;
     sample_page_ref_t current_page_ref;
     const float *current_base;
     uint32_t current_start_frame;
@@ -94,11 +89,8 @@ typedef struct
     uint8_t stretch_mode;
     uint8_t play_auto;
     uint8_t want_play_when_ready;
-    uint8_t cache_registered;
     uint8_t current_acquired;
     uint8_t scheduled_start_valid;
-    uint8_t is_live_wav;
-    uint8_t stream_registration_pending;
     uint8_t resync_pending;
     uint8_t resync_stable_blocks;
     uint8_t resync_xfade_remaining;
@@ -158,16 +150,7 @@ static float g_looper_stretch_r[AUDIO_BLOCK_SIZE];
 static brick6_looper_preroll_state_t g_looper_preroll;
 static brick6_looper_record_boundary_state_t g_looper_record_boundary;
 
-typedef struct
-{
-    uint32_t transport_sequence;
-    sample_page_load_token_t token;
-    uint8_t active;
-} brick6_looper_live_load_t;
-
-static brick6_looper_live_load_t g_looper_live_load;
-
-static void looper_request_playhead_pages(const brick6_looper_track_state_t *state);
+static void looper_update_primary_lease(const brick6_looper_track_state_t *state);
 static uint8_t looper_preroll_can_read(const brick6_looper_track_state_t *state,
                                        uint32_t playhead);
 static uint8_t looper_try_enter_normal_playback(brick6_looper_track_state_t *state);
@@ -262,40 +245,6 @@ static uint8_t looper_track_valid(uint8_t track_id)
     return (track_id < BRICK6_LOOPER_TRACK_CAP) ? 1U : 0U;
 }
 
-static uint8_t looper_copy_path(char *dst, const char *src)
-{
-    if((dst == 0) || (src == 0) || (src[0] == '\0'))
-        return 0U;
-
-    for(uint32_t i = 0U; i < AUDIO_RECORDER_PATH_MAX; ++i)
-    {
-        dst[i] = src[i];
-        if(src[i] == '\0')
-            return 1U;
-    }
-
-    dst[0] = '\0';
-    return 0U;
-}
-
-static void looper_diag_copy_path(char *dst, const char *src)
-{
-    if(dst == 0)
-        return;
-
-    dst[0] = '\0';
-    if(src == 0)
-        return;
-
-    for(uint32_t i = 0U; i < BRICK6_LOOPER_RUNTIME_DIAG_PATH_MAX; ++i)
-    {
-        dst[i] = src[i];
-        if(src[i] == '\0')
-            return;
-    }
-    dst[BRICK6_LOOPER_RUNTIME_DIAG_PATH_MAX - 1U] = '\0';
-}
-
 static void looper_diag_update_take(uint8_t track_id,
                                     const brick6_looper_track_state_t *state)
 {
@@ -317,11 +266,9 @@ static void looper_diag_update_take(uint8_t track_id,
     g_looper_runtime_diag.play_auto = state->play_auto;
     g_looper_runtime_diag.scheduled_start_valid = state->scheduled_start_valid;
     g_looper_runtime_diag.state = (uint8_t)state->state;
-    g_looper_runtime_diag.source =
-        (state->is_live_wav != 0U) ? (uint8_t)BRICK6_LOOPER_RUNTIME_SOURCE_WAV
-                                  : (uint8_t)BRICK6_LOOPER_RUNTIME_SOURCE_NONE;
-    g_looper_runtime_diag.cache_registered = state->cache_registered;
-    looper_diag_copy_path(g_looper_runtime_diag.active_path, state->path);
+    g_looper_runtime_diag.source = (state->frames_total != 0U)
+        ? (uint8_t)BRICK6_LOOPER_RUNTIME_SOURCE_WAV
+        : (uint8_t)BRICK6_LOOPER_RUNTIME_SOURCE_NONE;
 }
 
 static uint16_t looper_cache_id(uint8_t track_id)
@@ -614,7 +561,6 @@ static void looper_release_reader(brick6_looper_track_state_t *state)
         return;
     }
 
-    sample_page_cache_release_page_ref_key(state->cache_key, &state->current_page_ref);
     memset(&state->current_page_ref, 0, sizeof(state->current_page_ref));
     state->current_base = 0;
     state->current_start_frame = 0U;
@@ -622,15 +568,45 @@ static void looper_release_reader(brick6_looper_track_state_t *state)
     state->current_acquired = 0U;
 }
 
-static void looper_clear_stream(brick6_looper_track_state_t *state)
+static void looper_publish_lease(const brick6_looper_track_state_t *state,
+                                 uint32_t playhead,
+                                 uint8_t auxiliary)
+{
+    if (state == 0) return;
+    const uint8_t track = (uint8_t)(state - g_looper_tracks);
+    const uint8_t slot = (auxiliary != 0U)
+                           ? sample_page_lease_looper_aux_slot(track)
+                           : sample_page_lease_looper_slot(track);
+    if (state->frames_total == 0U)
+    {
+        sample_page_lease_audio_clear(slot);
+        return;
+    }
+    const uint32_t total_pages = (state->frames_total + SAMPLE_PAGE_FRAMES - 1U)
+                                   / SAMPLE_PAGE_FRAMES;
+    const uint32_t first = (playhead / SAMPLE_PAGE_FRAMES) % total_pages;
+    uint32_t count = (total_pages < 2U) ? total_pages : 2U;
+    sample_page_lease_range_t ranges[2] = {0};
+    ranges[0].first_page = first;
+    const uint32_t tail = total_pages - first;
+    ranges[0].page_count = (uint8_t)((count < tail) ? count : tail);
+    count -= ranges[0].page_count;
+    if (count != 0U) ranges[1].page_count = (uint8_t)count;
+    (void)sample_page_lease_audio_publish(slot, state->cache_key,
+                                          state->registration_epoch, ranges);
+}
+
+static void looper_release_pages(brick6_looper_track_state_t *state)
 {
     if((state == 0) || (state->cache_id >= SAMPLE_PAGE_CACHE_MAX_SAMPLES))
         return;
 
     looper_release_reader(state);
-    sample_page_cache_clear_key(state->cache_key);
-    state->cache_registered = 0U;
-    state->stream_map_generation = 0U;
+    sample_page_lease_audio_clear(sample_page_lease_looper_slot(
+        (uint8_t)(state - g_looper_tracks)));
+    sample_page_lease_audio_clear(sample_page_lease_looper_aux_slot(
+        (uint8_t)(state - g_looper_tracks)));
+    state->registration_epoch = 0U;
 }
 
 static void looper_reset_take_state(brick6_looper_track_state_t *state)
@@ -639,9 +615,8 @@ static void looper_reset_take_state(brick6_looper_track_state_t *state)
         return;
 
     const uint8_t track_id = (uint8_t)(state - g_looper_tracks);
-    looper_clear_stream(state);
+    looper_release_pages(state);
     looper_shifter_release(track_id);
-    state->path[0] = '\0';
     looper_store_take_metadata(state, 0U, 0U, 0U, 0U, 0U, 0U);
     state->playhead = 0U;
     state->playhead_frac_q16 = 0U;
@@ -655,8 +630,6 @@ static void looper_reset_take_state(brick6_looper_track_state_t *state)
     state->want_play_when_ready = 0U;
     looper_set_scheduled_start(state, 0U);
     state->scheduled_start_sample = 0U;
-    state->is_live_wav = 0U;
-    state->stream_registration_pending = 0U;
     looper_preroll_reset_take_state(state);
     looper_set_state(state, BRICK6_LOOPER_RUNTIME_STATE_EMPTY);
 }
@@ -667,7 +640,7 @@ static void looper_fail(brick6_looper_track_state_t *state)
         return;
 
     looper_shifter_release((uint8_t)(state - g_looper_tracks));
-    looper_clear_stream(state);
+    looper_release_pages(state);
     looper_set_state(state, BRICK6_LOOPER_RUNTIME_STATE_FAILED);
     looper_store_take_metadata(state, 0U, 0U, 0U, 0U, 0U, 0U);
     state->playhead = 0U;
@@ -680,105 +653,9 @@ static void looper_fail(brick6_looper_track_state_t *state)
     state->resync_old_frac_q16 = 0U;
 }
 
-static uint8_t looper_register_live_stream(brick6_looper_track_state_t *state)
+static void looper_update_primary_lease(const brick6_looper_track_state_t *state)
 {
-    if((state == 0) || (state->is_live_wav == 0U)
-            || (state->frames_total == 0U))
-    {
-        return 0U;
-    }
-    audio_recorder_live_stream_t live;
-    if(audio_recorder_get_live_stream(
-            AUDIO_RECORDER_CLIENT_LOOPER, &live) == 0U)
-    {
-        return 0U;
-    }
-    if((live.accepted_frames != state->frames_total)
-            || (live.reservation.reserved_file_bytes > UINT32_MAX)
-            || (looper_copy_path(state->path, live.path) == 0U))
-    {
-        return 0U;
-    }
-    looper_release_reader(state);
-    if(sample_page_cache_register_live_pcm24_stereo_sample_key(
-            state->cache_key,
-            state->path,
-            state->frames_total,
-            live.committed_frames,
-            AUDIO_RECORDER_WAV_HEADER_BYTES,
-            (uint32_t)live.reservation.reserved_file_bytes,
-            live.reservation.extents,
-            live.reservation.extent_count,
-            live.reservation.media_epoch) == 0U)
-    {
-        return 0U;
-    }
-    state->cache_registered = 1U;
-    state->stream_map_generation = live.reservation.generation;
-    state->stream_registration_pending = 0U;
-    looper_request_playhead_pages(state);
-    return 1U;
-}
-
-static void looper_live_stream_refresh(brick6_looper_track_state_t *state)
-{
-    if((state == 0) || (state->is_live_wav == 0U))
-    {
-        return;
-    }
-    if(state->stream_registration_pending != 0U)
-    {
-        (void)looper_register_live_stream(state);
-        return;
-    }
-    audio_recorder_live_stream_t live;
-    if(audio_recorder_get_live_stream(
-            AUDIO_RECORDER_CLIENT_LOOPER, &live) == 0U)
-    {
-        return;
-    }
-    if ((live.reservation.generation != state->stream_map_generation)
-            && (g_looper_live_load.active == 0U)
-            && (live.reservation.reserved_file_bytes <= UINT32_MAX)
-            && (sample_page_cache_update_live_map_key(
-                    state->cache_key,
-                    (uint32_t)live.reservation.reserved_file_bytes,
-                    live.reservation.extents,
-                    live.reservation.extent_count,
-                    live.reservation.media_epoch) != 0U))
-    {
-        state->stream_map_generation = live.reservation.generation;
-    }
-    (void)sample_page_cache_update_readable_frames_key(
-        state->cache_key, live.committed_frames);
-    if(strncmp(state->path, live.path, AUDIO_RECORDER_PATH_MAX) != 0)
-    {
-        if(looper_copy_path(state->path, live.path) != 0U)
-        {
-            (void)sample_page_cache_update_stream_path_key(
-                state->cache_key, state->path);
-        }
-    }
-}
-
-static void looper_request_playhead_pages(const brick6_looper_track_state_t *state)
-{
-    if((state == 0) || (state->cache_registered == 0U) || (state->frames_total == 0U))
-        return;
-
-    const uint32_t page_count =
-        (state->frames_total + SAMPLE_PAGE_FRAMES - 1U) / SAMPLE_PAGE_FRAMES;
-    if(page_count == 0U)
-        return;
-
-    const uint32_t playhead = state->playhead;
-    const uint32_t first_page = playhead / SAMPLE_PAGE_FRAMES;
-    for(uint32_t i = 0U; i < BRICK6_LOOPER_PREFETCH_PAGES; ++i)
-    {
-        (void)sample_page_cache_reserve_page_key_alloc(state->cache_key,
-                                                       (first_page + i) % page_count,
-                                                       SAMPLE_PAGE_ALLOC_MARGIN);
-    }
+    if (state != 0) looper_publish_lease(state, state->playhead, 0U);
 }
 
 static uint8_t looper_preroll_can_read(const brick6_looper_track_state_t *state,
@@ -854,14 +731,13 @@ static void looper_start_playback(brick6_looper_track_state_t *state,
     g_looper_runtime_diag.track_id = track_id;
     g_looper_runtime_diag.play_auto = state->play_auto;
     g_looper_runtime_diag.scheduled_start_valid = start_was_scheduled;
-    looper_request_playhead_pages(state);
+    looper_update_primary_lease(state);
 }
 
 static uint8_t looper_acquire_page_for_frame(brick6_looper_track_state_t *state,
                                              uint32_t frame)
 {
-    if((state == 0) || (state->cache_registered == 0U)
-            || (state->frames_total == 0U)
+    if((state == 0) || (state->frames_total == 0U)
             || (state->cache_id >= SAMPLE_PAGE_CACHE_MAX_SAMPLES))
     {
         return 0U;
@@ -880,9 +756,9 @@ static uint8_t looper_acquire_page_for_frame(brick6_looper_track_state_t *state,
     }
 
     looper_release_reader(state);
-
+    looper_publish_lease(state, frame, 0U);
     sample_page_span_t span;
-    if(sample_page_cache_try_acquire_page_key(state->cache_key,
+    if(sample_page_cache_audio_resolve_page_key(state->cache_key,
                                               frame / SAMPLE_PAGE_FRAMES,
                                               &span) == 0U)
     {
@@ -897,6 +773,7 @@ static uint8_t looper_acquire_page_for_frame(brick6_looper_track_state_t *state,
     state->current_page_ref.stride_floats = span.stride_floats;
     state->current_page_ref.frames_per_page = span.frames_per_page;
     state->current_page_ref.registration_epoch = span.registration_epoch;
+    state->registration_epoch = span.registration_epoch;
     state->current_base = span.frames_interleaved;
     state->current_start_frame = span.start_frame;
     state->current_frame_count = span.frame_count;
@@ -915,7 +792,7 @@ static uint8_t looper_acquire_current_page(brick6_looper_track_state_t *state)
 
 static uint8_t looper_try_enter_normal_playback(brick6_looper_track_state_t *state)
 {
-    if((state == 0) || (state->cache_registered == 0U) || (state->frames_total == 0U))
+    if((state == 0) || (state->frames_total == 0U))
     {
         return 0U;
     }
@@ -948,7 +825,7 @@ static void looper_update_ready_state(brick6_looper_track_state_t *state)
 
         if(state->scheduled_start_valid != 0U)
         {
-            const uint64_t now_sample = live_clock_audio_sample();
+            const uint64_t now_sample = audio_sample_clock_now();
             if(now_sample < state->scheduled_start_sample)
             {
                 looper_set_state(state, BRICK6_LOOPER_RUNTIME_STATE_READY);
@@ -997,26 +874,15 @@ void brick6_looper_runtime_on_record_stop(uint64_t sample_time)
         (sample_time > g_looper_record_boundary.actual_start_sample)
             ? (uint32_t)(sample_time - g_looper_record_boundary.actual_start_sample)
             : 0U;
+    if (audio_recorder_capture_audio_frames(AUDIO_RECORDER_CLIENT_LOOPER,
+                                            &span_frames) == 0U)
     {
-        audio_recorder_status_t status;
-        if(audio_recorder_capture_status_client(
-                AUDIO_RECORDER_CLIENT_LOOPER, &status) == 0U)
-        {
-            return;
-        }
-        if(status.state == AUDIO_RECORDER_STATE_FAILED)
-        {
-            if(track < BRICK6_LOOPER_TRACK_CAP)
-            {
-                looper_fail(&g_looper_tracks[track]);
-            }
-            looper_preroll_stop_capture();
-            g_looper_record_boundary.recording = 0U;
-            g_looper_record_boundary.stop_armed = 0U;
-            g_looper_record_boundary.target_stop_sample = 0U;
-            return;
-        }
-        span_frames = status.frames_received;
+        if(track < BRICK6_LOOPER_TRACK_CAP) looper_fail(&g_looper_tracks[track]);
+        looper_preroll_stop_capture();
+        g_looper_record_boundary.recording = 0U;
+        g_looper_record_boundary.stop_armed = 0U;
+        g_looper_record_boundary.target_stop_sample = 0U;
+        return;
     }
     uint32_t recorded_steps_q16 = g_looper_record_boundary.expected_steps_q16;
     if(recorded_steps_q16 == 0U)
@@ -1041,10 +907,7 @@ void brick6_looper_runtime_on_record_stop(uint64_t sample_time)
     if(span_frames != 0U)
     {
         brick6_looper_track_state_t *const state = &g_looper_tracks[track];
-        looper_clear_stream(state);
-        state->path[0] = '\0';
-        state->is_live_wav = 1U;
-        state->stream_registration_pending = 1U;
+        looper_release_pages(state);
         state->play_auto = (g_looper_record_boundary.play_auto != 0U) ? 1U : 0U;
         state->want_play_when_ready = ((state->play_auto != 0U)
             && (looper_transport_running() != 0U)) ? 1U : 0U;
@@ -1083,13 +946,6 @@ void brick6_looper_runtime_on_record_start(uint64_t sample_time)
         return;
     }
 
-    if(audio_recorder_client_is_recording(
-            AUDIO_RECORDER_CLIENT_LOOPER) == 0U)
-    {
-        looper_record_clear_boundary_state();
-        return;
-    }
-
     const uint8_t track = g_looper_record_boundary.track_id;
     g_looper_preroll.active = 0U;
     g_looper_preroll.frames = 0U;
@@ -1107,106 +963,12 @@ void brick6_looper_runtime_on_record_start(uint64_t sample_time)
             : 0U;
 }
 
-static void looper_live_load_poll(void)
-{
-    if(g_looper_live_load.active == 0U)
-    {
-        return;
-    }
-    sample_stream_io_result_t result;
-    if(sample_stream_transport_take_result(
-            g_looper_live_load.transport_sequence, &result) == 0U)
-    {
-        return;
-    }
-    const sample_page_finish_result_t finish =
-        (result.load_result == SAMPLE_PAGE_LOAD_OK)
-            ? SAMPLE_PAGE_FINISH_READY : SAMPLE_PAGE_FINISH_ERROR;
-    (void)sample_page_cache_finish_loading(&g_looper_live_load.token, finish);
-    memset(&g_looper_live_load, 0, sizeof(g_looper_live_load));
-}
-
-static void looper_live_load_submit(void)
-{
-    if((g_looper_live_load.active != 0U)
-            || (sample_stream_transport_can_submit() == 0U))
-    {
-        return;
-    }
-    for(uint8_t track = 0U; track < BRICK6_LOOPER_TRACK_CAP; ++track)
-    {
-        brick6_looper_track_state_t *const state = &g_looper_tracks[track];
-        if((state->is_live_wav == 0U) || (state->cache_registered == 0U)
-                || (state->frames_total == 0U))
-        {
-            continue;
-        }
-        const uint32_t page_count = (state->frames_total
-            + SAMPLE_PAGE_FRAMES - 1U) / SAMPLE_PAGE_FRAMES;
-        if(page_count == 0U)
-        {
-            continue;
-        }
-        const uint32_t first_page = state->playhead / SAMPLE_PAGE_FRAMES;
-        for(uint32_t offset = 0U; offset < BRICK6_LOOPER_PREFETCH_PAGES; ++offset)
-        {
-            const uint32_t page_index = (first_page + offset) % page_count;
-            sample_page_load_target_t target;
-            if(sample_page_cache_get_load_target_key(
-                    state->cache_key, page_index, &target) == 0U)
-            {
-                continue;
-            }
-            sample_page_stream_info_t stream_info;
-            if(sample_page_cache_get_stream_info_key(
-                    state->cache_key, &stream_info) == 0U)
-            {
-                (void)sample_page_cache_set_page_state_key(
-                    state->cache_key, page_index, SAMPLE_PAGE_FAILED);
-                return;
-            }
-            sample_page_load_token_t token;
-            if(sample_page_cache_begin_loading(&target, &token) == 0U)
-            {
-                continue;
-            }
-            sample_stream_io_command_t command;
-            if(sample_stream_io_command_init(
-                    &command, &token, &target, &stream_info) == 0U)
-            {
-                (void)sample_page_cache_finish_loading(
-                    &token, SAMPLE_PAGE_FINISH_ERROR);
-                return;
-            }
-            uint32_t distance = (target.start_frame >= state->playhead)
-                ? target.start_frame - state->playhead
-                : (state->frames_total - state->playhead) + target.start_frame;
-            const uint64_t margin = (uint64_t)distance * 1000000ULL
-                                  / AUDIO_RECORDER_SAMPLE_RATE_HZ;
-            command.deadline_margin_us = (margin > UINT32_MAX)
-                ? UINT32_MAX : (uint32_t)margin;
-            uint32_t sequence = 0U;
-            if(sample_stream_transport_submit(&command, &sequence) == 0U)
-            {
-                (void)sample_page_cache_finish_loading(
-                    &token, SAMPLE_PAGE_FINISH_ERROR);
-                return;
-            }
-            g_looper_live_load.transport_sequence = sequence;
-            g_looper_live_load.token = token;
-            g_looper_live_load.active = 1U;
-            return;
-        }
-    }
-}
-
 void brick6_looper_runtime_init(void)
 {
     g_looper_playing_mask = 0U;
     g_looper_scheduled_start_mask = 0U;
     memset(g_looper_tracks, 0, sizeof(g_looper_tracks));
     memset(&g_looper_runtime_diag, 0, sizeof(g_looper_runtime_diag));
-    memset(&g_looper_live_load, 0, sizeof(g_looper_live_load));
     looper_record_clear_boundary_state();
     for(uint8_t slot = 0U; slot < BRICK6_LOOPER_SHIFTER_CAP; ++slot)
     {
@@ -1222,17 +984,13 @@ void brick6_looper_runtime_init(void)
         looper_set_state(&g_looper_tracks[track], BRICK6_LOOPER_RUNTIME_STATE_EMPTY);
         g_looper_tracks[track].stretch_mode = BRICK6_LOOPER_STRETCH_OFF;
         g_looper_tracks[track].stretch_grain_frames = BRICK6_LOOPER_DEFAULT_GRAIN_FRAMES;
+        sample_page_lease_audio_clear(sample_page_lease_looper_slot(track));
+        sample_page_lease_audio_clear(sample_page_lease_looper_aux_slot(track));
     }
 }
 
 void brick6_looper_runtime_service(uint32_t byte_budget)
 {
-    looper_live_load_poll();
-    for(uint8_t track = 0U; track < BRICK6_LOOPER_TRACK_CAP; ++track)
-    {
-        looper_live_stream_refresh(&g_looper_tracks[track]);
-    }
-
     uint8_t has_work = 0U;
     for(uint8_t track = 0U; track < BRICK6_LOOPER_TRACK_CAP; ++track)
     {
@@ -1254,38 +1012,9 @@ void brick6_looper_runtime_service(uint32_t byte_budget)
     for(uint8_t track = 0U; track < BRICK6_LOOPER_TRACK_CAP; ++track)
     {
         brick6_looper_track_state_t *state = &g_looper_tracks[track];
-        if((state->is_live_wav != 0U) && (state->cache_registered != 0U))
-        {
-            looper_request_playhead_pages(state);
-        }
+        if (state->frames_total != 0U) looper_update_primary_lease(state);
         looper_update_ready_state(state);
     }
-    looper_live_load_submit();
-}
-
-void brick6_looper_runtime_notify_live_take_finalized(uint8_t track_id,
-                                                      const char *wav_path,
-                                                      uint32_t recorded_frames)
-{
-    if((looper_track_valid(track_id) == 0U) || (wav_path == 0)
-            || (recorded_frames == 0U))
-    {
-        return;
-    }
-    brick6_looper_track_state_t *const state = &g_looper_tracks[track_id];
-    if((state->is_live_wav == 0U) || (state->frames_total != recorded_frames)
-            || (looper_copy_path(state->path, wav_path) == 0U))
-    {
-        return;
-    }
-    if(state->cache_registered != 0U)
-    {
-        (void)sample_page_cache_update_stream_path_key(
-            state->cache_key, state->path);
-        (void)sample_page_cache_update_readable_frames_key(
-            state->cache_key, recorded_frames);
-    }
-    looper_diag_update_take(track_id, state);
 }
 
 void brick6_looper_runtime_stop_playback(uint8_t track_id)
@@ -1305,6 +1034,8 @@ void brick6_looper_runtime_stop_playback(uint8_t track_id)
         state->resync_xfade_remaining = 0U;
     }
     looper_release_reader(state);
+    sample_page_lease_audio_clear(sample_page_lease_looper_slot(track_id));
+    sample_page_lease_audio_clear(sample_page_lease_looper_aux_slot(track_id));
     state->want_play_when_ready = 0U;
     looper_set_scheduled_start(state, 0U);
     state->scheduled_start_sample = 0U;
@@ -1366,11 +1097,6 @@ uint8_t brick6_looper_runtime_get_record_capture_track(uint8_t *out_track)
         return 0U;
     }
 
-    if(audio_recorder_client_is_recording(AUDIO_RECORDER_CLIENT_LOOPER) == 0U)
-    {
-        return 0U;
-    }
-
     *out_track = g_looper_record_boundary.track_id;
     return 1U;
 }
@@ -1424,7 +1150,7 @@ uint8_t brick6_looper_runtime_capture_from_irq(uint8_t track_id,
 {
     brick6_looper_runtime_preroll_capture_from_irq(
         track_id, lr_interleaved, frames);
-    return audio_recorder_push_from_irq_client(
+    return audio_recorder_capture_audio_push(
         AUDIO_RECORDER_CLIENT_LOOPER, lr_interleaved, frames);
 }
 
@@ -1961,7 +1687,7 @@ static uint32_t looper_expected_frame_from_timeline(const brick6_looper_track_st
         return 0U;
     }
 
-    const uint64_t now_sample = live_clock_audio_sample();
+    const uint64_t now_sample = audio_sample_clock_now();
     const uint64_t elapsed =
         (now_sample > state->playback_start_sample)
             ? (now_sample - state->playback_start_sample)
@@ -2022,7 +1748,7 @@ static void looper_try_consume_resync(brick6_looper_track_state_t *state,
             : (uint8_t)BRICK6_LOOPER_RESYNC_XFADE_FRAMES;
     state->resync_pending = 0U;
     state->resync_stable_blocks = 0U;
-    looper_request_playhead_pages(state);
+    looper_update_primary_lease(state);
 }
 
 static uint32_t looper_render_resync_xfade(brick6_looper_track_state_t *state,
@@ -2039,6 +1765,8 @@ static uint32_t looper_render_resync_xfade(brick6_looper_track_state_t *state,
 
     uint32_t old_playhead = state->resync_old_playhead;
     uint32_t old_frac_q16 = state->resync_old_frac_q16;
+    looper_publish_lease(state, state->playhead, 0U);
+    looper_publish_lease(state, old_playhead, 1U);
     uint32_t produced = 0U;
     while((produced < frames) && (state->resync_xfade_remaining != 0U))
     {
@@ -2078,6 +1806,8 @@ static uint32_t looper_render_resync_xfade(brick6_looper_track_state_t *state,
         looper_advance_playhead(state, 1U);
         produced++;
         state->resync_xfade_remaining--;
+        looper_publish_lease(state, state->playhead, 0U);
+        looper_publish_lease(state, old_playhead, 1U);
         if((state->current_acquired != 0U)
                 && ((state->playhead == 0U)
                     || (state->playhead < state->current_start_frame)
@@ -2089,6 +1819,8 @@ static uint32_t looper_render_resync_xfade(brick6_looper_track_state_t *state,
 
     state->resync_old_playhead = old_playhead;
     state->resync_old_frac_q16 = old_frac_q16;
+    if (state->resync_xfade_remaining == 0U)
+        sample_page_lease_audio_clear(sample_page_lease_looper_aux_slot(track));
     looper_diag_update_take(track, state);
     return produced;
 }
@@ -2112,7 +1844,7 @@ void brick6_looper_runtime_render_track(const track_audio_runtime_ctx_t *ctx,
         return;
     }
 
-    if ((state->cache_registered == 0U) && (state->preroll_valid == 0U))
+    if ((state->frames_total == 0U) && (state->preroll_valid == 0U))
     {
         return;
     }
@@ -2142,11 +1874,6 @@ void brick6_looper_runtime_render_track(const track_audio_runtime_ctx_t *ctx,
         out_l += bridged;
         out_r += bridged;
         frames -= bridged;
-    }
-
-    if(state->cache_registered == 0U)
-    {
-        return;
     }
 
     const uint32_t current_samples_per_step_q16 =

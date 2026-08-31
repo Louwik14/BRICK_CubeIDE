@@ -8,15 +8,15 @@
 #include <stdint.h>
 
 #include "Seq/seq_types.h"
-#include "Sampler/sample_global_pool.h"
+#include "IPC/audio_wave_table_projection.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #define BRICK6_WAVE_MAX_INSTANCES 8U
-#define BRICK6_WAVE_VOICE_INSTANCE_COUNT 16U
-#define BRICK6_WAVE_OSC_COUNT     2U
+#define BRICK6_WAVE_VOICE_INSTANCE_COUNT AUDIO_WAVETABLE_VOICE_INSTANCE_COUNT
+#define BRICK6_WAVE_OSC_COUNT     AUDIO_WAVETABLE_OSC_COUNT
 
 typedef struct
 {

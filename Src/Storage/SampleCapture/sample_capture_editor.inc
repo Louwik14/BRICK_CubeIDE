@@ -12,10 +12,9 @@ void sample_capture_model_init(void)
             SAMPLE_CAPTURE_THRESHOLD_DBFS_DEFAULT);
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_IDLE;
     g_sample_capture.state.edit_vzoom = SAMPLE_CAPTURE_EDIT_VZOOM_DEFAULT;
-    sample_capture_waveform_reset();
     sample_capture_detail_reset();
-    audio_rec_bus_projection_control_init();
-    sample_capture_publish_audio_projection();
+    control_audio_rec_bus_init();
+    sample_capture_publish_rec_bus();
 }
 
 void sample_capture_model_get_state(sample_capture_state_t *out_state)
@@ -31,26 +30,6 @@ void sample_capture_model_get_state(sample_capture_state_t *out_state)
     out_state->line_count = g_sample_capture_line_hot.count;
     out_state->line_peak = g_sample_capture_line_hot.peak;
     memcpy(out_state->line, g_sample_capture_line_hot.points, sizeof(out_state->line));
-    if((g_sample_capture.waveform_pending_frames != 0U)
-            && (out_state->waveform_count < SAMPLE_CAPTURE_WAVEFORM_POINTS))
-    {
-        out_state->waveform[out_state->waveform_count++] = g_sample_capture.waveform_pending;
-    }
-    else if((g_sample_capture.waveform_pending_frames != 0U)
-            && (out_state->waveform_count != 0U))
-    {
-        sample_capture_waveform_bucket_t *last =
-            &out_state->waveform[out_state->waveform_count - 1U];
-        if(g_sample_capture.waveform_pending.min < last->min)
-        {
-            last->min = g_sample_capture.waveform_pending.min;
-        }
-        if(g_sample_capture.waveform_pending.max > last->max)
-        {
-            last->max = g_sample_capture.waveform_pending.max;
-        }
-        last->last = g_sample_capture.waveform_pending.last;
-    }
     for(uint8_t track = 0U; track < SAMPLE_CAPTURE_TRACK_COUNT; ++track)
     {
         out_state->route_enabled[track] = g_sample_capture.route_mask[track];
@@ -70,7 +49,7 @@ uint8_t sample_capture_model_toggle_route(uint8_t track)
     }
 
     g_sample_capture.route_mask[track] = (g_sample_capture.route_mask[track] == 0U) ? 1U : 0U;
-    sample_capture_publish_audio_projection();
+    sample_capture_publish_rec_bus();
     return 1U;
 }
 
@@ -96,7 +75,7 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
         g_sample_capture.state.trigger_latched = 0U;
         if(g_sample_capture.state.recording != 0U)
         {
-            sample_capture_set_audio_hook_enabled(0U);
+            sample_capture_set_capture_enabled(0U);
             (void)audio_recorder_request_stop_client(
                 AUDIO_RECORDER_CLIENT_AUDIO_REC);
             g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_STOPPING;
@@ -108,7 +87,7 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
             if(g_sample_capture.state.take_valid == 0U)
                 g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_IDLE;
         }
-        sample_capture_publish_audio_projection();
+    sample_capture_publish_rec_bus();
         return 1U;
     }
 
@@ -138,12 +117,12 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
     {
         audio_rec_level_snapshot_t level;
         g_sample_capture.trigger_last_level_generation =
-            (audio_rec_level_snapshot_control_read(&level) != 0U)
+            (audio_rec_level_reader_read(&level) != 0U)
                 ? level.generation : 0U;
     }
     g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_ARMED;
-    sample_capture_publish_audio_projection();
+    sample_capture_publish_rec_bus();
     return 1U;
 }
 
@@ -261,7 +240,7 @@ uint8_t sample_capture_model_step_threshold(int16_t delta)
 uint8_t sample_capture_model_set_line_enabled(uint8_t enabled)
 {
     g_sample_capture.state.line_enabled = (enabled != 0U) ? 1U : 0U;
-    sample_capture_publish_audio_projection();
+    sample_capture_publish_rec_bus();
     return 1U;
 }
 
@@ -274,7 +253,7 @@ uint8_t sample_capture_model_toggle_line(void)
 uint8_t sample_capture_model_set_mic_enabled(uint8_t enabled)
 {
     g_sample_capture.state.mic_enabled = (enabled != 0U) ? 1U : 0U;
-    sample_capture_publish_audio_projection();
+    sample_capture_publish_rec_bus();
     return 1U;
 }
 

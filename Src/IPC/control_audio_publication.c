@@ -2,7 +2,7 @@
 
 #include <string.h>
 
-#include "IPC/control_audio_fifo.h"
+#include "IPC/control_audio_fifo_control.h"
 #include "Platform/memory_layout.h"
 #include "Seq/seq_note_trace.h"
 

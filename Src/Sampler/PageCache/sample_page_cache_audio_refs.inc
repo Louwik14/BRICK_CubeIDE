@@ -1,18 +1,6 @@
-uint8_t sample_page_cache_pin_page(uint16_t sample_id, uint32_t page_index)
-{
-    return sample_page_cache_pin_page_key(sample_audio_key_classic(sample_id), page_index);
-}
-
-uint8_t sample_page_cache_pin_page_key(sample_audio_key_t key, uint32_t page_index)
-{
-    return sample_page_cache_pin_page_key_alloc(key,
-                                                page_index,
-                                                SAMPLE_PAGE_ALLOC_GENERAL);
-}
-
-uint8_t sample_page_cache_pin_page_key_alloc(sample_audio_key_t key,
-                                             uint32_t page_index,
-                                             sample_page_alloc_type_t alloc_type)
+uint8_t sample_page_cache_mark_static_page_key_alloc(sample_audio_key_t key,
+                                                     uint32_t page_index,
+                                                     sample_page_alloc_type_t alloc_type)
 {
     sample_page_desc_t *page = sample_page_cache_find_page_mut_key(key, page_index);
     if (page == 0)
@@ -24,55 +12,9 @@ uint8_t sample_page_cache_pin_page_key_alloc(sample_audio_key_t key,
         }
     }
 
-    if (page->pin_count != UINT16_MAX)
-    {
-        page->pin_count++;
-    }
+    page->static_resident = 1U;
     page->last_touch = ++g_sample_page_cache_state.touch_counter;
     return 1U;
-}
-
-void sample_page_cache_unpin_page(uint16_t sample_id, uint32_t page_index)
-{
-    sample_page_cache_unpin_page_key(sample_audio_key_classic(sample_id), page_index);
-}
-
-void sample_page_cache_unpin_page_key(sample_audio_key_t key, uint32_t page_index)
-{
-    sample_page_desc_t *const page = sample_page_cache_find_page_mut_key(key, page_index);
-    if (page == 0)
-    {
-        return;
-    }
-
-    if (page->pin_count != 0U)
-    {
-        page->pin_count--;
-    }
-    page->last_touch = ++g_sample_page_cache_state.touch_counter;
-}
-
-void sample_page_cache_unpin_page_ref_key(sample_audio_key_t key,
-                                          const sample_page_ref_t *ref)
-{
-    if ((ref == 0) || (sample_audio_key_equal(&key, &ref->key) == 0U)
-        || (ref->slot_index >= SAMPLE_PAGE_MAX_COUNT))
-    {
-        return;
-    }
-    sample_page_desc_t *const page = &g_sample_page_desc[ref->slot_index];
-    if ((sample_audio_key_equal(&page->key, &ref->key) == 0U)
-        || (page->page_index != ref->page_index)
-        || (page->generation != ref->page_generation)
-        || (page->registration_epoch != ref->registration_epoch))
-    {
-        return;
-    }
-    if (page->pin_count != 0U)
-    {
-        page->pin_count--;
-    }
-    page->last_touch = ++g_sample_page_cache_state.touch_counter;
 }
 
 uint8_t sample_page_cache_register_live_pcm24_stereo_sample_key(

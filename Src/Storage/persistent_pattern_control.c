@@ -10,7 +10,7 @@
 #include "Track/track_runtime.h"
 #include "Track/track_sound_state.h"
 #include "Track/track_state.h"
-#include "Mod/mod_destination_catalog.h"
+#include "Mod/mod_destination_contract.h"
 #include "Mod/mod_env3.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_matrix.h"

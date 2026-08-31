@@ -2,23 +2,29 @@
 
 ## Ownership
 
-AUDIO possede consommation, besoins de pages, page-cache, generations, pins, refcounts, eviction et validation des completions. CONTROL possede l'output musical et garantit START pour une configuration/asset/workload produit legaux. Storage possede SD, fichiers, maps physiques, lecture et decode. Les commandes et completions de pages sont tokenisees, bornes et sans pointeur.
+CONTROL possede les metadonnees du page-cache, index, generations,
+reservations, etats, eviction et validation des completions Storage. AUDIO
+possede uniquement les lecteurs, positions DSP et leases. CONTROL possede
+l'output musical et garantit START pour une configuration/asset/workload
+produit legaux. Storage possede SD, fichiers, maps physiques, lecture et
+decode. Les commandes et completions de pages sont tokenisees, bornes et sans
+pointeur.
 
-Une page suit `FREE -> RESERVED -> LOADING -> READY` ou `FAILED`. Une page LOADING n'est ni recyclable ni evictable. La completion valide key, slot, page generation, registration epoch et token; une completion tardive ne devient jamais visible.
+Une page suit `FREE -> RESERVED -> LOADING -> READY`, `EVICTING`, ou `FAILED`. Une page LOADING n'est ni recyclable ni evictable. Pour recycler, CONTROL publie d'abord `EVICTING`, relit l'union des leases, restaure `READY` si la page est protegee, sinon passe `FREE`. AUDIO etend son lease avant resolution puis revalide `READY/key/registration_epoch/generation`. La completion valide key, slot, page generation, registration epoch et token; une completion tardive ne devient jamais visible.
 
-## Credits de fenetre et service
+## Lease physique et service
 
-M7 ne publie plus de snapshot de playhead, de frame cursor, de deadline ou de
-liste page-par-page. Chaque voix Classic/Multi expose un credit de fenetre
-compact: `{key, registration_epoch, owner_token, current_page,
-mobile_page_count, loop_first_page, loop_last_page, loop_preload_count}`.
-`current_page` est le seul curseur physique; les pages suivantes et le wrap
-forward sont derives. Reverse et ping-pong restent propres au Sampler RAM.
+M7 ne publie aucun snapshot de playhead, frame cursor, deadline, pitch, phase,
+loop state ou demande I/O. Chaque lecteur expose uniquement le lease seqlocke
+`{seq, key, registration_epoch, ranges[2]}`. Un range est
+`{first_page, page_count}`. Il enumere les pages physiques que le lecteur peut
+encore lire; le second range sert au wrap discontinu. Le Looper emploie un
+second slot du meme type uniquement pendant son crossfade de resynchronisation.
 
-Le scheduler M4 sert les fenetres actives en round-robin fixe Classic puis
-Multi. Une page par voix et par passe; une voix sans credit chargeable est
-sautee. Aucune horloge STREAM, wake AUDIO vers Storage, low-water dynamique ou
-prediction temporelle ne conditionne le service.
+Le scheduler M4 sert les lecteurs actifs en round-robin. Il derive localement
+le lookahead produit a partir des ranges proteges; AUDIO ne publie ni liste de
+besoins ni wake Storage. Une page par lecteur et par passe; aucune horloge
+STREAM, low-water dynamique ou prediction temporelle ne conditionne le service.
 
 Le contrat produit garantit le pre-socle `2 x 32 KiB` et les limites Stream/Multi publiees avant jeu. Il n'existe ni READY par note, ni ACK START, ni retry, rollback ou fallback musical. Un underrun dans ce workload est une rupture de contrat, pas une admission tardive.
 
@@ -26,7 +32,10 @@ Le contrat produit garantit le pre-socle `2 x 32 KiB` et les limites Stream/Mult
 
 Le service Storage traite une commande bornee hors IRQ. Produit: tranche 32 KiB; page temporaire 16 KiB. Le backend physique resout des extents vers une FIFO DMA bornee; FatFs reste le fallback. Read-ahead ne change ni ordre, besoins ni lifecycle.
 
-Le transport contient geometrie source, format et token. Storage decode dans un payload partage; AUDIO invalide, copie dans la page finale et publie READY. H743 utilise l'adaptateur local `sample_page_cache_port`; H747 conserve le contrat avec M4 executant l'I/O et M7 possedant le cache.
+Le transport contient geometrie source, format et token. Storage decode dans
+un payload partage et CONTROL publie READY; AUDIO invalide avant lecture. H743
+et H747 conservent le meme contrat: M4 possede metadata et I/O, M7 possede les
+credits de lecture.
 
 ## Catalogue Classic unique
 
@@ -34,8 +43,8 @@ Le transport contient geometrie source, format et token. Storage decode dans un 
 Wavetable. Une ressource Classic est adressee directement par son index global :
 le chemin n'existe que dans cette entree et sa description WAV n'existe que dans
 le backend Classic. Le chargement analyse le WAV une seule fois puis choisit
-FULL ou STREAM. Les pages, readers, besoins, generations, pins, refcounts,
-scheduler SD et politiques de recyclage forment le plan physique Stream; ils
+FULL ou STREAM. Les pages, readers, leases, generations, scheduler SD et
+politiques de recyclage forment le plan physique Stream; ils
 ne constituent pas un second catalogue produit.
 
 ## Multi, Sampler RAM et Wavetable
@@ -46,10 +55,10 @@ Sample RAM charge par etapes, lectures de 4096 octets et conversion de 256 frame
 
 Les payloads Sampler RAM/Wavetable sont des references `{region, offset, length}`. CONTROL clean avant publication, AUDIO invalidate avant installation. Un unload/remplacement suit `STOP -> invalidation voix synchrone -> avancee du tail FIFO -> FREE CONTROL`. Les ACK Multi/RAM/Wavetable et leur ring IPC ont ete supprimes; seul le fence du consumer physique est lu.
 
-Le registre compact de credits Stream est fixe, pointer-free, seqlocke et place explicitement dans la fenetre IPC partagee SRAM3/D2. Le registre de snapshots complet a ete supprime. La projection live Recorder transporte une carte de reservation possedee, extents inclus, dans la zone partagee; AUDIO/Looper ne relisent jamais la reservation Storage.
+Le registre compact de leases Stream est fixe, pointer-free, seqlocke et place explicitement dans la fenetre IPC partagee SRAM3/D2. Les snapshots de besoins, pins, use-counts et refcounts de pages ont ete supprimes. Le Looper ne publie aucun intent Stream: CONTROL derive directement track, chemin, longueur, reservation et finalisation depuis son Recorder; AUDIO ne conserve que son runtime, ses playheads et ses leases.
 
 ## Format audio
 
-Une page de 16 KiB porte 4096 frames mono FLOAT32 ou 2048 frames stereo. Format, stride et frames/page sont derives par `sample_audio_format.h` et restent immutables pendant la voix. Mono reste mono jusqu'au pan/spread final; aucune duplication droite de rejet n'est conservee.
+Une page produit de 32 KiB porte 8192 frames mono FLOAT32 ou 4096 frames stereo. Format, stride et frames/page sont derives par `sample_audio_format.h` et restent immutables pendant la voix. Mono reste mono jusqu'au pan/spread final; aucune duplication droite de rejet n'est conservee.
 
 Preview est un ring PCM SPSC distinct. Les prises Looper actives utilisent la carte append-only du Recorder et ne lisent jamais au-dela du tail physiquement committed; le detail appartient a [recorder_sd.md](recorder_sd.md).

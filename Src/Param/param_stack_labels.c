@@ -2,7 +2,7 @@
 
 #include <stddef.h>
 
-#include "Audio/Engines/stack_engine.h"
+#include "Param/engine_model_catalog.h"
 #include "Param/param_registry.h"
 
 typedef struct

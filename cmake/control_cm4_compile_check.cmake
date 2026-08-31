@@ -39,11 +39,26 @@ set(common_args
     --specs=nano.specs
     -fsyntax-only)
 
-set(forbidden_dependencies
+set(control_forbidden_dependencies
     "/Inc/Audio/"
     "/Src/Audio/"
     "/mutable_instruments/"
     "/Inspiration/ctag-tbd/")
+
+set(contract_forbidden_dependencies
+    "/Inc/Audio/"
+    "/Src/Audio/"
+    "/Inc/App/"
+    "/Inc/Storage/"
+    "/Inc/UI/"
+    "/Inc/Keyboard/"
+    "/Inc/MIDI/"
+    "/Inc/NoteFx/"
+    "/Inc/Track/track_runtime.h"
+    "/Inc/Track/track_state.h"
+    "/Inc/Param/param_registry.h"
+    "/Inc/Param/param_store.h"
+    "/Inc/Sampler/sample_page_cache_audio.h")
 
 set(compiled_count 0)
 foreach(source IN LISTS CONTROL_CM4_SOURCES)
@@ -76,7 +91,7 @@ foreach(source IN LISTS CONTROL_CM4_SOURCES)
 
     file(READ "${depfile}" dependencies)
     string(REPLACE "\\" "/" dependencies "${dependencies}")
-    foreach(forbidden IN LISTS forbidden_dependencies)
+    foreach(forbidden IN LISTS control_forbidden_dependencies)
         string(FIND "${dependencies}" "${forbidden}" forbidden_at)
         if(NOT forbidden_at EQUAL -1)
             message(FATAL_ERROR
@@ -107,7 +122,7 @@ foreach(contract_header IN LISTS CONTROL_CM4_CONTRACT_HEADERS)
 
     file(READ "${depfile}" dependencies)
     string(REPLACE "\\" "/" dependencies "${dependencies}")
-    foreach(forbidden IN LISTS forbidden_dependencies)
+    foreach(forbidden IN LISTS contract_forbidden_dependencies)
         string(FIND "${dependencies}" "${forbidden}" forbidden_at)
         if(NOT forbidden_at EQUAL -1)
             message(FATAL_ERROR

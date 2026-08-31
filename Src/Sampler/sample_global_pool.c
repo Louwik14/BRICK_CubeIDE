@@ -453,7 +453,6 @@ sample_classic_slot_state_t sample_global_pool_get_classic_state(uint16_t global
         case SAMPLE_CACHE_SLOT_PLAYABLE: return SAMPLE_CLASSIC_SLOT_LOADED;
         case SAMPLE_CACHE_SLOT_PREPARING:
         case SAMPLE_CACHE_SLOT_START_PENDING:
-        case SAMPLE_CACHE_SLOT_NEEDS_REPREPARE: return SAMPLE_CLASSIC_SLOT_PREPARING;
         case SAMPLE_CACHE_SLOT_ERROR: return SAMPLE_CLASSIC_SLOT_ERROR;
         default: return (slot->path[0] != '\0')
                             ? SAMPLE_CLASSIC_SLOT_MISSING

@@ -8,7 +8,7 @@
 #include "IPC/control_audio_publication.h"
 #include "IPC/control_music_publication.h"
 #include "IPC/control_audio_command.h"
-#include "IPC/live_clock.h"
+#include "IPC/live_clock_control.h"
 #include "Param/param_registry.h"
 #include "Param/param_registry_runtime_state.h"
 #include "Platform/memory_layout.h"

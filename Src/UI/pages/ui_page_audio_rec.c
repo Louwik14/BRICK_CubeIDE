@@ -13,12 +13,6 @@
 #include <math.h>
 #include <stdio.h>
 
-typedef enum
-{
-    UI_AUDIO_REC_WAVE_VERTICAL_FIXED_FULL_SCALE = 0,
-    UI_AUDIO_REC_WAVE_VERTICAL_LOCAL_VIEW_NORMALIZED
-} ui_audio_rec_wave_vertical_mode_t;
-
 #define UI_AUDIO_REC_WAVE_X      0
 #define UI_AUDIO_REC_WAVE_Y      17
 #define UI_AUDIO_REC_WAVE_W      OLED_WIDTH

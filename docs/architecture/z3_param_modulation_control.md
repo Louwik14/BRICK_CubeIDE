@@ -1,6 +1,9 @@
 # Z3 - Parametres, modulation et controle
 
-Le registre decrit chaque parametre par ID, domaine, plage, affichage, persistance, p-lockabilite, politique de valeur et backend. Les parametres d'entite sont appliques avec leur entity; les parametres Master sont globaux.
+Le contrat commun `param_spec[]` ne contient que ID, type, min, max et default.
+Le registre CONTROL ajoute affichage, persistance, p-lockabilite, politique de
+valeur et callbacks. AUDIO consomme `param_audio.h`, rejette une valeur hors
+contrat et applique une valeur deja canonique sans rejouer la politique CONTROL.
 
 Autorites d'ecriture:
 
@@ -19,7 +22,19 @@ Un p-lock AUDIO est resolu par CONTROL en valeur finale puis transporte comme PA
 
 LFO, Matrix, ENV3, filtre et VCA ont une autorite unique. Une destination Matrix est `{entity_id, param_id}`. En GROUP, le master possede Matrix, trois LFO, ENV3 et operateurs; un child peut etre destination mais ne devient pas owner. AUDIO compile les plans et masques de sources a la publication, sans relire la configuration CONTROL.
 
-Le catalogue commun LFO/Matrix filtre les parametres selon le modele courant. Les labels CONTROL et disponibilites dynamiques de Prism, Stack, Drum MD et Audio FX viennent de leurs catalogues; cote AUDIO, Matrix lit directement les MODEL des runtimes Audio FX, Prism, Stack et Drum MD qui les executent. Il ne conserve aucun miroir MODEL. Un changement de PROGRAM ou MODEL marque les Matrix dependantes dirty et recompile localement leur interpretation sans retransmettre leurs valeurs persistantes.
+Les implementations sont separees par ownership: `mod_lfo_control` et
+`mod_matrix_control` modifient uniquement l'etat canonique et publient des
+PARAM; `mod_lfo_v1`, `mod_env3` et `mod_matrix` ne possedent que configuration
+appliquee, etats DSP, caches et plans AUDIO. Le registre Param suit la meme
+frontiere: les backends CONTROL couvrent l'etat canonique/MIDI, tandis que
+`param_registry_audio`, `param_filter_audio` et les backends moteur appliquent
+les commandes cote AUDIO. Aucun getter UI ne lit un runtime AUDIO.
+
+Le catalogue CONTROL LFO/Matrix derive et valide ses destinations depuis les
+regles Param et le descripteur canonique de piste. AUDIO ne consulte aucune
+politique Track: il verifie l'ABI puis prepare l'opcode DSP de la destination
+deja legitime. Les destinations MIDI CC n'existent plus cote AUDIO et MIDI OUT
+reste exclusivement CONTROL.
 
 La valeur CONTROL du parametre est l'unique autorite de sa base. Elle est projetee par le chemin normal des commandes parametre et met a jour directement la destination AUDIO, y compris pendant une modulation. Chaque champ Matrix traverse egalement PARAM: les kinds indexes 2..9 adressent les huit slots, tandis que Multi et Slew utilisent la portee track normale. M7 conserve le petit etat canonique propre a Matrix, marque l'owner dirty et finalise une seule recompilation apres toutes les commandes dues au meme sample. Min/max, endpoints, plans et caches restent derives localement; les MODEL et le nombre de slots Drum sont lus dans le runtime moteur. Aucun descripteur partage, pool, ACK ou canal fonctionnel parallele n'existe.
 
@@ -46,11 +61,11 @@ Les detents encodeur valides capturent TIM5 et leur cible CONTROL. CONTROL produ
 
 AUDIO applique la cible avant le sample concerne. Le smoothing appartient au backend reel: mixer, voix ou effet. Le dispatcher date ne fabrique aucun lissage generique.
 
-AUDIO conserve par piste les 26 positions TONE canoniques normalisees,
-alimentees directement par PARAM. Elles ne sont ni une image PARAM, ni un
-profil moteur: chaque renderer lit les slots qu'il connait dans sa propre
-plage et ignore les autres. PROGRAM ne charge aucun default et CONTROL ne
-republie aucun PARAM. Une NOTE deja tenue garde son output, sa note,
+Les 26 positions TONE normalisees restent exclusivement CONTROL/Seq/Persistence.
+Lors d'une publication, CONTROL resout `{type, slot, valeur}` en
+`{param_id, valeur canonique}` et utilise le PARAM ordinaire. AUDIO ne possede
+ni cache TONE, ni mapping slot, ni commande specialisee, ni reapply apres
+PROGRAM. Une NOTE deja tenue garde son output, sa note,
 sa velocite et son gate: le nouveau renderer utilise `initialize_held_note`,
 sans allocation musicale, `note_on`, retrigger LFO, VCA ou filtre commun.
 

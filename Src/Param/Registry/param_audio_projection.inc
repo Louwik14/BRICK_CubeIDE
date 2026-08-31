@@ -157,7 +157,13 @@ static const param_id_t g_audio_fx_param_order[] = {
 
 uint8_t param_registry_is_audio_fx_param(param_id_t id)
 {
-    return audio_fx_runtime_is_param(id);
+    for (uint8_t i = 0U; i < (uint8_t)(sizeof(g_audio_fx_param_order)
+                                       / sizeof(g_audio_fx_param_order[0])); ++i)
+    {
+        if (g_audio_fx_param_order[i] == id)
+            return 1U;
+    }
+    return 0U;
 }
 
 param_id_t param_registry_get_audio_fx_param(uint8_t order)
@@ -204,6 +210,14 @@ static uint8_t param_registry_submit_audio_value(param_id_t id,
         }}
     };
     return live_parameter_audio_publication_submit_bulk(&bulk) ? 1U : 0U;
+}
+
+uint8_t param_registry_publish_track_base_audio(param_id_t id,
+                                                uint8_t track,
+                                                float value)
+{
+    return param_registry_submit_audio_value(
+        id, track, value, LIVE_PARAMETER_EVENT_SCOPE_TRACK);
 }
 
 static uint8_t param_registry_apply_audio_fx_control(param_id_t id,

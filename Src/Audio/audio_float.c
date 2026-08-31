@@ -30,7 +30,6 @@
 #include <string.h>
 #include <arm_acle.h>
 #include "fx_dj_eq3_cmsis.h"
-#include "stm32h743xx.h"
 #include "arm_math.h"
 #include "fx_saturation.h"
 #include "Platform/memory_layout.h"
@@ -171,8 +170,7 @@ void audio_float_init_gain_staging(float boot_postgain,
     output_comp = boot_output_compensation;
     output_adjust = boot_postgain * boot_output_compensation;
 
-    /* Master remains silent until the physical pot value is published after
-     * the AUDIO timeline anchor has been established. */
+    /* Master remains silent until the physical pot value is published. */
     master_gain = 0.0f;
     master_gain_target = 0.0f;
     master_gain_smoothed = 0.0f;

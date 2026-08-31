@@ -7,13 +7,12 @@
 #include "IPC/control_audio_command.h"
 #include "IPC/control_audio_publication.h"
 #include "Track/control_music_output.h"
-#include "Audio/audio_fx_runtime.h"
-#include "Audio/mixer.h"
-#include "IPC/live_clock.h"
+#include "IPC/live_clock_control.h"
 #include "Platform/brick_build_config.h"
 #include "Track/track_input_ownership.h"
 #include "Track/track_state.h"
 #include "Param/param_registry_runtime_state.h"
+#include "IPC/live_parameter_audio_publication.h"
 #include "Seq/seq_model.h"
 #include "stm32h7xx_hal.h"
 #include "main.h"
@@ -21,10 +20,17 @@
 #define TRACK_RUNTIME_FLAG_CAN_FILTER  (1U << 0)
 #define TRACK_RUNTIME_FLAG_CAN_SYNTH   (1U << 1)
 #define TRACK_RUNTIME_FLAG_CAN_PLAY    (1U << 2)
+#define TRACK_RUNTIME_GROUP_BUS_TRACK BRICK_ENTITY_CAPACITY
 SEQ_STATE_D2 static track_runtime_ctx_t g_track_runtime_ctx[SEQ_LANE_CAPACITY];
 static uint32_t g_track_runtime_revision = 0U;
 static uint32_t g_track_runtime_track_revision[SEQ_LANE_CAPACITY];
 static uint8_t g_track_runtime_program_topology_flags[BRICK_ENTITY_CAPACITY];
+
+static uint8_t track_runtime_is_group_fx_level_param(param_id_t param)
+{
+    return (uint8_t)(((param == PARAM_GROUP_FX_A_LEVEL)
+                      || (param == PARAM_GROUP_FX_B_LEVEL)) ? 1U : 0U);
+}
 
 static uint8_t track_runtime_ctx_entity(
     const track_runtime_ctx_t *ctx,
@@ -63,9 +69,12 @@ static uint8_t track_runtime_publish_program(brick_entity_id_t entity_id,
             topology_flags |= CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD;
     }
     const control_audio_program_descriptor_t descriptor = {
+        .engine = (uint8_t)track_runtime_choose_engine(
+            (track_runtime_family_t)ctx->family,
+            (track_runtime_type_t)ctx->type),
         .family = ctx->family,
         .type = ctx->type,
-        .topology_flags = topology_flags
+        .flags = (uint8_t)(ctx->flags | topology_flags)
     };
     /* PROGRAM only changes the renderer.  The NOTE ledger remains authoritative
      * even while the selected renderer cannot render a live output. */
@@ -75,6 +84,22 @@ static uint8_t track_runtime_publish_program(brick_entity_id_t entity_id,
     {
         /* A legal structural change is covered by the FIFO dimensioning
          * contract.  Refusal is an invariant failure, not a runtime mode. */
+        Error_Handler();
+        return 0U;
+    }
+    float tone_values[SEQ_PARAM_TONE_SLOT_COUNT];
+    for (uint8_t slot = 0U; slot < SEQ_PARAM_TONE_SLOT_COUNT; ++slot)
+    {
+        if (param_registry_control_tone_get(
+                entity_id, slot, &tone_values[slot]) == 0U)
+        {
+            Error_Handler();
+            return 0U;
+        }
+    }
+    if (!live_parameter_audio_publication_submit_tone_state(
+            entity_id, tone_values))
+    {
         Error_Handler();
         return 0U;
     }
@@ -952,7 +977,7 @@ uint8_t track_runtime_get_mix_target_track(uint8_t track, uint8_t *out_mix_track
 
     if (out_mix_track != NULL)
         *out_mix_track = (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_GROUP)
-            ? MIXER_GROUP_BUS_TRACK : track;
+            ? TRACK_RUNTIME_GROUP_BUS_TRACK : track;
 
     return 1U;
 }
@@ -1052,7 +1077,7 @@ uint8_t track_runtime_get_descriptor(uint8_t track, track_runtime_descriptor_t *
         || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MIDI)
         ? 0xFFU
         : ((topology.role == ENTITY_ROLE_GROUP_MASTER)
-            ? MIXER_GROUP_BUS_TRACK : track);
+            ? TRACK_RUNTIME_GROUP_BUS_TRACK : track);
     out_descriptor->flags = ctx->flags;
     out_descriptor->midi_channel_1_16 = track_runtime_get_midi_channel_1_16(track);
     out_descriptor->ui_ensemble_mask = track_runtime_compute_ui_ensemble_mask(
@@ -1578,7 +1603,7 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
         if ((entity_topology_get((brick_entity_id_t)track, &topology) == 0U)
                 || (topology.active == 0U))
             return TRACK_RUNTIME_PARAM_UNAVAILABLE;
-        const uint8_t group_level = audio_fx_runtime_is_group_level_param(param);
+        const uint8_t group_level = track_runtime_is_group_fx_level_param(param);
         if (topology.role == ENTITY_ROLE_GROUP_CHILD)
             return (group_level != 0U) ? TRACK_RUNTIME_PARAM_ALLOWED
                                       : TRACK_RUNTIME_PARAM_UNAVAILABLE;

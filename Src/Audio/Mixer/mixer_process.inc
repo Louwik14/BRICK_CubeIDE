@@ -22,9 +22,8 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     AUDIO_HOT ALIGN32 static int32_t audio_rec_bus_i32[AUDIO_BLOCK_SIZE * AUDIO_RECORDER_CHANNELS];
     static uint8_t looper_output_active[MIXER_MAX_TRACKS];
 
-    audio_rec_bus_control_snapshot_t audio_rec_projection = {0};
-    const uint8_t audio_rec_projection_valid =
-        audio_rec_bus_projection_audio_read(&audio_rec_projection);
+    const audio_rec_bus_runtime_t audio_rec_projection =
+        *audio_rec_bus_runtime_get();
 
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
@@ -131,18 +130,15 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     uint8_t looper_record_track = 0U;
     const uint8_t looper_record_active = mixer_looper_record_capture_is_active(&looper_record_track);
     const uint8_t audio_rec_capture_active = (uint8_t)(
-        (audio_rec_projection_valid != 0U)
-        && ((audio_rec_projection.source_flags & AUDIO_REC_BUS_CAPTURE_ENABLED) != 0U));
+        (audio_rec_projection.source_flags & AUDIO_REC_BUS_CAPTURE_ENABLED) != 0U);
     const uint8_t audio_rec_track_routes_active = (uint8_t)(
-        (audio_rec_projection_valid != 0U)
-        && (audio_rec_projection.source_entity_mask != 0U));
+        audio_rec_projection.source_entity_mask != 0U);
     const uint8_t audio_rec_bus_active = (uint8_t)(
-        (audio_rec_projection_valid != 0U)
-        && ((audio_rec_capture_active != 0U)
+        (audio_rec_capture_active != 0U)
             || (audio_rec_projection.source_entity_mask != 0U)
             || ((audio_rec_projection.source_flags
                 & (AUDIO_REC_BUS_SOURCE_LINE_DIRECT
-                    | AUDIO_REC_BUS_SOURCE_MIC_LOGICAL)) != 0U)));
+                    | AUDIO_REC_BUS_SOURCE_MIC_LOGICAL)) != 0U));
     if((looper_playback_mix_active != 0U) && (looper_playback_routes_main != 0U))
     {
         memset(looper_bus_main_l, 0, sizeof(looper_bus_main_l));
@@ -1355,10 +1351,11 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         }
         if(audio_rec_capture_active != 0U)
         {
-            (void)sample_capture_push_audio_block_from_irq(audio_rec_bus_i32, frames);
+            (void)audio_recorder_capture_audio_push(
+                AUDIO_RECORDER_CLIENT_AUDIO_REC, audio_rec_bus_i32, frames);
         }
     }
-    audio_rec_level_snapshot_audio_publish(audio_rec_peak_abs_pcm24);
+    audio_rec_level_producer_publish(audio_rec_peak_abs_pcm24);
 
     if(track_count > 0U)
     {

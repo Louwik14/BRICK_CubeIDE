@@ -2,9 +2,10 @@
 
 #include <stdint.h>
 
-#include "Sampler/sample_cache.h"
-#include "Sampler/sample_page_cache.h"
+#include "Sampler/sample_page_cache_audio.h"
+#include "Sampler/sample_page_lease.h"
 #include "Sampler/sample_play_plan.h"
+#include "Sampler/sample_reader_contract.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -66,8 +67,9 @@ typedef struct
 
 typedef struct
 {
-    uint8_t cache_voice_id;
-    uint8_t cache_voice_valid;
+    uint8_t lease_slot;
+    uint8_t lease_valid;
+    sample_page_lease_range_t lease_ranges[2];
     uint16_t sample_id;
     sample_audio_key_t key;
     sample_audio_format_t format;
@@ -89,11 +91,11 @@ typedef struct
 void sample_voice_reader_reset(sample_voice_reader_t *reader);
 void sample_voice_reader_bind(sample_voice_reader_t *reader,
                               uint16_t sample_id,
-                              uint8_t cache_voice_id,
+                              uint8_t reader_id,
                               uint32_t start_frame);
 uint8_t sample_voice_reader_bind_play_plan(sample_voice_reader_t *reader,
                                            const sample_play_plan_t *plan,
-                                           uint8_t cache_voice_id);
+                                           uint8_t reader_id);
 void sample_voice_reader_bind_loop_cache_incarnation(sample_voice_reader_t *reader,
                                                      uint8_t voice_id,
                                                      uint32_t generation);
@@ -103,7 +105,7 @@ void sample_voice_reader_update_frame_pos(sample_voice_reader_t *reader, uint32_
 void sample_voice_reader_stop(sample_voice_reader_t *reader);
 uint8_t sample_voice_reader_begin_block(sample_voice_reader_t *reader,
                                         uint32_t max_frames,
-                                        sample_cache_block_t *out_block);
+                                        sample_reader_block_t *out_block);
 void sample_voice_reader_commit_block(sample_voice_reader_t *reader,
                                       uint32_t consumed_frames);
 uint8_t sample_voice_reader_begin_segment(sample_voice_reader_t *reader,

@@ -4,13 +4,14 @@
 
 Les decisions START/STOP Looper sont prises par CONTROL et publiees comme
 RECORD au sample de boundary. Le handler AUDIO de boundary ne rappelle aucune
-fonction CONTROL; il consulte uniquement la vue capture locale
-(`accepted/released/error/stop_generation`) pour figer la longueur physique.
-Le live stream publie aussi sequence, client, tails et chemin inline; sa carte
-physique reste le snapshot append-only de reservation. Inversement, les
-conflits Storage consultent un bit publie par le runtime Looper M7, jamais sa
-structure de boundary interne. Le service Looper/page-cache reste background
-M7 et ne s'execute plus dans le service Storage.
+fonction CONTROL; il consulte uniquement le head capture AUDIO local pour
+figer la longueur physique.
+Le live stream ne duplique plus sequence, client, tails et chemin dans une
+publication partagee: producteur et consommateur sont CONTROL et lisent
+directement l'etat Storage. CONTROL derive le track et le lifecycle de la
+session Recorder qu'il possede.
+Registration, map live, chemin, chargement et finalisation du page-cache
+Looper s'executent dans le service CONTROL/Storage.
 
 ARM prepare integralement la session Recorder avant toute echeance musicale:
 chemins, nettoyage, reservation, writer et configuration AUDIO sont deja en
@@ -23,13 +24,13 @@ playhead n'appartient au START.
 
 ## Autorites
 
-`audio_recorder` est l'unique facade produit de capture SD. Ses deux clients exclusifs sont Audio Rec et Looper. Il publie un endpoint SPSC generationnel dans D3 et une projection live complete, extents de reservation inclus, dans la zone partagee Recorder; il recoit le PCM `int32` stereo 48 kHz dans le ring Recorder non-cacheable, configure `generic_recorder` et publie etats, erreurs, metriques et prise finalisee. `generic_recorder` ne connait ni UI, ni Looper, ni WAV: Storage lui transmet le head accepte publie par AUDIO; il possede les deux buffers d'ecriture, les descripteurs asynchrones et le tail accepte/engage. Looper ne lit jamais la reservation mutable Storage.
+`audio_recorder` est l'unique facade produit de capture SD. Ses deux clients exclusifs sont Audio Rec et Looper. Le shared Recorder contient seulement le PCM et `{head_cursor, tail_cursor, closed_session, capture_fault}`. AUDIO ecrit payload/head/fermeture/fault; CONTROL ecrit uniquement tail. Session, client, frame limit, preparation, activite, erreurs SD/FatFs, writer et finalisation restent locaux a leur proprietaire et transitent si necessaire dans RECORD. `generic_recorder` ne connait ni UI, ni Looper, ni WAV. Looper ne lit jamais la reservation mutable Storage.
 
 Audio Rec possede un unique bus stereo AUDIO, somme des entites resolues par CONTROL et, si necessaire, de LINE directe. CONTROL publie le masque d'entites, ARM et les sources effectives comme PARAM final dans la FIFO unique; AUDIO conserve ensuite cette configuration privee. LINE directe est exclue lorsque l'entree physique est deja representee par une track External routee vers REC; cette decision est derivee de `track_input_ownership`, `entity_topology` et `track_runtime`. MIC reste un etat logique silencieux: aucune source physique, configuration codec ou voie ADC ne lui est associee.
 
 Le meme bus alimente la conversion PCM24 du Recorder et le peak brut par bloc. AUDIO publie seulement `{generation_io, peak_abs_pcm24}` avant capture; ce fait physique minimal est requis car le ring PCM ne recoit encore aucun sample avant THR. CONTROL compare le peak au seuil, latch ARM TRIG puis reutilise la quantification NOW/BAR/PATTERN de `sample_capture`. Le writer n'est active qu'apres trigger et echeance. Le vu-metre est diagnostique/UI et ne modifie ni le peak brut, ni la waveform de la prise, ni le WAV.
 
-Une seule capture peut etre preparee ou active. La preparation Storage cree la reservation et la configuration de session; CONTROL publie START/STOP sans attendre accepted/READY. L'IRQ copie dans le ring puis publie le head avec une barriere. Le stop fixe un marqueur de session et le head final; Storage draine jusqu'a ce fait physique puis finalise. `active`, `prepared` et la generation ne sont jamais des confirmations fonctionnelles CONTROL. L'IRQ ne touche jamais FatFs, le scheduler, la SD ni l'etat mutable du writer. La superloop empaquette, reserve, soumet les ecritures et finalise. Audio Rec et Looper produisent directement un fichier temporaire `.REC`, renomme en `.WAV` apres drainage, liberation de la queue reservee et ecriture du header final de 512 octets.
+Une seule capture peut etre preparee ou active. La preparation Storage cree reservation et writer; CONTROL publie REC_BUS puis START/STOP dates. L'IRQ mixer appelle directement l'endpoint Recorder AUDIO, copie dans le ring puis publie le head avec une barriere. STOP, limite ou overflow ferment localement AUDIO et publient seulement `closed_session` et `capture_fault`; Storage draine puis finalise. Aucun ACK fonctionnel, config preparee, `active`, `error`, client ou generation partage ne subsiste.
 
 ## Reservation et ecriture
 
@@ -41,9 +42,9 @@ Le block device n'autorise qu'un WRITE DMA actif. `begin/poll/take_result` publi
 
 ## Tails et reloop
 
-Les compteurs ont des sens distincts: `received` publie par AUDIO dans le ring, `released` republi par Storage apres engagement physique, `packed` converti, `submitted` transmis au block device, `committed` confirme physiquement. Le producteur borne son occupation par `received - released`; Storage ne reutilise ni ne finalise au-dela du head publie. Le streamer Looper ne peut lire que jusqu'au tail `committed`. Ses lectures de la prise active utilisent exclusivement la carte physique; aucun fallback FatFs n'est permis tant que le fichier est en cours de construction.
+Les compteurs ont des sens distincts: `head_cursor` publie par AUDIO, `tail_cursor` par Storage apres engagement physique, puis les tails packed/submitted/committed restent CONTROL-locaux. Le producteur borne son occupation par `head_cursor - tail_cursor`; Storage ne reutilise ni ne finalise au-dela du head publie. Le streamer Looper ne peut lire que jusqu'au tail `committed`.
 
-Le page-cache Looper remplace sa carte live uniquement lorsque la generation de reservation change et qu'aucune lecture Looper n'est en vol. Le remplacement construit d'abord une carte valide, la publie atomiquement, puis libere l'ancienne; le renommage seul ne change pas la generation.
+Le service Looper CONTROL remplace sa carte live lorsque la generation de reservation change. AUDIO ne lit ni reservation, ni chemin, ni etat de registration Storage et ne publie aucun intent Stream; il publie seulement le head PCM physique et ses leases de pages. La carte est construite puis publiee par CONTROL; le renommage seul ne change pas la generation.
 
 Au stop Looper, le preroll RAM de 0,25 s permet le premier passage immediat. Le page-cache rejoint ensuite le tail SD engage et le preroll n'est pas rejoue apres le premier wrap. Le chemin du stream passe de `.REC` a `.WAV` apres finalisation sans recharger la prise. Le transport de pages et le recorder partagent le scheduler et peuvent coexister; l'absence de page produit le fallback audio existant, sans lecture synchrone depuis l'IRQ.
 

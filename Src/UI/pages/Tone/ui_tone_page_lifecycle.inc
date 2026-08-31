@@ -31,13 +31,13 @@ static void ui_page_template_tone_update_synth_live_request(void)
             mask = (page == 0U) ? 0x01U : ((page == 1U) ? 0x02U : 0x03U);
         }
     }
-    synth_waveform_control_request(enabled, entity, engine, mask);
+    (void)control_audio_visual_synth_request(enabled, entity, engine, mask);
 }
 
 static void ui_page_template_tone_leave(void)
 {
-    synth_waveform_control_request(0U, BRICK_ENTITY_INVALID_ID,
-                                   SYNTH_WAVEFORM_ENGINE_NONE, 0U);
+    (void)control_audio_visual_synth_request(0U, 0U,
+                                            SYNTH_WAVEFORM_ENGINE_NONE, 0U);
     ui_template_page_leave();
     g_ui_template_tone_global_master = 0U;
 }

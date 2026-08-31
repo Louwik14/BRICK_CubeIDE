@@ -24,9 +24,9 @@
 #include "mixer.h"
 #include "Audio/audio_float.h"
 #include "Audio/audio_fx_runtime.h"
-#include "Audio/audio_waveform_capture.h"
+#include "Audio/audio_waveform_capture_audio.h"
 #include "Audio/audio_io.h"
-#include "Audio/audio_rec_level_snapshot.h"
+#include "Audio/audio_rec_level_producer.h"
 #include "IPC/control_audio_command.h"
 
 #include "env_adsr.h"
@@ -37,18 +37,17 @@
 #include "fx_delay_stereo.h"
 #include "Audio/fx_modfx_global.h"
 #include "fx_reverb.h"
-#include "Audio/spectral_window.h"
+#include "Param/spectral_window.h"
 #include "Audio/brick6_looper_runtime.h"
 #include "Audio/Engines/fm_engine.h"
 #include "Track/synth_polyphony.h"
-#include "Track/track_runtime.h"
-#include "IPC/audio_rec_bus_projection.h"
+#include "Track/track_types.h"
+#include "Audio/audio_rec_bus_runtime.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/multi_voice_dsp.h"
 
-#include "Storage/audio_recorder.h"
-#include "Storage/sample_capture.h"
-#include "Track/control_routing.h"
+#include "Audio/audio_recorder_capture_audio.h"
+#include "Audio/control_routing_audio.h"
 
 #include <math.h>
 #include <string.h>

@@ -1,4 +1,4 @@
-#include "IPC/live_parameter_event.h"
+#include "App/live_parameter_event_control.h"
 
 #include "stm32h7xx_hal.h"
 

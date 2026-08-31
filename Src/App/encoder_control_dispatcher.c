@@ -1,8 +1,7 @@
 #include "App/encoder_control_dispatcher.h"
 
 #include "IPC/live_parameter_audio_publication.h"
-#include "Audio/live_parameter_audio_runtime.h"
-#include "IPC/live_parameter_event.h"
+#include "App/live_parameter_event_control.h"
 #include "Param/live_parameter_migration.h"
 #include "Param/param_registry.h"
 #include "UI/ui_param.h"
@@ -70,7 +69,6 @@ void encoder_control_dispatcher_init(void)
 {
     live_parameter_event_init();
     live_parameter_audio_publication_init();
-    live_parameter_audio_runtime_init();
 }
 
 uint8_t encoder_control_dispatcher_service(void)

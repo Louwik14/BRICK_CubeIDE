@@ -29,7 +29,7 @@
 
 #include "App/engine_tasklet.h"
 #include "stm32h7xx_hal.h"
-#include "IPC/live_clock.h"
+#include "IPC/live_clock_control.h"
 
 #include "buttons.h"
 #include "encoders.h"

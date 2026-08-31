@@ -1,11 +1,10 @@
 #include "Track/control_routing.h"
 #include "IPC/control_audio_command.h"
 #include "IPC/control_audio_publication.h"
-#include "IPC/live_clock.h"
+#include "IPC/live_clock_control.h"
 #include <string.h>
 
 static uint8_t g_looper_sources[BRICK_ENTITY_CAPACITY][BRICK_ENTITY_CAPACITY];
-static uint16_t g_audio_looper_source_mask[BRICK_ENTITY_CAPACITY];
 
 static uint8_t control_routing_publish(brick_entity_id_t looper)
 {
@@ -23,7 +22,6 @@ static uint8_t control_routing_publish(brick_entity_id_t looper)
 void control_routing_init(void)
 {
     memset(g_looper_sources, 0, sizeof(g_looper_sources));
-    memset(g_audio_looper_source_mask, 0, sizeof(g_audio_looper_source_mask));
 }
 uint8_t control_routing_get_looper_source(brick_entity_id_t looper,brick_entity_id_t source){return(looper<BRICK_ENTITY_CAPACITY&&source<BRICK_ENTITY_CAPACITY)?g_looper_sources[looper][source]:0U;}
 uint8_t control_routing_set_looper_source(brick_entity_id_t looper,brick_entity_id_t source,uint8_t enabled){if(looper>=BRICK_ENTITY_CAPACITY||source>=BRICK_ENTITY_CAPACITY||looper==source)return 0U;const uint8_t next=(enabled!=0U)?1U:0U;if(g_looper_sources[looper][source]==next)return 1U;const uint8_t old=g_looper_sources[looper][source];g_looper_sources[looper][source]=next;if(control_routing_publish(looper)==0U){g_looper_sources[looper][source]=old;return 0U;}return 1U;}
@@ -67,21 +65,4 @@ uint8_t control_routing_apply_bulk(
             g_looper_sources[looper][source] = (uint8_t)(
                 (source != looper) && (sources[looper][source] != 0U));
     return 1U;
-}
-
-uint8_t control_routing_audio_set_mask(brick_entity_id_t looper,
-                                       uint16_t source_mask)
-{
-    if (looper >= BRICK_ENTITY_CAPACITY) return 0U;
-    g_audio_looper_source_mask[looper] = source_mask;
-    return 1U;
-}
-
-uint8_t control_routing_audio_get_looper_source(brick_entity_id_t looper,
-                                                brick_entity_id_t source)
-{
-    if ((looper >= BRICK_ENTITY_CAPACITY) || (source >= BRICK_ENTITY_CAPACITY))
-        return 0U;
-    return (uint8_t)((g_audio_looper_source_mask[looper]
-                      & (uint16_t)(1U << source)) != 0U);
 }

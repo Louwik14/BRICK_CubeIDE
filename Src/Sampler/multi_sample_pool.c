@@ -4,11 +4,10 @@
 
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_page_cache.h"
-#include "Sampler/sample_stream_needs.h"
 #include "Sampler/sample_stream_manager.h"
-#include "IPC/multi_sample_audio_projection.h"
+#include "IPC/multi_sample_audio_projection_control.h"
 #include "IPC/control_audio_publication.h"
-#include "IPC/live_clock.h"
+#include "IPC/live_clock_control.h"
 #include "Storage/sd_access_gate.h"
 #include "Platform/memory_layout.h"
 #include "stm32h7xx.h"

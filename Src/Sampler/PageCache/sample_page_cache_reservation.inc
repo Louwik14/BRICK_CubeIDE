@@ -32,87 +32,6 @@ const float *sample_page_cache_get_full_sample_base_key(sample_audio_key_t key,
         &g_sample_page_desc[sample->first_slot]);
 }
 
-uint8_t sample_page_cache_begin_read_block(uint16_t sample_id,
-                                           uint32_t frame_index,
-                                           uint32_t max_frames,
-                                           sample_page_block_t *out_block)
-{
-    return sample_page_cache_begin_read_block_key(sample_audio_key_classic(sample_id),
-                                                  frame_index,
-                                                  max_frames,
-                                                  out_block);
-}
-
-uint8_t sample_page_cache_begin_read_block_key(sample_audio_key_t key,
-                                               uint32_t frame_index,
-                                               uint32_t max_frames,
-                                               sample_page_block_t *out_block)
-{
-    if (out_block == 0)
-    {
-        return 0U;
-    }
-
-    memset(out_block, 0, sizeof(*out_block));
-    out_block->status = SAMPLE_PAGE_BLOCK_NOT_READY;
-
-    const uint16_t key_slot = sample_page_cache_key_slot(key);
-    if ((key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES) || (max_frames == 0U))
-    {
-        return 0U;
-    }
-
-    const sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
-    if (sample->valid == 0U)
-    {
-        return 1U;
-    }
-
-    if (frame_index >= sample->total_frames)
-    {
-        out_block->status = SAMPLE_PAGE_BLOCK_DONE;
-        return 1U;
-    }
-
-    const sample_audio_format_t format = sample_audio_format_or_stereo(sample->format);
-    const uint32_t page_index = sample_audio_format_page_index_from_frame(format, frame_index);
-    sample_page_span_t span;
-    if (sample_page_cache_try_acquire_page_key(key, page_index, &span) == 0U)
-    {
-        return 1U;
-    }
-
-    const uint32_t page_offset = frame_index - span.start_frame;
-    uint32_t frame_count = span.frame_count - page_offset;
-    if (frame_count > max_frames)
-    {
-        frame_count = max_frames;
-    }
-
-    out_block->frames_interleaved =
-        &span.frames_interleaved[page_offset * span.stride_floats];
-    out_block->frame_count = frame_count;
-    out_block->start_frame = frame_index;
-    out_block->page_index = page_index;
-    out_block->format = span.format;
-    out_block->stride_floats = span.stride_floats;
-    out_block->frames_per_page = span.frames_per_page;
-    out_block->status = (frame_count != 0U) ? SAMPLE_PAGE_BLOCK_OK : SAMPLE_PAGE_BLOCK_NOT_READY;
-    return 1U;
-}
-
-void sample_page_cache_commit_read_block(uint16_t sample_id,
-                                         uint32_t page_index)
-{
-    sample_page_cache_commit_read_block_key(sample_audio_key_classic(sample_id), page_index);
-}
-
-void sample_page_cache_commit_read_block_key(sample_audio_key_t key,
-                                             uint32_t page_index)
-{
-    sample_page_cache_release_page_key(key, page_index);
-}
-
 uint8_t sample_page_cache_has_reserved_range(uint16_t first_sample_id,
                                            uint16_t sample_count)
 {
@@ -426,8 +345,8 @@ uint8_t sample_page_cache_finish_loading(const sample_page_load_token_t *token,
                 ? SAMPLE_PAGE_READY
                 : SAMPLE_PAGE_FAILED;
         page->load_cancel_requested = 0U;
-        if ((cancelled != 0U) && (page->pin_count == 0U)
-            && (sample_page_cache_audio_use_count(page) == 0U))
+        if ((cancelled != 0U) && (page->static_resident == 0U)
+            && (sample_page_cache_page_is_leased(page) == 0U))
         {
             sample_page_cache_clear_desc(page, token->slot_index);
         }
@@ -573,8 +492,8 @@ uint8_t sample_page_cache_reserve_page_key_alloc(sample_audio_key_t key,
 
     if ((page->state == SAMPLE_PAGE_FREE)
         || ((page->state == SAMPLE_PAGE_FAILED)
-            && (page->pin_count == 0U)
-            && (sample_page_cache_audio_use_count(page) == 0U)))
+            && (page->static_resident == 0U)
+            && (sample_page_cache_page_is_leased(page) == 0U)))
     {
         page->load_cancel_requested = 0U;
         sample_page_cache_set_state(page, SAMPLE_PAGE_RESERVED);

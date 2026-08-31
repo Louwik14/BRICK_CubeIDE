@@ -7,7 +7,7 @@ Le code courant est l'autorite finale. Ce document est l'unique porte d'entree d
 - Seize identites logiques stables existent: huit entites top-level `0..7` et huit children GROUP `8..15`, actives uniquement lorsque l'entite 7 est GROUP master.
 - `entity_topology` derive activite, role, parent et capacites. `track_state` possede la configuration CONTROL; `track_runtime` la projette vers les moteurs, ressources et voies physiques.
 - Looper est un type de Sampler assignable. External est un moteur dont l'entree physique est arbitree par `track_input_ownership`. Ressource physique, voie mixer et quota ne sont jamais des identites logiques.
-- CONTROL possede UI, MIDI, sequence, ROLL, Note FX, p-locks, outputs logiques, deadlines et stealing musical. AUDIO possede IRQ, mapping d'execution `{output_id,note,velocity,gate} -> slot DSP`, RELEASE physique, moteurs, mixer et page-cache. PROGRAM peut remplacer un renderer compatible sans tuer l'output logique ni emettre NOTE OFF/ON.
+- CONTROL possede UI, MIDI, sequence, ROLL, Note FX, p-locks, outputs logiques, deadlines, stealing musical, catalogue Sample, Stream, I/O et page-cache. AUDIO possede IRQ, mapping d'execution `{output_id,note,velocity,gate} -> slot DSP`, RELEASE physique, lecteurs, positions, moteurs et mixer. PROGRAM peut remplacer un renderer compatible sans tuer l'output logique ni emettre NOTE OFF/ON.
 - L'ordre fonctionnel CONTROL vers AUDIO traverse exclusivement la FIFO SPSC
   unique PROGRAM/PARAM/NOTE/TRANSPORT/RECORD/PANIC. Les gros data planes et
   retours physiques utilisent des structures fixes, pointer-free et separees.

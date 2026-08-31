@@ -1,10 +1,7 @@
 #ifndef BRICK6_LIVE_PARAMETER_EVENT_H
 #define BRICK6_LIVE_PARAMETER_EVENT_H
 
-#include <stdbool.h>
 #include <stdint.h>
-
-#include "param_store.h"
 
 /* The value field carries the exact IEEE-754 bits of the canonical float
  * value.  The wire format stays integer-only and pointer-free. */
@@ -88,12 +85,6 @@ static inline uint8_t live_parameter_event_bulk_count(uint16_t flags)
 }
 
 #define LIVE_PARAMETER_EVENT_INVALID_INDEX 0xFFU
-#define LIVE_PARAMETER_EVENT_QUEUE_CAPACITY 64U
-
-_Static_assert((LIVE_PARAMETER_EVENT_QUEUE_CAPACITY
-                & (LIVE_PARAMETER_EVENT_QUEUE_CAPACITY - 1U)) == 0U,
-               "live parameter event queue capacity must be a power of two");
-
 static inline int32_t live_parameter_event_encode_float(float value)
 {
     union
@@ -115,13 +106,5 @@ static inline float live_parameter_event_decode_float(int32_t value)
 
     return bits.f;
 }
-
-void live_parameter_event_init(void);
-bool live_parameter_event_submit(const live_parameter_event_t *event);
-bool live_parameter_event_peek(live_parameter_event_t *out_event);
-void live_parameter_event_consume(void);
-bool live_parameter_event_pop(live_parameter_event_t *out_event);
-uint16_t live_parameter_event_depth(void);
-uint32_t live_parameter_event_drop_count(void);
 
 #endif /* BRICK6_LIVE_PARAMETER_EVENT_H */

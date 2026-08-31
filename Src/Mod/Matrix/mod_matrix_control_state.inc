@@ -59,19 +59,6 @@ static const track_sound_state_t *mod_matrix_control_state_const(uint8_t track)
         ? track_sound_state_get_const(owner) : NULL;
 }
 
-static void mod_matrix_recompute_global_route_flag(void)
-{
-    g_mod_matrix_any_route = 0U;
-    for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
-    {
-        if (g_mod_matrix_route_cache[track].any_route != 0U)
-        {
-            g_mod_matrix_any_route = 1U;
-            return;
-        }
-    }
-}
-
 static uint8_t mod_matrix_track_selected_slot(uint8_t track, uint8_t *out_slot)
 {
     const track_sound_state_t *const state = mod_matrix_control_state_const(track);

@@ -4,17 +4,14 @@
 #include "Platform/brick_build_config.h"
 
 #include "Sampler/sample_global_pool.h"
+#include "Sampler/wavetable_config.h"
 #include "Sampler/wavetable_prepared_format.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define WAVETABLE_POOL_MAX_SLOTS       (64U)
 #define WAVETABLE_POOL_PATH_MAX        SAMPLE_GLOBAL_POOL_PATH_MAX
-#define WAVETABLE_POOL_INVALID_SLOT    (0xFFFFU)
-#define WAVETABLE_FRAME_SAMPLE_COUNT   (1024U)
-#define WAVETABLE_PREVIEW_COLUMNS      (124U)
 
 _Static_assert(WAVETABLE_POOL_MAX_SLOTS <= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
                "Wavetable slots must fit the active global audio asset pool");

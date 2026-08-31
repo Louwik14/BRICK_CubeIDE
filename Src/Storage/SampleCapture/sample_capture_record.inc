@@ -390,7 +390,7 @@ static uint8_t sample_capture_prepare_session(void)
 }
 static uint8_t sample_capture_start_prepared_at(uint64_t sample_time)
 {
-    if(sample_capture_publish_audio_projection_at(sample_time) == 0U)
+    if(sample_capture_publish_rec_bus_at(sample_time) == 0U)
         return 0U;
     if(audio_recorder_start_client_at(AUDIO_RECORDER_CLIENT_AUDIO_REC,
                                       sample_time) == 0U)
@@ -406,9 +406,8 @@ static uint8_t sample_capture_start_prepared_at(uint64_t sample_time)
     g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
     g_sample_capture.last_take_notified = 0U;
     g_sample_capture.rec_edit_enter_deferred_services = 0U;
-    sample_capture_waveform_reset();
     sample_capture_detail_reset();
-    g_sample_capture.audio_hook_enabled = 1U;
+    g_sample_capture.capture_enabled = 1U;
     return 1U;
 }
 
@@ -428,12 +427,12 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
     }
     if(frames == 0U)
     {
-        sample_capture_set_audio_hook_enabled(0U);
+        sample_capture_set_capture_enabled(0U);
         g_sample_capture.state.recording = 0U;
         g_sample_capture.state.armed_pending = 0U;
         g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
         g_sample_capture.state.trigger_latched = 0U;
-        sample_capture_publish_audio_projection();
+        sample_capture_publish_rec_bus();
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
         g_sample_capture.last_take_notified = 1U;
         return;
@@ -443,7 +442,7 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
     g_sample_capture.state.armed_pending = 0U;
     g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
     g_sample_capture.state.trigger_latched = 0U;
-    sample_capture_publish_audio_projection();
+        sample_capture_publish_rec_bus();
 #if SAMPLE_CAPTURE_DEBUG_UART
     sample_capture_debug_log("REC_LIVE_DONE frames=%lu\r\n", (unsigned long)frames);
     sample_capture_debug_log("WRITER_FINAL_READY path=%s frames=%lu\r\n",
@@ -505,17 +504,9 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
     (void)status;
 }
 
-uint8_t sample_capture_push_audio_block_from_irq(const int32_t *lr_interleaved,
-                                                 uint32_t frames)
+static void sample_capture_set_capture_enabled(uint8_t enabled)
 {
-    sample_capture_waveform_push_minmax_from_irq(lr_interleaved, frames);
-    return audio_recorder_push_from_irq_client(
-        AUDIO_RECORDER_CLIENT_AUDIO_REC, lr_interleaved, frames);
-}
-
-static void sample_capture_set_audio_hook_enabled(uint8_t enabled)
-{
-    g_sample_capture.audio_hook_enabled = (enabled != 0U) ? 1U : 0U;
-    sample_capture_publish_audio_projection();
+    g_sample_capture.capture_enabled = (enabled != 0U) ? 1U : 0U;
+    sample_capture_publish_rec_bus();
 }
 

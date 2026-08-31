@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-#include "Sampler/multi_sample_pool.h"
+#include "Sampler/multi_sample_config.h"
 #include "Sampler/sample_classic_config.h"
 #include "Sampler/sample_audio_format.h"
 #include "Sampler/brick6_sampler_multi_contract.h"

@@ -1,5 +1,5 @@
 #include "Sampler/sample_stream_manager.h"
-#include "Sampler/sample_stream_needs.h"
+#include "Sampler/sample_page_lease_control.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -14,6 +14,7 @@
 
 #define SAMPLE_STREAM_CANCEL_REASON_RELEASE_KEY (3U)
 #define SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED (6U)
+#define SAMPLE_STREAM_LOOPER_CONTROL_LOOKAHEAD_PAGES (12U)
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(SAMPLE_CLASSIC_CAPACITY <= SAMPLE_PAGE_CACHE_ID_CAPACITY,
@@ -36,8 +37,8 @@ static uint8_t g_sample_stream_manager_pending_count;
 static uint32_t sample_stream_manager_collect_candidates(
     sample_stream_scheduler_candidate_t *out_candidates,
     uint32_t capacity,
-    uint32_t *out_loadable_needs,
-    uint32_t *out_loading_needs);
+    uint32_t *out_loadable_pages,
+    uint32_t *out_loading_pages);
 static uint8_t sample_stream_manager_finish_io(
     sample_stream_manager_pending_io_t *pending,
     sample_stream_io_result_t *io_result);
@@ -69,7 +70,6 @@ void sample_stream_manager_reset(void)
            sizeof(g_sample_stream_manager_pending_io));
     g_sample_stream_manager_pending_count = 0U;
     sample_stream_scheduler_init();
-    sample_stream_needs_registry_reset();
 }
 
 void sample_stream_manager_release_sample(uint16_t sample_id)
@@ -79,9 +79,11 @@ void sample_stream_manager_release_sample(uint16_t sample_id)
 
 void sample_stream_manager_release_key(sample_audio_key_t key)
 {
-    if (sample_stream_needs_registry_contains_key(key) != 0U)
+    for (uint8_t slot = 0U; slot < SAMPLE_PAGE_LEASE_SLOT_COUNT; ++slot)
     {
-        return;
+        sample_page_lease_t lease;
+        if ((sample_page_lease_control_read(slot, &lease) != 0U)
+            && (sample_audio_key_equal(&lease.key, &key) != 0U)) return;
     }
     (void)sample_stream_transport_request_release(key);
     (void)sample_page_cache_cancel_reserved_key(key, SAMPLE_STREAM_CANCEL_REASON_RELEASE_KEY);
@@ -110,58 +112,68 @@ static uint8_t sample_stream_manager_finish_io(
 static uint32_t sample_stream_manager_collect_candidates(
     sample_stream_scheduler_candidate_t *out_candidates,
     uint32_t capacity,
-    uint32_t *out_loadable_needs,
-    uint32_t *out_loading_needs)
+    uint32_t *out_loadable_pages,
+    uint32_t *out_loading_pages)
 {
     if ((out_candidates == 0) || (capacity == 0U))
     {
         return 0U;
     }
 
-    if (out_loadable_needs != 0)
+    if (out_loadable_pages != 0)
     {
-        *out_loadable_needs = 0U;
+        *out_loadable_pages = 0U;
     }
-    if (out_loading_needs != 0)
+    if (out_loading_pages != 0)
     {
-        *out_loading_needs = 0U;
+        *out_loading_pages = 0U;
     }
     uint32_t count = 0U;
-    for (uint8_t source = (uint8_t)SAMPLE_STREAM_SNAPSHOT_CLASSIC;
-         source <= (uint8_t)SAMPLE_STREAM_SNAPSHOT_MULTI;
-         ++source)
+    for (uint8_t slot = 0U; slot < SAMPLE_PAGE_LEASE_SLOT_COUNT; ++slot)
     {
-        const uint8_t voice_capacity =
-            (source == (uint8_t)SAMPLE_STREAM_SNAPSHOT_CLASSIC)
-                ? (uint8_t)SAMPLE_STREAM_SNAPSHOT_CLASSIC_CAPACITY
-                : (uint8_t)SAMPLE_STREAM_SNAPSHOT_MULTI_CAPACITY;
-        for (uint8_t voice_id = 0U; voice_id < voice_capacity; ++voice_id)
+        if (count >= capacity) return count;
+        sample_page_lease_t lease;
+        if (sample_page_lease_control_read(slot, &lease) == 0U) continue;
+        uint32_t looper_page_count = 0U;
+        if (lease.key.domain == SAMPLE_AUDIO_DOMAIN_LOOPER)
         {
-            if (count >= capacity)
+            sample_page_stream_info_t info;
+            if ((sample_page_cache_get_stream_info_key(lease.key, &info) != 0U)
+                && (info.frames_per_page != 0U))
+                looper_page_count = (info.total_frames + info.frames_per_page - 1U)
+                                      / info.frames_per_page;
+        }
+        uint8_t page_rank = 0U;
+        uint8_t first_missing_seen = 0U;
+        for (uint8_t range_index = 0U; range_index < 3U; ++range_index)
+        {
+            sample_page_lease_range_t derived = {0};
+            const sample_page_lease_range_t *range;
+            if (range_index < 2U)
             {
-                return count;
+                range = &lease.ranges[range_index];
             }
-
-            sample_stream_target_voice_registry_entry_t entry;
-            if (sample_stream_needs_registry_read(
-                    (sample_stream_snapshot_source_t)source, voice_id, &entry) == 0U)
+            else
             {
-                continue;
+                const sample_page_lease_range_t *const tail =
+                    (lease.ranges[1].page_count != 0U)
+                        ? &lease.ranges[1] : &lease.ranges[0];
+                derived.first_page = tail->first_page + tail->page_count;
+                derived.page_count = (lease.key.domain == SAMPLE_AUDIO_DOMAIN_LOOPER)
+                                       ? (SAMPLE_STREAM_LOOPER_CONTROL_LOOKAHEAD_PAGES - 2U)
+                                       : ((lease.key.domain == SAMPLE_AUDIO_DOMAIN_MULTI)
+                                           ? SAMPLE_PAGE_MULTI_LOOKAHEAD_PAGES
+                                           : SAMPLE_PAGE_CLASSIC_FORWARD_LOOKAHEAD_PAGES);
+                range = &derived;
             }
-
-            uint8_t first_missing_seen = 0U;
-            const uint8_t need_count = (uint8_t)(entry.mobile_page_count
-                                                 + entry.loop_preload_count);
-            for (uint8_t need_index = 0U;
-                 need_index < need_count;
-                 ++need_index)
+            for (uint8_t offset = 0U; offset < range->page_count; ++offset, ++page_rank)
             {
-                uint32_t page_index = 0U;
-                if (sample_stream_needs_entry_page_at(
-                        &entry, need_index, &page_index) == 0U)
-                    continue;
+                uint32_t page_index = range->first_page + offset;
+                if ((looper_page_count != 0U)
+                    && (page_index >= looper_page_count))
+                    page_index %= looper_page_count;
                 const sample_page_state_t state = sample_page_cache_get_page_state_key(
-                    entry.key, page_index);
+                    lease.key, page_index);
                 if (state == SAMPLE_PAGE_READY)
                 {
                     continue;
@@ -171,14 +183,14 @@ static uint32_t sample_stream_manager_collect_candidates(
                     first_missing_seen = 1U;
                     if (state == SAMPLE_PAGE_LOADING)
                     {
-                        if (out_loading_needs != 0)
+                        if (out_loading_pages != 0)
                         {
-                            (*out_loading_needs)++;
+                            (*out_loading_pages)++;
                         }
                     }
-                    else if (out_loadable_needs != 0)
+                    else if (out_loadable_pages != 0)
                     {
-                        (*out_loadable_needs)++;
+                        (*out_loadable_pages)++;
                     }
                 }
                 if (state == SAMPLE_PAGE_LOADING)
@@ -189,23 +201,20 @@ static uint32_t sample_stream_manager_collect_candidates(
                 sample_stream_scheduler_candidate_t *const candidate =
                     &out_candidates[count++];
                 memset(candidate, 0, sizeof(*candidate));
-                candidate->key = entry.key;
+                candidate->key = lease.key;
                 candidate->page_index = page_index;
-                candidate->registration_epoch = entry.registration_epoch;
-                candidate->source = source;
-                candidate->voice_id = voice_id;
-                candidate->need_index = need_index;
-                candidate->round_robin_slot =
-                    (source == (uint8_t)SAMPLE_STREAM_SNAPSHOT_CLASSIC)
-                        ? voice_id
-                        : (uint8_t)(SAMPLE_STREAM_SNAPSHOT_CLASSIC_CAPACITY + voice_id);
+                candidate->registration_epoch = lease.registration_epoch;
+                candidate->voice_id = slot;
+                candidate->page_rank = page_rank;
+                candidate->round_robin_slot = slot;
                 candidate->active = 1U;
                 break;
             }
+            if (first_missing_seen != 0U) break;
         }
     }
-    if ((count == 0U) && (out_loading_needs != 0) && (*out_loading_needs != 0U)
-        && (out_loadable_needs != 0) && (*out_loadable_needs == 0U))
+    if ((count == 0U) && (out_loading_pages != 0) && (*out_loading_pages != 0U)
+        && (out_loadable_pages != 0) && (*out_loadable_pages == 0U))
     {
         /* The caller records the exact no-selection reason. */
     }
@@ -485,10 +494,10 @@ uint8_t sample_stream_manager_has_pending_sd_work(void)
         return 1U;
     }
     sample_stream_scheduler_candidate_t candidates[SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES];
-    uint32_t loading_needs = 0U;
+    uint32_t loading_pages = 0U;
     const uint32_t candidate_count = sample_stream_manager_collect_candidates(
-        candidates, SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES, 0, &loading_needs);
-    return ((candidate_count != 0U) || (loading_needs != 0U)) ? 1U : 0U;
+        candidates, SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES, 0, &loading_pages);
+    return ((candidate_count != 0U) || (loading_pages != 0U)) ? 1U : 0U;
 }
 
 uint8_t sample_stream_manager_io_in_flight(void)

@@ -1,35 +1,9 @@
-static uint16_t ui_page_audio_rec_abs_i16(int16_t v)
-{
-    if(v >= 0)
-    {
-        return (uint16_t)v;
-    }
-    if(v == (int16_t)-32768)
-    {
-        return 32768U;
-    }
-    return (uint16_t)(-v);
-}
-
 static uint16_t ui_page_audio_rec_take_peak(const sample_capture_state_t *state)
 {
     uint16_t peak = 0U;
     if(state == 0)
     {
         return 0U;
-    }
-    for(uint16_t idx = 0U; idx < state->waveform_count; ++idx)
-    {
-        const uint16_t abs_min = ui_page_audio_rec_abs_i16(state->waveform[idx].min);
-        const uint16_t abs_max = ui_page_audio_rec_abs_i16(state->waveform[idx].max);
-        if(abs_min > peak)
-        {
-            peak = abs_min;
-        }
-        if(abs_max > peak)
-        {
-            peak = abs_max;
-        }
     }
     if(state->line_peak > peak)
     {
@@ -233,105 +207,6 @@ static void ui_page_audio_rec_draw_line_waveform(const sample_capture_state_t *s
     if(out_segments != 0)
     {
         *out_segments = segments;
-    }
-}
-
-static void ui_page_audio_rec_draw_waveform_range(const sample_capture_state_t *state,
-                                                  int x,
-                                                  int y,
-                                                  int w,
-                                                  int h,
-                                                  uint32_t view_start_frame,
-                                                  uint32_t view_frames,
-                                                  ui_audio_rec_wave_vertical_mode_t vertical_mode,
-                                                  uint16_t vertical_ref_override,
-                                                  uint16_t vzoom_q8)
-{
-    const int inner_x = x + 1;
-    const int inner_y = y + 1;
-    const int inner_w = w - 2;
-    const int inner_h = h - 2;
-    const int cy = y + (h / 2);
-
-    if((inner_w <= 0) || (inner_h <= 2) || (state->waveform_count == 0U))
-    {
-        return;
-    }
-    if(view_frames == 0U)
-    {
-        view_frames = 1U;
-    }
-
-    const uint32_t view_end_frame = view_start_frame + view_frames;
-    uint16_t vertical_ref = (vertical_ref_override != 0U)
-        ? vertical_ref_override
-        : SAMPLE_CAPTURE_WAVEFORM_FULL_SCALE;
-    if(vertical_mode == UI_AUDIO_REC_WAVE_VERTICAL_LOCAL_VIEW_NORMALIZED)
-    {
-        uint32_t norm_idx0 = ui_page_audio_rec_frame_to_wave_idx(state, view_start_frame);
-        uint32_t norm_idx1 = ui_page_audio_rec_frame_to_wave_idx(state, view_end_frame);
-        if(state->recorded_frames == 0U)
-        {
-            norm_idx0 = 0U;
-            norm_idx1 = state->waveform_count;
-        }
-        if(norm_idx1 <= norm_idx0)
-        {
-            norm_idx1 = norm_idx0 + 1U;
-        }
-        if(norm_idx1 > state->waveform_count)
-        {
-            norm_idx1 = state->waveform_count;
-        }
-
-        int16_t norm_min = 0;
-        int16_t norm_max = 0;
-        ui_page_audio_rec_minmax_in_range(state, norm_idx0, norm_idx1, &norm_min, &norm_max);
-        const uint16_t abs_min = ui_page_audio_rec_abs_i16(norm_min);
-        const uint16_t abs_max = ui_page_audio_rec_abs_i16(norm_max);
-        vertical_ref = (abs_min > abs_max) ? abs_min : abs_max;
-        if(vertical_ref < 2048U)
-        {
-            vertical_ref = 2048U;
-        }
-    }
-
-    for(int col = 0; col < inner_w; ++col)
-    {
-        uint32_t idx0 = 0U;
-        uint32_t idx1 = 0U;
-        if(state->recorded_frames != 0U)
-        {
-            const uint32_t frame0 = view_start_frame
-                + (uint32_t)(((uint64_t)col * (uint64_t)view_frames) / (uint64_t)inner_w);
-            uint32_t frame1 = view_start_frame
-                + (uint32_t)(((uint64_t)(col + 1) * (uint64_t)view_frames) / (uint64_t)inner_w);
-            if(frame1 <= frame0)
-            {
-                frame1 = frame0 + 1U;
-            }
-            idx0 = ui_page_audio_rec_frame_to_wave_idx(state, frame0);
-            idx1 = ui_page_audio_rec_frame_to_wave_idx(state, frame1);
-        }
-        else
-        {
-            idx0 = (uint32_t)(((uint64_t)col * (uint64_t)state->waveform_count)
-                    / (uint64_t)inner_w);
-            idx1 = (uint32_t)(((uint64_t)(col + 1) * (uint64_t)state->waveform_count)
-                    / (uint64_t)inner_w);
-        }
-
-        int16_t min_v = 0;
-        int16_t max_v = 0;
-        ui_page_audio_rec_minmax_in_range(state, idx0, idx1, &min_v, &max_v);
-        ui_page_audio_rec_draw_minmax_column(inner_x + col,
-                                             inner_y,
-                                             inner_h,
-                                             cy,
-                                             min_v,
-                                             max_v,
-                                             vertical_ref,
-                                             vzoom_q8);
     }
 }
 
@@ -856,8 +731,7 @@ static void ui_page_audio_rec_draw_marker_bar(const sample_capture_state_t *stat
     drv_display_clear_rect(x, y, w, h);
     drv_display_draw_rect(x, y, w, h);
     ui_page_audio_rec_draw_zero_line(x, y, w, h);
-    if((state->waveform_count == 0U)
-            && !((state->view == SAMPLE_CAPTURE_VIEW_REC_EDIT)
+    if(!((state->view == SAMPLE_CAPTURE_VIEW_REC_EDIT)
                 && (state->take_valid != 0U)
                 && (state->recorded_frames != 0U)))
     {
@@ -991,23 +865,6 @@ static void ui_page_audio_rec_draw_marker_bar(const sample_capture_state_t *stat
 
     if(waveform_drawn == 0U)
     {
-        const ui_audio_rec_wave_vertical_mode_t vertical_mode =
-            (state->view == SAMPLE_CAPTURE_VIEW_REC_EDIT)
-                ? UI_AUDIO_REC_WAVE_VERTICAL_FIXED_FULL_SCALE
-                : UI_AUDIO_REC_WAVE_VERTICAL_FIXED_FULL_SCALE;
-        const uint16_t vertical_ref =
-            (state->view == SAMPLE_CAPTURE_VIEW_REC_EDIT)
-                ? ui_page_audio_rec_edit_vertical_ref(state)
-                : 0U;
-        const uint16_t vzoom_q8 = (state->view == SAMPLE_CAPTURE_VIEW_REC_EDIT)
-            ? ui_page_audio_rec_vzoom_scale_q8(state->edit_vzoom)
-            : 256U;
-
-        ui_page_audio_rec_draw_waveform_range(state, x, y, w, h,
-                                              view_start_frame, view_frames,
-                                              vertical_mode,
-                                              vertical_ref,
-                                              vzoom_q8);
         if(state->view == SAMPLE_CAPTURE_VIEW_REC_EDIT)
         {
             renderer = SAMPLE_CAPTURE_RENDERER_EMPTY;

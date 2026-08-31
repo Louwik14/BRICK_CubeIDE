@@ -1,6 +1,6 @@
 static void sample_capture_editor_cache_reset(void);
 static void sample_capture_global_overview_reset(void);
-static void sample_capture_set_audio_hook_enabled(uint8_t enabled);
+static void sample_capture_set_capture_enabled(uint8_t enabled);
 
 static uint32_t sample_capture_threshold_to_peak_abs_pcm24(int8_t threshold_dbfs)
 {
@@ -10,7 +10,7 @@ static uint32_t sample_capture_threshold_to_peak_abs_pcm24(int8_t threshold_dbfs
         ? SAMPLE_CAPTURE_PCM24_PEAK : (uint32_t)(peak + 0.5f);
 }
 
-static void sample_capture_publish_audio_projection(void)
+static void sample_capture_publish_rec_bus(void)
 {
     uint16_t source_entity_mask = 0U;
     for(uint8_t track = 0U; track < SAMPLE_CAPTURE_TRACK_COUNT; ++track)
@@ -40,32 +40,16 @@ static void sample_capture_publish_audio_projection(void)
     {
         source_flags |= AUDIO_REC_BUS_SOURCE_MIC_LOGICAL;
     }
-    if(g_sample_capture.audio_hook_enabled != 0U)
+    if(g_sample_capture.capture_enabled != 0U)
     {
         source_flags |= AUDIO_REC_BUS_CAPTURE_ENABLED;
     }
 
-    if((g_sample_capture.projection_valid != 0U)
-            && (source_entity_mask == g_sample_capture.published_source_entity_mask)
-            && ((uint8_t)g_sample_capture.state.arm == g_sample_capture.published_arm)
-            && (source_flags == g_sample_capture.published_source_flags))
-    {
-        return;
-    }
-
-    if (audio_rec_bus_projection_control_publish(source_entity_mask,
-            (audio_rec_bus_arm_t)g_sample_capture.state.arm,
-            source_flags) == 0U)
-    {
-        return;
-    }
-    g_sample_capture.published_source_entity_mask = source_entity_mask;
-    g_sample_capture.published_arm = (uint8_t)g_sample_capture.state.arm;
-    g_sample_capture.published_source_flags = source_flags;
-    g_sample_capture.projection_valid = 1U;
+    (void)control_audio_rec_bus_publish(source_entity_mask,
+        (audio_rec_bus_arm_t)g_sample_capture.state.arm, source_flags);
 }
 
-static uint8_t sample_capture_publish_audio_projection_at(uint64_t sample_time)
+static uint8_t sample_capture_publish_rec_bus_at(uint64_t sample_time)
 {
     uint16_t source_entity_mask = 0U;
     for(uint8_t track = 0U; track < SAMPLE_CAPTURE_TRACK_COUNT; ++track)
@@ -86,14 +70,10 @@ static uint8_t sample_capture_publish_audio_projection_at(uint64_t sample_time)
     }
     if(g_sample_capture.state.mic_enabled != 0U)
         source_flags |= AUDIO_REC_BUS_SOURCE_MIC_LOGICAL;
-    if(audio_rec_bus_projection_control_publish_at(source_entity_mask,
+    if(control_audio_rec_bus_publish_at(source_entity_mask,
             (audio_rec_bus_arm_t)g_sample_capture.state.arm,
             source_flags, sample_time) == 0U)
         return 0U;
-    g_sample_capture.published_source_entity_mask = source_entity_mask;
-    g_sample_capture.published_arm = (uint8_t)g_sample_capture.state.arm;
-    g_sample_capture.published_source_flags = source_flags;
-    g_sample_capture.projection_valid = 1U;
     return 1U;
 }
 
@@ -189,7 +169,11 @@ static uint8_t sample_capture_has_route(void)
     {
         return 1U;
     }
-    return (uint8_t)(g_sample_capture.published_source_entity_mask != 0U);
+    for (uint8_t track = 0U; track < SAMPLE_CAPTURE_TRACK_COUNT; ++track)
+        if ((g_sample_capture.route_mask[track] != 0U)
+                && (entity_topology_is_active((brick_entity_id_t)track) != 0U)
+                && (track_runtime_is_audio_routable(track) != 0U)) return 1U;
+    return 0U;
 }
 
 static uint32_t sample_capture_len_to_frames(uint8_t len_bars)

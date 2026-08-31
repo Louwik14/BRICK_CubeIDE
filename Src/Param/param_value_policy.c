@@ -2,8 +2,7 @@
 
 #include <math.h>
 
-#include "Audio/audio_fx_runtime.h"
-#include "Audio/fx_modfx_global.h"
+#include "Param/engine_model_catalog.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Param/param_registry.h"
 

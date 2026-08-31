@@ -499,7 +499,10 @@ static uint8_t audio_note_engine_adapter_choose_mix_target(
 uint8_t audio_note_engine_adapter_install_prepared(
     const audio_note_engine_install_spec_t *spec)
 {
-    if ((spec == NULL) || (spec->entity_id >= BRICK_ENTITY_CAPACITY))
+    if ((spec == NULL) || (spec->entity_id >= BRICK_ENTITY_CAPACITY)
+            || (spec->engine >= (uint8_t)TRACK_RUNTIME_ENGINE_COUNT)
+            || (spec->family > (uint8_t)TRACK_RUNTIME_FAMILY_OTHER)
+            || (spec->type > (uint8_t)TRACK_RUNTIME_TYPE_OTHER))
         return 0U;
 
     const brick_entity_id_t entity_id = spec->entity_id;
@@ -507,7 +510,7 @@ uint8_t audio_note_engine_adapter_install_prepared(
         (track_runtime_family_t)spec->family;
     const track_runtime_type_t type = (track_runtime_type_t)spec->type;
     const track_runtime_engine_t requested_engine =
-        track_runtime_choose_engine(family, type);
+        (track_runtime_engine_t)spec->engine;
     track_audio_runtime_ctx_t *const ctx = &g_audio_track_ctx[entity_id];
     const uint8_t requested_voices = (ctx->program_route.active != 0U)
         ? synth_polyphony_get_voice_count(entity_id) : 1U;
@@ -526,8 +529,7 @@ uint8_t audio_note_engine_adapter_install_prepared(
         .midi_source = midi_source,
         .family = (uint8_t)family,
         .type = (uint8_t)type,
-        .flags = (uint8_t)(track_runtime_compute_flags(family, type)
-            | spec->topology_flags)
+        .flags = spec->flags
     };
     audio_program_route_t installed = {
         .entity_id = entity_id,
@@ -541,7 +543,7 @@ uint8_t audio_note_engine_adapter_install_prepared(
     if ((family == TRACK_RUNTIME_FAMILY_OFF)
             || (family == TRACK_RUNTIME_FAMILY_OTHER))
         installed.active = 0U;
-    else if ((spec->topology_flags
+    else if ((spec->flags
                 & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER) != 0U)
     {
         installed.mix_track_id = MIXER_GROUP_BUS_TRACK;

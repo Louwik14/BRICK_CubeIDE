@@ -13,13 +13,12 @@
 #define SEQ_RUNTIME_INTERNAL_USE 1
 
 #include "Platform/memory_layout.h"
-#include "Audio/metronome_runtime.h"
 #include "IPC/control_audio_command.h"
 #include "IPC/control_audio_publication.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include "App/engine_tasklet.h"
-#include "IPC/live_clock.h"
-#include "IPC/audio_transport_publication.h"
+#include "IPC/live_clock_control.h"
+#include "IPC/control_audio_transport.h"
 #include "Track/track_runtime.h"
 #include "Track/control_music_output.h"
 #include "Storage/audio_recorder.h"
@@ -235,7 +234,6 @@ static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_pan
     (void)audio_recorder_control_request_looper_stop(stop_sample, 0U);
     seq_edit_note_capture_reset();
     seq_runtime_exec_stop_lifecycle_apply(&g_seq_runtime);
-    metronome_runtime_stop();
     if (emit_transport_stop_and_panic != 0U)
     {
         const uint8_t send_stop = (uint8_t)(
@@ -316,8 +314,8 @@ void seq_runtime_init(void)
     seq_runtime_exec_set_midi_clock_enabled(0U);
     seq_runtime_exec_set_midi_clock_period_q16(1U);
     seq_runtime_update_samples_per_step_from_tempo();
-    audio_transport_publication_init();
-    audio_transport_publication_refresh();
+    control_audio_transport_init();
+    control_audio_transport_publish_changes();
     midi_clock_set_bpm_milli(seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge));
     midi_clock_set_mode(MIDI_CLOCK_MODE_MASTER);
 
@@ -374,7 +372,7 @@ void seq_runtime_start(void)
                                                      seq_runtime_get_now_tick(),
                                                      start_sample << 16);
     }
-    audio_transport_publication_refresh();
+    control_audio_transport_publish_changes();
     seq_runtime_exit_critical(primask);
 
     if (begin_running_now != 0U)
@@ -416,7 +414,7 @@ void seq_runtime_stop(void)
     {
         seq_runtime_stop_lifecycle_apply(emit_transport_stop_and_panic);
     }
-    audio_transport_publication_refresh();
+    control_audio_transport_publish_changes();
 }
 
 void seq_runtime_toggle_play_stop(void)
@@ -607,7 +605,7 @@ static void seq_runtime_process_core(void)
 void seq_runtime_time_adapter_process(void)
 {
     /* CONTROL advances autonomously. TIM12 owns the internal musical tick;
-     * TIM5 plus the single boot anchor owns the absolute sample projection. */
+     * TIM5 owns the common absolute sample projection. */
     seq_runtime_process_core();
 }
 
@@ -645,7 +643,7 @@ void seq_runtime_set_clock_source(seq_clock_src_t src)
     }
     seq_runtime_exec_set_external_step_pulses_pending(0U);
     seq_runtime_update_samples_per_step_from_tempo();
-    audio_transport_publication_refresh();
+    control_audio_transport_publish_changes();
 
     if (seq_clock_bridge_is_external_source(src) != 0U)
     {
@@ -1048,7 +1046,7 @@ void seq_runtime_set_tempo_bpm_milli(uint32_t bpm_milli)
 {
     seq_clock_bridge_set_internal_tempo(&g_seq_clock_bridge, &g_seq_runtime, bpm_milli);
     seq_runtime_update_samples_per_step_from_tempo();
-    audio_transport_publication_refresh();
+    control_audio_transport_publish_changes();
     if (seq_clock_bridge_is_external_source(seq_runtime_get_clock_source_internal()) == 0U)
     {
         midi_clock_set_bpm_milli(seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge));

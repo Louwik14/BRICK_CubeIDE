@@ -6,7 +6,7 @@
 #include "Seq/seq_runtime.h"
 #include "NoteFx/note_fx_engine.h"
 #include "NoteFx/note_fx_state.h"
-#include "IPC/live_clock.h"
+#include "IPC/live_clock_control.h"
 #include "Storage/project_load_quiesce.h"
 #include "Track/track_runtime.h"
 #include "Track/control_music_output.h"
@@ -299,7 +299,7 @@ static uint8_t note_fx_pipeline_configure_track_owner(
         return 0U;
     }
     const uint64_t sample = control_music_output_first_unpublished_sample(
-        live_clock_audio_sample());
+        live_clock_control_sample());
     for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
     {
         uint8_t value[NOTE_FX_PARAM_COUNT];
@@ -434,7 +434,7 @@ static note_event_result_t note_fx_pipeline_submit_source_control(uint8_t track,
 
     if (sample_time == NOTE_FX_SAMPLE_TIME_CONTROL_ANCHOR)
     {
-        sample_time = live_clock_audio_sample();
+        sample_time = live_clock_control_sample();
     }
     sample_time = control_music_output_first_unpublished_sample(sample_time);
 
@@ -705,7 +705,7 @@ static uint8_t note_fx_pipeline_apply_due_live_events(uint64_t now)
 static note_event_result_t note_fx_pipeline_apply_source_raw_command(
     const note_fx_command_t *command)
 {
-    const uint64_t now = live_clock_audio_sample();
+    const uint64_t now = live_clock_control_sample();
     return note_fx_pipeline_submit_live_command(command, now);
 }
 
@@ -754,7 +754,7 @@ void note_fx_pipeline_panic(void)
     g_note_fx_live_queue_count = 0U;
     note_fx_pipeline_exit_critical(primask);
     const uint64_t sample = control_music_output_first_unpublished_sample(
-        live_clock_audio_sample());
+        live_clock_control_sample());
     for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track)
         (void)note_fx_engine_cleanup(track, sample, NULL, NULL);
 }

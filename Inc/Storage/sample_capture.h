@@ -13,7 +13,6 @@ extern "C" {
 
 #define SAMPLE_CAPTURE_TRACK_COUNT BRICK_ENTITY_TOP_LEVEL_COUNT
 #define SAMPLE_CAPTURE_PATH_MAX AUDIO_RECORDER_PATH_MAX
-#define SAMPLE_CAPTURE_WAVEFORM_POINTS 1024U
 #define SAMPLE_CAPTURE_WAVEFORM_FULL_SCALE 32767
 #define SAMPLE_CAPTURE_DETAIL_POINTS 384U
 #define SAMPLE_CAPTURE_DETAIL_VISIBLE_POINTS 126U
@@ -131,9 +130,6 @@ typedef struct
     uint8_t edit_vzoom;
     uint8_t edit_zcross_enabled;
     uint32_t edit_scroll_frame;
-    uint16_t waveform_count;
-    uint32_t waveform_bucket_frames;
-    sample_capture_waveform_bucket_t waveform[SAMPLE_CAPTURE_WAVEFORM_POINTS];
     uint8_t detail_valid;
     uint32_t detail_start_frame;
     uint32_t detail_frames;
@@ -149,9 +145,6 @@ typedef struct
     char temp_path[SAMPLE_CAPTURE_PATH_MAX];
     char final_path[SAMPLE_CAPTURE_PATH_MAX];
 } sample_capture_state_t;
-
-uint8_t sample_capture_push_audio_block_from_irq(const int32_t *lr_interleaved,
-                                                 uint32_t frames);
 
 void sample_capture_model_init(void);
 void sample_capture_model_service(void);

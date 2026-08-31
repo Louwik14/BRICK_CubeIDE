@@ -5,32 +5,13 @@
 #include "SD/sd_block_device.h"
 #include "SD/sd_scheduler.h"
 #include "Storage/generic_recorder.h"
+#include "IPC/audio_recorder_capture.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define AUDIO_RECORDER_SAMPLE_RATE_HZ (48000U)
-#define AUDIO_RECORDER_CHANNELS (2U)
-#define AUDIO_RECORDER_BYTES_PER_FRAME (6U)
 #define AUDIO_RECORDER_PATH_MAX (96U)
-
-typedef enum
-{
-    AUDIO_RECORDER_CLIENT_NONE = 0,
-    AUDIO_RECORDER_CLIENT_AUDIO_REC,
-    AUDIO_RECORDER_CLIENT_LOOPER
-} audio_recorder_client_t;
-
-/* Private RECORD id packing for Looper lifecycle commands. The high bit keeps
- * those commands distinct from prepared Recorder config ids without adding a
- * second opcode or transport. */
-#define AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG          0x8000U
-#define AUDIO_RECORDER_LOOPER_REPLACE_VALID_FLAG      0x2000U
-#define AUDIO_RECORDER_LOOPER_OVERDUB_FLAG            0x4000U
-#define AUDIO_RECORDER_LOOPER_REPLACE_TRACK_SHIFT     9U
-#define AUDIO_RECORDER_LOOPER_REPLACE_TRACK_MASK      0x0FU
-#define AUDIO_RECORDER_LOOPER_PLAY_AUTO_SHIFT         8U
 
 typedef enum
 {
@@ -43,16 +24,6 @@ typedef enum
     AUDIO_RECORDER_STATE_FAILED
 } audio_recorder_state_t;
 
-typedef enum
-{
-    AUDIO_RECORDER_ERROR_NONE = 0,
-    AUDIO_RECORDER_ERROR_INVALID_ARGUMENT,
-    AUDIO_RECORDER_ERROR_INVALID_STATE,
-    AUDIO_RECORDER_ERROR_RING_OVERFLOW,
-    AUDIO_RECORDER_ERROR_NO_SPACE,
-    AUDIO_RECORDER_ERROR_SD_IO,
-    AUDIO_RECORDER_ERROR_MEDIA_CHANGED
-} audio_recorder_error_t;
 
 typedef struct
 {
@@ -101,9 +72,6 @@ uint8_t audio_recorder_prepare_client(audio_recorder_client_t client,
 uint8_t audio_recorder_start_client_at(audio_recorder_client_t client,
                                        uint64_t sample_time);
 uint8_t audio_recorder_cancel_prepared_client(audio_recorder_client_t client);
-uint8_t audio_recorder_push_from_irq_client(audio_recorder_client_t client,
-                                            const int32_t *lr_interleaved,
-                                            uint32_t frames);
 uint8_t audio_recorder_request_stop_client(audio_recorder_client_t client);
 uint8_t audio_recorder_request_stop_client_at(audio_recorder_client_t client,
                                               uint64_t sample_time);
@@ -126,9 +94,6 @@ uint8_t audio_recorder_control_request_looper_stop(uint64_t request_sample,
 void audio_recorder_control_on_looper_boundary(uint8_t track,
                                                uint64_t sample_time);
 void audio_recorder_control_on_transport_start(uint64_t sample_time);
-uint8_t audio_recorder_audio_start(uint8_t client, uint32_t session_id,
-                                   uint16_t config_id);
-uint8_t audio_recorder_audio_stop(uint8_t client, uint32_t session_id);
 uint8_t audio_recorder_get_status_client(audio_recorder_client_t client,
                                          audio_recorder_status_t *status);
 uint8_t audio_recorder_get_last_take_client(audio_recorder_client_t client,
@@ -139,9 +104,6 @@ uint8_t audio_recorder_get_live_stream(audio_recorder_client_t client,
 uint8_t audio_recorder_client_is_active(audio_recorder_client_t client);
 uint8_t audio_recorder_client_is_recording(audio_recorder_client_t client);
 
-/* AUDIO-side view: reads only the pointer-free M7<->M4 capture transport. */
-uint8_t audio_recorder_capture_status_client(audio_recorder_client_t client,
-                                             audio_recorder_status_t *status);
 
 #ifdef __cplusplus
 }

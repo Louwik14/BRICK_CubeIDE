@@ -6,7 +6,7 @@
 #include "Audio/fx_comp_lab.h"
 #include "Audio/fx_modfx_global.h"
 #include "Audio/mixer.h"
-#include "Param/param_store.h"
+#include "Param/param_ids.h"
 
 static float audio_global_clamp(float value, float lo, float hi)
 {

@@ -4,7 +4,7 @@
 #include "App/Hall/hall_engine.h"
 #include "IPC/control_audio_command.h"
 #include "IPC/control_audio_publication.h"
-#include "IPC/live_clock.h"
+#include "IPC/live_clock_control.h"
 #include "Track/control_routing.h"
 #include "Track/track_input_ownership.h"
 #include "Track/track_runtime.h"
@@ -22,7 +22,6 @@
 #include "Storage/wav_loader.h"
 #include "Storage/waveform_cache.h"
 #include "Storage/pattern_live_ram.h"
-#include "audio_float.h"
 #include "buttons.h"
 #include "param_registry.h"
 #include "ui_active_track_sync.h"
@@ -275,7 +274,7 @@ static uint8_t ui_core_runtime_bridge_looper_start_track(uint8_t track,
     const uint8_t overdub = ((uint8_t)(arm_value + 0.5f) == 2U) ? 1U : 0U;
     const uint8_t previous_take_track = g_looper_take_track;
     const uint32_t expected_frames = ui_core_runtime_bridge_looper_expected_record_frames(track);
-    const uint64_t rec_request_sample = live_clock_audio_sample();
+    const uint64_t rec_request_sample = live_clock_control_sample();
     char final_path[LOOPER_STORAGE_PATH_MAX];
     if(looper_storage_make_next_path(
             track, final_path, sizeof(final_path)) != LOOPER_STORAGE_PATH_OK)

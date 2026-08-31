@@ -8,6 +8,7 @@
 #include "ui_macro_interaction.h"
 #include "ui_hall_mode_flow.h"
 #include "Track/entity_topology.h"
+#include "Seq/seq_types.h"
 #if defined(BRICK6_VARIANT_LOWCOST)
 #include "Seq/seq_edit.h"
 #include "ui_core.h"

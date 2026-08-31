@@ -24,7 +24,6 @@
 #include "usbd_def.h"
 #include "usbd_core.h"
 #include "usbd_midi.h"
-#include "MIDI/midi.h"
 
 /* USER CODE BEGIN Includes */
 #include "usb_clock_select.h"

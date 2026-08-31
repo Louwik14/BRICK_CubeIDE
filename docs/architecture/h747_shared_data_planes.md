@@ -11,10 +11,10 @@ resolution locale d'un ID ne font jamais partie de l'ABI M4/M7.
 | Sample RAM | M4 loader -> M7 voices | payload dans le page pool; registry non-cacheable `AUDIO_SHARED_REGISTRY_SDRAM`; map ID dans `D2_IPC` | `global_slot`, `ram_slot`, generation et `{region, offset, length}` | payload clean, descriptor immutable, DMB, map `global_slot -> ram_slot` | stop PROGRAM/PARAM, fin des credits lecteurs, withdraw generation, puis pages libres |
 | Wavetable/mipmaps | M4 loader -> M7 Wave | payload dans le page pool; registry non-cacheable de 16 896 octets | slot, generation et refs `{region, offset, length}` par bande; aucun `float *` partage | payload clean, descriptor/bandes, DMB, `ready` publie en dernier | stop des voix + fence fonctionnelle, remove generation, puis pages libres |
 | Multi | M4 loader/projection -> M7 Sampler | projection non-cacheable `AUDIO_SHARED_MULTI_SDRAM` (47 104 octets) + instruments compacts `D2_IPC` | zones et sources numeriques, IDs sample/instrument, offsets fichier; aucun path/pointeur | samples/zones immutables, DMB, instrument `ready` publie en dernier | stop instrument + fin des credits page, withdraw, puis catalogue/pages recyclables |
-| STREAM pages | M4 Storage -> M7 voices | payload cacheable `.sdram_sample_page_pool`, 24 641 536 octets | descriptor M4 avec `data_offset`; token I/O pointer-free; resolution locale seulement | decode dans page, clean payload, clean descriptor, etat `READY` en dernier | M7 publie un credit par compteur de slot dans `D2_IPC`; M4 recycle seulement a zero |
-| Preview PCM | M4 Preview -> M7 MAIN | ring non-cacheable `AUDIO_STORAGE_SHARED_SDRAM`, 2048 x 2 floats (16 384) + head/tail/epoch `D3_IPC` | samples seulement, aucun pointeur | payload, DMB, `write_count` | M7 lit puis publie `read_count`; reset borne par epoch |
-| Recorder PCM | M7 AUDIO -> M4 Storage/SD | ring non-cacheable `SDRAM_RECORDER`, 12 001 x 2 x 32 bits (96 008) + transport `D3_IPC` | PCM, session/generation, head `accepted_frames`, tail `released_frames`, stop exact | PCM, DMB, head; STOP publie `stop_generation` et conserve la longueur du head | M4 publie tail apres copie/commit; M7 reutilise uniquement l'espace libere |
-| Looper live take | M7 capture -> M4 recorder, puis M4 map -> M7 reader | Recorder PCM ci-dessus; publication live non-cacheable 1680 octets | path borne et extents possedes en valeur; aucun pointeur. Le preroll (96 000 octets) est cacheable et M7-prive | meme head/STOP Recorder; map live par seqlock pair | tail Recorder, puis generation de map et credits pages; retrait apres stop/fence |
+| STREAM pages | M4 Storage -> M7 readers | payload cacheable `.sdram_sample_page_pool`, 24 641 536 octets | descriptor M4 avec `data_offset`; token I/O pointer-free; resolution locale seulement | decode dans page, clean payload, clean descriptor, etat `READY` en dernier | un lease seqlocke par lecteur; `EVICTING` puis relecture de leur union avant recyclage |
+| Preview PCM | M4 Preview -> M7 MAIN | ring non-cacheable `AUDIO_STORAGE_SHARED_SDRAM`, 2048 x 2 floats (16 384) + deux curseurs `D3_IPC` | samples seulement, aucun pointeur | payload, DMB, `write_count` M4 | M7 publie uniquement `read_count`; active/gain sont AUDIO-locaux via PARAM, sans epoch ni reset croise |
+| Recorder PCM | M7 AUDIO -> M4 Storage/SD | ring non-cacheable `SDRAM_RECORDER`, 12 001 x 2 x 32 bits (96 008) + layout 16 octets `D3_IPC` | `head_cursor`, `tail_cursor`, `closed_session`, `capture_fault`; aucun config/etat fonctionnel partage | PCM, DMB, `head_cursor`; fermeture AUDIO publie session/fault | M4 ecrit seulement `tail_cursor` apres copie/commit |
+| Looper live take | M7 capture -> M4 recorder, puis M4 map -> M7 reader | Recorder PCM ci-dessus; carte live CONTROL locale puis projection Stream existante | path borne et extents possedes en valeur; aucun pointeur. Le preroll (96 000 octets) est cacheable et M7-prive | meme head/fermeture Recorder; map Stream existante | tail Recorder, puis generation de map et credits pages; retrait apres stop/fence |
 
 Les contexts FatFs, loaders, diagnostics, paths de catalogue, pointeurs de
 buffers DMA et function pointers du generic recorder restent prives a M4. Les
@@ -42,15 +42,18 @@ clean/invalidate explicite.
 ## Synchronisation
 
 Les compteurs SPSC ont un seul writer par direction. Le page cache separe
-maintenant les metadata M4 des credits lecteurs M7: M7 ne modifie plus le
-descriptor cacheable, et M4 ne recycle pas un slot dont le credit est non nul.
+physiquement les metadata M4 dans `sample_page_cache.c` des resolutions
+lecteurs M7 dans `sample_page_cache_audio.c`. M7 ne modifie jamais un
+descriptor: il publie d'abord son lease, puis revalide le descriptor. M4
+recycle seulement apres `EVICTING` et une relecture stable de tous les leases.
 Les sections PRIMASK restantes dans `sample_page_cache.c` serialisent seulement
 des writers M4 locaux; elles ne fournissent aucune exclusion inter-core. Le
 Recorder n'installe plus de callback `__disable_irq()` dans le generic recorder.
 
 STREAM conserve sa politique de besoins/credits et son scheduler. Recorder,
 Preview et Looper conservent leurs semantiques, leur framing et leur longueur
-STOP. Les six opcodes et la cadence CONTROL ne changent pas.
+STOP. Les six opcodes et la cadence CONTROL ne changent pas. Les requetes
+visuelles typees utilisent PARAM dans la FIFO fonctionnelle existante.
 
 ## Controle de purete
 
@@ -75,34 +78,30 @@ PROGRAM structurellement differents et les PARAM dont la valeur finale change.
 
 ### Retour STREAM exact
 
-M7 publie deux classes de credits physiques:
-
-- par slot de page: compteur d'utilisation, dont le retour a zero autorise le
-  recyclage;
-- par voix: `{key, registration_epoch, owner_token, current_page,
-  mobile_page_count, loop_first_page, loop_last_page, loop_preload_count,
-  loop_enabled, voice_index, active}`.
+M7 publie une seule classe de protection physique: un lease par lecteur,
+`{seq, key, registration_epoch, ranges[2]}`. Aucun compteur par slot, pin,
+use-count, owner token, curseur ou snapshot de voix ne subsiste.
 
 Il ne publie ni low-water, ni deadline, ni vitesse, ni wake, ni demande I/O
-explicite. M4 derive les index de pages de la fenetre et reste seul proprietaire
-du scheduler, des reservations et des lectures SD. Ce retour n'est donc pas un
-simple index de capacite: `STREAM M7->M4 = CREDITS UNIQUEMENT : NON` dans la
-definition minimale demandee.
+explicite. M4 derive le lookahead, possede scheduler, reservations et lectures
+SD. `STREAM M7->M4 = LEASES PHYSIQUES UNIQUEMENT : OUI`.
 
-Cette fenetre detaillee reste necessaire pour le cas musical d'une voix sample
-pitchee qui franchit une page ou reboucle au cours du rendu sample-accurate,
-avec vol de voix possible au meme bloc. La phase effective, le wrap et la voix
-survivante sont des faits physiques connus de M7. Un simple nombre de slots
-libres ne permet pas a M4 de choisir la prochaine page; les reconstruire cote
-M4 imposerait un second moteur de voix synchronise. La fenetre ne choisit ni le
-sample, ni le loop, ni le pitch: ceux-ci proviennent des commandes FIFO. Elle
-projette seulement les pages requises pour executer ces decisions.
+Les ranges ne decrivent aucune phase musicale. Ils changent seulement lorsque
+l'ensemble des pages encore lisibles change: bind, entree de page, wrap,
+debut/fin du crossfade Looper et release physique. La publication supprime les
+ecritures identiques; aucun heartbeat periodique n'existe.
 
-Les retours M7->M4 finaux sont limites au tail FIFO, aux credits/fenetres
-physiques STREAM, au PCM/framing Recorder, a l'ancre boot et aux diagnostics.
+Hors retours physiques necessaires au recyclage (tail FIFO, leases STREAM et
+PCM/framing Recorder), les projections M7->M4 finales sont exactement l'ancre
+Clock, le niveau REC, les waveforms audio/synth et le diagnostic Audio.
 Aucun ACK de commande, READY musical, binding, programme installe ou PARAM
 applique n'est retourne. H743 et H747 partagent exactement cette semantique;
 seuls placement, cache, barrieres et visibilite different.
+
+Les references de payload partagent uniquement leur ABI `{region, offset,
+length}`: construction et resolution CONTROL sont distinctes de la resolution
+AUDIO. De meme, CONTROL est l'unique writer du registre de descriptors
+Wavetable; AUDIO en est uniquement reader apres publication.
 
 PROGRAM transporte directement son descripteur structurel de quatre octets
 dans `command.value`; il ne possede donc ni registre, ni ID, ni data plane.
@@ -119,10 +118,10 @@ au port H747.
 
 ## Teardown et cache
 
-Preview publie desormais `PREVIEW_ACTIVE=0` avec une fence FIFO. Le producer ne
-remet `write_count` a zero et ne reutilise le ring qu'apres passage du tail; le
-prochain START du meme epoch force alors le consumer a repartir de
-`read_count=0`. RAM et Multi suivent le meme contrat: STOP fence, passage du
+Preview publie `PREVIEW_ACTIVE=0` avec une fence FIFO. AUDIO avance
+`read_count` jusqu'a `write_count`; CONTROL ne reutilise le ring qu'apres ce
+drainage. Aucun epoch, active/gain partage ou reset croise ne subsiste. RAM et
+Multi suivent le meme contrat: STOP fence, passage du
 tail, retrait de projection, puis recyclage.
 
 La reutilisation du dernier tombstone de l'index STREAM publie explicitement la

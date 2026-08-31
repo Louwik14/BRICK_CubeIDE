@@ -9,8 +9,6 @@
 extern "C" {
 #endif
 
-#define BRICK6_LOOPER_RUNTIME_DIAG_PATH_MAX 96U
-
 typedef enum
 {
     BRICK6_LOOPER_RUNTIME_SOURCE_NONE = 0,
@@ -51,19 +49,14 @@ typedef struct
     uint8_t page_miss_seen;
     uint8_t state;
     uint8_t source;
-    uint8_t cache_registered;
     uint32_t preroll_bridge_active;
     uint32_t playback_normal_used;
     uint32_t fallback_miss;
     uint32_t wrap_count;
-    char active_path[BRICK6_LOOPER_RUNTIME_DIAG_PATH_MAX];
 } brick6_looper_runtime_diag_snapshot_t;
 
 void brick6_looper_runtime_init(void);
 void brick6_looper_runtime_service(uint32_t byte_budget);
-void brick6_looper_runtime_notify_live_take_finalized(uint8_t track_id,
-                                                      const char *wav_path,
-                                                      uint32_t recorded_frames);
 void brick6_looper_runtime_stop_playback(uint8_t track_id);
 void brick6_looper_runtime_prepare_replace(uint8_t track_id);
 void brick6_looper_runtime_arm_live_record_start(uint8_t track_id,
@@ -75,7 +68,7 @@ void brick6_looper_runtime_arm_live_record_start(uint8_t track_id,
 void brick6_looper_runtime_arm_record_stop(uint64_t request_sample);
 void brick6_looper_runtime_on_record_start(uint64_t sample_time);
 void brick6_looper_runtime_on_record_stop(uint64_t sample_time);
-/* Storage-side projection; never reads the AUDIO-owned Looper runtime. */
+/* AUDIO-local capture routing; no Storage state is consulted. */
 uint8_t brick6_looper_runtime_get_record_capture_track(uint8_t *out_track);
 uint8_t brick6_looper_runtime_is_overdub_recording(uint8_t track_id);
 void brick6_looper_runtime_preroll_capture_from_irq(uint8_t track_id,

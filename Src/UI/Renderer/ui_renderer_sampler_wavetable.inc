@@ -725,7 +725,7 @@ static void ui_renderer_template_draw_sampler_ram_playhead(uint16_t global_slot,
     const uint32_t duration = (uint32_t)(
         (region_frames * BOARD_AUDIO_SAMPLE_RATE_HZ) / source_rate);
     const ui_sampler_playhead_view_t view = ui_sampler_playhead_view(
-        ui_renderer_template_get_edit_owner_track(), live_clock_audio_sample(),
+        ui_renderer_template_get_edit_owner_track(), live_clock_control_sample(),
         duration, (uint8_t)(mode_value + 0.5f));
     if (view.active == 0U)
     {

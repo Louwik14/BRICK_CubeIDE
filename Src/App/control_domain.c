@@ -33,6 +33,9 @@
 #include "Storage/waveform_cache.h"
 #include "Track/track_state.h"
 #include "UI/ui_active_track_sync.h"
+#include "IPC/control_audio_fifo_control.h"
+#include "IPC/control_audio_publication.h"
+#include "IPC/live_clock_control.h"
 #include "lowcost_button_test_config.h"
 #include "ui_boot_loading.h"
 #include "ui_core.h"
@@ -40,6 +43,9 @@
 
 void control_domain_init(void)
 {
+    control_audio_fifo_control_init();
+    control_audio_publication_init();
+    live_clock_control_init();
     project_load_quiesce_init();
     board_usb_device_init();
     brick6_boot_fx_policy_init();

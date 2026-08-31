@@ -104,28 +104,17 @@ uint8_t param_registry_project_track_effective_mute(uint8_t track,
 uint8_t param_registry_project_track_base_audio(param_id_t id,
                                                 uint8_t track,
                                                 float value);
-uint8_t param_registry_apply_track_value_runtime_temp_audio(param_id_t id, uint8_t track, float value);
-uint8_t param_registry_clear_track_value_runtime_temp_audio(param_id_t id, uint8_t track);
+uint8_t param_registry_publish_track_base_audio(param_id_t id,
+                                                uint8_t track,
+                                                float value);
 uint8_t param_registry_is_lfo_param(param_id_t id);
 void param_registry_release_track_value_runtime_temp(param_id_t id, uint8_t track);
 void param_registry_clear_track_runtime_state(uint8_t track);
-/* Fast path reserved for RT modulation, not a general apply entry point. */
-uint8_t param_registry_apply_track_value_rt_fast(param_id_t id, uint8_t track, float value);
-/* Audio-owner track target path: updates the runtime backend and the
- * audio-authoritative track cache without UI/storage side effects. */
-uint8_t param_registry_apply_track_value_audio(param_id_t id, uint8_t track, float value);
-/* AUDIO terminal seam for an already validated canonical value. */
-uint8_t param_registry_apply_prepared_track_value_audio(
-    const param_registry_prepared_value_t *prepared,
-    uint8_t track);
 /* Control-side projection: converts a canonical global value into the
  * complete command payload consumed by AUDIO. */
 uint8_t param_registry_prepare_global_audio_command(param_id_t id,
                                                     float canonical_value,
                                                     float *out_command_value);
-/* CONTROL service: retries latest-wins state publications rejected before
- * AUDIO had a clock anchor or while its bounded queue was full. */
-
 void param_set(param_id_t id, float value);
 void param_reset(param_id_t id);
 #ifdef __cplusplus

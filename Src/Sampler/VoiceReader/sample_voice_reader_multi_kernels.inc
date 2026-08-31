@@ -304,10 +304,7 @@ uint8_t sample_voice_reader_render_fwd_1x_ready_simple(sample_voice_reader_t *re
 
     state->frame_pos += todo;
     state->position = (float)state->frame_pos;
-    if (state->cache_voice_valid != 0U)
-    {
-        sample_cache_update_voice_frame_pos(state->cache_voice_id, state->frame_pos);
-    }
+    sample_voice_reader_publish_lease(state, state->frame_pos);
     state->audio_cursor.current_offset_frames = state->frame_pos - state->audio_cursor.current_start_frame;
 
     if (state->frame_pos >= forward_end)
@@ -382,8 +379,11 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
         }
 
         const uint32_t base_frame = (uint32_t)reader->position;
-        sample_cache_span_t span;
-        if (sample_cache_try_acquire_span(reader->sample_id, base_frame, frames - produced, &span) == 0U)
+        sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
+        sample_voice_reader_publish_lease(state, base_frame);
+        sample_page_span_t span;
+        if (sample_page_cache_audio_resolve_page_key(reader->key,
+                base_frame / reader->frames_per_page, &span) == 0U)
         {
             if (out_underrun != 0)
             {
@@ -392,10 +392,8 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
             break;
         }
 
-        const uint32_t span_end = span.start_frame + span.frames;
+        const uint32_t span_end = span.start_frame + span.frame_count;
         uint32_t segment_frames = 0U;
-        uint8_t needs_neighbor_span = 0U;
-        uint32_t neighbor_frame_index = 0U;
         float scan_position = reader->position;
         uint8_t scan_reverse = reverse;
         while ((produced + segment_frames) < frames)
@@ -404,19 +402,6 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
             if ((scan_base_frame < span.start_frame) || (scan_base_frame >= span_end))
             {
                 break;
-            }
-
-            const uint8_t needs_neighbor =
-                ((scan_reverse == 0U) && ((scan_base_frame + 1U) < region_end))
-                || ((scan_reverse != 0U) && (scan_base_frame > region_start));
-            if (needs_neighbor != 0U)
-            {
-                neighbor_frame_index =
-                    (scan_reverse == 0U) ? (scan_base_frame + 1U) : (scan_base_frame - 1U);
-                if ((neighbor_frame_index < span.start_frame) || (neighbor_frame_index >= span_end))
-                {
-                    needs_neighbor_span = 1U;
-                }
             }
 
             segment_frames++;
@@ -454,18 +439,12 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
             }
         }
 
-        sample_cache_span_t neighbor_span;
-        memset(&neighbor_span, 0, sizeof(neighbor_span));
-        if (needs_neighbor_span != 0U)
-        {
-            (void)sample_cache_try_acquire_span(reader->sample_id, neighbor_frame_index, 1U, &neighbor_span);
-        }
-
         float position = reader->position;
         uint8_t segment_reverse = reverse;
-        const float *const span_l = span.l;
-        const float *const span_r = (span.is_mono != 0U) ? span_l : span.r;
-        const uint32_t span_stride = span.frame_stride;
+        const float *const span_l = span.frames_interleaved;
+        const uint32_t span_stride = span.stride_floats;
+        const float *const span_r = (span.format == SAMPLE_AUDIO_FORMAT_FLOAT32_MONO)
+                                      ? span_l : (span_l + 1U);
         for (uint32_t i = 0U; i < segment_frames; ++i)
         {
             const uint32_t segment_base_frame = (uint32_t)position;
@@ -489,15 +468,10 @@ uint32_t sample_voice_reader_render_pitch_forward(sample_voice_reader_t *reader,
                                                    loop_mode);
         }
 
-        sample_cache_release_span(reader->sample_id, &neighbor_span);
-        sample_cache_release_span(reader->sample_id, &span);
         reader->position = position;
         reverse = segment_reverse;
         reader->frame_pos = (uint32_t)reader->position;
-        if (reader->cache_voice_valid != 0U)
-        {
-            sample_cache_update_voice_frame_pos(reader->cache_voice_id, reader->frame_pos);
-        }
+        sample_voice_reader_publish_lease(sample_voice_reader_state(reader), reader->frame_pos);
         produced += segment_frames;
     }
 
@@ -595,10 +569,7 @@ uint8_t sample_voice_reader_render_fwd_1x_ready_simple_mono(sample_voice_reader_
 
     state->frame_pos += todo;
     state->position = (float)state->frame_pos;
-    if (state->cache_voice_valid != 0U)
-    {
-        sample_cache_update_voice_frame_pos(state->cache_voice_id, state->frame_pos);
-    }
+    sample_voice_reader_publish_lease(state, state->frame_pos);
     state->audio_cursor.current_offset_frames = state->frame_pos - state->audio_cursor.current_start_frame;
     if (state->frame_pos >= forward_end)
     {

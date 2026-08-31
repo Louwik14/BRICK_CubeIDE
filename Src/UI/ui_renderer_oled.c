@@ -23,7 +23,7 @@
 
 #include <stdio.h>
 
-#include "Audio/audio.h"
+#include "IPC/audio_boot_diagnostic_reader.h"
 #include "main.h"
 #include "drv_display.h"
 #include "font.h"

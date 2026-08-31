@@ -64,14 +64,6 @@ const wav_info_t *sd_preview_get_source_info(void);
 void sd_preview_set_gain(float gain);
 float sd_preview_get_gain(void);
 
-/*
- * AUDIO-side MAIN insertion point. Consumes only the shared SPSC ring and its
- * pointer-free IPC metadata; it never reads the Storage decoder context.
- */
-uint8_t sd_preview_render_main(float *out_main_l, float *out_main_r, uint32_t frames);
-uint8_t sd_preview_audio_apply_active(uint8_t active, uint32_t epoch);
-uint8_t sd_preview_audio_apply_gain(uint32_t gain_bits);
-
 #ifdef __cplusplus
 }
 #endif

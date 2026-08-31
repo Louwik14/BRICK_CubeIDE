@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 #include "audio_float.h"
-#include "Track/entity_topology.h"
+#include "Track/entity_types.h"
 
 /**
  * @file mixer.h

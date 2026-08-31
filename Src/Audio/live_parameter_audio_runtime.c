@@ -6,47 +6,13 @@
 #include "Audio/audio_mod_matrix.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "IPC/live_parameter_event.h"
-#include "Param/param_registry.h"
-#include "Param/param_registry_backends.h"
+#include "Param/param_audio.h"
+#include "Param/param_spec.h"
 #include "Seq/seq_types.h"
 #include "Platform/memory_layout.h"
 
 SEQ_STATE_D2 static float g_live_parameter_audio_poly_voices[SEQ_LANE_CAPACITY];
 SEQ_STATE_D2 static float g_live_parameter_audio_poly_spread[SEQ_LANE_CAPACITY];
-/* AUDIO authority.  Its lifetime is the track lifetime; PROGRAM never writes
- * it.  Engine runtimes contain only native/DSP projections of these values. */
-SEQ_STATE_D2 static float
-    g_track_tone_audio[SEQ_LANE_CAPACITY][SEQ_PARAM_TONE_SLOT_COUNT];
-
-static uint8_t live_parameter_audio_tone_store(uint8_t entity,
-                                               param_id_t parameter,
-                                               float value)
-{
-    track_audio_runtime_ctx_t ctx;
-    uint8_t slot;
-    if ((entity >= SEQ_LANE_CAPACITY)
-            || (audio_note_engine_adapter_current_ctx(entity, &ctx) == 0U)
-            || (track_runtime_tone_param_to_slot(
-                (track_runtime_type_t)ctx.type, parameter, &slot) == 0U)
-            || (slot >= SEQ_PARAM_TONE_SLOT_COUNT))
-        return 0U;
-    const float span = param_registry[parameter].max
-        - param_registry[parameter].min;
-    g_track_tone_audio[entity][slot] = (span > 0.0f)
-        ? (value - param_registry[parameter].min) / span : 0.0f;
-    return 1U;
-}
-static float live_parameter_audio_runtime_clamp(param_id_t parameter,
-                                                float value)
-{
-    if (parameter >= PARAM_COUNT) return value;
-    if (value < param_registry[parameter].min)
-        return param_registry[parameter].min;
-    if (value > param_registry[parameter].max)
-        return param_registry[parameter].max;
-    return value;
-}
-
 static uint8_t live_parameter_audio_runtime_changes_matrix_context(param_id_t id)
 {
     switch (id)
@@ -64,48 +30,13 @@ static uint8_t live_parameter_audio_runtime_changes_matrix_context(param_id_t id
 
 void live_parameter_audio_runtime_init(void)
 {
-    memset(g_track_tone_audio, 0, sizeof(g_track_tone_audio));
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         g_live_parameter_audio_poly_voices[track] =
-            param_registry[PARAM_CFG_POLY_VOICES].default_value;
+            param_spec[PARAM_CFG_POLY_VOICES].default_value;
         g_live_parameter_audio_poly_spread[track] =
-            param_registry[PARAM_CFG_POLY_SPREAD].default_value;
+            param_spec[PARAM_CFG_POLY_SPREAD].default_value;
     }
-}
-
-uint8_t live_parameter_audio_runtime_tone_get(uint8_t entity, uint8_t slot,
-                                              float *out_normalized)
-{
-    if ((entity >= SEQ_LANE_CAPACITY) || (slot >= SEQ_PARAM_TONE_SLOT_COUNT)
-            || (out_normalized == NULL)) return 0U;
-    *out_normalized = g_track_tone_audio[entity][slot];
-    return 1U;
-}
-
-uint8_t live_parameter_audio_runtime_apply_tone_slot(uint8_t entity,
-                                                     uint8_t slot,
-                                                     float normalized)
-{
-    if ((entity >= SEQ_LANE_CAPACITY) || (slot >= SEQ_PARAM_TONE_SLOT_COUNT))
-        return 0U;
-    normalized = (normalized < 0.0f) ? 0.0f
-        : ((normalized > 1.0f) ? 1.0f : normalized);
-    g_track_tone_audio[entity][slot] = normalized;
-
-    track_audio_runtime_ctx_t ctx;
-    param_id_t id;
-    if ((audio_note_engine_adapter_current_ctx(entity, &ctx) == 0U)
-            || (track_runtime_tone_slot_to_param(
-                (track_runtime_type_t)ctx.type, slot, &id) == 0U)
-            || (param_registry_track_value_is_audio_command(id, entity) == 0U))
-        return 1U;
-    const float value = param_registry[id].min
-        + normalized * (param_registry[id].max - param_registry[id].min);
-    if (param_backend_apply_prepared_track_value_audio(entity, id, value) == 0U)
-        return 0U;
-    audio_mod_matrix_base_update(entity, id, value);
-    return 1U;
 }
 
 uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
@@ -131,8 +62,9 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
             || (entity >= SEQ_LANE_CAPACITY))
         return 0U;
 
-    const float value = live_parameter_audio_runtime_clamp(
-        (param_id_t)parameter_id, decoded);
+    if (param_spec_value_is_valid((param_id_t)parameter_id, decoded) == 0U)
+        return 0U;
+    const float value = decoded;
     if ((parameter_id >= PARAM_MOD_MULTI_1_A)
             && (parameter_id <= PARAM_MOD_SLEW_2_AMOUNT))
         return audio_mod_matrix_apply_param(entity, UINT8_MAX,
@@ -152,13 +84,11 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
         return applied;
     }
 
-    const uint8_t tone_stored = (scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK)
-        ? live_parameter_audio_tone_store(
-            entity, (param_id_t)parameter_id, value) : 0U;
-    const uint8_t applied = param_registry_apply_track_value_audio(
-        parameter_id, entity, value);
-    if (((applied != 0U) || (tone_stored != 0U))
-            && (scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK))
+    const uint8_t applied = (scope == LIVE_PARAMETER_AUDIO_SCOPE_RUNTIME_TEMP)
+        ? param_audio_apply_track_temp((param_id_t)parameter_id, entity, value)
+        : param_audio_apply_track(&(const param_audio_value_t){
+            .id = (param_id_t)parameter_id, .value = value }, entity);
+    if ((applied != 0U) && (scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK))
     {
         audio_mod_matrix_base_update(entity, parameter_id, value);
         if (live_parameter_audio_runtime_changes_matrix_context(
@@ -167,5 +97,5 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
             audio_mod_matrix_rebuild_track(entity);
         }
     }
-    return (uint8_t)((applied != 0U) || (tone_stored != 0U));
+    return applied;
 }

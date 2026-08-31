@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 #include "Sampler/sample_stream_io.h"
-#include "Audio/audio_shared_memory.h"
+#include "IPC/shared_memory_ref.h"
 #include "ff.h"
 
 typedef struct
@@ -40,9 +40,9 @@ uint8_t sample_page_cache_port_register_file(sample_audio_key_t key,
 uint8_t sample_page_cache_port_prepare_page(sample_audio_key_t key,
                                             uint32_t page_index,
                                             sample_page_alloc_type_t alloc_type,
-                                            uint8_t pin,
+                                            uint8_t static_resident,
                                             sample_stream_io_command_t *out_command);
-uint8_t sample_page_cache_port_reserve_pin(sample_audio_key_t key,
+uint8_t sample_page_cache_port_reserve_static(sample_audio_key_t key,
                                            uint32_t page_index,
                                            sample_page_alloc_type_t alloc_type);
 uint8_t sample_page_cache_port_reserve(sample_audio_key_t key,

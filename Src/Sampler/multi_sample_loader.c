@@ -404,7 +404,7 @@ static uint8_t multi_loader_bulk_prepare_plan_pages(
              page <= plan->range_last[range];
              ++page)
         {
-            if (sample_page_cache_port_reserve_pin(
+            if (sample_page_cache_port_reserve_static(
                     key, page, SAMPLE_PAGE_ALLOC_SLOT_PERMANENT) == 0U)
             {
                 return 0U;

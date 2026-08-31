@@ -2,7 +2,7 @@
 
 #include <stddef.h>
 
-#include "Audio/Engines/prism_engine.h"
+#include "Param/engine_model_catalog.h"
 #include "Param/param_registry.h"
 
 static const param_prism_param_label_t g_prism_param_labels[] = {

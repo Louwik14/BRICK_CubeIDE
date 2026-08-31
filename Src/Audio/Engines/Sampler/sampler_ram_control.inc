@@ -87,7 +87,7 @@ static float brick6_sampler_runtime_pitch_ratio(float semitones)
 }
 
 static uint32_t brick6_sampler_runtime_ram_step_q16(const brick6_sampler_voice_t *voice,
-                                                    const sampler_ram_slot_t *ram)
+                                                    const sampler_ram_audio_view_t *ram)
 {
     const float tune = (voice != NULL) ? voice->tune : 0.0f;
     const int32_t note = (voice != NULL) ? (int32_t)voice->note : 60;
@@ -103,7 +103,7 @@ static uint32_t brick6_sampler_runtime_ram_step_q16(const brick6_sampler_voice_t
 }
 
 static uint32_t brick6_sampler_runtime_ram_slice_step_q16(const brick6_sampler_voice_t *voice,
-                                                          const sampler_ram_slot_t *ram)
+                                                          const sampler_ram_audio_view_t *ram)
 {
     const float tune = (voice != NULL) ? voice->tune : 0.0f;
     const uint32_t source_rate = ((ram != NULL) && (ram->sample_rate != 0U))
@@ -144,13 +144,11 @@ static uint32_t brick6_sampler_runtime_next_trigger_order(void)
 static void brick6_sampler_runtime_trigger_ram_slice(uint8_t track_id)
 {
     brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
-    const uint8_t cache_voice_id = brick6_sampler_runtime_cache_voice_id(track_id);
-    uint16_t ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
-    sampler_ram_slot_t ram_value;
-    const sampler_ram_slot_t *const ram = &ram_value;
+    uint16_t ram_slot = SAMPLER_RAM_AUDIO_INVALID_SLOT;
+    sampler_ram_audio_view_t ram_value;
+    const sampler_ram_audio_view_t *const ram = &ram_value;
 
     brick6_sampler_runtime_begin_declick_tail(track_id, voice);
-    sample_cache_stop_voice(cache_voice_id);
     sample_voice_reader_reset(&voice->reader);
 
     if (brick6_sampler_runtime_resolve_ram_source(voice->sample_id,
@@ -238,7 +236,7 @@ static void brick6_sampler_runtime_trigger_ram_slice(uint8_t track_id)
     voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
     voice->multi_instrument_id = MULTI_SAMPLE_POOL_INVALID_ID;
     voice->multi_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
-    voice->ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
+    voice->ram_slot = SAMPLER_RAM_AUDIO_INVALID_SLOT;
     voice->ram_generation = 0U;
     voice->ram_data = NULL;
     voice->ram_channels = 0U;
@@ -250,11 +248,11 @@ static void brick6_sampler_runtime_trigger_ram_slice(uint8_t track_id)
 
 static uint8_t brick6_sampler_runtime_resolve_ram_source(uint16_t global_slot,
                                                          uint16_t *out_ram_slot,
-                                                         sampler_ram_slot_t *out_ram)
+                                                         sampler_ram_audio_view_t *out_ram)
 {
     if (out_ram_slot != NULL)
     {
-        *out_ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
+        *out_ram_slot = SAMPLER_RAM_AUDIO_INVALID_SLOT;
     }
     if (out_ram != NULL)
     {
@@ -266,11 +264,11 @@ static uint8_t brick6_sampler_runtime_resolve_ram_source(uint16_t global_slot,
     {
         return 0U;
     }
-    if ((projected.ram_slot >= SAMPLER_RAM_POOL_MAX_SLOTS)
+    if ((projected.ram_slot >= SAMPLER_RAM_AUDIO_MAX_SLOTS)
         || ((projected.format != SAMPLER_RAM_FORMAT_FLOAT32_MONO)
             && (projected.format != SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED))
         || (projected.data.region == AUDIO_SHARED_REGION_NONE) || (projected.frames == 0U)
-        || (projected.channels != sampler_ram_format_channels(projected.format)))
+        || (projected.channels != sampler_ram_audio_format_channels(projected.format)))
     {
         return 0U;
     }
@@ -282,7 +280,6 @@ static uint8_t brick6_sampler_runtime_resolve_ram_source(uint16_t global_slot,
     }
     if (out_ram != NULL)
     {
-        out_ram->state = SAMPLER_RAM_SLOT_READY;
         out_ram->global_slot = projected.global_slot;
         out_ram->format = projected.format;
         out_ram->channels = projected.channels;
@@ -299,7 +296,7 @@ static uint8_t brick6_sampler_runtime_resolve_ram_source(uint16_t global_slot,
 
 static uint8_t brick6_sampler_runtime_ram_voice_snapshot(
     const brick6_sampler_voice_t *voice,
-    sampler_ram_slot_t *out_slot)
+    sampler_ram_audio_view_t *out_slot)
 {
     if (out_slot != NULL) memset(out_slot, 0, sizeof(*out_slot));
     if ((voice == NULL) || (out_slot == NULL)
@@ -307,17 +304,16 @@ static uint8_t brick6_sampler_runtime_ram_voice_snapshot(
         || (voice->ram_data == NULL) || (voice->ram_frames == 0U)
         || ((voice->ram_format != SAMPLER_RAM_FORMAT_FLOAT32_MONO)
             && (voice->ram_format != SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED))
-        || (voice->ram_channels != sampler_ram_format_channels(voice->ram_format)))
+        || (voice->ram_channels != sampler_ram_audio_format_channels(voice->ram_format)))
     {
         return 0U;
     }
-    out_slot->state = SAMPLER_RAM_SLOT_READY;
     out_slot->global_slot = voice->sample_id;
     out_slot->format = voice->ram_format;
     out_slot->channels = voice->ram_channels;
     out_slot->sample_rate = voice->ram_sample_rate;
     out_slot->frames = voice->ram_frames;
-    out_slot->bytes_per_frame = sampler_ram_format_bytes_per_frame(voice->ram_format);
+    out_slot->bytes_per_frame = sampler_ram_audio_format_bytes_per_frame(voice->ram_format);
     out_slot->data = (float *)voice->ram_data;
     out_slot->generation = voice->ram_generation;
     return 1U;
@@ -332,16 +328,15 @@ static uint8_t brick6_sampler_runtime_trigger_ram(uint8_t track_id)
 
     brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
     const uint16_t global_slot = voice->sample_id;
-    uint16_t ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
-    sampler_ram_slot_t ram_value;
-    const sampler_ram_slot_t *const ram = &ram_value;
+    uint16_t ram_slot = SAMPLER_RAM_AUDIO_INVALID_SLOT;
+    sampler_ram_audio_view_t ram_value;
+    const sampler_ram_audio_view_t *const ram = &ram_value;
     if (brick6_sampler_runtime_resolve_ram_source(global_slot, &ram_slot, &ram_value) == 0U)
     {
         return 0U;
     }
 
     brick6_sampler_runtime_begin_declick_tail(track_id, voice);
-    sample_cache_stop_voice(brick6_sampler_runtime_cache_voice_id(track_id));
     sample_voice_reader_reset(&voice->reader);
 
     uint32_t region_begin = 0U;
@@ -614,8 +609,8 @@ static void brick6_sampler_runtime_reconcile_ram_voice_bounds_live(uint8_t track
     }
 
     brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
-    sampler_ram_slot_t ram_snapshot;
-    const sampler_ram_slot_t *const ram = &ram_snapshot;
+    sampler_ram_audio_view_t ram_snapshot;
+    const sampler_ram_audio_view_t *const ram = &ram_snapshot;
     if ((voice->active == 0U)
         || (voice->source_kind != (uint8_t)BRICK6_SAMPLER_VOICE_RAM)
         || (brick6_sampler_runtime_ram_voice_snapshot(voice, &ram_snapshot) == 0U))
@@ -745,8 +740,8 @@ static void brick6_sampler_runtime_reproject_ram_voice_tune_live(uint8_t track_i
     }
 
     brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
-    sampler_ram_slot_t ram_snapshot;
-    const sampler_ram_slot_t *const ram = &ram_snapshot;
+    sampler_ram_audio_view_t ram_snapshot;
+    const sampler_ram_audio_view_t *const ram = &ram_snapshot;
     if ((voice->active == 0U)
         || (voice->source_kind != (uint8_t)BRICK6_SAMPLER_VOICE_RAM)
         || (brick6_sampler_runtime_ram_voice_snapshot(voice, &ram_snapshot) == 0U))
@@ -808,4 +803,3 @@ static uint8_t brick6_sampler_runtime_is_terminal_position(const brick6_sampler_
 
     return (position >= (float)voice->region_end) ? 1U : 0U;
 }
-

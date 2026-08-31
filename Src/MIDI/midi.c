@@ -32,7 +32,7 @@
 #include "usbd_midi.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "Seq/seq_runtime.h"
-#include "IPC/live_clock.h"
+#include "IPC/live_clock_control.h"
 #include "Storage/project_load_quiesce.h"
 #include <string.h>
 

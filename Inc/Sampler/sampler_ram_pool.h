@@ -4,6 +4,7 @@
 #include "Platform/brick_build_config.h"
 
 #include "Sampler/sample_global_pool.h"
+#include "IPC/sampler_ram_audio_projection.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -24,13 +25,6 @@ typedef enum
     SAMPLER_RAM_SLOT_RETIRING,
     SAMPLER_RAM_SLOT_ERROR
 } sampler_ram_slot_state_t;
-
-typedef enum
-{
-    SAMPLER_RAM_FORMAT_NONE = 0,
-    SAMPLER_RAM_FORMAT_FLOAT32_MONO,
-    SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED
-} sampler_ram_format_t;
 
 typedef enum
 {

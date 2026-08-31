@@ -1,4 +1,6 @@
 #include "Sampler/sample_voice_reader.h"
+#include "Sampler/sample_page_cache_config.h"
+#include "Audio/sample_page_lease_audio.h"
 
 #include <string.h>
 
@@ -9,8 +11,9 @@
 
 typedef struct
 {
-    uint8_t cache_voice_id;
-    uint8_t cache_voice_valid;
+    uint8_t lease_slot;
+    uint8_t lease_valid;
+    sample_page_lease_range_t lease_ranges[2];
     uint16_t sample_id;
     sample_audio_key_t key;
     sample_audio_format_t format;

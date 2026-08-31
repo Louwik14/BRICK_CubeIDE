@@ -15,26 +15,19 @@
 #include "Audio/mixer.h"
 #include "Board/board_audio_format.h"
 #include "Audio/brick6_clip_shifter.h"
-#include "IPC/audio_transport_publication.h"
+#include "Audio/audio_transport_runtime.h"
 #include "Track/synth_polyphony.h"
 #include "Track/track_types.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_matrix.h"
 #include "Platform/memory_layout.h"
-#include "Sampler/multi_sample_loader.h"
-#include "Sampler/multi_sample_pool.h"
-#include "IPC/multi_sample_audio_projection.h"
-#include "Sampler/sample_cache.h"
-#include "Sampler/sample_page_cache.h"
-#include "Sampler/sample_global_pool.h"
-#include "Sampler/sample_stream_manager.h"
-#include "Sampler/sample_stream_needs.h"
-#include "Sampler/sample_stream_snapshot.h"
+#include "Audio/multi_sample_audio_projection_audio.h"
+#include "Audio/sample_classic_audio_projection_audio.h"
+#include "Sampler/sample_reader_contract.h"
+#include "Sampler/sample_page_cache_audio.h"
 #include "Sampler/sample_voice_reader.h"
-#include "Sampler/sampler_ram_pool.h"
-#include "IPC/sampler_ram_audio_projection.h"
+#include "Audio/sampler_ram_audio_projection_audio.h"
 #include "Audio/audio_shared_memory.h"
-#include "Seq/seq_runtime.h"
 
 /* The sampler voice table is a lane resource.  GROUP children reuse this
  * table; they do not allocate a second sampler pool. */
@@ -57,6 +50,20 @@
 #define BRICK6_SAMPLER_MULTI_RENDER_PITCHED   (0U)
 #define BRICK6_SAMPLER_MULTI_RENDER_MONO_1X   (1U)
 #define BRICK6_SAMPLER_MULTI_RENDER_STEREO_1X (2U)
+
+typedef struct
+{
+    uint32_t generation;
+    uint32_t frames;
+    uint32_t sample_rate;
+    uint32_t data_offset;
+    float *data;
+    uint16_t global_slot;
+    uint16_t ram_slot;
+    uint16_t channels;
+    uint16_t bytes_per_frame;
+    sampler_ram_format_t format;
+} sampler_ram_audio_view_t;
 
 typedef struct
 {
@@ -103,16 +110,11 @@ typedef struct
     uint8_t vca_note_released;
     uint8_t dsp_slot;
     uint8_t spread_index;
-    uint8_t stream_needs_release_pending;
-    uint16_t stream_needs_release_sample_id;
     sample_play_plan_t play_plan;
     sample_voice_reader_t reader;
     /* Multi only: non-zero trigger_order is the handle generation. */
     uint32_t trigger_order;
     uint32_t output_id;
-    uint32_t stream_needs_release_generation;
-    uint32_t pinned_first_page;
-    uint32_t pinned_last_page;
     float last_out_l;
     float last_out_r;
     uint8_t last_out_valid;
@@ -237,9 +239,9 @@ static AUDIO_HOT brick6_sampler_voice_t
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(SAMPLER_MULTI_MAX_GLOBAL_VOICES == 8U,
                "Multi runtime pool must remain globally capped at eight voices");
-_Static_assert(sizeof(brick6_sampler_voice_t) == 464U,
+_Static_assert(sizeof(brick6_sampler_voice_t) == 472U,
                "Sampler voice size changed; remeasure DTCM before accepting it");
-_Static_assert(sizeof(g_sampler_multi_voice) == 3712U,
+_Static_assert(sizeof(g_sampler_multi_voice) == 3776U,
                "Multi sampler voice pool size changed; remeasure DTCM before accepting it");
 #endif
 static brick6_sampler_clip_runtime_t g_sampler_clip_runtime[SEQ_TRACK_COUNT];
@@ -278,7 +280,7 @@ static uint8_t brick6_sampler_runtime_resolve_grid_count(uint8_t raw_grid_count)
 static float brick6_sampler_runtime_velocity_gain(uint8_t velocity);
 static uint32_t brick6_sampler_runtime_ratio_to_q16(float ratio);
 static uint32_t brick6_sampler_runtime_ram_step_q16(const brick6_sampler_voice_t *voice,
-                                                    const sampler_ram_slot_t *ram);
+                                                    const sampler_ram_audio_view_t *ram);
 static uint32_t brick6_sampler_runtime_next_trigger_order(void);
 static uint32_t brick6_sampler_runtime_clip_ratio_q16(float source_bpm);
 static uint32_t brick6_sampler_runtime_clamp_region_begin(uint32_t length_frames, float start);
@@ -347,18 +349,18 @@ static void brick6_sampler_runtime_clip_render_shifter(brick6_sampler_voice_t *v
                                                        uint32_t frames);
 static uint8_t brick6_sampler_runtime_resolve_ram_source(uint16_t global_slot,
                                                          uint16_t *out_ram_slot,
-                                                         sampler_ram_slot_t *out_ram);
+                                                         sampler_ram_audio_view_t *out_ram);
 static uint8_t brick6_sampler_runtime_trigger_ram(uint8_t track_id);
 static uint8_t brick6_sampler_runtime_render_ram_forward_pitched(
     brick6_sampler_voice_t *voice,
-    const sampler_ram_slot_t *ram,
+    const sampler_ram_audio_view_t *ram,
     float *out_l,
     float *out_r,
     uint32_t frames,
     uint64_t *io_position_q16);
 static uint8_t brick6_sampler_runtime_render_ram_reverse_pitched(
     brick6_sampler_voice_t *voice,
-    const sampler_ram_slot_t *ram,
+    const sampler_ram_audio_view_t *ram,
     float *out_l,
     float *out_r,
     uint32_t frames,
@@ -367,14 +369,14 @@ static uint64_t brick6_sampler_runtime_wrap_q16(uint64_t offset_q16, uint64_t sp
 static inline float brick6_sampler_runtime_ram_fade_gain(brick6_sampler_voice_t *voice);
 static uint8_t brick6_sampler_runtime_render_ram_pingpong_unpitched(
     brick6_sampler_voice_t *voice,
-    const sampler_ram_slot_t *ram,
+    const sampler_ram_audio_view_t *ram,
     float *out_l,
     float *out_r,
     uint32_t frames,
     uint32_t position);
 static uint8_t brick6_sampler_runtime_render_ram_pingpong_pitched(
     brick6_sampler_voice_t *voice,
-    const sampler_ram_slot_t *ram,
+    const sampler_ram_audio_view_t *ram,
     float *out_l,
     float *out_r,
     uint32_t frames,
@@ -406,26 +408,8 @@ static void brick6_sampler_runtime_multi_stop_voice_after_vca(brick6_sampler_voi
 static void brick6_sampler_runtime_multi_stop_track(uint8_t track_id);
 static void brick6_sampler_runtime_multi_stop_track_renderer(uint8_t track_id);
 static void brick6_sampler_runtime_multi_defer_stream_release(uint16_t multi_sample_id);
-static void brick6_sampler_runtime_multi_service_streaming(void);
-static uint8_t brick6_sampler_runtime_multi_publish_snapshot_from_plan(
-    const sample_play_plan_t *plan,
-    uint8_t voice_id,
-    uint32_t generation,
-    uint32_t current_frame,
-    sample_stream_snapshot_t *out_snapshot);
-static uint8_t brick6_sampler_runtime_multi_publish_snapshot_from_voice(
-    const brick6_sampler_voice_t *voice,
-    sample_stream_snapshot_t *out_snapshot);
-static void brick6_sampler_runtime_multi_clear_snapshot(
-    const brick6_sampler_voice_t *voice);
-static uint8_t brick6_sampler_runtime_multi_update_stream_needs(
-    const brick6_sampler_voice_t *voice,
-    const sample_stream_snapshot_t *snapshot);
 static void brick6_sampler_runtime_multi_service_stream_releases(void);
-static uint8_t brick6_sampler_runtime_multi_update_voice_needs(brick6_sampler_voice_t *voice);
 static sample_audio_key_t brick6_sampler_runtime_multi_key(uint16_t multi_sample_id);
-static void brick6_sampler_runtime_multi_release_voice_stream_needs(
-    const brick6_sampler_voice_t *voice);
 static void brick6_sampler_runtime_multi_diag_note_page0_reject(
     uint8_t track_id,
     uint8_t note,

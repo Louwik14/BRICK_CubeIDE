@@ -321,6 +321,7 @@ int main(void)
   MX_SDMMC1_SD_Init();
   /* USER CODE BEGIN 2 */
   board_power_hold_enable_after_boot_press();
+  __HAL_TIM_SET_COUNTER(&htim5, 0U);
   HAL_TIM_Base_Start(&htim5);
   HAL_TIM_OC_Start(&htim5, TIM_CHANNEL_1);
   HAL_TIM_Base_Start_IT(&htim12);

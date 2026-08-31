@@ -1,11 +1,11 @@
 #include "Audio/drum_synth.h"
-#include "Audio/md_model.h"
+#include "Param/md_model_catalog.h"
 #include "Audio/md_dsp.h"
 
 #include <cstring>
 #include <new>
 
-#include "Track/entity_topology.h"
+#include "Track/entity_types.h"
 
 #include "plaits/dsp/drums/analog_bass_drum.h"
 #include "plaits/dsp/engine/engine.h"

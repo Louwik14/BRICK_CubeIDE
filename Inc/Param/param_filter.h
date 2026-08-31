@@ -13,19 +13,8 @@ uint8_t param_filter_apply_value(param_id_t id,
                                  float clamped,
                                  uint8_t update_control_value,
                                  uint8_t resync_lfo_base);
-uint8_t param_filter_apply_value_audio(param_id_t id,
-                                       uint8_t track,
-                                       float clamped);
 void param_filter_sync_ui_for_active_track(void);
 
-float param_filter_ui127_to_attack_s(float v);
-float param_filter_ui127_to_decay_s(float v);
-float param_filter_ui127_to_sustain(float v);
-float param_filter_ui127_to_release_s(float v);
-float param_filter_ui127_to_cutoff_hz(float v);
-float param_filter_ui127_to_resonance(float v);
-float param_filter_ui127_to_eg_amount(float v);
-float param_filter_ui127_to_keytrack(float v);
 float param_filter_eq_ui127_to_db(float v);
 
 void apply_filter_morph(float v);

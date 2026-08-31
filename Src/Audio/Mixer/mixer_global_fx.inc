@@ -217,8 +217,8 @@ void mixer_reset_runtime_state(void)
 
 void mixer_init(void)
 {
-    audio_rec_bus_projection_audio_init();
-    audio_rec_level_snapshot_audio_init();
+    audio_rec_bus_runtime_init();
+    audio_rec_level_producer_init();
     mixer_track_filter_init_time_lut();
     fx_modfx_global_init();
     mixer_reset_runtime_state();

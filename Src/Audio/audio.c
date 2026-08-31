@@ -21,17 +21,18 @@
 #include "audio.h"
 #include "audio_float.h"
 #include "Platform/cpu_load.h"
-#include "IPC/live_clock.h"
 #include "Platform/memory_layout.h"
 #include "Platform/cache_maintenance.h"
 #include "Audio/metronome_runtime.h"
-#include "IPC/control_audio_fifo.h"
-#include "IPC/control_audio_publication.h"
+#include "IPC/control_audio_fifo_audio.h"
 #include "Audio/audio_command_executor.h"
 #include "Audio/audio_fx_runtime.h"
-#include "Audio/audio_waveform_capture.h"
-#include "Audio/waveform_control.h"
-#include "Audio/synth_waveform_snapshot.h"
+#include "Audio/audio_transport_runtime.h"
+#include "Audio/audio_waveform_capture_audio.h"
+#include "Audio/synth_waveform_audio.h"
+#include "Audio/audio_boot_diagnostic_producer.h"
+#include "Audio/audio_recorder_capture_audio.h"
+#include "Audio/sd_preview_audio.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_mod_matrix.h"
 #include "Mod/mod_lfo_v1.h"
@@ -41,7 +42,6 @@
 #include "Audio/brick6_looper_runtime.h"
 #include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
 #include "Audio/Engines/wavetable_engine.h"
-#include "Storage/brick6_stream_service_task.h"
 
 #include <string.h>
 #include <stdint.h>
@@ -90,13 +90,28 @@ static AUDIO_DMA_BUFFER_NONCACHEABLE int32_t tx_buffer[AUDIO_BUFFER_WORDS];
 
 static volatile audio_init_state_t g_audio_init_state = AUDIO_INIT_NOT_STARTED;
 static uint64_t g_audio_sample_clock;
-D3_IPC static volatile uint32_t g_audio_boot_diag_word;
+static uint8_t g_audio_sample_clock_valid;
 
-static void audio_boot_diag_publish(audio_init_state_t state,
-                                    board_audio_boot_error_t error)
+static uint64_t audio_tim5_to_sample_clock(uint32_t tick)
 {
-    g_audio_boot_diag_word = (uint32_t)state | ((uint32_t)error << 8);
-    __DMB();
+    uint32_t tim_kernel_hz = HAL_RCC_GetPCLK1Freq();
+    if ((RCC->D2CFGR & RCC_D2CFGR_D2PPRE1) != RCC_APB1_DIV1)
+    {
+        tim_kernel_hz *= 2U;
+    }
+    const uint32_t tim5_hz = tim_kernel_hz / ((uint32_t)TIM5->PSC + 1U);
+    if (tim5_hz == 0U) return 0U;
+    return (((uint64_t)tick * BOARD_AUDIO_SAMPLE_RATE_HZ)
+            + (tim5_hz / 2U)) / tim5_hz;
+}
+
+static void audio_sample_clock_init_on_first_callback(void)
+{
+    if (g_audio_sample_clock_valid != 0U) return;
+    const uint64_t callback_sample = audio_tim5_to_sample_clock(TIM5->CNT);
+    g_audio_sample_clock = (callback_sample >= AUDIO_FRAMES_PER_HALF)
+        ? callback_sample - AUDIO_FRAMES_PER_HALF : 0U;
+    g_audio_sample_clock_valid = 1U;
 }
 /* ============================================================
    INTERNAL PROCESSING
@@ -105,13 +120,6 @@ static void audio_boot_diag_publish(audio_init_state_t state,
 
 static ITCM_TEXT void process_audio_segment(int32_t *rx, int32_t *tx, uint64_t sample_time, uint32_t frames)
 {
-    waveform_control_command_t waveform_command;
-    if (waveform_control_audio_consume(&waveform_command) != 0U)
-    {
-        audio_waveform_capture_audio_apply_control(
-            waveform_command.entity_id, waveform_command.enabled,
-            waveform_command.fast_refresh);
-    }
     uint32_t cursor = 0U;
     while (cursor < frames)
     {
@@ -229,20 +237,21 @@ static void process_half(uint32_t half_index)
  */
 void audio_boot_init_binding_io(void)
 {
-    live_clock_init();
-    control_audio_fifo_init();
-    control_audio_publication_init();
     audio_command_executor_init();
     audio_note_engine_adapter_init();
     audio_mod_matrix_init();
     audio_fx_runtime_init();
+    audio_transport_runtime_init();
+    audio_recorder_capture_audio_init();
+    sd_preview_audio_init();
     audio_waveform_capture_init();
-    waveform_control_init();
     synth_waveform_init();
+    audio_boot_diag_producer_init();
     board_audio_init();
     g_audio_init_state = AUDIO_INIT_NOT_STARTED;
     g_audio_sample_clock = 0U;
-    audio_boot_diag_publish(AUDIO_INIT_NOT_STARTED, BOARD_AUDIO_BOOT_OK);
+    g_audio_sample_clock_valid = 0U;
+    audio_boot_diag_producer_publish_state(AUDIO_INIT_NOT_STARTED, BOARD_AUDIO_BOOT_OK);
 
     memset(rx_buffer, 0, sizeof(rx_buffer));
     memset(tx_buffer, 0, sizeof(tx_buffer));
@@ -282,10 +291,10 @@ uint8_t audio_start(void)
         g_audio_init_state = AUDIO_INIT_ERROR;
         board_audio_boot_diag_t diag;
         board_audio_get_boot_diag(&diag);
-        audio_boot_diag_publish(AUDIO_INIT_ERROR, diag.last_error);
+        audio_boot_diag_producer_publish_state(AUDIO_INIT_ERROR, diag.last_error);
         return 0U;
     }
-    audio_boot_diag_publish(g_audio_init_state, BOARD_AUDIO_BOOT_OK);
+    audio_boot_diag_producer_publish_state(g_audio_init_state, BOARD_AUDIO_BOOT_OK);
     return (g_audio_init_state == AUDIO_INIT_READY) ? 1U : 0U;
 }
 
@@ -293,17 +302,12 @@ void audio_stop(void)
 {
     board_audio_stop_stream();
     g_audio_init_state = AUDIO_INIT_NOT_STARTED;
-    audio_boot_diag_publish(AUDIO_INIT_NOT_STARTED, BOARD_AUDIO_BOOT_OK);
+    audio_boot_diag_producer_publish_state(AUDIO_INIT_NOT_STARTED, BOARD_AUDIO_BOOT_OK);
 }
 
-void audio_boot_diag_read(audio_boot_diag_snapshot_t *out_diag)
+uint64_t audio_sample_clock_now(void)
 {
-    if (out_diag == NULL)
-        return;
-    const uint32_t word = g_audio_boot_diag_word;
-    __DMB();
-    out_diag->state = (audio_init_state_t)(word & 0xFFU);
-    out_diag->error = (board_audio_boot_error_t)((word >> 8) & 0xFFU);
+    return g_audio_sample_clock;
 }
 
 /* ============================================================
@@ -338,13 +342,14 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
     if ((g_audio_init_state == AUDIO_INIT_READY)
             && (board_audio_is_rx_callback_handle(hsai) != 0U))
     {
-        live_clock_audio_publish_anchor(
-            g_audio_sample_clock);
+        audio_sample_clock_init_on_first_callback();
         cpu_load_irq_begin();
 
         process_half(0);
 
         cpu_load_irq_end();
+        audio_boot_diag_producer_publish_cpu((uint8_t)cpu_load_is_valid(),
+                                             cpu_load_get_avg_permille());
     }
 }
 
@@ -376,12 +381,13 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
     if ((g_audio_init_state == AUDIO_INIT_READY)
             && (board_audio_is_rx_callback_handle(hsai) != 0U))
     {
-        live_clock_audio_publish_anchor(
-            g_audio_sample_clock);
+        audio_sample_clock_init_on_first_callback();
         cpu_load_irq_begin();
 
         process_half(1);
 
         cpu_load_irq_end();
+        audio_boot_diag_producer_publish_cpu((uint8_t)cpu_load_is_valid(),
+                                             cpu_load_get_avg_permille());
     }
 }

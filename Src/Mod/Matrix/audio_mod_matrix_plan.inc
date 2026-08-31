@@ -14,21 +14,21 @@ void audio_mod_matrix_init(void)
         uint8_t selected = 0U;
         mod_matrix_set_defaults(g_mod_matrix_audio_state[track].slots, &selected);
         g_mod_matrix_audio_state[track].multi_source[0][0] =
-            (uint8_t)param_registry[PARAM_MOD_MULTI_1_A].default_value;
+            (uint8_t)param_spec[PARAM_MOD_MULTI_1_A].default_value;
         g_mod_matrix_audio_state[track].multi_source[0][1] =
-            (uint8_t)param_registry[PARAM_MOD_MULTI_1_B].default_value;
+            (uint8_t)param_spec[PARAM_MOD_MULTI_1_B].default_value;
         g_mod_matrix_audio_state[track].multi_source[1][0] =
-            (uint8_t)param_registry[PARAM_MOD_MULTI_2_A].default_value;
+            (uint8_t)param_spec[PARAM_MOD_MULTI_2_A].default_value;
         g_mod_matrix_audio_state[track].multi_source[1][1] =
-            (uint8_t)param_registry[PARAM_MOD_MULTI_2_B].default_value;
+            (uint8_t)param_spec[PARAM_MOD_MULTI_2_B].default_value;
         g_mod_matrix_audio_state[track].slew_source[0] =
-            (uint8_t)param_registry[PARAM_MOD_SLEW_1_SOURCE].default_value;
+            (uint8_t)param_spec[PARAM_MOD_SLEW_1_SOURCE].default_value;
         g_mod_matrix_audio_state[track].slew_source[1] =
-            (uint8_t)param_registry[PARAM_MOD_SLEW_2_SOURCE].default_value;
+            (uint8_t)param_spec[PARAM_MOD_SLEW_2_SOURCE].default_value;
         g_mod_matrix_audio_state[track].slew_amount[0] =
-            param_registry[PARAM_MOD_SLEW_1_AMOUNT].default_value;
+            param_spec[PARAM_MOD_SLEW_1_AMOUNT].default_value;
         g_mod_matrix_audio_state[track].slew_amount[1] =
-            param_registry[PARAM_MOD_SLEW_2_AMOUNT].default_value;
+            param_spec[PARAM_MOD_SLEW_2_AMOUNT].default_value;
         for (uint8_t i = 0U; i < MOD_MATRIX_SLOT_COUNT; ++i)
         {
             g_mod_matrix_runtime[track].destinations[i].destination = (uint16_t)MOD_DESTINATION_NONE;

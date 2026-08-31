@@ -6,7 +6,7 @@
 #include "Track/entity_topology.h"
 #include "IPC/control_audio_command.h"
 #include "IPC/control_audio_publication.h"
-#include "IPC/live_clock.h"
+#include "IPC/live_clock_control.h"
 
 static uint8_t g_external_input[UI_TRACK_COUNT];
 static uint8_t g_external_owner[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT];

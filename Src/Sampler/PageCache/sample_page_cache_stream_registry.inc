@@ -130,9 +130,7 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
             page->frame_count = frame_count;
             page->generation = ++g_sample_page_cache_state.generation_counter;
             page->last_touch = ++g_sample_page_cache_state.touch_counter;
-            page->pin_count = 0U;
-            __atomic_store_n(&g_sample_page_audio_use_count[i], 0U,
-                             __ATOMIC_RELEASE);
+            page->static_resident = 0U;
             sample_page_cache_set_state(page, SAMPLE_PAGE_RESERVED);
             const uint16_t key_slot = sample_page_cache_key_slot(key);
             if (key_slot < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
@@ -188,9 +186,7 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
     evict_page->frame_count = frame_count;
     evict_page->generation = ++g_sample_page_cache_state.generation_counter;
     evict_page->last_touch = ++g_sample_page_cache_state.touch_counter;
-    evict_page->pin_count = 0U;
-    __atomic_store_n(&g_sample_page_audio_use_count[slot_index], 0U,
-                     __ATOMIC_RELEASE);
+    evict_page->static_resident = 0U;
     sample_page_cache_set_state(evict_page, SAMPLE_PAGE_RESERVED);
     const uint16_t key_slot = sample_page_cache_key_slot(key);
     if (key_slot < SAMPLE_PAGE_CACHE_MAX_SAMPLES)

@@ -1,4 +1,5 @@
 #include "ui_track_catalog.h"
+#include "Track/entity_topology.h"
 
 static const ui_track_family_t g_cfg_play_family_order[] = {
     UI_TRACK_FAMILY_OFF,

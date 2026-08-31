@@ -3,7 +3,6 @@
 #include <stdint.h>
 
 #include "Sampler/sample_page_cache.h"
-#include "Sampler/sample_stream_snapshot.h"
 
 #ifdef __cplusplus
 extern "C" {

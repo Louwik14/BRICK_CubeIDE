@@ -1,7 +1,6 @@
 #include "Param/param_registry_apply_bindings.h"
 #include "Param/param_registry.h"
 #include "Track/track_state.h"
-#include "Audio/metronome_runtime.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "ui_core.h"
 #include "Seq/seq_runtime.h"
@@ -264,8 +263,9 @@ void apply_cfg_rec_len(float v)
 void apply_cfg_metro(float v)
 {
     uint8_t level = (uint8_t)(clamp_value(v, 0.0f, 127.0f) + 0.5f);
-    metronome_runtime_set_level_u7(level);
     param_store_set_active(PARAM_CFG_METRO, (float)level);
+    (void)param_registry_publish_track_base_audio(
+        PARAM_CFG_METRO, 0U, (float)level);
 }
 
 void apply_seq_length(float v)

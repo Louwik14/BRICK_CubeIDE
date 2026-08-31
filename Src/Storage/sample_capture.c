@@ -1,12 +1,11 @@
 #include "Storage/sample_capture.h"
 
-#include "Audio/brick6_looper_runtime.h"
-#include "IPC/audio_rec_bus_projection.h"
+#include "IPC/control_audio_rec_bus.h"
 #include "IPC/control_music_publication.h"
-#include "IPC/live_clock.h"
+#include "IPC/live_clock_control.h"
 #include "Track/track_input_ownership.h"
 #include "Track/track_runtime.h"
-#include "Audio/audio_rec_level_snapshot.h"
+#include "IPC/audio_rec_level_reader.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_global_pool.h"
 #include "Seq/seq_runtime.h"
@@ -48,7 +47,6 @@
 #define SAMPLE_CAPTURE_THRESHOLD_DBFS_MAX (-6)
 #define SAMPLE_CAPTURE_THRESHOLD_DBFS_DEFAULT (-36)
 #define SAMPLE_CAPTURE_PCM24_PEAK 8388607UL
-#define SAMPLE_CAPTURE_WAVEFORM_INITIAL_BUCKET_FRAMES 16U
 #define SAMPLE_CAPTURE_DETAIL_BUILD_CHUNK_FRAMES 2048U
 #define SAMPLE_CAPTURE_DETAIL_CACHE_MARGIN_MULT 1U
 #define SAMPLE_CAPTURE_LINE_MAX_SOURCE_FRAMES 2048U
@@ -87,8 +85,6 @@ typedef struct
     waveform_cache_handle_t wave_cache_handle;
     uint8_t wave_cache_ready;
     uint8_t wave_cache_retry_countdown;
-    sample_capture_waveform_bucket_t waveform_pending;
-    uint32_t waveform_pending_frames;
     uint8_t detail_requested;
     uint8_t detail_building;
     uint8_t detail_seen[SAMPLE_CAPTURE_DETAIL_POINTS];
@@ -97,15 +93,11 @@ typedef struct
     uint16_t detail_request_columns;
     uint32_t detail_build_next_frame;
     uint8_t route_mask[SAMPLE_CAPTURE_TRACK_COUNT];
-    uint8_t audio_hook_enabled;
+    uint8_t capture_enabled;
     uint8_t last_take_notified;
     uint8_t rec_edit_enter_deferred_services;
     uint8_t rec_edit_first_render_pending;
     uint16_t final_counter;
-    uint16_t published_source_entity_mask;
-    uint8_t published_arm;
-    uint8_t published_source_flags;
-    uint8_t projection_valid;
     uint32_t trigger_threshold_peak_abs_pcm24;
     uint32_t trigger_last_level_generation;
 } sample_capture_model_t;

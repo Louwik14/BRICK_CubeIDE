@@ -3,19 +3,12 @@
 #include <stdint.h>
 
 #include "Sampler/sample_audio_format.h"
+#include "Sampler/multi_sample_config.h"
 #include "Sampler/sample_play_plan.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#define MULTI_SAMPLE_MAX_SAMPLES          (512U)
-#define MULTI_SAMPLE_POOL_MAX_INSTRUMENTS (32U)
-#define MULTI_SAMPLE_POOL_MAX_SAMPLES     (MULTI_SAMPLE_MAX_SAMPLES)
-#define MULTI_SAMPLE_POOL_MAX_ZONES       (2048U)
-#define MULTI_SAMPLE_POOL_NAME_MAX        (32U)
-#define MULTI_SAMPLE_POOL_PATH_MAX        (96U)
-#define MULTI_SAMPLE_POOL_INVALID_ID      (0xFFFFU)
 
 typedef enum
 {

@@ -1,5 +1,5 @@
 static void brick6_sampler_runtime_render_ram_unpitched(brick6_sampler_voice_t *voice,
-                                                        const sampler_ram_slot_t *ram,
+                                                        const sampler_ram_audio_view_t *ram,
                                                         float *out_l,
                                                         float *out_r,
                                                         uint32_t frames,
@@ -116,7 +116,7 @@ static void brick6_sampler_runtime_render_ram_unpitched(brick6_sampler_voice_t *
         voice->position = 0.0f;
         voice->ram_position_q16 = 0ULL;
         voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
-        voice->ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
+        voice->ram_slot = SAMPLER_RAM_AUDIO_INVALID_SLOT;
         voice->ram_generation = 0U;
         voice->ram_data = NULL;
         voice->ram_channels = 0U;
@@ -169,7 +169,7 @@ static uint32_t brick6_sampler_runtime_bounded_steps(uint64_t distance_q16,
 
 static uint8_t brick6_sampler_runtime_render_ram_forward_pitched(
     brick6_sampler_voice_t *voice,
-    const sampler_ram_slot_t *ram,
+    const sampler_ram_audio_view_t *ram,
     float *out_l,
     float *out_r,
     uint32_t frames,
@@ -332,7 +332,7 @@ static uint8_t brick6_sampler_runtime_render_ram_forward_pitched(
 
 static uint8_t brick6_sampler_runtime_render_ram_reverse_pitched(
     brick6_sampler_voice_t *voice,
-    const sampler_ram_slot_t *ram,
+    const sampler_ram_audio_view_t *ram,
     float *out_l,
     float *out_r,
     uint32_t frames,
@@ -517,7 +517,7 @@ static inline float brick6_sampler_runtime_ram_fade_gain(brick6_sampler_voice_t 
 
 static uint8_t brick6_sampler_runtime_render_ram_pingpong_unpitched(
     brick6_sampler_voice_t *voice,
-    const sampler_ram_slot_t *ram,
+    const sampler_ram_audio_view_t *ram,
     float *out_l,
     float *out_r,
     uint32_t frames,
@@ -641,7 +641,7 @@ static uint8_t brick6_sampler_runtime_render_ram_pingpong_unpitched(
 
 static uint8_t brick6_sampler_runtime_render_ram_pingpong_pitched(
     brick6_sampler_voice_t *voice,
-    const sampler_ram_slot_t *ram,
+    const sampler_ram_audio_view_t *ram,
     float *out_l,
     float *out_r,
     uint32_t frames,
@@ -821,8 +821,8 @@ static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
                                               float *out_r,
                                               uint32_t frames)
 {
-    sampler_ram_slot_t ram_snapshot;
-    const sampler_ram_slot_t *const ram = &ram_snapshot;
+    sampler_ram_audio_view_t ram_snapshot;
+    const sampler_ram_audio_view_t *const ram = &ram_snapshot;
     if ((voice == NULL) || (out_l == NULL) || (out_r == NULL) || (frames == 0U)
         || (voice->active == 0U))
     {
@@ -836,7 +836,7 @@ static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
         voice->position = 0.0f;
         voice->ram_position_q16 = 0ULL;
         voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
-        voice->ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
+        voice->ram_slot = SAMPLER_RAM_AUDIO_INVALID_SLOT;
         voice->ram_generation = 0U;
         voice->ram_data = NULL;
         voice->ram_channels = 0U;
@@ -935,7 +935,7 @@ static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
                 voice->position = 0.0f;
                 voice->ram_position_q16 = 0ULL;
                 voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
-                voice->ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
+                voice->ram_slot = SAMPLER_RAM_AUDIO_INVALID_SLOT;
                 voice->ram_generation = 0U;
                 voice->ram_data = NULL;
                 voice->ram_channels = 0U;
@@ -965,7 +965,7 @@ static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
                 voice->position = 0.0f;
                 voice->ram_position_q16 = 0ULL;
                 voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
-                voice->ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
+                voice->ram_slot = SAMPLER_RAM_AUDIO_INVALID_SLOT;
                 voice->ram_generation = 0U;
                 voice->ram_data = NULL;
                 voice->ram_channels = 0U;
@@ -1114,7 +1114,7 @@ static void brick6_sampler_runtime_render_ram(brick6_sampler_voice_t *voice,
         voice->position = 0.0f;
         voice->ram_position_q16 = 0ULL;
         voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
-        voice->ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
+        voice->ram_slot = SAMPLER_RAM_AUDIO_INVALID_SLOT;
         voice->ram_generation = 0U;
         voice->ram_data = NULL;
         voice->ram_channels = 0U;
@@ -1129,8 +1129,8 @@ static void brick6_sampler_runtime_render_ram_mono(brick6_sampler_voice_t *voice
                                                    float *out_mono,
                                                    uint32_t frames)
 {
-    sampler_ram_slot_t ram_snapshot;
-    const sampler_ram_slot_t *const ram = &ram_snapshot;
+    sampler_ram_audio_view_t ram_snapshot;
+    const sampler_ram_audio_view_t *const ram = &ram_snapshot;
     if ((voice == NULL) || (out_mono == NULL) || (frames == 0U) || (voice->active == 0U))
     {
         return;
@@ -1296,7 +1296,7 @@ static void brick6_sampler_runtime_clear_ram_voice(brick6_sampler_voice_t *voice
     voice->position = 0.0f;
     voice->ram_position_q16 = 0ULL;
     voice->source_kind = (uint8_t)BRICK6_SAMPLER_VOICE_NONE;
-    voice->ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
+    voice->ram_slot = SAMPLER_RAM_AUDIO_INVALID_SLOT;
     voice->ram_generation = 0U;
     voice->ram_data = NULL;
     voice->ram_channels = 0U;
@@ -1484,4 +1484,3 @@ void brick6_sampler_runtime_render_ram_track_mono(const track_audio_runtime_ctx_
     }
     brick6_sampler_runtime_mix_declick_tails_mono(ctx->program_route.entity_id, out_mono, frames);
 }
-

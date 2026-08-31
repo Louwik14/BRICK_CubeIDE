@@ -2,7 +2,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "Track/entity_topology.h"
+#include "Track/entity_types.h"
 
 /**
  * @file fx_chain.h

@@ -1,6 +1,6 @@
 #include "App/Hall/hall_engine.h"
 
-#include "IPC/live_clock.h"
+#include "IPC/live_clock_control.h"
 #include "IPC/live_event.h"
 #include "stm32h7xx_hal.h"
 

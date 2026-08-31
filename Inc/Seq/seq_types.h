@@ -2,7 +2,7 @@
 #define SEQ_TYPES_H
 
 #include <stdint.h>
-#include "Track/entity_topology.h"
+#include "Track/entity_types.h"
 #include "Param/param_store.h"
 
 #define SEQ_TRACK_COUNT        BRICK_ENTITY_TOP_LEVEL_COUNT

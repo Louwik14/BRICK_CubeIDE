@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "Track/track_runtime.h"
+#include "Track/entity_topology.h"
 #include "NoteFx/note_fx_state.h"
 #include "Seq/seq_model.h"
 #include "Seq/seq_param_iface.h"

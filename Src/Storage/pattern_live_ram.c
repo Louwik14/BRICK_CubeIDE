@@ -10,7 +10,7 @@
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Track/control_music_output.h"
-#include "IPC/live_clock.h"
+#include "IPC/live_clock_control.h"
 #include "Storage/pattern_control_bank.h"
 #include "Storage/persistence_workspace.h"
 #include "Storage/persistent_pattern_control.h"

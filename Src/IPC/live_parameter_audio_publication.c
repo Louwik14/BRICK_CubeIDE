@@ -4,10 +4,11 @@
 
 #include "IPC/control_audio_command.h"
 #include "IPC/control_audio_publication.h"
-#include "IPC/live_clock.h"
-#include "IPC/live_parameter_event.h"
+#include "IPC/live_clock_control.h"
+#include "App/live_parameter_event_control.h"
 #include "Storage/project_control.h"
 #include "Param/param_value_policy.h"
+#include "Track/track_runtime.h"
 #include "Seq/seq_runtime_exec.h"
 
 static uint32_t g_live_parameter_audio_publish_failure_count;
@@ -48,16 +49,11 @@ static uint8_t live_parameter_audio_make_command(
     uint8_t track, uint8_t slot, uint16_t flags, int32_t raw_value,
     control_audio_command_t *out_command)
 {
-    const uint8_t tone_slot_command = (uint8_t)(
-        (parameter_id >= CONTROL_AUDIO_PARAM_TONE_SLOT_FIRST)
-        && (parameter_id <= CONTROL_AUDIO_PARAM_TONE_SLOT_LAST));
-    if ((out_command == NULL)
-            || ((parameter_id >= PARAM_COUNT) && (tone_slot_command == 0U)))
+    if ((out_command == NULL) || (parameter_id >= PARAM_COUNT))
         return 0U;
     float value = ((flags & LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS) != 0U)
         ? live_parameter_event_decode_float(raw_value) : (float)raw_value;
-    if ((tone_slot_command == 0U)
-            && (scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK)
+    if ((scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK)
             && (live_parameter_audio_project_sampler_value(
                 parameter_id, track, value, &value) == 0U))
         return 0U;
@@ -86,20 +82,32 @@ bool live_parameter_audio_publication_submit_tone_state(
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
         .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
-        .count = SEQ_PARAM_TONE_SLOT_COUNT
+        .count = 0U
     };
+    track_runtime_descriptor_t descriptor;
+    if (track_runtime_get_descriptor(track, &descriptor) == 0U)
+        return live_parameter_audio_publish_failed();
     for (uint8_t slot = 0U; slot < SEQ_PARAM_TONE_SLOT_COUNT; ++slot)
     {
-        bulk.item[slot] = (live_parameter_audio_bulk_item_t){
-            .parameter_id = (uint16_t)(CONTROL_AUDIO_PARAM_TONE_SLOT_FIRST + slot),
+        param_id_t id = PARAM_COUNT;
+        if ((track_runtime_tone_slot_to_param(descriptor.type, slot, &id) == 0U)
+                || (param_registry_track_value_is_audio_command(id, track) == 0U))
+            continue;
+        const float normalized = (values[slot] < 0.0f) ? 0.0f
+            : ((values[slot] > 1.0f) ? 1.0f : values[slot]);
+        const float value = param_registry[id].min
+            + normalized * (param_registry[id].max - param_registry[id].min);
+        bulk.item[bulk.count++] = (live_parameter_audio_bulk_item_t){
+            .parameter_id = id,
             .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
             .track = track,
-            .slot = slot,
+            .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
             .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
                                 | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
-            .value = live_parameter_event_encode_float(values[slot])
+            .value = live_parameter_event_encode_float(value)
         };
     }
+    if (bulk.count == 0U) return true;
     return live_parameter_audio_publication_submit_bulk(&bulk);
 }
 

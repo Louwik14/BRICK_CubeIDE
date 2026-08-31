@@ -2,7 +2,7 @@
 
 #include "Track/track_state.h"
 #include "Track/track_runtime.h"
-#include "IPC/audio_wave_table_projection.h"
+#include "Sampler/audio_wave_table_projection_control.h"
 
 #include "Param/param_macro.h"
 #include "Sampler/multi_sample_loader.h"

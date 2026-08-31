@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 #include "Audio/Engines/fm_dsp_projection.h"
+#include "Param/engine_model_catalog.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -9,22 +10,6 @@ extern "C" {
 
 #define BRICK6_FM_VOICE_COUNT 16U
 #define BRICK6_FM_RENDER_BLOCK 64U
-
-typedef enum
-{
-    BRICK6_FM_OPERATOR_LEVEL = 0,
-    BRICK6_FM_OPERATOR_FREQ,
-    BRICK6_FM_OPERATOR_DETUNE,
-    BRICK6_FM_OPERATOR_ENV_ATTACK,
-    BRICK6_FM_OPERATOR_ENV_DECAY,
-    BRICK6_FM_OPERATOR_ENV_SUSTAIN,
-    BRICK6_FM_OPERATOR_ENV_RELEASE,
-    BRICK6_FM_OPERATOR_ON,
-    BRICK6_FM_OPERATOR_MODE,
-    BRICK6_FM_OPERATOR_VEL,
-    BRICK6_FM_OPERATOR_KEY,
-    BRICK6_FM_OPERATOR_PARAM_COUNT
-} brick6_fm_operator_param_t;
 
 void brick6_fm_runtime_init(void);
 void brick6_fm_runtime_reset_instance(uint8_t instance_id);

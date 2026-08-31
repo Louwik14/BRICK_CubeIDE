@@ -3,11 +3,10 @@
 #include <string.h>
 #include "pages/ui_page_template_tone.h"
 
-#include "Audio/md_model.h"
-#include "Audio/fx_modfx_global.h"
-#include "Audio/synth_waveform_snapshot.h"
-#include "Audio/Engines/fm_engine.h"
-#include "Audio/Engines/stack_engine.h"
+#include "Param/engine_model_catalog.h"
+#include "Param/md_model_catalog.h"
+#include "IPC/synth_waveform_contract.h"
+#include "IPC/control_audio_visual.h"
 #include "Storage/project_control.h"
 #include "Param/param_registry.h"
 #include "Param/param_prism_labels.h"

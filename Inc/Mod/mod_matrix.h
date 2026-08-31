@@ -1,13 +1,14 @@
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 
-#include "Audio/audio_note_engine_adapter.h"
 #include "Mod/mod_ramp.h"
-#include "Mod/mod_destination_catalog.h"
-#include "Param/param_store.h"
+#include "Mod/mod_destination_contract.h"
+#include "Param/param_ids.h"
 #include "Seq/seq_types.h"
-#include "ui_core.h"
+
+typedef struct track_audio_runtime_ctx_s track_audio_runtime_ctx_t;
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,7 +40,25 @@ typedef struct
     float depth;
 } track_mod_matrix_slot_t;
 
-void mod_matrix_set_defaults(track_mod_matrix_slot_t slots[MOD_MATRIX_SLOT_COUNT], uint8_t *selected_slot);
+static inline void mod_matrix_set_defaults(
+    track_mod_matrix_slot_t slots[MOD_MATRIX_SLOT_COUNT], uint8_t *selected_slot)
+{
+    if (slots != NULL)
+    {
+        for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
+        {
+            slots[slot].enabled = 0U;
+            slots[slot].source = (uint8_t)MOD_MATRIX_SOURCE_NONE;
+            slots[slot].destination = MOD_DESTINATION_NONE;
+            slots[slot].depth = 0.0f;
+        }
+        slots[0].source = (uint8_t)MOD_MATRIX_SOURCE_LFO1;
+        slots[1].source = (uint8_t)MOD_MATRIX_SOURCE_LFO2;
+        slots[2].source = (uint8_t)MOD_MATRIX_SOURCE_LFO3;
+        slots[3].source = (uint8_t)MOD_MATRIX_SOURCE_ENV3;
+    }
+    if (selected_slot != NULL) *selected_slot = 0U;
+}
 uint8_t mod_matrix_poly_route_mask(uint8_t track);
 
 uint8_t mod_matrix_set_selected_slot(uint8_t track, float value);

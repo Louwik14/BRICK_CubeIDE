@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include "Sampler/wavetable_config.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -10,7 +11,6 @@ extern "C" {
 #define WAVETABLE_PREPARED_FILE_VERSION     (5U)
 #define WAVETABLE_PREPARED_HEADER_SIZE      (128U)
 #define WAVETABLE_PREPARED_BAND_ENTRY_SIZE  (32U)
-#define WAVETABLE_MIPMAP_MAX_BANDS          (8U)
 #define WAVETABLE_MIPMAP_PREP_REVISION      (9U)
 #define WAVETABLE_MIPMAP_FLAG_MULTIBAND     (1UL << 0)
 #define WAVETABLE_PREPARED_SOURCE_CRC_OFFSET (84U)

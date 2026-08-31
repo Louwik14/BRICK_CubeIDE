@@ -4,6 +4,7 @@
 
 #include "Track/track_input_ownership.h"
 #include "Track/track_runtime.h"
+#include "Track/entity_topology.h"
 #include "Track/track_mute.h"
 #include "UI/ui_track_catalog.h"
 

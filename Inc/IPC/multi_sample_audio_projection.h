@@ -40,15 +40,6 @@ typedef struct
 _Static_assert(sizeof(multi_sample_audio_source_t) == 60U,
                "Multi AUDIO source ABI changed");
 
-void multi_sample_audio_projection_init(void);
-uint8_t multi_sample_audio_projection_publish(uint16_t instrument_id);
-void multi_sample_audio_projection_withdraw(uint16_t instrument_id);
-uint8_t multi_sample_audio_projection_is_ready(uint16_t instrument_id);
-uint8_t multi_sample_audio_projection_resolve(uint16_t instrument_id,
-                                              uint8_t note,
-                                              uint8_t velocity,
-                                              multi_sample_audio_source_t *out_source);
-
 #ifdef __cplusplus
 }
 #endif

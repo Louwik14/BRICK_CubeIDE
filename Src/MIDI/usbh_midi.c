@@ -36,7 +36,7 @@
   */
 
 #include "usbh_midi.h"
-#include "IPC/live_clock.h"
+#include "IPC/live_clock_control.h"
 
 static volatile uint32_t g_usbh_midi_rx_overflow_count;
 

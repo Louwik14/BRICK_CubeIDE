@@ -8,6 +8,7 @@
 #include "drv_display.h"
 #include "font.h"
 #include "Storage/patch_product.h"
+#include "Track/entity_topology.h"
 #include "pages/ui_page_name_edit.h"
 #include "ui_core.h"
 #include "ui_event.h"

@@ -6,19 +6,12 @@
 #include "Audio/Engines/fm_engine.h"
 #include "Audio/brick6_looper_runtime.h"
 #include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
-#include "Storage/project_control.h"
 #include "Audio/Engines/stack_engine.h"
 #include "Audio/Engines/wavetable_engine.h"
-#include "Audio/md_model.h"
-#include "Track/track_sound_state.h"
+#include "Param/md_model_catalog.h"
 #include "Audio/vca_env.h"
-#include "Track/track_mute.h"
-#include "Mod/mod_destination_catalog.h"
-#include "Mod/mod_matrix.h"
-#include "Param/param_filter.h"
-#include "Sampler/multi_sample_pool.h"
-#include "Sampler/sample_global_pool.h"
-#include "midi.h"
+#include "Param/param_filter_audio.h"
+#include "Sampler/sample_page_cache_config.h"
 #include "mixer.h"
 
 static float param_backend_clamp_value(float v, float lo, float hi)
@@ -533,96 +526,6 @@ uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value)
     }
 }
 
-uint8_t param_backend_is_midi_cc_id(param_id_t id)
-{
-    return ((id >= PARAM_MIDI_CC1_1) && (id <= PARAM_MIDI_CC3_4)) ? 1U : 0U;
-}
-
-uint8_t param_backend_midi_cc_number_from_id(param_id_t id)
-{
-    if (param_backend_is_midi_cc_id(id) == 0U)
-    {
-        return 0U;
-    }
-
-    return (uint8_t)(16U + (uint8_t)(id - PARAM_MIDI_CC1_1));
-}
-
-uint8_t param_backend_track_supports_midi_tone_ctx(const track_runtime_ctx_t *ctx)
-{
-    if (ctx == NULL)
-    {
-        return 0U;
-    }
-
-    if (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MIDI)
-    {
-        return 1U;
-    }
-
-    if ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_EXTERNAL)
-            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_EXTERNAL))
-    {
-        return 1U;
-    }
-
-    return 0U;
-}
-
-uint8_t param_backend_track_supports_midi_tone_descriptor(const track_runtime_descriptor_t *descriptor)
-{
-    if (descriptor == NULL)
-    {
-        return 0U;
-    }
-
-    return ((descriptor->family == TRACK_RUNTIME_FAMILY_MIDI)
-            || ((descriptor->family == TRACK_RUNTIME_FAMILY_EXTERNAL)
-                && (descriptor->type == TRACK_RUNTIME_TYPE_EXTERNAL))) ? 1U : 0U;
-}
-
-uint8_t param_backend_send_midi_cc(uint8_t track, param_id_t id, float value)
-{
-    if (param_backend_is_midi_cc_id(id) == 0U)
-    {
-        return 0U;
-    }
-
-    {
-        const uint8_t cc_number = param_backend_midi_cc_number_from_id(id);
-        const uint8_t cc_value = (uint8_t)(param_backend_clamp_value(value, 0.0f, 127.0f) + 0.5f);
-        const uint8_t channel = track_runtime_get_midi_channel_zero_based(track);
-
-        midi_cc(MIDI_DEST_BOTH, channel, cc_number, cc_value);
-    }
-
-    return 1U;
-}
-
-uint8_t param_backend_send_midi_cc_audio(
-    const track_audio_runtime_ctx_t *ctx,
-    param_id_t id,
-    float value)
-{
-    if ((ctx == NULL) || (param_backend_is_midi_cc_id(id) == 0U))
-    {
-        return 0U;
-    }
-
-    uint8_t channel = 0U;
-    if (audio_note_engine_adapter_audio_midi_channel_zero_based(
-            ctx, &channel) == 0U)
-    {
-        return 0U;
-    }
-
-    midi_cc(MIDI_DEST_BOTH,
-            channel,
-            param_backend_midi_cc_number_from_id(id),
-            (uint8_t)(param_backend_clamp_value(value, 0.0f, 127.0f) + 0.5f));
-    return 1U;
-}
-
 uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float value)
 {
     track_audio_runtime_ctx_t ctx_value;
@@ -646,14 +549,14 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             {
                 const uint16_t stream_slot = (uint16_t)(
                     param_backend_clamp_value(value, 0.0f,
-                        (float)(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS - 1U)) + 0.5f);
+                        (float)(SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS - 1U)) + 0.5f);
                 brick6_sampler_runtime_set_sample(track, stream_slot);
                 return 1U;
             }
 
             const uint16_t global_slot = (uint16_t)(
                 param_backend_clamp_value(value, 0.0f,
-                    (float)(SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS - 1U)) + 0.5f);
+                    (float)(SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS - 1U)) + 0.5f);
             brick6_sampler_runtime_set_sample(track, global_slot);
             return 1U;
         }
@@ -941,25 +844,25 @@ uint8_t param_backend_apply_mix_track(const track_audio_runtime_ctx_t *ctx,
 
         case PARAM_VCA_ATTACK:
         {
-            mixer_set_track_vca_attack(ctx->program_route.mix_track_id, param_filter_ui127_to_attack_s(value));
+            mixer_set_track_vca_attack(ctx->program_route.mix_track_id, param_filter_audio_attack_s(value));
             return 1U;
         }
 
         case PARAM_VCA_DECAY:
         {
-            mixer_set_track_vca_decay(ctx->program_route.mix_track_id, param_filter_ui127_to_decay_s(value));
+            mixer_set_track_vca_decay(ctx->program_route.mix_track_id, param_filter_audio_decay_s(value));
             return 1U;
         }
 
         case PARAM_VCA_SUSTAIN:
         {
-            mixer_set_track_vca_sustain(ctx->program_route.mix_track_id, param_filter_ui127_to_sustain(value));
+            mixer_set_track_vca_sustain(ctx->program_route.mix_track_id, param_filter_audio_sustain(value));
             return 1U;
         }
 
         case PARAM_VCA_RELEASE:
         {
-            const float release_s = param_filter_ui127_to_release_s(value);
+            const float release_s = param_filter_audio_release_s(value);
             mixer_set_track_vca_release(ctx->program_route.mix_track_id, release_s);
             if (ctx->program_route.engine == (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
             {

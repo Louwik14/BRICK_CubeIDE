@@ -1,5 +1,6 @@
 #include "Mod/mod_lfo_v1.h"
 #include "Audio/audio_note_engine_adapter.h"
+#include "IPC/control_audio_command.h"
 #include "Mod/mod_lfo_segment.h"
 #include "Platform/memory_layout.h"
 #include "stm32h7xx.h"
@@ -7,21 +8,12 @@
 #include <string.h>
 
 #include "Audio/brick6_audio_event_grid.h"
-#include "Track/entity_topology.h"
 #include "Track/synth_polyphony.h"
-#include "Track/track_runtime.h"
 #include "Audio/mixer.h"
 #include "Audio/audio_note_engine_adapter.h"
-#include "IPC/control_audio_command.h"
-#include "Mod/mod_destination_catalog.h"
 #include "Mod/mod_env3.h"
 #include "Mod/mod_matrix.h"
-#include "Param/param_registry.h"
-#include "Param/param_registry_runtime_state.h"
-#include "Seq/seq_runtime.h"
-#include "IPC/audio_transport_publication.h"
-#include "Seq/seq_runtime_control.h"
-#include "ui_core.h"
+#include "Audio/audio_transport_runtime.h"
 
 /* GROUP modulation state is owned by its master entity. */
 #undef SEQ_TRACK_COUNT
@@ -377,11 +369,8 @@ static uint32_t mod_lfo_phase_inc_from_rate_with_bpm(float rate, uint32_t bpm_mi
 
 static uint32_t mod_lfo_phase_inc_from_rate(float rate)
 {
-    audio_transport_publication_t transport;
-    const uint8_t transport_valid =
-        audio_transport_publication_read(&transport);
     return mod_lfo_phase_inc_from_rate_with_bpm(
-        rate, (transport_valid != 0U) ? transport.tempo_effective_bpm_milli : 120000U);
+        rate, audio_transport_runtime_get()->tempo_effective_bpm_milli);
 }
 
 static uint32_t mod_lfo_phase_from_degrees(float degrees)
@@ -432,13 +421,6 @@ static float mod_lfo_sh_next_value(uint32_t *state)
     const float ua = (float)(a >> 8) * (1.0f / 16777215.0f);
     const float ub = (float)(b >> 8) * (1.0f / 16777215.0f);
     return (ua + ub) - 1.0f;
-}
-
-static uint8_t mod_lfo_shape_is_positive(mod_lfo_shape_t shape)
-{
-    return ((shape == MOD_LFO_SHAPE_SINE_POS)
-            || (shape == MOD_LFO_SHAPE_TRIANGLE_POS)
-            || (shape == MOD_LFO_SHAPE_SQUARE_POS)) ? 1U : 0U;
 }
 
 static float mod_lfo_wave(mod_lfo_shape_t shape, uint32_t phase, mod_lfo_runtime_state_t *state)
@@ -836,53 +818,6 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames,
     }
 }
 
-void mod_lfo_v1_init(void)
-{
-    mod_destination_catalog_init();
-    mod_env3_init();
-    g_mod_lfo_audio_initialized = 0U;
-    mod_lfo_v1_invalidate_dest_cache_all();
-}
-
-uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param, float value)
-{
-    if ((track >= SEQ_TRACK_COUNT) || (lfo_index >= MOD_LFO_COUNT_PER_TRACK) || ((uint8_t)param >= (uint8_t)MOD_LFO_PARAM_COUNT))
-    {
-        return 0U;
-    }
-
-    brick_entity_id_t owner = track;
-    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
-    track = owner;
-    const param_id_t id = (param_id_t)(PARAM_LFO1_RATE
-        + lfo_index * 4U + (uint8_t)param);
-    float canonical = value;
-    switch (param)
-    {
-        case MOD_LFO_PARAM_RATE:
-            canonical = mod_lfo_clampf(value, -LFO_FREE_MAX_HZ, (float)MOD_LFO_SYNC_RATE_COUNT);
-            if (canonical > 0.0f) canonical = mod_lfo_quantize_sync_rate(canonical);
-            break;
-
-        case MOD_LFO_PARAM_SHAPE:
-            canonical = mod_lfo_clampf(value, 0.0f, (float)((uint8_t)MOD_LFO_SHAPE_COUNT - 1U));
-            break;
-
-        case MOD_LFO_PARAM_TRIG:
-            canonical = mod_lfo_clampf(value, 0.0f, (float)((uint8_t)MOD_LFO_TRIG_COUNT - 1U));
-            break;
-
-        case MOD_LFO_PARAM_PHASE:
-            canonical = mod_lfo_clampf(value, 0.0f, 360.0f);
-            break;
-
-        default:
-            return 0U;
-    }
-    param_registry_control_value_set(track, id, canonical);
-    return 1U;
-}
-
 uint8_t mod_lfo_v1_set_track_param_audio(uint8_t track, uint8_t lfo_index,
                                          mod_lfo_param_t param, float value)
 {
@@ -1068,22 +1003,6 @@ mod_lfo_trig_mode_t mod_lfo_v1_effective_trig(uint8_t track, uint8_t lfo_index)
         &g_mod_lfo_runtime[track][lfo_index], s, MOD_LFO_PARAM_TRIG) + 0.5f));
 }
 
-uint8_t mod_lfo_v1_get_track_param(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param, float *out_value)
-{
-    if ((track >= SEQ_TRACK_COUNT) || (lfo_index >= MOD_LFO_COUNT_PER_TRACK) || (out_value == NULL)
-            || ((uint8_t)param >= (uint8_t)MOD_LFO_PARAM_COUNT))
-    {
-        return 0U;
-    }
-
-    brick_entity_id_t owner = track;
-    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
-    track = owner;
-    return param_registry_control_value_get(track,
-        (param_id_t)(PARAM_LFO1_RATE + lfo_index * 4U + (uint8_t)param),
-        out_value);
-}
-
 void mod_lfo_v1_process_sample_all(void)
 {
     mod_lfo_v1_process_block(1U);
@@ -1098,11 +1017,8 @@ ITCM_TEXT void mod_lfo_v1_process_block(uint32_t frames)
         return;
     }
 
-    audio_transport_publication_t transport;
-    const uint8_t transport_valid =
-        audio_transport_publication_read(&transport);
-    const uint32_t bpm_milli = (transport_valid != 0U)
-        ? transport.tempo_effective_bpm_milli : 120000U;
+    const uint32_t bpm_milli =
+        audio_transport_runtime_get()->tempo_effective_bpm_milli;
     mod_lfo_prepare_poly_segment(frames, bpm_milli);
 
 #if MOD_LFO_WINDOW_RATE_EXPERIMENT
@@ -1377,85 +1293,4 @@ ITCM_TEXT void mod_lfo_v1_process_poly_voice(uint8_t track,
 void mod_lfo_v1_note_release(uint8_t track)
 {
     mod_env3_note_off(track);
-}
-
-uint8_t mod_lfo_v1_shape_is_random(uint8_t track, uint8_t lfo_index)
-{
-    brick_entity_id_t owner = track;
-    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
-    track = owner;
-    float shape = 0.0f;
-    if (!mod_lfo_v1_get_track_param(track, lfo_index,
-                                    MOD_LFO_PARAM_SHAPE, &shape)) return 0U;
-    return ((uint8_t)(shape + 0.5f) == (uint8_t)MOD_LFO_SHAPE_RANDOM_SH) ? 1U : 0U;
-}
-
-uint8_t mod_lfo_v1_waveform_point(uint8_t track, uint8_t lfo_index, uint8_t x, uint8_t width, int8_t *out_y_q7)
-{
-    if ((out_y_q7 == NULL) || (width == 0U))
-    {
-        return 0U;
-    }
-
-    brick_entity_id_t owner = track;
-    if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
-    track = owner;
-    float shape_value = 0.0f;
-    if (!mod_lfo_v1_get_track_param(track, lfo_index,
-                                    MOD_LFO_PARAM_SHAPE, &shape_value)) return 0U;
-    const mod_lfo_shape_t shape = (mod_lfo_shape_t)((uint8_t)(shape_value + 0.5f));
-    if (shape == MOD_LFO_SHAPE_RANDOM_SH)
-    {
-        const int8_t rnd_pattern[8] = {-48, 32, 84, -16, -80, 4, 56, -28};
-        *out_y_q7 = rnd_pattern[(width > 1U) ? ((x * 8U) / width) & 7U : 0U];
-        return 1U;
-    }
-
-    mod_lfo_runtime_state_t preview = {0};
-    preview.sh_value = 0.0f;
-    const uint32_t phase = (uint32_t)(((uint64_t)x * 4294967296ULL) / (uint64_t)width);
-    float y = mod_lfo_wave(shape, phase, &preview);
-    if (mod_lfo_shape_is_positive(shape) != 0U)
-    {
-        y = (y * 2.0f) - 1.0f;
-    }
-    y = mod_lfo_clampf(y, -1.0f, 1.0f);
-    *out_y_q7 = (int8_t)(y * 63.0f);
-    return 1U;
-}
-
-uint16_t mod_lfo_v1_dest_count(uint8_t track)
-{
-    return mod_destination_catalog_count(track);
-}
-
-uint8_t mod_lfo_v1_dest_param_at(uint8_t track, uint16_t dest_index, param_id_t *out_param)
-{
-    if (out_param == NULL)
-    {
-        return 0U;
-    }
-
-    *out_param = mod_destination_catalog_param_from_index(track, dest_index);
-    return 1U;
-}
-
-void mod_lfo_v1_invalidate_dest_cache_track(uint8_t track)
-{
-    mod_destination_catalog_invalidate_track(track);
-}
-
-void mod_lfo_v1_invalidate_dest_cache_all(void)
-{
-    mod_destination_catalog_invalidate_all();
-}
-
-uint8_t mod_lfo_v1_dest_label(uint8_t track, uint16_t dest_index, char *out, uint32_t out_len)
-{
-    return mod_destination_catalog_label(track, dest_index, out, out_len);
-}
-
-uint8_t mod_lfo_v1_dest_short_label(uint8_t track, uint16_t dest_index, char *out, uint32_t out_len)
-{
-    return mod_destination_catalog_short_label(track, dest_index, out, out_len);
 }

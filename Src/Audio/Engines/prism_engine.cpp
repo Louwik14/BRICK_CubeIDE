@@ -8,7 +8,7 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "Audio/synth_waveform_snapshot.h"
+#include "Audio/synth_waveform_audio.h"
 #include "Platform/memory_layout.h"
 
 #include "braids/macro_oscillator.h"

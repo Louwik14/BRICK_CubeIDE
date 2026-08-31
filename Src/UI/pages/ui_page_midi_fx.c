@@ -1,9 +1,10 @@
 #include "pages/ui_page_midi_fx.h"
 
-#include "Audio/audio_fx_runtime.h"
+#include "Param/engine_model_catalog.h"
 #include "Param/audio_fx_param_catalog.h"
-#include "Audio/waveform_control.h"
+#include "IPC/control_audio_visual.h"
 #include "Track/track_runtime.h"
+#include "Track/entity_topology.h"
 #include "NoteFx/note_fx_state.h"
 #include "Seq/seq_division_catalog.h"
 #include "drv_display.h"
@@ -81,6 +82,12 @@ static brick_entity_id_t ui_page_audio_fx_selected_entity(void)
     if (ui_template_edit_context_resolve_active(&context) != 0U)
         return (brick_entity_id_t)context.selected_entity;
     return (brick_entity_id_t)ui_get_active_lane();
+}
+
+static uint8_t ui_page_is_audio_fx_slot_param(param_id_t id)
+{
+    return (uint8_t)(((id >= PARAM_AUDIO_FX_MODEL)
+                      && (id <= PARAM_AUDIO_FX_B_P3)) ? 1U : 0U);
 }
 
 static const ui_template_family_t *ui_page_audio_fx_resolve_family(void)
@@ -211,7 +218,7 @@ static uint8_t ui_page_midi_fx_audio_subpage_active(void)
     const ui_template_subpage_t *const subpage =
         ui_template_page_get_active_subpage(ui_page_fx_state());
     return (uint8_t)((subpage != NULL)
-        && (audio_fx_runtime_param_slot(subpage->param_bank.params[0], NULL) != 0U));
+        && (ui_page_is_audio_fx_slot_param(subpage->param_bank.params[0]) != 0U));
 }
 
 static void ui_page_midi_fx_sync_waveform_capture(void)
@@ -220,7 +227,7 @@ static void ui_page_midi_fx_sync_waveform_capture(void)
     if ((ui_page_midi_fx_audio_subpage_active() == 0U)
             || (ui_template_edit_context_resolve_active(&context) == 0U))
     {
-        waveform_control_publish(BRICK_ENTITY_INVALID_ID, 0U, 0U);
+        (void)control_audio_visual_waveform_request(0U, 0U, 0U);
         return;
     }
 
@@ -237,8 +244,8 @@ static void ui_page_midi_fx_sync_waveform_capture(void)
             break;
         }
     }
-    waveform_control_publish((brick_entity_id_t)context.selected_entity,
-                             1U, fast_refresh);
+    (void)control_audio_visual_waveform_request(
+        (brick_entity_id_t)context.selected_entity, 1U, fast_refresh);
 }
 
 static ui_template_custom_widget_kind_t ui_page_midi_fx_pick_custom_widget(
@@ -249,7 +256,7 @@ static ui_template_custom_widget_kind_t ui_page_midi_fx_pick_custom_widget(
     if ((subpage != NULL)
             && (slot < 3U)
             && (id == subpage->param_bank.params[slot])
-            && (audio_fx_runtime_param_slot(id, NULL) != 0U))
+            && (ui_page_is_audio_fx_slot_param(id) != 0U))
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_AUDIO_FX_GROUP;
     }
@@ -490,7 +497,7 @@ static void ui_page_midi_fx_enter(void)
 
 static void ui_page_midi_fx_leave(void)
 {
-    waveform_control_publish(BRICK_ENTITY_INVALID_ID, 0U, 0U);
+    (void)control_audio_visual_waveform_request(0U, 0U, 0U);
     ui_template_page_leave();
 }
 

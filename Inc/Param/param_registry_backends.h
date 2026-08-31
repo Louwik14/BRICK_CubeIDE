@@ -1,7 +1,9 @@
 #pragma once
 
-#include "param_store.h"
-#include "Audio/audio_note_engine_adapter.h"
+#include "Param/param_ids.h"
+#include "Track/track_types.h"
+
+typedef struct track_audio_runtime_ctx_s track_audio_runtime_ctx_t;
 
 #ifdef __cplusplus
 extern "C" {
@@ -9,21 +11,6 @@ extern "C" {
 
 uint8_t param_backend_apply_tone_prism(uint8_t track, param_id_t id, float value);
 uint8_t param_backend_apply_tone_fm(uint8_t track, param_id_t id, float value);
-uint8_t param_backend_is_midi_cc_id(param_id_t id);
-uint8_t param_backend_midi_cc_number_from_id(param_id_t id);
-uint8_t param_backend_track_supports_midi_tone_ctx(const track_runtime_ctx_t *ctx);
-uint8_t param_backend_track_supports_midi_tone_descriptor(const track_runtime_descriptor_t *descriptor);
-uint8_t param_backend_send_midi_cc(uint8_t track, param_id_t id, float value);
-uint8_t param_backend_send_midi_cc_audio(
-    const track_audio_runtime_ctx_t *ctx,
-    param_id_t id,
-    float value);
-uint8_t param_backend_apply_track_value_control(
-    uint8_t track,
-    param_id_t id,
-    float value);
-uint8_t param_backend_prepare_current_tone_projection(uint8_t track,
-                                                       uint8_t runtime_type);
 uint8_t param_backend_apply_prepared_track_value_audio(
     uint8_t track,
     param_id_t id,

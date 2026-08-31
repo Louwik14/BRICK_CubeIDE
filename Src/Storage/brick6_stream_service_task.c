@@ -2,11 +2,11 @@
 
 #include <string.h>
 
-#include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Sampler/sample_stream_transport.h"
+#include "Storage/looper_stream_control.h"
 #include "Storage/sd_access_gate.h"
 #include "Platform/memory_layout.h"
 #include "SD/sd_scheduler_runtime.h"
@@ -28,14 +28,15 @@ static void brick6_stream_service_task_update_gate(void)
 
 void brick6_stream_service_task_init(void)
 {
+    looper_stream_control_init();
     memset(&g_brick6_stream_service_stats, 0, sizeof(g_brick6_stream_service_stats));
     brick6_stream_service_task_update_gate();
 }
 
 void brick6_stream_service_task_poll(void)
 {
-    /* H743 local worker adapter. On H747 this call belongs to the M4 loop;
-     * page-cache scheduling/completion remains on M7. */
+    /* H743 local worker adapter. On H747 this whole service belongs to M4. */
+    looper_stream_control_service();
     sample_stream_transport_worker_poll();
     sd_scheduler_runtime_service();
     brick6_stream_service_task_update_gate();
@@ -53,7 +54,6 @@ void brick6_stream_service_task_poll(void)
         return;
     }
 
-    brick6_sampler_runtime_queue_stream_pages();
     sample_cache_service(BRICK6_STREAM_SERVICE_BYTE_BUDGET);
     sample_stream_transport_worker_poll();
     sd_scheduler_runtime_service();

@@ -21,8 +21,8 @@
 
 #include "param_registry.h"
 #include "param_store.h"
-#include "Audio/fx_modfx_global.h"
-#include "IPC/audio_wave_table_projection.h"
+#include "Param/engine_model_catalog.h"
+#include "Sampler/audio_wave_table_projection_control.h"
 #include "Track/control_music_output.h"
 #include "NoteFx/note_fx_state.h"
 #include "NoteFx/note_fx_pipeline.h"
@@ -33,25 +33,22 @@
 #include "Param/param_macro.h"
 #include "Param/param_filter.h"
 #include "Param/param_registry_backends.h"
+#include "Param/param_control_backends.h"
 #include "Param/param_registry_runtime_state.h"
 #include "Seq/seq_param_iface.h"
-#include "Audio/Engines/stack_engine.h"
-#include "Audio/Engines/wavetable_engine.h"
 #include "Track/track_runtime.h"
 #include "Track/entity_topology.h"
 #include "Track/track_mute.h"
 #include "Track/track_sound_state.h"
-#include "Audio/md_model.h"
 #include "Track/track_state.h"
 #include "Param/live_parameter_migration.h"
 #include "IPC/live_parameter_audio_publication.h"
 #include "IPC/live_parameter_event.h"
-#include "IPC/live_clock.h"
-#include "Audio/audio_fx_runtime.h"
+#include "IPC/live_clock_control.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_env3.h"
 #include "Mod/mod_matrix.h"
-#include "Mod/mod_destination_catalog.h"
+#include "Mod/mod_destination_control.h"
 #include "UI/ui_core.h"
 #include "UI/ui_track_catalog.h"
 #include "Keyboard/keyboard_engine.h"
@@ -59,9 +56,6 @@
 #include <string.h>
 #include <math.h>
 
-
-/* Private CONTROL/AUDIO fragments share this translation unit to preserve
- * canonical values, publication order and existing backend ownership. */
 
 #include "Registry/param_audio_projection.inc"
 

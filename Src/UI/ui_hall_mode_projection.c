@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include "Board/board_product.h"
+#include "Track/entity_topology.h"
 #include "pages/ui_page_patch_assign.h"
 #include "stm32h7xx_hal.h"
 #include "ui_core_mute.h"

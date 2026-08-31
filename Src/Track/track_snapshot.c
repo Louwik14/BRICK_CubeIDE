@@ -4,7 +4,7 @@
 
 #include "Track/track_runtime.h"
 #include "Track/track_sound_state.h"
-#include "IPC/live_clock.h"
+#include "IPC/live_clock_control.h"
 #include "IPC/live_parameter_audio_publication.h"
 #include "Param/live_parameter_migration.h"
 #include "Track/track_input_ownership.h"

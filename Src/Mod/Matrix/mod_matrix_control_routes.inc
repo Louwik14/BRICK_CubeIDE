@@ -1,8 +1,3 @@
-uint8_t mod_matrix_poly_route_mask(uint8_t track)
-{
-    return (track < SEQ_TRACK_COUNT) ? g_mod_matrix_poly_plan[track].source_mask : 0U;
-}
-
 uint8_t mod_matrix_set_selected_slot(uint8_t track, float value)
 {
     track_sound_state_t *const state = mod_matrix_control_state(track);
@@ -376,26 +371,5 @@ uint8_t mod_matrix_get_slew_amount(uint8_t track, uint8_t op, float *out_value)
     return param_registry_control_value_get(track,
         (op == 0U) ? PARAM_MOD_SLEW_1_AMOUNT : PARAM_MOD_SLEW_2_AMOUNT,
         out_value);
-}
-
-uint8_t mod_matrix_has_any_configured_route(void)
-{
-    return g_mod_matrix_any_route;
-}
-
-uint8_t mod_matrix_track_has_configured_route(uint8_t track)
-{
-    if (track >= SEQ_TRACK_COUNT)
-    {
-        return 0U;
-    }
-
-    return g_mod_matrix_route_cache[track].any_route;
-}
-
-uint16_t mod_matrix_required_source_mask(uint8_t track)
-{
-    return (track < SEQ_TRACK_COUNT)
-        ? g_mod_matrix_route_cache[track].required_source_mask : 0U;
 }
 

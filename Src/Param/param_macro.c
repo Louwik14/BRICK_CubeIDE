@@ -2,13 +2,13 @@
 
 #include <string.h>
 
-#include "IPC/live_clock.h"
+#include "IPC/live_clock_control.h"
 #include "IPC/live_parameter_audio_publication.h"
 #include "IPC/live_parameter_event.h"
 #include "Param/live_parameter_migration.h"
 #include "Track/track_runtime.h"
 #include "Param/param_filter.h"
-#include "Param/param_registry_backends.h"
+#include "Param/param_control_backends.h"
 #include "Param/param_registry.h"
 #include "Seq/seq_param_iface.h"
 #include "Platform/memory_layout.h"

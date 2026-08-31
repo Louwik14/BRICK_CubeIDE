@@ -1,6 +1,7 @@
 #include "ui_hall_mode_flow.h"
 
 #include "Board/board_product.h"
+#include "Track/entity_topology.h"
 #include "Storage/patch_product.h"
 #include "stm32h7xx_hal.h"
 #include "pages/ui_page_audio_rec.h"

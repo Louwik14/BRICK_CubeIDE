@@ -269,6 +269,7 @@ int main(void)
   MX_TIM5_Init();
   MX_TIM12_Init();
   /* USER CODE BEGIN 2 */
+  __HAL_TIM_SET_COUNTER(&htim5, 0U);
   HAL_TIM_Base_Start(&htim5);
   HAL_TIM_OC_Start(&htim5, TIM_CHANNEL_1);
   HAL_TIM_Base_Start_IT(&htim12);

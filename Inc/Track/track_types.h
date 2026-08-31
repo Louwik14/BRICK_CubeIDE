@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include "Track/entity_topology.h"
+#include "Track/entity_types.h"
 
 #define TRACK_COUNT BRICK_ENTITY_TOP_LEVEL_COUNT
 #define TRACK_ACTIVE_COUNT BRICK_ENTITY_TOP_LEVEL_COUNT
@@ -46,6 +46,52 @@ typedef struct
     track_family_t family;
     track_type_t type;
 } track_config_t;
+
+/* Pure CONTROL/AUDIO vocabulary.  Selection policy remains in
+ * track_runtime.c; AUDIO only consumes the resolved value carried by PROGRAM. */
+typedef enum
+{
+    TRACK_RUNTIME_ENGINE_NONE = 0,
+    TRACK_RUNTIME_ENGINE_AUDIO_TRACK,
+    TRACK_RUNTIME_ENGINE_SAMPLER,
+    TRACK_RUNTIME_ENGINE_LOOPER,
+    TRACK_RUNTIME_ENGINE_PRISM,
+    TRACK_RUNTIME_ENGINE_DRUM,
+    TRACK_RUNTIME_ENGINE_STACK,
+    TRACK_RUNTIME_ENGINE_WAVE,
+    TRACK_RUNTIME_ENGINE_FM,
+    TRACK_RUNTIME_ENGINE_COUNT
+} track_runtime_engine_t;
+
+typedef enum
+{
+    TRACK_RUNTIME_FAMILY_OFF = 0,
+    TRACK_RUNTIME_FAMILY_SYNTH,
+    TRACK_RUNTIME_FAMILY_SAMPLER,
+    TRACK_RUNTIME_FAMILY_DRUM,
+    TRACK_RUNTIME_FAMILY_MIDI,
+    TRACK_RUNTIME_FAMILY_EXTERNAL,
+    TRACK_RUNTIME_FAMILY_OTHER
+} track_runtime_family_t;
+
+typedef enum
+{
+    TRACK_RUNTIME_TYPE_NONE = 0,
+    TRACK_RUNTIME_TYPE_RAM,
+    TRACK_RUNTIME_TYPE_PRISM,
+    TRACK_RUNTIME_TYPE_DRUM_MD,
+    TRACK_RUNTIME_TYPE_MIDI,
+    TRACK_RUNTIME_TYPE_STREAM,
+    TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG,
+    TRACK_RUNTIME_TYPE_LOOPER,
+    TRACK_RUNTIME_TYPE_MULTI,
+    TRACK_RUNTIME_TYPE_STACK,
+    TRACK_RUNTIME_TYPE_WAVE,
+    TRACK_RUNTIME_TYPE_EXTERNAL,
+    TRACK_RUNTIME_TYPE_GROUP,
+    TRACK_RUNTIME_TYPE_FM,
+    TRACK_RUNTIME_TYPE_OTHER
+} track_runtime_type_t;
 
 typedef enum
 {

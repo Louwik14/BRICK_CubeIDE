@@ -8,7 +8,7 @@
 #include "Audio/env_adsr.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "IPC/control_audio_command.h"
-#include "Param/param_filter.h"
+#include "Param/param_filter_audio.h"
 #include "Seq/seq_types.h"
 #include "Platform/memory_layout.h"
 
@@ -115,10 +115,10 @@ static void mod_env3_apply_settings(uint8_t track)
         return;
     }
 
-    env_adsr_set_attack(&rt->env, mod_env3_seconds_to_u16(param_filter_ui127_to_attack_s(s->attack)));
-    env_adsr_set_decay(&rt->env, mod_env3_seconds_to_u16(param_filter_ui127_to_decay_s(s->decay)));
+    env_adsr_set_attack(&rt->env, mod_env3_seconds_to_u16(param_filter_audio_attack_s(s->attack)));
+    env_adsr_set_decay(&rt->env, mod_env3_seconds_to_u16(param_filter_audio_decay_s(s->decay)));
     env_adsr_set_sustain(&rt->env, mod_env3_sustain_to_u15(s->sustain));
-    env_adsr_set_release(&rt->env, mod_env3_seconds_to_u16(param_filter_ui127_to_release_s(s->release)));
+    env_adsr_set_release(&rt->env, mod_env3_seconds_to_u16(param_filter_audio_release_s(s->release)));
     rt->applied = *s;
 }
 

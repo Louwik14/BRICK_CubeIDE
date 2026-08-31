@@ -18,14 +18,12 @@
 #include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
 #include "App/brick6_master_control.h"
-#include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
 #include "Storage/brick6_stream_service_task.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/project_product.h"
 #include "Storage/sd_preview.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/waveform_cache.h"
-#include "IPC/live_clock.h"
 #if BRICK_TEST_BUILD
 #include "Platform/crash_capsule.h"
 #endif
@@ -40,7 +38,6 @@
 typedef enum
 {
     BRICK6_BOOT_WAIT_MASTER = 0,
-    BRICK6_BOOT_WAIT_AUDIO_ANCHOR,
     BRICK6_BOOT_AUDIO_RUNNING,
     BRICK6_BOOT_AUDIO_FAILED
 } brick6_boot_audio_state_t;
@@ -120,7 +117,6 @@ static void brick6_app_service_storage(void)
     {
 #if BRICK_TEST_BUILD
 #endif
-        brick6_sampler_runtime_service();
         multi_sample_pool_service_retire();
         sampler_ram_pool_service_retire();
         wavetable_pool_service_retire();
@@ -150,18 +146,15 @@ void brick6_app_process(void)
     {
         if (brick6_master_control_boot_capture() != 0U)
         {
-            g_boot_audio_state = (audio_domain_start() != 0U)
-                ? BRICK6_BOOT_WAIT_AUDIO_ANCHOR
-                : BRICK6_BOOT_AUDIO_FAILED;
-        }
-    }
-    else if (g_boot_audio_state == BRICK6_BOOT_WAIT_AUDIO_ANCHOR)
-    {
-        live_clock_anchor_t anchor;
-        if (live_clock_read_anchor(&anchor))
-        {
-            brick6_master_control_boot_publish();
-            g_boot_audio_state = BRICK6_BOOT_AUDIO_RUNNING;
+            if (audio_domain_start() != 0U)
+            {
+                brick6_master_control_boot_publish();
+                g_boot_audio_state = BRICK6_BOOT_AUDIO_RUNNING;
+            }
+            else
+            {
+                g_boot_audio_state = BRICK6_BOOT_AUDIO_FAILED;
+            }
         }
     }
     else if (g_boot_audio_state == BRICK6_BOOT_AUDIO_RUNNING)

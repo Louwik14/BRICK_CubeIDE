@@ -3,7 +3,7 @@
 #include <string.h>
 
 #include "Sampler/sample_page_cache.h"
-#include "Audio/audio_shared_memory.h"
+#include "IPC/shared_memory_ref_control.h"
 #include "Sampler/sample_stream_fatfs_map.h"
 #include "Sampler/sample_stream_publish.h"
 #include "Sampler/sample_stream_transport.h"
@@ -16,7 +16,7 @@ uint8_t sample_page_cache_port_alloc_shared(
     sample_page_raw_allocation_t local;
     if (sample_page_cache_alloc_slot_pool_bytes(bytes, &local) == 0U)
         return 0U;
-    if (audio_shared_memory_page_ref(local.first_slot, 0U, bytes,
+    if (shared_memory_ref_make_page_pool(local.first_slot, 0U, bytes,
                                      &out->data) == 0U)
     {
         sample_page_cache_release_slot_pool_allocation(local.first_slot,
@@ -39,7 +39,7 @@ void *sample_page_cache_port_resolve_shared(
     const sample_page_loader_allocation_t *allocation)
 {
     return (allocation != NULL)
-        ? (void *)audio_shared_memory_resolve(&allocation->data) : NULL;
+        ? shared_memory_ref_control_resolve_page_pool(&allocation->data) : NULL;
 }
 
 uint32_t sample_page_cache_port_shared_total_bytes(void)
@@ -130,14 +130,14 @@ uint8_t sample_page_cache_port_register_file(sample_audio_key_t key,
 uint8_t sample_page_cache_port_prepare_page(sample_audio_key_t key,
                                             uint32_t page_index,
                                             sample_page_alloc_type_t alloc_type,
-                                            uint8_t pin,
+                                            uint8_t static_resident,
                                             sample_stream_io_command_t *out_command)
 {
     if (out_command == NULL) return 0U;
     memset(out_command, 0, sizeof(*out_command));
     if ((sample_page_cache_prepare_bulk_page_key_alloc(key, page_index,
                                                        alloc_type) == 0U)
-        || ((pin != 0U) && (sample_page_cache_pin_page_key_alloc(
+        || ((static_resident != 0U) && (sample_page_cache_mark_static_page_key_alloc(
                                 key, page_index, alloc_type) == 0U))) return 0U;
     sample_page_load_target_t target;
     sample_page_stream_info_t stream_info;
@@ -150,13 +150,13 @@ uint8_t sample_page_cache_port_prepare_page(sample_audio_key_t key,
     return 1U;
 }
 
-uint8_t sample_page_cache_port_reserve_pin(sample_audio_key_t key,
+uint8_t sample_page_cache_port_reserve_static(sample_audio_key_t key,
                                            uint32_t page_index,
                                            sample_page_alloc_type_t alloc_type)
 {
     return (uint8_t)((sample_page_cache_prepare_bulk_page_key_alloc(
                           key, page_index, alloc_type) != 0U)
-        && (sample_page_cache_pin_page_key_alloc(
+        && (sample_page_cache_mark_static_page_key_alloc(
                 key, page_index, alloc_type) != 0U));
 }
 

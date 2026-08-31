@@ -1,7 +1,6 @@
 #include "Storage/project_load_quiesce.h"
 
 #include "IPC/control_audio_publication.h"
-#include "IPC/live_clock.h"
 #include "IPC/live_event.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1
 #include "Seq/seq_play_scheduler.h"
@@ -60,12 +59,10 @@ uint8_t project_load_quiesce_safe(void)
         if (g_project_load_fence_valid != 0U)
             project_load_close_old_sources();
     }
-    live_clock_anchor_t anchor;
     const uint8_t audio_safe = (uint8_t)(
-        (live_clock_read_anchor(&anchor) == false)
-        || ((g_project_load_fence_valid != 0U)
-            && control_audio_consumer_fence_consumed(
-                g_project_load_consumer_fence)));
+        (g_project_load_fence_valid != 0U)
+        && control_audio_consumer_fence_consumed(
+            g_project_load_consumer_fence));
     return (uint8_t)(audio_safe
         && (sd_preview_is_active() == 0U)
         && (audio_recorder_is_active() == 0U));

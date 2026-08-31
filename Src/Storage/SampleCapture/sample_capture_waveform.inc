@@ -48,18 +48,6 @@ static void sample_capture_set_error(sample_capture_error_t error)
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_ERROR;
 }
 
-static void sample_capture_waveform_reset(void)
-{
-    g_sample_capture.state.waveform_count = 0U;
-    g_sample_capture.state.waveform_bucket_frames = SAMPLE_CAPTURE_WAVEFORM_INITIAL_BUCKET_FRAMES;
-    g_sample_capture.waveform_pending.min = 0;
-    g_sample_capture.waveform_pending.max = 0;
-    g_sample_capture.waveform_pending.first = 0;
-    g_sample_capture.waveform_pending.last = 0;
-    g_sample_capture.waveform_pending_frames = 0U;
-    memset(g_sample_capture.state.waveform, 0, sizeof(g_sample_capture.state.waveform));
-}
-
 static void sample_capture_detail_reset(void)
 {
     g_sample_capture.state.detail_valid = 0U;
@@ -99,84 +87,6 @@ static int16_t sample_capture_pcm24_to_waveform_i16(int32_t v)
         v = -8388608L;
     }
     return (int16_t)(v >> 8);
-}
-
-static void sample_capture_waveform_compress(void)
-{
-    for(uint32_t i = 0U; i < (SAMPLE_CAPTURE_WAVEFORM_POINTS / 2U); ++i)
-    {
-        const sample_capture_waveform_bucket_t a = g_sample_capture.state.waveform[i * 2U];
-        const sample_capture_waveform_bucket_t b = g_sample_capture.state.waveform[(i * 2U) + 1U];
-        g_sample_capture.state.waveform[i].min = (a.min < b.min) ? a.min : b.min;
-        g_sample_capture.state.waveform[i].max = (a.max > b.max) ? a.max : b.max;
-        g_sample_capture.state.waveform[i].first = a.first;
-        g_sample_capture.state.waveform[i].last = b.last;
-    }
-    g_sample_capture.state.waveform_count = SAMPLE_CAPTURE_WAVEFORM_POINTS / 2U;
-    if(g_sample_capture.state.waveform_bucket_frames <= (0xFFFFFFFFUL / 2U))
-    {
-        g_sample_capture.state.waveform_bucket_frames *= 2U;
-    }
-}
-
-static void sample_capture_waveform_append_bucket(const sample_capture_waveform_bucket_t *bucket)
-{
-    if(bucket == 0)
-    {
-        return;
-    }
-    if(g_sample_capture.state.waveform_count >= SAMPLE_CAPTURE_WAVEFORM_POINTS)
-    {
-        sample_capture_waveform_compress();
-    }
-    g_sample_capture.state.waveform[g_sample_capture.state.waveform_count++] = *bucket;
-}
-
-static void sample_capture_waveform_push_minmax_from_irq(const int32_t *lr_interleaved,
-                                                         uint32_t frames)
-{
-    if((lr_interleaved == 0) || (frames == 0U))
-    {
-        return;
-    }
-
-    for(uint32_t i = 0U; i < frames; ++i)
-    {
-        const int16_t l = sample_capture_pcm24_to_waveform_i16(lr_interleaved[i * 2U]);
-        const int16_t r = sample_capture_pcm24_to_waveform_i16(lr_interleaved[(i * 2U) + 1U]);
-        const int16_t sample_min = (l < r) ? l : r;
-        const int16_t sample_max = (l > r) ? l : r;
-        const int16_t sample_mid = (int16_t)(((int32_t)l + (int32_t)r) / 2);
-
-        if(g_sample_capture.waveform_pending_frames == 0U)
-        {
-            g_sample_capture.waveform_pending.min = sample_min;
-            g_sample_capture.waveform_pending.max = sample_max;
-            g_sample_capture.waveform_pending.first = sample_mid;
-        }
-        else
-        {
-            if(sample_min < g_sample_capture.waveform_pending.min)
-            {
-                g_sample_capture.waveform_pending.min = sample_min;
-            }
-            if(sample_max > g_sample_capture.waveform_pending.max)
-            {
-                g_sample_capture.waveform_pending.max = sample_max;
-            }
-        }
-        g_sample_capture.waveform_pending.last = sample_mid;
-        g_sample_capture.waveform_pending_frames++;
-        if(g_sample_capture.waveform_pending_frames >= g_sample_capture.state.waveform_bucket_frames)
-        {
-            sample_capture_waveform_append_bucket(&g_sample_capture.waveform_pending);
-            g_sample_capture.waveform_pending.min = 0;
-            g_sample_capture.waveform_pending.max = 0;
-            g_sample_capture.waveform_pending.first = 0;
-            g_sample_capture.waveform_pending.last = 0;
-            g_sample_capture.waveform_pending_frames = 0U;
-        }
-    }
 }
 
 static int16_t sample_capture_pcm24le_to_waveform_i16(const uint8_t *p)

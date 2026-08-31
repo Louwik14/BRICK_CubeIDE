@@ -4,10 +4,10 @@
 #include <stddef.h>
 #include <string.h>
 
-#include "Audio/synth_waveform_snapshot.h"
+#include "Audio/synth_waveform_audio.h"
 #include "Audio/audio_shared_memory.h"
 #include "Audio/audio_wavetable_registry.h"
-#include "Sampler/wavetable_pool.h"
+#include "Sampler/wavetable_config.h"
 #include "Platform/memory_layout.h"
 
 #define WAVE_DEFAULT_NOTE          60U
@@ -636,7 +636,7 @@ void brick6_wave_runtime_set_osc_table_wavetable_generation(
     const uint32_t previous_generation = target->table_generation;
     target->table_wavetable_slot = WAVETABLE_POOL_INVALID_SLOT;
     target->table_generation = 0U;
-    target->table_global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    target->table_global_slot = UINT16_MAX;
     memset(&target->hot_table, 0, sizeof(target->hot_table));
     audio_wavetable_descriptor_t table;
     if (audio_wavetable_registry_resolve(wavetable_slot, generation, &table) != 0U)
@@ -821,7 +821,7 @@ void brick6_wave_runtime_stop_wavetable_slot(uint16_t wavetable_slot,
                 && (osc->table_generation == generation))
             {
                 osc->table_wavetable_slot = WAVETABLE_POOL_INVALID_SLOT;
-                osc->table_global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+                osc->table_global_slot = UINT16_MAX;
                 osc->table_generation = 0U;
                 osc->mipmap_band = 0U;
                 osc->mipmap_phase_inc = 0U;
@@ -830,7 +830,6 @@ void brick6_wave_runtime_stop_wavetable_slot(uint16_t wavetable_slot,
             }
         }
     }
-    audio_wavetable_registry_remove(wavetable_slot, generation);
 }
 
 void brick6_wave_runtime_clear_trigger(uint8_t instance_id)

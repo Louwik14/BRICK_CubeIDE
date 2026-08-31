@@ -1,6 +1,5 @@
 #include "pages/ui_page_template_env.h"
 
-#include "mixer.h"
 #include "param_store.h"
 #include "ui_core.h"
 #include "ui_navigation.h"

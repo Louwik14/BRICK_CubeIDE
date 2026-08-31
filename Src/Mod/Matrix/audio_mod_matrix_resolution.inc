@@ -274,7 +274,7 @@ static uint8_t mod_matrix_runtime_destination_prepare(uint8_t track,
         /* Temporary initialization only; the CONTROL parameter command that
          * accompanies a newly routed destination seeds the authoritative
          * value before the next render. */
-        float base_value = param_registry[param].default_value;
+        float base_value = param_spec[param].default_value;
         dst->valid = 1U;
         dst->modulation_active = 0U;
         dst->destination = destination;
@@ -342,8 +342,8 @@ static void mod_matrix_rebuild_track_plan(uint8_t track,
             if (mod_destination_address_resolve(s->destination,
                                                 &target, &destination) != 0U)
             {
-                candidates[candidate_count].min_value = param_registry[destination].min;
-                candidates[candidate_count].max_value = param_registry[destination].max;
+                candidates[candidate_count].min_value = param_spec[destination].min;
+                candidates[candidate_count].max_value = param_spec[destination].max;
                 if ((destination == PARAM_AUDIO_FX_P1)
                         || (destination == PARAM_AUDIO_FX_B_P1))
                 {

@@ -997,7 +997,7 @@ static uint8_t wavetable_pool_publish_audio_descriptor(
     descriptor.wavetable_slot = wavetable_slot;
     descriptor.global_slot = slot->global_slot;
     descriptor.band_count = slot->mipmap.band_count;
-    if (audio_shared_memory_page_ref(slot->first_page_slot, 0U,
+    if (shared_memory_ref_make_page_pool(slot->first_page_slot, 0U,
                                      slot->data_bytes, &descriptor.base_data) == 0U)
         return 0U;
     dcache_clean_by_addr_aligned(slot->data, slot->data_bytes);
@@ -1012,13 +1012,13 @@ static uint8_t wavetable_pool_publish_audio_descriptor(
         dst->sample_count = src->sample_count;
         dst->cycle_magnitude = src->cycle_magnitude;
         dst->flags = src->flags;
-        if (audio_shared_memory_page_ref(slot->mipmap.first_page_slot,
+        if (shared_memory_ref_make_page_pool(slot->mipmap.first_page_slot,
                                          mip_offset, bytes, &dst->data) == 0U)
             return 0U;
         mip_offset += bytes;
     }
     dcache_clean_by_addr_aligned(slot->mipmap.data, slot->mipmap.data_bytes);
-    return audio_wavetable_registry_transport_install(&descriptor);
+    return audio_wave_table_projection_install_descriptor(&descriptor);
 }
 
 static wavetable_result_t wavetable_pool_commit_candidate(

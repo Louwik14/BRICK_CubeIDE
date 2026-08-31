@@ -19,9 +19,9 @@
 #include "Storage/sd_access_gate.h"
 #include "Storage/wav_audio_codec.h"
 #include "IPC/control_audio_command.h"
-#include "IPC/control_audio_fifo.h"
 #include "IPC/control_audio_publication.h"
-#include "IPC/live_clock.h"
+#include "IPC/live_clock_control.h"
+#include "IPC/sd_preview_ring_contract.h"
 #include "stm32h7xx_hal.h"
 
 #if defined(__has_include)
@@ -36,7 +36,6 @@
 #endif
 
 #define SD_PREVIEW_TARGET_RATE   48000U
-#define SD_PREVIEW_RING_FRAMES    2048U
 #define SD_PREVIEW_IO_BYTES       4096U
 
 typedef struct
@@ -76,83 +75,24 @@ typedef struct
  * These buffers are CPU-managed, not DMA-owned. Keep them out of the D2 DMA
  * MPU window so startup remains within the explicit coverage check in main().
  */
-static AUDIO_STORAGE_SHARED_SDRAM float
-    g_sd_preview_ring[SD_PREVIEW_RING_FRAMES * 2U];
 static AUDIO_COLD_SDRAM uint8_t g_sd_preview_io[SD_PREVIEW_IO_BYTES];
 STORAGE_STATE_SDRAM static sd_preview_ctx_t g_sd_preview;
 STORAGE_STATE_SDRAM static sd_preview_diag_t g_sd_preview_diag;
-
-typedef struct
-{
-    volatile uint32_t epoch;
-    volatile uint32_t write_count;
-    volatile uint32_t read_count;
-    volatile float gain;
-    volatile uint8_t active;
-    uint8_t reserved[15];
-} sd_preview_ring_ipc_t;
-
-_Static_assert(sizeof(sd_preview_ring_ipc_t) == 32U,
-               "Preview ring IPC ABI changed");
-
-D3_IPC static sd_preview_ring_ipc_t g_sd_preview_ring_ipc;
-static uint32_t g_sd_preview_control_epoch;
-static uint32_t g_sd_preview_reset_fence;
-static uint8_t g_sd_preview_reset_pending;
-static uint8_t g_sd_preview_reset_publish_failed;
 
 static void sd_preview_publish_active(uint8_t active)
 {
     uint64_t sample_time = 0U;
     if (live_clock_read_audio_sample(&sample_time))
         (void)control_audio_publish_param(active, CONTROL_AUDIO_PARAM_PREVIEW_ACTIVE,
-                                          g_sd_preview_control_epoch, 0U,
+                                          0U, 0U,
                                           sample_time);
-}
-
-static void sd_preview_ring_request_reset(void)
-{
-    if (g_sd_preview_reset_pending != 0U) return;
-    ++g_sd_preview_control_epoch;
-    if (g_sd_preview_control_epoch == 0U) g_sd_preview_control_epoch = 1U;
-    g_sd_preview_reset_fence = 0U;
-    g_sd_preview_reset_publish_failed = 0U;
-    g_sd_preview_reset_pending = 1U;
-}
-
-static uint8_t sd_preview_ring_service_reset(void)
-{
-    if (g_sd_preview_reset_pending == 0U) return 1U;
-    if (g_sd_preview_reset_publish_failed != 0U) return 0U;
-    if (g_sd_preview_reset_fence == 0U)
-    {
-        uint64_t sample_time = 0U;
-        if (!live_clock_read_audio_sample(&sample_time)
-                || (control_audio_fifo_control_free() == 0U))
-            return 0U;
-        if (!control_audio_publish_param_fenced(
-                0U, CONTROL_AUDIO_PARAM_PREVIEW_ACTIVE,
-                g_sd_preview_control_epoch, 0U, sample_time,
-                &g_sd_preview_reset_fence))
-        {
-            g_sd_preview_reset_publish_failed = 1U;
-            return 0U;
-        }
-    }
-    if (!control_audio_consumer_fence_consumed(g_sd_preview_reset_fence))
-        return 0U;
-    g_sd_preview_ring_ipc.write_count = 0U;
-    __DMB();
-    g_sd_preview_reset_fence = 0U;
-    g_sd_preview_reset_pending = 0U;
-    return 1U;
 }
 
 static uint32_t sd_preview_ring_producer_count(void)
 {
-    const uint32_t read_count = g_sd_preview_ring_ipc.read_count;
+    const uint32_t read_count = g_sd_preview_ring_layout.read_count;
     __DMB();
-    const uint32_t write_count = g_sd_preview_ring_ipc.write_count;
+    const uint32_t write_count = g_sd_preview_ring_layout.write_count;
     return (read_count <= write_count) ? (write_count - read_count) : 0U;
 }
 
@@ -179,8 +119,8 @@ static void sd_preview_diag_record_open_fail(const char *path, FRESULT fr)
 
 static uint8_t sd_preview_ring_push(float left, float right)
 {
-    const uint32_t write_count = g_sd_preview_ring_ipc.write_count;
-    const uint32_t read_count = g_sd_preview_ring_ipc.read_count;
+    const uint32_t write_count = g_sd_preview_ring_layout.write_count;
+    const uint32_t read_count = g_sd_preview_ring_layout.read_count;
     if ((read_count <= write_count)
             && ((write_count - read_count) >= SD_PREVIEW_RING_FRAMES))
         return 0U;
@@ -188,30 +128,7 @@ static uint8_t sd_preview_ring_push(float left, float right)
     g_sd_preview_ring[index * 2U] = left;
     g_sd_preview_ring[index * 2U + 1U] = right;
     __DMB();
-    g_sd_preview_ring_ipc.write_count = write_count + 1U;
-    return 1U;
-}
-
-static uint8_t sd_preview_ring_pop(float *left, float *right)
-{
-    static uint32_t consumer_epoch;
-    const uint32_t epoch = g_sd_preview_ring_ipc.epoch;
-    if (consumer_epoch != epoch)
-    {
-        consumer_epoch = epoch;
-        g_sd_preview_ring_ipc.read_count = 0U;
-        __DMB();
-    }
-    const uint32_t read_count = g_sd_preview_ring_ipc.read_count;
-    const uint32_t write_count = g_sd_preview_ring_ipc.write_count;
-    __DMB();
-    if ((read_count == write_count) || (left == 0) || (right == 0))
-        return 0U;
-    const uint32_t index = read_count % SD_PREVIEW_RING_FRAMES;
-    *left = g_sd_preview_ring[index * 2U];
-    *right = g_sd_preview_ring[index * 2U + 1U];
-    __DMB();
-    g_sd_preview_ring_ipc.read_count = read_count + 1U;
+    g_sd_preview_ring_layout.write_count = write_count + 1U;
     return 1U;
 }
 
@@ -256,7 +173,7 @@ static void sd_preview_clear_session(uint8_t clear_error, uint8_t clear_state)
         g_sd_preview.gate_held = 0U;
     }
 
-    sd_preview_ring_request_reset();
+    sd_preview_publish_active(0U);
     sd_preview_reset_source_state();
 
     if (clear_state != 0U)
@@ -541,15 +458,7 @@ void sd_preview_init(void)
     g_sd_preview.state = SD_PREVIEW_STATE_IDLE;
     g_sd_preview.last_error = SD_PREVIEW_ERROR_NONE;
     g_sd_preview.gain = 1.0f;
-    g_sd_preview_control_epoch = 0U;
-    g_sd_preview_reset_fence = 0U;
-    g_sd_preview_reset_pending = 0U;
-    g_sd_preview_reset_publish_failed = 0U;
-    g_sd_preview_ring_ipc.write_count = 0U;
-    g_sd_preview_ring_ipc.read_count = 0U;
-    g_sd_preview_ring_ipc.epoch = 0U;
-    g_sd_preview_ring_ipc.active = 0U;
-    g_sd_preview_ring_ipc.gain = 1.0f;
+    g_sd_preview_ring_layout.write_count = 0U;
     sd_preview_reset_source_state();
 }
 
@@ -749,8 +658,6 @@ void sd_preview_stop(void)
 
 void sd_preview_process(void)
 {
-    if (sd_preview_ring_service_reset() == 0U)
-        return;
     if ((g_sd_preview.state != SD_PREVIEW_STATE_OPENING)
         && (g_sd_preview.state != SD_PREVIEW_STATE_STREAMING))
     {
@@ -782,52 +689,4 @@ void sd_preview_process(void)
         sd_preview_set_error(SD_PREVIEW_ERROR_READ_FAIL);
         sd_preview_clear_session(0U, 0U);
     }
-}
-
-uint8_t sd_preview_render_main(float *out_main_l, float *out_main_r, uint32_t frames)
-{
-    uint32_t i;
-    uint8_t mixed = 0U;
-
-    if ((out_main_l == 0) || (out_main_r == 0) || (frames == 0U))
-    {
-        return 0U;
-    }
-
-    if (g_sd_preview_ring_ipc.active == 0U)
-    {
-        return 0U;
-    }
-
-    for (i = 0U; i < frames; ++i)
-    {
-        float left = 0.0f;
-        float right = 0.0f;
-
-        if (sd_preview_ring_pop(&left, &right) == 0U)
-        {
-            break;
-        }
-
-        const float gain = g_sd_preview_ring_ipc.gain;
-        out_main_l[i] += left * gain;
-        out_main_r[i] += right * gain;
-        mixed = 1U;
-    }
-
-    return mixed;
-}
-
-uint8_t sd_preview_audio_apply_active(uint8_t active, uint32_t epoch)
-{
-    g_sd_preview_ring_ipc.epoch = epoch;
-    g_sd_preview_ring_ipc.active = (uint8_t)(active != 0U);
-    return 1U;
-}
-
-uint8_t sd_preview_audio_apply_gain(uint32_t gain_bits)
-{
-    union { uint32_t u; float f; } decoded = { .u = gain_bits };
-    g_sd_preview_ring_ipc.gain = decoded.f;
-    return 1U;
 }

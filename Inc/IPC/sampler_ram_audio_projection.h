@@ -2,8 +2,32 @@
 
 #include <stdint.h>
 
-#include "Sampler/sampler_ram_pool.h"
-#include "Audio/audio_shared_memory.h"
+#include "IPC/shared_memory_ref.h"
+#include "Sampler/sample_page_cache_config.h"
+
+typedef enum
+{
+    SAMPLER_RAM_FORMAT_NONE = 0,
+    SAMPLER_RAM_FORMAT_FLOAT32_MONO,
+    SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED
+} sampler_ram_format_t;
+
+#define SAMPLER_RAM_AUDIO_INVALID_SLOT UINT16_MAX
+#define SAMPLER_RAM_AUDIO_MAX_SLOTS SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS
+
+static inline uint16_t sampler_ram_audio_format_channels(
+    sampler_ram_format_t format)
+{
+    return (format == SAMPLER_RAM_FORMAT_FLOAT32_MONO) ? 1U
+        : (format == SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED) ? 2U : 0U;
+}
+
+static inline uint16_t sampler_ram_audio_format_bytes_per_frame(
+    sampler_ram_format_t format)
+{
+    return (uint16_t)(sampler_ram_audio_format_channels(format)
+                      * sizeof(float));
+}
 
 typedef struct
 {
@@ -21,12 +45,3 @@ typedef struct
 
 _Static_assert(sizeof(sampler_ram_audio_descriptor_t) == 40U,
                "Sample RAM AUDIO descriptor ABI changed");
-
-void sampler_ram_audio_projection_init(void);
-/* H743 local transport seam. H747 replaces the implementation, not the
- * region+offset descriptor consumed by AUDIO. */
-uint8_t sampler_ram_audio_projection_publish(uint16_t ram_slot,
-                                             const sampler_ram_slot_t *slot);
-void sampler_ram_audio_projection_withdraw(uint16_t ram_slot, uint32_t generation);
-uint8_t sampler_ram_audio_projection_resolve(uint16_t global_slot,
-                                             sampler_ram_audio_descriptor_t *out);

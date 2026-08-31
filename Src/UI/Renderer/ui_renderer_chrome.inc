@@ -264,12 +264,8 @@ static uint8_t ui_renderer_template_draw_audio_fx_group(
     static uint8_t display_peak = 32U;
     const brick_entity_id_t selected_entity =
         (brick_entity_id_t)ui_renderer_template_get_selected_entity();
-    const brick_entity_id_t requested_entity = audio_waveform_capture_get_entity();
-    const uint32_t published_generation = audio_waveform_capture_get_generation();
-    const uint8_t snapshot_read = ((cache.valid == 0U)
-            || (cache.generation != published_generation))
-        ? audio_waveform_capture_read(&snapshot) : 0U;
-    if (requested_entity != selected_entity)
+    const uint8_t snapshot_read = audio_waveform_capture_read(&snapshot);
+    if ((snapshot_read != 0U) && (snapshot.entity_id != selected_entity))
     {
         cache.valid = 0U;
         scale_entity = BRICK_ENTITY_INVALID_ID;
@@ -359,8 +355,7 @@ static uint8_t ui_renderer_template_draw_audio_fx_group(
         cache.valid = 1U;
     }
     const uint8_t snapshot_valid = (uint8_t)(
-        (requested_entity == selected_entity)
-        && (cache.valid != 0U)
+        (cache.valid != 0U)
         && (cache.entity_id == selected_entity));
 
     for (int px = x; px < (x + w); px += 2)
