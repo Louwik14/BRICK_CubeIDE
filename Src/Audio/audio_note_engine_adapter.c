@@ -15,7 +15,7 @@
 #include "Platform/brick_build_config.h"
 #include "IPC/control_audio_command.h"
 #include "Track/synth_polyphony.h"
-#include "Mod/mod_lfo_v1.h"
+#include "Mod/mod_lfo_v1_audio.h"
 
 static track_audio_runtime_ctx_t g_audio_track_ctx[BRICK_ENTITY_CAPACITY];
 static uint16_t g_audio_entity_mask_by_engine[TRACK_RUNTIME_ENGINE_COUNT];

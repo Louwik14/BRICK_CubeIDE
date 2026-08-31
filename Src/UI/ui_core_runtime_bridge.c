@@ -10,7 +10,7 @@
 #include "Track/track_runtime.h"
 #include "Track/track_state.h"
 #include "Keyboard/keyboard_runtime.h"
-#include "Mod/mod_lfo_v1.h"
+#include "Mod/mod_lfo_v1_control.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"

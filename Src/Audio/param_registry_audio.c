@@ -7,7 +7,7 @@
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/metronome_runtime.h"
 #include "Mod/mod_env3.h"
-#include "Mod/mod_lfo_v1.h"
+#include "Mod/mod_lfo_v1_audio.h"
 #include "Param/param_filter_audio.h"
 #include "Param/param_registry_backends.h"
 #include "Param/param_spec.h"

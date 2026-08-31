@@ -1,3 +1,4 @@
+#include "Mod/mod_matrix_control.h"
 #include "Track/track_sound_state.h"
 
 #include <stddef.h>

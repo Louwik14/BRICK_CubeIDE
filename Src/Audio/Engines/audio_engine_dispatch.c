@@ -31,8 +31,8 @@
 #include "Audio/sd_preview_audio.h"
 #include "mixer.h"
 #include "Track/track_types.h"
-#include "Mod/mod_lfo_v1.h"
-#include "Mod/mod_matrix.h"
+#include "Mod/mod_lfo_v1_audio.h"
+#include "Mod/mod_matrix_audio.h"
 
 static uint8_t g_runtime_track_enabled = 1U;
 static uint8_t g_runtime_last_drum_processed = 0xFFU;

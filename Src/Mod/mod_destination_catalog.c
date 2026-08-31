@@ -22,7 +22,7 @@
 #include "Param/param_registry_backends.h"
 #include "Param/param_prism_labels.h"
 #include "Param/param_stack_labels.h"
-#include "Mod/mod_lfo_v1.h"
+#include "Mod/mod_lfo_v1_audio.h"
 #include "Mod/mod_env3.h"
 #include "Track/entity_types.h"
 #include "mixer.h"

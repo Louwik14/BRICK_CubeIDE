@@ -1,4 +1,4 @@
-#include "Mod/mod_matrix.h"
+#include "Mod/mod_matrix_control.h"
 
 #include "IPC/live_clock_control.h"
 #include "IPC/live_parameter_audio_publication.h"

@@ -2,7 +2,7 @@
 
 #include <stdio.h>
 
-#include "Mod/mod_lfo_v1.h"
+#include "Mod/mod_lfo_v1_control.h"
 #include "ui_core.h"
 #include "ui_navigation.h"
 #include "ui_template_page.h"
