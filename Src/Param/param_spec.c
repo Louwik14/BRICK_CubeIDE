@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stddef.h>
 #include "Mod/mod_lfo_types.h"
+#include "Seq/seq_types.h"
 #include "Track/track_types.h"
 #include "Param/engine_model_catalog.h"
 #include "Sampler/sample_page_cache_config.h"

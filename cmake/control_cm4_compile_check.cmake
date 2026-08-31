@@ -43,7 +43,7 @@ set(control_forbidden_dependencies
     "/Inc/Audio/"
     "/Src/Audio/"
     "/mutable_instruments/"
-    "/Inspiration/ctag-tbd/")
+    "/Inspiration/")
 
 set(contract_forbidden_dependencies
     "/Inc/Audio/"

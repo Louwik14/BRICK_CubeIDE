@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include "Track/entity_types.h"
-#include "Param/param_store.h"
+#include "Param/param_ids.h"
 
 #define SEQ_TRACK_COUNT        BRICK_ENTITY_TOP_LEVEL_COUNT
 #define SEQ_LANE_CAPACITY      BRICK_ENTITY_CAPACITY

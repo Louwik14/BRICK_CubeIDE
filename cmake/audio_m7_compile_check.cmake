@@ -40,6 +40,7 @@ set(common_args
     -fsyntax-only)
 
 set(audio_forbidden_dependencies
+    "/Inspiration/"
     "/Inc/App/"
     "/Src/App/"
     "/Inc/Storage/"

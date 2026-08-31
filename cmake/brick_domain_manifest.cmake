@@ -262,7 +262,7 @@ set(DOMAIN_AUDIO
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_audio_drift.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_audio_drive.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_audio_fold.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_audio_fold_warps_lut.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_audio_fold_lut.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_audio_lofi.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_audio_point.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_audio_ring.c"

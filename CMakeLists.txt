@@ -189,13 +189,6 @@ set(MUTABLE_INSTRUMENTS_SRC
     ${MUTABLE_PLAITS_SPEECH_SRC} ${MUTABLE_BRAIDS_SRC}
     ${MUTABLE_STMLIB_DSP_SRC} ${MUTABLE_STMLIB_UTILS_SRC})
 
-set(CTAG_WARPS_RESOURCE "")
-set(CTAG_WARPS_RESOURCE_PATH
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/ctag-tbd/components/mutable/eurorack/warps/resources.cc")
-if(EXISTS "${CTAG_WARPS_RESOURCE_PATH}")
-    set(CTAG_WARPS_RESOURCE "${CTAG_WARPS_RESOURCE_PATH}")
-endif()
-
 set(BRICK6_VARIANT_DRIVER_INC_DIRS "")
 if(BRICK6_VARIANT STREQUAL "premium")
     list(APPEND BRICK6_VARIANT_DRIVER_INC_DIRS
@@ -304,8 +297,7 @@ endif()
 
 set(DOMAIN_CONTROL_BUILD ${DOMAIN_CONTROL} ${USB_DEVICE_LIB_SRC} ${USB_HOST_LIB_SRC}
     ${FATFS_SRC} ${U8G2_SRC})
-set(DOMAIN_AUDIO_BUILD ${DOMAIN_AUDIO} ${CMSIS_DSP_SRC} ${MUTABLE_INSTRUMENTS_SRC}
-    ${CTAG_WARPS_RESOURCE})
+set(DOMAIN_AUDIO_BUILD ${DOMAIN_AUDIO} ${CMSIS_DSP_SRC} ${MUTABLE_INSTRUMENTS_SRC})
 set(ALL_USER_SOURCES ${DOMAIN_CONTROL_BUILD} ${DOMAIN_AUDIO_BUILD}
     ${DOMAIN_CONTRACTS} ${PLATFORM_H743_BUILD})
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${ALL_USER_SOURCES})
@@ -349,7 +341,6 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
     ${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments
     ${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/stmlib
-    ${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/ctag-tbd/components/mutable/eurorack
     ${CMAKE_CURRENT_SOURCE_DIR}/tinyusb
 )
 
@@ -426,8 +417,7 @@ set(AUDIO_M7_INCLUDE_DIRS ${CONTROL_CM4_INCLUDE_DIRS}
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS_DSP/PrivateInclude"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Daisy_SP/Source/Utility"
     "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments"
-    "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/stmlib"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Inspiration/ctag-tbd/components/mutable/eurorack")
+    "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/stmlib")
 set(AUDIO_M7_MANIFEST "${CMAKE_CURRENT_BINARY_DIR}/audio_m7_compile_manifest.cmake")
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/cmake/audio_m7_compile_manifest.cmake.in"
