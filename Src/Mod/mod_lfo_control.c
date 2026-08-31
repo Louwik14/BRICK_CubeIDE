@@ -1,4 +1,5 @@
 #include "Mod/mod_lfo_v1.h"
+#include "Track/entity_types.h"
 
 #include <stddef.h>
 
@@ -32,7 +33,7 @@ void mod_lfo_v1_init(void)
 uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index,
                                    mod_lfo_param_t param, float value)
 {
-    if ((track >= SEQ_LANE_CAPACITY) || (lfo_index >= MOD_LFO_COUNT_PER_TRACK)
+    if ((track >= BRICK_ENTITY_CAPACITY) || (lfo_index >= MOD_LFO_COUNT_PER_TRACK)
             || ((uint8_t)param >= (uint8_t)MOD_LFO_PARAM_COUNT))
         return 0U;
 
@@ -71,7 +72,7 @@ uint8_t mod_lfo_v1_set_track_param(uint8_t track, uint8_t lfo_index,
 uint8_t mod_lfo_v1_get_track_param(uint8_t track, uint8_t lfo_index,
                                    mod_lfo_param_t param, float *out_value)
 {
-    if ((track >= SEQ_LANE_CAPACITY) || (lfo_index >= MOD_LFO_COUNT_PER_TRACK)
+    if ((track >= BRICK_ENTITY_CAPACITY) || (lfo_index >= MOD_LFO_COUNT_PER_TRACK)
             || (out_value == NULL)
             || ((uint8_t)param >= (uint8_t)MOD_LFO_PARAM_COUNT))
         return 0U;

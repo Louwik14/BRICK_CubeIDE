@@ -13,9 +13,6 @@
 
 #include "Audio/audio_note_engine_adapter.h"
 #include "Sampler/brick6_sampler_multi_contract.h"
-#include "Sampler/multi_sample_pool.h"
-#include "Sampler/sample_cache.h"
-#include "Sampler/sample_voice_reader.h"
 
 #ifdef __cplusplus
 extern "C" {

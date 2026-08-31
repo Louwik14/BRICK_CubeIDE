@@ -9,12 +9,12 @@
 #include "Audio/audio_note_engine_adapter.h"
 #include "IPC/control_audio_command.h"
 #include "Param/param_filter_audio.h"
-#include "Seq/seq_types.h"
+#include "Track/entity_types.h"
 #include "Platform/memory_layout.h"
 
 /* GROUP ENV3 configuration is owned by its master entity. */
 #undef SEQ_TRACK_COUNT
-#define SEQ_TRACK_COUNT SEQ_LANE_CAPACITY
+#define SEQ_TRACK_COUNT BRICK_ENTITY_CAPACITY
 
 #define MOD_ENV3_AUDIO_SAMPLE_RATE 48000.0f
 

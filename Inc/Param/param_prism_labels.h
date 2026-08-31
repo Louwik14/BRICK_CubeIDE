@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include "Param/param_store.h"
+#include "Param/param_ids.h"
 
 #ifdef __cplusplus
 extern "C" {

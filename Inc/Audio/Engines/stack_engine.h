@@ -7,7 +7,6 @@
 
 #include <stdint.h>
 #include "Param/engine_model_catalog.h"
-#include "Seq/seq_types.h"
 
 #ifdef __cplusplus
 extern "C" {

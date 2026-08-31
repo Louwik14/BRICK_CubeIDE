@@ -22,9 +22,6 @@ static void brick6_sampler_runtime_multi_stop_voice(brick6_sampler_voice_t *voic
     {
         brick6_sampler_runtime_multi_mark_voice_physical_release(voice);
     }
-    else
-    {
-    }
 
     if ((reason != (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_NONE)
         && (voice->active != 0U)

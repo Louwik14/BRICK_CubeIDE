@@ -6,7 +6,6 @@
 #include "Mod/mod_ramp.h"
 #include "Mod/mod_destination_contract.h"
 #include "Param/param_ids.h"
-#include "Seq/seq_types.h"
 
 typedef struct track_audio_runtime_ctx_s track_audio_runtime_ctx_t;
 

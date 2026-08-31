@@ -11,7 +11,7 @@
 #include "Param/param_filter_audio.h"
 #include "Param/param_registry_backends.h"
 #include "Param/param_spec.h"
-#include "Seq/seq_types.h"
+#include "Track/entity_types.h"
 
 static uint8_t param_audio_lfo_map(param_id_t id,
                                    uint8_t *out_lfo,
@@ -72,7 +72,7 @@ uint8_t param_audio_apply_track_rt(param_id_t id,
                                    uint8_t track,
                                    float value)
 {
-    if ((id >= PARAM_COUNT) || (track >= SEQ_LANE_CAPACITY)
+    if ((id >= PARAM_COUNT) || (track >= BRICK_ENTITY_CAPACITY)
             || (id == PARAM_CFG_POLY_VOICES) || (id == PARAM_CFG_POLY_SPREAD))
         return 0U;
     if (param_spec_value_is_valid(id, value) == 0U) return 0U;
@@ -86,7 +86,7 @@ uint8_t param_audio_apply_track(
     uint8_t track)
 {
     if ((prepared == NULL) || (prepared->id >= PARAM_COUNT)
-            || (track >= SEQ_LANE_CAPACITY)) return 0U;
+            || (track >= BRICK_ENTITY_CAPACITY)) return 0U;
     const param_id_t id = prepared->id;
     const float value = prepared->value;
     if (param_spec_value_is_valid(id, value) == 0U) return 0U;
