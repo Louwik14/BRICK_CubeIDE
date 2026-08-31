@@ -8,7 +8,7 @@
 #include "Seq/seq_division_catalog.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_model.h"
-#include "Mod/mod_matrix.h"
+#include "Mod/mod_matrix_control.h"
 #include "UI/ui_track_catalog.h"
 #include <math.h>
 

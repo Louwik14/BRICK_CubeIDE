@@ -1,7 +1,7 @@
 #include "ui_edit_context_sync.h"
 
 #include "Keyboard/keyboard_runtime.h"
-#include "Mod/mod_lfo_v1.h"
+#include "Mod/mod_lfo_v1_control.h"
 #include "ui_core.h"
 #include "ui_core_navigation_bridge.h"
 #include "ui_page_manager.h"

@@ -24,7 +24,7 @@
 #include "Audio/synth_waveform_audio.h"
 #include "IPC/live_parameter_event.h"
 #include "Track/synth_polyphony.h"
-#include "Mod/mod_lfo_v1.h"
+#include "Mod/mod_lfo_v1_audio.h"
 #include "Mod/mod_env3.h"
 #include "Audio/sd_preview_audio.h"
 

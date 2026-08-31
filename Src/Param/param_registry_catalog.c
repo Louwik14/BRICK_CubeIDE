@@ -2,7 +2,7 @@
 #include "Param/engine_model_catalog.h"
 #include "Param/param_filter.h"
 #include "Param/param_registry_apply_bindings.h"
-#include "Mod/mod_lfo_v1.h"
+#include "Mod/mod_lfo_v1_control.h"
 #include "Sampler/sample_global_pool.h"
 #include "Seq/seq_types.h"
 #include "Seq/seq_division_catalog.h"

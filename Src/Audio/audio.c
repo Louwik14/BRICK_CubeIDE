@@ -35,7 +35,7 @@
 #include "Audio/sd_preview_audio.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_mod_matrix.h"
-#include "Mod/mod_lfo_v1.h"
+#include "Mod/mod_lfo_v1_audio.h"
 #include "Mod/mod_env3.h"
 #include "Board/board_audio.h"
 #include "Board/board_audio_format.h"

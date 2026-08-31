@@ -3,7 +3,7 @@
 #include "ui_core.h"
 #include "Track/track_runtime.h"
 #include "Param/param_registry_runtime_state.h"
-#include "Mod/mod_lfo_v1.h"
+#include "Mod/mod_lfo_v1_control.h"
 #include <string.h>
 
 static float clamp_value(float v, float lo, float hi)

@@ -12,7 +12,7 @@ void audio_mod_matrix_init(void)
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         uint8_t selected = 0U;
-        mod_matrix_set_defaults(g_mod_matrix_audio_state[track].slots, &selected);
+        mod_matrix_audio_set_defaults(g_mod_matrix_audio_state[track].slots, &selected);
         g_mod_matrix_audio_state[track].multi_source[0][0] =
             (uint8_t)param_spec[PARAM_MOD_MULTI_1_A].default_value;
         g_mod_matrix_audio_state[track].multi_source[0][1] =

@@ -1,4 +1,4 @@
-#include "Mod/mod_lfo_v1.h"
+#include "Mod/mod_lfo_v1_control.h"
 #include "Track/entity_types.h"
 
 #include <stddef.h>

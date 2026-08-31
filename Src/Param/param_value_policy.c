@@ -3,7 +3,7 @@
 #include <math.h>
 
 #include "Param/engine_model_catalog.h"
-#include "Mod/mod_lfo_v1.h"
+#include "Mod/mod_lfo_v1_control.h"
 #include "Param/param_registry.h"
 
 static float clampf(float value, float min_value, float max_value)

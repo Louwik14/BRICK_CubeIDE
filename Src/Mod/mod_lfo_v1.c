@@ -1,4 +1,4 @@
-#include "Mod/mod_lfo_v1.h"
+#include "Mod/mod_lfo_v1_audio.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "IPC/control_audio_command.h"
 #include "Mod/mod_lfo_segment.h"
@@ -13,7 +13,7 @@
 #include "Audio/mixer.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Mod/mod_env3.h"
-#include "Mod/mod_matrix.h"
+#include "Mod/mod_matrix_audio.h"
 #include "Audio/audio_transport_runtime.h"
 
 /* GROUP modulation state is owned by its master entity. */
