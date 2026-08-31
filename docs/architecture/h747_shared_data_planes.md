@@ -92,11 +92,20 @@ debut/fin du crossfade Looper et release physique. La publication supprime les
 ecritures identiques; aucun heartbeat periodique n'existe.
 
 Hors retours physiques necessaires au recyclage (tail FIFO, leases STREAM et
-PCM/framing Recorder), les projections M7->M4 finales sont exactement l'ancre
-Clock, le niveau REC, les waveforms audio/synth et le diagnostic Audio.
+PCM/framing Recorder), les projections M7->M4 finales sont exactement le niveau
+REC, les waveforms audio/synth et le diagnostic Audio.
 Aucun ACK de commande, READY musical, binding, programme installe ou PARAM
 applique n'est retourne. H743 et H747 partagent exactement cette semantique;
 seuls placement, cache, barrieres et visibilite different.
+
+Le retrait RAM/Wavetable n'observe pas le curseur consumer de la FIFO. CONTROL
+invalide d'abord la projection, commit le STOP, puis attend localement
+`L + 2*H`, avec `L` l'horizon maximal de publication et `H` la taille d'un
+demi-buffer AUDIO. Les valeurs actuelles `L=64`, `H=64` donnent 192 samples;
+elles sont derivees des constantes contractuelles, jamais d'une duree en ms.
+Multi, Classic et Looper ne sont recyclables que lorsque leurs leases physiques
+existantes ne referencent plus leurs cles. Aucun `released_generation`, fence
+consumer ou ACK fonctionnel M7->M4 n'existe.
 
 Les references de payload partagent uniquement leur ABI `{region, offset,
 length}`: construction et resolution CONTROL sont distinctes de la resolution

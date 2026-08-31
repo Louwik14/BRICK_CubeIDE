@@ -8,19 +8,19 @@
 #include "IPC/control_audio_publication.h"
 #include "IPC/live_clock_control.h"
 
-static uint8_t g_external_input[UI_TRACK_COUNT];
+static uint8_t g_external_input[TRACK_COUNT];
 static uint8_t g_external_owner[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT];
 
-static uint8_t track_input_ownership_is_external(const ui_track_config_t *config)
+static uint8_t track_input_ownership_is_external(const track_config_t *config)
 {
     return (uint8_t)((config != NULL)
-            && (config->family == UI_TRACK_FAMILY_EXTERNAL)
-            && (config->type == UI_TRACK_TYPE_EXTERNAL));
+            && (config->family == TRACK_FAMILY_EXTERNAL)
+            && (config->type == TRACK_TYPE_EXTERNAL));
 }
 
 static uint8_t track_input_ownership_build(
-    const ui_track_config_t configs[UI_TRACK_COUNT],
-    const uint8_t selected[UI_TRACK_COUNT],
+    const track_config_t configs[TRACK_COUNT],
+    const uint8_t selected[TRACK_COUNT],
     uint8_t owners[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT])
 {
     if ((configs == NULL) || (selected == NULL) || (owners == NULL))
@@ -29,7 +29,7 @@ static uint8_t track_input_ownership_build(
     }
 
     memset(owners, TRACK_INPUT_OWNER_NONE, ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT);
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < TRACK_COUNT; ++track)
     {
         if (track_input_ownership_is_external(&configs[track]) == 0U)
         {
@@ -47,9 +47,9 @@ static uint8_t track_input_ownership_build(
     return 1U;
 }
 
-void track_input_ownership_init(const ui_track_config_t configs[UI_TRACK_COUNT])
+void track_input_ownership_init(const track_config_t configs[TRACK_COUNT])
 {
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < TRACK_COUNT; ++track)
     {
         g_external_input[track] = (uint8_t)(track % ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT);
     }
@@ -58,23 +58,23 @@ void track_input_ownership_init(const ui_track_config_t configs[UI_TRACK_COUNT])
 }
 
 uint8_t track_input_ownership_apply_configs(
-    const ui_track_config_t configs[UI_TRACK_COUNT])
+    const track_config_t configs[TRACK_COUNT])
 {
     return track_input_ownership_apply_bulk(configs, g_external_input);
 }
 
 uint8_t track_input_ownership_apply_bulk(
-    const ui_track_config_t configs[UI_TRACK_COUNT],
-    const uint8_t external_input[UI_TRACK_COUNT])
+    const track_config_t configs[TRACK_COUNT],
+    const uint8_t external_input[TRACK_COUNT])
 {
-    uint8_t next_selected[UI_TRACK_COUNT];
+    uint8_t next_selected[TRACK_COUNT];
     uint8_t next_owners[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT];
     if ((configs == NULL) || (external_input == NULL))
     {
         return 0U;
     }
 
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < TRACK_COUNT; ++track)
     {
         const uint8_t input = external_input[track];
         if (input >= ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT)
@@ -117,15 +117,15 @@ uint8_t track_input_ownership_apply_bulk(
 }
 
 uint8_t track_input_ownership_validate_bulk(
-    const ui_track_config_t configs[UI_TRACK_COUNT],
-    const uint8_t external_input[UI_TRACK_COUNT])
+    const track_config_t configs[TRACK_COUNT],
+    const uint8_t external_input[TRACK_COUNT])
 {
     uint8_t owners[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT];
     if ((configs == NULL) || (external_input == NULL))
     {
         return 0U;
     }
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < TRACK_COUNT; ++track)
     {
         if (external_input[track] >= ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT)
         {
@@ -137,7 +137,7 @@ uint8_t track_input_ownership_validate_bulk(
 
 uint8_t track_input_ownership_can_claim(uint8_t track, uint8_t input)
 {
-    if ((track >= UI_TRACK_COUNT)
+    if ((track >= TRACK_COUNT)
             || (input >= ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT))
     {
         return 0U;
@@ -149,10 +149,10 @@ uint8_t track_input_ownership_can_claim(uint8_t track, uint8_t input)
 uint8_t track_input_ownership_set_external_input(
     uint8_t track,
     uint8_t input,
-    const ui_track_config_t configs[UI_TRACK_COUNT])
+    const track_config_t configs[TRACK_COUNT])
 {
-    uint8_t selected[UI_TRACK_COUNT];
-    if ((track >= UI_TRACK_COUNT)
+    uint8_t selected[TRACK_COUNT];
+    if ((track >= TRACK_COUNT)
             || (input >= ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT)
             || (configs == NULL))
     {
@@ -166,7 +166,7 @@ uint8_t track_input_ownership_set_external_input(
 
 uint8_t track_input_ownership_get_external_input(uint8_t track)
 {
-    return (track < UI_TRACK_COUNT) ? g_external_input[track] : 0U;
+    return (track < TRACK_COUNT) ? g_external_input[track] : 0U;
 }
 
 uint8_t track_input_ownership_get_external_owner(uint8_t input, uint8_t *out_track)

@@ -37,73 +37,73 @@ static void mod_matrix_audio_read_models(
 }
 
 
-static ui_track_family_t mod_matrix_ui_family_from_ctx(const track_audio_runtime_ctx_t *ctx)
+static track_family_t mod_matrix_ui_family_from_ctx(const track_audio_runtime_ctx_t *ctx)
 {
     if (ctx == NULL)
     {
-        return UI_TRACK_FAMILY_OFF;
+        return TRACK_FAMILY_OFF;
     }
 
     switch ((track_runtime_family_t)ctx->family)
     {
         case TRACK_RUNTIME_FAMILY_SYNTH:
-            return UI_TRACK_FAMILY_SYNTH;
+            return TRACK_FAMILY_SYNTH;
         case TRACK_RUNTIME_FAMILY_SAMPLER:
-            return UI_TRACK_FAMILY_SAMPLER;
+            return TRACK_FAMILY_SAMPLER;
         case TRACK_RUNTIME_FAMILY_DRUM:
-            return UI_TRACK_FAMILY_DRUM;
-            return UI_TRACK_FAMILY_OFF;
+            return TRACK_FAMILY_DRUM;
+            return TRACK_FAMILY_OFF;
         case TRACK_RUNTIME_FAMILY_MIDI:
-            return UI_TRACK_FAMILY_MIDI;
+            return TRACK_FAMILY_MIDI;
         case TRACK_RUNTIME_FAMILY_EXTERNAL:
-            return UI_TRACK_FAMILY_EXTERNAL;
+            return TRACK_FAMILY_EXTERNAL;
         case TRACK_RUNTIME_FAMILY_OFF:
         default:
-            return UI_TRACK_FAMILY_OFF;
+            return TRACK_FAMILY_OFF;
     }
 }
 
-static ui_track_type_t mod_matrix_ui_type_from_ctx(const track_audio_runtime_ctx_t *ctx)
+static track_type_t mod_matrix_ui_type_from_ctx(const track_audio_runtime_ctx_t *ctx)
 {
     if (ctx == NULL)
     {
-        return UI_TRACK_TYPE_NONE;
+        return TRACK_TYPE_NONE;
     }
 
     switch ((track_runtime_type_t)ctx->type)
     {
         case TRACK_RUNTIME_TYPE_RAM:
-            return UI_TRACK_TYPE_RAM;
+            return TRACK_TYPE_RAM;
         case TRACK_RUNTIME_TYPE_PRISM:
-            return UI_TRACK_TYPE_PRISM;
+            return TRACK_TYPE_PRISM;
         case TRACK_RUNTIME_TYPE_WAVE:
-            return UI_TRACK_TYPE_WAVE;
+            return TRACK_TYPE_WAVE;
         case TRACK_RUNTIME_TYPE_STACK:
-            return UI_TRACK_TYPE_STACK;
+            return TRACK_TYPE_STACK;
         case TRACK_RUNTIME_TYPE_DRUM_MD:
-            return UI_TRACK_TYPE_DRUM_MD;
+            return TRACK_TYPE_DRUM_MD;
         case TRACK_RUNTIME_TYPE_MIDI:
-            return UI_TRACK_TYPE_MIDI;
+            return TRACK_TYPE_MIDI;
         case TRACK_RUNTIME_TYPE_EXTERNAL:
-            return UI_TRACK_TYPE_EXTERNAL;
+            return TRACK_TYPE_EXTERNAL;
         case TRACK_RUNTIME_TYPE_STREAM:
-            return UI_TRACK_TYPE_STREAM;
+            return TRACK_TYPE_STREAM;
         case TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG:
-            return UI_TRACK_TYPE_DRUM_BD_ANALOG;
+            return TRACK_TYPE_DRUM_BD_ANALOG;
         case TRACK_RUNTIME_TYPE_LOOPER:
-            return UI_TRACK_TYPE_LOOPER;
+            return TRACK_TYPE_LOOPER;
         case TRACK_RUNTIME_TYPE_MULTI:
-            return UI_TRACK_TYPE_MULTI;
+            return TRACK_TYPE_MULTI;
         case TRACK_RUNTIME_TYPE_NONE:
         default:
-            return UI_TRACK_TYPE_NONE;
+            return TRACK_TYPE_NONE;
     }
 }
 
 static uint8_t mod_matrix_slot_is_effective(uint8_t track,
                                             const track_mod_matrix_slot_t *slot,
-                                            ui_track_family_t family,
-                                            ui_track_type_t type,
+                                            track_family_t family,
+                                            track_type_t type,
                                             const track_audio_runtime_ctx_t *ctx)
 {
     uint8_t target = 0U;
@@ -305,8 +305,8 @@ static void mod_matrix_restore_destination_value(
 }
 
 static void mod_matrix_rebuild_track_plan(uint8_t track,
-                                          ui_track_family_t family,
-                                          ui_track_type_t type,
+                                          track_family_t family,
+                                          track_type_t type,
                                           const track_audio_runtime_ctx_t *ctx,
                                           const mod_matrix_audio_state_t *state)
 {

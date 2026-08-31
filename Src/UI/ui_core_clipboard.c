@@ -40,8 +40,8 @@ typedef struct
 {
     uint8_t valid;
     ui_clipboard_scope_t scope;
-    ui_track_family_t source_family;
-    ui_track_type_t source_type;
+    track_family_t source_family;
+    track_type_t source_type;
     uint8_t param_count;
     param_id_t params[PARAM_COUNT];
     float values[PARAM_COUNT];

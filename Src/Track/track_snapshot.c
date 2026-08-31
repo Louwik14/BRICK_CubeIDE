@@ -426,8 +426,8 @@ uint8_t track_snapshot_capture(uint8_t track, track_snapshot_t *out_snapshot)
     out_snapshot->external_input = track_state_get_external_input(track);
     out_snapshot->midi_channel = track_state_get_midi_channel(track);
     out_snapshot->midi_source = track_state_get_midi_source(track);
-    if ((out_snapshot->config.family == UI_TRACK_FAMILY_SYNTH)
-            || (out_snapshot->config.family == UI_TRACK_FAMILY_DRUM))
+    if ((out_snapshot->config.family == TRACK_FAMILY_SYNTH)
+            || (out_snapshot->config.family == TRACK_FAMILY_DRUM))
     {
         float voices = 1.0f;
         (void)param_registry_get_track_value(
@@ -436,8 +436,8 @@ uint8_t track_snapshot_capture(uint8_t track, track_snapshot_t *out_snapshot)
         (void)param_registry_get_track_value(
             PARAM_CFG_POLY_SPREAD, track, &out_snapshot->poly_spread);
     }
-    else if ((out_snapshot->config.family == UI_TRACK_FAMILY_SAMPLER)
-            && (out_snapshot->config.type == UI_TRACK_TYPE_MULTI))
+    else if ((out_snapshot->config.family == TRACK_FAMILY_SAMPLER)
+            && (out_snapshot->config.type == TRACK_TYPE_MULTI))
     {
         float voices = 1.0f;
         (void)param_registry_get_track_value(
@@ -484,11 +484,11 @@ uint8_t track_snapshot_make_default(uint8_t track, track_snapshot_t *out_snapsho
     }
 
     memset(out_snapshot, 0, sizeof(*out_snapshot));
-    out_snapshot->config.family = UI_TRACK_FAMILY_OFF;
-    out_snapshot->config.type = UI_TRACK_TYPE_NONE;
+    out_snapshot->config.family = TRACK_FAMILY_OFF;
+    out_snapshot->config.type = TRACK_TYPE_NONE;
     out_snapshot->external_input = (uint8_t)(track % ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT);
     out_snapshot->midi_channel = (uint8_t)((track < 16U) ? (track + 1U) : 16U);
-    out_snapshot->midi_source = UI_TRACK_MIDI_SRC_ALL;
+    out_snapshot->midi_source = TRACK_MIDI_SOURCE_ALL;
     out_snapshot->poly_voice_count = 1U;
     out_snapshot->poly_spread = 0.0f;
     for (param_id_t id = 0U; id < PARAM_COUNT; ++id)
@@ -529,16 +529,16 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
 
     uint8_t family[BRICK_ENTITY_CAPACITY];
     uint8_t type[BRICK_ENTITY_CAPACITY];
-    uint8_t external_input[UI_TRACK_COUNT];
+    uint8_t external_input[TRACK_COUNT];
     uint8_t midi_channel[BRICK_ENTITY_CAPACITY];
     uint8_t midi_source[BRICK_ENTITY_CAPACITY];
 
     for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
     {
-        const ui_track_config_t cfg = track_state_get_config(track);
+        const track_config_t cfg = track_state_get_config(track);
         family[track] = (uint8_t)cfg.family;
         type[track] = (uint8_t)cfg.type;
-        if (track < UI_TRACK_COUNT)
+        if (track < TRACK_COUNT)
         {
             external_input[track] = track_state_get_external_input(track);
         }
@@ -551,23 +551,23 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
             && (options->source_track < BRICK_ENTITY_CAPACITY)
             && (options->source_track != target_track))
     {
-        family[options->source_track] = (uint8_t)UI_TRACK_FAMILY_OFF;
-        type[options->source_track] = (uint8_t)UI_TRACK_TYPE_NONE;
+        family[options->source_track] = (uint8_t)TRACK_FAMILY_OFF;
+        type[options->source_track] = (uint8_t)TRACK_TYPE_NONE;
     }
 
-    const ui_track_family_t target_family =
+    const track_family_t target_family =
         ((options != 0) && (options->has_family_override != 0U))
             ? options->family_override
             : snapshot->config.family;
 
     uint8_t applied_voice_count = snapshot->poly_voice_count;
-    const uint8_t target_is_multi = (uint8_t)((target_family == UI_TRACK_FAMILY_SAMPLER)
-        && (snapshot->config.type == UI_TRACK_TYPE_MULTI));
-    if ((target_family == UI_TRACK_FAMILY_SYNTH) || (target_family == UI_TRACK_FAMILY_DRUM))
+    const uint8_t target_is_multi = (uint8_t)((target_family == TRACK_FAMILY_SAMPLER)
+        && (snapshot->config.type == TRACK_TYPE_MULTI));
+    if ((target_family == TRACK_FAMILY_SYNTH) || (target_family == TRACK_FAMILY_DRUM))
     {
         const uint8_t maximum = (uint8_t)param_registry[PARAM_CFG_POLY_VOICES].max;
         if (applied_voice_count < 1U) applied_voice_count = 1U;
-        if (target_family == UI_TRACK_FAMILY_DRUM) applied_voice_count = 1U;
+        if (target_family == TRACK_FAMILY_DRUM) applied_voice_count = 1U;
         if (applied_voice_count > maximum)
         {
             applied_voice_count = maximum;
@@ -588,32 +588,32 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
 
     family[target_track] = (uint8_t)target_family;
     type[target_track] = (uint8_t)snapshot->config.type;
-    if (target_track < UI_TRACK_COUNT)
+    if (target_track < TRACK_COUNT)
     {
         external_input[target_track] = snapshot->external_input;
     }
     midi_channel[target_track] = snapshot->midi_channel;
     midi_source[target_track] = (uint8_t)snapshot->midi_source;
 
-    ui_track_config_t ownership_configs[BRICK_ENTITY_CAPACITY];
+    track_config_t ownership_configs[BRICK_ENTITY_CAPACITY];
     for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
     {
         ownership_configs[track] = track_state_get_config(track);
     }
     for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
     {
-        if ((family[track] >= (uint8_t)UI_TRACK_FAMILY_COUNT)
-                || (type[track] >= (uint8_t)UI_TRACK_TYPE_COUNT)
-                || ((family[track] == (uint8_t)UI_TRACK_FAMILY_OFF)
-                    && (type[track] != (uint8_t)UI_TRACK_TYPE_NONE)))
+        if ((family[track] >= (uint8_t)TRACK_FAMILY_COUNT)
+                || (type[track] >= (uint8_t)TRACK_TYPE_COUNT)
+                || ((family[track] == (uint8_t)TRACK_FAMILY_OFF)
+                    && (type[track] != (uint8_t)TRACK_TYPE_NONE)))
         {
             return 0U;
         }
-        ownership_configs[track].family = (ui_track_family_t)family[track];
-        ownership_configs[track].type = (ui_track_type_t)type[track];
+        ownership_configs[track].family = (track_family_t)family[track];
+        ownership_configs[track].type = (track_type_t)type[track];
     }
     const uint8_t prospective_group_active = (uint8_t)(
-        ownership_configs[BRICK_ENTITY_GROUP_MASTER_ID].type == UI_TRACK_TYPE_GROUP);
+        ownership_configs[BRICK_ENTITY_GROUP_MASTER_ID].type == TRACK_TYPE_GROUP);
     for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
     {
         entity_topology_descriptor_t entity;
@@ -622,7 +622,7 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
         {
             continue;
         }
-        if ((ownership_configs[track].family != UI_TRACK_FAMILY_OFF)
+        if ((ownership_configs[track].family != TRACK_FAMILY_OFF)
                 && (ui_track_catalog_type_is_available(
                         track,
                         ownership_configs[track].family,
@@ -638,7 +638,7 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
     }
 
     const uint8_t group_active = (uint8_t)(type[BRICK_ENTITY_GROUP_MASTER_ID]
-        == (uint8_t)UI_TRACK_TYPE_GROUP);
+        == (uint8_t)TRACK_TYPE_GROUP);
     entity_topology_descriptor_t target_entity;
     if ((entity_topology_resolve(group_active,
                                  (brick_entity_id_t)target_track,
@@ -700,7 +700,7 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
         goto restore_done;
     }
 
-    if ((target_family == UI_TRACK_FAMILY_SYNTH) || (target_family == UI_TRACK_FAMILY_DRUM)
+    if ((target_family == TRACK_FAMILY_SYNTH) || (target_family == TRACK_FAMILY_DRUM)
             || (target_is_multi != 0U))
     {
         if (param_registry_apply_track_value(PARAM_CFG_POLY_VOICES,
@@ -709,7 +709,7 @@ uint8_t track_snapshot_apply_ex(uint8_t target_track,
         {
             goto restore_done;
         }
-        if ((target_family == UI_TRACK_FAMILY_SYNTH) || (target_is_multi != 0U))
+        if ((target_family == TRACK_FAMILY_SYNTH) || (target_is_multi != 0U))
         {
             if (param_registry_apply_track_value(PARAM_CFG_POLY_SPREAD,
                                                   target_track,

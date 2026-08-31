@@ -202,12 +202,14 @@ void brick6_sampler_runtime_stop_ram_slot(uint16_t ram_slot, uint32_t generation
     for (uint8_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
     {
         brick6_sampler_voice_t *const voice = &g_sampler_voice[track];
-        if ((voice->active != 0U)
-            && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_RAM)
+        if ((voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_RAM)
             && (voice->ram_slot == ram_slot)
             && (voice->ram_generation == generation))
         {
-            brick6_sampler_runtime_begin_declick_tail(track, voice);
+            if (voice->active != 0U)
+                brick6_sampler_runtime_begin_declick_tail(track, voice);
+            /* The declick tail copied only scalar endpoint/gain state.  No
+             * retiring RAM pointer survives this command. */
             brick6_sampler_runtime_clear_ram_voice(voice);
         }
     }

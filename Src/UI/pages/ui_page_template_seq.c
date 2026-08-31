@@ -28,18 +28,18 @@ static ui_template_page_state_t g_ui_template_seq_state = {
 
 void ui_page_template_seq_register_families(void)
 {
-    for (uint8_t track_family = 0U; track_family < (uint8_t)UI_TRACK_FAMILY_COUNT; ++track_family)
+    for (uint8_t track_family = 0U; track_family < (uint8_t)TRACK_FAMILY_COUNT; ++track_family)
     {
-        for (uint8_t track_type = 0U; track_type < (uint8_t)UI_TRACK_TYPE_COUNT; ++track_type)
+        for (uint8_t track_type = 0U; track_type < (uint8_t)TRACK_TYPE_COUNT; ++track_type)
         {
-            if (!ui_track_type_is_valid_for_family((ui_track_family_t)track_family, (ui_track_type_t)track_type))
+            if (!ui_track_type_is_valid_for_family((track_family_t)track_family, (track_type_t)track_type))
             {
                 continue;
             }
 
             ui_template_family_register(UI_TEMPLATE_FAMILY_SEQ,
-                                        (ui_track_family_t)track_family,
-                                        (ui_track_type_t)track_type,
+                                        (track_family_t)track_family,
+                                        (track_type_t)track_type,
                                         &g_ui_template_seq_family);
         }
     }

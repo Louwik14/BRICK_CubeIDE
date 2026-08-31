@@ -6,7 +6,7 @@ Chaque PLAY porte NOTE, VELOCITY, LENGTH et MICROTIMING avec masque de presence;
 
 Le timestamp PLAY est resolu une seule fois dans le scheduler CONTROL a partir de la boundary nominale de lane. Les occurrences impaires de la lane recoivent le SWING (`0%` droit, `100%` = retard d'un demi-step de lane); cette phase alternee ne depend pas du rebouclage du pattern. Le MICROTIMING est ensuite converti sur la cadence de base et reduit symetriquement par QUANT (`0%` conserve, `100%` annule). ROLL derive tous ses retriggers de cette origine finale; Note FX recoit donc un timestamp deja definitif. Les sources du step suivant sont ouvertes a la boundary precedente pour couvrir le MICROTIMING negatif sans logique temporelle AUDIO. Lorsqu'une source vient seulement d'etre ouverte et que son premier lead negatif precede l'horizon encore modifiable, cette premiere occurrence est clampee a cet horizon; une source deja publiee n'est jamais rejouee.
 
-CONTROL conserve le futur musical sous forme de sources actives et de deadlines. Sa superloop se cadence sans appel AUDIO: TIM12 avance le tick musical interne et TIM5 extrapole la timeline sample depuis l'unique ancre boot SAI. Elle maintient un horizon glissant de 64 frames en avant du temps physique connu. Les actions finales du scheduler, des expirations/steals/fermetures et de Note FX sont reunies dans les buckets de cette fenetre puis emises par sample croissant; l'ordre de decouverte interne ne peut donc pas violer la monotonie de la FIFO. Toute fermeture demandee entre deux fenetres ouvre le meme bucket CONTROL au premier sample encore publiable; aucun STOP ne contourne la finalisation. `g_seq_play_events`, les futurs Off longue duree et la pre-expansion ROLL n'existent plus.
+CONTROL conserve le futur musical sous forme de sources actives et de deadlines. Sa superloop se cadence sans appel AUDIO: TIM12 avance le tick musical interne et CONTROL convertit directement la timeline TIM5 absolue en samples. Elle maintient un horizon glissant de 64 frames en avant du temps physique connu. Les actions finales du scheduler, des expirations/steals/fermetures et de Note FX sont reunies dans les buckets de cette fenetre puis emises par sample croissant; l'ordre de decouverte interne ne peut donc pas violer la monotonie de la FIFO. Toute fermeture demandee entre deux fenetres ouvre le meme bucket CONTROL au premier sample encore publiable; aucun STOP ne contourne la finalisation. `g_seq_play_events`, les futurs Off longue duree et la pre-expansion ROLL n'existent plus.
 
 Un Pattern arme borne cet horizon au sample exact de sa prochaine boundary de
 lane. CONTROL applique alors le nouveau Pattern avant de construire la fenetre
@@ -21,7 +21,7 @@ Undo/Redo conserve huit transactions structurelles. No-op n'est pas capture, une
 
 ## Horodatage live
 
-Hall, USB MIDI Device, USB MIDI Host et encodeurs capturent TIM5 a l'ingestion avec un `ingress_serial` monotone. CONTROL convertit contre l'ancrage SAI boot coherent et applique une garde fixe de 64 samples. La valeur effective n'est calculee qu'une fois.
+Hall, USB MIDI Device, USB MIDI Host et encodeurs capturent TIM5 a l'ingestion avec un `ingress_serial` monotone. CONTROL convertit directement cette capture et applique une garde fixe de 64 samples. La valeur effective n'est calculee qu'une fois.
 
 Hall publie un evenement fixe de 16 octets dans une FIFO bornee; Device conserve 128 paquets et Host 64. Les files rejettent deterministement le plus recent a saturation et incrementent leurs diagnostics.
 

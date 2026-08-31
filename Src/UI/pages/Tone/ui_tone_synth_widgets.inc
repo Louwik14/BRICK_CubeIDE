@@ -1,8 +1,8 @@
 static const ui_prism_param_label_t *ui_page_template_tone_prism_labels_for_param(param_id_t id, uint8_t *out_edit_index)
 {
     const uint8_t active_track = ui_get_active_lane();
-    if ((ui_get_track_family(active_track) != UI_TRACK_FAMILY_SYNTH)
-            || (ui_get_track_type(active_track) != UI_TRACK_TYPE_PRISM))
+    if ((ui_get_track_family(active_track) != TRACK_FAMILY_SYNTH)
+            || (ui_get_track_type(active_track) != TRACK_TYPE_PRISM))
     {
         return NULL;
     }
@@ -660,8 +660,8 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
     (void)slot;
 
     if ((g_ui_template_tone_subset == 0U)
-            && (ui_get_track_family(ui_get_active_lane()) == UI_TRACK_FAMILY_SYNTH)
-            && (ui_get_track_type(ui_get_active_lane()) == UI_TRACK_TYPE_FM)
+            && (ui_get_track_family(ui_get_active_lane()) == TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(ui_get_active_lane()) == TRACK_TYPE_FM)
             && (id == PARAM_FM_ALGORITHM))
     {
         return UIW_WIDGET_ALGO_ICON;
@@ -734,8 +734,8 @@ static ui_template_custom_widget_kind_t ui_page_template_tone_pick_custom_widget
     (void)slot;
 
     if ((g_ui_template_tone_subset == 0U)
-            && (ui_get_track_family(ui_get_active_lane()) == UI_TRACK_FAMILY_SYNTH)
-            && (ui_get_track_type(ui_get_active_lane()) == UI_TRACK_TYPE_FM)
+            && (ui_get_track_family(ui_get_active_lane()) == TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(ui_get_active_lane()) == TRACK_TYPE_FM)
             && (subpage != NULL)
             && (((subpage->param_bank.params[0] == PARAM_FM_PITCH_R1)
                     && (subpage->param_bank.params[1] == PARAM_FM_PITCH_R2)
@@ -750,8 +750,8 @@ static ui_template_custom_widget_kind_t ui_page_template_tone_pick_custom_widget
         return UI_TEMPLATE_CUSTOM_WIDGET_FM_PITCH_EG_GROUP;
     }
 
-    if ((ui_get_track_family(ui_get_active_lane()) == UI_TRACK_FAMILY_SYNTH)
-            && (ui_get_track_type(ui_get_active_lane()) == UI_TRACK_TYPE_WAVE)
+    if ((ui_get_track_family(ui_get_active_lane()) == TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(ui_get_active_lane()) == TRACK_TYPE_WAVE)
             && (subpage != NULL)
             && (((subpage->param_bank.params[0] == PARAM_WAVE_OSC1_TABLE)
                     && (subpage->param_bank.params[1] == PARAM_WAVE_OSC1_POS)
@@ -835,8 +835,8 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
         return 1U;
     }
     if ((g_ui_template_tone_subset == 0U)
-            && (ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
-            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_FM))
+            && (ui_get_track_family(active_track) == TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(active_track) == TRACK_TYPE_FM))
     {
         const char *name = NULL;
         switch (id)
@@ -879,9 +879,9 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
         }
     }
 
-    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
-            && ((ui_get_track_type(active_track) == UI_TRACK_TYPE_WAVE)
-                || (ui_get_track_type(active_track) == UI_TRACK_TYPE_PRISM)))
+    if ((ui_get_track_family(active_track) == TRACK_FAMILY_SYNTH)
+            && ((ui_get_track_type(active_track) == TRACK_TYPE_WAVE)
+                || (ui_get_track_type(active_track) == TRACK_TYPE_PRISM)))
     {
         const char *name = NULL;
         switch (id)
@@ -980,8 +980,8 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
         }
     }
 
-    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SAMPLER)
-            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_RAM))
+    if ((ui_get_track_family(active_track) == TRACK_FAMILY_SAMPLER)
+            && (ui_get_track_type(active_track) == TRACK_TYPE_RAM))
     {
         const char *name = NULL;
         switch (id)
@@ -1027,8 +1027,8 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
         }
     }
 
-    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SAMPLER)
-            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_MULTI))
+    if ((ui_get_track_family(active_track) == TRACK_FAMILY_SAMPLER)
+            && (ui_get_track_type(active_track) == TRACK_TYPE_MULTI))
     {
         if (id == PARAM_SAMPLER_SAMPLE)
         {
@@ -1081,16 +1081,16 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
         }
     }
 
-    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
-            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_PRISM)
+    if ((ui_get_track_family(active_track) == TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(active_track) == TRACK_TYPE_PRISM)
             && (ui_page_template_tone_prism_param_text(id, value, out_name, out_name_len, out_value, out_value_len) != 0U))
     {
         (void)slot;
         return 1U;
     }
 
-    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
-            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_STACK)
+    if ((ui_get_track_family(active_track) == TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(active_track) == TRACK_TYPE_STACK)
             && (ui_page_template_tone_stack_param_text(id,
                                                        value,
                                                        out_name,
@@ -1102,8 +1102,8 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
         return 1U;
     }
 
-    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_DRUM)
-            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_DRUM_MD)
+    if ((ui_get_track_family(active_track) == TRACK_FAMILY_DRUM)
+            && (ui_get_track_type(active_track) == TRACK_TYPE_DRUM_MD)
             && (id >= PARAM_DRUM_MD_MODEL)
             && (id <= PARAM_DRUM_MD_P8))
     {
@@ -1129,8 +1129,8 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
         return 1U;
     }
 
-    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_DRUM)
-            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_DRUM_BD_ANALOG))
+    if ((ui_get_track_family(active_track) == TRACK_FAMILY_DRUM)
+            && (ui_get_track_type(active_track) == TRACK_TYPE_DRUM_BD_ANALOG))
     {
         const char *name = NULL;
         switch (id)

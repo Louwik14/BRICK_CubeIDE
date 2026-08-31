@@ -189,7 +189,7 @@ static uint8_t ui_macro_interaction_get_held_scene_and_track(uint8_t *out_scene,
             || (g_ui_macro_interaction.armed == 0U)
             || (ui_macro_interaction_is_scene_mode() == 0U)
             || (g_ui_macro_interaction.hall >= PERSIST_CONTROL_MACRO_SCENE_COUNT)
-            || (g_ui_macro_interaction.capture_track >= UI_TRACK_COUNT))
+            || (g_ui_macro_interaction.capture_track >= TRACK_COUNT))
     {
         return 0U;
     }
@@ -578,7 +578,7 @@ void ui_macro_interaction_note_hall_release(uint8_t hall)
     }
 
     active_track = g_ui_macro_interaction.capture_track;
-    if (active_track >= UI_TRACK_COUNT)
+    if (active_track >= TRACK_COUNT)
     {
         ui_macro_interaction_reset();
         return;

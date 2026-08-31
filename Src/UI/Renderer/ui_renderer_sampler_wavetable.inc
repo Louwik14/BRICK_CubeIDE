@@ -66,8 +66,8 @@ static void ui_renderer_template_sampler_ram_sample_label(char *out, uint32_t ou
 
 static uint8_t ui_renderer_template_is_wave_wavetable_subpage(const ui_template_subpage_t *subpage)
 {
-    if ((ui_get_track_family(ui_renderer_template_get_edit_owner_track()) != UI_TRACK_FAMILY_SYNTH)
-            || (ui_get_track_type(ui_renderer_template_get_edit_owner_track()) != UI_TRACK_TYPE_WAVE)
+    if ((ui_get_track_family(ui_renderer_template_get_edit_owner_track()) != TRACK_FAMILY_SYNTH)
+            || (ui_get_track_type(ui_renderer_template_get_edit_owner_track()) != TRACK_TYPE_WAVE)
             || (subpage == NULL))
     {
         return 0U;
@@ -86,8 +86,8 @@ static uint8_t ui_renderer_template_is_wave_wavetable_subpage(const ui_template_
 static uint8_t ui_renderer_template_is_wave_common_subpage(const ui_template_subpage_t *subpage)
 {
     return (uint8_t)((subpage != NULL)
-        && (ui_get_track_family(ui_renderer_template_get_edit_owner_track()) == UI_TRACK_FAMILY_SYNTH)
-        && (ui_get_track_type(ui_renderer_template_get_edit_owner_track()) == UI_TRACK_TYPE_WAVE)
+        && (ui_get_track_family(ui_renderer_template_get_edit_owner_track()) == TRACK_FAMILY_SYNTH)
+        && (ui_get_track_type(ui_renderer_template_get_edit_owner_track()) == TRACK_TYPE_WAVE)
         && (subpage->param_bank.params[0] == PARAM_WAVE_VOLUME)
         && (subpage->param_bank.params[1] == PARAM_WAVE_BALANCE));
 }
@@ -96,8 +96,8 @@ static uint8_t ui_renderer_template_is_prism_tone_subpage(
     const ui_template_subpage_t *subpage)
 {
     if ((subpage == NULL)
-            || (ui_get_track_family(ui_renderer_template_get_edit_owner_track()) != UI_TRACK_FAMILY_SYNTH)
-            || (ui_get_track_type(ui_renderer_template_get_edit_owner_track()) != UI_TRACK_TYPE_PRISM))
+            || (ui_get_track_family(ui_renderer_template_get_edit_owner_track()) != TRACK_FAMILY_SYNTH)
+            || (ui_get_track_type(ui_renderer_template_get_edit_owner_track()) != TRACK_TYPE_PRISM))
     {
         return 0U;
     }

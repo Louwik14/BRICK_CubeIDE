@@ -175,45 +175,45 @@ static const char *ui_page_patch_assign_type_filter_label(patch_assign_type_filt
     }
 }
 
-static patch_assign_family_filter_t ui_page_patch_assign_family_filter_from_track(ui_track_family_t family)
+static patch_assign_family_filter_t ui_page_patch_assign_family_filter_from_track(track_family_t family)
 {
     switch (family)
     {
-        case UI_TRACK_FAMILY_SYNTH: return PATCH_ASSIGN_FAMILY_SYNTH;
-        case UI_TRACK_FAMILY_SAMPLER: return PATCH_ASSIGN_FAMILY_SAMPLER;
-        case UI_TRACK_FAMILY_DRUM: return PATCH_ASSIGN_FAMILY_DRUM;
+        case TRACK_FAMILY_SYNTH: return PATCH_ASSIGN_FAMILY_SYNTH;
+        case TRACK_FAMILY_SAMPLER: return PATCH_ASSIGN_FAMILY_SAMPLER;
+        case TRACK_FAMILY_DRUM: return PATCH_ASSIGN_FAMILY_DRUM;
         default: return PATCH_ASSIGN_FAMILY_ALL;
     }
 }
 
-static patch_assign_type_filter_t ui_page_patch_assign_type_filter_from_track(ui_track_family_t family,
-                                                                              ui_track_type_t type)
+static patch_assign_type_filter_t ui_page_patch_assign_type_filter_from_track(track_family_t family,
+                                                                              track_type_t type)
 {
     switch (ui_page_patch_assign_family_filter_from_track(family))
     {
         case PATCH_ASSIGN_FAMILY_SYNTH:
             switch (type)
             {
-                case UI_TRACK_TYPE_PRISM: return PATCH_ASSIGN_TYPE_PRISM;
-                case UI_TRACK_TYPE_WAVE: return PATCH_ASSIGN_TYPE_WAVE;
-                case UI_TRACK_TYPE_STACK: return PATCH_ASSIGN_TYPE_STACK;
+                case TRACK_TYPE_PRISM: return PATCH_ASSIGN_TYPE_PRISM;
+                case TRACK_TYPE_WAVE: return PATCH_ASSIGN_TYPE_WAVE;
+                case TRACK_TYPE_STACK: return PATCH_ASSIGN_TYPE_STACK;
                 default: return PATCH_ASSIGN_TYPE_ALL;
             }
 
         case PATCH_ASSIGN_FAMILY_SAMPLER:
             switch (type)
             {
-                case UI_TRACK_TYPE_RAM: return PATCH_ASSIGN_TYPE_RAM;
-                case UI_TRACK_TYPE_STREAM: return PATCH_ASSIGN_TYPE_STREAM;
-                case UI_TRACK_TYPE_MULTI: return PATCH_ASSIGN_TYPE_MULTI;
+                case TRACK_TYPE_RAM: return PATCH_ASSIGN_TYPE_RAM;
+                case TRACK_TYPE_STREAM: return PATCH_ASSIGN_TYPE_STREAM;
+                case TRACK_TYPE_MULTI: return PATCH_ASSIGN_TYPE_MULTI;
                 default: return PATCH_ASSIGN_TYPE_ALL;
             }
 
         case PATCH_ASSIGN_FAMILY_DRUM:
             switch (type)
             {
-                case UI_TRACK_TYPE_DRUM_MD: return PATCH_ASSIGN_TYPE_DRUM_MD;
-                case UI_TRACK_TYPE_DRUM_BD_ANALOG: return PATCH_ASSIGN_TYPE_DRUM_BD_ANALOG;
+                case TRACK_TYPE_DRUM_MD: return PATCH_ASSIGN_TYPE_DRUM_MD;
+                case TRACK_TYPE_DRUM_BD_ANALOG: return PATCH_ASSIGN_TYPE_DRUM_BD_ANALOG;
                 default: return PATCH_ASSIGN_TYPE_ALL;
             }
 
@@ -291,24 +291,24 @@ static patch_assign_type_filter_t ui_page_patch_assign_type_filter_next(int16_t 
     return list[next];
 }
 
-static uint8_t ui_page_patch_assign_family_matches(ui_track_family_t family)
+static uint8_t ui_page_patch_assign_family_matches(track_family_t family)
 {
     switch (g_patch_assign_family_filter)
     {
         case PATCH_ASSIGN_FAMILY_ALL:
             return 1U;
         case PATCH_ASSIGN_FAMILY_SYNTH:
-            return (family == UI_TRACK_FAMILY_SYNTH) ? 1U : 0U;
+            return (family == TRACK_FAMILY_SYNTH) ? 1U : 0U;
         case PATCH_ASSIGN_FAMILY_SAMPLER:
-            return (family == UI_TRACK_FAMILY_SAMPLER) ? 1U : 0U;
+            return (family == TRACK_FAMILY_SAMPLER) ? 1U : 0U;
         case PATCH_ASSIGN_FAMILY_DRUM:
-            return (family == UI_TRACK_FAMILY_DRUM) ? 1U : 0U;
+            return (family == TRACK_FAMILY_DRUM) ? 1U : 0U;
         default:
             return 1U;
     }
 }
 
-static uint8_t ui_page_patch_assign_type_matches(ui_track_type_t type)
+static uint8_t ui_page_patch_assign_type_matches(track_type_t type)
 {
     if (g_patch_assign_type_filter == PATCH_ASSIGN_TYPE_ALL)
     {
@@ -318,21 +318,21 @@ static uint8_t ui_page_patch_assign_type_matches(ui_track_type_t type)
     switch (g_patch_assign_type_filter)
     {
         case PATCH_ASSIGN_TYPE_PRISM:
-            return (type == UI_TRACK_TYPE_PRISM) ? 1U : 0U;
+            return (type == TRACK_TYPE_PRISM) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_WAVE:
-            return (type == UI_TRACK_TYPE_WAVE) ? 1U : 0U;
+            return (type == TRACK_TYPE_WAVE) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_STACK:
-            return (type == UI_TRACK_TYPE_STACK) ? 1U : 0U;
+            return (type == TRACK_TYPE_STACK) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_RAM:
-            return (type == UI_TRACK_TYPE_RAM) ? 1U : 0U;
+            return (type == TRACK_TYPE_RAM) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_STREAM:
-            return (type == UI_TRACK_TYPE_STREAM) ? 1U : 0U;
+            return (type == TRACK_TYPE_STREAM) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_MULTI:
-            return (type == UI_TRACK_TYPE_MULTI) ? 1U : 0U;
+            return (type == TRACK_TYPE_MULTI) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_DRUM_MD:
-            return (type == UI_TRACK_TYPE_DRUM_MD) ? 1U : 0U;
+            return (type == TRACK_TYPE_DRUM_MD) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_DRUM_BD_ANALOG:
-            return (type == UI_TRACK_TYPE_DRUM_BD_ANALOG) ? 1U : 0U;
+            return (type == TRACK_TYPE_DRUM_BD_ANALOG) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_ALL:
         default:
             return 1U;
@@ -346,8 +346,8 @@ static uint8_t ui_page_patch_assign_meta_matches_filter(const patch_product_meta
         return 0U;
     }
 
-    const ui_track_family_t family = (ui_track_family_t)meta->family;
-    const ui_track_type_t type = (ui_track_type_t)meta->type;
+    const track_family_t family = (track_family_t)meta->family;
+    const track_type_t type = (track_type_t)meta->type;
 
     return ((ui_page_patch_assign_family_matches(family) != 0U)
             && (ui_page_patch_assign_type_matches(type) != 0U)) ? 1U : 0U;
@@ -567,7 +567,7 @@ static uint8_t ui_page_patch_assign_target_count(void)
 
 static void ui_page_patch_assign_toggle_target(uint8_t track)
 {
-    if ((track >= UI_ACTIVE_TRACK_COUNT) || (entity_topology_is_active(track) == 0U))
+    if ((track >= TRACK_ACTIVE_COUNT) || (entity_topology_is_active(track) == 0U))
     {
         return;
     }
@@ -922,7 +922,7 @@ uint8_t ui_page_patch_assign_get_target_hall_led(uint8_t hall, uint8_t *out_on)
     }
 
     *out_on = 0U;
-    if (hall < UI_ACTIVE_TRACK_COUNT)
+    if (hall < TRACK_ACTIVE_COUNT)
     {
         *out_on = ((g_patch_assign.target_mask & (uint16_t)(1UL << hall)) != 0U) ? 1U : 0U;
     }
@@ -942,10 +942,10 @@ static void ui_page_patch_assign_draw_row(uint8_t row,
             && (patch_product_metadata(slot, &meta) != 0U))
     {
         const char *family =
-            ui_get_track_family_short_name((ui_track_family_t)meta.family);
+            ui_get_track_family_short_name((track_family_t)meta.family);
         const char *type =
-            ui_get_track_type_short_name((ui_track_family_t)meta.family,
-                                         (ui_track_type_t)meta.type);
+            ui_get_track_type_short_name((track_family_t)meta.family,
+                                         (track_type_t)meta.type);
         char short_name[13];
         memset(short_name, 0, sizeof(short_name));
         for (uint8_t i = 0U; i < (uint8_t)(sizeof(short_name) - 1U); ++i)

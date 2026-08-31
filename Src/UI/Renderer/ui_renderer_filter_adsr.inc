@@ -757,7 +757,7 @@ static uint8_t ui_renderer_template_is_sampler_ram_tone(const ui_template_page_s
         return 0U;
     }
 
-    return (uint8_t)(((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SAMPLER)
-                      && (ui_get_track_type(active_track) == UI_TRACK_TYPE_RAM)) ? 1U : 0U);
+    return (uint8_t)(((ui_get_track_family(active_track) == TRACK_FAMILY_SAMPLER)
+                      && (ui_get_track_type(active_track) == TRACK_TYPE_RAM)) ? 1U : 0U);
 }
 

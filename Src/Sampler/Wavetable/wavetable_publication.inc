@@ -47,15 +47,10 @@ void wavetable_pool_clear(uint16_t wavetable_slot)
         wavetable_pool_finalize_clear(wavetable_slot);
         return;
     }
-    uint64_t due_sample = 0U;
-    if (!live_clock_read_audio_sample(&due_sample)) return;
     const uint32_t generation = slot->generation;
-    if (control_audio_publish_param_fenced((uint8_t)wavetable_slot, 0xFFF7U,
-                                           generation, 0U, due_sample,
-                                           &g_wavetable_retire_fence[wavetable_slot]) == 0U)
-        return;
     audio_wave_table_projection_withdraw_slot(wavetable_slot, generation);
     slot->state = WAVETABLE_SLOT_RETIRING;
+    g_wavetable_retire_stop_committed[wavetable_slot] = 0U;
     __DMB();
 }
 
@@ -64,14 +59,30 @@ void wavetable_pool_service_retire(void)
     for (uint16_t i = 0U; i < WAVETABLE_POOL_MAX_SLOTS; ++i)
     {
         wavetable_slot_t *const slot = &g_wavetable_pool.slots[i];
-        if ((slot->state == WAVETABLE_SLOT_RETIRING)
-            && (control_audio_consumer_fence_consumed(
-                    g_wavetable_retire_fence[i]) != 0U))
+        if (slot->state != WAVETABLE_SLOT_RETIRING) continue;
+        uint64_t now_sample = 0U;
+        if (!live_clock_read_audio_sample(&now_sample)) continue;
+        if (g_wavetable_retire_stop_committed[i] == 0U)
         {
-            g_wavetable_retire_fence[i] = 0U;
-            wavetable_pool_finalize_clear(i);
+            if (control_audio_publication_horizon_active() != 0U) continue;
+            if (control_audio_publish_param((uint8_t)i, 0xFFF7U,
+                    slot->generation, 0U, now_sample) == 0U) continue;
+            g_wavetable_retire_not_before_sample[i] = now_sample
+                + CONTROL_AUDIO_RESOURCE_RETIRE_GRACE_FRAMES;
+            g_wavetable_retire_stop_committed[i] = 1U;
         }
+        if (now_sample < g_wavetable_retire_not_before_sample[i]) continue;
+        g_wavetable_retire_stop_committed[i] = 0U;
+        wavetable_pool_finalize_clear(i);
     }
+}
+
+uint8_t wavetable_pool_retire_idle(void)
+{
+    for (uint16_t i = 0U; i < WAVETABLE_POOL_MAX_SLOTS; ++i)
+        if (g_wavetable_pool.slots[i].state == WAVETABLE_SLOT_RETIRING)
+            return 0U;
+    return 1U;
 }
 
 const wavetable_slot_t *wavetable_pool_get_slot(uint16_t wavetable_slot)

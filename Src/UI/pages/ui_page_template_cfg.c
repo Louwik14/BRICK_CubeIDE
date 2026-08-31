@@ -154,7 +154,7 @@ static ui_template_custom_widget_kind_t ui_page_template_cfg_pick_custom_widget(
 {
     if ((subpage == NULL)
             || (subpage->param_bank.params[0] != PARAM_CFG_TRACK)
-            || (ui_get_track_family(ui_get_active_lane()) == UI_TRACK_FAMILY_OFF))
+            || (ui_get_track_family(ui_get_active_lane()) == TRACK_FAMILY_OFF))
     {
         if ((subpage != NULL) && (subpage->param_bank.params[0] == PARAM_CFG_TRACK) && (slot == 0U) && (id == PARAM_CFG_TRACK))
         {
@@ -189,23 +189,23 @@ static ui_template_custom_widget_kind_t ui_page_template_cfg_pick_custom_widget(
 static const ui_template_family_t *ui_page_template_cfg_resolve_family(void)
 {
     const uint8_t active_track = ui_get_active_lane();
-    if (ui_get_track_family(active_track) == UI_TRACK_FAMILY_OFF)
+    if (ui_get_track_family(active_track) == TRACK_FAMILY_OFF)
     {
         return &g_ui_template_cfg_family;
     }
 
-    if (ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
+    if (ui_get_track_family(active_track) == TRACK_FAMILY_SYNTH)
     {
         return &g_ui_template_cfg_synth_family;
     }
 
-    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SAMPLER)
-            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_MULTI))
+    if ((ui_get_track_family(active_track) == TRACK_FAMILY_SAMPLER)
+            && (ui_get_track_type(active_track) == TRACK_TYPE_MULTI))
     {
         return &g_ui_template_cfg_multi_family;
     }
 
-    if (ui_get_track_family(active_track) == UI_TRACK_FAMILY_EXTERNAL)
+    if (ui_get_track_family(active_track) == TRACK_FAMILY_EXTERNAL)
     {
         return &g_ui_template_cfg_external_family;
     }
@@ -239,12 +239,12 @@ static ui_template_page_state_t g_ui_template_cfg_state = {
 
 void ui_page_template_cfg_register_families(void)
 {
-    for (uint8_t family = 0U; family < (uint8_t)UI_TRACK_FAMILY_COUNT; family++)
+    for (uint8_t family = 0U; family < (uint8_t)TRACK_FAMILY_COUNT; family++)
     {
-        const ui_track_family_t track_family = (ui_track_family_t)family;
-        for (uint8_t type = 0U; type < (uint8_t)UI_TRACK_TYPE_COUNT; type++)
+        const track_family_t track_family = (track_family_t)family;
+        for (uint8_t type = 0U; type < (uint8_t)TRACK_TYPE_COUNT; type++)
         {
-            const ui_track_type_t track_type = (ui_track_type_t)type;
+            const track_type_t track_type = (track_type_t)type;
             if (!ui_track_type_is_valid_for_family(track_family, track_type))
             {
                 continue;

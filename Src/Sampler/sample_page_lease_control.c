@@ -56,3 +56,36 @@ uint8_t sample_page_lease_control_protects(sample_audio_key_t key,
     }
     return 0U;
 }
+
+uint8_t sample_page_lease_control_references_key(sample_audio_key_t key)
+{
+    sample_page_lease_t lease;
+    for (uint8_t slot = 0U; slot < SAMPLE_PAGE_LEASE_SLOT_COUNT; ++slot)
+    {
+        const uint32_t observed_seq = g_sample_page_leases[slot].seq;
+        if (sample_page_lease_control_read(slot, &lease) == 0U)
+        {
+            if ((observed_seq != 0U)
+                && (((observed_seq & 1U) != 0U)
+                    || (observed_seq != g_sample_page_leases[slot].seq)))
+                return 1U;
+            continue;
+        }
+        if (sample_audio_key_equal(&lease.key, &key) != 0U) return 1U;
+    }
+    return 0U;
+}
+
+uint8_t sample_page_lease_control_all_released(void)
+{
+    sample_page_lease_t lease;
+    for (uint8_t slot = 0U; slot < SAMPLE_PAGE_LEASE_SLOT_COUNT; ++slot)
+    {
+        const uint32_t observed_seq = g_sample_page_leases[slot].seq;
+        if (sample_page_lease_control_read(slot, &lease) != 0U) return 0U;
+        if ((observed_seq != 0U)
+            && (((observed_seq & 1U) != 0U)
+                || (observed_seq != g_sample_page_leases[slot].seq))) return 0U;
+    }
+    return 1U;
+}

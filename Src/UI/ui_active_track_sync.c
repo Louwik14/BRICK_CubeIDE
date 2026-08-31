@@ -33,7 +33,7 @@ static float ui_active_track_sync_clock_source_to_ui_value(void)
 void ui_active_track_sync_mirror(void)
 {
     const uint8_t active_track = ui_get_active_lane();
-    const ui_track_config_t active_config = ui_get_track_config(active_track);
+    const track_config_t active_config = ui_get_track_config(active_track);
 
     /* Mirror surface: UI store is resynced from explicit runtime projection reads. */
     param_store_set_active(UI_CFG_TRACK_PARAM, (float)active_config.family);

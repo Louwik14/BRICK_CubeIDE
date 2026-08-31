@@ -5,19 +5,18 @@
 La musique est strictement M4 vers M7 par la FIFO fonctionnelle unique. Les
 retours M7 vers M4 restants ne transportent aucune decision musicale:
 
-- `control_audio_fifo.tail`: liberation physique des cases FIFO et fence de
-  retrait de ressource;
+- `control_audio_fifo.tail`: liberation physique des cases et mesure de
+  capacite SPSC seulement, jamais preuve generique de retrait de ressource;
 - credit STREAM compact par voix: page courante, longueur de fenetre et bornes
   de loop forward;
 - Recorder PCM: ring stereo PCM24, head de frames produites, tail de frames
   liberees, session I/O et longueur exacte au stop;
-- ancre Clock `{TIM5_tick, audio_sample}`; extrapolation CONTROL ensuite;
 - niveau REC, waveform audio et waveform synth, chacun avec publisher AUDIO et reader CONTROL separes;
 - diagnostic Audio: boot/error et, pour la charge CPU, uniquement `{valid, avg_permille}`. Le couper
   ne modifie aucune commande, voix, page ou decision CONTROL.
 
 Les retours physiques restent limites au `tail` FIFO, aux credits STREAM et au
-PCM/framing Recorder. Les projections sont limitees a l'ancre Clock, au niveau
+PCM/framing Recorder. Les projections sont limitees au niveau
 REC, aux deux waveforms et au diagnostic Audio. Les boundaries Recorder/Looper ne
 necessitent aucun evenement AUDIO vers CONTROL separe: CONTROL publie
 directement le RECORD date; le head final et le framing de session sont des
@@ -26,12 +25,13 @@ faits physiques.
 ## Cadence et boot
 
 M4 avance de facon autonome. TIM12 porte le tick du tempo interne; TIM5,
-derive du meme HSE que SAI, projette la timeline sample depuis une seule ancre
-boot. Les callbacks SAI ne reveillent aucun code CONTROL. PendSV reste reserve
+demarre avant les domaines et derive du meme HSE que SAI, est la reference
+absolue commune. CONTROL possede son extension et sa conversion; M7 initialise
+sa sample clock locale depuis TIM5 au premier callback valide. Les callbacks SAI ne reveillent aucun code CONTROL. PendSV reste reserve
 au transport USB MIDI local et ne sert plus le sequenceur.
 
-Le nominal ne lit aucun etat boot AUDIO. L'absence d'ancre suffit aux chemins
-qui doivent savoir qu'aucun consumer AUDIO ne peut encore avancer. L'unique
+Le nominal ne lit aucun etat boot AUDIO et aucun transport Clock M7->M4
+n'existe. L'unique
 publication boot restante est `{state=FAULT, erreur_hardware}` pour l'ecran de
 diagnostic; elle ne porte aucun READY musical.
 

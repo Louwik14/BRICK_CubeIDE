@@ -17,7 +17,7 @@ STORAGE_STATE_SDRAM static persist_codec_patch_staging_t g_stage;
 static uint32_t crc32(uint32_t crc,const uint8_t*d,uint32_t n){for(uint32_t i=0;i<n;++i){crc^=d[i];for(uint8_t b=0;b<8U;++b)crc=(crc>>1U)^(0xEDB88320UL&((uint32_t)-(int32_t)(crc&1U)));}return crc;}
 static uint8_t path(char*out,uint32_t size,uint16_t slot){int n=snprintf(out,size,"0:/BRICK/PATCH/P%04u.B6C",slot);return(n>0&&(uint32_t)n<size)?1U:0U;}
 static uint8_t acquire(void){if(!sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PATCH))return 0U;if(!sd_access_fs_mount_if_needed()){sd_access_gate_release(SD_ACCESS_CLIENT_PATCH);return 0U;}return 1U;}
-static void meta_from_patch(uint16_t slot,const persist_control_patch_t*p){patch_product_metadata_t*m=&g_meta[slot];memset(m,0,sizeof(*m));uint16_t n=p->name_length;if(n>32U)n=32U;memcpy(m->name,p->name,n);ui_track_family_t f;ui_track_type_t t;if(persist_key_family_from_disk(p->family,&f))m->family=(uint8_t)f;if(persist_key_type_from_disk(p->type,&t))m->type=(uint8_t)t;m->summary_family=m->family;m->summary_type=m->type;}
+static void meta_from_patch(uint16_t slot,const persist_control_patch_t*p){patch_product_metadata_t*m=&g_meta[slot];memset(m,0,sizeof(*m));uint16_t n=p->name_length;if(n>32U)n=32U;memcpy(m->name,p->name,n);track_family_t f;track_type_t t;if(persist_key_family_from_disk(p->family,&f))m->family=(uint8_t)f;if(persist_key_type_from_disk(p->type,&t))m->type=(uint8_t)t;m->summary_family=m->family;m->summary_type=m->type;}
 static uint16_t le16(const uint8_t*p){return(uint16_t)((uint16_t)p[0]|((uint16_t)p[1]<<8U));}
 static uint32_t le32(const uint8_t*p){return(uint32_t)p[0]|((uint32_t)p[1]<<8U)|((uint32_t)p[2]<<16U)|((uint32_t)p[3]<<24U);}
 static uint8_t scan_meta(uint16_t slot)
@@ -45,7 +45,7 @@ static uint8_t scan_meta(uint16_t slot)
     const uint16_t name_len=ok?le16(nl):0U;
     ok=(ok&&name_len<=PERSIST_CONTROL_PATCH_NAME_BYTES
         &&section_length>=(uint32_t)name_len+10U);
-    if(ok){uint8_t buf[PERSIST_CONTROL_PATCH_NAME_BYTES+8U];ok=(f_read(&f,buf,name_len+8U,&n)==FR_OK&&n==name_len+8U);if(ok){persist_control_patch_t p;memset(&p,0,sizeof(p));p.name_length=name_len;memcpy(p.name,buf,name_len);p.family=le32(&buf[name_len]);p.type=le32(&buf[name_len+4U]);ui_track_family_t family;ui_track_type_t type;ok=(persist_key_family_from_disk(p.family,&family)&&persist_key_type_from_disk(p.type,&type));if(ok)meta_from_patch(slot,&p);}}
+    if(ok){uint8_t buf[PERSIST_CONTROL_PATCH_NAME_BYTES+8U];ok=(f_read(&f,buf,name_len+8U,&n)==FR_OK&&n==name_len+8U);if(ok){persist_control_patch_t p;memset(&p,0,sizeof(p));p.name_length=name_len;memcpy(p.name,buf,name_len);p.family=le32(&buf[name_len]);p.type=le32(&buf[name_len+4U]);track_family_t family;track_type_t type;ok=(persist_key_family_from_disk(p.family,&family)&&persist_key_type_from_disk(p.type,&type));if(ok)meta_from_patch(slot,&p);}}
     (void)f_close(&f);g_present[slot]=1U;g_invalid[slot]=ok?0U:1U;return ok;
 }
 static uint8_t load(uint16_t slot,persist_control_patch_t*out){if(slot>=PATCH_PRODUCT_SLOT_COUNT||out==NULL||!g_present[slot]||!acquire())return 0U;char x[48];persistent_fatfs_file_t f;uint8_t ok=path(x,sizeof(x),slot)&&persistent_fatfs_open_read(&f,x);if(ok){persist_codec_source_t s=persistent_fatfs_source(&f);ok=(persist_codec_decode_patch(&s,&g_stage)==PERSIST_CODEC_OK);persistent_fatfs_close(&f);}sd_access_gate_release(SD_ACCESS_CLIENT_PATCH);if(ok){*out=g_stage.patch;meta_from_patch(slot,out);g_invalid[slot]=0U;}else g_invalid[slot]=1U;return ok;}

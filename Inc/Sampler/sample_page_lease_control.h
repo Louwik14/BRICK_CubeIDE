@@ -7,3 +7,5 @@ uint8_t sample_page_lease_control_read(uint8_t slot,
 uint8_t sample_page_lease_control_protects(sample_audio_key_t key,
                                            uint32_t registration_epoch,
                                            uint32_t page_index);
+uint8_t sample_page_lease_control_references_key(sample_audio_key_t key);
+uint8_t sample_page_lease_control_all_released(void);

@@ -540,7 +540,7 @@ static void ui_page_midi_fx_render(void)
 
     drv_display_clear_rect(0, 16, 128, 48);
     drv_display_set_font(&FONT_5X7);
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < TRACK_COUNT; ++track)
     {
         const uint8_t column = (uint8_t)(track & 3U);
         const uint8_t row = (uint8_t)(track >> 2U);
@@ -565,15 +565,15 @@ static void ui_page_midi_fx_render(void)
 
 void ui_page_template_midi_fx_register_families(void)
 {
-    for (uint8_t family = 0U; family < (uint8_t)UI_TRACK_FAMILY_COUNT; ++family)
+    for (uint8_t family = 0U; family < (uint8_t)TRACK_FAMILY_COUNT; ++family)
     {
-        const ui_track_family_t track_family = (ui_track_family_t)family;
-        for (uint8_t type = 0U; type < (uint8_t)UI_TRACK_TYPE_COUNT; ++type)
+        const track_family_t track_family = (track_family_t)family;
+        for (uint8_t type = 0U; type < (uint8_t)TRACK_TYPE_COUNT; ++type)
         {
-            const ui_track_type_t track_type = (ui_track_type_t)type;
+            const track_type_t track_type = (track_type_t)type;
             if (!ui_track_type_is_valid_for_family(track_family, track_type)
-                    || (track_family == UI_TRACK_FAMILY_OFF)
-                    || ((track_family == UI_TRACK_FAMILY_SAMPLER) && (track_type == UI_TRACK_TYPE_LOOPER)))
+                    || (track_family == TRACK_FAMILY_OFF)
+                    || ((track_family == TRACK_FAMILY_SAMPLER) && (track_type == TRACK_TYPE_LOOPER)))
             {
                 continue;
             }

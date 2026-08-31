@@ -152,12 +152,12 @@ static void ui_page_template_keyboard_handle_event(const ui_event_t *ev)
 
 void ui_page_template_keyboard_register_families(void)
 {
-    for (uint8_t family = 0U; family < (uint8_t)UI_TRACK_FAMILY_COUNT; ++family)
+    for (uint8_t family = 0U; family < (uint8_t)TRACK_FAMILY_COUNT; ++family)
     {
-        const ui_track_family_t track_family = (ui_track_family_t)family;
-        for (uint8_t type = 0U; type < (uint8_t)UI_TRACK_TYPE_COUNT; ++type)
+        const track_family_t track_family = (track_family_t)family;
+        for (uint8_t type = 0U; type < (uint8_t)TRACK_TYPE_COUNT; ++type)
         {
-            const ui_track_type_t track_type = (ui_track_type_t)type;
+            const track_type_t track_type = (track_type_t)type;
             if (!ui_track_type_is_valid_for_family(track_family, track_type))
             {
                 continue;

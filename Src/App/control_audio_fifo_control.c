@@ -85,13 +85,3 @@ uint8_t control_audio_fifo_publish_batch(const control_audio_command_t *commands
 
 uint8_t control_audio_fifo_publish(const control_audio_command_t *command)
 { return control_audio_fifo_publish_batch(command, 1U); }
-
-uint8_t control_audio_fifo_publish_fenced(const control_audio_command_t *command,
-                                          uint32_t *out_consumer_fence)
-{
-    if ((out_consumer_fence == NULL) || (control_audio_fifo_publish(command) == 0U)) return 0U;
-    __DMB(); *out_consumer_fence = FIFO.head; return 1U;
-}
-
-uint8_t control_audio_fifo_control_fence_consumed(uint32_t consumer_fence)
-{ __DMB(); return ((int32_t)(FIFO.tail - consumer_fence) >= 0) ? 1U : 0U; }

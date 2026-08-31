@@ -34,15 +34,15 @@ void ui_hall_patch_feedback_end(uint32_t now_ms)
 ui_hall_rout_context_t ui_hall_mode_resolve_rout_context(uint8_t track, ui_hall_mode_t raw_mode)
 {
     (void)raw_mode;
-    if (track >= UI_TRACK_COUNT)
+    if (track >= TRACK_COUNT)
     {
         return UI_HALL_ROUT_CONTEXT_NONE;
     }
 
-    const ui_track_family_t family = ui_get_track_family(track);
-    const ui_track_type_t type = ui_get_track_type(track);
+    const track_family_t family = ui_get_track_family(track);
+    const track_type_t type = ui_get_track_type(track);
 
-    if ((family == UI_TRACK_FAMILY_SAMPLER) && (type == UI_TRACK_TYPE_LOOPER))
+    if ((family == TRACK_FAMILY_SAMPLER) && (type == TRACK_TYPE_LOOPER))
     {
         return UI_HALL_ROUT_CONTEXT_SAMPLER_LOOPER;
     }

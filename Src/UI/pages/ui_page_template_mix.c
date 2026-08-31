@@ -77,18 +77,18 @@ void ui_page_template_mix_toggle_subset(void)
 
 void ui_page_template_mix_register_families(void)
 {
-    for (uint8_t family = 0U; family < (uint8_t)UI_TRACK_FAMILY_COUNT; ++family)
+    for (uint8_t family = 0U; family < (uint8_t)TRACK_FAMILY_COUNT; ++family)
     {
-        const ui_track_family_t track_family = (ui_track_family_t)family;
+        const track_family_t track_family = (track_family_t)family;
         if ((ui_track_family_is_engine(track_family) == 0)
-                && (track_family != UI_TRACK_FAMILY_EXTERNAL))
+                && (track_family != TRACK_FAMILY_EXTERNAL))
         {
             continue;
         }
 
-        for (uint8_t type = 0U; type < (uint8_t)UI_TRACK_TYPE_COUNT; ++type)
+        for (uint8_t type = 0U; type < (uint8_t)TRACK_TYPE_COUNT; ++type)
         {
-            const ui_track_type_t track_type = (ui_track_type_t)type;
+            const track_type_t track_type = (track_type_t)type;
             if (!ui_track_type_is_valid_for_family(track_family, track_type))
             {
                 continue;

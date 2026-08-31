@@ -97,8 +97,8 @@ static void mod_matrix_audio_rebuild_route_cache_track(
     const track_audio_runtime_ctx_t *const ctx =
         (audio_note_engine_adapter_current_ctx(track, &ctx_value) != 0U)
             ? &ctx_value : NULL;
-    const ui_track_family_t family = mod_matrix_ui_family_from_ctx(ctx);
-    const ui_track_type_t type = mod_matrix_ui_type_from_ctx(ctx);
+    const track_family_t family = mod_matrix_ui_family_from_ctx(ctx);
+    const track_type_t type = mod_matrix_ui_type_from_ctx(ctx);
     const mod_matrix_audio_state_t *const state = &g_mod_matrix_audio_state[track];
     mod_matrix_rebuild_track_plan(track, family, type, ctx, state);
     if (ctx != NULL)

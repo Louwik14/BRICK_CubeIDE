@@ -21,27 +21,27 @@ const ui_template_family_t *ui_page_template_tone_resolve_for_track(uint8_t trac
         if (model == 2U) return &g_ui_template_tone_family_master_comp_brick;
         return &g_ui_template_tone_family_master_comp_off;
     }
-    if ((ui_get_track_family(track) == UI_TRACK_FAMILY_SYNTH)
-            && (ui_get_track_type(track) == UI_TRACK_TYPE_WAVE))
+    if ((ui_get_track_family(track) == TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(track) == TRACK_TYPE_WAVE))
     {
         return (g_ui_template_tone_subset == 0U)
             ? &g_ui_template_tone_family_wave
             : &g_ui_template_tone_family_wave_classic;
     }
-    if ((ui_get_track_family(track) == UI_TRACK_FAMILY_SYNTH)
-            && (ui_get_track_type(track) == UI_TRACK_TYPE_PRISM))
+    if ((ui_get_track_family(track) == TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(track) == TRACK_TYPE_PRISM))
     {
         return (subset == 0U)
             ? &g_ui_template_tone_family_prism_live
             : &g_ui_template_tone_family_prism;
     }
-    if ((ui_get_track_family(track) == UI_TRACK_FAMILY_SYNTH)
-            && (ui_get_track_type(track) == UI_TRACK_TYPE_STACK))
+    if ((ui_get_track_family(track) == TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(track) == TRACK_TYPE_STACK))
     {
         return &g_ui_template_tone_family_stack;
     }
-    if ((ui_get_track_family(track) == UI_TRACK_FAMILY_SYNTH)
-            && (ui_get_track_type(track) == UI_TRACK_TYPE_FM)
+    if ((ui_get_track_family(track) == TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(track) == TRACK_TYPE_FM)
             && (g_ui_template_tone_subset == 0U))
     {
         const uint8_t active_track = ui_get_active_lane();
@@ -59,8 +59,8 @@ const ui_template_family_t *ui_page_template_tone_resolve_for_track(uint8_t trac
         g_ui_template_tone_family_fm.subpages[1].param_bank.params[3] = (param_id_t)(first + BRICK6_FM_OPERATOR_DETUNE);
         return &g_ui_template_tone_family_fm;
     }
-    if ((ui_get_track_family(track) == UI_TRACK_FAMILY_SYNTH)
-            && (ui_get_track_type(track) == UI_TRACK_TYPE_FM)
+    if ((ui_get_track_family(track) == TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(track) == TRACK_TYPE_FM)
             && (g_ui_template_tone_subset != 0U))
     {
         const uint8_t active_track = ui_get_active_lane();
@@ -86,7 +86,7 @@ const ui_template_family_t *ui_page_template_tone_resolve_for_track(uint8_t trac
         g_ui_template_tone_family_fm_operator.subpages[2].param_bank.params[3] = (param_id_t)(first + 10U);
         return &g_ui_template_tone_family_fm_operator;
     }
-    const ui_track_config_t config = ui_get_track_config(track);
+    const track_config_t config = ui_get_track_config(track);
     return ui_template_family_resolve(UI_TEMPLATE_FAMILY_TONE, track, config.family, config.type);
 }
 

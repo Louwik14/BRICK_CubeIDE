@@ -84,7 +84,7 @@ static const ui_template_family_t *ui_page_template_env_resolve_family(void)
 {
     if (g_ui_template_env_subset != 0U)
     {
-        return (ui_get_track_type(ui_get_active_lane()) == UI_TRACK_TYPE_GROUP)
+        return (ui_get_track_type(ui_get_active_lane()) == TRACK_TYPE_GROUP)
                 ? &g_ui_template_env_family_group_retrig
                 : &g_ui_template_env_family_retrig;
     }
@@ -220,16 +220,16 @@ static ui_page_template_env_sync_cache_t g_ui_template_env_sync_cache = { 0U };
 
 void ui_page_template_env_register_families(void)
 {
-    for (uint8_t family = 0U; family < (uint8_t)UI_TRACK_FAMILY_COUNT; family++)
+    for (uint8_t family = 0U; family < (uint8_t)TRACK_FAMILY_COUNT; family++)
     {
-        const ui_track_family_t track_family = (ui_track_family_t)family;
-        if (track_family == UI_TRACK_FAMILY_MIDI)
+        const track_family_t track_family = (track_family_t)family;
+        if (track_family == TRACK_FAMILY_MIDI)
         {
             continue;
         }
-        for (uint8_t type = 0U; type < (uint8_t)UI_TRACK_TYPE_COUNT; type++)
+        for (uint8_t type = 0U; type < (uint8_t)TRACK_TYPE_COUNT; type++)
         {
-            const ui_track_type_t track_type = (ui_track_type_t)type;
+            const track_type_t track_type = (track_type_t)type;
             if (!ui_track_type_is_valid_for_family(track_family, track_type))
             {
                 continue;
@@ -238,7 +238,7 @@ void ui_page_template_env_register_families(void)
             ui_template_family_register(UI_TEMPLATE_FAMILY_ENV,
                                         track_family,
                                         track_type,
-                                        (track_type == UI_TRACK_TYPE_GROUP)
+                                        (track_type == TRACK_TYPE_GROUP)
                                                 ? &g_ui_template_env_family_group
                                                 : &g_ui_template_env_family_audio);
         }
@@ -251,8 +251,8 @@ static ui_template_family_t *ui_page_template_env_get_audio_family(void)
 }
 
 static uint8_t ui_page_template_env_sync_should_recompute(uint8_t active_track,
-                                                             ui_track_family_t active_family,
-                                                             ui_track_type_t active_type)
+                                                             track_family_t active_family,
+                                                             track_type_t active_type)
 {
     /* Consumer-edge refresh: revision checks use a refreshed projection; the revision is a coherence guard only. */
     const uint32_t runtime_track_revision = track_runtime_get_track_revision(active_track);
@@ -287,8 +287,8 @@ static void ui_page_template_env_sync_family(void)
     ui_template_family_t *family = ui_page_template_env_get_audio_family();
     uint8_t filter_target_track = 0U;
     const uint8_t active_track = ui_get_active_lane();
-    const ui_track_family_t active_family = ui_get_track_family(active_track);
-    const ui_track_type_t active_type = ui_get_track_type(active_track);
+    const track_family_t active_family = ui_get_track_family(active_track);
+    const track_type_t active_type = ui_get_track_type(active_track);
     if (family == 0)
     {
         return;

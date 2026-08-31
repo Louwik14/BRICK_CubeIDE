@@ -17,16 +17,16 @@ static void ui_page_template_tone_update_synth_live_request(void)
     if ((g_ui_template_tone_global_master == 0U)
             && (g_ui_template_tone_subset == 0U)
             && (ui_template_edit_context_resolve_active(&context) != 0U)
-            && (ui_get_track_family(context.owner_entity) == UI_TRACK_FAMILY_SYNTH))
+            && (ui_get_track_family(context.owner_entity) == TRACK_FAMILY_SYNTH))
     {
-        const ui_track_type_t type = ui_get_track_type(context.owner_entity);
+        const track_type_t type = ui_get_track_type(context.owner_entity);
         const uint8_t page = g_ui_template_tone_state.active_subpage;
-        if (((type == UI_TRACK_TYPE_WAVE) && (page < 3U))
-                || ((type == UI_TRACK_TYPE_PRISM) && (page < 4U)))
+        if (((type == TRACK_TYPE_WAVE) && (page < 3U))
+                || ((type == TRACK_TYPE_PRISM) && (page < 4U)))
         {
             entity = context.owner_entity;
             enabled = 1U;
-            engine = (type == UI_TRACK_TYPE_WAVE)
+            engine = (type == TRACK_TYPE_WAVE)
                 ? SYNTH_WAVEFORM_ENGINE_WAVE : SYNTH_WAVEFORM_ENGINE_PRISM;
             mask = (page == 0U) ? 0x01U : ((page == 1U) ? 0x02U : 0x03U);
         }

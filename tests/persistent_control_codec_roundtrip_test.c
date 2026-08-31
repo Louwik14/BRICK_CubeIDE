@@ -10,10 +10,10 @@
 
 const param_desc_t param_registry[PARAM_COUNT] = {0};
 
-ui_track_type_t track_state_get_type(uint8_t track)
+track_type_t track_state_get_type(uint8_t track)
 {
     (void)track;
-    return UI_TRACK_TYPE_NONE;
+    return TRACK_TYPE_NONE;
 }
 
 uint8_t seq_param_iface_is_param_plockable(param_id_t param_id)

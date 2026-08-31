@@ -112,7 +112,7 @@ static bool keyboard_engine_active_track_has_midi_note_path(void)
 
 static bool keyboard_engine_track_has_midi_note_path(uint8_t track)
 {
-    if (track >= UI_TRACK_COUNT)
+    if (track >= TRACK_COUNT)
     {
         return false;
     }
@@ -122,19 +122,19 @@ static bool keyboard_engine_track_has_midi_note_path(uint8_t track)
 
 static bool keyboard_engine_active_track_accepts_internal_source(void)
 {
-    const ui_track_midi_source_t source = ui_get_track_midi_source(keyboard_engine_get_play_owner_track());
-    return (source == UI_TRACK_MIDI_SRC_INT) || (source == UI_TRACK_MIDI_SRC_ALL);
+    const track_midi_source_t source = ui_get_track_midi_source(keyboard_engine_get_play_owner_track());
+    return (source == TRACK_MIDI_SOURCE_INTERNAL) || (source == TRACK_MIDI_SOURCE_ALL);
 }
 
 static bool keyboard_engine_track_accepts_internal_source(uint8_t track)
 {
-    if (track >= UI_TRACK_COUNT)
+    if (track >= TRACK_COUNT)
     {
         return false;
     }
 
-    const ui_track_midi_source_t source = ui_get_track_midi_source(track);
-    return (source == UI_TRACK_MIDI_SRC_INT) || (source == UI_TRACK_MIDI_SRC_ALL);
+    const track_midi_source_t source = ui_get_track_midi_source(track);
+    return (source == TRACK_MIDI_SOURCE_INTERNAL) || (source == TRACK_MIDI_SOURCE_ALL);
 }
 
 static uint8_t keyboard_engine_get_track_midi_channel_zero_based(uint8_t track)
@@ -294,26 +294,26 @@ static void keyboard_engine_dispatch_note_to_matching_tracks(uint8_t channel,
                                                              uint8_t source_internal,
                                                              uint8_t is_note_on)
 {
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < TRACK_COUNT; ++track)
     {
-        const ui_track_config_t cfg = ui_get_track_config(track);
+        const track_config_t cfg = ui_get_track_config(track);
         if ((ui_track_family_is_engine(cfg.family) == 0)
-                && (cfg.family != UI_TRACK_FAMILY_EXTERNAL))
+                && (cfg.family != TRACK_FAMILY_EXTERNAL))
         {
             continue;
         }
 
-        const ui_track_midi_source_t source = ui_get_track_midi_source(track);
+        const track_midi_source_t source = ui_get_track_midi_source(track);
         if (source_internal != 0U)
         {
-            if ((source != UI_TRACK_MIDI_SRC_INT) && (source != UI_TRACK_MIDI_SRC_ALL))
+            if ((source != TRACK_MIDI_SOURCE_INTERNAL) && (source != TRACK_MIDI_SOURCE_ALL))
             {
                 continue;
             }
         }
         else
         {
-            if ((source != UI_TRACK_MIDI_SRC_EXT) && (source != UI_TRACK_MIDI_SRC_ALL))
+            if ((source != TRACK_MIDI_SOURCE_EXTERNAL) && (source != TRACK_MIDI_SOURCE_ALL))
             {
                 continue;
             }
@@ -533,7 +533,7 @@ static void keyboard_engine_note_on_for_track_internal(uint8_t track,
                                                         uint32_t capture_tick,
                                                         uint32_t ingress_serial)
 {
-    if ((track >= UI_TRACK_COUNT) || (entity_topology_is_active(track) == 0U))
+    if ((track >= TRACK_COUNT) || (entity_topology_is_active(track) == 0U))
     {
         return;
     }
@@ -582,7 +582,7 @@ static void keyboard_engine_note_off_for_track_internal(uint8_t track,
                                                          uint32_t capture_tick,
                                                          uint32_t ingress_serial)
 {
-    if ((track >= UI_TRACK_COUNT) || (entity_topology_is_active(track) == 0U))
+    if ((track >= TRACK_COUNT) || (entity_topology_is_active(track) == 0U))
     {
         return;
     }
@@ -688,16 +688,16 @@ static void keyboard_engine_midi_receive_internal(const uint8_t *msg, size_t len
         }
     }
 
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < TRACK_COUNT; ++track)
     {
-        const ui_track_config_t cfg = ui_get_track_config(track);
+        const track_config_t cfg = ui_get_track_config(track);
         if ((ui_track_family_is_engine(cfg.family) == 0)
-                && (cfg.family != UI_TRACK_FAMILY_EXTERNAL))
+                && (cfg.family != TRACK_FAMILY_EXTERNAL))
         {
             continue;
         }
-        const ui_track_midi_source_t source = ui_get_track_midi_source(track);
-        if ((source != UI_TRACK_MIDI_SRC_EXT) && (source != UI_TRACK_MIDI_SRC_ALL))
+        const track_midi_source_t source = ui_get_track_midi_source(track);
+        if ((source != TRACK_MIDI_SOURCE_EXTERNAL) && (source != TRACK_MIDI_SOURCE_ALL))
         {
             continue;
         }
