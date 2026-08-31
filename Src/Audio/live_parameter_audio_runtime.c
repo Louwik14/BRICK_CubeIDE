@@ -8,11 +8,11 @@
 #include "IPC/live_parameter_event.h"
 #include "Param/param_audio.h"
 #include "Param/param_spec.h"
-#include "Seq/seq_types.h"
+#include "Track/entity_types.h"
 #include "Platform/memory_layout.h"
 
-SEQ_STATE_D2 static float g_live_parameter_audio_poly_voices[SEQ_LANE_CAPACITY];
-SEQ_STATE_D2 static float g_live_parameter_audio_poly_spread[SEQ_LANE_CAPACITY];
+SEQ_STATE_D2 static float g_live_parameter_audio_poly_voices[BRICK_ENTITY_CAPACITY];
+SEQ_STATE_D2 static float g_live_parameter_audio_poly_spread[BRICK_ENTITY_CAPACITY];
 static uint8_t live_parameter_audio_runtime_changes_matrix_context(param_id_t id)
 {
     switch (id)
@@ -30,7 +30,7 @@ static uint8_t live_parameter_audio_runtime_changes_matrix_context(param_id_t id
 
 void live_parameter_audio_runtime_init(void)
 {
-    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
+    for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
     {
         g_live_parameter_audio_poly_voices[track] =
             param_spec[PARAM_CFG_POLY_VOICES].default_value;
@@ -59,7 +59,7 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
     }
     if (((scope != LIVE_PARAMETER_EVENT_SCOPE_TRACK)
             && (scope != LIVE_PARAMETER_AUDIO_SCOPE_RUNTIME_TEMP))
-            || (entity >= SEQ_LANE_CAPACITY))
+            || (entity >= BRICK_ENTITY_CAPACITY))
         return 0U;
 
     if (param_spec_value_is_valid((param_id_t)parameter_id, decoded) == 0U)

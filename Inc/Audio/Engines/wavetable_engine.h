@@ -7,7 +7,6 @@
 
 #include <stdint.h>
 
-#include "Seq/seq_types.h"
 #include "IPC/audio_wave_table_projection.h"
 
 #ifdef __cplusplus

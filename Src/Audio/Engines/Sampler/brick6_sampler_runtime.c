@@ -11,6 +11,8 @@
 #include <math.h>
 #include <string.h>
 
+#include "cmsis_compiler.h"
+
 #include "Audio/audio_float.h"
 #include "Audio/mixer.h"
 #include "Board/board_audio_format.h"
@@ -32,7 +34,7 @@
 /* The sampler voice table is a lane resource.  GROUP children reuse this
  * table; they do not allocate a second sampler pool. */
 #undef SEQ_TRACK_COUNT
-#define SEQ_TRACK_COUNT SEQ_LANE_CAPACITY
+#define SEQ_TRACK_COUNT BRICK_ENTITY_CAPACITY
 
 #define BRICK6_SAMPLER_Q16_ONE (65536U)
 #define BRICK6_SAMPLER_CACHE_VOICE_BASE (2U)

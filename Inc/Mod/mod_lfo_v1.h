@@ -4,7 +4,6 @@
 
 #include "Mod/mod_lfo_types.h"
 #include "Param/param_ids.h"
-#include "Seq/seq_types.h"
 
 #ifdef __cplusplus
 extern "C" {

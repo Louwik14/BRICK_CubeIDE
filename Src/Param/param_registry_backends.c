@@ -1,4 +1,7 @@
 #include "Param/param_registry_backends.h"
+
+#include <stddef.h>
+
 #include "Audio/audio_note_engine_adapter.h"
 
 #include "Audio/drum_synth.h"

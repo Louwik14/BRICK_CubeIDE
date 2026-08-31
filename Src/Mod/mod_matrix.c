@@ -15,11 +15,11 @@
 #include "Mod/mod_destination_audio.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Param/param_spec.h"
-#include "Seq/seq_types.h"
+#include "Track/entity_types.h"
 
 /* Runtime remains entity-scoped; GROUP control state is owned by the master. */
 #undef SEQ_TRACK_COUNT
-#define SEQ_TRACK_COUNT SEQ_LANE_CAPACITY
+#define SEQ_TRACK_COUNT BRICK_ENTITY_CAPACITY
 
 
 typedef struct

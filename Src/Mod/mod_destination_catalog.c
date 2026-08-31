@@ -24,12 +24,12 @@
 #include "Param/param_stack_labels.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Mod/mod_env3.h"
-#include "Seq/seq_types.h"
+#include "Track/entity_types.h"
 #include "mixer.h"
 
 /* AUDIO destination execution is lane-scoped. */
 #undef SEQ_TRACK_COUNT
-#define SEQ_TRACK_COUNT SEQ_LANE_CAPACITY
+#define SEQ_TRACK_COUNT BRICK_ENTITY_CAPACITY
 
 static float mod_destination_clampf(float v, float lo, float hi)
 {

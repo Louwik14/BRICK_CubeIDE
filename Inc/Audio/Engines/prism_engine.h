@@ -6,7 +6,6 @@
 #pragma once
 
 #include <stdint.h>
-#include "Seq/seq_types.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -1,4 +1,5 @@
 #include "Track/synth_polyphony.h"
+#include "Track/track_types.h"
 
 #include <string.h>
 
@@ -8,7 +9,6 @@
 #include "Audio/Engines/stack_engine.h"
 #include "Audio/Engines/wavetable_engine.h"
 #include "Audio/Engines/fm_engine.h"
-#include "Track/track_runtime.h"
 #include "Mod/mod_lfo_v1.h"
 #include "stm32h7xx.h"
 

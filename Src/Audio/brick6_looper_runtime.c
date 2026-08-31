@@ -12,13 +12,13 @@
 #include "IPC/audio_recorder_capture.h"
 #include "Audio/audio_recorder_capture_audio.h"
 #include "Platform/memory_layout.h"
-#include "Seq/seq_types.h"
+#include "Track/entity_types.h"
 #include "stm32h7xx.h"
 
 #include <math.h>
 #include <string.h>
 
-#define BRICK6_LOOPER_TRACK_CAP SEQ_TRACK_COUNT
+#define BRICK6_LOOPER_TRACK_CAP BRICK_ENTITY_CAPACITY
 #define BRICK6_LOOPER_SHIFTER_CAP BRICK6_LOOPER_SHIFTER_SLOT_CAP
 #define BRICK6_LOOPER_SHIFTER_SLOT_NONE 0xFFU
 #define BRICK6_LOOPER_CACHE_ID_BASE SAMPLE_PAGE_CACHE_LOOPER_ID_BASE
@@ -58,7 +58,7 @@ static uint32_t looper_transport_tempo_bpm_milli(void)
 #endif
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
-_Static_assert((SAMPLE_PAGE_CACHE_LOOPER_ID_BASE + SEQ_TRACK_COUNT) <= SAMPLE_PAGE_CACHE_ID_CAPACITY,
+_Static_assert((SAMPLE_PAGE_CACHE_LOOPER_ID_BASE + BRICK_ENTITY_CAPACITY) <= SAMPLE_PAGE_CACHE_ID_CAPACITY,
                "Looper transient ids must fit in page-cache id capacity");
 #endif
 

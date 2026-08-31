@@ -3,6 +3,7 @@
 #include "IPC/control_audio_command.h"
 #include "Mod/mod_lfo_segment.h"
 #include "Platform/memory_layout.h"
+#include "Track/entity_types.h"
 #include "stm32h7xx.h"
 
 #include <string.h>
@@ -17,7 +18,7 @@
 
 /* GROUP modulation state is owned by its master entity. */
 #undef SEQ_TRACK_COUNT
-#define SEQ_TRACK_COUNT SEQ_LANE_CAPACITY
+#define SEQ_TRACK_COUNT BRICK_ENTITY_CAPACITY
 
 #define MOD_LFO_AUDIO_SAMPLE_RATE 48000.0f
 #define MOD_LFO_CONTROL_RATE_HZ 3000.0f
