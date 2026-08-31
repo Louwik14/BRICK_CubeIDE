@@ -140,11 +140,11 @@ static float ui_param_apply_delta_value(param_id_t param,
         return (float)valid[pos];
     }
     if ((param == PARAM_SAMPLER_SAMPLE)
-        && (ui_get_track_family(track) == UI_TRACK_FAMILY_SAMPLER)
-        && ((ui_get_track_type(track) == UI_TRACK_TYPE_STREAM)
-            || (ui_get_track_type(track) == UI_TRACK_TYPE_RAM)))
+        && (ui_get_track_family(track) == TRACK_FAMILY_SAMPLER)
+        && ((ui_get_track_type(track) == TRACK_TYPE_STREAM)
+            || (ui_get_track_type(track) == TRACK_TYPE_RAM)))
     {
-        const uint32_t kind = (ui_get_track_type(track) == UI_TRACK_TYPE_STREAM)
+        const uint32_t kind = (ui_get_track_type(track) == TRACK_TYPE_STREAM)
             ? PERSIST_ASSET_SAMPLE_STREAM : PERSIST_ASSET_SAMPLE_RAM;
         const uint16_t count = project_control_sample_projection_count(kind);
         if ((delta == 0) || (count == 0U))

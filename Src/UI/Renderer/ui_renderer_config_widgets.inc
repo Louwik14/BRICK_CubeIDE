@@ -520,7 +520,7 @@ static uint8_t ui_renderer_template_draw_cfg_stacked_text(int x,
     return 1U;
 }
 
-static ui_track_family_t ui_renderer_template_cfg_visible_family(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx)
+static track_family_t ui_renderer_template_cfg_visible_family(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx)
 {
     float family_value = 0.0f;
     if (ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_CFG_TRACK, &family_value, 0) == 0U)
@@ -533,11 +533,11 @@ static ui_track_family_t ui_renderer_template_cfg_visible_family(const ui_param_
     {
         family = 0;
     }
-    if (family >= (int32_t)UI_TRACK_FAMILY_COUNT)
+    if (family >= (int32_t)TRACK_FAMILY_COUNT)
     {
-        family = (int32_t)UI_TRACK_FAMILY_COUNT - 1;
+        family = (int32_t)TRACK_FAMILY_COUNT - 1;
     }
-    return (ui_track_family_t)family;
+    return (track_family_t)family;
 }
 
 static uint8_t ui_renderer_template_draw_custom_track_cfg(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
@@ -586,32 +586,32 @@ static uint8_t ui_renderer_template_draw_custom_track_cfg(const ui_param_seq_plo
         return ui_renderer_template_draw_filter_big_text(x, y, w, h, labels[source], &FONT_OFF_COMPACT);
     }
 
-    const ui_track_family_t family = ui_renderer_template_cfg_visible_family(plock_frame_ctx);
+    const track_family_t family = ui_renderer_template_cfg_visible_family(plock_frame_ctx);
     if (kind == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TRACK)
     {
-        if (family == UI_TRACK_FAMILY_OFF)
+        if (family == TRACK_FAMILY_OFF)
         {
             return ui_renderer_template_draw_filter_big_text(x, y, w, h, "OFF", &FONT_OFF_COMPACT);
         }
-        if (family == UI_TRACK_FAMILY_SYNTH)
+        if (family == TRACK_FAMILY_SYNTH)
         {
             ui_renderer_template_draw_cfg_synth_icon(x, y, w, h);
             return 1U;
         }
-        if (family == UI_TRACK_FAMILY_MIDI)
+        if (family == TRACK_FAMILY_MIDI)
         {
             return ui_renderer_template_draw_cfg_midi_text(x, y, w, h);
         }
-        if (family == UI_TRACK_FAMILY_EXTERNAL)
+        if (family == TRACK_FAMILY_EXTERNAL)
         {
             return ui_renderer_template_draw_filter_big_text(x, y, w, h, "EXT", &FONT_OFF_COMPACT);
         }
-        if (family == UI_TRACK_FAMILY_DRUM)
+        if (family == TRACK_FAMILY_DRUM)
         {
             ui_renderer_template_draw_cfg_drum_icon(x, y, w, h);
             return 1U;
         }
-        if (family == UI_TRACK_FAMILY_SAMPLER)
+        if (family == TRACK_FAMILY_SAMPLER)
         {
             ui_renderer_template_draw_cfg_sampler_icon(x, y, w, h);
             return 1U;
@@ -621,49 +621,49 @@ static uint8_t ui_renderer_template_draw_custom_track_cfg(const ui_param_seq_plo
 
     if (kind == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TYPE)
     {
-        const ui_track_type_t type = ui_get_track_type_from_family_index(family, (uint8_t)(value + 0.5f));
-        if (family == UI_TRACK_FAMILY_OFF)
+        const track_type_t type = ui_get_track_type_from_family_index(family, (uint8_t)(value + 0.5f));
+        if (family == TRACK_FAMILY_OFF)
         {
             return ui_renderer_template_draw_filter_text(x, y, w, h, "-", &FONT_4X6, 0);
         }
 
         switch (type)
         {
-            case UI_TRACK_TYPE_WAVE:
+            case TRACK_TYPE_WAVE:
                 ui_renderer_template_draw_cfg_wave_icon(x, y, w, h);
                 return 1U;
 
-            case UI_TRACK_TYPE_MULTI:
+            case TRACK_TYPE_MULTI:
                 ui_renderer_template_draw_cfg_piano_icon(x, y, w, h);
                 return 1U;
 
-            case UI_TRACK_TYPE_MIDI:
+            case TRACK_TYPE_MIDI:
                 ui_renderer_template_draw_cfg_midi_icon(x, y, w, h);
                 return 1U;
 
-            case UI_TRACK_TYPE_EXTERNAL:
+            case TRACK_TYPE_EXTERNAL:
                 ui_renderer_template_draw_cfg_external_icon(x, y, w, h);
                 return 1U;
 
-            case UI_TRACK_TYPE_NONE:
+            case TRACK_TYPE_NONE:
                 break;
 
-            case UI_TRACK_TYPE_RAM:
+            case TRACK_TYPE_RAM:
                 ui_renderer_template_draw_cfg_ram_icon(x, y, w, h);
                 return 1U;
 
-            case UI_TRACK_TYPE_STREAM:
+            case TRACK_TYPE_STREAM:
                 ui_renderer_template_draw_cfg_stream_icon(x, y, w, h);
                 return 1U;
 
-            case UI_TRACK_TYPE_LOOPER:
+            case TRACK_TYPE_LOOPER:
                 ui_renderer_template_draw_cfg_loop_icon(x, y, w, h);
                 return 1U;
 
-            case UI_TRACK_TYPE_DRUM_MD:
+            case TRACK_TYPE_DRUM_MD:
                 return ui_renderer_template_draw_cfg_stacked_text(x, y, w, h, "DRUM", "MD");
 
-            case UI_TRACK_TYPE_DRUM_BD_ANALOG:
+            case TRACK_TYPE_DRUM_BD_ANALOG:
                 return ui_renderer_template_draw_cfg_stacked_text(x, y, w, h, "BD", "Ana");
 
                 return ui_renderer_template_draw_filter_big_text(x, y, w, h, "FX", &FONT_OFF_COMPACT);

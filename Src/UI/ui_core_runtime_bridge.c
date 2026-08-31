@@ -54,8 +54,8 @@ static uint8_t ui_core_runtime_bridge_track_is_sampler_looper(uint8_t track)
         return 0U;
     }
 
-    return (uint8_t)((track_state_get_family(track) == UI_TRACK_FAMILY_SAMPLER)
-            && (track_state_get_type(track) == UI_TRACK_TYPE_LOOPER));
+    return (uint8_t)((track_state_get_family(track) == TRACK_FAMILY_SAMPLER)
+            && (track_state_get_type(track) == TRACK_TYPE_LOOPER));
 }
 
 static uint8_t ui_core_runtime_bridge_transport_play_command(const ui_event_t *ev,
@@ -200,7 +200,7 @@ static uint8_t ui_core_runtime_bridge_looper_find_single_record_eligible(uint8_t
     uint8_t found_track = 0U;
     uint8_t count = 0U;
 
-    for (uint8_t track = 0U; track < UI_TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < TRACK_COUNT; ++track)
     {
         if (ui_core_runtime_bridge_looper_track_is_record_eligible(track) != 0U)
         {
@@ -352,7 +352,7 @@ void ui_core_runtime_bridge_service_looper_record_control(ui_core_runtime_bridge
             && (live_status.state == AUDIO_RECORDER_STATE_TAKE_READY)
             && (live_status.error == AUDIO_RECORDER_ERROR_NONE)
             && (live_status.frames_committed != 0U)
-            && (g_looper_take_track < UI_TRACK_COUNT)
+            && (g_looper_take_track < TRACK_COUNT)
             && (g_looper_take_notified == 0U))
     {
         const char *wav_path = 0;
@@ -435,30 +435,30 @@ static void ui_core_runtime_bridge_finish_structure_change(
 }
 
 bool ui_core_runtime_bridge_apply_track_family_change(uint8_t track,
-                                                      ui_track_family_t family,
+                                                      track_family_t family,
                                                       uint8_t active_track_touched,
                                                       ui_core_runtime_bridge_post_sync_fn post_sync)
 {
     const uint8_t changes_external_ownership = (uint8_t)(
-        (track_state_get_family(track) == UI_TRACK_FAMILY_EXTERNAL)
-        || (family == UI_TRACK_FAMILY_EXTERNAL));
+        (track_state_get_family(track) == TRACK_FAMILY_EXTERNAL)
+        || (family == TRACK_FAMILY_EXTERNAL));
     uint8_t families[BRICK_ENTITY_CAPACITY], types[BRICK_ENTITY_CAPACITY];
     uint8_t midi[BRICK_ENTITY_CAPACITY], sources[BRICK_ENTITY_CAPACITY];
-    uint8_t inputs[UI_TRACK_COUNT];
+    uint8_t inputs[TRACK_COUNT];
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
     {
         families[entity] = (uint8_t)track_state_get_family(entity);
         types[entity] = (uint8_t)track_state_get_type(entity);
         midi[entity] = track_state_get_midi_channel(entity);
         sources[entity] = (uint8_t)track_state_get_midi_source(entity);
-        if (entity < UI_TRACK_COUNT)
+        if (entity < TRACK_COUNT)
             inputs[entity] = track_state_get_external_input(entity);
     }
     families[track] = (uint8_t)family;
-    if (family == UI_TRACK_FAMILY_OFF)
-        types[track] = (uint8_t)UI_TRACK_TYPE_NONE;
+    if (family == TRACK_FAMILY_OFF)
+        types[track] = (uint8_t)TRACK_TYPE_NONE;
     else if (!ui_track_catalog_type_is_valid_for_family(
-                 family, (ui_track_type_t)types[track]))
+                 family, (track_type_t)types[track]))
         types[track] = (uint8_t)ui_track_catalog_first_available_type(
             family, track, track_state_get_configs());
     if (!track_structure_apply_entity_bulk_with_inputs(
@@ -483,20 +483,20 @@ bool ui_core_runtime_bridge_apply_track_external_input_change(
 }
 
 bool ui_core_runtime_bridge_apply_track_type_change(uint8_t track,
-                                                    ui_track_type_t type,
+                                                    track_type_t type,
                                                     uint8_t active_track_touched,
                                                     ui_core_runtime_bridge_post_sync_fn post_sync)
 {
     uint8_t families[BRICK_ENTITY_CAPACITY], types[BRICK_ENTITY_CAPACITY];
     uint8_t midi[BRICK_ENTITY_CAPACITY], sources[BRICK_ENTITY_CAPACITY];
-    uint8_t inputs[UI_TRACK_COUNT];
+    uint8_t inputs[TRACK_COUNT];
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
     {
         families[entity] = (uint8_t)track_state_get_family(entity);
         types[entity] = (uint8_t)track_state_get_type(entity);
         midi[entity] = track_state_get_midi_channel(entity);
         sources[entity] = (uint8_t)track_state_get_midi_source(entity);
-        if (entity < UI_TRACK_COUNT)
+        if (entity < TRACK_COUNT)
             inputs[entity] = track_state_get_external_input(entity);
     }
     types[track] = (uint8_t)type;
@@ -508,10 +508,10 @@ bool ui_core_runtime_bridge_apply_track_type_change(uint8_t track,
     return true;
 }
 
-bool ui_core_runtime_bridge_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
-                                                      const uint8_t type[UI_TRACK_COUNT],
-                                                      const uint8_t midi_channel[UI_TRACK_COUNT],
-                                                      const uint8_t midi_source[UI_TRACK_COUNT],
+bool ui_core_runtime_bridge_restore_track_config_bulk(const uint8_t family[TRACK_COUNT],
+                                                      const uint8_t type[TRACK_COUNT],
+                                                      const uint8_t midi_channel[TRACK_COUNT],
+                                                      const uint8_t midi_source[TRACK_COUNT],
                                                       ui_core_runtime_bridge_post_sync_fn post_sync)
 {
     if (!track_structure_apply_bulk(
@@ -541,7 +541,7 @@ uint8_t ui_core_runtime_bridge_handle_routing_event(const ui_event_t *ev,
     }
 
     const uint8_t hall = (uint8_t)ev->id;
-    if (hall >= UI_TRACK_COUNT)
+    if (hall >= TRACK_COUNT)
     {
         if (suppress_hall_note != 0)
         {
@@ -573,7 +573,7 @@ uint8_t ui_core_runtime_bridge_handle_routing_event(const ui_event_t *ev,
 
 uint8_t ui_core_runtime_bridge_get_looper_route_enabled(uint8_t looper_track, uint8_t source_track)
 {
-    if ((looper_track >= UI_TRACK_COUNT) || (source_track >= UI_TRACK_COUNT))
+    if ((looper_track >= TRACK_COUNT) || (source_track >= TRACK_COUNT))
     {
         return 0U;
     }
@@ -583,7 +583,7 @@ uint8_t ui_core_runtime_bridge_get_looper_route_enabled(uint8_t looper_track, ui
 
 void ui_core_runtime_bridge_set_looper_route_enabled(uint8_t looper_track, uint8_t source_track, uint8_t enabled)
 {
-    if ((looper_track >= UI_TRACK_COUNT) || (source_track >= UI_TRACK_COUNT))
+    if ((looper_track >= TRACK_COUNT) || (source_track >= TRACK_COUNT))
     {
         return;
     }

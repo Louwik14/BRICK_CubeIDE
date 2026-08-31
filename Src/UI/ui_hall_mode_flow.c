@@ -448,7 +448,7 @@ void ui_hall_mode_flow_handle_track_hall_action(uint8_t hall,
                                                 uint32_t now_ms,
                                                 uint8_t held_master_candidate,
                                                 uint8_t has_held_master_candidate,
-                                                uint32_t cfg_tap_ms[UI_TRACK_COUNT],
+                                                uint32_t cfg_tap_ms[TRACK_COUNT],
                                                 uint8_t hall_note_suppressed[HALL_UI_LANE_COUNT],
                                                 ui_hall_mode_flow_set_active_track_fn set_active_track,
                                                 ui_hall_mode_flow_feedback_fn feedback)
@@ -456,7 +456,7 @@ void ui_hall_mode_flow_handle_track_hall_action(uint8_t hall,
     (void)held_master_candidate;
     (void)has_held_master_candidate;
     (void)feedback;
-    if ((hall >= HALL_UI_LANE_COUNT) || (hall >= UI_ACTIVE_TRACK_COUNT))
+    if ((hall >= HALL_UI_LANE_COUNT) || (hall >= TRACK_ACTIVE_COUNT))
     {
         return;
     }

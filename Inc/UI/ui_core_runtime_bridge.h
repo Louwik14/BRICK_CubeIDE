@@ -14,12 +14,12 @@ typedef void (*ui_core_runtime_bridge_post_sync_fn)(uint8_t sync_active_track_ui
 
 void ui_core_runtime_bridge_init(void);
 bool ui_core_runtime_bridge_apply_track_family_change(uint8_t track,
-                                                      ui_track_family_t family,
+                                                      track_family_t family,
                                                       uint8_t active_track_touched,
                                                       ui_core_runtime_bridge_post_sync_fn post_sync);
 
 bool ui_core_runtime_bridge_apply_track_type_change(uint8_t track,
-                                                     ui_track_type_t type,
+                                                     track_type_t type,
                                                      uint8_t active_track_touched,
                                                      ui_core_runtime_bridge_post_sync_fn post_sync);
 bool ui_core_runtime_bridge_apply_track_external_input_change(
@@ -28,10 +28,10 @@ bool ui_core_runtime_bridge_apply_track_external_input_change(
     uint8_t active_track_touched,
     ui_core_runtime_bridge_post_sync_fn post_sync);
 
-bool ui_core_runtime_bridge_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
-                                                      const uint8_t type[UI_TRACK_COUNT],
-                                                      const uint8_t midi_channel[UI_TRACK_COUNT],
-                                                      const uint8_t midi_source[UI_TRACK_COUNT],
+bool ui_core_runtime_bridge_restore_track_config_bulk(const uint8_t family[TRACK_COUNT],
+                                                      const uint8_t type[TRACK_COUNT],
+                                                      const uint8_t midi_channel[TRACK_COUNT],
+                                                      const uint8_t midi_source[TRACK_COUNT],
                                                       ui_core_runtime_bridge_post_sync_fn post_sync);
 
 uint8_t ui_core_runtime_bridge_handle_routing_event(const ui_event_t *ev,

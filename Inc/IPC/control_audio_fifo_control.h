@@ -23,6 +23,3 @@ uint8_t control_audio_fifo_batch_append(control_audio_fifo_batch_writer_t *write
                                         const control_audio_command_t *command);
 uint8_t control_audio_fifo_batch_commit(control_audio_fifo_batch_writer_t *writer);
 void control_audio_fifo_batch_abort(control_audio_fifo_batch_writer_t *writer);
-uint8_t control_audio_fifo_publish_fenced(const control_audio_command_t *command,
-                                          uint32_t *out_consumer_fence);
-uint8_t control_audio_fifo_control_fence_consumed(uint32_t consumer_fence);

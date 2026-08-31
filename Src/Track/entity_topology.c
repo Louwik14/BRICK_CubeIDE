@@ -44,7 +44,7 @@ uint8_t entity_topology_resolve(uint8_t group_active,
 uint8_t entity_topology_group_is_active(void)
 {
     return (track_state_get_type(BRICK_ENTITY_GROUP_MASTER_ID)
-            == UI_TRACK_TYPE_GROUP) ? 1U : 0U;
+            == TRACK_TYPE_GROUP) ? 1U : 0U;
 }
 
 uint8_t entity_topology_get(brick_entity_id_t entity_id,

@@ -32,7 +32,7 @@ uint8_t ui_track_led_project_hall(uint8_t hall,
     {
         out_projection->visible = 1U;
         out_projection->color =
-            (track_state_get_family(hall) == UI_TRACK_FAMILY_OFF)
+            (track_state_get_family(hall) == TRACK_FAMILY_OFF)
                 ? UI_TRACK_LED_COLOR_TOP_LEVEL_OFF
                 : UI_TRACK_LED_COLOR_TOP_LEVEL_ACTIVE;
     }

@@ -133,13 +133,13 @@ const ui_template_family_t *ui_template_page_get_active_family(const ui_template
 
 void ui_template_family_registry_init(void);
 void ui_template_family_register(ui_template_family_id_t family_id,
-                                 ui_track_family_t track_family,
-                                 ui_track_type_t track_type,
+                                 track_family_t track_family,
+                                 track_type_t track_type,
                                  const ui_template_family_t *family);
 const ui_template_family_t *ui_template_family_resolve(ui_template_family_id_t family_id,
                                                        uint8_t track,
-                                                       ui_track_family_t track_family,
-                                                       ui_track_type_t track_type);
+                                                       track_family_t track_family,
+                                                       track_type_t track_type);
 const ui_template_family_t *ui_template_family_resolve_active_track(ui_template_family_id_t family_id);
 uint8_t ui_template_edit_context_resolve(ui_template_family_id_t family_id,
                                          uint8_t selected_entity,

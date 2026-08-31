@@ -93,33 +93,33 @@ uint8_t ui_get_active_track(void);
 uint8_t ui_get_active_lane(void);
 void ui_restore_active_track(uint8_t track);
 bool ui_resolve_filter_target_track(uint8_t *out_track_id);
-ui_track_config_t ui_get_track_config(uint8_t track);
-ui_track_family_t ui_get_track_family(uint8_t track);
-ui_track_type_t ui_get_track_type(uint8_t track);
-bool ui_set_track_family(uint8_t track, ui_track_family_t family);
-bool ui_set_track_type(uint8_t track, ui_track_type_t type);
-bool ui_track_family_is_engine(ui_track_family_t family);
-bool ui_track_type_is_valid_for_family(ui_track_family_t family, ui_track_type_t type);
-bool ui_track_type_is_available(uint8_t track, ui_track_family_t family, ui_track_type_t type);
-ui_track_type_t ui_get_default_track_type_for_family(ui_track_family_t family);
-uint8_t ui_get_track_type_count_for_family(ui_track_family_t family);
-uint8_t ui_get_track_type_index_for_family(ui_track_family_t family, ui_track_type_t type);
-ui_track_type_t ui_get_track_type_from_family_index(ui_track_family_t family, uint8_t index);
-uint8_t ui_count_tracks_with_family(ui_track_family_t family);
-const char *ui_get_track_family_display_name(ui_track_family_t family);
-const char *ui_get_track_family_short_name(ui_track_family_t family);
-const char *ui_get_track_type_display_name(ui_track_family_t family, ui_track_type_t type);
-const char *ui_get_track_type_short_name(ui_track_family_t family, ui_track_type_t type);
+track_config_t ui_get_track_config(uint8_t track);
+track_family_t ui_get_track_family(uint8_t track);
+track_type_t ui_get_track_type(uint8_t track);
+bool ui_set_track_family(uint8_t track, track_family_t family);
+bool ui_set_track_type(uint8_t track, track_type_t type);
+bool ui_track_family_is_engine(track_family_t family);
+bool ui_track_type_is_valid_for_family(track_family_t family, track_type_t type);
+bool ui_track_type_is_available(uint8_t track, track_family_t family, track_type_t type);
+track_type_t ui_get_default_track_type_for_family(track_family_t family);
+uint8_t ui_get_track_type_count_for_family(track_family_t family);
+uint8_t ui_get_track_type_index_for_family(track_family_t family, track_type_t type);
+track_type_t ui_get_track_type_from_family_index(track_family_t family, uint8_t index);
+uint8_t ui_count_tracks_with_family(track_family_t family);
+const char *ui_get_track_family_display_name(track_family_t family);
+const char *ui_get_track_family_short_name(track_family_t family);
+const char *ui_get_track_type_display_name(track_family_t family, track_type_t type);
+const char *ui_get_track_type_short_name(track_family_t family, track_type_t type);
 uint8_t ui_get_track_midi_channel(uint8_t track);
 bool ui_set_track_midi_channel(uint8_t track, uint8_t channel_1_16);
-ui_track_midi_source_t ui_get_track_midi_source(uint8_t track);
-bool ui_set_track_midi_source(uint8_t track, ui_track_midi_source_t source);
+track_midi_source_t ui_get_track_midi_source(uint8_t track);
+bool ui_set_track_midi_source(uint8_t track, track_midi_source_t source);
 uint8_t ui_get_track_external_input(uint8_t track);
 bool ui_set_track_external_input(uint8_t track, uint8_t input);
-bool ui_restore_track_config_bulk(const uint8_t family[UI_TRACK_COUNT],
-                                  const uint8_t type[UI_TRACK_COUNT],
-                                  const uint8_t midi_channel[UI_TRACK_COUNT],
-                                  const uint8_t midi_source[UI_TRACK_COUNT]);
+bool ui_restore_track_config_bulk(const uint8_t family[TRACK_COUNT],
+                                  const uint8_t type[TRACK_COUNT],
+                                  const uint8_t midi_channel[TRACK_COUNT],
+                                  const uint8_t midi_source[TRACK_COUNT]);
 uint8_t ui_track_midi_channel_used_by_other(uint8_t track, uint8_t channel_1_16);
 void ui_get_track_runtime_header_label(uint8_t track, char *out, uint32_t out_len);
 

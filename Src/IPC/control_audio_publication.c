@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "IPC/control_audio_fifo_control.h"
+#include "IPC/control_audio_timing.h"
 #include "Platform/memory_layout.h"
 #include "Seq/seq_note_trace.h"
 
@@ -30,11 +31,16 @@ void control_audio_publication_init(void)
     g_control_audio_horizon_capacity_failure_count = 0U;
 }
 
+uint8_t control_audio_publication_horizon_active(void)
+{
+    return g_control_audio_horizon.active;
+}
+
 uint8_t control_audio_publication_begin_horizon(uint64_t first_sample,
                                                 uint16_t frames)
 {
     if ((g_control_audio_horizon.active != 0U) || (frames == 0U)
-            || (frames > 64U))
+            || (frames > CONTROL_AUDIO_MAX_PUBLICATION_HORIZON_FRAMES))
         return 0U;
     uint16_t free = control_audio_fifo_control_free();
     if (free < CONTROL_AUDIO_FIFO_CONTRACT_BURST)
@@ -187,25 +193,6 @@ uint8_t control_audio_publish_param(uint8_t entity, uint16_t param_id,
     return control_audio_publish(&c);
 }
 
-uint8_t control_audio_publish_param_fenced(uint8_t entity, uint16_t param_id,
-                                           uint32_t value,
-                                           uint32_t target_detail,
-                                           uint64_t sample_time,
-                                           uint32_t *out_consumer_fence)
-{
-    if (g_control_audio_horizon.active != 0U)
-        return 0U;
-    const control_audio_command_t c = { .effective_sample_time = sample_time,
-        .value = value, .id = param_id, .entity = entity,
-        .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM,
-                                                  target_detail & 0x1FU) };
-    return control_audio_fifo_publish_fenced(&c, out_consumer_fence);
-}
-
-uint8_t control_audio_consumer_fence_consumed(uint32_t consumer_fence)
-{
-    return control_audio_fifo_control_fence_consumed(consumer_fence);
-}
 
 uint8_t control_audio_publish_note(uint8_t entity, uint8_t kind,
                                    uint32_t output_id, uint8_t note,
@@ -244,16 +231,4 @@ uint8_t control_audio_publish_panic(uint8_t kind, uint8_t entity,
         .entity = entity,
         .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PANIC, kind) };
     return control_audio_publish(&c);
-}
-
-uint8_t control_audio_publish_panic_fenced(uint8_t kind, uint8_t entity,
-                                           uint64_t sample_time,
-                                           uint32_t *out_consumer_fence)
-{
-    if (g_control_audio_horizon.active != 0U) return 0U;
-    const control_audio_command_t c = { .effective_sample_time = sample_time,
-        .entity = entity,
-        .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PANIC,
-                                                  kind) };
-    return control_audio_fifo_publish_fenced(&c, out_consumer_fence);
 }

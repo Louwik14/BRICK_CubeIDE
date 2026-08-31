@@ -373,7 +373,10 @@ void wavetable_pool_init(void)
 void wavetable_pool_reset(void)
 {
     wavetable_pool_load_async_cancel();
-    memset(g_wavetable_retire_fence, 0, sizeof(g_wavetable_retire_fence));
+    memset(g_wavetable_retire_not_before_sample, 0,
+           sizeof(g_wavetable_retire_not_before_sample));
+    memset(g_wavetable_retire_stop_committed, 0,
+           sizeof(g_wavetable_retire_stop_committed));
     uint32_t generation_seed = g_wavetable_pool.generation_counter;
     for (uint16_t i = 0U; i < WAVETABLE_POOL_MAX_SLOTS; ++i)
     {

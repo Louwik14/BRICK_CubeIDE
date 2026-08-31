@@ -853,24 +853,6 @@ uint8_t control_music_output_panic_all(uint8_t send_transport_stop)
     return 1U;
 }
 
-uint8_t control_music_output_panic_all_fenced(uint32_t *out_consumer_fence)
-{
-    if (out_consumer_fence == NULL)
-        return 0U;
-    uint64_t due_sample = 0U;
-    (void)live_clock_read_audio_sample(&due_sample);
-    if (control_audio_publish_panic_fenced(CONTROL_AUDIO_PANIC_GLOBAL, 0U,
-            control_music_output_first_unpublished_sample(due_sample),
-            out_consumer_fence) == 0U)
-        return 0U;
-    control_music_output_close_all_midi();
-    for (brick_entity_id_t entity_id = 0U;
-         entity_id < BRICK_ENTITY_CAPACITY; ++entity_id)
-        for (uint8_t i = 0U; i < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++i)
-            control_music_output_mark_dead(entity_id, i);
-    return 1U;
-}
-
 uint8_t control_music_output_has_alive(void)
 {
     for (brick_entity_id_t entity_id = 0U;

@@ -440,7 +440,7 @@ static void led_apply_route_destination_hall_scene(led_id_t led)
 static void led_apply_sampler_looper_routing_hall_scene(uint8_t hall, uint8_t destination_track)
 {
     const led_id_t led = led_remap_led_for_hall(hall);
-    if (hall >= UI_ACTIVE_TRACK_COUNT)
+    if (hall >= TRACK_ACTIVE_COUNT)
     {
         led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
         return;
@@ -464,7 +464,7 @@ static void led_apply_sampler_looper_routing_hall_scene(uint8_t hall, uint8_t de
 static void led_apply_audio_rec_hall_scene(uint8_t hall)
 {
     const led_id_t led = led_remap_led_for_hall(hall);
-    if (hall >= UI_ACTIVE_TRACK_COUNT)
+    if (hall >= TRACK_ACTIVE_COUNT)
     {
         led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
         return;

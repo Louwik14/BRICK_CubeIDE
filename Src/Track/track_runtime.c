@@ -135,30 +135,30 @@ static uint8_t track_runtime_publish_midi_config(
         CONTROL_AUDIO_PARAM_MIDI_CONFIG, packed, 0U, due_sample);
 }
 
-track_runtime_family_t track_runtime_family_from_ui(ui_track_family_t family)
+track_runtime_family_t track_runtime_family_from_ui(track_family_t family)
 {
-    if (family == UI_TRACK_FAMILY_OFF)
+    if (family == TRACK_FAMILY_OFF)
     {
         return TRACK_RUNTIME_FAMILY_OFF;
     }
 
-    if (family == UI_TRACK_FAMILY_SYNTH)
+    if (family == TRACK_FAMILY_SYNTH)
     {
         return TRACK_RUNTIME_FAMILY_SYNTH;
     }
-    if (family == UI_TRACK_FAMILY_SAMPLER)
+    if (family == TRACK_FAMILY_SAMPLER)
     {
         return TRACK_RUNTIME_FAMILY_SAMPLER;
     }
-    if (family == UI_TRACK_FAMILY_DRUM)
+    if (family == TRACK_FAMILY_DRUM)
     {
         return TRACK_RUNTIME_FAMILY_DRUM;
     }
-    if (family == UI_TRACK_FAMILY_MIDI)
+    if (family == TRACK_FAMILY_MIDI)
     {
         return TRACK_RUNTIME_FAMILY_MIDI;
     }
-    if (family == UI_TRACK_FAMILY_EXTERNAL)
+    if (family == TRACK_FAMILY_EXTERNAL)
     {
         return TRACK_RUNTIME_FAMILY_EXTERNAL;
     }
@@ -166,39 +166,39 @@ track_runtime_family_t track_runtime_family_from_ui(ui_track_family_t family)
     return TRACK_RUNTIME_FAMILY_OTHER;
 }
 
-track_runtime_type_t track_runtime_type_from_ui(ui_track_type_t type)
+track_runtime_type_t track_runtime_type_from_ui(track_type_t type)
 {
     switch (type)
     {
-        case UI_TRACK_TYPE_NONE:
+        case TRACK_TYPE_NONE:
             return TRACK_RUNTIME_TYPE_NONE;
 
-        case UI_TRACK_TYPE_RAM:
+        case TRACK_TYPE_RAM:
             return TRACK_RUNTIME_TYPE_RAM;
-        case UI_TRACK_TYPE_STREAM:
+        case TRACK_TYPE_STREAM:
             return TRACK_RUNTIME_TYPE_STREAM;
-        case UI_TRACK_TYPE_PRISM:
+        case TRACK_TYPE_PRISM:
             return TRACK_RUNTIME_TYPE_PRISM;
-        case UI_TRACK_TYPE_WAVE:
+        case TRACK_TYPE_WAVE:
             return TRACK_RUNTIME_TYPE_WAVE;
 
-        case UI_TRACK_TYPE_DRUM_MD:
+        case TRACK_TYPE_DRUM_MD:
             return TRACK_RUNTIME_TYPE_DRUM_MD;
-        case UI_TRACK_TYPE_MIDI:
+        case TRACK_TYPE_MIDI:
             return TRACK_RUNTIME_TYPE_MIDI;
-        case UI_TRACK_TYPE_DRUM_BD_ANALOG:
+        case TRACK_TYPE_DRUM_BD_ANALOG:
             return TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG;
-        case UI_TRACK_TYPE_LOOPER:
+        case TRACK_TYPE_LOOPER:
             return TRACK_RUNTIME_TYPE_LOOPER;
-        case UI_TRACK_TYPE_MULTI:
+        case TRACK_TYPE_MULTI:
             return TRACK_RUNTIME_TYPE_MULTI;
-        case UI_TRACK_TYPE_GROUP:
+        case TRACK_TYPE_GROUP:
             return TRACK_RUNTIME_TYPE_GROUP;
-        case UI_TRACK_TYPE_STACK:
+        case TRACK_TYPE_STACK:
             return TRACK_RUNTIME_TYPE_STACK;
-        case UI_TRACK_TYPE_FM:
+        case TRACK_TYPE_FM:
             return TRACK_RUNTIME_TYPE_FM;
-        case UI_TRACK_TYPE_EXTERNAL:
+        case TRACK_TYPE_EXTERNAL:
             return TRACK_RUNTIME_TYPE_EXTERNAL;
 
         default:
@@ -744,8 +744,8 @@ static void track_runtime_prepare_ctx_base(uint8_t track, track_runtime_ctx_t *c
         return;
     }
 
-    const ui_track_config_t config = track_state_get_config(track);
-    const ui_track_type_t ui_type = config.type;
+    const track_config_t config = track_state_get_config(track);
+    const track_type_t ui_type = config.type;
     track_runtime_family_t family = track_runtime_family_from_ui(config.family);
     track_runtime_type_t type = track_runtime_type_from_ui(ui_type);
     memset(ctx, 0, sizeof(*ctx));
@@ -1033,13 +1033,13 @@ track_runtime_midi_source_t track_runtime_get_midi_source(uint8_t track)
         return TRACK_RUNTIME_MIDI_SOURCE_ALL;
     }
 
-    switch ((ui_track_midi_source_t)ctx->midi_source)
+    switch ((track_midi_source_t)ctx->midi_source)
     {
-        case UI_TRACK_MIDI_SRC_INT:
+        case TRACK_MIDI_SOURCE_INTERNAL:
             return TRACK_RUNTIME_MIDI_SOURCE_INTERNAL;
-        case UI_TRACK_MIDI_SRC_EXT:
+        case TRACK_MIDI_SOURCE_EXTERNAL:
             return TRACK_RUNTIME_MIDI_SOURCE_EXTERNAL;
-        case UI_TRACK_MIDI_SRC_ALL:
+        case TRACK_MIDI_SOURCE_ALL:
         default:
             return TRACK_RUNTIME_MIDI_SOURCE_ALL;
     }

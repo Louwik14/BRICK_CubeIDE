@@ -107,18 +107,18 @@ static uint8_t ui_param_resolve_edit_bounds(param_id_t param, uint8_t track, flo
     }
     if (param == PARAM_CFG_TRACK)
     {
-        *out_max = (float)((uint8_t)UI_TRACK_FAMILY_COUNT - 1U);
+        *out_max = (float)((uint8_t)TRACK_FAMILY_COUNT - 1U);
     }
     else if (param == PARAM_CFG_TRACK_TYPE)
     {
-        const ui_track_family_t active_family = ui_get_track_family(track);
+        const track_family_t active_family = ui_get_track_family(track);
         const uint8_t type_count = ui_get_track_type_count_for_family(active_family);
         *out_max = (type_count > 0U) ? (float)(type_count - 1U) : 0.0f;
     }
     else if (param == PARAM_CFG_POLY_VOICES)
     {
-        if ((ui_get_track_family(track) == UI_TRACK_FAMILY_SAMPLER)
-                && (ui_get_track_type(track) == UI_TRACK_TYPE_MULTI))
+        if ((ui_get_track_family(track) == TRACK_FAMILY_SAMPLER)
+                && (ui_get_track_type(track) == TRACK_TYPE_MULTI))
         {
             *out_min = 1.0f;
             *out_max = (float)BRICK6_SAMPLER_MULTI_MAX_VOICES;
@@ -134,14 +134,14 @@ static uint8_t ui_param_resolve_edit_bounds(param_id_t param, uint8_t track, flo
         *out_max = (count > 0U) ? (float)(count - 1U) : 0.0f;
     }
     else if ((param == PARAM_SAMPLER_SAMPLE)
-             && (ui_get_track_family(track) == UI_TRACK_FAMILY_SAMPLER)
-             && (ui_get_track_type(track) == UI_TRACK_TYPE_MULTI))
+             && (ui_get_track_family(track) == TRACK_FAMILY_SAMPLER)
+             && (ui_get_track_type(track) == TRACK_TYPE_MULTI))
     {
         *out_min = 0.0f;
         *out_max = (float)multi_sample_pool_get_instrument_count();
     }
     else if ((param == PARAM_SAMPLER_SAMPLE)
-             && (ui_get_track_family(track) == UI_TRACK_FAMILY_SAMPLER))
+             && (ui_get_track_family(track) == TRACK_FAMILY_SAMPLER))
     {
         const uint16_t active_slots = sample_global_pool_get_active_slot_capacity();
         *out_min = 0.0f;

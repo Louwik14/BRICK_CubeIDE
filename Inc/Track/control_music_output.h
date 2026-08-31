@@ -83,7 +83,6 @@ void control_music_output_set_multi(brick_entity_id_t entity_id,
                                     uint8_t is_multi);
 uint8_t control_music_output_count(brick_entity_id_t entity_id);
 uint8_t control_music_output_panic_all(uint8_t send_transport_stop);
-uint8_t control_music_output_panic_all_fenced(uint32_t *out_consumer_fence);
 uint8_t control_music_output_has_alive(void);
 uint8_t control_music_output_is_note_active_on_channel(
     uint8_t channel_zero_based, uint8_t note);

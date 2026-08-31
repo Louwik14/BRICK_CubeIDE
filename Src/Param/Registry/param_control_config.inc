@@ -9,7 +9,7 @@ static void param_registry_sync_active_cfg_mirror_for_track(uint8_t track)
         return;
     }
 
-    const ui_track_family_t family = track_state_get_family(track);
+    const track_family_t family = track_state_get_family(track);
     param_store_set_active(PARAM_CFG_TRACK, (float)family);
     param_store_set_active(PARAM_CFG_TRACK_TYPE,
                            (float)ui_track_catalog_type_index_for_family(family,
@@ -27,10 +27,10 @@ static uint8_t param_apply_cfg_track_value(param_id_t id, uint8_t track, float c
 
     if (id == PARAM_CFG_TRACK)
     {
-        const ui_track_family_t requested_family =
-            (ui_track_family_t)((uint8_t)(clamp_value(clamped,
+        const track_family_t requested_family =
+            (track_family_t)((uint8_t)(clamp_value(clamped,
                                                       0.0f,
-                                                      (float)((uint8_t)UI_TRACK_FAMILY_COUNT - 1U)) + 0.5f));
+                                                      (float)((uint8_t)TRACK_FAMILY_COUNT - 1U)) + 0.5f));
         if (ui_set_track_family(track, requested_family) == false)
         {
             param_registry_sync_active_cfg_mirror_for_track(track);
@@ -43,10 +43,10 @@ static uint8_t param_apply_cfg_track_value(param_id_t id, uint8_t track, float c
 
     if (id == PARAM_CFG_TRACK_TYPE)
     {
-        const ui_track_family_t family = track_state_get_family(track);
+        const track_family_t family = track_state_get_family(track);
         const uint8_t requested_index =
-            (uint8_t)(clamp_value(clamped, 0.0f, (float)((uint8_t)UI_TRACK_TYPE_COUNT - 1U)) + 0.5f);
-        const ui_track_type_t requested_type =
+            (uint8_t)(clamp_value(clamped, 0.0f, (float)((uint8_t)TRACK_TYPE_COUNT - 1U)) + 0.5f);
+        const track_type_t requested_type =
             ui_track_catalog_type_from_family_index(family,
                                                     requested_index,
                                                     track,

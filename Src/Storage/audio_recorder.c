@@ -463,8 +463,8 @@ uint8_t audio_recorder_request_stop_client_at(audio_recorder_client_t client,
 static uint8_t audio_recorder_looper_record_eligible(uint8_t track,
                                                      uint8_t *out_overdub)
 {
-    if ((track_state_get_family(track) != UI_TRACK_FAMILY_SAMPLER)
-            || (track_state_get_type(track) != UI_TRACK_TYPE_LOOPER))
+    if ((track_state_get_family(track) != TRACK_FAMILY_SAMPLER)
+            || (track_state_get_type(track) != TRACK_TYPE_LOOPER))
         return 0U;
     float arm = 0.0f;
     if (param_registry_get_track_value(PARAM_LOOPER_ARM, track, &arm) == 0U)

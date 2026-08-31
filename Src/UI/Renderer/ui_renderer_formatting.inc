@@ -184,14 +184,14 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
 
     if (id == PARAM_CFG_TRACK)
     {
-        (void)snprintf(out, out_len, "%s", ui_get_track_family_display_name((ui_track_family_t)((uint8_t)(value + 0.5f))));
+        (void)snprintf(out, out_len, "%s", ui_get_track_family_display_name((track_family_t)((uint8_t)(value + 0.5f))));
         return;
     }
 
     if (id == PARAM_CFG_TRACK_TYPE)
     {
-        const ui_track_family_t active_family = ui_get_track_family(ui_renderer_template_get_edit_owner_track());
-        const ui_track_type_t active_type = ui_get_track_type_from_family_index(active_family, (uint8_t)(value + 0.5f));
+        const track_family_t active_family = ui_get_track_family(ui_renderer_template_get_edit_owner_track());
+        const track_type_t active_type = ui_get_track_type_from_family_index(active_family, (uint8_t)(value + 0.5f));
         (void)snprintf(out, out_len, "%s", ui_get_track_type_display_name(active_family, active_type));
         return;
     }

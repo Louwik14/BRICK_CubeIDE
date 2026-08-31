@@ -109,9 +109,9 @@ void apply_mod_slew_2_amount(float v) { apply_mod_slew_amount_active_track(1U, v
 void apply_cfg_track(float v)
 {
     const uint8_t active_track = ui_get_active_track();
-    const ui_track_family_t previous_family = track_state_get_family(active_track);
-    const ui_track_type_t previous_type = track_state_get_type(active_track);
-    const ui_track_family_t requested_family = (ui_track_family_t)((uint8_t)(clamp_value(v, 0.0f, (float)((uint8_t)UI_TRACK_FAMILY_COUNT - 1U)) + 0.5f));
+    const track_family_t previous_family = track_state_get_family(active_track);
+    const track_type_t previous_type = track_state_get_type(active_track);
+    const track_family_t requested_family = (track_family_t)((uint8_t)(clamp_value(v, 0.0f, (float)((uint8_t)TRACK_FAMILY_COUNT - 1U)) + 0.5f));
 
     if (ui_set_track_family(active_track, requested_family) == false)
     {
@@ -141,10 +141,10 @@ void apply_cfg_track_type(float v)
 {
     g_param_cfg_track_type_apply_stage = 1U;
     const uint8_t active_track = ui_get_active_track();
-    const ui_track_family_t active_family = track_state_get_family(active_track);
-    const ui_track_type_t previous_type = track_state_get_type(active_track);
-    const uint8_t requested_index = (uint8_t)(clamp_value(v, 0.0f, (float)((uint8_t)UI_TRACK_TYPE_COUNT - 1U)) + 0.5f);
-    const ui_track_type_t requested_type = ui_track_catalog_type_from_family_index(active_family,
+    const track_family_t active_family = track_state_get_family(active_track);
+    const track_type_t previous_type = track_state_get_type(active_track);
+    const uint8_t requested_index = (uint8_t)(clamp_value(v, 0.0f, (float)((uint8_t)TRACK_TYPE_COUNT - 1U)) + 0.5f);
+    const track_type_t requested_type = ui_track_catalog_type_from_family_index(active_family,
                                                                                    requested_index,
                                                                                    active_track,
                                                                                    track_state_get_configs());
@@ -186,8 +186,8 @@ void apply_cfg_midi_ch(float v)
 void apply_cfg_midi_src(float v)
 {
     const uint8_t active_track = ui_get_active_track();
-    const ui_track_midi_source_t requested_source =
-            (ui_track_midi_source_t)((uint8_t)(clamp_value(v, 0.0f, 2.0f) + 0.5f));
+    const track_midi_source_t requested_source =
+            (track_midi_source_t)((uint8_t)(clamp_value(v, 0.0f, 2.0f) + 0.5f));
     (void)ui_set_track_midi_source(active_track, requested_source);
     param_store_set_active(PARAM_CFG_MIDI_SRC, (float)track_state_get_midi_source(active_track));
 }

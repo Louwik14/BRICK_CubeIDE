@@ -12,6 +12,7 @@
 #include "IPC/control_audio_publication.h"
 #include "Sampler/audio_wave_table_projection_control.h"
 #include "IPC/live_clock_control.h"
+#include "IPC/control_audio_timing.h"
 #include "Storage/sd_access_gate.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "Platform/memory_layout.h"
@@ -133,8 +134,10 @@ typedef struct
 } wavetable_load_job_t;
 
 STORAGE_STATE_SDRAM static wavetable_load_job_t g_wavetable_load_job;
-static CTRL_STATE uint32_t
-    g_wavetable_retire_fence[WAVETABLE_POOL_MAX_SLOTS];
+static CTRL_STATE uint64_t
+    g_wavetable_retire_not_before_sample[WAVETABLE_POOL_MAX_SLOTS];
+static CTRL_STATE uint8_t
+    g_wavetable_retire_stop_committed[WAVETABLE_POOL_MAX_SLOTS];
 
 static void wavetable_load_job_boot_init(void);
 

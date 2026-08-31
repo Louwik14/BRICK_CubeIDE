@@ -166,7 +166,7 @@ static float ui_param_step_cfg_track(float current_value, int8_t direction, uint
     }
 
     return (float)ui_track_catalog_cfg_family_step(
-        (ui_track_family_t)(uint8_t)(current_value + 0.5f),
+        (track_family_t)(uint8_t)(current_value + 0.5f),
         direction,
         active_track,
         track_state_get_configs());
@@ -176,7 +176,7 @@ static float ui_param_step_cfg_track_type(float current_value,
                                           int8_t direction,
                                           uint8_t active_track)
 {
-    const ui_track_family_t active_family = ui_get_track_family(active_track);
+    const track_family_t active_family = ui_get_track_family(active_track);
     const uint8_t type_count = ui_get_track_type_count_for_family(active_family);
     int16_t candidate = (int16_t)(current_value + 0.5f);
 

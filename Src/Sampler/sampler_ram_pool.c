@@ -13,6 +13,7 @@
 #include "IPC/sampler_ram_audio_projection_control.h"
 #include "IPC/control_audio_publication.h"
 #include "IPC/live_clock_control.h"
+#include "IPC/control_audio_timing.h"
 
 #define SAMPLER_RAM_IO_BYTES (8192U)
 #define SAMPLER_RAM_WAVEFORM_DEFAULT_SERVICE_FRAMES (4096U)
@@ -86,8 +87,10 @@ void sampler_ram_pool_load_async_cancel(void)
     memset(job, 0, sizeof(*job));
     job->state = SAMPLER_RAM_LOAD_IDLE;
 }
-static CTRL_STATE uint32_t
-    g_sampler_ram_retire_fence[SAMPLER_RAM_POOL_MAX_SLOTS];
+static CTRL_STATE uint64_t
+    g_sampler_ram_retire_not_before_sample[SAMPLER_RAM_POOL_MAX_SLOTS];
+static CTRL_STATE uint8_t
+    g_sampler_ram_retire_stop_committed[SAMPLER_RAM_POOL_MAX_SLOTS];
 
 uint16_t sampler_ram_format_channels(sampler_ram_format_t format)
 {
@@ -559,7 +562,10 @@ void sampler_ram_pool_reset(void)
 {
     sampler_ram_pool_load_async_cancel();
     sampler_ram_audio_projection_init();
-    memset(g_sampler_ram_retire_fence, 0, sizeof(g_sampler_ram_retire_fence));
+    memset(g_sampler_ram_retire_not_before_sample, 0,
+           sizeof(g_sampler_ram_retire_not_before_sample));
+    memset(g_sampler_ram_retire_stop_committed, 0,
+           sizeof(g_sampler_ram_retire_stop_committed));
     uint32_t generation_seed = g_sampler_ram_pool.generation_counter;
     for (uint16_t i = 0U; i < SAMPLER_RAM_POOL_MAX_SLOTS; ++i)
     {
@@ -1305,14 +1311,10 @@ void sampler_ram_pool_clear(uint16_t ram_slot)
         return;
     }
 
-    uint64_t due_sample = 0U;
-    if (!live_clock_read_audio_sample(&due_sample)) return;
     const uint32_t generation = slot->generation;
-    if (control_audio_publish_param_fenced((uint8_t)ram_slot, 0xFFF6U,
-                                           generation, 0U, due_sample,
-                                           &g_sampler_ram_retire_fence[ram_slot]) == 0U)
-        return;
+    sampler_ram_audio_projection_withdraw(ram_slot, generation);
     slot->state = SAMPLER_RAM_SLOT_RETIRING;
+    g_sampler_ram_retire_stop_committed[ram_slot] = 0U;
     __DMB();
 }
 
@@ -1321,14 +1323,30 @@ void sampler_ram_pool_service_retire(void)
     for (uint16_t i = 0U; i < SAMPLER_RAM_POOL_MAX_SLOTS; ++i)
     {
         sampler_ram_slot_t *const slot = &g_sampler_ram_pool.slots[i];
-        if ((slot->state == SAMPLER_RAM_SLOT_RETIRING)
-            && (control_audio_consumer_fence_consumed(
-                    g_sampler_ram_retire_fence[i]) != 0U))
+        if (slot->state != SAMPLER_RAM_SLOT_RETIRING) continue;
+        uint64_t now_sample = 0U;
+        if (!live_clock_read_audio_sample(&now_sample)) continue;
+        if (g_sampler_ram_retire_stop_committed[i] == 0U)
         {
-            g_sampler_ram_retire_fence[i] = 0U;
-            sampler_ram_pool_finalize_clear(i);
+            if (control_audio_publication_horizon_active() != 0U) continue;
+            if (control_audio_publish_param((uint8_t)i, 0xFFF6U,
+                    slot->generation, 0U, now_sample) == 0U) continue;
+            g_sampler_ram_retire_not_before_sample[i] = now_sample
+                + CONTROL_AUDIO_RESOURCE_RETIRE_GRACE_FRAMES;
+            g_sampler_ram_retire_stop_committed[i] = 1U;
         }
+        if (now_sample < g_sampler_ram_retire_not_before_sample[i]) continue;
+        g_sampler_ram_retire_stop_committed[i] = 0U;
+        sampler_ram_pool_finalize_clear(i);
     }
+}
+
+uint8_t sampler_ram_pool_retire_idle(void)
+{
+    for (uint16_t i = 0U; i < SAMPLER_RAM_POOL_MAX_SLOTS; ++i)
+        if (g_sampler_ram_pool.slots[i].state == SAMPLER_RAM_SLOT_RETIRING)
+            return 0U;
+    return 1U;
 }
 
 const sampler_ram_slot_t *sampler_ram_pool_get_slot(uint16_t ram_slot)

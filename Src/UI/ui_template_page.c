@@ -12,7 +12,7 @@
 #include "ui_navigation.h"
 #include "ui_renderer_template.h"
 
-UI_STATE_SDRAM static const ui_template_family_t *g_ui_template_family_registry[UI_TEMPLATE_FAMILY_COUNT][UI_TRACK_FAMILY_COUNT][UI_TRACK_TYPE_COUNT];
+UI_STATE_SDRAM static const ui_template_family_t *g_ui_template_family_registry[UI_TEMPLATE_FAMILY_COUNT][TRACK_FAMILY_COUNT][TRACK_TYPE_COUNT];
 
 static ui_template_page_state_t *ui_template_page_get_active_state(void)
 {
@@ -188,9 +188,9 @@ void ui_template_family_registry_init(void)
 {
     for (uint8_t family_index = 0U; family_index < (uint8_t)UI_TEMPLATE_FAMILY_COUNT; family_index++)
     {
-        for (uint8_t track_family_index = 0U; track_family_index < (uint8_t)UI_TRACK_FAMILY_COUNT; track_family_index++)
+        for (uint8_t track_family_index = 0U; track_family_index < (uint8_t)TRACK_FAMILY_COUNT; track_family_index++)
         {
-            for (uint8_t type_index = 0U; type_index < (uint8_t)UI_TRACK_TYPE_COUNT; type_index++)
+            for (uint8_t type_index = 0U; type_index < (uint8_t)TRACK_TYPE_COUNT; type_index++)
             {
                 g_ui_template_family_registry[family_index][track_family_index][type_index] = 0;
             }
@@ -199,13 +199,13 @@ void ui_template_family_registry_init(void)
 }
 
 void ui_template_family_register(ui_template_family_id_t family_id,
-                                 ui_track_family_t track_family,
-                                 ui_track_type_t track_type,
+                                 track_family_t track_family,
+                                 track_type_t track_type,
                                  const ui_template_family_t *family)
 {
     if (((uint8_t)family_id >= (uint8_t)UI_TEMPLATE_FAMILY_COUNT)
-            || ((uint8_t)track_family >= (uint8_t)UI_TRACK_FAMILY_COUNT)
-            || ((uint8_t)track_type >= (uint8_t)UI_TRACK_TYPE_COUNT)
+            || ((uint8_t)track_family >= (uint8_t)TRACK_FAMILY_COUNT)
+            || ((uint8_t)track_type >= (uint8_t)TRACK_TYPE_COUNT)
             || !ui_track_type_is_valid_for_family(track_family, track_type))
     {
         return;
@@ -216,14 +216,14 @@ void ui_template_family_register(ui_template_family_id_t family_id,
 
 const ui_template_family_t *ui_template_family_resolve(ui_template_family_id_t family_id,
                                                        uint8_t track,
-                                                       ui_track_family_t track_family,
-                                                       ui_track_type_t track_type)
+                                                       track_family_t track_family,
+                                                       track_type_t track_type)
 {
     (void)track;
 
     if (((uint8_t)family_id >= (uint8_t)UI_TEMPLATE_FAMILY_COUNT)
-            || ((uint8_t)track_family >= (uint8_t)UI_TRACK_FAMILY_COUNT)
-            || ((uint8_t)track_type >= (uint8_t)UI_TRACK_TYPE_COUNT)
+            || ((uint8_t)track_family >= (uint8_t)TRACK_FAMILY_COUNT)
+            || ((uint8_t)track_type >= (uint8_t)TRACK_TYPE_COUNT)
             || !ui_track_type_is_valid_for_family(track_family, track_type))
     {
         return 0;
@@ -235,7 +235,7 @@ const ui_template_family_t *ui_template_family_resolve(ui_template_family_id_t f
 const ui_template_family_t *ui_template_family_resolve_active_track(ui_template_family_id_t family_id)
 {
     const uint8_t active_track = ui_get_active_lane();
-    const ui_track_config_t config = ui_get_track_config(active_track);
+    const track_config_t config = ui_get_track_config(active_track);
     return ui_template_family_resolve(family_id, active_track, config.family, config.type);
 }
 
@@ -357,7 +357,7 @@ const ui_template_family_t *ui_template_family_resolve_effective_for_track(ui_te
         return ui_page_template_tone_resolve_for_track(owner_track, scope_index);
     }
 
-    const ui_track_config_t config = ui_get_track_config(owner_track);
+    const track_config_t config = ui_get_track_config(owner_track);
     return ui_template_family_resolve(family_id, owner_track, config.family, config.type);
 }
 

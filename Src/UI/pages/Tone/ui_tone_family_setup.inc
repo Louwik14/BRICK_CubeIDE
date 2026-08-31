@@ -10,8 +10,8 @@ static void ui_page_template_tone_set_subpage(uint8_t idx, const char *title, pa
 static void ui_page_template_tone_sync_drum_family(void)
 {
     const uint8_t active_track = ui_get_active_lane();
-    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_DRUM)
-            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_DRUM_MD))
+    if ((ui_get_track_family(active_track) == TRACK_FAMILY_DRUM)
+            && (ui_get_track_type(active_track) == TRACK_TYPE_DRUM_MD))
     {
         float model_value = 0.0f;
         (void)param_registry_get_track_value(PARAM_DRUM_MD_MODEL, active_track, &model_value);
@@ -36,8 +36,8 @@ static void ui_page_template_tone_sync_drum_family(void)
         return;
     }
 
-    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_DRUM)
-            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_DRUM_BD_ANALOG))
+    if ((ui_get_track_family(active_track) == TRACK_FAMILY_DRUM)
+            && (ui_get_track_type(active_track) == TRACK_TYPE_DRUM_BD_ANALOG))
     {
         g_ui_template_tone_family_drum.nav_labels[0] = "BD";
         g_ui_template_tone_family_drum.nav_labels[1] = "-";
@@ -67,64 +67,64 @@ static void ui_page_template_tone_sync_drum_family(void)
 
 void ui_page_template_tone_register_families(void)
 {
-    for (uint8_t family = 0U; family < (uint8_t)UI_TRACK_FAMILY_COUNT; ++family)
+    for (uint8_t family = 0U; family < (uint8_t)TRACK_FAMILY_COUNT; ++family)
     {
-        const ui_track_family_t track_family = (ui_track_family_t)family;
-        for (uint8_t type = 0U; type < (uint8_t)UI_TRACK_TYPE_COUNT; ++type)
+        const track_family_t track_family = (track_family_t)family;
+        for (uint8_t type = 0U; type < (uint8_t)TRACK_TYPE_COUNT; ++type)
         {
-            const ui_track_type_t track_type = (ui_track_type_t)type;
+            const track_type_t track_type = (track_type_t)type;
             if (!ui_track_type_is_valid_for_family(track_family, track_type))
             {
                 continue;
             }
 
             const ui_template_family_t *family_template = NULL;
-            if (track_type == UI_TRACK_TYPE_GROUP)
+            if (track_type == TRACK_TYPE_GROUP)
             {
                 family_template = &g_ui_template_tone_family_group;
             }
-            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_PRISM))
+            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == TRACK_TYPE_PRISM))
             {
                 family_template = &g_ui_template_tone_family_prism;
             }
-            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_WAVE))
+            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == TRACK_TYPE_WAVE))
             {
                 family_template = &g_ui_template_tone_family_wave;
             }
-            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_STACK))
+            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == TRACK_TYPE_STACK))
             {
                 family_template = &g_ui_template_tone_family_stack;
             }
-            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_FM))
+            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == TRACK_TYPE_FM))
             {
                 family_template = &g_ui_template_tone_family_fm;
             }
-            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == UI_TRACK_TYPE_RAM))
+            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == TRACK_TYPE_RAM))
             {
                 family_template = &g_ui_template_tone_family_sampler;
             }
 
-            else if ((track_family == UI_TRACK_FAMILY_SAMPLER) && (track_type == UI_TRACK_TYPE_STREAM))
+            else if ((track_family == TRACK_FAMILY_SAMPLER) && (track_type == TRACK_TYPE_STREAM))
             {
                 family_template = &g_ui_template_tone_family_clip;
             }
-            else if ((track_family == UI_TRACK_FAMILY_SAMPLER) && (track_type == UI_TRACK_TYPE_LOOPER))
+            else if ((track_family == TRACK_FAMILY_SAMPLER) && (track_type == TRACK_TYPE_LOOPER))
             {
                 family_template = &g_ui_template_tone_family_looper;
             }
-            else if ((track_family == UI_TRACK_FAMILY_SAMPLER) && (track_type == UI_TRACK_TYPE_MULTI))
+            else if ((track_family == TRACK_FAMILY_SAMPLER) && (track_type == TRACK_TYPE_MULTI))
             {
                 family_template = &g_ui_template_tone_family_multi;
             }
-            else if ((track_family == UI_TRACK_FAMILY_MIDI) && (track_type == UI_TRACK_TYPE_MIDI))
+            else if ((track_family == TRACK_FAMILY_MIDI) && (track_type == TRACK_TYPE_MIDI))
             {
                 family_template = &g_ui_template_tone_family_midi;
             }
-            else if ((track_family == UI_TRACK_FAMILY_EXTERNAL) && (track_type == UI_TRACK_TYPE_EXTERNAL))
+            else if ((track_family == TRACK_FAMILY_EXTERNAL) && (track_type == TRACK_TYPE_EXTERNAL))
             {
                 family_template = &g_ui_template_tone_family_midi;
             }
-            else if (track_family == UI_TRACK_FAMILY_DRUM)
+            else if (track_family == TRACK_FAMILY_DRUM)
             {
                 family_template = &g_ui_template_tone_family_drum;
             }
@@ -163,17 +163,17 @@ void ui_page_template_tone_toggle_subset(void)
         ui_navigation_restore_current_template_subpage();
         return;
     }
-    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
-            && (ui_get_track_type(active_track) == UI_TRACK_TYPE_FM))
+    if ((ui_get_track_family(active_track) == TRACK_FAMILY_SYNTH)
+            && (ui_get_track_type(active_track) == TRACK_TYPE_FM))
     {
         g_ui_template_tone_subset = (g_ui_template_tone_subset == 0U) ? 1U : 0U;
         g_ui_template_tone_state.navigation_subset = g_ui_template_tone_subset;
         ui_navigation_restore_current_template_subpage();
         return;
     }
-    if ((ui_get_track_family(active_track) == UI_TRACK_FAMILY_SYNTH)
-            && ((ui_get_track_type(active_track) == UI_TRACK_TYPE_WAVE)
-                || (ui_get_track_type(active_track) == UI_TRACK_TYPE_PRISM)))
+    if ((ui_get_track_family(active_track) == TRACK_FAMILY_SYNTH)
+            && ((ui_get_track_type(active_track) == TRACK_TYPE_WAVE)
+                || (ui_get_track_type(active_track) == TRACK_TYPE_PRISM)))
     {
         const uint8_t page = g_ui_template_tone_state.active_subpage;
         g_ui_template_tone_subset = (g_ui_template_tone_subset == 0U) ? 1U : 0U;
@@ -181,8 +181,8 @@ void ui_page_template_tone_toggle_subset(void)
         ui_template_page_select_subpage(&g_ui_template_tone_state, page);
         return;
     }
-    if ((ui_get_track_family(active_track) != UI_TRACK_FAMILY_SYNTH)
-            || (ui_get_track_type(active_track) != UI_TRACK_TYPE_STACK))
+    if ((ui_get_track_family(active_track) != TRACK_FAMILY_SYNTH)
+            || (ui_get_track_type(active_track) != TRACK_TYPE_STACK))
     {
         ui_page_template_tone_open_primary();
         return;
