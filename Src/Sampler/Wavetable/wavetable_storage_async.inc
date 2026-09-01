@@ -39,11 +39,24 @@ uint8_t wavetable_pool_load_async_begin_with_geometry(
     const char *path,
     wavetable_source_geometry_t source_geometry)
 {
+    return wavetable_pool_load_async_begin_prepared_with_geometry(
+        wavetable_slot, path, source_geometry, NULL, 0U, 0U);
+}
+
+uint8_t wavetable_pool_load_async_begin_prepared_with_geometry(
+    uint16_t wavetable_slot,
+    const char *path,
+    wavetable_source_geometry_t source_geometry,
+    const wav_info_t *prepared_info,
+    uint32_t source_file_size,
+    uint32_t source_crc32)
+{
     wavetable_load_job_t *const job = &g_wavetable_load_job;
     if ((job->state != WAVETABLE_LOAD_IDLE)
         || (wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)
         || (path == 0) || (path[0] == '\0')
-        || (wavetable_pool_path_ext_is_wav(path) == 0U)
+        || ((prepared_info == NULL)
+            && (wavetable_pool_path_ext_is_wav(path) == 0U))
         || ((source_geometry != WAVETABLE_SOURCE_GEOMETRY_1024)
             && (source_geometry != WAVETABLE_SOURCE_GEOMETRY_2048)))
     {
@@ -59,6 +72,14 @@ uint8_t wavetable_pool_load_async_begin_with_geometry(
     job->global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     job->media_epoch = sd_access_media_epoch();
     job->source_geometry = source_geometry;
+    if (prepared_info != NULL)
+    {
+        job->wav_info = *prepared_info;
+        job->source_crc = 0U;
+        job->prepared_file_size = source_file_size;
+        job->prepared_expected_crc = source_crc32;
+        job->prepared = 1U;
+    }
     job->result = WAVETABLE_RESULT_OK;
     job->state = WAVETABLE_LOAD_MOUNT;
     return 1U;
@@ -353,12 +374,19 @@ void wavetable_pool_load_async_service(void)
             else job->state = WAVETABLE_LOAD_STAT;
             break;
         case WAVETABLE_LOAD_STAT:
-            if (f_stat(job->path, &job->source_info) != FR_OK) wavetable_load_fail(WAVETABLE_RESULT_OPEN_FAIL);
+            if ((f_stat(job->path, &job->source_info) != FR_OK)
+                || ((job->prepared != 0U)
+                    && ((uint32_t)job->source_info.fsize != job->prepared_file_size)))
+                wavetable_load_fail(WAVETABLE_RESULT_OPEN_FAIL);
             else job->state = WAVETABLE_LOAD_OPEN;
             break;
         case WAVETABLE_LOAD_OPEN:
             if (f_open(&job->source, job->path, FA_READ) != FR_OK) wavetable_load_fail(WAVETABLE_RESULT_OPEN_FAIL);
-            else { job->source_open = 1U; job->state = WAVETABLE_LOAD_CRC_SEEK; }
+            else
+            {
+                job->source_open = 1U;
+                job->state = WAVETABLE_LOAD_CRC_SEEK;
+            }
             break;
         case WAVETABLE_LOAD_CRC_SEEK:
             if (f_lseek(&job->source, 0U) != FR_OK) wavetable_load_fail(WAVETABLE_RESULT_READ_FAIL);
@@ -373,7 +401,15 @@ void wavetable_pool_load_async_service(void)
             {
                 job->source_crc = wavetable_pool_crc32_update(job->source_crc, g_wavetable_pool_io, read);
                 job->io_offset += read;
-                if (job->io_offset >= (uint32_t)job->source_info.fsize) job->state = WAVETABLE_LOAD_PARSE;
+                if (job->io_offset >= (uint32_t)job->source_info.fsize)
+                {
+                    if ((job->prepared != 0U)
+                        && (job->source_crc != job->prepared_expected_crc))
+                        wavetable_load_fail(WAVETABLE_RESULT_READ_FAIL);
+                    else
+                        job->state = (job->prepared != 0U)
+                            ? WAVETABLE_LOAD_ALLOCATE : WAVETABLE_LOAD_PARSE;
+                }
             }
             break;
         }

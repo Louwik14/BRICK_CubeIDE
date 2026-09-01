@@ -1,61 +1,5 @@
 static float clamp_value(float v, float lo, float hi);
 
-static uint8_t param_registry_audio_fx_pre_filter_supported_control(uint8_t track)
-{
-    track_runtime_descriptor_t descriptor;
-    if (track_runtime_get_descriptor(track, &descriptor) == 0U
-            || descriptor.active == 0U)
-        return 0U;
-    entity_topology_descriptor_t topology;
-    if ((entity_topology_get((brick_entity_id_t)track, &topology) != 0U)
-            && (topology.role == ENTITY_ROLE_GROUP_MASTER))
-        return 1U;
-    if ((descriptor.family == TRACK_RUNTIME_FAMILY_SAMPLER)
-            && (descriptor.type == TRACK_RUNTIME_TYPE_MULTI))
-        return 0U;
-    if (descriptor.family == TRACK_RUNTIME_FAMILY_SYNTH)
-    {
-        float voices = 1.0f;
-        (void)param_registry_control_value_get(
-            track, PARAM_CFG_POLY_VOICES, &voices);
-        if (voices > 1.5f)
-            return 0U;
-    }
-    return 1U;
-}
-static float param_registry_audio_fx_clamp_p3(float value)
-{
-    return clamp_value(value, 0.0f, 127.0f);
-}
-static void param_registry_audio_fx_set_control(uint8_t track,
-                                                param_id_t id,
-                                                float value);
-
-static float param_registry_global_delay_time_seconds(float value)
-{
-    static const float beats[] = {
-        0.125f, 0.1666667f, 0.25f, 0.3333333f, 0.5f, 0.6666667f,
-        0.75f, 1.0f, 1.3333334f, 1.5f, 2.0f, 3.0f, 4.0f
-    };
-    uint32_t bpm_milli = 120000U;
-    const uint8_t index = (uint8_t)(clamp_value(value, 0.0f, 12.0f) + 0.5f);
-
-    if ((seq_runtime_get_clock_source() != SEQ_CLOCK_SRC_INTERNAL)
-            && (seq_runtime_is_external_tempo_valid() != 0U))
-    {
-        bpm_milli = seq_runtime_get_external_tempo_bpm_milli();
-    }
-    else
-    {
-        bpm_milli = seq_runtime_get_tempo_bpm_milli();
-    }
-    if (bpm_milli < 40000U)
-        bpm_milli = 40000U;
-    if (bpm_milli > 300000U)
-        bpm_milli = 300000U;
-    return beats[index] * 60000.0f / (float)bpm_milli;
-}
-
 static float param_registry_global_modfx_unit(float value)
 {
     return clamp_value(value, 0.0f, 127.0f) * (1.0f / 127.0f);
@@ -109,6 +53,7 @@ static float param_registry_global_modfx_command(param_id_t id,
 
 uint8_t param_registry_prepare_global_audio_command(param_id_t id,
                                                     float canonical_value,
+                                                    uint8_t modfx_model,
                                                     float *out_command_value)
 {
     if ((out_command_value == NULL) || (id >= PARAM_COUNT))
@@ -117,10 +62,6 @@ uint8_t param_registry_prepare_global_audio_command(param_id_t id,
     *out_command_value = canonical_value;
     switch (id)
     {
-        case PARAM_MIX_DELAY_TIME:
-        case PARAM_MIX_DELAY_TIME_R:
-            *out_command_value = param_registry_global_delay_time_seconds(canonical_value);
-            break;
         case PARAM_MODFX_RATE:
         case PARAM_MODFX_DEPTH:
         case PARAM_MODFX_FEEDBACK:
@@ -129,9 +70,11 @@ uint8_t param_registry_prepare_global_audio_command(param_id_t id,
         case PARAM_MODFX_DELAY_B:
         case PARAM_MODFX_DEPTH_B:
         case PARAM_MODFX_WIDTH:
+        {
             *out_command_value = param_registry_global_modfx_command(
-                id, canonical_value, (uint8_t)(param_get(PARAM_MODFX_MODEL) + 0.5f));
+                id, canonical_value, modfx_model);
             break;
+        }
         default:
             break;
     }
@@ -147,10 +90,6 @@ static const param_id_t g_audio_fx_param_order[] = {
     PARAM_AUDIO_FX_B_P1,
     PARAM_AUDIO_FX_B_P2,
     PARAM_AUDIO_FX_B_P3,
-    PARAM_AUDIO_FX_FILTER_POS,
-    PARAM_AUDIO_FX_ORDER,
-    PARAM_AUDIO_FX_MODE_A,
-    PARAM_AUDIO_FX_MODE_B,
     PARAM_GROUP_FX_A_LEVEL,
     PARAM_GROUP_FX_B_LEVEL
 };
@@ -218,40 +157,4 @@ uint8_t param_registry_publish_track_base_audio(param_id_t id,
 {
     return param_registry_submit_audio_value(
         id, track, value, LIVE_PARAMETER_EVENT_SCOPE_TRACK);
-}
-
-static uint8_t param_registry_apply_audio_fx_control(param_id_t id,
-                                                      uint8_t track,
-                                                      float value)
-{
-    if ((param_registry_is_audio_fx_param(id) == 0U)
-            || (track >= BRICK_ENTITY_CAPACITY)
-            || (track_runtime_get_effective_param_status(track, id)
-                != TRACK_RUNTIME_PARAM_ALLOWED))
-    {
-        return 0U;
-    }
-
-    if ((id == PARAM_AUDIO_FX_FILTER_POS)
-            && (param_registry_audio_fx_pre_filter_supported_control(track) == 0U))
-        value = (float)AUDIO_FX_FILTER_POS_PRE;
-    if ((id == PARAM_AUDIO_FX_P3) || (id == PARAM_AUDIO_FX_B_P3))
-        value = param_registry_audio_fx_clamp_p3(value);
-    param_registry_audio_fx_set_control(track, id, value);
-    (void)param_registry_control_value_get(track, id, &value);
-
-    if (param_registry_submit_audio_value(
-            id, track, value, LIVE_PARAMETER_EVENT_SCOPE_TRACK) == 0U)
-        return 0U;
-    if ((id == PARAM_AUDIO_FX_MODEL) || (id == PARAM_AUDIO_FX_B_MODEL))
-        mod_destination_catalog_invalidate_track(track);
-    return 1U;
-}
-
-uint8_t param_registry_project_track_effective_mute(
-    uint8_t track, uint8_t effective_muted)
-{
-    const float value = (effective_muted != 0U) ? 1.0f : 0.0f;
-    return param_registry_submit_audio_value(
-        PARAM_MIX_MUTE, track, value, LIVE_PARAMETER_EVENT_SCOPE_TRACK);
 }

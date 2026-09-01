@@ -1,12 +1,19 @@
 #include "pages/ui_page_template_seq.h"
 
+#include <stdio.h>
+
+#include "Seq/seq_edit.h"
+#include "Seq/seq_division_catalog.h"
+#include "Seq/seq_model.h"
+#include "Seq/seq_runtime_control.h"
+#include "ui_page_manager.h"
 #include "ui_template_page.h"
 
 static const ui_template_family_t g_ui_template_seq_family = {
     .family_title = "SEQ",
     .nav_labels = { "SEQ", "-", "-", "-" },
     .subpages = {
-        { .title = "SEQ", .param_bank = { .params = { PARAM_SEQ_LENGTH, PARAM_SEQ_DIV, PARAM_SEQ_QUANT, PARAM_SEQ_SWING } } },
+        { .title = "SEQ", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
@@ -19,12 +26,70 @@ static const ui_template_family_t *ui_page_template_seq_resolve_family(void)
     return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_SEQ);
 }
 
+static uint8_t ui_page_template_seq_virtual_slot_text(uint8_t slot,
+    char *out_name, uint32_t out_name_len, char *out_value, uint32_t out_value_len);
+
 static ui_template_page_state_t g_ui_template_seq_state = {
     .family = 0,
     .family_resolver = ui_page_template_seq_resolve_family,
+    .virtual_slot_text = ui_page_template_seq_virtual_slot_text,
     .active_subpage = 0U,
     .has_visited = 0U,
 };
+
+static uint8_t ui_page_template_seq_virtual_slot_text(uint8_t slot,
+    char *out_name, uint32_t out_name_len, char *out_value, uint32_t out_value_len)
+{
+    static const char *const names[] = { "LENGTH", "DIV", "QUANT", "SWING" };
+    const seq_track_id_t track = (seq_track_id_t)ui_get_active_lane();
+    uint8_t value = 0U;
+    if (slot >= 4U) return 0U;
+    if (slot == 0U) value = seq_model_get_track_length(track);
+    else if (slot == 1U) (void)seq_runtime_get_track_div(track, &value);
+    else if (slot == 2U) (void)seq_runtime_get_track_quant(track, &value);
+    else (void)seq_runtime_get_track_swing(track, &value);
+    (void)snprintf(out_name, out_name_len, "%s", names[slot]);
+    if (slot == 1U) (void)snprintf(out_value, out_value_len, "%s",
+                                  seq_division_track_labels[seq_division_track_div_to_ui(value)]);
+    else if (slot >= 2U) (void)snprintf(out_value, out_value_len, "%u%%", (unsigned)value);
+    else (void)snprintf(out_value, out_value_len, "%u", (unsigned)value);
+    return 1U;
+}
+
+uint8_t ui_page_template_seq_handle_encoder(uint8_t encoder, int16_t delta)
+{
+    if ((ui_page_get_id() != UI_PAGE_TEMPLATE_SEQ) || (encoder >= 4U) || (delta == 0)) return 0U;
+    const seq_track_id_t track = (seq_track_id_t)ui_get_active_lane();
+    int32_t value = 0;
+    if (encoder == 0U)
+    {
+        value = (int32_t)seq_model_get_track_length(track) + delta;
+        if (value < 1) value = 1;
+        if (value > SEQ_MAX_STEPS) value = SEQ_MAX_STEPS;
+        (void)seq_edit_set_track_length(track, (uint8_t)value);
+    }
+    else if (encoder == 1U)
+    {
+        uint8_t div = 1U; (void)seq_runtime_get_track_div(track, &div);
+        uint8_t index = seq_division_track_div_to_ui(div);
+        value = (int32_t)index + ((delta > 0) ? 1 : -1);
+        if (value < 0) value = 0;
+        if (value > 3) value = 3;
+        (void)seq_edit_set_track_division(track, seq_division_track_div_from_ui((uint8_t)value));
+    }
+    else
+    {
+        uint8_t current = 0U;
+        if (encoder == 2U) (void)seq_runtime_get_track_quant(track, &current);
+        else (void)seq_runtime_get_track_swing(track, &current);
+        value = (int32_t)current + delta;
+        if (value < 0) value = 0;
+        if (value > 100) value = 100;
+        if (encoder == 2U) (void)seq_edit_set_track_quantization(track, (uint8_t)value);
+        else (void)seq_edit_set_track_swing(track, (uint8_t)value);
+    }
+    return 1U;
+}
 
 void ui_page_template_seq_register_families(void)
 {

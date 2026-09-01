@@ -6,7 +6,6 @@
 typedef enum
 {
     PERSISTENCE_WORKSPACE_FREE = 0,
-    PERSISTENCE_WORKSPACE_PROJECT,
     PERSISTENCE_WORKSPACE_PROJECT_SAVE,
     PERSISTENCE_WORKSPACE_PROJECT_RESTORE,
     PERSISTENCE_WORKSPACE_PATTERN_IO
@@ -33,6 +32,9 @@ typedef struct
     uint16_t asset_count;
     uint8_t working_valid;
     uint8_t macros_valid;
+    uint8_t pattern_bank_started;
+    uint8_t pattern_bank_staged;
+    uint8_t active_pattern_seen;
 } persistence_project_restore_workspace_t;
 
 _Static_assert(sizeof(persist_control_pattern_t)
@@ -45,7 +47,6 @@ typedef struct
     uint8_t encoded[PERSISTENCE_PATTERN_ENCODED_MAX_BYTES];
 } persistence_pattern_io_workspace_t;
 
-persist_codec_project_workspace_t *persistence_workspace_acquire_project(void);
 persistence_project_save_workspace_t *persistence_workspace_acquire_project_save(void);
 persistence_project_restore_workspace_t *persistence_workspace_acquire_project_restore(void);
 persistence_pattern_io_workspace_t *persistence_workspace_acquire_pattern_io(void);

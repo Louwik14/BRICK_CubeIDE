@@ -13,7 +13,8 @@
 
 #include "Platform/memory_layout.h"
 #include "Track/track_runtime.h"
-#include "IPC/live_parameter_audio_publication.h"
+#include "Track/tone_param_codec.h"
+#include "App/live_parameter_audio_publication.h"
 #include "param_registry.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include "NoteFx/note_fx_state.h"
@@ -28,10 +29,6 @@ SEQ_STATE_D2 static seq_param_slot_state_t
     g_seq_param_runtime_state[SEQ_LANE_CAPACITY][SEQ_PARAM_RUNTIME_SLOT_COUNT];
 SEQ_STATE_D2 static uint8_t g_seq_param_base_valid_bits[SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT];
 SEQ_STATE_D2 static uint8_t g_seq_param_runtime_locked_bits[SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT];
-SEQ_STATE_D2 static seq_value16_t
-    g_seq_play_base_values[SEQ_LANE_CAPACITY][SEQ_PLAY_MAX_CAPACITY][SEQ_STEP_PLAY_FIELD_COUNT];
-SEQ_STATE_D2 static uint8_t
-    g_seq_play_base_valid[SEQ_LANE_CAPACITY][SEQ_PLAY_MAX_CAPACITY];
 #define SEQ_PARAM_SLOT_UNMAPPED ((seq_param_slot_t)0xFFU)
 
 typedef struct
@@ -52,9 +49,9 @@ static const param_id_t g_seq_param_env_slot_to_id[SEQ_PARAM_ENV_SLOT_COUNT] = {
     PARAM_FILTER_KEYTRK,
     PARAM_FILTER_ENVRST,
     PARAM_FILTER_ENVDLY,
-    PARAM_RESERVED_FILTER_SLOT_1,
-    PARAM_RESERVED_FILTER_SLOT_2,
-    PARAM_RESERVED_FILTER_SLOT_3,
+    PARAM_COUNT,
+    PARAM_COUNT,
+    PARAM_COUNT,
     PARAM_VCA_ATTACK,
     PARAM_VCA_DECAY,
     PARAM_VCA_SUSTAIN,
@@ -125,9 +122,6 @@ static const seq_param_compact_map_t g_seq_param_param_to_slot[PARAM_COUNT] = {
     [PARAM_FILTER_KEYTRK] = { (uint8_t)SEQ_PLOCK_SET_ENV, 8U },
     [PARAM_FILTER_ENVRST] = { (uint8_t)SEQ_PLOCK_SET_ENV, 9U },
     [PARAM_FILTER_ENVDLY] = { (uint8_t)SEQ_PLOCK_SET_ENV, 10U },
-    [PARAM_RESERVED_FILTER_SLOT_1] = { (uint8_t)SEQ_PLOCK_SET_ENV, 11U },
-    [PARAM_RESERVED_FILTER_SLOT_2] = { (uint8_t)SEQ_PLOCK_SET_ENV, 12U },
-    [PARAM_RESERVED_FILTER_SLOT_3] = { (uint8_t)SEQ_PLOCK_SET_ENV, 13U },
     [PARAM_VCA_ATTACK] = { (uint8_t)SEQ_PLOCK_SET_ENV, 14U },
     [PARAM_VCA_DECAY] = { (uint8_t)SEQ_PLOCK_SET_ENV, 15U },
     [PARAM_VCA_SUSTAIN] = { (uint8_t)SEQ_PLOCK_SET_ENV, 16U },
@@ -235,6 +229,8 @@ static seq_param_slot_state_t *seq_param_iface_state_at(seq_track_id_t track,
 static uint8_t seq_param_iface_resolve_runtime_tone_type(seq_track_id_t track,
                                                          track_runtime_type_t *out_type);
 static uint8_t seq_param_iface_is_group_master(seq_track_id_t track);
+static uint8_t seq_param_iface_param_matches_set_domain_context(
+    uint8_t group_master, uint8_t set_id, param_id_t param);
 static uint32_t seq_param_state_linear_index(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot)
 {
     return ((uint32_t)track * SEQ_PARAM_RUNTIME_SLOT_COUNT)
@@ -304,30 +300,6 @@ static void seq_param_clear_flags(void)
     memset(&g_seq_param_runtime_locked_bits, 0, sizeof(g_seq_param_runtime_locked_bits));
 }
 
-static uint8_t seq_param_iface_is_play_param(param_id_t param)
-{
-    return (track_runtime_get_param_rule(param).domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY) ? 1U : 0U;
-}
-
-static void seq_param_iface_seed_play_defaults(void)
-{
-    memset(g_seq_play_base_values, 0, sizeof(g_seq_play_base_values));
-    memset(g_seq_play_base_valid, 0, sizeof(g_seq_play_base_valid));
-    for (seq_track_id_t track = 0U; track < (seq_track_id_t)SEQ_LANE_CAPACITY; ++track)
-    {
-        for (uint16_t param_raw = 0U; param_raw < (uint16_t)PARAM_COUNT; ++param_raw)
-        {
-            const param_id_t param = (param_id_t)param_raw;
-            if (seq_param_iface_is_play_param(param) == 0U)
-            {
-                continue;
-            }
-            (void)seq_param_iface_set_play_base_param(
-                track, param,
-                seq_param_iface_encode_param_value(param, param_registry[param].default_value));
-        }
-    }
-}
 
 static uint8_t seq_param_iface_track_is_valid(seq_track_id_t track)
 {
@@ -364,7 +336,7 @@ static seq_param_slot_state_t *seq_param_iface_state_at(seq_track_id_t track, ui
         track_runtime_type_t tone_type = TRACK_RUNTIME_TYPE_OTHER;
         param_id_t tone_param = PARAM_COUNT;
         if ((seq_param_iface_resolve_runtime_tone_type(track, &tone_type) == 0U)
-                || (track_runtime_tone_slot_to_param(tone_type, param_slot, &tone_param) == 0U))
+                || (tone_param_codec_slot_to_param(tone_type, param_slot, &tone_param) == 0U))
         {
             return 0;
         }
@@ -378,24 +350,13 @@ static uint8_t seq_param_iface_is_excluded_from_plock(param_id_t param_id)
     switch (param_id)
     {
         case PARAM_SAMPLER_SLICE_COUNT:
+        case PARAM_AUDIO_FX_MODEL:
+        case PARAM_AUDIO_FX_B_MODEL:
         /* Looper decision for the current firmware: ARM/LEN/PLAY/XFADE are
          * p-lockable; STRETCH/PITCH/GRAIN are intentionally excluded. */
         case PARAM_LOOPER_STRETCH:
         case PARAM_LOOPER_PITCH:
         case PARAM_LOOPER_GRAIN:
-        case PARAM_MOD_MATRIX_SLOT:
-        case PARAM_MOD_MATRIX_SOURCE:
-        case PARAM_MOD_MATRIX_DEST:
-        case PARAM_MOD_MATRIX_DEPTH:
-        case PARAM_MOD_MULTI_1_A:
-        case PARAM_MOD_MULTI_1_B:
-        case PARAM_MOD_MULTI_2_A:
-        case PARAM_MOD_MULTI_2_B:
-        case PARAM_MOD_SLEW_1_SOURCE:
-        case PARAM_MOD_SLEW_1_AMOUNT:
-        case PARAM_MOD_SLEW_2_SOURCE:
-        case PARAM_MOD_SLEW_2_AMOUNT:
-        case PARAM_FM_OPERATOR_SELECT:
         case PARAM_FM_TRANSPOSE:
         case PARAM_FM_PITCH_R1:
         case PARAM_FM_PITCH_R2:
@@ -423,11 +384,6 @@ uint8_t seq_param_iface_is_param_plockable(param_id_t param_id)
         return 1U;
     }
 
-    if ((param_id >= PARAM_FM_DX7_HIDDEN_FIRST) && (param_id <= PARAM_FM_DX7_HIDDEN_LAST))
-    {
-        return 0U;
-    }
-
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param_id);
     if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_CFG)
             || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
@@ -453,6 +409,13 @@ static uint8_t seq_param_iface_param_matches_set_domain(seq_track_id_t track,
                                                         uint8_t set_id,
                                                         param_id_t param)
 {
+    return seq_param_iface_param_matches_set_domain_context(
+        (seq_param_iface_is_group_master(track) != 0U), set_id, param);
+}
+
+static uint8_t seq_param_iface_param_matches_set_domain_context(
+    uint8_t group_master, uint8_t set_id, param_id_t param)
+{
     if ((set_id == (uint8_t)SEQ_PLOCK_SET_FM_OPERATOR)
             && (param >= PARAM_FM_OPERATOR_FIRST)
             && (param <= PARAM_FM_OPERATOR_LAST))
@@ -475,7 +438,7 @@ static uint8_t seq_param_iface_param_matches_set_domain(seq_track_id_t track,
         return 0U;
     }
 
-    if ((seq_param_iface_is_group_master(track) != 0U)
+    if ((group_master != 0U)
             && (set_id == (uint8_t)SEQ_PLOCK_SET_TONE)
             && (rule.resource == TRACK_RUNTIME_RESOURCE_FILTER))
     {
@@ -508,6 +471,43 @@ static uint8_t seq_param_iface_param_matches_set_domain(seq_track_id_t track,
         return 0U;
     }
 
+    return 1U;
+}
+
+uint8_t seq_param_iface_param_to_slot_for_type(
+    uint8_t runtime_type, uint8_t group_master, uint8_t set_id,
+    param_id_t param_id, seq_param_slot_t *out_param_slot)
+{
+    if ((out_param_slot == NULL) || (param_id >= PARAM_COUNT)
+        || (set_id >= (uint8_t)SEQ_PLOCK_SET_COUNT)
+        || (seq_param_iface_param_matches_set_domain_context(
+                group_master, set_id, param_id) == 0U))
+        return 0U;
+
+    if (set_id == (uint8_t)SEQ_PLOCK_SET_TONE)
+    {
+        uint8_t slot = 0U;
+        if (tone_param_codec_param_to_slot(
+                (track_runtime_type_t)runtime_type, param_id, &slot) == 0U)
+            return 0U;
+        *out_param_slot = (seq_param_slot_t)slot;
+        return 1U;
+    }
+    if (set_id == (uint8_t)SEQ_PLOCK_SET_FM_OPERATOR)
+    {
+        if ((runtime_type != (uint8_t)TRACK_RUNTIME_TYPE_FM)
+            || (param_id < PARAM_FM_OPERATOR_FIRST)
+            || (param_id > PARAM_FM_OPERATOR_LAST))
+            return 0U;
+        *out_param_slot = (seq_param_slot_t)(param_id - PARAM_FM_OPERATOR_FIRST);
+        return 1U;
+    }
+
+    const seq_param_compact_map_t mapping = g_seq_param_param_to_slot[param_id];
+    if ((mapping.set_id != set_id)
+        || (mapping.param_slot >= (seq_param_slot_t)g_seq_param_set_capacities[set_id]))
+        return 0U;
+    *out_param_slot = mapping.param_slot;
     return 1U;
 }
 
@@ -645,7 +645,6 @@ void seq_param_iface_init(void)
     memset(&g_seq_param_runtime_state, 0, sizeof(g_seq_param_runtime_state));
     seq_param_clear_flags();
     track_runtime_init();
-    seq_param_iface_seed_play_defaults();
 }
 
 uint8_t seq_param_iface_is_set_plockable(uint8_t set_id)
@@ -723,7 +722,7 @@ uint8_t seq_param_iface_slot_to_param(seq_track_id_t track,
         }
 
         param_id_t tone_param = PARAM_COUNT;
-        if (track_runtime_tone_slot_to_param(tone_type, param_slot, &tone_param) == 0U)
+        if (tone_param_codec_slot_to_param(tone_type, param_slot, &tone_param) == 0U)
         {
             return 0U;
         }
@@ -759,7 +758,8 @@ uint8_t seq_param_iface_slot_to_param(seq_track_id_t track,
 
     const param_id_t param = inverse.ids[param_slot];
 
-    if (seq_param_iface_param_matches_set_domain(track, set_id, param) == 0U)
+    if ((param >= PARAM_COUNT)
+            || (seq_param_iface_param_matches_set_domain(track, set_id, param) == 0U))
     {
         return 0U;
     }
@@ -793,7 +793,7 @@ uint8_t seq_param_iface_param_to_slot(seq_track_id_t track,
         }
 
         uint8_t tone_slot = 0U;
-        if (track_runtime_tone_param_to_slot(tone_type, param_id, &tone_slot) == 0U)
+        if (tone_param_codec_param_to_slot(tone_type, param_id, &tone_slot) == 0U)
         {
             return 0U;
         }
@@ -851,7 +851,7 @@ uint8_t seq_param_iface_slot_is_storable_for_type(uint8_t runtime_type,
     param_id_t param = PARAM_COUNT;
     if (set_id == (uint8_t)SEQ_PLOCK_SET_TONE)
     {
-        if (track_runtime_tone_slot_to_param((track_runtime_type_t)runtime_type,
+        if (tone_param_codec_slot_to_param((track_runtime_type_t)runtime_type,
                                              param_slot,
                                              &param) == 0U)
         {
@@ -924,14 +924,12 @@ uint8_t seq_param_iface_get_base_value(seq_track_id_t track,
         param_id_t param = PARAM_COUNT;
         float value = 0.0f;
         if ((seq_param_iface_slot_to_param(track, set_id, param_slot, &param) == 0U)
-                || (seq_param_iface_is_play_param(param) != 0U)
                 || (param_registry_get_track_value(param, track, &value) == 0U))
         {
             return 0U;
         }
 
-        *out_value16 = seq_param_iface_encode_param_value(param, value);
-        return 1U;
+        return seq_param_iface_encode_param_value(param, value, out_value16);
     }
 
     *out_value16 = state->base_value;
@@ -987,39 +985,6 @@ uint8_t seq_param_iface_set_base_value(seq_track_id_t track,
         state->runtime_value = value16;
     }
 
-    return 1U;
-}
-
-uint8_t seq_param_iface_get_play_base_param(seq_track_id_t track,
-                                            param_id_t param,
-                                            seq_value16_t *out_value16)
-{
-    uint8_t voice = 0U;
-    seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
-    if ((out_value16 == NULL) || (track >= SEQ_LANE_CAPACITY)
-            || (seq_model_play_resolve_param(param, &voice, &field) == 0U)
-            || ((g_seq_play_base_valid[track][voice] & (uint8_t)(1U << field)) == 0U))
-    {
-        return 0U;
-    }
-    *out_value16 = g_seq_play_base_values[track][voice][field];
-    return 1U;
-}
-
-uint8_t seq_param_iface_set_play_base_param(seq_track_id_t track,
-                                            param_id_t param,
-                                            seq_value16_t value16)
-{
-    uint8_t voice = 0U;
-    seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
-    if ((track >= SEQ_LANE_CAPACITY)
-            || (seq_model_play_resolve_param(param, &voice, &field) == 0U))
-    {
-        return 0U;
-    }
-    g_seq_play_base_values[track][voice][field] = value16;
-    g_seq_play_base_valid[track][voice] = (uint8_t)(g_seq_play_base_valid[track][voice]
-                                                    | (uint8_t)(1U << field));
     return 1U;
 }
 
@@ -1095,7 +1060,9 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
         {
             return 0U;
         }
-        state->base_value = seq_param_iface_encode_param_value(param, base);
+        if (seq_param_iface_encode_param_value(
+                param, base, &state->base_value) == 0U)
+            return 0U;
         state->runtime_value = state->base_value;
         seq_param_set_base_valid(track, set_id, param_slot, 1U);
     }
@@ -1103,9 +1070,13 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
     if (set_id == (uint8_t)SEQ_PLOCK_SET_MIDI_FX)
     {
         uint8_t slot = 0U, fx_param = 0U;
-        if (note_fx_state_param_map(param, &slot, &fx_param) == 0U ||
-            note_fx_pipeline_apply_control_override(track, slot, fx_param,
-                (uint8_t)(seq_param_iface_decode_param_value(param, value16) + 0.5f)) == 0U)
+        float decoded_value;
+        if ((note_fx_state_param_map(param, &slot, &fx_param) == 0U)
+                || (seq_param_iface_decode_param_value(
+                    param, value16, &decoded_value) == 0U)
+                || (note_fx_pipeline_apply_control_override(
+                    track, slot, fx_param,
+                    (uint8_t)(decoded_value + 0.5f)) == 0U))
             return 0U;
         state->runtime_value = value16;
         seq_param_set_runtime_locked(track, set_id, param_slot, 1U);
@@ -1174,22 +1145,22 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
 
     return 1U;
 }
-seq_value16_t seq_param_iface_encode_param_value(param_id_t param, float value)
+uint8_t seq_param_iface_encode_param_value(param_id_t param, float value,
+                                           seq_value16_t *out_value16)
 {
-    if (param >= PARAM_COUNT)
-    {
-        return 0U;
-    }
-
-    return (seq_value16_t)param_value_policy_encode_u16(&param_registry[param], value);
+    if ((out_value16 == NULL) || (param >= PARAM_COUNT)
+            || (param_id_is_reserved(param) != 0U)) return 0U;
+    *out_value16 = (seq_value16_t)param_value_policy_encode_u16(
+        &param_registry[param], value);
+    return 1U;
 }
 
-float seq_param_iface_decode_param_value(param_id_t param, seq_value16_t value16)
+uint8_t seq_param_iface_decode_param_value(param_id_t param,
+                                           seq_value16_t value16,
+                                           float *out_value)
 {
-    if (param >= PARAM_COUNT)
-    {
-        return 0.0f;
-    }
-
-    return param_value_policy_decode_u16(&param_registry[param], value16);
+    if ((out_value == NULL) || (param >= PARAM_COUNT)
+            || (param_id_is_reserved(param) != 0U)) return 0U;
+    *out_value = param_value_policy_decode_u16(&param_registry[param], value16);
+    return 1U;
 }

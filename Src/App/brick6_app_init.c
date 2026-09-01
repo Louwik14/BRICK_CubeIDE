@@ -20,13 +20,11 @@
 #include "App/brick6_master_control.h"
 #include "Storage/brick6_stream_service_task.h"
 #include "Storage/pattern_live_ram.h"
+#include "Storage/patch_product.h"
 #include "Storage/project_product.h"
 #include "Storage/sd_preview.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/waveform_cache.h"
-#if BRICK_TEST_BUILD
-#include "Platform/crash_capsule.h"
-#endif
 #include "Platform/brick6_sd_config.h"
 
 #include "App/Hall/hall_keyboard_bridge.h"
@@ -73,9 +71,6 @@ static void brick6_process_hall_ui_keyboard_chain(void)
  */
 void brick6_app_init(void)
 {
-#if BRICK_TEST_BUILD
-    (void)crash_capsule_init();
-#endif
     SDRAM_Init();
 
     static const brick6_audio_boot_intent_t audio_boot = {
@@ -109,14 +104,14 @@ static void brick6_app_service_storage(void)
 {
     audio_recorder_service();
     project_product_save_service();
+    project_product_load_service();
+    patch_product_apply_service();
     if (multi_sample_load_has_pending() != 0U)
     {
         multi_sample_service_load(0U);
     }
     else
     {
-#if BRICK_TEST_BUILD
-#endif
         multi_sample_pool_service_retire();
         sampler_ram_pool_service_retire();
         wavetable_pool_service_retire();

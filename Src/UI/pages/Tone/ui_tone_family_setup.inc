@@ -13,8 +13,9 @@ static void ui_page_template_tone_sync_drum_family(void)
     if ((ui_get_track_family(active_track) == TRACK_FAMILY_DRUM)
             && (ui_get_track_type(active_track) == TRACK_TYPE_DRUM_MD))
     {
-        float model_value = 0.0f;
-        (void)param_registry_get_track_value(PARAM_DRUM_MD_MODEL, active_track, &model_value);
+        float model_value;
+        if (param_registry_get_track_value(PARAM_DRUM_MD_MODEL, active_track, &model_value) == 0U)
+            return;
         const md_model_profile_t *const profile = md_model_profile_get(md_model_validate(model_value));
         const param_id_t p6 = (profile->slot_count >= 6U) ? PARAM_DRUM_MD_P6 : PARAM_COUNT;
         const param_id_t p7 = (profile->slot_count >= 7U) ? PARAM_DRUM_MD_P7 : PARAM_COUNT;

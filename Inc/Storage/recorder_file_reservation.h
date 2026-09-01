@@ -30,22 +30,10 @@ typedef struct
     const sample_stream_physical_extent_t *extents;
     uint64_t reserved_file_bytes;
     uint64_t valid_file_bytes;
-    uint32_t generation;
     uint32_t media_epoch;
     uint16_t extent_count;
     uint16_t sector_size;
 } recorder_file_reservation_map_snapshot_t;
-
-typedef struct
-{
-    sample_stream_physical_extent_t extents[RECORDER_FILE_RESERVATION_MAX_EXTENTS];
-    uint64_t reserved_file_bytes;
-    uint64_t valid_file_bytes;
-    uint32_t generation;
-    uint32_t media_epoch;
-    uint16_t extent_count;
-    uint16_t sector_size;
-} recorder_file_reservation_map_owned_t;
 
 typedef struct
 {
@@ -73,7 +61,6 @@ typedef struct
     recorder_file_reservation_metrics_t metrics;
     char path[RECORDER_FILE_RESERVATION_PATH_MAX];
     volatile uint32_t publish_sequence;
-    volatile uint32_t map_generation;
     volatile uint64_t published_reserved_file_bytes;
     volatile uint64_t published_valid_file_bytes;
     volatile uint32_t published_media_epoch;
@@ -114,9 +101,6 @@ recorder_file_reservation_result_t recorder_file_reservation_rename_closed(
 uint8_t recorder_file_reservation_map_snapshot(
     const recorder_file_reservation_t *session,
     recorder_file_reservation_map_snapshot_t *out_snapshot);
-uint8_t recorder_file_reservation_map_snapshot_owned(
-    const recorder_file_reservation_t *session,
-    recorder_file_reservation_map_owned_t *out_snapshot);
 uint8_t recorder_file_reservation_map_resolve(
     const recorder_file_reservation_map_snapshot_t *snapshot,
     uint64_t file_byte_offset,

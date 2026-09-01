@@ -13,7 +13,7 @@
 #include "IPC/control_audio_command.h"
 #include "IPC/live_parameter_event.h"
 #include "Mod/mod_destination_audio.h"
-#include "Mod/mod_lfo_v1.h"
+#include "Mod/mod_lfo_v1_audio.h"
 #include "Param/param_spec.h"
 #include "Track/entity_types.h"
 
@@ -46,6 +46,7 @@ static void mod_matrix_audio_set_defaults(
 typedef struct
 {
     uint8_t valid;
+    uint8_t base_valid;
     uint8_t modulation_active;
     uint16_t destination;
     float base_value;

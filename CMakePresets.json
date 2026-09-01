@@ -13,8 +13,7 @@
             "inherits": "common-ninja-arm",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
-                "BRICK6_VARIANT": "lowcost",
-                "BRICK_TEST_BUILD": "ON"
+                "BRICK6_VARIANT": "lowcost"
             }
         },
         {
@@ -24,8 +23,7 @@
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_C_FLAGS_DEBUG": "-g3",
                 "CMAKE_CXX_FLAGS_DEBUG": "-g3",
-                "BRICK6_VARIANT": "lowcost",
-                "BRICK_TEST_BUILD": "OFF"
+                "BRICK6_VARIANT": "lowcost"
             }
         },
         {
@@ -33,26 +31,7 @@
             "inherits": "common-ninja-arm",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "BRICK6_VARIANT": "lowcost",
-                "BRICK_TEST_BUILD": "OFF"
-            }
-        },
-        {
-            "name": "Test",
-            "inherits": "common-ninja-arm",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release",
-                "BRICK6_VARIANT": "lowcost",
-                "BRICK_TEST_BUILD": "ON"
-            }
-        },
-        {
-            "name": "TestPremium",
-            "inherits": "common-ninja-arm",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release",
-                "BRICK6_VARIANT": "premium",
-                "BRICK_TEST_BUILD": "ON"
+                "BRICK6_VARIANT": "lowcost"
             }
         },
         {
@@ -60,8 +39,7 @@
             "inherits": "common-ninja-arm",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "BRICK6_VARIANT": "premium",
-                "BRICK_TEST_BUILD": "OFF"
+                "BRICK6_VARIANT": "premium"
             }
         },
         {
@@ -70,7 +48,6 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
                 "BRICK6_VARIANT": "lowcost",
-                "BRICK_TEST_BUILD": "OFF",
                 "BRICK6_STREAM_READ_CHUNK_KIB": "16"
             }
         },
@@ -80,7 +57,6 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
                 "BRICK6_VARIANT": "lowcost",
-                "BRICK_TEST_BUILD": "OFF",
                 "BRICK6_STREAM_READ_CHUNK_KIB": "32"
             }
         }
@@ -97,14 +73,6 @@
         {
             "name": "Release",
             "configurePreset": "Release"
-        },
-        {
-            "name": "Test",
-            "configurePreset": "Test"
-        },
-        {
-            "name": "TestPremium",
-            "configurePreset": "TestPremium"
         },
         {
             "name": "Premium",

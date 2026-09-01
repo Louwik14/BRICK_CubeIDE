@@ -4,6 +4,7 @@
 
 #include "App/Hall/hall_calibration.h"
 #include "App/Hall/hall_engine.h"
+#include "Keyboard/keyboard_runtime.h"
 #include "pages/ui_page_calibration.h"
 #include "stm32h7xx_hal.h"
 #include "ui_page_manager.h"
@@ -19,11 +20,11 @@ static const ui_template_family_t g_ui_template_keyboard_family = {
     .subpages = {
         {
             .title = "PLAY",
-            .param_bank = { .params = { PARAM_KBD_ROOT, PARAM_KBD_SCALE, PARAM_KBD_OMNICHORD, PARAM_COUNT } },
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
         {
             .title = "MODE",
-            .param_bank = { .params = { PARAM_KBD_NOTE_ORDER, PARAM_KBD_CHORD_OVERRIDE, PARAM_KBD_MONO_LAST, PARAM_COUNT } },
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
         {
 #if defined(BRICK6_VARIANT_LOWCOST)
@@ -46,20 +47,16 @@ static const ui_template_family_t *ui_page_template_keyboard_resolve_family(void
     return ui_template_family_resolve_active_track(UI_TEMPLATE_FAMILY_KEYBOARD);
 }
 
-#if defined(BRICK6_VARIANT_LOWCOST)
 static uint8_t ui_page_template_keyboard_virtual_slot_text(uint8_t slot,
                                                             char *out_name,
                                                             uint32_t out_name_len,
                                                             char *out_value,
                                                             uint32_t out_value_len);
-#endif
 
 static ui_template_page_state_t g_ui_template_keyboard_state = {
     .family = 0,
     .family_resolver = ui_page_template_keyboard_resolve_family,
-#if defined(BRICK6_VARIANT_LOWCOST)
     .virtual_slot_text = ui_page_template_keyboard_virtual_slot_text,
-#endif
     .active_subpage = 0U,
     .has_visited = 0U,
 };
@@ -73,6 +70,7 @@ static void ui_page_template_keyboard_mark_settings_dirty(void)
     g_ui_keyboard_velocity_settings_dirty = 1U;
     g_ui_keyboard_velocity_settings_dirty_since = HAL_GetTick();
 }
+#endif
 
 static uint8_t ui_page_template_keyboard_virtual_slot_text(uint8_t slot,
                                                             char *out_name,
@@ -80,6 +78,23 @@ static uint8_t ui_page_template_keyboard_virtual_slot_text(uint8_t slot,
                                                             char *out_value,
                                                             uint32_t out_value_len)
 {
+    static const char *const roots[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+    static const char *const scales[] = { "MAJOR", "MINOR", "DORIAN", "MIXOLYD", "PENTA", "BLUES", "CHROM" };
+    if (g_ui_template_keyboard_state.active_subpage == 0U)
+    {
+        if (slot == 0U) { (void)snprintf(out_name,out_name_len,"ROOT"); (void)snprintf(out_value,out_value_len,"%s",roots[keyboard_runtime_get_root_index()%12U]); return 1U; }
+        if (slot == 1U) { uint8_t v=keyboard_runtime_get_scale_index(); (void)snprintf(out_name,out_name_len,"SCALE"); (void)snprintf(out_value,out_value_len,"%s",scales[(v<7U)?v:0U]); return 1U; }
+        if (slot == 2U) { (void)snprintf(out_name,out_name_len,"OMNI"); (void)snprintf(out_value,out_value_len,"%s",keyboard_runtime_get_omnichord()?"ON":"OFF"); return 1U; }
+        return 0U;
+    }
+    if (g_ui_template_keyboard_state.active_subpage == 1U)
+    {
+        if (slot == 0U) { (void)snprintf(out_name,out_name_len,"ORDER"); (void)snprintf(out_value,out_value_len,"%s",keyboard_runtime_get_note_order()==NOTE_ORDER_FIFTHS?"FIFTHS":"NATURAL"); return 1U; }
+        if (slot == 1U) { (void)snprintf(out_name,out_name_len,"CHORD OVR"); (void)snprintf(out_value,out_value_len,"%s",keyboard_runtime_get_chord_override()?"ON":"OFF"); return 1U; }
+        if (slot == 2U) { (void)snprintf(out_name,out_name_len,"MONO LAST"); (void)snprintf(out_value,out_value_len,"%s",keyboard_runtime_get_mono_last()?"ON":"OFF"); return 1U; }
+        return 0U;
+    }
+#if defined(BRICK6_VARIANT_LOWCOST)
     static const char *const profile_labels[HALL_VEL_PROFILE_COUNT] = { "DEFAULT", "USER" };
     static const char *const mode_labels[HALL_VEL_MODE_USER] = { "DV", "TIME", "ENERGY" };
     static const char *const curve_labels[HALL_VEL_CURVE_COUNT] = {
@@ -119,8 +134,10 @@ static uint8_t ui_page_template_keyboard_virtual_slot_text(uint8_t slot,
         default:
             return 0U;
     }
-}
+#else
+    return 0U;
 #endif
+}
 
 #if defined(BRICK6_VARIANT_LOWCOST)
 static void ui_page_template_keyboard_leave(void)
@@ -173,11 +190,23 @@ void ui_page_template_keyboard_register_families(void)
 
 uint8_t ui_page_template_keyboard_handle_encoder(uint8_t encoder, int16_t delta)
 {
+    if ((ui_page_get_id() != UI_PAGE_TEMPLATE_KEYBOARD) || (encoder >= 4U) || (delta == 0)) return 0U;
+    if (g_ui_template_keyboard_state.active_subpage == 0U)
+    {
+        if (encoder == 0U) { int32_t v=(int32_t)keyboard_runtime_get_root_index()+((delta>0)?1:-1); if(v<0)v=0;if(v>11)v=11;keyboard_runtime_set_root((uint8_t)v); }
+        else if (encoder == 1U) { int32_t v=(int32_t)keyboard_runtime_get_scale_index()+((delta>0)?1:-1);if(v<0)v=0;if(v>6)v=6;keyboard_runtime_set_scale((uint8_t)v); }
+        else if (encoder == 2U) keyboard_runtime_set_omnichord(delta>0);
+        return 1U;
+    }
+    if (g_ui_template_keyboard_state.active_subpage == 1U)
+    {
+        if (encoder == 0U) keyboard_runtime_set_note_order((delta>0)?NOTE_ORDER_FIFTHS:NOTE_ORDER_NATURAL);
+        else if (encoder == 1U) keyboard_runtime_set_chord_override(delta>0);
+        else if (encoder == 2U) keyboard_runtime_set_mono_last(delta>0);
+        return 1U;
+    }
 #if defined(BRICK6_VARIANT_LOWCOST)
-    if ((ui_page_get_id() != UI_PAGE_TEMPLATE_KEYBOARD)
-        || (g_ui_template_keyboard_state.active_subpage != 2U)
-        || (encoder >= 4U)
-        || (delta == 0))
+    if (g_ui_template_keyboard_state.active_subpage != 2U)
     {
         return 0U;
     }

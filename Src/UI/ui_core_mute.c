@@ -44,7 +44,12 @@ static uint8_t ui_core_get_track_runtime_mute(uint8_t track, uint8_t *out_muted,
     *out_available = 0U;
 
     *out_available = track_mute_is_available(track);
-    *out_muted = (*out_available != 0U) ? track_mute_get(track) : 0U;
+    if (*out_available != 0U)
+    {
+        const int8_t muted = track_mute_get(track);
+        if (muted < 0) return 0U;
+        *out_muted = (uint8_t)muted;
+    }
     return 1U;
 }
 
@@ -58,25 +63,28 @@ static uint8_t ui_core_apply_track_runtime_mute(uint8_t track, uint8_t muted)
     return track_mute_set(track, muted);
 }
 
-static void ui_core_mute_capture_current_to_buffer(uint8_t *dst)
+static uint8_t ui_core_mute_capture_current_to_buffer(uint8_t *dst)
 {
     if (dst == 0)
     {
-        return;
+        return 0U;
     }
 
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         uint8_t muted = 0U;
         uint8_t available = 0U;
-        (void)ui_core_get_track_runtime_mute(track, &muted, &available);
+        if (ui_core_get_track_runtime_mute(track, &muted, &available) == 0U)
+            return 0U;
         dst[track] = (available != 0U) ? muted : 0U;
     }
+    return 1U;
 }
 
 static void ui_core_mute_cancel_prepared_to_current_state(void)
 {
-    ui_core_mute_capture_current_to_buffer(g_ui_core_mute.initial_state);
+    if (ui_core_mute_capture_current_to_buffer(
+            g_ui_core_mute.initial_state) == 0U) return;
     memcpy(g_ui_core_mute.prepared_state, g_ui_core_mute.initial_state, sizeof(g_ui_core_mute.prepared_state));
     g_ui_core_mute.hold_quick_prepare_armed = 0U;
 }
@@ -135,7 +143,8 @@ static void ui_core_mute_enter_prepare(ui_core_mute_set_hall_mode_fn set_hall_mo
         return;
     }
 
-    ui_core_mute_capture_current_to_buffer(g_ui_core_mute.initial_state);
+    if (ui_core_mute_capture_current_to_buffer(
+            g_ui_core_mute.initial_state) == 0U) return;
     memcpy(g_ui_core_mute.prepared_state, g_ui_core_mute.initial_state, sizeof(g_ui_core_mute.prepared_state));
     g_ui_core_mute.submode = UI_MUTE_SUBMODE_PREPARE;
     g_ui_core_mute.hold_quick_prepare_armed = 0U;
@@ -152,7 +161,9 @@ static void ui_core_mute_apply_prepared_and_exit(ui_core_mute_set_hall_mode_fn s
         {
             continue;
         }
-        (void)ui_core_apply_track_runtime_mute(track, g_ui_core_mute.prepared_state[track]);
+        if (ui_core_apply_track_runtime_mute(
+                track, g_ui_core_mute.prepared_state[track]) == 0U)
+            return;
     }
 
     ui_core_mute_exit_to_previous_mode(set_hall_mode);
@@ -167,7 +178,9 @@ static void ui_core_mute_toggle_quick_track(uint8_t track)
         return;
     }
 
-    (void)ui_core_apply_track_runtime_mute(track, (muted == 0U) ? 1U : 0U);
+    if (ui_core_apply_track_runtime_mute(
+            track, (muted == 0U) ? 1U : 0U) == 0U)
+        return;
 }
 
 static void ui_core_mute_toggle_prepared_track(uint8_t track)
@@ -274,7 +287,9 @@ uint8_t ui_core_mute_get_hall_led(uint8_t hall, ui_mute_hall_led_t *out_led)
     {
         uint8_t muted = 0U;
         uint8_t runtime_available = 0U;
-        (void)ui_core_get_track_runtime_mute(hall, &muted, &runtime_available);
+        if (ui_core_get_track_runtime_mute(
+                hall, &muted, &runtime_available) == 0U)
+            return 0U;
         if (runtime_available != 0U)
         {
             out_led->muted = muted;

@@ -4,7 +4,6 @@
 
 typedef union
 {
-    persist_codec_project_workspace_t project;
     persistence_project_save_workspace_t project_save;
     persistence_project_restore_workspace_t project_restore;
     persistence_pattern_io_workspace_t pattern_io;
@@ -12,17 +11,6 @@ typedef union
 
 STORAGE_STATE_SDRAM static persistence_workspace_storage_t g_persistence_workspace;
 static persistence_workspace_owner_t g_persistence_workspace_owner = PERSISTENCE_WORKSPACE_FREE;
-
-persist_codec_project_workspace_t *persistence_workspace_acquire_project(void)
-{
-    if (g_persistence_workspace_owner != PERSISTENCE_WORKSPACE_FREE)
-    {
-        return 0;
-    }
-
-    g_persistence_workspace_owner = PERSISTENCE_WORKSPACE_PROJECT;
-    return &g_persistence_workspace.project;
-}
 
 persistence_project_save_workspace_t *persistence_workspace_acquire_project_save(void)
 {

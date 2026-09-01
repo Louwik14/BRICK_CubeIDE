@@ -13,22 +13,14 @@ void audio_mod_matrix_init(void)
     {
         uint8_t selected = 0U;
         mod_matrix_audio_set_defaults(g_mod_matrix_audio_state[track].slots, &selected);
-        g_mod_matrix_audio_state[track].multi_source[0][0] =
-            (uint8_t)param_spec[PARAM_MOD_MULTI_1_A].default_value;
-        g_mod_matrix_audio_state[track].multi_source[0][1] =
-            (uint8_t)param_spec[PARAM_MOD_MULTI_1_B].default_value;
-        g_mod_matrix_audio_state[track].multi_source[1][0] =
-            (uint8_t)param_spec[PARAM_MOD_MULTI_2_A].default_value;
-        g_mod_matrix_audio_state[track].multi_source[1][1] =
-            (uint8_t)param_spec[PARAM_MOD_MULTI_2_B].default_value;
-        g_mod_matrix_audio_state[track].slew_source[0] =
-            (uint8_t)param_spec[PARAM_MOD_SLEW_1_SOURCE].default_value;
-        g_mod_matrix_audio_state[track].slew_source[1] =
-            (uint8_t)param_spec[PARAM_MOD_SLEW_2_SOURCE].default_value;
-        g_mod_matrix_audio_state[track].slew_amount[0] =
-            param_spec[PARAM_MOD_SLEW_1_AMOUNT].default_value;
-        g_mod_matrix_audio_state[track].slew_amount[1] =
-            param_spec[PARAM_MOD_SLEW_2_AMOUNT].default_value;
+        g_mod_matrix_audio_state[track].multi_source[0][0] = (uint8_t)MOD_MATRIX_SOURCE_LFO1;
+        g_mod_matrix_audio_state[track].multi_source[0][1] = (uint8_t)MOD_MATRIX_SOURCE_LFO2;
+        g_mod_matrix_audio_state[track].multi_source[1][0] = (uint8_t)MOD_MATRIX_SOURCE_LFO1;
+        g_mod_matrix_audio_state[track].multi_source[1][1] = (uint8_t)MOD_MATRIX_SOURCE_ENV3;
+        g_mod_matrix_audio_state[track].slew_source[0] = (uint8_t)MOD_MATRIX_SOURCE_LFO1;
+        g_mod_matrix_audio_state[track].slew_source[1] = (uint8_t)MOD_MATRIX_SOURCE_LFO2;
+        g_mod_matrix_audio_state[track].slew_amount[0] = 0.0f;
+        g_mod_matrix_audio_state[track].slew_amount[1] = 0.0f;
         for (uint8_t i = 0U; i < MOD_MATRIX_SLOT_COUNT; ++i)
         {
             g_mod_matrix_runtime[track].destinations[i].destination = (uint16_t)MOD_DESTINATION_NONE;
@@ -170,51 +162,20 @@ static void mod_matrix_audio_rebuild_route_cache_track(
     mod_matrix_recompute_global_route_flag();
 }
 
-uint8_t audio_mod_matrix_apply_param(uint8_t track, uint8_t slot,
-                                     param_id_t id, float value)
+static uint8_t audio_mod_matrix_mark_dirty(uint8_t track)
 {
     if (track >= SEQ_TRACK_COUNT) return 0U;
-    mod_matrix_audio_state_t *const state = &g_mod_matrix_audio_state[track];
-    if (slot < MOD_MATRIX_SLOT_COUNT)
-    {
-        track_mod_matrix_slot_t *const s = &state->slots[slot];
-        if (id == PARAM_MOD_MATRIX_SOURCE)
-            s->source = (uint8_t)mod_matrix_clampf(value, 0.0f,
-                (float)(MOD_MATRIX_SOURCE_COUNT - 1U));
-        else if (id == PARAM_MOD_MATRIX_DEST)
-            s->destination = (mod_destination_address_t)value;
-        else if (id == PARAM_MOD_MATRIX_DEPTH)
-            s->depth = mod_matrix_clampf(value, -127.0f, 127.0f);
-        else if (id == PARAM_MOD_MATRIX_SLOT)
-            s->enabled = (value >= 0.5f) ? 1U : 0U;
-        else return 0U;
-    }
-    else
-    {
-        uint8_t op = 0U;
-        if (id == PARAM_MOD_MULTI_1_A) state->multi_source[0][0] = (uint8_t)value;
-        else if (id == PARAM_MOD_MULTI_1_B) state->multi_source[0][1] = (uint8_t)value;
-        else if (id == PARAM_MOD_MULTI_2_A) state->multi_source[1][0] = (uint8_t)value;
-        else if (id == PARAM_MOD_MULTI_2_B) state->multi_source[1][1] = (uint8_t)value;
-        else if ((id == PARAM_MOD_SLEW_1_SOURCE)
-                || (id == PARAM_MOD_SLEW_2_SOURCE))
-        {
-            op = (id == PARAM_MOD_SLEW_2_SOURCE) ? 1U : 0U;
-            const uint8_t source = (uint8_t)value;
-            if (state->slew_source[op] != source)
-            {
-                state->slew_source[op] = source;
-                g_mod_matrix_operator_runtime[track].slew[op] = 0.0f;
-                g_mod_matrix_operator_runtime[track].slew_valid[op] = 0U;
-            }
-        }
-        else if (id == PARAM_MOD_SLEW_1_AMOUNT) state->slew_amount[0] = value;
-        else if (id == PARAM_MOD_SLEW_2_AMOUNT) state->slew_amount[1] = value;
-        else return 0U;
-    }
     g_mod_matrix_audio_dirty_mask |= (uint16_t)(1U << track);
     return 1U;
 }
+
+uint8_t audio_mod_matrix_set_route_source(uint8_t track,uint8_t slot,uint8_t source){if(track>=SEQ_TRACK_COUNT||slot>=MOD_MATRIX_SLOT_COUNT||source>=MOD_MATRIX_SOURCE_COUNT)return 0U;g_mod_matrix_audio_state[track].slots[slot].source=source;return audio_mod_matrix_mark_dirty(track);}
+uint8_t audio_mod_matrix_set_route_destination(uint8_t track,uint8_t slot,mod_destination_address_t destination){if(track>=SEQ_TRACK_COUNT||slot>=MOD_MATRIX_SLOT_COUNT)return 0U;g_mod_matrix_audio_state[track].slots[slot].destination=destination;return audio_mod_matrix_mark_dirty(track);}
+uint8_t audio_mod_matrix_set_route_depth(uint8_t track,uint8_t slot,float depth){if(track>=SEQ_TRACK_COUNT||slot>=MOD_MATRIX_SLOT_COUNT)return 0U;g_mod_matrix_audio_state[track].slots[slot].depth=mod_matrix_clampf(depth,-127.0f,127.0f);return audio_mod_matrix_mark_dirty(track);}
+uint8_t audio_mod_matrix_set_route_enabled(uint8_t track,uint8_t slot,uint8_t enabled){if(track>=SEQ_TRACK_COUNT||slot>=MOD_MATRIX_SLOT_COUNT)return 0U;g_mod_matrix_audio_state[track].slots[slot].enabled=(enabled!=0U)?1U:0U;return audio_mod_matrix_mark_dirty(track);}
+uint8_t audio_mod_matrix_set_multi_source(uint8_t track,uint8_t op,uint8_t input,uint8_t source){if(track>=SEQ_TRACK_COUNT||op>=2U||input>=2U||source>=MOD_MATRIX_SOURCE_COUNT)return 0U;g_mod_matrix_audio_state[track].multi_source[op][input]=source;return audio_mod_matrix_mark_dirty(track);}
+uint8_t audio_mod_matrix_set_slew_source(uint8_t track,uint8_t op,uint8_t source){if(track>=SEQ_TRACK_COUNT||op>=2U||source>=MOD_MATRIX_SOURCE_COUNT)return 0U;if(g_mod_matrix_audio_state[track].slew_source[op]!=source){g_mod_matrix_audio_state[track].slew_source[op]=source;g_mod_matrix_operator_runtime[track].slew[op]=0.0f;g_mod_matrix_operator_runtime[track].slew_valid[op]=0U;}return audio_mod_matrix_mark_dirty(track);}
+uint8_t audio_mod_matrix_set_slew_amount(uint8_t track,uint8_t op,float amount){if(track>=SEQ_TRACK_COUNT||op>=2U)return 0U;g_mod_matrix_audio_state[track].slew_amount[op]=mod_matrix_clampf(amount,0.0f,1.0f);return audio_mod_matrix_mark_dirty(track);}
 
 void audio_mod_matrix_rebuild_track(uint8_t track)
 {

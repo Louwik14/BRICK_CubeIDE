@@ -99,22 +99,6 @@ void NMI_Handler(void)
 /**
   * @brief This function handles Hard fault interrupt.
   */
-#if BRICK_TEST_BUILD
-__attribute__((naked)) void HardFault_Handler(void)
-{
-  __asm volatile(
-    "tst lr, #4\n"
-    "ite eq\n"
-    "mrseq r0, msp\n"
-    "mrsne r0, psp\n"
-    "mov r1, lr\n"
-    "movs r2, #1\n"
-    "ldr r3, =g_crash_capsule_fault_stack\n"
-    "add.w r3, r3, #1024\n"
-    "msr msp, r3\n"
-    "b crash_capsule_fault_capture_and_reset\n");
-}
-#else
 __attribute__((naked)) void HardFault_Handler(void)
 {
   __asm volatile(
@@ -125,27 +109,10 @@ __attribute__((naked)) void HardFault_Handler(void)
     "dsb\n"
     "b .\n");
 }
-#endif
 
 /**
   * @brief This function handles Memory management fault.
   */
-#if BRICK_TEST_BUILD
-__attribute__((naked)) void MemManage_Handler(void)
-{
-  __asm volatile(
-    "tst lr, #4\n"
-    "ite eq\n"
-    "mrseq r0, msp\n"
-    "mrsne r0, psp\n"
-    "mov r1, lr\n"
-    "movs r2, #2\n"
-    "ldr r3, =g_crash_capsule_fault_stack\n"
-    "add.w r3, r3, #1024\n"
-    "msr msp, r3\n"
-    "b crash_capsule_fault_capture_and_reset\n");
-}
-#else
 __attribute__((naked)) void MemManage_Handler(void)
 {
   __asm volatile(
@@ -156,27 +123,10 @@ __attribute__((naked)) void MemManage_Handler(void)
     "dsb\n"
     "b .\n");
 }
-#endif
 
 /**
   * @brief This function handles Pre-fetch fault, memory access fault.
   */
-#if BRICK_TEST_BUILD
-__attribute__((naked)) void BusFault_Handler(void)
-{
-  __asm volatile(
-    "tst lr, #4\n"
-    "ite eq\n"
-    "mrseq r0, msp\n"
-    "mrsne r0, psp\n"
-    "mov r1, lr\n"
-    "movs r2, #3\n"
-    "ldr r3, =g_crash_capsule_fault_stack\n"
-    "add.w r3, r3, #1024\n"
-    "msr msp, r3\n"
-    "b crash_capsule_fault_capture_and_reset\n");
-}
-#else
 __attribute__((naked)) void BusFault_Handler(void)
 {
   __asm volatile(
@@ -187,27 +137,10 @@ __attribute__((naked)) void BusFault_Handler(void)
     "dsb\n"
     "b .\n");
 }
-#endif
 
 /**
   * @brief This function handles Undefined instruction or illegal state.
   */
-#if BRICK_TEST_BUILD
-__attribute__((naked)) void UsageFault_Handler(void)
-{
-  __asm volatile(
-    "tst lr, #4\n"
-    "ite eq\n"
-    "mrseq r0, msp\n"
-    "mrsne r0, psp\n"
-    "mov r1, lr\n"
-    "movs r2, #4\n"
-    "ldr r3, =g_crash_capsule_fault_stack\n"
-    "add.w r3, r3, #1024\n"
-    "msr msp, r3\n"
-    "b crash_capsule_fault_capture_and_reset\n");
-}
-#else
 __attribute__((naked)) void UsageFault_Handler(void)
 {
   __asm volatile(
@@ -218,7 +151,6 @@ __attribute__((naked)) void UsageFault_Handler(void)
     "dsb\n"
     "b .\n");
 }
-#endif
 
 /**
   * @brief This function handles System service call via SWI instruction.

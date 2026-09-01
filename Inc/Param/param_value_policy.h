@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-#include "Param/param_store.h"
+#include "Param/param_ids.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,11 +35,18 @@ float param_value_milliseconds_to_seconds(float value, float min_value, float ma
 float param_value_prism_tune_to_display(float value, float min_value, float max_value);
 float param_value_prism_tune_to_canonical(float value, float min_value, float max_value);
 
-param_value_policy_t param_value_policy_resolve(param_id_t id, uint8_t track);
-const char *param_value_policy_display_unit(param_id_t id, uint8_t track);
+uint8_t param_value_policy_resolve(param_id_t id,
+                                   uint8_t track,
+                                   param_value_policy_t *out_policy);
+uint8_t param_value_policy_display_unit(param_id_t id,
+                                        uint8_t track,
+                                        const char **out_unit);
 float param_value_policy_canonical_to_display(param_id_t id, uint8_t track, float value);
 float param_value_policy_display_to_canonical(param_id_t id, uint8_t track, float value);
 float param_value_policy_canonicalize(param_id_t id, uint8_t track, float value);
+float param_value_policy_canonicalize_prism_model(param_id_t id,
+                                                 uint8_t prism_model,
+                                                 float value);
 float param_value_policy_apply_delta(param_id_t id,
                                      uint8_t track,
                                      float canonical_value,

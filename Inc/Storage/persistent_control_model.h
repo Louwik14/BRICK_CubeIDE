@@ -2,6 +2,15 @@
 #define PERSISTENT_CONTROL_MODEL_H
 
 #include <stdint.h>
+#include "Track/fm_control_state.h"
+#include "Track/tone_program_control.h"
+#include "Param/param_filter.h"
+#include "Track/vca_control_state.h"
+#include "Mod/mod_env3_control.h"
+#include "Track/mixer_control_state.h"
+#include "Track/audio_fx_control_state.h"
+#include "Track/polyphony_control.h"
+#include "Param/param_global_control.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -24,8 +33,6 @@ extern "C" {
 #define PERSIST_CONTROL_PLAY_ITEM_COUNT            8U
 #define PERSIST_CONTROL_CHILD_PLAY_ITEM_COUNT      1U
 #define PERSIST_CONTROL_STEP_LOCK_COUNT            32U
-#define PERSIST_CONTROL_ENTITY_PARAM_COUNT        320U
-#define PERSIST_CONTROL_GLOBAL_PARAM_COUNT        128U
 #define PERSIST_CONTROL_NOTE_FX_COUNT               3U
 #define PERSIST_CONTROL_NOTE_FX_VALUE_COUNT         4U
 #define PERSIST_CONTROL_MOD_LFO_COUNT               3U
@@ -38,16 +45,15 @@ extern "C" {
 #define PERSIST_CONTROL_ASSET_COUNT              1024U
 #define PERSIST_CONTROL_ASSET_PATH_BYTES          160U
 #define PERSIST_CONTROL_PATCH_NAME_BYTES           32U
+#define PERSIST_CONTROL_TRACK_ASSET_COUNT           3U
 
 typedef uint8_t persist_control_entity_id_t;
 typedef uint32_t persist_control_parameter_key_t;
 typedef uint32_t persist_control_family_key_t;
 typedef uint32_t persist_control_type_key_t;
-typedef uint32_t persist_control_asset_id_t;
 typedef uint32_t persist_control_asset_kind_key_t;
 
 #define PERSIST_CONTROL_KEY_NONE 0U
-#define PERSIST_CONTROL_ASSET_NONE 0U
 
 typedef enum
 {
@@ -189,10 +195,9 @@ typedef struct
 
 typedef struct
 {
-    persist_control_asset_id_t id;
     persist_control_asset_kind_key_t kind;
     uint16_t path_length;
-    char path[PERSIST_CONTROL_ASSET_PATH_BYTES];
+    char canonical_path[PERSIST_CONTROL_ASSET_PATH_BYTES];
 } persist_control_asset_ref_t;
 
 typedef struct
@@ -292,10 +297,18 @@ typedef struct
     uint8_t midi_channel;
     uint32_t midi_source_key;
     uint32_t input_key;
+    polyphony_control_state_t polyphony;
     uint8_t muted;
-    persist_control_asset_id_t asset;
-    uint16_t parameter_count;
-    persist_control_parameter_t parameters[PERSIST_CONTROL_ENTITY_PARAM_COUNT];
+    uint8_t asset_count;
+    persist_control_asset_ref_t assets[PERSIST_CONTROL_TRACK_ASSET_COUNT];
+    uint8_t fm_present;
+    fm_control_state_t fm;
+    uint8_t tone_present;
+    tone_program_control_t tone;
+    param_filter_control_state_t filter;
+    vca_control_state_t vca;
+    mixer_control_state_t mixer;
+    audio_fx_control_state_t audio_fx;
     uint8_t note_fx_count;
     persist_control_note_fx_t note_fx[PERSIST_CONTROL_NOTE_FX_COUNT];
     uint8_t modulation_present;
@@ -318,20 +331,30 @@ typedef struct
 
 typedef struct
 {
+    uint8_t root;
+    uint8_t scale;
+    uint8_t omnichord;
+    uint8_t note_order;
+    uint8_t chord_override;
+    uint8_t mono_last;
+} persist_control_keyboard_t;
+
+typedef struct
+{
     uint32_t tempo_milli_bpm;
     uint32_t clock_source_key;
     uint32_t record_start_key;
     uint32_t record_length_key;
-    uint16_t parameter_count;
-    persist_control_parameter_t parameters[PERSIST_CONTROL_GLOBAL_PARAM_COUNT];
+    param_global_control_state_t audio;
+    persist_control_keyboard_t keyboard;
+    uint8_t metronome_level;
 } persist_control_globals_t;
 
 typedef struct
 {
     persist_control_entity_id_t entity;
     persist_control_parameter_key_t parameter;
-    persist_control_value_kind_t kind;
-    persist_control_value_t value;
+    float scene_value;
 } persist_control_macro_lock_t;
 
 typedef struct
@@ -369,9 +392,18 @@ typedef struct
     char name[PERSIST_CONTROL_PATCH_NAME_BYTES];
     persist_control_family_key_t family;
     persist_control_type_key_t type;
-    persist_control_asset_ref_t asset;
-    uint16_t parameter_count;
-    persist_control_parameter_t parameters[PERSIST_CONTROL_ENTITY_PARAM_COUNT];
+    uint8_t asset_count;
+    persist_control_asset_ref_t assets[PERSIST_CONTROL_TRACK_ASSET_COUNT];
+    uint8_t fm_present;
+    fm_control_state_t fm;
+    uint8_t tone_present;
+    tone_program_control_t tone;
+    param_filter_control_state_t filter;
+    vca_control_state_t vca;
+    mod_env3_control_state_t env3;
+    audio_fx_control_state_t audio_fx;
+    polyphony_control_state_t polyphony;
+    persist_control_modulation_t modulation;
 } persist_control_patch_t;
 
 _Static_assert(PERSIST_CONTROL_ENTITY_COUNT

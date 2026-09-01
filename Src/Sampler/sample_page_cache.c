@@ -53,16 +53,8 @@ typedef struct
 
 typedef sample_page_shared_index_entry_t sample_page_index_entry_t;
 
-CONTROL_STREAM_META_SDRAM sample_page_desc_t
-    g_sample_page_shared_descriptor[SAMPLE_PAGE_MAX_COUNT];
-AUDIO_SHARED_PAGE_PAYLOAD_SDRAM float g_sample_page_shared_data
-    [SAMPLE_PAGE_MAX_COUNT][SAMPLE_PAGE_SLOT_FLOAT_CAPACITY];
 static CTRL_STATE sample_page_cache_state_t g_sample_page_cache_state;
 CONTROL_STREAM_META_SDRAM static sample_page_sample_desc_t g_sample_page_sample_desc[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
-D2_IPC volatile uint16_t
-    g_sample_page_shared_last_slot[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
-CONTROL_STREAM_INDEX_SDRAM sample_page_index_entry_t
-    g_sample_page_shared_index[SAMPLE_PAGE_INDEX_SIZE];
 static CTRL_STATE uint16_t g_sample_page_reserved_count[SAMPLE_PAGE_CACHE_MAX_SAMPLES];
 static CTRL_STATE uint16_t g_sample_page_free_cursor;
 static CTRL_STATE uint16_t g_sample_page_evict_cursor;

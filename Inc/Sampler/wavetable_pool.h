@@ -6,6 +6,7 @@
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/wavetable_config.h"
 #include "Sampler/wavetable_prepared_format.h"
+#include "Storage/wav_parser.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -103,6 +104,11 @@ typedef struct
 
 void wavetable_pool_init(void);
 void wavetable_pool_reset(void);
+uint8_t wavetable_pool_inspect_source(const wav_info_t *info,
+                                      wavetable_source_geometry_t source_geometry,
+                                      uint32_t *out_frame_count,
+                                      uint32_t *out_page_count,
+                                      uint32_t *out_cost_bytes);
 
 uint16_t wavetable_pool_find_free_slot(void);
 wavetable_result_t wavetable_pool_load_file(uint16_t wavetable_slot,
@@ -127,6 +133,14 @@ uint8_t wavetable_pool_load_async_begin_with_geometry(
     uint16_t wavetable_slot,
     const char *path,
     wavetable_source_geometry_t source_geometry);
+uint8_t wavetable_pool_load_async_begin_prepared_with_geometry(
+    uint16_t wavetable_slot,
+    const char *path,
+    wavetable_source_geometry_t source_geometry,
+    const wav_info_t *info,
+    uint32_t source_file_size,
+    uint32_t source_crc32);
+uint8_t wavetable_pool_source_crc32_file(FIL *file, uint32_t *out_crc32);
 void wavetable_pool_load_async_service(void);
 uint8_t wavetable_pool_load_async_busy(void);
 void wavetable_pool_load_async_cancel(void);
@@ -135,8 +149,10 @@ uint8_t wavetable_pool_load_async_take_result(wavetable_result_t *out_result,
                                               uint16_t *out_global_slot,
                                               const char **out_path);
 void wavetable_pool_clear(uint16_t wavetable_slot);
+void wavetable_pool_retire_all(void);
 void wavetable_pool_service_retire(void);
 uint8_t wavetable_pool_retire_idle(void);
+uint8_t wavetable_pool_retire_failed(void);
 
 const wavetable_slot_t *wavetable_pool_get_slot(uint16_t wavetable_slot);
 wavetable_slot_state_t wavetable_pool_get_state(uint16_t wavetable_slot);

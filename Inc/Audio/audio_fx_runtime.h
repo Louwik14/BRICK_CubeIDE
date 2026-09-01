@@ -24,6 +24,12 @@ uint8_t audio_fx_runtime_is_comp(brick_entity_id_t entity_id);
 uint8_t audio_fx_runtime_requires_stereo(brick_entity_id_t entity_id);
 uint8_t audio_fx_runtime_pre_filter_supported(brick_entity_id_t entity_id);
 audio_fx_filter_pos_t audio_fx_runtime_get_filter_pos(brick_entity_id_t entity_id);
+uint8_t audio_fx_runtime_set_filter_pos(brick_entity_id_t entity_id,
+                                        audio_fx_filter_pos_t position);
+uint8_t audio_fx_runtime_set_order(brick_entity_id_t entity_id,
+                                   audio_fx_order_t order);
+uint8_t audio_fx_runtime_set_spatial_mode(brick_entity_id_t entity_id,
+                                          audio_fx_slot_t slot, uint8_t mode);
 void audio_fx_runtime_rebuild_entity_plan(brick_entity_id_t entity_id);
 audio_fx_placement_t audio_fx_runtime_get_placement(brick_entity_id_t entity_id);
 uint8_t audio_fx_runtime_apply_param(brick_entity_id_t entity_id,

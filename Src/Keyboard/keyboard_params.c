@@ -16,7 +16,6 @@
 #include "Keyboard/keyboard_params.h"
 
 #include "Keyboard/kbd_input_mapper.h"
-#include "UI/ui_core.h"
 
 typedef struct
 {

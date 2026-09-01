@@ -1,4 +1,5 @@
 #include <stddef.h>
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include "pages/ui_page_template_tone.h"
@@ -37,14 +38,14 @@ static uint8_t ui_template_tone_multi_logical_label(uint16_t logical,
     uint16_t end = asset.path_length;
     for (uint16_t i = 0U; i < asset.path_length; ++i)
     {
-        if ((asset.path[i] == '/') || (asset.path[i] == '\\') || (asset.path[i] == ':'))
+        if ((asset.canonical_path[i] == '/') || (asset.canonical_path[i] == '\\') || (asset.canonical_path[i] == ':'))
         {
             begin = (uint16_t)(i + 1U);
         }
     }
     for (uint16_t i = begin; i < asset.path_length; ++i)
     {
-        if (asset.path[i] == '.')
+        if (asset.canonical_path[i] == '.')
         {
             end = i;
             break;
@@ -60,7 +61,7 @@ static uint8_t ui_template_tone_multi_logical_label(uint16_t logical,
     {
         copy_len = out_len - 1U;
     }
-    memcpy(out, &asset.path[begin], copy_len);
+    memcpy(out, &asset.canonical_path[begin], copy_len);
     out[copy_len] = '\0';
     return 1U;
 }
@@ -78,9 +79,12 @@ static ui_template_family_t g_ui_template_tone_family_master_reverb = {
     .default_subpage = 0U,
 };
 
-static void ui_template_tone_sync_modfx_pages(void)
+static uint8_t ui_template_tone_sync_modfx_pages(void)
 {
-    const uint8_t model = (uint8_t)(param_get(PARAM_MODFX_MODEL) + 0.5f);
+    float model_value;
+    if (param_registry_query_global(PARAM_MODFX_MODEL, &model_value) == 0U)
+        return 0U;
+    const uint8_t model = (uint8_t)(model_value + 0.5f);
     param_id_t *const p3 = g_ui_template_tone_family_master_reverb.subpages[2].param_bank.params;
     param_id_t *const p4 = g_ui_template_tone_family_master_reverb.subpages[3].param_bank.params;
     if (model == FX_MODFX_DAISY_STEREO)
@@ -93,13 +97,14 @@ static void ui_template_tone_sync_modfx_pages(void)
         p4[1] = PARAM_MODFX_DEPTH_B;
         p4[2] = PARAM_MODFX_FEEDBACK;
         p4[3] = PARAM_MODFX_WIDTH;
-        return;
+        return 1U;
     }
     p3[0] = (model == FX_MODFX_JUNOLOGUE) ? PARAM_MODFX_OFFSET : ((model == FX_MODFX_OFF) ? PARAM_COUNT : PARAM_MODFX_RATE);
     p3[1] = ((model == FX_MODFX_OFF) || (model == FX_MODFX_JUNOLOGUE)) ? PARAM_COUNT : PARAM_MODFX_DEPTH;
     p3[2] = PARAM_COUNT;
     p3[3] = ((model == FX_MODFX_OFF) || (model == FX_MODFX_JUNOLOGUE)) ? PARAM_COUNT : PARAM_MODFX_OFFSET;
     p4[0] = PARAM_COUNT; p4[1] = PARAM_COUNT; p4[2] = PARAM_COUNT; p4[3] = PARAM_COUNT;
+    return 1U;
 }
 
 static const ui_template_family_t g_ui_template_tone_family_master_delay_classic = {
@@ -166,7 +171,7 @@ static const ui_template_family_t g_ui_template_tone_family_sampler = {
     .family_title = "TONE",
     .nav_labels = { "PLAY", "LOOP", "-", "-" },
     .subpages = {
-        { .title = "PLAY", .param_bank = { .params = { PARAM_SAMPLER_SAMPLE, PARAM_SAMPLER_MODE, PARAM_SAMPLER_START, PARAM_SAMPLER_LENGTH } } },
+        { .title = "PLAY", .param_bank = { .params = { UI_PARAM_LOCAL_ASSET, PARAM_SAMPLER_MODE, PARAM_SAMPLER_START, PARAM_SAMPLER_LENGTH } } },
         { .title = "LOOP", .param_bank = { .params = { PARAM_SAMPLER_GAIN, PARAM_SAMPLER_TUNE, PARAM_SAMPLER_LOOP_START, PARAM_SAMPLER_SLICE_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
@@ -191,7 +196,7 @@ static const ui_template_family_t g_ui_template_tone_family_clip = {
     .family_title = "TONE",
     .nav_labels = { "PLAY", "STRM", "SYNC", "STR" },
     .subpages = {
-        { .title = "PLAY", .param_bank = { .params = { PARAM_SAMPLER_SAMPLE, PARAM_SAMPLER_GAIN, PARAM_SAMPLER_CLIP_SOURCE_BPM, PARAM_COUNT } } },
+        { .title = "PLAY", .param_bank = { .params = { UI_PARAM_LOCAL_ASSET, PARAM_SAMPLER_GAIN, PARAM_SAMPLER_CLIP_SOURCE_BPM, PARAM_COUNT } } },
         { .title = "STRM", .param_bank = { .params = { PARAM_SAMPLER_CLIP_PLAY_MODE, PARAM_SAMPLER_CLIP_LOOP, PARAM_SAMPLER_CLIP_STRETCH_MODE, PARAM_SAMPLER_CLIP_PITCH } } },
         { .title = "SYNC", .param_bank = { .params = { PARAM_SAMPLER_CLIP_SYNC_LENGTH, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "STR", .param_bank = { .params = { PARAM_SAMPLER_CLIP_GRAIN, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
@@ -203,7 +208,7 @@ static const ui_template_family_t g_ui_template_tone_family_looper = {
     .family_title = "TONE",
     .nav_labels = { "LOOP", "STR", "-", "-" },
     .subpages = {
-        { .title = "LOOP", .param_bank = { .params = { PARAM_LOOPER_ARM, PARAM_LOOPER_LEN, PARAM_LOOPER_PLAY, PARAM_LOOPER_XFADE } } },
+        { .title = "LOOP", .param_bank = { .params = { UI_PARAM_LOCAL_LOOPER_ARM, UI_PARAM_LOCAL_LOOPER_LENGTH, UI_PARAM_LOCAL_LOOPER_PLAY, PARAM_LOOPER_XFADE } } },
         { .title = "STR", .param_bank = { .params = { PARAM_LOOPER_STRETCH, PARAM_LOOPER_PITCH, PARAM_LOOPER_GRAIN, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
@@ -215,7 +220,7 @@ static const ui_template_family_t g_ui_template_tone_family_multi = {
     .family_title = "TONE",
     .nav_labels = { "INST", "-", "-", "-" },
     .subpages = {
-        { .title = "INST", .param_bank = { .params = { PARAM_SAMPLER_SAMPLE, PARAM_SAMPLER_GAIN, PARAM_SAMPLER_MULTI_LOOP, PARAM_COUNT } } },
+        { .title = "INST", .param_bank = { .params = { UI_PARAM_LOCAL_ASSET, PARAM_SAMPLER_GAIN, PARAM_SAMPLER_MULTI_LOOP, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
@@ -251,8 +256,8 @@ static const ui_template_family_t g_ui_template_tone_family_wave = {
     .family_title = "TONE 1/2",
     .nav_labels = { "OSC1", "OSC2", "COMMON", "-" },
     .subpages = {
-        { .title = "OSC1", .param_bank = { .params = { PARAM_WAVE_OSC1_TABLE, PARAM_WAVE_OSC1_POS, PARAM_WAVE_OSC1_START, PARAM_WAVE_OSC1_LEN } } },
-        { .title = "OSC2", .param_bank = { .params = { PARAM_WAVE_OSC2_TABLE, PARAM_WAVE_OSC2_POS, PARAM_WAVE_OSC2_START, PARAM_WAVE_OSC2_LEN } } },
+        { .title = "OSC1", .param_bank = { .params = { UI_PARAM_LOCAL_WAVE_OSC1, PARAM_WAVE_OSC1_POS, PARAM_WAVE_OSC1_START, PARAM_WAVE_OSC1_LEN } } },
+        { .title = "OSC2", .param_bank = { .params = { UI_PARAM_LOCAL_WAVE_OSC2, PARAM_WAVE_OSC2_POS, PARAM_WAVE_OSC2_START, PARAM_WAVE_OSC2_LEN } } },
         { .title = "COMMON", .param_bank = { .params = { PARAM_WAVE_VOLUME, PARAM_WAVE_BALANCE, PARAM_WAVE_TUNE, PARAM_WAVE_DETUNE } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
@@ -263,8 +268,8 @@ static const ui_template_family_t g_ui_template_tone_family_wave_classic = {
     .family_title = "TONE 2/2",
     .nav_labels = { "OSC1", "OSC2", "COMMON", "-" },
     .subpages = {
-        { .title = "OSC1", .param_bank = { .params = { PARAM_WAVE_OSC1_TABLE, PARAM_WAVE_OSC1_POS, PARAM_WAVE_OSC1_START, PARAM_WAVE_OSC1_LEN } } },
-        { .title = "OSC2", .param_bank = { .params = { PARAM_WAVE_OSC2_TABLE, PARAM_WAVE_OSC2_POS, PARAM_WAVE_OSC2_START, PARAM_WAVE_OSC2_LEN } } },
+        { .title = "OSC1", .param_bank = { .params = { UI_PARAM_LOCAL_WAVE_OSC1, PARAM_WAVE_OSC1_POS, PARAM_WAVE_OSC1_START, PARAM_WAVE_OSC1_LEN } } },
+        { .title = "OSC2", .param_bank = { .params = { UI_PARAM_LOCAL_WAVE_OSC2, PARAM_WAVE_OSC2_POS, PARAM_WAVE_OSC2_START, PARAM_WAVE_OSC2_LEN } } },
         { .title = "COMMON", .param_bank = { .params = { PARAM_WAVE_VOLUME, PARAM_WAVE_BALANCE, PARAM_WAVE_TUNE, PARAM_WAVE_DETUNE } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
@@ -288,7 +293,7 @@ static ui_template_family_t g_ui_template_tone_family_fm = {
     .nav_labels = { "GLOBAL", "OP QUICK", "PITCH R", "PITCH L" },
     .subpages = {
         { .title = "GLOBAL", .param_bank = { .params = { PARAM_FM_ALGORITHM, PARAM_FM_ENV_ATTACK, PARAM_FM_ENV_DECAY, PARAM_FM_TRANSPOSE } } },
-        { .title = "OP QUICK", .param_bank = { .params = { PARAM_FM_OPERATOR_SELECT, PARAM_FM_OP1_FREQ, PARAM_FM_OP1_LEVEL, PARAM_FM_OP1_DETUNE } } },
+        { .title = "OP QUICK", .param_bank = { .params = { UI_PARAM_LOCAL_FM_OPERATOR, PARAM_FM_OP1_FREQ, PARAM_FM_OP1_LEVEL, PARAM_FM_OP1_DETUNE } } },
         { .title = "PITCH R", .param_bank = { .params = { PARAM_FM_PITCH_R1, PARAM_FM_PITCH_R2, PARAM_FM_PITCH_R3, PARAM_FM_PITCH_R4 } } },
         { .title = "PITCH L", .param_bank = { .params = { PARAM_FM_PITCH_L1, PARAM_FM_PITCH_L2, PARAM_FM_PITCH_L3, PARAM_FM_PITCH_L4 } } },
     },
@@ -299,7 +304,7 @@ static ui_template_family_t g_ui_template_tone_family_fm_operator = {
     .family_title = "TONE 2/2",
     .nav_labels = { "VOICE", "ENV", "MOD", "-" },
     .subpages = {
-        { .title = "VOICE", .param_bank = { .params = { PARAM_FM_OPERATOR_SELECT, PARAM_FM_OP1_LEVEL, PARAM_FM_OP1_FREQ, PARAM_FM_OP1_DETUNE } } },
+        { .title = "VOICE", .param_bank = { .params = { UI_PARAM_LOCAL_FM_OPERATOR, PARAM_FM_OP1_LEVEL, PARAM_FM_OP1_FREQ, PARAM_FM_OP1_DETUNE } } },
         { .title = "ENV", .param_bank = { .params = { PARAM_FM_OP1_ENV_ATTACK, PARAM_FM_OP1_ENV_DECAY, PARAM_FM_OP1_ENV_SUSTAIN, PARAM_FM_OP1_ENV_RELEASE } } },
         { .title = "MOD", .param_bank = { .params = { PARAM_FM_OP1_ON, PARAM_FM_OP1_MODE, PARAM_FM_OP1_VEL, PARAM_FM_OP1_KEY } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },

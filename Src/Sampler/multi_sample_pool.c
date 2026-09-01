@@ -27,6 +27,23 @@ static CTRL_STATE uint16_t g_multi_sample_count;
 static CTRL_STATE uint16_t g_multi_zone_count;
 static CTRL_STATE uint8_t
     g_multi_retire_stop_committed[MULTI_SAMPLE_POOL_MAX_INSTRUMENTS];
+static CTRL_STATE uint8_t g_multi_retire_invariant_failed;
+static CTRL_STATE uint8_t g_multi_clear_active;
+
+void multi_sample_pool_clear_begin(void)
+{
+    g_multi_clear_active = 1U;
+}
+
+void multi_sample_pool_clear_end(void)
+{
+    g_multi_clear_active = 0U;
+}
+
+uint8_t multi_sample_pool_clear_is_active(void)
+{
+    return g_multi_clear_active;
+}
 
 static uint8_t multi_sample_instrument_id_valid(uint16_t instrument_id)
 {
@@ -147,9 +164,11 @@ void multi_sample_pool_init(void)
 
 void multi_sample_pool_reset(void)
 {
+    g_multi_clear_active = 0U;
     multi_sample_audio_projection_init();
     memset(g_multi_retire_stop_committed, 0,
            sizeof(g_multi_retire_stop_committed));
+    g_multi_retire_invariant_failed = 0U;
     memset(g_multi_instruments, 0, sizeof(g_multi_instruments));
     memset(g_multi_samples, 0, sizeof(g_multi_samples));
     memset(g_multi_zones, 0, sizeof(g_multi_zones));
@@ -390,8 +409,15 @@ uint8_t multi_sample_pool_clear_instrument(uint16_t instrument_id)
     return 1U;
 }
 
+void multi_sample_pool_retire_all(void)
+{
+    for (uint16_t i = 0U; i < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++i)
+        (void)multi_sample_pool_clear_instrument(i);
+}
+
 void multi_sample_pool_service_retire(void)
 {
+    if (g_multi_retire_invariant_failed != 0U) return;
     for (uint16_t i = 0U; i < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++i)
     {
         multi_sample_instrument_t *const instrument =
@@ -404,7 +430,11 @@ void multi_sample_pool_service_retire(void)
             uint64_t due_sample = 0U;
             if (!live_clock_read_audio_sample(&due_sample)) continue;
             if (control_audio_publish_param((uint8_t)i, 0xFFF5U, 0U, 0U,
-                                            due_sample) == 0U) continue;
+                                            due_sample) == 0U)
+            {
+                g_multi_retire_invariant_failed = 1U;
+                continue;
+            }
             g_multi_retire_stop_committed[i] = 1U;
         }
         uint8_t leased = 0U;
@@ -423,11 +453,17 @@ void multi_sample_pool_service_retire(void)
 
 uint8_t multi_sample_pool_retire_idle(void)
 {
+    if (g_multi_retire_invariant_failed != 0U) return 0U;
     for (uint16_t i = 0U; i < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++i)
         if ((g_multi_instruments[i].used != 0U)
             && (g_multi_instruments[i].desc.state
                 == MULTI_SAMPLE_INSTRUMENT_RETIRING)) return 0U;
     return 1U;
+}
+
+uint8_t multi_sample_pool_retire_failed(void)
+{
+    return g_multi_retire_invariant_failed;
 }
 
 uint8_t multi_sample_pool_resolve(uint16_t instrument_id,

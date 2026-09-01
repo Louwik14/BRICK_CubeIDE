@@ -22,6 +22,7 @@
 #include "IPC/control_audio_publication.h"
 #include "IPC/live_clock_control.h"
 #include "IPC/sd_preview_ring_contract.h"
+#include "Storage/project_load_quiesce.h"
 #include "stm32h7xx_hal.h"
 
 #if defined(__has_include)
@@ -519,6 +520,7 @@ float sd_preview_get_gain(void)
 
 uint8_t sd_preview_begin_range(const char *path, uint32_t start_frame, uint32_t end_frame)
 {
+    if (project_replacement_is_active() != 0U) return 0U;
     if (audio_recorder_is_active() != 0U)
     {
         sd_preview_set_error(SD_PREVIEW_ERROR_RECORD_ACTIVE);

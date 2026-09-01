@@ -3,7 +3,6 @@
 
 #include <stdint.h>
 
-#include "Platform/brick_build_config.h"
 #include "App/encoder_binding.h"
 
 typedef enum
@@ -49,9 +48,5 @@ void encoders_set_binding_snapshot(const encoder_binding_snapshot_t *snapshot);
 uint8_t encoder_detent_event_pop(encoder_detent_event_t *out_event);
 uint32_t encoder_detent_event_pending_count(void);
 uint32_t encoder_detent_event_overflow_count(void);
-
-#if BRICK_TEST_BUILD
-uint8_t encoder_test_inject_delta(uint8_t encoder, int16_t delta);
-#endif
 
 #endif

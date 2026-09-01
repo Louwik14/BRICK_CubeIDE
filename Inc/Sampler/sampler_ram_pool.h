@@ -5,6 +5,7 @@
 
 #include "Sampler/sample_global_pool.h"
 #include "IPC/sampler_ram_audio_projection.h"
+#include "Storage/wav_parser.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,10 +36,8 @@ typedef enum
     SAMPLER_RAM_RESULT_GLOBAL_BUDGET_FULL,
     SAMPLER_RAM_RESULT_RAM_POOL_FULL,
     SAMPLER_RAM_RESULT_PATH_TOO_LONG,
-    SAMPLER_RAM_RESULT_SD_BUSY,
     SAMPLER_RAM_RESULT_SD_MOUNT_FAIL,
     SAMPLER_RAM_RESULT_OPEN_FAIL,
-    SAMPLER_RAM_RESULT_WAV_PARSE_FAIL,
     SAMPLER_RAM_RESULT_WAV_UNSUPPORTED,
     SAMPLER_RAM_RESULT_TOO_LARGE,
     SAMPLER_RAM_RESULT_READ_FAIL,
@@ -104,21 +103,25 @@ uint8_t sampler_ram_format_cost_bytes(sampler_ram_format_t format,
                                       uint32_t *out_logical_bytes,
                                       uint32_t *out_page_count,
                                       uint32_t *out_cost_bytes);
+uint8_t sampler_ram_pool_inspect_wav(const wav_info_t *info,
+                                     uint32_t *out_frames,
+                                     uint32_t *out_data_bytes,
+                                     uint32_t *out_page_count,
+                                     uint32_t *out_cost_bytes);
 
 void sampler_ram_pool_init(void);
-void sampler_ram_pool_reset(void);
+uint8_t sampler_ram_pool_reset_quiesced(void);
 
 uint16_t sampler_ram_pool_find_free_slot(void);
-sampler_ram_result_t sampler_ram_pool_load_wav(uint16_t ram_slot,
-                                               const char *path,
-                                               uint16_t *out_global_slot);
-sampler_ram_result_t sampler_ram_pool_load_wav_at(uint16_t ram_slot,
-                                                  uint16_t global_slot,
-                                                  const char *path);
-sampler_ram_result_t sampler_ram_pool_load_wav_auto(const char *path,
-                                                    uint16_t *out_ram_slot,
-                                                    uint16_t *out_global_slot);
 uint8_t sampler_ram_pool_load_async_begin(uint16_t ram_slot, const char *path);
+uint8_t sampler_ram_pool_load_async_begin_prepared(uint16_t ram_slot,
+                                                   const char *path,
+                                                   const wav_info_t *info,
+                                                   uint32_t source_file_size,
+                                                   uint32_t source_crc32,
+                                                   uint32_t data_bytes,
+                                                   uint32_t page_count,
+                                                   uint32_t cost_bytes);
 void sampler_ram_pool_load_async_service(void);
 uint8_t sampler_ram_pool_load_async_busy(void);
 void sampler_ram_pool_load_async_cancel(void);
@@ -127,8 +130,10 @@ uint8_t sampler_ram_pool_load_async_take_result(sampler_ram_result_t *out_result
                                                 uint16_t *out_global_slot,
                                                 const char **out_path);
 void sampler_ram_pool_clear(uint16_t ram_slot);
+void sampler_ram_pool_retire_all(void);
 void sampler_ram_pool_service_retire(void);
 uint8_t sampler_ram_pool_retire_idle(void);
+uint8_t sampler_ram_pool_retire_failed(void);
 
 const sampler_ram_slot_t *sampler_ram_pool_get_slot(uint16_t ram_slot);
 sampler_ram_slot_state_t sampler_ram_pool_get_state(uint16_t ram_slot);

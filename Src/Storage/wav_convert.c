@@ -8,6 +8,7 @@
 #include "Storage/audio_recorder.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/storage_shared_io.h"
+#include "Storage/project_load_quiesce.h"
 #include "Storage/wav_audio_stream.h"
 #include "ff.h"
 
@@ -303,6 +304,7 @@ static void wav_convert_fail(wav_convert_error_t error)
 
 uint8_t wav_convert_start_destructive_48k(const char *path)
 {
+    if (project_replacement_is_active() != 0U) return 0U;
     if ((path == 0) || (path[0] == '\0'))
     {
         return 0U;

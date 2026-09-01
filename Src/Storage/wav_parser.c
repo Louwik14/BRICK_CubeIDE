@@ -19,6 +19,11 @@
 #include "wav_parser.h"
 #include <string.h>
 
+#include "Platform/memory_layout.h"
+
+#define WAV_PARSER_CRC_IO_BYTES (4096U)
+STORAGE_STATE_SDRAM static uint8_t g_wav_parser_crc_io[WAV_PARSER_CRC_IO_BYTES];
+
 #define WAV_FMT_PCM        1
 #define WAV_FMT_EXTENSIBLE 65534
 
@@ -234,4 +239,31 @@ bool wav_parser_parse_info(FIL *fp, wav_info_t *info)
                            &byte_rate,
                            &data_offset,
                            &data_size);
+}
+
+uint8_t wav_parser_crc32_file(FIL *fp, uint32_t *out_crc32)
+{
+    if ((fp == NULL) || (out_crc32 == NULL) || (f_lseek(fp, 0U) != FR_OK))
+        return 0U;
+
+    uint32_t crc = 0xFFFFFFFFUL;
+    for (;;)
+    {
+        UINT read = 0U;
+        if ((f_read(fp, g_wav_parser_crc_io, sizeof(g_wav_parser_crc_io), &read)
+             != FR_OK))
+            return 0U;
+        if (read == 0U) break;
+        for (UINT i = 0U; i < read; ++i)
+        {
+            crc ^= g_wav_parser_crc_io[i];
+            for (uint8_t bit = 0U; bit < 8U; ++bit)
+            {
+                const uint32_t mask = 0U - (crc & 1U);
+                crc = (crc >> 1U) ^ (0xEDB88320UL & mask);
+            }
+        }
+    }
+    *out_crc32 = ~crc;
+    return (f_lseek(fp, 0U) == FR_OK) ? 1U : 0U;
 }

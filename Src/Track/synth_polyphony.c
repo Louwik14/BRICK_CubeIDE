@@ -189,15 +189,18 @@ uint8_t synth_polyphony_set_track_active(uint8_t track, uint8_t active, uint8_t 
         poly->render_voice_count = 0U;
         poly->renderable_voice_mask = 0U;
         __DMB();
-        while (poly->voice_count > 0U)
+        for (uint8_t voice = 0U;
+             voice < SYNTH_POLYPHONY_MAX_VOICES;
+             ++voice)
         {
-            const uint8_t slot = synth_polyphony_find_slot(track, (uint8_t)(poly->voice_count - 1U));
+            if (voice >= poly->voice_count)
+                break;
+            const uint8_t slot = synth_polyphony_find_slot(track, voice);
             synth_polyphony_reset_slot(slot);
             synth_polyphony_release_slot(slot);
-            poly->slots[poly->voice_count - 1U] = SYNTH_POLYPHONY_NO_VOICE;
+            poly->slots[voice] = SYNTH_POLYPHONY_NO_VOICE;
             if (slot < SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
                 memset(&g_synth_voice[slot], 0, sizeof(g_synth_voice[slot]));
-            poly->voice_count--;
         }
         poly->active = 0U;
         poly->voice_count = 1U;

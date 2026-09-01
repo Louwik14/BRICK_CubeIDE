@@ -630,10 +630,10 @@ static void mixer_multi_filter_process_biquad(multi_voice_dsp_slot_t *slot,
     const float resonance_start = slot->resonance;
     const float keytrack_ratio_start = slot->keytrack_ratio;
     const uint8_t filter_env_modulated = (slot->eg_amount != 0.0f) ? 1U : 0U;
-    const env_adsr_peaks_stage_t env_stage = env_adsr_stage(&slot->filter_env);
+    const env_adsr_stage_t env_stage = env_adsr_stage(&slot->filter_env);
     const uint8_t env_static = (uint8_t)((filter_env_modulated == 0U)
-        || (env_stage == ENV_ADSR_PEAKS_STAGE_IDLE)
-        || (env_stage == ENV_ADSR_PEAKS_STAGE_SUSTAIN));
+        || (env_stage == ENV_ADSR_STAGE_IDLE)
+        || (env_stage == ENV_ADSR_STAGE_SUSTAIN));
     const uint8_t transition_active = 0U;
     if ((slot->morph_ramp_remaining == 0U) && (env_static != 0U) && (transition_active == 0U))
     {
@@ -781,7 +781,7 @@ uint8_t mixer_multi_voice_vca_requires_source(
     {
         return 0U;
     }
-    return (env_adsr_stage(&slot->vca_env) != ENV_ADSR_PEAKS_STAGE_IDLE) ? 1U : 0U;
+    return (env_adsr_stage(&slot->vca_env) != ENV_ADSR_STAGE_IDLE) ? 1U : 0U;
 }
 
 static void mixer_multi_filter_prepare_block(uint32_t track_id,
@@ -840,49 +840,49 @@ void mixer_multi_filter_set_voice_eg_amount(multi_voice_dsp_slot_t *slot, float 
 void mixer_multi_filter_set_voice_env_attack(multi_voice_dsp_slot_t *slot, float seconds)
 {
     if (slot != NULL) env_adsr_set_attack(&slot->filter_env,
-        mixer_track_filter_time_s_to_peaks(seconds, slot->sample_rate));
+        mixer_track_filter_time_s_to_env_units(seconds, slot->sample_rate));
 }
 
 void mixer_multi_filter_set_voice_env_decay(multi_voice_dsp_slot_t *slot, float seconds)
 {
     if (slot != NULL) env_adsr_set_decay(&slot->filter_env,
-        mixer_track_filter_time_s_to_peaks(seconds, slot->sample_rate));
+        mixer_track_filter_time_s_to_env_units(seconds, slot->sample_rate));
 }
 
 void mixer_multi_filter_set_voice_env_sustain(multi_voice_dsp_slot_t *slot, float sustain)
 {
     if (slot != NULL) env_adsr_set_sustain(&slot->filter_env,
-        mixer_track_filter_sustain_to_peaks(sustain));
+        mixer_track_filter_sustain_to_env_units(sustain));
 }
 
 void mixer_multi_filter_set_voice_env_release(multi_voice_dsp_slot_t *slot, float seconds)
 {
     if (slot != NULL) env_adsr_set_release(&slot->filter_env,
-        mixer_track_filter_time_s_to_peaks(seconds, slot->sample_rate));
+        mixer_track_filter_time_s_to_env_units(seconds, slot->sample_rate));
 }
 
 void mixer_multi_filter_set_voice_vca_attack(multi_voice_dsp_slot_t *slot, float seconds)
 {
     if (slot != NULL) env_adsr_set_attack(&slot->vca_env,
-        mixer_track_filter_time_s_to_peaks(seconds, slot->sample_rate));
+        mixer_track_filter_time_s_to_env_units(seconds, slot->sample_rate));
 }
 
 void mixer_multi_filter_set_voice_vca_decay(multi_voice_dsp_slot_t *slot, float seconds)
 {
     if (slot != NULL) env_adsr_set_decay(&slot->vca_env,
-        mixer_track_filter_time_s_to_peaks(seconds, slot->sample_rate));
+        mixer_track_filter_time_s_to_env_units(seconds, slot->sample_rate));
 }
 
 void mixer_multi_filter_set_voice_vca_sustain(multi_voice_dsp_slot_t *slot, float sustain)
 {
     if (slot != NULL) env_adsr_set_sustain(&slot->vca_env,
-        mixer_track_filter_sustain_to_peaks(sustain));
+        mixer_track_filter_sustain_to_env_units(sustain));
 }
 
 void mixer_multi_filter_set_voice_vca_release(multi_voice_dsp_slot_t *slot, float seconds)
 {
     if (slot != NULL) env_adsr_set_release(&slot->vca_env,
-        mixer_track_filter_time_s_to_peaks(seconds, slot->sample_rate));
+        mixer_track_filter_time_s_to_env_units(seconds, slot->sample_rate));
 }
 
 void mixer_multi_filter_process_prepared(uint32_t track_id,

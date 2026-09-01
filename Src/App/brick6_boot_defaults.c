@@ -3,7 +3,7 @@
  * @brief Application des defaults paramètres au boot.
  *
  * Rôle du module:
- * - Regrouper la séquence de param_reset(...) utilisée au démarrage.
+ * - Regrouper l'installation des valeurs CONTROL par défaut au démarrage.
  *
  * Frontière:
  * - N'embarque aucune logique runtime.
@@ -16,56 +16,25 @@
 
 void brick6_boot_apply_param_defaults(void)
 {
-    param_reset(PARAM_KBD_ROOT);
-    param_reset(PARAM_KBD_SCALE);
-    param_reset(PARAM_KBD_OMNICHORD);
-    param_reset(PARAM_KBD_NOTE_ORDER);
-    param_reset(PARAM_KBD_CHORD_OVERRIDE);
-    param_reset(PARAM_MIX_SEND0_FX);
-    param_reset(PARAM_MIX_SEND1_FX);
-    param_reset(PARAM_MODFX_MODEL);
-    param_reset(PARAM_MODFX_RATE);
-    param_reset(PARAM_MODFX_DEPTH);
-    param_reset(PARAM_MODFX_FEEDBACK);
-    param_reset(PARAM_MODFX_OFFSET);
-    param_reset(PARAM_BUS_COMP_THRESHOLD_DB);
-    param_reset(PARAM_BUS_COMP_RATIO);
-    param_reset(PARAM_BUS_COMP_ATTACK_INDEX);
-    param_reset(PARAM_BUS_COMP_RELEASE_INDEX);
-    param_reset(PARAM_BUS_COMP_MAKEUP_DB);
-    param_reset(PARAM_BUS_COMP_AUTO_MAKEUP);
-    param_reset(PARAM_BUS_COMP_DRYWET);
-    param_reset(PARAM_BUS_COMP_HPF_HZ);
-    param_reset(PARAM_EQ_LOW_DB);
-    param_reset(PARAM_EQ_MID_DB);
-    param_reset(PARAM_EQ_HIGH_DB);
-    param_reset(PARAM_SAT_TONE);
-    param_reset(PARAM_SAT_BIAS);
-    param_reset(PARAM_SAT_DRIVE);
-    param_reset(PARAM_SAT_MIX);
-    param_reset(PARAM_COMP_MODEL);
-    param_reset(PARAM_COMP_DETECT);
-    param_reset(PARAM_COMP_KNEE_DB);
-    param_reset(PARAM_COMP_DELUGE_SAT);
-    param_reset(PARAM_MIX_REVERB_DELAYS);
-    param_reset(PARAM_MIX_DELAY_TYPE);
-    param_reset(PARAM_MIX_DELAY_TIME);
-    param_reset(PARAM_MIX_DELAY_PINGPONG);
-    param_reset(PARAM_MIX_DELAY_MODE);
-    param_reset(PARAM_MIX_DELAY_TIME_R);
-    param_reset(PARAM_MIX_DELAY_WIDTH);
-    param_reset(PARAM_MIX_DELAY_FEEDBACK);
-    param_reset(PARAM_MIX_DELAY_SPECTRAL_POSITION);
-    param_reset(PARAM_MIX_DELAY_SPECTRAL_WIDTH);
-    param_reset(PARAM_MIX_DELAY_FBW);
-    param_reset(PARAM_MIX_DELAY_MOD);
-    param_reset(PARAM_MIX_DELAY_MOD_RATE);
-    param_reset(PARAM_MIX_DELAY_REV);
-    param_reset(PARAM_MIX_DELAY_VOL);
-    param_reset(PARAM_MIX_REVERB_WET);
-    param_reset(PARAM_MIX_REVERB_ROOM_SIZE);
-    param_reset(PARAM_MIX_REVERB_DAMPING);
-    param_reset(PARAM_MIX_REVERB_WIDTH);
-    param_reset(PARAM_MIX_REVERB_HPF);
-    param_reset(PARAM_MIX_REVERB_LPF);
+    const param_id_t globals[] = {
+        PARAM_MIX_SEND0_FX, PARAM_MIX_SEND1_FX, PARAM_MODFX_MODEL,
+        PARAM_MODFX_RATE, PARAM_MODFX_DEPTH, PARAM_MODFX_FEEDBACK,
+        PARAM_MODFX_OFFSET, PARAM_BUS_COMP_THRESHOLD_DB, PARAM_BUS_COMP_RATIO,
+        PARAM_BUS_COMP_ATTACK_INDEX, PARAM_BUS_COMP_RELEASE_INDEX,
+        PARAM_BUS_COMP_MAKEUP_DB, PARAM_BUS_COMP_AUTO_MAKEUP,
+        PARAM_BUS_COMP_DRYWET, PARAM_BUS_COMP_HPF_HZ, PARAM_EQ_LOW_DB,
+        PARAM_EQ_MID_DB, PARAM_EQ_HIGH_DB, PARAM_SAT_TONE, PARAM_SAT_BIAS,
+        PARAM_SAT_DRIVE, PARAM_SAT_MIX, PARAM_COMP_MODEL, PARAM_COMP_DETECT,
+        PARAM_COMP_KNEE_DB, PARAM_COMP_DELUGE_SAT, PARAM_MIX_REVERB_DELAYS,
+        PARAM_MIX_DELAY_TYPE, PARAM_MIX_DELAY_PINGPONG,
+        PARAM_MIX_DELAY_MODE, PARAM_MIX_DELAY_WIDTH,
+        PARAM_MIX_DELAY_FEEDBACK, PARAM_MIX_DELAY_SPECTRAL_POSITION,
+        PARAM_MIX_DELAY_SPECTRAL_WIDTH, PARAM_MIX_DELAY_FBW,
+        PARAM_MIX_DELAY_MOD, PARAM_MIX_DELAY_MOD_RATE, PARAM_MIX_DELAY_REV,
+        PARAM_MIX_DELAY_VOL, PARAM_MIX_REVERB_WET,
+        PARAM_MIX_REVERB_ROOM_SIZE, PARAM_MIX_REVERB_DAMPING,
+        PARAM_MIX_REVERB_WIDTH, PARAM_MIX_REVERB_HPF, PARAM_MIX_REVERB_LPF
+    };
+    for (uint32_t i = 0U; i < (uint32_t)(sizeof(globals) / sizeof(globals[0])); ++i)
+        (void)param_registry_reset_global(globals[i]);
 }

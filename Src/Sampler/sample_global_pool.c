@@ -32,18 +32,25 @@ static uint8_t sample_global_copy_path(char *dst, uint32_t dst_size, const char 
     }
 
     uint32_t i = 0U;
-    while ((i + 1U) < dst_size)
+    uint8_t previous_slash = 0U;
+    while (*src != '\0')
     {
-        dst[i] = src[i];
-        if (src[i] == '\0')
+        char value = *src++;
+        if (value == '\\') value = '/';
+        if (value == '/')
         {
-            return 1U;
+            if (previous_slash != 0U) continue;
+            previous_slash = 1U;
         }
-        i++;
+        else previous_slash = 0U;
+        if ((value >= 'A') && (value <= 'Z'))
+            value = (char)(value + ('a' - 'A'));
+        if ((i + 1U) >= dst_size) return 0U;
+        dst[i++] = value;
     }
-
+    while ((i > 1U) && (dst[i - 1U] == '/')) --i;
     dst[i] = '\0';
-    return (src[i] == '\0') ? 1U : 0U;
+    return 1U;
 }
 
 static uint32_t sample_global_used_bytes_without(sample_global_kind_t kind,
@@ -432,6 +439,33 @@ uint8_t sample_global_pool_load_classic(uint16_t global_index, const char *path)
     return 1U;
 }
 
+uint8_t sample_global_pool_load_classic_prepared(uint16_t global_index,
+                                                 const char *path,
+                                                 const wav_info_t *info,
+                                                 uint32_t source_file_size,
+                                                 uint32_t source_crc32,
+                                                 uint32_t prepared_cost_bytes)
+{
+    if ((global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+        || (path == NULL) || (path[0] == '\0')
+        || (strlen(path) >= SAMPLE_GLOBAL_POOL_PATH_MAX)
+        || ((g_sample_global_pool[global_index].kind != SAMPLE_GLOBAL_KIND_EMPTY)
+            && (g_sample_global_pool[global_index].kind != SAMPLE_GLOBAL_KIND_CLASSIC)))
+    {
+        g_sample_classic_last_error = SAMPLE_CLASSIC_LOAD_INVALID_PATH;
+        return 0U;
+    }
+    if (sample_cache_prepare_prevalidated(global_index, path, info,
+                                          source_file_size, source_crc32,
+                                          prepared_cost_bytes) == 0U)
+    {
+        g_sample_classic_last_error = sample_global_classic_error_from_cache(global_index);
+        return 0U;
+    }
+    g_sample_classic_last_error = SAMPLE_CLASSIC_LOAD_OK;
+    return 1U;
+}
+
 void sample_global_pool_clear_classic(uint16_t global_index)
 {
     if (global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS) return;
@@ -533,32 +567,6 @@ uint8_t sample_global_pool_register_ram_at(uint16_t global_index,
                                            ram_slot,
                                            path,
                                            cost_bytes,
-                                           1U);
-}
-
-uint8_t sample_global_pool_register_ram_error(uint16_t ram_slot,
-                                              const char *path,
-                                              uint16_t *out_global_index)
-{
-    return sample_global_pool_register(SAMPLE_GLOBAL_KIND_RAM,
-                                       SAMPLE_GLOBAL_STATE_ERROR,
-                                       ram_slot,
-                                       path,
-                                       0U,
-                                       1U,
-                                       out_global_index);
-}
-
-uint8_t sample_global_pool_register_ram_error_at(uint16_t global_index,
-                                                 uint16_t ram_slot,
-                                                 const char *path)
-{
-    return sample_global_pool_register_at(SAMPLE_GLOBAL_KIND_RAM,
-                                          SAMPLE_GLOBAL_STATE_ERROR,
-                                          global_index,
-                                           ram_slot,
-                                           path,
-                                           0U,
                                            1U);
 }
 

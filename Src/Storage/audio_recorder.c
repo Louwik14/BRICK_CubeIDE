@@ -5,16 +5,19 @@
 #include "SD/sd_scheduler_runtime.h"
 #include "Storage/audio_recorder_wav.h"
 #include "Storage/generic_recorder_adapters.h"
+#include "Sampler/sample_audio_key.h"
+#include "Sampler/sample_page_cache.h"
+#include "Sampler/sample_page_lease_control.h"
 #include "Platform/memory_layout.h"
 #include "Storage/sd_access_gate.h"
 #include "IPC/control_audio_command.h"
 #include "IPC/control_audio_publication.h"
 #include "IPC/audio_recorder_capture_contract.h"
 #include "IPC/live_clock_control.h"
-#include "Param/param_registry.h"
 #include "Storage/looper_storage.h"
 #include "Storage/wav_loader.h"
 #include "Storage/waveform_cache.h"
+#include "Storage/project_load_quiesce.h"
 #include "Track/control_routing.h"
 #include "Track/track_state.h"
 #include "ff.h"
@@ -77,8 +80,104 @@ typedef struct
 } audio_recorder_looper_control_t;
 
 static audio_recorder_looper_control_t g_audio_recorder_looper_control;
+static audio_recorder_looper_config_t
+    g_audio_recorder_looper_config[BRICK_ENTITY_CAPACITY];
 static uint8_t g_audio_recorder_looper_take_track = 0xFFU;
 static uint8_t g_audio_recorder_looper_take_notified;
+static uint8_t g_audio_recorder_looper_admission_open;
+static uint8_t g_audio_recorder_looper_stream_registered;
+static sample_audio_key_t g_audio_recorder_looper_stream_key;
+static uint32_t g_audio_recorder_looper_stream_readable_frames;
+
+static void audio_recorder_reset_looper_control(void)
+{
+    memset(&g_audio_recorder_looper_control, 0,
+           sizeof(g_audio_recorder_looper_control));
+    g_audio_recorder_looper_control.track = 0xFFU;
+}
+
+uint8_t audio_recorder_control_get_looper_config(
+    uint8_t track, audio_recorder_looper_config_t *out_config)
+{
+    if ((track >= BRICK_ENTITY_CAPACITY) || (out_config == NULL)) return 0U;
+    *out_config = g_audio_recorder_looper_config[track];
+    return 1U;
+}
+
+uint8_t audio_recorder_control_set_looper_config(
+    uint8_t track, const audio_recorder_looper_config_t *config)
+{
+    if ((track >= BRICK_ENTITY_CAPACITY) || (config == NULL)
+            || (config->arm_mode > 2U) || (config->length_mode > 5U)
+            || (config->play_auto > 1U)) return 0U;
+    uint64_t sample = 0U;
+    if ((config->play_auto != g_audio_recorder_looper_config[track].play_auto)
+            && ((live_clock_read_audio_sample(&sample) == 0U)
+                || (control_audio_publish_param(track,
+                    CONTROL_AUDIO_LOOPER_PLAY_AUTO, config->play_auto,
+                    0U, sample) == 0U))) return 0U;
+    g_audio_recorder_looper_config[track] = *config;
+    return 1U;
+}
+
+static void audio_recorder_retire_looper_stream(void)
+{
+    if (g_audio_recorder_looper_stream_registered == 0U) return;
+    sample_page_cache_clear_key(g_audio_recorder_looper_stream_key);
+    g_audio_recorder_looper_stream_registered = 0U;
+    memset(&g_audio_recorder_looper_stream_key, 0,
+           sizeof(g_audio_recorder_looper_stream_key));
+    g_audio_recorder_looper_stream_readable_frames = 0U;
+}
+
+static void audio_recorder_register_looper_stream(void)
+{
+    recorder_file_reservation_map_snapshot_t map;
+    const uint32_t total_frames = g_audio_recorder_capture.head_cursor;
+    const uint32_t readable_frames = (uint32_t)(
+        g_audio_recorder.recorder.committed_tail / AUDIO_RECORDER_BYTES_PER_FRAME);
+    const uint8_t track = g_audio_recorder_looper_take_track;
+    if (g_audio_recorder.client != AUDIO_RECORDER_CLIENT_LOOPER) return;
+
+    audio_recorder_retire_looper_stream();
+    if ((g_audio_recorder_looper_admission_open == 0U)
+            || (track >= BRICK_ENTITY_CAPACITY)
+            || (total_frames == 0U)
+            || (recorder_file_reservation_map_snapshot(
+                    &g_audio_recorder.reservation, &map) == 0U)
+            || (map.reserved_file_bytes > UINT32_MAX))
+        return;
+
+    const sample_audio_key_t key = sample_audio_key_looper(track);
+    if (sample_page_cache_register_live_pcm24_stereo_sample_key(
+            key, g_audio_recorder.temporary_path, total_frames,
+            readable_frames, AUDIO_RECORDER_WAV_HEADER_BYTES,
+            (uint32_t)map.reserved_file_bytes, map.extents,
+            map.extent_count, map.media_epoch) == 0U)
+        return;
+    g_audio_recorder_looper_stream_registered = 1U;
+    g_audio_recorder_looper_stream_key = key;
+    g_audio_recorder_looper_stream_readable_frames = readable_frames;
+}
+
+static void audio_recorder_enter_draining(void)
+{
+    if (g_audio_recorder.state == AUDIO_RECORDER_STATE_DRAINING) return;
+    g_audio_recorder.state = AUDIO_RECORDER_STATE_DRAINING;
+    audio_recorder_register_looper_stream();
+}
+
+static void audio_recorder_update_looper_stream_readable(void)
+{
+    if (g_audio_recorder_looper_stream_registered == 0U) return;
+    const uint32_t readable_frames = (uint32_t)(
+        g_audio_recorder.recorder.committed_tail / AUDIO_RECORDER_BYTES_PER_FRAME);
+    if (readable_frames == g_audio_recorder_looper_stream_readable_frames) return;
+    if (sample_page_cache_update_readable_frames_key(
+            g_audio_recorder_looper_stream_key,
+            readable_frames) != 0U)
+        g_audio_recorder_looper_stream_readable_frames = readable_frames;
+}
 
 static uint8_t audio_recorder_publish_start_client_at(
     audio_recorder_client_t client, uint64_t sample_time)
@@ -250,6 +349,11 @@ static sd_scheduler_start_result_t audio_recorder_finalization_step(
                 return SD_SCHEDULER_START_BUSY;
             if (reservation_result != RECORDER_FILE_RESERVATION_OK)
                 return SD_SCHEDULER_START_ERROR;
+            if (runtime->client == AUDIO_RECORDER_CLIENT_LOOPER
+                    && g_audio_recorder_looper_stream_registered != 0U)
+                (void)sample_page_cache_update_stream_path_key(
+                    g_audio_recorder_looper_stream_key,
+                    runtime->final_path);
             runtime->final_phase = AUDIO_RECORDER_FINAL_DONE;
             runtime->metrics.finalization_duration_us =
                 (HAL_GetTick() - runtime->final_started_ms) * 1000U;
@@ -299,9 +403,14 @@ void audio_recorder_init(void)
     g_audio_recorder.state = AUDIO_RECORDER_STATE_IDLE;
     g_audio_recorder_capture.tail_cursor = 0U;
     g_audio_recorder_control_session = 0U;
-    memset(&g_audio_recorder_looper_control, 0,
-           sizeof(g_audio_recorder_looper_control));
-    g_audio_recorder_looper_control.track = 0xFFU;
+    audio_recorder_reset_looper_control();
+    memset(g_audio_recorder_looper_config, 0,
+           sizeof(g_audio_recorder_looper_config));
+    g_audio_recorder_looper_admission_open = 1U;
+    g_audio_recorder_looper_stream_registered = 0U;
+    memset(&g_audio_recorder_looper_stream_key, 0,
+           sizeof(g_audio_recorder_looper_stream_key));
+    g_audio_recorder_looper_stream_readable_frames = 0U;
     const sd_scheduler_provider_t write_provider =
         generic_recorder_write_provider(&g_audio_recorder.recorder);
     g_audio_recorder.recorder_filesystem_provider =
@@ -321,8 +430,11 @@ uint8_t audio_recorder_prepare_client(audio_recorder_client_t client,
                                       const char *final_wav_path,
                                       uint32_t frame_limit)
 {
+    if (project_replacement_is_active() != 0U) return 0U;
     if ((client == AUDIO_RECORDER_CLIENT_NONE)
             || (temporary_rec_path == 0) || (final_wav_path == 0)
+            || ((client == AUDIO_RECORDER_CLIENT_LOOPER)
+                && (g_audio_recorder_looper_admission_open == 0U))
             || ((g_audio_recorder.state != AUDIO_RECORDER_STATE_IDLE)
                 && (g_audio_recorder.state != AUDIO_RECORDER_STATE_TAKE_READY)
                 && (g_audio_recorder.state != AUDIO_RECORDER_STATE_FAILED)))
@@ -413,6 +525,7 @@ uint8_t audio_recorder_prepare_client(audio_recorder_client_t client,
 uint8_t audio_recorder_start_client_at(audio_recorder_client_t client,
                                        uint64_t sample_time)
 {
+    if (project_replacement_is_active() != 0U) return 0U;
     return audio_recorder_publish_start_client_at(client, sample_time);
 }
 
@@ -439,11 +552,7 @@ uint8_t audio_recorder_cancel_prepared_client(audio_recorder_client_t client)
     g_audio_recorder.temporary_path[0] = '\0';
     g_audio_recorder.final_path[0] = '\0';
     if (client == AUDIO_RECORDER_CLIENT_LOOPER)
-    {
-        memset(&g_audio_recorder_looper_control, 0,
-               sizeof(g_audio_recorder_looper_control));
-        g_audio_recorder_looper_control.track = 0xFFU;
-    }
+        audio_recorder_reset_looper_control();
     return 1U;
 }
 
@@ -466,10 +575,7 @@ static uint8_t audio_recorder_looper_record_eligible(uint8_t track,
     if ((track_state_get_family(track) != TRACK_FAMILY_SAMPLER)
             || (track_state_get_type(track) != TRACK_TYPE_LOOPER))
         return 0U;
-    float arm = 0.0f;
-    if (param_registry_get_track_value(PARAM_LOOPER_ARM, track, &arm) == 0U)
-        return 0U;
-    const uint8_t mode = (uint8_t)(arm + 0.5f);
+    const uint8_t mode = g_audio_recorder_looper_config[track].arm_mode;
     if ((mode != 1U) && (mode != 2U))
         return 0U;
     uint8_t routed = 0U;
@@ -521,13 +627,9 @@ uint8_t audio_recorder_control_sync_looper_arm(uint8_t rec_armed,
     if (count != 1U)
         return 0U;
 
-    float len_value = 0.0f;
-    float play_value = 0.0f;
-    (void)param_registry_get_track_value(PARAM_LOOPER_LEN, selected,
-                                         &len_value);
-    (void)param_registry_get_track_value(PARAM_LOOPER_PLAY, selected,
-                                         &play_value);
-    const uint8_t len_mode = (uint8_t)(len_value + 0.5f);
+    const audio_recorder_looper_config_t config =
+        g_audio_recorder_looper_config[selected];
+    const uint8_t len_mode = config.length_mode;
     uint32_t bars = 0U;
     switch (len_mode)
     {
@@ -563,7 +665,7 @@ uint8_t audio_recorder_control_sync_looper_arm(uint8_t rec_armed,
     g_audio_recorder_looper_take_notified = 0U;
     if (audio_recorder_control_arm_looper(selected, previous_take_track,
             len_mode, expected_frames,
-            ((uint8_t)(play_value + 0.5f) == 1U), overdub,
+            config.play_auto, overdub,
             live_clock_control_sample()) == 0U)
     {
         g_audio_recorder_looper_take_track = previous_take_track;
@@ -583,6 +685,41 @@ uint8_t audio_recorder_control_looper_take_track(uint8_t *out_track)
     return 1U;
 }
 
+void audio_recorder_control_set_looper_admission(uint8_t open)
+{
+    g_audio_recorder_looper_admission_open = (open != 0U) ? 1U : 0U;
+}
+
+uint8_t audio_recorder_control_release_looper_take(void)
+{
+    if (audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_LOOPER) != 0U)
+        return 0U;
+    if ((g_audio_recorder.client == AUDIO_RECORDER_CLIENT_LOOPER)
+            && (g_audio_recorder.state != AUDIO_RECORDER_STATE_TAKE_READY)
+            && (g_audio_recorder.state != AUDIO_RECORDER_STATE_FAILED))
+        return 0U;
+    if (g_audio_recorder_looper_stream_registered != 0U)
+    {
+        if (sample_page_lease_control_references_key(
+                g_audio_recorder_looper_stream_key) != 0U) return 0U;
+        audio_recorder_retire_looper_stream();
+    }
+    g_audio_recorder_looper_take_track = 0xFFU;
+    g_audio_recorder_looper_take_notified = 0U;
+    if (g_audio_recorder.client == AUDIO_RECORDER_CLIENT_LOOPER)
+    {
+        generic_recorder_init(&g_audio_recorder.recorder);
+        recorder_file_reservation_init(&g_audio_recorder.reservation);
+        g_audio_recorder.state = AUDIO_RECORDER_STATE_IDLE;
+        g_audio_recorder.error = AUDIO_RECORDER_ERROR_NONE;
+        g_audio_recorder.client = AUDIO_RECORDER_CLIENT_NONE;
+        g_audio_recorder.temporary_path[0] = '\0';
+        g_audio_recorder.final_path[0] = '\0';
+    }
+    audio_recorder_reset_looper_control();
+    return 1U;
+}
+
 uint8_t audio_recorder_control_arm_looper(uint8_t track,
                                           uint8_t replace_track,
                                           uint8_t len_mode,
@@ -591,8 +728,10 @@ uint8_t audio_recorder_control_arm_looper(uint8_t track,
                                           uint8_t overdub,
                                           uint64_t request_sample)
 {
+    if (project_replacement_is_active() != 0U) return 0U;
     if ((g_audio_recorder.client != AUDIO_RECORDER_CLIENT_LOOPER)
-            || (g_audio_recorder.state != AUDIO_RECORDER_STATE_PREPARED))
+            || (g_audio_recorder.state != AUDIO_RECORDER_STATE_PREPARED)
+            || (g_audio_recorder_looper_admission_open == 0U))
         return 0U;
     const uint16_t replace_config = (replace_track < BRICK_ENTITY_CAPACITY)
         ? (uint16_t)(AUDIO_RECORDER_LOOPER_REPLACE_VALID_FLAG
@@ -637,8 +776,7 @@ uint8_t audio_recorder_control_request_looper_stop(uint64_t request_sample,
         return 0U;
     if (control->recording == 0U)
     {
-        memset(control, 0, sizeof(*control));
-        control->track = 0xFFU;
+        audio_recorder_reset_looper_control();
         return 1U;
     }
     control->stop_armed = 1U;
@@ -666,8 +804,7 @@ void audio_recorder_control_on_looper_boundary(uint8_t track,
         control->actual_start_sample = sample_time;
         control->target_stop_sample = (control->expected_frames != 0U)
             ? sample_time + control->expected_frames : 0U;
-        (void)param_registry_apply_track_value(PARAM_LOOPER_ARM,
-                                                control->track, 0.0f);
+        g_audio_recorder_looper_config[control->track].arm_mode = 0U;
     }
     if ((control->recording != 0U)
             && (((control->target_stop_sample != 0U)
@@ -729,7 +866,7 @@ static void audio_recorder_capture_transport_service(void)
     {
         (void)generic_recorder_request_stop(
             &g_audio_recorder.recorder, HAL_GetTick() * 1000U);
-        g_audio_recorder.state = AUDIO_RECORDER_STATE_DRAINING;
+        audio_recorder_enter_draining();
     }
 }
 
@@ -757,7 +894,7 @@ void audio_recorder_service(void)
         if (g_audio_recorder.error != AUDIO_RECORDER_ERROR_NONE)
         {
         }
-        g_audio_recorder.state = AUDIO_RECORDER_STATE_DRAINING;
+        audio_recorder_enter_draining();
     }
     else if ((g_audio_recorder.recorder.state == GENERIC_RECORDER_FINALIZABLE)
             && (g_audio_recorder.final_phase == AUDIO_RECORDER_FINAL_NONE))
@@ -769,6 +906,7 @@ void audio_recorder_service(void)
     sd_scheduler_runtime_service();
     generic_recorder_service(
         &g_audio_recorder.recorder, HAL_GetTick() * 1000U);
+    audio_recorder_update_looper_stream_readable();
     if ((g_audio_recorder.client == AUDIO_RECORDER_CLIENT_LOOPER)
             && (g_audio_recorder.state == AUDIO_RECORDER_STATE_TAKE_READY)
             && (g_audio_recorder.error == AUDIO_RECORDER_ERROR_NONE)
@@ -845,23 +983,6 @@ uint8_t audio_recorder_is_active(void)
         ? 1U : 0U;
 }
 
-uint8_t audio_recorder_get_live_stream(audio_recorder_client_t client,
-                                       audio_recorder_live_stream_t *stream)
-{
-    if ((stream == 0) || (client == AUDIO_RECORDER_CLIENT_NONE)
-            || (g_audio_recorder.client != client)
-            || (g_audio_recorder.state < AUDIO_RECORDER_STATE_DRAINING)
-            || (g_audio_recorder.state == AUDIO_RECORDER_STATE_FAILED)
-            || (recorder_file_reservation_map_snapshot_owned(
-                &g_audio_recorder.reservation, &stream->reservation) == 0U)) return 0U;
-    stream->accepted_frames = g_audio_recorder_capture.head_cursor;
-    stream->committed_frames = (uint32_t)(g_audio_recorder.recorder.committed_tail
-        / AUDIO_RECORDER_BYTES_PER_FRAME);
-    const char *const path = (g_audio_recorder.state == AUDIO_RECORDER_STATE_TAKE_READY)
-        ? g_audio_recorder.final_path : g_audio_recorder.temporary_path;
-    return audio_recorder_copy_path(stream->path, path);
-}
-
 uint8_t audio_recorder_client_is_active(audio_recorder_client_t client)
 {
     return (uint8_t)((g_audio_recorder.client == client)
@@ -874,4 +995,9 @@ uint8_t audio_recorder_client_is_recording(audio_recorder_client_t client)
             && (g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING)
             && (g_audio_recorder_capture.closed_session
                 != g_audio_recorder_control_session));
+}
+
+uint8_t audio_recorder_looper_take_resource_retained(void)
+{
+    return g_audio_recorder_looper_stream_registered;
 }

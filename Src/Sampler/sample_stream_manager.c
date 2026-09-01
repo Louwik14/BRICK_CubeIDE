@@ -14,7 +14,6 @@
 
 #define SAMPLE_STREAM_CANCEL_REASON_RELEASE_KEY (3U)
 #define SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED (6U)
-#define SAMPLE_STREAM_LOOPER_CONTROL_LOOKAHEAD_PAGES (12U)
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(SAMPLE_CLASSIC_CAPACITY <= SAMPLE_PAGE_CACHE_ID_CAPACITY,
@@ -134,20 +133,32 @@ static uint32_t sample_stream_manager_collect_candidates(
         if (count >= capacity) return count;
         sample_page_lease_t lease;
         if (sample_page_lease_control_read(slot, &lease) == 0U) continue;
-        uint32_t looper_page_count = 0U;
-        if (lease.key.domain == SAMPLE_AUDIO_DOMAIN_LOOPER)
-        {
-            sample_page_stream_info_t info;
-            if ((sample_page_cache_get_stream_info_key(lease.key, &info) != 0U)
+        sample_page_lease_range_t derived = {0};
+        const sample_page_lease_range_t *const tail =
+            (lease.ranges[1].page_count != 0U)
+                ? &lease.ranges[1] : &lease.ranges[0];
+        const uint32_t published_pages = (uint32_t)lease.ranges[0].page_count
+                                       + lease.ranges[1].page_count;
+        sample_page_stream_info_t info;
+        if ((published_pages <= 2U)
+                && (sample_page_cache_get_stream_info_key(
+                        lease.key, &info) != 0U)
                 && (info.frames_per_page != 0U))
-                looper_page_count = (info.total_frames + info.frames_per_page - 1U)
-                                      / info.frames_per_page;
+        {
+            const uint32_t total_pages =
+                (info.total_frames + info.frames_per_page - 1U)
+                / info.frames_per_page;
+            derived.first_page = tail->first_page + tail->page_count;
+            if (derived.first_page < total_pages)
+                derived.page_count =
+                    (lease.key.domain == SAMPLE_AUDIO_DOMAIN_MULTI)
+                        ? SAMPLE_PAGE_MULTI_LOOKAHEAD_PAGES
+                        : SAMPLE_PAGE_CLASSIC_FORWARD_LOOKAHEAD_PAGES;
         }
         uint8_t page_rank = 0U;
         uint8_t first_missing_seen = 0U;
         for (uint8_t range_index = 0U; range_index < 3U; ++range_index)
         {
-            sample_page_lease_range_t derived = {0};
             const sample_page_lease_range_t *range;
             if (range_index < 2U)
             {
@@ -155,23 +166,11 @@ static uint32_t sample_stream_manager_collect_candidates(
             }
             else
             {
-                const sample_page_lease_range_t *const tail =
-                    (lease.ranges[1].page_count != 0U)
-                        ? &lease.ranges[1] : &lease.ranges[0];
-                derived.first_page = tail->first_page + tail->page_count;
-                derived.page_count = (lease.key.domain == SAMPLE_AUDIO_DOMAIN_LOOPER)
-                                       ? (SAMPLE_STREAM_LOOPER_CONTROL_LOOKAHEAD_PAGES - 2U)
-                                       : ((lease.key.domain == SAMPLE_AUDIO_DOMAIN_MULTI)
-                                           ? SAMPLE_PAGE_MULTI_LOOKAHEAD_PAGES
-                                           : SAMPLE_PAGE_CLASSIC_FORWARD_LOOKAHEAD_PAGES);
                 range = &derived;
             }
             for (uint8_t offset = 0U; offset < range->page_count; ++offset, ++page_rank)
             {
-                uint32_t page_index = range->first_page + offset;
-                if ((looper_page_count != 0U)
-                    && (page_index >= looper_page_count))
-                    page_index %= looper_page_count;
+                const uint32_t page_index = range->first_page + offset;
                 const sample_page_state_t state = sample_page_cache_get_page_state_key(
                     lease.key, page_index);
                 if (state == SAMPLE_PAGE_READY)

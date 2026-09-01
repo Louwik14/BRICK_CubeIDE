@@ -1,11 +1,11 @@
 #include "Mod/mod_matrix_control.h"
 
 #include "IPC/live_clock_control.h"
-#include "IPC/live_parameter_audio_publication.h"
+#include "IPC/control_audio_command.h"
+#include "App/live_parameter_audio_publication.h"
 #include "IPC/live_parameter_event.h"
 #include "Mod/mod_destination_control.h"
 #include "Param/param_registry.h"
-#include "Param/param_registry_runtime_state.h"
 #include "Track/entity_topology.h"
 #include "Track/track_sound_state.h"
 

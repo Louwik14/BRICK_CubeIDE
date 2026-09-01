@@ -246,7 +246,6 @@ static inline bool midi_in_isr(void) {
 
 static void midi_send(midi_dest_t dest, const uint8_t *msg, size_t len);
 static void backend_usb_device_send(const uint8_t *msg, size_t len);
-static void backend_usb_host_send(const uint8_t *msg, size_t len) __attribute__((unused));
 static void backend_din_send(const uint8_t *msg, size_t len);
 
 static inline bool midi_is_realtime_clock_transport_status(uint8_t st) {
@@ -885,24 +884,6 @@ static void backend_usb_device_send(const uint8_t *msg, size_t len) {
   }
 
   midi_usb_try_flush();
-}
-
-/**
- * @brief Point d'entrée backend_usb_host_send.
- *
- * Rôle:
- * - Exécuter le traitement associé à backend_usb_host_send.
- *
- * @param msg Paramètre d'entrée de l'API.
- * @param len Paramètre d'entrée de l'API.
- *
- * Contexte d'appel:
- * - init / main loop / tasklet selon le module.
- */
-static void backend_usb_host_send(const uint8_t *msg, size_t len) {
-  (void)msg;
-  (void)len;
-  /* Stub: USB Host MIDI backend à implémenter plus tard. */
 }
 
 /**

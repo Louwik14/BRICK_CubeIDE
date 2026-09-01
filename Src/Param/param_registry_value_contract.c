@@ -1,6 +1,7 @@
 #include "Param/param_registry.h"
 
 #include <stddef.h>
+#include <math.h>
 
 uint8_t param_registry_prepare_value(param_id_t id,
                                      float value,
@@ -8,7 +9,8 @@ uint8_t param_registry_prepare_value(param_id_t id,
 {
     if ((out_value == NULL)
             || (id >= PARAM_COUNT)
-            || (param_id_is_reserved(id) != 0U))
+            || (param_id_is_reserved(id) != 0U)
+            || !isfinite(value))
     {
         return 0U;
     }
@@ -18,6 +20,16 @@ uint8_t param_registry_prepare_value(param_id_t id,
         value = desc->min;
     else if (value > desc->max)
         value = desc->max;
+    if (desc->type == PARAM_TYPE_BOOL)
+        value = (value >= 0.5f) ? 1.0f : 0.0f;
+    else if (((desc->type == PARAM_TYPE_INT)
+                || (desc->type == PARAM_TYPE_ENUM))
+            && (desc->step > 0.0f))
+    {
+        value = desc->min
+            + floorf(((value - desc->min) / desc->step) + 0.5f) * desc->step;
+        if (value > desc->max) value = desc->max;
+    }
 
     out_value->id = id;
     out_value->value = value;

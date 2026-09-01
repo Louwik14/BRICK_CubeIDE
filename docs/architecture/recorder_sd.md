@@ -6,12 +6,9 @@ Les decisions START/STOP Looper sont prises par CONTROL et publiees comme
 RECORD au sample de boundary. Le handler AUDIO de boundary ne rappelle aucune
 fonction CONTROL; il consulte uniquement le head capture AUDIO local pour
 figer la longueur physique.
-Le live stream ne duplique plus sequence, client, tails et chemin dans une
-publication partagee: producteur et consommateur sont CONTROL et lisent
-directement l'etat Storage. CONTROL derive le track et le lifecycle de la
-session Recorder qu'il possede.
-Registration, map live, chemin, chargement et finalisation du page-cache
-Looper s'executent dans le service CONTROL/Storage.
+Le Recorder CONTROL enregistre directement la source page-cache generique a
+l'entree `DRAINING`, depuis le track et la session qu'il possede. Il ne publie
+aucun DTO live et aucun service Looper ne sonde son etat.
 
 ARM prepare integralement la session Recorder avant toute echeance musicale:
 chemins, nettoyage, reservation, writer et configuration AUDIO sont deja en
@@ -44,7 +41,14 @@ Le block device n'autorise qu'un WRITE DMA actif. `begin/poll/take_result` publi
 
 Les compteurs ont des sens distincts: `head_cursor` publie par AUDIO, `tail_cursor` par Storage apres engagement physique, puis les tails packed/submitted/committed restent CONTROL-locaux. Le producteur borne son occupation par `head_cursor - tail_cursor`; Storage ne reutilise ni ne finalise au-dela du head publie. Le streamer Looper ne peut lire que jusqu'au tail `committed`.
 
-Le service Looper CONTROL remplace sa carte live lorsque la generation de reservation change. AUDIO ne lit ni reservation, ni chemin, ni etat de registration Storage et ne publie aucun intent Stream; il publie seulement le head PCM physique et ses leases de pages. La carte est construite puis publiee par CONTROL; le renommage seul ne change pas la generation.
+La carte physique finale est importee une fois a l'entree `DRAINING` et la
+registration conserve son epoch pendant toute la prise. Une progression
+effective du tail `committed` met seulement `readable_frames` a jour; le
+renommage `.REC -> .WAV` met seulement le chemin a jour. AUDIO ne lit ni
+reservation, ni chemin, ni etat Storage: il publie les deux ranges physiques
+de ses leases primaire et auxiliaire, wrap inclus, avec la profondeur de
+prefetch Looper. Le manager Stream ne reconstruit ni playhead, ni wrap, ni
+lookahead Looper.
 
 Au stop Looper, le preroll RAM de 0,25 s permet le premier passage immediat. Le page-cache rejoint ensuite le tail SD engage et le preroll n'est pas rejoue apres le premier wrap. Le chemin du stream passe de `.REC` a `.WAV` apres finalisation sans recharger la prise. Le transport de pages et le recorder partagent le scheduler et peuvent coexister; l'absence de page produit le fallback audio existant, sans lecture synchrone depuis l'IRQ.
 
@@ -56,7 +60,7 @@ Les `f_write` restants hors recorder servent l'editeur REC EDIT (copie Save/Assi
 
 ## Validation
 
-Les tests hote conserves couvrent le state machine generique, le WAV et ses erreurs produit, l'ecriture block-device asynchrone, l'arbitrage scheduler et la reservation FAT32/exFAT avec extension, preservation des voisins, liberation de queue et recovery. La validation cible doit compiler LowCost et Premium puis exercer capture longue, LEN, stop pendant charge streamer, carte lente/fragmentee, retrait media et reloop immediat.
+Les tests hote conserves couvrent le state machine generique, le WAV et ses erreurs produit, l'ecriture block-device asynchrone, l'arbitrage scheduler et la reservation FAT32/exFAT avec extension, preservation des voisins, liberation de queue et recovery. La validation cible doit compiler LowCost puis exercer capture longue, LEN, stop pendant charge streamer, carte lente/fragmentee, retrait media et reloop immediat.
 
 Le STOP Looper immediat est un lot fonctionnel unique de trois commandes au
 meme sample: armement STOP Looper, STOP du client Recorder et boundary Looper.

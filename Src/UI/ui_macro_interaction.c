@@ -492,9 +492,18 @@ uint8_t ui_macro_interaction_note_encoder_delta_with_context(const ui_param_enco
         {
             current_value = existing_lock.scene_value;
         }
-        else if (param_registry_get_track_value(param, g_ui_macro_interaction.capture_track, &current_value) == 0U)
+        else
         {
-            current_value = param_get(param);
+            const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
+            if (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
+            {
+                if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_GLOBAL)
+                        || (param_registry_query_global(param, &current_value) == 0U)) return 0U;
+            }
+            else if ((rule.status != TRACK_RUNTIME_PARAM_ALLOWED)
+                    || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
+                    || (param_registry_get_track_value(
+                            param, g_ui_macro_interaction.capture_track, &current_value) == 0U)) return 0U;
         }
 
         g_ui_macro_interaction.param = param;
@@ -509,9 +518,18 @@ uint8_t ui_macro_interaction_note_encoder_delta_with_context(const ui_param_enco
         {
             current_value = existing_lock.scene_value;
         }
-        else if (param_registry_get_track_value(param, g_ui_macro_interaction.capture_track, &current_value) == 0U)
+        else
         {
-            current_value = param_get(param);
+            const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
+            if (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
+            {
+                if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_GLOBAL)
+                        || (param_registry_query_global(param, &current_value) == 0U)) return 0U;
+            }
+            else if ((rule.status != TRACK_RUNTIME_PARAM_ALLOWED)
+                    || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
+                    || (param_registry_get_track_value(
+                            param, g_ui_macro_interaction.capture_track, &current_value) == 0U)) return 0U;
         }
 
         g_ui_macro_interaction.param = param;

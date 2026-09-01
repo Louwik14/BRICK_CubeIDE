@@ -283,6 +283,8 @@ void mod_matrix_process_track_ramped(uint8_t track,
         }
 
         mod_matrix_runtime_destination_t *const dst = &rt->destinations[runtime_index];
+        if (dst->base_valid == 0U)
+            continue;
         touched[route->destination_index] = 1U;
         dst->modulation_active = 1U;
         dst->sum += source_start[route->source] * route->scale;
@@ -383,6 +385,8 @@ void mod_matrix_process_poly_voice_ramped(uint8_t track,
         const uint8_t runtime_index = planned->runtime_destination_index;
         const mod_matrix_runtime_destination_t *const destination =
             &g_mod_matrix_runtime[track].destinations[runtime_index];
+        if (destination->base_valid == 0U)
+            continue;
         const float value = mod_matrix_clampf(destination->base_value + sums[i],
                                               destination->min_value,
                                               destination->max_value);
@@ -408,6 +412,8 @@ void mod_matrix_reset_poly_voice(uint8_t track,
         const uint8_t runtime_index = destination->runtime_destination_index;
         const mod_matrix_runtime_destination_t *const runtime_destination =
             &g_mod_matrix_runtime[track].destinations[runtime_index];
+        if (runtime_destination->base_valid == 0U)
+            continue;
         (void)mod_destination_catalog_apply_poly_prepared(
             &runtime_destination->prepared, voice_slot,
             runtime_destination->base_value);
@@ -456,5 +462,6 @@ void audio_mod_matrix_base_update(uint8_t track, param_id_t id, float value)
     if (dst != NULL)
     {
         dst->base_value = value;
+        dst->base_valid = 1U;
     }
 }

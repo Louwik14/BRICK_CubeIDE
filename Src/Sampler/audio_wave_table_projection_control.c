@@ -20,9 +20,6 @@
 
 static audio_wave_table_selection_t
     g_control_selection[AUDIO_WAVE_TABLE_SELECTION_COUNT];
-AUDIO_SHARED_REGISTRY_SDRAM audio_wavetable_registry_slot_t
-    g_audio_wavetable_registry[WAVETABLE_POOL_MAX_SLOTS];
-
 void audio_wave_table_projection_init(void)
 {
     memset(g_control_selection, 0, sizeof(g_control_selection));

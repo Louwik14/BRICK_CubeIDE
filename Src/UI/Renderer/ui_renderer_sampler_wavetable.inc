@@ -20,7 +20,7 @@ static const char *ui_renderer_template_path_basename(const char *path)
 
 static uint16_t ui_renderer_template_sampler_ram_selected_global_slot(void)
 {
-    const float sample_value = ui_renderer_template_get_param_display_value(PARAM_SAMPLER_SAMPLE);
+    const float sample_value = ui_renderer_template_get_param_display_value(UI_PARAM_LOCAL_ASSET);
     uint16_t sample_index = 0U;
     if (sample_value > 0.0f)
     {
@@ -73,11 +73,11 @@ static uint8_t ui_renderer_template_is_wave_wavetable_subpage(const ui_template_
         return 0U;
     }
 
-    return (uint8_t)(((subpage->param_bank.params[0] == PARAM_WAVE_OSC1_TABLE)
+    return (uint8_t)(((subpage->param_bank.params[0] == UI_PARAM_LOCAL_WAVE_OSC1)
                 && (subpage->param_bank.params[1] == PARAM_WAVE_OSC1_POS)
                 && (subpage->param_bank.params[2] == PARAM_WAVE_OSC1_START)
                 && (subpage->param_bank.params[3] == PARAM_WAVE_OSC1_LEN))
-            || ((subpage->param_bank.params[0] == PARAM_WAVE_OSC2_TABLE)
+            || ((subpage->param_bank.params[0] == UI_PARAM_LOCAL_WAVE_OSC2)
                 && (subpage->param_bank.params[1] == PARAM_WAVE_OSC2_POS)
                 && (subpage->param_bank.params[2] == PARAM_WAVE_OSC2_START)
                 && (subpage->param_bank.params[3] == PARAM_WAVE_OSC2_LEN)));

@@ -3,10 +3,10 @@
 #include <string.h>
 
 #include "Track/track_input_ownership.h"
+#include "Track/track_catalog.h"
 #include "Track/track_runtime.h"
 #include "Track/entity_topology.h"
 #include "Track/track_mute.h"
-#include "UI/ui_track_catalog.h"
 
 static track_config_t g_track_configs[TRACK_CONFIG_CAPACITY];
 static uint8_t g_track_midi_channel[TRACK_CONFIG_CAPACITY];
@@ -226,10 +226,12 @@ static bool track_state_apply_entity_bulk_with_inputs(
     const uint8_t type[BRICK_ENTITY_CAPACITY],
     const uint8_t midi_channel[BRICK_ENTITY_CAPACITY],
     const uint8_t midi_source[BRICK_ENTITY_CAPACITY],
-    const uint8_t external_input[TRACK_COUNT])
+    const uint8_t external_input[TRACK_COUNT],
+    const uint8_t effective_mute_before[BRICK_ENTITY_CAPACITY])
 {
     if ((family == NULL) || (type == NULL) || (midi_channel == NULL)
-            || (midi_source == NULL) || (external_input == NULL))
+            || (midi_source == NULL) || (external_input == NULL)
+            || (effective_mute_before == NULL))
     {
         return false;
     }
@@ -269,10 +271,10 @@ static bool track_state_apply_entity_bulk_with_inputs(
                 .type = typ
             };
             if ((normalized.family != TRACK_FAMILY_OFF)
-                    && !ui_track_catalog_type_is_valid_for_family(normalized.family, normalized.type))
+                    && !track_catalog_type_is_valid_for_family(normalized.family, normalized.type))
             {
-                normalized.type = ui_track_catalog_default_type_for_family(normalized.family);
-                if (!ui_track_catalog_type_is_valid_for_family(normalized.family, normalized.type))
+                normalized.type = track_catalog_default_type_for_family(normalized.family);
+                if (!track_catalog_type_is_valid_for_family(normalized.family, normalized.type))
                 {
                     return false;
                 }
@@ -301,19 +303,25 @@ static bool track_state_apply_entity_bulk_with_inputs(
         const track_type_t typ = next_configs[track].type;
 
         if ((fam != TRACK_FAMILY_OFF)
-                && !ui_track_catalog_family_is_available(track, fam, next_configs))
+                && !track_catalog_family_is_available(track, fam, next_configs))
         {
             return false;
         }
 
         if ((fam != TRACK_FAMILY_OFF)
-                && !ui_track_catalog_type_is_available(track, fam, typ, next_configs))
+                && !track_catalog_type_is_available(track, fam, typ, next_configs))
         {
             return false;
         }
     }
 
     if (track_input_ownership_apply_bulk(next_configs, external_input) == 0U)
+    {
+        return false;
+    }
+
+    if (track_mute_publish_topology_projection(
+            group_active, effective_mute_before) == 0U)
     {
         return false;
     }
@@ -339,12 +347,15 @@ bool track_structure_apply_entity_bulk_with_inputs(
     const uint8_t group_active_before = entity_topology_group_is_active();
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
     {
-        effective_mute_before[entity] =
+        const int8_t effective_mute =
             track_mute_is_effectively_muted(entity);
+        if (effective_mute < 0) return false;
+        effective_mute_before[entity] = (uint8_t)effective_mute;
         revision_before[entity] = track_state_get_revision(entity);
     }
     if (!track_state_apply_entity_bulk_with_inputs(
-            family, type, midi_channel, midi_source, external_input))
+            family, type, midi_channel, midi_source, external_input,
+            effective_mute_before))
         return false;
     if (group_active_before != entity_topology_group_is_active())
     {
@@ -356,7 +367,7 @@ bool track_structure_apply_entity_bulk_with_inputs(
             if (revision_before[entity] != track_state_get_revision(entity))
                 track_runtime_rebuild_track(entity);
     }
-    track_mute_reproject_after_topology_change(effective_mute_before);
+    track_mute_apply_topology_change(effective_mute_before);
     return true;
 }
 

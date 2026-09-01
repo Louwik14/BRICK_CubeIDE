@@ -20,18 +20,6 @@ typedef enum
 } recorder_file_metric_operation_t;
 
 static volatile uint8_t g_recorder_file_reservation_operation_active;
-static uint32_t g_recorder_file_reservation_generation;
-
-static uint32_t recorder_file_next_generation(void)
-{
-    g_recorder_file_reservation_generation++;
-    if(g_recorder_file_reservation_generation == 0U)
-    {
-        g_recorder_file_reservation_generation = 1U;
-    }
-    return g_recorder_file_reservation_generation;
-}
-
 static uint8_t recorder_file_copy_path(char *dst, const char *src)
 {
     if((dst == 0) || (src == 0) || (src[0] == '\0'))
@@ -135,7 +123,6 @@ static void recorder_file_publish(recorder_file_reservation_t *session)
     session->published_reserved_file_bytes = session->fs_state.reserved_bytes;
     session->published_valid_file_bytes = session->fs_state.valid_bytes;
     session->published_media_epoch = sd_access_media_epoch();
-    session->map_generation = recorder_file_next_generation();
     __DMB();
     session->publish_sequence++;
 }
@@ -547,7 +534,6 @@ uint8_t recorder_file_reservation_map_snapshot(
         out_snapshot->extents = session->physical_extents;
         out_snapshot->reserved_file_bytes = session->published_reserved_file_bytes;
         out_snapshot->valid_file_bytes = session->published_valid_file_bytes;
-        out_snapshot->generation = session->map_generation;
         out_snapshot->media_epoch = session->published_media_epoch;
         out_snapshot->extent_count = session->published_extent_count;
         out_snapshot->sector_size = RECORDER_FILE_RESERVATION_SECTOR_BYTES;
@@ -556,31 +542,6 @@ uint8_t recorder_file_reservation_map_snapshot(
         {
             return 1U;
         }
-    }
-    return 0U;
-}
-
-uint8_t recorder_file_reservation_map_snapshot_owned(
-    const recorder_file_reservation_t *session,
-    recorder_file_reservation_map_owned_t *out_snapshot)
-{
-    if ((session == 0) || (out_snapshot == 0)) return 0U;
-    for (uint8_t attempt = 0U; attempt < 3U; ++attempt)
-    {
-        const uint32_t before = session->publish_sequence;
-        if ((before == 0U) || ((before & 1U) != 0U)) continue;
-        const uint16_t count = session->published_extent_count;
-        if (count > RECORDER_FILE_RESERVATION_MAX_EXTENTS) return 0U;
-        out_snapshot->reserved_file_bytes = session->published_reserved_file_bytes;
-        out_snapshot->valid_file_bytes = session->published_valid_file_bytes;
-        out_snapshot->generation = session->map_generation;
-        out_snapshot->media_epoch = session->published_media_epoch;
-        out_snapshot->extent_count = count;
-        out_snapshot->sector_size = RECORDER_FILE_RESERVATION_SECTOR_BYTES;
-        memcpy(out_snapshot->extents, session->physical_extents,
-               (size_t)count * sizeof(out_snapshot->extents[0]));
-        __DMB();
-        if (before == session->publish_sequence) return 1U;
     }
     return 0U;
 }

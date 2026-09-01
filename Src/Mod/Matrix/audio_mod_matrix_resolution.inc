@@ -184,10 +184,12 @@ static void mod_matrix_release_destination(mod_matrix_runtime_destination_t *dst
         return;
     }
 
-    (void)mod_destination_catalog_apply_prepared(&dst->prepared,
-                                                 dst->base_value);
+    if (dst->base_valid != 0U)
+        (void)mod_destination_catalog_apply_prepared(&dst->prepared,
+                                                     dst->base_value);
 
     dst->valid = 0U;
+    dst->base_valid = 0U;
     dst->modulation_active = 0U;
     dst->destination = MOD_DESTINATION_NONE;
     dst->base_value = 0.0f;
@@ -271,14 +273,11 @@ static uint8_t mod_matrix_runtime_destination_prepare(uint8_t track,
             return 0U;
         }
 
-        /* Temporary initialization only; the CONTROL parameter command that
-         * accompanies a newly routed destination seeds the authoritative
-         * value before the next render. */
-        float base_value = param_spec[param].default_value;
         dst->valid = 1U;
+        dst->base_valid = 0U;
         dst->modulation_active = 0U;
         dst->destination = destination;
-        dst->base_value = base_value;
+        dst->base_value = 0.0f;
         dst->sum = 0.0f;
         dst->sum_end = 0.0f;
         dst->min_value = min_value;
@@ -295,7 +294,7 @@ static uint8_t mod_matrix_runtime_destination_prepare(uint8_t track,
 static void mod_matrix_restore_destination_value(
     mod_matrix_runtime_destination_t *dst)
 {
-    if ((dst == NULL) || (dst->valid == 0U))
+    if ((dst == NULL) || (dst->valid == 0U) || (dst->base_valid == 0U))
     {
         return;
     }

@@ -178,7 +178,6 @@ typedef struct
     uint32_t sent_valid_bytes;
     uint32_t active_dma_bytes;
     uint32_t active_valid_bytes;
-    uint32_t map_generation;
     uint32_t media_epoch;
     uint16_t extent_index;
     generic_recorder_descriptor_state_t state;

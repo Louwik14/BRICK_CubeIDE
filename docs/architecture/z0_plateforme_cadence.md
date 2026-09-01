@@ -13,8 +13,9 @@ La frontiere suit `M4 CONTROL decide -> commande finale 16 octets -> M7 AUDIO ex
 Les ingress Hall/MIDI et les sources scheduler restent des buffers locaux CONTROL. CONTROL resout et fusionne leur fenetre, transforme un retrigger en NOTE OFF puis NOTE ON au meme sample, puis publie un lot atomique dans la FIFO unique. AUDIO ne fusionne aucune queue et l'ordre physique FIFO est l'ordre fonctionnel a timestamp egal.
 
 La frontiere physique de plateforme est regroupee dans `Inc/Platform` et
-`Src/Platform`. Les backings et layouts purs de `Src/IPC` appartiennent a
-`DOMAIN_CONTRACTS`; ses publishers et queues locales appartiennent explicitement
+`Src/Platform`. Les types, layouts et `extern` purs appartiennent a
+`DOMAIN_CONTRACTS`; leurs definitions physiques appartiennent au groupe
+`SHARED_BACKING`. Les publishers et queues locales appartiennent explicitement
 a `DOMAIN_CONTROL`, jamais a `PLATFORM_H743`. Les writers CONTROL, readers AUDIO,
 publishers AUDIO et readers CONTROL sont des unites distinctes dans leur domaine proprietaire. Les
 fichiers de metier CONTROL, les runtimes et DSP AUDIO, ainsi que les pools
@@ -36,7 +37,7 @@ AUDIO -> CONTROL : niveau REC, waveforms audio/synth et diagnostic Audio; plus l
 Storage <-> AUDIO : registration, token, completion de page et payloads bornes
 ```
 
-Preview est un ring PCM SPSC M4->M7: CONTROL possede payload/`write_count`, AUDIO `read_count` et le gain/active local applique par PARAM. Recorder est le ring inverse: AUDIO possede payload/`head_cursor`/fermeture/fault, CONTROL uniquement `tail_cursor`, writer et erreurs SD. Le Looper AUDIO date son DSP avec sa timeline locale. Le transport et le REC bus sont des runtimes AUDIO locaux alimentes par TRANSPORT/PARAM; aucun snapshot parallele n'en revient. FILTER POS affiche le shadow CONTROL; aucune valeur DSP n'est une autorite UI.
+Preview est un ring PCM SPSC M4->M7: CONTROL possede payload/`write_count`, AUDIO `read_count` et le gain/active local applique par PARAM. Recorder est le ring inverse: AUDIO possede payload/`head_cursor`/fermeture/fault, CONTROL uniquement `tail_cursor`, writer et erreurs SD. Le Looper AUDIO date son DSP avec sa timeline locale. Le transport et le REC bus sont des runtimes AUDIO locaux alimentes par TRANSPORT/PARAM; aucun snapshot parallele n'en revient. FILTER POS affiche la valeur CONTROL canonique; aucune valeur DSP n'est une autorite UI.
 
 Au boot, `track_state` est initialise avant la projection finale `track_runtime`; le bridge Hall/keyboard et son focus sont ensuite initialises et synchronises depuis cette autorite canonique. PLAY/PAUSE ou une reconfiguration moteur ne font pas partie du protocole d'activation Hall.
 
@@ -49,23 +50,29 @@ La migration H747 conserve les payloads et protocoles. Restent physiques: deux i
 ## Ownership de build prepare pour H747
 
 Le build H743 classe chaque unite dans un seul ensemble: `DOMAIN_CONTROL`,
-`DOMAIN_AUDIO`, `DOMAIN_CONTRACTS` ou `PLATFORM_H743`. Il n'existe plus de
+`DOMAIN_AUDIO`, `DOMAIN_CONTRACTS`, `SHARED_BACKING` ou `PLATFORM_H743`. Il n'existe plus de
 domaine de transition mixte. UI, sequenceur, Storage et etat Param canonique
 appartiennent a CONTROL; DSP, projection Param appliquee, ENV3 et caches/plans
 de modulation appartiennent a AUDIO. Les catalogues immuables partages
 (modeles moteur/FX/MD et formes d'affichage) appartiennent aux contrats.
 
-`PLATFORM_H743` porte seulement les seams de composition mono-coeur, le hardware
+`SHARED_BACKING` n'est pas un domaine fonctionnel: il ne contient que les
+variables placees correspondant aux `extern`, sans fonction, init, reset ou
+policy. L'initialisation reste chez le writer proprietaire. `PLATFORM_H743`
+porte seulement les seams de composition mono-coeur, le hardware
 board et le staging/remap LED physique. Boutons, encodeurs et logique produit LED
-appartiennent a CONTROL. Les backings diagnostic/waveform et references de memoire
-partagee appartiennent a CONTRACTS. Le page-cache n'y est pas masque: `sample_page_cache.c` possede les
+appartiennent a CONTROL. Les backings diagnostic/waveform, FIFO, Recorder,
+Preview, page-cache et projections Sampler appartiennent a `SHARED_BACKING`.
+Le page-cache n'y est pas masque: `sample_page_cache.c` possede les
 metadonnees, index, reservations et publications CONTROL;
 `sample_page_cache_audio.c` possede les credits et acces AUDIO. Le port H747
 ne change que leur placement physique. Les appels CONTROL vers AUDIO ne passent
 que par `Inc/IPC`; le compile-check Cortex-M4 interdit toute dependance vers
 `Inc/Audio`, `Src/Audio` et les DSP tiers. Le firewall CONTRACTS refuse en plus
 les headers prives CONTROL/AUDIO et les anciennes APIs owner-specific sorties de
-la liste des contrats.
+la liste des contrats. Les checks compilent de vrais objets CM4/CM7, incluent
+les DSP tiers declares, produisent symboles/relocations/sections et ferment les
+indefinis par provider ou allowlist nominative avant un link relocatable.
 
 ## Robustesse
 

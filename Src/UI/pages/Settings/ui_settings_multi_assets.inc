@@ -441,6 +441,7 @@ static const char *ui_page_settings_multi_load_error_label(multi_sample_load_res
 
 static uint8_t ui_page_settings_multi_prepare_entry(const ui_settings_multi_entry_t *entry)
 {
+    if (project_replacement_is_active() != 0U) return 0U;
     if (entry == 0)
     {
         return 0U;
@@ -467,6 +468,7 @@ static uint8_t ui_page_settings_multi_prepare_entry(const ui_settings_multi_entr
 
 static void ui_page_settings_multi_confirm_prepare(uint8_t slot)
 {
+    if (project_replacement_is_active() != 0U) return;
     const ui_settings_multi_entry_t *const entry = ui_page_settings_multi_selected_entry();
     if ((entry == 0) || (entry->type != UI_SETTINGS_MULTI_ENTRY_MULTI_ITEM))
     {
@@ -482,6 +484,7 @@ static void ui_page_settings_multi_confirm_prepare(uint8_t slot)
 
 static void ui_page_settings_multi_confirm_replace(uint8_t slot)
 {
+    if (project_replacement_is_active() != 0U) return;
     const ui_settings_multi_entry_t *const entry = ui_page_settings_multi_selected_entry();
     if (entry == 0)
     {
@@ -503,6 +506,7 @@ static void ui_page_settings_multi_confirm_replace(uint8_t slot)
 
 static void ui_page_settings_multi_confirm_unload(uint8_t slot)
 {
+    if (project_replacement_is_active() != 0U) return;
     if (multi_sample_pool_get_state(slot) == MULTI_SAMPLE_INSTRUMENT_EMPTY)
     {
         ui_page_settings_status("SLOT EMPTY");
@@ -516,6 +520,7 @@ static void ui_page_settings_multi_confirm_unload(uint8_t slot)
 
 static void ui_page_settings_multi_confirm_clear_indexes(void)
 {
+    if (project_replacement_is_active() != 0U) return;
     if (g_ui_settings.multi_entry_count == 0U)
     {
         ui_page_settings_status("NO MULTI");
@@ -550,6 +555,7 @@ static void ui_page_settings_multi_confirm_clear_indexes(void)
 
 static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_settings_multi_entry_t *entry)
 {
+    if (project_replacement_is_active() != 0U) return;
     const uint8_t already_blocking =
         (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_PREPARING) ? 1U : 0U;
 

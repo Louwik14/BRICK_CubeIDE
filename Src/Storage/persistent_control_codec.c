@@ -1,4 +1,5 @@
 #include "Storage/persistent_control_codec.h"
+#include "Storage/asset_ref.h"
 #include "Storage/persistent_entity_topology.h"
 #include "Storage/persistent_key_catalog.h"
 #include "Param/param_registry.h"
@@ -19,6 +20,22 @@
 #define SECTION_PROJECT_MACROS 0x2003U
 #define SECTION_PROJECT_BANK 0x2004U
 #define SECTION_PATCH_BODY 0x3001U
+
+#define PERSIST_TYPED_KBD_ROOT           0x4B420001UL
+#define PERSIST_TYPED_KBD_SCALE          0x4B420002UL
+#define PERSIST_TYPED_KBD_OMNICHORD      0x4B420003UL
+#define PERSIST_TYPED_KBD_NOTE_ORDER     0x4B420004UL
+#define PERSIST_TYPED_KBD_CHORD_OVERRIDE 0x4B420005UL
+#define PERSIST_TYPED_KBD_MONO_LAST      0x4B420006UL
+#define PERSIST_TYPED_METRONOME_LEVEL    0x4D540001UL
+
+#define PERSIST_V3_KBD_ROOT           PERSIST_CONTROL_PARAMETER_KEY(PERSIST_PARAM_NAMESPACE_PLAY, 0x27D7BBUL)
+#define PERSIST_V3_KBD_SCALE          PERSIST_CONTROL_PARAMETER_KEY(PERSIST_PARAM_NAMESPACE_PLAY, 0xAE5DF7UL)
+#define PERSIST_V3_KBD_OMNICHORD      PERSIST_CONTROL_PARAMETER_KEY(PERSIST_PARAM_NAMESPACE_PLAY, 0xCC7358UL)
+#define PERSIST_V3_KBD_NOTE_ORDER     PERSIST_CONTROL_PARAMETER_KEY(PERSIST_PARAM_NAMESPACE_PLAY, 0x6E3280UL)
+#define PERSIST_V3_KBD_CHORD_OVERRIDE PERSIST_CONTROL_PARAMETER_KEY(PERSIST_PARAM_NAMESPACE_PLAY, 0xE63C50UL)
+#define PERSIST_V3_KBD_MONO_LAST      PERSIST_CONTROL_PARAMETER_KEY(PERSIST_PARAM_NAMESPACE_PLAY, 0x8B0D59UL)
+#define PERSIST_V3_METRONOME_LEVEL    PERSIST_CONTROL_PARAMETER_KEY(PERSIST_PARAM_NAMESPACE_CONFIG, 0xBC3D3DUL)
 
 typedef enum { CODEC_COUNT, CODEC_WRITE, CODEC_READ } codec_mode_t;
 
@@ -81,6 +98,7 @@ static void codec_bytes(codec_io_t *io, uint8_t *data, uint32_t length)
 }
 
 static void codec_u8(codec_io_t *io, uint8_t *value) { codec_bytes(io, value, 1U); }
+static void codec_i8(codec_io_t *io, int8_t *value) { codec_bytes(io, (uint8_t *)value, 1U); }
 
 static void codec_u16(codec_io_t *io, uint16_t *value)
 {
@@ -113,9 +131,6 @@ static void codec_f32(codec_io_t *io, float *value)
     codec_u32(io,&bits);
     if (io->mode == CODEC_READ) memcpy(value,&bits,4U);
 }
-
-static uint8_t codec_value_kind_valid(persist_control_value_kind_t kind)
-{ return (uint8_t)((kind>=PERSIST_VALUE_BOOL)&&(kind<=PERSIST_VALUE_FLOAT32)); }
 
 static uint8_t codec_family_valid(uint32_t key)
 {
@@ -159,19 +174,12 @@ static void codec_value(codec_io_t *io, persist_control_value_kind_t kind,
     }
 }
 
-static void codec_parameter(codec_io_t *io, persist_control_parameter_t *p)
-{
-    uint8_t kind=(uint8_t)p->kind; codec_u32(io,&p->key); codec_u8(io,&kind);
-    if(io->mode==CODEC_READ)p->kind=(persist_control_value_kind_t)kind;
-    codec_value(io,p->kind,&p->value);
-}
-
 static void codec_asset(codec_io_t *io, persist_control_asset_ref_t *a)
 {
-    codec_u32(io,&a->id); codec_u32(io,&a->kind); codec_u16(io,&a->path_length);
+    codec_u32(io,&a->kind); codec_u16(io,&a->path_length);
     if(a->path_length>PERSIST_CONTROL_ASSET_PATH_BYTES){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}
-    codec_bytes(io,(uint8_t *)a->path,a->path_length);
-    if((io->mode==CODEC_READ)&&(a->path_length<PERSIST_CONTROL_ASSET_PATH_BYTES))a->path[a->path_length]='\0';
+    codec_bytes(io,(uint8_t *)a->canonical_path,a->path_length);
+    if((io->mode==CODEC_READ)&&(a->path_length<PERSIST_CONTROL_ASSET_PATH_BYTES))a->canonical_path[a->path_length]='\0';
 }
 
 static void codec_sequence(codec_io_t *io, persist_control_entity_t *entity,uint8_t group_active)
@@ -210,6 +218,119 @@ static void codec_sequence(codec_io_t *io, persist_control_entity_t *entity,uint
 }
 
 static void codec_modulation(codec_io_t *io, persist_control_modulation_t *m);
+static persist_codec_result_t codec_validate_asset_ref(
+    const persist_control_asset_ref_t *asset);
+
+static uint8_t codec_entity_assets_valid(const persist_control_entity_t *entity)
+{
+    if ((entity == NULL) || (entity->asset_count > PERSIST_CONTROL_TRACK_ASSET_COUNT))
+    {
+        return 0U;
+    }
+    uint32_t expected_kind = 0U;
+    uint8_t maximum = 0U;
+    switch (entity->type)
+    {
+        case PERSIST_TYPE_WAVE:
+            expected_kind = PERSIST_ASSET_WAVETABLE;
+            maximum = 2U;
+            break;
+        case PERSIST_TYPE_RAM_SAMPLE:
+            expected_kind = PERSIST_ASSET_SAMPLE_RAM;
+            maximum = 1U;
+            break;
+        case PERSIST_TYPE_STREAM_SAMPLE:
+            expected_kind = PERSIST_ASSET_SAMPLE_STREAM;
+            maximum = 1U;
+            break;
+        case PERSIST_TYPE_MULTI_SAMPLE:
+            expected_kind = PERSIST_ASSET_MULTI;
+            maximum = 1U;
+            break;
+        default:
+            maximum = 0U;
+            break;
+    }
+    if (entity->asset_count > maximum)
+    {
+        return 0U;
+    }
+    for (uint8_t i = 0U; i < entity->asset_count; ++i)
+    {
+        if ((codec_validate_asset_ref(&entity->assets[i]) != PERSIST_CODEC_OK)
+            || (entity->assets[i].kind != expected_kind))
+        {
+            return 0U;
+        }
+        for (uint8_t j = 0U; j < i; ++j)
+        {
+            if ((entity->assets[j].kind == entity->assets[i].kind)
+                && (entity->assets[j].path_length == entity->assets[i].path_length)
+                && (memcmp(entity->assets[j].canonical_path,
+                           entity->assets[i].canonical_path,
+                           entity->assets[i].path_length) == 0))
+            {
+                return 0U;
+            }
+        }
+    }
+    return 1U;
+}
+
+static void codec_fm_state(codec_io_t *io, fm_control_state_t *state)
+{
+    for (uint8_t op = 0U; op < TRACK_TONE_FM_OPERATOR_COUNT; ++op)
+    {
+        track_tone_fm_operator_base_t *const value = &state->base.operators[op];
+        for (uint8_t i = 0U; i < 4U; ++i) codec_u8(io, &value->rates[i]);
+        for (uint8_t i = 0U; i < 4U; ++i) codec_u8(io, &value->levels[i]);
+        codec_u8(io, &value->breakpoint);
+        codec_u8(io, &value->left_depth); codec_u8(io, &value->right_depth);
+        codec_u8(io, &value->left_curve); codec_u8(io, &value->right_curve);
+        codec_u8(io, &value->rate_scaling); codec_u8(io, &value->output_level);
+        codec_u8(io, &value->mode); codec_u8(io, &value->coarse);
+        codec_u8(io, &value->fine); codec_i8(io, &value->detune);
+        codec_u8(io, &value->velocity_sensitivity); codec_u8(io, &value->enabled);
+    }
+    for (uint8_t i = 0U; i < 4U; ++i) codec_u8(io, &state->base.pitch_rates[i]);
+    for (uint8_t i = 0U; i < 4U; ++i) codec_u8(io, &state->base.pitch_levels[i]);
+    codec_u8(io, &state->base.transpose); codec_u8(io, &state->base.algorithm);
+    codec_u8(io, &state->base.feedback); codec_u8(io, &state->base.key_sync);
+    codec_f32(io, &state->macros.ratio); codec_f32(io, &state->macros.bright);
+    codec_f32(io, &state->macros.body); codec_f32(io, &state->macros.detail);
+    codec_f32(io, &state->macros.metal); codec_f32(io, &state->macros.env_attack);
+    codec_f32(io, &state->macros.env_decay); codec_f32(io, &state->macros.env_sustain);
+    codec_f32(io, &state->macros.env_release); codec_f32(io, &state->macros.play_vel);
+    codec_f32(io, &state->macros.play_key); codec_f32(io, &state->macros.pitch_env);
+    codec_f32(io, &state->macros.pitch_time);
+}
+
+static void codec_float_block(codec_io_t *io, float *values, uint16_t count)
+{ for (uint16_t i=0U;i<count;++i) codec_f32(io,&values[i]); }
+static void codec_tone(codec_io_t *io,tone_program_control_t*t)
+{
+    uint8_t tag=(uint8_t)t->tag;codec_u8(io,&tag);if(io->mode==CODEC_READ)t->tag=(track_runtime_type_t)tag;
+    switch(t->tag){
+    case TRACK_RUNTIME_TYPE_PRISM:codec_float_block(io,&t->state.prism.osc[0].param1,16U);break;
+    case TRACK_RUNTIME_TYPE_STACK:codec_float_block(io,&t->state.stack.osc[0].level,18U);break;
+    case TRACK_RUNTIME_TYPE_WAVE:codec_float_block(io,&t->state.wave.osc[0].position,10U);break;
+    case TRACK_RUNTIME_TYPE_RAM:codec_float_block(io,&t->state.ram.gain,7U);break;
+    case TRACK_RUNTIME_TYPE_STREAM:codec_float_block(io,&t->state.stream.gain,8U);break;
+    case TRACK_RUNTIME_TYPE_LOOPER:codec_float_block(io,&t->state.looper.xfade,4U);break;
+    case TRACK_RUNTIME_TYPE_MULTI:codec_float_block(io,&t->state.multi.gain,2U);break;
+    case TRACK_RUNTIME_TYPE_MIDI:case TRACK_RUNTIME_TYPE_EXTERNAL:codec_float_block(io,&t->state.midi.program,13U);break;
+    case TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG:codec_float_block(io,&t->state.drum_analog.pitch,8U);break;
+    case TRACK_RUNTIME_TYPE_DRUM_MD:codec_float_block(io,&t->state.drum_md.model,9U);break;
+    case TRACK_RUNTIME_TYPE_NONE:case TRACK_RUNTIME_TYPE_FM:case TRACK_RUNTIME_TYPE_GROUP:break;
+    default:io->result=PERSIST_CODEC_INVALID_ENTITY;break;}
+}
+static void codec_filter(codec_io_t*io,param_filter_control_state_t*s){codec_float_block(io,&s->morph,16U);}
+static void codec_vca(codec_io_t*io,vca_control_state_t*s){codec_float_block(io,&s->attack,6U);}
+static void codec_env3(codec_io_t*io,mod_env3_control_state_t*s){codec_float_block(io,&s->attack,5U);}
+static void codec_mixer(codec_io_t*io,mixer_control_state_t*s){codec_float_block(io,&s->level,5U);}
+static void codec_polyphony(codec_io_t*io,polyphony_control_state_t*s){codec_u8(io,&s->voice_count);codec_f32(io,&s->spread);}
+static void codec_audio_fx(codec_io_t*io,audio_fx_control_state_t*s){uint8_t pos=(uint8_t)s->config.filter_position,order=(uint8_t)s->config.order;codec_u8(io,&pos);codec_u8(io,&order);if(io->mode==CODEC_READ){s->config.filter_position=(audio_fx_filter_pos_t)pos;s->config.order=(audio_fx_order_t)order;}for(uint8_t i=0U;i<2U;++i){codec_u8(io,&s->config.spatial_mode[i]);codec_u8(io,&s->model[i]);codec_f32(io,&s->p1[i]);codec_f32(io,&s->p2[i]);codec_f32(io,&s->p3[i]);codec_f32(io,&s->group_level[i]);}}
+static void codec_global_audio(codec_io_t*io,param_global_control_state_t*s){codec_float_block(io,&s->send_fx[0],54U);}
 
 static void codec_entity(codec_io_t *io, persist_control_entity_t *e,uint8_t group_active)
 {
@@ -221,9 +342,15 @@ static void codec_entity(codec_io_t *io, persist_control_entity_t *e,uint8_t gro
     }
     codec_u8(io,&e->entity_id);codec_u32(io,&e->family);codec_u32(io,&e->type);
     codec_u8(io,&e->midi_channel);codec_u32(io,&e->midi_source_key);codec_u32(io,&e->input_key);
-    codec_u8(io,&e->muted);codec_u32(io,&e->asset);codec_u16(io,&e->parameter_count);
-    if(e->parameter_count>PERSIST_CONTROL_ENTITY_PARAM_COUNT){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}
-    for(uint16_t i=0U;i<e->parameter_count;++i)codec_parameter(io,&e->parameters[i]);
+    codec_polyphony(io,&e->polyphony);
+    codec_u8(io,&e->muted);codec_u8(io,&e->asset_count);
+    if(e->asset_count>PERSIST_CONTROL_TRACK_ASSET_COUNT){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}
+    for(uint8_t i=0U;i<e->asset_count;++i)codec_asset(io,&e->assets[i]);
+    codec_u8(io,&e->fm_present);
+    if(e->fm_present>1U){io->result=PERSIST_CODEC_INVALID_ENTITY;return;}
+    if(e->fm_present!=0U)codec_fm_state(io,&e->fm);
+    codec_u8(io,&e->tone_present);if(e->tone_present>1U){io->result=PERSIST_CODEC_INVALID_ENTITY;return;}if(e->tone_present!=0U)codec_tone(io,&e->tone);
+    codec_filter(io,&e->filter);codec_vca(io,&e->vca);codec_mixer(io,&e->mixer);codec_audio_fx(io,&e->audio_fx);
     codec_u8(io,&e->note_fx_count);
     if((e->note_fx_count>PERSIST_CONTROL_NOTE_FX_COUNT)
             ||((io->mode!=CODEC_READ)&&(caps.note_fx_owner==0U)&&(e->note_fx_count!=0U)))
@@ -257,9 +384,8 @@ static void codec_pattern_body(codec_io_t *io, persist_control_pattern_t *p)
     for(uint16_t i=0U;i<p->route_count;++i)
     {codec_u32(io,&p->routes[i].kind);codec_u8(io,&p->routes[i].source);codec_u8(io,&p->routes[i].destination);codec_u8(io,&p->routes[i].enabled);}
     codec_u32(io,&p->globals.tempo_milli_bpm);codec_u32(io,&p->globals.clock_source_key);
-    codec_u32(io,&p->globals.record_start_key);codec_u32(io,&p->globals.record_length_key);codec_u16(io,&p->globals.parameter_count);
-    if(p->globals.parameter_count>PERSIST_CONTROL_GLOBAL_PARAM_COUNT){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}
-    for(uint16_t i=0U;i<p->globals.parameter_count;++i)codec_parameter(io,&p->globals.parameters[i]);
+    codec_u32(io,&p->globals.record_start_key);codec_u32(io,&p->globals.record_length_key);
+    codec_global_audio(io,&p->globals.audio);codec_u8(io,&p->globals.keyboard.root);codec_u8(io,&p->globals.keyboard.scale);codec_u8(io,&p->globals.keyboard.omnichord);codec_u8(io,&p->globals.keyboard.note_order);codec_u8(io,&p->globals.keyboard.chord_override);codec_u8(io,&p->globals.keyboard.mono_last);codec_u8(io,&p->globals.metronome_level);
 }
 
 static void codec_macros(codec_io_t *io,persist_control_macros_t *m)
@@ -267,31 +393,7 @@ static void codec_macros(codec_io_t *io,persist_control_macros_t *m)
     codec_u32(io,&m->hall_switch_key);codec_bytes(io,m->selected_scene,PERSIST_CONTROL_MACRO_COUNT);
     for(uint8_t s=0U;s<PERSIST_CONTROL_MACRO_SCENE_COUNT;++s)
     { codec_u8(io,&m->scenes[s].lock_count);if(m->scenes[s].lock_count>PERSIST_CONTROL_MACRO_LOCK_COUNT){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}
-      for(uint8_t i=0U;i<m->scenes[s].lock_count;++i){persist_control_macro_lock_t *l=&m->scenes[s].locks[i];uint8_t kind=(uint8_t)l->kind;codec_u8(io,&l->entity);codec_u32(io,&l->parameter);codec_u8(io,&kind);if(io->mode==CODEC_READ)l->kind=(persist_control_value_kind_t)kind;codec_value(io,l->kind,&l->value);} }
-}
-
-static uint8_t codec_parameter_value_valid(param_id_t id,
-                                           persist_control_value_kind_t kind,
-                                           const persist_control_value_t *value)
-{
-    if ((id >= PARAM_COUNT) || (value == NULL)) return 0U;
-    if (kind != PERSIST_VALUE_FLOAT32) return 0U;
-    return (uint8_t)(isfinite(value->f32)
-            && (value->f32 >= param_registry[id].min)
-            && (value->f32 <= param_registry[id].max));
-}
-
-static persist_codec_result_t codec_validate_parameters(const persist_control_parameter_t *p,
-                                                         uint16_t count,
-                                                         persist_param_scope_t scope)
-{
-    for(uint16_t i=0U;i<count;++i)
-    { uint8_t tone_slot=0U;param_id_t id=0U;persist_param_descriptor_t d;
-      if(persist_key_tone_slot_from_disk(p[i].key,&tone_slot)!=0U){
-          if((scope!=PERSIST_PARAM_SCOPE_ENTITY)||(p[i].kind!=PERSIST_VALUE_FLOAT32)||!isfinite(p[i].value.f32)||(p[i].value.f32<0.0f)||(p[i].value.f32>1.0f))return PERSIST_CODEC_UNKNOWN_KEY;
-      }else if((persist_key_param_from_disk(p[i].key,&id)==0U)||(persist_key_param_descriptor(id,&d)==0U)||(d.persistent==0U)||(d.scope!=scope)||(p[i].kind!=d.kind)||(codec_value_kind_valid(p[i].kind)==0U)||(codec_parameter_value_valid(id,p[i].kind,&p[i].value)==0U))return PERSIST_CODEC_UNKNOWN_KEY;
-      for(uint16_t j=0U;j<i;++j)if(p[j].key==p[i].key)return PERSIST_CODEC_DUPLICATE; }
-    return PERSIST_CODEC_OK;
+      for(uint8_t i=0U;i<m->scenes[s].lock_count;++i){persist_control_macro_lock_t *l=&m->scenes[s].locks[i];codec_u8(io,&l->entity);codec_u32(io,&l->parameter);codec_f32(io,&l->scene_value);} }
 }
 
 static uint8_t codec_play_value_valid(const persist_control_play_item_t *play)
@@ -304,6 +406,17 @@ static uint8_t codec_play_value_valid(const persist_control_play_item_t *play)
     if (((play->present_mask & 0x08U) != 0U)
             && ((play->microtiming < -24) || (play->microtiming > 24))) return 0U;
     return 1U;
+}
+
+static uint8_t codec_parameter_value_valid(param_id_t id,
+                                           persist_control_value_kind_t kind,
+                                           const persist_control_value_t *value)
+{
+    if ((id >= PARAM_COUNT) || (value == NULL)
+            || (kind != PERSIST_VALUE_FLOAT32)) return 0U;
+    return (uint8_t)(isfinite(value->f32)
+            && (value->f32 >= param_registry[id].min)
+            && (value->f32 <= param_registry[id].max));
 }
 
 static uint8_t codec_plock_value_valid(param_id_t id,
@@ -327,13 +440,12 @@ persist_codec_result_t persist_codec_validate_pattern(const persist_control_patt
     if(p==NULL)return PERSIST_CODEC_INVALID_ARGUMENT;
     const uint8_t group_active=(p->entities[PERSIST_CONTROL_GROUP_MASTER_ID].type==PERSIST_TYPE_GROUP)?1U:0U;
     for(uint8_t e=0U;e<PERSIST_CONTROL_ENTITY_COUNT;++e)
-    { const persist_control_entity_t *x=&p->entities[e];persist_entity_caps_t caps;uint8_t input=0U;if((x->entity_id!=e)||(persist_entity_caps_resolve(group_active,e,&caps)==0U)||(caps.persistable==0U)||(codec_family_valid(x->family)==0U)||(codec_type_valid(x->type)==0U)||(x->midi_channel<1U)||(x->midi_channel>16U)||(codec_midi_source_valid(x->midi_source_key)==0U)||(persist_key_input_from_disk(x->input_key,&input)==0U)||(x->muted>1U)||((caps.input_owner==0U)&&(input!=0U))||((x->family==PERSIST_FAMILY_OFF)&&(x->muted!=0U)))return PERSIST_CODEC_INVALID_ENTITY;
-      if((caps.active==0U)&&((x->asset!=PERSIST_CONTROL_ASSET_NONE)||(x->muted!=0U)||(x->parameter_count!=0U)||(x->note_fx_count!=0U)||(x->modulation_present!=0U)))return PERSIST_CODEC_INVALID_ENTITY;
-      if((x->parameter_count>PERSIST_CONTROL_ENTITY_PARAM_COUNT)||(x->note_fx_count>PERSIST_CONTROL_NOTE_FX_COUNT))return PERSIST_CODEC_CAPACITY_EXCEEDED;
+    { const persist_control_entity_t *x=&p->entities[e];persist_entity_caps_t caps;uint8_t input=0U;if((x->entity_id!=e)||(persist_entity_caps_resolve(group_active,e,&caps)==0U)||(caps.persistable==0U)||(codec_family_valid(x->family)==0U)||(codec_type_valid(x->type)==0U)||(codec_entity_assets_valid(x)==0U)||(x->midi_channel<1U)||(x->midi_channel>16U)||(codec_midi_source_valid(x->midi_source_key)==0U)||(persist_key_input_from_disk(x->input_key,&input)==0U)||(x->polyphony.voice_count<1U)||(x->polyphony.voice_count>8U)||(x->audio_fx.config.filter_position>=3U)||(x->audio_fx.config.order>=2U)||(x->audio_fx.config.spatial_mode[0]>=4U)||(x->audio_fx.config.spatial_mode[1]>=4U)||(x->muted>1U)||(x->fm_present>1U)||(x->tone_present>1U)||(x->fm_present&&x->tone_present)||((caps.input_owner==0U)&&(input!=0U))||((x->family==PERSIST_FAMILY_OFF)&&(x->muted!=0U)))return PERSIST_CODEC_INVALID_ENTITY;
+      if((caps.active==0U)&&((x->asset_count!=0U)||(x->fm_present!=0U)||(x->tone_present!=0U)||(x->muted!=0U)||(x->note_fx_count!=0U)||(x->modulation_present!=0U)))return PERSIST_CODEC_INVALID_ENTITY;
+      if(x->note_fx_count>PERSIST_CONTROL_NOTE_FX_COUNT)return PERSIST_CODEC_CAPACITY_EXCEEDED;
       if((caps.note_fx_owner==0U)&&(x->note_fx_count!=0U))return PERSIST_CODEC_INVALID_ENTITY;
       if((x->sequence.length<1U)||(x->sequence.length>PERSIST_CONTROL_STEP_COUNT)||((x->sequence.division!=1U)&&(x->sequence.division!=2U)&&(x->sequence.division!=4U)&&(x->sequence.division!=8U))||(x->sequence.quantization>100U)||(x->sequence.swing>100U))return PERSIST_CODEC_INVALID_ENTITY;
       if(x->modulation_present>1U||x->modulation_present!=caps.modulation_owner)return PERSIST_CODEC_INVALID_MODULATION;
-      persist_codec_result_t r=codec_validate_parameters(x->parameters,x->parameter_count,PERSIST_PARAM_SCOPE_ENTITY);if(r!=PERSIST_CODEC_OK)return r;
       for(uint8_t n=0U;n<x->note_fx_count;++n)if(codec_note_fx_valid(x->note_fx[n].model_key)==0U)return PERSIST_CODEC_UNKNOWN_KEY;
       uint16_t locks=0U;for(uint8_t s=0U;s<PERSIST_CONTROL_STEP_COUNT;++s){const persist_control_step_t *st=&x->sequence.steps[s];if(st->trigger>1U||st->roll>=SEQ_STEP_ROLL_COUNT||(st->trigger==0U&&st->roll!=SEQ_STEP_ROLL_OFF)||(caps.sequence_owner==0U&&st->trigger!=0U)||st->play_count>caps.play_limit)return PERSIST_CODEC_INVALID_PLAY;for(uint8_t v=0U;v<st->play_count;++v)if(codec_play_value_valid(&st->play[v])==0U)return PERSIST_CODEC_INVALID_PLAY;if(st->lock_count>PERSIST_CONTROL_STEP_LOCK_COUNT||(caps.sequence_owner==0U&&st->lock_count!=0U))return PERSIST_CODEC_INVALID_PLOCK;locks=(uint16_t)(locks+st->lock_count);for(uint8_t i=0U;i<st->lock_count;++i){uint8_t tone_slot=0U;param_id_t id=0U;persist_param_descriptor_t d;if(persist_key_tone_slot_from_disk(st->locks[i].parameter,&tone_slot)!=0U){if((st->locks[i].kind!=PERSIST_VALUE_FLOAT32)||!isfinite(st->locks[i].value.f32)||(st->locks[i].value.f32<0.0f)||(st->locks[i].value.f32>1.0f))return PERSIST_CODEC_INVALID_PLOCK;}else if((persist_key_param_from_disk(st->locks[i].parameter,&id)==0U)||(persist_key_param_descriptor(id,&d)==0U)||(d.plockable==0U)||(codec_plock_value_valid(id,&st->locks[i])==0U))return PERSIST_CODEC_INVALID_PLOCK;for(uint8_t j=0U;j<i;++j)if(st->locks[j].parameter==st->locks[i].parameter)return PERSIST_CODEC_DUPLICATE;}}if(locks>SEQ_PLOCK_POOL_CAP_PER_TRACK)return PERSIST_CODEC_INVALID_PLOCK; }
     uint8_t record_mode=0U;if((p->route_count>(PERSIST_CONTROL_ENTITY_COUNT*PERSIST_CONTROL_ENTITY_COUNT))||(codec_clock_valid(p->globals.clock_source_key)==0U)||(persist_key_record_start_from_disk(p->globals.record_start_key,&record_mode)==0U)||(persist_key_record_length_from_disk(p->globals.record_length_key,&record_mode)==0U))return PERSIST_CODEC_CAPACITY_EXCEEDED;
@@ -343,11 +455,17 @@ persist_codec_result_t persist_codec_validate_pattern(const persist_control_patt
     if(m->envelope.retrigger_hard>1U||!isfinite(m->envelope.attack)||!isfinite(m->envelope.decay)||!isfinite(m->envelope.sustain)||!isfinite(m->envelope.release))return PERSIST_CODEC_INVALID_MODULATION;
     for(uint8_t i=0U;i<2U;++i){uint8_t source;if((persist_key_mod_source_from_disk(m->multi[i].source_a_key,&source)==0U)||(persist_key_mod_source_from_disk(m->multi[i].source_b_key,&source)==0U)||(persist_key_mod_source_from_disk(m->slew[i].source_key,&source)==0U)||!isfinite(m->slew[i].amount))return PERSIST_CODEC_INVALID_MODULATION;}
     for(uint8_t i=0U;i<PERSIST_CONTROL_MOD_ROUTE_COUNT;++i){const persist_control_mod_route_t *route=&m->routes[i];uint8_t destination_entity;param_id_t destination;if((codec_mod_source_valid(route->source_key)==0U)||(route->enabled>1U)||!isfinite(route->depth))return PERSIST_CODEC_INVALID_MODULATION;if(route->destination_parameter==PERSIST_CONTROL_KEY_NONE){if(route->enabled!=0U||route->destination_entity!=e)return PERSIST_CODEC_INVALID_MODULATION;}else if((persist_key_mod_destination_from_disk(route->destination_entity,route->destination_parameter,group_active,&destination_entity,&destination)==0U)||(persist_entity_mod_destination_allowed(group_active,e,destination_entity)==0U))return PERSIST_CODEC_INVALID_MODULATION;}}
-    return codec_validate_parameters(p->globals.parameters,p->globals.parameter_count,PERSIST_PARAM_SCOPE_GLOBAL);
+    if ((p->globals.keyboard.root > 11U) || (p->globals.keyboard.scale > 6U)
+            || (p->globals.keyboard.omnichord > 1U)
+            || (p->globals.keyboard.note_order > 1U)
+            || (p->globals.keyboard.chord_override > 1U)
+            || (p->globals.keyboard.mono_last > 1U)
+            || (p->globals.metronome_level > 127U)) return PERSIST_CODEC_INVALID_ENTITY;
+    return PERSIST_CODEC_OK;
 }
 
 persist_codec_result_t persist_codec_validate_patch(const persist_control_patch_t *p)
-{ if(p==NULL)return PERSIST_CODEC_INVALID_ARGUMENT;if((p->name_length>PERSIST_CONTROL_PATCH_NAME_BYTES)||(codec_family_valid(p->family)==0U)||(codec_type_valid(p->type)==0U)||(p->parameter_count>PERSIST_CONTROL_ENTITY_PARAM_COUNT))return PERSIST_CODEC_CAPACITY_EXCEEDED;if((p->asset.id!=PERSIST_CONTROL_ASSET_NONE)&&((codec_asset_kind_valid(p->asset.kind)==0U)||(p->asset.path_length==0U)||(p->asset.path_length>PERSIST_CONTROL_ASSET_PATH_BYTES)))return PERSIST_CODEC_INVALID_ASSET;return codec_validate_parameters(p->parameters,p->parameter_count,PERSIST_PARAM_SCOPE_ENTITY); }
+{ if(p==NULL)return PERSIST_CODEC_INVALID_ARGUMENT;if((p->name_length>PERSIST_CONTROL_PATCH_NAME_BYTES)||(codec_family_valid(p->family)==0U)||(codec_type_valid(p->type)==0U)||(p->asset_count>PERSIST_CONTROL_TRACK_ASSET_COUNT)||(p->fm_present>1U)||(p->tone_present>1U)||(p->fm_present&&p->tone_present)||(p->polyphony.voice_count<1U)||(p->polyphony.voice_count>8U))return PERSIST_CODEC_CAPACITY_EXCEEDED;for(uint8_t i=0U;i<p->asset_count;++i)if(codec_validate_asset_ref(&p->assets[i])!=PERSIST_CODEC_OK)return PERSIST_CODEC_INVALID_ASSET;return PERSIST_CODEC_OK; }
 
 typedef void (*codec_body_fn)(codec_io_t *,void *);
 static void codec_pattern_adapter(codec_io_t *io,void *p){codec_pattern_body(io,(persist_control_pattern_t *)p);}
@@ -383,16 +501,16 @@ static void codec_expect_section(codec_io_t *io,uint16_t expected,codec_body_fn 
 {uint16_t type=0U,version=0U;uint32_t length=0U;codec_u16(io,&type);codec_u16(io,&version);codec_u32(io,&length);if((io->result!=PERSIST_CODEC_OK)||(type!=expected)||(version!=1U)||(io->count>io->limit)||(length>io->limit-io->count)){io->result=PERSIST_CODEC_BAD_SECTION;return;}uint32_t old=io->limit,start=io->count;io->limit=start+length;fn(io,object);if((io->result==PERSIST_CODEC_OK)&&(io->count!=io->limit))io->result=PERSIST_CODEC_BAD_LENGTH;io->limit=old;}
 
 typedef struct{const persist_codec_project_source_t*source;uint8_t seen[PERSIST_CONTROL_PATTERN_BANK_COUNT*PERSIST_CONTROL_PATTERN_PER_BANK];} project_encode_ctx_t;
-static persist_codec_result_t codec_validate_project_pattern(const persist_control_pattern_t*p){persist_codec_result_t r=persist_codec_validate_pattern(p);if(r!=PERSIST_CODEC_OK)return r;for(uint8_t e=0U;e<PERSIST_CONTROL_ENTITY_COUNT;++e)if(p->entities[e].asset!=PERSIST_CONTROL_ASSET_NONE)return PERSIST_CODEC_INVALID_ASSET;return PERSIST_CODEC_OK;}
-static persist_codec_result_t codec_validate_project_macros(const persist_control_macros_t*m){if(m==NULL||((m->hall_switch_key!=PERSIST_MACRO_HALL_SCENE)&&(m->hall_switch_key!=PERSIST_MACRO_HALL_SWITCH)))return PERSIST_CODEC_UNKNOWN_KEY;for(uint8_t i=0U;i<PERSIST_CONTROL_MACRO_COUNT;++i)if(m->selected_scene[i]>=PERSIST_CONTROL_MACRO_SCENE_COUNT)return PERSIST_CODEC_INVALID_ENTITY;for(uint8_t s=0U;s<PERSIST_CONTROL_MACRO_SCENE_COUNT;++s){if(m->scenes[s].lock_count>PERSIST_CONTROL_MACRO_LOCK_COUNT)return PERSIST_CODEC_CAPACITY_EXCEEDED;for(uint8_t i=0U;i<m->scenes[s].lock_count;++i){const persist_control_macro_lock_t*l=&m->scenes[s].locks[i];param_id_t id;persist_param_descriptor_t d;if(l->entity>=PERSIST_CONTROL_ENTITY_COUNT||persist_key_param_from_disk(l->parameter,&id)==0U||persist_key_param_descriptor(id,&d)==0U||d.persistent==0U||l->kind!=d.kind||!isfinite(l->value.f32))return PERSIST_CODEC_UNKNOWN_KEY;for(uint8_t j=0U;j<i;++j)if(m->scenes[s].locks[j].entity==l->entity&&m->scenes[s].locks[j].parameter==l->parameter)return PERSIST_CODEC_DUPLICATE;}}return PERSIST_CODEC_OK;}
-static persist_codec_result_t codec_validate_asset_ref(const persist_control_asset_ref_t*a){return(a!=NULL&&a->id!=PERSIST_CONTROL_ASSET_NONE&&codec_asset_kind_valid(a->kind)&&a->path_length!=0U&&a->path_length<=PERSIST_CONTROL_ASSET_PATH_BYTES)?PERSIST_CODEC_OK:PERSIST_CODEC_INVALID_ASSET;}
+static persist_codec_result_t codec_validate_project_pattern(const persist_control_pattern_t*p){return persist_codec_validate_pattern(p);}
+static persist_codec_result_t codec_validate_project_macros(const persist_control_macros_t*m){if(m==NULL||((m->hall_switch_key!=PERSIST_MACRO_HALL_SCENE)&&(m->hall_switch_key!=PERSIST_MACRO_HALL_SWITCH)))return PERSIST_CODEC_UNKNOWN_KEY;for(uint8_t i=0U;i<PERSIST_CONTROL_MACRO_COUNT;++i)if(m->selected_scene[i]>=PERSIST_CONTROL_MACRO_SCENE_COUNT)return PERSIST_CODEC_INVALID_ENTITY;for(uint8_t s=0U;s<PERSIST_CONTROL_MACRO_SCENE_COUNT;++s){if(m->scenes[s].lock_count>PERSIST_CONTROL_MACRO_LOCK_COUNT)return PERSIST_CODEC_CAPACITY_EXCEEDED;for(uint8_t i=0U;i<m->scenes[s].lock_count;++i){const persist_control_macro_lock_t*l=&m->scenes[s].locks[i];param_id_t id;persist_param_descriptor_t d;if(l->entity>=PERSIST_CONTROL_ENTITY_COUNT||persist_key_param_from_disk(l->parameter,&id)==0U||persist_key_param_descriptor(id,&d)==0U||d.key==0U||d.scope!=PERSIST_PARAM_SCOPE_ENTITY||d.kind!=PERSIST_VALUE_FLOAT32||!isfinite(l->scene_value)||l->scene_value<param_registry[id].min||l->scene_value>param_registry[id].max)return PERSIST_CODEC_UNKNOWN_KEY;for(uint8_t j=0U;j<i;++j)if(m->scenes[s].locks[j].entity==l->entity&&m->scenes[s].locks[j].parameter==l->parameter)return PERSIST_CODEC_DUPLICATE;}}return PERSIST_CODEC_OK;}
+static persist_codec_result_t codec_validate_asset_ref(const persist_control_asset_ref_t*a){return(asset_ref_is_canonical(a)!=0U&&codec_asset_kind_valid(a->kind))?PERSIST_CODEC_OK:PERSIST_CODEC_INVALID_ASSET;}
 static void codec_project_core_encode(codec_io_t*io,void*v){project_encode_ctx_t*c=v;persist_codec_project_metadata_t m=c->source->metadata;codec_u8(io,&m.active_pattern_bank);codec_u8(io,&m.active_pattern);codec_u16(io,&m.pattern_count);const persist_control_pattern_t*p=(c->source->working_pattern.get!=NULL)?c->source->working_pattern.get(c->source->working_pattern.context):NULL;if(m.active_pattern_bank>=PERSIST_CONTROL_PATTERN_BANK_COUNT||m.active_pattern>=PERSIST_CONTROL_PATTERN_PER_BANK||m.pattern_count>PERSIST_CONTROL_PATTERN_BANK_COUNT*PERSIST_CONTROL_PATTERN_PER_BANK||p==NULL){io->result=PERSIST_CODEC_INVALID_ENTITY;return;}persist_codec_result_t r=codec_validate_project_pattern(p);if(r!=PERSIST_CODEC_OK){io->result=r;return;}codec_pattern_body(io,(persist_control_pattern_t*)p);}
 static void codec_project_assets_encode(codec_io_t*io,void*v){project_encode_ctx_t*c=v;uint16_t count=c->source->assets.count;codec_u16(io,&count);if(count>PERSIST_CONTROL_ASSET_COUNT||c->source->assets.get==NULL){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}for(uint16_t i=0U;i<count;++i){const persist_control_asset_ref_t*a=c->source->assets.get(c->source->assets.context,i);persist_codec_result_t r=codec_validate_asset_ref(a);if(r!=PERSIST_CODEC_OK){io->result=r;return;}codec_asset(io,(persist_control_asset_ref_t*)a);}}
 static void codec_project_macros_encode(codec_io_t*io,void*v){project_encode_ctx_t*c=v;persist_codec_result_t r=codec_validate_project_macros(c->source->macros);if(r!=PERSIST_CODEC_OK){io->result=r;return;}codec_macros(io,(persist_control_macros_t*)c->source->macros);}
 static void codec_project_bank_encode(codec_io_t*io,void*v){project_encode_ctx_t*c=v;memset(c->seen,0,sizeof(c->seen));uint16_t count=c->source->metadata.pattern_count;codec_u16(io,&count);for(uint16_t i=0U;i<count;++i){const persist_control_pattern_record_t*r=(c->source->patterns.get!=NULL)?c->source->patterns.get(c->source->patterns.context,i):NULL;if(r==NULL){io->result=PERSIST_CODEC_IO_ERROR;return;}persist_control_pattern_record_t*record=(persist_control_pattern_record_t*)r;codec_u8(io,&record->bank);codec_u8(io,&record->pattern);codec_u8(io,&record->present);codec_pattern_body(io,&record->content);if(record->bank>=PERSIST_CONTROL_PATTERN_BANK_COUNT||record->pattern>=PERSIST_CONTROL_PATTERN_PER_BANK||record->present!=1U){io->result=PERSIST_CODEC_INVALID_ENTITY;return;}uint8_t slot=(uint8_t)(record->bank*PERSIST_CONTROL_PATTERN_PER_BANK+record->pattern);if(c->seen[slot]){io->result=PERSIST_CODEC_DUPLICATE;return;}c->seen[slot]=1U;persist_codec_result_t valid=codec_validate_project_pattern(&record->content);if(valid!=PERSIST_CODEC_OK){io->result=valid;return;}}}
 static void codec_project_payload(codec_io_t*io,void*v){codec_section(io,SECTION_PROJECT_CORE,codec_project_core_encode,v);codec_section(io,SECTION_PROJECT_ASSETS,codec_project_assets_encode,v);codec_section(io,SECTION_PROJECT_MACROS,codec_project_macros_encode,v);codec_section(io,SECTION_PROJECT_BANK,codec_project_bank_encode,v);}
 static void codec_pattern_payload(codec_io_t *io,void *v){codec_section(io,SECTION_PATTERN_BODY,codec_pattern_adapter,v);}
-static void codec_patch_body(codec_io_t *io,void *v){persist_control_patch_t *p=v;codec_u16(io,&p->name_length);if(p->name_length>PERSIST_CONTROL_PATCH_NAME_BYTES){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}codec_bytes(io,(uint8_t *)p->name,p->name_length);codec_u32(io,&p->family);codec_u32(io,&p->type);codec_asset(io,&p->asset);codec_u16(io,&p->parameter_count);if(p->parameter_count>PERSIST_CONTROL_ENTITY_PARAM_COUNT){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}for(uint16_t i=0U;i<p->parameter_count;++i)codec_parameter(io,&p->parameters[i]);}
+static void codec_patch_body(codec_io_t *io,void *v){persist_control_patch_t *p=v;codec_u16(io,&p->name_length);if(p->name_length>PERSIST_CONTROL_PATCH_NAME_BYTES){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}codec_bytes(io,(uint8_t *)p->name,p->name_length);codec_u32(io,&p->family);codec_u32(io,&p->type);codec_u8(io,&p->asset_count);if(p->asset_count>PERSIST_CONTROL_TRACK_ASSET_COUNT){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}for(uint8_t i=0U;i<p->asset_count;++i)codec_asset(io,&p->assets[i]);codec_u8(io,&p->fm_present);if(p->fm_present)codec_fm_state(io,&p->fm);codec_u8(io,&p->tone_present);if(p->tone_present)codec_tone(io,&p->tone);codec_filter(io,&p->filter);codec_vca(io,&p->vca);codec_env3(io,&p->env3);codec_audio_fx(io,&p->audio_fx);codec_polyphony(io,&p->polyphony);codec_modulation(io,&p->modulation);}
 static void codec_patch_payload(codec_io_t *io,void *v){codec_section(io,SECTION_PATCH_BODY,codec_patch_body,v);}
 
 persist_codec_result_t persist_codec_encode_pattern(const persist_control_pattern_t *p,const persist_codec_sink_t *s,uint32_t *n){persist_codec_result_t r=persist_codec_validate_pattern(p);return(r==PERSIST_CODEC_OK)?codec_write_document(PERSIST_CODEC_DOCUMENT_PATTERN,1U,codec_pattern_payload,(void *)p,s,n):r;}
@@ -580,10 +698,10 @@ persist_codec_result_t persist_codec_prevalidate_project(const persist_codec_sou
 }
 
 typedef struct{persist_codec_project_workspace_t*w;const persist_codec_project_consumer_t*project;const persist_codec_pattern_consumer_t*patterns;persist_codec_project_metadata_t metadata;uint8_t mutate;uint8_t pattern_seen[256];} project_decode_ctx_t;
-static void codec_project_core_decode(codec_io_t*io,void*v){project_decode_ctx_t*c=v;memset(&c->w->unit.pattern_record,0,sizeof(c->w->unit.pattern_record));codec_u8(io,&c->metadata.active_pattern_bank);codec_u8(io,&c->metadata.active_pattern);codec_u16(io,&c->metadata.pattern_count);codec_pattern_body(io,&c->w->unit.pattern_record.content);if(io->result!=PERSIST_CODEC_OK)return;if(c->metadata.active_pattern_bank>=PERSIST_CONTROL_PATTERN_BANK_COUNT||c->metadata.active_pattern>=PERSIST_CONTROL_PATTERN_PER_BANK||c->metadata.pattern_count>PERSIST_CONTROL_PATTERN_BANK_COUNT*PERSIST_CONTROL_PATTERN_PER_BANK)io->result=PERSIST_CODEC_INVALID_ENTITY;else io->result=codec_validate_project_pattern(&c->w->unit.pattern_record.content);}
-static void codec_project_assets_decode(codec_io_t*io,void*v){project_decode_ctx_t*c=v;codec_u16(io,&c->metadata.asset_count);if(c->metadata.asset_count>PERSIST_CONTROL_ASSET_COUNT){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}for(uint16_t i=0U;i<c->metadata.asset_count;++i){persist_control_asset_ref_t asset;memset(&asset,0,sizeof(asset));codec_asset(io,&asset);if(io->result!=PERSIST_CODEC_OK)return;persist_codec_result_t r=codec_validate_asset_ref(&asset);if(r!=PERSIST_CODEC_OK){io->result=r;return;}for(uint16_t j=0U;j<i;++j)if(c->w->asset_ids[j]==asset.id){io->result=PERSIST_CODEC_DUPLICATE;return;}c->w->asset_ids[i]=asset.id;if(c->project->validate_asset(c->project->context,&asset)==0U||(c->mutate&&c->project->put_asset(c->project->context,&asset)==0U)){io->result=PERSIST_CODEC_INVALID_ASSET;return;}}}
-static void codec_project_macros_decode(codec_io_t*io,void*v){project_decode_ctx_t*c=v;memset(&c->w->unit.macros,0,sizeof(c->w->unit.macros));codec_macros(io,&c->w->unit.macros);if(io->result!=PERSIST_CODEC_OK)return;persist_codec_result_t r=codec_validate_project_macros(&c->w->unit.macros);if(r!=PERSIST_CODEC_OK)io->result=r;else if(c->mutate&&c->project->apply_macros(c->project->context,&c->w->unit.macros)==0U)io->result=PERSIST_CODEC_IO_ERROR;}
-static void codec_project_bank_decode(codec_io_t*io,void*v){project_decode_ctx_t*c=v;uint16_t count=0U;codec_u16(io,&count);if(count!=c->metadata.pattern_count){io->result=PERSIST_CODEC_BAD_LENGTH;return;}memset(c->pattern_seen,0,sizeof(c->pattern_seen));for(uint16_t i=0U;i<count;++i){persist_control_pattern_record_t*r=&c->w->unit.pattern_record;memset(r,0,sizeof(*r));codec_u8(io,&r->bank);codec_u8(io,&r->pattern);codec_u8(io,&r->present);codec_pattern_body(io,&r->content);if(io->result!=PERSIST_CODEC_OK)return;if(r->bank>=PERSIST_CONTROL_PATTERN_BANK_COUNT||r->pattern>=PERSIST_CONTROL_PATTERN_PER_BANK||r->present!=1U){io->result=PERSIST_CODEC_INVALID_ENTITY;return;}uint8_t slot=(uint8_t)(r->bank*PERSIST_CONTROL_PATTERN_PER_BANK+r->pattern);if(c->pattern_seen[slot]){io->result=PERSIST_CODEC_DUPLICATE;return;}c->pattern_seen[slot]=1U;persist_codec_result_t valid=codec_validate_project_pattern(&r->content);if(valid!=PERSIST_CODEC_OK){io->result=valid;return;}if(c->mutate&&c->patterns->put(c->patterns->context,r)==0U){io->result=PERSIST_CODEC_IO_ERROR;return;}}}
+static void codec_project_core_decode(codec_io_t*io,void*v){project_decode_ctx_t*c=v;memset(&c->w->unit.pattern_record,0,sizeof(c->w->unit.pattern_record));codec_u8(io,&c->metadata.active_pattern_bank);codec_u8(io,&c->metadata.active_pattern);codec_u16(io,&c->metadata.pattern_count);codec_pattern_body(io,&c->w->unit.pattern_record.content);if(io->result!=PERSIST_CODEC_OK)return;if(c->metadata.active_pattern_bank>=PERSIST_CONTROL_PATTERN_BANK_COUNT||c->metadata.active_pattern>=PERSIST_CONTROL_PATTERN_PER_BANK||c->metadata.pattern_count>PERSIST_CONTROL_PATTERN_BANK_COUNT*PERSIST_CONTROL_PATTERN_PER_BANK)io->result=PERSIST_CODEC_INVALID_ENTITY;}
+static void codec_project_assets_decode(codec_io_t*io,void*v){project_decode_ctx_t*c=v;codec_u16(io,&c->metadata.asset_count);if(c->metadata.asset_count>PERSIST_CONTROL_ASSET_COUNT){io->result=PERSIST_CODEC_CAPACITY_EXCEEDED;return;}for(uint16_t i=0U;i<c->metadata.asset_count;++i){persist_control_asset_ref_t*asset=&c->w->assets[i];memset(asset,0,sizeof(*asset));codec_asset(io,asset);if(io->result!=PERSIST_CODEC_OK)return;persist_codec_result_t r=codec_validate_asset_ref(asset);if(r!=PERSIST_CODEC_OK){io->result=r;return;}for(uint16_t j=0U;j<i;++j)if(c->w->assets[j].kind==asset->kind&&c->w->assets[j].path_length==asset->path_length&&memcmp(c->w->assets[j].canonical_path,asset->canonical_path,asset->path_length)==0){io->result=PERSIST_CODEC_DUPLICATE;return;}if(c->project->validate_asset(c->project->context,asset)==0U||(c->mutate&&c->project->put_asset(c->project->context,asset)==0U)){io->result=PERSIST_CODEC_INVALID_ASSET;return;}}}
+static void codec_project_macros_decode(codec_io_t*io,void*v){project_decode_ctx_t*c=v;memset(&c->w->unit.macros,0,sizeof(c->w->unit.macros));codec_macros(io,&c->w->unit.macros);if(io->result!=PERSIST_CODEC_OK)return;if(c->mutate&&c->project->apply_macros(c->project->context,&c->w->unit.macros)==0U)io->result=PERSIST_CODEC_IO_ERROR;}
+static void codec_project_bank_decode(codec_io_t*io,void*v){project_decode_ctx_t*c=v;uint16_t count=0U;codec_u16(io,&count);if(count!=c->metadata.pattern_count){io->result=PERSIST_CODEC_BAD_LENGTH;return;}memset(c->pattern_seen,0,sizeof(c->pattern_seen));for(uint16_t i=0U;i<count;++i){persist_control_pattern_record_t*r=&c->w->unit.pattern_record;memset(r,0,sizeof(*r));codec_u8(io,&r->bank);codec_u8(io,&r->pattern);codec_u8(io,&r->present);codec_pattern_body(io,&r->content);if(io->result!=PERSIST_CODEC_OK)return;if(r->bank>=PERSIST_CONTROL_PATTERN_BANK_COUNT||r->pattern>=PERSIST_CONTROL_PATTERN_PER_BANK||r->present!=1U){io->result=PERSIST_CODEC_INVALID_ENTITY;return;}uint8_t slot=(uint8_t)(r->bank*PERSIST_CONTROL_PATTERN_PER_BANK+r->pattern);if(c->pattern_seen[slot]){io->result=PERSIST_CODEC_DUPLICATE;return;}c->pattern_seen[slot]=1U;if(c->mutate&&c->patterns->put(c->patterns->context,r)==0U){io->result=PERSIST_CODEC_IO_ERROR;return;}}}
 static persist_codec_result_t codec_project_decode_pass(const persist_codec_source_t*s,project_decode_ctx_t*c)
 {if(s->reset(s->context)==0U)return PERSIST_CODEC_IO_ERROR;memset(c->w,0,sizeof(*c->w));codec_io_t io;uint32_t crc;persist_codec_result_t r=codec_decode_begin(s,PERSIST_CODEC_DOCUMENT_PROJECT,4U,&io,&crc);if(r!=PERSIST_CODEC_OK)return r;codec_expect_section(&io,SECTION_PROJECT_CORE,codec_project_core_decode,c);codec_expect_section(&io,SECTION_PROJECT_ASSETS,codec_project_assets_decode,c);if(io.result==PERSIST_CODEC_OK&&c->mutate&&c->project->apply_working(c->project->context,&c->metadata,&c->w->unit.pattern_record.content)==0U)io.result=PERSIST_CODEC_IO_ERROR;codec_expect_section(&io,SECTION_PROJECT_MACROS,codec_project_macros_decode,c);codec_expect_section(&io,SECTION_PROJECT_BANK,codec_project_bank_decode,c);return codec_decode_end(&io,crc);}
 

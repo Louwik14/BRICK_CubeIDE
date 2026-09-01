@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-#define PERSIST_CODEC_VERSION 3U
+#define PERSIST_CODEC_VERSION 4U
 #define PERSIST_CODEC_HEADER_BYTES 24U
 #define PERSIST_CODEC_SECTION_HEADER_BYTES 8U
 #define PERSIST_CODEC_MAX_DOCUMENT_BYTES 0x3FFFFFFFUL
@@ -132,8 +132,7 @@ typedef struct
 typedef struct
 {
     union { persist_control_pattern_record_t pattern_record; persist_control_macros_t macros; } unit;
-    persist_control_asset_ref_t asset;
-    persist_control_asset_id_t asset_ids[PERSIST_CONTROL_ASSET_COUNT];
+    persist_control_asset_ref_t assets[PERSIST_CONTROL_ASSET_COUNT];
 } persist_codec_project_workspace_t;
 
 typedef struct

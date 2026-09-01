@@ -270,6 +270,11 @@ static uint8_t wavetable_pool_source_crc32(FIL *fp, uint32_t *out_crc32)
     return (f_lseek(fp, 0U) == FR_OK) ? 1U : 0U;
 }
 
+uint8_t wavetable_pool_source_crc32_file(FIL *file, uint32_t *out_crc32)
+{
+    return wav_parser_crc32_file(file, out_crc32);
+}
+
 static void wavetable_pool_candidate_init(wavetable_slot_t *candidate)
 {
     memset(candidate, 0, sizeof(*candidate));
@@ -467,45 +472,61 @@ static void wavetable_pool_generate_band_from_fft(float *dst,
     }
 }
 
+static uint8_t wavetable_pool_frame_geometry(
+    uint32_t frame_count,
+    uint32_t *out_brick_bytes,
+    uint32_t *out_mipmap_bytes,
+    uint32_t *out_brick_pages,
+    uint32_t *out_mipmap_pages)
+{
+    const uint32_t mipmap_samples_per_cycle =
+        wavetable_pool_mipmap_samples_per_table_cycle();
+    if ((frame_count == 0U)
+        || (frame_count > (UINT32_MAX / WAVETABLE_FRAME_SAMPLE_COUNT))
+        || (frame_count > (UINT32_MAX / mipmap_samples_per_cycle)))
+        return 0U;
+    const uint64_t brick_bytes64 = (uint64_t)frame_count
+        * WAVETABLE_FRAME_SAMPLE_COUNT * sizeof(float);
+    const uint64_t mipmap_bytes64 = (uint64_t)frame_count
+        * mipmap_samples_per_cycle * sizeof(float);
+    if ((brick_bytes64 > UINT32_MAX) || (mipmap_bytes64 > UINT32_MAX))
+        return 0U;
+    const uint32_t brick_bytes = (uint32_t)brick_bytes64;
+    const uint32_t mipmap_bytes = (uint32_t)mipmap_bytes64;
+    const uint32_t brick_pages = (brick_bytes + SAMPLE_PAGE_BYTES - 1U)
+        / SAMPLE_PAGE_BYTES;
+    const uint32_t mipmap_pages = (mipmap_bytes + SAMPLE_PAGE_BYTES - 1U)
+        / SAMPLE_PAGE_BYTES;
+    if ((brick_pages == 0U) || (mipmap_pages == 0U)
+        || (brick_pages > (UINT32_MAX / SAMPLE_PAGE_BYTES))
+        || (mipmap_pages > (UINT32_MAX / SAMPLE_PAGE_BYTES)))
+        return 0U;
+    if (out_brick_bytes != NULL) *out_brick_bytes = brick_bytes;
+    if (out_mipmap_bytes != NULL) *out_mipmap_bytes = mipmap_bytes;
+    if (out_brick_pages != NULL) *out_brick_pages = brick_pages;
+    if (out_mipmap_pages != NULL) *out_mipmap_pages = mipmap_pages;
+    return 1U;
+}
+
 static wavetable_result_t wavetable_pool_candidate_allocate(
     uint16_t wavetable_slot,
     const char *path,
     uint32_t frame_count,
     wavetable_slot_t *candidate)
 {
-    if ((path == 0) || (candidate == 0) || (frame_count == 0U)
-        || (frame_count > (UINT32_MAX / WAVETABLE_FRAME_SAMPLE_COUNT)))
+    if ((path == 0) || (candidate == 0))
     {
         return WAVETABLE_RESULT_INVALID_ARG;
     }
 
-    const uint32_t brick_samples =
-        frame_count * WAVETABLE_FRAME_SAMPLE_COUNT;
-    const uint32_t mipmap_samples_per_cycle =
-        wavetable_pool_mipmap_samples_per_table_cycle();
-    if (frame_count > (UINT32_MAX / mipmap_samples_per_cycle)
-        || brick_samples > (UINT32_MAX / sizeof(float)))
-    {
+    uint32_t brick_bytes = 0U;
+    uint32_t mipmap_bytes = 0U;
+    uint32_t brick_pages = 0U;
+    uint32_t mipmap_pages = 0U;
+    if (wavetable_pool_frame_geometry(frame_count, &brick_bytes,
+                                      &mipmap_bytes, &brick_pages,
+                                      &mipmap_pages) == 0U)
         return WAVETABLE_RESULT_TOO_LARGE;
-    }
-    const uint32_t mipmap_samples = frame_count * mipmap_samples_per_cycle;
-    if (mipmap_samples > (UINT32_MAX / sizeof(float)))
-    {
-        return WAVETABLE_RESULT_TOO_LARGE;
-    }
-
-    const uint32_t brick_bytes = brick_samples * sizeof(float);
-    const uint32_t mipmap_bytes = mipmap_samples * sizeof(float);
-    const uint32_t brick_pages =
-        (brick_bytes + SAMPLE_PAGE_BYTES - 1U) / SAMPLE_PAGE_BYTES;
-    const uint32_t mipmap_pages =
-        (mipmap_bytes + SAMPLE_PAGE_BYTES - 1U) / SAMPLE_PAGE_BYTES;
-    if ((brick_pages == 0U) || (mipmap_pages == 0U)
-        || (brick_pages > (UINT32_MAX / SAMPLE_PAGE_BYTES))
-        || (mipmap_pages > (UINT32_MAX / SAMPLE_PAGE_BYTES)))
-    {
-        return WAVETABLE_RESULT_TOO_LARGE;
-    }
     const uint32_t brick_cost = brick_pages * SAMPLE_PAGE_BYTES;
     const uint32_t mipmap_cost = mipmap_pages * SAMPLE_PAGE_BYTES;
     if ((brick_cost > sample_page_cache_port_shared_total_bytes())

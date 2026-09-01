@@ -56,8 +56,7 @@ static const button_id_t g_button_physical_to_logical[] = {
 
 /*
  * The scan order above remains the raw board order.  These IDs are the
- * values currently reported by the low-cost button-test page and are remapped
- * only after that raw lookup.
+ * values are remapped only after that raw lookup.
  */
 static button_id_t board_controls_button_remap_observed_id(button_id_t observed_id)
 {

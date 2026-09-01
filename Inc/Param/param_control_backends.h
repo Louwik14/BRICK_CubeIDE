@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Param/param_store.h"
+#include "Param/param_ids.h"
 #include "Track/track_runtime.h"
 
 uint8_t param_backend_is_midi_cc_id(param_id_t id);

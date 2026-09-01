@@ -9,9 +9,8 @@
 /* Place uninitialized, non real-time buffers in SDRAM */
 #define SDRAM_BSS __attribute__((section(".sdram")))
 
-/* Timeouts and test sizes */
+/* Initialization timeout */
 #define SDRAM_TIMEOUT     ((uint32_t)0xFFFF)
-#define SDRAM_BUFFER_SIZE ((uint32_t)0x1000)
 
 /* SDRAM mode register definitions */
 #define SDRAM_MODEREG_BURST_LENGTH_1             ((uint16_t)0x0000)
@@ -28,7 +27,6 @@
 
 /* Public API */
 void SDRAM_Init(void);
-void SDRAM_Test(void);
 
 /* =========================================================
  * ⚠️ Important note about 32-bit access on x16 FMC (STM32H7)

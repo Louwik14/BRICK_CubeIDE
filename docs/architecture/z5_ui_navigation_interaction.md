@@ -15,6 +15,6 @@ track selection -> mute -> track hall gate -> transport -> settings
 -> global shortcuts -> pattern -> sequence -> navigation -> page active
 ```
 
-Les deltas encodeur utilisent un snapshot du contexte pris au debut du tick. Les modifications structurelles et restores passent par `ui_core_runtime_bridge`; la post-synchronisation suit invalidation runtime, enables AUDIO, focus clavier, miroir actif, registre UI et contexte d'edition.
+Les deltas encodeur utilisent un snapshot du contexte pris au debut du tick. Les modifications structurelles et restores appellent directement les owners Track; la mise a jour de contexte UI reste explicite via `ui_active_track_sync` et `ui_edit_context_sync`.
 
 Les clipboards transportent uniquement des etats logiques. Un collage MIDI FX applique MODEL avant ses parametres; un collage External conserve l'entree demandee et echoue sur conflit.

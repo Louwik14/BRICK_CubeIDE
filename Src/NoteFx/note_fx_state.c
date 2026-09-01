@@ -249,3 +249,11 @@ uint8_t note_fx_state_restore_track(uint8_t track, const note_fx_track_state_t *
     g_note_fx_state[track] = normalized;
     return 1U;
 }
+
+uint8_t note_fx_state_install_prepared_track(uint8_t track,
+                                             const note_fx_track_state_t *state)
+{
+    if ((track >= NOTE_FX_TRACK_COUNT) || (state == NULL)) return 0U;
+    g_note_fx_state[track] = *state;
+    return 1U;
+}

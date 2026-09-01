@@ -75,11 +75,6 @@ void ui_event_from_inputs(void)
             ev.type = UI_EVENT_BUTTON_PRESS;
             ev.id = i;
             ev.value = 1;
-#if BRICK_TEST_BUILD
-            ev.source = (button_test_pressed_is_diagnostic((button_id_t)i) != 0U)
-                ? UI_EVENT_SOURCE_DIAGNOSTIC
-                : UI_EVENT_SOURCE_PHYSICAL;
-#endif
             ui_event_push(&ev);
         }
 
@@ -88,11 +83,6 @@ void ui_event_from_inputs(void)
             ev.type = UI_EVENT_BUTTON_RELEASE;
             ev.id = i;
             ev.value = 0;
-#if BRICK_TEST_BUILD
-            ev.source = (button_test_released_is_diagnostic((button_id_t)i) != 0U)
-                ? UI_EVENT_SOURCE_DIAGNOSTIC
-                : UI_EVENT_SOURCE_PHYSICAL;
-#endif
             ui_event_push(&ev);
         }
     }
@@ -106,9 +96,6 @@ void ui_event_from_inputs(void)
             ev.type = UI_EVENT_HALL_PRESS;
             ev.id = hall;
             ev.value = 1;
-#if BRICK_TEST_BUILD
-            ev.source = UI_EVENT_SOURCE_PHYSICAL;
-#endif
             ui_event_push(&ev);
         }
         else if ((g_ui_hall_prev_pressed[hall] != 0U) && (pressed == 0U))
@@ -116,9 +103,6 @@ void ui_event_from_inputs(void)
             ev.type = UI_EVENT_HALL_RELEASE;
             ev.id = hall;
             ev.value = 0;
-#if BRICK_TEST_BUILD
-            ev.source = UI_EVENT_SOURCE_PHYSICAL;
-#endif
             ui_event_push(&ev);
         }
 

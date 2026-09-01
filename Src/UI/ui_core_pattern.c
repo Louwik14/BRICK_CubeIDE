@@ -116,7 +116,8 @@ uint8_t ui_core_pattern_handle_mode_event(const ui_event_t *ev,
             return 1U;
         }
     }
-    else if (pattern_live_queue_slot(g_ui_core_pattern.selected_bank, ev->id) != 0U)
+    else if (pattern_live_queue_slot(g_ui_core_pattern.selected_bank, ev->id,
+                                    ui_get_active_track()) != 0U)
     {
         if (feedback != 0)
         {

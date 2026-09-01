@@ -7,7 +7,6 @@
 
 #include "Seq/seq_types.h"
 #include "Keyboard/ui_keyboard_app.h"
-#include "UI/ui_core.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,8 +31,7 @@ void keyboard_runtime_process_hall_timed(uint8_t hall_index, bool pressed,
                                          uint8_t velocity, uint32_t capture_tick,
                                          uint32_t ingress_serial);
 void keyboard_runtime_all_notes_off(void);
-void keyboard_runtime_sync_track_focus_context(void);
-void keyboard_runtime_on_hall_mode_changed(ui_hall_mode_t previous_mode, ui_hall_mode_t new_mode);
+void keyboard_runtime_on_hall_keyboard_deactivated(void);
 uint8_t keyboard_runtime_get_root_index(void);
 uint8_t keyboard_runtime_get_scale_index(void);
 bool keyboard_runtime_get_omnichord(void);

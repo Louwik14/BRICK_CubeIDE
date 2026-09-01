@@ -66,3 +66,16 @@ uint8_t control_routing_apply_bulk(
                 (source != looper) && (sources[looper][source] != 0U));
     return 1U;
 }
+
+uint8_t control_routing_clear_entity(brick_entity_id_t entity)
+{
+    if (entity >= BRICK_ENTITY_CAPACITY) return 0U;
+    uint8_t next[BRICK_ENTITY_CAPACITY][BRICK_ENTITY_CAPACITY];
+    memcpy(next, g_looper_sources, sizeof(next));
+    for (uint8_t other = 0U; other < BRICK_ENTITY_CAPACITY; ++other)
+    {
+        next[entity][other] = 0U;
+        next[other][entity] = 0U;
+    }
+    return control_routing_apply_bulk(next);
+}

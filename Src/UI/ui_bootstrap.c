@@ -1,6 +1,5 @@
 #include "ui_bootstrap.h"
 
-#include "pages/ui_page_param_test.h"
 #include "pages/ui_page_debug_hall.h"
 #include "pages/ui_page_calibration.h"
 #include "pages/ui_page_template_env.h"
@@ -17,10 +16,8 @@
 #include "pages/ui_page_patch_assign.h"
 #include "pages/ui_page_name_edit.h"
 #include "pages/ui_page_settings.h"
-#include "pages/ui_page_lowcost_button_test.h"
 #include "ui_page_manager.h"
 #include "ui_template_page.h"
-#include "lowcost_button_test_config.h"
 
 /* Placeholder for intentionally unavailable page slots. */
 static const ui_page_t g_ui_page_reserved_slot = { 0 };
@@ -44,7 +41,6 @@ void ui_bootstrap_init(void)
      * Register pages once at boot against their stable IDs. Registration order
      * is intentionally irrelevant to the navigation rule table.
      */
-    ui_page_manager_register(UI_PAGE_PARAM_TEST, &g_ui_page_param_test);
     ui_page_manager_register(UI_PAGE_HALL_KEY_DEBUG, &g_ui_page_debug_hall);
     ui_page_manager_register(UI_PAGE_CALIBRATION, &g_ui_page_calibration);
     ui_page_manager_register(UI_PAGE_USER_CALIBRATION, &g_ui_page_user_calibration);
@@ -65,11 +61,6 @@ void ui_bootstrap_init(void)
     ui_page_manager_register(UI_PAGE_PATCH_ASSIGN, &g_ui_page_patch_assign);
     ui_page_manager_register(UI_PAGE_NAME_EDIT, &g_ui_page_name_edit);
     ui_page_manager_register(UI_PAGE_SETTINGS, &g_ui_page_settings);
-#if LOWCOST_BUTTON_TEST_PAGE
-    ui_page_manager_register(UI_PAGE_LOWCOST_BUTTON_TEST, &g_ui_page_lowcost_button_test);
-#else
-    ui_page_manager_register(UI_PAGE_LOWCOST_BUTTON_TEST, &g_ui_page_reserved_slot);
-#endif
     ui_page_manager_register(UI_PAGE_RESERVED_DIAGNOSTIC, &g_ui_page_reserved_slot);
 
     ui_page_set(UI_PAGE_CALIBRATION);

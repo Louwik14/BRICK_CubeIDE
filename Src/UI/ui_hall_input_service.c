@@ -4,7 +4,7 @@
 #include "buttons.h"
 #include "stm32h7xx_hal.h"
 #include "ui_core_mute.h"
-#include "ui_core_runtime_bridge.h"
+#include "Keyboard/keyboard_runtime.h"
 #include "ui_macro_interaction.h"
 #include "ui_hall_mode_flow.h"
 #include "Track/entity_topology.h"
@@ -144,12 +144,12 @@ void ui_hall_input_service_handle_transpose(uint8_t shift_down,
     {
         if (button_pressed(BTN_TRANSPOSE_UP) != 0U)
         {
-            ui_core_runtime_bridge_step_octave(1);
+            keyboard_runtime_step_octave(1);
         }
 
         if (button_pressed(BTN_TRANSPOSE_DOWN) != 0U)
         {
-            ui_core_runtime_bridge_step_octave(-1);
+            keyboard_runtime_step_octave(-1);
         }
     }
 }

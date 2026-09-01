@@ -3,12 +3,23 @@
 
 #include <stdint.h>
 
-#include "param_store.h"
+#include "Param/param_ids.h"
 
 typedef struct
 {
     param_id_t params[4];
 } ui_param_bank_t;
+
+enum
+{
+    UI_PARAM_LOCAL_ASSET = PARAM_COUNT + 1U,
+    UI_PARAM_LOCAL_WAVE_OSC1,
+    UI_PARAM_LOCAL_WAVE_OSC2,
+    UI_PARAM_LOCAL_LOOPER_ARM,
+    UI_PARAM_LOCAL_LOOPER_LENGTH,
+    UI_PARAM_LOCAL_LOOPER_PLAY,
+    UI_PARAM_LOCAL_FM_OPERATOR
+};
 
 typedef struct
 {
@@ -46,8 +57,6 @@ typedef enum
 void ui_param_set_bank(const ui_param_bank_t *bank);
 void ui_param_invalidate_bank(void);
 void ui_param_clear_value_flash(void);
-void ui_param_sync_active_bank_values(void);
-void ui_param_sync_active_track_mirror_from_runtime(void);
 void ui_param_capture_encoder_context(ui_param_encoder_context_t *out_ctx);
 void ui_param_capture_encoder_context_for_state(ui_param_encoder_context_t *out_ctx,
                                                 uint8_t active_track,
@@ -78,13 +87,10 @@ uint8_t ui_param_resolve_encoder_detent(const ui_param_encoder_context_t *ctx,
                                         ui_param_encoder_target_t *out_target);
 void ui_param_handle_encoder(uint8_t encoder, int16_t delta);
 float ui_param_get_active_track_display_value(param_id_t param, uint8_t active_track);
+uint8_t ui_param_is_local_control(param_id_t id);
 uint8_t ui_param_get_audio_owned_command_value(param_id_t param,
                                                uint8_t track,
                                                float *out_value);
-uint8_t ui_param_accept_audio_owned_command(param_id_t param,
-                                            uint8_t scope,
-                                            uint8_t track,
-                                            float value);
 uint8_t ui_param_resolve_encoder_detent_from_binding(param_id_t param,
                                                      uint8_t scope,
                                                      uint8_t track,

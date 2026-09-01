@@ -22,3 +22,4 @@ typedef struct
 } wav_info_t;
 
 bool wav_parser_parse_info(FIL *fp, wav_info_t *info);
+uint8_t wav_parser_crc32_file(FIL *fp, uint32_t *out_crc32);

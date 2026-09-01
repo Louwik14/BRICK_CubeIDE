@@ -54,8 +54,15 @@ void wavetable_pool_clear(uint16_t wavetable_slot)
     __DMB();
 }
 
+void wavetable_pool_retire_all(void)
+{
+    for (uint16_t i = 0U; i < WAVETABLE_POOL_MAX_SLOTS; ++i)
+        wavetable_pool_clear(i);
+}
+
 void wavetable_pool_service_retire(void)
 {
+    if (g_wavetable_retire_invariant_failed != 0U) return;
     for (uint16_t i = 0U; i < WAVETABLE_POOL_MAX_SLOTS; ++i)
     {
         wavetable_slot_t *const slot = &g_wavetable_pool.slots[i];
@@ -66,7 +73,11 @@ void wavetable_pool_service_retire(void)
         {
             if (control_audio_publication_horizon_active() != 0U) continue;
             if (control_audio_publish_param((uint8_t)i, 0xFFF7U,
-                    slot->generation, 0U, now_sample) == 0U) continue;
+                    slot->generation, 0U, now_sample) == 0U)
+            {
+                g_wavetable_retire_invariant_failed = 1U;
+                continue;
+            }
             g_wavetable_retire_not_before_sample[i] = now_sample
                 + CONTROL_AUDIO_RESOURCE_RETIRE_GRACE_FRAMES;
             g_wavetable_retire_stop_committed[i] = 1U;
@@ -79,10 +90,16 @@ void wavetable_pool_service_retire(void)
 
 uint8_t wavetable_pool_retire_idle(void)
 {
+    if (g_wavetable_retire_invariant_failed != 0U) return 0U;
     for (uint16_t i = 0U; i < WAVETABLE_POOL_MAX_SLOTS; ++i)
         if (g_wavetable_pool.slots[i].state == WAVETABLE_SLOT_RETIRING)
             return 0U;
     return 1U;
+}
+
+uint8_t wavetable_pool_retire_failed(void)
+{
+    return g_wavetable_retire_invariant_failed;
 }
 
 const wavetable_slot_t *wavetable_pool_get_slot(uint16_t wavetable_slot)

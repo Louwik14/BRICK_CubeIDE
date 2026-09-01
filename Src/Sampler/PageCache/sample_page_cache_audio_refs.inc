@@ -105,43 +105,6 @@ uint8_t sample_page_cache_update_readable_frames_key(sample_audio_key_t key,
     return 1U;
 }
 
-uint8_t sample_page_cache_update_live_map_key(
-    sample_audio_key_t key,
-    uint32_t file_size,
-    const sample_stream_physical_extent_t *extents,
-    uint16_t extent_count,
-    uint32_t media_epoch)
-{
-    const uint16_t key_slot = sample_page_cache_key_slot(key);
-    if ((key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES) || (extents == 0)
-            || (extent_count == 0U))
-    {
-        return 0U;
-    }
-    sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
-    if ((sample->valid == 0U) || (sample->live_committed == 0U))
-    {
-        return 0U;
-    }
-
-    sample_stream_physical_map_t map;
-    memset(&map, 0, sizeof(map));
-    map.first_pool_block = SAMPLE_STREAM_PHYSICAL_MAP_INVALID_BLOCK;
-    if (sample_stream_physical_map_import(
-            &map, extents, extent_count, media_epoch) == 0U)
-    {
-        return 0U;
-    }
-    const uint32_t primask = sample_page_cache_lock();
-    const sample_stream_physical_map_t previous = sample->stream_safe.physical_map;
-    sample->stream_safe.physical_map = map;
-    sample->stream_safe.file_size = file_size;
-    sample_page_cache_unlock(primask);
-    sample_stream_physical_map_t released = previous;
-    sample_stream_physical_map_release(&released);
-    return 1U;
-}
-
 uint8_t sample_page_cache_update_stream_path_key(sample_audio_key_t key,
                                                   const char *path)
 {

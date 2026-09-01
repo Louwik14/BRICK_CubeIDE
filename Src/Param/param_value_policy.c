@@ -11,6 +11,13 @@ static float clampf(float value, float min_value, float max_value)
     return (value < min_value) ? min_value : ((value > max_value) ? max_value : value);
 }
 
+static uint8_t param_registry_global_model_is(param_id_t id, uint8_t model)
+{
+    float value = 0.0f;
+    return (uint8_t)((param_registry_query_global(id, &value) != 0U)
+                     && ((uint8_t)(value + 0.5f) == model));
+}
+
 float param_value_identity(float value, float min_value, float max_value)
 {
     (void)min_value;
@@ -189,35 +196,48 @@ static uint8_t audio_fx_model_for_param(param_id_t id, uint8_t track, uint8_t *o
     return 1U;
 }
 
-param_value_policy_t param_value_policy_resolve(param_id_t id, uint8_t track)
+uint8_t param_value_policy_resolve(param_id_t id,
+                                   uint8_t track,
+                                   param_value_policy_t *out_policy)
 {
+    if ((out_policy == NULL) || (id >= PARAM_COUNT)
+            || (param_id_is_reserved(id) != 0U))
+        return 0U;
+
     param_value_policy_t policy = param_registry[id].value_policy;
     if (id == PARAM_MIX_PAN)
-        return affine_policy(mix_pan_to_display, mix_pan_to_canonical);
+        policy = affine_policy(mix_pan_to_display, mix_pan_to_canonical);
     if ((id >= PARAM_MODFX_RATE) && (id <= PARAM_MODFX_WIDTH))
     {
-        const uint8_t modfx_model = (uint8_t)(param_get(PARAM_MODFX_MODEL) + 0.5f);
+        float model_value;
+        if (param_registry_query_global(PARAM_MODFX_MODEL, &model_value) == 0U)
+            return 0U;
+        const uint8_t modfx_model = (uint8_t)(model_value + 0.5f);
         if (modfx_model == FX_MODFX_DAISY_STEREO)
         {
             if ((id == PARAM_MODFX_RATE) || (id == PARAM_MODFX_RATE_B))
-                return affine_policy(modfx_rate_to_display, modfx_rate_to_canonical);
+                policy = affine_policy(modfx_rate_to_display, modfx_rate_to_canonical);
             if ((id == PARAM_MODFX_OFFSET) || (id == PARAM_MODFX_DELAY_B))
-                return affine_policy(modfx_delay_to_display, modfx_delay_to_canonical);
+                policy = affine_policy(modfx_delay_to_display, modfx_delay_to_canonical);
             if ((id == PARAM_MODFX_DEPTH) || (id == PARAM_MODFX_DEPTH_B))
-                return affine_policy(modfx_depth_to_display, modfx_depth_to_canonical);
+                policy = affine_policy(modfx_depth_to_display, modfx_depth_to_canonical);
             if (id == PARAM_MODFX_FEEDBACK)
-                return affine_policy(modfx_feedback_to_display, modfx_feedback_to_canonical);
+                policy = affine_policy(modfx_feedback_to_display, modfx_feedback_to_canonical);
             if (id == PARAM_MODFX_WIDTH)
-                return affine_policy(modfx_width_percent_to_display,
-                                     modfx_width_percent_to_canonical);
+                policy = affine_policy(modfx_width_percent_to_display,
+                                       modfx_width_percent_to_canonical);
         }
         if ((modfx_model == FX_MODFX_JUNOLOGUE) && (id == PARAM_MODFX_OFFSET))
-            return affine_policy(modfx_juno_mode_to_display, modfx_juno_mode_to_canonical);
-        return policy;
+            policy = affine_policy(modfx_juno_mode_to_display, modfx_juno_mode_to_canonical);
+        *out_policy = policy;
+        return 1U;
     }
     uint8_t model = 0U;
     if (audio_fx_model_for_param(id, track, &model) == 0U)
-        return policy;
+    {
+        *out_policy = policy;
+        return 1U;
+    }
 
     const uint8_t p1 = (uint8_t)((id == PARAM_AUDIO_FX_P1) || (id == PARAM_AUDIO_FX_B_P1));
     const uint8_t p2 = (uint8_t)((id == PARAM_AUDIO_FX_P2) || (id == PARAM_AUDIO_FX_B_P2));
@@ -225,60 +245,83 @@ param_value_policy_t param_value_policy_resolve(param_id_t id, uint8_t track)
     if (p3 != 0U)
     {
         if (model == AUDIO_FX_MODEL_DRIVE)
-            return affine_policy(drive_level_to_display, drive_level_to_canonical);
+            policy = affine_policy(drive_level_to_display, drive_level_to_canonical);
         if (model == AUDIO_FX_MODEL_POINT)
-            return affine_policy(normalized127_to_display, normalized127_to_canonical);
+            policy = affine_policy(normalized127_to_display, normalized127_to_canonical);
         if ((model == AUDIO_FX_MODEL_FOLD) || (model == AUDIO_FX_MODEL_SUB)
                 || (model == AUDIO_FX_MODEL_SUB_LIGHT) || (model == AUDIO_FX_MODEL_VIBE))
-            return policy;
+        {
+            *out_policy = policy;
+            return 1U;
+        }
         policy.normal_step_display = 1.0f;
         policy.fine_step_display = 1.0f;
         policy.automation = PARAM_AUTOMATION_DISCRETE_STEP;
-        return policy;
+        *out_policy = policy;
+        return 1U;
     }
     if ((model == AUDIO_FX_MODEL_DRIFT) && (p1 != 0U))
-        return affine_policy(drift_delay_to_display, drift_delay_to_canonical);
+        policy = affine_policy(drift_delay_to_display, drift_delay_to_canonical);
     if ((model == AUDIO_FX_MODEL_VIBE) && (p1 != 0U))
-        return affine_policy(vibe_rate_to_display, vibe_rate_to_canonical);
+        policy = affine_policy(vibe_rate_to_display, vibe_rate_to_canonical);
     if ((model == AUDIO_FX_MODEL_VIBE) && (p2 != 0U))
-        return affine_policy(percent100_to_display, percent100_to_canonical);
+        policy = affine_policy(percent100_to_display, percent100_to_canonical);
     if ((model == AUDIO_FX_MODEL_POINT) && (p1 != 0U))
-        return affine_policy(db24_to_display, db24_to_canonical);
+        policy = affine_policy(db24_to_display, db24_to_canonical);
     if ((model == AUDIO_FX_MODEL_POINT) && (p2 != 0U))
-        return affine_policy(bipolar2_to_display, bipolar2_to_canonical);
+        policy = affine_policy(bipolar2_to_display, bipolar2_to_canonical);
     if ((model == AUDIO_FX_MODEL_DRIVE) && (p2 != 0U))
-        return affine_policy(db24_to_display, db24_to_canonical);
-    return policy;
+        policy = affine_policy(db24_to_display, db24_to_canonical);
+    *out_policy = policy;
+    return 1U;
 }
 
-const char *param_value_policy_display_unit(param_id_t id, uint8_t track)
+uint8_t param_value_policy_display_unit(param_id_t id,
+                                        uint8_t track,
+                                        const char **out_unit)
 {
     (void)track;
+    if ((out_unit == NULL) || (id >= PARAM_COUNT)
+            || (param_id_is_reserved(id) != 0U))
+        return 0U;
     if ((id >= PARAM_MODFX_RATE) && (id <= PARAM_MODFX_WIDTH))
     {
-        const uint8_t model = (uint8_t)(param_get(PARAM_MODFX_MODEL) + 0.5f);
+        float model_value;
+        if (param_registry_query_global(PARAM_MODFX_MODEL, &model_value) == 0U)
+            return 0U;
+        const uint8_t model = (uint8_t)(model_value + 0.5f);
         if (model == FX_MODFX_DAISY_STEREO)
         {
-            if ((id == PARAM_MODFX_RATE) || (id == PARAM_MODFX_RATE_B)) return "Hz";
-            if ((id == PARAM_MODFX_OFFSET) || (id == PARAM_MODFX_DELAY_B)) return "ms";
-            return "%";
+            if ((id == PARAM_MODFX_RATE) || (id == PARAM_MODFX_RATE_B)) *out_unit = "Hz";
+            else if ((id == PARAM_MODFX_OFFSET) || (id == PARAM_MODFX_DELAY_B)) *out_unit = "ms";
+            else *out_unit = "%";
+            return 1U;
         }
-        if ((model == FX_MODFX_JUNOLOGUE) && (id == PARAM_MODFX_OFFSET)) return "";
+        if ((model == FX_MODFX_JUNOLOGUE) && (id == PARAM_MODFX_OFFSET))
+        {
+            *out_unit = "";
+            return 1U;
+        }
     }
-    return param_registry[id].unit;
+    *out_unit = param_registry[id].unit;
+    return 1U;
 }
 
 float param_value_policy_canonical_to_display(param_id_t id, uint8_t track, float value)
 {
     const param_desc_t *const desc = &param_registry[id];
-    const param_value_policy_t policy = param_value_policy_resolve(id, track);
+    param_value_policy_t policy;
+    if (param_value_policy_resolve(id, track, &policy) == 0U)
+        return NAN;
     return policy.canonical_to_display(value, desc->min, desc->max);
 }
 
 float param_value_policy_display_to_canonical(param_id_t id, uint8_t track, float value)
 {
     const param_desc_t *const desc = &param_registry[id];
-    const param_value_policy_t policy = param_value_policy_resolve(id, track);
+    param_value_policy_t policy;
+    if (param_value_policy_resolve(id, track, &policy) == 0U)
+        return NAN;
     return policy.display_to_canonical(value, desc->min, desc->max);
 }
 
@@ -294,26 +337,17 @@ typedef struct
     uint8_t count;
 } prism_discrete_domain_t;
 
-static uint8_t prism_discrete_domain(param_id_t id,
-                                     uint8_t track,
-                                     prism_discrete_domain_t *out)
+static uint8_t prism_discrete_domain_for_model(param_id_t id,
+                                               uint8_t model,
+                                               prism_discrete_domain_t *out)
 {
     if ((out == NULL)
             || ((id != PARAM_PRISM_OSC1_PARAM1) && (id != PARAM_PRISM_OSC1_PARAM2)
                 && (id != PARAM_PRISM_OSC2_PARAM1) && (id != PARAM_PRISM_OSC2_PARAM2)))
         return 0U;
 
-    const uint8_t second_osc = (uint8_t)((id == PARAM_PRISM_OSC2_PARAM1)
-                                         || (id == PARAM_PRISM_OSC2_PARAM2));
     const uint8_t second_param = (uint8_t)((id == PARAM_PRISM_OSC1_PARAM2)
                                            || (id == PARAM_PRISM_OSC2_PARAM2));
-    float model_value = 0.0f;
-    if (param_registry_get_track_value(second_osc ? PARAM_PRISM_OSC2_MODEL
-                                                  : PARAM_PRISM_OSC1_MODEL,
-                                       track, &model_value) == 0U)
-        return 0U;
-    const uint8_t model = (uint8_t)(model_value + 0.5f);
-
     out->first_raw = 0U;
     if ((model == 17U) && (second_param == 0U))
     {
@@ -346,6 +380,21 @@ static uint8_t prism_discrete_domain(param_id_t id,
     return 0U;
 }
 
+static uint8_t prism_discrete_domain(param_id_t id,
+                                     uint8_t track,
+                                     prism_discrete_domain_t *out)
+{
+    if (out == NULL) return 0U;
+    float model_value = 0.0f;
+    const uint8_t second_osc = (uint8_t)((id == PARAM_PRISM_OSC2_PARAM1)
+                                         || (id == PARAM_PRISM_OSC2_PARAM2));
+    if (param_registry_get_track_value(second_osc ? PARAM_PRISM_OSC2_MODEL
+                                                  : PARAM_PRISM_OSC1_MODEL,
+                                       track, &model_value) == 0U)
+        return 0U;
+    return prism_discrete_domain_for_model(id, (uint8_t)(model_value + 0.5f), out);
+}
+
 static uint8_t prism_discrete_index(float value, const prism_discrete_domain_t *domain)
 {
     uint32_t raw = (uint32_t)(clampf(value, 0.0f, 1.0f) * 32767.0f + 0.5f);
@@ -370,6 +419,17 @@ float param_value_policy_canonicalize(param_id_t id, uint8_t track, float value)
     return value;
 }
 
+float param_value_policy_canonicalize_prism_model(param_id_t id,
+                                                  uint8_t prism_model,
+                                                  float value)
+{
+    prism_discrete_domain_t domain;
+    if (prism_discrete_domain_for_model(id, prism_model, &domain) == 0U)
+        return value;
+    return (domain.count != 0U) ? prism_discrete_value(
+        prism_discrete_index(value, &domain), &domain) : value;
+}
+
 float param_value_policy_apply_delta(param_id_t id,
                                      uint8_t track,
                                      float canonical_value,
@@ -392,7 +452,7 @@ float param_value_policy_apply_delta(param_id_t id,
     }
 
     if ((id == PARAM_MODFX_OFFSET)
-            && ((uint8_t)(param_get(PARAM_MODFX_MODEL) + 0.5f) == FX_MODFX_JUNOLOGUE))
+            && (param_registry_global_model_is(PARAM_MODFX_MODEL, FX_MODFX_JUNOLOGUE) != 0U))
     {
         int32_t mode = (int32_t)(canonical_value * (2.0f / 127.0f) + 0.5f);
         mode += (delta > 0) ? 1 : -1;
@@ -402,7 +462,7 @@ float param_value_policy_apply_delta(param_id_t id,
     }
 
     if (((id == PARAM_MODFX_RATE) || (id == PARAM_MODFX_RATE_B))
-            && ((uint8_t)(param_get(PARAM_MODFX_MODEL) + 0.5f) == FX_MODFX_DAISY_STEREO))
+            && (param_registry_global_model_is(PARAM_MODFX_MODEL, FX_MODFX_DAISY_STEREO) != 0U))
     {
         const float step = (fine != 0U) ? 0.01f : 1.0f;
         return clampf(canonical_value + (float)delta * step, min_value, max_value);
@@ -427,7 +487,9 @@ float param_value_policy_apply_delta(param_id_t id,
         return (direction > 0) ? 1.0f : ((fine != 0U) ? -0.01f : -1.0f);
     }
 
-    const param_value_policy_t policy = param_value_policy_resolve(id, track);
+    param_value_policy_t policy;
+    if (param_value_policy_resolve(id, track, &policy) == 0U)
+        return NAN;
     if (policy.automation == PARAM_AUTOMATION_DISCRETE_STEP)
     {
         float step = param_registry[id].step;

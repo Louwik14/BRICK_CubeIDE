@@ -1,6 +1,7 @@
 #include "Audio/audio_fx_runtime.h"
 
 #include <stddef.h>
+#include <math.h>
 #include <string.h>
 
 #include "Audio/audio_note_engine_adapter.h"
@@ -100,14 +101,14 @@ static uint8_t audio_fx_owner(brick_entity_id_t entity, uint8_t *out)
     return 1U;
 }
 
-static uint8_t valid_model(float value)
+static uint8_t audio_fx_runtime_model_is_valid(uint8_t model)
 {
-    const uint8_t m=(value<0.0f)?0U:(uint8_t)(value+0.5f);
-    return (m==AUDIO_FX_MODEL_LOFI||m==AUDIO_FX_MODEL_FOLD
-        ||m==AUDIO_FX_MODEL_DRIVE||m==AUDIO_FX_MODEL_POINT
-        ||m==AUDIO_FX_MODEL_SUB||m==AUDIO_FX_MODEL_SUB_LIGHT
-        ||m==AUDIO_FX_MODEL_RING||m==AUDIO_FX_MODEL_VIBE
-        ||m==AUDIO_FX_MODEL_DRIFT)?m:AUDIO_FX_MODEL_OFF;
+    return (uint8_t)((model == AUDIO_FX_MODEL_OFF)
+        || (model == AUDIO_FX_MODEL_LOFI) || (model == AUDIO_FX_MODEL_FOLD)
+        || (model == AUDIO_FX_MODEL_DRIVE) || (model == AUDIO_FX_MODEL_POINT)
+        || (model == AUDIO_FX_MODEL_SUB) || (model == AUDIO_FX_MODEL_SUB_LIGHT)
+        || (model == AUDIO_FX_MODEL_RING) || (model == AUDIO_FX_MODEL_VIBE)
+        || (model == AUDIO_FX_MODEL_DRIFT));
 }
 
 uint8_t audio_fx_runtime_param_slot(param_id_t id, audio_fx_slot_t *out)
@@ -125,14 +126,6 @@ uint8_t audio_fx_runtime_param_slot(param_id_t id, audio_fx_slot_t *out)
     }
     if (out != NULL) *out=slot;
     return 1U;
-}
-
-static uint8_t routing_param(param_id_t id)
-{
-    return (uint8_t)((id == PARAM_AUDIO_FX_FILTER_POS)
-        || (id == PARAM_AUDIO_FX_ORDER)
-        || (id == PARAM_AUDIO_FX_MODE_A)
-        || (id == PARAM_AUDIO_FX_MODE_B));
 }
 
 uint8_t audio_fx_runtime_is_group_level_param(param_id_t id)
@@ -308,7 +301,8 @@ static audio_fx_stereo_sample_fn spatial_sample_kernel(uint8_t model,uint8_t mod
         case AUDIO_FX_SPATIAL_MONO:return spatial_sample_mono;
         case AUDIO_FX_SPATIAL_MID:return spatial_sample_mid;
         case AUDIO_FX_SPATIAL_SIDE:return spatial_sample_side;
-        default:return stereo_sample_kernel(model);
+        case AUDIO_FX_SPATIAL_STEREO:return stereo_sample_kernel(model);
+        default:return NULL;
     }
 }
 
@@ -320,25 +314,18 @@ static audio_fx_stereo_block_fn spatial_block_kernel(uint8_t model,uint8_t mode)
         case AUDIO_FX_SPATIAL_MONO:return(model==AUDIO_FX_MODEL_DRIFT)?drift_block_mono:spatial_block_mono;
         case AUDIO_FX_SPATIAL_MID:return(model==AUDIO_FX_MODEL_DRIFT)?drift_block_mid:spatial_block_mid;
         case AUDIO_FX_SPATIAL_SIDE:return(model==AUDIO_FX_MODEL_DRIFT)?drift_block_side:spatial_block_side;
-        default:return stereo_block_kernel(model);
+        case AUDIO_FX_SPATIAL_STEREO:return stereo_block_kernel(model);
+        default:return NULL;
     }
-}
-
-static uint8_t filter_is_per_voice(uint8_t owner)
-{
-    track_audio_runtime_ctx_t s;
-    if(!audio_note_engine_adapter_current_ctx(owner,&s)
-            ||s.program_route.active==0U)return 0U;
-    if((s.flags&CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER)!=0U)return 1U;
-    if(s.family==(uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER
-            &&s.type==(uint8_t)TRACK_RUNTIME_TYPE_MULTI)return 1U;
-    return (uint8_t)((s.family==(uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
-            &&(synth_polyphony_get_voice_count(owner)>1U));
 }
 
 static void rebuild_plan(uint8_t owner)
 {
     audio_fx_runtime_plan_t *const plan=&g_audio_fx_plan[owner];
+    if((plan->filter_pos>=AUDIO_FX_FILTER_POS_COUNT)
+            ||(plan->order>=AUDIO_FX_ORDER_COUNT)
+            ||(plan->mode[0]>=AUDIO_FX_SPATIAL_COUNT)
+            ||(plan->mode[1]>=AUDIO_FX_SPATIAL_COUNT))return;
     plan->active_mask=0U;
     plan->before_filter_count=0U;
     plan->after_filter_count=0U;
@@ -351,16 +338,10 @@ static void rebuild_plan(uint8_t owner)
             :(r->config.model==AUDIO_FX_MODEL_DRIFT)?(void*)&g_audio_fx_drift_history[owner][0]:NULL;
         p->mono_sample=mono_sample_kernel(r->config.model);
         r->prepared_mono=p->mono_sample;
-        if(plan->mode[si]>=AUDIO_FX_SPATIAL_COUNT)plan->mode[si]=AUDIO_FX_SPATIAL_STEREO;
         p->stereo_sample=spatial_sample_kernel(r->config.model,plan->mode[si]);
         p->stereo_block=spatial_block_kernel(r->config.model,plan->mode[si]);
         if(r->config.model!=AUDIO_FX_MODEL_OFF)plan->active_mask|=(uint8_t)(1U<<si);
     }
-    const audio_fx_filter_pos_t requested=(audio_fx_filter_pos_t)
-        ((plan->filter_pos<AUDIO_FX_FILTER_POS_COUNT)
-            ? plan->filter_pos:AUDIO_FX_FILTER_POS_PRE);
-    plan->filter_pos=(filter_is_per_voice(owner)!=0U)?AUDIO_FX_FILTER_POS_PRE:(uint8_t)requested;
-    if(plan->order>=AUDIO_FX_ORDER_COUNT)plan->order=AUDIO_FX_ORDER_A_B;
     const uint8_t first=(plan->order==AUDIO_FX_ORDER_B_A)?1U:0U;
     const uint8_t second=(uint8_t)(first^1U);
     const uint8_t ordered[2]={first,second};
@@ -387,7 +368,7 @@ void audio_fx_runtime_init(void)
     for(uint8_t owner=0U;owner<AUDIO_FX_OWNER_COUNT;++owner){g_audio_fx_plan[owner].mode[0]=AUDIO_FX_SPATIAL_STEREO;g_audio_fx_plan[owner].mode[1]=AUDIO_FX_SPATIAL_STEREO;rebuild_plan(owner);}
     mixer_rebuild_static_plan();
 }
-uint8_t audio_fx_runtime_is_param(param_id_t id){return (uint8_t)(audio_fx_runtime_param_slot(id,NULL)||routing_param(id)||audio_fx_runtime_is_group_level_param(id));}
+uint8_t audio_fx_runtime_is_param(param_id_t id){return (uint8_t)(audio_fx_runtime_param_slot(id,NULL)||audio_fx_runtime_is_group_level_param(id));}
 uint8_t audio_fx_runtime_get_model(brick_entity_id_t e,audio_fx_slot_t slot){uint8_t owner;return(audio_fx_owner(e,&owner)&&slot<AUDIO_FX_SLOT_COUNT)?g_audio_fx_runtime[owner][slot].config.model:AUDIO_FX_MODEL_OFF;}
 uint8_t audio_fx_runtime_is_active(brick_entity_id_t e){return(audio_fx_runtime_get_model(e,AUDIO_FX_SLOT_A)!=AUDIO_FX_MODEL_OFF||audio_fx_runtime_get_model(e,AUDIO_FX_SLOT_B)!=AUDIO_FX_MODEL_OFF)?1U:0U;}
 uint8_t audio_fx_runtime_is_comp(brick_entity_id_t e){(void)e;return 0U;}
@@ -402,6 +383,9 @@ uint8_t audio_fx_runtime_pre_filter_supported(brick_entity_id_t e)
 }
 audio_fx_placement_t audio_fx_runtime_get_placement(brick_entity_id_t e){(void)e;return AUDIO_FX_PLACEMENT_POST_FILTER;}
 audio_fx_filter_pos_t audio_fx_runtime_get_filter_pos(brick_entity_id_t e){uint8_t owner;return audio_fx_owner(e,&owner)?(audio_fx_filter_pos_t)g_audio_fx_plan[owner].filter_pos:AUDIO_FX_FILTER_POS_PRE;}
+uint8_t audio_fx_runtime_set_filter_pos(brick_entity_id_t e,audio_fx_filter_pos_t position){uint8_t owner;if(!audio_fx_owner(e,&owner)||position>=AUDIO_FX_FILTER_POS_COUNT)return 0U;g_audio_fx_plan[owner].filter_pos=(uint8_t)position;rebuild_plan(owner);mixer_rebuild_static_plan();return 1U;}
+uint8_t audio_fx_runtime_set_order(brick_entity_id_t e,audio_fx_order_t order){uint8_t owner;if(!audio_fx_owner(e,&owner)||order>=AUDIO_FX_ORDER_COUNT)return 0U;g_audio_fx_plan[owner].order=(uint8_t)order;rebuild_plan(owner);mixer_rebuild_static_plan();return 1U;}
+uint8_t audio_fx_runtime_set_spatial_mode(brick_entity_id_t e,audio_fx_slot_t slot,uint8_t mode){uint8_t owner;if(!audio_fx_owner(e,&owner)||slot>=AUDIO_FX_SLOT_COUNT||mode>=4U)return 0U;g_audio_fx_plan[owner].mode[slot]=mode;rebuild_plan(owner);mixer_rebuild_static_plan();return 1U;}
 void audio_fx_runtime_rebuild_entity_plan(brick_entity_id_t e){uint8_t owner;if(audio_fx_owner(e,&owner)){rebuild_plan(owner);mixer_rebuild_static_plan();}}
 
 uint8_t audio_fx_runtime_apply_param(brick_entity_id_t e,param_id_t id,float value)
@@ -414,26 +398,25 @@ uint8_t audio_fx_runtime_apply_param(brick_entity_id_t e,param_id_t id,float val
                 ||(s.flags&CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD)==0U
                 ||s.program_route.mix_track_id>=MIXER_MAX_TRACKS)return 0U;
         mixer_set_track_group_fx_level(s.program_route.mix_track_id,
-            (id==PARAM_GROUP_FX_B_LEVEL)?1U:0U,clamp01(value));
+            (id==PARAM_GROUP_FX_B_LEVEL)?1U:0U,value);
         return 1U;
     }
     uint8_t owner;audio_fx_slot_t si;if(!audio_fx_owner(e,&owner))return 0U;
     track_audio_runtime_ctx_t topology;
     const uint8_t group_master=(uint8_t)(audio_note_engine_adapter_current_ctx(e,&topology)
         &&((topology.flags&CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER)!=0U));
-    if(group_master!=0U&&(id==PARAM_AUDIO_FX_FILTER_POS||id==PARAM_AUDIO_FX_ORDER))return 0U;
-    if(id==PARAM_AUDIO_FX_FILTER_POS){g_audio_fx_plan[owner].filter_pos=(value<0.5f)?0U:(value<1.5f)?1U:2U;rebuild_plan(owner);mixer_rebuild_static_plan();return 1U;}
-    if(id==PARAM_AUDIO_FX_ORDER){g_audio_fx_plan[owner].order=(value<0.5f)?0U:1U;rebuild_plan(owner);mixer_rebuild_static_plan();return 1U;}
-    if(id==PARAM_AUDIO_FX_MODE_A||id==PARAM_AUDIO_FX_MODE_B){const uint8_t slot=(id==PARAM_AUDIO_FX_MODE_B)?1U:0U;const uint8_t mode=(value<0.5f)?0U:(value<1.5f)?1U:(value<2.5f)?2U:3U;g_audio_fx_plan[owner].mode[slot]=mode;rebuild_plan(owner);mixer_rebuild_static_plan();return 1U;}
+    (void)group_master;
     if(!audio_fx_runtime_param_slot(id,&si))return 0U;
     audio_fx_runtime_slot_t*r=&g_audio_fx_runtime[owner][si];
-    if(param_kind(id)==1U){r->config.p1=clamp01(value);prepare(r);}
-    else if(param_kind(id)==2U){r->config.p2=clamp01(value);prepare(r);}
-    else if(param_kind(id)==3U){r->config.p3=clamp127(value);prepare(r);}
+    if(param_kind(id)==1U){r->config.p1=value;prepare(r);}
+    else if(param_kind(id)==2U){r->config.p2=value;prepare(r);}
+    else if(param_kind(id)==3U){r->config.p3=value;prepare(r);}
     else
     {
-        uint8_t model=valid_model(value);const audio_fx_slot_t peer=(si==AUDIO_FX_SLOT_A)?AUDIO_FX_SLOT_B:AUDIO_FX_SLOT_A;
-        if(model!=AUDIO_FX_MODEL_OFF&&g_audio_fx_runtime[owner][peer].config.model==model)model=AUDIO_FX_MODEL_OFF;
+        if(!isfinite(value)||value<0.0f||value>255.0f
+                ||value!=(float)(uint8_t)value)return 0U;
+        const uint8_t model=(uint8_t)value;
+        if(audio_fx_runtime_model_is_valid(model)==0U)return 0U;
         if(r->config.model!=model){r->config.model=model;reset_light_state(r);prepare(r);rebuild_plan(owner);mixer_rebuild_static_plan();}
     }
     return 1U;

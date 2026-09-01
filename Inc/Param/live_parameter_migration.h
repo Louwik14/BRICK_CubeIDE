@@ -1,7 +1,7 @@
 #ifndef BRICK6_LIVE_PARAMETER_MIGRATION_H
 #define BRICK6_LIVE_PARAMETER_MIGRATION_H
 
-#include "param_store.h"
+#include "Param/param_ids.h"
 
 #ifdef __cplusplus
 extern "C" {

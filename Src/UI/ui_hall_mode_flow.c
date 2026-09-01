@@ -9,7 +9,6 @@
 #include "pages/ui_page_settings.h"
 #include "pages/ui_page_template_tone.h"
 #include "ui_core_feedback.h"
-#include "ui_core_navigation_bridge.h"
 #include "ui_hall_mode_contract.h"
 #include "ui_hall_mode_projection.h"
 #include "ui_navigation.h"
@@ -52,7 +51,9 @@ static void ui_hall_mode_flow_activate_mode(ui_hall_mode_t target_mode,
         ui_macro_overlay_on_hall_mode_changed();
     }
     ui_set_hall_mode(target_mode);
-    ui_core_navigation_bridge_request_hall_mode_page(target_mode, target_page, is_double_tap);
+    if (((target_mode == UI_HALL_MODE_AUDIO_REC) || (is_double_tap != 0U))
+            && (target_page != UI_HALL_MODE_TARGET_PAGE_NONE))
+        ui_navigation_request_page_with_availability(target_page);
 }
 
 static void ui_hall_mode_flow_open_midi_fx(void)
@@ -478,7 +479,7 @@ void ui_hall_mode_flow_handle_track_hall_action(uint8_t hall,
         }
         if (is_double_tap != 0U)
         {
-            ui_core_navigation_bridge_request_cfg_page();
+            ui_navigation_request_ensemble_page(UI_PAGE_TEMPLATE_CFG);
         }
         return;
     }
@@ -489,6 +490,6 @@ void ui_hall_mode_flow_handle_track_hall_action(uint8_t hall,
     }
     if (is_double_tap != 0U)
     {
-        ui_core_navigation_bridge_request_cfg_page();
+        ui_navigation_request_ensemble_page(UI_PAGE_TEMPLATE_CFG);
     }
 }

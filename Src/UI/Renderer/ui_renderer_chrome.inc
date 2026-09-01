@@ -181,27 +181,6 @@ static void ui_renderer_template_draw_footer(const ui_template_page_state_t *sta
     }
 }
 
-static void ui_renderer_template_draw_elbow_arrow(uint8_t from_slot, uint8_t to_slot)
-{
-    if ((from_slot >= 4U) || (to_slot >= 4U) || (to_slot <= from_slot))
-    {
-        return;
-    }
-
-    const int x0 = (int)g_ui_template_frame_x[from_slot] + (UI_TEMPLATE_FRAME_W / 2);
-    const int x1 = (int)g_ui_template_frame_x[to_slot] + (UI_TEMPLATE_FRAME_W / 2);
-    const int y_low = UI_TEMPLATE_FRAME_Y + 10;
-    const int y_high = UI_TEMPLATE_FRAME_Y + 6;
-
-    drv_display_draw_line(x0, y_low, x0, y_high);
-    drv_display_draw_line(x0, y_high, x1, y_high);
-    drv_display_draw_line(x1, y_high, x1, y_low);
-    drv_display_draw_pixel(x1 - 1, y_low - 1, true);
-    drv_display_draw_pixel(x1 + 1, y_low - 1, true);
-    drv_display_draw_pixel(x1 - 2, y_low - 2, true);
-    drv_display_draw_pixel(x1 + 2, y_low - 2, true);
-}
-
 static void ui_renderer_template_draw_mod_link_arrows(const ui_template_subpage_t *subpage)
 {
     if (subpage == NULL)
@@ -209,33 +188,7 @@ static void ui_renderer_template_draw_mod_link_arrows(const ui_template_subpage_
         return;
     }
 
-    if ((subpage->param_bank.params[0] == PARAM_MOD_MATRIX_SLOT)
-            && (subpage->param_bank.params[1] == PARAM_MOD_MATRIX_SOURCE)
-            && (subpage->param_bank.params[2] == PARAM_MOD_MATRIX_DEST)
-            && (subpage->param_bank.params[3] == PARAM_MOD_MATRIX_DEPTH))
-    {
-        ui_renderer_template_draw_elbow_arrow(1U, 2U);
-        return;
-    }
-
-    if ((subpage->param_bank.params[0] == PARAM_MOD_MULTI_1_A)
-            && (subpage->param_bank.params[1] == PARAM_MOD_MULTI_1_B)
-            && (subpage->param_bank.params[2] == PARAM_MOD_MULTI_2_A)
-            && (subpage->param_bank.params[3] == PARAM_MOD_MULTI_2_B))
-    {
-        ui_renderer_template_draw_elbow_arrow(0U, 1U);
-        ui_renderer_template_draw_elbow_arrow(2U, 3U);
-        return;
-    }
-
-    if ((subpage->param_bank.params[0] == PARAM_MOD_SLEW_1_SOURCE)
-            && (subpage->param_bank.params[1] == PARAM_MOD_SLEW_1_AMOUNT)
-            && (subpage->param_bank.params[2] == PARAM_MOD_SLEW_2_SOURCE)
-            && (subpage->param_bank.params[3] == PARAM_MOD_SLEW_2_AMOUNT))
-    {
-        ui_renderer_template_draw_elbow_arrow(0U, 1U);
-        ui_renderer_template_draw_elbow_arrow(2U, 3U);
-    }
+    (void)subpage;
 }
 
 static uint8_t ui_renderer_template_draw_audio_fx_group(
@@ -418,7 +371,7 @@ void ui_renderer_template_draw(const ui_template_page_state_t *state)
         }
         else if ((wave_wavetable_subpage != 0U) && (wave_classic_page == 0U))
         {
-            const uint8_t osc_mask = (subpage->param_bank.params[0] == PARAM_WAVE_OSC2_TABLE)
+            const uint8_t osc_mask = (subpage->param_bank.params[0] == UI_PARAM_LOCAL_WAVE_OSC2)
                 ? 0x02U : 0x01U;
             ui_renderer_template_draw_synth_live_placeholder(state, &plock_frame_ctx,
                                                              subpage, osc_mask, 1U,

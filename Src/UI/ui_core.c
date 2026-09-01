@@ -32,16 +32,16 @@
 #include "pages/ui_page_audio_rec.h"
 #include "pages/ui_page_patch_assign.h"
 #include "pages/ui_page_name_edit.h"
-#include "pages/ui_page_lowcost_button_test.h"
-#if defined(BRICK6_VARIANT_LOWCOST)
 #include "pages/ui_page_template_keyboard.h"
-#endif
+#include "pages/ui_page_template_seq.h"
+#include "pages/ui_page_template_play.h"
+#include "UI/pages/ui_page_template_cfg.h"
 #include "Storage/sample_capture.h"
 #include "Track/track_input_ownership.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1
 #include "ui_bootstrap.h"
 #include "ui_event.h"
-#include "ui_core_navigation_bridge.h"
+#include "ui_navigation.h"
 #include "ui_hall_input_service.h"
 #include "ui_hall_mode_state.h"
 #include "ui_hall_mode_flow.h"
@@ -51,15 +51,25 @@
 #include "ui_core_feedback.h"
 #include "ui_core_mute.h"
 #include "ui_core_pattern.h"
-#include "ui_core_runtime_bridge.h"
+#include "ui_core_shortcuts.h"
+#include "ui_core_seq_transport.h"
+#include "ui_edit_context_sync.h"
+#include "ui_active_track_sync.h"
 #include "ui_page_manager.h"
 #include "ui_param.h"
 #include "UI/ui_sampler_playhead.h"
 #include "App/encoder_control_dispatcher.h"
 #include "Track/track_runtime.h"
 #include "Track/track_state.h"
+#include "Track/control_routing.h"
 #include "App/Hall/hall_surface.h"
 #include "Track/entity_topology.h"
+#include "Keyboard/keyboard_runtime.h"
+#include "Mod/mod_lfo_v1_control.h"
+#include "Seq/seq_edit.h"
+#include "Seq/seq_runtime.h"
+#include "Storage/audio_recorder.h"
+#include "Storage/pattern_live_ram.h"
 
 #define UI_TRACK_MOD_BUTTON BTN_TRACK
 
@@ -102,6 +112,8 @@ static ui_track_state_t g_ui_track_state = {
 
 static void ui_core_set_active_track(uint8_t track);
 static void ui_core_set_feedback(const char *message);
+static bool ui_core_apply_track_external_input_change(
+    uint8_t track, uint8_t input, uint8_t active_track_touched);
 
 
 static void ui_core_mute_suppress_hall_note(uint8_t hall)
@@ -213,7 +225,7 @@ static void ui_core_set_active_track(uint8_t track)
             || (g_ui_track_state.active_lane != track));
     if (changed == 0U)
     {
-        ui_core_runtime_bridge_sync_active_track_context(0U);
+        ui_edit_context_sync_active_track(0U);
         return;
     }
 
@@ -224,7 +236,7 @@ static void ui_core_set_active_track(uint8_t track)
     g_ui_track_state.active_lane = track;
     ui_param_publish_encoder_binding(g_ui_track_state.active_lane,
                                      g_ui_track_state.shift_down);
-    ui_core_runtime_bridge_sync_active_track_context(1U);
+    ui_edit_context_sync_active_track(1U);
 }
 
 void ui_restore_active_track(uint8_t track)
@@ -254,7 +266,6 @@ bool ui_set_track_midi_channel(uint8_t track, uint8_t channel_1_16)
     track_runtime_rebuild_track(track);
     if (track == g_ui_track_state.active_track)
     {
-        ui_core_runtime_bridge_sync_active_track_midi_channel();
     }
     return true;
 }
@@ -300,8 +311,7 @@ bool ui_set_track_external_input(uint8_t track, uint8_t input)
         return false;
     }
     const uint8_t active = (track == g_ui_track_state.active_track) ? 1U : 0U;
-    if (ui_core_runtime_bridge_apply_track_external_input_change(
-            track, input, active, ui_core_runtime_bridge_post_track_structure_change) == false)
+    if (ui_core_apply_track_external_input_change(track, input, active) == false)
     {
         uint8_t owner = TRACK_INPUT_OWNER_NONE;
         if ((active != 0U)
@@ -330,7 +340,6 @@ bool ui_set_track_midi_source(uint8_t track, track_midi_source_t source)
     track_runtime_rebuild_track(track);
     if (track == g_ui_track_state.active_track)
     {
-        ui_core_runtime_bridge_sync_active_track_midi_source();
     }
     return true;
 }
@@ -340,11 +349,10 @@ bool ui_restore_track_config_bulk(const uint8_t family[TRACK_COUNT],
                                   const uint8_t midi_channel[TRACK_COUNT],
                                   const uint8_t midi_source[TRACK_COUNT])
 {
-    return ui_core_runtime_bridge_restore_track_config_bulk(family,
-                                                            type,
-                                                            midi_channel,
-                                                            midi_source,
-                                                            ui_core_runtime_bridge_post_track_structure_change);
+    if (!track_structure_apply_bulk(family, type, midi_channel, midi_source))
+        return false;
+    ui_active_track_sync_full_after_global_restore();
+    return true;
 }
 
 uint8_t ui_track_midi_channel_used_by_other(uint8_t track, uint8_t channel_1_16)
@@ -544,6 +552,138 @@ static void ui_core_transport_enter_pattern(ui_pattern_mode_t mode)
     ui_core_pattern_enter(mode, ui_get_hall_mode(), ui_set_hall_mode);
 }
 
+static uint8_t ui_core_track_is_sampler_looper(uint8_t track)
+{
+    return (uint8_t)((track < BRICK_ENTITY_CAPACITY)
+        && (track_state_get_family(track) == TRACK_FAMILY_SAMPLER)
+        && (track_state_get_type(track) == TRACK_TYPE_LOOPER));
+}
+
+static uint8_t ui_core_handle_looper_save(void)
+{
+    const uint8_t track = ui_get_active_lane();
+    if (ui_core_track_is_sampler_looper(track) == 0U)
+    {
+        return 0U;
+    }
+
+    audio_recorder_status_t status;
+    if (audio_recorder_get_status_client(AUDIO_RECORDER_CLIENT_LOOPER, &status) == 0U)
+    {
+        ui_core_set_feedback("NO LOOP");
+        return 1U;
+    }
+    if ((status.state == AUDIO_RECORDER_STATE_PREPARED)
+            || (status.state == AUDIO_RECORDER_STATE_RECORDING)
+            || (status.state == AUDIO_RECORDER_STATE_DRAINING)
+            || (status.state == AUDIO_RECORDER_STATE_FINALIZING))
+    {
+        ui_core_set_feedback("LOOP BUSY");
+        return 1U;
+    }
+    if ((status.state == AUDIO_RECORDER_STATE_FAILED)
+            || (status.error != AUDIO_RECORDER_ERROR_NONE))
+    {
+        ui_core_set_feedback("LOOP FAIL");
+        return 1U;
+    }
+
+    uint8_t take_track = 0xFFU;
+    (void)audio_recorder_control_looper_take_track(&take_track);
+    ui_core_set_feedback(((status.state == AUDIO_RECORDER_STATE_TAKE_READY)
+            && (status.frames_committed != 0U)
+            && (take_track == track)) ? "LOOP SAVED" : "NO LOOP");
+    return 1U;
+}
+
+static void ui_core_finish_track_structure_change(
+    uint8_t track, uint8_t all_tracks, uint8_t active_track_touched,
+    uint8_t created_from_off)
+{
+    if (all_tracks != 0U)
+        mod_lfo_v1_invalidate_dest_cache_all();
+    else
+        mod_lfo_v1_invalidate_dest_cache_track(track);
+
+    if (active_track_touched != 0U)
+    {
+        if (created_from_off != 0U)
+            ui_active_track_sync_after_track_creation_from_off(1U);
+        else
+            ui_active_track_sync_after_track_structure_change(1U);
+    }
+}
+
+static bool ui_core_apply_track_family_change(
+    uint8_t track, track_family_t family, uint8_t active_track_touched,
+    uint8_t created_from_off)
+{
+    const uint8_t changes_external_ownership = (uint8_t)(
+        (track_state_get_family(track) == TRACK_FAMILY_EXTERNAL)
+        || (family == TRACK_FAMILY_EXTERNAL));
+    uint8_t families[BRICK_ENTITY_CAPACITY], types[BRICK_ENTITY_CAPACITY];
+    uint8_t midi[BRICK_ENTITY_CAPACITY], sources[BRICK_ENTITY_CAPACITY];
+    uint8_t inputs[TRACK_COUNT];
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        families[entity] = (uint8_t)track_state_get_family(entity);
+        types[entity] = (uint8_t)track_state_get_type(entity);
+        midi[entity] = track_state_get_midi_channel(entity);
+        sources[entity] = (uint8_t)track_state_get_midi_source(entity);
+        if (entity < TRACK_COUNT)
+            inputs[entity] = track_state_get_external_input(entity);
+    }
+
+    families[track] = (uint8_t)family;
+    if (family == TRACK_FAMILY_OFF)
+        types[track] = (uint8_t)TRACK_TYPE_NONE;
+    else if (!ui_track_catalog_type_is_valid_for_family(
+                 family, (track_type_t)types[track]))
+        types[track] = (uint8_t)ui_track_catalog_first_available_type(
+            family, track, ui_core_get_track_configs());
+
+    if (!track_structure_apply_entity_bulk_with_inputs(
+            families, types, midi, sources, inputs))
+        return false;
+
+    ui_core_finish_track_structure_change(
+        track, changes_external_ownership, active_track_touched, created_from_off);
+    return true;
+}
+
+static bool ui_core_apply_track_type_change(
+    uint8_t track, track_type_t type, uint8_t active_track_touched)
+{
+    uint8_t families[BRICK_ENTITY_CAPACITY], types[BRICK_ENTITY_CAPACITY];
+    uint8_t midi[BRICK_ENTITY_CAPACITY], sources[BRICK_ENTITY_CAPACITY];
+    uint8_t inputs[TRACK_COUNT];
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        families[entity] = (uint8_t)track_state_get_family(entity);
+        types[entity] = (uint8_t)track_state_get_type(entity);
+        midi[entity] = track_state_get_midi_channel(entity);
+        sources[entity] = (uint8_t)track_state_get_midi_source(entity);
+        if (entity < TRACK_COUNT)
+            inputs[entity] = track_state_get_external_input(entity);
+    }
+    types[track] = (uint8_t)type;
+    if (!track_structure_apply_entity_bulk_with_inputs(
+            families, types, midi, sources, inputs))
+        return false;
+
+    ui_core_finish_track_structure_change(track, 0U, active_track_touched, 0U);
+    return true;
+}
+
+static bool ui_core_apply_track_external_input_change(
+    uint8_t track, uint8_t input, uint8_t active_track_touched)
+{
+    if (!track_state_set_external_input(track, input))
+        return false;
+    ui_core_finish_track_structure_change(track, 1U, active_track_touched, 0U);
+    return true;
+}
+
 static uint8_t ui_core_is_track_hall_event_consumed(const ui_event_t *ev)
 {
     if ((ev == 0)
@@ -577,53 +717,96 @@ static uint8_t ui_core_is_suppressed_hall_press_event_consumed(const ui_event_t 
 
 static uint8_t ui_core_handle_routing_event(const ui_event_t *ev)
 {
-    return ui_core_runtime_bridge_handle_routing_event(ev,
-                                                       ui_get_active_track(),
-                                                       ui_get_hall_mode(),
-                                                       g_ui_track_state.track_select_armed,
-                                                       ui_core_mute_suppress_hall_note);
+    const uint8_t active_track = ui_get_active_track();
+    if ((ev == 0) || (ui_core_track_is_sampler_looper(active_track) == 0U)
+            || (ui_page_get_id() != UI_PAGE_MIDI_FX)
+            || (g_ui_track_state.track_select_armed != 0U)
+            || (ev->type != UI_EVENT_HALL_PRESS)
+            || (ev->id >= HALL_UI_LANE_COUNT))
+        return 0U;
+
+    const uint8_t hall = ev->id;
+    if ((hall >= TRACK_COUNT) || (hall == active_track))
+    {
+        ui_core_mute_suppress_hall_note(hall);
+        return 1U;
+    }
+
+    (void)control_routing_set_looper_source(active_track, hall,
+        (control_routing_get_looper_source(active_track, hall) == 0U) ? 1U : 0U);
+    ui_core_mute_suppress_hall_note(hall);
+    return 1U;
 }
 
 static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
 {
-    return ui_core_runtime_bridge_handle_transport_event(ev,
-                                                          ui_core_mute_is_active(),
-                                                          g_ui_track_state.shift_down,
-                                                          g_ui_track_state.track_select_armed,
-                                                          ui_core_transport_enter_pattern,
-                                                          ui_core_set_feedback);
+    (void)ui_core_mute_is_active();
+    if ((ev != 0) && (ev->type == UI_EVENT_BUTTON_PRESS)
+            && (ev->id == (uint8_t)BTN_PLAY))
+    {
+        seq_runtime_toggle_play_stop();
+        return 1U;
+    }
+    if ((ev != 0) && (ev->type == UI_EVENT_BUTTON_PRESS)
+            && (ev->id == (uint8_t)BTN_REC))
+    {
+        if (g_ui_track_state.shift_down != 0U)
+        {
+            ui_page_template_rec_cfg_open_main();
+            ui_navigation_request_page_with_availability(UI_PAGE_TEMPLATE_REC_CFG);
+        }
+        else
+        {
+            seq_runtime_set_pattern_rec_target_track(ui_get_active_lane());
+            seq_runtime_rec_toggle_arm();
+        }
+        return 1U;
+    }
+    if ((ev != 0) && (ev->type == UI_EVENT_BUTTON_PRESS)
+            && (ev->id == (uint8_t)BTN_TRANSPOSE_DOWN)
+            && ((g_ui_track_state.shift_down != 0U)
+                || (g_ui_track_state.track_select_armed != 0U))
+            && (ui_get_hall_mode() != UI_HALL_MODE_PATTERN))
+    {
+        ui_core_transport_enter_pattern(
+            (g_ui_track_state.shift_down != 0U)
+                ? UI_PATTERN_MODE_RECALL : UI_PATTERN_MODE_STORE);
+        return 1U;
+    }
+    return 0U;
 }
 
 uint8_t ui_core_request_undo(void)
 {
-    return ui_core_runtime_bridge_request_undo(ui_core_set_feedback);
+    return ui_core_shortcuts_request_undo(ui_core_set_feedback);
 }
 
 static uint8_t ui_core_handle_pattern_mode_event(const ui_event_t *ev)
 {
-    return ui_core_runtime_bridge_handle_pattern_mode_event(ev,
-                                                            ui_get_hall_mode(),
-                                                            g_ui_track_state.shift_down,
-                                                            g_ui_track_state.track_select_armed,
-                                                            ui_set_hall_mode,
-                                                            ui_core_set_feedback);
+    return ui_core_pattern_handle_mode_event(ev, ui_get_hall_mode(),
+                                             g_ui_track_state.shift_down,
+                                             g_ui_track_state.track_select_armed,
+                                             ui_set_hall_mode, ui_core_set_feedback);
 }
 
 static uint8_t ui_core_handle_global_shortcuts(const ui_event_t *ev)
 {
-    return ui_core_runtime_bridge_handle_global_shortcuts(ev,
-                                                          g_ui_track_state.shift_down,
-                                                          g_ui_track_state.track_select_armed,
-                                                          ui_core_mute_is_active(),
-                                                          ui_core_set_feedback);
+    if ((ev != 0) && (ev->type == UI_EVENT_BUTTON_PRESS)
+            && (ev->id == (uint8_t)BTN_SETTINGS)
+            && (g_ui_track_state.shift_down != 0U)
+            && (g_ui_track_state.track_select_armed == 0U)
+            && (ui_core_mute_is_active() == 0U)
+            && (ui_core_handle_looper_save() != 0U))
+        return 1U;
+    return ui_core_shortcuts_handle_global_event(ev,
+        g_ui_track_state.shift_down, g_ui_track_state.track_select_armed,
+        ui_core_mute_is_active(), ui_core_set_feedback);
 }
 
 static uint8_t ui_core_handle_seq_mode_event(const ui_event_t *ev)
 {
-    return ui_core_runtime_bridge_handle_seq_mode_event(ev,
-                                                        ui_get_hall_mode(),
-                                                        g_ui_track_state.shift_down,
-                                                        ui_core_set_feedback);
+    return ui_core_seq_transport_handle_seq_mode_event(
+        ev, ui_get_hall_mode(), g_ui_track_state.shift_down, ui_core_set_feedback);
 }
 
 static uint8_t ui_core_handle_macro_mode_event(const ui_event_t *ev)
@@ -655,7 +838,6 @@ void ui_core_init(void)
     ui_core_clipboard_init();
     ui_core_feedback_init();
     ui_core_pattern_init();
-    ui_core_runtime_bridge_init();
     sample_capture_model_init();
     ui_macro_interaction_init();
     g_ui_track_state.active_track = 0U;
@@ -682,8 +864,6 @@ void ui_core_init(void)
         g_ui_track_state.hall_prev_pressed[hall] = 0U;
         g_ui_track_state.hall_note_suppressed[hall] = 0U;
     }
-
-    ui_core_runtime_bridge_sync_active_track_mirror();
 
     encoder_control_dispatcher_init();
 
@@ -787,7 +967,6 @@ void ui_core_tick(void)
     ui_param_encoder_context_t encoder_ctx;
 
     ui_param_capture_encoder_context(&encoder_ctx);
-    param_registry_batch_begin();
     ui_param_begin_encoder_edit_group(&encoder_ctx);
 
     for (uint8_t encoder = 0U; encoder < (uint8_t)ENC_COUNT; encoder++)
@@ -815,12 +994,12 @@ void ui_core_tick(void)
         }
         else
         {
-#if defined(BRICK6_VARIANT_LOWCOST)
             if ((ui_page_template_keyboard_handle_encoder(encoder, delta) == 0U)
+                && (ui_page_template_seq_handle_encoder(encoder, delta) == 0U)
+                && (ui_page_template_play_handle_encoder(encoder, delta) == 0U)
+                && (ui_page_template_cfg_handle_encoder(encoder, delta) == 0U)
+                && (ui_page_template_rec_cfg_handle_encoder(encoder, delta) == 0U)
                 && (ui_macro_interaction_note_encoder_delta_with_context(&encoder_ctx, encoder, delta) == 0U))
-#else
-            if (ui_macro_interaction_note_encoder_delta_with_context(&encoder_ctx, encoder, delta) == 0U)
-#endif
             {
                 ui_param_handle_encoder_with_context(&encoder_ctx, encoder, delta);
             }
@@ -828,20 +1007,12 @@ void ui_core_tick(void)
     }
 
     ui_param_end_encoder_edit_group();
-    param_registry_batch_end();
 
     ui_event_from_inputs();
-    ui_core_runtime_bridge_update_seq_step_hold();
+    seq_edit_step_hold_update();
 
     while (ui_event_pop(&ev))
     {
-        /* Temporary low-cost bring-up page owns button events, including events
-         * normally consumed by transport, shortcuts, or navigation. */
-        if (ui_page_lowcost_button_test_capture_event(&ev) != 0U)
-        {
-            goto next_event;
-        }
-
         /* Must stay first: updates shift/track modifier state consumed by later stages. */
         ui_core_handle_track_selection_event(&ev);
 
@@ -858,11 +1029,11 @@ void ui_core_tick(void)
 
         /*
          * Navigation/page dispatch contract:
-         * - navigation may change current page through the navigation bridge
+         * - navigation may change the current page before page dispatch
          * - this same event is then dispatched to the page active after navigation
          * - navigation is intentionally non-consuming in this pipeline
          */
-        ui_core_navigation_bridge_handle_event(&ev);
+        ui_navigation_handle_event(&ev);
 
         const ui_page_t *dispatch_page = ui_page_get();
         if ((dispatch_page != 0) && (dispatch_page->handle_event != 0))
@@ -903,10 +1074,14 @@ uint8_t ui_get_active_lane(void)
 
 bool ui_resolve_filter_target_track(uint8_t *out_track_id)
 {
-    if (ui_core_runtime_bridge_resolve_filter_target_track(out_track_id) == 0U)
+    track_runtime_resolved_track_t resolved;
+    if ((out_track_id == 0U)
+            || (track_runtime_resolve_track(ui_get_active_lane(), &resolved) == 0U)
+            || (resolved.has_filter_target == 0U))
     {
         return false;
     }
+    *out_track_id = resolved.filter_track_id;
     return true;
 }
 
@@ -948,7 +1123,7 @@ bool ui_set_track_family(uint8_t track, track_family_t family)
     {
         if (track == g_ui_track_state.active_track)
         {
-            ui_core_runtime_bridge_sync_active_track_context(0U);
+            ui_edit_context_sync_active_track(0U);
         }
         return false;
     }
@@ -979,17 +1154,15 @@ bool ui_set_track_family(uint8_t track, track_family_t family)
         if (ui_track_catalog_type_is_available(track, family, config.type, ui_core_get_track_configs()) == false)
         {
             const uint8_t active_track_touched = (track == g_ui_track_state.active_track) ? 1U : 0U;
-            if (ui_core_runtime_bridge_apply_track_family_change(track,
-                                                                 family,
-                                                                 active_track_touched,
-                                                                 ui_core_runtime_bridge_post_track_structure_change) == false)
+            if (!ui_core_apply_track_family_change(track, family,
+                                                   active_track_touched, 0U))
             {
                 return false;
             }
         }
         if (track == g_ui_track_state.active_track)
         {
-            ui_core_runtime_bridge_sync_active_track_context(0U);
+            ui_edit_context_sync_active_track(0U);
         }
         return true;
     }
@@ -1001,20 +1174,15 @@ bool ui_set_track_family(uint8_t track, track_family_t family)
     {
         if (track == g_ui_track_state.active_track)
         {
-            ui_core_runtime_bridge_sync_active_track_context(0U);
+            ui_edit_context_sync_active_track(0U);
         }
         return false;
     }
 
     const uint8_t active_track_touched = (track == g_ui_track_state.active_track) ? 1U : 0U;
-    const ui_core_runtime_bridge_post_sync_fn post_sync =
-        ((active_track_touched != 0U) && (creates_track_from_off != 0U))
-            ? ui_core_runtime_bridge_post_track_creation_from_off
-            : ui_core_runtime_bridge_post_track_structure_change;
-    if (ui_core_runtime_bridge_apply_track_family_change(track,
-                                                          family,
-                                                          active_track_touched,
-                                                          post_sync) == false)
+    if (!ui_core_apply_track_family_change(track, family,
+                                           active_track_touched,
+                                           creates_track_from_off))
     {
         if ((active_track_touched != 0U) && (family == TRACK_FAMILY_EXTERNAL))
         {
@@ -1050,7 +1218,7 @@ bool ui_set_track_type(uint8_t track, track_type_t type)
     {
         if (track == g_ui_track_state.active_track)
         {
-            ui_core_runtime_bridge_sync_active_track_context(0U);
+            ui_edit_context_sync_active_track(0U);
         }
         return false;
     }
@@ -1063,7 +1231,7 @@ bool ui_set_track_type(uint8_t track, track_type_t type)
         }
         if (track == g_ui_track_state.active_track)
         {
-            ui_core_runtime_bridge_sync_active_track_context(0U);
+            ui_edit_context_sync_active_track(0U);
         }
         return false;
     }
@@ -1072,16 +1240,13 @@ bool ui_set_track_type(uint8_t track, track_type_t type)
     {
         if (track == g_ui_track_state.active_track)
         {
-            ui_core_runtime_bridge_sync_active_track_context(0U);
+            ui_edit_context_sync_active_track(0U);
         }
         return true;
     }
 
     const uint8_t active_track_touched = (track == g_ui_track_state.active_track) ? 1U : 0U;
-    if (ui_core_runtime_bridge_apply_track_type_change(track,
-                                                       type,
-                                                       active_track_touched,
-                                                       ui_core_runtime_bridge_post_track_structure_change) == false)
+    if (!ui_core_apply_track_type_change(track, type, active_track_touched))
     {
         return false;
     }
@@ -1159,7 +1324,18 @@ void ui_get_pattern_stub_state(ui_pattern_stub_state_t *out_state)
         return;
     }
 
-    ui_core_runtime_bridge_get_pattern_stub_state(out_state);
+    out_state->active_bank = 0U;
+    out_state->active_pattern = 0U;
+    out_state->queued_valid = 0U;
+    out_state->queued_bank = 0U;
+    out_state->queued_pattern = 0U;
+    (void)pattern_live_get_active(&out_state->active_bank, &out_state->active_pattern);
+    (void)pattern_live_get_queued(&out_state->queued_valid,
+                                  &out_state->queued_bank,
+                                  &out_state->queued_pattern);
+    out_state->substate = ui_core_pattern_get_substate();
+    out_state->selected_bank = ui_core_pattern_get_selected_bank();
+    out_state->mode = ui_core_pattern_get_mode();
 }
 
 ui_mute_state_t ui_get_mute_state(void)

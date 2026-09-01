@@ -74,6 +74,24 @@ SDRAM_MULTI_LOAD static multi_sample_bulk_plan_t
     g_multi_bulk_plans[MULTI_SAMPLE_MAX_SAMPLES];
 static multi_sample_bulk_state_t g_multi_bulk;
 
+static uint8_t multi_loader_complete_already_ready(uint16_t logical_id,
+                                                    const char *index_path,
+                                                    uint16_t instrument_id)
+{
+    const project_control_asset_result_t completion =
+        project_control_complete_multi_runtime(logical_id, index_path,
+                                               instrument_id, 1U);
+    if (completion != PROJECT_CONTROL_ASSET_READY)
+    {
+        g_multi_load_diag.last_error = MULTI_SAMPLE_LOAD_REGISTER_FAIL;
+        return 0U;
+    }
+    return 1U;
+}
+
+uint8_t multi_sample_load_required_prep_pages(
+    const multi_sample_index_t *index, uint32_t *out_pages);
+
 void multi_sample_loader_init(void)
 {
     memset(&g_multi_load_diag, 0, sizeof(g_multi_load_diag));
@@ -428,45 +446,41 @@ static multi_sample_prep_budget_t multi_loader_calc_prep_budget(
         return budget;
     }
 
+    if (multi_sample_load_required_prep_pages(index, &required_pages) == 0U)
+    {
+        budget.required_pages = UINT16_MAX;
+        budget.first_unpreparable_sample = 0U;
+        return budget;
+    }
+    budget.required_pages = (required_pages > UINT16_MAX)
+        ? UINT16_MAX : (uint16_t)required_pages;
+    if (required_pages <= budget.budget_pages)
+        budget.samples_preparable = index->sample_count;
+    else
+        budget.first_unpreparable_sample = 0U;
+
+    return budget;
+}
+
+uint8_t multi_sample_load_required_prep_pages(const multi_sample_index_t *index,
+                                              uint32_t *out_pages)
+{
+    if ((index == NULL) || (out_pages == NULL)) return 0U;
+    uint32_t pages = 0U;
     for (uint16_t i = 0U; i < index->sample_count; ++i)
     {
         const multi_sample_index_sample_t *const sample = &index->samples[i];
-        const sample_audio_format_t format = sample_audio_format_from_channels(sample->channels);
-        const uint16_t pages = (uint16_t)(sample_audio_format_multi_start_slot_cost(format)
-                                          * SAMPLE_PREP_MULTI_START_SLOT_PAGES);
-        if (pages == 0U)
-        {
-            if (budget.first_unpreparable_sample == MULTI_SAMPLE_POOL_INVALID_ID)
-            {
-                budget.first_unpreparable_sample = i;
-            }
-            budget.required_pages = UINT16_MAX;
-            continue;
-        }
-
-        required_pages += pages;
-        if (required_pages > UINT16_MAX)
-        {
-            budget.required_pages = UINT16_MAX;
-        }
-        else
-        {
-            budget.required_pages = (uint16_t)required_pages;
-        }
-
-        if (required_pages > budget.budget_pages)
-        {
-            if (budget.first_unpreparable_sample == MULTI_SAMPLE_POOL_INVALID_ID)
-            {
-                budget.first_unpreparable_sample = i;
-            }
-            continue;
-        }
-
-        budget.samples_preparable++;
+        const sample_audio_format_t format =
+            sample_audio_format_from_channels(sample->channels);
+        const uint32_t sample_pages =
+            (uint32_t)sample_audio_format_multi_start_slot_cost(format)
+            * SAMPLE_PREP_MULTI_START_SLOT_PAGES;
+        if ((sample_pages == 0U) || (pages > (UINT32_MAX - sample_pages)))
+            return 0U;
+        pages += sample_pages;
     }
-
-    return budget;
+    *out_pages = pages;
+    return 1U;
 }
 
 static multi_sample_load_result_t multi_loader_start_instrument(const char *index_path,
@@ -515,7 +529,8 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
     }
 
     multi_sample_index_t index;
-    const multi_sample_index_result_t load_result = multi_sample_index_load(index_path, &index);
+    const multi_sample_index_result_t load_result =
+        multi_sample_index_load(index_path, &index);
     if (load_result != MULTI_SAMPLE_INDEX_OK)
     {
         g_multi_load_diag.last_error = (load_result == MULTI_SAMPLE_INDEX_LIMIT)
@@ -545,6 +560,7 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
     g_multi_load_diag.prep_samples_preparable = prep_budget.samples_preparable;
     if ((prep_budget.required_pages > prep_budget.budget_pages)
         || (prep_budget.samples_preparable < index.sample_count))
+       
     {
         const multi_sample_instrument_t *const failed_instrument =
             multi_sample_pool_get_instrument(instrument_id);
@@ -691,7 +707,7 @@ multi_sample_load_result_t multi_sample_load_instrument(uint16_t logical_id,
         project_control_complete_multi_runtime(logical_id,index_path,instrument_id,0U);
         return MULTI_SAMPLE_LOAD_PATH_TOO_LONG;
     }
-    const multi_sample_load_result_t result =
+    multi_sample_load_result_t result =
         multi_loader_start_instrument(index_path, instrument_id);
     if (result == MULTI_SAMPLE_LOAD_SD_BUSY)
     {
@@ -702,10 +718,19 @@ multi_sample_load_result_t multi_sample_load_instrument(uint16_t logical_id,
             project_control_complete_multi_runtime(logical_id,index_path,instrument_id,0U);
         return queued;
     }
+    uint8_t completion_done = 0U;
     if (result == MULTI_SAMPLE_LOAD_ALREADY_READY)
-        project_control_complete_multi_runtime(logical_id,index_path,instrument_id,1U);
-    else if (result != MULTI_SAMPLE_LOAD_OK)
-        project_control_complete_multi_runtime(logical_id,index_path,instrument_id,0U);
+    {
+        completion_done = 1U;
+        if (multi_loader_complete_already_ready(
+                logical_id, index_path, instrument_id) == 0U)
+            result = MULTI_SAMPLE_LOAD_REGISTER_FAIL;
+    }
+    if ((completion_done == 0U)
+        && (result != MULTI_SAMPLE_LOAD_OK)
+        && (result != MULTI_SAMPLE_LOAD_ALREADY_READY))
+        (void)project_control_complete_multi_runtime(
+            logical_id,index_path,instrument_id,0U);
     if (result != MULTI_SAMPLE_LOAD_OK)
         memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
     return result;
@@ -727,7 +752,7 @@ static void multi_loader_start_next_queued(void)
             const uint16_t instrument_id = g_multi_load_queue[i].instrument_id;
             (void)multi_loader_copy_text(path, sizeof(path), g_multi_load_queue[i].path);
             g_multi_load_request = g_multi_load_queue[i];
-            const multi_sample_load_result_t result =
+            multi_sample_load_result_t result =
                 multi_loader_start_instrument(path, instrument_id);
             if (result != MULTI_SAMPLE_LOAD_SD_BUSY)
             {
@@ -738,8 +763,13 @@ static void multi_loader_start_next_queued(void)
                     project_control_complete_multi_runtime(logical_id,path,instrument_id,0U);
                     (void)multi_sample_pool_clear_instrument(instrument_id);
                 }
-                else if (result == MULTI_SAMPLE_LOAD_ALREADY_READY)
-                    project_control_complete_multi_runtime(logical_id,path,instrument_id,1U);
+                else if (result == MULTI_SAMPLE_LOAD_ALREADY_READY
+                         && (multi_loader_complete_already_ready(
+                             logical_id, path, instrument_id) == 0U))
+                {
+                    result = MULTI_SAMPLE_LOAD_REGISTER_FAIL;
+                    (void)multi_sample_pool_clear_instrument(instrument_id);
+                }
                 if (result != MULTI_SAMPLE_LOAD_OK)
                     memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
             }

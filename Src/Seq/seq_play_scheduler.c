@@ -18,9 +18,10 @@
 #include "IPC/live_clock_control.h"
 #include "Track/track_mute.h"
 #include "Track/control_music_output.h"
+#include "Track/polyphony_control.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include "param_registry.h"
-#include "Param/param_registry_runtime_state.h"
+#include "Track/tone_program_control.h"
 #include "midi.h"
 
 #include "Seq/seq_model.h"
@@ -178,22 +179,6 @@ static void seq_play_scheduler_output_died(brick_entity_id_t entity_id,
                 && (g_seq_play_imminent[i].event_token == output_id))
             g_seq_play_imminent[i].event_token = 0U;
 }
-static const param_id_t g_seq_play_voice_note_ids[SEQ_PLAY_MAX_CAPACITY] = {
-    PARAM_SEQ_PLAY_V1_NOTE, PARAM_SEQ_PLAY_V2_NOTE, PARAM_SEQ_PLAY_V3_NOTE, PARAM_SEQ_PLAY_V4_NOTE,
-    PARAM_SEQ_PLAY_V5_NOTE, PARAM_SEQ_PLAY_V6_NOTE, PARAM_SEQ_PLAY_V7_NOTE, PARAM_SEQ_PLAY_V8_NOTE
-};
-static const param_id_t g_seq_play_voice_vel_ids[SEQ_PLAY_MAX_CAPACITY] = {
-    PARAM_SEQ_PLAY_V1_VEL, PARAM_SEQ_PLAY_V2_VEL, PARAM_SEQ_PLAY_V3_VEL, PARAM_SEQ_PLAY_V4_VEL,
-    PARAM_SEQ_PLAY_V5_VEL, PARAM_SEQ_PLAY_V6_VEL, PARAM_SEQ_PLAY_V7_VEL, PARAM_SEQ_PLAY_V8_VEL
-};
-static const param_id_t g_seq_play_voice_len_ids[SEQ_PLAY_MAX_CAPACITY] = {
-    PARAM_SEQ_PLAY_V1_LEN, PARAM_SEQ_PLAY_V2_LEN, PARAM_SEQ_PLAY_V3_LEN, PARAM_SEQ_PLAY_V4_LEN,
-    PARAM_SEQ_PLAY_V5_LEN, PARAM_SEQ_PLAY_V6_LEN, PARAM_SEQ_PLAY_V7_LEN, PARAM_SEQ_PLAY_V8_LEN
-};
-static const param_id_t g_seq_play_voice_mictim_ids[SEQ_PLAY_MAX_CAPACITY] = {
-    PARAM_SEQ_PLAY_V1_MICTIM, PARAM_SEQ_PLAY_V2_MICTIM, PARAM_SEQ_PLAY_V3_MICTIM, PARAM_SEQ_PLAY_V4_MICTIM,
-    PARAM_SEQ_PLAY_V5_MICTIM, PARAM_SEQ_PLAY_V6_MICTIM, PARAM_SEQ_PLAY_V7_MICTIM, PARAM_SEQ_PLAY_V8_MICTIM
-};
 static uint32_t seq_play_scheduler_alloc_event_token(void);
 
 static uint32_t seq_play_scheduler_enter_critical(void)
@@ -437,53 +422,6 @@ static uint8_t seq_play_scheduler_register_source(
     return 0U;
 }
 
-static param_id_t seq_play_scheduler_param_by_voice(const param_id_t *voice_ids,
-                                                    uint8_t voice,
-                                                    param_id_t fallback)
-{
-    return (voice_ids != NULL && voice < SEQ_PLAY_MAX_CAPACITY) ? voice_ids[voice] : fallback;
-}
-
-static param_id_t seq_play_scheduler_param_note(uint8_t voice)
-{
-    return seq_play_scheduler_param_by_voice(g_seq_play_voice_note_ids, voice, PARAM_SEQ_PLAY_V1_NOTE);
-}
-
-static param_id_t seq_play_scheduler_param_vel(uint8_t voice)
-{
-    return seq_play_scheduler_param_by_voice(g_seq_play_voice_vel_ids, voice, PARAM_SEQ_PLAY_V1_VEL);
-}
-
-static param_id_t seq_play_scheduler_param_len(uint8_t voice)
-{
-    return seq_play_scheduler_param_by_voice(g_seq_play_voice_len_ids, voice, PARAM_SEQ_PLAY_V1_LEN);
-}
-
-static param_id_t seq_play_scheduler_param_mictim(uint8_t voice)
-{
-    return seq_play_scheduler_param_by_voice(g_seq_play_voice_mictim_ids, voice, PARAM_SEQ_PLAY_V1_MICTIM);
-}
-
-static param_id_t seq_play_scheduler_param_for_play_kind(seq_play_scheduler_play_param_t kind,
-                                                         uint8_t voice)
-{
-    switch (kind)
-    {
-        case SEQ_PLAY_SCHEDULER_PLAY_PARAM_NOTE:
-            return seq_play_scheduler_param_note(voice);
-        case SEQ_PLAY_SCHEDULER_PLAY_PARAM_VEL:
-            return seq_play_scheduler_param_vel(voice);
-        case SEQ_PLAY_SCHEDULER_PLAY_PARAM_LEN:
-            return seq_play_scheduler_param_len(voice);
-        case SEQ_PLAY_SCHEDULER_PLAY_PARAM_MICTIM:
-            return seq_play_scheduler_param_mictim(voice);
-        default:
-            break;
-    }
-
-    return seq_play_scheduler_param_note(0U);
-}
-
 static seq_step_play_field_t seq_play_scheduler_field_for_play_kind(
     seq_play_scheduler_play_param_t kind)
 {
@@ -502,19 +440,12 @@ static seq_step_play_field_t seq_play_scheduler_field_for_play_kind(
     }
 }
 
-static seq_value16_t seq_play_scheduler_get_play_locked_or_default(const seq_play_scheduler_play_item_t *item,
-                                                                   seq_play_scheduler_play_param_t kind)
+static uint8_t seq_play_scheduler_get_play_locked_or_base(
+    const seq_play_scheduler_play_item_t *item,
+    seq_play_scheduler_play_param_t kind,
+    int16_t *out_value)
 {
-    if (item == NULL)
-    {
-        return seq_param_iface_encode_param_value(PARAM_SEQ_PLAY_V1_NOTE,
-                                                  param_registry[PARAM_SEQ_PLAY_V1_NOTE].default_value);
-    }
-
-    const param_id_t source_param =
-        seq_play_scheduler_param_for_play_kind(kind, item->source_voice);
-    const param_id_t target_param =
-        seq_play_scheduler_param_for_play_kind(kind, item->target_voice);
+    if ((item == NULL) || (out_value == NULL)) return 0U;
 
     int16_t stored_value = 0;
     if (seq_model_play_get(item->source_track,
@@ -523,18 +454,20 @@ static seq_value16_t seq_play_scheduler_get_play_locked_or_default(const seq_pla
                                 seq_play_scheduler_field_for_play_kind(kind),
                                 &stored_value) != 0U)
     {
-        return seq_param_iface_encode_param_value(source_param, (float)stored_value);
+        *out_value = stored_value;
+        return 1U;
     }
 
     {
-        seq_value16_t base_value16 = 0U;
-        if (seq_param_iface_get_play_base_param(item->target_track, target_param, &base_value16) != 0U)
+        int16_t base_value = 0;
+        if (seq_model_play_base_get(item->target_track, item->target_voice,
+                seq_play_scheduler_field_for_play_kind(kind), &base_value) != 0U)
     {
-            return base_value16;
+            *out_value = base_value;
+            return 1U;
         }
     }
-
-    return seq_param_iface_encode_param_value(target_param, param_registry[target_param].default_value);
+    return 0U;
 }
 
 void seq_play_scheduler_init(void)
@@ -795,9 +728,7 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
         goto finish;
     }
 
-    if (track_runtime_get_effective_param_status(
-            track, PARAM_SEQ_PLAY_V1_NOTE)
-            == TRACK_RUNTIME_PARAM_UNAVAILABLE)
+    if (seq_model_track_can_store_play(track) == 0U)
     {
         goto finish;
     }
@@ -807,27 +738,25 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
     for (uint8_t voice = 0U; voice < play_context.item_count; ++voice)
     {
         const seq_play_scheduler_play_item_t *const item = &play_context.items[voice];
-        const param_id_t note_id = seq_play_scheduler_param_note(item->target_voice);
-        const param_id_t vel_id = seq_play_scheduler_param_vel(item->target_voice);
-        /* Projection read: per-param status is a runtime guard, not a local recomputation. */
-        if (track_runtime_get_effective_param_status(item->target_track, note_id) == TRACK_RUNTIME_PARAM_UNAVAILABLE)
+        if (seq_model_track_can_store_play(item->target_track) == 0U)
         {
             continue;
         }
 
-        const float vel_f = seq_param_iface_decode_param_value(vel_id,
-                                                               seq_play_scheduler_get_play_locked_or_default(item,
-                                                                                                             SEQ_PLAY_SCHEDULER_PLAY_PARAM_VEL));
-        const uint8_t vel = (uint8_t)(vel_f + 0.5f);
+        int16_t vel_value = 0;
+        int16_t note_value = 0;
+        if ((seq_play_scheduler_get_play_locked_or_base(item,
+                 SEQ_PLAY_SCHEDULER_PLAY_PARAM_VEL, &vel_value) == 0U)
+                || (seq_play_scheduler_get_play_locked_or_base(item,
+                 SEQ_PLAY_SCHEDULER_PLAY_PARAM_NOTE, &note_value) == 0U))
+            continue;
+        const uint8_t vel = (uint8_t)vel_value;
         if (vel == 0U)
         {
             continue;
         }
 
-        const float note_f = seq_param_iface_decode_param_value(note_id,
-                                                                seq_play_scheduler_get_play_locked_or_default(item,
-                                                                                                              SEQ_PLAY_SCHEDULER_PLAY_PARAM_NOTE));
-        const uint8_t note = (uint8_t)(note_f + 0.5f);
+        const uint8_t note = (uint8_t)note_value;
         if (note >= 128U)
         {
             continue;
@@ -944,22 +873,24 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                 .target_voice = source->target_voice,
                 .source_voice = source->source_voice
             };
-            const param_id_t note_id = seq_play_scheduler_param_note(item.target_voice);
-            const param_id_t vel_id = seq_play_scheduler_param_vel(item.target_voice);
-            const param_id_t len_id = seq_play_scheduler_param_len(item.target_voice);
-            const param_id_t mictim_id = seq_play_scheduler_param_mictim(item.target_voice);
-            const uint8_t note = (uint8_t)(seq_param_iface_decode_param_value(
-                note_id, seq_play_scheduler_get_play_locked_or_default(
-                    &item, SEQ_PLAY_SCHEDULER_PLAY_PARAM_NOTE)) + 0.5f);
-            const uint8_t velocity = (uint8_t)(seq_param_iface_decode_param_value(
-                vel_id, seq_play_scheduler_get_play_locked_or_default(
-                    &item, SEQ_PLAY_SCHEDULER_PLAY_PARAM_VEL)) + 0.5f);
-            float length_steps = seq_param_iface_decode_param_value(
-                len_id, seq_play_scheduler_get_play_locked_or_default(
-                    &item, SEQ_PLAY_SCHEDULER_PLAY_PARAM_LEN));
-            const float mictim = seq_param_iface_decode_param_value(
-                mictim_id, seq_play_scheduler_get_play_locked_or_default(
-                    &item, SEQ_PLAY_SCHEDULER_PLAY_PARAM_MICTIM));
+            int16_t note_value = 0, velocity_value = 0;
+            int16_t length_value = 0, mictim_value = 0;
+            if ((seq_play_scheduler_get_play_locked_or_base(&item,
+                     SEQ_PLAY_SCHEDULER_PLAY_PARAM_NOTE, &note_value) == 0U)
+                    || (seq_play_scheduler_get_play_locked_or_base(&item,
+                     SEQ_PLAY_SCHEDULER_PLAY_PARAM_VEL, &velocity_value) == 0U)
+                    || (seq_play_scheduler_get_play_locked_or_base(&item,
+                     SEQ_PLAY_SCHEDULER_PLAY_PARAM_LEN, &length_value) == 0U)
+                    || (seq_play_scheduler_get_play_locked_or_base(&item,
+                     SEQ_PLAY_SCHEDULER_PLAY_PARAM_MICTIM, &mictim_value) == 0U))
+            {
+                seq_play_scheduler_deactivate_source_at(source_position);
+                continue;
+            }
+            const uint8_t note = (uint8_t)note_value;
+            const uint8_t velocity = (uint8_t)velocity_value;
+            float length_steps = (float)length_value;
+            const float mictim = (float)mictim_value;
             if ((note >= 128U) || (velocity == 0U))
             {
                 if (seq_note_trace_target(source->source_track,
@@ -1061,8 +992,8 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                                 && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI))))
                 {
                     float configured = 1.0f;
-                    (void)param_registry_control_value_get(
-                        source->target_track, PARAM_CFG_POLY_VOICES, &configured);
+                    configured = (float)polyphony_control_get_voice_count(
+                        source->target_track);
                     voice_limit = (configured >= 1.0f) ? (uint8_t)configured : 1U;
                     if (voice_limit > SEQ_PLAY_MAX_CAPACITY)
                         voice_limit = SEQ_PLAY_MAX_CAPACITY;
@@ -1387,10 +1318,11 @@ void seq_play_scheduler_notify_play_changed(seq_track_id_t track,
         .target_voice = voice,
         .source_voice = voice
     };
-    const param_id_t length_id = seq_play_scheduler_param_len(voice);
-    float length_steps = seq_param_iface_decode_param_value(
-        length_id, seq_play_scheduler_get_play_locked_or_default(
-            &item, SEQ_PLAY_SCHEDULER_PLAY_PARAM_LEN));
+    int16_t length_value = 0;
+    if (seq_play_scheduler_get_play_locked_or_base(
+            &item, SEQ_PLAY_SCHEDULER_PLAY_PARAM_LEN, &length_value) == 0U)
+        return;
+    float length_steps = (float)length_value;
     if (length_steps < 1.0f) length_steps = 1.0f;
     if (length_steps > 64.0f) length_steps = 64.0f;
     for (uint16_t i = 0U;

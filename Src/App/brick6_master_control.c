@@ -85,7 +85,7 @@ uint8_t brick6_master_control_boot_capture(void)
 
 void brick6_master_control_boot_publish(void)
 {
-    param_set(PARAM_MASTER_GAIN, g_boot_master_gain);
+    (void)param_registry_commit_global(PARAM_MASTER_GAIN, g_boot_master_gain);
 }
 
 void brick6_master_control_process(void)
@@ -142,7 +142,7 @@ void brick6_master_control_process(void)
     }
 
     const float level = (float)raw / (float)POT_RAW_MAX;
-    param_set(PARAM_MASTER_GAIN, level * level);
+    (void)param_registry_commit_global(PARAM_MASTER_GAIN, level * level);
     g_master_last_raw = raw;
 #else
     if (mux_pots_is_valid(POT_MASTER_INDEX) == 0U)
@@ -158,7 +158,7 @@ void brick6_master_control_process(void)
         return;
     }
 
-    param_set(PARAM_MASTER_GAIN, gain);
+    (void)param_registry_commit_global(PARAM_MASTER_GAIN, gain);
     g_master_last_step = step;
 #endif
 }

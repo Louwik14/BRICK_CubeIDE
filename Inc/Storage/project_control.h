@@ -6,10 +6,23 @@
 #include "Param/param_registry.h"
 
 typedef enum { PROJECT_CONTROL_HALL_SCENE=0, PROJECT_CONTROL_HALL_SWITCH=1 } project_control_hall_mode_t;
+typedef enum {
+    PROJECT_CONTROL_ASSET_FAILED = 0,
+    PROJECT_CONTROL_ASSET_READY,
+    PROJECT_CONTROL_ASSET_PENDING,
+    PROJECT_CONTROL_ASSET_FAILED_INTERNAL
+} project_control_asset_result_t;
 typedef struct { uint8_t track; param_id_t param; float scene_value; } project_control_macro_lock_t;
+typedef enum {
+    PROJECT_CONTROL_ASSET_SAMPLER = 0,
+    PROJECT_CONTROL_ASSET_WAVE_OSC1,
+    PROJECT_CONTROL_ASSET_WAVE_OSC2,
+    PROJECT_CONTROL_ASSET_ROLE_COUNT
+} project_control_asset_role_t;
 
 void project_control_init(void);
 void project_control_reset_macros(void);
+uint8_t project_control_get_default_macros(persist_control_macros_t *out);
 void project_control_reset_asset_banks(void);
 project_control_hall_mode_t project_control_get_hall_mode(void);
 uint8_t project_control_set_hall_mode(project_control_hall_mode_t mode);
@@ -30,18 +43,23 @@ uint16_t project_control_asset_count(void);
 uint8_t project_control_get_asset_ordinal(uint16_t ordinal,persist_control_asset_ref_t*out);
 uint8_t project_control_begin_asset_restore(void);
 uint8_t project_control_validate_asset(const persist_control_asset_ref_t*asset);
-uint8_t project_control_put_asset(const persist_control_asset_ref_t*asset);
-uint8_t project_control_ensure_asset(uint32_t kind,const char*path,uint16_t*out_logical);
+project_control_asset_result_t project_control_put_asset(const persist_control_asset_ref_t*asset);
+project_control_asset_result_t project_control_ensure_asset(uint32_t kind,const char*path,uint16_t*out_logical);
+project_control_asset_result_t project_control_complete_ram_runtime(
+    const char*path,uint16_t runtime_backend,uint16_t runtime_global,uint8_t success);
+project_control_asset_result_t project_control_complete_wavetable_runtime(
+    const char*path,uint16_t runtime_backend,uint16_t runtime_global,uint8_t success);
 uint8_t project_control_find_asset(uint32_t kind,const char*path,uint16_t*out_logical);
 
-/* Logical Project banks. Values stored in parameters and p-locks are these
- * logical indices; runtime pool/global/instrument slots are deliberately not
- * exposed as persistent identities. */
+/* Logical Project banks are lookup tables only. Track selection authority is
+ * a typed asset reference; runtime pool/global/instrument slots are resolved
+ * only when publishing to AUDIO and are never parameters or p-lock targets. */
 uint8_t project_control_register_sample_runtime(uint32_t kind,const char*path,uint16_t runtime_global,uint16_t*out_logical);
 uint8_t project_control_register_wavetable_runtime(const char*path,uint16_t runtime_global,uint16_t*out_logical);
 uint8_t project_control_register_multi_runtime(const char*path,uint16_t runtime_instrument,uint16_t*out_logical);
 uint8_t project_control_begin_multi_runtime(uint16_t logical,const char*path,uint16_t runtime_instrument);
-void project_control_complete_multi_runtime(uint16_t logical,const char*path,uint16_t runtime_instrument,uint8_t success);
+project_control_asset_result_t project_control_complete_multi_runtime(
+    uint16_t logical,const char*path,uint16_t runtime_instrument,uint8_t success);
 uint8_t project_control_remove_sample(uint16_t logical);
 uint8_t project_control_remove_wavetable(uint16_t logical);
 uint8_t project_control_remove_multi(uint16_t logical);
@@ -60,10 +78,22 @@ uint8_t project_control_get_logical_asset(uint32_t kind,uint16_t logical,persist
 uint8_t project_control_resolve_sample_runtime(uint16_t logical,uint16_t*out_runtime_global,uint32_t*out_kind);
 uint8_t project_control_resolve_wavetable_runtime(uint16_t logical,uint16_t*out_runtime_global);
 uint8_t project_control_resolve_multi_runtime(uint16_t logical,uint16_t*out_runtime_instrument);
-/* CONTROL-side conversion of a logical sampler selector to the runtime
- * backend identity consumed by AUDIO. */
-uint8_t project_control_resolve_audio_sampler_value(uint8_t track,
-                                                    float logical_value,
-                                                    float *out_runtime_value);
+uint8_t project_control_track_asset_get(uint8_t entity,
+                                        project_control_asset_role_t role,
+                                        persist_control_asset_ref_t *out_asset);
+uint8_t project_control_track_asset_get_logical(uint8_t entity,
+                                                project_control_asset_role_t role,
+                                                uint16_t *out_logical);
+uint8_t project_control_track_asset_select_logical(uint8_t entity,
+                                                   project_control_asset_role_t role,
+                                                   uint16_t logical);
+uint8_t project_control_track_asset_restore(uint8_t entity,
+                                            project_control_asset_role_t role,
+                                            const persist_control_asset_ref_t *asset);
+project_control_asset_result_t project_control_track_asset_restore_status(
+    uint8_t entity, project_control_asset_role_t role,
+    const persist_control_asset_ref_t *asset);
+uint8_t project_control_track_assets_clear(uint8_t entity);
+uint8_t project_control_asset_loads_pending(void);
 
 #endif

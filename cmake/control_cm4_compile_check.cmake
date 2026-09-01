@@ -1,3 +1,5 @@
+cmake_policy(SET CMP0057 NEW)
+
 if(NOT DEFINED MANIFEST)
     message(FATAL_ERROR "control_cm4_compile_check: MANIFEST is required")
 endif()
@@ -18,7 +20,6 @@ set(definition_args
     -DARM_MATH_CM4
     -DUSE_HAL_DRIVER
     -DUSE_PWR_LDO_SUPPLY
-    -DBRICK_TEST_BUILD=0
     "-D${CONTROL_CM4_VARIANT_DEFINE}"
     "-DBRICK6_STREAM_PRODUCT_PAGE_KIB=${CONTROL_CM4_PRODUCT_PAGE_KIB}"
     "-DBRICK6_STREAM_PRODUCT_MULTI_PRESOCLE_PAGES=${CONTROL_CM4_PRODUCT_MULTI_PRESOCLE_PAGES}"
@@ -36,8 +37,7 @@ set(common_args
     -fdata-sections
     -Wall
     -Werror=implicit-function-declaration
-    --specs=nano.specs
-    -fsyntax-only)
+    --specs=nano.specs)
 
 set(control_forbidden_dependencies
     "/Inc/Audio/"
@@ -57,11 +57,14 @@ set(contract_forbidden_dependencies
     "/Inc/Track/track_runtime.h"
     "/Inc/Track/track_state.h"
     "/Inc/Param/param_registry.h"
-    "/Inc/Param/param_store.h"
+    "/Inc/Param/param_global_control.h"
     "/Inc/Sampler/sample_page_cache_audio.h")
 
 set(compiled_count 0)
-foreach(source IN LISTS CONTROL_CM4_SOURCES)
+set(all_sources ${CONTROL_CM4_SOURCES} ${CONTROL_CM4_CONTRACT_SOURCES}
+    ${CONTROL_CM4_SHARED_SOURCES})
+set(object_manifest "")
+foreach(source IN LISTS all_sources)
     get_filename_component(extension "${source}" EXT)
     if(extension STREQUAL ".cpp" OR extension STREQUAL ".cc" OR extension STREQUAL ".cxx")
         set(compiler "${CONTROL_CM4_CXX_COMPILER}")
@@ -73,6 +76,7 @@ foreach(source IN LISTS CONTROL_CM4_SOURCES)
 
     string(SHA1 source_id "${source}")
     set(depfile "${CONTROL_CM4_WORK_DIR}/${source_id}.d")
+    set(object "${CONTROL_CM4_WORK_DIR}/${source_id}.o")
     execute_process(
         COMMAND "${compiler}"
             ${common_args}
@@ -80,6 +84,7 @@ foreach(source IN LISTS CONTROL_CM4_SOURCES)
             ${definition_args}
             ${include_args}
             -MMD -MF "${depfile}" -MT control_cm4_check
+            -c -o "${object}"
             "${source}"
         RESULT_VARIABLE compile_result
         OUTPUT_VARIABLE compile_stdout
@@ -88,6 +93,14 @@ foreach(source IN LISTS CONTROL_CM4_SOURCES)
         message(FATAL_ERROR
             "Cortex-M4 compile failed for ${source}:\n${compile_stdout}${compile_stderr}")
     endif()
+    if(source IN_LIST CONTROL_CM4_SHARED_SOURCES)
+        set(owner SHARED_BACKING)
+    elseif(source IN_LIST CONTROL_CM4_CONTRACT_SOURCES)
+        set(owner CONTRACTS)
+    else()
+        set(owner CONTROL)
+    endif()
+    string(APPEND object_manifest "${owner}|${object}|${source}\n")
 
     file(READ "${depfile}" dependencies)
     string(REPLACE "\\" "/" dependencies "${dependencies}")
@@ -100,6 +113,7 @@ foreach(source IN LISTS CONTROL_CM4_SOURCES)
     endforeach()
     math(EXPR compiled_count "${compiled_count} + 1")
 endforeach()
+file(WRITE "${CONTROL_CM4_WORK_DIR}/objects.manifest" "${object_manifest}")
 
 foreach(contract_header IN LISTS CONTROL_CM4_CONTRACT_HEADERS)
     string(SHA1 contract_id "${contract_header}")
@@ -107,6 +121,7 @@ foreach(contract_header IN LISTS CONTROL_CM4_CONTRACT_HEADERS)
     execute_process(
         COMMAND "${CONTROL_CM4_C_COMPILER}"
             ${common_args}
+            -fsyntax-only
             -std=gnu11
             ${definition_args}
             ${include_args}

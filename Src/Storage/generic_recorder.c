@@ -305,7 +305,6 @@ static uint8_t generic_recorder_prepare_descriptor(generic_recorder_t *recorder,
     descriptor->lba = span.lba;
     descriptor->dma_bytes = dma_bytes;
     descriptor->valid_bytes = valid_bytes;
-    descriptor->map_generation = snapshot.generation;
     descriptor->media_epoch = snapshot.media_epoch;
     descriptor->extent_index = span.extent_index;
     generic_recorder_pack(recorder,

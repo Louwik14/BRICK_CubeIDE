@@ -1061,77 +1061,6 @@ static void ui_page_settings_render_wavetable_browser(void)
     drv_display_set_font(&FONT_5X7);
 }
 
-#if defined(BRICK6_VARIANT_LOWCOST)
-static void ui_page_settings_render_test_hall(void)
-{
-    char line[24];
-    const uint8_t key = g_ui_settings.hall_test_key;
-    const uint8_t mux = g_ui_settings.hall_test_mux;
-    const uint16_t raw = hall_adc_get_raw(key);
-    hall_velocity_debug_t debug = {0};
-    hall_engine_get_velocity_debug(key, &debug);
-    const uint8_t calibration_valid =
-        ((debug.calibrated != 0U) && (debug.range_valid != 0U)) ? 1U : 0U;
-
-    drv_display_set_font(&FONT_5X7);
-    drv_display_draw_text(0U, 0U, "TEST > HALL");
-    drv_display_draw_line(0, 9, 127, 9);
-
-    (void)snprintf(line,
-                   sizeof(line),
-                   "HALL %02u / 24",
-                   (unsigned)(key + 1U));
-    drv_display_draw_text(0U, 12U, line);
-    (void)snprintf(line,
-                   sizeof(line),
-                   "M%u %lu.%lums",
-                   (unsigned)mux,
-                   (unsigned long)(debug.sample_period_us / 1000U),
-                   (unsigned long)((debug.sample_period_us % 1000U) / 100U));
-    drv_display_draw_text(70U, 12U, line);
-
-    drv_display_set_font(&FONT_4X6);
-    (void)snprintf(line, sizeof(line), "RAW %u", (unsigned)raw);
-    drv_display_draw_text(0U, 22U, line);
-    (void)snprintf(line, sizeof(line), "ENG %u", (unsigned)debug.raw_current);
-    drv_display_draw_text(64U, 22U, line);
-
-    if (calibration_valid != 0U)
-    {
-        (void)snprintf(line, sizeof(line), "RAW LOW %u", (unsigned)debug.min_current);
-        drv_display_draw_text(0U, 32U, line);
-        (void)snprintf(line, sizeof(line), "RAW HIGH %u", (unsigned)debug.max_current);
-        drv_display_draw_text(0U, 40U, line);
-    }
-    else
-    {
-        drv_display_draw_text(0U, 32U, "RAW LOW ---");
-        drv_display_draw_text(0U, 40U, "RAW HIGH ---");
-    }
-
-    (void)snprintf(line,
-                   sizeof(line),
-                   "PRESS %s",
-                   (debug.state != 0U) ? "ON" : "OFF");
-    drv_display_draw_text(0U, 48U, line);
-    (void)snprintf(line,
-                   sizeof(line),
-                   "VEL %u",
-                   (unsigned)debug.velocity);
-    drv_display_draw_text(72U, 48U, line);
-
-    (void)snprintf(line,
-                   sizeof(line),
-                   "M%u %u %u %u",
-                   (unsigned)mux,
-                   (unsigned)hall_adc_get_mux_raw(0U, mux),
-                   (unsigned)hall_adc_get_mux_raw(1U, mux),
-                   (unsigned)hall_adc_get_mux_raw(2U, mux));
-    drv_display_draw_text(0U, 56U, line);
-
-}
-#endif
-
 static void ui_page_settings_render(void)
 {
     ui_settings_menu_level_t *const level = ui_page_settings_current_level();
@@ -1164,13 +1093,6 @@ static void ui_page_settings_render(void)
         ui_page_settings_render_wavetable_browser();
         return;
     }
-#if defined(BRICK6_VARIANT_LOWCOST)
-    if (level->view == UI_SETTINGS_VIEW_TEST_HALL)
-    {
-        ui_page_settings_render_test_hall();
-        return;
-    }
-#endif
     drv_display_set_font(&FONT_5X7);
     drv_display_draw_text(0U, 0U, ui_page_settings_view_title(level->view));
     drv_display_draw_line(0, 9, 127, 9);

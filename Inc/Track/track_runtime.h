@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-#include "param_registry.h"
+#include "Param/param_ids.h"
 #include "Track/entity_topology.h"
 #include "Seq/seq_types.h"
 #include "Track/track_types.h"
@@ -34,29 +34,22 @@ typedef enum
     TRACK_RUNTIME_PARAM_DOMAIN_TONE,
     TRACK_RUNTIME_PARAM_DOMAIN_MOD,
     TRACK_RUNTIME_PARAM_DOMAIN_MIX,
-    TRACK_RUNTIME_PARAM_DOMAIN_PLAY,
     TRACK_RUNTIME_PARAM_DOMAIN_MIDI_FX,
-    TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX
+    TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX,
+    TRACK_RUNTIME_PARAM_DOMAIN_GLOBAL
 } track_runtime_param_domain_t;
 
 typedef enum
 {
     TRACK_RUNTIME_RESOURCE_NONE = 0,
     TRACK_RUNTIME_RESOURCE_FILTER,
-    TRACK_RUNTIME_RESOURCE_SYNTH,
     TRACK_RUNTIME_RESOURCE_MIX,
     TRACK_RUNTIME_RESOURCE_PLAY,
     TRACK_RUNTIME_RESOURCE_MIDI_FX,
     TRACK_RUNTIME_RESOURCE_POLYPHONY,
-    TRACK_RUNTIME_RESOURCE_AUDIO_FX
+    TRACK_RUNTIME_RESOURCE_AUDIO_FX,
+    TRACK_RUNTIME_RESOURCE_GLOBAL
 } track_runtime_resource_t;
-
-typedef enum
-{
-    TRACK_RUNTIME_CARDINALITY_PER_TRACK = 0,
-    TRACK_RUNTIME_CARDINALITY_SHARED,
-    TRACK_RUNTIME_CARDINALITY_GLOBAL
-} track_runtime_cardinality_t;
 
 typedef enum
 {
@@ -69,7 +62,6 @@ typedef struct
 {
     track_runtime_param_domain_t domain;
     track_runtime_resource_t resource;
-    track_runtime_cardinality_t cardinality;
     track_runtime_param_status_t status;
 } track_runtime_param_rule_t;
 
@@ -156,12 +148,6 @@ uint8_t track_runtime_is_ui_ensemble_available(uint8_t track, track_runtime_ui_e
 uint8_t track_runtime_supports_vca_gate(const track_runtime_ctx_t *ctx);
 track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t track, param_id_t param);
 track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param);
-uint8_t track_runtime_tone_slot_to_param(track_runtime_type_t type,
-                                         uint8_t slot,
-                                         param_id_t *out_param);
-uint8_t track_runtime_tone_param_to_slot(track_runtime_type_t type,
-                                         param_id_t param,
-                                         uint8_t *out_slot);
 track_runtime_voice_mode_t track_runtime_get_voice_mode(const track_runtime_ctx_t *ctx);
 uint8_t track_runtime_is_track_prism_available(uint8_t track);
 track_runtime_family_t track_runtime_family_from_ui(track_family_t family);

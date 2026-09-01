@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include "param_store.h"
+#include "Param/param_ids.h"
 
 typedef struct
 {
@@ -20,7 +20,7 @@ typedef struct
 void param_macro_init(void);
 float param_macro_lerp(float base_value, float scene_value, float amount);
 uint8_t param_macro_lock_target_is_supported(uint8_t track, param_id_t param);
-void param_macro_sync_scene_sources(void);
+uint8_t param_macro_sync_scene_sources(void);
 uint8_t param_macro_set_amount(uint8_t macro, float amount);
 uint8_t param_macro_adjust_amount(uint8_t macro, int16_t delta);
 float param_macro_get_amount(uint8_t macro);

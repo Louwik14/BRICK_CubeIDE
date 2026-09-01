@@ -4,6 +4,7 @@
 
 #include "Sampler/sample_classic_config.h"
 #include "Sampler/sample_page_cache_config.h"
+#include "Storage/wav_parser.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -110,6 +111,12 @@ uint8_t sample_global_pool_register_classic_at(uint16_t global_index,
                                                const char *path,
                                                uint32_t cost_bytes);
 uint8_t sample_global_pool_load_classic(uint16_t global_index, const char *path);
+uint8_t sample_global_pool_load_classic_prepared(uint16_t global_index,
+                                                 const char *path,
+                                                 const wav_info_t *info,
+                                                 uint32_t source_file_size,
+                                                 uint32_t source_crc32,
+                                                 uint32_t prepared_cost_bytes);
 void sample_global_pool_clear_classic(uint16_t global_index);
 sample_classic_slot_state_t sample_global_pool_get_classic_state(uint16_t global_index);
 sample_classic_load_error_t sample_global_pool_get_last_classic_load_error(void);
@@ -134,12 +141,6 @@ uint8_t sample_global_pool_register_ram_at(uint16_t global_index,
                                            uint16_t ram_slot,
                                            const char *path,
                                            uint32_t cost_bytes);
-uint8_t sample_global_pool_register_ram_error(uint16_t ram_slot,
-                                              const char *path,
-                                              uint16_t *out_global_index);
-uint8_t sample_global_pool_register_ram_error_at(uint16_t global_index,
-                                                 uint16_t ram_slot,
-                                                 const char *path);
 uint8_t sample_global_pool_reserve_wavetable(uint16_t wavetable_slot,
                                              const char *path,
                                              uint32_t cost_bytes,

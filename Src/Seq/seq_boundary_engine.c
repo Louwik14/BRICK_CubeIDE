@@ -107,10 +107,10 @@ static uint8_t seq_boundary_engine_midi_fx_model(
                                        (uint8_t)SEQ_PLOCK_SET_MIDI_FX,
                                        model_slot, &value16) != 0U)
     {
-        const float decoded = seq_param_iface_decode_param_value(model_param,
-                                                                  value16);
-        model = (decoded >= 0.0f) ? (uint8_t)(decoded + 0.5f)
-                                  : NOTE_FX_MODEL_OFF;
+        float decoded;
+        if (seq_param_iface_decode_param_value(
+                model_param, value16, &decoded) != 0U)
+            model = (uint8_t)(decoded + 0.5f);
     }
     for (uint8_t i = 0U; i < active_count; ++i)
     {
@@ -125,10 +125,10 @@ static uint8_t seq_boundary_engine_midi_fx_model(
                     track, (uint8_t)SEQ_PLOCK_SET_MIDI_FX,
                     model_slot, &value16) != 0U)
             {
-                const float decoded = seq_param_iface_decode_param_value(
-                    model_param, value16);
-                model = (decoded >= 0.0f)
-                    ? (uint8_t)(decoded + 0.5f) : NOTE_FX_MODEL_OFF;
+                float decoded;
+                if (seq_param_iface_decode_param_value(
+                        model_param, value16, &decoded) != 0U)
+                    model = (uint8_t)(decoded + 0.5f);
             }
             break;
         }
@@ -263,10 +263,11 @@ static uint8_t seq_boundary_engine_collect_non_play_locks(seq_track_id_t track,
         {
             const param_id_t model_param = (param_id_t)(
                 PARAM_MIDI_FX_S1_MODEL + (slot * NOTE_FX_PARAM_COUNT));
-            const float decoded = seq_param_iface_decode_param_value(
-                model_param, out_locks[i].value16);
-            effective_model[slot] = (decoded >= 0.0f)
-                ? (uint8_t)(decoded + 0.5f) : NOTE_FX_MODEL_OFF;
+            float decoded;
+            if (seq_param_iface_decode_param_value(
+                    model_param, out_locks[i].value16, &decoded) == 0U)
+                continue;
+            effective_model[slot] = (uint8_t)(decoded + 0.5f);
             if (effective_model[slot] >= NOTE_FX_MODEL_COUNT)
                 effective_model[slot] = NOTE_FX_MODEL_OFF;
         }

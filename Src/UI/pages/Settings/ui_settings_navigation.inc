@@ -32,14 +32,6 @@ static const char *ui_page_settings_view_title(ui_settings_view_t view)
         case UI_SETTINGS_VIEW_CALIBRATION:
             return "CALIBRATION";
 #endif
-#if defined(BRICK6_VARIANT_LOWCOST)
-        case UI_SETTINGS_VIEW_TEST:
-            return "TEST";
-#if defined(BRICK6_VARIANT_LOWCOST)
-        case UI_SETTINGS_VIEW_TEST_HALL:
-            return "TEST > HALL";
-#endif
-#endif
         default:
             return "SETTINGS";
     }
@@ -51,8 +43,6 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
     {
         case UI_SETTINGS_VIEW_ROOT:
 #if defined(BRICK6_VARIANT_LOWCOST)
-            return 4U;
-#elif defined(BRICK6_VARIANT_LOWCOST) || BRICK_TEST_BUILD
             return 3U;
 #else
             return 2U;
@@ -83,14 +73,6 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
         case UI_SETTINGS_VIEW_CALIBRATION:
             return 2U;
 #endif
-#if defined(BRICK6_VARIANT_LOWCOST)
-        case UI_SETTINGS_VIEW_TEST:
-            return 1U;
-#if defined(BRICK6_VARIANT_LOWCOST)
-        case UI_SETTINGS_VIEW_TEST_HALL:
-            return 0U;
-#endif
-#endif
         default:
             return 0U;
     }
@@ -116,11 +98,7 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
                 return "CALIBRATION";
             }
 #endif
-#if BRICK_TEST_BUILD
-            return "TEST";
-#else
             return "-";
-#endif
         case UI_SETTINGS_VIEW_SAMPLE:
             if (index == 0U)
             {
@@ -241,13 +219,6 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
 #if defined(BRICK6_VARIANT_LOWCOST)
         case UI_SETTINGS_VIEW_CALIBRATION:
             return (index == 0U) ? "HALL KBD" : "HALL VEL";
-#endif
-#if defined(BRICK6_VARIANT_LOWCOST)
-        case UI_SETTINGS_VIEW_TEST:
-            if (index == 0U)
-            {
-                return "HALL";
-            }
 #endif
         default:
             return "-";
@@ -382,12 +353,6 @@ static void ui_page_settings_apply_action(void)
                 ui_page_settings_push(UI_SETTINGS_VIEW_CALIBRATION);
             }
 #endif
-            else
-            {
-#if BRICK_TEST_BUILD || defined(BRICK6_VARIANT_LOWCOST)
-                ui_page_settings_push(UI_SETTINGS_VIEW_TEST);
-#endif
-            }
             break;
 
 #if defined(BRICK6_VARIANT_LOWCOST)
@@ -399,23 +364,6 @@ static void ui_page_settings_apply_action(void)
             else
             {
                 ui_page_user_calibration_open(UI_PAGE_SETTINGS);
-            }
-            break;
-#endif
-
-#if defined(BRICK6_VARIANT_LOWCOST)
-        case UI_SETTINGS_VIEW_TEST:
-            if (level->selected_index == 0U)
-            {
-                g_ui_settings.hall_test_key = 0U;
-                g_ui_settings.hall_test_mux = 0U;
-                g_ui_settings.encoder_accum[0U] = 0;
-                g_ui_settings.encoder_accum[1U] = 0;
-                ui_page_settings_push(UI_SETTINGS_VIEW_TEST_HALL);
-            }
-            else
-            {
-                ui_page_settings_push(UI_SETTINGS_VIEW_TEST_HALL);
             }
             break;
 #endif
@@ -485,7 +433,7 @@ static void ui_page_settings_apply_action(void)
             else if (((level->selected_index - 1U) < g_ui_settings.project_slot_count)
                      && (project_product_load(g_ui_settings.project_slots[level->selected_index - 1U]) != 0U))
             {
-                ui_page_settings_status("LOAD OK");
+                    ui_page_settings_status("LOADING");
             }
             else
             {
@@ -515,7 +463,7 @@ static void ui_page_settings_apply_action(void)
             if (level->selected_index == (uint8_t)UI_SETTINGS_MANAGE_ACTION_LOAD_FROM)
             {
                 if (project_product_load(g_ui_settings.selected_slot) != 0U)
-                {                    ui_page_settings_status("LOAD FROM OK");
+                {                    ui_page_settings_status("LOADING");
                 }
                 else
                 {                    ui_page_settings_status("LOAD FROM FAIL");
@@ -639,6 +587,7 @@ static void ui_page_settings_apply_action(void)
             }
             else if (level->selected_index == (uint8_t)UI_SETTINGS_SAMPLER_ACTION_CLEAR)
             {
+                if (project_replacement_is_active() != 0U) return;
                 ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
                 (void)project_control_remove_sample(g_ui_settings.sample_slot_selected);
                 sample_global_pool_clear_classic(g_ui_settings.selected_slot);
@@ -693,10 +642,6 @@ static void ui_page_settings_enter(void)
     g_ui_settings.return_page_id = return_page_id;
     g_ui_settings.depth = 0U;
     g_ui_settings.selected_slot = 0U;
-#if defined(BRICK6_VARIANT_LOWCOST)
-    g_ui_settings.hall_test_key = 0U;
-    g_ui_settings.hall_test_mux = 0U;
-#endif
     g_ui_settings.sampler_catalog_mode = UI_SETTINGS_SAMPLER_CATALOG_MODE_LOAD;
     g_ui_settings.sampler_slot_count = 0U;
     g_ui_settings.project_slot_count = 0U;

@@ -55,11 +55,10 @@ typedef struct
 
 typedef struct
 {
-    recorder_file_reservation_map_owned_t reservation;
-    char path[AUDIO_RECORDER_PATH_MAX];
-    uint32_t accepted_frames;
-    uint32_t committed_frames;
-} audio_recorder_live_stream_t;
+    uint8_t arm_mode;
+    uint8_t length_mode;
+    uint8_t play_auto;
+} audio_recorder_looper_config_t;
 
 void audio_recorder_init(void);
 void audio_recorder_service(void);
@@ -89,20 +88,25 @@ uint8_t audio_recorder_control_arm_looper(uint8_t track,
 uint8_t audio_recorder_control_sync_looper_arm(uint8_t rec_armed,
                                                uint32_t samples_per_step_q16);
 uint8_t audio_recorder_control_looper_take_track(uint8_t *out_track);
+void audio_recorder_control_set_looper_admission(uint8_t open);
+uint8_t audio_recorder_control_release_looper_take(void);
 uint8_t audio_recorder_control_request_looper_stop(uint64_t request_sample,
                                                    uint8_t wait_boundary);
 void audio_recorder_control_on_looper_boundary(uint8_t track,
                                                uint64_t sample_time);
 void audio_recorder_control_on_transport_start(uint64_t sample_time);
+uint8_t audio_recorder_control_get_looper_config(
+    uint8_t track, audio_recorder_looper_config_t *out_config);
+uint8_t audio_recorder_control_set_looper_config(
+    uint8_t track, const audio_recorder_looper_config_t *config);
 uint8_t audio_recorder_get_status_client(audio_recorder_client_t client,
                                          audio_recorder_status_t *status);
 uint8_t audio_recorder_get_last_take_client(audio_recorder_client_t client,
                                             const char **path,
                                             uint32_t *frames);
-uint8_t audio_recorder_get_live_stream(audio_recorder_client_t client,
-                                       audio_recorder_live_stream_t *stream);
 uint8_t audio_recorder_client_is_active(audio_recorder_client_t client);
 uint8_t audio_recorder_client_is_recording(audio_recorder_client_t client);
+uint8_t audio_recorder_looper_take_resource_retained(void);
 
 
 #ifdef __cplusplus

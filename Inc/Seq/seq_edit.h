@@ -58,20 +58,28 @@ uint8_t seq_edit_lowcost_length_flash_step_visible(seq_track_id_t track,
 uint8_t seq_edit_lowcost_range_length_candidate(seq_track_id_t track,
                                                 uint8_t hall_index);
 
-uint8_t seq_edit_step_play_find(seq_track_id_t track,
+uint8_t seq_edit_step_play_get(seq_track_id_t track,
                                 seq_step_id_t step,
-                                param_id_t param,
-                                seq_value16_t *out_value16);
+                                uint8_t voice,
+                                seq_step_play_field_t field,
+                                int16_t *out_value);
 seq_plock_op_status_t seq_edit_step_play_upsert(seq_track_id_t track,
                                                  seq_step_id_t step,
-                                                 param_id_t param,
-                                                 seq_value16_t value16);
+                                                 uint8_t voice,
+                                                 seq_step_play_field_t field,
+                                                 int16_t value);
 void seq_edit_step_play_commit(seq_track_id_t track,
                                seq_step_id_t step,
-                               param_id_t param);
+                               uint8_t voice,
+                               seq_step_play_field_t field);
 seq_plock_op_status_t seq_edit_step_play_delete(seq_track_id_t track,
                                                  seq_step_id_t step,
-                                                 param_id_t param);
+                                                 uint8_t voice,
+                                                 seq_step_play_field_t field);
+uint8_t seq_edit_set_track_length(seq_track_id_t track, uint8_t length);
+uint8_t seq_edit_set_track_division(seq_track_id_t track, uint8_t division);
+uint8_t seq_edit_set_track_quantization(seq_track_id_t track, uint8_t quantization);
+uint8_t seq_edit_set_track_swing(seq_track_id_t track, uint8_t swing);
 void seq_edit_step_play_clear_voice(seq_track_id_t track,
                                     seq_step_id_t step,
                                     uint8_t voice);

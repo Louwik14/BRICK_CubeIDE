@@ -60,6 +60,7 @@ typedef struct
     uint8_t metadata_flags;
     uint32_t wav_size;
     uint32_t wav_mtime;
+    uint32_t wav_crc32;
 } multi_sample_index_source_sample_t;
 
 typedef struct
@@ -105,6 +106,8 @@ typedef struct
     uint8_t metadata_flags;
     uint32_t wav_size;
     uint32_t wav_mtime;
+    uint32_t wav_crc32;
+    uint8_t wav_identity_valid;
 } multi_sample_index_sample_t;
 
 typedef struct
@@ -120,6 +123,8 @@ typedef struct
     const multi_sample_index_sample_t *samples;
     const multi_sample_index_zone_t *zones;
     const char *strings;
+    uint32_t file_size;
+    uint32_t crc32;
 } multi_sample_index_t;
 
 multi_sample_index_result_t multi_sample_index_write(

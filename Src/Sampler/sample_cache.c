@@ -43,11 +43,9 @@ static uint8_t sample_cache_prepare_partial_via_page_cache(uint16_t sample_id,
 static uint8_t sample_cache_reserve_static_page_span(uint16_t sample_id,
                                                   const sample_play_plan_page_span_t *span);
 static uint32_t sample_cache_stream_last_page_index(const sample_cache_desc_t *desc);
-static uint8_t sample_cache_stream_start_base_ready(uint16_t sample_id,
-                                                    const sample_cache_desc_t *desc);
 
-static uint32_t sample_cache_product_cost_bytes(uint32_t frames,
-                                                sample_audio_format_t format)
+uint32_t sample_cache_product_cost_bytes(uint32_t frames,
+                                          sample_audio_format_t format)
 {
     const uint32_t prep_frames = (frames < SAMPLE_PREP_MIN_READY_FRAMES)
                                      ? frames
@@ -355,22 +353,6 @@ static uint32_t sample_cache_frame_offset(const sample_cache_desc_t *desc, uint3
     return (desc->cache_capacity_frames == 0U) ? 0U : (frame_index % desc->cache_capacity_frames);
 }
 
-static uint8_t sample_cache_start_frame_available(uint16_t sample_id)
-{
-    if (sample_id >= SAMPLE_CLASSIC_CAPACITY)
-    {
-        return 0U;
-    }
-
-    if ((g_sample_cache[sample_id].mode == SAMPLE_CACHE_MODE_STREAM)
-        && (g_sample_cache[sample_id].fully_cached == 0U))
-    {
-        return (sample_page_cache_get_page_state(sample_id, 0U) == SAMPLE_PAGE_READY) ? 1U : 0U;
-    }
-
-    return sample_cache_frame_available(&g_sample_cache[sample_id], 0U);
-}
-
 static uint32_t sample_cache_stream_last_page_index(const sample_cache_desc_t *desc)
 {
     if ((desc == 0) || (desc->total_frames == 0U))
@@ -379,38 +361,6 @@ static uint32_t sample_cache_stream_last_page_index(const sample_cache_desc_t *d
     }
 
     return sample_audio_format_page_index_from_frame(desc->format, desc->total_frames - 1U);
-}
-
-static uint8_t sample_cache_stream_start_base_ready(uint16_t sample_id,
-                                                    const sample_cache_desc_t *desc)
-{
-    if ((sample_id >= SAMPLE_CLASSIC_CAPACITY) || (desc == 0)
-        || (desc->total_frames == 0U))
-    {
-        return 0U;
-    }
-
-    if ((desc->mode != SAMPLE_CACHE_MODE_STREAM) || (desc->fully_cached != 0U))
-    {
-        return sample_cache_start_frame_available(sample_id);
-    }
-
-    const uint32_t last_page = sample_cache_stream_last_page_index(desc);
-    uint32_t required_pages = sample_audio_format_presocle_pages(desc->format);
-    if (required_pages > (last_page + 1U))
-    {
-        required_pages = last_page + 1U;
-    }
-
-    for (uint32_t page = 0U; page < required_pages; ++page)
-    {
-        if (sample_page_cache_get_page_state(sample_id, page) != SAMPLE_PAGE_READY)
-        {
-            return 0U;
-        }
-    }
-
-    return 1U;
 }
 
 static uint8_t sample_cache_stream_start_base_failed(uint16_t sample_id,
@@ -469,7 +419,12 @@ void sample_cache_clear(uint16_t sample_id)
     g_sample_cache_last_fresult[sample_id] = FR_OK;
 }
 
-uint8_t sample_cache_prepare(uint16_t sample_id, const char *path)
+static uint8_t sample_cache_prepare_internal(uint16_t sample_id,
+                                              const char *path,
+                                              const wav_info_t *prepared_info,
+                                              uint32_t prepared_file_size,
+                                              uint32_t prepared_crc32,
+                                              uint32_t prepared_cost_bytes)
 {
     if (sample_id >= SAMPLE_CLASSIC_CAPACITY)
     {
@@ -519,25 +474,41 @@ uint8_t sample_cache_prepare(uint16_t sample_id, const char *path)
     }
     fp_open = 1U;
 
-    if (wav_parser_parse_info(&fp, &desc->info) == 0U)
+    uint32_t actual_crc32 = 0U;
+    if ((prepared_info != NULL)
+        && (((uint32_t)f_size(&fp) != prepared_file_size)
+            || (wav_parser_crc32_file(&fp, &actual_crc32) == 0U)
+            || (actual_crc32 != prepared_crc32)))
     {
-        desc->last_error = 5U;
-        g_sample_cache_last_fresult[sample_id] = FR_INVALID_OBJECT;
         goto done;
     }
 
-    if (desc->info.sample_rate != 48000U)
+    if (prepared_info != NULL)
     {
-        desc->last_error = 15U;
-        g_sample_cache_last_fresult[sample_id] = FR_INVALID_PARAMETER;
-        goto done;
+        desc->info = *prepared_info;
     }
-
-    if (sample_cache_wav_format_supported(&desc->info) == 0U)
+    else
     {
-        desc->last_error = 6U;
-        g_sample_cache_last_fresult[sample_id] = FR_INVALID_PARAMETER;
-        goto done;
+        if (wav_parser_parse_info(&fp, &desc->info) == 0U)
+        {
+            desc->last_error = 5U;
+            g_sample_cache_last_fresult[sample_id] = FR_INVALID_OBJECT;
+            goto done;
+        }
+
+        if (desc->info.sample_rate != 48000U)
+        {
+            desc->last_error = 15U;
+            g_sample_cache_last_fresult[sample_id] = FR_INVALID_PARAMETER;
+            goto done;
+        }
+
+        if (sample_cache_wav_format_supported(&desc->info) == 0U)
+        {
+            desc->last_error = 6U;
+            g_sample_cache_last_fresult[sample_id] = FR_INVALID_PARAMETER;
+            goto done;
+        }
     }
 
     desc->total_frames = desc->info.data_size / desc->info.block_align;
@@ -597,10 +568,12 @@ done:
     }
     if (ok != 0U)
     {
-        const uint32_t product_cost = sample_cache_product_cost_bytes(
-            desc->total_frames, desc->format);
-        if (sample_global_pool_register_classic_at(sample_id, prepared_path,
-                                                   product_cost) == 0U)
+        const uint32_t product_cost = (prepared_info != NULL)
+            ? prepared_cost_bytes
+            : sample_cache_product_cost_bytes(desc->total_frames, desc->format);
+        if ((product_cost == 0U)
+            || (sample_global_pool_register_classic_at(sample_id, prepared_path,
+                                                       product_cost) == 0U))
         {
             ok = 0U;
             desc->last_error = 8U;
@@ -624,6 +597,24 @@ done:
     }
     sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_CACHE);
     return ok;
+}
+
+uint8_t sample_cache_prepare(uint16_t sample_id, const char *path)
+{
+    return sample_cache_prepare_internal(sample_id, path, NULL, 0U, 0U, 0U);
+}
+
+uint8_t sample_cache_prepare_prevalidated(uint16_t sample_id,
+                                          const char *path,
+                                          const wav_info_t *info,
+                                          uint32_t source_file_size,
+                                          uint32_t source_crc32,
+                                          uint32_t prepared_cost_bytes)
+{
+    if (info == NULL) return 0U;
+    return sample_cache_prepare_internal(sample_id, path, info,
+                                         source_file_size, source_crc32,
+                                         prepared_cost_bytes);
 }
 
 void sample_cache_service(uint32_t byte_budget)
@@ -697,11 +688,7 @@ sample_cache_slot_readiness_t sample_cache_get_slot_readiness(uint16_t sample_id
             {
                 return SAMPLE_CACHE_SLOT_ERROR;
             }
-            if (sample_cache_stream_start_base_ready(sample_id, desc) == 0U)
-            {
-                return SAMPLE_CACHE_SLOT_START_PENDING;
-            }
-            return SAMPLE_CACHE_SLOT_PLAYABLE;
+            return SAMPLE_CACHE_SLOT_START_PENDING;
 
         case SAMPLE_CACHE_ERROR:
         default:

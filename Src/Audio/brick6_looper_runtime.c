@@ -585,7 +585,8 @@ static void looper_publish_lease(const brick6_looper_track_state_t *state,
     const uint32_t total_pages = (state->frames_total + SAMPLE_PAGE_FRAMES - 1U)
                                    / SAMPLE_PAGE_FRAMES;
     const uint32_t first = (playhead / SAMPLE_PAGE_FRAMES) % total_pages;
-    uint32_t count = (total_pages < 2U) ? total_pages : 2U;
+    uint32_t count = (total_pages < BRICK6_LOOPER_PREFETCH_PAGES)
+                       ? total_pages : BRICK6_LOOPER_PREFETCH_PAGES;
     sample_page_lease_range_t ranges[2] = {0};
     ranges[0].first_page = first;
     const uint32_t tail = total_pages - first;

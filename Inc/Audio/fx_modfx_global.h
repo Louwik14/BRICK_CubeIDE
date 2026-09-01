@@ -20,16 +20,6 @@ void fx_modfx_global_set_width(float width);
 uint8_t fx_modfx_global_is_active(void);
 void fx_modfx_global_process_block(float *left, float *right, uint32_t frames);
 
-#if defined(BRICK6_DAISY_STEREO_TEST)
-typedef struct {
-    float rate_hz[2];
-    float depth[2];
-    float delay_samples[2];
-    float feedback[2];
-} fx_modfx_daisy_stereo_debug_t;
-void fx_modfx_global_daisy_stereo_debug(fx_modfx_daisy_stereo_debug_t *out);
-#endif
-
 #ifdef __cplusplus
 }
 #endif

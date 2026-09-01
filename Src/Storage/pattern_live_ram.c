@@ -6,7 +6,6 @@
 #include "Storage/audio_recorder.h"
 #include "Storage/sd_preview.h"
 #include "Storage/undo_v2.h"
-#include "UI/ui_core.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Track/control_music_output.h"
@@ -14,6 +13,7 @@
 #include "Storage/pattern_control_bank.h"
 #include "Storage/persistence_workspace.h"
 #include "Storage/persistent_pattern_control.h"
+#include "Storage/project_load_quiesce.h"
 
 #define PATTERN_BANK_COUNT 16U
 #define PATTERN_PER_BANK   16U
@@ -104,7 +104,7 @@ static uint8_t pattern_live_arm_ready_queue(uint8_t bank,
 
 uint8_t pattern_live_apply_boot_snapshot(uint8_t resume_transport)
 {
-    if (persistent_pattern_control_install_restored(&g_boot_control_pattern, resume_transport) != PERSIST_CODEC_OK)
+    if (persistent_pattern_control_apply(&g_boot_control_pattern, resume_transport) != PERSIST_CODEC_OK)
     {
         return 0U;
     }
@@ -128,6 +128,7 @@ uint8_t pattern_live_apply_boot_snapshot(uint8_t resume_transport)
 
 uint8_t pattern_load_request(uint8_t bank, uint8_t pattern)
 {
+    if (project_replacement_is_active() != 0U) return 0U;
     if(sd_preview_is_active() != 0U)
     {
         sd_preview_stop();
@@ -389,7 +390,7 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
     return 1U;
 }
 
-uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern)
+uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern, uint8_t boundary_track)
 {
     if (pattern_live_slot_is_valid(bank, pattern) == 0U)
     {
@@ -401,7 +402,6 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern)
         return 0U;
     }
 
-    uint8_t boundary_track = ui_get_active_track();
     if (boundary_track >= SEQ_LANE_CAPACITY)
     {
         boundary_track = 0U;
@@ -427,7 +427,7 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern)
             return 1U;
         }
 
-        if (persistent_pattern_control_install_restored(&g_next_pattern, 0U) != PERSIST_CODEC_OK)
+        if (persistent_pattern_control_apply(&g_next_pattern, 0U) != PERSIST_CODEC_OK)
         {
             return 0U;
         }
@@ -492,7 +492,7 @@ static uint8_t pattern_live_try_take_pending_ready(void)
 
     if (seq_runtime_is_running() == 0U)
     {
-        if (persistent_pattern_control_install_restored(&g_next_pattern, 0U) != PERSIST_CODEC_OK)
+        if (persistent_pattern_control_apply(&g_next_pattern, 0U) != PERSIST_CODEC_OK)
         {
             return 0U;
         }
@@ -547,7 +547,7 @@ void pattern_live_service(void)
         return;
     }
 
-    if (persistent_pattern_control_install_restored(&g_next_pattern, 1U) == PERSIST_CODEC_OK)
+    if (persistent_pattern_control_apply(&g_next_pattern, 1U) == PERSIST_CODEC_OK)
     {
         g_active_bank = g_queued_bank;
         g_active_pattern = g_queued_pattern;
@@ -649,7 +649,8 @@ void pattern_live_set_active_state(uint8_t active_bank,
                                    uint8_t active_pattern,
                                    uint8_t queued_valid,
                                    uint8_t queued_bank,
-                                   uint8_t queued_pattern)
+                                   uint8_t queued_pattern,
+                                   uint8_t boundary_track)
 {
     if (pattern_live_slot_is_valid(active_bank, active_pattern) != 0U)
     {
@@ -659,7 +660,6 @@ void pattern_live_set_active_state(uint8_t active_bank,
 
     if ((queued_valid != 0U) && (pattern_live_slot_is_valid(queued_bank, queued_pattern) != 0U))
     {
-        uint8_t boundary_track = ui_get_active_track();
         if (boundary_track >= SEQ_LANE_CAPACITY)
         {
             boundary_track = 0U;

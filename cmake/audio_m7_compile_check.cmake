@@ -1,3 +1,5 @@
+cmake_policy(SET CMP0057 NEW)
+
 if(NOT DEFINED MANIFEST)
     message(FATAL_ERROR "audio_m7_compile_check: MANIFEST is required")
 endif()
@@ -18,7 +20,6 @@ set(definition_args
     -DARM_MATH_CM7
     -DUSE_HAL_DRIVER
     -DUSE_PWR_LDO_SUPPLY
-    -DBRICK_TEST_BUILD=0
     "-D${AUDIO_M7_VARIANT_DEFINE}"
     "-DBRICK6_STREAM_PRODUCT_PAGE_KIB=${AUDIO_M7_PRODUCT_PAGE_KIB}"
     "-DBRICK6_STREAM_PRODUCT_MULTI_PRESOCLE_PAGES=${AUDIO_M7_PRODUCT_MULTI_PRESOCLE_PAGES}"
@@ -36,8 +37,7 @@ set(common_args
     -fdata-sections
     -Wall
     -Werror=implicit-function-declaration
-    --specs=nano.specs
-    -fsyntax-only)
+    --specs=nano.specs)
 
 set(audio_forbidden_dependencies
     "/Inspiration/"
@@ -49,7 +49,7 @@ set(audio_forbidden_dependencies
     "/Src/UI/"
     "/Inc/Track/track_runtime.h"
     "/Inc/Track/entity_topology.h"
-    "/Inc/Param/param_store.h"
+    "/Inc/Param/param_global_control.h"
     "/Inc/Param/param_registry_control.h"
     "/Inc/Mod/mod_matrix_control.h"
     "/Inc/Mod/mod_destination_catalog_control.h"
@@ -60,7 +60,10 @@ set(audio_forbidden_dependencies
     "_control.h")
 
 set(compiled_count 0)
-foreach(source IN LISTS AUDIO_M7_SOURCES)
+set(all_sources ${AUDIO_M7_SOURCES} ${AUDIO_M7_CONTRACT_SOURCES}
+    ${AUDIO_M7_SHARED_SOURCES})
+set(object_manifest "")
+foreach(source IN LISTS all_sources)
     get_filename_component(extension "${source}" EXT)
     if(extension STREQUAL ".cpp" OR extension STREQUAL ".cc" OR extension STREQUAL ".cxx")
         set(compiler "${AUDIO_M7_CXX_COMPILER}")
@@ -72,6 +75,7 @@ foreach(source IN LISTS AUDIO_M7_SOURCES)
 
     string(SHA1 source_id "${source}")
     set(depfile "${AUDIO_M7_WORK_DIR}/${source_id}.d")
+    set(object "${AUDIO_M7_WORK_DIR}/${source_id}.o")
     execute_process(
         COMMAND "${compiler}"
             ${common_args}
@@ -79,6 +83,7 @@ foreach(source IN LISTS AUDIO_M7_SOURCES)
             ${definition_args}
             ${include_args}
             -MMD -MF "${depfile}" -MT audio_m7_check
+            -c -o "${object}"
             "${source}"
         RESULT_VARIABLE compile_result
         OUTPUT_VARIABLE compile_stdout
@@ -87,6 +92,14 @@ foreach(source IN LISTS AUDIO_M7_SOURCES)
         message(FATAL_ERROR
             "Cortex-M7 compile failed for ${source}:\n${compile_stdout}${compile_stderr}")
     endif()
+    if(source IN_LIST AUDIO_M7_SHARED_SOURCES)
+        set(owner SHARED_BACKING)
+    elseif(source IN_LIST AUDIO_M7_CONTRACT_SOURCES)
+        set(owner CONTRACTS)
+    else()
+        set(owner AUDIO)
+    endif()
+    string(APPEND object_manifest "${owner}|${object}|${source}\n")
 
     file(READ "${depfile}" dependencies)
     string(REPLACE "\\" "/" dependencies "${dependencies}")
@@ -99,6 +112,7 @@ foreach(source IN LISTS AUDIO_M7_SOURCES)
     endforeach()
     math(EXPR compiled_count "${compiled_count} + 1")
 endforeach()
+file(WRITE "${AUDIO_M7_WORK_DIR}/objects.manifest" "${object_manifest}")
 
 message(STATUS
     "Cortex-M7 AUDIO compile-check passed (${compiled_count} translation units)")

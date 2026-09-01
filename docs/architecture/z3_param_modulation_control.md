@@ -7,12 +7,24 @@ contrat et applique une valeur deja canonique sans rejouer la politique CONTROL.
 
 Autorites d'ecriture:
 
-- global: `param_set`;
+- global: `param_registry_commit_global`, vers l'autorite CONTROL explicite;
 - entite: `param_registry_apply_track_value`;
 - configuration LFO: `mod_lfo_v1_set_track_param`;
 - override AUDIO temporaire: chemin RT/audio dedie.
 
-`param_store.active[]` a deux usages selon le contrat du parametre: valeur CONTROL canonique pour un parametre global, projection de la piste UI active pour un parametre d'entite. Cette projection d'entite n'est pas la verite runtime. La separer exige de modifier le contrat `param_get`/`param_set` et les synchronisations UI; aucun second cache ou proprietaire n'est introduit ici. Une application batch pre-valide et publie atomiquement ses PARAM finaux.
+Le routeur Param ne stocke aucune valeur. Keyboard, configuration Seq, PLAY et
+Transport/Metronome ne sont pas des Param: leurs UI et leur persistance parlent
+directement a `keyboard_runtime`, `seq_model`/`seq_runtime`/`seq_edit` et
+`metronome_control`. Les autres scalaires globaux Param utilisent le sparse
+`param_global_control`.
+La structure Track (famille, type, canal/source MIDI et entree), le nombre de
+voix, la structure Matrix/Multi/Slew et le routing Audio FX ne sont pas des
+Param non plus. Leurs owners sont respectivement Track, `polyphony_control`,
+Mod et `audio_fx_control_state`; leurs UI appellent directement ces APIs.
+`PARAM_CFG_POLY_SPREAD` reste un Param sonore scalaire.
+Les valeurs d'entite sont lues et ecrites directement dans Track, Seq, Mod,
+NoteFx ou l'etat Param CONTROL par piste. L'UI ne conserve que son contexte
+d'interaction et lit l'autorite a la demande.
 
 `param_desc_t::value_policy` possede conversions canonique/affichee, pas normal/SHIFT et politique d'automation. Les p-locks continus utilisent toute la plage `uint16_t`; les discrets utilisent leur pas. La persistance stocke la valeur CONTROL typee, notamment FLOAT32, jamais une representation UI.
 
@@ -36,9 +48,16 @@ politique Track: il verifie l'ABI puis prepare l'opcode DSP de la destination
 deja legitime. Les destinations MIDI CC n'existent plus cote AUDIO et MIDI OUT
 reste exclusivement CONTROL.
 
-La valeur CONTROL du parametre est l'unique autorite de sa base. Elle est projetee par le chemin normal des commandes parametre et met a jour directement la destination AUDIO, y compris pendant une modulation. Chaque champ Matrix traverse egalement PARAM: les kinds indexes 2..9 adressent les huit slots, tandis que Multi et Slew utilisent la portee track normale. M7 conserve le petit etat canonique propre a Matrix, marque l'owner dirty et finalise une seule recompilation apres toutes les commandes dues au meme sample. Min/max, endpoints, plans et caches restent derives localement; les MODEL et le nombre de slots Drum sont lus dans le runtime moteur. Aucun descripteur partage, pool, ACK ou canal fonctionnel parallele n'existe.
+La valeur CONTROL du parametre est l'unique autorite de sa base. Elle est projetee par le chemin normal des commandes parametre et met a jour directement la destination AUDIO, y compris pendant une modulation. Les routes Matrix sont adressees par `{track, slot, field}` et Multi/Slew par leurs APIs typees; source, destination, depth et enable ne traversent jamais Param. Des commandes fonctionnelles typees mettent a jour l'etat Matrix M7, marquent l'owner dirty et finalisent une seule recompilation apres toutes les commandes dues au meme sample. Min/max, endpoints, plans et caches restent derives localement; les MODEL et le nombre de slots Drum sont lus dans le runtime moteur. Aucun descripteur partage, pool, ACK ou canal fonctionnel parallele n'existe.
 
-Le selector Sampler est resolu par CONTROL en slot runtime Multi/Stream/RAM avant publication, et les commandes Looper transportent directement leurs valeurs finales. Le backend AUDIO n'interroge ni Project ni stockage; il applique le PARAM au programme courant et reconstruit Matrix depuis ses catalogues et son etat AUDIO local.
+Les selections Sample et Wavetable appartiennent a `project_control` sous forme
+de references asset typees stables; leur resolution en slot runtime n'a lieu
+qu'a la publication AUDIO. Elles ne sont ni Param, ni destinations de p-lock,
+modulation ou MIDI. Arm, longueur et lecture automatique du Looper appartiennent
+a `audio_recorder`; l'UI appelle directement cet owner. La selection d'operateur
+FM est un contexte local de l'editeur. L'etat interne FM est possede par
+`fm_control_state` cote CONTROL et publie comme un DTO coherent unique vers
+AUDIO; aucun pack FM interne ne traverse Param.
 
 La resolution commune est `clamp(base_courante + somme(source * profondeur_normalisee * plage), min, max)`. Retirer le dernier slot restaure `base_courante`.
 
@@ -77,4 +96,13 @@ serialisent egalement l'ordinal normalise, sans dependance au moteur actif.
 Les runtimes moteur et voix ne conservent que leurs projections natives ou
 leurs etats DSP.
 
-Les slots Audio FX A/B possedent MODEL/P1/P2/P3. Un changement de MODEL conserve P1/P2/P3 et ne publie que MODEL; AUDIO recalcule seulement son etat derive local. Les restores installent puis publient directement l'etat final, sans passer par les defaults du modele. Seuls P1/P2/P3 sont p-lockables. En GROUP, les models appartiennent au master et les children n'exposent que LEVEL A/B.
+Les slots Audio FX A/B possedent MODEL/P1/P2/P3. MODEL reste un endpoint musical stable de slot; un changement conserve P1/P2/P3 et ne publie que MODEL. Filter position, ordre et modes spatiaux appartiennent a `audio_fx_control_state` et utilisent des commandes typees. Les restores preparent, publient, puis installent directement l'etat final, sans passer par les defaults du modele. Seuls P1/P2/P3 sont p-lockables. En GROUP, les models appartiennent au master et les children n'exposent que LEVEL A/B.
+# FM parameter authority
+
+Public `PARAM_FM_*` queries and commits address the semantic FM CONTROL state
+directly. Scalar edits use the PARAM FIFO path. Whole-state replacement emits
+one atomic FIFO batch at a common effective sample time; AUDIO remains a
+projection and no FM shared snapshot, mailbox, sequence or generation exists.
+Les endpoints operateur projettent directement les champs DX7 canoniques;
+FREQ convertit vers/depuis mode/coarse/fine et KEY projette la moyenne des
+profondeurs gauche/droite. Aucun tableau float operateur n'est stocke.

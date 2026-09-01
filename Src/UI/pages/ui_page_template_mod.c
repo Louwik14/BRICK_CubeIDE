@@ -3,11 +3,16 @@
 #include <stdio.h>
 
 #include "Mod/mod_lfo_v1_control.h"
+#include "Mod/mod_matrix_control.h"
+#include "Mod/mod_destination_control.h"
 #include "ui_core.h"
 #include "ui_navigation.h"
 #include "ui_template_page.h"
 
 static uint8_t g_ui_template_mod_subset = 0U;
+static ui_template_page_state_t g_ui_template_mod_state;
+static uint8_t ui_page_template_mod_virtual_slot_text(uint8_t slot,char*out_name,
+    uint32_t out_name_len,char*out_value,uint32_t out_value_len);
 
 static const ui_template_family_t g_ui_template_mod_family_main = {
     .family_title = "MOD 1/2",
@@ -15,7 +20,7 @@ static const ui_template_family_t g_ui_template_mod_family_main = {
     .subpages = {
         {
             .title = "MATRIX",
-            .param_bank = { .params = { PARAM_MOD_MATRIX_SLOT, PARAM_MOD_MATRIX_SOURCE, PARAM_MOD_MATRIX_DEST, PARAM_MOD_MATRIX_DEPTH } },
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
         {
             .title = "LFO 1",
@@ -39,11 +44,11 @@ static const ui_template_family_t g_ui_template_mod_family_ops = {
     .subpages = {
         {
             .title = "MULTI",
-            .param_bank = { .params = { PARAM_MOD_MULTI_1_A, PARAM_MOD_MULTI_1_B, PARAM_MOD_MULTI_2_A, PARAM_MOD_MULTI_2_B } },
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
         {
             .title = "SLEW",
-            .param_bank = { .params = { PARAM_MOD_SLEW_1_SOURCE, PARAM_MOD_SLEW_1_AMOUNT, PARAM_MOD_SLEW_2_SOURCE, PARAM_MOD_SLEW_2_AMOUNT } },
+            .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
         {
             .title = "-",
@@ -94,38 +99,9 @@ static ui_template_custom_widget_kind_t ui_page_template_mod_pick_custom_widget(
 {
     (void)subpage;
 
-    if ((slot == 0U) && (id == PARAM_MOD_MATRIX_SLOT))
-    {
-        return UI_TEMPLATE_CUSTOM_WIDGET_MATRIX_SLOT;
-    }
-    if ((slot == 1U) && (id == PARAM_MOD_MATRIX_SOURCE))
-    {
-        return UI_TEMPLATE_CUSTOM_WIDGET_MATRIX_SOURCE;
-    }
-    if (((id == PARAM_MOD_MULTI_1_A)
-            || (id == PARAM_MOD_MULTI_1_B)
-            || (id == PARAM_MOD_MULTI_2_A)
-            || (id == PARAM_MOD_MULTI_2_B)
-            || (id == PARAM_MOD_SLEW_1_SOURCE)
-            || (id == PARAM_MOD_SLEW_2_SOURCE)))
-    {
-        return UI_TEMPLATE_CUSTOM_WIDGET_MATRIX_SOURCE;
-    }
-    if ((slot == 2U) && (id == PARAM_MOD_MATRIX_DEST))
-    {
-        return UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEST;
-    }
     if ((slot == 0U) && (ui_page_template_mod_is_lfo_param(id, MOD_LFO_PARAM_RATE) != 0U))
     {
         return UI_TEMPLATE_CUSTOM_WIDGET_LFO_RATE;
-    }
-    if ((slot == 3U) && (id == PARAM_MOD_MATRIX_DEPTH))
-    {
-        return UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEPTH;
-    }
-    if ((id == PARAM_MOD_SLEW_1_AMOUNT) || (id == PARAM_MOD_SLEW_2_AMOUNT))
-    {
-        return UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEPTH;
     }
     if (((slot == 1U) && (ui_page_template_mod_is_lfo_param(id, MOD_LFO_PARAM_SHAPE) != 0U))
             || ((slot == 2U) && (ui_page_template_mod_is_lfo_param(id, MOD_LFO_PARAM_PHASE) != 0U)))
@@ -190,12 +166,42 @@ static uint8_t ui_page_template_mod_param_text(uint8_t slot,
     return 1U;
 }
 
+static const char *ui_page_template_mod_source_label(uint8_t source)
+{
+    static const char *const labels[]={"OFF","LFO1","LFO2","LFO3","ENV1","ENV2","ENV3","MLT1","MLT2","SLW1","SLW2"};
+    return (source<MOD_MATRIX_SOURCE_COUNT)?labels[source]:"OFF";
+}
+
+static uint8_t ui_page_template_mod_virtual_slot_text(uint8_t slot,char*out_name,
+    uint32_t out_name_len,char*out_value,uint32_t out_value_len)
+{
+    const uint8_t track=ui_get_active_lane();float value=0.0f;
+    if(g_ui_template_mod_subset==0U&&g_ui_template_mod_state.active_subpage==0U){
+        if(slot==0U){if(!mod_matrix_get_selected_slot(track,&value))return 0U;(void)snprintf(out_name,out_name_len,"SLOT");(void)snprintf(out_value,out_value_len,"%u",(unsigned)((uint8_t)value+1U));return 1U;}
+        if(slot==1U){if(!mod_matrix_get_selected_slot_source(track,&value))return 0U;(void)snprintf(out_name,out_name_len,"SOURCE");(void)snprintf(out_value,out_value_len,"%s",ui_page_template_mod_source_label((uint8_t)value));return 1U;}
+        if(slot==2U){if(!mod_matrix_get_selected_slot_destination_index(track,&value))return 0U;(void)snprintf(out_name,out_name_len,"DEST");return mod_destination_catalog_label(track,(uint16_t)value,out_value,out_value_len);}
+        if(slot==3U){if(!mod_matrix_get_selected_slot_depth(track,&value))return 0U;(void)snprintf(out_name,out_name_len,"DEPTH");(void)snprintf(out_value,out_value_len,"%+.0f",(double)value);return 1U;}}
+    if(g_ui_template_mod_subset!=0U&&g_ui_template_mod_state.active_subpage==0U){const uint8_t op=(uint8_t)(slot>>1U),input=(uint8_t)(slot&1U);if(!mod_matrix_get_multi_source(track,op,input,&value))return 0U;(void)snprintf(out_name,out_name_len,"M%u%c",(unsigned)(op+1U),input?'B':'A');(void)snprintf(out_value,out_value_len,"%s",ui_page_template_mod_source_label((uint8_t)value));return 1U;}
+    if(g_ui_template_mod_subset!=0U&&g_ui_template_mod_state.active_subpage==1U){const uint8_t op=(uint8_t)(slot>>1U);if((slot&1U)==0U){if(!mod_matrix_get_slew_source(track,op,&value))return 0U;(void)snprintf(out_name,out_name_len,"S%u SRC",(unsigned)(op+1U));(void)snprintf(out_value,out_value_len,"%s",ui_page_template_mod_source_label((uint8_t)value));}else{if(!mod_matrix_get_slew_amount(track,op,&value))return 0U;(void)snprintf(out_name,out_name_len,"S%u AMT",(unsigned)(op+1U));(void)snprintf(out_value,out_value_len,"%u%%",(unsigned)(value*100.0f+0.5f));}return 1U;}
+    return 0U;
+}
+
+static void ui_page_template_mod_handle_event(const ui_event_t *ev)
+{
+    if(ev!=0&&ev->type==UI_EVENT_ENCODER&&ev->id<4U&&ev->value!=0){const uint8_t track=ui_get_active_lane();float value=0.0f;const float step=(ev->value>0)?1.0f:-1.0f;
+        if(g_ui_template_mod_subset==0U&&g_ui_template_mod_state.active_subpage==0U){if(ev->id==0U){(void)mod_matrix_get_selected_slot(track,&value);(void)mod_matrix_set_selected_slot(track,value+step);}else if(ev->id==1U){(void)mod_matrix_get_selected_slot_source(track,&value);(void)mod_matrix_set_selected_slot_source(track,value+step);}else if(ev->id==2U){(void)mod_matrix_get_selected_slot_destination_index(track,&value);(void)mod_matrix_set_selected_slot_destination_index(track,value+step);}else{(void)mod_matrix_get_selected_slot_depth(track,&value);(void)mod_matrix_set_selected_slot_depth(track,value+(float)ev->value);}return;}
+        if(g_ui_template_mod_subset!=0U&&g_ui_template_mod_state.active_subpage==0U){const uint8_t op=(uint8_t)(ev->id>>1U),input=(uint8_t)(ev->id&1U);(void)mod_matrix_get_multi_source(track,op,input,&value);(void)mod_matrix_set_multi_source(track,op,input,value+step);return;}
+        if(g_ui_template_mod_subset!=0U&&g_ui_template_mod_state.active_subpage==1U){const uint8_t op=(uint8_t)(ev->id>>1U);if((ev->id&1U)==0U){(void)mod_matrix_get_slew_source(track,op,&value);(void)mod_matrix_set_slew_source(track,op,value+step);}else{(void)mod_matrix_get_slew_amount(track,op,&value);(void)mod_matrix_set_slew_amount(track,op,value+(float)ev->value*0.01f);}return;}}
+    ui_template_page_handle_event(ev);
+}
+
 static ui_template_page_state_t g_ui_template_mod_state = {
     .family = 0,
     .family_resolver = ui_page_template_mod_resolve_family,
     .widget_picker = ui_page_template_mod_pick_widget,
     .custom_widget_picker = ui_page_template_mod_pick_custom_widget,
     .param_text = ui_page_template_mod_param_text,
+    .virtual_slot_text = ui_page_template_mod_virtual_slot_text,
     .active_subpage = 0U,
     .has_visited = 0U,
 };
@@ -238,7 +244,7 @@ void ui_page_template_mod_register_families(void)
 const ui_page_t g_ui_page_template_mod = {
     .enter = ui_template_page_enter,
     .leave = ui_template_page_leave,
-    .handle_event = ui_template_page_handle_event,
+    .handle_event = ui_page_template_mod_handle_event,
     .tick = ui_template_page_tick,
     .sync_active_context = ui_template_page_sync_active_track_context,
     .render = ui_template_page_render,

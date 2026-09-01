@@ -5,7 +5,6 @@
 
 #include "Seq/seq_types.h"
 #include "Track/entity_topology.h"
-#include "Param/param_store.h"
 
 #define SEQ_PLAY_MAX_CAPACITY 8U
 
@@ -43,6 +42,12 @@ typedef struct
 {
     seq_play_item_t items[SEQ_PLAY_MAX_CAPACITY];
 } seq_play_snapshot_t;
+
+typedef struct
+{
+    uint8_t voice;
+    seq_step_play_field_t field;
+} seq_play_address_t;
 
 _Static_assert(SEQ_STEP_PLAY_FIELD_COUNT == 4U, "PLAY field count changed");
 _Static_assert(sizeof(seq_play_item_t) == 5U, "PLAY voice storage size changed");
@@ -204,20 +209,18 @@ uint8_t seq_model_play_iterate(seq_track_id_t track,
                                seq_step_id_t step,
                                seq_model_play_iter_fn callback,
                                void *context);
-uint8_t seq_model_play_resolve_param(param_id_t param,
-                                          uint8_t *out_voice,
-                                          seq_step_play_field_t *out_field);
-uint8_t seq_model_play_param_get(seq_track_id_t track,
-                                      seq_step_id_t step,
-                                      param_id_t param,
-                                      int16_t *out_value);
-uint8_t seq_model_play_param_set(seq_track_id_t track,
-                                      seq_step_id_t step,
-                                      param_id_t param,
-                                      int16_t value);
-uint8_t seq_model_play_param_delete(seq_track_id_t track,
-                                         seq_step_id_t step,
-                                         param_id_t param);
+uint8_t seq_model_play_base_get(seq_track_id_t track,
+                                uint8_t voice,
+                                seq_step_play_field_t field,
+                                int16_t *out_value);
+uint8_t seq_model_play_base_set(seq_track_id_t track,
+                                uint8_t voice,
+                                seq_step_play_field_t field,
+                                int16_t value);
+uint8_t seq_model_play_base_capture(seq_track_id_t track,
+                                    seq_play_snapshot_t *out_snapshot);
+uint8_t seq_model_play_base_restore(seq_track_id_t track,
+                                    const seq_play_snapshot_t *snapshot);
 uint8_t seq_model_get_step_lock_limit(seq_track_id_t track);
 uint16_t seq_model_get_track_plock_capacity(seq_track_id_t track);
 uint16_t seq_model_get_track_plock_count(seq_track_id_t track);

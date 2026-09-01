@@ -47,10 +47,6 @@ uint8_t live_parameter_is_audio_owned(param_id_t parameter)
         case PARAM_AUDIO_FX_B_P2:
         case PARAM_AUDIO_FX_B_P3:
         case PARAM_AUDIO_FX_B_MODEL:
-        case PARAM_AUDIO_FX_FILTER_POS:
-        case PARAM_AUDIO_FX_ORDER:
-        case PARAM_AUDIO_FX_MODE_A:
-        case PARAM_AUDIO_FX_MODE_B:
         case PARAM_GROUP_FX_A_LEVEL:
         case PARAM_GROUP_FX_B_LEVEL:
         case PARAM_WAVE_OSC1_POS:

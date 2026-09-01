@@ -6,6 +6,7 @@
 #include "Track/entity_types.h"
 #include "stm32h7xx.h"
 
+#include <math.h>
 #include <string.h>
 
 #include "Audio/brick6_audio_event_grid.h"
@@ -825,7 +826,8 @@ uint8_t mod_lfo_v1_set_track_param_audio(uint8_t track, uint8_t lfo_index,
     if (g_mod_lfo_audio_initialized == 0U)
         mod_lfo_v1_audio_init();
     if ((lfo_index >= MOD_LFO_COUNT_PER_TRACK)
-            || ((uint8_t)param >= (uint8_t)MOD_LFO_PARAM_COUNT))
+            || ((uint8_t)param >= (uint8_t)MOD_LFO_PARAM_COUNT)
+            || !isfinite(value))
         return 0U;
     uint8_t owner = 0U;
     if (mod_lfo_audio_resolve_owner(track, &owner) == 0U)
@@ -842,25 +844,30 @@ uint8_t mod_lfo_v1_set_track_param_audio(uint8_t track, uint8_t lfo_index,
     switch (param)
     {
         case MOD_LFO_PARAM_RATE:
-            config->rate = mod_lfo_clampf(value, -LFO_FREE_MAX_HZ,
-                                          (float)MOD_LFO_SYNC_RATE_COUNT);
-            if (config->rate > 0.0f)
-                config->rate = mod_lfo_quantize_sync_rate(config->rate);
+            if ((value < -LFO_FREE_MAX_HZ)
+                    || (value > (float)MOD_LFO_SYNC_RATE_COUNT)
+                    || ((value > 0.0f) && (value != floorf(value)))) return 0U;
+            config->rate = value;
             if ((config->rate <= MOD_LFO_RATE_OFF_EPS)
                     && (config->rate >= -MOD_LFO_RATE_OFF_EPS))
                 rt->active = 0U;
             break;
         case MOD_LFO_PARAM_SHAPE:
-            config->shape = mod_lfo_clampf(value, 0.0f,
-                (float)((uint8_t)MOD_LFO_SHAPE_COUNT - 1U));
+            if ((value < 0.0f)
+                    || (value > (float)((uint8_t)MOD_LFO_SHAPE_COUNT - 1U))
+                    || (value != floorf(value))) return 0U;
+            config->shape = value;
             break;
         case MOD_LFO_PARAM_TRIG:
-            config->trig = mod_lfo_clampf(value, 0.0f,
-                (float)((uint8_t)MOD_LFO_TRIG_COUNT - 1U));
+            if ((value < 0.0f)
+                    || (value > (float)((uint8_t)MOD_LFO_TRIG_COUNT - 1U))
+                    || (value != floorf(value))) return 0U;
+            config->trig = value;
             reset = MOD_LFO_SNAPSHOT_RESET_TRIGGER;
             break;
         case MOD_LFO_PARAM_PHASE:
-            config->phase = mod_lfo_clampf(value, 0.0f, 360.0f);
+            if ((value < 0.0f) || (value > 360.0f)) return 0U;
+            config->phase = value;
             break;
         default:
             return 0U;
@@ -914,11 +921,10 @@ uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_
     switch (param)
     {
         case MOD_LFO_PARAM_RATE:
-            rt->temp.rate = mod_lfo_clampf(value, -LFO_FREE_MAX_HZ, (float)MOD_LFO_SYNC_RATE_COUNT);
-            if (rt->temp.rate > 0.0f)
-            {
-                rt->temp.rate = mod_lfo_quantize_sync_rate(rt->temp.rate);
-            }
+            if (!isfinite(value) || (value < -LFO_FREE_MAX_HZ)
+                    || (value > (float)MOD_LFO_SYNC_RATE_COUNT)
+                    || ((value > 0.0f) && (value != floorf(value)))) return 0U;
+            rt->temp.rate = value;
             rt->phase_inc = mod_lfo_phase_inc_from_rate(rt->temp.rate);
             if (rt->phase_inc == 0U)
             {
@@ -927,7 +933,10 @@ uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_
             break;
 
         case MOD_LFO_PARAM_SHAPE:
-            rt->temp.shape = mod_lfo_clampf(value, 0.0f, (float)((uint8_t)MOD_LFO_SHAPE_COUNT - 1U));
+            if (!isfinite(value) || (value < 0.0f)
+                    || (value > (float)((uint8_t)MOD_LFO_SHAPE_COUNT - 1U))
+                    || (value != floorf(value))) return 0U;
+            rt->temp.shape = value;
             rt->sh_valid = 0U;
             rt->slew_valid = 0U;
             break;
@@ -935,8 +944,11 @@ uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_
         case MOD_LFO_PARAM_TRIG:
         {
             const mod_lfo_trig_mode_t old_trig = (mod_lfo_trig_mode_t)((uint8_t)
-                (mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_TRIG) + 0.5f));
-            rt->temp.trig = mod_lfo_clampf(value, 0.0f, (float)((uint8_t)MOD_LFO_TRIG_COUNT - 1U));
+                mod_lfo_effective_field(rt, s, MOD_LFO_PARAM_TRIG));
+            if (!isfinite(value) || (value < 0.0f)
+                    || (value > (float)((uint8_t)MOD_LFO_TRIG_COUNT - 1U))
+                    || (value != floorf(value))) return 0U;
+            rt->temp.trig = value;
             rt->triggered = 0U;
             rt->one_running = 0U;
             rt->one_done = 0U;
@@ -945,12 +957,13 @@ uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_
             mod_lfo_poly_mode_changed(track,
                                       lfo_index,
                                       old_trig,
-                                      (mod_lfo_trig_mode_t)((uint8_t)(rt->temp.trig + 0.5f)));
+                                      (mod_lfo_trig_mode_t)((uint8_t)rt->temp.trig));
             break;
         }
 
         case MOD_LFO_PARAM_PHASE:
-            rt->temp.phase = mod_lfo_clampf(value, 0.0f, 360.0f);
+            if (!isfinite(value) || (value < 0.0f) || (value > 360.0f)) return 0U;
+            rt->temp.phase = value;
             rt->slew_valid = 0U;
             break;
 
@@ -990,7 +1003,7 @@ uint8_t mod_lfo_v1_clear_track_param_temp_audio(uint8_t track,
         }
         mod_lfo_audio_reset_poly_track_lfo(
             track, lfo_index,
-            (uint8_t)(((uint8_t)(config->trig + 0.5f)) >= MOD_LFO_TRIG_POLY_TRIG));
+            (uint8_t)(((uint8_t)config->trig) >= MOD_LFO_TRIG_POLY_TRIG));
     }
     return 1U;
 }

@@ -1,6 +1,6 @@
 static uint8_t ui_param_set_active_track_value(uint8_t encoder, param_id_t param, float value, uint8_t active_track)
 {
-    return ui_param_set_track_value(encoder, param, value, active_track, 1U);
+    return ui_param_set_track_value(encoder, param, value, active_track);
 }
 
 static uint8_t ui_param_desc_value_count_is_short(const param_desc_t *desc)
@@ -75,14 +75,16 @@ static int16_t ui_param_filter_stepped_encoder_delta(const ui_param_encoder_cont
     return stepped_delta;
 }
 
-static float ui_param_apply_delta_value(param_id_t param,
-                                        uint8_t track,
-                                        float current_value,
-                                        int16_t delta,
-                                        float min_value,
-                                        float max_value,
-                                        uint8_t shift_down)
+static uint8_t ui_param_apply_delta_value(param_id_t param,
+                                          uint8_t track,
+                                          float current_value,
+                                          int16_t delta,
+                                          float min_value,
+                                          float max_value,
+                                          uint8_t shift_down,
+                                          float *out_value)
 {
+    if (out_value == 0) return 0U;
     if ((param == PARAM_STACK_OSC1_MODEL)
             || (param == PARAM_STACK_OSC2_MODEL)
             || (param == PARAM_STACK_OSC3_MODEL))
@@ -105,7 +107,8 @@ static float ui_param_apply_delta_value(param_id_t param,
             if (next > 2) next = 2;
             pos = (uint8_t)next;
         }
-        return (float)models[pos];
+        *out_value = (float)models[pos];
+        return 1U;
     }
     if((param==PARAM_AUDIO_FX_MODEL)||(param==PARAM_AUDIO_FX_B_MODEL))
     {
@@ -127,7 +130,8 @@ static float ui_param_apply_delta_value(param_id_t param,
         float peer_value = 0.0f;
         const param_id_t peer = (param == PARAM_AUDIO_FX_MODEL)
             ? PARAM_AUDIO_FX_B_MODEL : PARAM_AUDIO_FX_MODEL;
-        (void)param_registry_get_track_value(peer, track, &peer_value);
+        if (param_registry_get_track_value(peer, track, &peer_value) == 0U)
+            return 0U;
         const uint8_t peer_model = (uint8_t)(peer_value + 0.5f);
         if ((valid[pos] != 0U) && (valid[pos] == peer_model))
         {
@@ -137,58 +141,15 @@ static float ui_param_apply_delta_value(param_id_t param,
             if (next > 9) next = 9;
             pos = (uint8_t)next;
         }
-        return (float)valid[pos];
+        *out_value = (float)valid[pos];
+        return 1U;
     }
-    if ((param == PARAM_SAMPLER_SAMPLE)
-        && (ui_get_track_family(track) == TRACK_FAMILY_SAMPLER)
-        && ((ui_get_track_type(track) == TRACK_TYPE_STREAM)
-            || (ui_get_track_type(track) == TRACK_TYPE_RAM)))
-    {
-        const uint32_t kind = (ui_get_track_type(track) == TRACK_TYPE_STREAM)
-            ? PERSIST_ASSET_SAMPLE_STREAM : PERSIST_ASSET_SAMPLE_RAM;
-        const uint16_t count = project_control_sample_projection_count(kind);
-        if ((delta == 0) || (count == 0U))
-        {
-            return current_value;
-        }
-
-        const uint16_t current_logical = (uint16_t)((current_value < 0.0f)
-            ? 0.0f : (current_value + 0.5f));
-        uint16_t ordinal = 0U;
-        if (project_control_sample_ordinal_for_logical(kind, current_logical, &ordinal) == 0U)
-        {
-            ordinal = (delta > 0) ? 0U : (uint16_t)(count - 1U);
-        }
-        else
-        {
-            int32_t next = (int32_t)ordinal + (int32_t)delta;
-            if (next < 0) next = 0;
-            if (next >= (int32_t)count) next = (int32_t)count - 1;
-            ordinal = (uint16_t)next;
-        }
-
-        uint16_t logical = current_logical;
-        return (project_control_sample_logical_at_ordinal(kind, ordinal, &logical) != 0U)
-            ? (float)logical : current_value;
-    }
-    if ((param == PARAM_WAVE_OSC1_TABLE) || (param == PARAM_WAVE_OSC2_TABLE))
-    {
-        if (delta == 0)
-        {
-            return current_value;
-        }
-        uint16_t logical[SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS];
-        const uint16_t count=project_control_list_wavetables(logical,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS);
-        if(count==0U)return current_value;
-        uint16_t pos=0U;
-        const uint16_t current=(uint16_t)(current_value+0.5f);
-        while(pos<count&&logical[pos]!=current)++pos;
-        if(pos==count)pos=(delta>0)?0U:(uint16_t)(count-1U);
-        else {int32_t next=(int32_t)pos+(int32_t)delta;if(next<0)next=0;if(next>=(int32_t)count)next=(int32_t)count-1;pos=(uint16_t)next;}
-        return (float)logical[pos];
-    }
-    return param_value_policy_apply_delta(param, track, current_value, delta,
-                                          shift_down, min_value, max_value);
+    const float next_value = param_value_policy_apply_delta(
+        param, track, current_value, delta, shift_down, min_value, max_value);
+    if (isnan(next_value))
+        return 0U;
+    *out_value = next_value;
+    return 1U;
 }
 
 static uint8_t ui_param_apply_relative_delta_to_other_tracks(uint8_t encoder,
@@ -227,15 +188,17 @@ static uint8_t ui_param_apply_relative_delta_to_other_tracks(uint8_t encoder,
             continue;
         }
 
-        float next_value = ui_param_apply_delta_value(param, track, current_value,
-                                                      delta,
-                                                      min_value, max_value, fine);
+        float next_value = 0.0f;
+        if (ui_param_apply_delta_value(param, track, current_value, delta,
+                                       min_value, max_value, fine,
+                                       &next_value) == 0U)
+            continue;
         if (ui_param_value_is_same(next_value, current_value) != 0U)
         {
             continue;
         }
 
-        if (ui_param_set_track_value(encoder, param, next_value, track, 0U) != 0U)
+        if (ui_param_set_track_value(encoder, param, next_value, track) != 0U)
         {
             applied = 1U;
         }
@@ -295,11 +258,20 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
                                                        set_id, param_slot, &prior_entries[i]);
         if (had_prior_entry[i] != 0U)
         {
-            source_value = seq_param_iface_decode_param_value(param, prior_entries[i].value16);
+            if (seq_param_iface_decode_param_value(
+                    param, prior_entries[i].value16, &source_value) == 0U)
+                return 0U;
         }
 
-        const float next_value = ui_param_apply_delta_value(param, param_track, source_value, delta, min_value, max_value, button_down(BTN_SHIFT) != 0U);
-        target_values[i] = seq_param_iface_encode_param_value(param, next_value);
+        float next_value = 0.0f;
+        if (ui_param_apply_delta_value(param, param_track, source_value, delta,
+                                       min_value, max_value,
+                                       button_down(BTN_SHIFT) != 0U,
+                                       &next_value) == 0U)
+            return 1U;
+        if (seq_param_iface_encode_param_value(
+                param, next_value, &target_values[i]) == 0U)
+            return 0U;
     }
 
     uint8_t applied_count = 0U;
@@ -349,10 +321,14 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
         return 1U;
     }
 
+    float flashed_value;
+    if (seq_param_iface_decode_param_value(
+            param, target_values[0], &flashed_value) == 0U)
+        return 0U;
     ui_param_note_user_value_flash(encoder,
                                    param,
                                    param_track,
-                                   seq_param_iface_decode_param_value(param, target_values[0]),
+                                   flashed_value,
                                    UI_PARAM_VALUE_FLASH_PLOCK);
 
     return 1U;
@@ -397,29 +373,22 @@ static uint8_t ui_param_try_apply_live_rec_plock(uint8_t encoder,
                                                             &existing);
     if (before_present != 0U)
     {
-        source_value = seq_param_iface_decode_param_value(param, existing.value16);
-    }
-
-    float next_value = ui_param_apply_delta_value(param,
-                                                  live_rec_ctx.track,
-                                                  source_value,
-                                                  delta,
-                                                  min_value,
-                                                  max_value,
-                                                  button_down(BTN_SHIFT) != 0U);
-    const seq_value16_t encoded = seq_param_iface_encode_param_value(param, next_value);
-
-    if (track_runtime_get_param_rule(param).domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
-    {
-        const seq_plock_op_status_t status = seq_edit_step_play_upsert(
-            live_rec_ctx.track, live_rec_ctx.step, param, encoded);
-        if ((status != SEQ_PLOCK_OP_CREATED) && (status != SEQ_PLOCK_OP_UPDATED))
-        {
+        if (seq_param_iface_decode_param_value(
+                param, existing.value16, &source_value) == 0U)
             return 0U;
-        }
-        seq_edit_step_play_commit(live_rec_ctx.track, live_rec_ctx.step, param);
     }
-    else if (seq_runtime_live_rec_param_write(live_rec_ctx.track,
+
+    float next_value = 0.0f;
+    if (ui_param_apply_delta_value(param, live_rec_ctx.track, source_value,
+                                   delta, min_value, max_value,
+                                   button_down(BTN_SHIFT) != 0U,
+                                   &next_value) == 0U)
+        return 0U;
+    seq_value16_t encoded;
+    if (seq_param_iface_encode_param_value(param, next_value, &encoded) == 0U)
+        return 0U;
+
+    if (seq_runtime_live_rec_param_write(live_rec_ctx.track,
                                               live_rec_ctx.set_id,
                                               live_rec_ctx.param_slot,
                                               encoded) == 0U)
@@ -427,7 +396,6 @@ static uint8_t ui_param_try_apply_live_rec_plock(uint8_t encoder,
         return 0U;
     }
 
-    param_store_set_active(param, next_value);
     ui_param_note_user_value_flash(encoder,
                                    param,
                                    active_track,
@@ -477,7 +445,9 @@ uint8_t ui_param_try_get_seq_plock_feedback_with_frame(const ui_param_seq_plock_
         return 0U;
     }
 
-    *out_value = seq_param_iface_decode_param_value(param, existing.value16);
+    if (seq_param_iface_decode_param_value(
+            param, existing.value16, out_value) == 0U)
+        return 0U;
     if (out_inverted != 0)
     {
         *out_inverted = 1U;

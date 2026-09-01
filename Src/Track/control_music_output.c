@@ -4,13 +4,14 @@
 #include <string.h>
 
 #include "Track/track_runtime.h"
+#include "Track/polyphony_control.h"
 #include "Sampler/brick6_sampler_multi_contract.h"
 #include "IPC/control_audio_publication.h"
 #include "IPC/control_music_publication.h"
 #include "IPC/control_audio_command.h"
 #include "IPC/live_clock_control.h"
 #include "Param/param_registry.h"
-#include "Param/param_registry_runtime_state.h"
+#include "Track/tone_program_control.h"
 #include "Platform/memory_layout.h"
 #include "midi.h"
 
@@ -380,8 +381,7 @@ static uint8_t control_music_output_limit(brick_entity_id_t entity_id)
         return 1U;
 
     float configured = 1.0f;
-    (void)param_registry_control_value_get(entity_id, PARAM_CFG_POLY_VOICES,
-                                            &configured);
+    configured = (float)polyphony_control_get_voice_count(entity_id);
     uint8_t limit = (configured >= 1.0f) ? (uint8_t)configured : 1U;
     return (limit > CONTROL_MUSIC_OUTPUTS_PER_ENTITY)
         ? CONTROL_MUSIC_OUTPUTS_PER_ENTITY : limit;

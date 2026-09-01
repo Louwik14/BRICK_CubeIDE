@@ -22,7 +22,7 @@ void control_audio_transport_init(void)
 void control_audio_transport_publish_changes(void)
 {
     const control_transport_last_t next = {
-        .tempo = seq_runtime_get_tempo_bpm_milli(),
+        .tempo = seq_runtime_get_effective_tempo_bpm_milli(),
         .step_q16 = seq_runtime_get_samples_per_step_q16(),
         .running = seq_runtime_is_running()
     };

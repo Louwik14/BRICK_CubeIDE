@@ -30,38 +30,6 @@ static float param_backend_clamp_value(float v, float lo, float hi)
     return v;
 }
 
-static void param_backend_fm_unpack3(float value, uint8_t *a, uint8_t *b, uint8_t *c)
-{
-    const uint32_t packed = (uint32_t)param_backend_clamp_value(value, 0.0f, 16777215.0f);
-    *a = (uint8_t)packed;
-    *b = (uint8_t)(packed >> 8U);
-    *c = (uint8_t)(packed >> 16U);
-}
-
-static uint8_t param_backend_fm_store_hidden(track_tone_fm_base_voice_t *base,
-                                             param_id_t id,
-                                             float value)
-{
-    const uint16_t index = (uint16_t)(id - PARAM_FM_DX7_HIDDEN_FIRST);
-    if (index < 24U)
-    {
-        track_tone_fm_operator_base_t *const op = &base->operators[index / 4U];
-        switch (index % 4U)
-        {
-            case 0U: param_backend_fm_unpack3(value, &op->rates[2], &op->levels[0], &op->levels[1]); break;
-            case 1U: param_backend_fm_unpack3(value, &op->levels[3], &op->breakpoint, &op->left_depth); break;
-            case 2U: param_backend_fm_unpack3(value, &op->right_depth, &op->left_curve, &op->right_curve); break;
-            default: param_backend_fm_unpack3(value, &op->rate_scaling, &op->coarse, &op->fine); break;
-        }
-        return 1U;
-    }
-    if (index == 24U) param_backend_fm_unpack3(value, &base->pitch_rates[0], &base->pitch_rates[1], &base->pitch_rates[2]);
-    else if (index == 25U) param_backend_fm_unpack3(value, &base->pitch_rates[3], &base->pitch_levels[0], &base->pitch_levels[1]);
-    else if (index == 26U) param_backend_fm_unpack3(value, &base->pitch_levels[2], &base->pitch_levels[3], &base->transpose);
-    else return 0U;
-    return 1U;
-}
-
 static uint8_t param_backend_fm_store_ui(track_tone_fm_base_voice_t *base,
                                          param_id_t id,
                                          float value)
@@ -105,12 +73,6 @@ static uint8_t param_backend_clip_size_index(float value)
 {
     const uint8_t index = (uint8_t)(param_backend_clamp_value(value, 0.0f, 5.0f) + 0.5f);
     return (index <= 5U) ? index : 5U;
-}
-
-static uint16_t param_backend_clip_size_value(uint8_t index)
-{
-    static const uint16_t values[] = {32U, 64U, 96U, 128U, 256U, 512U};
-    return values[(index <= 5U) ? index : 5U];
 }
 
 static uint16_t param_backend_clip_grain_size_value(uint8_t index)
@@ -216,16 +178,6 @@ uint8_t param_backend_apply_tone_fm(uint8_t track, param_id_t id, float value)
         return 0U;
     }
 
-    if ((id >= PARAM_FM_DX7_HIDDEN_FIRST) && (id <= PARAM_FM_DX7_HIDDEN_LAST))
-    {
-            track_tone_fm_base_voice_t base;
-            if ((brick6_fm_runtime_get_base_voice(ctx->program_route.instance_id, &base) == 0U)
-                    || (param_backend_fm_store_hidden(&base, id, value) == 0U))
-                return 0U;
-            brick6_fm_runtime_set_base_voice(ctx->program_route.instance_id, &base);
-        return 1U;
-    }
-
     if ((id >= PARAM_FM_UI_FIRST) && (id <= PARAM_FM_UI_LAST))
     {
             track_tone_fm_base_voice_t base;
@@ -235,8 +187,6 @@ uint8_t param_backend_apply_tone_fm(uint8_t track, param_id_t id, float value)
             brick6_fm_runtime_set_base_voice(ctx->program_route.instance_id, &base);
         return 1U;
     }
-
-    if (id == PARAM_FM_OPERATOR_SELECT) return 1U;
 
     if ((id >= PARAM_FM_PLAY_VEL) && (id <= PARAM_FM_PLAY_PITCH_TIME))
     {
@@ -440,17 +390,20 @@ uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value
 
 static uint8_t param_backend_wave_slot_for_id(param_id_t id, uint8_t *out_osc, uint8_t *out_param)
 {
-    if ((out_osc == NULL) || (out_param == NULL)
-            || (id < PARAM_WAVE_OSC1_TABLE)
-            || (id > PARAM_WAVE_OSC2_LEN))
+    if ((out_osc == NULL) || (out_param == NULL)) return 0U;
+    if ((id >= PARAM_WAVE_OSC1_POS) && (id <= PARAM_WAVE_OSC1_LEN))
     {
-        return 0U;
+        *out_osc = 0U;
+        *out_param = (uint8_t)(id - PARAM_WAVE_OSC1_POS + 1U);
+        return 1U;
     }
-
-    const uint8_t rel = (uint8_t)(id - PARAM_WAVE_OSC1_TABLE);
-    *out_osc = (uint8_t)(rel / 4U);
-    *out_param = (uint8_t)(rel % 4U);
-    return (*out_osc < BRICK6_WAVE_OSC_COUNT) ? 1U : 0U;
+    if ((id >= PARAM_WAVE_OSC2_POS) && (id <= PARAM_WAVE_OSC2_LEN))
+    {
+        *out_osc = 1U;
+        *out_param = (uint8_t)(id - PARAM_WAVE_OSC2_POS + 1U);
+        return 1U;
+    }
+    return 0U;
 }
 
 uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value)
@@ -538,31 +491,6 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
 
     switch (id)
     {
-        case PARAM_SAMPLER_SAMPLE:
-            if ((ctx != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI))
-            {
-                const uint16_t runtime = (uint16_t)(
-                    param_backend_clamp_value(value, 0.0f,
-                        (float)(MULTI_SAMPLE_POOL_MAX_INSTRUMENTS - 1U)) + 0.5f);
-                brick6_sampler_runtime_set_multi_instrument(track, runtime);
-                return 1U;
-            }
-        {
-            if ((ctx != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
-            {
-                const uint16_t stream_slot = (uint16_t)(
-                    param_backend_clamp_value(value, 0.0f,
-                        (float)(SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS - 1U)) + 0.5f);
-                brick6_sampler_runtime_set_sample(track, stream_slot);
-                return 1U;
-            }
-
-            const uint16_t global_slot = (uint16_t)(
-                param_backend_clamp_value(value, 0.0f,
-                    (float)(SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS - 1U)) + 0.5f);
-            brick6_sampler_runtime_set_sample(track, global_slot);
-            return 1U;
-        }
         case PARAM_SAMPLER_GAIN:
             if ((ctx != NULL) && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI))
             {
@@ -664,32 +592,6 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             brick6_sampler_runtime_set_clip_grain_size(track, param_backend_clip_grain_size_value(grain_index));
             return 1U;
         }
-        case PARAM_SAMPLER_CLIP_HOP:
-        {
-            uint8_t grain_index;
-            uint8_t hop_index;
-
-            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
-            {
-                return 0U;
-            }
-
-            grain_index = 4U;
-            hop_index = param_backend_clip_size_index(value);
-            if (param_backend_clip_size_value(hop_index) > param_backend_clip_size_value(grain_index))
-            {
-                hop_index = grain_index;
-            }
-            return 1U;
-        }
-        case PARAM_SAMPLER_CLIP_SEARCH:
-        {
-            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
-            {
-                return 0U;
-            }
-            return 1U;
-        }
         case PARAM_SAMPLER_MULTI_LOOP:
         {
             const uint8_t enabled =
@@ -722,13 +624,6 @@ uint8_t param_backend_apply_tone_looper(uint8_t track, param_id_t id, float valu
 
     switch (id)
     {
-        case PARAM_LOOPER_ARM:
-        case PARAM_LOOPER_LEN:
-            return 1U;
-        case PARAM_LOOPER_PLAY:
-            brick6_looper_runtime_set_play_auto(
-                track, (param_backend_clamp_value(value, 0.0f, 1.0f) >= 0.5f) ? 1U : 0U);
-            return 1U;
         case PARAM_LOOPER_XFADE:
         {
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);

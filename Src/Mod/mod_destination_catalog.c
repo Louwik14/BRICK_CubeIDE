@@ -125,7 +125,6 @@ static uint8_t mod_destination_is_direct_sampler(param_id_t dest)
         case PARAM_SAMPLER_CLIP_LOOP:
         case PARAM_SAMPLER_CLIP_STRETCH_MODE:
         case PARAM_SAMPLER_CLIP_GRAIN:
-        case PARAM_SAMPLER_CLIP_HOP:
         case PARAM_SAMPLER_MULTI_LOOP:
         case PARAM_LOOPER_XFADE:
             return 1U;
@@ -147,8 +146,6 @@ static uint8_t mod_destination_is_structural_sampler(param_id_t dest)
         case PARAM_SAMPLER_CLIP_LOOP:
         case PARAM_SAMPLER_CLIP_STRETCH_MODE:
         case PARAM_SAMPLER_CLIP_GRAIN:
-        case PARAM_SAMPLER_CLIP_HOP:
-        case PARAM_SAMPLER_CLIP_SEARCH:
         case PARAM_SAMPLER_MULTI_LOOP:
             return 1U;
         default:
@@ -477,9 +474,6 @@ static uint8_t mod_destination_apply_sampler_rt(uint8_t track,
             brick6_sampler_runtime_set_clip_grain_size(track, grain_frames[idx]);
             return 1U;
         }
-        case PARAM_SAMPLER_CLIP_HOP:
-        case PARAM_SAMPLER_CLIP_SEARCH:
-            return (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_STREAM) ? 1U : 0U;
         case PARAM_SAMPLER_MULTI_LOOP:
             if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_MULTI) { return 0U; }
             brick6_sampler_runtime_set_multi_loop(track, (mod_destination_clampf(value, 0.0f, 1.0f) >= 0.5f) ? 1U : 0U);

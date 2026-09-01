@@ -10,6 +10,7 @@
 #include "Storage/sd_access_gate.h"
 #include "Storage/wav_audio_codec.h"
 #include "Storage/wav_parser.h"
+#include "Storage/project_load_quiesce.h"
 
 #include "ff.h"
 
@@ -1501,6 +1502,8 @@ multi_sample_import_result_t multi_sample_import_folder_with_progress(
     multi_sample_import_progress_cb_t progress_cb,
     void *progress_user)
 {
+    if (project_replacement_is_active() != 0U)
+        return MULTI_SAMPLE_IMPORT_SD_BUSY;
     g_import_last_result = MULTI_SAMPLE_IMPORT_OK;
     multi_import_clear_diag();
     g_import_sample_count = 0U;

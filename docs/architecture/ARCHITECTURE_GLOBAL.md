@@ -12,7 +12,7 @@ Le code courant est l'autorite finale. Ce document est l'unique porte d'entree d
   unique PROGRAM/PARAM/NOTE/TRANSPORT/RECORD/PANIC. Les gros data planes et
   retours physiques utilisent des structures fixes, pointer-free et separees.
 - `STOP(output_id)` rend l'output musicalement mort dans CONTROL. AUDIO peut conserver une tail RELEASE et libere ou reutilise physiquement le slot sans ACK musical.
-- Pattern, Project et Patch utilisent exclusivement le codec CONTROL explicite version 3.
+- Pattern, Project et Patch utilisent exclusivement le codec CONTROL explicite version 4.
 
 ## Flux principaux
 
@@ -21,7 +21,7 @@ configuration CONTROL -> validation globale -> FIFO fonctionnelle -> AUDIO
 SEQ/live -> resolution CONTROL -> START/STOP/RETRIGGER dates -> AUDIO
 capture TIM5 -> conversion audio -> file datee -> segmentation -> rendu
 credit de fenetre stream AUDIO -> I/O Storage tokenisee -> page AUDIO
-Save/Load -> prevalidation -> transaction -> publication atomique
+Save/Load -> decode safety -> safe quiesce -> progressive install -> publication
 ```
 
 Restore reste CONTROL et republie les effets AUDIO par la FIFO unique; aucune

@@ -8,7 +8,6 @@
 #include "App/Hall/hall_loop.h"
 #include "Board/board_usb.h"
 #include "midi.h"
-#include "param_store.h"
 #include "Param/param_registry.h"
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/multi_sample_pool.h"
@@ -36,7 +35,6 @@
 #include "IPC/control_audio_fifo_control.h"
 #include "IPC/control_audio_publication.h"
 #include "IPC/live_clock_control.h"
-#include "lowcost_button_test_config.h"
 #include "ui_boot_loading.h"
 #include "ui_core.h"
 #include "ui_page_manager.h"
@@ -69,12 +67,12 @@ void control_domain_init(void)
 void control_domain_start(float postgain, float output_compensation)
 {
     engine_tasklet_init(48000U);
-    param_store_init();
+    param_registry_init();
     track_state_init();
     seq_runtime_init();
     ui_core_init();
-    param_set(PARAM_POST_GAIN, postgain);
-    param_set(PARAM_OUTPUT_COMP, output_compensation);
+    (void)param_registry_commit_global(PARAM_POST_GAIN, postgain);
+    (void)param_registry_commit_global(PARAM_OUTPUT_COMP, output_compensation);
     brick6_boot_apply_param_defaults();
     project_control_init();
     pattern_live_init();
@@ -92,9 +90,6 @@ void control_domain_start(float postgain, float output_compensation)
     {
         ui_page_set(UI_PAGE_CALIBRATION);
     }
-#if LOWCOST_BUTTON_TEST_PAGE
-    ui_page_set(UI_PAGE_LOWCOST_BUTTON_TEST);
-#endif
     ui_active_track_sync_full_after_global_restore();
     brick6_stream_service_task_init();
     midi_init();

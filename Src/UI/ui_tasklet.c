@@ -552,7 +552,8 @@ void ui_boot_loading_service(void)
             project_product_restore_boot();
         if (result == PROJECT_PRODUCT_BOOT_RESTORE_FAILED)
             g_ui_boot_loading_phase = UI_BOOT_LOADING_FAILED;
-        else if (result == PROJECT_PRODUCT_BOOT_RESTORE_PROJECT_READY)
+        else if (result == PROJECT_PRODUCT_BOOT_RESTORE_PROJECT_READY
+                 || result == PROJECT_PRODUCT_BOOT_RESTORE_DEFAULTS_READY)
             g_ui_boot_loading_phase = UI_BOOT_LOADING_WAIT_SAMPLES;
         else
             g_ui_boot_loading_phase = UI_BOOT_LOADING_INACTIVE;
@@ -563,7 +564,9 @@ void ui_boot_loading_service(void)
         if ((project_product_get_progress(&g_ui_boot_loading_progress) != 0U)
             && (g_ui_boot_loading_progress.complete != 0U))
         {
-            g_ui_boot_loading_phase = UI_BOOT_LOADING_INACTIVE;
+            g_ui_boot_loading_phase =
+                (g_ui_boot_loading_progress.result == PROJECT_PRODUCT_RESULT_FAILED)
+                    ? UI_BOOT_LOADING_FAILED : UI_BOOT_LOADING_INACTIVE;
         }
     }
 }

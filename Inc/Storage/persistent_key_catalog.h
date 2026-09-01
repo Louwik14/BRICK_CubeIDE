@@ -3,14 +3,14 @@
 
 #include <stdint.h>
 #include "Storage/persistent_control_model.h"
-#include "Param/param_store.h"
+#include "Param/param_ids.h"
 #include "Track/track_types.h"
 #include "Seq/seq_types.h"
 #include "Mod/mod_lfo_v1.h"
 #include "NoteFx/note_fx_state.h"
 
 typedef enum { PERSIST_PARAM_SCOPE_NONE=0, PERSIST_PARAM_SCOPE_ENTITY, PERSIST_PARAM_SCOPE_GLOBAL } persist_param_scope_t;
-typedef struct { persist_control_parameter_key_t key; persist_control_value_kind_t kind; persist_param_scope_t scope; uint8_t persistent; uint8_t plockable; } persist_param_descriptor_t;
+typedef struct { persist_control_parameter_key_t key; persist_control_value_kind_t kind; persist_param_scope_t scope; uint8_t plockable; } persist_param_descriptor_t;
 
 uint8_t persist_key_param_descriptor(param_id_t id,persist_param_descriptor_t *out);
 uint8_t persist_key_param_to_disk(param_id_t id,persist_control_parameter_key_t *out);

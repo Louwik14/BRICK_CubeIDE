@@ -212,12 +212,6 @@ uint8_t sample_page_cache_register_live_pcm24_stereo_sample_key(
     uint32_t media_epoch);
 uint8_t sample_page_cache_update_readable_frames_key(sample_audio_key_t key,
                                                       uint32_t readable_frames);
-uint8_t sample_page_cache_update_live_map_key(
-    sample_audio_key_t key,
-    uint32_t file_size,
-    const sample_stream_physical_extent_t *extents,
-    uint16_t extent_count,
-    uint32_t media_epoch);
 uint8_t sample_page_cache_update_stream_path_key(sample_audio_key_t key,
                                                   const char *path);
 

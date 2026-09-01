@@ -8,7 +8,8 @@
 #include "stm32h7xx_hal.h"
 #include "ui_core_mute.h"
 #include "ui_core_pattern.h"
-#include "ui_core_runtime_bridge.h"
+#include "Keyboard/keyboard_runtime.h"
+#include "Seq/seq_edit.h"
 #include "ui_hall_mode_contract.h"
 #include "ui_page_manager.h"
 
@@ -152,7 +153,7 @@ const char *ui_get_hall_mode_short_label(void)
     if (view == UI_HALL_MODE_VIEW_KEYBOARD)
     {
         static char chord_label[8];
-        ui_core_runtime_bridge_get_keyboard_chord_label(chord_label, sizeof(chord_label));
+        keyboard_runtime_get_active_chord_label(chord_label, sizeof(chord_label));
         return chord_label;
     }
 
@@ -183,7 +184,7 @@ const char *ui_get_hall_mode_suffix_label(void)
 
     if (raw_mode == UI_HALL_MODE_SEQ)
     {
-        const uint8_t page = ui_core_runtime_bridge_get_seq_edit_page(active_track);
+        const uint8_t page = seq_edit_get_page(active_track);
         (void)snprintf(label, sizeof(label), "P%u", (unsigned int)(page + 1U));
         return label;
     }
@@ -219,7 +220,7 @@ const char *ui_get_hall_mode_suffix_label(void)
         return "";
     }
 
-    const int8_t octave_shift = ui_core_runtime_bridge_get_keyboard_octave_shift();
+    const int8_t octave_shift = keyboard_runtime_get_octave_shift();
     if (octave_shift == 0)
     {
         return "";

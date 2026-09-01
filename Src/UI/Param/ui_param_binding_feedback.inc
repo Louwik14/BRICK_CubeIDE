@@ -47,20 +47,6 @@ uint8_t ui_param_get_audio_owned_command_value(param_id_t param,
     return ui_param_control_value_get(param, track, out_value);
 }
 
-uint8_t ui_param_accept_audio_owned_command(param_id_t param,
-                                            uint8_t scope,
-                                            uint8_t track,
-                                            float value)
-{
-    const uint8_t control_track = (scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK) ? track : 0U;
-    const uint8_t update_global_mirror =
-        (scope == LIVE_PARAMETER_EVENT_SCOPE_GLOBAL) ? 1U : 0U;
-    return ui_param_control_value_set(param,
-                                      control_track,
-                                      value,
-                                      update_global_mirror);
-}
-
 static uint8_t ui_param_bank_is_same(const ui_param_bank_t *bank)
 {
     if ((bank == 0) || (g_ui_param.valid == 0U))

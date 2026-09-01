@@ -10,7 +10,6 @@
 #include "Seq/seq_model.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
-#include "UI/ui_core.h"
 #include "led_layer.h"
 #include "led_remap.h"
 
@@ -90,9 +89,8 @@ static void seq_led_render_page_indicators(uint8_t track, uint8_t active_page)
     }
 }
 
-void seq_led_render_active_track_page(void)
+void seq_led_render_active_track_page(uint8_t track)
 {
-    const uint8_t track = ui_get_active_lane();
     const uint8_t page = seq_edit_get_page(track);
     const uint8_t base_step = (uint8_t)(page * SEQ_STEPS_PER_PAGE);
 

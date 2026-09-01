@@ -59,7 +59,7 @@ static uint8_t param_audio_apply_non_filter(param_id_t id,
     mod_lfo_param_t lfo_param = MOD_LFO_PARAM_RATE;
     if (param_audio_lfo_map(id, &lfo, &lfo_param) != 0U)
         return mod_lfo_v1_set_track_param_audio(track, lfo, lfo_param, value);
-    if ((id == PARAM_EXTERNAL_INPUT) || (id == PARAM_MIDI_PROGRAM))
+    if (id == PARAM_MIDI_PROGRAM)
         return 0U;
     track_audio_runtime_ctx_t ctx;
     if ((audio_note_engine_adapter_current_ctx(track, &ctx) == 0U)
@@ -73,7 +73,7 @@ uint8_t param_audio_apply_track_rt(param_id_t id,
                                    float value)
 {
     if ((id >= PARAM_COUNT) || (track >= BRICK_ENTITY_CAPACITY)
-            || (id == PARAM_CFG_POLY_VOICES) || (id == PARAM_CFG_POLY_SPREAD))
+            || (id == PARAM_CFG_POLY_SPREAD))
         return 0U;
     if (param_spec_value_is_valid(id, value) == 0U) return 0U;
     if (param_filter_audio_is_param(id) != 0U)
@@ -90,16 +90,11 @@ uint8_t param_audio_apply_track(
     const param_id_t id = prepared->id;
     const float value = prepared->value;
     if (param_spec_value_is_valid(id, value) == 0U) return 0U;
-    if (id == PARAM_CFG_METRO)
-    {
-        metronome_runtime_set_level_u7((uint8_t)(value + 0.5f));
-        return 1U;
-    }
     uint8_t fx_slot = 0U;
     uint8_t fx_param = 0U;
     if (audio_fx_param_catalog_param_info(id, &fx_slot, &fx_param) != 0U)
         return audio_fx_runtime_apply_param((brick_entity_id_t)track, id, value);
-    if ((id == PARAM_CFG_POLY_VOICES) || (id == PARAM_CFG_POLY_SPREAD)) return 0U;
+    if (id == PARAM_CFG_POLY_SPREAD) return 0U;
     if (param_filter_audio_is_param(id) != 0U)
         return param_filter_apply_value_audio(id, track, value);
     mod_env3_param_t env_param;

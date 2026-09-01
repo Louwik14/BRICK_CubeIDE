@@ -215,6 +215,8 @@ typedef enum
 } mixer_delay_type_t;
 
 static uint8_t g_delay_type = (uint8_t)MIXER_DELAY_TYPE_CLASSIC;
+static uint8_t g_delay_division_l = 7U;
+static uint8_t g_delay_division_r = 7U;
 static float g_delay_diag_volume;
 static float g_delay_diag_reverb_send;
 #define MIXER_ENV_ADSR_MAX_SEGMENT_SECONDS 30.0f
@@ -405,13 +407,13 @@ static float mixer_track_filter_resonance_to_biquad_q(float resonance)
     return 0.70710678f + ((6.5f - 0.70710678f) * distributed);
 }
 
-static uint16_t mixer_track_filter_time_s_to_peaks(float time_s, float sample_rate)
+static uint16_t mixer_track_filter_time_s_to_env_units(float time_s, float sample_rate)
 {
     (void)sample_rate;
     return mixer_track_filter_time_lut_lookup(time_s);
 }
 
-static uint16_t mixer_track_filter_sustain_to_peaks(float sustain)
+static uint16_t mixer_track_filter_sustain_to_env_units(float sustain)
 {
     const float clamped = clampf_local(sustain, 0.0f, 1.0f);
     return (uint16_t)(clamped * 32767.0f + 0.5f);
@@ -486,9 +488,9 @@ static uint8_t mixer_track_filter_env_control_is_static(
         return 1U;
     }
 
-    const env_adsr_peaks_stage_t stage = env_adsr_stage(&filter->filter_env);
-    return (uint8_t)((stage == ENV_ADSR_PEAKS_STAGE_IDLE)
-        || (stage == ENV_ADSR_PEAKS_STAGE_SUSTAIN));
+    const env_adsr_stage_t stage = env_adsr_stage(&filter->filter_env);
+    return (uint8_t)((stage == ENV_ADSR_STAGE_IDLE)
+        || (stage == ENV_ADSR_STAGE_SUSTAIN));
 }
 
 static float mixer_track_filter_static_env_value(mixer_track_filter_t *filter,
@@ -654,15 +656,15 @@ static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_r
     filter->config_version = mixer_track_filter_next_config_version();
 
     env_adsr_init(&filter->filter_env, filter->sample_rate);
-    env_adsr_set_attack(&filter->filter_env, mixer_track_filter_time_s_to_peaks(0.01f, filter->sample_rate));
-    env_adsr_set_decay(&filter->filter_env, mixer_track_filter_time_s_to_peaks(0.10f, filter->sample_rate));
-    env_adsr_set_sustain(&filter->filter_env, mixer_track_filter_sustain_to_peaks(1.0f));
-    env_adsr_set_release(&filter->filter_env, mixer_track_filter_time_s_to_peaks(0.10f, filter->sample_rate));
+    env_adsr_set_attack(&filter->filter_env, mixer_track_filter_time_s_to_env_units(0.01f, filter->sample_rate));
+    env_adsr_set_decay(&filter->filter_env, mixer_track_filter_time_s_to_env_units(0.10f, filter->sample_rate));
+    env_adsr_set_sustain(&filter->filter_env, mixer_track_filter_sustain_to_env_units(1.0f));
+    env_adsr_set_release(&filter->filter_env, mixer_track_filter_time_s_to_env_units(0.10f, filter->sample_rate));
     env_adsr_init(&filter->vca_env, filter->sample_rate);
-    env_adsr_set_attack(&filter->vca_env, mixer_track_filter_time_s_to_peaks(0.001f, filter->sample_rate));
-    env_adsr_set_decay(&filter->vca_env, mixer_track_filter_time_s_to_peaks(0.001f, filter->sample_rate));
-    env_adsr_set_sustain(&filter->vca_env, mixer_track_filter_sustain_to_peaks(1.0f));
-    env_adsr_set_release(&filter->vca_env, mixer_track_filter_time_s_to_peaks(0.001f, filter->sample_rate));
+    env_adsr_set_attack(&filter->vca_env, mixer_track_filter_time_s_to_env_units(0.001f, filter->sample_rate));
+    env_adsr_set_decay(&filter->vca_env, mixer_track_filter_time_s_to_env_units(0.001f, filter->sample_rate));
+    env_adsr_set_sustain(&filter->vca_env, mixer_track_filter_sustain_to_env_units(1.0f));
+    env_adsr_set_release(&filter->vca_env, mixer_track_filter_time_s_to_env_units(0.001f, filter->sample_rate));
     env_adsr_reset(&filter->vca_env);
     vca_env_init(&filter->synth_vca_env, filter->sample_rate);
     vca_env_set_attack(&filter->synth_vca_env, 0.001f);

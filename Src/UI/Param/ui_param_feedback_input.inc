@@ -34,6 +34,8 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
     }
 
     const param_id_t param = ctx->bank.params[encoder];
+    if (ui_param_is_local_control(param) != 0U)
+        return ui_param_local_control_apply(param, ctx->active_track, delta);
     if (param >= PARAM_COUNT)
     {
         return 0U;
@@ -63,58 +65,16 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
 
     float value = ui_param_get_active_track_value(param, ctx->active_track);
 
-    if (param == PARAM_CFG_TRACK)
-    {
-        value = ui_param_step_cfg_track(value, ui_param_signum(delta), edit_track);
-        if (ui_param_value_is_same(value, ui_param_get_active_track_value(param, ctx->active_track)) != 0U)
-        {
-            return 0U;
-        }
-        const uint8_t structural_applied = ui_param_set_active_track_value(encoder, param, value, edit_track);
-        if (structural_applied != 0U)
-        {
-            ui_param_note_user_value_flash(encoder,
-                                           param,
-                                           edit_track,
-                                           value,
-                                           UI_PARAM_VALUE_FLASH_DIRECT);
-        }
-        return 1U;
-    }
-
-    if (param == PARAM_CFG_TRACK_TYPE)
-    {
-        value = ui_param_step_cfg_track_type(value, ui_param_signum(delta), edit_track);
-        if (ui_param_value_is_same(value, ui_param_get_active_track_value(param, ctx->active_track)) != 0U)
-        {
-            return 0U;
-        }
-        const uint8_t structural_applied = ui_param_set_active_track_value(encoder, param, value, edit_track);
-        if (structural_applied != 0U)
-        {
-            ui_param_note_user_value_flash(encoder,
-                                           param,
-                                           edit_track,
-                                           value,
-                                           UI_PARAM_VALUE_FLASH_DIRECT);
-        }
-        return 1U;
-    }
-
     const float source_current_value = value;
     {
-        value = ui_param_apply_delta_value(param,
-                                           edit_track,
-                                           source_current_value,
-                                           delta,
-                                           min_value,
-                                           max_value,
-                                           ctx->shift_down);
+        if (ui_param_apply_delta_value(param, edit_track,
+                                       source_current_value, delta,
+                                       min_value, max_value,
+                                       ctx->shift_down, &value) == 0U)
+            return 0U;
 
         if (ui_param_value_is_same(value, source_current_value) != 0U)
         {
-            if ((param == PARAM_CFG_POLY_VOICES) && (delta > 0))
-                ui_core_feedback_set("VOICE MAX", HAL_GetTick());
             const uint8_t applied = ui_param_apply_relative_delta_to_other_tracks(encoder, param, delta, ctx->shift_down, edit_track);
             return applied;
         }
@@ -160,13 +120,11 @@ uint8_t ui_param_resolve_encoder_detent(const ui_param_encoder_context_t *ctx,
         return 0U;
     }
 
-    const float value = ui_param_apply_delta_value(param,
-                                                   edit_track,
-                                                   current_value,
-                                                   direction,
-                                                   min_value,
-                                                   max_value,
-                                                   ctx->shift_down);
+    float value = 0.0f;
+    if (ui_param_apply_delta_value(param, edit_track, current_value,
+                                   direction, min_value, max_value,
+                                   ctx->shift_down, &value) == 0U)
+        return 0U;
 
     out_target->parameter_id = param;
     out_target->scope = (ui_param_is_track_scoped(param) != 0U) ? 1U : 0U;
@@ -216,12 +174,11 @@ uint8_t ui_param_resolve_encoder_detent_from_binding(param_id_t param,
     out_target->scope = scope;
     out_target->track = (scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK) ? track : 0xFFU;
     out_target->slot = slot;
-    out_target->value = ui_param_apply_delta_value(param,
-                                                   binding_context.active_track,
-                                                   current_value,
-                                                   direction,
-                                                   min_value,
-                                                   max_value,
-                                                   binding_context.shift_down);
+    if (ui_param_apply_delta_value(param, binding_context.active_track,
+                                   current_value, direction,
+                                   min_value, max_value,
+                                   binding_context.shift_down,
+                                   &out_target->value) == 0U)
+        return 0U;
     return 1U;
 }

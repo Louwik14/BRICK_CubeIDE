@@ -1,6 +1,5 @@
 #include "pages/ui_page_template_env.h"
 
-#include "param_store.h"
 #include "ui_core.h"
 #include "ui_navigation.h"
 #include "ui_template_page.h"
@@ -256,7 +255,8 @@ static uint8_t ui_page_template_env_sync_should_recompute(uint8_t active_track,
 {
     /* Consumer-edge refresh: revision checks use a refreshed projection; the revision is a coherence guard only. */
     const uint32_t runtime_track_revision = track_runtime_get_track_revision(active_track);
-    const uint8_t filter_morph_ui = (uint8_t)(param_store_get_active(PARAM_FILTER_MORPH) + 0.5f);
+    const uint8_t filter_morph_ui = (uint8_t)(ui_param_get_active_track_display_value(
+        PARAM_FILTER_MORPH, ui_get_active_lane()) + 0.5f);
 
     if ((g_ui_template_env_sync_cache.valid != 0U)
             && (g_ui_template_env_sync_cache.active_track == active_track)

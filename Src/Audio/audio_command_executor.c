@@ -35,6 +35,7 @@
 static uint32_t g_audio_command_invariant_failures;
 static uint32_t g_audio_wavetable_generation[
     BRICK6_WAVE_VOICE_INSTANCE_COUNT * BRICK6_WAVE_OSC_COUNT];
+static track_tone_fm_base_voice_t g_audio_fm_base_projection[BRICK_ENTITY_CAPACITY];
 
 static void audio_command_close_entity(uint8_t entity)
 {
@@ -102,6 +103,28 @@ static uint8_t audio_command_apply_program(const control_audio_command_t *comman
 
 static uint8_t audio_command_apply_param(const control_audio_command_t *command)
 {
+    const uint16_t fm_base_words =
+        (uint16_t)((sizeof(track_tone_fm_base_voice_t) + 3U) / 4U);
+    if ((command->id >= CONTROL_AUDIO_FM_BASE_WORD_FIRST)
+            && (command->id < CONTROL_AUDIO_FM_BASE_WORD_FIRST + fm_base_words))
+    {
+        if (command->entity >= BRICK_ENTITY_CAPACITY) return 0U;
+        const uint16_t word = command->id - CONTROL_AUDIO_FM_BASE_WORD_FIRST;
+        const uint16_t offset = (uint16_t)(word * 4U);
+        uint16_t bytes = (uint16_t)(sizeof(track_tone_fm_base_voice_t) - offset);
+        if (bytes > 4U) bytes = 4U;
+        memcpy((uint8_t *)&g_audio_fm_base_projection[command->entity] + offset,
+               &command->value, bytes);
+        if (word + 1U == fm_base_words)
+        {
+            track_audio_runtime_ctx_t ctx;
+            if ((audio_note_engine_adapter_current_ctx(command->entity, &ctx) == 0U)
+                    || (ctx.program_route.engine != TRACK_RUNTIME_ENGINE_FM)) return 0U;
+            brick6_fm_runtime_set_base_voice(ctx.program_route.instance_id,
+                &g_audio_fm_base_projection[command->entity]);
+        }
+        return 1U;
+    }
     if (command->id == CONTROL_AUDIO_PARAM_PREVIEW_GAIN)
         return sd_preview_audio_apply_gain(command->value);
     if (command->id == CONTROL_AUDIO_PARAM_PREVIEW_ACTIVE)
@@ -150,6 +173,30 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
         return audio_transport_runtime_set_tempo(command->value);
     if (command->id == CONTROL_AUDIO_PARAM_TRANSPORT_STEP_Q16)
         return audio_transport_runtime_set_step_q16(command->value);
+    if (command->id == CONTROL_AUDIO_PARAM_METRONOME_LEVEL)
+    {
+        metronome_runtime_set_level_u7((uint8_t)command->value);
+        return 1U;
+    }
+    if (command->id == CONTROL_AUDIO_SAMPLER_ASSET)
+    {
+        track_audio_runtime_ctx_t ctx;
+        if (audio_note_engine_adapter_current_ctx(command->entity, &ctx) == 0U)
+            return 0U;
+        if (ctx.type == TRACK_RUNTIME_TYPE_MULTI)
+            brick6_sampler_runtime_set_multi_instrument(command->entity,
+                                                        (uint16_t)command->value);
+        else
+            brick6_sampler_runtime_set_sample(command->entity,
+                                              (uint16_t)command->value);
+        return 1U;
+    }
+    if (command->id == CONTROL_AUDIO_LOOPER_PLAY_AUTO)
+    {
+        brick6_looper_runtime_set_play_auto(command->entity,
+                                            command->value != 0U ? 1U : 0U);
+        return 1U;
+    }
     if (command->id == CONTROL_AUDIO_PARAM_MIX_ROUTE)
         return mixer_audio_set_route(command->entity, command->value);
     if ((command->id >= CONTROL_AUDIO_PARAM_MIX_INSERT_FIRST)

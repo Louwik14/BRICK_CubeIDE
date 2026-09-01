@@ -123,7 +123,7 @@ if (-not [BitConverter]::IsLittleEndian) {
     throw "The B6P serializer requires a little-endian host."
 }
 
-$Param = Get-ParamIds (Join-Path $RepoRoot "Inc\Param\param_store.h")
+$Param = Get-ParamIds (Join-Path $RepoRoot "Inc\Param\param_ids.h")
 
 $rows = @'
 Velvet Dawn|Pad|Stack|11,12,0|0.52,0.34,0.00|0.00,0.02,0.00|0.30,0.64,0.50|0.42,0.38,0.50|0.56,0.42,0.50|82|18|42|Drift|0.18|0.08|Warm morphing analog pad

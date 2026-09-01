@@ -7,13 +7,6 @@
 #include "Sampler/multi_sample_pool.h"
 #include "stm32h7xx_hal.h"
 
-D2_IPC multi_audio_instrument_t
-    g_multi_audio_instruments[MULTI_SAMPLE_POOL_MAX_INSTRUMENTS];
-AUDIO_SHARED_MULTI_SDRAM multi_audio_zone_t
-    g_multi_audio_zones[MULTI_SAMPLE_POOL_MAX_ZONES];
-AUDIO_SHARED_MULTI_SDRAM multi_sample_audio_source_t
-    g_multi_audio_samples[MULTI_SAMPLE_POOL_MAX_SAMPLES];
-
 void multi_sample_audio_projection_init(void)
 {
     memset(g_multi_audio_instruments, 0, sizeof(g_multi_audio_instruments));

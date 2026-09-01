@@ -18,9 +18,6 @@ endif()
 
 message("BRICK6 variant: ${BRICK6_VARIANT}")
 
-option(BRICK_TEST_BUILD "Include diagnostic-only firmware features" OFF)
-message("BRICK test build: ${BRICK_TEST_BUILD}")
-
 set(FM_KERNEL_BENCH "0" CACHE STRING
     "Experimental DX7 algorithm-1 renderer: 0=MSFA, 1=sample-centric log kernel")
 set_property(CACHE FM_KERNEL_BENCH PROPERTY STRINGS 0 1)
@@ -221,6 +218,7 @@ set(DOMAIN_CONTRACT_HEADERS
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_boot_diagnostic.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_boot_diagnostic_layout.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_waveform_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/fm_dsp_projection.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_wave_table_projection.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_wavetable_registry_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/control_audio_command.h"
@@ -258,7 +256,8 @@ file(GLOB_RECURSE BRICK_FIRST_PARTY_INVENTORY CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/*.c" "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/*.cpp")
 list(FILTER BRICK_FIRST_PARTY_INVENTORY EXCLUDE REGEX "/Generated/")
 
-set(BRICK_DOMAIN_UNION ${DOMAIN_CONTROL} ${DOMAIN_AUDIO} ${DOMAIN_CONTRACTS} ${PLATFORM_H743})
+set(BRICK_DOMAIN_UNION ${DOMAIN_CONTROL} ${DOMAIN_AUDIO} ${DOMAIN_CONTRACTS}
+    ${PLATFORM_H743} ${SHARED_BACKING})
 list(LENGTH BRICK_DOMAIN_UNION BRICK_DOMAIN_ENTRY_COUNT)
 set(BRICK_DOMAIN_UNIQUE ${BRICK_DOMAIN_UNION})
 list(REMOVE_DUPLICATES BRICK_DOMAIN_UNIQUE)
@@ -282,28 +281,22 @@ foreach(platform_source IN LISTS PLATFORM_H743)
     endif()
 endforeach()
 
-set(BRICK_TEST_ONLY_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/crash_capsule.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/diagnostic_watchdog.c")
 set(PLATFORM_H743_BUILD ${PLATFORM_H743_COMMON})
 if(BRICK6_VARIANT STREQUAL "premium")
     list(APPEND PLATFORM_H743_BUILD ${PLATFORM_H743_PREMIUM})
 else()
     list(APPEND PLATFORM_H743_BUILD ${PLATFORM_H743_LOWCOST})
 endif()
-if(NOT BRICK_TEST_BUILD)
-    list(REMOVE_ITEM PLATFORM_H743_BUILD ${BRICK_TEST_ONLY_SOURCES})
-endif()
-
 set(DOMAIN_CONTROL_BUILD ${DOMAIN_CONTROL} ${USB_DEVICE_LIB_SRC} ${USB_HOST_LIB_SRC}
     ${FATFS_SRC} ${U8G2_SRC})
 set(DOMAIN_AUDIO_BUILD ${DOMAIN_AUDIO} ${CMSIS_DSP_SRC} ${MUTABLE_INSTRUMENTS_SRC})
 set(ALL_USER_SOURCES ${DOMAIN_CONTROL_BUILD} ${DOMAIN_AUDIO_BUILD}
-    ${DOMAIN_CONTRACTS} ${PLATFORM_H743_BUILD})
+    ${DOMAIN_CONTRACTS} ${SHARED_BACKING} ${PLATFORM_H743_BUILD})
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${ALL_USER_SOURCES})
 source_group("Domains/CONTROL" FILES ${DOMAIN_CONTROL})
 source_group("Domains/AUDIO" FILES ${DOMAIN_AUDIO})
 source_group("Domains/CONTRACTS" FILES ${DOMAIN_CONTRACTS} ${DOMAIN_CONTRACT_HEADERS})
+source_group("Domains/SHARED_BACKING" FILES ${SHARED_BACKING})
 source_group("Domains/PLATFORM_H743" FILES ${PLATFORM_H743})
 
 # CONTROL is compiled for its future Cortex-M4 ISA and its transitive include
@@ -408,7 +401,7 @@ add_custom_target(control_cm4_compile_check
 
 # The symmetric M7 check compiles AUDIO-owned BRICK units only, then audits
 # compiler-produced dependency files against CONTROL-private surfaces.
-set(DOMAIN_AUDIO_M7 ${DOMAIN_AUDIO})
+set(DOMAIN_AUDIO_M7 ${DOMAIN_AUDIO_BUILD})
 list(FILTER DOMAIN_AUDIO_M7 INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
 set(AUDIO_M7_INCLUDE_DIRS ${CONTROL_CM4_INCLUDE_DIRS}
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Audio"
@@ -429,6 +422,23 @@ add_custom_target(audio_m7_compile_check
     COMMENT "Compile-check DOMAIN_AUDIO for Cortex-M7"
     VERBATIM)
 
+get_filename_component(BRICK_TOOLCHAIN_BIN "${CMAKE_C_COMPILER}" DIRECTORY)
+set(DOMAIN_AUDIT_REPORT_DIR "${CMAKE_CURRENT_BINARY_DIR}/domain_symbol_audit")
+add_custom_target(domain_symbol_closure_check
+    COMMAND "${CMAKE_COMMAND}"
+        -DCONTROL_MANIFEST=${CMAKE_CURRENT_BINARY_DIR}/control_cm4_compile_check/objects.manifest
+        -DAUDIO_MANIFEST=${CMAKE_CURRENT_BINARY_DIR}/audio_m7_compile_check/objects.manifest
+        -DNM=${BRICK_TOOLCHAIN_BIN}/arm-none-eabi-nm${CMAKE_EXECUTABLE_SUFFIX}
+        -DREADELF=${BRICK_TOOLCHAIN_BIN}/arm-none-eabi-readelf${CMAKE_EXECUTABLE_SUFFIX}
+        -DLD=${BRICK_TOOLCHAIN_BIN}/arm-none-eabi-ld${CMAKE_EXECUTABLE_SUFFIX}
+        -DCONTROL_ALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/cmake/control_external_symbols.txt
+        -DAUDIO_ALLOWLIST=${CMAKE_CURRENT_SOURCE_DIR}/cmake/audio_external_symbols.txt
+        -DREPORT_DIR=${DOMAIN_AUDIT_REPORT_DIR}
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/domain_symbol_audit.cmake"
+    DEPENDS control_cm4_compile_check audio_m7_compile_check
+    COMMENT "Audit real CM4/M7 objects, providers, relocations and sections"
+    VERBATIM)
+
 
 # --------------------------------------------------------------------------
 # Defines
@@ -437,7 +447,6 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     USE_PWR_LDO_SUPPLY
     USE_HAL_DRIVER
     STM32H743xx
-    BRICK_TEST_BUILD=$<BOOL:${BRICK_TEST_BUILD}>
     BRICK6_STREAM_PRODUCT_PAGE_KIB=${BRICK6_STREAM_PRODUCT_PAGE_KIB}
     BRICK6_STREAM_PRODUCT_MULTI_PRESOCLE_PAGES=${BRICK6_STREAM_PRODUCT_MULTI_PRESOCLE_PAGES}
     BRICK6_STREAM_PRODUCT_MULTI_MOBILE_PAGES=${BRICK6_STREAM_PRODUCT_MULTI_MOBILE_PAGES}
@@ -543,7 +552,6 @@ set(AUDIO_LTO_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/Sampler/brick6_sampler_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/brick6_looper_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/synth_polyphony.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_apply_wrappers.c
 )
 set_source_files_properties(${AUDIO_LTO_SOURCES} PROPERTIES
     COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"

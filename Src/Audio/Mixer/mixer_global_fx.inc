@@ -156,6 +156,31 @@ static void mixer_apply_delay_spectral_window(void)
     fx_delay_dual_global_set_filter_hz(result.low_cut_hz, result.high_cut_hz);
 }
 
+static float mixer_delay_division_seconds(uint8_t division,
+                                          uint32_t tempo_bpm_milli)
+{
+    static const float beats[] = {
+        0.125f, 0.1666667f, 0.25f, 0.3333333f, 0.5f, 0.6666667f,
+        0.75f, 1.0f, 1.3333334f, 1.5f, 2.0f, 3.0f, 4.0f
+    };
+    if (division >= (uint8_t)(sizeof(beats) / sizeof(beats[0])))
+        division = (uint8_t)(sizeof(beats) / sizeof(beats[0])) - 1U;
+    uint32_t tempo = tempo_bpm_milli;
+    if (tempo < 40000U) tempo = 40000U;
+    if (tempo > 300000U) tempo = 300000U;
+    return beats[division] * 60000.0f / (float)tempo;
+}
+
+static void mixer_apply_delay_times(uint32_t tempo_bpm_milli)
+{
+    const float time_l = mixer_delay_division_seconds(
+        g_delay_division_l, tempo_bpm_milli);
+    fx_delay_stereo_global_set_time(time_l);
+    fx_delay_dual_global_set_time_l(time_l);
+    fx_delay_dual_global_set_time_r(
+        mixer_delay_division_seconds(g_delay_division_r, tempo_bpm_milli));
+}
+
 void mixer_reset_runtime_state(void)
 {
     mixer_reverb_state_reset_defaults();
@@ -168,6 +193,9 @@ void mixer_reset_runtime_state(void)
     fx_reverb_global_set_lpf(g_reverb.lpf);
     fx_delay_stereo_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
     fx_delay_dual_global_init(MIXER_FILTER_SAMPLE_RATE_DEFAULT);
+    g_delay_division_l = 7U;
+    g_delay_division_r = 7U;
+    mixer_apply_delay_times(120000U);
     mixer_apply_delay_spectral_window();
     g_delay_type = (uint8_t)MIXER_DELAY_TYPE_CLASSIC;
     fx_delay_stereo_global_clear();
@@ -507,15 +535,26 @@ void mixer_set_delay_mode(uint8_t mode)
     fx_delay_dual_global_set_mode(mode);
 }
 
-void mixer_set_delay_time(float time_s)
+void mixer_set_delay_division(float division, uint32_t tempo_bpm_milli)
 {
-    fx_delay_stereo_global_set_time(time_s);
-    fx_delay_dual_global_set_time_l(time_s);
+    if (division < 0.0f) division = 0.0f;
+    if (division > 12.0f) division = 12.0f;
+    g_delay_division_l = (uint8_t)(division + 0.5f);
+    mixer_apply_delay_times(tempo_bpm_milli);
 }
 
-void mixer_set_delay_time_r(float time_s)
+void mixer_set_delay_division_r(float division, uint32_t tempo_bpm_milli)
 {
-    fx_delay_dual_global_set_time_r(time_s);
+    if (division < 0.0f) division = 0.0f;
+    if (division > 12.0f) division = 12.0f;
+    g_delay_division_r = (uint8_t)(division + 0.5f);
+    mixer_apply_delay_times(tempo_bpm_milli);
+}
+
+void mixer_set_delay_transport_tempo_bpm_milli(uint32_t tempo_bpm_milli)
+{
+    if (tempo_bpm_milli == 0U) return;
+    mixer_apply_delay_times(tempo_bpm_milli);
 }
 
 void mixer_set_delay_feedback(float feedback)

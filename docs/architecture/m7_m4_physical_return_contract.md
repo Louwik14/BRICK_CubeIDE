@@ -36,7 +36,7 @@ publication boot restante est `{state=FAULT, erreur_hardware}` pour l'ecran de
 diagnostic; elle ne porte aucun READY musical.
 
 FILTER POS et les contraintes de placement sont resolus depuis
-`track_sound_state`, `track_runtime`, la topologie et le shadow de polyphonie
+`track_sound_state`, `track_runtime`, la topologie et l'etat de polyphonie
 CONTROL. La valeur DSP privee n'est plus publiee ni relue par UI/CONTROL.
 
 ## Data planes et ownership

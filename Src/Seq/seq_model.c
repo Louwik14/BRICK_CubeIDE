@@ -31,12 +31,13 @@ typedef struct
     seq_track_data_t tracks[SEQ_LANE_CAPACITY];
     seq_play_item_t top_level_play[BRICK_ENTITY_TOP_LEVEL_COUNT][SEQ_MAX_STEPS][SEQ_PLAY_MAX_CAPACITY];
     seq_play_item_t group_child_play[BRICK_ENTITY_GROUP_CHILD_COUNT][SEQ_MAX_STEPS];
+    seq_play_snapshot_t play_base[SEQ_LANE_CAPACITY];
     seq_plock_node_t pool[SEQ_LANE_CAPACITY][SEQ_PLOCK_POOL_CAP_PER_TRACK];
     uint16_t free_head[SEQ_LANE_CAPACITY];
     uint16_t free_count[SEQ_LANE_CAPACITY];
 } seq_runtime_project_data_t;
 
-_Static_assert(sizeof(seq_runtime_project_data_t) == 80512U,
+_Static_assert(sizeof(seq_runtime_project_data_t) == 81152U,
                "sequencer project storage size changed");
 
 SEQ_STATE_D2 static seq_runtime_project_data_t g_seq_project;
@@ -536,6 +537,19 @@ void seq_model_init_defaults(void)
             g_seq_project.tracks[tr].steps[st].lock_head = SEQ_LOCK_NONE;
         }
 
+        for (uint8_t voice = 0U; voice < SEQ_PLAY_MAX_CAPACITY; ++voice)
+        {
+            (void)seq_play_snapshot_set(&g_seq_project.play_base[tr], voice,
+                                        SEQ_STEP_PLAY_FIELD_NOTE, 60);
+            (void)seq_play_snapshot_set(&g_seq_project.play_base[tr], voice,
+                                        SEQ_STEP_PLAY_FIELD_VELOCITY,
+                                        (voice == 0U) ? 100 : 0);
+            (void)seq_play_snapshot_set(&g_seq_project.play_base[tr], voice,
+                                        SEQ_STEP_PLAY_FIELD_LENGTH, 1);
+            (void)seq_play_snapshot_set(&g_seq_project.play_base[tr], voice,
+                                        SEQ_STEP_PLAY_FIELD_MICROTIMING, 0);
+        }
+
         g_seq_project.free_head[tr] = 0U;
         const uint16_t pool_capacity = seq_model_pool_capacity(tr);
         g_seq_project.free_count[tr] = pool_capacity;
@@ -980,82 +994,47 @@ uint8_t seq_model_play_iterate(seq_track_id_t track,
     return 1U;
 }
 
-uint8_t seq_model_play_resolve_param(param_id_t param,
-                                          uint8_t *out_voice,
-                                          seq_step_play_field_t *out_field)
+uint8_t seq_model_play_base_get(seq_track_id_t track,
+                                uint8_t voice,
+                                seq_step_play_field_t field,
+                                int16_t *out_value)
 {
-    if ((out_voice == NULL) || (out_field == NULL))
-    {
-        return 0U;
-    }
+    if ((track >= SEQ_LANE_CAPACITY) || (voice >= SEQ_PLAY_MAX_CAPACITY)) return 0U;
+    return seq_play_snapshot_get(&g_seq_project.play_base[track], voice, field, out_value);
+}
 
-    static const param_id_t play_params[SEQ_PLAY_MAX_CAPACITY][SEQ_STEP_PLAY_FIELD_COUNT] = {
-        { PARAM_SEQ_PLAY_V1_NOTE, PARAM_SEQ_PLAY_V1_VEL,
-          PARAM_SEQ_PLAY_V1_LEN, PARAM_SEQ_PLAY_V1_MICTIM },
-        { PARAM_SEQ_PLAY_V2_NOTE, PARAM_SEQ_PLAY_V2_VEL,
-          PARAM_SEQ_PLAY_V2_LEN, PARAM_SEQ_PLAY_V2_MICTIM },
-        { PARAM_SEQ_PLAY_V3_NOTE, PARAM_SEQ_PLAY_V3_VEL,
-          PARAM_SEQ_PLAY_V3_LEN, PARAM_SEQ_PLAY_V3_MICTIM },
-        { PARAM_SEQ_PLAY_V4_NOTE, PARAM_SEQ_PLAY_V4_VEL,
-          PARAM_SEQ_PLAY_V4_LEN, PARAM_SEQ_PLAY_V4_MICTIM },
-        { PARAM_SEQ_PLAY_V5_NOTE, PARAM_SEQ_PLAY_V5_VEL,
-          PARAM_SEQ_PLAY_V5_LEN, PARAM_SEQ_PLAY_V5_MICTIM },
-        { PARAM_SEQ_PLAY_V6_NOTE, PARAM_SEQ_PLAY_V6_VEL,
-          PARAM_SEQ_PLAY_V6_LEN, PARAM_SEQ_PLAY_V6_MICTIM },
-        { PARAM_SEQ_PLAY_V7_NOTE, PARAM_SEQ_PLAY_V7_VEL,
-          PARAM_SEQ_PLAY_V7_LEN, PARAM_SEQ_PLAY_V7_MICTIM },
-        { PARAM_SEQ_PLAY_V8_NOTE, PARAM_SEQ_PLAY_V8_VEL,
-          PARAM_SEQ_PLAY_V8_LEN, PARAM_SEQ_PLAY_V8_MICTIM }
-    };
+uint8_t seq_model_play_base_set(seq_track_id_t track,
+                                uint8_t voice,
+                                seq_step_play_field_t field,
+                                int16_t value)
+{
+    if ((track >= SEQ_LANE_CAPACITY) || (voice >= SEQ_PLAY_MAX_CAPACITY)) return 0U;
+    return seq_play_snapshot_set(&g_seq_project.play_base[track], voice, field, value);
+}
 
+uint8_t seq_model_play_base_capture(seq_track_id_t track,
+                                    seq_play_snapshot_t *out_snapshot)
+{
+    if ((track >= SEQ_LANE_CAPACITY) || (out_snapshot == NULL)) return 0U;
+    *out_snapshot = g_seq_project.play_base[track];
+    return 1U;
+}
+
+uint8_t seq_model_play_base_restore(seq_track_id_t track,
+                                    const seq_play_snapshot_t *snapshot)
+{
+    if ((track >= SEQ_LANE_CAPACITY) || (snapshot == NULL)) return 0U;
     for (uint8_t voice = 0U; voice < SEQ_PLAY_MAX_CAPACITY; ++voice)
-    {
         for (uint8_t field = 0U; field < SEQ_STEP_PLAY_FIELD_COUNT; ++field)
         {
-            if (play_params[voice][field] == param)
-            {
-                *out_voice = voice;
-                *out_field = (seq_step_play_field_t)field;
-                return 1U;
-            }
+            int16_t value = 0;
+            if (seq_play_snapshot_get(snapshot, voice,
+                    (seq_step_play_field_t)field, &value) == 0U
+                    || seq_step_play_value_is_valid((seq_step_play_field_t)field, value) == 0U)
+                return 0U;
         }
-    }
-    return 0U;
-}
-
-uint8_t seq_model_play_param_get(seq_track_id_t track,
-                                      seq_step_id_t step,
-                                      param_id_t param,
-                                      int16_t *out_value)
-{
-    uint8_t voice = 0U;
-    seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
-    return (seq_model_play_resolve_param(param, &voice, &field) != 0U)
-        ? seq_model_play_get(track, step, voice, field, out_value)
-        : 0U;
-}
-
-uint8_t seq_model_play_param_set(seq_track_id_t track,
-                                      seq_step_id_t step,
-                                      param_id_t param,
-                                      int16_t value)
-{
-    uint8_t voice = 0U;
-    seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
-    return (seq_model_play_resolve_param(param, &voice, &field) != 0U)
-        ? seq_model_play_set(track, step, voice, field, value)
-        : 0U;
-}
-
-uint8_t seq_model_play_param_delete(seq_track_id_t track,
-                                         seq_step_id_t step,
-                                         param_id_t param)
-{
-    uint8_t voice = 0U;
-    seq_step_play_field_t field = SEQ_STEP_PLAY_FIELD_NOTE;
-    return (seq_model_play_resolve_param(param, &voice, &field) != 0U)
-        ? seq_model_play_clear(track, step, voice, field)
-        : 0U;
+    g_seq_project.play_base[track] = *snapshot;
+    return 1U;
 }
 
 uint8_t seq_model_get_step_lock_limit(seq_track_id_t track)

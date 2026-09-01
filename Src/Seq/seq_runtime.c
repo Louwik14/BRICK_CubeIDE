@@ -24,6 +24,7 @@
 #include "Storage/audio_recorder.h"
 #include "Storage/sample_capture.h"
 #include "Storage/pattern_live_ram.h"
+#include "Storage/project_load_quiesce.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "midi.h"
 
@@ -37,6 +38,7 @@
 #include "Seq/seq_live_rec_session.h"
 #include "Seq/seq_transport_fsm.h"
 #include "Seq/seq_clock_bridge.h"
+#include "Seq/metronome_control.h"
 #include "main.h"
 
 #define SEQ_RUNTIME_DEFAULT_TEMPO_BPM_MILLI 120000U
@@ -266,13 +268,8 @@ static uint32_t seq_runtime_compute_samples_per_step_q16(uint32_t bpm_milli)
 
 static void seq_runtime_update_samples_per_step_from_tempo(void)
 {
-    uint32_t bpm_milli = seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge);
-    if ((seq_clock_bridge_is_external_source(seq_runtime_get_clock_source_internal()) != 0U)
-        && (seq_clock_bridge_is_external_tempo_valid(&g_seq_clock_bridge) != 0U))
-    {
-        bpm_milli = seq_clock_bridge_get_external_tempo_bpm_milli(&g_seq_clock_bridge);
-    }
-    g_seq_runtime.samples_per_step_q16 = seq_runtime_compute_samples_per_step_q16(bpm_milli);
+    g_seq_runtime.samples_per_step_q16 = seq_runtime_compute_samples_per_step_q16(
+        seq_runtime_get_effective_tempo_bpm_milli());
     seq_runtime_update_midi_clock_period_from_step_period();
 }
 
@@ -289,6 +286,7 @@ static void seq_runtime_update_midi_clock_period_from_step_period(void)
 void seq_runtime_init(void)
 {
     seq_model_init_defaults();
+    metronome_control_init();
     seq_param_iface_init();
 
     /* Orchestration seam: runtime bootstrap delegates execution-state ownership to seq_runtime_exec. */
@@ -329,6 +327,7 @@ void seq_runtime_init(void)
 
 void seq_runtime_start(void)
 {
+    if (project_replacement_is_active() != 0U) return;
     uint8_t begin_running_now = 0U;
     if (g_seq_runtime_trigger_start_bypass == 0U)
     {
@@ -442,8 +441,16 @@ uint8_t seq_runtime_is_start_pending(void)
 static void seq_runtime_process_core(void)
 {
     const uint32_t now_tick = seq_runtime_get_now_tick();
+    const uint32_t previous_effective_tempo =
+        seq_runtime_get_effective_tempo_bpm_milli();
     /* Orchestration seam: clock bridge only supervises cadence policy here; transport state is checked separately. */
     seq_clock_bridge_on_process(&g_seq_clock_bridge, seq_runtime_get_clock_source_internal(), now_tick);
+    if (seq_runtime_get_effective_tempo_bpm_milli()
+            != previous_effective_tempo)
+    {
+        seq_runtime_update_samples_per_step_from_tempo();
+        control_audio_transport_publish_changes();
+    }
 
     const uint64_t audio_sample = seq_runtime_get_now_sample();
     const uint64_t publish_limit = audio_sample + 64U;
@@ -676,6 +683,8 @@ void seq_runtime_midi_clock_from_source(seq_clock_src_t source)
     }
 
     const uint32_t now = seq_runtime_get_now_tick_for_source(source);
+    const uint32_t previous_effective_tempo =
+        seq_runtime_get_effective_tempo_bpm_milli();
     uint8_t step_pulse = 0U;
     /* Orchestration seam: external MIDI clock updates cadence policy first, then transport gets the step request. */
     if (seq_clock_bridge_on_external_clock_pulse(&g_seq_clock_bridge,
@@ -686,6 +695,13 @@ void seq_runtime_midi_clock_from_source(seq_clock_src_t source)
                                                  &step_pulse) == 0U)
     {
         return;
+    }
+
+    if (seq_runtime_get_effective_tempo_bpm_milli()
+            != previous_effective_tempo)
+    {
+        seq_runtime_update_samples_per_step_from_tempo();
+        control_audio_transport_publish_changes();
     }
 
     if (step_pulse == 0U)
@@ -1040,6 +1056,18 @@ uint8_t seq_runtime_rec_is_pattern_pending_start(void)
 uint32_t seq_runtime_get_tempo_bpm_milli(void)
 {
     return seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge);
+}
+
+uint32_t seq_runtime_get_effective_tempo_bpm_milli(void)
+{
+    if ((seq_clock_bridge_is_external_source(
+                seq_runtime_get_clock_source_internal()) != 0U)
+            && (seq_clock_bridge_is_external_tempo_valid(
+                    &g_seq_clock_bridge) != 0U))
+        return seq_clock_bridge_get_external_tempo_bpm_milli(
+            &g_seq_clock_bridge);
+    return seq_clock_bridge_get_internal_tempo_bpm_milli(
+        &g_seq_clock_bridge);
 }
 
 void seq_runtime_set_tempo_bpm_milli(uint32_t bpm_milli)

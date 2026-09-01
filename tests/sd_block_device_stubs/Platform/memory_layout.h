@@ -1,6 +1,0 @@
-#ifndef TEST_MEMORY_LAYOUT_H
-#define TEST_MEMORY_LAYOUT_H
-
-#define SDRAM_STREAM_SERVICE
-
-#endif

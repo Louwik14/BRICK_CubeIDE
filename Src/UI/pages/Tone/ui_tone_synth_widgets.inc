@@ -620,20 +620,22 @@ static uint8_t ui_page_template_tone_stack_param_text(param_id_t id,
             break;
         case 3U:
         {
-            float model_value = 0.0f;
+            float model_value;
             const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 4U));
-            (void)param_registry_get_track_value(model_param, active_track, &model_value);
-            (void)param_stack_model_param_resolve(
-                (uint8_t)(model_value + 0.5f), 0U, &name);
+            if ((param_registry_get_track_value(model_param, active_track, &model_value) == 0U)
+                    || (param_stack_model_param_resolve(
+                        (uint8_t)(model_value + 0.5f), 0U, &name) == 0U))
+                return 0U;
             break;
         }
         case 4U:
         {
-            float model_value = 0.0f;
+            float model_value;
             const param_id_t model_param = (param_id_t)(PARAM_STACK_OSC1_MODEL + (stack_slot * 4U));
-            (void)param_registry_get_track_value(model_param, active_track, &model_value);
-            (void)param_stack_model_param_resolve(
-                (uint8_t)(model_value + 0.5f), 1U, &name);
+            if ((param_registry_get_track_value(model_param, active_track, &model_value) == 0U)
+                    || (param_stack_model_param_resolve(
+                        (uint8_t)(model_value + 0.5f), 1U, &name) == 0U))
+                return 0U;
             break;
         }
         default: name = "PARAM"; break;
@@ -669,15 +671,16 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
 
     if ((id >= PARAM_MODFX_RATE) && (id <= PARAM_MODFX_WIDTH))
     {
-        const uint8_t model = (uint8_t)(param_get(PARAM_MODFX_MODEL) + 0.5f);
-        if ((model == FX_MODFX_DAISY_STEREO) && (id == PARAM_MODFX_FEEDBACK))
-        {
+        float model_value;
+        if (param_registry_query_global(PARAM_MODFX_MODEL, &model_value) == 0U)
+            return UIW_WIDGET_NONE;
+        const uint8_t model = (uint8_t)(model_value + 0.5f);
+        if ((model == FX_MODFX_DAISY_STEREO)
+                && (id == PARAM_MODFX_FEEDBACK))
             return UIW_WIDGET_BIPOLAR_BAR;
-        }
-        if ((model == FX_MODFX_JUNOLOGUE) && (id == PARAM_MODFX_OFFSET))
-        {
+        if ((model == FX_MODFX_JUNOLOGUE)
+                && (id == PARAM_MODFX_OFFSET))
             return UIW_WIDGET_ENUM_TEXT;
-        }
     }
     (void)value_label;
 
@@ -753,11 +756,11 @@ static ui_template_custom_widget_kind_t ui_page_template_tone_pick_custom_widget
     if ((ui_get_track_family(ui_get_active_lane()) == TRACK_FAMILY_SYNTH)
             && (ui_get_track_type(ui_get_active_lane()) == TRACK_TYPE_WAVE)
             && (subpage != NULL)
-            && (((subpage->param_bank.params[0] == PARAM_WAVE_OSC1_TABLE)
+            && (((subpage->param_bank.params[0] == UI_PARAM_LOCAL_WAVE_OSC1)
                     && (subpage->param_bank.params[1] == PARAM_WAVE_OSC1_POS)
                     && (subpage->param_bank.params[2] == PARAM_WAVE_OSC1_START)
                     && (subpage->param_bank.params[3] == PARAM_WAVE_OSC1_LEN))
-                || ((subpage->param_bank.params[0] == PARAM_WAVE_OSC2_TABLE)
+                || ((subpage->param_bank.params[0] == UI_PARAM_LOCAL_WAVE_OSC2)
                     && (subpage->param_bank.params[1] == PARAM_WAVE_OSC2_POS)
                     && (subpage->param_bank.params[2] == PARAM_WAVE_OSC2_START)
                     && (subpage->param_bank.params[3] == PARAM_WAVE_OSC2_LEN))))
@@ -799,13 +802,20 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
     const uint8_t active_track = ui_get_active_lane();
     if ((id >= PARAM_MODFX_RATE) && (id <= PARAM_MODFX_WIDTH))
     {
-        const uint8_t model = (uint8_t)(param_get(PARAM_MODFX_MODEL) + 0.5f);
         const char *name = (id==PARAM_MODFX_RATE)?"RATE":((id==PARAM_MODFX_DEPTH)?"DEPTH":((id==PARAM_MODFX_FEEDBACK)?"FEEDBACK":"OFFSET"));
-        if (model == FX_MODFX_DAISY_STEREO)
+        float model_value;
+        const uint8_t have_model = param_registry_query_global(
+            PARAM_MODFX_MODEL, &model_value);
+        if (have_model == 0U)
+            return 0U;
+        if (have_model != 0U)
         {
-            name = (id==PARAM_MODFX_RATE)?"RATE A":((id==PARAM_MODFX_RATE_B)?"RATE B":((id==PARAM_MODFX_OFFSET)?"DELAY A":((id==PARAM_MODFX_DELAY_B)?"DELAY B":((id==PARAM_MODFX_DEPTH)?"DEPTH A":((id==PARAM_MODFX_DEPTH_B)?"DEPTH B":((id==PARAM_MODFX_WIDTH)?"WIDTH":"FEEDBACK A-B"))))));
+            const uint8_t model = (uint8_t)(model_value + 0.5f);
+            if (model == FX_MODFX_DAISY_STEREO)
+                name = (id==PARAM_MODFX_RATE)?"RATE A":((id==PARAM_MODFX_RATE_B)?"RATE B":((id==PARAM_MODFX_OFFSET)?"DELAY A":((id==PARAM_MODFX_DELAY_B)?"DELAY B":((id==PARAM_MODFX_DEPTH)?"DEPTH A":((id==PARAM_MODFX_DEPTH_B)?"DEPTH B":((id==PARAM_MODFX_WIDTH)?"WIDTH":"FEEDBACK A-B"))))));
+            else if ((model == FX_MODFX_JUNOLOGUE)
+                    && (id == PARAM_MODFX_OFFSET)) name = "MODE";
         }
-        else if ((model == FX_MODFX_JUNOLOGUE) && (id == PARAM_MODFX_OFFSET)) name = "MODE";
         if ((out_name != NULL) && (out_name_len > 0U))
         {
             (void)snprintf(out_name, out_name_len, "%s", name);
@@ -814,8 +824,14 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
         {
             const float shown = param_value_policy_canonical_to_display(
                 id, active_track, value);
-            const char *const unit = param_value_policy_display_unit(id, active_track);
-            if ((model == FX_MODFX_JUNOLOGUE) && (id == PARAM_MODFX_OFFSET))
+            const char *unit = NULL;
+            if ((isnan(shown) != 0)
+                    || (param_value_policy_display_unit(
+                        id, active_track, &unit) == 0U))
+                return 0U;
+            if ((have_model != 0U)
+                    && ((uint8_t)(model_value + 0.5f) == FX_MODFX_JUNOLOGUE)
+                    && (id == PARAM_MODFX_OFFSET))
             {
                 static const char *const modes[] = { "I", "I+II", "II" };
                 int32_t mode = (int32_t)(shown + 0.5f);
@@ -823,7 +839,8 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
                 if (mode > 2) mode = 2;
                 (void)snprintf(out_value, out_value_len, "%s", modes[mode]);
             }
-            else if ((model == FX_MODFX_DAISY_STEREO)
+            else if ((have_model != 0U)
+                    && ((uint8_t)(model_value + 0.5f) == FX_MODFX_DAISY_STEREO)
                     && (id == PARAM_MODFX_FEEDBACK))
                 (void)snprintf(out_value, out_value_len, "%+.2f%s",
                                (double)shown, unit);
@@ -845,7 +862,7 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
             case PARAM_FM_ENV_ATTACK: name = "ATK"; break;
             case PARAM_FM_ENV_DECAY: name = "DECAY"; break;
             case PARAM_FM_TRANSPOSE: name = "TRANSPOSE"; break;
-            case PARAM_FM_OPERATOR_SELECT: name = "OP"; break;
+            case UI_PARAM_LOCAL_FM_OPERATOR: name = "OP"; break;
             case PARAM_FM_PITCH_R1: name = "R1"; break;
             case PARAM_FM_PITCH_R2: name = "R2"; break;
             case PARAM_FM_PITCH_R3: name = "R3"; break;
@@ -886,8 +903,8 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
         const char *name = NULL;
         switch (id)
         {
-            case PARAM_WAVE_OSC1_TABLE:
-            case PARAM_WAVE_OSC2_TABLE:
+            case UI_PARAM_LOCAL_WAVE_OSC1:
+            case UI_PARAM_LOCAL_WAVE_OSC2:
                 name = "TABLE";
                 break;
             case PARAM_WAVE_OSC1_POS:
@@ -926,7 +943,7 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
             }
             if ((out_value != NULL) && (out_value_len > 0U))
             {
-                if ((id == PARAM_WAVE_OSC1_TABLE) || (id == PARAM_WAVE_OSC2_TABLE))
+                if ((id == UI_PARAM_LOCAL_WAVE_OSC1) || (id == UI_PARAM_LOCAL_WAVE_OSC2))
                 {
                     const uint16_t logical_slot = (uint16_t)((value < 0.0f) ? 0.0f : value + 0.5f);
                     uint16_t runtime_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
@@ -986,7 +1003,7 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
         const char *name = NULL;
         switch (id)
         {
-            case PARAM_SAMPLER_SAMPLE:
+            case UI_PARAM_LOCAL_ASSET:
                 name = "SAMPLE";
                 break;
             case PARAM_SAMPLER_MODE:
@@ -1030,7 +1047,7 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
     if ((ui_get_track_family(active_track) == TRACK_FAMILY_SAMPLER)
             && (ui_get_track_type(active_track) == TRACK_TYPE_MULTI))
     {
-        if (id == PARAM_SAMPLER_SAMPLE)
+        if (id == UI_PARAM_LOCAL_ASSET)
         {
             float selector = 0.0f;
 
@@ -1042,9 +1059,8 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
             if ((out_value != NULL) && (out_value_len > 0U))
             {
                 const uint8_t has_selection =
-                    (param_registry_get_track_value(PARAM_SAMPLER_SAMPLE,
-                                                    active_track,
-                                                    &selector) != 0U)
+                    (!isnan(selector = ui_param_get_active_track_display_value(
+                        UI_PARAM_LOCAL_ASSET, active_track)))
                     && (ui_template_tone_multi_logical_label(
                             (uint16_t)(selector + 0.5f), out_value, out_value_len) != 0U);
                 if (has_selection == 0U)
@@ -1107,8 +1123,9 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
             && (id >= PARAM_DRUM_MD_MODEL)
             && (id <= PARAM_DRUM_MD_P8))
     {
-        float model_value = 0.0f;
-        (void)param_registry_get_track_value(PARAM_DRUM_MD_MODEL, active_track, &model_value);
+        float model_value;
+        if (param_registry_get_track_value(PARAM_DRUM_MD_MODEL, active_track, &model_value) == 0U)
+            return 0U;
         const md_model_profile_t *const profile = md_model_profile_get(md_model_validate(model_value));
         if (id == PARAM_DRUM_MD_MODEL)
         {

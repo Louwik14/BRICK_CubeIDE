@@ -16,21 +16,11 @@ typedef enum
 
 } ui_event_type_t;
 
-typedef enum
-{
-    UI_EVENT_SOURCE_PHYSICAL = 0,
-    UI_EVENT_SOURCE_DIAGNOSTIC
-} ui_event_source_t;
-
 typedef struct
 {
     ui_event_type_t type;
     uint8_t id;
     int16_t value;
-#if BRICK_TEST_BUILD
-    ui_event_source_t source;
-#endif
-
 } ui_event_t;
 
 void ui_event_from_inputs(void);

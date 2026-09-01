@@ -6,17 +6,24 @@ const ui_template_family_t *ui_page_template_tone_resolve_for_track(uint8_t trac
     {
         if (subset == 0U)
         {
-            ui_template_tone_sync_modfx_pages();
+            if (ui_template_tone_sync_modfx_pages() == 0U)
+                return NULL;
             return &g_ui_template_tone_family_master_reverb;
         }
         if (subset == 1U)
         {
-            return (param_get(PARAM_MIX_DELAY_TYPE) >= 0.5f)
+            float delay_type;
+            if (param_registry_query_global(PARAM_MIX_DELAY_TYPE, &delay_type) == 0U)
+                return NULL;
+            return (delay_type >= 0.5f)
                     ? &g_ui_template_tone_family_master_delay_dual
                     : &g_ui_template_tone_family_master_delay_classic;
         }
 
-        const uint8_t model = (uint8_t)(param_get(PARAM_COMP_MODEL) + 0.5f);
+        float model_value;
+        if (param_registry_query_global(PARAM_COMP_MODEL, &model_value) == 0U)
+            return NULL;
+        const uint8_t model = (uint8_t)(model_value + 0.5f);
         if (model == 1U) return &g_ui_template_tone_family_master_comp_deluge;
         if (model == 2U) return &g_ui_template_tone_family_master_comp_brick;
         return &g_ui_template_tone_family_master_comp_off;
@@ -45,8 +52,8 @@ const ui_template_family_t *ui_page_template_tone_resolve_for_track(uint8_t trac
             && (g_ui_template_tone_subset == 0U))
     {
         const uint8_t active_track = ui_get_active_lane();
-        float selected_value = 0.0f;
-        (void)param_registry_get_track_value(PARAM_FM_OPERATOR_SELECT, active_track, &selected_value);
+        const float selected_value = ui_param_get_active_track_display_value(
+            UI_PARAM_LOCAL_FM_OPERATOR, active_track);
         uint8_t selected = (uint8_t)(selected_value + 0.5f);
         if (selected >= PARAM_FM_OPERATOR_COUNT)
         {
@@ -64,8 +71,8 @@ const ui_template_family_t *ui_page_template_tone_resolve_for_track(uint8_t trac
             && (g_ui_template_tone_subset != 0U))
     {
         const uint8_t active_track = ui_get_active_lane();
-        float selected_value = 0.0f;
-        (void)param_registry_get_track_value(PARAM_FM_OPERATOR_SELECT, active_track, &selected_value);
+        const float selected_value = ui_param_get_active_track_display_value(
+            UI_PARAM_LOCAL_FM_OPERATOR, active_track);
         uint8_t selected = (uint8_t)(selected_value + 0.5f);
         if (selected >= PARAM_FM_OPERATOR_COUNT)
         {

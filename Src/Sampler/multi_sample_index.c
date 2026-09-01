@@ -4,6 +4,7 @@
 
 #include "Platform/memory_layout.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/wav_parser.h"
 
 #include "ff.h"
 
@@ -615,8 +616,9 @@ multi_sample_index_result_t multi_sample_index_write(
     return result;
 }
 
-multi_sample_index_result_t multi_sample_index_load(const char *path,
-                                                    multi_sample_index_t *out)
+static multi_sample_index_result_t multi_sample_index_load_internal(
+    const char *path,
+    multi_sample_index_t *out)
 {
     if ((path == 0) || (path[0] == '\0') || (out == 0))
     {
@@ -663,7 +665,8 @@ multi_sample_index_result_t multi_sample_index_load(const char *path,
             result = MULTI_SAMPLE_INDEX_LIMIT;
         }
         else if ((multi_index_header_basic_valid(&header) == 0U)
-                 || (f_size(&fp) != header.file_size))
+                 || (f_size(&fp) != header.file_size)
+                 )
         {
             result = MULTI_SAMPLE_INDEX_BAD_FORMAT;
         }
@@ -682,6 +685,8 @@ multi_sample_index_result_t multi_sample_index_load(const char *path,
         out->samples = g_index_samples;
         out->zones = g_index_zones;
         out->strings = g_index_strings;
+        out->file_size = header.file_size;
+        out->crc32 = header.crc32;
 
         for (uint16_t i = 0U; (result == MULTI_SAMPLE_INDEX_OK) && (i < out->sample_count);
              ++i)
@@ -718,7 +723,8 @@ multi_sample_index_result_t multi_sample_index_load(const char *path,
             result = MULTI_SAMPLE_INDEX_READ_FAIL;
         }
 
-        if ((result == MULTI_SAMPLE_INDEX_OK) && (multi_sample_index_validate(out) == 0U))
+        if ((result == MULTI_SAMPLE_INDEX_OK)
+            && (multi_sample_index_validate(out) == 0U))
         {
             result = MULTI_SAMPLE_INDEX_BAD_FORMAT;
         }
@@ -736,6 +742,12 @@ multi_sample_index_result_t multi_sample_index_load(const char *path,
         multi_sample_index_reset(out);
     }
     return result;
+}
+
+multi_sample_index_result_t multi_sample_index_load(const char *path,
+                                                    multi_sample_index_t *out)
+{
+    return multi_sample_index_load_internal(path, out);
 }
 
 multi_sample_index_result_t multi_sample_index_peek_counts(const char *path,
@@ -871,11 +883,12 @@ uint8_t multi_sample_index_validate(const multi_sample_index_t *idx)
     return 1U;
 }
 
-multi_sample_index_result_t multi_sample_index_apply_to_pool(
+static multi_sample_index_result_t multi_sample_index_apply_to_pool_internal(
     const multi_sample_index_t *idx,
     uint16_t instrument_id)
 {
-    if ((idx != 0) && (multi_index_format_contract_valid(idx) == 0U))
+    if ((idx != 0)
+        && (multi_index_format_contract_valid(idx) == 0U))
     {
         return MULTI_SAMPLE_INDEX_FORMAT_MISMATCH;
     }
@@ -962,6 +975,13 @@ multi_sample_index_result_t multi_sample_index_apply_to_pool(
     }
 
     return MULTI_SAMPLE_INDEX_OK;
+}
+
+multi_sample_index_result_t multi_sample_index_apply_to_pool(
+    const multi_sample_index_t *idx,
+    uint16_t instrument_id)
+{
+    return multi_sample_index_apply_to_pool_internal(idx, instrument_id);
 }
 
 void multi_sample_index_reset(multi_sample_index_t *idx)

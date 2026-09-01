@@ -68,6 +68,7 @@ static void ui_page_settings_sample_confirm_convert(uint16_t slot, const char *p
 
 static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path)
 {
+    if (project_replacement_is_active() != 0U) return;
     uint16_t existing_logical = 0U;
     uint16_t existing_runtime = 0U;
     uint32_t existing_kind = 0U;
@@ -113,6 +114,7 @@ static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path
 
 static void ui_page_settings_ram_load_to_slot(uint16_t slot, const char *path)
 {
+    if (project_replacement_is_active() != 0U) return;
     uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     uint16_t existing_logical = 0U;
     uint32_t existing_kind = 0U;
@@ -137,6 +139,7 @@ static void ui_page_settings_ram_load_to_slot(uint16_t slot, const char *path)
 
 static void ui_page_settings_wavetable_load_to_slot(uint16_t slot, const char *path)
 {
+    if (project_replacement_is_active() != 0U) return;
     uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     uint16_t existing_logical = 0U;
     if ((project_control_find_asset(PERSIST_ASSET_WAVETABLE,path,&existing_logical) != 0U)
@@ -286,6 +289,11 @@ static void ui_page_settings_sample_confirm_clear(uint16_t slot)
 
 static void ui_page_settings_sample_confirm_accept(void)
 {
+    if (project_replacement_is_active() != 0U)
+    {
+        ui_page_settings_status("BUSY");
+        return;
+    }
     if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_CONVERT)
     {
         const uint16_t slot = g_ui_settings.confirm_slot;
@@ -426,6 +434,12 @@ static void ui_page_settings_sample_confirm_accept(void)
         g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
         g_ui_settings.confirm_path[0] = '\0';
 
+        if (project_replacement_is_active() != 0U)
+        {
+            ui_page_settings_status("BUSY");
+            return;
+        }
+
         if ((audio_recorder_is_active() != 0U)
             || (sample_cache_has_pending_sd_work() != 0U)
             || (multi_sample_load_has_pending() != 0U))
@@ -446,7 +460,7 @@ static void ui_page_settings_sample_confirm_accept(void)
             }
         }
 
-        g_ui_settings.multi_clear_active = 1U;
+        multi_sample_pool_clear_begin();
         g_ui_settings.multi_clear_failed = 0U;
         g_ui_settings.multi_clear_mounted = 0U;
         g_ui_settings.multi_clear_index = 0U;
@@ -460,7 +474,7 @@ static void ui_page_settings_sample_confirm_accept(void)
 
 static void ui_page_settings_multi_clear_service(void)
 {
-    if (g_ui_settings.multi_clear_active == 0U)
+    if (multi_sample_pool_clear_is_active() == 0U)
     {
         return;
     }
@@ -480,7 +494,7 @@ static void ui_page_settings_multi_clear_service(void)
         sd_scheduler_runtime_background_end();
         if (mounted == 0U)
         {
-            g_ui_settings.multi_clear_active = 0U;
+            multi_sample_pool_clear_end();
             ui_page_settings_status("SD UNAVAILABLE");
             return;
         }
@@ -524,7 +538,7 @@ static void ui_page_settings_multi_clear_service(void)
         }
         return;
     }
-    g_ui_settings.multi_clear_active = 0U;
+    multi_sample_pool_clear_end();
     (void)ui_page_settings_multi_browser_refresh();
     if (g_ui_settings.multi_clear_failed != 0U)
     {

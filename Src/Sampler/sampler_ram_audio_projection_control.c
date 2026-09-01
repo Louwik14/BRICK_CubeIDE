@@ -9,11 +9,6 @@
 #include "Sampler/sample_global_pool.h"
 #include "stm32h7xx_hal.h"
 
-sampler_ram_audio_slot_t
-    g_sampler_ram_audio_slots[SAMPLER_RAM_AUDIO_SLOT_COUNT] AUDIO_SHARED_REGISTRY_SDRAM;
-D2_IPC volatile uint16_t
-    g_sampler_ram_audio_global_to_slot[SAMPLER_RAM_AUDIO_SLOT_COUNT];
-
 void sampler_ram_audio_projection_init(void)
 {
     memset(g_sampler_ram_audio_slots, 0, sizeof(g_sampler_ram_audio_slots));

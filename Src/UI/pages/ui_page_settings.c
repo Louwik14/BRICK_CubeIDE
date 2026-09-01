@@ -14,6 +14,7 @@
 #include "Storage/wav_convert.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/project_product.h"
+#include "Storage/project_load_quiesce.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "Platform/brick_build_config.h"
 #include "Storage/project_control.h"
@@ -38,11 +39,6 @@
 #include "pages/ui_page_calibration.h"
 #endif
 
-#if defined(BRICK6_VARIANT_LOWCOST)
-#include "App/Hall/hall_adc.h"
-#include "App/Hall/hall_engine.h"
-#endif
-
 typedef enum
 {
     UI_SETTINGS_VIEW_ROOT = 0,
@@ -61,13 +57,6 @@ typedef enum
 #if defined(BRICK6_VARIANT_LOWCOST)
     UI_SETTINGS_VIEW_CALIBRATION,
 #endif
-#if defined(BRICK6_VARIANT_LOWCOST)
-    UI_SETTINGS_VIEW_TEST,
-#if defined(BRICK6_VARIANT_LOWCOST)
-    UI_SETTINGS_VIEW_TEST_HALL,
-#endif
-#endif
-
     UI_SETTINGS_VIEW_COUNT
 } ui_settings_view_t;
 
@@ -205,10 +194,6 @@ typedef struct
     ui_settings_menu_level_t levels[UI_SETTINGS_MAX_LEVELS];
     uint8_t depth;
     uint8_t selected_slot;
-#if defined(BRICK6_VARIANT_LOWCOST)
-    uint8_t hall_test_key;
-    uint8_t hall_test_mux;
-#endif
     ui_settings_sampler_catalog_mode_t sampler_catalog_mode;
     uint16_t sample_entry_count;
     uint16_t sample_child_count;
@@ -225,7 +210,6 @@ typedef struct
     uint16_t multi_prepare_progress_done;
     uint16_t multi_prepare_progress_total;
     uint8_t multi_prepare_phase;
-    uint8_t multi_clear_active;
     uint8_t multi_clear_failed;
     uint8_t multi_clear_mounted;
     uint16_t multi_clear_index;

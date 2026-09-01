@@ -36,7 +36,7 @@
 #include "Storage/project_control.h"
 #include "Storage/sample_capture.h"
 #include "UI/ui_core.h"
-#include "UI/ui_core_runtime_bridge.h"
+#include "Track/control_routing.h"
 #include "UI/ui_hall_mode_projection.h"
 #include "UI/ui_navigation.h"
 #include "UI/ui_macro_interaction.h"
@@ -345,9 +345,6 @@ static button_id_t led_macro_param_to_button(param_id_t param)
         case TRACK_RUNTIME_PARAM_DOMAIN_MIX:
             return BTN_PARAM_4;
 
-        case TRACK_RUNTIME_PARAM_DOMAIN_PLAY:
-            return BTN_PARAM_5;
-
         default:
             return BTN_COUNT;
     }
@@ -452,7 +449,7 @@ static void led_apply_sampler_looper_routing_hall_scene(uint8_t hall, uint8_t de
         return;
     }
 
-    if (ui_core_runtime_bridge_get_looper_route_enabled(destination_track, hall) == 0U)
+    if (control_routing_get_looper_source(destination_track, hall) == 0U)
     {
         led_layer_set(LED_LAYER_UI, led, LED_FIXED_DIM_WHITE, LED_FIXED_DIM_WHITE, LED_FIXED_DIM_WHITE);
         return;
@@ -747,7 +744,7 @@ static void led_apply_fixed_scene(void)
     }
     else if (ui_step_led_ownership_page_needs_step_leds(active_page_id) != 0U)
     {
-        seq_led_render_active_track_page();
+        seq_led_render_active_track_page(ui_get_active_lane());
     }
     else if (hall_mode == UI_HALL_MODE_MUTE)
     {
@@ -765,7 +762,7 @@ static void led_apply_fixed_scene(void)
     }
     else if (led_hall_mode_uses_seq_scene(hall_mode))
     {
-        seq_led_render_active_track_page();
+        seq_led_render_active_track_page(ui_get_active_lane());
     }
     else
     {

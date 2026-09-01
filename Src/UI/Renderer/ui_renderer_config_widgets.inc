@@ -522,22 +522,8 @@ static uint8_t ui_renderer_template_draw_cfg_stacked_text(int x,
 
 static track_family_t ui_renderer_template_cfg_visible_family(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx)
 {
-    float family_value = 0.0f;
-    if (ui_renderer_template_get_visible_param_value(plock_frame_ctx, PARAM_CFG_TRACK, &family_value, 0) == 0U)
-    {
-        return ui_get_track_family(ui_renderer_template_get_edit_owner_track());
-    }
-
-    int32_t family = (int32_t)(family_value + 0.5f);
-    if (family < 0)
-    {
-        family = 0;
-    }
-    if (family >= (int32_t)TRACK_FAMILY_COUNT)
-    {
-        family = (int32_t)TRACK_FAMILY_COUNT - 1;
-    }
-    return (track_family_t)family;
+    (void)plock_frame_ctx;
+    return ui_get_track_family(ui_renderer_template_get_edit_owner_track());
 }
 
 static uint8_t ui_renderer_template_draw_custom_track_cfg(const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,

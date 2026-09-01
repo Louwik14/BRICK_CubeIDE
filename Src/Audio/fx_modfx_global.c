@@ -361,16 +361,3 @@ void fx_modfx_global_process_block(float *left, float *right, uint32_t frames)
             break;
     }
 }
-
-#if defined(BRICK6_DAISY_STEREO_TEST)
-void fx_modfx_global_daisy_stereo_debug(fx_modfx_daisy_stereo_debug_t *out)
-{
-    if (out == NULL) return;
-    for (uint8_t engine = 0U; engine < 2U; ++engine) {
-        out->rate_hz[engine] = state.daisy_stereo_target[engine].rate_hz;
-        out->depth[engine] = state.daisy_stereo_target[engine].depth;
-        out->delay_samples[engine] = state.daisy_stereo_target[engine].delay;
-        out->feedback[engine] = state.daisy_stereo_target[engine].feedback;
-    }
-}
-#endif

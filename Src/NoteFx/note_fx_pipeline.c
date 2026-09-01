@@ -12,7 +12,6 @@
 #include "Track/control_music_output.h"
 #include "Seq/seq_runtime_exec.h"
 #include "Platform/memory_layout.h"
-#include "UI/ui_sampler_playhead.h"
 #include "Seq/seq_note_trace.h"
 
 static uint8_t g_note_fx_override_valid[NOTE_FX_TRACK_COUNT][NOTE_FX_SLOT_COUNT][NOTE_FX_PARAM_COUNT];
@@ -262,7 +261,9 @@ static note_event_result_t note_fx_pipeline_terminal(const note_event_t *event, 
         return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
     }
     if (terminal.kind == NOTE_EVENT_KIND_ON)
-        ui_sampler_playhead_note_trigger(terminal.track, terminal.sample_abs);
+    {
+        return NOTE_EVENT_RESULT_ACCEPTED;
+    }
     return NOTE_EVENT_RESULT_ACCEPTED;
 }
 

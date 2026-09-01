@@ -2,10 +2,7 @@
 
 #include <string.h>
 
-#include "Platform/memory_layout.h"
 #include "stm32h7xx.h"
-
-D2_IPC sample_page_lease_t g_sample_page_leases[SAMPLE_PAGE_LEASE_SLOT_COUNT];
 
 void sample_page_lease_audio_init(void)
 {

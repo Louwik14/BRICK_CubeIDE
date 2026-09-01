@@ -3,6 +3,6 @@
 
 #include <stdint.h>
 
-void seq_led_render_active_track_page(void);
+void seq_led_render_active_track_page(uint8_t track);
 
 #endif /* SEQ_LED_H */

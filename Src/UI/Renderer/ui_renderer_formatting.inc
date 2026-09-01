@@ -16,8 +16,6 @@ static void ui_renderer_template_format_active_pattern_label(char *out, uint32_t
 static const uint8_t g_ui_template_frame_x[4] = {0U, 32U, 64U, 96U};
 static const uint8_t g_ui_template_footer_x[4] = {0U, 32U, 64U, 96U};
 static const uint8_t g_ui_template_footer_w[4] = {32U, 32U, 32U, 32U};
-static const char *const g_ui_template_midi_note_names[12] = {"C", "C#", "D", "D#", "E", "F",
-                                                              "F#", "G", "G#", "A", "A#", "B"};
 static void ui_renderer_template_draw_bar_value_text(int widget_x,
                                                      int widget_y,
                                                      int widget_w,
@@ -120,26 +118,6 @@ static const char *ui_renderer_template_matrix_source_label(float value)
     return (index < (uint8_t)(sizeof(labels) / sizeof(labels[0]))) ? labels[index] : "OFF";
 }
 
-static const char *ui_renderer_template_matrix_source_value_label(float value)
-{
-    const uint8_t index = (uint8_t)(value + 0.5f);
-    static const char *const labels[] = {
-        "Off",
-        "LFO 1",
-        "LFO 2",
-        "LFO 3",
-        "env flt",
-        "env vca",
-        "env mod",
-        "MULT1",
-        "MULT2",
-        "SLEW1",
-        "SLEW2"
-    };
-
-    return (index < (uint8_t)(sizeof(labels) / sizeof(labels[0]))) ? labels[index] : "Off";
-}
-
 void ui_format_param_127_00(float value, float min_value, float max_value, char *out, uint32_t out_len)
 {
     float normalized = 0.0f;
@@ -182,54 +160,6 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
 {
     const param_desc_t *desc = &param_registry[id];
 
-    if (id == PARAM_CFG_TRACK)
-    {
-        (void)snprintf(out, out_len, "%s", ui_get_track_family_display_name((track_family_t)((uint8_t)(value + 0.5f))));
-        return;
-    }
-
-    if (id == PARAM_CFG_TRACK_TYPE)
-    {
-        const track_family_t active_family = ui_get_track_family(ui_renderer_template_get_edit_owner_track());
-        const track_type_t active_type = ui_get_track_type_from_family_index(active_family, (uint8_t)(value + 0.5f));
-        (void)snprintf(out, out_len, "%s", ui_get_track_type_display_name(active_family, active_type));
-        return;
-    }
-
-    if (id == PARAM_CFG_MIDI_CH)
-    {
-        const uint8_t channel = (uint8_t)(value + 0.5f);
-        const uint8_t duplicate = ui_track_midi_channel_used_by_other(ui_renderer_template_get_edit_owner_track(), channel);
-        (void)snprintf(out, out_len, "%u%s", (unsigned int)channel, (duplicate != 0U) ? "*" : "");
-        return;
-    }
-
-    if (id == PARAM_MOD_MATRIX_SLOT)
-    {
-        (void)snprintf(out, out_len, "%u", (unsigned int)((uint8_t)(value + 0.5f) + 1U));
-        return;
-    }
-
-    if ((id == PARAM_MOD_MATRIX_SOURCE)
-            || (id == PARAM_MOD_MULTI_1_A)
-            || (id == PARAM_MOD_MULTI_1_B)
-            || (id == PARAM_MOD_MULTI_2_A)
-            || (id == PARAM_MOD_MULTI_2_B)
-            || (id == PARAM_MOD_SLEW_1_SOURCE)
-            || (id == PARAM_MOD_SLEW_2_SOURCE))
-    {
-        (void)snprintf(out, out_len, "%s", ui_renderer_template_matrix_source_value_label(value));
-        return;
-    }
-
-    if (id == PARAM_MOD_MATRIX_DEST)
-    {
-        if (mod_lfo_v1_dest_label(ui_renderer_template_get_edit_owner_track(), (uint16_t)(value + 0.5f), out, out_len) != 0U)
-        {
-            return;
-        }
-    }
-
     if ((id == PARAM_LFO1_RATE) || (id == PARAM_LFO2_RATE) || (id == PARAM_LFO3_RATE))
     {
         if (value < -0.0001f)
@@ -254,58 +184,8 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
         return;
     }
 
-    uint8_t play_index = 0U;
-    seq_step_play_field_t play_field = SEQ_STEP_PLAY_FIELD_COUNT;
-    const uint8_t is_play_param = seq_model_play_resolve_param(id,
-                                                               &play_index,
-                                                               &play_field);
-    (void)play_index;
-    if ((is_play_param != 0U) && (play_field == SEQ_STEP_PLAY_FIELD_VELOCITY))
-    {
-        if (value < 0.5f)
-        {
-            (void)snprintf(out, out_len, "OFF");
-            return;
-        }
-    }
-
-    if ((is_play_param != 0U) && (play_field == SEQ_STEP_PLAY_FIELD_NOTE))
-    {
-        int32_t note = (int32_t)(value + 0.5f);
-        if (note < 0)
-        {
-            note = 0;
-        }
-        if (note > 127)
-        {
-            note = 127;
-        }
-
-        const int32_t note_index = note % 12;
-        const int32_t octave = (note / 12) - 1;
-        (void)snprintf(out, out_len, "%s%ld", g_ui_template_midi_note_names[note_index], (long)octave);
-        return;
-    }
-
     const float display_value = param_value_policy_canonical_to_display(
         id, ui_renderer_template_get_param_authority_track(id), value);
-
-    if (id == PARAM_CFG_TEMPO)
-    {
-        ui_renderer_template_format_fixed(display_value, 2U, "", out, out_len);
-        return;
-    }
-
-    if (id == PARAM_CFG_METRO)
-    {
-        if (value < 0.5f)
-        {
-            (void)snprintf(out, out_len, "OFF");
-            return;
-        }
-        (void)snprintf(out, out_len, "%ld", (long)(value + 0.5f));
-        return;
-    }
 
     if ((desc->display_type == PARAM_DISPLAY_INT)
             && (desc->unit != NULL)
@@ -542,18 +422,17 @@ static uint8_t ui_renderer_template_get_param_authority_track(param_id_t id)
         /* Encoder flash is authored against the selected Audio-FX entity. */
         return selected_entity;
     }
-    uint8_t track = ui_renderer_template_get_edit_owner_track();
-    (void)ui_page_template_play_resolve_param_track(id, selected_entity, &track);
-    return track;
+    return ui_renderer_template_get_edit_owner_track();
 }
 
 static float ui_renderer_template_get_param_display_value(param_id_t id)
 {
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
-    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
-            || (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED))
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_GLOBAL)
+            && (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED))
     {
-        return param_get(id);
+        float value = 0.0f;
+        return (param_registry_query_global(id, &value) != 0U) ? value : NAN;
     }
 
     return ui_param_get_active_track_display_value(id,
@@ -565,7 +444,8 @@ static uint8_t ui_renderer_template_get_visible_param_value(const ui_param_seq_p
                                                             float *out_value,
                                                             uint8_t *out_inverted)
 {
-    if ((id >= PARAM_COUNT) || (out_value == 0))
+    if (((id >= PARAM_COUNT) && (ui_param_is_local_control(id) == 0U))
+            || (out_value == 0))
     {
         return 0U;
     }
@@ -576,6 +456,11 @@ static uint8_t ui_renderer_template_get_visible_param_value(const ui_param_seq_p
     }
 
     float value = ui_renderer_template_get_param_display_value(id);
+    if (ui_param_is_local_control(id) != 0U)
+    {
+        *out_value = value;
+        return (isnan(value) == 0) ? 1U : 0U;
+    }
     uint8_t macro_lock_track = 0xFFU;
     float macro_lock_scene_value = 0.0f;
     const uint8_t has_macro_lock_value =

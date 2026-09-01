@@ -27,9 +27,6 @@
 #include "encoders_hw.h"
 #include "usbh_conf.h"
 #include "usb_role_manager.h"
-#if BRICK_TEST_BUILD
-#include "Platform/crash_capsule.h"
-#endif
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -110,19 +107,6 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
-#if BRICK_TEST_BUILD
-  __asm volatile(
-    "tst lr, #4\n"
-    "ite eq\n"
-    "mrseq r0, msp\n"
-    "mrsne r0, psp\n"
-    "mov r1, lr\n"
-    "movs r2, #1\n"
-    "ldr r3, =g_crash_capsule_fault_stack\n"
-    "add.w r3, r3, #1024\n"
-    "msr msp, r3\n"
-    "b crash_capsule_fault_capture_and_reset\n");
-#else
   __asm volatile(
     "ldr r0, =0xE000ED0C\n"
     "ldr r1, =0x05FA0004\n"
@@ -130,7 +114,6 @@ void HardFault_Handler(void)
     "str r1, [r0]\n"
     "dsb\n"
     "b .\n");
-#endif
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {
@@ -145,19 +128,6 @@ void HardFault_Handler(void)
 void MemManage_Handler(void)
 {
   /* USER CODE BEGIN MemoryManagement_IRQn 0 */
-#if BRICK_TEST_BUILD
-  __asm volatile(
-    "tst lr, #4\n"
-    "ite eq\n"
-    "mrseq r0, msp\n"
-    "mrsne r0, psp\n"
-    "mov r1, lr\n"
-    "movs r2, #2\n"
-    "ldr r3, =g_crash_capsule_fault_stack\n"
-    "add.w r3, r3, #1024\n"
-    "msr msp, r3\n"
-    "b crash_capsule_fault_capture_and_reset\n");
-#else
   __asm volatile(
     "ldr r0, =0xE000ED0C\n"
     "ldr r1, =0x05FA0004\n"
@@ -165,7 +135,6 @@ void MemManage_Handler(void)
     "str r1, [r0]\n"
     "dsb\n"
     "b .\n");
-#endif
   /* USER CODE END MemoryManagement_IRQn 0 */
   while (1)
   {
@@ -180,19 +149,6 @@ void MemManage_Handler(void)
 void BusFault_Handler(void)
 {
   /* USER CODE BEGIN BusFault_IRQn 0 */
-#if BRICK_TEST_BUILD
-  __asm volatile(
-    "tst lr, #4\n"
-    "ite eq\n"
-    "mrseq r0, msp\n"
-    "mrsne r0, psp\n"
-    "mov r1, lr\n"
-    "movs r2, #3\n"
-    "ldr r3, =g_crash_capsule_fault_stack\n"
-    "add.w r3, r3, #1024\n"
-    "msr msp, r3\n"
-    "b crash_capsule_fault_capture_and_reset\n");
-#else
   __asm volatile(
     "ldr r0, =0xE000ED0C\n"
     "ldr r1, =0x05FA0004\n"
@@ -200,7 +156,6 @@ void BusFault_Handler(void)
     "str r1, [r0]\n"
     "dsb\n"
     "b .\n");
-#endif
   /* USER CODE END BusFault_IRQn 0 */
   while (1)
   {
@@ -215,19 +170,6 @@ void BusFault_Handler(void)
 void UsageFault_Handler(void)
 {
   /* USER CODE BEGIN UsageFault_IRQn 0 */
-#if BRICK_TEST_BUILD
-  __asm volatile(
-    "tst lr, #4\n"
-    "ite eq\n"
-    "mrseq r0, msp\n"
-    "mrsne r0, psp\n"
-    "mov r1, lr\n"
-    "movs r2, #4\n"
-    "ldr r3, =g_crash_capsule_fault_stack\n"
-    "add.w r3, r3, #1024\n"
-    "msr msp, r3\n"
-    "b crash_capsule_fault_capture_and_reset\n");
-#else
   __asm volatile(
     "ldr r0, =0xE000ED0C\n"
     "ldr r1, =0x05FA0004\n"
@@ -235,7 +177,6 @@ void UsageFault_Handler(void)
     "str r1, [r0]\n"
     "dsb\n"
     "b .\n");
-#endif
   /* USER CODE END UsageFault_IRQn 0 */
   while (1)
   {

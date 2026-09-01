@@ -3,6 +3,7 @@
 #include <stdint.h>
 
 #include "Sampler/multi_sample_pool.h"
+#include "Sampler/multi_sample_index.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -59,6 +60,8 @@ void multi_sample_loader_init(void);
 multi_sample_load_result_t multi_sample_load_instrument(uint16_t logical_id,
                                                         const char *index_path,
                                                         uint16_t instrument_id);
+uint8_t multi_sample_load_required_prep_pages(const multi_sample_index_t *index,
+                                              uint32_t *out_pages);
 void multi_sample_service_load(uint32_t byte_budget);
 uint8_t multi_sample_is_ready(uint16_t instrument_id);
 uint8_t multi_sample_load_has_pending(void);

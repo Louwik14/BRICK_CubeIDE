@@ -9,28 +9,29 @@ static float clamp_value(float v, float lo, float hi)
 
 extern const param_desc_t param_registry[PARAM_COUNT];
 
-static uint8_t g_param_registry_batch_depth = 0U;
-
 static const param_id_t g_param_registry_lfo_params[MOD_LFO_COUNT_PER_TRACK][MOD_LFO_PARAM_COUNT] = {
     { PARAM_LFO1_RATE, PARAM_LFO1_SHAPE, PARAM_LFO1_TRIG, PARAM_LFO1_PHASE },
     { PARAM_LFO2_RATE, PARAM_LFO2_SHAPE, PARAM_LFO2_TRIG, PARAM_LFO2_PHASE },
     { PARAM_LFO3_RATE, PARAM_LFO3_SHAPE, PARAM_LFO3_TRIG, PARAM_LFO3_PHASE },
 };
 
-void param_registry_batch_begin(void)
+static uint8_t param_control_owner_get(uint8_t track, param_id_t id,
+                                       float *out_value)
 {
-    if (g_param_registry_batch_depth < 255U)
+    if (param_filter_control_get(track, id, out_value) != 0U) return 1U;
+    if (vca_control_state_get_param(track, id, out_value) != 0U) return 1U;
+    if (mod_env3_control_get_param(track, id, out_value) != 0U) return 1U;
+    if (mixer_control_state_get_param(track, id, out_value) != 0U) return 1U;
+    if (id == PARAM_MIX_MUTE)
     {
-        g_param_registry_batch_depth++;
+        const int8_t muted = track_mute_get(track);
+        if (muted < 0) return 0U;
+        *out_value = (float)muted;
+        return 1U;
     }
-}
-
-void param_registry_batch_end(void)
-{
-    if (g_param_registry_batch_depth > 0U)
-    {
-        g_param_registry_batch_depth--;
-    }
+    if (id == PARAM_CFG_POLY_SPREAD)
+        return polyphony_control_get_spread(track, out_value);
+    return audio_fx_control_state_get_param(track, id, out_value);
 }
 
 static uint8_t param_lfo_map(param_id_t id, uint8_t *out_lfo_index, mod_lfo_param_t *out_lfo_param)
@@ -56,108 +57,13 @@ static uint8_t param_lfo_map(param_id_t id, uint8_t *out_lfo_index, mod_lfo_para
     return 0U;
 }
 
-static uint8_t param_matrix_get_track_value(param_id_t id, uint8_t track, float *out_value)
-{
-    switch (id)
-    {
-        case PARAM_MOD_MATRIX_SLOT:
-            return mod_matrix_get_selected_slot(track, out_value);
-        case PARAM_MOD_MATRIX_SOURCE:
-            return mod_matrix_get_selected_slot_source(track, out_value);
-        case PARAM_MOD_MATRIX_DEST:
-            return mod_matrix_get_selected_slot_destination_index(track, out_value);
-        case PARAM_MOD_MATRIX_DEPTH:
-            return mod_matrix_get_selected_slot_depth(track, out_value);
-        default:
-            return 0U;
-    }
-}
-
-static uint8_t param_matrix_set_track_value(param_id_t id, uint8_t track, float value)
-{
-    switch (id)
-    {
-        case PARAM_MOD_MATRIX_SLOT:
-            return mod_matrix_set_selected_slot(track, value);
-        case PARAM_MOD_MATRIX_SOURCE:
-            return mod_matrix_set_selected_slot_source(track, value);
-        case PARAM_MOD_MATRIX_DEST:
-            return mod_matrix_set_selected_slot_destination_index(track, value);
-        case PARAM_MOD_MATRIX_DEPTH:
-            return mod_matrix_set_selected_slot_depth(track, value);
-        default:
-            return 0U;
-    }
-}
-
-
-static uint8_t param_mod_operator_set_track_value(param_id_t id, uint8_t track, float value)
-{
-    switch (id)
-    {
-        case PARAM_MOD_MULTI_1_A:
-            return mod_matrix_set_multi_source(track, 0U, 0U, value);
-        case PARAM_MOD_MULTI_1_B:
-            return mod_matrix_set_multi_source(track, 0U, 1U, value);
-        case PARAM_MOD_MULTI_2_A:
-            return mod_matrix_set_multi_source(track, 1U, 0U, value);
-        case PARAM_MOD_MULTI_2_B:
-            return mod_matrix_set_multi_source(track, 1U, 1U, value);
-        case PARAM_MOD_SLEW_1_SOURCE:
-            return mod_matrix_set_slew_source(track, 0U, value);
-        case PARAM_MOD_SLEW_1_AMOUNT:
-            return mod_matrix_set_slew_amount(track, 0U, value);
-        case PARAM_MOD_SLEW_2_SOURCE:
-            return mod_matrix_set_slew_source(track, 1U, value);
-        case PARAM_MOD_SLEW_2_AMOUNT:
-            return mod_matrix_set_slew_amount(track, 1U, value);
-        default:
-            return 0U;
-    }
-}
-
-static uint8_t param_apply_play_track_value(param_id_t id, uint8_t track, float clamped)
-{
-    if (id == PARAM_MIDI_PROGRAM)
-    {
-        if (seq_param_iface_set_play_base_param(track,
-                                                id,
-                                                seq_param_iface_encode_param_value(id, clamped)) == 0U)
-        {
-            return 0U;
-        }
-
-        param_registry_control_value_set(track, id, clamped);
-        /* Post-commit notification: MIDI program changes are forwarded after the authoritative write. */
-        seq_runtime_on_midi_program_live_change(track, clamped);
-        return 1U;
-    }
-
-    if (param_backend_is_midi_cc_id(id) != 0U)
-    {
-        if (param_backend_send_midi_cc(track, id, clamped) == 0U)
-        {
-            return 0U;
-        }
-    }
-
-    if (seq_param_iface_set_play_base_param(track,
-                                            id,
-                                            seq_param_iface_encode_param_value(id, clamped)) == 0U)
-    {
-        return 0U;
-    }
-
-    param_registry_control_value_set(track, id, clamped);
-    return 1U;
-}
-
-
 static uint8_t param_registry_set_track_tone_value(param_id_t id,
                                                     uint8_t track,
                                                     float value)
 {
-    if ((track >= SEQ_LANE_CAPACITY) || (id >= PARAM_COUNT))
+    float previous;
+    if ((track >= SEQ_LANE_CAPACITY) || (id >= PARAM_COUNT)
+            || (tone_program_control_get(track, id, &previous) == 0U))
         return 0U;
     if (id == PARAM_DRUM_MD_MODEL)
     {
@@ -167,7 +73,7 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id,
         value = (float)model;
         mod_destination_catalog_invalidate_track(track);
     }
-    param_registry_control_value_set(track, id, value);
+    (void)tone_program_control_set(track, id, value);
     return 1U;
 }
 
@@ -246,8 +152,7 @@ static uint8_t param_track_exec_authorize(const param_track_exec_ctx_t *ctx)
 
     if (ctx->rt_fast != 0U)
     {
-        if ((ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
-                || (ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD)
+        if ((ctx->rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD)
                 || (ctx->id == PARAM_MIDI_PROGRAM))
         {
             return 0U;
@@ -277,7 +182,7 @@ static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx)
         {
             return 0U;
         }
-        param_registry_control_value_set(ctx->track, ctx->id, ctx->clamped);
+        (void)tone_program_control_set(ctx->track, ctx->id, ctx->clamped);
         seq_runtime_on_midi_program_live_change(ctx->track, ctx->clamped);
         return 1U;
     }
@@ -292,7 +197,7 @@ static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx)
         {
             return 0U;
         }
-        param_registry_control_value_set(ctx->track, ctx->id, ctx->clamped);
+        (void)tone_program_control_set(ctx->track, ctx->id, ctx->clamped);
         return 1U;
     }
 
@@ -312,7 +217,7 @@ static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx)
     const uint8_t applied = param_backend_apply_track_value_control(
         ctx->track, ctx->id, ctx->clamped);
     if ((applied != 0U) && (ctx->rt_fast == 0U))
-        param_registry_control_value_set(ctx->track, ctx->id, ctx->clamped);
+        (void)tone_program_control_set(ctx->track, ctx->id, ctx->clamped);
     return applied;
 }
 
@@ -321,39 +226,17 @@ static uint8_t param_apply_non_filter_track_value_core(param_id_t id,
                                                        float clamped,
                                                        uint8_t rt_fast)
 {
-    if (id == PARAM_EXTERNAL_INPUT)
-    {
-        if (rt_fast != 0U)
-        {
-            return 0U;
-        }
-        return ui_set_track_external_input(
-            track, (uint8_t)(clamp_value(clamped, 0.0f,
-                (float)(ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT - 1U)) + 0.5f)) ? 1U : 0U;
-    }
-
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
 
-    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
-            || (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED))
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_GLOBAL)
+            && (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED))
     {
         if (rt_fast != 0U)
         {
             return 0U;
         }
 
-        param_set(id, clamped);
-        return 1U;
-    }
-
-    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_PLAY)
-    {
-        if (rt_fast != 0U)
-        {
-            return 0U;
-        }
-
-        return param_apply_play_track_value(id, track, clamped);
+        return param_registry_commit_global(id, clamped);
     }
 
     if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_CFG)
@@ -382,13 +265,14 @@ static uint8_t param_apply_non_filter_track_value(param_id_t id, uint8_t track, 
 
 static uint8_t param_apply_filter_track_value(param_id_t id, uint8_t track, float clamped)
 {
-    return param_filter_apply_value(id, track, clamped, 1U, 1U);
+    return param_filter_apply_value(id, track, clamped, 1U);
 }
 
 /* Query surface: pure value read, no mutation, no resync, no transition. */
 uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_value)
 {
-    if ((id >= PARAM_COUNT) || (out_value == NULL))
+    if ((id >= PARAM_COUNT) || (out_value == NULL)
+            || (param_id_is_reserved(id) != 0U))
     {
         return 0U;
     }
@@ -400,58 +284,23 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
         return note_fx_state_get_param(track, id, out_value);
     }
 
-    if (track < SEQ_LANE_CAPACITY)
     {
-        switch (id)
-        {
-            case PARAM_CFG_TRACK:
-                *out_value = (float)track_state_get_family(track);
-                return 1U;
-
-            case PARAM_CFG_TRACK_TYPE:
-                *out_value = (float)ui_track_catalog_type_index_for_family(track_state_get_family(track),
-                                                                           track_state_get_type(track),
-                                                                           track,
-                                                                           track_state_get_configs());
-                return 1U;
-
-            case PARAM_CFG_MIDI_CH:
-                *out_value = (float)track_state_get_midi_channel(track);
-                return 1U;
-
-            case PARAM_CFG_MIDI_SRC:
-                *out_value = (float)track_state_get_midi_source(track);
-                return 1U;
-
-            case PARAM_EXTERNAL_INPUT:
-                *out_value = (float)track_state_get_external_input(track);
-                return 1U;
-
-            default:
-                break;
-        }
+        uint8_t lfo_index = 0U;
+        mod_lfo_param_t lfo_param = MOD_LFO_PARAM_RATE;
+        if (param_lfo_map(id, &lfo_index, &lfo_param) != 0U)
+            return mod_lfo_v1_get_track_param(track, lfo_index, lfo_param, out_value);
     }
 
-    if (param_matrix_get_track_value(id, track, out_value) != 0U)
-    {
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+    if ((rule.status != TRACK_RUNTIME_PARAM_ALLOWED)
+            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
+            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_GLOBAL)
+            || (track >= SEQ_LANE_CAPACITY))
+        return 0U;
+    if (fm_control_state_get_public_param(track, id, out_value) != 0U)
         return 1U;
-    }
-
-    {
-        const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
-        if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_NONE)
-                && (rule.status != TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED))
-        {
-            if (track >= SEQ_LANE_CAPACITY)
-            {
-                return 0U;
-            }
-
-            return param_registry_control_value_get(track, id, out_value);
-        }
-    }
-
-    *out_value = param_get(id);
-    return 1U;
+    if (param_control_owner_get(track, id, out_value) != 0U)
+        return 1U;
+    return tone_program_control_get(track, id, out_value);
 }
 /* Command surface: RT fast-path apply reserved for modulation callers. */

@@ -25,8 +25,6 @@
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_play_scheduler.h"
 
-#include "ui_core.h"
-
 #include <string.h>
 
 #define KEYBOARD_RUNTIME_MIDI_CHANNEL_COUNT 16U
@@ -296,30 +294,9 @@ void keyboard_runtime_all_notes_off(void)
     keyboard_engine_clear_source_occurrences_silent();
 }
 
-void keyboard_runtime_sync_track_focus_context(void)
+void keyboard_runtime_on_hall_keyboard_deactivated(void)
 {
-    const ui_hall_mode_t hall_mode = ui_get_hall_mode();
-    if (hall_mode != UI_HALL_MODE_KEYBOARD)
-    {
-        return;
-    }
-
-    /*
-     * Le changement de focus track est une action UI.
-     * On ne doit pas envoyer de panic/runtime reset global ici,
-     * sinon on coupe aussi des notes/séquences qui jouent encore.
-     *
-     * On purge uniquement l'état local clavier pour éviter que
-     * des relâchements tardifs d'anciens halls pilotent la nouvelle track.
-    */
-}
-
-void keyboard_runtime_on_hall_mode_changed(ui_hall_mode_t previous_mode, ui_hall_mode_t new_mode)
-{
-    if ((previous_mode == UI_HALL_MODE_KEYBOARD) && (new_mode != UI_HALL_MODE_KEYBOARD))
-    {
-        ui_keyboard_app_all_notes_off();
-    }
+    ui_keyboard_app_all_notes_off();
 }
 
 uint8_t keyboard_runtime_get_root_index(void) { return keyboard_params_get_root_index(); }

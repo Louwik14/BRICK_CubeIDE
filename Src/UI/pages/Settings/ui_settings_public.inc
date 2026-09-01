@@ -17,9 +17,14 @@ uint8_t ui_page_settings_is_open(void)
     return (ui_page_get_id() == UI_PAGE_SETTINGS) ? 1U : 0U;
 }
 
+uint8_t ui_page_settings_multi_clear_is_active(void)
+{
+    return multi_sample_pool_clear_is_active();
+}
+
 void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
 {
-    if ((g_ui_settings.multi_clear_active != 0U)
+    if ((multi_sample_pool_clear_is_active() != 0U)
         || (wav_convert_is_active() != 0U)
         || (g_ui_settings.convert_slot_valid != 0U))
     {
@@ -31,54 +36,6 @@ void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
     {
         return;
     }
-
-#if defined(BRICK6_VARIANT_LOWCOST)
-    if (level->view == UI_SETTINGS_VIEW_TEST_HALL)
-    {
-        if (encoder > 1U)
-        {
-            return;
-        }
-
-        g_ui_settings.encoder_accum[encoder] =
-            (int16_t)(g_ui_settings.encoder_accum[encoder] + delta);
-        const int16_t step =
-            (int16_t)(g_ui_settings.encoder_accum[encoder] / UI_SETTINGS_ENCODER_DIVIDER);
-        g_ui_settings.encoder_accum[encoder] =
-            (int16_t)(g_ui_settings.encoder_accum[encoder]
-                      - (step * UI_SETTINGS_ENCODER_DIVIDER));
-        if (step != 0)
-        {
-            if (encoder == 0U)
-            {
-                int32_t key = (int32_t)g_ui_settings.hall_test_key + step;
-                if (key < 0)
-                {
-                    key = 0;
-                }
-                else if (key >= HALL_KEY_COUNT)
-                {
-                    key = HALL_KEY_COUNT - 1U;
-                }
-                g_ui_settings.hall_test_key = (uint8_t)key;
-            }
-            else
-            {
-                int32_t mux = (int32_t)g_ui_settings.hall_test_mux + step;
-                if (mux < 0)
-                {
-                    mux = 0;
-                }
-                else if (mux >= 8)
-                {
-                    mux = 7;
-                }
-                g_ui_settings.hall_test_mux = (uint8_t)mux;
-            }
-        }
-        return;
-    }
-#endif
 
     if ((level->view == UI_SETTINGS_VIEW_SAMPLER)
         || (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM)
@@ -251,7 +208,7 @@ uint8_t ui_page_settings_handle_event(const ui_event_t *ev)
     {
         return 0U;
     }
-    if (g_ui_settings.multi_clear_active != 0U)
+    if (multi_sample_pool_clear_is_active() != 0U)
     {
         ui_page_settings_status("CLEAR...");
         return 1U;

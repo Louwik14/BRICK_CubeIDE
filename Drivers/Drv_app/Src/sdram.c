@@ -1,22 +1,20 @@
 /**
  * @file sdram.c
- * @brief Initialisation et test de la SDRAM externe via FMC.
+ * @brief Initialisation de la SDRAM externe via FMC.
  *
  * Ce module configure la SDRAM W9825G6KH via le contrôleur FMC et
- * fournit un test simple de lecture/écriture pour validation.
  *
  * Rôle dans le système:
  * - Mise en service de la mémoire externe avant usage applicatif.
- * - Vérification de base de l'intégrité SDRAM.
  *
  * Contraintes temps réel:
- * - Critique audio: non (exécuté à l'init ou en diagnostics).
+ * - Critique audio: non (exécuté à l'init).
  * - Tasklet: non.
  * - IRQ: non.
  * - Borné: non critique (HAL bloquant possible).
  *
  * Architecture:
- * - Appelé par: brick6_app_init, diagnostics_tasklet.
+ * - Appelé par: brick6_app_init.
  * - Appelle: HAL SDRAM/FMC, UART pour logs.
  *
  * Règles:
@@ -30,19 +28,13 @@
 #include "fmc.h"
 #include "w9825g6kh_conf.h"
 
-/* =========================================================
- * Local buffers for test
- * ========================================================= */
 static FMC_SDRAM_CommandTypeDef sdram_command;
-static uint32_t sdram_tx_buffer[SDRAM_BUFFER_SIZE];
-static uint32_t sdram_rx_buffer[SDRAM_BUFFER_SIZE];
 
 /* =========================================================
  * Local prototypes
  * ========================================================= */
 static void SDRAM_Initialization_Sequence(SDRAM_HandleTypeDef *hsdram,
                                           FMC_SDRAM_CommandTypeDef *command);
-static void Fill_Buffer(uint32_t *pBuffer, uint32_t buffer_length, uint32_t offset);
 
 /* =========================================================
  * Public API
@@ -64,49 +56,14 @@ void SDRAM_Init(void)
 }
 
 /**
- * @brief Point d'entrée SDRAM_Test.
  *
  * Rôle:
- * - Exécuter le traitement associé à SDRAM_Test.
  *
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void SDRAM_Test(void)
-{
-    uint32_t index = 0;
-    uint32_t status = 0;
-    uint32_t fail_index = 0;
 
-    Fill_Buffer(sdram_tx_buffer, SDRAM_BUFFER_SIZE, 0xA244250FU);
-    Fill_Buffer(sdram_rx_buffer, SDRAM_BUFFER_SIZE, 0xBBBBBBBBU);
-
-    /* Write */
-    for (index = 0; index < SDRAM_BUFFER_SIZE; index++)
-    {
-        sdram_write32(index, sdram_tx_buffer[index]);
-    }
-
-    /* Read */
-    for (index = 0; index < SDRAM_BUFFER_SIZE; index++)
-    {
-        sdram_rx_buffer[index] = sdram_read32(index);
-    }
-
-    /* Compare */
-    for (index = 0; index < SDRAM_BUFFER_SIZE; index++)
-    {
-        if (sdram_rx_buffer[index] != sdram_tx_buffer[index])
-        {
-            status = 1;
-            fail_index = index;
-            break;
-        }
-    }
-    (void)status;
-    (void)fail_index;
-}
 
 /* =========================================================
  * SDRAM Initialization Sequence (ST style)
@@ -174,10 +131,8 @@ static void SDRAM_Initialization_Sequence(SDRAM_HandleTypeDef *hsdram,
  * ========================================================= */
 
 /**
- * @brief Point d'entrée Fill_Buffer.
  *
  * Rôle:
- * - Exécuter le traitement associé à Fill_Buffer.
  *
  * @param pBuffer Paramètre d'entrée de l'API.
  * @param buffer_length Paramètre d'entrée de l'API.
@@ -186,10 +141,3 @@ static void SDRAM_Initialization_Sequence(SDRAM_HandleTypeDef *hsdram,
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-static void Fill_Buffer(uint32_t *pBuffer, uint32_t buffer_length, uint32_t offset)
-{
-    for (uint32_t index = 0; index < buffer_length; index++)
-    {
-        pBuffer[index] = index + offset;
-    }
-}

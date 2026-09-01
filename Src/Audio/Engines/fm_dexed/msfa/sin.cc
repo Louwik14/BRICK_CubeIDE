@@ -77,29 +77,6 @@ int32_t Sin::lookup(int32_t phase) {
 #endif
 
 
-#if 0
-// The following is an implementation designed not to use any lookup tables,
-// based on the following implementation by Basile Graf:
-// http://www.rossbencina.com/static/code/sinusoids/even_polynomial_sin_approximation.txt
-
-#define C0 (1 << 24)
-#define C1 (331121857 >> 2)
-#define C2 (1084885537 >> 4)
-#define C3 (1310449902 >> 6)
-
-int32_t Sin::compute(int32_t phase) {
-  int32_t x = (phase & ((1 << 23) - 1)) - (1 << 22);
-  int32_t x2 = ((int64_t)x * (int64_t)x) >> 22;
-  int32_t x4 = ((int64_t)x2 * (int64_t)x2) >> 24;
-  int32_t x6 = ((int64_t)x2 * (int64_t)x4) >> 24;
-  int32_t y = C0 -
-    (((int64_t)C1 * (int64_t)x2) >> 24) +
-    (((int64_t)C2 * (int64_t)x4) >> 24) -
-    (((int64_t)C3 * (int64_t)x6) >> 24);
-  y ^= -((phase >> 23) & 1);
-  return y;
-}
-#endif
 
 #if 1
 // coefficients are Chebyshev polynomial, computed by compute_cos_poly.py

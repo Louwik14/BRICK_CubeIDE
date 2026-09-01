@@ -2,6 +2,7 @@
 
 #include "Param/engine_model_catalog.h"
 #include "Param/audio_fx_param_catalog.h"
+#include "Track/audio_fx_control_state.h"
 #include "IPC/control_audio_visual.h"
 #include "Track/track_runtime.h"
 #include "Track/entity_topology.h"
@@ -9,7 +10,7 @@
 #include "Seq/seq_division_catalog.h"
 #include "drv_display.h"
 #include "font.h"
-#include "ui_core_runtime_bridge.h"
+#include "Track/control_routing.h"
 #include "ui_page_manager.h"
 #include "ui_param.h"
 #include "ui_template_page.h"
@@ -46,7 +47,7 @@ static const ui_template_family_t g_ui_template_audio_fx_family = {
     .subpages = {
         { .title = "FX A", .param_bank = { .params = { PARAM_AUDIO_FX_P1, PARAM_AUDIO_FX_P2, PARAM_AUDIO_FX_P3, PARAM_AUDIO_FX_MODEL } } },
         { .title = "FX B", .param_bank = { .params = { PARAM_AUDIO_FX_B_P1, PARAM_AUDIO_FX_B_P2, PARAM_AUDIO_FX_B_P3, PARAM_AUDIO_FX_B_MODEL } } },
-        { .title = "ROUTING", .param_bank = { .params = { PARAM_AUDIO_FX_FILTER_POS, PARAM_AUDIO_FX_ORDER, PARAM_AUDIO_FX_MODE_A, PARAM_AUDIO_FX_MODE_B } } },
+        { .title = "ROUTING", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
     .default_subpage = 0U,
@@ -58,7 +59,7 @@ static const ui_template_family_t g_ui_template_audio_fx_group_master_family = {
     .subpages = {
         { .title = "FX A", .param_bank = { .params = { PARAM_AUDIO_FX_P1, PARAM_AUDIO_FX_P2, PARAM_AUDIO_FX_P3, PARAM_AUDIO_FX_MODEL } } },
         { .title = "FX B", .param_bank = { .params = { PARAM_AUDIO_FX_B_P1, PARAM_AUDIO_FX_B_P2, PARAM_AUDIO_FX_B_P3, PARAM_AUDIO_FX_B_MODEL } } },
-        { .title = "SPATIAL", .param_bank = { .params = { PARAM_AUDIO_FX_MODE_A, PARAM_AUDIO_FX_MODE_B, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "SPATIAL", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
     .default_subpage = 0U,
@@ -287,32 +288,6 @@ static uint8_t ui_page_midi_fx_param_text(uint8_t slot,
         return 1U;
     }
 
-    if (id == PARAM_AUDIO_FX_FILTER_POS)
-    {
-        static const char *const labels[] = {"PRE","MID","POST"};
-        const uint8_t pos=(value<0.5f)?0U:(value<1.5f)?1U:2U;
-        (void)snprintf(out_name,out_name_len,"FILTER POS");
-        if(out_value!=NULL&&out_value_len>0U)
-            (void)snprintf(out_value,out_value_len,"%s",labels[pos]);
-        return 1U;
-    }
-    if (id == PARAM_AUDIO_FX_ORDER)
-    {
-        (void)snprintf(out_name,out_name_len,"FX ORDER");
-        if(out_value!=NULL&&out_value_len>0U)
-            (void)snprintf(out_value,out_value_len,"%s",value>=0.5f?"B>A":"A>B");
-        return 1U;
-    }
-    if ((id == PARAM_AUDIO_FX_MODE_A) || (id == PARAM_AUDIO_FX_MODE_B))
-    {
-        static const char *const labels[] = {"MONO","STEREO","MID","SIDE"};
-        const uint8_t mode=(value<0.5f)?0U:(value<1.5f)?1U:(value<2.5f)?2U:3U;
-        (void)snprintf(out_name,out_name_len,"MODE %c",(id==PARAM_AUDIO_FX_MODE_B)?'B':'A');
-        if(out_value!=NULL&&out_value_len>0U)
-            (void)snprintf(out_value,out_value_len,"%s",labels[mode]);
-        return 1U;
-    }
-
     const uint8_t slot_b = (uint8_t)((id == PARAM_AUDIO_FX_B_P1)
         || (id == PARAM_AUDIO_FX_B_P2) || (id == PARAM_AUDIO_FX_B_P3));
     const param_id_t display_id = (id == PARAM_AUDIO_FX_B_P1) ? PARAM_AUDIO_FX_P1
@@ -433,6 +408,15 @@ static uint8_t ui_page_midi_fx_virtual_slot_text(uint8_t slot,
     static const char *const euclid_names[] = { "LENGTH", "PULSE", "DIV", "MODEL" };
     if (ui_page_get_id() == UI_PAGE_AUDIO_FX)
     {
+        if (g_ui_template_audio_fx_state.active_subpage != 2U) return 0U;
+        audio_fx_control_config_t config;
+        if (audio_fx_control_state_get(ui_page_audio_fx_selected_entity(),&config)==0U)return 0U;
+        static const char *const pos_labels[]={"PRE","MID","POST"};
+        static const char *const mode_labels[]={"MONO","STEREO","MID","SIDE"};
+        if(ui_page_audio_fx_resolve_family()==&g_ui_template_audio_fx_group_master_family){if(slot>=2U)return 0U;(void)snprintf(out_name,out_name_len,"MODE %c",slot?'B':'A');(void)snprintf(out_value,out_value_len,"%s",mode_labels[config.spatial_mode[slot]]);return 1U;}
+        if(slot==0U){(void)snprintf(out_name,out_name_len,"FILTER POS");(void)snprintf(out_value,out_value_len,"%s",pos_labels[config.filter_position]);return 1U;}
+        if(slot==1U){(void)snprintf(out_name,out_name_len,"FX ORDER");(void)snprintf(out_value,out_value_len,"%s",config.order==AUDIO_FX_ORDER_B_A?"B>A":"A>B");return 1U;}
+        if(slot<4U){const uint8_t fx_slot=(uint8_t)(slot-2U);(void)snprintf(out_name,out_name_len,"MODE %c",fx_slot?'B':'A');(void)snprintf(out_value,out_value_len,"%s",mode_labels[config.spatial_mode[fx_slot]]);return 1U;}
         return 0U;
     }
     const uint8_t page_slot = g_ui_template_midi_fx_state.active_subpage;
@@ -503,6 +487,17 @@ static void ui_page_midi_fx_leave(void)
 
 static void ui_page_midi_fx_handle_event(const ui_event_t *ev)
 {
+    if ((ui_page_get_id()==UI_PAGE_AUDIO_FX)&&(ev!=0)&&(ev->type==UI_EVENT_ENCODER)
+            &&(ev->id<4U)&&(ev->value!=0)&&(g_ui_template_audio_fx_state.active_subpage==2U))
+    {
+        audio_fx_control_config_t config;const brick_entity_id_t entity=ui_page_audio_fx_selected_entity();
+        if(audio_fx_control_state_get(entity,&config)==0U)return;
+        const uint8_t group_master=(ui_page_audio_fx_resolve_family()==&g_ui_template_audio_fx_group_master_family)?1U:0U;
+        if(group_master!=0U){if(ev->id<2U){int32_t v=(int32_t)config.spatial_mode[ev->id]+((ev->value>0)?1:-1);if(v<0)v=0;if(v>3)v=3;(void)audio_fx_control_set_spatial_mode(entity,(audio_fx_slot_t)ev->id,(uint8_t)v);}return;}
+        if(ev->id==0U){int32_t v=(int32_t)config.filter_position+((ev->value>0)?1:-1);if(v<0)v=0;if(v>2)v=2;(void)audio_fx_control_set_filter_position(entity,(audio_fx_filter_pos_t)v);return;}
+        if(ev->id==1U){(void)audio_fx_control_set_order(entity,(ev->value>0)?AUDIO_FX_ORDER_B_A:AUDIO_FX_ORDER_A_B);return;}
+        {const uint8_t slot=(uint8_t)(ev->id-2U);int32_t v=(int32_t)config.spatial_mode[slot]+((ev->value>0)?1:-1);if(v<0)v=0;if(v>3)v=3;(void)audio_fx_control_set_spatial_mode(entity,(audio_fx_slot_t)slot,(uint8_t)v);return;}
+    }
     if ((ui_page_get_id() == UI_PAGE_MIDI_FX)
             && (ev != 0) && (ev->type == UI_EVENT_ENCODER)
             && (ev->id < 3U)
@@ -546,7 +541,7 @@ static void ui_page_midi_fx_render(void)
         const uint8_t row = (uint8_t)(track >> 2U);
         const uint8_t x = (uint8_t)(2U + (column * 32U));
         const uint8_t y = (uint8_t)(19U + (row * 22U));
-        const uint8_t routed = ui_core_runtime_bridge_get_looper_route_enabled(active_track, track);
+        const uint8_t routed = control_routing_get_looper_source(active_track, track);
         char label[4];
         (void)snprintf(label, sizeof(label), "T%u", (unsigned int)(track + 1U));
 

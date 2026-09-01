@@ -7,9 +7,6 @@
 #include "Sampler/sample_cache.h"
 #include "stm32h7xx.h"
 
-D2_IPC sample_classic_audio_source_t
-    g_sample_classic_audio_source[SAMPLE_CLASSIC_CAPACITY];
-
 void sample_classic_audio_projection_init(void)
 {
     memset(g_sample_classic_audio_source, 0, sizeof(g_sample_classic_audio_source));

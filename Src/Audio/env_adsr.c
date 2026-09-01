@@ -1,106 +1,485 @@
 #include "env_adsr.h"
 
+#include <math.h>
+#include <stddef.h>
+#include "Platform/memory_layout.h"
+
+#define ENV_ADSR_Q15_MAX 32767
+#define ENV_ADSR_PHASE_MAX 0xFFFFFFFFu
+#define ENV_ADSR_MAX_SEGMENT_SECONDS 30u
+#define ENV_ADSR_RELEASE_END_RATIO (1.0f / 65536.0f)
+
+static uint16_t clamp_u16(uint16_t v, uint16_t lo, uint16_t hi)
+{
+    if(v < lo)
+        return lo;
+    if(v > hi)
+        return hi;
+    return v;
+}
+
+static uint32_t phase_increment_from_time(const env_adsr_t *env, uint16_t time)
+{
+    uint32_t scaled = 0u;
+#if defined(__SIZEOF_INT128__)
+    const uint64_t x = (uint64_t)time;
+    const __uint128_t scaled_wide = ((__uint128_t)(x * x * x) * (__uint128_t)env->max_segment_samples) >> 48;
+    scaled = (scaled_wide > (__uint128_t)UINT32_MAX) ? UINT32_MAX : (uint32_t)scaled_wide;
+#else
+    /* Fallback without 128-bit arithmetic: keep cubic law monotonic and overflow-safe. */
+    const double t = (double)time * (1.0 / 65535.0);
+    const double shaped = t * t * t;
+    const double wide = shaped * (double)env->max_segment_samples;
+    if(wide > (double)UINT32_MAX)
+        scaled = UINT32_MAX;
+    else if(wide > 0.0)
+        scaled = (uint32_t)wide;
+#endif
+    const uint32_t duration_samples = 1u + scaled;
+
+    if(duration_samples <= 1u)
+        return ENV_ADSR_PHASE_MAX;
+
+    uint32_t increment = (uint32_t)(((uint64_t)1u << 32) / (uint64_t)duration_samples);
+    if(increment == 0u)
+        increment = 1u;
+    return increment;
+}
+
+static void refresh_increments(env_adsr_t *env)
+{
+    env->attack_increment = phase_increment_from_time(env, env->attack);
+    env->decay_increment = phase_increment_from_time(env, env->decay);
+    env->release_increment = phase_increment_from_time(env, env->release);
+}
+
+static uint16_t phase_curve_quartic(uint32_t phase)
+{
+    const uint32_t x = phase >> 16;
+    const uint32_t x2 = (x * x) >> 16;
+    const uint32_t x4 = (x2 * x2) >> 16;
+    return (uint16_t)x4;
+}
+
+static uint16_t phase_curve_exponential(uint32_t phase)
+{
+    const uint32_t x = phase >> 16;
+    const uint32_t inv = 65535u - x;
+    const uint32_t inv2 = (inv * inv) >> 16;
+    const uint32_t inv4 = (inv2 * inv2) >> 16;
+    return (uint16_t)(65535u - inv4);
+}
+
+static int16_t interpolate_q15(int16_t a, int16_t b, uint16_t t)
+{
+    const int32_t delta = (int32_t)b - (int32_t)a;
+    return (int16_t)((int32_t)a + ((delta * (int32_t)t) >> 16));
+}
+
+static void prepare_release_from_level(env_adsr_t *env, float level)
+{
+    env->start_value = (int16_t)level;
+    env->target_value = 0;
+    env->phase = 0;
+    env->phase_increment = env->release_increment;
+    env->release_level = level;
+    const uint32_t duration_samples =
+        (env->phase_increment != 0u)
+            ? ((UINT32_MAX / env->phase_increment) + 1u)
+            : 1u;
+    const float multiplier = powf(ENV_ADSR_RELEASE_END_RATIO,
+                                  1.0f / (float)duration_samples);
+    env->release_coefficient = 1.0f - multiplier;
+    if (!(env->release_coefficient > 0.0f))
+        env->release_coefficient = 1.0f;
+    else if (env->release_coefficient > 1.0f)
+        env->release_coefficient = 1.0f;
+    env->stage = ENV_ADSR_STAGE_RELEASE;
+}
+
+static void prepare_attack_from_current(env_adsr_t *env)
+{
+    env->start_value = env->value;
+    env->target_value = ENV_ADSR_Q15_MAX;
+    env->phase = 0u;
+    env->phase_increment = env->attack_increment;
+    env->stage = ENV_ADSR_STAGE_ATTACK;
+}
+
+static void prepare_decay_from_current(env_adsr_t *env)
+{
+    if (env->value == (int16_t)env->sustain)
+    {
+        if (env->gate_high)
+        {
+            env->stage = ENV_ADSR_STAGE_SUSTAIN;
+            env->phase = 0u;
+            env->phase_increment = 0u;
+        }
+        else
+        {
+            prepare_release_from_level(env, (float)env->value);
+        }
+        return;
+    }
+
+    env->start_value = env->value;
+    env->target_value = (int16_t)env->sustain;
+    env->phase = 0u;
+    env->phase_increment = env->decay_increment;
+    env->stage = ENV_ADSR_STAGE_DECAY;
+}
+
+static void start_attack(env_adsr_t *env, bool hard_reset)
+{
+    if (hard_reset || env->stage == ENV_ADSR_STAGE_IDLE)
+        env->value = 0;
+    prepare_attack_from_current(env);
+}
+
 void env_adsr_init(env_adsr_t *env, float sample_rate)
 {
-    env_adsr_peaks_init(env, sample_rate);
+    const float sr = (sample_rate > 1.0f) ? sample_rate : 48000.0f;
+    env->max_segment_samples = (uint32_t)(sr * (float)ENV_ADSR_MAX_SEGMENT_SECONDS);
+    if(env->max_segment_samples == 0u)
+        env->max_segment_samples = 1u;
+
+    env->attack = 0u;
+    env->decay = 8192u;
+    env->sustain = 16384u;
+    env->release = 32767u;
+    env->hard_reset = false;
+
+    refresh_increments(env);
+    env_adsr_reset(env);
 }
 
 void env_adsr_reset(env_adsr_t *env)
 {
-    env_adsr_peaks_reset(env);
+    env->gate_high = false;
+    env->phase = 0u;
+    env->phase_increment = 0u;
+    env->start_value = 0;
+    env->target_value = 0;
+    env->value = 0;
+    env->release_level = 0.0f;
+    env->release_coefficient = 1.0f;
+    env->stage = ENV_ADSR_STAGE_IDLE;
 }
 
 void env_adsr_set_attack(env_adsr_t *env, uint16_t attack)
 {
-    env_adsr_peaks_set_attack(env, attack);
+    env->attack = attack;
+    env->attack_increment = phase_increment_from_time(env, env->attack);
+    if(env->stage == ENV_ADSR_STAGE_ATTACK)
+        prepare_attack_from_current(env);
 }
 
 void env_adsr_set_decay(env_adsr_t *env, uint16_t decay)
 {
-    env_adsr_peaks_set_decay(env, decay);
+    env->decay = decay;
+    env->decay_increment = phase_increment_from_time(env, env->decay);
+    if(env->stage == ENV_ADSR_STAGE_DECAY)
+        prepare_decay_from_current(env);
 }
 
 void env_adsr_set_sustain(env_adsr_t *env, uint16_t sustain)
 {
-    env_adsr_peaks_set_sustain(env, sustain);
+    env->sustain = clamp_u16(sustain, 0u, ENV_ADSR_Q15_MAX);
+    if(env->stage == ENV_ADSR_STAGE_DECAY)
+        prepare_decay_from_current(env);
 }
 
 void env_adsr_set_release(env_adsr_t *env, uint16_t release)
 {
-    env_adsr_peaks_set_release(env, release);
-}
-
-void env_adsr_gate_on(env_adsr_t *env)
-{
-    env_adsr_peaks_gate_on(env);
+    env->release = release;
+    env->release_increment = phase_increment_from_time(env, env->release);
+    if(env->stage == ENV_ADSR_STAGE_RELEASE)
+        prepare_release_from_level(env, env->release_level);
 }
 
 void env_adsr_gate_off(env_adsr_t *env)
 {
-    env_adsr_peaks_gate_off(env);
+    env->gate_high = false;
+    if(env->stage != ENV_ADSR_STAGE_IDLE && env->stage != ENV_ADSR_STAGE_RELEASE)
+        prepare_release_from_level(env, (float)env->value);
 }
 
 void env_adsr_retrigger(env_adsr_t *env, bool hard_reset)
 {
-    env_adsr_peaks_retrigger(env, hard_reset);
+    env->hard_reset = hard_reset;
+    env->gate_high = true;
+    start_attack(env, hard_reset);
 }
 
-int16_t env_adsr_process_step(env_adsr_t *env)
+static inline int16_t env_adsr_advance_attack_sample(env_adsr_t *env)
 {
-    return env_adsr_peaks_process_step(env);
-}
-
-uint8_t env_adsr_process_vca_sample(env_adsr_t *env, float *out_gain)
-{
-    const env_adsr_peaks_stage_t stage_before = env_adsr_stage(env);
-    const int16_t value = env_adsr_process_step(env);
-    if (out_gain != 0)
+    const uint32_t previous_phase = env->phase;
+    env->phase += env->phase_increment;
+    const uint16_t curve = phase_curve_quartic(env->phase);
+    env->value = interpolate_q15(env->start_value, env->target_value, curve);
+    if(env->phase < previous_phase)
     {
-        *out_gain = (float)value * (1.0f / 32767.0f);
+        env->value = ENV_ADSR_Q15_MAX;
+        prepare_decay_from_current(env);
+    }
+    return env->value;
+}
+
+static inline int16_t env_adsr_advance_decay_sample(env_adsr_t *env)
+{
+    const uint32_t previous_phase = env->phase;
+    env->phase += env->phase_increment;
+    const uint16_t curve = phase_curve_exponential(env->phase);
+    env->value = interpolate_q15(env->start_value, env->target_value, curve);
+    if(env->phase < previous_phase)
+    {
+        if(env->gate_high)
+        {
+            env->stage = ENV_ADSR_STAGE_SUSTAIN;
+            env->value = (int16_t)env->sustain;
+        }
+        else
+        {
+            env->value = (int16_t)env->sustain;
+            prepare_release_from_level(env, (float)env->value);
+        }
+    }
+    return env->value;
+}
+
+static inline int16_t env_adsr_advance_release_sample(env_adsr_t *env)
+{
+    const uint32_t previous_phase = env->phase;
+    env->phase += env->phase_increment;
+    env->release_level += env->release_coefficient * (0.0f - env->release_level);
+
+    if((env->phase < previous_phase) || !(env->release_level > 0.0f))
+    {
+        env->stage = ENV_ADSR_STAGE_IDLE;
+        env->value = 0;
+        env->release_level = 0.0f;
+        env->phase = 0u;
+        env->phase_increment = 0u;
+        return 0;
     }
 
-    /* A zero Q15 sample at the start of ATTACK is valid.  Only a release
-     * which actually reached IDLE may terminate the source contract. */
-    const uint8_t release_terminal =
-        ((stage_before == ENV_ADSR_PEAKS_STAGE_RELEASE)
-            && (env_adsr_stage(env) == ENV_ADSR_PEAKS_STAGE_IDLE)
-            && (value <= 0)) ? 1U : 0U;
-    return ((stage_before != ENV_ADSR_PEAKS_STAGE_IDLE)
-            && (release_terminal == 0U)) ? 1U : 0U;
+    env->value = (int16_t)env->release_level;
+    /* Q15 zero is terminal only after a real RELEASE phase advance.  A
+     * zero value in ATTACK/DECAY/SUSTAIN is not an end condition. */
+    if ((env->phase != previous_phase) && (env->value <= 0))
+    {
+        env->stage = ENV_ADSR_STAGE_IDLE;
+        env->release_level = 0.0f;
+        env->phase = 0u;
+        env->phase_increment = 0u;
+        return 0;
+    }
+    return env->value;
 }
 
-uint32_t env_adsr_process_vca_block(env_adsr_t *env,
-                                    float *out_gain,
-                                    uint32_t frames)
+static int16_t env_adsr_process_step(env_adsr_t *env)
 {
-    return env_adsr_peaks_process_vca_block(env, out_gain, frames);
+    switch((env_adsr_stage_t)env->stage)
+    {
+        case ENV_ADSR_STAGE_ATTACK:
+            return env_adsr_advance_attack_sample(env);
+        case ENV_ADSR_STAGE_DECAY:
+            return env_adsr_advance_decay_sample(env);
+        case ENV_ADSR_STAGE_SUSTAIN:
+            env->value = (int16_t)env->sustain;
+            return env->value;
+        case ENV_ADSR_STAGE_RELEASE:
+            return env_adsr_advance_release_sample(env);
+        case ENV_ADSR_STAGE_IDLE:
+        default:
+            return 0;
+    }
 }
 
 int16_t env_adsr_process_advance(env_adsr_t *env,
-                                 uint32_t steps,
-                                 int16_t *first_value)
+                                       uint32_t steps,
+                                       int16_t *first_value)
 {
-    return env_adsr_peaks_process_advance(env, steps, first_value);
+    if(steps == 0u)
+    {
+        if(first_value != NULL)
+            *first_value = env->value;
+        return env->value;
+    }
+
+    if(first_value != NULL)
+    {
+        *first_value = env_adsr_process_step(env);
+        steps--;
+        if(steps == 0u)
+            return env->value;
+    }
+
+    while(steps > 0u)
+    {
+        if(env->stage == ENV_ADSR_STAGE_IDLE)
+        {
+            return 0;
+        }
+
+        if(env->stage == ENV_ADSR_STAGE_SUSTAIN)
+        {
+            env->value = (int16_t)env->sustain;
+            return env->value;
+        }
+
+        if(env->stage == ENV_ADSR_STAGE_RELEASE)
+        {
+            do
+            {
+                (void)env_adsr_process_step(env);
+                steps--;
+            } while((steps > 0u) && (env->stage == ENV_ADSR_STAGE_RELEASE));
+            continue;
+        }
+
+        if(((env->stage != ENV_ADSR_STAGE_ATTACK)
+                && (env->stage != ENV_ADSR_STAGE_DECAY)
+                && (env->stage != ENV_ADSR_STAGE_RELEASE))
+                || (env->phase_increment == 0u))
+        {
+            do
+            {
+                (void)env_adsr_process_step(env);
+                steps--;
+            } while(steps > 0u);
+            return env->value;
+        }
+
+        const uint32_t steps_before_wrap =
+                (UINT32_MAX - env->phase) / env->phase_increment;
+
+        if(steps <= steps_before_wrap)
+        {
+            env->phase += env->phase_increment * steps;
+
+            uint16_t curve = 0u;
+            if(env->stage == ENV_ADSR_STAGE_ATTACK)
+                curve = phase_curve_quartic(env->phase);
+            else
+                curve = phase_curve_exponential(env->phase);
+
+            env->value = interpolate_q15(env->start_value, env->target_value, curve);
+            return env->value;
+        }
+
+        const uint32_t steps_to_wrap = steps_before_wrap + 1u;
+        env->phase += env->phase_increment * steps_to_wrap;
+        steps -= steps_to_wrap;
+
+        if(env->stage == ENV_ADSR_STAGE_ATTACK)
+        {
+            env->value = ENV_ADSR_Q15_MAX;
+            prepare_decay_from_current(env);
+        }
+        else if(env->stage == ENV_ADSR_STAGE_DECAY)
+        {
+            if(env->gate_high)
+            {
+                env->stage = ENV_ADSR_STAGE_SUSTAIN;
+                env->value = (int16_t)env->sustain;
+            }
+            else
+            {
+                env->value = (int16_t)env->sustain;
+                prepare_release_from_level(env, (float)env->value);
+            }
+        }
+        else
+        {
+            env->stage = ENV_ADSR_STAGE_IDLE;
+            env->value = 0;
+            env->phase = 0u;
+            env->phase_increment = 0u;
+        }
+    }
+
+    return env->value;
+}
+
+ITCM_TEXT uint32_t env_adsr_process_vca_block(env_adsr_t *env,
+                                          float *out_gain,
+                                          uint32_t frames)
+{
+    if ((env == NULL) || (out_gain == NULL) || (frames == 0U))
+    {
+        return 0U;
+    }
+
+    uint32_t produced = 0U;
+    while (produced < frames)
+    {
+        switch((env_adsr_stage_t)env->stage)
+        {
+            case ENV_ADSR_STAGE_ATTACK:
+                do
+                {
+                    const int16_t value =
+                        env_adsr_advance_attack_sample(env);
+                    out_gain[produced++] =
+                        (float)value * (1.0f / 32767.0f);
+                } while ((produced < frames)
+                    && (env->stage == ENV_ADSR_STAGE_ATTACK));
+                break;
+
+            case ENV_ADSR_STAGE_DECAY:
+                do
+                {
+                    const int16_t value =
+                        env_adsr_advance_decay_sample(env);
+                    out_gain[produced++] =
+                        (float)value * (1.0f / 32767.0f);
+                } while ((produced < frames)
+                    && (env->stage == ENV_ADSR_STAGE_DECAY));
+                break;
+
+            case ENV_ADSR_STAGE_SUSTAIN:
+            {
+                env->value = (int16_t)env->sustain;
+                const float gain =
+                    (float)env->value * (1.0f / 32767.0f);
+                while (produced < frames)
+                {
+                    out_gain[produced++] = gain;
+                }
+                break;
+            }
+
+            case ENV_ADSR_STAGE_RELEASE:
+                do
+                {
+                    const int16_t value =
+                        env_adsr_advance_release_sample(env);
+                    if (env->stage == ENV_ADSR_STAGE_IDLE)
+                    {
+                        return produced;
+                    }
+                    out_gain[produced++] =
+                        (float)value * (1.0f / 32767.0f);
+                } while ((produced < frames)
+                    && (env->stage == ENV_ADSR_STAGE_RELEASE));
+                break;
+
+            case ENV_ADSR_STAGE_IDLE:
+            default:
+                return produced;
+        }
+    }
+    return produced;
 }
 
 int16_t env_adsr_value(const env_adsr_t *env)
 {
-    return env_adsr_peaks_value(env);
+    return env->value;
 }
 
-env_adsr_peaks_stage_t env_adsr_stage(const env_adsr_t *env)
+env_adsr_stage_t env_adsr_stage(const env_adsr_t *env)
 {
-    return env_adsr_peaks_stage(env);
-}
-
-void env_adsr_bank_init(env_adsr_bank_t *bank, float sample_rate)
-{
-    env_adsr_init(&bank->filter_env, sample_rate);
-    env_adsr_init(&bank->volume_env, sample_rate);
-}
-
-void env_adsr_bank_reset(env_adsr_bank_t *bank)
-{
-    env_adsr_reset(&bank->filter_env);
-    env_adsr_reset(&bank->volume_env);
+    return (env_adsr_stage_t)env->stage;
 }

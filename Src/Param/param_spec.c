@@ -14,11 +14,11 @@
 #define PARAM_TYPE_ENUM PARAM_SPEC_ENUM
 #define PARAM_TYPE_BOOL PARAM_SPEC_BOOL
 #define PARAM_TYPE_BIPOLAR PARAM_SPEC_BIPOLAR
-#define PARAM_DESC_POLICY_EX(_id,_name,_type,_min,_max,_step,_default,_display,_unit,_labels,_apply,_to_display,_to_canonical,_normal,_fine,_automation) [(_id)]={.id=(_id),.type=(_type),.min=(_min),.max=(_max),.default_value=(_default)}
-#define PARAM_DESC_EX(_id,_name,_type,_min,_max,_step,_default,_display,_unit,_labels,_apply) PARAM_DESC_POLICY_EX(_id,_name,_type,_min,_max,_step,_default,_display,_unit,_labels,_apply,0,0,0,0,0)
+#define PARAM_DESC_POLICY_EX(_id,_name,_type,_min,_max,_step,_default,_display,_unit,_labels,_to_display,_to_canonical,_normal,_fine,_automation) [(_id)]={.id=(_id),.type=(_type),.min=(_min),.max=(_max),.default_value=(_default)}
+#define PARAM_DESC_EX(_id,_name,_type,_min,_max,_step,_default,_display,_unit,_labels) PARAM_DESC_POLICY_EX(_id,_name,_type,_min,_max,_step,_default,_display,_unit,_labels,0,0,0,0,0)
 #define PARAM_DESC_CONTINUOUS PARAM_DESC_EX
-#define PARAM_DESC(_id,_name,_type,_min,_max,_step,_default,_unit,_apply) PARAM_DESC_EX(_id,_name,_type,_min,_max,_step,_default,0,_unit,0,_apply)
-#define PARAM_DESC_LFO(_rate,_shape,_trig,_phase) PARAM_DESC_EX(_rate,"Rate",PARAM_TYPE_FLOAT,-LFO_FREE_MAX_HZ,(float)MOD_LFO_SYNC_RATE_COUNT,0.01f,0.0f,0,"",0,0), PARAM_DESC_EX(_shape,"Shape",PARAM_TYPE_ENUM,0.0f,8.0f,1.0f,0.0f,0,"",0,0), PARAM_DESC_EX(_trig,"Trig",PARAM_TYPE_ENUM,0.0f,6.0f,1.0f,0.0f,0,"",0,0), PARAM_DESC_EX(_phase,"Phase",PARAM_TYPE_FLOAT,0.0f,360.0f,1.0f,0.0f,0,"",0,0)
+#define PARAM_DESC(_id,_name,_type,_min,_max,_step,_default,_unit) PARAM_DESC_EX(_id,_name,_type,_min,_max,_step,_default,0,_unit,0)
+#define PARAM_DESC_LFO(_rate,_shape,_trig,_phase) PARAM_DESC_EX(_rate,"Rate",PARAM_TYPE_FLOAT,-LFO_FREE_MAX_HZ,(float)MOD_LFO_SYNC_RATE_COUNT,0.01f,0.0f,0,"",0), PARAM_DESC_EX(_shape,"Shape",PARAM_TYPE_ENUM,0.0f,8.0f,1.0f,0.0f,0,"",0), PARAM_DESC_EX(_trig,"Trig",PARAM_TYPE_ENUM,0.0f,6.0f,1.0f,0.0f,0,"",0), PARAM_DESC_EX(_phase,"Phase",PARAM_TYPE_FLOAT,0.0f,360.0f,1.0f,0.0f,0,"",0)
 
 const param_spec_t param_spec[PARAM_COUNT] = {
 #include "param_spec_catalog.inc"

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdint.h>
-#include "Audio/Engines/fm_dsp_projection.h"
+#include "IPC/fm_dsp_projection.h"
 #include "Param/engine_model_catalog.h"
 
 #ifdef __cplusplus

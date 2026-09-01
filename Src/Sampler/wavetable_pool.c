@@ -130,6 +130,9 @@ typedef struct
     uint8_t source_open;
     uint8_t cache_open;
     uint8_t cleanup_phase;
+    uint8_t prepared;
+    uint32_t prepared_file_size;
+    uint32_t prepared_expected_crc;
     wavetable_source_geometry_t source_geometry;
 } wavetable_load_job_t;
 
@@ -138,6 +141,7 @@ static CTRL_STATE uint64_t
     g_wavetable_retire_not_before_sample[WAVETABLE_POOL_MAX_SLOTS];
 static CTRL_STATE uint8_t
     g_wavetable_retire_stop_committed[WAVETABLE_POOL_MAX_SLOTS];
+static CTRL_STATE uint8_t g_wavetable_retire_invariant_failed;
 
 static void wavetable_load_job_boot_init(void);
 
@@ -152,3 +156,45 @@ static void wavetable_load_job_boot_init(void);
 #include "Wavetable/wavetable_storage_async.inc"
 
 #include "Wavetable/wavetable_publication.inc"
+
+uint8_t wavetable_pool_inspect_source(const wav_info_t *info,
+                                      wavetable_source_geometry_t source_geometry,
+                                      uint32_t *out_frame_count,
+                                      uint32_t *out_page_count,
+                                      uint32_t *out_cost_bytes)
+{
+    if ((wavetable_pool_wav_info_valid(info) == 0U)
+        || ((source_geometry != WAVETABLE_SOURCE_GEOMETRY_1024)
+            && (source_geometry != WAVETABLE_SOURCE_GEOMETRY_2048)))
+    {
+        return 0U;
+    }
+
+    const uint32_t source_samples = info->data_size / info->block_align;
+    const uint32_t source_cycle_samples =
+        wavetable_pool_source_cycle_sample_count(source_geometry);
+    if ((source_cycle_samples == 0U) || ((source_samples % source_cycle_samples) != 0U))
+    {
+        return 0U;
+    }
+
+    const uint32_t frame_count = source_samples / source_cycle_samples;
+    uint32_t base_bytes = 0U;
+    uint32_t mipmap_bytes = 0U;
+    uint32_t base_pages = 0U;
+    uint32_t mipmap_pages = 0U;
+    if (wavetable_pool_frame_geometry(frame_count, &base_bytes, &mipmap_bytes,
+                                      &base_pages, &mipmap_pages) == 0U)
+        return 0U;
+    const uint64_t total_bytes = (uint64_t)base_pages * SAMPLE_PAGE_BYTES
+                               + (uint64_t)mipmap_pages * SAMPLE_PAGE_BYTES;
+    if ((base_pages == 0U) || (mipmap_pages == 0U)
+        || (total_bytes > sample_page_cache_port_shared_total_bytes()))
+    {
+        return 0U;
+    }
+    if (out_frame_count != 0) *out_frame_count = frame_count;
+    if (out_page_count != 0) *out_page_count = base_pages + mipmap_pages;
+    if (out_cost_bytes != 0) *out_cost_bytes = (uint32_t)total_bytes;
+    return 1U;
+}

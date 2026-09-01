@@ -550,18 +550,7 @@ static uint8_t ui_renderer_template_draw_lfo_custom_widget(ui_template_custom_wi
             return 1U;
         }
         case UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEPTH:
-            if (id == PARAM_MOD_MATRIX_DEPTH)
-            {
-                ui_renderer_template_draw_lfo_center_indicator(x, y, w, h, value, 127.0f);
-            }
-            else if ((id == PARAM_MOD_SLEW_1_AMOUNT) || (id == PARAM_MOD_SLEW_2_AMOUNT))
-            {
-                ui_renderer_template_draw_lfo_unipolar_bar(x, y, w, h, value, 0.0f, 1.0f);
-            }
-            else
-            {
-                ui_renderer_template_draw_lfo_unipolar_bar(x, y, w, h, value, 0.0f, 127.0f);
-            }
+            ui_renderer_template_draw_lfo_unipolar_bar(x, y, w, h, value, 0.0f, 127.0f);
             return 1U;
         case UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE:
             return ui_renderer_template_draw_lfo_shape_widget(x, y, w, h, value);

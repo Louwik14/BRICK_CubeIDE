@@ -10,7 +10,7 @@
 seq_runtime_state_t *seq_runtime_exec_state(void);
 /*
  * Contract surface:
- * - readonly mirror of the shared execution owner.
+ * - readonly view of the shared execution owner.
  * - exposes timeline/progression state for consumers that need projection only.
  * - does not grant mutation ownership.
  */

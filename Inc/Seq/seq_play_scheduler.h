@@ -67,13 +67,13 @@ uint8_t seq_play_scheduler_control_apply_event(
 /*
  * Contract surface:
  * - post-commit notifications from runtime/transport.
- * - refresh scheduler-facing mirrors or emit transport-start/pattern-change re-seeding.
+ * - refresh scheduler emission caches or emit transport-start/pattern-change events.
  */
 void seq_play_scheduler_live_midi_program_changed(seq_track_id_t track, float program_value);
 /*
  * Contract surface:
  * - post-commit notification on transport start.
- * - re-seeds program changes from scheduler mirrors without owning transport state.
+ * - emits cached program changes without owning transport state.
  */
 void seq_play_scheduler_emit_midi_program_on_transport_start(void);
 /*
