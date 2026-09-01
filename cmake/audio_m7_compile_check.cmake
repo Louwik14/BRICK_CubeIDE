@@ -40,6 +40,8 @@ set(common_args
     --specs=nano.specs)
 
 set(audio_forbidden_dependencies
+    # AUDIO may consume only the pointer-free Recorder contract.  All
+    # Recorder/SD/FatFs implementations remain outside the M7 graph.
     "/Inspiration/"
     "/Inc/App/"
     "/Src/App/"
@@ -57,6 +59,20 @@ set(audio_forbidden_dependencies
     "/Inc/Sampler/multi_sample_pool.h"
     "/Inc/Sampler/sampler_ram_pool.h"
     "/Inc/Sampler/wavetable_pool.h"
+    "/Inc/Sampler/sample_cache.h"
+    "/Inc/Sampler/sample_page_cache.h"
+    "/Inc/Sampler/sample_page_cache_port.h"
+    "/Inc/Sampler/sample_page_lease_control.h"
+    "/Inc/Sampler/sample_stream_backend_physical.h"
+    "/Inc/Sampler/sample_stream_decoder.h"
+    "/Inc/Sampler/sample_stream_fatfs_map.h"
+    "/Inc/Sampler/sample_stream_io.h"
+    "/Inc/Sampler/sample_stream_manager.h"
+    "/Inc/Sampler/sample_stream_publish.h"
+    "/Inc/Sampler/sample_stream_scheduler.h"
+    "/Inc/Sampler/sample_stream_transport.h"
+    "/Inc/SD/"
+    "/App/Middlewares/Third_Party/FatFs/"
     "_control.h")
 
 set(compiled_count 0)

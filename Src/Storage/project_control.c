@@ -4,8 +4,7 @@
 #include "Track/track_runtime.h"
 #include "Sampler/audio_wave_table_projection_control.h"
 #include "IPC/control_audio_command.h"
-#include "IPC/control_audio_publication.h"
-#include "IPC/live_clock_control.h"
+#include "ControlRT/control_rt_publication.h"
 
 #include "Param/param_macro.h"
 #include "Param/param_registry.h"
@@ -214,10 +213,8 @@ static uint8_t project_control_publish_sampler_asset(uint8_t entity,
             || ((resolved.descriptor.type == TRACK_RUNTIME_TYPE_RAM)
                 && (kind != PERSIST_ASSET_SAMPLE_RAM))) return 0U;
     }
-    uint64_t sample = 0U;
-    if (live_clock_read_audio_sample(&sample) == 0U) return 0U;
-    return control_audio_publish_param(entity, CONTROL_AUDIO_SAMPLER_ASSET,
-                                       runtime, 0U, sample);
+    return control_rt_publish_param_now(entity, CONTROL_AUDIO_SAMPLER_ASSET,
+                                         runtime, 0U);
 }
 
 uint8_t project_control_track_asset_get(uint8_t entity,

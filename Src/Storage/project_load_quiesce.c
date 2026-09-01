@@ -1,7 +1,7 @@
 #include "Storage/project_load_quiesce.h"
 
 #include "IPC/live_event.h"
-#include "IPC/control_audio_publication.h"
+#include "ControlRT/control_rt_publication.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1
 #include "Seq/seq_play_scheduler.h"
 #include "Seq/seq_runtime.h"
@@ -99,7 +99,7 @@ uint8_t project_load_quiesce_safe(void)
         || (g_project_load_retire_started == 0U)) return 0U;
     return (uint8_t)((g_project_load_panic_committed != 0U)
         && (g_project_load_retire_started != 0U)
-        && (control_audio_publication_horizon_active() == 0U)
+        && (control_rt_publication_horizon_active() == 0U)
         && (sample_page_lease_control_all_released() != 0U)
         && (sample_cache_has_pending_sd_work() == 0U)
         && (sampler_ram_pool_retire_idle() != 0U)

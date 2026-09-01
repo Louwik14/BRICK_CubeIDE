@@ -50,9 +50,11 @@ La migration H747 conserve les payloads et protocoles. Restent physiques: deux i
 ## Ownership de build prepare pour H747
 
 Le build H743 classe chaque unite dans un seul ensemble: `DOMAIN_CONTROL`,
-`DOMAIN_AUDIO`, `DOMAIN_CONTRACTS`, `SHARED_BACKING` ou `PLATFORM_H743`. Il n'existe plus de
-domaine de transition mixte. UI, sequenceur, Storage et etat Param canonique
-appartiennent a CONTROL; DSP, projection Param appliquee, ENV3 et caches/plans
+`DOMAIN_STORAGE`, `DOMAIN_AUDIO`, `DOMAIN_CONTRACTS`, `SHARED_BACKING` ou
+`PLATFORM_H743`. Il n'existe plus de domaine de transition mixte. UI,
+sequenceur et etat Param canonique appartiennent a CONTROL; le refill Stream,
+son page-cache, ses leases de recyclage, son I/O, son decode et son scheduler
+appartiennent a STORAGE; DSP, projection Param appliquee, ENV3 et caches/plans
 de modulation appartiennent a AUDIO. Les catalogues immuables partages
 (modeles moteur/FX/MD et formes d'affichage) appartiennent aux contrats.
 
@@ -64,7 +66,7 @@ board et le staging/remap LED physique. Boutons, encodeurs et logique produit LE
 appartiennent a CONTROL. Les backings diagnostic/waveform, FIFO, Recorder,
 Preview, page-cache et projections Sampler appartiennent a `SHARED_BACKING`.
 Le page-cache n'y est pas masque: `sample_page_cache.c` possede les
-metadonnees, index, reservations et publications CONTROL;
+metadonnees, index, reservations et publications READY dans `DOMAIN_STORAGE`;
 `sample_page_cache_audio.c` possede les credits et acces AUDIO. Le port H747
 ne change que leur placement physique. Les appels CONTROL vers AUDIO ne passent
 que par `Inc/IPC`; le compile-check Cortex-M4 interdit toute dependance vers

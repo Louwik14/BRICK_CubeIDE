@@ -1,4 +1,4 @@
-# Contrat des data planes CONTROL/AUDIO
+# Contrat des data planes CONTROL/AUDIO/STORAGE
 
 Ce document est l'inventaire normatif des donnees volumineuses partagees. La
 FIFO fonctionnelle n'est pas un data plane. Les adresses C obtenues apres

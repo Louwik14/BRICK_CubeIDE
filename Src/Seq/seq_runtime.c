@@ -14,10 +14,9 @@
 
 #include "Platform/memory_layout.h"
 #include "IPC/control_audio_command.h"
-#include "IPC/control_audio_publication.h"
+#include "ControlRT/control_rt_publication.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include "App/engine_tasklet.h"
-#include "IPC/live_clock_control.h"
 #include "IPC/control_audio_transport.h"
 #include "Track/track_runtime.h"
 #include "Track/control_music_output.h"
@@ -202,7 +201,7 @@ static uint32_t seq_runtime_get_now_tick(void)
 static uint64_t seq_runtime_get_now_sample(void)
 {
     uint64_t sample = 0U;
-    (void)live_clock_read_audio_sample(&sample);
+    (void)control_rt_now_sample(&sample);
     return sample;
 }
 
@@ -486,12 +485,15 @@ static void seq_runtime_process_core(void)
             if (before_boundary < frames)
                 frames = (uint16_t)before_boundary;
         }
-        if (control_audio_publication_begin_horizon(
+        if (control_rt_publication_begin_horizon(
                 window_first, frames) == 0U)
+        {
+            Error_Handler();
             return;
+        }
         if (control_music_output_begin_window(window_first, frames) == 0U)
         {
-            control_audio_publication_abort_horizon();
+            control_rt_publication_abort_horizon();
             return;
         }
         seq_runtime_control_event_t events[128];
@@ -504,7 +506,7 @@ static void seq_runtime_process_core(void)
         if (note_fx_pipeline_apply_pending() == 0U)
         {
             control_music_output_abort_window();
-            control_audio_publication_abort_horizon();
+            control_rt_publication_abort_horizon();
             return;
         }
 
@@ -535,7 +537,7 @@ static void seq_runtime_process_core(void)
                         published = 1U;
                     }
                     else
-                        published = control_audio_publish_note(event->track,
+                        published = control_rt_publish_note(event->track,
                             CONTROL_AUDIO_NOTE_ON,
                             CONTROL_AUDIO_NOTE_METRONOME_PREFIX
                                 | (uint32_t)(event->velocity != 0U),
@@ -543,7 +545,8 @@ static void seq_runtime_process_core(void)
                     if (published == 0U)
                     {
                         control_music_output_abort_window();
-                        control_audio_publication_abort_horizon();
+                        control_rt_publication_abort_horizon();
+                        Error_Handler();
                         return;
                     }
                 }
@@ -552,7 +555,7 @@ static void seq_runtime_process_core(void)
                     if (seq_runtime_control_apply_event(event) == 0U)
                     {
                         control_music_output_abort_window();
-                        control_audio_publication_abort_horizon();
+                        control_rt_publication_abort_horizon();
                         return;
                     }
                 }
@@ -568,19 +571,21 @@ static void seq_runtime_process_core(void)
                 frames, g_seq_runtime.samples_per_step_q16) == 0U)
         {
             control_music_output_abort_window();
-            control_audio_publication_abort_horizon();
+            control_rt_publication_abort_horizon();
             return;
         }
         if (control_music_output_commit_window() == 0U)
         {
             control_music_output_abort_window();
-            control_audio_publication_abort_horizon();
+            control_rt_publication_abort_horizon();
+            Error_Handler();
             return;
         }
-        if (control_audio_publication_commit_horizon() == 0U)
+        if (control_rt_publication_commit_horizon() == 0U)
         {
             control_music_output_abort_window();
-            control_audio_publication_abort_horizon();
+            control_rt_publication_abort_horizon();
+            Error_Handler();
             return;
         }
         if (control_music_output_finalize_window() == 0U)

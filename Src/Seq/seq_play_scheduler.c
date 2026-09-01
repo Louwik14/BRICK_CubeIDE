@@ -15,7 +15,7 @@
 #include "stm32h7xx_hal.h"
 #include "Track/track_runtime.h"
 #include "Track/entity_topology.h"
-#include "IPC/live_clock_control.h"
+#include "ControlRT/control_rt_publication.h"
 #include "Track/track_mute.h"
 #include "Track/control_music_output.h"
 #include "Track/polyphony_control.h"
@@ -521,7 +521,8 @@ static uint8_t seq_play_scheduler_remove_sources(
     }
 
     uint64_t close_sample = 0U;
-    (void)live_clock_read_audio_sample(&close_sample);
+    if (control_rt_now_sample(&close_sample) == 0U)
+        return 0U;
     close_sample = control_music_output_first_unpublished_sample(close_sample);
     if ((close_terminal != 0U) && (cause_count != 0U)
             && (control_music_output_close_causal_sources(
@@ -1364,7 +1365,7 @@ void seq_play_scheduler_remove_play(seq_track_id_t track,
 
     uint64_t first_executable = seq_runtime_exec_get_sample_timeline();
     uint64_t audio_sample = 0U;
-    if ((live_clock_read_audio_sample(&audio_sample) != 0U)
+    if ((control_rt_now_sample(&audio_sample) != 0U)
             && (audio_sample > first_executable))
         first_executable = audio_sample;
     for (uint16_t i = 0U;

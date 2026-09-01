@@ -6,14 +6,14 @@
 #include "Track/track_runtime.h"
 #include "Track/polyphony_control.h"
 #include "Sampler/brick6_sampler_multi_contract.h"
-#include "IPC/control_audio_publication.h"
+#include "ControlRT/control_rt_publication.h"
 #include "IPC/control_music_publication.h"
 #include "IPC/control_audio_command.h"
-#include "IPC/live_clock_control.h"
 #include "Param/param_registry.h"
 #include "Track/tone_program_control.h"
 #include "Platform/memory_layout.h"
 #include "midi.h"
+#include "main.h"
 
 typedef struct
 {
@@ -839,10 +839,17 @@ static void control_music_output_close_all_midi(void)
 uint8_t control_music_output_panic_all(uint8_t send_transport_stop)
 {
     uint64_t due_sample = 0U;
-    (void)live_clock_read_audio_sample(&due_sample);
-    if (control_audio_publish_panic(CONTROL_AUDIO_PANIC_GLOBAL, 0U,
-            control_music_output_first_unpublished_sample(due_sample)) == 0U)
+    if (control_rt_now_sample(&due_sample) == 0U)
+    {
+        Error_Handler();
         return 0U;
+    }
+    if (control_rt_publish_panic(CONTROL_AUDIO_PANIC_GLOBAL, 0U,
+            control_music_output_first_unpublished_sample(due_sample)) == 0U)
+    {
+        Error_Handler();
+        return 0U;
+    }
     control_music_output_close_all_midi();
     for (brick_entity_id_t entity_id = 0U;
          entity_id < BRICK_ENTITY_CAPACITY; ++entity_id)

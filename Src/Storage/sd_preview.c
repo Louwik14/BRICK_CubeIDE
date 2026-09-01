@@ -19,11 +19,11 @@
 #include "Storage/sd_access_gate.h"
 #include "Storage/wav_audio_codec.h"
 #include "IPC/control_audio_command.h"
-#include "IPC/control_audio_publication.h"
-#include "IPC/live_clock_control.h"
+#include "ControlRT/control_rt_publication.h"
 #include "IPC/sd_preview_ring_contract.h"
 #include "Storage/project_load_quiesce.h"
 #include "stm32h7xx_hal.h"
+#include "main.h"
 
 #if defined(__has_include)
 #  if __has_include("ff.h")
@@ -82,11 +82,9 @@ STORAGE_STATE_SDRAM static sd_preview_diag_t g_sd_preview_diag;
 
 static void sd_preview_publish_active(uint8_t active)
 {
-    uint64_t sample_time = 0U;
-    if (live_clock_read_audio_sample(&sample_time))
-        (void)control_audio_publish_param(active, CONTROL_AUDIO_PARAM_PREVIEW_ACTIVE,
-                                          0U, 0U,
-                                          sample_time);
+    if (control_rt_publish_param_now(active, CONTROL_AUDIO_PARAM_PREVIEW_ACTIVE,
+                                     0U, 0U) == 0U)
+        Error_Handler();
 }
 
 static uint32_t sd_preview_ring_producer_count(void)
@@ -507,10 +505,9 @@ void sd_preview_set_gain(float gain)
 
     g_sd_preview.gain = gain;
     union { float f; uint32_t u; } encoded = { .f = gain };
-    uint64_t sample_time = 0U;
-    if (live_clock_read_audio_sample(&sample_time))
-        (void)control_audio_publish_param(0U, CONTROL_AUDIO_PARAM_PREVIEW_GAIN,
-                                          encoded.u, 0U, sample_time);
+    if (control_rt_publish_param_now(0U, CONTROL_AUDIO_PARAM_PREVIEW_GAIN,
+                                     encoded.u, 0U) == 0U)
+        Error_Handler();
 }
 
 float sd_preview_get_gain(void)

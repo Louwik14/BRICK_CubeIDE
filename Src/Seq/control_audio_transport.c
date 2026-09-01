@@ -1,9 +1,10 @@
 #include "IPC/control_audio_transport.h"
 
 #include "IPC/control_audio_command.h"
-#include "IPC/control_audio_publication.h"
+#include "ControlRT/control_rt_publication.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_exec.h"
+#include "main.h"
 
 typedef struct
 {
@@ -42,5 +43,16 @@ void control_audio_transport_publish_changes(void)
         commands[count++] = (control_audio_command_t){ .effective_sample_time=sample,
             .value=next.step_q16, .id=CONTROL_AUDIO_PARAM_TRANSPORT_STEP_Q16,
             .opcode_kind=CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM,0U) };
-    if ((count == 0U) || (control_audio_publish_batch(commands,count) != 0U)) g_last=next;
+    if (count == 0U)
+    {
+        g_last=next;
+        return;
+    }
+    if (control_rt_publish_batch_scheduled(commands, count) == 0U)
+    {
+        /* g_last is a change-detection snapshot, never a retry queue. */
+        Error_Handler();
+        return;
+    }
+    g_last=next;
 }

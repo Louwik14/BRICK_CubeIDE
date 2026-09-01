@@ -21,7 +21,14 @@ playhead n'appartient au START.
 
 ## Autorites
 
-`audio_recorder` est l'unique facade produit de capture SD. Ses deux clients exclusifs sont Audio Rec et Looper. Le shared Recorder contient seulement le PCM et `{head_cursor, tail_cursor, closed_session, capture_fault}`. AUDIO ecrit payload/head/fermeture/fault; CONTROL ecrit uniquement tail. Session, client, frame limit, preparation, activite, erreurs SD/FatFs, writer et finalisation restent locaux a leur proprietaire et transitent si necessaire dans RECORD. `generic_recorder` ne connait ni UI, ni Looper, ni WAV. Looper ne lit jamais la reservation mutable Storage.
+`audio_recorder` est l'unique facade produit de capture SD. Ses deux clients exclusifs sont Audio Rec et Looper. Le shared Recorder contient seulement le PCM et `{head_cursor, tail_cursor, closed_session, capture_fault}`. AUDIO ecrit payload/head/fermeture/fault; STORAGE ecrit uniquement tail. Session, client, frame limit, preparation, activite, erreurs SD/FatFs, writer et finalisation restent locaux a leur proprietaire et transitent si necessaire dans RECORD. `generic_recorder` ne connait ni UI, ni Looper, ni WAV. Looper ne lit jamais la reservation mutable Storage.
+
+La facade `audio_recorder.c` conserve ARM, client, session, commandes datees,
+politique Looper et projection des statuts produit. `audio_recorder_storage.c`
+possede l'etat writer, les buffers DMA, la reservation, le drain, le scheduler,
+FatFs et la finalisation. Leur API est un point d'appel local CM4;
+elle ne constitue pas l'ABI H747 et ne transporte aucun pointeur prive vers
+AUDIO.
 
 Audio Rec possede un unique bus stereo AUDIO, somme des entites resolues par CONTROL et, si necessaire, de LINE directe. CONTROL publie le masque d'entites, ARM et les sources effectives comme PARAM final dans la FIFO unique; AUDIO conserve ensuite cette configuration privee. LINE directe est exclue lorsque l'entree physique est deja representee par une track External routee vers REC; cette decision est derivee de `track_input_ownership`, `entity_topology` et `track_runtime`. MIC reste un etat logique silencieux: aucune source physique, configuration codec ou voie ADC ne lui est associee.
 
@@ -39,7 +46,7 @@ Le block device n'autorise qu'un WRITE DMA actif. `begin/poll/take_result` publi
 
 ## Tails et reloop
 
-Les compteurs ont des sens distincts: `head_cursor` publie par AUDIO, `tail_cursor` par Storage apres engagement physique, puis les tails packed/submitted/committed restent CONTROL-locaux. Le producteur borne son occupation par `head_cursor - tail_cursor`; Storage ne reutilise ni ne finalise au-dela du head publie. Le streamer Looper ne peut lire que jusqu'au tail `committed`.
+Les compteurs ont des sens distincts: `head_cursor` publie par AUDIO, `tail_cursor` par Storage apres engagement physique, puis les tails packed/submitted/committed restent STORAGE-locaux. Le producteur borne son occupation par `head_cursor - tail_cursor`; Storage ne reutilise ni ne finalise au-dela du head publie. Le streamer Looper ne peut lire que jusqu'au tail `committed`.
 
 La carte physique finale est importee une fois a l'entree `DRAINING` et la
 registration conserve son epoch pendant toute la prise. Une progression

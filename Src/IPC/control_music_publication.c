@@ -1,7 +1,7 @@
 #include "IPC/control_music_publication.h"
 
 #include <stddef.h>
-#include "IPC/control_audio_publication.h"
+#include "ControlRT/control_rt_publication.h"
 #include "Platform/memory_layout.h"
 
 CONTROL_STATE_SDRAM static control_audio_command_t
@@ -39,7 +39,7 @@ static uint16_t control_music_convert(const control_music_action_t *action,
 
 uint16_t control_music_publication_free(void)
 {
-    return (uint16_t)(control_audio_publication_free() / 2U);
+    return (uint16_t)(control_rt_publication_free() / 2U);
 }
 
 uint8_t control_music_publication_publish_merged_window(
@@ -79,5 +79,5 @@ uint8_t control_music_publication_publish_merged_window(
     }
     if ((internal_visited != internal_count)
             || (external_visited != external_count) || (emitted == 0U)) return 0U;
-    return control_audio_publish_batch(g_music_publish_scratch, emitted);
+    return control_rt_publish_batch_scheduled(g_music_publish_scratch, emitted);
 }

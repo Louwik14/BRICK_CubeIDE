@@ -4,8 +4,7 @@
 #include <string.h>
 
 #include "IPC/control_audio_command.h"
-#include "IPC/control_audio_publication.h"
-#include "IPC/live_clock_control.h"
+#include "ControlRT/control_rt_publication.h"
 #include "Param/param_registry.h"
 #include "Platform/intercore_cache.h"
 #include "Platform/memory_layout.h"
@@ -71,17 +70,16 @@ static uint8_t resolve_selection(uint16_t logical,
 static uint8_t publish_selection(
     uint8_t index, const audio_wave_table_selection_t *selection)
 {
-    uint64_t sample = 0U;
-    if ((selection == NULL) || !live_clock_read_audio_sample(&sample)) return 0U;
-    const control_audio_command_t commands[2] = {
-        { .effective_sample_time = sample, .value = selection->generation,
+    if (selection == NULL) return 0U;
+    control_audio_command_t commands[2] = {
+        { .value = selection->generation,
           .id = CONTROL_AUDIO_PARAM_WAVETABLE_GEN, .entity = index,
           .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM, 0U) },
-        { .effective_sample_time = sample, .value = selection->wavetable_slot,
+        { .value = selection->wavetable_slot,
           .id = CONTROL_AUDIO_PARAM_WAVETABLE_SET, .entity = index,
           .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM, 0U) }
     };
-    return control_audio_publish_batch(commands, 2U);
+    return control_rt_publish_batch_now(commands, 2U);
 }
 
 uint8_t audio_wave_table_projection_publish_track(

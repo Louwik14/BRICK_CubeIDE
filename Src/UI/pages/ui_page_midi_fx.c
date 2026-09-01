@@ -14,6 +14,7 @@
 #include "ui_page_manager.h"
 #include "ui_param.h"
 #include "ui_template_page.h"
+#include "main.h"
 
 #include <stdio.h>
 
@@ -228,7 +229,8 @@ static void ui_page_midi_fx_sync_waveform_capture(void)
     if ((ui_page_midi_fx_audio_subpage_active() == 0U)
             || (ui_template_edit_context_resolve_active(&context) == 0U))
     {
-        (void)control_audio_visual_waveform_request(0U, 0U, 0U);
+        if (control_audio_visual_waveform_request(0U, 0U, 0U) == 0U)
+            Error_Handler();
         return;
     }
 
@@ -245,8 +247,9 @@ static void ui_page_midi_fx_sync_waveform_capture(void)
             break;
         }
     }
-    (void)control_audio_visual_waveform_request(
-        (brick_entity_id_t)context.selected_entity, 1U, fast_refresh);
+    if (control_audio_visual_waveform_request(
+            (brick_entity_id_t)context.selected_entity, 1U, fast_refresh) == 0U)
+        Error_Handler();
 }
 
 static ui_template_custom_widget_kind_t ui_page_midi_fx_pick_custom_widget(
@@ -481,7 +484,8 @@ static void ui_page_midi_fx_enter(void)
 
 static void ui_page_midi_fx_leave(void)
 {
-    (void)control_audio_visual_waveform_request(0U, 0U, 0U);
+    if (control_audio_visual_waveform_request(0U, 0U, 0U) == 0U)
+        Error_Handler();
     ui_template_page_leave();
 }
 

@@ -2,7 +2,7 @@
 
 ## Ownership
 
-CONTROL possede les metadonnees du page-cache, index, generations,
+STORAGE possede les metadonnees du page-cache, index, generations,
 reservations, etats, eviction et validation des completions Storage. AUDIO
 possede uniquement les lecteurs, positions DSP et leases. CONTROL possede
 l'output musical et garantit START pour une configuration/asset/workload
@@ -10,7 +10,7 @@ produit legaux. Storage possede SD, fichiers, maps physiques, lecture et
 decode. Les commandes et completions de pages sont tokenisees, bornes et sans
 pointeur.
 
-Une page suit `FREE -> RESERVED -> LOADING -> READY`, `EVICTING`, ou `FAILED`. Une page LOADING n'est ni recyclable ni evictable. Pour recycler, CONTROL publie d'abord `EVICTING`, relit l'union des leases, restaure `READY` si la page est protegee, sinon passe `FREE`. AUDIO etend son lease avant resolution puis revalide `READY/key/registration_epoch/generation`. La completion valide key, slot, page generation, registration epoch et token; une completion tardive ne devient jamais visible.
+Une page suit `FREE -> RESERVED -> LOADING -> READY`, `EVICTING`, ou `FAILED`. Une page LOADING n'est ni recyclable ni evictable. Pour recycler, STORAGE publie d'abord `EVICTING`, relit l'union des leases, restaure `READY` si la page est protegee, sinon passe `FREE`. AUDIO etend son lease avant resolution puis revalide `READY/key/registration_epoch/generation`. La completion valide key, slot, page generation, registration epoch et token; une completion tardive ne devient jamais visible.
 
 ## Lease physique et service
 
@@ -32,8 +32,8 @@ Le contrat produit garantit le pre-socle `2 x 32 KiB` et les limites Stream/Mult
 
 Le service Storage traite une commande bornee hors IRQ. Produit: tranche 32 KiB; page temporaire 16 KiB. Le backend physique resout des extents vers une FIFO DMA bornee; FatFs reste le fallback. Read-ahead ne change ni ordre, besoins ni lifecycle.
 
-Le transport contient geometrie source, format et token. Storage decode dans
-un payload partage et CONTROL publie READY; AUDIO invalide avant lecture. H743
+Le transport contient geometrie source, format et token. STORAGE decode dans
+un payload partage et publie READY; AUDIO invalide avant lecture. H743
 et H747 conservent le meme contrat: M4 possede metadata et I/O, M7 possede les
 credits de lecture.
 

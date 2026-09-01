@@ -7,7 +7,7 @@
 #include "Sampler/sample_page_lease.h"
 
 /* Physical storage only.  Initialization and publication remain in the
- * CONTROL/AUDIO owners declared by the contracts above. */
+ * STORAGE/AUDIO owners declared by the contracts above. */
 D2_IPC sample_page_lease_t
     g_sample_page_leases[SAMPLE_PAGE_LEASE_SLOT_COUNT];
 

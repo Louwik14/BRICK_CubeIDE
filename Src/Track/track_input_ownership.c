@@ -5,8 +5,7 @@
 
 #include "Track/entity_topology.h"
 #include "IPC/control_audio_command.h"
-#include "IPC/control_audio_publication.h"
-#include "IPC/live_clock_control.h"
+#include "ControlRT/control_rt_publication.h"
 
 static uint8_t g_external_input[TRACK_COUNT];
 static uint8_t g_external_owner[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT];
@@ -88,8 +87,6 @@ uint8_t track_input_ownership_apply_bulk(
         return 0U;
     }
 
-    uint64_t sample_time = 0U;
-    if (!live_clock_read_audio_sample(&sample_time)) return 0U;
     control_audio_command_t commands[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT];
     uint8_t command_count = 0U;
     for (uint8_t input = 0U;
@@ -97,7 +94,6 @@ uint8_t track_input_ownership_apply_bulk(
     {
         if (next_owners[input] == g_external_owner[input]) continue;
         commands[command_count++] = (control_audio_command_t){
-            .effective_sample_time = sample_time,
             .value = next_owners[input],
             .id = CONTROL_AUDIO_PARAM_INPUT_OWNER,
             .entity = input,
@@ -106,7 +102,7 @@ uint8_t track_input_ownership_apply_bulk(
         };
     }
     if ((command_count != 0U)
-            && (control_audio_publish_batch(commands, command_count) == 0U))
+            && (control_rt_publish_batch_now(commands, command_count) == 0U))
     {
         assert(0 && "input ownership publication capacity invariant");
         return 0U;

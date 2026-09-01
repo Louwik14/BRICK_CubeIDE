@@ -7,9 +7,8 @@
 
 #include "Platform/memory_layout.h"
 #include "IPC/control_audio_command.h"
-#include "IPC/control_audio_publication.h"
+#include "ControlRT/control_rt_publication.h"
 #include "Track/control_music_output.h"
-#include "IPC/live_clock_control.h"
 #include "Platform/brick_build_config.h"
 #include "Track/track_input_ownership.h"
 #include "Track/track_state.h"
@@ -59,7 +58,11 @@ static uint8_t track_runtime_publish_program(brick_entity_id_t entity_id,
     if ((ctx == NULL) || (entity_id >= BRICK_ENTITY_CAPACITY))
         return 0U;
     uint64_t due_sample = 0U;
-    (void)live_clock_read_audio_sample(&due_sample);
+    if (control_rt_now_sample(&due_sample) == 0U)
+    {
+        Error_Handler();
+        return 0U;
+    }
     due_sample = control_music_output_first_unpublished_sample(due_sample);
     entity_topology_descriptor_t topology;
     uint8_t topology_flags = 0U;
@@ -80,7 +83,7 @@ static uint8_t track_runtime_publish_program(brick_entity_id_t entity_id,
     };
     /* PROGRAM only changes the renderer.  The NOTE ledger remains authoritative
      * even while the selected renderer cannot render a live output. */
-    if (control_audio_publish_program(entity_id,
+    if (control_rt_publish_program(entity_id,
                                       control_audio_program_pack(&descriptor),
                                       due_sample) == 0U)
     {
@@ -120,12 +123,21 @@ static uint8_t track_runtime_publish_midi_config(
     if ((ctx == NULL) || (entity_id >= BRICK_ENTITY_CAPACITY))
         return 0U;
     uint64_t due_sample = 0U;
-    (void)live_clock_read_audio_sample(&due_sample);
+    if (control_rt_now_sample(&due_sample) == 0U)
+    {
+        Error_Handler();
+        return 0U;
+    }
     due_sample = control_music_output_first_unpublished_sample(due_sample);
     const uint32_t packed = (uint32_t)ctx->midi_channel_1_16
         | ((uint32_t)ctx->midi_source << 8);
-    return control_audio_publish_param(entity_id,
-        CONTROL_AUDIO_PARAM_MIDI_CONFIG, packed, 0U, due_sample);
+    if (control_rt_publish_param(entity_id,
+            CONTROL_AUDIO_PARAM_MIDI_CONFIG, packed, 0U, due_sample) == 0U)
+    {
+        Error_Handler();
+        return 0U;
+    }
+    return 1U;
 }
 
 track_runtime_family_t track_runtime_family_from_ui(track_family_t family)

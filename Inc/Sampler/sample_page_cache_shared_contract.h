@@ -8,7 +8,7 @@
 #define SAMPLE_PAGE_SLOT_FLOAT_CAPACITY (SAMPLE_PAGE_BYTES / sizeof(float))
 #define SAMPLE_PAGE_INDEX_SIZE (SAMPLE_PAGE_MAX_COUNT * 2U)
 
-/* Shared data-plane layout. CONTROL is the sole writer; AUDIO only validates
+/* Shared data-plane layout. STORAGE is the sole writer; AUDIO only validates
  * and resolves READY descriptors after publishing its lease. */
 typedef struct
 {

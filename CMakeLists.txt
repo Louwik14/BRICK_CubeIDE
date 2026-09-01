@@ -256,7 +256,7 @@ file(GLOB_RECURSE BRICK_FIRST_PARTY_INVENTORY CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/*.c" "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/*.cpp")
 list(FILTER BRICK_FIRST_PARTY_INVENTORY EXCLUDE REGEX "/Generated/")
 
-set(BRICK_DOMAIN_UNION ${DOMAIN_CONTROL} ${DOMAIN_AUDIO} ${DOMAIN_CONTRACTS}
+set(BRICK_DOMAIN_UNION ${DOMAIN_CONTROL} ${DOMAIN_STORAGE} ${DOMAIN_AUDIO} ${DOMAIN_CONTRACTS}
     ${PLATFORM_H743} ${SHARED_BACKING})
 list(LENGTH BRICK_DOMAIN_UNION BRICK_DOMAIN_ENTRY_COUNT)
 set(BRICK_DOMAIN_UNIQUE ${BRICK_DOMAIN_UNION})
@@ -289,19 +289,21 @@ else()
 endif()
 set(DOMAIN_CONTROL_BUILD ${DOMAIN_CONTROL} ${USB_DEVICE_LIB_SRC} ${USB_HOST_LIB_SRC}
     ${FATFS_SRC} ${U8G2_SRC})
+set(DOMAIN_STORAGE_BUILD ${DOMAIN_STORAGE})
 set(DOMAIN_AUDIO_BUILD ${DOMAIN_AUDIO} ${CMSIS_DSP_SRC} ${MUTABLE_INSTRUMENTS_SRC})
-set(ALL_USER_SOURCES ${DOMAIN_CONTROL_BUILD} ${DOMAIN_AUDIO_BUILD}
+set(ALL_USER_SOURCES ${DOMAIN_CONTROL_BUILD} ${DOMAIN_STORAGE_BUILD} ${DOMAIN_AUDIO_BUILD}
     ${DOMAIN_CONTRACTS} ${SHARED_BACKING} ${PLATFORM_H743_BUILD})
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${ALL_USER_SOURCES})
 source_group("Domains/CONTROL" FILES ${DOMAIN_CONTROL})
+source_group("Domains/STORAGE" FILES ${DOMAIN_STORAGE})
 source_group("Domains/AUDIO" FILES ${DOMAIN_AUDIO})
 source_group("Domains/CONTRACTS" FILES ${DOMAIN_CONTRACTS} ${DOMAIN_CONTRACT_HEADERS})
 source_group("Domains/SHARED_BACKING" FILES ${SHARED_BACKING})
 source_group("Domains/PLATFORM_H743" FILES ${PLATFORM_H743})
 
-# CONTROL is compiled for its future Cortex-M4 ISA and its transitive include
-# graph is rejected when it reaches AUDIO-private implementation surfaces.
-set(DOMAIN_CONTROL_CM4 ${DOMAIN_CONTROL_BUILD})
+# CONTROL and STORAGE are compiled for their future Cortex-M4 ISA and their
+# transitive include graphs are rejected when they reach AUDIO-private surfaces.
+set(DOMAIN_CONTROL_CM4 ${DOMAIN_CONTROL_BUILD} ${DOMAIN_STORAGE_BUILD})
 list(FILTER DOMAIN_CONTROL_CM4 INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
 
 # --------------------------------------------------------------------------
@@ -382,6 +384,7 @@ else()
 endif()
 list(APPEND CONTROL_CM4_INCLUDE_DIRS "${CONTROL_CM4_GENERATED_INC}")
 
+set(CONTROL_CM4_STORAGE_SOURCES ${DOMAIN_STORAGE_BUILD})
 set(CONTROL_CM4_CONTRACT_HEADERS ${DOMAIN_CONTRACT_HEADERS} ${DOMAIN_CONTRACT_UNITS})
 
 set(CONTROL_CM4_MANIFEST
@@ -396,7 +399,7 @@ add_custom_target(control_cm4_compile_check
         -DMANIFEST=${CONTROL_CM4_MANIFEST}
         -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/control_cm4_compile_check.cmake"
     SOURCES ${DOMAIN_CONTROL_CM4} ${DOMAIN_CONTRACTS}
-    COMMENT "Compile-check DOMAIN_CONTROL for Cortex-M4"
+    COMMENT "Compile-check DOMAIN_CONTROL + DOMAIN_STORAGE for Cortex-M4"
     VERBATIM)
 
 # The symmetric M7 check compiles AUDIO-owned BRICK units only, then audits
@@ -617,7 +620,7 @@ set_source_files_properties(${SAMPLE_RENDER_HOT_SOURCES} PROPERTIES
 
 # Storage I/O/persistence implementation in O0, excluding CONTROL/runtime
 # orchestration hosted physically by Storage.
-set(STORAGE_IO_O0_SOURCES ${DOMAIN_CONTROL})
+set(STORAGE_IO_O0_SOURCES ${DOMAIN_CONTROL} ${DOMAIN_STORAGE})
 list(FILTER STORAGE_IO_O0_SOURCES INCLUDE REGEX "/Src/Storage/")
 list(FILTER STORAGE_IO_O0_SOURCES INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
 list(REMOVE_ITEM STORAGE_IO_O0_SOURCES ${CONTROL_RUNTIME_O1_SOURCES})

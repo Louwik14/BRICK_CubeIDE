@@ -207,9 +207,6 @@ typedef struct
 void generic_recorder_init(generic_recorder_t *recorder);
 uint8_t generic_recorder_begin(generic_recorder_t *recorder,
                                const generic_recorder_config_t *config);
-uint8_t generic_recorder_push(generic_recorder_t *recorder,
-                              const int32_t *pcm_interleaved,
-                              uint32_t frames);
 uint8_t generic_recorder_request_stop(generic_recorder_t *recorder,
                                       uint32_t now_us);
 void generic_recorder_service(generic_recorder_t *recorder, uint32_t now_us);

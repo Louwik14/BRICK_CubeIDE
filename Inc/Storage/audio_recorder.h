@@ -5,6 +5,7 @@
 #include "SD/sd_block_device.h"
 #include "SD/sd_scheduler.h"
 #include "Storage/generic_recorder.h"
+#include "Storage/audio_recorder_format.h"
 #include "IPC/audio_recorder_capture.h"
 
 #ifdef __cplusplus

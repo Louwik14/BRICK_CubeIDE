@@ -1,7 +1,6 @@
 #include "Track/control_routing.h"
 #include "IPC/control_audio_command.h"
-#include "IPC/control_audio_publication.h"
-#include "IPC/live_clock_control.h"
+#include "ControlRT/control_rt_publication.h"
 #include <string.h>
 
 static uint8_t g_looper_sources[BRICK_ENTITY_CAPACITY][BRICK_ENTITY_CAPACITY];
@@ -9,14 +8,12 @@ static uint8_t g_looper_sources[BRICK_ENTITY_CAPACITY][BRICK_ENTITY_CAPACITY];
 static uint8_t control_routing_publish(brick_entity_id_t looper)
 {
     uint16_t mask = 0U;
-    uint64_t sample_time = 0U;
     for (uint8_t source = 0U; source < BRICK_ENTITY_CAPACITY; ++source)
         if (g_looper_sources[looper][source] != 0U)
             mask |= (uint16_t)(1U << source);
-    if (!live_clock_read_audio_sample(&sample_time)) return 0U;
-    return control_audio_publish_param(looper,
+    return control_rt_publish_param_now(looper,
         CONTROL_AUDIO_PARAM_LOOPER_ROUTE,
-        mask, 0U, sample_time);
+        mask, 0U);
 }
 
 void control_routing_init(void)
@@ -30,8 +27,6 @@ uint8_t control_routing_apply_bulk(
     const uint8_t sources[BRICK_ENTITY_CAPACITY][BRICK_ENTITY_CAPACITY])
 {
     if (sources == NULL) return 0U;
-    uint64_t sample_time = 0U;
-    if (!live_clock_read_audio_sample(&sample_time)) return 0U;
     control_audio_command_t commands[BRICK_ENTITY_CAPACITY];
     uint8_t command_count = 0U;
     for (uint8_t looper = 0U; looper < BRICK_ENTITY_CAPACITY; ++looper)
@@ -49,7 +44,6 @@ uint8_t control_routing_apply_bulk(
         if (old_mask == mask)
             continue;
         commands[command_count++] = (control_audio_command_t){
-            .effective_sample_time = sample_time,
             .value = mask,
             .id = CONTROL_AUDIO_PARAM_LOOPER_ROUTE,
             .entity = looper,
@@ -58,7 +52,7 @@ uint8_t control_routing_apply_bulk(
         };
     }
     if ((command_count != 0U)
-            && (control_audio_publish_batch(commands, command_count) == 0U))
+            && (control_rt_publish_batch_now(commands, command_count) == 0U))
         return 0U;
     for (uint8_t looper = 0U; looper < BRICK_ENTITY_CAPACITY; ++looper)
         for (uint8_t source = 0U; source < BRICK_ENTITY_CAPACITY; ++source)

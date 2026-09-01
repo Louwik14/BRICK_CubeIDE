@@ -80,13 +80,6 @@ bool live_clock_read_audio_sample(uint64_t *out_audio_sample)
     return live_clock_tim5_to_sample_time(TIM5->CNT, out_audio_sample);
 }
 
-uint64_t live_clock_control_sample(void)
-{
-    uint64_t sample = 0U;
-    (void)live_clock_read_audio_sample(&sample);
-    return sample;
-}
-
 bool live_clock_tim5_to_sample_time(uint32_t capture_tick,
                                     uint64_t *out_sample_time)
 {

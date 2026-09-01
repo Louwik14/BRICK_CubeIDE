@@ -53,12 +53,16 @@ uint8_t control_audio_fifo_batch_append(control_audio_fifo_batch_writer_t *write
 {
     if ((writer == NULL) || (writer->active == 0U)
             || (writer->written >= writer->count) || (command_valid(command) == 0U)) return 0U;
-    control_audio_command_t published = *command;
-    if (published.effective_sample_time < writer->floor)
-    { ++FIFO.invariant_failure_count; published.effective_sample_time = writer->floor; }
-    writer->floor = published.effective_sample_time;
+    if (command->effective_sample_time < writer->floor)
+    {
+        /* Publication order is an invariant.  Never rewrite a producer's
+         * timestamp to hide a regression; reject the whole batch instead. */
+        ++FIFO.invariant_failure_count;
+        return 0U;
+    }
+    writer->floor = command->effective_sample_time;
     g_control_audio_fifo_commands[(writer->head + writer->written)
-        & (CONTROL_AUDIO_FIFO_CAPACITY - 1U)] = published;
+        & (CONTROL_AUDIO_FIFO_CAPACITY - 1U)] = *command;
     ++writer->written;
     return 1U;
 }

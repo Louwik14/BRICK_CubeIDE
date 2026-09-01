@@ -387,6 +387,30 @@ static uint8_t sample_cache_stream_start_base_failed(uint16_t sample_id,
     return 0U;
 }
 
+static uint8_t sample_cache_stream_start_base_ready(uint16_t sample_id,
+                                                    const sample_cache_desc_t *desc)
+{
+    if ((sample_id >= SAMPLE_CLASSIC_CAPACITY) || (desc == 0)
+        || (desc->mode != SAMPLE_CACHE_MODE_STREAM) || (desc->total_frames == 0U))
+    {
+        return 0U;
+    }
+    const uint32_t last_page = sample_cache_stream_last_page_index(desc);
+    uint32_t required_pages = sample_audio_format_presocle_pages(desc->format);
+    if (required_pages > (last_page + 1U))
+    {
+        required_pages = last_page + 1U;
+    }
+    for (uint32_t page = 0U; page < required_pages; ++page)
+    {
+        if (sample_page_cache_get_page_state(sample_id, page) != SAMPLE_PAGE_READY)
+        {
+            return 0U;
+        }
+    }
+    return 1U;
+}
+
 void sample_cache_init(void)
 {
     sample_classic_audio_projection_init();
@@ -687,6 +711,10 @@ sample_cache_slot_readiness_t sample_cache_get_slot_readiness(uint16_t sample_id
             if (sample_cache_stream_start_base_failed(sample_id, desc) != 0U)
             {
                 return SAMPLE_CACHE_SLOT_ERROR;
+            }
+            if (sample_cache_stream_start_base_ready(sample_id, desc) != 0U)
+            {
+                return SAMPLE_CACHE_SLOT_PLAYABLE;
             }
             return SAMPLE_CACHE_SLOT_START_PENDING;
 

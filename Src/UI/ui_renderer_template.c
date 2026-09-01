@@ -17,7 +17,7 @@
 #include "Param/engine_model_catalog.h"
 #include "Param/stack_waveform.h"
 #include "Storage/project_control.h"
-#include "IPC/live_clock_control.h"
+#include "ControlRT/control_rt_publication.h"
 #include "UI/ui_sampler_playhead.h"
 #include "Track/track_runtime.h"
 #include "Track/track_state.h"

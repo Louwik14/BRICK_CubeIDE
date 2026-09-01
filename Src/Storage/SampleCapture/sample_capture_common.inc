@@ -45,8 +45,9 @@ static void sample_capture_publish_rec_bus(void)
         source_flags |= AUDIO_REC_BUS_CAPTURE_ENABLED;
     }
 
-    (void)control_audio_rec_bus_publish(source_entity_mask,
-        (audio_rec_bus_arm_t)g_sample_capture.state.arm, source_flags);
+    if (control_audio_rec_bus_publish(source_entity_mask,
+            (audio_rec_bus_arm_t)g_sample_capture.state.arm, source_flags) == 0U)
+        Error_Handler();
 }
 
 static uint8_t sample_capture_publish_rec_bus_at(uint64_t sample_time)

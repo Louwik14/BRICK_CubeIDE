@@ -11,8 +11,7 @@
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_page_cache_port.h"
 #include "IPC/sampler_ram_audio_projection_control.h"
-#include "IPC/control_audio_publication.h"
-#include "IPC/live_clock_control.h"
+#include "ControlRT/control_rt_publication.h"
 #include "IPC/control_audio_timing.h"
 
 #define SAMPLER_RAM_IO_BYTES (8192U)
@@ -1084,12 +1083,12 @@ void sampler_ram_pool_service_retire(void)
         sampler_ram_slot_t *const slot = &g_sampler_ram_pool.slots[i];
         if (slot->state != SAMPLER_RAM_SLOT_RETIRING) continue;
         uint64_t now_sample = 0U;
-        if (!live_clock_read_audio_sample(&now_sample)) continue;
+        if (!control_rt_now_sample(&now_sample)) continue;
         if (g_sampler_ram_retire_stop_committed[i] == 0U)
         {
-            if (control_audio_publication_horizon_active() != 0U) continue;
-            if (control_audio_publish_param((uint8_t)i, 0xFFF6U,
-                    slot->generation, 0U, now_sample) == 0U)
+            if (control_rt_publication_horizon_active() != 0U) continue;
+            if (control_rt_publish_param_now((uint8_t)i, 0xFFF6U,
+                    slot->generation, 0U) == 0U)
             {
                 g_sampler_ram_retire_invariant_failed = 1U;
                 continue;

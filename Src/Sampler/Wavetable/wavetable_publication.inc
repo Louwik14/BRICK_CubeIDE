@@ -68,12 +68,12 @@ void wavetable_pool_service_retire(void)
         wavetable_slot_t *const slot = &g_wavetable_pool.slots[i];
         if (slot->state != WAVETABLE_SLOT_RETIRING) continue;
         uint64_t now_sample = 0U;
-        if (!live_clock_read_audio_sample(&now_sample)) continue;
+        if (!control_rt_now_sample(&now_sample)) continue;
         if (g_wavetable_retire_stop_committed[i] == 0U)
         {
-            if (control_audio_publication_horizon_active() != 0U) continue;
-            if (control_audio_publish_param((uint8_t)i, 0xFFF7U,
-                    slot->generation, 0U, now_sample) == 0U)
+            if (control_rt_publication_horizon_active() != 0U) continue;
+            if (control_rt_publish_param_now((uint8_t)i, 0xFFF7U,
+                    slot->generation, 0U) == 0U)
             {
                 g_wavetable_retire_invariant_failed = 1U;
                 continue;

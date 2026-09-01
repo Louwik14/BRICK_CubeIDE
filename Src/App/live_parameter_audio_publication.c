@@ -3,7 +3,7 @@
 #include <stddef.h>
 
 #include "IPC/control_audio_command.h"
-#include "IPC/control_audio_publication.h"
+#include "ControlRT/control_rt_publication.h"
 #include "IPC/live_clock_control.h"
 #include "IPC/live_parameter_event.h"
 #include "Param/param_value_policy.h"
@@ -11,6 +11,7 @@
 #include "Track/tone_param_codec.h"
 #include "Track/tone_program_control.h"
 #include "Seq/seq_runtime_exec.h"
+#include "main.h"
 
 static uint32_t g_live_parameter_audio_publish_failure_count;
 
@@ -20,20 +21,8 @@ static bool live_parameter_audio_publish_failed(void)
     return false;
 }
 
-static uint8_t live_parameter_audio_convert_capture(
-    uint32_t capture_tick, uint64_t *out_effective_sample_time)
-{
-    if (live_clock_tim5_to_guarded_sample_time(
-            capture_tick, out_effective_sample_time) == 0U)
-        return 0U;
-    const uint64_t now = seq_runtime_exec_get_sample_timeline();
-    if (*out_effective_sample_time < now)
-        *out_effective_sample_time = now;
-    return 1U;
-}
-
 static uint8_t live_parameter_audio_make_command(
-    uint64_t due_sample, uint16_t parameter_id, uint8_t scope,
+    uint16_t parameter_id, uint8_t scope,
     uint8_t track, uint8_t slot, uint16_t flags, int32_t raw_value,
     control_audio_command_t *out_command)
 {
@@ -50,7 +39,6 @@ static uint8_t live_parameter_audio_make_command(
         command_scope = (uint8_t)(LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_BASE + slot);
     }
     *out_command = (control_audio_command_t){
-        .effective_sample_time = due_sample,
         .value = (uint32_t)live_parameter_event_encode_float(value),
         .id = parameter_id,
         .entity = (track < BRICK_ENTITY_CAPACITY) ? track : 0U,
@@ -104,11 +92,6 @@ bool live_parameter_audio_publication_submit_bulk(
     if ((bulk == NULL) || (bulk->count == 0U)
             || (bulk->count > LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS))
         return live_parameter_audio_publish_failed();
-    uint64_t due_sample;
-    if (live_parameter_audio_convert_capture(
-            bulk->capture_tick, &due_sample) == 0U)
-        return live_parameter_audio_publish_failed();
-
     control_audio_command_t commands[LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS];
     for (uint8_t i = 0U; i < bulk->count; ++i)
     {
@@ -125,12 +108,20 @@ bool live_parameter_audio_publication_submit_bulk(
                 return live_parameter_audio_publish_failed();
         }
         if (live_parameter_audio_make_command(
-                due_sample, item->parameter_id, item->scope, item->track,
+                item->parameter_id, item->scope, item->track,
                 item->slot, item->flags, item->value, &commands[i]) == 0U)
             return live_parameter_audio_publish_failed();
     }
-    return control_audio_publish_batch(commands, bulk->count) != 0U
-        ? true : live_parameter_audio_publish_failed();
+    if (control_rt_publish_batch_captured(
+        commands, bulk->count, bulk->capture_tick,
+        seq_runtime_exec_get_sample_timeline()) == 0U)
+    {
+        /* A valid CONTROL batch is dimensioned before publication.  A refusal
+         * is an invariant failure, never a deferred parameter update. */
+        Error_Handler();
+        return false;
+    }
+    return true;
 }
 
 bool live_parameter_audio_publication_submit_poly_pair(
@@ -170,8 +161,12 @@ bool live_parameter_audio_publication_submit_dated(
         return live_parameter_audio_publish_failed();
     float final_value = param_value_policy_decode_u16(
         &param_registry[parameter_id], value16);
-    return control_audio_publish_param(track, parameter_id,
+    if (control_rt_publish_param(track, parameter_id,
         (uint32_t)live_parameter_event_encode_float(final_value),
-        LIVE_PARAMETER_AUDIO_SCOPE_RUNTIME_TEMP, effective_sample_time) != 0U
-        ? true : live_parameter_audio_publish_failed();
+        LIVE_PARAMETER_AUDIO_SCOPE_RUNTIME_TEMP, effective_sample_time) == 0U)
+    {
+        Error_Handler();
+        return false;
+    }
+    return true;
 }

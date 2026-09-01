@@ -348,8 +348,8 @@ void sample_stream_transport_execute_monocore(const sample_stream_io_command_t *
     }
     do
     {
-        sample_stream_transport_worker_poll();
         sd_scheduler_runtime_service();
+        sample_stream_transport_worker_poll();
     } while (sample_stream_transport_take_result(sequence, out_result) == 0U);
     if (out_result->token.page_generation != command->token.page_generation)
     {

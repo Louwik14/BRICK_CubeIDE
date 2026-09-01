@@ -2,7 +2,6 @@
 
 #include "IPC/control_audio_rec_bus.h"
 #include "IPC/control_music_publication.h"
-#include "IPC/live_clock_control.h"
 #include "Track/track_input_ownership.h"
 #include "Track/track_runtime.h"
 #include "IPC/audio_rec_level_reader.h"
@@ -10,6 +9,7 @@
 #include "Sampler/sample_global_pool.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
+#include "ControlRT/control_rt_publication.h"
 #include "Storage/audio_recorder_wav.h"
 #include "Platform/memory_layout.h"
 #include "Storage/pattern_live_ram.h"
@@ -17,6 +17,7 @@
 #include "Storage/sd_preview.h"
 #include "Storage/waveform_cache.h"
 #include "ff.h"
+#include "main.h"
 
 #if SAMPLE_CAPTURE_DEBUG_UART
 #include "stm32h7xx_hal.h"

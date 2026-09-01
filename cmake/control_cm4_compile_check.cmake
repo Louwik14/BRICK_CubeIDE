@@ -45,6 +45,16 @@ set(control_forbidden_dependencies
     "/mutable_instruments/"
     "/Inspiration/")
 
+set(storage_forbidden_dependencies
+    # STORAGE may consume the shared Recorder data plane, but never AUDIO
+    # implementation details, Looper/DSP/track business state or callbacks.
+    "/Inc/Audio/"
+    "/Src/Audio/"
+    "/Inc/Sampler/sample_voice_reader.h"
+    "/Src/Sampler/VoiceReader/"
+    "/Inc/Track/"
+    "/Src/Track/")
+
 set(contract_forbidden_dependencies
     "/Inc/Audio/"
     "/Src/Audio/"
@@ -97,6 +107,8 @@ foreach(source IN LISTS all_sources)
         set(owner SHARED_BACKING)
     elseif(source IN_LIST CONTROL_CM4_CONTRACT_SOURCES)
         set(owner CONTRACTS)
+    elseif(source IN_LIST CONTROL_CM4_STORAGE_SOURCES)
+        set(owner STORAGE)
     else()
         set(owner CONTROL)
     endif()
@@ -111,6 +123,15 @@ foreach(source IN LISTS all_sources)
                 "DOMAIN_CONTROL dependency firewall: ${source} reaches ${forbidden}")
         endif()
     endforeach()
+    if(source IN_LIST CONTROL_CM4_STORAGE_SOURCES)
+        foreach(forbidden IN LISTS storage_forbidden_dependencies)
+            string(FIND "${dependencies}" "${forbidden}" forbidden_at)
+            if(NOT forbidden_at EQUAL -1)
+                message(FATAL_ERROR
+                    "DOMAIN_STORAGE dependency firewall: ${source} reaches ${forbidden}")
+            endif()
+        endforeach()
+    endif()
     math(EXPR compiled_count "${compiled_count} + 1")
 endforeach()
 file(WRITE "${CONTROL_CM4_WORK_DIR}/objects.manifest" "${object_manifest}")
@@ -147,4 +168,4 @@ foreach(contract_header IN LISTS CONTROL_CM4_CONTRACT_HEADERS)
 endforeach()
 
 message(STATUS
-    "Cortex-M4 CONTROL compile-check passed (${compiled_count} translation units)")
+    "Cortex-M4 CONTROL/STORAGE compile-check passed (${compiled_count} translation units)")

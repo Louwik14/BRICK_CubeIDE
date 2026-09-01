@@ -4,8 +4,7 @@
 #include <string.h>
 
 #include "IPC/control_audio_command.h"
-#include "IPC/control_audio_publication.h"
-#include "IPC/live_clock_control.h"
+#include "ControlRT/control_rt_publication.h"
 #include "Platform/memory_layout.h"
 
 CONTROL_STATE_SDRAM static fm_control_state_t
@@ -120,8 +119,6 @@ static uint8_t fm_control_state_publish_value(
     uint8_t entity, const fm_control_state_t *state)
 {
     if ((entity >= BRICK_ENTITY_CAPACITY) || (state == NULL)) return 0U;
-    uint64_t sample = 0U;
-    if (live_clock_read_audio_sample(&sample) == 0U) return 0U;
     control_audio_command_t commands[160U];
     uint16_t count = 0U;
     for (param_id_t id = PARAM_FM_RATIO;
@@ -133,7 +130,7 @@ static uint8_t fm_control_state_publish_value(
         uint32_t bits;
         memcpy(&bits, &value, sizeof(bits));
         commands[count++] = (control_audio_command_t){
-            .effective_sample_time = sample, .value = bits, .id = (uint16_t)id,
+            .value = bits, .id = (uint16_t)id,
             .entity = entity,
             .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM, 0U)
         };
@@ -147,7 +144,7 @@ static uint8_t fm_control_state_publish_value(
         uint32_t bits;
         memcpy(&bits, &value, sizeof(bits));
         commands[count++] = (control_audio_command_t){
-            .effective_sample_time = sample, .value = bits, .id = (uint16_t)id,
+            .value = bits, .id = (uint16_t)id,
             .entity = entity,
             .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM, 0U)
         };
@@ -161,7 +158,7 @@ static uint8_t fm_control_state_publish_value(
         uint32_t bits;
         memcpy(&bits, &value, sizeof(bits));
         commands[count++] = (control_audio_command_t){
-            .effective_sample_time = sample, .value = bits, .id = (uint16_t)id,
+            .value = bits, .id = (uint16_t)id,
             .entity = entity,
             .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM, 0U)
         };
@@ -176,13 +173,13 @@ static uint8_t fm_control_state_publish_value(
         if (bytes > 4U) bytes = 4U;
         memcpy(&bits, &base[offset], bytes);
         commands[count++] = (control_audio_command_t){
-            .effective_sample_time = sample, .value = bits,
+            .value = bits,
             .id = (uint16_t)(CONTROL_AUDIO_FM_BASE_WORD_FIRST + word),
             .entity = entity,
             .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM, 0U)
         };
     }
-    return control_audio_publish_batch(commands, count);
+    return control_rt_publish_batch_now(commands, count);
 }
 
 uint8_t fm_control_state_validate(const fm_control_state_t *state)

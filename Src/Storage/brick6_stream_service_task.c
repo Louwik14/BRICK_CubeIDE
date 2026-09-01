@@ -34,8 +34,8 @@ void brick6_stream_service_task_init(void)
 void brick6_stream_service_task_poll(void)
 {
     /* H743 local worker adapter. On H747 this whole service belongs to M4. */
-    sample_stream_transport_worker_poll();
     sd_scheduler_runtime_service();
+    sample_stream_transport_worker_poll();
     brick6_stream_service_task_update_gate();
     const uint8_t pending = sample_cache_has_pending_sd_work();
     if (pending == 0U)
@@ -52,8 +52,8 @@ void brick6_stream_service_task_poll(void)
     }
 
     sample_cache_service(BRICK6_STREAM_SERVICE_BYTE_BUDGET);
-    sample_stream_transport_worker_poll();
     sd_scheduler_runtime_service();
+    sample_stream_transport_worker_poll();
     brick6_stream_service_task_update_gate();
 }
 

@@ -9,7 +9,7 @@
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Track/control_music_output.h"
-#include "IPC/live_clock_control.h"
+#include "ControlRT/control_rt_publication.h"
 #include "Storage/pattern_control_bank.h"
 #include "Storage/persistence_workspace.h"
 #include "Storage/persistent_pattern_control.h"
@@ -537,7 +537,8 @@ void pattern_live_service(void)
             g_queued_boundary_track, &boundary_sample) != 0U)
     {
         uint64_t now_sample = 0U;
-        (void)live_clock_read_audio_sample(&now_sample);
+        if (control_rt_now_sample(&now_sample) == 0U)
+            return;
         boundary_due = (uint8_t)(boundary_sample
             <= control_music_output_first_unpublished_sample(now_sample));
     }

@@ -6,13 +6,14 @@
 #include "Seq/seq_runtime.h"
 #include "NoteFx/note_fx_engine.h"
 #include "NoteFx/note_fx_state.h"
-#include "IPC/live_clock_control.h"
+#include "ControlRT/control_rt_publication.h"
 #include "Storage/project_load_quiesce.h"
 #include "Track/track_runtime.h"
 #include "Track/control_music_output.h"
 #include "Seq/seq_runtime_exec.h"
 #include "Platform/memory_layout.h"
 #include "Seq/seq_note_trace.h"
+#include "main.h"
 
 static uint8_t g_note_fx_override_valid[NOTE_FX_TRACK_COUNT][NOTE_FX_SLOT_COUNT][NOTE_FX_PARAM_COUNT];
 static uint8_t g_note_fx_override_value[NOTE_FX_TRACK_COUNT][NOTE_FX_SLOT_COUNT][NOTE_FX_PARAM_COUNT];
@@ -299,8 +300,14 @@ static uint8_t note_fx_pipeline_configure_track_owner(
     {
         return 0U;
     }
+    uint64_t now_sample = 0U;
+    if (control_rt_now_sample(&now_sample) == 0U)
+    {
+        Error_Handler();
+        return 0U;
+    }
     const uint64_t sample = control_music_output_first_unpublished_sample(
-        live_clock_control_sample());
+        now_sample);
     for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
     {
         uint8_t value[NOTE_FX_PARAM_COUNT];
@@ -435,7 +442,11 @@ static note_event_result_t note_fx_pipeline_submit_source_control(uint8_t track,
 
     if (sample_time == NOTE_FX_SAMPLE_TIME_CONTROL_ANCHOR)
     {
-        sample_time = live_clock_control_sample();
+        if (control_rt_now_sample(&sample_time) == 0U)
+        {
+            Error_Handler();
+            return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
+        }
     }
     sample_time = control_music_output_first_unpublished_sample(sample_time);
 
@@ -624,14 +635,9 @@ static note_event_result_t note_fx_pipeline_submit_live_command(
     }
 
     uint64_t sample_time = 0U;
-    if (!live_clock_tim5_to_guarded_sample_time(command->capture_tick,
-                                                &sample_time))
+    if (!control_rt_capture_tick_to_sample(command->capture_tick, now,
+                                           &sample_time))
         return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
-
-    if (sample_time < now)
-    {
-        sample_time = now;
-    }
 
     live_note_event_t event = {
         .sample_time = sample_time,
@@ -706,7 +712,12 @@ static uint8_t note_fx_pipeline_apply_due_live_events(uint64_t now)
 static note_event_result_t note_fx_pipeline_apply_source_raw_command(
     const note_fx_command_t *command)
 {
-    const uint64_t now = live_clock_control_sample();
+    uint64_t now = 0U;
+    if (control_rt_now_sample(&now) == 0U)
+    {
+        Error_Handler();
+        return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
+    }
     return note_fx_pipeline_submit_live_command(command, now);
 }
 
@@ -754,8 +765,14 @@ void note_fx_pipeline_panic(void)
     memset(g_note_fx_live_queue, 0, sizeof(g_note_fx_live_queue));
     g_note_fx_live_queue_count = 0U;
     note_fx_pipeline_exit_critical(primask);
+    uint64_t now_sample = 0U;
+    if (control_rt_now_sample(&now_sample) == 0U)
+    {
+        Error_Handler();
+        return;
+    }
     const uint64_t sample = control_music_output_first_unpublished_sample(
-        live_clock_control_sample());
+        now_sample);
     for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track)
         (void)note_fx_engine_cleanup(track, sample, NULL, NULL);
 }
