@@ -15,9 +15,7 @@
 #include "Keyboard/keyboard_input.h"
 
 #include "App/Hall/hall_keymap.h"
-#include "Board/board_product.h"
 #include "Keyboard/kbd_chords_dict.h"
-#include "Keyboard/kbd_input_mapper.h"
 #include "Keyboard/keyboard_engine.h"
 #include "Keyboard/keyboard_params.h"
 #include "Keyboard/ui_keyboard_app.h"
@@ -34,7 +32,7 @@
 
 #include <string.h>
 
-#define LOWCOST_KEY_COUNT HALL_KEY_COUNT
+#define KEY_COUNT HALL_KEY_COUNT
 #define KEYBOARD_INPUT_OWNER_STACK_DEPTH 8U
 
 typedef struct
@@ -42,9 +40,9 @@ typedef struct
     uint8_t track;
 } keyboard_input_note_owner_t;
 
-static uint8_t g_lowcost_key_note[LOWCOST_KEY_COUNT];
-static uint8_t g_lowcost_key_down[LOWCOST_KEY_COUNT];
-static uint8_t g_lowcost_key_consumed[LOWCOST_KEY_COUNT];
+static uint8_t g_key_note[KEY_COUNT];
+static uint8_t g_key_down[KEY_COUNT];
+static uint8_t g_key_consumed[KEY_COUNT];
 static keyboard_input_note_owner_t
     g_keyboard_input_note_owner[128U][KEYBOARD_INPUT_OWNER_STACK_DEPTH];
 static uint8_t g_keyboard_input_note_owner_count[128U];
@@ -92,12 +90,6 @@ static uint8_t keyboard_input_note_owner_pop(uint8_t note,
     return 1U;
 }
 
-static uint8_t keyboard_input_has_separate_hall_keyboard(void)
-{
-    const board_product_capabilities_t *caps = board_product_capabilities();
-    return ((caps != 0) && (caps->has_separate_hall_keyboard != 0U)) ? 1U : 0U;
-}
-
 static uint8_t keyboard_input_scale_period(uint8_t scale)
 {
     switch (scale)
@@ -114,7 +106,7 @@ static uint8_t keyboard_input_scale_period(uint8_t scale)
     }
 }
 
-static uint8_t keyboard_input_lowcost_seq_note(uint8_t key)
+static uint8_t keyboard_input_seq_note(uint8_t key)
 {
     hall_key_metadata_t meta;
     if ((hall_keymap_metadata(key, &meta) == 0U) || (meta.kind != HALL_KEY_KIND_WHITE))
@@ -150,7 +142,7 @@ static uint8_t keyboard_input_lowcost_seq_note(uint8_t key)
     return (uint8_t)note;
 }
 
-static void keyboard_input_lowcost_nav_button(button_id_t button)
+static void keyboard_input_nav_button(button_id_t button)
 {
     const ui_event_t ev = {
         .type = UI_EVENT_BUTTON_PRESS,
@@ -160,28 +152,28 @@ static void keyboard_input_lowcost_nav_button(button_id_t button)
     ui_navigation_handle_event(&ev);
 }
 
-static void keyboard_input_lowcost_trigger_black_shortcut(uint8_t black_index)
+static void keyboard_input_trigger_black_shortcut(uint8_t black_index)
 {
     switch (black_index)
     {
         case 1U:
-            keyboard_input_lowcost_nav_button(BTN_PARAM_2); /* Tone */
+            keyboard_input_nav_button(BTN_PARAM_2); /* Tone */
             break;
 
         case 2U:
-            keyboard_input_lowcost_nav_button(BTN_PARAM_1); /* Env ensemble */
+            keyboard_input_nav_button(BTN_PARAM_1); /* Env ensemble */
             break;
 
         case 3U:
-            keyboard_input_lowcost_nav_button(BTN_PARAM_5); /* Play */
+            keyboard_input_nav_button(BTN_PARAM_5); /* Play */
             break;
 
         case 4U:
-            keyboard_input_lowcost_nav_button(BTN_PARAM_3); /* Mod */
+            keyboard_input_nav_button(BTN_PARAM_3); /* Mod */
             break;
 
         case 5U:
-            keyboard_input_lowcost_nav_button(BTN_PARAM_4); /* Mix */
+            keyboard_input_nav_button(BTN_PARAM_4); /* Mix */
             break;
 
         case 6U:
@@ -212,7 +204,7 @@ static void keyboard_input_lowcost_trigger_black_shortcut(uint8_t black_index)
     }
 }
 
-static uint8_t keyboard_input_lowcost_shortcut_press(uint8_t key, ui_hall_mode_t mode)
+static uint8_t keyboard_input_shortcut_press(uint8_t key, ui_hall_mode_t mode)
 {
     hall_key_metadata_t meta;
     if ((hall_keymap_metadata(key, &meta) == 0U) || (meta.kind != HALL_KEY_KIND_BLACK))
@@ -231,7 +223,7 @@ static uint8_t keyboard_input_lowcost_shortcut_press(uint8_t key, ui_hall_mode_t
         return 0U;
     }
 
-    keyboard_input_lowcost_trigger_black_shortcut(meta.black_index);
+    keyboard_input_trigger_black_shortcut(meta.black_index);
     return 1U;
 }
 
@@ -241,7 +233,7 @@ static ui_hall_mode_t keyboard_input_effective_input_mode(void)
     return (mode == UI_HALL_MODE_MUTE) ? ui_core_mute_get_passthrough_hall_mode() : mode;
 }
 
-static uint8_t keyboard_input_lowcost_chromatic_note(uint8_t key)
+static uint8_t keyboard_input_chromatic_note(uint8_t key)
 {
     hall_key_metadata_t meta;
     if (hall_keymap_metadata(key, &meta) == 0U)
@@ -262,7 +254,7 @@ static uint8_t keyboard_input_lowcost_chromatic_note(uint8_t key)
     return (uint8_t)note;
 }
 
-static void keyboard_input_lowcost_omni(uint8_t key, bool pressed)
+static void keyboard_input_omni(uint8_t key, bool pressed)
 {
     static const uint8_t chord_for_left_group[7] = {
         0U, /* Maj */
@@ -299,9 +291,9 @@ static void keyboard_input_lowcost_omni(uint8_t key, bool pressed)
     ui_keyboard_app_note_button(meta.chromatic_position, pressed);
 }
 
-static void keyboard_input_process_lowcost_key(uint8_t key, bool pressed, uint8_t velocity)
+static void keyboard_input_process_key(uint8_t key, bool pressed, uint8_t velocity)
 {
-    if (key >= LOWCOST_KEY_COUNT)
+    if (key >= KEY_COUNT)
     {
         return;
     }
@@ -311,21 +303,21 @@ static void keyboard_input_process_lowcost_key(uint8_t key, bool pressed, uint8_
     if (pressed)
     {
         const ui_hall_mode_t mode = keyboard_input_effective_input_mode();
-        if (keyboard_input_lowcost_shortcut_press(key, mode) != 0U)
+        if (keyboard_input_shortcut_press(key, mode) != 0U)
         {
-            g_lowcost_key_consumed[key] = 1U;
+            g_key_consumed[key] = 1U;
             return;
         }
     }
-    else if (g_lowcost_key_consumed[key] != 0U)
+    else if (g_key_consumed[key] != 0U)
     {
-        g_lowcost_key_consumed[key] = 0U;
+        g_key_consumed[key] = 0U;
         return;
     }
 
     if (keyboard_params_get_omnichord())
     {
-        keyboard_input_lowcost_omni(key, pressed);
+        keyboard_input_omni(key, pressed);
         return;
     }
 
@@ -341,18 +333,18 @@ static void keyboard_input_process_lowcost_key(uint8_t key, bool pressed, uint8_
             }
         }
         const uint8_t note = (mode == UI_HALL_MODE_SEQ)
-            ? keyboard_input_lowcost_seq_note(key)
-            : keyboard_input_lowcost_chromatic_note(key);
-        g_lowcost_key_note[key] = note;
-        g_lowcost_key_down[key] = 1U;
+            ? keyboard_input_seq_note(key)
+            : keyboard_input_chromatic_note(key);
+        g_key_note[key] = note;
+        g_key_down[key] = 1U;
         keyboard_input_note_on_sink(note, velocity);
         return;
     }
 
-    if (g_lowcost_key_down[key] != 0U)
+    if (g_key_down[key] != 0U)
     {
-        g_lowcost_key_down[key] = 0U;
-        keyboard_input_note_off_sink(g_lowcost_key_note[key]);
+        g_key_down[key] = 0U;
+        keyboard_input_note_off_sink(g_key_note[key]);
     }
 }
 
@@ -427,19 +419,11 @@ void keyboard_input_init(void)
     };
 
     ui_keyboard_app_init(&sink);
-    kbd_input_mapper_init(keyboard_params_get_omnichord());
 }
 
 void keyboard_input_process_hall(uint8_t hall_index, bool pressed, uint8_t velocity)
 {
-    if (keyboard_input_has_separate_hall_keyboard() != 0U)
-    {
-        keyboard_input_process_lowcost_key(hall_index, pressed, velocity);
-        return;
-    }
-
-    ui_keyboard_app_set_velocity(velocity);
-    kbd_input_mapper_process((uint8_t)(hall_index + 1U), pressed);
+    keyboard_input_process_key(hall_index, pressed, velocity);
 }
 
 void keyboard_input_process_hall_timed(uint8_t hall_index, bool pressed,

@@ -3,9 +3,7 @@
 #include <stddef.h>
 
 #include "App/Hall/hall_engine.h"
-#include "App/Hall/hall_surface.h"
 #include "App/control_domain.h"
-#include "Board/board_product.h"
 #include "buttons.h"
 #include "Track/track_runtime.h"
 #include "Param/param_macro.h"
@@ -56,14 +54,6 @@ static uint16_t hall_pressure_delta(uint8_t hall)
     return (raw_value > min_value) ? (uint16_t)(raw_value - min_value) : 0U;
 }
 
-static uint8_t hall_pressure_uses_binary_surface(void)
-{
-    const board_product_capabilities_t *caps = board_product_capabilities();
-    return ((caps != 0)
-            && (caps->has_step_binary_lanes != 0U)
-            && (caps->has_analog_hall_lanes == 0U)) ? 1U : 0U;
-}
-
 static uint8_t hall_pressure_update(uint8_t hall)
 {
     uint16_t min_value = 0U;
@@ -75,12 +65,6 @@ static uint8_t hall_pressure_update(uint8_t hall)
     if (hall >= HALL_UI_LANE_COUNT)
     {
         return 0U;
-    }
-
-    if (hall_pressure_uses_binary_surface() != 0U)
-    {
-        g_hall_pressure_active[hall] = hall_surface_is_pressed(hall);
-        return g_hall_pressure_active[hall];
     }
 
     min_value = hall_engine_get_min(hall);
@@ -121,11 +105,6 @@ static float hall_pressure_amount(uint8_t hall)
     if (hall >= HALL_UI_LANE_COUNT)
     {
         return 0.0f;
-    }
-
-    if (hall_pressure_uses_binary_surface() != 0U)
-    {
-        return (hall_surface_is_pressed(hall) != 0U) ? 1.0f : 0.0f;
     }
 
     min_value = hall_engine_get_min(hall);

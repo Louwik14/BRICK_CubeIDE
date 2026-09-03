@@ -15,21 +15,17 @@
 
 #define CALIBRATION_REST_SAMPLES_MAX          255U
 #define CALIBRATION_HOLD_SAMPLES_MAX          255U
-#define LOWCOST_CALIBRATION_STAGE_KEY_COUNT    12U
-#define LOWCOST_CALIBRATION_PRESS_DELTA      1000U
-#define LOWCOST_CALIBRATION_RELEASE_DELTA     500U
-#define LOWCOST_CALIBRATION_REST_PRIME          8U
+#define HALL_CALIBRATION_STAGE_KEY_COUNT    12U
+#define HALL_CALIBRATION_PRESS_DELTA      1000U
+#define HALL_CALIBRATION_RELEASE_DELTA     500U
+#define HALL_CALIBRATION_REST_PRIME          8U
 
 #define HALL_CAL_FLASH_ADDRESS                0x081E0000U
 #define HALL_CAL_FLASH_BANK                   FLASH_BANK_2
 #define HALL_CAL_FLASH_SECTOR                 FLASH_SECTOR_7
 
 #define HALL_CAL_STORAGE_MAGIC                0x48435550UL
-#if defined(BRICK6_VARIANT_LOWCOST)
 #define HALL_CAL_STORAGE_VERSION              2U
-#else
-#define HALL_CAL_STORAGE_VERSION              1U
-#endif
 #define HALL_CAL_FLASH_CHUNKS                 ((sizeof(hall_calibration_storage_blob_t) + 31U) / 32U)
 
 #define HALL_USER_STAGE_COUNT                 3U
@@ -38,10 +34,8 @@
 #define HALL_USER_TRIAD_LOCKOUT_MS            120U
 #define HALL_USER_MIN_STAGE_GAP               4U
 
-#if defined(BRICK6_VARIANT_LOWCOST)
-_Static_assert(HALL_KEY_COUNT == (2U * LOWCOST_CALIBRATION_STAGE_KEY_COUNT),
+_Static_assert(HALL_KEY_COUNT == (2U * HALL_CALIBRATION_STAGE_KEY_COUNT),
                "Low-cost Hall calibration requires two complete 12-key stages");
-#endif
 
 typedef enum
 {
@@ -74,22 +68,15 @@ typedef struct
     uint16_t size;
     hall_calibration_blob_t hall;
     hall_user_velocity_profile_t user;
-#if defined(BRICK6_VARIANT_LOWCOST)
     uint8_t velocity_profile;
     uint8_t velocity_mode;
     uint8_t velocity_curve;
     uint8_t reserved0;
     uint8_t reserved1[28];
-#endif
 } hall_calibration_storage_blob_t;
 
-#if defined(BRICK6_VARIANT_LOWCOST)
 _Static_assert(sizeof(hall_calibration_storage_blob_t) == 160U,
                "Low-cost Hall calibration storage must fill five flash words");
-#else
-_Static_assert(sizeof(hall_calibration_storage_blob_t) == 128U,
-               "Premium Hall calibration storage format must remain unchanged");
-#endif
 
 typedef struct
 {
@@ -285,7 +272,6 @@ static uint8_t hall_storage_blob_is_valid(const hall_calibration_storage_blob_t 
     return hall_calibration_blob_is_valid(&blob->hall);
 }
 
-#if defined(BRICK6_VARIANT_LOWCOST)
 static uint8_t hall_storage_v1_blob_is_valid(const hall_calibration_storage_v1_blob_t *blob)
 {
     if (blob == 0)
@@ -315,7 +301,6 @@ static void hall_velocity_settings_apply(uint8_t profile, uint8_t mode, uint8_t 
                                 ? curve
                                 : (uint8_t)HALL_VEL_CURVE_LINEAR);
 }
-#endif
 
 static uint8_t hall_user_stage_to_index(hall_user_calibration_stage_t stage)
 {
@@ -428,19 +413,18 @@ static uint8_t hall_user_build_profile(hall_user_velocity_profile_t *profile)
     return hall_user_profile_is_valid_local(profile);
 }
 
-#if defined(BRICK6_VARIANT_LOWCOST)
-static uint8_t hall_calibration_lowcost_pressed(uint8_t key, uint16_t value)
+static uint8_t hall_calibration_pressed(uint8_t key, uint16_t value)
 {
-    if ((key >= HALL_KEY_COUNT) || (g_min_buffer[key].count < LOWCOST_CALIBRATION_REST_PRIME))
+    if ((key >= HALL_KEY_COUNT) || (g_min_buffer[key].count < HALL_CALIBRATION_REST_PRIME))
     {
         return 0U;
     }
 
     const uint16_t rest = hall_median_buffer_compute(&g_min_buffer[key]);
-    return ((uint32_t)rest > ((uint32_t)value + LOWCOST_CALIBRATION_PRESS_DELTA)) ? 1U : 0U;
+    return ((uint32_t)rest > ((uint32_t)value + HALL_CALIBRATION_PRESS_DELTA)) ? 1U : 0U;
 }
 
-static uint8_t hall_calibration_lowcost_released(uint8_t key, uint16_t value)
+static uint8_t hall_calibration_released(uint8_t key, uint16_t value)
 {
     if ((key >= HALL_KEY_COUNT) || (g_min_buffer[key].count == 0U))
     {
@@ -448,10 +432,10 @@ static uint8_t hall_calibration_lowcost_released(uint8_t key, uint16_t value)
     }
 
     const uint16_t rest = hall_median_buffer_compute(&g_min_buffer[key]);
-    return (((uint32_t)value + LOWCOST_CALIBRATION_RELEASE_DELTA) >= (uint32_t)rest) ? 1U : 0U;
+    return (((uint32_t)value + HALL_CALIBRATION_RELEASE_DELTA) >= (uint32_t)rest) ? 1U : 0U;
 }
 
-static void hall_calibration_lowcost_store_raw_span(uint8_t key,
+static void hall_calibration_store_raw_span(uint8_t key,
                                                     uint16_t a,
                                                     uint16_t b)
 {
@@ -471,7 +455,6 @@ static void hall_calibration_lowcost_store_raw_span(uint8_t key,
         g_cal_blob.max[key] = a;
     }
 }
-#endif
 
 static void hall_user_profile_apply(const hall_user_velocity_profile_t *profile)
 {
@@ -570,10 +553,8 @@ void hall_calibration_process(void)
         return;
     }
 
-#if defined(BRICK6_VARIANT_LOWCOST)
-    first_key = (uint8_t)(g_calibration_stage * LOWCOST_CALIBRATION_STAGE_KEY_COUNT);
-    key_count = LOWCOST_CALIBRATION_STAGE_KEY_COUNT;
-#endif
+    first_key = (uint8_t)(g_calibration_stage * HALL_CALIBRATION_STAGE_KEY_COUNT);
+    key_count = HALL_CALIBRATION_STAGE_KEY_COUNT;
 
     uint8_t done_count = 0U;
 
@@ -588,11 +569,7 @@ void hall_calibration_process(void)
             {
                 hall_median_buffer_push(&g_min_buffer[i], v, CALIBRATION_REST_SAMPLES_MAX);
 
-#if defined(BRICK6_VARIANT_LOWCOST)
-                if (hall_calibration_lowcost_pressed(i, v) != 0U)
-#else
-                if (v > CALIBRATION_PRESS_ADC)
-#endif
+                if (hall_calibration_pressed(i, v) != 0U)
                 {
                     g_key_state[i] = KEY_STATE_PRESSED;
                     g_hold_start_tick[i] = HAL_GetTick();
@@ -603,11 +580,7 @@ void hall_calibration_process(void)
             }
             else
             {
-#if defined(BRICK6_VARIANT_LOWCOST)
-                if (hall_calibration_lowcost_released(i, v) != 0U)
-#else
-                if (v < CALIBRATION_RELEASE_ADC)
-#endif
+                if (hall_calibration_released(i, v) != 0U)
                 {
                     g_key_state[i] = KEY_STATE_RELEASED;
                     g_hold_start_tick[i] = 0U;
@@ -633,12 +606,7 @@ void hall_calibration_process(void)
                         const uint16_t min_median = hall_median_buffer_compute(&g_min_buffer[i]);
                         const uint16_t max_median = hall_median_buffer_compute(&g_max_buffer[i]);
 
-#if defined(BRICK6_VARIANT_LOWCOST)
-                        hall_calibration_lowcost_store_raw_span(i, min_median, max_median);
-#else
-                        g_cal_blob.min[i] = min_median;
-                        g_cal_blob.max[i] = max_median;
-#endif
+                        hall_calibration_store_raw_span(i, min_median, max_median);
                         g_key_done[i] = 1U;
                         g_press_count[i] = CALIBRATION_PROGRESS_MAX;
                     }
@@ -647,14 +615,10 @@ void hall_calibration_process(void)
         }
         else
         {
-#if defined(BRICK6_VARIANT_LOWCOST)
-            if (hall_calibration_lowcost_released(i, v) != 0U)
+            if (hall_calibration_released(i, v) != 0U)
             {
                 hall_median_buffer_push(&g_min_buffer[i], v, CALIBRATION_REST_SAMPLES_MAX);
             }
-#else
-            hall_median_buffer_push(&g_min_buffer[i], v, CALIBRATION_REST_SAMPLES_MAX);
-#endif
         }
 
         if (g_key_done[i] != 0U)
@@ -672,16 +636,8 @@ void hall_calibration_process(void)
             const uint8_t i = (uint8_t)(first_key + key_index);
             const uint16_t min_median = hall_median_buffer_compute(&g_min_buffer[i]);
 
-#if defined(BRICK6_VARIANT_LOWCOST)
-            hall_calibration_lowcost_store_raw_span(i, min_median, g_cal_blob.min[i]);
-#else
-            if (min_median < g_cal_blob.max[i])
-            {
-                g_cal_blob.min[i] = min_median;
-            }
-#endif
+            hall_calibration_store_raw_span(i, min_median, g_cal_blob.min[i]);
 
-#if defined(BRICK6_VARIANT_LOWCOST)
             if (g_cal_blob.min[i] >= g_cal_blob.max[i])
             {
                 g_cal_blob.min[i] = 0xFFFFU;
@@ -694,10 +650,8 @@ void hall_calibration_process(void)
                 hall_median_buffer_reset(&g_max_buffer[i]);
                 stage_valid = 0U;
             }
-#endif
         }
 
-#if defined(BRICK6_VARIANT_LOWCOST)
         if (stage_valid == 0U)
         {
             return;
@@ -713,9 +667,6 @@ void hall_calibration_process(void)
         {
             return;
         }
-#else
-        (void)stage_valid;
-#endif
 
         g_calibration_done = 1U;
         hall_engine_set_calibration(g_cal_blob.min, g_cal_blob.max);
@@ -775,10 +726,8 @@ uint16_t hall_calibration_get_max(uint8_t key)
 uint8_t hall_calibration_load(void)
 {
     const hall_calibration_storage_blob_t *stored = (const hall_calibration_storage_blob_t *)HALL_CAL_FLASH_ADDRESS;
-#if defined(BRICK6_VARIANT_LOWCOST)
     const hall_calibration_storage_v1_blob_t *stored_v1 =
         (const hall_calibration_storage_v1_blob_t *)HALL_CAL_FLASH_ADDRESS;
-#endif
     const hall_calibration_blob_t *previous_format =
         (const hall_calibration_blob_t *)HALL_CAL_FLASH_ADDRESS;
 
@@ -793,16 +742,13 @@ uint8_t hall_calibration_load(void)
             hall_user_profile_apply(&stored->user);
         }
 
-#if defined(BRICK6_VARIANT_LOWCOST)
         hall_velocity_settings_apply(stored->velocity_profile,
                                      stored->velocity_mode,
                                      stored->velocity_curve);
-#endif
         hall_engine_set_calibration(g_cal_blob.min, g_cal_blob.max);
         return 1U;
     }
 
-#if defined(BRICK6_VARIANT_LOWCOST)
     if (hall_storage_v1_blob_is_valid(stored_v1) != 0U)
     {
         g_cal_blob = stored_v1->hall;
@@ -818,7 +764,6 @@ uint8_t hall_calibration_load(void)
         hall_engine_set_calibration(g_cal_blob.min, g_cal_blob.max);
         return 1U;
     }
-#endif
 
     if (hall_calibration_blob_is_valid(previous_format) == 0U)
     {
@@ -848,11 +793,9 @@ void hall_calibration_save(void)
 
     blob.hall = g_cal_blob;
     blob.user = g_user_profile;
-#if defined(BRICK6_VARIANT_LOWCOST)
     blob.velocity_profile = hall_get_velocity_profile();
     blob.velocity_mode = hall_get_velocity_mode();
     blob.velocity_curve = hall_get_velocity_curve();
-#endif
 
     HAL_FLASH_Unlock();
 

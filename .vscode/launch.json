@@ -50,31 +50,6 @@
       "postLaunchCommands": [
         "monitor reset halt"
       ]
-    },
-    {
-      "name": "Premium Release (OpenOCD + ST-Link)",
-      "type": "cortex-debug",
-      "request": "launch",
-      "servertype": "openocd",
-      "cwd": "${workspaceFolder}",
-      "executable": "${workspaceFolder}/build/Premium/BRICK6_CUBE.elf",
-      "device": "STM32H743IITx",
-      "interface": "swd",
-      "gdbPath": "C:/ChibiStudio/tools/GNU Tools ARM Embedded/11.3 2022.08/bin/arm-none-eabi-gdb.exe",
-      "serverpath": "C:/openocd/OpenOCD-20250710-0.12.0/bin/openocd.exe",
-      "configFiles": [
-        "interface/stlink.cfg",
-        "target/stm32h7x.cfg"
-      ],
-      "searchDir": [
-        "${workspaceFolder}"
-      ],
-      "preLaunchTask": "Build Premium",
-      "runToEntryPoint": "main",
-      "showDevDebugOutput": "raw",
-      "postLaunchCommands": [
-        "monitor reset halt"
-      ]
     }
   ]
 }

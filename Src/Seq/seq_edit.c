@@ -10,12 +10,12 @@
 #include <string.h>
 
 #include "App/engine_tasklet.h"
+#include "buttons.h"
 #include "Platform/memory_layout.h"
 #include "Seq/seq_model.h"
 #include "Track/entity_topology.h"
 #include "Seq/seq_clipboard.h"
 #include "Seq/seq_param_iface.h"
-#include "App/Hall/hall_surface.h"
 #include "Track/track_runtime.h"
 #include "Storage/undo_v2.h"
 #include "Seq/seq_runtime_control.h"
@@ -24,13 +24,7 @@
 
 #define SEQ_EDIT_ENGINE_TICKS_PER_SECOND 1500U
 
-#if defined(BRICK6_VARIANT_LOWCOST)
 #define STEP_PLOCK_HOLD_MS 300U
-#else
-#define SEQ_STEP_HOLD_THRESHOLD_TICKS 160U
-#define STEP_PLOCK_HOLD_MS (((SEQ_STEP_HOLD_THRESHOLD_TICKS * 1000U) + (SEQ_EDIT_ENGINE_TICKS_PER_SECOND - 1U)) \
-                            / SEQ_EDIT_ENGINE_TICKS_PER_SECOND)
-#endif
 
 #if !defined(SEQ_STEP_HOLD_THRESHOLD_TICKS)
 #define SEQ_STEP_HOLD_THRESHOLD_TICKS (((STEP_PLOCK_HOLD_MS * SEQ_EDIT_ENGINE_TICKS_PER_SECOND) + 999U) / 1000U)
@@ -60,7 +54,6 @@ typedef struct
     seq_track_id_t track_id[SEQ_STEPS_PER_PAGE];
 } seq_edit_hold_state_t;
 
-#if defined(BRICK6_VARIANT_LOWCOST)
 #define SEQ_EDIT_LENGTH_FLASH_HALF_TICKS 150U
 #define SEQ_EDIT_LENGTH_FLASH_PHASE_COUNT 4U
 
@@ -72,16 +65,13 @@ typedef struct
     seq_step_id_t end_step;
     uint32_t start_tick;
 } seq_edit_length_flash_t;
-#endif
 
 static void seq_edit_mark_step_edited(seq_track_id_t track, seq_step_id_t step);
 static void seq_edit_clear_auto_note_pending(seq_track_id_t track, seq_step_id_t step);
 static void seq_edit_finish_snapshot_undo(uint8_t started);
 
 SEQ_STATE_D2 static seq_edit_hold_state_t g_seq_hold_state;
-#if defined(BRICK6_VARIANT_LOWCOST)
 SEQ_STATE_D2 static seq_edit_length_flash_t g_seq_length_flash;
-#endif
 
 static void seq_edit_reset_gesture_if_idle(void)
 {
@@ -101,12 +91,10 @@ static void seq_edit_reset_gesture_if_idle(void)
     g_seq_hold_state.note_capture_target_valid = 0U;
 }
 
-#if defined(BRICK6_VARIANT_LOWCOST)
 static uint8_t seq_edit_step_plock_upsert_succeeded(seq_plock_op_status_t status)
 {
     return ((status == SEQ_PLOCK_OP_CREATED) || (status == SEQ_PLOCK_OP_UPDATED)) ? 1U : 0U;
 }
-#endif
 
 uint8_t seq_edit_step_play_get(seq_track_id_t track,
                                 seq_step_id_t step,
@@ -290,8 +278,7 @@ static void seq_edit_mark_step_edited(seq_track_id_t track, seq_step_id_t step)
     }
 }
 
-#if defined(BRICK6_VARIANT_LOWCOST)
-static void seq_edit_lowcost_length_flash_start(seq_track_id_t track,
+static void seq_edit_length_flash_start(seq_track_id_t track,
                                                 seq_step_id_t start_step,
                                                 seq_step_id_t end_step)
 {
@@ -302,7 +289,7 @@ static void seq_edit_lowcost_length_flash_start(seq_track_id_t track,
     g_seq_length_flash.start_tick = engine_tick_count;
 }
 
-uint8_t seq_edit_lowcost_length_flash_step_visible(seq_track_id_t track,
+uint8_t seq_edit_length_flash_step_visible(seq_track_id_t track,
                                                    seq_step_id_t step)
 {
     if ((g_seq_length_flash.active == 0U)
@@ -324,7 +311,7 @@ uint8_t seq_edit_lowcost_length_flash_step_visible(seq_track_id_t track,
     return ((phase & 0x1U) == 0U) ? 1U : 0U;
 }
 
-static uint8_t seq_edit_lowcost_step_has_play_param(seq_track_id_t track,
+static uint8_t seq_edit_step_has_play_param(seq_track_id_t track,
                                                     seq_step_id_t step,
                                                     uint8_t voice,
                                                     seq_step_play_field_t field)
@@ -333,73 +320,73 @@ static uint8_t seq_edit_lowcost_step_has_play_param(seq_track_id_t track,
     return seq_edit_step_play_get(track, step, voice, field, &value);
 }
 
-static uint8_t seq_edit_lowcost_voice_is_present(seq_track_id_t track,
+static uint8_t seq_edit_voice_is_present(seq_track_id_t track,
                                                  seq_step_id_t step,
                                                  uint8_t voice)
 {
-    return (uint8_t)((seq_edit_lowcost_step_has_play_param(track, step, voice, SEQ_STEP_PLAY_FIELD_NOTE) != 0U)
-                    || (seq_edit_lowcost_step_has_play_param(track, step, voice, SEQ_STEP_PLAY_FIELD_VELOCITY) != 0U)
-                    || (seq_edit_lowcost_step_has_play_param(track, step, voice, SEQ_STEP_PLAY_FIELD_LENGTH) != 0U));
+    return (uint8_t)((seq_edit_step_has_play_param(track, step, voice, SEQ_STEP_PLAY_FIELD_NOTE) != 0U)
+                    || (seq_edit_step_has_play_param(track, step, voice, SEQ_STEP_PLAY_FIELD_VELOCITY) != 0U)
+                    || (seq_edit_step_has_play_param(track, step, voice, SEQ_STEP_PLAY_FIELD_LENGTH) != 0U));
 }
 
-static uint8_t seq_edit_lowcost_step_is_range_end_empty(seq_track_id_t track,
+static uint8_t seq_edit_step_is_range_end_empty(seq_track_id_t track,
                                                         seq_step_id_t step)
 {
     return (uint8_t)((seq_model_step_is_active(track, step) == 0U)
                     && (seq_model_step_has_non_play_plock(track, step) == 0U));
 }
 
-static uint8_t seq_edit_lowcost_source_is_held_or_pending(uint8_t hall)
+static uint8_t seq_edit_step_source_is_held_or_pending(uint8_t step_index)
 {
-    if (hall >= SEQ_STEPS_PER_PAGE)
+    if (step_index >= SEQ_STEPS_PER_PAGE)
     {
         return 0U;
     }
 
-    if (g_seq_hold_state.held[hall] != 0U)
+    if (g_seq_hold_state.held[step_index] != 0U)
     {
         return 1U;
     }
 
-    if (g_seq_hold_state.pending[hall] == 0U)
+    if (g_seq_hold_state.pending[step_index] == 0U)
     {
         return 0U;
     }
 
-    g_seq_hold_state.pending[hall] = 0U;
-    g_seq_hold_state.held[hall] = 1U;
+    g_seq_hold_state.pending[step_index] = 0U;
+    g_seq_hold_state.held[step_index] = 1U;
     return 1U;
 }
 
-static uint8_t seq_edit_lowcost_find_range_length_source(seq_track_id_t track,
-                                                         seq_step_id_t end_step,
-                                                         uint8_t end_hall,
-                                                         seq_step_id_t *out_start_step)
+static uint8_t seq_edit_find_range_length_source(seq_track_id_t track,
+                                                 seq_step_id_t end_step,
+                                                 uint8_t end_step_index,
+                                                 seq_step_id_t *out_start_step)
 {
     if (seq_model_is_step_editable_index(end_step) == 0U)
     {
         return 0U;
     }
 
-    if (seq_edit_lowcost_step_is_range_end_empty(track, end_step) == 0U)
+    if (seq_edit_step_is_range_end_empty(track, end_step) == 0U)
     {
         return 0U;
     }
 
-    for (uint8_t hall = 0U; hall < SEQ_STEPS_PER_PAGE; ++hall)
+    for (uint8_t step_index = 0U; step_index < SEQ_STEPS_PER_PAGE; ++step_index)
     {
-        if ((hall == end_hall)
-                || (seq_edit_lowcost_source_is_held_or_pending(hall) == 0U)
-                || (hall_surface_is_pressed(hall) == 0U)
-                || (g_seq_hold_state.track_id[hall] != track)
-                || (seq_model_step_produces_note(track, g_seq_hold_state.step_id[hall]) == 0U)
-                || (g_seq_hold_state.step_id[hall] >= end_step))
+        if ((step_index == end_step_index)
+                || (seq_edit_step_source_is_held_or_pending(step_index) == 0U)
+                || (button_down((button_id_t)((uint8_t)BTN_STEP_1 + step_index)) == 0U)
+                || (g_seq_hold_state.track_id[step_index] != track)
+                || (seq_model_step_produces_note(track, g_seq_hold_state.step_id[step_index]) == 0U)
+                || (g_seq_hold_state.step_id[step_index] >= end_step))
         {
             continue;
         }
         if (out_start_step != 0)
         {
-            *out_start_step = g_seq_hold_state.step_id[hall];
+            *out_start_step = g_seq_hold_state.step_id[step_index];
         }
         return 1U;
     }
@@ -407,27 +394,10 @@ static uint8_t seq_edit_lowcost_find_range_length_source(seq_track_id_t track,
     return 0U;
 }
 
-uint8_t seq_edit_lowcost_range_length_candidate(seq_track_id_t track,
-                                                uint8_t hall_index)
-{
-    if (seq_edit_track_sequence_is_locked(track) != 0U)
-    {
-        return 0U;
-    }
-
-    seq_step_id_t end_step = 0U;
-    if (seq_edit_map_hall_to_step(track, hall_index, &end_step) == 0U)
-    {
-        return 0U;
-    }
-
-    return seq_edit_lowcost_find_range_length_source(track, end_step, hall_index, 0);
-}
-
-static uint8_t seq_edit_lowcost_apply_length_to_voice(seq_track_id_t track,
-                                                      seq_step_id_t step,
-                                                      uint8_t voice,
-                                                      uint8_t length_steps)
+static uint8_t seq_edit_apply_length_to_voice(seq_track_id_t track,
+                                              seq_step_id_t step,
+                                              uint8_t voice,
+                                              uint8_t length_steps)
 {
     if (seq_edit_track_sequence_is_locked(track) != 0U)
     {
@@ -441,9 +411,9 @@ static uint8_t seq_edit_lowcost_apply_length_to_voice(seq_track_id_t track,
     return seq_edit_step_plock_upsert_succeeded(status);
 }
 
-static uint8_t seq_edit_lowcost_try_range_length(seq_track_id_t track,
-                                                 uint8_t end_hall,
-                                                 seq_step_id_t end_step)
+static uint8_t seq_edit_try_range_length(seq_track_id_t track,
+                                         uint8_t end_step_index,
+                                         seq_step_id_t end_step)
 {
     if (seq_edit_track_sequence_is_locked(track) != 0U)
     {
@@ -451,7 +421,7 @@ static uint8_t seq_edit_lowcost_try_range_length(seq_track_id_t track,
     }
 
     seq_step_id_t start_step = 0U;
-    if (seq_edit_lowcost_find_range_length_source(track, end_step, end_hall, &start_step) == 0U)
+    if (seq_edit_find_range_length_source(track, end_step, end_step_index, &start_step) == 0U)
     {
         return 0U;
     }
@@ -477,12 +447,12 @@ static uint8_t seq_edit_lowcost_try_range_length(seq_track_id_t track,
     const uint8_t play_capacity = seq_model_play_capacity(track);
     for (uint8_t voice = 0U; voice < play_capacity; ++voice)
     {
-        if (seq_edit_lowcost_voice_is_present(track, start_step, voice) == 0U)
+        if (seq_edit_voice_is_present(track, start_step, voice) == 0U)
         {
             continue;
         }
 
-        if (seq_edit_lowcost_apply_length_to_voice(track, start_step, voice, (uint8_t)length_steps) != 0U)
+        if (seq_edit_apply_length_to_voice(track, start_step, voice, (uint8_t)length_steps) != 0U)
         {
             applied = 1U;
         }
@@ -490,7 +460,7 @@ static uint8_t seq_edit_lowcost_try_range_length(seq_track_id_t track,
 
     if (applied == 0U)
     {
-        applied = seq_edit_lowcost_apply_length_to_voice(track, start_step, 0U, (uint8_t)length_steps);
+        applied = seq_edit_apply_length_to_voice(track, start_step, 0U, (uint8_t)length_steps);
     }
 
     if (applied == 0U)
@@ -503,31 +473,11 @@ static uint8_t seq_edit_lowcost_try_range_length(seq_track_id_t track,
         seq_model_set_trig(track, start_step, 1U);
     }
     seq_edit_mark_step_edited(track, start_step);
-    seq_edit_lowcost_length_flash_start(track, start_step, end_step);
+    seq_edit_length_flash_start(track, start_step, end_step);
     g_seq_hold_state.quick_length_applied = 1U;
     g_seq_hold_state.held_content = SEQ_EDIT_HELD_CONTENT_QUICK_LENGTH;
     return 1U;
 }
-#else
-uint8_t seq_edit_lowcost_length_flash_step_visible(seq_track_id_t track,
-                                                   seq_step_id_t step)
-{
-    (void)track;
-    (void)step;
-    return 0U;
-}
-
-uint8_t seq_edit_lowcost_range_length_candidate(seq_track_id_t track,
-                                                uint8_t hall_index)
-{
-    if (seq_edit_track_sequence_is_locked(track) != 0U)
-    {
-        return 0U;
-    }
-    (void)hall_index;
-    return 0U;
-}
-#endif
 
 static void seq_edit_apply_short_action(uint8_t hall)
 {
@@ -570,17 +520,17 @@ static void seq_edit_apply_short_action(uint8_t hall)
     seq_edit_finish_snapshot_undo(undo_started);
 }
 
-static void seq_edit_reset_hall_press_state(uint8_t hall)
+static void seq_edit_reset_step_press_state(uint8_t step_index)
 {
-    if (hall >= SEQ_STEPS_PER_PAGE)
+    if (step_index >= SEQ_STEPS_PER_PAGE)
     {
         return;
     }
 
-    g_seq_hold_state.auto_note_pending[hall] = 0U;
-    g_seq_hold_state.edited[hall] = 0U;
-    g_seq_hold_state.pending[hall] = 0U;
-    g_seq_hold_state.held[hall] = 0U;
+    g_seq_hold_state.auto_note_pending[step_index] = 0U;
+    g_seq_hold_state.edited[step_index] = 0U;
+    g_seq_hold_state.pending[step_index] = 0U;
+    g_seq_hold_state.held[step_index] = 0U;
     seq_edit_reset_gesture_if_idle();
 }
 
@@ -588,28 +538,7 @@ void seq_edit_init(void)
 {
     seq_clipboard_init();
     memset(&g_seq_hold_state, 0, sizeof(g_seq_hold_state));
-#if defined(BRICK6_VARIANT_LOWCOST)
     memset(&g_seq_length_flash, 0, sizeof(g_seq_length_flash));
-#endif
-}
-
-uint8_t seq_edit_toggle_hall_step(seq_track_id_t track, uint8_t hall_index)
-{
-    if (seq_edit_track_sequence_is_locked(track) != 0U)
-    {
-        return 0U;
-    }
-
-    seq_step_id_t step = 0U;
-    if (seq_edit_map_hall_to_step(track, hall_index, &step) == 0U)
-    {
-        return 0U;
-    }
-
-    const uint8_t undo_started = seq_edit_begin_snapshot_undo(track, &step, 1U);
-    seq_model_toggle_trig(track, step);
-    seq_edit_finish_snapshot_undo(undo_started);
-    return 1U;
 }
 
 void seq_edit_change_page(seq_track_id_t track, int8_t delta)
@@ -644,16 +573,18 @@ uint8_t seq_edit_get_page(seq_track_id_t track)
     return seq_model_get_track_page(track);
 }
 
-uint8_t seq_edit_map_hall_to_step(seq_track_id_t track, uint8_t hall_index, seq_step_id_t *out_step)
+uint8_t seq_edit_map_step_index_to_step(seq_track_id_t track,
+                                        uint8_t step_index,
+                                        seq_step_id_t *out_step)
 {
     (void)track;
-    if (hall_index >= SEQ_STEPS_PER_PAGE)
+    if (step_index >= SEQ_STEPS_PER_PAGE)
     {
         return 0U;
     }
 
     const uint8_t page = seq_model_get_track_page(track);
-    const uint8_t step = (uint8_t)(page * SEQ_STEPS_PER_PAGE + hall_index);
+    const uint8_t step = (uint8_t)(page * SEQ_STEPS_PER_PAGE + step_index);
 
     if (seq_model_is_step_editable_index(step) == 0U)
     {
@@ -668,68 +599,66 @@ uint8_t seq_edit_map_hall_to_step(seq_track_id_t track, uint8_t hall_index, seq_
     return 1U;
 }
 
-void seq_edit_step_press(seq_track_id_t track, uint8_t hall_index)
+void seq_edit_step_press(seq_track_id_t track, uint8_t step_index)
 {
-    if (hall_index >= SEQ_STEPS_PER_PAGE)
+    if (step_index >= SEQ_STEPS_PER_PAGE)
     {
         return;
     }
     if (seq_edit_track_sequence_is_locked(track) != 0U)
     {
-        seq_edit_reset_hall_press_state(hall_index);
+        seq_edit_reset_step_press_state(step_index);
         return;
     }
 
     seq_step_id_t step = 0U;
-    if (seq_edit_map_hall_to_step(track, hall_index, &step) == 0U)
+    if (seq_edit_map_step_index_to_step(track, step_index, &step) == 0U)
     {
         return;
     }
 
-#if defined(BRICK6_VARIANT_LOWCOST)
-    if (seq_edit_lowcost_try_range_length(track, hall_index, step) != 0U)
+    if (seq_edit_try_range_length(track, step_index, step) != 0U)
     {
         return;
     }
-#endif
 
-    g_seq_hold_state.step_id[hall_index] = step;
-    g_seq_hold_state.track_id[hall_index] = track;
-    g_seq_hold_state.pressed_active[hall_index] = seq_model_step_is_active(track, step);
-    g_seq_hold_state.pressed_content[hall_index] = seq_model_get_step_content(track, step);
-    g_seq_hold_state.auto_note_pending[hall_index] = seq_model_step_is_quick_note_eligible(track, step);
-    g_seq_hold_state.edited[hall_index] = 0U;
-    g_seq_hold_state.pending[hall_index] = 1U;
-    g_seq_hold_state.held[hall_index] = 0U;
-    g_seq_hold_state.press_tick[hall_index] = engine_tick_count;
+    g_seq_hold_state.step_id[step_index] = step;
+    g_seq_hold_state.track_id[step_index] = track;
+    g_seq_hold_state.pressed_active[step_index] = seq_model_step_is_active(track, step);
+    g_seq_hold_state.pressed_content[step_index] = seq_model_get_step_content(track, step);
+    g_seq_hold_state.auto_note_pending[step_index] = seq_model_step_is_quick_note_eligible(track, step);
+    g_seq_hold_state.edited[step_index] = 0U;
+    g_seq_hold_state.pending[step_index] = 1U;
+    g_seq_hold_state.held[step_index] = 0U;
+    g_seq_hold_state.press_tick[step_index] = engine_tick_count;
     if (g_seq_hold_state.quick_length_applied == 0U)
     {
         g_seq_hold_state.held_content = SEQ_EDIT_HELD_CONTENT_NONE;
     }
 }
 
-void seq_edit_step_release(seq_track_id_t track, uint8_t hall_index)
+void seq_edit_step_release(seq_track_id_t track, uint8_t step_index)
 {
     (void)track;
 
-    if (hall_index >= SEQ_STEPS_PER_PAGE)
+    if (step_index >= SEQ_STEPS_PER_PAGE)
     {
         return;
     }
 
-    const uint8_t was_pending = g_seq_hold_state.pending[hall_index];
-    const uint8_t was_held = g_seq_hold_state.held[hall_index];
+    const uint8_t was_pending = g_seq_hold_state.pending[step_index];
+    const uint8_t was_held = g_seq_hold_state.held[step_index];
 
     if ((was_pending != 0U) && (was_held == 0U))
     {
-        const uint32_t held_ticks = engine_tick_count - g_seq_hold_state.press_tick[hall_index];
+        const uint32_t held_ticks = engine_tick_count - g_seq_hold_state.press_tick[step_index];
         if (held_ticks < SEQ_STEP_HOLD_THRESHOLD_TICKS)
         {
-            seq_edit_apply_short_action(hall_index);
+            seq_edit_apply_short_action(step_index);
         }
     }
 
-    seq_edit_reset_hall_press_state(hall_index);
+    seq_edit_reset_step_press_state(step_index);
 }
 
 void seq_edit_step_hold_update(void)
@@ -743,14 +672,14 @@ void seq_edit_step_hold_update(void)
             continue;
         }
 
-        if (hall_surface_is_pressed(hall) == 0U)
+        if (button_down((button_id_t)((uint8_t)BTN_STEP_1 + hall)) == 0U)
         {
             const uint32_t held_ticks = now_tick - g_seq_hold_state.press_tick[hall];
             if (held_ticks < SEQ_STEP_HOLD_THRESHOLD_TICKS)
             {
                 seq_edit_apply_short_action(hall);
             }
-            seq_edit_reset_hall_press_state(hall);
+            seq_edit_reset_step_press_state(hall);
             continue;
         }
 
@@ -1098,7 +1027,7 @@ uint8_t seq_edit_step_is_pressed(seq_track_id_t track, seq_step_id_t step)
         if (((g_seq_hold_state.pending[hall] != 0U) || (g_seq_hold_state.held[hall] != 0U))
                 && (g_seq_hold_state.track_id[hall] == track)
                 && (g_seq_hold_state.step_id[hall] == step)
-                && (hall_surface_is_pressed(hall) != 0U))
+                && (button_down((button_id_t)((uint8_t)BTN_STEP_1 + hall)) != 0U))
         {
             return 1U;
         }

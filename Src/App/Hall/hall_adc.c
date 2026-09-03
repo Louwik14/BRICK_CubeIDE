@@ -1,8 +1,6 @@
 #include "App/Hall/hall_adc.h"
 
-#if defined(BRICK6_VARIANT_LOWCOST)
 #include "App/Hall/hall_engine.h"
-#endif
 #include "App/Hall/hall_keymap.h"
 #include "Board/board_surface.h"
 #include "IPC/live_clock_control.h"
@@ -13,17 +11,12 @@
 
 /*
  * ADC DMA mailboxes:
- * - premium: ADC1/ADC2 each write one Hall MUX sample
- * - low-cost: ADC1 writes Hall MUX 0/2 plus the master-volume pot,
+ * - ADC1 writes Hall MUX 0/2 plus the master-volume pot,
  *   ADC2 writes Hall MUX 1
  *
  * Placement in DMA_BUFFER prepares a non-cacheable policy at MPU stage.
  */
-#if defined(BRICK6_VARIANT_LOWCOST)
 static DMA_BUFFER volatile uint16_t adc1_dma[3U];
-#else
-static DMA_BUFFER volatile uint16_t adc1_dma[2U];
-#endif
 static DMA_BUFFER volatile uint16_t adc2_dma;
 
 static volatile uint16_t hall_raw[HALL_KEY_COUNT];
@@ -33,9 +26,7 @@ static volatile uint8_t hall_mux_index;
 static volatile uint8_t hall_discard_count;
 static volatile uint8_t adc1_ready;
 static volatile uint8_t adc2_ready;
-#if defined(BRICK6_VARIANT_LOWCOST)
 static volatile uint16_t hall_mux_raw[3U][HALL_MUX_COUNT];
-#endif
 static void hall_mux_select(uint8_t index)
 {
     board_surface_select_hall_mux(index);
@@ -48,9 +39,7 @@ static void hall_adc_queue_sample(uint8_t key, uint16_t raw)
 
     hall_raw[key] = raw;
     hall_sample_count[key] = sample_count;
-    board_surface_update_lane(key, raw, sample_count);
-
-    /* Both boards run the same bounded detector in the acquisition callback. */
+    /* The bounded detector consumes all 24 BRICK Hall channels in the callback. */
     hall_engine_process_sample(key, raw, sample_count, tim5_tick);
 }
 
@@ -66,11 +55,9 @@ static void hall_adc_process_pair(void)
         return;
     }
 
-#if defined(BRICK6_VARIANT_LOWCOST)
     hall_mux_raw[0U][hall_mux_index] = v1;
     hall_mux_raw[1U][hall_mux_index] = v2;
     hall_mux_raw[2U][hall_mux_index] = v3;
-#endif
 
     {
         uint8_t key_a = 0U;
@@ -108,9 +95,7 @@ void hall_adc_init(void)
 
     adc1_dma[0U] = 0U;
     adc1_dma[1U] = 0U;
-#if defined(BRICK6_VARIANT_LOWCOST)
     adc1_dma[2U] = 0U;
-#endif
     adc2_dma = 0U;
 
     hall_mux_select(hall_mux_index);
@@ -120,14 +105,12 @@ void hall_adc_init(void)
         hall_raw[i] = 0U;
         hall_sample_count[i] = 0U;
     }
-#if defined(BRICK6_VARIANT_LOWCOST)
     for (uint8_t mux = 0U; mux < HALL_MUX_COUNT; mux++)
     {
         hall_mux_raw[0U][mux] = 0U;
         hall_mux_raw[1U][mux] = 0U;
         hall_mux_raw[2U][mux] = 0U;
     }
-#endif
 
     if (board_surface_start_hall_adc_dma(adc1_dma, &adc2_dma) == 0U)
     {
@@ -155,7 +138,6 @@ uint8_t hall_adc_get_mux_index(void)
     return hall_mux_index;
 }
 
-#if defined(BRICK6_VARIANT_LOWCOST)
 uint16_t hall_adc_get_mux_raw(uint8_t mux_adc, uint8_t mux_channel)
 {
     if ((mux_adc >= 3U) || (mux_channel >= HALL_MUX_COUNT))
@@ -165,7 +147,6 @@ uint16_t hall_adc_get_mux_raw(uint8_t mux_adc, uint8_t mux_channel)
 
     return hall_mux_raw[mux_adc][mux_channel];
 }
-#endif
 
 uint32_t hall_adc_get_sample_count(uint8_t key)
 {

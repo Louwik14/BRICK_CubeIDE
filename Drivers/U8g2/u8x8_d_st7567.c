@@ -1316,7 +1316,7 @@ uint8_t u8x8_d_st7567_erc13232(u8x8_t *u8x8, uint8_t msg, uint8_t arg_int, void 
 /*=====================================================*/
 /*
 
-  https://www.buydisplay.com/2-inch-low-cost-white-128x64-graphic-cog-lcd-display-st7567-spi
+  https://www.buydisplay.com/2-inch-brick-white-128x64-graphic-cog-lcd-display-st7567-spi
 
   ERC12864FSF-20
 

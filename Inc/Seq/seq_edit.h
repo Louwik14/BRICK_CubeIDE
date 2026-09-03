@@ -9,13 +9,14 @@
 
 void seq_edit_init(void);
 uint8_t seq_edit_track_sequence_is_locked(seq_track_id_t track);
-uint8_t seq_edit_toggle_hall_step(seq_track_id_t track, uint8_t hall_index);
 void seq_edit_change_page(seq_track_id_t track, int8_t delta);
 uint8_t seq_edit_get_page(seq_track_id_t track);
-uint8_t seq_edit_map_hall_to_step(seq_track_id_t track, uint8_t hall_index, seq_step_id_t *out_step);
+uint8_t seq_edit_map_step_index_to_step(seq_track_id_t track,
+                                        uint8_t step_index,
+                                        seq_step_id_t *out_step);
 
-void seq_edit_step_press(seq_track_id_t track, uint8_t hall_index);
-void seq_edit_step_release(seq_track_id_t track, uint8_t hall_index);
+void seq_edit_step_press(seq_track_id_t track, uint8_t step_index);
+void seq_edit_step_release(seq_track_id_t track, uint8_t step_index);
 void seq_edit_step_hold_update(void);
 uint8_t seq_edit_step_is_pressed(seq_track_id_t track, seq_step_id_t step);
 
@@ -53,10 +54,8 @@ uint8_t seq_edit_collect_held_steps(seq_track_id_t *out_track,
 uint8_t seq_edit_collect_pressed_steps(seq_track_id_t *out_track,
                                        seq_step_id_t *out_steps,
                                        uint8_t max_steps);
-uint8_t seq_edit_lowcost_length_flash_step_visible(seq_track_id_t track,
-                                                   seq_step_id_t step);
-uint8_t seq_edit_lowcost_range_length_candidate(seq_track_id_t track,
-                                                uint8_t hall_index);
+uint8_t seq_edit_length_flash_step_visible(seq_track_id_t track,
+                                           seq_step_id_t step);
 
 uint8_t seq_edit_step_play_get(seq_track_id_t track,
                                 seq_step_id_t step,

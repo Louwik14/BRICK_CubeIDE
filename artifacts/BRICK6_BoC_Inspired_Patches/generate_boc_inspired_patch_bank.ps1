@@ -675,10 +675,10 @@ function Validate-Patch([string]$Path, [object]$Spec) {
 $abiObject = Join-Path $env:TEMP "brick6_patch_abi_probe.o"
 $armGcc = (Get-Command arm-none-eabi-gcc -ErrorAction Stop).Source
 $includeArgs = @("-I$RepoRoot\Inc", "-I$RepoRoot\App\Middlewares\Third_Party\FatFs\src",
-    "-I$RepoRoot\Board\LowCost\Generated\Inc", "-I$RepoRoot\Drivers\STM32H7xx_HAL_Driver\Inc",
+    "-I$RepoRoot\Board\Generated\Inc", "-I$RepoRoot\Drivers\STM32H7xx_HAL_Driver\Inc",
     "-I$RepoRoot\Drivers\CMSIS\Device\ST\STM32H7xx\Include", "-I$RepoRoot\Drivers\CMSIS\Include")
 foreach ($dir in Get-ChildItem (Join-Path $RepoRoot "Inc") -Directory) { $includeArgs += "-I$($dir.FullName)" }
-& $armGcc -std=c11 -mcpu=cortex-m7 -mthumb -DSTM32H743xx -DBRICK6_VARIANT_LOWCOST @includeArgs `
+& $armGcc -std=c11 -mcpu=cortex-m7 -mthumb -DSTM32H743xx @includeArgs `
     -c (Join-Path $RepoRoot "tools\patch_bank\abi_probe.c") -o $abiObject
 if ($LASTEXITCODE -ne 0) { throw "ARM ABI probe failed." }
 Remove-Item -LiteralPath $abiObject -Force

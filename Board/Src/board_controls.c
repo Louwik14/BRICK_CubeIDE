@@ -54,73 +54,24 @@ static const button_id_t g_button_physical_to_logical[] = {
     [31] = BTN_TRACK,
 };
 
-/*
- * The scan order above remains the raw board order.  These IDs are the
- * values are remapped only after that raw lookup.
- */
-static button_id_t board_controls_button_remap_observed_id(button_id_t observed_id)
-{
-    switch ((uint8_t)observed_id)
-    {
-        case 7U:  return BTN_TRACK;
-        case 8U:  return BTN_PLAY;
-        case 9U:  return BTN_REC;
-        case 10U: return BTN_SHIFT;
-        case 11U: return BTN_TRANSPOSE_UP;
-        case 12U: return BTN_TRANSPOSE_DOWN;
-        case 13U: return BTN_COPY;
-        case 14U: return BTN_PASTE;
-
-        case 16U: return BTN_PAGE_1;
-        case 18U: return BTN_PAGE_3;
-        case 19U: return BTN_PAGE_4;
-        case 20U: return BTN_ENCODER_1_PUSH;
-        case 21U: return BTN_PAGE_2;
-
-        case 24U: return BTN_STEP_4;
-        case 25U: return BTN_STEP_1;
-        case 26U: return BTN_STEP_2;
-        case 27U: return BTN_STEP_3;
-        case 28U: return BTN_STEP_5;
-        case 29U: return BTN_STEP_6;
-        case 30U: return BTN_STEP_7;
-        case 31U: return BTN_STEP_8;
-
-        case 32U: return BTN_STEP_13;
-        case 33U: return BTN_STEP_14;
-        case 34U: return BTN_STEP_15;
-        case 35U: return BTN_STEP_16;
-        case 36U: return BTN_STEP_9;
-        case 37U: return BTN_STEP_10;
-        case 38U: return BTN_STEP_11;
-        case 39U: return BTN_STEP_12;
-
-        default:  return observed_id;
-    }
-}
-
 #define STEP_MASK (((1ULL << BTN_STEP_1) | (1ULL << BTN_STEP_2) | (1ULL << BTN_STEP_3) | (1ULL << BTN_STEP_4) | \
                     (1ULL << BTN_STEP_5) | (1ULL << BTN_STEP_6) | (1ULL << BTN_STEP_7) | (1ULL << BTN_STEP_8) | \
                     (1ULL << BTN_STEP_9) | (1ULL << BTN_STEP_10) | (1ULL << BTN_STEP_11) | (1ULL << BTN_STEP_12) | \
                     (1ULL << BTN_STEP_13) | (1ULL << BTN_STEP_14) | (1ULL << BTN_STEP_15) | (1ULL << BTN_STEP_16)))
 #define ENCODER_PUSH_MASK (((1ULL << BTN_ENCODER_1_PUSH) | (1ULL << BTN_ENCODER_2_PUSH) | \
                             (1ULL << BTN_ENCODER_3_PUSH) | (1ULL << BTN_ENCODER_4_PUSH)))
-#define LOWCOST_STEP_MASK_PRESENT (((1ULL << BTN_STEP_8) | (1ULL << BTN_STEP_7) | \
-                                    (1ULL << BTN_STEP_6) | (1ULL << BTN_STEP_5) | \
-                                    (1ULL << BTN_STEP_4) | (1ULL << BTN_STEP_3) | \
-                                    (1ULL << BTN_STEP_2) | (1ULL << BTN_STEP_1) | \
-                                    (1ULL << BTN_STEP_12) | (1ULL << BTN_STEP_11) | \
-                                    (1ULL << BTN_STEP_10) | (1ULL << BTN_STEP_9) | \
-                                    (1ULL << BTN_STEP_16) | (1ULL << BTN_STEP_15) | \
-                                    (1ULL << BTN_STEP_14) | (1ULL << BTN_STEP_13)))
-#define LOWCOST_ENCODER_PUSH_MASK_PRESENT (((1ULL << BTN_ENCODER_4_PUSH) | (1ULL << BTN_ENCODER_3_PUSH) | \
-                                            (1ULL << BTN_ENCODER_1_PUSH) | (1ULL << BTN_ENCODER_2_PUSH)))
+#define BRICK_STEP_MASK_PRESENT (((1ULL << BTN_STEP_12) | (1ULL << BTN_STEP_11) | (1ULL << BTN_STEP_10) | (1ULL << BTN_STEP_9) | \
+                                  (1ULL << BTN_STEP_16) | (1ULL << BTN_STEP_15) | (1ULL << BTN_STEP_14) | (1ULL << BTN_STEP_13) | \
+                                  (1ULL << BTN_STEP_8) | (1ULL << BTN_STEP_7) | (1ULL << BTN_STEP_6) | (1ULL << BTN_STEP_5) | \
+                                  (1ULL << BTN_STEP_4) | (1ULL << BTN_STEP_3) | (1ULL << BTN_STEP_2) | (1ULL << BTN_STEP_1)))
+#define BRICK_ENCODER_PUSH_MASK_PRESENT (((1ULL << BTN_ENCODER_4_PUSH) | (1ULL << BTN_ENCODER_3_PUSH) | \
+                                          (1ULL << BTN_ENCODER_1_PUSH) | (1ULL << BTN_ENCODER_2_PUSH)))
 
 _Static_assert((sizeof(g_button_physical_to_logical) / sizeof(g_button_physical_to_logical[0])) == 32U,
                "Low-cost SR mapping must define 32 physical positions");
-_Static_assert(LOWCOST_STEP_MASK_PRESENT == STEP_MASK, "Low-cost SR mapping must contain each STEP exactly once");
-_Static_assert(LOWCOST_ENCODER_PUSH_MASK_PRESENT == ENCODER_PUSH_MASK,
-               "Low-cost SR mapping must contain each encoder push exactly once");
+_Static_assert(BRICK_STEP_MASK_PRESENT == STEP_MASK, "BRICK SR mapping must contain each STEP exactly once");
+_Static_assert(BRICK_ENCODER_PUSH_MASK_PRESENT == ENCODER_PUSH_MASK,
+               "BRICK SR mapping must contain each encoder push exactly once");
 
 uint8_t board_controls_button_physical_count(void)
 {
@@ -133,7 +84,7 @@ button_id_t board_controls_button_logical_for_physical(uint8_t physical_idx)
     {
         return BOARD_CONTROLS_BUTTON_INVALID;
     }
-    return board_controls_button_remap_observed_id(g_button_physical_to_logical[physical_idx]);
+    return g_button_physical_to_logical[physical_idx];
 }
 
 void board_controls_buttons_latch_low(void) { CS_SR_GPIO_Port->BSRR = ((uint32_t)CS_SR_Pin << 16U); }

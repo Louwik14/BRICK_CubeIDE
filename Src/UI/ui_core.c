@@ -126,7 +126,6 @@ static uint16_t ui_core_hall_ui_claim_mask(uint8_t pressed)
         || (g_ui_track_state.track_select_armed != 0U)
         || (g_ui_track_state.macro_overlay_active != 0U)
         || (raw_mode == UI_HALL_MODE_PATTERN)
-        || (ui_hall_is_seq_context(raw_mode) != 0U)
         || (ui_page_patch_assign_is_open() != 0U)
         || (ui_page_audio_rec_is_open() != 0U)
         || (ui_page_settings_is_open() != 0U)
@@ -135,6 +134,11 @@ static uint16_t ui_core_hall_ui_claim_mask(uint8_t pressed)
                 != UI_HALL_ROUT_CONTEXT_NONE)))
     {
         return all_hall_lanes;
+    }
+
+    if (raw_mode == UI_HALL_MODE_SEQ)
+    {
+        return 0U;
     }
 
     const ui_hall_mode_t input_mode = (raw_mode == UI_HALL_MODE_MUTE)

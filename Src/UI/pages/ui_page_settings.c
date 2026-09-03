@@ -36,9 +36,7 @@
 #include "ui_core.h"
 #include "ui_page_manager.h"
 
-#if defined(BRICK6_VARIANT_LOWCOST)
 #include "pages/ui_page_calibration.h"
-#endif
 
 typedef enum
 {
@@ -55,9 +53,7 @@ typedef enum
     UI_SETTINGS_VIEW_PROJECT_SAVE_AS,
     UI_SETTINGS_VIEW_PROJECT_MANAGE,
     UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT,
-#if defined(BRICK6_VARIANT_LOWCOST)
     UI_SETTINGS_VIEW_CALIBRATION,
-#endif
     UI_SETTINGS_VIEW_COUNT
 } ui_settings_view_t;
 

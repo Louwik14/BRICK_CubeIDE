@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * File Name          : freertos.c
-  * Description        : FreeRTOS application tasks for BRICK6 Low-Cost.
+  * Description        : FreeRTOS application tasks for BRICK6 BRICK.
   ******************************************************************************
   */
 /* USER CODE END Header */

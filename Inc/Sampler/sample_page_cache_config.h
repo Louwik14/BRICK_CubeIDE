@@ -191,22 +191,22 @@ static inline uint8_t sample_page_slot_is_margin_pool(uint32_t slot)
 
 #if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
 #if (SAMPLE_PAGE_BYTES != (32U * 1024U))
-#error "Low-Cost differentiated Multi contract requires 32 KiB pages"
+#error "BRICK differentiated Multi contract requires 32 KiB pages"
 #endif
 #if (SAMPLE_PAGE_MULTI_WINDOW_PAGES != 6U)
-#error "Low-Cost stereo Multi mobile window must reserve six pages"
+#error "BRICK stereo Multi mobile window must reserve six pages"
 #endif
 #if (SAMPLE_PAGE_VOICE_LOOP_CACHE_MAX_PAGES != 4U)
-#error "Low-Cost stereo Multi loop cache must reserve four pages"
+#error "BRICK stereo Multi loop cache must reserve four pages"
 #endif
 #if (SAMPLE_PAGE_PRODUCT_VOICE_RESERVE_PAGES != 80U)
-#error "Low-Cost Multi runtime reserve must cover 8 x (6 mobile + 4 loop) pages"
+#error "BRICK Multi runtime reserve must cover 8 x (6 mobile + 4 loop) pages"
 #endif
 #if (SAMPLE_PREP_MULTI_BUDGET_PAGES != 608U)
-#error "Low-Cost Multi START budget must be 608 physical pages"
+#error "BRICK Multi START budget must be 608 physical pages"
 #endif
 #if (SAMPLE_PREP_MULTI_START_SLOT_BUDGET != 304U)
-#error "Low-Cost Multi START budget must expose 304 mono-equivalent slots"
+#error "BRICK Multi START budget must expose 304 mono-equivalent slots"
 #endif
 #endif
 

@@ -1,4 +1,4 @@
-# Recorder SD, Looper et streamer
+# Recorder SD, Looper et streamer BRICK
 
 ## Frontieres P0-4
 
@@ -67,7 +67,7 @@ Les `f_write` restants hors recorder servent l'editeur REC EDIT (copie Save/Assi
 
 ## Validation
 
-Les tests hote conserves couvrent le state machine generique, le WAV et ses erreurs produit, l'ecriture block-device asynchrone, l'arbitrage scheduler et la reservation FAT32/exFAT avec extension, preservation des voisins, liberation de queue et recovery. La validation cible doit compiler LowCost puis exercer capture longue, LEN, stop pendant charge streamer, carte lente/fragmentee, retrait media et reloop immediat.
+Les tests hote conserves couvrent le state machine generique, le WAV et ses erreurs produit, l'ecriture block-device asynchrone, l'arbitrage scheduler et la reservation FAT32/exFAT avec extension, preservation des voisins, liberation de queue et recovery. La validation cible doit compiler BRICK puis exercer capture longue, LEN, stop pendant charge streamer, carte lente/fragmentee, retrait media et reloop immediat.
 
 Le STOP Looper immediat est un lot fonctionnel unique de trois commandes au
 meme sample: armement STOP Looper, STOP du client Recorder et boundary Looper.

@@ -8,7 +8,6 @@ board_controls_start_encoder_fast_poll_timer
 led_fb_clear
 led_fb_commit
 led_fb_set
-board_product_capabilities
 HAL_GetTick
 led_fb_fill
 led_fb_init
@@ -17,13 +16,11 @@ board_surface_is_hall_adc2_callback
 board_surface_select_hall_mux
 board_surface_start_hall_adc_dma
 board_surface_start_hall_scan_timer
-board_surface_update_lane
 HAL_FLASH_Lock
 HAL_FLASH_Program
 HAL_FLASH_Unlock
 HAL_FLASHEx_Erase
 memcpy
-board_surface_snapshot
 board_surface_read_master_volume_raw
 board_usb_device_init
 __aeabi_uldivmod

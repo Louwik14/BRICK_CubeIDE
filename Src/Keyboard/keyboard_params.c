@@ -15,8 +15,6 @@
 
 #include "Keyboard/keyboard_params.h"
 
-#include "Keyboard/kbd_input_mapper.h"
-
 typedef struct
 {
     uint8_t root_index;
@@ -43,7 +41,6 @@ static void keyboard_params_apply(void)
                                g_keyboard_params.omnichord);
     ui_keyboard_app_set_note_order(g_keyboard_params.note_order);
     ui_keyboard_app_set_chord_override(g_keyboard_params.chord_override);
-    kbd_input_mapper_set_omnichord_state(g_keyboard_params.omnichord);
 }
 
 void keyboard_params_init(void)

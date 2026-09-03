@@ -12,8 +12,7 @@
             "name": "Debug",
             "inherits": "common-ninja-arm",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug",
-                "BRICK6_VARIANT": "lowcost"
+                "CMAKE_BUILD_TYPE": "Debug"
             }
         },
         {
@@ -22,24 +21,14 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_C_FLAGS_DEBUG": "-g3",
-                "CMAKE_CXX_FLAGS_DEBUG": "-g3",
-                "BRICK6_VARIANT": "lowcost"
+                "CMAKE_CXX_FLAGS_DEBUG": "-g3"
             }
         },
         {
             "name": "Release",
             "inherits": "common-ninja-arm",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release",
-                "BRICK6_VARIANT": "lowcost"
-            }
-        },
-        {
-            "name": "Premium",
-            "inherits": "common-ninja-arm",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release",
-                "BRICK6_VARIANT": "premium"
+                "CMAKE_BUILD_TYPE": "Release"
             }
         },
         {
@@ -47,7 +36,6 @@
             "inherits": "common-ninja-arm",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "BRICK6_VARIANT": "lowcost",
                 "BRICK6_STREAM_READ_CHUNK_KIB": "16"
             }
         },
@@ -56,7 +44,6 @@
             "inherits": "common-ninja-arm",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "BRICK6_VARIANT": "lowcost",
                 "BRICK6_STREAM_READ_CHUNK_KIB": "32"
             }
         }
@@ -73,10 +60,6 @@
         {
             "name": "Release",
             "configurePreset": "Release"
-        },
-        {
-            "name": "Premium",
-            "configurePreset": "Premium"
         },
         {
             "name": "Calibration32Chunk16",

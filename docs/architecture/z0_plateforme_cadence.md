@@ -4,7 +4,7 @@
 
 L'audio travaille par demi-buffer de 64 frames a 48 kHz. L'IRQ SAI possede sa timeline audio locale et n'execute ni FatFs, ni scan de cache, ni travail Storage non borne. CONTROL_RT se cadence seul: TIM12 porte le tick musical interne, TIM5, demarre avant les domaines, porte le temps physique commun et sa conversion nominale en samples. CONTROL_RT publie l'horizon musical glissant; aucun reveil AUDIO, compteur de frames periodique ou PendSV sequenceur ne traverse la frontiere. Scheduler, lifecycle et Note FX contribuent d'abord a une fenetre CONTROL fixe; ses 64 buckets sample/kind finalisent ensuite la FIFO en ordre chronologique, avec STOP avant START a timestamp egal.
 
-Hall Low-Cost et Premium executent la meme machine bornee depuis l'acquisition ADC. TIM5 est le compteur libre commun de capture. CONTROL en possede l'extension et la conversion; AUDIO initialise sa sample clock locale depuis TIM5 au premier callback valide et ne publie aucune ancre.
+Le clavier Hall BRICK execute la meme machine bornee depuis l'acquisition ADC. TIM5 est le compteur libre commun de capture. CONTROL en possede l'extension et la conversion; AUDIO initialise sa sample clock locale depuis TIM5 au premier callback valide et ne publie aucune ancre.
 
 ## Frontiere CONTROL/AUDIO
 
@@ -16,7 +16,7 @@ La frontiere physique de plateforme est regroupee dans `Inc/Platform` et
 `Src/Platform`. Les types, layouts et `extern` purs appartiennent a
 `DOMAIN_CONTRACTS`; leurs definitions physiques appartiennent au groupe
 `SHARED_BACKING`. Les publishers et queues locales appartiennent explicitement
-a `DOMAIN_CONTROL`, jamais a `PLATFORM_H743`. Les writers CONTROL, readers AUDIO,
+a `DOMAIN_CONTROL`. Les writers CONTROL, readers AUDIO,
 publishers AUDIO et readers CONTROL sont des unites distinctes dans leur domaine proprietaire. Les
 fichiers de metier CONTROL, les runtimes et DSP AUDIO, ainsi que les pools
 Storage/Sampler, restent dans leurs domaines; `live_parameter_audio_runtime`
@@ -51,7 +51,7 @@ La migration H747 conserve les payloads et protocoles. Restent physiques: deux i
 
 Le build H743 classe chaque unite dans un seul ensemble: `DOMAIN_CONTROL`,
 `DOMAIN_STORAGE`, `DOMAIN_AUDIO`, `DOMAIN_CONTRACTS`, `SHARED_BACKING` ou
-`PLATFORM_H743`. Il n'existe plus de domaine de transition mixte. UI,
+`BOARD_SOURCES`. Il n'existe plus de domaine de transition mixte. UI,
 sequenceur et etat Param canonique appartiennent a CONTROL; le refill Stream,
 son page-cache, ses leases de recyclage, son I/O, son decode et son scheduler
 appartiennent a STORAGE; DSP, projection Param appliquee, ENV3 et caches/plans
@@ -60,7 +60,7 @@ de modulation appartiennent a AUDIO. Les catalogues immuables partages
 
 `SHARED_BACKING` n'est pas un domaine fonctionnel: il ne contient que les
 variables placees correspondant aux `extern`, sans fonction, init, reset ou
-policy. L'initialisation reste chez le writer proprietaire. `PLATFORM_H743`
+policy. L'initialisation reste chez le writer proprietaire. `BOARD_SOURCES`
 porte seulement les seams de composition mono-coeur, le hardware
 board et le staging/remap LED physique. Boutons, encodeurs et logique produit LED
 appartiennent a CONTROL. Les backings diagnostic/waveform, FIFO, Recorder,

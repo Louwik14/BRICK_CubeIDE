@@ -3,7 +3,6 @@
 #include "stm32h7xx_hal.h"
 #include "App/control_domain.h"
 #include "App/control_clipboard.h"
-#include "Board/board_product.h"
 #include "buttons.h"
 #include "ui_page_manager.h"
 #include "pages/ui_page_template_cfg.h"
@@ -17,20 +16,7 @@
 
 static uint8_t ui_core_seq_transport_hall_steps_available_in_mode(ui_hall_mode_t hall_mode)
 {
-    if (ui_hall_is_seq_context(hall_mode) != 0U)
-    {
-        return 1U;
-    }
-
-    const board_product_capabilities_t *const caps = board_product_capabilities();
-    if ((caps == 0)
-        || (caps->has_step_binary_lanes == 0U)
-        || (caps->has_separate_hall_keyboard == 0U))
-    {
-        return 0U;
-    }
-
-    return (uint8_t)(hall_mode == UI_HALL_MODE_KEYBOARD);
+    return ui_hall_is_seq_context(hall_mode);
 }
 
 static uint8_t ui_core_seq_transport_request_roll(int8_t delta)
@@ -109,42 +95,33 @@ uint8_t ui_core_seq_transport_handle_seq_mode_event(const ui_event_t *ev,
         return 1U;
     }
 
-    if (shift_down != 0U)
-    {
-#if defined(BRICK6_VARIANT_LOWCOST)
-        if ((ev->type == UI_EVENT_HALL_PRESS)
-            && (ev->id < SEQ_STEPS_PER_PAGE)
-            && (seq_edit_lowcost_range_length_candidate(track, ev->id) != 0U))
-        {
-            const control_seq_intent_t intent = {
-                .operation = CONTROL_SEQ_STEP_PRESS,
-                .track = track,
-                .step = ev->id
-            };
-            return control_domain_request_seq(&intent);
-        }
-#endif
-        return 0U;
-    }
-
-    if ((ev->type == UI_EVENT_HALL_PRESS) && (ev->id < SEQ_STEPS_PER_PAGE))
+    if ((ev->type == UI_EVENT_BUTTON_PRESS)
+        && (ev->id >= (uint8_t)BTN_STEP_1)
+        && (ev->id <= (uint8_t)BTN_STEP_16))
     {
         const control_seq_intent_t intent = {
             .operation = CONTROL_SEQ_STEP_PRESS,
             .track = track,
-            .step = ev->id
+            .step = (uint8_t)(ev->id - (uint8_t)BTN_STEP_1)
         };
         return control_domain_request_seq(&intent);
     }
 
-    if ((ev->type == UI_EVENT_HALL_RELEASE) && (ev->id < SEQ_STEPS_PER_PAGE))
+    if ((ev->type == UI_EVENT_BUTTON_RELEASE)
+        && (ev->id >= (uint8_t)BTN_STEP_1)
+        && (ev->id <= (uint8_t)BTN_STEP_16))
     {
         const control_seq_intent_t intent = {
             .operation = CONTROL_SEQ_STEP_RELEASE,
             .track = ui_get_active_lane(),
-            .step = ev->id
+            .step = (uint8_t)(ev->id - (uint8_t)BTN_STEP_1)
         };
         return control_domain_request_seq(&intent);
+    }
+
+    if (shift_down != 0U)
+    {
+        return 0U;
     }
 
     if (ev->type == UI_EVENT_BUTTON_PRESS)

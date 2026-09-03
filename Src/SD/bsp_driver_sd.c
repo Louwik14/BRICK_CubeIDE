@@ -498,7 +498,7 @@ __weak void BSP_SD_ReadCpltCallback(void)
  */
 __weak uint8_t BSP_SD_IsDetected(void)
 {
-  /* No card-detect GPIO on LowCost: expose only the last successful
+  /* No card-detect GPIO on BRICK: expose only the last successful
      initialization result, never a fabricated physical level. */
   return (g_bsp_sd_initialized != 0U) ? SD_PRESENT : SD_NOT_PRESENT;
 }

@@ -1,7 +1,6 @@
 #include "ui_hall_mode_flow.h"
 #include "App/control_domain.h"
 
-#include "Board/board_product.h"
 #include "Track/entity_topology.h"
 #include "Storage/patch_product.h"
 #include "Storage/patch_product.h"
@@ -30,19 +29,11 @@ typedef struct
 } ui_hall_mode_flow_patch_pending_t;
 
 static ui_hall_mode_flow_patch_pending_t g_patch_pending;
-static uint8_t g_lowcost_rec_return_page = UI_PAGE_TEMPLATE_CFG;
-static ui_hall_mode_t g_lowcost_rec_return_mode = UI_HALL_MODE_SEQ;
-static uint8_t g_lowcost_rec_return_valid;
+static uint8_t g_rec_return_page = UI_PAGE_TEMPLATE_CFG;
+static ui_hall_mode_t g_rec_return_mode = UI_HALL_MODE_SEQ;
+static uint8_t g_rec_return_valid;
 
-static void ui_hall_mode_flow_leave_lowcost_modal_page(void);
-
-static uint8_t ui_hall_mode_flow_has_lowcost_step_modes(void)
-{
-    const board_product_capabilities_t *caps = board_product_capabilities();
-    return ((caps != 0)
-            && (caps->has_step_binary_lanes != 0U)
-            && (caps->has_separate_hall_keyboard != 0U)) ? 1U : 0U;
-}
+static void ui_hall_mode_flow_leave_modal_page(void);
 
 static void ui_hall_mode_flow_activate_mode(ui_hall_mode_t target_mode,
                                             uint8_t target_page,
@@ -60,13 +51,13 @@ static void ui_hall_mode_flow_activate_mode(ui_hall_mode_t target_mode,
 
 static void ui_hall_mode_flow_open_midi_fx(void)
 {
-    ui_hall_mode_flow_leave_lowcost_modal_page();
+    ui_hall_mode_flow_leave_modal_page();
     ui_navigation_request_page_with_availability(UI_PAGE_MIDI_FX);
 }
 
 static void ui_hall_mode_flow_open_audio_fx(void)
 {
-    ui_hall_mode_flow_leave_lowcost_modal_page();
+    ui_hall_mode_flow_leave_modal_page();
     ui_navigation_request_page_with_availability(UI_PAGE_AUDIO_FX);
 }
 
@@ -94,25 +85,25 @@ static uint8_t ui_hall_mode_flow_open_looper_rout(void)
     return 1U;
 }
 
-static void ui_hall_mode_flow_close_lowcost_rec(void)
+static void ui_hall_mode_flow_close_rec(void)
 {
     if (ui_page_audio_rec_is_open() == 0U)
     {
         return;
     }
 
-    const uint8_t return_page = (g_lowcost_rec_return_valid != 0U)
-        ? g_lowcost_rec_return_page
+    const uint8_t return_page = (g_rec_return_valid != 0U)
+        ? g_rec_return_page
         : UI_PAGE_TEMPLATE_CFG;
-    const ui_hall_mode_t return_mode = (g_lowcost_rec_return_valid != 0U)
-        ? g_lowcost_rec_return_mode
+    const ui_hall_mode_t return_mode = (g_rec_return_valid != 0U)
+        ? g_rec_return_mode
         : UI_HALL_MODE_SEQ;
-    g_lowcost_rec_return_valid = 0U;
+    g_rec_return_valid = 0U;
     ui_set_hall_mode(return_mode);
     ui_navigation_request_page_with_availability(return_page);
 }
 
-static void ui_hall_mode_flow_leave_lowcost_modal_page(void)
+static void ui_hall_mode_flow_leave_modal_page(void)
 {
     if (ui_page_patch_assign_is_open() != 0U)
     {
@@ -124,12 +115,12 @@ static void ui_hall_mode_flow_leave_lowcost_modal_page(void)
         ui_page_settings_close_to_return_page();
         return;
     }
-    ui_hall_mode_flow_close_lowcost_rec();
+    ui_hall_mode_flow_close_rec();
 }
 
-static void ui_hall_mode_flow_handle_lowcost_nav_button(button_id_t button)
+static void ui_hall_mode_flow_handle_nav_button(button_id_t button)
 {
-    ui_hall_mode_flow_leave_lowcost_modal_page();
+    ui_hall_mode_flow_leave_modal_page();
     const ui_event_t event = {
         .type = UI_EVENT_BUTTON_PRESS,
         .id = (uint8_t)button,
@@ -138,15 +129,10 @@ static void ui_hall_mode_flow_handle_lowcost_nav_button(button_id_t button)
     ui_navigation_handle_event(&event);
 }
 
-static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
+static uint8_t ui_hall_mode_flow_handle_shift_step(uint8_t hall,
                                                            uint32_t now_ms,
                                                            uint32_t mode_tap_ms[UI_HALL_MODE_COUNT])
 {
-    if (ui_hall_mode_flow_has_lowcost_step_modes() == 0U)
-    {
-        return 0U;
-    }
-
     g_patch_pending.active = 0U;
 
     ui_hall_mode_t target_mode = UI_HALL_MODE_SEQ;
@@ -177,7 +163,7 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
                 ui_core_feedback_set("TRACK ONLY", now_ms);
                 return 1U;
             }
-            ui_hall_mode_flow_leave_lowcost_modal_page();
+            ui_hall_mode_flow_leave_modal_page();
             if (ui_macro_overlay_is_active() != 0U)
             {
                 ui_macro_overlay_on_hall_mode_changed();
@@ -193,20 +179,20 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
                 ui_page_settings_close_to_return_page();
                 return 1U;
             }
-            ui_hall_mode_flow_leave_lowcost_modal_page();
+            ui_hall_mode_flow_leave_modal_page();
             ui_page_settings_open_sample_browser(ui_page_get_id());
             return 1U;
 
         case 5U:
             if (ui_page_audio_rec_is_open() != 0U)
             {
-                ui_hall_mode_flow_close_lowcost_rec();
+                ui_hall_mode_flow_close_rec();
                 return 1U;
             }
-            ui_hall_mode_flow_leave_lowcost_modal_page();
-            g_lowcost_rec_return_page = ui_page_get_id();
-            g_lowcost_rec_return_mode = ui_get_hall_mode();
-            g_lowcost_rec_return_valid = 1U;
+            ui_hall_mode_flow_leave_modal_page();
+            g_rec_return_page = ui_page_get_id();
+            g_rec_return_mode = ui_get_hall_mode();
+            g_rec_return_valid = 1U;
             target_mode = UI_HALL_MODE_AUDIO_REC;
             target_page = UI_PAGE_AUDIO_REC;
             break;
@@ -228,23 +214,23 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
             return 1U;
 
         case 9U:
-            ui_hall_mode_flow_handle_lowcost_nav_button(BTN_PARAM_2);
+            ui_hall_mode_flow_handle_nav_button(BTN_PARAM_2);
             return 1U;
 
         case 10U:
-            ui_hall_mode_flow_handle_lowcost_nav_button(BTN_PARAM_1);
+            ui_hall_mode_flow_handle_nav_button(BTN_PARAM_1);
             return 1U;
 
         case 11U:
-            ui_hall_mode_flow_handle_lowcost_nav_button(BTN_PARAM_5);
+            ui_hall_mode_flow_handle_nav_button(BTN_PARAM_5);
             return 1U;
 
         case 12U:
-            ui_hall_mode_flow_handle_lowcost_nav_button(BTN_PARAM_3);
+            ui_hall_mode_flow_handle_nav_button(BTN_PARAM_3);
             return 1U;
 
         case 13U:
-            ui_hall_mode_flow_handle_lowcost_nav_button(BTN_PARAM_4);
+            ui_hall_mode_flow_handle_nav_button(BTN_PARAM_4);
             return 1U;
 
         case 14U:
@@ -257,7 +243,7 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
 
     if (target_mode != UI_HALL_MODE_AUDIO_REC)
     {
-        ui_hall_mode_flow_leave_lowcost_modal_page();
+        ui_hall_mode_flow_leave_modal_page();
     }
 
     const uint32_t last_tap = mode_tap_ms[target_mode];
@@ -308,13 +294,13 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
         }
         else
         {
-            ui_hall_mode_flow_leave_lowcost_modal_page();
+            ui_hall_mode_flow_leave_modal_page();
             ui_page_template_tone_open_global_master();
         }
         return;
     }
 
-    if (ui_hall_mode_flow_handle_lowcost_shift_step(hall, now_ms, mode_tap_ms) != 0U)
+    if (ui_hall_mode_flow_handle_shift_step(hall, now_ms, mode_tap_ms) != 0U)
     {
         return;
     }

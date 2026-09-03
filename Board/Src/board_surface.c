@@ -1,34 +1,11 @@
 #include "Board/board_surface.h"
-#include "Board/board_controls.h"
 
 #include "adc.h"
 #include "main.h"
 #include "tim.h"
 
-static board_surface_snapshot_t g_surface_snapshot;
 static volatile uint16_t *g_adc1_mailbox;
 static volatile uint8_t g_master_volume_valid;
-
-static uint32_t read_shift_register_bits(void)
-{
-    uint32_t raw = 0U;
-
-    CS_SR_GPIO_Port->BSRR = ((uint32_t)CS_SR_Pin << 16U);
-    __NOP();
-    CS_SR_GPIO_Port->BSRR = CS_SR_Pin;
-
-    for (uint32_t i = 0U; i < 32U; i++)
-    {
-        SCK_SR_GPIO_Port->BSRR = ((uint32_t)SCK_SR_Pin << 16U);
-        __NOP();
-        raw <<= 1U;
-        raw |= (SR_DATA_GPIO_Port->IDR & SR_DATA_Pin) ? 1U : 0U;
-        SCK_SR_GPIO_Port->BSRR = SCK_SR_Pin;
-        __NOP();
-    }
-
-    return ~raw;
-}
 
 void board_surface_select_hall_mux(uint8_t index)
 {
@@ -126,47 +103,6 @@ uint8_t board_surface_is_hall_adc2_callback(void *handle)
 {
     ADC_HandleTypeDef *hadc = (ADC_HandleTypeDef *)handle;
     return ((hadc != NULL) && (hadc->Instance == ADC2)) ? 1U : 0U;
-}
-
-void board_surface_update_lane(uint8_t lane, uint16_t raw, uint32_t sample_count)
-{
-    if (lane >= BOARD_SURFACE_LANE_COUNT)
-    {
-        return;
-    }
-
-    g_surface_snapshot.raw[lane] = raw;
-    g_surface_snapshot.sample_count[lane] = sample_count;
-    g_surface_snapshot.analog[lane] = 1U;
-}
-
-void board_surface_snapshot(board_surface_snapshot_t *snapshot)
-{
-    if (snapshot == NULL)
-    {
-        return;
-    }
-
-    const uint32_t pressed = read_shift_register_bits();
-    uint16_t lane_mask = 0U;
-
-    for (uint8_t physical_idx = 0U; physical_idx < 32U; ++physical_idx)
-    {
-        const button_id_t button = board_controls_button_logical_for_physical(physical_idx);
-        if ((button >= BTN_STEP_1) && (button <= BTN_STEP_16)
-            && (((pressed >> physical_idx) & 0x01U) != 0U))
-        {
-            lane_mask |= (uint16_t)(1U << ((uint8_t)button - (uint8_t)BTN_STEP_1));
-        }
-    }
-
-    for (uint8_t lane = 0U; lane < BOARD_SURFACE_LANE_COUNT; lane++)
-    {
-        const uint8_t down = (uint8_t)((lane_mask >> lane) & 0x01U);
-        snapshot->raw[lane] = down ? UINT16_MAX : 0U;
-        snapshot->sample_count[lane] = g_surface_snapshot.sample_count[lane] + 1U;
-        snapshot->analog[lane] = 0U;
-    }
 }
 
 uint8_t board_surface_read_master_volume_raw(uint16_t *raw)

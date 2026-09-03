@@ -1,7 +1,6 @@
 #include "ui_core_clipboard.h"
 #include "App/control_clipboard.h"
-#include "App/Hall/hall_surface.h"
-#include "Board/board_product.h"
+#include "App/Hall/hall_engine.h"
 
 #include <string.h>
 #include <math.h>
@@ -380,9 +379,8 @@ static uint8_t ui_core_clipboard_midi_fx_shortcut_is_held(void)
     {
         return 0U;
     }
-    const board_product_capabilities_t *const caps = board_product_capabilities();
-    const uint8_t hall = ((caps != 0) && (caps->has_separate_hall_keyboard != 0U)) ? 6U : 9U;
-    return hall_surface_is_pressed(hall);
+    const uint8_t hall = 6U;
+    return hall_engine_is_pressed(hall);
 }
 
 static uint8_t ui_core_clipboard_resolve_template_family_from_button(button_id_t button,

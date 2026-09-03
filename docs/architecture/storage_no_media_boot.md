@@ -1,6 +1,6 @@
 # STORAGE sans carte SD au boot
 
-Sur H743 LowCost, aucun GPIO card-detect n'est câblé. `BSP_SD_IsDetected()`
+Sur H743 BRICK, aucun GPIO card-detect n'est câblé. `BSP_SD_IsDetected()`
 reflète uniquement la dernière initialisation BSP réussie et ne constitue pas
 une mesure physique de hotplug. `HAL_SD_Init()` est la sonde média.
 Son échec n'est fatal que si le diagnostic ne correspond pas à une absence de

@@ -303,7 +303,6 @@ static uint8_t seq_model_clamp_playback_length(uint8_t length_steps)
 
 static uint8_t seq_model_page_count_for_length(uint8_t length_steps)
 {
-#if defined(BRICK6_VARIANT_LOWCOST)
     const uint8_t length = seq_model_clamp_playback_length(length_steps);
     uint8_t page_count = (uint8_t)((length + (SEQ_STEPS_PER_PAGE - 1U)) / SEQ_STEPS_PER_PAGE);
     if (page_count > SEQ_PAGE_COUNT)
@@ -311,10 +310,6 @@ static uint8_t seq_model_page_count_for_length(uint8_t length_steps)
         page_count = SEQ_PAGE_COUNT;
     }
     return page_count;
-#else
-    (void)length_steps;
-    return SEQ_PAGE_COUNT;
-#endif
 }
 
 static uint8_t seq_model_clamp_ui_page_for_length(uint8_t page, uint8_t length_steps)

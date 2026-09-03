@@ -8,15 +8,8 @@ set(MX_Defines_Syms
     STM32H743xx
 )
 
-if(BRICK6_VARIANT STREQUAL "premium")
-    set(BRICK6_GENERATED_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../Board/Premium/Generated")
-    list(APPEND MX_Defines_Syms BRICK6_VARIANT_PREMIUM)
-elseif(BRICK6_VARIANT STREQUAL "lowcost")
-    set(BRICK6_GENERATED_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../Board/LowCost/Generated")
-    list(APPEND MX_Defines_Syms BRICK6_VARIANT_LOWCOST HAL_HCD_MODULE_ENABLED)
-else()
-    message(FATAL_ERROR "BRICK6_VARIANT='${BRICK6_VARIANT}' has no CubeMX generated source set")
-endif()
+set(BRICK6_GENERATED_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../Board/Generated")
+list(APPEND MX_Defines_Syms HAL_HCD_MODULE_ENABLED)
 
 # STM32CubeMX generated include paths
 set(MX_Include_Dirs
@@ -29,25 +22,23 @@ set(MX_Include_Dirs
 )
 
 set(FreeRTOS_Src)
-if(BRICK6_VARIANT STREQUAL "lowcost")
-    list(APPEND MX_Include_Dirs
-        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/include
-        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2
-        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F
-    )
-    list(APPEND FreeRTOS_Src
-        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/croutine.c
-        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/event_groups.c
-        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/list.c
-        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/queue.c
-        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c
-        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/tasks.c
-        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/timers.c
-        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c
-        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c
-        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c
-    )
-endif()
+list(APPEND MX_Include_Dirs
+    ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/include
+    ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2
+    ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F
+)
+list(APPEND FreeRTOS_Src
+    ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/croutine.c
+    ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/event_groups.c
+    ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/list.c
+    ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/queue.c
+    ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c
+    ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/tasks.c
+    ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/timers.c
+    ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c
+    ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c
+    ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c
+)
 
 # STM32CubeMX generated application sources
 set(MX_Application_Src
@@ -69,9 +60,7 @@ set(MX_Application_Src
     ${BRICK6_GENERATED_ROOT}/Startup/startup_stm32h743xx.s
 )
 
-if(BRICK6_VARIANT STREQUAL "lowcost")
-    list(APPEND MX_Application_Src ${BRICK6_GENERATED_ROOT}/Src/freertos.c)
-endif()
+list(APPEND MX_Application_Src ${BRICK6_GENERATED_ROOT}/Src/freertos.c)
 
 # STM32 HAL/LL Drivers
 set(STM32_Drivers_Src

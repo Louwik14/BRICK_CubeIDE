@@ -28,10 +28,8 @@ static const char *ui_page_settings_view_title(ui_settings_view_t view)
             return "PROJECT > MANAGE";
         case UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT:
             return "MANAGE > SLOT";
-#if defined(BRICK6_VARIANT_LOWCOST)
         case UI_SETTINGS_VIEW_CALIBRATION:
             return "CALIBRATION";
-#endif
         default:
             return "SETTINGS";
     }
@@ -42,11 +40,7 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
     switch (view)
     {
         case UI_SETTINGS_VIEW_ROOT:
-#if defined(BRICK6_VARIANT_LOWCOST)
             return 3U;
-#else
-            return 2U;
-#endif
         case UI_SETTINGS_VIEW_PROJECT:
             return 3U;
         case UI_SETTINGS_VIEW_SAMPLE:
@@ -69,10 +63,8 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
             return PROJECT_PRODUCT_SLOT_COUNT;
         case UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT:
             return (uint8_t)UI_SETTINGS_MANAGE_ACTION_COUNT;
-#if defined(BRICK6_VARIANT_LOWCOST)
         case UI_SETTINGS_VIEW_CALIBRATION:
             return 2U;
-#endif
         default:
             return 0U;
     }
@@ -92,12 +84,10 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
             {
                 return "PROJECT";
             }
-#if defined(BRICK6_VARIANT_LOWCOST)
             if (index == 2U)
             {
                 return "CALIBRATION";
             }
-#endif
             return "-";
         case UI_SETTINGS_VIEW_SAMPLE:
             if (index == 0U)
@@ -216,10 +206,8 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
                 return "SAVE TO";
             }
             return "DELETE";
-#if defined(BRICK6_VARIANT_LOWCOST)
         case UI_SETTINGS_VIEW_CALIBRATION:
             return (index == 0U) ? "HALL KBD" : "HALL VEL";
-#endif
         default:
             return "-";
     }
@@ -400,15 +388,12 @@ static void ui_page_settings_apply_action(void)
             {
                 ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT);
             }
-#if defined(BRICK6_VARIANT_LOWCOST)
             else if (level->selected_index == 2U)
             {
                 ui_page_settings_push(UI_SETTINGS_VIEW_CALIBRATION);
             }
-#endif
             break;
 
-#if defined(BRICK6_VARIANT_LOWCOST)
         case UI_SETTINGS_VIEW_CALIBRATION:
             if (level->selected_index == 0U)
             {
@@ -419,7 +404,6 @@ static void ui_page_settings_apply_action(void)
                 ui_page_user_calibration_open(UI_PAGE_SETTINGS);
             }
             break;
-#endif
 
         case UI_SETTINGS_VIEW_SAMPLE:
             if (level->selected_index == 0U)

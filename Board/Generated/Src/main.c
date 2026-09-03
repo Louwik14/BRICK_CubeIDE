@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
 #include "adc.h"
 #include "dma.h"
 #include "i2c.h"
@@ -31,22 +32,11 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "usb_device.h"
-#include "usb_host.h"
-#include "midi.h"
-#include "midi_host.h"
-#include "sdram.h"
-#include "App/engine_tasklet.h"
-#include "ui_tasklet.h"
 #include "App/brick6_app_init.h"
-#include "audio.h"
-#include "audio_float.h"
 #include "fatfs.h"
 #include "led_rgb.h"
-#include "led_ids.h"
-#include "display_flush_service.h"
-#include "ui_renderer_oled.h"
-#include "App/power_shutdown.h"
+#include "Board/board_power.h"
+#include "buttons.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -70,11 +60,11 @@
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 void PeriphCommonClock_Config(void);
+void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
 static void MPU_Config(void);
 //void MX_USB_HOST_Process(void);
 //void MX_USB_HOST_Init(void);
-void MX_USB_DEVICE_Init(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -96,8 +86,9 @@ extern uint32_t __ram_d2_dma_cacheable_end__;
 #define RAM_D2_IPC_MPU_BASE                 (0x30040000UL)
 #define SDRAM_MPU_BASE                     (0xC0000000UL)
 #define SDRAM_RECORDER_MPU_BASE            (0xC1FC0000UL)
-#define UI_TASKLET_ENGINE_DIVIDER         (4UL)
-#define UI_TASKLET_CATCHUP_BUDGET         (8UL)
+#define BRICK_BOOTLOADER_SHIFT_STEP16_ENABLE     1U
+#define BRICK_BOOTLOADER_HOLD_MS                 2000UL
+#define BRICK_BOOTLOADER_BOOT0_CHARGE_MS         10UL
 
 static void MPU_Config(void)
 {
@@ -172,6 +163,52 @@ static void MPU_Config(void)
   __DSB();
   __ISB();
 }
+
+void brick_bootloader_shift_step16_service(void)
+{
+#if BRICK_BOOTLOADER_SHIFT_STEP16_ENABLE
+  static uint8_t combo_was_down = 0U;
+  static uint8_t fired = 0U;
+  static uint32_t hold_start_ms = 0U;
+
+  const uint8_t combo_down =
+      ((button_down(BTN_SHIFT) != 0U) && (button_down(BTN_STEP_16) != 0U)) ? 1U : 0U;
+  const uint32_t now_ms = HAL_GetTick();
+
+  if (combo_down == 0U)
+  {
+    combo_was_down = 0U;
+    fired = 0U;
+    hold_start_ms = 0U;
+    return;
+  }
+
+  if (combo_was_down == 0U)
+  {
+    combo_was_down = 1U;
+    hold_start_ms = now_ms;
+    return;
+  }
+
+  if ((fired == 0U) && ((uint32_t)(now_ms - hold_start_ms) >= BRICK_BOOTLOADER_HOLD_MS))
+  {
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    fired = 1U;
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    GPIO_InitStruct.Pin = BOOTLOADER_TRIGGER_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(BOOTLOADER_TRIGGER_GPIO_Port, &GPIO_InitStruct);
+
+    HAL_GPIO_WritePin(BOOTLOADER_TRIGGER_GPIO_Port, BOOTLOADER_TRIGGER_Pin, GPIO_PIN_SET);
+    HAL_Delay(BRICK_BOOTLOADER_BOOT0_CHARGE_MS);
+    NVIC_SystemReset();
+  }
+#endif
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -240,21 +277,21 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
-  MX_USART1_UART_Init();
+  MX_UART4_Init();
   MX_FMC_Init();
-  MX_SDMMC1_SD_Init();
   MX_SPI5_Init();
-  MX_I2C2_Init();
+  MX_I2C1_Init();
   MX_ADC2_Init();
-  MX_SAI2_Init();
+  MX_SAI1_Init();
   MX_ADC1_Init();
-  MX_ADC3_Init();
   MX_TIM2_Init();
   MX_TIM6_Init();
   MX_TIM7_Init();
   MX_TIM5_Init();
   MX_TIM12_Init();
+  MX_SDMMC1_SD_Init();
   /* USER CODE BEGIN 2 */
+  board_power_hold_enable_after_boot_press();
   __HAL_TIM_SET_COUNTER(&htim5, 0U);
   HAL_TIM_Base_Start(&htim5);
   HAL_TIM_OC_Start(&htim5, TIM_CHANNEL_1);
@@ -262,10 +299,17 @@ int main(void)
   MX_FATFS_Init();
   brick6_app_init();
   led_init();
-  uint32_t last_tick = 0;
-  uint32_t ui_tasklet_divider = 0U;
 
   /* USER CODE END 2 */
+
+  /* Init scheduler */
+  osKernelInitialize();  /* Call init function for freertos objects (in cmsis_os2.c) */
+  MX_FREERTOS_Init();
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -275,39 +319,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
-         if (power_shutdown_service(HAL_GetTick()) != 0U)
-         {
-             continue;
-         }
-
-	     brick6_app_process();
-
-	     //MX_USB_HOST_Process();
-	     midi_host_poll_bounded(8);
-
-	     uint32_t ui_ticks_processed = 0U;
-	     while ((engine_tick_count != last_tick) && (ui_ticks_processed < UI_TASKLET_CATCHUP_BUDGET))
-	     {
-	         last_tick++;
-	         ui_tasklet_divider++;
-	         if (ui_tasklet_divider < UI_TASKLET_ENGINE_DIVIDER)
-	         {
-	             continue;
-	         }
-
-	         ui_tasklet_divider = 0U;
-	         ui_tasklet_poll();
-	         ui_ticks_processed++;
-	     }
-
-	     if (ui_tasklet_is_initialized() != 0U)
-	     {
-	         ui_renderer_oled_service_poll();
-	         display_flush_service_poll();
-	     }
-
-
   }
   /* USER CODE END 3 */
 }
@@ -339,8 +350,8 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSI48State = RCC_HSI48_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 5;
-  RCC_OscInitStruct.PLL.PLLN = 192;
+  RCC_OscInitStruct.PLL.PLLM = 3;
+  RCC_OscInitStruct.PLL.PLLN = 240;
   RCC_OscInitStruct.PLL.PLLP = 2;
   RCC_OscInitStruct.PLL.PLLQ = 20;
   RCC_OscInitStruct.PLL.PLLR = 2;
@@ -382,16 +393,16 @@ void PeriphCommonClock_Config(void)
   /** Initializes the peripherals clock
   */
   PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_FMC|RCC_PERIPHCLK_ADC
-                              |RCC_PERIPHCLK_SDMMC|RCC_PERIPHCLK_SAI2;
-  PeriphClkInitStruct.PLL2.PLL2M = 5;
-  PeriphClkInitStruct.PLL2.PLL2N = 144;
+                              |RCC_PERIPHCLK_SDMMC|RCC_PERIPHCLK_SAI1;
+  PeriphClkInitStruct.PLL2.PLL2M = 3;
+  PeriphClkInitStruct.PLL2.PLL2N = 180;
   PeriphClkInitStruct.PLL2.PLL2P = 20;
   PeriphClkInitStruct.PLL2.PLL2Q = 1;
   PeriphClkInitStruct.PLL2.PLL2R = 3;
   PeriphClkInitStruct.PLL2.PLL2RGE = RCC_PLL2VCIRANGE_2;
   PeriphClkInitStruct.PLL2.PLL2VCOSEL = RCC_PLL2VCOWIDE;
   PeriphClkInitStruct.PLL2.PLL2FRACN = 0;
-  PeriphClkInitStruct.PLL3.PLL3M = 25;
+  PeriphClkInitStruct.PLL3.PLL3M = 12;
   PeriphClkInitStruct.PLL3.PLL3N = 491;
   PeriphClkInitStruct.PLL3.PLL3P = 40;
   PeriphClkInitStruct.PLL3.PLL3Q = 2;
@@ -401,7 +412,7 @@ void PeriphCommonClock_Config(void)
   PeriphClkInitStruct.PLL3.PLL3FRACN = 4260;
   PeriphClkInitStruct.FmcClockSelection = RCC_FMCCLKSOURCE_PLL2;
   PeriphClkInitStruct.SdmmcClockSelection = RCC_SDMMCCLKSOURCE_PLL2;
-  PeriphClkInitStruct.Sai23ClockSelection = RCC_SAI23CLKSOURCE_PLL3;
+  PeriphClkInitStruct.Sai1ClockSelection = RCC_SAI1CLKSOURCE_PLL3;
   PeriphClkInitStruct.AdcClockSelection = RCC_ADCCLKSOURCE_PLL2;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
   {

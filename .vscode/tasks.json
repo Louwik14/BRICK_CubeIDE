@@ -96,40 +96,6 @@
         "cwd": "${workspaceFolder}"
       },
       "problemMatcher": []
-    },
-    {
-      "label": "Configure Premium",
-      "type": "shell",
-      "command": "cmake",
-      "args": [
-        "--preset",
-        "Premium"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Build Premium",
-      "type": "shell",
-      "command": "cmake",
-      "args": [
-        "--build",
-        "--preset",
-        "Premium"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "dependsOn": [
-        "Configure Premium"
-      ],
-      "dependsOrder": "sequence",
-      "group": "build",
-      "problemMatcher": [
-        "$gcc"
-      ]
     }
   ]
 }

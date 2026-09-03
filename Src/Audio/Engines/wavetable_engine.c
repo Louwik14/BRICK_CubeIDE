@@ -23,11 +23,7 @@
 #define WAVE_PHASE_SCALE           4294967296.0
 #define WAVE_GAIN_SILENCE_EPS      0.00001f
 #define BRICK6_WAVE_OUTPUT_GAIN    0.42169650f
-#if defined(BRICK6_VARIANT_LOWCOST)
 #define WAVE_OUTPUT_TRIM           0.30f
-#else
-#define WAVE_OUTPUT_TRIM           1.0f
-#endif
 
 typedef struct wave_osc_block_ctx_t wave_osc_block_ctx_t;
 enum

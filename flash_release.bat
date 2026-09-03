@@ -10,14 +10,14 @@ if not exist "%OPENOCD%" (
 )
 
 if not exist "%ELF%" (
-    echo ELF lowcost introuvable :
+    echo ELF BRICK introuvable :
     echo %ELF%
     pause
     exit /b 1
 )
 
 echo.
-echo === FLASH LOWCOST ===
+echo === FLASH BRICK ===
 echo %ELF%
 echo.
 
@@ -37,5 +37,5 @@ if errorlevel 1 (
 )
 
 echo.
-echo FLASH LOWCOST TERMINE
+echo FLASH BRICK TERMINE
 pause

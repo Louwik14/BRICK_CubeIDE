@@ -12,7 +12,7 @@ static volatile sd_diskio_read_metrics_t g_sd_diskio_read_metrics;
 
 uint8_t brick_sd_is_detected(void)
 {
-    /* LowCost has no card-detect GPIO.  This is the BSP's last successful
+    /* BRICK has no card-detect GPIO.  This is the BSP's last successful
        initialization state, not a physical hotplug signal. */
     return BSP_SD_IsDetected();
 }
@@ -28,7 +28,7 @@ uint8_t brick_sd_init_failure_is_no_media(uint8_t bsp_status)
         return 1U;
     }
 
-    /* LowCost has no card-detect GPIO, so HAL_SD_Init() communication is the
+    /* BRICK has no card-detect GPIO, so HAL_SD_Init() communication is the
        media probe.  This HAL maps a failed CMD55/ACMD41 during SD_PowerON()
        to UNSUPPORTED_FEATURE, including the observed no-response/no-card
        path.  Keep CRC, parameter, DMA and other failures as real faults. */
