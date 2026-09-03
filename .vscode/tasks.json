@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Configure Debug Lowcost",
+      "label": "Configure Debug BRICK",
       "type": "shell",
       "command": "cmake",
       "args": [
@@ -15,7 +15,7 @@
       "problemMatcher": []
     },
     {
-      "label": "Build Debug Lowcost",
+      "label": "Build Debug BRICK",
       "type": "shell",
       "command": "cmake",
       "args": [
@@ -35,7 +35,7 @@
       ]
     },
     {
-      "label": "Configure Release Lowcost",
+      "label": "Configure Release BRICK",
       "type": "shell",
       "command": "cmake",
       "args": [
@@ -60,7 +60,7 @@
         "cwd": "${workspaceFolder}"
       },
       "dependsOn": [
-        "Configure Release Lowcost"
+        "Configure Release BRICK"
       ],
       "dependsOrder": "sequence",
       "group": "build",

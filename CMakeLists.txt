@@ -23,7 +23,7 @@ if(NOT BRICK6_STREAM_READ_CHUNK_KIB MATCHES "^(4|8|16|32)$")
     message(FATAL_ERROR "BRICK6_STREAM_READ_CHUNK_KIB must be 4, 8, 16 or 32")
 endif()
 
-# Common sampler/streamer product contract. Board variants only adapt hardware.
+# Common sampler/streamer BRICK product contract.
 set(BRICK6_STREAM_PRODUCT_PAGE_KIB 32)
 set(BRICK6_STREAM_PRODUCT_READ_CHUNK_KIB 32)
 set(BRICK6_STREAM_PRODUCT_MULTI_PRESOCLE_PAGES 2)
@@ -435,7 +435,6 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     HAL_HCD_MODULE_ENABLED
-    TLV320AIC3204_I2C_HANDLE=hi2c2
 )
 
 # --------------------------------------------------------------------------

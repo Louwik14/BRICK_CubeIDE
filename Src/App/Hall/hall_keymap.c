@@ -68,7 +68,7 @@ _Static_assert(MUX_KEY_MASK == KEY_ID_MASK,
 _Static_assert((WHITE_KEY_MASK | BLACK_KEY_MASK) == KEY_ID_MASK,
                "Hall keyboard metadata must cover 24 chromatic keys");
 _Static_assert((WHITE_KEY_MASK & BLACK_KEY_MASK) == 0U,
-               "Low-cost Hall keyboard white/black key sets must not overlap");
+               "Hall keyboard white/black key sets must not overlap");
 
 uint8_t hall_keymap_key_for_mux_channel(uint8_t mux_index, uint8_t channel, uint8_t *out_key)
 {

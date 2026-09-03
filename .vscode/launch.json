@@ -2,7 +2,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug Lowcost (OpenOCD + ST-Link)",
+      "name": "Debug BRICK (OpenOCD + ST-Link)",
       "type": "cortex-debug",
       "request": "launch",
       "servertype": "openocd",
@@ -19,7 +19,7 @@
       "searchDir": [
         "${workspaceFolder}"
       ],
-      "preLaunchTask": "Build Debug Lowcost",
+      "preLaunchTask": "Build Debug BRICK",
       "runToEntryPoint": "main",
       "showDevDebugOutput": "raw",
       "postLaunchCommands": [
@@ -27,7 +27,7 @@
       ]
     },
     {
-      "name": "Release Lowcost (OpenOCD + ST-Link)",
+      "name": "Release BRICK (OpenOCD + ST-Link)",
       "type": "cortex-debug",
       "request": "launch",
       "servertype": "openocd",

@@ -22,9 +22,9 @@ ui_hall_direct_action_t ui_hall_mode_flow_resolve_direct_action(uint8_t shift_do
                                                                 uint8_t was_pressed,
                                                                 uint8_t pressed);
 
-void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
-                                                uint32_t now_ms,
-                                                uint32_t mode_tap_ms[UI_HALL_MODE_COUNT]);
+uint8_t ui_hall_mode_flow_handle_shift_step(uint8_t step,
+                                             uint32_t now_ms,
+                                             uint32_t mode_tap_ms[UI_HALL_MODE_COUNT]);
 
 void ui_hall_mode_flow_handle_track_hall_action(uint8_t hall,
                                                 uint32_t now_ms,

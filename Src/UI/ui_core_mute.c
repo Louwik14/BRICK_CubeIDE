@@ -400,6 +400,25 @@ uint8_t ui_core_mute_handle_event(const ui_event_t *ev,
             return 1U;
         }
 
+        if ((ev->id >= (uint8_t)BTN_STEP_1)
+                && (ev->id <= (uint8_t)BTN_STEP_16))
+        {
+            if (ev->type == UI_EVENT_BUTTON_PRESS)
+            {
+                const uint8_t track = (uint8_t)(ev->id - (uint8_t)BTN_STEP_1);
+                if ((g_ui_core_mute.submode == UI_MUTE_SUBMODE_QUICK)
+                        || (g_ui_core_mute.submode == UI_MUTE_SUBMODE_HOLD_QUICK))
+                {
+                    ui_core_mute_toggle_quick_track(track);
+                }
+                else if (g_ui_core_mute.submode == UI_MUTE_SUBMODE_PREPARE)
+                {
+                    ui_core_mute_toggle_prepared_track(track);
+                }
+            }
+            return 1U;
+        }
+
         /*
          * Do not globally monopolize button events while mute is active:
          * non-mute controls (transport, param navigation, SHIFT+HALL path) must

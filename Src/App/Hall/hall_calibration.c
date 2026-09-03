@@ -35,7 +35,7 @@
 #define HALL_USER_MIN_STAGE_GAP               4U
 
 _Static_assert(HALL_KEY_COUNT == (2U * HALL_CALIBRATION_STAGE_KEY_COUNT),
-               "Low-cost Hall calibration requires two complete 12-key stages");
+               "Hall calibration requires two complete 12-key stages");
 
 typedef enum
 {
@@ -76,7 +76,7 @@ typedef struct
 } hall_calibration_storage_blob_t;
 
 _Static_assert(sizeof(hall_calibration_storage_blob_t) == 160U,
-               "Low-cost Hall calibration storage must fill five flash words");
+               "Hall calibration storage must fill five flash words");
 
 typedef struct
 {

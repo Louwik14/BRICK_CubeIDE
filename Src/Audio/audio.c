@@ -48,7 +48,7 @@
 #include "stm32h7xx_hal.h"
 
 /* ============================================================
-   CONFIG AUDIO : contrat codec/SAI stereo commun aux variantes
+   CONFIG AUDIO : contrat codec/SAI stereo BRICK
    ============================================================ */
 
 /* Deux slots stéréo de 32 bits transportant des samples 24 bits. */

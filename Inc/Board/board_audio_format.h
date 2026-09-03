@@ -7,10 +7,9 @@
 #define BOARD_AUDIO_FRAMES_TOTAL (BOARD_AUDIO_FRAMES_PER_HALF * 2U)
 
 /*
- * Common audio contract used by both product variants.
+ * Common BRICK audio contract.
  *
- * Both variants use this contract.  Only the physical SAI/I2C/DMA wiring may
- * remain board-specific.
+ * The physical SAI/I2C/DMA wiring remains board-specific.
  */
 #define BOARD_AUDIO_CONTRACT_SAMPLE_RATE_HZ 48000U
 #define BOARD_AUDIO_CONTRACT_SAMPLE_BITS 24U

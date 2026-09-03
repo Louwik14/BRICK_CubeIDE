@@ -122,7 +122,6 @@ static uint16_t ui_core_hall_ui_claim_mask(uint8_t pressed)
     const ui_hall_mode_t raw_mode = ui_get_hall_mode();
 
     if ((ui_core_mute_is_active() != 0U)
-        || (g_ui_track_state.shift_down != 0U)
         || (g_ui_track_state.track_select_armed != 0U)
         || (g_ui_track_state.macro_overlay_active != 0U)
         || (raw_mode == UI_HALL_MODE_PATTERN)
@@ -578,12 +577,43 @@ static uint8_t ui_core_handle_hall_input_event(const ui_event_t *ev)
         g_ui_track_state.shift_down,
         g_ui_track_state.track_select_armed,
         (ui_core_mute_is_active() != 0U) ? 1U : 0U,
-        g_ui_track_state.mode_tap_ms,
         g_ui_track_state.cfg_tap_ms,
         ui_core_set_active_track,
         ui_core_set_feedback);
     g_ui_track_state.hall_prev_pressed[hall] = pressed;
     return consumed;
+}
+
+static uint8_t ui_core_handle_step_context_event(const ui_event_t *ev)
+{
+    if ((ev == 0)
+            || (ev->id < (uint8_t)BTN_STEP_1)
+            || (ev->id > (uint8_t)BTN_STEP_16))
+    {
+        return 0U;
+    }
+
+    const uint8_t step = (uint8_t)(ev->id - (uint8_t)BTN_STEP_1);
+    if (g_ui_track_state.track_select_armed != 0U)
+    {
+        if (ev->type == UI_EVENT_BUTTON_PRESS)
+        {
+            ui_core_set_active_track(step);
+        }
+        return 1U;
+    }
+
+    if (g_ui_track_state.shift_down != 0U)
+    {
+        if (ev->type == UI_EVENT_BUTTON_PRESS)
+        {
+            (void)ui_hall_mode_flow_handle_shift_step(
+                step, HAL_GetTick(), g_ui_track_state.mode_tap_ms);
+        }
+        return 1U;
+    }
+
+    return 0U;
 }
 
 /**
@@ -866,6 +896,7 @@ void ui_core_tick(void)
 
     static const ui_core_tick_stage_t k_event_stages[] = {
         { ui_core_handle_mute_event, 1U, 1U },
+        { ui_core_handle_step_context_event, 1U, 1U },
         { ui_core_handle_hall_input_event, 1U, 1U },
         { ui_core_handle_routing_event, 1U, 1U },
         { ui_core_handle_transport_event, 1U, 1U },

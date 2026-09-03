@@ -9,7 +9,6 @@
 #include "ui_hall_mode_flow.h"
 #include "Track/entity_topology.h"
 #include "Seq/seq_types.h"
-#include "Seq/seq_edit.h"
 #include "ui_core.h"
 
 uint8_t ui_hall_input_service_handle_hall(uint8_t hall,
@@ -19,7 +18,6 @@ uint8_t ui_hall_input_service_handle_hall(uint8_t hall,
                                           uint8_t shift_down,
                                           uint8_t track_select_armed,
                                           uint8_t mute_active,
-                                          uint32_t mode_tap_ms[UI_HALL_MODE_COUNT],
                                           uint32_t cfg_tap_ms[TRACK_COUNT],
                                           ui_hall_input_service_set_active_track_fn set_active_track,
                                           ui_hall_input_service_feedback_fn feedback)
@@ -43,15 +41,6 @@ uint8_t ui_hall_input_service_handle_hall(uint8_t hall,
                   && !((ui_macro_overlay_is_latched() != 0U)
                        && (shift_down != 0U)
                        && (action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)));
-
-    if ((action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)
-        && (macro_overlay_hall_context == 0U))
-    {
-        ui_hall_mode_flow_handle_shift_hall_action(hall,
-                                                   now_ms,
-                                                   mode_tap_ms);
-        return 1U;
-    }
 
     (void)hall_mode;
 

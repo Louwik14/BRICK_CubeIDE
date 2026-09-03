@@ -28,22 +28,22 @@ static const button_id_t g_button_physical_to_logical[] = {
     [5]  = BTN_ENCODER_2_PUSH,
     [6]  = BTN_PAGE_2,
     [7]  = BTN_PAGE_1,
-    [8]  = BTN_STEP_12,
-    [9]  = BTN_STEP_11,
-    [10] = BTN_STEP_10,
-    [11] = BTN_STEP_9,
-    [12] = BTN_STEP_16,
-    [13] = BTN_STEP_15,
-    [14] = BTN_STEP_14,
-    [15] = BTN_STEP_13,
+    [8]  = BTN_STEP_16,
+    [9]  = BTN_STEP_15,
+    [10] = BTN_STEP_14,
+    [11] = BTN_STEP_13,
+    [12] = BTN_STEP_12,
+    [13] = BTN_STEP_11,
+    [14] = BTN_STEP_10,
+    [15] = BTN_STEP_9,
     [16] = BTN_STEP_8,
     [17] = BTN_STEP_7,
     [18] = BTN_STEP_6,
     [19] = BTN_STEP_5,
-    [20] = BTN_STEP_4,
-    [21] = BTN_STEP_3,
-    [22] = BTN_STEP_2,
-    [23] = BTN_STEP_1,
+    [20] = BTN_STEP_3,
+    [21] = BTN_STEP_2,
+    [22] = BTN_STEP_1,
+    [23] = BTN_STEP_4,
     [24] = BTN_TRANSPOSE_UP,
     [25] = BTN_TRANSPOSE_DOWN,
     [26] = BTN_PASTE,
@@ -68,7 +68,7 @@ static const button_id_t g_button_physical_to_logical[] = {
                                           (1ULL << BTN_ENCODER_1_PUSH) | (1ULL << BTN_ENCODER_2_PUSH)))
 
 _Static_assert((sizeof(g_button_physical_to_logical) / sizeof(g_button_physical_to_logical[0])) == 32U,
-               "Low-cost SR mapping must define 32 physical positions");
+               "BRICK SR mapping must define 32 physical positions");
 _Static_assert(BRICK_STEP_MASK_PRESENT == STEP_MASK, "BRICK SR mapping must contain each STEP exactly once");
 _Static_assert(BRICK_ENCODER_PUSH_MASK_PRESENT == ENCODER_PUSH_MASK,
                "BRICK SR mapping must contain each encoder push exactly once");
