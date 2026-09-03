@@ -58,6 +58,7 @@
 #include "Sampler/multi_sample_pool.h"
 #include "Sampler/sample_global_pool.h"
 #include "pages/ui_page_template_play.h"
+#include "App/control_domain.h"
 #include "stm32h7xx_hal.h"
 
 #define UI_PARAM_VALUE_FLASH_DURATION_MS 800U
@@ -174,7 +175,13 @@ static uint8_t ui_param_local_control_apply(param_id_t id, uint8_t track,
             if (moved >= (int32_t)count) moved = (int32_t)count - 1;
             pos = (uint16_t)moved;
         }
-        return project_control_track_asset_select_logical(track, role, list[pos]);
+        const control_asset_intent_t intent = {
+            .operation = CONTROL_ASSET_SELECT_TRACK_LOGICAL,
+            .track = track,
+            .role = (uint8_t)role,
+            .logical = list[pos]
+        };
+        return control_domain_request_asset(&intent);
     }
     if ((id == UI_PARAM_LOCAL_LOOPER_ARM)
             || (id == UI_PARAM_LOCAL_LOOPER_LENGTH)
@@ -190,7 +197,14 @@ static uint8_t ui_param_local_control_apply(param_id_t id, uint8_t track,
         if (id == UI_PARAM_LOCAL_LOOPER_ARM) config.arm_mode = (uint8_t)next;
         else if (id == UI_PARAM_LOCAL_LOOPER_LENGTH) config.length_mode = (uint8_t)next;
         else config.play_auto = (uint8_t)next;
-        return audio_recorder_control_set_looper_config(track, &config);
+        const control_track_intent_t intent = {
+            .operation = CONTROL_TRACK_SET_LOOPER_CONFIG,
+            .track = track,
+            .value0 = config.arm_mode,
+            .value1 = config.length_mode,
+            .value2 = config.play_auto
+        };
+        return control_domain_request_track(&intent);
     }
     if (id == UI_PARAM_LOCAL_FM_OPERATOR)
     {
@@ -269,16 +283,22 @@ static seq_plock_op_status_t ui_param_step_value_upsert(seq_track_id_t track,
                                                          seq_value16_t value16,
                                                          uint8_t flags)
 {
-    return seq_edit_step_plock_upsert(track, step, set_id, param_slot, value16, flags);
-}
-
-static void ui_param_step_value_commit(seq_track_id_t track,
-                                       seq_step_id_t step,
-                                       param_id_t param,
-                                       uint8_t set_id,
-                                       seq_param_slot_t param_slot)
-{
-    seq_edit_step_plock_commit(track, step, set_id, param_slot);
+    seq_plock_entry_t existing;
+    const uint8_t had_entry = ui_param_step_value_find(track, step, param,
+                                                       set_id, param_slot,
+                                                       &existing);
+    const control_seq_intent_t intent = {
+        .operation = CONTROL_SEQ_PLOCK_UPSERT,
+        .track = (uint8_t)track,
+        .step = (uint8_t)step,
+        .set_id = set_id,
+        .param_slot = param_slot,
+        .flags = flags,
+        .value16 = value16
+    };
+    if (control_domain_request_seq(&intent) == 0U)
+        return SEQ_PLOCK_OP_INVALID;
+    return (had_entry != 0U) ? SEQ_PLOCK_OP_UPDATED : SEQ_PLOCK_OP_CREATED;
 }
 
 static seq_plock_op_status_t ui_param_step_value_delete(seq_track_id_t track,
@@ -287,7 +307,20 @@ static seq_plock_op_status_t ui_param_step_value_delete(seq_track_id_t track,
                                                          uint8_t set_id,
                                                          seq_param_slot_t param_slot)
 {
-    return seq_edit_step_plock_delete(track, step, set_id, param_slot);
+    seq_plock_entry_t existing;
+    const uint8_t had_entry = ui_param_step_value_find(track, step, param,
+                                                       set_id, param_slot,
+                                                       &existing);
+    const control_seq_intent_t intent = {
+        .operation = CONTROL_SEQ_PLOCK_DELETE,
+        .track = (uint8_t)track,
+        .step = (uint8_t)step,
+        .set_id = set_id,
+        .param_slot = param_slot
+    };
+    if (control_domain_request_seq(&intent) == 0U)
+        return SEQ_PLOCK_OP_INVALID;
+    return (had_entry != 0U) ? SEQ_PLOCK_OP_DELETED : SEQ_PLOCK_OP_NOT_FOUND;
 }
 
 /* Parameter access, encoder interaction and sequencer feedback remain in their original sequence.

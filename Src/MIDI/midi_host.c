@@ -7,21 +7,21 @@
  *
  * Rôle dans le système:
  * - Bridge entre USB Host et l'API midi.c.
- * - Traitement borné pour ne pas monopoliser la boucle principale.
+ * - Traitement borné pour ne pas monopoliser les tâches applicatives.
  *
  * Contraintes temps réel:
  * - Critique audio: non.
- * - Tasklet: oui (poll en boucle principale).
+ * - USB_SERVICE/CONTROL_RT: oui.
  * - IRQ: non (pas d'accès en ISR).
- * - Borné: oui (midi_host_poll_bounded avec budget fixe).
+ * - Borné: oui (transport et contrôle avec budgets fixes).
  *
  * Architecture:
- * - Appelé par: main loop (midi_host_poll).
+ * - Appelé par: USB_SERVICE et CONTROL_RT.
  * - Appelle: USBH_MIDI_ReadPacket/Transmit, midi_internal_receive, midi_send_raw.
  *
  * Règles:
  * - Pas de malloc.
- * - Ne pas bloquer la boucle principale.
+ * - Ne pas bloquer les tâches applicatives.
  *
  * @note L’API publique est déclarée dans midi_host.h.
  */
@@ -35,6 +35,19 @@ extern USBH_HandleTypeDef hUsbHostHS;
 
 static uint8_t midi_host_rx_packet[USBH_MIDI_PACKET_SIZE];
 static uint8_t midi_host_tx_packet[USBH_MIDI_PACKET_SIZE];
+
+typedef struct
+{
+  uint8_t packet[USBH_MIDI_PACKET_SIZE];
+  uint32_t tim5_tick;
+  uint32_t ingress_serial;
+} midi_host_event_t;
+
+#define MIDI_HOST_EVENT_QUEUE_LENGTH  (32U)
+static midi_host_event_t midi_host_event_queue[MIDI_HOST_EVENT_QUEUE_LENGTH];
+static volatile uint16_t midi_host_event_head;
+static volatile uint16_t midi_host_event_tail;
+static volatile uint8_t midi_host_discard_requested;
 
 /**
  * @brief Point d'entrée midi_host_cin_to_length.
@@ -59,53 +72,78 @@ static uint8_t midi_host_cin_to_length(uint8_t cin)
   return cin_len[cin & 0x0FU];
 }
 
-/**
- * @brief Point d'entrée midi_host_poll.
- *
- * Rôle:
- * - Exécuter le traitement associé à midi_host_poll.
- *
- *
- * Contexte d'appel:
- * - init / main loop / tasklet selon le module.
- */
-void midi_host_poll(void)
-{
-  midi_host_poll_bounded(8); // budget fixe simple
-}
-
 void midi_host_rx_discard_pending(void)
 {
-  uint8_t packet[USBH_MIDI_PACKET_SIZE];
-  for (uint32_t i = 0U; i < USBH_MIDI_RX_QUEUE_LEN; ++i)
-  {
-    if (USBH_MIDI_ReadPacket(&hUsbHostHS, packet) != USBH_OK)
-      break;
-  }
+  /* USBH is owned by USB_SERVICE; request the discard there. */
+  midi_host_discard_requested = 1U;
 }
 
-/**
- * @brief Point d'entrée midi_host_poll_bounded.
- *
- * Rôle:
- * - Exécuter le traitement associé à midi_host_poll_bounded.
- *
- * @param max_msgs Paramètre d'entrée de l'API.
- *
- * Contexte d'appel:
- * - init / main loop / tasklet selon le module.
- */
 void midi_host_poll_bounded(uint32_t max_msgs)
 {
-  uint32_t n = 0U;
+  midi_host_transport_poll_bounded(max_msgs);
+  midi_host_control_poll_bounded(max_msgs);
+}
 
+static bool midi_host_event_push(const uint8_t *packet,
+                                 uint32_t tim5_tick,
+                                 uint32_t ingress_serial)
+{
+  const uint16_t head = midi_host_event_head;
+  const uint16_t next = (uint16_t)((head + 1U) % MIDI_HOST_EVENT_QUEUE_LENGTH);
+  if (next == midi_host_event_tail)
+  {
+    return false;
+  }
+
+  midi_host_event_queue[head].packet[0] = packet[0];
+  midi_host_event_queue[head].packet[1] = packet[1];
+  midi_host_event_queue[head].packet[2] = packet[2];
+  midi_host_event_queue[head].packet[3] = packet[3];
+  midi_host_event_queue[head].tim5_tick = tim5_tick;
+  midi_host_event_queue[head].ingress_serial = ingress_serial;
+  __DMB();
+  midi_host_event_head = next;
+  return true;
+}
+
+static bool midi_host_event_pop(midi_host_event_t *event)
+{
+  const uint16_t tail = midi_host_event_tail;
+  if (tail == midi_host_event_head)
+  {
+    return false;
+  }
+
+  __DMB();
+  *event = midi_host_event_queue[tail];
+  midi_host_event_tail =
+      (uint16_t)((tail + 1U) % MIDI_HOST_EVENT_QUEUE_LENGTH);
+  return true;
+}
+
+void midi_host_transport_poll_bounded(uint32_t max_msgs)
+{
+  if (midi_host_discard_requested != 0U)
+  {
+    uint8_t packet[USBH_MIDI_PACKET_SIZE];
+    for (uint32_t i = 0U; i < USBH_MIDI_RX_QUEUE_LEN; ++i)
+    {
+      if (USBH_MIDI_ReadPacket(&hUsbHostHS, packet) != USBH_OK)
+      {
+        break;
+      }
+    }
+    midi_host_event_tail = midi_host_event_head;
+    midi_host_discard_requested = 0U;
+    return;
+  }
 
   if (!USBH_MIDI_IsReady(&hUsbHostHS))
   {
     return;
   }
 
-  for (; n < max_msgs; n++)
+  for (uint32_t n = 0U; n < max_msgs; ++n)
   {
     uint32_t tim5_tick = 0U;
     uint32_t ingress_serial = 0U;
@@ -116,17 +154,40 @@ void midi_host_poll_bounded(uint32_t max_msgs)
       break;
     }
 
-    uint8_t cin = midi_host_rx_packet[0] & 0x0FU;
-    uint8_t length = midi_host_cin_to_length(cin);
+    if (!midi_host_event_push(midi_host_rx_packet, tim5_tick, ingress_serial))
+    {
+      break;
+    }
+  }
+}
+
+void midi_host_control_poll_bounded(uint32_t max_msgs)
+{
+  if (midi_host_discard_requested != 0U)
+  {
+    return;
+  }
+
+  for (uint32_t n = 0U; n < max_msgs; ++n)
+  {
+    midi_host_event_t event;
+    if (!midi_host_event_pop(&event))
+    {
+      break;
+    }
+
+    const uint8_t cin = event.packet[0] & 0x0FU;
+    const uint8_t length = midi_host_cin_to_length(cin);
     if (length == 0U)
     {
       continue;
     }
 
-    midi_internal_receive_with_timestamp(&midi_host_rx_packet[1], length,
+    midi_internal_receive_with_timestamp(&event.packet[1], length,
                                          SEQ_CLOCK_SRC_EXTERNAL_USB,
-                                         tim5_tick, ingress_serial);
-    midi_send_raw(MIDI_DEST_USB, &midi_host_rx_packet[1], length);
+                                         event.tim5_tick,
+                                         event.ingress_serial);
+    midi_send_raw(MIDI_DEST_USB, &event.packet[1], length);
   }
 
 }

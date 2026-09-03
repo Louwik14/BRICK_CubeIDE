@@ -37,7 +37,7 @@ uint8_t sampler_ram_audio_projection_publish(uint16_t ram_slot,
         .sample_rate = slot->sample_rate, .data_offset = slot->data_offset,
         .data = data, .global_slot = slot->global_slot, .ram_slot = ram_slot,
         .channels = slot->channels, .bytes_per_frame = slot->bytes_per_frame,
-        .format = (uint32_t)slot->format
+        .format = (uint8_t)slot->format
     };
     dst->sequence++;
     __DMB();

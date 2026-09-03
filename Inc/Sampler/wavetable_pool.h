@@ -111,6 +111,11 @@ uint8_t wavetable_pool_inspect_source(const wav_info_t *info,
                                       uint32_t *out_cost_bytes);
 
 uint16_t wavetable_pool_find_free_slot(void);
+uint8_t wavetable_pool_request_load(uint16_t wavetable_slot,
+                                    const char *path,
+                                    wavetable_source_geometry_t source_geometry);
+uint8_t wavetable_pool_request_clear(uint16_t wavetable_slot);
+void wavetable_pool_storage_request_service(void);
 wavetable_result_t wavetable_pool_load_file(uint16_t wavetable_slot,
                                             const char *path,
                                             uint16_t *out_global_slot);

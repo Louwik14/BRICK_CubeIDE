@@ -2,7 +2,7 @@
 
 ## Execution
 
-L'audio travaille par demi-buffer de 64 frames a 48 kHz. L'IRQ SAI possede sa timeline audio locale et n'execute ni FatFs, ni scan de cache, ni travail Storage non borne. CONTROL se cadence seul: TIM12 porte le tick musical interne, TIM5, demarre avant les domaines, porte le temps physique commun et sa conversion nominale en samples. La superloop publie l'horizon musical glissant; aucun reveil AUDIO, compteur de frames periodique ou PendSV sequenceur ne traverse la frontiere. Scheduler, lifecycle et Note FX contribuent d'abord a une fenetre CONTROL fixe; ses 64 buckets sample/kind finalisent ensuite la FIFO en ordre chronologique, avec STOP avant START a timestamp egal.
+L'audio travaille par demi-buffer de 64 frames a 48 kHz. L'IRQ SAI possede sa timeline audio locale et n'execute ni FatFs, ni scan de cache, ni travail Storage non borne. CONTROL_RT se cadence seul: TIM12 porte le tick musical interne, TIM5, demarre avant les domaines, porte le temps physique commun et sa conversion nominale en samples. CONTROL_RT publie l'horizon musical glissant; aucun reveil AUDIO, compteur de frames periodique ou PendSV sequenceur ne traverse la frontiere. Scheduler, lifecycle et Note FX contribuent d'abord a une fenetre CONTROL fixe; ses 64 buckets sample/kind finalisent ensuite la FIFO en ordre chronologique, avec STOP avant START a timestamp egal.
 
 Hall Low-Cost et Premium executent la meme machine bornee depuis l'acquisition ADC. TIM5 est le compteur libre commun de capture. CONTROL en possede l'extension et la conversion; AUDIO initialise sa sample clock locale depuis TIM5 au premier callback valide et ne publie aucune ancre.
 
@@ -67,7 +67,7 @@ appartiennent a CONTROL. Les backings diagnostic/waveform, FIFO, Recorder,
 Preview, page-cache et projections Sampler appartiennent a `SHARED_BACKING`.
 Le page-cache n'y est pas masque: `sample_page_cache.c` possede les
 metadonnees, index, reservations et publications READY dans `DOMAIN_STORAGE`;
-`sample_page_cache_audio.c` possede les credits et acces AUDIO. Le port H747
+`sample_page_cache_audio.c` possede les leases lecteurs et acces AUDIO. Le port H747
 ne change que leur placement physique. Les appels CONTROL vers AUDIO ne passent
 que par `Inc/IPC`; le compile-check Cortex-M4 interdit toute dependance vers
 `Inc/Audio`, `Src/Audio` et les DSP tiers. Le firewall CONTRACTS refuse en plus

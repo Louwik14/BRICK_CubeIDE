@@ -55,6 +55,8 @@ uint8_t sd_preview_begin(const char *path);
 uint8_t sd_preview_begin_range(const char *path, uint32_t start_frame, uint32_t end_frame);
 void sd_preview_stop(void);
 void sd_preview_process(void);
+uint8_t sd_preview_request_begin(const char *path);
+void sd_preview_request_stop(void);
 sd_preview_state_t sd_preview_get_state(void);
 sd_preview_error_t sd_preview_get_last_error(void);
 const sd_preview_diag_t *sd_preview_get_diag(void);

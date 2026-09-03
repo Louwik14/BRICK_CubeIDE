@@ -402,7 +402,7 @@ void audio_recorder_storage_service(uint32_t session_id,
         runtime->final_started_ms = HAL_GetTick();
     }
     if (sd_scheduler_runtime_owner() == SD_SCHEDULER_OWNER_WRITE_DMA)
-        runtime->metrics.superloop_iterations_during_write++;
+        runtime->metrics.storage_service_iterations_during_write++;
     sd_scheduler_runtime_service();
     generic_recorder_service(&runtime->recorder, HAL_GetTick() * 1000U);
 }

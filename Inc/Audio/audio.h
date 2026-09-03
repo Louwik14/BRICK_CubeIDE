@@ -17,7 +17,8 @@
  * - Les IRQ DMA SAI appellent en interne audio_process_block_int32().
  *
  * Contraintes temps réel:
- * - audio_boot_init_binding_io()/audio_start(): contexte main loop (non IRQ).
+ * - audio_boot_init_binding_io()/audio_start(): bootstrap plateforme
+ *   pré-scheduler (non IRQ).
  * - Callbacks HAL_SAI_RxHalfCpltCallback / HAL_SAI_RxCpltCallback: contexte IRQ,
  *   budget strict (pas de blocage, pas d'allocation dynamique, pas de logs).
  */
@@ -26,7 +27,7 @@
  * @brief Initialise la couche audio bas niveau.
  *
  * Contexte d'appel:
- * - Main loop uniquement (phase d'init).
+ * - Bootstrap plateforme pré-scheduler uniquement.
  *
  * Effets de bord:
  * - Mémorise les handles SAI dans l'état statique du module.
@@ -38,7 +39,7 @@ void audio_boot_init_binding_io(void);
  * @brief Initialise le codec et démarre les flux DMA audio vérifiés.
  *
  * Contexte d'appel:
- * - Main loop uniquement.
+ * - Bootstrap plateforme pré-scheduler uniquement.
  *
  * Effets de bord:
  * - Lance le bootstrap codec/SAI via le backend Board.

@@ -4,6 +4,7 @@
 
 #include "App/Hall/hall_engine.h"
 #include "App/Hall/hall_surface.h"
+#include "App/control_domain.h"
 #include "Board/board_product.h"
 #include "buttons.h"
 #include "Track/track_runtime.h"
@@ -238,10 +239,14 @@ static uint8_t ui_macro_interaction_commit_pending_lock(void)
         return 0U;
     }
 
-    return project_control_assign_scene_lock(scene,
-                                              track,
-                                              g_ui_macro_interaction.param,
-                                              g_ui_macro_interaction.scene_value);
+    const control_macro_intent_t intent = {
+        .operation = CONTROL_MACRO_ASSIGN_SCENE_LOCK,
+        .scene = scene,
+        .track = track,
+        .parameter = g_ui_macro_interaction.param,
+        .value = g_ui_macro_interaction.scene_value
+    };
+    return control_domain_request_macro(&intent);
 }
 
 static uint8_t ui_macro_interaction_resolve_lock_param(param_id_t *out_param)
@@ -376,10 +381,10 @@ void ui_macro_interaction_init(void)
 
 void ui_macro_interaction_reset(void)
 {
-    for (uint8_t scene = 0U; scene < PERSIST_CONTROL_MACRO_SCENE_COUNT; ++scene)
-    {
-        param_macro_release_scene_source(scene);
-    }
+    const control_macro_intent_t release_all = {
+        .operation = CONTROL_MACRO_RELEASE_ALL_SCENE_SOURCES
+    };
+    (void)control_domain_request_macro(&release_all);
 
     for (uint8_t hall = 0U; hall < HALL_UI_LANE_COUNT; ++hall)
     {
@@ -468,7 +473,13 @@ uint8_t ui_macro_interaction_note_encoder_delta_with_context(const ui_param_enco
 
         if (ui_macro_interaction_get_held_scene_and_track(&scene, &track) != 0U)
         {
-            (void)project_control_clear_scene_lock(scene, track, param);
+            const control_macro_intent_t intent = {
+                .operation = CONTROL_MACRO_CLEAR_SCENE_LOCK,
+                .scene = scene,
+                .track = track,
+                .parameter = param
+            };
+            (void)control_domain_request_macro(&intent);
         }
 
         g_ui_macro_interaction.encoder = encoder;
@@ -621,13 +632,23 @@ void ui_macro_interaction_service_hall(uint8_t hall, uint8_t pressed)
         return;
     }
 
+    const uint8_t was_active = g_hall_pressure_active[hall];
     if (hall_pressure_update(hall) != 0U)
     {
-        (void)param_macro_set_scene_source_amount(hall, hall_pressure_amount(hall));
+        const control_macro_intent_t intent = {
+            .operation = CONTROL_MACRO_SET_SCENE_SOURCE_AMOUNT,
+            .scene = hall,
+            .value = hall_pressure_amount(hall)
+        };
+        (void)control_domain_request_macro(&intent);
     }
-    else
+    else if (was_active != 0U)
     {
-        param_macro_release_scene_source(hall);
+        const control_macro_intent_t intent = {
+            .operation = CONTROL_MACRO_RELEASE_SCENE_SOURCE,
+            .scene = hall
+        };
+        (void)control_domain_request_macro(&intent);
     }
 }
 

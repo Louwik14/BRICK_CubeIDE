@@ -268,7 +268,8 @@ static uint8_t brick6_sampler_runtime_resolve_ram_source(uint16_t global_slot,
         || ((projected.format != SAMPLER_RAM_FORMAT_FLOAT32_MONO)
             && (projected.format != SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED))
         || (projected.data.region == AUDIO_SHARED_REGION_NONE) || (projected.frames == 0U)
-        || (projected.channels != sampler_ram_audio_format_channels(projected.format)))
+        || (projected.channels != sampler_ram_audio_format_channels(
+                (sampler_ram_format_t)projected.format)))
     {
         return 0U;
     }
@@ -281,7 +282,7 @@ static uint8_t brick6_sampler_runtime_resolve_ram_source(uint16_t global_slot,
     if (out_ram != NULL)
     {
         out_ram->global_slot = projected.global_slot;
-        out_ram->format = projected.format;
+        out_ram->format = (sampler_ram_format_t)projected.format;
         out_ram->channels = projected.channels;
         out_ram->sample_rate = projected.sample_rate;
         out_ram->frames = projected.frames;

@@ -51,7 +51,7 @@ typedef struct
     uint32_t close_duration_us;
     uint32_t rename_duration_us;
     uint32_t finalization_duration_us;
-    uint32_t superloop_iterations_during_write;
+    uint32_t storage_service_iterations_during_write;
 } audio_recorder_metrics_t;
 
 typedef struct

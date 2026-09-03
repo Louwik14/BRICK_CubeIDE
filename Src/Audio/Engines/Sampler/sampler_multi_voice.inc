@@ -198,7 +198,6 @@ void brick6_sampler_runtime_service(void)
 {
     brick6_sampler_runtime_multi_service_physical_releases();
     brick6_sampler_runtime_multi_service_stream_releases();
-    brick6_sampler_runtime_multi_service_physical_releases();
 }
 
 static uint8_t brick6_sampler_runtime_multi_voice_occupied(

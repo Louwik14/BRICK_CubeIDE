@@ -1,4 +1,5 @@
 #include "ui_core_clipboard.h"
+#include "App/control_clipboard.h"
 #include "App/Hall/hall_surface.h"
 #include "Board/board_product.h"
 
@@ -9,8 +10,6 @@
 #include "ui_core.h"
 #include "ui_page_manager.h"
 #include "ui_template_page.h"
-#include "ui_edit_context_sync.h"
-#include "UI/ui_active_track_sync.h"
 #include "ui_macro_interaction.h"
 #include "Storage/project_control.h"
 #include "Platform/memory_layout.h"
@@ -39,7 +38,7 @@
 #include "param_registry.h"
 #include "Track/track_runtime.h"
 #include "Track/entity_topology.h"
-#include "UI/ui_track_catalog.h"
+#include "Track/track_catalog.h"
 #include "Mod/mod_matrix_control.h"
 #include "Mod/mod_destination_control.h"
 #include "Seq/seq_edit.h"
@@ -74,6 +73,8 @@ typedef struct
 {
     uint8_t valid;
     uint8_t count;
+    uint8_t target_count;
+    param_id_t target_params[UI_PAGE_CLIPBOARD_CAPACITY];
     ui_param_clipboard_entry_t entry[UI_PAGE_CLIPBOARD_CAPACITY];
 } ui_page_clipboard_t;
 
@@ -81,8 +82,18 @@ typedef struct
 {
     uint8_t valid;
     uint8_t count;
+    uint8_t target_count;
+    param_id_t target_params[UI_ENSEMBLE_CLIPBOARD_CAPACITY];
     ui_param_clipboard_entry_t entry[UI_ENSEMBLE_CLIPBOARD_CAPACITY];
 } ui_ensemble_clipboard_t;
+
+typedef struct
+{
+    uint8_t valid;
+    uint8_t track;
+    uint8_t count;
+    seq_step_id_t steps[SEQ_MAX_STEPS];
+} ui_seq_clipboard_target_t;
 
 typedef struct
 {
@@ -147,9 +158,11 @@ typedef struct
     ui_track_clipboard_t track;
     ui_ensemble_clipboard_t ensemble;
     ui_page_clipboard_t page;
+    ui_seq_clipboard_target_t sequence_target;
 } ui_clipboard_state_t;
 
 UI_SDRAM static ui_clipboard_state_t g_ui_clipboard;
+static volatile uint8_t g_clipboard_control_owned;
 
 static uint8_t ui_core_clipboard_note_fx_param_kind(param_id_t id, uint8_t *out_param)
 {
@@ -191,6 +204,51 @@ static void ui_core_clipboard_feedback(ui_core_clipboard_feedback_fn feedback, c
     {
         feedback(message);
     }
+}
+
+uint8_t control_clipboard_ui_available(void)
+{
+    return (g_clipboard_control_owned == 0U) ? 1U : 0U;
+}
+
+uint8_t control_clipboard_request_apply(control_clipboard_operation_t operation,
+                                        uint8_t target,
+                                        uint8_t arg0,
+                                        uint8_t arg1)
+{
+    if (g_clipboard_control_owned != 0U) return 0U;
+    g_clipboard_control_owned = 1U;
+    const control_clipboard_intent_t intent = {
+        .operation = (uint8_t)operation,
+        .target = target,
+        .arg0 = arg0,
+        .arg1 = arg1
+    };
+    if (control_domain_request_clipboard(&intent) == 0U)
+    {
+        g_clipboard_control_owned = 0U;
+        return 0U;
+    }
+    return 1U;
+}
+
+uint8_t control_clipboard_request_sequence_apply(uint8_t track,
+                                                 const seq_step_id_t *steps,
+                                                 uint8_t count,
+                                                 uint8_t clear)
+{
+    if ((steps == 0) || (count == 0U) || (count > SEQ_MAX_STEPS)
+        || (control_clipboard_ui_available() == 0U))
+        return 0U;
+    g_ui_clipboard.sequence_target.valid = 1U;
+    g_ui_clipboard.sequence_target.track = track;
+    g_ui_clipboard.sequence_target.count = count;
+    memcpy(g_ui_clipboard.sequence_target.steps, steps,
+           (size_t)count * sizeof(steps[0]));
+    return control_clipboard_request_apply(
+        (clear != 0U) ? CONTROL_CLIPBOARD_CLEAR_SEQUENCE
+                      : CONTROL_CLIPBOARD_APPLY_SEQUENCE,
+        track, 0U, 0U);
 }
 
 static uint8_t ui_core_clipboard_macro_make_empty_lock(project_control_macro_lock_t *out_lock)
@@ -502,8 +560,7 @@ static uint8_t ui_core_clipboard_bulk_add(live_parameter_audio_bulk_t *bulk,
     item->scope = scope;
     item->track = event_track;
     item->slot = LIVE_PARAMETER_EVENT_INVALID_INDEX;
-    item->flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                             | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS);
+    item->flags = LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS;
     item->value = live_parameter_event_encode_float(command_value);
     prepared[(*prepared_count)++] = next;
     return 1U;
@@ -551,7 +608,6 @@ static uint8_t ui_core_clipboard_clear_param_list_to_min(uint8_t track,
 
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
         .count = 0U
     };
     ui_clipboard_prepared_control_t prepared[UI_ENSEMBLE_CLIPBOARD_CAPACITY];
@@ -920,7 +976,7 @@ static uint8_t ui_track_clipboard_prevalidate(
                 || ((payload->config.family == TRACK_FAMILY_OFF)
                     != (payload->config.type == TRACK_TYPE_NONE))
                 || ((payload->config.family != TRACK_FAMILY_OFF)
-                    && (ui_track_catalog_type_is_valid_for_family(
+                    && (track_catalog_type_is_valid_for_family(
                             payload->config.family, payload->config.type) == false))
                 || (payload->midi_channel < 1U) || (payload->midi_channel > 16U)
                 || (payload->midi_source >= TRACK_MIDI_SOURCE_COUNT)
@@ -956,7 +1012,7 @@ static uint8_t ui_track_clipboard_prevalidate(
         entity_topology_descriptor_t topology;
         if (entity_topology_resolve(group_active, entity, &topology) == 0U) return 0U;
         if ((topology.active != 0U) && (configs[entity].family != TRACK_FAMILY_OFF)
-                && (ui_track_catalog_type_is_available(entity,
+                && (track_catalog_type_is_available(entity,
                         configs[entity].family, configs[entity].type, configs) == false))
             return 0U;
     }
@@ -1061,7 +1117,7 @@ static uint8_t ui_track_clipboard_restore_payload(
     polyphony_control_state_t prepared_polyphony;
     audio_fx_control_state_t prepared_audio_fx;
     live_parameter_audio_bulk_t owner_bulk={.capture_tick=live_clock_capture_tick(),
-        .source=LIVE_PARAMETER_EVENT_SOURCE_BULK,.count=0U};
+        .count=0U};
     track_runtime_resolved_track_t resolved;
     if ((track_runtime_resolve_track(target, &resolved) == 0U)
             || !polyphony_control_prepare(&payload->polyphony,&prepared_polyphony)
@@ -1111,8 +1167,6 @@ static uint8_t ui_core_clipboard_paste_track(uint8_t track)
                         source, target, &cb->payload[index]) == 0U))
             return 0U;
     }
-    ui_active_track_sync_full_after_reconfigure();
-    ui_edit_context_sync_active_track(0U);
     return 1U;
 }
 
@@ -1258,8 +1312,6 @@ static uint8_t ui_core_clipboard_clear_track(uint8_t track)
     if (track_structure_apply_entity_bulk_with_inputs(families, types,
             midi_channels, midi_sources, inputs) == false)
         return 0U;
-    ui_active_track_sync_full_after_reconfigure();
-    ui_edit_context_sync_active_track(0U);
     return 1U;
 }
 
@@ -1326,7 +1378,6 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
     uint8_t common = 0U;
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
         .count = 0U
     };
     ui_clipboard_prepared_control_t prepared[UI_ENSEMBLE_CLIPBOARD_CAPACITY];
@@ -1513,9 +1564,83 @@ static uint8_t ui_core_clipboard_resolve_seq_steps(seq_track_id_t *io_track,
     return 1U;
 }
 
+void control_clipboard_process(void)
+{
+    control_clipboard_intent_t intent;
+    if (control_domain_take_clipboard(&intent) == 0U) return;
+
+    switch ((control_clipboard_operation_t)intent.operation)
+    {
+        case CONTROL_CLIPBOARD_APPLY_MACRO_LOCK:
+            (void)ui_core_clipboard_paste_macro_lock(intent.arg0, intent.arg1);
+            break;
+        case CONTROL_CLIPBOARD_CLEAR_MACRO_LOCK:
+            (void)ui_core_clipboard_clear_macro_lock(intent.arg0, intent.arg1);
+            break;
+        case CONTROL_CLIPBOARD_APPLY_TRACK:
+            (void)ui_core_clipboard_paste_track(intent.target);
+            break;
+        case CONTROL_CLIPBOARD_CLEAR_TRACK:
+            (void)ui_core_clipboard_clear_track(intent.target);
+            break;
+        case CONTROL_CLIPBOARD_APPLY_ENSEMBLE:
+        {
+            uint8_t common = 0U;
+            uint8_t applied = 0U;
+            (void)ui_core_clipboard_apply_intersection(
+                intent.target, g_ui_clipboard.ensemble.entry,
+                g_ui_clipboard.ensemble.count, g_ui_clipboard.ensemble.valid,
+                g_ui_clipboard.ensemble.target_params,
+                g_ui_clipboard.ensemble.target_count, &common, &applied);
+            break;
+        }
+        case CONTROL_CLIPBOARD_CLEAR_ENSEMBLE:
+            (void)ui_core_clipboard_clear_param_list_to_min(
+                intent.target, g_ui_clipboard.ensemble.target_params,
+                g_ui_clipboard.ensemble.target_count);
+            break;
+        case CONTROL_CLIPBOARD_APPLY_PAGE:
+        {
+            uint8_t common = 0U;
+            uint8_t applied = 0U;
+            (void)ui_core_clipboard_apply_intersection(
+                intent.target, g_ui_clipboard.page.entry,
+                g_ui_clipboard.page.count, g_ui_clipboard.page.valid,
+                g_ui_clipboard.page.target_params,
+                g_ui_clipboard.page.target_count, &common, &applied);
+            break;
+        }
+        case CONTROL_CLIPBOARD_CLEAR_PAGE:
+            (void)ui_core_clipboard_clear_param_list_to_min(
+                intent.target, g_ui_clipboard.page.target_params,
+                g_ui_clipboard.page.target_count);
+            break;
+        case CONTROL_CLIPBOARD_APPLY_SEQUENCE:
+        {
+            seq_clipboard_paste_result_t result = { 0U, 0U, 0U };
+            if (g_ui_clipboard.sequence_target.valid != 0U)
+                (void)seq_edit_paste_steps(
+                    g_ui_clipboard.sequence_target.track,
+                    g_ui_clipboard.sequence_target.steps,
+                    g_ui_clipboard.sequence_target.count, &result);
+            break;
+        }
+        case CONTROL_CLIPBOARD_CLEAR_SEQUENCE:
+            if (g_ui_clipboard.sequence_target.valid != 0U)
+                seq_edit_clear_steps(g_ui_clipboard.sequence_target.track,
+                                     g_ui_clipboard.sequence_target.steps,
+                                     g_ui_clipboard.sequence_target.count);
+            break;
+        default:
+            break;
+    }
+    g_clipboard_control_owned = 0U;
+}
+
 void ui_core_clipboard_init(void)
 {
     memset(&g_ui_clipboard, 0, sizeof(g_ui_clipboard));
+    g_clipboard_control_owned = 0U;
 }
 
 uint8_t ui_core_clipboard_handle_macro_lock_event(const ui_event_t *ev,
@@ -1540,6 +1665,12 @@ uint8_t ui_core_clipboard_handle_macro_lock_event(const ui_event_t *ev,
         return 0U;
     }
 
+    if (control_clipboard_ui_available() == 0U)
+    {
+        ui_core_clipboard_feedback(feedback, "CLIP BUSY");
+        return 1U;
+    }
+
     if (ev->id == (uint8_t)BTN_COPY)
     {
         if (ui_core_clipboard_copy_macro_lock(scene, lock) != 0U)
@@ -1551,21 +1682,17 @@ uint8_t ui_core_clipboard_handle_macro_lock_event(const ui_event_t *ev,
 
     if (shift_down != 0U)
     {
-        if (ui_core_clipboard_clear_macro_lock(scene, lock) != 0U)
-        {
-            ui_core_clipboard_feedback(feedback, "MACRO CLEARED");
-        }
+        if (control_clipboard_request_apply(CONTROL_CLIPBOARD_CLEAR_MACRO_LOCK,
+                                            0U, scene, lock) != 0U)
+            ui_core_clipboard_feedback(feedback, "MACRO QUEUED");
+        else ui_core_clipboard_feedback(feedback, "CLIP BUSY");
         return 1U;
     }
 
-    if (ui_core_clipboard_paste_macro_lock(scene, lock) != 0U)
-    {
-        ui_core_clipboard_feedback(feedback, "MACRO PASTED");
-    }
-    else
-    {
-        ui_core_clipboard_feedback(feedback, "MACRO INCOMP");
-    }
+    if (control_clipboard_request_apply(CONTROL_CLIPBOARD_APPLY_MACRO_LOCK,
+                                        0U, scene, lock) != 0U)
+        ui_core_clipboard_feedback(feedback, "MACRO QUEUED");
+    else ui_core_clipboard_feedback(feedback, "CLIP BUSY");
     return 1U;
 }
 
@@ -1586,6 +1713,11 @@ uint8_t ui_core_clipboard_handle_track_event(const ui_event_t *ev,
     }
 
     const uint8_t track = ui_get_active_lane();
+    if (control_clipboard_ui_available() == 0U)
+    {
+        ui_core_clipboard_feedback(feedback, "CLIP BUSY");
+        return 1U;
+    }
     if (ev->id == (uint8_t)BTN_COPY)
     {
         if (ui_core_clipboard_copy_track(track) != 0U)
@@ -1597,21 +1729,17 @@ uint8_t ui_core_clipboard_handle_track_event(const ui_event_t *ev,
 
     if (shift_down != 0U)
     {
-        if (ui_core_clipboard_clear_track(track) != 0U)
-        {
-            ui_core_clipboard_feedback(feedback, "TRACK CLEARED");
-        }
+        if (control_clipboard_request_apply(CONTROL_CLIPBOARD_CLEAR_TRACK,
+                                            track, 0U, 0U) != 0U)
+            ui_core_clipboard_feedback(feedback, "TRACK QUEUED");
+        else ui_core_clipboard_feedback(feedback, "CLIP BUSY");
         return 1U;
     }
 
-    if (ui_core_clipboard_paste_track(track) != 0U)
-    {
-        ui_core_clipboard_feedback(feedback, "TRACK PASTED");
-    }
-    else
-    {
-        ui_core_clipboard_feedback(feedback, "TRACK INCOMP");
-    }
+    if (control_clipboard_request_apply(CONTROL_CLIPBOARD_APPLY_TRACK,
+                                        track, 0U, 0U) != 0U)
+        ui_core_clipboard_feedback(feedback, "TRACK QUEUED");
+    else ui_core_clipboard_feedback(feedback, "CLIP BUSY");
     return 1U;
 }
 
@@ -1655,6 +1783,11 @@ uint8_t ui_core_clipboard_handle_ensemble_event(const ui_event_t *ev,
         ui_core_clipboard_feedback(feedback, "ENS N/A");
         return 1U;
     }
+    if (control_clipboard_ui_available() == 0U)
+    {
+        ui_core_clipboard_feedback(feedback, "CLIP BUSY");
+        return 1U;
+    }
     if (ev->id == (uint8_t)BTN_COPY)
     {
         if (ui_core_clipboard_copy_param_scope(g_ui_clipboard.ensemble.entry,
@@ -1672,37 +1805,23 @@ uint8_t ui_core_clipboard_handle_ensemble_event(const ui_event_t *ev,
 
     if (shift_down != 0U)
     {
-        const uint8_t cleared = ui_core_clipboard_clear_param_list_to_min(track, params, count);
-        ui_edit_context_sync_active_track(0U);
-        ui_core_clipboard_feedback(feedback, (cleared != 0U) ? "ENS CLEARED" : "ENS INCOMP");
+        g_ui_clipboard.ensemble.target_count = count;
+        memcpy(g_ui_clipboard.ensemble.target_params, params,
+               (size_t)count * sizeof(params[0]));
+        if (control_clipboard_request_apply(CONTROL_CLIPBOARD_CLEAR_ENSEMBLE,
+                                            track, 0U, 0U) != 0U)
+            ui_core_clipboard_feedback(feedback, "ENS QUEUED");
+        else ui_core_clipboard_feedback(feedback, "CLIP BUSY");
         return 1U;
     }
 
-    uint8_t common_count = 0U;
-    uint8_t applied = 0U;
-    const uint8_t apply_ok = ui_core_clipboard_apply_intersection(track,
-                                                                 g_ui_clipboard.ensemble.entry,
-                                                                 g_ui_clipboard.ensemble.count,
-                                                                 g_ui_clipboard.ensemble.valid,
-                                                                 params,
-                                                                 count,
-                                                                 &common_count,
-                                                                 &applied);
-    if ((apply_ok == 0U) || (common_count == 0U) || (applied == 0U))
-    {
-        ui_core_clipboard_feedback(feedback, "ENS INCOMP");
-        return 1U;
-    }
-
-    ui_edit_context_sync_active_track(0U);
-    if ((applied < common_count) || (common_count < g_ui_clipboard.ensemble.count))
-    {
-        ui_core_clipboard_feedback(feedback, "ENS PARTIAL");
-    }
-    else
-    {
-        ui_core_clipboard_feedback(feedback, "ENS PASTED");
-    }
+    g_ui_clipboard.ensemble.target_count = count;
+    memcpy(g_ui_clipboard.ensemble.target_params, params,
+           (size_t)count * sizeof(params[0]));
+    if (control_clipboard_request_apply(CONTROL_CLIPBOARD_APPLY_ENSEMBLE,
+                                        track, 0U, 0U) != 0U)
+        ui_core_clipboard_feedback(feedback, "ENS QUEUED");
+    else ui_core_clipboard_feedback(feedback, "CLIP BUSY");
     return 1U;
 }
 
@@ -1739,6 +1858,11 @@ uint8_t ui_core_clipboard_handle_page_event(const ui_event_t *ev,
         return 0U;
     }
     const uint8_t track = edit_context.owner_entity;
+    if (control_clipboard_ui_available() == 0U)
+    {
+        ui_core_clipboard_feedback(feedback, "CLIP BUSY");
+        return 1U;
+    }
     if (ev->id == (uint8_t)BTN_COPY)
     {
         if (ui_core_clipboard_copy_param_scope(g_ui_clipboard.page.entry,
@@ -1756,37 +1880,23 @@ uint8_t ui_core_clipboard_handle_page_event(const ui_event_t *ev,
 
     if (shift_down != 0U)
     {
-        const uint8_t cleared = ui_core_clipboard_clear_param_list_to_min(track, params, count);
-        ui_edit_context_sync_active_track(0U);
-        ui_core_clipboard_feedback(feedback, (cleared != 0U) ? "PAGE CLEARED" : "PAGE INCOMP");
+        g_ui_clipboard.page.target_count = count;
+        memcpy(g_ui_clipboard.page.target_params, params,
+               (size_t)count * sizeof(params[0]));
+        if (control_clipboard_request_apply(CONTROL_CLIPBOARD_CLEAR_PAGE,
+                                            track, 0U, 0U) != 0U)
+            ui_core_clipboard_feedback(feedback, "PAGE QUEUED");
+        else ui_core_clipboard_feedback(feedback, "CLIP BUSY");
         return 1U;
     }
 
-    uint8_t common_count = 0U;
-    uint8_t applied = 0U;
-    const uint8_t apply_ok = ui_core_clipboard_apply_intersection(track,
-                                                                 g_ui_clipboard.page.entry,
-                                                                 g_ui_clipboard.page.count,
-                                                                 g_ui_clipboard.page.valid,
-                                                                 params,
-                                                                 count,
-                                                                 &common_count,
-                                                                 &applied);
-    if ((apply_ok == 0U) || (common_count == 0U) || (applied == 0U))
-    {
-        ui_core_clipboard_feedback(feedback, "PAGE INCOMP");
-        return 1U;
-    }
-
-    ui_edit_context_sync_active_track(0U);
-    if ((applied < common_count) || (common_count < g_ui_clipboard.page.count))
-    {
-        ui_core_clipboard_feedback(feedback, "PAGE PARTIAL");
-    }
-    else
-    {
-        ui_core_clipboard_feedback(feedback, "PAGE PASTED");
-    }
+    g_ui_clipboard.page.target_count = count;
+    memcpy(g_ui_clipboard.page.target_params, params,
+           (size_t)count * sizeof(params[0]));
+    if (control_clipboard_request_apply(CONTROL_CLIPBOARD_APPLY_PAGE,
+                                        track, 0U, 0U) != 0U)
+        ui_core_clipboard_feedback(feedback, "PAGE QUEUED");
+    else ui_core_clipboard_feedback(feedback, "CLIP BUSY");
     return 1U;
 }
 
@@ -1837,12 +1947,28 @@ uint8_t ui_core_clipboard_handle_seq_track_event(const ui_event_t *ev,
 
     const uint8_t step_scope = (scope == UI_SEQ_CLIPBOARD_SCOPE_STEP) ? 1U : 0U;
 
+    if (control_clipboard_ui_available() == 0U)
+    {
+        ui_core_clipboard_feedback(feedback, "CLIP BUSY");
+        return 1U;
+    }
+
     if (ev->id == (uint8_t)BTN_COPY)
     {
         if (shift_down != 0U)
         {
-            seq_edit_clear_steps(track, steps, step_count);
-            ui_core_clipboard_feedback(feedback, (step_scope != 0U) ? "STEP CLEARED" : "SEQ CLEARED");
+            g_ui_clipboard.sequence_target.valid = 1U;
+            g_ui_clipboard.sequence_target.track = track;
+            g_ui_clipboard.sequence_target.count = step_count;
+            memcpy(g_ui_clipboard.sequence_target.steps, steps,
+                   (size_t)step_count * sizeof(steps[0]));
+            if (control_clipboard_request_apply(CONTROL_CLIPBOARD_CLEAR_SEQUENCE,
+                                                (uint8_t)track, 0U, 0U) != 0U)
+                ui_core_clipboard_feedback(feedback,
+                                           (step_scope != 0U)
+                                               ? "STEP QUEUED" : "SEQ QUEUED");
+            else
+                ui_core_clipboard_feedback(feedback, "CLIP BUSY");
             return 1U;
         }
 
@@ -1853,25 +1979,20 @@ uint8_t ui_core_clipboard_handle_seq_track_event(const ui_event_t *ev,
         return 1U;
     }
 
-    seq_clipboard_paste_result_t paste_result = { 0U, 0U, 0U };
-    if (seq_edit_paste_steps(track, steps, step_count, &paste_result) == 0U)
-    {
-        ui_core_clipboard_feedback(feedback, (step_scope != 0U) ? "STEP INCOMP" : "SEQ INCOMP");
-        return 1U;
-    }
-
-    if (paste_result.trunc != 0U)
-    {
-        ui_core_clipboard_feedback(feedback, (step_scope != 0U) ? "STEP TRUNC" : "SEQ TRUNC");
-    }
-    else if (paste_result.partial != 0U)
-    {
-        ui_core_clipboard_feedback(feedback, (step_scope != 0U) ? "STEP PARTIAL" : "SEQ PARTIAL");
-    }
+    g_ui_clipboard.sequence_target.valid = 1U;
+    g_ui_clipboard.sequence_target.track = track;
+    g_ui_clipboard.sequence_target.count = step_count;
+    memcpy(g_ui_clipboard.sequence_target.steps, steps,
+           (size_t)step_count * sizeof(steps[0]));
+    const control_clipboard_operation_t operation =
+        (shift_down != 0U) ? CONTROL_CLIPBOARD_CLEAR_SEQUENCE
+                           : CONTROL_CLIPBOARD_APPLY_SEQUENCE;
+    if (control_clipboard_request_apply(operation, (uint8_t)track, 0U, 0U) != 0U)
+        ui_core_clipboard_feedback(feedback,
+                                   (step_scope != 0U)
+                                       ? "STEP QUEUED" : "SEQ QUEUED");
     else
-    {
-        ui_core_clipboard_feedback(feedback, (step_scope != 0U) ? "STEP PASTED" : "SEQ PASTED");
-    }
+        ui_core_clipboard_feedback(feedback, "CLIP BUSY");
 
     return 1U;
 }

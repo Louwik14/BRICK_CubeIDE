@@ -29,7 +29,7 @@ uint8_t sample_classic_audio_projection_resolve(uint16_t sample_id,
     out->data_size = snap.data_size;
     out->sample_rate = snap.sample_rate;
     out->registration_epoch = snap.registration_epoch;
-    out->format = snap.format;
+    out->format = (sample_audio_format_t)snap.format;
     out->channels = snap.channels;
     out->bits_per_sample = snap.bits_per_sample;
     out->block_align = snap.block_align;

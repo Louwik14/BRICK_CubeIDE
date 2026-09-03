@@ -1,6 +1,7 @@
 #include "Sampler/sample_global_pool.h"
 
 #include <string.h>
+#include <stdio.h>
 
 #include "Sampler/sample_cache.h"
 #include "Platform/memory_layout.h"
@@ -9,6 +10,11 @@ STORAGE_STATE_SDRAM static sample_global_slot_t
     g_sample_global_pool[SAMPLE_GLOBAL_POOL_MAX_SLOTS];
 
 static sample_classic_load_error_t g_sample_classic_last_error;
+static volatile uint8_t g_classic_request_valid;
+static volatile uint16_t g_classic_request_slot;
+static char g_classic_request_path[SAMPLE_GLOBAL_POOL_PATH_MAX];
+static volatile uint8_t g_classic_clear_request_valid;
+static volatile uint16_t g_classic_clear_request_slot;
 
 static uint8_t sample_global_kind_valid(sample_global_kind_t kind)
 {
@@ -124,6 +130,10 @@ void sample_global_pool_reset(void)
         g_sample_global_pool[i].entry_count = 0U;
     }
     g_sample_classic_last_error = SAMPLE_CLASSIC_LOAD_OK;
+    g_classic_request_valid = 0U;
+    g_classic_clear_request_valid = 0U;
+    g_classic_request_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    g_classic_request_path[0] = '\0';
 }
 
 uint16_t sample_global_pool_find_free_slot(void)
@@ -437,6 +447,54 @@ uint8_t sample_global_pool_load_classic(uint16_t global_index, const char *path)
     }
     g_sample_classic_last_error = SAMPLE_CLASSIC_LOAD_OK;
     return 1U;
+}
+
+uint8_t sample_global_pool_request_classic_load(uint16_t global_index, const char *path)
+{
+    if ((global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+        || (path == NULL) || (path[0] == '\0')
+        || (strlen(path) >= sizeof(g_classic_request_path))
+        || (g_classic_request_valid != 0U))
+    {
+        return 0U;
+    }
+    g_classic_request_slot = global_index;
+    (void)snprintf(g_classic_request_path, sizeof(g_classic_request_path), "%s", path);
+    __DMB();
+    g_classic_request_valid = 1U;
+    return 1U;
+}
+
+uint8_t sample_global_pool_request_clear_classic(uint16_t global_index)
+{
+    if ((global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+        || (g_classic_request_valid != 0U)
+        || (g_classic_clear_request_valid != 0U))
+    {
+        return 0U;
+    }
+    g_classic_clear_request_slot = global_index;
+    __DMB();
+    g_classic_clear_request_valid = 1U;
+    return 1U;
+}
+
+void sample_global_pool_storage_request_service(void)
+{
+    if (g_classic_clear_request_valid != 0U)
+    {
+        const uint16_t slot = g_classic_clear_request_slot;
+        g_classic_clear_request_valid = 0U;
+        sample_global_pool_clear_classic(slot);
+        return;
+    }
+    if (g_classic_request_valid == 0U)
+        return;
+    const uint16_t slot = g_classic_request_slot;
+    char path[SAMPLE_GLOBAL_POOL_PATH_MAX];
+    (void)snprintf(path, sizeof(path), "%s", g_classic_request_path);
+    g_classic_request_valid = 0U;
+    (void)sample_global_pool_load_classic(slot, path);
 }
 
 uint8_t sample_global_pool_load_classic_prepared(uint16_t global_index,

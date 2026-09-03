@@ -10,7 +10,7 @@
 #include "Storage/audio_recorder.h"
 #include "Storage/sd_preview.h"
 #include "Storage/wav_convert.h"
-#include "Storage/pattern_live_ram.h"
+#include "Storage/pattern_load_storage.h"
 #include "Storage/pattern_control_bank.h"
 #include "Sampler/sample_page_lease_control.h"
 #include "Sampler/sample_cache.h"
@@ -21,9 +21,11 @@
 #include "Sampler/multi_sample_pool.h"
 #include "midi.h"
 #include "midi_host.h"
-static uint8_t g_project_load_panic_committed;
-static uint8_t g_project_load_retire_started;
-static uint8_t g_project_load_requested;
+static volatile uint8_t g_project_load_panic_committed;
+static volatile uint8_t g_project_load_retire_started;
+static volatile uint8_t g_project_load_requested;
+static volatile uint8_t g_project_load_request_pending;
+static volatile uint8_t g_project_load_release_pending;
 static volatile uint8_t g_project_load_ingress_open;
 
 static uint8_t project_load_recorder_busy(void)
@@ -47,7 +49,7 @@ uint8_t project_load_allowed(void)
     return (uint8_t)((seq_runtime_is_running() == 0U)
         && (seq_runtime_is_start_pending() == 0U)
         && (pattern_control_bank_async_busy() == 0U)
-        && (pattern_load_is_pending() == 0U)
+        && (pattern_storage_is_pending() == 0U)
         && (project_load_recorder_busy() == 0U)
         && (sampler_ram_pool_load_async_busy() == 0U)
         && (wavetable_pool_load_async_busy() == 0U)
@@ -61,35 +63,67 @@ void project_load_quiesce_init(void)
     g_project_load_panic_committed = 0U;
     g_project_load_retire_started = 0U;
     g_project_load_requested = 0U;
+    g_project_load_request_pending = 0U;
+    g_project_load_release_pending = 0U;
     g_project_load_ingress_open = 1U;
 }
 
 void project_load_quiesce_request(void)
 {
-    if (g_project_load_requested != 0U) return;
+    if (g_project_load_requested != 0U
+        || g_project_load_request_pending != 0U)
+        return;
+    g_project_load_request_pending = 1U;
+}
+
+void project_load_quiesce_control_process(void)
+{
+    if (g_project_load_release_pending != 0U)
+    {
+        g_project_load_release_pending = 0U;
+        g_project_load_panic_committed = 0U;
+        g_project_load_retire_started = 0U;
+        g_project_load_requested = 0U;
+        __DMB();
+        g_project_load_ingress_open = 1U;
+    }
+
+    if (g_project_load_request_pending == 0U
+        || g_project_load_requested != 0U)
+        return;
+
+    g_project_load_request_pending = 0U;
     g_project_load_ingress_open = 0U;
     __DMB();
     live_event_discard_pending();
     midi_rx_discard_pending();
     midi_host_rx_discard_pending();
-    sd_preview_stop();
+    if (sd_preview_is_active() != 0U)
+        sd_preview_stop();
     note_fx_pipeline_panic();
     seq_play_scheduler_clear();
     g_project_load_requested = 1U;
     g_project_load_panic_committed = control_music_output_panic_all(0U);
-    if (g_project_load_panic_committed != 0U)
-    {
-        (void)sample_page_cache_cancel_reserved_domain(
-            SAMPLE_AUDIO_DOMAIN_CLASSIC, 0U);
-        (void)sample_page_cache_cancel_reserved_domain(
-            SAMPLE_AUDIO_DOMAIN_LOOPER, 0U);
-        (void)sample_page_cache_cancel_reserved_domain(
-            SAMPLE_AUDIO_DOMAIN_MULTI, 0U);
-        sampler_ram_pool_retire_all();
-        wavetable_pool_retire_all();
-        multi_sample_pool_retire_all();
-        g_project_load_retire_started = 1U;
-    }
+}
+
+void project_load_quiesce_storage_retire(void)
+{
+    if (g_project_load_requested == 0U
+        || g_project_load_panic_committed == 0U
+        || g_project_load_retire_started != 0U)
+        return;
+
+    (void)sample_page_cache_cancel_reserved_domain(
+        SAMPLE_AUDIO_DOMAIN_CLASSIC, 0U);
+    (void)sample_page_cache_cancel_reserved_domain(
+        SAMPLE_AUDIO_DOMAIN_LOOPER, 0U);
+    (void)sample_page_cache_cancel_reserved_domain(
+        SAMPLE_AUDIO_DOMAIN_MULTI, 0U);
+    sampler_ram_pool_retire_all();
+    wavetable_pool_retire_all();
+    multi_sample_pool_retire_all();
+    __DMB();
+    g_project_load_retire_started = 1U;
 }
 
 uint8_t project_load_quiesce_safe(void)
@@ -118,11 +152,7 @@ uint8_t project_load_quiesce_failed(void)
 
 void project_load_quiesce_end(void)
 {
-    g_project_load_panic_committed = 0U;
-    g_project_load_retire_started = 0U;
-    g_project_load_requested = 0U;
-    __DMB();
-    g_project_load_ingress_open = 1U;
+    g_project_load_release_pending = 1U;
 }
 
 uint8_t project_load_ingress_is_open(void)

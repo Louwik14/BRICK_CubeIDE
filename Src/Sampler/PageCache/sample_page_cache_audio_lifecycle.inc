@@ -3,7 +3,7 @@ sample_page_state_t sample_page_cache_audio_get_page_state_key(
 {
     const sample_page_desc_t *const page =
         sample_page_cache_audio_find_page_key(key, page_index);
-    return (page != 0) ? page->state : SAMPLE_PAGE_FREE;
+    return (page != 0) ? (sample_page_state_t)page->state : SAMPLE_PAGE_FREE;
 }
 
 uint8_t sample_page_cache_audio_resolve_page(uint16_t sample_id,

@@ -33,15 +33,6 @@ uint8_t polyphony_control_get_voice_count(uint8_t track)
     return (track < BRICK_ENTITY_CAPACITY) ? g_polyphony_voice_count[track] : 1U;
 }
 
-uint8_t polyphony_control_set_voice_count(uint8_t track, uint8_t voices)
-{
-    if (track >= BRICK_ENTITY_CAPACITY) return 0U;
-    const polyphony_control_state_t state = {
-        .voice_count = voices, .spread = g_polyphony_spread[track]
-    };
-    return polyphony_control_restore(track, &state);
-}
-
 uint8_t polyphony_control_get_spread(uint8_t track, float *out_spread)
 {
     if ((track >= BRICK_ENTITY_CAPACITY) || (out_spread == NULL)) return 0U;
@@ -98,4 +89,4 @@ uint8_t polyphony_control_install_prepared(uint8_t track,
     return 1U;
 }
 uint8_t polyphony_control_restore(uint8_t track,const polyphony_control_state_t*state)
-{polyphony_control_state_t prepared;live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),.source=LIVE_PARAMETER_EVENT_SOURCE_BULK};if(track>=BRICK_ENTITY_CAPACITY||!polyphony_control_prepare(state,&prepared)||!polyphony_control_bulk_add(track,&prepared,&bulk)||!live_parameter_audio_publication_submit_bulk(&bulk))return 0U;return polyphony_control_install_prepared(track,&prepared);}
+{polyphony_control_state_t prepared;live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick()};if(track>=BRICK_ENTITY_CAPACITY||!polyphony_control_prepare(state,&prepared)||!polyphony_control_bulk_add(track,&prepared,&bulk)||!live_parameter_audio_publication_submit_bulk(&bulk))return 0U;return polyphony_control_install_prepared(track,&prepared);}

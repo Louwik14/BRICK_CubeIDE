@@ -9,7 +9,6 @@
 #include "Sampler/sample_stream_manager.h"
 #include "Sampler/sample_stream_transport.h"
 #include "Sampler/sample_cache.h"
-#include "Storage/project_control.h"
 #include "Seq/seq_runtime.h"
 #include "Platform/memory_layout.h"
 #include "Storage/audio_recorder.h"
@@ -17,22 +16,13 @@
 #include "stm32h7xx_hal.h"
 
 #define MULTI_SAMPLE_LOADER_PATH_MAX SAMPLE_PAGE_CACHE_PATH_MAX
-#define MULTI_SAMPLE_BULK_READ_BYTES (64U * 1024U)
-#define MULTI_SAMPLE_BULK_MAX_BATCH_PAGES \
-    (MULTI_SAMPLE_BULK_READ_BYTES / 4096U)
-
-#if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
-_Static_assert((MULTI_SAMPLE_BULK_READ_BYTES % 512U) == 0U,
-               "Multi bulk buffer must remain sector aligned in size");
-_Static_assert(MULTI_SAMPLE_BULK_MAX_BATCH_PAGES >= SAMPLE_AUDIO_FORMAT_STEREO_PRESOCLE_PAGES,
-               "one bulk batch must cover a stereo presocle when source width permits");
-#endif
 
 typedef struct
 {
     uint8_t used;
     uint16_t logical_id;
     uint16_t instrument_id;
+    uint8_t cancelled;
     char path[MULTI_SAMPLE_LOADER_PATH_MAX];
 } multi_sample_load_request_t;
 
@@ -48,6 +38,10 @@ static multi_sample_load_diag_t g_multi_load_diag;
 static uint8_t g_multi_load_active;
 static uint16_t g_multi_load_first_sample_id;
 static multi_sample_load_request_t g_multi_load_request;
+SDRAM_MULTI_LOAD static multi_sample_load_request_t g_multi_external_request;
+static volatile uint8_t g_multi_external_request_valid;
+SDRAM_MULTI_LOAD static multi_sample_load_completion_t g_multi_load_completion;
+static volatile uint8_t g_multi_load_completion_valid;
 SDRAM_MULTI_LOAD static multi_sample_load_request_t
     g_multi_load_queue[MULTI_SAMPLE_POOL_MAX_INSTRUMENTS];
 
@@ -68,25 +62,40 @@ typedef struct
     uint16_t plan_count;
     uint16_t current_plan;
     uint32_t started_at_ms;
+    uint32_t pending_sequence;
+    uint8_t pending;
+    uint8_t cancel_requested;
 } multi_sample_bulk_state_t;
 
 SDRAM_MULTI_LOAD static multi_sample_bulk_plan_t
     g_multi_bulk_plans[MULTI_SAMPLE_MAX_SAMPLES];
 static multi_sample_bulk_state_t g_multi_bulk;
+static uint8_t multi_loader_copy_text(char *dst, uint32_t dst_size,
+                                      const char *src);
 
-static uint8_t multi_loader_complete_already_ready(uint16_t logical_id,
-                                                    const char *index_path,
-                                                    uint16_t instrument_id)
+static void multi_loader_publish_completion_for(uint16_t logical_id,
+                                                uint16_t instrument_id,
+                                                const char *path,
+                                                uint8_t success)
 {
-    const project_control_asset_result_t completion =
-        project_control_complete_multi_runtime(logical_id, index_path,
-                                               instrument_id, 1U);
-    if (completion != PROJECT_CONTROL_ASSET_READY)
-    {
-        g_multi_load_diag.last_error = MULTI_SAMPLE_LOAD_REGISTER_FAIL;
-        return 0U;
-    }
-    return 1U;
+    if (g_multi_load_completion_valid != 0U)
+        return;
+    g_multi_load_completion.logical_id = logical_id;
+    g_multi_load_completion.instrument_id = instrument_id;
+    g_multi_load_completion.success = success;
+    (void)multi_loader_copy_text(g_multi_load_completion.path,
+                                 sizeof(g_multi_load_completion.path),
+                                 path);
+    __DMB();
+    g_multi_load_completion_valid = 1U;
+}
+
+static void multi_loader_publish_completion(uint8_t success)
+{
+    if (g_multi_load_request.used != 0U)
+        multi_loader_publish_completion_for(g_multi_load_request.logical_id,
+                                            g_multi_load_request.instrument_id,
+                                            g_multi_load_request.path, success);
 }
 
 uint8_t multi_sample_load_required_prep_pages(
@@ -98,6 +107,10 @@ void multi_sample_loader_init(void)
     g_multi_load_active = 0U;
     g_multi_load_first_sample_id = MULTI_SAMPLE_POOL_INVALID_ID;
     memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
+    memset(&g_multi_external_request, 0, sizeof(g_multi_external_request));
+    g_multi_external_request_valid = 0U;
+    memset(&g_multi_load_completion, 0, sizeof(g_multi_load_completion));
+    g_multi_load_completion_valid = 0U;
     memset(g_multi_load_queue, 0, sizeof(g_multi_load_queue));
     memset(&g_multi_bulk, 0, sizeof(g_multi_bulk));
 }
@@ -274,13 +287,7 @@ static void multi_loader_set_error(multi_sample_load_result_t error,
     g_multi_load_diag.last_error = error;
     g_multi_load_diag.last_failed_sample = failed_sample;
     g_multi_load_diag.state = MULTI_SAMPLE_INSTRUMENT_ERROR;
-    if (g_multi_load_request.used != 0U)
-    {
-        project_control_complete_multi_runtime(g_multi_load_request.logical_id,
-                                               g_multi_load_request.path,
-                                               g_multi_load_diag.instrument_id,
-                                               0U);
-    }
+    multi_loader_publish_completion(0U);
     (void)multi_sample_pool_clear_instrument(g_multi_load_diag.instrument_id);
     g_multi_load_active = 0U;
     memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
@@ -682,16 +689,10 @@ multi_sample_load_result_t multi_sample_load_instrument(uint16_t logical_id,
                                                         const char *index_path,
                                                         uint16_t instrument_id)
 {
-    if (project_control_begin_multi_runtime(logical_id,index_path,instrument_id) == 0U)
-    {
-        return MULTI_SAMPLE_LOAD_INVALID_ARG;
-    }
     if (g_multi_load_active != 0U)
     {
         const multi_sample_load_result_t queued =
             multi_loader_enqueue(logical_id, index_path, instrument_id);
-        if (queued != MULTI_SAMPLE_LOAD_OK)
-            project_control_complete_multi_runtime(logical_id,index_path,instrument_id,0U);
         return queued;
     }
 
@@ -704,7 +705,6 @@ multi_sample_load_result_t multi_sample_load_instrument(uint16_t logical_id,
                                index_path) == 0U)
     {
         memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
-        project_control_complete_multi_runtime(logical_id,index_path,instrument_id,0U);
         return MULTI_SAMPLE_LOAD_PATH_TOO_LONG;
     }
     multi_sample_load_result_t result =
@@ -714,31 +714,70 @@ multi_sample_load_result_t multi_sample_load_instrument(uint16_t logical_id,
         const multi_sample_load_result_t queued =
             multi_loader_enqueue(logical_id, index_path, instrument_id);
         memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
-        if (queued != MULTI_SAMPLE_LOAD_OK)
-            project_control_complete_multi_runtime(logical_id,index_path,instrument_id,0U);
         return queued;
     }
-    uint8_t completion_done = 0U;
     if (result == MULTI_SAMPLE_LOAD_ALREADY_READY)
     {
-        completion_done = 1U;
-        if (multi_loader_complete_already_ready(
-                logical_id, index_path, instrument_id) == 0U)
-            result = MULTI_SAMPLE_LOAD_REGISTER_FAIL;
+        multi_loader_publish_completion(1U);
     }
-    if ((completion_done == 0U)
-        && (result != MULTI_SAMPLE_LOAD_OK)
-        && (result != MULTI_SAMPLE_LOAD_ALREADY_READY))
-        (void)project_control_complete_multi_runtime(
-            logical_id,index_path,instrument_id,0U);
-    if (result != MULTI_SAMPLE_LOAD_OK)
+    else if ((result != MULTI_SAMPLE_LOAD_OK)
+             && (g_multi_load_completion_valid == 0U))
+    {
+        multi_loader_publish_completion(0U);
+    }
+    if ((result != MULTI_SAMPLE_LOAD_OK)
+        || (result == MULTI_SAMPLE_LOAD_ALREADY_READY))
         memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
     return result;
 }
 
+multi_sample_load_result_t multi_sample_load_request_instrument(uint16_t logical_id,
+                                                                const char *index_path,
+                                                                uint16_t instrument_id)
+{
+    if ((index_path == 0) || (index_path[0] == '\0')
+        || (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS))
+    {
+        return MULTI_SAMPLE_LOAD_INVALID_ARG;
+    }
+    if (strlen(index_path) >= sizeof(g_multi_external_request.path))
+        return MULTI_SAMPLE_LOAD_PATH_TOO_LONG;
+    if ((g_multi_external_request_valid != 0U)
+        || (multi_sample_load_has_pending() != 0U))
+    {
+        return MULTI_SAMPLE_LOAD_SD_BUSY;
+    }
+    memset(&g_multi_external_request, 0, sizeof(g_multi_external_request));
+    g_multi_external_request.logical_id = logical_id;
+    g_multi_external_request.instrument_id = instrument_id;
+    if (multi_loader_copy_text(g_multi_external_request.path,
+                               sizeof(g_multi_external_request.path),
+                               index_path) == 0U)
+    {
+        return MULTI_SAMPLE_LOAD_PATH_TOO_LONG;
+    }
+    g_multi_external_request.used = 1U;
+    __DMB();
+    g_multi_external_request_valid = 1U;
+    return MULTI_SAMPLE_LOAD_OK;
+}
+
+void multi_sample_load_storage_request_service(void)
+{
+    if (g_multi_external_request_valid == 0U) return;
+    const uint16_t logical_id = g_multi_external_request.logical_id;
+    const uint16_t instrument_id = g_multi_external_request.instrument_id;
+    char path[MULTI_SAMPLE_LOADER_PATH_MAX];
+    (void)multi_loader_copy_text(path, sizeof(path), g_multi_external_request.path);
+    g_multi_external_request_valid = 0U;
+    g_multi_external_request.used = 0U;
+    (void)multi_sample_load_instrument(logical_id, path, instrument_id);
+}
+
 static void multi_loader_start_next_queued(void)
 {
-    if (g_multi_load_active != 0U)
+    if ((g_multi_load_active != 0U)
+        || (g_multi_load_completion_valid != 0U))
     {
         return;
     }
@@ -750,6 +789,16 @@ static void multi_loader_start_next_queued(void)
             char path[MULTI_SAMPLE_LOADER_PATH_MAX];
             const uint16_t logical_id = g_multi_load_queue[i].logical_id;
             const uint16_t instrument_id = g_multi_load_queue[i].instrument_id;
+            if (g_multi_load_queue[i].cancelled != 0U)
+            {
+                if (g_multi_load_completion_valid == 0U)
+                {
+                    multi_loader_publish_completion_for(
+                        logical_id, instrument_id, g_multi_load_queue[i].path, 0U);
+                    g_multi_load_queue[i].used = 0U;
+                }
+                return;
+            }
             (void)multi_loader_copy_text(path, sizeof(path), g_multi_load_queue[i].path);
             g_multi_load_request = g_multi_load_queue[i];
             multi_sample_load_result_t result =
@@ -760,15 +809,15 @@ static void multi_loader_start_next_queued(void)
                 if ((result != MULTI_SAMPLE_LOAD_OK)
                     && (result != MULTI_SAMPLE_LOAD_ALREADY_READY))
                 {
-                    project_control_complete_multi_runtime(logical_id,path,instrument_id,0U);
+                    if (g_multi_load_completion_valid == 0U)
+                        multi_loader_publish_completion_for(logical_id, instrument_id,
+                                                            path, 0U);
                     (void)multi_sample_pool_clear_instrument(instrument_id);
                 }
-                else if (result == MULTI_SAMPLE_LOAD_ALREADY_READY
-                         && (multi_loader_complete_already_ready(
-                             logical_id, path, instrument_id) == 0U))
+                else if (result == MULTI_SAMPLE_LOAD_ALREADY_READY)
                 {
-                    result = MULTI_SAMPLE_LOAD_REGISTER_FAIL;
-                    (void)multi_sample_pool_clear_instrument(instrument_id);
+                    multi_loader_publish_completion_for(logical_id, instrument_id,
+                                                        path, 1U);
                 }
                 if (result != MULTI_SAMPLE_LOAD_OK)
                     memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
@@ -780,53 +829,34 @@ static void multi_loader_start_next_queued(void)
     }
 }
 
-static uint8_t multi_loader_bulk_read_batch(multi_sample_bulk_plan_t *plan,
-                                            const multi_sample_desc_t *sample)
+static uint8_t multi_loader_bulk_read_step(multi_sample_bulk_plan_t *plan,
+                                           const multi_sample_desc_t *sample)
 {
-    sample_stream_io_command_t commands[MULTI_SAMPLE_BULK_MAX_BATCH_PAGES];
-    uint32_t batch_bytes = 0U;
-    uint32_t target_count = 0U;
-    uint32_t page = plan->next_page;
-    const uint32_t range_last = plan->range_last[plan->current_range];
-    const sample_audio_key_t key = sample_audio_key_multi(plan->sample_id);
-
-    while ((page <= range_last) && (target_count < MULTI_SAMPLE_BULK_MAX_BATCH_PAGES))
-    {
-        const uint32_t start_frame = page * sample->frames_per_page;
-        if (start_frame >= sample->total_frames) return 0U;
-        uint32_t frame_count = sample->total_frames - start_frame;
-        if (frame_count > sample->frames_per_page)
-            frame_count = sample->frames_per_page;
-        const uint32_t bytes = frame_count * sample->block_align;
-        if ((bytes == 0U) || (bytes > MULTI_SAMPLE_BULK_READ_BYTES))
-            return 0U;
-        if ((target_count != 0U)
-            && (batch_bytes > (MULTI_SAMPLE_BULK_READ_BYTES - bytes)))
-            break;
-        sample_stream_io_command_t command;
-        if (sample_page_cache_port_prepare_page(
-                key, page, SAMPLE_PAGE_ALLOC_SLOT_PERMANENT, 0U,
-                &command) == 0U)
-        {
-            for (uint32_t j = 0U; j < target_count; ++j)
-                sample_page_cache_port_abort(&commands[j]);
-            return 0U;
-        }
-        commands[target_count] = command;
-        batch_bytes += bytes;
-        target_count++;
-        page++;
-    }
-
-    if ((target_count == 0U) || (batch_bytes == 0U))
+    if ((plan == 0) || (sample == 0))
     {
         return 0U;
     }
 
-    for (uint32_t i = 0U; i < target_count; ++i)
+    const uint32_t range_last = plan->range_last[plan->current_range];
+    const sample_audio_key_t key = sample_audio_key_multi(plan->sample_id);
+
+    if (g_multi_bulk.pending != 0U)
     {
         sample_stream_io_result_t result;
-        sample_stream_transport_execute_monocore(&commands[i], &result);
+        if (sample_stream_transport_take_result(
+                g_multi_bulk.pending_sequence, &result) == 0U)
+        {
+            return 1U;
+        }
+        g_multi_bulk.pending = 0U;
+        if (g_multi_bulk.cancel_requested != 0U)
+        {
+            (void)sample_page_cache_port_complete(&result);
+            sample_stream_io_release_key(key);
+            multi_loader_set_error(MULTI_SAMPLE_LOAD_CANCELLED,
+                                   plan->sample_id);
+            return 1U;
+        }
         g_multi_load_diag.read_calls++;
         g_multi_load_diag.file_opens += result.file_opens;
         g_multi_load_diag.seeks += result.seeks;
@@ -843,30 +873,46 @@ static uint8_t multi_loader_bulk_read_batch(multi_sample_bulk_plan_t *plan,
         g_multi_load_diag.decode_cycles += result.decode_cycles;
         const uint8_t published = sample_page_cache_port_complete(&result);
         if ((result.load_result != SAMPLE_PAGE_LOAD_OK) || (published == 0U))
-        {
-            for (uint32_t j = i + 1U; j < target_count; ++j)
-                sample_page_cache_port_abort(&commands[j]);
             return 0U;
-        }
+
         if (plan->pages_remaining != 0U)
-        {
             plan->pages_remaining--;
-        }
         if (g_multi_load_diag.pages_remaining != 0U)
-        {
             g_multi_load_diag.pages_remaining--;
-        }
         g_multi_load_diag.pages_ready++;
+        plan->next_page++;
+        if (plan->next_page > range_last)
+        {
+            plan->current_range++;
+            if (plan->current_range < plan->range_count)
+                plan->next_page = plan->range_first[plan->current_range];
+        }
+        return 1U;
     }
-    plan->next_page = page;
+
     if (plan->next_page > range_last)
     {
-        plan->current_range++;
-        if (plan->current_range < plan->range_count)
-        {
-            plan->next_page = plan->range_first[plan->current_range];
-        }
+        return (plan->pages_remaining == 0U) ? 1U : 0U;
     }
+
+    if (sample_stream_transport_can_submit() == 0U)
+        return 1U;
+
+    const uint32_t start_frame = plan->next_page * sample->frames_per_page;
+    if (start_frame >= sample->total_frames)
+        return 0U;
+    sample_stream_io_command_t command;
+    if (sample_page_cache_port_prepare_page(
+            key, plan->next_page, SAMPLE_PAGE_ALLOC_SLOT_PERMANENT, 0U,
+            &command) == 0U)
+        return 0U;
+    if (sample_stream_transport_submit(
+            &command, &g_multi_bulk.pending_sequence) == 0U)
+    {
+        sample_page_cache_port_abort(&command);
+        return 0U;
+    }
+    g_multi_bulk.pending = 1U;
     return 1U;
 }
 
@@ -891,10 +937,7 @@ static uint8_t multi_loader_bulk_finish_instrument(void)
     g_multi_load_diag.last_error = MULTI_SAMPLE_LOAD_OK;
     (void)multi_sample_pool_set_state(g_multi_load_diag.instrument_id,
                                       MULTI_SAMPLE_INSTRUMENT_READY);
-    project_control_complete_multi_runtime(g_multi_load_request.logical_id,
-                                           g_multi_load_request.path,
-                                           g_multi_load_diag.instrument_id,
-                                           1U);
+    multi_loader_publish_completion(1U);
     memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
     memset(&g_multi_bulk, 0, sizeof(g_multi_bulk));
     multi_loader_start_next_queued();
@@ -910,7 +953,8 @@ void multi_sample_service_load(uint32_t byte_budget)
         return;
     }
 
-    if (multi_loader_bulk_runtime_stopped() == 0U)
+    if ((g_multi_bulk.pending == 0U)
+        && (multi_loader_bulk_runtime_stopped() == 0U))
     {
         multi_loader_set_error(MULTI_SAMPLE_LOAD_TRANSPORT_ACTIVE,
                                (g_multi_bulk.current_plan < g_multi_bulk.plan_count)
@@ -937,7 +981,7 @@ void multi_sample_service_load(uint32_t byte_budget)
         &g_multi_bulk_plans[g_multi_bulk.current_plan];
     const multi_sample_desc_t *const sample = multi_sample_pool_get_sample(plan->sample_id);
     const uint8_t ok = (sample != 0)
-        && (multi_loader_bulk_read_batch(plan, sample) != 0U);
+        && (multi_loader_bulk_read_step(plan, sample) != 0U);
 
     if ((ok != 0U) && (plan->pages_remaining == 0U))
     {
@@ -986,6 +1030,17 @@ uint8_t multi_sample_load_is_active(void)
     return g_multi_load_active;
 }
 
+uint8_t multi_sample_load_take_completion(
+    multi_sample_load_completion_t *out_completion)
+{
+    if ((out_completion == 0U) || (g_multi_load_completion_valid == 0U))
+        return 0U;
+    *out_completion = g_multi_load_completion;
+    __DMB();
+    g_multi_load_completion_valid = 0U;
+    return 1U;
+}
+
 uint8_t multi_sample_cancel_load(void)
 {
     if (g_multi_load_active == 0U)
@@ -997,6 +1052,11 @@ uint8_t multi_sample_cancel_load(void)
     {
         sample_stream_io_release_key(sample_audio_key_multi(
             g_multi_bulk_plans[g_multi_bulk.current_plan].sample_id));
+    }
+    if (g_multi_bulk.pending != 0U)
+    {
+        g_multi_bulk.cancel_requested = 1U;
+        return 1U;
     }
     multi_loader_set_error(MULTI_SAMPLE_LOAD_CANCELLED,
                            (g_multi_bulk.current_plan < g_multi_bulk.plan_count)
@@ -1012,15 +1072,11 @@ void multi_sample_cancel_all_loads(void)
     {
         if (g_multi_load_queue[i].used != 0U)
         {
-            project_control_complete_multi_runtime(g_multi_load_queue[i].logical_id,
-                                                   g_multi_load_queue[i].path,
-                                                   g_multi_load_queue[i].instrument_id,
-                                                   0U);
+            g_multi_load_queue[i].cancelled = 1U;
             (void)multi_sample_pool_clear_instrument(
                 g_multi_load_queue[i].instrument_id);
         }
     }
-    memset(g_multi_load_queue, 0, sizeof(g_multi_load_queue));
 }
 
 void multi_sample_get_load_diag(multi_sample_load_diag_t *out_diag)

@@ -65,12 +65,26 @@ typedef struct
 } wav_convert_ctx_t;
 
 STORAGE_SCRATCH_SDRAM static wav_convert_ctx_t g_wav_convert;
+static volatile uint8_t g_wav_convert_request_valid;
+static char g_wav_convert_request_path[SAMPLE_CLASSIC_PATH_MAX];
 
 void wav_convert_init(void)
 {
     memset(&g_wav_convert, 0, sizeof(g_wav_convert));
     g_wav_convert.state = WAV_CONVERT_STATE_IDLE;
     g_wav_convert.phase = WAV_CONVERT_PHASE_IDLE;
+    g_wav_convert_request_valid = 0U;
+}
+
+uint8_t wav_convert_request_start(const char *path)
+{
+    if ((path == NULL) || (path[0] == '\0')
+        || (strlen(path) >= sizeof(g_wav_convert_request_path)))
+        return 0U;
+    memcpy(g_wav_convert_request_path, path, strlen(path) + 1U);
+    __DMB();
+    g_wav_convert_request_valid = 1U;
+    return 1U;
 }
 
 static void wav_convert_write_le16(uint8_t *dst, uint16_t value)
@@ -626,6 +640,11 @@ static uint8_t wav_convert_replace_phase(void)
 
 void wav_convert_service(uint32_t byte_budget)
 {
+    if (g_wav_convert_request_valid != 0U)
+    {
+        g_wav_convert_request_valid = 0U;
+        (void)wav_convert_start_destructive_48k(g_wav_convert_request_path);
+    }
     if (g_wav_convert.state != WAV_CONVERT_STATE_ACTIVE)
     {
         return;

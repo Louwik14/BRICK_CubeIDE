@@ -123,8 +123,7 @@ static uint8_t param_macro_bulk_add(live_parameter_audio_bulk_t *bulk,
         .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
         .track = event_track,
         .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-        .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                            | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS
+        .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS
                             | LIVE_PARAMETER_EVENT_FLAG_RUNTIME_TEMP),
         .value = live_parameter_event_encode_float(value)
     };
@@ -492,7 +491,6 @@ static uint8_t param_macro_recompute_sources(
     uint32_t last_applied_seq = 0U;
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
         .count = 0U
     };
     uint16_t collected_count = 0U;
@@ -691,7 +689,6 @@ uint8_t param_macro_apply_resolution(const param_macro_resolution_t *resolution)
 
     bulk = (live_parameter_audio_bulk_t){
         .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
         .count = 0U
     };
     float canonical = 0.0f;

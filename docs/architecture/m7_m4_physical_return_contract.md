@@ -7,15 +7,15 @@ retours M7 vers M4 restants ne transportent aucune decision musicale:
 
 - `control_audio_fifo.tail`: liberation physique des cases et mesure de
   capacite SPSC seulement, jamais preuve generique de retrait de ressource;
-- credit STREAM compact par voix: page courante, longueur de fenetre et bornes
-  de loop forward;
+- lease STREAM seqlocke par lecteur: cle, epoch de registration et jusqu'a deux
+  ranges de pages physiques protegees;
 - Recorder PCM: ring stereo PCM24, head de frames produites, tail de frames
   liberees, session I/O et longueur exacte au stop;
 - niveau REC, waveform audio et waveform synth, chacun avec publisher AUDIO et reader CONTROL separes;
 - diagnostic Audio: boot/error et, pour la charge CPU, uniquement `{valid, avg_permille}`. Le couper
   ne modifie aucune commande, voix, page ou decision CONTROL.
 
-Les retours physiques restent limites au `tail` FIFO, aux credits STREAM et au
+Les retours physiques restent limites au `tail` FIFO, aux leases STREAM et au
 PCM/framing Recorder. Les projections sont limitees au niveau
 REC, aux deux waveforms et au diagnostic Audio. Les boundaries Recorder/Looper ne
 necessitent aucun evenement AUDIO vers CONTROL separe: CONTROL publie
@@ -27,8 +27,8 @@ faits physiques.
 M4 avance de facon autonome. TIM12 porte le tick du tempo interne; TIM5,
 demarre avant les domaines et derive du meme HSE que SAI, est la reference
 absolue commune. CONTROL possede son extension et sa conversion; M7 initialise
-sa sample clock locale depuis TIM5 au premier callback valide. Les callbacks SAI ne reveillent aucun code CONTROL. PendSV reste reserve
-au transport USB MIDI local et ne sert plus le sequenceur.
+sa sample clock locale depuis TIM5 au premier callback valide. Les callbacks SAI ne reveillent aucun code CONTROL. PendSV reste exclusivement
+reserve au noyau FreeRTOS; le deferred USB MIDI est traite par USB_SERVICE.
 
 Le nominal ne lit aucun etat boot AUDIO et aucun transport Clock M7->M4
 n'existe. L'unique
@@ -45,7 +45,7 @@ CONTROL. La valeur DSP privee n'est plus publiee ni relue par UI/CONTROL.
 |---|---|---|---|
 | Sample RAM | M4/Storage | M7/AUDIO | slot retire apres fence `tail`; token de load protege les completions SD tardives |
 | Wavetable/mipmaps | M4/Storage | M7/AUDIO | projection immutable; pages liberees apres fence `tail`; generation de load/registry physique conservee |
-| Multi descriptors/pages | M4/Storage | M7/AUDIO | descripteurs publies puis pages protegees par le credit de fenetre; retrait apres fence `tail` |
+| Multi descriptors/pages | M4/Storage | M7/AUDIO | descripteurs publies puis pages protegees par les leases lecteurs; retrait apres fence `tail` |
 | STREAM pages | M4/Storage | M7/AUDIO | cache partage; un lease par lecteur, union M4, `EVICTING` puis relecture; aucun pin/use-count/refcount |
 | Preview PCM | M4/Storage | M7/AUDIO | ring SPSC separe; reutilisation par consumer tail |
 | Recorder PCM | M7/AUDIO | M4/Storage | ring SPSC; M7 head `accepted_frames`, M4 tail `released_frames`; stop fixe le head final |

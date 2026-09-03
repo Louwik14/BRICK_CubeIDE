@@ -367,6 +367,8 @@ static void wavetable_pool_slot_error_at(uint16_t wavetable_slot,
 void wavetable_pool_init(void)
 {
     wavetable_load_job_boot_init();
+    g_wavetable_clear_request_valid = 0U;
+    g_wavetable_load_request_valid = 0U;
     wavetable_pool_reset();
 }
 

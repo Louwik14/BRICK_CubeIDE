@@ -56,18 +56,32 @@ typedef struct
     uint32_t saved_page_checks;
 } multi_sample_load_diag_t;
 
+typedef struct
+{
+    uint16_t logical_id;
+    uint16_t instrument_id;
+    uint8_t success;
+    char path[MULTI_SAMPLE_POOL_PATH_MAX];
+} multi_sample_load_completion_t;
+
 void multi_sample_loader_init(void);
+multi_sample_load_result_t multi_sample_load_request_instrument(uint16_t logical_id,
+                                                                const char *index_path,
+                                                                uint16_t instrument_id);
 multi_sample_load_result_t multi_sample_load_instrument(uint16_t logical_id,
                                                         const char *index_path,
                                                         uint16_t instrument_id);
 uint8_t multi_sample_load_required_prep_pages(const multi_sample_index_t *index,
                                               uint32_t *out_pages);
 void multi_sample_service_load(uint32_t byte_budget);
+void multi_sample_load_storage_request_service(void);
 uint8_t multi_sample_is_ready(uint16_t instrument_id);
 uint8_t multi_sample_load_has_pending(void);
 uint8_t multi_sample_load_is_active(void);
 uint8_t multi_sample_cancel_load(void);
 void multi_sample_cancel_all_loads(void);
+uint8_t multi_sample_load_take_completion(
+    multi_sample_load_completion_t *out_completion);
 void multi_sample_get_load_diag(multi_sample_load_diag_t *out_diag);
 
 #ifdef __cplusplus

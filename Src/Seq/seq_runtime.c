@@ -72,6 +72,8 @@ typedef struct
 } seq_runtime_live_rec_event_t;
 CONTROL_M4_SRAM2 static seq_runtime_live_rec_event_t
     g_seq_runtime_live_rec_queue[SEQ_RUNTIME_LIVE_REC_QUEUE_CAPACITY];
+CONTROL_M4_SRAM2 static seq_runtime_control_event_t
+    g_seq_runtime_control_events[128U];
 static volatile uint8_t g_seq_runtime_live_rec_head;
 static volatile uint8_t g_seq_runtime_live_rec_tail;
 static volatile uint8_t g_seq_runtime_live_rec_count;
@@ -286,7 +288,6 @@ void seq_runtime_init(void)
 {
     seq_model_init_defaults();
     metronome_control_init();
-    seq_param_iface_init();
 
     /* Orchestration seam: runtime bootstrap delegates execution-state ownership to seq_runtime_exec. */
     seq_runtime_exec_init();
@@ -313,6 +314,9 @@ void seq_runtime_init(void)
     seq_runtime_update_samples_per_step_from_tempo();
     control_audio_transport_init();
     control_audio_transport_publish_changes();
+    /* Track runtime init publishes initial MIDI config at the live sample.
+     * Transport boot must establish the FIFO origin before those commands. */
+    seq_param_iface_init();
     midi_clock_set_bpm_milli(seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge));
     midi_clock_set_mode(MIDI_CLOCK_MODE_MASTER);
 
@@ -496,11 +500,10 @@ static void seq_runtime_process_core(void)
             control_rt_publication_abort_horizon();
             return;
         }
-        seq_runtime_control_event_t events[128];
         uint16_t count = seq_runtime_exec_collect_block_events(
             &g_seq_runtime, &g_seq_transport_fsm, &g_seq_clock_bridge,
             g_seq_track_loop_generation,
-            events, 128U, window_first, frames,
+            g_seq_runtime_control_events, 128U, window_first, frames,
             seq_runtime_get_clock_source_internal(),
             g_seq_runtime.running);
         if (note_fx_pipeline_apply_pending() == 0U)
@@ -514,7 +517,8 @@ static void seq_runtime_process_core(void)
         {
             for (uint16_t i = 0U; i < count; ++i)
             {
-                const seq_runtime_control_event_t *const event = &events[i];
+                const seq_runtime_control_event_t *const event =
+                    &g_seq_runtime_control_events[i];
                 if ((event->type == SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE)
                         || (event->type == SEQ_RUNTIME_AUDIO_EVENT_TRANSPORT_START)
                         || (event->type == SEQ_RUNTIME_AUDIO_EVENT_METRO_CLICK))
@@ -563,7 +567,7 @@ static void seq_runtime_process_core(void)
             if (count < 128U)
                 break;
             count = seq_runtime_exec_collect_remaining_scheduler_events(
-                events, 128U, frames,
+                g_seq_runtime_control_events, 128U, frames,
                 window_first);
         }
         if (note_fx_pipeline_process(

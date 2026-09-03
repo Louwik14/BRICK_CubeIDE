@@ -24,6 +24,7 @@ typedef struct
 } ui_event_t;
 
 void ui_event_from_inputs(void);
+bool ui_event_push_hall(uint8_t hall, uint8_t pressed);
 bool ui_event_pop(ui_event_t *ev);
 
 #endif /* UI_EVENT_H */

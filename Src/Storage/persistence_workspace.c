@@ -30,6 +30,12 @@ persistence_project_restore_workspace_t *persistence_workspace_acquire_project_r
     return &g_persistence_workspace.project_restore;
 }
 
+persistence_project_restore_workspace_t *persistence_workspace_project_restore_view(void)
+{
+    return (g_persistence_workspace_owner == PERSISTENCE_WORKSPACE_PROJECT_RESTORE)
+        ? &g_persistence_workspace.project_restore : 0;
+}
+
 persistence_pattern_io_workspace_t *persistence_workspace_acquire_pattern_io(void)
 {
     if (g_persistence_workspace_owner != PERSISTENCE_WORKSPACE_FREE)

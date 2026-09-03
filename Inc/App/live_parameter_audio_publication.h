@@ -23,7 +23,6 @@ typedef struct
 typedef struct
 {
     uint32_t capture_tick;
-    uint8_t source;
     uint8_t count;
     live_parameter_audio_bulk_item_t item[LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS];
 } live_parameter_audio_bulk_t;
@@ -38,8 +37,6 @@ _Static_assert(sizeof(live_parameter_audio_bulk_t)
 void live_parameter_audio_publication_init(void);
 bool live_parameter_audio_publication_submit_bulk(
     const live_parameter_audio_bulk_t *bulk);
-bool live_parameter_audio_publication_submit_poly_pair(
-    uint32_t capture_tick, uint8_t track, float voices, float spread);
 bool live_parameter_audio_publication_submit_tone_program(
     uint8_t track, track_runtime_type_t type);
 bool live_parameter_audio_publication_submit_dated(

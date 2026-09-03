@@ -10,6 +10,9 @@
  */
 
 void brick6_app_init(void);
-void brick6_app_process(void);
+void brick6_app_control_process(void);
+void brick6_app_storage_process(void);
+void brick6_app_usb_process(void);
+void brick6_app_ui_process(void);
 
 #endif /* BRICK6_APP_INIT_H */

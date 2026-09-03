@@ -43,12 +43,6 @@ uint16_t project_control_asset_count(void);
 uint8_t project_control_get_asset_ordinal(uint16_t ordinal,persist_control_asset_ref_t*out);
 uint8_t project_control_begin_asset_restore(void);
 uint8_t project_control_validate_asset(const persist_control_asset_ref_t*asset);
-project_control_asset_result_t project_control_put_asset(const persist_control_asset_ref_t*asset);
-project_control_asset_result_t project_control_ensure_asset(uint32_t kind,const char*path,uint16_t*out_logical);
-project_control_asset_result_t project_control_complete_ram_runtime(
-    const char*path,uint16_t runtime_backend,uint16_t runtime_global,uint8_t success);
-project_control_asset_result_t project_control_complete_wavetable_runtime(
-    const char*path,uint16_t runtime_backend,uint16_t runtime_global,uint8_t success);
 uint8_t project_control_find_asset(uint32_t kind,const char*path,uint16_t*out_logical);
 
 /* Logical Project banks are lookup tables only. Track selection authority is
@@ -57,7 +51,6 @@ uint8_t project_control_find_asset(uint32_t kind,const char*path,uint16_t*out_lo
 uint8_t project_control_register_sample_runtime(uint32_t kind,const char*path,uint16_t runtime_global,uint16_t*out_logical);
 uint8_t project_control_register_wavetable_runtime(const char*path,uint16_t runtime_global,uint16_t*out_logical);
 uint8_t project_control_register_multi_runtime(const char*path,uint16_t runtime_instrument,uint16_t*out_logical);
-uint8_t project_control_begin_multi_runtime(uint16_t logical,const char*path,uint16_t runtime_instrument);
 project_control_asset_result_t project_control_complete_multi_runtime(
     uint16_t logical,const char*path,uint16_t runtime_instrument,uint8_t success);
 uint8_t project_control_remove_sample(uint16_t logical);
@@ -94,6 +87,5 @@ project_control_asset_result_t project_control_track_asset_restore_status(
     uint8_t entity, project_control_asset_role_t role,
     const persist_control_asset_ref_t *asset);
 uint8_t project_control_track_assets_clear(uint8_t entity);
-uint8_t project_control_asset_loads_pending(void);
 
 #endif

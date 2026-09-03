@@ -242,7 +242,6 @@ uint8_t param_global_control_restore(const param_global_control_state_t *state)
         canonical[GLOBAL_MODFX_MODEL] + 0.5f);
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
         .count = 0U
     };
     for (uint8_t i = 0U; i < (uint8_t)GLOBAL_CONTROL_VALUE_COUNT; ++i)
@@ -260,8 +259,7 @@ uint8_t param_global_control_restore(const param_global_control_state_t *state)
             .scope = LIVE_PARAMETER_EVENT_SCOPE_GLOBAL,
             .track = 0U,
             .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-            .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                                | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+            .flags = LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
             .value = live_parameter_event_encode_float(command_value)
         };
     }

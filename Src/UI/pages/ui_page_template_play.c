@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#include "App/control_domain.h"
 #include "Track/track_runtime.h"
 #include "Track/entity_topology.h"
 #include "Seq/seq_model.h"
@@ -106,10 +107,15 @@ uint8_t ui_page_template_play_handle_encoder(uint8_t encoder, int16_t delta)
             if (field == SEQ_STEP_PLAY_FIELD_LENGTH) { if (value < 1) value = 1; if (value > 64) value = 64; }
             else if (field == SEQ_STEP_PLAY_FIELD_MICROTIMING) { if (value < -24) value = -24; if (value > 24) value = 24; }
             else { if (value < 0) value = 0; if (value > 127) value = 127; }
-            const seq_plock_op_status_t status = seq_edit_step_play_upsert(
-                track, held_steps[i], voice, field, value);
-            if ((status == SEQ_PLOCK_OP_CREATED) || (status == SEQ_PLOCK_OP_UPDATED))
-                seq_edit_step_play_commit(track, held_steps[i], voice, field);
+            const control_seq_intent_t intent = {
+                .operation = CONTROL_SEQ_PLAY_SET,
+                .track = (uint8_t)track,
+                .step = (uint8_t)held_steps[i],
+                .voice = voice,
+                .field = (uint8_t)field,
+                .value = value
+            };
+            (void)control_domain_request_seq(&intent);
         }
         return 1U;
     }
@@ -119,7 +125,15 @@ uint8_t ui_page_template_play_handle_encoder(uint8_t encoder, int16_t delta)
     if (field == SEQ_STEP_PLAY_FIELD_LENGTH) { if (value < 1) value = 1; if (value > 64) value = 64; }
     else if (field == SEQ_STEP_PLAY_FIELD_MICROTIMING) { if (value < -24) value = -24; if (value > 24) value = 24; }
     else { if (value < 0) value = 0; if (value > 127) value = 127; }
-    (void)seq_model_play_base_set(track, voice, field, value);
+    const control_seq_intent_t intent = {
+        .operation = CONTROL_SEQ_PLAY_SET,
+        .track = (uint8_t)track,
+        .step = 0xFFU,
+        .voice = voice,
+        .field = (uint8_t)field,
+        .value = value
+    };
+    (void)control_domain_request_seq(&intent);
     return 1U;
 }
 

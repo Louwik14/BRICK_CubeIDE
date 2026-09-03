@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
 #include "adc.h"
 #include "dma.h"
 #include "i2c.h"
@@ -31,25 +32,11 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "usb_device.h"
-#include "usb_host.h"
-#include "usb_role_manager.h"
-#include "midi.h"
-#include "midi_host.h"
-#include "sdram.h"
-#include "App/engine_tasklet.h"
-#include "ui_tasklet.h"
 #include "App/brick6_app_init.h"
-#include "audio.h"
-#include "audio_float.h"
 #include "fatfs.h"
 #include "led_rgb.h"
-#include "led_ids.h"
-#include "display_flush_service.h"
-#include "ui_renderer_oled.h"
 #include "Board/board_power.h"
 #include "buttons.h"
-#include "App/power_shutdown.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -73,11 +60,11 @@
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 void PeriphCommonClock_Config(void);
+void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
 static void MPU_Config(void);
 //void MX_USB_HOST_Process(void);
 //void MX_USB_HOST_Init(void);
-void MX_USB_DEVICE_Init(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -99,8 +86,6 @@ extern uint32_t __ram_d2_dma_cacheable_end__;
 #define RAM_D2_IPC_MPU_BASE                 (0x30040000UL)
 #define SDRAM_MPU_BASE                     (0xC0000000UL)
 #define SDRAM_RECORDER_MPU_BASE            (0xC1FC0000UL)
-#define UI_TASKLET_ENGINE_DIVIDER         (4UL)
-#define UI_TASKLET_CATCHUP_BUDGET         (8UL)
 #define LOWCOST_BOOTLOADER_SHIFT_STEP16_ENABLE     1U
 #define LOWCOST_BOOTLOADER_HOLD_MS                 2000UL
 #define LOWCOST_BOOTLOADER_BOOT0_CHARGE_MS         10UL
@@ -179,7 +164,7 @@ static void MPU_Config(void)
   __ISB();
 }
 
-static void lowcost_bootloader_shift_step16_service(void)
+void lowcost_bootloader_shift_step16_service(void)
 {
 #if LOWCOST_BOOTLOADER_SHIFT_STEP16_ENABLE
   static uint8_t combo_was_down = 0U;
@@ -314,10 +299,17 @@ int main(void)
   MX_FATFS_Init();
   brick6_app_init();
   led_init();
-  uint32_t last_tick = 0;
-  uint32_t ui_tasklet_divider = 0U;
 
   /* USER CODE END 2 */
+
+  /* Init scheduler */
+  osKernelInitialize();  /* Call init function for freertos objects (in cmsis_os2.c) */
+  MX_FREERTOS_Init();
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -327,43 +319,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
-         if (power_shutdown_service(HAL_GetTick()) != 0U)
-         {
-             continue;
-         }
-
-	     brick6_app_process();
-	     lowcost_bootloader_shift_step16_service();
-
-	     if (usb_role_manager_is_host_active() != 0U)
-	     {
-	         MX_USB_HOST_Process();
-	         midi_host_poll_bounded(8);
-	     }
-
-	     uint32_t ui_ticks_processed = 0U;
-	     while ((engine_tick_count != last_tick) && (ui_ticks_processed < UI_TASKLET_CATCHUP_BUDGET))
-	     {
-	         last_tick++;
-	         ui_tasklet_divider++;
-	         if (ui_tasklet_divider < UI_TASKLET_ENGINE_DIVIDER)
-	         {
-	             continue;
-	         }
-
-	         ui_tasklet_divider = 0U;
-	         ui_tasklet_poll();
-	         ui_ticks_processed++;
-	     }
-
-	     if (ui_tasklet_is_initialized() != 0U)
-	     {
-	         ui_renderer_oled_service_poll();
-	         display_flush_service_poll();
-	     }
-
-
   }
   /* USER CODE END 3 */
 }

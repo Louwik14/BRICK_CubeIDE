@@ -18,6 +18,7 @@ static uint8_t g_sd_fs_mounted;
 static volatile uint32_t g_sd_media_epoch;
 static uint8_t g_sd_media_present_known;
 static uint8_t g_sd_media_present;
+static volatile sd_storage_status_t g_sd_storage_status;
 
 void sd_access_gate_init(void)
 {
@@ -36,6 +37,7 @@ void sd_access_gate_init(void)
     g_sd_fs_mounted = 0U;
     g_sd_media_present_known = 0U;
     g_sd_media_present = 0U;
+    g_sd_storage_status = SD_STORAGE_STATUS_UNKNOWN;
     g_sd_media_epoch++;
     if (g_sd_media_epoch == 0U)
     {
@@ -46,6 +48,11 @@ void sd_access_gate_init(void)
 
 uint8_t sd_access_fs_mount_if_needed(void)
 {
+    if ((g_sd_storage_status == SD_STORAGE_STATUS_NO_MEDIA)
+        || (g_sd_storage_status == SD_STORAGE_STATUS_FAULT))
+    {
+        return 0U;
+    }
     if (g_sd_fs_mounted != 0U)
     {
         return 1U;
@@ -54,17 +61,51 @@ uint8_t sd_access_fs_mount_if_needed(void)
     const FRESULT fr = f_mount(&g_sd_fs, "0:", 1U);
     if (fr != FR_OK)
     {
+        if (g_sd_storage_status == SD_STORAGE_STATUS_UNKNOWN)
+        {
+            g_sd_storage_status = SD_STORAGE_STATUS_FAULT;
+        }
         return 0U;
     }
 
     g_sd_fs_mounted = 1U;
+    g_sd_storage_status = SD_STORAGE_STATUS_READY;
     return 1U;
+}
+
+uint8_t sd_access_fs_reprobe_if_no_media(void)
+{
+    if (g_sd_storage_status != SD_STORAGE_STATUS_NO_MEDIA)
+    {
+        return 0U;
+    }
+
+    g_sd_fs_mounted = 0U;
+    g_sd_storage_status = SD_STORAGE_STATUS_UNKNOWN;
+    sd_access_media_epoch_advance();
+    return sd_access_fs_mount_if_needed();
 }
 
 void sd_access_fs_invalidate_mount(void)
 {
     g_sd_fs_mounted = 0U;
+    if (g_sd_storage_status != SD_STORAGE_STATUS_NO_MEDIA)
+    {
+        g_sd_storage_status = SD_STORAGE_STATUS_FAULT;
+    }
     sd_access_media_epoch_advance();
+}
+
+sd_storage_status_t sd_access_storage_status(void)
+{
+    return g_sd_storage_status;
+}
+
+void sd_access_storage_report_init_failure(uint8_t no_media)
+{
+    g_sd_fs_mounted = 0U;
+    g_sd_storage_status = (no_media != 0U)
+        ? SD_STORAGE_STATUS_NO_MEDIA : SD_STORAGE_STATUS_FAULT;
 }
 
 uint32_t sd_access_media_epoch(void)
@@ -94,6 +135,10 @@ void sd_access_media_set_present(uint8_t present)
     {
         g_sd_media_present_known = 1U;
         g_sd_media_present = present;
+        if (present == 0U)
+        {
+            g_sd_storage_status = SD_STORAGE_STATUS_NO_MEDIA;
+        }
         return;
     }
     if (g_sd_media_present == present)
@@ -102,6 +147,8 @@ void sd_access_media_set_present(uint8_t present)
     }
     g_sd_media_present = present;
     g_sd_fs_mounted = 0U;
+    g_sd_storage_status = (present != 0U)
+        ? SD_STORAGE_STATUS_UNKNOWN : SD_STORAGE_STATUS_NO_MEDIA;
     sd_access_media_epoch_advance();
 }
 

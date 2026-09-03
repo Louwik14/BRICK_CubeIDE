@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 
 #include "Sampler/sample_audio_key.h"
@@ -27,6 +28,7 @@ typedef struct
 {
     uint32_t first_page;
     uint8_t page_count;
+    uint8_t reserved[3];
 } sample_page_lease_range_t;
 
 typedef struct
@@ -36,6 +38,17 @@ typedef struct
     uint32_t registration_epoch;
     sample_page_lease_range_t ranges[2];
 } sample_page_lease_t;
+
+_Static_assert(sizeof(sample_page_lease_range_t) == 8U,
+               "Sample page lease range ABI changed");
+_Static_assert(sizeof(sample_page_lease_t) == 28U,
+               "Sample page lease ABI changed");
+_Static_assert(offsetof(sample_page_lease_t, key) == 4U,
+               "Sample page lease key offset changed");
+_Static_assert(offsetof(sample_page_lease_t, registration_epoch) == 8U,
+               "Sample page lease epoch offset changed");
+_Static_assert(offsetof(sample_page_lease_t, ranges) == 12U,
+               "Sample page lease ranges offset changed");
 
 extern sample_page_lease_t g_sample_page_leases[SAMPLE_PAGE_LEASE_SLOT_COUNT];
 

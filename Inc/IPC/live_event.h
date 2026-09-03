@@ -11,7 +11,7 @@ typedef enum
     LIVE_EVENT_SOURCE_MIDI_HOST = 2
 } live_event_source_t;
 
-/* Fixed-size, pointer-free contract suitable for a future shared M4/M7 RAM. */
+/* Fixed-size CONTROL-local ingress event used by Hall and MIDI producers. */
 typedef struct
 {
     uint32_t tim5_tick;
@@ -29,8 +29,7 @@ typedef enum
     LIVE_NOTE_EVENT_ON = 1
 } live_note_event_type_t;
 
-/* Audio-owned timed queue item. It is fixed-size, pointer-free and therefore
- * directly transferable to a future shared M4/M7 event queue. */
+/* CONTROL/NoteFx-local timed event; AUDIO receives only the finalized command. */
 typedef struct
 {
     uint64_t sample_time;

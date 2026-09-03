@@ -28,6 +28,27 @@ set(MX_Include_Dirs
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/CMSIS/Include
 )
 
+set(FreeRTOS_Src)
+if(BRICK6_VARIANT STREQUAL "lowcost")
+    list(APPEND MX_Include_Dirs
+        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/include
+        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2
+        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F
+    )
+    list(APPEND FreeRTOS_Src
+        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/croutine.c
+        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/event_groups.c
+        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/list.c
+        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/queue.c
+        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c
+        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/tasks.c
+        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/timers.c
+        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c
+        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c
+        ${BRICK6_GENERATED_ROOT}/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c
+    )
+endif()
+
 # STM32CubeMX generated application sources
 set(MX_Application_Src
     ${BRICK6_GENERATED_ROOT}/Src/main.c
@@ -47,6 +68,10 @@ set(MX_Application_Src
     ${BRICK6_GENERATED_ROOT}/Src/syscalls.c
     ${BRICK6_GENERATED_ROOT}/Startup/startup_stm32h743xx.s
 )
+
+if(BRICK6_VARIANT STREQUAL "lowcost")
+    list(APPEND MX_Application_Src ${BRICK6_GENERATED_ROOT}/Src/freertos.c)
+endif()
 
 # STM32 HAL/LL Drivers
 set(STM32_Drivers_Src
@@ -106,8 +131,10 @@ set(MX_LINK_DIRS
 set(MX_LINK_LIBS 
     STM32_Drivers
     ${TOOLCHAIN_LINK_LIBRARIES}
-    
 )
+if(FreeRTOS_Src)
+    list(APPEND MX_LINK_LIBS FreeRTOS)
+endif()
 # Interface library for includes and symbols
 add_library(stm32cubemx INTERFACE)
 target_include_directories(stm32cubemx INTERFACE ${MX_Include_Dirs})
@@ -117,6 +144,12 @@ target_compile_definitions(stm32cubemx INTERFACE ${MX_Defines_Syms})
 add_library(STM32_Drivers OBJECT)
 target_sources(STM32_Drivers PRIVATE ${STM32_Drivers_Src})
 target_link_libraries(STM32_Drivers PUBLIC stm32cubemx)
+
+if(FreeRTOS_Src)
+    add_library(FreeRTOS OBJECT)
+    target_sources(FreeRTOS PRIVATE ${FreeRTOS_Src})
+    target_link_libraries(FreeRTOS PUBLIC stm32cubemx)
+endif()
 
 
 # Add STM32CubeMX generated application sources to the project

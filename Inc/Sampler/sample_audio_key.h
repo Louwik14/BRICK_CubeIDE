@@ -10,31 +10,46 @@ extern "C" {
 typedef enum
 {
     SAMPLE_AUDIO_DOMAIN_CLASSIC = 0,
-    SAMPLE_AUDIO_DOMAIN_LOOPER,
-    SAMPLE_AUDIO_DOMAIN_MULTI
+    SAMPLE_AUDIO_DOMAIN_LOOPER = 1,
+    SAMPLE_AUDIO_DOMAIN_MULTI = 2
 } sample_audio_domain_t;
 
 typedef struct
 {
-    sample_audio_domain_t domain;
+    /* Fixed-width ABI code; the semantic enum remains for local call sites. */
+    uint8_t domain;
+    uint8_t reserved;
     uint16_t object_id;
 } sample_audio_key_t;
 
+_Static_assert(sizeof(sample_audio_key_t) == 4U,
+               "Sample audio key ABI changed");
+_Static_assert(offsetof(sample_audio_key_t, domain) == 0U,
+               "Sample audio key domain offset changed");
+_Static_assert(offsetof(sample_audio_key_t, object_id) == 2U,
+               "Sample audio key object offset changed");
+
 static inline sample_audio_key_t sample_audio_key_classic(uint16_t object_id)
 {
-    const sample_audio_key_t key = { SAMPLE_AUDIO_DOMAIN_CLASSIC, object_id };
+    const sample_audio_key_t key = {
+        .domain = SAMPLE_AUDIO_DOMAIN_CLASSIC, .object_id = object_id
+    };
     return key;
 }
 
 static inline sample_audio_key_t sample_audio_key_looper(uint16_t object_id)
 {
-    const sample_audio_key_t key = { SAMPLE_AUDIO_DOMAIN_LOOPER, object_id };
+    const sample_audio_key_t key = {
+        .domain = SAMPLE_AUDIO_DOMAIN_LOOPER, .object_id = object_id
+    };
     return key;
 }
 
 static inline sample_audio_key_t sample_audio_key_multi(uint16_t object_id)
 {
-    const sample_audio_key_t key = { SAMPLE_AUDIO_DOMAIN_MULTI, object_id };
+    const sample_audio_key_t key = {
+        .domain = SAMPLE_AUDIO_DOMAIN_MULTI, .object_id = object_id
+    };
     return key;
 }
 

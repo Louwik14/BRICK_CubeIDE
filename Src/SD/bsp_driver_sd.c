@@ -32,6 +32,7 @@
 /* Extern variables ---------------------------------------------------------*/
 
 extern SD_HandleTypeDef hsd1;
+static uint8_t g_bsp_sd_initialized;
 
 /* USER CODE BEGIN BeforeInitSection */
 /* can be used to modify / undefine following code or add code */
@@ -55,11 +56,7 @@ extern SD_HandleTypeDef hsd1;
 __weak uint8_t BSP_SD_Init(void)
 {
   uint8_t sd_state = MSD_OK;
-  /* Check if the SD card is plugged in the slot */
-  if (BSP_SD_IsDetected() != SD_PRESENT)
-  {
-    return MSD_ERROR_SD_NOT_PRESENT;
-  }
+  g_bsp_sd_initialized = 0U;
   /* HAL SD initialization */
   sd_state = HAL_SD_Init(&hsd1);
   /* Configure SD Bus width (4 bits mode selected) */
@@ -70,6 +67,11 @@ __weak uint8_t BSP_SD_Init(void)
     {
       sd_state = MSD_ERROR;
     }
+  }
+
+  if (sd_state == MSD_OK)
+  {
+    g_bsp_sd_initialized = 1U;
   }
 
   return sd_state;
@@ -496,13 +498,9 @@ __weak void BSP_SD_ReadCpltCallback(void)
  */
 __weak uint8_t BSP_SD_IsDetected(void)
 {
-  __IO uint8_t status = SD_PRESENT;
-
-  /* USER CODE BEGIN IsDetectedSection */
-  /* user code can be inserted here */
-  /* USER CODE END IsDetectedSection */
-
-  return status;
+  /* No card-detect GPIO on LowCost: expose only the last successful
+     initialization result, never a fabricated physical level. */
+  return (g_bsp_sd_initialized != 0U) ? SD_PRESENT : SD_NOT_PRESENT;
 }
 
 /* USER CODE BEGIN AdditionalCode */

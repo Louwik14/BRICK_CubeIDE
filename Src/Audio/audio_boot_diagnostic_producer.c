@@ -26,8 +26,8 @@ void audio_boot_diag_producer_init(void)
 void audio_boot_diag_producer_publish_state(audio_init_state_t state,
                                             board_audio_boot_error_t error)
 {
-    g_audio_diag.state = state;
-    g_audio_diag.error = error;
+    g_audio_diag.state = (uint8_t)state;
+    g_audio_diag.error = (uint8_t)error;
     publish();
 }
 

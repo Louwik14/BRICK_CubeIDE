@@ -21,16 +21,16 @@
 
 #include "ui_event.h"
 
+#include "App/Hall/hall_engine.h"
 #include "buttons.h"
 #include "ui_core.h"
-#include "App/Hall/hall_surface.h"
+#include "stm32h7xx.h"
 
 #define UI_EVENT_Q_LEN 32U
 
 static ui_event_t g_ui_evt_q[UI_EVENT_Q_LEN];
-static uint8_t g_ui_evt_w = 0U;
-static uint8_t g_ui_evt_r = 0U;
-static uint8_t g_ui_hall_prev_pressed[HALL_UI_LANE_COUNT];
+static volatile uint8_t g_ui_evt_w = 0U;
+static volatile uint8_t g_ui_evt_r = 0U;
 
 /**
  * @brief Point d'entrée ui_event_push.
@@ -43,16 +43,29 @@ static uint8_t g_ui_hall_prev_pressed[HALL_UI_LANE_COUNT];
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-static void ui_event_push(const ui_event_t *ev)
+static bool ui_event_push(const ui_event_t *ev)
 {
+    if (ev == 0)
+    {
+        return false;
+    }
+
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+
     const uint8_t next = (uint8_t)((g_ui_evt_w + 1U) & (UI_EVENT_Q_LEN - 1U));
     if (next == g_ui_evt_r)
     {
-        return;
+        __set_PRIMASK(primask);
+        return false;
     }
 
     g_ui_evt_q[g_ui_evt_w] = *ev;
+    __DMB();
     g_ui_evt_w = next;
+    __DMB();
+    __set_PRIMASK(primask);
+    return true;
 }
 
 /**
@@ -87,27 +100,21 @@ void ui_event_from_inputs(void)
         }
     }
 
-    hall_surface_refresh();
-    for (uint8_t hall = 0U; hall < HALL_UI_LANE_COUNT; hall++)
-    {
-        const uint8_t pressed = hall_surface_is_pressed(hall);
-        if ((g_ui_hall_prev_pressed[hall] == 0U) && (pressed != 0U))
-        {
-            ev.type = UI_EVENT_HALL_PRESS;
-            ev.id = hall;
-            ev.value = 1;
-            ui_event_push(&ev);
-        }
-        else if ((g_ui_hall_prev_pressed[hall] != 0U) && (pressed == 0U))
-        {
-            ev.type = UI_EVENT_HALL_RELEASE;
-            ev.id = hall;
-            ev.value = 0;
-            ui_event_push(&ev);
-        }
+}
 
-        g_ui_hall_prev_pressed[hall] = pressed;
+bool ui_event_push_hall(uint8_t hall, uint8_t pressed)
+{
+    if (hall >= HALL_UI_LANE_COUNT)
+    {
+        return false;
     }
+
+    const ui_event_t ev = {
+        .type = (pressed != 0U) ? UI_EVENT_HALL_PRESS : UI_EVENT_HALL_RELEASE,
+        .id = hall,
+        .value = (pressed != 0U) ? 1 : 0,
+    };
+    return ui_event_push(&ev);
 }
 
 /**
@@ -135,7 +142,9 @@ bool ui_event_pop(ui_event_t *ev)
         return false;
     }
 
+    __DMB();
     *ev = g_ui_evt_q[g_ui_evt_r];
+    __DMB();
     g_ui_evt_r = (uint8_t)((g_ui_evt_r + 1U) & (UI_EVENT_Q_LEN - 1U));
     return true;
 }

@@ -12,7 +12,6 @@
 #include "Track/control_music_output.h"
 #include "Seq/seq_runtime_exec.h"
 #include "Platform/memory_layout.h"
-#include "Seq/seq_note_trace.h"
 #include "main.h"
 
 static uint8_t g_note_fx_override_valid[NOTE_FX_TRACK_COUNT][NOTE_FX_SLOT_COUNT][NOTE_FX_PARAM_COUNT];
@@ -244,19 +243,6 @@ static note_event_result_t note_fx_pipeline_terminal(const note_event_t *event, 
     };
     const uint8_t submitted = control_music_output_submit(
         &audio_event, terminal.source_token, terminal.generation);
-    uint8_t trace_track = 0U;
-    uint8_t trace_step = 0U;
-    if (seq_note_trace_output_is_watched(terminal.occurrence_id,
-                                         &trace_track, &trace_step) != 0U)
-        seq_note_trace_record(
-            (submitted == 0U)
-                ? SEQ_NOTE_TRACE_REJECT_TERMINAL
-                : ((terminal.kind == NOTE_EVENT_KIND_ON)
-                    ? SEQ_NOTE_TRACE_TERMINAL_ON
-                    : SEQ_NOTE_TRACE_TERMINAL_OFF),
-            trace_track, trace_step, terminal.sample_abs,
-            terminal.generation, terminal.occurrence_id,
-            terminal.source_token);
     if (submitted == 0U)
     {
         return NOTE_EVENT_RESULT_REJECTED_CAPACITY;

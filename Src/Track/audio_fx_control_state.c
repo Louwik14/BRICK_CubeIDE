@@ -194,7 +194,7 @@ static uint8_t audio_fx_control_publish(brick_entity_id_t entity,
                                         uint16_t command, uint8_t index, float value)
 {
     const live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),
-        .source=LIVE_PARAMETER_EVENT_SOURCE_BULK,.count=1U,.item={{
+        .count=1U,.item={{
         .parameter_id=command,.scope=LIVE_PARAMETER_EVENT_SCOPE_SLOT,.track=entity,
         .slot=index,.flags=LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
         .value=live_parameter_event_encode_float(value)}}};
@@ -345,8 +345,7 @@ uint8_t audio_fx_control_state_bulk_add_prepared(
         bulk->item[bulk->count++]=(live_parameter_audio_bulk_item_t){
             .parameter_id=(uint16_t)ids[i],.scope=LIVE_PARAMETER_EVENT_SCOPE_TRACK,
             .track=entity,.slot=LIVE_PARAMETER_EVENT_INVALID_INDEX,
-            .flags=(uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                |LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+            .flags=LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
             .value=live_parameter_event_encode_float(values[i])};
     }
     return 1U;
@@ -371,7 +370,7 @@ uint8_t audio_fx_control_state_restore(brick_entity_id_t entity,
 {
     audio_fx_control_state_t prepared;
     live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),
-        .source=LIVE_PARAMETER_EVENT_SOURCE_BULK,.count=0U};
+        .count=0U};
     if(!audio_fx_control_state_prepare_for_polyphony(entity,state,
             polyphony_control_get_voice_count(entity),&prepared)
             ||!audio_fx_control_state_bulk_add_prepared(entity,&prepared,&bulk)

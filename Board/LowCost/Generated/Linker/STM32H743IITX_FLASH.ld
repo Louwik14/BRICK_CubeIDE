@@ -361,13 +361,18 @@ SECTIONS
   ASSERT(SIZEOF(.ram_d3_restore_ipc) <= 64,
          "Restore IPC exceeds its 64-byte contract")
 
-  .ram_d3_ipc (NOLOAD) :
+  .ram_d3_ipc ORIGIN(RAM_D3) + 32K (NOLOAD) :
   {
     . = ALIGN(32);
     *(.ram_d3_ipc)
     *(.ram_d3_ipc*)
     . = ALIGN(32);
   } >RAM_D3
+  ASSERT(ADDR(.ram_d3_ipc) == (ORIGIN(RAM_D3) + 32K),
+         "SRAM4 IPC window starts outside its upper half")
+  ASSERT((ADDR(.ram_d3_ipc) + SIZEOF(.ram_d3_ipc))
+             <= (ORIGIN(RAM_D3) + LENGTH(RAM_D3)),
+         "SRAM4 non-cacheable IPC half exceeds RAM_D3")
   ASSERT(SIZEOF(.ram_d3_restore_ipc) + SIZEOF(.ram_d3_ipc) <= 32K,
          "SRAM4 non-cacheable IPC half overflow")
 

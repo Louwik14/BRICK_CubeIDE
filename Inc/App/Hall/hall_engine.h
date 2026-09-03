@@ -103,7 +103,6 @@ uint8_t hall_engine_user_velocity_profile_is_valid(void);
 
 void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count,
                                 uint32_t tim5_tick);
-void hall_engine_process(void);
 
 uint16_t hall_engine_get_raw(uint8_t key);
 uint16_t hall_engine_get_value(uint8_t key);

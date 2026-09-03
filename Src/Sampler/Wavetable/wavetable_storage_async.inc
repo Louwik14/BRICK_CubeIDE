@@ -85,6 +85,63 @@ uint8_t wavetable_pool_load_async_begin_prepared_with_geometry(
     return 1U;
 }
 
+uint8_t wavetable_pool_request_clear(uint16_t wavetable_slot)
+{
+    if ((wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)
+        || (wavetable_pool_load_async_busy() != 0U)
+        || (g_wavetable_clear_request_valid != 0U))
+    {
+        return 0U;
+    }
+    g_wavetable_clear_request_slot = wavetable_slot;
+    __DMB();
+    g_wavetable_clear_request_valid = 1U;
+    return 1U;
+}
+
+uint8_t wavetable_pool_request_load(uint16_t wavetable_slot,
+                                    const char *path,
+                                    wavetable_source_geometry_t source_geometry)
+{
+    if ((wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)
+        || (path == 0) || (path[0] == '\0')
+        || (strlen(path) >= sizeof(g_wavetable_load_request_path))
+        || (wavetable_pool_load_async_busy() != 0U)
+        || (g_wavetable_load_request_valid != 0U)
+        || ((source_geometry != WAVETABLE_SOURCE_GEOMETRY_1024)
+            && (source_geometry != WAVETABLE_SOURCE_GEOMETRY_2048)))
+    {
+        return 0U;
+    }
+    g_wavetable_load_request_slot = wavetable_slot;
+    g_wavetable_load_request_geometry = source_geometry;
+    (void)snprintf(g_wavetable_load_request_path,
+                   sizeof(g_wavetable_load_request_path), "%s", path);
+    __DMB();
+    g_wavetable_load_request_valid = 1U;
+    return 1U;
+}
+
+void wavetable_pool_storage_request_service(void)
+{
+    if (g_wavetable_clear_request_valid != 0U)
+    {
+        const uint16_t slot = g_wavetable_clear_request_slot;
+        g_wavetable_clear_request_valid = 0U;
+        wavetable_pool_clear(slot);
+        return;
+    }
+    if (g_wavetable_load_request_valid != 0U)
+    {
+        const uint16_t slot = g_wavetable_load_request_slot;
+        const wavetable_source_geometry_t geometry = g_wavetable_load_request_geometry;
+        char path[WAVETABLE_POOL_PATH_MAX];
+        (void)snprintf(path, sizeof(path), "%s", g_wavetable_load_request_path);
+        g_wavetable_load_request_valid = 0U;
+        (void)wavetable_pool_load_async_begin_with_geometry(slot, path, geometry);
+    }
+}
+
 uint8_t wavetable_pool_load_async_begin(uint16_t wavetable_slot, const char *path)
 {
     return wavetable_pool_load_async_begin_with_geometry(

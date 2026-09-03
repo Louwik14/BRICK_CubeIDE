@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "buttons.h"
+#include "App/control_domain.h"
 #include "App/Hall/hall_engine.h"
 #include "Track/track_mute.h"
 #include "Track/track_runtime.h"
@@ -53,14 +54,19 @@ static uint8_t ui_core_get_track_runtime_mute(uint8_t track, uint8_t *out_muted,
     return 1U;
 }
 
-static uint8_t ui_core_apply_track_runtime_mute(uint8_t track, uint8_t muted)
+static uint8_t ui_core_request_track_runtime_mute(uint8_t track, uint8_t muted)
 {
     if (track >= SEQ_LANE_CAPACITY)
     {
         return 0U;
     }
 
-    return track_mute_set(track, muted);
+    const control_track_intent_t intent = {
+        .operation = CONTROL_TRACK_SET_MUTE,
+        .track = track,
+        .value0 = muted
+    };
+    return control_domain_request_track(&intent);
 }
 
 static uint8_t ui_core_mute_capture_current_to_buffer(uint8_t *dst)
@@ -154,6 +160,7 @@ static void ui_core_mute_enter_prepare(ui_core_mute_set_hall_mode_fn set_hall_mo
 
 static void ui_core_mute_apply_prepared_and_exit(ui_core_mute_set_hall_mode_fn set_hall_mode)
 {
+    uint16_t mute_mask = 0U;
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         if ((entity_topology_is_active((brick_entity_id_t)track) == 0U)
@@ -161,10 +168,15 @@ static void ui_core_mute_apply_prepared_and_exit(ui_core_mute_set_hall_mode_fn s
         {
             continue;
         }
-        if (ui_core_apply_track_runtime_mute(
-                track, g_ui_core_mute.prepared_state[track]) == 0U)
-            return;
+        if (g_ui_core_mute.prepared_state[track] != 0U)
+            mute_mask |= (uint16_t)(1U << track);
     }
+
+    const control_track_intent_t intent = {
+        .operation = CONTROL_TRACK_SET_MUTE_MASK,
+        .mute_mask = mute_mask
+    };
+    if (control_domain_request_track(&intent) == 0U) return;
 
     ui_core_mute_exit_to_previous_mode(set_hall_mode);
 }
@@ -178,7 +190,7 @@ static void ui_core_mute_toggle_quick_track(uint8_t track)
         return;
     }
 
-    if (ui_core_apply_track_runtime_mute(
+    if (ui_core_request_track_runtime_mute(
             track, (muted == 0U) ? 1U : 0U) == 0U)
         return;
 }
@@ -309,8 +321,7 @@ uint8_t ui_core_mute_handle_event(const ui_event_t *ev,
                                   uint8_t *io_shift_down,
                                   uint8_t track_select_armed,
                                   ui_core_mute_get_hall_mode_fn get_hall_mode,
-                                  ui_core_mute_set_hall_mode_fn set_hall_mode,
-                                  ui_core_mute_suppress_hall_note_fn suppress_hall_note)
+                                  ui_core_mute_set_hall_mode_fn set_hall_mode)
 {
     if ((ev == 0) || (io_shift_down == 0) || (get_hall_mode == 0) || (set_hall_mode == 0))
     {
@@ -399,11 +410,6 @@ uint8_t ui_core_mute_handle_event(const ui_event_t *ev,
 
     if ((ev->type == UI_EVENT_HALL_PRESS) && (ev->id < SEQ_LANE_CAPACITY))
     {
-        if (suppress_hall_note != 0)
-        {
-            suppress_hall_note(ev->id);
-        }
-
         if ((g_ui_core_mute.submode == UI_MUTE_SUBMODE_QUICK)
             || (g_ui_core_mute.submode == UI_MUTE_SUBMODE_HOLD_QUICK))
         {

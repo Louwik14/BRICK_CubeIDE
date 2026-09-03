@@ -3,7 +3,6 @@
 #include <string.h>
 #include <stddef.h>
 
-#include "SD/sd_scheduler_runtime.h"
 #include "Platform/memory_layout.h"
 #include "stm32h7xx.h"
 
@@ -325,38 +324,6 @@ void sample_stream_transport_release_map(
 void sample_stream_transport_reset_storage_maps(void)
 {
     sample_stream_physical_map_pool_reset();
-}
-
-void sample_stream_transport_execute_monocore(const sample_stream_io_command_t *command,
-                                              sample_stream_io_result_t *out_result)
-{
-    if (out_result == 0)
-    {
-        return;
-    }
-    memset(out_result, 0, sizeof(*out_result));
-    out_result->load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
-    if (command == 0)
-    {
-        return;
-    }
-    out_result->token = command->token;
-    uint32_t sequence = 0U;
-    if (sample_stream_transport_submit(command, &sequence) == 0U)
-    {
-        return;
-    }
-    do
-    {
-        sd_scheduler_runtime_service();
-        sample_stream_transport_worker_poll();
-    } while (sample_stream_transport_take_result(sequence, out_result) == 0U);
-    if (out_result->token.page_generation != command->token.page_generation)
-    {
-        g_sample_stream_transport_stats.protocol_errors++;
-        out_result->token = command->token;
-        out_result->load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
-    }
 }
 
 void sample_stream_transport_get_stats(sample_stream_transport_stats_t *out_stats)

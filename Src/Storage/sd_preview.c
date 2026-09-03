@@ -79,6 +79,8 @@ typedef struct
 static AUDIO_COLD_SDRAM uint8_t g_sd_preview_io[SD_PREVIEW_IO_BYTES];
 STORAGE_STATE_SDRAM static sd_preview_ctx_t g_sd_preview;
 STORAGE_STATE_SDRAM static sd_preview_diag_t g_sd_preview_diag;
+static volatile uint8_t g_sd_preview_request;
+static char g_sd_preview_request_path[SAMPLE_CLASSIC_PATH_MAX];
 
 static void sd_preview_publish_active(uint8_t active)
 {
@@ -459,6 +461,23 @@ void sd_preview_init(void)
     g_sd_preview.gain = 1.0f;
     g_sd_preview_ring_layout.write_count = 0U;
     sd_preview_reset_source_state();
+    g_sd_preview_request = 0U;
+}
+
+uint8_t sd_preview_request_begin(const char *path)
+{
+    if ((path == NULL) || (path[0] == '\0')
+        || (strlen(path) >= sizeof(g_sd_preview_request_path)))
+        return 0U;
+    memcpy(g_sd_preview_request_path, path, strlen(path) + 1U);
+    __DMB();
+    g_sd_preview_request = 1U;
+    return 1U;
+}
+
+void sd_preview_request_stop(void)
+{
+    g_sd_preview_request = 2U;
 }
 
 uint8_t sd_preview_is_active(void)
@@ -657,6 +676,16 @@ void sd_preview_stop(void)
 
 void sd_preview_process(void)
 {
+    const uint8_t request = g_sd_preview_request;
+    if (request != 0U)
+    {
+        __DMB();
+        g_sd_preview_request = 0U;
+        if (request == 1U)
+            (void)sd_preview_begin(g_sd_preview_request_path);
+        else
+            sd_preview_stop();
+    }
     if ((g_sd_preview.state != SD_PREVIEW_STATE_OPENING)
         && (g_sd_preview.state != SD_PREVIEW_STATE_STREAMING))
     {

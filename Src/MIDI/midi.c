@@ -11,12 +11,13 @@
  *
  * Contraintes temps réel:
  * - Critique audio: non.
- * - IRQ: RX USB en ISR -> file RX -> traitement en midi_poll().
- * - Tasklet: oui (midi_poll dans la boucle principale).
+ * - IRQ: RX USB en ISR -> file RX.
+ * - USB_SERVICE: transport TX/RX USB.
+ * - CONTROL_RT: décodage et injection MIDI.
  * - Borné: oui (traitement par paquets/itérations).
  *
  * Architecture:
- * - Appelé par: main loop (midi_poll), callbacks USB Device.
+ * - Appelé par: services USB/CONTROL, callbacks USB Device.
  * - Appelle: usbd_midi, midi_host (backend host), diagnostics/logs.
  *
  * Règles:
@@ -591,11 +592,7 @@ static uint32_t midi_usb_try_flush(void) {
 }
 
 static inline void midi_usb_request_deferred_flush_from_isr(void) {
-  if (midi_usb_tx_deferred_pending) {
-    return;
-  }
   midi_usb_tx_deferred_pending = true;
-  SCB->ICSR = SCB_ICSR_PENDSVSET_Msk;
 }
 
 /* ====================================================================== */
@@ -989,7 +986,6 @@ void midi_init(void) {
   midi_usb_tx_deferred_pending = false;
   midi_clock_recompute_period(MIDI_CLOCK_DEFAULT_BPM_MILLI);
   midi_clock_hw_stop();
-  HAL_NVIC_SetPriority(PendSV_IRQn, 15U, 0U);
 
   midi_stats_reset();
 }
@@ -1002,7 +998,7 @@ void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim) {
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
   if ((htim != NULL) && (htim->Instance == TIM12)) {
-    /* Internal seq clock cadence tick source (runtime core runs in superloop). */
+    /* Internal seq clock cadence tick source; musical processing runs in CONTROL_RT. */
     seq_runtime_time_adapter_process_internal_from_irq();
   }
 }
@@ -1063,24 +1059,30 @@ midi_dest_t midi_get_rx_destination(void) {
   return midi_rx_dest;
 }
 
-/**
- * @brief Point d'entrée midi_poll.
- *
- * Rôle:
- * - Exécuter le traitement associé à midi_poll.
- *
- *
- * Contexte d'appel:
- * - init / main loop / tasklet selon le module.
- */
-void midi_poll(void) {
+static bool midi_usb_take_deferred_flush(void) {
+  uint32_t primask = midi_enter_critical();
+  const bool pending = midi_usb_tx_deferred_pending;
+  midi_usb_tx_deferred_pending = false;
+  midi_exit_critical(primask);
+  return pending;
+}
+
+void midi_usb_service_poll(void) {
   if (!midi_initialized) {
     return;
   }
 
   (void)midi_usb_refresh_connection();
-  (void)midi_process_usb_rx();
+  (void)midi_usb_take_deferred_flush();
   (void)midi_usb_try_flush();
+}
+
+void midi_control_poll(void) {
+  if (!midi_initialized) {
+    return;
+  }
+
+  (void)midi_process_usb_rx();
 }
 
 /**
@@ -1979,17 +1981,4 @@ void USBD_MIDI_OnPacketsSent(void) {
   }
 #endif
   midi_usb_request_deferred_flush_from_isr();
-}
-
-void midi_usb_tx_deferred_service_from_isr(void) {
-  if (!midi_initialized) {
-    return;
-  }
-
-  if (!midi_usb_tx_deferred_pending) {
-    return;
-  }
-
-  midi_usb_tx_deferred_pending = false;
-  midi_usb_try_flush_internal(true);
 }

@@ -125,15 +125,13 @@ uint8_t encoder_control_dispatcher_service(void)
 
         const live_parameter_audio_bulk_t bulk = {
             .capture_tick = detent.capture_tick,
-            .source = LIVE_PARAMETER_EVENT_SOURCE_ENCODER,
             .count = 1U,
             .item = {{
                 .parameter_id = target.parameter_id,
                 .scope = target.scope,
                 .track = target.track,
                 .slot = target.slot,
-                .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                                    | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+                .flags = LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
                 .value = live_parameter_event_encode_float(command_value)
             }}
         };

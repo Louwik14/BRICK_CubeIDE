@@ -20,7 +20,7 @@ Le code courant est l'autorite finale. Ce document est l'unique porte d'entree d
 configuration CONTROL -> validation globale -> FIFO fonctionnelle -> AUDIO
 SEQ/live -> resolution CONTROL -> START/STOP/RETRIGGER dates -> AUDIO
 capture TIM5 -> conversion audio -> file datee -> segmentation -> rendu
-credit de fenetre stream AUDIO -> I/O Storage tokenisee -> page AUDIO
+leases physiques stream AUDIO -> I/O Storage tokenisee -> pages AUDIO
 Save/Load -> decode safety -> safe quiesce -> progressive install -> publication
 ```
 

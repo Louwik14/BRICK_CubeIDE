@@ -136,12 +136,14 @@ void midi_set_rx_destination(midi_dest_t dest);
 midi_dest_t midi_get_rx_destination(void);
 
 /**
- * @brief Traitement périodique (à appeler dans la boucle principale).
- *
- * - Vide la file RX USB (décodage + injection moteur)
- * - Tente d'émettre les messages USB en attente
+ * @brief Service transport USB (à appeler depuis USB_SERVICE).
  */
-void midi_poll(void);
+void midi_usb_service_poll(void);
+
+/**
+ * @brief Décodage et injection MIDI (à appeler depuis CONTROL_RT).
+ */
+void midi_control_poll(void);
 
 /**
  * @brief Envoie un message MIDI brut vers une destination.

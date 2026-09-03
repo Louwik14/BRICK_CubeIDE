@@ -4,6 +4,7 @@
 
 #include "ui_template_page.h"
 #include "ui_macro_interaction.h"
+#include "App/control_domain.h"
 #include "Storage/project_control.h"
 
 static const ui_template_family_t g_ui_template_macro_family = {
@@ -83,12 +84,20 @@ void ui_page_template_macro_handle_encoder(uint8_t encoder, int16_t delta)
 
     if (delta > 0)
     {
-        project_control_set_hall_mode(PROJECT_CONTROL_HALL_SWITCH);
+        const control_macro_intent_t intent = {
+            .operation = CONTROL_MACRO_SET_HALL_MODE,
+            .scene = PROJECT_CONTROL_HALL_SWITCH
+        };
+        (void)control_domain_request_macro(&intent);
         ui_macro_interaction_reset();
         return;
     }
 
-    project_control_set_hall_mode(PROJECT_CONTROL_HALL_SCENE);
+    const control_macro_intent_t intent = {
+        .operation = CONTROL_MACRO_SET_HALL_MODE,
+        .scene = PROJECT_CONTROL_HALL_SCENE
+    };
+    (void)control_domain_request_macro(&intent);
     ui_macro_interaction_reset();
 }
 

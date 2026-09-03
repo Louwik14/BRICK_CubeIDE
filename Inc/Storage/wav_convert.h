@@ -36,6 +36,7 @@ typedef enum
 void wav_convert_init(void);
 uint8_t wav_convert_path_needs_48k(const char *path, wav_info_t *out_info);
 uint8_t wav_convert_start_destructive_48k(const char *path);
+uint8_t wav_convert_request_start(const char *path);
 void wav_convert_service(uint32_t byte_budget);
 uint8_t wav_convert_is_active(void);
 wav_convert_state_t wav_convert_get_state(void);

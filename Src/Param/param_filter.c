@@ -159,7 +159,6 @@ uint8_t param_filter_control_restore(uint8_t track,
     }
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
         .count = (uint8_t)(sizeof(ids) / sizeof(ids[0]))
     };
     for (uint8_t i = 0U; i < bulk.count; ++i)
@@ -168,8 +167,7 @@ uint8_t param_filter_control_restore(uint8_t track,
             .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
             .track = track,
             .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-            .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                                | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+            .flags = LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
             .value = live_parameter_event_encode_float(values[i])
         };
     if (!live_parameter_audio_publication_submit_bulk(&bulk)) return 0U;

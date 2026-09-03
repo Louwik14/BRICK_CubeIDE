@@ -264,11 +264,26 @@ static uint8_t ui_param_live_rec_resolve_context(param_id_t param,
     return 1U;
 }
 
+static uint8_t ui_param_request_control_value(param_id_t param,
+                                               uint8_t scope,
+                                               uint8_t track,
+                                               float value)
+{
+    const control_param_intent_t intent = {
+        .parameter_id = param,
+        .scope = scope,
+        .track = track,
+        .value = value
+    };
+    return control_domain_request_param(&intent);
+}
+
 static uint8_t ui_param_set_track_value(uint8_t encoder,
                                         param_id_t param,
                                         float value,
                                         uint8_t track)
 {
+    (void)encoder;
     if (live_parameter_is_audio_owned(param) != 0U)
     {
         const param_desc_t *const desc = &param_registry[param];
@@ -279,9 +294,11 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
             (void)ui_param_resolve_edit_bounds(param, track, &edit_min, &edit_max);
         }
         const float clamped = ui_param_clamp(value, edit_min, edit_max);
-        return (ui_param_is_track_scoped(param) != 0U)
-            ? param_registry_apply_track_value(param, track, clamped)
-            : param_registry_commit_global(param, clamped);
+        return ui_param_request_control_value(
+            param,
+            (ui_param_is_track_scoped(param) != 0U)
+                ? CONTROL_PARAM_SCOPE_TRACK : CONTROL_PARAM_SCOPE_GLOBAL,
+            track, clamped);
     }
 
     if (ui_param_is_track_scoped(param) == 0U)
@@ -295,7 +312,8 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
             return 1U;
         }
 
-        return param_registry_commit_global(param, clamped);
+        return ui_param_request_control_value(
+            param, CONTROL_PARAM_SCOPE_GLOBAL, 0U, clamped);
     }
 
     float edit_min = 0.0f;
@@ -312,29 +330,7 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
         return 1U;
     }
 
-    if (param_registry_apply_track_value(param, track, clamped) == 0U)
-    {
-        return 0U;
-    }
-
-    uint8_t set_id = 0U;
-    seq_param_slot_t param_slot = 0U;
-    if (ui_param_resolve_seq_slot(track, param, &set_id, &param_slot) != 0U)
-    {
-        seq_value16_t encoded;
-        if (seq_param_iface_encode_param_value(param, clamped, &encoded) == 0U)
-            return 0U;
-        const seq_param_iface_base_commit_cmd_t cmd = {
-            .source = SEQ_PARAM_IFACE_COMMIT_SOURCE_UI_TRACK_EDIT,
-            .authoritative_apply_done = 1U,
-            .target_track = track,
-            .set_id = set_id,
-            .param_slot = param_slot,
-            .value16 = encoded
-        };
-        (void)seq_param_iface_commit_base_after_authoritative_apply(&cmd);
-    }
-
-    return 1U;
+    return ui_param_request_control_value(
+        param, CONTROL_PARAM_SCOPE_TRACK, track, clamped);
 }
 

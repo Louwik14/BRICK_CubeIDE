@@ -40,7 +40,7 @@ uint8_t sample_classic_audio_projection_publish(uint16_t sample_id)
     dst->data_size = source.data_size;
     dst->sample_rate = source.sample_rate;
     dst->registration_epoch = source.registration_epoch;
-    dst->format = source.format;
+    dst->format = (uint8_t)source.format;
     dst->channels = source.channels;
     dst->bits_per_sample = source.bits_per_sample;
     dst->block_align = source.block_align;

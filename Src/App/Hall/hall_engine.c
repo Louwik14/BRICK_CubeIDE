@@ -964,10 +964,6 @@ void hall_engine_process_sample(uint8_t key, uint16_t raw, uint32_t sample_count
     }
 }
 
-void hall_engine_process(void)
-{
-}
-
 uint16_t hall_engine_get_raw(uint8_t key)
 {
     if (key >= HALL_KEY_COUNT)

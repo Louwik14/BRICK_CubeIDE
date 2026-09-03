@@ -95,7 +95,7 @@ uint8_t sample_page_cache_control_resolve_page(uint16_t sample_id,
     out_span->page_index = page->page_index;
     out_span->page_generation = page->generation;
     out_span->key = page->key;
-    out_span->format = page->format;
+    out_span->format = (sample_audio_format_t)page->format;
     out_span->stride_floats = page->stride_floats;
     out_span->frames_per_page = page->frames_per_page;
     out_span->registration_epoch = page->registration_epoch;

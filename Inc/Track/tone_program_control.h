@@ -51,12 +51,6 @@ void tone_program_control_init(void);
 uint8_t tone_program_control_activate(uint8_t track, track_runtime_type_t type);
 uint8_t tone_program_control_get(uint8_t track, param_id_t id, float *out_value);
 uint8_t tone_program_control_set(uint8_t track, param_id_t id, float value);
-uint8_t tone_program_control_get_slot_normalized(uint8_t track, uint8_t slot,
-                                                 float *out_value);
-uint8_t tone_program_control_set_slot_normalized(uint8_t track, uint8_t slot,
-                                                 float value);
-track_runtime_type_t tone_program_control_get_type(uint8_t track);
-uint32_t tone_program_control_size_bytes(void);
 uint8_t tone_program_control_capture(uint8_t track, tone_program_control_t *out_program);
 uint8_t tone_program_control_restore(uint8_t track, const tone_program_control_t *program);
 uint8_t tone_program_control_validate(const tone_program_control_t *program,

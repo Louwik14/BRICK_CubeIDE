@@ -1,31 +1,24 @@
 #include "App/Hall/hall_keyboard_bridge.h"
 
 #include "App/Hall/hall_engine.h"
-#include "Board/board_product.h"
 #include "IPC/live_event.h"
 #include "Keyboard/keyboard_runtime.h"
-#include "pages/ui_page_audio_rec.h"
-#include "pages/ui_page_patch_assign.h"
 #include "ui_core.h"
-#include "ui_core_mute.h"
+#include "ui_event.h"
 
-static uint8_t g_separate_hall_key_injected[HALL_KEY_COUNT];
+static uint8_t g_hall_musical_active[HALL_KEY_COUNT];
 
 void hall_keyboard_bridge_init(void)
 {
     for (uint8_t key = 0U; key < HALL_KEY_COUNT; ++key)
     {
-        g_separate_hall_key_injected[key] = 0U;
+        g_hall_musical_active[key] = 0U;
     }
     keyboard_runtime_init();
 }
 
 void hall_keyboard_bridge_process(void)
 {
-    const board_product_capabilities_t *caps = board_product_capabilities();
-    const uint8_t has_separate_hall_keyboard =
-        ((caps != 0) && (caps->has_separate_hall_keyboard != 0U)) ? 1U : 0U;
-
     live_event_t event;
     while (live_event_pop(&event))
     {
@@ -44,49 +37,33 @@ void hall_keyboard_bridge_process(void)
             velocity = 100U;
         }
 
-        if ((has_separate_hall_keyboard == 0U)
-                && (ui_core_hall_note_is_suppressed(key) != 0U))
+        ui_hall_arbitration_snapshot_t snapshot;
+        const uint8_t snapshot_valid =
+            ui_core_hall_arbitration_snapshot_read(&snapshot);
+        if (snapshot_valid == 0U)
         {
-            if (pressed == 0U)
-                ui_core_clear_hall_note_suppression(key);
-            continue;
+            snapshot.consume_press_mask = UINT16_MAX;
+            snapshot.consume_release_mask = UINT16_MAX;
         }
 
-        const ui_hall_mode_t raw_mode = ui_get_hall_mode();
-        const ui_hall_mode_t input_mode = (raw_mode == UI_HALL_MODE_MUTE)
-            ? ui_core_mute_get_passthrough_hall_mode()
-            : raw_mode;
-        uint8_t injection_allowed = ui_hall_allows_injection(
-            ui_get_active_track(), input_mode);
-        if ((has_separate_hall_keyboard != 0U)
-                && ((input_mode == UI_HALL_MODE_SEQ)
-                    || (ui_page_patch_assign_is_open() != 0U)
-                    || (ui_page_audio_rec_is_open() != 0U)))
-        {
-            injection_allowed = 1U;
-        }
+        const uint16_t consume_mask = (pressed != 0U)
+            ? snapshot.consume_press_mask : snapshot.consume_release_mask;
+        const uint8_t ui_consumes =
+            (key < HALL_UI_LANE_COUNT)
+            && ((consume_mask & (uint16_t)(1U << key)) != 0U);
+        const uint8_t musical_release =
+            ((pressed == 0U) && (g_hall_musical_active[key] != 0U)) ? 1U : 0U;
 
-        if (injection_allowed == 0U)
+        if ((ui_consumes != 0U) && (musical_release == 0U))
         {
-            if ((has_separate_hall_keyboard != 0U)
-                    && (pressed == 0U)
-                    && (g_separate_hall_key_injected[key] != 0U))
-            {
-                keyboard_runtime_process_hall_timed(key, false, velocity,
-                                                    event.tim5_tick,
-                                                    event.ingress_serial);
-                g_separate_hall_key_injected[key] = 0U;
-            }
+            (void)ui_event_push_hall(key, pressed);
             continue;
         }
 
         keyboard_runtime_process_hall_timed(key, pressed != 0U, velocity,
                                             event.tim5_tick,
                                             event.ingress_serial);
-        if (has_separate_hall_keyboard != 0U)
-        {
-            g_separate_hall_key_injected[key] = (pressed != 0U) ? 1U : 0U;
-        }
+        g_hall_musical_active[key] = (pressed != 0U) ? 1U : 0U;
     }
 
     keyboard_runtime_tick();

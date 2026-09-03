@@ -130,25 +130,18 @@ static uint8_t param_apply_non_filter_track_value_core(param_id_t id,
                                                        uint8_t rt_fast);
 
 static uint8_t param_registry_submit_audio_value(param_id_t id,
-                                                 uint8_t track,
-                                                 float value,
-                                                 uint8_t scope)
+                                                  uint8_t track,
+                                                  float value,
+                                                  uint8_t scope)
 {
-    live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
-        .count = 1U,
-        .item = {{
-            .parameter_id = (uint16_t)id,
-            .scope = scope,
-            .track = track,
-            .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-            .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                                | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
-            .value = live_parameter_event_encode_float(value)
-        }}
-    };
-    return live_parameter_audio_publication_submit_bulk(&bulk) ? 1U : 0U;
+    /* This is an immediate CONTROL commit, not an ingress capture.  Its
+     * publication must share the NOW/timeline authority used by rebuilds;
+     * the captured path remains reserved for real ingress timestamps. */
+    return control_rt_publish_param_now(
+        (track < BRICK_ENTITY_CAPACITY) ? track : 0U,
+        (uint16_t)id,
+        (uint32_t)live_parameter_event_encode_float(value),
+        scope) ? 1U : 0U;
 }
 
 uint8_t param_registry_publish_track_base_audio(param_id_t id,

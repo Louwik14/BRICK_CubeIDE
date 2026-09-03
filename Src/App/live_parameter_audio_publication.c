@@ -33,7 +33,11 @@ static uint8_t live_parameter_audio_make_command(
     float value = ((flags & LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS) != 0U)
         ? live_parameter_event_decode_float(raw_value) : (float)raw_value;
     uint8_t command_scope = scope;
-    if (scope == LIVE_PARAMETER_EVENT_SCOPE_SLOT)
+    if ((flags & LIVE_PARAMETER_EVENT_FLAG_RUNTIME_TEMP) != 0U)
+    {
+        command_scope = LIVE_PARAMETER_AUDIO_SCOPE_RUNTIME_TEMP;
+    }
+    else if (scope == LIVE_PARAMETER_EVENT_SCOPE_SLOT)
     {
         if (slot >= 8U) return 0U;
         command_scope = (uint8_t)(LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_BASE + slot);
@@ -55,7 +59,6 @@ bool live_parameter_audio_publication_submit_tone_program(
         return live_parameter_audio_publish_failed();
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
         .count = 0U
     };
     const uint8_t count = tone_param_codec_count(type);
@@ -72,8 +75,7 @@ bool live_parameter_audio_publication_submit_tone_program(
             .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
             .track = track,
             .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-            .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                                | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+            .flags = LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
             .value = live_parameter_event_encode_float(value)
         };
     }
@@ -122,35 +124,6 @@ bool live_parameter_audio_publication_submit_bulk(
         return false;
     }
     return true;
-}
-
-bool live_parameter_audio_publication_submit_poly_pair(
-    uint32_t capture_tick, uint8_t track, float voices, float spread)
-{
-    if (track >= SEQ_LANE_CAPACITY)
-        return live_parameter_audio_publish_failed();
-    live_parameter_audio_bulk_t bulk = {
-        .capture_tick = capture_tick,
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
-        .count = 2U
-    };
-    bulk.item[0] = (live_parameter_audio_bulk_item_t){
-        .parameter_id = CONTROL_AUDIO_CONFIG_POLY_VOICES,
-        .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
-        .track = track,
-        .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-        .flags = LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
-        .value = live_parameter_event_encode_float(voices)
-    };
-    bulk.item[1] = (live_parameter_audio_bulk_item_t){
-        .parameter_id = PARAM_CFG_POLY_SPREAD,
-        .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
-        .track = track,
-        .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-        .flags = LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
-        .value = live_parameter_event_encode_float(spread)
-    };
-    return live_parameter_audio_publication_submit_bulk(&bulk);
 }
 
 bool live_parameter_audio_publication_submit_dated(

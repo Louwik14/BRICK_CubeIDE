@@ -5,12 +5,6 @@
 
 typedef enum
 {
-    LIVE_PARAMETER_EVENT_SOURCE_ENCODER = 0U,
-    LIVE_PARAMETER_EVENT_SOURCE_BULK = 1U
-} live_parameter_event_source_t;
-
-typedef enum
-{
     LIVE_PARAMETER_EVENT_SCOPE_GLOBAL = 0U,
     LIVE_PARAMETER_EVENT_SCOPE_TRACK = 1U,
     LIVE_PARAMETER_EVENT_SCOPE_SLOT = 2U
@@ -24,7 +18,6 @@ typedef enum
 
 enum
 {
-    LIVE_PARAMETER_EVENT_FLAG_SET_TARGET = (uint16_t)(1U << 0),
     LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS = (uint16_t)(1U << 1),
     /* Temporary effective target: apply in audio without replacing the
      * control/UI base value (macro, modulation-like override). */

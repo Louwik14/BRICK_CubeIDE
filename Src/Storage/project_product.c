@@ -26,9 +26,11 @@ _Static_assert((2U * SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS
                    <= PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY,
                "Project Save asset snapshot capacity is too small");
 
-static uint8_t g_present[PROJECT_PRODUCT_SLOT_COUNT],g_active_valid,g_active;
+static uint8_t g_present[PROJECT_PRODUCT_SLOT_COUNT];
 static project_product_progress_t g_progress;
 static project_product_save_error_t g_save_error;
+static volatile project_product_command_t g_storage_request;
+static volatile uint8_t g_storage_slot;
 static int32_t g_save_detail;
 
 static void project_capture_metadata(persist_codec_project_metadata_t *out)
@@ -137,13 +139,20 @@ typedef enum
 
 typedef struct
 {
-    project_load_state_t state;
-    persistence_project_restore_workspace_t *restore;
+    volatile project_load_state_t state;
     uint16_t asset_index;
+    uint16_t asset_count;
     uint8_t slot;
     uint8_t result;
     uint8_t quiesce_requested;
 } project_load_runtime_t;
+
+static persistence_project_restore_workspace_t *g_project_load_workspace;
+static volatile uint8_t g_project_load_control_ready;
+static volatile uint8_t g_project_load_control_done;
+static volatile uint8_t g_project_load_control_result;
+
+static uint8_t project_product_asset_valid(const persist_control_asset_ref_t *asset);
 
 #define PROJECT_PRODUCT_NO_SLOT ((uint8_t)0xFFU)
 
@@ -155,7 +164,8 @@ static uint8_t acquire(void){if(!sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PRO
 static uint8_t ensure_directory(void){FRESULT r=f_mkdir("0:/BRICK");if(r!=FR_OK&&r!=FR_EXIST)return 0U;r=f_mkdir("0:/BRICK/PROJECT");return(r==FR_OK||r==FR_EXIST)?1U:0U;}
 
 void project_product_refresh_slots(void){if(project_replacement_is_active()!=0U||project_product_save_busy()!=0U||project_product_load_busy()!=0U)return;memset(g_present,0,sizeof(g_present));if(!acquire())return;if(!ensure_directory()){sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);return;}for(uint8_t s=0U;s<PROJECT_PRODUCT_SLOT_COUNT;++s){char x[48],tmp[48],bak[48];FILINFO i;if(path(x,sizeof(x),s)&&side_path(tmp,sizeof(tmp),s,"TMP")&&side_path(bak,sizeof(bak),s,"BAK")){(void)persistent_fatfs_recover_replace(x,tmp,bak);if(f_stat(x,&i)==FR_OK)g_present[s]=1U;}}sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);}
-void project_product_init(void){memset(&g_progress,0,sizeof(g_progress));memset(&g_project_save,0,sizeof(g_project_save));memset(&g_project_load,0,sizeof(g_project_load));g_active_valid=0U;g_active=0U;project_product_refresh_slots();boot_context_flash_init();}
+void project_product_init(void){memset(&g_progress,0,sizeof(g_progress));memset(&g_project_save,0,sizeof(g_project_save));memset(&g_project_load,0,sizeof(g_project_load));g_project_load_workspace=NULL;g_storage_request=PROJECT_PRODUCT_COMMAND_NONE;g_storage_slot=0U;g_project_load_control_ready=0U;g_project_load_control_done=0U;g_project_load_control_result=0U;}
+void project_product_storage_init(void){project_product_refresh_slots();}
 uint8_t project_product_list_slots(uint8_t*out,uint8_t cap){uint8_t n=0U;if(out==NULL)return 0U;for(uint8_t s=0;s<PROJECT_PRODUCT_SLOT_COUNT&&n<cap;++s)if(g_present[s])out[n++]=s;return n;}
 uint8_t project_product_slot_present(uint8_t s){return(s<PROJECT_PRODUCT_SLOT_COUNT)?g_present[s]:0U;}
 
@@ -190,7 +200,7 @@ static void project_save_finish(uint8_t success)
     g_project_save.workspace=NULL;g_project_save.project_open=0U;g_project_save.pattern_open=0U;
     g_project_save.success=(success!=0U)?1U:0U;g_project_save.result_ready=1U;
     g_project_save.state=PROJECT_SAVE_DONE;g_progress.active=0U;g_progress.complete=1U;g_progress.result=(success!=0U)?PROJECT_PRODUCT_RESULT_SUCCESS:PROJECT_PRODUCT_RESULT_FAILED;
-    if(success!=0U){g_present[g_project_save.slot]=1U;g_active=g_project_save.slot;g_active_valid=1U;(void)boot_context_flash_commit(g_project_save.slot);}
+    if(success!=0U){g_present[g_project_save.slot]=1U;(void)boot_context_flash_commit(g_project_save.slot);}
 }
 
 static void project_save_fail(project_product_save_error_t error,int32_t detail)
@@ -487,7 +497,7 @@ project_product_save_error_t project_product_save_last_error(void){return g_save
 int32_t project_product_save_last_detail(void){return g_save_detail;}
 
 static uint8_t begin_assets(void*ctx){persistence_project_restore_workspace_t*w=ctx;if(w==NULL)return 0U;w->asset_count=0U;return 1U;}
-static uint8_t validate_asset(void*ctx,const persist_control_asset_ref_t*a){(void)ctx;return project_control_validate_asset(a);}
+static uint8_t validate_asset(void*ctx,const persist_control_asset_ref_t*a){(void)ctx;return project_product_asset_valid(a);}
 static uint8_t put_asset(void*ctx,const persist_control_asset_ref_t*a){persistence_project_restore_workspace_t*w=ctx;if(w==NULL||a==NULL||w->asset_count>=PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY)return 0U;w->assets[w->asset_count++]=*a;return 1U;}
 static uint8_t apply_working(void*ctx,const persist_codec_project_metadata_t*m,const persist_control_pattern_t*p){persistence_project_restore_workspace_t*w=ctx;if(w==NULL||m==NULL||p==NULL)return 0U;w->metadata=*m;w->working_pattern=*p;w->working_valid=1U;return 1U;}
 static uint8_t apply_macros(void*ctx,const persist_control_macros_t*m){persistence_project_restore_workspace_t*w=ctx;if(w==NULL||m==NULL)return 0U;w->macros=*m;w->macros_valid=1U;return 1U;}
@@ -535,7 +545,10 @@ static void project_product_start_candidate(
     uint8_t slot,
     uint8_t quiesce_requested)
 {
-    g_project_load.restore=restore;
+    g_project_load_control_ready=0U;
+    g_project_load_control_done=0U;
+    g_project_load_control_result=0U;
+    g_project_load_workspace=restore;
     g_project_load.asset_index=0U;
     g_project_load.slot=slot;
     g_project_load.quiesce_requested=quiesce_requested;
@@ -565,7 +578,8 @@ static void project_discard_restore_workspace(
 static void project_product_load_fail_post_p2(void)
 {
     persistence_project_restore_workspace_t *const restore =
-        g_project_load.restore;
+        g_project_load_workspace;
+    const uint8_t quiesce_requested = g_project_load.quiesce_requested;
     if (restore != NULL && restore->pattern_bank_started != 0U)
     {
         pattern_control_bank_abort(NULL);
@@ -575,29 +589,139 @@ static void project_product_load_fail_post_p2(void)
     if (restore != NULL)
         persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_RESTORE);
     memset(&g_project_load,0,sizeof(g_project_load));
+    g_project_load_control_ready=0U;
+    g_project_load_control_done=0U;
     g_progress.done=g_progress.total;
     g_progress.complete=1U;
     g_progress.active=0U;
     g_progress.result=PROJECT_PRODUCT_RESULT_FAILED;
-    g_project_load.state=PROJECT_LOAD_FAILED;
+    g_project_load_workspace=NULL;
+    g_project_load.state=PROJECT_LOAD_IDLE;
+    if (quiesce_requested != 0U)
+        project_load_quiesce_end();
 }
 
 static uint8_t project_product_asset_loads_pending(void)
 {
-    return (uint8_t)(project_control_asset_loads_pending() != 0U
-        || sampler_ram_pool_load_async_busy() != 0U
+    return (uint8_t)(sampler_ram_pool_load_async_busy() != 0U
         || wavetable_pool_load_async_busy() != 0U
         || multi_sample_load_has_pending() != 0U
         || sample_cache_has_pending_sd_work() != 0U);
 }
 
+static uint8_t project_product_asset_valid(const persist_control_asset_ref_t *asset)
+{
+    return (asset != NULL && asset_ref_is_canonical(asset) != 0U) ? 1U : 0U;
+}
+
+static void project_product_reset_physical_assets(void)
+{
+    sample_cache_init();
+    sample_global_pool_reset();
+}
+
+static uint8_t project_product_start_asset(
+    persistence_project_restore_workspace_t *restore, uint16_t index)
+{
+    const persist_control_asset_ref_t *const asset = &restore->assets[index];
+    char asset_path[PERSIST_CONTROL_ASSET_PATH_BYTES];
+    if (project_product_asset_valid(asset) == 0U) return 0U;
+    memcpy(asset_path, asset->canonical_path, asset->path_length);
+    asset_path[asset->path_length] = '\0';
+    restore->asset_result[index] = PERSISTENCE_ASSET_RESULT_FAILED;
+    restore->asset_runtime[index] = UINT16_MAX;
+    if (asset->kind == PERSIST_ASSET_SAMPLE_STREAM)
+    {
+        const uint16_t runtime = sample_global_pool_find_free_slot();
+        if (runtime == SAMPLE_GLOBAL_POOL_INVALID_INDEX
+                || sample_global_pool_load_classic(runtime, asset_path) == 0U)
+            return 0U;
+        restore->asset_runtime[index] = runtime;
+        return 1U;
+    }
+    if (asset->kind == PERSIST_ASSET_SAMPLE_RAM)
+    {
+        const uint16_t backend = sampler_ram_pool_find_free_slot();
+        if (backend >= SAMPLER_RAM_POOL_MAX_SLOTS
+                || sampler_ram_pool_load_async_begin(backend, asset_path) == 0U)
+            return 0U;
+        restore->asset_runtime[index] = backend;
+        return 1U;
+    }
+    if (asset->kind == PERSIST_ASSET_WAVETABLE)
+    {
+        const uint16_t backend = wavetable_pool_find_free_slot();
+        if (backend >= WAVETABLE_POOL_MAX_SLOTS
+                || wavetable_pool_load_async_begin_with_geometry(
+                    backend, asset_path, WAVETABLE_SOURCE_GEOMETRY_2048) == 0U)
+            return 0U;
+        restore->asset_runtime[index] = backend;
+        return 1U;
+    }
+    if (asset->kind == PERSIST_ASSET_MULTI)
+    {
+        for (uint16_t runtime = 0U; runtime < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS;
+             ++runtime)
+            if (multi_sample_pool_get_state(runtime) == MULTI_SAMPLE_INSTRUMENT_EMPTY)
+            {
+                const multi_sample_load_result_t result =
+                    multi_sample_load_instrument(MULTI_SAMPLE_POOL_INVALID_ID,
+                                                 asset_path, runtime);
+                if (result == MULTI_SAMPLE_LOAD_OK
+                        || result == MULTI_SAMPLE_LOAD_ALREADY_READY)
+                {
+                    restore->asset_runtime[index] = runtime;
+                    return 1U;
+                }
+                return 0U;
+            }
+    }
+    return 0U;
+}
+
+static uint8_t project_product_finish_asset(
+    persistence_project_restore_workspace_t *restore, uint16_t index)
+{
+    const persist_control_asset_ref_t *const asset = &restore->assets[index];
+    if (asset->kind == PERSIST_ASSET_SAMPLE_STREAM)
+    {
+        if (sample_cache_is_ready(restore->asset_runtime[index]) == 0U)
+            return (sample_cache_get_state(restore->asset_runtime[index])
+                    == SAMPLE_CACHE_ERROR) ? 0U : 2U;
+    }
+    else if (asset->kind == PERSIST_ASSET_SAMPLE_RAM)
+    {
+        sampler_ram_result_t result; uint16_t backend, runtime; const char *path_value;
+        if (sampler_ram_pool_load_async_take_result(
+                &result, &backend, &runtime, &path_value) == 0U) return 2U;
+        if (result != SAMPLER_RAM_RESULT_OK) return 0U;
+        restore->asset_runtime[index] = runtime;
+    }
+    else if (asset->kind == PERSIST_ASSET_WAVETABLE)
+    {
+        wavetable_result_t result; uint16_t backend, runtime; const char *path_value;
+        if (wavetable_pool_load_async_take_result(
+                &result, &backend, &runtime, &path_value) == 0U) return 2U;
+        if (result != WAVETABLE_RESULT_OK) return 0U;
+        restore->asset_runtime[index] = runtime;
+    }
+    else if (asset->kind == PERSIST_ASSET_MULTI)
+    {
+        if (multi_sample_load_has_pending() != 0U) return 2U;
+        if (multi_sample_pool_get_state(restore->asset_runtime[index])
+                != MULTI_SAMPLE_INSTRUMENT_READY) return 0U;
+    }
+    restore->asset_result[index] = PERSISTENCE_ASSET_RESULT_READY;
+    return 1U;
+}
+
 static void project_product_load_finish(uint8_t success)
 {
-    persistence_project_restore_workspace_t *const restore=g_project_load.restore;
+    persistence_project_restore_workspace_t *const restore=g_project_load_workspace;
     const uint8_t slot=g_project_load.slot;
     const uint8_t quiesce_requested=g_project_load.quiesce_requested;
     if (success != 0U
-        && (g_project_load.asset_index < ((restore != NULL) ? restore->asset_count : 0U)
+        && (g_project_load.asset_index < g_project_load.asset_count
             || project_product_asset_loads_pending() != 0U))
         success = 0U;
     if (success == 0U)
@@ -612,36 +736,18 @@ static void project_product_load_finish(uint8_t success)
         return;
     }
     if(restore!=NULL)persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_RESTORE);
+    g_project_load_workspace=NULL;
     memset(&g_project_load,0,sizeof(g_project_load));
+    g_project_load_control_ready=0U;
+    g_project_load_control_done=0U;
     g_progress.done=g_progress.total;
     g_progress.complete=1U;
     g_progress.active=0U;
-    if (slot != PROJECT_PRODUCT_NO_SLOT)
-    {
-        g_active=slot;
-        g_active_valid=1U;
-    }
-    else
-    {
-        g_active=0U;
-        g_active_valid=0U;
+    if (slot == PROJECT_PRODUCT_NO_SLOT)
         boot_context_flash_clear();
-    }
     g_progress.result=PROJECT_PRODUCT_RESULT_SUCCESS;
     if (quiesce_requested != 0U)
         project_load_quiesce_end();
-}
-
-static uint8_t project_ram_result_internal(sampler_ram_result_t result)
-{
-    return (uint8_t)(result == SAMPLER_RAM_RESULT_INVALID_ARG
-        || result == SAMPLER_RAM_RESULT_REGISTER_FAIL);
-}
-
-static uint8_t project_wavetable_result_internal(wavetable_result_t result)
-{
-    return (uint8_t)(result == WAVETABLE_RESULT_INVALID_ARG
-        || result == WAVETABLE_RESULT_REGISTER_FAIL);
 }
 
 static uint8_t project_multi_result_internal(multi_sample_load_result_t result)
@@ -655,7 +761,7 @@ static uint8_t project_multi_result_internal(multi_sample_load_result_t result)
 
 void project_product_load_service(void)
 {
-    persistence_project_restore_workspace_t *const restore=g_project_load.restore;
+    persistence_project_restore_workspace_t *const restore=g_project_load_workspace;
     if(g_project_load.state==PROJECT_LOAD_IDLE
         || g_project_load.state==PROJECT_LOAD_FAILED)return;
     if (g_project_load.state == PROJECT_LOAD_WAIT_SAFE
@@ -668,25 +774,17 @@ void project_product_load_service(void)
     if(g_project_load.state==PROJECT_LOAD_WAIT_MULTI)
     {
         if(multi_sample_load_has_pending()!=0U)return;
-        const persist_control_asset_ref_t *const asset =
-            &restore->assets[g_project_load.asset_index];
-        char path_value[PERSIST_CONTROL_ASSET_PATH_BYTES];
-        memcpy(path_value,asset->canonical_path,asset->path_length);
-        path_value[asset->path_length]='\0';
-        uint16_t logical=0U,runtime=0U;
         multi_sample_load_diag_t diag;
         multi_sample_get_load_diag(&diag);
-        if (project_control_find_asset(PERSIST_ASSET_MULTI,path_value,&logical)==0U
-                || project_control_resolve_multi_runtime(logical,&runtime)==0U)
+        if (project_multi_result_internal(diag.last_error))
         {
-            if (project_multi_result_internal(diag.last_error)
-                || diag.last_error == MULTI_SAMPLE_LOAD_OK)
-            {
-                project_product_load_finish(0U);
-                return;
-            }
-            ++g_progress.asset_warning_count;
+            project_product_load_finish(0U); return;
         }
+        restore->asset_result[g_project_load.asset_index] =
+            (diag.last_error == MULTI_SAMPLE_LOAD_OK)
+                ? PERSISTENCE_ASSET_RESULT_READY : PERSISTENCE_ASSET_RESULT_FAILED;
+        if (diag.last_error != MULTI_SAMPLE_LOAD_OK)
+            ++g_progress.asset_warning_count;
         ++g_project_load.asset_index;
         ++g_progress.done;
         g_project_load.state=PROJECT_LOAD_ASSETS;
@@ -694,15 +792,10 @@ void project_product_load_service(void)
     }
     if(g_project_load.state==PROJECT_LOAD_WAIT_STREAM)
     {
-        const project_control_asset_result_t result = project_control_put_asset(
-            &restore->assets[g_project_load.asset_index]);
-        if(result==PROJECT_CONTROL_ASSET_PENDING)return;
-        if(result==PROJECT_CONTROL_ASSET_FAILED_INTERNAL)
-        {
-            project_product_load_finish(0U);
-            return;
-        }
-        if(result==PROJECT_CONTROL_ASSET_FAILED)++g_progress.asset_warning_count;
+        const uint8_t result = project_product_finish_asset(
+            restore, g_project_load.asset_index);
+        if(result==2U)return;
+        if(result==0U)++g_progress.asset_warning_count;
         ++g_project_load.asset_index;
         ++g_progress.done;
         g_project_load.state=PROJECT_LOAD_ASSETS;
@@ -722,12 +815,7 @@ void project_product_load_service(void)
         }
         restore->pattern_bank_started = 0U;
         restore->pattern_bank_staged = 0U;
-        if (project_control_begin_asset_restore() == 0U)
-        {
-            sd_scheduler_runtime_exclusive_end();
-            project_product_load_finish(0U);
-            return;
-        }
+        project_product_reset_physical_assets();
         g_project_load.state = PROJECT_LOAD_ASSETS;
         g_progress=(project_product_progress_t){1U,0U,0U,
             (uint32_t)restore->asset_count+1U};
@@ -736,47 +824,20 @@ void project_product_load_service(void)
     }
     if(g_project_load.state==PROJECT_LOAD_WAIT_RAM)
     {
-        sampler_ram_result_t result=SAMPLER_RAM_RESULT_INVALID_ARG;
-        uint16_t backend=SAMPLER_RAM_POOL_INVALID_SLOT;
-        uint16_t runtime=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-        const char *path_value=NULL;
-        if(sampler_ram_pool_load_async_take_result(&result,&backend,&runtime,&path_value)==0U)return;
-        const project_control_asset_result_t completion =
-            project_control_complete_ram_runtime(path_value,backend,runtime,
-                (result==SAMPLER_RAM_RESULT_OK)?1U:0U);
-        if (completion == PROJECT_CONTROL_ASSET_FAILED_INTERNAL
-            || project_ram_result_internal(result) != 0U)
-        {
-            project_product_load_finish(0U);
-            return;
-        }
-        if (result!=SAMPLER_RAM_RESULT_OK) ++g_progress.asset_warning_count;
+        const uint8_t result = project_product_finish_asset(
+            restore, g_project_load.asset_index);
+        if(result==2U)return;
+        if(result==0U)++g_progress.asset_warning_count;
         ++g_project_load.asset_index;
         ++g_progress.done;
         g_project_load.state=PROJECT_LOAD_ASSETS;
     }
     if (g_project_load.state == PROJECT_LOAD_WAIT_WAVETABLE)
     {
-        wavetable_result_t result = WAVETABLE_RESULT_INVALID_ARG;
-        uint16_t backend = UINT16_MAX;
-        uint16_t runtime = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-        const char *path_value = NULL;
-        if (wavetable_pool_load_async_take_result(&result, &backend,
-                                                  &runtime, &path_value) == 0U)
-            return;
-        (void)backend;
-        project_control_asset_result_t completion = PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
-        if (path_value != NULL)
-            completion = project_control_complete_wavetable_runtime(
-                path_value, backend, runtime,
-                (result == WAVETABLE_RESULT_OK) ? 1U : 0U);
-        if (completion == PROJECT_CONTROL_ASSET_FAILED_INTERNAL
-            || project_wavetable_result_internal(result) != 0U)
-        {
-            project_product_load_finish(0U);
-            return;
-        }
-        if (result != WAVETABLE_RESULT_OK) ++g_progress.asset_warning_count;
+        const uint8_t result = project_product_finish_asset(
+            restore, g_project_load.asset_index);
+        if(result==2U)return;
+        if(result==0U)++g_progress.asset_warning_count;
         ++g_project_load.asset_index;
         ++g_progress.done;
         g_project_load.state = PROJECT_LOAD_ASSETS;
@@ -785,11 +846,25 @@ void project_product_load_service(void)
     {
         if(g_project_load.asset_index<restore->asset_count)
         {
-            const project_control_asset_result_t result = project_control_put_asset(
-                &restore->assets[g_project_load.asset_index]);
-            if(result==PROJECT_CONTROL_ASSET_PENDING)
+            const uint8_t result = project_product_start_asset(
+                restore, g_project_load.asset_index);
+            if(result != 0U)
             {
                 const uint32_t kind=restore->assets[g_project_load.asset_index].kind;
+                if (kind == PERSIST_ASSET_SAMPLE_STREAM)
+                {
+                    const uint8_t terminal = project_product_finish_asset(
+                        restore, g_project_load.asset_index);
+                    if (terminal == 1U) { ++g_project_load.asset_index; ++g_progress.done; return; }
+                    if (terminal == 0U) ++g_progress.asset_warning_count;
+                }
+                else if (kind == PERSIST_ASSET_MULTI
+                         && multi_sample_load_has_pending() == 0U)
+                {
+                    restore->asset_result[g_project_load.asset_index] =
+                        PERSISTENCE_ASSET_RESULT_READY;
+                    ++g_project_load.asset_index; ++g_progress.done; return;
+                }
                 g_project_load.state=(kind==PERSIST_ASSET_SAMPLE_STREAM)
                     ? PROJECT_LOAD_WAIT_STREAM
                     : (kind==PERSIST_ASSET_WAVETABLE
@@ -798,13 +873,7 @@ void project_product_load_service(void)
                             ? PROJECT_LOAD_WAIT_MULTI : PROJECT_LOAD_WAIT_RAM));
                 return;
             }
-            if(result==PROJECT_CONTROL_ASSET_FAILED_INTERNAL)
-            {
-                project_product_load_finish(0U);
-                return;
-            }
-            if(result==PROJECT_CONTROL_ASSET_FAILED)
-                ++g_progress.asset_warning_count;
+            ++g_progress.asset_warning_count;
             ++g_project_load.asset_index;
             ++g_progress.done;
             return;
@@ -818,11 +887,82 @@ void project_product_load_service(void)
             project_product_load_finish(0U);
             return;
         }
-        uint8_t ok=(persistent_pattern_control_apply(&restore->working_pattern,0U)==PERSIST_CODEC_OK)?1U:0U;
-        if(ok)ok=project_control_apply_macros(&restore->macros);
-        if(ok)pattern_live_set_active_state(restore->metadata.active_pattern_bank,restore->metadata.active_pattern,0U,0U,0U,0U);
-        project_product_load_finish(ok);
+        if (g_project_load_control_ready == 0U)
+        {
+            __DMB();
+            g_project_load_control_ready = 1U;
+            return;
+        }
+        if (g_project_load_control_done != 0U)
+        {
+            project_product_load_finish(g_project_load_control_result);
+        }
     }
+}
+
+void project_product_control_process(void)
+{
+    if (g_project_load_control_ready == 0U)
+        return;
+
+    persistence_project_restore_workspace_t *const restore =
+        persistence_workspace_project_restore_view();
+    uint8_t ok = (restore != NULL) ? 1U : 0U;
+    if (ok != 0U)
+        ok = project_control_begin_asset_restore();
+    if (ok != 0U)
+        for (uint16_t i = 0U; i < restore->asset_count; ++i)
+        {
+            const persist_control_asset_ref_t *const asset = &restore->assets[i];
+            if (restore->asset_result[i] != PERSISTENCE_ASSET_RESULT_READY)
+                continue;
+            if (asset->kind == PERSIST_ASSET_SAMPLE_STREAM)
+                ok = project_control_register_sample_runtime(
+                    asset->kind, asset->canonical_path,
+                    restore->asset_runtime[i], NULL);
+            else if (asset->kind == PERSIST_ASSET_SAMPLE_RAM)
+                ok = project_control_register_sample_runtime(
+                    asset->kind, asset->canonical_path,
+                    restore->asset_runtime[i], NULL);
+            else if (asset->kind == PERSIST_ASSET_WAVETABLE)
+                ok = project_control_register_wavetable_runtime(
+                    asset->canonical_path, restore->asset_runtime[i], NULL);
+            else if (asset->kind == PERSIST_ASSET_MULTI)
+                ok = project_control_register_multi_runtime(
+                    asset->canonical_path, restore->asset_runtime[i], NULL);
+            if (ok == 0U) break;
+        }
+    if (ok != 0U)
+        ok = (persistent_pattern_control_apply(
+            &restore->working_pattern, 0U) == PERSIST_CODEC_OK) ? 1U : 0U;
+    if (ok != 0U)
+        ok = project_control_apply_macros(&restore->macros);
+    if (ok != 0U)
+        pattern_live_set_active_state(restore->metadata.active_pattern_bank,
+                                       restore->metadata.active_pattern,
+                                       0U, 0U, 0U, 0U);
+    __DMB();
+    g_project_load_control_result = ok;
+    g_project_load_control_done = 1U;
+    g_project_load_control_ready = 0U;
+    if (restore != NULL)
+        persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_RESTORE);
+}
+
+void project_product_control_process_intent(uint8_t operation, uint8_t slot)
+{
+    if (operation == PROJECT_PRODUCT_COMMAND_SAVE)
+    {
+        (void)project_product_save(slot);
+        return;
+    }
+    if (g_storage_request != PROJECT_PRODUCT_COMMAND_NONE
+        || project_product_save_busy() != 0U
+        || project_product_load_busy() != 0U)
+        return;
+    g_storage_slot = slot;
+    __DMB();
+    g_storage_request = (project_product_command_t)operation;
 }
 
 uint8_t project_product_load(uint8_t slot)
@@ -875,13 +1015,15 @@ uint8_t project_product_load(uint8_t slot)
         return 0U;
     }
 
+    g_project_load.asset_count=restore->asset_count;
+
     /* P1 ends here: the bounded Project DTO and inactive Pattern bank staging
      * are complete while the live Project remains untouched. */
     project_product_start_candidate(restore,slot,1U);
     return 1U;
 }
 
-uint8_t project_product_delete(uint8_t slot){if(project_replacement_is_active()!=0U||project_product_save_busy()!=0U||project_product_load_busy()!=0U||slot>=PROJECT_PRODUCT_SLOT_COUNT||!acquire())return 0U;char x[48];FRESULT r=FR_INVALID_NAME;if(path(x,sizeof(x),slot))r=f_unlink(x);sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);uint8_t ok=(r==FR_OK||r==FR_NO_FILE);if(ok){g_present[slot]=0U;if(g_active_valid&&g_active==slot)g_active_valid=0U;}return ok;}
+uint8_t project_product_delete(uint8_t slot){if(project_replacement_is_active()!=0U||project_product_save_busy()!=0U||project_product_load_busy()!=0U||slot>=PROJECT_PRODUCT_SLOT_COUNT||!acquire())return 0U;char x[48];FRESULT r=FR_INVALID_NAME;if(path(x,sizeof(x),slot))r=f_unlink(x);sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);uint8_t ok=(r==FR_OK||r==FR_NO_FILE);if(ok)g_present[slot]=0U;return ok;}
 uint8_t project_product_blank(void)
 {
     if(project_replacement_is_active()!=0U||project_product_save_busy()!=0U
@@ -900,6 +1042,9 @@ uint8_t project_product_blank(void)
 }
 project_product_boot_restore_result_t project_product_restore_boot(void)
 {
+    if (sd_access_storage_status() != SD_STORAGE_STATUS_READY)
+        return PROJECT_PRODUCT_BOOT_RESTORE_FAILED;
+
     boot_context_flash_data_t context;
     if (!boot_context_flash_load(&context))
     {
@@ -923,3 +1068,29 @@ project_product_boot_restore_result_t project_product_restore_boot(void)
         : PROJECT_PRODUCT_BOOT_RESTORE_FAILED;
 }
 uint8_t project_product_get_progress(project_product_progress_t*out){if(out==NULL)return 0U;*out=g_progress;return 1U;}
+
+void project_product_storage_request_service(void)
+{
+    const project_product_command_t command = g_storage_request;
+    if (command == PROJECT_PRODUCT_COMMAND_NONE)
+        return;
+    const uint8_t slot = g_storage_slot;
+    g_storage_request = PROJECT_PRODUCT_COMMAND_NONE;
+    switch (command)
+    {
+        case PROJECT_PRODUCT_COMMAND_LOAD:
+            (void)project_product_load(slot);
+            break;
+        case PROJECT_PRODUCT_COMMAND_DELETE:
+            (void)project_product_delete(slot);
+            break;
+        case PROJECT_PRODUCT_COMMAND_BLANK:
+            (void)project_product_blank();
+            break;
+        case PROJECT_PRODUCT_COMMAND_RESTORE_BOOT:
+            (void)project_product_restore_boot();
+            break;
+        default:
+            break;
+    }
+}

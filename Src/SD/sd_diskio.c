@@ -36,6 +36,7 @@
 #include "Platform/brick6_sd_config.h"
 #include "Platform/cache_maintenance.h"
 #include "Storage/sd_access_gate.h"
+#include "sdmmc.h"
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
@@ -202,16 +203,32 @@ static DSTATUS SD_CheckStatus(BYTE lun)
  */
 DSTATUS SD_initialize(BYTE lun)
 {
+  Stat = STA_NOINIT;
 
 #if !defined(DISABLE_SD_INIT)
 
-  if(BSP_SD_Init() == MSD_OK)
+  const uint8_t init_status = BSP_SD_Init();
+  if(init_status == MSD_OK)
   {
     Stat = SD_CheckStatus(lun);
+    if((Stat & STA_NOINIT) != 0U)
+    {
+      sd_access_storage_report_init_failure(0U);
+    }
+  }
+  else
+  {
+    sd_access_storage_report_init_failure(
+        brick_sd_init_failure_is_no_media(init_status));
   }
 
 #else
   Stat = SD_CheckStatus(lun);
+  if((Stat & STA_NOINIT) != 0U)
+  {
+    sd_access_storage_report_init_failure(
+        brick_sd_init_failure_is_no_media(MSD_ERROR));
+  }
 #endif
 
   return Stat;

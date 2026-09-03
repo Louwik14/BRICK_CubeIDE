@@ -83,14 +83,13 @@ static uint8_t mod_matrix_publish_slot_candidate(uint8_t track, uint8_t slot,
             || (candidate == NULL)) return 0U;
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK, .count = 0U
+        .count = 0U
     };
 #define ADD_MATRIX_FIELD(condition, parameter, field_value) do { \
     if (condition) bulk.item[bulk.count++] = (live_parameter_audio_bulk_item_t){ \
         .parameter_id = (uint16_t)(parameter), .scope = LIVE_PARAMETER_EVENT_SCOPE_SLOT, \
         .track = owner, .slot = slot, \
-        .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET \
-            | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS), \
+        .flags = LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS, \
         .value = live_parameter_event_encode_float(field_value) }; \
 } while (0)
     ADD_MATRIX_FIELD((fields & MOD_MATRIX_FIELD_SOURCE) != 0U,
@@ -119,8 +118,7 @@ static uint8_t mod_matrix_publish_slot_candidate(uint8_t track, uint8_t slot,
             .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
             .track = target,
             .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-            .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+            .flags = LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
             .value = live_parameter_event_encode_float(prepared.value)
         };
     }
@@ -135,12 +133,11 @@ static uint8_t mod_matrix_publish_operator_candidate(uint8_t track, uint16_t id,
             || (owner >= SEQ_TRACK_COUNT)) return 0U;
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK, .count = 1U,
+        .count = 1U,
         .item = {{ .parameter_id = (uint16_t)id,
             .scope = LIVE_PARAMETER_EVENT_SCOPE_SLOT, .track = owner,
             .slot = index,
-            .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+            .flags = LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
             .value = live_parameter_event_encode_float(value) }}
     };
     return live_parameter_audio_publication_submit_bulk(&bulk) ? 1U : 0U;

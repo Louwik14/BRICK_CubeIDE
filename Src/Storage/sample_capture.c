@@ -13,6 +13,7 @@
 #include "Storage/audio_recorder_wav.h"
 #include "Platform/memory_layout.h"
 #include "Storage/pattern_live_ram.h"
+#include "Storage/pattern_load_storage.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/sd_preview.h"
 #include "Storage/waveform_cache.h"

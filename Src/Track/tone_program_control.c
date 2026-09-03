@@ -82,12 +82,6 @@ uint8_t tone_program_control_get(uint8_t track,param_id_t id,float*out)
 {if(track>=SEQ_LANE_CAPACITY||out==NULL)return 0U;float*f=tone_field(&g_tone_program[track],id);if(f==NULL)return 0U;*out=*f;return 1U;}
 uint8_t tone_program_control_set(uint8_t track,param_id_t id,float value)
 {if(track>=SEQ_LANE_CAPACITY)return 0U;float*f=tone_field(&g_tone_program[track],id);if(f==NULL)return 0U;*f=value;return 1U;}
-uint8_t tone_program_control_get_slot_normalized(uint8_t track,uint8_t slot,float*out)
-{param_id_t id;float v;if(track>=SEQ_LANE_CAPACITY||out==NULL||!tone_param_codec_slot_to_param(g_tone_program[track].tag,slot,&id)||!tone_program_control_get(track,id,&v))return 0U;const float span=param_registry[id].max-param_registry[id].min;*out=span>0.0f?(v-param_registry[id].min)/span:0.0f;return 1U;}
-uint8_t tone_program_control_set_slot_normalized(uint8_t track,uint8_t slot,float value)
-{param_id_t id;if(track>=SEQ_LANE_CAPACITY||!tone_param_codec_slot_to_param(g_tone_program[track].tag,slot,&id))return 0U;if(value<0.0f)value=0.0f;else if(value>1.0f)value=1.0f;return tone_program_control_set(track,id,param_registry[id].min+value*(param_registry[id].max-param_registry[id].min));}
-track_runtime_type_t tone_program_control_get_type(uint8_t track){return track<SEQ_LANE_CAPACITY?g_tone_program[track].tag:TRACK_RUNTIME_TYPE_NONE;}
-uint32_t tone_program_control_size_bytes(void){return (uint32_t)sizeof(tone_program_control_t);}
 uint8_t tone_program_control_capture(uint8_t track,tone_program_control_t*out_program)
 {if(track>=SEQ_LANE_CAPACITY||out_program==NULL)return 0U;*out_program=g_tone_program[track];return 1U;}
 uint8_t tone_program_control_validate(const tone_program_control_t *program,
@@ -107,7 +101,7 @@ uint8_t tone_program_control_restore(uint8_t track,const tone_program_control_t*
  if(track>=SEQ_LANE_CAPACITY||program==NULL||tone_program_control_validate(program,program->tag)==0U)return 0U;
  tone_program_control_t prepared=*program;
  live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),
-  .source=LIVE_PARAMETER_EVENT_SOURCE_BULK,.count=0U};
+  .count=0U};
  const uint8_t count=tone_param_codec_count(prepared.tag);
  for(uint8_t slot=0U;slot<count;++slot){param_id_t id;float*value;
   param_registry_prepared_value_t canonical;
@@ -119,8 +113,7 @@ uint8_t tone_program_control_restore(uint8_t track,const tone_program_control_t*
   bulk.item[bulk.count++]=(live_parameter_audio_bulk_item_t){
    .parameter_id=(uint16_t)id,.scope=LIVE_PARAMETER_EVENT_SCOPE_TRACK,
    .track=track,.slot=LIVE_PARAMETER_EVENT_INVALID_INDEX,
-   .flags=(uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-       |LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+   .flags=LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
    .value=live_parameter_event_encode_float(*value)};}
  if((bulk.count!=0U)&&!live_parameter_audio_publication_submit_bulk(&bulk))return 0U;
  g_tone_program[track]=prepared;

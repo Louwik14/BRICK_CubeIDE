@@ -11,6 +11,7 @@
 #include "IPC/live_clock_control.h"
 #include "IPC/live_parameter_event.h"
 #include "App/live_parameter_audio_publication.h"
+#include "App/control_domain.h"
 #include "Track/control_music_output.h"
 #include "Track/track_input_ownership.h"
 #include "Seq/metronome_control.h"
@@ -28,7 +29,7 @@ static uint8_t ui_cfg_restore_polyphony_audio_fx(uint8_t track,uint8_t voices)
     polyphony_control_state_t polyphony,prepared_polyphony;
     audio_fx_control_state_t audio_fx,prepared_audio_fx;
     live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),
-        .source=LIVE_PARAMETER_EVENT_SOURCE_BULK};
+        .count=0U};
     if(!polyphony_control_capture(track,&polyphony)
             ||!audio_fx_control_state_capture(track,&audio_fx))return 0U;
     polyphony.voice_count=voices;
@@ -283,14 +284,59 @@ uint8_t ui_page_template_rec_cfg_handle_encoder(uint8_t encoder, int16_t delta)
     if ((ui_page_get_id()!=UI_PAGE_TEMPLATE_REC_CFG)||(encoder>=4U)||(delta==0)) return 0U;
     if (g_ui_template_rec_cfg_state.active_subpage == 1U)
     {
-        if (encoder == 0U) seq_runtime_set_rec_len_mode((delta>0)?1U:0U);
+        if (encoder == 0U)
+        {
+            const control_seq_intent_t intent = {
+                .operation = CONTROL_SEQ_SET_RECORD_LENGTH_MODE,
+                .step = (delta > 0) ? 1U : 0U
+            };
+            return control_domain_request_seq(&intent);
+        }
         return 1U;
     }
-    if (encoder == 0U) { int32_t v=(int32_t)seq_runtime_get_rec_start_mode()+((delta>0)?1:-1);if(v<0)v=0;if(v>4)v=4;seq_runtime_set_rec_start_mode((uint8_t)v); }
-    else if (encoder == 1U) { int32_t v=(int32_t)seq_runtime_get_tempo_bpm_milli()+(int32_t)delta*100;if(v<40000)v=40000;if(v>300000)v=300000;seq_runtime_set_tempo_bpm_milli((uint32_t)v); }
-    else if (encoder == 2U) { int32_t v=(int32_t)seq_runtime_get_clock_source()+((delta>0)?1:-1);if(v<0)v=0;if(v>2)v=2;seq_runtime_set_clock_source((seq_clock_src_t)v); }
-    else { int32_t v=(int32_t)metronome_control_get_level()+delta;if(v<0)v=0;if(v>127)v=127;return metronome_control_set_level((uint8_t)v); }
-    return 1U;
+    if (encoder == 0U)
+    {
+        int32_t v=(int32_t)seq_runtime_get_rec_start_mode()+((delta>0)?1:-1);
+        if (v < 0) v = 0;
+        if (v > 4) v = 4;
+        const control_seq_intent_t intent = {
+            .operation = CONTROL_SEQ_SET_RECORD_START_MODE,
+            .step = (uint8_t)v
+        };
+        return control_domain_request_seq(&intent);
+    }
+    if (encoder == 1U)
+    {
+        int32_t v=(int32_t)seq_runtime_get_tempo_bpm_milli()+(int32_t)delta*100;
+        if (v < 40000) v = 40000;
+        if (v > 300000) v = 300000;
+        const control_seq_intent_t intent = {
+            .operation = CONTROL_SEQ_SET_TEMPO,
+            .value32 = (uint32_t)v
+        };
+        return control_domain_request_seq(&intent);
+    }
+    if (encoder == 2U)
+    {
+        int32_t v=(int32_t)seq_runtime_get_clock_source()+((delta>0)?1:-1);
+        if (v < 0) v = 0;
+        if (v > 2) v = 2;
+        const control_seq_intent_t intent = {
+            .operation = CONTROL_SEQ_SET_CLOCK_SOURCE,
+            .step = (uint8_t)v
+        };
+        return control_domain_request_seq(&intent);
+    }
+    {
+        int32_t v=(int32_t)metronome_control_get_level()+delta;
+        if (v < 0) v = 0;
+        if (v > 127) v = 127;
+        const control_seq_intent_t intent = {
+            .operation = CONTROL_SEQ_SET_METRONOME,
+            .step = (uint8_t)v
+        };
+        return control_domain_request_seq(&intent);
+    }
 }
 
 const ui_page_t g_ui_page_template_rec_cfg = {

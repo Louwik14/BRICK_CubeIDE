@@ -40,9 +40,11 @@ static void sample_page_cache_set_page_geometry(sample_page_desc_t *page,
         return;
     }
 
-    page->format = sample_page_cache_format_key(key);
-    page->stride_floats = (uint16_t)sample_audio_format_stride_floats(page->format);
-    page->frames_per_page = sample_audio_format_frames_per_page(page->format);
+    page->format = (uint8_t)sample_page_cache_format_key(key);
+    page->stride_floats = (uint16_t)sample_audio_format_stride_floats(
+        (sample_audio_format_t)page->format);
+    page->frames_per_page = sample_audio_format_frames_per_page(
+        (sample_audio_format_t)page->format);
     const uint16_t key_slot = sample_page_cache_key_slot(key);
     page->registration_epoch = (key_slot < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
                                    ? g_sample_page_sample_desc[key_slot].registration_epoch
@@ -234,7 +236,7 @@ static void sample_page_cache_set_state(sample_page_desc_t *page, sample_page_st
             * page->stride_floats * sizeof(float);
         intercore_cache_publish(payload, payload_bytes);
     }
-    page->state = state;
+    page->state = (uint8_t)state;
     intercore_cache_publish(page, sizeof(*page));
 }
 
@@ -297,7 +299,7 @@ static void sample_page_cache_clear_desc(sample_page_desc_t *page, uint32_t slot
     page->page_index = UINT32_MAX;
     page->start_frame = UINT32_MAX;
     page->data_offset = slot_index * SAMPLE_PAGE_BYTES;
-    page->state = SAMPLE_PAGE_FREE;
+    page->state = (uint8_t)SAMPLE_PAGE_FREE;
 }
 
 static sample_page_desc_t *sample_page_cache_find_page_mut_key(sample_audio_key_t key, uint32_t page_index)
@@ -349,7 +351,7 @@ static uint8_t sample_page_cache_fill_ref(const sample_page_desc_t *page,
     out_ref->key = page->key;
     out_ref->page_index = page->page_index;
     out_ref->page_generation = page->generation;
-    out_ref->format = page->format;
+    out_ref->format = (sample_audio_format_t)page->format;
     out_ref->stride_floats = page->stride_floats;
     out_ref->frames_per_page = page->frames_per_page;
     out_ref->registration_epoch = page->registration_epoch;

@@ -1,4 +1,5 @@
 #include "pages/ui_page_settings.h"
+#include "App/control_domain.h"
 
 #include <stdio.h>
 #include <stddef.h>
@@ -7,7 +8,6 @@
 #include "stm32h7xx_hal.h"
 #include "buttons.h"
 #include "buttons_ids.h"
-#include "ff.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/sd_preview.h"
 #include "Platform/memory_layout.h"
@@ -29,6 +29,7 @@
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/multi_sample_pool.h"
 #include "Storage/wav_loader.h"
+#include "Storage/storage_catalog.h"
 #include "Seq/seq_runtime.h"
 #include "drv_display.h"
 #include "font.h"
@@ -206,6 +207,8 @@ typedef struct
     uint8_t sample_focus;
     uint8_t sample_confirm;
     uint16_t confirm_slot;
+    uint16_t classic_load_slot;
+    uint8_t classic_load_pending;
     uint8_t sample_preview_volume;
     uint16_t multi_prepare_progress_done;
     uint16_t multi_prepare_progress_total;
@@ -224,6 +227,9 @@ typedef struct
     uint8_t preview_stop_origin;
     uint8_t convert_slot_valid;
     uint16_t convert_slot;
+    uint8_t asset_register_pending;
+    uint32_t asset_register_kind;
+    uint16_t asset_register_runtime;
     uint32_t status_until_ms;
     uint32_t header_slot_flash_until_ms;
     uint32_t header_mem_flash_until_ms;
@@ -268,7 +274,6 @@ static int16_t ui_page_settings_multi_find_loaded_path(const char *index_path);
 static uint8_t ui_page_settings_multi_prepare_entry(const ui_settings_multi_entry_t *entry);
 static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_settings_multi_entry_t *entry);
 static void ui_page_settings_multi_confirm_clear_indexes(void);
-static void ui_page_settings_multi_prepare_progress_cb(uint16_t done, uint16_t total, void *user);
 static void ui_page_settings_multi_prepare_begin(uint8_t slot,
                                                  const char *path,
                                                  ui_settings_multi_prepare_phase_t phase);
@@ -279,8 +284,6 @@ static void ui_page_settings_multi_clear_service(void);
 static const char *ui_page_settings_multi_load_error_label(multi_sample_load_result_t result);
 static void ui_page_settings_flash_sample_header_slots(void);
 static void ui_page_settings_flash_sample_header_memory(void);
-static uint32_t ui_page_settings_multi_sample_prep_bytes(
-    const multi_sample_index_sample_t *sample);
 static uint32_t ui_page_settings_multi_slot_bytes(void);
 static uint16_t ui_page_settings_global_entry_count_used(void);
 static void ui_page_settings_draw_progress_bar(uint8_t x,
@@ -294,6 +297,12 @@ static void ui_page_settings_draw_sample_header(const char *title,
                                                 uint16_t max_slots,
                                                 uint32_t used_bytes,
                                                 uint32_t max_bytes);
+static uint8_t ui_page_settings_request_asset_register(uint32_t kind,
+                                                       uint16_t runtime);
+static uint8_t ui_page_settings_request_asset_remove(uint32_t kind,
+                                                     uint16_t logical,
+                                                     uint16_t runtime);
+static void ui_page_settings_asset_register_poll(void);
 
 
 /* Settings navigation, asset browsers/actions and rendering remain in their original sequence.

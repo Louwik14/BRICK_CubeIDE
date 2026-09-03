@@ -126,7 +126,8 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
             page->sample_id = sample_page_cache_key_slot(key);
             page->page_index = page_index;
             sample_page_cache_set_page_geometry(page, key);
-            page->start_frame = sample_audio_format_page_start_frame(page->format, page_index);
+            page->start_frame = sample_audio_format_page_start_frame(
+                (sample_audio_format_t)page->format, page_index);
             page->frame_count = frame_count;
             page->generation = ++g_sample_page_cache_state.generation_counter;
             page->last_touch = ++g_sample_page_cache_state.touch_counter;
@@ -182,7 +183,8 @@ static sample_page_desc_t *sample_page_cache_alloc_empty_slot_key(sample_audio_k
     evict_page->sample_id = sample_page_cache_key_slot(key);
     evict_page->page_index = page_index;
     sample_page_cache_set_page_geometry(evict_page, key);
-    evict_page->start_frame = sample_audio_format_page_start_frame(evict_page->format, page_index);
+        evict_page->start_frame = sample_audio_format_page_start_frame(
+            (sample_audio_format_t)evict_page->format, page_index);
     evict_page->frame_count = frame_count;
     evict_page->generation = ++g_sample_page_cache_state.generation_counter;
     evict_page->last_touch = ++g_sample_page_cache_state.touch_counter;
@@ -313,7 +315,8 @@ static sample_page_desc_t *sample_page_cache_assign_slot_key(uint32_t slot_index
     page->sample_id = sample_page_cache_key_slot(key);
     page->page_index = page_index;
     sample_page_cache_set_page_geometry(page, key);
-    page->start_frame = sample_audio_format_page_start_frame(page->format, page_index);
+    page->start_frame = sample_audio_format_page_start_frame(
+        (sample_audio_format_t)page->format, page_index);
     page->frame_count = frame_count;
     page->generation = ++g_sample_page_cache_state.generation_counter;
     page->last_touch = ++g_sample_page_cache_state.touch_counter;

@@ -158,7 +158,6 @@ uint8_t track_mute_set(uint8_t track, uint8_t muted)
     uint8_t effective_after[BRICK_ENTITY_GROUP_CHILD_COUNT + 1U];
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
         .count = affected_count
     };
     for (uint8_t i = 0U; i < affected_count; ++i)
@@ -176,8 +175,7 @@ uint8_t track_mute_set(uint8_t track, uint8_t muted)
             .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
             .track = affected[i],
             .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-            .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                                | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+            .flags = LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
             .value = live_parameter_event_encode_float(
                 (float)effective_after[i])
         };
@@ -233,7 +231,6 @@ uint8_t track_mute_publish_topology_projection(
 
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
         .count = 0U
     };
     for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
@@ -250,8 +247,7 @@ uint8_t track_mute_publish_topology_projection(
             .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
             .track = track,
             .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-            .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                                | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+            .flags = LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
             .value = live_parameter_event_encode_float(
                 (float)(effective_after != 0))
         };

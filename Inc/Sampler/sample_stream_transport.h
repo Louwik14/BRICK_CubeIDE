@@ -33,8 +33,6 @@ uint8_t sample_stream_transport_request_release(sample_audio_key_t key);
 void sample_stream_transport_release_map(
     const sample_stream_physical_map_t *map);
 void sample_stream_transport_reset_storage_maps(void);
-void sample_stream_transport_execute_monocore(const sample_stream_io_command_t *command,
-                                              sample_stream_io_result_t *out_result);
 void sample_stream_transport_get_stats(sample_stream_transport_stats_t *out_stats);
 
 #ifdef __cplusplus

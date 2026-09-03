@@ -25,10 +25,6 @@ bool track_state_set_track_midi_channel(uint8_t track, uint8_t channel_1_16);
 bool track_state_set_track_midi_source(uint8_t track, track_midi_source_t source);
 uint8_t track_state_get_external_input(uint8_t track);
 bool track_state_set_external_input(uint8_t track, uint8_t input);
-bool track_structure_apply_bulk(const uint8_t family[TRACK_COUNT],
-                                const uint8_t type[TRACK_COUNT],
-                                const uint8_t midi_channel[TRACK_COUNT],
-                                const uint8_t midi_source[TRACK_COUNT]);
 /* Sole CONTROL commit for a final structural state: validate/commit state,
  * then rebuild/publish the changed runtime PROGRAM descriptors. */
 bool track_structure_apply_entity_bulk_with_inputs(

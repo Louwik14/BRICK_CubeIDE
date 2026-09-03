@@ -5,7 +5,7 @@
 #include "Sampler/multi_sample_config.h"
 #include "Sampler/sample_classic_config.h"
 #include "Sampler/sample_audio_format.h"
-#include "Sampler/brick6_sampler_multi_contract.h"
+#include "Sampler/sample_stream_limits.h"
 
 /*
  * Product page-cache sizing.
@@ -70,7 +70,7 @@ typedef enum
                                                + SAMPLE_PAGE_CACHE_MULTI_ID_CAPACITY)
 #define SAMPLE_PAGE_CACHE_MAX_SAMPLES         (SAMPLE_PAGE_CACHE_ID_CAPACITY)
 /* Multi page-window reserve; Stream admits at most 8 active voices. */
-#define SAMPLE_PAGE_CACHE_MAX_VOICES          BRICK6_SAMPLER_MULTI_MAX_VOICES
+#define SAMPLE_PAGE_CACHE_MAX_VOICES          SAMPLE_STREAM_TARGET_MAX_VOICES
 #ifndef BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES
 #define BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES (2U)
 #endif

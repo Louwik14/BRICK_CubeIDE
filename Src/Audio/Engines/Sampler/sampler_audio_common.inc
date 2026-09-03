@@ -589,7 +589,7 @@ static brick6_sample_common_plan_result_t brick6_sampler_runtime_build_common_pl
         out_source->channels = projected->channels;
         out_source->bits_per_sample = projected->bits_per_sample;
         out_source->block_align = projected->block_align;
-        out_source->format = projected->format;
+        out_source->format = (sample_audio_format_t)projected->format;
         out_source->stride_floats = projected->stride_floats;
         out_source->frames_per_page = projected->frames_per_page;
         out_source->registration_epoch = projected->registration_epoch;

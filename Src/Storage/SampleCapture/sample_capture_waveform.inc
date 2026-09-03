@@ -229,7 +229,7 @@ static uint8_t sample_capture_global_overview_can_build(void)
     }
     if((audio_recorder_is_active() != 0U)
             || (sd_preview_is_active() != 0U)
-            || (pattern_load_is_pending() != 0U)
+            || (pattern_storage_is_pending() != 0U)
             || (sample_cache_has_pending_sd_work() != 0U))
     {
         return 0U;
@@ -825,7 +825,7 @@ static uint8_t sample_capture_editor_cache_can_fill(uint8_t *out_reason)
         if(out_reason != 0) { *out_reason = 3U; }
         return 0U;
     }
-    if(pattern_load_is_pending() != 0U)
+    if(pattern_storage_is_pending() != 0U)
     {
         if(out_reason != 0) { *out_reason = 4U; }
         return 0U;
@@ -1251,7 +1251,7 @@ static uint8_t sample_capture_detail_can_build(void)
     }
     if((audio_recorder_is_active() != 0U)
             || (sd_preview_is_active() != 0U)
-            || (pattern_load_is_pending() != 0U)
+            || (pattern_storage_is_pending() != 0U)
             || (sample_cache_has_pending_sd_work() != 0U))
     {
         return 0U;
@@ -1273,7 +1273,7 @@ static uint8_t sample_capture_line_can_build(void)
     }
     if((audio_recorder_is_active() != 0U)
             || (sd_preview_is_active() != 0U)
-            || (pattern_load_is_pending() != 0U)
+            || (pattern_storage_is_pending() != 0U)
             || (sample_cache_has_pending_sd_work() != 0U))
     {
         return 0U;

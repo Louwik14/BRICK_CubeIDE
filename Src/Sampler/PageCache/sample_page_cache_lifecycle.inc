@@ -137,7 +137,8 @@ sample_page_state_t sample_page_cache_get_page_state_key(sample_audio_key_t key,
                                                          uint32_t page_index)
 {
     const sample_page_desc_t *const page = sample_page_cache_find_page_key(key, page_index);
-    const sample_page_state_t state = (page != 0) ? page->state : SAMPLE_PAGE_FREE;
+    const sample_page_state_t state = (page != 0)
+        ? (sample_page_state_t)page->state : SAMPLE_PAGE_FREE;
     if (state == SAMPLE_PAGE_READY)
     {
         __DMB();

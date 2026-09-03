@@ -4,6 +4,7 @@
 
 #include "SD/sd_block_device.h"
 #include "Storage/sd_access_gate.h"
+#include "sdmmc.h"
 
 #define SD_IO_HOOK_SECTOR_BYTES (512U)
 
@@ -11,9 +12,30 @@ static volatile sd_diskio_read_metrics_t g_sd_diskio_read_metrics;
 
 uint8_t brick_sd_is_detected(void)
 {
-    const uint8_t detected = BSP_SD_IsDetected();
-    sd_access_media_set_present((detected == SD_PRESENT) ? 1U : 0U);
-    return detected;
+    /* LowCost has no card-detect GPIO.  This is the BSP's last successful
+       initialization state, not a physical hotplug signal. */
+    return BSP_SD_IsDetected();
+}
+
+uint8_t brick_sd_init_failure_is_no_media(uint8_t bsp_status)
+{
+    if (bsp_status == MSD_ERROR_SD_NOT_PRESENT)
+    {
+        return 1U;
+    }
+    if (bsp_status == (uint8_t)HAL_TIMEOUT)
+    {
+        return 1U;
+    }
+
+    /* LowCost has no card-detect GPIO, so HAL_SD_Init() communication is the
+       media probe.  This HAL maps a failed CMD55/ACMD41 during SD_PowerON()
+       to UNSUPPORTED_FEATURE, including the observed no-response/no-card
+       path.  Keep CRC, parameter, DMA and other failures as real faults. */
+    const uint32_t no_media_errors = HAL_SD_ERROR_CMD_RSP_TIMEOUT
+        | HAL_SD_ERROR_TIMEOUT | HAL_SD_ERROR_UNSUPPORTED_FEATURE;
+    return ((hsd1.ErrorCode != HAL_SD_ERROR_NONE)
+            && ((hsd1.ErrorCode & ~no_media_errors) == 0U)) ? 1U : 0U;
 }
 
 void brick_sd_media_fault(void)

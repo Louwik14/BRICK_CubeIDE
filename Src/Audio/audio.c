@@ -7,7 +7,7 @@
  * - Déclencher le traitement bloc du moteur float via audio_process_block_int32().
  *
  * Architecture:
- * - Appelé par: brick6_app_init.c (audio_init, audio_start).
+ * - Appelé par: brick6_app_init.c (bootstrap plateforme pré-scheduler).
  * - Appelle: audio_process_block_int32() (audio_float.c),
  *            sans reveil direct du domaine CONTROL.
  *
@@ -270,7 +270,7 @@ void audio_boot_init_binding_io(void)
  * @brief Démarre les flux audio SAI RX/TX en DMA circulaire.
  *
  * Contexte d'appel:
- * - Main loop (après audio_init et callback DSP installé).
+ * - Bootstrap plateforme pré-scheduler (après audio_domain_init et callback DSP installé).
  */
 /**
  * @brief Point d'entrée audio_start.
@@ -280,7 +280,7 @@ void audio_boot_init_binding_io(void)
  *
  *
  * Contexte d'appel:
- * - init / main loop / tasklet selon le module.
+ * - bootstrap plateforme pré-scheduler uniquement.
  */
 uint8_t audio_start(void)
 {

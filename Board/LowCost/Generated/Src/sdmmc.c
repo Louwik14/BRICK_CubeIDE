@@ -22,6 +22,8 @@
 
 /* USER CODE BEGIN 0 */
 
+#include "SD/sd_io_hooks.h"
+
 /* USER CODE END 0 */
 
 SD_HandleTypeDef hsd1;
@@ -46,7 +48,10 @@ void MX_SDMMC1_SD_Init(void)
   hsd1.Init.ClockDiv = 5;
   if (HAL_SD_Init(&hsd1) != HAL_OK)
   {
-    Error_Handler();
+    if (brick_sd_init_failure_is_no_media(MSD_ERROR) == 0U)
+    {
+      Error_Handler();
+    }
   }
   /* USER CODE BEGIN SDMMC1_Init 2 */
 

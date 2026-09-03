@@ -48,7 +48,8 @@ uint8_t multi_sample_audio_projection_publish(uint16_t instrument_id)
             .total_frames = s->total_frames, .data_offset = s->data_offset,
             .data_size = s->data_size, .sample_rate = s->sample_rate,
             .registration_epoch = s->registration_epoch, .loop_begin = s->loop_begin,
-            .loop_end = s->loop_end, .format = s->format, .channels = s->channels,
+            .loop_end = s->loop_end, .format = (uint8_t)s->format,
+            .channels = s->channels,
             .bits_per_sample = s->bits_per_sample, .block_align = s->block_align,
             .stride_floats = s->stride_floats, .frames_per_page = s->frames_per_page,
             .has_loop = s->has_loop

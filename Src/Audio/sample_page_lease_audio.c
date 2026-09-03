@@ -38,6 +38,8 @@ void sample_page_lease_audio_clear(uint8_t slot)
 {
     if (slot >= SAMPLE_PAGE_LEASE_SLOT_COUNT) return;
     const sample_page_lease_range_t empty[2] = { {0}, {0} };
-    const sample_audio_key_t key = { SAMPLE_AUDIO_DOMAIN_CLASSIC, 0U };
+    const sample_audio_key_t key = {
+        .domain = SAMPLE_AUDIO_DOMAIN_CLASSIC, .object_id = 0U
+    };
     (void)sample_page_lease_audio_publish(slot, key, 0U, empty);
 }

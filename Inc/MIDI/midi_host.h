@@ -10,7 +10,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-void midi_host_poll(void);
+void midi_host_transport_poll_bounded(uint32_t max_msgs);
+void midi_host_control_poll_bounded(uint32_t max_msgs);
 void midi_host_poll_bounded(uint32_t max_msgs);
 void midi_host_rx_discard_pending(void);
 

@@ -82,6 +82,12 @@ typedef struct
     ui_pattern_mode_t mode;
 } ui_pattern_stub_state_t;
 
+typedef struct
+{
+    uint16_t consume_press_mask;
+    uint16_t consume_release_mask;
+} ui_hall_arbitration_snapshot_t;
+
 #include "ui_hall_mode_projection.h"
 #include "ui_hall_mode_state.h"
 
@@ -116,10 +122,6 @@ track_midi_source_t ui_get_track_midi_source(uint8_t track);
 bool ui_set_track_midi_source(uint8_t track, track_midi_source_t source);
 uint8_t ui_get_track_external_input(uint8_t track);
 bool ui_set_track_external_input(uint8_t track, uint8_t input);
-bool ui_restore_track_config_bulk(const uint8_t family[TRACK_COUNT],
-                                  const uint8_t type[TRACK_COUNT],
-                                  const uint8_t midi_channel[TRACK_COUNT],
-                                  const uint8_t midi_source[TRACK_COUNT]);
 uint8_t ui_track_midi_channel_used_by_other(uint8_t track, uint8_t channel_1_16);
 void ui_get_track_runtime_header_label(uint8_t track, char *out, uint32_t out_len);
 
@@ -132,7 +134,7 @@ uint8_t ui_macro_overlay_is_active(void);
 uint8_t ui_macro_overlay_is_latched(void);
 uint8_t ui_macro_overlay_get_submode(ui_macro_overlay_submode_t *out_submode);
 void ui_macro_overlay_on_hall_mode_changed(void);
-uint8_t ui_core_hall_note_is_suppressed(uint8_t hall);
-void ui_core_clear_hall_note_suppression(uint8_t hall);
+uint8_t ui_core_hall_arbitration_snapshot_read(
+    ui_hall_arbitration_snapshot_t *out_snapshot);
 
 #endif /* UI_CORE_H */

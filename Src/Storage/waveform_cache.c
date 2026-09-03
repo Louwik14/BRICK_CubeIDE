@@ -3,7 +3,7 @@
 #include "Sampler/sample_cache.h"
 #include "Platform/memory_layout.h"
 #include "Storage/audio_recorder.h"
-#include "Storage/pattern_live_ram.h"
+#include "Storage/pattern_load_storage.h"
 #include "Storage/sample_capture.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/sd_preview.h"
@@ -1118,7 +1118,7 @@ static void waveform_cache_service_build(uint32_t byte_budget)
     if(sample_cache_has_pending_sd_work() != 0U
             || audio_recorder_is_active() != 0U
             || sd_preview_is_active() != 0U
-            || pattern_load_is_pending() != 0U)
+            || pattern_storage_is_pending() != 0U)
     {
         return;
     }
@@ -1287,7 +1287,7 @@ static void waveform_cache_service_tile_request(uint32_t byte_budget)
     if(sample_cache_has_pending_sd_work() != 0U
             || audio_recorder_is_active() != 0U
             || sd_preview_is_active() != 0U
-            || pattern_load_is_pending() != 0U)
+            || pattern_storage_is_pending() != 0U)
     {
         return;
     }

@@ -111,6 +111,9 @@ uint8_t sample_global_pool_register_classic_at(uint16_t global_index,
                                                const char *path,
                                                uint32_t cost_bytes);
 uint8_t sample_global_pool_load_classic(uint16_t global_index, const char *path);
+uint8_t sample_global_pool_request_classic_load(uint16_t global_index, const char *path);
+uint8_t sample_global_pool_request_clear_classic(uint16_t global_index);
+void sample_global_pool_storage_request_service(void);
 uint8_t sample_global_pool_load_classic_prepared(uint16_t global_index,
                                                  const char *path,
                                                  const wav_info_t *info,

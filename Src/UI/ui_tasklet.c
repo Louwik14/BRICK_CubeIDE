@@ -20,6 +20,7 @@
  */
 
 #include "ui_tasklet.h"
+#include "App/control_domain.h"
 #include "IPC/live_clock_control.h"
 #include "Track/track_runtime.h"
 
@@ -32,6 +33,7 @@
 #include "encoders.h"
 #include "font.h"
 #include "Storage/project_product.h"
+#include "Storage/sd_access_gate.h"
 #include "stm32h7xx_hal.h"
 #include "ui_boot_loading.h"
 #include "ui_core.h"
@@ -541,6 +543,18 @@ void ui_boot_loading_begin(void)
 
 void ui_boot_loading_service(void)
 {
+    const sd_storage_status_t storage_status = sd_access_storage_status();
+    if ((storage_status == SD_STORAGE_STATUS_NO_MEDIA)
+        || (storage_status == SD_STORAGE_STATUS_FAULT))
+    {
+        g_ui_boot_loading_phase = UI_BOOT_LOADING_INACTIVE;
+        return;
+    }
+    if (storage_status != SD_STORAGE_STATUS_READY)
+    {
+        return;
+    }
+
     if (g_ui_boot_loading_phase == UI_BOOT_LOADING_RESTORE_PROJECT)
     {
         if (drv_display_flush_in_progress() != 0U)
@@ -548,15 +562,10 @@ void ui_boot_loading_service(void)
             return;
         }
 
-        const project_product_boot_restore_result_t result =
-            project_product_restore_boot();
-        if (result == PROJECT_PRODUCT_BOOT_RESTORE_FAILED)
-            g_ui_boot_loading_phase = UI_BOOT_LOADING_FAILED;
-        else if (result == PROJECT_PRODUCT_BOOT_RESTORE_PROJECT_READY
-                 || result == PROJECT_PRODUCT_BOOT_RESTORE_DEFAULTS_READY)
+        if (control_domain_request_project(&(control_project_intent_t){CONTROL_PROJECT_RESTORE_BOOT, 0U}) != 0U)
             g_ui_boot_loading_phase = UI_BOOT_LOADING_WAIT_SAMPLES;
         else
-            g_ui_boot_loading_phase = UI_BOOT_LOADING_INACTIVE;
+            g_ui_boot_loading_phase = UI_BOOT_LOADING_FAILED;
     }
 
     if (g_ui_boot_loading_phase == UI_BOOT_LOADING_WAIT_SAMPLES)
@@ -615,7 +624,6 @@ void ui_boot_loading_discard_inputs(void)
         encoder_reset_delta(i);
     }
 
-    ui_event_from_inputs();
     while (ui_event_pop(&ev))
     {
     }

@@ -243,7 +243,7 @@ uint8_t sample_page_cache_get_load_target_key(sample_audio_key_t key,
     out_target->page_index = page->page_index;
     out_target->start_frame = page->start_frame;
     out_target->frame_count = page->frame_count;
-    out_target->format = page->format;
+    out_target->format = (sample_audio_format_t)page->format;
     out_target->stride_floats = page->stride_floats;
     out_target->frames_per_page = page->frames_per_page;
     out_target->registration_epoch = page->registration_epoch;
@@ -309,7 +309,7 @@ uint8_t sample_page_cache_resolve_loading_target(const sample_page_load_token_t 
         out_target->page_index = page->page_index;
         out_target->start_frame = page->start_frame;
         out_target->frame_count = page->frame_count;
-        out_target->format = page->format;
+        out_target->format = (sample_audio_format_t)page->format;
         out_target->stride_floats = page->stride_floats;
         out_target->frames_per_page = page->frames_per_page;
         out_target->registration_epoch = page->registration_epoch;
@@ -424,7 +424,7 @@ uint8_t sample_page_cache_get_bulk_load_target_key(
     out_target->page_index = page->page_index;
     out_target->start_frame = page->start_frame;
     out_target->frame_count = page->frame_count;
-    out_target->format = page->format;
+        out_target->format = (sample_audio_format_t)page->format;
     out_target->stride_floats = page->stride_floats;
     out_target->frames_per_page = page->frames_per_page;
     out_target->registration_epoch = page->registration_epoch;
@@ -452,7 +452,7 @@ uint8_t sample_page_cache_set_page_state_key(sample_audio_key_t key,
         return 0U;
     }
 
-    const sample_page_state_t current = page->state;
+    const sample_page_state_t current = (sample_page_state_t)page->state;
     const uint8_t transition_allowed =
         (uint8_t)(((current == SAMPLE_PAGE_RESERVED) && (state == SAMPLE_PAGE_FAILED))
                   || ((current == SAMPLE_PAGE_READY) && (state == SAMPLE_PAGE_READY))
@@ -500,7 +500,8 @@ uint8_t sample_page_cache_reserve_page_key_alloc(sample_audio_key_t key,
     }
 
     sample_page_cache_set_page_geometry(page, key);
-    page->start_frame = sample_audio_format_page_start_frame(page->format, page_index);
+    page->start_frame = sample_audio_format_page_start_frame(
+        (sample_audio_format_t)page->format, page_index);
     page->frame_count = sample_page_cache_stream_page_frame_count_key(key, page_index);
     if (page->frame_count == 0U)
     {
@@ -543,7 +544,8 @@ uint8_t sample_page_cache_reserve_page_ref_key(sample_audio_key_t key,
     }
 
     sample_page_cache_set_page_geometry(page, key);
-    page->start_frame = sample_audio_format_page_start_frame(page->format, page_index);
+    page->start_frame = sample_audio_format_page_start_frame(
+        (sample_audio_format_t)page->format, page_index);
     page->frame_count = sample_page_cache_stream_page_frame_count_key(key, page_index);
     if (page->frame_count == 0U)
     {

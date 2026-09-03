@@ -307,8 +307,8 @@ uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command,
         async->state = SAMPLE_STREAM_IO_SCRATCH_RAW_READY;
         return 1U;
     }
-    /* Deadline streaming stays physical-only; synchronous full imports may
-     * use the bounded Storage-side FatFs fallback above. */
+    /* Deadline streaming stays physical-only; full imports may use the
+     * bounded Storage-side FatFs fallback above. */
     async->result.load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
     async->state = SAMPLE_STREAM_IO_SCRATCH_RAW_READY;
     return 1U;

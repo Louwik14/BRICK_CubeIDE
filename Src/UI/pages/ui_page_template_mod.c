@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 
+#include "App/control_domain.h"
 #include "Mod/mod_lfo_v1_control.h"
 #include "Mod/mod_matrix_control.h"
 #include "Mod/mod_destination_control.h"
@@ -172,6 +173,22 @@ static const char *ui_page_template_mod_source_label(uint8_t source)
     return (source<MOD_MATRIX_SOURCE_COUNT)?labels[source]:"OFF";
 }
 
+static void ui_page_template_mod_request(uint8_t operation,
+                                          uint8_t track,
+                                          uint8_t index,
+                                          uint8_t input,
+                                          float value)
+{
+    const control_mod_intent_t intent = {
+        .operation = operation,
+        .track = track,
+        .index = index,
+        .input = input,
+        .value = value
+    };
+    (void)control_domain_request_mod(&intent);
+}
+
 static uint8_t ui_page_template_mod_virtual_slot_text(uint8_t slot,char*out_name,
     uint32_t out_name_len,char*out_value,uint32_t out_value_len)
 {
@@ -189,9 +206,9 @@ static uint8_t ui_page_template_mod_virtual_slot_text(uint8_t slot,char*out_name
 static void ui_page_template_mod_handle_event(const ui_event_t *ev)
 {
     if(ev!=0&&ev->type==UI_EVENT_ENCODER&&ev->id<4U&&ev->value!=0){const uint8_t track=ui_get_active_lane();float value=0.0f;const float step=(ev->value>0)?1.0f:-1.0f;
-        if(g_ui_template_mod_subset==0U&&g_ui_template_mod_state.active_subpage==0U){if(ev->id==0U){(void)mod_matrix_get_selected_slot(track,&value);(void)mod_matrix_set_selected_slot(track,value+step);}else if(ev->id==1U){(void)mod_matrix_get_selected_slot_source(track,&value);(void)mod_matrix_set_selected_slot_source(track,value+step);}else if(ev->id==2U){(void)mod_matrix_get_selected_slot_destination_index(track,&value);(void)mod_matrix_set_selected_slot_destination_index(track,value+step);}else{(void)mod_matrix_get_selected_slot_depth(track,&value);(void)mod_matrix_set_selected_slot_depth(track,value+(float)ev->value);}return;}
-        if(g_ui_template_mod_subset!=0U&&g_ui_template_mod_state.active_subpage==0U){const uint8_t op=(uint8_t)(ev->id>>1U),input=(uint8_t)(ev->id&1U);(void)mod_matrix_get_multi_source(track,op,input,&value);(void)mod_matrix_set_multi_source(track,op,input,value+step);return;}
-        if(g_ui_template_mod_subset!=0U&&g_ui_template_mod_state.active_subpage==1U){const uint8_t op=(uint8_t)(ev->id>>1U);if((ev->id&1U)==0U){(void)mod_matrix_get_slew_source(track,op,&value);(void)mod_matrix_set_slew_source(track,op,value+step);}else{(void)mod_matrix_get_slew_amount(track,op,&value);(void)mod_matrix_set_slew_amount(track,op,value+(float)ev->value*0.01f);}return;}}
+        if(g_ui_template_mod_subset==0U&&g_ui_template_mod_state.active_subpage==0U){if(ev->id==0U){(void)mod_matrix_get_selected_slot(track,&value);ui_page_template_mod_request(CONTROL_MOD_SET_SELECTED_SLOT,track,0U,0U,value+step);}else if(ev->id==1U){(void)mod_matrix_get_selected_slot_source(track,&value);ui_page_template_mod_request(CONTROL_MOD_SET_SELECTED_SOURCE,track,0U,0U,value+step);}else if(ev->id==2U){(void)mod_matrix_get_selected_slot_destination_index(track,&value);ui_page_template_mod_request(CONTROL_MOD_SET_SELECTED_DESTINATION,track,0U,0U,value+step);}else{(void)mod_matrix_get_selected_slot_depth(track,&value);ui_page_template_mod_request(CONTROL_MOD_SET_SELECTED_DEPTH,track,0U,0U,value+(float)ev->value);}return;}
+        if(g_ui_template_mod_subset!=0U&&g_ui_template_mod_state.active_subpage==0U){const uint8_t op=(uint8_t)(ev->id>>1U),input=(uint8_t)(ev->id&1U);(void)mod_matrix_get_multi_source(track,op,input,&value);ui_page_template_mod_request(CONTROL_MOD_SET_MULTI_SOURCE,track,op,input,value+step);return;}
+        if(g_ui_template_mod_subset!=0U&&g_ui_template_mod_state.active_subpage==1U){const uint8_t op=(uint8_t)(ev->id>>1U);if((ev->id&1U)==0U){(void)mod_matrix_get_slew_source(track,op,&value);ui_page_template_mod_request(CONTROL_MOD_SET_SLEW_SOURCE,track,op,0U,value+step);}else{(void)mod_matrix_get_slew_amount(track,op,&value);ui_page_template_mod_request(CONTROL_MOD_SET_SLEW_AMOUNT,track,op,0U,value+(float)ev->value*0.01f);}return;}}
     ui_template_page_handle_event(ev);
 }
 

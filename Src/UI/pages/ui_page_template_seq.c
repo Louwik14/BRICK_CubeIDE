@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 
+#include "App/control_domain.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_division_catalog.h"
 #include "Seq/seq_model.h"
@@ -66,7 +67,12 @@ uint8_t ui_page_template_seq_handle_encoder(uint8_t encoder, int16_t delta)
         value = (int32_t)seq_model_get_track_length(track) + delta;
         if (value < 1) value = 1;
         if (value > SEQ_MAX_STEPS) value = SEQ_MAX_STEPS;
-        (void)seq_edit_set_track_length(track, (uint8_t)value);
+        const control_seq_intent_t intent = {
+            .operation = CONTROL_SEQ_SET_LENGTH,
+            .track = (uint8_t)track,
+            .step = (uint8_t)value
+        };
+        return control_domain_request_seq(&intent);
     }
     else if (encoder == 1U)
     {
@@ -75,7 +81,12 @@ uint8_t ui_page_template_seq_handle_encoder(uint8_t encoder, int16_t delta)
         value = (int32_t)index + ((delta > 0) ? 1 : -1);
         if (value < 0) value = 0;
         if (value > 3) value = 3;
-        (void)seq_edit_set_track_division(track, seq_division_track_div_from_ui((uint8_t)value));
+        const control_seq_intent_t intent = {
+            .operation = CONTROL_SEQ_SET_DIVISION,
+            .track = (uint8_t)track,
+            .step = seq_division_track_div_from_ui((uint8_t)value)
+        };
+        return control_domain_request_seq(&intent);
     }
     else
     {
@@ -85,8 +96,12 @@ uint8_t ui_page_template_seq_handle_encoder(uint8_t encoder, int16_t delta)
         value = (int32_t)current + delta;
         if (value < 0) value = 0;
         if (value > 100) value = 100;
-        if (encoder == 2U) (void)seq_edit_set_track_quantization(track, (uint8_t)value);
-        else (void)seq_edit_set_track_swing(track, (uint8_t)value);
+        const control_seq_intent_t intent = {
+            .operation = (encoder == 2U) ? CONTROL_SEQ_SET_QUANTIZATION : CONTROL_SEQ_SET_SWING,
+            .track = (uint8_t)track,
+            .step = (uint8_t)value
+        };
+        return control_domain_request_seq(&intent);
     }
     return 1U;
 }

@@ -189,38 +189,6 @@ bool track_state_set_external_input(uint8_t track, uint8_t input)
     return true;
 }
 
-bool track_structure_apply_bulk(const uint8_t family[TRACK_COUNT],
-                                const uint8_t type[TRACK_COUNT],
-                                const uint8_t midi_channel[TRACK_COUNT],
-                                const uint8_t midi_source[TRACK_COUNT])
-{
-    uint8_t entity_family[BRICK_ENTITY_CAPACITY];
-    uint8_t entity_type[BRICK_ENTITY_CAPACITY];
-    uint8_t entity_channel[BRICK_ENTITY_CAPACITY];
-    uint8_t entity_source[BRICK_ENTITY_CAPACITY];
-    uint8_t external_input[TRACK_COUNT];
-    if ((family == NULL) || (type == NULL) || (midi_channel == NULL)
-            || (midi_source == NULL))
-        return false;
-    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
-    {
-        const track_config_t config = track_state_get_config(entity);
-        entity_family[entity] = (entity < TRACK_COUNT)
-            ? family[entity] : (uint8_t)config.family;
-        entity_type[entity] = (entity < TRACK_COUNT)
-            ? type[entity] : (uint8_t)config.type;
-        entity_channel[entity] = (entity < TRACK_COUNT)
-            ? midi_channel[entity] : track_state_get_midi_channel(entity);
-        entity_source[entity] = (entity < TRACK_COUNT)
-            ? midi_source[entity] : (uint8_t)track_state_get_midi_source(entity);
-        if (entity < TRACK_COUNT)
-            external_input[entity] = track_state_get_external_input(entity);
-    }
-    return track_structure_apply_entity_bulk_with_inputs(
-        entity_family, entity_type, entity_channel, entity_source,
-        external_input);
-}
-
 static bool track_state_apply_entity_bulk_with_inputs(
     const uint8_t family[BRICK_ENTITY_CAPACITY],
     const uint8_t type[BRICK_ENTITY_CAPACITY],

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 
 #include "Sampler/sample_audio_format.h"
@@ -28,7 +29,7 @@ typedef struct
     uint32_t registration_epoch;
     uint32_t loop_begin;
     uint32_t loop_end;
-    sample_audio_format_t format;
+    uint8_t format;
     uint16_t channels;
     uint16_t bits_per_sample;
     uint16_t block_align;
@@ -39,6 +40,8 @@ typedef struct
 
 _Static_assert(sizeof(multi_sample_audio_source_t) == 60U,
                "Multi AUDIO source ABI changed");
+_Static_assert(offsetof(multi_sample_audio_source_t, format) == 40U,
+               "Multi AUDIO format offset changed");
 
 #ifdef __cplusplus
 }

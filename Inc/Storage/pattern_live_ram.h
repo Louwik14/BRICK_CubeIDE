@@ -5,14 +5,10 @@
 #include "Storage/persistent_control_model.h"
 
 void pattern_live_init(void);
+void pattern_live_storage_init(void);
 uint8_t pattern_live_get_control_boot(persist_control_pattern_t *out);
-uint8_t pattern_load_request(uint8_t bank, uint8_t pattern);
-void pattern_load_service(uint32_t byte_budget);
-uint8_t pattern_load_is_pending(void);
-uint8_t pattern_load_is_ready(uint8_t *out_bank, uint8_t *out_pattern);
-uint8_t pattern_load_take_ready(uint8_t *out_bank, uint8_t *out_pattern, persist_control_pattern_t *out_snapshot);
-void pattern_load_cancel(void);
 void pattern_live_service(void);
+void pattern_live_control_process(void);
 uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern);
 uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern, uint8_t boundary_track);
 uint8_t pattern_live_get_active(uint8_t *out_bank, uint8_t *out_pattern);

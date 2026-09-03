@@ -251,6 +251,59 @@ static void ui_page_settings_status(const char *status)
     g_ui_settings.status_until_ms = HAL_GetTick() + UI_SETTINGS_STATUS_DURATION_MS;
 }
 
+static uint8_t ui_page_settings_request_asset_register(uint32_t kind,
+                                                       uint16_t runtime)
+{
+    const control_asset_intent_t intent = {
+        .operation = CONTROL_ASSET_REGISTER_RUNTIME,
+        .kind = kind,
+        .runtime = runtime
+    };
+    if (control_domain_request_asset(&intent) == 0U) return 0U;
+    g_ui_settings.asset_register_pending = 1U;
+    g_ui_settings.asset_register_kind = kind;
+    g_ui_settings.asset_register_runtime = runtime;
+    return 1U;
+}
+
+static uint8_t ui_page_settings_request_asset_remove(uint32_t kind,
+                                                     uint16_t logical,
+                                                     uint16_t runtime)
+{
+    const control_asset_intent_t intent = {
+        .operation = CONTROL_ASSET_REMOVE_RUNTIME,
+        .kind = kind,
+        .logical = logical,
+        .runtime = runtime
+    };
+    return control_domain_request_asset(&intent);
+}
+
+static void ui_page_settings_asset_register_poll(void)
+{
+    if (g_ui_settings.asset_register_pending == 0U) return;
+    const char *path = 0;
+    if (g_ui_settings.asset_register_kind == PERSIST_ASSET_MULTI)
+    {
+        const multi_sample_instrument_t *const instrument =
+            multi_sample_pool_get_instrument(g_ui_settings.asset_register_runtime);
+        if (instrument != 0) path = instrument->index_path;
+    }
+    else
+    {
+        const sample_global_slot_t *const slot = sample_global_pool_get_slot(
+            g_ui_settings.asset_register_runtime);
+        if (slot != 0) path = slot->path;
+    }
+    if ((path == 0) || (path[0] == '\0')) return;
+
+    uint16_t logical = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    if (project_control_find_asset(g_ui_settings.asset_register_kind,
+                                   path, &logical) == 0U) return;
+    g_ui_settings.sample_slot_selected = logical;
+    g_ui_settings.asset_register_pending = 0U;
+}
+
 static void ui_page_settings_preview_stop(ui_settings_preview_stop_origin_t origin)
 {
     if (sd_preview_is_active() == 0U)
@@ -258,7 +311,7 @@ static void ui_page_settings_preview_stop(ui_settings_preview_stop_origin_t orig
         return;
     }
 
-    sd_preview_stop();
+    sd_preview_request_stop();
     g_ui_settings.preview_stop_origin = origin;
 }
 
@@ -420,7 +473,7 @@ static void ui_page_settings_apply_action(void)
         case UI_SETTINGS_VIEW_PROJECT_LOAD:
             if (level->selected_index == 0U)
             {
-                if (project_product_blank() != 0U)
+                if (control_domain_request_project(&(control_project_intent_t){CONTROL_PROJECT_BLANK, 0U}) != 0U)
                 {
                     g_ui_settings.return_page_id = UI_PAGE_TEMPLATE_CFG;
                     ui_page_set(UI_PAGE_TEMPLATE_CFG);
@@ -431,7 +484,7 @@ static void ui_page_settings_apply_action(void)
                 }
             }
             else if (((level->selected_index - 1U) < g_ui_settings.project_slot_count)
-                     && (project_product_load(g_ui_settings.project_slots[level->selected_index - 1U]) != 0U))
+                     && (control_domain_request_project(&(control_project_intent_t){CONTROL_PROJECT_LOAD, g_ui_settings.project_slots[level->selected_index - 1U]}) != 0U))
             {
                     ui_page_settings_status("LOADING");
             }
@@ -442,7 +495,7 @@ static void ui_page_settings_apply_action(void)
             break;
 
         case UI_SETTINGS_VIEW_PROJECT_SAVE_AS:
-            if (project_product_save(level->selected_index) != 0U)
+            if (control_domain_request_project(&(control_project_intent_t){CONTROL_PROJECT_SAVE, level->selected_index}) != 0U)
             {
                 ui_page_settings_status("SAVING");
             }
@@ -462,7 +515,7 @@ static void ui_page_settings_apply_action(void)
         case UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT:
             if (level->selected_index == (uint8_t)UI_SETTINGS_MANAGE_ACTION_LOAD_FROM)
             {
-                if (project_product_load(g_ui_settings.selected_slot) != 0U)
+                if (control_domain_request_project(&(control_project_intent_t){CONTROL_PROJECT_LOAD, g_ui_settings.selected_slot}) != 0U)
                 {                    ui_page_settings_status("LOADING");
                 }
                 else
@@ -471,20 +524,18 @@ static void ui_page_settings_apply_action(void)
             }
             else if (level->selected_index == (uint8_t)UI_SETTINGS_MANAGE_ACTION_SAVE_TO)
             {
-                if (project_product_save(g_ui_settings.selected_slot) != 0U)
+                if (control_domain_request_project(&(control_project_intent_t){CONTROL_PROJECT_SAVE, g_ui_settings.selected_slot}) != 0U)
                 {                    ui_page_settings_status("SAVING");
                 }
                 else
                 {                    ui_page_settings_status("SAVE TO FAIL");
                 }
             }
-            else if (project_product_delete(g_ui_settings.selected_slot) != 0U)
-            {                ui_page_settings_refresh_project_slots();
-                ui_page_settings_back();
-                ui_page_settings_status("DELETE OK");
+            else if (control_domain_request_project(&(control_project_intent_t){CONTROL_PROJECT_DELETE, g_ui_settings.selected_slot}) != 0U)
+            {                ui_page_settings_status("DELETING");
             }
             else
-            {                ui_page_settings_status("DELETE FAIL");
+            {                ui_page_settings_status("DELETE BUSY");
             }
             break;
 
@@ -589,8 +640,10 @@ static void ui_page_settings_apply_action(void)
             {
                 if (project_replacement_is_active() != 0U) return;
                 ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
-                (void)project_control_remove_sample(g_ui_settings.sample_slot_selected);
-                sample_global_pool_clear_classic(g_ui_settings.selected_slot);
+                (void)ui_page_settings_request_asset_remove(
+                    PERSIST_ASSET_SAMPLE_STREAM,
+                    g_ui_settings.sample_slot_selected,
+                    g_ui_settings.selected_slot);
                 ui_page_settings_refresh_sampler_slots();
                 ui_page_settings_status("CLEAR OK");
             }
@@ -611,7 +664,7 @@ static void ui_page_settings_apply_action(void)
                             break;
                         }
 
-                        if (sd_preview_begin(entry->path) != 0U)
+                        if (sd_preview_request_begin(entry->path) != 0U)
                         {
                             g_ui_settings.preview_stop_origin = UI_SETTINGS_PREVIEW_STOP_ORIGIN_NONE;
                             g_ui_settings.preview_was_active = sd_preview_is_active();
@@ -858,7 +911,48 @@ static void ui_page_settings_handle_event_page(const ui_event_t *ev)
 
 static void ui_page_settings_tick(void)
 {
+    ui_page_settings_asset_register_poll();
     ui_page_settings_multi_clear_service();
+    const ui_settings_menu_level_t *const catalog_level =
+        (g_ui_settings.depth != 0U)
+            ? &g_ui_settings.levels[g_ui_settings.depth - 1U] : 0;
+    if (catalog_level != 0)
+    {
+        if (catalog_level->view == UI_SETTINGS_VIEW_WAVETABLE)
+            (void)ui_page_settings_wavetable_browser_refresh();
+        else if (catalog_level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
+            (void)ui_page_settings_multi_browser_refresh();
+    }
+    if (g_ui_settings.classic_load_pending != 0U)
+    {
+        const sample_cache_slot_readiness_t readiness =
+            sample_cache_get_slot_readiness(g_ui_settings.classic_load_slot);
+        if (readiness == SAMPLE_CACHE_SLOT_PLAYABLE)
+        {
+            if (ui_page_settings_request_asset_register(
+                    PERSIST_ASSET_SAMPLE_STREAM,
+                    g_ui_settings.classic_load_slot) != 0U)
+            {
+                g_ui_settings.sample_slot_selected = g_ui_settings.classic_load_slot;
+                ui_page_settings_refresh_sampler_slots();
+                ui_page_settings_status("LOAD OK");
+            }
+            else
+            {
+                (void)ui_page_settings_request_asset_remove(
+                    PERSIST_ASSET_SAMPLE_STREAM,
+                    g_ui_settings.classic_load_slot,
+                    g_ui_settings.classic_load_slot);
+                ui_page_settings_status("BANK FAIL");
+            }
+            g_ui_settings.classic_load_pending = 0U;
+        }
+        else if (readiness == SAMPLE_CACHE_SLOT_ERROR)
+        {
+            g_ui_settings.classic_load_pending = 0U;
+            ui_page_settings_status("LOAD FAIL");
+        }
+    }
     uint8_t project_slot = 0U;
     uint8_t project_success = 0U;
     if (project_product_save_take_result(&project_slot, &project_success) != 0U)
@@ -884,10 +978,8 @@ static void ui_page_settings_tick(void)
     {
         if (ram_result == SAMPLER_RAM_RESULT_OK)
         {
-            uint16_t logical = 0U;
-            (void)project_control_register_sample_runtime(PERSIST_ASSET_SAMPLE_RAM,
-                                                          ram_path, ram_global, &logical);
-            g_ui_settings.sample_slot_selected = logical;
+            (void)ui_page_settings_request_asset_register(
+                PERSIST_ASSET_SAMPLE_RAM, ram_global);
         }
         else if ((ram_result == SAMPLER_RAM_RESULT_GLOBAL_SLOT_FULL)
                  || (ram_result == SAMPLER_RAM_RESULT_POOL_FULL))
@@ -913,10 +1005,8 @@ static void ui_page_settings_tick(void)
     {
         if (wavetable_result == WAVETABLE_RESULT_OK)
         {
-            uint16_t logical = 0U;
-            (void)project_control_register_wavetable_runtime(wavetable_path,
-                                                             wavetable_global, &logical);
-            g_ui_settings.sample_slot_selected = logical;
+            (void)ui_page_settings_request_asset_register(
+                PERSIST_ASSET_WAVETABLE, wavetable_global);
         }
         else if ((wavetable_result == WAVETABLE_RESULT_GLOBAL_SLOT_FULL)
                  || (wavetable_result == WAVETABLE_RESULT_POOL_FULL))
@@ -934,7 +1024,7 @@ static void ui_page_settings_tick(void)
     }
 
     const wav_loader_catalog_view_service_result_t browser_result =
-        wav_loader_catalog_view_service();
+        wav_loader_catalog_view_last_result();
     if (browser_result == WAV_LOADER_CATALOG_VIEW_PUBLISHED)
     {
         const ui_settings_menu_level_t *const level =
@@ -953,7 +1043,6 @@ static void ui_page_settings_tick(void)
 
     if ((wav_convert_is_active() != 0U) || (g_ui_settings.convert_slot_valid != 0U))
     {
-        wav_convert_service(65536U);
         const wav_convert_state_t convert_state = wav_convert_get_state();
         if (convert_state == WAV_CONVERT_STATE_ACTIVE)
         {

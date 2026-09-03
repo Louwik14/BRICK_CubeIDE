@@ -24,13 +24,14 @@ typedef enum
     MULTI_SAMPLE_IMPORT_INDEX_WRITE_FAIL
 } multi_sample_import_result_t;
 
-typedef void (*multi_sample_import_progress_cb_t)(uint16_t done, uint16_t total, void *user);
-
-multi_sample_import_result_t multi_sample_import_folder(const char *instrument_dir);
-multi_sample_import_result_t multi_sample_import_folder_with_progress(
-    const char *instrument_dir,
-    multi_sample_import_progress_cb_t progress_cb,
-    void *progress_user);
+uint8_t multi_sample_import_request_folder(const char *instrument_dir);
+void multi_sample_import_storage_request_service(void);
+uint8_t multi_sample_import_is_busy(void);
+uint16_t multi_sample_import_progress_done(void);
+uint16_t multi_sample_import_progress_total(void);
+uint8_t multi_sample_import_request_delete_index(const char *index_path);
+void multi_sample_import_storage_delete_service(void);
+uint8_t multi_sample_import_take_delete_result(uint8_t *result);
 multi_sample_import_result_t multi_sample_import_get_last_result(void);
 const char *multi_sample_import_get_last_diagnostic(void);
 uint16_t multi_sample_import_get_last_sample_count(void);

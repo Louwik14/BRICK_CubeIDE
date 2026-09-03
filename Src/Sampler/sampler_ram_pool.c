@@ -26,6 +26,8 @@ typedef struct
 
 STORAGE_STATE_SDRAM static sampler_ram_pool_state_t g_sampler_ram_pool;
 AUDIO_WARM ALIGN32 static uint8_t g_sampler_ram_io[SAMPLER_RAM_IO_BYTES];
+static volatile uint8_t g_sampler_ram_clear_request_valid;
+static volatile uint16_t g_sampler_ram_clear_request_slot;
 
 typedef enum
 {
@@ -69,11 +71,16 @@ typedef struct
 } sampler_ram_load_job_t;
 
 STORAGE_STATE_SDRAM static sampler_ram_load_job_t g_sampler_ram_load_job;
+static volatile uint8_t g_sampler_ram_load_request_valid;
+static uint16_t g_sampler_ram_load_request_slot;
+static char g_sampler_ram_load_request_path[SAMPLER_RAM_POOL_PATH_MAX];
+static uint8_t sampler_ram_copy_path(char *dst, uint32_t dst_size, const char *src);
 
 static void sampler_ram_load_job_boot_init(void)
 {
     memset(&g_sampler_ram_load_job, 0, sizeof(g_sampler_ram_load_job));
     g_sampler_ram_load_job.state = SAMPLER_RAM_LOAD_IDLE;
+    g_sampler_ram_load_request_valid = 0U;
 }
 
 void sampler_ram_pool_load_async_cancel(void)
@@ -91,6 +98,39 @@ void sampler_ram_pool_load_async_cancel(void)
     }
     memset(job, 0, sizeof(*job));
     job->state = SAMPLER_RAM_LOAD_IDLE;
+}
+
+uint8_t sampler_ram_pool_request_clear(uint16_t ram_slot)
+{
+    if ((ram_slot >= SAMPLER_RAM_POOL_MAX_SLOTS)
+        || (sampler_ram_pool_load_async_busy() != 0U)
+        || (g_sampler_ram_clear_request_valid != 0U))
+    {
+        return 0U;
+    }
+    g_sampler_ram_clear_request_slot = ram_slot;
+    __DMB();
+    g_sampler_ram_clear_request_valid = 1U;
+    return 1U;
+}
+
+void sampler_ram_pool_storage_request_service(void)
+{
+    if (g_sampler_ram_clear_request_valid != 0U)
+    {
+        const uint16_t slot = g_sampler_ram_clear_request_slot;
+        g_sampler_ram_clear_request_valid = 0U;
+        sampler_ram_pool_clear(slot);
+        return;
+    }
+    if (g_sampler_ram_load_request_valid != 0U)
+    {
+        const uint16_t slot = g_sampler_ram_load_request_slot;
+        char path[SAMPLER_RAM_POOL_PATH_MAX];
+        (void)sampler_ram_copy_path(path, sizeof(path), g_sampler_ram_load_request_path);
+        g_sampler_ram_load_request_valid = 0U;
+        (void)sampler_ram_pool_load_async_begin(slot, path);
+    }
 }
 static CTRL_STATE uint64_t
     g_sampler_ram_retire_not_before_sample[SAMPLER_RAM_POOL_MAX_SLOTS];
@@ -549,6 +589,7 @@ static float sampler_ram_pcm24_to_float(const uint8_t *p)
 void sampler_ram_pool_init(void)
 {
     sampler_ram_load_job_boot_init();
+    g_sampler_ram_clear_request_valid = 0U;
     (void)sampler_ram_pool_reset_quiesced();
 }
 
@@ -661,6 +702,24 @@ static uint8_t sampler_ram_pool_load_async_begin_internal(
     }
     job->result = SAMPLER_RAM_RESULT_OK;
     job->state = SAMPLER_RAM_LOAD_MOUNT;
+    return 1U;
+}
+
+uint8_t sampler_ram_pool_request_load(uint16_t ram_slot, const char *path)
+{
+    if ((ram_slot >= SAMPLER_RAM_POOL_MAX_SLOTS)
+        || (path == 0) || (path[0] == '\0')
+        || (strlen(path) >= sizeof(g_sampler_ram_load_request_path))
+        || (sampler_ram_pool_load_async_busy() != 0U)
+        || (g_sampler_ram_load_request_valid != 0U))
+    {
+        return 0U;
+    }
+    g_sampler_ram_load_request_slot = ram_slot;
+    (void)sampler_ram_copy_path(g_sampler_ram_load_request_path,
+                                sizeof(g_sampler_ram_load_request_path), path);
+    __DMB();
+    g_sampler_ram_load_request_valid = 1U;
     return 1U;
 }
 

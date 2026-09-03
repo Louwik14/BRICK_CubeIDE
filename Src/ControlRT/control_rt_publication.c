@@ -6,7 +6,6 @@
 #include "IPC/control_audio_timing.h"
 #include "IPC/live_clock_control.h"
 #include "Platform/memory_layout.h"
-#include "Seq/seq_note_trace.h"
 
 typedef struct
 {
@@ -74,14 +73,11 @@ uint8_t control_rt_publication_begin_horizon(uint64_t first_sample,
     g_control_audio_horizon.frames = frames;
     g_control_audio_horizon.first_sample = first_sample;
     g_control_audio_horizon.active = 1U;
-    seq_note_trace_horizon_begin(first_sample);
     return 1U;
 }
 
 void control_rt_publication_abort_horizon(void)
 {
-    seq_note_trace_horizon_abort(g_control_audio_horizon.first_sample,
-        g_control_audio_horizon.first_sample + g_control_audio_horizon.frames);
     g_control_audio_horizon.count = 0U;
     g_control_audio_horizon.active = 0U;
 }
@@ -143,35 +139,6 @@ uint8_t control_rt_publication_commit_horizon(void)
             ? control_audio_fifo_publish_batch(
                 g_control_audio_horizon.ordered, ordered_count)
             : 0U;
-    if (accepted != 0U)
-    {
-        for (uint16_t i = 0U; i < ordered_count; ++i)
-        {
-            const control_audio_command_t *const command =
-                &g_control_audio_horizon.ordered[i];
-            if (CONTROL_AUDIO_COMMAND_OPCODE(command)
-                    != CONTROL_AUDIO_COMMAND_NOTE)
-                continue;
-            uint8_t trace_track = 0U;
-            uint8_t trace_step = 0U;
-            if (seq_note_trace_output_is_watched(
-                    command->value, &trace_track, &trace_step) == 0U)
-                continue;
-            seq_note_trace_record(
-                (CONTROL_AUDIO_COMMAND_KIND(command) == CONTROL_AUDIO_NOTE_ON)
-                    ? SEQ_NOTE_TRACE_FIFO_NOTE_ON
-                    : SEQ_NOTE_TRACE_FIFO_NOTE_OFF,
-                trace_track, trace_step, command->effective_sample_time,
-                0U, command->value, command->id);
-        }
-        seq_note_trace_horizon_commit(g_control_audio_horizon.first_sample,
-            g_control_audio_horizon.first_sample
-                + g_control_audio_horizon.frames);
-    }
-    else
-        seq_note_trace_horizon_abort(g_control_audio_horizon.first_sample,
-            g_control_audio_horizon.first_sample
-                + g_control_audio_horizon.frames);
     return accepted;
 }
 
@@ -230,17 +197,6 @@ uint8_t control_rt_publish_program(uint8_t entity, uint32_t descriptor,
     return control_rt_publish(&c);
 }
 
-uint8_t control_rt_publish_program_now(uint8_t entity, uint32_t descriptor)
-{
-    control_audio_command_t command = {
-        .value = descriptor,
-        .entity = entity,
-        .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(
-            CONTROL_AUDIO_COMMAND_PROGRAM, 0U)
-    };
-    return control_rt_publish_batch_now(&command, 1U);
-}
-
 uint8_t control_rt_publish_param(uint8_t entity, uint16_t param_id,
                                  uint32_t value, uint32_t target_detail,
                                  uint64_t sample_time)
@@ -274,16 +230,6 @@ uint8_t control_rt_publish_note(uint8_t entity, uint8_t kind,
         .entity = entity,
         .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_NOTE,
             kind) };
-    return control_rt_publish(&c);
-}
-
-uint8_t control_rt_publish_transport(uint8_t kind, uint32_t position,
-                                     uint64_t sample_time)
-{
-    const control_audio_command_t c = { .effective_sample_time = sample_time,
-        .value = position,
-        .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(
-            CONTROL_AUDIO_COMMAND_TRANSPORT, kind) };
     return control_rt_publish(&c);
 }
 

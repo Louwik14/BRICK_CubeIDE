@@ -28,6 +28,8 @@ static CTRL_STATE uint8_t
     g_multi_retire_stop_committed[MULTI_SAMPLE_POOL_MAX_INSTRUMENTS];
 static CTRL_STATE uint8_t g_multi_retire_invariant_failed;
 static CTRL_STATE uint8_t g_multi_clear_active;
+static volatile uint8_t g_multi_clear_request;
+static volatile uint16_t g_multi_clear_request_instrument;
 
 void multi_sample_pool_clear_begin(void)
 {
@@ -37,6 +39,39 @@ void multi_sample_pool_clear_begin(void)
 void multi_sample_pool_clear_end(void)
 {
     g_multi_clear_active = 0U;
+}
+
+uint8_t multi_sample_pool_request_clear_begin(void)
+{
+    if (g_multi_clear_request != 0U) return 0U;
+    g_multi_clear_request = 1U;
+    return 1U;
+}
+
+uint8_t multi_sample_pool_request_clear_end(void)
+{
+    if (g_multi_clear_request != 0U) return 0U;
+    g_multi_clear_request = 2U;
+    return 1U;
+}
+
+uint8_t multi_sample_pool_request_clear_instrument(uint16_t instrument_id)
+{
+    if ((instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
+        || (g_multi_clear_request != 0U)) return 0U;
+    g_multi_clear_request_instrument = instrument_id;
+    g_multi_clear_request = 3U;
+    return 1U;
+}
+
+void multi_sample_pool_storage_request_service(void)
+{
+    const uint8_t request = g_multi_clear_request;
+    if (request == 0U) return;
+    g_multi_clear_request = 0U;
+    if (request == 1U) multi_sample_pool_clear_begin();
+    else if (request == 2U) multi_sample_pool_clear_end();
+    else (void)multi_sample_pool_clear_instrument(g_multi_clear_request_instrument);
 }
 
 uint8_t multi_sample_pool_clear_is_active(void)
@@ -164,6 +199,7 @@ void multi_sample_pool_init(void)
 void multi_sample_pool_reset(void)
 {
     g_multi_clear_active = 0U;
+    g_multi_clear_request = 0U;
     multi_sample_audio_projection_init();
     memset(g_multi_retire_stop_committed, 0,
            sizeof(g_multi_retire_stop_committed));

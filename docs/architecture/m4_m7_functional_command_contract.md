@@ -2,7 +2,7 @@
 
 ## Autorite et transport
 
-CONTROL est l'unique autorite fonctionnelle. `control_audio_publication` est le
+CONTROL est l'unique autorite fonctionnelle. `control_rt_publication` est le
 seul point final de publication et le seul appelant du writer de
 `control_audio_fifo`. La FIFO est SPSC: CONTROL possede `head`, AUDIO possede
 `tail`. AUDIO n'avance `tail` qu'apres l'application synchrone complete de la

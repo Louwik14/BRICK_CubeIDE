@@ -286,12 +286,6 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
                                                                         0U);
         if ((status == SEQ_PLOCK_OP_CREATED) || (status == SEQ_PLOCK_OP_UPDATED))
         {
-            ui_param_step_value_commit(param_track, held_steps[applied_count], param,
-                                       set_id, param_slot);
-            if ((param_track != held_track) && (seq_model_get_trig(held_track, held_steps[applied_count]) == 0U))
-            {
-                seq_model_set_trig(held_track, held_steps[applied_count], 1U);
-            }
             continue;
         }
 
@@ -388,10 +382,14 @@ static uint8_t ui_param_try_apply_live_rec_plock(uint8_t encoder,
     if (seq_param_iface_encode_param_value(param, next_value, &encoded) == 0U)
         return 0U;
 
-    if (seq_runtime_live_rec_param_write(live_rec_ctx.track,
-                                              live_rec_ctx.set_id,
-                                              live_rec_ctx.param_slot,
-                                              encoded) == 0U)
+    const control_seq_intent_t intent = {
+        .operation = CONTROL_SEQ_LIVE_REC_PLOCK_WRITE,
+        .track = (uint8_t)live_rec_ctx.track,
+        .set_id = live_rec_ctx.set_id,
+        .param_slot = live_rec_ctx.param_slot,
+        .value16 = encoded
+    };
+    if (control_domain_request_seq(&intent) == 0U)
     {
         return 0U;
     }

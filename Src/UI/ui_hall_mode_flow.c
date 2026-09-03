@@ -1,7 +1,9 @@
 #include "ui_hall_mode_flow.h"
+#include "App/control_domain.h"
 
 #include "Board/board_product.h"
 #include "Track/entity_topology.h"
+#include "Storage/patch_product.h"
 #include "Storage/patch_product.h"
 #include "stm32h7xx_hal.h"
 #include "pages/ui_page_audio_rec.h"
@@ -138,15 +140,13 @@ static void ui_hall_mode_flow_handle_lowcost_nav_button(button_id_t button)
 
 static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
                                                            uint32_t now_ms,
-                                                           uint32_t mode_tap_ms[UI_HALL_MODE_COUNT],
-                                                           uint8_t hall_note_suppressed[HALL_UI_LANE_COUNT])
+                                                           uint32_t mode_tap_ms[UI_HALL_MODE_COUNT])
 {
     if (ui_hall_mode_flow_has_lowcost_step_modes() == 0U)
     {
         return 0U;
     }
 
-    hall_note_suppressed[hall] = 1U;
     g_patch_pending.active = 0U;
 
     ui_hall_mode_t target_mode = UI_HALL_MODE_SEQ;
@@ -291,8 +291,7 @@ ui_hall_direct_action_t ui_hall_mode_flow_resolve_direct_action(uint8_t shift_do
 
 void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
                                                 uint32_t now_ms,
-                                                uint32_t mode_tap_ms[UI_HALL_MODE_COUNT],
-                                                uint8_t hall_note_suppressed[HALL_UI_LANE_COUNT])
+                                                uint32_t mode_tap_ms[UI_HALL_MODE_COUNT])
 {
     if (hall >= HALL_UI_LANE_COUNT)
     {
@@ -301,7 +300,6 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
 
     if (hall == 15U)
     {
-        hall_note_suppressed[hall] = 1U;
         g_patch_pending.active = 0U;
         if ((ui_page_get_id() == UI_PAGE_TEMPLATE_TONE)
                 && (ui_page_template_tone_is_global_master() != 0U))
@@ -316,14 +314,13 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
         return;
     }
 
-    if (ui_hall_mode_flow_handle_lowcost_shift_step(hall, now_ms, mode_tap_ms, hall_note_suppressed) != 0U)
+    if (ui_hall_mode_flow_handle_lowcost_shift_step(hall, now_ms, mode_tap_ms) != 0U)
     {
         return;
     }
 
     if (hall == 0U)
     {
-        hall_note_suppressed[hall] = 1U;
         if (entity_topology_is_active(ui_get_active_track()) == 0U)
         {
             g_patch_pending.active = 0U;
@@ -351,7 +348,6 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
 
     if (hall == 1U)
     {
-        hall_note_suppressed[hall] = 1U;
         g_patch_pending.active = 0U;
         return;
     }
@@ -360,7 +356,6 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
 
     if (hall == 9U)
     {
-        hall_note_suppressed[hall] = 1U;
         if (ui_hall_mode_resolve_rout_context(ui_get_active_track(), ui_get_hall_mode())
                 == UI_HALL_ROUT_CONTEXT_NONE)
         {
@@ -371,7 +366,6 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
 
     if (hall == 14U)
     {
-        hall_note_suppressed[hall] = 1U;
         (void)ui_hall_mode_flow_open_looper_rout();
         return;
     }
@@ -397,7 +391,6 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
         return;
     }
 
-    hall_note_suppressed[hall] = 1U;
     const uint32_t last_tap = mode_tap_ms[target_mode];
     const uint8_t is_double_tap = ((last_tap != 0U)
                                    && ((now_ms - last_tap) <= UI_HALL_MODE_DOUBLE_TAP_MS)) ? 1U : 0U;
@@ -414,10 +407,10 @@ void ui_hall_mode_flow_service_pending(uint32_t now_ms)
             return;
         }
 
-        uint16_t saved_slot = PATCH_PRODUCT_INVALID_SLOT;
         const patch_product_result_t result =
-            patch_product_save(g_patch_pending.save_track, &saved_slot);
-        (void)saved_slot;
+            (control_domain_request_patch(&(control_patch_intent_t){
+                CONTROL_PATCH_SAVE, 0U, 0U, g_patch_pending.save_track, {0}}) != 0U)
+                ? PATCH_PRODUCT_PENDING : PATCH_PRODUCT_IO_BUSY;
         const uint32_t done_ms = HAL_GetTick();
         ui_hall_patch_feedback_end(done_ms);
         g_patch_pending.save_pending = 0U;
@@ -450,7 +443,6 @@ void ui_hall_mode_flow_handle_track_hall_action(uint8_t hall,
                                                 uint8_t held_master_candidate,
                                                 uint8_t has_held_master_candidate,
                                                 uint32_t cfg_tap_ms[TRACK_COUNT],
-                                                uint8_t hall_note_suppressed[HALL_UI_LANE_COUNT],
                                                 ui_hall_mode_flow_set_active_track_fn set_active_track,
                                                 ui_hall_mode_flow_feedback_fn feedback)
 {
@@ -463,8 +455,6 @@ void ui_hall_mode_flow_handle_track_hall_action(uint8_t hall,
     }
 
     const uint8_t active_track_before_press = ui_get_active_track();
-    hall_note_suppressed[hall] = 1U;
-
     const uint32_t last_tap = cfg_tap_ms[hall];
     const uint8_t is_double_tap = ((active_track_before_press == hall)
                                    && (last_tap != 0U)

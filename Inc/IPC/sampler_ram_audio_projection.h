@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 
 #include "IPC/shared_memory_ref.h"
@@ -8,8 +9,8 @@
 typedef enum
 {
     SAMPLER_RAM_FORMAT_NONE = 0,
-    SAMPLER_RAM_FORMAT_FLOAT32_MONO,
-    SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED
+    SAMPLER_RAM_FORMAT_FLOAT32_MONO = 1,
+    SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED = 2
 } sampler_ram_format_t;
 
 #define SAMPLER_RAM_AUDIO_INVALID_SLOT UINT16_MAX
@@ -40,8 +41,10 @@ typedef struct
     uint16_t ram_slot;
     uint16_t channels;
     uint16_t bytes_per_frame;
-    sampler_ram_format_t format;
+    uint8_t format;
 } sampler_ram_audio_descriptor_t;
 
 _Static_assert(sizeof(sampler_ram_audio_descriptor_t) == 40U,
                "Sample RAM AUDIO descriptor ABI changed");
+_Static_assert(offsetof(sampler_ram_audio_descriptor_t, format) == 36U,
+               "Sample RAM AUDIO format offset changed");

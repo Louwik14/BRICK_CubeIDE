@@ -36,7 +36,7 @@
 _Static_assert(SAMPLE_STREAM_TARGET_MAX_VOICES <= UINT8_MAX,
                "stream voice index must fit in uint8_t");
 _Static_assert(SAMPLE_STREAM_TARGET_MAX_IO_IN_FLIGHT == 1U,
-               "streaming keeps one monocore I/O operation in flight");
+               "streaming keeps one bounded I/O operation in flight");
 _Static_assert(SAMPLE_STREAM_PAGES_PER_VOICE_PER_ROUND > 0U,
                "stream round must distribute at least one page per voice");
 #endif

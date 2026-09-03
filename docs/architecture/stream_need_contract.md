@@ -34,8 +34,8 @@ Le service Storage traite une commande bornee hors IRQ. Produit: tranche 32 KiB;
 
 Le transport contient geometrie source, format et token. STORAGE decode dans
 un payload partage et publie READY; AUDIO invalide avant lecture. H743
-et H747 conservent le meme contrat: M4 possede metadata et I/O, M7 possede les
-credits de lecture.
+et H747 conservent le meme contrat: M4 possede metadata et I/O, M7 publie les
+leases physiques de ses lecteurs.
 
 ## Catalogue Classic unique
 

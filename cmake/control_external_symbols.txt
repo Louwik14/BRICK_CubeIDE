@@ -56,6 +56,7 @@ HAL_SD_Abort_IT
 __assert_func
 strchr
 strlen
+strcpy
 strrchr
 _ctype_
 __aeabi_d2uiz

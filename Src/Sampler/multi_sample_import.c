@@ -105,8 +105,202 @@ SDRAM_MULTI_IMPORT static uint8_t g_auto_loop_io[MULTI_SAMPLE_AUTO_LOOP_IO_BYTES
 static CTRL_STATE multi_sample_import_result_t g_import_last_result;
 static CTRL_STATE uint16_t g_import_sample_count;
 static CTRL_STATE uint16_t g_import_zone_count;
+static volatile uint8_t g_import_request_valid;
+static char g_import_request_path[MULTI_SAMPLE_IMPORT_PATH_MAX];
+static volatile uint8_t g_import_busy;
+static volatile uint16_t g_import_progress_done;
+static volatile uint16_t g_import_progress_total;
+static volatile uint8_t g_delete_request_valid;
+static volatile uint8_t g_delete_result_valid;
+static volatile uint8_t g_delete_result;
+static char g_delete_request_path[MULTI_SAMPLE_IMPORT_PATH_MAX];
+typedef enum
+{
+    MULTI_IMPORT_PROGRESSIVE_IDLE = 0,
+    MULTI_IMPORT_PROGRESSIVE_SCAN,
+    MULTI_IMPORT_PROGRESSIVE_GENERATE,
+    MULTI_IMPORT_PROGRESSIVE_WRITE
+} multi_import_progressive_state_t;
+static multi_import_progressive_state_t g_import_progressive_state;
+static DIR g_import_progressive_dir;
+static uint8_t g_import_progressive_dir_open;
+static uint8_t g_import_progressive_gate_held;
+static uint16_t g_import_progressive_wav_count;
+static uint32_t g_import_progressive_path_cursor;
+static char g_import_progressive_name[MULTI_SAMPLE_POOL_NAME_MAX];
 
 static uint8_t multi_import_validate_wav_info(const wav_info_t *info);
+static uint8_t multi_import_is_wav(const char *name);
+static multi_sample_import_result_t multi_import_add_wav(const char *scan_dir,
+                                                         const FILINFO *info,
+                                                         uint32_t *path_cursor);
+static multi_sample_import_result_t multi_import_generate_zones(void);
+static multi_sample_import_result_t multi_import_count_direct_wavs(const char *scan_dir,
+                                                                    uint16_t *out_count);
+static void multi_import_clear_diag(void);
+static uint8_t multi_import_extract_instrument_name(const char *instrument_dir,
+                                                    char *out_name,
+                                                    uint32_t out_size);
+static multi_sample_import_result_t multi_import_index_write_result(
+    multi_sample_index_result_t result);
+static void multi_import_notify_progress(uint16_t done, uint16_t total);
+
+static void multi_import_progressive_finish(multi_sample_import_result_t result)
+{
+    if (g_import_progressive_dir_open != 0U)
+    {
+        (void)f_closedir(&g_import_progressive_dir);
+        g_import_progressive_dir_open = 0U;
+    }
+    if (g_import_progressive_gate_held != 0U)
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+        g_import_progressive_gate_held = 0U;
+    }
+    g_import_last_result = result;
+    g_import_progressive_state = MULTI_IMPORT_PROGRESSIVE_IDLE;
+    g_import_busy = 0U;
+}
+
+static uint8_t multi_import_progressive_start(const char *instrument_dir)
+{
+    g_import_last_result = MULTI_SAMPLE_IMPORT_OK;
+    multi_import_clear_diag();
+    g_import_sample_count = 0U;
+    g_import_zone_count = 0U;
+    g_import_progress_done = 0U;
+    g_import_progress_total = 1U;
+    memset(g_import_paths, 0, sizeof(g_import_paths));
+    memset(g_import_samples, 0, sizeof(g_import_samples));
+    memset(g_import_zones, 0, sizeof(g_import_zones));
+
+    if ((instrument_dir == NULL) || (instrument_dir[0] == '\0'))
+    {
+        g_import_last_result = MULTI_SAMPLE_IMPORT_INVALID_ARG;
+        return 0U;
+    }
+    if ((project_replacement_is_active() != 0U)
+        || (audio_recorder_is_active() != 0U)
+        || (sample_cache_has_pending_sd_work() != 0U))
+    {
+        g_import_last_result = MULTI_SAMPLE_IMPORT_SD_BUSY;
+        return 0U;
+    }
+    if ((multi_import_extract_instrument_name(instrument_dir,
+                                               g_import_progressive_name,
+                                               sizeof(g_import_progressive_name)) == 0U)
+        || (strlen(instrument_dir) >= sizeof(g_import_scan_dir)))
+    {
+        g_import_last_result = MULTI_SAMPLE_IMPORT_PATH_TOO_LONG;
+        return 0U;
+    }
+    memcpy(g_import_scan_dir, instrument_dir, strlen(instrument_dir) + 1U);
+    const int written = snprintf(g_import_index_path, sizeof(g_import_index_path),
+                                 "%s/%s.brickmulti", instrument_dir,
+                                 g_import_progressive_name);
+    if ((written < 0) || ((uint32_t)written >= sizeof(g_import_index_path)))
+    {
+        g_import_last_result = MULTI_SAMPLE_IMPORT_PATH_TOO_LONG;
+        return 0U;
+    }
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U)
+    {
+        g_import_last_result = MULTI_SAMPLE_IMPORT_SD_BUSY;
+        return 0U;
+    }
+    g_import_progressive_gate_held = 1U;
+    if (sd_access_fs_mount_if_needed() == 0U)
+    {
+        multi_import_progressive_finish(MULTI_SAMPLE_IMPORT_SD_MOUNT_FAIL);
+        return 0U;
+    }
+    const multi_sample_import_result_t count_result =
+        multi_import_count_direct_wavs(g_import_scan_dir, &g_import_progressive_wav_count);
+    if (count_result != MULTI_SAMPLE_IMPORT_OK)
+    {
+        multi_import_progressive_finish(count_result);
+        return 0U;
+    }
+    g_import_progress_total = (uint16_t)(g_import_progressive_wav_count + 2U);
+    if (f_opendir(&g_import_progressive_dir, g_import_scan_dir) != FR_OK)
+    {
+        multi_import_progressive_finish(MULTI_SAMPLE_IMPORT_OPEN_DIR_FAIL);
+        return 0U;
+    }
+    g_import_progressive_dir_open = 1U;
+    g_import_progressive_path_cursor = 0U;
+    g_import_progressive_state = MULTI_IMPORT_PROGRESSIVE_SCAN;
+    g_import_busy = 1U;
+    return 1U;
+}
+
+static void multi_import_progressive_step(void)
+{
+    if (g_import_progressive_state == MULTI_IMPORT_PROGRESSIVE_SCAN)
+    {
+        FILINFO info;
+        memset(&info, 0, sizeof(info));
+        const FRESULT result = f_readdir(&g_import_progressive_dir, &info);
+        if (result != FR_OK)
+        {
+            multi_import_progressive_finish(MULTI_SAMPLE_IMPORT_OPEN_DIR_FAIL);
+            return;
+        }
+        if (info.fname[0] == '\0')
+        {
+            multi_import_progressive_finish(MULTI_SAMPLE_IMPORT_OK);
+            g_import_progressive_state = MULTI_IMPORT_PROGRESSIVE_GENERATE;
+            g_import_busy = 1U;
+            return;
+        }
+        if (((info.fattrib & AM_DIR) == 0U)
+            && (multi_import_is_wav(info.fname) != 0U))
+        {
+            const multi_sample_import_result_t import_result =
+                multi_import_add_wav(g_import_scan_dir, &info,
+                                     &g_import_progressive_path_cursor);
+            if (import_result != MULTI_SAMPLE_IMPORT_OK)
+            {
+                multi_import_progressive_finish(import_result);
+                return;
+            }
+            multi_import_notify_progress((uint16_t)(g_import_progress_done + 1U),
+                                         g_import_progress_total);
+        }
+        return;
+    }
+    if (g_import_progressive_state == MULTI_IMPORT_PROGRESSIVE_GENERATE)
+    {
+        const multi_sample_import_result_t result = multi_import_generate_zones();
+        if (result != MULTI_SAMPLE_IMPORT_OK)
+        {
+            multi_import_progressive_finish(result);
+            return;
+        }
+        multi_import_notify_progress((uint16_t)(g_import_progressive_wav_count + 1U),
+                                     g_import_progress_total);
+        g_import_progressive_state = MULTI_IMPORT_PROGRESSIVE_WRITE;
+        return;
+    }
+    if (g_import_progressive_state == MULTI_IMPORT_PROGRESSIVE_WRITE)
+    {
+        multi_sample_index_source_t source;
+        memset(&source, 0, sizeof(source));
+        source.instrument_name = g_import_progressive_name;
+        source.sample_count = g_import_sample_count;
+        source.zone_count = g_import_zone_count;
+        source.zones = g_import_zones;
+        for (uint16_t i = 0U; i < g_import_sample_count; ++i)
+            g_import_source_samples[i] = g_import_samples[i].sample;
+        source.samples = g_import_source_samples;
+        const multi_sample_import_result_t result =
+            multi_import_index_write_result(multi_sample_index_write(
+                g_import_index_path, &source));
+        if (result == MULTI_SAMPLE_IMPORT_OK)
+            multi_import_notify_progress(g_import_progress_total, g_import_progress_total);
+        multi_import_progressive_finish(result);
+    }
+}
 
 static void multi_import_clear_diag(void)
 {
@@ -1444,15 +1638,10 @@ static multi_sample_import_result_t multi_import_index_write_result(
         : MULTI_SAMPLE_IMPORT_INDEX_WRITE_FAIL;
 }
 
-static void multi_import_notify_progress(multi_sample_import_progress_cb_t progress_cb,
-                                         void *progress_user,
-                                         uint16_t done,
-                                         uint16_t total)
+static void multi_import_notify_progress(uint16_t done, uint16_t total)
 {
-    if (progress_cb != 0)
-    {
-        progress_cb(done, total, progress_user);
-    }
+    g_import_progress_done = done;
+    g_import_progress_total = (total == 0U) ? 1U : total;
 }
 
 static multi_sample_import_result_t multi_import_count_direct_wavs(const char *scan_dir,
@@ -1497,164 +1686,91 @@ static multi_sample_import_result_t multi_import_count_direct_wavs(const char *s
     return MULTI_SAMPLE_IMPORT_OK;
 }
 
-multi_sample_import_result_t multi_sample_import_folder_with_progress(
-    const char *instrument_dir,
-    multi_sample_import_progress_cb_t progress_cb,
-    void *progress_user)
+uint8_t multi_sample_import_request_folder(const char *instrument_dir)
 {
-    if (project_replacement_is_active() != 0U)
-        return MULTI_SAMPLE_IMPORT_SD_BUSY;
-    g_import_last_result = MULTI_SAMPLE_IMPORT_OK;
-    multi_import_clear_diag();
-    g_import_sample_count = 0U;
-    g_import_zone_count = 0U;
-    memset(g_import_paths, 0, sizeof(g_import_paths));
-    memset(g_import_samples, 0, sizeof(g_import_samples));
-    memset(g_import_zones, 0, sizeof(g_import_zones));
-
-    if ((instrument_dir == 0) || (instrument_dir[0] == '\0'))
+    if ((instrument_dir == NULL) || (instrument_dir[0] == '\0')
+        || (strlen(instrument_dir) >= sizeof(g_import_request_path))
+        || (g_import_request_valid != 0U) || (g_import_busy != 0U))
     {
-        g_import_last_result = MULTI_SAMPLE_IMPORT_INVALID_ARG;
-        return g_import_last_result;
+        return 0U;
     }
-
-    if ((audio_recorder_is_active() != 0U)
-        || (sample_cache_has_pending_sd_work() != 0U))
-    {
-        g_import_last_result = MULTI_SAMPLE_IMPORT_SD_BUSY;
-        return g_import_last_result;
-    }
-
-    char instrument_name[MULTI_SAMPLE_POOL_NAME_MAX];
-    if ((multi_import_extract_instrument_name(instrument_dir,
-                                              instrument_name,
-                                              sizeof(instrument_name)) == 0U)
-        || (strlen(instrument_dir) >= sizeof(g_import_scan_dir)))
-    {
-        g_import_last_result = MULTI_SAMPLE_IMPORT_PATH_TOO_LONG;
-        return g_import_last_result;
-    }
-    memcpy(g_import_scan_dir, instrument_dir, strlen(instrument_dir) + 1U);
-
-    const int index_path_written = snprintf(g_import_index_path,
-                                            sizeof(g_import_index_path),
-                                            "%s/%s.brickmulti",
-                                            instrument_dir,
-                                            instrument_name);
-    if ((index_path_written < 0) || ((uint32_t)index_path_written >= sizeof(g_import_index_path)))
-    {
-        g_import_last_result = MULTI_SAMPLE_IMPORT_PATH_TOO_LONG;
-        return g_import_last_result;
-    }
-
-    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U)
-    {
-        g_import_last_result = MULTI_SAMPLE_IMPORT_SD_BUSY;
-        return g_import_last_result;
-    }
-
-    if (sd_access_fs_mount_if_needed() == 0U)
-    {
-        sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
-        g_import_last_result = MULTI_SAMPLE_IMPORT_SD_MOUNT_FAIL;
-        return g_import_last_result;
-    }
-
-    uint16_t direct_wav_count = 0U;
-    multi_sample_import_result_t count_result =
-        multi_import_count_direct_wavs(g_import_scan_dir, &direct_wav_count);
-    if (count_result != MULTI_SAMPLE_IMPORT_OK)
-    {
-        sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
-        g_import_last_result = count_result;
-        return g_import_last_result;
-    }
-
-    const uint16_t progress_total = (uint16_t)(direct_wav_count + 2U);
-    uint16_t progress_done = 0U;
-    multi_import_notify_progress(progress_cb, progress_user, progress_done, progress_total);
-
-    DIR dir;
-    FRESULT fr = f_opendir(&dir, g_import_scan_dir);
-    if (fr != FR_OK)
-    {
-        sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
-        g_import_last_result = MULTI_SAMPLE_IMPORT_OPEN_DIR_FAIL;
-        return g_import_last_result;
-    }
-
-    uint32_t path_cursor = 0U;
-    multi_sample_import_result_t result = MULTI_SAMPLE_IMPORT_OK;
-    while (result == MULTI_SAMPLE_IMPORT_OK)
-    {
-        FILINFO fno;
-        memset(&fno, 0, sizeof(fno));
-        fr = f_readdir(&dir, &fno);
-        if (fr != FR_OK)
-        {
-            result = MULTI_SAMPLE_IMPORT_OPEN_DIR_FAIL;
-            break;
-        }
-        if (fno.fname[0] == '\0')
-        {
-            break;
-        }
-        if (((fno.fattrib & AM_DIR) != 0U) || (multi_import_is_wav(fno.fname) == 0U))
-        {
-            continue;
-        }
-
-        result = multi_import_add_wav(g_import_scan_dir, &fno, &path_cursor);
-        if (result == MULTI_SAMPLE_IMPORT_OK)
-        {
-            progress_done++;
-            multi_import_notify_progress(progress_cb, progress_user, progress_done, progress_total);
-        }
-    }
-
-    (void)f_closedir(&dir);
-    sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
-
-    if (result == MULTI_SAMPLE_IMPORT_OK)
-    {
-        result = multi_import_generate_zones();
-        if (result == MULTI_SAMPLE_IMPORT_OK)
-        {
-            progress_done = (uint16_t)(direct_wav_count + 1U);
-            multi_import_notify_progress(progress_cb, progress_user, progress_done, progress_total);
-        }
-    }
-
-    if (result == MULTI_SAMPLE_IMPORT_OK)
-    {
-        multi_sample_index_source_t src;
-        memset(&src, 0, sizeof(src));
-        src.instrument_name = instrument_name;
-        src.sample_count = g_import_sample_count;
-        src.zone_count = g_import_zone_count;
-        src.zones = g_import_zones;
-
-        for (uint16_t i = 0U; i < g_import_sample_count; ++i)
-        {
-            g_import_source_samples[i] = g_import_samples[i].sample;
-        }
-        src.samples = g_import_source_samples;
-
-        result = multi_import_index_write_result(multi_sample_index_write(g_import_index_path,
-                                                                          &src));
-        if (result == MULTI_SAMPLE_IMPORT_OK)
-        {
-            multi_import_notify_progress(progress_cb, progress_user, progress_total, progress_total);
-        }
-    }
-
-    g_import_last_result = result;
-    return result;
+    (void)snprintf(g_import_request_path, sizeof(g_import_request_path), "%s", instrument_dir);
+    g_import_request_valid = 1U;
+    return 1U;
 }
 
-multi_sample_import_result_t multi_sample_import_folder(const char *instrument_dir)
+void multi_sample_import_storage_request_service(void)
 {
-    return multi_sample_import_folder_with_progress(instrument_dir, 0, 0);
+    if (g_import_request_valid != 0U)
+    {
+        if (g_import_busy != 0U)
+            return;
+        char path[MULTI_SAMPLE_IMPORT_PATH_MAX];
+        (void)snprintf(path, sizeof(path), "%s", g_import_request_path);
+        g_import_request_valid = 0U;
+        (void)multi_import_progressive_start(path);
+        return;
+    }
+    if (g_import_busy != 0U)
+        multi_import_progressive_step();
+}
+
+uint8_t multi_sample_import_is_busy(void)
+{
+    return (g_import_busy != 0U) || (g_import_request_valid != 0U);
+}
+
+uint16_t multi_sample_import_progress_done(void)
+{
+    return g_import_progress_done;
+}
+
+uint16_t multi_sample_import_progress_total(void)
+{
+    return g_import_progress_total;
+}
+
+uint8_t multi_sample_import_request_delete_index(const char *index_path)
+{
+    if ((index_path == NULL) || (index_path[0] == '\0')
+        || (strlen(index_path) >= sizeof(g_delete_request_path))
+        || (g_delete_request_valid != 0U) || (g_delete_result_valid != 0U))
+    {
+        return 0U;
+    }
+    (void)snprintf(g_delete_request_path, sizeof(g_delete_request_path), "%s", index_path);
+    g_delete_request_valid = 1U;
+    return 1U;
+}
+
+void multi_sample_import_storage_delete_service(void)
+{
+    if (g_delete_request_valid == 0U)
+        return;
+    uint8_t result = 3U;
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) != 0U)
+    {
+        if (sd_access_fs_mount_if_needed() != 0U)
+        {
+            const FRESULT fr = f_unlink(g_delete_request_path);
+            result = (fr == FR_OK) ? 1U : ((fr == FR_NO_FILE) ? 2U : 3U);
+        }
+        sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+    }
+    g_delete_request_valid = 0U;
+    g_delete_result = result;
+    __DMB();
+    g_delete_result_valid = 1U;
+}
+
+uint8_t multi_sample_import_take_delete_result(uint8_t *result)
+{
+    if (g_delete_result_valid == 0U)
+        return 0U;
+    if (result != NULL)
+        *result = g_delete_result;
+    g_delete_result_valid = 0U;
+    return 1U;
 }
 
 multi_sample_import_result_t multi_sample_import_get_last_result(void)

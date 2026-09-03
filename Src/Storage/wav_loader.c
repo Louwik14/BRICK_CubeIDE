@@ -41,6 +41,8 @@ static uint8_t g_wav_catalog_stale;
 static uint8_t g_wav_catalog_last_sd_busy;
 static uint8_t g_wav_catalog_last_io_error;
 static uint8_t g_wav_catalog_path_truncated;
+static volatile uint8_t g_wav_catalog_rebuild_requested;
+static volatile wav_loader_catalog_view_service_result_t g_wav_catalog_view_last_result;
 STORAGE_STATE_SDRAM static wav_loader_catalog_diag_t g_wav_catalog_diag;
 
 
@@ -232,6 +234,52 @@ typedef struct
     uint32_t checksum;
 } wav_loader_catalog_build_t;
 
+#define WAV_LOADER_CATALOG_SCAN_ENTRIES_PER_PASS (8U)
+#define WAV_LOADER_CATALOG_SCAN_MAX_DEPTH (8U)
+
+typedef enum
+{
+    WAV_CATALOG_REBUILD_IDLE = 0,
+    WAV_CATALOG_REBUILD_CREATE,
+    WAV_CATALOG_REBUILD_SCAN,
+    WAV_CATALOG_REBUILD_FINALIZE
+} wav_catalog_rebuild_state_t;
+
+typedef enum
+{
+    WAV_CATALOG_SCAN_DIRS = 0,
+    WAV_CATALOG_SCAN_FILES,
+    WAV_CATALOG_SCAN_DONE
+} wav_catalog_scan_phase_t;
+
+typedef struct
+{
+    DIR dir;
+    char path[WAV_LOADER_CATALOG_PATH_MAX];
+    uint16_t parent_id;
+    uint8_t depth;
+    uint8_t phase;
+    uint8_t open;
+} wav_catalog_scan_frame_t;
+
+typedef struct
+{
+    wav_catalog_rebuild_state_t state;
+    wav_catalog_scan_frame_t frames[WAV_LOADER_CATALOG_SCAN_MAX_DEPTH + 1U];
+    uint8_t frame_top;
+    volatile uint8_t active;
+    uint32_t media_epoch;
+    uint32_t checksum;
+    uint16_t old_count;
+    uint8_t old_loaded;
+    uint8_t old_truncated;
+    uint8_t old_path_truncated;
+    uint8_t old_stale;
+    wav_loader_catalog_file_header_t header;
+} wav_catalog_rebuild_t;
+
+STORAGE_STATE_SDRAM static wav_catalog_rebuild_t g_wav_catalog_rebuild;
+
 static uint8_t wav_loader_catalog_write_entry(wav_loader_catalog_build_t *build,
                                               const wav_loader_catalog_entry_t *entry,
                                               uint16_t *out_index)
@@ -326,97 +374,123 @@ static uint8_t wav_loader_catalog_write_dirent(wav_loader_catalog_build_t *build
     return wav_loader_catalog_write_entry(build, &entry, out_index);
 }
 
-static void wav_loader_catalog_scan_dir(wav_loader_catalog_build_t *build,
-                                        const char *dir_path,
-                                        uint16_t parent_id,
-                                        uint8_t depth)
+static void wav_loader_catalog_scan_close_dirs(void)
 {
-    DIR dir;
-    FILINFO fno;
-    if((build == 0) || (build->fr != FR_OK)
-        || (depth > 8U) || (wav_loader_path_is_hidden_system_cache(dir_path) != 0U))
+    for (uint8_t i = 0U; i <= WAV_LOADER_CATALOG_SCAN_MAX_DEPTH; ++i)
     {
-        return;
-    }
-    FRESULT fr = f_opendir(&dir, dir_path);
-    if (fr != FR_OK)
-    {
-        return;
-    }
-
-    while (1)
-    {
-        fr = f_readdir(&dir, &fno);
-        if ((fr != FR_OK) || (fno.fname[0] == '\0'))
+        wav_catalog_scan_frame_t *const frame = &g_wav_catalog_rebuild.frames[i];
+        if (frame->open != 0U)
         {
-            break;
+            (void)f_closedir(&frame->dir);
+            frame->open = 0U;
         }
-        if ((fno.fname[0] == '.') || ((fno.fattrib & AM_DIR) == 0U))
+    }
+    g_wav_catalog_rebuild.frame_top = 0U;
+}
+
+static uint8_t wav_loader_catalog_scan_push(const FILINFO *fno,
+                                            const wav_loader_catalog_build_t *build,
+                                            uint16_t entry_index)
+{
+    if ((fno == 0) || (build == 0)
+        || (g_wav_catalog_rebuild.frame_top >= WAV_LOADER_CATALOG_SCAN_MAX_DEPTH))
+        return 0U;
+
+    wav_catalog_scan_frame_t *const parent =
+        &g_wav_catalog_rebuild.frames[g_wav_catalog_rebuild.frame_top];
+    wav_catalog_scan_frame_t *const child =
+        &g_wav_catalog_rebuild.frames[g_wav_catalog_rebuild.frame_top + 1U];
+    if (wav_loader_catalog_make_path(child->path, sizeof(child->path),
+                                     parent->path, fno->fname) == 0U)
+    {
+        g_wav_catalog_path_truncated = 1U;
+        return 0U;
+    }
+    if (wav_loader_path_is_hidden_system_cache(child->path) != 0U)
+        return 0U;
+    memset(&child->dir, 0, sizeof(child->dir));
+    child->parent_id = entry_index;
+    child->depth = (uint8_t)(parent->depth + 1U);
+    child->phase = WAV_CATALOG_SCAN_DIRS;
+    child->open = 0U;
+    g_wav_catalog_rebuild.frame_top++;
+    return 1U;
+}
+
+static uint8_t wav_loader_catalog_scan_step(wav_loader_catalog_build_t *build,
+                                            uint32_t *budget)
+{
+    while ((*budget != 0U) && (build->fr == FR_OK))
+    {
+        wav_catalog_scan_frame_t *const frame =
+            &g_wav_catalog_rebuild.frames[g_wav_catalog_rebuild.frame_top];
+        if (frame->open == 0U)
         {
+            if (f_opendir(&frame->dir, frame->path) != FR_OK)
+            {
+                if (g_wav_catalog_rebuild.frame_top == 0U)
+                    return 1U;
+                g_wav_catalog_rebuild.frame_top--;
+                continue;
+            }
+            frame->open = 1U;
+        }
+
+        FILINFO fno;
+        memset(&fno, 0, sizeof(fno));
+        const FRESULT fr = f_readdir(&frame->dir, &fno);
+        (*budget)--;
+        if (fr != FR_OK)
+        {
+            build->fr = fr;
+            return 0U;
+        }
+        if (fno.fname[0] == '\0')
+        {
+            (void)f_closedir(&frame->dir);
+            frame->open = 0U;
+            if (frame->phase == WAV_CATALOG_SCAN_DIRS)
+            {
+                frame->phase = WAV_CATALOG_SCAN_FILES;
+                continue;
+            }
+            frame->phase = WAV_CATALOG_SCAN_DONE;
+            if (g_wav_catalog_rebuild.frame_top == 0U)
+                return 1U;
+            g_wav_catalog_rebuild.frame_top--;
+            continue;
+        }
+        if (fno.fname[0] == '.')
+            continue;
+
+        if (frame->phase == WAV_CATALOG_SCAN_DIRS)
+        {
+            if ((fno.fattrib & AM_DIR) == 0U)
+                continue;
+
+            uint16_t entry_index = WAV_LOADER_CATALOG_ROOT_PARENT;
+            if (wav_loader_catalog_write_dirent(build, frame->path, &fno,
+                                                frame->parent_id, &entry_index) == 0U)
+            {
+                if (g_wav_catalog_truncated != 0U)
+                    return 1U;
+                continue;
+            }
+            if ((g_wav_catalog_truncated == 0U)
+                && (frame->depth < WAV_LOADER_CATALOG_SCAN_MAX_DEPTH))
+                (void)wav_loader_catalog_scan_push(&fno, build, entry_index);
             continue;
         }
 
-        uint16_t entry_index = WAV_LOADER_CATALOG_ROOT_PARENT;
-        if (wav_loader_catalog_write_dirent(build, dir_path, &fno, parent_id, &entry_index) == 0U)
+        if (((fno.fattrib & AM_DIR) == 0U) && wav_ext_is_wav(fno.fname) != 0U)
         {
+            (void)wav_loader_catalog_write_dirent(build, frame->path, &fno,
+                                                  frame->parent_id, 0);
             if (g_wav_catalog_truncated != 0U)
-            {
-                break;
-            }
-        }
-        else if (g_wav_catalog_truncated == 0U)
-        {
-            char path[WAV_LOADER_CATALOG_PATH_MAX];
-            const size_t dir_len = strlen(dir_path);
-            const char *const separator = ((dir_len != 0U) && (dir_path[dir_len - 1U] == '/')) ? "" : "/";
-            const int path_len = snprintf(path, sizeof(path), "%s%s%s", dir_path, separator, fno.fname);
-            if ((path_len >= 0) && ((uint32_t)path_len < sizeof(path)))
-            {
-                wav_loader_catalog_scan_dir(build, path, entry_index, (uint8_t)(depth + 1U));
-            }
-            else
-            {
-                g_wav_catalog_path_truncated = 1U;
-            }
+                return 1U;
         }
     }
-
-    (void)f_closedir(&dir);
-
-    if (build->fr != FR_OK)
-    {
-        return;
-    }
-
-    fr = f_opendir(&dir, dir_path);
-    if (fr != FR_OK)
-    {
-        return;
-    }
-
-    while (1)
-    {
-        fr = f_readdir(&dir, &fno);
-        if ((fr != FR_OK) || (fno.fname[0] == '\0'))
-        {
-            break;
-        }
-        if ((fno.fname[0] == '.')
-            || ((fno.fattrib & AM_DIR) != 0U)
-            || (!wav_ext_is_wav(fno.fname)))
-        {
-            continue;
-        }
-        if (wav_loader_catalog_write_dirent(build, dir_path, &fno, parent_id, 0) == 0U)
-        {
-            if (g_wav_catalog_truncated != 0U)
-            {
-                break;
-            }
-        }
-    }
-
-    (void)f_closedir(&dir);
+    return 0U;
 }
 
 static uint8_t wav_loader_catalog_validate_stream(FIL *file, const wav_loader_catalog_file_header_t *header)
@@ -789,60 +863,78 @@ static uint8_t wav_loader_catalog_read_entry_by_index(uint16_t index, wav_loader
     return (uint8_t)((fr == FR_OK) && (read == sizeof(*out)));
 }
 
-static uint8_t wav_loader_catalog_save(void)
+static void wav_loader_catalog_rebuild_restore(void)
 {
-    FIL file;
-    UINT written = 0U;
-    if (f_mkdir("0:/BRICK") != FR_OK)
+    wav_loader_catalog_scan_close_dirs();
+    g_wav_catalog_count = g_wav_catalog_rebuild.old_count;
+    g_wav_catalog_loaded = g_wav_catalog_rebuild.old_loaded;
+    g_wav_catalog_truncated = g_wav_catalog_rebuild.old_truncated;
+    g_wav_catalog_path_truncated = g_wav_catalog_rebuild.old_path_truncated;
+    g_wav_catalog_stale = g_wav_catalog_rebuild.old_stale;
+    g_wav_catalog_rebuild.active = 0U;
+    g_wav_catalog_rebuild.state = WAV_CATALOG_REBUILD_IDLE;
+}
+
+static void wav_loader_catalog_rebuild_commit(void)
+{
+    wav_loader_catalog_scan_close_dirs();
+    wav_loader_catalog_views_clear();
+    g_wav_catalog_stale = 0U;
+    g_wav_catalog_loaded = 1U;
+    g_wav_catalog_rebuild.active = 0U;
+    g_wav_catalog_rebuild.state = WAV_CATALOG_REBUILD_IDLE;
+}
+
+static void wav_loader_catalog_rebuild_start(void)
+{
+    if (g_wav_catalog_rebuild.active != 0U)
+        return;
+
+    const uint16_t old_count = g_wav_catalog_count;
+    const uint8_t old_loaded = g_wav_catalog_loaded;
+    const uint8_t old_truncated = g_wav_catalog_truncated;
+    const uint8_t old_path_truncated = g_wav_catalog_path_truncated;
+    const uint8_t old_stale = g_wav_catalog_stale;
+    memset(&g_wav_catalog_rebuild, 0, sizeof(g_wav_catalog_rebuild));
+    g_wav_catalog_rebuild.old_count = old_count;
+    g_wav_catalog_rebuild.old_loaded = old_loaded;
+    g_wav_catalog_rebuild.old_truncated = old_truncated;
+    g_wav_catalog_rebuild.old_path_truncated = old_path_truncated;
+    g_wav_catalog_rebuild.old_stale = old_stale;
+    g_wav_catalog_rebuild.media_epoch = sd_access_media_epoch();
+    g_wav_catalog_rebuild.checksum = 2166136261UL;
+    g_wav_catalog_rebuild.state = WAV_CATALOG_REBUILD_CREATE;
+    g_wav_catalog_rebuild.active = 1U;
+
+    g_wav_catalog_count = 0U;
+    g_wav_catalog_truncated = 0U;
+    g_wav_catalog_path_truncated = 0U;
+    g_wav_catalog_loaded = 0U;
+    g_wav_catalog_stale = 1U;
+    g_wav_catalog_last_sd_busy = 0U;
+    g_wav_catalog_last_io_error = 0U;
+}
+
+static uint8_t wav_loader_catalog_rebuild_open_file(FIL *file, uint8_t create)
+{
+    if (file == 0)
+        return 0U;
+    if ((create != 0U) && (f_mkdir("0:/BRICK") != FR_OK))
     {
         /* Existing directory also reports an error on some FatFs builds. */
     }
-
-    if (f_open(&file, WAV_LOADER_CATALOG_PATH, FA_CREATE_ALWAYS | FA_READ | FA_WRITE) != FR_OK)
-    {
-        return 0U;
-    }
-
-    wav_loader_catalog_file_header_t header;
-    header.magic = WAV_LOADER_CATALOG_MAGIC;
-    header.version = WAV_LOADER_CATALOG_VERSION;
-    header.entry_size = (uint16_t)sizeof(wav_loader_catalog_entry_t);
-    header.capacity = WAV_LOADER_CATALOG_MAX;
-    header.count = 0U;
-    header.checksum = 0U;
-
-    FRESULT fr = f_write(&file, &header, sizeof(header), &written);
-    wav_loader_catalog_build_t build;
-    build.file = &file;
-    build.fr = ((fr == FR_OK) && (written == sizeof(header))) ? FR_OK : FR_INT_ERR;
-    build.checksum = 2166136261UL;
-    if (build.fr == FR_OK)
-    {
-        wav_loader_catalog_scan_dir(&build, WAV_LOADER_SAMPLE_ROOT, WAV_LOADER_CATALOG_ROOT_PARENT, 0U);
-        fr = build.fr;
-    }
-    if ((fr == FR_OK) && (f_lseek(&file, 0U) == FR_OK))
-    {
-        header.count = g_wav_catalog_count;
-        header.checksum = build.checksum;
-        written = 0U;
-        fr = f_write(&file, &header, sizeof(header), &written);
-        if (written != sizeof(header))
-        {
-            fr = FR_INT_ERR;
-        }
-    }
-    if (fr == FR_OK)
-    {
-        fr = f_sync(&file);
-    }
-    (void)f_close(&file);
-    return (fr == FR_OK) ? 1U : 0U;
+    const BYTE mode = (create != 0U)
+        ? (FA_CREATE_ALWAYS | FA_READ | FA_WRITE)
+        : (FA_OPEN_EXISTING | FA_READ | FA_WRITE);
+    return (f_open(file, WAV_LOADER_CATALOG_PATH, mode) == FR_OK) ? 1U : 0U;
 }
 
 void wav_loader_catalog_init_load(void)
 {
     memset(&g_wav_catalog_diag, 0, sizeof(g_wav_catalog_diag));
+    memset(&g_wav_catalog_rebuild, 0, sizeof(g_wav_catalog_rebuild));
+    g_wav_catalog_rebuild_requested = 0U;
+    g_wav_catalog_view_last_result = WAV_LOADER_CATALOG_VIEW_PENDING;
 #if WAV_LOADER_HAS_FATFS
     wav_loader_catalog_file_header_t header;
 
@@ -867,10 +959,9 @@ void wav_loader_catalog_init_load(void)
 #endif
 }
 
-void wav_loader_catalog_rebuild(void)
+static void wav_loader_catalog_rebuild_storage(void)
 {
 #if WAV_LOADER_HAS_FATFS
-    g_wav_catalog_last_sd_busy = 0U;
     if ((audio_recorder_is_active() != 0U)
             || (sd_access_gate_streaming_critical_active() != 0U))
     {
@@ -884,38 +975,130 @@ void wav_loader_catalog_rebuild(void)
         return;
     }
 
-    const uint16_t old_count = g_wav_catalog_count;
-    const uint8_t old_loaded = g_wav_catalog_loaded;
-    const uint8_t old_truncated = g_wav_catalog_truncated;
-    const uint8_t old_path_truncated = g_wav_catalog_path_truncated;
-    const uint8_t old_stale = g_wav_catalog_stale;
-
-    if (sd_access_fs_mount_if_needed() == 0U)
+    uint8_t success = 0U;
+    uint8_t failure = 0U;
+    g_wav_catalog_last_sd_busy = 0U;
+    if ((g_wav_catalog_rebuild.media_epoch != sd_access_media_epoch())
+        || (sd_access_fs_mount_if_needed() == 0U))
     {
-        sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
-        return;
+        failure = 1U;
     }
-
-    g_wav_catalog_count = 0U;
-    g_wav_catalog_truncated = 0U;
-    g_wav_catalog_path_truncated = 0U;
-    g_wav_catalog_loaded = 0U;
-    g_wav_catalog_stale = 1U;
-    if (wav_loader_catalog_save() != 0U)
+    else if (g_wav_catalog_rebuild.state == WAV_CATALOG_REBUILD_CREATE)
     {
-        wav_loader_catalog_views_clear();
-        g_wav_catalog_stale = 0U;
-        g_wav_catalog_loaded = 1U;
+        FIL file;
+        UINT written = 0U;
+        uint8_t file_open = 0U;
+        g_wav_catalog_rebuild.header.magic = WAV_LOADER_CATALOG_MAGIC;
+        g_wav_catalog_rebuild.header.version = WAV_LOADER_CATALOG_VERSION;
+        g_wav_catalog_rebuild.header.entry_size = (uint16_t)sizeof(wav_loader_catalog_entry_t);
+        g_wav_catalog_rebuild.header.capacity = WAV_LOADER_CATALOG_MAX;
+        g_wav_catalog_rebuild.header.count = 0U;
+        g_wav_catalog_rebuild.header.checksum = 0U;
+        if (wav_loader_catalog_rebuild_open_file(&file, 1U) == 0U)
+        {
+            failure = 1U;
+        }
+        else
+        {
+            file_open = 1U;
+            if ((f_write(&file, &g_wav_catalog_rebuild.header,
+                         sizeof(g_wav_catalog_rebuild.header), &written) != FR_OK)
+                || (written != sizeof(g_wav_catalog_rebuild.header)))
+                failure = 1U;
+            if (f_close(&file) != FR_OK)
+                failure = 1U;
+            file_open = 0U;
+        }
+        if (file_open != 0U)
+            (void)f_close(&file);
+        if (failure == 0U)
+        {
+            memset(g_wav_catalog_rebuild.frames, 0,
+                   sizeof(g_wav_catalog_rebuild.frames));
+            (void)snprintf(g_wav_catalog_rebuild.frames[0].path,
+                           sizeof(g_wav_catalog_rebuild.frames[0].path),
+                           "%s", WAV_LOADER_SAMPLE_ROOT);
+            g_wav_catalog_rebuild.frames[0].parent_id = WAV_LOADER_CATALOG_ROOT_PARENT;
+            g_wav_catalog_rebuild.frames[0].phase = WAV_CATALOG_SCAN_DIRS;
+            g_wav_catalog_rebuild.state = WAV_CATALOG_REBUILD_SCAN;
+        }
+    }
+    else if (g_wav_catalog_rebuild.state == WAV_CATALOG_REBUILD_SCAN)
+    {
+        FIL file;
+        wav_loader_catalog_build_t build;
+        uint8_t scan_done = 0U;
+        uint8_t file_open = 0U;
+        if (wav_loader_catalog_rebuild_open_file(&file, 0U) == 0U)
+        {
+            failure = 1U;
+        }
+        else
+        {
+            file_open = 1U;
+            if (f_lseek(&file, f_size(&file)) != FR_OK)
+                failure = 1U;
+            else
+            {
+                uint32_t budget = WAV_LOADER_CATALOG_SCAN_ENTRIES_PER_PASS;
+                build.file = &file;
+                build.fr = FR_OK;
+                build.checksum = g_wav_catalog_rebuild.checksum;
+                scan_done = wav_loader_catalog_scan_step(&build, &budget);
+                g_wav_catalog_rebuild.checksum = build.checksum;
+                if (build.fr != FR_OK)
+                    failure = 1U;
+            }
+            if (f_close(&file) != FR_OK)
+                failure = 1U;
+            file_open = 0U;
+        }
+        if (file_open != 0U)
+            (void)f_close(&file);
+        if ((failure == 0U) && (scan_done != 0U))
+            g_wav_catalog_rebuild.state = WAV_CATALOG_REBUILD_FINALIZE;
+    }
+    else if (g_wav_catalog_rebuild.state == WAV_CATALOG_REBUILD_FINALIZE)
+    {
+        FIL file;
+        UINT written = 0U;
+        uint8_t file_open = 0U;
+        g_wav_catalog_rebuild.header.count = g_wav_catalog_count;
+        g_wav_catalog_rebuild.header.checksum = g_wav_catalog_rebuild.checksum;
+        if (wav_loader_catalog_rebuild_open_file(&file, 0U) == 0U)
+        {
+            failure = 1U;
+        }
+        else
+        {
+            file_open = 1U;
+            if ((f_lseek(&file, 0U) != FR_OK)
+                || (f_write(&file, &g_wav_catalog_rebuild.header,
+                            sizeof(g_wav_catalog_rebuild.header), &written) != FR_OK)
+                || (written != sizeof(g_wav_catalog_rebuild.header))
+                || (f_sync(&file) != FR_OK))
+                failure = 1U;
+            if (f_close(&file) != FR_OK)
+                failure = 1U;
+            file_open = 0U;
+        }
+        if (file_open != 0U)
+            (void)f_close(&file);
+        if (failure == 0U)
+            success = 1U;
     }
     else
     {
-        g_wav_catalog_count = old_count;
-        g_wav_catalog_loaded = old_loaded;
-        g_wav_catalog_truncated = old_truncated;
-        g_wav_catalog_path_truncated = old_path_truncated;
-        g_wav_catalog_stale = old_stale;
+        failure = 1U;
     }
     sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
+    if (success != 0U)
+        wav_loader_catalog_rebuild_commit();
+    else if (failure != 0U)
+    {
+        g_wav_catalog_last_io_error = 1U;
+        wav_loader_catalog_rebuild_restore();
+    }
 #else
     wav_loader_catalog_clear();
 #endif
@@ -923,7 +1106,55 @@ void wav_loader_catalog_rebuild(void)
 
 void wav_loader_catalog_refresh(void)
 {
-    wav_loader_catalog_rebuild();
+    if ((g_wav_catalog_rebuild.active != 0U)
+        || (g_wav_catalog_rebuild_requested != 0U))
+        return;
+    g_wav_catalog_stale = 1U;
+    g_wav_catalog_rebuild_requested = 1U;
+}
+
+void wav_loader_catalog_rebuild(void)
+{
+    if ((g_wav_catalog_rebuild.active != 0U)
+        || (g_wav_catalog_rebuild_requested != 0U))
+        return;
+    g_wav_catalog_stale = 1U;
+    g_wav_catalog_rebuild_requested = 1U;
+}
+
+void wav_loader_catalog_storage_service(void)
+{
+    if ((g_wav_catalog_rebuild_requested != 0U)
+        && (g_wav_catalog_rebuild.active == 0U))
+    {
+        if (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+        {
+            if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PREVIEW) == 0U)
+                return;
+            (void)sd_access_fs_reprobe_if_no_media();
+            sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
+        }
+        g_wav_catalog_rebuild_requested = 0U;
+        wav_loader_catalog_rebuild_start();
+    }
+
+    if (g_wav_catalog_rebuild.active != 0U)
+        wav_loader_catalog_rebuild_storage();
+    if (g_wav_catalog_rebuild.active != 0U)
+        return;
+
+    const wav_loader_catalog_view_service_result_t result =
+        wav_loader_catalog_view_service();
+    if (result != WAV_LOADER_CATALOG_VIEW_PENDING)
+        g_wav_catalog_view_last_result = result;
+}
+
+wav_loader_catalog_view_service_result_t wav_loader_catalog_view_last_result(void)
+{
+    const wav_loader_catalog_view_service_result_t result =
+        g_wav_catalog_view_last_result;
+    g_wav_catalog_view_last_result = WAV_LOADER_CATALOG_VIEW_PENDING;
+    return result;
 }
 
 uint16_t wav_loader_catalog_count(void)

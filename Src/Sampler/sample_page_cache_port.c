@@ -160,14 +160,6 @@ uint8_t sample_page_cache_port_reserve_static(sample_audio_key_t key,
                 key, page_index, alloc_type) != 0U));
 }
 
-uint8_t sample_page_cache_port_reserve(sample_audio_key_t key,
-                                       uint32_t page_index,
-                                       sample_page_alloc_type_t alloc_type)
-{
-    return sample_page_cache_prepare_bulk_page_key_alloc(
-        key, page_index, alloc_type);
-}
-
 uint8_t sample_page_cache_port_complete(const sample_stream_io_result_t *result)
 {
     return sample_stream_publish_result(result);
@@ -185,7 +177,7 @@ void sample_page_cache_port_clear(sample_audio_key_t key)
     sample_page_cache_clear_key(key);
 }
 
-sample_page_load_result_t sample_page_cache_port_load_full(
+sample_page_load_result_t sample_page_cache_port_begin_full(
     sample_audio_key_t key, const char *path, FIL *map_file,
     const wav_info_t *info, uint32_t total_frames, uint32_t data_offset,
     sample_page_alloc_type_t alloc_type)
@@ -202,25 +194,10 @@ sample_page_load_result_t sample_page_cache_port_load_full(
         return SAMPLE_PAGE_LOAD_NO_SPACE;
     }
     if (sample_page_cache_get_stream_info_key(key, &registration) == 0U)
-    { sample_page_cache_port_clear(key); return SAMPLE_PAGE_LOAD_INVALID_ARG; }
-    for (uint32_t page = 0U; page < page_count; ++page)
     {
-        sample_stream_io_command_t command;
-        sample_page_load_target_t target;
-        sample_page_load_token_t token;
-        if ((sample_page_cache_get_bulk_load_target_key(key, page, &target) == 0U)
-            || (sample_page_cache_begin_loading(&target, &token) == 0U)
-            || (sample_stream_io_command_init(&command, &token, &target,
-                                              &registration) == 0U))
-        { sample_page_cache_port_clear(key); return SAMPLE_PAGE_LOAD_INVALID_ARG; }
-        command.deadline_margin_us = UINT32_MAX;
-        sample_stream_io_result_t result;
-        sample_stream_transport_execute_monocore(&command, &result);
-        if ((result.load_result != SAMPLE_PAGE_LOAD_OK)
-            || (sample_page_cache_port_complete(&result) == 0U))
-        { sample_page_cache_port_clear(key); return result.load_result; }
+        sample_page_cache_port_clear(key);
+        return SAMPLE_PAGE_LOAD_INVALID_ARG;
     }
-    if (sample_page_cache_finish_full_reservation(key) == 0U)
-    { sample_page_cache_port_clear(key); return SAMPLE_PAGE_LOAD_INVALID_ARG; }
+    (void)page_count;
     return SAMPLE_PAGE_LOAD_OK;
 }

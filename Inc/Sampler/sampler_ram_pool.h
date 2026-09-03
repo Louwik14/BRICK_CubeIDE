@@ -113,6 +113,9 @@ void sampler_ram_pool_init(void);
 uint8_t sampler_ram_pool_reset_quiesced(void);
 
 uint16_t sampler_ram_pool_find_free_slot(void);
+uint8_t sampler_ram_pool_request_load(uint16_t ram_slot, const char *path);
+uint8_t sampler_ram_pool_request_clear(uint16_t ram_slot);
+void sampler_ram_pool_storage_request_service(void);
 uint8_t sampler_ram_pool_load_async_begin(uint16_t ram_slot, const char *path);
 uint8_t sampler_ram_pool_load_async_begin_prepared(uint16_t ram_slot,
                                                    const char *path,

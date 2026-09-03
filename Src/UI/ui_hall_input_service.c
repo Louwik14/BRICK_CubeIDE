@@ -14,27 +14,21 @@
 #include "ui_core.h"
 #endif
 
-void ui_hall_input_service_handle_hall(uint8_t hall,
-                                       uint8_t pressed,
-                                       uint8_t was_pressed,
-                                       ui_hall_mode_t hall_mode,
-                                       uint8_t shift_down,
-                                       uint8_t track_select_armed,
-                                       uint8_t mute_active,
-                                       uint8_t hall_prev_pressed[HALL_UI_LANE_COUNT],
-                                       uint32_t mode_tap_ms[UI_HALL_MODE_COUNT],
-                                       uint32_t cfg_tap_ms[TRACK_COUNT],
-                                       uint8_t hall_note_suppressed[HALL_UI_LANE_COUNT],
-                                       ui_hall_input_service_set_active_track_fn set_active_track,
-                                       ui_hall_input_service_feedback_fn feedback)
+uint8_t ui_hall_input_service_handle_hall(uint8_t hall,
+                                          uint8_t pressed,
+                                          uint8_t was_pressed,
+                                          ui_hall_mode_t hall_mode,
+                                          uint8_t shift_down,
+                                          uint8_t track_select_armed,
+                                          uint8_t mute_active,
+                                          uint32_t mode_tap_ms[UI_HALL_MODE_COUNT],
+                                          uint32_t cfg_tap_ms[TRACK_COUNT],
+                                          ui_hall_input_service_set_active_track_fn set_active_track,
+                                          ui_hall_input_service_feedback_fn feedback)
 {
     if ((mute_active != 0U) && (hall < SEQ_LANE_CAPACITY))
     {
-        if ((was_pressed == 0U) && (pressed != 0U))
-        {
-            hall_note_suppressed[hall] = 1U;
-        }
-        return;
+        return 1U;
     }
 
     const ui_hall_direct_action_t action =
@@ -68,29 +62,17 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
     {
         ui_hall_mode_flow_handle_shift_hall_action(hall,
                                                    now_ms,
-                                                   mode_tap_ms,
-                                                   hall_note_suppressed);
-        return;
+                                                   mode_tap_ms);
+        return 1U;
     }
 
     (void)hall_mode;
-
-    if ((mute_active != 0U)
-        && (shift_down == 0U)
-        && (track_select_armed == 0U)
-        && (was_pressed == 0U)
-        && (pressed != 0U)
-        && (hall < SEQ_LANE_CAPACITY))
-    {
-        hall_note_suppressed[hall] = 1U;
-    }
 
     if ((macro_overlay_hall_context != 0U) && (mute_active == 0U))
     {
         if ((was_pressed == 0U) && (pressed != 0U))
         {
             ui_macro_interaction_note_hall_press(hall);
-            hall_note_suppressed[hall] = 1U;
         }
         else if ((was_pressed != 0U) && (pressed == 0U))
         {
@@ -100,13 +82,13 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
 
         if (macro_overlay_hall_context != 0U)
         {
-            return;
+            return 1U;
         }
     }
 
     if ((action != UI_HALL_DIRECT_ACTION_TRACK_SELECT) || (mute_active != 0U) || (shift_down != 0U))
     {
-        return;
+        return 0U;
     }
 
     entity_topology_descriptor_t entity;
@@ -116,22 +98,23 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
     {
         if (entity.role == ENTITY_ROLE_GROUP_CHILD)
         {
-            hall_note_suppressed[hall] = 1U;
             if (set_active_track != 0)
             {
                 set_active_track(hall);
             }
-            return;
+            return 1U;
         }
         ui_hall_mode_flow_handle_track_hall_action(hall,
                                                    now_ms,
                                                    0U,
                                                    0U,
                                                    cfg_tap_ms,
-                                                   hall_note_suppressed,
                                                    set_active_track,
                                                    feedback);
+        return 1U;
     }
+
+    return 1U;
 }
 
 void ui_hall_input_service_handle_transpose(uint8_t shift_down,
