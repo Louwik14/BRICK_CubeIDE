@@ -4,7 +4,9 @@
 
 #include "App/brick6_app_init.h"
 
+#include "App/power_shutdown.h"
 #include "App/control_domain.h"
+#include "App/encoder_control_dispatcher.h"
 #include "IPC/live_clock_control.h"
 #include "App/control_clipboard.h"
 #include "App/engine_tasklet.h"
@@ -127,6 +129,7 @@ static void brick6_app_service_storage(void)
     multi_sample_import_storage_request_service();
     multi_sample_import_storage_delete_service();
     multi_sample_load_storage_request_service();
+    control_domain_storage_process_requests();
     wav_convert_service(65536U);
     if (multi_sample_load_has_pending() != 0U)
     {
@@ -157,6 +160,11 @@ void brick6_app_storage_process(void)
 
 void brick6_app_control_process(void)
 {
+    if (power_shutdown_service(HAL_GetTick()) != 0U)
+    {
+        return;
+    }
+
     multi_sample_load_completion_t multi_completion;
     if (multi_sample_load_take_completion(&multi_completion) != 0U)
     {
@@ -173,32 +181,50 @@ void brick6_app_control_process(void)
                 multi_completion.path, multi_completion.instrument_id, &logical);
         }
     }
-    control_domain_process_track_intents();
-    control_domain_process_routing_intents();
-    control_domain_process_param_intents();
-    control_domain_process_seq_intents();
-    control_domain_process_mod_intents();
-    control_domain_process_macro_intents();
-    control_domain_process_asset_intents();
-    control_clipboard_process();
-    control_project_intent_t project_intent;
-    while (control_domain_take_project(&project_intent) != 0U)
     {
-        const uint8_t operation = (uint8_t)project_intent.operation + 1U;
-        project_product_control_process_intent(operation, project_intent.slot);
+        uint8_t project_slot = 0U;
+        uint8_t project_success = 0U;
+        (void)project_product_save_take_result(&project_slot, &project_success);
     }
-    control_patch_intent_t patch_intent;
-    while (control_domain_take_patch(&patch_intent) != 0U)
+
+    /* Storage owns the RAM/Wavetable workers.  CONTROL is the sole consumer
+     * of completions originating from the UI-facing load requests. */
     {
-        patch_product_control_process_intent((uint8_t)patch_intent.operation,
-                                             patch_intent.slot,
-                                             patch_intent.target_mask,
-                                             patch_intent.entity,
-                                             patch_intent.name);
+        sampler_ram_result_t result;
+        uint16_t ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
+        uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+        const char *path = 0;
+        const uint32_t request_id = sampler_ram_pool_load_async_request_id();
+        if ((sampler_ram_pool_load_async_requester() == SAMPLER_RAM_REQUESTER_UI)
+            && sampler_ram_pool_load_async_take_result(
+                request_id, &result, &ram_slot, &global_slot, &path) != 0U
+            && result == SAMPLER_RAM_RESULT_OK && path != 0)
+        {
+            (void)project_control_register_sample_runtime(
+                PERSIST_ASSET_SAMPLE_RAM, path, global_slot, 0);
+        }
     }
+    {
+        wavetable_result_t result;
+        uint16_t wavetable_slot = WAVETABLE_POOL_INVALID_SLOT;
+        uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+        const char *path = 0;
+        const uint32_t request_id = wavetable_pool_load_async_request_id();
+        if ((wavetable_pool_load_async_requester() == WAVETABLE_REQUESTER_UI)
+            && wavetable_pool_load_async_take_result(
+                request_id, &result, &wavetable_slot, &global_slot, &path) != 0U
+            && result == WAVETABLE_RESULT_OK && path != 0)
+        {
+            (void)project_control_register_wavetable_runtime(
+                path, global_slot, 0);
+        }
+    }
+    control_domain_process_ui_messages();
+    control_domain_process_storage_messages();
     project_load_quiesce_control_process();
-    ui_event_from_inputs();
     engine_tasklet_poll();
+    ui_event_from_inputs();
+    (void)encoder_control_dispatcher_service();
     /*
      * TIM12 only advances INTERNAL time.  CONTROL_RT consumes the adapter.
     */
@@ -221,6 +247,7 @@ void brick6_app_control_process(void)
     }
 
     hall_keyboard_bridge_process();
+    midi_clock_service_pending();
     midi_control_poll();
     midi_host_control_poll_bounded(8U);
 }

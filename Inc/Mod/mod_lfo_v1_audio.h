@@ -10,6 +10,9 @@ extern "C" {
 
 struct track_audio_runtime_ctx_s;
 
+/* Must run during audio bootstrap; the IRQ path never performs lazy init. */
+void mod_lfo_v1_audio_init(void);
+
 uint8_t mod_lfo_v1_set_track_param_audio(uint8_t track, uint8_t lfo_index,
                                          mod_lfo_param_t param, float value);
 uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param, float value);

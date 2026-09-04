@@ -277,10 +277,13 @@ void keyboard_runtime_process_hall(uint8_t hall_index, bool pressed, uint8_t vel
 
 void keyboard_runtime_process_hall_timed(uint8_t hall_index, bool pressed,
                                          uint8_t velocity, uint32_t capture_tick,
-                                         uint32_t ingress_serial)
+                                         uint32_t ingress_serial,
+                                         uint8_t hall_mode, uint8_t shift_down,
+                                         uint8_t context_track)
 {
     keyboard_input_process_hall_timed(hall_index, pressed, velocity,
-                                      capture_tick, ingress_serial);
+                                      capture_tick, ingress_serial, hall_mode,
+                                      shift_down, context_track);
 }
 
 void keyboard_runtime_all_notes_off(void)

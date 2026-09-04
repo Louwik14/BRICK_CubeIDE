@@ -86,12 +86,19 @@ typedef uiw_widget_type_t (*ui_template_widget_picker_fn)(uint8_t slot,
 typedef ui_template_custom_widget_kind_t (*ui_template_custom_widget_picker_fn)(uint8_t slot,
                                                                                 const ui_template_subpage_t *subpage,
                                                                                 param_id_t id);
+typedef ui_template_custom_widget_kind_t (*ui_template_virtual_custom_widget_picker_fn)(uint8_t slot,
+                                                                                          const ui_template_subpage_t *subpage);
 typedef uint8_t (*ui_template_subpage_enabled_fn)(uint8_t subpage_index);
 typedef uint8_t (*ui_template_virtual_slot_text_fn)(uint8_t slot,
                                                     char *out_name,
                                                     uint32_t out_name_len,
                                                     char *out_value,
                                                     uint32_t out_value_len);
+typedef uint8_t (*ui_template_virtual_slot_value_fn)(
+    const ui_param_seq_plock_feedback_frame_t *frame_ctx,
+    uint8_t slot,
+    float *out_value,
+    uint8_t *out_bipolar);
 typedef uint8_t (*ui_template_param_text_fn)(uint8_t slot,
                                              param_id_t id,
                                              float value,
@@ -106,8 +113,10 @@ typedef struct
     ui_template_family_resolver_fn family_resolver;
     ui_template_widget_picker_fn widget_picker;
     ui_template_custom_widget_picker_fn custom_widget_picker;
+    ui_template_virtual_custom_widget_picker_fn virtual_custom_widget_picker;
     ui_template_subpage_enabled_fn subpage_enabled;
     ui_template_virtual_slot_text_fn virtual_slot_text;
+    ui_template_virtual_slot_value_fn virtual_slot_value;
     ui_template_param_text_fn param_text;
     const ui_template_family_t *resolved_family;
     uint8_t active_subpage;

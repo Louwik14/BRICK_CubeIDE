@@ -1,7 +1,10 @@
 #include "Sampler/multi_sample_pool.h"
+#include "App/control_domain.h"
 
 #include <string.h>
 
+#include "Sampler/multi_sample_import.h"
+#include "Sampler/multi_sample_loader.h"
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_stream_manager.h"
@@ -43,7 +46,11 @@ void multi_sample_pool_clear_end(void)
 
 uint8_t multi_sample_pool_request_clear_begin(void)
 {
-    if (g_multi_clear_request != 0U) return 0U;
+    if ((g_multi_clear_request != 0U)
+        || (g_multi_clear_active != 0U)
+        || (multi_sample_import_is_busy() != 0U)
+        || (multi_sample_import_delete_is_busy() != 0U)
+        || (multi_sample_load_has_pending() != 0U)) return 0U;
     g_multi_clear_request = 1U;
     return 1U;
 }
@@ -58,7 +65,11 @@ uint8_t multi_sample_pool_request_clear_end(void)
 uint8_t multi_sample_pool_request_clear_instrument(uint16_t instrument_id)
 {
     if ((instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
-        || (g_multi_clear_request != 0U)) return 0U;
+        || (g_multi_clear_request != 0U)
+        || (g_multi_clear_active != 0U)
+        || (multi_sample_import_is_busy() != 0U)
+        || (multi_sample_import_delete_is_busy() != 0U)
+        || (multi_sample_load_has_pending() != 0U)) return 0U;
     g_multi_clear_request_instrument = instrument_id;
     g_multi_clear_request = 3U;
     return 1U;
@@ -76,7 +87,8 @@ void multi_sample_pool_storage_request_service(void)
 
 uint8_t multi_sample_pool_clear_is_active(void)
 {
-    return g_multi_clear_active;
+    return ((g_multi_clear_active != 0U)
+            || (g_multi_clear_request != 0U)) ? 1U : 0U;
 }
 
 static uint8_t multi_sample_instrument_id_valid(uint16_t instrument_id)
@@ -464,7 +476,8 @@ void multi_sample_pool_service_retire(void)
             if (control_rt_publication_horizon_active() != 0U) continue;
             uint64_t due_sample = 0U;
             if (!control_rt_now_sample(&due_sample)) continue;
-            if (control_rt_publish_param_now((uint8_t)i, 0xFFF5U, 0U, 0U) == 0U)
+            if (control_domain_request_storage_audio_param(
+                    (uint8_t)i, 0xFFF5U, 0U) == 0U)
             {
                 g_multi_retire_invariant_failed = 1U;
                 continue;

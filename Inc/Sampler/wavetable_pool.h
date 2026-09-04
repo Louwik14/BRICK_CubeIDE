@@ -70,6 +70,12 @@ typedef enum
     WAVETABLE_RESULT_REGISTER_FAIL
 } wavetable_result_t;
 
+typedef enum
+{
+    WAVETABLE_REQUESTER_UI = 0U,
+    WAVETABLE_REQUESTER_STORAGE
+} wavetable_requester_t;
+
 typedef struct
 {
     wavetable_preview_state_t state;
@@ -148,8 +154,11 @@ uint8_t wavetable_pool_load_async_begin_prepared_with_geometry(
 uint8_t wavetable_pool_source_crc32_file(FIL *file, uint32_t *out_crc32);
 void wavetable_pool_load_async_service(void);
 uint8_t wavetable_pool_load_async_busy(void);
+uint32_t wavetable_pool_load_async_request_id(void);
+wavetable_requester_t wavetable_pool_load_async_requester(void);
 void wavetable_pool_load_async_cancel(void);
-uint8_t wavetable_pool_load_async_take_result(wavetable_result_t *out_result,
+uint8_t wavetable_pool_load_async_take_result(uint32_t expected_request_id,
+                                              wavetable_result_t *out_result,
                                               uint16_t *out_wavetable_slot,
                                               uint16_t *out_global_slot,
                                               const char **out_path);

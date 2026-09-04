@@ -3,10 +3,10 @@
 #include "fusb302.h"
 #include "i2c.h"
 #include "main.h"
+#include "midi.h"
 #include "usb_device.h"
 #include "usb_host.h"
 
-extern PCD_HandleTypeDef hpcd_USB_OTG_FS;
 extern HCD_HandleTypeDef hhcd_USB_OTG_FS;
 
 typedef struct {
@@ -14,6 +14,7 @@ typedef struct {
     usb_role_manager_role_t requested;
     uint8_t initialized;
     uint8_t host_fault;
+    uint8_t shutdown_requested;
 } usb_role_manager_ctx_t;
 
 static usb_role_manager_ctx_t g_usb_role;
@@ -43,22 +44,29 @@ static void host_power_off(void)
     HAL_GPIO_WritePin(HOST_EN_GPIO_Port, HOST_EN_Pin, GPIO_PIN_SET);
 }
 
-static void stop_active_role(void)
+static uint8_t stop_active_role(void)
 {
     HAL_NVIC_DisableIRQ(OTG_FS_IRQn);
     if (g_usb_role.active == USB_ROLE_MANAGER_HOST) {
-        (void)usb_host_stop();
+        if (usb_host_stop() == 0U) {
+            return 0U;
+        }
         host_power_off();
     } else if (g_usb_role.active == USB_ROLE_MANAGER_DEVICE) {
-        (void)usb_device_stop();
+        if (usb_device_stop() == 0U) {
+            return 0U;
+        }
     }
     g_usb_role.active = USB_ROLE_MANAGER_NONE;
+    return 1U;
 }
 
 static void apply_role(usb_role_manager_role_t requested)
 {
     if ((requested == USB_ROLE_MANAGER_HOST) && (host_fault_active() != 0U)) {
-        stop_active_role();
+        if (stop_active_role() == 0U) {
+            return;
+        }
         g_usb_role.host_fault = 1U;
         g_usb_role.requested = requested;
         return;
@@ -69,7 +77,9 @@ static void apply_role(usb_role_manager_role_t requested)
         return;
     }
 
-    stop_active_role();
+    if (stop_active_role() == 0U) {
+        return;
+    }
     g_usb_role.requested = requested;
 
     if (requested == USB_ROLE_MANAGER_DEVICE) {
@@ -92,33 +102,48 @@ void usb_role_manager_init(void)
 
     if (fusb302_init(&hi2c1) == FUSB302_STATUS_OK) {
         fusb302_role_t role = FUSB302_ROLE_NONE;
-        (void)fusb302_read_role(&role);
         g_usb_role.initialized = 1U;
-        apply_role(role_from_fusb302(role));
+        if (fusb302_read_role(&role) == FUSB302_STATUS_OK) {
+            g_usb_role.requested = role_from_fusb302(role);
+        }
     }
 }
 
 void usb_role_manager_process(void)
 {
+    if (g_usb_role.shutdown_requested != 0U) {
+        if (stop_active_role() != 0U) {
+            host_power_off();
+            g_usb_role.active = USB_ROLE_MANAGER_NONE;
+            g_usb_role.requested = USB_ROLE_MANAGER_NONE;
+            g_usb_role.initialized = 0U;
+        }
+        return;
+    }
+
     if (g_usb_role.initialized == 0U) {
         return;
     }
 
     if ((g_usb_role.active == USB_ROLE_MANAGER_HOST) && (host_fault_active() != 0U)) {
         g_usb_role.host_fault = 1U;
-        stop_active_role();
+        (void)stop_active_role();
         return;
     }
 
     if (fusb302_handle_interrupt() != FUSB302_STATUS_OK) {
-        stop_active_role();
+        if (stop_active_role() == 0U) {
+            return;
+        }
         host_power_off();
         return;
     }
 
     fusb302_role_t role = FUSB302_ROLE_NONE;
     if (fusb302_read_role(&role) != FUSB302_STATUS_OK) {
-        stop_active_role();
+        if (stop_active_role() == 0U) {
+            return;
+        }
         host_power_off();
         return;
     }
@@ -133,15 +158,16 @@ void usb_role_manager_shutdown(void)
 {
     HAL_NVIC_DisableIRQ(OTG_FS_IRQn);
     host_power_off();
-    if (g_usb_role.active == USB_ROLE_MANAGER_HOST) {
-        (void)usb_host_stop();
-    } else if (g_usb_role.active == USB_ROLE_MANAGER_DEVICE) {
-        (void)usb_device_stop();
-    }
-    host_power_off();
-    g_usb_role.active = USB_ROLE_MANAGER_NONE;
-    g_usb_role.requested = USB_ROLE_MANAGER_NONE;
-    g_usb_role.initialized = 0U;
+    g_usb_role.shutdown_requested = 1U;
+    midi_usb_transport_quiesce_begin();
+    midi_usb_transport_quiesce_control_ack();
+}
+
+uint8_t usb_role_manager_shutdown_complete(void)
+{
+    return (g_usb_role.shutdown_requested != 0U)
+        && (g_usb_role.initialized == 0U)
+        && (g_usb_role.active == USB_ROLE_MANAGER_NONE);
 }
 
 usb_role_manager_role_t usb_role_manager_active_role(void)
@@ -169,6 +195,6 @@ void usb_role_irq_dispatch(void)
     if (usb_role_manager_is_host_active() != 0U) {
         HAL_HCD_IRQHandler(&hhcd_USB_OTG_FS);
     } else if (usb_role_manager_is_device_active() != 0U) {
-        HAL_PCD_IRQHandler(&hpcd_USB_OTG_FS);
+        usb_device_irq();
     }
 }

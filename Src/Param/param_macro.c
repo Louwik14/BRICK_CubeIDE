@@ -490,7 +490,7 @@ static uint8_t param_macro_recompute_sources(
 {
     uint32_t last_applied_seq = 0U;
     live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
+        .capture_tick = 0U,
         .count = 0U
     };
     uint16_t collected_count = 0U;
@@ -575,7 +575,7 @@ static uint8_t param_macro_recompute_sources(
     }
 
     if ((bulk.count != 0U)
-            && (live_parameter_audio_publication_submit_bulk(&bulk) == false))
+            && (live_parameter_audio_publication_submit_bulk_now(&bulk) == false))
     {
         return 0U;
     }
@@ -688,7 +688,7 @@ uint8_t param_macro_apply_resolution(const param_macro_resolution_t *resolution)
     }
 
     bulk = (live_parameter_audio_bulk_t){
-        .capture_tick = live_clock_capture_tick(),
+        .capture_tick = 0U,
         .count = 0U
     };
     float canonical = 0.0f;
@@ -697,7 +697,7 @@ uint8_t param_macro_apply_resolution(const param_macro_resolution_t *resolution)
                               resolution->track,
                               resolution->resolved_value,
                               &canonical) == 0U)
-            || (live_parameter_audio_publication_submit_bulk(&bulk) == false))
+            || (live_parameter_audio_publication_submit_bulk_now(&bulk) == false))
     {
         return 0U;
     }

@@ -58,7 +58,7 @@ bool live_parameter_audio_publication_submit_tone_program(
     if (track >= SEQ_LANE_CAPACITY)
         return live_parameter_audio_publish_failed();
     live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
+        .capture_tick = 0U,
         .count = 0U
     };
     const uint8_t count = tone_param_codec_count(type);
@@ -80,7 +80,7 @@ bool live_parameter_audio_publication_submit_tone_program(
         };
     }
     if (bulk.count == 0U) return true;
-    return live_parameter_audio_publication_submit_bulk(&bulk);
+    return live_parameter_audio_publication_submit_bulk_now(&bulk);
 }
 
 void live_parameter_audio_publication_init(void)
@@ -120,6 +120,40 @@ bool live_parameter_audio_publication_submit_bulk(
     {
         /* A valid CONTROL batch is dimensioned before publication.  A refusal
          * is an invariant failure, never a deferred parameter update. */
+        Error_Handler();
+        return false;
+    }
+    return true;
+}
+
+bool live_parameter_audio_publication_submit_bulk_now(
+    const live_parameter_audio_bulk_t *bulk)
+{
+    if ((bulk == NULL) || (bulk->count == 0U)
+            || (bulk->count > LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS))
+        return live_parameter_audio_publish_failed();
+    control_audio_command_t commands[LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS];
+    for (uint8_t i = 0U; i < bulk->count; ++i)
+    {
+        const live_parameter_audio_bulk_item_t *const item = &bulk->item[i];
+        for (uint8_t previous = 0U; previous < i; ++previous)
+        {
+            const live_parameter_audio_bulk_item_t *const prior = &bulk->item[previous];
+            if ((prior->parameter_id == item->parameter_id)
+                    && (prior->scope == item->scope)
+                    && (prior->track == item->track)
+                    && (prior->slot == item->slot)
+                    && ((item->parameter_id != CONTROL_AUDIO_PARAM_CLEAR_RUNTIME_TEMP)
+                        || (prior->value == item->value)))
+                return live_parameter_audio_publish_failed();
+        }
+        if (live_parameter_audio_make_command(
+                item->parameter_id, item->scope, item->track,
+                item->slot, item->flags, item->value, &commands[i]) == 0U)
+            return live_parameter_audio_publish_failed();
+    }
+    if (control_rt_publish_batch_now(commands, bulk->count) == 0U)
+    {
         Error_Handler();
         return false;
     }

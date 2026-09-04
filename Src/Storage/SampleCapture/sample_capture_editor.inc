@@ -13,8 +13,6 @@ void sample_capture_model_init(void)
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_IDLE;
     g_sample_capture.state.edit_vzoom = SAMPLE_CAPTURE_EDIT_VZOOM_DEFAULT;
     sample_capture_detail_reset();
-    control_audio_rec_bus_init();
-    sample_capture_publish_rec_bus();
 }
 
 void sample_capture_model_get_state(sample_capture_state_t *out_state)

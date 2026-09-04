@@ -90,7 +90,7 @@ uint8_t mod_env3_control_restore(uint8_t entity,const mod_env3_control_state_t*s
     mod_env3_control_state_t canonical;
     if(!mod_env3_control_prepare(state,&canonical))return 0U;
     float *const values=&canonical.attack;
-    live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),
+    live_parameter_audio_bulk_t bulk={.capture_tick=0U,
         .count=0U};
     for(uint8_t i=0U;i<5U;++i)bulk.item[bulk.count++]=
         (live_parameter_audio_bulk_item_t){.parameter_id=(uint16_t)ids[i],
@@ -98,7 +98,7 @@ uint8_t mod_env3_control_restore(uint8_t entity,const mod_env3_control_state_t*s
         .slot=LIVE_PARAMETER_EVENT_INVALID_INDEX,
         .flags=LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
         .value=live_parameter_event_encode_float(values[i])};
-    if(!live_parameter_audio_publication_submit_bulk(&bulk))return 0U;
+    if(!live_parameter_audio_publication_submit_bulk_now(&bulk))return 0U;
     g_mod_env3_control[entity]=canonical;
     return 1U;
 }

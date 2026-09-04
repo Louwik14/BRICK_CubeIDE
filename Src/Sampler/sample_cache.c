@@ -662,7 +662,7 @@ done:
         }
         else
         {
-            (void)waveform_cache_request_for_wav_known_duration(
+            (void)waveform_cache_storage_request_for_wav_known_duration(
                 prepared_path, WAVEFORM_CACHE_REASON_EDITOR_VISIBLE,
                 desc->total_frames, desc->info.sample_rate);
         }

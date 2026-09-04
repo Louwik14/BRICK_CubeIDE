@@ -142,6 +142,7 @@ typedef struct
     volatile project_load_state_t state;
     uint16_t asset_index;
     uint16_t asset_count;
+    uint32_t asset_request_id;
     uint8_t slot;
     uint8_t result;
     uint8_t quiesce_requested;
@@ -286,7 +287,7 @@ uint8_t project_product_save(uint8_t slot)
     g_progress=(project_product_progress_t){1U,0U,0U,1U,PROJECT_PRODUCT_RESULT_IN_PROGRESS};return 1U;
 }
 
-uint8_t project_product_save_busy(void){return(g_project_save.state!=PROJECT_SAVE_IDLE&&g_project_save.state!=PROJECT_SAVE_DONE)?1U:0U;}
+uint8_t project_product_save_busy(void){return(g_project_save.state!=PROJECT_SAVE_IDLE)?1U:0U;}
 
 uint8_t project_product_save_take_result(uint8_t *slot,uint8_t *success)
 {
@@ -562,6 +563,27 @@ uint8_t project_product_load_busy(void)
     return (g_project_load.state != PROJECT_LOAD_IDLE) ? 1U : 0U;
 }
 
+uint8_t project_product_ui_busy(void)
+{
+    return (project_product_ui_busy_command() != PROJECT_PRODUCT_COMMAND_NONE)
+        ? 1U : 0U;
+}
+
+project_product_command_t project_product_ui_busy_command(void)
+{
+    if ((project_product_save_busy() != 0U)
+        || (g_storage_request == PROJECT_PRODUCT_COMMAND_SAVE))
+        return PROJECT_PRODUCT_COMMAND_SAVE;
+    if ((project_product_load_busy() != 0U)
+        || (g_storage_request == PROJECT_PRODUCT_COMMAND_LOAD)
+        || (g_storage_request == PROJECT_PRODUCT_COMMAND_BLANK)
+        || (g_storage_request == PROJECT_PRODUCT_COMMAND_RESTORE_BOOT))
+        return PROJECT_PRODUCT_COMMAND_LOAD;
+    if (g_storage_request == PROJECT_PRODUCT_COMMAND_DELETE)
+        return PROJECT_PRODUCT_COMMAND_DELETE;
+    return PROJECT_PRODUCT_COMMAND_NONE;
+}
+
 static void project_discard_restore_workspace(
     persistence_project_restore_workspace_t *restore)
 {
@@ -645,6 +667,7 @@ static uint8_t project_product_start_asset(
         if (backend >= SAMPLER_RAM_POOL_MAX_SLOTS
                 || sampler_ram_pool_load_async_begin(backend, asset_path) == 0U)
             return 0U;
+        g_project_load.asset_request_id = sampler_ram_pool_load_async_request_id();
         restore->asset_runtime[index] = backend;
         return 1U;
     }
@@ -655,6 +678,7 @@ static uint8_t project_product_start_asset(
                 || wavetable_pool_load_async_begin_with_geometry(
                     backend, asset_path, WAVETABLE_SOURCE_GEOMETRY_2048) == 0U)
             return 0U;
+        g_project_load.asset_request_id = wavetable_pool_load_async_request_id();
         restore->asset_runtime[index] = backend;
         return 1U;
     }
@@ -693,7 +717,8 @@ static uint8_t project_product_finish_asset(
     {
         sampler_ram_result_t result; uint16_t backend, runtime; const char *path_value;
         if (sampler_ram_pool_load_async_take_result(
-                &result, &backend, &runtime, &path_value) == 0U) return 2U;
+                g_project_load.asset_request_id, &result, &backend, &runtime,
+                &path_value) == 0U) return 2U;
         if (result != SAMPLER_RAM_RESULT_OK) return 0U;
         restore->asset_runtime[index] = runtime;
     }
@@ -701,7 +726,8 @@ static uint8_t project_product_finish_asset(
     {
         wavetable_result_t result; uint16_t backend, runtime; const char *path_value;
         if (wavetable_pool_load_async_take_result(
-                &result, &backend, &runtime, &path_value) == 0U) return 2U;
+                g_project_load.asset_request_id, &result, &backend, &runtime,
+                &path_value) == 0U) return 2U;
         if (result != WAVETABLE_RESULT_OK) return 0U;
         restore->asset_runtime[index] = runtime;
     }
@@ -953,12 +979,18 @@ void project_product_control_process_intent(uint8_t operation, uint8_t slot)
 {
     if (operation == PROJECT_PRODUCT_COMMAND_SAVE)
     {
+        if ((g_storage_request != PROJECT_PRODUCT_COMMAND_NONE)
+            || (project_product_save_busy() != 0U)
+            || (project_product_load_busy() != 0U)
+            || (project_replacement_is_active() != 0U))
+            return;
         (void)project_product_save(slot);
         return;
     }
     if (g_storage_request != PROJECT_PRODUCT_COMMAND_NONE
         || project_product_save_busy() != 0U
-        || project_product_load_busy() != 0U)
+        || project_product_load_busy() != 0U
+        || project_replacement_is_active() != 0U)
         return;
     g_storage_slot = slot;
     __DMB();
@@ -1067,7 +1099,34 @@ project_product_boot_restore_result_t project_product_restore_boot(void)
         ? PROJECT_PRODUCT_BOOT_RESTORE_PROJECT_READY
         : PROJECT_PRODUCT_BOOT_RESTORE_FAILED;
 }
-uint8_t project_product_get_progress(project_product_progress_t*out){if(out==NULL)return 0U;*out=g_progress;return 1U;}
+uint8_t project_product_get_progress(project_product_progress_t*out)
+{
+    if (out == NULL) return 0U;
+    *out = g_progress;
+    if ((g_storage_request != PROJECT_PRODUCT_COMMAND_NONE)
+        && (g_project_save.state == PROJECT_SAVE_IDLE)
+        && (g_project_load.state == PROJECT_LOAD_IDLE))
+    {
+        out->active = 1U;
+        out->complete = 0U;
+        out->done = 0U;
+        out->total = 1U;
+        out->result = PROJECT_PRODUCT_RESULT_IN_PROGRESS;
+    }
+    if ((g_project_save.state != PROJECT_SAVE_IDLE)
+        && (g_project_save.state != PROJECT_SAVE_DONE))
+    {
+        /* Save byte totals are not known until the document is encoded.  The
+         * existing state machine is monotonic, so expose its real phase as a
+         * bounded progress source instead of a misleading byte percentage. */
+        out->active = 1U;
+        out->complete = 0U;
+        out->done = (uint32_t)g_project_save.state;
+        out->total = (uint32_t)PROJECT_SAVE_DONE;
+        out->result = PROJECT_PRODUCT_RESULT_IN_PROGRESS;
+    }
+    return 1U;
+}
 
 void project_product_storage_request_service(void)
 {
@@ -1075,7 +1134,6 @@ void project_product_storage_request_service(void)
     if (command == PROJECT_PRODUCT_COMMAND_NONE)
         return;
     const uint8_t slot = g_storage_slot;
-    g_storage_request = PROJECT_PRODUCT_COMMAND_NONE;
     switch (command)
     {
         case PROJECT_PRODUCT_COMMAND_LOAD:
@@ -1093,4 +1151,5 @@ void project_product_storage_request_service(void)
         default:
             break;
     }
+    g_storage_request = PROJECT_PRODUCT_COMMAND_NONE;
 }

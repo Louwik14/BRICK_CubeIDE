@@ -303,6 +303,115 @@ ui_hall_direct_action_t ui_hall_mode_flow_resolve_direct_action(uint8_t shift_do
     return UI_HALL_DIRECT_ACTION_NONE;
 }
 
+void ui_hall_mode_flow_handle_shift_hall_action(
+    uint8_t hall,
+    uint32_t now_ms,
+    ui_hall_mode_t hall_mode,
+    uint8_t context_track,
+    uint32_t mode_tap_ms[UI_HALL_MODE_COUNT])
+{
+    if (hall >= HALL_UI_LANE_COUNT)
+    {
+        return;
+    }
+
+    if (hall == 0U)
+    {
+        if (entity_topology_is_active(context_track) == 0U)
+        {
+            g_patch_pending.active = 0U;
+            ui_core_feedback_set("TRACK ONLY", now_ms);
+            return;
+        }
+        if ((g_patch_pending.active != 0U)
+                && ((now_ms - g_patch_pending.tap_ms) <= UI_HALL_MODE_DOUBLE_TAP_MS))
+        {
+            ui_hall_patch_feedback_begin(now_ms);
+            ui_core_feedback_set("PATCH SAVE", now_ms);
+            g_patch_pending.save_pending = 1U;
+            g_patch_pending.save_due_ms = now_ms + UI_HALL_PATCH_SAVE_ARM_MS;
+            g_patch_pending.save_track = context_track;
+            g_patch_pending.active = 0U;
+            return;
+        }
+
+        g_patch_pending.active = 1U;
+        g_patch_pending.tap_ms = now_ms;
+        g_patch_pending.target_track = context_track;
+        g_patch_pending.previous_mode = hall_mode;
+        return;
+    }
+
+    if (hall == 1U)
+    {
+        g_patch_pending.active = 0U;
+        return;
+    }
+
+    if (hall == 15U)
+    {
+        g_patch_pending.active = 0U;
+        if ((ui_page_get_id() == UI_PAGE_TEMPLATE_TONE)
+                && (ui_page_template_tone_is_global_master() != 0U))
+        {
+            ui_page_template_tone_toggle_subset();
+        }
+        else
+        {
+            ui_hall_mode_flow_leave_modal_page();
+            ui_page_template_tone_open_global_master();
+        }
+        return;
+    }
+
+    if (hall == 9U)
+    {
+        if (ui_hall_mode_resolve_rout_context(context_track, hall_mode)
+                == UI_HALL_ROUT_CONTEXT_NONE)
+        {
+            ui_hall_mode_flow_cycle_fx();
+        }
+        return;
+    }
+
+    if (hall == 14U)
+    {
+        if (ui_hall_mode_resolve_rout_context(context_track, hall_mode)
+                != UI_HALL_ROUT_CONTEXT_NONE)
+        {
+            ui_hall_mode_flow_open_midi_fx();
+            return;
+        }
+    }
+
+    ui_hall_mode_t target_mode = UI_HALL_MODE_SEQ;
+    uint8_t target_page = UI_HALL_MODE_TARGET_PAGE_NONE;
+    for (uint8_t mode = 0U; mode < (uint8_t)UI_HALL_MODE_COUNT; ++mode)
+    {
+        uint8_t trigger_hall = 0U;
+        uint8_t resolved_page = 0U;
+        if ((ui_hall_mode_get_trigger_hall((ui_hall_mode_t)mode, &trigger_hall) != 0U)
+                && (trigger_hall == hall)
+                && (ui_hall_mode_get_target_page((ui_hall_mode_t)mode, &resolved_page) != 0U))
+        {
+            target_mode = (ui_hall_mode_t)mode;
+            target_page = resolved_page;
+            break;
+        }
+    }
+
+    if (target_page == UI_HALL_MODE_TARGET_PAGE_NONE)
+    {
+        return;
+    }
+
+    const uint32_t last_tap = mode_tap_ms[target_mode];
+    const uint8_t is_double_tap = ((last_tap != 0U)
+                                   && ((now_ms - last_tap) <= UI_HALL_MODE_DOUBLE_TAP_MS)) ? 1U : 0U;
+    mode_tap_ms[target_mode] = now_ms;
+    ui_hall_mode_flow_activate_mode(target_mode, target_page, is_double_tap);
+}
+
 void ui_hall_mode_flow_service_pending(uint32_t now_ms)
 {
     if (g_patch_pending.save_pending != 0U)

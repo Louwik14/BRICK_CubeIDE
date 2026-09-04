@@ -15,6 +15,8 @@ typedef enum
     MOD_ENV3_PARAM_COUNT
 } mod_env3_param_t;
 
+/* Must run during audio bootstrap; the IRQ path never performs lazy init. */
+void mod_env3_audio_init(void);
 void mod_env3_init(void);
 void mod_env3_audio_apply_retrigger(uint8_t track, float value);
 uint8_t mod_env3_audio_apply_track_param(uint8_t track, mod_env3_param_t param, float value);

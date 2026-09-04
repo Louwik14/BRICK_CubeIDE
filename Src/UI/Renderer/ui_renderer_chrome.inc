@@ -181,14 +181,44 @@ static void ui_renderer_template_draw_footer(const ui_template_page_state_t *sta
     }
 }
 
-static void ui_renderer_template_draw_mod_link_arrows(const ui_template_subpage_t *subpage)
+static void ui_renderer_template_draw_elbow_arrow(uint8_t from_slot, uint8_t to_slot)
 {
-    if (subpage == NULL)
+    if ((from_slot >= 4U) || (to_slot >= 4U) || (to_slot <= from_slot))
     {
         return;
     }
 
-    (void)subpage;
+    const int x0 = (int)g_ui_template_frame_x[from_slot] + (UI_TEMPLATE_FRAME_W / 2);
+    const int x1 = (int)g_ui_template_frame_x[to_slot] + (UI_TEMPLATE_FRAME_W / 2);
+    const int y_low = UI_TEMPLATE_FRAME_Y + 10;
+    const int y_high = UI_TEMPLATE_FRAME_Y + 6;
+
+    drv_display_draw_line(x0, y_low, x0, y_high);
+    drv_display_draw_line(x0, y_high, x1, y_high);
+    drv_display_draw_line(x1, y_high, x1, y_low);
+    drv_display_draw_pixel(x1 - 1, y_low - 1, true);
+    drv_display_draw_pixel(x1 + 1, y_low - 1, true);
+    drv_display_draw_pixel(x1 - 2, y_low - 2, true);
+    drv_display_draw_pixel(x1 + 2, y_low - 2, true);
+}
+
+static void ui_renderer_template_draw_mod_link_arrows(const ui_template_subpage_t *subpage)
+{
+    if ((subpage == NULL) || (subpage->title == NULL))
+    {
+        return;
+    }
+
+    if (strcmp(subpage->title, "MATRIX") == 0)
+    {
+        ui_renderer_template_draw_elbow_arrow(1U, 2U);
+    }
+    else if (strcmp(subpage->title, "MULTI") == 0
+            || strcmp(subpage->title, "SLEW") == 0)
+    {
+        ui_renderer_template_draw_elbow_arrow(0U, 1U);
+        ui_renderer_template_draw_elbow_arrow(2U, 3U);
+    }
 }
 
 static uint8_t ui_renderer_template_draw_audio_fx_group(

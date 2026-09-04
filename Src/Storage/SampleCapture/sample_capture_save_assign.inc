@@ -181,11 +181,19 @@ static uint8_t sample_capture_copy_trimmed_take(const char *src_path,
 done:
     if(dst_open != 0U)
     {
-        (void)f_close(&dst);
+        if(f_close(&dst) != FR_OK)
+        {
+            ok = 0U;
+            sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
+        }
     }
     if(src_open != 0U)
     {
-        (void)f_close(&src);
+        if(f_close(&src) != FR_OK)
+        {
+            ok = 0U;
+            sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
+        }
     }
     sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
     return ok;
@@ -224,7 +232,7 @@ uint8_t sample_capture_model_save_trimmed(void)
 
     sample_capture_copy_path(g_sample_capture.state.final_path, final_path);
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_SAVED;
-    (void)waveform_cache_request_for_wav_known_duration(
+    (void)control_domain_request_storage_waveform_cache(
         final_path,
         WAVEFORM_CACHE_REASON_EDITOR_VISIBLE,
         g_sample_capture.state.edit_end_frame - g_sample_capture.state.edit_start_frame,

@@ -126,19 +126,32 @@ uint8_t ui_page_audio_rec_handle_encoder(uint8_t encoder, int16_t delta)
         {
             return 1U;
         }
-        return sample_capture_model_step_edit(encoder, delta, button_down(BTN_SHIFT));
+        return control_domain_request_audio_rec(&(control_audio_rec_intent_t){
+            .operation = CONTROL_AUDIO_REC_STEP_EDIT,
+            .value0 = encoder,
+            .value1 = button_down(BTN_SHIFT),
+            .delta = delta
+        });
     }
 
     switch(encoder)
     {
         case 0U:
-            return sample_capture_model_step_arm(delta);
+            return control_domain_request_audio_rec(&(control_audio_rec_intent_t){
+                .operation = CONTROL_AUDIO_REC_STEP_ARM, .delta = delta
+            });
         case 1U:
-            return sample_capture_model_step_len(delta);
+            return control_domain_request_audio_rec(&(control_audio_rec_intent_t){
+                .operation = CONTROL_AUDIO_REC_STEP_LENGTH, .delta = delta
+            });
         case 2U:
-            return sample_capture_model_step_quant(delta);
+            return control_domain_request_audio_rec(&(control_audio_rec_intent_t){
+                .operation = CONTROL_AUDIO_REC_STEP_QUANTIZATION, .delta = delta
+            });
         case 3U:
-            return sample_capture_model_step_threshold(delta);
+            return control_domain_request_audio_rec(&(control_audio_rec_intent_t){
+                .operation = CONTROL_AUDIO_REC_STEP_THRESHOLD, .delta = delta
+            });
         default:
             return 0U;
     }

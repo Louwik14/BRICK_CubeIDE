@@ -56,7 +56,7 @@ typedef struct
 } brick6_looper_runtime_diag_snapshot_t;
 
 void brick6_looper_runtime_init(void);
-void brick6_looper_runtime_service(uint32_t byte_budget);
+void brick6_looper_runtime_audio_maintenance(void);
 void brick6_looper_runtime_stop_playback(uint8_t track_id);
 void brick6_looper_runtime_prepare_replace(uint8_t track_id);
 void brick6_looper_runtime_arm_live_record_start(uint8_t track_id,

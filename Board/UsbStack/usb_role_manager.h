@@ -17,6 +17,7 @@ typedef enum {
 void usb_role_manager_init(void);
 void usb_role_manager_process(void);
 void usb_role_manager_shutdown(void);
+uint8_t usb_role_manager_shutdown_complete(void);
 usb_role_manager_role_t usb_role_manager_active_role(void);
 uint8_t usb_role_manager_is_device_active(void);
 uint8_t usb_role_manager_is_host_active(void);

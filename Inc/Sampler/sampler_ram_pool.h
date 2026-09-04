@@ -46,6 +46,12 @@ typedef enum
 
 typedef enum
 {
+    SAMPLER_RAM_REQUESTER_UI = 0U,
+    SAMPLER_RAM_REQUESTER_STORAGE
+} sampler_ram_requester_t;
+
+typedef enum
+{
     SAMPLE_RAM_WAVEFORM_EMPTY = 0,
     SAMPLE_RAM_WAVEFORM_BUILDING,
     SAMPLE_RAM_WAVEFORM_READY,
@@ -127,8 +133,11 @@ uint8_t sampler_ram_pool_load_async_begin_prepared(uint16_t ram_slot,
                                                    uint32_t cost_bytes);
 void sampler_ram_pool_load_async_service(void);
 uint8_t sampler_ram_pool_load_async_busy(void);
+uint32_t sampler_ram_pool_load_async_request_id(void);
+sampler_ram_requester_t sampler_ram_pool_load_async_requester(void);
 void sampler_ram_pool_load_async_cancel(void);
-uint8_t sampler_ram_pool_load_async_take_result(sampler_ram_result_t *out_result,
+uint8_t sampler_ram_pool_load_async_take_result(uint32_t expected_request_id,
+                                                sampler_ram_result_t *out_result,
                                                 uint16_t *out_ram_slot,
                                                 uint16_t *out_global_slot,
                                                 const char **out_path);

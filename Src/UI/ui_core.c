@@ -35,6 +35,7 @@
 #include "pages/ui_page_template_keyboard.h"
 #include "pages/ui_page_template_seq.h"
 #include "pages/ui_page_template_play.h"
+#include "pages/ui_page_template_macro.h"
 #include "UI/pages/ui_page_template_cfg.h"
 #include "Storage/sample_capture.h"
 #include "Track/track_input_ownership.h"
@@ -81,6 +82,7 @@ typedef struct
     uint32_t mode_tap_ms[UI_HALL_MODE_COUNT];
     uint32_t cfg_tap_ms[TRACK_COUNT];
     uint8_t hall_prev_pressed[HALL_UI_LANE_COUNT];
+    uint8_t step_context_owner[16U];
     uint8_t macro_overlay_active;
     uint8_t macro_overlay_latched;
     ui_macro_overlay_submode_t macro_overlay_submode;
@@ -122,6 +124,8 @@ static uint16_t ui_core_hall_ui_claim_mask(uint8_t pressed)
     const ui_hall_mode_t raw_mode = ui_get_hall_mode();
 
     if ((ui_core_mute_is_active() != 0U)
+        || ((g_ui_track_state.shift_down != 0U)
+            && (raw_mode == UI_HALL_MODE_KEYBOARD))
         || (g_ui_track_state.track_select_armed != 0U)
         || (g_ui_track_state.macro_overlay_active != 0U)
         || (raw_mode == UI_HALL_MODE_PATTERN)
@@ -151,6 +155,10 @@ static void ui_core_publish_hall_arbitration_snapshot(void)
     ui_hall_arbitration_snapshot_t next = {
         .consume_press_mask = ui_core_hall_ui_claim_mask(1U),
         .consume_release_mask = ui_core_hall_ui_claim_mask(0U),
+        .shift_down = g_ui_track_state.shift_down,
+        .track_select_armed = g_ui_track_state.track_select_armed,
+        .hall_mode = (uint8_t)ui_get_hall_mode(),
+        .context_track = ui_get_active_lane(),
     };
 
     g_ui_hall_arbitration_seq++;
@@ -573,10 +581,12 @@ static uint8_t ui_core_handle_hall_input_event(const ui_event_t *ev)
         hall,
         pressed,
         was_pressed,
-        ui_get_hall_mode(),
-        g_ui_track_state.shift_down,
-        g_ui_track_state.track_select_armed,
+        (ui_hall_mode_t)ev->hall_mode,
+        ev->context_track,
+        ev->shift_down,
+        ev->track_select_armed,
         (ui_core_mute_is_active() != 0U) ? 1U : 0U,
+        ev->capture_ms,
         g_ui_track_state.cfg_tap_ms,
         ui_core_set_active_track,
         ui_core_set_feedback);
@@ -594,23 +604,46 @@ static uint8_t ui_core_handle_step_context_event(const ui_event_t *ev)
     }
 
     const uint8_t step = (uint8_t)(ev->id - (uint8_t)BTN_STEP_1);
-    if (g_ui_track_state.track_select_armed != 0U)
+    if (ev->type == UI_EVENT_BUTTON_RELEASE)
+    {
+        const uint8_t owner = g_ui_track_state.step_context_owner[step];
+        g_ui_track_state.step_context_owner[step] = 0U;
+        if ((owner == 1U) || (owner == 2U))
+        {
+            return 1U;
+        }
+        if (owner == 3U)
+        {
+            return (ui_core_seq_transport_handle_seq_mode_event(
+                ev, UI_HALL_MODE_SEQ, 0U, ui_core_set_feedback) != 0U) ? 1U : 0U;
+        }
+    }
+
+    if (ev->track_select_armed != 0U)
     {
         if (ev->type == UI_EVENT_BUTTON_PRESS)
         {
+            g_ui_track_state.step_context_owner[step] = 1U;
             ui_core_set_active_track(step);
         }
         return 1U;
     }
 
-    if (g_ui_track_state.shift_down != 0U)
+    if (ev->shift_down != 0U)
     {
         if (ev->type == UI_EVENT_BUTTON_PRESS)
         {
+            g_ui_track_state.step_context_owner[step] = 2U;
             (void)ui_hall_mode_flow_handle_shift_step(
-                step, HAL_GetTick(), g_ui_track_state.mode_tap_ms);
+                step, ev->capture_ms, g_ui_track_state.mode_tap_ms);
         }
         return 1U;
+    }
+
+    if ((ev->type == UI_EVENT_BUTTON_PRESS)
+            && (ev->hall_mode == (uint8_t)UI_HALL_MODE_SEQ))
+    {
+        g_ui_track_state.step_context_owner[step] = 3U;
     }
 
     return 0U;
@@ -687,13 +720,13 @@ static uint8_t ui_core_handle_routing_event(const ui_event_t *ev)
     const uint8_t active_track = ui_get_active_track();
     if ((ev == 0) || (ui_core_track_is_sampler_looper(active_track) == 0U)
             || (ui_page_get_id() != UI_PAGE_MIDI_FX)
-            || (g_ui_track_state.track_select_armed != 0U)
+            || (ev->track_select_armed != 0U)
             || (ev->type != UI_EVENT_HALL_PRESS)
             || (ev->id >= HALL_UI_LANE_COUNT))
         return 0U;
 
     const uint8_t hall = ev->id;
-    if ((hall >= TRACK_COUNT) || (hall == active_track))
+    if ((hall >= BRICK_ENTITY_CAPACITY) || (hall == active_track))
     {
         return 1U;
     }
@@ -722,7 +755,7 @@ static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
     if ((ev != 0) && (ev->type == UI_EVENT_BUTTON_PRESS)
             && (ev->id == (uint8_t)BTN_REC))
     {
-        if (g_ui_track_state.shift_down != 0U)
+        if (ev->shift_down != 0U)
         {
             ui_page_template_rec_cfg_open_main();
             ui_navigation_request_page_with_availability(UI_PAGE_TEMPLATE_REC_CFG);
@@ -739,13 +772,25 @@ static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
     }
     if ((ev != 0) && (ev->type == UI_EVENT_BUTTON_PRESS)
             && (ev->id == (uint8_t)BTN_TRANSPOSE_DOWN)
-            && ((g_ui_track_state.shift_down != 0U)
-                || (g_ui_track_state.track_select_armed != 0U))
+            && ((ev->shift_down != 0U)
+                || (ev->track_select_armed != 0U))
             && (ui_get_hall_mode() != UI_HALL_MODE_PATTERN))
     {
         ui_core_transport_enter_pattern(
-            (g_ui_track_state.shift_down != 0U)
+            (ev->shift_down != 0U)
                 ? UI_PATTERN_MODE_RECALL : UI_PATTERN_MODE_STORE);
+        return 1U;
+    }
+    if ((ev != 0) && (ev->type == UI_EVENT_BUTTON_PRESS)
+            && ((ev->id == (uint8_t)BTN_TRANSPOSE_UP)
+                || (ev->id == (uint8_t)BTN_TRANSPOSE_DOWN))
+            && (ev->shift_down == 0U)
+            && (ev->track_select_armed == 0U)
+            && (ui_hall_allows_injection(ui_get_active_lane(),
+                                         (ui_hall_mode_t)ev->hall_mode) != 0U))
+    {
+        const int8_t delta = (ev->id == (uint8_t)BTN_TRANSPOSE_UP) ? 1 : -1;
+        (void)control_domain_request_keyboard(CONTROL_KEYBOARD_STEP_OCTAVE, delta);
         return 1U;
     }
     return 0U;
@@ -758,9 +803,9 @@ uint8_t ui_core_request_undo(void)
 
 static uint8_t ui_core_handle_pattern_mode_event(const ui_event_t *ev)
 {
-    return ui_core_pattern_handle_mode_event(ev, ui_get_hall_mode(),
-                                             g_ui_track_state.shift_down,
-                                             g_ui_track_state.track_select_armed,
+    return ui_core_pattern_handle_mode_event(ev, (ui_hall_mode_t)ev->hall_mode,
+                                             ev->shift_down,
+                                             ev->track_select_armed,
                                              ui_set_hall_mode, ui_core_set_feedback);
 }
 
@@ -768,20 +813,20 @@ static uint8_t ui_core_handle_global_shortcuts(const ui_event_t *ev)
 {
     if ((ev != 0) && (ev->type == UI_EVENT_BUTTON_PRESS)
             && (ev->id == (uint8_t)BTN_SETTINGS)
-            && (g_ui_track_state.shift_down != 0U)
-            && (g_ui_track_state.track_select_armed == 0U)
+            && (ev->shift_down != 0U)
+            && (ev->track_select_armed == 0U)
             && (ui_core_mute_is_active() == 0U)
             && (ui_core_handle_looper_save() != 0U))
         return 1U;
     return ui_core_shortcuts_handle_global_event(ev,
-        g_ui_track_state.shift_down, g_ui_track_state.track_select_armed,
+        ev->shift_down, ev->track_select_armed,
         ui_core_mute_is_active(), ui_core_set_feedback);
 }
 
 static uint8_t ui_core_handle_seq_mode_event(const ui_event_t *ev)
 {
     return ui_core_seq_transport_handle_seq_mode_event(
-        ev, ui_get_hall_mode(), g_ui_track_state.shift_down, ui_core_set_feedback);
+        ev, (ui_hall_mode_t)ev->hall_mode, ev->shift_down, ui_core_set_feedback);
 }
 
 static uint8_t ui_core_handle_macro_mode_event(const ui_event_t *ev)
@@ -804,6 +849,81 @@ static uint8_t ui_core_handle_macro_mode_event(const ui_event_t *ev)
         return 0U;
     }
 
+    return 1U;
+}
+
+static uint8_t ui_core_handle_encoder_event(const ui_event_t *ev,
+                                            ui_param_encoder_context_t *ctx)
+{
+    if ((ev == 0) || (ctx == 0) || (ev->type != UI_EVENT_ENCODER)
+            || (ev->id >= (uint8_t)ENC_COUNT) || (ev->value == 0))
+    {
+        return 0U;
+    }
+
+    int16_t delta = ev->value;
+    if (ev->id == (uint8_t)ENC_PARAM_A)
+    {
+        delta = (int16_t)-delta;
+    }
+
+    ui_param_capture_encoder_context_for_state(
+        ctx, ev->context_track, ev->shift_down);
+
+    if (ui_page_settings_is_open() != 0U)
+    {
+        ui_page_settings_handle_encoder(ev->id, delta);
+        return 1U;
+    }
+    if (ui_page_name_edit_is_open() != 0U)
+    {
+        return ui_page_name_edit_handle_encoder(ev->id, delta);
+    }
+    if (ui_page_patch_assign_is_open() != 0U)
+    {
+        return ui_page_patch_assign_handle_encoder(ev->id, delta);
+    }
+    if (ui_page_audio_rec_is_open() != 0U)
+    {
+        return ui_page_audio_rec_handle_encoder(ev->id, delta);
+    }
+    if (ui_page_get_id() == UI_PAGE_TEMPLATE_MACRO)
+    {
+        ui_page_template_macro_handle_encoder(ev->id, delta);
+        return 1U;
+    }
+    if (ui_page_template_keyboard_handle_encoder(ev->id, delta) != 0U)
+    {
+        return 1U;
+    }
+    if (ui_page_template_seq_handle_encoder(ev->id, delta) != 0U)
+    {
+        return 1U;
+    }
+    if (ui_page_template_play_handle_encoder(ev->id, delta) != 0U)
+    {
+        return 1U;
+    }
+    if (ui_page_template_cfg_handle_encoder(ev->id, delta) != 0U)
+    {
+        return 1U;
+    }
+    if (ui_page_template_rec_cfg_handle_encoder(ev->id, delta) != 0U)
+    {
+        return 1U;
+    }
+    if ((ui_page_get_id() == UI_PAGE_TEMPLATE_MOD)
+            || (ui_page_get_id() == UI_PAGE_MIDI_FX)
+            || (ui_page_get_id() == UI_PAGE_AUDIO_FX))
+    {
+        return 0U;
+    }
+    if (ui_macro_interaction_note_encoder_delta_with_context(
+            ctx, ev->id, delta) != 0U)
+    {
+        return 1U;
+    }
+    (void)ui_param_handle_encoder_with_context(ctx, ev->id, delta);
     return 1U;
 }
 
@@ -837,10 +957,16 @@ void ui_core_init(void)
     {
         g_ui_track_state.hall_prev_pressed[hall] = 0U;
     }
+    for (uint8_t step = 0U; step < 16U; ++step)
+    {
+        g_ui_track_state.step_context_owner[step] = 0U;
+    }
 
     encoder_control_dispatcher_init();
 
     ui_bootstrap_init();
+    ui_param_publish_encoder_binding(g_ui_track_state.active_lane,
+                                     g_ui_track_state.shift_down);
     ui_core_publish_hall_arbitration_snapshot();
 }
 
@@ -848,8 +974,6 @@ void ui_core_service_track_selection_inputs(void)
 {
     /* Keep the UI-owned modifier and presentation context current before the
      * Hall arbitration projection is published. */
-    (void)encoder_control_dispatcher_service();
-
     const uint8_t mute_active = (ui_core_mute_is_active() != 0U) ? 1U : 0U;
     const uint8_t shift_down = button_down(BTN_SHIFT);
     const uint8_t track_modifier_down = (mute_active == 0U) ? button_down(UI_TRACK_MOD_BUTTON) : 0U;
@@ -867,10 +991,6 @@ void ui_core_service_track_selection_inputs(void)
 
     ui_core_service_macro_overlay_inputs(shift_down, track_modifier_down);
 
-    const uint8_t active_track = ui_get_active_lane();
-    ui_hall_input_service_handle_transpose(g_ui_track_state.shift_down,
-                                           g_ui_track_state.track_select_armed,
-                                           active_track);
     ui_core_publish_hall_arbitration_snapshot();
 }
 
@@ -910,51 +1030,31 @@ void ui_core_tick(void)
 
     ui_event_t ev;
     ui_param_encoder_context_t encoder_ctx;
-
     ui_param_capture_encoder_context(&encoder_ctx);
     ui_param_begin_encoder_edit_group(&encoder_ctx);
 
-    for (uint8_t encoder = 0U; encoder < (uint8_t)ENC_COUNT; encoder++)
-    {
-        int16_t delta = encoder_consume_delta(encoder);
-        if (encoder == 1U)
-        {
-            delta = (int16_t)-delta;
-        }
-        if (ui_page_settings_is_open() != 0U)
-        {
-            ui_page_settings_handle_encoder(encoder, delta);
-        }
-        else if (ui_page_name_edit_is_open() != 0U)
-        {
-            (void)ui_page_name_edit_handle_encoder(encoder, delta);
-        }
-        else if (ui_page_patch_assign_is_open() != 0U)
-        {
-            (void)ui_page_patch_assign_handle_encoder(encoder, delta);
-        }
-        else if (ui_page_audio_rec_is_open() != 0U)
-        {
-            (void)ui_page_audio_rec_handle_encoder(encoder, delta);
-        }
-        else
-        {
-            if ((ui_page_template_keyboard_handle_encoder(encoder, delta) == 0U)
-                && (ui_page_template_seq_handle_encoder(encoder, delta) == 0U)
-                && (ui_page_template_play_handle_encoder(encoder, delta) == 0U)
-                && (ui_page_template_cfg_handle_encoder(encoder, delta) == 0U)
-                && (ui_page_template_rec_cfg_handle_encoder(encoder, delta) == 0U)
-                && (ui_macro_interaction_note_encoder_delta_with_context(&encoder_ctx, encoder, delta) == 0U))
-            {
-                ui_param_handle_encoder_with_context(&encoder_ctx, encoder, delta);
-            }
-        }
-    }
-
-    ui_param_end_encoder_edit_group();
-
     while (ui_event_pop(&ev))
     {
+        if (control_domain_project_ui_busy() != 0U)
+        {
+            encoders_discard_pending();
+            continue;
+        }
+        if (ev.type == UI_EVENT_ENCODER)
+        {
+            (void)ui_core_handle_encoder_event(&ev, &encoder_ctx);
+            if ((ui_page_get_id() == UI_PAGE_TEMPLATE_MOD)
+                    || (ui_page_get_id() == UI_PAGE_MIDI_FX)
+                    || (ui_page_get_id() == UI_PAGE_AUDIO_FX))
+            {
+                const ui_page_t *const encoder_page = ui_page_get();
+                if ((encoder_page != 0) && (encoder_page->handle_event != 0))
+                {
+                    encoder_page->handle_event(&ev);
+                }
+            }
+            continue;
+        }
         /* Must stay first: updates shift/track modifier state consumed by later stages. */
         ui_core_handle_track_selection_event(&ev);
 
@@ -986,6 +1086,8 @@ void ui_core_tick(void)
 next_event:
         ;
     }
+
+    ui_param_end_encoder_edit_group();
 
     sample_capture_model_service();
     ui_hall_mode_flow_service_pending(HAL_GetTick());

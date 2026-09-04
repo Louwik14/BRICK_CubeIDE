@@ -8,6 +8,7 @@ extern "C" {
 #endif
 
 #define WAVEFORM_CACHE_SAMPLE_ID_BYTES 16U
+#define WAVEFORM_CACHE_PATH_MAX 96U
 #define WAVEFORM_CACHE_TILE_COLUMNS 512U
 #define WAVEFORM_CACHE_PERSIST_MIN_SECONDS 60U
 #define WAVEFORM_CACHE_PERSIST_DEFAULT_SAMPLE_RATE 48000U
@@ -84,6 +85,12 @@ uint8_t waveform_cache_request_for_wav_known_duration(const char *path,
                                                       waveform_cache_reason_t reason,
                                                       uint32_t frame_count,
                                                       uint32_t sample_rate);
+uint8_t waveform_cache_storage_request_for_wav(const char *path,
+                                               waveform_cache_reason_t reason);
+uint8_t waveform_cache_storage_request_for_wav_known_duration(const char *path,
+                                                              waveform_cache_reason_t reason,
+                                                              uint32_t frame_count,
+                                                              uint32_t sample_rate);
 void waveform_cache_service(uint32_t byte_budget);
 void waveform_cache_get_diag(waveform_cache_diag_t *out_diag);
 
@@ -97,6 +104,11 @@ uint8_t waveform_cache_request_tiles(const waveform_cache_handle_t *handle,
                                      uint32_t tile_start,
                                      uint32_t tile_count,
                                      waveform_cache_reason_t reason);
+uint8_t waveform_cache_storage_request_tiles(const waveform_cache_handle_t *handle,
+                                             waveform_cache_level_id_t level_id,
+                                             uint32_t tile_start,
+                                             uint32_t tile_count,
+                                             waveform_cache_reason_t reason);
 uint8_t waveform_cache_tiles_ready(const waveform_cache_handle_t *handle,
                                    waveform_cache_level_id_t level_id,
                                    uint32_t tile_start,

@@ -1,4 +1,5 @@
 #include "Sampler/wavetable_pool.h"
+#include "App/control_domain.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -56,6 +57,9 @@ static volatile uint8_t g_wavetable_load_request_valid;
 static uint16_t g_wavetable_load_request_slot;
 static wavetable_source_geometry_t g_wavetable_load_request_geometry;
 static char g_wavetable_load_request_path[WAVETABLE_POOL_PATH_MAX];
+static uint32_t g_wavetable_load_request_id;
+static wavetable_requester_t g_wavetable_load_requester;
+static uint32_t g_wavetable_request_id_counter;
 STORAGE_STATE_SDRAM ALIGN32 static float
     g_wavetable_fft_real[WAVETABLE_SOURCE_2048_SAMPLE_COUNT];
 STORAGE_STATE_SDRAM ALIGN32 static float
@@ -132,6 +136,8 @@ typedef struct
     uint16_t wavetable_slot;
     uint16_t global_slot;
     wavetable_result_t result;
+    uint32_t request_id;
+    wavetable_requester_t requester;
     uint8_t source_open;
     uint8_t cache_open;
     uint8_t cleanup_phase;

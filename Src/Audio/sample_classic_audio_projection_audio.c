@@ -5,8 +5,19 @@
 
 uint8_t sample_classic_audio_projection_is_ready(uint16_t sample_id)
 {
-    return (sample_id < SAMPLE_CLASSIC_CAPACITY)
-        ? g_sample_classic_audio_source[sample_id].ready : 0U;
+    if (sample_id >= SAMPLE_CLASSIC_CAPACITY) return 0U;
+    const sample_classic_audio_source_t *const src =
+        &g_sample_classic_audio_source[sample_id];
+    for (uint8_t attempt = 0U; attempt < 3U; ++attempt)
+    {
+        const uint32_t before = src->seq;
+        if ((before & 1U) != 0U) continue;
+        __DMB();
+        const uint8_t ready = src->ready;
+        __DMB();
+        if ((before == src->seq) && ((before & 1U) == 0U)) return ready;
+    }
+    return 0U;
 }
 
 uint8_t sample_classic_audio_projection_resolve(uint16_t sample_id,
@@ -15,14 +26,20 @@ uint8_t sample_classic_audio_projection_resolve(uint16_t sample_id,
     if (out != 0) sample_resolved_source_init(out);
     if ((out == 0) || (sample_id >= SAMPLE_CLASSIC_CAPACITY)) return 0U;
     const sample_classic_audio_source_t *const src = &g_sample_classic_audio_source[sample_id];
-    sample_classic_audio_source_t snap;
-    uint32_t before;
-    do {
-        before = src->seq;
+    sample_classic_audio_source_t snap = {0};
+    uint8_t stable = 0U;
+    for (uint8_t attempt = 0U; attempt < 3U; ++attempt)
+    {
+        const uint32_t before = src->seq;
         if ((before & 1U) != 0U) continue;
         __DMB(); snap = *src; __DMB();
-    } while ((before != src->seq) || ((src->seq & 1U) != 0U));
-    if (snap.ready == 0U) return 0U;
+        if ((before == src->seq) && ((before & 1U) == 0U))
+        {
+            stable = 1U;
+            break;
+        }
+    }
+    if ((stable == 0U) || (snap.ready == 0U)) return 0U;
     out->key = snap.key;
     out->total_frames = snap.total_frames;
     out->data_offset = snap.data_offset;

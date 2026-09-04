@@ -16,6 +16,7 @@
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Sampler/multi_sample_loader.h"
+#include "Sampler/multi_sample_import.h"
 #include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
 #include "Sampler/multi_sample_pool.h"
@@ -54,6 +55,8 @@ uint8_t project_load_allowed(void)
         && (sampler_ram_pool_load_async_busy() == 0U)
         && (wavetable_pool_load_async_busy() == 0U)
         && (multi_sample_load_has_pending() == 0U)
+        && (multi_sample_import_is_busy() == 0U)
+        && (multi_sample_import_delete_is_busy() == 0U)
         && (multi_sample_pool_clear_is_active() == 0U)
         && (wav_convert_is_active() == 0U));
 }

@@ -2,7 +2,10 @@
 
 #include "App/brick6_boot_defaults.h"
 #include "App/brick6_boot_fx_policy.h"
+#include "App/control_clipboard.h"
 #include "App/engine_tasklet.h"
+#include "App/live_parameter_audio_publication.h"
+#include "encoders.h"
 #include "App/Hall/hall_calibration.h"
 #include "App/Hall/hall_keyboard_bridge.h"
 #include "App/Hall/hall_loop.h"
@@ -33,6 +36,7 @@
 #include "Storage/project_product.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/sd_preview.h"
+#include "Storage/sample_capture.h"
 #include "Storage/undo_v2.h"
 #include "Storage/wav_convert.h"
 #include "Storage/waveform_cache.h"
@@ -41,262 +45,520 @@
 #include "Track/control_routing.h"
 #include "Track/entity_topology.h"
 #include "Track/track_runtime.h"
+#include "Track/audio_fx_control_state.h"
+#include "Track/polyphony_control.h"
+#include "Keyboard/keyboard_runtime.h"
 #include "Mod/mod_lfo_v1_control.h"
 #include "Mod/mod_matrix_control.h"
+#include "Platform/memory_layout.h"
 #include "UI/ui_active_track_sync.h"
 #include "ControlRT/control_rt_publication.h"
+#include "IPC/control_audio_command.h"
+#include "IPC/control_audio_rec_bus.h"
 #include "ui_boot_loading.h"
 #include "ui_core.h"
 #include "ui_page_manager.h"
 
-#define CONTROL_PROJECT_INTENT_CAPACITY 4U
-#define CONTROL_PATCH_INTENT_CAPACITY 4U
-#define CONTROL_TRACK_INTENT_CAPACITY 8U
-#define CONTROL_ROUTING_INTENT_CAPACITY 8U
-#define CONTROL_PARAM_INTENT_CAPACITY 8U
-#define CONTROL_SEQ_INTENT_CAPACITY 32U
-#define CONTROL_MOD_INTENT_CAPACITY 16U
-#define CONTROL_MACRO_INTENT_CAPACITY 8U
-static control_asset_intent_t g_asset_intent;
-static volatile uint8_t g_asset_intent_valid;
-static control_clipboard_intent_t g_clipboard_intent;
-static volatile uint8_t g_clipboard_intent_valid;
+#include <stdio.h>
+#include <string.h>
 
-static control_project_intent_t g_project_intents[CONTROL_PROJECT_INTENT_CAPACITY];
-static volatile uint8_t g_project_intent_head;
-static volatile uint8_t g_project_intent_tail;
-static control_patch_intent_t g_patch_intents[CONTROL_PATCH_INTENT_CAPACITY];
-static volatile uint8_t g_patch_intent_head;
-static volatile uint8_t g_patch_intent_tail;
-static control_track_intent_t g_track_intents[CONTROL_TRACK_INTENT_CAPACITY];
-static volatile uint8_t g_track_intent_head;
-static volatile uint8_t g_track_intent_tail;
-static control_routing_intent_t g_routing_intents[CONTROL_ROUTING_INTENT_CAPACITY];
-static volatile uint8_t g_routing_intent_head;
-static volatile uint8_t g_routing_intent_tail;
-static control_param_intent_t g_param_intents[CONTROL_PARAM_INTENT_CAPACITY];
-static volatile uint8_t g_param_intent_head;
-static volatile uint8_t g_param_intent_tail;
-static control_seq_intent_t g_seq_intents[CONTROL_SEQ_INTENT_CAPACITY];
-static volatile uint8_t g_seq_intent_head;
-static volatile uint8_t g_seq_intent_tail;
-static control_mod_intent_t g_mod_intents[CONTROL_MOD_INTENT_CAPACITY];
-static volatile uint8_t g_mod_intent_head;
-static volatile uint8_t g_mod_intent_tail;
-static control_macro_intent_t g_macro_intents[CONTROL_MACRO_INTENT_CAPACITY];
-static volatile uint8_t g_macro_intent_head;
-static volatile uint8_t g_macro_intent_tail;
+#define CONTROL_UI_FIFO_MASK (CONTROL_UI_FIFO_CAPACITY - 1U)
 
-uint8_t control_domain_request_project(const control_project_intent_t *intent)
+_Static_assert((CONTROL_UI_FIFO_CAPACITY
+                & (CONTROL_UI_FIFO_CAPACITY - 1U)) == 0U,
+               "UI to CONTROL FIFO capacity must be a power of two");
+
+CONTROL_M4_SRAM2 static control_ui_message_t
+    g_control_ui_fifo[CONTROL_UI_FIFO_CAPACITY];
+static volatile uint32_t g_control_ui_head;
+static volatile uint32_t g_control_ui_tail;
+static volatile uint32_t g_control_ui_overflow_count;
+static volatile uint8_t g_control_project_request_pending;
+
+#define CONTROL_STORAGE_FIFO_CAPACITY 512U
+#define CONTROL_STORAGE_FIFO_MASK (CONTROL_STORAGE_FIFO_CAPACITY - 1U)
+
+#define CONTROL_STORAGE_FIFO_MAX_RETIRE_EVENTS \
+    (SAMPLER_RAM_POOL_MAX_SLOTS + WAVETABLE_POOL_MAX_SLOTS \
+     + MULTI_SAMPLE_POOL_MAX_INSTRUMENTS + 2U)
+
+_Static_assert((CONTROL_STORAGE_FIFO_CAPACITY
+                & (CONTROL_STORAGE_FIFO_CAPACITY - 1U)) == 0U,
+               "Storage to CONTROL FIFO capacity must be a power of two");
+_Static_assert(CONTROL_STORAGE_FIFO_CAPACITY
+                   >= CONTROL_STORAGE_FIFO_MAX_RETIRE_EVENTS,
+               "Storage to CONTROL FIFO must cover one complete retire burst");
+
+CONTROL_M4_SRAM2 static control_storage_audio_event_t
+    g_control_storage_fifo[CONTROL_STORAGE_FIFO_CAPACITY];
+static volatile uint32_t g_control_storage_head;
+static volatile uint32_t g_control_storage_tail;
+static volatile uint32_t g_control_storage_overflow_count;
+
+#define CONTROL_STORAGE_WAVEFORM_FIFO_CAPACITY 8U
+#define CONTROL_STORAGE_WAVEFORM_FIFO_MASK \
+    (CONTROL_STORAGE_WAVEFORM_FIFO_CAPACITY - 1U)
+
+_Static_assert((CONTROL_STORAGE_WAVEFORM_FIFO_CAPACITY
+                & (CONTROL_STORAGE_WAVEFORM_FIFO_CAPACITY - 1U)) == 0U,
+               "Control to Storage waveform FIFO capacity must be a power of two");
+
+typedef struct
 {
-    if (intent == NULL) return 0U;
-    const uint8_t head = g_project_intent_head;
-    const uint8_t next = (uint8_t)((head + 1U) % CONTROL_PROJECT_INTENT_CAPACITY);
-    if (next == g_project_intent_tail) return 0U;
-    g_project_intents[head] = *intent;
+    uint8_t reason;
+    uint32_t frame_count;
+    uint32_t sample_rate;
+    char path[WAVEFORM_CACHE_PATH_MAX];
+} control_storage_waveform_request_t;
+
+static control_storage_waveform_request_t
+    g_control_storage_waveform_fifo[CONTROL_STORAGE_WAVEFORM_FIFO_CAPACITY];
+static volatile uint32_t g_control_storage_waveform_head;
+static volatile uint32_t g_control_storage_waveform_tail;
+
+static uint8_t control_domain_submit_ui_message(
+    control_ui_message_type_t type,
+    const control_ui_message_payload_t *payload)
+{
+    if (payload == NULL) return 0U;
+    const uint32_t head = g_control_ui_head;
+    const uint32_t tail = g_control_ui_tail;
+    if ((uint32_t)(head - tail) >= CONTROL_UI_FIFO_CAPACITY)
+    {
+        ++g_control_ui_overflow_count;
+        return 0U;
+    }
+
+    control_ui_message_t *const message =
+        &g_control_ui_fifo[head & CONTROL_UI_FIFO_MASK];
+    message->type = (uint8_t)type;
+    message->reserved[0] = 0U;
+    message->reserved[1] = 0U;
+    message->reserved[2] = 0U;
+    message->payload = *payload;
     __DMB();
-    g_project_intent_head = next;
+    g_control_ui_head = head + 1U;
+    if (type == CONTROL_UI_MSG_PROJECT)
+        g_control_project_request_pending = 1U;
     return 1U;
 }
 
-uint8_t control_domain_take_project(control_project_intent_t *intent)
+static uint8_t control_domain_take_ui_message(control_ui_message_t *message)
 {
-    if (intent == NULL || g_project_intent_tail == g_project_intent_head) return 0U;
-    const uint8_t tail = g_project_intent_tail;
-    *intent = g_project_intents[tail];
+    if (message == NULL) return 0U;
+    const uint32_t tail = g_control_ui_tail;
+    if (tail == g_control_ui_head) return 0U;
+    *message = g_control_ui_fifo[tail & CONTROL_UI_FIFO_MASK];
     __DMB();
-    g_project_intent_tail = (uint8_t)((tail + 1U) % CONTROL_PROJECT_INTENT_CAPACITY);
+    g_control_ui_tail = tail + 1U;
     return 1U;
 }
 
-uint8_t control_domain_request_patch(const control_patch_intent_t *intent)
+static uint8_t control_domain_submit_storage_message(
+    const control_storage_audio_event_t *message)
 {
-    if (intent == NULL) return 0U;
-    const uint8_t head = g_patch_intent_head;
-    const uint8_t next = (uint8_t)((head + 1U) % CONTROL_PATCH_INTENT_CAPACITY);
-    if (next == g_patch_intent_tail) return 0U;
-    g_patch_intents[head] = *intent;
+    if (message == NULL) return 0U;
+    const uint32_t head = g_control_storage_head;
+    const uint32_t tail = g_control_storage_tail;
+    if ((uint32_t)(head - tail) >= CONTROL_STORAGE_FIFO_CAPACITY)
+    {
+        ++g_control_storage_overflow_count;
+        return 0U;
+    }
+    g_control_storage_fifo[head & CONTROL_STORAGE_FIFO_MASK] = *message;
     __DMB();
-    g_patch_intent_head = next;
+    g_control_storage_head = head + 1U;
     return 1U;
 }
 
-uint8_t control_domain_take_patch(control_patch_intent_t *intent)
+static uint8_t control_domain_take_storage_message(
+    control_storage_audio_event_t *message)
 {
-    if (intent == NULL || g_patch_intent_tail == g_patch_intent_head) return 0U;
-    const uint8_t tail = g_patch_intent_tail;
-    *intent = g_patch_intents[tail];
+    if (message == NULL) return 0U;
+    const uint32_t tail = g_control_storage_tail;
+    if (tail == g_control_storage_head) return 0U;
+    *message = g_control_storage_fifo[tail & CONTROL_STORAGE_FIFO_MASK];
     __DMB();
-    g_patch_intent_tail = (uint8_t)((tail + 1U) % CONTROL_PATCH_INTENT_CAPACITY);
+    g_control_storage_tail = tail + 1U;
     return 1U;
 }
 
-uint8_t control_domain_request_track(const control_track_intent_t *intent)
+#define CONTROL_DOMAIN_REQUEST(_name, _type, _member, _intent_type) \
+uint8_t control_domain_request_##_name(const _intent_type *intent) \
+{ \
+    if (intent == NULL) return 0U; \
+    control_ui_message_payload_t payload = { 0 }; \
+    payload._member = *intent; \
+    return control_domain_submit_ui_message((_type), &payload); \
+}
+
+CONTROL_DOMAIN_REQUEST(project, CONTROL_UI_MSG_PROJECT, project,
+                       control_project_intent_t)
+CONTROL_DOMAIN_REQUEST(patch, CONTROL_UI_MSG_PATCH, patch,
+                       control_patch_intent_t)
+CONTROL_DOMAIN_REQUEST(track, CONTROL_UI_MSG_TRACK, track,
+                       control_track_intent_t)
+CONTROL_DOMAIN_REQUEST(routing, CONTROL_UI_MSG_ROUTING, routing,
+                       control_routing_intent_t)
+CONTROL_DOMAIN_REQUEST(param, CONTROL_UI_MSG_PARAM, param,
+                       control_param_intent_t)
+CONTROL_DOMAIN_REQUEST(seq, CONTROL_UI_MSG_SEQ, seq,
+                       control_seq_intent_t)
+CONTROL_DOMAIN_REQUEST(mod, CONTROL_UI_MSG_MOD, mod,
+                       control_mod_intent_t)
+CONTROL_DOMAIN_REQUEST(macro, CONTROL_UI_MSG_MACRO, macro,
+                       control_macro_intent_t)
+CONTROL_DOMAIN_REQUEST(asset, CONTROL_UI_MSG_ASSET, asset,
+                       control_asset_intent_t)
+CONTROL_DOMAIN_REQUEST(clipboard, CONTROL_UI_MSG_CLIPBOARD, clipboard,
+                       control_clipboard_intent_t)
+
+uint8_t control_domain_request_keyboard(uint8_t operation, int8_t value)
 {
-    if (intent == NULL) return 0U;
-    const uint8_t head = g_track_intent_head;
-    const uint8_t next = (uint8_t)((head + 1U) % CONTROL_TRACK_INTENT_CAPACITY);
-    if (next == g_track_intent_tail) return 0U;
-    g_track_intents[head] = *intent;
+    control_ui_message_payload_t payload = { 0 };
+    payload.keyboard.operation = operation;
+    payload.keyboard.value = value;
+    return control_domain_submit_ui_message(CONTROL_UI_MSG_KEYBOARD, &payload);
+}
+
+CONTROL_DOMAIN_REQUEST(audio_fx, CONTROL_UI_MSG_AUDIO_FX, audio_fx,
+                       control_audio_fx_intent_t)
+CONTROL_DOMAIN_REQUEST(audio_rec, CONTROL_UI_MSG_AUDIO_REC, audio_rec,
+                       control_audio_rec_intent_t)
+CONTROL_DOMAIN_REQUEST(audio_visual, CONTROL_UI_MSG_AUDIO_VISUAL, audio_visual,
+                       control_audio_visual_intent_t)
+
+#undef CONTROL_DOMAIN_REQUEST
+
+uint8_t control_domain_request_polyphony(uint8_t track, uint8_t voices)
+{
+    control_ui_message_payload_t payload = { 0 };
+    payload.polyphony.track = track;
+    payload.polyphony.voices = voices;
+    return control_domain_submit_ui_message(CONTROL_UI_MSG_POLYPHONY, &payload);
+}
+
+uint8_t control_domain_request_history(uint8_t redo)
+{
+    control_ui_message_payload_t payload = { 0 };
+    payload.history.redo = (redo != 0U) ? 1U : 0U;
+    return control_domain_submit_ui_message(CONTROL_UI_MSG_HISTORY, &payload);
+}
+
+uint8_t control_domain_request_preview_gain(float gain)
+{
+    control_ui_message_payload_t payload = { 0 };
+    payload.preview_gain.gain = gain;
+    return control_domain_submit_ui_message(CONTROL_UI_MSG_PREVIEW_GAIN, &payload);
+}
+
+uint8_t control_domain_request_rec_bus(uint16_t source_entity_mask,
+                                       uint8_t arm, uint8_t source_flags,
+                                       uint8_t has_sample_time,
+                                       uint64_t sample_time)
+{
+    control_ui_message_payload_t payload = { 0 };
+    payload.rec_bus.source_entity_mask = source_entity_mask;
+    payload.rec_bus.arm = arm;
+    payload.rec_bus.source_flags = source_flags;
+    payload.rec_bus.has_sample_time = (has_sample_time != 0U) ? 1U : 0U;
+    payload.rec_bus.sample_time = sample_time;
+    return control_domain_submit_ui_message(CONTROL_UI_MSG_REC_BUS, &payload);
+}
+
+uint8_t control_domain_request_storage_ui(uint8_t operation)
+{
+    control_ui_message_payload_t payload = { 0 };
+    payload.storage.operation = operation;
+    return control_domain_submit_ui_message(CONTROL_UI_MSG_STORAGE, &payload);
+}
+
+static void control_domain_apply_keyboard_intent(
+    const control_keyboard_intent_t *intent)
+{
+    switch ((control_keyboard_operation_t)intent->operation)
+    {
+    case CONTROL_KEYBOARD_SET_ROOT:
+        keyboard_runtime_set_root((uint8_t)intent->value);
+        break;
+    case CONTROL_KEYBOARD_SET_SCALE:
+        keyboard_runtime_set_scale((uint8_t)intent->value);
+        break;
+    case CONTROL_KEYBOARD_SET_OMNICHORD:
+        keyboard_runtime_set_omnichord(intent->value != 0);
+        break;
+    case CONTROL_KEYBOARD_SET_NOTE_ORDER:
+        keyboard_runtime_set_note_order((note_order_t)intent->value);
+        break;
+    case CONTROL_KEYBOARD_SET_CHORD_OVERRIDE:
+        keyboard_runtime_set_chord_override(intent->value != 0);
+        break;
+    case CONTROL_KEYBOARD_SET_MONO_LAST:
+        keyboard_runtime_set_mono_last(intent->value != 0);
+        break;
+    case CONTROL_KEYBOARD_STEP_OCTAVE:
+        keyboard_runtime_step_octave(intent->value);
+        break;
+    case CONTROL_KEYBOARD_SET_VELOCITY_PROFILE:
+        hall_set_velocity_profile((uint8_t)intent->value);
+        break;
+    case CONTROL_KEYBOARD_SET_VELOCITY_MODE:
+        hall_set_velocity_mode((uint8_t)intent->value);
+        break;
+    case CONTROL_KEYBOARD_SET_VELOCITY_CURVE:
+        hall_set_velocity_curve((uint8_t)intent->value);
+        break;
+    default:
+        break;
+    }
+}
+
+static void control_domain_apply_audio_fx_intent(
+    const control_audio_fx_intent_t *intent)
+{
+    switch ((control_audio_fx_operation_t)intent->operation)
+    {
+    case CONTROL_AUDIO_FX_SET_FILTER_POSITION:
+        (void)audio_fx_control_set_filter_position(
+            (brick_entity_id_t)intent->entity,
+            (audio_fx_filter_pos_t)intent->value);
+        break;
+    case CONTROL_AUDIO_FX_SET_ORDER:
+        (void)audio_fx_control_set_order(
+            (brick_entity_id_t)intent->entity,
+            (audio_fx_order_t)intent->value);
+        break;
+    case CONTROL_AUDIO_FX_SET_SPATIAL_MODE:
+        (void)audio_fx_control_set_spatial_mode(
+            (brick_entity_id_t)intent->entity,
+            (audio_fx_slot_t)intent->slot, intent->value);
+        break;
+    default:
+        break;
+    }
+}
+
+static void control_domain_apply_polyphony_intent(
+    const control_polyphony_intent_t *intent)
+{
+    polyphony_control_state_t polyphony;
+    polyphony_control_state_t prepared_polyphony;
+    audio_fx_control_state_t audio_fx;
+    audio_fx_control_state_t prepared_audio_fx;
+    live_parameter_audio_bulk_t bulk = { .capture_tick = 0U, .count = 0U };
+
+    if ((polyphony_control_capture(intent->track, &polyphony) == 0U)
+            || (audio_fx_control_state_capture(intent->track, &audio_fx) == 0U))
+        return;
+    polyphony.voice_count = intent->voices;
+    if ((polyphony_control_prepare(&polyphony, &prepared_polyphony) == 0U)
+            || (audio_fx_control_state_prepare_for_polyphony(
+                intent->track, &audio_fx, prepared_polyphony.voice_count,
+                &prepared_audio_fx) == 0U)
+            || (polyphony_control_bulk_add(intent->track, &prepared_polyphony,
+                &bulk) == 0U)
+            || (audio_fx_control_state_bulk_add_prepared(intent->track,
+                &prepared_audio_fx, &bulk) == 0U)
+            || (bulk.count == 0U)
+            || (live_parameter_audio_publication_submit_bulk_now(&bulk) == false))
+        return;
+    (void)polyphony_control_install_prepared(intent->track, &prepared_polyphony);
+    (void)audio_fx_control_state_install_prepared(intent->track,
+                                                  &prepared_audio_fx);
+}
+
+static void control_domain_apply_audio_rec_intent(
+    const control_audio_rec_intent_t *intent)
+{
+    sample_capture_model_set_control_context(1U);
+    switch ((control_audio_rec_operation_t)intent->operation)
+    {
+    case CONTROL_AUDIO_REC_TOGGLE_ROUTE:
+        (void)sample_capture_model_toggle_route(intent->value0);
+        break;
+    case CONTROL_AUDIO_REC_SET_ARM:
+        (void)sample_capture_model_set_arm(
+            (sample_capture_arm_t)intent->value0);
+        break;
+    case CONTROL_AUDIO_REC_STEP_ARM:
+        (void)sample_capture_model_step_arm(intent->delta);
+        break;
+    case CONTROL_AUDIO_REC_STEP_LENGTH:
+        (void)sample_capture_model_step_len(intent->delta);
+        break;
+    case CONTROL_AUDIO_REC_STEP_QUANTIZATION:
+        (void)sample_capture_model_step_quant(intent->delta);
+        break;
+    case CONTROL_AUDIO_REC_STEP_THRESHOLD:
+        (void)sample_capture_model_step_threshold(intent->delta);
+        break;
+    case CONTROL_AUDIO_REC_TOGGLE_LINE:
+        (void)sample_capture_model_toggle_line();
+        break;
+    case CONTROL_AUDIO_REC_TOGGLE_MIC:
+        (void)sample_capture_model_toggle_mic();
+        break;
+    case CONTROL_AUDIO_REC_STEP_EDIT:
+        (void)sample_capture_model_step_edit(intent->value0, intent->delta,
+                                             intent->value1);
+        break;
+    case CONTROL_AUDIO_REC_RETURN:
+        (void)sample_capture_model_return_to_audio_rec();
+        break;
+    case CONTROL_AUDIO_REC_AUDITION:
+        (void)sample_capture_model_audition_trimmed();
+        break;
+    case CONTROL_AUDIO_REC_SAVE:
+        (void)sample_capture_model_save_trimmed();
+        break;
+    case CONTROL_AUDIO_REC_ASSIGN:
+        (void)sample_capture_model_assign_saved_take_to_pool();
+        break;
+    case CONTROL_AUDIO_REC_TOGGLE_ZCROSS:
+        (void)sample_capture_model_toggle_zcross();
+        break;
+    case CONTROL_AUDIO_REC_STOP_CLIENT:
+    {
+        uint64_t sample_time = 0U;
+        if (control_rt_now_sample(&sample_time) != 0U)
+            (void)audio_recorder_request_stop_client_at(
+                (audio_recorder_client_t)intent->value0, sample_time);
+        break;
+    }
+    case CONTROL_AUDIO_REC_START_AT:
+        if (intent->has_sample_time != 0U)
+            (void)sample_capture_control_start_prepared_at(
+                intent->sample_time);
+        break;
+    default:
+        break;
+    }
+    sample_capture_model_set_control_context(0U);
+}
+
+static void control_domain_apply_history_intent(
+    const control_history_intent_t *intent)
+{
+    if (intent->redo != 0U)
+        (void)undo_v2_redo();
+    else
+        (void)undo_v2_undo();
+}
+
+static void control_domain_apply_audio_visual_intent(
+    const control_audio_visual_intent_t *intent)
+{
+    uint16_t parameter_id = CONTROL_AUDIO_PARAM_AUDIO_WAVEFORM_REQUEST;
+    uint32_t value = (uint32_t)intent->value;
+    if (intent->operation != 0U)
+    {
+        parameter_id = CONTROL_AUDIO_PARAM_SYNTH_WAVEFORM_REQUEST;
+        value = (uint32_t)intent->slot | ((uint32_t)intent->value << 8);
+    }
+    if (control_rt_publish_param_now(intent->entity, parameter_id, value, 0U)
+            == 0U)
+        Error_Handler();
+}
+
+static void control_domain_apply_rec_bus_intent(
+    const control_rec_bus_intent_t *intent)
+{
+    const audio_rec_bus_arm_t arm = (audio_rec_bus_arm_t)intent->arm;
+    const uint8_t published = (intent->has_sample_time != 0U)
+        ? control_audio_rec_bus_publish_at(intent->source_entity_mask, arm,
+                                           intent->source_flags,
+                                           intent->sample_time)
+        : control_audio_rec_bus_publish(intent->source_entity_mask, arm,
+                                        intent->source_flags);
+    if (published == 0U) Error_Handler();
+}
+
+static void control_domain_apply_storage_ui_intent(
+    const control_storage_ui_intent_t *intent)
+{
+    if (intent->operation == CONTROL_STORAGE_UI_CANCEL_MULTI_LOAD)
+        (void)multi_sample_cancel_load();
+    else if (intent->operation == CONTROL_STORAGE_UI_CLEAR_CONVERSION)
+        wav_convert_clear_finished();
+}
+
+uint8_t control_domain_request_storage_audio_param(uint8_t entity,
+                                                   uint16_t parameter_id,
+                                                   uint32_t value)
+{
+    const control_storage_audio_event_t message = {
+        .type = CONTROL_STORAGE_EVENT_AUDIO_PARAM,
+        .family = 1U,
+        .requester = 0U,
+        .result = 1U,
+        .entity = entity,
+        .parameter_id = parameter_id,
+        .value = value
+    };
+    return control_domain_submit_storage_message(&message);
+}
+
+uint8_t control_domain_request_storage_record_stop(uint8_t client)
+{
+    const control_storage_audio_event_t message = {
+        .type = CONTROL_STORAGE_EVENT_RECORD_STOP,
+        .family = 2U,
+        .requester = 0U,
+        .result = 1U,
+        .client = client
+    };
+    return control_domain_submit_storage_message(&message);
+}
+
+uint8_t control_domain_request_storage_waveform_cache(const char *path,
+                                                      uint8_t reason,
+                                                      uint32_t frame_count,
+                                                      uint32_t sample_rate)
+{
+    if ((path == NULL) || (path[0] == '\0')
+            || (strlen(path) >= WAVEFORM_CACHE_PATH_MAX))
+        return 0U;
+    const uint32_t head = g_control_storage_waveform_head;
+    const uint32_t tail = g_control_storage_waveform_tail;
+    if ((head - tail) >= CONTROL_STORAGE_WAVEFORM_FIFO_CAPACITY)
+        return 0U;
+    control_storage_waveform_request_t *const request =
+        &g_control_storage_waveform_fifo[head & CONTROL_STORAGE_WAVEFORM_FIFO_MASK];
+    request->reason = reason;
+    request->frame_count = frame_count;
+    request->sample_rate = sample_rate;
+    (void)snprintf(request->path, sizeof(request->path), "%s", path);
     __DMB();
-    g_track_intent_head = next;
+    g_control_storage_waveform_head = head + 1U;
     return 1U;
 }
 
-uint8_t control_domain_take_track(control_track_intent_t *intent)
+void control_domain_storage_process_requests(void)
 {
-    if (intent == NULL || g_track_intent_tail == g_track_intent_head) return 0U;
-    const uint8_t tail = g_track_intent_tail;
-    *intent = g_track_intents[tail];
-    __DMB();
-    g_track_intent_tail = (uint8_t)((tail + 1U) % CONTROL_TRACK_INTENT_CAPACITY);
-    return 1U;
+    while (g_control_storage_waveform_tail != g_control_storage_waveform_head)
+    {
+        const uint32_t tail = g_control_storage_waveform_tail;
+        const control_storage_waveform_request_t request =
+            g_control_storage_waveform_fifo[tail & CONTROL_STORAGE_WAVEFORM_FIFO_MASK];
+        __DMB();
+        g_control_storage_waveform_tail = tail + 1U;
+        (void)waveform_cache_storage_request_for_wav_known_duration(
+            request.path,
+            (waveform_cache_reason_t)request.reason,
+            request.frame_count,
+            request.sample_rate);
+    }
 }
 
-uint8_t control_domain_request_routing(const control_routing_intent_t *intent)
+uint32_t control_domain_ui_overflow_count(void)
 {
-    if (intent == NULL) return 0U;
-    const uint8_t head = g_routing_intent_head;
-    const uint8_t next = (uint8_t)((head + 1U) % CONTROL_ROUTING_INTENT_CAPACITY);
-    if (next == g_routing_intent_tail) return 0U;
-    g_routing_intents[head] = *intent;
-    __DMB();
-    g_routing_intent_head = next;
-    return 1U;
+    return g_control_ui_overflow_count;
 }
 
-uint8_t control_domain_take_routing(control_routing_intent_t *intent)
+uint8_t control_domain_project_ui_busy(void)
 {
-    if (intent == NULL || g_routing_intent_tail == g_routing_intent_head) return 0U;
-    const uint8_t tail = g_routing_intent_tail;
-    *intent = g_routing_intents[tail];
-    __DMB();
-    g_routing_intent_tail = (uint8_t)((tail + 1U) % CONTROL_ROUTING_INTENT_CAPACITY);
-    return 1U;
-}
-
-uint8_t control_domain_request_param(const control_param_intent_t *intent)
-{
-    if (intent == NULL) return 0U;
-    const uint8_t head = g_param_intent_head;
-    const uint8_t next = (uint8_t)((head + 1U) % CONTROL_PARAM_INTENT_CAPACITY);
-    if (next == g_param_intent_tail) return 0U;
-    g_param_intents[head] = *intent;
-    __DMB();
-    g_param_intent_head = next;
-    return 1U;
-}
-
-uint8_t control_domain_take_param(control_param_intent_t *intent)
-{
-    if (intent == NULL || g_param_intent_tail == g_param_intent_head) return 0U;
-    const uint8_t tail = g_param_intent_tail;
-    *intent = g_param_intents[tail];
-    __DMB();
-    g_param_intent_tail = (uint8_t)((tail + 1U) % CONTROL_PARAM_INTENT_CAPACITY);
-    return 1U;
-}
-
-uint8_t control_domain_request_seq(const control_seq_intent_t *intent)
-{
-    if (intent == NULL) return 0U;
-    const uint8_t head = g_seq_intent_head;
-    const uint8_t next = (uint8_t)((head + 1U) % CONTROL_SEQ_INTENT_CAPACITY);
-    if (next == g_seq_intent_tail) return 0U;
-    g_seq_intents[head] = *intent;
-    __DMB();
-    g_seq_intent_head = next;
-    return 1U;
-}
-
-uint8_t control_domain_take_seq(control_seq_intent_t *intent)
-{
-    if (intent == NULL || g_seq_intent_tail == g_seq_intent_head) return 0U;
-    const uint8_t tail = g_seq_intent_tail;
-    *intent = g_seq_intents[tail];
-    __DMB();
-    g_seq_intent_tail = (uint8_t)((tail + 1U) % CONTROL_SEQ_INTENT_CAPACITY);
-    return 1U;
-}
-
-uint8_t control_domain_request_mod(const control_mod_intent_t *intent)
-{
-    if (intent == NULL) return 0U;
-    const uint8_t head = g_mod_intent_head;
-    const uint8_t next = (uint8_t)((head + 1U) % CONTROL_MOD_INTENT_CAPACITY);
-    if (next == g_mod_intent_tail) return 0U;
-    g_mod_intents[head] = *intent;
-    __DMB();
-    g_mod_intent_head = next;
-    return 1U;
-}
-
-uint8_t control_domain_take_mod(control_mod_intent_t *intent)
-{
-    if (intent == NULL || g_mod_intent_tail == g_mod_intent_head) return 0U;
-    const uint8_t tail = g_mod_intent_tail;
-    *intent = g_mod_intents[tail];
-    __DMB();
-    g_mod_intent_tail = (uint8_t)((tail + 1U) % CONTROL_MOD_INTENT_CAPACITY);
-    return 1U;
-}
-
-uint8_t control_domain_request_macro(const control_macro_intent_t *intent)
-{
-    if (intent == NULL) return 0U;
-    const uint8_t head = g_macro_intent_head;
-    const uint8_t next = (uint8_t)((head + 1U) % CONTROL_MACRO_INTENT_CAPACITY);
-    if (next == g_macro_intent_tail) return 0U;
-    g_macro_intents[head] = *intent;
-    __DMB();
-    g_macro_intent_head = next;
-    return 1U;
-}
-
-uint8_t control_domain_take_macro(control_macro_intent_t *intent)
-{
-    if (intent == NULL || g_macro_intent_tail == g_macro_intent_head) return 0U;
-    const uint8_t tail = g_macro_intent_tail;
-    *intent = g_macro_intents[tail];
-    __DMB();
-    g_macro_intent_tail = (uint8_t)((tail + 1U) % CONTROL_MACRO_INTENT_CAPACITY);
-    return 1U;
-}
-
-uint8_t control_domain_request_asset(const control_asset_intent_t *intent)
-{
-    if ((intent == NULL) || (g_asset_intent_valid != 0U)) return 0U;
-    g_asset_intent = *intent;
-    __DMB();
-    g_asset_intent_valid = 1U;
-    return 1U;
-}
-
-uint8_t control_domain_take_asset(control_asset_intent_t *intent)
-{
-    if ((intent == NULL) || (g_asset_intent_valid == 0U)) return 0U;
-    *intent = g_asset_intent;
-    __DMB();
-    g_asset_intent_valid = 0U;
-    return 1U;
-}
-
-uint8_t control_domain_request_clipboard(const control_clipboard_intent_t *intent)
-{
-    if ((intent == NULL) || (g_clipboard_intent_valid != 0U)) return 0U;
-    g_clipboard_intent = *intent;
-    __DMB();
-    g_clipboard_intent_valid = 1U;
-    return 1U;
-}
-
-uint8_t control_domain_take_clipboard(control_clipboard_intent_t *intent)
-{
-    if ((intent == NULL) || (g_clipboard_intent_valid == 0U)) return 0U;
-    *intent = g_clipboard_intent;
-    __DMB();
-    g_clipboard_intent_valid = 0U;
-    return 1U;
+    return ((g_control_project_request_pending != 0U)
+            || (project_product_ui_busy() != 0U)) ? 1U : 0U;
 }
 
 static uint8_t control_domain_apply_track_structure(const control_track_intent_t *intent)
@@ -403,29 +665,6 @@ static void control_domain_apply_track_intent(const control_track_intent_t *inte
     }
 }
 
-void control_domain_process_track_intents(void)
-{
-    control_track_intent_t intent;
-    for (uint8_t count = 0U; count < CONTROL_TRACK_INTENT_CAPACITY; ++count)
-    {
-        if (control_domain_take_track(&intent) == 0U) break;
-        control_domain_apply_track_intent(&intent);
-    }
-}
-
-void control_domain_process_routing_intents(void)
-{
-    control_routing_intent_t intent;
-    for (uint8_t count = 0U; count < CONTROL_ROUTING_INTENT_CAPACITY; ++count)
-    {
-        if (control_domain_take_routing(&intent) == 0U) break;
-        (void)control_routing_set_looper_source(
-            (brick_entity_id_t)intent.looper,
-            (brick_entity_id_t)intent.source,
-            intent.enabled);
-    }
-}
-
 static void control_domain_commit_param_base(
     const control_param_intent_t *intent)
 {
@@ -480,16 +719,6 @@ static void control_domain_apply_param_intent(
             intent->parameter_id, intent->track, intent->value) == 0U)
         return;
     control_domain_commit_param_base(intent);
-}
-
-void control_domain_process_param_intents(void)
-{
-    control_param_intent_t intent;
-    for (uint8_t count = 0U; count < CONTROL_PARAM_INTENT_CAPACITY; ++count)
-    {
-        if (control_domain_take_param(&intent) == 0U) break;
-        control_domain_apply_param_intent(&intent);
-    }
 }
 
 static void control_domain_apply_seq_intent(const control_seq_intent_t *intent)
@@ -581,17 +810,6 @@ static void control_domain_apply_seq_intent(const control_seq_intent_t *intent)
     }
 }
 
-void control_domain_process_seq_intents(void)
-{
-    control_seq_intent_t intent;
-    for (uint8_t count = 0U; count < CONTROL_SEQ_INTENT_CAPACITY; ++count)
-    {
-        if (control_domain_take_seq(&intent) == 0U) break;
-        control_domain_apply_seq_intent(&intent);
-    }
-    seq_edit_step_hold_update();
-}
-
 static void control_domain_apply_mod_intent(const control_mod_intent_t *intent)
 {
     switch ((control_mod_operation_t)intent->operation)
@@ -625,16 +843,6 @@ static void control_domain_apply_mod_intent(const control_mod_intent_t *intent)
     }
 }
 
-void control_domain_process_mod_intents(void)
-{
-    control_mod_intent_t intent;
-    for (uint8_t count = 0U; count < CONTROL_MOD_INTENT_CAPACITY; ++count)
-    {
-        if (control_domain_take_mod(&intent) == 0U) break;
-        control_domain_apply_mod_intent(&intent);
-    }
-}
-
 static void control_domain_apply_macro_intent(const control_macro_intent_t *intent)
 {
     switch ((control_macro_operation_t)intent->operation)
@@ -664,16 +872,6 @@ static void control_domain_apply_macro_intent(const control_macro_intent_t *inte
         break;
     default:
         break;
-    }
-}
-
-void control_domain_process_macro_intents(void)
-{
-    control_macro_intent_t intent;
-    for (uint8_t count = 0U; count < CONTROL_MACRO_INTENT_CAPACITY; ++count)
-    {
-        if (control_domain_take_macro(&intent) == 0U) break;
-        control_domain_apply_macro_intent(&intent);
     }
 }
 
@@ -744,36 +942,169 @@ static void control_domain_apply_asset_intent(const control_asset_intent_t *inte
     }
 }
 
-void control_domain_process_asset_intents(void)
+static void control_domain_apply_project_intent(
+    const control_project_intent_t *intent)
 {
-    control_asset_intent_t intent;
-    if (control_domain_take_asset(&intent) != 0U)
-        control_domain_apply_asset_intent(&intent);
+    const uint8_t operation = (uint8_t)intent->operation + 1U;
+    project_product_control_process_intent(operation, intent->slot);
+}
+
+static void control_domain_apply_patch_intent(
+    const control_patch_intent_t *intent)
+{
+    patch_product_control_process_intent((uint8_t)intent->operation,
+                                         intent->slot,
+                                         intent->target_mask,
+                                         intent->entity,
+                                         intent->name);
+}
+
+static uint8_t control_domain_project_busy_allows_message(
+    control_ui_message_type_t type)
+{
+    if (project_product_ui_busy() == 0U)
+        return 1U;
+    return (type == CONTROL_UI_MSG_PROJECT) ? 1U : 0U;
+}
+
+void control_domain_process_ui_messages(void)
+{
+    control_ui_message_t message;
+    uint16_t processed = 0U;
+
+    while ((processed < CONTROL_UI_FIFO_CAPACITY)
+           && (control_domain_take_ui_message(&message) != 0U))
+    {
+        if (control_domain_project_busy_allows_message(
+                (control_ui_message_type_t)message.type) == 0U)
+        {
+            ++processed;
+            continue;
+        }
+        switch ((control_ui_message_type_t)message.type)
+        {
+        case CONTROL_UI_MSG_PROJECT:
+            control_domain_apply_project_intent(&message.payload.project);
+            break;
+        case CONTROL_UI_MSG_PATCH:
+            control_domain_apply_patch_intent(&message.payload.patch);
+            break;
+        case CONTROL_UI_MSG_TRACK:
+            control_domain_apply_track_intent(&message.payload.track);
+            break;
+        case CONTROL_UI_MSG_ROUTING:
+            (void)control_routing_set_looper_source(
+                (brick_entity_id_t)message.payload.routing.looper,
+                (brick_entity_id_t)message.payload.routing.source,
+                message.payload.routing.enabled);
+            break;
+        case CONTROL_UI_MSG_PARAM:
+            control_domain_apply_param_intent(&message.payload.param);
+            break;
+        case CONTROL_UI_MSG_SEQ:
+            control_domain_apply_seq_intent(&message.payload.seq);
+            break;
+        case CONTROL_UI_MSG_MOD:
+            control_domain_apply_mod_intent(&message.payload.mod);
+            break;
+        case CONTROL_UI_MSG_MACRO:
+            control_domain_apply_macro_intent(&message.payload.macro);
+            break;
+        case CONTROL_UI_MSG_ASSET:
+            control_domain_apply_asset_intent(&message.payload.asset);
+            break;
+        case CONTROL_UI_MSG_CLIPBOARD:
+            control_clipboard_process(&message.payload.clipboard);
+            break;
+        case CONTROL_UI_MSG_KEYBOARD:
+            control_domain_apply_keyboard_intent(&message.payload.keyboard);
+            break;
+        case CONTROL_UI_MSG_AUDIO_FX:
+            control_domain_apply_audio_fx_intent(&message.payload.audio_fx);
+            break;
+        case CONTROL_UI_MSG_POLYPHONY:
+            control_domain_apply_polyphony_intent(&message.payload.polyphony);
+            break;
+        case CONTROL_UI_MSG_AUDIO_REC:
+            control_domain_apply_audio_rec_intent(&message.payload.audio_rec);
+            break;
+        case CONTROL_UI_MSG_HISTORY:
+            control_domain_apply_history_intent(&message.payload.history);
+            break;
+        case CONTROL_UI_MSG_AUDIO_VISUAL:
+            control_domain_apply_audio_visual_intent(
+                &message.payload.audio_visual);
+            break;
+        case CONTROL_UI_MSG_PREVIEW_GAIN:
+            sd_preview_set_gain(message.payload.preview_gain.gain);
+            {
+                union { float f; uint32_t u; } encoded = {
+                    .f = sd_preview_get_gain()
+                };
+                if (control_rt_publish_param_now(
+                        0U, CONTROL_AUDIO_PARAM_PREVIEW_GAIN,
+                        encoded.u, 0U) == 0U)
+                    Error_Handler();
+            }
+            break;
+        case CONTROL_UI_MSG_REC_BUS:
+            control_domain_apply_rec_bus_intent(&message.payload.rec_bus);
+            break;
+        case CONTROL_UI_MSG_STORAGE:
+            control_domain_apply_storage_ui_intent(&message.payload.storage);
+            break;
+        default:
+            break;
+        }
+        ++processed;
+    }
+
+    if (g_control_ui_tail == g_control_ui_head)
+        g_control_project_request_pending = 0U;
+    seq_edit_step_hold_update();
+}
+
+void control_domain_process_storage_messages(void)
+{
+    control_storage_audio_event_t message;
+    while (control_domain_take_storage_message(&message) != 0U)
+    {
+        switch ((control_storage_event_type_t)message.type)
+        {
+        case CONTROL_STORAGE_EVENT_AUDIO_PARAM:
+            if (control_rt_publish_param_now(message.entity,
+                    message.parameter_id, message.value, 0U) == 0U)
+                Error_Handler();
+            break;
+        case CONTROL_STORAGE_EVENT_RECORD_STOP:
+        {
+            uint64_t sample_time = 0U;
+            if ((control_rt_now_sample(&sample_time) != 0U)
+                    && (audio_recorder_request_stop_client_at(
+                        (audio_recorder_client_t)message.client,
+                        sample_time) == 0U))
+                Error_Handler();
+            break;
+        }
+        default:
+            break;
+        }
+    }
 }
 
 void control_domain_init(void)
 {
-    g_project_intent_head = 0U;
-    g_project_intent_tail = 0U;
-    g_patch_intent_head = 0U;
-    g_patch_intent_tail = 0U;
-    g_track_intent_head = 0U;
-    g_track_intent_tail = 0U;
-    g_routing_intent_head = 0U;
-    g_routing_intent_tail = 0U;
-    g_param_intent_head = 0U;
-    g_param_intent_tail = 0U;
-    g_seq_intent_head = 0U;
-    g_seq_intent_tail = 0U;
-    g_mod_intent_head = 0U;
-    g_mod_intent_tail = 0U;
-    g_macro_intent_head = 0U;
-    g_macro_intent_tail = 0U;
-    g_asset_intent_valid = 0U;
-    g_clipboard_intent_valid = 0U;
+    g_control_ui_head = 0U;
+    g_control_ui_tail = 0U;
+    g_control_ui_overflow_count = 0U;
+    g_control_project_request_pending = 0U;
+    g_control_storage_head = 0U;
+    g_control_storage_tail = 0U;
+    g_control_storage_overflow_count = 0U;
+    g_control_storage_waveform_head = 0U;
+    g_control_storage_waveform_tail = 0U;
     control_rt_publication_init();
     project_load_quiesce_init();
-    board_usb_device_init();
     sd_access_gate_init();
     wav_convert_init();
     waveform_cache_init();
@@ -796,6 +1127,7 @@ void control_domain_start(float postgain, float output_compensation)
     seq_runtime_init();
     brick6_boot_fx_policy_init();
     ui_core_init();
+    control_audio_rec_bus_init();
     (void)param_registry_commit_global(PARAM_POST_GAIN, postgain);
     (void)param_registry_commit_global(PARAM_OUTPUT_COMP, output_compensation);
     brick6_boot_apply_param_defaults();
@@ -816,6 +1148,8 @@ void control_domain_start(float postgain, float output_compensation)
         ui_page_set(UI_PAGE_CALIBRATION);
     }
     ui_active_track_sync_full_after_global_restore();
+    encoders_start_fast_poll();
     brick6_stream_service_task_init();
     midi_init();
+    board_usb_device_init();
 }

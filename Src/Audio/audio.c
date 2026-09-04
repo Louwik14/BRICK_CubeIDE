@@ -89,29 +89,47 @@ static AUDIO_DMA_BUFFER_NONCACHEABLE int32_t tx_buffer[AUDIO_BUFFER_WORDS];
    ============================================================ */
 
 static volatile audio_init_state_t g_audio_init_state = AUDIO_INIT_NOT_STARTED;
-static uint64_t g_audio_sample_clock;
-static uint8_t g_audio_sample_clock_valid;
+static volatile uint64_t g_audio_sample_clock;
+static volatile uint32_t g_audio_sample_clock_sequence;
+static uint32_t g_audio_sample_clock_tim5_hz;
 
-static uint64_t audio_tim5_to_sample_clock(uint32_t tick)
+static uint32_t audio_tim5_frequency_hz(void)
 {
     uint32_t tim_kernel_hz = HAL_RCC_GetPCLK1Freq();
     if ((RCC->D2CFGR & RCC_D2CFGR_D2PPRE1) != RCC_APB1_DIV1)
     {
         tim_kernel_hz *= 2U;
     }
-    const uint32_t tim5_hz = tim_kernel_hz / ((uint32_t)TIM5->PSC + 1U);
+    return tim_kernel_hz / ((uint32_t)TIM5->PSC + 1U);
+}
+
+static uint64_t audio_tim5_to_sample_clock(uint32_t tick, uint32_t tim5_hz)
+{
     if (tim5_hz == 0U) return 0U;
     return (((uint64_t)tick * BOARD_AUDIO_SAMPLE_RATE_HZ)
             + (tim5_hz / 2U)) / tim5_hz;
 }
 
-static void audio_sample_clock_init_on_first_callback(void)
+static void audio_sample_clock_write_begin(void)
 {
-    if (g_audio_sample_clock_valid != 0U) return;
-    const uint64_t callback_sample = audio_tim5_to_sample_clock(TIM5->CNT);
-    g_audio_sample_clock = (callback_sample >= AUDIO_FRAMES_PER_HALF)
-        ? callback_sample - AUDIO_FRAMES_PER_HALF : 0U;
-    g_audio_sample_clock_valid = 1U;
+    uint32_t sequence = g_audio_sample_clock_sequence;
+    if ((sequence & 1U) != 0U) ++sequence;
+    g_audio_sample_clock_sequence = sequence + 1U;
+    __DMB();
+}
+
+static void audio_sample_clock_write_end(void)
+{
+    __DMB();
+    g_audio_sample_clock_sequence++;
+    __DMB();
+}
+
+static void audio_sample_clock_advance(uint32_t frames)
+{
+    audio_sample_clock_write_begin();
+    g_audio_sample_clock += (uint64_t)frames;
+    audio_sample_clock_write_end();
 }
 /* ============================================================
    INTERNAL PROCESSING
@@ -185,9 +203,9 @@ static ITCM_TEXT void audio_process_half_common_hot(int32_t *rx, int32_t *tx)
         if (block_frames == 0U) continue;
 
         const uint64_t block_start_sample = g_audio_sample_clock;
-        g_audio_sample_clock += (uint64_t)block_frames;
         audio_process_event_segment(rx, tx, half_cursor,
                                     block_start_sample, block_frames);
+        audio_sample_clock_advance(block_frames);
         half_cursor += block_frames;
     }
 }
@@ -246,11 +264,14 @@ void audio_boot_init_binding_io(void)
     sd_preview_audio_init();
     audio_waveform_capture_init();
     synth_waveform_init();
+    mod_lfo_v1_audio_init();
+    mod_env3_audio_init();
     audio_boot_diag_producer_init();
     board_audio_init();
     g_audio_init_state = AUDIO_INIT_NOT_STARTED;
     g_audio_sample_clock = 0U;
-    g_audio_sample_clock_valid = 0U;
+    g_audio_sample_clock_sequence = 0U;
+    g_audio_sample_clock_tim5_hz = audio_tim5_frequency_hz();
     audio_boot_diag_producer_publish_state(AUDIO_INIT_NOT_STARTED, BOARD_AUDIO_BOOT_OK);
 
     memset(rx_buffer, 0, sizeof(rx_buffer));
@@ -285,6 +306,11 @@ void audio_boot_init_binding_io(void)
 uint8_t audio_start(void)
 {
     g_audio_init_state = AUDIO_INIT_CODEC;
+    /* Establish the audio timeline before DMA can raise its first IRQ. */
+    audio_sample_clock_write_begin();
+    g_audio_sample_clock = audio_tim5_to_sample_clock(TIM5->CNT,
+                                                      g_audio_sample_clock_tim5_hz);
+    audio_sample_clock_write_end();
     if (board_audio_start_stream(rx_buffer, tx_buffer, AUDIO_BUFFER_WORDS,
                                  &g_audio_init_state) == 0U)
     {
@@ -307,7 +333,18 @@ void audio_stop(void)
 
 uint64_t audio_sample_clock_now(void)
 {
-    return g_audio_sample_clock;
+    uint64_t snapshot = 0U;
+    for (uint8_t attempt = 0U; attempt < 3U; ++attempt)
+    {
+        const uint32_t before = g_audio_sample_clock_sequence;
+        if ((before & 1U) != 0U) continue;
+        __DMB();
+        snapshot = g_audio_sample_clock;
+        __DMB();
+        if ((before == g_audio_sample_clock_sequence)
+                && ((before & 1U) == 0U)) return snapshot;
+    }
+    return snapshot;
 }
 
 /* ============================================================
@@ -342,7 +379,6 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
     if ((g_audio_init_state == AUDIO_INIT_READY)
             && (board_audio_is_rx_callback_handle(hsai) != 0U))
     {
-        audio_sample_clock_init_on_first_callback();
         cpu_load_irq_begin();
 
         process_half(0);
@@ -381,7 +417,6 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
     if ((g_audio_init_state == AUDIO_INIT_READY)
             && (board_audio_is_rx_callback_handle(hsai) != 0U))
     {
-        audio_sample_clock_init_on_first_callback();
         cpu_load_irq_begin();
 
         process_half(1);

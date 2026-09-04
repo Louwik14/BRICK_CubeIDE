@@ -155,7 +155,8 @@ void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
             }
 
             g_ui_settings.sample_preview_volume = (uint8_t)volume;
-            sd_preview_set_gain((float)g_ui_settings.sample_preview_volume * 0.01f);
+            (void)control_domain_request_preview_gain(
+                (float)g_ui_settings.sample_preview_volume * 0.01f);
 
             char status[20];
             (void)snprintf(status,

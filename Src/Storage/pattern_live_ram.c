@@ -78,7 +78,11 @@ typedef struct
     uint8_t boundary_track;
 } pattern_live_intent_t;
 
-#define PATTERN_LIVE_INTENT_CAPACITY 4U
+#define PATTERN_LIVE_INTENT_CAPACITY 32U
+
+_Static_assert((PATTERN_LIVE_INTENT_CAPACITY
+                & (PATTERN_LIVE_INTENT_CAPACITY - 1U)) == 0U,
+               "Pattern live intent capacity must be a power of two");
 static pattern_live_intent_t g_pattern_live_intents[PATTERN_LIVE_INTENT_CAPACITY];
 static volatile uint8_t g_pattern_live_intent_head;
 static volatile uint8_t g_pattern_live_intent_tail;

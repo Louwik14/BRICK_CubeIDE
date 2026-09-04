@@ -295,7 +295,6 @@ int main(void)
   __HAL_TIM_SET_COUNTER(&htim5, 0U);
   HAL_TIM_Base_Start(&htim5);
   HAL_TIM_OC_Start(&htim5, TIM_CHANNEL_1);
-  HAL_TIM_Base_Start_IT(&htim12);
   MX_FATFS_Init();
   brick6_app_init();
   led_init();
@@ -305,6 +304,7 @@ int main(void)
   /* Init scheduler */
   osKernelInitialize();  /* Call init function for freertos objects (in cmsis_os2.c) */
   MX_FREERTOS_Init();
+  HAL_TIM_Base_Start_IT(&htim12);
 
   /* Start scheduler */
   osKernelStart();

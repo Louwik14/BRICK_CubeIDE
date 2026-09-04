@@ -157,7 +157,7 @@ uint8_t track_mute_set(uint8_t track, uint8_t muted)
     muted = (muted != 0U) ? 1U : 0U;
     uint8_t effective_after[BRICK_ENTITY_GROUP_CHILD_COUNT + 1U];
     live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
+        .capture_tick = 0U,
         .count = affected_count
     };
     for (uint8_t i = 0U; i < affected_count; ++i)
@@ -180,7 +180,7 @@ uint8_t track_mute_set(uint8_t track, uint8_t muted)
                 (float)effective_after[i])
         };
     }
-    if (!live_parameter_audio_publication_submit_bulk(&bulk)) return 0U;
+    if (!live_parameter_audio_publication_submit_bulk_now(&bulk)) return 0U;
     if (track_mute_install(track, muted) == 0U) return 0U;
 
     for (uint8_t i = 0U; i < affected_count; ++i)
@@ -230,7 +230,7 @@ uint8_t track_mute_publish_topology_projection(
         return 0U;
 
     live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
+        .capture_tick = 0U,
         .count = 0U
     };
     for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
@@ -253,7 +253,7 @@ uint8_t track_mute_publish_topology_projection(
         };
     }
     return (bulk.count == 0U)
-        || live_parameter_audio_publication_submit_bulk(&bulk);
+        || live_parameter_audio_publication_submit_bulk_now(&bulk);
 }
 
 void track_mute_apply_topology_change(

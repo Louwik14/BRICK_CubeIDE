@@ -363,7 +363,5 @@ list(APPEND BOARD_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/UsbStack/usb_device.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/UsbStack/usb_host.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/UsbStack/usb_role_manager.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/UsbStack/usbd_conf.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/UsbStack/usbd_desc.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/UsbStack/usbh_conf.c"
 )

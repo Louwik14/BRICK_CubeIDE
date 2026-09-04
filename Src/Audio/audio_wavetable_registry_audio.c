@@ -14,16 +14,22 @@ uint8_t audio_wavetable_registry_resolve(uint16_t wavetable_slot,
     if ((out == NULL) || (wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)) return 0U;
     const audio_wavetable_registry_slot_t *const src =
         &g_audio_wavetable_registry[wavetable_slot];
-    audio_wavetable_registry_slot_t snap;
-    uint32_t before;
-    do {
+    audio_wavetable_registry_slot_t snap = {0};
+    uint8_t stable = 0U;
+    for (uint8_t attempt = 0U; attempt < 3U; ++attempt)
+    {
         intercore_cache_consume(src, sizeof(*src));
-        before = src->sequence;
+        const uint32_t before = src->sequence;
         if ((before & 1U) != 0U) continue;
         snap = *src;
         intercore_cache_consume(src, sizeof(*src));
-    } while ((before != src->sequence) || ((src->sequence & 1U) != 0U));
-    if ((snap.ready == 0U)
+        if ((before == src->sequence) && ((before & 1U) == 0U))
+        {
+            stable = 1U;
+            break;
+        }
+    }
+    if ((stable == 0U) || (snap.ready == 0U)
         || ((generation != 0U) && (snap.descriptor.generation != generation)))
         return 0U;
     *out = snap.descriptor;

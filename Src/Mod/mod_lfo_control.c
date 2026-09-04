@@ -161,7 +161,7 @@ uint8_t mod_lfo_v1_restore_track(uint8_t track,
     mod_lfo_control_bank_t canonical;
     if (mod_lfo_v1_prepare_bank(state, &canonical) == 0U) return 0U;
     live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
+        .capture_tick = 0U,
     };
     for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
     {
@@ -179,7 +179,7 @@ uint8_t mod_lfo_v1_restore_track(uint8_t track,
             };
         }
     }
-    if (!live_parameter_audio_publication_submit_bulk(&bulk)) return 0U;
+    if (!live_parameter_audio_publication_submit_bulk_now(&bulk)) return 0U;
     for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
         memcpy(g_mod_lfo_control_state[owner][lfo].value,
             &canonical.lfo[lfo].rate, sizeof(g_mod_lfo_control_state[owner][lfo].value));

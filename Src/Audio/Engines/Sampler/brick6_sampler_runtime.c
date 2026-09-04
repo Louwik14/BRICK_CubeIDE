@@ -254,8 +254,6 @@ static AUDIO_HOT brick6_sampler_declick_tail_t
 static AUDIO_HOT uint32_t g_sampler_render_track_mask;
 static uint32_t g_sampler_voice_trigger_counter;
 static CTRL_STATE uint8_t
-    g_sampler_multi_stream_release_pending[MULTI_SAMPLE_POOL_MAX_SAMPLES];
-static CTRL_STATE uint8_t
     g_sampler_multi_page0_reject_logged[MULTI_SAMPLE_POOL_MAX_SAMPLES];
 
 static brick6_sampler_runtime_diag_snapshot_t g_brick6_sampler_runtime_diag;
@@ -409,8 +407,6 @@ static void brick6_sampler_runtime_multi_stop_voice(brick6_sampler_voice_t *voic
 static void brick6_sampler_runtime_multi_stop_voice_after_vca(brick6_sampler_voice_t *voice);
 static void brick6_sampler_runtime_multi_stop_track(uint8_t track_id);
 static void brick6_sampler_runtime_multi_stop_track_renderer(uint8_t track_id);
-static void brick6_sampler_runtime_multi_defer_stream_release(uint16_t multi_sample_id);
-static void brick6_sampler_runtime_multi_service_stream_releases(void);
 static sample_audio_key_t brick6_sampler_runtime_multi_key(uint16_t multi_sample_id);
 static void brick6_sampler_runtime_multi_diag_note_page0_reject(
     uint8_t track_id,

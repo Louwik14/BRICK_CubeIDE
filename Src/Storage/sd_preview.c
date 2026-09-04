@@ -12,6 +12,7 @@
 
 #include <string.h>
 
+#include "App/control_domain.h"
 #include "Sampler/sample_cache.h"
 #include "Platform/memory_layout.h"
 #include "Storage/looper_storage.h"
@@ -19,7 +20,6 @@
 #include "Storage/sd_access_gate.h"
 #include "Storage/wav_audio_codec.h"
 #include "IPC/control_audio_command.h"
-#include "ControlRT/control_rt_publication.h"
 #include "IPC/sd_preview_ring_contract.h"
 #include "Storage/project_load_quiesce.h"
 #include "stm32h7xx_hal.h"
@@ -79,13 +79,14 @@ typedef struct
 static AUDIO_COLD_SDRAM uint8_t g_sd_preview_io[SD_PREVIEW_IO_BYTES];
 STORAGE_STATE_SDRAM static sd_preview_ctx_t g_sd_preview;
 STORAGE_STATE_SDRAM static sd_preview_diag_t g_sd_preview_diag;
+static volatile float g_sd_preview_control_gain;
 static volatile uint8_t g_sd_preview_request;
 static char g_sd_preview_request_path[SAMPLE_CLASSIC_PATH_MAX];
 
 static void sd_preview_publish_active(uint8_t active)
 {
-    if (control_rt_publish_param_now(active, CONTROL_AUDIO_PARAM_PREVIEW_ACTIVE,
-                                     0U, 0U) == 0U)
+    if (control_domain_request_storage_audio_param(
+            active, CONTROL_AUDIO_PARAM_PREVIEW_ACTIVE, 0U) == 0U)
         Error_Handler();
 }
 
@@ -440,6 +441,9 @@ static void sd_preview_fill_ring(void)
     if ((g_sd_preview.state == SD_PREVIEW_STATE_OPENING)
             && (sd_preview_ring_producer_count() != 0U))
     {
+        __DMB();
+        if (g_sd_preview_request != 0U)
+            return;
         g_sd_preview.state = SD_PREVIEW_STATE_STREAMING;
         sd_preview_publish_active(1U);
     }
@@ -459,6 +463,7 @@ void sd_preview_init(void)
     g_sd_preview.state = SD_PREVIEW_STATE_IDLE;
     g_sd_preview.last_error = SD_PREVIEW_ERROR_NONE;
     g_sd_preview.gain = 1.0f;
+    g_sd_preview_control_gain = 1.0f;
     g_sd_preview_ring_layout.write_count = 0U;
     sd_preview_reset_source_state();
     g_sd_preview_request = 0U;
@@ -522,16 +527,13 @@ void sd_preview_set_gain(float gain)
         gain = 1.0f;
     }
 
-    g_sd_preview.gain = gain;
-    union { float f; uint32_t u; } encoded = { .f = gain };
-    if (control_rt_publish_param_now(0U, CONTROL_AUDIO_PARAM_PREVIEW_GAIN,
-                                     encoded.u, 0U) == 0U)
-        Error_Handler();
+    g_sd_preview_control_gain = gain;
+    __DMB();
 }
 
 float sd_preview_get_gain(void)
 {
-    return g_sd_preview.gain;
+    return g_sd_preview_control_gain;
 }
 
 uint8_t sd_preview_begin_range(const char *path, uint32_t start_frame, uint32_t end_frame)
@@ -676,6 +678,7 @@ void sd_preview_stop(void)
 
 void sd_preview_process(void)
 {
+    g_sd_preview.gain = g_sd_preview_control_gain;
     const uint8_t request = g_sd_preview_request;
     if (request != 0U)
     {

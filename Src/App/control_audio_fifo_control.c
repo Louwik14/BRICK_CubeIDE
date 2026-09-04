@@ -9,6 +9,7 @@
 void control_audio_fifo_control_init(void)
 {
     FIFO.head = 0U;
+    FIFO.tail = 0U;
     FIFO.overflow_count = 0U;
     FIFO.invariant_failure_count = 0U;
     __DMB();

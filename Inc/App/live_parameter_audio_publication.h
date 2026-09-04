@@ -37,6 +37,8 @@ _Static_assert(sizeof(live_parameter_audio_bulk_t)
 void live_parameter_audio_publication_init(void);
 bool live_parameter_audio_publication_submit_bulk(
     const live_parameter_audio_bulk_t *bulk);
+bool live_parameter_audio_publication_submit_bulk_now(
+    const live_parameter_audio_bulk_t *bulk);
 bool live_parameter_audio_publication_submit_tone_program(
     uint8_t track, track_runtime_type_t type);
 bool live_parameter_audio_publication_submit_dated(

@@ -605,7 +605,7 @@ static uint8_t ui_core_clipboard_clear_param_list_to_min(uint8_t track,
     }
 
     live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
+        .capture_tick = 0U,
         .count = 0U
     };
     ui_clipboard_prepared_control_t prepared[UI_ENSEMBLE_CLIPBOARD_CAPACITY];
@@ -653,7 +653,7 @@ static uint8_t ui_core_clipboard_clear_param_list_to_min(uint8_t track,
         }
     }
     if ((bulk.count != 0U)
-            && (live_parameter_audio_publication_submit_bulk(&bulk) == false))
+            && (live_parameter_audio_publication_submit_bulk_now(&bulk) == false))
     {
         return 0U;
     }
@@ -1114,7 +1114,7 @@ static uint8_t ui_track_clipboard_restore_payload(
 {
     polyphony_control_state_t prepared_polyphony;
     audio_fx_control_state_t prepared_audio_fx;
-    live_parameter_audio_bulk_t owner_bulk={.capture_tick=live_clock_capture_tick(),
+    live_parameter_audio_bulk_t owner_bulk={.capture_tick=0U,
         .count=0U};
     track_runtime_resolved_track_t resolved;
     if ((track_runtime_resolve_track(target, &resolved) == 0U)
@@ -1132,7 +1132,7 @@ static uint8_t ui_track_clipboard_restore_payload(
             || ((resolved.has_filter_target != 0U)
                 && (param_filter_control_restore(target, &payload->filter) == 0U))
             || (vca_control_state_restore(target, &payload->vca) == 0U)
-            || !live_parameter_audio_publication_submit_bulk(&owner_bulk)
+            || !live_parameter_audio_publication_submit_bulk_now(&owner_bulk)
             || !polyphony_control_install_prepared(target,&prepared_polyphony)
             || !audio_fx_control_state_install_prepared(target,&prepared_audio_fx)
             || (mixer_control_state_restore(target, &payload->mixer) == 0U)
@@ -1375,7 +1375,7 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
     uint8_t applied = 0U;
     uint8_t common = 0U;
     live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
+        .capture_tick = 0U,
         .count = 0U
     };
     ui_clipboard_prepared_control_t prepared[UI_ENSEMBLE_CLIPBOARD_CAPACITY];
@@ -1445,7 +1445,7 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
         }
     }
     const uint8_t bulk_accepted = (bulk.count == 0U)
-        ? 1U : (live_parameter_audio_publication_submit_bulk(&bulk) != false);
+        ? 1U : (live_parameter_audio_publication_submit_bulk_now(&bulk) != false);
     if (bulk_accepted == 0U) return 0U;
     if (ui_core_clipboard_bulk_accept_control_values(
             prepared, prepared_count) == 0U) return 0U;
@@ -1562,31 +1562,30 @@ static uint8_t ui_core_clipboard_resolve_seq_steps(seq_track_id_t *io_track,
     return 1U;
 }
 
-void control_clipboard_process(void)
+void control_clipboard_process(const control_clipboard_intent_t *intent)
 {
-    control_clipboard_intent_t intent;
-    if (control_domain_take_clipboard(&intent) == 0U) return;
+    if (intent == 0) return;
 
-    switch ((control_clipboard_operation_t)intent.operation)
+    switch ((control_clipboard_operation_t)intent->operation)
     {
         case CONTROL_CLIPBOARD_APPLY_MACRO_LOCK:
-            (void)ui_core_clipboard_paste_macro_lock(intent.arg0, intent.arg1);
+            (void)ui_core_clipboard_paste_macro_lock(intent->arg0, intent->arg1);
             break;
         case CONTROL_CLIPBOARD_CLEAR_MACRO_LOCK:
-            (void)ui_core_clipboard_clear_macro_lock(intent.arg0, intent.arg1);
+            (void)ui_core_clipboard_clear_macro_lock(intent->arg0, intent->arg1);
             break;
         case CONTROL_CLIPBOARD_APPLY_TRACK:
-            (void)ui_core_clipboard_paste_track(intent.target);
+            (void)ui_core_clipboard_paste_track(intent->target);
             break;
         case CONTROL_CLIPBOARD_CLEAR_TRACK:
-            (void)ui_core_clipboard_clear_track(intent.target);
+            (void)ui_core_clipboard_clear_track(intent->target);
             break;
         case CONTROL_CLIPBOARD_APPLY_ENSEMBLE:
         {
             uint8_t common = 0U;
             uint8_t applied = 0U;
             (void)ui_core_clipboard_apply_intersection(
-                intent.target, g_ui_clipboard.ensemble.entry,
+                intent->target, g_ui_clipboard.ensemble.entry,
                 g_ui_clipboard.ensemble.count, g_ui_clipboard.ensemble.valid,
                 g_ui_clipboard.ensemble.target_params,
                 g_ui_clipboard.ensemble.target_count, &common, &applied);
@@ -1594,7 +1593,7 @@ void control_clipboard_process(void)
         }
         case CONTROL_CLIPBOARD_CLEAR_ENSEMBLE:
             (void)ui_core_clipboard_clear_param_list_to_min(
-                intent.target, g_ui_clipboard.ensemble.target_params,
+                intent->target, g_ui_clipboard.ensemble.target_params,
                 g_ui_clipboard.ensemble.target_count);
             break;
         case CONTROL_CLIPBOARD_APPLY_PAGE:
@@ -1602,7 +1601,7 @@ void control_clipboard_process(void)
             uint8_t common = 0U;
             uint8_t applied = 0U;
             (void)ui_core_clipboard_apply_intersection(
-                intent.target, g_ui_clipboard.page.entry,
+                intent->target, g_ui_clipboard.page.entry,
                 g_ui_clipboard.page.count, g_ui_clipboard.page.valid,
                 g_ui_clipboard.page.target_params,
                 g_ui_clipboard.page.target_count, &common, &applied);
@@ -1610,7 +1609,7 @@ void control_clipboard_process(void)
         }
         case CONTROL_CLIPBOARD_CLEAR_PAGE:
             (void)ui_core_clipboard_clear_param_list_to_min(
-                intent.target, g_ui_clipboard.page.target_params,
+                intent->target, g_ui_clipboard.page.target_params,
                 g_ui_clipboard.page.target_count);
             break;
         case CONTROL_CLIPBOARD_APPLY_SEQUENCE:

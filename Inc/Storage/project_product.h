@@ -62,6 +62,8 @@ uint8_t project_product_delete(uint8_t slot);
 uint8_t project_product_blank(void);
 project_product_boot_restore_result_t project_product_restore_boot(void);
 uint8_t project_product_get_progress(project_product_progress_t*out);
+uint8_t project_product_ui_busy(void);
+project_product_command_t project_product_ui_busy_command(void);
 void project_product_storage_request_service(void);
 void project_product_control_process_intent(uint8_t operation, uint8_t slot);
 #endif

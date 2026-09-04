@@ -27,9 +27,7 @@
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm32h7xx.h"
-#include "stm32h7xx_hal.h"
-#include "usbd_def.h"
+#include <stdint.h>
 
 /* USER CODE BEGIN INCLUDE */
 
@@ -84,6 +82,10 @@ void MX_USB_DEVICE_Init(void);
 uint8_t usb_device_start(void);
 uint8_t usb_device_stop(void);
 uint8_t usb_device_is_started(void);
+uint8_t usb_device_is_ready(void);
+void usb_device_process(void);
+void usb_device_irq(void);
+uint16_t usb_device_send_packets(const uint8_t *packets, uint16_t bytes_len);
 
 /* USER CODE END FD */
 /**

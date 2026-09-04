@@ -193,12 +193,12 @@ uint8_t audio_fx_control_install_prepared_param(
 static uint8_t audio_fx_control_publish(brick_entity_id_t entity,
                                         uint16_t command, uint8_t index, float value)
 {
-    const live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),
+    const live_parameter_audio_bulk_t bulk={.capture_tick=0U,
         .count=1U,.item={{
         .parameter_id=command,.scope=LIVE_PARAMETER_EVENT_SCOPE_SLOT,.track=entity,
         .slot=index,.flags=LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
         .value=live_parameter_event_encode_float(value)}}};
-    return live_parameter_audio_publication_submit_bulk(&bulk)?1U:0U;
+    return live_parameter_audio_publication_submit_bulk_now(&bulk)?1U:0U;
 }
 
 void audio_fx_control_state_init(void)
@@ -369,11 +369,11 @@ uint8_t audio_fx_control_state_restore(brick_entity_id_t entity,
                                        const audio_fx_control_state_t *state)
 {
     audio_fx_control_state_t prepared;
-    live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),
+    live_parameter_audio_bulk_t bulk={.capture_tick=0U,
         .count=0U};
     if(!audio_fx_control_state_prepare_for_polyphony(entity,state,
             polyphony_control_get_voice_count(entity),&prepared)
             ||!audio_fx_control_state_bulk_add_prepared(entity,&prepared,&bulk)
-            ||((bulk.count!=0U)&&!live_parameter_audio_publication_submit_bulk(&bulk)))return 0U;
+            ||((bulk.count!=0U)&&!live_parameter_audio_publication_submit_bulk_now(&bulk)))return 0U;
     return audio_fx_control_state_install_prepared(entity,&prepared);
 }

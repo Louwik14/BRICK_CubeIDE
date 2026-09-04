@@ -189,6 +189,67 @@ static void ui_page_template_mod_request(uint8_t operation,
     (void)control_domain_request_mod(&intent);
 }
 
+static ui_template_custom_widget_kind_t ui_page_template_mod_pick_virtual_widget(
+    uint8_t slot, const ui_template_subpage_t *subpage)
+{
+    if ((subpage == NULL) || (slot >= 4U)) return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+    if (g_ui_template_mod_subset == 0U
+            && g_ui_template_mod_state.active_subpage == 0U)
+    {
+        static const ui_template_custom_widget_kind_t matrix_widgets[] = {
+            UI_TEMPLATE_CUSTOM_WIDGET_MATRIX_SLOT,
+            UI_TEMPLATE_CUSTOM_WIDGET_MATRIX_SOURCE,
+            UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEST,
+            UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEPTH
+        };
+        return matrix_widgets[slot];
+    }
+    if (g_ui_template_mod_subset != 0U
+            && g_ui_template_mod_state.active_subpage <= 1U)
+    {
+        return ((slot & 1U) == 0U)
+            ? UI_TEMPLATE_CUSTOM_WIDGET_MATRIX_SOURCE
+            : UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEPTH;
+    }
+    return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+}
+
+static uint8_t ui_page_template_mod_virtual_slot_value(
+    const ui_param_seq_plock_feedback_frame_t *frame_ctx,
+    uint8_t slot,
+    float *out_value,
+    uint8_t *out_bipolar)
+{
+    (void)frame_ctx;
+    if ((out_value == NULL) || (out_bipolar == NULL) || (slot >= 4U)) return 0U;
+    const uint8_t track = ui_get_active_lane();
+    *out_bipolar = 0U;
+    if (g_ui_template_mod_subset == 0U
+            && g_ui_template_mod_state.active_subpage == 0U)
+    {
+        if (slot == 0U) return mod_matrix_get_selected_slot(track, out_value);
+        if (slot == 1U) return mod_matrix_get_selected_slot_source(track, out_value);
+        if (slot == 2U) return mod_matrix_get_selected_slot_destination_index(track, out_value);
+        *out_bipolar = 1U;
+        return mod_matrix_get_selected_slot_depth(track, out_value);
+    }
+    if (g_ui_template_mod_subset != 0U
+            && g_ui_template_mod_state.active_subpage == 0U)
+    {
+        return mod_matrix_get_multi_source(track, (uint8_t)(slot >> 1U),
+                                           (uint8_t)(slot & 1U), out_value);
+    }
+    if (g_ui_template_mod_subset != 0U
+            && g_ui_template_mod_state.active_subpage == 1U)
+    {
+        const uint8_t op = (uint8_t)(slot >> 1U);
+        if ((slot & 1U) == 0U)
+            return mod_matrix_get_slew_source(track, op, out_value);
+        return mod_matrix_get_slew_amount(track, op, out_value);
+    }
+    return 0U;
+}
+
 static uint8_t ui_page_template_mod_virtual_slot_text(uint8_t slot,char*out_name,
     uint32_t out_name_len,char*out_value,uint32_t out_value_len)
 {
@@ -217,8 +278,10 @@ static ui_template_page_state_t g_ui_template_mod_state = {
     .family_resolver = ui_page_template_mod_resolve_family,
     .widget_picker = ui_page_template_mod_pick_widget,
     .custom_widget_picker = ui_page_template_mod_pick_custom_widget,
+    .virtual_custom_widget_picker = ui_page_template_mod_pick_virtual_widget,
     .param_text = ui_page_template_mod_param_text,
     .virtual_slot_text = ui_page_template_mod_virtual_slot_text,
+    .virtual_slot_value = ui_page_template_mod_virtual_slot_value,
     .active_subpage = 0U,
     .has_visited = 0U,
 };

@@ -663,7 +663,7 @@ static void ui_page_settings_sample_browser_enter_root(void)
     g_ui_settings.confirm_slot = 0U;
     g_ui_settings.sample_preview_volume = 100U;
     g_ui_settings.confirm_path[0] = '\0';
-    sd_preview_set_gain(1.0f);
+    (void)control_domain_request_preview_gain(1.0f);
     (void)ui_page_settings_sample_browser_refresh();
 }
 

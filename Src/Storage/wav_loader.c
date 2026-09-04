@@ -1146,7 +1146,9 @@ void wav_loader_catalog_storage_service(void)
     const wav_loader_catalog_view_service_result_t result =
         wav_loader_catalog_view_service();
     if (result != WAV_LOADER_CATALOG_VIEW_PENDING)
+    {
         g_wav_catalog_view_last_result = result;
+    }
 }
 
 wav_loader_catalog_view_service_result_t wav_loader_catalog_view_last_result(void)

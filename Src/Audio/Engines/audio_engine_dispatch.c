@@ -739,6 +739,8 @@ ITCM_TEXT void brick6_audio_runtime_dsp(StereoTrack *tracks,
                               uint32_t track_count,
                               uint32_t frames)
 {
+    brick6_sampler_runtime_audio_maintenance();
+    brick6_looper_runtime_audio_maintenance();
     brick6_publish_owned_physical_line(frames);
     const uint16_t drum_entity_mask = audio_note_engine_adapter_entity_mask(
         TRACK_RUNTIME_ENGINE_DRUM);

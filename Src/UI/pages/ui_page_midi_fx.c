@@ -1,5 +1,6 @@
 #include "pages/ui_page_midi_fx.h"
 
+#include "App/control_domain.h"
 #include "Param/engine_model_catalog.h"
 #include "Param/audio_fx_param_catalog.h"
 #include "Track/audio_fx_control_state.h"
@@ -497,10 +498,10 @@ static void ui_page_midi_fx_handle_event(const ui_event_t *ev)
         audio_fx_control_config_t config;const brick_entity_id_t entity=ui_page_audio_fx_selected_entity();
         if(audio_fx_control_state_get(entity,&config)==0U)return;
         const uint8_t group_master=(ui_page_audio_fx_resolve_family()==&g_ui_template_audio_fx_group_master_family)?1U:0U;
-        if(group_master!=0U){if(ev->id<2U){int32_t v=(int32_t)config.spatial_mode[ev->id]+((ev->value>0)?1:-1);if(v<0)v=0;if(v>3)v=3;(void)audio_fx_control_set_spatial_mode(entity,(audio_fx_slot_t)ev->id,(uint8_t)v);}return;}
-        if(ev->id==0U){int32_t v=(int32_t)config.filter_position+((ev->value>0)?1:-1);if(v<0)v=0;if(v>2)v=2;(void)audio_fx_control_set_filter_position(entity,(audio_fx_filter_pos_t)v);return;}
-        if(ev->id==1U){(void)audio_fx_control_set_order(entity,(ev->value>0)?AUDIO_FX_ORDER_B_A:AUDIO_FX_ORDER_A_B);return;}
-        {const uint8_t slot=(uint8_t)(ev->id-2U);int32_t v=(int32_t)config.spatial_mode[slot]+((ev->value>0)?1:-1);if(v<0)v=0;if(v>3)v=3;(void)audio_fx_control_set_spatial_mode(entity,(audio_fx_slot_t)slot,(uint8_t)v);return;}
+        if(group_master!=0U){if(ev->id<2U){int32_t v=(int32_t)config.spatial_mode[ev->id]+((ev->value>0)?1:-1);if(v<0)v=0;if(v>3)v=3;(void)control_domain_request_audio_fx(&(control_audio_fx_intent_t){.operation=CONTROL_AUDIO_FX_SET_SPATIAL_MODE,.entity=entity,.slot=ev->id,.value=(uint8_t)v});}return;}
+        if(ev->id==0U){int32_t v=(int32_t)config.filter_position+((ev->value>0)?1:-1);if(v<0)v=0;if(v>2)v=2;(void)control_domain_request_audio_fx(&(control_audio_fx_intent_t){.operation=CONTROL_AUDIO_FX_SET_FILTER_POSITION,.entity=entity,.value=(uint8_t)v});return;}
+        if(ev->id==1U){(void)control_domain_request_audio_fx(&(control_audio_fx_intent_t){.operation=CONTROL_AUDIO_FX_SET_ORDER,.entity=entity,.value=(ev->value>0)?AUDIO_FX_ORDER_B_A:AUDIO_FX_ORDER_A_B});return;}
+        {const uint8_t slot=(uint8_t)(ev->id-2U);int32_t v=(int32_t)config.spatial_mode[slot]+((ev->value>0)?1:-1);if(v<0)v=0;if(v>3)v=3;(void)control_domain_request_audio_fx(&(control_audio_fx_intent_t){.operation=CONTROL_AUDIO_FX_SET_SPATIAL_MODE,.entity=entity,.slot=slot,.value=(uint8_t)v});return;}
     }
     if ((ui_page_get_id() == UI_PAGE_MIDI_FX)
             && (ev != 0) && (ev->type == UI_EVENT_ENCODER)
@@ -539,7 +540,7 @@ static void ui_page_midi_fx_render(void)
 
     drv_display_clear_rect(0, 16, 128, 48);
     drv_display_set_font(&FONT_5X7);
-    for (uint8_t track = 0U; track < TRACK_COUNT; ++track)
+    for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
     {
         const uint8_t column = (uint8_t)(track & 3U);
         const uint8_t row = (uint8_t)(track >> 2U);

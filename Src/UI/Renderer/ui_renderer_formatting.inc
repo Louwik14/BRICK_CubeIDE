@@ -158,6 +158,20 @@ static uint8_t ui_renderer_template_get_selected_entity(void)
 
 static void ui_renderer_template_format_value(param_id_t id, float value, char *out, uint32_t out_len)
 {
+    if (id == PARAM_COUNT)
+    {
+        static const char *const note_names[] = {
+            "C-", "C#", "D-", "D#", "E-", "F-", "F#", "G-", "G#", "A-", "A#", "B-"
+        };
+        int32_t note = (int32_t)(value + 0.5f);
+        if (note < 0) note = 0;
+        if (note > 127) note = 127;
+        (void)snprintf(out, out_len, "%s%ld",
+                       note_names[note % 12],
+                       (long)((note / 12) - 1));
+        return;
+    }
+
     const param_desc_t *desc = &param_registry[id];
 
     if ((id == PARAM_LFO1_RATE) || (id == PARAM_LFO2_RATE) || (id == PARAM_LFO3_RATE))

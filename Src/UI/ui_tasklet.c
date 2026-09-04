@@ -619,10 +619,7 @@ void ui_boot_loading_discard_inputs(void)
 {
     ui_event_t ev;
 
-    for (uint8_t i = 0U; i < (uint8_t)ENC_COUNT; ++i)
-    {
-        encoder_reset_delta(i);
-    }
+    encoders_discard_pending();
 
     while (ui_event_pop(&ev))
     {
@@ -638,6 +635,12 @@ void ui_tasklet_poll(void)
     }
 
     if (ui_boot_loading_is_active() != 0U)
+    {
+        ui_boot_loading_discard_inputs();
+        return;
+    }
+
+    if (control_domain_project_ui_busy() != 0U)
     {
         ui_boot_loading_discard_inputs();
         return;

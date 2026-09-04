@@ -170,7 +170,7 @@ project_control_asset_result_t project_control_complete_multi_runtime(uint16_t l
     g_multi_bank[logical].pending_runtime=PROJECT_CONTROL_INVALID_RUNTIME;
     return PROJECT_CONTROL_ASSET_READY;
 }
-uint8_t project_control_remove_sample(uint16_t logical){const sample_global_slot_t*s=sample_global_pool_get_slot(logical);if(s!=NULL&&s->kind==SAMPLE_GLOBAL_KIND_CLASSIC){sample_global_pool_clear_classic(logical);return 1U;}return bank_remove(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical);}
+uint8_t project_control_remove_sample(uint16_t logical){const sample_global_slot_t*s=sample_global_pool_get_slot(logical);if(s!=NULL&&s->kind==SAMPLE_GLOBAL_KIND_CLASSIC){return sample_global_pool_request_clear_classic(logical);}return bank_remove(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical);}
 uint8_t project_control_remove_wavetable(uint16_t logical){return bank_remove(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical);}
 uint8_t project_control_remove_multi(uint16_t logical){if(logical>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS||g_multi_bank[logical].used==0U)return 0U;g_multi_bank[logical].runtime=PROJECT_CONTROL_INVALID_RUNTIME;g_multi_bank[logical].pending_runtime=PROJECT_CONTROL_INVALID_RUNTIME;return bank_remove(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,logical);}
 uint8_t project_control_has_sample(uint16_t logical,uint32_t*out_kind){const sample_global_slot_t*s=sample_global_pool_get_slot(logical);if(s!=NULL&&s->kind==SAMPLE_GLOBAL_KIND_CLASSIC){if(out_kind!=NULL)*out_kind=PERSIST_ASSET_SAMPLE_STREAM;return 1U;}return bank_has(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical,out_kind);}

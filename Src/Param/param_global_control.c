@@ -241,7 +241,7 @@ uint8_t param_global_control_restore(const param_global_control_state_t *state)
     const uint8_t modfx_model = (uint8_t)(
         canonical[GLOBAL_MODFX_MODEL] + 0.5f);
     live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
+        .capture_tick = 0U,
         .count = 0U
     };
     for (uint8_t i = 0U; i < (uint8_t)GLOBAL_CONTROL_VALUE_COUNT; ++i)
@@ -264,7 +264,7 @@ uint8_t param_global_control_restore(const param_global_control_state_t *state)
         };
     }
     if ((bulk.count != 0U)
-            && !live_parameter_audio_publication_submit_bulk(&bulk)) return 0U;
+            && !live_parameter_audio_publication_submit_bulk_now(&bulk)) return 0U;
     for (uint8_t i=0U;i<(uint8_t)GLOBAL_CONTROL_VALUE_COUNT;++i)
         g_global_values[i]=canonical[i];
     return 1U;

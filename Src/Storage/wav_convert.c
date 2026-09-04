@@ -79,7 +79,9 @@ void wav_convert_init(void)
 uint8_t wav_convert_request_start(const char *path)
 {
     if ((path == NULL) || (path[0] == '\0')
-        || (strlen(path) >= sizeof(g_wav_convert_request_path)))
+        || (strlen(path) >= sizeof(g_wav_convert_request_path))
+        || (g_wav_convert_request_valid != 0U)
+        || (g_wav_convert.state != WAV_CONVERT_STATE_IDLE))
         return 0U;
     memcpy(g_wav_convert_request_path, path, strlen(path) + 1U);
     __DMB();

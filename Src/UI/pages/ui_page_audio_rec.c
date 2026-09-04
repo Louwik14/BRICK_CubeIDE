@@ -1,6 +1,7 @@
 #include "pages/ui_page_audio_rec.h"
 
 #include "buttons.h"
+#include "App/control_domain.h"
 #include "drv_display.h"
 #include "font.h"
 #include "Storage/sample_capture.h"

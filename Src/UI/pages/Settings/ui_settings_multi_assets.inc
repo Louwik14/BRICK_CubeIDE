@@ -52,12 +52,6 @@ static void ui_page_settings_flash_sample_header_slots(void)
         HAL_GetTick() + UI_SETTINGS_HEADER_FLASH_DURATION_MS;
 }
 
-static void ui_page_settings_flash_sample_header_memory(void)
-{
-    g_ui_settings.header_mem_flash_until_ms =
-        HAL_GetTick() + UI_SETTINGS_HEADER_FLASH_DURATION_MS;
-}
-
 static void ui_page_settings_multi_prepare_begin(uint8_t slot,
                                                  const char *path,
                                                  ui_settings_multi_prepare_phase_t phase)

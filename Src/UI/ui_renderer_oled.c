@@ -23,10 +23,12 @@
 
 #include <stdio.h>
 
+#include "App/control_domain.h"
 #include "IPC/audio_boot_diagnostic_reader.h"
 #include "main.h"
 #include "drv_display.h"
 #include "font.h"
+#include "Storage/project_product.h"
 #include "ui_boot_loading.h"
 #include "ui_page_manager.h"
 #include "ui_roll_popup.h"
@@ -50,6 +52,46 @@ static const char *ui_audio_boot_error_label(board_audio_boot_error_t error)
         case BOARD_AUDIO_BOOT_SAI_SYNC: return "SAI SYNC";
         default: return "AUDIO HARDWARE";
     }
+}
+
+static void ui_renderer_oled_draw_project_busy(void)
+{
+    project_product_progress_t progress;
+    const project_product_command_t command =
+        project_product_ui_busy_command();
+    const char *title = (command == PROJECT_PRODUCT_COMMAND_SAVE)
+        ? "SAVING PROJECT"
+        : (command == PROJECT_PRODUCT_COMMAND_LOAD)
+            ? "LOADING PROJECT" : "PROJECT BUSY";
+    char counter[24];
+
+    (void)project_product_get_progress(&progress);
+    drv_display_set_draw_color(1U);
+    drv_display_set_font(&FONT_5X7);
+    drv_display_draw_text((uint8_t)((OLED_WIDTH - drv_display_text_width(title)) / 2U),
+                          8U, title);
+    drv_display_draw_rect(8, 25, 112, 8);
+    if (progress.total != 0U)
+    {
+        uint32_t done = progress.done;
+        if (done > progress.total) done = progress.total;
+        const uint8_t fill = (uint8_t)(((uint64_t)done * 108U)
+                                       / progress.total);
+        if (fill != 0U)
+            drv_display_fill_rect(10, 27, fill, 4);
+    }
+
+    drv_display_set_font(&FONT_4X6);
+    if (progress.total != 0U)
+    {
+        (void)snprintf(counter, sizeof(counter), "%lu/%lu",
+                       (unsigned long)progress.done,
+                       (unsigned long)progress.total);
+        drv_display_draw_text(
+            (uint8_t)((OLED_WIDTH - drv_display_text_width(counter)) / 2U),
+            43U, counter);
+    }
+    drv_display_draw_text(42U, 56U, "PLEASE WAIT");
 }
 
 /**
@@ -89,6 +131,10 @@ void ui_renderer_oled_draw(void)
     {
         ui_boot_loading_render();
         ui_boot_loading_note_frame_rendered();
+    }
+    else if (control_domain_project_ui_busy() != 0U)
+    {
+        ui_renderer_oled_draw_project_busy();
     }
     else if ((page != 0) && (page->render != 0))
     {

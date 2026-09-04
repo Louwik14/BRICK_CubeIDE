@@ -7,7 +7,6 @@ static void brick6_sampler_runtime_multi_stop_voice(brick6_sampler_voice_t *voic
 
     const uint8_t stopped_track_id = voice->owner_track_id;
     const uint8_t stopped_voice_index = brick6_sampler_runtime_multi_voice_index(voice);
-    const uint16_t stopped_multi_sample_id = voice->multi_sample_id;
     /* Normal Note Off already made this a no-op; EOF, steal and forced stops
      * also close a still-held per-voice VCA gate and cannot leave it stale. */
     brick6_sampler_runtime_multi_release_voice_vca(voice);
@@ -49,7 +48,6 @@ static void brick6_sampler_runtime_multi_stop_voice(brick6_sampler_voice_t *voic
     }
     voice->trigger_order = 0U;
 
-    brick6_sampler_runtime_multi_defer_stream_release(stopped_multi_sample_id);
 }
 
 static void brick6_sampler_runtime_multi_stop_voice_after_vca(brick6_sampler_voice_t *voice)
@@ -63,14 +61,6 @@ static void brick6_sampler_runtime_multi_stop_voice_after_vca(brick6_sampler_voi
     brick6_sampler_runtime_multi_stop_voice(
         voice,
         (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_REL_DONE);
-}
-
-static void brick6_sampler_runtime_multi_defer_stream_release(uint16_t multi_sample_id)
-{
-    if (multi_sample_id < MULTI_SAMPLE_POOL_MAX_SAMPLES)
-    {
-        g_sampler_multi_stream_release_pending[multi_sample_id] = 1U;
-    }
 }
 
 static void brick6_sampler_runtime_multi_stop_track_internal(
@@ -114,11 +104,6 @@ static void brick6_sampler_runtime_multi_stop_track_renderer(uint8_t track_id)
 
 static void brick6_sampler_runtime_multi_service_physical_releases(void)
 {
-    if (__get_IPSR() != 0U)
-    {
-        return;
-    }
-
     for (uint8_t i = 0U; i < SAMPLER_MULTI_MAX_GLOBAL_VOICES; ++i)
     {
         brick6_sampler_voice_t *const voice = &g_sampler_multi_voice[i];
@@ -148,56 +133,9 @@ static void brick6_sampler_runtime_multi_service_physical_releases(void)
     }
 }
 
-void brick6_sampler_runtime_service_physical_releases(void)
+void brick6_sampler_runtime_audio_maintenance(void)
 {
     brick6_sampler_runtime_multi_service_physical_releases();
-}
-
-static uint8_t brick6_sampler_runtime_multi_sample_has_active_voice(uint16_t multi_sample_id)
-{
-    for (uint8_t i = 0U; i < SAMPLER_MULTI_MAX_GLOBAL_VOICES; ++i)
-    {
-        const brick6_sampler_voice_t *const voice = &g_sampler_multi_voice[i];
-        if ((voice->active != 0U)
-            && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_MULTI)
-            && (voice->multi_sample_id == multi_sample_id))
-        {
-            return 1U;
-        }
-    }
-
-    return 0U;
-}
-
-static void brick6_sampler_runtime_multi_service_stream_releases(void)
-{
-    if (__get_IPSR() != 0U)
-    {
-        return;
-    }
-
-    for (uint16_t multi_sample_id = 0U;
-         multi_sample_id < MULTI_SAMPLE_POOL_MAX_SAMPLES;
-         ++multi_sample_id)
-    {
-        if (g_sampler_multi_stream_release_pending[multi_sample_id] == 0U)
-        {
-            continue;
-        }
-
-        if (brick6_sampler_runtime_multi_sample_has_active_voice(multi_sample_id) != 0U)
-        {
-            continue;
-        }
-
-        g_sampler_multi_stream_release_pending[multi_sample_id] = 0U;
-    }
-}
-
-void brick6_sampler_runtime_service(void)
-{
-    brick6_sampler_runtime_multi_service_physical_releases();
-    brick6_sampler_runtime_multi_service_stream_releases();
 }
 
 static uint8_t brick6_sampler_runtime_multi_voice_occupied(

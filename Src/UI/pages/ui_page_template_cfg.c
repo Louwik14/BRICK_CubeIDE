@@ -7,10 +7,6 @@
 #include "Track/track_runtime.h"
 #include "Track/track_state.h"
 #include "Track/polyphony_control.h"
-#include "Track/audio_fx_control_state.h"
-#include "IPC/live_clock_control.h"
-#include "IPC/live_parameter_event.h"
-#include "App/live_parameter_audio_publication.h"
 #include "App/control_domain.h"
 #include "Track/control_music_output.h"
 #include "Track/track_input_ownership.h"
@@ -24,25 +20,14 @@
 
 static ui_template_page_state_t g_ui_template_cfg_state;
 
-static uint8_t ui_cfg_restore_polyphony_audio_fx(uint8_t track,uint8_t voices)
+static uint8_t ui_page_template_cfg_has_voices(uint8_t track)
 {
-    polyphony_control_state_t polyphony,prepared_polyphony;
-    audio_fx_control_state_t audio_fx,prepared_audio_fx;
-    live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),
-        .count=0U};
-    if(!polyphony_control_capture(track,&polyphony)
-            ||!audio_fx_control_state_capture(track,&audio_fx))return 0U;
-    polyphony.voice_count=voices;
-    if(!polyphony_control_prepare(&polyphony,&prepared_polyphony)
-            ||!audio_fx_control_state_prepare_for_polyphony(track,&audio_fx,
-                prepared_polyphony.voice_count,&prepared_audio_fx)
-            ||!polyphony_control_bulk_add(track,&prepared_polyphony,&bulk)
-            ||!audio_fx_control_state_bulk_add_prepared(track,
-                &prepared_audio_fx,&bulk)
-            ||!live_parameter_audio_publication_submit_bulk(&bulk))return 0U;
-    return polyphony_control_install_prepared(track,&prepared_polyphony)
-        &&audio_fx_control_state_install_prepared(track,&prepared_audio_fx);
+    const track_family_t family = ui_get_track_family(track);
+    return (uint8_t)((family == TRACK_FAMILY_SYNTH)
+        || ((family == TRACK_FAMILY_SAMPLER)
+            && (ui_get_track_type(track) == TRACK_TYPE_MULTI)));
 }
+
 
 static const ui_template_family_t g_ui_template_cfg_family = {
     .family_title = "CFG",
@@ -157,6 +142,66 @@ static ui_template_custom_widget_kind_t ui_page_template_cfg_pick_custom_widget(
     (void)slot;(void)subpage;(void)id;return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
 }
 
+static ui_template_custom_widget_kind_t ui_page_template_cfg_pick_virtual_widget(
+    uint8_t slot, const ui_template_subpage_t *subpage)
+{
+    const uint8_t track = ui_get_active_lane();
+    const track_family_t family = ui_get_track_family(track);
+    if (subpage == NULL) return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+
+    if (subpage->title != NULL && strcmp(subpage->title, "MIDI") == 0)
+    {
+        if (slot == 0U) return UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_MIDI_CHANNEL;
+        if (slot == 1U) return UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_MIDI_SOURCE;
+        return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+    }
+
+    if (slot == 0U) return UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TRACK;
+    if (family == TRACK_FAMILY_OFF)
+    {
+        return (slot < 4U) ? UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_INACTIVE
+                           : UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+    }
+    return (slot == 1U) ? UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TYPE
+                        : UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+}
+
+static uint8_t ui_page_template_cfg_virtual_slot_value(
+    const ui_param_seq_plock_feedback_frame_t *frame_ctx,
+    uint8_t slot,
+    float *out_value,
+    uint8_t *out_bipolar)
+{
+    (void)frame_ctx;
+    if ((out_value == NULL) || (out_bipolar == NULL)) return 0U;
+    *out_bipolar = 0U;
+    const uint8_t track = ui_get_active_lane();
+    const track_family_t family = ui_get_track_family(track);
+    if (g_ui_template_cfg_state.active_subpage == 1U)
+    {
+        if (slot == 0U) *out_value = (float)ui_get_track_midi_channel(track);
+        else if (slot == 1U) *out_value = (float)ui_get_track_midi_source(track);
+        else return 0U;
+        return 1U;
+    }
+    if (slot == 0U)
+    {
+        *out_value = (float)family;
+        return 1U;
+    }
+    if (family == TRACK_FAMILY_OFF)
+    {
+        return (slot < 4U) ? 1U : 0U;
+    }
+    if (slot == 1U)
+    {
+        *out_value = (float)ui_track_catalog_type_index_for_family(
+            family, ui_get_track_type(track), track, track_state_get_configs());
+        return 1U;
+    }
+    return 0U;
+}
+
 static const ui_template_family_t *ui_page_template_cfg_resolve_family(void)
 {
     const uint8_t active_track = ui_get_active_lane();
@@ -204,7 +249,9 @@ static ui_template_page_state_t g_ui_template_cfg_state = {
     .family_resolver = ui_page_template_cfg_resolve_family,
     .widget_picker = ui_page_template_cfg_pick_widget,
     .custom_widget_picker = ui_page_template_cfg_pick_custom_widget,
+    .virtual_custom_widget_picker = ui_page_template_cfg_pick_virtual_widget,
     .virtual_slot_text = ui_page_template_cfg_virtual_slot_text,
+    .virtual_slot_value = ui_page_template_cfg_virtual_slot_value,
     .active_subpage = 0U,
     .has_visited = 0U,
 };
@@ -245,7 +292,7 @@ uint8_t ui_page_template_cfg_handle_encoder(uint8_t encoder,int16_t delta)
     if(encoder==0U){const track_family_t next=ui_track_catalog_cfg_family_step(ui_get_track_family(track),(delta>0)?1:-1,track,track_state_get_configs());return ui_set_track_family(track,next)?1U:0U;}
     if(encoder==1U){const track_family_t family=ui_get_track_family(track);const uint8_t count=ui_track_catalog_type_count_for_family(family,track,track_state_get_configs());if(count==0U)return 1U;int32_t index=(int32_t)ui_track_catalog_type_index_for_family(family,ui_get_track_type(track),track,track_state_get_configs())+((delta>0)?1:-1);if(index<0)index=0;if(index>=count)index=count-1;return ui_set_track_type(track,ui_track_catalog_type_from_family_index(family,(uint8_t)index,track,track_state_get_configs()))?1U:0U;}
     if(encoder==2U&&ui_get_track_family(track)==TRACK_FAMILY_EXTERNAL){int32_t v=(int32_t)ui_get_track_external_input(track)+((delta>0)?1:-1);if(v<0)v=0;if(v>=ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT)v=ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT-1;return ui_set_track_external_input(track,(uint8_t)v)?1U:0U;}
-    if(encoder==2U){int32_t v=(int32_t)polyphony_control_get_voice_count(track)+((delta>0)?1:-1);const uint8_t minimum=control_music_output_count(track);if(v<minimum)v=minimum;if(v>8)v=8;return ui_cfg_restore_polyphony_audio_fx(track,(uint8_t)v);}
+    if(encoder==2U&&ui_page_template_cfg_has_voices(track)){int32_t v=(int32_t)polyphony_control_get_voice_count(track)+((delta>0)?1:-1);const uint8_t minimum=control_music_output_count(track);if(v<minimum)v=minimum;if(v>8)v=8;return control_domain_request_polyphony(track,(uint8_t)v);}
     return 0U;
 }
 

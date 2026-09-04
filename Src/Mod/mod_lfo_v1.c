@@ -279,7 +279,7 @@ static void mod_lfo_audio_reset_poly_track_lfo(uint8_t track,
     }
 }
 
-static void mod_lfo_v1_audio_init(void)
+void mod_lfo_v1_audio_init(void)
 {
     memset(g_mod_lfo_audio_config, 0, sizeof(g_mod_lfo_audio_config));
     memset(g_mod_lfo_runtime, 0, sizeof(g_mod_lfo_runtime));
@@ -823,8 +823,6 @@ static void mod_lfo_process_control_tick(uint32_t elapsed_frames,
 uint8_t mod_lfo_v1_set_track_param_audio(uint8_t track, uint8_t lfo_index,
                                          mod_lfo_param_t param, float value)
 {
-    if (g_mod_lfo_audio_initialized == 0U)
-        mod_lfo_v1_audio_init();
     if ((lfo_index >= MOD_LFO_COUNT_PER_TRACK)
             || ((uint8_t)param >= (uint8_t)MOD_LFO_PARAM_COUNT)
             || !isfinite(value))
@@ -1024,8 +1022,6 @@ void mod_lfo_v1_process_sample_all(void)
 
 ITCM_TEXT void mod_lfo_v1_process_block(uint32_t frames)
 {
-    if (g_mod_lfo_audio_initialized == 0U)
-        mod_lfo_v1_audio_init();
     if (frames == 0U)
     {
         return;

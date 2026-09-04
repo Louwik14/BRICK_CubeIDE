@@ -46,6 +46,20 @@ avant publication UI. Aucun loader RAM synchrone ni ACK AUDIO de restore
 n'existe. Patch utilise le meme loader et differe son application lorsqu'un
 asset RAM reference est absent.
 
+## User admission
+
+Project Save et Project Load sont des operations UI modales. Leur etat busy est
+derive des lifecycles produit existants, y compris une commande acceptee mais
+encore en attente de prise en charge Storage. L'UI affiche la progression
+reelle et rejette les inputs locaux jusqu'a la fin fonctionnelle; CONTROL garde
+la meme invariance si une mutation arrive malgre l'UI. Cette regle ne suspend
+ni l'IRQ audio, ni le playback, ni les workers necessaires.
+
+Les mutations utilisateur Multi (Load, Import, Delete, Clear, Replace) sont
+mutuellement exclusives au point d'admission. La gate SD reste une protection
+physique, pas le mecanisme normal de refus produit. Pattern Save/Load conserve
+son comportement non modal documente ci-dessus.
+
 Une application Pattern ou Project reussie reconstruit runtime/AUDIO et invalide Undo/Redo. Un rejet conserve integralement l'etat courant.
 
 Le DTO Pattern porte sous forme typee Keyboard, niveau de metronome, structure

@@ -125,12 +125,15 @@ void midi_host_transport_poll_bounded(uint32_t max_msgs)
 {
   if (midi_host_discard_requested != 0U)
   {
-    uint8_t packet[USBH_MIDI_PACKET_SIZE];
-    for (uint32_t i = 0U; i < USBH_MIDI_RX_QUEUE_LEN; ++i)
+    if (usb_host_is_started() != 0U)
     {
-      if (USBH_MIDI_ReadPacket(&hUsbHostHS, packet) != USBH_OK)
+      uint8_t packet[USBH_MIDI_PACKET_SIZE];
+      for (uint32_t i = 0U; i < USBH_MIDI_RX_QUEUE_LEN; ++i)
       {
-        break;
+        if (USBH_MIDI_ReadPacket(&hUsbHostHS, packet) != USBH_OK)
+        {
+          break;
+        }
       }
     }
     midi_host_event_tail = midi_host_event_head;

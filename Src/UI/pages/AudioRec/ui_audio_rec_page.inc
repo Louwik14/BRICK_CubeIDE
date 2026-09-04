@@ -21,18 +21,25 @@ static void ui_page_audio_rec_handle_event(const ui_event_t *ev)
     {
         if(ev->id == (uint8_t)BTN_PAGE_3)
         {
-            (void)sample_capture_model_toggle_line();
+            (void)control_domain_request_audio_rec(&(control_audio_rec_intent_t){
+                .operation = CONTROL_AUDIO_REC_TOGGLE_LINE
+            });
         }
         else if(ev->id == (uint8_t)BTN_PAGE_4)
         {
-            (void)sample_capture_model_toggle_mic();
+            (void)control_domain_request_audio_rec(&(control_audio_rec_intent_t){
+                .operation = CONTROL_AUDIO_REC_TOGGLE_MIC
+            });
         }
         return;
     }
 
     if((ev->type == UI_EVENT_HALL_PRESS) && (ev->id < SAMPLE_CAPTURE_TRACK_COUNT))
     {
-        (void)sample_capture_model_toggle_route(ev->id);
+        (void)control_domain_request_audio_rec(&(control_audio_rec_intent_t){
+            .operation = CONTROL_AUDIO_REC_TOGGLE_ROUTE,
+            .value0 = ev->id
+        });
     }
 }
 
@@ -55,7 +62,9 @@ static void ui_page_rec_edit_handle_event(const ui_event_t *ev)
         }
         else if(ev->id == (uint8_t)BTN_PAGE_2)
         {
-            (void)sample_capture_model_assign_saved_take_to_pool();
+            (void)control_domain_request_audio_rec(&(control_audio_rec_intent_t){
+                .operation = CONTROL_AUDIO_REC_ASSIGN
+            });
             g_ui_rec_edit_assign_popup = 0U;
         }
         return;
@@ -67,7 +76,9 @@ static void ui_page_rec_edit_handle_event(const ui_event_t *ev)
         sample_capture_model_get_state(&state);
         if((state.take_valid != 0U) && (state.edit_end_frame > state.edit_start_frame))
         {
-            (void)sample_capture_model_audition_trimmed();
+            (void)control_domain_request_audio_rec(&(control_audio_rec_intent_t){
+                .operation = CONTROL_AUDIO_REC_AUDITION
+            });
         }
         return;
     }
@@ -80,19 +91,23 @@ static void ui_page_rec_edit_handle_event(const ui_event_t *ev)
     switch((button_id_t)ev->id)
     {
         case BTN_PAGE_1:
-            (void)sample_capture_model_return_to_audio_rec();
+            (void)control_domain_request_audio_rec(&(control_audio_rec_intent_t){
+                .operation = CONTROL_AUDIO_REC_RETURN
+            });
             ui_page_set(UI_PAGE_AUDIO_REC);
             break;
 
         case BTN_PAGE_2:
-            if(sample_capture_model_save_trimmed() != 0U)
-            {
+            if (control_domain_request_audio_rec(&(control_audio_rec_intent_t){
+                    .operation = CONTROL_AUDIO_REC_SAVE
+                }) != 0U)
                 g_ui_rec_edit_assign_popup = 1U;
-            }
             break;
 
         case BTN_PAGE_3:
-            (void)sample_capture_model_toggle_zcross();
+            (void)control_domain_request_audio_rec(&(control_audio_rec_intent_t){
+                .operation = CONTROL_AUDIO_REC_TOGGLE_ZCROSS
+            });
             break;
 
         default:

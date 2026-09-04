@@ -21,6 +21,12 @@ typedef struct
     uint8_t pressed;
     uint8_t velocity;
     uint8_t source;
+    uint8_t shift_down;
+    uint8_t track_select_armed;
+    uint8_t hall_mode;
+    uint8_t context_track;
+    uint8_t reserved;
+    uint32_t capture_ms;
 } live_event_t;
 
 typedef enum
@@ -45,8 +51,8 @@ typedef struct
 _Static_assert(sizeof(live_note_event_t) == 24U,
                "live_note_event_t must remain a fixed 24-byte event");
 
-_Static_assert(sizeof(live_event_t) == 16U,
-               "live_event_t must remain a fixed 16-byte shared event");
+_Static_assert(sizeof(live_event_t) == 28U,
+               "live_event_t must remain a fixed 28-byte shared event");
 
 #define LIVE_EVENT_QUEUE_CAPACITY 64U
 
@@ -56,7 +62,12 @@ void live_event_discard_pending(void);
 bool live_event_submit_from_hall(uint8_t key,
                                  bool pressed,
                                  uint8_t velocity,
-                                 uint32_t tim5_tick);
+                                 uint32_t tim5_tick,
+                                 uint8_t shift_down,
+                                 uint8_t track_select_armed,
+                                 uint8_t hall_mode,
+                                 uint8_t context_track,
+                                 uint32_t capture_ms);
 
 bool live_event_pop(live_event_t *out_event);
 uint16_t live_event_depth(void);

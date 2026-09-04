@@ -165,6 +165,54 @@ static uint8_t ui_renderer_template_custom_widget_is_bar(ui_template_custom_widg
             || (kind == UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEPTH));
 }
 
+static uint8_t ui_renderer_template_draw_virtual_custom_widget(
+    const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+    ui_template_custom_widget_kind_t kind,
+    int x,
+    int y,
+    int w,
+    int h,
+    float value,
+    uint8_t bipolar)
+{
+    switch (kind)
+    {
+        case UI_TEMPLATE_CUSTOM_WIDGET_PLAY_NOTE:
+            return ui_renderer_template_draw_play_note_text(PARAM_COUNT, x, y, w, h, value);
+
+        case UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TRACK:
+        case UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TYPE:
+        case UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_INACTIVE:
+        case UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_MIDI_CHANNEL:
+        case UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_MIDI_SOURCE:
+            return ui_renderer_template_draw_custom_track_cfg(plock_frame_ctx, kind,
+                                                               x, y, w, h, value);
+
+        case UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEST:
+            return ui_renderer_template_draw_lfo_dest_text(x, y, w, h, value);
+
+        case UI_TEMPLATE_CUSTOM_WIDGET_MATRIX_SLOT:
+            return ui_renderer_template_draw_matrix_slot_widget(x, y, w, h, value);
+
+        case UI_TEMPLATE_CUSTOM_WIDGET_MATRIX_SOURCE:
+            return ui_renderer_template_draw_matrix_source_text(x, y, w, h, value);
+
+        case UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEPTH:
+            if (bipolar != 0U)
+            {
+                ui_renderer_template_draw_lfo_center_indicator(x, y, w, h, value, 127.0f);
+            }
+            else
+            {
+                ui_renderer_template_draw_lfo_unipolar_bar(x, y, w, h, value, 0.0f, 1.0f);
+            }
+            return 1U;
+
+        default:
+            return 0U;
+    }
+}
+
 static void ui_renderer_template_draw_bar_value_text(int widget_x,
                                                      int widget_y,
                                                      int widget_w,
@@ -223,6 +271,36 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
                                      virt_value,
                                      (uint32_t)sizeof(virt_value)) != 0U)
         {
+            ui_template_custom_widget_kind_t virtual_widget = UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+            float virtual_value = 0.0f;
+            uint8_t virtual_bipolar = 0U;
+            if ((state->virtual_custom_widget_picker != NULL)
+                    && (state->virtual_slot_value != NULL))
+            {
+                virtual_widget = state->virtual_custom_widget_picker(slot, subpage);
+                if ((virtual_widget != UI_TEMPLATE_CUSTOM_WIDGET_NONE)
+                        && (state->virtual_slot_value(plock_frame_ctx, slot,
+                                                      &virtual_value,
+                                                      &virtual_bipolar) != 0U)
+                        && (ui_renderer_template_draw_virtual_custom_widget(
+                                plock_frame_ctx, virtual_widget, widget_x, widget_y,
+                                UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H,
+                                virtual_value, virtual_bipolar) != 0U))
+            {
+                if (ui_renderer_template_custom_widget_is_bar(virtual_widget) != 0U)
+                {
+                    ui_renderer_template_draw_bar_value_text(widget_x, widget_y,
+                                                              UI_TEMPLATE_CARD_WIDGET_W,
+                                                              UI_TEMPLATE_CARD_WIDGET_H,
+                                                              virt_value);
+                }
+                drv_display_set_font(&FONT_4X6);
+                ui_renderer_template_fit_text(virt_name, UI_TEMPLATE_CARD_LABEL_MAX_PX);
+                drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, virt_name),
+                                      (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y), virt_name);
+                return;
+            }
+            }
             drv_display_set_font(&FONT_4X6);
             ui_renderer_template_fit_text(virt_name, UI_TEMPLATE_CARD_LABEL_MAX_PX);
             ui_renderer_template_fit_text(virt_value, UI_TEMPLATE_CARD_LABEL_MAX_PX);

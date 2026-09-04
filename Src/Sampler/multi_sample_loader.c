@@ -2,6 +2,7 @@
 
 #include <string.h>
 
+#include "Sampler/multi_sample_import.h"
 #include "Sampler/multi_sample_index.h"
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_page_cache.h"
@@ -742,6 +743,10 @@ multi_sample_load_result_t multi_sample_load_request_instrument(uint16_t logical
     }
     if (strlen(index_path) >= sizeof(g_multi_external_request.path))
         return MULTI_SAMPLE_LOAD_PATH_TOO_LONG;
+    if ((multi_sample_import_is_busy() != 0U)
+        || (multi_sample_import_delete_is_busy() != 0U)
+        || (multi_sample_pool_clear_is_active() != 0U))
+        return MULTI_SAMPLE_LOAD_SD_BUSY;
     if ((g_multi_external_request_valid != 0U)
         || (multi_sample_load_has_pending() != 0U))
     {
@@ -789,6 +794,7 @@ static void multi_loader_start_next_queued(void)
             char path[MULTI_SAMPLE_LOADER_PATH_MAX];
             const uint16_t logical_id = g_multi_load_queue[i].logical_id;
             const uint16_t instrument_id = g_multi_load_queue[i].instrument_id;
+            g_multi_load_request = g_multi_load_queue[i];
             if (g_multi_load_queue[i].cancelled != 0U)
             {
                 if (g_multi_load_completion_valid == 0U)
@@ -800,7 +806,6 @@ static void multi_loader_start_next_queued(void)
                 return;
             }
             (void)multi_loader_copy_text(path, sizeof(path), g_multi_load_queue[i].path);
-            g_multi_load_request = g_multi_load_queue[i];
             multi_sample_load_result_t result =
                 multi_loader_start_instrument(path, instrument_id);
             if (result != MULTI_SAMPLE_LOAD_SD_BUSY)
@@ -1009,7 +1014,9 @@ uint8_t multi_sample_is_ready(uint16_t instrument_id)
 
 uint8_t multi_sample_load_has_pending(void)
 {
-    if (g_multi_load_active != 0U)
+    if ((g_multi_load_active != 0U)
+        || (g_multi_external_request_valid != 0U)
+        || (g_multi_load_completion_valid != 0U))
     {
         return 1U;
     }
@@ -1068,6 +1075,8 @@ uint8_t multi_sample_cancel_load(void)
 void multi_sample_cancel_all_loads(void)
 {
     (void)multi_sample_cancel_load();
+    g_multi_external_request_valid = 0U;
+    memset(&g_multi_external_request, 0, sizeof(g_multi_external_request));
     for (uint16_t i = 0U; i < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++i)
     {
         if (g_multi_load_queue[i].used != 0U)

@@ -64,11 +64,6 @@ void drv_encoders_poll(void)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-int16_t drv_encoder_get_delta(uint8_t id)
-{
-    return encoder_consume_delta(id);
-}
-
 /**
  * @brief Point d'entrée drv_encoder_reset.
  *
@@ -80,7 +75,3 @@ int16_t drv_encoder_get_delta(uint8_t id)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void drv_encoder_reset(uint8_t id)
-{
-    encoder_reset_delta(id);
-}

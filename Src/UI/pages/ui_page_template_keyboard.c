@@ -4,6 +4,7 @@
 
 #include "App/Hall/hall_calibration.h"
 #include "App/Hall/hall_engine.h"
+#include "App/control_domain.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "pages/ui_page_calibration.h"
 #include "stm32h7xx_hal.h"
@@ -177,16 +178,16 @@ uint8_t ui_page_template_keyboard_handle_encoder(uint8_t encoder, int16_t delta)
     if ((ui_page_get_id() != UI_PAGE_TEMPLATE_KEYBOARD) || (encoder >= 4U) || (delta == 0)) return 0U;
     if (g_ui_template_keyboard_state.active_subpage == 0U)
     {
-        if (encoder == 0U) { int32_t v=(int32_t)keyboard_runtime_get_root_index()+((delta>0)?1:-1); if(v<0)v=0;if(v>11)v=11;keyboard_runtime_set_root((uint8_t)v); }
-        else if (encoder == 1U) { int32_t v=(int32_t)keyboard_runtime_get_scale_index()+((delta>0)?1:-1);if(v<0)v=0;if(v>6)v=6;keyboard_runtime_set_scale((uint8_t)v); }
-        else if (encoder == 2U) keyboard_runtime_set_omnichord(delta>0);
+        if (encoder == 0U) { int32_t v=(int32_t)keyboard_runtime_get_root_index()+((delta>0)?1:-1); if(v<0)v=0;if(v>11)v=11;(void)control_domain_request_keyboard(CONTROL_KEYBOARD_SET_ROOT,(int8_t)v); }
+        else if (encoder == 1U) { int32_t v=(int32_t)keyboard_runtime_get_scale_index()+((delta>0)?1:-1);if(v<0)v=0;if(v>6)v=6;(void)control_domain_request_keyboard(CONTROL_KEYBOARD_SET_SCALE,(int8_t)v); }
+        else if (encoder == 2U) (void)control_domain_request_keyboard(CONTROL_KEYBOARD_SET_OMNICHORD,(delta>0)?1:0);
         return 1U;
     }
     if (g_ui_template_keyboard_state.active_subpage == 1U)
     {
-        if (encoder == 0U) keyboard_runtime_set_note_order((delta>0)?NOTE_ORDER_FIFTHS:NOTE_ORDER_NATURAL);
-        else if (encoder == 1U) keyboard_runtime_set_chord_override(delta>0);
-        else if (encoder == 2U) keyboard_runtime_set_mono_last(delta>0);
+        if (encoder == 0U) (void)control_domain_request_keyboard(CONTROL_KEYBOARD_SET_NOTE_ORDER,(delta>0)?NOTE_ORDER_FIFTHS:NOTE_ORDER_NATURAL);
+        else if (encoder == 1U) (void)control_domain_request_keyboard(CONTROL_KEYBOARD_SET_CHORD_OVERRIDE,(delta>0)?1:0);
+        else if (encoder == 2U) (void)control_domain_request_keyboard(CONTROL_KEYBOARD_SET_MONO_LAST,(delta>0)?1:0);
         return 1U;
     }
     if (g_ui_template_keyboard_state.active_subpage != 2U)
@@ -201,7 +202,8 @@ uint8_t ui_page_template_keyboard_handle_encoder(uint8_t encoder, int16_t delta)
             : (uint8_t)HALL_VEL_PROFILE_DEFAULT;
         if (next != hall_get_velocity_profile())
         {
-            hall_set_velocity_profile(next);
+            (void)control_domain_request_keyboard(
+                CONTROL_KEYBOARD_SET_VELOCITY_PROFILE, (int8_t)next);
             ui_page_template_keyboard_mark_settings_dirty();
         }
     }
@@ -218,7 +220,8 @@ uint8_t ui_page_template_keyboard_handle_encoder(uint8_t encoder, int16_t delta)
         }
         if ((uint8_t)next != hall_get_velocity_mode())
         {
-            hall_set_velocity_mode((uint8_t)next);
+            (void)control_domain_request_keyboard(
+                CONTROL_KEYBOARD_SET_VELOCITY_MODE, (int8_t)next);
             ui_page_template_keyboard_mark_settings_dirty();
         }
     }
@@ -235,7 +238,8 @@ uint8_t ui_page_template_keyboard_handle_encoder(uint8_t encoder, int16_t delta)
         }
         if ((uint8_t)next != hall_get_velocity_curve())
         {
-            hall_set_velocity_curve((uint8_t)next);
+            (void)control_domain_request_keyboard(
+                CONTROL_KEYBOARD_SET_VELOCITY_CURVE, (int8_t)next);
             ui_page_template_keyboard_mark_settings_dirty();
         }
     }

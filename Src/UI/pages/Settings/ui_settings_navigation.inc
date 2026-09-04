@@ -294,13 +294,9 @@ static void ui_page_settings_asset_register_poll(void)
 
 static void ui_page_settings_preview_stop(ui_settings_preview_stop_origin_t origin)
 {
-    if (sd_preview_is_active() == 0U)
-    {
-        return;
-    }
-
     sd_preview_request_stop();
-    g_ui_settings.preview_stop_origin = origin;
+    if (sd_preview_is_active() != 0U)
+        g_ui_settings.preview_stop_origin = origin;
 }
 
 static void ui_page_settings_preview_apply_termination_status(void)
@@ -348,6 +344,10 @@ static void ui_page_settings_push(ui_settings_view_t view)
 
     g_ui_settings.levels[g_ui_settings.depth].view = view;
     g_ui_settings.levels[g_ui_settings.depth].selected_index = 0U;
+    for (uint8_t i = 0U; i < UI_SETTINGS_ENCODER_COUNT; ++i)
+    {
+        g_ui_settings.encoder_accum[i] = 0;
+    }
     g_ui_settings.depth++;
 }
 
@@ -357,19 +357,27 @@ static void ui_page_settings_back(void)
     const ui_settings_menu_level_t *const level = ui_page_settings_current_level();
     if ((level != 0) && (level->view == UI_SETTINGS_VIEW_SAMPLER))
     {
-        sd_preview_set_gain(1.0f);
+        (void)control_domain_request_preview_gain(1.0f);
     }
 
     if (g_ui_settings.depth <= 1U)
     {
+        for (uint8_t i = 0U; i < UI_SETTINGS_ENCODER_COUNT; ++i)
+        {
+            g_ui_settings.encoder_accum[i] = 0;
+        }
         ui_page_settings_close();
         return;
     }
 
     g_ui_settings.depth--;
+    for (uint8_t i = 0U; i < UI_SETTINGS_ENCODER_COUNT; ++i)
+    {
+        g_ui_settings.encoder_accum[i] = 0;
+    }
 }
 
-static void ui_page_settings_apply_action(void)
+static void ui_page_settings_apply_action(uint8_t shift_down)
 {
     ui_settings_menu_level_t *const level = ui_page_settings_current_level();
     if (level == 0)
@@ -526,44 +534,44 @@ static void ui_page_settings_apply_action(void)
         case UI_SETTINGS_VIEW_SAMPLER:
             if (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY)
             {
-                ui_page_settings_sample_copy_left((uint8_t)(button_down(BTN_SHIFT) != 0U));
+                ui_page_settings_sample_copy_left(shift_down);
             }
             else
             {
-                ui_page_settings_sample_copy_right((uint8_t)(button_down(BTN_SHIFT) != 0U));
+                ui_page_settings_sample_copy_right(shift_down);
             }
             break;
 
         case UI_SETTINGS_VIEW_MULTI_SAMPLE:
             if (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY)
             {
-                ui_page_settings_multi_copy_left((uint8_t)(button_down(BTN_SHIFT) != 0U));
+                ui_page_settings_multi_copy_left(shift_down);
             }
             else
             {
-                ui_page_settings_multi_copy_right((uint8_t)(button_down(BTN_SHIFT) != 0U));
+                ui_page_settings_multi_copy_right(shift_down);
             }
             break;
 
         case UI_SETTINGS_VIEW_SAMPLE_RAM:
             if (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY)
             {
-                ui_page_settings_ram_copy_left((uint8_t)(button_down(BTN_SHIFT) != 0U));
+                ui_page_settings_ram_copy_left(shift_down);
             }
             else
             {
-                ui_page_settings_ram_copy_right((uint8_t)(button_down(BTN_SHIFT) != 0U));
+                ui_page_settings_ram_copy_right(shift_down);
             }
             break;
 
         case UI_SETTINGS_VIEW_WAVETABLE:
             if (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY)
             {
-                ui_page_settings_wavetable_copy_left((uint8_t)(button_down(BTN_SHIFT) != 0U));
+                ui_page_settings_wavetable_copy_left(shift_down);
             }
             else
             {
-                ui_page_settings_wavetable_copy_right((uint8_t)(button_down(BTN_SHIFT) != 0U));
+                ui_page_settings_wavetable_copy_right(shift_down);
             }
             break;
 
@@ -701,7 +709,7 @@ static void ui_page_settings_enter(void)
 static void ui_page_settings_leave(void)
 {
     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
-    sd_preview_set_gain(1.0f);
+    (void)control_domain_request_preview_gain(1.0f);
     g_ui_settings.depth = 0U;
 }
 
@@ -737,7 +745,8 @@ static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
             {
                 if (ev->id == (uint8_t)BTN_PAGE_1)
                 {
-                    (void)multi_sample_cancel_load();
+                    (void)control_domain_request_storage_ui(
+                        CONTROL_STORAGE_UI_CANCEL_MULTI_LOAD);
                     ui_page_settings_multi_prepare_finish("CANCEL");
                 }
                 return;
@@ -780,9 +789,9 @@ static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
                 return;
             }
             if ((ev->id == (uint8_t)BTN_PAGE_2)
-                && (button_down(BTN_SHIFT) == 0U))
+                && (ev->shift_down == 0U))
             {
-                ui_page_settings_apply_action();
+                ui_page_settings_apply_action(ev->shift_down);
                 return;
             }
             if (ev->id == (uint8_t)BTN_PAGE_3)
@@ -797,7 +806,7 @@ static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
                 }
                 else
                 {
-                    ui_page_settings_sample_catalog_refresh_action((uint8_t)(button_down(BTN_SHIFT) != 0U));
+                    ui_page_settings_sample_catalog_refresh_action(ev->shift_down);
                 }
                 return;
             }
@@ -812,7 +821,7 @@ static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
 
         if ((level->view == UI_SETTINGS_VIEW_SAMPLER)
             && (ev->id == (uint8_t)BTN_PAGE_2)
-            && (button_down(BTN_SHIFT) == 0U))
+            && (ev->shift_down == 0U))
         {
             ui_page_settings_sample_ok_action();
             return;
@@ -827,7 +836,7 @@ static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
         if ((level->view == UI_SETTINGS_VIEW_SAMPLER)
             && (ev->id == (uint8_t)BTN_PAGE_4))
         {
-            ui_page_settings_sample_catalog_refresh_action((uint8_t)(button_down(BTN_SHIFT) != 0U));
+            ui_page_settings_sample_catalog_refresh_action(ev->shift_down);
             return;
         }
 
@@ -838,9 +847,9 @@ static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
                 ui_page_settings_multi_browser_parent_or_exit();
                 return;
             }
-            if ((ev->id == (uint8_t)BTN_PAGE_2) && (button_down(BTN_SHIFT) == 0U))
+            if ((ev->id == (uint8_t)BTN_PAGE_2) && (ev->shift_down == 0U))
             {
-                ui_page_settings_apply_action();
+                ui_page_settings_apply_action(ev->shift_down);
                 return;
             }
             if (ev->id == (uint8_t)BTN_PAGE_3)
@@ -871,7 +880,7 @@ static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
 
     if (ev->id == (uint8_t)BTN_PAGE_2)
     {
-        ui_page_settings_apply_action();
+        ui_page_settings_apply_action(ev->shift_down);
         return;
     }
 
@@ -937,76 +946,6 @@ static void ui_page_settings_tick(void)
             ui_page_settings_status("LOAD FAIL");
         }
     }
-    uint8_t project_slot = 0U;
-    uint8_t project_success = 0U;
-    if (project_product_save_take_result(&project_slot, &project_success) != 0U)
-    {
-        (void)project_slot;
-        if (project_success != 0U)
-        {
-            ui_page_settings_refresh_project_slots();
-            ui_page_settings_status("SAVE OK");
-        }
-        else
-        {
-            ui_page_settings_status("SAVE FAIL");
-        }
-    }
-
-    sampler_ram_result_t ram_result;
-    uint16_t ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
-    uint16_t ram_global = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    const char *ram_path = 0;
-    if (sampler_ram_pool_load_async_take_result(&ram_result, &ram_slot,
-                                                &ram_global, &ram_path) != 0U)
-    {
-        if (ram_result == SAMPLER_RAM_RESULT_OK)
-        {
-            (void)ui_page_settings_request_asset_register(
-                PERSIST_ASSET_SAMPLE_RAM, ram_global);
-        }
-        else if ((ram_result == SAMPLER_RAM_RESULT_GLOBAL_SLOT_FULL)
-                 || (ram_result == SAMPLER_RAM_RESULT_POOL_FULL))
-        {
-            ui_page_settings_flash_sample_header_slots();
-        }
-        else if ((ram_result == SAMPLER_RAM_RESULT_GLOBAL_BUDGET_FULL)
-                 || (ram_result == SAMPLER_RAM_RESULT_RAM_POOL_FULL)
-                 || (ram_result == SAMPLER_RAM_RESULT_TOO_LARGE))
-        {
-            ui_page_settings_flash_sample_header_memory();
-        }
-        ui_page_settings_refresh_ram_slots();
-        ui_page_settings_status(sampler_ram_pool_result_label(ram_result));
-    }
-
-    wavetable_result_t wavetable_result;
-    uint16_t wavetable_slot = WAVETABLE_POOL_INVALID_SLOT;
-    uint16_t wavetable_global = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    const char *wavetable_path = 0;
-    if (wavetable_pool_load_async_take_result(&wavetable_result, &wavetable_slot,
-                                              &wavetable_global, &wavetable_path) != 0U)
-    {
-        if (wavetable_result == WAVETABLE_RESULT_OK)
-        {
-            (void)ui_page_settings_request_asset_register(
-                PERSIST_ASSET_WAVETABLE, wavetable_global);
-        }
-        else if ((wavetable_result == WAVETABLE_RESULT_GLOBAL_SLOT_FULL)
-                 || (wavetable_result == WAVETABLE_RESULT_POOL_FULL))
-        {
-            ui_page_settings_flash_sample_header_slots();
-        }
-        else if ((wavetable_result == WAVETABLE_RESULT_GLOBAL_BUDGET_FULL)
-                 || (wavetable_result == WAVETABLE_RESULT_RAM_POOL_FULL)
-                 || (wavetable_result == WAVETABLE_RESULT_TOO_LARGE))
-        {
-            ui_page_settings_flash_sample_header_memory();
-        }
-        ui_page_settings_refresh_wavetable_slots();
-        ui_page_settings_status(wavetable_pool_result_label(wavetable_result));
-    }
-
     const wav_loader_catalog_view_service_result_t browser_result =
         wav_loader_catalog_view_last_result();
     if (browser_result == WAV_LOADER_CATALOG_VIEW_PUBLISHED)
@@ -1044,7 +983,8 @@ static void ui_page_settings_tick(void)
             (void)snprintf(path, sizeof(path), "%s", g_ui_settings.convert_path);
             g_ui_settings.convert_slot_valid = 0U;
             g_ui_settings.convert_path[0] = '\0';
-            wav_convert_clear_finished();
+            (void)control_domain_request_storage_ui(
+                CONTROL_STORAGE_UI_CLEAR_CONVERSION);
             wav_loader_catalog_mark_stale();
             ui_page_settings_sample_load_to_slot(slot, path);
             return;
@@ -1055,7 +995,8 @@ static void ui_page_settings_tick(void)
                 ui_page_settings_convert_error_label(wav_convert_get_last_error());
             g_ui_settings.convert_slot_valid = 0U;
             g_ui_settings.convert_path[0] = '\0';
-            wav_convert_clear_finished();
+            (void)control_domain_request_storage_ui(
+                CONTROL_STORAGE_UI_CLEAR_CONVERSION);
             ui_page_settings_status(label);
             return;
         }

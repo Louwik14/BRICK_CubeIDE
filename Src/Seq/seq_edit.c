@@ -672,17 +672,6 @@ void seq_edit_step_hold_update(void)
             continue;
         }
 
-        if (button_down((button_id_t)((uint8_t)BTN_STEP_1 + hall)) == 0U)
-        {
-            const uint32_t held_ticks = now_tick - g_seq_hold_state.press_tick[hall];
-            if (held_ticks < SEQ_STEP_HOLD_THRESHOLD_TICKS)
-            {
-                seq_edit_apply_short_action(hall);
-            }
-            seq_edit_reset_step_press_state(hall);
-            continue;
-        }
-
         if ((now_tick - g_seq_hold_state.press_tick[hall]) >= SEQ_STEP_HOLD_THRESHOLD_TICKS)
         {
             g_seq_hold_state.held[hall] = 1U;

@@ -1,9 +1,6 @@
 void brick6_sampler_runtime_diag_reset(void)
 {
     memset(&g_brick6_sampler_runtime_diag, 0, sizeof(g_brick6_sampler_runtime_diag));
-    memset(g_sampler_multi_stream_release_pending,
-           0,
-           sizeof(g_sampler_multi_stream_release_pending));
     memset(g_sampler_multi_page0_reject_logged,
            0,
            sizeof(g_sampler_multi_page0_reject_logged));

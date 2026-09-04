@@ -378,14 +378,14 @@ static void ui_page_name_edit_handle_event(const ui_event_t *ev)
     switch ((button_id_t)ev->id)
     {
         case BTN_PAGE_1:
-            if (button_down(BTN_SHIFT) == 0U)
+            if (ev->shift_down == 0U)
             {
                 ui_page_name_edit_finish(UI_PAGE_NAME_EDIT_RESULT_CANCEL);
             }
             break;
 
         case BTN_PAGE_2:
-            if (button_down(BTN_SHIFT) != 0U)
+            if (ev->shift_down != 0U)
             {
                 ui_page_name_edit_commit_char(' ');
             }
@@ -396,14 +396,14 @@ static void ui_page_name_edit_handle_event(const ui_event_t *ev)
             break;
 
         case BTN_PAGE_3:
-            if (button_down(BTN_SHIFT) == 0U)
+            if (ev->shift_down == 0U)
             {
                 ui_page_name_edit_commit_char(g_name_edit_chars[g_name_edit.char_index]);
             }
             break;
 
         case BTN_PAGE_4:
-            if (button_down(BTN_SHIFT) == 0U)
+            if (ev->shift_down == 0U)
             {
                 ui_page_name_edit_backspace();
             }

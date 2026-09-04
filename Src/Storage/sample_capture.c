@@ -1,6 +1,8 @@
 #include "Storage/sample_capture.h"
 
+#include "App/control_domain.h"
 #include "IPC/control_audio_rec_bus.h"
+#include "IPC/audio_rec_bus_contract.h"
 #include "IPC/control_music_publication.h"
 #include "Track/track_input_ownership.h"
 #include "Track/track_runtime.h"
@@ -247,6 +249,7 @@ typedef struct
 #endif
 
 static sample_capture_model_t g_sample_capture;
+static uint8_t g_sample_capture_control_context;
 CONTROL_M4_SRAM2 static sample_capture_line_hot_t g_sample_capture_line_hot;
 STORAGE_STATE_SDRAM static sample_capture_editor_audio_cache_t g_sample_capture_editor_cache;
 STORAGE_STATE_SDRAM static sample_capture_global_overview_t g_sample_capture_global_overview;
@@ -285,3 +288,13 @@ STORAGE_STATE_SDRAM static sample_capture_debug_t g_sample_capture_debug;
 #include "SampleCapture/sample_capture_service.inc"
 
 #include "SampleCapture/sample_capture_save_assign.inc"
+
+uint8_t sample_capture_control_start_prepared_at(uint64_t sample_time)
+{
+    return sample_capture_start_prepared_at(sample_time);
+}
+
+void sample_capture_model_set_control_context(uint8_t enabled)
+{
+    g_sample_capture_control_context = (enabled != 0U) ? 1U : 0U;
+}

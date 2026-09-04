@@ -35,13 +35,11 @@ _Static_assert(sizeof(encoder_detent_event_t) == 28U,
                "encoder detent event ABI must remain fixed-width");
 
 void encoders_init(void);
+void encoders_start_fast_poll(void);
 void encoders_update(uint32_t dt_ms);
 
-int16_t encoder_get_delta(uint8_t encoder);
-int16_t encoder_consume_delta(uint8_t encoder);
-void encoder_reset_delta(uint8_t encoder);
-
 void encoders_set_binding_snapshot(const encoder_binding_snapshot_t *snapshot);
+void encoders_discard_pending(void);
 
 /* The timer-poll IRQ is the single producer and the caller the single
  * consumer. Saturation drops the newest event and increments the counter. */

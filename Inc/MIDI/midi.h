@@ -139,6 +139,12 @@ midi_dest_t midi_get_rx_destination(void);
  * @brief Service transport USB (à appeler depuis USB_SERVICE).
  */
 void midi_usb_service_poll(void);
+void midi_usb_transport_reset(void);
+void midi_usb_transport_quiesce_begin(void);
+void midi_usb_transport_quiesce_end(void);
+uint8_t midi_usb_transport_quiesce_ready(void);
+void midi_usb_transport_quiesce_control_ack(void);
+uint8_t midi_usb_transport_quiesce_requested(void);
 
 /**
  * @brief Décodage et injection MIDI (à appeler depuis CONTROL_RT).
@@ -180,6 +186,7 @@ midi_dest_t midi_clock_get_destination(void);
  * // TODO CubeMX: configure TIMx à 24 PPQN
  */
 void midi_clock_on_timer_tick(void);
+void midi_clock_service_pending(void);
 
 /* ====================================================================== */
 /*                        COMMANDES “CHANNEL VOICE”                       */

@@ -40,7 +40,7 @@ static mod_env3_values_t g_mod_env3_audio_config[SEQ_TRACK_COUNT];
 static float g_mod_env3_audio_retrigger[SEQ_TRACK_COUNT];
 
 static uint8_t g_mod_env3_audio_initialized;
-static void mod_env3_audio_init(void);
+void mod_env3_audio_init(void);
 
 /* All public ENV3 entry points accept an entity ID.  Runtime state is owned
  * by the modulation owner, not by a GROUP child lane. */
@@ -67,7 +67,6 @@ static uint8_t mod_env3_audio_resolve_owner(uint8_t track, uint8_t *out_owner)
 
 void mod_env3_audio_apply_retrigger(uint8_t track, float value)
 {
-    if (g_mod_env3_audio_initialized == 0U) mod_env3_audio_init();
     uint8_t owner = 0U;
     if (mod_env3_audio_resolve_owner(track, &owner) != 0U)
     {
@@ -130,7 +129,7 @@ static void mod_env3_audio_invalidate_applied(uint8_t track)
     g_mod_env3_runtime[track].applied.release = -1.0f;
 }
 
-static void mod_env3_audio_init(void)
+void mod_env3_audio_init(void)
 {
     memset(g_mod_env3_audio_config, 0, sizeof(g_mod_env3_audio_config));
     memset(g_mod_env3_audio_retrigger, 0, sizeof(g_mod_env3_audio_retrigger));
@@ -171,7 +170,6 @@ static uint8_t mod_env3_write_param(mod_env3_values_t *s, mod_env3_param_t param
 
 uint8_t mod_env3_audio_apply_track_param(uint8_t track, mod_env3_param_t param, float value)
 {
-    if (g_mod_env3_audio_initialized == 0U) mod_env3_audio_init();
     if ((track >= SEQ_TRACK_COUNT) || (param >= MOD_ENV3_PARAM_COUNT)) return 0U;
     uint8_t owner = 0U;
     if (mod_env3_audio_resolve_owner(track, &owner) == 0U) return 0U;
@@ -185,7 +183,6 @@ uint8_t mod_env3_audio_apply_track_param(uint8_t track, mod_env3_param_t param, 
 
 uint8_t mod_env3_apply_track_param_temp(uint8_t track, mod_env3_param_t param, float value)
 {
-    if (g_mod_env3_audio_initialized == 0U) mod_env3_audio_init();
     if ((track >= SEQ_TRACK_COUNT) || (param >= MOD_ENV3_PARAM_COUNT))
     {
         return 0U;
@@ -217,7 +214,6 @@ uint8_t mod_env3_apply_track_param_temp(uint8_t track, mod_env3_param_t param, f
 
 uint8_t mod_env3_clear_track_param_temp_audio(uint8_t track, mod_env3_param_t param)
 {
-    if (g_mod_env3_audio_initialized == 0U) mod_env3_audio_init();
     (void)param;
     if (track >= SEQ_TRACK_COUNT)
     {
@@ -234,7 +230,6 @@ uint8_t mod_env3_clear_track_param_temp_audio(uint8_t track, mod_env3_param_t pa
 
 void mod_env3_note_on(uint8_t track)
 {
-    if (g_mod_env3_audio_initialized == 0U) mod_env3_audio_init();
     uint8_t owner = 0U;
     if (mod_env3_audio_resolve_owner(track, &owner) == 0U)
     {
@@ -253,7 +248,6 @@ void mod_env3_note_on(uint8_t track)
 
 void mod_env3_note_off(uint8_t track)
 {
-    if (g_mod_env3_audio_initialized == 0U) mod_env3_audio_init();
     uint8_t owner = 0U;
     if (mod_env3_audio_resolve_owner(track, &owner) == 0U)
     {
@@ -273,7 +267,6 @@ void mod_env3_note_off(uint8_t track)
 
 float mod_env3_process_track(uint8_t track, uint32_t elapsed_frames)
 {
-    if (g_mod_env3_audio_initialized == 0U) mod_env3_audio_init();
     uint8_t owner = 0U;
     if (mod_env3_audio_resolve_owner(track, &owner) == 0U)
     {

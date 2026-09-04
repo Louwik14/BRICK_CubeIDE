@@ -45,8 +45,12 @@ static void sample_capture_publish_rec_bus(void)
         source_flags |= AUDIO_REC_BUS_CAPTURE_ENABLED;
     }
 
-    if (control_audio_rec_bus_publish(source_entity_mask,
-            (audio_rec_bus_arm_t)g_sample_capture.state.arm, source_flags) == 0U)
+    const uint8_t accepted = (g_sample_capture_control_context != 0U)
+        ? control_audio_rec_bus_publish(source_entity_mask,
+            (audio_rec_bus_arm_t)g_sample_capture.state.arm, source_flags)
+        : control_domain_request_rec_bus(source_entity_mask,
+            (uint8_t)g_sample_capture.state.arm, source_flags, 0U, 0U);
+    if (accepted == 0U)
         Error_Handler();
 }
 
@@ -71,9 +75,14 @@ static uint8_t sample_capture_publish_rec_bus_at(uint64_t sample_time)
     }
     if(g_sample_capture.state.mic_enabled != 0U)
         source_flags |= AUDIO_REC_BUS_SOURCE_MIC_LOGICAL;
-    if(control_audio_rec_bus_publish_at(source_entity_mask,
+    const uint8_t accepted = (g_sample_capture_control_context != 0U)
+        ? control_audio_rec_bus_publish_at(source_entity_mask,
             (audio_rec_bus_arm_t)g_sample_capture.state.arm,
-            source_flags, sample_time) == 0U)
+            source_flags, sample_time)
+        : control_domain_request_rec_bus(source_entity_mask,
+            (uint8_t)g_sample_capture.state.arm, source_flags, 1U,
+            sample_time);
+    if (accepted == 0U)
         return 0U;
     return 1U;
 }

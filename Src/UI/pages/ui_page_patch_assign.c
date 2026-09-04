@@ -566,7 +566,7 @@ static uint8_t ui_page_patch_assign_target_count(void)
 
 static void ui_page_patch_assign_toggle_target(uint8_t track)
 {
-    if ((track >= TRACK_ACTIVE_COUNT) || (entity_topology_is_active(track) == 0U))
+    if ((track >= BRICK_ENTITY_CAPACITY) || (entity_topology_is_active(track) == 0U))
     {
         return;
     }
@@ -876,7 +876,7 @@ uint8_t ui_page_patch_assign_get_target_hall_led(uint8_t hall, uint8_t *out_on)
     }
 
     *out_on = 0U;
-    if (hall < TRACK_ACTIVE_COUNT)
+    if (hall < BRICK_ENTITY_CAPACITY)
     {
         *out_on = ((g_patch_assign.target_mask & (uint16_t)(1UL << hall)) != 0U) ? 1U : 0U;
     }

@@ -21,11 +21,16 @@
 #define WAVEFORM_CACHE_HASH_BYTES 65536U
 #define WAVEFORM_CACHE_QUEUE_CAPACITY 4U
 #define WAVEFORM_CACHE_TILE_QUEUE_CAPACITY 8U
+#define WAVEFORM_CACHE_UI_REQUEST_CAPACITY 16U
 #define WAVEFORM_CACHE_RAM_TILE_COUNT 64U
 #define WAVEFORM_CACHE_IO_FRAMES 1024U
 #define WAVEFORM_CACHE_MAX_BLOCK_ALIGN 8U
 #define WAVEFORM_CACHE_ACTIVE_LEVEL_COUNT 4U
 #define WAVEFORM_CACHE_FORMAT_LEVEL_COUNT ((uint8_t)WAVEFORM_CACHE_LEVEL_COUNT)
+
+_Static_assert((WAVEFORM_CACHE_UI_REQUEST_CAPACITY
+                & (WAVEFORM_CACHE_UI_REQUEST_CAPACITY - 1U)) == 0U,
+               "Waveform cache UI request capacity must be a power of two");
 
 #if defined(__GNUC__)
 #define WAVEFORM_CACHE_PACKED __attribute__((packed))
@@ -131,6 +136,35 @@ typedef struct
     waveform_cache_reason_t reason;
 } waveform_cache_tile_request_t;
 
+typedef enum
+{
+    WAVEFORM_CACHE_UI_REQUEST_WAV = 0U,
+    WAVEFORM_CACHE_UI_REQUEST_WAV_KNOWN_DURATION,
+    WAVEFORM_CACHE_UI_REQUEST_TILES
+} waveform_cache_ui_request_kind_t;
+
+typedef struct
+{
+    waveform_cache_ui_request_kind_t kind;
+    waveform_cache_reason_t reason;
+    union
+    {
+        struct
+        {
+            char path[96U];
+            uint32_t frame_count;
+            uint32_t sample_rate;
+        } wav;
+        struct
+        {
+            waveform_cache_handle_t handle;
+            waveform_cache_level_id_t level_id;
+            uint32_t tile_start;
+            uint32_t tile_count;
+        } tiles;
+    } payload;
+} waveform_cache_ui_request_t;
+
 typedef struct
 {
     waveform_cache_diag_t diag;
@@ -142,6 +176,10 @@ typedef struct
 } waveform_cache_state_t;
 
 STORAGE_STATE_SDRAM static waveform_cache_state_t g_waveform_cache;
+static waveform_cache_ui_request_t
+    g_waveform_cache_ui_requests[WAVEFORM_CACHE_UI_REQUEST_CAPACITY];
+static volatile uint32_t g_waveform_cache_ui_request_head;
+static volatile uint32_t g_waveform_cache_ui_request_tail;
 STORAGE_STATE_SDRAM static waveform_cache_ram_tile_t
     g_waveform_cache_ram_tiles[WAVEFORM_CACHE_RAM_TILE_COUNT];
 RECORDER_SCRATCH_SDRAM static uint8_t
@@ -951,6 +989,9 @@ static uint8_t waveform_cache_start_next_job(void)
 void waveform_cache_init(void)
 {
     memset(&g_waveform_cache, 0, sizeof(g_waveform_cache));
+    memset(g_waveform_cache_ui_requests, 0, sizeof(g_waveform_cache_ui_requests));
+    g_waveform_cache_ui_request_head = 0U;
+    g_waveform_cache_ui_request_tail = 0U;
     memset(g_waveform_cache_ram_tiles, 0, sizeof(g_waveform_cache_ram_tiles));
     g_waveform_cache.diag.active_level_count = WAVEFORM_CACHE_ACTIVE_LEVEL_COUNT;
 }
@@ -984,7 +1025,8 @@ uint8_t waveform_cache_ensure_dirs(void)
     return ok;
 }
 
-uint8_t waveform_cache_request_for_wav(const char *path, waveform_cache_reason_t reason)
+uint8_t waveform_cache_storage_request_for_wav(const char *path,
+                                               waveform_cache_reason_t reason)
 {
     if((path == 0) || (path[0] == '\0') || (waveform_cache_path_is_temporary(path) != 0U))
     {
@@ -1032,10 +1074,10 @@ uint8_t waveform_cache_request_for_wav(const char *path, waveform_cache_reason_t
     return waveform_cache_finish_request(path, reason, 0U);
 }
 
-uint8_t waveform_cache_request_for_wav_known_duration(const char *path,
-                                                      waveform_cache_reason_t reason,
-                                                      uint32_t frame_count,
-                                                      uint32_t sample_rate)
+uint8_t waveform_cache_storage_request_for_wav_known_duration(const char *path,
+                                                              waveform_cache_reason_t reason,
+                                                              uint32_t frame_count,
+                                                              uint32_t sample_rate)
 {
     if((path == 0) || (path[0] == '\0') || (waveform_cache_path_is_temporary(path) != 0U))
     {
@@ -1045,7 +1087,102 @@ uint8_t waveform_cache_request_for_wav_known_duration(const char *path,
     {
         return waveform_cache_finish_request(path, reason, 1U);
     }
-    return waveform_cache_request_for_wav(path, reason);
+    return waveform_cache_storage_request_for_wav(path, reason);
+}
+
+static uint8_t waveform_cache_ui_enqueue(const waveform_cache_ui_request_t *request)
+{
+    if(request == 0)
+    {
+        return 0U;
+    }
+    const uint32_t head = g_waveform_cache_ui_request_head;
+    const uint32_t tail = g_waveform_cache_ui_request_tail;
+    if((head - tail) >= WAVEFORM_CACHE_UI_REQUEST_CAPACITY)
+    {
+        return 0U;
+    }
+    g_waveform_cache_ui_requests[head & (WAVEFORM_CACHE_UI_REQUEST_CAPACITY - 1U)] = *request;
+    __DMB();
+    g_waveform_cache_ui_request_head = head + 1U;
+    return 1U;
+}
+
+static void waveform_cache_storage_drain_ui_requests(void)
+{
+    while(g_waveform_cache_ui_request_tail != g_waveform_cache_ui_request_head)
+    {
+        const uint32_t tail = g_waveform_cache_ui_request_tail;
+        waveform_cache_ui_request_t request =
+            g_waveform_cache_ui_requests[tail & (WAVEFORM_CACHE_UI_REQUEST_CAPACITY - 1U)];
+        __DMB();
+        g_waveform_cache_ui_request_tail = tail + 1U;
+        if(request.kind == WAVEFORM_CACHE_UI_REQUEST_WAV)
+        {
+            (void)waveform_cache_storage_request_for_wav(request.payload.wav.path,
+                                                         request.reason);
+        }
+        else if(request.kind == WAVEFORM_CACHE_UI_REQUEST_WAV_KNOWN_DURATION)
+        {
+            (void)waveform_cache_storage_request_for_wav_known_duration(
+                request.payload.wav.path,
+                request.reason,
+                request.payload.wav.frame_count,
+                request.payload.wav.sample_rate);
+        }
+        else if(request.kind == WAVEFORM_CACHE_UI_REQUEST_TILES)
+        {
+            (void)waveform_cache_storage_request_tiles(&request.payload.tiles.handle,
+                                                       request.payload.tiles.level_id,
+                                                       request.payload.tiles.tile_start,
+                                                       request.payload.tiles.tile_count,
+                                                       request.reason);
+        }
+    }
+}
+
+uint8_t waveform_cache_request_for_wav(const char *path, waveform_cache_reason_t reason)
+{
+    waveform_cache_ui_request_t request;
+    memset(&request, 0, sizeof(request));
+    if((path == 0) || (path[0] == '\0') || (waveform_cache_path_is_temporary(path) != 0U))
+    {
+        return 1U;
+    }
+    request.kind = WAVEFORM_CACHE_UI_REQUEST_WAV;
+    request.reason = reason;
+    if(waveform_cache_copy_path(request.payload.wav.path,
+                                sizeof(request.payload.wav.path),
+                                path) == 0U)
+    {
+        return 0U;
+    }
+    return waveform_cache_ui_enqueue(&request);
+}
+
+uint8_t waveform_cache_request_for_wav_known_duration(const char *path,
+                                                      waveform_cache_reason_t reason,
+                                                      uint32_t frame_count,
+                                                      uint32_t sample_rate)
+{
+    waveform_cache_ui_request_t request;
+    memset(&request, 0, sizeof(request));
+    if((path == 0) || (path[0] == '\0') || (waveform_cache_path_is_temporary(path) != 0U)
+            || (waveform_cache_duration_is_persistable(frame_count, sample_rate) == 0U))
+    {
+        return 1U;
+    }
+    request.kind = WAVEFORM_CACHE_UI_REQUEST_WAV_KNOWN_DURATION;
+    request.reason = reason;
+    request.payload.wav.frame_count = frame_count;
+    request.payload.wav.sample_rate = sample_rate;
+    if(waveform_cache_copy_path(request.payload.wav.path,
+                                sizeof(request.payload.wav.path),
+                                path) == 0U)
+    {
+        return 0U;
+    }
+    return waveform_cache_ui_enqueue(&request);
 }
 
 static void waveform_cache_service_validate(void)
@@ -1104,6 +1241,7 @@ static void waveform_cache_service_build(uint32_t byte_budget)
     uint8_t wav_open = 0U;
     uint8_t cache_open = 0U;
     uint8_t ok = 0U;
+    uint8_t completed = 0U;
     waveform_cache_job_t *const job = &g_waveform_cache.active;
 
     if((byte_budget == 0U) || (job->header.block_align == 0U))
@@ -1179,10 +1317,8 @@ static void waveform_cache_service_build(uint32_t byte_budget)
             {
                 break;
             }
-            memset(job, 0, sizeof(*job));
-            g_waveform_cache.diag.status = WAVEFORM_CACHE_STATUS_READY;
-            g_waveform_cache.diag.jobs_done++;
             ok = 1U;
+            completed = 1U;
             break;
         }
         if(f_lseek(&wav_fp,
@@ -1229,25 +1365,35 @@ static void waveform_cache_service_build(uint32_t byte_budget)
             {
                 break;
             }
-            memset(job, 0, sizeof(*job));
-            g_waveform_cache.diag.status = WAVEFORM_CACHE_STATUS_READY;
-            g_waveform_cache.diag.jobs_done++;
+            completed = 1U;
         }
         ok = 1U;
     } while(0);
 
     if(cache_open != 0U)
     {
-        (void)f_close(&cache_fp);
+        if(f_close(&cache_fp) != FR_OK)
+        {
+            ok = 0U;
+        }
     }
     if(wav_open != 0U)
     {
-        (void)f_close(&wav_fp);
+        if(f_close(&wav_fp) != FR_OK)
+        {
+            ok = 0U;
+        }
     }
     sd_access_gate_release(SD_ACCESS_CLIENT_WAVEFORM_CACHE);
     if(ok == 0U)
     {
         waveform_cache_fail_active();
+    }
+    else if(completed != 0U)
+    {
+        memset(job, 0, sizeof(*job));
+        g_waveform_cache.diag.status = WAVEFORM_CACHE_STATUS_READY;
+        g_waveform_cache.diag.jobs_done++;
     }
 }
 
@@ -1370,19 +1516,22 @@ static void waveform_cache_service_tile_request(uint32_t byte_budget)
         g_waveform_cache_ram_tiles[(uint16_t)slot].tile_index = req.tile_index;
         g_waveform_cache_ram_tiles[(uint16_t)slot].column_count = column_count;
         g_waveform_cache_ram_tiles[(uint16_t)slot].last_used = ++g_waveform_cache.tile_lru_tick;
-        g_waveform_cache_ram_tiles[(uint16_t)slot].valid = 1U;
         ok = 1U;
     } while(0);
 
     if(file_open != 0U)
     {
-        (void)f_close(&fp);
+        if(f_close(&fp) != FR_OK)
+        {
+            ok = 0U;
+        }
     }
     g_waveform_cache_ram_tiles[(uint16_t)slot].loading = 0U;
     sd_access_gate_release(SD_ACCESS_CLIENT_WAVEFORM_CACHE);
 
     if(ok != 0U)
     {
+        g_waveform_cache_ram_tiles[(uint16_t)slot].valid = 1U;
         memset(&g_waveform_cache.tile_queue[(uint8_t)req_idx],
                0,
                sizeof(g_waveform_cache.tile_queue[(uint8_t)req_idx]));
@@ -1391,6 +1540,7 @@ static void waveform_cache_service_tile_request(uint32_t byte_budget)
 
 void waveform_cache_service(uint32_t byte_budget)
 {
+    waveform_cache_storage_drain_ui_requests();
     if(g_waveform_cache.service_defer_passes != 0U)
     {
         g_waveform_cache.service_defer_passes--;
@@ -1512,11 +1662,11 @@ uint8_t waveform_cache_open_for_wav(const char *path, waveform_cache_handle_t *o
     return ok;
 }
 
-uint8_t waveform_cache_request_tiles(const waveform_cache_handle_t *handle,
-                                     waveform_cache_level_id_t level_id,
-                                     uint32_t tile_start,
-                                     uint32_t tile_count,
-                                     waveform_cache_reason_t reason)
+uint8_t waveform_cache_storage_request_tiles(const waveform_cache_handle_t *handle,
+                                             waveform_cache_level_id_t level_id,
+                                             uint32_t tile_start,
+                                             uint32_t tile_count,
+                                             waveform_cache_reason_t reason)
 {
     if((handle == 0) || (level_id >= WAVEFORM_CACHE_ACTIVE_LEVEL_COUNT) || (tile_count == 0U))
     {
@@ -1552,6 +1702,28 @@ uint8_t waveform_cache_request_tiles(const waveform_cache_handle_t *handle,
         }
     }
     return queued_any;
+}
+
+uint8_t waveform_cache_request_tiles(const waveform_cache_handle_t *handle,
+                                     waveform_cache_level_id_t level_id,
+                                     uint32_t tile_start,
+                                     uint32_t tile_count,
+                                     waveform_cache_reason_t reason)
+{
+    waveform_cache_ui_request_t request;
+    memset(&request, 0, sizeof(request));
+    if((handle == 0) || (level_id >= WAVEFORM_CACHE_ACTIVE_LEVEL_COUNT)
+            || (tile_count == 0U))
+    {
+        return 0U;
+    }
+    request.kind = WAVEFORM_CACHE_UI_REQUEST_TILES;
+    request.reason = reason;
+    request.payload.tiles.handle = *handle;
+    request.payload.tiles.level_id = level_id;
+    request.payload.tiles.tile_start = tile_start;
+    request.payload.tiles.tile_count = tile_count;
+    return waveform_cache_ui_enqueue(&request);
 }
 
 uint8_t waveform_cache_tiles_ready(const waveform_cache_handle_t *handle,

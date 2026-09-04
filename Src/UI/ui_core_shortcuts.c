@@ -1,14 +1,14 @@
 #include "ui_core_shortcuts.h"
 
+#include "App/control_domain.h"
 #include "buttons.h"
 #include "ui_core_clipboard.h"
 #include "ui_page_manager.h"
 #include "pages/ui_page_settings.h"
-#include "Storage/undo_v2.h"
 
 uint8_t ui_core_shortcuts_request_undo(ui_core_shortcuts_feedback_fn feedback)
 {
-    const uint8_t ok = (undo_v2_undo() == UNDO_V2_STATUS_OK) ? 1U : 0U;
+    const uint8_t ok = control_domain_request_history(0U);
     if (feedback != 0)
         feedback(ok != 0U ? "UNDO" : "UNDO N/A");
     return ok;

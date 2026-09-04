@@ -15,11 +15,11 @@
 #include "Keyboard/keyboard_input.h"
 
 #include "App/Hall/hall_keymap.h"
+#include "App/control_domain.h"
 #include "Keyboard/kbd_chords_dict.h"
 #include "Keyboard/keyboard_engine.h"
 #include "Keyboard/keyboard_params.h"
 #include "Keyboard/ui_keyboard_app.h"
-#include "Storage/undo_v2.h"
 #include "buttons.h"
 #include "ui_core.h"
 #include "ui_core_mute.h"
@@ -49,6 +49,10 @@ static uint8_t g_keyboard_input_note_owner_count[128U];
 static uint8_t g_keyboard_input_timed_context_active;
 static uint32_t g_keyboard_input_capture_tick;
 static uint32_t g_keyboard_input_ingress_serial;
+static uint8_t g_keyboard_input_hall_context_valid;
+static uint8_t g_keyboard_input_hall_mode;
+static uint8_t g_keyboard_input_hall_shift_down;
+static uint8_t g_keyboard_input_hall_track;
 
 static void keyboard_input_note_on_sink(uint8_t note, uint8_t velocity);
 static void keyboard_input_note_off_sink(uint8_t note);
@@ -181,7 +185,7 @@ static void keyboard_input_trigger_black_shortcut(uint8_t black_index)
             break;
 
         case 7U:
-            (void)undo_v2_redo();
+            (void)control_domain_request_history(1U);
             break;
 
         case 8U:
@@ -204,7 +208,9 @@ static void keyboard_input_trigger_black_shortcut(uint8_t black_index)
     }
 }
 
-static uint8_t keyboard_input_shortcut_press(uint8_t key, ui_hall_mode_t mode)
+static uint8_t keyboard_input_shortcut_press(uint8_t key,
+                                             ui_hall_mode_t mode,
+                                             uint8_t shift_down)
 {
     hall_key_metadata_t meta;
     if ((hall_keymap_metadata(key, &meta) == 0U) || (meta.kind != HALL_KEY_KIND_BLACK))
@@ -212,7 +218,6 @@ static uint8_t keyboard_input_shortcut_press(uint8_t key, ui_hall_mode_t mode)
         return 0U;
     }
 
-    const uint8_t shift_down = (button_down(BTN_SHIFT) != 0U) ? 1U : 0U;
     const uint8_t shortcut_active =
         (uint8_t)(((mode == UI_HALL_MODE_SEQ)
                    || ((mode == UI_HALL_MODE_KEYBOARD)
@@ -302,8 +307,13 @@ static void keyboard_input_process_key(uint8_t key, bool pressed, uint8_t veloci
 
     if (pressed)
     {
-        const ui_hall_mode_t mode = keyboard_input_effective_input_mode();
-        if (keyboard_input_shortcut_press(key, mode) != 0U)
+        const ui_hall_mode_t mode = (g_keyboard_input_hall_context_valid != 0U)
+            ? (ui_hall_mode_t)g_keyboard_input_hall_mode
+            : keyboard_input_effective_input_mode();
+        const uint8_t shift_down = (g_keyboard_input_hall_context_valid != 0U)
+            ? g_keyboard_input_hall_shift_down
+            : ((button_down(BTN_SHIFT) != 0U) ? 1U : 0U);
+        if (keyboard_input_shortcut_press(key, mode, shift_down) != 0U)
         {
             g_key_consumed[key] = 1U;
             return;
@@ -323,7 +333,9 @@ static void keyboard_input_process_key(uint8_t key, bool pressed, uint8_t veloci
 
     if (pressed)
     {
-        const ui_hall_mode_t mode = keyboard_input_effective_input_mode();
+        const ui_hall_mode_t mode = (g_keyboard_input_hall_context_valid != 0U)
+            ? (ui_hall_mode_t)g_keyboard_input_hall_mode
+            : keyboard_input_effective_input_mode();
         if (mode == UI_HALL_MODE_SEQ)
         {
             hall_key_metadata_t meta;
@@ -350,7 +362,8 @@ static void keyboard_input_process_key(uint8_t key, bool pressed, uint8_t veloci
 
 static void keyboard_input_note_on_sink(uint8_t note, uint8_t velocity)
 {
-    const uint8_t active_track = ui_get_active_lane();
+    const uint8_t active_track = (g_keyboard_input_hall_context_valid != 0U)
+        ? g_keyboard_input_hall_track : ui_get_active_lane();
     const ui_hall_mode_t hall_mode = keyboard_input_effective_input_mode();
     const ui_hall_mode_effective_view_t effective_view =
         ui_hall_mode_resolve_effective_view(active_track, hall_mode);
@@ -411,6 +424,10 @@ void keyboard_input_init(void)
     g_keyboard_input_timed_context_active = 0U;
     g_keyboard_input_capture_tick = 0U;
     g_keyboard_input_ingress_serial = 0U;
+    g_keyboard_input_hall_context_valid = 0U;
+    g_keyboard_input_hall_mode = 0U;
+    g_keyboard_input_hall_shift_down = 0U;
+    g_keyboard_input_hall_track = 0U;
     const ui_keyboard_note_sink_t sink = {
         .note_on = keyboard_input_note_on_sink,
         .note_off = keyboard_input_note_off_sink,
@@ -428,11 +445,18 @@ void keyboard_input_process_hall(uint8_t hall_index, bool pressed, uint8_t veloc
 
 void keyboard_input_process_hall_timed(uint8_t hall_index, bool pressed,
                                        uint8_t velocity, uint32_t capture_tick,
-                                       uint32_t ingress_serial)
+                                       uint32_t ingress_serial,
+                                       uint8_t hall_mode, uint8_t shift_down,
+                                       uint8_t context_track)
 {
     g_keyboard_input_timed_context_active = 1U;
     g_keyboard_input_capture_tick = capture_tick;
     g_keyboard_input_ingress_serial = ingress_serial;
+    g_keyboard_input_hall_context_valid = 1U;
+    g_keyboard_input_hall_mode = hall_mode;
+    g_keyboard_input_hall_shift_down = (shift_down != 0U) ? 1U : 0U;
+    g_keyboard_input_hall_track = context_track;
     keyboard_input_process_hall(hall_index, pressed, velocity);
     g_keyboard_input_timed_context_active = 0U;
+    g_keyboard_input_hall_context_valid = 0U;
 }

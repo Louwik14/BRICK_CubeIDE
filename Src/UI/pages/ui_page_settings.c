@@ -261,7 +261,7 @@ static void ui_page_settings_ram_copy_right(uint8_t shift_down);
 static void ui_page_settings_wavetable_copy_left(uint8_t shift_down);
 static void ui_page_settings_wavetable_copy_right(uint8_t shift_down);
 static const ui_settings_sample_entry_t *ui_page_settings_sample_selected_entry(void);
-static void ui_page_settings_apply_action(void);
+static void ui_page_settings_apply_action(uint8_t shift_down);
 static void ui_page_settings_copy_bounded(char *out, uint32_t out_size, const char *src);
 static const char *ui_page_settings_basename(const char *path);
 static void ui_page_settings_draw_browser_context_label(const char *tag, const char *label);
@@ -279,7 +279,6 @@ static void ui_page_settings_multi_prepare_flush_progress(void);
 static void ui_page_settings_multi_clear_service(void);
 static const char *ui_page_settings_multi_load_error_label(multi_sample_load_result_t result);
 static void ui_page_settings_flash_sample_header_slots(void);
-static void ui_page_settings_flash_sample_header_memory(void);
 static uint32_t ui_page_settings_multi_slot_bytes(void);
 static uint16_t ui_page_settings_global_entry_count_used(void);
 static void ui_page_settings_draw_progress_bar(uint8_t x,

@@ -10,15 +10,24 @@ uint8_t sampler_ram_audio_projection_resolve(uint16_t global_slot,
 {
     if (out != NULL) memset(out, 0, sizeof(*out));
     if ((out == NULL) || (global_slot >= SAMPLER_RAM_AUDIO_SLOT_COUNT)) return 0U;
-    const uint16_t i = g_sampler_ram_audio_global_to_slot[global_slot];
-    __DMB();
-    if (i >= SAMPLER_RAM_AUDIO_SLOT_COUNT) return 0U;
-    __DMB();
-    const sampler_ram_audio_slot_t snap = g_sampler_ram_audio_slots[i];
-    __DMB();
-    if ((snap.ready == 0U) || (snap.descriptor.global_slot != global_slot)
-        || (snap.sequence != g_sampler_ram_audio_slots[i].sequence)
-        || (g_sampler_ram_audio_slots[i].ready == 0U)) return 0U;
-    *out = snap.descriptor;
-    return 1U;
+    for (uint8_t attempt = 0U; attempt < 3U; ++attempt)
+    {
+        const uint16_t i = g_sampler_ram_audio_global_to_slot[global_slot];
+        __DMB();
+        if (i >= SAMPLER_RAM_AUDIO_SLOT_COUNT) return 0U;
+        const sampler_ram_audio_slot_t *const slot = &g_sampler_ram_audio_slots[i];
+        const uint32_t before = slot->sequence;
+        if ((before & 1U) != 0U) continue;
+        __DMB();
+        const sampler_ram_audio_slot_t snap = *slot;
+        __DMB();
+        if ((before == slot->sequence) && ((before & 1U) == 0U)
+            && (snap.ready != 0U)
+            && (snap.descriptor.global_slot == global_slot))
+        {
+            *out = snap.descriptor;
+            return 1U;
+        }
+    }
+    return 0U;
 }

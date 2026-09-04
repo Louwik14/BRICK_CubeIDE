@@ -2,7 +2,18 @@ static void wavetable_load_job_boot_init(void)
 {
     memset(&g_wavetable_load_job, 0, sizeof(g_wavetable_load_job));
     g_wavetable_load_job.state = WAVETABLE_LOAD_IDLE;
+    g_wavetable_load_request_id = 0U;
+    g_wavetable_load_requester = WAVETABLE_REQUESTER_STORAGE;
+    g_wavetable_request_id_counter = 0U;
     wavetable_pool_candidate_init(&g_wavetable_candidate);
+}
+
+static uint32_t wavetable_next_request_id(void)
+{
+    ++g_wavetable_request_id_counter;
+    if (g_wavetable_request_id_counter == 0U)
+        g_wavetable_request_id_counter = 1U;
+    return g_wavetable_request_id_counter;
 }
 
 void wavetable_pool_load_async_cancel(void)
@@ -25,6 +36,8 @@ void wavetable_pool_load_async_cancel(void)
     wavetable_pool_candidate_release(&g_wavetable_candidate);
     memset(job, 0, sizeof(*job));
     job->state = WAVETABLE_LOAD_IDLE;
+    g_wavetable_load_request_valid = 0U;
+    g_wavetable_load_request_id = 0U;
 }
 
 static void wavetable_load_fail(wavetable_result_t result)
@@ -69,6 +82,8 @@ uint8_t wavetable_pool_load_async_begin_prepared_with_geometry(
         return 0U;
     }
     job->wavetable_slot = wavetable_slot;
+    job->request_id = wavetable_next_request_id();
+    job->requester = WAVETABLE_REQUESTER_STORAGE;
     job->global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     job->media_epoch = sd_access_media_epoch();
     job->source_geometry = source_geometry;
@@ -89,6 +104,7 @@ uint8_t wavetable_pool_request_clear(uint16_t wavetable_slot)
 {
     if ((wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)
         || (wavetable_pool_load_async_busy() != 0U)
+        || (g_wavetable_load_request_valid != 0U)
         || (g_wavetable_clear_request_valid != 0U))
     {
         return 0U;
@@ -108,12 +124,15 @@ uint8_t wavetable_pool_request_load(uint16_t wavetable_slot,
         || (strlen(path) >= sizeof(g_wavetable_load_request_path))
         || (wavetable_pool_load_async_busy() != 0U)
         || (g_wavetable_load_request_valid != 0U)
+        || (g_wavetable_clear_request_valid != 0U)
         || ((source_geometry != WAVETABLE_SOURCE_GEOMETRY_1024)
             && (source_geometry != WAVETABLE_SOURCE_GEOMETRY_2048)))
     {
         return 0U;
     }
     g_wavetable_load_request_slot = wavetable_slot;
+    g_wavetable_load_request_id = wavetable_next_request_id();
+    g_wavetable_load_requester = WAVETABLE_REQUESTER_UI;
     g_wavetable_load_request_geometry = source_geometry;
     (void)snprintf(g_wavetable_load_request_path,
                    sizeof(g_wavetable_load_request_path), "%s", path);
@@ -138,7 +157,11 @@ void wavetable_pool_storage_request_service(void)
         char path[WAVETABLE_POOL_PATH_MAX];
         (void)snprintf(path, sizeof(path), "%s", g_wavetable_load_request_path);
         g_wavetable_load_request_valid = 0U;
-        (void)wavetable_pool_load_async_begin_with_geometry(slot, path, geometry);
+        if (wavetable_pool_load_async_begin_with_geometry(slot, path, geometry) != 0U)
+        {
+            g_wavetable_load_job.request_id = g_wavetable_load_request_id;
+            g_wavetable_load_job.requester = g_wavetable_load_requester;
+        }
     }
 }
 
@@ -150,8 +173,17 @@ uint8_t wavetable_pool_load_async_begin(uint16_t wavetable_slot, const char *pat
 
 uint8_t wavetable_pool_load_async_busy(void)
 {
-    return ((g_wavetable_load_job.state != WAVETABLE_LOAD_IDLE)
-            && (g_wavetable_load_job.state != WAVETABLE_LOAD_DONE)) ? 1U : 0U;
+    return (g_wavetable_load_job.state != WAVETABLE_LOAD_IDLE) ? 1U : 0U;
+}
+
+uint32_t wavetable_pool_load_async_request_id(void)
+{
+    return g_wavetable_load_job.request_id;
+}
+
+wavetable_requester_t wavetable_pool_load_async_requester(void)
+{
+    return g_wavetable_load_job.requester;
 }
 
 static void wavetable_load_process_band(wavetable_load_job_t *job)
@@ -582,13 +614,16 @@ void wavetable_pool_load_async_service(void)
     sd_scheduler_runtime_background_end();
 }
 
-uint8_t wavetable_pool_load_async_take_result(wavetable_result_t *out_result,
+uint8_t wavetable_pool_load_async_take_result(uint32_t expected_request_id,
+                                              wavetable_result_t *out_result,
                                               uint16_t *out_wavetable_slot,
                                               uint16_t *out_global_slot,
                                               const char **out_path)
 {
     wavetable_load_job_t *const job = &g_wavetable_load_job;
-    if (job->state != WAVETABLE_LOAD_DONE) return 0U;
+    if ((job->state != WAVETABLE_LOAD_DONE)
+        || (expected_request_id == 0U)
+        || (job->request_id != expected_request_id)) return 0U;
     if (out_result != 0) *out_result = job->result;
     if (out_wavetable_slot != 0) *out_wavetable_slot = job->wavetable_slot;
     if (out_global_slot != 0) *out_global_slot = job->global_slot;

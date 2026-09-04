@@ -6,6 +6,7 @@
 #include "Param/param_registry.h"
 #include "Track/track_mute.h"
 #include "UI/ui_param.h"
+#include "ui_event.h"
 #include "encoders.h"
 #include "main.h"
 
@@ -36,10 +37,18 @@ uint8_t encoder_control_dispatcher_service(void)
         }
 
         const uint32_t binding = detent.binding.entry[detent.encoder_id];
-        if ((encoder_binding_valid(binding) == 0U)
-                || (encoder_binding_route(binding) != ENCODER_BINDING_ROUTE_AUDIO))
+        if (encoder_binding_valid(binding) == 0U)
+        {
+            continue;
+        }
+        if (encoder_binding_route(binding) != ENCODER_BINDING_ROUTE_AUDIO)
         {
             /* Navigation and CONTROL-owned bindings stay on the UI path. */
+            (void)ui_event_push_encoder(
+                detent.encoder_id, detent.direction, detent.capture_tick,
+                detent.ingress_serial,
+                encoder_binding_shift_down(binding),
+                encoder_binding_track(binding));
             continue;
         }
 

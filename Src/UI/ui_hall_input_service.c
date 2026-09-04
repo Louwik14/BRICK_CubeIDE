@@ -1,10 +1,9 @@
 #include "ui_hall_input_service.h"
 
+#include "App/control_domain.h"
 #include "App/Hall/hall_engine.h"
 #include "buttons.h"
-#include "stm32h7xx_hal.h"
 #include "ui_core_mute.h"
-#include "Keyboard/keyboard_runtime.h"
 #include "ui_macro_interaction.h"
 #include "ui_hall_mode_flow.h"
 #include "Track/entity_topology.h"
@@ -15,9 +14,11 @@ uint8_t ui_hall_input_service_handle_hall(uint8_t hall,
                                           uint8_t pressed,
                                           uint8_t was_pressed,
                                           ui_hall_mode_t hall_mode,
+                                          uint8_t context_track,
                                           uint8_t shift_down,
                                           uint8_t track_select_armed,
                                           uint8_t mute_active,
+                                          uint32_t capture_ms,
                                           uint32_t cfg_tap_ms[TRACK_COUNT],
                                           ui_hall_input_service_set_active_track_fn set_active_track,
                                           ui_hall_input_service_feedback_fn feedback)
@@ -32,7 +33,7 @@ uint8_t ui_hall_input_service_handle_hall(uint8_t hall,
                                                 track_select_armed,
                                                 was_pressed,
                                                 pressed);
-    const uint32_t now_ms = HAL_GetTick();
+    const uint32_t now_ms = capture_ms;
     const uint8_t track_select_without_shift =
         (uint8_t)((action == UI_HALL_DIRECT_ACTION_TRACK_SELECT) && (shift_down == 0U));
     const uint8_t macro_overlay_hall_context =
@@ -42,7 +43,14 @@ uint8_t ui_hall_input_service_handle_hall(uint8_t hall,
                        && (shift_down != 0U)
                        && (action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)));
 
-    (void)hall_mode;
+    if ((action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)
+        && (macro_overlay_hall_context == 0U)
+        && (mute_active == 0U))
+    {
+        ui_hall_mode_flow_handle_shift_hall_action(
+            hall, now_ms, hall_mode, context_track, cfg_tap_ms);
+        return 1U;
+    }
 
     if ((macro_overlay_hall_context != 0U) && (mute_active == 0U))
     {
@@ -91,24 +99,4 @@ uint8_t ui_hall_input_service_handle_hall(uint8_t hall,
     }
 
     return 1U;
-}
-
-void ui_hall_input_service_handle_transpose(uint8_t shift_down,
-                                           uint8_t track_select_armed,
-                                           uint8_t active_track)
-{
-    if ((ui_hall_allows_injection(active_track, ui_get_hall_mode()) != 0U)
-        && (shift_down == 0U)
-        && (track_select_armed == 0U))
-    {
-        if (button_pressed(BTN_TRANSPOSE_UP) != 0U)
-        {
-            keyboard_runtime_step_octave(1);
-        }
-
-        if (button_pressed(BTN_TRANSPOSE_DOWN) != 0U)
-        {
-            keyboard_runtime_step_octave(-1);
-        }
-    }
 }

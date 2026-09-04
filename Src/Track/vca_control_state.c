@@ -96,7 +96,7 @@ uint8_t vca_control_state_restore(uint8_t entity,const vca_control_state_t *stat
     for(uint8_t i=0U;i<6U;++i){param_registry_prepared_value_t prepared;
         if(!param_registry_prepare_value(ids[i],values[i],&prepared))return 0U;
         values[i]=prepared.value;}
-    live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),
+    live_parameter_audio_bulk_t bulk={.capture_tick=0U,
         .count=6U};
     for(uint8_t i=0U;i<6U;++i)bulk.item[i]=
         (live_parameter_audio_bulk_item_t){.parameter_id=(uint16_t)ids[i],
@@ -104,7 +104,7 @@ uint8_t vca_control_state_restore(uint8_t entity,const vca_control_state_t *stat
         .slot=LIVE_PARAMETER_EVENT_INVALID_INDEX,
         .flags=LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
         .value=live_parameter_event_encode_float(values[i])};
-    if(!live_parameter_audio_publication_submit_bulk(&bulk))return 0U;
+    if(!live_parameter_audio_publication_submit_bulk_now(&bulk))return 0U;
     g_vca_control[entity]=canonical_state;
     return 1U;
 }

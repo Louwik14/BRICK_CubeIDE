@@ -86,6 +86,10 @@ typedef struct
 {
     uint16_t consume_press_mask;
     uint16_t consume_release_mask;
+    uint8_t shift_down;
+    uint8_t track_select_armed;
+    uint8_t hall_mode;
+    uint8_t context_track;
 } ui_hall_arbitration_snapshot_t;
 
 #include "ui_hall_mode_projection.h"

@@ -24,12 +24,20 @@ uint8_t sampler_ram_audio_projection_publish(uint16_t ram_slot,
         || (slot->state != SAMPLER_RAM_SLOT_READY) || (slot->data == NULL)
         || (slot->frames == 0U)) return 0U;
     sampler_ram_audio_slot_t *const dst = &g_sampler_ram_audio_slots[ram_slot];
+    uint32_t sequence = dst->sequence;
+    if ((sequence & 1U) != 0U) ++sequence;
+    dst->sequence = sequence + 1U;
     dst->ready = 0U;
     __DMB();
     audio_shared_memory_ref_t data;
     const uint32_t data_bytes = slot->frames * slot->bytes_per_frame;
     if (shared_memory_ref_make_page_pool(slot->first_page_slot, 0U,
-                                         data_bytes, &data) == 0U) return 0U;
+                                         data_bytes, &data) == 0U)
+    {
+        dst->sequence = sequence + 2U;
+        __DMB();
+        return 0U;
+    }
     dcache_clean_by_addr_aligned(slot->data, data_bytes);
     dcache_invalidate_by_addr_aligned(slot->data, data_bytes);
     dst->descriptor = (sampler_ram_audio_descriptor_t){
@@ -39,9 +47,10 @@ uint8_t sampler_ram_audio_projection_publish(uint16_t ram_slot,
         .channels = slot->channels, .bytes_per_frame = slot->bytes_per_frame,
         .format = (uint8_t)slot->format
     };
-    dst->sequence++;
     __DMB();
     dst->ready = 1U;
+    __DMB();
+    dst->sequence = sequence + 2U;
     __DMB();
     if (slot->global_slot < SAMPLER_RAM_AUDIO_SLOT_COUNT)
         g_sampler_ram_audio_global_to_slot[slot->global_slot] = ram_slot;
@@ -60,6 +69,8 @@ void sampler_ram_audio_projection_withdraw(uint16_t ram_slot, uint32_t generatio
             SAMPLER_RAM_POOL_INVALID_SLOT;
     slot->ready = 0U;
     __DMB();
-    slot->sequence++;
+    uint32_t sequence = slot->sequence;
+    if ((sequence & 1U) != 0U) ++sequence;
+    slot->sequence = sequence + 2U;
     __DMB();
 }

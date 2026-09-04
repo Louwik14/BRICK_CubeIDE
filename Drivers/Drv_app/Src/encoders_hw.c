@@ -8,7 +8,6 @@
 #include <limits.h>
 
 static uint8_t enc_prev_state[ENC_COUNT];
-static volatile int16_t enc_raw_delta[ENC_COUNT];
 static int8_t enc_transition_residual[ENC_COUNT];
 
 /* SPSC queue: the fast-poll IRQ publishes and one consumer pops. */
@@ -66,7 +65,7 @@ static void encoders_hw_read_binding_snapshot(encoder_binding_snapshot_t *out_sn
     *out_snapshot = enc_binding_buffers[active];
 }
 
-static uint8_t encoders_hw_publish_detent(uint8_t encoder, int8_t direction)
+static void encoders_hw_publish_detent(uint8_t encoder, int8_t direction)
 {
     const uint32_t capture_tick = live_clock_capture_tick();
     const uint32_t ingress_serial = encoders_hw_next_ingress_serial();
@@ -74,15 +73,11 @@ static uint8_t encoders_hw_publish_detent(uint8_t encoder, int8_t direction)
     encoders_hw_read_binding_snapshot(&binding);
     const uint32_t head = enc_detent_head;
     const uint32_t tail = enc_detent_tail;
-    const uint8_t keep_legacy_delta =
-        (encoder_binding_route(binding.entry[encoder]) == ENCODER_BINDING_ROUTE_AUDIO)
-            ? 0U : 1U;
-
     if ((uint32_t)(head - tail) >= ENCODER_DETENT_QUEUE_CAPACITY)
     {
         /* Drop newest: accepted events retain their original order. */
         enc_detent_overflow_count++;
-        return keep_legacy_delta;
+        return;
     }
 
     encoder_detent_event_t *const event =
@@ -95,7 +90,6 @@ static uint8_t encoders_hw_publish_detent(uint8_t encoder, int8_t direction)
     event->reserved = 0U;
     __DMB();
     enc_detent_head = head + 1U;
-    return keep_legacy_delta;
 }
 
 static void encoders_hw_accumulate_transition(uint8_t encoder, int8_t transition)
@@ -113,27 +107,10 @@ static void encoders_hw_accumulate_transition(uint8_t encoder, int8_t transition
 
     const int8_t direction = (increment > 0) ? 1 : -1;
     int16_t detents = (increment > 0) ? increment : (int16_t)-increment;
-    int16_t legacy_detents = 0;
     while (detents > 0)
     {
-        legacy_detents = (int16_t)(legacy_detents
-            + (int16_t)encoders_hw_publish_detent(encoder, direction));
+        encoders_hw_publish_detent(encoder, direction);
         detents--;
-    }
-
-    const int32_t sum = (int32_t)enc_raw_delta[encoder]
-                      + ((int32_t)direction * (int32_t)legacy_detents);
-    if (sum > (int32_t)INT16_MAX)
-    {
-        enc_raw_delta[encoder] = INT16_MAX;
-    }
-    else if (sum < (int32_t)INT16_MIN)
-    {
-        enc_raw_delta[encoder] = INT16_MIN;
-    }
-    else
-    {
-        enc_raw_delta[encoder] = (int16_t)sum;
     }
 }
 
@@ -150,7 +127,6 @@ void encoders_hw_init(void)
     for (uint8_t i = 0U; i < (uint8_t)ENC_COUNT; i++)
     {
         enc_prev_state[i] = enc_read_state(i);
-        enc_raw_delta[i] = 0;
         enc_transition_residual[i] = 0;
     }
 }
@@ -191,21 +167,16 @@ void encoders_hw_read(void)
     }
 }
 
-int16_t encoders_hw_get_delta(uint8_t encoder)
+void encoders_hw_discard_pending(void)
 {
-    if (encoder >= (uint8_t)ENC_COUNT)
-    {
-        return 0;
-    }
-
-    int16_t delta;
-
+    const uint32_t primask = __get_PRIMASK();
     __disable_irq();
-    delta = enc_raw_delta[encoder];
-    enc_raw_delta[encoder] = 0;
-    __enable_irq();
-
-    return delta;
+    enc_detent_tail = enc_detent_head;
+    for (uint8_t i = 0U; i < (uint8_t)ENC_COUNT; ++i)
+    {
+        enc_transition_residual[i] = 0;
+    }
+    __set_PRIMASK(primask);
 }
 
 uint8_t encoders_hw_pop_detent_event(encoder_detent_event_t *out_event)

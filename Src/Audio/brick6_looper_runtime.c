@@ -990,26 +990,8 @@ void brick6_looper_runtime_init(void)
     }
 }
 
-void brick6_looper_runtime_service(uint32_t byte_budget)
+void brick6_looper_runtime_audio_maintenance(void)
 {
-    uint8_t has_work = 0U;
-    for(uint8_t track = 0U; track < BRICK6_LOOPER_TRACK_CAP; ++track)
-    {
-        const brick6_looper_runtime_state_t state = g_looper_tracks[track].state;
-        if((state == BRICK6_LOOPER_RUNTIME_STATE_LOAD_PENDING)
-                || (state == BRICK6_LOOPER_RUNTIME_STATE_LOADING)
-                || (state == BRICK6_LOOPER_RUNTIME_STATE_READY)
-                || (state == BRICK6_LOOPER_RUNTIME_STATE_PLAYING))
-        {
-            has_work = 1U;
-        }
-    }
-
-    if((has_work == 0U) || (byte_budget == 0U))
-    {
-        return;
-    }
-
     for(uint8_t track = 0U; track < BRICK6_LOOPER_TRACK_CAP; ++track)
     {
         brick6_looper_track_state_t *state = &g_looper_tracks[track];

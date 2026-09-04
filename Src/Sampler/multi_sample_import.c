@@ -4,6 +4,8 @@
 #include <string.h>
 
 #include "Sampler/multi_sample_index.h"
+#include "Sampler/multi_sample_loader.h"
+#include "Sampler/multi_sample_pool.h"
 #include "Sampler/sample_cache.h"
 #include "Platform/memory_layout.h"
 #include "Storage/audio_recorder.h"
@@ -181,7 +183,9 @@ static uint8_t multi_import_progressive_start(const char *instrument_dir)
     }
     if ((project_replacement_is_active() != 0U)
         || (audio_recorder_is_active() != 0U)
-        || (sample_cache_has_pending_sd_work() != 0U))
+        || (sample_cache_has_pending_sd_work() != 0U)
+        || (multi_sample_load_has_pending() != 0U)
+        || (multi_sample_pool_clear_is_active() != 0U))
     {
         g_import_last_result = MULTI_SAMPLE_IMPORT_SD_BUSY;
         return 0U;
@@ -1690,7 +1694,10 @@ uint8_t multi_sample_import_request_folder(const char *instrument_dir)
 {
     if ((instrument_dir == NULL) || (instrument_dir[0] == '\0')
         || (strlen(instrument_dir) >= sizeof(g_import_request_path))
-        || (g_import_request_valid != 0U) || (g_import_busy != 0U))
+        || (g_import_request_valid != 0U) || (g_import_busy != 0U)
+        || (g_delete_request_valid != 0U) || (g_delete_result_valid != 0U)
+        || (multi_sample_load_has_pending() != 0U)
+        || (multi_sample_pool_clear_is_active() != 0U))
     {
         return 0U;
     }
@@ -1720,6 +1727,11 @@ uint8_t multi_sample_import_is_busy(void)
     return (g_import_busy != 0U) || (g_import_request_valid != 0U);
 }
 
+uint8_t multi_sample_import_delete_is_busy(void)
+{
+    return (g_delete_request_valid != 0U) || (g_delete_result_valid != 0U);
+}
+
 uint16_t multi_sample_import_progress_done(void)
 {
     return g_import_progress_done;
@@ -1734,7 +1746,9 @@ uint8_t multi_sample_import_request_delete_index(const char *index_path)
 {
     if ((index_path == NULL) || (index_path[0] == '\0')
         || (strlen(index_path) >= sizeof(g_delete_request_path))
-        || (g_delete_request_valid != 0U) || (g_delete_result_valid != 0U))
+        || (g_delete_request_valid != 0U) || (g_delete_result_valid != 0U)
+        || (g_import_request_valid != 0U) || (g_import_busy != 0U)
+        || (multi_sample_load_has_pending() != 0U))
     {
         return 0U;
     }

@@ -817,7 +817,6 @@ static void brick6_sampler_runtime_multi_direct_stop(
     }
     brick6_sampler_runtime_multi_diag_note_stop(voice, stop_reason);
     brick6_sampler_runtime_multi_mark_voice_physical_release(voice);
-    brick6_sampler_runtime_multi_defer_stream_release(voice->multi_sample_id);
     voice->active = 0U;
     voice->position = 0.0f;
     sample_voice_reader_stop(&voice->reader);
@@ -935,7 +934,6 @@ static void brick6_sampler_render_multi_mono(brick6_sampler_voice_t *voice,
                 voice,
                 (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_UNDERRUN);
             brick6_sampler_runtime_multi_mark_voice_physical_release(voice);
-            brick6_sampler_runtime_multi_defer_stream_release(voice->multi_sample_id);
             voice->active = 0U;
             voice->position = 0.0f;
             sample_voice_reader_stop(&voice->reader);
@@ -954,7 +952,6 @@ static void brick6_sampler_render_multi_mono(brick6_sampler_voice_t *voice,
             }
             brick6_sampler_runtime_multi_diag_note_stop(voice, stop_reason);
             brick6_sampler_runtime_multi_mark_voice_physical_release(voice);
-            brick6_sampler_runtime_multi_defer_stream_release(voice->multi_sample_id);
             voice->active = 0U;
             voice->position = 0.0f;
             sample_voice_reader_stop(&voice->reader);
@@ -971,7 +968,6 @@ static void brick6_sampler_render_multi_mono(brick6_sampler_voice_t *voice,
                 voice,
                 (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_UNDERRUN);
             brick6_sampler_runtime_multi_mark_voice_physical_release(voice);
-            brick6_sampler_runtime_multi_defer_stream_release(voice->multi_sample_id);
             voice->active = 0U;
             voice->position = 0.0f;
             sample_voice_reader_stop(&voice->reader);
@@ -1019,7 +1015,6 @@ static void brick6_sampler_render_multi_mono(brick6_sampler_voice_t *voice,
             }
             brick6_sampler_runtime_multi_diag_note_stop(voice, stop_reason);
             brick6_sampler_runtime_multi_mark_voice_physical_release(voice);
-            brick6_sampler_runtime_multi_defer_stream_release(voice->multi_sample_id);
             voice->active = 0U;
             voice->position = 0.0f;
             sample_voice_reader_stop(&voice->reader);

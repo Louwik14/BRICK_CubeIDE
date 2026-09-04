@@ -18,6 +18,7 @@
 
 #include "usb_host.h"
 #include "usbh_core.h"
+#include "midi_host.h"
 
 /* USER CODE BEGIN Includes */
 #include "usbh_midi.h"
@@ -85,6 +86,8 @@ uint8_t usb_host_start(void)
 
 uint8_t usb_host_stop(void)
 {
+  midi_host_rx_discard_pending();
+
   if (g_usb_host_started == 0U)
   {
     return 1U;

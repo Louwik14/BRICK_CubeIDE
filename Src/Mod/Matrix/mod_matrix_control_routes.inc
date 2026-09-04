@@ -82,7 +82,7 @@ static uint8_t mod_matrix_publish_slot_candidate(uint8_t track, uint8_t slot,
             || (owner >= SEQ_TRACK_COUNT) || (slot >= MOD_MATRIX_SLOT_COUNT)
             || (candidate == NULL)) return 0U;
     live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
+        .capture_tick = 0U,
         .count = 0U
     };
 #define ADD_MATRIX_FIELD(condition, parameter, field_value) do { \
@@ -122,7 +122,7 @@ static uint8_t mod_matrix_publish_slot_candidate(uint8_t track, uint8_t slot,
             .value = live_parameter_event_encode_float(prepared.value)
         };
     }
-    return live_parameter_audio_publication_submit_bulk(&bulk) ? 1U : 0U;
+    return live_parameter_audio_publication_submit_bulk_now(&bulk) ? 1U : 0U;
 }
 
 static uint8_t mod_matrix_publish_operator_candidate(uint8_t track, uint16_t id,
@@ -132,7 +132,7 @@ static uint8_t mod_matrix_publish_operator_candidate(uint8_t track, uint16_t id,
     if ((entity_topology_mod_owner(track, &owner) == 0U)
             || (owner >= SEQ_TRACK_COUNT)) return 0U;
     live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
+        .capture_tick = 0U,
         .count = 1U,
         .item = {{ .parameter_id = (uint16_t)id,
             .scope = LIVE_PARAMETER_EVENT_SCOPE_SLOT, .track = owner,
@@ -140,7 +140,7 @@ static uint8_t mod_matrix_publish_operator_candidate(uint8_t track, uint16_t id,
             .flags = LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
             .value = live_parameter_event_encode_float(value) }}
     };
-    return live_parameter_audio_publication_submit_bulk(&bulk) ? 1U : 0U;
+    return live_parameter_audio_publication_submit_bulk_now(&bulk) ? 1U : 0U;
 }
 
 uint8_t mod_matrix_set_slot_destination_index(uint8_t track, uint8_t slot, float value)
