@@ -8,6 +8,7 @@
 #include "Storage/pattern_control_bank.h"
 #include "Storage/persistence_workspace.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/storage_io_wakeup.h"
 #include "Platform/memory_layout.h"
 #include "Storage/boot_context_flash.h"
 #include "Storage/pattern_live_ram.h"
@@ -985,6 +986,7 @@ void project_product_control_process_intent(uint8_t operation, uint8_t slot)
             || (project_replacement_is_active() != 0U))
             return;
         (void)project_product_save(slot);
+        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
         return;
     }
     if (g_storage_request != PROJECT_PRODUCT_COMMAND_NONE
@@ -995,6 +997,7 @@ void project_product_control_process_intent(uint8_t operation, uint8_t slot)
     g_storage_slot = slot;
     __DMB();
     g_storage_request = (project_product_command_t)operation;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
 }
 
 uint8_t project_product_load(uint8_t slot)

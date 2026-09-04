@@ -85,6 +85,7 @@ void sd_block_device_async_poll(void);
 uint8_t sd_block_device_async_take_completion(
     sd_block_device_async_completion_t *out_completion);
 uint32_t sd_block_device_async_pending_count(void);
+uint8_t sd_block_device_async_immediate_pending(void);
 uint8_t sd_block_device_async_write_buffer_locked(const void *src);
 sd_block_device_hardware_state_t sd_block_device_async_hardware_state(void);
 sd_block_device_result_t sd_block_device_async_abort_active(void);

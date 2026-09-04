@@ -9,6 +9,7 @@
 #include "Storage/sd_access_gate.h"
 #include "Storage/storage_shared_io.h"
 #include "Storage/project_load_quiesce.h"
+#include "Storage/storage_io_wakeup.h"
 #include "Storage/wav_audio_stream.h"
 #include "ff.h"
 
@@ -86,6 +87,7 @@ uint8_t wav_convert_request_start(const char *path)
     memcpy(g_wav_convert_request_path, path, strlen(path) + 1U);
     __DMB();
     g_wav_convert_request_valid = 1U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 

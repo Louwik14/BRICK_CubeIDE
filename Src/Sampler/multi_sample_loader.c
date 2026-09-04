@@ -14,6 +14,7 @@
 #include "Platform/memory_layout.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/wav_parser.h"
+#include "Storage/storage_io_wakeup.h"
 #include "stm32h7xx_hal.h"
 
 #define MULTI_SAMPLE_LOADER_PATH_MAX SAMPLE_PAGE_CACHE_PATH_MAX
@@ -764,6 +765,7 @@ multi_sample_load_result_t multi_sample_load_request_instrument(uint16_t logical
     g_multi_external_request.used = 1U;
     __DMB();
     g_multi_external_request_valid = 1U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return MULTI_SAMPLE_LOAD_OK;
 }
 

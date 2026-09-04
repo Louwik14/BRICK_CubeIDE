@@ -36,6 +36,7 @@
 #define UI_RENDER_PERIOD_MS 16U
 
 static volatile uint8_t g_ui_rendering = 0U;
+static uint32_t g_ui_last_render_tick;
 
 static const char *ui_audio_boot_error_label(board_audio_boot_error_t error)
 {
@@ -150,16 +151,27 @@ void ui_renderer_oled_draw(void)
  */
 void ui_renderer_oled_service_poll(void)
 {
-    static uint32_t last_render = 0U;
     const uint32_t now = HAL_GetTick();
 
-    if ((now - last_render) < UI_RENDER_PERIOD_MS)
+    if ((now - g_ui_last_render_tick) < UI_RENDER_PERIOD_MS)
     {
         return;
     }
 
     ui_renderer_oled_draw();
-    last_render = now;
+    g_ui_last_render_tick = now;
+}
+
+uint32_t ui_renderer_oled_next_render_wait_ticks(void)
+{
+    const uint32_t elapsed = HAL_GetTick() - g_ui_last_render_tick;
+
+    if (elapsed >= UI_RENDER_PERIOD_MS)
+    {
+        return 0U;
+    }
+
+    return UI_RENDER_PERIOD_MS - elapsed;
 }
 
 uint8_t ui_renderer_oled_is_rendering(void)

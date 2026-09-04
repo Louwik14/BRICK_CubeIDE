@@ -68,18 +68,29 @@ add_subdirectory(cmake/stm32cubemx)
 # App / middleware
 set(BRICK_USB_INC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Board/UsbStack")
 
-file(GLOB USB_HOST_LIB_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Host_Library/Core/Src/*.c"
-)
+# TinyUSB official release 0.21.0, upstream tag commit dae3f9a366bfcddbf9dcf1b48d7500286a849539.
+set(BRICK_TINYUSB_VERSION "0.21.0")
+set(BRICK_USB_LEGACY_ROOTS
+    "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Device_Library"
+    "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Host_Library")
+foreach(legacy_root IN LISTS BRICK_USB_LEGACY_ROOTS)
+    if(EXISTS "${legacy_root}")
+        message(FATAL_ERROR
+            "USB-D firewall: ST USB middleware must not be present: ${legacy_root}")
+    endif()
+endforeach()
 
-set(TINYUSB_DEVICE_SRC
+set(TINYUSB_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src/tusb.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src/common/tusb_fifo.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src/device/usbd.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src/device/usbd_control.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src/class/audio/audio_device.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src/class/midi/midi_device.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src/host/usbh.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src/class/midi/midi_host.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src/portable/synopsys/dwc2/dwc2_common.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src/portable/synopsys/dwc2/dcd_dwc2.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src/portable/synopsys/dwc2/hcd_dwc2.c"
 )
 
 file(GLOB FATFS_SRC
@@ -208,6 +219,7 @@ set(DOMAIN_CONTRACT_HEADERS
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/audio_wavetable_registry_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/control_audio_command.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/control_audio_fifo_layout.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/usb_audio_pcm_ring.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/live_parameter_event.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/multi_sample_audio_projection.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/multi_sample_audio_projection_contract.h"
@@ -266,7 +278,7 @@ foreach(board_source IN LISTS BOARD_SOURCES)
 endforeach()
 
 set(BOARD_BUILD ${BOARD_SOURCES})
-set(DOMAIN_CONTROL_BUILD ${DOMAIN_CONTROL} ${TINYUSB_DEVICE_SRC} ${USB_HOST_LIB_SRC}
+set(DOMAIN_CONTROL_BUILD ${DOMAIN_CONTROL} ${TINYUSB_SRC}
     ${FATFS_SRC} ${U8G2_SRC})
 set(DOMAIN_STORAGE_BUILD ${DOMAIN_STORAGE})
 set(DOMAIN_AUDIO_BUILD ${DOMAIN_AUDIO} ${CMSIS_DSP_SRC} ${MUTABLE_INSTRUMENTS_SRC})
@@ -291,7 +303,6 @@ list(FILTER DOMAIN_CONTROL_CM4 INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/App
     ${BRICK_USB_INC_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Host_Library/Core/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/Third_Party/FatFs/src
 
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc
@@ -320,7 +331,6 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 set(CONTROL_CM4_INCLUDE_DIRS
     "${CMAKE_CURRENT_SOURCE_DIR}/App"
     "${BRICK_USB_INC_DIR}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Host_Library/Core/Inc"
     "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/Third_Party/FatFs/src"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/App"
@@ -347,10 +357,14 @@ set(CONTROL_CM4_INCLUDE_DIRS
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS/Device/ST/STM32H7xx/Include"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS/Include"
     "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src"
 )
 
 list(APPEND CONTROL_CM4_INCLUDE_DIRS
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Generated/Inc")
+    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Generated/Inc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Generated/Middlewares/Third_Party/FreeRTOS/Source/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Generated/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Generated/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F")
 
 set(CONTROL_CM4_STORAGE_SOURCES ${DOMAIN_STORAGE_BUILD})
 set(CONTROL_CM4_CONTRACT_HEADERS ${DOMAIN_CONTRACT_HEADERS} ${DOMAIN_CONTRACT_UNITS})
@@ -433,10 +447,6 @@ target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     $<$<CONFIG:Debug>:DEBUG>
     FM_KERNEL_BENCH=${FM_KERNEL_BENCH}
-)
-
-target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
-    HAL_HCD_MODULE_ENABLED
 )
 
 # --------------------------------------------------------------------------

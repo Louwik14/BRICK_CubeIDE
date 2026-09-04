@@ -27,7 +27,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "encoders_hw.h"
-#include "usbh_conf.h"
 #include "usb_role_manager.h"
 /* USER CODE END Includes */
 
@@ -78,8 +77,6 @@ extern TIM_HandleTypeDef htim5;
 extern TIM_HandleTypeDef htim7;
 extern TIM_HandleTypeDef htim12;
 /* USER CODE BEGIN EV */
-extern HCD_HandleTypeDef hhcd_USB_OTG_FS;
-
 /* USER CODE END EV */
 
 /******************************************************************************/

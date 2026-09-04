@@ -1,175 +1,154 @@
-/* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file            : usb_host.c
-  * @version         : v1.0_Cube
-  * @brief           : This file implements the USB Host (MIDI only)
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  ******************************************************************************
-  */
-/* USER CODE END Header */
-
-/* Includes ------------------------------------------------------------------*/
-
 #include "usb_host.h"
-#include "usbh_core.h"
+
+#include "main.h"
 #include "midi_host.h"
+#include "tusb.h"
+#include "usb_clock_select.h"
 
-/* USER CODE BEGIN Includes */
-#include "usbh_midi.h"
-/* USER CODE END Includes */
+#define USB_HOST_RHPORT 0U
 
-/* USER CODE BEGIN PV */
-/* Private variables ---------------------------------------------------------*/
-/* USER CODE END PV */
+static uint8_t g_usb_host_started;
+static uint8_t g_usb_host_power_prepared;
+static volatile uint8_t g_usb_host_midi_mounted;
 
-/* USB Host core handle declaration */
-USBH_HandleTypeDef hUsbHostHS;
-ApplicationTypeDef Appli_state = APPLICATION_IDLE;
-
-/* USER CODE BEGIN 0 */
-static uint8_t g_usb_host_started = 0U;
-/* USER CODE END 0 */
-
-/* user callback declaration */
-static void USBH_UserProcess(USBH_HandleTypeDef *phost, uint8_t id);
-
-/**
-  * Init USB host library, add supported class and start the library
-  * @retval None
-  */
-void MX_USB_HOST_Init(void)
+static uint8_t usb_host_hw_init(void)
 {
-  /* USER CODE BEGIN USB_HOST_Init_PreTreatment */
-  /* USER CODE END USB_HOST_Init_PreTreatment */
+    GPIO_InitTypeDef gpio = {0};
+    RCC_PeriphCLKInitTypeDef clocks = {0};
 
-  (void)usb_host_start();
+    clocks.PeriphClockSelection = RCC_PERIPHCLK_USB;
+    clocks.UsbClockSelection = usb_stack_get_rcc_usb_clock_source();
+    if (HAL_RCCEx_PeriphCLKConfig(&clocks) != HAL_OK) {
+        return 0U;
+    }
+
+    HAL_PWREx_EnableUSBVoltageDetector();
+
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    gpio.Pin = GPIO_PIN_11 | GPIO_PIN_12;
+    gpio.Mode = GPIO_MODE_AF_PP;
+    gpio.Pull = GPIO_NOPULL;
+    gpio.Speed = GPIO_SPEED_FREQ_LOW;
+    gpio.Alternate = GPIO_AF10_OTG1_FS;
+    HAL_GPIO_Init(GPIOA, &gpio);
+
+    __HAL_RCC_USB_OTG_FS_CLK_ENABLE();
+    HAL_NVIC_SetPriority(OTG_FS_IRQn, 6U, 0U);
+    HAL_NVIC_EnableIRQ(OTG_FS_IRQn);
+    return 1U;
+}
+
+void usb_host_power_on(void)
+{
+    /* AP2161 enable is active low. */
+    HAL_GPIO_WritePin(HOST_EN_GPIO_Port, HOST_EN_Pin, GPIO_PIN_RESET);
+}
+
+void usb_host_power_off(void)
+{
+    HAL_GPIO_WritePin(HOST_EN_GPIO_Port, HOST_EN_Pin, GPIO_PIN_SET);
+    g_usb_host_power_prepared = 0U;
+}
+
+uint8_t usb_host_prepare(void)
+{
+    if (g_usb_host_started != 0U) {
+        return 1U;
+    }
+
+    if (g_usb_host_power_prepared != 0U) {
+        return 1U;
+    }
+
+    g_usb_host_midi_mounted = 0U;
+    midi_host_transport_reset();
+    if (usb_host_hw_init() == 0U) {
+        return 0U;
+    }
+
+    usb_host_power_on();
+    g_usb_host_power_prepared = 1U;
+    return 1U;
 }
 
 uint8_t usb_host_start(void)
 {
-  if (g_usb_host_started != 0U)
-  {
+    const tusb_rhport_init_t init = {
+        .role = TUSB_ROLE_HOST,
+        .speed = TUSB_SPEED_FULL
+    };
+
+    if (g_usb_host_started != 0U) {
+        return 1U;
+    }
+
+    if (g_usb_host_power_prepared == 0U) {
+        return 0U;
+    }
+
+    if (!tuh_rhport_init(USB_HOST_RHPORT, &init)) {
+        usb_host_power_off();
+        HAL_NVIC_DisableIRQ(OTG_FS_IRQn);
+        return 0U;
+    }
+
+    g_usb_host_started = 1U;
     return 1U;
-  }
-
-  USBH_StatusTypeDef status;
-
-  status = USBH_Init(&hUsbHostHS, USBH_UserProcess, HOST_FS);
-  if (status != USBH_OK)
-  {
-    return 0U;
-  }
-
-  status = USBH_RegisterClass(&hUsbHostHS, &USBH_MIDI_Class);
-  if (status != USBH_OK)
-  {
-    (void)USBH_DeInit(&hUsbHostHS);
-    return 0U;
-  }
-
-  status = USBH_Start(&hUsbHostHS);
-  if (status != USBH_OK)
-  {
-    (void)USBH_DeInit(&hUsbHostHS);
-    return 0U;
-  }
-
-  g_usb_host_started = 1U;
-  return 1U;
 }
 
 uint8_t usb_host_stop(void)
 {
-  midi_host_rx_discard_pending();
+    HAL_NVIC_DisableIRQ(OTG_FS_IRQn);
 
-  if (g_usb_host_started == 0U)
-  {
+    if (tuh_rhport_is_active(USB_HOST_RHPORT)) {
+        (void)tuh_deinit(USB_HOST_RHPORT);
+    }
+
+    g_usb_host_started = 0U;
+    g_usb_host_midi_mounted = 0U;
+    midi_host_transport_reset();
+    usb_host_power_off();
     return 1U;
-  }
-
-  (void)USBH_Stop(&hUsbHostHS);
-  (void)USBH_DeInit(&hUsbHostHS);
-  Appli_state = APPLICATION_IDLE;
-  g_usb_host_started = 0U;
-  return 1U;
 }
 
 uint8_t usb_host_is_started(void)
 {
-  return g_usb_host_started;
+    return g_usb_host_started;
 }
 
-/*
- * Background task
- */
-void MX_USB_HOST_Process(void)
+uint8_t usb_host_is_ready(void)
 {
-  if (g_usb_host_started != 0U)
-  {
-    USBH_Process(&hUsbHostHS);
-  }
+    return (g_usb_host_started != 0U)
+        && (g_usb_host_midi_mounted != 0U)
+        && tuh_midi_mounted(0U);
 }
 
-void usb_host_tasklet_poll_bounded(uint32_t max_packets)
+void usb_host_process(void)
 {
-  uint32_t n = 0U;
-  if (g_usb_host_started == 0U)
-  {
-    return;
-  }
-
-  for (; n < max_packets; n++)
-  {
-    USBH_Process(&hUsbHostHS);
-    if (hUsbHostHS.gState == HOST_IDLE)
-    {
-      break;
+    if (g_usb_host_started != 0U) {
+        tuh_task_ext(0U, false);
     }
-  }
-
-  if ((max_packets > 0U) && (n >= max_packets) && (hUsbHostHS.gState != HOST_IDLE))
-  {
-  }
 }
 
-/*
- * user callback definition
- */
-static void USBH_UserProcess(USBH_HandleTypeDef *phost, uint8_t id)
+void usb_host_irq(void)
 {
-  (void)phost;
+    if (g_usb_host_started != 0U) {
+        tuh_int_handler(USB_HOST_RHPORT);
+    }
+}
 
-  switch(id)
-  {
-  case HOST_USER_SELECT_CONFIGURATION:
-    break;
+void tuh_midi_mount_cb(uint8_t idx, const tuh_midi_mount_cb_t *mount_cb_data)
+{
+    (void)mount_cb_data;
+    if (idx == 0U) {
+        g_usb_host_midi_mounted = 1U;
+    }
+}
 
-  case HOST_USER_DISCONNECTION:
-    Appli_state = APPLICATION_DISCONNECT;
-    break;
-
-  case HOST_USER_CLASS_ACTIVE:
-    Appli_state = APPLICATION_READY;
-    break;
-
-  case HOST_USER_CLASS_SELECTED:
-    break;
-
-  case HOST_USER_CONNECTION:
-    Appli_state = APPLICATION_START;
-    break;
-
-  case HOST_USER_UNRECOVERED_ERROR:
-    Appli_state = APPLICATION_DISCONNECT;
-    break;
-
-  default:
-    break;
-  }
+void tuh_midi_umount_cb(uint8_t idx)
+{
+    if (idx == 0U) {
+        g_usb_host_midi_mounted = 0U;
+        midi_host_rx_discard_pending();
+    }
 }

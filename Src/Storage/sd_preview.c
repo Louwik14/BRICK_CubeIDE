@@ -18,6 +18,7 @@
 #include "Storage/looper_storage.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/storage_io_wakeup.h"
 #include "Storage/wav_audio_codec.h"
 #include "IPC/control_audio_command.h"
 #include "IPC/sd_preview_ring_contract.h"
@@ -477,12 +478,14 @@ uint8_t sd_preview_request_begin(const char *path)
     memcpy(g_sd_preview_request_path, path, strlen(path) + 1U);
     __DMB();
     g_sd_preview_request = 1U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 
 void sd_preview_request_stop(void)
 {
     g_sd_preview_request = 2U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
 }
 
 uint8_t sd_preview_is_active(void)

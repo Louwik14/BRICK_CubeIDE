@@ -435,12 +435,24 @@ static uint8_t codec_plock_value_valid(param_id_t id,
     return codec_parameter_value_valid(id,lock->kind,&lock->value);
 }
 
+static uint8_t codec_input_key_valid(
+    const persist_control_entity_t *entity, uint8_t *out_input)
+{
+    if ((entity == NULL) || (out_input == NULL)) return 0U;
+    if ((entity->family == PERSIST_FAMILY_EXTERNAL)
+            && (entity->type == PERSIST_TYPE_EXTERNAL))
+        return persist_key_input_from_disk(entity->input_key, out_input);
+    if (entity->input_key != PERSIST_INPUT_NONE) return 0U;
+    *out_input = ENTITY_AUDIO_SOURCE_LINE;
+    return 1U;
+}
+
 persist_codec_result_t persist_codec_validate_pattern(const persist_control_pattern_t *p)
 {
     if(p==NULL)return PERSIST_CODEC_INVALID_ARGUMENT;
     const uint8_t group_active=(p->entities[PERSIST_CONTROL_GROUP_MASTER_ID].type==PERSIST_TYPE_GROUP)?1U:0U;
     for(uint8_t e=0U;e<PERSIST_CONTROL_ENTITY_COUNT;++e)
-    { const persist_control_entity_t *x=&p->entities[e];persist_entity_caps_t caps;uint8_t input=0U;if((x->entity_id!=e)||(persist_entity_caps_resolve(group_active,e,&caps)==0U)||(caps.persistable==0U)||(codec_family_valid(x->family)==0U)||(codec_type_valid(x->type)==0U)||(codec_entity_assets_valid(x)==0U)||(x->midi_channel<1U)||(x->midi_channel>16U)||(codec_midi_source_valid(x->midi_source_key)==0U)||(persist_key_input_from_disk(x->input_key,&input)==0U)||(x->polyphony.voice_count<1U)||(x->polyphony.voice_count>8U)||(x->audio_fx.config.filter_position>=3U)||(x->audio_fx.config.order>=2U)||(x->audio_fx.config.spatial_mode[0]>=4U)||(x->audio_fx.config.spatial_mode[1]>=4U)||(x->muted>1U)||(x->fm_present>1U)||(x->tone_present>1U)||(x->fm_present&&x->tone_present)||((caps.input_owner==0U)&&(input!=0U))||((x->family==PERSIST_FAMILY_OFF)&&(x->muted!=0U)))return PERSIST_CODEC_INVALID_ENTITY;
+    { const persist_control_entity_t *x=&p->entities[e];persist_entity_caps_t caps;uint8_t input=0U;if((x->entity_id!=e)||(persist_entity_caps_resolve(group_active,e,&caps)==0U)||(caps.persistable==0U)||(codec_family_valid(x->family)==0U)||(codec_type_valid(x->type)==0U)||(codec_entity_assets_valid(x)==0U)||(x->midi_channel<1U)||(x->midi_channel>16U)||(codec_midi_source_valid(x->midi_source_key)==0U)||(codec_input_key_valid(x,&input)==0U)||(x->polyphony.voice_count<1U)||(x->polyphony.voice_count>8U)||(x->audio_fx.config.filter_position>=3U)||(x->audio_fx.config.order>=2U)||(x->audio_fx.config.spatial_mode[0]>=4U)||(x->audio_fx.config.spatial_mode[1]>=4U)||(x->muted>1U)||(x->fm_present>1U)||(x->tone_present>1U)||(x->fm_present&&x->tone_present)||((caps.input_owner==0U)&&(input!=0U))||((x->family==PERSIST_FAMILY_OFF)&&(x->muted!=0U)))return PERSIST_CODEC_INVALID_ENTITY;
       if((caps.active==0U)&&((x->asset_count!=0U)||(x->fm_present!=0U)||(x->tone_present!=0U)||(x->muted!=0U)||(x->note_fx_count!=0U)||(x->modulation_present!=0U)))return PERSIST_CODEC_INVALID_ENTITY;
       if(x->note_fx_count>PERSIST_CONTROL_NOTE_FX_COUNT)return PERSIST_CODEC_CAPACITY_EXCEEDED;
       if((caps.note_fx_owner==0U)&&(x->note_fx_count!=0U))return PERSIST_CODEC_INVALID_ENTITY;

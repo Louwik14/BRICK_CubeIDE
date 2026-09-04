@@ -39,23 +39,38 @@
 #include "host/usbh_pvt.h"
 #endif
 
+// Suppress IAR warning
+// Warning[Pe111]: statement is unreachable
+#if defined(__ICCARM__)
+#pragma diag_suppress = Pe111
+#endif
+
 tusb_role_t _tusb_rhport_role[TUP_USBIP_CONTROLLER_NUM] = { TUSB_ROLE_INVALID };
 
 //--------------------------------------------------------------------
 // Weak/Default API, can be overwritten by Application
 //--------------------------------------------------------------------
 
-TU_ATTR_WEAK void tusb_time_delay_ms_api(uint32_t ms) {
 #if CFG_TUSB_OS != OPT_OS_NONE
-  osal_task_delay(ms);
-#else
-  // delay using millis() (if implemented) and/or frame number if possible
-  const uint32_t time_ms = tusb_time_millis_api();
-  while ((tusb_time_millis_api() - time_ms) < ms) {}
-#endif
+TU_ATTR_WEAK uint32_t tusb_time_millis_api(void) {
+  return osal_time_millis();
 }
 
-TU_ATTR_WEAK void* tusb_app_virt_to_phys(void *virt_addr) {
+TU_ATTR_WEAK void tusb_time_delay_ms_api(uint32_t ms) {
+  osal_task_delay(ms);
+}
+
+#else
+// tusb_time_millis_api() must be implemented by user application.
+
+TU_ATTR_WEAK void tusb_time_delay_ms_api(uint32_t ms) {
+  // delay using millis()
+  const uint32_t time_ms = tusb_time_millis_api();
+  while ((tusb_time_millis_api() - time_ms) < ms) {}
+}
+#endif
+
+TU_ATTR_WEAK void *tusb_app_virt_to_phys(void *virt_addr) {
   return virt_addr;
 }
 
@@ -209,32 +224,31 @@ uint8_t const* tu_desc_find3(uint8_t const* desc, uint8_t const* end, uint8_t by
 // Endpoint Helper for both Host and Device stack
 //--------------------------------------------------------------------+
 
-bool tu_edpt_claim(tu_edpt_state_t* ep_state, osal_mutex_t mutex) {
+bool tu_edpt_claim(volatile uint8_t* ep_state, osal_mutex_t mutex) {
   (void) mutex;
 
   // pre-check to help reducing mutex lock
-  TU_VERIFY(ep_state->busy == 0);
-  TU_VERIFY(ep_state->claimed == 0);
+  TU_VERIFY((*ep_state & (TU_EDPT_STATE_BUSY | TU_EDPT_STATE_CLAIMED)) == 0);
   (void) osal_mutex_lock(mutex, OSAL_TIMEOUT_WAIT_FOREVER);
 
   // can only claim the endpoint if it is not busy and not claimed yet.
-  bool const available = (ep_state->busy == 0) && (ep_state->claimed == 0);
+  bool const available = (*ep_state & (TU_EDPT_STATE_BUSY | TU_EDPT_STATE_CLAIMED)) == 0;
   if (available) {
-    ep_state->claimed = 1;
+    *ep_state |= TU_EDPT_STATE_CLAIMED;
   }
 
   (void) osal_mutex_unlock(mutex);
   return available;
 }
 
-bool tu_edpt_release(tu_edpt_state_t* ep_state, osal_mutex_t mutex) {
+bool tu_edpt_release(volatile uint8_t* ep_state, osal_mutex_t mutex) {
   (void) mutex;
   (void) osal_mutex_lock(mutex, OSAL_TIMEOUT_WAIT_FOREVER);
 
   // can only release the endpoint if it is claimed and not busy
-  bool const ret = (ep_state->claimed == 1) && (ep_state->busy == 0);
+  bool const ret = (*ep_state & (TU_EDPT_STATE_CLAIMED | TU_EDPT_STATE_BUSY)) == TU_EDPT_STATE_CLAIMED;
   if (ret) {
-    ep_state->claimed = 0;
+    *ep_state &= (uint8_t) ~TU_EDPT_STATE_CLAIMED;
   }
 
   (void) osal_mutex_unlock(mutex);
@@ -245,6 +259,7 @@ bool tu_edpt_release(tu_edpt_state_t* ep_state, osal_mutex_t mutex) {
 bool tu_edpt_validate(const tusb_desc_endpoint_t *desc_ep, tusb_speed_t speed) {
   const uint16_t max_packet_size = tu_edpt_packet_size(desc_ep);
   TU_LOG2("  Open EP %02X with Size = %u\r\n", desc_ep->bEndpointAddress, max_packet_size);
+  TU_ASSERT(max_packet_size > 0);
 
   switch (desc_ep->bmAttributes.xfer) {
     case TUSB_XFER_ISOCHRONOUS: {
@@ -264,7 +279,7 @@ bool tu_edpt_validate(const tusb_desc_endpoint_t *desc_ep, tusb_speed_t speed) {
       break;
 
     case TUSB_XFER_INTERRUPT: {
-      uint16_t const spec_size = (speed == TUSB_SPEED_HIGH ? 1024 : 64);
+      const uint16_t spec_size = (speed == TUSB_SPEED_HIGH ? 1024 : 64);
       TU_ASSERT(max_packet_size <= spec_size);
       break;
     }
@@ -306,7 +321,7 @@ bool tu_bind_driver_to_ep_itf(uint8_t driver_id, uint8_t ep2drv[][2], uint8_t it
 //--------------------------------------------------------------------+
 
 bool tu_edpt_stream_init(tu_edpt_stream_t *s, bool is_host, bool is_tx, bool overwritable, void *ff_buf,
-                         uint16_t ff_bufsize, uint8_t *ep_buf, uint16_t ep_bufsize) {
+                         uint16_t ff_bufsize, uint8_t *ep_buf) {
   (void) is_tx;
 
   if (ff_buf == NULL || ff_bufsize == 0) {
@@ -324,7 +339,6 @@ bool tu_edpt_stream_init(tu_edpt_stream_t *s, bool is_host, bool is_tx, bool ove
   #endif
 
   s->ep_buf = ep_buf;
-  s->ep_bufsize = ep_bufsize;
 
   return true;
 }
@@ -394,7 +408,7 @@ uint32_t tu_edpt_stream_write_xfer(tu_edpt_stream_t *s) {
   if (s->ep_buf == NULL) {
     count = tu_fifo_count(&s->ff); // re-get count since fifo can be changed
   } else {
-    count = tu_fifo_read_n(&s->ff, s->ep_buf, s->ep_bufsize);
+    count = tu_fifo_read_n(&s->ff, s->ep_buf, s->xfer_len);
   }
 
   if (count > 0) {
@@ -441,7 +455,7 @@ uint32_t tu_edpt_stream_read_xfer(tu_edpt_stream_t *s) {
   if (available >= s->mps) {
     // multiple of packet size limit by ep bufsize
     uint16_t count = (uint16_t) (available & ~(s->mps - 1));
-    count = tu_min16(count, s->ep_bufsize);
+    count = tu_min16(count, s->xfer_len);
     TU_ASSERT(stream_xfer(s, count), 0);
     return count;
   } else {
@@ -483,7 +497,7 @@ char const* const tu_str_std_request[] = {
 };
 
 char const* const tu_str_xfer_result[] = {
-    "OK", "FAILED", "STALLED", "TIMEOUT"
+    "OK", "FAILED", "STALLED", "TIMEOUT", "ABORTED", "INVALID"
 };
 #endif
 

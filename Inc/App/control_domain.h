@@ -432,6 +432,8 @@ uint8_t control_domain_request_storage_waveform_cache(const char *path,
                                                       uint32_t sample_rate);
 void control_domain_storage_process_requests(void);
 uint32_t control_domain_ui_overflow_count(void);
+uint32_t control_domain_ui_pending_count(void);
+uint32_t control_domain_storage_pending_count(void);
 uint8_t control_domain_project_ui_busy(void);
 void control_domain_process_ui_messages(void);
 void control_domain_process_storage_messages(void);

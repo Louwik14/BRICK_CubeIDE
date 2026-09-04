@@ -16,7 +16,24 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "App/brick6_app_init.h"
+#include "App/control_domain.h"
 #include "Audio/audio_domain.h"
+#include "encoders.h"
+#include "IPC/live_event.h"
+#include "MIDI/midi.h"
+#include "MIDI/midi_host.h"
+#include "App/control_rt_wakeup.h"
+#include "App/usb_service_wakeup.h"
+#include "fusb302.h"
+#include "SD/sd_block_device.h"
+#include "Storage/storage_io_wakeup.h"
+#include "UI/display_flush_service.h"
+#include "UI/ui_event.h"
+#include "UI/ui_renderer_oled.h"
+#include "UI/ui_service_wakeup.h"
+#include "tusb.h"
+#include "usb_role_manager.h"
+#include "drv_display.h"
 
 /* USER CODE END Includes */
 
@@ -112,6 +129,64 @@ void StartUsbTask(void *argument);
 void StartUiTask(void *argument);
 void StartAudioBgTask(void *argument);
 
+static uint8_t storage_io_work_pending(void)
+{
+  return (sd_block_device_async_immediate_pending() != 0U) ? 1U : 0U;
+}
+
+static uint8_t control_rt_work_pending(void)
+{
+  return (live_event_depth() != 0U
+          || encoder_detent_event_pending_count() != 0U
+          || midi_control_pending_count() != 0U
+          || midi_host_control_pending_count() != 0U
+          || control_domain_ui_pending_count() != 0U
+          || control_domain_storage_pending_count() != 0U) ? 1U : 0U;
+}
+
+static uint8_t ui_service_work_pending(void)
+{
+  return (ui_event_pending_count() != 0U
+          || drv_display_flush_continuation_pending() != 0U) ? 1U : 0U;
+}
+
+static uint8_t usb_service_work_pending(void)
+{
+  if (fusb302_irq_pending()
+      || (usb_role_manager_work_pending() != 0U)
+      || midi_usb_service_work_pending() != 0U)
+  {
+    return 1U;
+  }
+
+  if ((usb_role_manager_is_device_active() != 0U)
+      && tud_task_event_ready())
+  {
+    return 1U;
+  }
+
+  if ((usb_role_manager_is_host_active() != 0U)
+      && tuh_task_event_ready())
+  {
+    return 1U;
+  }
+
+  return 0U;
+}
+
+static void ui_service_process_wakeup(uint32_t wake_flags)
+{
+  if (((wake_flags & osFlagsError) != 0U)
+      || ((wake_flags & UI_SERVICE_WAKE_INPUT) != 0U))
+  {
+    brick6_app_ui_process();
+  }
+  else
+  {
+    display_flush_service_poll();
+  }
+}
+
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
 /**
@@ -180,7 +255,17 @@ void StartControlTask(void *argument)
   for(;;)
   {
     brick6_app_control_process();
-    osDelay(1);
+    if (control_rt_work_pending() != 0U)
+    {
+      continue;
+    }
+    (void)osThreadFlagsWait(CONTROL_RT_WAKE_HALL
+                            | CONTROL_RT_WAKE_ENCODER
+                            | CONTROL_RT_WAKE_MIDI
+                            | CONTROL_RT_WAKE_UI
+                            | CONTROL_RT_WAKE_STORAGE,
+                            osFlagsWaitAny,
+                            1U);
   }
   /* USER CODE END StartControlTask */
 }
@@ -199,7 +284,14 @@ void StartStorageTask(void *argument)
   for(;;)
   {
     brick6_app_storage_process();
-    osDelay(1);
+    if (storage_io_work_pending() != 0U)
+    {
+      continue;
+    }
+    (void)osThreadFlagsWait(STORAGE_IO_WAKE_SD
+                            | STORAGE_IO_WAKE_WORK,
+                            osFlagsWaitAny,
+                            1U);
   }
   /* USER CODE END StartStorageTask */
 }
@@ -218,7 +310,13 @@ void StartUsbTask(void *argument)
   for(;;)
   {
     brick6_app_usb_process();
-    osDelay(1);
+    if (usb_service_work_pending() != 0U)
+    {
+      continue;
+    }
+    (void)osThreadFlagsWait(USB_SERVICE_WAKE_WORK,
+                            osFlagsWaitAny,
+                            1U);
   }
   /* USER CODE END StartUsbTask */
 }
@@ -233,11 +331,30 @@ void StartUsbTask(void *argument)
 void StartUiTask(void *argument)
 {
   /* USER CODE BEGIN StartUiTask */
+  uint32_t wake_flags = UI_SERVICE_WAKE_INPUT;
   /* Infinite loop */
   for(;;)
   {
-    brick6_app_ui_process();
-    osDelay(1);
+    ui_service_process_wakeup(wake_flags);
+    if (ui_service_work_pending() != 0U)
+    {
+      if (ui_event_pending_count() != 0U)
+      {
+        wake_flags = osThreadFlagsWait(UI_SERVICE_WAKE_INPUT
+                                       | UI_SERVICE_WAKE_OLED,
+                                       osFlagsWaitAny,
+                                       1U);
+      }
+      else
+      {
+        wake_flags = UI_SERVICE_WAKE_OLED;
+      }
+      continue;
+    }
+    wake_flags = osThreadFlagsWait(UI_SERVICE_WAKE_INPUT
+                                   | UI_SERVICE_WAKE_OLED,
+                                   osFlagsWaitAny,
+                                   ui_renderer_oled_next_render_wait_ticks());
   }
   /* USER CODE END StartUiTask */
 }

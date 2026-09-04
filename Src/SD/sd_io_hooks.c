@@ -38,6 +38,14 @@ uint8_t brick_sd_init_failure_is_no_media(uint8_t bsp_status)
             && ((hsd1.ErrorCode & ~no_media_errors) == 0U)) ? 1U : 0U;
 }
 
+void brick_sd_generated_sdmmc_error_handler(void)
+{
+    if (brick_sd_init_failure_is_no_media(MSD_ERROR) == 0U)
+    {
+        Error_Handler();
+    }
+}
+
 void brick_sd_media_fault(void)
 {
     sd_access_fs_invalidate_mount();

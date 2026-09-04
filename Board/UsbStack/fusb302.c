@@ -1,5 +1,6 @@
 #include "fusb302.h"
 
+#include "App/usb_service_wakeup.h"
 #include "main.h"
 
 #include <string.h>
@@ -459,5 +460,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     if (GPIO_Pin == FUSB302_INT_N_Pin) {
         g_fusb302.irq_pending = true;
+        __DMB();
+        usb_service_wakeup(USB_SERVICE_WAKE_WORK);
     }
 }

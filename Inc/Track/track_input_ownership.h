@@ -11,6 +11,9 @@ extern "C" {
 
 #define TRACK_INPUT_OWNER_NONE 0xFFU
 
+/* Track/External may claim only these logical sources.  The global audio
+ * source enum also contains MIC for Recorder/Audio REC contracts. */
+uint8_t track_input_ownership_is_valid_external_input(uint8_t input);
 void track_input_ownership_init(const track_config_t configs[TRACK_COUNT]);
 uint8_t track_input_ownership_apply_configs(
     const track_config_t configs[TRACK_COUNT]);

@@ -545,7 +545,8 @@ bool mscd_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t event, uint32_t
 
           // Invoke user callback if not built-in
           if ((resplen < 0) && (p_msc->sense_key == 0)) {
-            resplen = tud_msc_scsi_cb(p_cbw->lun, p_cbw->command, _mscd_epbuf.buf, (uint16_t)p_msc->total_len);
+            resplen = tud_msc_scsi_cb(p_cbw->lun, p_cbw->command, _mscd_epbuf.buf,
+                                      (uint16_t) tu_min32(p_msc->total_len, CFG_TUD_MSC_EP_BUFSIZE));
           }
 
           if (resplen < 0) {
@@ -646,7 +647,11 @@ bool mscd_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t event, uint32_t
             break;
         }
 
-        TU_ASSERT(prepare_cbw(p_msc));
+        if (!usbd_edpt_stalled(rhport, p_msc->ep_out)) {
+          TU_ASSERT(prepare_cbw(p_msc));
+        } else {
+          p_msc->stage = MSC_STAGE_CMD;
+        }
       } else {
         // Any xfer ended here is considered unknown error, ignore it
         TU_LOG1("  Warning expect SCSI Status but received unknown data\r\n");

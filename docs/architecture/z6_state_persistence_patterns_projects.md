@@ -2,16 +2,18 @@
 
 ## Modele et format
 
-Pattern, Project et Patch utilisent exclusivement `persistent_control_model` et le codec explicite `B6CP` version 4. Les DTO ne sont ni des snapshots runtime ni une ABI disque; chaque champ est encode explicitement. Header, kind, sections, longueurs et CRC sont stricts. Aucune ancienne version ni dump de structure n'est lu.
+Pattern, Project et Patch utilisent exclusivement `persistent_control_model` et le codec explicite `B6CP` version 5. Les DTO ne sont ni des snapshots runtime ni une ABI disque; chaque champ est encode explicitement. Header, kind, sections, longueurs et CRC sont stricts. Aucune ancienne version ni dump de structure n'est lu.
 
-Les cles persistantes de famille, type, parametre, MIDI, clock, Note FX, modulation et asset sont explicites et independantes des ordinaux C. Les FLOAT32 conservent leurs bits. Les indices runtime, contextes AUDIO installes, pointeurs, caches, voix, phases, playheads et UI sont exclus.
+Les cles persistantes de famille, type, parametre, MIDI, clock, entree External, Note FX, modulation et asset sont explicites et independantes des ordinaux C. Les sources External utilisent uniquement `PERSIST_INPUT_LINE` et `PERSIST_INPUT_USB`; `MIC` est reserve a Recorder / Audio REC. Les FLOAT32 conservent leurs bits. Les indices runtime, contextes AUDIO installes, pointeurs, caches, voix, phases, playheads et UI sont exclus.
 
 Pattern contient les seize identites. La configuration des children inactifs est conservee, mais pas leurs parametres, assets, routes, modulation, Note FX ou sequence dynamique. En GROUP, le master possede MOD et Audio FX; les children ont leur lane a un PLAY et leurs niveaux A/B.
 
-Patch contient une entite, ses parametres logiques, zero a deux references
+Patch contient une entite et ses parametres logiques, zero a deux references
 d'assets typees et, pour FM, le DTO de l'owner. Project contient metadata,
 Pattern de travail, manifeste d'assets, macros/scenes et jusqu'a 256 records
 Pattern diffuses progressivement.
+Patch ne transporte ni source External ni ownership d'entree; Pattern et
+Project restaurent `LINE` / `USB` par le commit canonique d'ownership.
 
 ## Codec et application
 
@@ -21,13 +23,14 @@ par `persistent_entity_topology`; la validation metier des owners reste dans la
 phase d'installation. Les providers/consumers Project reutilisent un workspace
 borne sans allocation dynamique.
 
-`persistent_pattern_control` et `persistent_patch_control` sont les facades CONTROL. `pattern_control_bank`, `patch_product` et `project_product` sont les facades produit. Une reference asset persistante est `{kind, canonical_path}`; elle est canonicalisee une fois a l'entree de l'owner, puis le codec la valide et l'encode sans transformation. `project_control` ne resout le slot AUDIO qu'apres chargement, au moment de la publication fonctionnelle. Sample et tables Wave ne possedent plus de stable key Param. L'owner FM unique est encode champ par champ, sans packs flottants, copie operateur secondaire ni codec historique. Les tables et mipmaps restent des data planes immutables hors FIFO.
+`persistent_pattern_control` et `persistent_patch_control` sont les facades CONTROL. `pattern_control_bank`, `patch_product` et `project_product` sont les facades produit. Une reference asset persistante est `{kind, canonical_path}`; elle est canonicalisee une fois a l'entree de l'owner, puis le codec la valide et l'encode sans transformation. `project_control` ne resout le slot AUDIO qu'apres chargement, au moment de la publication fonctionnelle. Sample et tables Wave ne possedent plus de stable key Param. L'owner FM unique est encode champ par champ, sans packs flottants ni copie operateur secondaire. Les tables et mipmaps restent des data planes immutables hors FIFO.
 
 ## Transactions
 
-Pour Project Load, P1 decode un candidat minimal; P2 impose le safe point et
-purge l'ancien etat; P3 installe les assets sequentiellement puis applique
-Pattern, macros et globals avant le commit du contexte de boot. Les autres
+Pour Project Load, P1 decode et valide un candidat minimal hors quiesce; P2
+impose ensuite le safe point et purge l'ancien etat; P3 installe les assets
+sequentiellement puis applique Pattern, macros et globals avant le commit du
+contexte de boot. Les autres
 operations de persistence conservent leur prevalidation locale. Pattern
 Store/delete/clear construisent le namespace inactif puis publient `COMMIT.BIN`.
 Les Save utilisent des tranches DATA de 4096 octets et des etapes METADATA
@@ -36,8 +39,14 @@ recuperable.
 
 Pattern Save/Load, Project Save, browser SD, Sample RAM, Wavetable et Clear Multi utilisent l'admission Background cooperative de `sd_scheduler_runtime`. Toute demande RT ou transaction active produit `NOT_NOW`; le client conserve son etat et rend la main.
 
-Project Load decode le document sous quiesce et exclusivite scheduler, puis rend
-l'exclusivite et sequence les assets RAM avec le loader cooperatif canonique.
+Pattern Save capture un DTO immutable au point d'admission; les mutations
+ulterieures ne modifient pas le document en cours d'ecriture. Pattern Load
+valide puis committe le candidat comme nouvel etat CONTROL et peut donc
+remplacer les edits non sauvegardes presents au moment de l'application.
+
+Project Load decode et valide le document avant d'acquerir la quiesce et
+l'exclusivite scheduler, puis sequence les assets RAM avec le loader cooperatif
+canonique.
 Chaque candidat RAM est complet avant retrait; un remplacement attend ensuite
 STOP AUDIO et `T_safe` cote CONTROL avant liberation et commit. Un slot EMPTY
 est commite directement. Le quiesce Project reste ferme jusqu'a la fin de cette
@@ -53,7 +62,8 @@ derive des lifecycles produit existants, y compris une commande acceptee mais
 encore en attente de prise en charge Storage. L'UI affiche la progression
 reelle et rejette les inputs locaux jusqu'a la fin fonctionnelle; CONTROL garde
 la meme invariance si une mutation arrive malgre l'UI. Cette regle ne suspend
-ni l'IRQ audio, ni le playback, ni les workers necessaires.
+pas l'IRQ audio ni les workers necessaires; le playback peut etre coupe lorsque
+le contrat de remplacement l'exige.
 
 Les mutations utilisateur Multi (Load, Import, Delete, Clear, Replace) sont
 mutuellement exclusives au point d'admission. La gate SD reste une protection

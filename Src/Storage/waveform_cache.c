@@ -7,6 +7,7 @@
 #include "Storage/sample_capture.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/sd_preview.h"
+#include "Storage/storage_io_wakeup.h"
 #include "Storage/wav_audio_codec.h"
 #include "wav_parser.h"
 #include "ff.h"
@@ -1105,6 +1106,7 @@ static uint8_t waveform_cache_ui_enqueue(const waveform_cache_ui_request_t *requ
     g_waveform_cache_ui_requests[head & (WAVEFORM_CACHE_UI_REQUEST_CAPACITY - 1U)] = *request;
     __DMB();
     g_waveform_cache_ui_request_head = head + 1U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 

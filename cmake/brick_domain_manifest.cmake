@@ -22,9 +22,11 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/control_audio_fifo_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/control_clipboard.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/control_domain.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/control_rt_wakeup.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/encoder_control_dispatcher.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/engine_tasklet.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/live_clock_control.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/usb_service_wakeup.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/ControlRT/control_rt_publication.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/control_music_publication.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/live_event.c"
@@ -38,7 +40,6 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/ui_keyboard_app.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/MIDI/midi.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/MIDI/midi_host.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/MIDI/usbh_midi.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_destination_catalog_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_env3_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_lfo_control.c"
@@ -176,6 +177,7 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_renderer_template.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_roll_popup.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_sampler_playhead.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_service_wakeup.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_step_led_ownership.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_tasklet.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/ui_template_page.c"
@@ -187,6 +189,7 @@ set(DOMAIN_CONTROL
 set(DOMAIN_STORAGE
     # Recorder/SD storage owner.  audio_recorder.c remains CONTROL because
     # its public facade still contains arm/Looper policy and publication.
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/storage_io_wakeup.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/SD/bsp_driver_sd.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/SD/fatfs.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/SD/sd_block_device.c"
@@ -361,7 +364,8 @@ list(APPEND BOARD_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/Src/board_usb.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/UsbStack/fusb302.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/UsbStack/usb_device.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Board/UsbStack/usb_audio.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Board/UsbStack/usb_audio_pcm_ring.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/UsbStack/usb_host.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/UsbStack/usb_role_manager.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/UsbStack/usbh_conf.c"
 )

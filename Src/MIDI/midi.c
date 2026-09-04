@@ -3,7 +3,7 @@
  * @brief Implémentation du module MIDI (USB Device + backends futurs) pour STM32 HAL.
  *
  * Ce module fournit une API MIDI haut niveau, indépendante du transport,
- * et un backend USB Device basé sur la classe usbd_midi.
+ * et un backend USB Device basé sur TinyUSB MIDI.
  *
  * Rôle dans le système:
  * - Centralise la gestion MIDI (RX/TX) pour les tasklets.
@@ -18,7 +18,7 @@
  *
  * Architecture:
  * - Appelé par: services USB/CONTROL, callbacks USB Device.
- * - Appelle: usbd_midi, midi_host (backend host), diagnostics/logs.
+ * - Appelle: TinyUSB MIDI, midi_host (backend host), diagnostics/logs.
  *
  * Règles:
  * - Pas de malloc.
@@ -31,9 +31,11 @@
 #include "main.h"
 #include "tim.h"
 #include "usb_device.h"
+#include "App/usb_service_wakeup.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "Seq/seq_runtime.h"
 #include "IPC/live_clock_control.h"
+#include "App/control_rt_wakeup.h"
 #include "Storage/project_load_quiesce.h"
 #include <string.h>
 
@@ -356,6 +358,7 @@ static bool usb_tx_queue_push(const uint8_t packet[4]) {
   midi_usb_tx_queue[midi_usb_tx_head].bytes[2] = packet[2];
   midi_usb_tx_queue[midi_usb_tx_head].bytes[3] = packet[3];
 
+  __DMB();
   midi_usb_tx_head = (uint16_t)((midi_usb_tx_head + 1U) % MIDI_USB_TX_QUEUE_LEN);
   midi_usb_tx_count++;
   if (midi_usb_tx_count > midi_usb_tx_high_water) {
@@ -405,6 +408,7 @@ static bool usb_tx_queue_push_front(const midi_usb_packet_t *packet) {
 
   midi_usb_tx_tail = (uint16_t)((midi_usb_tx_tail + MIDI_USB_TX_QUEUE_LEN - 1U) % MIDI_USB_TX_QUEUE_LEN);
   midi_usb_tx_queue[midi_usb_tx_tail] = *packet;
+  __DMB();
   midi_usb_tx_count++;
   if (midi_usb_tx_count > midi_usb_tx_high_water) {
     midi_usb_tx_high_water = midi_usb_tx_count;
@@ -426,6 +430,7 @@ static bool usb_tx_queue_push_front_realtime(const midi_usb_packet_t *packet) {
 
   midi_usb_tx_tail = (uint16_t)((midi_usb_tx_tail + MIDI_USB_TX_QUEUE_LEN - 1U) % MIDI_USB_TX_QUEUE_LEN);
   midi_usb_tx_queue[midi_usb_tx_tail] = *packet;
+  __DMB();
   midi_usb_tx_count++;
   if (midi_usb_tx_count > midi_usb_tx_high_water) {
     midi_usb_tx_high_water = midi_usb_tx_count;
@@ -462,6 +467,7 @@ static bool usb_rx_queue_push(const uint8_t packet[4], uint32_t tim5_tick,
   midi_usb_rx_queue[midi_usb_rx_head].tim5_tick = tim5_tick;
   midi_usb_rx_queue[midi_usb_rx_head].ingress_serial = ingress_serial;
 
+  __DMB();
   midi_usb_rx_head = (uint16_t)((midi_usb_rx_head + 1U) % MIDI_USB_RX_QUEUE_LEN);
   midi_usb_rx_count++;
   if (midi_usb_rx_count > midi_usb_rx_high_water) {
@@ -646,6 +652,13 @@ static uint32_t midi_usb_try_flush(void) {
 
 static inline void midi_usb_request_deferred_flush_from_isr(void) {
   midi_usb_tx_deferred_pending = true;
+}
+
+static void midi_usb_wakeup_if_pending(void)
+{
+  if ((midi_usb_tx_count != 0U) || midi_usb_tx_deferred_pending) {
+    usb_service_wakeup(USB_SERVICE_WAKE_WORK);
+  }
 }
 
 /* ====================================================================== */
@@ -918,10 +931,10 @@ static void backend_usb_device_send(const uint8_t *msg, size_t len) {
 #endif
   if (midi_in_isr()) {
     midi_usb_request_deferred_flush_from_isr();
-    return;
+  } else {
+    midi_usb_try_flush();
   }
-
-  midi_usb_try_flush();
+  midi_usb_wakeup_if_pending();
 }
 
 /**
@@ -1123,6 +1136,18 @@ void midi_usb_service_poll(void) {
   (void)midi_usb_try_flush();
 }
 
+uint8_t midi_usb_service_work_pending(void)
+{
+  if ((midi_initialized == false)
+      || (midi_usb_transport_quiesce_requested() != 0U)
+      || (usb_device_is_ready() == 0U)
+      || !midi_usb_tx_deferred_pending) {
+    return 0U;
+  }
+
+  return (midi_usb_tx_count != 0U) ? 1U : 0U;
+}
+
 void midi_control_poll(void) {
   if (!midi_initialized) {
     return;
@@ -1134,6 +1159,11 @@ void midi_control_poll(void) {
   }
 
   (void)midi_process_usb_rx();
+}
+
+uint16_t midi_control_pending_count(void)
+{
+  return midi_usb_rx_count;
 }
 
 /**
@@ -1368,6 +1398,7 @@ static bool midi_usb_channel_voice_admit(uint8_t status, uint8_t ch,
   packet->bytes[1] = (uint8_t)(status | (ch & 0x0FU));
   packet->bytes[2] = (uint8_t)(note & 0x7FU);
   packet->bytes[3] = (uint8_t)(vel & 0x7FU);
+  __DMB();
   midi_usb_tx_head = (uint16_t)((midi_usb_tx_head + 1U) % MIDI_USB_TX_QUEUE_LEN);
   ++midi_usb_tx_count;
   if (midi_usb_tx_count > midi_usb_tx_high_water)
@@ -1989,6 +2020,7 @@ void midi_usb_rx_submit_from_isr(const uint8_t *packet, size_t len) {
 
   const uint32_t tim5_tick = live_clock_capture_tick();
   size_t packets = len / 4U;
+  bool control_wakeup_pending = false;
   for (size_t i = 0U; i < packets; i++) {
     uint32_t ingress_serial = midi_usb_rx_ingress_serial + 1U;
     if (ingress_serial == 0U)
@@ -2001,8 +2033,13 @@ void midi_usb_rx_submit_from_isr(const uint8_t *packet, size_t len) {
       midi_rx_stats.usb_rx_drops++;
     } else {
       midi_rx_stats.usb_rx_enqueued++;
+      control_wakeup_pending = true;
     }
     packet += 4U;
+  }
+
+  if (control_wakeup_pending) {
+    control_rt_wakeup(CONTROL_RT_WAKE_MIDI);
   }
 }
 

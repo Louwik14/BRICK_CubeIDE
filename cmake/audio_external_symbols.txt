@@ -16,6 +16,9 @@ board_audio_pack_output
 board_audio_start_stream
 board_audio_stop_stream
 board_audio_unpack_input
+usb_audio_audio_input_active
+usb_audio_audio_read
+usb_audio_audio_write
 cbrtf
 ceilf
 cos

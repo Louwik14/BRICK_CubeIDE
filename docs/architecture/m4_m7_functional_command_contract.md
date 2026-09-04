@@ -49,6 +49,15 @@ PROGRAM PARAM NOTE TRANSPORT RECORD PANIC
 - `RECORD` porte START ou STOP, un `session_id`, une configuration et un client.
 - `PANIC` est global ou limite a une entite.
 
+## Temporalites
+
+Chaque requete est classee avant publication: `NOW` modifie immediatement
+l'autorite CONTROL; `CAPTURED` fige une valeur ou un contexte au point
+d'admission; `SCHEDULED` transporte un effet musical a
+`effective_sample_time`. La FIFO ne recoit que le resultat final de cette
+resolution. Une UI, une source MIDI ou Storage ne publie jamais directement
+dans AUDIO et ne contourne pas `CONTROL_RT`.
+
 `effective_sample_time` utilise la timeline sample absolue. A date egale,
 l'ordre d'intention CONTROL est conserve. Les samples, wavetables, instruments
 Multi, pages Stream et rings PCM restent des data planes separes; seuls leurs

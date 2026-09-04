@@ -19,6 +19,17 @@ a largeur fixe; leur taille et leurs offsets structurants sont proteges par des
 | Recorder PCM | M7 AUDIO -> M4 Storage/SD | ring non-cacheable `SDRAM_RECORDER`, 12 001 x 2 x 32 bits (96 008) + layout 16 octets `D3_IPC` | `head_cursor`, `tail_cursor`, `closed_session`, `capture_fault`; aucun config/etat fonctionnel partage | PCM, DMB, `head_cursor`; fermeture AUDIO publie session/fault | M4 ecrit seulement `tail_cursor` apres copie/commit |
 | Looper live take | M7 capture -> M4 recorder, puis M4 map -> M7 reader | Recorder PCM ci-dessus; carte live CONTROL locale puis projection Stream existante | path borne et extents possedes en valeur; aucun pointeur. Le preroll (96 000 octets) est cacheable et M7-prive | meme head/fermeture Recorder; map Stream existante | tail Recorder, puis generation de map et leases pages; retrait apres stop/fence |
 
+### USB Audio
+
+Le ring PCM USB existant est un transport preparatoire pointer-free. Sur H743,
+USB Audio et `audio_io` restent dans le meme runtime M4; sur la cible H747, USB
+reste M4 et le traitement Audio est M7. Le format du ring ne constitue pas a lui
+seul un contrat inter-core: proprietaire de chaque curseur, handshake de reset,
+backpressure, epoch, activation et regles de cache restent a definir.
+
+**CONTRAT H747 NON ENCORE FINALISE**: USB Audio ne fait pas partie des data planes
+dont le port inter-core est declare complet dans ce document.
+
 Les contexts FatFs, loaders, diagnostics, paths de catalogue, pointeurs de
 buffers DMA et function pointers du generic recorder restent prives a M4. Les
 voices, pointeurs DSP chauds et le preroll Looper restent prives a M7. Les API
@@ -125,8 +136,9 @@ M7->M4 ne subsiste.
 Le port H747 place les memes sections dans des regions visibles des deux
 coeurs, configure MPU region 5/6 et `.sdram_recorder` sur les deux coeurs, puis
 definit `BRICK6_H747_DUAL_CORE` pour activer clean/invalidate des caches prives.
-Aucun scheduler, opcode, setter FM, cadence ou chemin DMA live n'est specifique
-au port H747.
+Aucun scheduler, opcode, setter FM, cadence ou chemin DMA live des data planes
+finalises n'est specifique au port H747. USB Audio reste soumis au contrat
+non finalise ci-dessus.
 
 ## Teardown et cache
 

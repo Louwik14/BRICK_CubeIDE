@@ -9,8 +9,6 @@ set(MX_Defines_Syms
 )
 
 set(BRICK6_GENERATED_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../Board/Generated")
-list(APPEND MX_Defines_Syms HAL_HCD_MODULE_ENABLED)
-
 # STM32CubeMX generated include paths
 set(MX_Include_Dirs
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Inc
@@ -62,6 +60,17 @@ set(MX_Application_Src
 
 list(APPEND MX_Application_Src ${BRICK6_GENERATED_ROOT}/Src/freertos.c)
 
+# CubeMX may regenerate its USB files, but TinyUSB owns the active OTG
+# peripheral. Fail closed if a generated ST USB application source is added.
+set(BRICK_USB_FORBIDDEN_GENERATED_SOURCES
+    ${BRICK6_GENERATED_ROOT}/Src/usb_otg.c)
+foreach(legacy_source IN LISTS BRICK_USB_FORBIDDEN_GENERATED_SOURCES)
+    if(legacy_source IN_LIST MX_Application_Src)
+        message(FATAL_ERROR
+            "USB-D firewall: generated ST USB source entered active build: ${legacy_source}")
+    endif()
+endforeach()
+
 # STM32 HAL/LL Drivers
 set(STM32_Drivers_Src
     ${BRICK6_GENERATED_ROOT}/Src/system_stm32h7xx.c
@@ -102,9 +111,15 @@ set(STM32_Drivers_Src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_tim_ex.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_uart.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_uart_ex.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_ll_usb.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_hcd.c
 )
+
+foreach(driver_source IN LISTS STM32_Drivers_Src)
+    if(driver_source MATCHES "stm32h7xx_hal_(pcd|hcd)(_ex)?\\.c$"
+       OR driver_source MATCHES "stm32h7xx_ll_usb\\.c$")
+        message(FATAL_ERROR
+            "USB-D firewall: ST PCD/HCD driver entered active build: ${driver_source}")
+    endif()
+endforeach()
 
 # Drivers Midllewares
 

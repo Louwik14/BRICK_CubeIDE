@@ -26,6 +26,7 @@
 #include "encoders.h"
 #include "IPC/live_clock_control.h"
 #include "ui_core.h"
+#include "UI/ui_service_wakeup.h"
 #include "stm32h7xx.h"
 #include "stm32h7xx_hal.h"
 
@@ -74,6 +75,7 @@ static bool ui_event_push(const ui_event_t *ev)
     g_ui_evt_w = next;
     __DMB();
     __set_PRIMASK(primask);
+    ui_service_wakeup(UI_SERVICE_WAKE_INPUT);
     return true;
 }
 
@@ -244,4 +246,9 @@ bool ui_event_pop(ui_event_t *ev)
     __DMB();
     g_ui_evt_r = (uint16_t)((g_ui_evt_r + 1U) & (UI_EVENT_Q_LEN - 1U));
     return true;
+}
+
+uint32_t ui_event_pending_count(void)
+{
+    return (uint32_t)((uint16_t)(g_ui_evt_w - g_ui_evt_r));
 }

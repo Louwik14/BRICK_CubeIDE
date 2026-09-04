@@ -1,6 +1,7 @@
 #include "drv_display.h"
 
 #include "Board/board_display_transport.h"
+#include "UI/ui_service_wakeup.h"
 #include "sdram.h"
 #include "Platform/memory_layout.h"
 #include "../../U8g2/u8g2.h"
@@ -197,6 +198,17 @@ uint8_t drv_display_flush_in_progress(void)
     return 0U;
 }
 
+uint8_t drv_display_flush_continuation_pending(void)
+{
+    if (g_display_state != DRV_DISPLAY_STATE_READY)
+    {
+        return 0U;
+    }
+
+    return ((g_dma_payload_done != 0U) || (g_dma_payload_error != 0U))
+        ? 1U : 0U;
+}
+
 /* ====================================================================== */
 /*                              CLEAR                                     */
 /* ====================================================================== */
@@ -349,6 +361,8 @@ void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
         g_dma_payload_busy = 0U;
         g_dma_payload_done = 1U;
         g_display_stats.tx_ok++;
+        __DMB();
+        ui_service_wakeup(UI_SERVICE_WAKE_OLED);
     }
 }
 
@@ -361,6 +375,8 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
         g_dma_payload_error = 1U;
         g_display_stats.tx_err++;
         g_display_state = DRV_DISPLAY_STATE_FAULT;
+        __DMB();
+        ui_service_wakeup(UI_SERVICE_WAKE_OLED);
     }
 }
 

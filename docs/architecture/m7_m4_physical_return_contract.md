@@ -58,5 +58,9 @@ ne valident jamais PROGRAM/PARAM/NOTE et ne reconstruisent aucun etat musical.
 ## Compatibilite
 
 H743 utilise exactement les memes contrats via les adaptateurs locaux. H747
-place M4 et M7 de part et d'autre des memes structures pointer-free. Aucun
-handshake, peripheral ou service H747-only n'est requis au nominal.
+place M4 et M7 de part et d'autre des memes structures pointer-free pour les
+data planes enumeres. USB Audio est une exception explicite: le transport USB
+et le runtime Audio restent M4-local sur H743, tandis que la cible H747 repartit
+USB sur M4 et Audio sur M7. Le ring PCM existant prepare ce port, mais ownership,
+handshake, reset, backpressure et activation inter-core ne sont pas encore
+definis.

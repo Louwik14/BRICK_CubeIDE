@@ -5,11 +5,42 @@
 #include "main.h"
 #include "midi.h"
 #include "tusb.h"
+#include "usb_audio.h"
 
 #define USB_DEVICE_RHPORT       0U
 #define USB_DEVICE_MIDI_EP_OUT  0x01U
 #define USB_DEVICE_MIDI_EP_IN   0x81U
 #define USB_DEVICE_MIDI_EP_SIZE 64U
+#define USB_DEVICE_AUDIO_EP_OUT 0x02U
+#define USB_DEVICE_AUDIO_EP_IN  0x82U
+#define USB_DEVICE_AUDIO_EP_FB  0x83U
+#define USB_DEVICE_AUDIO_EP_SIZE \
+    TUD_AUDIO_EP_SIZE(false, 48000U, 4U, 2U)
+#define USB_DEVICE_DWC2_FS_FIFO_WORDS      1024U
+#define USB_DEVICE_DWC2_FS_RX_FIFO_WORDS \
+    (13U + 1U + 2U * ((USB_DEVICE_AUDIO_EP_SIZE / 4U) + 1U) + 2U * 2U)
+#define USB_DEVICE_DWC2_FS_TX_FIFO_WORDS \
+    (64U / 4U + USB_DEVICE_AUDIO_EP_SIZE / 4U + 4U / 4U + 64U / 4U)
+
+#define USB_DEVICE_AUDIO_DESC_LEN (TUD_AUDIO20_DESC_IAD_LEN \
+    + TUD_AUDIO20_DESC_STD_AC_LEN \
+    + TUD_AUDIO20_DESC_CS_AC_LEN \
+    + TUD_AUDIO20_DESC_CLK_SRC_LEN \
+    + 2U * TUD_AUDIO20_DESC_INPUT_TERM_LEN \
+    + 2U * TUD_AUDIO20_DESC_OUTPUT_TERM_LEN \
+    + 4U * TUD_AUDIO20_DESC_STD_AS_LEN \
+    + 2U * TUD_AUDIO20_DESC_CS_AS_INT_LEN \
+    + 2U * TUD_AUDIO20_DESC_TYPE_I_FORMAT_LEN \
+    + 2U * TUD_AUDIO20_DESC_STD_AS_ISO_EP_LEN \
+    + 2U * TUD_AUDIO20_DESC_CS_AS_ISO_EP_LEN \
+    + TUD_AUDIO20_DESC_STD_AS_ISO_FB_EP_LEN)
+
+_Static_assert(USB_DEVICE_AUDIO_EP_SIZE == 392U,
+               "USB Audio FS endpoint maximum packet size changed");
+_Static_assert(USB_DEVICE_DWC2_FS_RX_FIFO_WORDS
+                   + USB_DEVICE_DWC2_FS_TX_FIFO_WORDS
+                   < USB_DEVICE_DWC2_FS_FIFO_WORDS,
+               "DWC2 FS FIFO allocation exceeds the 1024-word budget");
 
 #define USB_VID                 1155U
 #define USB_PID                 22315U
@@ -26,7 +57,7 @@ static volatile uint8_t g_usb_device_mounted;
 static const uint8_t g_usb_device_descriptor[] = {
     0x12U, TUSB_DESC_DEVICE,
     0x00U, 0x02U,
-    0x00U, 0x00U, 0x00U,
+    0xEFU, 0x02U, 0x01U,
     64U,
     (uint8_t)(USB_VID & 0xFFU), (uint8_t)(USB_VID >> 8),
     (uint8_t)(USB_PID & 0xFFU), (uint8_t)(USB_PID >> 8),
@@ -36,13 +67,114 @@ static const uint8_t g_usb_device_descriptor[] = {
 };
 
 static const uint8_t g_usb_configuration_descriptor[] = {
-    TUD_CONFIG_DESCRIPTOR(1U, 2U, 0U,
-                          TUD_CONFIG_DESC_LEN + TUD_MIDI_DESC_LEN,
+    TUD_CONFIG_DESCRIPTOR(1U, 4U, 0U,
+                          TUD_CONFIG_DESC_LEN + USB_DEVICE_AUDIO_DESC_LEN
+                          + TUD_MIDI_DESC_LEN,
                           TUSB_DESC_CONFIG_ATT_SELF_POWERED, 100U),
-    TUD_MIDI_DESCRIPTOR(1U, USB_STR_MIDI,
+    /* UAC2 Audio Control + OUT/IN streaming interfaces. */
+    TUD_AUDIO20_DESC_IAD(0U, 3U, 0U),
+    TUD_AUDIO20_DESC_STD_AC(0U, 0U, 0U),
+    TUD_AUDIO20_DESC_CS_AC(
+        0x0200U,
+        AUDIO20_FUNC_PRO_AUDIO,
+        TUD_AUDIO20_DESC_CLK_SRC_LEN
+            + 2U * TUD_AUDIO20_DESC_INPUT_TERM_LEN
+            + 2U * TUD_AUDIO20_DESC_OUTPUT_TERM_LEN,
+        AUDIO20_CS_AS_INTERFACE_CTRL_LATENCY_POS),
+    TUD_AUDIO20_DESC_CLK_SRC(
+        0x10U,
+        AUDIO20_CLOCK_SOURCE_ATT_INT_VAR_CLK,
+        (AUDIO20_CTRL_R << AUDIO20_CLOCK_SOURCE_CTRL_CLK_FRQ_POS)
+            | (AUDIO20_CTRL_R << AUDIO20_CLOCK_SOURCE_CTRL_CLK_VAL_POS),
+        0U,
+        0U),
+    TUD_AUDIO20_DESC_INPUT_TERM(
+        0x01U,
+        AUDIO_TERM_TYPE_IN_GENERIC_MIC,
+        0x03U,
+        0x10U,
+        2U,
+        AUDIO20_CHANNEL_CONFIG_FRONT_LEFT | AUDIO20_CHANNEL_CONFIG_FRONT_RIGHT,
+        0U,
+        AUDIO20_CTRL_NONE,
+        0U),
+    TUD_AUDIO20_DESC_OUTPUT_TERM(
+        0x03U,
+        AUDIO_TERM_TYPE_USB_STREAMING,
+        0x01U,
+        0x01U,
+        0x10U,
+        AUDIO20_CTRL_NONE,
+        0U),
+    TUD_AUDIO20_DESC_INPUT_TERM(
+        0x04U,
+        AUDIO_TERM_TYPE_USB_STREAMING,
+        0x06U,
+        0x10U,
+        2U,
+        AUDIO20_CHANNEL_CONFIG_FRONT_LEFT | AUDIO20_CHANNEL_CONFIG_FRONT_RIGHT,
+        0U,
+        AUDIO20_CTRL_NONE,
+        0U),
+    TUD_AUDIO20_DESC_OUTPUT_TERM(
+        0x06U,
+        AUDIO_TERM_TYPE_OUT_GENERIC_SPEAKER,
+        0x04U,
+        0x04U,
+        0x10U,
+        AUDIO20_CTRL_NONE,
+        0U),
+
+    /* Host to BRICK: asynchronous OUT data plus explicit feedback. */
+    TUD_AUDIO20_DESC_STD_AS_INT(1U, 0U, 0U, 0U),
+    TUD_AUDIO20_DESC_STD_AS_INT(1U, 1U, 2U, 0U),
+    TUD_AUDIO20_DESC_CS_AS_INT(
+        0x04U, AUDIO20_CTRL_NONE, AUDIO20_FORMAT_TYPE_I,
+        AUDIO20_DATA_FORMAT_TYPE_I_PCM, 2U,
+        AUDIO20_CHANNEL_CONFIG_FRONT_LEFT | AUDIO20_CHANNEL_CONFIG_FRONT_RIGHT,
+        0U),
+    TUD_AUDIO20_DESC_TYPE_I_FORMAT(4U, 24U),
+    TUD_AUDIO20_DESC_STD_AS_ISO_EP(
+        USB_DEVICE_AUDIO_EP_OUT,
+        (uint8_t)(TUSB_XFER_ISOCHRONOUS | TUSB_ISO_EP_ATT_ASYNCHRONOUS
+                  | TUSB_ISO_EP_ATT_DATA),
+        USB_DEVICE_AUDIO_EP_SIZE,
+        1U),
+    TUD_AUDIO20_DESC_CS_AS_ISO_EP(
+        AUDIO20_CS_AS_ISO_DATA_EP_ATT_NON_MAX_PACKETS_OK,
+        AUDIO20_CTRL_NONE,
+        AUDIO20_CS_AS_ISO_DATA_EP_LOCK_DELAY_UNIT_UNDEFINED,
+        0U),
+    TUD_AUDIO20_DESC_STD_AS_ISO_FB_EP(USB_DEVICE_AUDIO_EP_FB, 4U, 1U),
+
+    /* BRICK to host: asynchronous IN data. */
+    TUD_AUDIO20_DESC_STD_AS_INT(2U, 0U, 0U, 0U),
+    TUD_AUDIO20_DESC_STD_AS_INT(2U, 1U, 1U, 0U),
+    TUD_AUDIO20_DESC_CS_AS_INT(
+        0x03U, AUDIO20_CTRL_NONE, AUDIO20_FORMAT_TYPE_I,
+        AUDIO20_DATA_FORMAT_TYPE_I_PCM, 2U,
+        AUDIO20_CHANNEL_CONFIG_FRONT_LEFT | AUDIO20_CHANNEL_CONFIG_FRONT_RIGHT,
+        0U),
+    TUD_AUDIO20_DESC_TYPE_I_FORMAT(4U, 24U),
+    TUD_AUDIO20_DESC_STD_AS_ISO_EP(
+        USB_DEVICE_AUDIO_EP_IN,
+        (uint8_t)(TUSB_XFER_ISOCHRONOUS | TUSB_ISO_EP_ATT_ASYNCHRONOUS
+                  | TUSB_ISO_EP_ATT_DATA),
+        USB_DEVICE_AUDIO_EP_SIZE,
+        1U),
+    TUD_AUDIO20_DESC_CS_AS_ISO_EP(
+        AUDIO20_CS_AS_ISO_DATA_EP_ATT_NON_MAX_PACKETS_OK,
+        AUDIO20_CTRL_NONE,
+        AUDIO20_CS_AS_ISO_DATA_EP_LOCK_DELAY_UNIT_UNDEFINED,
+        0U),
+
+    TUD_MIDI_DESCRIPTOR(3U, USB_STR_MIDI,
                         USB_DEVICE_MIDI_EP_OUT, USB_DEVICE_MIDI_EP_IN,
                         USB_DEVICE_MIDI_EP_SIZE)
 };
+
+_Static_assert(sizeof(g_usb_configuration_descriptor) == 310U,
+               "USB MIDI + UAC2 configuration descriptor size changed");
 
 static uint16_t g_usb_string_descriptor[32U];
 
@@ -107,11 +239,6 @@ static uint8_t usb_device_hw_init(void)
     return 1U;
 }
 
-void MX_USB_DEVICE_Init(void)
-{
-    (void)usb_device_start();
-}
-
 uint8_t usb_device_start(void)
 {
     const tusb_rhport_init_t init = {
@@ -123,6 +250,7 @@ uint8_t usb_device_start(void)
         return 1U;
     }
 
+    usb_audio_transport_reset();
     midi_usb_transport_quiesce_end();
     g_usb_device_mounted = 0U;
     if (usb_device_hw_init() == 0U) {
@@ -141,6 +269,7 @@ uint8_t usb_device_start(void)
 uint8_t usb_device_stop(void)
 {
     if (g_usb_device_started == 0U) {
+        usb_audio_transport_reset();
         midi_usb_transport_reset();
         return 1U;
     }
@@ -155,6 +284,7 @@ uint8_t usb_device_stop(void)
     if (tud_inited()) {
         (void)tud_deinit(USB_DEVICE_RHPORT);
     }
+    usb_audio_transport_reset();
     g_usb_device_started = 0U;
     midi_usb_transport_reset();
     midi_usb_transport_quiesce_end();
@@ -175,7 +305,8 @@ void usb_device_process(void)
 {
     if ((g_usb_device_started != 0U)
         && (midi_usb_transport_quiesce_requested() == 0U)) {
-        tud_task();
+        tud_task_ext(0U, false);
+        usb_audio_transport_process();
     }
 }
 
@@ -247,6 +378,7 @@ void tud_mount_cb(void)
 void tud_umount_cb(void)
 {
     g_usb_device_mounted = 0U;
+    usb_audio_transport_reset();
 }
 
 void tud_midi_rx_cb(uint8_t itf)

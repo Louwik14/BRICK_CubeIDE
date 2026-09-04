@@ -1,9 +1,8 @@
 #include "App/Hall/hall_engine.h"
 
+#include "buttons.h"
 #include "IPC/live_clock_control.h"
 #include "IPC/live_event.h"
-#include "UI/ui_core.h"
-#include "buttons.h"
 #include "stm32h7xx_hal.h"
 
 #define HALL_THRESHOLD_PPM                 200U
@@ -103,13 +102,18 @@ static uint8_t hall_consume_flag(volatile uint8_t *flag)
 static void hall_publish_edge(uint8_t key, uint8_t pressed,
                               uint8_t velocity, uint32_t tim5_tick)
 {
-    ui_hall_arbitration_snapshot_t context = {0};
-    (void)ui_core_hall_arbitration_snapshot_read(&context);
+    uint8_t modifier_bits = 0U;
+    if (button_down(BTN_SHIFT) != 0U)
+    {
+        modifier_bits |= LIVE_EVENT_MODIFIER_SHIFT;
+    }
+    if (button_down(BTN_TRACK) != 0U)
+    {
+        modifier_bits |= LIVE_EVENT_MODIFIER_TRACK;
+    }
+
     if (live_event_submit_from_hall(key, pressed != 0U, velocity, tim5_tick,
-                                    button_down(BTN_SHIFT),
-                                    button_down(BTN_TRACK),
-                                    context.hall_mode,
-                                    context.context_track,
+                                    modifier_bits,
                                     HAL_GetTick()))
     {
         if (pressed != 0U)

@@ -58,6 +58,7 @@
 #include "ui_active_track_sync.h"
 #include "ui_page_manager.h"
 #include "ui_param.h"
+
 #include "UI/ui_sampler_playhead.h"
 #include "App/encoder_control_dispatcher.h"
 #include "Track/track_runtime.h"
@@ -71,6 +72,7 @@
 #include "Storage/pattern_live_ram.h"
 #include "App/control_domain.h"
 
+#define UI_EVENT_PROCESS_BUDGET 16U
 #define UI_TRACK_MOD_BUTTON BTN_TRACK
 
 typedef struct
@@ -332,7 +334,7 @@ uint8_t ui_get_track_external_input(uint8_t track)
 bool ui_set_track_external_input(uint8_t track, uint8_t input)
 {
     if ((track >= TRACK_COUNT)
-            || (input >= ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT)
+            || (track_input_ownership_is_valid_external_input(input) == 0U)
             || (ui_get_track_family(track) != TRACK_FAMILY_EXTERNAL)
             || (ui_get_track_type(track) != TRACK_TYPE_EXTERNAL))
     {
@@ -1030,11 +1032,13 @@ void ui_core_tick(void)
 
     ui_event_t ev;
     ui_param_encoder_context_t encoder_ctx;
+    uint16_t processed = 0U;
     ui_param_capture_encoder_context(&encoder_ctx);
     ui_param_begin_encoder_edit_group(&encoder_ctx);
 
-    while (ui_event_pop(&ev))
+    while ((processed < UI_EVENT_PROCESS_BUDGET) && ui_event_pop(&ev))
     {
+        ++processed;
         if (control_domain_project_ui_busy() != 0U)
         {
             encoders_discard_pending();

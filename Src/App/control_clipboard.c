@@ -978,6 +978,9 @@ static uint8_t ui_track_clipboard_prevalidate(
                             payload->config.family, payload->config.type) == false))
                 || (payload->midi_channel < 1U) || (payload->midi_channel > 16U)
                 || (payload->midi_source >= TRACK_MIDI_SOURCE_COUNT)
+                || ((payload->config.family == TRACK_FAMILY_EXTERNAL)
+                    && (track_input_ownership_is_valid_external_input(
+                            payload->external_input) == 0U))
                 || (payload->polyphony.voice_count < 1U)
                 || (payload->polyphony.voice_count > SYNTH_POLYPHONY_MAX_VOICES)
                 || !isfinite(payload->polyphony.spread)
@@ -1305,7 +1308,8 @@ static uint8_t ui_core_clipboard_clear_track(uint8_t track)
         midi_channels[entity] = (uint8_t)((entity < 16U) ? entity + 1U : 16U);
         midi_sources[entity] = TRACK_MIDI_SOURCE_ALL;
         if (entity < TRACK_COUNT)
-            inputs[entity] = (uint8_t)(entity % ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT);
+            inputs[entity] = (uint8_t)((entity & 1U) != 0U
+                ? ENTITY_AUDIO_SOURCE_USB : ENTITY_AUDIO_SOURCE_LINE);
     }
     if (track_structure_apply_entity_bulk_with_inputs(families, types,
             midi_channels, midi_sources, inputs) == false)

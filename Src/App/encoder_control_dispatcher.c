@@ -37,10 +37,6 @@ uint8_t encoder_control_dispatcher_service(void)
         }
 
         const uint32_t binding = detent.binding.entry[detent.encoder_id];
-        if (encoder_binding_valid(binding) == 0U)
-        {
-            continue;
-        }
         if (encoder_binding_route(binding) != ENCODER_BINDING_ROUTE_AUDIO)
         {
             /* Navigation and CONTROL-owned bindings stay on the UI path. */
@@ -49,6 +45,10 @@ uint8_t encoder_control_dispatcher_service(void)
                 detent.ingress_serial,
                 encoder_binding_shift_down(binding),
                 encoder_binding_track(binding));
+            continue;
+        }
+        if (encoder_binding_valid(binding) == 0U)
+        {
             continue;
         }
 

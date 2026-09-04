@@ -8,6 +8,7 @@
 #include "Platform/cache_maintenance.h"
 #include "Platform/memory_layout.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/storage_io_wakeup.h"
 
 #include "sdmmc.h"
 #include "stm32h7xx_hal.h"
@@ -487,6 +488,41 @@ uint32_t sd_block_device_async_pending_count(void)
     return g_sd_block_device_async_count;
 }
 
+uint8_t sd_block_device_async_immediate_pending(void)
+{
+    if (g_sd_block_device_async_count == 0U)
+    {
+        return 0U;
+    }
+
+    const sd_block_device_async_entry_t *const entry =
+        &g_sd_block_device_async_fifo[g_sd_block_device_async_head];
+    if (entry->completed != 0U)
+    {
+        return 1U;
+    }
+    if (g_sd_block_device_async_error != 0U)
+    {
+        return 1U;
+    }
+    if ((g_sd_block_device_hw_state == SD_BLOCK_DEVICE_HW_ABORTING)
+            && (g_sd_block_device_async_abort_complete != 0U))
+    {
+        return 1U;
+    }
+    if ((entry->operation == SD_BLOCK_DEVICE_OPERATION_READ)
+            && (g_sd_block_device_async_rx_complete != 0U))
+    {
+        return 1U;
+    }
+    if ((entry->operation == SD_BLOCK_DEVICE_OPERATION_WRITE)
+            && (g_sd_block_device_async_tx_complete != 0U))
+    {
+        return 1U;
+    }
+    return 0U;
+}
+
 uint8_t sd_block_device_async_write_buffer_locked(const void *src)
 {
     if(src == 0)
@@ -561,22 +597,30 @@ void sd_block_device_async_read_complete_isr(void)
 {
     g_sd_block_device_async_callback_tick = HAL_GetTick();
     g_sd_block_device_async_rx_complete = 1U;
+    __DMB();
+    storage_io_wakeup(STORAGE_IO_WAKE_SD);
 }
 
 void sd_block_device_async_write_complete_isr(void)
 {
     g_sd_block_device_async_callback_tick = HAL_GetTick();
     g_sd_block_device_async_tx_complete = 1U;
+    __DMB();
+    storage_io_wakeup(STORAGE_IO_WAKE_SD);
 }
 
 void sd_block_device_async_abort_complete_isr(void)
 {
     g_sd_block_device_async_callback_tick = HAL_GetTick();
     g_sd_block_device_async_abort_complete = 1U;
+    __DMB();
+    storage_io_wakeup(STORAGE_IO_WAKE_SD);
 }
 
 void sd_block_device_async_error_isr(void)
 {
     g_sd_block_device_async_callback_tick = HAL_GetTick();
     g_sd_block_device_async_error = 1U;
+    __DMB();
+    storage_io_wakeup(STORAGE_IO_WAKE_SD);
 }

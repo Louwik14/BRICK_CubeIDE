@@ -20,6 +20,6 @@ void board_usb_host_process(void)
     if (usb_role_manager_is_device_active() != 0U) {
         usb_device_process();
     } else if (usb_role_manager_is_host_active() != 0U) {
-        usb_host_tasklet_poll_bounded(8U);
+        usb_host_process();
     }
 }

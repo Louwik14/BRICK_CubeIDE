@@ -41,6 +41,7 @@ bool ui_event_push_encoder(uint8_t encoder, int8_t direction,
                            uint32_t capture_tick, uint32_t ingress_serial,
                            uint8_t shift_down, uint8_t context_track);
 bool ui_event_pop(ui_event_t *ev);
+uint32_t ui_event_pending_count(void);
 uint32_t ui_event_drop_count(void);
 
 #endif /* UI_EVENT_H */

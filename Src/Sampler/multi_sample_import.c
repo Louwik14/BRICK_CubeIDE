@@ -13,6 +13,7 @@
 #include "Storage/wav_audio_codec.h"
 #include "Storage/wav_parser.h"
 #include "Storage/project_load_quiesce.h"
+#include "Storage/storage_io_wakeup.h"
 
 #include "ff.h"
 
@@ -1703,6 +1704,7 @@ uint8_t multi_sample_import_request_folder(const char *instrument_dir)
     }
     (void)snprintf(g_import_request_path, sizeof(g_import_request_path), "%s", instrument_dir);
     g_import_request_valid = 1U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 
@@ -1754,6 +1756,7 @@ uint8_t multi_sample_import_request_delete_index(const char *index_path)
     }
     (void)snprintf(g_delete_request_path, sizeof(g_delete_request_path), "%s", index_path);
     g_delete_request_valid = 1U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 

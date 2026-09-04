@@ -15,6 +15,7 @@
 #include "Storage/persistence_workspace.h"
 #include "Storage/persistent_pattern_control.h"
 #include "Storage/project_load_quiesce.h"
+#include "Storage/storage_io_wakeup.h"
 
 #define PATTERN_BANK_COUNT 16U
 #define PATTERN_PER_BANK   16U
@@ -242,6 +243,7 @@ uint8_t pattern_storage_request(uint8_t bank, uint8_t pattern)
     g_pattern_slot_meta[bank][pattern].has_snapshot =
         pattern_control_bank_present(bank, pattern);
     g_pattern_load_state = PATTERN_LOAD_REQUESTED;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 
@@ -264,6 +266,7 @@ uint8_t pattern_storage_request_save(uint8_t bank, uint8_t pattern)
     g_pattern_save_request_pattern = pattern;
     __DMB();
     g_pattern_save_request_valid = 1U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 

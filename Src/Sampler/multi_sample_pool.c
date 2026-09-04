@@ -12,6 +12,7 @@
 #include "IPC/multi_sample_audio_projection_control.h"
 #include "ControlRT/control_rt_publication.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/storage_io_wakeup.h"
 #include "Platform/memory_layout.h"
 #include "stm32h7xx.h"
 
@@ -52,6 +53,7 @@ uint8_t multi_sample_pool_request_clear_begin(void)
         || (multi_sample_import_delete_is_busy() != 0U)
         || (multi_sample_load_has_pending() != 0U)) return 0U;
     g_multi_clear_request = 1U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 
@@ -59,6 +61,7 @@ uint8_t multi_sample_pool_request_clear_end(void)
 {
     if (g_multi_clear_request != 0U) return 0U;
     g_multi_clear_request = 2U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 
@@ -72,6 +75,7 @@ uint8_t multi_sample_pool_request_clear_instrument(uint16_t instrument_id)
         || (multi_sample_load_has_pending() != 0U)) return 0U;
     g_multi_clear_request_instrument = instrument_id;
     g_multi_clear_request = 3U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 

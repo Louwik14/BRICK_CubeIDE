@@ -8,7 +8,15 @@
 #include "ControlRT/control_rt_publication.h"
 
 static uint8_t g_external_input[TRACK_COUNT];
-static uint8_t g_external_owner[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT];
+static uint8_t g_external_owner[ENTITY_TOPOLOGY_AUDIO_SOURCE_COUNT];
+
+#define TRACK_INPUT_OWNER_UNINITIALIZED 0xFEU
+
+uint8_t track_input_ownership_is_valid_external_input(uint8_t input)
+{
+    return (uint8_t)((input == ENTITY_AUDIO_SOURCE_LINE)
+            || (input == ENTITY_AUDIO_SOURCE_USB));
+}
 
 static uint8_t track_input_ownership_is_external(const track_config_t *config)
 {
@@ -20,14 +28,14 @@ static uint8_t track_input_ownership_is_external(const track_config_t *config)
 static uint8_t track_input_ownership_build(
     const track_config_t configs[TRACK_COUNT],
     const uint8_t selected[TRACK_COUNT],
-    uint8_t owners[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT])
+    uint8_t owners[ENTITY_TOPOLOGY_AUDIO_SOURCE_COUNT])
 {
     if ((configs == NULL) || (selected == NULL) || (owners == NULL))
     {
         return 0U;
     }
 
-    memset(owners, TRACK_INPUT_OWNER_NONE, ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT);
+    memset(owners, TRACK_INPUT_OWNER_NONE, ENTITY_TOPOLOGY_AUDIO_SOURCE_COUNT);
     for (uint8_t track = 0U; track < TRACK_COUNT; ++track)
     {
         if (track_input_ownership_is_external(&configs[track]) == 0U)
@@ -36,7 +44,7 @@ static uint8_t track_input_ownership_build(
         }
 
         const uint8_t input = selected[track];
-        if ((input >= ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT)
+        if ((track_input_ownership_is_valid_external_input(input) == 0U)
                 || (owners[input] != TRACK_INPUT_OWNER_NONE))
         {
             return 0U;
@@ -50,9 +58,12 @@ void track_input_ownership_init(const track_config_t configs[TRACK_COUNT])
 {
     for (uint8_t track = 0U; track < TRACK_COUNT; ++track)
     {
-        g_external_input[track] = (uint8_t)(track % ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT);
+        g_external_input[track] = (uint8_t)((track & 1U) != 0U
+            ? ENTITY_AUDIO_SOURCE_USB : ENTITY_AUDIO_SOURCE_LINE);
     }
-    memset(g_external_owner, TRACK_INPUT_OWNER_NONE, sizeof(g_external_owner));
+    /* Force the first projection to AUDIO, including MIC=NONE. */
+    memset(g_external_owner, TRACK_INPUT_OWNER_UNINITIALIZED,
+        sizeof(g_external_owner));
     (void)track_input_ownership_apply_configs(configs);
 }
 
@@ -67,7 +78,7 @@ uint8_t track_input_ownership_apply_bulk(
     const uint8_t external_input[TRACK_COUNT])
 {
     uint8_t next_selected[TRACK_COUNT];
-    uint8_t next_owners[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT];
+    uint8_t next_owners[ENTITY_TOPOLOGY_AUDIO_SOURCE_COUNT];
     if ((configs == NULL) || (external_input == NULL))
     {
         return 0U;
@@ -76,7 +87,7 @@ uint8_t track_input_ownership_apply_bulk(
     for (uint8_t track = 0U; track < TRACK_COUNT; ++track)
     {
         const uint8_t input = external_input[track];
-        if (input >= ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT)
+        if (track_input_ownership_is_valid_external_input(input) == 0U)
         {
             return 0U;
         }
@@ -87,10 +98,10 @@ uint8_t track_input_ownership_apply_bulk(
         return 0U;
     }
 
-    control_audio_command_t commands[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT];
+    control_audio_command_t commands[ENTITY_TOPOLOGY_AUDIO_SOURCE_COUNT];
     uint8_t command_count = 0U;
     for (uint8_t input = 0U;
-         input < ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT; ++input)
+         input < ENTITY_TOPOLOGY_AUDIO_SOURCE_COUNT; ++input)
     {
         if (next_owners[input] == g_external_owner[input]) continue;
         commands[command_count++] = (control_audio_command_t){
@@ -116,14 +127,15 @@ uint8_t track_input_ownership_validate_bulk(
     const track_config_t configs[TRACK_COUNT],
     const uint8_t external_input[TRACK_COUNT])
 {
-    uint8_t owners[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT];
+    uint8_t owners[ENTITY_TOPOLOGY_AUDIO_SOURCE_COUNT];
     if ((configs == NULL) || (external_input == NULL))
     {
         return 0U;
     }
     for (uint8_t track = 0U; track < TRACK_COUNT; ++track)
     {
-        if (external_input[track] >= ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT)
+        if (track_input_ownership_is_valid_external_input(
+                external_input[track]) == 0U)
         {
             return 0U;
         }
@@ -134,7 +146,7 @@ uint8_t track_input_ownership_validate_bulk(
 uint8_t track_input_ownership_can_claim(uint8_t track, uint8_t input)
 {
     if ((track >= TRACK_COUNT)
-            || (input >= ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT))
+            || (track_input_ownership_is_valid_external_input(input) == 0U))
     {
         return 0U;
     }
@@ -149,8 +161,9 @@ uint8_t track_input_ownership_set_external_input(
 {
     uint8_t selected[TRACK_COUNT];
     if ((track >= TRACK_COUNT)
-            || (input >= ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT)
-            || (configs == NULL))
+            || (configs == NULL)
+            || (track_input_ownership_is_valid_external_input(input) == 0U)
+            || (track_input_ownership_is_external(&configs[track]) == 0U))
     {
         return 0U;
     }
@@ -167,7 +180,7 @@ uint8_t track_input_ownership_get_external_input(uint8_t track)
 
 uint8_t track_input_ownership_get_external_owner(uint8_t input, uint8_t *out_track)
 {
-    if ((input >= ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT)
+    if ((track_input_ownership_is_valid_external_input(input) == 0U)
             || (g_external_owner[input] == TRACK_INPUT_OWNER_NONE))
     {
         return 0U;

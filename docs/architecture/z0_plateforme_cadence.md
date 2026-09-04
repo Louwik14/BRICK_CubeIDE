@@ -6,6 +6,32 @@ L'audio travaille par demi-buffer de 64 frames a 48 kHz. L'IRQ SAI possede sa ti
 
 Le clavier Hall BRICK execute la meme machine bornee depuis l'acquisition ADC. TIM5 est le compteur libre commun de capture. CONTROL en possede l'extension et la conversion; AUDIO initialise sa sample clock locale depuis TIM5 au premier callback valide et ne publie aucune ancre.
 
+## Services FreeRTOS
+
+Le produit fonctionne avec cinq services FreeRTOS aux responsabilites distinctes:
+
+- `CONTROL_RT` possede la decision musicale, le temps CONTROL et la publication de la FIFO fonctionnelle.
+- `STORAGE_IO` possede les lectures/ecritures SD, le page-cache, le decode et les transactions cooperatives.
+- `USB_SERVICE` possede le pump TinyUSB et la gestion des roles USB; il publie les ingress USB vers les owners CONTROL.
+- `UI_SERVICE` possede le drain des evenements UI, la navigation, le rendu OLED et les wakeups d'entree.
+- `AUDIO_BG_LOCAL` execute les travaux AUDIO non hard-RT qui restent locaux au coeur M7.
+
+CONTROL_RT, STORAGE_IO et USB_SERVICE utilisent des wakeups par flags et un
+fallback temporel borne; UI_SERVICE dort sur ses evenements et sa cadence de
+rendu; AUDIO_BG_LOCAL reste cooperatif. Aucun de ces services ne remplace la
+timeline SAI de l'IRQ audio et aucun ne transforme un data plane en commande
+fonctionnelle.
+
+## USB
+
+`USB_SERVICE` pompe TinyUSB 0.21.0 et le `usb_role_manager` arbitre un seul
+role actif a la fois avec FUSB302. Le role Device expose MIDI et Audio UAC2;
+le role Host expose MIDI. La mise sous VBUS utilise un delai de stabilisation
+borne de 200 ms avec deadline, sans `HAL_Delay` dans le service. L'AP2161 est
+pilote en logique active-bas. Le transport USB Audio reste M4-local sur H743;
+son passage inter-core H747 est explicitement non finalise dans le contrat des
+data planes.
+
 ## Frontiere CONTROL/AUDIO
 
 La frontiere suit `M4 CONTROL decide -> commande finale 16 octets -> M7 AUDIO execute`. La FIFO SPSC unique de 2048 commandes transporte PROGRAM, PARAM, NOTE, TRANSPORT, RECORD et PANIC. Les requetes visuelles typees AUDIO waveform et synth waveform empruntent egalement PARAM dans cette FIFO; elles n'ont ni mailbox ni file secondaire. Aucun pointeur, callback, contexte mutable, Pattern ou Project ne la traverse.
@@ -45,7 +71,14 @@ Au boot, `track_state` est initialise avant la projection finale `track_runtime`
 
 Les budgets DTCM, D1, D2, SRAM2, SRAM3, SRAM4, ITCM et SDRAM sont controles par les linkers; toute croissance d'une region proche de sa limite exige un budget explicite. Les voix et etats chauds restent en DTCM; les arenas AUDIO volumineuses resident en SDRAM selon leur contrat cache.
 
-La migration H747 conserve les payloads et protocoles. Restent physiques: deux images CM7/CM4, boot/HSEM, clocks, linkers, MPU des deux coeurs, repartition IRQ/DMA et initialisation FMC/SDRAM unique. M7 recoit SAI/audio; M4 recoit UI/MIDI/SD/display.
+La cible H747 conserve les payloads et protocoles. M7 possede SAI, IRQ audio,
+mapping des sorties, voix/DSP, mixer, Recorder PCM et lecteurs physiques; M4
+possede CONTROL, UI, MIDI, sequence, Track/Param/Mod/Note FX, Storage/SD,
+page-cache, decode, persistence, USB et catalogues. Restent physiques: deux
+images CM7/CM4, boot/HSEM, clocks, linkers, MPU des deux coeurs, repartition
+IRQ/DMA et initialisation FMC/SDRAM unique. Le transport USB Audio H747 n'est
+pas encore un contrat inter-core finalise; voir
+`h747_shared_data_planes.md`.
 
 ## Ownership de build prepare pour H747
 

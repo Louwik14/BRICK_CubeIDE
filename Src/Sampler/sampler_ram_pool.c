@@ -7,6 +7,7 @@
 #include "ff.h"
 #include "Platform/memory_layout.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/storage_io_wakeup.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "Storage/wav_parser.h"
 #include "Sampler/sample_page_cache.h"
@@ -131,6 +132,7 @@ uint8_t sampler_ram_pool_request_clear(uint16_t ram_slot)
     g_sampler_ram_clear_request_slot = ram_slot;
     __DMB();
     g_sampler_ram_clear_request_valid = 1U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 
@@ -750,6 +752,7 @@ uint8_t sampler_ram_pool_request_load(uint16_t ram_slot, const char *path)
                                 sizeof(g_sampler_ram_load_request_path), path);
     __DMB();
     g_sampler_ram_load_request_valid = 1U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 

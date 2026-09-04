@@ -34,6 +34,7 @@ void MX_SDMMC1_SD_Init(void)
 {
 
   /* USER CODE BEGIN SDMMC1_Init 0 */
+#define Error_Handler brick_sd_generated_sdmmc_error_handler
 
   /* USER CODE END SDMMC1_Init 0 */
 
@@ -48,12 +49,10 @@ void MX_SDMMC1_SD_Init(void)
   hsd1.Init.ClockDiv = 5;
   if (HAL_SD_Init(&hsd1) != HAL_OK)
   {
-    if (brick_sd_init_failure_is_no_media(MSD_ERROR) == 0U)
-    {
-      Error_Handler();
-    }
+    Error_Handler();
   }
   /* USER CODE BEGIN SDMMC1_Init 2 */
+#undef Error_Handler
 
   /* USER CODE END SDMMC1_Init 2 */
 

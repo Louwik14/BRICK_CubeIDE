@@ -5,6 +5,7 @@
 #include "Storage/sd_access_gate.h"
 #include "Storage/project_control.h"
 #include "Storage/project_load_quiesce.h"
+#include "Storage/storage_io_wakeup.h"
 #include "Sampler/sampler_ram_pool.h"
 #include "Platform/memory_layout.h"
 #include "Track/track_catalog.h"
@@ -178,6 +179,7 @@ static uint8_t patch_product_request_begin(patch_request_kind_t kind,
         g_patch_request_name[0] = '\0';
     __DMB();
     g_patch_request = kind;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 

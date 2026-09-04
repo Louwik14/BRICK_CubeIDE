@@ -10,6 +10,7 @@
 #include "Sampler/sample_page_cache_config.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/storage_io_wakeup.h"
 
 typedef struct
 {
@@ -417,6 +418,7 @@ uint8_t storage_catalog_request(storage_catalog_kind_t kind, const char *path)
     g_storage_catalog_request.kind = kind;
     __DMB();
     g_storage_catalog_request_valid = 1U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 

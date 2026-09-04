@@ -26,11 +26,11 @@ Le GROUP master 7 possede le bus AUDIO, les deux kernels Audio FX A/B, MOD et le
 
 ## Sampler mono et stereo
 
-Le format est immutable pendant la voix. Une page physique de 16 KiB contient 4096 frames mono FLOAT32 ou 2048 frames stereo entrelacees. Mono reste mono jusqu'au pan final; Multi applique filtre et VCA par voix avant spread/pan. Les inserts recoivent le signal stereo apres cette projection. Reverse et ping-pong appartiennent au Sampler RAM, pas au streamer.
+Le format est immutable pendant la voix. Une page physique de 32 KiB contient 8192 frames mono FLOAT32 ou 4096 frames stereo entrelacees. Mono reste mono jusqu'au pan final; Multi applique filtre et VCA par voix avant spread/pan. Les inserts recoivent le signal stereo apres cette projection. Reverse et ping-pong appartiennent au Sampler RAM, pas au streamer.
 
 ## Wave
 
-Wave possede OSC1, OSC2 et COMMON. TABLE est un slot logique projete vers un slot/generation AUDIO. Les deux oscillateurs sont independants; WAVE ne possede aucun routage ou etat de modulation croisee. L'interpolation de frame et de sample est permanente, POS reste l'axe des frames et aucun smoothing POS n'est applique. START (0..100 %) et LEN (1..100 %) definissent une fenetre lineaire interne bornee a la fin du cycle : `effective_len = min(LEN, 1 - START)`, puis `read_phase = START + phase_porteuse * effective_len`. La phase porteuse et le pitch restent possedes par la voix, aucun wrap de lecture n'est applique, et START=0/LEN=100 conserve le chemin historique bit-identique.
+Wave possede OSC1, OSC2 et COMMON. TABLE est un slot logique projete vers un slot/generation AUDIO. Les deux oscillateurs sont independants; WAVE ne possede aucun routage ou etat de modulation croisee. L'interpolation de frame et de sample est permanente, POS reste l'axe des frames et aucun smoothing POS n'est applique. START (0..100 %) et LEN (1..100 %) definissent une fenetre lineaire interne bornee a la fin du cycle : `effective_len = min(LEN, 1 - START)`, puis `read_phase = START + phase_porteuse * effective_len`. La phase porteuse et le pitch restent possedes par la voix, aucun wrap de lecture n'est applique, et START=0/LEN=100 conserve le chemin de reference bit-identique.
 
 Le snapshot de waveform est une publication seqlock AUDIO->CONTROL fixe et sans pointeur. Il capture au plus 48 points par oscillateur, a 20 Hz maximum, sans second rendu. Desactive, il n'ajoute aucun cout par sample.
 

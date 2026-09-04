@@ -307,7 +307,16 @@ void seq_runtime_init(void)
     seq_clock_bridge_init(&g_seq_clock_bridge,
                           &g_seq_runtime,
                           SEQ_RUNTIME_DEFAULT_TEMPO_BPM_MILLI);
-    seq_runtime_exec_reset_sample_timeline(0U);
+    /* The FIFO may already contain boot projections dated from TIM5.  Seed
+     * the execution timeline from that same absolute sample authority so
+     * Transport scheduled publication cannot move behind the FIFO floor. */
+    uint64_t boot_sample = 0U;
+    if (control_rt_now_sample(&boot_sample) == 0U)
+    {
+        Error_Handler();
+        return;
+    }
+    seq_runtime_exec_reset_sample_timeline(boot_sample);
     g_seq_runtime.step_sample_q16 = 0U;
     seq_runtime_exec_set_midi_clock_enabled(0U);
     seq_runtime_exec_set_midi_clock_period_q16(1U);

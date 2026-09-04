@@ -1,6 +1,7 @@
 #include "encoders_hw.h"
 
 #include "Board/board_controls.h"
+#include "App/control_rt_wakeup.h"
 #include "IPC/live_clock_control.h"
 
 #include "cmsis_gcc.h"
@@ -90,6 +91,7 @@ static void encoders_hw_publish_detent(uint8_t encoder, int8_t direction)
     event->reserved = 0U;
     __DMB();
     enc_detent_head = head + 1U;
+    control_rt_wakeup(CONTROL_RT_WAKE_ENCODER);
 }
 
 static void encoders_hw_accumulate_transition(uint8_t encoder, int8_t transition)

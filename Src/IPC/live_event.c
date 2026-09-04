@@ -1,6 +1,6 @@
 #include "IPC/live_event.h"
-#include "Storage/project_load_quiesce.h"
 
+#include "App/control_rt_wakeup.h"
 #include "stm32h7xx_hal.h"
 
 #define LIVE_EVENT_QUEUE_MASK (LIVE_EVENT_QUEUE_CAPACITY - 1U)
@@ -48,20 +48,10 @@ bool live_event_submit_from_hall(uint8_t key,
                                  bool pressed,
                                  uint8_t velocity,
                                  uint32_t tim5_tick,
-                                 uint8_t shift_down,
-                                 uint8_t track_select_armed,
-                                 uint8_t hall_mode,
-                                 uint8_t context_track,
+                                 uint8_t modifier_bits,
                                  uint32_t capture_ms)
 {
-    if (project_load_ingress_is_open() == 0U)
-        return false;
     const uint32_t primask = live_event_enter_critical();
-    if (project_load_ingress_is_open() == 0U)
-    {
-        live_event_exit_critical(primask);
-        return false;
-    }
     const uint16_t head = g_live_event_head;
     const uint16_t next = (uint16_t)((head + 1U) & LIVE_EVENT_QUEUE_MASK);
 
@@ -82,22 +72,19 @@ bool live_event_submit_from_hall(uint8_t key,
     g_live_event_queue[head] = (live_event_t){
         .tim5_tick = tim5_tick,
         .ingress_serial = serial,
-        .occurrence_id = 0U,
         .key = key,
         .pressed = pressed ? 1U : 0U,
         .velocity = velocity,
-        .source = LIVE_EVENT_SOURCE_HALL,
-        .shift_down = (shift_down != 0U) ? 1U : 0U,
-        .track_select_armed = (track_select_armed != 0U) ? 1U : 0U,
-        .hall_mode = hall_mode,
-        .context_track = context_track,
-        .reserved = 0U,
+        .modifier_bits = modifier_bits,
         .capture_ms = capture_ms
     };
     __DMB();
     g_live_event_head = next;
 
     live_event_exit_critical(primask);
+
+    /* The FIFO is authoritative; the flag is only a best-effort doorbell. */
+    control_rt_wakeup(CONTROL_RT_WAKE_HALL);
     return true;
 }
 

@@ -11,21 +11,15 @@ typedef enum
     LIVE_EVENT_SOURCE_MIDI_HOST = 2
 } live_event_source_t;
 
-/* Fixed-size CONTROL-local ingress event used by Hall and MIDI producers. */
+/* Fixed-size CONTROL-local physical Hall edge. */
 typedef struct
 {
     uint32_t tim5_tick;
     uint32_t ingress_serial;
-    uint32_t occurrence_id;
     uint8_t key;
     uint8_t pressed;
     uint8_t velocity;
-    uint8_t source;
-    uint8_t shift_down;
-    uint8_t track_select_armed;
-    uint8_t hall_mode;
-    uint8_t context_track;
-    uint8_t reserved;
+    uint8_t modifier_bits;
     uint32_t capture_ms;
 } live_event_t;
 
@@ -51,8 +45,11 @@ typedef struct
 _Static_assert(sizeof(live_note_event_t) == 24U,
                "live_note_event_t must remain a fixed 24-byte event");
 
-_Static_assert(sizeof(live_event_t) == 28U,
-               "live_event_t must remain a fixed 28-byte shared event");
+_Static_assert(sizeof(live_event_t) == 16U,
+               "live_event_t must remain a fixed 16-byte physical Hall event");
+
+#define LIVE_EVENT_MODIFIER_SHIFT (1U << 0)
+#define LIVE_EVENT_MODIFIER_TRACK (1U << 1)
 
 #define LIVE_EVENT_QUEUE_CAPACITY 64U
 
@@ -63,10 +60,7 @@ bool live_event_submit_from_hall(uint8_t key,
                                  bool pressed,
                                  uint8_t velocity,
                                  uint32_t tim5_tick,
-                                 uint8_t shift_down,
-                                 uint8_t track_select_armed,
-                                 uint8_t hall_mode,
-                                 uint8_t context_track,
+                                 uint8_t modifier_bits,
                                  uint32_t capture_ms);
 
 bool live_event_pop(live_event_t *out_event);

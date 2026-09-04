@@ -33,6 +33,9 @@ Looper est `Sampler / Looper` et peut occuper tout top-level `0..7`. Son quota
 global est pre-valide par CONTROL. Etat, prises, parametres, p-locks et routes
 restent indexes par l'entite.
 
-External est l'unique proprietaire possible de l'entree physique selectionnee.
-`track_input_ownership` interdit deux proprietaires pour une entree. Les
-snapshots et clipboards transportent uniquement des etats logiques CONTROL.
+External est l'unique proprietaire possible de chaque source d'entree
+selectionnee. Le contrat de sources est explicite et stable : `LINE` et
+`USB`; `MIC` est reserve au chemin Recorder / Audio REC et n'est pas une
+source de track. `track_input_ownership` interdit deux proprietaires pour une
+source External.
+Les snapshots et clipboards transportent uniquement des etats logiques CONTROL.

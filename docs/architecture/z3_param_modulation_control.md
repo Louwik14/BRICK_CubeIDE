@@ -20,7 +20,8 @@ directement a `keyboard_runtime`, `seq_model`/`seq_runtime`/`seq_edit` et
 La structure Track (famille, type, canal/source MIDI et entree), le nombre de
 voix, la structure Matrix/Multi/Slew et le routing Audio FX ne sont pas des
 Param non plus. Leurs owners sont respectivement Track, `polyphony_control`,
-Mod et `audio_fx_control_state`; leurs UI appellent directement ces APIs.
+Mod et `audio_fx_control_state`; CONTROL applique les intentions UI via ces
+APIs et reste l'unique autorite de publication.
 `PARAM_CFG_POLY_SPREAD` reste un Param sonore scalaire.
 Les valeurs d'entite sont lues et ecrites directement dans Track, Seq, Mod,
 NoteFx ou l'etat Param CONTROL par piste. L'UI ne conserve que son contexte
@@ -53,9 +54,10 @@ La valeur CONTROL du parametre est l'unique autorite de sa base. Elle est projet
 Les selections Sample et Wavetable appartiennent a `project_control` sous forme
 de references asset typees stables; leur resolution en slot runtime n'a lieu
 qu'a la publication AUDIO. Elles ne sont ni Param, ni destinations de p-lock,
-modulation ou MIDI. Arm, longueur et lecture automatique du Looper appartiennent
-a `audio_recorder`; l'UI appelle directement cet owner. La selection d'operateur
-FM est un contexte local de l'editeur. L'etat interne FM est possede par
+modulation ou MIDI. Arm, longueur et lecture automatique du Looper sont des
+decisions CONTROL: l'UI emet une intention et CONTROL appelle la facade
+`audio_recorder` avant de publier le RECORD date. La selection d'operateur FM
+est un contexte local de l'editeur. L'etat interne FM est possede par
 `fm_control_state` cote CONTROL et publie comme un DTO coherent unique vers
 AUDIO; aucun pack FM interne ne traverse Param.
 

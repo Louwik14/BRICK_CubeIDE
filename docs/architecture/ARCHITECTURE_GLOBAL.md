@@ -6,13 +6,13 @@ Le code courant est l'autorite finale. Ce document est l'unique porte d'entree d
 
 - Seize identites logiques stables existent: huit entites top-level `0..7` et huit children GROUP `8..15`, actives uniquement lorsque l'entite 7 est GROUP master.
 - `entity_topology` derive activite, role, parent et capacites. `track_state` possede la configuration CONTROL; `track_runtime` la projette vers les moteurs, ressources et voies physiques.
-- Looper est un type de Sampler assignable. External est un moteur dont l'entree physique est arbitree par `track_input_ownership`. Ressource physique, voie mixer et quota ne sont jamais des identites logiques.
+- Looper est un type de Sampler assignable. External est un moteur dont la source d'entree (`LINE` ou `USB`) est arbitree par `track_input_ownership`; `MIC` reste reserve au chemin Recorder / Audio REC. Ressource physique, voie mixer et quota ne sont jamais des identites logiques.
 - CONTROL possede UI, MIDI, sequence, ROLL, Note FX, p-locks, outputs logiques, deadlines, stealing musical et catalogue Sample. STORAGE possede le Stream, son I/O et son page-cache. AUDIO possede IRQ, mapping d'execution `{output_id,note,velocity,gate} -> slot DSP`, RELEASE physique, lecteurs, positions, moteurs et mixer. PROGRAM peut remplacer un renderer compatible sans tuer l'output logique ni emettre NOTE OFF/ON.
 - L'ordre fonctionnel CONTROL vers AUDIO traverse exclusivement la FIFO SPSC
   unique PROGRAM/PARAM/NOTE/TRANSPORT/RECORD/PANIC. Les gros data planes et
   retours physiques utilisent des structures fixes, pointer-free et separees.
 - `STOP(output_id)` rend l'output musicalement mort dans CONTROL. AUDIO peut conserver une tail RELEASE et libere ou reutilise physiquement le slot sans ACK musical.
-- Pattern, Project et Patch utilisent exclusivement le codec CONTROL explicite version 4.
+- Pattern, Project et Patch utilisent exclusivement le codec CONTROL explicite version 5.
 
 ## Flux principaux
 
@@ -69,3 +69,6 @@ implementation dans `Src`. Aucun domaine generique `Core` ne subsiste.
 - [recorder_sd.md](recorder_sd.md): bus AUDIO REC unique, ARM TRIG/peak pointer-free, Recorder, capture Looper, reservation fichier et relecture de prise.
 - [m4_m7_functional_command_contract.md](m4_m7_functional_command_contract.md): FIFO fonctionnelle unique et consumer AUDIO.
 - [m7_m4_physical_return_contract.md](m7_m4_physical_return_contract.md): retours physiques minimaux, diagnostic et ownership des data planes.
+- [h747_shared_data_planes.md](h747_shared_data_planes.md): data planes pointer-free, ownership, cache et port H747.
+- [storage_no_media_boot.md](storage_no_media_boot.md): boot sans media, absence SD et reprise des services Storage.
+- [prism_contract.md](prism_contract.md): contrat du moteur Prism et de ses projections AUDIO.

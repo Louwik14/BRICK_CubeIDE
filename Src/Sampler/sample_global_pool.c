@@ -5,6 +5,7 @@
 
 #include "Sampler/sample_cache.h"
 #include "Platform/memory_layout.h"
+#include "Storage/storage_io_wakeup.h"
 
 STORAGE_STATE_SDRAM static sample_global_slot_t
     g_sample_global_pool[SAMPLE_GLOBAL_POOL_MAX_SLOTS];
@@ -462,6 +463,7 @@ uint8_t sample_global_pool_request_classic_load(uint16_t global_index, const cha
     (void)snprintf(g_classic_request_path, sizeof(g_classic_request_path), "%s", path);
     __DMB();
     g_classic_request_valid = 1U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 
@@ -476,6 +478,7 @@ uint8_t sample_global_pool_request_clear_classic(uint16_t global_index)
     g_classic_clear_request_slot = global_index;
     __DMB();
     g_classic_clear_request_valid = 1U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 

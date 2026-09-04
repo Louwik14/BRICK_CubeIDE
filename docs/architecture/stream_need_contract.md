@@ -26,11 +26,19 @@ le lookahead produit a partir des ranges proteges; AUDIO ne publie ni liste de
 besoins ni wake Storage. Une page par lecteur et par passe; aucune horloge
 STREAM, low-water dynamique ou prediction temporelle ne conditionne le service.
 
+Le contrat V1 borne le workload a huit voix Stream maximum, avec une page par
+voix et par passe dans le meme round-robin strict. Toutes les voix admissibles
+suivent cette cadence et cette politique; il n'existe pas d'EDF par voix, de
+deadline individuelle ni de priorite derivee du playhead.
+
 Le contrat produit garantit le pre-socle `2 x 32 KiB` et les limites Stream/Multi publiees avant jeu. Il n'existe ni READY par note, ni ACK START, ni retry, rollback ou fallback musical. Un underrun dans ce workload est une rupture de contrat, pas une admission tardive.
 
 ## I/O et cadence
 
-Le service Storage traite une commande bornee hors IRQ. Produit: tranche 32 KiB; page temporaire 16 KiB. Le backend physique resout des extents vers une FIFO DMA bornee; FatFs reste le fallback. Read-ahead ne change ni ordre, besoins ni lifecycle.
+Le service Storage traite une commande bornee hors IRQ. Produit: tranche et
+page de travail 32 KiB. Le backend physique resout des extents vers une FIFO DMA
+bornee; FatFs reste le fallback. Read-ahead ne change ni ordre, besoins ni
+lifecycle.
 
 Le transport contient geometrie source, format et token. STORAGE decode dans
 un payload partage et publie READY; AUDIO invalide avant lecture. H743

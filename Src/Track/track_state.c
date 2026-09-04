@@ -180,6 +180,9 @@ bool track_state_set_external_input(uint8_t track, uint8_t input)
 {
     if ((track >= TRACK_COUNT)
             || (entity_topology_is_active(track) == 0U)
+            || (g_track_configs[track].family != TRACK_FAMILY_EXTERNAL)
+            || (g_track_configs[track].type != TRACK_TYPE_EXTERNAL)
+            || (track_input_ownership_is_valid_external_input(input) == 0U)
             || (track_input_ownership_set_external_input(
                     track, input, g_track_configs) == 0U))
     {

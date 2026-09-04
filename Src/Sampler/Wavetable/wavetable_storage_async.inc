@@ -112,6 +112,7 @@ uint8_t wavetable_pool_request_clear(uint16_t wavetable_slot)
     g_wavetable_clear_request_slot = wavetable_slot;
     __DMB();
     g_wavetable_clear_request_valid = 1U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 
@@ -138,6 +139,7 @@ uint8_t wavetable_pool_request_load(uint16_t wavetable_slot,
                    sizeof(g_wavetable_load_request_path), "%s", path);
     __DMB();
     g_wavetable_load_request_valid = 1U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 

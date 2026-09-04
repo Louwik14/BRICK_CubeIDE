@@ -3,7 +3,7 @@
  * @brief Interface du module MIDI pour STM32 HAL (USB Device + backends futurs).
  *
  * Fournit une API unifiée pour l'envoi de messages MIDI sur différents transports :
- * - USB Device (usbd_midi)
+ * - USB Device (TinyUSB MIDI)
  * - USB Host (stub pour l'instant)
  * - DIN UART (stub pour l'instant)
  */
@@ -139,6 +139,7 @@ midi_dest_t midi_get_rx_destination(void);
  * @brief Service transport USB (à appeler depuis USB_SERVICE).
  */
 void midi_usb_service_poll(void);
+uint8_t midi_usb_service_work_pending(void);
 void midi_usb_transport_reset(void);
 void midi_usb_transport_quiesce_begin(void);
 void midi_usb_transport_quiesce_end(void);
@@ -150,6 +151,7 @@ uint8_t midi_usb_transport_quiesce_requested(void);
  * @brief Décodage et injection MIDI (à appeler depuis CONTROL_RT).
  */
 void midi_control_poll(void);
+uint16_t midi_control_pending_count(void);
 
 /**
  * @brief Envoie un message MIDI brut vers une destination.

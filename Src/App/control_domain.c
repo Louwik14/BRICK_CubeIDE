@@ -4,6 +4,7 @@
 #include "App/brick6_boot_fx_policy.h"
 #include "App/control_clipboard.h"
 #include "App/engine_tasklet.h"
+#include "App/control_rt_wakeup.h"
 #include "App/live_parameter_audio_publication.h"
 #include "encoders.h"
 #include "App/Hall/hall_calibration.h"
@@ -36,6 +37,7 @@
 #include "Storage/project_product.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/sd_preview.h"
+#include "Storage/storage_io_wakeup.h"
 #include "Storage/sample_capture.h"
 #include "Storage/undo_v2.h"
 #include "Storage/wav_convert.h"
@@ -63,6 +65,7 @@
 #include <string.h>
 
 #define CONTROL_UI_FIFO_MASK (CONTROL_UI_FIFO_CAPACITY - 1U)
+#define CONTROL_UI_PROCESS_BUDGET 16U
 
 _Static_assert((CONTROL_UI_FIFO_CAPACITY
                 & (CONTROL_UI_FIFO_CAPACITY - 1U)) == 0U,
@@ -77,6 +80,7 @@ static volatile uint8_t g_control_project_request_pending;
 
 #define CONTROL_STORAGE_FIFO_CAPACITY 512U
 #define CONTROL_STORAGE_FIFO_MASK (CONTROL_STORAGE_FIFO_CAPACITY - 1U)
+#define CONTROL_STORAGE_PROCESS_BUDGET 16U
 
 #define CONTROL_STORAGE_FIFO_MAX_RETIRE_EVENTS \
     (SAMPLER_RAM_POOL_MAX_SLOTS + WAVETABLE_POOL_MAX_SLOTS \
@@ -138,6 +142,7 @@ static uint8_t control_domain_submit_ui_message(
     message->payload = *payload;
     __DMB();
     g_control_ui_head = head + 1U;
+    control_rt_wakeup(CONTROL_RT_WAKE_UI);
     if (type == CONTROL_UI_MSG_PROJECT)
         g_control_project_request_pending = 1U;
     return 1U;
@@ -168,6 +173,7 @@ static uint8_t control_domain_submit_storage_message(
     g_control_storage_fifo[head & CONTROL_STORAGE_FIFO_MASK] = *message;
     __DMB();
     g_control_storage_head = head + 1U;
+    control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
     return 1U;
 }
 
@@ -547,6 +553,7 @@ void control_domain_storage_process_requests(void)
             (waveform_cache_reason_t)request.reason,
             request.frame_count,
             request.sample_rate);
+        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     }
 }
 
@@ -631,8 +638,6 @@ static void control_domain_apply_track_intent(const control_track_intent_t *inte
     case CONTROL_TRACK_SET_EXTERNAL_INPUT:
         if (track_state_set_external_input(intent->track, intent->value0))
         {
-            mod_lfo_v1_invalidate_dest_cache_all();
-            track_runtime_rebuild_track(intent->track);
             if (intent->track == ui_get_active_track())
                 ui_active_track_sync_after_track_structure_change(1U);
         }
@@ -972,7 +977,7 @@ void control_domain_process_ui_messages(void)
     control_ui_message_t message;
     uint16_t processed = 0U;
 
-    while ((processed < CONTROL_UI_FIFO_CAPACITY)
+    while ((processed < CONTROL_UI_PROCESS_BUDGET)
            && (control_domain_take_ui_message(&message) != 0U))
     {
         if (control_domain_project_busy_allows_message(
@@ -1067,7 +1072,9 @@ void control_domain_process_ui_messages(void)
 void control_domain_process_storage_messages(void)
 {
     control_storage_audio_event_t message;
-    while (control_domain_take_storage_message(&message) != 0U)
+    uint32_t processed = 0U;
+    while ((processed < CONTROL_STORAGE_PROCESS_BUDGET)
+           && (control_domain_take_storage_message(&message) != 0U))
     {
         switch ((control_storage_event_type_t)message.type)
         {
@@ -1089,7 +1096,18 @@ void control_domain_process_storage_messages(void)
         default:
             break;
         }
+        ++processed;
     }
+}
+
+uint32_t control_domain_ui_pending_count(void)
+{
+    return g_control_ui_head - g_control_ui_tail;
+}
+
+uint32_t control_domain_storage_pending_count(void)
+{
+    return g_control_storage_head - g_control_storage_tail;
 }
 
 void control_domain_init(void)
