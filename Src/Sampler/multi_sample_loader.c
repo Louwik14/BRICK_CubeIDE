@@ -684,6 +684,7 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
     g_multi_load_active = 1U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return MULTI_SAMPLE_LOAD_OK;
 }
 
@@ -1005,6 +1006,9 @@ void multi_sample_service_load(uint32_t byte_budget)
         sample_stream_io_release_key(sample_audio_key_multi(plan->sample_id));
         multi_loader_set_error(MULTI_SAMPLE_LOAD_PAGE_ERROR, plan->sample_id);
     }
+
+    if ((g_multi_load_active != 0U) && (g_multi_bulk.pending == 0U))
+        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
 }
 
 uint8_t multi_sample_is_ready(uint16_t instrument_id)
@@ -1047,6 +1051,7 @@ uint8_t multi_sample_load_take_completion(
     *out_completion = g_multi_load_completion;
     __DMB();
     g_multi_load_completion_valid = 0U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 

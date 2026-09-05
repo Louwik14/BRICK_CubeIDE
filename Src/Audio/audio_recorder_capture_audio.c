@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "IPC/audio_recorder_capture_contract.h"
+#include "Storage/storage_io_wakeup.h"
 #include "stm32h7xx.h"
 
 typedef struct
@@ -23,6 +24,7 @@ static void audio_recorder_capture_audio_close(audio_recorder_error_t fault)
     g_audio_recorder_capture.capture_fault = (uint32_t)fault;
     __DMB();
     g_audio_recorder_capture.closed_session = g_audio_capture.session_id;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
 }
 
 void audio_recorder_capture_audio_init(void)
@@ -82,6 +84,7 @@ uint8_t audio_recorder_capture_audio_push(audio_recorder_client_t client,
     const uint32_t remaining = g_audio_capture.frame_limit - captured;
     if (frames > remaining) frames = remaining;
     const uint32_t tail = g_audio_recorder_capture.tail_cursor;
+    const uint8_t was_empty = (head == tail) ? 1U : 0U;
     __DMB();
     const uint32_t retained = head - tail;
     if (frames > (AUDIO_RECORDER_CAPTURE_RING_FRAMES - retained))
@@ -101,6 +104,8 @@ uint8_t audio_recorder_capture_audio_push(audio_recorder_client_t client,
                (size_t)(frames - first) * AUDIO_RECORDER_CHANNELS * sizeof(int32_t));
     __DMB();
     g_audio_recorder_capture.head_cursor = head + frames;
+    if (was_empty != 0U)
+        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     if ((captured + frames) >= g_audio_capture.frame_limit)
         audio_recorder_capture_audio_close(AUDIO_RECORDER_ERROR_NONE);
     return 1U;
@@ -113,4 +118,10 @@ uint8_t audio_recorder_capture_audio_frames(audio_recorder_client_t client,
             || (g_audio_capture.session_id == 0U)) return 0U;
     *out_frames = g_audio_recorder_capture.head_cursor - g_audio_capture.start_cursor;
     return (g_audio_recorder_capture.capture_fault == AUDIO_RECORDER_ERROR_NONE) ? 1U : 0U;
+}
+
+uint8_t audio_recorder_capture_audio_pending(void)
+{
+    return (g_audio_recorder_capture.head_cursor
+            != g_audio_recorder_capture.tail_cursor) ? 1U : 0U;
 }

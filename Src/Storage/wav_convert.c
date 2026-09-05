@@ -642,7 +642,7 @@ static uint8_t wav_convert_replace_phase(void)
     return 1U;
 }
 
-void wav_convert_service(uint32_t byte_budget)
+static void wav_convert_service_step(uint32_t byte_budget)
 {
     if (g_wav_convert_request_valid != 0U)
     {
@@ -681,6 +681,24 @@ void wav_convert_service(uint32_t byte_budget)
             wav_convert_fail(WAV_CONVERT_ERROR_INVALID_ARG);
             break;
     }
+}
+
+void wav_convert_service(uint32_t byte_budget)
+{
+    const wav_convert_state_t state = g_wav_convert.state;
+    const wav_convert_phase_t phase = g_wav_convert.phase;
+    const uint32_t frames_done = g_wav_convert.frames_done;
+    const uint32_t frames_written = g_wav_convert.frames_written;
+    const uint32_t pack_fill_frames = g_wav_convert.pack_fill_frames;
+
+    wav_convert_service_step(byte_budget);
+    if ((g_wav_convert.state == WAV_CONVERT_STATE_ACTIVE)
+            && ((g_wav_convert.state != state)
+                || (g_wav_convert.phase != phase)
+                || (g_wav_convert.frames_done != frames_done)
+                || (g_wav_convert.frames_written != frames_written)
+                || (g_wav_convert.pack_fill_frames != pack_fill_frames)))
+        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
 }
 
 uint8_t wav_convert_is_active(void)

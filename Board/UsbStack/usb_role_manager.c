@@ -190,6 +190,7 @@ void usb_role_manager_process(void)
 void usb_role_manager_shutdown(void)
 {
     HAL_NVIC_DisableIRQ(OTG_FS_IRQn);
+    usb_host_power_off();
     g_usb_role.shutdown_requested = 1U;
     midi_usb_transport_quiesce_begin();
     midi_usb_transport_quiesce_control_ack();
@@ -197,9 +198,9 @@ void usb_role_manager_shutdown(void)
 
 uint8_t usb_role_manager_shutdown_complete(void)
 {
-    return (g_usb_role.shutdown_requested != 0U)
-        && (g_usb_role.initialized == 0U)
-        && (g_usb_role.active == USB_ROLE_MANAGER_NONE);
+    /* HOST_EN is already OFF synchronously; USB teardown must not gate
+     * POWER_HOLD release. */
+    return (g_usb_role.shutdown_requested != 0U) ? 1U : 0U;
 }
 
 usb_role_manager_role_t usb_role_manager_active_role(void)

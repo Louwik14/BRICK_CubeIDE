@@ -536,6 +536,7 @@ uint8_t control_domain_request_storage_waveform_cache(const char *path,
     (void)snprintf(request->path, sizeof(request->path), "%s", path);
     __DMB();
     g_control_storage_waveform_head = head + 1U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 

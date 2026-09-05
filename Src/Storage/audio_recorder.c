@@ -10,11 +10,14 @@
 #include "IPC/control_audio_command.h"
 #include "ControlRT/control_rt_publication.h"
 #include "IPC/audio_recorder_capture_contract.h"
+#include "Audio/audio_recorder_capture_audio.h"
 #include "IPC/live_clock_control.h"
 #include "Storage/looper_storage.h"
 #include "Storage/wav_loader.h"
 #include "Storage/waveform_cache.h"
 #include "Storage/project_load_quiesce.h"
+#include "Storage/storage_io_wakeup.h"
+#include "SD/sd_block_device.h"
 #include "Track/control_routing.h"
 #include "Track/track_state.h"
 #define AUDIO_RECORDER_LOOPER_STEPS_PER_BAR 16U
@@ -615,6 +618,8 @@ void audio_recorder_control_on_transport_start(uint64_t sample_time)
 
 void audio_recorder_service(void)
 {
+    const audio_recorder_storage_phase_t phase_before =
+        audio_recorder_storage_phase();
     audio_recorder_storage_service(
         g_audio_recorder_control_session,
         (audio_recorder_observed_state() == AUDIO_RECORDER_STATE_RECORDING)
@@ -665,6 +670,15 @@ void audio_recorder_service(void)
             g_audio_recorder_looper_take_notified = 1U;
         }
     }
+    const audio_recorder_storage_phase_t phase_after =
+        audio_recorder_storage_phase();
+    if (((audio_recorder_capture_audio_pending() != 0U)
+            && (sd_block_device_async_immediate_pending() == 0U))
+            || (phase_after != phase_before
+                && phase_after != AUDIO_RECORDER_STORAGE_IDLE
+                && phase_after != AUDIO_RECORDER_STORAGE_TAKE_READY
+                && phase_after != AUDIO_RECORDER_STORAGE_FAILED))
+        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
 }
 
 uint8_t audio_recorder_get_status_client(audio_recorder_client_t client,

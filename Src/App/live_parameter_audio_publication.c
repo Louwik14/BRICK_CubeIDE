@@ -52,8 +52,99 @@ static uint8_t live_parameter_audio_make_command(
     return 1U;
 }
 
-bool live_parameter_audio_publication_submit_tone_program(
-    uint8_t track, track_runtime_type_t type)
+static bool live_parameter_audio_build_commands(
+    const live_parameter_audio_bulk_t *bulk,
+    control_audio_command_t commands[LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS])
+{
+    if ((bulk == NULL) || (commands == NULL) || (bulk->count == 0U)
+            || (bulk->count > LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS))
+        return false;
+    for (uint8_t i = 0U; i < bulk->count; ++i)
+    {
+        const live_parameter_audio_bulk_item_t *const item = &bulk->item[i];
+        for (uint8_t previous = 0U; previous < i; ++previous)
+        {
+            const live_parameter_audio_bulk_item_t *const prior = &bulk->item[previous];
+            if ((prior->parameter_id == item->parameter_id)
+                    && (prior->scope == item->scope)
+                    && (prior->track == item->track)
+                    && (prior->slot == item->slot)
+                    && ((item->parameter_id != CONTROL_AUDIO_PARAM_CLEAR_RUNTIME_TEMP)
+                        || (prior->value == item->value)))
+                return false;
+        }
+        if (live_parameter_audio_make_command(
+                item->parameter_id, item->scope, item->track,
+                item->slot, item->flags, item->value, &commands[i]) == 0U)
+            return false;
+    }
+    return true;
+}
+
+void live_parameter_audio_publication_init(void)
+{
+    g_live_parameter_audio_publish_failure_count = 0U;
+}
+
+bool live_parameter_audio_publication_submit_bulk(
+    const live_parameter_audio_bulk_t *bulk)
+{
+    if ((bulk == NULL) || (bulk->count == 0U)
+            || (bulk->count > LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS))
+        return live_parameter_audio_publish_failed();
+    control_audio_command_t commands[LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS];
+    if (!live_parameter_audio_build_commands(bulk, commands))
+        return live_parameter_audio_publish_failed();
+    if (control_rt_publish_batch_captured(
+        commands, bulk->count, bulk->capture_tick,
+        seq_runtime_exec_get_sample_timeline()) == 0U)
+    {
+        /* A valid CONTROL batch is dimensioned before publication.  A refusal
+         * is an invariant failure, never a deferred parameter update. */
+        Error_Handler();
+        return false;
+    }
+    return true;
+}
+
+bool live_parameter_audio_publication_submit_bulk_now(
+    const live_parameter_audio_bulk_t *bulk)
+{
+    if ((bulk == NULL) || (bulk->count == 0U)
+            || (bulk->count > LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS))
+        return live_parameter_audio_publish_failed();
+    control_audio_command_t commands[LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS];
+    if (!live_parameter_audio_build_commands(bulk, commands))
+        return live_parameter_audio_publish_failed();
+    if (control_rt_publish_batch_now(commands, bulk->count) == 0U)
+    {
+        Error_Handler();
+        return false;
+    }
+    return true;
+}
+
+bool live_parameter_audio_publication_submit_bulk_scheduled(
+    const live_parameter_audio_bulk_t *bulk, uint64_t effective_sample_time)
+{
+    if ((bulk == NULL) || (bulk->count == 0U)
+            || (bulk->count > LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS))
+        return live_parameter_audio_publish_failed();
+    control_audio_command_t commands[LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS];
+    if (!live_parameter_audio_build_commands(bulk, commands))
+        return live_parameter_audio_publish_failed();
+    for (uint8_t i = 0U; i < bulk->count; ++i)
+        commands[i].effective_sample_time = effective_sample_time;
+    if (control_rt_publish_batch_scheduled(commands, bulk->count) == 0U)
+    {
+        Error_Handler();
+        return false;
+    }
+    return true;
+}
+
+bool live_parameter_audio_publication_submit_tone_program_scheduled(
+    uint8_t track, track_runtime_type_t type, uint64_t effective_sample_time)
 {
     if (track >= SEQ_LANE_CAPACITY)
         return live_parameter_audio_publish_failed();
@@ -80,84 +171,8 @@ bool live_parameter_audio_publication_submit_tone_program(
         };
     }
     if (bulk.count == 0U) return true;
-    return live_parameter_audio_publication_submit_bulk_now(&bulk);
-}
-
-void live_parameter_audio_publication_init(void)
-{
-    g_live_parameter_audio_publish_failure_count = 0U;
-}
-
-bool live_parameter_audio_publication_submit_bulk(
-    const live_parameter_audio_bulk_t *bulk)
-{
-    if ((bulk == NULL) || (bulk->count == 0U)
-            || (bulk->count > LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS))
-        return live_parameter_audio_publish_failed();
-    control_audio_command_t commands[LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS];
-    for (uint8_t i = 0U; i < bulk->count; ++i)
-    {
-        const live_parameter_audio_bulk_item_t *const item = &bulk->item[i];
-        for (uint8_t previous = 0U; previous < i; ++previous)
-        {
-            const live_parameter_audio_bulk_item_t *const prior = &bulk->item[previous];
-            if ((prior->parameter_id == item->parameter_id)
-                    && (prior->scope == item->scope)
-                    && (prior->track == item->track)
-                    && (prior->slot == item->slot)
-                    && ((item->parameter_id != CONTROL_AUDIO_PARAM_CLEAR_RUNTIME_TEMP)
-                        || (prior->value == item->value)))
-                return live_parameter_audio_publish_failed();
-        }
-        if (live_parameter_audio_make_command(
-                item->parameter_id, item->scope, item->track,
-                item->slot, item->flags, item->value, &commands[i]) == 0U)
-            return live_parameter_audio_publish_failed();
-    }
-    if (control_rt_publish_batch_captured(
-        commands, bulk->count, bulk->capture_tick,
-        seq_runtime_exec_get_sample_timeline()) == 0U)
-    {
-        /* A valid CONTROL batch is dimensioned before publication.  A refusal
-         * is an invariant failure, never a deferred parameter update. */
-        Error_Handler();
-        return false;
-    }
-    return true;
-}
-
-bool live_parameter_audio_publication_submit_bulk_now(
-    const live_parameter_audio_bulk_t *bulk)
-{
-    if ((bulk == NULL) || (bulk->count == 0U)
-            || (bulk->count > LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS))
-        return live_parameter_audio_publish_failed();
-    control_audio_command_t commands[LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS];
-    for (uint8_t i = 0U; i < bulk->count; ++i)
-    {
-        const live_parameter_audio_bulk_item_t *const item = &bulk->item[i];
-        for (uint8_t previous = 0U; previous < i; ++previous)
-        {
-            const live_parameter_audio_bulk_item_t *const prior = &bulk->item[previous];
-            if ((prior->parameter_id == item->parameter_id)
-                    && (prior->scope == item->scope)
-                    && (prior->track == item->track)
-                    && (prior->slot == item->slot)
-                    && ((item->parameter_id != CONTROL_AUDIO_PARAM_CLEAR_RUNTIME_TEMP)
-                        || (prior->value == item->value)))
-                return live_parameter_audio_publish_failed();
-        }
-        if (live_parameter_audio_make_command(
-                item->parameter_id, item->scope, item->track,
-                item->slot, item->flags, item->value, &commands[i]) == 0U)
-            return live_parameter_audio_publish_failed();
-    }
-    if (control_rt_publish_batch_now(commands, bulk->count) == 0U)
-    {
-        Error_Handler();
-        return false;
-    }
-    return true;
+    return live_parameter_audio_publication_submit_bulk_scheduled(
+        &bulk, effective_sample_time);
 }
 
 bool live_parameter_audio_publication_submit_dated(

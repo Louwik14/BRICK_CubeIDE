@@ -82,7 +82,12 @@ void wavetable_pool_service_retire(void)
                 + CONTROL_AUDIO_RESOURCE_RETIRE_GRACE_FRAMES;
             g_wavetable_retire_stop_committed[i] = 1U;
         }
-        if (now_sample < g_wavetable_retire_not_before_sample[i]) continue;
+        if (now_sample < g_wavetable_retire_not_before_sample[i])
+        {
+            storage_io_schedule_sample_wakeup(
+                g_wavetable_retire_not_before_sample[i]);
+            continue;
+        }
         g_wavetable_retire_stop_committed[i] = 0U;
         wavetable_pool_finalize_clear(i);
     }

@@ -504,6 +504,11 @@ void storage_catalog_service(void)
         sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
     if (background_gate_held != 0U)
         sd_scheduler_runtime_background_end();
+
+    if ((g_storage_catalog_scan.active != 0U)
+            && ((background_gate_held != 0U)
+                || (project_gate_held != 0U)))
+        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
 }
 
 uint8_t storage_catalog_snapshot_begin(storage_catalog_kind_t kind,

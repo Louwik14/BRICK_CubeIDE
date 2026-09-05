@@ -10,6 +10,7 @@
 #include "SD/sd_scheduler_runtime.h"
 #include "Platform/memory_layout.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/storage_io_wakeup.h"
 #include "stm32h7xx_hal.h"
 #include "ff.h"
 
@@ -368,6 +369,7 @@ uint8_t sample_stream_io_poll(sample_stream_io_result_t *out_result)
             async->result.read_bytes = async->result.source_bytes;
         }
         async->state = SAMPLE_STREAM_IO_SCRATCH_RAW_READY;
+        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
         return 0U;
     }
     return 0U;

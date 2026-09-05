@@ -20,6 +20,7 @@
 #include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
 #include "Sampler/multi_sample_pool.h"
+#include "Storage/storage_io_wakeup.h"
 #include "midi.h"
 #include "midi_host.h"
 static volatile uint8_t g_project_load_panic_committed;
@@ -107,6 +108,7 @@ void project_load_quiesce_control_process(void)
     seq_play_scheduler_clear();
     g_project_load_requested = 1U;
     g_project_load_panic_committed = control_music_output_panic_all(0U);
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
 }
 
 void project_load_quiesce_storage_retire(void)

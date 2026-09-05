@@ -10,6 +10,7 @@
 #include "Sampler/sample_stream_scheduler.h"
 #include "Sampler/sample_stream_transport.h"
 #include "Platform/memory_layout.h"
+#include "Storage/storage_io_wakeup.h"
 #include "stm32h7xx_hal.h"
 
 #define SAMPLE_STREAM_CANCEL_REASON_RELEASE_KEY (3U)
@@ -344,7 +345,7 @@ static uint8_t sample_stream_manager_submit_classic_prefill(void)
     return 1U;
 }
 
-void sample_stream_manager_service(uint32_t byte_budget)
+static void sample_stream_manager_service_step(uint32_t byte_budget)
 {
     if (byte_budget == 0U)
     {
@@ -484,6 +485,14 @@ void sample_stream_manager_service(uint32_t byte_budget)
 
     }
     (void)sample_stream_manager_submit_classic_prefill();
+}
+
+void sample_stream_manager_service(uint32_t byte_budget)
+{
+    sample_stream_manager_service_step(byte_budget);
+    if ((g_sample_stream_manager_pending_count == 0U)
+            && (sample_stream_manager_has_pending_sd_work() != 0U))
+        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
 }
 
 uint8_t sample_stream_manager_has_pending_sd_work(void)

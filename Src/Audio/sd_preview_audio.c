@@ -1,6 +1,7 @@
 #include "Audio/sd_preview_audio.h"
 
 #include "IPC/sd_preview_ring_contract.h"
+#include "Storage/storage_io_wakeup.h"
 #include "stm32h7xx.h"
 
 static float g_sd_preview_gain;
@@ -18,6 +19,8 @@ static uint8_t sd_preview_ring_pop(float *left, float *right)
 {
     const uint32_t read_count = g_sd_preview_ring_layout.read_count;
     const uint32_t write_count = g_sd_preview_ring_layout.write_count;
+    const uint8_t was_full = ((write_count - read_count)
+                              >= SD_PREVIEW_RING_FRAMES) ? 1U : 0U;
     __DMB();
     if ((read_count == write_count) || (left == 0) || (right == 0)) return 0U;
     const uint32_t index = read_count % SD_PREVIEW_RING_FRAMES;
@@ -25,6 +28,8 @@ static uint8_t sd_preview_ring_pop(float *left, float *right)
     *right = g_sd_preview_ring[index * 2U + 1U];
     __DMB();
     g_sd_preview_ring_layout.read_count = read_count + 1U;
+    if (was_full != 0U)
+        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 

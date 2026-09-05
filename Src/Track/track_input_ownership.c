@@ -4,13 +4,12 @@
 #include <assert.h>
 
 #include "Track/entity_topology.h"
+#include "Track/control_music_output.h"
 #include "IPC/control_audio_command.h"
 #include "ControlRT/control_rt_publication.h"
 
 static uint8_t g_external_input[TRACK_COUNT];
 static uint8_t g_external_owner[ENTITY_TOPOLOGY_AUDIO_SOURCE_COUNT];
-
-#define TRACK_INPUT_OWNER_UNINITIALIZED 0xFEU
 
 uint8_t track_input_ownership_is_valid_external_input(uint8_t input)
 {
@@ -61,8 +60,7 @@ void track_input_ownership_init(const track_config_t configs[TRACK_COUNT])
         g_external_input[track] = (uint8_t)((track & 1U) != 0U
             ? ENTITY_AUDIO_SOURCE_USB : ENTITY_AUDIO_SOURCE_LINE);
     }
-    /* Force the first projection to AUDIO, including MIC=NONE. */
-    memset(g_external_owner, TRACK_INPUT_OWNER_UNINITIALIZED,
+    memset(g_external_owner, TRACK_INPUT_OWNER_NONE,
         sizeof(g_external_owner));
     (void)track_input_ownership_apply_configs(configs);
 }
@@ -87,11 +85,21 @@ uint8_t track_input_ownership_apply_bulk(
     for (uint8_t track = 0U; track < TRACK_COUNT; ++track)
     {
         const uint8_t input = external_input[track];
-        if (track_input_ownership_is_valid_external_input(input) == 0U)
+        if (track_input_ownership_is_external(&configs[track]) != 0U)
         {
-            return 0U;
+            if (track_input_ownership_is_valid_external_input(input) == 0U)
+            {
+                return 0U;
+            }
+            next_selected[track] = input;
         }
-        next_selected[track] = input;
+        else
+        {
+            /* Non-External tracks do not carry an input selection.  Reset the
+             * parallel cache while building the prospective snapshot so a
+             * stale historical value cannot poison a bulk apply. */
+            next_selected[track] = ENTITY_AUDIO_SOURCE_LINE;
+        }
     }
     if (track_input_ownership_build(configs, next_selected, next_owners) == 0U)
     {
@@ -112,8 +120,20 @@ uint8_t track_input_ownership_apply_bulk(
                 CONTROL_AUDIO_COMMAND_PARAM, 0U)
         };
     }
+    uint64_t due_sample = 0U;
     if ((command_count != 0U)
-            && (control_rt_publish_batch_now(commands, command_count) == 0U))
+            && (control_rt_now_sample(&due_sample) == 0U))
+    {
+        return 0U;
+    }
+    if (command_count != 0U)
+    {
+        due_sample = control_music_output_first_unpublished_sample(due_sample);
+        for (uint8_t command = 0U; command < command_count; ++command)
+            commands[command].effective_sample_time = due_sample;
+    }
+    if ((command_count != 0U)
+            && (control_rt_publish_batch_scheduled(commands, command_count) == 0U))
     {
         assert(0 && "input ownership publication capacity invariant");
         return 0U;
@@ -131,14 +151,6 @@ uint8_t track_input_ownership_validate_bulk(
     if ((configs == NULL) || (external_input == NULL))
     {
         return 0U;
-    }
-    for (uint8_t track = 0U; track < TRACK_COUNT; ++track)
-    {
-        if (track_input_ownership_is_valid_external_input(
-                external_input[track]) == 0U)
-        {
-            return 0U;
-        }
     }
     return track_input_ownership_build(configs, external_input, owners);
 }

@@ -93,8 +93,8 @@ static uint8_t track_runtime_publish_program(brick_entity_id_t entity_id,
         return 0U;
     }
     if ((ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_FM)
-            && !live_parameter_audio_publication_submit_tone_program(
-                entity_id, (track_runtime_type_t)ctx->type))
+            && !live_parameter_audio_publication_submit_tone_program_scheduled(
+                entity_id, (track_runtime_type_t)ctx->type, due_sample))
     {
         Error_Handler();
         return 0U;

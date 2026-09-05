@@ -3,6 +3,7 @@
 #include "SD/sd_scheduler_runtime.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/project_load_quiesce.h"
+#include "Storage/storage_io_wakeup.h"
 #include "ff.h"
 #include <stdio.h>
 #include <string.h>
@@ -269,7 +270,7 @@ uint8_t pattern_control_bank_load_async_begin(
     return 1U;
 }
 
-void pattern_control_bank_async_service(void)
+static void pattern_control_bank_async_service_step(void)
 {
     if ((g_pattern_async.state == PATTERN_ASYNC_IDLE)
         || (g_pattern_async.state == PATTERN_ASYNC_DONE))
@@ -482,6 +483,20 @@ void pattern_control_bank_async_service(void)
             break;
     }
     sd_scheduler_runtime_background_end();
+}
+
+void pattern_control_bank_async_service(void)
+{
+    const pattern_async_state_t state = g_pattern_async.state;
+    const uint32_t offset = g_pattern_async.offset;
+    const uint32_t encoded_size = g_pattern_async.encoded_size;
+
+    pattern_control_bank_async_service_step();
+    if ((g_pattern_async.state != PATTERN_ASYNC_IDLE)
+            && ((g_pattern_async.state != state)
+                || (g_pattern_async.offset != offset)
+                || (g_pattern_async.encoded_size != encoded_size)))
+        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
 }
 
 uint8_t pattern_control_bank_async_busy(void)

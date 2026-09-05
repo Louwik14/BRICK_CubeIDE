@@ -291,7 +291,7 @@ void StartStorageTask(void *argument)
     (void)osThreadFlagsWait(STORAGE_IO_WAKE_SD
                             | STORAGE_IO_WAKE_WORK,
                             osFlagsWaitAny,
-                            1U);
+                            osWaitForever);
   }
   /* USER CODE END StartStorageTask */
 }

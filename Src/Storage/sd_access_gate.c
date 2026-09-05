@@ -1,6 +1,7 @@
 #include "Storage/sd_access_gate.h"
 
 #include "Platform/memory_layout.h"
+#include "Storage/storage_io_wakeup.h"
 #include "stm32h7xx_hal.h"
 
 static volatile uint8_t g_sd_access_owner;
@@ -139,6 +140,7 @@ void sd_access_media_set_present(uint8_t present)
         {
             g_sd_storage_status = SD_STORAGE_STATUS_NO_MEDIA;
         }
+        storage_io_wakeup(STORAGE_IO_WAKE_SD);
         return;
     }
     if (g_sd_media_present == present)
@@ -150,6 +152,7 @@ void sd_access_media_set_present(uint8_t present)
     g_sd_storage_status = (present != 0U)
         ? SD_STORAGE_STATUS_UNKNOWN : SD_STORAGE_STATUS_NO_MEDIA;
     sd_access_media_epoch_advance();
+    storage_io_wakeup(STORAGE_IO_WAKE_SD);
 }
 
 uint8_t sd_access_gate_try_acquire(sd_access_client_t client)

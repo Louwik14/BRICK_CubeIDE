@@ -7,7 +7,8 @@
 #include "Platform/memory_layout.h"
 #include "Seq/seq_types.h"
 #include "Track/tone_param_codec.h"
-#include "IPC/live_clock_control.h"
+#include "ControlRT/control_rt_publication.h"
+#include "Track/control_music_output.h"
 #include "App/live_parameter_audio_publication.h"
 #include "IPC/live_parameter_event.h"
 
@@ -115,7 +116,11 @@ uint8_t tone_program_control_restore(uint8_t track,const tone_program_control_t*
    .track=track,.slot=LIVE_PARAMETER_EVENT_INVALID_INDEX,
    .flags=LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
    .value=live_parameter_event_encode_float(*value)};}
- if((bulk.count!=0U)&&!live_parameter_audio_publication_submit_bulk_now(&bulk))return 0U;
+ uint64_t due_sample=0U;
+ if((bulk.count!=0U)
+      &&(control_rt_now_sample(&due_sample)==0U))return 0U;
+ if(bulk.count!=0U){due_sample=control_music_output_first_unpublished_sample(due_sample);
+  if(!live_parameter_audio_publication_submit_bulk_scheduled(&bulk,due_sample))return 0U;}
  g_tone_program[track]=prepared;
  return 1U;
 }

@@ -298,7 +298,7 @@ uint8_t project_product_save_take_result(uint8_t *slot,uint8_t *success)
     memset(&g_project_save,0,sizeof(g_project_save));return 1U;
 }
 
-void project_product_save_service(void)
+static void project_product_save_service_step(void)
 {
     if(g_project_save.state==PROJECT_SAVE_IDLE||g_project_save.state==PROJECT_SAVE_DONE)return;
 
@@ -493,6 +493,29 @@ void project_product_save_service(void)
             break;
     }
     sd_scheduler_runtime_background_end();
+}
+
+void project_product_save_service(void)
+{
+    const project_save_state_t state = g_project_save.state;
+    const uint32_t file_offset = g_project_save.file_offset;
+    const uint32_t write_offset = g_project_save.write_offset;
+    const uint32_t pattern_read_offset = g_project_save.pattern_read_offset;
+    const uint32_t crc_remaining = g_project_save.crc_remaining;
+    const uint16_t pattern_ordinal = g_project_save.pattern_ordinal;
+
+    project_product_save_service_step();
+    if ((g_project_save.state != PROJECT_SAVE_IDLE)
+            && (g_project_save.state != PROJECT_SAVE_DONE)
+            && ((g_project_save.state != state)
+                || (g_project_save.file_offset != file_offset)
+                || (g_project_save.write_offset != write_offset)
+                || (g_project_save.pattern_read_offset != pattern_read_offset)
+                || (g_project_save.crc_remaining != crc_remaining)
+                || (g_project_save.pattern_ordinal != pattern_ordinal)))
+        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    else if (g_project_save.state == PROJECT_SAVE_DONE)
+        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
 }
 
 project_product_save_error_t project_product_save_last_error(void){return g_save_error;}
@@ -786,7 +809,7 @@ static uint8_t project_multi_result_internal(multi_sample_load_result_t result)
         || result == MULTI_SAMPLE_LOAD_CANCELLED);
 }
 
-void project_product_load_service(void)
+static void project_product_load_service_step(void)
 {
     persistence_project_restore_workspace_t *const restore=g_project_load_workspace;
     if(g_project_load.state==PROJECT_LOAD_IDLE
@@ -927,6 +950,23 @@ void project_product_load_service(void)
     }
 }
 
+void project_product_load_service(void)
+{
+    const project_load_state_t state = g_project_load.state;
+    const uint16_t asset_index = g_project_load.asset_index;
+    const uint8_t control_ready = g_project_load_control_ready;
+    const uint8_t control_done = g_project_load_control_done;
+
+    project_product_load_service_step();
+    if ((g_project_load.state != PROJECT_LOAD_IDLE)
+            && (g_project_load.state != PROJECT_LOAD_FAILED)
+            && ((g_project_load.state != state)
+                || (g_project_load.asset_index != asset_index)
+                || (g_project_load_control_ready != control_ready)
+                || (g_project_load_control_done != control_done)))
+        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+}
+
 void project_product_control_process(void)
 {
     if (g_project_load_control_ready == 0U)
@@ -972,6 +1012,7 @@ void project_product_control_process(void)
     g_project_load_control_result = ok;
     g_project_load_control_done = 1U;
     g_project_load_control_ready = 0U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     if (restore != NULL)
         persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_RESTORE);
 }

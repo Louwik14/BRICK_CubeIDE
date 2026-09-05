@@ -745,8 +745,10 @@ static uint8_t ui_track_clipboard_capture_payload(
     if ((track >= BRICK_ENTITY_CAPACITY) || (out == NULL)) return 0U;
     memset(out, 0, sizeof(*out));
     out->config = track_state_get_config(track);
-    out->external_input = (track < TRACK_COUNT)
-        ? track_state_get_external_input(track) : 0U;
+    out->external_input = (track < TRACK_COUNT
+        && out->config.family == TRACK_FAMILY_EXTERNAL
+        && out->config.type == TRACK_TYPE_EXTERNAL)
+        ? track_state_get_external_input(track) : ENTITY_AUDIO_SOURCE_LINE;
     out->midi_channel = track_state_get_midi_channel(track);
     out->midi_source = track_state_get_midi_source(track);
     out->fm_present = (uint8_t)((out->config.family == TRACK_FAMILY_SYNTH)
@@ -979,6 +981,7 @@ static uint8_t ui_track_clipboard_prevalidate(
                 || (payload->midi_channel < 1U) || (payload->midi_channel > 16U)
                 || (payload->midi_source >= TRACK_MIDI_SOURCE_COUNT)
                 || ((payload->config.family == TRACK_FAMILY_EXTERNAL)
+                    && (payload->config.type == TRACK_TYPE_EXTERNAL)
                     && (track_input_ownership_is_valid_external_input(
                             payload->external_input) == 0U))
                 || (payload->polyphony.voice_count < 1U)
@@ -998,7 +1001,12 @@ static uint8_t ui_track_clipboard_prevalidate(
         types[target] = (uint8_t)payload->config.type;
         midi_channels[target] = payload->midi_channel;
         midi_sources[target] = (uint8_t)payload->midi_source;
-        if (target < TRACK_COUNT) inputs[target] = payload->external_input;
+        if (target < TRACK_COUNT)
+        {
+            inputs[target] = ((payload->config.family == TRACK_FAMILY_EXTERNAL)
+                    && (payload->config.type == TRACK_TYPE_EXTERNAL))
+                ? payload->external_input : ENTITY_AUDIO_SOURCE_LINE;
+        }
     }
     track_config_t configs[BRICK_ENTITY_CAPACITY];
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)

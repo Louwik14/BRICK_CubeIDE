@@ -9,4 +9,8 @@
 
 void storage_io_wakeup(uint32_t flags);
 
+/* Audio-clock doorbell for sample-timed Storage continuations. */
+void storage_io_schedule_sample_wakeup(uint64_t sample_time);
+void storage_io_sample_event(uint64_t sample_time);
+
 #endif /* BRICK6_STORAGE_IO_WAKEUP_H */

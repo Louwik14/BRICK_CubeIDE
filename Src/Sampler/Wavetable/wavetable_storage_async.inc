@@ -97,6 +97,7 @@ uint8_t wavetable_pool_load_async_begin_prepared_with_geometry(
     }
     job->result = WAVETABLE_RESULT_OK;
     job->state = WAVETABLE_LOAD_MOUNT;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 
@@ -217,7 +218,7 @@ static void wavetable_load_process_band(wavetable_load_job_t *job)
     }
 }
 
-void wavetable_pool_load_async_service(void)
+static void wavetable_pool_load_async_service_step(void)
 {
     wavetable_load_job_t *const job = &g_wavetable_load_job;
     wavetable_slot_t *const candidate = &g_wavetable_candidate;
@@ -614,6 +615,29 @@ void wavetable_pool_load_async_service(void)
             break;
     }
     sd_scheduler_runtime_background_end();
+}
+
+void wavetable_pool_load_async_service(void)
+{
+    wavetable_load_job_t *const job = &g_wavetable_load_job;
+    const wavetable_load_state_t state = job->state;
+    const uint32_t io_offset = job->io_offset;
+    const uint32_t buffered_samples = job->buffered_samples;
+    const uint32_t converted_samples = job->converted_samples;
+    const uint32_t source_cycle_offset = job->source_cycle_offset;
+    const uint32_t cycle = job->cycle;
+    const uint16_t band = job->band;
+
+    wavetable_pool_load_async_service_step();
+    if ((job->state != WAVETABLE_LOAD_IDLE)
+            && ((job->state != state)
+                || (job->io_offset != io_offset)
+                || (job->buffered_samples != buffered_samples)
+                || (job->converted_samples != converted_samples)
+                || (job->source_cycle_offset != source_cycle_offset)
+                || (job->cycle != cycle)
+                || (job->band != band)))
+        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
 }
 
 uint8_t wavetable_pool_load_async_take_result(uint32_t expected_request_id,

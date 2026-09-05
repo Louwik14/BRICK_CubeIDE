@@ -25,6 +25,7 @@
 #include "Storage/looper_storage.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/storage_io_wakeup.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "wav_parser.h"
 
@@ -320,6 +321,7 @@ uint8_t wav_loader_catalog_notify_file_created(const char *path)
     }
 
     wav_loader_catalog_mark_stale();
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 
@@ -636,6 +638,7 @@ static wav_loader_catalog_view_t *wav_loader_catalog_load_view(uint16_t parent_i
         g_wav_catalog_view_load.media_epoch = sd_access_media_epoch();
         g_wav_catalog_view_load.read_ok = 1U;
         g_wav_catalog_view_load.state = WAV_CATALOG_VIEW_MOUNT;
+        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
         g_wav_catalog_scratch_view.parent_id = parent_id;
         g_wav_catalog_scratch_view.page_start = page_start;
     }
@@ -688,6 +691,7 @@ wav_loader_catalog_view_service_result_t wav_loader_catalog_view_service(void)
         wav_loader_catalog_view_begin(kind, bytes);
     if (admission == SD_SCHEDULER_BACKGROUND_NOT_NOW)
     {
+        g_wav_catalog_last_sd_busy = 1U;
         return WAV_LOADER_CATALOG_VIEW_PENDING;
     }
     if (admission != SD_SCHEDULER_BACKGROUND_GO)
@@ -696,6 +700,7 @@ wav_loader_catalog_view_service_result_t wav_loader_catalog_view_service(void)
         g_wav_catalog_last_io_error = 1U;
         return WAV_LOADER_CATALOG_VIEW_ERROR;
     }
+    g_wav_catalog_last_sd_busy = 0U;
 
     wav_loader_catalog_view_service_result_t result = WAV_LOADER_CATALOG_VIEW_PENDING;
     switch (load->state)
@@ -1111,6 +1116,7 @@ void wav_loader_catalog_refresh(void)
         return;
     g_wav_catalog_stale = 1U;
     g_wav_catalog_rebuild_requested = 1U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
 }
 
 void wav_loader_catalog_rebuild(void)
@@ -1120,6 +1126,7 @@ void wav_loader_catalog_rebuild(void)
         return;
     g_wav_catalog_stale = 1U;
     g_wav_catalog_rebuild_requested = 1U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
 }
 
 void wav_loader_catalog_storage_service(void)
@@ -1141,7 +1148,11 @@ void wav_loader_catalog_storage_service(void)
     if (g_wav_catalog_rebuild.active != 0U)
         wav_loader_catalog_rebuild_storage();
     if (g_wav_catalog_rebuild.active != 0U)
+    {
+        if (g_wav_catalog_last_sd_busy == 0U)
+            storage_io_wakeup(STORAGE_IO_WAKE_WORK);
         return;
+    }
 
     const wav_loader_catalog_view_service_result_t result =
         wav_loader_catalog_view_service();
@@ -1149,6 +1160,12 @@ void wav_loader_catalog_storage_service(void)
     {
         g_wav_catalog_view_last_result = result;
     }
+    if ((g_wav_catalog_rebuild.active != 0U)
+            && (g_wav_catalog_last_sd_busy == 0U))
+        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    else if ((g_wav_catalog_view_load.state != WAV_CATALOG_VIEW_IDLE)
+            && (g_wav_catalog_last_sd_busy == 0U))
+        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
 }
 
 wav_loader_catalog_view_service_result_t wav_loader_catalog_view_last_result(void)

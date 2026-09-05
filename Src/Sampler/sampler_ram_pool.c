@@ -731,6 +731,7 @@ static uint8_t sampler_ram_pool_load_async_begin_internal(
     }
     job->result = SAMPLER_RAM_RESULT_OK;
     job->state = SAMPLER_RAM_LOAD_MOUNT;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 
@@ -798,7 +799,7 @@ sampler_ram_requester_t sampler_ram_pool_load_async_requester(void)
     return g_sampler_ram_load_job.requester;
 }
 
-void sampler_ram_pool_load_async_service(void)
+static void sampler_ram_pool_load_async_service_step(void)
 {
     sampler_ram_load_job_t *const job = &g_sampler_ram_load_job;
     if ((job->state == SAMPLER_RAM_LOAD_IDLE) || (job->state == SAMPLER_RAM_LOAD_DONE))
@@ -1103,6 +1104,23 @@ void sampler_ram_pool_load_async_service(void)
     sd_scheduler_runtime_background_end();
 }
 
+void sampler_ram_pool_load_async_service(void)
+{
+    sampler_ram_load_job_t *const job = &g_sampler_ram_load_job;
+    const sampler_ram_load_state_t state = job->state;
+    const uint32_t frames_done = job->frames_done;
+    const uint32_t buffered_frames = job->buffered_frames;
+    const uint32_t converted_frames = job->converted_frames;
+
+    sampler_ram_pool_load_async_service_step();
+    if ((job->state != SAMPLER_RAM_LOAD_IDLE)
+            && ((job->state != state)
+                || (job->frames_done != frames_done)
+                || (job->buffered_frames != buffered_frames)
+                || (job->converted_frames != converted_frames)))
+        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+}
+
 uint8_t sampler_ram_pool_load_async_take_result(uint32_t expected_request_id,
                                                 sampler_ram_result_t *out_result,
                                                 uint16_t *out_ram_slot,
@@ -1203,7 +1221,12 @@ void sampler_ram_pool_service_retire(void)
                 + CONTROL_AUDIO_RESOURCE_RETIRE_GRACE_FRAMES;
             g_sampler_ram_retire_stop_committed[i] = 1U;
         }
-        if (now_sample < g_sampler_ram_retire_not_before_sample[i]) continue;
+        if (now_sample < g_sampler_ram_retire_not_before_sample[i])
+        {
+            storage_io_schedule_sample_wakeup(
+                g_sampler_ram_retire_not_before_sample[i]);
+            continue;
+        }
         g_sampler_ram_retire_stop_committed[i] = 0U;
         sampler_ram_pool_finalize_clear(i);
     }
@@ -1311,6 +1334,15 @@ void sampler_ram_pool_waveform_service(uint32_t frame_budget)
     for (uint16_t i = 0U; (i < SAMPLER_RAM_POOL_MAX_SLOTS) && (frames_left > 0U); ++i)
     {
         sampler_ram_waveform_service_slot(&g_sampler_ram_pool.slots[i], &frames_left);
+    }
+    for (uint16_t i = 0U; i < SAMPLER_RAM_POOL_MAX_SLOTS; ++i)
+    {
+        if (g_sampler_ram_pool.slots[i].waveform.state
+                == SAMPLE_RAM_WAVEFORM_BUILDING)
+        {
+            storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+            break;
+        }
     }
 }
 

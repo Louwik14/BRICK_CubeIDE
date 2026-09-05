@@ -236,6 +236,7 @@ static uint8_t multi_import_progressive_start(const char *instrument_dir)
     g_import_progressive_path_cursor = 0U;
     g_import_progressive_state = MULTI_IMPORT_PROGRESSIVE_SCAN;
     g_import_busy = 1U;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 
@@ -1721,7 +1722,11 @@ void multi_sample_import_storage_request_service(void)
         return;
     }
     if (g_import_busy != 0U)
+    {
         multi_import_progressive_step();
+        if (g_import_busy != 0U)
+            storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    }
 }
 
 uint8_t multi_sample_import_is_busy(void)

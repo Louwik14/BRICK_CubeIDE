@@ -447,6 +447,7 @@ uint8_t sample_global_pool_load_classic(uint16_t global_index, const char *path)
         return 0U;
     }
     g_sample_classic_last_error = SAMPLE_CLASSIC_LOAD_OK;
+    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     return 1U;
 }
 

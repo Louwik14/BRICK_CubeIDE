@@ -369,6 +369,14 @@ static uint8_t waveform_cache_copy_path(char *dst, uint32_t dst_len, const char 
     return 0U;
 }
 
+static uint8_t waveform_cache_tile_work_pending(void)
+{
+    for (uint8_t i = 0U; i < WAVEFORM_CACHE_TILE_QUEUE_CAPACITY; ++i)
+        if (g_waveform_cache.tile_queue[i].pending != 0U)
+            return 1U;
+    return 0U;
+}
+
 static void waveform_cache_hex32(const uint8_t *id, char *out)
 {
     static const char hex[] = "0123456789ABCDEF";
@@ -1069,6 +1077,7 @@ uint8_t waveform_cache_storage_request_for_wav(const char *path,
             g_waveform_cache.queue[i].state = WAVEFORM_CACHE_JOB_QUEUED;
             g_waveform_cache.diag.jobs_queued++;
             g_waveform_cache.diag.status = WAVEFORM_CACHE_STATUS_QUEUED;
+            storage_io_wakeup(STORAGE_IO_WAKE_WORK);
             return waveform_cache_finish_request(path, reason, 1U);
         }
     }
@@ -1546,6 +1555,7 @@ void waveform_cache_service(uint32_t byte_budget)
     if(g_waveform_cache.service_defer_passes != 0U)
     {
         g_waveform_cache.service_defer_passes--;
+        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
         return;
     }
     waveform_cache_service_tile_request(byte_budget);
@@ -1560,6 +1570,18 @@ void waveform_cache_service(uint32_t byte_budget)
     else if(g_waveform_cache.active.state == WAVEFORM_CACHE_JOB_BUILDING)
     {
         waveform_cache_service_build(byte_budget);
+    }
+
+    if (((g_waveform_cache.active.state != WAVEFORM_CACHE_JOB_EMPTY)
+            || (waveform_cache_tile_work_pending() != 0U))
+            && (sample_cache_has_pending_sd_work() == 0U)
+            && (audio_recorder_is_active() == 0U)
+            && (sd_preview_is_active() == 0U)
+            && (pattern_storage_is_pending() == 0U)
+            && (g_waveform_cache.service_defer_passes == 0U)
+            && (sd_access_gate_current_owner() == SD_ACCESS_CLIENT_NONE))
+    {
+        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
     }
 }
 

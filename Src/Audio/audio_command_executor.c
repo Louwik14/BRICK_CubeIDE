@@ -27,6 +27,7 @@
 #include "Mod/mod_lfo_v1_audio.h"
 #include "Mod/mod_env3.h"
 #include "Audio/sd_preview_audio.h"
+#include "Storage/storage_io_wakeup.h"
 
 #define AUDIO_PARAM_MULTI_RESOURCE_STOP   0xFFF5U
 #define AUDIO_PARAM_RAM_RESOURCE_STOP     0xFFF6U
@@ -355,6 +356,7 @@ void audio_command_executor_init(void)
 uint16_t __attribute__((noinline)) audio_command_executor_apply_due(
     uint64_t sample_time, uint32_t head_limit)
 {
+    storage_io_sample_event(sample_time);
     uint16_t applied = 0U;
     control_audio_command_t command;
     while ((control_audio_fifo_audio_tail_before(head_limit) != 0U)
