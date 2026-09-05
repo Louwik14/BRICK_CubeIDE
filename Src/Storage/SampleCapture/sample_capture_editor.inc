@@ -34,6 +34,40 @@ void sample_capture_model_get_state(sample_capture_state_t *out_state)
     }
 }
 
+void sample_capture_model_get_ui_state(sample_capture_ui_state_t *out_state)
+{
+    if(out_state == 0)
+    {
+        return;
+    }
+    out_state->view = g_sample_capture.state.view;
+    out_state->phase = g_sample_capture.state.phase;
+    out_state->arm = g_sample_capture.state.arm;
+    out_state->len_bars = g_sample_capture.state.len_bars;
+    out_state->quant = g_sample_capture.state.quant;
+    out_state->threshold_dbfs = g_sample_capture.state.threshold_dbfs;
+    out_state->line_enabled = g_sample_capture.state.line_enabled;
+    out_state->mic_enabled = g_sample_capture.state.mic_enabled;
+    out_state->live_peak_abs_pcm24 = g_sample_capture.state.live_peak_abs_pcm24;
+    out_state->take_valid = g_sample_capture.state.take_valid;
+    out_state->recorded_frames = g_sample_capture.state.recorded_frames;
+    out_state->edit_start_frame = g_sample_capture.state.edit_start_frame;
+    out_state->edit_end_frame = g_sample_capture.state.edit_end_frame;
+    out_state->edit_loop_start_frame = g_sample_capture.state.edit_loop_start_frame;
+    out_state->edit_loop_end_frame = g_sample_capture.state.edit_loop_end_frame;
+    out_state->edit_zoom = g_sample_capture.state.edit_zoom;
+    out_state->edit_vzoom = g_sample_capture.state.edit_vzoom;
+    out_state->edit_zcross_enabled = g_sample_capture.state.edit_zcross_enabled;
+    out_state->edit_scroll_frame = g_sample_capture.state.edit_scroll_frame;
+    out_state->line_valid = g_sample_capture_line_hot.valid;
+    out_state->line_start_frame = g_sample_capture_line_hot.start_frame;
+    out_state->line_frames = g_sample_capture_line_hot.frames;
+    out_state->line_count = g_sample_capture_line_hot.count;
+    out_state->line_peak = g_sample_capture_line_hot.peak;
+    memcpy(out_state->line, g_sample_capture_line_hot.points, sizeof(out_state->line));
+    out_state->error = g_sample_capture.state.error;
+}
+
 void sample_capture_model_set_view(sample_capture_view_t view)
 {
     g_sample_capture.state.view = view;

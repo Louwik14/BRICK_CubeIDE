@@ -1,4 +1,4 @@
-static uint16_t ui_page_audio_rec_take_peak(const sample_capture_state_t *state)
+static uint16_t ui_page_audio_rec_take_peak(const sample_capture_ui_state_t *state)
 {
     uint16_t peak = 0U;
     if(state == 0)
@@ -17,7 +17,7 @@ static uint16_t ui_page_audio_rec_take_peak(const sample_capture_state_t *state)
     return peak;
 }
 
-static uint16_t ui_page_audio_rec_edit_vertical_ref(const sample_capture_state_t *state)
+static uint16_t ui_page_audio_rec_edit_vertical_ref(const sample_capture_ui_state_t *state)
 {
     uint16_t ref = ui_page_audio_rec_take_peak(state);
     if(ref < 4096U)
@@ -139,7 +139,7 @@ static uint8_t ui_page_audio_rec_clip_line_y(int *x0,
     return 1U;
 }
 
-static void ui_page_audio_rec_draw_line_waveform(const sample_capture_state_t *state,
+static void ui_page_audio_rec_draw_line_waveform(const sample_capture_ui_state_t *state,
                                                  int x,
                                                  int y,
                                                  int w,
@@ -461,7 +461,7 @@ static uint8_t ui_page_audio_rec_draw_wavecache(int x,
     return 1U;
 }
 
-static void ui_page_audio_rec_invert_active_range(const sample_capture_state_t *state,
+static void ui_page_audio_rec_invert_active_range(const sample_capture_ui_state_t *state,
                                                   int x,
                                                   int y,
                                                   int w,
@@ -530,7 +530,7 @@ static void ui_page_audio_rec_invert_active_range(const sample_capture_state_t *
     drv_display_set_draw_color(1U);
 }
 
-static void ui_page_audio_rec_draw_edit_overview(const sample_capture_state_t *state,
+static void ui_page_audio_rec_draw_edit_overview(const sample_capture_ui_state_t *state,
                                                  uint32_t view_start_frame,
                                                  uint32_t view_frames)
 {
@@ -719,7 +719,7 @@ static void ui_page_audio_rec_draw_edit_overview(const sample_capture_state_t *s
     drv_display_set_draw_color(1U);
 }
 
-static void ui_page_audio_rec_draw_marker_bar(const sample_capture_state_t *state)
+static void ui_page_audio_rec_draw_marker_bar(sample_capture_ui_state_t *state)
 {
 #if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
     const uint32_t waveform_draw_start_ms = HAL_GetTick();
@@ -791,23 +791,22 @@ static void ui_page_audio_rec_draw_marker_bar(const sample_capture_state_t *stat
             (uint8_t)((samples_per_pixel < 128U)
                 && (sample_capture_model_view_uses_tile_cache(view_frames) != 0U));
 
-        sample_capture_state_t draw_state = *state;
         if(prefer_old_audio_tile != 0U)
         {
             sample_capture_model_request_line_waveform(view_start_frame,
                                                        view_frames,
                                                        line_columns);
-            sample_capture_model_get_state(&draw_state);
+            sample_capture_model_get_ui_state(state);
         }
 
         if((prefer_old_audio_tile != 0U)
-                && (draw_state.line_valid != 0U)
-                && (draw_state.line_start_frame == view_start_frame)
-                && (draw_state.line_frames == view_frames))
+                && (state->line_valid != 0U)
+                && (state->line_start_frame == view_start_frame)
+                && (state->line_frames == view_frames))
         {
-            ui_page_audio_rec_draw_line_waveform(&draw_state, x, y, w, h,
-                                                 ui_page_audio_rec_edit_vertical_ref(&draw_state),
-                                                 ui_page_audio_rec_vzoom_scale_q8(draw_state.edit_vzoom),
+            ui_page_audio_rec_draw_line_waveform(state, x, y, w, h,
+                                                 ui_page_audio_rec_edit_vertical_ref(state),
+                                                 ui_page_audio_rec_vzoom_scale_q8(state->edit_vzoom),
                                                  &draw_line_segments);
             waveform_drawn = 1U;
             renderer = SAMPLE_CAPTURE_RENDERER_OLD_AUDIO_TILE;
@@ -831,19 +830,19 @@ static void ui_page_audio_rec_draw_marker_bar(const sample_capture_state_t *stat
 
         if((waveform_drawn == 0U)
                 && (prefer_old_audio_tile != 0U)
-                && (draw_state.line_valid != 0U)
-                && (((draw_state.line_start_frame <= view_start_frame)
-                     && ((draw_state.line_start_frame + draw_state.line_frames)
+                && (state->line_valid != 0U)
+                && (((state->line_start_frame <= view_start_frame)
+                     && ((state->line_start_frame + state->line_frames)
                          >= (view_start_frame + view_frames)))
-                    || ((draw_state.line_frames == view_frames)
-                        && (((draw_state.line_start_frame > view_start_frame)
-                                ? (draw_state.line_start_frame - view_start_frame)
-                                : (view_start_frame - draw_state.line_start_frame))
+                    || ((state->line_frames == view_frames)
+                        && (((state->line_start_frame > view_start_frame)
+                                ? (state->line_start_frame - view_start_frame)
+                                : (view_start_frame - state->line_start_frame))
                             <= (view_frames / 4U)))))
         {
-            ui_page_audio_rec_draw_line_waveform(&draw_state, x, y, w, h,
-                                                 ui_page_audio_rec_edit_vertical_ref(&draw_state),
-                                                 ui_page_audio_rec_vzoom_scale_q8(draw_state.edit_vzoom),
+            ui_page_audio_rec_draw_line_waveform(state, x, y, w, h,
+                                                 ui_page_audio_rec_edit_vertical_ref(state),
+                                                 ui_page_audio_rec_vzoom_scale_q8(state->edit_vzoom),
                                                  &draw_line_segments);
             waveform_drawn = 1U;
             renderer = SAMPLE_CAPTURE_RENDERER_OLD_LINE;

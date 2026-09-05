@@ -657,6 +657,20 @@ uint8_t track_runtime_is_audio_routable(uint8_t track)
     return track_runtime_is_audio_routable_ctx(track_runtime_get_ctx(track));
 }
 
+uint8_t track_runtime_family_can_emit_external_midi(
+    track_runtime_family_t family)
+{
+    return (family == TRACK_RUNTIME_FAMILY_MIDI) ? 1U : 0U;
+}
+
+uint8_t track_runtime_can_emit_external_midi(uint8_t track)
+{
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    return (ctx == NULL) ? 0U
+        : track_runtime_family_can_emit_external_midi(
+            (track_runtime_family_t)ctx->family);
+}
+
 uint8_t track_runtime_has_capability(uint8_t track, track_capability_t capability)
 {
     const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);

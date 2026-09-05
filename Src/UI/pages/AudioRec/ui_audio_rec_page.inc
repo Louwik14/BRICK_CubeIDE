@@ -72,8 +72,8 @@ static void ui_page_rec_edit_handle_event(const ui_event_t *ev)
 
     if(ev->type == UI_EVENT_HALL_PRESS)
     {
-        sample_capture_state_t state;
-        sample_capture_model_get_state(&state);
+        sample_capture_ui_state_t state;
+        sample_capture_model_get_ui_state(&state);
         if((state.take_valid != 0U) && (state.edit_end_frame > state.edit_start_frame))
         {
             (void)control_domain_request_audio_rec(&(control_audio_rec_intent_t){
@@ -118,8 +118,8 @@ static void ui_page_rec_edit_handle_event(const ui_event_t *ev)
 static void ui_page_audio_rec_tick(void)
 {
     sample_capture_model_service();
-    sample_capture_state_t state;
-    sample_capture_model_get_state(&state);
+    sample_capture_ui_state_t state;
+    sample_capture_model_get_ui_state(&state);
     if(state.view == SAMPLE_CAPTURE_VIEW_AUDIO_REC)
     {
         ui_page_audio_rec_update_meter(state.live_peak_abs_pcm24);

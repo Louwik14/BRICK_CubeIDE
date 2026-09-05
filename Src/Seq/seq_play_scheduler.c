@@ -237,6 +237,8 @@ static uint8_t seq_play_scheduler_event_priority(uint8_t type)
 
 static void seq_play_scheduler_emit_midi_program(seq_track_id_t track, uint8_t program_0_127)
 {
+    if (track_runtime_can_emit_external_midi(track) == 0U)
+        return;
     const uint8_t channel = track_runtime_get_midi_channel_zero_based(track);
     midi_program_change(MIDI_DEST_BOTH, channel, program_0_127);
 
@@ -279,18 +281,7 @@ static uint8_t seq_play_scheduler_track_supports_program_change(const track_runt
         return 0U;
     }
 
-    if (descriptor->family == TRACK_RUNTIME_FAMILY_MIDI)
-    {
-        return 1U;
-    }
-
-    if ((descriptor->family == TRACK_RUNTIME_FAMILY_EXTERNAL)
-            && (descriptor->type == TRACK_RUNTIME_TYPE_EXTERNAL))
-    {
-        return 1U;
-    }
-
-    return 0U;
+    return track_runtime_family_can_emit_external_midi(descriptor->family);
 }
 
 static int32_t seq_play_scheduler_apply_quant_percent(int32_t microtiming_samples, uint8_t quant_percent)

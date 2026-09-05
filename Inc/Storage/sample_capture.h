@@ -146,6 +146,37 @@ typedef struct
     char final_path[SAMPLE_CAPTURE_PATH_MAX];
 } sample_capture_state_t;
 
+/* UI projection: keep waveform rendering off the UI task stack's large frame. */
+typedef struct
+{
+    sample_capture_view_t view;
+    sample_capture_phase_t phase;
+    sample_capture_arm_t arm;
+    uint8_t len_bars;
+    sample_capture_quant_t quant;
+    int8_t threshold_dbfs;
+    uint8_t line_enabled;
+    uint8_t mic_enabled;
+    uint32_t live_peak_abs_pcm24;
+    uint8_t take_valid;
+    uint32_t recorded_frames;
+    uint32_t edit_start_frame;
+    uint32_t edit_end_frame;
+    uint32_t edit_loop_start_frame;
+    uint32_t edit_loop_end_frame;
+    uint8_t edit_zoom;
+    uint8_t edit_vzoom;
+    uint8_t edit_zcross_enabled;
+    uint32_t edit_scroll_frame;
+    uint8_t line_valid;
+    uint32_t line_start_frame;
+    uint32_t line_frames;
+    uint16_t line_count;
+    uint16_t line_peak;
+    int16_t line[SAMPLE_CAPTURE_LINE_POINTS];
+    sample_capture_error_t error;
+} sample_capture_ui_state_t;
+
 void sample_capture_model_init(void);
 void sample_capture_model_service(void);
 void sample_capture_model_set_control_context(uint8_t enabled);
@@ -156,6 +187,7 @@ void sample_capture_control_on_musical_boundary(uint8_t track,
 void sample_capture_control_on_transport_stop(uint64_t sample_time);
 void sample_capture_control_on_global_rec_arm(uint8_t armed);
 void sample_capture_model_get_state(sample_capture_state_t *out_state);
+void sample_capture_model_get_ui_state(sample_capture_ui_state_t *out_state);
 void sample_capture_model_set_view(sample_capture_view_t view);
 uint8_t sample_capture_model_toggle_route(uint8_t track);
 uint8_t sample_capture_model_source_track_is_enabled(uint8_t track);

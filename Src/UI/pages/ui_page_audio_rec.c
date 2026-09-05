@@ -81,7 +81,7 @@ static void ui_page_audio_rec_update_meter(uint32_t peak_abs_pcm24)
     g_ui_audio_rec_smoothed_peak -= release;
 }
 
-static void ui_page_audio_rec_draw_live_meter(const sample_capture_state_t *state)
+static void ui_page_audio_rec_draw_live_meter(const sample_capture_ui_state_t *state)
 {
     if(state == 0)
     {

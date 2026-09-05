@@ -507,6 +507,15 @@ static uint8_t control_music_output_cause_is_external(uint32_t causal_source_id)
         || (name_space == UINT32_C(0x80000000)));
 }
 
+static uint8_t control_music_output_admit_midi_note(
+    brick_entity_id_t entity_id, uint8_t channel, uint8_t note,
+    uint8_t velocity)
+{
+    if (track_runtime_can_emit_external_midi(entity_id) == 0U)
+        return 0U;
+    return midi_note_on_admit(MIDI_DEST_BOTH, channel, note, velocity);
+}
+
 static void control_music_output_send_midi_off(
     const control_music_output_t *output)
 {
@@ -570,9 +579,8 @@ uint8_t control_music_output_submit(const control_music_action_t *action,
         output->causal_source_id = causal_source_id;
         output->generation = generation;
         output->midi_channel = control_music_action_channel(action);
-        output->midi_dest_mask = midi_note_on_admit(
-            MIDI_DEST_BOTH, output->midi_channel, output->note,
-            output->velocity);
+        output->midi_dest_mask = control_music_output_admit_midi_note(
+            entity_id, output->midi_channel, output->note, output->velocity);
         return 1U;
     }
 
@@ -675,9 +683,9 @@ uint8_t control_music_output_submit(const control_music_action_t *action,
             .alive = 1U,
             .multi = (control_music_output_is_multi(entity_id) != 0U),
             .midi_channel = control_music_action_channel(action),
-            .midi_dest_mask = midi_note_on_admit(
-                MIDI_DEST_BOTH, control_music_action_channel(action),
-                action->note, action->velocity),
+            .midi_dest_mask = control_music_output_admit_midi_note(
+                entity_id, control_music_action_channel(action), action->note,
+                action->velocity),
         };
     return 1U;
 }

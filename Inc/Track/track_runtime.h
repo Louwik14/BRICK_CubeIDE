@@ -136,6 +136,10 @@ const track_runtime_ctx_t *track_runtime_get_ctx(uint8_t track);
  * runtime contexts without becoming UI tracks or mixer lanes. */
 uint8_t track_runtime_is_audio_routable_ctx(const track_runtime_ctx_t *ctx);
 uint8_t track_runtime_is_audio_routable(uint8_t track);
+/* MIDI OUT is a structural product capability, independent from MIDI IN. */
+uint8_t track_runtime_family_can_emit_external_midi(
+    track_runtime_family_t family);
+uint8_t track_runtime_can_emit_external_midi(uint8_t track);
 uint8_t track_runtime_has_capability(uint8_t track, track_capability_t capability);
 uint8_t track_runtime_get_mix_target_track(uint8_t track, uint8_t *out_mix_track);
 uint8_t track_runtime_resolve_filter_target_track(uint8_t ui_track, uint8_t *out_filter_track);

@@ -3,9 +3,9 @@ static void ui_page_audio_rec_render(void)
 #if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
     const uint32_t page_draw_start_ms = HAL_GetTick();
 #endif
-    sample_capture_state_t state;
+    sample_capture_ui_state_t state;
     char line[32];
-    sample_capture_model_get_state(&state);
+    sample_capture_model_get_ui_state(&state);
 
     drv_display_set_font(&FONT_5X7);
     drv_display_draw_text(0U, 0U, "AUDIO REC");
@@ -54,8 +54,8 @@ static void ui_page_rec_edit_render(void)
 #if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
     const uint32_t page_draw_start_ms = HAL_GetTick();
 #endif
-    sample_capture_state_t state;
-    sample_capture_model_get_state(&state);
+    sample_capture_ui_state_t state;
+    sample_capture_model_get_ui_state(&state);
     sample_capture_model_note_rec_edit_first_render();
 
     drv_display_set_font(&FONT_5X7);
@@ -118,8 +118,8 @@ uint8_t ui_page_audio_rec_handle_encoder(uint8_t encoder, int16_t delta)
         return 1U;
     }
 
-    sample_capture_state_t state;
-    sample_capture_model_get_state(&state);
+    sample_capture_ui_state_t state;
+    sample_capture_model_get_ui_state(&state);
     if(state.view == SAMPLE_CAPTURE_VIEW_REC_EDIT)
     {
         if(g_ui_rec_edit_assign_popup != 0U)

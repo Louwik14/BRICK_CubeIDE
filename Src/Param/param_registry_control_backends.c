@@ -22,24 +22,22 @@ uint8_t param_backend_midi_cc_number_from_id(param_id_t id)
 
 uint8_t param_backend_track_supports_midi_tone_ctx(const track_runtime_ctx_t *ctx)
 {
-    if (ctx == NULL) return 0U;
-    if (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_MIDI) return 1U;
-    return ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_EXTERNAL)
-            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_EXTERNAL)) ? 1U : 0U;
+    return (ctx == NULL) ? 0U
+        : track_runtime_family_can_emit_external_midi(
+            (track_runtime_family_t)ctx->family);
 }
 
 uint8_t param_backend_track_supports_midi_tone_descriptor(
     const track_runtime_descriptor_t *descriptor)
 {
-    if (descriptor == NULL) return 0U;
-    return ((descriptor->family == TRACK_RUNTIME_FAMILY_MIDI)
-            || ((descriptor->family == TRACK_RUNTIME_FAMILY_EXTERNAL)
-                && (descriptor->type == TRACK_RUNTIME_TYPE_EXTERNAL))) ? 1U : 0U;
+    return (descriptor == NULL) ? 0U
+        : track_runtime_family_can_emit_external_midi(descriptor->family);
 }
 
 uint8_t param_backend_send_midi_cc(uint8_t track, param_id_t id, float value)
 {
-    if (param_backend_is_midi_cc_id(id) == 0U) return 0U;
+    if ((param_backend_is_midi_cc_id(id) == 0U)
+            || (track_runtime_can_emit_external_midi(track) == 0U)) return 0U;
     midi_cc(MIDI_DEST_BOTH,
             track_runtime_get_midi_channel_zero_based(track),
             param_backend_midi_cc_number_from_id(id),
