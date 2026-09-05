@@ -135,8 +135,8 @@ uint32_t usb_audio_audio_read(int32_t *interleaved, uint32_t frames)
 
     read_frames = usb_audio_pcm_read_pc_to_brick(interleaved, frames);
     if (read_frames < frames) {
-        memset(&interleaved[read_frames * USB_AUDIO_CHANNELS], 0,
-               (frames - read_frames) * USB_AUDIO_BYTES_PER_FRAME);
+        g_usb_audio_out_ready = 0U;
+        memset(interleaved, 0, frames * USB_AUDIO_BYTES_PER_FRAME);
     }
     return frames;
 }

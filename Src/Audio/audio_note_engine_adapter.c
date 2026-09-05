@@ -632,6 +632,15 @@ uint8_t audio_note_engine_adapter_install_prepared(
         && ((ctx->flags & CONTROL_AUDIO_PROGRAM_FLAG_CAN_FILTER) != 0U)
         && (installed.mix_track_id < MIXER_MAX_TRACKS));
     ctx->filter_track_id = installed.mix_track_id;
+    if ((installed.active != 0U)
+            && (installed.mix_track_id < MIXER_MAX_TRACKS))
+    {
+        const uint8_t external = (uint8_t)(
+            (family == TRACK_RUNTIME_FAMILY_EXTERNAL)
+            && (type == TRACK_RUNTIME_TYPE_EXTERNAL));
+        mixer_set_track_vca_trigger_enabled(installed.mix_track_id,
+                                             (external == 0U) ? 1U : 0U);
+    }
     ctx->supports_vca_gate = (uint8_t)((installed.active != 0U)
         && !((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
             && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))

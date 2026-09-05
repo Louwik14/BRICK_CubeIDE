@@ -404,6 +404,9 @@ static void control_domain_apply_audio_rec_intent(
     case CONTROL_AUDIO_REC_TOGGLE_MIC:
         (void)sample_capture_model_toggle_mic();
         break;
+    case CONTROL_AUDIO_REC_TOGGLE_USB:
+        (void)sample_capture_model_toggle_usb();
+        break;
     case CONTROL_AUDIO_REC_STEP_EDIT:
         (void)sample_capture_model_step_edit(intent->value0, intent->delta,
                                              intent->value1);

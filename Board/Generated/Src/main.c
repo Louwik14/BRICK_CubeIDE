@@ -37,6 +37,8 @@
 #include "led_rgb.h"
 #include "Board/board_power.h"
 #include "buttons.h"
+#include "FreeRTOS.h"
+#include "task.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -210,6 +212,19 @@ void brick_bootloader_shift_step16_service(void)
 }
 
 /* USER CODE END 0 */
+
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
+{
+  TaskHandle_t volatile failed_task = xTask;
+  char * volatile failed_task_name = pcTaskName;
+
+  taskDISABLE_INTERRUPTS();
+  for (;;)
+  {
+    (void)failed_task;
+    (void)failed_task_name;
+  }
+}
 
 /**
   * @brief  The application entry point.

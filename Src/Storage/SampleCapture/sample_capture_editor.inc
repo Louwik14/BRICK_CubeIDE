@@ -48,6 +48,7 @@ void sample_capture_model_get_ui_state(sample_capture_ui_state_t *out_state)
     out_state->threshold_dbfs = g_sample_capture.state.threshold_dbfs;
     out_state->line_enabled = g_sample_capture.state.line_enabled;
     out_state->mic_enabled = g_sample_capture.state.mic_enabled;
+    out_state->usb_enabled = g_sample_capture.state.usb_enabled;
     out_state->live_peak_abs_pcm24 = g_sample_capture.state.live_peak_abs_pcm24;
     out_state->take_valid = g_sample_capture.state.take_valid;
     out_state->recorded_frames = g_sample_capture.state.recorded_frames;
@@ -293,6 +294,19 @@ uint8_t sample_capture_model_toggle_mic(void)
 {
     return sample_capture_model_set_mic_enabled(
         (uint8_t)(g_sample_capture.state.mic_enabled == 0U));
+}
+
+uint8_t sample_capture_model_set_usb_enabled(uint8_t enabled)
+{
+    g_sample_capture.state.usb_enabled = (enabled != 0U) ? 1U : 0U;
+    sample_capture_publish_rec_bus();
+    return 1U;
+}
+
+uint8_t sample_capture_model_toggle_usb(void)
+{
+    return sample_capture_model_set_usb_enabled(
+        (uint8_t)(g_sample_capture.state.usb_enabled == 0U));
 }
 
 uint8_t sample_capture_model_step_edit(uint8_t encoder, int16_t delta, uint8_t alt_held)

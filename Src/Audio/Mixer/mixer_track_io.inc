@@ -275,6 +275,28 @@ void mixer_set_track_vca_enabled(uint32_t track_id, uint8_t enabled)
     }
 }
 
+void mixer_set_track_vca_trigger_enabled(uint32_t track_id, uint8_t enabled)
+{
+    if(track_id >= MIXER_MAX_TRACKS)
+        return;
+
+    mixer_track_filter_t *const filter = &g_track_filters[track_id];
+    const uint8_t next = (enabled != 0U) ? 1U : 0U;
+    if (filter->vca_trigger_enabled == next)
+        return;
+    mixer_track_filter_touch_config(filter);
+    filter->vca_trigger_enabled = next;
+
+    /* Both transitions start from a deterministic closed VCA state. */
+    filter->vca_enabled = next;
+    filter->vca_note_active = 0U;
+    filter->vca_note_count = 0U;
+    filter->vca_current_note = MIXER_FILTER_NOTE_REF_MIDI;
+    filter->vca_gate = 0U;
+    filter->vca_env_value = 0.0f;
+    env_adsr_reset(&filter->vca_env);
+}
+
 void mixer_set_track_vca_retrigger_hard(uint32_t track_id, uint8_t hard)
 {
     if(track_id >= MIXER_MAX_TRACKS)
@@ -295,6 +317,8 @@ void mixer_track_vca_note_on(uint32_t track_id, uint8_t midi_note, uint8_t veloc
         return;
 
     mixer_track_filter_t *filter = &g_track_filters[track_id];
+    if (filter->vca_trigger_enabled == 0U)
+        return;
     filter->vca_enabled = 1U;
     filter->vca_current_note = midi_note;
     if (filter->vca_note_count < 0xFFU)

@@ -6,6 +6,7 @@
 #include "font.h"
 #include "Storage/sample_capture.h"
 #include "ui_event.h"
+#include "ui_hall_mode_flow.h"
 #include "ui_page_manager.h"
 
 #if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
@@ -15,18 +16,25 @@
 #include <stdio.h>
 
 #define UI_AUDIO_REC_WAVE_X      0
-#define UI_AUDIO_REC_WAVE_Y      17
+#define UI_AUDIO_REC_CONTROL_Y   0U
+#define UI_AUDIO_REC_WAVE_Y      8
 #define UI_AUDIO_REC_WAVE_W      OLED_WIDTH
 #define UI_AUDIO_REC_WAVE_H      26
 #define UI_AUDIO_REC_METER_X     11U
-#define UI_AUDIO_REC_METER_Y     49U
+#define UI_AUDIO_REC_METER_Y     41U
 #define UI_AUDIO_REC_METER_W     49U
 #define UI_AUDIO_REC_METER_H     8U
-#define UI_AUDIO_REC_STATUS_X    64U
+#define UI_AUDIO_REC_ERROR_Y     35U
+#define UI_AUDIO_REC_PAGE_LABEL_Y 51U
+#define UI_AUDIO_REC_INPUT_STATE_Y 58U
+#define UI_AUDIO_REC_SOURCE_USB_X 34U
+#define UI_AUDIO_REC_SOURCE_LINE_X 68U
+#define UI_AUDIO_REC_SOURCE_MIC_X 108U
 #define UI_REC_EDIT_OVERVIEW_X   0
 #define UI_REC_EDIT_OVERVIEW_Y   45
 #define UI_REC_EDIT_OVERVIEW_W   OLED_WIDTH
 #define UI_REC_EDIT_OVERVIEW_H   13
+#define UI_REC_EDIT_WAVE_Y       17
 #define UI_REC_EDIT_TITLE_Y      0U
 #define UI_REC_EDIT_TITLE_GAP    2U
 
@@ -90,7 +98,7 @@ static void ui_page_audio_rec_draw_live_meter(const sample_capture_ui_state_t *s
     const uint8_t inner_w = UI_AUDIO_REC_METER_W - 2U;
     const uint8_t fill_w = ui_page_audio_rec_peak_to_meter(
         g_ui_audio_rec_smoothed_peak, inner_w);
-    drv_display_draw_text(0U, 50U, "IN");
+    drv_display_draw_text(0U, UI_AUDIO_REC_METER_Y, "IN");
     drv_display_draw_rect(UI_AUDIO_REC_METER_X, UI_AUDIO_REC_METER_Y,
                           UI_AUDIO_REC_METER_W, UI_AUDIO_REC_METER_H);
     if(fill_w != 0U)

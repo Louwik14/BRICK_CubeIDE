@@ -6,6 +6,8 @@ Pattern, Project et Patch utilisent exclusivement `persistent_control_model` et 
 
 Les cles persistantes de famille, type, parametre, MIDI, clock, entree External, Note FX, modulation et asset sont explicites et independantes des ordinaux C. Les sources External utilisent uniquement `PERSIST_INPUT_LINE` et `PERSIST_INPUT_USB`; `MIC` est reserve a Recorder / Audio REC. Les FLOAT32 conservent leurs bits. Les indices runtime, contextes AUDIO installes, pointeurs, caches, voix, phases, playheads et UI sont exclus.
 
+Pour une track External, le TONE `TRIG` est persiste comme parametre canonique : `OFF` laisse l'audio en THRU et `ON` le gate par les notes.
+
 Pattern contient les seize identites. La configuration des children inactifs est conservee, mais pas leurs parametres, assets, routes, modulation, Note FX ou sequence dynamique. En GROUP, le master possede MOD et Audio FX; les children ont leur lane a un PLAY et leurs niveaux A/B.
 
 Patch contient une entite et ses parametres logiques, zero a deux references

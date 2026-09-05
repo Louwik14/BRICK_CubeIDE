@@ -133,6 +133,7 @@ typedef struct __attribute__((aligned(32))) {
     uint8_t note_active;
     uint8_t current_note;
     uint8_t vca_enabled;
+    uint8_t vca_trigger_enabled;
     uint8_t vca_note_active;
     uint8_t vca_note_count;
     uint8_t vca_current_note;

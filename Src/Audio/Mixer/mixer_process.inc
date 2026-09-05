@@ -138,7 +138,8 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
             || (audio_rec_projection.source_entity_mask != 0U)
             || ((audio_rec_projection.source_flags
                 & (AUDIO_REC_BUS_SOURCE_LINE_DIRECT
-                    | AUDIO_REC_BUS_SOURCE_MIC_LOGICAL)) != 0U));
+                    | AUDIO_REC_BUS_SOURCE_MIC_LOGICAL
+                    | AUDIO_REC_BUS_SOURCE_USB_DIRECT)) != 0U));
     if((looper_playback_mix_active != 0U) && (looper_playback_routes_main != 0U))
     {
         memset(looper_bus_main_l, 0, sizeof(looper_bus_main_l));
@@ -1322,6 +1323,19 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         {
             audio_rec_bus_l[i] += inputs->line.left[i];
             audio_rec_bus_r[i] += inputs->line.right[i];
+        }
+    }
+
+    if((audio_rec_bus_active != 0U)
+            && ((audio_rec_projection.source_flags
+                & AUDIO_REC_BUS_SOURCE_USB_DIRECT) != 0U))
+    {
+        const audio_physical_inputs_t *const inputs =
+            audio_io_get_current_physical_inputs();
+        for(uint32_t i = 0U; i < frames; ++i)
+        {
+            audio_rec_bus_l[i] += inputs->usb.left[i];
+            audio_rec_bus_r[i] += inputs->usb.right[i];
         }
     }
 

@@ -40,6 +40,10 @@ static void sample_capture_publish_rec_bus(void)
     {
         source_flags |= AUDIO_REC_BUS_SOURCE_MIC_LOGICAL;
     }
+    if(g_sample_capture.state.usb_enabled != 0U)
+    {
+        source_flags |= AUDIO_REC_BUS_SOURCE_USB_DIRECT;
+    }
     if(g_sample_capture.capture_enabled != 0U)
     {
         source_flags |= AUDIO_REC_BUS_CAPTURE_ENABLED;
@@ -75,6 +79,8 @@ static uint8_t sample_capture_publish_rec_bus_at(uint64_t sample_time)
     }
     if(g_sample_capture.state.mic_enabled != 0U)
         source_flags |= AUDIO_REC_BUS_SOURCE_MIC_LOGICAL;
+    if(g_sample_capture.state.usb_enabled != 0U)
+        source_flags |= AUDIO_REC_BUS_SOURCE_USB_DIRECT;
     const uint8_t accepted = (g_sample_capture_control_context != 0U)
         ? control_audio_rec_bus_publish_at(source_entity_mask,
             (audio_rec_bus_arm_t)g_sample_capture.state.arm,
@@ -175,7 +181,8 @@ static uint8_t sample_capture_path_is_temp(const char *path)
 static uint8_t sample_capture_has_route(void)
 {
     if((g_sample_capture.state.line_enabled != 0U)
-            || (g_sample_capture.state.mic_enabled != 0U))
+            || (g_sample_capture.state.mic_enabled != 0U)
+            || (g_sample_capture.state.usb_enabled != 0U))
     {
         return 1U;
     }

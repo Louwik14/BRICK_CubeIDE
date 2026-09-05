@@ -19,7 +19,17 @@ static void ui_page_audio_rec_handle_event(const ui_event_t *ev)
 
     if(ev->type == UI_EVENT_BUTTON_PRESS)
     {
-        if(ev->id == (uint8_t)BTN_PAGE_3)
+        if(ev->id == (uint8_t)BTN_PAGE_1)
+        {
+            ui_hall_mode_flow_close_rec();
+        }
+        else if(ev->id == (uint8_t)BTN_PAGE_2)
+        {
+            (void)control_domain_request_audio_rec(&(control_audio_rec_intent_t){
+                .operation = CONTROL_AUDIO_REC_TOGGLE_USB
+            });
+        }
+        else if(ev->id == (uint8_t)BTN_PAGE_3)
         {
             (void)control_domain_request_audio_rec(&(control_audio_rec_intent_t){
                 .operation = CONTROL_AUDIO_REC_TOGGLE_LINE
@@ -127,22 +137,6 @@ static void ui_page_audio_rec_tick(void)
     if(state.view == SAMPLE_CAPTURE_VIEW_REC_EDIT && ui_page_get_id() != UI_PAGE_REC_EDIT)
     {
         ui_page_set(UI_PAGE_REC_EDIT);
-    }
-}
-
-static const char *ui_page_audio_rec_phase_label(sample_capture_phase_t phase)
-{
-    switch(phase)
-    {
-        case SAMPLE_CAPTURE_PHASE_IDLE: return "IDLE";
-        case SAMPLE_CAPTURE_PHASE_ARMED: return "ARMED";
-        case SAMPLE_CAPTURE_PHASE_WAIT_QUANT: return "WAIT";
-        case SAMPLE_CAPTURE_PHASE_RECORDING: return "REC";
-        case SAMPLE_CAPTURE_PHASE_STOPPING: return "STOP";
-        case SAMPLE_CAPTURE_PHASE_REC_EDIT: return "EDIT";
-        case SAMPLE_CAPTURE_PHASE_SAVED: return "SAVED";
-        case SAMPLE_CAPTURE_PHASE_ERROR: return "ERROR";
-        default: return "?";
     }
 }
 

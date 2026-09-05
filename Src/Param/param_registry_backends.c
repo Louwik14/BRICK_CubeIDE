@@ -65,6 +65,7 @@ static uint8_t param_backend_is_vca_param(param_id_t id)
                      || (id == PARAM_VCA_DECAY)
                      || (id == PARAM_VCA_SUSTAIN)
                      || (id == PARAM_VCA_RELEASE)
+                     || (id == PARAM_EXTERNAL_TRIG)
                      || (id == PARAM_FILTER_MODE)
                      || (id == PARAM_ENV_RETRIG_VCA));
 }
@@ -768,6 +769,12 @@ uint8_t param_backend_apply_mix_track(const track_audio_runtime_ctx_t *ctx,
             }
             return 1U;
         }
+
+        case PARAM_EXTERNAL_TRIG:
+            mixer_set_track_vca_trigger_enabled(
+                ctx->program_route.mix_track_id,
+                (value >= 0.5f) ? 1U : 0U);
+            return 1U;
 
         default:
             return 0U;

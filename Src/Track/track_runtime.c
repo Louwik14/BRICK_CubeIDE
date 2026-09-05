@@ -1066,6 +1066,7 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_LOOPER_STRETCH:
         case PARAM_LOOPER_PITCH:
         case PARAM_LOOPER_GRAIN:
+        case PARAM_EXTERNAL_TRIG:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_TONE;
             rule.resource = TRACK_RUNTIME_RESOURCE_PLAY;
             rule.status = TRACK_RUNTIME_PARAM_ALLOWED;
@@ -1317,6 +1318,12 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
                     return TRACK_RUNTIME_PARAM_UNAVAILABLE;
                 }
                 return TRACK_RUNTIME_PARAM_ALLOWED;
+            }
+            if ((param == PARAM_EXTERNAL_TRIG)
+                    && ((ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_EXTERNAL)
+                        || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_EXTERNAL)))
+            {
+                return TRACK_RUNTIME_PARAM_UNAVAILABLE;
             }
             if ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_PLAY) == 0U)
             {

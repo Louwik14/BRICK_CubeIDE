@@ -401,6 +401,9 @@ enum {
     PARAM_GROUP_FX_A_LEVEL,
     PARAM_GROUP_FX_B_LEVEL,
 
+    /* External TONE gate policy.  Appended to preserve existing ordinals. */
+    PARAM_EXTERNAL_TRIG,
+
     PARAM_COUNT
 };
 
@@ -499,7 +502,7 @@ PARAM_ID_STATIC_ASSERT(PARAM_DRUM_MD_P1 == 22, "Drum MD parameter IDs changed");
 PARAM_ID_STATIC_ASSERT(PARAM_DRUM_MD_P8 == 29, "Drum MD parameter IDs changed");
 PARAM_ID_STATIC_ASSERT(PARAM_MIX_REVERB_DELAYS == 143, "Reverb parameter ID changed");
 PARAM_ID_STATIC_ASSERT(PARAM_RESERVED_175 == 144, "Reserved parameter ID changed");
-PARAM_ID_STATIC_ASSERT(PARAM_COUNT == 365, "Parameter count changed");
+PARAM_ID_STATIC_ASSERT(PARAM_COUNT == 366, "Parameter count changed");
 PARAM_ID_STATIC_ASSERT(PARAM_MIDI_FX_S1_PARAM1 == 250, "MIDI FX parameter boundary changed");
 #undef PARAM_ID_STATIC_ASSERT
 

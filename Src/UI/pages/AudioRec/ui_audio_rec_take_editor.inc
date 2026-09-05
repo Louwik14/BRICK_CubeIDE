@@ -725,7 +725,8 @@ static void ui_page_audio_rec_draw_marker_bar(sample_capture_ui_state_t *state)
     const uint32_t waveform_draw_start_ms = HAL_GetTick();
 #endif
     const int x = UI_AUDIO_REC_WAVE_X;
-    const int y = UI_AUDIO_REC_WAVE_Y;
+    const int y = (state->view == SAMPLE_CAPTURE_VIEW_REC_EDIT)
+        ? UI_REC_EDIT_WAVE_Y : UI_AUDIO_REC_WAVE_Y;
     const int w = UI_AUDIO_REC_WAVE_W;
     const int h = UI_AUDIO_REC_WAVE_H;
     drv_display_clear_rect(x, y, w, h);

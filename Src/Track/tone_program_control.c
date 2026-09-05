@@ -56,6 +56,8 @@ static float *tone_field(tone_program_control_t *p, param_id_t id)
     case TRACK_RUNTIME_TYPE_MIDI: case TRACK_RUNTIME_TYPE_EXTERNAL:
         if(id==PARAM_MIDI_PROGRAM)return &p->state.midi.program;
         if(id>=PARAM_MIDI_CC1_1&&id<=PARAM_MIDI_CC3_4)return &p->state.midi.cc[((uint16_t)id-(uint16_t)PARAM_MIDI_CC1_1)/4U][((uint16_t)id-(uint16_t)PARAM_MIDI_CC1_1)%4U];
+        if ((p->tag == TRACK_RUNTIME_TYPE_EXTERNAL) && (id == PARAM_EXTERNAL_TRIG))
+            return &p->state.midi.external_trig;
         return NULL;
     case TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG:
         switch(id){F(PARAM_DRUM_TRX_BD_PITCH,p->state.drum_analog.pitch);F(PARAM_DRUM_TRX_BD_DECAY,p->state.drum_analog.decay);F(PARAM_DRUM_TRX_BD_PITCH_SWEEP,p->state.drum_analog.pitch_sweep);

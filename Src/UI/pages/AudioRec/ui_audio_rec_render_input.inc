@@ -7,12 +7,8 @@ static void ui_page_audio_rec_render(void)
     char line[32];
     sample_capture_model_get_ui_state(&state);
 
-    drv_display_set_font(&FONT_5X7);
-    drv_display_draw_text(0U, 0U, "AUDIO REC");
-    drv_display_draw_text(80U, 0U, ui_page_audio_rec_phase_label(state.phase));
-
     drv_display_set_font(&FONT_4X6);
-    const uint8_t live_label_y = (uint8_t)(UI_AUDIO_REC_WAVE_Y - drv_display_font_height() - 2U);
+    const uint8_t live_label_y = UI_AUDIO_REC_CONTROL_Y;
     (void)snprintf(line, sizeof(line), "ARM %s", ui_page_audio_rec_arm_label(state.arm));
     drv_display_draw_text(0U, live_label_y, line);
     if(state.len_bars == 0U)
@@ -31,14 +27,24 @@ static void ui_page_audio_rec_render(void)
     ui_page_audio_rec_draw_marker_bar(&state);
     ui_page_audio_rec_draw_live_meter(&state);
 
-    (void)snprintf(line, sizeof(line), "LINE %s MIC %s",
-                   state.line_enabled ? "ON" : "OFF",
-                   state.mic_enabled ? "ON" : "OFF");
-    drv_display_draw_text(UI_AUDIO_REC_STATUS_X, 50U, line);
+    drv_display_draw_text(0U, UI_AUDIO_REC_PAGE_LABEL_Y, "BACK");
+    drv_display_draw_text(UI_AUDIO_REC_SOURCE_USB_X, UI_AUDIO_REC_PAGE_LABEL_Y, "USB");
+    drv_display_draw_text(UI_AUDIO_REC_SOURCE_LINE_X, UI_AUDIO_REC_PAGE_LABEL_Y, "LINE");
+    drv_display_draw_text(UI_AUDIO_REC_SOURCE_MIC_X, UI_AUDIO_REC_PAGE_LABEL_Y, "MIC");
+    ui_page_audio_rec_draw_label(6U, UI_AUDIO_REC_INPUT_STATE_Y,
+                                 state.usb_enabled ? "ON" : "OFF",
+                                 state.usb_enabled);
+    ui_page_audio_rec_draw_label(38U, UI_AUDIO_REC_INPUT_STATE_Y,
+                                 state.line_enabled ? "ON" : "OFF",
+                                 state.line_enabled);
+    ui_page_audio_rec_draw_label(74U, UI_AUDIO_REC_INPUT_STATE_Y,
+                                 state.mic_enabled ? "ON" : "OFF",
+                                 state.mic_enabled);
 
     if(state.error != SAMPLE_CAPTURE_ERROR_NONE)
     {
-        drv_display_draw_text(46U, 34U, ui_page_audio_rec_error_label(state.error));
+        drv_display_draw_text(46U, UI_AUDIO_REC_ERROR_Y,
+                              ui_page_audio_rec_error_label(state.error));
     }
 #if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
     if(state.view == SAMPLE_CAPTURE_VIEW_REC_EDIT)

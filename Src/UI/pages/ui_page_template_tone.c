@@ -336,6 +336,18 @@ static const ui_template_family_t g_ui_template_tone_family_midi = {
     .default_subpage = 0U,
 };
 
+static const ui_template_family_t g_ui_template_tone_family_external = {
+    .family_title = "TONE",
+    .nav_labels = { "TRIG", "-", "-", "-" },
+    .subpages = {
+        { .title = "TRIG", .param_bank = { .params = { PARAM_EXTERNAL_TRIG, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
 
 static ui_template_family_t g_ui_template_tone_family_drum = {
     .family_title = "TONE",

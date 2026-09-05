@@ -8,6 +8,7 @@
 #include "IPC/live_parameter_event.h"
 #include "Param/param_value_policy.h"
 #include "Track/track_runtime.h"
+#include "Track/control_music_output.h"
 #include "Track/tone_param_codec.h"
 #include "Track/tone_program_control.h"
 #include "Seq/seq_runtime_exec.h"
@@ -95,9 +96,12 @@ bool live_parameter_audio_publication_submit_bulk(
     control_audio_command_t commands[LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS];
     if (!live_parameter_audio_build_commands(bulk, commands))
         return live_parameter_audio_publish_failed();
+    const uint64_t minimum_sample =
+        control_music_output_first_unpublished_sample(
+            seq_runtime_exec_get_sample_timeline());
     if (control_rt_publish_batch_captured(
         commands, bulk->count, bulk->capture_tick,
-        seq_runtime_exec_get_sample_timeline()) == 0U)
+        minimum_sample) == 0U)
     {
         /* A valid CONTROL batch is dimensioned before publication.  A refusal
          * is an invariant failure, never a deferred parameter update. */

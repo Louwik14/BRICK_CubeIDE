@@ -134,14 +134,18 @@ static uint8_t param_registry_submit_audio_value(param_id_t id,
                                                   float value,
                                                   uint8_t scope)
 {
-    /* This is an immediate CONTROL commit, not an ingress capture.  Its
-     * publication must share the NOW/timeline authority used by rebuilds;
-     * the captured path remains reserved for real ingress timestamps. */
-    return control_rt_publish_param_now(
+    /* The UI request is immediate in product semantics, but the strict FIFO
+     * may already contain future musical commands.  Publish at the first
+     * legal sample so this PARAM cannot regress the transport floor. */
+    uint64_t sample_time = 0U;
+    if (control_rt_now_sample(&sample_time) == 0U)
+        return 0U;
+    sample_time = control_music_output_first_unpublished_sample(sample_time);
+    return control_rt_publish_param(
         (track < BRICK_ENTITY_CAPACITY) ? track : 0U,
         (uint16_t)id,
         (uint32_t)live_parameter_event_encode_float(value),
-        scope) ? 1U : 0U;
+        scope, sample_time) ? 1U : 0U;
 }
 
 uint8_t param_registry_publish_track_base_audio(param_id_t id,

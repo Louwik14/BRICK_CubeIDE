@@ -642,6 +642,7 @@ static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_r
     filter->morph_target = 0.0f;
     filter->note_active = 0U;
     filter->vca_enabled = 0U;
+    filter->vca_trigger_enabled = 1U;
     filter->vca_note_active = 0U;
     filter->vca_note_count = 0U;
     filter->vca_current_note = MIXER_FILTER_NOTE_REF_MIDI;

@@ -72,12 +72,17 @@ static uint32_t usb_audio_pcm_write(usb_audio_pcm_ring_t *ring,
 
 static uint32_t usb_audio_pcm_read(usb_audio_pcm_ring_t *ring,
                                    int32_t *interleaved,
-                                   uint32_t frames)
+                                   uint32_t frames,
+                                   volatile uint32_t *underflow_counter)
 {
     const uint32_t read_count = ring->read_count;
     const uint32_t available = usb_audio_pcm_available(ring);
 
     if (frames > available) {
+        if (underflow_counter != NULL) {
+            *underflow_counter += frames - available;
+            return 0U;
+        }
         frames = available;
     }
     for (uint32_t i = 0U; i < frames; ++i) {
@@ -142,7 +147,8 @@ uint32_t usb_audio_pcm_read_pc_to_brick(int32_t *interleaved,
         return 0U;
     }
     return usb_audio_pcm_read(&g_usb_audio_pcm_rings.pc_to_brick,
-                              interleaved, frames);
+                              interleaved, frames,
+                              &g_usb_audio_pcm_rings.pc_to_brick_underflow_frames);
 }
 
 uint32_t usb_audio_pcm_write_brick_to_pc(const int32_t *interleaved,
@@ -163,7 +169,7 @@ uint32_t usb_audio_pcm_read_brick_to_pc(int32_t *interleaved,
         return 0U;
     }
     return usb_audio_pcm_read(&g_usb_audio_pcm_rings.brick_to_pc,
-                              interleaved, frames);
+                              interleaved, frames, NULL);
 }
 
 uint32_t usb_audio_pcm_peek_brick_to_pc(int32_t *interleaved,

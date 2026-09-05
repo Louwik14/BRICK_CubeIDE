@@ -318,7 +318,8 @@ static void codec_tone(codec_io_t *io,tone_program_control_t*t)
     case TRACK_RUNTIME_TYPE_STREAM:codec_float_block(io,&t->state.stream.gain,8U);break;
     case TRACK_RUNTIME_TYPE_LOOPER:codec_float_block(io,&t->state.looper.xfade,4U);break;
     case TRACK_RUNTIME_TYPE_MULTI:codec_float_block(io,&t->state.multi.gain,2U);break;
-    case TRACK_RUNTIME_TYPE_MIDI:case TRACK_RUNTIME_TYPE_EXTERNAL:codec_float_block(io,&t->state.midi.program,13U);break;
+    case TRACK_RUNTIME_TYPE_MIDI:codec_float_block(io,&t->state.midi.program,13U);break;
+    case TRACK_RUNTIME_TYPE_EXTERNAL:codec_float_block(io,&t->state.midi.program,14U);break;
     case TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG:codec_float_block(io,&t->state.drum_analog.pitch,8U);break;
     case TRACK_RUNTIME_TYPE_DRUM_MD:codec_float_block(io,&t->state.drum_md.model,9U);break;
     case TRACK_RUNTIME_TYPE_NONE:case TRACK_RUNTIME_TYPE_FM:case TRACK_RUNTIME_TYPE_GROUP:break;

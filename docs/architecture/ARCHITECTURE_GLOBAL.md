@@ -27,8 +27,8 @@ Save/Load -> decode safety -> safe quiesce -> progressive install -> publication
 Restore reste CONTROL et republie les effets AUDIO par la FIFO unique; aucune
 completion AUDIO ne reconstruit ou ne confirme l'etat musical.
 
-La configuration modulation/ENV3/Matrix, le routing Looper, l'ownership des
-entrees, le bus Recorder, la selection Wavetable et le lifecycle Preview sont
+  La configuration modulation/ENV3/Matrix, le routing Looper, l'ownership des
+ entrees, le bus Recorder (dont les sources physiques LINE/USB directes), la selection Wavetable et le lifecycle Preview sont
 des decisions CONTROL ordonnancees dans cette meme FIFO. Les rings PCM,
 tables/mipmaps et compteurs de data plane restent separes; ils ne portent
 aucune seconde chronologie fonctionnelle.

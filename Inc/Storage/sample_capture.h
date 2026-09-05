@@ -113,6 +113,7 @@ typedef struct
     int8_t threshold_dbfs;
     uint8_t line_enabled;
     uint8_t mic_enabled;
+    uint8_t usb_enabled;
     uint8_t trigger_latched;
     uint32_t live_peak_abs_pcm24;
     uint32_t live_peak_generation;
@@ -157,6 +158,7 @@ typedef struct
     int8_t threshold_dbfs;
     uint8_t line_enabled;
     uint8_t mic_enabled;
+    uint8_t usb_enabled;
     uint32_t live_peak_abs_pcm24;
     uint8_t take_valid;
     uint32_t recorded_frames;
@@ -201,6 +203,8 @@ uint8_t sample_capture_model_set_line_enabled(uint8_t enabled);
 uint8_t sample_capture_model_toggle_line(void);
 uint8_t sample_capture_model_set_mic_enabled(uint8_t enabled);
 uint8_t sample_capture_model_toggle_mic(void);
+uint8_t sample_capture_model_set_usb_enabled(uint8_t enabled);
+uint8_t sample_capture_model_toggle_usb(void);
 uint8_t sample_capture_model_step_edit(uint8_t encoder, int16_t delta, uint8_t alt_held);
 uint32_t sample_capture_model_visible_frames_for_zoom(uint32_t recorded_frames, uint8_t zoom);
 uint32_t sample_capture_model_tile_cache_capacity_frames(void);

@@ -36,7 +36,13 @@
 
 static uint8_t g_runtime_track_enabled = 1U;
 static uint8_t g_runtime_last_drum_processed = 0xFFU;
-static uint8_t g_audio_input_owner[ENTITY_TOPOLOGY_AUDIO_SOURCE_COUNT];
+/* Unowned physical sources must never default to entity 0: publication is
+ * first-writer-wins per mixer lane, so a zeroed MIC lane would mask USB. */
+static uint8_t g_audio_input_owner[ENTITY_TOPOLOGY_AUDIO_SOURCE_COUNT] = {
+    [ENTITY_AUDIO_SOURCE_LINE] = BRICK_ENTITY_INVALID_ID,
+    [ENTITY_AUDIO_SOURCE_MIC] = BRICK_ENTITY_INVALID_ID,
+    [ENTITY_AUDIO_SOURCE_USB] = BRICK_ENTITY_INVALID_ID
+};
 
 uint8_t brick6_audio_runtime_set_input_owner(uint8_t input, uint8_t owner)
 {

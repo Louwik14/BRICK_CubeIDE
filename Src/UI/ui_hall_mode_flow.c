@@ -85,7 +85,7 @@ static uint8_t ui_hall_mode_flow_open_looper_rout(void)
     return 1U;
 }
 
-static void ui_hall_mode_flow_close_rec(void)
+void ui_hall_mode_flow_close_rec(void)
 {
     if (ui_page_audio_rec_is_open() == 0U)
     {
