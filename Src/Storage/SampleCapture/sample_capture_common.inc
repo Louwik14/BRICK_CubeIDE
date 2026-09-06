@@ -20,8 +20,14 @@ static uint32_t sample_capture_next_trigger_arm_epoch(void)
 
 static void sample_capture_publish_trigger_config(void)
 {
+    audio_recorder_status_t recorder_status;
+    const uint8_t recorder_ready =
+        (audio_recorder_get_status_client(AUDIO_RECORDER_CLIENT_AUDIO_REC,
+                                          &recorder_status) != 0U)
+        && (recorder_status.state == AUDIO_RECORDER_STATE_PREPARED);
     const uint8_t enabled = (uint8_t)(
         (g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_TRIG)
+        && (recorder_ready != 0U)
         && (g_sample_capture.state.recording == 0U)
         && (g_sample_capture.state.trigger_latched == 0U));
     audio_rec_level_control_publish_trigger_config(

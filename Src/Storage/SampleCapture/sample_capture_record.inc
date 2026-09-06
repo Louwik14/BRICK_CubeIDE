@@ -324,11 +324,6 @@ static uint8_t sample_capture_make_next_final_path(char *out_path, uint32_t out_
 
 static uint8_t sample_capture_prepare_session(void)
 {
-    if(sd_preview_is_active() != 0U)
-    {
-        sd_preview_request_stop();
-    }
-
     if(sample_capture_has_route() == 0U)
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_NO_ROUTE);
@@ -358,6 +353,12 @@ static uint8_t sample_capture_start_prepared_at(uint64_t sample_time)
     if ((audio_recorder_get_status_client(
                 AUDIO_RECORDER_CLIENT_AUDIO_REC, &recorder_status) == 0U)
             || (recorder_status.state != AUDIO_RECORDER_STATE_PREPARED))
+        return 0U;
+    if ((g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_REC)
+            && (seq_runtime_rec_is_armed() == 0U))
+        return 0U;
+    if ((g_sample_capture.state.quant == SAMPLE_CAPTURE_QUANT_NOW)
+            && (seq_runtime_is_running() == 0U))
         return 0U;
     if(sample_capture_publish_rec_bus_at(sample_time) == 0U)
         return 0U;

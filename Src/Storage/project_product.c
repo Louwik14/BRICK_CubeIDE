@@ -9,6 +9,7 @@
 #include "Storage/pattern_load_storage.h"
 #include "Storage/persistence_workspace.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/sd_preview.h"
 #include "Storage/storage_io_wakeup.h"
 #include "App/control_rt_wakeup.h"
 #include "ControlRT/control_rt_publication.h"
@@ -898,7 +899,14 @@ static void project_product_load_service_step(void)
     if (g_project_load.state == PROJECT_LOAD_WAIT_SAFE)
     {
         if (g_project_load.quiesce_requested != 0U
-            && project_load_quiesce_safe() == 0U) return;
+            && project_load_quiesce_safe() == 0U)
+        {
+            if ((sd_preview_get_state() == SD_PREVIEW_STATE_OPENING)
+                    || (sd_preview_get_state() == SD_PREVIEW_STATE_STREAMING)
+                    || (sd_preview_get_state() == SD_PREVIEW_STATE_STOPPING))
+                storage_io_owner_wait_resource(STORAGE_OWNER_PROJECT);
+            return;
+        }
         uint64_t now_sample = 0U;
         if ((control_rt_publication_horizon_active() != 0U)
             || (control_audio_fifo_control_free() != CONTROL_AUDIO_FIFO_CAPACITY)

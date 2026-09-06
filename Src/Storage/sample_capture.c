@@ -110,6 +110,7 @@ typedef struct
     uint32_t trigger_arm_epoch;
     uint8_t export_pending;
     uint8_t export_event_pending;
+    uint8_t export_result_available;
     uint8_t export_result_success;
     uint32_t export_request_id;
     uint32_t export_start_frame;
@@ -345,21 +346,28 @@ void sample_capture_recorder_storage_service(void)
             .type = CONTROL_STORAGE_EVENT_REC_EDIT_SAVED,
             .family = AUDIO_RECORDER_CLIENT_AUDIO_REC,
             .result = g_sample_capture.export_result_success,
-            .request_id = g_sample_capture.export_request_id,
-            .session_id = g_sample_capture.export_request_id
+            .request_id = g_sample_capture.export_request_id
         };
         if (control_domain_publish_storage_event(&event) == 0U)
             storage_io_owner_wakeup(STORAGE_OWNER_RECORDER);
+        else
+            g_sample_capture.export_event_pending = 0U;
         return;
     }
-    if (g_sample_capture.export_pending == 0U)
+    if ((g_sample_capture.export_pending == 0U)
+            || (g_sample_capture.export_result_available != 0U))
         return;
 
     const uint32_t request_id = g_sample_capture.export_request_id;
     uint8_t success = 0U;
     g_sample_capture.export_result_path[0] = '\0';
-    if (sd_preview_is_active() != 0U)
-        sd_preview_stop();
+    if (((sd_preview_is_active() != 0U)
+            || (sd_preview_get_state() == SD_PREVIEW_STATE_STOPPING))
+            && (sd_preview_stop() == 0U))
+    {
+        storage_io_owner_wait_resource(STORAGE_OWNER_RECORDER);
+        return;
+    }
 
     char final_path[SAMPLE_CAPTURE_PATH_MAX];
     if ((sample_capture_make_next_final_path(
@@ -373,29 +381,32 @@ void sample_capture_recorder_storage_service(void)
                                  final_path);
         success = 1U;
     }
-    g_sample_capture.export_pending = 0U;
     g_sample_capture.export_result_success = success;
+    g_sample_capture.export_result_available = 1U;
     g_sample_capture.export_event_pending = 1U;
     __DMB();
     const control_storage_audio_event_t event = {
         .type = CONTROL_STORAGE_EVENT_REC_EDIT_SAVED,
         .family = AUDIO_RECORDER_CLIENT_AUDIO_REC,
         .result = success,
-        .request_id = request_id,
-        .session_id = request_id
+        .request_id = request_id
     };
     if (control_domain_publish_storage_event(&event) == 0U)
         storage_io_owner_wakeup(STORAGE_OWNER_RECORDER);
+    else
+        g_sample_capture.export_event_pending = 0U;
 }
 
 void sample_capture_control_on_storage_event(uint8_t result,
                                              uint32_t request_id)
 {
     if ((request_id != g_sample_capture.export_request_id)
-            || ((g_sample_capture.export_pending != 0U)
-                && (g_sample_capture.export_event_pending == 0U)))
+            || (g_sample_capture.export_pending == 0U)
+            || (g_sample_capture.export_result_available == 0U))
         return;
     g_sample_capture.export_event_pending = 0U;
+    g_sample_capture.export_result_available = 0U;
+    g_sample_capture.export_pending = 0U;
     if (result != 0U)
     {
         sample_capture_copy_path(g_sample_capture.state.final_path,
@@ -405,14 +416,69 @@ void sample_capture_control_on_storage_event(uint8_t result,
         (void)waveform_cache_request_for_wav_known_duration(
             g_sample_capture.state.final_path,
             WAVEFORM_CACHE_REASON_EDITOR_VISIBLE,
-            g_sample_capture.state.edit_end_frame
-                - g_sample_capture.state.edit_start_frame,
+            g_sample_capture.export_end_frame
+                - g_sample_capture.export_start_frame,
             AUDIO_RECORDER_SAMPLE_RATE_HZ);
     }
     else
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
     }
+}
+
+uint8_t sample_capture_recorder_export_busy(void)
+{
+    return g_sample_capture.export_pending;
+}
+
+void sample_capture_control_on_recorder_prepared(uint32_t request_id)
+{
+    (void)request_id;
+    audio_recorder_status_t recorder_status;
+    if ((audio_recorder_get_status_client(
+                AUDIO_RECORDER_CLIENT_AUDIO_REC, &recorder_status) == 0U)
+            || (recorder_status.state != AUDIO_RECORDER_STATE_PREPARED))
+        return;
+    sample_capture_model_set_control_context(1U);
+    sample_capture_publish_trigger_config();
+    if ((g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_REC)
+            && (g_sample_capture.state.armed_pending != 0U)
+            && (g_sample_capture.state.recording == 0U)
+            && (seq_runtime_rec_is_armed() != 0U)
+            && (seq_runtime_is_running() != 0U))
+    {
+        uint64_t now_sample = 0U;
+        if (control_rt_now_sample(&now_sample) != 0U)
+        {
+            const uint64_t start_sample =
+                control_music_output_first_unpublished_sample(now_sample);
+            if (g_sample_capture.state.quant == SAMPLE_CAPTURE_QUANT_NOW)
+                (void)sample_capture_start_prepared_at(start_sample);
+            else
+                g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_WAIT_QUANT;
+        }
+    }
+    sample_capture_model_set_control_context(0U);
+}
+
+void sample_capture_control_on_recorder_canceled(uint32_t request_id)
+{
+    (void)request_id;
+    sample_capture_model_set_control_context(1U);
+    sample_capture_set_capture_enabled(0U);
+    g_sample_capture.state.recording = 0U;
+    g_sample_capture.state.armed_pending = 0U;
+    g_sample_capture.state.trigger_latched = 0U;
+    sample_capture_publish_trigger_config();
+    sample_capture_publish_rec_bus();
+    if (g_sample_capture.state.take_valid == 0U)
+    {
+        g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_IDLE;
+        g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
+    }
+    else if (g_sample_capture.state.phase == SAMPLE_CAPTURE_PHASE_STOPPING)
+        g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_REC_EDIT;
+    sample_capture_model_set_control_context(0U);
 }
 
 void sample_capture_model_set_control_context(uint8_t enabled)

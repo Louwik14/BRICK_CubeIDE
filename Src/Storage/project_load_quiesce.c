@@ -110,7 +110,8 @@ void project_load_quiesce_control_process(void)
     live_event_discard_pending();
     midi_rx_discard_pending();
     midi_host_rx_discard_pending();
-    if (sd_preview_is_active() != 0U)
+    if ((sd_preview_is_active() != 0U)
+            || (sd_preview_get_state() == SD_PREVIEW_STATE_STOPPING))
         sd_preview_request_stop();
     note_fx_pipeline_panic();
     seq_play_scheduler_clear();
@@ -158,7 +159,10 @@ uint8_t project_load_quiesce_safe(void)
         && (storage_io_owner_test(STORAGE_OWNER_STREAM) == 0U)
         && (sampler_ram_pool_retire_idle() != 0U)
         && (wavetable_pool_retire_idle() != 0U)
-        && (multi_sample_pool_retire_idle() != 0U));
+        && (multi_sample_pool_retire_idle() != 0U)
+        && (sd_preview_get_state() != SD_PREVIEW_STATE_OPENING)
+        && (sd_preview_get_state() != SD_PREVIEW_STATE_STREAMING)
+        && (sd_preview_get_state() != SD_PREVIEW_STATE_STOPPING));
 }
 
 uint8_t project_load_quiesce_failed(void)

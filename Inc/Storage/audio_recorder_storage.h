@@ -42,8 +42,8 @@ void audio_recorder_storage_init(void);
 uint8_t audio_recorder_storage_prepare_request(audio_recorder_client_t client,
                                                uint8_t looper_track,
                                                uint32_t frame_limit,
-                                               uint32_t session_id);
-uint8_t audio_recorder_storage_cancel(uint32_t session_id);
+                                               uint32_t request_id);
+uint8_t audio_recorder_storage_cancel(uint32_t request_id);
 void audio_recorder_storage_release(void);
 
 /* Observe the existing capture transport, drain and advance the SD writer. */

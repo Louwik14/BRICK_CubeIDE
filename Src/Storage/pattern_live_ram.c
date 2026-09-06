@@ -24,11 +24,6 @@
 #define PATTERN_BANK_COUNT 16U
 #define PATTERN_PER_BANK   16U
 
-static void pattern_storage_stop_preview_local(void)
-{
-    sd_preview_stop();
-}
-
 typedef struct
 {
     uint8_t has_snapshot;
@@ -236,7 +231,8 @@ uint8_t pattern_storage_request(uint8_t bank, uint8_t pattern)
         || (project_product_ui_busy() != 0U)) return 0U;
     if (pattern_storage_save_busy() != 0U)
         return 0U;
-    if(sd_preview_is_active() != 0U)
+    if((sd_preview_is_active() != 0U)
+            || (sd_preview_get_state() == SD_PREVIEW_STATE_STOPPING))
     {
         sd_preview_request_stop();
     }
@@ -410,7 +406,11 @@ void pattern_storage_service(uint32_t byte_budget)
 
     if(sd_preview_is_active() != 0U)
     {
-        pattern_storage_stop_preview_local();
+        if (sd_preview_stop() == 0U)
+        {
+            storage_io_owner_wait_resource(STORAGE_OWNER_PATTERN);
+            return;
+        }
     }
 
     if (g_pattern_load_state == PATTERN_LOAD_LOADING)

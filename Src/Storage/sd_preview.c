@@ -196,11 +196,11 @@ static uint8_t sd_preview_close_file(void)
     return 1U;
 }
 
-static void sd_preview_clear_session(uint8_t clear_error, uint8_t clear_state)
+static uint8_t sd_preview_clear_session(uint8_t clear_error, uint8_t clear_state)
 {
     if (sd_preview_close_file() == 0U)
     {
-        return;
+        return 0U;
     }
 
     if (g_sd_preview.gate_held != 0U)
@@ -226,6 +226,7 @@ static void sd_preview_clear_session(uint8_t clear_error, uint8_t clear_state)
     {
         g_sd_preview.last_error = SD_PREVIEW_ERROR_NONE;
     }
+    return 1U;
 }
 
 static void sd_preview_set_error(sd_preview_error_t error)
@@ -577,11 +578,22 @@ uint8_t sd_preview_request_begin_range(const char *path,
         return 0U;
     if (sd_preview_storage_unavailable() != 0U)
         return 0U;
-    memcpy(g_sd_preview_request_path, path, strlen(path) + 1U);
+    const size_t path_length = strlen(path) + 1U;
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if (g_sd_preview_request == 2U)
+    {
+        if (primask == 0U) __enable_irq();
+        else __set_PRIMASK(primask);
+        return 0U;
+    }
+    memcpy(g_sd_preview_request_path, path, path_length);
     g_sd_preview_request_start_frame = start_frame;
     g_sd_preview_request_end_frame = end_frame;
     __DMB();
     g_sd_preview_request = 1U;
+    if (primask == 0U) __enable_irq();
+    else __set_PRIMASK(primask);
     storage_io_owner_set(STORAGE_OWNER_PREVIEW);
     storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
@@ -589,7 +601,11 @@ uint8_t sd_preview_request_begin_range(const char *path,
 
 void sd_preview_request_stop(void)
 {
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
     g_sd_preview_request = 2U;
+    if (primask == 0U) __enable_irq();
+    else __set_PRIMASK(primask);
     storage_io_owner_set(STORAGE_OWNER_PREVIEW);
     storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
 }
@@ -667,10 +683,12 @@ uint8_t sd_preview_begin_range(const char *path, uint32_t start_frame, uint32_t 
 
     if (sd_preview_is_active() != 0U)
     {
-        sd_preview_stop();
+        if (sd_preview_stop() == 0U)
+            return 0U;
     }
 
-    sd_preview_clear_session(0U, 1U);
+    if (sd_preview_clear_session(0U, 1U) == 0U)
+        return 0U;
     g_sd_preview.state = SD_PREVIEW_STATE_OPENING;
     g_sd_preview.last_error = SD_PREVIEW_ERROR_NONE;
     g_sd_preview.range_start_frame = start_frame;
@@ -787,34 +805,57 @@ uint8_t sd_preview_begin(const char *path)
     return sd_preview_begin_range(path, 0U, 0U);
 }
 
-void sd_preview_stop(void)
+uint8_t sd_preview_stop(void)
 {
     g_sd_preview.state = SD_PREVIEW_STATE_STOPPING;
-    sd_preview_clear_session(1U, 1U);
+    return sd_preview_clear_session(1U, 1U);
 }
 
 void sd_preview_process(void)
 {
     g_sd_preview.gain = g_sd_preview_control_gain;
-    const uint8_t request = g_sd_preview_request;
-    if (request != 0U)
+    uint8_t request = 0U;
+    char request_path[SAMPLE_CLASSIC_PATH_MAX];
+    uint32_t request_start_frame = 0U;
+    uint32_t request_end_frame = 0U;
+    uint8_t request_pending = 0U;
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    request = g_sd_preview_request;
+    if (primask == 0U) __enable_irq();
+    else __set_PRIMASK(primask);
+    if ((request == 1U)
+            && (sd_access_gate_current_owner() != SD_ACCESS_CLIENT_NONE
+                || sd_access_gate_streaming_critical_active() != 0U))
     {
-        if ((request == 1U)
-            && (sd_preview_storage_unavailable() == 0U)
-            && ((sd_access_gate_current_owner() != SD_ACCESS_CLIENT_NONE)
-                || (sd_access_gate_streaming_critical_active() != 0U)))
-        {
-            storage_io_owner_wait_resource(STORAGE_OWNER_PREVIEW);
-            return;
-        }
-        __DMB();
-        g_sd_preview_request = 0U;
+        storage_io_owner_wait_resource(STORAGE_OWNER_PREVIEW);
+        return;
+    }
+    primask = __get_PRIMASK();
+    __disable_irq();
+    if (g_sd_preview_request != 0U)
+    {
+        request = g_sd_preview_request;
         if (request == 1U)
-            (void)sd_preview_begin_range(g_sd_preview_request_path,
-                                         g_sd_preview_request_start_frame,
-                                         g_sd_preview_request_end_frame);
+        {
+            request_start_frame = g_sd_preview_request_start_frame;
+            request_end_frame = g_sd_preview_request_end_frame;
+            memcpy(request_path, g_sd_preview_request_path,
+                   sizeof(request_path));
+        }
+        g_sd_preview_request = 0U;
+        request_pending = 1U;
+    }
+    if (primask == 0U) __enable_irq();
+    else __set_PRIMASK(primask);
+    if (request_pending != 0U)
+    {
+        if (request == 1U)
+            (void)sd_preview_begin_range(request_path,
+                                         request_start_frame,
+                                         request_end_frame);
         else
-            sd_preview_stop();
+            (void)sd_preview_stop();
     }
     if ((g_sd_preview.state != SD_PREVIEW_STATE_OPENING)
         && (g_sd_preview.state != SD_PREVIEW_STATE_STREAMING))

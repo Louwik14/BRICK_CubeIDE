@@ -329,6 +329,7 @@ typedef enum
     CONTROL_STORAGE_EVENT_AUDIO_PARAM = 0U,
     CONTROL_STORAGE_EVENT_RECORD_STOP,
     CONTROL_STORAGE_EVENT_RECORDER_PREPARED,
+    CONTROL_STORAGE_EVENT_RECORDER_CANCELED,
     CONTROL_STORAGE_EVENT_RECORDER_ERROR,
     CONTROL_STORAGE_EVENT_REC_EDIT_SAVED
 } control_storage_event_type_t;
@@ -349,7 +350,6 @@ typedef struct
     uint8_t client;
     uint16_t parameter_id;
     uint32_t value;
-    uint32_t session_id;
 } control_storage_audio_event_t;
 
 typedef enum

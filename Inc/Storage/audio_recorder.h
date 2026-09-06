@@ -111,8 +111,9 @@ uint8_t audio_recorder_looper_take_resource_retained(void);
 uint32_t audio_recorder_control_session(void);
 uint8_t audio_recorder_get_prepared_paths(const char **temporary_rec_path,
                                           const char **final_wav_path);
-void audio_recorder_control_on_storage_prepared(uint32_t session_id);
-void audio_recorder_control_on_storage_error(uint32_t session_id,
+uint8_t audio_recorder_control_on_storage_prepared(uint32_t request_id);
+void audio_recorder_control_on_storage_canceled(uint32_t request_id);
+void audio_recorder_control_on_storage_error(uint32_t request_id,
                                              audio_recorder_error_t error);
 
 

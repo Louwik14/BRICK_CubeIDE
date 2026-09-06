@@ -1187,11 +1187,17 @@ void control_domain_process_storage_messages(void)
             break;
         }
         case CONTROL_STORAGE_EVENT_RECORDER_PREPARED:
-            audio_recorder_control_on_storage_prepared(message.session_id);
+            if (audio_recorder_control_on_storage_prepared(message.request_id)
+                    != 0U)
+                sample_capture_control_on_recorder_prepared(
+                    message.request_id);
+            break;
+        case CONTROL_STORAGE_EVENT_RECORDER_CANCELED:
+            audio_recorder_control_on_storage_canceled(message.request_id);
             break;
         case CONTROL_STORAGE_EVENT_RECORDER_ERROR:
             audio_recorder_control_on_storage_error(
-                message.session_id,
+                message.request_id,
                 (audio_recorder_error_t)message.value);
             break;
         case CONTROL_STORAGE_EVENT_REC_EDIT_SAVED:

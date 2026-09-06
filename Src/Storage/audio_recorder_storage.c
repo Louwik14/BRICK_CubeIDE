@@ -11,6 +11,8 @@
 #include "Storage/sd_access_gate.h"
 #include "IPC/audio_recorder_capture_contract.h"
 #include "Storage/storage_io_wakeup.h"
+#include "Storage/sd_preview.h"
+#include "App/control_domain.h"
 #include "ff.h"
 #include "stm32h7xx_hal.h"
 #include "main.h"
@@ -52,9 +54,19 @@ typedef struct
     uint8_t prepare_client;
     uint8_t prepare_looper_track;
     uint8_t cancel_requested;
-    uint32_t prepare_frame_limit;
-    uint32_t prepare_session_id;
+    uint32_t prepare_request_id;
+    uint8_t result_pending;
+    uint8_t result_published;
+    uint8_t result_type;
 } audio_recorder_storage_runtime_t;
+
+enum
+{
+    AUDIO_RECORDER_STORAGE_RESULT_NONE = 0U,
+    AUDIO_RECORDER_STORAGE_RESULT_PREPARED,
+    AUDIO_RECORDER_STORAGE_RESULT_CANCELED,
+    AUDIO_RECORDER_STORAGE_RESULT_ERROR
+};
 
 /* FatFs, callbacks, generic-recorder state and DMA buffers are STORAGE-only. */
 STORAGE_STATE_SDRAM static audio_recorder_storage_runtime_t g_audio_recorder_storage;
@@ -244,7 +256,7 @@ void audio_recorder_storage_init(void)
 uint8_t audio_recorder_storage_prepare_request(audio_recorder_client_t client,
                                                 uint8_t looper_track,
                                                 uint32_t frame_limit,
-                                                uint32_t session_id)
+                                                uint32_t request_id)
 {
     audio_recorder_storage_runtime_t *const runtime =
         &g_audio_recorder_storage;
@@ -256,9 +268,11 @@ uint8_t audio_recorder_storage_prepare_request(audio_recorder_client_t client,
         return 0U;
     runtime->prepare_client = (uint8_t)client;
     runtime->prepare_looper_track = looper_track;
-    runtime->prepare_frame_limit = frame_limit;
-    runtime->prepare_session_id = session_id;
+    runtime->prepare_request_id = request_id;
     runtime->cancel_requested = 0U;
+    runtime->result_pending = 0U;
+    runtime->result_published = 0U;
+    runtime->result_type = AUDIO_RECORDER_STORAGE_RESULT_NONE;
     __DMB();
     runtime->prepare_pending = 1U;
     storage_io_owner_wakeup(STORAGE_OWNER_RECORDER);
@@ -271,6 +285,12 @@ static uint8_t audio_recorder_storage_prepare_physical(
     if ((temporary_rec_path == 0) || (final_wav_path == 0)) return 0U;
     if ((strlen(temporary_rec_path) >= AUDIO_RECORDER_PATH_MAX)
             || (strlen(final_wav_path) >= AUDIO_RECORDER_PATH_MAX)) return 0U;
+    if ((sd_preview_is_active() != 0U)
+            || (sd_preview_get_state() == SD_PREVIEW_STATE_STOPPING))
+    {
+        if (sd_preview_stop() == 0U)
+            return 2U;
+    }
     (void)strcpy(g_audio_recorder_storage.temporary_path, temporary_rec_path);
     (void)strcpy(g_audio_recorder_storage.final_path, final_wav_path);
     memset(&g_audio_recorder_storage.metrics, 0,
@@ -280,9 +300,32 @@ static uint8_t audio_recorder_storage_prepare_physical(
     g_audio_recorder_storage.error = AUDIO_RECORDER_ERROR_NONE;
     g_audio_recorder_storage.final_phase = AUDIO_RECORDER_FINAL_NONE;
 
-    if (sd_access_gate_try_acquire(
-            SD_ACCESS_CLIENT_SCHEDULED_RECORDER) == 0U)
+    if (sd_access_gate_try_acquire_for_owner(
+            SD_ACCESS_CLIENT_SCHEDULED_RECORDER,
+            (uint8_t)STORAGE_OWNER_RECORDER) == 0U)
     {
+        storage_io_owner_wait_resource(STORAGE_OWNER_RECORDER);
+        return 2U;
+    }
+    if (sd_access_fs_mount_if_needed() == 0U)
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_SCHEDULED_RECORDER);
+        g_audio_recorder_storage.error = AUDIO_RECORDER_ERROR_SD_IO;
+        g_audio_recorder_storage.phase = AUDIO_RECORDER_STORAGE_FAILED;
+        return 0U;
+    }
+    FRESULT directory_result = f_mkdir("0:/PROJECT");
+    if ((directory_result != FR_OK) && (directory_result != FR_EXIST))
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_SCHEDULED_RECORDER);
+        g_audio_recorder_storage.error = AUDIO_RECORDER_ERROR_SD_IO;
+        g_audio_recorder_storage.phase = AUDIO_RECORDER_STORAGE_FAILED;
+        return 0U;
+    }
+    directory_result = f_mkdir("0:/PROJECT/REC");
+    if ((directory_result != FR_OK) && (directory_result != FR_EXIST))
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_SCHEDULED_RECORDER);
         g_audio_recorder_storage.error = AUDIO_RECORDER_ERROR_SD_IO;
         g_audio_recorder_storage.phase = AUDIO_RECORDER_STORAGE_FAILED;
         return 0U;
@@ -338,33 +381,47 @@ static uint8_t audio_recorder_storage_prepare_physical(
     return 1U;
 }
 
-static uint8_t audio_recorder_storage_cancel_physical(uint32_t session_id)
+static uint8_t audio_recorder_storage_cancel_physical(uint32_t request_id)
 {
     if ((g_audio_recorder_storage.phase != AUDIO_RECORDER_STORAGE_PREPARED)
-            || (g_audio_recorder_storage.prepare_session_id != session_id))
+            || (g_audio_recorder_storage.prepare_request_id != request_id))
         return 0U;
-    if (recorder_file_reservation_close(
-            &g_audio_recorder_storage.reservation)
-            != RECORDER_FILE_RESERVATION_OK)
+    if (sd_access_gate_try_acquire_for_owner(
+            SD_ACCESS_CLIENT_SCHEDULED_RECORDER,
+            (uint8_t)STORAGE_OWNER_RECORDER) == 0U)
+    {
+        storage_io_owner_wait_resource(STORAGE_OWNER_RECORDER);
         return 0U;
-    if (sd_access_gate_try_acquire(
-            SD_ACCESS_CLIENT_SCHEDULED_RECORDER) == 0U)
+    }
+    const recorder_file_reservation_result_t closed =
+        recorder_file_reservation_close(&g_audio_recorder_storage.reservation);
+    if (closed == RECORDER_FILE_RESERVATION_SD_BUSY)
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_SCHEDULED_RECORDER);
         return 0U;
+    }
+    if (closed != RECORDER_FILE_RESERVATION_OK)
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_SCHEDULED_RECORDER);
+        g_audio_recorder_storage.error = AUDIO_RECORDER_ERROR_SD_IO;
+        g_audio_recorder_storage.phase = AUDIO_RECORDER_STORAGE_FAILED;
+        return 2U;
+    }
     (void)f_unlink(g_audio_recorder_storage.temporary_path);
     sd_access_gate_release(SD_ACCESS_CLIENT_SCHEDULED_RECORDER);
-    audio_recorder_storage_release();
+    g_audio_recorder_storage.phase = AUDIO_RECORDER_STORAGE_IDLE;
+    g_audio_recorder_storage.error = AUDIO_RECORDER_ERROR_NONE;
     return 1U;
 }
 
-uint8_t audio_recorder_storage_cancel(uint32_t session_id)
+uint8_t audio_recorder_storage_cancel(uint32_t request_id)
 {
-    if ((g_audio_recorder_storage.prepare_session_id != session_id)
+    if ((g_audio_recorder_storage.prepare_request_id != request_id)
             || ((g_audio_recorder_storage.prepare_pending == 0U)
                 && (g_audio_recorder_storage.phase
                     != AUDIO_RECORDER_STORAGE_PREPARED)))
         return 0U;
     g_audio_recorder_storage.cancel_requested = 1U;
-    g_audio_recorder_storage.prepare_pending = 0U;
     storage_io_owner_wakeup(STORAGE_OWNER_RECORDER);
     return 1U;
 }
@@ -379,6 +436,57 @@ void audio_recorder_storage_release(void)
     g_audio_recorder_storage.final_path[0] = '\0';
     g_audio_recorder_storage.prepare_pending = 0U;
     g_audio_recorder_storage.cancel_requested = 0U;
+    g_audio_recorder_storage.prepare_request_id = 0U;
+    g_audio_recorder_storage.result_pending = 0U;
+    g_audio_recorder_storage.result_published = 0U;
+    g_audio_recorder_storage.result_type = AUDIO_RECORDER_STORAGE_RESULT_NONE;
+}
+
+static void audio_recorder_storage_set_result(uint8_t result_type)
+{
+    g_audio_recorder_storage.result_type = result_type;
+    g_audio_recorder_storage.result_pending = 1U;
+    g_audio_recorder_storage.result_published = 0U;
+    __DMB();
+}
+
+static void audio_recorder_storage_publish_result(void)
+{
+    audio_recorder_storage_runtime_t *const runtime =
+        &g_audio_recorder_storage;
+    if ((runtime->result_pending == 0U)
+            || (runtime->result_published != 0U)) return;
+    control_storage_audio_event_t event = {0};
+    event.family = runtime->prepare_client;
+    event.request_id = runtime->prepare_request_id;
+    if (runtime->result_type == AUDIO_RECORDER_STORAGE_RESULT_PREPARED)
+    {
+        event.type = CONTROL_STORAGE_EVENT_RECORDER_PREPARED;
+        event.result = 1U;
+    }
+    else if (runtime->result_type == AUDIO_RECORDER_STORAGE_RESULT_CANCELED)
+    {
+        event.type = CONTROL_STORAGE_EVENT_RECORDER_CANCELED;
+        event.result = 1U;
+    }
+    else if (runtime->result_type == AUDIO_RECORDER_STORAGE_RESULT_ERROR)
+    {
+        event.type = CONTROL_STORAGE_EVENT_RECORDER_ERROR;
+        event.value = runtime->error;
+    }
+    else
+    {
+        return;
+    }
+    if (control_domain_publish_storage_event(&event) != 0U)
+    {
+        runtime->result_published = 1U;
+        runtime->result_pending = 0U;
+    }
+    else
+    {
+        storage_io_owner_wakeup(STORAGE_OWNER_RECORDER);
+    }
 }
 
 void audio_recorder_storage_service(uint32_t session_id,
@@ -386,33 +494,83 @@ void audio_recorder_storage_service(uint32_t session_id,
 {
     audio_recorder_storage_runtime_t *const runtime =
         &g_audio_recorder_storage;
-    if (runtime->cancel_requested != 0U
-            && runtime->prepare_pending == 0U)
+    if (runtime->cancel_requested != 0U)
     {
-        const uint32_t cancel_session = runtime->prepare_session_id;
+        const uint32_t cancel_request = runtime->prepare_request_id;
+        if ((sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+                || (sd_access_storage_status() == SD_STORAGE_STATUS_FAULT))
+        {
+            generic_recorder_init(&runtime->recorder);
+            recorder_file_reservation_init(&runtime->reservation);
+            runtime->phase = AUDIO_RECORDER_STORAGE_IDLE;
+            runtime->prepare_pending = 0U;
+            runtime->error = AUDIO_RECORDER_ERROR_MEDIA_CHANGED;
+            runtime->cancel_requested = 0U;
+            audio_recorder_storage_set_result(
+                AUDIO_RECORDER_STORAGE_RESULT_CANCELED);
+            audio_recorder_storage_publish_result();
+            return;
+        }
+        if (runtime->prepare_pending != 0U)
+        {
+            runtime->prepare_pending = 0U;
+            runtime->phase = AUDIO_RECORDER_STORAGE_IDLE;
+            runtime->error = AUDIO_RECORDER_ERROR_NONE;
+            audio_recorder_storage_set_result(
+                AUDIO_RECORDER_STORAGE_RESULT_CANCELED);
+            runtime->cancel_requested = 0U;
+            audio_recorder_storage_publish_result();
+            return;
+        }
         if (runtime->phase == AUDIO_RECORDER_STORAGE_PREPARED)
         {
-            if (audio_recorder_storage_cancel_physical(cancel_session) == 0U)
+            const uint8_t cancel_result =
+                audio_recorder_storage_cancel_physical(cancel_request);
+            if (cancel_result == 0U)
             {
                 storage_io_owner_wakeup(STORAGE_OWNER_RECORDER);
                 return;
             }
+            if (cancel_result == 2U)
+            {
+                runtime->cancel_requested = 0U;
+                audio_recorder_storage_set_result(
+                    AUDIO_RECORDER_STORAGE_RESULT_ERROR);
+                audio_recorder_storage_publish_result();
+                return;
+            }
+            runtime->cancel_requested = 0U;
+            audio_recorder_storage_set_result(
+                AUDIO_RECORDER_STORAGE_RESULT_CANCELED);
+            audio_recorder_storage_publish_result();
+            return;
         }
         runtime->cancel_requested = 0U;
-        return;
+        if (runtime->phase == AUDIO_RECORDER_STORAGE_FAILED)
+        {
+            runtime->prepare_pending = 0U;
+            audio_recorder_storage_set_result(
+                AUDIO_RECORDER_STORAGE_RESULT_CANCELED);
+            audio_recorder_storage_publish_result();
+            return;
+        }
     }
     if (runtime->prepare_pending != 0U)
     {
         char final_path[AUDIO_RECORDER_PATH_MAX];
         char temporary_path[AUDIO_RECORDER_PATH_MAX];
         uint8_t paths_ok = 0U;
+        uint8_t paths_deferred = 0U;
         const audio_recorder_client_t client =
             (audio_recorder_client_t)runtime->prepare_client;
         if (client == AUDIO_RECORDER_CLIENT_LOOPER)
         {
-            paths_ok = (looper_storage_make_next_path(
-                runtime->prepare_looper_track, final_path,
-                sizeof(final_path)) == LOOPER_STORAGE_PATH_OK) ? 1U : 0U;
+            const looper_storage_path_result_t path_result =
+                looper_storage_make_next_path(runtime->prepare_looper_track,
+                                              final_path,
+                                              sizeof(final_path));
+            paths_ok = (path_result == LOOPER_STORAGE_PATH_OK) ? 1U : 0U;
+            paths_deferred = (path_result == LOOPER_STORAGE_PATH_BUSY) ? 1U : 0U;
             if ((paths_ok != 0U)
                     && (looper_storage_copy_wav_path_as_rec(
                         final_path, temporary_path,
@@ -427,37 +585,65 @@ void audio_recorder_storage_service(uint32_t session_id,
                            AUDIO_RECORDER_AUDIO_REC_TEMP_PATH);
             paths_ok = 1U;
         }
-        const uint32_t prepare_session = runtime->prepare_session_id;
-        const uint32_t prepare_limit = runtime->prepare_frame_limit;
+        const uint32_t prepare_request = runtime->prepare_request_id;
+        uint8_t prepare_result = 0U;
+        if (paths_deferred != 0U)
+        {
+            storage_io_owner_wait_resource(STORAGE_OWNER_RECORDER);
+            return;
+        }
+        if (paths_ok != 0U)
+            prepare_result = audio_recorder_storage_prepare_physical(
+                temporary_path, final_path);
+        if (prepare_result == 2U)
+        {
+            storage_io_owner_wait_resource(STORAGE_OWNER_RECORDER);
+            return;
+        }
         runtime->prepare_pending = 0U;
-        if ((paths_ok == 0U)
-                || (audio_recorder_storage_prepare_physical(
-                    temporary_path, final_path) == 0U))
+        if ((paths_ok == 0U) || (prepare_result == 0U))
         {
             if (runtime->phase != AUDIO_RECORDER_STORAGE_FAILED)
             {
                 runtime->error = AUDIO_RECORDER_ERROR_SD_IO;
                 runtime->phase = AUDIO_RECORDER_STORAGE_FAILED;
             }
+            audio_recorder_storage_set_result(
+                AUDIO_RECORDER_STORAGE_RESULT_ERROR);
         }
-        else
-        {
-            runtime->prepare_session_id = prepare_session;
-            (void)prepare_limit;
-        }
+        else if (runtime->cancel_requested == 0U)
+            audio_recorder_storage_set_result(
+                AUDIO_RECORDER_STORAGE_RESULT_PREPARED);
         if (runtime->cancel_requested != 0U)
         {
             if (runtime->phase == AUDIO_RECORDER_STORAGE_PREPARED)
             {
-                if (audio_recorder_storage_cancel_physical(prepare_session) != 0U)
+                const uint8_t cancel_result =
+                    audio_recorder_storage_cancel_physical(prepare_request);
+                if (cancel_result == 1U)
+                {
                     runtime->cancel_requested = 0U;
+                    runtime->error = AUDIO_RECORDER_ERROR_NONE;
+                    audio_recorder_storage_set_result(
+                        AUDIO_RECORDER_STORAGE_RESULT_CANCELED);
+                }
+                else if (cancel_result == 2U)
+                {
+                    runtime->cancel_requested = 0U;
+                    audio_recorder_storage_set_result(
+                        AUDIO_RECORDER_STORAGE_RESULT_ERROR);
+                }
                 else
                     storage_io_owner_wakeup(STORAGE_OWNER_RECORDER);
             }
             else
+            {
                 runtime->cancel_requested = 0U;
+                runtime->result_type = AUDIO_RECORDER_STORAGE_RESULT_CANCELED;
+            }
         }
     }
+    audio_recorder_storage_publish_result();
     if ((runtime->phase == AUDIO_RECORDER_STORAGE_IDLE)
             || (runtime->phase == AUDIO_RECORDER_STORAGE_TAKE_READY)
             || (runtime->phase == AUDIO_RECORDER_STORAGE_FAILED)) return;

@@ -118,9 +118,10 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
         }
         else
         {
-            (void)audio_recorder_cancel_prepared_client(
-                AUDIO_RECORDER_CLIENT_AUDIO_REC);
-            if(g_sample_capture.state.take_valid == 0U)
+            if (audio_recorder_cancel_prepared_client(
+                    AUDIO_RECORDER_CLIENT_AUDIO_REC) != 0U)
+                g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_STOPPING;
+            else if(g_sample_capture.state.take_valid == 0U)
                 g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_IDLE;
         }
         sample_capture_publish_trigger_config();
@@ -140,8 +141,7 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
     }
 
     if (audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_AUDIO_REC) != 0U)
-        (void)audio_recorder_cancel_prepared_client(
-            AUDIO_RECORDER_CLIENT_AUDIO_REC);
+        return 0U;
     if (sample_capture_prepare_session() == 0U)
         return 0U;
 
@@ -327,7 +327,8 @@ uint8_t sample_capture_model_toggle_usb(void)
 
 uint8_t sample_capture_model_step_edit(uint8_t encoder, int16_t delta, uint8_t alt_held)
 {
-    if((delta == 0) || (g_sample_capture.state.take_valid == 0U))
+    if((delta == 0) || (g_sample_capture.state.take_valid == 0U)
+            || (sample_capture_recorder_export_busy() != 0U))
     {
         return 0U;
     }

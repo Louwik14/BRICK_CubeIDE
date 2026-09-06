@@ -86,6 +86,7 @@ void sample_capture_control_service(void)
         const uint8_t trigger_current = (uint8_t)(
             (trigger_event.arm_epoch == g_sample_capture.trigger_arm_epoch)
             && (g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_TRIG)
+            && (status.state == AUDIO_RECORDER_STATE_PREPARED)
             && (g_sample_capture.state.recording == 0U)
             && (g_sample_capture.state.trigger_latched == 0U));
         if (trigger_current != 0U)
@@ -98,46 +99,10 @@ void sample_capture_control_service(void)
                 ? SAMPLE_CAPTURE_PHASE_WAIT_QUANT
                 : SAMPLE_CAPTURE_PHASE_ARMED;
             sample_capture_publish_trigger_config();
-            if ((seq_runtime_is_running() != 0U)
-                    && (g_sample_capture.state.quant == SAMPLE_CAPTURE_QUANT_NOW))
-            {
-                if (status.state == AUDIO_RECORDER_STATE_PREPARED)
-                {
-                    uint64_t now_sample = 0U;
-                    if (control_rt_now_sample(&now_sample) != 0U)
-                        (void)sample_capture_start_prepared_at(
-                            control_music_output_first_unpublished_sample(
-                                now_sample));
-                }
-            }
         }
         audio_rec_level_reader_ack_trigger_event(trigger_event.sequence);
     }
 
-    if ((status.state == AUDIO_RECORDER_STATE_PREPARED)
-            && (g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_REC)
-            && (g_sample_capture.state.armed_pending != 0U)
-            && (g_sample_capture.state.recording == 0U)
-            && (g_sample_capture.state.quant == SAMPLE_CAPTURE_QUANT_NOW)
-            && (seq_runtime_is_running() != 0U))
-    {
-        uint64_t now_sample = 0U;
-        if (control_rt_now_sample(&now_sample) != 0U)
-            (void)sample_capture_start_prepared_at(
-                control_music_output_first_unpublished_sample(now_sample));
-    }
-
-    if ((status.state == AUDIO_RECORDER_STATE_PREPARED)
-            && (g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_TRIG)
-            && (g_sample_capture.state.trigger_latched != 0U)
-            && (g_sample_capture.state.recording == 0U)
-            && (g_sample_capture.state.quant == SAMPLE_CAPTURE_QUANT_NOW))
-    {
-        uint64_t now_sample = 0U;
-        if (control_rt_now_sample(&now_sample) != 0U)
-            (void)sample_capture_start_prepared_at(
-                control_music_output_first_unpublished_sample(now_sample));
-    }
 
     if((status.state == AUDIO_RECORDER_STATE_FAILED)
             && ((g_sample_capture.state.recording != 0U) || (g_sample_capture.state.armed_pending != 0U)))
@@ -233,7 +198,11 @@ void sample_capture_control_on_global_rec_arm(uint8_t armed)
         }
         else
             g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_ARMED;
+        sample_capture_publish_rec_bus();
     }
+    else if ((g_sample_capture.state.recording == 0U)
+            && (g_sample_capture.state.armed_pending != 0U))
+        sample_capture_control_on_recorder_prepared(0U);
     sample_capture_model_set_control_context(0U);
 }
 

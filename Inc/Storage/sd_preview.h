@@ -53,7 +53,8 @@ typedef struct
 void sd_preview_init(void);
 uint8_t sd_preview_begin(const char *path);
 uint8_t sd_preview_begin_range(const char *path, uint32_t start_frame, uint32_t end_frame);
-void sd_preview_stop(void);
+/* Returns 1 when the physical session is closed, 0 when closure is deferred. */
+uint8_t sd_preview_stop(void);
 void sd_preview_process(void);
 uint8_t sd_preview_request_begin(const char *path);
 uint8_t sd_preview_request_begin_range(const char *path,
