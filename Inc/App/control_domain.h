@@ -259,8 +259,7 @@ typedef enum
     CONTROL_AUDIO_REC_SAVE,
     CONTROL_AUDIO_REC_ASSIGN,
     CONTROL_AUDIO_REC_TOGGLE_ZCROSS,
-    CONTROL_AUDIO_REC_STOP_CLIENT,
-    CONTROL_AUDIO_REC_START_AT
+    CONTROL_AUDIO_REC_STOP_CLIENT
 } control_audio_rec_operation_t;
 
 typedef struct
@@ -328,7 +327,10 @@ typedef struct
 typedef enum
 {
     CONTROL_STORAGE_EVENT_AUDIO_PARAM = 0U,
-    CONTROL_STORAGE_EVENT_RECORD_STOP
+    CONTROL_STORAGE_EVENT_RECORD_STOP,
+    CONTROL_STORAGE_EVENT_RECORDER_PREPARED,
+    CONTROL_STORAGE_EVENT_RECORDER_ERROR,
+    CONTROL_STORAGE_EVENT_REC_EDIT_SAVED
 } control_storage_event_type_t;
 
 /* Final Storage -> CONTROL event shape.  PASS 2 uses the audio command
@@ -347,6 +349,7 @@ typedef struct
     uint8_t client;
     uint16_t parameter_id;
     uint32_t value;
+    uint32_t session_id;
 } control_storage_audio_event_t;
 
 typedef enum
@@ -442,6 +445,8 @@ uint8_t control_domain_request_storage_audio_param(uint8_t entity,
                                                    uint16_t parameter_id,
                                                    uint32_t value);
 uint8_t control_domain_request_storage_record_stop(uint8_t client);
+uint8_t control_domain_publish_storage_event(
+    const control_storage_audio_event_t *message);
 uint8_t control_domain_request_storage_waveform_cache(const char *path,
                                                       uint8_t reason,
                                                       uint32_t frame_count,

@@ -17,6 +17,7 @@ extern "C" {
 typedef enum
 {
     AUDIO_RECORDER_STATE_IDLE = 0,
+    AUDIO_RECORDER_STATE_PREPARING,
     AUDIO_RECORDER_STATE_PREPARED,
     AUDIO_RECORDER_STATE_RECORDING,
     AUDIO_RECORDER_STATE_DRAINING,
@@ -66,8 +67,7 @@ void audio_recorder_service(void);
 void audio_recorder_get_metrics(audio_recorder_metrics_t *metrics);
 uint8_t audio_recorder_is_active(void);
 uint8_t audio_recorder_prepare_client(audio_recorder_client_t client,
-                                      const char *temporary_rec_path,
-                                      const char *final_wav_path,
+                                      uint8_t looper_track,
                                       uint32_t frame_limit);
 uint8_t audio_recorder_start_client_at(audio_recorder_client_t client,
                                        uint64_t sample_time);
@@ -108,6 +108,12 @@ uint8_t audio_recorder_get_last_take_client(audio_recorder_client_t client,
 uint8_t audio_recorder_client_is_active(audio_recorder_client_t client);
 uint8_t audio_recorder_client_is_recording(audio_recorder_client_t client);
 uint8_t audio_recorder_looper_take_resource_retained(void);
+uint32_t audio_recorder_control_session(void);
+uint8_t audio_recorder_get_prepared_paths(const char **temporary_rec_path,
+                                          const char **final_wav_path);
+void audio_recorder_control_on_storage_prepared(uint32_t session_id);
+void audio_recorder_control_on_storage_error(uint32_t session_id,
+                                             audio_recorder_error_t error);
 
 
 #ifdef __cplusplus

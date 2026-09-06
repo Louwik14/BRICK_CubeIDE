@@ -42,9 +42,7 @@
 #define SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART 0U
 #endif
 
-#define SAMPLE_CAPTURE_TEMP_REC_DIR "0:/PROJECT/REC"
 #define SAMPLE_CAPTURE_TEMP_PATH "0:/PROJECT/REC/AUDIOREC_TMP.REC"
-#define SAMPLE_CAPTURE_WORKING_WAV_PATH "0:/PROJECT/REC/AUDIOREC_TMP.WAV"
 #define SAMPLE_CAPTURE_FINAL_DIR "0:/Samples"
 #define SAMPLE_CAPTURE_FINAL_TRIES 10000U
 #define SAMPLE_CAPTURE_COPY_FRAMES 1024U
@@ -110,6 +108,14 @@ typedef struct
     uint32_t trigger_threshold_peak_abs_pcm24;
     uint32_t trigger_last_level_generation;
     uint32_t trigger_arm_epoch;
+    uint8_t export_pending;
+    uint8_t export_event_pending;
+    uint8_t export_result_success;
+    uint32_t export_request_id;
+    uint32_t export_start_frame;
+    uint32_t export_end_frame;
+    char export_source_path[SAMPLE_CAPTURE_PATH_MAX];
+    char export_result_path[SAMPLE_CAPTURE_PATH_MAX];
 } sample_capture_model_t;
 
 typedef struct
@@ -331,9 +337,82 @@ STORAGE_STATE_SDRAM static sample_capture_debug_t g_sample_capture_debug;
 
 #include "SampleCapture/sample_capture_save_assign.inc"
 
-uint8_t sample_capture_control_start_prepared_at(uint64_t sample_time)
+void sample_capture_recorder_storage_service(void)
 {
-    return sample_capture_start_prepared_at(sample_time);
+    if (g_sample_capture.export_event_pending != 0U)
+    {
+        const control_storage_audio_event_t event = {
+            .type = CONTROL_STORAGE_EVENT_REC_EDIT_SAVED,
+            .family = AUDIO_RECORDER_CLIENT_AUDIO_REC,
+            .result = g_sample_capture.export_result_success,
+            .request_id = g_sample_capture.export_request_id,
+            .session_id = g_sample_capture.export_request_id
+        };
+        if (control_domain_publish_storage_event(&event) == 0U)
+            storage_io_owner_wakeup(STORAGE_OWNER_RECORDER);
+        return;
+    }
+    if (g_sample_capture.export_pending == 0U)
+        return;
+
+    const uint32_t request_id = g_sample_capture.export_request_id;
+    uint8_t success = 0U;
+    g_sample_capture.export_result_path[0] = '\0';
+    if (sd_preview_is_active() != 0U)
+        sd_preview_stop();
+
+    char final_path[SAMPLE_CAPTURE_PATH_MAX];
+    if ((sample_capture_make_next_final_path(
+            final_path, sizeof(final_path)) != 0U)
+            && (sample_capture_copy_trimmed_take(
+                g_sample_capture.export_source_path, final_path,
+                g_sample_capture.export_start_frame,
+                g_sample_capture.export_end_frame) != 0U))
+    {
+        sample_capture_copy_path(g_sample_capture.export_result_path,
+                                 final_path);
+        success = 1U;
+    }
+    g_sample_capture.export_pending = 0U;
+    g_sample_capture.export_result_success = success;
+    g_sample_capture.export_event_pending = 1U;
+    __DMB();
+    const control_storage_audio_event_t event = {
+        .type = CONTROL_STORAGE_EVENT_REC_EDIT_SAVED,
+        .family = AUDIO_RECORDER_CLIENT_AUDIO_REC,
+        .result = success,
+        .request_id = request_id,
+        .session_id = request_id
+    };
+    if (control_domain_publish_storage_event(&event) == 0U)
+        storage_io_owner_wakeup(STORAGE_OWNER_RECORDER);
+}
+
+void sample_capture_control_on_storage_event(uint8_t result,
+                                             uint32_t request_id)
+{
+    if ((request_id != g_sample_capture.export_request_id)
+            || ((g_sample_capture.export_pending != 0U)
+                && (g_sample_capture.export_event_pending == 0U)))
+        return;
+    g_sample_capture.export_event_pending = 0U;
+    if (result != 0U)
+    {
+        sample_capture_copy_path(g_sample_capture.state.final_path,
+                                 g_sample_capture.export_result_path);
+        g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_SAVED;
+        g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
+        (void)waveform_cache_request_for_wav_known_duration(
+            g_sample_capture.state.final_path,
+            WAVEFORM_CACHE_REASON_EDITOR_VISIBLE,
+            g_sample_capture.state.edit_end_frame
+                - g_sample_capture.state.edit_start_frame,
+            AUDIO_RECORDER_SAMPLE_RATE_HZ);
+    }
+    else
+    {
+        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
+    }
 }
 
 void sample_capture_model_set_control_context(uint8_t enabled)

@@ -1,13 +1,16 @@
 #include "Storage/audio_recorder_storage.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "SD/sd_scheduler_runtime.h"
 #include "Storage/audio_recorder_wav.h"
+#include "Storage/looper_storage.h"
 #include "Storage/generic_recorder_adapters.h"
 #include "Platform/memory_layout.h"
 #include "Storage/sd_access_gate.h"
 #include "IPC/audio_recorder_capture_contract.h"
+#include "Storage/storage_io_wakeup.h"
 #include "ff.h"
 #include "stm32h7xx_hal.h"
 #include "main.h"
@@ -18,6 +21,8 @@
 #define AUDIO_RECORDER_EXTENSION_BYTES (2U * 1024U * 1024U)
 #define AUDIO_RECORDER_RESERVATION_LOW_US (3000000U)
 #define AUDIO_RECORDER_RESERVATION_CRITICAL_US (1000000U)
+#define AUDIO_RECORDER_AUDIO_REC_TEMP_PATH "0:/PROJECT/REC/AUDIOREC_TMP.REC"
+#define AUDIO_RECORDER_AUDIO_REC_WAV_PATH "0:/PROJECT/REC/AUDIOREC_TMP.WAV"
 
 typedef enum
 {
@@ -43,6 +48,12 @@ typedef struct
     uint32_t final_started_ms;
     char temporary_path[AUDIO_RECORDER_PATH_MAX];
     char final_path[AUDIO_RECORDER_PATH_MAX];
+    uint8_t prepare_pending;
+    uint8_t prepare_client;
+    uint8_t prepare_looper_track;
+    uint8_t cancel_requested;
+    uint32_t prepare_frame_limit;
+    uint32_t prepare_session_id;
 } audio_recorder_storage_runtime_t;
 
 /* FatFs, callbacks, generic-recorder state and DMA buffers are STORAGE-only. */
@@ -230,8 +241,32 @@ void audio_recorder_storage_init(void)
         &write_provider, &filesystem_provider);
 }
 
-uint8_t audio_recorder_storage_prepare(const char *temporary_rec_path,
-                                       const char *final_wav_path)
+uint8_t audio_recorder_storage_prepare_request(audio_recorder_client_t client,
+                                                uint8_t looper_track,
+                                                uint32_t frame_limit,
+                                                uint32_t session_id)
+{
+    audio_recorder_storage_runtime_t *const runtime =
+        &g_audio_recorder_storage;
+    if ((client == AUDIO_RECORDER_CLIENT_NONE)
+            || (runtime->prepare_pending != 0U)
+            || (runtime->phase != AUDIO_RECORDER_STORAGE_IDLE
+                && runtime->phase != AUDIO_RECORDER_STORAGE_TAKE_READY
+                && runtime->phase != AUDIO_RECORDER_STORAGE_FAILED))
+        return 0U;
+    runtime->prepare_client = (uint8_t)client;
+    runtime->prepare_looper_track = looper_track;
+    runtime->prepare_frame_limit = frame_limit;
+    runtime->prepare_session_id = session_id;
+    runtime->cancel_requested = 0U;
+    __DMB();
+    runtime->prepare_pending = 1U;
+    storage_io_owner_wakeup(STORAGE_OWNER_RECORDER);
+    return 1U;
+}
+
+static uint8_t audio_recorder_storage_prepare_physical(
+    const char *temporary_rec_path, const char *final_wav_path)
 {
     if ((temporary_rec_path == 0) || (final_wav_path == 0)) return 0U;
     if ((strlen(temporary_rec_path) >= AUDIO_RECORDER_PATH_MAX)
@@ -303,8 +338,11 @@ uint8_t audio_recorder_storage_prepare(const char *temporary_rec_path,
     return 1U;
 }
 
-uint8_t audio_recorder_storage_cancel(void)
+static uint8_t audio_recorder_storage_cancel_physical(uint32_t session_id)
 {
+    if ((g_audio_recorder_storage.phase != AUDIO_RECORDER_STORAGE_PREPARED)
+            || (g_audio_recorder_storage.prepare_session_id != session_id))
+        return 0U;
     if (recorder_file_reservation_close(
             &g_audio_recorder_storage.reservation)
             != RECORDER_FILE_RESERVATION_OK)
@@ -318,6 +356,19 @@ uint8_t audio_recorder_storage_cancel(void)
     return 1U;
 }
 
+uint8_t audio_recorder_storage_cancel(uint32_t session_id)
+{
+    if ((g_audio_recorder_storage.prepare_session_id != session_id)
+            || ((g_audio_recorder_storage.prepare_pending == 0U)
+                && (g_audio_recorder_storage.phase
+                    != AUDIO_RECORDER_STORAGE_PREPARED)))
+        return 0U;
+    g_audio_recorder_storage.cancel_requested = 1U;
+    g_audio_recorder_storage.prepare_pending = 0U;
+    storage_io_owner_wakeup(STORAGE_OWNER_RECORDER);
+    return 1U;
+}
+
 void audio_recorder_storage_release(void)
 {
     generic_recorder_init(&g_audio_recorder_storage.recorder);
@@ -326,6 +377,8 @@ void audio_recorder_storage_release(void)
     g_audio_recorder_storage.error = AUDIO_RECORDER_ERROR_NONE;
     g_audio_recorder_storage.temporary_path[0] = '\0';
     g_audio_recorder_storage.final_path[0] = '\0';
+    g_audio_recorder_storage.prepare_pending = 0U;
+    g_audio_recorder_storage.cancel_requested = 0U;
 }
 
 void audio_recorder_storage_service(uint32_t session_id,
@@ -333,6 +386,78 @@ void audio_recorder_storage_service(uint32_t session_id,
 {
     audio_recorder_storage_runtime_t *const runtime =
         &g_audio_recorder_storage;
+    if (runtime->cancel_requested != 0U
+            && runtime->prepare_pending == 0U)
+    {
+        const uint32_t cancel_session = runtime->prepare_session_id;
+        if (runtime->phase == AUDIO_RECORDER_STORAGE_PREPARED)
+        {
+            if (audio_recorder_storage_cancel_physical(cancel_session) == 0U)
+            {
+                storage_io_owner_wakeup(STORAGE_OWNER_RECORDER);
+                return;
+            }
+        }
+        runtime->cancel_requested = 0U;
+        return;
+    }
+    if (runtime->prepare_pending != 0U)
+    {
+        char final_path[AUDIO_RECORDER_PATH_MAX];
+        char temporary_path[AUDIO_RECORDER_PATH_MAX];
+        uint8_t paths_ok = 0U;
+        const audio_recorder_client_t client =
+            (audio_recorder_client_t)runtime->prepare_client;
+        if (client == AUDIO_RECORDER_CLIENT_LOOPER)
+        {
+            paths_ok = (looper_storage_make_next_path(
+                runtime->prepare_looper_track, final_path,
+                sizeof(final_path)) == LOOPER_STORAGE_PATH_OK) ? 1U : 0U;
+            if ((paths_ok != 0U)
+                    && (looper_storage_copy_wav_path_as_rec(
+                        final_path, temporary_path,
+                        sizeof(temporary_path)) == 0U))
+                paths_ok = 0U;
+        }
+        else if (client == AUDIO_RECORDER_CLIENT_AUDIO_REC)
+        {
+            (void)snprintf(final_path, sizeof(final_path), "%s",
+                           AUDIO_RECORDER_AUDIO_REC_WAV_PATH);
+            (void)snprintf(temporary_path, sizeof(temporary_path), "%s",
+                           AUDIO_RECORDER_AUDIO_REC_TEMP_PATH);
+            paths_ok = 1U;
+        }
+        const uint32_t prepare_session = runtime->prepare_session_id;
+        const uint32_t prepare_limit = runtime->prepare_frame_limit;
+        runtime->prepare_pending = 0U;
+        if ((paths_ok == 0U)
+                || (audio_recorder_storage_prepare_physical(
+                    temporary_path, final_path) == 0U))
+        {
+            if (runtime->phase != AUDIO_RECORDER_STORAGE_FAILED)
+            {
+                runtime->error = AUDIO_RECORDER_ERROR_SD_IO;
+                runtime->phase = AUDIO_RECORDER_STORAGE_FAILED;
+            }
+        }
+        else
+        {
+            runtime->prepare_session_id = prepare_session;
+            (void)prepare_limit;
+        }
+        if (runtime->cancel_requested != 0U)
+        {
+            if (runtime->phase == AUDIO_RECORDER_STORAGE_PREPARED)
+            {
+                if (audio_recorder_storage_cancel_physical(prepare_session) != 0U)
+                    runtime->cancel_requested = 0U;
+                else
+                    storage_io_owner_wakeup(STORAGE_OWNER_RECORDER);
+            }
+            else
+                runtime->cancel_requested = 0U;
+        }
+    }
     if ((runtime->phase == AUDIO_RECORDER_STORAGE_IDLE)
             || (runtime->phase == AUDIO_RECORDER_STORAGE_TAKE_READY)
             || (runtime->phase == AUDIO_RECORDER_STORAGE_FAILED)) return;
@@ -457,5 +582,17 @@ uint8_t audio_recorder_storage_get_map_copy(
     if (map->extent_count != 0U)
         memcpy(map->extents, snapshot.extents,
                (size_t)map->extent_count * sizeof(map->extents[0]));
+    return 1U;
+}
+
+uint8_t audio_recorder_storage_get_paths(const char **temporary_rec_path,
+                                         const char **final_wav_path)
+{
+    if ((temporary_rec_path == 0) || (final_wav_path == 0)
+            || (g_audio_recorder_storage.phase
+                != AUDIO_RECORDER_STORAGE_PREPARED))
+        return 0U;
+    *temporary_rec_path = g_audio_recorder_storage.temporary_path;
+    *final_wav_path = g_audio_recorder_storage.final_path;
     return 1U;
 }

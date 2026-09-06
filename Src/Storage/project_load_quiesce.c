@@ -111,7 +111,7 @@ void project_load_quiesce_control_process(void)
     midi_rx_discard_pending();
     midi_host_rx_discard_pending();
     if (sd_preview_is_active() != 0U)
-        sd_preview_stop();
+        sd_preview_request_stop();
     note_fx_pipeline_panic();
     seq_play_scheduler_clear();
     g_project_load_requested = 1U;

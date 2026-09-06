@@ -287,32 +287,6 @@ static uint32_t sample_capture_snap_to_zcross(uint32_t current,
     return candidate;
 }
 
-static uint8_t sample_capture_prepare_paths(void)
-{
-    if(sd_access_gate_try_acquire(SD_ACCESS_CLIENT_RECORDER) == 0U)
-    {
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_BUSY);
-        return 0U;
-    }
-
-    uint8_t ok = 0U;
-    if(sd_access_fs_mount_if_needed() != 0U)
-    {
-        (void)f_mkdir("0:/PROJECT");
-        (void)f_mkdir(SAMPLE_CAPTURE_TEMP_REC_DIR);
-        (void)f_mkdir(SAMPLE_CAPTURE_FINAL_DIR);
-        sample_capture_copy_path(g_sample_capture.state.temp_path, SAMPLE_CAPTURE_TEMP_PATH);
-        ok = 1U;
-    }
-    else
-    {
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
-    }
-
-    sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
-    return ok;
-}
-
 static uint8_t sample_capture_make_next_final_path(char *out_path, uint32_t out_len)
 {
     if((out_path == 0) || (out_len == 0U))
@@ -321,10 +295,7 @@ static uint8_t sample_capture_make_next_final_path(char *out_path, uint32_t out_
     }
 
     if(sd_access_gate_try_acquire(SD_ACCESS_CLIENT_RECORDER) == 0U)
-    {
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_BUSY);
         return 0U;
-    }
 
     uint8_t ok = 0U;
     if(sd_access_fs_mount_if_needed() != 0U)
@@ -344,7 +315,7 @@ static uint8_t sample_capture_make_next_final_path(char *out_path, uint32_t out_
     }
     else
     {
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
+        ok = 0U;
     }
 
     sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
@@ -355,7 +326,7 @@ static uint8_t sample_capture_prepare_session(void)
 {
     if(sd_preview_is_active() != 0U)
     {
-        sd_preview_stop();
+        sd_preview_request_stop();
     }
 
     if(sample_capture_has_route() == 0U)
@@ -370,16 +341,9 @@ static uint8_t sample_capture_prepare_session(void)
         return 0U;
     }
 
-    if(sample_capture_prepare_paths() == 0U)
-    {
-        return 0U;
-    }
-
     const uint32_t frame_limit = sample_capture_len_to_frames(g_sample_capture.state.len_bars);
     if(audio_recorder_prepare_client(AUDIO_RECORDER_CLIENT_AUDIO_REC,
-                                     g_sample_capture.state.temp_path,
-                                     SAMPLE_CAPTURE_WORKING_WAV_PATH,
-                                     frame_limit) == 0U)
+                                     UINT8_MAX, frame_limit) == 0U)
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
         return 0U;
@@ -390,6 +354,11 @@ static uint8_t sample_capture_prepare_session(void)
 }
 static uint8_t sample_capture_start_prepared_at(uint64_t sample_time)
 {
+    audio_recorder_status_t recorder_status;
+    if ((audio_recorder_get_status_client(
+                AUDIO_RECORDER_CLIENT_AUDIO_REC, &recorder_status) == 0U)
+            || (recorder_status.state != AUDIO_RECORDER_STATE_PREPARED))
+        return 0U;
     if(sample_capture_publish_rec_bus_at(sample_time) == 0U)
         return 0U;
     if(audio_recorder_start_client_at(AUDIO_RECORDER_CLIENT_AUDIO_REC,

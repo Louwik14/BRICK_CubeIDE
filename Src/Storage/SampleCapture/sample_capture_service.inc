@@ -66,6 +66,20 @@ void sample_capture_control_service(void)
         g_sample_capture.state.live_peak_generation = level.generation;
     }
 
+    if (status.state == AUDIO_RECORDER_STATE_PREPARED)
+    {
+        const char *temporary_path = 0;
+        const char *working_path = 0;
+        if ((g_sample_capture.state.temp_path[0] == '\0')
+                && (audio_recorder_get_prepared_paths(
+                    &temporary_path, &working_path) != 0U))
+        {
+            sample_capture_copy_path(g_sample_capture.state.temp_path,
+                                     temporary_path);
+            (void)working_path;
+        }
+    }
+
     audio_rec_trigger_event_t trigger_event;
     if (audio_rec_level_reader_read_trigger_event(&trigger_event) != 0U)
     {
@@ -87,23 +101,42 @@ void sample_capture_control_service(void)
             if ((seq_runtime_is_running() != 0U)
                     && (g_sample_capture.state.quant == SAMPLE_CAPTURE_QUANT_NOW))
             {
-                uint64_t now_sample = 0U;
-                if (control_rt_now_sample(&now_sample) == 0U)
+                if (status.state == AUDIO_RECORDER_STATE_PREPARED)
                 {
-                    Error_Handler();
-                    goto done;
+                    uint64_t now_sample = 0U;
+                    if (control_rt_now_sample(&now_sample) != 0U)
+                        (void)sample_capture_start_prepared_at(
+                            control_music_output_first_unpublished_sample(
+                                now_sample));
                 }
-                const uint64_t sample_time =
-                    control_music_output_first_unpublished_sample(now_sample);
-                (void)control_domain_request_audio_rec(
-                    &(control_audio_rec_intent_t){
-                        .operation = CONTROL_AUDIO_REC_START_AT,
-                        .has_sample_time = 1U,
-                        .sample_time = sample_time
-                    });
             }
         }
         audio_rec_level_reader_ack_trigger_event(trigger_event.sequence);
+    }
+
+    if ((status.state == AUDIO_RECORDER_STATE_PREPARED)
+            && (g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_REC)
+            && (g_sample_capture.state.armed_pending != 0U)
+            && (g_sample_capture.state.recording == 0U)
+            && (g_sample_capture.state.quant == SAMPLE_CAPTURE_QUANT_NOW)
+            && (seq_runtime_is_running() != 0U))
+    {
+        uint64_t now_sample = 0U;
+        if (control_rt_now_sample(&now_sample) != 0U)
+            (void)sample_capture_start_prepared_at(
+                control_music_output_first_unpublished_sample(now_sample));
+    }
+
+    if ((status.state == AUDIO_RECORDER_STATE_PREPARED)
+            && (g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_TRIG)
+            && (g_sample_capture.state.trigger_latched != 0U)
+            && (g_sample_capture.state.recording == 0U)
+            && (g_sample_capture.state.quant == SAMPLE_CAPTURE_QUANT_NOW))
+    {
+        uint64_t now_sample = 0U;
+        if (control_rt_now_sample(&now_sample) != 0U)
+            (void)sample_capture_start_prepared_at(
+                control_music_output_first_unpublished_sample(now_sample));
     }
 
     if((status.state == AUDIO_RECORDER_STATE_FAILED)

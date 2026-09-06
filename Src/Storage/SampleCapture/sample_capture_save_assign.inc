@@ -2,7 +2,7 @@ uint8_t sample_capture_model_return_to_audio_rec(void)
 {
     if(sd_preview_is_active() != 0U)
     {
-        sd_preview_stop();
+        sd_preview_request_stop();
     }
 
     g_sample_capture.state.view = SAMPLE_CAPTURE_VIEW_AUDIO_REC;
@@ -33,7 +33,7 @@ uint8_t sample_capture_model_audition_trimmed(void)
     if((sd_preview_is_active() != 0U)
             && (strcmp(sd_preview_get_path(), g_sample_capture.state.temp_path) == 0))
     {
-        sd_preview_stop();
+        sd_preview_request_stop();
         g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
         if(g_sample_capture.state.phase == SAMPLE_CAPTURE_PHASE_ERROR)
         {
@@ -42,9 +42,9 @@ uint8_t sample_capture_model_audition_trimmed(void)
         return 1U;
     }
 
-    if(sd_preview_begin_range(g_sample_capture.state.temp_path,
-                              g_sample_capture.state.edit_start_frame,
-                              g_sample_capture.state.edit_end_frame) == 0U)
+    if(sd_preview_request_begin_range(g_sample_capture.state.temp_path,
+                                      g_sample_capture.state.edit_start_frame,
+                                      g_sample_capture.state.edit_end_frame) == 0U)
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_PREVIEW_FAIL);
         return 0U;
@@ -64,16 +64,10 @@ static uint8_t sample_capture_copy_trimmed_take(const char *src_path,
                                                 uint32_t end_frame)
 {
     if((src_path == 0) || (dst_path == 0) || (end_frame <= start_frame))
-    {
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_INVALID_ARG);
         return 0U;
-    }
 
     if(sd_access_gate_try_acquire(SD_ACCESS_CLIENT_RECORDER) == 0U)
-    {
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_BUSY);
         return 0U;
-    }
 
     FIL src;
     FIL dst;
@@ -81,41 +75,26 @@ static uint8_t sample_capture_copy_trimmed_take(const char *src_path,
     uint8_t dst_open = 0U;
     uint8_t ok = 0U;
     if(sd_access_fs_mount_if_needed() == 0U)
-    {
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
         goto done;
-    }
 
     FRESULT fr = f_open(&src, src_path, FA_READ);
     if(fr != FR_OK)
-    {
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
         goto done;
-    }
     src_open = 1U;
 
     fr = f_open(&dst, dst_path, FA_CREATE_NEW | FA_WRITE);
     if(fr != FR_OK)
-    {
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
         goto done;
-    }
     dst_open = 1U;
 
     uint8_t header[SAMPLE_CAPTURE_WAV_DATA_OFFSET];
     UINT br = 0U;
     fr = f_lseek(&src, 0U);
     if(fr != FR_OK)
-    {
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
         goto done;
-    }
     fr = f_read(&src, header, sizeof(header), &br);
     if((fr != FR_OK) || (br != sizeof(header)))
-    {
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
         goto done;
-    }
 
     const uint32_t frames = end_frame - start_frame;
     const uint32_t data_bytes = frames * AUDIO_RECORDER_BYTES_PER_FRAME;
@@ -131,18 +110,12 @@ static uint8_t sample_capture_copy_trimmed_take(const char *src_path,
     UINT bw = 0U;
     fr = f_write(&dst, header, sizeof(header), &bw);
     if((fr != FR_OK) || (bw != sizeof(header)))
-    {
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
         goto done;
-    }
 
     fr = f_lseek(&src, SAMPLE_CAPTURE_WAV_DATA_OFFSET +
         (start_frame * AUDIO_RECORDER_BYTES_PER_FRAME));
     if(fr != FR_OK)
-    {
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
         goto done;
-    }
 
     uint32_t bytes_left = data_bytes;
     while(bytes_left != 0U)
@@ -155,57 +128,38 @@ static uint8_t sample_capture_copy_trimmed_take(const char *src_path,
         br = 0U;
         fr = f_read(&src, g_sample_capture_copy_buf, chunk, &br);
         if((fr != FR_OK) || (br != chunk))
-        {
-            sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
             goto done;
-        }
         bw = 0U;
         fr = f_write(&dst, g_sample_capture_copy_buf, chunk, &bw);
         if((fr != FR_OK) || (bw != chunk))
-        {
-            sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
             goto done;
-        }
         bytes_left -= chunk;
     }
 
     if(f_sync(&dst) != FR_OK)
-    {
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
         goto done;
-    }
 
     ok = 1U;
-    g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
 
 done:
     if(dst_open != 0U)
     {
         if(f_close(&dst) != FR_OK)
-        {
             ok = 0U;
-            sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
-        }
     }
     if(src_open != 0U)
     {
         if(f_close(&src) != FR_OK)
-        {
             ok = 0U;
-            sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
-        }
     }
+    if ((ok == 0U) && (dst_open != 0U))
+        (void)f_unlink(dst_path);
     sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
     return ok;
 }
 
 uint8_t sample_capture_model_save_trimmed(void)
 {
-    if(sd_preview_is_active() != 0U)
-    {
-        sd_preview_stop();
-    }
-
     if(g_sample_capture.state.take_valid == 0U)
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_NO_TAKE);
@@ -215,28 +169,18 @@ uint8_t sample_capture_model_save_trimmed(void)
     {
         return 1U;
     }
+    if (g_sample_capture.export_pending != 0U)
+        return 1U;
 
-    char final_path[SAMPLE_CAPTURE_PATH_MAX];
-    if(sample_capture_make_next_final_path(final_path, sizeof(final_path)) == 0U)
-    {
-        return 0U;
-    }
-
-    if(sample_capture_copy_trimmed_take(g_sample_capture.state.temp_path,
-                                        final_path,
-                                        g_sample_capture.state.edit_start_frame,
-                                        g_sample_capture.state.edit_end_frame) == 0U)
-    {
-        return 0U;
-    }
-
-    sample_capture_copy_path(g_sample_capture.state.final_path, final_path);
-    g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_SAVED;
-    (void)waveform_cache_request_for_wav_known_duration(
-        final_path,
-        WAVEFORM_CACHE_REASON_EDITOR_VISIBLE,
-        g_sample_capture.state.edit_end_frame - g_sample_capture.state.edit_start_frame,
-        AUDIO_RECORDER_SAMPLE_RATE_HZ);
+    g_sample_capture.export_request_id++;
+    if (g_sample_capture.export_request_id == 0U)
+        g_sample_capture.export_request_id = 1U;
+    sample_capture_copy_path(g_sample_capture.export_source_path,
+                             g_sample_capture.state.temp_path);
+    g_sample_capture.export_start_frame = g_sample_capture.state.edit_start_frame;
+    g_sample_capture.export_end_frame = g_sample_capture.state.edit_end_frame;
+    g_sample_capture.export_pending = 1U;
+    storage_io_owner_wakeup(STORAGE_OWNER_RECORDER);
     return 1U;
 }
 
@@ -244,7 +188,7 @@ uint8_t sample_capture_model_assign_trimmed(void)
 {
     if(sd_preview_is_active() != 0U)
     {
-        sd_preview_stop();
+        sd_preview_request_stop();
     }
 
     if(g_sample_capture.state.take_valid == 0U)
@@ -261,12 +205,17 @@ uint8_t sample_capture_model_assign_trimmed(void)
         return 0U;
     }
 
-    if(sample_capture_model_save_trimmed() == 0U)
+    if((g_sample_capture.state.final_path[0] == '\0')
+            && (sample_capture_model_save_trimmed() == 0U))
     {
         return 0U;
     }
 
-    if(sample_global_pool_load_classic(slot, g_sample_capture.state.final_path) == false)
+    if(g_sample_capture.state.final_path[0] == '\0')
+        return 0U;
+
+    if(sample_global_pool_request_classic_load(
+            slot, g_sample_capture.state.final_path) == false)
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_LOAD_FAIL);
         return 0U;
@@ -291,7 +240,8 @@ uint8_t sample_capture_model_assign_saved_take_to_pool(void)
         return 0U;
     }
 
-    if(sample_global_pool_load_classic(slot, g_sample_capture.state.final_path) == false)
+    if(sample_global_pool_request_classic_load(
+            slot, g_sample_capture.state.final_path) == false)
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_LOAD_FAIL);
         return 0U;

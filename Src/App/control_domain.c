@@ -226,6 +226,12 @@ static uint8_t control_domain_submit_storage_message(
     return 1U;
 }
 
+uint8_t control_domain_publish_storage_event(
+    const control_storage_audio_event_t *message)
+{
+    return control_domain_submit_storage_message(message);
+}
+
 static uint8_t control_domain_take_storage_message(
     control_storage_audio_event_t *message)
 {
@@ -511,11 +517,6 @@ static void control_domain_apply_audio_rec_intent(
                 (audio_recorder_client_t)intent->value0, sample_time);
         break;
     }
-    case CONTROL_AUDIO_REC_START_AT:
-        if (intent->has_sample_time != 0U)
-            (void)sample_capture_control_start_prepared_at(
-                intent->sample_time);
-        break;
     default:
         break;
     }
@@ -1185,6 +1186,18 @@ void control_domain_process_storage_messages(void)
                 Error_Handler();
             break;
         }
+        case CONTROL_STORAGE_EVENT_RECORDER_PREPARED:
+            audio_recorder_control_on_storage_prepared(message.session_id);
+            break;
+        case CONTROL_STORAGE_EVENT_RECORDER_ERROR:
+            audio_recorder_control_on_storage_error(
+                message.session_id,
+                (audio_recorder_error_t)message.value);
+            break;
+        case CONTROL_STORAGE_EVENT_REC_EDIT_SAVED:
+            sample_capture_control_on_storage_event(
+                message.result, message.request_id);
+            break;
         default:
             break;
         }

@@ -258,6 +258,7 @@ void brick6_app_storage_dispatch_once(void)
     {
         storage_io_owner_clear(STORAGE_OWNER_RECORDER);
         audio_recorder_service();
+        sample_capture_recorder_storage_service();
     }
     if ((runnable & (1UL << STORAGE_OWNER_PROJECT)) != 0U)
     {

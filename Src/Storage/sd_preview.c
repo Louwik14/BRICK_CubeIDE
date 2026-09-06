@@ -85,6 +85,8 @@ STORAGE_STATE_SDRAM static sd_preview_diag_t g_sd_preview_diag;
 static volatile float g_sd_preview_control_gain;
 static volatile uint8_t g_sd_preview_request;
 static char g_sd_preview_request_path[SAMPLE_CLASSIC_PATH_MAX];
+static volatile uint32_t g_sd_preview_request_start_frame;
+static volatile uint32_t g_sd_preview_request_end_frame;
 
 static uint8_t sd_preview_storage_unavailable(void);
 
@@ -557,9 +559,18 @@ void sd_preview_init(void)
     g_sd_preview_ring_layout.write_count = 0U;
     sd_preview_reset_source_state();
     g_sd_preview_request = 0U;
+    g_sd_preview_request_start_frame = 0U;
+    g_sd_preview_request_end_frame = 0U;
 }
 
 uint8_t sd_preview_request_begin(const char *path)
+{
+    return sd_preview_request_begin_range(path, 0U, 0U);
+}
+
+uint8_t sd_preview_request_begin_range(const char *path,
+                                       uint32_t start_frame,
+                                       uint32_t end_frame)
 {
     if ((path == NULL) || (path[0] == '\0')
         || (strlen(path) >= sizeof(g_sd_preview_request_path)))
@@ -567,6 +578,8 @@ uint8_t sd_preview_request_begin(const char *path)
     if (sd_preview_storage_unavailable() != 0U)
         return 0U;
     memcpy(g_sd_preview_request_path, path, strlen(path) + 1U);
+    g_sd_preview_request_start_frame = start_frame;
+    g_sd_preview_request_end_frame = end_frame;
     __DMB();
     g_sd_preview_request = 1U;
     storage_io_owner_set(STORAGE_OWNER_PREVIEW);
@@ -797,7 +810,9 @@ void sd_preview_process(void)
         __DMB();
         g_sd_preview_request = 0U;
         if (request == 1U)
-            (void)sd_preview_begin(g_sd_preview_request_path);
+            (void)sd_preview_begin_range(g_sd_preview_request_path,
+                                         g_sd_preview_request_start_frame,
+                                         g_sd_preview_request_end_frame);
         else
             sd_preview_stop();
     }
