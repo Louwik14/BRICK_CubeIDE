@@ -1,47 +1,40 @@
 #include "display_flush_service.h"
 
-#include "main.h"
 #include "drv_display.h"
-#include "Storage/sample_capture.h"
 #include "ui_renderer_oled.h"
 
-#define DISPLAY_FLUSH_PERIOD_MS 16U
+static volatile uint8_t g_display_frame_pending;
+
+void display_flush_service_frame_ready(void)
+{
+    g_display_frame_pending = 1U;
+}
+
+uint8_t display_flush_service_frame_pending(void)
+{
+    return g_display_frame_pending;
+}
 
 void display_flush_service_poll(void)
 {
-    static uint32_t last_flush = 0U;
-    uint32_t now = HAL_GetTick();
-
-    if (drv_display_flush_in_progress() != 0U)
-    {
-#if SAMPLE_CAPTURE_DEBUG_UART
-        const uint32_t start = HAL_GetTick();
-#endif
-        drv_display_update();
-#if SAMPLE_CAPTURE_DEBUG_UART
-        sample_capture_model_debug_note_flush_cost(HAL_GetTick() - start, 1U);
-#endif
-        return;
-    }
-
-    if ((now - last_flush) < DISPLAY_FLUSH_PERIOD_MS)
-    {
-        return;
-    }
-
     if (ui_renderer_oled_is_rendering() != 0U)
     {
         return;
     }
 
+    /* A completion/error wake owns the continuation of the current flush.
+     * Do not consume the newer frame while advancing the snapshot DMA. */
+    if (drv_display_flush_continuation_pending() != 0U)
     {
-#if SAMPLE_CAPTURE_DEBUG_UART
-        const uint32_t start = HAL_GetTick();
-#endif
         drv_display_update();
-#if SAMPLE_CAPTURE_DEBUG_UART
-        sample_capture_model_debug_note_flush_cost(HAL_GetTick() - start, 0U);
-#endif
     }
-    last_flush = now;
+
+    if ((drv_display_flush_in_progress() == 0U)
+        && (g_display_frame_pending != 0U)
+        && (drv_display_get_state() == DRV_DISPLAY_STATE_READY))
+    {
+        drv_display_update();
+        if (drv_display_flush_in_progress() != 0U)
+            g_display_frame_pending = 0U;
+    }
 }

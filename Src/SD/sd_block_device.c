@@ -14,6 +14,7 @@
 #include "stm32h7xx_hal.h"
 
 #define SD_BLOCK_DEVICE_SECTOR_BYTES (512U)
+#define SD_BLOCK_DEVICE_CARD_READY_RETRY_MS (1U)
 
 typedef struct
 {
@@ -30,6 +31,7 @@ typedef struct
     sd_block_device_result_t result;
     sd_block_device_result_t abort_result;
     uint8_t owner_client;
+    uint8_t storage_owner;
     uint8_t started;
     uint8_t callback_seen;
     uint8_t completed;
@@ -50,8 +52,42 @@ static volatile uint8_t g_sd_block_device_async_error;
 static volatile uint32_t g_sd_block_device_async_callback_tick;
 static sd_block_device_async_metrics_t g_sd_block_device_metrics;
 
+static storage_io_owner_t sd_block_device_storage_owner(
+    const sd_block_device_async_entry_t *entry)
+{
+    if ((entry != 0) && (entry->storage_owner < STORAGE_OWNER_COUNT))
+    {
+        return (storage_io_owner_t)entry->storage_owner;
+    }
+    switch ((sd_access_client_t)((entry != 0) ? entry->owner_client : 0U))
+    {
+        case SD_ACCESS_CLIENT_SCHEDULED_RECORDER:
+        case SD_ACCESS_CLIENT_RECORDER:
+            return STORAGE_OWNER_RECORDER;
+        case SD_ACCESS_CLIENT_PROJECT:
+            return STORAGE_OWNER_PROJECT;
+        case SD_ACCESS_CLIENT_PATTERN:
+            return STORAGE_OWNER_PATTERN;
+        case SD_ACCESS_CLIENT_PATCH:
+            return STORAGE_OWNER_PATCH;
+        case SD_ACCESS_CLIENT_PREVIEW:
+            return STORAGE_OWNER_PREVIEW;
+        case SD_ACCESS_CLIENT_WAV_CONVERT:
+            return STORAGE_OWNER_WAV_CONVERT;
+        case SD_ACCESS_CLIENT_WAVEFORM_CACHE:
+        case SD_ACCESS_CLIENT_EDITOR_CACHE:
+            return STORAGE_OWNER_WAVEFORM_CACHE;
+        default:
+            return STORAGE_OWNER_STREAM;
+    }
+}
+
 static void sd_block_device_queue_reset(void)
 {
+    for (uint32_t i = 0U; i < STORAGE_OWNER_COUNT; ++i)
+    {
+        storage_io_clear_owner_deadline_ms((storage_io_owner_t)i);
+    }
     memset(g_sd_block_device_async_fifo, 0, sizeof(g_sd_block_device_async_fifo));
     g_sd_block_device_async_head = 0U;
     g_sd_block_device_async_tail = 0U;
@@ -135,12 +171,22 @@ static void sd_block_device_complete(sd_block_device_async_entry_t *entry,
     }
     g_sd_block_device_hw_state = (result == SD_BLOCK_DEVICE_OK)
         ? SD_BLOCK_DEVICE_HW_IDLE : SD_BLOCK_DEVICE_HW_ERROR_LATCHED;
+    storage_io_clear_owner_deadline_ms(
+        sd_block_device_storage_owner(entry));
+    storage_io_owner_set(sd_block_device_storage_owner(entry));
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
 }
 
 static uint8_t sd_block_device_media_valid(
     const sd_block_device_async_entry_t *entry,
     sd_block_device_result_t *failure)
 {
+    if (sd_access_storage_status() != SD_STORAGE_STATUS_READY)
+    {
+        *failure = (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+            ? SD_BLOCK_DEVICE_CARD_REMOVED : SD_BLOCK_DEVICE_READ_FAIL;
+        return 0U;
+    }
     if(brick_sd_is_detected() != SD_PRESENT)
     {
         *failure = SD_BLOCK_DEVICE_CARD_REMOVED;
@@ -172,8 +218,7 @@ static void sd_block_device_request_abort(sd_block_device_async_entry_t *entry,
     }
     else
     {
-        entry->result = SD_BLOCK_DEVICE_ABORT_FAILED;
-        g_sd_block_device_hw_state = SD_BLOCK_DEVICE_HW_ERROR_LATCHED;
+        sd_block_device_complete(entry, SD_BLOCK_DEVICE_ABORT_FAILED);
     }
 }
 
@@ -212,8 +257,14 @@ static void sd_block_device_async_start_head(void)
     }
     if(BSP_SD_GetCardState() != SD_TRANSFER_OK)
     {
+        storage_io_schedule_owner_deadline_ms(
+            sd_block_device_storage_owner(entry),
+            HAL_GetTick() + SD_BLOCK_DEVICE_CARD_READY_RETRY_MS);
         return;
     }
+
+    storage_io_clear_owner_deadline_ms(
+        sd_block_device_storage_owner(entry));
 
     g_sd_block_device_async_rx_complete = 0U;
     g_sd_block_device_async_tx_complete = 0U;
@@ -279,7 +330,8 @@ static sd_block_device_result_t sd_block_device_validate_submit(
 
 sd_block_device_result_t sd_block_device_async_enqueue(uint32_t lba,
                                                        uint32_t sector_count,
-                                                       void *dst)
+                                                       void *dst,
+                                                       storage_io_owner_t storage_owner)
 {
     const sd_block_device_result_t valid =
         sd_block_device_validate_submit(sector_count, dst);
@@ -303,6 +355,8 @@ sd_block_device_result_t sd_block_device_async_enqueue(uint32_t lba,
     entry->queued_tick = HAL_GetTick();
     entry->media_epoch = sd_access_media_epoch();
     entry->owner_client = (uint8_t)sd_access_gate_current_owner();
+    entry->storage_owner = (storage_owner < STORAGE_OWNER_COUNT)
+        ? (uint8_t)storage_owner : (uint8_t)STORAGE_OWNER_STREAM;
     g_sd_block_device_async_tail = (uint8_t)(
         (g_sd_block_device_async_tail + 1U) % SD_BLOCK_DEVICE_ASYNC_FIFO_DEPTH);
     g_sd_block_device_async_count++;
@@ -340,6 +394,7 @@ sd_block_device_result_t sd_block_device_async_write_submit(
     entry->queued_tick = HAL_GetTick();
     entry->media_epoch = sd_access_media_epoch();
     entry->owner_client = (uint8_t)sd_access_gate_current_owner();
+    entry->storage_owner = (uint8_t)STORAGE_OWNER_RECORDER;
     g_sd_block_device_async_tail = (uint8_t)(
         (g_sd_block_device_async_tail + 1U) % SD_BLOCK_DEVICE_ASYNC_FIFO_DEPTH);
     g_sd_block_device_async_count++;
@@ -435,6 +490,12 @@ void sd_block_device_async_poll(void)
             }
             sd_block_device_complete(entry, SD_BLOCK_DEVICE_OK);
         }
+        else
+        {
+            storage_io_schedule_owner_deadline_ms(
+                sd_block_device_storage_owner(entry),
+                HAL_GetTick() + SD_BLOCK_DEVICE_CARD_READY_RETRY_MS);
+        }
     }
 }
 
@@ -445,7 +506,6 @@ uint8_t sd_block_device_async_take_completion(
     {
         return 0U;
     }
-    sd_block_device_async_poll();
     sd_block_device_async_entry_t *const entry =
         &g_sd_block_device_async_fifo[g_sd_block_device_async_head];
     if(entry->completed == 0U)

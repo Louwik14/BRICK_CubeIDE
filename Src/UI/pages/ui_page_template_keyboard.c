@@ -54,15 +54,6 @@ static ui_template_page_state_t g_ui_template_keyboard_state = {
     .has_visited = 0U,
 };
 
-static uint8_t g_ui_keyboard_velocity_settings_dirty;
-static uint32_t g_ui_keyboard_velocity_settings_dirty_since;
-
-static void ui_page_template_keyboard_mark_settings_dirty(void)
-{
-    g_ui_keyboard_velocity_settings_dirty = 1U;
-    g_ui_keyboard_velocity_settings_dirty_since = HAL_GetTick();
-}
-
 static uint8_t ui_page_template_keyboard_virtual_slot_text(uint8_t slot,
                                                             char *out_name,
                                                             uint32_t out_name_len,
@@ -128,23 +119,7 @@ static uint8_t ui_page_template_keyboard_virtual_slot_text(uint8_t slot,
 
 static void ui_page_template_keyboard_leave(void)
 {
-    if (g_ui_keyboard_velocity_settings_dirty != 0U)
-    {
-        hall_calibration_save();
-        g_ui_keyboard_velocity_settings_dirty = 0U;
-    }
     ui_template_page_leave();
-}
-
-static void ui_page_template_keyboard_tick(void)
-{
-    ui_template_page_tick();
-    if ((g_ui_keyboard_velocity_settings_dirty != 0U)
-        && ((HAL_GetTick() - g_ui_keyboard_velocity_settings_dirty_since) >= 500U))
-    {
-        hall_calibration_save();
-        g_ui_keyboard_velocity_settings_dirty = 0U;
-    }
 }
 
 static void ui_page_template_keyboard_handle_event(const ui_event_t *ev)
@@ -204,7 +179,6 @@ uint8_t ui_page_template_keyboard_handle_encoder(uint8_t encoder, int16_t delta)
         {
             (void)control_domain_request_keyboard(
                 CONTROL_KEYBOARD_SET_VELOCITY_PROFILE, (int8_t)next);
-            ui_page_template_keyboard_mark_settings_dirty();
         }
     }
     else if (encoder == 1U)
@@ -222,7 +196,6 @@ uint8_t ui_page_template_keyboard_handle_encoder(uint8_t encoder, int16_t delta)
         {
             (void)control_domain_request_keyboard(
                 CONTROL_KEYBOARD_SET_VELOCITY_MODE, (int8_t)next);
-            ui_page_template_keyboard_mark_settings_dirty();
         }
     }
     else if (encoder == 2U)
@@ -240,7 +213,6 @@ uint8_t ui_page_template_keyboard_handle_encoder(uint8_t encoder, int16_t delta)
         {
             (void)control_domain_request_keyboard(
                 CONTROL_KEYBOARD_SET_VELOCITY_CURVE, (int8_t)next);
-            ui_page_template_keyboard_mark_settings_dirty();
         }
     }
     else
@@ -255,7 +227,6 @@ const ui_page_t g_ui_page_template_keyboard = {
     .enter = ui_template_page_enter,
     .leave = ui_page_template_keyboard_leave,
     .handle_event = ui_page_template_keyboard_handle_event,
-    .tick = ui_page_template_keyboard_tick,
     .sync_active_context = ui_template_page_sync_active_track_context,
     .render = ui_template_page_render,
     .context = &g_ui_template_keyboard_state,

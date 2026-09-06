@@ -4,6 +4,7 @@
 
 #include "Sampler/sample_stream_backend_physical.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/storage_io_wakeup.h"
 #include "stm32h7xx_hal.h"
 
 typedef struct
@@ -149,6 +150,7 @@ sd_scheduler_background_admission_t sd_scheduler_runtime_background_try_begin(
                     > SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES)))
         || ((request->kind == SD_SCHEDULER_BACKGROUND_METADATA)
             && (request->byte_count != 0U))
+        || (request->storage_owner >= (uint8_t)STORAGE_OWNER_COUNT)
         || (request->media_epoch != sd_access_media_epoch()))
     {
         return SD_SCHEDULER_BACKGROUND_INVALID;
@@ -159,10 +161,14 @@ sd_scheduler_background_admission_t sd_scheduler_runtime_background_try_begin(
         || (sd_scheduler_background_can_start(
                 &g_sd_scheduler_runtime, request->media_epoch) == 0U))
     {
+        storage_io_owner_wait_resource(
+            (storage_io_owner_t)request->storage_owner);
         return SD_SCHEDULER_BACKGROUND_NOT_NOW;
     }
     if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_BACKGROUND) == 0U)
     {
+        storage_io_owner_wait_resource(
+            (storage_io_owner_t)request->storage_owner);
         return SD_SCHEDULER_BACKGROUND_NOT_NOW;
     }
     g_sd_scheduler_background_active = 1U;
@@ -198,6 +204,10 @@ uint8_t sd_scheduler_runtime_exclusive_try_begin(void)
             != SD_SCHEDULER_OWNER_IDLE)
         || (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U))
     {
+        if (g_sd_scheduler_exclusive_requested != 0U)
+        {
+            storage_io_owner_wait_resource(STORAGE_OWNER_PROJECT);
+        }
         return 0U;
     }
     g_sd_scheduler_exclusive_active = 1U;

@@ -67,8 +67,8 @@ typedef struct
 
 bool wav_loader_find_first_wav(char *out_path, uint32_t max_len);
 void wav_loader_catalog_init_load(void);
-void wav_loader_catalog_refresh(void);
-void wav_loader_catalog_rebuild(void);
+uint8_t wav_loader_catalog_refresh(void);
+uint8_t wav_loader_catalog_rebuild(void);
 void wav_loader_catalog_storage_service(void);
 uint8_t wav_loader_catalog_notify_file_created(const char *path);
 uint16_t wav_loader_catalog_count(void);
@@ -85,6 +85,12 @@ void wav_loader_catalog_mark_stale(void);
 wav_loader_catalog_view_service_result_t wav_loader_catalog_view_service(void);
 wav_loader_catalog_view_service_result_t wav_loader_catalog_view_last_result(void);
 uint8_t wav_loader_catalog_view_busy(void);
+uint8_t wav_loader_catalog_request_index(uint16_t index);
+uint8_t wav_loader_catalog_request_path(const char *path);
+const wav_loader_catalog_entry_t *wav_loader_catalog_get_cached(uint16_t index);
+uint8_t wav_loader_catalog_find_path_cached(const char *path,
+                                            uint16_t *out_index,
+                                            wav_loader_catalog_entry_t *out_entry);
 uint8_t wav_loader_catalog_find_path(const char *path, uint16_t *out_index, wav_loader_catalog_entry_t *out_entry);
 const wav_loader_catalog_entry_t *wav_loader_catalog_get(uint16_t index);
 const wav_loader_catalog_entry_t *wav_loader_catalog_get_child(uint16_t parent_id, uint16_t child_index);

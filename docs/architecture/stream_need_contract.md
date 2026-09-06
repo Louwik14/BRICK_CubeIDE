@@ -35,10 +35,23 @@ Le contrat produit garantit le pre-socle `2 x 32 KiB` et les limites Stream/Mult
 
 ## I/O et cadence
 
+Les admissions de Multi Load, Stream Load, Wavetable Load et Sampler RAM Load
+sont autorisees uniquement sur transport `STOPPED` stable. Le gate est pris
+avant creation du job ou mutation de pool; un transport actif ou une SD absente
+produit un refus immediat, sans retry automatique. La Preview SD reste
+disponible pendant le playback.
+
 Le service Storage traite une commande bornee hors IRQ. Produit: tranche et
 page de travail 32 KiB. Le backend physique resout des extents vers une FIFO DMA
 bornee; FatFs reste le fallback. Read-ahead ne change ni ordre, besoins ni
 lifecycle.
+
+STORAGE_IO reveille le seul owner runnable concerne par une demande, une
+completion ou une ressource liberee. Le refill Stream n'est execute qu'une
+fois par activation pertinente; aucun second passage via une facade Storage,
+aucun repoll generique et aucune strategie de scheduling supplementaire ne
+modifient le round-robin strict ci-dessus. Le scheduler SD reste l'unique
+arbitre du media physique.
 
 Le transport contient geometrie source, format et token. STORAGE decode dans
 un payload partage et publie READY; AUDIO invalide avant lecture. H743
@@ -65,7 +78,25 @@ Les payloads Sampler RAM/Wavetable sont des references `{region, offset, length}
 
 Le registre compact de leases Stream est fixe, pointer-free, seqlocke et place explicitement dans la fenetre IPC partagee SRAM3/D2. Les snapshots de besoins, pins, use-counts et refcounts de pages ont ete supprimes. Le Looper ne publie aucun intent Stream: CONTROL derive directement track, chemin, longueur, reservation et finalisation depuis son Recorder; AUDIO ne conserve que son runtime, ses playheads et ses leases.
 
-## Format audio
+Pour une prise Looper, la reservation de deux credits couvre toute la
+transition `REC -> READY -> PLAY`. Un STOP de capture ne la libere pas lorsque
+`play_auto` conserve une lecture possible; elle est liberee seulement lorsque
+la prise est abandonnee/remplacee, qu'une erreur annule le runtime, ou qu'aucun
+playback suivant n'est demande. L'arret du transport ne detruit pas une prise
+READY et ne recycle donc pas ses credits.
+
+## Admission globale des readers
+
+L'admission Stream est globale au produit: les huit credits fixes sont
+partages par Classic, Multi et Looper. CONTROL reserve avant chaque START,
+Multi associe ensuite son reader a un slot physique local, et Looper reserve
+atomiquement son couple primaire/auxiliaire; un slot auxiliaire peut rester
+absent tant qu'aucun crossfade ne le publie. Chaque credit porte proprietaire,
+generation, role, presence physique et cycle `ACTIVE -> RETIRE_REQUESTED ->
+PHYSICALLY_RELEASED`. AUDIO ne peut associer ou publier un reader sans token
+actif. La liberation est signalee par masque de slots lors d'un lease vide;
+CONTROL valide alors le seqlock et recycle uniquement les credits du groupe,
+sans balayage periodique des 56 leases physiques.
 
 Une page produit de 32 KiB porte 8192 frames mono FLOAT32 ou 4096 frames stereo. Format, stride et frames/page sont derives par `sample_audio_format.h` et restent immutables pendant la voix. Mono reste mono jusqu'au pan/spread final; aucune duplication droite de rejet n'est conservee.
 

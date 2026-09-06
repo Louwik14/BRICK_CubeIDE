@@ -546,7 +546,6 @@ const ui_page_t g_ui_page_name_edit = {
     .enter = 0,
     .leave = 0,
     .handle_event = ui_page_name_edit_handle_event,
-    .tick = 0,
     .sync_active_context = 0,
     .render = ui_page_name_edit_render,
     .context = 0,

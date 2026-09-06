@@ -9,8 +9,8 @@
 
 #define SEQ_CLOCK_BRIDGE_MIDI_CLOCKS_PER_STEP 6U
 #define SEQ_CLOCK_BRIDGE_STEPS_PER_QUARTER_NOTE 4U
-#define SEQ_CLOCK_BRIDGE_ENGINE_TICK_HZ 1500U
-#define SEQ_CLOCK_BRIDGE_EXT_TEMPO_TIMEOUT_TICKS (SEQ_CLOCK_BRIDGE_ENGINE_TICK_HZ * 2U)
+#define SEQ_CLOCK_BRIDGE_CLOCK_HZ 48000U
+#define SEQ_CLOCK_BRIDGE_EXT_TEMPO_TIMEOUT_TICKS (SEQ_CLOCK_BRIDGE_CLOCK_HZ * 2U)
 
 static uint32_t seq_clock_bridge_clamp_tempo(uint32_t bpm_milli)
 {
@@ -45,7 +45,7 @@ static void seq_clock_bridge_internal_step_period_recompute(seq_clock_bridge_t *
                                                             seq_runtime_state_t *runtime)
 {
     const uint32_t bpm_milli = seq_clock_bridge_clamp_tempo(bridge->tempo_bpm_milli);
-    const uint64_t num = ((uint64_t)SEQ_CLOCK_BRIDGE_ENGINE_TICK_HZ * 60ULL * 1000ULL);
+    const uint64_t num = ((uint64_t)SEQ_CLOCK_BRIDGE_CLOCK_HZ * 60ULL * 1000ULL);
     const uint32_t den = (uint32_t)((uint64_t)bpm_milli * (uint64_t)SEQ_CLOCK_BRIDGE_STEPS_PER_QUARTER_NOTE);
     uint32_t base = (uint32_t)(num / den);
     if (base == 0U)
@@ -89,7 +89,7 @@ void seq_clock_bridge_reset_external_tempo(seq_clock_bridge_t *bridge)
 
 void seq_clock_bridge_on_process(seq_clock_bridge_t *bridge,
                                  seq_clock_src_t active_src,
-                                 uint32_t engine_ticks_now)
+                                 uint64_t clock_now)
 {
     /* Hybrid seam: this supervises clock policy only; transport state remains in seq_transport_fsm. */
     if ((bridge == 0) || (seq_clock_bridge_is_external_source(active_src) == 0U) || (bridge->ext_clock_last_tick == 0U))
@@ -97,7 +97,7 @@ void seq_clock_bridge_on_process(seq_clock_bridge_t *bridge,
         return;
     }
 
-    const uint32_t silent_ticks = engine_ticks_now - bridge->ext_clock_last_tick;
+    const uint64_t silent_ticks = clock_now - bridge->ext_clock_last_tick;
     if (silent_ticks > SEQ_CLOCK_BRIDGE_EXT_TEMPO_TIMEOUT_TICKS)
     {
         seq_clock_bridge_reset_external_tempo_state(bridge);
@@ -171,7 +171,7 @@ uint8_t seq_clock_bridge_on_external_clock_pulse(seq_clock_bridge_t *bridge,
                                                  seq_runtime_state_t *runtime,
                                                  seq_clock_src_t active_src,
                                                  seq_clock_src_t source,
-                                                 uint32_t engine_ticks_now,
+                                                 uint64_t clock_now,
                                                  uint8_t *out_step_pulse)
 {
     /* Hybrid seam: external clock pulses update cadence policy and emit a step request; transport owns the actual step progression. */
@@ -188,7 +188,7 @@ uint8_t seq_clock_bridge_on_external_clock_pulse(seq_clock_bridge_t *bridge,
 
     if (bridge->ext_clock_last_tick != 0U)
     {
-        const uint32_t delta = engine_ticks_now - bridge->ext_clock_last_tick;
+        const uint64_t delta = clock_now - bridge->ext_clock_last_tick;
         if ((delta > 0U) && (delta < SEQ_CLOCK_BRIDGE_EXT_TEMPO_TIMEOUT_TICKS))
         {
             bridge->ext_clock_period_accum += delta;
@@ -202,8 +202,8 @@ uint8_t seq_clock_bridge_on_external_clock_pulse(seq_clock_bridge_t *bridge,
                 if (avg_delta > 0U)
                 {
                     bridge->ext_clock_bpm_milli =
-                            (uint32_t)(((uint64_t)SEQ_CLOCK_BRIDGE_ENGINE_TICK_HZ * 60ULL * 1000ULL)
-                                       / ((uint64_t)avg_delta * 24ULL));
+                            (uint32_t)(((uint64_t)SEQ_CLOCK_BRIDGE_CLOCK_HZ * 60ULL * 1000ULL)
+                                       / (avg_delta * 24ULL));
                     bridge->ext_clock_tempo_valid = 1U;
                 }
             }
@@ -217,7 +217,7 @@ uint8_t seq_clock_bridge_on_external_clock_pulse(seq_clock_bridge_t *bridge,
         }
     }
 
-    bridge->ext_clock_last_tick = engine_ticks_now;
+    bridge->ext_clock_last_tick = clock_now;
     runtime->ext_clock_tick_accum++;
     if (runtime->ext_clock_tick_accum >= SEQ_CLOCK_BRIDGE_MIDI_CLOCKS_PER_STEP)
     {

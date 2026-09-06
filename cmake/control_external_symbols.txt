@@ -22,6 +22,7 @@ HAL_FLASH_Unlock
 HAL_FLASHEx_Erase
 memcpy
 board_surface_read_master_volume_raw
+board_surface_master_volume_version
 board_usb_device_init
 __aeabi_uldivmod
 __aeabi_ldivmod

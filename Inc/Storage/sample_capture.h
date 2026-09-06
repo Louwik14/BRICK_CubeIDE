@@ -180,7 +180,8 @@ typedef struct
 } sample_capture_ui_state_t;
 
 void sample_capture_model_init(void);
-void sample_capture_model_service(void);
+void sample_capture_control_service(void);
+void sample_capture_storage_service(void);
 void sample_capture_model_set_control_context(uint8_t enabled);
 uint8_t sample_capture_control_start_prepared_at(uint64_t sample_time);
 void sample_capture_control_on_transport_start(uint64_t sample_time);

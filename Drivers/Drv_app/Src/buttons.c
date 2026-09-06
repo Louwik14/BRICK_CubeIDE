@@ -97,8 +97,6 @@ void buttons_init(void)
  */
 void buttons_update(uint32_t dt_ms)
 {
-    buttons_hw_read();
-
     for (uint32_t i = 0U; i < (uint32_t)BTN_COUNT; i++)
     {
         button_state_t *s = &button_states[i];

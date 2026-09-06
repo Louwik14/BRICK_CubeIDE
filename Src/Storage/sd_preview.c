@@ -14,6 +14,7 @@
 
 #include "App/control_domain.h"
 #include "Sampler/sample_cache.h"
+#include "Sampler/sample_stream_manager.h"
 #include "Platform/memory_layout.h"
 #include "Storage/looper_storage.h"
 #include "Storage/audio_recorder.h"
@@ -39,6 +40,7 @@
 
 #define SD_PREVIEW_TARGET_RATE   48000U
 #define SD_PREVIEW_IO_BYTES       4096U
+#define SD_PREVIEW_IO_DEFERRED    2U
 
 typedef struct
 {
@@ -83,6 +85,8 @@ STORAGE_STATE_SDRAM static sd_preview_diag_t g_sd_preview_diag;
 static volatile float g_sd_preview_control_gain;
 static volatile uint8_t g_sd_preview_request;
 static char g_sd_preview_request_path[SAMPLE_CLASSIC_PATH_MAX];
+
+static uint8_t sd_preview_storage_unavailable(void);
 
 static void sd_preview_publish_active(uint8_t active)
 {
@@ -156,15 +160,46 @@ static void sd_preview_reset_source_state(void)
     g_sd_preview.phase_step = 1.0;
 }
 
-static void sd_preview_clear_session(uint8_t clear_error, uint8_t clear_state)
+static uint8_t sd_preview_close_file(void)
 {
 #if SD_PREVIEW_HAS_FATFS
-    if (g_sd_preview.file_open != 0U)
+    if (g_sd_preview.file_open == 0U)
     {
-        (void)f_close(&g_sd_preview.fp);
+        return 1U;
+    }
+    if (sd_preview_storage_unavailable() != 0U)
+    {
+        memset(&g_sd_preview.fp, 0, sizeof(g_sd_preview.fp));
         g_sd_preview.file_open = 0U;
+        return 1U;
+    }
+    uint8_t acquired = 0U;
+    if (g_sd_preview.gate_held == 0U)
+    {
+        if (sd_access_gate_try_acquire_for_owner(
+                SD_ACCESS_CLIENT_PREVIEW, (uint8_t)STORAGE_OWNER_PREVIEW) == 0U)
+        {
+            storage_io_owner_wait_resource(STORAGE_OWNER_PREVIEW);
+            return 0U;
+        }
+        acquired = 1U;
+    }
+    (void)f_close(&g_sd_preview.fp);
+    g_sd_preview.file_open = 0U;
+    if (acquired != 0U)
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
     }
 #endif
+    return 1U;
+}
+
+static void sd_preview_clear_session(uint8_t clear_error, uint8_t clear_state)
+{
+    if (sd_preview_close_file() == 0U)
+    {
+        return;
+    }
 
     if (g_sd_preview.gate_held != 0U)
     {
@@ -197,6 +232,13 @@ static void sd_preview_set_error(sd_preview_error_t error)
     g_sd_preview.state = SD_PREVIEW_STATE_ERROR;
 }
 
+static uint8_t sd_preview_storage_unavailable(void)
+{
+    const sd_storage_status_t status = sd_access_storage_status();
+    return ((status == SD_STORAGE_STATUS_NO_MEDIA)
+            || (status == SD_STORAGE_STATUS_FAULT)) ? 1U : 0U;
+}
+
 static uint8_t sd_preview_refill_io_buffer(void)
 {
     if (g_sd_preview.data_remaining == 0U)
@@ -219,10 +261,16 @@ static uint8_t sd_preview_refill_io_buffer(void)
     }
 
 #if SD_PREVIEW_HAS_FATFS
+    if (sd_access_gate_try_acquire_for_owner(
+            SD_ACCESS_CLIENT_PREVIEW, (uint8_t)STORAGE_OWNER_PREVIEW) == 0U)
+    {
+        return SD_PREVIEW_IO_DEFERRED;
+    }
     UINT br = 0U;
     const FRESULT fr = f_read(&g_sd_preview.fp, g_sd_preview_io, request, &br);
     if ((fr != FR_OK) || (br < g_sd_preview.info.block_align))
     {
+        sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
         g_sd_preview.data_remaining = 0U;
         g_sd_preview.source_exhausted = 1U;
         g_sd_preview.io_error = 1U;
@@ -233,6 +281,7 @@ static uint8_t sd_preview_refill_io_buffer(void)
     g_sd_preview.io_len = br - (br % g_sd_preview.info.block_align);
     if (g_sd_preview.io_len == 0U)
     {
+        sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
         g_sd_preview.data_remaining = 0U;
         g_sd_preview.source_exhausted = 1U;
         g_sd_preview.io_error = 1U;
@@ -248,6 +297,7 @@ static uint8_t sd_preview_refill_io_buffer(void)
         g_sd_preview.data_remaining -= br;
     }
 
+    sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
     return 1U;
 #else
     g_sd_preview.data_remaining = 0U;
@@ -267,7 +317,12 @@ static uint8_t sd_preview_decode_next_source_frame(float *out_l, float *out_r)
 
     while ((g_sd_preview.io_pos + block_align) > g_sd_preview.io_len)
     {
-        if (sd_preview_refill_io_buffer() == 0U)
+        const uint8_t refill = sd_preview_refill_io_buffer();
+        if (refill == SD_PREVIEW_IO_DEFERRED)
+        {
+            return SD_PREVIEW_IO_DEFERRED;
+        }
+        if (refill == 0U)
         {
             return 0U;
         }
@@ -295,11 +350,18 @@ static uint8_t sd_preview_prepare_stream(void)
     }
 
 #if SD_PREVIEW_HAS_FATFS
+    if (sd_access_gate_try_acquire_for_owner(
+            SD_ACCESS_CLIENT_PREVIEW, (uint8_t)STORAGE_OWNER_PREVIEW) == 0U)
+    {
+        return SD_PREVIEW_IO_DEFERRED;
+    }
     const uint32_t start_byte = g_sd_preview.range_start_frame * g_sd_preview.info.block_align;
     if (f_lseek(&g_sd_preview.fp, g_sd_preview.info.data_offset + start_byte) != FR_OK)
     {
+        sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
         return 0U;
     }
+    sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
 #endif
 
     sd_preview_reset_source_state();
@@ -324,25 +386,37 @@ static uint8_t sd_preview_prepare_stream(void)
                                   ? 1.0
                                   : ((double)g_sd_preview.info.sample_rate / (double)SD_PREVIEW_TARGET_RATE);
 
-    if (sd_preview_decode_next_source_frame(&g_sd_preview.prev_l, &g_sd_preview.prev_r) == 0U)
+    uint8_t decode = sd_preview_decode_next_source_frame(&g_sd_preview.prev_l,
+                                                         &g_sd_preview.prev_r);
+    if (decode == SD_PREVIEW_IO_DEFERRED)
+    {
+        return SD_PREVIEW_IO_DEFERRED;
+    }
+    if (decode == 0U)
     {
         return 0U;
     }
     g_sd_preview.source_prev_valid = 1U;
     g_sd_preview.prev_index = 0U;
 
-    if (sd_preview_decode_next_source_frame(&g_sd_preview.curr_l, &g_sd_preview.curr_r) != 0U)
+    decode = sd_preview_decode_next_source_frame(&g_sd_preview.curr_l,
+                                                 &g_sd_preview.curr_r);
+    if (decode == 1U)
     {
         g_sd_preview.source_curr_valid = 1U;
         g_sd_preview.curr_index = 1U;
     }
-    else
+    else if (decode == 0U)
     {
         g_sd_preview.curr_l = g_sd_preview.prev_l;
         g_sd_preview.curr_r = g_sd_preview.prev_r;
         g_sd_preview.source_curr_valid = 0U;
         g_sd_preview.curr_index = 0U;
         g_sd_preview.source_exhausted = 1U;
+    }
+    else
+    {
+        return SD_PREVIEW_IO_DEFERRED;
     }
 
     g_sd_preview.phase = 0.0;
@@ -361,7 +435,12 @@ static uint8_t sd_preview_ensure_source_window(uint32_t target_index)
         g_sd_preview.prev_r = g_sd_preview.curr_r;
         g_sd_preview.prev_index = g_sd_preview.curr_index;
 
-        if (sd_preview_decode_next_source_frame(&next_l, &next_r) == 0U)
+        const uint8_t decode = sd_preview_decode_next_source_frame(&next_l, &next_r);
+        if (decode == SD_PREVIEW_IO_DEFERRED)
+        {
+            return SD_PREVIEW_IO_DEFERRED;
+        }
+        if (decode == 0U)
         {
             g_sd_preview.source_curr_valid = 0U;
             g_sd_preview.source_exhausted = 1U;
@@ -394,13 +473,23 @@ static uint8_t sd_preview_generate_one(float *out_l, float *out_r)
 
     if (g_sd_preview.stream_initialized == 0U)
     {
-        if (sd_preview_prepare_stream() == 0U)
+        const uint8_t prepare = sd_preview_prepare_stream();
+        if (prepare == SD_PREVIEW_IO_DEFERRED)
+        {
+            return SD_PREVIEW_IO_DEFERRED;
+        }
+        if (prepare == 0U)
         {
             return 0U;
         }
     }
 
-    if (sd_preview_ensure_source_window(target_index) == 0U)
+    const uint8_t ensure = sd_preview_ensure_source_window(target_index);
+    if (ensure == SD_PREVIEW_IO_DEFERRED)
+    {
+        return SD_PREVIEW_IO_DEFERRED;
+    }
+    if (ensure == 0U)
     {
         return 0U;
     }
@@ -428,7 +517,7 @@ static void sd_preview_fill_ring(void)
         float left = 0.0f;
         float right = 0.0f;
 
-        if (sd_preview_generate_one(&left, &right) == 0U)
+        if (sd_preview_generate_one(&left, &right) != 1U)
         {
             break;
         }
@@ -475,17 +564,21 @@ uint8_t sd_preview_request_begin(const char *path)
     if ((path == NULL) || (path[0] == '\0')
         || (strlen(path) >= sizeof(g_sd_preview_request_path)))
         return 0U;
+    if (sd_preview_storage_unavailable() != 0U)
+        return 0U;
     memcpy(g_sd_preview_request_path, path, strlen(path) + 1U);
     __DMB();
     g_sd_preview_request = 1U;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_PREVIEW);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
 void sd_preview_request_stop(void)
 {
     g_sd_preview_request = 2U;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_PREVIEW);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
 }
 
 uint8_t sd_preview_is_active(void)
@@ -551,6 +644,11 @@ uint8_t sd_preview_begin_range(const char *path, uint32_t start_frame, uint32_t 
     if ((path == NULL) || (path[0] == '\0'))
     {
         sd_preview_set_error(SD_PREVIEW_ERROR_INVALID_PATH);
+        return 0U;
+    }
+    if (sd_preview_storage_unavailable() != 0U)
+    {
+        sd_preview_set_error(SD_PREVIEW_ERROR_MOUNT_FAIL);
         return 0U;
     }
 
@@ -665,6 +763,9 @@ uint8_t sd_preview_begin_range(const char *path, uint32_t start_frame, uint32_t 
     return 0U;
 #endif
 
+    sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
+    g_sd_preview.gate_held = 0U;
+
     return 1U;
 }
 
@@ -685,6 +786,14 @@ void sd_preview_process(void)
     const uint8_t request = g_sd_preview_request;
     if (request != 0U)
     {
+        if ((request == 1U)
+            && (sd_preview_storage_unavailable() == 0U)
+            && ((sd_access_gate_current_owner() != SD_ACCESS_CLIENT_NONE)
+                || (sd_access_gate_streaming_critical_active() != 0U)))
+        {
+            storage_io_owner_wait_resource(STORAGE_OWNER_PREVIEW);
+            return;
+        }
         __DMB();
         g_sd_preview_request = 0U;
         if (request == 1U)
@@ -695,18 +804,37 @@ void sd_preview_process(void)
     if ((g_sd_preview.state != SD_PREVIEW_STATE_OPENING)
         && (g_sd_preview.state != SD_PREVIEW_STATE_STREAMING))
     {
+        if (g_sd_preview.file_open != 0U)
+        {
+            sd_preview_clear_session(0U,
+                                      (g_sd_preview.state == SD_PREVIEW_STATE_STOPPING)
+                                          ? 1U : 0U);
+        }
         return;
     }
 
-    if (sample_cache_has_pending_sd_work() != 0U)
+    if (sd_preview_storage_unavailable() != 0U)
     {
-        sd_preview_stop();
+        sd_preview_set_error(SD_PREVIEW_ERROR_READ_FAIL);
+        sd_preview_clear_session(0U, 0U);
+        return;
+    }
+
+    if ((sample_stream_manager_io_in_flight() != 0U)
+        || (storage_io_owner_test(STORAGE_OWNER_STREAM) != 0U))
+    {
+        storage_io_owner_wait_resource(STORAGE_OWNER_PREVIEW);
         return;
     }
 
     if (g_sd_preview.stream_initialized == 0U)
     {
-        if (sd_preview_prepare_stream() == 0U)
+        const uint8_t prepare = sd_preview_prepare_stream();
+        if (prepare == SD_PREVIEW_IO_DEFERRED)
+        {
+            return;
+        }
+        if (prepare == 0U)
         {
             sd_preview_set_error((g_sd_preview.io_error != 0U)
                                  ? SD_PREVIEW_ERROR_READ_FAIL

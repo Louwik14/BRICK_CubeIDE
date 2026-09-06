@@ -794,10 +794,8 @@ static void ui_page_audio_rec_draw_marker_bar(sample_capture_ui_state_t *state)
 
         if(prefer_old_audio_tile != 0U)
         {
-            sample_capture_model_request_line_waveform(view_start_frame,
-                                                       view_frames,
-                                                       line_columns);
-            sample_capture_model_get_ui_state(state);
+            /* Line-cache requests are issued by the Storage presentation
+             * service; rendering consumes only the published snapshot. */
         }
 
         if((prefer_old_audio_tile != 0U)

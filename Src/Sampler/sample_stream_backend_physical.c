@@ -43,7 +43,8 @@ uint8_t sample_stream_backend_physical_begin(
     sample_stream_physical_cursor_t *cursor,
     uint8_t *scratch,
     uint32_t scratch_capacity,
-    uint32_t deadline_margin_us)
+    uint32_t deadline_margin_us,
+    uint8_t storage_owner)
 {
     if ((async == 0) || (info == 0) || (target == 0)
         || (target->frames_interleaved == 0) || (scratch == 0)
@@ -75,6 +76,7 @@ uint8_t sample_stream_backend_physical_begin(
     async->scratch_capacity = scratch_capacity;
     async->source_bytes = source_bytes;
     async->deadline_margin_us = deadline_margin_us;
+    async->storage_owner = storage_owner;
     async->deadline_started_ms = HAL_GetTick();
     async->active = 1U;
     g_sample_stream_physical_pending = async;
@@ -199,7 +201,8 @@ static sd_scheduler_start_result_t sample_stream_backend_physical_read_start(
     const sd_block_device_result_t result = sd_block_device_async_enqueue(
         span.lba, span.sector_count,
         &async->scratch[async->scratch_sectors
-                        * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE]);
+                        * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE],
+        (storage_io_owner_t)async->storage_owner);
     if ((result == SD_BLOCK_DEVICE_BUSY)
             || (result == SD_BLOCK_DEVICE_QUEUE_FULL))
     {

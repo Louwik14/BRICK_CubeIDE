@@ -1,8 +1,8 @@
 #include "ui_hall_mode_flow.h"
 #include "App/control_domain.h"
+#include "App/control_rt_wakeup.h"
 
 #include "Track/entity_topology.h"
-#include "Storage/patch_product.h"
 #include "Storage/patch_product.h"
 #include "stm32h7xx_hal.h"
 #include "pages/ui_page_audio_rec.h"
@@ -15,7 +15,6 @@
 #include "ui_navigation.h"
 
 #define UI_HALL_MODE_DOUBLE_TAP_MS 400U
-#define UI_HALL_PATCH_SAVE_ARM_MS 80U
 
 typedef struct
 {
@@ -23,9 +22,6 @@ typedef struct
     uint32_t tap_ms;
     uint8_t target_track;
     ui_hall_mode_t previous_mode;
-    uint8_t save_pending;
-    uint32_t save_due_ms;
-    uint8_t save_track;
 } ui_hall_mode_flow_patch_pending_t;
 
 static ui_hall_mode_flow_patch_pending_t g_patch_pending;
@@ -326,11 +322,13 @@ void ui_hall_mode_flow_handle_shift_hall_action(
         if ((g_patch_pending.active != 0U)
                 && ((now_ms - g_patch_pending.tap_ms) <= UI_HALL_MODE_DOUBLE_TAP_MS))
         {
+            /* The gesture is validated; CONTROL owns the save operation. */
             ui_hall_patch_feedback_begin(now_ms);
-            ui_core_feedback_set("PATCH SAVE", now_ms);
-            g_patch_pending.save_pending = 1U;
-            g_patch_pending.save_due_ms = now_ms + UI_HALL_PATCH_SAVE_ARM_MS;
-            g_patch_pending.save_track = context_track;
+            const patch_product_result_t result =
+                (control_domain_request_patch(&(control_patch_intent_t){
+                    CONTROL_PATCH_SAVE, 0U, 0U, context_track, {0}}) != 0U)
+                    ? PATCH_PRODUCT_PENDING : PATCH_PRODUCT_IO_BUSY;
+            ui_core_feedback_set(patch_product_result_label(result), now_ms);
             g_patch_pending.active = 0U;
             return;
         }
@@ -339,6 +337,7 @@ void ui_hall_mode_flow_handle_shift_hall_action(
         g_patch_pending.tap_ms = now_ms;
         g_patch_pending.target_track = context_track;
         g_patch_pending.previous_mode = hall_mode;
+        control_rt_wakeup(CONTROL_RT_WAKE_DEADLINE);
         return;
     }
 
@@ -414,24 +413,6 @@ void ui_hall_mode_flow_handle_shift_hall_action(
 
 void ui_hall_mode_flow_service_pending(uint32_t now_ms)
 {
-    if (g_patch_pending.save_pending != 0U)
-    {
-        if ((int32_t)(now_ms - g_patch_pending.save_due_ms) < 0)
-        {
-            return;
-        }
-
-        const patch_product_result_t result =
-            (control_domain_request_patch(&(control_patch_intent_t){
-                CONTROL_PATCH_SAVE, 0U, 0U, g_patch_pending.save_track, {0}}) != 0U)
-                ? PATCH_PRODUCT_PENDING : PATCH_PRODUCT_IO_BUSY;
-        const uint32_t done_ms = HAL_GetTick();
-        ui_hall_patch_feedback_end(done_ms);
-        g_patch_pending.save_pending = 0U;
-        ui_core_feedback_set(patch_product_result_label(result), done_ms);
-        return;
-    }
-
     if (g_patch_pending.active != 0U)
     {
         if ((now_ms - g_patch_pending.tap_ms) <= UI_HALL_MODE_DOUBLE_TAP_MS)
@@ -450,6 +431,19 @@ void ui_hall_mode_flow_service_pending(uint32_t now_ms)
         ui_page_patch_assign_open(target_track, previous_mode);
         return;
     }
+}
+
+uint8_t ui_hall_mode_flow_next_deadline(uint32_t now_ms,
+                                        uint32_t *out_deadline_ms)
+{
+    if ((out_deadline_ms == 0)
+        || (g_patch_pending.active == 0U))
+        return 0U;
+
+    *out_deadline_ms = g_patch_pending.tap_ms + UI_HALL_MODE_DOUBLE_TAP_MS;
+    if ((int32_t)(*out_deadline_ms - now_ms) <= 0)
+        *out_deadline_ms = now_ms;
+    return 1U;
 }
 
 void ui_hall_mode_flow_handle_track_hall_action(uint8_t hall,

@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "Sampler/sample_cache.h"
+#include "Sampler/sample_stream_manager.h"
 #include "Storage/looper_storage.h"
 #include "Platform/memory_layout.h"
 #include "Storage/audio_recorder.h"
@@ -79,7 +80,9 @@ void wav_convert_init(void)
 
 uint8_t wav_convert_request_start(const char *path)
 {
-    if ((path == NULL) || (path[0] == '\0')
+    if ((project_transport_stopped_stable() == 0U)
+        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+        || (path == NULL) || (path[0] == '\0')
         || (strlen(path) >= sizeof(g_wav_convert_request_path))
         || (g_wav_convert_request_valid != 0U)
         || (g_wav_convert.state != WAV_CONVERT_STATE_IDLE))
@@ -87,7 +90,8 @@ uint8_t wav_convert_request_start(const char *path)
     memcpy(g_wav_convert_request_path, path, strlen(path) + 1U);
     __DMB();
     g_wav_convert_request_valid = 1U;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_WAV_CONVERT);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
@@ -322,14 +326,17 @@ static void wav_convert_fail(wav_convert_error_t error)
 
 uint8_t wav_convert_start_destructive_48k(const char *path)
 {
-    if (project_replacement_is_active() != 0U) return 0U;
+    if ((project_replacement_is_active() != 0U)
+        || (project_transport_stopped_stable() == 0U)
+        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)) return 0U;
     if ((path == 0) || (path[0] == '\0'))
     {
         return 0U;
     }
     if ((g_wav_convert.state == WAV_CONVERT_STATE_ACTIVE)
         || (audio_recorder_is_active() != 0U)
-        || (sample_cache_has_pending_sd_work() != 0U))
+        || (sample_stream_manager_io_in_flight() != 0U)
+        || (storage_io_owner_test(STORAGE_OWNER_STREAM) != 0U))
     {
         return 0U;
     }
@@ -698,7 +705,10 @@ void wav_convert_service(uint32_t byte_budget)
                 || (g_wav_convert.frames_done != frames_done)
                 || (g_wav_convert.frames_written != frames_written)
                 || (g_wav_convert.pack_fill_frames != pack_fill_frames)))
-        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+        {
+            storage_io_owner_set(STORAGE_OWNER_WAV_CONVERT);
+            storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+        }
 }
 
 uint8_t wav_convert_is_active(void)

@@ -37,10 +37,8 @@
 #define SEQ_TRACK_COUNT BRICK_ENTITY_CAPACITY
 
 #define BRICK6_SAMPLER_Q16_ONE (65536U)
-#define BRICK6_SAMPLER_CACHE_VOICE_BASE (2U)
 #define BRICK6_SAMPLER_CLIP_SLOT_NONE 0xFFU
 #define BRICK6_SAMPLER_CLIP_DEFAULT_GRAIN_FRAMES 1536U
-#define BRICK6_SAMPLER_CACHE_VOICE_NONE UINT8_MAX
 #define BRICK6_SAMPLER_MULTI_LOOKAHEAD_PAGES SAMPLE_PAGE_MULTI_LOOKAHEAD_PAGES
 #define BRICK6_SAMPLER_MULTI_WINDOW_MASK_BITS (32U)
 #define BRICK6_SAMPLER_MIN_READY_TARGET_FRAMES SAMPLE_PREP_MIN_READY_FRAMES
@@ -338,7 +336,8 @@ static void brick6_sampler_runtime_clip_configure_shifter(const brick6_sampler_c
 static void brick6_sampler_runtime_clip_reset_shifter(const brick6_sampler_clip_runtime_t *clip,
                                                       brick6_sampler_clip_slot_t *slot);
 static void brick6_sampler_runtime_clip_reset(uint8_t track_id);
-static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id);
+static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id,
+                                                          uint32_t output_id);
 static void brick6_sampler_runtime_clip_stop_playback(uint8_t track_id);
 static void brick6_sampler_runtime_clip_stop_playback_silent(uint8_t track_id);
 static void brick6_sampler_runtime_clip_render_shifter(brick6_sampler_voice_t *voice,

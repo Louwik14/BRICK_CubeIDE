@@ -15,7 +15,11 @@
 #include "Storage/persistence_workspace.h"
 #include "Storage/persistent_pattern_control.h"
 #include "Storage/project_load_quiesce.h"
+#include "Storage/project_product.h"
+#include "Storage/sd_access_gate.h"
 #include "Storage/storage_io_wakeup.h"
+#include "App/control_rt_wakeup.h"
+#include "App/control_domain.h"
 
 #define PATTERN_BANK_COUNT 16U
 #define PATTERN_PER_BANK   16U
@@ -56,6 +60,7 @@ static uint8_t g_pattern_load_bank;
 static uint8_t g_pattern_load_pattern;
 static uint8_t g_pattern_load_last_error;
 static volatile uint8_t g_pattern_save_completion_valid;
+static volatile uint8_t g_pattern_save_completion_success;
 static volatile uint8_t g_pattern_save_completion_bank;
 static volatile uint8_t g_pattern_save_completion_pattern;
 UI_SDRAM static persist_control_pattern_t g_pattern_save_candidate;
@@ -140,6 +145,23 @@ static uint8_t pattern_live_slot_is_valid(uint8_t bank, uint8_t pattern)
     return (bank < PATTERN_BANK_COUNT) && (pattern < PATTERN_PER_BANK);
 }
 
+static void pattern_storage_publish_save_completion(uint8_t bank,
+                                                    uint8_t pattern,
+                                                    uint8_t success)
+{
+    g_pattern_save_completion_bank = bank;
+    g_pattern_save_completion_pattern = pattern;
+    g_pattern_save_completion_success = (success != 0U) ? 1U : 0U;
+    __DMB();
+    g_pattern_save_completion_valid = 1U;
+    control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
+}
+
+static void pattern_storage_wake_owner(void)
+{
+    storage_io_owner_wakeup(STORAGE_OWNER_PATTERN);
+}
+
 static uint8_t pattern_live_arm_ready_queue(uint8_t bank,
                                             uint8_t pattern,
                                             const persist_control_pattern_t *snapshot,
@@ -204,7 +226,11 @@ uint8_t pattern_live_apply_boot_snapshot(uint8_t resume_transport)
 
 uint8_t pattern_storage_request(uint8_t bank, uint8_t pattern)
 {
-    if (project_replacement_is_active() != 0U) return 0U;
+    if ((project_replacement_is_active() != 0U)
+        || (control_domain_project_ui_busy() != 0U)
+        || (project_product_ui_busy() != 0U)) return 0U;
+    if (pattern_storage_save_busy() != 0U)
+        return 0U;
     if(sd_preview_is_active() != 0U)
     {
         sd_preview_stop();
@@ -231,19 +257,14 @@ uint8_t pattern_storage_request(uint8_t bank, uint8_t pattern)
         return 1U;
     }
 
-    if ((g_pattern_io_workspace != 0)
-        || (g_pattern_save_request_valid != 0U)
-        || (pattern_control_bank_async_busy() != 0U))
-    {
-        return 0U;
-    }
     g_pattern_load_bank = bank;
     g_pattern_load_pattern = pattern;
     g_pattern_load_last_error = 0U;
     g_pattern_slot_meta[bank][pattern].has_snapshot =
         pattern_control_bank_present(bank, pattern);
     g_pattern_load_state = PATTERN_LOAD_REQUESTED;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_PATTERN);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
@@ -257,7 +278,11 @@ uint8_t pattern_storage_save_busy(void)
 
 uint8_t pattern_storage_request_save(uint8_t bank, uint8_t pattern)
 {
-    if ((pattern_live_slot_is_valid(bank, pattern) == 0U)
+    if ((control_domain_project_ui_busy() != 0U)
+        || (project_product_ui_busy() != 0U)
+        || (pattern_live_slot_is_valid(bank, pattern) == 0U)
+        || (pattern_storage_is_pending() != 0U)
+        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
         || (pattern_storage_save_busy() != 0U))
     {
         return 0U;
@@ -266,7 +291,8 @@ uint8_t pattern_storage_request_save(uint8_t bank, uint8_t pattern)
     g_pattern_save_request_pattern = pattern;
     __DMB();
     g_pattern_save_request_valid = 1U;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_PATTERN);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
@@ -295,16 +321,13 @@ void pattern_storage_service(uint32_t byte_budget)
             && (g_pattern_io_operation == PATTERN_CONTROL_BANK_ASYNC_SAVE))
         {
             if (completed_success != 0U)
-            {
                 g_pattern_slot_meta[completed_bank][completed_pattern].has_snapshot = 1U;
-                g_pattern_save_completion_bank = completed_bank;
-                g_pattern_save_completion_pattern = completed_pattern;
-                __DMB();
-                g_pattern_save_completion_valid = 1U;
-                persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_IO);
-                g_pattern_io_workspace = 0;
-                g_pattern_io_operation = PATTERN_CONTROL_BANK_ASYNC_NONE;
-            }
+            pattern_storage_publish_save_completion(completed_bank,
+                                                    completed_pattern,
+                                                    completed_success);
+            persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_IO);
+            g_pattern_io_workspace = 0;
+            g_pattern_io_operation = PATTERN_CONTROL_BANK_ASYNC_NONE;
         }
         else if ((completed_operation == PATTERN_CONTROL_BANK_ASYNC_LOAD)
                  && (g_pattern_io_workspace != 0)
@@ -318,11 +341,13 @@ void pattern_storage_service(uint32_t byte_budget)
                 __DMB();
                 g_pattern_load_state = PATTERN_LOAD_READY;
                 g_pattern_load_last_error = 0U;
+                control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
             }
             else if (g_pattern_load_state == PATTERN_LOAD_LOADING)
             {
                 g_pattern_load_state = PATTERN_LOAD_ERROR;
                 g_pattern_load_last_error = PATTERN_LOAD_ERR_SD_LOAD;
+                control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
             }
         }
         if (g_pattern_io_workspace != 0
@@ -353,9 +378,14 @@ void pattern_storage_service(uint32_t byte_budget)
         {
             persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_IO);
             g_pattern_io_workspace = NULL;
+            pattern_storage_publish_save_completion(
+                g_pattern_save_request_bank,
+                g_pattern_save_request_pattern,
+                0U);
             return;
         }
         g_pattern_io_operation = PATTERN_CONTROL_BANK_ASYNC_SAVE;
+        pattern_storage_wake_owner();
         return;
     }
 
@@ -369,6 +399,7 @@ void pattern_storage_service(uint32_t byte_budget)
     {
         g_pattern_load_state = PATTERN_LOAD_ERROR;
         g_pattern_load_last_error = PATTERN_LOAD_ERR_RECORD_ACTIVE;
+        control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
         return;
     }
 
@@ -400,6 +431,7 @@ void pattern_storage_service(uint32_t byte_budget)
             g_pattern_io_workspace = 0;
             g_pattern_load_state = PATTERN_LOAD_ERROR;
             g_pattern_load_last_error = PATTERN_LOAD_ERR_SD_LOAD;
+            control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
             return;
         }
 
@@ -407,10 +439,12 @@ void pattern_storage_service(uint32_t byte_budget)
         __DMB();
         g_pattern_load_state = PATTERN_LOAD_READY;
         g_pattern_load_last_error = 0U;
+        control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
         return;
     }
     g_pattern_io_operation = PATTERN_CONTROL_BANK_ASYNC_LOAD;
     g_pattern_load_state = PATTERN_LOAD_LOADING;
+    pattern_storage_wake_owner();
 }
 
 uint8_t pattern_storage_is_pending(void)
@@ -474,6 +508,7 @@ void pattern_storage_cancel(void)
     g_pattern_load_pattern = 0U;
     g_pattern_load_last_error = 0U;
     g_pattern_save_request_valid = 0U;
+    g_pattern_save_completion_success = 0U;
     if ((g_pattern_io_workspace != NULL)
         && (pattern_control_bank_async_busy() == 0U))
     {
@@ -596,6 +631,7 @@ static uint8_t pattern_live_intent_push(pattern_live_intent_kind_t kind,
         kind, bank, pattern, boundary_track};
     __DMB();
     g_pattern_live_intent_head = next;
+    control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
     return 1U;
 }
 
@@ -658,9 +694,11 @@ void pattern_live_control_process(void)
     {
         const uint8_t bank = g_pattern_save_completion_bank;
         const uint8_t pattern = g_pattern_save_completion_pattern;
+        const uint8_t success = g_pattern_save_completion_success;
         __DMB();
         g_pattern_save_completion_valid = 0U;
-        if ((g_queued_valid != 0U)
+        if ((success != 0U)
+            && (g_queued_valid != 0U)
             && (g_queued_bank == bank)
             && (g_queued_pattern == pattern))
             g_next_pattern = g_pattern_save_candidate;
@@ -804,6 +842,7 @@ void pattern_live_init(void)
     g_pattern_load_pattern = 0U;
     g_pattern_load_last_error = 0U;
     g_pattern_save_completion_valid = 0U;
+    g_pattern_save_completion_success = 0U;
     g_pattern_save_completion_bank = 0U;
     g_pattern_save_completion_pattern = 0U;
     g_pattern_save_request_valid = 0U;
@@ -968,4 +1007,5 @@ void pattern_live_set_active_state(uint8_t active_bank,
         queued_pattern, boundary_track};
     __DMB();
     g_pattern_live_state_request_valid = 1U;
+    control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
 }

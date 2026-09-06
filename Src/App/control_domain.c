@@ -3,11 +3,12 @@
 #include "App/brick6_boot_defaults.h"
 #include "App/brick6_boot_fx_policy.h"
 #include "App/control_clipboard.h"
-#include "App/engine_tasklet.h"
+#include "App/control_rt_sampled_state.h"
 #include "App/control_rt_wakeup.h"
 #include "App/live_parameter_audio_publication.h"
 #include "encoders.h"
 #include "App/Hall/hall_calibration.h"
+#include "App/Hall/hall_engine.h"
 #include "App/Hall/hall_keyboard_bridge.h"
 #include "App/Hall/hall_loop.h"
 #include "Board/board_usb.h"
@@ -20,6 +21,7 @@
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_page_cache.h"
+#include "Sampler/sample_stream_admission.h"
 #include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
 #include "Sampler/wavetable_pool.h"
@@ -29,19 +31,21 @@
 #include "Seq/seq_edit.h"
 #include "Seq/metronome_control.h"
 #include "Storage/audio_recorder.h"
-#include "Storage/brick6_stream_service_task.h"
 #include "Storage/patch_product.h"
 #include "Storage/pattern_live_ram.h"
+#include "Storage/pattern_load_storage.h"
+#include "Storage/pattern_control_bank.h"
 #include "Storage/project_control.h"
+#include "Storage/project_audio_prepared_state.h"
 #include "Storage/project_load_quiesce.h"
 #include "Storage/project_product.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/sd_preview.h"
-#include "Storage/storage_io_wakeup.h"
 #include "Storage/sample_capture.h"
 #include "Storage/undo_v2.h"
 #include "Storage/wav_convert.h"
 #include "Storage/waveform_cache.h"
+#include "Storage/storage_io_wakeup.h"
 #include "Track/track_state.h"
 #include "Track/track_mute.h"
 #include "Track/control_routing.h"
@@ -60,12 +64,19 @@
 #include "ui_boot_loading.h"
 #include "ui_core.h"
 #include "ui_page_manager.h"
+#include "UI/ui_service_wakeup.h"
+#include "stm32h7xx.h"
 
 #include <stdio.h>
 #include <string.h>
 
 #define CONTROL_UI_FIFO_MASK (CONTROL_UI_FIFO_CAPACITY - 1U)
 #define CONTROL_UI_PROCESS_BUDGET 16U
+
+#define CONTROL_HALL_PRESSURE_RAW_NOISE_FLOOR 400U
+#define CONTROL_HALL_PRESSURE_RAW_NOISE_MARGIN 200U
+#define CONTROL_HALL_PRESSURE_HYST 150U
+#define CONTROL_HALL_PRESSURE_AMOUNT_DEADZONE 25U
 
 _Static_assert((CONTROL_UI_FIFO_CAPACITY
                 & (CONTROL_UI_FIFO_CAPACITY - 1U)) == 0U,
@@ -77,6 +88,59 @@ static volatile uint32_t g_control_ui_head;
 static volatile uint32_t g_control_ui_tail;
 static volatile uint32_t g_control_ui_overflow_count;
 static volatile uint8_t g_control_project_request_pending;
+static uint8_t g_control_hall_pressure_active[HALL_UI_LANE_COUNT];
+
+static void control_domain_update_hall_pressure(uint8_t scene)
+{
+    const uint16_t on_delta =
+        (uint16_t)(CONTROL_HALL_PRESSURE_RAW_NOISE_FLOOR
+                   + CONTROL_HALL_PRESSURE_RAW_NOISE_MARGIN);
+    const uint16_t off_delta = (on_delta > CONTROL_HALL_PRESSURE_HYST)
+        ? (uint16_t)(on_delta - CONTROL_HALL_PRESSURE_HYST) : 0U;
+    const uint16_t min_value = hall_engine_get_min(scene);
+    const uint16_t max_value = hall_engine_get_max(scene);
+    const uint16_t raw_value = hall_engine_get_raw(scene);
+    const uint16_t delta = (raw_value > min_value)
+        ? (uint16_t)(raw_value - min_value) : 0U;
+    const uint8_t was_active = g_control_hall_pressure_active[scene];
+
+    if ((max_value <= min_value)
+        || ((uint16_t)(max_value - min_value) <= on_delta))
+    {
+        g_control_hall_pressure_active[scene] = 0U;
+    }
+    else if (g_control_hall_pressure_active[scene] == 0U)
+    {
+        if (delta >= on_delta)
+            g_control_hall_pressure_active[scene] = 1U;
+    }
+    else if (delta <= off_delta)
+    {
+        g_control_hall_pressure_active[scene] = 0U;
+    }
+
+    if (g_control_hall_pressure_active[scene] != 0U)
+    {
+        const uint16_t range = (uint16_t)(max_value - min_value);
+        const uint16_t amount_start =
+            (uint16_t)(on_delta + CONTROL_HALL_PRESSURE_AMOUNT_DEADZONE);
+        float amount = 0.0f;
+
+        if (range > amount_start)
+        {
+            amount = ((float)delta - (float)amount_start)
+                / ((float)range - (float)amount_start);
+            if (amount < 0.0f) amount = 0.0f;
+            if (amount > 1.0f) amount = 1.0f;
+        }
+
+        (void)param_macro_set_scene_source_amount(scene, amount);
+    }
+    else if (was_active != 0U)
+    {
+        param_macro_release_scene_source(scene);
+    }
+}
 
 #define CONTROL_STORAGE_FIFO_CAPACITY 512U
 #define CONTROL_STORAGE_FIFO_MASK (CONTROL_STORAGE_FIFO_CAPACITY - 1U)
@@ -99,37 +163,21 @@ static volatile uint32_t g_control_storage_head;
 static volatile uint32_t g_control_storage_tail;
 static volatile uint32_t g_control_storage_overflow_count;
 
-#define CONTROL_STORAGE_WAVEFORM_FIFO_CAPACITY 8U
-#define CONTROL_STORAGE_WAVEFORM_FIFO_MASK \
-    (CONTROL_STORAGE_WAVEFORM_FIFO_CAPACITY - 1U)
-
-_Static_assert((CONTROL_STORAGE_WAVEFORM_FIFO_CAPACITY
-                & (CONTROL_STORAGE_WAVEFORM_FIFO_CAPACITY - 1U)) == 0U,
-               "Control to Storage waveform FIFO capacity must be a power of two");
-
-typedef struct
-{
-    uint8_t reason;
-    uint32_t frame_count;
-    uint32_t sample_rate;
-    char path[WAVEFORM_CACHE_PATH_MAX];
-} control_storage_waveform_request_t;
-
-static control_storage_waveform_request_t
-    g_control_storage_waveform_fifo[CONTROL_STORAGE_WAVEFORM_FIFO_CAPACITY];
-static volatile uint32_t g_control_storage_waveform_head;
-static volatile uint32_t g_control_storage_waveform_tail;
-
 static uint8_t control_domain_submit_ui_message(
     control_ui_message_type_t type,
     const control_ui_message_payload_t *payload)
 {
     if (payload == NULL) return 0U;
+    /* UI_SERVICE and STORAGE_IO both publish here on H743.  Serialize only
+     * the publication window; CONTROL remains the sole consumer. */
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
     const uint32_t head = g_control_ui_head;
     const uint32_t tail = g_control_ui_tail;
     if ((uint32_t)(head - tail) >= CONTROL_UI_FIFO_CAPACITY)
     {
         ++g_control_ui_overflow_count;
+        __set_PRIMASK(primask);
         return 0U;
     }
 
@@ -142,9 +190,10 @@ static uint8_t control_domain_submit_ui_message(
     message->payload = *payload;
     __DMB();
     g_control_ui_head = head + 1U;
-    control_rt_wakeup(CONTROL_RT_WAKE_UI);
     if (type == CONTROL_UI_MSG_PROJECT)
         g_control_project_request_pending = 1U;
+    __set_PRIMASK(primask);
+    control_rt_wakeup(CONTROL_RT_WAKE_UI);
     return 1U;
 }
 
@@ -198,8 +247,26 @@ uint8_t control_domain_request_##_name(const _intent_type *intent) \
     return control_domain_submit_ui_message((_type), &payload); \
 }
 
-CONTROL_DOMAIN_REQUEST(project, CONTROL_UI_MSG_PROJECT, project,
-                       control_project_intent_t)
+uint8_t control_domain_request_project(const control_project_intent_t *intent)
+{
+    if (intent == NULL)
+        return 0U;
+    if ((intent->operation == CONTROL_PROJECT_SAVE)
+        || (intent->operation == CONTROL_PROJECT_LOAD))
+    {
+        if ((project_load_allowed() == 0U)
+            || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+            || (g_control_project_request_pending != 0U)
+            || (project_product_ui_busy() != 0U)
+            || (pattern_storage_is_pending() != 0U)
+            || (pattern_storage_save_busy() != 0U)
+            || (pattern_control_bank_async_busy() != 0U))
+            return 0U;
+    }
+    control_ui_message_payload_t payload = { 0 };
+    payload.project = *intent;
+    return control_domain_submit_ui_message(CONTROL_UI_MSG_PROJECT, &payload);
+}
 CONTROL_DOMAIN_REQUEST(patch, CONTROL_UI_MSG_PATCH, patch,
                        control_patch_intent_t)
 CONTROL_DOMAIN_REQUEST(track, CONTROL_UI_MSG_TRACK, track,
@@ -279,6 +346,13 @@ uint8_t control_domain_request_storage_ui(uint8_t operation)
     return control_domain_submit_ui_message(CONTROL_UI_MSG_STORAGE, &payload);
 }
 
+uint8_t control_domain_request_calibration(uint8_t operation)
+{
+    control_ui_message_payload_t payload = { 0 };
+    payload.calibration.operation = operation;
+    return control_domain_submit_ui_message(CONTROL_UI_MSG_CALIBRATION, &payload);
+}
+
 static void control_domain_apply_keyboard_intent(
     const control_keyboard_intent_t *intent)
 {
@@ -307,12 +381,15 @@ static void control_domain_apply_keyboard_intent(
         break;
     case CONTROL_KEYBOARD_SET_VELOCITY_PROFILE:
         hall_set_velocity_profile((uint8_t)intent->value);
+        hall_calibration_save();
         break;
     case CONTROL_KEYBOARD_SET_VELOCITY_MODE:
         hall_set_velocity_mode((uint8_t)intent->value);
+        hall_calibration_save();
         break;
     case CONTROL_KEYBOARD_SET_VELOCITY_CURVE:
         hall_set_velocity_curve((uint8_t)intent->value);
+        hall_calibration_save();
         break;
     default:
         break;
@@ -524,41 +601,11 @@ uint8_t control_domain_request_storage_waveform_cache(const char *path,
                                                       uint32_t frame_count,
                                                       uint32_t sample_rate)
 {
-    if ((path == NULL) || (path[0] == '\0')
-            || (strlen(path) >= WAVEFORM_CACHE_PATH_MAX))
-        return 0U;
-    const uint32_t head = g_control_storage_waveform_head;
-    const uint32_t tail = g_control_storage_waveform_tail;
-    if ((head - tail) >= CONTROL_STORAGE_WAVEFORM_FIFO_CAPACITY)
-        return 0U;
-    control_storage_waveform_request_t *const request =
-        &g_control_storage_waveform_fifo[head & CONTROL_STORAGE_WAVEFORM_FIFO_MASK];
-    request->reason = reason;
-    request->frame_count = frame_count;
-    request->sample_rate = sample_rate;
-    (void)snprintf(request->path, sizeof(request->path), "%s", path);
-    __DMB();
-    g_control_storage_waveform_head = head + 1U;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
-    return 1U;
-}
-
-void control_domain_storage_process_requests(void)
-{
-    while (g_control_storage_waveform_tail != g_control_storage_waveform_head)
-    {
-        const uint32_t tail = g_control_storage_waveform_tail;
-        const control_storage_waveform_request_t request =
-            g_control_storage_waveform_fifo[tail & CONTROL_STORAGE_WAVEFORM_FIFO_MASK];
-        __DMB();
-        g_control_storage_waveform_tail = tail + 1U;
-        (void)waveform_cache_storage_request_for_wav_known_duration(
-            request.path,
-            (waveform_cache_reason_t)request.reason,
-            request.frame_count,
-            request.sample_rate);
-        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
-    }
+    return waveform_cache_request_for_wav_known_duration(
+        path,
+        (waveform_cache_reason_t)reason,
+        frame_count,
+        sample_rate);
 }
 
 uint32_t control_domain_ui_overflow_count(void)
@@ -592,6 +639,9 @@ static uint8_t control_domain_apply_track_structure(const control_track_intent_t
     }
 
     const track_family_t previous_family = track_state_get_family(intent->track);
+    const uint8_t previous_looper = (uint8_t)(
+        (previous_family == TRACK_FAMILY_SAMPLER)
+        && (track_state_get_type(intent->track) == TRACK_TYPE_LOOPER));
     family[intent->track] = intent->value0;
     type[intent->track] = intent->value1;
     if (!track_structure_apply_entity_bulk_with_inputs(
@@ -603,6 +653,12 @@ static uint8_t control_domain_apply_track_structure(const control_track_intent_t
         mod_lfo_v1_invalidate_dest_cache_all();
     else
         mod_lfo_v1_invalidate_dest_cache_track(intent->track);
+
+    if ((previous_looper != 0U)
+            && !((family[intent->track] == (uint8_t)TRACK_FAMILY_SAMPLER)
+                && (type[intent->track] == (uint8_t)TRACK_TYPE_LOOPER)))
+        (void)sample_stream_admission_control_request_looper_release(
+            intent->track);
 
     if (intent->track == ui_get_active_track())
     {
@@ -873,7 +929,15 @@ static void control_domain_apply_macro_intent(const control_macro_intent_t *inte
     case CONTROL_MACRO_RELEASE_ALL_SCENE_SOURCES:
         for (uint8_t scene = 0U;
              scene < PERSIST_CONTROL_MACRO_SCENE_COUNT; ++scene)
+        {
             param_macro_release_scene_source(scene);
+            if (scene < HALL_UI_LANE_COUNT)
+                g_control_hall_pressure_active[scene] = 0U;
+        }
+        break;
+    case CONTROL_MACRO_UPDATE_HALL_PRESSURE:
+        if (intent->scene < HALL_UI_LANE_COUNT)
+            control_domain_update_hall_pressure(intent->scene);
         break;
     case CONTROL_MACRO_SET_HALL_MODE:
         (void)project_control_set_hall_mode(
@@ -924,6 +988,14 @@ static void control_domain_apply_asset_intent(const control_asset_intent_t *inte
         else if (intent->kind == PERSIST_ASSET_MULTI)
             (void)project_control_register_multi_runtime(
                 path, intent->runtime, &logical);
+        if (intent->kind == PERSIST_ASSET_SAMPLE_STREAM)
+            storage_io_owner_wakeup(STORAGE_OWNER_STREAM);
+        else if (intent->kind == PERSIST_ASSET_SAMPLE_RAM)
+            storage_io_owner_wakeup(STORAGE_OWNER_SAMPLE_RAM);
+        else if (intent->kind == PERSIST_ASSET_WAVETABLE)
+            storage_io_owner_wakeup(STORAGE_OWNER_WAVETABLE);
+        else if (intent->kind == PERSIST_ASSET_MULTI)
+            storage_io_owner_wakeup(STORAGE_OWNER_MULTI);
         return;
     }
 
@@ -1062,15 +1134,31 @@ void control_domain_process_ui_messages(void)
         case CONTROL_UI_MSG_STORAGE:
             control_domain_apply_storage_ui_intent(&message.payload.storage);
             break;
+        case CONTROL_UI_MSG_CALIBRATION:
+            if (message.payload.calibration.operation
+                == (uint8_t)CONTROL_CALIBRATION_START_USER)
+                hall_user_calibration_start();
+            else
+                hall_calibration_start();
+            break;
         default:
             break;
         }
         ++processed;
     }
 
+    if ((processed >= CONTROL_UI_PROCESS_BUDGET)
+        && (g_control_ui_tail != g_control_ui_head))
+        control_rt_wakeup(CONTROL_RT_WAKE_UI);
+
     if (g_control_ui_tail == g_control_ui_head)
         g_control_project_request_pending = 0U;
-    seq_edit_step_hold_update();
+
+    if (processed != 0U)
+    {
+        ui_service_dirty_set();
+        ui_service_led_dirty_set();
+    }
 }
 
 void control_domain_process_storage_messages(void)
@@ -1102,6 +1190,10 @@ void control_domain_process_storage_messages(void)
         }
         ++processed;
     }
+
+    if ((processed >= CONTROL_STORAGE_PROCESS_BUDGET)
+        && (g_control_storage_tail != g_control_storage_head))
+        control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
 }
 
 uint32_t control_domain_ui_pending_count(void)
@@ -1116,6 +1208,7 @@ uint32_t control_domain_storage_pending_count(void)
 
 void control_domain_init(void)
 {
+    sample_stream_admission_control_init();
     g_control_ui_head = 0U;
     g_control_ui_tail = 0U;
     g_control_ui_overflow_count = 0U;
@@ -1123,8 +1216,6 @@ void control_domain_init(void)
     g_control_storage_head = 0U;
     g_control_storage_tail = 0U;
     g_control_storage_overflow_count = 0U;
-    g_control_storage_waveform_head = 0U;
-    g_control_storage_waveform_tail = 0U;
     control_rt_publication_init();
     project_load_quiesce_init();
     sd_access_gate_init();
@@ -1139,11 +1230,12 @@ void control_domain_init(void)
     multi_sample_loader_init();
     sample_cache_init();
     audio_recorder_init();
+    project_audio_prepared_state_init();
 }
 
 void control_domain_start(float postgain, float output_compensation)
 {
-    engine_tasklet_init(48000U);
+    control_rt_sampled_state_init();
     param_registry_init();
     track_state_init();
     seq_runtime_init();
@@ -1171,7 +1263,6 @@ void control_domain_start(float postgain, float output_compensation)
     }
     ui_active_track_sync_full_after_global_restore();
     encoders_start_fast_poll();
-    brick6_stream_service_task_init();
     midi_init();
     board_usb_device_init();
 }

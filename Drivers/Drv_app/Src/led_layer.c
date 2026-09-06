@@ -197,8 +197,8 @@ void led_layer_compose(void)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void led_layer_commit(void)
+uint8_t led_layer_commit(void)
 {
     led_layer_compose();
-    led_fb_commit();
+    return led_fb_commit();
 }

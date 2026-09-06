@@ -25,6 +25,7 @@
 #include "Storage/looper_storage.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/project_load_quiesce.h"
 #include "Storage/storage_io_wakeup.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "wav_parser.h"
@@ -141,6 +142,21 @@ typedef struct
 
 STORAGE_STATE_SDRAM static wav_catalog_view_load_t g_wav_catalog_view_load;
 
+typedef struct
+{
+    uint8_t active;
+    uint8_t file_open;
+    uint8_t by_path;
+    uint8_t _pad;
+    uint16_t target_index;
+    uint16_t cursor;
+    FIL file;
+    wav_loader_catalog_file_header_t header;
+    char path[WAV_LOADER_CATALOG_PATH_MAX];
+} wav_catalog_lookup_t;
+
+STORAGE_STATE_SDRAM static wav_catalog_lookup_t g_wav_catalog_lookup;
+
 static void wav_loader_catalog_checksum_update(uint32_t *hash, const void *data, uint32_t len)
 {
     const uint8_t *bytes = (const uint8_t *)data;
@@ -160,6 +176,7 @@ static void wav_loader_catalog_views_clear(void)
     g_wav_catalog_lookup_valid = 0U;
     g_wav_catalog_view_age = 0U;
     memset(&g_wav_catalog_view_load, 0, sizeof(g_wav_catalog_view_load));
+    memset(&g_wav_catalog_lookup, 0, sizeof(g_wav_catalog_lookup));
 }
 
 static void wav_loader_catalog_diag_record_open_fail(FRESULT fr)
@@ -177,7 +194,7 @@ static void wav_loader_catalog_diag_record_open_fail(FRESULT fr)
 static void wav_loader_catalog_release_gate_on_error(void)
 {
     g_wav_catalog_diag.gate_release_on_error_count++;
-    sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
+    sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
 }
 
 static void wav_loader_catalog_clear(void)
@@ -321,7 +338,8 @@ uint8_t wav_loader_catalog_notify_file_created(const char *path)
     }
 
     wav_loader_catalog_mark_stale();
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_CATALOG);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
@@ -549,7 +567,8 @@ static uint8_t wav_loader_catalog_open_read(FIL *file, wav_loader_catalog_file_h
         g_wav_catalog_last_sd_busy = 1U;
         return 0U;
     }
-    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PREVIEW) == 0U)
+    if (sd_access_gate_try_acquire_for_owner(
+            SD_ACCESS_CLIENT_PROJECT, STORAGE_OWNER_CATALOG) == 0U)
     {
         g_wav_catalog_last_sd_busy = 1U;
         return 0U;
@@ -638,7 +657,8 @@ static wav_loader_catalog_view_t *wav_loader_catalog_load_view(uint16_t parent_i
         g_wav_catalog_view_load.media_epoch = sd_access_media_epoch();
         g_wav_catalog_view_load.read_ok = 1U;
         g_wav_catalog_view_load.state = WAV_CATALOG_VIEW_MOUNT;
-        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_CATALOG);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
         g_wav_catalog_scratch_view.parent_id = parent_id;
         g_wav_catalog_scratch_view.page_start = page_start;
     }
@@ -656,7 +676,8 @@ static sd_scheduler_background_admission_t wav_loader_catalog_view_begin(
     const sd_scheduler_background_request_t request = {
         .byte_count = bytes,
         .media_epoch = g_wav_catalog_view_load.media_epoch,
-        .kind = kind
+        .kind = kind,
+        .storage_owner = (uint8_t)STORAGE_OWNER_CATALOG
     };
     return sd_scheduler_runtime_background_try_begin(&request);
 }
@@ -864,7 +885,7 @@ static uint8_t wav_loader_catalog_read_entry_by_index(uint16_t index, wav_loader
         g_wav_catalog_diag.catalog_view_preserved_on_error_count++;
     }
     (void)f_close(&file);
-    sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
+    sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
     return (uint8_t)((fr == FR_OK) && (read == sizeof(*out)));
 }
 
@@ -958,7 +979,7 @@ void wav_loader_catalog_init_load(void)
         g_wav_catalog_stale = 0U;
     }
     (void)f_close(&file);
-    sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
+    sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
 #else
     wav_loader_catalog_clear();
 #endif
@@ -974,7 +995,8 @@ static void wav_loader_catalog_rebuild_storage(void)
         return;
     }
 
-    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PREVIEW) == 0U)
+    if (sd_access_gate_try_acquire_for_owner(
+            SD_ACCESS_CLIENT_PROJECT, STORAGE_OWNER_CATALOG) == 0U)
     {
         g_wav_catalog_last_sd_busy = 1U;
         return;
@@ -1096,7 +1118,7 @@ static void wav_loader_catalog_rebuild_storage(void)
     {
         failure = 1U;
     }
-    sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
+    sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
     if (success != 0U)
         wav_loader_catalog_rebuild_commit();
     else if (failure != 0U)
@@ -1109,24 +1131,34 @@ static void wav_loader_catalog_rebuild_storage(void)
 #endif
 }
 
-void wav_loader_catalog_refresh(void)
+uint8_t wav_loader_catalog_refresh(void)
 {
     if ((g_wav_catalog_rebuild.active != 0U)
         || (g_wav_catalog_rebuild_requested != 0U))
-        return;
+        return 0U;
+    if ((project_transport_stopped_stable() == 0U)
+        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA))
+        return 0U;
     g_wav_catalog_stale = 1U;
     g_wav_catalog_rebuild_requested = 1U;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_CATALOG);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+    return 1U;
 }
 
-void wav_loader_catalog_rebuild(void)
+uint8_t wav_loader_catalog_rebuild(void)
 {
     if ((g_wav_catalog_rebuild.active != 0U)
         || (g_wav_catalog_rebuild_requested != 0U))
-        return;
+        return 0U;
+    if ((project_transport_stopped_stable() == 0U)
+        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA))
+        return 0U;
     g_wav_catalog_stale = 1U;
     g_wav_catalog_rebuild_requested = 1U;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_CATALOG);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+    return 1U;
 }
 
 void wav_loader_catalog_storage_service(void)
@@ -1134,13 +1166,6 @@ void wav_loader_catalog_storage_service(void)
     if ((g_wav_catalog_rebuild_requested != 0U)
         && (g_wav_catalog_rebuild.active == 0U))
     {
-        if (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
-        {
-            if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PREVIEW) == 0U)
-                return;
-            (void)sd_access_fs_reprobe_if_no_media();
-            sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
-        }
         g_wav_catalog_rebuild_requested = 0U;
         wav_loader_catalog_rebuild_start();
     }
@@ -1150,7 +1175,83 @@ void wav_loader_catalog_storage_service(void)
     if (g_wav_catalog_rebuild.active != 0U)
     {
         if (g_wav_catalog_last_sd_busy == 0U)
-            storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+        {
+            storage_io_owner_set(STORAGE_OWNER_CATALOG);
+            storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+        }
+        else
+            storage_io_owner_wait_resource(STORAGE_OWNER_CATALOG);
+        return;
+    }
+
+    if ((g_wav_catalog_lookup.active != 0U)
+        && (g_wav_catalog_view_load.state == WAV_CATALOG_VIEW_IDLE))
+    {
+        uint8_t complete = 0U;
+        if (g_wav_catalog_lookup.file_open == 0U)
+        {
+            if (wav_loader_catalog_open_read(&g_wav_catalog_lookup.file,
+                                             &g_wav_catalog_lookup.header) == 0U)
+            {
+                if (g_wav_catalog_last_sd_busy != 0U)
+                {
+                    storage_io_owner_wait_resource(STORAGE_OWNER_CATALOG);
+                    return;
+                }
+                g_wav_catalog_lookup.active = 0U;
+                g_wav_catalog_view_last_result = WAV_LOADER_CATALOG_VIEW_ERROR;
+                return;
+            }
+            g_wav_catalog_lookup.file_open = 1U;
+            g_wav_catalog_lookup.cursor = 0U;
+        }
+
+        for (uint8_t budget = 0U; budget < 8U; ++budget)
+        {
+            wav_loader_catalog_entry_t entry;
+            UINT read = 0U;
+            if (g_wav_catalog_lookup.cursor >= g_wav_catalog_lookup.header.count)
+            {
+                complete = 1U;
+                break;
+            }
+            if ((f_read(&g_wav_catalog_lookup.file, &entry, sizeof(entry), &read) != FR_OK)
+                || (read != sizeof(entry)))
+            {
+                g_wav_catalog_last_io_error = 1U;
+                complete = 1U;
+                break;
+            }
+            const uint16_t index = g_wav_catalog_lookup.cursor++;
+            if (((g_wav_catalog_lookup.by_path != 0U)
+                 && (strcmp(entry.path, g_wav_catalog_lookup.path) == 0))
+                || ((g_wav_catalog_lookup.by_path == 0U)
+                    && (index == g_wav_catalog_lookup.target_index)))
+            {
+                g_wav_catalog_lookup_entry = entry;
+                g_wav_catalog_lookup_index = index;
+                g_wav_catalog_lookup_valid = 1U;
+                complete = 1U;
+                break;
+            }
+        }
+
+        if (complete != 0U)
+        {
+            (void)f_close(&g_wav_catalog_lookup.file);
+            g_wav_catalog_lookup.file_open = 0U;
+            sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+            g_wav_catalog_lookup.active = 0U;
+            g_wav_catalog_view_last_result =
+                (g_wav_catalog_lookup_valid != 0U)
+                    ? WAV_LOADER_CATALOG_VIEW_PUBLISHED
+                    : WAV_LOADER_CATALOG_VIEW_ERROR;
+        }
+        else
+        {
+            storage_io_owner_set(STORAGE_OWNER_CATALOG);
+            storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+        }
         return;
     }
 
@@ -1162,10 +1263,107 @@ void wav_loader_catalog_storage_service(void)
     }
     if ((g_wav_catalog_rebuild.active != 0U)
             && (g_wav_catalog_last_sd_busy == 0U))
-        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    {
+        storage_io_owner_set(STORAGE_OWNER_CATALOG);
+        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+    }
     else if ((g_wav_catalog_view_load.state != WAV_CATALOG_VIEW_IDLE)
             && (g_wav_catalog_last_sd_busy == 0U))
-        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    {
+        storage_io_owner_set(STORAGE_OWNER_CATALOG);
+        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+    }
+    else if ((g_wav_catalog_rebuild.active != 0U)
+             || (g_wav_catalog_view_load.state != WAV_CATALOG_VIEW_IDLE))
+        storage_io_owner_wait_resource(STORAGE_OWNER_CATALOG);
+}
+
+uint8_t wav_loader_catalog_request_index(uint16_t index)
+{
+    if ((g_wav_catalog_loaded == 0U) || (g_wav_catalog_stale != 0U)
+        || (g_wav_catalog_lookup.active != 0U))
+    {
+        return 0U;
+    }
+    memset(&g_wav_catalog_lookup, 0, sizeof(g_wav_catalog_lookup));
+    g_wav_catalog_lookup_valid = 0U;
+    g_wav_catalog_lookup.active = 1U;
+    g_wav_catalog_lookup.target_index = index;
+    g_wav_catalog_lookup.by_path = 0U;
+    storage_io_owner_set(STORAGE_OWNER_CATALOG);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+    return 1U;
+}
+
+uint8_t wav_loader_catalog_request_path(const char *path)
+{
+    if ((path == 0) || (path[0] == '\0')
+        || (g_wav_catalog_loaded == 0U) || (g_wav_catalog_stale != 0U)
+        || (g_wav_catalog_lookup.active != 0U))
+    {
+        return 0U;
+    }
+    memset(&g_wav_catalog_lookup, 0, sizeof(g_wav_catalog_lookup));
+    g_wav_catalog_lookup_valid = 0U;
+    g_wav_catalog_lookup.active = 1U;
+    g_wav_catalog_lookup.by_path = 1U;
+    (void)snprintf(g_wav_catalog_lookup.path,
+                   sizeof(g_wav_catalog_lookup.path), "%s", path);
+    storage_io_owner_set(STORAGE_OWNER_CATALOG);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+    return 1U;
+}
+
+const wav_loader_catalog_entry_t *wav_loader_catalog_get_cached(uint16_t index)
+{
+    if ((g_wav_catalog_lookup_valid != 0U)
+        && (g_wav_catalog_lookup_index == index))
+    {
+        return &g_wav_catalog_lookup_entry;
+    }
+    for (uint8_t v = 0U; v < WAV_LOADER_CATALOG_VIEW_CACHE_COUNT; ++v)
+    {
+        wav_loader_catalog_view_t *const view = &g_wav_catalog_views[v];
+        if (view->valid == 0U)
+            continue;
+        for (uint16_t i = 0U; i < view->loaded_count; ++i)
+        {
+            if (view->indices[i] == index)
+                return &view->entries[i];
+        }
+    }
+    return 0;
+}
+
+uint8_t wav_loader_catalog_find_path_cached(const char *path,
+                                            uint16_t *out_index,
+                                            wav_loader_catalog_entry_t *out_entry)
+{
+    if ((path == 0) || (path[0] == '\0'))
+        return 0U;
+    for (uint8_t v = 0U; v < WAV_LOADER_CATALOG_VIEW_CACHE_COUNT; ++v)
+    {
+        wav_loader_catalog_view_t *const view = &g_wav_catalog_views[v];
+        if (view->valid == 0U)
+            continue;
+        for (uint16_t i = 0U; i < view->loaded_count; ++i)
+        {
+            if (strcmp(view->entries[i].path, path) == 0)
+            {
+                if (out_index != 0) *out_index = view->indices[i];
+                if (out_entry != 0) *out_entry = view->entries[i];
+                return 1U;
+            }
+        }
+    }
+    if ((g_wav_catalog_lookup_valid != 0U)
+        && (strcmp(g_wav_catalog_lookup_entry.path, path) == 0))
+    {
+        if (out_index != 0) *out_index = g_wav_catalog_lookup_index;
+        if (out_entry != 0) *out_entry = g_wav_catalog_lookup_entry;
+        return 1U;
+    }
+    return 0U;
 }
 
 wav_loader_catalog_view_service_result_t wav_loader_catalog_view_last_result(void)
@@ -1328,7 +1526,7 @@ uint8_t wav_loader_catalog_find_path(const char *path, uint16_t *out_index, wav_
         }
     }
     (void)f_close(&file);
-    sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
+    sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
     return found;
 }
 
@@ -1418,7 +1616,7 @@ bool wav_loader_find_first_wav(char *out_path, uint32_t max_len)
         }
     }
     (void)f_close(&file);
-    sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
+    sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
     if (found == 0U)
     {
         return false;

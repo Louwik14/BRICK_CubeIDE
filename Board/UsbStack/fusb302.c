@@ -1,6 +1,7 @@
 #include "fusb302.h"
 
 #include "App/usb_service_wakeup.h"
+#include "usb_role_manager.h"
 #include "main.h"
 
 #include <string.h>
@@ -432,8 +433,20 @@ fusb302_status_t fusb302_handle_interrupt(void)
         return FUSB302_STATUS_OK;
     }
 
-    g_fusb302.irq_pending = false;
-    return fusb302_read_state(true);
+    const fusb302_status_t status = fusb302_read_state(true);
+
+    /* Keep the software latch until the complete transaction succeeded.  If
+     * INT_N is still asserted after a successful read, another interrupt is
+     * pending and the falling-edge EXTI will not necessarily fire again. */
+    if ((status == FUSB302_STATUS_OK)
+        && (HAL_GPIO_ReadPin(FUSB302_INT_N_GPIO_Port, FUSB302_INT_N_Pin)
+            == GPIO_PIN_SET)) {
+        g_fusb302.irq_pending = false;
+    } else {
+        g_fusb302.irq_pending = true;
+    }
+
+    return status;
 }
 
 bool fusb302_is_present(void)
@@ -461,6 +474,9 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     if (GPIO_Pin == FUSB302_INT_N_Pin) {
         g_fusb302.irq_pending = true;
         __DMB();
+        usb_service_wakeup(USB_SERVICE_WAKE_WORK);
+    } else if (GPIO_Pin == HOST_FLAG_Pin) {
+        usb_role_manager_host_flag_irq();
         usb_service_wakeup(USB_SERVICE_WAKE_WORK);
     }
 }

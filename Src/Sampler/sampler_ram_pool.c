@@ -8,8 +8,11 @@
 #include "Platform/memory_layout.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/storage_io_wakeup.h"
+#include "Storage/project_load_quiesce.h"
+#include "App/control_rt_wakeup.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "Storage/wav_parser.h"
+#include "Storage/project_product.h"
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_page_cache_port.h"
 #include "IPC/sampler_ram_audio_projection_control.h"
@@ -132,7 +135,8 @@ uint8_t sampler_ram_pool_request_clear(uint16_t ram_slot)
     g_sampler_ram_clear_request_slot = ram_slot;
     __DMB();
     g_sampler_ram_clear_request_valid = 1U;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_SAMPLE_RAM);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
@@ -151,10 +155,10 @@ void sampler_ram_pool_storage_request_service(void)
         char path[SAMPLER_RAM_POOL_PATH_MAX];
         (void)sampler_ram_copy_path(path, sizeof(path), g_sampler_ram_load_request_path);
         g_sampler_ram_load_request_valid = 0U;
-        if (sampler_ram_pool_load_async_begin(slot, path) != 0U)
+        if (sampler_ram_pool_load_async_begin_for_requester(
+                slot, path, g_sampler_ram_load_requester) != 0U)
         {
             g_sampler_ram_load_job.request_id = g_sampler_ram_load_request_id;
-            g_sampler_ram_load_job.requester = g_sampler_ram_load_requester;
         }
     }
 }
@@ -681,7 +685,8 @@ static sd_scheduler_background_admission_t sampler_ram_load_sd_begin(
     const sd_scheduler_background_request_t request = {
         .byte_count = bytes,
         .media_epoch = g_sampler_ram_load_job.media_epoch,
-        .kind = kind
+        .kind = kind,
+        .storage_owner = (uint8_t)STORAGE_OWNER_SAMPLE_RAM
     };
     return sd_scheduler_runtime_background_try_begin(&request);
 }
@@ -706,7 +711,9 @@ static uint8_t sampler_ram_pool_load_async_begin_internal(
     sampler_ram_requester_t requester)
 {
     sampler_ram_load_job_t *const job = &g_sampler_ram_load_job;
-    if ((job->state != SAMPLER_RAM_LOAD_IDLE)
+    if ((project_transport_stopped_stable() == 0U)
+        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+        || (job->state != SAMPLER_RAM_LOAD_IDLE)
         || (ram_slot >= SAMPLER_RAM_POOL_MAX_SLOTS)
         || (path == 0) || (path[0] == '\0'))
     {
@@ -731,13 +738,16 @@ static uint8_t sampler_ram_pool_load_async_begin_internal(
     }
     job->result = SAMPLER_RAM_RESULT_OK;
     job->state = SAMPLER_RAM_LOAD_MOUNT;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_SAMPLE_RAM);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
 uint8_t sampler_ram_pool_request_load(uint16_t ram_slot, const char *path)
 {
-    if ((ram_slot >= SAMPLER_RAM_POOL_MAX_SLOTS)
+    if ((project_transport_stopped_stable() == 0U)
+        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+        || (ram_slot >= SAMPLER_RAM_POOL_MAX_SLOTS)
         || (path == 0) || (path[0] == '\0')
         || (strlen(path) >= sizeof(g_sampler_ram_load_request_path))
         || (sampler_ram_pool_load_async_busy() != 0U)
@@ -753,14 +763,26 @@ uint8_t sampler_ram_pool_request_load(uint16_t ram_slot, const char *path)
                                 sizeof(g_sampler_ram_load_request_path), path);
     __DMB();
     g_sampler_ram_load_request_valid = 1U;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_SAMPLE_RAM);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
 uint8_t sampler_ram_pool_load_async_begin(uint16_t ram_slot, const char *path)
 {
     return sampler_ram_pool_load_async_begin_internal(
-        ram_slot, path, NULL, SAMPLER_RAM_REQUESTER_STORAGE);
+        ram_slot, path, NULL, SAMPLER_RAM_REQUESTER_PROJECT);
+}
+
+uint8_t sampler_ram_pool_load_async_begin_for_requester(
+    uint16_t ram_slot, const char *path, sampler_ram_requester_t requester)
+{
+    if (requester > SAMPLER_RAM_REQUESTER_PATCH)
+    {
+        return 0U;
+    }
+    return sampler_ram_pool_load_async_begin_internal(
+        ram_slot, path, NULL, requester);
 }
 
 uint8_t sampler_ram_pool_load_async_begin_prepared(uint16_t ram_slot,
@@ -1113,12 +1135,38 @@ void sampler_ram_pool_load_async_service(void)
     const uint32_t converted_frames = job->converted_frames;
 
     sampler_ram_pool_load_async_service_step();
+    if ((state != SAMPLER_RAM_LOAD_DONE)
+            && (job->state == SAMPLER_RAM_LOAD_DONE))
+    {
+        storage_io_owner_t completion_owner = STORAGE_OWNER_SAMPLE_RAM;
+        switch (sampler_ram_pool_load_async_requester())
+        {
+            case SAMPLER_RAM_REQUESTER_PATCH:
+                completion_owner = STORAGE_OWNER_PATCH;
+                break;
+            case SAMPLER_RAM_REQUESTER_PROJECT:
+                completion_owner = STORAGE_OWNER_PROJECT;
+                break;
+            case SAMPLER_RAM_REQUESTER_UI:
+            default:
+                break;
+        }
+        if (completion_owner != STORAGE_OWNER_SAMPLE_RAM)
+        {
+            storage_io_owner_set(completion_owner);
+            storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+        }
+        control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
+    }
     if ((job->state != SAMPLER_RAM_LOAD_IDLE)
             && ((job->state != state)
                 || (job->frames_done != frames_done)
                 || (job->buffered_frames != buffered_frames)
                 || (job->converted_frames != converted_frames)))
-        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+        {
+            storage_io_owner_set(STORAGE_OWNER_SAMPLE_RAM);
+            storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+        }
 }
 
 uint8_t sampler_ram_pool_load_async_take_result(uint32_t expected_request_id,
@@ -1201,6 +1249,7 @@ void sampler_ram_pool_retire_all(void)
 
 void sampler_ram_pool_service_retire(void)
 {
+    uint8_t finalized = 0U;
     if (g_sampler_ram_retire_invariant_failed != 0U) return;
     for (uint16_t i = 0U; i < SAMPLER_RAM_POOL_MAX_SLOTS; ++i)
     {
@@ -1224,11 +1273,18 @@ void sampler_ram_pool_service_retire(void)
         if (now_sample < g_sampler_ram_retire_not_before_sample[i])
         {
             storage_io_schedule_sample_wakeup(
+                STORAGE_OWNER_SAMPLE_RAM,
                 g_sampler_ram_retire_not_before_sample[i]);
             continue;
         }
         g_sampler_ram_retire_stop_committed[i] = 0U;
         sampler_ram_pool_finalize_clear(i);
+        finalized = 1U;
+    }
+    if ((finalized != 0U) && (project_product_load_busy() != 0U))
+    {
+        storage_io_owner_set(STORAGE_OWNER_PROJECT);
+        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     }
 }
 
@@ -1340,7 +1396,8 @@ void sampler_ram_pool_waveform_service(uint32_t frame_budget)
         if (g_sampler_ram_pool.slots[i].waveform.state
                 == SAMPLE_RAM_WAVEFORM_BUILDING)
         {
-            storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+            storage_io_owner_set(STORAGE_OWNER_SAMPLE_RAM);
+            storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
             break;
         }
     }

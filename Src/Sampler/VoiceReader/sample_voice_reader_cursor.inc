@@ -7,10 +7,46 @@ static uint8_t sample_voice_reader_lease_slot(sample_audio_key_t key,
                                                uint8_t reader_id)
 {
     if (key.domain == SAMPLE_AUDIO_DOMAIN_CLASSIC)
-        return sample_page_lease_classic_slot(reader_id);
+        return (reader_id < SAMPLE_PAGE_LEASE_CLASSIC_COUNT)
+            ? sample_page_lease_classic_slot(reader_id) : UINT8_MAX;
     if (key.domain == SAMPLE_AUDIO_DOMAIN_MULTI)
-        return sample_page_lease_multi_slot(reader_id);
+        return (reader_id < SAMPLE_PAGE_LEASE_MULTI_COUNT)
+            ? sample_page_lease_multi_slot(reader_id) : UINT8_MAX;
     return UINT8_MAX;
+}
+
+static void sample_voice_reader_admission_map_clear(
+    sample_voice_reader_t *reader)
+{
+    if (reader == 0)
+        return;
+    const sample_voice_reader_state_t *const state =
+        sample_voice_reader_state(reader);
+    if ((state->lease_slot < SAMPLE_PAGE_LEASE_SLOT_COUNT)
+        && (g_sample_voice_reader_admission_readers[state->lease_slot] == reader))
+    {
+        g_sample_voice_reader_admission_readers[state->lease_slot] = 0;
+        memset(&g_sample_voice_reader_admission_tokens[state->lease_slot],
+               0, sizeof(g_sample_voice_reader_admission_tokens[0]));
+    }
+}
+
+static uint8_t sample_voice_reader_lease_admission_valid(
+    const sample_voice_reader_state_t *state,
+    sample_stream_admission_owner_t owner,
+    uint8_t physical_class)
+{
+    if ((state == 0) || (owner == SAMPLE_STREAM_ADMISSION_OWNER_NONE)
+        || (state->lease_slot >= SAMPLE_PAGE_LEASE_SLOT_COUNT))
+        return 0U;
+    const sample_voice_reader_t *const reader =
+        (const sample_voice_reader_t *)(const void *)state;
+    if (g_sample_voice_reader_admission_readers[state->lease_slot] != reader)
+        return 0U;
+    return sample_stream_admission_audio_lease_valid(
+        &g_sample_voice_reader_admission_tokens[state->lease_slot],
+        owner, SAMPLE_STREAM_ADMISSION_ROLE_PRIMARY,
+        physical_class, state->lease_slot);
 }
 
 static void sample_voice_reader_publish_lease(sample_voice_reader_state_t *state,
@@ -18,6 +54,25 @@ static void sample_voice_reader_publish_lease(sample_voice_reader_state_t *state
 {
     if ((state == 0) || (state->lease_valid == 0U)
         || (state->frames_per_page == 0U)) return;
+
+    const sample_stream_admission_owner_t owner =
+        (state->key.domain == SAMPLE_AUDIO_DOMAIN_CLASSIC)
+            ? SAMPLE_STREAM_ADMISSION_OWNER_CLASSIC
+            : (state->key.domain == SAMPLE_AUDIO_DOMAIN_MULTI)
+                ? SAMPLE_STREAM_ADMISSION_OWNER_MULTI
+                : SAMPLE_STREAM_ADMISSION_OWNER_NONE;
+    const uint8_t physical_class =
+        (owner == SAMPLE_STREAM_ADMISSION_OWNER_CLASSIC)
+            ? SAMPLE_STREAM_ADMISSION_PHYSICAL_CLASS_CLASSIC
+            : (owner == SAMPLE_STREAM_ADMISSION_OWNER_MULTI)
+                ? SAMPLE_STREAM_ADMISSION_PHYSICAL_CLASS_MULTI : 0U;
+    if ((state->active == 0U)
+        || (sample_voice_reader_lease_admission_valid(
+                state, owner, physical_class) == 0U))
+    {
+        sample_page_lease_audio_clear(state->lease_slot);
+        return;
+    }
 
     const uint32_t page = frame_pos / state->frames_per_page;
     sample_page_lease_range_t ranges[2] = {0};
@@ -692,6 +747,7 @@ void sample_voice_reader_reset(sample_voice_reader_t *reader)
     sample_voice_reader_release_loop_cache(state);
 #endif
     sample_voice_reader_release_audio_cursor(state);
+    sample_voice_reader_admission_map_clear(reader);
     if (state->lease_valid != 0U)
         sample_page_lease_audio_clear(state->lease_slot);
     memset(state, 0, sizeof(*state));
@@ -702,33 +758,49 @@ void sample_voice_reader_bind(sample_voice_reader_t *reader,
                               uint8_t reader_id,
                               uint32_t start_frame)
 {
-    if (reader == 0)
-    {
-        return;
-    }
-
+    (void)sample_id;
+    (void)reader_id;
+    (void)start_frame;
+    /* Stream readers must enter through the admission-bearing plan bind. */
+    if (reader == 0) return;
     sample_voice_reader_reset(reader);
-    reader->sample_id = sample_id;
-    reader->key = sample_audio_key_classic(sample_id);
-    reader->format = SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED;
-    reader->stride_floats = SAMPLE_AUDIO_FORMAT_STEREO_STRIDE_FLOATS;
-    reader->frames_per_page = SAMPLE_AUDIO_FORMAT_STEREO_FRAMES_PER_PAGE;
-    reader->lease_slot = sample_page_lease_classic_slot(reader_id);
-    reader->lease_valid = 1U;
-    reader->position = (float)start_frame;
-    reader->step = 1.0f;
-    reader->frame_pos = start_frame;
-    reader->active = 1U;
 }
 
 uint8_t sample_voice_reader_bind_play_plan(sample_voice_reader_t *reader,
                                            const sample_play_plan_t *plan,
                                            uint8_t reader_id)
 {
+    return sample_voice_reader_bind_play_plan_admitted(reader, plan, reader_id,
+                                                       NULL);
+}
+
+uint8_t sample_voice_reader_bind_play_plan_admitted(
+    sample_voice_reader_t *reader, const sample_play_plan_t *plan,
+    uint8_t reader_id, const sample_stream_admission_token_t *token)
+{
     if ((reader == 0) || (plan == 0))
     {
         return 0U;
     }
+
+    const uint8_t lease_slot = sample_voice_reader_lease_slot(plan->key, reader_id);
+    sample_stream_admission_owner_t owner = SAMPLE_STREAM_ADMISSION_OWNER_NONE;
+    uint8_t physical_class = 0U;
+    if (plan->key.domain == SAMPLE_AUDIO_DOMAIN_CLASSIC)
+    {
+        owner = SAMPLE_STREAM_ADMISSION_OWNER_CLASSIC;
+        physical_class = SAMPLE_STREAM_ADMISSION_PHYSICAL_CLASS_CLASSIC;
+    }
+    else if (plan->key.domain == SAMPLE_AUDIO_DOMAIN_MULTI)
+    {
+        owner = SAMPLE_STREAM_ADMISSION_OWNER_MULTI;
+        physical_class = SAMPLE_STREAM_ADMISSION_PHYSICAL_CLASS_MULTI;
+    }
+    if ((lease_slot >= SAMPLE_PAGE_LEASE_SLOT_COUNT)
+        || (owner == SAMPLE_STREAM_ADMISSION_OWNER_NONE)
+        || (sample_stream_admission_audio_associate(
+                token, owner, physical_class, lease_slot) == 0U))
+        return 0U;
 
     sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
     sample_voice_reader_reset(reader);
@@ -742,14 +814,16 @@ uint8_t sample_voice_reader_bind_play_plan(sample_voice_reader_t *reader,
                                  ? plan->frames_per_page
                                  : sample_audio_format_frames_per_page(state->format);
     state->registration_epoch = plan->registration_epoch;
-    state->lease_slot = sample_voice_reader_lease_slot(plan->key, reader_id);
-    state->lease_valid = (state->lease_slot < SAMPLE_PAGE_LEASE_SLOT_COUNT) ? 1U : 0U;
+    state->lease_slot = lease_slot;
+    state->lease_valid = 1U;
     state->position = (float)plan->start_frame;
     state->step = (float)plan->step_q16 / (float)SAMPLE_Q16_ONE;
     state->frame_pos = plan->start_frame;
     state->active = 1U;
     state->plan = *plan;
     state->plan_valid = 1U;
+    g_sample_voice_reader_admission_readers[lease_slot] = reader;
+    g_sample_voice_reader_admission_tokens[lease_slot] = *token;
     sample_voice_reader_publish_lease(state, plan->start_frame);
 
     if (sample_voice_reader_acquire_audio_page(state, plan->start_frame) == 0U)

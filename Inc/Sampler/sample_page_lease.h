@@ -54,22 +54,26 @@ extern sample_page_lease_t g_sample_page_leases[SAMPLE_PAGE_LEASE_SLOT_COUNT];
 
 static inline uint8_t sample_page_lease_classic_slot(uint8_t reader)
 {
-    return (uint8_t)(SAMPLE_PAGE_LEASE_CLASSIC_BASE + reader);
+    return (reader < SAMPLE_PAGE_LEASE_CLASSIC_COUNT)
+        ? (uint8_t)(SAMPLE_PAGE_LEASE_CLASSIC_BASE + reader) : UINT8_MAX;
 }
 
 static inline uint8_t sample_page_lease_multi_slot(uint8_t reader)
 {
-    return (uint8_t)(SAMPLE_PAGE_LEASE_MULTI_BASE + reader);
+    return (reader < SAMPLE_PAGE_LEASE_MULTI_COUNT)
+        ? (uint8_t)(SAMPLE_PAGE_LEASE_MULTI_BASE + reader) : UINT8_MAX;
 }
 
 static inline uint8_t sample_page_lease_looper_slot(uint8_t reader)
 {
-    return (uint8_t)(SAMPLE_PAGE_LEASE_LOOPER_BASE + reader);
+    return (reader < SAMPLE_PAGE_LEASE_LOOPER_COUNT)
+        ? (uint8_t)(SAMPLE_PAGE_LEASE_LOOPER_BASE + reader) : UINT8_MAX;
 }
 
 static inline uint8_t sample_page_lease_looper_aux_slot(uint8_t reader)
 {
-    return (uint8_t)(SAMPLE_PAGE_LEASE_LOOPER_AUX_BASE + reader);
+    return (reader < SAMPLE_PAGE_LEASE_LOOPER_AUX_COUNT)
+        ? (uint8_t)(SAMPLE_PAGE_LEASE_LOOPER_AUX_BASE + reader) : UINT8_MAX;
 }
 
 #ifdef __cplusplus

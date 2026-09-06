@@ -16,6 +16,7 @@
 #include "Sampler/wavetable_pool.h"
 #include "Platform/memory_layout.h"
 #include "Storage/persistent_key_catalog.h"
+#include "Storage/persistent_control_codec.h"
 #include "Storage/asset_ref.h"
 #include "ff.h"
 
@@ -112,7 +113,7 @@ uint8_t project_control_assign_scene_lock(uint8_t scene,uint8_t track,param_id_t
 uint8_t project_control_clear_scene_lock(uint8_t scene,uint8_t track,param_id_t param){if(scene>=PERSIST_CONTROL_MACRO_SCENE_COUNT||track>=PERSIST_CONTROL_ENTITY_COUNT||param>=PARAM_COUNT)return 0U;for(uint8_t lock=0U;lock<PERSIST_CONTROL_MACRO_LOCK_COUNT;++lock){project_control_macro_lock_t current;if(project_control_get_scene_lock(scene,lock,&current)!=0U&&current.track==track&&current.param==param){const project_control_macro_lock_t empty={0xFFU,PARAM_COUNT,0.0f};return project_control_set_scene_lock(scene,lock,&empty);}}return 0U;}
 uint8_t project_control_capture_macros(persist_control_macros_t*out){if(out==NULL)return 0U;*out=g_macros;return 1U;}
 const persist_control_macros_t*project_control_macros_view(void){return &g_macros;}
-uint8_t project_control_apply_macros(const persist_control_macros_t*in){if(in==NULL)return 0U;for(uint8_t m=0U;m<PERSIST_CONTROL_MACRO_COUNT;++m)if(in->selected_scene[m]>=PERSIST_CONTROL_MACRO_SCENE_COUNT)return 0U;for(uint8_t scene=0U;scene<PERSIST_CONTROL_MACRO_SCENE_COUNT;++scene){if(in->scenes[scene].lock_count>PERSIST_CONTROL_MACRO_LOCK_COUNT)return 0U;for(uint8_t lock=0U;lock<in->scenes[scene].lock_count;++lock){const persist_control_macro_lock_t*l=&in->scenes[scene].locks[lock];param_id_t id;if(l->entity>=PERSIST_CONTROL_ENTITY_COUNT||persist_key_param_from_disk(l->parameter,&id)==0U||param_macro_lock_target_is_supported(l->entity,id)==0U||!isfinite(l->scene_value)||l->scene_value<param_registry[id].min||l->scene_value>param_registry[id].max)return 0U;}}g_macros=*in;return param_macro_sync_scene_sources();}
+uint8_t project_control_apply_macros(const persist_control_macros_t*in){if(persist_codec_validate_macros(in)!=PERSIST_CODEC_OK)return 0U;g_macros=*in;return param_macro_sync_scene_sources();}
 uint16_t project_control_asset_count(void){uint16_t n=0U;for(uint16_t i=0U;i<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS;++i){const sample_global_slot_t*s=sample_global_pool_get_slot(i);n+=((s!=NULL&&s->kind==SAMPLE_GLOBAL_KIND_CLASSIC)?1U:0U);n+=(g_sample_bank[i].used!=0U);n+=(g_wavetable_bank[i].used!=0U);}for(uint16_t i=0U;i<MULTI_SAMPLE_POOL_MAX_INSTRUMENTS;++i)n+=(g_multi_bank[i].used!=0U);return n;}
 uint8_t project_control_get_asset_ordinal(uint16_t ordinal,persist_control_asset_ref_t*out){if(out==NULL)return 0U;for(uint16_t i=0U;i<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS;++i){const sample_global_slot_t*s=sample_global_pool_get_slot(i);if(s!=NULL&&s->kind==SAMPLE_GLOBAL_KIND_CLASSIC){if(ordinal--==0U)return classic_asset(i,out);}}const project_control_bank_slot_t*banks[3]={g_sample_bank,g_wavetable_bank,g_multi_bank};const uint16_t caps[3]={SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS};for(uint8_t b=0U;b<3U;++b)for(uint16_t i=0U;i<caps[b];++i)if(banks[b][i].used!=0U){if(ordinal--==0U)return asset_ref_make_canonical(banks[b][i].kind,banks[b][i].canonical_path,out);}return 0U;}
 

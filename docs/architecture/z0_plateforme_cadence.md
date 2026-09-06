@@ -2,7 +2,7 @@
 
 ## Execution
 
-L'audio travaille par demi-buffer de 64 frames a 48 kHz. L'IRQ SAI possede sa timeline audio locale et n'execute ni FatFs, ni scan de cache, ni travail Storage non borne. CONTROL_RT se cadence seul: TIM12 porte le tick musical interne, TIM5, demarre avant les domaines, porte le temps physique commun et sa conversion nominale en samples. CONTROL_RT publie l'horizon musical glissant; aucun reveil AUDIO, compteur de frames periodique ou PendSV sequenceur ne traverse la frontiere. Scheduler, lifecycle et Note FX contribuent d'abord a une fenetre CONTROL fixe; ses 64 buckets sample/kind finalisent ensuite la FIFO en ordre chronologique, avec STOP avant START a timestamp egal.
+L'audio travaille par demi-buffer de 64 frames a 48 kHz. L'IRQ SAI possede sa timeline audio locale et n'execute ni FatFs, ni scan de cache, ni travail Storage non borne. CONTROL_RT se cadence seul: TIM12 est un one-shot de deadline, arme uniquement pendant un transport interne actif pour rafraichir l'horizon musical; TIM5, demarre avant les domaines, porte le temps physique commun et sa conversion nominale en samples. CONTROL_RT publie l'horizon musical glissant; aucun reveil AUDIO, compteur de frames periodique ou PendSV sequenceur ne traverse la frontiere. Scheduler, lifecycle et Note FX contribuent d'abord a une fenetre CONTROL fixe; ses 64 buckets sample/kind finalisent ensuite la FIFO en ordre chronologique, avec STOP avant START a timestamp egal.
 
 Le clavier Hall BRICK execute la meme machine bornee depuis l'acquisition ADC. TIM5 est le compteur libre commun de capture. CONTROL en possede l'extension et la conversion; AUDIO initialise sa sample clock locale depuis TIM5 au premier callback valide et ne publie aucune ancre.
 
@@ -16,9 +16,23 @@ Le produit fonctionne avec cinq services FreeRTOS aux responsabilites distinctes
 - `UI_SERVICE` possede le drain des evenements UI, la navigation, le rendu OLED et les wakeups d'entree.
 - `AUDIO_BG_LOCAL` execute les travaux AUDIO non hard-RT qui restent locaux au coeur M7.
 
-CONTROL_RT, STORAGE_IO et USB_SERVICE utilisent des wakeups par flags et un
-fallback temporel borne; UI_SERVICE dort sur ses evenements et sa cadence de
-rendu; AUDIO_BG_LOCAL reste cooperatif. Aucun de ces services ne remplace la
+CONTROL_RT et STORAGE_IO utilisent des wakeups par flags; STORAGE_IO conserve
+un bitmap fixe des owners runnable (STREAM, RECORDER, PROJECT, PATTERN, PATCH,
+SAMPLE_RAM, WAVETABLE, MULTI, CATALOG, WAV_CONVERT, WAVEFORM_CACHE et
+PREVIEW). Le flag Storage est un doorbell; il ne transporte aucun payload et
+aucun scan global n'est autorise. Un owner efface son bit lorsqu'il attend une
+ressource, un evenement ou une deadline reelle. USB_SERVICE dort
+sur ses evenements USB ou sur la prochaine vraie deadline USB, puis attend
+indefiniment lorsqu'il n'existe ni travail ni deadline. UI_SERVICE dort sur
+ses evenements, dirty, DMA et deadlines visuelles locales; son chemin OLED
+unique est `dirty -> render -> frame ready -> flush service -> DMA`, et une
+completion DMA ne relance jamais le rendu. AUDIO_BG_LOCAL reste cooperatif.
+CONTROL_RT n'a aucun fallback de reveil a 1 ms: hors evenements, il attend la
+prochaine deadline explicite de sampled-state, Power/holds ou calibration; le
+one-shot TIM12 n'est arme que pour la prochaine maintenance necessaire de
+l'horizon musical interne. Les callbacks SAI
+half/full ne reveillent pas CONTROL.
+Aucun de ces services ne remplace la
 timeline SAI de l'IRQ audio et aucun ne transforme un data plane en commande
 fonctionnelle.
 
@@ -26,15 +40,20 @@ fonctionnelle.
 
 `USB_SERVICE` pompe TinyUSB 0.21.0 et le `usb_role_manager` arbitre un seul
 role actif a la fois avec FUSB302. Le role Device expose MIDI et Audio UAC2;
-le role Host expose MIDI. La mise sous VBUS utilise un delai de stabilisation
-borne de 200 ms avec deadline, sans `HAL_Delay` dans le service. L'AP2161 est
-pilote en logique active-bas. Le transport USB Audio reste M4-local sur H743;
-son passage inter-core H747 est explicitement non finalise dans le contrat des
-data planes.
+le role Host expose MIDI. Les IRQ FUSB302, OTG_FS, endpoints/SOF TinyUSB et
+les queues USB reveillent le service; la seule temporisation USB exposee au
+service est la plus proche des deadlines de stabilisation VBUS et des
+continuations `call_after` TinyUSB Host. En l'absence de travail ou de
+deadline, le service dort indefiniment. `HOST_FLAG` est une entree EXTI6
+relue par USB_SERVICE, pas un polling periodique. La mise sous VBUS utilise
+un delai de stabilisation borne de 200 ms avec deadline, sans `HAL_Delay`
+dans le service. L'AP2161 est pilote en logique active-bas. Le transport USB
+Audio reste M4-local sur H743; son passage inter-core H747 est explicitement
+non finalise dans le contrat des data planes.
 
 ## Frontiere CONTROL/AUDIO
 
-La frontiere suit `M4 CONTROL decide -> commande finale 16 octets -> M7 AUDIO execute`. La FIFO SPSC unique de 2048 commandes transporte PROGRAM, PARAM, NOTE, TRANSPORT, RECORD et PANIC. Les requetes visuelles typees AUDIO waveform et synth waveform empruntent egalement PARAM dans cette FIFO; elles n'ont ni mailbox ni file secondaire. Aucun pointeur, callback, contexte mutable, Pattern ou Project ne la traverse.
+La frontiere suit `M4 CONTROL decide -> commande finale 16 octets -> M7 AUDIO execute`. La FIFO SPSC unique de 2048 commandes transporte PROGRAM, PARAM, NOTE, TRANSPORT, RECORD, PANIC et le commit STOPPED-only `STATE_COMMIT`. Les requetes visuelles typees AUDIO waveform et synth waveform empruntent egalement PARAM dans cette FIFO; elles n'ont ni mailbox ni file secondaire. Aucun pointeur, callback, contexte mutable, Pattern ou Project ne la traverse.
 
 Les ingress Hall/MIDI et les sources scheduler restent des buffers locaux CONTROL. CONTROL resout et fusionne leur fenetre, transforme un retrigger en NOTE OFF puis NOTE ON au meme sample, puis publie un lot atomique dans la FIFO unique. AUDIO ne fusionne aucune queue et l'ordre physique FIFO est l'ordre fonctionnel a timestamp egal.
 
@@ -50,15 +69,17 @@ reste dans `Inc/Audio` et `Src/Audio` et n'est pas une projection IPC.
 
 PROGRAM porte directement la structure moteur. PARAM porte les proprietes
 finales et PANIC emprunte la meme FIFO; aucune generation musicale, queue
-prioritaire ou plan fonctionnel de restore ne traverse la frontiere. L'etat
-restore est valide puis republie par CONTROL avec le contrat final.
+prioritaire ou plan fonctionnel de restore ne traverse la frontiere. Project
+Load prepare un etat AUDIO immutable dans le data plane partage, puis publie
+une seule commande `STATE_COMMIT` sur cette FIFO. Le commit contient seulement
+la generation de l'etat; il ne republie pas les PARAM du restore un par un.
 
 Sur H743, les objets IPC resident dans la moitie haute de SRAM4 `0x38008000..0x3800FFFF`, shareable et non-cacheable; les registres Stream fixes resident dans la fenetre IPC partagee SRAM3/D2, et la projection complete du Recorder dans la zone SDRAM partagee non-cacheable. `DMB` ordonne la publication mais ne remplace pas le protocole d'ownership. Les payloads SDRAM cacheables exigent clean producteur puis invalidate consommateur. La zone Recorder de 256 KiB est shareable non-cacheable; les buffers DMA SAI sont en D2 non-cacheable.
 
 Les principaux sens sont:
 
 ```text
-CONTROL -> AUDIO : FIFO unique PROGRAM, PARAM, NOTE, TRANSPORT, RECORD, PANIC et requetes visuelles typees; data planes volumineux separes
+CONTROL -> AUDIO : FIFO unique PROGRAM, PARAM, NOTE, TRANSPORT, RECORD, PANIC, STATE_COMMIT et requetes visuelles typees; data planes volumineux separes
 AUDIO -> CONTROL : niveau REC, waveforms audio/synth et diagnostic Audio; plus les retours physiques STREAM/Recorder hors IPC fonctionnel
 Storage <-> AUDIO : registration, token, completion de page et payloads bornes
 ```
@@ -95,8 +116,9 @@ de modulation appartiennent a AUDIO. Les catalogues immuables partages
 variables placees correspondant aux `extern`, sans fonction, init, reset ou
 policy. L'initialisation reste chez le writer proprietaire. `BOARD_SOURCES`
 porte seulement les seams de composition mono-coeur, le hardware
-board et le staging/remap LED physique. Boutons, encodeurs et logique produit LED
-appartiennent a CONTROL. Les backings diagnostic/waveform, FIFO, Recorder,
+board et le staging/remap LED physique. Boutons et encodeurs appartiennent a
+CONTROL; la projection LED appartient a UI_SERVICE et son transport reste board.
+Les backings diagnostic/waveform, FIFO, Recorder,
 Preview, page-cache et projections Sampler appartiennent a `SHARED_BACKING`.
 Le page-cache n'y est pas masque: `sample_page_cache.c` possede les
 metadonnees, index, reservations et publications READY dans `DOMAIN_STORAGE`;

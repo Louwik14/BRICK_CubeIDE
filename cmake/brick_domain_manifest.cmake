@@ -3,7 +3,6 @@
 
 set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/buttons.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/drv_encoders.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/encoders.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/encoders_hw.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/led_anim.c"
@@ -24,7 +23,7 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/control_domain.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/control_rt_wakeup.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/encoder_control_dispatcher.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/engine_tasklet.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/control_rt_sampled_state.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/live_clock_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/usb_service_wakeup.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/ControlRT/control_rt_publication.c"
@@ -68,6 +67,7 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/multi_sample_pool.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_classic_audio_projection_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_global_pool.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/sample_stream_admission.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sampler_ram_audio_projection_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sampler_ram_pool.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/shared_memory_ref_control.c"
@@ -106,6 +106,7 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/persistent_patch_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/persistent_pattern_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/project_control.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/project_audio_prepared_state.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/project_load_quiesce.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/project_product.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/sample_capture.c"
@@ -215,8 +216,8 @@ set(DOMAIN_STORAGE
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_publish.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_scheduler.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_transport.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/brick6_stream_service_task.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/storage_catalog.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/settings_storage_service.c"
 )
 
 set(DOMAIN_AUDIO
@@ -333,6 +334,7 @@ set(DOMAIN_CONTRACTS ${DOMAIN_CONTRACT_UNITS})
 # functions, initialization or ownership policy.
 set(SHARED_BACKING
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/audio_boot_diagnostic.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/audio_prepared_state.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/audio_rec_level_layout.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/audio_recorder_capture.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/audio_waveform_layout.c"

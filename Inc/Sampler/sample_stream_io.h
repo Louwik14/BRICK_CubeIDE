@@ -28,6 +28,7 @@ typedef struct
     sample_stream_io_target_t target;
     sample_page_stream_info_t stream_info;
     uint32_t deadline_margin_us;
+    uint8_t storage_owner;
 } sample_stream_io_command_t;
 
 typedef struct

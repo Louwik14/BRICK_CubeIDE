@@ -36,7 +36,6 @@ _Static_assert(sizeof(encoder_detent_event_t) == 28U,
 
 void encoders_init(void);
 void encoders_start_fast_poll(void);
-void encoders_update(uint32_t dt_ms);
 
 void encoders_set_binding_snapshot(const encoder_binding_snapshot_t *snapshot);
 void encoders_discard_pending(void);

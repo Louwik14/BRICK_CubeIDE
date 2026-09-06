@@ -83,6 +83,10 @@ typedef struct
 void seq_runtime_init(void);
 /* Notification/maintenance seam: IRQ tick accounting only, no step authority. */
 void seq_runtime_time_adapter_process_internal_from_irq(void);
+/* One-shot CONTROL deadline for maintaining the published musical horizon. */
+void seq_runtime_control_deadline_service(void);
+void seq_runtime_control_deadline_disarm(void);
+uint8_t seq_runtime_control_deadline_timer_fired(void);
 /* Orchestration loop: supervises transport, clock source and external/internal progress. */
 void seq_runtime_time_adapter_process(void);
 uint32_t seq_runtime_get_samples_per_step_q16(void);
@@ -135,6 +139,8 @@ uint8_t seq_runtime_live_rec_submit_effective(seq_live_rec_source_t source,
 void seq_runtime_live_rec_drain_effective(void);
 /* Notification surface from MIDI input / transport source. */
 void seq_runtime_midi_clock_from_source(seq_clock_src_t source);
+void seq_runtime_midi_clock_from_source_at(seq_clock_src_t source,
+                                           uint64_t sample_time);
 void seq_runtime_midi_start_from_source(seq_clock_src_t source);
 void seq_runtime_midi_continue_from_source(seq_clock_src_t source);
 void seq_runtime_midi_stop_from_source(seq_clock_src_t source);

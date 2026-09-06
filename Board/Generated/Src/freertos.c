@@ -18,14 +18,17 @@
 #include "App/brick6_app_init.h"
 #include "App/control_domain.h"
 #include "Audio/audio_domain.h"
+#include "Board/board_usb.h"
 #include "encoders.h"
 #include "IPC/live_event.h"
 #include "MIDI/midi.h"
 #include "MIDI/midi_host.h"
 #include "App/control_rt_wakeup.h"
+#include "App/control_rt_sampled_state.h"
 #include "App/usb_service_wakeup.h"
 #include "fusb302.h"
 #include "SD/sd_block_device.h"
+#include "SD/sd_scheduler_runtime.h"
 #include "Storage/storage_io_wakeup.h"
 #include "UI/display_flush_service.h"
 #include "UI/ui_event.h"
@@ -34,6 +37,8 @@
 #include "tusb.h"
 #include "usb_role_manager.h"
 #include "drv_display.h"
+#include "led_hw.h"
+#include "led_rgb.h"
 
 /* USER CODE END Includes */
 
@@ -129,31 +134,62 @@ void StartUsbTask(void *argument);
 void StartUiTask(void *argument);
 void StartAudioBgTask(void *argument);
 
-static uint8_t storage_io_work_pending(void)
+static uint32_t storage_io_wait_timeout_ticks(void)
 {
-  return (sd_block_device_async_immediate_pending() != 0U) ? 1U : 0U;
+  const uint32_t now_ms = HAL_GetTick();
+  uint32_t deadline_ms = 0U;
+  uint64_t timeout_ticks;
+  int32_t remaining_ms;
+  if (storage_io_next_deadline_ms(now_ms, &deadline_ms) == 0U)
+    return osWaitForever;
+  remaining_ms = (int32_t)(deadline_ms - now_ms);
+  if (remaining_ms <= 0)
+    return 0U;
+  timeout_ticks = (((uint64_t)(uint32_t)remaining_ms
+                    * (uint64_t)osKernelGetTickFreq()) + 999U) / 1000U;
+  if (timeout_ticks == 0U)
+    timeout_ticks = 1U;
+  return (timeout_ticks >= (uint64_t)osWaitForever)
+      ? (osWaitForever - 1U) : (uint32_t)timeout_ticks;
 }
 
-static uint8_t control_rt_work_pending(void)
+static uint32_t control_rt_wait_timeout_ticks(void)
 {
-  return (live_event_depth() != 0U
-          || encoder_detent_event_pending_count() != 0U
-          || midi_control_pending_count() != 0U
-          || midi_host_control_pending_count() != 0U
-          || control_domain_ui_pending_count() != 0U
-          || control_domain_storage_pending_count() != 0U) ? 1U : 0U;
+  const uint32_t now_ms = HAL_GetTick();
+  uint32_t deadline_ms = now_ms;
+  uint64_t timeout_ticks;
+  int32_t remaining_ms;
+
+  if (control_rt_sampled_state_next_deadline(now_ms, &deadline_ms) == 0U)
+    return osWaitForever;
+  remaining_ms = (int32_t)(deadline_ms - now_ms);
+  if (remaining_ms <= 0)
+    return 0U;
+  timeout_ticks = (((uint64_t)(uint32_t)remaining_ms
+                    * (uint64_t)osKernelGetTickFreq()) + 999U) / 1000U;
+  if (timeout_ticks == 0U)
+    timeout_ticks = 1U;
+  return (timeout_ticks >= (uint64_t)osWaitForever)
+      ? (osWaitForever - 1U) : (uint32_t)timeout_ticks;
 }
 
 static uint8_t ui_service_work_pending(void)
 {
   return (ui_event_pending_count() != 0U
-          || drv_display_flush_continuation_pending() != 0U) ? 1U : 0U;
+          || ui_service_dirty_is_set() != 0U
+          || ((ui_service_led_dirty_is_set() != 0U)
+              && (led_hw_busy() == 0U))
+          || (drv_display_flush_continuation_pending() != 0U)
+          || ((display_flush_service_frame_pending() != 0U)
+              && (drv_display_flush_in_progress() == 0U)
+              && (drv_display_get_state() == DRV_DISPLAY_STATE_READY))) ? 1U : 0U;
 }
 
 static uint8_t usb_service_work_pending(void)
 {
   if (fusb302_irq_pending()
       || (usb_role_manager_work_pending() != 0U)
+      || (midi_host_transport_work_pending() != 0U)
       || midi_usb_service_work_pending() != 0U)
   {
     return 1U;
@@ -174,17 +210,55 @@ static uint8_t usb_service_work_pending(void)
   return 0U;
 }
 
+static uint32_t usb_service_wait_timeout_ticks(void)
+{
+  const uint32_t now_ms = HAL_GetTick();
+  uint32_t deadline_ms;
+  int32_t remaining_signed;
+  uint64_t timeout_ticks;
+
+  if (board_usb_next_deadline_ms(now_ms, &deadline_ms) == 0U) {
+    return osWaitForever;
+  }
+
+  remaining_signed = (int32_t)(deadline_ms - now_ms);
+  if (remaining_signed <= 0) {
+    return 0U;
+  }
+
+  /* Deadlines are in milliseconds; CMSIS flags waits use kernel ticks. */
+  timeout_ticks = (((uint64_t)(uint32_t)remaining_signed
+                    * (uint64_t)osKernelGetTickFreq()) + 999U) / 1000U;
+  if (timeout_ticks == 0U) {
+    timeout_ticks = 1U;
+  }
+  if (timeout_ticks >= (uint64_t)osWaitForever) {
+    return osWaitForever - 1U;
+  }
+  return (uint32_t)timeout_ticks;
+}
+
 static void ui_service_process_wakeup(uint32_t wake_flags)
 {
-  if (((wake_flags & osFlagsError) != 0U)
-      || ((wake_flags & UI_SERVICE_WAKE_INPUT) != 0U))
-  {
-    brick6_app_ui_process();
-  }
-  else
-  {
-    display_flush_service_poll();
-  }
+  const uint8_t deadline_due = ((wake_flags & osFlagsError) != 0U) ? 1U : 0U;
+
+  if (deadline_due != 0U)
+    led_presentation_service_deadline(HAL_GetTick());
+
+  if ((wake_flags & UI_SERVICE_WAKE_INPUT) != 0U)
+    brick6_app_ui_process_input();
+
+  if ((deadline_due != 0U)
+      || ((wake_flags & UI_SERVICE_WAKE_DIRTY) != 0U))
+    brick6_app_ui_process_presentation(deadline_due);
+
+  /* Single UI presentation tail: render publishes frame-ready, then the
+   * flush service advances DMA or its continuation. */
+  display_flush_service_poll();
+
+  if ((deadline_due != 0U)
+      || ((wake_flags & UI_SERVICE_WAKE_LED) != 0U))
+    led_presentation_service();
 }
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
@@ -251,21 +325,33 @@ void MX_FREERTOS_Init(void) {
 void StartControlTask(void *argument)
 {
   /* USER CODE BEGIN StartControlTask */
+  uint8_t initial_control_wake = 1U;
   /* Infinite loop */
   for(;;)
   {
-    brick6_app_control_process();
-    if (control_rt_work_pending() != 0U)
+    uint32_t wake_flags = CONTROL_RT_WAKE_LATEST;
+    if (initial_control_wake != 0U)
     {
-      continue;
+      initial_control_wake = 0U;
     }
-    (void)osThreadFlagsWait(CONTROL_RT_WAKE_HALL
-                            | CONTROL_RT_WAKE_ENCODER
-                            | CONTROL_RT_WAKE_MIDI
-                            | CONTROL_RT_WAKE_UI
-                            | CONTROL_RT_WAKE_STORAGE,
-                            osFlagsWaitAny,
-                            1U);
+    else
+    {
+      wake_flags = osThreadFlagsWait(
+          CONTROL_RT_WAKE_HALL
+          | CONTROL_RT_WAKE_ENCODER
+          | CONTROL_RT_WAKE_MIDI
+          | CONTROL_RT_WAKE_UI
+          | CONTROL_RT_WAKE_STORAGE
+          | CONTROL_RT_WAKE_STREAM_RELEASE
+          | CONTROL_RT_WAKE_DEADLINE
+          | CONTROL_RT_WAKE_INPUT
+          | CONTROL_RT_WAKE_LATEST,
+          osFlagsWaitAny,
+          control_rt_wait_timeout_ticks());
+    }
+    brick6_app_control_process_causes(
+        ((wake_flags & osFlagsError) != 0U)
+            ? CONTROL_RT_WAKE_DEADLINE : wake_flags);
   }
   /* USER CODE END StartControlTask */
 }
@@ -280,18 +366,24 @@ void StartControlTask(void *argument)
 void StartStorageTask(void *argument)
 {
   /* USER CODE BEGIN StartStorageTask */
+  uint32_t wake_flags = 0U;
   /* Infinite loop */
   for(;;)
   {
-    brick6_app_storage_process();
-    if (storage_io_work_pending() != 0U)
+    if ((wake_flags & STORAGE_IO_WAKE_SD) != 0U)
+    {
+      sd_scheduler_runtime_service();
+      wake_flags &= ~STORAGE_IO_WAKE_SD;
+    }
+    brick6_app_storage_dispatch_once();
+    if (storage_io_owner_snapshot() != 0U)
     {
       continue;
     }
-    (void)osThreadFlagsWait(STORAGE_IO_WAKE_SD
-                            | STORAGE_IO_WAKE_WORK,
-                            osFlagsWaitAny,
-                            osWaitForever);
+    wake_flags = osThreadFlagsWait(STORAGE_IO_WAKE_SD
+                                   | STORAGE_IO_WAKE_RUNNABLE,
+                                   osFlagsWaitAny,
+                                   storage_io_wait_timeout_ticks());
   }
   /* USER CODE END StartStorageTask */
 }
@@ -316,7 +408,7 @@ void StartUsbTask(void *argument)
     }
     (void)osThreadFlagsWait(USB_SERVICE_WAKE_WORK,
                             osFlagsWaitAny,
-                            1U);
+                            usb_service_wait_timeout_ticks());
   }
   /* USER CODE END StartUsbTask */
 }
@@ -338,21 +430,26 @@ void StartUiTask(void *argument)
     ui_service_process_wakeup(wake_flags);
     if (ui_service_work_pending() != 0U)
     {
+      wake_flags = 0U;
       if (ui_event_pending_count() != 0U)
-      {
-        wake_flags = osThreadFlagsWait(UI_SERVICE_WAKE_INPUT
-                                       | UI_SERVICE_WAKE_OLED,
-                                       osFlagsWaitAny,
-                                       1U);
-      }
-      else
-      {
-        wake_flags = UI_SERVICE_WAKE_OLED;
-      }
+        wake_flags |= UI_SERVICE_WAKE_INPUT;
+      if (ui_service_dirty_is_set() != 0U)
+        wake_flags |= UI_SERVICE_WAKE_DIRTY;
+      if ((ui_service_led_dirty_is_set() != 0U) && (led_hw_busy() == 0U))
+        wake_flags |= UI_SERVICE_WAKE_LED;
+      if ((drv_display_flush_continuation_pending() != 0U)
+          || ((display_flush_service_frame_pending() != 0U)
+              && (drv_display_flush_in_progress() == 0U)
+              && (drv_display_get_state() == DRV_DISPLAY_STATE_READY)))
+        wake_flags |= UI_SERVICE_WAKE_OLED;
+      if (wake_flags == 0U)
+        continue;
       continue;
     }
     wake_flags = osThreadFlagsWait(UI_SERVICE_WAKE_INPUT
-                                   | UI_SERVICE_WAKE_OLED,
+                                   | UI_SERVICE_WAKE_OLED
+                                   | UI_SERVICE_WAKE_DIRTY
+                                   | UI_SERVICE_WAKE_LED,
                                    osFlagsWaitAny,
                                    ui_renderer_oled_next_render_wait_ticks());
   }
@@ -382,4 +479,3 @@ void StartAudioBgTask(void *argument)
 /* USER CODE BEGIN Application */
 
 /* USER CODE END Application */
-

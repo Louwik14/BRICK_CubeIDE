@@ -4,10 +4,12 @@
 #include "stm32h7xx_hal.h"
 
 #include "App/Hall/hall_calibration.h"
+#include "App/control_domain.h"
 #include "drv_display.h"
 #include "ui_navigation.h"
 #include "ui_page_manager.h"
 #include "UI/font.h"
+#include "UI/ui_service_wakeup.h"
 
 #define CAL_GRID_COLS                     8U
 #define CAL_CELL_W                        16U
@@ -28,9 +30,7 @@
 #define CAL_VALID_FLASH_PHASE_MS   90U
 #define CAL_NO_FLASH_KEY           0xFFU
 
-static uint8_t g_save_done = 0U;
 static uint32_t g_cal_done_tick = 0U;
-static uint8_t g_user_save_done = 0U;
 static uint32_t g_user_message_tick = 0U;
 static uint8_t g_calibration_return_page = UI_PAGE_TEMPLATE_CFG;
 static uint8_t g_user_calibration_return_page = UI_PAGE_TEMPLATE_ENV;
@@ -60,8 +60,7 @@ static const char *ui_page_user_calibration_stage_label(hall_user_calibration_st
 
 static void ui_page_calibration_enter(void)
 {
-    hall_calibration_start();
-    g_save_done = 0U;
+    (void)control_domain_request_calibration(CONTROL_CALIBRATION_START_HALL);
     g_cal_done_tick = 0U;
     for (uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
     {
@@ -80,46 +79,85 @@ static void ui_page_calibration_handle_event(const ui_event_t *ev)
     (void)ev;
 }
 
-static void ui_page_calibration_tick(void)
+void ui_page_calibration_process_presentation(uint8_t deadline_due)
 {
-    hall_calibration_process();
+    const uint32_t now_ms = HAL_GetTick();
 
-    for (uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
+    if (ui_page_get_id() == UI_PAGE_CALIBRATION)
     {
-        const uint8_t done = hall_calibration_is_key_done(i);
-
-        if ((done != 0U) && (g_cal_prev_done[i] == 0U))
+        if (ui_service_dirty_is_set() != 0U)
         {
-            g_cal_flash_key = i;
-            g_cal_flash_start_tick = HAL_GetTick();
+            for (uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
+            {
+                const uint8_t done = hall_calibration_is_key_done(i);
+                if ((done != 0U) && (g_cal_prev_done[i] == 0U))
+                {
+                    g_cal_flash_key = i;
+                    g_cal_flash_start_tick = now_ms;
+                }
+                g_cal_prev_done[i] = done;
+            }
         }
 
-        g_cal_prev_done[i] = done;
-    }
+        if ((deadline_due != 0U) && (g_cal_flash_key != CAL_NO_FLASH_KEY)
+            && ((now_ms - g_cal_flash_start_tick) >= CAL_VALID_FLASH_MS))
+            g_cal_flash_key = CAL_NO_FLASH_KEY;
 
-    if ((g_cal_flash_key != CAL_NO_FLASH_KEY) &&
-        ((HAL_GetTick() - g_cal_flash_start_tick) >= CAL_VALID_FLASH_MS))
-    {
-        g_cal_flash_key = CAL_NO_FLASH_KEY;
-    }
-
-    if (hall_calibration_is_done() == 0U)
-    {
+        if (hall_calibration_is_done() != 0U)
+        {
+            if (g_cal_done_tick == 0U)
+                g_cal_done_tick = now_ms;
+            else if ((deadline_due != 0U)
+                     && ((now_ms - g_cal_done_tick) >= CAL_OK_DISPLAY_TIME_MS))
+                ui_page_set(g_calibration_return_page);
+        }
         return;
     }
 
-    if (g_save_done == 0U)
+    if (ui_page_get_id() == UI_PAGE_USER_CALIBRATION)
     {
-        hall_calibration_save();
-        g_cal_done_tick = HAL_GetTick();
-        g_save_done = 1U;
-        return;
+        if (hall_user_calibration_is_done() == 0U)
+        {
+            g_user_message_tick = 0U;
+            return;
+        }
+        if (g_user_message_tick == 0U)
+        {
+            g_user_message_tick = now_ms;
+            return;
+        }
+        if ((deadline_due != 0U)
+            && ((now_ms - g_user_message_tick) >= USER_CAL_MESSAGE_TIME_MS)
+            && (hall_user_calibration_was_successful() != 0U))
+            ui_page_set(g_user_calibration_return_page);
     }
+}
 
-    if ((HAL_GetTick() - g_cal_done_tick) >= CAL_OK_DISPLAY_TIME_MS)
+uint8_t ui_page_calibration_next_deadline(uint32_t now_ms, uint32_t *out_deadline_ms)
+{
+    uint32_t deadline = 0U;
+    if (ui_page_get_id() == UI_PAGE_CALIBRATION)
     {
-        ui_page_set(g_calibration_return_page);
+        if (g_cal_flash_key != CAL_NO_FLASH_KEY)
+            deadline = now_ms + CAL_VALID_FLASH_PHASE_MS;
+        if ((hall_calibration_is_done() != 0U) && (g_cal_done_tick != 0U))
+        {
+            const uint32_t done_deadline = g_cal_done_tick + CAL_OK_DISPLAY_TIME_MS;
+            if ((deadline == 0U) || ((int32_t)(done_deadline - deadline) < 0))
+                deadline = done_deadline;
+        }
     }
+    else if ((ui_page_get_id() == UI_PAGE_USER_CALIBRATION)
+             && (hall_user_calibration_is_done() != 0U)
+             && (g_user_message_tick != 0U))
+    {
+        deadline = g_user_message_tick + USER_CAL_MESSAGE_TIME_MS;
+    }
+    if (deadline == 0U)
+        return 0U;
+    if (out_deadline_ms != 0)
+        *out_deadline_ms = deadline;
+    return 1U;
 }
 
 static uint8_t ui_page_calibration_flash_fill_visible(uint8_t key)
@@ -286,8 +324,7 @@ static void ui_page_calibration_render(void)
 
 static void ui_page_user_calibration_enter(void)
 {
-    hall_user_calibration_start();
-    g_user_save_done = 0U;
+    (void)control_domain_request_calibration(CONTROL_CALIBRATION_START_USER);
     g_user_message_tick = 0U;
 }
 
@@ -298,43 +335,6 @@ static void ui_page_user_calibration_leave(void)
 static void ui_page_user_calibration_handle_event(const ui_event_t *ev)
 {
     (void)ev;
-}
-
-static void ui_page_user_calibration_tick(void)
-{
-    hall_user_calibration_process();
-
-    if (hall_user_calibration_is_done() == 0U)
-    {
-        return;
-    }
-
-    if (g_user_message_tick == 0U)
-    {
-        g_user_message_tick = HAL_GetTick();
-
-        if (hall_user_calibration_was_successful() != 0U)
-        {
-            hall_set_velocity_profile((uint8_t)HALL_VEL_PROFILE_USER);
-            hall_calibration_save();
-            g_user_save_done = 1U;
-        }
-    }
-
-    if ((HAL_GetTick() - g_user_message_tick) < USER_CAL_MESSAGE_TIME_MS)
-    {
-        return;
-    }
-
-    if (g_user_save_done != 0U)
-    {
-        ui_page_set(g_user_calibration_return_page);
-    }
-    else
-    {
-        hall_user_calibration_start();
-        g_user_message_tick = 0U;
-    }
 }
 
 static void ui_page_user_calibration_render(void)
@@ -396,7 +396,6 @@ const ui_page_t g_ui_page_calibration = {
     .enter = ui_page_calibration_enter,
     .leave = ui_page_calibration_leave,
     .handle_event = ui_page_calibration_handle_event,
-    .tick = ui_page_calibration_tick,
     .render = ui_page_calibration_render,
 };
 
@@ -404,7 +403,6 @@ const ui_page_t g_ui_page_user_calibration = {
     .enter = ui_page_user_calibration_enter,
     .leave = ui_page_user_calibration_leave,
     .handle_event = ui_page_user_calibration_handle_event,
-    .tick = ui_page_user_calibration_tick,
     .render = ui_page_user_calibration_render,
 };
 

@@ -2,6 +2,8 @@
 
 #include <stdint.h>
 
+#include "Storage/storage_io_wakeup.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -75,7 +77,8 @@ typedef struct
 void sd_block_device_async_init(void);
 sd_block_device_result_t sd_block_device_async_enqueue(uint32_t lba,
                                                        uint32_t sector_count,
-                                                       void *dst);
+                                                       void *dst,
+                                                       storage_io_owner_t storage_owner);
 sd_block_device_result_t sd_block_device_async_write_submit(
     uint32_t lba,
     uint32_t sector_count,

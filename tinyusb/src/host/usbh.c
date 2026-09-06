@@ -690,6 +690,18 @@ bool tuh_task_event_ready(void) {
   return false;
 }
 
+bool tuh_task_next_deadline_ms(uint32_t *remaining_ms) {
+  if ((remaining_ms == NULL) || !tuh_inited()
+      || (_usbh_data.call_after.func == NULL)) {
+    return false;
+  }
+
+  int32_t remain =
+      (int32_t)(_usbh_data.call_after.at_ms - tusb_time_millis_api());
+  *remaining_ms = (remain <= 0) ? 0U : (uint32_t)remain;
+  return true;
+}
+
 /* USB Host Driver task
  * This top level thread manages all host controller event and delegates events to class-specific drivers.
  * This should be called periodically within the mainloop or rtos thread.

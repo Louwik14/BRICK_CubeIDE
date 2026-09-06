@@ -232,7 +232,7 @@ uint8_t sample_capture_model_save_trimmed(void)
 
     sample_capture_copy_path(g_sample_capture.state.final_path, final_path);
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_SAVED;
-    (void)control_domain_request_storage_waveform_cache(
+    (void)waveform_cache_request_for_wav_known_duration(
         final_path,
         WAVEFORM_CACHE_REASON_EDITOR_VISIBLE,
         g_sample_capture.state.edit_end_frame - g_sample_capture.state.edit_start_frame,

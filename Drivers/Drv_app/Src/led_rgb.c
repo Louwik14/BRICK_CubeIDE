@@ -49,6 +49,7 @@
 #include "Seq/seq_model.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_runtime.h"
+#include "UI/ui_service_wakeup.h"
 
 #define LED_FIXED_HALF_BRIGHTNESS 128U
 #define LED_FIXED_DIM_WHITE       13U
@@ -168,6 +169,8 @@ static const led_rgb_color_t g_led_macro_scene_colors[PERSIST_CONTROL_MACRO_SCEN
 };
 
 static uint8_t g_led_macro_pressure_scale[PERSIST_CONTROL_MACRO_SCENE_COUNT];
+static uint8_t g_led_rec_blink_rendered_active;
+static uint8_t g_led_rec_blink_rendered_phase;
 
 static led_rgb_color_t led_macro_scene_color(uint8_t scene)
 {
@@ -673,20 +676,28 @@ static bool led_hall_mode_uses_seq_scene(ui_hall_mode_t mode)
 
 static void led_apply_normal_rec_scene(led_id_t led)
 {
-    uint8_t blink = 0U;
+    const uint8_t blink_active =
+        (seq_runtime_rec_is_armed() != 0U)
+        && ((seq_runtime_rec_is_pattern_pending_start() != 0U)
+            || (seq_runtime_get_rec_count_in_remaining_steps() > 0U));
+
+    if (blink_active == 0U)
+    {
+        g_led_rec_blink_rendered_active = 0U;
+    }
 
     if (seq_runtime_rec_is_armed() != 0U)
     {
-        blink = (uint8_t)(((HAL_GetTick() / 150U) & 0x1U) != 0U ? 1U : 0U);
-        if (seq_runtime_rec_is_pattern_pending_start() != 0U)
+        if (blink_active != 0U)
         {
-            led_layer_set(LED_LAYER_UI, led, blink ? LED_FIXED_RED_R : 0U, 0U, 0U);
-            return;
-        }
-
-        if (seq_runtime_get_rec_count_in_remaining_steps() > 0U)
-        {
-            led_layer_set(LED_LAYER_UI, led, blink ? LED_FIXED_RED_R : 0U, 0U, 0U);
+            const uint8_t phase = (uint8_t)((HAL_GetTick() / 150U) & 0x1U);
+            g_led_rec_blink_rendered_active = 1U;
+            g_led_rec_blink_rendered_phase = phase;
+            led_layer_set(LED_LAYER_UI,
+                          led,
+                          (phase != 0U) ? LED_FIXED_RED_R : 0U,
+                          0U,
+                          0U);
             return;
         }
 
@@ -694,6 +705,7 @@ static void led_apply_normal_rec_scene(led_id_t led)
         return;
     }
 
+    g_led_rec_blink_rendered_active = 0U;
     led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
 }
 
@@ -918,21 +930,82 @@ void led_show(void)
 }
 
 /**
- * @brief Point d'entrée led_service.
+ * @brief Projection LED de présentation.
  *
  * Rôle:
- * - Exécuter le traitement associé à led_service.
+ * - Reprojeter l'état visuel uniquement sur invalidation.
  *
  * @param dt_ms Paramètre d'entrée de l'API.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void led_service(uint32_t dt_ms)
+void led_presentation_service(void)
 {
-    (void)dt_ms;
-
-    led_anim_stop_all();
+    if (ui_service_led_dirty_take() == 0U)
+        return;
     led_apply_fixed_scene();
-    led_layer_commit();
+    if (led_layer_commit() == 0U)
+        ui_service_led_dirty_set();
+}
+
+static uint8_t led_presentation_blink_active(void)
+{
+    return (seq_runtime_rec_is_armed() != 0U)
+        && ((seq_runtime_rec_is_pattern_pending_start() != 0U)
+            || (seq_runtime_get_rec_count_in_remaining_steps() > 0U));
+}
+
+uint8_t led_presentation_next_deadline(uint32_t now_ms, uint32_t *out_deadline_ms)
+{
+    uint32_t candidate = 0U;
+    uint32_t next_deadline = 0U;
+
+    if (out_deadline_ms == 0)
+    {
+        return 0U;
+    }
+
+    if (led_presentation_blink_active() != 0U)
+    {
+        const uint8_t phase = (uint8_t)((now_ms / 150U) & 0x1U);
+        candidate = ((g_led_rec_blink_rendered_active == 0U)
+                     || (g_led_rec_blink_rendered_phase != phase))
+            ? now_ms : now_ms + (150U - (now_ms % 150U));
+    }
+
+    if ((seq_edit_length_flash_next_deadline(now_ms, &next_deadline) != 0U)
+        && ((candidate == 0U)
+            || ((int32_t)(next_deadline - candidate) < 0)))
+    {
+        candidate = next_deadline;
+    }
+
+    if (candidate == 0U)
+    {
+        return 0U;
+    }
+
+    *out_deadline_ms = candidate;
+    return 1U;
+}
+
+void led_presentation_service_deadline(uint32_t now_ms)
+{
+    uint32_t deadline_ms = 0U;
+    const uint8_t seq_flash_due =
+        (seq_edit_length_flash_next_deadline(now_ms, &deadline_ms) != 0U)
+        && ((int32_t)(deadline_ms - now_ms) <= 0);
+
+    if (seq_flash_due != 0U)
+    {
+        (void)seq_edit_length_flash_service_deadline(now_ms);
+        ui_service_led_dirty_set();
+    }
+
+    if ((led_presentation_next_deadline(now_ms, &deadline_ms) != 0U)
+        && ((int32_t)(deadline_ms - now_ms) <= 0))
+    {
+        ui_service_led_dirty_set();
+    }
 }

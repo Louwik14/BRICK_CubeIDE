@@ -21,6 +21,7 @@ typedef struct
     uint32_t byte_count;
     uint32_t media_epoch;
     sd_scheduler_background_kind_t kind;
+    uint8_t storage_owner;
 } sd_scheduler_background_request_t;
 
 typedef enum

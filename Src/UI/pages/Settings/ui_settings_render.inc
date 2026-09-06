@@ -147,8 +147,8 @@ static void ui_page_settings_sample_slot_label(uint16_t global_slot, char *out, 
         return;
     }
 
-    const sample_classic_slot_state_t state = sample_global_pool_get_classic_state(backend_slot);
-    const sample_global_slot_t *const slot = sample_global_pool_get_slot(global_slot);
+    const sample_classic_slot_state_t state = storage_settings_get_classic_state(backend_slot);
+    const sample_global_slot_t *const slot = storage_settings_get_global_slot(global_slot);
     const char *name = (slot != 0) ? strrchr(slot->path, '/') : 0;
     name = (name != 0) ? (name + 1) : ((slot != 0) ? slot->path : "");
 
@@ -208,7 +208,7 @@ static void ui_page_settings_multi_slot_label(uint16_t global_slot, char *out, u
 
     if (ui_page_settings_multi_backend_from_global(global_slot, &backend_slot) != 0U)
     {
-        instrument = multi_sample_pool_get_instrument(backend_slot);
+        instrument = storage_settings_get_multi_instrument(backend_slot);
     }
 
     if (instrument == 0)
@@ -240,7 +240,7 @@ static void ui_page_settings_ram_slot_label(uint16_t global_slot, char *out, uin
 
     if (ui_page_settings_ram_backend_from_global(global_slot, &backend_slot) != 0U)
     {
-        ram = sampler_ram_pool_get_slot(backend_slot);
+        ram = storage_settings_get_ram_slot(backend_slot);
     }
 
     if (ram == 0)
@@ -284,7 +284,7 @@ static void ui_page_settings_wavetable_slot_label(uint16_t global_slot,
 
     if (ui_page_settings_wavetable_backend_from_global(global_slot, &backend_slot) != 0U)
     {
-        table = wavetable_pool_get_slot(backend_slot);
+        table = storage_settings_get_wavetable_slot(backend_slot);
     }
 
     if (table == 0)
@@ -325,7 +325,7 @@ static void ui_page_settings_draw_ram_name_label(void)
         const sampler_ram_slot_t *const ram =
             (ui_page_settings_ram_backend_from_global(g_ui_settings.sample_slot_selected,
                                                       &backend_slot) != 0U)
-                ? sampler_ram_pool_get_slot(backend_slot)
+                ? storage_settings_get_ram_slot(backend_slot)
                 : 0;
         if ((ram != 0) && (ram->path[0] != '\0'))
         {
@@ -363,7 +363,7 @@ static void ui_page_settings_draw_wavetable_name_label(void)
         const wavetable_slot_t *const table =
             (ui_page_settings_wavetable_backend_from_global(g_ui_settings.sample_slot_selected,
                                                             &backend_slot) != 0U)
-                ? wavetable_pool_get_slot(backend_slot)
+                ? storage_settings_get_wavetable_slot(backend_slot)
                 : 0;
         if ((table != 0) && (table->path[0] != '\0'))
         {
@@ -519,7 +519,7 @@ static void ui_page_settings_draw_stream_name_label(void)
         const sample_global_slot_t *const slot =
             (ui_page_settings_stream_backend_from_global(g_ui_settings.sample_slot_selected,
                                                          &backend_slot) != 0U)
-                ? sample_global_pool_get_slot(g_ui_settings.sample_slot_selected)
+                ? storage_settings_get_global_slot(g_ui_settings.sample_slot_selected)
                 : 0;
         const char *name = (slot != 0) ? strrchr(slot->path, '/') : 0;
         name = (name != 0) ? (name + 1) : ((slot != 0) ? slot->path : "");
@@ -550,7 +550,7 @@ static void ui_page_settings_draw_multi_name_label(void)
         const multi_sample_instrument_t *const instrument =
             (ui_page_settings_multi_backend_from_global(g_ui_settings.sample_slot_selected,
                                                         &backend_slot) != 0U)
-                ? multi_sample_pool_get_instrument(backend_slot)
+                ? storage_settings_get_multi_instrument(backend_slot)
                 : 0;
         label = (instrument != 0) ? instrument->name : "EMPTY";
         ui_page_settings_draw_browser_context_label("SLOT", label);
@@ -674,8 +674,6 @@ static void ui_page_settings_render_multi_browser(void)
         UI_SETTINGS_SAMPLE_RIGHT_TEXT_W = 62
     };
 
-    ui_page_settings_multi_prepare_poll();
-
     ui_page_settings_draw_multi_sample_header();
     drv_display_draw_line(0, UI_SETTINGS_SAMPLE_BROWSER_HEADER_LINE_Y, 127, UI_SETTINGS_SAMPLE_BROWSER_HEADER_LINE_Y);
     ui_page_settings_draw_multi_name_label();
@@ -792,9 +790,7 @@ static void ui_page_settings_render_multi_browser(void)
 
 static void ui_page_settings_multi_prepare_flush_progress(void)
 {
-    drv_display_clear();
-    ui_page_settings_render_multi_browser();
-    drv_display_update();
+    ui_service_dirty_set();
 }
 
 static void ui_page_settings_render_sample_browser(void)
@@ -1063,6 +1059,7 @@ static void ui_page_settings_render_wavetable_browser(void)
 
 static void ui_page_settings_render(void)
 {
+    ui_page_settings_sync_storage_view();
     ui_settings_menu_level_t *const level = ui_page_settings_current_level();
     if (level == 0)
     {
@@ -1144,7 +1141,7 @@ static void ui_page_settings_render(void)
     else if (level->view == UI_SETTINGS_VIEW_SAMPLER_SLOT)
     {
         char slot_line[24];
-        const sample_classic_slot_state_t state = sample_global_pool_get_classic_state(g_ui_settings.selected_slot);
+        const sample_classic_slot_state_t state = storage_settings_get_classic_state(g_ui_settings.selected_slot);
         const char *state_label = (state == SAMPLE_CLASSIC_SLOT_LOADED) ? "LOADED"
                                  : (state == SAMPLE_CLASSIC_SLOT_PREPARING) ? "PREP"
                                  : (state == SAMPLE_CLASSIC_SLOT_ERROR) ? "ERROR"
@@ -1162,8 +1159,8 @@ static void ui_page_settings_render(void)
         (void)snprintf(slot_line,
                        sizeof(slot_line),
                        "CATALOG %u%s",
-                       (unsigned)wav_loader_catalog_count(),
-                       (wav_loader_catalog_truncated() != 0U) ? "+" : "");
+                       (unsigned)storage_settings_catalog_count(),
+                       (storage_settings_catalog_truncated() != 0U) ? "+" : "");
         drv_display_draw_text(0U, 42U, slot_line);
         ui_page_settings_draw_page_footer("-");
     }
@@ -1177,7 +1174,6 @@ const ui_page_t g_ui_page_settings = {
     .enter = ui_page_settings_enter,
     .leave = ui_page_settings_leave,
     .handle_event = ui_page_settings_handle_event_page,
-    .tick = ui_page_settings_tick,
     .render = ui_page_settings_render,
 };
 

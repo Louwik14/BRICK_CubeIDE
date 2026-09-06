@@ -6,6 +6,7 @@
 #include "Storage/project_control.h"
 #include "Storage/project_load_quiesce.h"
 #include "Storage/storage_io_wakeup.h"
+#include "App/control_rt_wakeup.h"
 #include "Sampler/sampler_ram_pool.h"
 #include "Platform/memory_layout.h"
 #include "Track/track_catalog.h"
@@ -82,7 +83,7 @@ void patch_product_init(void){memset(g_present,0,sizeof(g_present));memset(g_inv
 void patch_product_storage_init(void){if(!acquire())return;(void)f_mkdir("0:/BRICK");(void)f_mkdir("0:/BRICK/PATCH");for(uint16_t s=0;s<PATCH_PRODUCT_SLOT_COUNT;++s){char x[48];FILINFO i;if(path(x,sizeof(x),s)&&f_stat(x,&i)==FR_OK)(void)scan_meta(s);}sd_access_gate_release(SD_ACCESS_CLIENT_PATCH);}
 uint16_t patch_product_first_empty(void){for(uint16_t s=0;s<PATCH_PRODUCT_SLOT_COUNT;++s)if(!g_present[s])return s;return PATCH_PRODUCT_INVALID_SLOT;}
 patch_product_result_t patch_product_save(uint8_t e,uint16_t*out){if(g_patch_apply.active!=0U||g_patch_save_pending!=0U||g_patch_completion_valid!=0U)return PATCH_PRODUCT_IO_BUSY;uint16_t s=(g_current<PATCH_PRODUCT_SLOT_COUNT&&!g_invalid[g_current])?g_current:patch_product_first_empty();if(s==PATCH_PRODUCT_INVALID_SLOT)return PATCH_PRODUCT_NO_SLOT;char generated[33];const char*name=(g_present[s]&&g_meta[s].name[0])?g_meta[s].name:generated;if(name==generated)(void)snprintf(generated,sizeof(generated),"T%02u %s",(unsigned)(e+1U),track_catalog_family_short_name(track_state_get_family(e)));if(persistent_patch_control_capture(e,name,&g_patch_save_stage.patch)!=PERSIST_CODEC_OK)return PATCH_PRODUCT_INVALID;g_patch_save_slot=s;g_patch_save_pending=1U;if(out)*out=s;return PATCH_PRODUCT_PENDING;}
-void patch_product_save_service(void){if(g_patch_save_pending==0U)return;const uint8_t success=store(g_patch_save_slot,&g_patch_save_stage.patch);g_patch_completion_kind=PATCH_COMPLETION_SAVE;g_patch_completion_slot=g_patch_save_slot;g_patch_completion_next=PATCH_PRODUCT_INVALID_SLOT;g_patch_completion_success=success;__DMB();g_patch_completion_valid=1U;g_patch_save_pending=0U;}
+void patch_product_save_service(void){if(g_patch_save_pending==0U)return;const uint8_t success=store(g_patch_save_slot,&g_patch_save_stage.patch);g_patch_completion_kind=PATCH_COMPLETION_SAVE;g_patch_completion_slot=g_patch_save_slot;g_patch_completion_next=PATCH_PRODUCT_INVALID_SLOT;g_patch_completion_success=success;__DMB();g_patch_completion_valid=1U;g_patch_save_pending=0U;control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);}
 patch_product_result_t patch_product_apply(uint16_t s,uint8_t e)
 {
     if ((project_replacement_is_active() != 0U)
@@ -111,7 +112,8 @@ patch_product_result_t patch_product_apply(uint16_t s,uint8_t e)
         memcpy(asset_path,selected->canonical_path,selected->path_length);asset_path[selected->path_length]='\0';
         const uint16_t backend = sampler_ram_pool_find_free_slot();
         if (backend >= SAMPLER_RAM_POOL_MAX_SLOTS
-                || sampler_ram_pool_load_async_begin(backend, asset_path) == 0U)
+                || sampler_ram_pool_load_async_begin_for_requester(
+                    backend, asset_path, SAMPLER_RAM_REQUESTER_PATCH) == 0U)
             return PATCH_PRODUCT_INVALID;
         g_patch_asset_request_id = sampler_ram_pool_load_async_request_id();
         g_patch_completion_kind=PATCH_COMPLETION_APPLY;
@@ -128,6 +130,7 @@ patch_product_result_t patch_product_apply(uint16_t s,uint8_t e)
     g_patch_completion_success=1U;
     __DMB();
     g_patch_completion_valid=1U;
+    control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
     return PATCH_PRODUCT_PENDING;
 }
 
@@ -151,9 +154,10 @@ void patch_product_apply_service(void)
     g_patch_completion_success=(result==SAMPLER_RAM_RESULT_OK)?1U:0U;
     __DMB();
     g_patch_completion_valid=1U;
+    control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
 }
 patch_product_result_t patch_product_rename(uint16_t s,const char*n){if(g_patch_apply.active!=0U||g_patch_completion_valid!=0U)return PATCH_PRODUCT_IO_BUSY;persist_control_patch_t p;if(n==NULL||!load(s,&p))return PATCH_PRODUCT_IO_ERROR;size_t z=strlen(n);if(z>PERSIST_CONTROL_PATCH_NAME_BYTES)return PATCH_PRODUCT_INVALID;memset(p.name,0,sizeof(p.name));memcpy(p.name,n,z);p.name_length=(uint16_t)z;return store(s,&p)?PATCH_PRODUCT_OK:PATCH_PRODUCT_IO_ERROR;}
-patch_product_result_t patch_product_delete(uint16_t s,uint16_t*out){if(g_patch_apply.active!=0U||g_patch_completion_valid!=0U)return PATCH_PRODUCT_IO_BUSY;if(s>=PATCH_PRODUCT_SLOT_COUNT)return PATCH_PRODUCT_INVALID;if(!g_present[s])return PATCH_PRODUCT_EMPTY;if(!acquire())return PATCH_PRODUCT_IO_BUSY;char x[48];FRESULT r=FR_INVALID_NAME;if(path(x,sizeof(x),s))r=f_unlink(x);sd_access_gate_release(SD_ACCESS_CLIENT_PATCH);if(r!=FR_OK&&r!=FR_NO_FILE)return PATCH_PRODUCT_IO_ERROR;g_present[s]=g_invalid[s]=0U;memset(&g_meta[s],0,sizeof(g_meta[s]));uint16_t next=PATCH_PRODUCT_INVALID_SLOT;for(uint16_t i=1;i<=PATCH_PRODUCT_SLOT_COUNT;++i){uint16_t c=(uint16_t)((s+i)%PATCH_PRODUCT_SLOT_COUNT);if(g_present[c]&&!g_invalid[c]){next=c;break;}}g_patch_completion_kind=PATCH_COMPLETION_DELETE;g_patch_completion_slot=s;g_patch_completion_next=next;g_patch_completion_asset_pending=0U;g_patch_completion_success=1U;__DMB();g_patch_completion_valid=1U;if(out)*out=next;return PATCH_PRODUCT_OK;}
+patch_product_result_t patch_product_delete(uint16_t s,uint16_t*out){if(g_patch_apply.active!=0U||g_patch_completion_valid!=0U)return PATCH_PRODUCT_IO_BUSY;if(s>=PATCH_PRODUCT_SLOT_COUNT)return PATCH_PRODUCT_INVALID;if(!g_present[s])return PATCH_PRODUCT_EMPTY;if(!acquire())return PATCH_PRODUCT_IO_BUSY;char x[48];FRESULT r=FR_INVALID_NAME;if(path(x,sizeof(x),s))r=f_unlink(x);sd_access_gate_release(SD_ACCESS_CLIENT_PATCH);if(r!=FR_OK&&r!=FR_NO_FILE)return PATCH_PRODUCT_IO_ERROR;g_present[s]=g_invalid[s]=0U;memset(&g_meta[s],0,sizeof(g_meta[s]));uint16_t next=PATCH_PRODUCT_INVALID_SLOT;for(uint16_t i=1;i<=PATCH_PRODUCT_SLOT_COUNT;++i){uint16_t c=(uint16_t)((s+i)%PATCH_PRODUCT_SLOT_COUNT);if(g_present[c]&&!g_invalid[c]){next=c;break;}}g_patch_completion_kind=PATCH_COMPLETION_DELETE;g_patch_completion_slot=s;g_patch_completion_next=next;g_patch_completion_asset_pending=0U;g_patch_completion_success=1U;__DMB();g_patch_completion_valid=1U;control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);if(out)*out=next;return PATCH_PRODUCT_OK;}
 patch_product_slot_state_t patch_product_slot_state(uint16_t s){return(s>=PATCH_PRODUCT_SLOT_COUNT||g_invalid[s])?PATCH_PRODUCT_SLOT_INVALID:(g_present[s]?PATCH_PRODUCT_SLOT_VALID:PATCH_PRODUCT_SLOT_EMPTY);}
 uint8_t patch_product_metadata(uint16_t s,patch_product_metadata_t*out){if(out==NULL||patch_product_slot_state(s)!=PATCH_PRODUCT_SLOT_VALID)return 0U;*out=g_meta[s];return 1U;}
 void patch_product_set_current(uint16_t s){if((s<PATCH_PRODUCT_SLOT_COUNT)||(s==PATCH_PRODUCT_INVALID_SLOT))g_current=s;}
@@ -179,7 +183,8 @@ static uint8_t patch_product_request_begin(patch_request_kind_t kind,
         g_patch_request_name[0] = '\0';
     __DMB();
     g_patch_request = kind;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_PATCH);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 

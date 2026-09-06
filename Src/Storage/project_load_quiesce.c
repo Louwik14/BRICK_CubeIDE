@@ -1,4 +1,5 @@
 #include "Storage/project_load_quiesce.h"
+#include "App/control_rt_wakeup.h"
 
 #include "IPC/live_event.h"
 #include "ControlRT/control_rt_publication.h"
@@ -13,6 +14,7 @@
 #include "Storage/pattern_load_storage.h"
 #include "Storage/pattern_control_bank.h"
 #include "Sampler/sample_page_lease_control.h"
+#include "Sampler/sample_stream_admission.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Sampler/multi_sample_loader.h"
@@ -23,6 +25,12 @@
 #include "Storage/storage_io_wakeup.h"
 #include "midi.h"
 #include "midi_host.h"
+
+uint8_t project_transport_stopped_stable(void)
+{
+    return (uint8_t)((seq_runtime_is_running() == 0U)
+        && (seq_runtime_is_start_pending() == 0U));
+}
 static volatile uint8_t g_project_load_panic_committed;
 static volatile uint8_t g_project_load_retire_started;
 static volatile uint8_t g_project_load_requested;
@@ -48,8 +56,7 @@ static uint8_t project_load_recorder_busy(void)
 
 uint8_t project_load_allowed(void)
 {
-    return (uint8_t)((seq_runtime_is_running() == 0U)
-        && (seq_runtime_is_start_pending() == 0U)
+    return (uint8_t)(project_transport_stopped_stable()
         && (pattern_control_bank_async_busy() == 0U)
         && (pattern_storage_is_pending() == 0U)
         && (project_load_recorder_busy() == 0U)
@@ -78,6 +85,7 @@ void project_load_quiesce_request(void)
         || g_project_load_request_pending != 0U)
         return;
     g_project_load_request_pending = 1U;
+    control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
 }
 
 void project_load_quiesce_control_process(void)
@@ -108,7 +116,9 @@ void project_load_quiesce_control_process(void)
     seq_play_scheduler_clear();
     g_project_load_requested = 1U;
     g_project_load_panic_committed = control_music_output_panic_all(0U);
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    sample_stream_admission_control_retire_loopers();
+    storage_io_owner_set(STORAGE_OWNER_PROJECT);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
 }
 
 void project_load_quiesce_storage_retire(void)
@@ -127,8 +137,12 @@ void project_load_quiesce_storage_retire(void)
     sampler_ram_pool_retire_all();
     wavetable_pool_retire_all();
     multi_sample_pool_retire_all();
+    storage_io_owner_set(STORAGE_OWNER_SAMPLE_RAM);
+    storage_io_owner_set(STORAGE_OWNER_WAVETABLE);
+    storage_io_owner_set(STORAGE_OWNER_MULTI);
     __DMB();
     g_project_load_retire_started = 1U;
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
 }
 
 uint8_t project_load_quiesce_safe(void)
@@ -140,7 +154,8 @@ uint8_t project_load_quiesce_safe(void)
         && (g_project_load_retire_started != 0U)
         && (control_rt_publication_horizon_active() == 0U)
         && (sample_page_lease_control_all_released() != 0U)
-        && (sample_cache_has_pending_sd_work() == 0U)
+        && (sample_stream_manager_io_in_flight() == 0U)
+        && (storage_io_owner_test(STORAGE_OWNER_STREAM) == 0U)
         && (sampler_ram_pool_retire_idle() != 0U)
         && (wavetable_pool_retire_idle() != 0U)
         && (multi_sample_pool_retire_idle() != 0U));

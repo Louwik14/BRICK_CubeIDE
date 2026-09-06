@@ -8,6 +8,7 @@
 #include "Audio/audio.h"
 #include "Sampler/sample_page_cache_audio.h"
 #include "Sampler/sample_page_cache_config.h"
+#include "Sampler/sample_stream_admission.h"
 #include "Audio/sample_page_lease_audio.h"
 #include "IPC/audio_recorder_capture.h"
 #include "Audio/audio_recorder_capture_audio.h"
@@ -577,6 +578,22 @@ static void looper_publish_lease(const brick6_looper_track_state_t *state,
     const uint8_t slot = (auxiliary != 0U)
                            ? sample_page_lease_looper_aux_slot(track)
                            : sample_page_lease_looper_slot(track);
+    sample_stream_admission_token_t admission_token;
+    if (sample_stream_admission_audio_lookup_output(
+            track, 0x80000000UL | track, &admission_token) == 0U)
+    {
+        sample_page_lease_audio_clear(slot);
+        return;
+    }
+    if (sample_stream_admission_audio_lease_valid(
+            &admission_token, SAMPLE_STREAM_ADMISSION_OWNER_LOOPER,
+            (auxiliary != 0U) ? SAMPLE_STREAM_ADMISSION_ROLE_AUXILIARY
+                              : SAMPLE_STREAM_ADMISSION_ROLE_PRIMARY,
+            SAMPLE_STREAM_ADMISSION_PHYSICAL_CLASS_LOOPER, slot) == 0U)
+    {
+        sample_page_lease_audio_clear(slot);
+        return;
+    }
     if (state->frames_total == 0U)
     {
         sample_page_lease_audio_clear(slot);
@@ -701,6 +718,18 @@ static void looper_start_playback(brick6_looper_track_state_t *state,
 
     const uint8_t start_was_scheduled = state->scheduled_start_valid;
     const uint64_t start_scheduled_sample = state->scheduled_start_sample;
+    const uint8_t track_id = (uint8_t)(state - g_looper_tracks);
+    sample_stream_admission_token_t admission_token;
+    if ((sample_stream_admission_audio_lookup_output(
+            track_id, 0x80000000UL | track_id, &admission_token) == 0U)
+        || (sample_stream_admission_audio_associate_role(
+            &admission_token, SAMPLE_STREAM_ADMISSION_OWNER_LOOPER,
+            SAMPLE_STREAM_ADMISSION_ROLE_PRIMARY,
+            SAMPLE_STREAM_ADMISSION_PHYSICAL_CLASS_LOOPER,
+            sample_page_lease_looper_slot(track_id)) == 0U))
+    {
+        return;
+    }
     looper_release_reader(state);
     looper_set_scheduled_start(state, 0U);
     state->scheduled_start_sample = 0U;
@@ -713,7 +742,6 @@ static void looper_start_playback(brick6_looper_track_state_t *state,
     state->resync_xfade_remaining = 0U;
     state->resync_old_playhead = initial_playhead;
     state->resync_old_frac_q16 = 0U;
-    const uint8_t track_id = (uint8_t)(state - g_looper_tracks);
     brick6_looper_shifter_slot_t *const slot = looper_shifter_get(track_id);
     if(slot != 0)
     {
@@ -743,6 +771,13 @@ static uint8_t looper_acquire_page_for_frame(brick6_looper_track_state_t *state,
     {
         return 0U;
     }
+
+    sample_stream_admission_token_t admission_token;
+    if (sample_stream_admission_audio_lookup_output(
+            (uint8_t)(state - g_looper_tracks),
+            0x80000000UL | (uint8_t)(state - g_looper_tracks),
+            &admission_token) == 0U)
+        return 0U;
 
     if(frame >= state->frames_total)
     {
@@ -1276,7 +1311,15 @@ void brick6_looper_runtime_on_transport_start(uint64_t sample_time)
         state->want_play_when_ready = (state->play_auto != 0U) ? 1U : 0U;
         if ((state->state == BRICK6_LOOPER_RUNTIME_STATE_READY)
                 && (state->want_play_when_ready != 0U))
+        {
             looper_start_playback(state, sample_time, 0U);
+            if (state->state != BRICK6_LOOPER_RUNTIME_STATE_PLAYING)
+            {
+                state->scheduled_start_sample = sample_time
+                    + (uint64_t)BRICK6_LOOPER_RESCHEDULE_GUARD_FRAMES;
+                looper_set_scheduled_start(state, 1U);
+            }
+        }
         looper_diag_update_take(track, state);
     }
 }
@@ -1359,6 +1402,12 @@ void brick6_looper_runtime_on_scheduled_start(uint64_t sample_time)
                 && (looper_transport_running() != 0U))
         {
             looper_start_playback(state, sample_time, 0U);
+            if (state->state != BRICK6_LOOPER_RUNTIME_STATE_PLAYING)
+            {
+                state->scheduled_start_sample = sample_time
+                    + (uint64_t)BRICK6_LOOPER_RESCHEDULE_GUARD_FRAMES;
+                looper_set_scheduled_start(state, 1U);
+            }
         }
         else if(state->state != BRICK6_LOOPER_RUNTIME_STATE_PLAYING)
         {
@@ -1748,6 +1797,18 @@ static uint32_t looper_render_resync_xfade(brick6_looper_track_state_t *state,
 
     uint32_t old_playhead = state->resync_old_playhead;
     uint32_t old_frac_q16 = state->resync_old_frac_q16;
+    sample_stream_admission_token_t admission_token;
+    if ((sample_stream_admission_audio_lookup_output(
+            track, 0x80000000UL | track, &admission_token) == 0U)
+        || (sample_stream_admission_audio_associate_role(
+            &admission_token, SAMPLE_STREAM_ADMISSION_OWNER_LOOPER,
+            SAMPLE_STREAM_ADMISSION_ROLE_AUXILIARY,
+            SAMPLE_STREAM_ADMISSION_PHYSICAL_CLASS_LOOPER,
+            sample_page_lease_looper_aux_slot(track)) == 0U))
+    {
+        sample_page_lease_audio_clear(sample_page_lease_looper_aux_slot(track));
+        return 0U;
+    }
     looper_publish_lease(state, state->playhead, 0U);
     looper_publish_lease(state, old_playhead, 1U);
     uint32_t produced = 0U;

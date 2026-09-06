@@ -4,6 +4,7 @@
 
 #include "Platform/memory_layout.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/storage_io_wakeup.h"
 #include "Storage/wav_parser.h"
 
 #include "ff.h"
@@ -555,7 +556,8 @@ multi_sample_index_result_t multi_sample_index_write(
         return MULTI_SAMPLE_INDEX_BAD_FORMAT;
     }
 
-    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U)
+    if (sd_access_gate_try_acquire_for_owner(
+            SD_ACCESS_CLIENT_PROJECT, STORAGE_OWNER_MULTI) == 0U)
     {
         return MULTI_SAMPLE_INDEX_SD_BUSY;
     }
@@ -618,7 +620,8 @@ multi_sample_index_result_t multi_sample_index_write(
 
 static multi_sample_index_result_t multi_sample_index_load_internal(
     const char *path,
-    multi_sample_index_t *out)
+    multi_sample_index_t *out,
+    uint8_t storage_owner)
 {
     if ((path == 0) || (path[0] == '\0') || (out == 0))
     {
@@ -626,7 +629,8 @@ static multi_sample_index_result_t multi_sample_index_load_internal(
     }
 
     multi_sample_index_reset(out);
-    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U)
+    if (sd_access_gate_try_acquire_for_owner(
+            SD_ACCESS_CLIENT_PROJECT, storage_owner) == 0U)
     {
         return MULTI_SAMPLE_INDEX_SD_BUSY;
     }
@@ -747,12 +751,19 @@ static multi_sample_index_result_t multi_sample_index_load_internal(
 multi_sample_index_result_t multi_sample_index_load(const char *path,
                                                     multi_sample_index_t *out)
 {
-    return multi_sample_index_load_internal(path, out);
+    return multi_sample_index_load_internal(path, out,
+                                             (uint8_t)STORAGE_OWNER_MULTI);
 }
 
-multi_sample_index_result_t multi_sample_index_peek_counts(const char *path,
-                                                           uint16_t *out_sample_count,
-                                                           uint16_t *out_zone_count)
+multi_sample_index_result_t multi_sample_index_load_for_owner(
+    const char *path, multi_sample_index_t *out, uint8_t storage_owner)
+{
+    return multi_sample_index_load_internal(path, out, storage_owner);
+}
+
+static multi_sample_index_result_t multi_sample_index_peek_counts_internal(
+    const char *path, uint16_t *out_sample_count,
+    uint16_t *out_zone_count, uint8_t storage_owner)
 {
     if ((path == 0) || (path[0] == '\0') || (out_sample_count == 0)
         || (out_zone_count == 0))
@@ -763,7 +774,8 @@ multi_sample_index_result_t multi_sample_index_peek_counts(const char *path,
     *out_sample_count = 0U;
     *out_zone_count = 0U;
 
-    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U)
+    if (sd_access_gate_try_acquire_for_owner(
+            SD_ACCESS_CLIENT_PROJECT, storage_owner) == 0U)
     {
         return MULTI_SAMPLE_INDEX_SD_BUSY;
     }
@@ -816,6 +828,22 @@ multi_sample_index_result_t multi_sample_index_peek_counts(const char *path,
     (void)f_close(&fp);
     sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
     return result;
+}
+
+multi_sample_index_result_t multi_sample_index_peek_counts(
+    const char *path, uint16_t *out_sample_count, uint16_t *out_zone_count)
+{
+    return multi_sample_index_peek_counts_internal(
+        path, out_sample_count, out_zone_count,
+        (uint8_t)STORAGE_OWNER_MULTI);
+}
+
+multi_sample_index_result_t multi_sample_index_peek_counts_for_owner(
+    const char *path, uint16_t *out_sample_count,
+    uint16_t *out_zone_count, uint8_t storage_owner)
+{
+    return multi_sample_index_peek_counts_internal(
+        path, out_sample_count, out_zone_count, storage_owner);
 }
 
 uint8_t multi_sample_index_validate(const multi_sample_index_t *idx)

@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "IPC/control_audio_command.h"
+#include "IPC/audio_prepared_state.h"
 #include "IPC/control_audio_fifo_audio.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_mod_matrix.h"
@@ -17,6 +18,7 @@
 #include "Audio/Engines/audio_engine_dispatch.h"
 #include "Audio/control_routing_audio.h"
 #include "Audio/audio_rec_bus_runtime.h"
+#include "Audio/audio_fx_runtime.h"
 #include "IPC/audio_recorder_capture.h"
 #include "Audio/audio_recorder_capture_audio.h"
 #include "Audio/live_parameter_audio_runtime.h"
@@ -27,7 +29,9 @@
 #include "Mod/mod_lfo_v1_audio.h"
 #include "Mod/mod_env3.h"
 #include "Audio/sd_preview_audio.h"
-#include "Storage/storage_io_wakeup.h"
+#include "IPC/storage_io_wakeup.h"
+#include "Platform/intercore_cache.h"
+#include "main.h"
 
 #define AUDIO_PARAM_MULTI_RESOURCE_STOP   0xFFF5U
 #define AUDIO_PARAM_RAM_RESOURCE_STOP     0xFFF6U
@@ -332,6 +336,225 @@ static uint8_t audio_command_apply_panic(const control_audio_command_t *command)
     return 1U;
 }
 
+static uint32_t audio_command_float_bits(float value)
+{
+    uint32_t bits = 0U;
+    memcpy(&bits, &value, sizeof(bits));
+    return bits;
+}
+
+static uint8_t audio_command_apply_prepared_value(
+    uint8_t entity, uint16_t id, float value, uint8_t scope)
+{
+    const control_audio_command_t command = {
+        .value = audio_command_float_bits(value),
+        .id = id,
+        .entity = entity,
+        .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(
+            CONTROL_AUDIO_COMMAND_PARAM, scope)
+    };
+    return audio_command_apply_param(&command);
+}
+
+static uint8_t audio_command_apply_prepared_raw(
+    uint8_t entity, uint16_t id, uint32_t value, uint8_t scope)
+{
+    const control_audio_command_t command = {
+        .value = value,
+        .id = id,
+        .entity = entity,
+        .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(
+            CONTROL_AUDIO_COMMAND_PARAM, scope)
+    };
+    return audio_command_apply_param(&command);
+}
+
+static uint8_t audio_command_engine_has_polyphony(uint8_t engine)
+{
+    switch ((track_runtime_engine_t)engine)
+    {
+        case TRACK_RUNTIME_ENGINE_SAMPLER:
+        case TRACK_RUNTIME_ENGINE_PRISM:
+        case TRACK_RUNTIME_ENGINE_STACK:
+        case TRACK_RUNTIME_ENGINE_WAVE:
+        case TRACK_RUNTIME_ENGINE_FM:
+        case TRACK_RUNTIME_ENGINE_DRUM:
+            return 1U;
+        default:
+            return 0U;
+    }
+}
+
+static uint8_t audio_command_state_commit_internal_failure(void)
+{
+    Error_Handler();
+    return 1U;
+}
+
+static uint8_t audio_command_apply_state_commit(
+    const control_audio_command_t *command)
+{
+    const audio_prepared_state_t *const state = &g_audio_prepared_state;
+    if ((command == NULL) || (command->value == 0U)) return 0U;
+    intercore_cache_consume(state, sizeof(*state));
+    if ((state->ready == 0U)
+            || (state->version != AUDIO_PREPARED_STATE_VERSION)
+            || (state->generation != command->value))
+        return 0U;
+
+    for (uint8_t input = 0U;
+         input < ENTITY_TOPOLOGY_AUDIO_SOURCE_COUNT; ++input)
+        if (brick6_audio_runtime_set_input_owner(
+                input, state->input_owner[input]) == 0U)
+            return audio_command_state_commit_internal_failure();
+    if ((audio_command_apply_prepared_raw(
+                0U, CONTROL_AUDIO_PARAM_TRANSPORT_TEMPO,
+                state->tempo_bpm_milli, 0U) == 0U)
+            || (audio_command_apply_prepared_raw(
+                0U, CONTROL_AUDIO_PARAM_TRANSPORT_STEP_Q16,
+                state->transport_step_q16, 0U) == 0U)
+            || (audio_command_apply_prepared_raw(
+                0U, CONTROL_AUDIO_PARAM_METRONOME_LEVEL,
+                state->metronome_level, 0U) == 0U))
+        return audio_command_state_commit_internal_failure();
+
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        const audio_prepared_entity_state_t *const prepared =
+            &state->entity[entity];
+        if ((prepared->valid == 0U)
+                || (audio_command_apply_program(&(const control_audio_command_t){
+                    .value = control_audio_program_pack(&prepared->program),
+                    .entity = entity,
+                    .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(
+                        CONTROL_AUDIO_COMMAND_PROGRAM, 0U)}) == 0U))
+            return audio_command_state_commit_internal_failure();
+        if (prepared->active == 0U) continue;
+
+        track_audio_runtime_ctx_t context;
+        if (audio_note_engine_adapter_current_ctx(entity, &context) == 0U)
+            return audio_command_state_commit_internal_failure();
+        const uint8_t audio_routable =
+            audio_note_engine_adapter_ctx_is_audio_routable(&context);
+        if ((audio_command_engine_has_polyphony(prepared->program.engine) != 0U)
+                && (audio_note_engine_adapter_apply_polyphony(
+                    entity, prepared->polyphony_voice_count,
+                    prepared->track_value[PARAM_CFG_POLY_SPREAD]) == 0U))
+            return audio_command_state_commit_internal_failure();
+        if ((audio_routable != 0U)
+                && (audio_note_engine_adapter_set_mute(
+                    entity, prepared->muted) == 0U))
+            return audio_command_state_commit_internal_failure();
+        if ((prepared->midi_channel_1_16 == 0U
+                || audio_note_engine_adapter_apply_midi_config(
+                    entity, prepared->midi_channel_1_16,
+                    prepared->midi_source) == 0U))
+            return audio_command_state_commit_internal_failure();
+        if (prepared->lfo_valid != 0U)
+            for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
+                for (uint8_t parameter = 0U;
+                     parameter < (uint8_t)MOD_LFO_PARAM_COUNT; ++parameter)
+                    if (mod_lfo_v1_set_track_param_audio(
+                            entity, lfo, (mod_lfo_param_t)parameter,
+                            prepared->lfo_value[lfo][parameter]) == 0U)
+                        return audio_command_state_commit_internal_failure();
+        if ((audio_routable != 0U) && (prepared->matrix_valid != 0U))
+        {
+            for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
+            {
+                const track_mod_matrix_slot_t *const route =
+                    &prepared->matrix[slot];
+                if ((audio_mod_matrix_set_route_source(
+                        entity, slot, route->source) == 0U)
+                        || (audio_mod_matrix_set_route_destination(
+                            entity, slot, route->destination) == 0U)
+                        || (audio_mod_matrix_set_route_depth(
+                            entity, slot, route->depth) == 0U)
+                        || (audio_mod_matrix_set_route_enabled(
+                            entity, slot, route->enabled) == 0U))
+                    return audio_command_state_commit_internal_failure();
+            }
+            for (uint8_t op = 0U; op < 2U; ++op)
+            {
+                if ((audio_mod_matrix_set_multi_source(
+                        entity, op, 0U, prepared->multi_source[op][0U]) == 0U)
+                        || (audio_mod_matrix_set_multi_source(
+                            entity, op, 1U, prepared->multi_source[op][1U]) == 0U)
+                        || (audio_mod_matrix_set_slew_source(
+                            entity, op, prepared->slew_source[op]) == 0U)
+                        || (audio_mod_matrix_set_slew_amount(
+                            entity, op, prepared->slew_amount[op]) == 0U))
+                    return audio_command_state_commit_internal_failure();
+            }
+        }
+        if ((audio_routable != 0U) && ((audio_fx_runtime_set_filter_pos(entity,
+                (audio_fx_filter_pos_t)prepared->fx_filter_position) == 0U)
+                || (audio_fx_runtime_set_order(entity,
+                    (audio_fx_order_t)prepared->fx_order) == 0U)
+                || (audio_fx_runtime_set_spatial_mode(entity,
+                    AUDIO_FX_SLOT_A, prepared->fx_spatial_mode[0U]) == 0U)
+                || (audio_fx_runtime_set_spatial_mode(entity,
+                    AUDIO_FX_SLOT_B, prepared->fx_spatial_mode[1U]) == 0U)))
+            return audio_command_state_commit_internal_failure();
+
+        if (prepared->fm_base_valid != 0U)
+        {
+            if ((context.program_route.engine
+                        != TRACK_RUNTIME_ENGINE_FM))
+                return audio_command_state_commit_internal_failure();
+            brick6_fm_runtime_set_base_voice(
+                context.program_route.instance_id, &prepared->fm_base);
+        }
+        if (prepared->sampler_asset_valid != 0U)
+        {
+            if (audio_command_apply_prepared_raw(
+                    entity, CONTROL_AUDIO_SAMPLER_ASSET,
+                    prepared->sampler_asset, 0U) == 0U)
+                return audio_command_state_commit_internal_failure();
+        }
+        if (prepared->wave_selection_valid[0U]
+                || prepared->wave_selection_valid[1U])
+        {
+            for (uint8_t osc = 0U; osc < 2U; ++osc)
+            {
+                if (prepared->wave_selection_valid[osc] == 0U) continue;
+                const uint8_t index = (uint8_t)(
+                    context.program_route.instance_id * BRICK6_WAVE_OSC_COUNT
+                    + osc);
+                if ((audio_command_apply_prepared_raw(
+                        index, CONTROL_AUDIO_PARAM_WAVETABLE_GEN,
+                        prepared->wave_selection[osc].generation, 0U) == 0U)
+                        || (audio_command_apply_prepared_raw(
+                            index, CONTROL_AUDIO_PARAM_WAVETABLE_SET,
+                            prepared->wave_selection[osc].wavetable_slot,
+                            0U) == 0U))
+                    return audio_command_state_commit_internal_failure();
+            }
+        }
+        if ((audio_routable != 0U) && (audio_command_apply_prepared_raw(
+                entity, CONTROL_AUDIO_PARAM_LOOPER_ROUTE,
+                prepared->looper_route_mask, 0U) == 0U))
+            return audio_command_state_commit_internal_failure();
+        for (param_id_t id = 0U; id < PARAM_COUNT; ++id)
+            if ((audio_routable != 0U)
+                    && (prepared->track_value_valid[id] != 0U)
+                    && (id != PARAM_CFG_POLY_SPREAD)
+                    && (audio_command_apply_prepared_value(
+                        entity, id, prepared->track_value[id],
+                        LIVE_PARAMETER_EVENT_SCOPE_TRACK) == 0U))
+                return audio_command_state_commit_internal_failure();
+    }
+    for (param_id_t id = 0U; id < PARAM_COUNT; ++id)
+        if ((state->global_value_valid[id] != 0U)
+                && (audio_command_apply_prepared_value(
+                    0U, id, state->global_value[id],
+                    LIVE_PARAMETER_EVENT_SCOPE_GLOBAL) == 0U))
+            return audio_command_state_commit_internal_failure();
+    brick6_fm_runtime_finalize_pending();
+    audio_mod_matrix_finalize_dirty();
+    return 1U;
+}
+
 static uint8_t audio_command_apply(const control_audio_command_t *command)
 {
     switch (CONTROL_AUDIO_COMMAND_OPCODE(command))
@@ -342,6 +565,8 @@ static uint8_t audio_command_apply(const control_audio_command_t *command)
         case CONTROL_AUDIO_COMMAND_TRANSPORT: return audio_command_apply_transport(command);
         case CONTROL_AUDIO_COMMAND_RECORD: return audio_command_apply_record(command);
         case CONTROL_AUDIO_COMMAND_PANIC: return audio_command_apply_panic(command);
+        case CONTROL_AUDIO_COMMAND_STATE_COMMIT:
+            return audio_command_apply_state_commit(command);
         default: return 0U;
     }
 }

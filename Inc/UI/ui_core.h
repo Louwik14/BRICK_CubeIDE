@@ -96,7 +96,7 @@ typedef struct
 #include "ui_hall_mode_state.h"
 
 void ui_core_init(void);
-void ui_core_tick(void);
+void ui_core_process_inputs(void);
 void ui_core_service_track_selection_inputs(void);
 
 uint8_t ui_get_active_track(void);

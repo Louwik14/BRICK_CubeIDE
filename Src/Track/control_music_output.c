@@ -6,6 +6,7 @@
 #include "Track/track_runtime.h"
 #include "Track/polyphony_control.h"
 #include "Sampler/brick6_sampler_multi_contract.h"
+#include "Sampler/sample_stream_admission.h"
 #include "ControlRT/control_rt_publication.h"
 #include "IPC/control_music_publication.h"
 #include "IPC/control_audio_command.h"
@@ -98,6 +99,8 @@ static void control_music_output_reset_window_buckets(void)
     g_control_music_window_external.count = 0U;
 }
 
+static void control_music_output_abort_stream_admissions(void);
+
 uint8_t control_music_output_begin_window(uint64_t first_sample,
                                           uint16_t frames)
 {
@@ -143,6 +146,7 @@ void control_music_output_abort_window(void)
     control_music_output_reset_window_buckets();
     g_control_music_window_active = 0U;
     g_control_music_window_prepared = 0U;
+    control_music_output_abort_stream_admissions();
 }
 
 static uint8_t control_music_output_stage(const control_music_action_t *action)
@@ -343,6 +347,8 @@ static void control_music_output_mark_dead(brick_entity_id_t entity_id,
         return;
     const uint32_t output_id = output->output_id;
     output->alive = 0U;
+    (void)sample_stream_admission_control_request_output_release(
+        entity_id, output_id);
     if ((g_control_music_window_active != 0U)
             || (g_control_music_window_prepared != 0U))
         return;
@@ -395,62 +401,17 @@ static uint8_t control_music_output_is_multi(brick_entity_id_t entity_id)
             && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI)) ? 1U : 0U;
 }
 
-static uint8_t control_music_output_multi_live_count(void)
+static sample_stream_admission_owner_t control_music_output_stream_owner(
+    brick_entity_id_t entity_id)
 {
-    uint8_t count = 0U;
-    for (brick_entity_id_t entity_id = 0U;
-         entity_id < BRICK_ENTITY_CAPACITY; ++entity_id)
-    {
-        for (uint8_t i = 0U; i < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++i)
-            count += ((control_music_output_ledger()[entity_id][i].alive != 0U)
-                && (control_music_output_ledger()[entity_id][i].multi != 0U))
-                ? 1U : 0U;
-    }
-    return count;
-}
-
-static uint8_t control_music_output_ref_is_excluded(
-    brick_entity_id_t entity_id, uint8_t index,
-    const brick_entity_id_t *excluded_entities,
-    const uint8_t *excluded_indices, uint8_t excluded_count)
-{
-    for (uint8_t i = 0U; i < excluded_count; ++i)
-        if ((excluded_entities[i] == entity_id)
-                && (excluded_indices[i] == index))
-            return 1U;
-    return 0U;
-}
-
-static uint8_t control_music_output_find_oldest_multi(
-    const brick_entity_id_t *excluded_entities,
-    const uint8_t *excluded_indices, uint8_t excluded_count,
-    brick_entity_id_t *out_entity, uint8_t *out_index)
-{
-    uint8_t found = 0U;
-    uint32_t oldest_age = UINT32_MAX;
-    for (brick_entity_id_t entity_id = 0U;
-         entity_id < BRICK_ENTITY_CAPACITY; ++entity_id)
-    {
-        for (uint8_t index = 0U;
-             index < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++index)
-        {
-            const control_music_output_t *const output =
-                &control_music_output_ledger()[entity_id][index];
-            if ((output->alive == 0U) || (output->multi == 0U)
-                    || (control_music_output_ref_is_excluded(
-                        entity_id, index, excluded_entities, excluded_indices,
-                        excluded_count) != 0U))
-                continue;
-            if ((found == 0U) || (output->age < oldest_age))
-            {
-                found = 1U;
-                oldest_age = output->age;
-                *out_entity = entity_id;
-                *out_index = index;
-            }
-        }
-    }
-    return found;
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(entity_id);
+    if ((ctx == NULL) || (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER))
+        return SAMPLE_STREAM_ADMISSION_OWNER_NONE;
+    if (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_STREAM)
+        return SAMPLE_STREAM_ADMISSION_OWNER_CLASSIC;
+    if (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI)
+        return SAMPLE_STREAM_ADMISSION_OWNER_MULTI;
+    return SAMPLE_STREAM_ADMISSION_OWNER_NONE;
 }
 
 static int8_t control_music_output_find(brick_entity_id_t entity_id,
@@ -477,6 +438,24 @@ static int8_t control_music_output_find_free(brick_entity_id_t entity_id)
         if (control_music_output_ledger()[entity_id][i].alive == 0U)
             return (int8_t)i;
     return -1;
+}
+
+static void control_music_output_abort_stream_admissions(void)
+{
+    for (uint16_t i = 0U; i < SAMPLE_STREAM_ADMISSION_BINDING_CAPACITY; ++i)
+    {
+        const volatile sample_stream_admission_binding_t *const binding =
+            &g_sample_stream_admission_bindings[i];
+        if ((binding->active == 0U) || (binding->output_id >= 0x80000000UL))
+            continue;
+        if (control_music_output_find(binding->entity, binding->output_id) < 0)
+        {
+            const sample_stream_admission_token_t token = binding->token;
+            (void)sample_stream_admission_control_request_release(&token);
+            sample_stream_admission_control_unbind_output(
+                binding->entity, binding->output_id);
+        }
+    }
 }
 
 static int8_t control_music_output_find_oldest(brick_entity_id_t entity_id,
@@ -584,6 +563,19 @@ uint8_t control_music_output_submit(const control_music_action_t *action,
         return 1U;
     }
 
+    const sample_stream_admission_owner_t stream_owner =
+        control_music_output_stream_owner(entity_id);
+    sample_stream_admission_token_t stream_token = {0};
+    const uint8_t stream_admitted =
+        (stream_owner == SAMPLE_STREAM_ADMISSION_OWNER_NONE)
+            ? 0U
+            : sample_stream_admission_control_reserve(
+                stream_owner, SAMPLE_STREAM_ADMISSION_ROLE_PRIMARY, 1U,
+                &stream_token);
+    if ((stream_owner != SAMPLE_STREAM_ADMISSION_OWNER_NONE)
+        && (stream_admitted == 0U))
+        return 0U;
+
     const uint8_t live_count = control_music_output_live_count(entity_id);
     const uint8_t limit = control_music_output_limit(entity_id);
     control_music_action_t batch[CONTROL_MUSIC_OUTPUTS_PER_ENTITY + 1U];
@@ -601,23 +593,14 @@ uint8_t control_music_output_submit(const control_music_action_t *action,
             const int8_t target = control_music_output_find_oldest(
                 entity_id, excluded_mask);
             if (target < 0)
+            {
+                if (stream_admitted != 0U)
+                    (void)sample_stream_admission_control_request_release(&stream_token);
                 return 0U;
+            }
             victim_entities[victim_count] = entity_id;
             victim_indices[victim_count] = (uint8_t)target;
             excluded_mask |= (uint8_t)(1U << (uint8_t)target);
-        }
-        const uint8_t multi_live_count = control_music_output_multi_live_count();
-        if (((uint16_t)multi_live_count - victim_count + 1U)
-                > BRICK6_SAMPLER_MULTI_MAX_VOICES)
-        {
-            brick_entity_id_t target_entity = BRICK_ENTITY_INVALID_ID;
-            uint8_t target_index = UINT8_MAX;
-            if (control_music_output_find_oldest_multi(
-                    victim_entities, victim_indices, victim_count,
-                    &target_entity, &target_index) == 0U)
-                return 0U;
-            victim_entities[victim_count] = target_entity;
-            victim_indices[victim_count++] = target_index;
         }
     }
     else
@@ -630,7 +613,11 @@ uint8_t control_music_output_submit(const control_music_action_t *action,
             const int8_t target = control_music_output_find_oldest(
                 entity_id, excluded_mask);
             if (target < 0)
+            {
+                if (stream_admitted != 0U)
+                    (void)sample_stream_admission_control_request_release(&stream_token);
                 return 0U;
+            }
             victim_entities[victim_count] = entity_id;
             victim_indices[victim_count] = (uint8_t)target;
             excluded_mask |= (uint8_t)(1U << (uint8_t)target);
@@ -654,8 +641,35 @@ uint8_t control_music_output_submit(const control_music_action_t *action,
         };
     }
     batch[count++] = *action;
+    int8_t target = control_music_output_find_free(entity_id);
+    if (target < 0)
+        for (uint8_t i = 0U; i < victim_count; ++i)
+            if (victim_entities[i] == entity_id)
+            {
+                target = (int8_t)victim_indices[i];
+                break;
+            }
+    if (target < 0)
+    {
+        if (stream_admitted != 0U)
+            (void)sample_stream_admission_control_request_release(&stream_token);
+        return 0U;
+    }
+    if ((stream_admitted != 0U)
+        && (sample_stream_admission_control_bind_output(
+            entity_id, action->output_id, &stream_token) == 0U))
+    {
+        (void)sample_stream_admission_control_request_release(&stream_token);
+        return 0U;
+    }
     if (control_music_output_publish_batch(batch, count) == 0U)
     {
+        if (stream_admitted != 0U)
+        {
+            sample_stream_admission_control_unbind_output(
+                entity_id, action->output_id);
+            (void)sample_stream_admission_control_request_release(&stream_token);
+        }
         return 0U;
     }
 
@@ -666,10 +680,6 @@ uint8_t control_music_output_submit(const control_music_action_t *action,
                 [victim_indices[i]]);
         control_music_output_mark_dead(victim_entities[i], victim_indices[i]);
     }
-    const int8_t target = control_music_output_find_free(entity_id);
-    if (target < 0)
-        return 0U;
-
     control_music_output_ledger()[entity_id][(uint8_t)target] =
         (control_music_output_t){
             .output_id = action->output_id,

@@ -1123,7 +1123,8 @@ static sd_scheduler_background_admission_t wavetable_load_sd_begin(
     const sd_scheduler_background_request_t request = {
         .byte_count = bytes,
         .media_epoch = g_wavetable_load_job.media_epoch,
-        .kind = kind
+        .kind = kind,
+        .storage_owner = (uint8_t)STORAGE_OWNER_WAVETABLE
     };
     return sd_scheduler_runtime_background_try_begin(&request);
 }

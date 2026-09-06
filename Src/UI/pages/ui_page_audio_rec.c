@@ -8,6 +8,7 @@
 #include "ui_event.h"
 #include "ui_hall_mode_flow.h"
 #include "ui_page_manager.h"
+#include "UI/ui_service_wakeup.h"
 
 #if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
 #include "stm32h7xx_hal.h"

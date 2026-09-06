@@ -73,7 +73,7 @@ static void sample_capture_detail_reset(void)
     sample_capture_global_overview_reset();
     memset(&g_sample_capture.wave_cache_handle, 0, sizeof(g_sample_capture.wave_cache_handle));
     g_sample_capture.wave_cache_ready = 0U;
-    g_sample_capture.wave_cache_retry_countdown = 0U;
+    g_sample_capture.wave_cache_terminal = 0U;
 }
 
 static int16_t sample_capture_pcm24_to_waveform_i16(int32_t v)
@@ -173,6 +173,10 @@ static uint8_t sample_capture_global_overview_path_matches(void)
 
 static void sample_capture_global_overview_request(void)
 {
+    if(sample_capture_storage_unavailable() != 0U)
+    {
+        return;
+    }
     if((g_sample_capture.state.take_valid == 0U)
             || (g_sample_capture.state.recorded_frames == 0U)
             || (g_sample_capture.state.temp_path[0] == '\0'))
@@ -212,6 +216,7 @@ static void sample_capture_global_overview_request(void)
         g_sample_capture_global_overview_points[i].min = 32767;
         g_sample_capture_global_overview_points[i].max = (int16_t)-32768;
     }
+    sample_capture_storage_wakeup();
 }
 
 static uint8_t sample_capture_global_overview_can_build(void)
@@ -230,8 +235,10 @@ static uint8_t sample_capture_global_overview_can_build(void)
     if((audio_recorder_is_active() != 0U)
             || (sd_preview_is_active() != 0U)
             || (pattern_storage_is_pending() != 0U)
-            || (sample_cache_has_pending_sd_work() != 0U))
+            || (sample_stream_manager_io_in_flight() != 0U)
+            || (storage_io_owner_test(STORAGE_OWNER_STREAM) != 0U))
     {
+        sample_capture_storage_wait_resource();
         return 0U;
     }
     return 1U;
@@ -263,6 +270,7 @@ static void sample_capture_global_overview_finish(void)
     }
     g_sample_capture_global_overview.peak = peak;
     g_sample_capture_global_overview.state = SAMPLE_CAPTURE_GLOBAL_OVERVIEW_READY;
+    sample_capture_waveform_ui_wakeup();
 #if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
     sample_capture_debug_log("GOVERVIEW DONE points=%u frames=%lu peak=%u\r\n",
                              (unsigned)g_sample_capture_global_overview.point_count,
@@ -290,7 +298,7 @@ static void sample_capture_global_overview_service(void)
         frames_left = SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILD_CHUNK_FRAMES;
     }
 
-    if(sd_access_gate_try_acquire(SD_ACCESS_CLIENT_EDITOR_CACHE) == 0U)
+    if(sample_capture_storage_try_acquire(SD_ACCESS_CLIENT_EDITOR_CACHE) == 0U)
     {
         return;
     }
@@ -367,7 +375,14 @@ done:
     sd_access_gate_release(SD_ACCESS_CLIENT_EDITOR_CACHE);
     if(ok == 0U)
     {
-        g_sample_capture_global_overview.state = SAMPLE_CAPTURE_GLOBAL_OVERVIEW_ERROR;
+        if(sample_capture_storage_unavailable() != 0U)
+        {
+            sample_capture_storage_abort_unavailable();
+        }
+        else
+        {
+            g_sample_capture_global_overview.state = SAMPLE_CAPTURE_GLOBAL_OVERVIEW_ERROR;
+        }
     }
 }
 
@@ -799,6 +814,8 @@ static void sample_capture_editor_cache_request(uint32_t view_start_frame,
     {
         (void)sample_capture_editor_queue_tile_limited(optional[i], focus, &queued_count);
     }
+    if(queued_count != 0U)
+        sample_capture_storage_wakeup();
 }
 
 static uint8_t sample_capture_editor_cache_can_fill(uint8_t *out_reason)
@@ -817,21 +834,26 @@ static uint8_t sample_capture_editor_cache_can_fill(uint8_t *out_reason)
     }
     if(audio_recorder_is_active() != 0U)
     {
+        sample_capture_storage_wait_resource();
         if(out_reason != 0) { *out_reason = 1U; }
         return 0U;
     }
     if(sd_preview_is_active() != 0U)
     {
+        sample_capture_storage_wait_resource();
         if(out_reason != 0) { *out_reason = 3U; }
         return 0U;
     }
     if(pattern_storage_is_pending() != 0U)
     {
+        sample_capture_storage_wait_resource();
         if(out_reason != 0) { *out_reason = 4U; }
         return 0U;
     }
-    if(sample_cache_has_pending_sd_work() != 0U)
+    if((sample_stream_manager_io_in_flight() != 0U)
+        || (storage_io_owner_test(STORAGE_OWNER_STREAM) != 0U))
     {
+        sample_capture_storage_wait_resource();
         if(out_reason != 0) { *out_reason = 5U; }
         return 0U;
     }
@@ -908,6 +930,7 @@ static void sample_capture_editor_cache_service(void)
     if(frames_left == 0U)
     {
         tile->state = SAMPLE_CAPTURE_EDITOR_CACHE_READY;
+        sample_capture_waveform_ui_wakeup();
         return;
     }
     if(frames_left > SAMPLE_CAPTURE_EDITOR_TILE_BUILD_CHUNK_FRAMES)
@@ -915,7 +938,7 @@ static void sample_capture_editor_cache_service(void)
         frames_left = SAMPLE_CAPTURE_EDITOR_TILE_BUILD_CHUNK_FRAMES;
     }
 
-    if(sd_access_gate_try_acquire(SD_ACCESS_CLIENT_EDITOR_CACHE) == 0U)
+    if(sample_capture_storage_try_acquire(SD_ACCESS_CLIENT_EDITOR_CACHE) == 0U)
     {
 #if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
         g_sample_capture_debug.cache_gate_busy_count++;
@@ -974,6 +997,7 @@ static void sample_capture_editor_cache_service(void)
     {
         tile->frame_count = tile->load_next_frame;
         tile->state = SAMPLE_CAPTURE_EDITOR_CACHE_READY;
+        sample_capture_waveform_ui_wakeup();
 #if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
         const uint32_t elapsed = HAL_GetTick() - g_sample_capture_debug.fill_start_ms;
         sample_capture_debug_log("OLD_AUDIO_TILE_DONE slot=%u start=%lu frames=%lu chunks=%lu passes=%lu gate_busy=%lu ms=%lu\r\n",
@@ -1007,6 +1031,10 @@ done:
                                  (unsigned long)tile->load_next_frame,
                                  (unsigned long)tile->frame_count);
 #endif
+    }
+    else if(tile->state == SAMPLE_CAPTURE_EDITOR_CACHE_LOADING)
+    {
+        sample_capture_storage_wakeup();
     }
 #if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
     const uint32_t service_ms = HAL_GetTick() - service_start_ms;
@@ -1252,8 +1280,10 @@ static uint8_t sample_capture_detail_can_build(void)
     if((audio_recorder_is_active() != 0U)
             || (sd_preview_is_active() != 0U)
             || (pattern_storage_is_pending() != 0U)
-            || (sample_cache_has_pending_sd_work() != 0U))
+            || (sample_stream_manager_io_in_flight() != 0U)
+            || (storage_io_owner_test(STORAGE_OWNER_STREAM) != 0U))
     {
+        sample_capture_storage_wait_resource();
         return 0U;
     }
     return 1U;
@@ -1274,8 +1304,10 @@ static uint8_t sample_capture_line_can_build(void)
     if((audio_recorder_is_active() != 0U)
             || (sd_preview_is_active() != 0U)
             || (pattern_storage_is_pending() != 0U)
-            || (sample_cache_has_pending_sd_work() != 0U))
+            || (sample_stream_manager_io_in_flight() != 0U)
+            || (storage_io_owner_test(STORAGE_OWNER_STREAM) != 0U))
     {
+        sample_capture_storage_wait_resource();
         return 0U;
     }
     return 1U;
@@ -1308,6 +1340,7 @@ static void sample_capture_detail_finish_build(void)
     g_sample_capture.state.detail_valid = 1U;
     g_sample_capture.detail_building = 0U;
     g_sample_capture.detail_requested = 0U;
+    sample_capture_waveform_ui_wakeup();
 }
 
 static void sample_capture_detail_service(void)
@@ -1336,7 +1369,7 @@ static void sample_capture_detail_service(void)
         frames_left = SAMPLE_CAPTURE_DETAIL_BUILD_CHUNK_FRAMES;
     }
 
-    if(sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PREVIEW) == 0U)
+    if(sample_capture_storage_try_acquire(SD_ACCESS_CLIENT_PREVIEW) == 0U)
     {
         return;
     }
@@ -1426,7 +1459,14 @@ done:
     sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
     if(ok == 0U)
     {
-        g_sample_capture.detail_building = 0U;
+        if(sample_capture_storage_unavailable() != 0U)
+        {
+            sample_capture_storage_abort_unavailable();
+        }
+        else
+        {
+            g_sample_capture.detail_building = 0U;
+        }
     }
 }
 
@@ -1575,7 +1615,7 @@ static void sample_capture_line_service(void)
 
     if(g_sample_capture_line_hot.build_frames <= SAMPLE_CAPTURE_LINE_MAX_SOURCE_FRAMES)
     {
-        if(sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PREVIEW) == 0U)
+        if(sample_capture_storage_try_acquire(SD_ACCESS_CLIENT_PREVIEW) == 0U)
         {
             return;
         }
@@ -1653,7 +1693,14 @@ short_done:
         sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
         if(ok == 0U)
         {
-            g_sample_capture_line_hot.building = 0U;
+            if(sample_capture_storage_unavailable() != 0U)
+            {
+                sample_capture_storage_abort_unavailable();
+            }
+            else
+            {
+                g_sample_capture_line_hot.building = 0U;
+            }
         }
         return;
     }
@@ -1670,7 +1717,7 @@ short_done:
         frames_left = SAMPLE_CAPTURE_LINE_BUILD_CHUNK_FRAMES;
     }
 
-    if(sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PREVIEW) == 0U)
+    if(sample_capture_storage_try_acquire(SD_ACCESS_CLIENT_PREVIEW) == 0U)
     {
         return;
     }
@@ -1730,7 +1777,14 @@ done:
     sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
     if(ok == 0U)
     {
-        g_sample_capture_line_hot.building = 0U;
+        if(sample_capture_storage_unavailable() != 0U)
+        {
+            sample_capture_storage_abort_unavailable();
+        }
+        else
+        {
+            g_sample_capture_line_hot.building = 0U;
+        }
     }
 }
 

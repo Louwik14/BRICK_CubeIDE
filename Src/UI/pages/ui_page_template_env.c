@@ -377,12 +377,6 @@ static void ui_page_template_env_handle_event(const ui_event_t *ev)
     ui_template_page_select_subpage(&g_ui_template_env_state, g_ui_template_env_state.active_subpage);
 }
 
-static void ui_page_template_env_tick(void)
-{
-    ui_page_template_env_sync_family();
-    ui_template_page_tick();
-}
-
 static void ui_page_template_env_sync_active_context(void)
 {
     ui_page_template_env_sync_family();
@@ -399,7 +393,6 @@ const ui_page_t g_ui_page_template_env = {
     .enter = ui_page_template_env_enter,
     .leave = ui_template_page_leave,
     .handle_event = ui_page_template_env_handle_event,
-    .tick = ui_page_template_env_tick,
     .sync_active_context = ui_page_template_env_sync_active_context,
     .render = ui_page_template_env_render,
     .context = &g_ui_template_env_state,

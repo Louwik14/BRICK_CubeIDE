@@ -4,7 +4,7 @@
  * Responsibilities: cycle start/stop/process, gestion playhead/ticks,
  * coordination clock bridge, transport FSM, scheduler, boundary engine
  * et facade live-rec.
- * Integration: point d'int�gration central des modules Src/Seq avec MIDI et engine_tasklet.
+ * Integration: point d'int�gration central des modules Src/Seq avec CONTROL_RT.
  */
 #include "Seq/seq_runtime.h"
 
@@ -16,7 +16,6 @@
 #include "IPC/control_audio_command.h"
 #include "ControlRT/control_rt_publication.h"
 #include "NoteFx/note_fx_pipeline.h"
-#include "App/engine_tasklet.h"
 #include "IPC/control_audio_transport.h"
 #include "Track/track_runtime.h"
 #include "Track/control_music_output.h"
@@ -24,8 +23,10 @@
 #include "Storage/sample_capture.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/project_load_quiesce.h"
+#include "Storage/project_product.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "midi.h"
+#include "tim.h"
 
 #include "Seq/seq_model.h"
 #include "Seq/seq_edit.h"
@@ -45,6 +46,9 @@
 #define SEQ_RUNTIME_STEPS_PER_QUARTER 4U
 #define SEQ_RUNTIME_MIDI_CLOCKS_PER_STEP 6U
 #define SEQ_RUNTIME_LIVE_REC_QUEUE_CAPACITY 128U
+/* TIM12 runs at 1500 Hz: one one-shot update is 32 audio frames.  CONTROL
+ * refreshes the 64-frame publication horizon halfway through that horizon. */
+#define SEQ_RUNTIME_CONTROL_DEADLINE_TIMER_TICKS 1U
 
 /* Shared execution state lives in seq_runtime_exec. */
 #define g_seq_runtime (*seq_runtime_exec_state())
@@ -56,6 +60,7 @@ SEQ_STATE_D2 static struct
     uint8_t track_swing[SEQ_LANE_CAPACITY];
 } g_seq_runtime_control;
 static volatile uint32_t g_seq_internal_time_tick;
+static volatile uint8_t g_seq_control_deadline_armed;
 SEQ_STATE_D2 static uint32_t g_seq_track_loop_generation[SEQ_LANE_CAPACITY];
 SEQ_STATE_D2 static seq_transport_fsm_t g_seq_transport_fsm;
 SEQ_STATE_D2 static seq_clock_bridge_t g_seq_clock_bridge;
@@ -187,11 +192,6 @@ static void seq_runtime_send_transport_start(void)
 
 static uint32_t seq_runtime_get_now_tick_for_source(seq_clock_src_t source)
 {
-    if (seq_clock_bridge_is_external_source(source) != 0U)
-    {
-        return engine_tick_count;
-    }
-
     return g_seq_internal_time_tick;
 }
 
@@ -339,7 +339,8 @@ void seq_runtime_init(void)
 
 void seq_runtime_start(void)
 {
-    if (project_replacement_is_active() != 0U) return;
+    if ((project_replacement_is_active() != 0U)
+        || (project_product_save_busy() != 0U)) return;
     uint8_t begin_running_now = 0U;
     if (g_seq_runtime_trigger_start_bypass == 0U)
     {
@@ -456,7 +457,11 @@ static void seq_runtime_process_core(void)
     const uint32_t previous_effective_tempo =
         seq_runtime_get_effective_tempo_bpm_milli();
     /* Orchestration seam: clock bridge only supervises cadence policy here; transport state is checked separately. */
-    seq_clock_bridge_on_process(&g_seq_clock_bridge, seq_runtime_get_clock_source_internal(), now_tick);
+    seq_clock_bridge_on_process(&g_seq_clock_bridge,
+                                seq_runtime_get_clock_source_internal(),
+                                seq_clock_bridge_is_external_source(
+                                    seq_runtime_get_clock_source_internal())
+                                    ? seq_runtime_get_now_sample() : now_tick);
     if (seq_runtime_get_effective_tempo_bpm_milli()
             != previous_effective_tempo)
     {
@@ -634,9 +639,61 @@ void seq_runtime_time_adapter_process(void)
     seq_runtime_process_core();
 }
 
+void seq_runtime_control_deadline_disarm(void)
+{
+    (void)HAL_TIM_Base_Stop_IT(&htim12);
+    __HAL_TIM_CLEAR_FLAG(&htim12, TIM_FLAG_UPDATE);
+    g_seq_control_deadline_armed = 0U;
+}
+
+uint8_t seq_runtime_control_deadline_timer_fired(void)
+{
+    const uint8_t was_armed = g_seq_control_deadline_armed;
+    seq_runtime_control_deadline_disarm();
+    if ((was_armed == 0U)
+        || (seq_runtime_get_clock_source_internal() != SEQ_CLOCK_SRC_INTERNAL)
+        || ((seq_runtime_is_running() == 0U)
+            && (seq_runtime_is_start_pending() == 0U)))
+    {
+        return 0U;
+    }
+    return 1U;
+}
+
+void seq_runtime_control_deadline_service(void)
+{
+    const uint8_t musical_deadline_active =
+        ((seq_runtime_get_clock_source_internal() == SEQ_CLOCK_SRC_INTERNAL)
+         && ((seq_runtime_is_running() != 0U)
+             || (seq_runtime_is_start_pending() != 0U))) ? 1U : 0U;
+
+    if (musical_deadline_active == 0U)
+    {
+        seq_runtime_control_deadline_disarm();
+        return;
+    }
+
+    if (g_seq_control_deadline_armed != 0U)
+    {
+        return;
+    }
+
+    __HAL_TIM_SET_COUNTER(&htim12, 0U);
+    __HAL_TIM_SET_AUTORELOAD(&htim12,
+                             SEQ_RUNTIME_CONTROL_DEADLINE_TIMER_TICKS - 1U);
+    __HAL_TIM_CLEAR_FLAG(&htim12, TIM_FLAG_UPDATE);
+    g_seq_control_deadline_armed = 1U;
+    if (HAL_TIM_Base_Start_IT(&htim12) != HAL_OK)
+    {
+        g_seq_control_deadline_armed = 0U;
+    }
+}
+
 void seq_runtime_time_adapter_process_internal_from_irq(void)
 {
-    if (seq_clock_bridge_is_external_source(seq_runtime_get_clock_source_internal()) == 0U)
+    if ((seq_clock_bridge_is_external_source(seq_runtime_get_clock_source_internal()) == 0U)
+        && ((seq_runtime_is_running() != 0U)
+            || (seq_runtime_is_start_pending() != 0U)))
     {
         g_seq_internal_time_tick++;
     }
@@ -695,12 +752,19 @@ seq_clock_src_t seq_runtime_get_clock_source(void)
 
 void seq_runtime_midi_clock_from_source(seq_clock_src_t source)
 {
+    seq_runtime_midi_clock_from_source_at(source, seq_runtime_get_now_sample());
+}
+
+void seq_runtime_midi_clock_from_source_at(seq_clock_src_t source,
+                                           uint64_t sample_time)
+{
     if (seq_runtime_get_clock_source_internal() != source)
     {
         return;
     }
 
-    const uint32_t now = seq_runtime_get_now_tick_for_source(source);
+    const uint64_t now = seq_clock_bridge_is_external_source(source)
+        ? sample_time : (uint64_t)seq_runtime_get_now_tick_for_source(source);
     const uint32_t previous_effective_tempo =
         seq_runtime_get_effective_tempo_bpm_milli();
     uint8_t step_pulse = 0U;
@@ -746,6 +810,11 @@ void seq_runtime_midi_start_from_source(seq_clock_src_t source)
 
 void seq_runtime_midi_continue_from_source(seq_clock_src_t source)
 {
+    if ((project_replacement_is_active() != 0U)
+        || (project_product_save_busy() != 0U))
+    {
+        return;
+    }
     const uint8_t was_stopped = seq_transport_fsm_is_stopped(&g_seq_transport_fsm);
 
     if (seq_runtime_get_clock_source_internal() != source)

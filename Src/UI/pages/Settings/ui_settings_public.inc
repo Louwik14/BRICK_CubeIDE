@@ -17,16 +17,178 @@ uint8_t ui_page_settings_is_open(void)
     return (ui_page_get_id() == UI_PAGE_SETTINGS) ? 1U : 0U;
 }
 
+uint8_t ui_page_settings_next_deadline(uint32_t now_ms, uint32_t *out_deadline_ms)
+{
+    uint32_t candidate = 0U;
+
+    if ((out_deadline_ms == 0) || (ui_page_settings_is_open() == 0U))
+    {
+        return 0U;
+    }
+
+    if ((g_ui_settings.status_line[0] != '\0')
+        && ((int32_t)(g_ui_settings.status_until_ms - now_ms) > 0))
+    {
+        candidate = g_ui_settings.status_until_ms;
+    }
+    if ((g_ui_settings.header_slot_flash_until_ms != 0U)
+        && ((int32_t)(g_ui_settings.header_slot_flash_until_ms - now_ms) > 0)
+        && ((candidate == 0U)
+            || ((int32_t)(g_ui_settings.header_slot_flash_until_ms - candidate) < 0)))
+    {
+        candidate = g_ui_settings.header_slot_flash_until_ms;
+    }
+    if ((g_ui_settings.header_mem_flash_until_ms != 0U)
+        && ((int32_t)(g_ui_settings.header_mem_flash_until_ms - now_ms) > 0)
+        && ((candidate == 0U)
+            || ((int32_t)(g_ui_settings.header_mem_flash_until_ms - candidate) < 0)))
+    {
+        candidate = g_ui_settings.header_mem_flash_until_ms;
+    }
+
+    if (candidate == 0U)
+    {
+        return 0U;
+    }
+
+    *out_deadline_ms = candidate;
+    return 1U;
+}
+
+void ui_page_settings_service_deadline(uint32_t now_ms)
+{
+    uint8_t changed = 0U;
+
+    if (ui_page_settings_is_open() == 0U)
+    {
+        return;
+    }
+
+    if ((g_ui_settings.status_line[0] != '\0')
+        && ((int32_t)(g_ui_settings.status_until_ms - now_ms) <= 0))
+    {
+        g_ui_settings.status_line[0] = '\0';
+        g_ui_settings.status_until_ms = 0U;
+        changed = 1U;
+    }
+    if ((g_ui_settings.header_slot_flash_until_ms != 0U)
+        && ((int32_t)(g_ui_settings.header_slot_flash_until_ms - now_ms) <= 0))
+    {
+        g_ui_settings.header_slot_flash_until_ms = 0U;
+        changed = 1U;
+    }
+    if ((g_ui_settings.header_mem_flash_until_ms != 0U)
+        && ((int32_t)(g_ui_settings.header_mem_flash_until_ms - now_ms) <= 0))
+    {
+        g_ui_settings.header_mem_flash_until_ms = 0U;
+        changed = 1U;
+    }
+
+    if (changed != 0U)
+    {
+        ui_service_dirty_set();
+    }
+}
+
 uint8_t ui_page_settings_multi_clear_is_active(void)
 {
-    return multi_sample_pool_clear_is_active();
+    return storage_settings_multi_clear_active();
+}
+
+static void ui_page_settings_sync_storage_view(void)
+{
+    storage_settings_event_t event;
+    uint32_t sequence = 0U;
+    if ((storage_settings_get_event_snapshot(&event, &sequence) == 0U)
+        || (sequence == g_ui_settings.storage_event_sequence))
+    {
+        ui_page_settings_preview_apply_termination_status();
+        return;
+    }
+    g_ui_settings.storage_event_sequence = sequence;
+    switch (event.type)
+    {
+        case STORAGE_SETTINGS_EVENT_CLASSIC_READY:
+            g_ui_settings.sample_slot_selected = event.slot;
+            ui_page_settings_refresh_sampler_slots();
+            ui_page_settings_status("LOAD OK");
+            break;
+        case STORAGE_SETTINGS_EVENT_CLASSIC_FAILED:
+            ui_page_settings_status("LOAD FAIL");
+            break;
+        case STORAGE_SETTINGS_EVENT_ASSET_READY:
+            g_ui_settings.sample_slot_selected = event.logical;
+            ui_page_settings_refresh_sampler_slots();
+            ui_page_settings_status("LOAD OK");
+            break;
+        case STORAGE_SETTINGS_EVENT_CATALOG_READY:
+        {
+            const ui_settings_menu_level_t *const level =
+                ui_page_settings_current_level();
+            if (level != 0)
+            {
+                if ((level->view == UI_SETTINGS_VIEW_SAMPLE)
+                    || (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM))
+                    (void)ui_page_settings_sample_browser_refresh();
+                else if (level->view == UI_SETTINGS_VIEW_WAVETABLE)
+                    (void)ui_page_settings_wavetable_browser_refresh();
+                else if (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
+                    (void)ui_page_settings_multi_browser_refresh();
+            }
+            break;
+    }
+        case STORAGE_SETTINGS_EVENT_CATALOG_FAILED:
+            ui_page_settings_status("CAT FAIL");
+            break;
+        case STORAGE_SETTINGS_EVENT_MULTI_PROGRESS:
+            g_ui_settings.multi_prepare_progress_done = event.done;
+            g_ui_settings.multi_prepare_progress_total = event.total;
+            g_ui_settings.multi_prepare_phase = (uint8_t)UI_SETTINGS_MULTI_PREP_PHASE_PREPARE;
+            ui_page_settings_multi_prepare_flush_progress();
+            break;
+        case STORAGE_SETTINGS_EVENT_MULTI_READY:
+            g_ui_settings.sample_slot_selected = event.slot;
+            ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_MULTI);
+            (void)ui_page_settings_multi_browser_refresh();
+            ui_page_settings_multi_prepare_finish("LOAD OK");
+            break;
+        case STORAGE_SETTINGS_EVENT_MULTI_FAILED:
+            ui_page_settings_multi_prepare_finish(
+                (event.kind == 1U)
+                    ? ui_page_settings_multi_import_error_label(
+                        (multi_sample_import_result_t)event.result)
+                    : ui_page_settings_multi_load_error_label(
+                        (multi_sample_load_result_t)event.result));
+            break;
+        case STORAGE_SETTINGS_EVENT_MULTI_CLEAR_DONE:
+            (void)ui_page_settings_multi_browser_refresh();
+            ui_page_settings_status((event.deleted != 0U) ? "CLEAR OK" : "NO INDEX");
+            break;
+        case STORAGE_SETTINGS_EVENT_MULTI_CLEAR_FAILED:
+            (void)ui_page_settings_multi_browser_refresh();
+            ui_page_settings_status("CLEAR FAIL");
+            break;
+        case STORAGE_SETTINGS_EVENT_CONVERT_PROGRESS:
+        {
+            char status[24];
+            (void)snprintf(status, sizeof(status), "CONVERT %u%%", event.percent);
+            ui_page_settings_status(status);
+            break;
+        }
+        case STORAGE_SETTINGS_EVENT_CONVERT_FAILED:
+            ui_page_settings_status(ui_page_settings_convert_error_label(
+                (wav_convert_error_t)event.result));
+            break;
+        default:
+            break;
+        }
+    ui_page_settings_preview_apply_termination_status();
 }
 
 void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
 {
-    if ((multi_sample_pool_clear_is_active() != 0U)
-        || (wav_convert_is_active() != 0U)
-        || (g_ui_settings.convert_slot_valid != 0U))
+    if ((storage_settings_multi_clear_active() != 0U)
+        || (storage_settings_convert_active() != 0U))
     {
         return;
     }
@@ -95,7 +257,7 @@ void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
                                                                     + g_ui_settings.sample_entry_count))))
             {
                 if ((ui_page_settings_sample_browser_refresh() == 0U)
-                    && (wav_loader_catalog_view_busy() == 0U))
+                    && (storage_settings_catalog_view_busy() == 0U))
                 {
                     g_ui_settings.sample_selected = old_selected;
                     (void)ui_page_settings_sample_browser_refresh();
@@ -209,7 +371,7 @@ uint8_t ui_page_settings_handle_event(const ui_event_t *ev)
     {
         return 0U;
     }
-    if (multi_sample_pool_clear_is_active() != 0U)
+    if (storage_settings_multi_clear_active() != 0U)
     {
         ui_page_settings_status("CLEAR...");
         return 1U;

@@ -22,6 +22,10 @@ typedef enum
 
 void hall_calibration_start(void);
 void hall_calibration_process(void);
+uint8_t hall_calibration_is_active(void);
+/* Active Hall calibration sampling/hold deadline; no deadline when idle. */
+uint8_t hall_calibration_next_deadline(uint32_t now_ms,
+                                       uint32_t *out_deadline_ms);
 
 uint8_t hall_calibration_is_done(void);
 uint8_t hall_calibration_is_key_done(uint8_t key);
@@ -37,6 +41,10 @@ void hall_calibration_save(void);
 
 void hall_user_calibration_start(void);
 void hall_user_calibration_process(void);
+uint8_t hall_user_calibration_is_active(void);
+/* Failed user-calibration retry deadline; capture-driven stages have none. */
+uint8_t hall_user_calibration_next_deadline(uint32_t now_ms,
+                                            uint32_t *out_deadline_ms);
 uint8_t hall_user_calibration_is_done(void);
 uint8_t hall_user_calibration_was_successful(void);
 hall_user_calibration_stage_t hall_user_calibration_get_stage(void);

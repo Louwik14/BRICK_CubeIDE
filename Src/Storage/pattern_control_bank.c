@@ -3,6 +3,8 @@
 #include "SD/sd_scheduler_runtime.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/project_load_quiesce.h"
+#include "Storage/project_product.h"
+#include "App/control_domain.h"
 #include "Storage/storage_io_wakeup.h"
 #include "ff.h"
 #include <stdio.h>
@@ -177,6 +179,7 @@ static sd_scheduler_background_admission_t pattern_async_admit(
         .byte_count = byte_count,
         .media_epoch = g_pattern_async.media_epoch,
         .kind = kind,
+        .storage_owner = (uint8_t)STORAGE_OWNER_PATTERN,
     };
     return sd_scheduler_runtime_background_try_begin(&request);
 }
@@ -188,7 +191,9 @@ uint8_t pattern_control_bank_store_async_begin(
     uint8_t *encoded,
     uint32_t encoded_capacity)
 {
-    if (project_replacement_is_active() != 0U) return 0U;
+    if ((project_replacement_is_active() != 0U)
+        || (control_domain_project_ui_busy() != 0U)
+        || (project_product_ui_busy() != 0U)) return 0U;
     if (!valid(bank, pattern) || (in == NULL) || (encoded == NULL)
         || (encoded_capacity == 0U)
         || (g_active_set >= SET_COUNT)
@@ -244,7 +249,9 @@ uint8_t pattern_control_bank_load_async_begin(
     uint32_t encoded_capacity,
     persist_control_pattern_t *out)
 {
-    if (project_replacement_is_active() != 0U) return 0U;
+    if ((project_replacement_is_active() != 0U)
+        || (control_domain_project_ui_busy() != 0U)
+        || (project_product_ui_busy() != 0U)) return 0U;
     if (!valid(bank, pattern) || (encoded == NULL) || (encoded_capacity == 0U)
         || (out == NULL) || (g_active_set >= SET_COUNT) || !g_present[bank][pattern]
         || (g_pattern_async.state != PATTERN_ASYNC_IDLE))
@@ -496,7 +503,10 @@ void pattern_control_bank_async_service(void)
             && ((g_pattern_async.state != state)
                 || (g_pattern_async.offset != offset)
                 || (g_pattern_async.encoded_size != encoded_size)))
-        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+        {
+            storage_io_owner_set(STORAGE_OWNER_PATTERN);
+            storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+        }
 }
 
 uint8_t pattern_control_bank_async_busy(void)

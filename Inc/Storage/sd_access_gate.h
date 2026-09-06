@@ -35,6 +35,8 @@ typedef enum
 
 void sd_access_gate_init(void);
 uint8_t sd_access_gate_try_acquire(sd_access_client_t client);
+uint8_t sd_access_gate_try_acquire_for_owner(sd_access_client_t client,
+                                             uint8_t storage_owner);
 void sd_access_gate_release(sd_access_client_t client);
 void sd_access_gate_set_streaming_critical(uint8_t active);
 uint8_t sd_access_gate_streaming_critical_active(void);
@@ -47,7 +49,6 @@ const char *sd_access_gate_client_label(sd_access_client_t client);
 const char *sd_access_gate_busy_label(void);
 
 uint8_t sd_access_fs_mount_if_needed(void);
-uint8_t sd_access_fs_reprobe_if_no_media(void);
 void sd_access_fs_invalidate_mount(void);
 sd_storage_status_t sd_access_storage_status(void);
 void sd_access_storage_report_init_failure(uint8_t no_media);

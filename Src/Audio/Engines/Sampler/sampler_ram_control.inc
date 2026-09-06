@@ -396,7 +396,8 @@ static uint8_t brick6_sampler_runtime_trigger_ram(uint8_t track_id)
 
 static uint8_t brick6_sampler_runtime_cache_voice_id(uint8_t track_id)
 {
-    return (uint8_t)(BRICK6_SAMPLER_CACHE_VOICE_BASE + track_id);
+    return (track_id < SAMPLE_PAGE_LEASE_CLASSIC_COUNT)
+        ? track_id : UINT8_MAX;
 }
 
 static uint32_t brick6_sampler_runtime_clamp_region_begin(uint32_t length_frames, float start)

@@ -360,7 +360,8 @@ static brick6_sampler_stream_pitch_plan_t brick6_sampler_runtime_stream_build_pi
     return plan;
 }
 
-static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
+static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id,
+                                                          uint32_t output_id)
 {
     brick6_sampler_clip_slot_t *slot = NULL;
     if ((track_id >= SEQ_TRACK_COUNT) || (brick6_sampler_runtime_track_is_clip(track_id) == 0U))
@@ -373,6 +374,15 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     sample_resolved_source_t source;
     sample_resolved_source_init(&source);
     const uint8_t cache_voice_id = brick6_sampler_runtime_cache_voice_id(track_id);
+    sample_stream_admission_token_t admission_token;
+    if ((cache_voice_id == UINT8_MAX)
+        || ((output_id != 0U)
+            ? (sample_stream_admission_audio_lookup_output(
+                track_id, output_id, &admission_token) == 0U)
+            : (sample_stream_admission_audio_lookup_entity(
+                track_id, SAMPLE_STREAM_ADMISSION_OWNER_CLASSIC,
+                &admission_token) == 0U)))
+        return 0U;
     sample_play_plan_t play_plan;
     brick6_sampler_stream_pitch_plan_t pitch_plan;
     uint8_t use_shifter = brick6_sampler_runtime_clip_uses_shifter(clip);
@@ -451,7 +461,8 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     const uint8_t start_fade = brick6_sampler_runtime_begin_declick_tail(track_id, voice);
     sample_voice_reader_reset(&voice->reader);
 
-    if (sample_voice_reader_bind_play_plan(&voice->reader, &play_plan, cache_voice_id) == 0U)
+    if (sample_voice_reader_bind_play_plan_admitted(
+            &voice->reader, &play_plan, cache_voice_id, &admission_token) == 0U)
     {
         sample_voice_reader_reset(&voice->reader);
         if (use_shifter != 0U)

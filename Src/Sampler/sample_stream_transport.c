@@ -5,6 +5,7 @@
 
 #include "Platform/memory_layout.h"
 #include "Storage/storage_io_wakeup.h"
+#include "Storage/project_product.h"
 #include "stm32h7xx.h"
 
 typedef enum
@@ -201,7 +202,11 @@ void sample_stream_transport_worker_poll(void)
         sample_stream_transport_clean(&ready->result, sizeof(ready->result));
         ready->state = SAMPLE_STREAM_TRANSPORT_RESULT_READY;
         sample_stream_transport_clean(&ready->state, sizeof(ready->state));
-        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+        storage_io_owner_set((storage_io_owner_t)
+                             ready->command.storage_owner);
+        if (project_product_load_busy() != 0U)
+            storage_io_owner_set(STORAGE_OWNER_PROJECT);
+        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
         ready = 0;
     }
     if ((ready != 0) && (active == 0))
@@ -232,7 +237,11 @@ void sample_stream_transport_worker_poll(void)
             active->state = SAMPLE_STREAM_TRANSPORT_RESULT_READY;
             sample_stream_transport_clean(&active->state, sizeof(active->state));
             __DMB();
-            storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+            storage_io_owner_set((storage_io_owner_t)
+                                 active->command.storage_owner);
+            if (project_product_load_busy() != 0U)
+                storage_io_owner_set(STORAGE_OWNER_PROJECT);
+            storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
         }
     }
 }

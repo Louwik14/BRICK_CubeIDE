@@ -1,6 +1,7 @@
 #include "App/Hall/hall_keyboard_bridge.h"
 
 #include "App/Hall/hall_engine.h"
+#include "App/control_rt_wakeup.h"
 #include "IPC/live_event.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "Storage/project_load_quiesce.h"
@@ -99,6 +100,10 @@ void hall_keyboard_bridge_process(void)
             g_hall_ui_active[key] = 0U;
         }
     }
+
+    if ((processed >= HALL_EVENT_PROCESS_BUDGET)
+        && (live_event_depth() != 0U))
+        control_rt_wakeup(CONTROL_RT_WAKE_HALL);
 
     keyboard_runtime_tick();
 }

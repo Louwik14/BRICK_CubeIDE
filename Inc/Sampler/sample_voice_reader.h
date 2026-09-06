@@ -6,6 +6,7 @@
 #include "Sampler/sample_page_lease.h"
 #include "Sampler/sample_play_plan.h"
 #include "Sampler/sample_reader_contract.h"
+#include "Sampler/sample_stream_admission.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -96,6 +97,9 @@ void sample_voice_reader_bind(sample_voice_reader_t *reader,
 uint8_t sample_voice_reader_bind_play_plan(sample_voice_reader_t *reader,
                                            const sample_play_plan_t *plan,
                                            uint8_t reader_id);
+uint8_t sample_voice_reader_bind_play_plan_admitted(
+    sample_voice_reader_t *reader, const sample_play_plan_t *plan,
+    uint8_t reader_id, const sample_stream_admission_token_t *token);
 void sample_voice_reader_bind_loop_cache_incarnation(sample_voice_reader_t *reader,
                                                      uint8_t voice_id,
                                                      uint32_t generation);

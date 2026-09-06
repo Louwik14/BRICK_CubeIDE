@@ -1,77 +1,151 @@
 #include "Board/board_power.h"
 
 #include "main.h"
+#include "App/control_rt_wakeup.h"
 #include "stm32h7xx_hal.h"
 #include "usb_role_manager.h"
 
 #define POWER_BOOT_PRESS_MS 1000UL
 #define POWER_OFF_HOLD_MS 2000UL
 #define POWER_BUTTON_DEBOUNCE_MS 20UL
+
+static volatile uint8_t g_shutdown_initialized;
+static volatile uint8_t g_shutdown_raw_state;
+static uint8_t g_shutdown_stable_state;
+static uint8_t g_shutdown_armed;
+static uint8_t g_shutdown_hold_active;
+static uint8_t g_shutdown_request_fired;
+static volatile uint32_t g_shutdown_raw_changed_ms;
+static uint32_t g_shutdown_hold_start_ms;
+
 void board_power_delay_ms(uint32_t ms)
 {
     HAL_Delay(ms);
 }
 
-uint8_t board_power_shutdown_request_poll(uint32_t now_ms)
+void board_power_shutdown_init(void)
 {
-    static uint8_t initialized = 0U;
-    static uint8_t raw_state = 0U;
-    static uint8_t stable_state = 0U;
-    static uint8_t armed = 0U;
-    static uint8_t hold_active = 0U;
-    static uint8_t request_fired = 0U;
-    static uint32_t raw_changed_ms = 0U;
-    static uint32_t hold_start_ms = 0U;
+    g_shutdown_initialized = 0U;
+    g_shutdown_raw_state = 0U;
+    g_shutdown_stable_state = 0U;
+    g_shutdown_armed = 0U;
+    g_shutdown_hold_active = 0U;
+    g_shutdown_request_fired = 0U;
+    g_shutdown_raw_changed_ms = 0U;
+    g_shutdown_hold_start_ms = 0U;
+}
+
+void board_power_shutdown_sample(uint32_t now_ms)
+{
     const uint8_t sampled_state =
         (HAL_GPIO_ReadPin(POWER_BUTTON_SENSE_GPIO_Port,
                           POWER_BUTTON_SENSE_Pin) == GPIO_PIN_SET) ? 1U : 0U;
 
-    if (initialized == 0U)
+    if (g_shutdown_initialized == 0U)
     {
-        initialized = 1U;
-        raw_state = sampled_state;
-        stable_state = sampled_state;
-        raw_changed_ms = now_ms;
+        g_shutdown_initialized = 1U;
+        g_shutdown_raw_state = sampled_state;
+        g_shutdown_stable_state = sampled_state;
+        g_shutdown_armed = (sampled_state == 0U) ? 1U : 0U;
+        g_shutdown_raw_changed_ms = now_ms;
     }
-    else if (sampled_state != raw_state)
+    else if (sampled_state != g_shutdown_raw_state)
     {
-        raw_state = sampled_state;
-        raw_changed_ms = now_ms;
+        g_shutdown_raw_state = sampled_state;
+        g_shutdown_raw_changed_ms = now_ms;
+    }
+}
+
+void board_power_shutdown_poll_irq(void)
+{
+    const uint32_t now_ms = HAL_GetTick();
+    const uint8_t sampled_state =
+        (HAL_GPIO_ReadPin(POWER_BUTTON_SENSE_GPIO_Port,
+                          POWER_BUTTON_SENSE_Pin) == GPIO_PIN_SET) ? 1U : 0U;
+
+    if (g_shutdown_initialized == 0U)
+    {
+        board_power_shutdown_sample(now_ms);
+        return;
     }
 
-    if ((stable_state != raw_state)
-        && ((uint32_t)(now_ms - raw_changed_ms) >= POWER_BUTTON_DEBOUNCE_MS))
+    if (sampled_state != g_shutdown_raw_state)
     {
-        stable_state = raw_state;
+        g_shutdown_raw_state = sampled_state;
+        g_shutdown_raw_changed_ms = now_ms;
+        control_rt_wakeup(CONTROL_RT_WAKE_INPUT);
+    }
+}
+
+uint8_t board_power_shutdown_process_deadline(uint32_t now_ms)
+{
+    if (g_shutdown_initialized == 0U)
+        return 0U;
+
+    if ((g_shutdown_stable_state != g_shutdown_raw_state)
+        && ((uint32_t)(now_ms - g_shutdown_raw_changed_ms)
+            >= POWER_BUTTON_DEBOUNCE_MS))
+    {
+        g_shutdown_stable_state = g_shutdown_raw_state;
     }
 
-    if (armed == 0U)
+    if (g_shutdown_armed == 0U)
     {
-        if (stable_state == 0U) armed = 1U;
+        if (g_shutdown_stable_state == 0U) g_shutdown_armed = 1U;
         return 0U;
     }
 
-    if (stable_state == 0U)
+    if (g_shutdown_stable_state == 0U)
     {
-        hold_active = 0U;
-        request_fired = 0U;
-        hold_start_ms = 0U;
+        g_shutdown_hold_active = 0U;
+        g_shutdown_request_fired = 0U;
+        g_shutdown_hold_start_ms = 0U;
         return 0U;
     }
 
-    if (hold_active == 0U)
+    if (g_shutdown_hold_active == 0U)
     {
-        hold_active = 1U;
-        hold_start_ms = now_ms;
+        g_shutdown_hold_active = 1U;
+        g_shutdown_hold_start_ms = now_ms;
         return 0U;
     }
 
-    if ((request_fired == 0U)
-        && ((uint32_t)(now_ms - hold_start_ms) >= POWER_OFF_HOLD_MS))
+    if ((g_shutdown_request_fired == 0U)
+        && ((uint32_t)(now_ms - g_shutdown_hold_start_ms)
+            >= POWER_OFF_HOLD_MS))
     {
-        request_fired = 1U;
+        g_shutdown_request_fired = 1U;
         return 1U;
     }
+    return 0U;
+}
+
+uint8_t board_power_shutdown_next_deadline(uint32_t now_ms,
+                                            uint32_t *out_deadline_ms)
+{
+    if (out_deadline_ms == NULL || g_shutdown_initialized == 0U)
+        return 0U;
+
+    if (g_shutdown_stable_state != g_shutdown_raw_state)
+    {
+        *out_deadline_ms = g_shutdown_raw_changed_ms
+            + POWER_BUTTON_DEBOUNCE_MS;
+        if ((int32_t)(*out_deadline_ms - now_ms) < 0)
+            *out_deadline_ms = now_ms;
+        return 1U;
+    }
+
+    if ((g_shutdown_armed != 0U)
+        && (g_shutdown_stable_state != 0U)
+        && (g_shutdown_hold_active != 0U)
+        && (g_shutdown_request_fired == 0U))
+    {
+        *out_deadline_ms = g_shutdown_hold_start_ms + POWER_OFF_HOLD_MS;
+        if ((int32_t)(*out_deadline_ms - now_ms) < 0)
+            *out_deadline_ms = now_ms;
+        return 1U;
+    }
+
     return 0U;
 }
 

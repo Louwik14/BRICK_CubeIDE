@@ -9,7 +9,8 @@
 #include "App/encoder_control_dispatcher.h"
 #include "IPC/live_clock_control.h"
 #include "App/control_clipboard.h"
-#include "App/engine_tasklet.h"
+#include "App/control_rt_sampled_state.h"
+#include "App/control_rt_wakeup.h"
 #include "Audio/audio_domain.h"
 #include "Audio/audio.h"
 #include "Board/board_usb.h"
@@ -22,8 +23,11 @@
 #include "Sampler/multi_sample_pool.h"
 #include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
+#include "Sampler/sample_cache.h"
+#include "Sampler/sample_stream_manager.h"
+#include "Sampler/sample_stream_transport.h"
+#include "Sampler/sample_stream_admission.h"
 #include "App/brick6_master_control.h"
-#include "Storage/brick6_stream_service_task.h"
 #include "Storage/boot_context_flash.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/pattern_load_storage.h"
@@ -33,22 +37,36 @@
 #include "Storage/project_load_quiesce.h"
 #include "Storage/storage_catalog.h"
 #include "Storage/sd_preview.h"
+#include "Storage/sd_access_gate.h"
 #include "Storage/audio_recorder.h"
+#include "Storage/sample_capture.h"
 #include "Storage/waveform_cache.h"
 #include "Storage/wav_convert.h"
+#include "Storage/settings_storage_service.h"
+#include "Storage/storage_io_wakeup.h"
+#include "SD/sd_scheduler_runtime.h"
+#include "SD/sd_block_device.h"
 #include "Platform/brick6_sd_config.h"
 
 #include "App/Hall/hall_keyboard_bridge.h"
 #include "App/Hall/hall_calibration.h"
 #include "App/Hall/hall_loop.h"
 #include "Seq/seq_runtime.h"
+#include "Seq/seq_runtime_control.h"
+#include "Seq/seq_clock_bridge.h"
 #include "UI/ui_active_track_sync.h"
-#include "UI/display_flush_service.h"
 #include "UI/ui_boot_loading.h"
 #include "UI/ui_core.h"
 #include "UI/ui_event.h"
 #include "UI/ui_renderer_oled.h"
 #include "UI/ui_tasklet.h"
+#include "UI/ui_service_wakeup.h"
+#include "UI/ui_hall_mode_flow.h"
+#include "UI/pages/ui_page_settings.h"
+
+#define BRICK6_STREAM_SERVICE_BYTE_BUDGET      (32768U)
+#define BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES  (8192U)
+#define BRICK6_STREAM_OTHER_SD_QUANTUM_FRAMES (1024U)
 
 typedef enum
 {
@@ -58,6 +76,108 @@ typedef enum
 } brick6_boot_audio_state_t;
 
 static brick6_boot_audio_state_t g_boot_audio_state;
+static uint8_t g_control_calibration_saved;
+static uint8_t g_control_calibration_seen;
+static uint8_t g_control_calibration_stage;
+static uint8_t g_control_calibration_counts[HALL_KEY_COUNT];
+static uint8_t g_control_user_calibration_handled;
+static uint8_t g_control_user_calibration_seen;
+static uint8_t g_control_user_calibration_stage;
+static uint8_t g_control_user_calibration_count;
+
+static void brick6_app_control_calibration_service(uint32_t now_ms)
+{
+    uint8_t calibration_changed = 0U;
+    if (hall_calibration_is_active() != 0U)
+    {
+        hall_calibration_process();
+        if ((g_control_calibration_seen == 0U)
+            || (g_control_calibration_stage != hall_calibration_get_stage()))
+        {
+            calibration_changed = 1U;
+        }
+        for (uint8_t key = 0U; key < HALL_KEY_COUNT; ++key)
+        {
+            const uint8_t count = hall_calibration_get_count(key);
+            if ((g_control_calibration_seen == 0U)
+                || (g_control_calibration_counts[key] != count))
+            {
+                calibration_changed = 1U;
+            }
+            g_control_calibration_counts[key] = count;
+        }
+        g_control_calibration_stage = hall_calibration_get_stage();
+        g_control_calibration_seen = 1U;
+    }
+    else
+    {
+        g_control_calibration_seen = 0U;
+    }
+
+    if (hall_calibration_is_done() != 0U)
+    {
+        if (g_control_calibration_saved == 0U)
+        {
+            hall_calibration_save();
+            g_control_calibration_saved = 1U;
+            calibration_changed = 1U;
+        }
+    }
+    else
+    {
+        g_control_calibration_saved = 0U;
+    }
+
+    if (hall_user_calibration_is_active() != 0U)
+    {
+        if (g_control_user_calibration_seen == 0U)
+            g_control_user_calibration_handled = 0U;
+        hall_user_calibration_process();
+        if ((g_control_user_calibration_seen == 0U)
+            || (g_control_user_calibration_stage != hall_user_calibration_get_stage())
+            || (g_control_user_calibration_count != hall_user_calibration_get_stage_count()))
+            calibration_changed = 1U;
+        g_control_user_calibration_stage = (uint8_t)hall_user_calibration_get_stage();
+        g_control_user_calibration_count = hall_user_calibration_get_stage_count();
+        g_control_user_calibration_seen = 1U;
+    }
+    else
+    {
+        g_control_user_calibration_seen = 0U;
+    }
+    if (hall_user_calibration_is_done() != 0U)
+    {
+        if (g_control_user_calibration_handled == 0U)
+        {
+            g_control_user_calibration_handled = 1U;
+            if (hall_user_calibration_was_successful() != 0U)
+            {
+                hall_set_velocity_profile((uint8_t)HALL_VEL_PROFILE_USER);
+                hall_calibration_save();
+            }
+            calibration_changed = 1U;
+        }
+        else if (hall_user_calibration_was_successful() == 0U)
+        {
+            /* Retry timing is owned by the calibration state machine. */
+            uint32_t retry_deadline_ms = 0U;
+            if (hall_user_calibration_next_deadline(now_ms, &retry_deadline_ms) != 0U
+                && ((int32_t)(now_ms - retry_deadline_ms) >= 0))
+            {
+                hall_user_calibration_start();
+                g_control_user_calibration_handled = 0U;
+                calibration_changed = 1U;
+            }
+        }
+    }
+    else
+    {
+        g_control_user_calibration_handled = 0U;
+    }
+
+    if (calibration_changed != 0U)
+        ui_service_dirty_set();
+}
 
 /* ============================================================
    INIT APP
@@ -72,6 +192,7 @@ static brick6_boot_audio_state_t g_boot_audio_state;
 void brick6_app_init(void)
 {
     SDRAM_Init();
+    storage_io_init();
     boot_context_flash_init();
 
     static const brick6_audio_boot_intent_t audio_boot = {
@@ -111,59 +232,115 @@ static void brick6_app_storage_init(void)
 }
 
 
-static void brick6_app_service_storage(void)
+void brick6_app_storage_dispatch_once(void)
 {
-    project_load_quiesce_storage_retire();
-    storage_catalog_service();
-    wav_loader_catalog_storage_service();
-    audio_recorder_service();
-    project_product_storage_request_service();
-    project_product_save_service();
-    project_product_load_service();
-    patch_product_apply_service();
-    patch_product_storage_request_service();
-    sample_global_pool_storage_request_service();
-    sampler_ram_pool_storage_request_service();
-    wavetable_pool_storage_request_service();
-    multi_sample_pool_storage_request_service();
-    multi_sample_import_storage_request_service();
-    multi_sample_import_storage_delete_service();
-    multi_sample_load_storage_request_service();
-    control_domain_storage_process_requests();
-    wav_convert_service(65536U);
-    if (multi_sample_load_has_pending() != 0U)
+    brick6_app_storage_init();
+    const uint32_t runnable = storage_io_owner_snapshot();
+
+    if ((runnable & (1UL << STORAGE_OWNER_STREAM)) != 0U)
     {
-        multi_sample_service_load(0U);
+        storage_io_owner_clear(STORAGE_OWNER_STREAM);
+        sample_global_pool_storage_request_service();
+        sd_scheduler_runtime_service();
+        sample_stream_transport_worker_poll();
+        sd_access_gate_set_streaming_critical(
+            sample_stream_manager_has_pending_sd_work());
+        if (!((sample_stream_manager_io_in_flight() == 0U)
+              && (multi_sample_load_is_active() != 0U)))
+        {
+            sample_cache_service(BRICK6_STREAM_SERVICE_BYTE_BUDGET);
+            sd_access_gate_set_streaming_critical(
+                sample_stream_manager_has_pending_sd_work());
+        }
+        storage_settings_service_owner(STORAGE_OWNER_STREAM);
     }
-    else
+    if ((runnable & (1UL << STORAGE_OWNER_RECORDER)) != 0U)
     {
-        multi_sample_pool_service_retire();
-        sampler_ram_pool_service_retire();
-        wavetable_pool_service_retire();
-        sampler_ram_pool_load_async_service();
-        wavetable_pool_load_async_service();
-        sampler_ram_pool_waveform_service(BRICK6_STREAM_OTHER_SD_QUANTUM_FRAMES);
-        multi_sample_service_load(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
+        storage_io_owner_clear(STORAGE_OWNER_RECORDER);
+        audio_recorder_service();
+    }
+    if ((runnable & (1UL << STORAGE_OWNER_PROJECT)) != 0U)
+    {
+        storage_io_owner_clear(STORAGE_OWNER_PROJECT);
+        project_load_quiesce_storage_retire();
+        project_product_storage_request_service();
+        project_product_save_service();
+        project_product_load_service();
+    }
+    if ((runnable & (1UL << STORAGE_OWNER_PATTERN)) != 0U)
+    {
+        storage_io_owner_clear(STORAGE_OWNER_PATTERN);
         pattern_storage_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES / 2U);
+    }
+    if ((runnable & (1UL << STORAGE_OWNER_PATCH)) != 0U)
+    {
+        storage_io_owner_clear(STORAGE_OWNER_PATCH);
+        patch_product_apply_service();
+        patch_product_storage_request_service();
+    }
+    if ((runnable & (1UL << STORAGE_OWNER_SAMPLE_RAM)) != 0U)
+    {
+        storage_io_owner_clear(STORAGE_OWNER_SAMPLE_RAM);
+        sampler_ram_pool_storage_request_service();
+        sampler_ram_pool_service_retire();
+        sampler_ram_pool_load_async_service();
+        sampler_ram_pool_waveform_service(BRICK6_STREAM_OTHER_SD_QUANTUM_FRAMES);
+        storage_settings_service_owner(STORAGE_OWNER_SAMPLE_RAM);
+    }
+    if ((runnable & (1UL << STORAGE_OWNER_WAVETABLE)) != 0U)
+    {
+        storage_io_owner_clear(STORAGE_OWNER_WAVETABLE);
+        wavetable_pool_storage_request_service();
+        wavetable_pool_service_retire();
+        wavetable_pool_load_async_service();
+        storage_settings_service_owner(STORAGE_OWNER_WAVETABLE);
+    }
+    if ((runnable & (1UL << STORAGE_OWNER_MULTI)) != 0U)
+    {
+        storage_io_owner_clear(STORAGE_OWNER_MULTI);
+        multi_sample_pool_storage_request_service();
+        multi_sample_import_storage_request_service();
+        multi_sample_import_storage_delete_service();
+        multi_sample_load_storage_request_service();
+        sd_scheduler_runtime_service();
+        sample_stream_transport_worker_poll();
+        multi_sample_pool_service_retire();
+        multi_sample_service_load(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
+        sd_scheduler_runtime_service();
+        sample_stream_transport_worker_poll();
+        storage_settings_service_owner(STORAGE_OWNER_MULTI);
+    }
+    if ((runnable & (1UL << STORAGE_OWNER_CATALOG)) != 0U)
+    {
+        storage_io_owner_clear(STORAGE_OWNER_CATALOG);
+        storage_catalog_service();
+        wav_loader_catalog_storage_service();
+        storage_settings_service_owner(STORAGE_OWNER_CATALOG);
+    }
+    if ((runnable & (1UL << STORAGE_OWNER_WAV_CONVERT)) != 0U)
+    {
+        storage_io_owner_clear(STORAGE_OWNER_WAV_CONVERT);
+        wav_convert_service(65536U);
+        storage_settings_service_owner(STORAGE_OWNER_WAV_CONVERT);
+    }
+    if ((runnable & (1UL << STORAGE_OWNER_WAVEFORM_CACHE)) != 0U)
+    {
+        storage_io_owner_clear(STORAGE_OWNER_WAVEFORM_CACHE);
+        sample_capture_storage_service();
         waveform_cache_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
+    }
+    if ((runnable & (1UL << STORAGE_OWNER_PREVIEW)) != 0U)
+    {
+        storage_io_owner_clear(STORAGE_OWNER_PREVIEW);
         sd_preview_process();
     }
 }
 
-void brick6_app_storage_process(void)
+static void brick6_app_control_process_storage_completions(void)
 {
-    brick6_app_storage_init();
-    brick6_stream_service_task_poll();
-    brick6_app_service_storage();
-    brick6_stream_service_task_poll();
-}
-
-void brick6_app_control_process(void)
-{
-    if (power_shutdown_service(HAL_GetTick()) != 0U)
-    {
-        return;
-    }
+    uint8_t project_slot = 0U;
+    uint8_t project_success = 0U;
+    (void)project_product_save_take_result(&project_slot, &project_success);
 
     multi_sample_load_completion_t multi_completion;
     if (multi_sample_load_take_completion(&multi_completion) != 0U)
@@ -181,14 +358,6 @@ void brick6_app_control_process(void)
                 multi_completion.path, multi_completion.instrument_id, &logical);
         }
     }
-    {
-        uint8_t project_slot = 0U;
-        uint8_t project_success = 0U;
-        (void)project_product_save_take_result(&project_slot, &project_success);
-    }
-
-    /* Storage owns the RAM/Wavetable workers.  CONTROL is the sole consumer
-     * of completions originating from the UI-facing load requests. */
     {
         sampler_ram_result_t result;
         uint16_t ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
@@ -219,21 +388,77 @@ void brick6_app_control_process(void)
                 path, global_slot, 0);
         }
     }
-    control_domain_process_ui_messages();
-    control_domain_process_storage_messages();
-    project_load_quiesce_control_process();
-    engine_tasklet_poll();
-    ui_event_from_inputs();
-    (void)encoder_control_dispatcher_service();
-    /*
-     * TIM12 only advances INTERNAL time.  CONTROL_RT consumes the adapter.
-    */
-    seq_runtime_time_adapter_process();
-    project_product_control_process();
-    patch_product_control_process();
-    pattern_live_control_process();
-    pattern_live_service();
-    if (g_boot_audio_state == BRICK6_BOOT_WAIT_MASTER)
+}
+
+void brick6_app_control_process_causes(uint32_t wake_flags)
+{
+    const uint32_t now_ms = HAL_GetTick();
+    control_rt_sampled_state_process(now_ms);
+    if (power_shutdown_is_active() != 0U)
+    {
+        seq_runtime_control_deadline_disarm();
+        return;
+    }
+
+    sample_capture_control_service();
+    brick6_app_control_calibration_service(now_ms);
+    ui_hall_mode_flow_service_pending(now_ms);
+
+    if (ui_boot_loading_restore_pending() != 0U
+        && sd_access_storage_status() == SD_STORAGE_STATUS_READY)
+    {
+        const project_product_boot_restore_result_t restore_result =
+            project_product_restore_boot();
+        ui_boot_loading_note_restore_started(
+            restore_result != PROJECT_PRODUCT_BOOT_RESTORE_FAILED);
+    }
+
+    if ((wake_flags & CONTROL_RT_WAKE_STREAM_RELEASE) != 0U)
+        sample_stream_admission_control_service_releases();
+
+    if ((wake_flags & CONTROL_RT_WAKE_HALL) != 0U)
+        hall_keyboard_bridge_process();
+    if ((wake_flags & CONTROL_RT_WAKE_ENCODER) != 0U)
+        (void)encoder_control_dispatcher_service();
+    if ((wake_flags & CONTROL_RT_WAKE_MIDI) != 0U)
+    {
+        midi_clock_service_pending();
+        midi_control_poll();
+        midi_host_control_poll_bounded(8U);
+        seq_runtime_live_rec_drain_effective();
+        if (seq_clock_bridge_is_external_source(seq_runtime_get_clock_source()) != 0U)
+        {
+            /* External clock is the existing cause for the real boundary. */
+            seq_runtime_time_adapter_process();
+            pattern_live_service();
+        }
+    }
+    if ((wake_flags & CONTROL_RT_WAKE_UI) != 0U)
+        control_domain_process_ui_messages();
+    if ((wake_flags & CONTROL_RT_WAKE_STORAGE) != 0U)
+    {
+        control_domain_process_storage_messages();
+        brick6_app_control_process_storage_completions();
+        project_product_control_process();
+        patch_product_control_process();
+        pattern_live_control_process();
+        project_load_quiesce_control_process();
+        pattern_live_service();
+    }
+    if ((wake_flags & CONTROL_RT_WAKE_DEADLINE) != 0U)
+    {
+        seq_runtime_time_adapter_process();
+        project_load_quiesce_control_process();
+        pattern_live_service();
+    }
+    if ((wake_flags & CONTROL_RT_WAKE_LATEST) != 0U)
+        brick6_master_control_process();
+
+    /* Boot capture is a sampled/latest-value concern, never a global poll. */
+    if ((g_boot_audio_state == BRICK6_BOOT_WAIT_MASTER)
+        && ((wake_flags & (CONTROL_RT_WAKE_HALL
+                           | CONTROL_RT_WAKE_LATEST
+                           | CONTROL_RT_WAKE_DEADLINE)) != 0U))
     {
         if (brick6_master_control_boot_capture() != 0U)
         {
@@ -241,15 +466,13 @@ void brick6_app_control_process(void)
             g_boot_audio_state = BRICK6_BOOT_AUDIO_RUNNING;
         }
     }
-    else if (g_boot_audio_state == BRICK6_BOOT_AUDIO_RUNNING)
+    else if ((g_boot_audio_state == BRICK6_BOOT_AUDIO_RUNNING)
+             && ((wake_flags & CONTROL_RT_WAKE_LATEST) != 0U))
     {
         brick6_master_control_process();
     }
 
-    hall_keyboard_bridge_process();
-    midi_clock_service_pending();
-    midi_control_poll();
-    midi_host_control_poll_bounded(8U);
+    seq_runtime_control_deadline_service();
 }
 
 void brick6_app_usb_process(void)
@@ -259,19 +482,20 @@ void brick6_app_usb_process(void)
     midi_usb_service_poll();
 }
 
-void brick6_app_ui_process(void)
+void brick6_app_ui_process_input(void)
 {
-    ui_boot_loading_service();
-
+    ui_tasklet_initialize();
     if (ui_boot_loading_is_active() == 0U)
-    {
         ui_core_service_track_selection_inputs();
-    }
+    ui_tasklet_process_input();
+}
 
-    ui_tasklet_poll();
-    if (ui_tasklet_is_initialized() != 0U)
-    {
-        ui_renderer_oled_service_poll();
-        display_flush_service_poll();
-    }
+void brick6_app_ui_process_presentation(uint8_t deadline_due)
+{
+    ui_tasklet_process_presentation(deadline_due);
+    if (ui_tasklet_is_initialized() == 0U)
+        return;
+    if (deadline_due != 0U)
+        ui_renderer_oled_service_deadline();
+    ui_renderer_oled_service_render();
 }

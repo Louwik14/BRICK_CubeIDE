@@ -132,3 +132,44 @@ static ui_renderer_template_wavetable_cache_t g_ui_renderer_template_wavetable_c
 #include "Renderer/ui_renderer_synth_widgets.inc"
 
 #include "Renderer/ui_renderer_chrome.inc"
+
+uint8_t ui_renderer_template_has_live_waveform(const ui_template_page_state_t *state)
+{
+    const ui_template_family_t *family;
+    const ui_template_subpage_t *subpage;
+    uint8_t wave_wavetable_subpage;
+    uint8_t wave_classic_page;
+
+    if (state == NULL)
+    {
+        return 0U;
+    }
+    family = ui_template_page_get_active_family(state);
+    subpage = ui_template_page_get_active_subpage(state);
+    if ((family == NULL) || (subpage == NULL))
+    {
+        return 0U;
+    }
+
+    wave_wavetable_subpage = ui_renderer_template_is_wave_wavetable_subpage(subpage);
+    wave_classic_page = (uint8_t)((wave_wavetable_subpage != 0U)
+        && (family->family_title != NULL)
+        && (strcmp(family->family_title, "TONE 2/2") == 0));
+
+    if ((wave_wavetable_subpage != 0U) && (wave_classic_page == 0U))
+    {
+        return 1U;
+    }
+    if ((state->navigation_subset == 0U)
+            && (ui_renderer_template_is_wave_common_subpage(subpage) != 0U))
+    {
+        return 1U;
+    }
+    if ((state->navigation_subset == 0U)
+            && (ui_renderer_template_is_prism_tone_subpage(subpage) != 0U))
+    {
+        return 1U;
+    }
+    return (uint8_t)(ui_renderer_template_resolve_grouped_custom_widget(state, subpage)
+        == UI_TEMPLATE_CUSTOM_WIDGET_AUDIO_FX_GROUP);
+}

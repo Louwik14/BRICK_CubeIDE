@@ -9,8 +9,8 @@
 
 #include <string.h>
 
-#include "App/engine_tasklet.h"
 #include "buttons.h"
+#include "stm32h7xx_hal.h"
 #include "Platform/memory_layout.h"
 #include "Seq/seq_model.h"
 #include "Track/entity_topology.h"
@@ -22,13 +22,7 @@
 #define SEQ_RUNTIME_INTERNAL_USE 1
 #include "Seq/seq_play_scheduler.h"
 
-#define SEQ_EDIT_ENGINE_TICKS_PER_SECOND 1500U
-
 #define STEP_PLOCK_HOLD_MS 300U
-
-#if !defined(SEQ_STEP_HOLD_THRESHOLD_TICKS)
-#define SEQ_STEP_HOLD_THRESHOLD_TICKS (((STEP_PLOCK_HOLD_MS * SEQ_EDIT_ENGINE_TICKS_PER_SECOND) + 999U) / 1000U)
-#endif
 
 typedef struct
 {
@@ -54,16 +48,18 @@ typedef struct
     seq_track_id_t track_id[SEQ_STEPS_PER_PAGE];
 } seq_edit_hold_state_t;
 
-#define SEQ_EDIT_LENGTH_FLASH_HALF_TICKS 150U
+#define SEQ_EDIT_LENGTH_FLASH_HALF_MS 100U
 #define SEQ_EDIT_LENGTH_FLASH_PHASE_COUNT 4U
 
 typedef struct
 {
     uint8_t active;
+    uint8_t rendered_phase_valid;
+    uint8_t rendered_phase;
     seq_track_id_t track;
     seq_step_id_t start_step;
     seq_step_id_t end_step;
-    uint32_t start_tick;
+    uint32_t start_ms;
 } seq_edit_length_flash_t;
 
 static void seq_edit_mark_step_edited(seq_track_id_t track, seq_step_id_t step);
@@ -286,7 +282,8 @@ static void seq_edit_length_flash_start(seq_track_id_t track,
     g_seq_length_flash.track = track;
     g_seq_length_flash.start_step = start_step;
     g_seq_length_flash.end_step = end_step;
-    g_seq_length_flash.start_tick = engine_tick_count;
+    g_seq_length_flash.start_ms = HAL_GetTick();
+    g_seq_length_flash.rendered_phase_valid = 0U;
 }
 
 uint8_t seq_edit_length_flash_step_visible(seq_track_id_t track,
@@ -300,15 +297,66 @@ uint8_t seq_edit_length_flash_step_visible(seq_track_id_t track,
         return 0U;
     }
 
-    const uint32_t elapsed = engine_tick_count - g_seq_length_flash.start_tick;
-    const uint32_t phase = elapsed / SEQ_EDIT_LENGTH_FLASH_HALF_TICKS;
+    const uint32_t elapsed = HAL_GetTick() - g_seq_length_flash.start_ms;
+    const uint32_t phase = elapsed / SEQ_EDIT_LENGTH_FLASH_HALF_MS;
     if (phase >= SEQ_EDIT_LENGTH_FLASH_PHASE_COUNT)
     {
         g_seq_length_flash.active = 0U;
         return 0U;
     }
 
+    g_seq_length_flash.rendered_phase_valid = 1U;
+    g_seq_length_flash.rendered_phase = (uint8_t)phase;
+
     return ((phase & 0x1U) == 0U) ? 1U : 0U;
+}
+
+uint8_t seq_edit_length_flash_next_deadline(uint32_t now_ms,
+                                            uint32_t *out_deadline_ms)
+{
+    if ((out_deadline_ms == 0) || (g_seq_length_flash.active == 0U))
+    {
+        return 0U;
+    }
+
+    const uint32_t elapsed = now_ms - g_seq_length_flash.start_ms;
+    const uint32_t phase = elapsed / SEQ_EDIT_LENGTH_FLASH_HALF_MS;
+    if (phase >= SEQ_EDIT_LENGTH_FLASH_PHASE_COUNT)
+    {
+        *out_deadline_ms = g_seq_length_flash.start_ms
+            + (SEQ_EDIT_LENGTH_FLASH_HALF_MS * SEQ_EDIT_LENGTH_FLASH_PHASE_COUNT);
+        return 1U;
+    }
+
+    if ((g_seq_length_flash.rendered_phase_valid == 0U)
+        || (g_seq_length_flash.rendered_phase != (uint8_t)phase))
+    {
+        *out_deadline_ms = now_ms;
+        return 1U;
+    }
+
+    *out_deadline_ms = g_seq_length_flash.start_ms
+        + ((phase + 1U) * SEQ_EDIT_LENGTH_FLASH_HALF_MS);
+    return 1U;
+}
+
+uint8_t seq_edit_length_flash_service_deadline(uint32_t now_ms)
+{
+    uint32_t deadline_ms = 0U;
+
+    if ((seq_edit_length_flash_next_deadline(now_ms, &deadline_ms) == 0U)
+        || ((int32_t)(deadline_ms - now_ms) > 0))
+    {
+        return 0U;
+    }
+
+    if ((uint32_t)(now_ms - g_seq_length_flash.start_ms)
+        >= (SEQ_EDIT_LENGTH_FLASH_HALF_MS * SEQ_EDIT_LENGTH_FLASH_PHASE_COUNT))
+    {
+        g_seq_length_flash.active = 0U;
+        g_seq_length_flash.rendered_phase_valid = 0U;
+    }
+    return 1U;
 }
 
 static uint8_t seq_edit_step_has_play_param(seq_track_id_t track,
@@ -630,7 +678,7 @@ void seq_edit_step_press(seq_track_id_t track, uint8_t step_index)
     g_seq_hold_state.edited[step_index] = 0U;
     g_seq_hold_state.pending[step_index] = 1U;
     g_seq_hold_state.held[step_index] = 0U;
-    g_seq_hold_state.press_tick[step_index] = engine_tick_count;
+    g_seq_hold_state.press_tick[step_index] = HAL_GetTick();
     if (g_seq_hold_state.quick_length_applied == 0U)
     {
         g_seq_hold_state.held_content = SEQ_EDIT_HELD_CONTENT_NONE;
@@ -651,8 +699,8 @@ void seq_edit_step_release(seq_track_id_t track, uint8_t step_index)
 
     if ((was_pending != 0U) && (was_held == 0U))
     {
-        const uint32_t held_ticks = engine_tick_count - g_seq_hold_state.press_tick[step_index];
-        if (held_ticks < SEQ_STEP_HOLD_THRESHOLD_TICKS)
+        const uint32_t held_ms = HAL_GetTick() - g_seq_hold_state.press_tick[step_index];
+        if (held_ms < STEP_PLOCK_HOLD_MS)
         {
             seq_edit_apply_short_action(step_index);
         }
@@ -661,10 +709,8 @@ void seq_edit_step_release(seq_track_id_t track, uint8_t step_index)
     seq_edit_reset_step_press_state(step_index);
 }
 
-void seq_edit_step_hold_update(void)
+void seq_edit_step_hold_process_deadline(uint32_t now_ms)
 {
-    const uint32_t now_tick = engine_tick_count;
-
     for (uint8_t hall = 0U; hall < SEQ_STEPS_PER_PAGE; ++hall)
     {
         if (g_seq_hold_state.pending[hall] == 0U)
@@ -672,12 +718,44 @@ void seq_edit_step_hold_update(void)
             continue;
         }
 
-        if ((now_tick - g_seq_hold_state.press_tick[hall]) >= SEQ_STEP_HOLD_THRESHOLD_TICKS)
+        if ((now_ms - g_seq_hold_state.press_tick[hall]) >= STEP_PLOCK_HOLD_MS)
         {
             g_seq_hold_state.held[hall] = 1U;
             g_seq_hold_state.pending[hall] = 0U;
         }
     }
+}
+
+uint8_t seq_edit_step_hold_next_deadline(uint32_t now_ms,
+                                         uint32_t *out_deadline_ms)
+{
+    uint8_t found = 0U;
+    uint32_t next_deadline_ms = 0U;
+
+    if (out_deadline_ms == NULL)
+        return 0U;
+
+    for (uint8_t hall = 0U; hall < SEQ_STEPS_PER_PAGE; ++hall)
+    {
+        if (g_seq_hold_state.pending[hall] == 0U)
+            continue;
+
+        const uint32_t deadline_ms =
+            g_seq_hold_state.press_tick[hall] + STEP_PLOCK_HOLD_MS;
+        if ((found == 0U)
+            || ((int32_t)(deadline_ms - next_deadline_ms) < 0))
+        {
+            next_deadline_ms = deadline_ms;
+            found = 1U;
+        }
+    }
+
+    if (found == 0U)
+        return 0U;
+
+    *out_deadline_ms = ((int32_t)(next_deadline_ms - now_ms) <= 0)
+        ? now_ms : next_deadline_ms;
+    return 1U;
 }
 
 seq_edit_held_content_t seq_edit_classify_held_steps(void)

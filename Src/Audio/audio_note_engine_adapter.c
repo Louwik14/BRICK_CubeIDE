@@ -434,8 +434,8 @@ static uint8_t audio_note_engine_adapter_apply_physical(
             return (uint8_t)((committed != 0U) && (sampler_result != 0U));
         }
         if (is_note_on != 0U)
-            brick6_sampler_runtime_trigger_note_velocity(entity_id, note,
-                                                          velocity);
+            return (uint8_t)(brick6_sampler_runtime_trigger_note_velocity_output(
+                entity_id, note, velocity, output_id) != 0U);
         else
             brick6_sampler_runtime_note_off_note(entity_id, note);
     }

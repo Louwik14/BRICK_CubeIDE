@@ -9,8 +9,8 @@
 typedef struct
 {
     uint32_t tempo_bpm_milli;
-    uint32_t ext_clock_last_tick;
-    uint32_t ext_clock_period_accum;
+    uint64_t ext_clock_last_tick;
+    uint64_t ext_clock_period_accum;
     uint16_t ext_clock_period_samples;
     uint8_t ext_clock_tempo_valid;
     uint32_t ext_clock_bpm_milli;
@@ -34,7 +34,7 @@ uint8_t seq_clock_bridge_is_external_source(seq_clock_src_t src);
 void seq_clock_bridge_reset_external_tempo(seq_clock_bridge_t *bridge);
 void seq_clock_bridge_on_process(seq_clock_bridge_t *bridge,
                                  seq_clock_src_t active_src,
-                                 uint32_t engine_ticks_now);
+                                 uint64_t clock_now);
 void seq_clock_bridge_set_source(seq_clock_bridge_t *bridge,
                                  seq_runtime_state_t *runtime,
                                  seq_clock_src_t src);
@@ -51,7 +51,7 @@ uint8_t seq_clock_bridge_on_external_clock_pulse(seq_clock_bridge_t *bridge,
                                                  seq_runtime_state_t *runtime,
                                                  seq_clock_src_t active_src,
                                                  seq_clock_src_t source,
-                                                 uint32_t engine_ticks_now,
+                                                 uint64_t clock_now,
                                                  uint8_t *out_step_pulse);
 
 void seq_clock_bridge_set_internal_tempo(seq_clock_bridge_t *bridge,

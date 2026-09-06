@@ -17,7 +17,9 @@ uint8_t seq_edit_map_step_index_to_step(seq_track_id_t track,
 
 void seq_edit_step_press(seq_track_id_t track, uint8_t step_index);
 void seq_edit_step_release(seq_track_id_t track, uint8_t step_index);
-void seq_edit_step_hold_update(void);
+void seq_edit_step_hold_process_deadline(uint32_t now_ms);
+uint8_t seq_edit_step_hold_next_deadline(uint32_t now_ms,
+                                         uint32_t *out_deadline_ms);
 uint8_t seq_edit_step_is_pressed(seq_track_id_t track, seq_step_id_t step);
 
 typedef enum
@@ -56,6 +58,9 @@ uint8_t seq_edit_collect_pressed_steps(seq_track_id_t *out_track,
                                        uint8_t max_steps);
 uint8_t seq_edit_length_flash_step_visible(seq_track_id_t track,
                                            seq_step_id_t step);
+uint8_t seq_edit_length_flash_next_deadline(uint32_t now_ms,
+                                            uint32_t *out_deadline_ms);
+uint8_t seq_edit_length_flash_service_deadline(uint32_t now_ms);
 
 uint8_t seq_edit_step_play_get(seq_track_id_t track,
                                 seq_step_id_t step,

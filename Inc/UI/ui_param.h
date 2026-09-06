@@ -57,6 +57,8 @@ typedef enum
 void ui_param_set_bank(const ui_param_bank_t *bank);
 void ui_param_invalidate_bank(void);
 void ui_param_clear_value_flash(void);
+uint8_t ui_param_next_value_flash_deadline(uint32_t now_ms, uint32_t *out_deadline_ms);
+void ui_param_service_value_flash(uint32_t now_ms);
 void ui_param_capture_encoder_context(ui_param_encoder_context_t *out_ctx);
 void ui_param_capture_encoder_context_for_state(ui_param_encoder_context_t *out_ctx,
                                                 uint8_t active_track,

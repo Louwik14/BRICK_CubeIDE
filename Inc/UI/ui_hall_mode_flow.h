@@ -42,6 +42,8 @@ void ui_hall_mode_flow_handle_track_hall_action(uint8_t hall,
                                                 ui_hall_mode_flow_feedback_fn feedback);
 
 void ui_hall_mode_flow_service_pending(uint32_t now_ms);
+uint8_t ui_hall_mode_flow_next_deadline(uint32_t now_ms,
+                                        uint32_t *out_deadline_ms);
 void ui_hall_mode_flow_close_rec(void);
 
 #endif /* UI_HALL_MODE_FLOW_H */

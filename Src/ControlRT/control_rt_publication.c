@@ -6,6 +6,7 @@
 #include "IPC/control_audio_timing.h"
 #include "IPC/live_clock_control.h"
 #include "Platform/memory_layout.h"
+#include "stm32h7xx.h"
 
 typedef struct
 {
@@ -20,6 +21,7 @@ typedef struct
 
 CONTROL_STATE_SDRAM static control_audio_horizon_t g_control_audio_horizon;
 static volatile uint32_t g_control_audio_horizon_capacity_failure_count;
+static volatile uint8_t g_control_rt_publication_suppressed;
 
 void control_rt_publication_init(void)
 {
@@ -30,6 +32,19 @@ void control_rt_publication_init(void)
     g_control_audio_horizon.first_sample = 0U;
     g_control_audio_horizon.active = 0U;
     g_control_audio_horizon_capacity_failure_count = 0U;
+    g_control_rt_publication_suppressed = 0U;
+}
+
+void control_rt_publication_suppress_begin(void)
+{
+    g_control_rt_publication_suppressed = 1U;
+    __DMB();
+}
+
+void control_rt_publication_suppress_end(void)
+{
+    __DMB();
+    g_control_rt_publication_suppressed = 0U;
 }
 
 uint8_t control_rt_publication_horizon_active(void)
@@ -144,6 +159,8 @@ uint8_t control_rt_publication_commit_horizon(void)
 
 static uint8_t control_rt_publish(const control_audio_command_t *command)
 {
+    if (g_control_rt_publication_suppressed != 0U)
+        return (command != NULL) ? 1U : 0U;
     return (g_control_audio_horizon.active != 0U)
         ? ((control_rt_publication_free() != 0U)
             ? control_rt_publication_stage(command, 1U) : 0U)
@@ -153,6 +170,8 @@ static uint8_t control_rt_publish(const control_audio_command_t *command)
 uint8_t control_rt_publish_batch_scheduled(
     const control_audio_command_t *commands, uint16_t count)
 {
+    if (g_control_rt_publication_suppressed != 0U)
+        return ((commands != NULL) && (count != 0U)) ? 1U : 0U;
     return (g_control_audio_horizon.active != 0U)
         ? ((control_rt_publication_free() >= count)
             ? control_rt_publication_stage(commands, count) : 0U)
@@ -164,6 +183,8 @@ uint8_t control_rt_publish_batch_captured(control_audio_command_t *commands,
                                           uint32_t capture_tick,
                                           uint64_t minimum_sample)
 {
+    if (g_control_rt_publication_suppressed != 0U)
+        return ((commands != NULL) && (count != 0U)) ? 1U : 0U;
     uint64_t sample_time = 0U;
     if ((commands == NULL) || (count == 0U)
             || (count > CONTROL_AUDIO_FIFO_CONTRACT_BURST)
@@ -178,6 +199,8 @@ uint8_t control_rt_publish_batch_captured(control_audio_command_t *commands,
 uint8_t control_rt_publish_batch_now(control_audio_command_t *commands,
                                      uint16_t count)
 {
+    if (g_control_rt_publication_suppressed != 0U)
+        return ((commands != NULL) && (count != 0U)) ? 1U : 0U;
     uint64_t sample_time = 0U;
     if ((commands == NULL) || (count == 0U)
             || (count > CONTROL_AUDIO_FIFO_CONTRACT_BURST)
@@ -252,4 +275,19 @@ uint8_t control_rt_publish_panic(uint8_t kind, uint8_t entity,
         .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PANIC,
             kind) };
     return control_rt_publish(&c);
+}
+
+uint8_t control_rt_publish_audio_state_commit(uint32_t generation)
+{
+    uint64_t sample_time = 0U;
+    control_audio_command_t command;
+    if ((generation == 0U) || (control_rt_now_sample(&sample_time) == 0U))
+        return 0U;
+    command = (control_audio_command_t){
+        .effective_sample_time = sample_time,
+        .value = generation,
+        .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(
+            CONTROL_AUDIO_COMMAND_STATE_COMMIT, 0U)
+    };
+    return control_rt_publish(&command);
 }

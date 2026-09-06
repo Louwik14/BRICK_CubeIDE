@@ -19,6 +19,11 @@ board_audio_unpack_input
 usb_audio_audio_input_active
 usb_audio_audio_read
 usb_audio_audio_write
+control_rt_wakeup
+storage_io_wakeup
+storage_io_owner_wakeup
+storage_io_schedule_sample_wakeup
+storage_io_sample_event
 cbrtf
 ceilf
 cos

@@ -3,9 +3,12 @@
 #include "adc.h"
 #include "main.h"
 #include "tim.h"
+#include "App/control_rt_wakeup.h"
 
 static volatile uint16_t *g_adc1_mailbox;
 static volatile uint8_t g_master_volume_valid;
+static volatile uint16_t g_master_volume_last_raw;
+static volatile uint32_t g_master_volume_version;
 
 void board_surface_select_hall_mux(uint8_t index)
 {
@@ -66,6 +69,8 @@ uint8_t board_surface_start_hall_adc_dma(volatile uint16_t *adc1_mailbox,
 
     g_adc1_mailbox = adc1_mailbox;
     g_master_volume_valid = 0U;
+    g_master_volume_last_raw = 0U;
+    g_master_volume_version = 0U;
 
     if (hadc1.DMA_Handle == NULL)
     {
@@ -116,13 +121,30 @@ uint8_t board_surface_read_master_volume_raw(uint16_t *raw)
     return 1U;
 }
 
+uint32_t board_surface_master_volume_version(void)
+{
+    return g_master_volume_version;
+}
+
 uint8_t board_surface_is_hall_adc1_callback(void *handle)
 {
     ADC_HandleTypeDef *hadc = (ADC_HandleTypeDef *)handle;
     const uint8_t is_adc1 = ((hadc != NULL) && (hadc->Instance == ADC1)) ? 1U : 0U;
     if (is_adc1 != 0U)
     {
+        const uint16_t raw = (g_adc1_mailbox != 0) ? g_adc1_mailbox[2U] : 0U;
+        const uint8_t changed = ((g_master_volume_valid == 0U)
+                                 || (raw != g_master_volume_last_raw)) ? 1U : 0U;
+
+        /* Hall continuous sampling is consumed in this DMA callback.  CONTROL
+         * only needs a doorbell for the first valid pot value or a new value. */
         g_master_volume_valid = 1U;
+        g_master_volume_last_raw = raw;
+        if (changed != 0U)
+        {
+            ++g_master_volume_version;
+            control_rt_wakeup(CONTROL_RT_WAKE_LATEST);
+        }
     }
     return is_adc1;
 }

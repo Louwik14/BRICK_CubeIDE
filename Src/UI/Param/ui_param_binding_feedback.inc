@@ -81,6 +81,77 @@ void ui_param_clear_value_flash(void)
     g_ui_param_tweak_until_ms = 0U;
 }
 
+uint8_t ui_param_next_value_flash_deadline(uint32_t now_ms, uint32_t *out_deadline_ms)
+{
+    uint32_t candidate = 0U;
+
+    if (out_deadline_ms == 0)
+    {
+        return 0U;
+    }
+
+    for (uint8_t i = 0U; i < 4U; ++i)
+    {
+        const ui_param_value_flash_slot_t *const flash = &g_ui_param_value_flash[i];
+        if ((flash->active == 0U)
+            || ((int32_t)(flash->until_ms - now_ms) <= 0))
+        {
+            continue;
+        }
+        if ((candidate == 0U)
+            || ((int32_t)(flash->until_ms - candidate) < 0))
+        {
+            candidate = flash->until_ms;
+        }
+    }
+
+    if ((g_ui_param_tweak_param < PARAM_COUNT)
+        && ((int32_t)(g_ui_param_tweak_until_ms - now_ms) > 0)
+        && ((candidate == 0U)
+            || ((int32_t)(g_ui_param_tweak_until_ms - candidate) < 0)))
+    {
+        candidate = g_ui_param_tweak_until_ms;
+    }
+
+    if (candidate == 0U)
+    {
+        return 0U;
+    }
+
+    *out_deadline_ms = candidate;
+    return 1U;
+}
+
+void ui_param_service_value_flash(uint32_t now_ms)
+{
+    uint8_t changed = 0U;
+
+    for (uint8_t i = 0U; i < 4U; ++i)
+    {
+        ui_param_value_flash_slot_t *const flash = &g_ui_param_value_flash[i];
+        if ((flash->active != 0U)
+            && ((int32_t)(flash->until_ms - now_ms) <= 0))
+        {
+            flash->active = 0U;
+            changed = 1U;
+        }
+    }
+
+    if ((g_ui_param_tweak_param < PARAM_COUNT)
+        && ((int32_t)(g_ui_param_tweak_until_ms - now_ms) <= 0))
+    {
+        g_ui_param_tweak_param = PARAM_COUNT;
+        g_ui_param_tweak_slot = 0xFFU;
+        g_ui_param_tweak_until_ms = 0U;
+        changed = 1U;
+    }
+
+    if (changed != 0U)
+    {
+        ui_service_dirty_set();
+    }
+}
+
 void ui_param_note_user_tweak(uint8_t slot, param_id_t param)
 {
     if ((slot >= 4U) || (param >= PARAM_COUNT)) return;

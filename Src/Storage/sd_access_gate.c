@@ -1,6 +1,7 @@
 #include "Storage/sd_access_gate.h"
 
 #include "Platform/memory_layout.h"
+#include "App/control_rt_wakeup.h"
 #include "Storage/storage_io_wakeup.h"
 #include "stm32h7xx_hal.h"
 
@@ -20,6 +21,50 @@ static volatile uint32_t g_sd_media_epoch;
 static uint8_t g_sd_media_present_known;
 static uint8_t g_sd_media_present;
 static volatile sd_storage_status_t g_sd_storage_status;
+
+static storage_io_owner_t sd_access_storage_owner(sd_access_client_t client)
+{
+    switch (client)
+    {
+        case SD_ACCESS_CLIENT_SCHEDULED_RECORDER:
+        case SD_ACCESS_CLIENT_RECORDER:
+            return STORAGE_OWNER_RECORDER;
+        case SD_ACCESS_CLIENT_PROJECT:
+            return STORAGE_OWNER_PROJECT;
+        case SD_ACCESS_CLIENT_PATTERN:
+            return STORAGE_OWNER_PATTERN;
+        case SD_ACCESS_CLIENT_PATCH:
+            return STORAGE_OWNER_PATCH;
+        case SD_ACCESS_CLIENT_PREVIEW:
+            return STORAGE_OWNER_PREVIEW;
+        case SD_ACCESS_CLIENT_WAV_CONVERT:
+            return STORAGE_OWNER_WAV_CONVERT;
+        case SD_ACCESS_CLIENT_WAVEFORM_CACHE:
+        case SD_ACCESS_CLIENT_EDITOR_CACHE:
+            return STORAGE_OWNER_WAVEFORM_CACHE;
+        default:
+            return STORAGE_OWNER_STREAM;
+    }
+}
+
+static void sd_access_note_wait(sd_access_client_t client,
+                                uint8_t requested_owner)
+{
+    if (requested_owner < (uint8_t)STORAGE_OWNER_COUNT)
+    {
+        storage_io_owner_wait_resource((storage_io_owner_t)requested_owner);
+    }
+    else if (client == SD_ACCESS_CLIENT_BACKGROUND)
+        return;
+    else
+        storage_io_owner_wait_resource(sd_access_storage_owner(client));
+}
+
+static uint8_t sd_access_storage_unavailable(void)
+{
+    return ((g_sd_storage_status == SD_STORAGE_STATUS_NO_MEDIA)
+            || (g_sd_storage_status == SD_STORAGE_STATUS_FAULT)) ? 1U : 0U;
+}
 
 void sd_access_gate_init(void)
 {
@@ -69,22 +114,14 @@ uint8_t sd_access_fs_mount_if_needed(void)
         return 0U;
     }
 
+    const sd_storage_status_t previous_status = g_sd_storage_status;
     g_sd_fs_mounted = 1U;
     g_sd_storage_status = SD_STORAGE_STATUS_READY;
-    return 1U;
-}
-
-uint8_t sd_access_fs_reprobe_if_no_media(void)
-{
-    if (g_sd_storage_status != SD_STORAGE_STATUS_NO_MEDIA)
+    if (previous_status != SD_STORAGE_STATUS_READY)
     {
-        return 0U;
+        control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
     }
-
-    g_sd_fs_mounted = 0U;
-    g_sd_storage_status = SD_STORAGE_STATUS_UNKNOWN;
-    sd_access_media_epoch_advance();
-    return sd_access_fs_mount_if_needed();
+    return 1U;
 }
 
 void sd_access_fs_invalidate_mount(void)
@@ -140,6 +177,7 @@ void sd_access_media_set_present(uint8_t present)
         {
             g_sd_storage_status = SD_STORAGE_STATUS_NO_MEDIA;
         }
+        storage_io_resource_available();
         storage_io_wakeup(STORAGE_IO_WAKE_SD);
         return;
     }
@@ -152,13 +190,21 @@ void sd_access_media_set_present(uint8_t present)
     g_sd_storage_status = (present != 0U)
         ? SD_STORAGE_STATUS_UNKNOWN : SD_STORAGE_STATUS_NO_MEDIA;
     sd_access_media_epoch_advance();
+    storage_io_resource_available();
     storage_io_wakeup(STORAGE_IO_WAKE_SD);
 }
 
-uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
+static uint8_t sd_access_gate_try_acquire_impl(sd_access_client_t client,
+                                                uint8_t requested_owner)
 {
     if ((client == SD_ACCESS_CLIENT_NONE) || (client > SD_ACCESS_CLIENT_MAX))
     {
+        return 0U;
+    }
+
+    if (sd_access_storage_unavailable() != 0U)
+    {
+        sd_access_note_wait(client, requested_owner);
         return 0U;
     }
 
@@ -170,6 +216,7 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
     {
         g_sd_access_acquire_fail_count[(uint8_t)client]++;
         __enable_irq();
+        sd_access_note_wait(client, requested_owner);
         return 0U;
     }
 
@@ -196,6 +243,7 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
         {
             g_sd_access_acquire_fail_count[(uint8_t)client]++;
             __enable_irq();
+            sd_access_note_wait(client, requested_owner);
             return 0U;
         }
 
@@ -216,6 +264,7 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
         {
             g_sd_access_acquire_fail_count[(uint8_t)client]++;
             __enable_irq();
+            sd_access_note_wait(client, requested_owner);
             return 0U;
         }
     }
@@ -226,9 +275,24 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
     return 1U;
 }
 
+uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
+{
+    return sd_access_gate_try_acquire_impl(client,
+                                            (uint8_t)STORAGE_OWNER_COUNT);
+}
+
+uint8_t sd_access_gate_try_acquire_for_owner(sd_access_client_t client,
+                                             uint8_t storage_owner)
+{
+    if (storage_owner >= (uint8_t)STORAGE_OWNER_COUNT)
+        return 0U;
+    return sd_access_gate_try_acquire_impl(client, storage_owner);
+}
+
 
 void sd_access_gate_release(sd_access_client_t client)
 {
+    uint8_t available = 0U;
     __disable_irq();
     if (((uint8_t)client <= (uint8_t)SD_ACCESS_CLIENT_MAX)
         && (g_sd_access_client_count[(uint8_t)client] != 0U)
@@ -240,6 +304,7 @@ void sd_access_gate_release(sd_access_client_t client)
 
     if (g_sd_access_total_count == 0U)
     {
+        available = 1U;
         if (g_sd_access_owner != (uint8_t)SD_ACCESS_CLIENT_NONE)
         {
             g_sd_access_client_cycles[g_sd_access_owner] +=
@@ -256,6 +321,8 @@ void sd_access_gate_release(sd_access_client_t client)
         g_sd_access_owner_acquire_tick = 0U;
     }
     __enable_irq();
+    if (available != 0U)
+        storage_io_resource_available();
 }
 
 uint32_t sd_access_gate_client_cycles(sd_access_client_t client)
@@ -273,9 +340,18 @@ uint32_t sd_access_gate_client_cycles(sd_access_client_t client)
 
 void sd_access_gate_set_streaming_critical(uint8_t active)
 {
+    uint8_t became_available = 0U;
     __disable_irq();
+    if ((g_sd_access_streaming_critical != 0U) && (active == 0U))
+    {
+        became_available = 1U;
+    }
     g_sd_access_streaming_critical = (active != 0U) ? 1U : 0U;
     __enable_irq();
+    if (became_available != 0U)
+    {
+        storage_io_resource_available();
+    }
 }
 
 uint8_t sd_access_gate_streaming_critical_active(void)

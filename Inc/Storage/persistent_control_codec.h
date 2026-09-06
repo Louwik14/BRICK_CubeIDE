@@ -146,6 +146,7 @@ typedef struct
 } persist_codec_patch_staging_t;
 
 persist_codec_result_t persist_codec_validate_pattern(const persist_control_pattern_t *pattern);
+persist_codec_result_t persist_codec_validate_macros(const persist_control_macros_t *macros);
 persist_codec_result_t persist_codec_validate_patch(const persist_control_patch_t *patch);
 
 persist_codec_result_t persist_codec_encode_pattern(const persist_control_pattern_t *pattern,

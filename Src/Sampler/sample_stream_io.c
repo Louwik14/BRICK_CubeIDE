@@ -83,6 +83,7 @@ uint8_t sample_stream_io_command_init(sample_stream_io_command_t *out_command,
         .stride_floats = target->stride_floats,
     };
     out_command->stream_info = *stream_info;
+    out_command->storage_owner = 0U;
     return 1U;
 }
 
@@ -266,7 +267,8 @@ uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command,
                     cursor,
                     async->scratch,
                     SAMPLE_STREAM_IO_READ_SCRATCH_BYTES,
-                    command->deadline_margin_us) != 0U)
+                    command->deadline_margin_us,
+                    command->storage_owner) != 0U)
         {
             async->physical_active = 1U;
             async->state = SAMPLE_STREAM_IO_SCRATCH_DMA;
@@ -369,7 +371,8 @@ uint8_t sample_stream_io_poll(sample_stream_io_result_t *out_result)
             async->result.read_bytes = async->result.source_bytes;
         }
         async->state = SAMPLE_STREAM_IO_SCRATCH_RAW_READY;
-        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+        storage_io_owner_set(STORAGE_OWNER_STREAM);
+        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
         return 0U;
     }
     return 0U;

@@ -30,7 +30,8 @@ par `NO_MEDIA` ne ferme pas les ingress et ne touche pas à la preview. Le stop
 preview du quiesce reste conditionné à l'existence d'une session active.
 
 Le refresh explicite d'un browser SD réutilise sa requête catalogue vers
-`STORAGE_IO`. Si l'état est `NO_MEDIA`, le service effectue une unique nouvelle
-tentative init/mount avant le scan. Un succès publie `READY` puis poursuit le
-refresh normal; un nouvel échec sans carte reste `NO_MEDIA`. Il n'existe ni
-polling, ni retry automatique, ni restauration Project associée au refresh.
+`STORAGE_IO`. Si l'état est `NO_MEDIA` (ou `FAULT`), la requête est refusée avec
+le feedback `SD ABSENTE` et ne crée ni job ni retry. L'insertion du média publie
+un nouvel état d'admission; une nouvelle action explicite peut alors demander le
+refresh normal. Il n'existe ni polling, ni retry automatique, ni restauration
+Project associée au refresh.

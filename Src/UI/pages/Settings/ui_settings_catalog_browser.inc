@@ -59,7 +59,7 @@ static const char *ui_page_settings_convert_error_label(wav_convert_error_t erro
 
 static void ui_page_settings_refresh_project_slots(void)
 {
-    g_ui_settings.project_slot_count = project_product_list_slots(g_ui_settings.project_slots, PROJECT_PRODUCT_SLOT_COUNT);
+    g_ui_settings.project_slot_count = storage_settings_project_list_slots(g_ui_settings.project_slots, PROJECT_PRODUCT_SLOT_COUNT);
 }
 
 static void ui_page_settings_refresh_global_kind_slots(sample_global_kind_t kind)
@@ -67,13 +67,13 @@ static void ui_page_settings_refresh_global_kind_slots(sample_global_kind_t kind
     uint16_t count = 0U;
     const uint16_t capacity = SAMPLE_GLOBAL_POOL_FINAL_SLOTS;
     if (kind == SAMPLE_GLOBAL_KIND_CLASSIC)
-        count = project_control_list_samples(PERSIST_ASSET_SAMPLE_STREAM,g_ui_settings.sampler_slots,capacity);
+        count = storage_settings_list_samples(PERSIST_ASSET_SAMPLE_STREAM,g_ui_settings.sampler_slots,capacity);
     else if (kind == SAMPLE_GLOBAL_KIND_RAM)
-        count = project_control_list_samples(PERSIST_ASSET_SAMPLE_RAM,g_ui_settings.sampler_slots,capacity);
+        count = storage_settings_list_samples(PERSIST_ASSET_SAMPLE_RAM,g_ui_settings.sampler_slots,capacity);
     else if (kind == SAMPLE_GLOBAL_KIND_WAVETABLE)
-        count = project_control_list_wavetables(g_ui_settings.sampler_slots,capacity);
+        count = storage_settings_list_wavetables(g_ui_settings.sampler_slots,capacity);
     else if (kind == SAMPLE_GLOBAL_KIND_MULTI)
-        count = project_control_list_multis(g_ui_settings.sampler_slots,capacity);
+        count = storage_settings_list_multis(g_ui_settings.sampler_slots,capacity);
     g_ui_settings.sampler_slot_count = count;
     if (g_ui_settings.sample_slot_selected >= capacity)
     {
@@ -130,7 +130,7 @@ static void ui_page_settings_refresh_wavetable_slots(void)
 static void ui_page_settings_sd_busy_status(void)
 {
     char status[16];
-    (void)snprintf(status, sizeof(status), "SD %s", sd_access_gate_busy_label());
+    (void)snprintf(status, sizeof(status), "SD %s", storage_settings_sd_busy_label());
     ui_page_settings_status(status);
 }
 
@@ -144,8 +144,8 @@ static uint8_t ui_page_settings_stream_backend_from_global(uint16_t global_slot,
 
     uint16_t runtime_global=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     uint32_t runtime_kind=0U;
-    if(project_control_resolve_sample_runtime(global_slot,&runtime_global,&runtime_kind)==0U||runtime_kind!=PERSIST_ASSET_SAMPLE_STREAM)return 0U;
-    const sample_global_slot_t *const slot = sample_global_pool_get_slot(runtime_global);
+    if(storage_settings_resolve_sample_runtime(global_slot,&runtime_global,&runtime_kind)==0U||runtime_kind!=PERSIST_ASSET_SAMPLE_STREAM)return 0U;
+    const sample_global_slot_t *const slot = storage_settings_get_global_slot(runtime_global);
     if ((slot == 0)
         || (slot->kind != SAMPLE_GLOBAL_KIND_CLASSIC)
         || (runtime_global >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS))
@@ -181,7 +181,7 @@ static uint8_t ui_page_settings_multi_backend_from_global(uint16_t global_slot,
         *out_backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     }
 
-    if ((project_control_resolve_multi_runtime(global_slot,&backend_slot)==0U)
+    if ((storage_settings_resolve_multi_runtime(global_slot,&backend_slot)==0U)
         || (backend_slot >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS))
     {
         return 0U;
@@ -205,11 +205,11 @@ static uint8_t ui_page_settings_ram_backend_from_global(uint16_t global_slot,
 
     uint16_t runtime_global=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     uint32_t runtime_kind=0U;
-    if(project_control_resolve_sample_runtime(global_slot,&runtime_global,&runtime_kind)==0U||runtime_kind!=PERSIST_ASSET_SAMPLE_RAM)return 0U;
-    const sample_global_slot_t *const slot = sample_global_pool_get_slot(runtime_global);
+    if(storage_settings_resolve_sample_runtime(global_slot,&runtime_global,&runtime_kind)==0U||runtime_kind!=PERSIST_ASSET_SAMPLE_RAM)return 0U;
+    const sample_global_slot_t *const slot = storage_settings_get_global_slot(runtime_global);
     if ((slot == 0)
         || (slot->kind != SAMPLE_GLOBAL_KIND_RAM)
-        || (sample_global_pool_resolve_backend(runtime_global,
+        || (storage_settings_resolve_backend(runtime_global,
                                                SAMPLE_GLOBAL_KIND_RAM,
                                                &backend_slot) == 0U)
         || (backend_slot >= SAMPLER_RAM_POOL_MAX_SLOTS))
@@ -234,11 +234,11 @@ static uint8_t ui_page_settings_wavetable_backend_from_global(uint16_t global_sl
     }
 
     uint16_t runtime_global=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    if(project_control_resolve_wavetable_runtime(global_slot,&runtime_global)==0U)return 0U;
-    const sample_global_slot_t *const slot = sample_global_pool_get_slot(runtime_global);
+    if(storage_settings_resolve_wavetable_runtime(global_slot,&runtime_global)==0U)return 0U;
+    const sample_global_slot_t *const slot = storage_settings_get_global_slot(runtime_global);
     if ((slot == 0)
         || (slot->kind != SAMPLE_GLOBAL_KIND_WAVETABLE)
-        || (sample_global_pool_resolve_backend(runtime_global,
+        || (storage_settings_resolve_backend(runtime_global,
                                                SAMPLE_GLOBAL_KIND_WAVETABLE,
                                                &backend_slot) == 0U)
         || (backend_slot >= WAVETABLE_POOL_MAX_SLOTS))
@@ -255,19 +255,19 @@ static uint8_t ui_page_settings_wavetable_backend_from_global(uint16_t global_sl
 
 static int16_t ui_page_settings_stream_find_free_backend_slot(void)
 {
-    const uint16_t slot = sample_global_pool_find_free_slot();
+    const uint16_t slot = storage_settings_find_free_global_slot();
     return (slot == SAMPLE_GLOBAL_POOL_INVALID_INDEX) ? -1 : (int16_t)slot;
 }
 
 static int16_t ui_page_settings_ram_find_free_backend_slot(void)
 {
-    const uint16_t slot = sampler_ram_pool_find_free_slot();
+    const uint16_t slot = storage_settings_find_free_ram_slot();
     return (slot < SAMPLER_RAM_POOL_MAX_SLOTS) ? (int16_t)slot : -1;
 }
 
 static int16_t ui_page_settings_wavetable_find_free_backend_slot(void)
 {
-    const uint16_t slot = wavetable_pool_find_free_slot();
+    const uint16_t slot = storage_settings_find_free_wavetable_slot();
     return (slot < WAVETABLE_POOL_MAX_SLOTS) ? (int16_t)slot : -1;
 }
 
@@ -361,25 +361,25 @@ static void ui_page_settings_make_wavetable_label(char *out, uint32_t out_size, 
 
 static uint8_t ui_page_settings_sample_browser_refresh(void)
 {
-    if ((wav_loader_catalog_loaded() == 0U) || (wav_loader_catalog_stale() != 0U))
+    if ((storage_settings_catalog_loaded() == 0U) || (storage_settings_catalog_stale() != 0U))
     {
         ui_page_settings_status("REFRESH LIB");
         return 0U;
     }
 
-    const uint16_t catalog_child_count = wav_loader_catalog_child_count(g_ui_settings.sample_parent_id);
+    const uint16_t catalog_child_count = storage_settings_catalog_child_count(g_ui_settings.sample_parent_id);
     const uint16_t parent_entry_count =
         (g_ui_settings.sample_parent_id != WAV_LOADER_CATALOG_ROOT_PARENT) ? 1U : 0U;
-    if (wav_loader_catalog_view_busy() != 0U)
+    if (storage_settings_catalog_view_busy() != 0U)
     {
         return 0U;
     }
-    if (wav_loader_catalog_last_sd_busy() != 0U)
+    if (storage_settings_catalog_last_sd_busy() != 0U)
     {
         ui_page_settings_sd_busy_status();
         return 0U;
     }
-    if (wav_loader_catalog_last_io_error() != 0U)
+    if (storage_settings_catalog_last_io_error() != 0U)
     {
         ui_page_settings_status("CAT FAIL");
         return 0U;
@@ -399,13 +399,13 @@ static uint8_t ui_page_settings_sample_browser_refresh(void)
     {
         const uint16_t first_catalog_child =
             (page_start > parent_entry_count) ? (uint16_t)(page_start - parent_entry_count) : 0U;
-        if (wav_loader_catalog_get_child(g_ui_settings.sample_parent_id, first_catalog_child) == 0)
+        if (storage_settings_catalog_get_child(g_ui_settings.sample_parent_id, first_catalog_child) == 0)
         {
-            if (wav_loader_catalog_last_sd_busy() != 0U)
+            if (storage_settings_catalog_last_sd_busy() != 0U)
             {
                 ui_page_settings_sd_busy_status();
             }
-            else if (wav_loader_catalog_last_io_error() != 0U)
+            else if (storage_settings_catalog_last_io_error() != 0U)
             {
                 ui_page_settings_status("CAT FAIL");
             }
@@ -436,15 +436,15 @@ static uint8_t ui_page_settings_sample_browser_refresh(void)
         }
         const uint16_t catalog_child = (uint16_t)(child - parent_entry_count);
         const wav_loader_catalog_entry_t *const catalog_entry =
-            wav_loader_catalog_get_child(g_ui_settings.sample_parent_id, catalog_child);
+            storage_settings_catalog_get_child(g_ui_settings.sample_parent_id, catalog_child);
         if (catalog_entry == 0)
         {
-            if (wav_loader_catalog_last_sd_busy() != 0U)
+            if (storage_settings_catalog_last_sd_busy() != 0U)
             {
                 ui_page_settings_sd_busy_status();
                 return 0U;
             }
-            if (wav_loader_catalog_last_io_error() != 0U)
+            if (storage_settings_catalog_last_io_error() != 0U)
             {
                 ui_page_settings_status("CAT FAIL");
                 return 0U;
@@ -474,14 +474,14 @@ static uint8_t ui_page_settings_sample_browser_refresh(void)
                            entry->label);
             (void)snprintf(entry->label, sizeof(entry->label), "%s", prefixed);
         }
-        entry->catalog_index = wav_loader_catalog_get_child_index(g_ui_settings.sample_parent_id, catalog_child);
+        entry->catalog_index = storage_settings_catalog_get_child_index(g_ui_settings.sample_parent_id, catalog_child);
         entry->type = (catalog_entry->type == WAV_LOADER_CATALOG_ENTRY_DIR)
             ? UI_SETTINGS_SAMPLE_ENTRY_DIR
             : UI_SETTINGS_SAMPLE_ENTRY_FILE;
         g_ui_settings.sample_entry_count++;
     }
 
-    if (wav_loader_catalog_truncated() != 0U)
+    if (storage_settings_catalog_truncated() != 0U)
     {
         ui_page_settings_status("LIB FULL");
     }
@@ -511,7 +511,7 @@ static uint8_t ui_page_settings_wavetable_browser_refresh(void)
         }
 
         storage_catalog_snapshot_t snapshot;
-        if (storage_catalog_snapshot_begin(STORAGE_CATALOG_WAVETABLE, g_ui_settings.sample_dir,
+        if (storage_settings_catalog_snapshot_begin(STORAGE_CATALOG_WAVETABLE, g_ui_settings.sample_dir,
                                             &snapshot) == 0U)
             break;
         for (uint16_t i = 0U; i < snapshot.count; ++i)
@@ -534,11 +534,11 @@ static uint8_t ui_page_settings_wavetable_browser_refresh(void)
             }
             entry->catalog_index = WAV_LOADER_CATALOG_ROOT_PARENT;
         }
-        if (storage_catalog_snapshot_end(&snapshot) != 0U)
+        if (storage_settings_catalog_snapshot_end(&snapshot) != 0U)
             goto wavetable_snapshot_valid;
     }
 
-    (void)storage_catalog_request(STORAGE_CATALOG_WAVETABLE, g_ui_settings.sample_dir);
+    (void)storage_settings_catalog_request(STORAGE_CATALOG_WAVETABLE, g_ui_settings.sample_dir);
     ui_page_settings_status("NO WAVETABLES");
     return 0U;
 
@@ -595,7 +595,7 @@ static uint8_t ui_page_settings_multi_browser_refresh(void)
     {
         g_ui_settings.multi_entry_count = 0U;
         storage_catalog_snapshot_t snapshot;
-        if (storage_catalog_snapshot_begin(STORAGE_CATALOG_MULTI, g_ui_settings.sample_dir,
+        if (storage_settings_catalog_snapshot_begin(STORAGE_CATALOG_MULTI, g_ui_settings.sample_dir,
                                             &snapshot) == 0U)
             break;
         for (uint16_t i = 0U; i < snapshot.count; ++i)
@@ -624,11 +624,11 @@ static uint8_t ui_page_settings_multi_browser_refresh(void)
             }
         }
 
-        if (storage_catalog_snapshot_end(&snapshot) != 0U)
+        if (storage_settings_catalog_snapshot_end(&snapshot) != 0U)
             goto multi_snapshot_valid;
     }
 
-    (void)storage_catalog_request(STORAGE_CATALOG_MULTI, g_ui_settings.sample_dir);
+    (void)storage_settings_catalog_request(STORAGE_CATALOG_MULTI, g_ui_settings.sample_dir);
     ui_page_settings_status("NO MULTI");
     return 0U;
 
@@ -763,8 +763,8 @@ static void ui_page_settings_sample_browser_parent_or_exit(void)
 
     if (g_ui_settings.sample_parent_id != WAV_LOADER_CATALOG_ROOT_PARENT)
     {
-        const wav_loader_catalog_entry_t *const parent = wav_loader_catalog_get(g_ui_settings.sample_parent_id);
-        if ((parent == 0) && (wav_loader_catalog_last_sd_busy() != 0U))
+        const wav_loader_catalog_entry_t *const parent = storage_settings_catalog_get(g_ui_settings.sample_parent_id);
+        if ((parent == 0) && (storage_settings_catalog_last_sd_busy() != 0U))
         {
             ui_page_settings_sd_busy_status();
             return;
@@ -807,7 +807,7 @@ static uint8_t ui_page_settings_sample_restore_dir_after_refresh(const char *dir
             found = 1U;
             dir_index = WAV_LOADER_CATALOG_ROOT_PARENT;
         }
-        else if ((wav_loader_catalog_find_path(probe, &dir_index, &dir_entry) != 0U)
+        else if ((storage_settings_catalog_find_path(probe, &dir_index, &dir_entry) != 0U)
                  && (dir_entry.type == WAV_LOADER_CATALOG_ENTRY_DIR))
         {
             found = 1U;
@@ -822,15 +822,15 @@ static uint8_t ui_page_settings_sample_restore_dir_after_refresh(const char *dir
             {
                 uint16_t selected_index = WAV_LOADER_CATALOG_ROOT_PARENT;
                 wav_loader_catalog_entry_t selected_entry;
-                if ((wav_loader_catalog_find_path(selection_path, &selected_index, &selected_entry) != 0U)
+                if ((storage_settings_catalog_find_path(selection_path, &selected_index, &selected_entry) != 0U)
                     && (selected_entry.parent_id == dir_index))
                 {
                     const uint16_t parent_entry_count =
                         (dir_index != WAV_LOADER_CATALOG_ROOT_PARENT) ? 1U : 0U;
-                    const uint16_t child_count = wav_loader_catalog_child_count(dir_index);
+                    const uint16_t child_count = storage_settings_catalog_child_count(dir_index);
                     for (uint16_t child = 0U; child < child_count; ++child)
                     {
-                        if (wav_loader_catalog_get_child_index(dir_index, child) == selected_index)
+                        if (storage_settings_catalog_get_child_index(dir_index, child) == selected_index)
                         {
                             g_ui_settings.sample_selected = (uint16_t)(child + parent_entry_count);
                             break;

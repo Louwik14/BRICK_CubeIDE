@@ -32,18 +32,22 @@
 #include "drv_display.h"
 #include "encoders.h"
 #include "font.h"
-#include "Storage/project_product.h"
-#include "Storage/sd_access_gate.h"
+#include "Storage/settings_storage_service.h"
 #include "stm32h7xx_hal.h"
 #include "ui_boot_loading.h"
 #include "ui_core.h"
 #include "ui_event.h"
+#include "ui_page_manager.h"
+#include "pages/ui_page_audio_rec.h"
+#include "pages/ui_page_calibration.h"
+#include "pages/ui_page_settings.h"
+#include "UI/ui_service_wakeup.h"
 
 /**
- * @brief Point d'entrée ui_tasklet_poll.
+ * @brief Services ciblés du propriétaire UI.
  *
  * Rôle:
- * - Exécuter le traitement associé à ui_tasklet_poll.
+ * - Séparer l'initialisation, les entrées et la présentation.
  *
  *
  * Contexte d'appel:
@@ -539,15 +543,17 @@ void ui_boot_loading_begin(void)
     g_ui_boot_loading_variant = ui_boot_loading_select_variant();
     ui_boot_loading_select_phrases();
     g_ui_boot_loading_phase = UI_BOOT_LOADING_WAIT_FRAME;
+    ui_service_dirty_set();
 }
 
 void ui_boot_loading_service(void)
 {
-    const sd_storage_status_t storage_status = sd_access_storage_status();
+    const sd_storage_status_t storage_status = storage_settings_sd_status();
     if ((storage_status == SD_STORAGE_STATUS_NO_MEDIA)
         || (storage_status == SD_STORAGE_STATUS_FAULT))
     {
         g_ui_boot_loading_phase = UI_BOOT_LOADING_INACTIVE;
+        ui_service_dirty_set();
         return;
     }
     if (storage_status != SD_STORAGE_STATUS_READY)
@@ -555,27 +561,15 @@ void ui_boot_loading_service(void)
         return;
     }
 
-    if (g_ui_boot_loading_phase == UI_BOOT_LOADING_RESTORE_PROJECT)
-    {
-        if (drv_display_flush_in_progress() != 0U)
-        {
-            return;
-        }
-
-        if (control_domain_request_project(&(control_project_intent_t){CONTROL_PROJECT_RESTORE_BOOT, 0U}) != 0U)
-            g_ui_boot_loading_phase = UI_BOOT_LOADING_WAIT_SAMPLES;
-        else
-            g_ui_boot_loading_phase = UI_BOOT_LOADING_FAILED;
-    }
-
     if (g_ui_boot_loading_phase == UI_BOOT_LOADING_WAIT_SAMPLES)
     {
-        if ((project_product_get_progress(&g_ui_boot_loading_progress) != 0U)
+        if ((storage_settings_project_progress(&g_ui_boot_loading_progress) != 0U)
             && (g_ui_boot_loading_progress.complete != 0U))
         {
             g_ui_boot_loading_phase =
                 (g_ui_boot_loading_progress.result == PROJECT_PRODUCT_RESULT_FAILED)
                     ? UI_BOOT_LOADING_FAILED : UI_BOOT_LOADING_INACTIVE;
+            ui_service_dirty_set();
         }
     }
 }
@@ -585,19 +579,28 @@ uint8_t ui_boot_loading_is_active(void)
     return (g_ui_boot_loading_phase != UI_BOOT_LOADING_INACTIVE) ? 1U : 0U;
 }
 
-void ui_boot_loading_note_frame_rendered(void)
+uint8_t ui_boot_loading_restore_pending(void)
 {
-    if (g_ui_boot_loading_phase == UI_BOOT_LOADING_WAIT_FRAME)
-    {
-        g_ui_boot_loading_phase = UI_BOOT_LOADING_RESTORE_PROJECT;
-    }
+    return ((g_ui_boot_loading_phase == UI_BOOT_LOADING_WAIT_FRAME)
+            || (g_ui_boot_loading_phase == UI_BOOT_LOADING_RESTORE_PROJECT)) ? 1U : 0U;
+}
+
+void ui_boot_loading_note_restore_started(uint8_t accepted)
+{
+    g_ui_boot_loading_phase = (accepted != 0U)
+        ? UI_BOOT_LOADING_WAIT_SAMPLES : UI_BOOT_LOADING_FAILED;
+    ui_service_dirty_set();
+}
+
+void ui_boot_loading_advance_animation(void)
+{
+    if (g_ui_boot_loading_phase != UI_BOOT_LOADING_INACTIVE)
+        g_ui_boot_loading_anim_phase++;
 }
 
 void ui_boot_loading_render(void)
 {
     char counter[16];
-    g_ui_boot_loading_anim_phase++;
-
     drv_display_set_draw_color(1U);
     ui_boot_loading_draw_loader(g_ui_boot_loading_progress.done,
                                 g_ui_boot_loading_progress.total);
@@ -626,14 +629,18 @@ void ui_boot_loading_discard_inputs(void)
     }
 }
 
-void ui_tasklet_poll(void)
+void ui_tasklet_initialize(void)
 {
     if (g_ui_tasklet_init == 0U)
     {
         g_ui_tasklet_init = 1U;
         drv_display_init();
     }
+}
 
+void ui_tasklet_process_input(void)
+{
+    ui_tasklet_initialize();
     if (ui_boot_loading_is_active() != 0U)
     {
         ui_boot_loading_discard_inputs();
@@ -646,7 +653,26 @@ void ui_tasklet_poll(void)
         return;
     }
 
-    ui_core_tick();
+    ui_core_process_inputs();
+}
+
+void ui_tasklet_process_presentation(uint8_t deadline_due)
+{
+    ui_tasklet_initialize();
+    ui_boot_loading_service();
+    if ((deadline_due != 0U) || (ui_service_dirty_is_set() != 0U))
+    {
+        if ((ui_boot_loading_is_active() == 0U)
+            && (control_domain_project_ui_busy() == 0U)
+            && ((ui_page_get_id() == UI_PAGE_AUDIO_REC)
+                || (ui_page_get_id() == UI_PAGE_REC_EDIT)))
+            ui_page_audio_rec_process_presentation(deadline_due);
+        if ((ui_boot_loading_is_active() == 0U)
+            && (control_domain_project_ui_busy() == 0U)
+            && ((ui_page_get_id() == UI_PAGE_CALIBRATION)
+                || (ui_page_get_id() == UI_PAGE_USER_CALIBRATION)))
+            ui_page_calibration_process_presentation(deadline_due);
+    }
 }
 
 uint8_t ui_tasklet_is_initialized(void)

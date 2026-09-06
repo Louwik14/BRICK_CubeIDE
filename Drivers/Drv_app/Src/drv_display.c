@@ -200,11 +200,6 @@ uint8_t drv_display_flush_in_progress(void)
 
 uint8_t drv_display_flush_continuation_pending(void)
 {
-    if (g_display_state != DRV_DISPLAY_STATE_READY)
-    {
-        return 0U;
-    }
-
     return ((g_dma_payload_done != 0U) || (g_dma_payload_error != 0U))
         ? 1U : 0U;
 }
@@ -226,6 +221,19 @@ void drv_display_update(void)
 {
     static const uint8_t k_page_mode_cmds[] = { 0x20U, 0x02U };
     g_display_stats.flush_count++;
+
+    if (g_dma_payload_error != 0U)
+    {
+        /* DMA error completion is a continuation event, not a terminal
+         * display state.  The pending frame remains owned by the flush
+         * service and is retried after this cleanup. */
+        g_dma_payload_error = 0U;
+        g_dma_payload_done = 0U;
+        g_dma_payload_busy = 0U;
+        g_flush_active = 0U;
+        g_display_stats.flush_fail++;
+        g_display_state = DRV_DISPLAY_STATE_READY;
+    }
 
     if (g_display_state != DRV_DISPLAY_STATE_READY)
     {
@@ -255,6 +263,7 @@ void drv_display_update(void)
         if (send_cmd_burst(k_page_mode_cmds, sizeof(k_page_mode_cmds)) == 0U)
         {
             g_display_stats.flush_fail++;
+            g_dma_payload_error = 0U;
             return;
         }
 
@@ -288,6 +297,7 @@ void drv_display_update(void)
         if (send_cmd_burst(page_cmds, sizeof(page_cmds)) == 0U)
         {
             g_display_stats.flush_fail++;
+            g_dma_payload_error = 0U;
             g_flush_active = 0U;
             return;
         }
@@ -295,6 +305,7 @@ void drv_display_update(void)
         if (send_data_burst_dma(&flush_snapshot[g_flush_page * OLED_WIDTH], OLED_WIDTH) == 0U)
         {
             g_display_stats.flush_fail++;
+            g_dma_payload_error = 0U;
             g_flush_active = 0U;
             return;
         }
@@ -373,8 +384,10 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
         transport_end();
         g_dma_payload_busy = 0U;
         g_dma_payload_error = 1U;
+        g_dma_payload_done = 0U;
+        g_flush_active = 0U;
         g_display_stats.tx_err++;
-        g_display_state = DRV_DISPLAY_STATE_FAULT;
+        g_display_state = DRV_DISPLAY_STATE_READY;
         __DMB();
         ui_service_wakeup(UI_SERVICE_WAKE_OLED);
     }

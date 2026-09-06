@@ -447,7 +447,7 @@ void brick6_sampler_runtime_trigger(uint8_t track_id)
         {
             case BRICK6_SAMPLER_CLIP_STATE_IDLE:
             case BRICK6_SAMPLER_CLIP_STATE_STOPPED:
-                clip->state = (brick6_sampler_runtime_clip_start_playback(track_id) != 0U)
+                clip->state = (brick6_sampler_runtime_clip_start_playback(track_id, 0U) != 0U)
                                   ? (uint8_t)BRICK6_SAMPLER_CLIP_STATE_PLAYING
                                   : (uint8_t)BRICK6_SAMPLER_CLIP_STATE_STOPPED;
                 break;
@@ -455,7 +455,7 @@ void brick6_sampler_runtime_trigger(uint8_t track_id)
             case BRICK6_SAMPLER_CLIP_STATE_PLAYING:
                 if (launch_mode == 0U)
                 {
-                    clip->state = (brick6_sampler_runtime_clip_start_playback(track_id) != 0U)
+                    clip->state = (brick6_sampler_runtime_clip_start_playback(track_id, 0U) != 0U)
                                       ? (uint8_t)BRICK6_SAMPLER_CLIP_STATE_PLAYING
                                       : (uint8_t)BRICK6_SAMPLER_CLIP_STATE_STOPPED;
                 }
@@ -503,11 +503,12 @@ void brick6_sampler_runtime_trigger_note(uint8_t track_id, uint8_t note)
     brick6_sampler_runtime_trigger_note_velocity(track_id, note, 127U);
 }
 
-void brick6_sampler_runtime_trigger_note_velocity(uint8_t track_id, uint8_t note, uint8_t velocity)
+uint8_t brick6_sampler_runtime_trigger_note_velocity_output(
+    uint8_t track_id, uint8_t note, uint8_t velocity, uint32_t output_id)
 {
     if (track_id >= SEQ_TRACK_COUNT)
     {
-        return;
+        return 0U;
     }
 
     g_sampler_voice[track_id].note = note;
@@ -516,11 +517,19 @@ void brick6_sampler_runtime_trigger_note_velocity(uint8_t track_id, uint8_t note
     if (brick6_sampler_runtime_track_is_clip(track_id) != 0U)
     {
         brick6_sampler_clip_runtime_t *const clip = &g_sampler_clip_runtime[track_id];
-        clip->state = (brick6_sampler_runtime_clip_start_playback(track_id) != 0U)
+        clip->state = (brick6_sampler_runtime_clip_start_playback(track_id, output_id) != 0U)
                           ? (uint8_t)BRICK6_SAMPLER_CLIP_STATE_PLAYING
                           : (uint8_t)BRICK6_SAMPLER_CLIP_STATE_STOPPED;
-        return;
+        return (clip->state == (uint8_t)BRICK6_SAMPLER_CLIP_STATE_PLAYING)
+            ? 1U : 0U;
     }
 
     brick6_sampler_runtime_trigger(track_id);
+    return 1U;
+}
+
+void brick6_sampler_runtime_trigger_note_velocity(uint8_t track_id, uint8_t note, uint8_t velocity)
+{
+    (void)brick6_sampler_runtime_trigger_note_velocity_output(track_id, note,
+                                                               velocity, 0U);
 }

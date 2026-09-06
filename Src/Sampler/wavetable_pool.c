@@ -15,10 +15,13 @@
 #include "IPC/control_audio_timing.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/storage_io_wakeup.h"
+#include "App/control_rt_wakeup.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "Platform/memory_layout.h"
 #include "Storage/wav_audio_codec.h"
 #include "Storage/wav_parser.h"
+#include "Storage/project_product.h"
+#include "Storage/project_load_quiesce.h"
 #include "stm32h7xx.h"
 
 #define WAVETABLE_POOL_IO_BYTES (8192U)

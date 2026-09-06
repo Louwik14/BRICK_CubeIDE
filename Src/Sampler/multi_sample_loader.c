@@ -13,8 +13,12 @@
 #include "Seq/seq_runtime.h"
 #include "Platform/memory_layout.h"
 #include "Storage/audio_recorder.h"
+#include "Storage/project_load_quiesce.h"
+#include "Storage/project_product.h"
+#include "Storage/sd_access_gate.h"
 #include "Storage/wav_parser.h"
 #include "Storage/storage_io_wakeup.h"
+#include "App/control_rt_wakeup.h"
 #include "stm32h7xx_hal.h"
 
 #define MULTI_SAMPLE_LOADER_PATH_MAX SAMPLE_PAGE_CACHE_PATH_MAX
@@ -90,6 +94,12 @@ static void multi_loader_publish_completion_for(uint16_t logical_id,
                                  path);
     __DMB();
     g_multi_load_completion_valid = 1U;
+    if (project_product_load_busy() != 0U)
+    {
+        storage_io_owner_set(STORAGE_OWNER_PROJECT);
+        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+    }
+    control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
 }
 
 static void multi_loader_publish_completion(uint8_t success)
@@ -530,8 +540,8 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
     }
 
     if ((audio_recorder_is_active() != 0U)
-        || (sample_cache_has_pending_sd_work() != 0U)
-        || (sample_stream_manager_has_pending_sd_work() != 0U))
+        || (sample_stream_manager_io_in_flight() != 0U)
+        || (storage_io_owner_test(STORAGE_OWNER_STREAM) != 0U))
     {
         g_multi_load_diag.last_error = MULTI_SAMPLE_LOAD_SD_BUSY;
         return MULTI_SAMPLE_LOAD_SD_BUSY;
@@ -684,7 +694,8 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
     g_multi_load_active = 1U;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_MULTI);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return MULTI_SAMPLE_LOAD_OK;
 }
 
@@ -692,6 +703,10 @@ multi_sample_load_result_t multi_sample_load_instrument(uint16_t logical_id,
                                                         const char *index_path,
                                                         uint16_t instrument_id)
 {
+    if (project_transport_stopped_stable() == 0U)
+        return MULTI_SAMPLE_LOAD_TRANSPORT_ACTIVE;
+    if (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+        return MULTI_SAMPLE_LOAD_SD_BUSY;
     if (g_multi_load_active != 0U)
     {
         const multi_sample_load_result_t queued =
@@ -738,7 +753,9 @@ multi_sample_load_result_t multi_sample_load_request_instrument(uint16_t logical
                                                                 const char *index_path,
                                                                 uint16_t instrument_id)
 {
-    if ((index_path == 0) || (index_path[0] == '\0')
+    if ((project_transport_stopped_stable() == 0U)
+        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+        || (index_path == 0) || (index_path[0] == '\0')
         || (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS))
     {
         return MULTI_SAMPLE_LOAD_INVALID_ARG;
@@ -766,7 +783,8 @@ multi_sample_load_result_t multi_sample_load_request_instrument(uint16_t logical
     g_multi_external_request.used = 1U;
     __DMB();
     g_multi_external_request_valid = 1U;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_MULTI);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return MULTI_SAMPLE_LOAD_OK;
 }
 
@@ -779,7 +797,14 @@ void multi_sample_load_storage_request_service(void)
     (void)multi_loader_copy_text(path, sizeof(path), g_multi_external_request.path);
     g_multi_external_request_valid = 0U;
     g_multi_external_request.used = 0U;
-    (void)multi_sample_load_instrument(logical_id, path, instrument_id);
+    const multi_sample_load_result_t result =
+        multi_sample_load_instrument(logical_id, path, instrument_id);
+    if ((result == MULTI_SAMPLE_LOAD_SD_BUSY)
+        || ((multi_sample_load_is_active() == 0U)
+            && (multi_sample_load_has_pending() != 0U)))
+    {
+        storage_io_owner_wait_resource(STORAGE_OWNER_MULTI);
+    }
 }
 
 static void multi_loader_start_next_queued(void)
@@ -914,6 +939,7 @@ static uint8_t multi_loader_bulk_read_step(multi_sample_bulk_plan_t *plan,
             key, plan->next_page, SAMPLE_PAGE_ALLOC_SLOT_PERMANENT, 0U,
             &command) == 0U)
         return 0U;
+    command.storage_owner = (uint8_t)STORAGE_OWNER_MULTI;
     if (sample_stream_transport_submit(
             &command, &g_multi_bulk.pending_sequence) == 0U)
     {
@@ -921,6 +947,10 @@ static uint8_t multi_loader_bulk_read_step(multi_sample_bulk_plan_t *plan,
         return 0U;
     }
     g_multi_bulk.pending = 1U;
+    /* Bulk asset loading remains a MULTI continuation.  It shares the
+     * transport and physical SD scheduler, but it is not a Stream reader. */
+    storage_io_owner_set(STORAGE_OWNER_MULTI);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
@@ -1008,7 +1038,10 @@ void multi_sample_service_load(uint32_t byte_budget)
     }
 
     if ((g_multi_load_active != 0U) && (g_multi_bulk.pending == 0U))
-        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    {
+        storage_io_owner_set(STORAGE_OWNER_MULTI);
+        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+    }
 }
 
 uint8_t multi_sample_is_ready(uint16_t instrument_id)
@@ -1051,7 +1084,11 @@ uint8_t multi_sample_load_take_completion(
     *out_completion = g_multi_load_completion;
     __DMB();
     g_multi_load_completion_valid = 0U;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    if (multi_sample_load_has_pending() != 0U)
+    {
+        storage_io_owner_set(STORAGE_OWNER_MULTI);
+        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+    }
     return 1U;
 }
 

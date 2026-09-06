@@ -34,10 +34,10 @@
 #include "pages/ui_page_name_edit.h"
 #include "pages/ui_page_template_keyboard.h"
 #include "pages/ui_page_template_seq.h"
+#include "Storage/sample_capture.h"
 #include "pages/ui_page_template_play.h"
 #include "pages/ui_page_template_macro.h"
 #include "UI/pages/ui_page_template_cfg.h"
-#include "Storage/sample_capture.h"
 #include "Track/track_input_ownership.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1
 #include "ui_bootstrap.h"
@@ -997,16 +997,16 @@ void ui_core_service_track_selection_inputs(void)
 }
 
 /**
- * @brief Point d'entrée ui_core_tick.
+ * @brief Point d'entrée ui_core_process_inputs.
  *
  * Rôle:
- * - Exécuter le traitement associé à ui_core_tick.
+ * - Exécuter le drainage et le dispatch des entrées UI.
  *
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void ui_core_tick(void)
+void ui_core_process_inputs(void)
 {
     typedef uint8_t (*ui_core_tick_stage_fn_t)(const ui_event_t *ev);
     typedef struct
@@ -1092,16 +1092,6 @@ next_event:
     }
 
     ui_param_end_encoder_edit_group();
-
-    sample_capture_model_service();
-    ui_hall_mode_flow_service_pending(HAL_GetTick());
-
-    const ui_page_t *active_page = ui_page_get();
-    if ((active_page != 0) && (active_page->tick != 0))
-    {
-        /* Page-local periodic work only; track context sync is explicit in dedicated sync APIs. */
-        active_page->tick();
-    }
 
     ui_core_publish_hall_arbitration_snapshot();
 }

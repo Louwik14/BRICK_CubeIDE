@@ -404,20 +404,20 @@ static persist_codec_result_t persistent_pattern_control_install_internal(
     if (control_routing_apply_bulk(routes) == 0U)
         return PERSIST_CODEC_INVALID_ENTITY;
 
-    seq_runtime_set_tempo_bpm_milli(pattern->globals.tempo_milli_bpm);
     seq_clock_src_t clock;
-    uint8_t mode;
+    uint8_t record_start_mode;
+    uint8_t record_length_mode;
     if ((persist_key_clock_from_disk(
-            pattern->globals.clock_source_key, &clock) == 0U)
+             pattern->globals.clock_source_key, &clock) == 0U)
             || (persist_key_record_start_from_disk(
-                pattern->globals.record_start_key, &mode) == 0U))
+                pattern->globals.record_start_key, &record_start_mode) == 0U)
+            || (persist_key_record_length_from_disk(
+                pattern->globals.record_length_key, &record_length_mode) == 0U))
         return PERSIST_CODEC_UNKNOWN_KEY;
+    seq_runtime_set_tempo_bpm_milli(pattern->globals.tempo_milli_bpm);
     seq_runtime_set_clock_source(clock);
-    seq_runtime_set_rec_start_mode(mode);
-    if (persist_key_record_length_from_disk(
-            pattern->globals.record_length_key, &mode) == 0U)
-        return PERSIST_CODEC_UNKNOWN_KEY;
-    seq_runtime_set_rec_len_mode(mode);
+    seq_runtime_set_rec_start_mode(record_start_mode);
+    seq_runtime_set_rec_len_mode(record_length_mode);
     keyboard_runtime_set_root(pattern->globals.keyboard.root);
     keyboard_runtime_set_scale(pattern->globals.keyboard.scale);
     keyboard_runtime_set_omnichord(pattern->globals.keyboard.omnichord != 0U);

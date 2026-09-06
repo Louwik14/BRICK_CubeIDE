@@ -522,11 +522,6 @@ void ui_template_page_handle_event(const ui_event_t *ev)
     }
 }
 
-void ui_template_page_tick(void)
-{
-    ui_template_page_sync_active_track_context();
-}
-
 void ui_template_page_sync_active_track_context(void)
 {
     ui_template_page_state_t *state = ui_template_page_get_active_state();

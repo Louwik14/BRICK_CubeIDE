@@ -54,7 +54,7 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
         case UI_SETTINGS_VIEW_SAMPLER_SLOT:
             return (uint8_t)UI_SETTINGS_SAMPLER_ACTION_COUNT;
         case UI_SETTINGS_VIEW_SAMPLER_CATALOG:
-            return (wav_loader_catalog_count() > 255U) ? 255U : (uint8_t)wav_loader_catalog_count();
+            return (storage_settings_catalog_count() > 255U) ? 255U : (uint8_t)storage_settings_catalog_count();
         case UI_SETTINGS_VIEW_PROJECT_LOAD:
             return (uint8_t)(g_ui_settings.project_slot_count + 1U);
         case UI_SETTINGS_VIEW_PROJECT_MANAGE:
@@ -132,7 +132,7 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
             (void)snprintf(out, out_size, "PROJECT %02u", (unsigned)g_ui_settings.project_slots[index]);
             return out;
         case UI_SETTINGS_VIEW_PROJECT_SAVE_AS:
-            if (project_product_slot_present(index) != 0U)
+            if (storage_settings_project_slot_present(index) != 0U)
             {
                 (void)snprintf(out, out_size, "PROJECT %02u *", (unsigned)index);
             }
@@ -151,7 +151,7 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
                 const uint16_t global_slot = g_ui_settings.sampler_slots[index];
                 const sample_classic_slot_state_t state =
                     (ui_page_settings_stream_backend_from_global(global_slot, &backend_slot) != 0U)
-                        ? sample_global_pool_get_classic_state(backend_slot)
+                        ? storage_settings_get_classic_state(backend_slot)
                         : SAMPLE_CLASSIC_SLOT_ERROR;
                 const char *state_label = "EMPTY";
                 if (state == SAMPLE_CLASSIC_SLOT_LOADED)
@@ -176,11 +176,11 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
         case UI_SETTINGS_VIEW_SAMPLER_SLOT:
             if (index == (uint8_t)UI_SETTINGS_SAMPLER_ACTION_LOAD_OR_REPLACE)
             {
-                return (sample_global_pool_get_classic_state(g_ui_settings.selected_slot) == SAMPLE_CLASSIC_SLOT_EMPTY) ? "LOAD FROM SD" : "REPLACE FROM SD";
+                return (storage_settings_get_classic_state(g_ui_settings.selected_slot) == SAMPLE_CLASSIC_SLOT_EMPTY) ? "LOAD FROM SD" : "REPLACE FROM SD";
             }
             if (index == (uint8_t)UI_SETTINGS_SAMPLER_ACTION_PREVIEW_OR_STOP)
             {
-                return (sd_preview_is_active() != 0U) ? "STOP" : "PREVIEW";
+                return (storage_settings_preview_active() != 0U) ? "STOP" : "PREVIEW";
             }
             if (index == (uint8_t)UI_SETTINGS_SAMPLER_ACTION_CLEAR)
             {
@@ -189,7 +189,7 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
             return "-";
         case UI_SETTINGS_VIEW_SAMPLER_CATALOG:
             {
-                const wav_loader_catalog_entry_t *entry = wav_loader_catalog_get(index);
+                const wav_loader_catalog_entry_t *entry = storage_settings_catalog_get(index);
                 if (entry == 0)
                 {
                     return "-";
@@ -242,16 +242,7 @@ static void ui_page_settings_status(const char *status)
 static uint8_t ui_page_settings_request_asset_register(uint32_t kind,
                                                        uint16_t runtime)
 {
-    const control_asset_intent_t intent = {
-        .operation = CONTROL_ASSET_REGISTER_RUNTIME,
-        .kind = kind,
-        .runtime = runtime
-    };
-    if (control_domain_request_asset(&intent) == 0U) return 0U;
-    g_ui_settings.asset_register_pending = 1U;
-    g_ui_settings.asset_register_kind = kind;
-    g_ui_settings.asset_register_runtime = runtime;
-    return 1U;
+    return storage_settings_track_asset_register(kind, runtime);
 }
 
 static uint8_t ui_page_settings_request_asset_remove(uint32_t kind,
@@ -267,41 +258,16 @@ static uint8_t ui_page_settings_request_asset_remove(uint32_t kind,
     return control_domain_request_asset(&intent);
 }
 
-static void ui_page_settings_asset_register_poll(void)
-{
-    if (g_ui_settings.asset_register_pending == 0U) return;
-    const char *path = 0;
-    if (g_ui_settings.asset_register_kind == PERSIST_ASSET_MULTI)
-    {
-        const multi_sample_instrument_t *const instrument =
-            multi_sample_pool_get_instrument(g_ui_settings.asset_register_runtime);
-        if (instrument != 0) path = instrument->index_path;
-    }
-    else
-    {
-        const sample_global_slot_t *const slot = sample_global_pool_get_slot(
-            g_ui_settings.asset_register_runtime);
-        if (slot != 0) path = slot->path;
-    }
-    if ((path == 0) || (path[0] == '\0')) return;
-
-    uint16_t logical = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    if (project_control_find_asset(g_ui_settings.asset_register_kind,
-                                   path, &logical) == 0U) return;
-    g_ui_settings.sample_slot_selected = logical;
-    g_ui_settings.asset_register_pending = 0U;
-}
-
 static void ui_page_settings_preview_stop(ui_settings_preview_stop_origin_t origin)
 {
-    sd_preview_request_stop();
-    if (sd_preview_is_active() != 0U)
+    storage_settings_request_preview_stop();
+    if (storage_settings_preview_active() != 0U)
         g_ui_settings.preview_stop_origin = origin;
 }
 
 static void ui_page_settings_preview_apply_termination_status(void)
 {
-    const uint8_t active = sd_preview_is_active();
+    const uint8_t active = storage_settings_preview_active();
 
     if ((g_ui_settings.preview_was_active != 0U) && (active == 0U))
     {
@@ -311,7 +277,7 @@ static void ui_page_settings_preview_apply_termination_status(void)
         }
         else if (g_ui_settings.preview_stop_origin == UI_SETTINGS_PREVIEW_STOP_ORIGIN_NONE)
         {
-            const sd_preview_error_t error = sd_preview_get_last_error();
+            const sd_preview_error_t error = storage_settings_preview_last_error();
             ui_page_settings_status((error == SD_PREVIEW_ERROR_NONE)
                                         ? "PREVIEW END"
                                         : ui_page_settings_preview_error_label(error));
@@ -482,7 +448,9 @@ static void ui_page_settings_apply_action(uint8_t shift_down)
             }
             else
             {
-                ui_page_settings_status("LOAD FAIL");
+                ui_page_settings_status(
+                    (storage_settings_sd_status() == SD_STORAGE_STATUS_NO_MEDIA)
+                        ? "SD ABSENTE" : "LOAD FAIL");
             }
             break;
 
@@ -492,7 +460,9 @@ static void ui_page_settings_apply_action(uint8_t shift_down)
                 ui_page_settings_status("SAVING");
             }
             else
-            {                ui_page_settings_status("SAVE FAIL");
+            {                ui_page_settings_status(
+                    (storage_settings_sd_status() == SD_STORAGE_STATUS_NO_MEDIA)
+                        ? "SD ABSENTE" : "SAVE FAIL");
             }
             break;
 
@@ -511,7 +481,9 @@ static void ui_page_settings_apply_action(uint8_t shift_down)
                 {                    ui_page_settings_status("LOADING");
                 }
                 else
-                {                    ui_page_settings_status("LOAD FROM FAIL");
+                {                    ui_page_settings_status(
+                    (storage_settings_sd_status() == SD_STORAGE_STATUS_NO_MEDIA)
+                        ? "SD ABSENTE" : "LOAD FROM FAIL");
                 }
             }
             else if (level->selected_index == (uint8_t)UI_SETTINGS_MANAGE_ACTION_SAVE_TO)
@@ -520,7 +492,9 @@ static void ui_page_settings_apply_action(uint8_t shift_down)
                 {                    ui_page_settings_status("SAVING");
                 }
                 else
-                {                    ui_page_settings_status("SAVE TO FAIL");
+                {                    ui_page_settings_status(
+                    (storage_settings_sd_status() == SD_STORAGE_STATUS_NO_MEDIA)
+                        ? "SD ABSENTE" : "SAVE TO FAIL");
                 }
             }
             else if (control_domain_request_project(&(control_project_intent_t){CONTROL_PROJECT_DELETE, g_ui_settings.selected_slot}) != 0U)
@@ -579,16 +553,16 @@ static void ui_page_settings_apply_action(uint8_t shift_down)
             if (level->selected_index == (uint8_t)UI_SETTINGS_SAMPLER_ACTION_LOAD_OR_REPLACE)
             {
                 ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
-                if ((wav_loader_catalog_loaded() != 0U)
-                    && (wav_loader_catalog_stale() == 0U)
-                    && (wav_loader_catalog_count() != 0U))
+                if ((storage_settings_catalog_loaded() != 0U)
+                    && (storage_settings_catalog_stale() == 0U)
+                    && (storage_settings_catalog_count() != 0U))
                 {
                     g_ui_settings.sampler_catalog_mode = UI_SETTINGS_SAMPLER_CATALOG_MODE_LOAD;
-                    if (wav_loader_catalog_truncated() != 0U)
+                    if (storage_settings_catalog_truncated() != 0U)
                     {
                         ui_page_settings_status("LIB FULL");
                     }
-                    else if (wav_loader_catalog_path_truncated() != 0U)
+                    else if (storage_settings_catalog_path_truncated() != 0U)
                     {
                         ui_page_settings_status("PATH LONG");
                     }
@@ -601,22 +575,22 @@ static void ui_page_settings_apply_action(uint8_t shift_down)
             }
             else if (level->selected_index == (uint8_t)UI_SETTINGS_SAMPLER_ACTION_PREVIEW_OR_STOP)
             {
-                if (sd_preview_is_active() != 0U)
+                if (storage_settings_preview_active() != 0U)
                 {
                     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_USER);
                 }
                 else
                 {
-                    if ((wav_loader_catalog_loaded() != 0U)
-                        && (wav_loader_catalog_stale() == 0U)
-                        && (wav_loader_catalog_count() != 0U))
+                    if ((storage_settings_catalog_loaded() != 0U)
+                        && (storage_settings_catalog_stale() == 0U)
+                        && (storage_settings_catalog_count() != 0U))
                     {
                         g_ui_settings.sampler_catalog_mode = UI_SETTINGS_SAMPLER_CATALOG_MODE_PREVIEW;
-                        if (wav_loader_catalog_truncated() != 0U)
+                        if (storage_settings_catalog_truncated() != 0U)
                         {
                             ui_page_settings_status("LIB FULL");
                         }
-                        else if (wav_loader_catalog_path_truncated() != 0U)
+                        else if (storage_settings_catalog_path_truncated() != 0U)
                         {
                             ui_page_settings_status("PATH LONG");
                         }
@@ -630,7 +604,7 @@ static void ui_page_settings_apply_action(uint8_t shift_down)
             }
             else if (level->selected_index == (uint8_t)UI_SETTINGS_SAMPLER_ACTION_CLEAR)
             {
-                if (project_replacement_is_active() != 0U) return;
+                if (storage_settings_project_replacement_active() != 0U) return;
                 ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
                 (void)ui_page_settings_request_asset_remove(
                     PERSIST_ASSET_SAMPLE_STREAM,
@@ -642,29 +616,29 @@ static void ui_page_settings_apply_action(uint8_t shift_down)
             break;
 
         case UI_SETTINGS_VIEW_SAMPLER_CATALOG:
-            if (level->selected_index < wav_loader_catalog_count())
+            if (level->selected_index < storage_settings_catalog_count())
             {
-                const wav_loader_catalog_entry_t *entry = wav_loader_catalog_get(level->selected_index);
+                const wav_loader_catalog_entry_t *entry = storage_settings_catalog_get(level->selected_index);
                 if ((entry != 0) && (entry->state == WAV_LOADER_CATALOG_READY))
                 {
                     if (g_ui_settings.sampler_catalog_mode == UI_SETTINGS_SAMPLER_CATALOG_MODE_PREVIEW)
                     {
-                        if ((sd_preview_is_active() != 0U)
-                            && (strcmp(sd_preview_get_path(), entry->path) == 0))
+                        if ((storage_settings_preview_active() != 0U)
+                            && (strcmp(storage_settings_preview_path(), entry->path) == 0))
                         {
                             ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_USER);
                             break;
                         }
 
-                        if (sd_preview_request_begin(entry->path) != 0U)
+                        if (storage_settings_request_preview(entry->path) != 0U)
                         {
                             g_ui_settings.preview_stop_origin = UI_SETTINGS_PREVIEW_STOP_ORIGIN_NONE;
-                            g_ui_settings.preview_was_active = sd_preview_is_active();
+                            g_ui_settings.preview_was_active = storage_settings_preview_active();
                             ui_page_settings_status("PREVIEW ON");
                         }
                         else
                         {
-                            ui_page_settings_status(ui_page_settings_preview_error_label(sd_preview_get_last_error()));
+                            ui_page_settings_status(ui_page_settings_preview_error_label(storage_settings_preview_last_error()));
                         }
                     }
                     else
@@ -692,9 +666,6 @@ static void ui_page_settings_enter(void)
     g_ui_settings.project_slot_count = 0U;
     g_ui_settings.preview_was_active = 0U;
     g_ui_settings.preview_stop_origin = UI_SETTINGS_PREVIEW_STOP_ORIGIN_NONE;
-    g_ui_settings.convert_slot_valid = 0U;
-    g_ui_settings.convert_slot = 0U;
-    g_ui_settings.convert_path[0] = '\0';
     g_ui_settings.header_slot_flash_until_ms = 0U;
     g_ui_settings.header_mem_flash_until_ms = 0U;
     for (uint8_t i = 0U; i < UI_SETTINGS_ENCODER_COUNT; ++i)
@@ -715,7 +686,7 @@ static void ui_page_settings_leave(void)
 
 static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
 {
-    if ((wav_convert_is_active() != 0U) || (g_ui_settings.convert_slot_valid != 0U))
+    if (storage_settings_convert_active() != 0U)
     {
         return;
     }
@@ -747,6 +718,7 @@ static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
                 {
                     (void)control_domain_request_storage_ui(
                         CONTROL_STORAGE_UI_CANCEL_MULTI_LOAD);
+                    storage_settings_cancel_multi();
                     ui_page_settings_multi_prepare_finish("CANCEL");
                 }
                 return;
@@ -901,113 +873,3 @@ static void ui_page_settings_handle_event_page(const ui_event_t *ev)
 {
     (void)ui_page_settings_handle_event(ev);
 }
-
-static void ui_page_settings_tick(void)
-{
-    ui_page_settings_asset_register_poll();
-    ui_page_settings_multi_clear_service();
-    const ui_settings_menu_level_t *const catalog_level =
-        (g_ui_settings.depth != 0U)
-            ? &g_ui_settings.levels[g_ui_settings.depth - 1U] : 0;
-    if (catalog_level != 0)
-    {
-        if (catalog_level->view == UI_SETTINGS_VIEW_WAVETABLE)
-            (void)ui_page_settings_wavetable_browser_refresh();
-        else if (catalog_level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
-            (void)ui_page_settings_multi_browser_refresh();
-    }
-    if (g_ui_settings.classic_load_pending != 0U)
-    {
-        const sample_cache_slot_readiness_t readiness =
-            sample_cache_get_slot_readiness(g_ui_settings.classic_load_slot);
-        if (readiness == SAMPLE_CACHE_SLOT_PLAYABLE)
-        {
-            if (ui_page_settings_request_asset_register(
-                    PERSIST_ASSET_SAMPLE_STREAM,
-                    g_ui_settings.classic_load_slot) != 0U)
-            {
-                g_ui_settings.sample_slot_selected = g_ui_settings.classic_load_slot;
-                ui_page_settings_refresh_sampler_slots();
-                ui_page_settings_status("LOAD OK");
-            }
-            else
-            {
-                (void)ui_page_settings_request_asset_remove(
-                    PERSIST_ASSET_SAMPLE_STREAM,
-                    g_ui_settings.classic_load_slot,
-                    g_ui_settings.classic_load_slot);
-                ui_page_settings_status("BANK FAIL");
-            }
-            g_ui_settings.classic_load_pending = 0U;
-        }
-        else if (readiness == SAMPLE_CACHE_SLOT_ERROR)
-        {
-            g_ui_settings.classic_load_pending = 0U;
-            ui_page_settings_status("LOAD FAIL");
-        }
-    }
-    const wav_loader_catalog_view_service_result_t browser_result =
-        wav_loader_catalog_view_last_result();
-    if (browser_result == WAV_LOADER_CATALOG_VIEW_PUBLISHED)
-    {
-        const ui_settings_menu_level_t *const level =
-            (g_ui_settings.depth != 0U) ? &g_ui_settings.levels[g_ui_settings.depth - 1U] : 0;
-        if ((level != 0)
-            && ((level->view == UI_SETTINGS_VIEW_SAMPLE)
-                || (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM)))
-        {
-            (void)ui_page_settings_sample_browser_refresh();
-        }
-    }
-    else if (browser_result == WAV_LOADER_CATALOG_VIEW_ERROR)
-    {
-        ui_page_settings_status("CAT FAIL");
-    }
-
-    if ((wav_convert_is_active() != 0U) || (g_ui_settings.convert_slot_valid != 0U))
-    {
-        const wav_convert_state_t convert_state = wav_convert_get_state();
-        if (convert_state == WAV_CONVERT_STATE_ACTIVE)
-        {
-            (void)snprintf(g_ui_settings.status_line,
-                           sizeof(g_ui_settings.status_line),
-                           "CONVERT %u%%",
-                           (unsigned)wav_convert_get_progress_percent());
-            g_ui_settings.status_until_ms = HAL_GetTick() + UI_SETTINGS_STATUS_DURATION_MS;
-            return;
-        }
-        if (convert_state == WAV_CONVERT_STATE_DONE)
-        {
-            const uint16_t slot = g_ui_settings.convert_slot;
-            char path[SAMPLE_CLASSIC_PATH_MAX];
-            (void)snprintf(path, sizeof(path), "%s", g_ui_settings.convert_path);
-            g_ui_settings.convert_slot_valid = 0U;
-            g_ui_settings.convert_path[0] = '\0';
-            (void)control_domain_request_storage_ui(
-                CONTROL_STORAGE_UI_CLEAR_CONVERSION);
-            wav_loader_catalog_mark_stale();
-            ui_page_settings_sample_load_to_slot(slot, path);
-            return;
-        }
-        if (convert_state == WAV_CONVERT_STATE_FAILED)
-        {
-            const char *const label =
-                ui_page_settings_convert_error_label(wav_convert_get_last_error());
-            g_ui_settings.convert_slot_valid = 0U;
-            g_ui_settings.convert_path[0] = '\0';
-            (void)control_domain_request_storage_ui(
-                CONTROL_STORAGE_UI_CLEAR_CONVERSION);
-            ui_page_settings_status(label);
-            return;
-        }
-    }
-
-    ui_page_settings_preview_apply_termination_status();
-
-    if ((g_ui_settings.status_line[0] != '\0')
-        && ((int32_t)(g_ui_settings.status_until_ms - HAL_GetTick()) <= 0))
-    {
-        ui_page_settings_status(0);
-    }
-}
-

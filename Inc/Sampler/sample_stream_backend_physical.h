@@ -27,6 +27,7 @@ typedef struct
     uint32_t active_lba;
     uint32_t active_sector_count;
     uint8_t *active_buffer;
+    uint8_t storage_owner;
 } sample_stream_backend_physical_async_t;
 
 uint8_t sample_stream_backend_physical_begin(
@@ -36,7 +37,8 @@ uint8_t sample_stream_backend_physical_begin(
     sample_stream_physical_cursor_t *cursor,
     uint8_t *scratch,
     uint32_t scratch_capacity,
-    uint32_t deadline_margin_us);
+    uint32_t deadline_margin_us,
+    uint8_t storage_owner);
 uint8_t sample_stream_backend_physical_poll(
     sample_stream_backend_physical_async_t *async,
     sample_page_load_result_t *out_result,

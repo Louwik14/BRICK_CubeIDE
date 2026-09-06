@@ -243,6 +243,9 @@ void MX_TIM12_Init(void)
   }
   /* USER CODE BEGIN TIM12_Init 2 */
 
+  /* TIM12 is a 1500 Hz one-shot base for musical deadlines. CONTROL arms
+     it only while an internal transport deadline is active. */
+
   /* Timer dédié au domaine temps séquenceur interne: 1500 Hz fixes. */
 
   /* USER CODE END TIM12_Init 2 */

@@ -125,16 +125,17 @@ static void ui_page_rec_edit_handle_event(const ui_event_t *ev)
     }
 }
 
-static void ui_page_audio_rec_tick(void)
+void ui_page_audio_rec_process_presentation(uint8_t deadline_due)
 {
-    sample_capture_model_service();
     sample_capture_ui_state_t state;
     sample_capture_model_get_ui_state(&state);
-    if(state.view == SAMPLE_CAPTURE_VIEW_AUDIO_REC)
+    if ((deadline_due != 0U) && (state.view == SAMPLE_CAPTURE_VIEW_AUDIO_REC))
     {
         ui_page_audio_rec_update_meter(state.live_peak_abs_pcm24);
     }
-    if(state.view == SAMPLE_CAPTURE_VIEW_REC_EDIT && ui_page_get_id() != UI_PAGE_REC_EDIT)
+    if ((ui_service_dirty_is_set() != 0U)
+        && (state.view == SAMPLE_CAPTURE_VIEW_REC_EDIT)
+        && (ui_page_get_id() != UI_PAGE_REC_EDIT))
     {
         ui_page_set(UI_PAGE_REC_EDIT);
     }

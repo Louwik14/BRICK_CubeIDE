@@ -1,6 +1,7 @@
 #include "Storage/waveform_cache.h"
 
 #include "Sampler/sample_cache.h"
+#include "Sampler/sample_stream_manager.h"
 #include "Platform/memory_layout.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/pattern_load_storage.h"
@@ -9,6 +10,8 @@
 #include "Storage/sd_preview.h"
 #include "Storage/storage_io_wakeup.h"
 #include "Storage/wav_audio_codec.h"
+#include "UI/ui_service_wakeup.h"
+#include "ui_page_manager.h"
 #include "wav_parser.h"
 #include "ff.h"
 
@@ -194,6 +197,21 @@ static const uint32_t g_waveform_cache_level_frames[WAVEFORM_CACHE_LEVEL_COUNT] 
     64U
 };
 
+static void waveform_cache_ui_completion_wakeup(waveform_cache_reason_t reason)
+{
+    if((reason == WAVEFORM_CACHE_REASON_EDITOR_VISIBLE)
+            && (ui_page_get_id() == UI_PAGE_REC_EDIT))
+    {
+        ui_service_dirty_set();
+    }
+}
+
+static void waveform_cache_owner_wakeup(void)
+{
+    storage_io_owner_set(STORAGE_OWNER_WAVEFORM_CACHE);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+}
+
 static uint32_t waveform_cache_persist_min_frames_for_rate(uint32_t sample_rate)
 {
     const uint32_t rate = (sample_rate != 0U)
@@ -375,6 +393,13 @@ static uint8_t waveform_cache_tile_work_pending(void)
         if (g_waveform_cache.tile_queue[i].pending != 0U)
             return 1U;
     return 0U;
+}
+
+static uint8_t waveform_cache_storage_unavailable(void)
+{
+    const sd_storage_status_t status = sd_access_storage_status();
+    return ((status == SD_STORAGE_STATUS_NO_MEDIA)
+            || (status == SD_STORAGE_STATUS_FAULT)) ? 1U : 0U;
 }
 
 static void waveform_cache_hex32(const uint8_t *id, char *out)
@@ -692,7 +717,7 @@ static uint8_t waveform_cache_validate_existing(const char *cache_path,
     } while(0);
 
     (void)f_close(&fp);
-    if(valid == 0U)
+    if((valid == 0U) && (waveform_cache_storage_unavailable() == 0U))
     {
         (void)f_unlink(cache_path);
     }
@@ -959,13 +984,43 @@ static uint8_t waveform_cache_accumulate_frame(FIL *cache_fp,
 
 static void waveform_cache_fail_active(void)
 {
-    if(g_waveform_cache.active.cache_path[0] != '\0')
+    if((g_waveform_cache.active.cache_path[0] != '\0')
+            && (waveform_cache_storage_unavailable() == 0U))
     {
         (void)f_unlink(g_waveform_cache.active.cache_path);
     }
     memset(&g_waveform_cache.active, 0, sizeof(g_waveform_cache.active));
     g_waveform_cache.diag.status = WAVEFORM_CACHE_STATUS_ERROR;
     g_waveform_cache.diag.jobs_failed++;
+}
+
+static void waveform_cache_abort_storage_unavailable(void)
+{
+    uint8_t had_job =
+        (g_waveform_cache.active.state != WAVEFORM_CACHE_JOB_EMPTY) ? 1U : 0U;
+
+    for(uint8_t i = 0U; i < WAVEFORM_CACHE_QUEUE_CAPACITY; ++i)
+    {
+        if(g_waveform_cache.queue[i].state != WAVEFORM_CACHE_JOB_EMPTY)
+            had_job = 1U;
+    }
+    memset(&g_waveform_cache.active, 0, sizeof(g_waveform_cache.active));
+    memset(g_waveform_cache.queue, 0, sizeof(g_waveform_cache.queue));
+    memset(g_waveform_cache.tile_queue, 0, sizeof(g_waveform_cache.tile_queue));
+    g_waveform_cache_ui_request_tail = g_waveform_cache_ui_request_head;
+    g_waveform_cache.service_defer_passes = 0U;
+    for(uint16_t i = 0U; i < WAVEFORM_CACHE_RAM_TILE_COUNT; ++i)
+    {
+        if(g_waveform_cache_ram_tiles[i].loading != 0U)
+        {
+            memset(&g_waveform_cache_ram_tiles[i], 0,
+                   sizeof(g_waveform_cache_ram_tiles[i]));
+        }
+    }
+    g_waveform_cache.diag.status = WAVEFORM_CACHE_STATUS_ERROR;
+    g_waveform_cache.diag.last_fresult = (uint32_t)FR_NOT_READY;
+    if(had_job != 0U)
+        g_waveform_cache.diag.jobs_failed++;
 }
 
 static uint8_t waveform_cache_start_next_job(void)
@@ -1037,6 +1092,8 @@ uint8_t waveform_cache_ensure_dirs(void)
 uint8_t waveform_cache_storage_request_for_wav(const char *path,
                                                waveform_cache_reason_t reason)
 {
+    if(waveform_cache_storage_unavailable() != 0U)
+        return 0U;
     if((path == 0) || (path[0] == '\0') || (waveform_cache_path_is_temporary(path) != 0U))
     {
         return waveform_cache_finish_request(path, reason, 1U);
@@ -1077,7 +1134,8 @@ uint8_t waveform_cache_storage_request_for_wav(const char *path,
             g_waveform_cache.queue[i].state = WAVEFORM_CACHE_JOB_QUEUED;
             g_waveform_cache.diag.jobs_queued++;
             g_waveform_cache.diag.status = WAVEFORM_CACHE_STATUS_QUEUED;
-            storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+            storage_io_owner_set(STORAGE_OWNER_WAVEFORM_CACHE);
+            storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
             return waveform_cache_finish_request(path, reason, 1U);
         }
     }
@@ -1115,7 +1173,8 @@ static uint8_t waveform_cache_ui_enqueue(const waveform_cache_ui_request_t *requ
     g_waveform_cache_ui_requests[head & (WAVEFORM_CACHE_UI_REQUEST_CAPACITY - 1U)] = *request;
     __DMB();
     g_waveform_cache_ui_request_head = head + 1U;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_WAVEFORM_CACHE);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
@@ -1160,6 +1219,8 @@ uint8_t waveform_cache_request_for_wav(const char *path, waveform_cache_reason_t
     {
         return 1U;
     }
+    if(waveform_cache_storage_unavailable() != 0U)
+        return 0U;
     request.kind = WAVEFORM_CACHE_UI_REQUEST_WAV;
     request.reason = reason;
     if(waveform_cache_copy_path(request.payload.wav.path,
@@ -1183,6 +1244,8 @@ uint8_t waveform_cache_request_for_wav_known_duration(const char *path,
     {
         return 1U;
     }
+    if(waveform_cache_storage_unavailable() != 0U)
+        return 0U;
     request.kind = WAVEFORM_CACHE_UI_REQUEST_WAV_KNOWN_DURATION;
     request.reason = reason;
     request.payload.wav.frame_count = frame_count;
@@ -1206,6 +1269,7 @@ static void waveform_cache_service_validate(void)
     }
     if(sd_access_gate_try_acquire(SD_ACCESS_CLIENT_WAVEFORM_CACHE) == 0U)
     {
+        storage_io_owner_wait_resource(STORAGE_OWNER_WAVEFORM_CACHE);
         return;
     }
     if(waveform_cache_build_identity(g_waveform_cache.active.wav_path,
@@ -1231,6 +1295,8 @@ static void waveform_cache_service_validate(void)
     if(waveform_cache_validate_existing(g_waveform_cache.active.cache_path,
                                         &g_waveform_cache.active.header) != 0U)
     {
+        waveform_cache_ui_completion_wakeup(g_waveform_cache.active.reason);
+        waveform_cache_owner_wakeup();
         memset(&g_waveform_cache.active, 0, sizeof(g_waveform_cache.active));
         g_waveform_cache.diag.status = WAVEFORM_CACHE_STATUS_READY;
         g_waveform_cache.diag.jobs_done++;
@@ -1264,11 +1330,13 @@ static void waveform_cache_service_build(uint32_t byte_budget)
         waveform_cache_fail_active();
         return;
     }
-    if(sample_cache_has_pending_sd_work() != 0U
+    if((sample_stream_manager_io_in_flight() != 0U)
+            || (storage_io_owner_test(STORAGE_OWNER_STREAM) != 0U)
             || audio_recorder_is_active() != 0U
             || sd_preview_is_active() != 0U
             || pattern_storage_is_pending() != 0U)
     {
+        storage_io_owner_wait_resource(STORAGE_OWNER_WAVEFORM_CACHE);
         return;
     }
     if(sd_access_gate_try_acquire(SD_ACCESS_CLIENT_WAVEFORM_CACHE) == 0U)
@@ -1402,6 +1470,8 @@ static void waveform_cache_service_build(uint32_t byte_budget)
     }
     else if(completed != 0U)
     {
+        waveform_cache_ui_completion_wakeup(job->reason);
+        waveform_cache_owner_wakeup();
         memset(job, 0, sizeof(*job));
         g_waveform_cache.diag.status = WAVEFORM_CACHE_STATUS_READY;
         g_waveform_cache.diag.jobs_done++;
@@ -1441,11 +1511,13 @@ static void waveform_cache_service_tile_request(uint32_t byte_budget)
     {
         return;
     }
-    if(sample_cache_has_pending_sd_work() != 0U
+    if((sample_stream_manager_io_in_flight() != 0U)
+            || (storage_io_owner_test(STORAGE_OWNER_STREAM) != 0U)
             || audio_recorder_is_active() != 0U
             || sd_preview_is_active() != 0U
             || pattern_storage_is_pending() != 0U)
     {
+        storage_io_owner_wait_resource(STORAGE_OWNER_WAVEFORM_CACHE);
         return;
     }
 
@@ -1543,6 +1615,7 @@ static void waveform_cache_service_tile_request(uint32_t byte_budget)
     if(ok != 0U)
     {
         g_waveform_cache_ram_tiles[(uint16_t)slot].valid = 1U;
+        waveform_cache_ui_completion_wakeup(req.reason);
         memset(&g_waveform_cache.tile_queue[(uint8_t)req_idx],
                0,
                sizeof(g_waveform_cache.tile_queue[(uint8_t)req_idx]));
@@ -1551,11 +1624,17 @@ static void waveform_cache_service_tile_request(uint32_t byte_budget)
 
 void waveform_cache_service(uint32_t byte_budget)
 {
+    if(waveform_cache_storage_unavailable() != 0U)
+    {
+        waveform_cache_abort_storage_unavailable();
+        return;
+    }
     waveform_cache_storage_drain_ui_requests();
     if(g_waveform_cache.service_defer_passes != 0U)
     {
         g_waveform_cache.service_defer_passes--;
-        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+        storage_io_owner_set(STORAGE_OWNER_WAVEFORM_CACHE);
+        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
         return;
     }
     waveform_cache_service_tile_request(byte_budget);
@@ -1574,14 +1653,17 @@ void waveform_cache_service(uint32_t byte_budget)
 
     if (((g_waveform_cache.active.state != WAVEFORM_CACHE_JOB_EMPTY)
             || (waveform_cache_tile_work_pending() != 0U))
-            && (sample_cache_has_pending_sd_work() == 0U)
+            && (sample_stream_manager_io_in_flight() == 0U)
+            && (storage_io_owner_test(STORAGE_OWNER_STREAM) == 0U)
             && (audio_recorder_is_active() == 0U)
             && (sd_preview_is_active() == 0U)
             && (pattern_storage_is_pending() == 0U)
             && (g_waveform_cache.service_defer_passes == 0U)
+            && (waveform_cache_storage_unavailable() == 0U)
             && (sd_access_gate_current_owner() == SD_ACCESS_CLIENT_NONE))
     {
-        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+        storage_io_owner_set(STORAGE_OWNER_WAVEFORM_CACHE);
+        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     }
 }
 
@@ -1633,6 +1715,10 @@ uint8_t waveform_cache_choose_level(uint32_t frames_per_pixel,
 uint8_t waveform_cache_open_for_wav(const char *path, waveform_cache_handle_t *out_handle)
 {
     if((path == 0) || (out_handle == 0) || (waveform_cache_path_is_temporary(path) != 0U))
+    {
+        return 0U;
+    }
+    if(waveform_cache_storage_unavailable() != 0U)
     {
         return 0U;
     }
@@ -1696,6 +1782,8 @@ uint8_t waveform_cache_storage_request_tiles(const waveform_cache_handle_t *hand
     {
         return 0U;
     }
+    if(waveform_cache_storage_unavailable() != 0U)
+        return 0U;
     uint8_t queued_any = 0U;
     for(uint32_t t = 0U; t < tile_count; ++t)
     {
@@ -1741,6 +1829,8 @@ uint8_t waveform_cache_request_tiles(const waveform_cache_handle_t *handle,
     {
         return 0U;
     }
+    if(waveform_cache_storage_unavailable() != 0U)
+        return 0U;
     request.kind = WAVEFORM_CACHE_UI_REQUEST_TILES;
     request.reason = reason;
     request.payload.tiles.handle = *handle;

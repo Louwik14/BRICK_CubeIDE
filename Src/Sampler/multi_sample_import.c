@@ -7,6 +7,7 @@
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/multi_sample_pool.h"
 #include "Sampler/sample_cache.h"
+#include "Sampler/sample_stream_manager.h"
 #include "Platform/memory_layout.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/sd_access_gate.h"
@@ -184,7 +185,8 @@ static uint8_t multi_import_progressive_start(const char *instrument_dir)
     }
     if ((project_replacement_is_active() != 0U)
         || (audio_recorder_is_active() != 0U)
-        || (sample_cache_has_pending_sd_work() != 0U)
+        || (sample_stream_manager_io_in_flight() != 0U)
+        || (storage_io_owner_test(STORAGE_OWNER_STREAM) != 0U)
         || (multi_sample_load_has_pending() != 0U)
         || (multi_sample_pool_clear_is_active() != 0U))
     {
@@ -208,7 +210,8 @@ static uint8_t multi_import_progressive_start(const char *instrument_dir)
         g_import_last_result = MULTI_SAMPLE_IMPORT_PATH_TOO_LONG;
         return 0U;
     }
-    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U)
+    if (sd_access_gate_try_acquire_for_owner(
+            SD_ACCESS_CLIENT_PROJECT, STORAGE_OWNER_MULTI) == 0U)
     {
         g_import_last_result = MULTI_SAMPLE_IMPORT_SD_BUSY;
         return 0U;
@@ -236,7 +239,8 @@ static uint8_t multi_import_progressive_start(const char *instrument_dir)
     g_import_progressive_path_cursor = 0U;
     g_import_progressive_state = MULTI_IMPORT_PROGRESSIVE_SCAN;
     g_import_busy = 1U;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_MULTI);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
@@ -1694,7 +1698,9 @@ static multi_sample_import_result_t multi_import_count_direct_wavs(const char *s
 
 uint8_t multi_sample_import_request_folder(const char *instrument_dir)
 {
-    if ((instrument_dir == NULL) || (instrument_dir[0] == '\0')
+    if ((project_transport_stopped_stable() == 0U)
+        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+        || (instrument_dir == NULL) || (instrument_dir[0] == '\0')
         || (strlen(instrument_dir) >= sizeof(g_import_request_path))
         || (g_import_request_valid != 0U) || (g_import_busy != 0U)
         || (g_delete_request_valid != 0U) || (g_delete_result_valid != 0U)
@@ -1705,7 +1711,8 @@ uint8_t multi_sample_import_request_folder(const char *instrument_dir)
     }
     (void)snprintf(g_import_request_path, sizeof(g_import_request_path), "%s", instrument_dir);
     g_import_request_valid = 1U;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_MULTI);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
@@ -1725,7 +1732,10 @@ void multi_sample_import_storage_request_service(void)
     {
         multi_import_progressive_step();
         if (g_import_busy != 0U)
-            storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+        {
+            storage_io_owner_set(STORAGE_OWNER_MULTI);
+            storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+        }
     }
 }
 
@@ -1761,7 +1771,8 @@ uint8_t multi_sample_import_request_delete_index(const char *index_path)
     }
     (void)snprintf(g_delete_request_path, sizeof(g_delete_request_path), "%s", index_path);
     g_delete_request_valid = 1U;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_MULTI);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
@@ -1770,7 +1781,8 @@ void multi_sample_import_storage_delete_service(void)
     if (g_delete_request_valid == 0U)
         return;
     uint8_t result = 3U;
-    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) != 0U)
+    if (sd_access_gate_try_acquire_for_owner(
+            SD_ACCESS_CLIENT_PROJECT, STORAGE_OWNER_MULTI) != 0U)
     {
         if (sd_access_fs_mount_if_needed() != 0U)
         {

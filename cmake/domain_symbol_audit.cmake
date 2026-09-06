@@ -90,6 +90,12 @@ foreach(provider IN LISTS all_records)
 endforeach()
 list(REMOVE_DUPLICATES CONTROL_PRIVATE_SYMBOLS)
 list(REMOVE_DUPLICATES AUDIO_PRIVATE_SYMBOLS)
+set(DOMAIN_DOORBELL_SYMBOLS
+    control_rt_wakeup
+    storage_io_wakeup
+    storage_io_owner_wakeup
+    storage_io_schedule_sample_wakeup
+    storage_io_sample_event)
 foreach(image CONTROL AUDIO)
     set(undefined_report "symbol|category\n")
     set(image_defined "")
@@ -110,6 +116,10 @@ foreach(image CONTROL AUDIO)
     foreach(symbol IN LISTS image_undefined)
         if(symbol IN_LIST image_defined)
             string(APPEND undefined_report "${symbol}|same-image provider\n")
+            continue()
+        endif()
+        if(symbol IN_LIST DOMAIN_DOORBELL_SYMBOLS)
+            string(APPEND undefined_report "${symbol}|explicit cross-domain doorbell\n")
             continue()
         endif()
         set(opposite_owner "")

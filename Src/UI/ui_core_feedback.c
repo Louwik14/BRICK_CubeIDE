@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include "UI/ui_service_wakeup.h"
 
 #define UI_CORE_FEEDBACK_DURATION_MS 1000U
 #define UI_CORE_FEEDBACK_TEXT_MAX 16U
@@ -28,11 +29,33 @@ void ui_core_feedback_set(const char *message, uint32_t now_ms)
     if (message == 0)
     {
         ui_core_feedback_init();
+        ui_service_dirty_set();
         return;
     }
 
     (void)snprintf(g_ui_core_feedback.message, sizeof(g_ui_core_feedback.message), "%s", message);
     g_ui_core_feedback.until_ms = now_ms + UI_CORE_FEEDBACK_DURATION_MS;
+    ui_service_dirty_set();
+}
+
+uint8_t ui_core_feedback_next_deadline(uint32_t now_ms, uint32_t *out_deadline_ms)
+{
+    if ((out_deadline_ms == 0)
+        || (g_ui_core_feedback.message[0] == '\0')
+        || ((int32_t)(g_ui_core_feedback.until_ms - now_ms) <= 0))
+        return 0U;
+    *out_deadline_ms = g_ui_core_feedback.until_ms;
+    return 1U;
+}
+
+void ui_core_feedback_service(uint32_t now_ms)
+{
+    if ((g_ui_core_feedback.message[0] != '\0')
+        && ((int32_t)(g_ui_core_feedback.until_ms - now_ms) <= 0))
+    {
+        ui_core_feedback_init();
+        ui_service_dirty_set();
+    }
 }
 
 uint8_t ui_core_feedback_try_get_for_track(uint8_t active_track,

@@ -1108,7 +1108,6 @@ const ui_page_t g_ui_page_patch_assign = {
     .enter = ui_page_patch_assign_enter,
     .leave = ui_page_patch_assign_leave,
     .handle_event = ui_page_patch_assign_handle_event,
-    .tick = 0,
     .sync_active_context = 0,
     .render = ui_page_patch_assign_render,
     .context = 0,

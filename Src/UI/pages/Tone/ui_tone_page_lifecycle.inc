@@ -51,14 +51,6 @@ static void ui_page_template_tone_handle_event(const ui_event_t *ev)
     ui_page_template_tone_update_synth_live_request();
 }
 
-static void ui_page_template_tone_tick(void)
-{
-    ui_page_template_tone_sync_drum_family();
-    ui_template_page_select_subpage(&g_ui_template_tone_state, g_ui_template_tone_state.active_subpage);
-    ui_template_page_tick();
-    ui_page_template_tone_update_synth_live_request();
-}
-
 static void ui_page_template_tone_sync_active_context(void)
 {
     ui_page_template_tone_sync_drum_family();
@@ -77,7 +69,6 @@ const ui_page_t g_ui_page_template_tone = {
     .enter = ui_page_template_tone_enter,
     .leave = ui_page_template_tone_leave,
     .handle_event = ui_page_template_tone_handle_event,
-    .tick = ui_page_template_tone_tick,
     .sync_active_context = ui_page_template_tone_sync_active_context,
     .render = ui_page_template_tone_render,
     .context = &g_ui_template_tone_state,

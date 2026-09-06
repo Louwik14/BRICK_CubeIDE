@@ -65,7 +65,9 @@ uint8_t wavetable_pool_load_async_begin_prepared_with_geometry(
     uint32_t source_crc32)
 {
     wavetable_load_job_t *const job = &g_wavetable_load_job;
-    if ((job->state != WAVETABLE_LOAD_IDLE)
+    if ((project_transport_stopped_stable() == 0U)
+        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+        || (job->state != WAVETABLE_LOAD_IDLE)
         || (wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)
         || (path == 0) || (path[0] == '\0')
         || ((prepared_info == NULL)
@@ -97,7 +99,8 @@ uint8_t wavetable_pool_load_async_begin_prepared_with_geometry(
     }
     job->result = WAVETABLE_RESULT_OK;
     job->state = WAVETABLE_LOAD_MOUNT;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_WAVETABLE);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
@@ -113,7 +116,8 @@ uint8_t wavetable_pool_request_clear(uint16_t wavetable_slot)
     g_wavetable_clear_request_slot = wavetable_slot;
     __DMB();
     g_wavetable_clear_request_valid = 1U;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_WAVETABLE);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
@@ -121,7 +125,9 @@ uint8_t wavetable_pool_request_load(uint16_t wavetable_slot,
                                     const char *path,
                                     wavetable_source_geometry_t source_geometry)
 {
-    if ((wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)
+    if ((project_transport_stopped_stable() == 0U)
+        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+        || (wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)
         || (path == 0) || (path[0] == '\0')
         || (strlen(path) >= sizeof(g_wavetable_load_request_path))
         || (wavetable_pool_load_async_busy() != 0U)
@@ -140,7 +146,8 @@ uint8_t wavetable_pool_request_load(uint16_t wavetable_slot,
                    sizeof(g_wavetable_load_request_path), "%s", path);
     __DMB();
     g_wavetable_load_request_valid = 1U;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_WAVETABLE);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
@@ -629,6 +636,16 @@ void wavetable_pool_load_async_service(void)
     const uint16_t band = job->band;
 
     wavetable_pool_load_async_service_step();
+    if ((state != WAVETABLE_LOAD_DONE)
+            && (job->state == WAVETABLE_LOAD_DONE))
+    {
+        if (wavetable_pool_load_async_requester() != WAVETABLE_REQUESTER_UI)
+        {
+            storage_io_owner_set(STORAGE_OWNER_PROJECT);
+            storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+        }
+        control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
+    }
     if ((job->state != WAVETABLE_LOAD_IDLE)
             && ((job->state != state)
                 || (job->io_offset != io_offset)
@@ -637,7 +654,10 @@ void wavetable_pool_load_async_service(void)
                 || (job->source_cycle_offset != source_cycle_offset)
                 || (job->cycle != cycle)
                 || (job->band != band)))
-        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+        {
+            storage_io_owner_set(STORAGE_OWNER_WAVETABLE);
+            storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+        }
 }
 
 uint8_t wavetable_pool_load_async_take_result(uint32_t expected_request_id,

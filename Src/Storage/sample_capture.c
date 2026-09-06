@@ -8,6 +8,7 @@
 #include "Track/track_runtime.h"
 #include "IPC/audio_rec_level_reader.h"
 #include "Sampler/sample_cache.h"
+#include "Sampler/sample_stream_manager.h"
 #include "Sampler/sample_global_pool.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
@@ -19,8 +20,12 @@
 #include "Storage/sd_access_gate.h"
 #include "Storage/sd_preview.h"
 #include "Storage/waveform_cache.h"
+#include "Storage/storage_io_wakeup.h"
+#include "UI/ui_service_wakeup.h"
+#include "ui_page_manager.h"
 #include "ff.h"
 #include "main.h"
+#include "stm32h7xx_hal.h"
 
 #if SAMPLE_CAPTURE_DEBUG_UART
 #include "stm32h7xx_hal.h"
@@ -88,7 +93,7 @@ typedef struct
     sample_capture_state_t state;
     waveform_cache_handle_t wave_cache_handle;
     uint8_t wave_cache_ready;
-    uint8_t wave_cache_retry_countdown;
+    uint8_t wave_cache_terminal;
     uint8_t detail_requested;
     uint8_t detail_building;
     uint8_t detail_seen[SAMPLE_CAPTURE_DETAIL_POINTS];
@@ -104,6 +109,7 @@ typedef struct
     uint16_t final_counter;
     uint32_t trigger_threshold_peak_abs_pcm24;
     uint32_t trigger_last_level_generation;
+    uint32_t trigger_arm_epoch;
 } sample_capture_model_t;
 
 typedef struct
@@ -250,6 +256,42 @@ typedef struct
 
 static sample_capture_model_t g_sample_capture;
 static uint8_t g_sample_capture_control_context;
+static uint8_t g_sample_capture_storage_waiting;
+
+static uint8_t sample_capture_storage_unavailable(void);
+static void sample_capture_storage_abort_unavailable(void);
+static void sample_capture_waveform_ui_wakeup(void);
+
+static void sample_capture_storage_wakeup(void)
+{
+    g_sample_capture_storage_waiting = 0U;
+    storage_io_owner_wakeup(STORAGE_OWNER_WAVEFORM_CACHE);
+}
+
+static void sample_capture_storage_wait_resource(void)
+{
+    g_sample_capture_storage_waiting = 1U;
+    storage_io_owner_wait_resource(STORAGE_OWNER_WAVEFORM_CACHE);
+}
+
+static void sample_capture_waveform_ui_wakeup(void)
+{
+    if(ui_page_get_id() == UI_PAGE_REC_EDIT)
+    {
+        ui_service_dirty_set();
+    }
+}
+
+static uint8_t sample_capture_storage_try_acquire(sd_access_client_t client)
+{
+    if (sd_access_gate_try_acquire_for_owner(
+            client, (uint8_t)STORAGE_OWNER_WAVEFORM_CACHE) == 0U)
+    {
+        sample_capture_storage_wait_resource();
+        return 0U;
+    }
+    return 1U;
+}
 CONTROL_M4_SRAM2 static sample_capture_line_hot_t g_sample_capture_line_hot;
 STORAGE_STATE_SDRAM static sample_capture_editor_audio_cache_t g_sample_capture_editor_cache;
 STORAGE_STATE_SDRAM static sample_capture_global_overview_t g_sample_capture_global_overview;

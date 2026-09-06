@@ -47,6 +47,7 @@
 #include "Param/engine_model_catalog.h"
 #include "Track/synth_polyphony.h"
 #include "UI/ui_core_feedback.h"
+#include "UI/ui_service_wakeup.h"
 #include "Track/track_state.h"
 #include "encoders.h"
 #include "NoteFx/note_fx_state.h"

@@ -26,6 +26,10 @@ STEP 1..8 selectionnent les top-level. En GROUP, STEP 9..16 selectionnent les ch
 
 Le chemin Hall direct met a jour modifiers, selection, mode et double-tap avant le drain de la queue UI. SHIFT+HALL precede TRACK_MOD+HALL. Un evenement consomme par un stage masque les suivants.
 
+En overlay Macro Switch, l'UI signale l'evenement Hall; CONTROL possede le
+seuil/hysteresis de pression et le calcul de grandeur qui commande la source
+de scene. L'UI ne decide pas la valeur produit.
+
 Ordre contractuel du tick:
 
 ```text

@@ -27,6 +27,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "encoders_hw.h"
+#include "buttons_hw.h"
+#include "Board/board_power.h"
 #include "usb_role_manager.h"
 /* USER CODE END Includes */
 
@@ -76,6 +78,7 @@ extern DMA_HandleTypeDef hdma_tim2_ch4;
 extern TIM_HandleTypeDef htim5;
 extern TIM_HandleTypeDef htim7;
 extern TIM_HandleTypeDef htim12;
+static uint8_t tim7_input_poll_divider;
 /* USER CODE BEGIN EV */
 /* USER CODE END EV */
 
@@ -238,6 +241,20 @@ void EXTI4_IRQHandler(void)
 }
 
 /**
+  * @brief This function handles EXTI line[9:5] interrupts.
+  */
+void EXTI9_5_IRQHandler(void)
+{
+  /* USER CODE BEGIN EXTI9_5_IRQn 0 */
+
+  /* USER CODE END EXTI9_5_IRQn 0 */
+  HAL_GPIO_EXTI_IRQHandler(HOST_FLAG_Pin);
+  /* USER CODE BEGIN EXTI9_5_IRQn 1 */
+
+  /* USER CODE END EXTI9_5_IRQn 1 */
+}
+
+/**
   * @brief This function handles DMA1 stream0 global interrupt.
   */
 void DMA1_Stream0_IRQHandler(void)
@@ -374,6 +391,12 @@ void TIM7_IRQHandler(void)
   {
     __HAL_TIM_CLEAR_IT(&htim7, TIM_IT_UPDATE);
     encoders_fast_poll_irq();
+    if (++tim7_input_poll_divider >= 25U)
+    {
+      tim7_input_poll_divider = 0U;
+      buttons_hw_poll_irq();
+      board_power_shutdown_poll_irq();
+    }
     return;
   }
 

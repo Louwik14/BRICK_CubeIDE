@@ -47,7 +47,9 @@ typedef enum
 typedef enum
 {
     SAMPLER_RAM_REQUESTER_UI = 0U,
-    SAMPLER_RAM_REQUESTER_STORAGE
+    SAMPLER_RAM_REQUESTER_PROJECT,
+    SAMPLER_RAM_REQUESTER_PATCH,
+    SAMPLER_RAM_REQUESTER_STORAGE = SAMPLER_RAM_REQUESTER_PROJECT
 } sampler_ram_requester_t;
 
 typedef enum
@@ -123,6 +125,8 @@ uint8_t sampler_ram_pool_request_load(uint16_t ram_slot, const char *path);
 uint8_t sampler_ram_pool_request_clear(uint16_t ram_slot);
 void sampler_ram_pool_storage_request_service(void);
 uint8_t sampler_ram_pool_load_async_begin(uint16_t ram_slot, const char *path);
+uint8_t sampler_ram_pool_load_async_begin_for_requester(
+    uint16_t ram_slot, const char *path, sampler_ram_requester_t requester);
 uint8_t sampler_ram_pool_load_async_begin_prepared(uint16_t ram_slot,
                                                    const char *path,
                                                    const wav_info_t *info,

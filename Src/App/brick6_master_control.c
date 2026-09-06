@@ -25,6 +25,7 @@ enum
 
 static float g_boot_master_gain;
 static uint16_t g_master_last_raw;
+static uint32_t g_master_last_version;
 
 uint8_t brick6_master_control_boot_capture(void)
 {
@@ -37,6 +38,7 @@ uint8_t brick6_master_control_boot_capture(void)
     const float level = (float)raw / (float)POT_RAW_MAX;
     g_boot_master_gain = level * level;
     g_master_last_raw = raw;
+    g_master_last_version = board_surface_master_volume_version();
     return 1U;
 }
 
@@ -48,6 +50,11 @@ void brick6_master_control_boot_publish(void)
 void brick6_master_control_process(void)
 {
     uint16_t raw;
+    const uint32_t version = board_surface_master_volume_version();
+    if (version == g_master_last_version)
+    {
+        return;
+    }
     if (board_surface_read_master_volume_raw(&raw) == 0U)
     {
         return;
@@ -61,4 +68,5 @@ void brick6_master_control_process(void)
     const float level = (float)raw / (float)POT_RAW_MAX;
     (void)param_registry_commit_global(PARAM_MASTER_GAIN, level * level);
     g_master_last_raw = raw;
+    g_master_last_version = version;
 }

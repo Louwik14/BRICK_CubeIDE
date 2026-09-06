@@ -62,6 +62,7 @@ void wavetable_pool_retire_all(void)
 
 void wavetable_pool_service_retire(void)
 {
+    uint8_t finalized = 0U;
     if (g_wavetable_retire_invariant_failed != 0U) return;
     for (uint16_t i = 0U; i < WAVETABLE_POOL_MAX_SLOTS; ++i)
     {
@@ -85,11 +86,18 @@ void wavetable_pool_service_retire(void)
         if (now_sample < g_wavetable_retire_not_before_sample[i])
         {
             storage_io_schedule_sample_wakeup(
+                STORAGE_OWNER_WAVETABLE,
                 g_wavetable_retire_not_before_sample[i]);
             continue;
         }
         g_wavetable_retire_stop_committed[i] = 0U;
         wavetable_pool_finalize_clear(i);
+        finalized = 1U;
+    }
+    if ((finalized != 0U) && (project_product_load_busy() != 0U))
+    {
+        storage_io_owner_set(STORAGE_OWNER_PROJECT);
+        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     }
 }
 

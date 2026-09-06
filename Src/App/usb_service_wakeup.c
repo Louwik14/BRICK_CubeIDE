@@ -1,6 +1,7 @@
 #include "App/usb_service_wakeup.h"
 
 #include "cmsis_os.h"
+#include "midi_host.h"
 #include "tusb.h"
 
 extern osThreadId_t USB_SERVICEHandle;
@@ -31,7 +32,7 @@ void tud_event_hook_cb(uint8_t rhport, uint32_t eventid, bool in_isr)
 void tuh_event_hook_cb(uint8_t rhport, uint32_t eventid, bool in_isr)
 {
     (void)rhport;
-    (void)eventid;
     (void)in_isr;
+    midi_host_transport_hcd_event(eventid);
     usb_service_wakeup(USB_SERVICE_WAKE_WORK);
 }

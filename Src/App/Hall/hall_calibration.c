@@ -33,6 +33,8 @@
 #define HALL_USER_TRIAD_WINDOW_MS             35U
 #define HALL_USER_TRIAD_LOCKOUT_MS            120U
 #define HALL_USER_MIN_STAGE_GAP               4U
+#define HALL_CALIBRATION_SAMPLE_PERIOD_MS     1U
+#define HALL_USER_CALIBRATION_RETRY_MS        1200U
 
 _Static_assert(HALL_KEY_COUNT == (2U * HALL_CALIBRATION_STAGE_KEY_COUNT),
                "Hall calibration requires two complete 12-key stages");
@@ -97,11 +99,15 @@ static uint8_t g_key_done[HALL_KEY_COUNT];
 static hall_key_state_t g_key_state[HALL_KEY_COUNT];
 static uint8_t g_calibration_done = 0U;
 static uint8_t g_calibration_stage = 0U;
+static uint8_t g_calibration_active = 0U;
+static uint32_t g_calibration_next_sample_ms = UINT32_MAX;
 
 static uint32_t g_hold_start_tick[HALL_KEY_COUNT];
 CONTROL_STATE_SDRAM static hall_median_buffer_t g_min_buffer[HALL_KEY_COUNT];
 CONTROL_STATE_SDRAM static hall_median_buffer_t g_max_buffer[HALL_KEY_COUNT];
 static hall_user_calibration_state_t g_user_calibration;
+static uint8_t g_user_calibration_active = 0U;
+static uint32_t g_user_calibration_retry_deadline_ms = UINT32_MAX;
 
 static void hall_median_buffer_reset(hall_median_buffer_t *buffer)
 {
@@ -483,6 +489,8 @@ static void hall_user_calibration_finish(uint8_t success)
     g_user_calibration.success = success;
     g_user_calibration.stage = HALL_USER_CAL_STAGE_DONE;
     hall_user_calibration_reset_pending();
+    g_user_calibration_retry_deadline_ms = (success == 0U)
+        ? (HAL_GetTick() + HALL_USER_CALIBRATION_RETRY_MS) : UINT32_MAX;
 }
 
 static void hall_user_calibration_store_sample(uint16_t metric)
@@ -529,6 +537,8 @@ void hall_calibration_start(void)
 {
     g_calibration_done = 0U;
     g_calibration_stage = 0U;
+    g_calibration_active = 1U;
+    g_calibration_next_sample_ms = HAL_GetTick();
 
     for (uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
     {
@@ -543,15 +553,37 @@ void hall_calibration_start(void)
     }
 }
 
+uint8_t hall_calibration_is_active(void)
+{
+    return (g_calibration_active != 0U) && (g_calibration_done == 0U) ? 1U : 0U;
+}
+
+uint8_t hall_calibration_next_deadline(uint32_t now_ms,
+                                       uint32_t *out_deadline_ms)
+{
+    if ((out_deadline_ms == 0) || (hall_calibration_is_active() == 0U))
+        return 0U;
+
+    *out_deadline_ms = g_calibration_next_sample_ms;
+    if ((int32_t)(*out_deadline_ms - now_ms) <= 0)
+        *out_deadline_ms = now_ms;
+    return 1U;
+}
+
 void hall_calibration_process(void)
 {
+    const uint32_t now_ms = HAL_GetTick();
     uint8_t first_key = 0U;
     uint8_t key_count = HALL_KEY_COUNT;
 
-    if (g_calibration_done != 0U)
+    if ((g_calibration_done != 0U)
+        || (g_calibration_active == 0U)
+        || ((int32_t)(now_ms - g_calibration_next_sample_ms) < 0))
     {
         return;
     }
+
+    g_calibration_next_sample_ms = now_ms + HALL_CALIBRATION_SAMPLE_PERIOD_MS;
 
     first_key = (uint8_t)(g_calibration_stage * HALL_CALIBRATION_STAGE_KEY_COUNT);
     key_count = HALL_CALIBRATION_STAGE_KEY_COUNT;
@@ -833,11 +865,32 @@ void hall_user_calibration_start(void)
 {
     memset(&g_user_calibration, 0, sizeof(g_user_calibration));
     g_user_calibration.stage = HALL_USER_CAL_STAGE_FORT;
+    g_user_calibration_active = 1U;
+    g_user_calibration_retry_deadline_ms = UINT32_MAX;
 
     hall_velocity_capture_t capture;
     while (hall_engine_pop_velocity_capture(&capture) != 0U)
     {
     }
+}
+
+uint8_t hall_user_calibration_is_active(void)
+{
+    return (g_user_calibration_active != 0U)
+        && (g_user_calibration.done == 0U) ? 1U : 0U;
+}
+
+uint8_t hall_user_calibration_next_deadline(uint32_t now_ms,
+                                            uint32_t *out_deadline_ms)
+{
+    if ((out_deadline_ms == 0)
+        || (g_user_calibration_retry_deadline_ms == UINT32_MAX))
+        return 0U;
+
+    *out_deadline_ms = g_user_calibration_retry_deadline_ms;
+    if ((int32_t)(*out_deadline_ms - now_ms) <= 0)
+        *out_deadline_ms = now_ms;
+    return 1U;
 }
 
 void hall_user_calibration_process(void)

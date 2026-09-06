@@ -1,5 +1,7 @@
 #include "usb_role_manager.h"
 
+#include <stddef.h>
+
 #include "fusb302.h"
 #include "i2c.h"
 #include "main.h"
@@ -14,6 +16,7 @@ typedef struct {
     uint8_t host_fault;
     uint8_t shutdown_requested;
     uint8_t host_power_waiting;
+    volatile uint8_t host_flag_event_pending;
     uint32_t host_power_deadline;
 } usb_role_manager_ctx_t;
 
@@ -44,6 +47,19 @@ static usb_role_manager_role_t role_from_fusb302(fusb302_role_t role)
 static uint8_t host_fault_active(void)
 {
     return (HAL_GPIO_ReadPin(HOST_FLAG_GPIO_Port, HOST_FLAG_Pin) == GPIO_PIN_RESET) ? 1U : 0U;
+}
+
+static uint8_t take_host_flag_event(void)
+{
+    const uint32_t primask = __get_PRIMASK();
+    uint8_t pending;
+
+    __disable_irq();
+    pending = g_usb_role.host_flag_event_pending;
+    g_usb_role.host_flag_event_pending = 0U;
+    __DMB();
+    __set_PRIMASK(primask);
+    return pending;
 }
 
 static uint8_t stop_active_role(void)
@@ -124,6 +140,8 @@ void usb_role_manager_init(void)
 
 void usb_role_manager_process(void)
 {
+    const uint8_t host_flag_event = take_host_flag_event();
+
     if (g_usb_role.shutdown_requested != 0U) {
         if (stop_active_role() != 0U) {
             usb_host_power_off();
@@ -138,32 +156,30 @@ void usb_role_manager_process(void)
         return;
     }
 
-    if (((g_usb_role.active == USB_ROLE_MANAGER_HOST)
-         || (g_usb_role.host_power_waiting != 0U))
-        && (host_fault_active() != 0U)) {
-        g_usb_role.host_fault = 1U;
-        (void)stop_active_role();
-        return;
-    }
-
-    if (fusb302_handle_interrupt() != FUSB302_STATUS_OK) {
-        if (stop_active_role() == 0U) {
+    if ((host_flag_event != 0U)
+        && ((g_usb_role.active == USB_ROLE_MANAGER_HOST)
+            || (g_usb_role.host_power_waiting != 0U)
+            || (g_usb_role.requested == USB_ROLE_MANAGER_HOST))) {
+        if (host_fault_active() != 0U) {
+            g_usb_role.host_fault = 1U;
+            (void)stop_active_role();
             return;
         }
-        usb_host_power_off();
-        return;
+        g_usb_role.host_fault = 0U;
     }
 
-    fusb302_role_t role = FUSB302_ROLE_NONE;
-    if (fusb302_read_role(&role) != FUSB302_STATUS_OK) {
-        if (stop_active_role() == 0U) {
+    if (fusb302_irq_pending()) {
+        if (fusb302_handle_interrupt() != FUSB302_STATUS_OK) {
+            if (stop_active_role() == 0U) {
+                return;
+            }
+            usb_host_power_off();
             return;
         }
-        usb_host_power_off();
-        return;
     }
 
-    usb_role_manager_role_t requested = role_from_fusb302(role);
+    usb_role_manager_role_t requested =
+        role_from_fusb302(fusb302_cached_role());
     if (g_usb_role.host_power_waiting != 0U) {
         if (requested != USB_ROLE_MANAGER_HOST) {
             apply_role(requested);
@@ -227,6 +243,24 @@ uint8_t usb_role_manager_work_pending(void)
 {
     return (g_usb_role.host_power_waiting != 0U)
         && (deadline_reached(g_usb_role.host_power_deadline) != 0U);
+}
+
+uint8_t usb_role_manager_next_deadline_ms(uint32_t now_ms,
+                                          uint32_t *deadline_ms)
+{
+    (void)now_ms;
+    if ((deadline_ms == NULL) || (g_usb_role.host_power_waiting == 0U)) {
+        return 0U;
+    }
+
+    *deadline_ms = g_usb_role.host_power_deadline;
+    return 1U;
+}
+
+void usb_role_manager_host_flag_irq(void)
+{
+    g_usb_role.host_flag_event_pending = 1U;
+    __DMB();
 }
 
 void usb_role_irq_dispatch(void)

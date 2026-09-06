@@ -11,6 +11,7 @@
 #include "Seq/seq_edit.h"
 #include "ui_hall_mode_contract.h"
 #include "ui_page_manager.h"
+#include "UI/ui_service_wakeup.h"
 
 #define UI_HALL_PATCH_FEEDBACK_MS 1000U
 
@@ -29,6 +30,29 @@ void ui_hall_patch_feedback_begin(uint32_t now_ms)
 void ui_hall_patch_feedback_end(uint32_t now_ms)
 {
     g_ui_hall_patch_feedback_until_ms = now_ms + UI_HALL_PATCH_FEEDBACK_MS;
+}
+
+uint8_t ui_hall_patch_feedback_next_deadline(uint32_t now_ms,
+                                             uint32_t *out_deadline_ms)
+{
+    if ((out_deadline_ms == 0)
+        || ((int32_t)(g_ui_hall_patch_feedback_until_ms - now_ms) <= 0))
+    {
+        return 0U;
+    }
+
+    *out_deadline_ms = g_ui_hall_patch_feedback_until_ms;
+    return 1U;
+}
+
+void ui_hall_patch_feedback_service_deadline(uint32_t now_ms)
+{
+    if ((g_ui_hall_patch_feedback_until_ms != 0U)
+        && ((int32_t)(g_ui_hall_patch_feedback_until_ms - now_ms) <= 0))
+    {
+        g_ui_hall_patch_feedback_until_ms = 0U;
+        ui_service_dirty_set();
+    }
 }
 
 ui_hall_rout_context_t ui_hall_mode_resolve_rout_context(uint8_t track, ui_hall_mode_t raw_mode)

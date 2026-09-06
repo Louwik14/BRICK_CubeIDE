@@ -2,8 +2,48 @@
 
 #include <string.h>
 
-#include "Storage/storage_io_wakeup.h"
+#include "IPC/storage_io_wakeup.h"
+#include "IPC/control_rt_wakeup.h"
+#include "Sampler/sample_stream_admission.h"
 #include "stm32h7xx.h"
+
+static void sample_stream_admission_audio_or_word(volatile uint32_t *word,
+                                                  uint32_t bits)
+{
+    uint32_t old_value;
+    uint32_t new_value;
+    do
+    {
+        old_value = __LDREXW(word);
+        new_value = old_value | bits;
+    } while (__STREXW(new_value, word) != 0U);
+    __DMB();
+}
+
+void sample_stream_admission_audio_signal_lease(uint8_t slot)
+{
+    if (slot >= SAMPLE_PAGE_LEASE_SLOT_COUNT) return;
+
+    sample_stream_admission_release_stamp_t stamp = {0};
+    for (uint8_t i = 0U; i < STREAM_MAX_ACTIVE_READERS; ++i)
+    {
+        const volatile sample_stream_admission_credit_t *const credit =
+            &g_sample_stream_admission_ledger[i];
+        if ((credit->physical_present != 0U)
+            && (credit->physical_slot == slot))
+        {
+            stamp.generation = credit->generation;
+            stamp.ledger_slot = i;
+            stamp.owner = credit->owner;
+            break;
+        }
+    }
+    g_sample_stream_admission_release_stamps[slot] = stamp;
+    __DMB();
+    sample_stream_admission_audio_or_word(
+        &g_sample_stream_admission_release_mask[slot / 32U],
+        (uint32_t)1U << (slot % 32U));
+}
 
 void sample_page_lease_audio_init(void)
 {
@@ -37,7 +77,14 @@ uint8_t sample_page_lease_audio_publish(uint8_t slot,
     __DMB();
     lease->seq = seq + 2U;
     __DMB();
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    if ((ranges[0].page_count == 0U) && (ranges[1].page_count == 0U))
+    {
+        sample_stream_admission_audio_signal_lease(slot);
+        control_rt_wakeup(CONTROL_RT_WAKE_STREAM_RELEASE);
+    }
+    storage_io_owner_wakeup(STORAGE_OWNER_STREAM);
+    if ((ranges[0].page_count == 0U) && (ranges[1].page_count == 0U))
+        storage_io_owner_wakeup(STORAGE_OWNER_PROJECT);
     return 1U;
 }
 

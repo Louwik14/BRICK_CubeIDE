@@ -23,6 +23,7 @@
 #include "ui_core_mute.h"
 #include "ui_navigation.h"
 #include "ui_param.h"
+#include "UI/ui_service_wakeup.h"
 
 #define UI_PAGE_MANAGER_MAX_PAGES UI_PAGE_COUNT
 
@@ -114,6 +115,8 @@ void ui_page_set(uint8_t page_id)
         next_page->enter();
     }
     ui_navigation_restore_current_template_subpage();
+    ui_service_dirty_set();
+    ui_service_led_dirty_set();
 }
 const ui_page_t *ui_page_get(void)
 {

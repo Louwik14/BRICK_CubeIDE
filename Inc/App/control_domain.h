@@ -146,6 +146,7 @@ typedef enum
     CONTROL_MACRO_SET_SCENE_SOURCE_AMOUNT,
     CONTROL_MACRO_RELEASE_SCENE_SOURCE,
     CONTROL_MACRO_RELEASE_ALL_SCENE_SOURCES,
+    CONTROL_MACRO_UPDATE_HALL_PRESSURE,
     CONTROL_MACRO_SET_HALL_MODE
 } control_macro_operation_t;
 
@@ -315,6 +316,17 @@ typedef struct
 
 typedef enum
 {
+    CONTROL_CALIBRATION_START_HALL = 0U,
+    CONTROL_CALIBRATION_START_USER
+} control_calibration_operation_t;
+
+typedef struct
+{
+    uint8_t operation;
+} control_calibration_intent_t;
+
+typedef enum
+{
     CONTROL_STORAGE_EVENT_AUDIO_PARAM = 0U,
     CONTROL_STORAGE_EVENT_RECORD_STOP
 } control_storage_event_type_t;
@@ -357,7 +369,8 @@ typedef enum
     CONTROL_UI_MSG_AUDIO_VISUAL,
     CONTROL_UI_MSG_PREVIEW_GAIN,
     CONTROL_UI_MSG_REC_BUS,
-    CONTROL_UI_MSG_STORAGE
+    CONTROL_UI_MSG_STORAGE,
+    CONTROL_UI_MSG_CALIBRATION
 } control_ui_message_type_t;
 
 typedef union
@@ -381,6 +394,7 @@ typedef union
     control_preview_gain_intent_t preview_gain;
     control_rec_bus_intent_t rec_bus;
     control_storage_ui_intent_t storage;
+    control_calibration_intent_t calibration;
 } control_ui_message_payload_t;
 
 typedef struct
@@ -423,6 +437,7 @@ uint8_t control_domain_request_rec_bus(uint16_t source_entity_mask,
                                        uint8_t has_sample_time,
                                        uint64_t sample_time);
 uint8_t control_domain_request_storage_ui(uint8_t operation);
+uint8_t control_domain_request_calibration(uint8_t operation);
 uint8_t control_domain_request_storage_audio_param(uint8_t entity,
                                                    uint16_t parameter_id,
                                                    uint32_t value);
@@ -431,7 +446,6 @@ uint8_t control_domain_request_storage_waveform_cache(const char *path,
                                                       uint8_t reason,
                                                       uint32_t frame_count,
                                                       uint32_t sample_rate);
-void control_domain_storage_process_requests(void);
 uint32_t control_domain_ui_overflow_count(void);
 uint32_t control_domain_ui_pending_count(void);
 uint32_t control_domain_storage_pending_count(void);

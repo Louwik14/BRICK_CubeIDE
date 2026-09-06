@@ -45,3 +45,13 @@ _Static_assert(sizeof(audio_recorder_capture_transport_t) == 16U,
 extern int32_t g_audio_recorder_capture_ring
     [AUDIO_RECORDER_CAPTURE_RING_FRAMES * AUDIO_RECORDER_CHANNELS];
 extern audio_recorder_capture_transport_t g_audio_recorder_capture;
+
+/* Audio-owned command/read surface used by STORAGE without reaching into the
+ * AUDIO implementation header. */
+void audio_recorder_capture_audio_init(void);
+uint8_t audio_recorder_capture_audio_start(uint8_t client,
+                                           uint32_t session_id,
+                                           uint32_t frame_limit);
+uint8_t audio_recorder_capture_audio_stop(uint8_t client,
+                                          uint32_t session_id);
+uint8_t audio_recorder_capture_audio_pending(void);

@@ -2,9 +2,11 @@
 
 #include "stm32h7xx.h"
 #include "App/control_rt_wakeup.h"
+#include "App/usb_service_wakeup.h"
 #include "live_clock_control.h"
 #include "midi.h"
 #include "usb_host.h"
+#include <host/hcd.h>
 #include <host/usbh.h>
 #include <class/midi/midi_host.h>
 
@@ -28,6 +30,9 @@ static volatile uint16_t midi_host_event_tail;
 static volatile uint16_t midi_host_tx_head;
 static volatile uint16_t midi_host_tx_tail;
 static volatile uint8_t midi_host_discard_requested;
+static volatile uint8_t midi_host_tx_waiting_for_hcd;
+static volatile uint8_t midi_host_rx_work_pending;
+static volatile uint8_t midi_host_rx_waiting_for_control;
 static uint32_t midi_host_ingress_serial;
 
 static uint8_t midi_host_cin_to_length(uint8_t cin)
@@ -43,6 +48,7 @@ void midi_host_rx_discard_pending(void)
 {
   /* USB host transport is owned and drained by USB_SERVICE. */
   midi_host_discard_requested = 1U;
+  usb_service_wakeup(USB_SERVICE_WAKE_WORK);
 }
 
 void midi_host_transport_reset(void)
@@ -50,6 +56,35 @@ void midi_host_transport_reset(void)
   midi_host_event_tail = midi_host_event_head;
   midi_host_tx_tail = midi_host_tx_head;
   midi_host_discard_requested = 0U;
+  midi_host_tx_waiting_for_hcd = 0U;
+  midi_host_rx_work_pending = 0U;
+  midi_host_rx_waiting_for_control = 0U;
+}
+
+static bool midi_host_event_queue_has_room(void)
+{
+  const uint16_t head = midi_host_event_head;
+  const uint16_t next = (uint16_t)((head + 1U) % MIDI_HOST_EVENT_QUEUE_LENGTH);
+  return next != midi_host_event_tail;
+}
+
+uint8_t midi_host_transport_work_pending(void)
+{
+  if (midi_host_discard_requested != 0U) {
+    return 1U;
+  }
+  if (usb_host_is_ready() == 0U) {
+    return 0U;
+  }
+  if ((midi_host_tx_head != midi_host_tx_tail)
+      && (midi_host_tx_waiting_for_hcd == 0U)) {
+    return 1U;
+  }
+  if ((midi_host_rx_work_pending != 0U)
+      && midi_host_event_queue_has_room()) {
+    return 1U;
+  }
+  return 0U;
 }
 
 void midi_host_poll_bounded(uint32_t max_msgs)
@@ -132,11 +167,21 @@ void midi_host_transport_poll_bounded(uint32_t max_msgs)
 {
   if (midi_host_discard_requested != 0U) {
     if (usb_host_is_ready() != 0U) {
-      while (tuh_midi_packet_read(0U, midi_host_rx_packet)) {
+      for (uint32_t n = 0U; n < max_msgs; ++n) {
+        if (!tuh_midi_packet_read(0U, midi_host_rx_packet)) {
+          break;
+        }
+      }
+      if (tuh_midi_read_available(0U) != 0U) {
+        midi_host_rx_work_pending = 1U;
+        usb_service_wakeup(USB_SERVICE_WAKE_WORK);
+        return;
       }
     }
     midi_host_event_tail = midi_host_event_head;
     midi_host_discard_requested = 0U;
+    midi_host_rx_work_pending = 0U;
+    midi_host_rx_waiting_for_control = 0U;
     return;
   }
 
@@ -145,6 +190,11 @@ void midi_host_transport_poll_bounded(uint32_t max_msgs)
   }
 
   for (uint32_t n = 0U; n < max_msgs; ++n) {
+    if (!midi_host_event_queue_has_room()) {
+      midi_host_rx_work_pending = 0U;
+      midi_host_rx_waiting_for_control = 1U;
+      break;
+    }
     if (!tuh_midi_packet_read(0U, midi_host_rx_packet)) {
       break;
     }
@@ -162,16 +212,34 @@ void midi_host_transport_poll_bounded(uint32_t max_msgs)
     control_rt_wakeup(CONTROL_RT_WAKE_MIDI);
   }
 
-  for (uint32_t n = 0U; n < max_msgs; ++n) {
-    if (!midi_host_tx_peek(midi_host_tx_packet)) {
-      break;
+  if (midi_host_tx_waiting_for_hcd == 0U) {
+    for (uint32_t n = 0U; n < max_msgs; ++n) {
+      if (!midi_host_tx_peek(midi_host_tx_packet)) {
+        break;
+      }
+      if (!tuh_midi_packet_write(0U, midi_host_tx_packet)) {
+        break;
+      }
+      midi_host_tx_drop();
     }
-    if (!tuh_midi_packet_write(0U, midi_host_tx_packet)) {
-      break;
+    const uint32_t flushed = tuh_midi_write_flush(0U);
+    if ((midi_host_tx_head != midi_host_tx_tail) && (flushed == 0U)) {
+      midi_host_tx_waiting_for_hcd = 1U;
     }
-    midi_host_tx_drop();
   }
-  (void)tuh_midi_write_flush(0U);
+
+  if (tuh_midi_read_available(0U) != 0U) {
+    if (midi_host_event_queue_has_room()) {
+      midi_host_rx_work_pending = 1U;
+      midi_host_rx_waiting_for_control = 0U;
+      usb_service_wakeup(USB_SERVICE_WAKE_WORK);
+    } else {
+      midi_host_rx_work_pending = 0U;
+      midi_host_rx_waiting_for_control = 1U;
+    }
+  } else {
+    midi_host_rx_work_pending = 0U;
+  }
 }
 
 void midi_host_control_poll_bounded(uint32_t max_msgs)
@@ -196,6 +264,22 @@ void midi_host_control_poll_bounded(uint32_t max_msgs)
                                          event.tim5_tick,
                                          event.ingress_serial);
     midi_send_raw(MIDI_DEST_USB, &event.packet[1], length);
+  }
+
+  if (midi_host_control_pending_count() != 0U) {
+    control_rt_wakeup(CONTROL_RT_WAKE_MIDI);
+  }
+  if ((midi_host_rx_waiting_for_control != 0U)
+      && midi_host_event_queue_has_room()) {
+    midi_host_rx_waiting_for_control = 0U;
+    usb_service_wakeup(USB_SERVICE_WAKE_WORK);
+  }
+}
+
+void midi_host_transport_hcd_event(uint32_t eventid)
+{
+  if (eventid == HCD_EVENT_XFER_COMPLETE) {
+    midi_host_tx_waiting_for_hcd = 0U;
   }
 }
 
@@ -262,5 +346,10 @@ bool midi_host_send(const uint8_t *msg, size_t len)
   if (!midi_host_encode_packet(msg, len, midi_host_tx_packet)) {
     return false;
   }
-  return midi_host_tx_push(midi_host_tx_packet);
+  if (!midi_host_tx_push(midi_host_tx_packet)) {
+    return false;
+  }
+
+  usb_service_wakeup(USB_SERVICE_WAKE_WORK);
+  return true;
 }

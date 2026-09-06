@@ -7,6 +7,7 @@
 
 void buttons_hw_init(void);
 void buttons_hw_read(void);
+void buttons_hw_poll_irq(void);
 uint8_t buttons_hw_get(button_id_t btn);
 
 #endif

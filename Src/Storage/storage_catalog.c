@@ -108,7 +108,8 @@ static uint8_t storage_catalog_begin_metadata(void)
     const sd_scheduler_background_request_t request = {
         .byte_count = 0U,
         .media_epoch = sd_access_media_epoch(),
-        .kind = SD_SCHEDULER_BACKGROUND_METADATA};
+        .kind = SD_SCHEDULER_BACKGROUND_METADATA,
+        .storage_owner = (uint8_t)STORAGE_OWNER_CATALOG};
     return (sd_scheduler_runtime_background_try_begin(&request)
             == SD_SCHEDULER_BACKGROUND_GO) ? 1U : 0U;
 }
@@ -198,12 +199,16 @@ static void storage_catalog_fill_multi_summary(storage_catalog_entry_t *entry)
     uint16_t samples = 0U;
     uint16_t zones = 0U;
     if ((entry == NULL) || (entry->index_path[0] == '\0')
-        || (multi_sample_index_peek_counts(entry->index_path, &samples, &zones)
+        || (multi_sample_index_peek_counts_for_owner(
+                entry->index_path, &samples, &zones,
+                (uint8_t)STORAGE_OWNER_CATALOG)
             != MULTI_SAMPLE_INDEX_OK))
         return;
     entry->sample_count = samples;
     entry->zone_count = zones;
-    if (multi_sample_index_load(entry->index_path, &index) != MULTI_SAMPLE_INDEX_OK)
+    if (multi_sample_index_load_for_owner(
+            entry->index_path, &index, (uint8_t)STORAGE_OWNER_CATALOG)
+            != MULTI_SAMPLE_INDEX_OK)
         return;
     uint32_t bytes = 0U;
     for (uint16_t i = 0U; i < index.sample_count; ++i)
@@ -410,15 +415,16 @@ static uint8_t storage_catalog_scan_step(void)
 uint8_t storage_catalog_request(storage_catalog_kind_t kind, const char *path)
 {
     if ((path == NULL) || (path[0] == '\0')
+        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
         || (g_storage_catalog_scan.active != 0U)
-        || (g_storage_catalog_request_valid != 0U)
         || (storage_catalog_copy_path(g_storage_catalog_request.path,
                                       sizeof(g_storage_catalog_request.path), path) == 0U))
         return 0U;
     g_storage_catalog_request.kind = kind;
     __DMB();
     g_storage_catalog_request_valid = 1U;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_CATALOG);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
@@ -431,8 +437,6 @@ void storage_catalog_service(void)
         if (g_storage_catalog_request_valid == 0U) return;
         if (storage_catalog_begin_metadata() == 0U) return;
         background_gate_held = 1U;
-        if (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
-            (void)sd_access_fs_reprobe_if_no_media();
         g_storage_catalog_scan.request = g_storage_catalog_request;
         g_storage_catalog_request_valid = 0U;
         g_storage_catalog_scan.active = 1U;
@@ -452,12 +456,17 @@ void storage_catalog_service(void)
     }
     else if (g_storage_catalog_scan.state == STORAGE_CATALOG_SCAN_MULTI_SUMMARY)
     {
-        if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U)
+    if (sd_access_gate_try_acquire_for_owner(
+            SD_ACCESS_CLIENT_PROJECT, STORAGE_OWNER_CATALOG) == 0U)
+        {
+            storage_io_owner_wait_resource(STORAGE_OWNER_CATALOG);
             return;
+        }
         project_gate_held = 1U;
     }
     else if (storage_catalog_begin_metadata() == 0U)
     {
+        storage_io_owner_wait_resource(STORAGE_OWNER_CATALOG);
         return;
     }
     else
@@ -508,7 +517,10 @@ void storage_catalog_service(void)
     if ((g_storage_catalog_scan.active != 0U)
             && ((background_gate_held != 0U)
                 || (project_gate_held != 0U)))
-        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    {
+        storage_io_owner_set(STORAGE_OWNER_CATALOG);
+        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+    }
 }
 
 uint8_t storage_catalog_snapshot_begin(storage_catalog_kind_t kind,

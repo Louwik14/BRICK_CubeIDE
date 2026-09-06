@@ -650,7 +650,7 @@ static uint32_t midi_usb_try_flush(void) {
   return midi_usb_try_flush_internal(false);
 }
 
-static inline void midi_usb_request_deferred_flush_from_isr(void) {
+static inline void midi_usb_request_deferred_flush(void) {
   midi_usb_tx_deferred_pending = true;
 }
 
@@ -792,6 +792,9 @@ static uint32_t midi_process_usb_rx(void) {
     }
     processed++;
   }
+  if (midi_usb_rx_count != 0U) {
+    control_rt_wakeup(CONTROL_RT_WAKE_MIDI);
+  }
   return processed;
 }
 
@@ -929,11 +932,7 @@ static void backend_usb_device_send(const uint8_t *msg, size_t len) {
     midi_clock_tx_probe.clock_f8_send_deferred_count++;
   }
 #endif
-  if (midi_in_isr()) {
-    midi_usb_request_deferred_flush_from_isr();
-  } else {
-    midi_usb_try_flush();
-  }
+  midi_usb_request_deferred_flush();
   midi_usb_wakeup_if_pending();
 }
 
@@ -973,7 +972,14 @@ void midi_internal_receive_with_timestamp(const uint8_t *msg, size_t len,
 
   switch (msg[0]) {
     case 0xF8U: /* MIDI Clock */
-      seq_runtime_midi_clock_from_source(source);
+      {
+        uint64_t sample_time = 0U;
+        if ((tim5_tick != 0U)
+            && live_clock_tim5_to_sample_time(tim5_tick, &sample_time))
+          seq_runtime_midi_clock_from_source_at(source, sample_time);
+        else
+          seq_runtime_midi_clock_from_source(source);
+      }
       break;
     case 0xFAU: /* MIDI Start */
       seq_runtime_midi_start_from_source(source);
@@ -1053,8 +1059,12 @@ void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim) {
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
   if ((htim != NULL) && (htim->Instance == TIM12)) {
-    /* Internal seq clock cadence tick source; musical processing runs in CONTROL_RT. */
-    seq_runtime_time_adapter_process_internal_from_irq();
+    /* TIM12 is one-shot: CONTROL rearms it only while an internal musical
+     * deadline is active.  It is never a permanent fallback cadence. */
+    if (seq_runtime_control_deadline_timer_fired() != 0U) {
+      seq_runtime_time_adapter_process_internal_from_irq();
+      control_rt_wakeup(CONTROL_RT_WAKE_DEADLINE);
+    }
   }
 }
 
@@ -1320,6 +1330,7 @@ void midi_clock_on_timer_tick(void) {
   if (midi_clock_pending_ticks != UINT32_MAX) {
     midi_clock_pending_ticks++;
   }
+  control_rt_wakeup(CONTROL_RT_WAKE_MIDI);
   {
     const uint32_t delta = midi_clock_compute_next_delta_ticks();
     midi_clock_next_ccr += delta;
@@ -1404,10 +1415,8 @@ static bool midi_usb_channel_voice_admit(uint8_t status, uint8_t ch,
   if (midi_usb_tx_count > midi_usb_tx_high_water)
     midi_usb_tx_high_water = midi_usb_tx_count;
   midi_exit_critical(primask);
-  if (midi_in_isr())
-    midi_usb_request_deferred_flush_from_isr();
-  else
-    midi_usb_try_flush();
+  midi_usb_request_deferred_flush();
+  midi_usb_wakeup_if_pending();
   return true;
 }
 

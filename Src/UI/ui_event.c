@@ -76,6 +76,8 @@ static bool ui_event_push(const ui_event_t *ev)
     __DMB();
     __set_PRIMASK(primask);
     ui_service_wakeup(UI_SERVICE_WAKE_INPUT);
+    ui_service_dirty_set();
+    ui_service_led_dirty_set();
     return true;
 }
 

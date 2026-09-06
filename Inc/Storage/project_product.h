@@ -31,6 +31,10 @@ typedef enum {
     PROJECT_PRODUCT_SAVE_ERROR_MEDIA_CHANGED
 } project_product_save_error_t;
 typedef enum {
+    PROJECT_SAVE_MODAL_INACTIVE = 0,
+    PROJECT_SAVE_MODAL = 1
+} project_product_save_modal_state_t;
+typedef enum {
     PROJECT_PRODUCT_BOOT_RESTORE_FAILED = 0,
     PROJECT_PRODUCT_BOOT_RESTORE_DEFAULTS_READY,
     PROJECT_PRODUCT_BOOT_RESTORE_PROJECT_READY
@@ -51,6 +55,7 @@ uint8_t project_product_slot_present(uint8_t slot);
 uint8_t project_product_save(uint8_t slot);
 void project_product_save_service(void);
 uint8_t project_product_save_busy(void);
+project_product_save_modal_state_t project_product_save_modal_state(void);
 uint8_t project_product_save_take_result(uint8_t *slot,uint8_t *success);
 project_product_save_error_t project_product_save_last_error(void);
 int32_t project_product_save_last_detail(void);

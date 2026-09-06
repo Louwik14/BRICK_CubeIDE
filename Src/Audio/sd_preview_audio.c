@@ -1,7 +1,7 @@
 #include "Audio/sd_preview_audio.h"
 
 #include "IPC/sd_preview_ring_contract.h"
-#include "Storage/storage_io_wakeup.h"
+#include "IPC/storage_io_wakeup.h"
 #include "stm32h7xx.h"
 
 static float g_sd_preview_gain;
@@ -29,7 +29,7 @@ static uint8_t sd_preview_ring_pop(float *left, float *right)
     __DMB();
     g_sd_preview_ring_layout.read_count = read_count + 1U;
     if (was_full != 0U)
-        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+        storage_io_owner_wakeup(STORAGE_OWNER_PREVIEW);
     return 1U;
 }
 

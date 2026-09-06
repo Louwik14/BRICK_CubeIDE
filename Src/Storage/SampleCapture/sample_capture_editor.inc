@@ -10,6 +10,8 @@ void sample_capture_model_init(void)
     g_sample_capture.trigger_threshold_peak_abs_pcm24 =
         sample_capture_threshold_to_peak_abs_pcm24(
             SAMPLE_CAPTURE_THRESHOLD_DBFS_DEFAULT);
+    audio_rec_level_control_publish_trigger_config(0U, 0U,
+        g_sample_capture.trigger_threshold_peak_abs_pcm24);
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_IDLE;
     g_sample_capture.state.edit_vzoom = SAMPLE_CAPTURE_EDIT_VZOOM_DEFAULT;
     sample_capture_detail_reset();
@@ -104,6 +106,7 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
     if(arm == SAMPLE_CAPTURE_ARM_OFF)
     {
         g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
+        (void)sample_capture_next_trigger_arm_epoch();
         g_sample_capture.state.armed_pending = 0U;
         g_sample_capture.state.trigger_latched = 0U;
         if(g_sample_capture.state.recording != 0U)
@@ -120,6 +123,7 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
             if(g_sample_capture.state.take_valid == 0U)
                 g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_IDLE;
         }
+        sample_capture_publish_trigger_config();
     sample_capture_publish_rec_bus();
         return 1U;
     }
@@ -142,6 +146,7 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
         return 0U;
 
     g_sample_capture.state.arm = arm;
+    (void)sample_capture_next_trigger_arm_epoch();
     g_sample_capture.state.armed_pending =
         ((arm == SAMPLE_CAPTURE_ARM_REC)
             && (seq_runtime_rec_is_armed() != 0U)) ? 1U : 0U;
@@ -155,6 +160,7 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
     }
     g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_ARMED;
+    sample_capture_publish_trigger_config();
     sample_capture_publish_rec_bus();
     return 1U;
 }
@@ -241,6 +247,11 @@ uint8_t sample_capture_model_set_threshold_dbfs(int8_t threshold_dbfs)
     g_sample_capture.state.threshold_dbfs = threshold_dbfs;
     g_sample_capture.trigger_threshold_peak_abs_pcm24 =
         sample_capture_threshold_to_peak_abs_pcm24(threshold_dbfs);
+    if(g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_TRIG)
+    {
+        (void)sample_capture_next_trigger_arm_epoch();
+        sample_capture_publish_trigger_config();
+    }
     return 1U;
 }
 
@@ -267,6 +278,11 @@ uint8_t sample_capture_model_step_threshold(int16_t delta)
     g_sample_capture.state.threshold_dbfs = (int8_t)next;
     g_sample_capture.trigger_threshold_peak_abs_pcm24 =
         sample_capture_threshold_to_peak_abs_pcm24((int8_t)next);
+    if(g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_TRIG)
+    {
+        (void)sample_capture_next_trigger_arm_epoch();
+        sample_capture_publish_trigger_config();
+    }
     return 1U;
 }
 
@@ -547,6 +563,10 @@ void sample_capture_model_request_detail_waveform(uint32_t start_frame,
                                                   uint32_t frame_count,
                                                   uint16_t columns)
 {
+    if(sample_capture_storage_unavailable() != 0U)
+    {
+        return;
+    }
     if(SAMPLE_CAPTURE_DETAIL_VISIBLE_POINTS > SAMPLE_CAPTURE_DETAIL_POINTS)
     {
         return;
@@ -617,6 +637,7 @@ void sample_capture_model_request_detail_waveform(uint32_t start_frame,
     g_sample_capture.detail_request_frames = cache_end - cache_start;
     g_sample_capture.detail_request_columns = (uint16_t)request_columns;
     g_sample_capture.detail_build_next_frame = 0U;
+    sample_capture_storage_wakeup();
 }
 
 uint8_t sample_capture_model_global_overview_ready(void)
@@ -737,6 +758,10 @@ void sample_capture_model_request_line_waveform(uint32_t start_frame,
                                                 uint32_t frame_count,
                                                 uint16_t columns)
 {
+    if(sample_capture_storage_unavailable() != 0U)
+    {
+        return;
+    }
     if((g_sample_capture.state.take_valid == 0U)
             || (frame_count == 0U)
             || (start_frame >= g_sample_capture.state.recorded_frames)

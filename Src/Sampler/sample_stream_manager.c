@@ -42,7 +42,6 @@ static uint32_t sample_stream_manager_collect_candidates(
 static uint8_t sample_stream_manager_finish_io(
     sample_stream_manager_pending_io_t *pending,
     sample_stream_io_result_t *io_result);
-static uint8_t sample_stream_manager_submit_classic_prefill(void);
 static void sample_stream_manager_init_storage_once(void)
 {
     if (g_sample_stream_manager_initialized != 0U)
@@ -238,6 +237,8 @@ static uint8_t sample_stream_manager_pick_next(
         0);
     if (candidate_count == 0U)
     {
+        sample_stream_scheduler_decision_t end_round;
+        (void)sample_stream_scheduler_pick(0, 0U, &end_round);
         return 0U;
     }
 
@@ -288,60 +289,6 @@ static uint8_t sample_stream_manager_pick_next(
     }
     *out_candidate = *candidate;
     *out_target = target;
-    return 1U;
-}
-
-static uint8_t sample_stream_manager_submit_classic_prefill(void)
-{
-    sample_page_load_target_t target;
-    if ((g_sample_stream_manager_pending_count >= 2U)
-        || (sample_page_cache_get_reserved_load_target_domain_range(
-                SAMPLE_AUDIO_DOMAIN_CLASSIC, 0U,
-                SAMPLE_CLASSIC_CAPACITY, &target) == 0U))
-    {
-        return 0U;
-    }
-    sample_page_stream_info_t stream_info;
-    if ((sample_page_cache_get_stream_info_key(target.key, &stream_info) == 0U)
-        || (sample_audio_key_equal(&target.key, &stream_info.key) == 0U)
-        || (target.format != stream_info.format)
-        || (target.stride_floats != stream_info.stride_floats)
-        || (target.frames_per_page != stream_info.frames_per_page)
-        || ((target.registration_epoch != 0U)
-            && (target.registration_epoch != stream_info.registration_epoch)))
-    {
-        (void)sample_page_cache_set_page_state_key(
-            target.key, target.page_index, SAMPLE_PAGE_FAILED);
-        return 0U;
-    }
-    sample_page_load_token_t token;
-    if (sample_page_cache_begin_loading(&target, &token) == 0U)
-    {
-        return 0U;
-    }
-    sample_stream_io_command_t command;
-    if (sample_stream_io_command_init(&command, &token, &target,
-                                      &stream_info) == 0U)
-    {
-        (void)sample_page_cache_finish_loading(
-            &token, SAMPLE_PAGE_FINISH_ERROR);
-        return 0U;
-    }
-    command.deadline_margin_us = UINT32_MAX;
-    sample_stream_manager_pending_io_t *const pending =
-        &g_sample_stream_manager_pending_io[g_sample_stream_manager_pending_count];
-    memset(pending, 0, sizeof(*pending));
-    pending->target = target;
-    pending->command = command;
-    if (sample_stream_transport_submit(
-            &pending->command, &pending->transport_sequence) == 0U)
-    {
-        (void)sample_page_cache_finish_loading(
-            &token, SAMPLE_PAGE_FINISH_ERROR);
-        return 0U;
-    }
-    pending->active = 1U;
-    ++g_sample_stream_manager_pending_count;
     return 1U;
 }
 
@@ -447,6 +394,8 @@ static void sample_stream_manager_service_step(uint32_t byte_budget)
             (void)sample_stream_manager_finish_io(pending, &io_result);
             return;
         }
+        storage_io_owner_set(STORAGE_OWNER_STREAM);
+        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
         pending->active = 1U;
         ++g_sample_stream_manager_pending_count;
         if (sample_stream_transport_take_result(
@@ -484,7 +433,6 @@ static void sample_stream_manager_service_step(uint32_t byte_budget)
         byte_budget -= consumed;
 
     }
-    (void)sample_stream_manager_submit_classic_prefill();
 }
 
 void sample_stream_manager_service(uint32_t byte_budget)
@@ -492,7 +440,10 @@ void sample_stream_manager_service(uint32_t byte_budget)
     sample_stream_manager_service_step(byte_budget);
     if ((g_sample_stream_manager_pending_count == 0U)
             && (sample_stream_manager_has_pending_sd_work() != 0U))
-        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    {
+        storage_io_owner_set(STORAGE_OWNER_STREAM);
+        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+    }
 }
 
 uint8_t sample_stream_manager_has_pending_sd_work(void)

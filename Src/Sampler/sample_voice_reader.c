@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "Sampler/sample_stream_limits.h"
+#include "Sampler/sample_stream_admission.h"
 #include "Platform/memory_layout.h"
 
 #define SAMPLE_Q16_ONE (65536U)
@@ -46,6 +47,11 @@ typedef struct
 SDRAM_STREAM_SERVICE static sample_voice_loop_cache_t
     g_sample_voice_loop_cache[SAMPLE_STREAM_TARGET_MAX_VOICES];
 #endif
+
+SDRAM_STREAM_SERVICE static sample_voice_reader_t *
+    g_sample_voice_reader_admission_readers[SAMPLE_PAGE_LEASE_SLOT_COUNT];
+SDRAM_STREAM_SERVICE static sample_stream_admission_token_t
+    g_sample_voice_reader_admission_tokens[SAMPLE_PAGE_LEASE_SLOT_COUNT];
 
 
 /* Cursor/page/loop handling and render kernels remain in their original sequence.

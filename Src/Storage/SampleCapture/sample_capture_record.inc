@@ -404,6 +404,7 @@ static uint8_t sample_capture_start_prepared_at(uint64_t sample_time)
     g_sample_capture.state.take_valid = 0U;
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_RECORDING;
     g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
+    sample_capture_publish_trigger_config();
     g_sample_capture.last_take_notified = 0U;
     g_sample_capture.rec_edit_enter_deferred_services = 0U;
     sample_capture_detail_reset();
@@ -432,9 +433,11 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
         g_sample_capture.state.armed_pending = 0U;
         g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
         g_sample_capture.state.trigger_latched = 0U;
+        sample_capture_publish_trigger_config();
         sample_capture_publish_rec_bus();
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
         g_sample_capture.last_take_notified = 1U;
+        ui_service_dirty_set();
         return;
     }
 
@@ -442,6 +445,7 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
     g_sample_capture.state.armed_pending = 0U;
     g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
     g_sample_capture.state.trigger_latched = 0U;
+    sample_capture_publish_trigger_config();
         sample_capture_publish_rec_bus();
 #if SAMPLE_CAPTURE_DEBUG_UART
     sample_capture_debug_log("REC_LIVE_DONE frames=%lu\r\n", (unsigned long)frames);
@@ -477,19 +481,17 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
                 WAVEFORM_CACHE_REASON_POST_AUDIO_REC,
                 frames,
                 AUDIO_RECORDER_SAMPLE_RATE_HZ);
-            g_sample_capture.wave_cache_retry_countdown = 32U;
         }
         else
         {
-            g_sample_capture.wave_cache_retry_countdown = 0U;
         }
     }
     else
     {
-        g_sample_capture.wave_cache_retry_countdown = 0U;
     }
     g_sample_capture.rec_edit_enter_deferred_services = 2U;
     g_sample_capture.rec_edit_first_render_pending = 1U;
+    ui_service_dirty_set();
 #if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
     sample_capture_debug_log("WAVEFORM_CACHE_%s path=%s\r\n",
                              (cache_queued != 0U) ? "JOB_QUEUED" : "DEFERRED",

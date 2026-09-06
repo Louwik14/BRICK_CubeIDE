@@ -132,9 +132,14 @@ multi_sample_index_result_t multi_sample_index_write(
     const multi_sample_index_source_t *src);
 multi_sample_index_result_t multi_sample_index_load(const char *path,
                                                     multi_sample_index_t *out);
+multi_sample_index_result_t multi_sample_index_load_for_owner(
+    const char *path, multi_sample_index_t *out, uint8_t storage_owner);
 multi_sample_index_result_t multi_sample_index_peek_counts(const char *path,
                                                            uint16_t *out_sample_count,
                                                            uint16_t *out_zone_count);
+multi_sample_index_result_t multi_sample_index_peek_counts_for_owner(
+    const char *path, uint16_t *out_sample_count,
+    uint16_t *out_zone_count, uint8_t storage_owner);
 uint8_t multi_sample_index_validate(const multi_sample_index_t *idx);
 multi_sample_index_result_t multi_sample_index_apply_to_pool(
     const multi_sample_index_t *idx,

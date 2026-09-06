@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "IPC/audio_recorder_capture_contract.h"
-#include "Storage/storage_io_wakeup.h"
+#include "IPC/storage_io_wakeup.h"
 #include "stm32h7xx.h"
 
 typedef struct
@@ -24,7 +24,7 @@ static void audio_recorder_capture_audio_close(audio_recorder_error_t fault)
     g_audio_recorder_capture.capture_fault = (uint32_t)fault;
     __DMB();
     g_audio_recorder_capture.closed_session = g_audio_capture.session_id;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_wakeup(STORAGE_OWNER_RECORDER);
 }
 
 void audio_recorder_capture_audio_init(void)
@@ -105,7 +105,9 @@ uint8_t audio_recorder_capture_audio_push(audio_recorder_client_t client,
     __DMB();
     g_audio_recorder_capture.head_cursor = head + frames;
     if (was_empty != 0U)
-        storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    {
+        storage_io_owner_wakeup(STORAGE_OWNER_RECORDER);
+    }
     if ((captured + frames) >= g_audio_capture.frame_limit)
         audio_recorder_capture_audio_close(AUDIO_RECORDER_ERROR_NONE);
     return 1U;

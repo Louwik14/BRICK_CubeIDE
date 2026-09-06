@@ -2,7 +2,6 @@
 
 #include <stddef.h>
 
-#include "App/Hall/hall_engine.h"
 #include "App/control_domain.h"
 #include "buttons.h"
 #include "Track/track_runtime.h"
@@ -11,11 +10,6 @@
 #include "Storage/project_control.h"
 #include "ui_core.h"
 #include "ui_param.h"
-
-#define HALL_PRESSURE_RAW_NOISE_FLOOR 400U
-#define HALL_PRESSURE_RAW_NOISE_MARGIN 200U
-#define HALL_PRESSURE_HYST 150U
-#define HALL_PRESSURE_AMOUNT_DEADZONE 25U
 
 typedef struct
 {
@@ -30,104 +24,6 @@ typedef struct
 } ui_macro_interaction_state_t;
 
 static ui_macro_interaction_state_t g_ui_macro_interaction;
-static uint8_t g_hall_pressure_active[HALL_UI_LANE_COUNT];
-
-static float ui_macro_interaction_clampf(float value, float min_value, float max_value)
-{
-    if (value < min_value)
-    {
-        return min_value;
-    }
-
-    if (value > max_value)
-    {
-        return max_value;
-    }
-
-    return value;
-}
-static uint16_t hall_pressure_delta(uint8_t hall)
-{
-    const uint16_t min_value = hall_engine_get_min(hall);
-    const uint16_t raw_value = hall_engine_get_raw(hall);
-
-    return (raw_value > min_value) ? (uint16_t)(raw_value - min_value) : 0U;
-}
-
-static uint8_t hall_pressure_update(uint8_t hall)
-{
-    uint16_t min_value = 0U;
-    uint16_t max_value = 0U;
-    uint16_t delta = 0U;
-    const uint16_t on_delta = (uint16_t)(HALL_PRESSURE_RAW_NOISE_FLOOR + HALL_PRESSURE_RAW_NOISE_MARGIN);
-    const uint16_t off_delta = (on_delta > HALL_PRESSURE_HYST) ? (uint16_t)(on_delta - HALL_PRESSURE_HYST) : 0U;
-
-    if (hall >= HALL_UI_LANE_COUNT)
-    {
-        return 0U;
-    }
-
-    min_value = hall_engine_get_min(hall);
-    max_value = hall_engine_get_max(hall);
-    delta = hall_pressure_delta(hall);
-
-    if ((max_value <= min_value) || ((uint16_t)(max_value - min_value) <= on_delta))
-    {
-        g_hall_pressure_active[hall] = 0U;
-        return 0U;
-    }
-
-    if (g_hall_pressure_active[hall] == 0U)
-    {
-        if (delta >= on_delta)
-        {
-            g_hall_pressure_active[hall] = 1U;
-        }
-    }
-    else if (delta <= off_delta)
-    {
-        g_hall_pressure_active[hall] = 0U;
-    }
-
-    return g_hall_pressure_active[hall];
-}
-
-static float hall_pressure_amount(uint8_t hall)
-{
-    uint16_t min_value = 0U;
-    uint16_t max_value = 0U;
-    uint16_t range = 0U;
-    uint16_t amount_start = 0U;
-    uint16_t delta = 0U;
-    float start = 0.0f;
-    float amount = 0.0f;
-
-    if (hall >= HALL_UI_LANE_COUNT)
-    {
-        return 0.0f;
-    }
-
-    min_value = hall_engine_get_min(hall);
-    max_value = hall_engine_get_max(hall);
-    if (max_value <= min_value)
-    {
-        return 0.0f;
-    }
-
-    range = (uint16_t)(max_value - min_value);
-    amount_start = (uint16_t)(HALL_PRESSURE_RAW_NOISE_FLOOR
-                              + HALL_PRESSURE_RAW_NOISE_MARGIN
-                              + HALL_PRESSURE_AMOUNT_DEADZONE);
-    if (range <= amount_start)
-    {
-        return 0.0f;
-    }
-
-    delta = hall_pressure_delta(hall);
-    start = (float)amount_start;
-    amount = ((float)delta - start) / ((float)range - start);
-    return ui_macro_interaction_clampf(amount, 0.0f, 1.0f);
-}
 
 static uint8_t ui_macro_interaction_is_scene_mode(void)
 {
@@ -365,11 +261,6 @@ void ui_macro_interaction_reset(void)
     };
     (void)control_domain_request_macro(&release_all);
 
-    for (uint8_t hall = 0U; hall < HALL_UI_LANE_COUNT; ++hall)
-    {
-        g_hall_pressure_active[hall] = 0U;
-    }
-
     g_ui_macro_interaction.armed = 0U;
     g_ui_macro_interaction.hall = 0U;
     g_ui_macro_interaction.encoder = 0U;
@@ -382,7 +273,7 @@ void ui_macro_interaction_reset(void)
 
 void ui_macro_interaction_note_hall_press(uint8_t hall)
 {
-    if (hall >= HALL_UI_LANE_COUNT)
+    if (hall >= PERSIST_CONTROL_MACRO_SCENE_COUNT)
     {
         return;
     }
@@ -606,29 +497,17 @@ void ui_macro_interaction_service_hall(uint8_t hall, uint8_t pressed)
 {
     (void)pressed;
 
-    if ((hall >= HALL_UI_LANE_COUNT) || (ui_macro_interaction_is_switch_mode() == 0U))
+    if ((hall >= PERSIST_CONTROL_MACRO_SCENE_COUNT)
+        || (ui_macro_interaction_is_switch_mode() == 0U))
     {
         return;
     }
 
-    const uint8_t was_active = g_hall_pressure_active[hall];
-    if (hall_pressure_update(hall) != 0U)
-    {
-        const control_macro_intent_t intent = {
-            .operation = CONTROL_MACRO_SET_SCENE_SOURCE_AMOUNT,
-            .scene = hall,
-            .value = hall_pressure_amount(hall)
-        };
-        (void)control_domain_request_macro(&intent);
-    }
-    else if (was_active != 0U)
-    {
-        const control_macro_intent_t intent = {
-            .operation = CONTROL_MACRO_RELEASE_SCENE_SOURCE,
-            .scene = hall
-        };
-        (void)control_domain_request_macro(&intent);
-    }
+    const control_macro_intent_t intent = {
+        .operation = CONTROL_MACRO_UPDATE_HALL_PRESSURE,
+        .scene = hall
+    };
+    (void)control_domain_request_macro(&intent);
 }
 
 uint8_t param_macro_get_ui_held_scene(uint8_t macro, uint8_t *out_scene)

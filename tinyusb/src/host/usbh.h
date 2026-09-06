@@ -191,6 +191,10 @@ TU_ATTR_ALWAYS_INLINE static inline void tuh_task(void) {
 // Check if there is pending events need processing by tuh_task()
 bool tuh_task_event_ready(void);
 
+// Return the remaining delay for TinyUSB's single deferred continuation.
+// The delay is relative to tusb_time_millis_api(), not an absolute timestamp.
+bool tuh_task_next_deadline_ms(uint32_t *remaining_ms);
+
 #ifndef TUSB_HCD_H_
 extern void hcd_int_handler(uint8_t rhport, bool in_isr);
 #endif

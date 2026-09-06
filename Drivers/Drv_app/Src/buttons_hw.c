@@ -21,11 +21,12 @@
 
 #include "buttons_hw.h"
 #include "Board/board_controls.h"
+#include "App/control_rt_wakeup.h"
 
 #define BUTTONS_HW_REG_COUNT_MAX 4U
 #define BUTTONS_HW_BITS_PER_REG 8U
 
-static uint8_t buttons_hw_state[BTN_COUNT];
+static volatile uint8_t buttons_hw_state[BTN_COUNT];
 
 /* --------- GPIO helpers --------- */
 
@@ -182,6 +183,29 @@ void buttons_hw_read(void)
             buttons_hw_state[logical_idx] = (uint8_t)((pressed_mask >> physical_idx) & 1U);
         }
     }
+}
+
+void buttons_hw_poll_irq(void)
+{
+    uint8_t previous[BTN_COUNT];
+    uint8_t changed = 0U;
+
+    for (uint32_t i = 0U; i < BTN_COUNT; ++i)
+        previous[i] = buttons_hw_state[i];
+
+    buttons_hw_read();
+
+    for (uint32_t i = 0U; i < BTN_COUNT; ++i)
+    {
+        if (previous[i] != buttons_hw_state[i])
+        {
+            changed = 1U;
+            break;
+        }
+    }
+
+    if (changed != 0U)
+        control_rt_wakeup(CONTROL_RT_WAKE_INPUT);
 }
 
 /* --------- API --------- */

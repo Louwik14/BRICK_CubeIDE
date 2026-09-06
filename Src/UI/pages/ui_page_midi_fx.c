@@ -521,12 +521,6 @@ static void ui_page_midi_fx_handle_event(const ui_event_t *ev)
     ui_page_midi_fx_sync_waveform_capture();
 }
 
-static void ui_page_midi_fx_tick(void)
-{
-    ui_template_page_tick();
-    ui_page_midi_fx_sync_waveform_capture();
-}
-
 static void ui_page_midi_fx_render(void)
 {
     ui_template_page_render();
@@ -590,7 +584,6 @@ const ui_page_t g_ui_page_midi_fx = {
     .enter = ui_page_midi_fx_enter,
     .leave = ui_page_midi_fx_leave,
     .handle_event = ui_page_midi_fx_handle_event,
-    .tick = ui_page_midi_fx_tick,
     .sync_active_context = ui_template_page_sync_active_track_context,
     .render = ui_page_midi_fx_render,
     .context = &g_ui_template_midi_fx_state,
@@ -600,7 +593,6 @@ const ui_page_t g_ui_page_audio_fx = {
     .enter = ui_page_midi_fx_enter,
     .leave = ui_page_midi_fx_leave,
     .handle_event = ui_page_midi_fx_handle_event,
-    .tick = ui_page_midi_fx_tick,
     .render = ui_page_midi_fx_render,
     .context = &g_ui_template_audio_fx_state,
 };

@@ -11,6 +11,8 @@
  * but never owns a product value.
  */
 void control_rt_publication_init(void);
+void control_rt_publication_suppress_begin(void);
+void control_rt_publication_suppress_end(void);
 uint8_t control_rt_publication_horizon_active(void);
 uint8_t control_rt_now_sample(uint64_t *out_sample_time);
 uint8_t control_rt_capture_tick_to_sample(uint32_t capture_tick,
@@ -45,5 +47,6 @@ uint8_t control_rt_publish_record(uint8_t kind, uint32_t session_id,
                                   uint64_t sample_time);
 uint8_t control_rt_publish_panic(uint8_t kind, uint8_t entity,
                                  uint64_t sample_time);
+uint8_t control_rt_publish_audio_state_commit(uint32_t generation);
 
 #endif /* BRICK6_CONTROL_RT_PUBLICATION_H */

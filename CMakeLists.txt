@@ -507,7 +507,6 @@ set_source_files_properties(${BRAIDS_O3_SOURCES} PROPERTIES
 set(CONTROL_RUNTIME_O1_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/brick6_clip_shifter.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/live_parameter_audio_runtime.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/brick6_stream_service_task.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/project_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/project_load_quiesce.c"
 )

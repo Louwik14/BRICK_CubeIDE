@@ -13,5 +13,6 @@ void project_load_quiesce_end(void);
 uint8_t project_load_ingress_is_open(void);
 uint8_t project_replacement_is_active(void);
 uint8_t project_load_allowed(void);
+uint8_t project_transport_stopped_stable(void);
 
 #endif

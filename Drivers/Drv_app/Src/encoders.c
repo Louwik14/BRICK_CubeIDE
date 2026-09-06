@@ -59,11 +59,6 @@ void encoders_discard_pending(void)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void encoders_update(uint32_t dt_ms)
-{
-    (void)dt_ms;
-}
-
 /**
  * @brief Point d'entrée encoder_get_delta.
  *

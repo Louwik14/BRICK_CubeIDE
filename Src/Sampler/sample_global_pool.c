@@ -5,6 +5,8 @@
 
 #include "Sampler/sample_cache.h"
 #include "Platform/memory_layout.h"
+#include "Storage/project_load_quiesce.h"
+#include "Storage/sd_access_gate.h"
 #include "Storage/storage_io_wakeup.h"
 
 STORAGE_STATE_SDRAM static sample_global_slot_t
@@ -330,7 +332,9 @@ static uint8_t sample_global_pool_register_at(sample_global_kind_t kind,
                                               uint32_t cost_bytes,
                                               uint16_t entry_count)
 {
-    if ((global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+    if ((project_transport_stopped_stable() == 0U)
+        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+        || (global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
         || (sample_global_kind_valid(kind) == 0U)
         || (backend_index == SAMPLE_GLOBAL_POOL_INVALID_INDEX)
         || (sample_global_pool_validate_entries(kind, backend_index, entry_count) == 0U)
@@ -420,6 +424,12 @@ static sample_classic_load_error_t sample_global_classic_error_from_cache(uint16
 
 uint8_t sample_global_pool_load_classic(uint16_t global_index, const char *path)
 {
+    if ((project_transport_stopped_stable() == 0U)
+        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA))
+    {
+        g_sample_classic_last_error = SAMPLE_CLASSIC_LOAD_SD_GATE_REFUSED;
+        return 0U;
+    }
     if (global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
     {
         g_sample_classic_last_error = SAMPLE_CLASSIC_LOAD_INVALID_ID;
@@ -447,13 +457,16 @@ uint8_t sample_global_pool_load_classic(uint16_t global_index, const char *path)
         return 0U;
     }
     g_sample_classic_last_error = SAMPLE_CLASSIC_LOAD_OK;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_STREAM);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
 uint8_t sample_global_pool_request_classic_load(uint16_t global_index, const char *path)
 {
-    if ((global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+    if ((project_transport_stopped_stable() == 0U)
+        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+        || (global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
         || (path == NULL) || (path[0] == '\0')
         || (strlen(path) >= sizeof(g_classic_request_path))
         || (g_classic_request_valid != 0U))
@@ -464,7 +477,8 @@ uint8_t sample_global_pool_request_classic_load(uint16_t global_index, const cha
     (void)snprintf(g_classic_request_path, sizeof(g_classic_request_path), "%s", path);
     __DMB();
     g_classic_request_valid = 1U;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_STREAM);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
@@ -479,7 +493,8 @@ uint8_t sample_global_pool_request_clear_classic(uint16_t global_index)
     g_classic_clear_request_slot = global_index;
     __DMB();
     g_classic_clear_request_valid = 1U;
-    storage_io_wakeup(STORAGE_IO_WAKE_WORK);
+    storage_io_owner_set(STORAGE_OWNER_STREAM);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
@@ -508,7 +523,9 @@ uint8_t sample_global_pool_load_classic_prepared(uint16_t global_index,
                                                  uint32_t source_crc32,
                                                  uint32_t prepared_cost_bytes)
 {
-    if ((global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+    if ((project_transport_stopped_stable() == 0U)
+        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+        || (global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
         || (path == NULL) || (path[0] == '\0')
         || (strlen(path) >= SAMPLE_GLOBAL_POOL_PATH_MAX)
         || ((g_sample_global_pool[global_index].kind != SAMPLE_GLOBAL_KIND_EMPTY)

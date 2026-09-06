@@ -129,7 +129,6 @@ typedef struct
 void ui_template_page_enter(void);
 void ui_template_page_leave(void);
 void ui_template_page_handle_event(const ui_event_t *ev);
-void ui_template_page_tick(void);
 void ui_template_page_sync_active_track_context(void);
 void ui_template_page_render(void);
 

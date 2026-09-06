@@ -49,28 +49,60 @@ remplacer les edits non sauvegardes presents au moment de l'application.
 Project Load decode et valide le document avant d'acquerir la quiesce et
 l'exclusivite scheduler, puis sequence les assets RAM avec le loader cooperatif
 canonique.
+Le safe-point ne conserve que le nettoyage des leases physiques, queues/tails
+residuels, etat AUDIO et coherence transactionnelle; le protocole de quiesce
+destine a transformer un Load live en arret n'existe plus.
 Chaque candidat RAM est complet avant retrait; un remplacement attend ensuite
 STOP AUDIO et `T_safe` cote CONTROL avant liberation et commit. Un slot EMPTY
 est commite directement. Le quiesce Project reste ferme jusqu'a la fin de cette
-sequence, puis le restore republie PROGRAM/PARAM/TRANSPORT/RECORD par la FIFO
-avant publication UI. Aucun loader RAM synchrone ni ACK AUDIO de restore
-n'existe. Patch utilise le meme loader et differe son application lorsqu'un
+sequence. Le restore installe d'abord l'etat CONTROL sous suppression de
+publication live, construit et valide avant la frontiere finale un prepared
+AUDIO state immutable couvrant PROGRAM, LFO, MIDI channel/source, ownership des
+entrees External, parametres audio, tempo/step transport, metronome, mute,
+routage, FX, polyphonie et assets deja prets. Le Pattern bank est ensuite
+committe, puis une seule commande `STATE_COMMIT` est publiee sur le canal
+CONTROL->AUDIO existant. AUDIO applique cette generation de maniere
+deterministe; aucun transport Project parallele, aucune deuxieme chronologie,
+aucun ACK M7->M4, aucune confirmation de commit et aucun nouveau retour
+inter-core ne sont introduits. Le succes Project cote M4 resulte de la
+publication engagee et de l'invariant d'application AUDIO; le restore ne
+depend donc plus de la capacite cumulative de la FIFO pour des milliers de
+PARAM. Patch utilise le meme loader et differe son application lorsqu'un
 asset RAM reference est absent.
 
 ## User admission
 
-Project Save et Project Load sont des operations UI modales. Leur etat busy est
-derive des lifecycles produit existants, y compris une commande acceptee mais
-encore en attente de prise en charge Storage. L'UI affiche la progression
-reelle et rejette les inputs locaux jusqu'a la fin fonctionnelle; CONTROL garde
+Project Save et Project Load sont des operations UI modales. Tous deux sont
+refuses lorsque le transport est `RUNNING`, `START_PENDING` ou dans tout autre
+etat non stable; un tel rejet ne provoque aucun `STOP` automatique, snapshot,
+modal, transaction ou entree FSM Project. Ils sont admissibles uniquement
+lorsque le transport est `STOPPED` stable, puis s'executent comme operations
+modales et transactionnelles.
+Leur etat busy est derive des lifecycles produit existants, y compris une
+commande acceptee mais encore en attente de prise en charge Storage. L'UI
+affiche la progression reelle et rejette les inputs locaux jusqu'a la fin
+fonctionnelle; CONTROL garde
 la meme invariance si une mutation arrive malgre l'UI. Cette regle ne suspend
 pas l'IRQ audio ni les workers necessaires; le playback peut etre coupe lorsque
 le contrat de remplacement l'exige.
 
-Les mutations utilisateur Multi (Load, Import, Delete, Clear, Replace) sont
-mutuellement exclusives au point d'admission. La gate SD reste une protection
-physique, pas le mecanisme normal de refus produit. Pattern Save/Load conserve
-son comportement non modal documente ci-dessus.
+Les Project Save/Load et Pattern Save/Load sont mutuellement exclusifs au point
+d'admission: l'action incompatible est refusee, sans file d'attente ni retry
+differe. Les mutations utilisateur Multi (Load, Import, Delete, Clear, Replace)
+restent mutuellement exclusives au point d'admission. La gate SD reste une
+protection physique, pas le mecanisme normal de refus produit. Pattern Save/Load
+conserve son comportement non modal documente ci-dessus.
+
+Les quatre Asset Loads (Multi, Stream, Wavetable et Sampler RAM) sont
+`STOPPED`-only, avec gate avant creation du job, mutation de pool, demande SD ou
+publication d'asset. `WAV Convert` et le rebuild complet du catalogue sont
+egalement `STOPPED`-only. Si la SD est absente a l'admission, l'action est
+refusee avec feedback `SD ABSENTE`; aucun job, retry ou restart automatique
+n'est cree. Une disparition de SD pendant une operation provoque un abort
+propre et une erreur visible, a relancer manuellement apres reinsertion.
+
+La Preview SD reste live et utilisable pendant le playback. Le browsing et la
+consultation d'un catalogue deja construit restent distincts du rebuild.
 
 Une application Pattern ou Project reussie reconstruit runtime/AUDIO et invalide Undo/Redo. Un rejet conserve integralement l'etat courant.
 

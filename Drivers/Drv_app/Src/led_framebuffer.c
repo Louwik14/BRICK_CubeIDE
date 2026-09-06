@@ -116,11 +116,11 @@ void led_fb_fill(uint8_t r, uint8_t g, uint8_t b)
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-void led_fb_commit(void)
+uint8_t led_fb_commit(void)
 {
     if (led_hw_busy())
     {
-        return;
+        return 0U;
     }
 
     memset(led_hw_rgb, 0, sizeof(led_hw_rgb));
@@ -139,4 +139,5 @@ void led_fb_commit(void)
     }
 
     led_hw_send(led_hw_rgb, LED_HW_COUNT);
+    return 1U;
 }

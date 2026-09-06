@@ -12,7 +12,6 @@
 #include "ui_macro_interaction.h"
 #include "Storage/project_control.h"
 #include "Platform/memory_layout.h"
-#include "App/engine_tasklet.h"
 #include "Track/track_state.h"
 #include "Track/track_input_ownership.h"
 #include "Track/track_mute.h"

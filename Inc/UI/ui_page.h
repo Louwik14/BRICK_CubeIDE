@@ -8,7 +8,6 @@ typedef struct
     void (*enter)(void);
     void (*leave)(void);
     void (*handle_event)(const ui_event_t *);
-    void (*tick)(void);
     void (*sync_active_context)(void);
     void (*render)(void);
     const void *context;

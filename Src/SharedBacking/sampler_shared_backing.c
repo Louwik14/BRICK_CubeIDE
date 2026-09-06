@@ -5,11 +5,20 @@
 #include "Platform/memory_layout.h"
 #include "Sampler/sample_page_cache_shared_contract.h"
 #include "Sampler/sample_page_lease.h"
+#include "Sampler/sample_stream_admission.h"
 
 /* Physical storage only.  Initialization and publication remain in the
  * STORAGE/AUDIO owners declared by the contracts above. */
 D2_IPC sample_page_lease_t
     g_sample_page_leases[SAMPLE_PAGE_LEASE_SLOT_COUNT];
+
+D2_IPC volatile sample_stream_admission_credit_t
+    g_sample_stream_admission_ledger[STREAM_MAX_ACTIVE_READERS];
+D2_IPC volatile sample_stream_admission_binding_t
+    g_sample_stream_admission_bindings[SAMPLE_STREAM_ADMISSION_BINDING_CAPACITY];
+D2_IPC volatile uint32_t g_sample_stream_admission_release_mask[2];
+D2_IPC volatile sample_stream_admission_release_stamp_t
+    g_sample_stream_admission_release_stamps[56U];
 
 CONTROL_STREAM_META_SDRAM sample_page_shared_descriptor_t
     g_sample_page_shared_descriptor[SAMPLE_PAGE_MAX_COUNT];

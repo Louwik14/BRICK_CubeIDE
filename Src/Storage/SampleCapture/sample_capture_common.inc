@@ -10,6 +10,26 @@ static uint32_t sample_capture_threshold_to_peak_abs_pcm24(int8_t threshold_dbfs
         ? SAMPLE_CAPTURE_PCM24_PEAK : (uint32_t)(peak + 0.5f);
 }
 
+static uint32_t sample_capture_next_trigger_arm_epoch(void)
+{
+    uint32_t next = g_sample_capture.trigger_arm_epoch + 1U;
+    if (next == 0U) next = 1U;
+    g_sample_capture.trigger_arm_epoch = next;
+    return next;
+}
+
+static void sample_capture_publish_trigger_config(void)
+{
+    const uint8_t enabled = (uint8_t)(
+        (g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_TRIG)
+        && (g_sample_capture.state.recording == 0U)
+        && (g_sample_capture.state.trigger_latched == 0U));
+    audio_rec_level_control_publish_trigger_config(
+        enabled,
+        g_sample_capture.trigger_arm_epoch,
+        g_sample_capture.trigger_threshold_peak_abs_pcm24);
+}
+
 static void sample_capture_publish_rec_bus(void)
 {
     uint16_t source_entity_mask = 0U;

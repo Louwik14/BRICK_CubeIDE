@@ -3,8 +3,8 @@
 
 #include <stdint.h>
 
-/* Shared M4 -> M7 functional ABI.  The six opcodes are deliberately the
- * complete public grammar; sub-kinds only refine an opcode. */
+/* Shared M4 -> M7 functional ABI.  The live grammar remains the six normal
+ * opcodes; STATE_COMMIT is the STOPPED-only Project Load bulk restore edge. */
 typedef enum
 {
     CONTROL_AUDIO_COMMAND_PROGRAM = 0U,
@@ -12,7 +12,8 @@ typedef enum
     CONTROL_AUDIO_COMMAND_NOTE,
     CONTROL_AUDIO_COMMAND_TRANSPORT,
     CONTROL_AUDIO_COMMAND_RECORD,
-    CONTROL_AUDIO_COMMAND_PANIC
+    CONTROL_AUDIO_COMMAND_PANIC,
+    CONTROL_AUDIO_COMMAND_STATE_COMMIT
 } control_audio_command_opcode_t;
 
 typedef enum { CONTROL_AUDIO_NOTE_OFF = 0U, CONTROL_AUDIO_NOTE_ON } control_audio_note_kind_t;
