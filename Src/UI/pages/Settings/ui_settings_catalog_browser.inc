@@ -26,37 +26,6 @@ static const char *ui_page_settings_preview_error_label(sd_preview_error_t error
     }
 }
 
-static const char *ui_page_settings_convert_error_label(wav_convert_error_t error)
-{
-    switch (error)
-    {
-        case WAV_CONVERT_ERROR_NO_SPACE:
-            return "SD FULL";
-        case WAV_CONVERT_ERROR_BUSY:
-            return "SD BUSY";
-        case WAV_CONVERT_ERROR_UNSUPPORTED:
-            return "WAV UNSUPP";
-        case WAV_CONVERT_ERROR_MOUNT_FAIL:
-            return "SD UNAVAILABLE";
-        case WAV_CONVERT_ERROR_OPEN_FAIL:
-            return "OPEN FAIL";
-        case WAV_CONVERT_ERROR_READ_FAIL:
-            return "SD READ FAIL";
-        case WAV_CONVERT_ERROR_WRITE_FAIL:
-            return "SD WRITE FAIL";
-        case WAV_CONVERT_ERROR_SYNC_FAIL:
-            return "SD SYNC FAIL";
-        case WAV_CONVERT_ERROR_VERIFY_FAIL:
-            return "VERIFY FAIL";
-        case WAV_CONVERT_ERROR_REPLACE_FAIL:
-            return "REPLACE FAIL";
-        case WAV_CONVERT_ERROR_CLOSE_FAIL:
-            return "CLOSE FAIL";
-        default:
-            return "CONVERT FAIL";
-    }
-}
-
 static void ui_page_settings_refresh_project_slots(void)
 {
     g_ui_settings.project_slot_count = storage_settings_project_list_slots(g_ui_settings.project_slots, PROJECT_PRODUCT_SLOT_COUNT);

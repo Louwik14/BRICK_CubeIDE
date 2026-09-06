@@ -10,6 +10,7 @@ extern const ui_page_t g_ui_page_settings;
 void ui_page_settings_open(uint8_t return_page_id);
 void ui_page_settings_open_sample_browser(uint8_t return_page_id);
 void ui_page_settings_close_to_return_page(void);
+void ui_page_settings_service_storage_results(void);
 uint8_t ui_page_settings_is_open(void);
 uint8_t ui_page_settings_multi_clear_is_active(void);
 uint8_t ui_page_settings_next_deadline(uint32_t now_ms, uint32_t *out_deadline_ms);

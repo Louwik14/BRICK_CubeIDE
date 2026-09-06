@@ -60,16 +60,19 @@ static const ui_settings_sample_entry_t *ui_page_settings_sample_selected_entry(
 static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path)
 {
     if (storage_settings_project_replacement_active() != 0U) return;
-    uint16_t existing_logical = 0U;
-    uint16_t existing_runtime = 0U;
-    uint32_t existing_kind = 0U;
-    if ((storage_settings_find_asset(PERSIST_ASSET_SAMPLE_STREAM,path,&existing_logical) != 0U)
-        && (storage_settings_resolve_sample_runtime(existing_logical,&existing_runtime,&existing_kind) != 0U)
-        && (existing_kind == PERSIST_ASSET_SAMPLE_STREAM))
+    uint16_t classic_slots[SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS];
+    const uint16_t classic_count = storage_settings_list_samples(
+        PERSIST_ASSET_SAMPLE_STREAM, classic_slots, SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS);
+    for (uint16_t i = 0U; i < classic_count; ++i)
     {
-        g_ui_settings.sample_slot_selected = existing_logical;
-        ui_page_settings_status("ALREADY LOADED");
-        return;
+        const sample_global_slot_t *const classic =
+            storage_settings_get_global_slot(classic_slots[i]);
+        if ((classic != 0) && (strcmp(classic->path, path) == 0))
+        {
+            g_ui_settings.sample_slot_selected = classic_slots[i];
+            ui_page_settings_status("ALREADY LOADED");
+            return;
+        }
     }
     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
     if (storage_settings_request_classic_load(slot, path) != 0U)
@@ -292,7 +295,7 @@ static void ui_page_settings_sample_confirm_accept(void)
         }
 
         ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
-        if (storage_settings_request_conversion(path) == 0U)
+        if (storage_settings_request_classic_with_conversion(slot, path) == 0U)
         {
             ui_page_settings_status(
                 (storage_settings_sd_status() == SD_STORAGE_STATUS_NO_MEDIA)
@@ -300,7 +303,6 @@ static void ui_page_settings_sample_confirm_accept(void)
             return;
         }
 
-        (void)storage_settings_track_conversion(slot, path);
         ui_page_settings_status("CONVERT 0%");
         return;
     }

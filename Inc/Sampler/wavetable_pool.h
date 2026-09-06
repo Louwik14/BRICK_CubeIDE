@@ -154,6 +154,7 @@ uint8_t wavetable_pool_load_async_begin_prepared_with_geometry(
 uint8_t wavetable_pool_source_crc32_file(FIL *file, uint32_t *out_crc32);
 void wavetable_pool_load_async_service(void);
 uint8_t wavetable_pool_load_async_busy(void);
+uint8_t wavetable_pool_load_async_work_active(void);
 uint32_t wavetable_pool_load_async_request_id(void);
 wavetable_requester_t wavetable_pool_load_async_requester(void);
 void wavetable_pool_load_async_cancel(void);

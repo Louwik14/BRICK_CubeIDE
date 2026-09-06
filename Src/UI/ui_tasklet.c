@@ -42,6 +42,7 @@
 #include "pages/ui_page_calibration.h"
 #include "pages/ui_page_settings.h"
 #include "UI/ui_service_wakeup.h"
+#include "UI/pages/ui_page_settings.h"
 
 /**
  * @brief Services ciblés du propriétaire UI.
@@ -641,6 +642,7 @@ void ui_tasklet_initialize(void)
 void ui_tasklet_process_input(void)
 {
     ui_tasklet_initialize();
+    ui_page_settings_service_storage_results();
     if (ui_boot_loading_is_active() != 0U)
     {
         ui_boot_loading_discard_inputs();
@@ -659,6 +661,7 @@ void ui_tasklet_process_input(void)
 void ui_tasklet_process_presentation(uint8_t deadline_due)
 {
     ui_tasklet_initialize();
+    ui_page_settings_service_storage_results();
     ui_boot_loading_service();
     if ((deadline_due != 0U) || (ui_service_dirty_is_set() != 0U))
     {

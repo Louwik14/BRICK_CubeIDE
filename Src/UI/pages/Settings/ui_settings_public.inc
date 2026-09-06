@@ -95,93 +95,56 @@ uint8_t ui_page_settings_multi_clear_is_active(void)
     return storage_settings_multi_clear_active();
 }
 
-static void ui_page_settings_sync_storage_view(void)
+void ui_page_settings_service_storage_results(void)
 {
-    storage_settings_event_t event;
-    uint32_t sequence = 0U;
-    if ((storage_settings_get_event_snapshot(&event, &sequence) == 0U)
-        || (sequence == g_ui_settings.storage_event_sequence))
+    for (control_asset_family_t family = CONTROL_ASSET_FAMILY_CLASSIC;
+         family < CONTROL_ASSET_FAMILY_COUNT; ++family)
     {
-        ui_page_settings_preview_apply_termination_status();
-        return;
-    }
-    g_ui_settings.storage_event_sequence = sequence;
-    switch (event.type)
-    {
-        case STORAGE_SETTINGS_EVENT_CLASSIC_READY:
-            g_ui_settings.sample_slot_selected = event.slot;
-            ui_page_settings_refresh_sampler_slots();
-            ui_page_settings_status("LOAD OK");
-            break;
-        case STORAGE_SETTINGS_EVENT_CLASSIC_FAILED:
-            ui_page_settings_status("LOAD FAIL");
-            break;
-        case STORAGE_SETTINGS_EVENT_ASSET_READY:
-            g_ui_settings.sample_slot_selected = event.logical;
-            ui_page_settings_refresh_sampler_slots();
-            ui_page_settings_status("LOAD OK");
-            break;
-        case STORAGE_SETTINGS_EVENT_CATALOG_READY:
+        if ((g_ui_asset_receipt_valid[family] == 0U)
+            && (control_domain_take_asset_terminal(
+                    family, &g_ui_asset_receipts[family]) != 0U))
+            g_ui_asset_receipt_valid[family] = 1U;
+        if ((g_ui_asset_receipt_valid[family] == 0U)
+            || (ui_page_settings_is_open() == 0U)) continue;
+
+        const control_asset_terminal_t *const receipt = &g_ui_asset_receipts[family];
+        if (family == CONTROL_ASSET_FAMILY_MULTI)
         {
-            const ui_settings_menu_level_t *const level =
-                ui_page_settings_current_level();
-            if (level != 0)
+            if (receipt->stage == CONTROL_ASSET_STAGE_CLEAR_INDEXES)
             {
-                if ((level->view == UI_SETTINGS_VIEW_SAMPLE)
-                    || (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM))
-                    (void)ui_page_settings_sample_browser_refresh();
-                else if (level->view == UI_SETTINGS_VIEW_WAVETABLE)
-                    (void)ui_page_settings_wavetable_browser_refresh();
-                else if (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
-                    (void)ui_page_settings_multi_browser_refresh();
+                (void)ui_page_settings_multi_browser_refresh();
+                ui_page_settings_status((receipt->success != 0U)
+                                            ? ((receipt->result != 0U) ? "CLEAR OK" : "NO INDEX")
+                                            : "CLEAR FAIL");
             }
-            break;
-    }
-        case STORAGE_SETTINGS_EVENT_CATALOG_FAILED:
-            ui_page_settings_status("CAT FAIL");
-            break;
-        case STORAGE_SETTINGS_EVENT_MULTI_PROGRESS:
-            g_ui_settings.multi_prepare_progress_done = event.done;
-            g_ui_settings.multi_prepare_progress_total = event.total;
-            g_ui_settings.multi_prepare_phase = (uint8_t)UI_SETTINGS_MULTI_PREP_PHASE_PREPARE;
-            ui_page_settings_multi_prepare_flush_progress();
-            break;
-        case STORAGE_SETTINGS_EVENT_MULTI_READY:
-            g_ui_settings.sample_slot_selected = event.slot;
-            ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_MULTI);
-            (void)ui_page_settings_multi_browser_refresh();
-            ui_page_settings_multi_prepare_finish("LOAD OK");
-            break;
-        case STORAGE_SETTINGS_EVENT_MULTI_FAILED:
-            ui_page_settings_multi_prepare_finish(
-                (event.kind == 1U)
-                    ? ui_page_settings_multi_import_error_label(
-                        (multi_sample_import_result_t)event.result)
-                    : ui_page_settings_multi_load_error_label(
-                        (multi_sample_load_result_t)event.result));
-            break;
-        case STORAGE_SETTINGS_EVENT_MULTI_CLEAR_DONE:
-            (void)ui_page_settings_multi_browser_refresh();
-            ui_page_settings_status((event.deleted != 0U) ? "CLEAR OK" : "NO INDEX");
-            break;
-        case STORAGE_SETTINGS_EVENT_MULTI_CLEAR_FAILED:
-            (void)ui_page_settings_multi_browser_refresh();
-            ui_page_settings_status("CLEAR FAIL");
-            break;
-        case STORAGE_SETTINGS_EVENT_CONVERT_PROGRESS:
+            else
+            {
+                g_ui_settings.sample_slot_selected = receipt->logical_id;
+                ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_MULTI);
+                ui_page_settings_multi_prepare_finish(
+                    (receipt->success != 0U) ? "LOAD OK" : "LOAD FAIL");
+            }
+        }
+        else
         {
-            char status[24];
-            (void)snprintf(status, sizeof(status), "CONVERT %u%%", event.percent);
-            ui_page_settings_status(status);
-            break;
+            g_ui_settings.sample_slot_selected = receipt->logical_id;
+            if (family == CONTROL_ASSET_FAMILY_RAM)
+                ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_RAM);
+            else if (family == CONTROL_ASSET_FAMILY_WAVETABLE)
+                ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_WAVETABLE);
+            else
+                ui_page_settings_refresh_sampler_slots();
+            ui_page_settings_status((receipt->success != 0U) ? "LOAD OK" : "LOAD FAIL");
         }
-        case STORAGE_SETTINGS_EVENT_CONVERT_FAILED:
-            ui_page_settings_status(ui_page_settings_convert_error_label(
-                (wav_convert_error_t)event.result));
-            break;
-        default:
-            break;
-        }
+        g_ui_asset_receipt_valid[family] = 0U;
+    }
+    if ((ui_page_settings_is_open() != 0U) && (wav_convert_is_active() != 0U))
+    {
+        char status[24];
+        (void)snprintf(status, sizeof(status), "CONVERT %u%%",
+                       (unsigned)wav_convert_get_progress_percent());
+        ui_page_settings_status(status);
+    }
     ui_page_settings_preview_apply_termination_status();
 }
 

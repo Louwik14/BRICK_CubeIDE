@@ -19,6 +19,7 @@
 #include "Storage/wav_parser.h"
 #include "Storage/storage_io_wakeup.h"
 #include "App/control_rt_wakeup.h"
+#include "UI/ui_service_wakeup.h"
 #include "stm32h7xx_hal.h"
 
 #define MULTI_SAMPLE_LOADER_PATH_MAX SAMPLE_PAGE_CACHE_PATH_MAX
@@ -89,6 +90,8 @@ static void multi_loader_publish_completion_for(uint16_t logical_id,
     g_multi_load_completion.logical_id = logical_id;
     g_multi_load_completion.instrument_id = instrument_id;
     g_multi_load_completion.success = success;
+    g_multi_load_completion.result = success != 0U
+        ? MULTI_SAMPLE_LOAD_OK : g_multi_load_diag.last_error;
     (void)multi_loader_copy_text(g_multi_load_completion.path,
                                  sizeof(g_multi_load_completion.path),
                                  path);
@@ -99,6 +102,23 @@ static void multi_loader_publish_completion_for(uint16_t logical_id,
         storage_io_owner_set(STORAGE_OWNER_PROJECT);
         storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     }
+    control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
+}
+
+void multi_sample_load_publish_import_result(uint16_t instrument_id,
+                                             const char *index_path,
+                                             multi_sample_load_result_t result)
+{
+    if ((g_multi_load_completion_valid != 0U) || (index_path == NULL)) return;
+    memset(&g_multi_load_completion, 0, sizeof(g_multi_load_completion));
+    g_multi_load_completion.logical_id = MULTI_SAMPLE_POOL_INVALID_ID;
+    g_multi_load_completion.instrument_id = instrument_id;
+    g_multi_load_completion.success = 0U;
+    g_multi_load_completion.result = result;
+    (void)multi_loader_copy_text(g_multi_load_completion.path,
+                                 sizeof(g_multi_load_completion.path), index_path);
+    __DMB();
+    g_multi_load_completion_valid = 1U;
     control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
 }
 
@@ -913,6 +933,7 @@ static uint8_t multi_loader_bulk_read_step(multi_sample_bulk_plan_t *plan,
         if (g_multi_load_diag.pages_remaining != 0U)
             g_multi_load_diag.pages_remaining--;
         g_multi_load_diag.pages_ready++;
+        ui_service_dirty_set();
         plan->next_page++;
         if (plan->next_page > range_last)
         {
@@ -1073,7 +1094,13 @@ uint8_t multi_sample_load_has_pending(void)
 
 uint8_t multi_sample_load_is_active(void)
 {
-    return g_multi_load_active;
+    if ((g_multi_load_active != 0U)
+        || (g_multi_external_request_valid != 0U)) return 1U;
+    for (uint16_t i = 0U; i < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++i)
+    {
+        if (g_multi_load_queue[i].used != 0U) return 1U;
+    }
+    return 0U;
 }
 
 uint8_t multi_sample_load_take_completion(

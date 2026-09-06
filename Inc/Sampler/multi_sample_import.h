@@ -25,6 +25,8 @@ typedef enum
 } multi_sample_import_result_t;
 
 uint8_t multi_sample_import_request_folder(const char *instrument_dir);
+uint8_t multi_sample_import_request_folder_for_load(const char *instrument_dir,
+                                                    uint16_t instrument_id);
 void multi_sample_import_storage_request_service(void);
 uint8_t multi_sample_import_is_busy(void);
 uint8_t multi_sample_import_delete_is_busy(void);
@@ -33,6 +35,14 @@ uint16_t multi_sample_import_progress_total(void);
 uint8_t multi_sample_import_request_delete_index(const char *index_path);
 void multi_sample_import_storage_delete_service(void);
 uint8_t multi_sample_import_take_delete_result(uint8_t *result);
+const char *multi_sample_import_get_index_path(void);
+uint8_t multi_sample_import_clear_batch_begin(void);
+uint8_t multi_sample_import_clear_batch_add(const char *path);
+uint8_t multi_sample_import_clear_batch_commit(void);
+void multi_sample_import_clear_batch_cancel(void);
+uint8_t multi_sample_import_clear_batch_active(void);
+uint8_t multi_sample_import_take_clear_batch_result(uint16_t *deleted,
+                                                    uint16_t *failed);
 multi_sample_import_result_t multi_sample_import_get_last_result(void);
 const char *multi_sample_import_get_last_diagnostic(void);
 uint16_t multi_sample_import_get_last_sample_count(void);

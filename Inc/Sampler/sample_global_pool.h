@@ -82,6 +82,15 @@ typedef enum
 
 typedef struct
 {
+    uint32_t request_id;
+    uint16_t slot;
+    uint8_t success;
+    sample_classic_load_error_t error;
+    char path[SAMPLE_GLOBAL_POOL_PATH_MAX];
+} sample_classic_load_result_t;
+
+typedef struct
+{
     sample_global_kind_t kind;
     sample_global_state_t state;
     uint16_t backend_index;
@@ -112,6 +121,13 @@ uint8_t sample_global_pool_register_classic_at(uint16_t global_index,
                                                uint32_t cost_bytes);
 uint8_t sample_global_pool_load_classic(uint16_t global_index, const char *path);
 uint8_t sample_global_pool_request_classic_load(uint16_t global_index, const char *path);
+uint8_t sample_global_pool_report_classic_load_failure(uint16_t global_index,
+                                                       const char *path,
+                                                       sample_classic_load_error_t error);
+uint8_t sample_global_pool_classic_load_active(void);
+uint32_t sample_global_pool_classic_load_request_id(void);
+uint8_t sample_global_pool_take_classic_load_result(sample_classic_load_result_t *out_result);
+void sample_global_pool_service_classic_completion(void);
 uint8_t sample_global_pool_request_clear_classic(uint16_t global_index);
 void sample_global_pool_storage_request_service(void);
 uint8_t sample_global_pool_load_classic_prepared(uint16_t global_index,

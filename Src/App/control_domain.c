@@ -160,6 +160,8 @@ CONTROL_M4_SRAM2 static control_storage_audio_event_t
     g_control_storage_fifo[CONTROL_STORAGE_FIFO_CAPACITY];
 static volatile uint32_t g_control_storage_head;
 static volatile uint32_t g_control_storage_tail;
+static control_asset_terminal_t g_control_asset_terminals[CONTROL_ASSET_FAMILY_COUNT];
+static volatile uint8_t g_control_asset_terminal_valid[CONTROL_ASSET_FAMILY_COUNT];
 static volatile uint32_t g_control_storage_overflow_count;
 
 static uint8_t control_domain_submit_ui_message(
@@ -288,6 +290,36 @@ CONTROL_DOMAIN_REQUEST(macro, CONTROL_UI_MSG_MACRO, macro,
                        control_macro_intent_t)
 CONTROL_DOMAIN_REQUEST(asset, CONTROL_UI_MSG_ASSET, asset,
                        control_asset_intent_t)
+
+uint8_t control_domain_publish_asset_terminal(const control_asset_terminal_t *terminal)
+{
+    if ((terminal == NULL) || (terminal->family >= CONTROL_ASSET_FAMILY_COUNT)
+        || (g_control_asset_terminal_valid[terminal->family] != 0U)) return 0U;
+    g_control_asset_terminals[terminal->family] = *terminal;
+    __DMB();
+    g_control_asset_terminal_valid[terminal->family] = 1U;
+    control_rt_wakeup(CONTROL_RT_WAKE_UI);
+    ui_service_dirty_set();
+    return 1U;
+}
+
+uint8_t control_domain_asset_terminal_available(control_asset_family_t family)
+{
+    return (family < CONTROL_ASSET_FAMILY_COUNT)
+        ? g_control_asset_terminal_valid[family] : 0U;
+}
+
+uint8_t control_domain_take_asset_terminal(control_asset_family_t family,
+                                           control_asset_terminal_t *out_terminal)
+{
+    if ((family >= CONTROL_ASSET_FAMILY_COUNT) || (out_terminal == NULL)
+        || (g_control_asset_terminal_valid[family] == 0U)) return 0U;
+    *out_terminal = g_control_asset_terminals[family];
+    __DMB();
+    g_control_asset_terminal_valid[family] = 0U;
+    return 1U;
+}
+
 CONTROL_DOMAIN_REQUEST(clipboard, CONTROL_UI_MSG_CLIPBOARD, clipboard,
                        control_clipboard_intent_t)
 
@@ -1216,6 +1248,9 @@ uint32_t control_domain_storage_pending_count(void)
 
 void control_domain_init(void)
 {
+    memset(g_control_asset_terminals, 0, sizeof(g_control_asset_terminals));
+    memset((void *)g_control_asset_terminal_valid, 0,
+           sizeof(g_control_asset_terminal_valid));
     sample_stream_admission_control_init();
     g_control_ui_head = 0U;
     g_control_ui_tail = 0U;

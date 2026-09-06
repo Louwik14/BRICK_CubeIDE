@@ -180,6 +180,34 @@ typedef struct
 
 typedef enum
 {
+    CONTROL_ASSET_FAMILY_CLASSIC = 0U,
+    CONTROL_ASSET_FAMILY_RAM,
+    CONTROL_ASSET_FAMILY_WAVETABLE,
+    CONTROL_ASSET_FAMILY_MULTI,
+    CONTROL_ASSET_FAMILY_COUNT
+} control_asset_family_t;
+
+enum
+{
+    CONTROL_ASSET_STAGE_LOAD = 0U,
+    CONTROL_ASSET_STAGE_CLEAR_INDEXES = 1U
+};
+
+typedef struct
+{
+    uint8_t family;
+    uint8_t requester;
+    uint8_t success;
+    uint8_t stage;
+    uint32_t request_id;
+    uint16_t physical_id;
+    uint16_t logical_id;
+    uint16_t result;
+    char path[160];
+} control_asset_terminal_t;
+
+typedef enum
+{
     CONTROL_CLIPBOARD_APPLY_MACRO_LOCK = 0,
     CONTROL_CLIPBOARD_CLEAR_MACRO_LOCK,
     CONTROL_CLIPBOARD_APPLY_TRACK,
@@ -428,6 +456,10 @@ uint8_t control_domain_request_seq(const control_seq_intent_t *intent);
 uint8_t control_domain_request_mod(const control_mod_intent_t *intent);
 uint8_t control_domain_request_macro(const control_macro_intent_t *intent);
 uint8_t control_domain_request_asset(const control_asset_intent_t *intent);
+uint8_t control_domain_publish_asset_terminal(const control_asset_terminal_t *terminal);
+uint8_t control_domain_asset_terminal_available(control_asset_family_t family);
+uint8_t control_domain_take_asset_terminal(control_asset_family_t family,
+                                           control_asset_terminal_t *out_terminal);
 uint8_t control_domain_request_clipboard(const control_clipboard_intent_t *intent);
 uint8_t control_domain_request_keyboard(uint8_t operation, int8_t value);
 uint8_t control_domain_request_audio_fx(const control_audio_fx_intent_t *intent);

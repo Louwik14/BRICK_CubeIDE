@@ -197,7 +197,6 @@ typedef struct
     uint8_t return_page_id;
     uint8_t preview_was_active;
     uint8_t preview_stop_origin;
-    uint32_t storage_event_sequence;
     uint32_t status_until_ms;
     uint32_t header_slot_flash_until_ms;
     uint32_t header_mem_flash_until_ms;
@@ -217,6 +216,10 @@ UI_SETTINGS_STATIC_ASSERT(confirm_path_aligned, UI_SETTINGS_OFFSET_ALIGNED(ui_se
 UI_SETTINGS_STATIC_ASSERT(status_line_aligned, UI_SETTINGS_OFFSET_ALIGNED(ui_settings_state_t, status_line));
 
 UI_STATE_SDRAM static ui_settings_state_t g_ui_settings;
+UI_STATE_SDRAM static control_asset_terminal_t
+    g_ui_asset_receipts[CONTROL_ASSET_FAMILY_COUNT];
+UI_STATE_SDRAM static uint8_t
+    g_ui_asset_receipt_valid[CONTROL_ASSET_FAMILY_COUNT];
 
 static void ui_page_settings_status(const char *status);
 static void ui_page_settings_sd_busy_status(void);
@@ -245,7 +248,6 @@ static void ui_page_settings_multi_prepare_begin(uint8_t slot,
                                                  ui_settings_multi_prepare_phase_t phase);
 static void ui_page_settings_multi_prepare_finish(const char *status);
 static void ui_page_settings_multi_prepare_flush_progress(void);
-static const char *ui_page_settings_multi_load_error_label(multi_sample_load_result_t result);
 static void ui_page_settings_flash_sample_header_slots(void);
 static uint32_t ui_page_settings_multi_slot_bytes(void);
 static uint16_t ui_page_settings_global_entry_count_used(void);
@@ -260,12 +262,9 @@ static void ui_page_settings_draw_sample_header(const char *title,
                                                 uint16_t max_slots,
                                                 uint32_t used_bytes,
                                                 uint32_t max_bytes);
-static uint8_t ui_page_settings_request_asset_register(uint32_t kind,
-                                                       uint16_t runtime);
 static uint8_t ui_page_settings_request_asset_remove(uint32_t kind,
                                                      uint16_t logical,
                                                      uint16_t runtime);
-static void ui_page_settings_sync_storage_view(void);
 
 
 /* Settings navigation, asset browsers/actions and rendering remain in their original sequence.

@@ -260,91 +260,6 @@ static int16_t ui_page_settings_multi_find_loaded_path(const char *index_path)
     return -1;
 }
 
-static uint8_t ui_page_settings_multi_register_global(uint16_t instrument_id)
-{
-    if ((instrument_id != MULTI_SAMPLE_POOL_INVALID_ID)
-            && (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS))
-    {
-        return 0U;
-    }
-
-    return ui_page_settings_request_asset_register(PERSIST_ASSET_MULTI,
-                                                   instrument_id);
-}
-
-static const char *ui_page_settings_multi_import_error_label(multi_sample_import_result_t result)
-{
-    switch (result)
-    {
-        case MULTI_SAMPLE_IMPORT_SD_BUSY:
-            return "SD BUSY";
-        case MULTI_SAMPLE_IMPORT_SD_MOUNT_FAIL:
-            return "SD UNAVAILABLE";
-        case MULTI_SAMPLE_IMPORT_OPEN_DIR_FAIL:
-            return "NO SAMPLES";
-        case MULTI_SAMPLE_IMPORT_NO_WAV:
-            return "NO WAV";
-        case MULTI_SAMPLE_IMPORT_TOO_MANY_SAMPLES:
-            return "TOO MANY";
-        case MULTI_SAMPLE_IMPORT_PATH_TOO_LONG:
-            return "PATH LONG";
-        case MULTI_SAMPLE_IMPORT_WAV_OPEN_FAIL:
-            return "OPEN FAIL";
-        case MULTI_SAMPLE_IMPORT_WAV_PARSE_FAIL:
-            return "WAV INVALID";
-        case MULTI_SAMPLE_IMPORT_WAV_UNSUPPORTED:
-            return "WAV UNSUPP";
-        case MULTI_SAMPLE_IMPORT_DUPLICATE_ZONE:
-        {
-            const char *const diag = storage_settings_multi_import_diagnostic();
-            return ((diag != 0) && (diag[0] != '\0')) ? diag : "DUP ZONE";
-        }
-        case MULTI_SAMPLE_IMPORT_ZONE_LIMIT:
-            return "ZONE FULL";
-        case MULTI_SAMPLE_IMPORT_INDEX_WRITE_FAIL:
-            return "INDEX FAIL";
-        default:
-            return "PREP FAIL";
-    }
-}
-
-static const char *ui_page_settings_multi_load_error_label(multi_sample_load_result_t result)
-{
-    switch (result)
-    {
-        case MULTI_SAMPLE_LOAD_ALREADY_READY:
-            return "ALREADY";
-        case MULTI_SAMPLE_LOAD_SD_BUSY:
-            return "SD BUSY";
-        case MULTI_SAMPLE_LOAD_INDEX_FAIL:
-            return "INDEX FAIL";
-        case MULTI_SAMPLE_LOAD_POOL_FAIL:
-            return "POOL FAIL";
-        case MULTI_SAMPLE_LOAD_PATH_TOO_LONG:
-            return "PATH LONG";
-        case MULTI_SAMPLE_LOAD_REGISTER_FAIL:
-            return "REGISTER FAIL";
-        case MULTI_SAMPLE_LOAD_NOT_ENOUGH_CACHE:
-            return "CACHE FULL";
-        case MULTI_SAMPLE_LOAD_PAGE_ERROR:
-            return "PAGE FAIL";
-        case MULTI_SAMPLE_LOAD_TRANSPORT_ACTIVE:
-            return "STOP AUDIO";
-        case MULTI_SAMPLE_LOAD_CANCELLED:
-            return "CANCEL";
-        case MULTI_SAMPLE_LOAD_INVALID_ARG:
-            return "INVALID LOAD";
-        case MULTI_SAMPLE_LOAD_INDEX_LIMIT:
-            return "INDEX LIMIT";
-        case MULTI_SAMPLE_LOAD_FORMAT_MISMATCH:
-            return "FORMAT FAIL";
-        case MULTI_SAMPLE_LOAD_PREP_BUDGET_EXCEEDED:
-            return "PREP FULL";
-        default:
-            return "LOAD FAIL";
-    }
-}
-
 static void ui_page_settings_multi_confirm_prepare(uint8_t slot)
 {
     if (storage_settings_project_replacement_active() != 0U) return;
@@ -459,7 +374,6 @@ static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_set
     const int16_t existing = ui_page_settings_multi_find_loaded_path(entry->index_path);
     if (existing >= 0)
     {
-        (void)ui_page_settings_multi_register_global((uint16_t)existing);
         ui_page_settings_status("REUSED");
         return;
     }
@@ -506,17 +420,6 @@ static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_set
         ui_page_settings_multi_prepare_flush_progress();
     }
 
-    if (storage_settings_multi_state(slot) != MULTI_SAMPLE_INSTRUMENT_EMPTY)
-    {
-        if (ui_page_settings_request_asset_remove(
-                PERSIST_ASSET_MULTI,
-                g_ui_settings.sample_slot_selected,
-                slot) == 0U)
-        {
-            ui_page_settings_multi_prepare_finish("CLEAR BUSY");
-            return;
-        }
-    }
     if (storage_settings_begin_multi_load(slot, entry->path,
                                           entry->index_path) == 0U)
     {
@@ -617,7 +520,6 @@ static void ui_page_settings_multi_copy_left(uint8_t shift_down)
     const int16_t existing = ui_page_settings_multi_find_loaded_path(entry->index_path);
     if (existing >= 0)
     {
-        (void)ui_page_settings_multi_register_global((uint16_t)existing);
         ui_page_settings_status("REUSED");
         return;
     }

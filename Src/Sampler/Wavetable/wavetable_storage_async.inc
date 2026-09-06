@@ -130,6 +130,7 @@ uint8_t wavetable_pool_request_load(uint16_t wavetable_slot,
         || (wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)
         || (path == 0) || (path[0] == '\0')
         || (strlen(path) >= sizeof(g_wavetable_load_request_path))
+        || (wavetable_pool_path_ext_is_wav(path) == 0U)
         || (wavetable_pool_load_async_busy() != 0U)
         || (g_wavetable_load_request_valid != 0U)
         || (g_wavetable_clear_request_valid != 0U)
@@ -166,11 +167,28 @@ void wavetable_pool_storage_request_service(void)
         const wavetable_source_geometry_t geometry = g_wavetable_load_request_geometry;
         char path[WAVETABLE_POOL_PATH_MAX];
         (void)snprintf(path, sizeof(path), "%s", g_wavetable_load_request_path);
-        g_wavetable_load_request_valid = 0U;
         if (wavetable_pool_load_async_begin_with_geometry(slot, path, geometry) != 0U)
         {
             g_wavetable_load_job.request_id = g_wavetable_load_request_id;
             g_wavetable_load_job.requester = g_wavetable_load_requester;
+            g_wavetable_load_request_valid = 0U;
+        }
+        else if (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+        {
+            memset(&g_wavetable_load_job, 0, sizeof(g_wavetable_load_job));
+            (void)snprintf(g_wavetable_load_job.path,
+                           sizeof(g_wavetable_load_job.path), "%s", path);
+            g_wavetable_load_job.wavetable_slot = slot;
+            g_wavetable_load_job.request_id = g_wavetable_load_request_id;
+            g_wavetable_load_job.requester = g_wavetable_load_requester;
+            g_wavetable_load_job.result = WAVETABLE_RESULT_SD_MOUNT_FAIL;
+            g_wavetable_load_job.state = WAVETABLE_LOAD_DONE;
+            g_wavetable_load_request_valid = 0U;
+            control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
+        }
+        else
+        {
+            storage_io_owner_wait_resource(STORAGE_OWNER_WAVETABLE);
         }
     }
 }
@@ -184,6 +202,13 @@ uint8_t wavetable_pool_load_async_begin(uint16_t wavetable_slot, const char *pat
 uint8_t wavetable_pool_load_async_busy(void)
 {
     return (g_wavetable_load_job.state != WAVETABLE_LOAD_IDLE) ? 1U : 0U;
+}
+
+uint8_t wavetable_pool_load_async_work_active(void)
+{
+    return (uint8_t)((g_wavetable_load_request_valid != 0U)
+        || ((g_wavetable_load_job.state != WAVETABLE_LOAD_IDLE)
+            && (g_wavetable_load_job.state != WAVETABLE_LOAD_DONE)));
 }
 
 uint32_t wavetable_pool_load_async_request_id(void)

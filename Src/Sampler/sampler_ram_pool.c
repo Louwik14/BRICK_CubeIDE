@@ -154,11 +154,28 @@ void sampler_ram_pool_storage_request_service(void)
         const uint16_t slot = g_sampler_ram_load_request_slot;
         char path[SAMPLER_RAM_POOL_PATH_MAX];
         (void)sampler_ram_copy_path(path, sizeof(path), g_sampler_ram_load_request_path);
-        g_sampler_ram_load_request_valid = 0U;
         if (sampler_ram_pool_load_async_begin_for_requester(
                 slot, path, g_sampler_ram_load_requester) != 0U)
         {
             g_sampler_ram_load_job.request_id = g_sampler_ram_load_request_id;
+            g_sampler_ram_load_request_valid = 0U;
+        }
+        else if (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+        {
+            sampler_ram_load_job_t *const job = &g_sampler_ram_load_job;
+            memset(job, 0, sizeof(*job));
+            job->state = SAMPLER_RAM_LOAD_DONE;
+            job->request_id = g_sampler_ram_load_request_id;
+            job->requester = g_sampler_ram_load_requester;
+            job->ram_slot = slot;
+            (void)sampler_ram_copy_path(job->path, sizeof(job->path), path);
+            job->result = SAMPLER_RAM_RESULT_SD_MOUNT_FAIL;
+            g_sampler_ram_load_request_valid = 0U;
+            control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
+        }
+        else
+        {
+            storage_io_owner_wait_resource(STORAGE_OWNER_SAMPLE_RAM);
         }
     }
 }
@@ -809,6 +826,13 @@ uint8_t sampler_ram_pool_load_async_begin_prepared(uint16_t ram_slot,
 uint8_t sampler_ram_pool_load_async_busy(void)
 {
     return (g_sampler_ram_load_job.state != SAMPLER_RAM_LOAD_IDLE) ? 1U : 0U;
+}
+
+uint8_t sampler_ram_pool_load_async_work_active(void)
+{
+    return (uint8_t)((g_sampler_ram_load_request_valid != 0U)
+        || ((g_sampler_ram_load_job.state != SAMPLER_RAM_LOAD_IDLE)
+            && (g_sampler_ram_load_job.state != SAMPLER_RAM_LOAD_DONE)));
 }
 
 uint32_t sampler_ram_pool_load_async_request_id(void)

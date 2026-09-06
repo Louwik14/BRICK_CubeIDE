@@ -24,6 +24,13 @@
 #include "Storage/pattern_live_ram.h"
 #include "Storage/project_load_quiesce.h"
 #include "Storage/project_product.h"
+#include "Storage/wav_convert.h"
+#include "Sampler/sample_global_pool.h"
+#include "Sampler/sampler_ram_pool.h"
+#include "Sampler/wavetable_pool.h"
+#include "Sampler/multi_sample_import.h"
+#include "Sampler/multi_sample_loader.h"
+#include "Sampler/multi_sample_pool.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "midi.h"
 #include "tim.h"
@@ -52,6 +59,18 @@
 
 /* Shared execution state lives in seq_runtime_exec. */
 #define g_seq_runtime (*seq_runtime_exec_state())
+
+static uint8_t seq_runtime_asset_cycle_engaged(void)
+{
+    return (uint8_t)(sample_global_pool_classic_load_active()
+        || sampler_ram_pool_load_async_work_active()
+        || wavetable_pool_load_async_work_active()
+        || multi_sample_load_is_active()
+        || multi_sample_import_is_busy()
+        || multi_sample_import_clear_batch_active()
+        || multi_sample_pool_clear_is_active()
+        || wav_convert_is_active());
+}
 SEQ_STATE_D2 static struct
 {
     seq_clock_src_t clock_src;
@@ -340,7 +359,8 @@ void seq_runtime_init(void)
 void seq_runtime_start(void)
 {
     if ((project_replacement_is_active() != 0U)
-        || (project_product_save_busy() != 0U)) return;
+        || (project_product_save_busy() != 0U)
+        || (seq_runtime_asset_cycle_engaged() != 0U)) return;
     uint8_t begin_running_now = 0U;
     if (g_seq_runtime_trigger_start_bypass == 0U)
     {
@@ -815,6 +835,7 @@ void seq_runtime_midi_continue_from_source(seq_clock_src_t source)
     {
         return;
     }
+    if (seq_runtime_asset_cycle_engaged() != 0U) return;
     const uint8_t was_stopped = seq_transport_fsm_is_stopped(&g_seq_transport_fsm);
 
     if (seq_runtime_get_clock_source_internal() != source)

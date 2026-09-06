@@ -239,12 +239,6 @@ static void ui_page_settings_status(const char *status)
     g_ui_settings.status_until_ms = HAL_GetTick() + UI_SETTINGS_STATUS_DURATION_MS;
 }
 
-static uint8_t ui_page_settings_request_asset_register(uint32_t kind,
-                                                       uint16_t runtime)
-{
-    return storage_settings_track_asset_register(kind, runtime);
-}
-
 static uint8_t ui_page_settings_request_asset_remove(uint32_t kind,
                                                      uint16_t logical,
                                                      uint16_t runtime)

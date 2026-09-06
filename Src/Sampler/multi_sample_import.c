@@ -1,4 +1,5 @@
 #include "Sampler/multi_sample_import.h"
+#include "Sampler/multi_sample_loader.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -15,6 +16,8 @@
 #include "Storage/wav_parser.h"
 #include "Storage/project_load_quiesce.h"
 #include "Storage/storage_io_wakeup.h"
+#include "App/control_rt_wakeup.h"
+#include "UI/ui_service_wakeup.h"
 
 #include "ff.h"
 
@@ -118,6 +121,17 @@ static volatile uint8_t g_delete_request_valid;
 static volatile uint8_t g_delete_result_valid;
 static volatile uint8_t g_delete_result;
 static char g_delete_request_path[MULTI_SAMPLE_IMPORT_PATH_MAX];
+static uint16_t g_import_load_instrument = MULTI_SAMPLE_POOL_INVALID_ID;
+static volatile uint8_t g_import_load_continuation;
+#define MULTI_IMPORT_CLEAR_BATCH_MAX 240U
+static char g_clear_batch_paths[MULTI_IMPORT_CLEAR_BATCH_MAX][MULTI_SAMPLE_IMPORT_PATH_MAX];
+static uint16_t g_clear_batch_count;
+static uint16_t g_clear_batch_index;
+static uint16_t g_clear_batch_deleted;
+static uint16_t g_clear_batch_failed_count;
+static uint8_t g_clear_batch_failed;
+static volatile uint8_t g_clear_batch_active;
+static volatile uint8_t g_clear_batch_result_valid;
 typedef enum
 {
     MULTI_IMPORT_PROGRESSIVE_IDLE = 0,
@@ -151,6 +165,16 @@ static void multi_import_notify_progress(uint16_t done, uint16_t total);
 
 static void multi_import_progressive_finish(multi_sample_import_result_t result)
 {
+    if ((result != MULTI_SAMPLE_IMPORT_OK)
+        && (g_import_load_continuation != 0U))
+    {
+        multi_sample_load_publish_import_result(
+            g_import_load_instrument,
+            (g_import_index_path[0] != '\0') ? g_import_index_path : g_import_scan_dir,
+            MULTI_SAMPLE_LOAD_INDEX_FAIL);
+        g_import_load_continuation = 0U;
+        g_import_load_instrument = MULTI_SAMPLE_POOL_INVALID_ID;
+    }
     if (g_import_progressive_dir_open != 0U)
     {
         (void)f_closedir(&g_import_progressive_dir);
@@ -309,6 +333,23 @@ static void multi_import_progressive_step(void)
         if (result == MULTI_SAMPLE_IMPORT_OK)
             multi_import_notify_progress(g_import_progress_total, g_import_progress_total);
         multi_import_progressive_finish(result);
+        if ((result == MULTI_SAMPLE_IMPORT_OK)
+            && (g_import_load_continuation != 0U))
+        {
+            const multi_sample_load_result_t load_result =
+                multi_sample_load_request_instrument(
+                MULTI_SAMPLE_POOL_INVALID_ID,
+                g_import_index_path,
+                g_import_load_instrument);
+            if ((load_result != MULTI_SAMPLE_LOAD_OK)
+                && (load_result != MULTI_SAMPLE_LOAD_ALREADY_READY))
+            {
+                multi_sample_load_publish_import_result(
+                    g_import_load_instrument, g_import_index_path, load_result);
+            }
+            g_import_load_continuation = 0U;
+            g_import_load_instrument = MULTI_SAMPLE_POOL_INVALID_ID;
+        }
     }
 }
 
@@ -1652,6 +1693,7 @@ static void multi_import_notify_progress(uint16_t done, uint16_t total)
 {
     g_import_progress_done = done;
     g_import_progress_total = (total == 0U) ? 1U : total;
+    ui_service_dirty_set();
 }
 
 static multi_sample_import_result_t multi_import_count_direct_wavs(const char *scan_dir,
@@ -1716,6 +1758,17 @@ uint8_t multi_sample_import_request_folder(const char *instrument_dir)
     return 1U;
 }
 
+uint8_t multi_sample_import_request_folder_for_load(const char *instrument_dir,
+                                                    uint16_t instrument_id)
+{
+    if (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS) return 0U;
+    if (multi_sample_import_request_folder(instrument_dir) == 0U) return 0U;
+    g_import_load_instrument = instrument_id;
+    __DMB();
+    g_import_load_continuation = 1U;
+    return 1U;
+}
+
 void multi_sample_import_storage_request_service(void)
 {
     if (g_import_request_valid != 0U)
@@ -1749,6 +1802,80 @@ uint8_t multi_sample_import_delete_is_busy(void)
     return (g_delete_request_valid != 0U) || (g_delete_result_valid != 0U);
 }
 
+const char *multi_sample_import_get_index_path(void)
+{
+    return g_import_index_path;
+}
+
+uint8_t multi_sample_import_clear_batch_begin(void)
+{
+    if ((g_clear_batch_active != 0U) || (multi_sample_import_is_busy() != 0U)
+        || (multi_sample_load_has_pending() != 0U)) return 0U;
+    g_clear_batch_count = 0U;
+    g_clear_batch_index = 0U;
+    g_clear_batch_deleted = 0U;
+    g_clear_batch_failed_count = 0U;
+    g_clear_batch_failed = 0U;
+    g_clear_batch_result_valid = 0U;
+    g_clear_batch_active = 1U;
+    return 1U;
+}
+
+uint8_t multi_sample_import_clear_batch_add(const char *path)
+{
+    if ((g_clear_batch_active == 0U) || (path == NULL)
+        || (path[0] == '\0') || (g_clear_batch_count >= MULTI_IMPORT_CLEAR_BATCH_MAX)
+        || (strlen(path) >= sizeof(g_clear_batch_paths[0]))) return 0U;
+    (void)snprintf(g_clear_batch_paths[g_clear_batch_count],
+                   sizeof(g_clear_batch_paths[0]), "%s", path);
+    ++g_clear_batch_count;
+    return 1U;
+}
+
+uint8_t multi_sample_import_clear_batch_commit(void)
+{
+    if ((g_clear_batch_active == 0U) || (multi_sample_pool_request_clear_begin() == 0U))
+        return 0U;
+    if (g_clear_batch_count == 0U)
+    {
+        g_clear_batch_active = 0U;
+        g_clear_batch_result_valid = 1U;
+        (void)multi_sample_pool_request_clear_end();
+        control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
+        return 1U;
+    }
+    storage_io_owner_set(STORAGE_OWNER_MULTI);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+    return 1U;
+}
+
+void multi_sample_import_clear_batch_cancel(void)
+{
+    g_clear_batch_active = 0U;
+    g_clear_batch_count = 0U;
+    g_clear_batch_index = 0U;
+    g_clear_batch_deleted = 0U;
+    g_clear_batch_failed_count = 0U;
+    g_clear_batch_failed = 0U;
+    g_clear_batch_result_valid = 0U;
+    (void)multi_sample_pool_request_clear_end();
+}
+
+uint8_t multi_sample_import_clear_batch_active(void)
+{
+    return g_clear_batch_active;
+}
+
+uint8_t multi_sample_import_take_clear_batch_result(uint16_t *deleted,
+                                                    uint16_t *failed)
+{
+    if (g_clear_batch_result_valid == 0U) return 0U;
+    if (deleted != NULL) *deleted = g_clear_batch_deleted;
+    if (failed != NULL) *failed = g_clear_batch_failed_count;
+    g_clear_batch_result_valid = 0U;
+    return 1U;
+}
+
 uint16_t multi_sample_import_progress_done(void)
 {
     return g_import_progress_done;
@@ -1778,11 +1905,45 @@ uint8_t multi_sample_import_request_delete_index(const char *index_path)
 
 void multi_sample_import_storage_delete_service(void)
 {
+    if ((g_clear_batch_active != 0U) && (g_delete_result_valid != 0U))
+    {
+        uint8_t result = 3U;
+        (void)multi_sample_import_take_delete_result(&result);
+        if (result == 1U) ++g_clear_batch_deleted;
+        else if (result != 2U)
+        {
+            g_clear_batch_failed = 1U;
+            ++g_clear_batch_failed_count;
+        }
+        if ((g_clear_batch_failed != 0U)
+            || (g_clear_batch_index >= g_clear_batch_count))
+        {
+            g_clear_batch_active = 0U;
+            g_clear_batch_result_valid = 1U;
+            (void)multi_sample_pool_request_clear_end();
+            control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
+        }
+        else
+        {
+            (void)multi_sample_import_request_delete_index(
+                g_clear_batch_paths[g_clear_batch_index++]);
+        }
+    }
     if (g_delete_request_valid == 0U)
+    {
+        if ((g_clear_batch_active != 0U)
+            && (g_clear_batch_index < g_clear_batch_count))
+            (void)multi_sample_import_request_delete_index(
+                g_clear_batch_paths[g_clear_batch_index++]);
         return;
+    }
     uint8_t result = 3U;
     if (sd_access_gate_try_acquire_for_owner(
-            SD_ACCESS_CLIENT_PROJECT, STORAGE_OWNER_MULTI) != 0U)
+            SD_ACCESS_CLIENT_PROJECT, STORAGE_OWNER_MULTI) == 0U)
+    {
+        storage_io_owner_wait_resource(STORAGE_OWNER_MULTI);
+        return;
+    }
     {
         if (sd_access_fs_mount_if_needed() != 0U)
         {

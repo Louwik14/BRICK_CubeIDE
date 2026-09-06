@@ -22,39 +22,6 @@
 extern "C" {
 #endif
 
-typedef enum
-{
-    STORAGE_SETTINGS_EVENT_CLASSIC_READY = 0U,
-    STORAGE_SETTINGS_EVENT_CLASSIC_FAILED,
-    STORAGE_SETTINGS_EVENT_ASSET_READY,
-    STORAGE_SETTINGS_EVENT_CATALOG_READY,
-    STORAGE_SETTINGS_EVENT_CATALOG_FAILED,
-    STORAGE_SETTINGS_EVENT_MULTI_PROGRESS,
-    STORAGE_SETTINGS_EVENT_MULTI_READY,
-    STORAGE_SETTINGS_EVENT_MULTI_FAILED,
-    STORAGE_SETTINGS_EVENT_MULTI_CLEAR_DONE,
-    STORAGE_SETTINGS_EVENT_MULTI_CLEAR_FAILED,
-    STORAGE_SETTINGS_EVENT_CONVERT_PROGRESS,
-    STORAGE_SETTINGS_EVENT_CONVERT_FAILED
-} storage_settings_event_type_t;
-
-typedef struct
-{
-    storage_settings_event_type_t type;
-    uint8_t kind;
-    uint16_t slot;
-    uint16_t logical;
-    uint16_t done;
-    uint16_t total;
-    uint16_t result;
-    uint16_t deleted;
-    uint8_t percent;
-    char path[160];
-} storage_settings_event_t;
-
-uint8_t storage_settings_track_classic_load(uint16_t slot);
-uint8_t storage_settings_track_asset_register(uint32_t kind, uint16_t runtime);
-uint8_t storage_settings_track_conversion(uint16_t slot, const char *path);
 uint8_t storage_settings_request_catalog(uint8_t rebuild);
 uint8_t storage_settings_catalog_request(storage_catalog_kind_t kind, const char *path);
 uint8_t storage_settings_request_classic_load(uint16_t slot, const char *path);
@@ -63,6 +30,8 @@ uint8_t storage_settings_request_wavetable_load(uint16_t slot,
                                                 const char *path,
                                                 wavetable_source_geometry_t geometry);
 uint8_t storage_settings_request_conversion(const char *path);
+uint8_t storage_settings_request_classic_with_conversion(uint16_t slot,
+                                                         const char *path);
 uint8_t storage_settings_request_preview(const char *path);
 void storage_settings_request_preview_stop(void);
 uint8_t storage_settings_preview_active(void);
@@ -78,13 +47,8 @@ uint8_t storage_settings_begin_multi_clear(void);
 uint8_t storage_settings_add_multi_clear_path(const char *path);
 uint8_t storage_settings_commit_multi_clear(void);
 void storage_settings_cancel_multi(void);
-void storage_settings_service_owner(storage_io_owner_t owner);
-uint8_t storage_settings_take_event(storage_settings_event_t *event);
-
 /* Read-only settings projection.  These functions copy or return immutable
  * owner snapshots; UI code never reaches the underlying Storage products. */
-uint8_t storage_settings_get_event_snapshot(storage_settings_event_t *event,
-                                            uint32_t *sequence);
 uint8_t storage_settings_project_progress(project_product_progress_t *progress);
 project_product_command_t storage_settings_project_busy_command(void);
 sd_storage_status_t storage_settings_sd_status(void);

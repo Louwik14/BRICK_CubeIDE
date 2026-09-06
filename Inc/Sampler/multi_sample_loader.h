@@ -61,6 +61,7 @@ typedef struct
     uint16_t logical_id;
     uint16_t instrument_id;
     uint8_t success;
+    multi_sample_load_result_t result;
     char path[MULTI_SAMPLE_POOL_PATH_MAX];
 } multi_sample_load_completion_t;
 
@@ -82,6 +83,9 @@ uint8_t multi_sample_cancel_load(void);
 void multi_sample_cancel_all_loads(void);
 uint8_t multi_sample_load_take_completion(
     multi_sample_load_completion_t *out_completion);
+void multi_sample_load_publish_import_result(uint16_t instrument_id,
+                                             const char *index_path,
+                                             multi_sample_load_result_t result);
 void multi_sample_get_load_diag(multi_sample_load_diag_t *out_diag);
 
 #ifdef __cplusplus

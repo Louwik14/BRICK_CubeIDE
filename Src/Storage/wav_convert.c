@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "Sampler/sample_cache.h"
+#include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Storage/looper_storage.h"
 #include "Platform/memory_layout.h"
@@ -11,6 +12,8 @@
 #include "Storage/storage_shared_io.h"
 #include "Storage/project_load_quiesce.h"
 #include "Storage/storage_io_wakeup.h"
+#include "App/control_rt_wakeup.h"
+#include "UI/ui_service_wakeup.h"
 #include "Storage/wav_audio_stream.h"
 #include "ff.h"
 
@@ -69,6 +72,8 @@ typedef struct
 STORAGE_SCRATCH_SDRAM static wav_convert_ctx_t g_wav_convert;
 static volatile uint8_t g_wav_convert_request_valid;
 static char g_wav_convert_request_path[SAMPLE_CLASSIC_PATH_MAX];
+static volatile uint8_t g_wav_convert_classic_continuation;
+static uint16_t g_wav_convert_classic_slot;
 
 void wav_convert_init(void)
 {
@@ -76,6 +81,8 @@ void wav_convert_init(void)
     g_wav_convert.state = WAV_CONVERT_STATE_IDLE;
     g_wav_convert.phase = WAV_CONVERT_PHASE_IDLE;
     g_wav_convert_request_valid = 0U;
+    g_wav_convert_classic_continuation = 0U;
+    g_wav_convert_classic_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
 }
 
 uint8_t wav_convert_request_start(const char *path)
@@ -92,6 +99,16 @@ uint8_t wav_convert_request_start(const char *path)
     g_wav_convert_request_valid = 1U;
     storage_io_owner_set(STORAGE_OWNER_WAV_CONVERT);
     storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+    return 1U;
+}
+
+uint8_t wav_convert_request_classic_cycle(uint16_t slot, const char *path)
+{
+    if (slot >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS) return 0U;
+    if (wav_convert_request_start(path) == 0U) return 0U;
+    g_wav_convert_classic_slot = slot;
+    __DMB();
+    g_wav_convert_classic_continuation = 1U;
     return 1U;
 }
 
@@ -322,6 +339,14 @@ static void wav_convert_fail(wav_convert_error_t error)
     wav_convert_release_gate();
     g_wav_convert.error = error;
     g_wav_convert.state = WAV_CONVERT_STATE_FAILED;
+    if (g_wav_convert_classic_continuation != 0U)
+    {
+        const char *const path = (g_wav_convert.source_path[0] != '\0')
+            ? g_wav_convert.source_path : g_wav_convert_request_path;
+        (void)sample_global_pool_report_classic_load_failure(
+            g_wav_convert_classic_slot, path, SAMPLE_CLASSIC_LOAD_SD_READ_FAIL);
+        g_wav_convert_classic_continuation = 0U;
+    }
 }
 
 uint8_t wav_convert_start_destructive_48k(const char *path)
@@ -699,6 +724,34 @@ void wav_convert_service(uint32_t byte_budget)
     const uint32_t pack_fill_frames = g_wav_convert.pack_fill_frames;
 
     wav_convert_service_step(byte_budget);
+    if ((g_wav_convert_classic_continuation != 0U)
+        && (g_wav_convert.state == WAV_CONVERT_STATE_FAILED))
+    {
+        const char *const path = (g_wav_convert.source_path[0] != '\0')
+            ? g_wav_convert.source_path : g_wav_convert_request_path;
+        (void)sample_global_pool_report_classic_load_failure(
+            g_wav_convert_classic_slot, path, SAMPLE_CLASSIC_LOAD_SD_READ_FAIL);
+        g_wav_convert_classic_continuation = 0U;
+    }
+    if ((g_wav_convert_classic_continuation != 0U)
+        && (g_wav_convert.state == WAV_CONVERT_STATE_DONE))
+    {
+        if (sample_global_pool_request_classic_load(
+                g_wav_convert_classic_slot, g_wav_convert.source_path) != 0U)
+        {
+            g_wav_convert_classic_continuation = 0U;
+            g_wav_convert.state = WAV_CONVERT_STATE_IDLE;
+        }
+        else
+        {
+            (void)sample_global_pool_report_classic_load_failure(
+                g_wav_convert_classic_slot,
+                g_wav_convert.source_path,
+                SAMPLE_CLASSIC_LOAD_SD_GATE_REFUSED);
+            g_wav_convert_classic_continuation = 0U;
+            g_wav_convert.state = WAV_CONVERT_STATE_IDLE;
+        }
+    }
     if ((g_wav_convert.state == WAV_CONVERT_STATE_ACTIVE)
             && ((g_wav_convert.state != state)
                 || (g_wav_convert.phase != phase)
@@ -708,12 +761,19 @@ void wav_convert_service(uint32_t byte_budget)
         {
             storage_io_owner_set(STORAGE_OWNER_WAV_CONVERT);
             storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+            ui_service_dirty_set();
         }
+    if ((g_wav_convert.state != state)
+        && ((g_wav_convert.state == WAV_CONVERT_STATE_DONE)
+            || (g_wav_convert.state == WAV_CONVERT_STATE_FAILED)))
+        control_rt_wakeup(CONTROL_RT_WAKE_UI);
 }
 
 uint8_t wav_convert_is_active(void)
 {
-    return (g_wav_convert.state == WAV_CONVERT_STATE_ACTIVE) ? 1U : 0U;
+    return (uint8_t)((g_wav_convert.state == WAV_CONVERT_STATE_ACTIVE)
+                     || (g_wav_convert_request_valid != 0U)
+                     || (g_wav_convert_classic_continuation != 0U));
 }
 
 wav_convert_state_t wav_convert_get_state(void)
