@@ -44,6 +44,7 @@ uint8_t multi_sample_import_clear_batch_add(const char *path);
 uint8_t multi_sample_import_clear_batch_commit(void);
 void multi_sample_import_clear_batch_cancel(void);
 uint8_t multi_sample_import_clear_batch_active(void);
+uint32_t multi_sample_import_clear_batch_request_id(void);
 uint8_t multi_sample_import_take_clear_batch_result(uint16_t *deleted,
                                                     uint16_t *failed);
 multi_sample_import_result_t multi_sample_import_get_last_result(void);

@@ -18,6 +18,7 @@
 #include "Storage/storage_io_wakeup.h"
 #include "App/control_rt_wakeup.h"
 #include "UI/ui_service_wakeup.h"
+#include "stm32h7xx.h"
 
 #include "ff.h"
 
@@ -133,6 +134,8 @@ static uint16_t g_clear_batch_failed_count;
 static uint8_t g_clear_batch_failed;
 static volatile uint8_t g_clear_batch_active;
 static volatile uint8_t g_clear_batch_result_valid;
+static uint32_t g_clear_batch_request_id;
+static uint32_t g_clear_batch_request_id_counter;
 typedef enum
 {
     MULTI_IMPORT_PROGRESSIVE_IDLE = 0,
@@ -188,14 +191,14 @@ static void multi_import_progressive_finish(multi_sample_import_result_t result)
     g_import_last_result = result;
     g_import_progressive_state = MULTI_IMPORT_PROGRESSIVE_IDLE;
     g_import_busy = 0U;
-    if (notify_load)
+    if (notify_load && (result != MULTI_SAMPLE_IMPORT_OK))
     {
-        multi_sample_load_publish_import_result(
-            load_request_id, load_instrument, load_path,
-            MULTI_SAMPLE_LOAD_INDEX_FAIL);
         g_import_load_continuation = 0U;
         g_import_load_instrument = MULTI_SAMPLE_POOL_INVALID_ID;
         g_import_load_request_id = 0U;
+        multi_sample_load_publish_import_result(
+            load_request_id, load_instrument, load_path,
+            MULTI_SAMPLE_LOAD_INDEX_FAIL);
     }
 }
 
@@ -207,6 +210,7 @@ static uint8_t multi_import_progressive_start(const char *instrument_dir)
     g_import_zone_count = 0U;
     g_import_progress_done = 0U;
     g_import_progress_total = 1U;
+    g_import_index_path[0] = '\0';
     memset(g_import_paths, 0, sizeof(g_import_paths));
     memset(g_import_samples, 0, sizeof(g_import_samples));
     memset(g_import_zones, 0, sizeof(g_import_zones));
@@ -216,11 +220,17 @@ static uint8_t multi_import_progressive_start(const char *instrument_dir)
         g_import_last_result = MULTI_SAMPLE_IMPORT_INVALID_ARG;
         return 0U;
     }
+    multi_sample_external_request_t parent_request;
+    const uint8_t has_parent =
+        (g_import_load_continuation != 0U)
+        && (g_import_load_request_id != 0U)
+        && (multi_sample_load_peek_external(g_import_load_request_id,
+                                            &parent_request) != 0U);
     if ((project_replacement_is_active() != 0U)
         || (audio_recorder_is_active() != 0U)
         || (sample_stream_manager_io_in_flight() != 0U)
         || (storage_io_owner_test(STORAGE_OWNER_STREAM) != 0U)
-        || (multi_sample_load_has_pending() != 0U)
+        || ((multi_sample_load_has_pending() != 0U) && (has_parent == 0U))
         || (multi_sample_pool_clear_is_active() != 0U))
     {
         g_import_last_result = MULTI_SAMPLE_IMPORT_SD_BUSY;
@@ -345,23 +355,19 @@ static void multi_import_progressive_step(void)
         if ((result == MULTI_SAMPLE_IMPORT_OK)
             && (g_import_load_continuation != 0U))
         {
-            if (g_import_load_request_id != 0U)
-                (void)multi_sample_load_continue_after_import(
-                    g_import_load_request_id, g_import_index_path);
-            else
-            {
-                const multi_sample_load_result_t load_result =
-                    multi_sample_load_request_instrument(
-                        MULTI_SAMPLE_POOL_INVALID_ID,
-                        g_import_index_path, g_import_load_instrument);
-                if ((load_result != MULTI_SAMPLE_LOAD_OK)
-                    && (load_result != MULTI_SAMPLE_LOAD_ALREADY_READY))
-                    multi_sample_load_publish_import_result(
-                        0U, g_import_load_instrument, g_import_index_path, load_result);
-            }
+            const uint32_t load_request_id = g_import_load_request_id;
+            const uint16_t load_instrument = g_import_load_instrument;
+            char load_index_path[MULTI_SAMPLE_IMPORT_PATH_MAX];
+            (void)snprintf(load_index_path, sizeof(load_index_path), "%s",
+                           g_import_index_path);
             g_import_load_continuation = 0U;
             g_import_load_instrument = MULTI_SAMPLE_POOL_INVALID_ID;
             g_import_load_request_id = 0U;
+            if (multi_sample_load_continue_after_import(
+                    load_request_id, load_index_path) == 0U)
+                multi_sample_load_publish_import_result(
+                    load_request_id, load_instrument, load_index_path,
+                    MULTI_SAMPLE_LOAD_INDEX_FAIL);
         }
     }
 }
@@ -1764,8 +1770,20 @@ uint8_t multi_sample_import_request_folder(const char *instrument_dir)
     {
         return 0U;
     }
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if ((g_import_request_valid != 0U) || (g_import_busy != 0U)
+        || (g_delete_request_valid != 0U) || (g_delete_result_valid != 0U)
+        || (multi_sample_load_has_pending() != 0U)
+        || (multi_sample_pool_clear_is_active() != 0U))
+    {
+        __set_PRIMASK(primask);
+        return 0U;
+    }
     (void)snprintf(g_import_request_path, sizeof(g_import_request_path), "%s", instrument_dir);
+    __DMB();
     g_import_request_valid = 1U;
+    __set_PRIMASK(primask);
     storage_io_owner_set(STORAGE_OWNER_MULTI);
     storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
@@ -1774,12 +1792,24 @@ uint8_t multi_sample_import_request_folder(const char *instrument_dir)
 uint8_t multi_sample_import_request_folder_for_load(const char *instrument_dir,
                                                     uint16_t instrument_id)
 {
-    if (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS) return 0U;
-    if (multi_sample_import_request_folder(instrument_dir) == 0U) return 0U;
+    if ((instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
+        || (instrument_dir == NULL) || (instrument_dir[0] == '\0')
+        || (strlen(instrument_dir) >= sizeof(g_import_request_path))
+        || (g_import_request_valid != 0U) || (g_import_busy != 0U)
+        || (g_delete_request_valid != 0U) || (g_delete_result_valid != 0U)
+        || (g_import_load_continuation != 0U)
+        || (multi_sample_pool_clear_is_active() != 0U)) return 0U;
+    if (multi_sample_load_request_import(instrument_dir, instrument_id) == 0U)
+        return 0U;
+    (void)snprintf(g_import_request_path, sizeof(g_import_request_path), "%s",
+                   instrument_dir);
     g_import_load_instrument = instrument_id;
-    g_import_load_request_id = 0U;
+    g_import_load_request_id = multi_sample_load_external_request_id();
     __DMB();
     g_import_load_continuation = 1U;
+    g_import_request_valid = 1U;
+    storage_io_owner_set(STORAGE_OWNER_MULTI);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
@@ -1822,15 +1852,34 @@ void multi_sample_import_cancel_load_continuation(void)
     }
     g_import_progressive_state = MULTI_IMPORT_PROGRESSIVE_IDLE;
     g_import_busy = 0U;
-    (void)multi_sample_load_publish_external_result(
-        g_import_load_request_id, MULTI_SAMPLE_LOAD_CANCELLED);
+    const uint32_t load_request_id = g_import_load_request_id;
+    const uint16_t load_instrument = g_import_load_instrument;
+    char load_path[MULTI_SAMPLE_IMPORT_PATH_MAX];
+    (void)snprintf(load_path, sizeof(load_path), "%s",
+                   (g_import_index_path[0] != '\0')
+                       ? g_import_index_path : g_import_scan_dir);
     g_import_load_continuation = 0U;
     g_import_load_instrument = MULTI_SAMPLE_POOL_INVALID_ID;
     g_import_load_request_id = 0U;
+    multi_sample_load_publish_import_result(
+        load_request_id, load_instrument, load_path,
+        MULTI_SAMPLE_LOAD_CANCELLED);
 }
 
 void multi_sample_import_storage_request_service(void)
 {
+    if (g_import_load_continuation != 0U)
+    {
+        multi_sample_external_request_t request;
+        if ((g_import_load_request_id != 0U)
+            && (multi_sample_load_peek_external(g_import_load_request_id,
+                                                &request) != 0U)
+            && (request.cancelled != 0U))
+        {
+            multi_sample_import_cancel_load_continuation();
+            return;
+        }
+    }
     if (g_import_request_valid != 0U)
     {
         if (g_import_busy != 0U)
@@ -1838,7 +1887,19 @@ void multi_sample_import_storage_request_service(void)
         char path[MULTI_SAMPLE_IMPORT_PATH_MAX];
         (void)snprintf(path, sizeof(path), "%s", g_import_request_path);
         g_import_request_valid = 0U;
-        (void)multi_import_progressive_start(path);
+        if (multi_import_progressive_start(path) == 0U)
+        {
+            if ((g_import_load_continuation != 0U)
+                && (g_import_last_result == MULTI_SAMPLE_IMPORT_SD_BUSY))
+            {
+                g_import_request_valid = 1U;
+                storage_io_owner_wait_resource(STORAGE_OWNER_MULTI);
+            }
+            else if (g_import_load_continuation != 0U)
+            {
+                multi_import_progressive_finish(g_import_last_result);
+            }
+        }
         return;
     }
     if (g_import_busy != 0U)
@@ -1870,14 +1931,29 @@ const char *multi_sample_import_get_index_path(void)
 uint8_t multi_sample_import_clear_batch_begin(void)
 {
     if ((g_clear_batch_active != 0U) || (multi_sample_import_is_busy() != 0U)
-        || (multi_sample_load_has_pending() != 0U)) return 0U;
+        || (multi_sample_load_has_pending() != 0U)
+        || (g_clear_batch_result_valid != 0U)) return 0U;
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if ((g_clear_batch_active != 0U) || (multi_sample_import_is_busy() != 0U)
+        || (multi_sample_load_has_pending() != 0U)
+        || (g_clear_batch_result_valid != 0U))
+    {
+        __set_PRIMASK(primask);
+        return 0U;
+    }
     g_clear_batch_count = 0U;
     g_clear_batch_index = 0U;
     g_clear_batch_deleted = 0U;
     g_clear_batch_failed_count = 0U;
     g_clear_batch_failed = 0U;
     g_clear_batch_result_valid = 0U;
+    ++g_clear_batch_request_id_counter;
+    if (g_clear_batch_request_id_counter == 0U)
+        g_clear_batch_request_id_counter = 1U;
+    g_clear_batch_request_id = g_clear_batch_request_id_counter;
     g_clear_batch_active = 1U;
+    __set_PRIMASK(primask);
     return 1U;
 }
 
@@ -1894,16 +1970,15 @@ uint8_t multi_sample_import_clear_batch_add(const char *path)
 
 uint8_t multi_sample_import_clear_batch_commit(void)
 {
-    if ((g_clear_batch_active == 0U) || (multi_sample_pool_request_clear_begin() == 0U))
-        return 0U;
+    if (g_clear_batch_active == 0U) return 0U;
     if (g_clear_batch_count == 0U)
     {
         g_clear_batch_active = 0U;
         g_clear_batch_result_valid = 1U;
-        (void)multi_sample_pool_request_clear_end();
         control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
         return 1U;
     }
+    if (multi_sample_pool_request_clear_begin() == 0U) return 0U;
     storage_io_owner_set(STORAGE_OWNER_MULTI);
     storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
@@ -1918,12 +1993,18 @@ void multi_sample_import_clear_batch_cancel(void)
     g_clear_batch_failed_count = 0U;
     g_clear_batch_failed = 0U;
     g_clear_batch_result_valid = 0U;
-    (void)multi_sample_pool_request_clear_end();
+    if (multi_sample_pool_clear_is_active() != 0U)
+        (void)multi_sample_pool_request_clear_end();
 }
 
 uint8_t multi_sample_import_clear_batch_active(void)
 {
     return g_clear_batch_active;
+}
+
+uint32_t multi_sample_import_clear_batch_request_id(void)
+{
+    return g_clear_batch_request_id;
 }
 
 uint8_t multi_sample_import_take_clear_batch_result(uint16_t *deleted,
@@ -1956,8 +2037,19 @@ uint8_t multi_sample_import_request_delete_index(const char *index_path)
     {
         return 0U;
     }
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if ((g_delete_request_valid != 0U) || (g_delete_result_valid != 0U)
+        || (g_import_request_valid != 0U) || (g_import_busy != 0U)
+        || (multi_sample_load_has_pending() != 0U))
+    {
+        __set_PRIMASK(primask);
+        return 0U;
+    }
     (void)snprintf(g_delete_request_path, sizeof(g_delete_request_path), "%s", index_path);
+    __DMB();
     g_delete_request_valid = 1U;
+    __set_PRIMASK(primask);
     storage_io_owner_set(STORAGE_OWNER_MULTI);
     storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
@@ -1978,23 +2070,37 @@ void multi_sample_import_storage_delete_service(void)
         if ((g_clear_batch_failed != 0U)
             || (g_clear_batch_index >= g_clear_batch_count))
         {
-            g_clear_batch_active = 0U;
-            g_clear_batch_result_valid = 1U;
             (void)multi_sample_pool_request_clear_end();
-            control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
         }
         else
         {
-            (void)multi_sample_import_request_delete_index(
-                g_clear_batch_paths[g_clear_batch_index++]);
+            if (multi_sample_import_request_delete_index(
+                    g_clear_batch_paths[g_clear_batch_index]) != 0U)
+                ++g_clear_batch_index;
+            else
+                storage_io_owner_wait_resource(STORAGE_OWNER_MULTI);
         }
+        return;
     }
     if (g_delete_request_valid == 0U)
     {
         if ((g_clear_batch_active != 0U)
             && (g_clear_batch_index < g_clear_batch_count))
-            (void)multi_sample_import_request_delete_index(
-                g_clear_batch_paths[g_clear_batch_index++]);
+        {
+            if (multi_sample_import_request_delete_index(
+                    g_clear_batch_paths[g_clear_batch_index]) != 0U)
+                ++g_clear_batch_index;
+            else
+                storage_io_owner_wait_resource(STORAGE_OWNER_MULTI);
+        }
+        else if ((g_clear_batch_active != 0U)
+                 && (g_clear_batch_index >= g_clear_batch_count)
+                 && (multi_sample_pool_clear_is_active() == 0U))
+        {
+            g_clear_batch_active = 0U;
+            g_clear_batch_result_valid = 1U;
+            control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
+        }
         return;
     }
     uint8_t result = 3U;

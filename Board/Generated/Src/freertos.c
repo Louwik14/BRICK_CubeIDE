@@ -179,6 +179,14 @@ static uint8_t ui_service_work_pending(void)
 {
   return (ui_active_track_sync_is_pending() != 0U
           || ui_event_pending_count() != 0U
+          || (control_domain_asset_terminal_available(
+                  CONTROL_ASSET_FAMILY_CLASSIC) != 0U)
+          || (control_domain_asset_terminal_available(
+                  CONTROL_ASSET_FAMILY_RAM) != 0U)
+          || (control_domain_asset_terminal_available(
+                  CONTROL_ASSET_FAMILY_WAVETABLE) != 0U)
+          || (control_domain_asset_terminal_available(
+                  CONTROL_ASSET_FAMILY_MULTI) != 0U)
           || ui_service_dirty_is_set() != 0U
           || ((ui_service_led_dirty_is_set() != 0U)
               && (led_hw_busy() == 0U))

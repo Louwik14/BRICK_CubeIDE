@@ -243,6 +243,18 @@ static uint8_t ui_page_settings_request_asset_remove(uint32_t kind,
                                                      uint16_t logical,
                                                      uint16_t runtime)
 {
+    control_asset_family_t family = CONTROL_ASSET_FAMILY_COUNT;
+    if (kind == PERSIST_ASSET_SAMPLE_STREAM)
+        family = CONTROL_ASSET_FAMILY_CLASSIC;
+    else if (kind == PERSIST_ASSET_SAMPLE_RAM)
+        family = CONTROL_ASSET_FAMILY_RAM;
+    else if (kind == PERSIST_ASSET_WAVETABLE)
+        family = CONTROL_ASSET_FAMILY_WAVETABLE;
+    else if (kind == PERSIST_ASSET_MULTI)
+        family = CONTROL_ASSET_FAMILY_MULTI;
+    if ((family >= CONTROL_ASSET_FAMILY_COUNT)
+        || (control_domain_asset_terminal_available(family) != 0U))
+        return 0U;
     const control_asset_intent_t intent = {
         .operation = CONTROL_ASSET_REMOVE_RUNTIME,
         .kind = kind,
@@ -600,12 +612,15 @@ static void ui_page_settings_apply_action(uint8_t shift_down)
             {
                 if (storage_settings_project_replacement_active() != 0U) return;
                 ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
-                (void)ui_page_settings_request_asset_remove(
-                    PERSIST_ASSET_SAMPLE_STREAM,
-                    g_ui_settings.sample_slot_selected,
-                    g_ui_settings.selected_slot);
-                ui_page_settings_refresh_sampler_slots();
-                ui_page_settings_status("CLEAR OK");
+                if (ui_page_settings_request_asset_remove(
+                        PERSIST_ASSET_SAMPLE_STREAM,
+                        g_ui_settings.sample_slot_selected,
+                        g_ui_settings.selected_slot) == 0U)
+                {
+                    ui_page_settings_status("CLEAR BUSY");
+                    break;
+                }
+                ui_page_settings_status("CLEAR...");
             }
             break;
 
@@ -710,8 +725,6 @@ static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
             {
                 if (ev->id == (uint8_t)BTN_PAGE_1)
                 {
-                    (void)control_domain_request_storage_ui(
-                        CONTROL_STORAGE_UI_CANCEL_MULTI_LOAD);
                     storage_settings_cancel_multi();
                     ui_page_settings_multi_prepare_finish("CANCEL");
                 }

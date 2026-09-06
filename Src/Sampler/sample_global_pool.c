@@ -9,6 +9,7 @@
 #include "Storage/sd_access_gate.h"
 #include "Storage/storage_io_wakeup.h"
 #include "App/control_rt_wakeup.h"
+#include "stm32h7xx.h"
 
 STORAGE_STATE_SDRAM static sample_global_slot_t
     g_sample_global_pool[SAMPLE_GLOBAL_POOL_MAX_SLOTS];
@@ -22,6 +23,10 @@ static uint32_t g_classic_active_request_id;
 static uint16_t g_classic_active_request_slot;
 static char g_classic_active_request_path[SAMPLE_GLOBAL_POOL_PATH_MAX];
 static volatile uint8_t g_classic_active_request;
+static volatile uint8_t g_classic_conversion_reserved;
+static uint32_t g_classic_conversion_request_id;
+static uint16_t g_classic_conversion_slot;
+static char g_classic_conversion_path[SAMPLE_GLOBAL_POOL_PATH_MAX];
 static volatile uint8_t g_classic_result_valid;
 static sample_classic_load_result_t g_classic_result;
 static volatile uint8_t g_classic_clear_request_valid;
@@ -150,6 +155,10 @@ void sample_global_pool_reset(void)
     g_classic_active_request_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     g_classic_active_request_path[0] = '\0';
     g_classic_active_request = 0U;
+    g_classic_conversion_reserved = 0U;
+    g_classic_conversion_request_id = 0U;
+    g_classic_conversion_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    g_classic_conversion_path[0] = '\0';
     g_classic_result_valid = 0U;
     memset(&g_classic_result, 0, sizeof(g_classic_result));
 }
@@ -485,38 +494,146 @@ uint8_t sample_global_pool_request_classic_load(uint16_t global_index, const cha
         || (path == NULL) || (path[0] == '\0')
         || (strlen(path) >= sizeof(g_classic_request_path))
         || (g_classic_active_request != 0U)
+        || (g_classic_conversion_reserved != 0U)
         || (g_classic_result_valid != 0U)
-        || (g_classic_request_valid != 0U))
+        || (g_classic_request_valid != 0U)
+        || (g_classic_clear_request_valid != 0U))
     {
+        return 0U;
+    }
+    char path_copy[SAMPLE_GLOBAL_POOL_PATH_MAX];
+    (void)snprintf(path_copy, sizeof(path_copy), "%s", path);
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if ((project_transport_stopped_stable() == 0U)
+        || (g_classic_active_request != 0U)
+        || (g_classic_conversion_reserved != 0U)
+        || (g_classic_result_valid != 0U)
+        || (g_classic_request_valid != 0U)
+        || (g_classic_clear_request_valid != 0U))
+    {
+        __set_PRIMASK(primask);
         return 0U;
     }
     g_classic_request_slot = global_index;
     ++g_classic_request_id_counter;
     if (g_classic_request_id_counter == 0U) g_classic_request_id_counter = 1U;
-    (void)snprintf(g_classic_request_path, sizeof(g_classic_request_path), "%s", path);
+    (void)snprintf(g_classic_request_path, sizeof(g_classic_request_path), "%s", path_copy);
     __DMB();
     g_classic_request_valid = 1U;
+    __set_PRIMASK(primask);
     storage_io_owner_set(STORAGE_OWNER_STREAM);
     storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
-uint8_t sample_global_pool_report_classic_load_failure(uint16_t global_index,
-                                                       const char *path,
-                                                       sample_classic_load_error_t error)
+uint8_t sample_global_pool_reserve_classic_conversion(uint16_t global_index,
+                                                      const char *path,
+                                                      uint32_t *out_request_id)
 {
-    if ((global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+    if (out_request_id != NULL) *out_request_id = 0U;
+    if ((project_transport_stopped_stable() == 0U)
+        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+        || (global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
         || (path == NULL) || (path[0] == '\0')
-        || (strlen(path) >= sizeof(g_classic_result.path))
-        || (g_classic_result_valid != 0U))
+        || (strlen(path) >= sizeof(g_classic_conversion_path))
+        || (g_classic_active_request != 0U)
+        || (g_classic_request_valid != 0U)
+        || (g_classic_result_valid != 0U)
+        || (g_classic_conversion_reserved != 0U)
+        || (g_classic_clear_request_valid != 0U)
+        || ((g_sample_global_pool[global_index].kind != SAMPLE_GLOBAL_KIND_EMPTY)
+            && (g_sample_global_pool[global_index].kind != SAMPLE_GLOBAL_KIND_CLASSIC)))
+        return 0U;
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if ((project_transport_stopped_stable() == 0U)
+        || (g_classic_active_request != 0U)
+        || (g_classic_request_valid != 0U)
+        || (g_classic_result_valid != 0U)
+        || (g_classic_conversion_reserved != 0U)
+        || (g_classic_clear_request_valid != 0U))
     {
+        __set_PRIMASK(primask);
         return 0U;
     }
-    memset(&g_classic_result, 0, sizeof(g_classic_result));
     ++g_classic_request_id_counter;
     if (g_classic_request_id_counter == 0U) g_classic_request_id_counter = 1U;
-    g_classic_result.request_id = g_classic_request_id_counter;
-    g_classic_result.slot = global_index;
+    g_classic_conversion_reserved = 1U;
+    g_classic_conversion_request_id = g_classic_request_id_counter;
+    g_classic_conversion_slot = global_index;
+    (void)snprintf(g_classic_conversion_path,
+                   sizeof(g_classic_conversion_path), "%s", path);
+    __DMB();
+    if (out_request_id != NULL) *out_request_id = g_classic_conversion_request_id;
+    __set_PRIMASK(primask);
+    return 1U;
+}
+
+uint8_t sample_global_pool_cancel_classic_conversion(uint32_t request_id)
+{
+    if ((g_classic_conversion_reserved == 0U)
+        || (g_classic_conversion_request_id != request_id)) return 0U;
+    g_classic_conversion_reserved = 0U;
+    g_classic_conversion_request_id = 0U;
+    g_classic_conversion_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    g_classic_conversion_path[0] = '\0';
+    return 1U;
+}
+
+uint8_t sample_global_pool_start_reserved_classic_load(uint32_t request_id)
+{
+    if ((g_classic_conversion_reserved == 0U)
+        || (g_classic_conversion_request_id != request_id)) return 0U;
+    const uint16_t slot = g_classic_conversion_slot;
+    char path[SAMPLE_GLOBAL_POOL_PATH_MAX];
+    (void)snprintf(path, sizeof(path), "%s", g_classic_conversion_path);
+    g_classic_conversion_reserved = 0U;
+    g_classic_conversion_request_id = 0U;
+    g_classic_conversion_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    g_classic_conversion_path[0] = '\0';
+    g_classic_active_request_id = request_id;
+    g_classic_active_request_slot = slot;
+    (void)snprintf(g_classic_active_request_path,
+                   sizeof(g_classic_active_request_path), "%s", path);
+    g_classic_active_request = 1U;
+    if (sample_global_pool_load_classic(slot, path) == 0U)
+    {
+        memset(&g_classic_result, 0, sizeof(g_classic_result));
+        g_classic_result.request_id = request_id;
+        g_classic_result.slot = slot;
+        g_classic_result.error = g_sample_classic_last_error;
+        (void)snprintf(g_classic_result.path, sizeof(g_classic_result.path), "%s", path);
+        g_classic_result_valid = 1U;
+        control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
+    }
+    else
+    {
+        sample_global_pool_service_classic_completion();
+    }
+    return 1U;
+}
+
+uint8_t sample_global_pool_report_classic_load_failure_for_request(
+    uint32_t request_id, const char *path, sample_classic_load_error_t error)
+{
+    if ((request_id == 0U) || (g_classic_result_valid != 0U)) return 0U;
+    uint16_t slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    if ((g_classic_conversion_reserved != 0U)
+        && (g_classic_conversion_request_id == request_id))
+    {
+        slot = g_classic_conversion_slot;
+        g_classic_conversion_reserved = 0U;
+        g_classic_conversion_request_id = 0U;
+        g_classic_conversion_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+        g_classic_conversion_path[0] = '\0';
+    }
+    if ((slot >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS) || (path == NULL)
+        || (path[0] == '\0') || (strlen(path) >= sizeof(g_classic_result.path)))
+        return 0U;
+    memset(&g_classic_result, 0, sizeof(g_classic_result));
+    g_classic_result.request_id = request_id;
+    g_classic_result.slot = slot;
     g_classic_result.success = 0U;
     g_classic_result.error = error;
     (void)snprintf(g_classic_result.path, sizeof(g_classic_result.path), "%s", path);
@@ -549,37 +666,69 @@ uint8_t sample_global_pool_classic_load_active(void)
 {
     return (uint8_t)(((g_classic_active_request != 0U)
                       && (g_classic_result_valid == 0U))
-                     || (g_classic_request_valid != 0U));
+                     || (g_classic_request_valid != 0U)
+                     || (g_classic_conversion_reserved != 0U));
 }
 
 uint32_t sample_global_pool_classic_load_request_id(void)
 {
+    if (g_classic_conversion_reserved != 0U)
+        return g_classic_conversion_request_id;
     return (g_classic_active_request != 0U) ? g_classic_active_request_id
                                            : g_classic_request_id_counter;
 }
 
-uint8_t sample_global_pool_take_classic_load_result(sample_classic_load_result_t *out_result)
+uint8_t sample_global_pool_peek_classic_load_result(
+    sample_classic_load_result_t *out_result)
 {
     if ((out_result == NULL) || (g_classic_result_valid == 0U)) return 0U;
     *out_result = g_classic_result;
-    __DMB();
+    return 1U;
+}
+
+uint8_t sample_global_pool_finish_classic_load_result(uint32_t request_id)
+{
+    if ((g_classic_result_valid == 0U)
+        || (g_classic_result.request_id != request_id)) return 0U;
     g_classic_result_valid = 0U;
     g_classic_active_request = 0U;
     g_classic_active_request_id = 0U;
     return 1U;
 }
 
+uint8_t sample_global_pool_take_classic_load_result(sample_classic_load_result_t *out_result)
+{
+    if ((out_result == NULL) || (g_classic_result_valid == 0U)) return 0U;
+    *out_result = g_classic_result;
+    return sample_global_pool_finish_classic_load_result(out_result->request_id);
+}
+
 uint8_t sample_global_pool_request_clear_classic(uint16_t global_index)
 {
     if ((global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+        || (g_classic_active_request != 0U)
+        || (g_classic_result_valid != 0U)
         || (g_classic_request_valid != 0U)
+        || (g_classic_conversion_reserved != 0U)
         || (g_classic_clear_request_valid != 0U))
     {
+        return 0U;
+    }
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if ((g_classic_active_request != 0U)
+        || (g_classic_result_valid != 0U)
+        || (g_classic_request_valid != 0U)
+        || (g_classic_conversion_reserved != 0U)
+        || (g_classic_clear_request_valid != 0U))
+    {
+        __set_PRIMASK(primask);
         return 0U;
     }
     g_classic_clear_request_slot = global_index;
     __DMB();
     g_classic_clear_request_valid = 1U;
+    __set_PRIMASK(primask);
     storage_io_owner_set(STORAGE_OWNER_STREAM);
     storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
@@ -592,19 +741,21 @@ void sample_global_pool_storage_request_service(void)
         const uint16_t slot = g_classic_clear_request_slot;
         g_classic_clear_request_valid = 0U;
         sample_global_pool_clear_classic(slot);
+        control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
         return;
     }
     if (g_classic_request_valid == 0U)
         return;
     const uint16_t slot = g_classic_request_slot;
     char path[SAMPLE_GLOBAL_POOL_PATH_MAX];
+    const uint32_t request_id = g_classic_request_id_counter;
     (void)snprintf(path, sizeof(path), "%s", g_classic_request_path);
-    g_classic_request_valid = 0U;
-    g_classic_active_request_id = g_classic_request_id_counter;
+    g_classic_active_request_id = request_id;
     g_classic_active_request_slot = slot;
     (void)snprintf(g_classic_active_request_path,
                    sizeof(g_classic_active_request_path), "%s", path);
     g_classic_active_request = 1U;
+    g_classic_request_valid = 0U;
     if (sample_global_pool_load_classic(slot, path) == 0U)
     {
         memset(&g_classic_result, 0, sizeof(g_classic_result));

@@ -4,6 +4,8 @@
 
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/sample_cache.h"
+#include "Sampler/multi_sample_import.h"
+#include "App/control_domain.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/project_control.h"
 #include "Storage/project_product.h"
@@ -146,8 +148,12 @@ uint8_t storage_settings_commit_multi_clear(void)
 
 void storage_settings_cancel_multi(void)
 {
+    (void)control_domain_request_storage_ui(CONTROL_STORAGE_UI_CANCEL_MULTI_LOAD);
+}
+
+void storage_settings_cancel_multi_clear(void)
+{
     multi_sample_import_clear_batch_cancel();
-    multi_sample_cancel_all_loads();
 }
 
 uint8_t storage_settings_project_replacement_active(void)

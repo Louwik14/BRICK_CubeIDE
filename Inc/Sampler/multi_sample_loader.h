@@ -95,6 +95,9 @@ void multi_sample_loader_init(void);
 multi_sample_load_result_t multi_sample_load_request_instrument(uint16_t logical_id,
                                                                 const char *index_path,
                                                                 uint16_t instrument_id);
+uint8_t multi_sample_load_request_import(const char *source_path,
+                                         uint16_t instrument_id);
+uint32_t multi_sample_load_external_request_id(void);
 multi_sample_load_result_t multi_sample_load_request_replacement(
     uint16_t old_logical_id, uint16_t instrument_id, const char *source_path,
     const char *index_path, uint8_t import_required);

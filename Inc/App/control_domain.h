@@ -193,7 +193,8 @@ enum
 {
     CONTROL_ASSET_STAGE_LOAD = 0U,
     CONTROL_ASSET_STAGE_CLEAR_INDEXES = 1U,
-    CONTROL_ASSET_STAGE_REGISTRATION = 2U
+    CONTROL_ASSET_STAGE_REGISTRATION = 2U,
+    CONTROL_ASSET_STAGE_REMOVE = 3U
 };
 
 typedef struct
@@ -464,6 +465,10 @@ uint8_t control_domain_publish_asset_terminal(const control_asset_terminal_t *te
 uint8_t control_domain_asset_terminal_available(control_asset_family_t family);
 uint8_t control_domain_take_asset_terminal(control_asset_family_t family,
                                            control_asset_terminal_t *out_terminal);
+uint8_t control_domain_peek_asset_remove(control_asset_family_t family,
+                                         control_asset_terminal_t *out_terminal);
+uint8_t control_domain_finish_asset_remove(control_asset_family_t family,
+                                           uint32_t request_id);
 uint8_t control_domain_request_clipboard(const control_clipboard_intent_t *intent);
 uint8_t control_domain_request_keyboard(uint8_t operation, int8_t value);
 uint8_t control_domain_request_audio_fx(const control_audio_fx_intent_t *intent);

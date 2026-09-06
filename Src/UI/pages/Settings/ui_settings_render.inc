@@ -1059,6 +1059,7 @@ static void ui_page_settings_render_wavetable_browser(void)
 
 static void ui_page_settings_render(void)
 {
+    ui_page_settings_present_storage_receipts();
     ui_settings_menu_level_t *const level = ui_page_settings_current_level();
     if (level == 0)
     {

@@ -108,7 +108,9 @@ static uint8_t wavetable_pool_load_async_begin_prepared_internal(
         || (job->state != WAVETABLE_LOAD_IDLE)
         || (g_wavetable_clear_request_valid != 0U)
         || ((consume_request == 0U) && (g_wavetable_load_request_valid != 0U))
-        || (control_domain_asset_terminal_available(CONTROL_ASSET_FAMILY_WAVETABLE) != 0U))
+        || ((g_wavetable_load_requester == WAVETABLE_REQUESTER_UI)
+            && (control_domain_asset_terminal_available(
+                    CONTROL_ASSET_FAMILY_WAVETABLE) != 0U)))
     {
         __set_PRIMASK(primask);
         return 0U;

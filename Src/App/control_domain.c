@@ -162,6 +162,9 @@ static volatile uint32_t g_control_storage_head;
 static volatile uint32_t g_control_storage_tail;
 static control_asset_terminal_t g_control_asset_terminals[CONTROL_ASSET_FAMILY_COUNT];
 static volatile uint8_t g_control_asset_terminal_valid[CONTROL_ASSET_FAMILY_COUNT];
+static control_asset_terminal_t g_control_asset_remove_pending[CONTROL_ASSET_FAMILY_COUNT];
+static volatile uint8_t g_control_asset_remove_valid[CONTROL_ASSET_FAMILY_COUNT];
+static uint32_t g_control_asset_request_id_counter;
 static volatile uint32_t g_control_storage_overflow_count;
 
 static uint8_t control_domain_submit_ui_message(
@@ -326,6 +329,47 @@ uint8_t control_domain_take_asset_terminal(control_asset_family_t family,
     *out_terminal = g_control_asset_terminals[family];
     __DMB();
     g_control_asset_terminal_valid[family] = 0U;
+    return 1U;
+}
+
+static uint32_t control_domain_next_asset_request_id(void)
+{
+    ++g_control_asset_request_id_counter;
+    if (g_control_asset_request_id_counter == 0U)
+        g_control_asset_request_id_counter = 1U;
+    return g_control_asset_request_id_counter;
+}
+
+uint8_t control_domain_peek_asset_remove(control_asset_family_t family,
+                                         control_asset_terminal_t *out_terminal)
+{
+    if ((family >= CONTROL_ASSET_FAMILY_COUNT) || (out_terminal == NULL)
+        || (g_control_asset_remove_valid[family] == 0U)) return 0U;
+    const uint16_t runtime = g_control_asset_remove_pending[family].physical_id;
+    uint8_t empty = 0U;
+    if (family == CONTROL_ASSET_FAMILY_CLASSIC)
+        empty = (sample_global_pool_get_classic_state(runtime)
+                 == SAMPLE_CLASSIC_SLOT_EMPTY);
+    else if (family == CONTROL_ASSET_FAMILY_RAM)
+        empty = (sampler_ram_pool_get_state(runtime) == SAMPLER_RAM_SLOT_EMPTY);
+    else if (family == CONTROL_ASSET_FAMILY_WAVETABLE)
+        empty = (wavetable_pool_get_state(runtime) == WAVETABLE_SLOT_EMPTY);
+    else if (family == CONTROL_ASSET_FAMILY_MULTI)
+        empty = (multi_sample_pool_get_state(runtime) == MULTI_SAMPLE_INSTRUMENT_EMPTY);
+    if (empty == 0U) return 0U;
+    *out_terminal = g_control_asset_remove_pending[family];
+    return 1U;
+}
+
+uint8_t control_domain_finish_asset_remove(control_asset_family_t family,
+                                           uint32_t request_id)
+{
+    if ((family >= CONTROL_ASSET_FAMILY_COUNT)
+        || (g_control_asset_remove_valid[family] == 0U)
+        || (g_control_asset_remove_pending[family].request_id != request_id)) return 0U;
+    g_control_asset_remove_valid[family] = 0U;
+    memset(&g_control_asset_remove_pending[family], 0,
+           sizeof(g_control_asset_remove_pending[family]));
     return 1U;
 }
 
@@ -1063,26 +1107,85 @@ static void control_domain_apply_asset_intent(const control_asset_intent_t *inte
     }
 
     if (intent->operation != CONTROL_ASSET_REMOVE_RUNTIME) return;
-
+    control_asset_family_t family = CONTROL_ASSET_FAMILY_COUNT;
+    control_asset_terminal_t terminal = {0};
+    terminal.stage = CONTROL_ASSET_STAGE_REMOVE;
+    terminal.logical_id = intent->logical;
+    terminal.physical_id = intent->runtime;
+    terminal.request_id = (intent->request_id != 0U)
+        ? intent->request_id : control_domain_next_asset_request_id();
+    terminal.success = 0U;
+    terminal.result = 1U;
+    uint8_t accepted = 0U;
+    if (intent->kind == PERSIST_ASSET_SAMPLE_STREAM)
+        family = CONTROL_ASSET_FAMILY_CLASSIC;
+    else if (intent->kind == PERSIST_ASSET_SAMPLE_RAM)
+        family = CONTROL_ASSET_FAMILY_RAM;
+    else if (intent->kind == PERSIST_ASSET_WAVETABLE)
+        family = CONTROL_ASSET_FAMILY_WAVETABLE;
+    else if (intent->kind == PERSIST_ASSET_MULTI)
+        family = CONTROL_ASSET_FAMILY_MULTI;
+    if ((family >= CONTROL_ASSET_FAMILY_COUNT)
+        || (g_control_asset_remove_valid[family] != 0U)) return;
+    const sample_global_slot_t *classic_slot = NULL;
     if (intent->kind == PERSIST_ASSET_SAMPLE_STREAM)
     {
+        family = CONTROL_ASSET_FAMILY_CLASSIC;
+        classic_slot = sample_global_pool_get_slot(intent->runtime);
+        (void)snprintf(terminal.path, sizeof(terminal.path), "%s",
+                       (classic_slot != NULL) ? classic_slot->path : "");
         if (sample_global_pool_request_clear_classic(intent->runtime) != 0U)
-            (void)project_control_remove_sample(intent->logical);
+        {
+            accepted = 1U;
+            /* Classic logical identity is the physical slot; the clear
+             * request above is its canonical removal operation. */
+            terminal.success = 1U;
+        }
     }
     else if (intent->kind == PERSIST_ASSET_SAMPLE_RAM)
     {
+        family = CONTROL_ASSET_FAMILY_RAM;
+        const sampler_ram_slot_t *slot = sampler_ram_pool_get_slot(intent->runtime);
+        (void)snprintf(terminal.path, sizeof(terminal.path), "%s",
+                       (slot != NULL) ? slot->path : "");
         if (sampler_ram_pool_request_clear(intent->runtime) != 0U)
-            (void)project_control_remove_sample(intent->logical);
+        {
+            accepted = 1U;
+            terminal.success = project_control_remove_sample(intent->logical);
+        }
     }
     else if (intent->kind == PERSIST_ASSET_WAVETABLE)
     {
+        family = CONTROL_ASSET_FAMILY_WAVETABLE;
+        const wavetable_slot_t *slot = wavetable_pool_get_slot(intent->runtime);
+        (void)snprintf(terminal.path, sizeof(terminal.path), "%s",
+                       (slot != NULL) ? slot->path : "");
         if (wavetable_pool_request_clear(intent->runtime) != 0U)
-            (void)project_control_remove_wavetable(intent->logical);
+        {
+            accepted = 1U;
+            terminal.success = project_control_remove_wavetable(intent->logical);
+        }
     }
     else if (intent->kind == PERSIST_ASSET_MULTI)
     {
+        family = CONTROL_ASSET_FAMILY_MULTI;
+        const multi_sample_instrument_t *slot =
+            multi_sample_pool_get_instrument(intent->runtime);
+        (void)snprintf(terminal.path, sizeof(terminal.path), "%s",
+                       (slot != NULL) ? slot->index_path : "");
         if (multi_sample_pool_request_clear_instrument(intent->runtime) != 0U)
-            (void)project_control_remove_multi(intent->logical);
+        {
+            accepted = 1U;
+            terminal.success = project_control_remove_multi(intent->logical);
+        }
+    }
+    if ((family < CONTROL_ASSET_FAMILY_COUNT)
+        && (terminal.path[0] != '\0')
+        && (accepted != 0U))
+    {
+        terminal.family = family;
+        g_control_asset_remove_pending[family] = terminal;
+        g_control_asset_remove_valid[family] = 1U;
     }
 }
 
@@ -1295,6 +1398,11 @@ void control_domain_init(void)
     memset(g_control_asset_terminals, 0, sizeof(g_control_asset_terminals));
     memset((void *)g_control_asset_terminal_valid, 0,
            sizeof(g_control_asset_terminal_valid));
+    memset(g_control_asset_remove_pending, 0,
+           sizeof(g_control_asset_remove_pending));
+    memset((void *)g_control_asset_remove_valid, 0,
+           sizeof(g_control_asset_remove_valid));
+    g_control_asset_request_id_counter = 0U;
     sample_stream_admission_control_init();
     g_control_ui_head = 0U;
     g_control_ui_tail = 0U;

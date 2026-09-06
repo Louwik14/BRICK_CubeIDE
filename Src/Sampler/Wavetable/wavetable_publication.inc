@@ -99,6 +99,8 @@ void wavetable_pool_service_retire(void)
         storage_io_owner_set(STORAGE_OWNER_PROJECT);
         storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     }
+    if (finalized != 0U)
+        control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
 }
 
 uint8_t wavetable_pool_retire_idle(void)

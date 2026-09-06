@@ -340,9 +340,26 @@ static void brick6_app_control_process_storage_completions(void)
     uint8_t project_success = 0U;
     (void)project_product_save_take_result(&project_slot, &project_success);
 
+    for (control_asset_family_t family = CONTROL_ASSET_FAMILY_CLASSIC;
+         family < CONTROL_ASSET_FAMILY_COUNT; ++family)
+    {
+        control_asset_terminal_t remove_terminal;
+        if ((control_domain_asset_terminal_available(family) == 0U)
+            && (control_domain_peek_asset_remove(family, &remove_terminal) != 0U))
+        {
+            if (control_domain_publish_asset_terminal(&remove_terminal) == 0U)
+            {
+                Error_Handler();
+                return;
+            }
+            (void)control_domain_finish_asset_remove(
+                family, remove_terminal.request_id);
+        }
+    }
+
     sample_classic_load_result_t classic_result;
     if ((control_domain_asset_terminal_available(CONTROL_ASSET_FAMILY_CLASSIC) == 0U)
-        && (sample_global_pool_take_classic_load_result(&classic_result) != 0U))
+        && (sample_global_pool_peek_classic_load_result(&classic_result) != 0U))
     {
         control_asset_terminal_t terminal = {0};
         terminal.family = CONTROL_ASSET_FAMILY_CLASSIC;
@@ -353,7 +370,13 @@ static void brick6_app_control_process_storage_completions(void)
         terminal.result = (uint16_t)classic_result.error;
         (void)snprintf(terminal.path, sizeof(terminal.path), "%s",
                        classic_result.path);
-        (void)control_domain_publish_asset_terminal(&terminal);
+        if (control_domain_publish_asset_terminal(&terminal) == 0U)
+        {
+            Error_Handler();
+            return;
+        }
+        (void)sample_global_pool_finish_classic_load_result(
+            classic_result.request_id);
     }
 
     if (control_domain_asset_terminal_available(CONTROL_ASSET_FAMILY_MULTI) == 0U)
@@ -365,10 +388,15 @@ static void brick6_app_control_process_storage_completions(void)
             control_asset_terminal_t terminal = {0};
             terminal.family = CONTROL_ASSET_FAMILY_MULTI;
             terminal.stage = CONTROL_ASSET_STAGE_CLEAR_INDEXES;
+            terminal.request_id = multi_sample_import_clear_batch_request_id();
             terminal.success = (failed == 0U) ? 1U : 0U;
             terminal.result = deleted;
             terminal.physical_id = failed;
-            (void)control_domain_publish_asset_terminal(&terminal);
+            if (control_domain_publish_asset_terminal(&terminal) == 0U)
+            {
+                Error_Handler();
+                return;
+            }
         }
     }
 

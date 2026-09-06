@@ -760,7 +760,9 @@ static uint8_t sampler_ram_pool_load_async_begin_internal(
         || (job->state != SAMPLER_RAM_LOAD_IDLE)
         || (g_sampler_ram_clear_request_valid != 0U)
         || ((consume_request == 0U) && (g_sampler_ram_load_request_valid != 0U))
-        || (control_domain_asset_terminal_available(CONTROL_ASSET_FAMILY_RAM) != 0U))
+        || ((requester == SAMPLER_RAM_REQUESTER_UI)
+            && (control_domain_asset_terminal_available(
+                    CONTROL_ASSET_FAMILY_RAM) != 0U)))
     {
         __set_PRIMASK(primask);
         return 0U;
@@ -1380,6 +1382,8 @@ void sampler_ram_pool_service_retire(void)
         storage_io_owner_set(STORAGE_OWNER_PROJECT);
         storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     }
+    if (finalized != 0U)
+        control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
 }
 
 uint8_t sampler_ram_pool_retire_idle(void)

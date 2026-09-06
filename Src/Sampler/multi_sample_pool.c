@@ -11,6 +11,7 @@
 #include "Sampler/sample_page_lease_control.h"
 #include "IPC/multi_sample_audio_projection_control.h"
 #include "ControlRT/control_rt_publication.h"
+#include "App/control_rt_wakeup.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/storage_io_wakeup.h"
 #include "Storage/project_product.h"
@@ -53,7 +54,19 @@ uint8_t multi_sample_pool_request_clear_begin(void)
         || (multi_sample_import_is_busy() != 0U)
         || (multi_sample_import_delete_is_busy() != 0U)
         || (multi_sample_load_has_pending() != 0U)) return 0U;
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if ((g_multi_clear_request != 0U)
+        || (g_multi_clear_active != 0U)
+        || (multi_sample_import_is_busy() != 0U)
+        || (multi_sample_import_delete_is_busy() != 0U)
+        || (multi_sample_load_has_pending() != 0U))
+    {
+        __set_PRIMASK(primask);
+        return 0U;
+    }
     g_multi_clear_request = 1U;
+    __set_PRIMASK(primask);
     storage_io_owner_set(STORAGE_OWNER_MULTI);
     storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
@@ -62,7 +75,15 @@ uint8_t multi_sample_pool_request_clear_begin(void)
 uint8_t multi_sample_pool_request_clear_end(void)
 {
     if (g_multi_clear_request != 0U) return 0U;
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if (g_multi_clear_request != 0U)
+    {
+        __set_PRIMASK(primask);
+        return 0U;
+    }
     g_multi_clear_request = 2U;
+    __set_PRIMASK(primask);
     storage_io_owner_set(STORAGE_OWNER_MULTI);
     storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
@@ -76,8 +97,20 @@ uint8_t multi_sample_pool_request_clear_instrument(uint16_t instrument_id)
         || (multi_sample_import_is_busy() != 0U)
         || (multi_sample_import_delete_is_busy() != 0U)
         || (multi_sample_load_has_pending() != 0U)) return 0U;
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if ((g_multi_clear_request != 0U)
+        || (g_multi_clear_active != 0U)
+        || (multi_sample_import_is_busy() != 0U)
+        || (multi_sample_import_delete_is_busy() != 0U)
+        || (multi_sample_load_has_pending() != 0U))
+    {
+        __set_PRIMASK(primask);
+        return 0U;
+    }
     g_multi_clear_request_instrument = instrument_id;
     g_multi_clear_request = 3U;
+    __set_PRIMASK(primask);
     storage_io_owner_set(STORAGE_OWNER_MULTI);
     storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
@@ -515,6 +548,7 @@ void multi_sample_pool_service_retire(void)
     {
         storage_io_owner_set(STORAGE_OWNER_MULTI);
         storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+        control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
     }
 }
 

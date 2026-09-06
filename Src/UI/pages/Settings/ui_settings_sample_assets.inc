@@ -336,10 +336,8 @@ static void ui_page_settings_sample_confirm_accept(void)
             ui_page_settings_status("CLEAR BUSY");
             return;
         }
-        ui_page_settings_select_neighbor_before_delete();
-        ui_page_settings_refresh_sampler_slots();
         g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
-        ui_page_settings_status("CLEAR OK");
+        ui_page_settings_status("CLEAR...");
         return;
     }
 
@@ -409,15 +407,13 @@ static void ui_page_settings_sample_confirm_accept(void)
                 deleted_logical,
                 g_ui_settings.confirm_slot) != 0U)
         {
-            ui_page_settings_status("UNLOAD OK");
+            ui_page_settings_status("UNLOAD...");
         }
         else
         {
             ui_page_settings_status("UNLOAD FAIL");
             return;
         }
-        ui_page_settings_select_neighbor_before_delete();
-        ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_MULTI);
         g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;
         return;
     }
@@ -465,14 +461,14 @@ static void ui_page_settings_sample_confirm_accept(void)
                 && (entry->index_path[0] != '\0')
                 && (storage_settings_add_multi_clear_path(entry->index_path) == 0U))
             {
-                storage_settings_cancel_multi();
+                storage_settings_cancel_multi_clear();
                 ui_page_settings_status("CLEAR BUSY");
                 return;
             }
         }
         if (storage_settings_commit_multi_clear() == 0U)
         {
-            storage_settings_cancel_multi();
+            storage_settings_cancel_multi_clear();
             ui_page_settings_status("CLEAR BUSY");
             return;
         }
@@ -655,9 +651,7 @@ static void ui_page_settings_ram_copy_right(uint8_t shift_down)
         ui_page_settings_status("CLEAR BUSY");
         return;
     }
-    ui_page_settings_select_neighbor_before_delete();
-    ui_page_settings_refresh_ram_slots();
-    ui_page_settings_status("CLEAR OK");
+    ui_page_settings_status("CLEAR...");
 }
 
 static void ui_page_settings_wavetable_request_replace(uint16_t global_slot, const char *path)
@@ -759,8 +753,6 @@ static void ui_page_settings_wavetable_copy_right(uint8_t shift_down)
         ui_page_settings_status("CLEAR BUSY");
         return;
     }
-    ui_page_settings_select_neighbor_before_delete();
-    ui_page_settings_refresh_wavetable_slots();
-    ui_page_settings_status("CLEAR OK");
+    ui_page_settings_status("CLEAR...");
 }
 

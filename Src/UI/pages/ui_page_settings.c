@@ -220,8 +220,11 @@ UI_STATE_SDRAM static control_asset_terminal_t
     g_ui_asset_receipts[CONTROL_ASSET_FAMILY_COUNT];
 UI_STATE_SDRAM static uint8_t
     g_ui_asset_receipt_valid[CONTROL_ASSET_FAMILY_COUNT];
+UI_STATE_SDRAM static uint32_t
+    g_ui_asset_receipt_presented[CONTROL_ASSET_FAMILY_COUNT];
 
 static void ui_page_settings_status(const char *status);
+static void ui_page_settings_present_storage_receipts(void);
 static void ui_page_settings_sd_busy_status(void);
 static void ui_page_settings_preview_stop(ui_settings_preview_stop_origin_t origin);
 static const char *ui_page_settings_preview_error_label(sd_preview_error_t error);

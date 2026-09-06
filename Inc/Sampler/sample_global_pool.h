@@ -77,7 +77,8 @@ typedef enum
     SAMPLE_CLASSIC_LOAD_SD_NOT_READY,
     SAMPLE_CLASSIC_LOAD_SD_INVALID_OBJECT,
     SAMPLE_CLASSIC_LOAD_SD_TIMEOUT,
-    SAMPLE_CLASSIC_LOAD_SD_NOT_ENOUGH_CORE
+    SAMPLE_CLASSIC_LOAD_SD_NOT_ENOUGH_CORE,
+    SAMPLE_CLASSIC_LOAD_CONVERT_FAIL
 } sample_classic_load_error_t;
 
 typedef struct
@@ -121,11 +122,18 @@ uint8_t sample_global_pool_register_classic_at(uint16_t global_index,
                                                uint32_t cost_bytes);
 uint8_t sample_global_pool_load_classic(uint16_t global_index, const char *path);
 uint8_t sample_global_pool_request_classic_load(uint16_t global_index, const char *path);
-uint8_t sample_global_pool_report_classic_load_failure(uint16_t global_index,
-                                                       const char *path,
-                                                       sample_classic_load_error_t error);
+uint8_t sample_global_pool_reserve_classic_conversion(uint16_t global_index,
+                                                      const char *path,
+                                                      uint32_t *out_request_id);
+uint8_t sample_global_pool_cancel_classic_conversion(uint32_t request_id);
+uint8_t sample_global_pool_start_reserved_classic_load(uint32_t request_id);
+uint8_t sample_global_pool_report_classic_load_failure_for_request(
+    uint32_t request_id, const char *path, sample_classic_load_error_t error);
 uint8_t sample_global_pool_classic_load_active(void);
 uint32_t sample_global_pool_classic_load_request_id(void);
+uint8_t sample_global_pool_peek_classic_load_result(
+    sample_classic_load_result_t *out_result);
+uint8_t sample_global_pool_finish_classic_load_result(uint32_t request_id);
 uint8_t sample_global_pool_take_classic_load_result(sample_classic_load_result_t *out_result);
 void sample_global_pool_service_classic_completion(void);
 uint8_t sample_global_pool_request_clear_classic(uint16_t global_index);

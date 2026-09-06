@@ -50,6 +50,7 @@ uint8_t storage_settings_begin_multi_clear(void);
 uint8_t storage_settings_add_multi_clear_path(const char *path);
 uint8_t storage_settings_commit_multi_clear(void);
 void storage_settings_cancel_multi(void);
+void storage_settings_cancel_multi_clear(void);
 /* Read-only settings projection.  These functions copy or return immutable
  * owner snapshots; UI code never reaches the underlying Storage products. */
 uint8_t storage_settings_project_progress(project_product_progress_t *progress);

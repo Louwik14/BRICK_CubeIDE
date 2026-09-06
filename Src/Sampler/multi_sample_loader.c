@@ -95,7 +95,8 @@ static uint8_t multi_loader_copy_text(char *dst, uint32_t dst_size,
 static uint8_t multi_loader_external_is_replacement(void)
 {
     return (uint8_t)((g_multi_external_request.used != 0U)
-        && (g_multi_external_request.source_path[0] != '\0'));
+        && (g_multi_external_request.source_path[0] != '\0')
+        && (g_multi_external_request.old_logical_id != MULTI_SAMPLE_POOL_INVALID_ID));
 }
 
 static void multi_loader_publish_completion_for(uint32_t request_id,
@@ -105,6 +106,12 @@ static void multi_loader_publish_completion_for(uint32_t request_id,
                                                 const char *path,
                                                 uint8_t success)
 {
+    if ((requester == MULTI_SAMPLE_LOAD_REQUESTER_PROJECT)
+        && (project_product_load_busy() != 0U))
+    {
+        storage_io_owner_set(STORAGE_OWNER_PROJECT);
+        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+    }
     if ((requester != MULTI_SAMPLE_LOAD_REQUESTER_UI)
         || (g_multi_load_completion_valid != 0U))
         return;
@@ -120,11 +127,6 @@ static void multi_loader_publish_completion_for(uint32_t request_id,
                                  path);
     __DMB();
     g_multi_load_completion_valid = 1U;
-    if (project_product_load_busy() != 0U)
-    {
-        storage_io_owner_set(STORAGE_OWNER_PROJECT);
-        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
-    }
     control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
 }
 
@@ -133,9 +135,11 @@ void multi_sample_load_publish_import_result(uint32_t request_id,
                                              const char *index_path,
                                              multi_sample_load_result_t result)
 {
-    if ((g_multi_load_completion_valid != 0U) || (index_path == NULL)) return;
+    if ((request_id == 0U) || (g_multi_load_completion_valid != 0U)
+        || (index_path == NULL)) return;
     multi_sample_external_request_t request;
     const uint8_t identified = multi_sample_load_peek_external(request_id, &request);
+    if (identified == 0U) return;
     memset(&g_multi_load_completion, 0, sizeof(g_multi_load_completion));
     g_multi_load_completion.request_id = request_id;
     g_multi_load_completion.requester = (identified != 0U)
@@ -845,7 +849,8 @@ multi_sample_load_result_t multi_sample_load_request_replacement(
         || (control_domain_asset_terminal_available(CONTROL_ASSET_FAMILY_MULTI) != 0U)
         || (g_multi_external_request.used != 0U)
         || (g_multi_external_request_valid != 0U)
-        || (multi_sample_load_has_pending() != 0U))
+        || (multi_sample_load_has_pending() != 0U)
+        || (multi_sample_import_clear_batch_active() != 0U))
         return MULTI_SAMPLE_LOAD_SD_BUSY;
 
     char source_copy[MULTI_SAMPLE_LOADER_PATH_MAX];
@@ -867,6 +872,8 @@ multi_sample_load_result_t multi_sample_load_request_replacement(
         || (g_multi_external_request.used != 0U)
         || (g_multi_external_request_valid != 0U)
         || (multi_sample_load_has_pending() != 0U)
+        || (multi_sample_import_delete_is_busy() != 0U)
+        || (multi_sample_import_clear_batch_active() != 0U)
         || (control_domain_asset_terminal_available(CONTROL_ASSET_FAMILY_MULTI) != 0U))
     {
         __set_PRIMASK(primask);
@@ -922,7 +929,8 @@ multi_sample_load_result_t multi_sample_load_request_instrument(uint16_t logical
         return MULTI_SAMPLE_LOAD_PATH_TOO_LONG;
     if ((multi_sample_import_is_busy() != 0U)
         || (multi_sample_import_delete_is_busy() != 0U)
-        || (multi_sample_pool_clear_is_active() != 0U))
+        || (multi_sample_pool_clear_is_active() != 0U)
+        || (multi_sample_import_clear_batch_active() != 0U))
         return MULTI_SAMPLE_LOAD_SD_BUSY;
     if ((g_multi_external_request_valid != 0U)
         || (multi_sample_load_has_pending() != 0U))
@@ -938,6 +946,8 @@ multi_sample_load_result_t multi_sample_load_request_instrument(uint16_t logical
         || (g_multi_external_request.used != 0U)
         || (g_multi_external_request_valid != 0U)
         || (multi_sample_load_has_pending() != 0U)
+        || (multi_sample_import_delete_is_busy() != 0U)
+        || (multi_sample_import_clear_batch_active() != 0U)
         || (control_domain_asset_terminal_available(CONTROL_ASSET_FAMILY_MULTI) != 0U))
     {
         __set_PRIMASK(primask);
@@ -959,34 +969,141 @@ multi_sample_load_result_t multi_sample_load_request_instrument(uint16_t logical
     return MULTI_SAMPLE_LOAD_OK;
 }
 
+uint8_t multi_sample_load_request_import(const char *source_path,
+                                         uint16_t instrument_id)
+{
+    if ((project_transport_stopped_stable() == 0U)
+        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+        || (source_path == NULL) || (source_path[0] == '\0')
+        || (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
+        || (strlen(source_path) >= sizeof(g_multi_external_request.source_path))
+        || (g_multi_external_request.used != 0U)
+        || (g_multi_external_request_valid != 0U)
+        || (multi_sample_load_has_pending() != 0U)
+        || (multi_sample_import_delete_is_busy() != 0U)
+        || (multi_sample_import_clear_batch_active() != 0U)
+        || (control_domain_asset_terminal_available(CONTROL_ASSET_FAMILY_MULTI) != 0U)
+        || (multi_sample_pool_get_state(instrument_id)
+            != MULTI_SAMPLE_INSTRUMENT_EMPTY))
+        return 0U;
+
+    char source_copy[MULTI_SAMPLE_LOADER_PATH_MAX];
+    (void)multi_loader_copy_text(source_copy, sizeof(source_copy), source_path);
+    const uint32_t request_id = multi_loader_next_request_id();
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if ((project_transport_stopped_stable() == 0U)
+        || (g_multi_external_request.used != 0U)
+        || (g_multi_external_request_valid != 0U)
+        || (multi_sample_load_has_pending() != 0U)
+        || (multi_sample_import_delete_is_busy() != 0U)
+        || (control_domain_asset_terminal_available(CONTROL_ASSET_FAMILY_MULTI) != 0U)
+        || (multi_sample_pool_get_state(instrument_id)
+            != MULTI_SAMPLE_INSTRUMENT_EMPTY))
+    {
+        __set_PRIMASK(primask);
+        return 0U;
+    }
+    memset(&g_multi_external_request, 0, sizeof(g_multi_external_request));
+    g_multi_external_request.used = 1U;
+    g_multi_external_request.request_id = request_id;
+    g_multi_external_request.requester = MULTI_SAMPLE_LOAD_REQUESTER_UI;
+    g_multi_external_request.old_logical_id = MULTI_SAMPLE_POOL_INVALID_ID;
+    g_multi_external_request.instrument_id = instrument_id;
+    g_multi_external_request.import_required = 1U;
+    (void)multi_loader_copy_text(g_multi_external_request.source_path,
+                                 sizeof(g_multi_external_request.source_path),
+                                 source_copy);
+    __DMB();
+    __set_PRIMASK(primask);
+    return 1U;
+}
+
+uint32_t multi_sample_load_external_request_id(void)
+{
+    return (g_multi_external_request.used != 0U)
+        ? g_multi_external_request.request_id : 0U;
+}
+
+static void multi_loader_service_external_load(
+    multi_sample_load_request_t *request)
+{
+    if ((request == NULL) || (request->used == 0U)
+        || (request->load_started != 0U)) return;
+    if (request->cancelled != 0U)
+    {
+        (void)multi_sample_load_publish_external_result(
+            request->request_id, MULTI_SAMPLE_LOAD_CANCELLED);
+        return;
+    }
+    g_multi_load_request = *request;
+    const multi_sample_load_result_t result =
+        multi_loader_start_instrument(request->path, request->instrument_id);
+    if (result == MULTI_SAMPLE_LOAD_SD_BUSY)
+    {
+        memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
+        storage_io_owner_wait_resource(STORAGE_OWNER_MULTI);
+    }
+    else if (result == MULTI_SAMPLE_LOAD_ALREADY_READY)
+    {
+        request->load_started = 1U;
+        multi_loader_publish_completion(1U);
+    }
+    else if (result == MULTI_SAMPLE_LOAD_OK)
+    {
+        request->load_started = 1U;
+    }
+    else
+    {
+        request->load_started = 1U;
+        if (g_multi_load_completion_valid == 0U)
+            multi_loader_publish_completion(0U);
+    }
+}
+
 void multi_sample_load_storage_request_service(void)
 {
     if (g_multi_external_request_valid != 0U)
     {
-        const multi_sample_load_request_t request = g_multi_external_request;
         g_multi_external_request_valid = 0U;
-        memset(&g_multi_external_request, 0, sizeof(g_multi_external_request));
-        g_multi_load_request = request;
-        const multi_sample_load_result_t result =
-            multi_loader_start_instrument(request.path, request.instrument_id);
-        if (result == MULTI_SAMPLE_LOAD_SD_BUSY)
-        {
-            storage_io_owner_wait_resource(STORAGE_OWNER_MULTI);
-        }
-        else if (result == MULTI_SAMPLE_LOAD_ALREADY_READY)
-        {
-            multi_loader_publish_completion(1U);
-        }
-        else if ((result != MULTI_SAMPLE_LOAD_OK)
-                 && (g_multi_load_completion_valid == 0U))
-        {
-            multi_loader_publish_completion(0U);
-        }
+        multi_loader_service_external_load(&g_multi_external_request);
         return;
     }
 
     multi_sample_load_request_t *const request = &g_multi_external_request;
-    if ((request->used == 0U) || (request->canonical_retired == 0U)) return;
+    if (request->used == 0U) return;
+    if ((request->cancelled != 0U) && (request->load_started == 0U)
+        && ((multi_loader_external_is_replacement() == 0U)
+            || (request->canonical_retired == 0U)))
+    {
+        (void)multi_sample_load_publish_external_result(
+            request->request_id, MULTI_SAMPLE_LOAD_CANCELLED);
+        return;
+    }
+    if ((multi_loader_external_is_replacement() != 0U)
+        && (request->canonical_retired == 0U)) return;
+
+    if (request->load_started != 0U)
+    {
+        const multi_sample_instrument_state_t state =
+            multi_sample_pool_get_state(request->instrument_id);
+        if ((request->cancelled != 0U)
+            && (state == MULTI_SAMPLE_INSTRUMENT_READY))
+        {
+            if (multi_sample_pool_clear_instrument(request->instrument_id) != 0U)
+                request->physical_retire_started = 1U;
+        }
+        else if ((request->cancelled != 0U)
+                 && (state == MULTI_SAMPLE_INSTRUMENT_EMPTY)
+                 && (g_multi_load_completion_valid != 0U))
+        {
+            control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
+        }
+        return;
+    }
+
+    if ((request->import_started != 0U) && (request->import_required != 0U))
+        return;
 
     const multi_sample_instrument_state_t state =
         multi_sample_pool_get_state(request->instrument_id);
@@ -1053,30 +1170,7 @@ void multi_sample_load_storage_request_service(void)
         }
         return;
     }
-    if (request->load_started != 0U) return;
-
-    g_multi_load_request = *request;
-    const multi_sample_load_result_t result =
-        multi_loader_start_instrument(request->path, request->instrument_id);
-    if (result == MULTI_SAMPLE_LOAD_SD_BUSY)
-    {
-        memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
-        storage_io_owner_wait_resource(STORAGE_OWNER_MULTI);
-    }
-    else if (result == MULTI_SAMPLE_LOAD_ALREADY_READY)
-    {
-        multi_loader_publish_completion(1U);
-        request->load_started = 1U;
-    }
-    else if (result == MULTI_SAMPLE_LOAD_OK)
-    {
-        request->load_started = 1U;
-    }
-    else
-    {
-        if (g_multi_load_completion_valid == 0U)
-            multi_loader_publish_completion(0U);
-    }
+    multi_loader_service_external_load(request);
 }
 
 static void multi_loader_start_next_queued(void)
@@ -1270,6 +1364,16 @@ void multi_sample_service_load(uint32_t byte_budget)
         return;
     }
 
+    if ((g_multi_bulk.cancel_requested != 0U)
+        && (g_multi_bulk.pending == 0U))
+    {
+        multi_loader_set_error(MULTI_SAMPLE_LOAD_CANCELLED,
+                               (g_multi_bulk.current_plan < g_multi_bulk.plan_count)
+                                   ? g_multi_bulk_plans[g_multi_bulk.current_plan].sample_id
+                                   : MULTI_SAMPLE_POOL_INVALID_ID);
+        return;
+    }
+
     if ((g_multi_bulk.pending == 0U)
         && (multi_loader_bulk_runtime_stopped() == 0U))
     {
@@ -1403,13 +1507,7 @@ uint8_t multi_sample_load_publish_external_result(
     const multi_sample_load_request_t *const request = &g_multi_external_request;
     if ((request->used == 0U) || (request->request_id != request_id)) return 0U;
     if (g_multi_load_completion_valid != 0U)
-    {
-        if (g_multi_load_completion.request_id != request_id) return 0U;
-        g_multi_load_completion.success = 0U;
-        g_multi_load_completion.result = result;
-        control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
-        return 1U;
-    }
+        return (g_multi_load_completion.request_id == request_id) ? 1U : 0U;
     memset(&g_multi_load_completion, 0, sizeof(g_multi_load_completion));
     g_multi_load_completion.request_id = request->request_id;
     g_multi_load_completion.requester = request->requester;
@@ -1493,39 +1591,21 @@ uint8_t multi_sample_load_take_completion(
 
 uint8_t multi_sample_cancel_load(void)
 {
-    if (multi_loader_external_is_replacement() != 0U)
+    if (g_multi_external_request.used != 0U)
     {
         g_multi_external_request.cancelled = 1U;
-        if ((g_multi_external_request.import_started != 0U)
-            && (g_multi_load_active == 0U))
-            multi_sample_import_cancel_load_continuation();
-        if ((g_multi_load_active == 0U)
-            && (g_multi_external_request.canonical_retired != 0U))
-        {
-            storage_io_owner_set(STORAGE_OWNER_MULTI);
-            storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
-        }
-        if (g_multi_load_active == 0U) return 1U;
+        storage_io_owner_set(STORAGE_OWNER_MULTI);
+        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+        return 1U;
     }
     if (g_multi_load_active == 0U)
     {
         return 0U;
     }
 
-    if (g_multi_bulk.current_plan < g_multi_bulk.plan_count)
-    {
-        sample_stream_io_release_key(sample_audio_key_multi(
-            g_multi_bulk_plans[g_multi_bulk.current_plan].sample_id));
-    }
-    if (g_multi_bulk.pending != 0U)
-    {
-        g_multi_bulk.cancel_requested = 1U;
-        return 1U;
-    }
-    multi_loader_set_error(MULTI_SAMPLE_LOAD_CANCELLED,
-                           (g_multi_bulk.current_plan < g_multi_bulk.plan_count)
-                               ? g_multi_bulk_plans[g_multi_bulk.current_plan].sample_id
-                               : MULTI_SAMPLE_POOL_INVALID_ID);
+    g_multi_bulk.cancel_requested = 1U;
+    storage_io_owner_set(STORAGE_OWNER_MULTI);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
