@@ -99,6 +99,15 @@ void sample_capture_control_service(void)
                 ? SAMPLE_CAPTURE_PHASE_WAIT_QUANT
                 : SAMPLE_CAPTURE_PHASE_ARMED;
             sample_capture_publish_trigger_config();
+            if ((g_sample_capture.state.quant == SAMPLE_CAPTURE_QUANT_NOW)
+                    && (seq_runtime_is_running() != 0U))
+            {
+                uint64_t now_sample = 0U;
+                if (control_rt_now_sample(&now_sample) != 0U)
+                    (void)sample_capture_start_prepared_at(
+                        control_music_output_first_unpublished_sample(
+                            now_sample));
+            }
         }
         audio_rec_level_reader_ack_trigger_event(trigger_event.sequence);
     }

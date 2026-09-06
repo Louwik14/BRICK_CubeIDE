@@ -83,9 +83,13 @@ static audio_recorder_state_t audio_recorder_observed_state(void)
     switch (audio_recorder_storage_phase())
     {
         case AUDIO_RECORDER_STORAGE_FAILED:
-            return AUDIO_RECORDER_STATE_FAILED;
+            return ((g_audio_recorder.state == AUDIO_RECORDER_STATE_PREPARING)
+                    || (g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING)
+                    || (g_audio_recorder.state == AUDIO_RECORDER_STATE_DRAINING))
+                ? g_audio_recorder.state : AUDIO_RECORDER_STATE_FAILED;
         case AUDIO_RECORDER_STORAGE_TAKE_READY:
-            return AUDIO_RECORDER_STATE_TAKE_READY;
+            return (g_audio_recorder.state == AUDIO_RECORDER_STATE_TAKE_READY)
+                ? AUDIO_RECORDER_STATE_TAKE_READY : g_audio_recorder.state;
         case AUDIO_RECORDER_STORAGE_FINALIZING:
             return AUDIO_RECORDER_STATE_FINALIZING;
         case AUDIO_RECORDER_STORAGE_DRAINING:
@@ -712,7 +716,6 @@ void audio_recorder_service(void)
                 g_audio_recorder_looper_stream_key,
                 g_audio_recorder.final_path);
         g_audio_recorder_storage_take_ready_seen = 1U;
-        g_audio_recorder.state = AUDIO_RECORDER_STATE_TAKE_READY;
         if (take_ready_edge != 0U)
             control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
     }
@@ -833,6 +836,11 @@ uint32_t audio_recorder_control_session(void)
     return g_audio_recorder_control_session;
 }
 
+uint32_t audio_recorder_control_request_id(void)
+{
+    return g_audio_recorder.request_id;
+}
+
 uint8_t audio_recorder_get_prepared_paths(const char **temporary_rec_path,
                                           const char **final_wav_path)
 {
@@ -896,21 +904,51 @@ void audio_recorder_control_on_storage_canceled(uint32_t request_id)
     sample_capture_control_on_recorder_canceled(request_id);
 }
 
+void audio_recorder_control_on_storage_take_ready(uint32_t request_id)
+{
+    if ((request_id != g_audio_recorder.request_id)
+            || ((g_audio_recorder.state != AUDIO_RECORDER_STATE_RECORDING)
+                && (g_audio_recorder.state != AUDIO_RECORDER_STATE_DRAINING)))
+        return;
+    g_audio_recorder.state = AUDIO_RECORDER_STATE_TAKE_READY;
+    g_audio_recorder.error = AUDIO_RECORDER_ERROR_NONE;
+    storage_io_owner_wakeup(STORAGE_OWNER_RECORDER);
+}
+
+uint8_t audio_recorder_control_on_storage_record_stop(
+    uint32_t request_id, audio_recorder_client_t client)
+{
+    if ((request_id != g_audio_recorder.request_id)
+            || (client != g_audio_recorder.client)
+            || (g_audio_recorder.state != AUDIO_RECORDER_STATE_RECORDING))
+        return 0U;
+    uint64_t sample = 0U;
+    if (control_rt_now_sample(&sample) == 0U)
+        return 0U;
+    if (audio_recorder_publish_stop_client_at(
+            client, control_music_output_first_unpublished_sample(sample)) == 0U)
+        return 0U;
+    g_audio_recorder.state = AUDIO_RECORDER_STATE_FAILED;
+    return 1U;
+}
+
 void audio_recorder_control_on_storage_error(uint32_t request_id,
-                                             audio_recorder_error_t error)
+                                             audio_recorder_error_t error,
+                                             uint8_t stop_required)
 {
     if ((request_id != g_audio_recorder.request_id)
             || ((g_audio_recorder.state != AUDIO_RECORDER_STATE_PREPARING)
                 && (g_audio_recorder.state != AUDIO_RECORDER_STATE_RECORDING)))
         return;
     g_audio_recorder.error = error;
-    if (g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING)
+    if ((stop_required != 0U)
+            && (g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING))
     {
-        uint64_t sample = 0U;
-        if (control_rt_now_sample(&sample) != 0U)
-            (void)audio_recorder_publish_stop_client_at(
-                g_audio_recorder.client,
-                control_music_output_first_unpublished_sample(sample));
+        if (control_domain_request_storage_record_stop(
+                (uint8_t)g_audio_recorder.client,
+                g_audio_recorder.request_id) == 0U)
+            Error_Handler();
+        return;
     }
     else if ((g_audio_recorder.client == AUDIO_RECORDER_CLIENT_LOOPER)
             && (g_audio_recorder_looper_control.admission_reused == 0U))

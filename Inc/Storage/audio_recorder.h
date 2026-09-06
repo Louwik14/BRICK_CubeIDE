@@ -109,12 +109,17 @@ uint8_t audio_recorder_client_is_active(audio_recorder_client_t client);
 uint8_t audio_recorder_client_is_recording(audio_recorder_client_t client);
 uint8_t audio_recorder_looper_take_resource_retained(void);
 uint32_t audio_recorder_control_session(void);
+uint32_t audio_recorder_control_request_id(void);
 uint8_t audio_recorder_get_prepared_paths(const char **temporary_rec_path,
                                           const char **final_wav_path);
 uint8_t audio_recorder_control_on_storage_prepared(uint32_t request_id);
 void audio_recorder_control_on_storage_canceled(uint32_t request_id);
+void audio_recorder_control_on_storage_take_ready(uint32_t request_id);
+uint8_t audio_recorder_control_on_storage_record_stop(
+    uint32_t request_id, audio_recorder_client_t client);
 void audio_recorder_control_on_storage_error(uint32_t request_id,
-                                             audio_recorder_error_t error);
+                                             audio_recorder_error_t error,
+                                             uint8_t stop_required);
 
 
 #ifdef __cplusplus

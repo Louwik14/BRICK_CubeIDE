@@ -404,7 +404,8 @@ void pattern_storage_service(uint32_t byte_budget)
         return;
     }
 
-    if(sd_preview_is_active() != 0U)
+    if ((sd_preview_is_active() != 0U)
+            || (sd_preview_get_state() == SD_PREVIEW_STATE_STOPPING))
     {
         if (sd_preview_stop() == 0U)
         {

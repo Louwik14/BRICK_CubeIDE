@@ -585,13 +585,15 @@ uint8_t control_domain_request_storage_audio_param(uint8_t entity,
     return control_domain_submit_storage_message(&message);
 }
 
-uint8_t control_domain_request_storage_record_stop(uint8_t client)
+uint8_t control_domain_request_storage_record_stop(uint8_t client,
+                                                   uint32_t request_id)
 {
     const control_storage_audio_event_t message = {
         .type = CONTROL_STORAGE_EVENT_RECORD_STOP,
         .family = 2U,
         .requester = 0U,
         .result = 1U,
+        .request_id = request_id,
         .client = client
     };
     return control_domain_submit_storage_message(&message);
@@ -1177,15 +1179,11 @@ void control_domain_process_storage_messages(void)
                 Error_Handler();
             break;
         case CONTROL_STORAGE_EVENT_RECORD_STOP:
-        {
-            uint64_t sample_time = 0U;
-            if ((control_rt_now_sample(&sample_time) != 0U)
-                    && (audio_recorder_request_stop_client_at(
-                        (audio_recorder_client_t)message.client,
-                        sample_time) == 0U))
-                Error_Handler();
+            if (audio_recorder_control_on_storage_record_stop(
+                    message.request_id,
+                    (audio_recorder_client_t)message.client) == 0U)
+                break;
             break;
-        }
         case CONTROL_STORAGE_EVENT_RECORDER_PREPARED:
             if (audio_recorder_control_on_storage_prepared(message.request_id)
                     != 0U)
@@ -1195,10 +1193,14 @@ void control_domain_process_storage_messages(void)
         case CONTROL_STORAGE_EVENT_RECORDER_CANCELED:
             audio_recorder_control_on_storage_canceled(message.request_id);
             break;
+        case CONTROL_STORAGE_EVENT_RECORDER_TAKE_READY:
+            audio_recorder_control_on_storage_take_ready(message.request_id);
+            break;
         case CONTROL_STORAGE_EVENT_RECORDER_ERROR:
             audio_recorder_control_on_storage_error(
                 message.request_id,
-                (audio_recorder_error_t)message.value);
+                (audio_recorder_error_t)message.value,
+                message.result);
             break;
         case CONTROL_STORAGE_EVENT_REC_EDIT_SAVED:
             sample_capture_control_on_storage_event(

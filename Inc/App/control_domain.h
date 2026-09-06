@@ -331,7 +331,8 @@ typedef enum
     CONTROL_STORAGE_EVENT_RECORDER_PREPARED,
     CONTROL_STORAGE_EVENT_RECORDER_CANCELED,
     CONTROL_STORAGE_EVENT_RECORDER_ERROR,
-    CONTROL_STORAGE_EVENT_REC_EDIT_SAVED
+    CONTROL_STORAGE_EVENT_REC_EDIT_SAVED,
+    CONTROL_STORAGE_EVENT_RECORDER_TAKE_READY
 } control_storage_event_type_t;
 
 /* Final Storage -> CONTROL event shape.  PASS 2 uses the audio command
@@ -444,7 +445,8 @@ uint8_t control_domain_request_calibration(uint8_t operation);
 uint8_t control_domain_request_storage_audio_param(uint8_t entity,
                                                    uint16_t parameter_id,
                                                    uint32_t value);
-uint8_t control_domain_request_storage_record_stop(uint8_t client);
+uint8_t control_domain_request_storage_record_stop(uint8_t client,
+                                                   uint32_t request_id);
 uint8_t control_domain_publish_storage_event(
     const control_storage_audio_event_t *message);
 uint8_t control_domain_request_storage_waveform_cache(const char *path,

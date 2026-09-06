@@ -58,6 +58,7 @@ typedef struct
     uint8_t result_pending;
     uint8_t result_published;
     uint8_t result_type;
+    uint8_t result_requires_stop;
 } audio_recorder_storage_runtime_t;
 
 enum
@@ -65,8 +66,13 @@ enum
     AUDIO_RECORDER_STORAGE_RESULT_NONE = 0U,
     AUDIO_RECORDER_STORAGE_RESULT_PREPARED,
     AUDIO_RECORDER_STORAGE_RESULT_CANCELED,
+    AUDIO_RECORDER_STORAGE_RESULT_TAKE_READY,
     AUDIO_RECORDER_STORAGE_RESULT_ERROR
 };
+
+static void audio_recorder_storage_set_result(uint8_t result_type);
+static void audio_recorder_storage_set_error_result(uint8_t requires_stop);
+static void audio_recorder_storage_publish_result(void);
 
 /* FatFs, callbacks, generic-recorder state and DMA buffers are STORAGE-only. */
 STORAGE_STATE_SDRAM static audio_recorder_storage_runtime_t g_audio_recorder_storage;
@@ -198,6 +204,8 @@ static sd_scheduler_start_result_t audio_recorder_storage_finalization_step(
             runtime->metrics.finalization_duration_us =
                 (HAL_GetTick() - runtime->final_started_ms) * 1000U;
             runtime->phase = AUDIO_RECORDER_STORAGE_TAKE_READY;
+            audio_recorder_storage_set_result(
+                AUDIO_RECORDER_STORAGE_RESULT_TAKE_READY);
             return SD_SCHEDULER_START_COMPLETED;
 
         default:
@@ -227,6 +235,7 @@ static sd_scheduler_start_result_t audio_recorder_storage_filesystem_start(
     {
         runtime->error = AUDIO_RECORDER_ERROR_SD_IO;
         runtime->phase = AUDIO_RECORDER_STORAGE_FAILED;
+        audio_recorder_storage_set_error_result(0U);
     }
     return result;
 }
@@ -273,6 +282,7 @@ uint8_t audio_recorder_storage_prepare_request(audio_recorder_client_t client,
     runtime->result_pending = 0U;
     runtime->result_published = 0U;
     runtime->result_type = AUDIO_RECORDER_STORAGE_RESULT_NONE;
+    runtime->result_requires_stop = 0U;
     __DMB();
     runtime->prepare_pending = 1U;
     storage_io_owner_wakeup(STORAGE_OWNER_RECORDER);
@@ -398,6 +408,7 @@ static uint8_t audio_recorder_storage_cancel_physical(uint32_t request_id)
     if (closed == RECORDER_FILE_RESERVATION_SD_BUSY)
     {
         sd_access_gate_release(SD_ACCESS_CLIENT_SCHEDULED_RECORDER);
+        storage_io_owner_wait_resource(STORAGE_OWNER_RECORDER);
         return 0U;
     }
     if (closed != RECORDER_FILE_RESERVATION_OK)
@@ -440,6 +451,7 @@ void audio_recorder_storage_release(void)
     g_audio_recorder_storage.result_pending = 0U;
     g_audio_recorder_storage.result_published = 0U;
     g_audio_recorder_storage.result_type = AUDIO_RECORDER_STORAGE_RESULT_NONE;
+    g_audio_recorder_storage.result_requires_stop = 0U;
 }
 
 static void audio_recorder_storage_set_result(uint8_t result_type)
@@ -447,7 +459,16 @@ static void audio_recorder_storage_set_result(uint8_t result_type)
     g_audio_recorder_storage.result_type = result_type;
     g_audio_recorder_storage.result_pending = 1U;
     g_audio_recorder_storage.result_published = 0U;
+    g_audio_recorder_storage.result_requires_stop = 0U;
     __DMB();
+}
+
+static void audio_recorder_storage_set_error_result(uint8_t requires_stop)
+{
+    audio_recorder_storage_set_result(
+        AUDIO_RECORDER_STORAGE_RESULT_ERROR);
+    g_audio_recorder_storage.result_requires_stop =
+        (requires_stop != 0U) ? 1U : 0U;
 }
 
 static void audio_recorder_storage_publish_result(void)
@@ -469,9 +490,15 @@ static void audio_recorder_storage_publish_result(void)
         event.type = CONTROL_STORAGE_EVENT_RECORDER_CANCELED;
         event.result = 1U;
     }
+    else if (runtime->result_type == AUDIO_RECORDER_STORAGE_RESULT_TAKE_READY)
+    {
+        event.type = CONTROL_STORAGE_EVENT_RECORDER_TAKE_READY;
+        event.result = 1U;
+    }
     else if (runtime->result_type == AUDIO_RECORDER_STORAGE_RESULT_ERROR)
     {
         event.type = CONTROL_STORAGE_EVENT_RECORDER_ERROR;
+        event.result = runtime->result_requires_stop;
         event.value = runtime->error;
     }
     else
@@ -528,14 +555,12 @@ void audio_recorder_storage_service(uint32_t session_id,
                 audio_recorder_storage_cancel_physical(cancel_request);
             if (cancel_result == 0U)
             {
-                storage_io_owner_wakeup(STORAGE_OWNER_RECORDER);
                 return;
             }
             if (cancel_result == 2U)
             {
                 runtime->cancel_requested = 0U;
-                audio_recorder_storage_set_result(
-                    AUDIO_RECORDER_STORAGE_RESULT_ERROR);
+                audio_recorder_storage_set_error_result(0U);
                 audio_recorder_storage_publish_result();
                 return;
             }
@@ -608,8 +633,7 @@ void audio_recorder_storage_service(uint32_t session_id,
                 runtime->error = AUDIO_RECORDER_ERROR_SD_IO;
                 runtime->phase = AUDIO_RECORDER_STORAGE_FAILED;
             }
-            audio_recorder_storage_set_result(
-                AUDIO_RECORDER_STORAGE_RESULT_ERROR);
+            audio_recorder_storage_set_error_result(0U);
         }
         else if (runtime->cancel_requested == 0U)
             audio_recorder_storage_set_result(
@@ -630,11 +654,10 @@ void audio_recorder_storage_service(uint32_t session_id,
                 else if (cancel_result == 2U)
                 {
                     runtime->cancel_requested = 0U;
-                    audio_recorder_storage_set_result(
-                        AUDIO_RECORDER_STORAGE_RESULT_ERROR);
+                    audio_recorder_storage_set_error_result(capture_is_active);
                 }
                 else
-                    storage_io_owner_wakeup(STORAGE_OWNER_RECORDER);
+                    return;
             }
             else
             {
@@ -696,7 +719,11 @@ void audio_recorder_storage_service(uint32_t session_id,
     {
         runtime->error = audio_recorder_storage_map_error(
             runtime->recorder.error);
-        runtime->phase = AUDIO_RECORDER_STORAGE_FAILED;
+        if (runtime->phase != AUDIO_RECORDER_STORAGE_FAILED)
+        {
+            runtime->phase = AUDIO_RECORDER_STORAGE_FAILED;
+            audio_recorder_storage_set_error_result(capture_is_active);
+        }
     }
     else if ((runtime->recorder.state == GENERIC_RECORDER_DRAINING)
             && (runtime->phase != AUDIO_RECORDER_STORAGE_DRAINING))
@@ -716,6 +743,18 @@ void audio_recorder_storage_service(uint32_t session_id,
         runtime->metrics.storage_service_iterations_during_write++;
     sd_scheduler_runtime_service();
     generic_recorder_service(&runtime->recorder, HAL_GetTick() * 1000U);
+    if ((runtime->recorder.state == GENERIC_RECORDER_ERROR)
+            || (runtime->recorder.state == GENERIC_RECORDER_ABORTED))
+    {
+        runtime->error = audio_recorder_storage_map_error(
+            runtime->recorder.error);
+        if (runtime->phase != AUDIO_RECORDER_STORAGE_FAILED)
+        {
+            runtime->phase = AUDIO_RECORDER_STORAGE_FAILED;
+            audio_recorder_storage_set_error_result(capture_is_active);
+        }
+    }
+    audio_recorder_storage_publish_result();
 }
 
 audio_recorder_storage_phase_t audio_recorder_storage_phase(void)
