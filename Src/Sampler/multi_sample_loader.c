@@ -15,9 +15,11 @@
 #include "Storage/audio_recorder.h"
 #include "Storage/project_load_quiesce.h"
 #include "Storage/project_product.h"
+#include "Storage/project_control.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/wav_parser.h"
 #include "Storage/storage_io_wakeup.h"
+#include "App/control_domain.h"
 #include "App/control_rt_wakeup.h"
 #include "UI/ui_service_wakeup.h"
 #include "stm32h7xx_hal.h"
@@ -27,9 +29,18 @@
 typedef struct
 {
     uint8_t used;
+    uint32_t request_id;
+    uint8_t requester;
     uint16_t logical_id;
+    uint16_t old_logical_id;
     uint16_t instrument_id;
     uint8_t cancelled;
+    uint8_t import_required;
+    uint8_t canonical_retired;
+    uint8_t physical_retire_started;
+    uint8_t import_started;
+    uint8_t load_started;
+    char source_path[MULTI_SAMPLE_LOADER_PATH_MAX];
     char path[MULTI_SAMPLE_LOADER_PATH_MAX];
 } multi_sample_load_request_t;
 
@@ -47,6 +58,7 @@ static uint16_t g_multi_load_first_sample_id;
 static multi_sample_load_request_t g_multi_load_request;
 SDRAM_MULTI_LOAD static multi_sample_load_request_t g_multi_external_request;
 static volatile uint8_t g_multi_external_request_valid;
+static uint32_t g_multi_request_id_counter;
 SDRAM_MULTI_LOAD static multi_sample_load_completion_t g_multi_load_completion;
 static volatile uint8_t g_multi_load_completion_valid;
 SDRAM_MULTI_LOAD static multi_sample_load_request_t
@@ -80,13 +92,24 @@ static multi_sample_bulk_state_t g_multi_bulk;
 static uint8_t multi_loader_copy_text(char *dst, uint32_t dst_size,
                                       const char *src);
 
-static void multi_loader_publish_completion_for(uint16_t logical_id,
+static uint8_t multi_loader_external_is_replacement(void)
+{
+    return (uint8_t)((g_multi_external_request.used != 0U)
+        && (g_multi_external_request.source_path[0] != '\0'));
+}
+
+static void multi_loader_publish_completion_for(uint32_t request_id,
+                                                uint8_t requester,
+                                                uint16_t logical_id,
                                                 uint16_t instrument_id,
                                                 const char *path,
                                                 uint8_t success)
 {
-    if (g_multi_load_completion_valid != 0U)
+    if ((requester != MULTI_SAMPLE_LOAD_REQUESTER_UI)
+        || (g_multi_load_completion_valid != 0U))
         return;
+    g_multi_load_completion.request_id = request_id;
+    g_multi_load_completion.requester = requester;
     g_multi_load_completion.logical_id = logical_id;
     g_multi_load_completion.instrument_id = instrument_id;
     g_multi_load_completion.success = success;
@@ -105,12 +128,18 @@ static void multi_loader_publish_completion_for(uint16_t logical_id,
     control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
 }
 
-void multi_sample_load_publish_import_result(uint16_t instrument_id,
+void multi_sample_load_publish_import_result(uint32_t request_id,
+                                             uint16_t instrument_id,
                                              const char *index_path,
                                              multi_sample_load_result_t result)
 {
     if ((g_multi_load_completion_valid != 0U) || (index_path == NULL)) return;
+    multi_sample_external_request_t request;
+    const uint8_t identified = multi_sample_load_peek_external(request_id, &request);
     memset(&g_multi_load_completion, 0, sizeof(g_multi_load_completion));
+    g_multi_load_completion.request_id = request_id;
+    g_multi_load_completion.requester = (identified != 0U)
+        ? request.requester : MULTI_SAMPLE_LOAD_REQUESTER_UI;
     g_multi_load_completion.logical_id = MULTI_SAMPLE_POOL_INVALID_ID;
     g_multi_load_completion.instrument_id = instrument_id;
     g_multi_load_completion.success = 0U;
@@ -125,9 +154,18 @@ void multi_sample_load_publish_import_result(uint16_t instrument_id,
 static void multi_loader_publish_completion(uint8_t success)
 {
     if (g_multi_load_request.used != 0U)
-        multi_loader_publish_completion_for(g_multi_load_request.logical_id,
-                                            g_multi_load_request.instrument_id,
-                                            g_multi_load_request.path, success);
+    {
+        const uint32_t request_id = g_multi_load_request.request_id;
+        const multi_sample_load_requester_t requester = g_multi_load_request.requester;
+        const uint16_t logical_id = g_multi_load_request.logical_id;
+        const uint16_t instrument_id = g_multi_load_request.instrument_id;
+        char path[MULTI_SAMPLE_LOADER_PATH_MAX];
+        (void)multi_loader_copy_text(path, sizeof(path), g_multi_load_request.path);
+        memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
+        memset(&g_multi_bulk, 0, sizeof(g_multi_bulk));
+        multi_loader_publish_completion_for(request_id, requester, logical_id,
+                                            instrument_id, path, success);
+    }
 }
 
 uint8_t multi_sample_load_required_prep_pages(
@@ -141,10 +179,18 @@ void multi_sample_loader_init(void)
     memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
     memset(&g_multi_external_request, 0, sizeof(g_multi_external_request));
     g_multi_external_request_valid = 0U;
+    g_multi_request_id_counter = 0U;
     memset(&g_multi_load_completion, 0, sizeof(g_multi_load_completion));
     g_multi_load_completion_valid = 0U;
     memset(g_multi_load_queue, 0, sizeof(g_multi_load_queue));
     memset(&g_multi_bulk, 0, sizeof(g_multi_bulk));
+}
+
+static uint32_t multi_loader_next_request_id(void)
+{
+    ++g_multi_request_id_counter;
+    if (g_multi_request_id_counter == 0U) g_multi_request_id_counter = 1U;
+    return g_multi_request_id_counter;
 }
 
 static uint8_t multi_loader_copy_text(char *dst, uint32_t dst_size, const char *src)
@@ -171,7 +217,8 @@ static uint8_t multi_loader_copy_text(char *dst, uint32_t dst_size, const char *
 
 static multi_sample_load_result_t multi_loader_enqueue(uint16_t logical_id,
                                                        const char *index_path,
-                                                       uint16_t instrument_id)
+                                                       uint16_t instrument_id,
+                                                       multi_sample_load_requester_t requester)
 {
     if ((index_path == 0) || (index_path[0] == '\0')
         || (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS))
@@ -205,6 +252,7 @@ static multi_sample_load_result_t multi_loader_enqueue(uint16_t logical_id,
 
             g_multi_load_queue[i].logical_id = logical_id;
             g_multi_load_queue[i].instrument_id = instrument_id;
+            g_multi_load_queue[i].requester = requester;
             g_multi_load_queue[i].used = 1U;
             (void)multi_sample_pool_set_index_path(instrument_id, index_path);
             (void)multi_sample_pool_set_state(instrument_id,
@@ -319,11 +367,9 @@ static void multi_loader_set_error(multi_sample_load_result_t error,
     g_multi_load_diag.last_error = error;
     g_multi_load_diag.last_failed_sample = failed_sample;
     g_multi_load_diag.state = MULTI_SAMPLE_INSTRUMENT_ERROR;
-    multi_loader_publish_completion(0U);
     (void)multi_sample_pool_clear_instrument(g_multi_load_diag.instrument_id);
     g_multi_load_active = 0U;
-    memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
-    memset(&g_multi_bulk, 0, sizeof(g_multi_bulk));
+    multi_loader_publish_completion(0U);
 }
 
 typedef struct
@@ -543,6 +589,13 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
 
     if (multi_sample_pool_get_state(instrument_id) == MULTI_SAMPLE_INSTRUMENT_READY)
     {
+        const multi_sample_instrument_t *const ready =
+            multi_sample_pool_get_instrument(instrument_id);
+        if ((ready == NULL) || (strcmp(ready->index_path, index_path) != 0))
+        {
+            g_multi_load_diag.last_error = MULTI_SAMPLE_LOAD_POOL_FAIL;
+            return MULTI_SAMPLE_LOAD_POOL_FAIL;
+        }
         g_multi_load_diag.last_error = MULTI_SAMPLE_LOAD_ALREADY_READY;
         g_multi_load_diag.state = MULTI_SAMPLE_INSTRUMENT_READY;
         return MULTI_SAMPLE_LOAD_ALREADY_READY;
@@ -730,12 +783,14 @@ multi_sample_load_result_t multi_sample_load_instrument(uint16_t logical_id,
     if (g_multi_load_active != 0U)
     {
         const multi_sample_load_result_t queued =
-            multi_loader_enqueue(logical_id, index_path, instrument_id);
+            multi_loader_enqueue(logical_id, index_path, instrument_id,
+                                 MULTI_SAMPLE_LOAD_REQUESTER_PROJECT);
         return queued;
     }
 
     memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
     g_multi_load_request.used = 1U;
+    g_multi_load_request.requester = MULTI_SAMPLE_LOAD_REQUESTER_PROJECT;
     g_multi_load_request.logical_id = logical_id;
     g_multi_load_request.instrument_id = instrument_id;
     if (multi_loader_copy_text(g_multi_load_request.path,
@@ -750,7 +805,8 @@ multi_sample_load_result_t multi_sample_load_instrument(uint16_t logical_id,
     if (result == MULTI_SAMPLE_LOAD_SD_BUSY)
     {
         const multi_sample_load_result_t queued =
-            multi_loader_enqueue(logical_id, index_path, instrument_id);
+            multi_loader_enqueue(logical_id, index_path, instrument_id,
+                                 MULTI_SAMPLE_LOAD_REQUESTER_PROJECT);
         memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
         return queued;
     }
@@ -767,6 +823,88 @@ multi_sample_load_result_t multi_sample_load_instrument(uint16_t logical_id,
         || (result == MULTI_SAMPLE_LOAD_ALREADY_READY))
         memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
     return result;
+}
+
+multi_sample_load_result_t multi_sample_load_request_replacement(
+    uint16_t old_logical_id, uint16_t instrument_id, const char *source_path,
+    const char *index_path, uint8_t import_required)
+{
+    if ((project_transport_stopped_stable() == 0U)
+        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+        || (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
+        || (source_path == NULL) || (source_path[0] == '\0')
+        || (index_path == NULL) || (index_path[0] == '\0')
+        || (import_required > 1U)
+        || (strlen(source_path) >= sizeof(g_multi_external_request.source_path))
+        || (strlen(index_path) >= sizeof(g_multi_external_request.path)))
+        return MULTI_SAMPLE_LOAD_INVALID_ARG;
+    if ((project_product_ui_busy() != 0U)
+        || (multi_sample_import_is_busy() != 0U)
+        || (multi_sample_import_delete_is_busy() != 0U)
+        || (multi_sample_pool_clear_is_active() != 0U)
+        || (control_domain_asset_terminal_available(CONTROL_ASSET_FAMILY_MULTI) != 0U)
+        || (g_multi_external_request.used != 0U)
+        || (g_multi_external_request_valid != 0U)
+        || (multi_sample_load_has_pending() != 0U))
+        return MULTI_SAMPLE_LOAD_SD_BUSY;
+
+    char source_copy[MULTI_SAMPLE_LOADER_PATH_MAX];
+    char index_copy[MULTI_SAMPLE_LOADER_PATH_MAX];
+    (void)multi_loader_copy_text(source_copy, sizeof(source_copy), source_path);
+    (void)multi_loader_copy_text(index_copy, sizeof(index_copy), index_path);
+    const uint32_t request_id = multi_loader_next_request_id();
+    control_asset_intent_t intent = {
+        .operation = CONTROL_ASSET_RETIRE_MULTI_FOR_REPLACE,
+        .kind = PERSIST_ASSET_MULTI,
+        .logical = old_logical_id,
+        .runtime = instrument_id,
+        .request_id = request_id
+    };
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if ((project_transport_stopped_stable() == 0U)
+        || (project_product_ui_busy() != 0U)
+        || (g_multi_external_request.used != 0U)
+        || (g_multi_external_request_valid != 0U)
+        || (multi_sample_load_has_pending() != 0U)
+        || (control_domain_asset_terminal_available(CONTROL_ASSET_FAMILY_MULTI) != 0U))
+    {
+        __set_PRIMASK(primask);
+        return MULTI_SAMPLE_LOAD_SD_BUSY;
+    }
+    if (old_logical_id != MULTI_SAMPLE_POOL_INVALID_ID)
+    {
+        uint16_t resolved = MULTI_SAMPLE_POOL_INVALID_ID;
+        if ((project_control_resolve_multi_runtime(old_logical_id, &resolved) == 0U)
+            || (resolved != instrument_id))
+        {
+            __set_PRIMASK(primask);
+            return MULTI_SAMPLE_LOAD_POOL_FAIL;
+        }
+    }
+    memset(&g_multi_external_request, 0, sizeof(g_multi_external_request));
+    g_multi_external_request.used = 1U;
+    g_multi_external_request.request_id = request_id;
+    g_multi_external_request.requester = MULTI_SAMPLE_LOAD_REQUESTER_UI;
+    g_multi_external_request.logical_id = MULTI_SAMPLE_POOL_INVALID_ID;
+    g_multi_external_request.old_logical_id = old_logical_id;
+    g_multi_external_request.instrument_id = instrument_id;
+    g_multi_external_request.import_required = import_required;
+    (void)multi_loader_copy_text(g_multi_external_request.source_path,
+                                  sizeof(g_multi_external_request.source_path),
+                                  source_copy);
+    (void)multi_loader_copy_text(g_multi_external_request.path,
+                                  sizeof(g_multi_external_request.path), index_copy);
+    __DMB();
+    if (control_domain_request_asset_deferred(&intent) == 0U)
+    {
+        memset(&g_multi_external_request, 0, sizeof(g_multi_external_request));
+        __set_PRIMASK(primask);
+        return MULTI_SAMPLE_LOAD_SD_BUSY;
+    }
+    __set_PRIMASK(primask);
+    control_rt_wakeup(CONTROL_RT_WAKE_UI);
+    return MULTI_SAMPLE_LOAD_OK;
 }
 
 multi_sample_load_result_t multi_sample_load_request_instrument(uint16_t logical_id,
@@ -791,18 +929,31 @@ multi_sample_load_result_t multi_sample_load_request_instrument(uint16_t logical
     {
         return MULTI_SAMPLE_LOAD_SD_BUSY;
     }
+    char path_copy[MULTI_SAMPLE_LOADER_PATH_MAX];
+    (void)multi_loader_copy_text(path_copy, sizeof(path_copy), index_path);
+    const uint32_t request_id = multi_loader_next_request_id();
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if ((project_transport_stopped_stable() == 0U)
+        || (g_multi_external_request.used != 0U)
+        || (g_multi_external_request_valid != 0U)
+        || (multi_sample_load_has_pending() != 0U)
+        || (control_domain_asset_terminal_available(CONTROL_ASSET_FAMILY_MULTI) != 0U))
+    {
+        __set_PRIMASK(primask);
+        return MULTI_SAMPLE_LOAD_SD_BUSY;
+    }
     memset(&g_multi_external_request, 0, sizeof(g_multi_external_request));
+    g_multi_external_request.request_id = request_id;
+    g_multi_external_request.requester = MULTI_SAMPLE_LOAD_REQUESTER_UI;
     g_multi_external_request.logical_id = logical_id;
     g_multi_external_request.instrument_id = instrument_id;
-    if (multi_loader_copy_text(g_multi_external_request.path,
-                               sizeof(g_multi_external_request.path),
-                               index_path) == 0U)
-    {
-        return MULTI_SAMPLE_LOAD_PATH_TOO_LONG;
-    }
+    (void)multi_loader_copy_text(g_multi_external_request.path,
+                                 sizeof(g_multi_external_request.path), path_copy);
     g_multi_external_request.used = 1U;
     __DMB();
     g_multi_external_request_valid = 1U;
+    __set_PRIMASK(primask);
     storage_io_owner_set(STORAGE_OWNER_MULTI);
     storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return MULTI_SAMPLE_LOAD_OK;
@@ -810,20 +961,121 @@ multi_sample_load_result_t multi_sample_load_request_instrument(uint16_t logical
 
 void multi_sample_load_storage_request_service(void)
 {
-    if (g_multi_external_request_valid == 0U) return;
-    const uint16_t logical_id = g_multi_external_request.logical_id;
-    const uint16_t instrument_id = g_multi_external_request.instrument_id;
-    char path[MULTI_SAMPLE_LOADER_PATH_MAX];
-    (void)multi_loader_copy_text(path, sizeof(path), g_multi_external_request.path);
-    g_multi_external_request_valid = 0U;
-    g_multi_external_request.used = 0U;
-    const multi_sample_load_result_t result =
-        multi_sample_load_instrument(logical_id, path, instrument_id);
-    if ((result == MULTI_SAMPLE_LOAD_SD_BUSY)
-        || ((multi_sample_load_is_active() == 0U)
-            && (multi_sample_load_has_pending() != 0U)))
+    if (g_multi_external_request_valid != 0U)
     {
+        const multi_sample_load_request_t request = g_multi_external_request;
+        g_multi_external_request_valid = 0U;
+        memset(&g_multi_external_request, 0, sizeof(g_multi_external_request));
+        g_multi_load_request = request;
+        const multi_sample_load_result_t result =
+            multi_loader_start_instrument(request.path, request.instrument_id);
+        if (result == MULTI_SAMPLE_LOAD_SD_BUSY)
+        {
+            storage_io_owner_wait_resource(STORAGE_OWNER_MULTI);
+        }
+        else if (result == MULTI_SAMPLE_LOAD_ALREADY_READY)
+        {
+            multi_loader_publish_completion(1U);
+        }
+        else if ((result != MULTI_SAMPLE_LOAD_OK)
+                 && (g_multi_load_completion_valid == 0U))
+        {
+            multi_loader_publish_completion(0U);
+        }
+        return;
+    }
+
+    multi_sample_load_request_t *const request = &g_multi_external_request;
+    if ((request->used == 0U) || (request->canonical_retired == 0U)) return;
+
+    const multi_sample_instrument_state_t state =
+        multi_sample_pool_get_state(request->instrument_id);
+    if ((request->cancelled != 0U)
+        && (state == MULTI_SAMPLE_INSTRUMENT_READY))
+    {
+        if (multi_sample_pool_clear_instrument(request->instrument_id) != 0U)
+            request->physical_retire_started = 1U;
+        return;
+    }
+    if (request->physical_retire_started == 0U)
+    {
+        if (state == MULTI_SAMPLE_INSTRUMENT_READY)
+        {
+            if (multi_sample_pool_clear_instrument(request->instrument_id) == 0U)
+            {
+                (void)multi_sample_load_publish_external_result(
+                    request->request_id, MULTI_SAMPLE_LOAD_POOL_FAIL);
+                return;
+            }
+            request->physical_retire_started = 1U;
+            return;
+        }
+        if (state == MULTI_SAMPLE_INSTRUMENT_RETIRING)
+            request->physical_retire_started = 1U;
+        else if (state == MULTI_SAMPLE_INSTRUMENT_EMPTY)
+            request->physical_retire_started = 1U;
+        else
+        {
+            (void)multi_sample_load_publish_external_result(
+                request->request_id, MULTI_SAMPLE_LOAD_POOL_FAIL);
+            return;
+        }
+    }
+    if (multi_sample_pool_get_state(request->instrument_id)
+            == MULTI_SAMPLE_INSTRUMENT_RETIRING)
+        return;
+    if (multi_sample_pool_get_state(request->instrument_id)
+            != MULTI_SAMPLE_INSTRUMENT_EMPTY)
+    {
+        (void)multi_sample_load_publish_external_result(
+            request->request_id, MULTI_SAMPLE_LOAD_POOL_FAIL);
+        return;
+    }
+    if (request->cancelled != 0U)
+    {
+        (void)multi_sample_load_publish_external_result(
+            request->request_id, MULTI_SAMPLE_LOAD_CANCELLED);
+        return;
+    }
+    if (request->import_required != 0U)
+    {
+        if (request->import_started == 0U)
+        {
+            if (multi_sample_import_request_folder_for_replacement(
+                    request->source_path, request->request_id,
+                    request->instrument_id) == 0U)
+            {
+                (void)multi_sample_load_publish_external_result(
+                    request->request_id, MULTI_SAMPLE_LOAD_INDEX_FAIL);
+                return;
+            }
+            request->import_started = 1U;
+        }
+        return;
+    }
+    if (request->load_started != 0U) return;
+
+    g_multi_load_request = *request;
+    const multi_sample_load_result_t result =
+        multi_loader_start_instrument(request->path, request->instrument_id);
+    if (result == MULTI_SAMPLE_LOAD_SD_BUSY)
+    {
+        memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
         storage_io_owner_wait_resource(STORAGE_OWNER_MULTI);
+    }
+    else if (result == MULTI_SAMPLE_LOAD_ALREADY_READY)
+    {
+        multi_loader_publish_completion(1U);
+        request->load_started = 1U;
+    }
+    else if (result == MULTI_SAMPLE_LOAD_OK)
+    {
+        request->load_started = 1U;
+    }
+    else
+    {
+        if (g_multi_load_completion_valid == 0U)
+            multi_loader_publish_completion(0U);
     }
 }
 
@@ -848,6 +1100,8 @@ static void multi_loader_start_next_queued(void)
                 if (g_multi_load_completion_valid == 0U)
                 {
                     multi_loader_publish_completion_for(
+                        g_multi_load_queue[i].request_id,
+                        g_multi_load_queue[i].requester,
                         logical_id, instrument_id, g_multi_load_queue[i].path, 0U);
                     g_multi_load_queue[i].used = 0U;
                 }
@@ -863,14 +1117,18 @@ static void multi_loader_start_next_queued(void)
                     && (result != MULTI_SAMPLE_LOAD_ALREADY_READY))
                 {
                     if (g_multi_load_completion_valid == 0U)
-                        multi_loader_publish_completion_for(logical_id, instrument_id,
-                                                            path, 0U);
+                        multi_loader_publish_completion_for(
+                            g_multi_load_queue[i].request_id,
+                            g_multi_load_queue[i].requester,
+                            logical_id, instrument_id, path, 0U);
                     (void)multi_sample_pool_clear_instrument(instrument_id);
                 }
                 else if (result == MULTI_SAMPLE_LOAD_ALREADY_READY)
                 {
-                    multi_loader_publish_completion_for(logical_id, instrument_id,
-                                                        path, 1U);
+                    multi_loader_publish_completion_for(
+                        g_multi_load_queue[i].request_id,
+                        g_multi_load_queue[i].requester,
+                        logical_id, instrument_id, path, 1U);
                 }
                 if (result != MULTI_SAMPLE_LOAD_OK)
                     memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
@@ -997,9 +1255,9 @@ static uint8_t multi_loader_bulk_finish_instrument(void)
     (void)multi_sample_pool_set_state(g_multi_load_diag.instrument_id,
                                       MULTI_SAMPLE_INSTRUMENT_READY);
     multi_loader_publish_completion(1U);
-    memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
-    memset(&g_multi_bulk, 0, sizeof(g_multi_bulk));
-    multi_loader_start_next_queued();
+    if ((g_multi_load_completion_valid == 0U)
+        && (g_multi_external_request.used == 0U))
+        multi_loader_start_next_queued();
     return 1U;
 }
 
@@ -1076,6 +1334,7 @@ uint8_t multi_sample_load_has_pending(void)
 {
     if ((g_multi_load_active != 0U)
         || (g_multi_external_request_valid != 0U)
+        || (g_multi_external_request.used != 0U)
         || (g_multi_load_completion_valid != 0U))
     {
         return 1U;
@@ -1095,12 +1354,125 @@ uint8_t multi_sample_load_has_pending(void)
 uint8_t multi_sample_load_is_active(void)
 {
     if ((g_multi_load_active != 0U)
-        || (g_multi_external_request_valid != 0U)) return 1U;
+        || (g_multi_external_request_valid != 0U)
+        || (g_multi_external_request.used != 0U)) return 1U;
     for (uint16_t i = 0U; i < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++i)
     {
         if (g_multi_load_queue[i].used != 0U) return 1U;
     }
     return 0U;
+}
+
+uint8_t multi_sample_load_peek_external(
+    uint32_t request_id, multi_sample_external_request_t *out_request)
+{
+    const multi_sample_load_request_t *const request = &g_multi_external_request;
+    if ((out_request == NULL) || (request->used == 0U)
+        || (request_id == 0U) || (request->request_id != request_id)) return 0U;
+    memset(out_request, 0, sizeof(*out_request));
+    out_request->used = request->used;
+    out_request->request_id = request->request_id;
+    out_request->requester = (multi_sample_load_requester_t)request->requester;
+    out_request->old_logical_id = request->old_logical_id;
+    out_request->instrument_id = request->instrument_id;
+    out_request->cancelled = request->cancelled;
+    out_request->import_required = request->import_required;
+    out_request->canonical_retired = request->canonical_retired;
+    out_request->physical_retire_started = request->physical_retire_started;
+    out_request->import_started = request->import_started;
+    out_request->load_started = request->load_started;
+    (void)multi_loader_copy_text(out_request->source_path,
+                                 sizeof(out_request->source_path), request->source_path);
+    (void)multi_loader_copy_text(out_request->path,
+                                 sizeof(out_request->path), request->path);
+    return 1U;
+}
+
+uint8_t multi_sample_load_mark_canonical_retired(uint32_t request_id)
+{
+    if ((g_multi_external_request.used == 0U)
+        || (g_multi_external_request.request_id != request_id)
+        || (g_multi_external_request.cancelled != 0U)) return 0U;
+    g_multi_external_request.canonical_retired = 1U;
+    return 1U;
+}
+
+uint8_t multi_sample_load_publish_external_result(
+    uint32_t request_id, multi_sample_load_result_t result)
+{
+    const multi_sample_load_request_t *const request = &g_multi_external_request;
+    if ((request->used == 0U) || (request->request_id != request_id)) return 0U;
+    if (g_multi_load_completion_valid != 0U)
+    {
+        if (g_multi_load_completion.request_id != request_id) return 0U;
+        g_multi_load_completion.success = 0U;
+        g_multi_load_completion.result = result;
+        control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
+        return 1U;
+    }
+    memset(&g_multi_load_completion, 0, sizeof(g_multi_load_completion));
+    g_multi_load_completion.request_id = request->request_id;
+    g_multi_load_completion.requester = request->requester;
+    g_multi_load_completion.logical_id = MULTI_SAMPLE_POOL_INVALID_ID;
+    g_multi_load_completion.instrument_id = request->instrument_id;
+    g_multi_load_completion.success = (result == MULTI_SAMPLE_LOAD_OK) ? 1U : 0U;
+    g_multi_load_completion.result = result;
+    (void)multi_loader_copy_text(g_multi_load_completion.path,
+                                 sizeof(g_multi_load_completion.path), request->path);
+    __DMB();
+    g_multi_load_completion_valid = 1U;
+    control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
+    return 1U;
+}
+
+uint8_t multi_sample_load_continue_after_import(uint32_t request_id,
+                                                const char *index_path)
+{
+    if ((g_multi_external_request.used == 0U)
+        || (g_multi_external_request.request_id != request_id)
+        || (index_path == NULL) || (index_path[0] == '\0')
+        || (strlen(index_path) >= sizeof(g_multi_external_request.path))) return 0U;
+    if (g_multi_external_request.cancelled != 0U)
+    {
+        (void)multi_sample_load_publish_external_result(
+            request_id, MULTI_SAMPLE_LOAD_CANCELLED);
+        return 1U;
+    }
+    (void)multi_loader_copy_text(g_multi_external_request.path,
+                                 sizeof(g_multi_external_request.path), index_path);
+    g_multi_external_request.import_required = 0U;
+    g_multi_external_request.import_started = 1U;
+    storage_io_owner_set(STORAGE_OWNER_MULTI);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+    return 1U;
+}
+
+uint8_t multi_sample_load_replacement_waiting_for_retire(void)
+{
+    return (uint8_t)(g_multi_external_request.used != 0U
+        && g_multi_external_request.canonical_retired != 0U
+        && g_multi_external_request.physical_retire_started != 0U
+        && multi_sample_pool_get_state(g_multi_external_request.instrument_id)
+            == MULTI_SAMPLE_INSTRUMENT_RETIRING);
+}
+
+uint8_t multi_sample_load_peek_completion(
+    multi_sample_load_completion_t *out_completion)
+{
+    if ((out_completion == NULL) || (g_multi_load_completion_valid == 0U)) return 0U;
+    *out_completion = g_multi_load_completion;
+    return 1U;
+}
+
+uint8_t multi_sample_load_finish_completion(uint32_t request_id)
+{
+    if ((g_multi_load_completion_valid == 0U)
+        || (g_multi_load_completion.request_id != request_id)) return 0U;
+    g_multi_load_completion_valid = 0U;
+    if ((g_multi_external_request.used != 0U)
+        && (g_multi_external_request.request_id == request_id))
+        memset(&g_multi_external_request, 0, sizeof(g_multi_external_request));
+    return 1U;
 }
 
 uint8_t multi_sample_load_take_completion(
@@ -1121,6 +1493,20 @@ uint8_t multi_sample_load_take_completion(
 
 uint8_t multi_sample_cancel_load(void)
 {
+    if (multi_loader_external_is_replacement() != 0U)
+    {
+        g_multi_external_request.cancelled = 1U;
+        if ((g_multi_external_request.import_started != 0U)
+            && (g_multi_load_active == 0U))
+            multi_sample_import_cancel_load_continuation();
+        if ((g_multi_load_active == 0U)
+            && (g_multi_external_request.canonical_retired != 0U))
+        {
+            storage_io_owner_set(STORAGE_OWNER_MULTI);
+            storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+        }
+        if (g_multi_load_active == 0U) return 1U;
+    }
     if (g_multi_load_active == 0U)
     {
         return 0U;
@@ -1147,7 +1533,10 @@ void multi_sample_cancel_all_loads(void)
 {
     (void)multi_sample_cancel_load();
     g_multi_external_request_valid = 0U;
-    memset(&g_multi_external_request, 0, sizeof(g_multi_external_request));
+    if (multi_loader_external_is_replacement() != 0U)
+        g_multi_external_request.cancelled = 1U;
+    else
+        memset(&g_multi_external_request, 0, sizeof(g_multi_external_request));
     for (uint16_t i = 0U; i < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS; ++i)
     {
         if (g_multi_load_queue[i].used != 0U)

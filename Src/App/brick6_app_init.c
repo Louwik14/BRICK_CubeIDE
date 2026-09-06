@@ -5,6 +5,7 @@
 #include "App/brick6_app_init.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include "App/power_shutdown.h"
 #include "App/control_domain.h"
@@ -373,85 +374,181 @@ static void brick6_app_control_process_storage_completions(void)
 
     multi_sample_load_completion_t multi_completion;
     if ((control_domain_asset_terminal_available(CONTROL_ASSET_FAMILY_MULTI) == 0U)
-        && (multi_sample_load_take_completion(&multi_completion) != 0U))
+        && (multi_sample_load_peek_completion(&multi_completion) != 0U)
+        && (multi_completion.requester == MULTI_SAMPLE_LOAD_REQUESTER_UI))
     {
         control_asset_terminal_t terminal = {0};
-        multi_sample_load_diag_t multi_diag;
-        multi_sample_get_load_diag(&multi_diag);
         terminal.family = CONTROL_ASSET_FAMILY_MULTI;
         terminal.stage = CONTROL_ASSET_STAGE_LOAD;
         terminal.physical_id = multi_completion.instrument_id;
         terminal.logical_id = MULTI_SAMPLE_POOL_INVALID_ID;
+        terminal.requester = multi_completion.requester;
+        terminal.request_id = multi_completion.request_id;
         terminal.success = multi_completion.success;
         terminal.result = (uint16_t)multi_completion.result;
         (void)snprintf(terminal.path, sizeof(terminal.path), "%s",
                        multi_completion.path);
-        if (multi_completion.logical_id != MULTI_SAMPLE_POOL_INVALID_ID)
+        multi_sample_external_request_t external_request;
+        const uint8_t cancelled =
+            (multi_sample_load_peek_external(multi_completion.request_id,
+                                              &external_request) != 0U)
+                ? external_request.cancelled : 0U;
+        if ((cancelled != 0U)
+            && (external_request.canonical_retired != 0U)
+            && (multi_sample_pool_get_state(multi_completion.instrument_id)
+                != MULTI_SAMPLE_INSTRUMENT_EMPTY))
         {
-            terminal.logical_id = multi_completion.logical_id;
-            terminal.success = (project_control_complete_multi_runtime(
-                multi_completion.logical_id, multi_completion.path,
-                multi_completion.instrument_id, multi_completion.success)
-                == PROJECT_CONTROL_ASSET_READY) ? 1U : 0U;
+            storage_io_owner_wakeup(STORAGE_OWNER_MULTI);
+            return;
         }
-        else if (multi_completion.success != 0U)
+        if (cancelled != 0U)
+        {
+            terminal.success = 0U;
+            terminal.result = MULTI_SAMPLE_LOAD_CANCELLED;
+        }
+        const multi_sample_instrument_t *const instrument =
+            multi_sample_pool_get_instrument(multi_completion.instrument_id);
+        if ((terminal.success != 0U)
+            && ((instrument == NULL)
+                || (multi_sample_pool_get_state(multi_completion.instrument_id)
+                    != MULTI_SAMPLE_INSTRUMENT_READY)
+                || (strcmp(instrument->index_path, multi_completion.path) != 0)))
+        {
+            terminal.success = 0U;
+            terminal.stage = CONTROL_ASSET_STAGE_REGISTRATION;
+            terminal.result = MULTI_SAMPLE_LOAD_REGISTER_FAIL;
+        }
+        if (terminal.success != 0U)
         {
             uint16_t logical = UINT16_MAX;
-            terminal.success = project_control_register_multi_runtime(
+            const uint8_t registered = project_control_register_multi_runtime(
                 multi_completion.path, multi_completion.instrument_id, &logical);
+            terminal.success = registered;
             terminal.logical_id = logical;
+            uint16_t resolved = MULTI_SAMPLE_POOL_INVALID_ID;
+            if ((registered == 0U)
+                || (project_control_resolve_multi_runtime(logical, &resolved) == 0U)
+                || (resolved != multi_completion.instrument_id))
+            {
+                terminal.success = 0U;
+                terminal.stage = CONTROL_ASSET_STAGE_REGISTRATION;
+                terminal.result = MULTI_SAMPLE_LOAD_REGISTER_FAIL;
+            }
         }
-        (void)control_domain_publish_asset_terminal(&terminal);
+        if (control_domain_publish_asset_terminal(&terminal) == 0U)
+        {
+            Error_Handler();
+            return;
+        }
+        (void)multi_sample_load_finish_completion(multi_completion.request_id);
     }
     {
-        sampler_ram_result_t result;
-        uint16_t ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
-        uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-        const char *path = 0;
+        sampler_ram_load_result_t completion;
         const uint32_t request_id = sampler_ram_pool_load_async_request_id();
         if ((control_domain_asset_terminal_available(CONTROL_ASSET_FAMILY_RAM) == 0U)
-            && sampler_ram_pool_load_async_take_result(
-                request_id, &result, &ram_slot, &global_slot, &path) != 0U)
+            && sampler_ram_pool_load_async_peek_result(request_id, &completion) != 0U
+            && (completion.requester == SAMPLER_RAM_REQUESTER_UI))
         {
             control_asset_terminal_t terminal = {0};
             terminal.family = CONTROL_ASSET_FAMILY_RAM;
-            terminal.requester = (uint8_t)sampler_ram_pool_load_async_requester();
-            terminal.request_id = request_id;
-            terminal.physical_id = ram_slot;
-            terminal.logical_id = global_slot;
-            terminal.result = (uint16_t)result;
-            terminal.success = (result == SAMPLER_RAM_RESULT_OK) && (path != 0);
+            terminal.requester = (uint8_t)completion.requester;
+            terminal.request_id = completion.request_id;
+            terminal.physical_id = completion.backend;
+            terminal.logical_id = completion.global_slot;
+            terminal.result = (uint16_t)completion.result;
+            (void)snprintf(terminal.path, sizeof(terminal.path), "%s", completion.path);
+            terminal.success = (completion.result == SAMPLER_RAM_RESULT_OK);
+            const sampler_ram_slot_t *const slot =
+                sampler_ram_pool_get_slot(completion.backend);
+            if ((terminal.success != 0U)
+                && ((slot == NULL)
+                    || (slot->state != SAMPLER_RAM_SLOT_READY)
+                    || (slot->global_slot != completion.global_slot)
+                    || (strcmp(slot->path, completion.path) != 0)))
+            {
+                terminal.success = 0U;
+                terminal.stage = CONTROL_ASSET_STAGE_REGISTRATION;
+                terminal.result = SAMPLER_RAM_RESULT_REGISTER_FAIL;
+            }
             if (terminal.success != 0U)
-                terminal.success = project_control_register_sample_runtime(
-                    PERSIST_ASSET_SAMPLE_RAM, path, global_slot,
-                    &terminal.logical_id);
-            if (path != 0) (void)snprintf(terminal.path, sizeof(terminal.path), "%s", path);
-            (void)control_domain_publish_asset_terminal(&terminal);
+            {
+                uint16_t logical = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+                const uint8_t registered = project_control_register_sample_runtime(
+                    PERSIST_ASSET_SAMPLE_RAM, completion.path,
+                    completion.global_slot, &logical);
+                terminal.logical_id = logical;
+                terminal.success = registered;
+                uint16_t resolved_global = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+                if ((registered == 0U)
+                    || (project_control_resolve_sample_runtime(
+                            logical, &resolved_global, NULL) == 0U)
+                    || (resolved_global != completion.global_slot))
+                {
+                    terminal.success = 0U;
+                    terminal.stage = CONTROL_ASSET_STAGE_REGISTRATION;
+                    terminal.result = SAMPLER_RAM_RESULT_REGISTER_FAIL;
+                }
+            }
+            if (control_domain_publish_asset_terminal(&terminal) == 0U)
+            {
+                Error_Handler();
+                return;
+            }
+            (void)sampler_ram_pool_load_async_finish_result(request_id);
         }
     }
     {
-        wavetable_result_t result;
-        uint16_t wavetable_slot = WAVETABLE_POOL_INVALID_SLOT;
-        uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-        const char *path = 0;
+        wavetable_load_result_t completion;
         const uint32_t request_id = wavetable_pool_load_async_request_id();
         if ((control_domain_asset_terminal_available(CONTROL_ASSET_FAMILY_WAVETABLE) == 0U)
-            && wavetable_pool_load_async_take_result(
-                request_id, &result, &wavetable_slot, &global_slot, &path) != 0U)
+            && wavetable_pool_load_async_peek_result(request_id, &completion) != 0U
+            && (completion.requester == WAVETABLE_REQUESTER_UI))
         {
             control_asset_terminal_t terminal = {0};
             terminal.family = CONTROL_ASSET_FAMILY_WAVETABLE;
-            terminal.requester = (uint8_t)wavetable_pool_load_async_requester();
-            terminal.request_id = request_id;
-            terminal.physical_id = wavetable_slot;
-            terminal.logical_id = global_slot;
-            terminal.result = (uint16_t)result;
-            terminal.success = (result == WAVETABLE_RESULT_OK) && (path != 0);
+            terminal.requester = (uint8_t)completion.requester;
+            terminal.request_id = completion.request_id;
+            terminal.physical_id = completion.backend;
+            terminal.logical_id = completion.global_slot;
+            terminal.result = (uint16_t)completion.result;
+            (void)snprintf(terminal.path, sizeof(terminal.path), "%s", completion.path);
+            terminal.success = (completion.result == WAVETABLE_RESULT_OK);
+            const wavetable_slot_t *const slot =
+                wavetable_pool_get_slot(completion.backend);
+            if ((terminal.success != 0U)
+                && ((slot == NULL)
+                    || (slot->state != WAVETABLE_SLOT_READY)
+                    || (slot->global_slot != completion.global_slot)
+                    || (strcmp(slot->path, completion.path) != 0)))
+            {
+                terminal.success = 0U;
+                terminal.stage = CONTROL_ASSET_STAGE_REGISTRATION;
+                terminal.result = WAVETABLE_RESULT_REGISTER_FAIL;
+            }
             if (terminal.success != 0U)
-                terminal.success = project_control_register_wavetable_runtime(
-                    path, global_slot, &terminal.logical_id);
-            if (path != 0) (void)snprintf(terminal.path, sizeof(terminal.path), "%s", path);
-            (void)control_domain_publish_asset_terminal(&terminal);
+            {
+                uint16_t logical = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+                const uint8_t registered = project_control_register_wavetable_runtime(
+                    completion.path, completion.global_slot, &logical);
+                terminal.logical_id = logical;
+                terminal.success = registered;
+                uint16_t resolved_global = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+                if ((registered == 0U)
+                    || (project_control_resolve_wavetable_runtime(
+                            logical, &resolved_global) == 0U)
+                    || (resolved_global != completion.global_slot))
+                {
+                    terminal.success = 0U;
+                    terminal.stage = CONTROL_ASSET_STAGE_REGISTRATION;
+                    terminal.result = WAVETABLE_RESULT_REGISTER_FAIL;
+                }
+            }
+            if (control_domain_publish_asset_terminal(&terminal) == 0U)
+            {
+                Error_Handler();
+                return;
+            }
+            (void)wavetable_pool_load_async_finish_result(request_id);
         }
     }
 }
@@ -479,7 +576,11 @@ void brick6_app_control_process_causes(uint32_t wake_flags)
     }
 
     if ((wake_flags & CONTROL_RT_WAKE_STREAM_RELEASE) != 0U)
+    {
         sample_stream_admission_control_service_releases();
+        if (multi_sample_load_replacement_waiting_for_retire() != 0U)
+            storage_io_owner_wakeup(STORAGE_OWNER_MULTI);
+    }
 
     if ((wake_flags & CONTROL_RT_WAKE_HALL) != 0U)
         hall_keyboard_bridge_process();

@@ -78,6 +78,7 @@ typedef struct
 } sampler_ram_load_job_t;
 
 STORAGE_STATE_SDRAM static sampler_ram_load_job_t g_sampler_ram_load_job;
+static sampler_ram_load_result_t g_sampler_ram_taken_result;
 static volatile uint8_t g_sampler_ram_load_request_valid;
 static uint16_t g_sampler_ram_load_request_slot;
 static uint32_t g_sampler_ram_load_request_id;
@@ -85,6 +86,9 @@ static sampler_ram_requester_t g_sampler_ram_load_requester;
 static char g_sampler_ram_load_request_path[SAMPLER_RAM_POOL_PATH_MAX];
 static uint32_t g_sampler_ram_request_id_counter;
 static uint8_t sampler_ram_copy_path(char *dst, uint32_t dst_size, const char *src);
+static uint8_t sampler_ram_pool_load_async_begin_internal(
+    uint16_t ram_slot, const char *path, const wav_info_t *prepared_info,
+    sampler_ram_requester_t requester, uint8_t consume_request, uint8_t wake);
 
 static void sampler_ram_load_job_boot_init(void)
 {
@@ -128,13 +132,25 @@ uint8_t sampler_ram_pool_request_clear(uint16_t ram_slot)
     if ((ram_slot >= SAMPLER_RAM_POOL_MAX_SLOTS)
         || (sampler_ram_pool_load_async_busy() != 0U)
         || (g_sampler_ram_load_request_valid != 0U)
-        || (g_sampler_ram_clear_request_valid != 0U))
+        || (g_sampler_ram_clear_request_valid != 0U)
+        || (control_domain_asset_terminal_available(CONTROL_ASSET_FAMILY_RAM) != 0U))
     {
+        return 0U;
+    }
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if ((sampler_ram_pool_load_async_busy() != 0U)
+        || (g_sampler_ram_load_request_valid != 0U)
+        || (g_sampler_ram_clear_request_valid != 0U)
+        || (control_domain_asset_terminal_available(CONTROL_ASSET_FAMILY_RAM) != 0U))
+    {
+        __set_PRIMASK(primask);
         return 0U;
     }
     g_sampler_ram_clear_request_slot = ram_slot;
     __DMB();
     g_sampler_ram_clear_request_valid = 1U;
+    __set_PRIMASK(primask);
     storage_io_owner_set(STORAGE_OWNER_SAMPLE_RAM);
     storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
@@ -154,11 +170,13 @@ void sampler_ram_pool_storage_request_service(void)
         const uint16_t slot = g_sampler_ram_load_request_slot;
         char path[SAMPLER_RAM_POOL_PATH_MAX];
         (void)sampler_ram_copy_path(path, sizeof(path), g_sampler_ram_load_request_path);
-        if (sampler_ram_pool_load_async_begin_for_requester(
-                slot, path, g_sampler_ram_load_requester) != 0U)
+        if (sampler_ram_pool_load_async_begin_internal(
+                slot, path, NULL, g_sampler_ram_load_requester, 1U, 0U) != 0U)
         {
             g_sampler_ram_load_job.request_id = g_sampler_ram_load_request_id;
             g_sampler_ram_load_request_valid = 0U;
+            storage_io_owner_set(STORAGE_OWNER_SAMPLE_RAM);
+            storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
         }
         else if (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
         {
@@ -725,7 +743,7 @@ static void sampler_ram_load_fail(sampler_ram_result_t result)
 
 static uint8_t sampler_ram_pool_load_async_begin_internal(
     uint16_t ram_slot, const char *path, const wav_info_t *prepared_info,
-    sampler_ram_requester_t requester)
+    sampler_ram_requester_t requester, uint8_t consume_request, uint8_t wake)
 {
     sampler_ram_load_job_t *const job = &g_sampler_ram_load_job;
     if ((project_transport_stopped_stable() == 0U)
@@ -736,11 +754,23 @@ static uint8_t sampler_ram_pool_load_async_begin_internal(
     {
         return 0U;
     }
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if ((project_transport_stopped_stable() == 0U)
+        || (job->state != SAMPLER_RAM_LOAD_IDLE)
+        || (g_sampler_ram_clear_request_valid != 0U)
+        || ((consume_request == 0U) && (g_sampler_ram_load_request_valid != 0U))
+        || (control_domain_asset_terminal_available(CONTROL_ASSET_FAMILY_RAM) != 0U))
+    {
+        __set_PRIMASK(primask);
+        return 0U;
+    }
     memset(job, 0, sizeof(*job));
     if (sampler_ram_copy_path(job->path, sizeof(job->path), path) == 0U)
     {
         job->state = SAMPLER_RAM_LOAD_DONE;
         job->result = SAMPLER_RAM_RESULT_PATH_TOO_LONG;
+        __set_PRIMASK(primask);
         return 0U;
     }
     job->ram_slot = ram_slot;
@@ -755,8 +785,12 @@ static uint8_t sampler_ram_pool_load_async_begin_internal(
     }
     job->result = SAMPLER_RAM_RESULT_OK;
     job->state = SAMPLER_RAM_LOAD_MOUNT;
-    storage_io_owner_set(STORAGE_OWNER_SAMPLE_RAM);
-    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+    __set_PRIMASK(primask);
+    if (wake != 0U)
+    {
+        storage_io_owner_set(STORAGE_OWNER_SAMPLE_RAM);
+        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+    }
     return 1U;
 }
 
@@ -769,17 +803,30 @@ uint8_t sampler_ram_pool_request_load(uint16_t ram_slot, const char *path)
         || (strlen(path) >= sizeof(g_sampler_ram_load_request_path))
         || (sampler_ram_pool_load_async_busy() != 0U)
         || (g_sampler_ram_load_request_valid != 0U)
-        || (g_sampler_ram_clear_request_valid != 0U))
+        || (g_sampler_ram_clear_request_valid != 0U)
+        || (control_domain_asset_terminal_available(CONTROL_ASSET_FAMILY_RAM) != 0U))
     {
+        return 0U;
+    }
+    (void)sampler_ram_copy_path(g_sampler_ram_load_request_path,
+                                sizeof(g_sampler_ram_load_request_path), path);
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if ((project_transport_stopped_stable() == 0U)
+        || (sampler_ram_pool_load_async_busy() != 0U)
+        || (g_sampler_ram_load_request_valid != 0U)
+        || (g_sampler_ram_clear_request_valid != 0U)
+        || (control_domain_asset_terminal_available(CONTROL_ASSET_FAMILY_RAM) != 0U))
+    {
+        __set_PRIMASK(primask);
         return 0U;
     }
     g_sampler_ram_load_request_slot = ram_slot;
     g_sampler_ram_load_request_id = sampler_ram_next_request_id();
     g_sampler_ram_load_requester = SAMPLER_RAM_REQUESTER_UI;
-    (void)sampler_ram_copy_path(g_sampler_ram_load_request_path,
-                                sizeof(g_sampler_ram_load_request_path), path);
     __DMB();
     g_sampler_ram_load_request_valid = 1U;
+    __set_PRIMASK(primask);
     storage_io_owner_set(STORAGE_OWNER_SAMPLE_RAM);
     storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
@@ -788,7 +835,7 @@ uint8_t sampler_ram_pool_request_load(uint16_t ram_slot, const char *path)
 uint8_t sampler_ram_pool_load_async_begin(uint16_t ram_slot, const char *path)
 {
     return sampler_ram_pool_load_async_begin_internal(
-        ram_slot, path, NULL, SAMPLER_RAM_REQUESTER_PROJECT);
+        ram_slot, path, NULL, SAMPLER_RAM_REQUESTER_PROJECT, 0U, 1U);
 }
 
 uint8_t sampler_ram_pool_load_async_begin_for_requester(
@@ -798,8 +845,9 @@ uint8_t sampler_ram_pool_load_async_begin_for_requester(
     {
         return 0U;
     }
-    return sampler_ram_pool_load_async_begin_internal(
-        ram_slot, path, NULL, requester);
+    const uint8_t result = sampler_ram_pool_load_async_begin_internal(
+        ram_slot, path, NULL, requester, 0U, 1U);
+    return result;
 }
 
 uint8_t sampler_ram_pool_load_async_begin_prepared(uint16_t ram_slot,
@@ -813,13 +861,15 @@ uint8_t sampler_ram_pool_load_async_begin_prepared(uint16_t ram_slot,
 {
     if ((info == NULL) || (source_file_size == 0U)) return 0U;
     if (sampler_ram_pool_load_async_begin_internal(
-            ram_slot, path, info, SAMPLER_RAM_REQUESTER_STORAGE) == 0U)
+            ram_slot, path, info, SAMPLER_RAM_REQUESTER_STORAGE, 0U, 0U) == 0U)
         return 0U;
     g_sampler_ram_load_job.prepared_file_size = source_file_size;
     g_sampler_ram_load_job.prepared_expected_crc32 = source_crc32;
     g_sampler_ram_load_job.prepared_data_bytes = data_bytes;
     g_sampler_ram_load_job.prepared_page_count = page_count;
     g_sampler_ram_load_job.prepared_cost_bytes = cost_bytes;
+    storage_io_owner_set(STORAGE_OWNER_SAMPLE_RAM);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
 }
 
@@ -831,8 +881,7 @@ uint8_t sampler_ram_pool_load_async_busy(void)
 uint8_t sampler_ram_pool_load_async_work_active(void)
 {
     return (uint8_t)((g_sampler_ram_load_request_valid != 0U)
-        || ((g_sampler_ram_load_job.state != SAMPLER_RAM_LOAD_IDLE)
-            && (g_sampler_ram_load_job.state != SAMPLER_RAM_LOAD_DONE)));
+        || (g_sampler_ram_load_job.state != SAMPLER_RAM_LOAD_IDLE));
 }
 
 uint32_t sampler_ram_pool_load_async_request_id(void)
@@ -843,6 +892,32 @@ uint32_t sampler_ram_pool_load_async_request_id(void)
 sampler_ram_requester_t sampler_ram_pool_load_async_requester(void)
 {
     return g_sampler_ram_load_job.requester;
+}
+
+uint8_t sampler_ram_pool_load_async_peek_result(
+    uint32_t expected_request_id, sampler_ram_load_result_t *out_result)
+{
+    const sampler_ram_load_job_t *const job = &g_sampler_ram_load_job;
+    if ((out_result == NULL) || (job->state != SAMPLER_RAM_LOAD_DONE)
+        || (expected_request_id == 0U) || (job->request_id != expected_request_id))
+        return 0U;
+    out_result->request_id = job->request_id;
+    out_result->requester = job->requester;
+    out_result->result = job->result;
+    out_result->backend = job->ram_slot;
+    out_result->global_slot = job->global_slot;
+    (void)sampler_ram_copy_path(out_result->path, sizeof(out_result->path), job->path);
+    return 1U;
+}
+
+uint8_t sampler_ram_pool_load_async_finish_result(uint32_t expected_request_id)
+{
+    sampler_ram_load_job_t *const job = &g_sampler_ram_load_job;
+    if ((job->state != SAMPLER_RAM_LOAD_DONE)
+        || (expected_request_id == 0U) || (job->request_id != expected_request_id))
+        return 0U;
+    job->state = SAMPLER_RAM_LOAD_IDLE;
+    return 1U;
 }
 
 static void sampler_ram_pool_load_async_service_step(void)
@@ -1163,7 +1238,7 @@ void sampler_ram_pool_load_async_service(void)
             && (job->state == SAMPLER_RAM_LOAD_DONE))
     {
         storage_io_owner_t completion_owner = STORAGE_OWNER_SAMPLE_RAM;
-        switch (sampler_ram_pool_load_async_requester())
+        switch (job->requester)
         {
             case SAMPLER_RAM_REQUESTER_PATCH:
                 completion_owner = STORAGE_OWNER_PATCH;
@@ -1181,6 +1256,7 @@ void sampler_ram_pool_load_async_service(void)
             storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
         }
         control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
+        return;
     }
     if ((job->state != SAMPLER_RAM_LOAD_IDLE)
             && ((job->state != state)
@@ -1199,19 +1275,13 @@ uint8_t sampler_ram_pool_load_async_take_result(uint32_t expected_request_id,
                                                 uint16_t *out_global_slot,
                                                 const char **out_path)
 {
-    sampler_ram_load_job_t *const job = &g_sampler_ram_load_job;
-    if ((job->state != SAMPLER_RAM_LOAD_DONE)
-        || (expected_request_id == 0U)
-        || (job->request_id != expected_request_id))
-    {
-        return 0U;
-    }
-    if (out_result != 0) *out_result = job->result;
-    if (out_ram_slot != 0) *out_ram_slot = job->ram_slot;
-    if (out_global_slot != 0) *out_global_slot = job->global_slot;
-    if (out_path != 0) *out_path = job->path;
-    job->state = SAMPLER_RAM_LOAD_IDLE;
-    return 1U;
+    if (sampler_ram_pool_load_async_peek_result(
+            expected_request_id, &g_sampler_ram_taken_result) == 0U) return 0U;
+    if (out_result != 0) *out_result = g_sampler_ram_taken_result.result;
+    if (out_ram_slot != 0) *out_ram_slot = g_sampler_ram_taken_result.backend;
+    if (out_global_slot != 0) *out_global_slot = g_sampler_ram_taken_result.global_slot;
+    if (out_path != 0) *out_path = g_sampler_ram_taken_result.path;
+    return sampler_ram_pool_load_async_finish_result(expected_request_id);
 }
 
 static void sampler_ram_pool_finalize_clear(uint16_t ram_slot)

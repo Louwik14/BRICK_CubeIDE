@@ -385,8 +385,9 @@ static void ui_page_settings_sample_confirm_accept(void)
             ui_page_settings_multi_prepare_begin(slot,
                                                  path,
                                                  UI_SETTINGS_MULTI_PREP_PHASE_SCAN);
-            if (storage_settings_begin_multi_import(slot, path,
-                                                    g_ui_settings.sample_dir) == 0U)
+            if (storage_settings_begin_multi_replacement(
+                    g_ui_settings.sample_slot_selected, slot, path,
+                    entry->index_path, 1U) == 0U)
             {
                 ui_page_settings_multi_prepare_finish(
                     (storage_settings_sd_status() == SD_STORAGE_STATUS_NO_MEDIA)

@@ -511,6 +511,11 @@ void multi_sample_pool_service_retire(void)
         storage_io_owner_set(STORAGE_OWNER_PROJECT);
         storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     }
+    if (finalized != 0U)
+    {
+        storage_io_owner_set(STORAGE_OWNER_MULTI);
+        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+    }
 }
 
 uint8_t multi_sample_pool_retire_idle(void)

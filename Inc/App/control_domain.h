@@ -165,7 +165,8 @@ typedef enum
 {
     CONTROL_ASSET_SELECT_TRACK_LOGICAL = 0,
     CONTROL_ASSET_REGISTER_RUNTIME,
-    CONTROL_ASSET_REMOVE_RUNTIME
+    CONTROL_ASSET_REMOVE_RUNTIME,
+    CONTROL_ASSET_RETIRE_MULTI_FOR_REPLACE
 } control_asset_operation_t;
 
 typedef struct
@@ -176,6 +177,7 @@ typedef struct
     uint32_t kind;
     uint16_t logical;
     uint16_t runtime;
+    uint32_t request_id;
 } control_asset_intent_t;
 
 typedef enum
@@ -190,7 +192,8 @@ typedef enum
 enum
 {
     CONTROL_ASSET_STAGE_LOAD = 0U,
-    CONTROL_ASSET_STAGE_CLEAR_INDEXES = 1U
+    CONTROL_ASSET_STAGE_CLEAR_INDEXES = 1U,
+    CONTROL_ASSET_STAGE_REGISTRATION = 2U
 };
 
 typedef struct
@@ -456,6 +459,7 @@ uint8_t control_domain_request_seq(const control_seq_intent_t *intent);
 uint8_t control_domain_request_mod(const control_mod_intent_t *intent);
 uint8_t control_domain_request_macro(const control_macro_intent_t *intent);
 uint8_t control_domain_request_asset(const control_asset_intent_t *intent);
+uint8_t control_domain_request_asset_deferred(const control_asset_intent_t *intent);
 uint8_t control_domain_publish_asset_terminal(const control_asset_terminal_t *terminal);
 uint8_t control_domain_asset_terminal_available(control_asset_family_t family);
 uint8_t control_domain_take_asset_terminal(control_asset_family_t family,

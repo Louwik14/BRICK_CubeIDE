@@ -359,8 +359,7 @@ void seq_runtime_init(void)
 void seq_runtime_start(void)
 {
     if ((project_replacement_is_active() != 0U)
-        || (project_product_save_busy() != 0U)
-        || (seq_runtime_asset_cycle_engaged() != 0U)) return;
+        || (project_product_save_busy() != 0U)) return;
     uint8_t begin_running_now = 0U;
     if (g_seq_runtime_trigger_start_bypass == 0U)
     {
@@ -372,6 +371,11 @@ void seq_runtime_start(void)
     g_seq_runtime_trigger_start_bypass = 0U;
     const uint32_t primask = seq_runtime_enter_critical();
     if (seq_transport_fsm_is_stopped(&g_seq_transport_fsm) == 0U)
+    {
+        seq_runtime_exit_critical(primask);
+        return;
+    }
+    if (seq_runtime_asset_cycle_engaged() != 0U)
     {
         seq_runtime_exit_critical(primask);
         return;
@@ -835,24 +839,24 @@ void seq_runtime_midi_continue_from_source(seq_clock_src_t source)
     {
         return;
     }
-    if (seq_runtime_asset_cycle_engaged() != 0U) return;
+    const uint32_t primask = seq_runtime_enter_critical();
+    if ((seq_runtime_asset_cycle_engaged() != 0U)
+        || (seq_runtime_get_clock_source_internal() != source)
+        || (seq_transport_fsm_is_running(&g_seq_transport_fsm) != 0U))
+    {
+        seq_runtime_exit_critical(primask);
+        return;
+    }
     const uint8_t was_stopped = seq_transport_fsm_is_stopped(&g_seq_transport_fsm);
 
-    if (seq_runtime_get_clock_source_internal() != source)
-    {
-        return;
-    }
-
-    if (seq_transport_fsm_is_running(&g_seq_transport_fsm) != 0U)
-    {
-        return;
-    }
-
-    /* Orchestration seam: transport FSM owns CONTINUE; runtime only re-anchors shared execution state. */
+    /* Orchestration seam: transport FSM owns CONTINUE; only the transition
+     * engagement is protected.  Timeline work remains outside the section. */
     if (seq_transport_fsm_request_continue(&g_seq_transport_fsm) == 0U)
     {
+        seq_runtime_exit_critical(primask);
         return;
     }
+    seq_runtime_exit_critical(primask);
 
     const uint64_t transition_sample =
         control_music_output_first_unpublished_sample(

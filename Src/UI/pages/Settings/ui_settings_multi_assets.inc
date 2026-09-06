@@ -352,6 +352,8 @@ static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_set
     if (storage_settings_project_replacement_active() != 0U) return;
     const uint8_t already_blocking =
         (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_PREPARING) ? 1U : 0U;
+    const uint8_t replacing =
+        (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_REPLACE) ? 1U : 0U;
 
     if ((entry == 0)
         || (entry->type != UI_SETTINGS_MULTI_ENTRY_MULTI_ITEM)
@@ -420,8 +422,13 @@ static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_set
         ui_page_settings_multi_prepare_flush_progress();
     }
 
-    if (storage_settings_begin_multi_load(slot, entry->path,
-                                          entry->index_path) == 0U)
+    const uint8_t accepted = (replacing != 0U)
+        ? storage_settings_begin_multi_replacement(
+            g_ui_settings.sample_slot_selected, slot, entry->path,
+            entry->index_path, 0U)
+        : storage_settings_begin_multi_load(slot, entry->path,
+                                            entry->index_path);
+    if (accepted == 0U)
     {
         ui_page_settings_multi_prepare_finish(
             (storage_settings_sd_status() == SD_STORAGE_STATUS_NO_MEDIA)

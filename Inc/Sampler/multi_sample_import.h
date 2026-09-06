@@ -27,6 +27,9 @@ typedef enum
 uint8_t multi_sample_import_request_folder(const char *instrument_dir);
 uint8_t multi_sample_import_request_folder_for_load(const char *instrument_dir,
                                                     uint16_t instrument_id);
+uint8_t multi_sample_import_request_folder_for_replacement(
+    const char *instrument_dir, uint32_t request_id, uint16_t instrument_id);
+void multi_sample_import_cancel_load_continuation(void);
 void multi_sample_import_storage_request_service(void);
 uint8_t multi_sample_import_is_busy(void);
 uint8_t multi_sample_import_delete_is_busy(void);

@@ -52,6 +52,16 @@ typedef enum
     SAMPLER_RAM_REQUESTER_STORAGE = SAMPLER_RAM_REQUESTER_PROJECT
 } sampler_ram_requester_t;
 
+typedef struct
+{
+    uint32_t request_id;
+    sampler_ram_requester_t requester;
+    sampler_ram_result_t result;
+    uint16_t backend;
+    uint16_t global_slot;
+    char path[SAMPLER_RAM_POOL_PATH_MAX];
+} sampler_ram_load_result_t;
+
 typedef enum
 {
     SAMPLE_RAM_WAVEFORM_EMPTY = 0,
@@ -140,6 +150,9 @@ uint8_t sampler_ram_pool_load_async_busy(void);
 uint8_t sampler_ram_pool_load_async_work_active(void);
 uint32_t sampler_ram_pool_load_async_request_id(void);
 sampler_ram_requester_t sampler_ram_pool_load_async_requester(void);
+uint8_t sampler_ram_pool_load_async_peek_result(
+    uint32_t expected_request_id, sampler_ram_load_result_t *out_result);
+uint8_t sampler_ram_pool_load_async_finish_result(uint32_t expected_request_id);
 void sampler_ram_pool_load_async_cancel(void);
 uint8_t sampler_ram_pool_load_async_take_result(uint32_t expected_request_id,
                                                 sampler_ram_result_t *out_result,

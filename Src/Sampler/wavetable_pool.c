@@ -152,6 +152,7 @@ typedef struct
 } wavetable_load_job_t;
 
 STORAGE_STATE_SDRAM static wavetable_load_job_t g_wavetable_load_job;
+static wavetable_load_result_t g_wavetable_taken_result;
 static CTRL_STATE uint64_t
     g_wavetable_retire_not_before_sample[WAVETABLE_POOL_MAX_SLOTS];
 static CTRL_STATE uint8_t

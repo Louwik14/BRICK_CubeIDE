@@ -78,6 +78,16 @@ typedef enum
 
 typedef struct
 {
+    uint32_t request_id;
+    wavetable_requester_t requester;
+    wavetable_result_t result;
+    uint16_t backend;
+    uint16_t global_slot;
+    char path[WAVETABLE_POOL_PATH_MAX];
+} wavetable_load_result_t;
+
+typedef struct
+{
     wavetable_preview_state_t state;
     uint32_t generation;
     uint32_t frame_count;
@@ -157,6 +167,9 @@ uint8_t wavetable_pool_load_async_busy(void);
 uint8_t wavetable_pool_load_async_work_active(void);
 uint32_t wavetable_pool_load_async_request_id(void);
 wavetable_requester_t wavetable_pool_load_async_requester(void);
+uint8_t wavetable_pool_load_async_peek_result(
+    uint32_t expected_request_id, wavetable_load_result_t *out_result);
+uint8_t wavetable_pool_load_async_finish_result(uint32_t expected_request_id);
 void wavetable_pool_load_async_cancel(void);
 uint8_t wavetable_pool_load_async_take_result(uint32_t expected_request_id,
                                               wavetable_result_t *out_result,

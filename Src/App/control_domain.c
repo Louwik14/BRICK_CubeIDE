@@ -166,7 +166,8 @@ static volatile uint32_t g_control_storage_overflow_count;
 
 static uint8_t control_domain_submit_ui_message(
     control_ui_message_type_t type,
-    const control_ui_message_payload_t *payload)
+    const control_ui_message_payload_t *payload,
+    uint8_t wake)
 {
     if (payload == NULL) return 0U;
     /* UI_SERVICE and STORAGE_IO both publish here on H743.  Serialize only
@@ -194,7 +195,7 @@ static uint8_t control_domain_submit_ui_message(
     if (type == CONTROL_UI_MSG_PROJECT)
         g_control_project_request_pending = 1U;
     __set_PRIMASK(primask);
-    control_rt_wakeup(CONTROL_RT_WAKE_UI);
+    if (wake != 0U) control_rt_wakeup(CONTROL_RT_WAKE_UI);
     return 1U;
 }
 
@@ -251,7 +252,7 @@ uint8_t control_domain_request_##_name(const _intent_type *intent) \
     if (intent == NULL) return 0U; \
     control_ui_message_payload_t payload = { 0 }; \
     payload._member = *intent; \
-    return control_domain_submit_ui_message((_type), &payload); \
+    return control_domain_submit_ui_message((_type), &payload, 1U); \
 }
 
 uint8_t control_domain_request_project(const control_project_intent_t *intent)
@@ -272,7 +273,7 @@ uint8_t control_domain_request_project(const control_project_intent_t *intent)
     }
     control_ui_message_payload_t payload = { 0 };
     payload.project = *intent;
-    return control_domain_submit_ui_message(CONTROL_UI_MSG_PROJECT, &payload);
+    return control_domain_submit_ui_message(CONTROL_UI_MSG_PROJECT, &payload, 1U);
 }
 CONTROL_DOMAIN_REQUEST(patch, CONTROL_UI_MSG_PATCH, patch,
                        control_patch_intent_t)
@@ -290,6 +291,14 @@ CONTROL_DOMAIN_REQUEST(macro, CONTROL_UI_MSG_MACRO, macro,
                        control_macro_intent_t)
 CONTROL_DOMAIN_REQUEST(asset, CONTROL_UI_MSG_ASSET, asset,
                        control_asset_intent_t)
+
+uint8_t control_domain_request_asset_deferred(const control_asset_intent_t *intent)
+{
+    if (intent == NULL) return 0U;
+    control_ui_message_payload_t payload = { 0 };
+    payload.asset = *intent;
+    return control_domain_submit_ui_message(CONTROL_UI_MSG_ASSET, &payload, 0U);
+}
 
 uint8_t control_domain_publish_asset_terminal(const control_asset_terminal_t *terminal)
 {
@@ -328,7 +337,7 @@ uint8_t control_domain_request_keyboard(uint8_t operation, int8_t value)
     control_ui_message_payload_t payload = { 0 };
     payload.keyboard.operation = operation;
     payload.keyboard.value = value;
-    return control_domain_submit_ui_message(CONTROL_UI_MSG_KEYBOARD, &payload);
+    return control_domain_submit_ui_message(CONTROL_UI_MSG_KEYBOARD, &payload, 1U);
 }
 
 CONTROL_DOMAIN_REQUEST(audio_fx, CONTROL_UI_MSG_AUDIO_FX, audio_fx,
@@ -345,21 +354,21 @@ uint8_t control_domain_request_polyphony(uint8_t track, uint8_t voices)
     control_ui_message_payload_t payload = { 0 };
     payload.polyphony.track = track;
     payload.polyphony.voices = voices;
-    return control_domain_submit_ui_message(CONTROL_UI_MSG_POLYPHONY, &payload);
+    return control_domain_submit_ui_message(CONTROL_UI_MSG_POLYPHONY, &payload, 1U);
 }
 
 uint8_t control_domain_request_history(uint8_t redo)
 {
     control_ui_message_payload_t payload = { 0 };
     payload.history.redo = (redo != 0U) ? 1U : 0U;
-    return control_domain_submit_ui_message(CONTROL_UI_MSG_HISTORY, &payload);
+    return control_domain_submit_ui_message(CONTROL_UI_MSG_HISTORY, &payload, 1U);
 }
 
 uint8_t control_domain_request_preview_gain(float gain)
 {
     control_ui_message_payload_t payload = { 0 };
     payload.preview_gain.gain = gain;
-    return control_domain_submit_ui_message(CONTROL_UI_MSG_PREVIEW_GAIN, &payload);
+    return control_domain_submit_ui_message(CONTROL_UI_MSG_PREVIEW_GAIN, &payload, 1U);
 }
 
 uint8_t control_domain_request_rec_bus(uint16_t source_entity_mask,
@@ -373,21 +382,21 @@ uint8_t control_domain_request_rec_bus(uint16_t source_entity_mask,
     payload.rec_bus.source_flags = source_flags;
     payload.rec_bus.has_sample_time = (has_sample_time != 0U) ? 1U : 0U;
     payload.rec_bus.sample_time = sample_time;
-    return control_domain_submit_ui_message(CONTROL_UI_MSG_REC_BUS, &payload);
+    return control_domain_submit_ui_message(CONTROL_UI_MSG_REC_BUS, &payload, 1U);
 }
 
 uint8_t control_domain_request_storage_ui(uint8_t operation)
 {
     control_ui_message_payload_t payload = { 0 };
     payload.storage.operation = operation;
-    return control_domain_submit_ui_message(CONTROL_UI_MSG_STORAGE, &payload);
+    return control_domain_submit_ui_message(CONTROL_UI_MSG_STORAGE, &payload, 1U);
 }
 
 uint8_t control_domain_request_calibration(uint8_t operation)
 {
     control_ui_message_payload_t payload = { 0 };
     payload.calibration.operation = operation;
-    return control_domain_submit_ui_message(CONTROL_UI_MSG_CALIBRATION, &payload);
+    return control_domain_submit_ui_message(CONTROL_UI_MSG_CALIBRATION, &payload, 1U);
 }
 
 static void control_domain_apply_keyboard_intent(
@@ -1021,6 +1030,38 @@ static void control_domain_apply_asset_intent(const control_asset_intent_t *inte
         return;
     }
 
+    if (intent->operation == CONTROL_ASSET_RETIRE_MULTI_FOR_REPLACE)
+    {
+        multi_sample_external_request_t request;
+        if (multi_sample_load_peek_external(intent->request_id, &request) == 0U)
+            return;
+        if (request.cancelled != 0U)
+        {
+            (void)multi_sample_load_publish_external_result(
+                intent->request_id, MULTI_SAMPLE_LOAD_CANCELLED);
+            return;
+        }
+        if ((request.old_logical_id != MULTI_SAMPLE_POOL_INVALID_ID))
+        {
+            uint16_t runtime = MULTI_SAMPLE_POOL_INVALID_ID;
+            if ((request.old_logical_id != intent->logical)
+                || (request.instrument_id != intent->runtime)
+                || (project_control_resolve_multi_runtime(
+                        request.old_logical_id, &runtime) == 0U)
+                || (runtime != request.instrument_id)
+                || (project_control_remove_multi(request.old_logical_id) == 0U))
+            {
+                (void)multi_sample_load_publish_external_result(
+                    intent->request_id, MULTI_SAMPLE_LOAD_POOL_FAIL);
+                return;
+            }
+        }
+        if (multi_sample_load_mark_canonical_retired(intent->request_id) == 0U)
+            return;
+        storage_io_owner_wakeup(STORAGE_OWNER_MULTI);
+        return;
+    }
+
     if (intent->operation != CONTROL_ASSET_REMOVE_RUNTIME) return;
 
     if (intent->kind == PERSIST_ASSET_SAMPLE_STREAM)
@@ -1078,8 +1119,11 @@ void control_domain_process_ui_messages(void)
     while ((processed < CONTROL_UI_PROCESS_BUDGET)
            && (control_domain_take_ui_message(&message) != 0U))
     {
-        if (control_domain_project_busy_allows_message(
+        if ((control_domain_project_busy_allows_message(
                 (control_ui_message_type_t)message.type) == 0U)
+            && !((message.type == CONTROL_UI_MSG_ASSET)
+                 && (message.payload.asset.operation
+                     == CONTROL_ASSET_RETIRE_MULTI_FOR_REPLACE)))
         {
             ++processed;
             continue;

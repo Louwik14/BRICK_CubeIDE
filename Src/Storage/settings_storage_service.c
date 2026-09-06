@@ -115,6 +115,18 @@ uint8_t storage_settings_begin_multi_load(uint16_t slot,
         || (result == MULTI_SAMPLE_LOAD_ALREADY_READY);
 }
 
+uint8_t storage_settings_begin_multi_replacement(
+    uint16_t old_logical, uint16_t slot, const char *source_path,
+    const char *index_path, uint8_t import_required)
+{
+    if ((project_transport_stopped_stable() == 0U)
+        || (seq_runtime_is_start_pending() != 0U)
+        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)) return 0U;
+    return (multi_sample_load_request_replacement(
+                old_logical, slot, source_path, index_path, import_required)
+            == MULTI_SAMPLE_LOAD_OK) ? 1U : 0U;
+}
+
 uint8_t storage_settings_begin_multi_clear(void)
 {
     if ((project_transport_stopped_stable() == 0U)
