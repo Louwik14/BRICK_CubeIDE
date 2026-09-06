@@ -403,7 +403,6 @@ void brick6_app_control_process_causes(uint32_t wake_flags)
 
     sample_capture_control_service();
     brick6_app_control_calibration_service(now_ms);
-    ui_hall_mode_flow_service_pending(now_ms);
 
     if (ui_boot_loading_restore_pending() != 0U
         && sd_access_storage_status() == SD_STORAGE_STATUS_READY)
@@ -486,17 +485,24 @@ void brick6_app_usb_process(void)
 void brick6_app_ui_process_input(void)
 {
     ui_tasklet_initialize();
+    ui_active_track_sync_process_pending();
     if (ui_boot_loading_is_active() == 0U)
         ui_core_service_track_selection_inputs();
     ui_tasklet_process_input();
+    if (ui_event_pending_count() == 0U)
+        ui_hall_mode_flow_service_pending(HAL_GetTick());
 }
 
 void brick6_app_ui_process_presentation(uint8_t deadline_due)
 {
+    ui_active_track_sync_process_pending();
+    if (ui_event_pending_count() == 0U)
+        ui_hall_mode_flow_service_pending(HAL_GetTick());
     ui_tasklet_process_presentation(deadline_due);
     if (ui_tasklet_is_initialized() == 0U)
         return;
     if (deadline_due != 0U)
         ui_renderer_oled_service_deadline();
+    ui_active_track_sync_process_pending();
     ui_renderer_oled_service_render();
 }

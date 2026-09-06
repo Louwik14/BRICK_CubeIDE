@@ -32,6 +32,8 @@
 #include "Storage/storage_io_wakeup.h"
 #include "UI/display_flush_service.h"
 #include "UI/ui_event.h"
+#include "UI/ui_active_track_sync.h"
+#include "UI/ui_hall_mode_flow.h"
 #include "UI/ui_renderer_oled.h"
 #include "UI/ui_service_wakeup.h"
 #include "tusb.h"
@@ -175,7 +177,8 @@ static uint32_t control_rt_wait_timeout_ticks(void)
 
 static uint8_t ui_service_work_pending(void)
 {
-  return (ui_event_pending_count() != 0U
+  return (ui_active_track_sync_is_pending() != 0U
+          || ui_event_pending_count() != 0U
           || ui_service_dirty_is_set() != 0U
           || ((ui_service_led_dirty_is_set() != 0U)
               && (led_hw_busy() == 0U))
@@ -245,7 +248,7 @@ static void ui_service_process_wakeup(uint32_t wake_flags)
   if (deadline_due != 0U)
     led_presentation_service_deadline(HAL_GetTick());
 
-  if ((wake_flags & UI_SERVICE_WAKE_INPUT) != 0U)
+  if (((wake_flags & UI_SERVICE_WAKE_INPUT) != 0U) || (deadline_due != 0U))
     brick6_app_ui_process_input();
 
   if ((deadline_due != 0U)
@@ -259,6 +262,29 @@ static void ui_service_process_wakeup(uint32_t wake_flags)
   if ((deadline_due != 0U)
       || ((wake_flags & UI_SERVICE_WAKE_LED) != 0U))
     led_presentation_service();
+}
+
+static uint32_t ui_service_wait_timeout_ticks(void)
+{
+  const uint32_t now_ms = HAL_GetTick();
+  uint32_t timeout_ticks = ui_renderer_oled_next_render_wait_ticks();
+  uint32_t deadline_ms = 0U;
+  if (ui_hall_mode_flow_next_deadline(now_ms, &deadline_ms) != 0U)
+  {
+    const int32_t remaining_ms = (int32_t)(deadline_ms - now_ms);
+    uint64_t patch_ticks;
+    if (remaining_ms <= 0)
+      return 0U;
+    patch_ticks = (((uint64_t)(uint32_t)remaining_ms
+                    * (uint64_t)osKernelGetTickFreq()) + 999U) / 1000U;
+    if (patch_ticks == 0U)
+      patch_ticks = 1U;
+    if (patch_ticks >= (uint64_t)osWaitForever)
+      patch_ticks = (uint64_t)(osWaitForever - 1U);
+    if (patch_ticks < (uint64_t)timeout_ticks)
+      timeout_ticks = (uint32_t)patch_ticks;
+  }
+  return timeout_ticks;
 }
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
@@ -433,6 +459,8 @@ void StartUiTask(void *argument)
       wake_flags = 0U;
       if (ui_event_pending_count() != 0U)
         wake_flags |= UI_SERVICE_WAKE_INPUT;
+      if (ui_active_track_sync_is_pending() != 0U)
+        wake_flags |= UI_SERVICE_WAKE_INPUT;
       if (ui_service_dirty_is_set() != 0U)
         wake_flags |= UI_SERVICE_WAKE_DIRTY;
       if ((ui_service_led_dirty_is_set() != 0U) && (led_hw_busy() == 0U))
@@ -451,7 +479,7 @@ void StartUiTask(void *argument)
                                    | UI_SERVICE_WAKE_DIRTY
                                    | UI_SERVICE_WAKE_LED,
                                    osFlagsWaitAny,
-                                   ui_renderer_oled_next_render_wait_ticks());
+                                   ui_service_wait_timeout_ticks());
   }
   /* USER CODE END StartUiTask */
 }

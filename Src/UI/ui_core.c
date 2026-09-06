@@ -272,9 +272,11 @@ static void ui_core_set_active_track(uint8_t track)
             || (g_ui_track_state.active_lane != track));
     if (changed == 0U)
     {
-        ui_edit_context_sync_active_track(0U);
+        ui_edit_context_sync_active_track();
         return;
     }
+
+    ui_hall_mode_flow_cancel_pending_navigation();
 
     if (g_ui_track_state.active_track != main_track)
     {
@@ -283,7 +285,8 @@ static void ui_core_set_active_track(uint8_t track)
     g_ui_track_state.active_lane = track;
     ui_param_publish_encoder_binding(g_ui_track_state.active_lane,
                                      g_ui_track_state.shift_down);
-    ui_edit_context_sync_active_track(1U);
+    ui_navigation_sync_active_track_ensemble();
+    ui_edit_context_sync_active_track();
 }
 
 void ui_restore_active_track(uint8_t track)
@@ -929,6 +932,61 @@ static uint8_t ui_core_handle_encoder_event(const ui_event_t *ev,
     return 1U;
 }
 
+static uint8_t ui_core_handle_keyboard_shortcut(const ui_event_t *ev)
+{
+    if ((ev == 0) || (ev->type != UI_EVENT_KEYBOARD_SHORTCUT))
+    {
+        return 0U;
+    }
+
+    switch (ev->id)
+    {
+        case 1U:
+        case 2U:
+        case 3U:
+        case 4U:
+        case 5U:
+        {
+            ui_hall_mode_flow_cancel_pending_navigation();
+            static const button_id_t k_shortcut_buttons[6U] = {
+                BTN_COUNT, BTN_PARAM_2, BTN_PARAM_1, BTN_PARAM_5,
+                BTN_PARAM_3, BTN_PARAM_4
+            };
+            const ui_event_t nav_event = {
+                .type = UI_EVENT_BUTTON_PRESS,
+                .id = (uint8_t)k_shortcut_buttons[ev->id],
+                .value = 1,
+                .capture_tick = ev->capture_tick,
+                .capture_ms = ev->capture_ms,
+                .ingress_serial = ev->ingress_serial,
+                .shift_down = ev->shift_down,
+                .track_select_armed = ev->track_select_armed,
+                .hall_mode = ev->hall_mode,
+                .context_track = ev->context_track,
+            };
+            ui_navigation_handle_event(&nav_event);
+            return 1U;
+        }
+
+        case 9U:
+            ui_hall_mode_flow_cancel_pending_navigation();
+            ui_page_template_rec_cfg_open_main();
+            ui_navigation_request_page_with_availability(UI_PAGE_TEMPLATE_REC_CFG);
+            return 1U;
+
+        case 10U:
+            if (ui_page_settings_is_open() == 0U)
+            {
+                ui_hall_mode_flow_cancel_pending_navigation();
+                ui_page_settings_open(ui_page_get_id());
+            }
+            return 1U;
+
+        default:
+            return 1U;
+    }
+}
+
 void ui_core_init(void)
 {
     ui_sampler_playhead_init();
@@ -996,6 +1054,21 @@ void ui_core_service_track_selection_inputs(void)
     ui_core_publish_hall_arbitration_snapshot();
 }
 
+void ui_core_reconcile_current_product_context(void)
+{
+    const uint8_t resolved_lane = ui_get_active_lane();
+    if (g_ui_track_state.active_lane != resolved_lane)
+    {
+        g_ui_track_state.active_lane = resolved_lane;
+    }
+
+    ui_navigation_reconcile_current_page();
+    ui_edit_context_sync_active_track();
+    ui_param_publish_encoder_binding(g_ui_track_state.active_lane,
+                                     g_ui_track_state.shift_down);
+    ui_core_publish_hall_arbitration_snapshot();
+}
+
 /**
  * @brief Point d'entrée ui_core_process_inputs.
  *
@@ -1033,6 +1106,7 @@ void ui_core_process_inputs(void)
     ui_event_t ev;
     ui_param_encoder_context_t encoder_ctx;
     uint16_t processed = 0U;
+    ui_active_track_sync_process_pending();
     ui_param_capture_encoder_context(&encoder_ctx);
     ui_param_begin_encoder_edit_group(&encoder_ctx);
 
@@ -1042,6 +1116,11 @@ void ui_core_process_inputs(void)
         if (control_domain_project_ui_busy() != 0U)
         {
             encoders_discard_pending();
+            continue;
+        }
+        if (ev.type == UI_EVENT_KEYBOARD_SHORTCUT)
+        {
+            (void)ui_core_handle_keyboard_shortcut(&ev);
             continue;
         }
         if (ev.type == UI_EVENT_ENCODER)
@@ -1080,6 +1159,13 @@ void ui_core_process_inputs(void)
          * - navigation is intentionally non-consuming in this pipeline
          */
         ui_navigation_handle_event(&ev);
+
+        if ((ev.type == UI_EVENT_BUTTON_PRESS)
+                && (ev.id >= (uint8_t)BTN_PAGE_1)
+                && (ev.id <= (uint8_t)BTN_PAGE_4))
+        {
+            ui_hall_mode_flow_cancel_pending_navigation();
+        }
 
         const ui_page_t *dispatch_page = ui_page_get();
         if ((dispatch_page != 0) && (dispatch_page->handle_event != 0))
@@ -1163,7 +1249,7 @@ bool ui_set_track_family(uint8_t track, track_family_t family)
     {
         if (track == g_ui_track_state.active_track)
         {
-            ui_edit_context_sync_active_track(0U);
+            ui_edit_context_sync_active_track();
         }
         return false;
     }
@@ -1203,7 +1289,7 @@ bool ui_set_track_family(uint8_t track, track_family_t family)
         }
         if (track == g_ui_track_state.active_track)
         {
-            ui_edit_context_sync_active_track(0U);
+            ui_edit_context_sync_active_track();
         }
         return true;
     }
@@ -1215,7 +1301,7 @@ bool ui_set_track_family(uint8_t track, track_family_t family)
     {
         if (track == g_ui_track_state.active_track)
         {
-            ui_edit_context_sync_active_track(0U);
+            ui_edit_context_sync_active_track();
         }
         return false;
     }
@@ -1268,7 +1354,7 @@ bool ui_set_track_type(uint8_t track, track_type_t type)
     {
         if (track == g_ui_track_state.active_track)
         {
-            ui_edit_context_sync_active_track(0U);
+            ui_edit_context_sync_active_track();
         }
         return false;
     }
@@ -1281,7 +1367,7 @@ bool ui_set_track_type(uint8_t track, track_type_t type)
         }
         if (track == g_ui_track_state.active_track)
         {
-            ui_edit_context_sync_active_track(0U);
+            ui_edit_context_sync_active_track();
         }
         return false;
     }
@@ -1290,7 +1376,7 @@ bool ui_set_track_type(uint8_t track, track_type_t type)
     {
         if (track == g_ui_track_state.active_track)
         {
-            ui_edit_context_sync_active_track(0U);
+            ui_edit_context_sync_active_track();
         }
         return true;
     }

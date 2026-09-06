@@ -76,13 +76,6 @@ uint8_t control_rt_sampled_state_next_deadline(uint32_t now_ms,
         next_deadline_ms = deadline_ms;
         found = 1U;
     }
-    if (ui_hall_mode_flow_next_deadline(now_ms, &deadline_ms) != 0U
-        && ((found == 0U) || ((int32_t)(deadline_ms - next_deadline_ms) < 0)))
-    {
-        next_deadline_ms = deadline_ms;
-        found = 1U;
-    }
-
     *out_deadline_ms = next_deadline_ms;
     return found;
 }

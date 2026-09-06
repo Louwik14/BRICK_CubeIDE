@@ -24,11 +24,8 @@
 #include "ui_core.h"
 #include "ui_core_mute.h"
 #include "ui_event.h"
-#include "ui_navigation.h"
-#include "ui_page_manager.h"
-#include "pages/ui_page_settings.h"
-#include "pages/ui_page_template_cfg.h"
 #include "IPC/live_event.h"
+#include "stm32h7xx_hal.h"
 
 #include <string.h>
 
@@ -146,38 +143,27 @@ static uint8_t keyboard_input_seq_note(uint8_t key)
     return (uint8_t)note;
 }
 
-static void keyboard_input_nav_button(button_id_t button)
-{
-    const ui_event_t ev = {
-        .type = UI_EVENT_BUTTON_PRESS,
-        .id = (uint8_t)button,
-        .value = 1
-    };
-    ui_navigation_handle_event(&ev);
-}
-
 static void keyboard_input_trigger_black_shortcut(uint8_t black_index)
 {
+    const uint8_t shift_down = (g_keyboard_input_hall_context_valid != 0U)
+        ? g_keyboard_input_hall_shift_down : button_down(BTN_SHIFT);
+    const uint8_t context_track = (g_keyboard_input_hall_context_valid != 0U)
+        ? g_keyboard_input_hall_track : ui_get_active_lane();
     switch (black_index)
     {
         case 1U:
-            keyboard_input_nav_button(BTN_PARAM_2); /* Tone */
-            break;
-
         case 2U:
-            keyboard_input_nav_button(BTN_PARAM_1); /* Env ensemble */
-            break;
-
         case 3U:
-            keyboard_input_nav_button(BTN_PARAM_5); /* Play */
-            break;
-
         case 4U:
-            keyboard_input_nav_button(BTN_PARAM_3); /* Mod */
-            break;
-
         case 5U:
-            keyboard_input_nav_button(BTN_PARAM_4); /* Mix */
+        case 9U:
+        case 10U:
+            (void)ui_event_push_keyboard_shortcut(
+                black_index,
+                (g_keyboard_input_timed_context_active != 0U)
+                    ? g_keyboard_input_capture_tick : 0U,
+                HAL_GetTick(), g_keyboard_input_ingress_serial,
+                shift_down, context_track);
             break;
 
         case 6U:
@@ -189,18 +175,6 @@ static void keyboard_input_trigger_black_shortcut(uint8_t black_index)
             break;
 
         case 8U:
-            break;
-
-        case 9U:
-            ui_page_template_rec_cfg_open_main();
-            ui_page_set(UI_PAGE_TEMPLATE_REC_CFG);
-            break;
-
-        case 10U:
-            if (ui_page_settings_is_open() == 0U)
-            {
-                ui_page_settings_open(ui_page_get_id());
-            }
             break;
 
         default:

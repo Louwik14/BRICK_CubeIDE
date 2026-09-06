@@ -213,6 +213,28 @@ bool ui_event_push_encoder(uint8_t encoder, int8_t direction,
     return ui_event_push(&ev);
 }
 
+bool ui_event_push_keyboard_shortcut(uint8_t shortcut,
+                                     uint32_t capture_tick,
+                                     uint32_t capture_ms,
+                                     uint32_t ingress_serial,
+                                     uint8_t shift_down,
+                                     uint8_t context_track)
+{
+    const ui_event_t ev = {
+        .type = UI_EVENT_KEYBOARD_SHORTCUT,
+        .id = shortcut,
+        .value = 1,
+        .capture_tick = capture_tick,
+        .capture_ms = capture_ms,
+        .ingress_serial = ingress_serial,
+        .shift_down = (shift_down != 0U) ? 1U : 0U,
+        .track_select_armed = button_down(BTN_TRACK),
+        .hall_mode = (uint8_t)ui_get_hall_mode(),
+        .context_track = context_track,
+    };
+    return ui_event_push(&ev);
+}
+
 uint32_t ui_event_drop_count(void)
 {
     return g_ui_evt_drop_count;

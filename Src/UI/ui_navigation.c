@@ -1,6 +1,7 @@
 #include "ui_navigation.h"
 
 #include "ui_core.h"
+#include "ui_hall_mode_flow.h"
 #include "Track/track_runtime.h"
 #include "pages/ui_page_template_mix.h"
 #include "pages/ui_page_template_env.h"
@@ -133,6 +134,8 @@ static uint8_t ui_navigation_resolve_effective_ensemble_page(void)
 void ui_navigation_request_ensemble_page(uint8_t page_id)
 {
 
+    ui_hall_mode_flow_cancel_pending_navigation();
+
     if (page_id == UI_PAGE_TEMPLATE_CFG)
     {
         g_ui_requested_ensemble_page = page_id;
@@ -162,6 +165,8 @@ void ui_navigation_request_ensemble_page(uint8_t page_id)
 
 void ui_navigation_request_page_with_availability(uint8_t page_id)
 {
+
+    ui_hall_mode_flow_cancel_pending_navigation();
 
     if (page_id == UI_PAGE_TEMPLATE_CFG)
     {
@@ -202,6 +207,7 @@ void ui_navigation_handle_event(const ui_event_t *event)
         if ((event->id == (uint8_t)rule->button)
                 && ((rule->required_page == UI_NAV_ANY_PAGE) || (rule->required_page == current_page)))
         {
+            ui_hall_mode_flow_cancel_pending_navigation();
             if ((rule->button == BTN_PARAM_6) && (rule->target_page == UI_PAGE_TEMPLATE_ENV))
             {
                 ui_navigation_request_ensemble_page(UI_PAGE_TEMPLATE_ENV);
@@ -287,9 +293,14 @@ button_id_t ui_navigation_get_button_for_page(uint8_t page_id)
 
 void ui_navigation_sync_active_track_ensemble(void)
 {
-
     const uint8_t current_page = ui_page_get_id();
-    if ((current_page == UI_PAGE_TEMPLATE_CFG) || (ui_navigation_is_ensemble_page(current_page) != 0U))
+    if ((current_page == UI_PAGE_TEMPLATE_TONE)
+            && (ui_page_template_tone_is_global_master() != 0U))
+    {
+        return;
+    }
+    if ((current_page == UI_PAGE_TEMPLATE_CFG)
+            || (ui_navigation_is_ensemble_page(current_page) != 0U))
     {
         const uint8_t effective_page = ui_navigation_resolve_effective_ensemble_page();
         if (effective_page != current_page)
@@ -303,22 +314,25 @@ void ui_navigation_sync_active_track_ensemble(void)
             && (ui_navigation_is_page_available(current_page) == 0U))
     {
         ui_page_set(UI_PAGE_TEMPLATE_CFG);
-        return;
-    }
-
-    if (ui_navigation_is_track_bound_template_page(current_page) == 0U)
-    {
-        return;
     }
 }
 
-void ui_navigation_sync_created_track_destination(void)
+void ui_navigation_reconcile_current_page(void)
 {
-    g_ui_requested_ensemble_page = UI_PAGE_TEMPLATE_CFG;
-
-    if (ui_page_get_id() != UI_PAGE_TEMPLATE_CFG)
+    const uint8_t current_page = ui_page_get_id();
+    if ((current_page == UI_PAGE_TEMPLATE_TONE)
+            && (ui_page_template_tone_is_global_master() != 0U))
     {
-        ui_page_set(UI_PAGE_TEMPLATE_CFG);
+        return;
+    }
+
+    if ((ui_navigation_is_track_bound_template_page(current_page) != 0U)
+            && (ui_navigation_is_page_available(current_page) == 0U))
+    {
+        if (current_page != UI_PAGE_TEMPLATE_CFG)
+        {
+            ui_page_set(UI_PAGE_TEMPLATE_CFG);
+        }
     }
 }
 

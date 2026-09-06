@@ -203,9 +203,17 @@ static sd_scheduler_start_result_t audio_recorder_storage_finalization_step(
             runtime->final_phase = AUDIO_RECORDER_FINAL_DONE;
             runtime->metrics.finalization_duration_us =
                 (HAL_GetTick() - runtime->final_started_ms) * 1000U;
-            runtime->phase = AUDIO_RECORDER_STORAGE_TAKE_READY;
-            audio_recorder_storage_set_result(
-                AUDIO_RECORDER_STORAGE_RESULT_TAKE_READY);
+            if (runtime->error == AUDIO_RECORDER_ERROR_NONE)
+            {
+                runtime->phase = AUDIO_RECORDER_STORAGE_TAKE_READY;
+                audio_recorder_storage_set_result(
+                    AUDIO_RECORDER_STORAGE_RESULT_TAKE_READY);
+            }
+            else
+            {
+                runtime->phase = AUDIO_RECORDER_STORAGE_FAILED;
+                audio_recorder_storage_set_error_result(0U);
+            }
             return SD_SCHEDULER_START_COMPLETED;
 
         default:

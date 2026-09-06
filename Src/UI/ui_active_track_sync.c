@@ -1,34 +1,34 @@
 #include "ui_active_track_sync.h"
 
 #include "ui_core.h"
-#include "ui_edit_context_sync.h"
+#include "UI/ui_service_wakeup.h"
+#include "stm32h7xx.h"
 
-void ui_active_track_sync_full_after_reconfigure(void)
+static volatile uint8_t g_ui_active_track_sync_pending;
+
+void ui_active_track_sync_notify_product_changed(void)
 {
-    ui_edit_context_sync_active_track(0U);
+    g_ui_active_track_sync_pending = 1U;
+    __DMB();
+    ui_service_wakeup(UI_SERVICE_WAKE_INPUT);
 }
 
-void ui_active_track_sync_after_track_structure_change(uint8_t sync_active_track_ui_context)
+uint8_t ui_active_track_sync_is_pending(void)
 {
-    if (sync_active_track_ui_context == 0U)
+    return g_ui_active_track_sync_pending;
+}
+
+void ui_active_track_sync_process_pending(void)
+{
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    const uint8_t pending = g_ui_active_track_sync_pending;
+    g_ui_active_track_sync_pending = 0U;
+    __DMB();
+    __set_PRIMASK(primask);
+
+    if (pending != 0U)
     {
-        return;
+        ui_core_reconcile_current_product_context();
     }
-
-    ui_edit_context_sync_active_track(sync_active_track_ui_context);
-}
-
-void ui_active_track_sync_after_track_creation_from_off(uint8_t sync_active_track_ui_context)
-{
-    if (sync_active_track_ui_context == 0U)
-    {
-        return;
-    }
-
-    ui_edit_context_sync_active_track_created_from_off(sync_active_track_ui_context);
-}
-
-void ui_active_track_sync_full_after_global_restore(void)
-{
-    ui_active_track_sync_after_track_structure_change(1U);
 }

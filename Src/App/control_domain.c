@@ -57,7 +57,6 @@
 #include "Mod/mod_lfo_v1_control.h"
 #include "Mod/mod_matrix_control.h"
 #include "Platform/memory_layout.h"
-#include "UI/ui_active_track_sync.h"
 #include "ControlRT/control_rt_publication.h"
 #include "IPC/control_audio_command.h"
 #include "IPC/control_audio_rec_bus.h"
@@ -663,14 +662,6 @@ static uint8_t control_domain_apply_track_structure(const control_track_intent_t
         (void)sample_stream_admission_control_request_looper_release(
             intent->track);
 
-    if (intent->track == ui_get_active_track())
-    {
-        if ((previous_family == TRACK_FAMILY_OFF)
-                && (family[intent->track] != (uint8_t)TRACK_FAMILY_OFF))
-            ui_active_track_sync_after_track_creation_from_off(1U);
-        else
-            ui_active_track_sync_after_track_structure_change(1U);
-    }
     return 1U;
 }
 
@@ -699,11 +690,7 @@ static void control_domain_apply_track_intent(const control_track_intent_t *inte
             track_runtime_rebuild_track(intent->track);
         break;
     case CONTROL_TRACK_SET_EXTERNAL_INPUT:
-        if (track_state_set_external_input(intent->track, intent->value0))
-        {
-            if (intent->track == ui_get_active_track())
-                ui_active_track_sync_after_track_structure_change(1U);
-        }
+        (void)track_state_set_external_input(intent->track, intent->value0);
         break;
     case CONTROL_TRACK_SET_MUTE:
         (void)track_mute_set(intent->track, intent->value0);
@@ -1282,7 +1269,6 @@ void control_domain_start(float postgain, float output_compensation)
     {
         ui_page_set(UI_PAGE_CALIBRATION);
     }
-    ui_active_track_sync_full_after_global_restore();
     encoders_start_fast_poll();
     midi_init();
     board_usb_device_init();

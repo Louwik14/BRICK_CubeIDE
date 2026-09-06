@@ -4,6 +4,7 @@
 #include "buttons.h"
 #include "ui_core_clipboard.h"
 #include "ui_page_manager.h"
+#include "ui_hall_mode_flow.h"
 #include "pages/ui_page_settings.h"
 
 uint8_t ui_core_shortcuts_request_undo(ui_core_shortcuts_feedback_fn feedback)
@@ -66,6 +67,7 @@ uint8_t ui_core_shortcuts_handle_global_event(const ui_event_t *ev,
     {
         if (ui_page_settings_is_open() == 0U)
         {
+            ui_hall_mode_flow_cancel_pending_navigation();
             ui_page_settings_open(ui_page_get_id());
         }
         return 1U;

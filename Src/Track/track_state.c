@@ -7,6 +7,7 @@
 #include "Track/track_runtime.h"
 #include "Track/entity_topology.h"
 #include "Track/track_mute.h"
+#include "UI/ui_active_track_sync.h"
 
 static track_config_t g_track_configs[TRACK_CONFIG_CAPACITY];
 static uint8_t g_track_midi_channel[TRACK_CONFIG_CAPACITY];
@@ -189,6 +190,7 @@ bool track_state_set_external_input(uint8_t track, uint8_t input)
         return false;
     }
     track_state_bump_revision(track);
+    ui_active_track_sync_notify_product_changed();
     return true;
 }
 
@@ -339,6 +341,7 @@ bool track_structure_apply_entity_bulk_with_inputs(
                 track_runtime_rebuild_track(entity);
     }
     track_mute_apply_topology_change(effective_mute_before);
+    ui_active_track_sync_notify_product_changed();
     return true;
 }
 

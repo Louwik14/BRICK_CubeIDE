@@ -3,9 +3,8 @@
 
 #include <stdint.h>
 
-void ui_active_track_sync_full_after_reconfigure(void);
-void ui_active_track_sync_after_track_structure_change(uint8_t sync_active_track_ui_context);
-void ui_active_track_sync_after_track_creation_from_off(uint8_t sync_active_track_ui_context);
-void ui_active_track_sync_full_after_global_restore(void);
+void ui_active_track_sync_notify_product_changed(void);
+uint8_t ui_active_track_sync_is_pending(void);
+void ui_active_track_sync_process_pending(void);
 
 #endif /* UI_ACTIVE_TRACK_SYNC_H */

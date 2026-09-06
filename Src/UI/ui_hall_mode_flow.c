@@ -1,6 +1,5 @@
 #include "ui_hall_mode_flow.h"
 #include "App/control_domain.h"
-#include "App/control_rt_wakeup.h"
 
 #include "Track/entity_topology.h"
 #include "Storage/patch_product.h"
@@ -13,6 +12,7 @@
 #include "ui_hall_mode_contract.h"
 #include "ui_hall_mode_projection.h"
 #include "ui_navigation.h"
+#include "UI/ui_service_wakeup.h"
 
 #define UI_HALL_MODE_DOUBLE_TAP_MS 400U
 
@@ -31,10 +31,16 @@ static uint8_t g_rec_return_valid;
 
 static void ui_hall_mode_flow_leave_modal_page(void);
 
+void ui_hall_mode_flow_cancel_pending_navigation(void)
+{
+    g_patch_pending.active = 0U;
+}
+
 static void ui_hall_mode_flow_activate_mode(ui_hall_mode_t target_mode,
                                             uint8_t target_page,
                                             uint8_t is_double_tap)
 {
+    ui_hall_mode_flow_cancel_pending_navigation();
     if (ui_macro_overlay_is_active() != 0U)
     {
         ui_macro_overlay_on_hall_mode_changed();
@@ -261,7 +267,7 @@ uint8_t ui_hall_mode_flow_handle_shift_step(uint8_t step,
 
     if (step == 15U)
     {
-        g_patch_pending.active = 0U;
+        ui_hall_mode_flow_cancel_pending_navigation();
         if ((ui_page_get_id() == UI_PAGE_TEMPLATE_TONE)
                 && (ui_page_template_tone_is_global_master() != 0U))
         {
@@ -337,19 +343,19 @@ void ui_hall_mode_flow_handle_shift_hall_action(
         g_patch_pending.tap_ms = now_ms;
         g_patch_pending.target_track = context_track;
         g_patch_pending.previous_mode = hall_mode;
-        control_rt_wakeup(CONTROL_RT_WAKE_DEADLINE);
+        ui_service_wakeup(UI_SERVICE_WAKE_INPUT);
         return;
     }
 
     if (hall == 1U)
     {
-        g_patch_pending.active = 0U;
+        ui_hall_mode_flow_cancel_pending_navigation();
         return;
     }
 
     if (hall == 15U)
     {
-        g_patch_pending.active = 0U;
+        ui_hall_mode_flow_cancel_pending_navigation();
         if ((ui_page_get_id() == UI_PAGE_TEMPLATE_TONE)
                 && (ui_page_template_tone_is_global_master() != 0U))
         {
@@ -422,7 +428,11 @@ void ui_hall_mode_flow_service_pending(uint32_t now_ms)
 
         const uint8_t target_track = g_patch_pending.target_track;
         const ui_hall_mode_t previous_mode = g_patch_pending.previous_mode;
-        g_patch_pending.active = 0U;
+        ui_hall_mode_flow_cancel_pending_navigation();
+        if (entity_topology_is_active(target_track) == 0U)
+        {
+            return;
+        }
         if (ui_macro_overlay_is_active() != 0U)
         {
             ui_macro_overlay_on_hall_mode_changed();
@@ -440,7 +450,7 @@ uint8_t ui_hall_mode_flow_next_deadline(uint32_t now_ms,
         || (g_patch_pending.active == 0U))
         return 0U;
 
-    *out_deadline_ms = g_patch_pending.tap_ms + UI_HALL_MODE_DOUBLE_TAP_MS;
+    *out_deadline_ms = g_patch_pending.tap_ms + UI_HALL_MODE_DOUBLE_TAP_MS + 1U;
     if ((int32_t)(*out_deadline_ms - now_ms) <= 0)
         *out_deadline_ms = now_ms;
     return 1U;

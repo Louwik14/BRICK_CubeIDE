@@ -10,13 +10,16 @@ Les STEP 1..8 ciblent les top-level et les STEP 9..16 ciblent les children
 L'ISR Hall effectue uniquement l'acquisition ADC, le seuil/hysteresis, le
 debounce borne et la mise en file d'un `live_event_t` de 16 octets. Les bits
 modifier `SHIFT` et `TRACK` sont captures dans l'evenement. La queue est SPSC;
-CONTROL interprete les evenements et possede la selection, le mode et le
-contexte logique. Aucun handler UI ne lit un GPIO Hall comme un STEP.
+CONTROL interprete les evenements et prend les decisions produit et musicales;
+UI_SERVICE possede la selection, la navigation et le contexte de presentation.
+Aucun handler UI ne lit un GPIO Hall comme un STEP.
 
 KBD utilise les touches Hall pour les commandes clavier; SEQ utilise les STEP
 pour les lanes et les fonctions de sequence. Les pages PLAY, TRACK CFG, MOD,
 TONE, ENV, FILTER et MIX utilisent leurs renderers et handlers propres; aucun
-renderer generique ne remplace leur etat produit.
+renderer generique ne remplace leur etat produit. UI_SERVICE possede la page,
+la selection de presentation, le mode d'affichage et le contexte encodeurs;
+CONTROL possede les decisions produit et musicales.
 
 STEP 1..8 selectionnent les top-level. En GROUP, STEP 9..16 selectionnent les children 8..15. CFG, ENV, TONE, MIX et PLAY utilisent l'entite selectionnee; MOD derive son owner par `entity_topology`.
 
@@ -37,6 +40,19 @@ track selection -> mute -> track hall gate -> transport -> settings
 -> global shortcuts -> pattern -> sequence -> navigation -> page active
 ```
 
-Les deltas encodeur utilisent un snapshot du contexte pris au debut du tick. Les modifications structurelles et restores appellent directement les owners Track; la mise a jour de contexte UI reste explicite via `ui_active_track_sync` et `ui_edit_context_sync`.
+Les deltas encodeur utilisent un snapshot du contexte pris au debut du tick.
+
+CONTROL possede les decisions produit, musicales et les mutations Track. Les
+modifications structurelles publient uniquement une notification fusionnable,
+sans destination; UI_SERVICE conserve la page courante si elle reste valide,
+replie vers CFG sinon, puis actualise localement selection, famille, sous-page,
+banque et liaison encodeurs. L'initialisation exclusive avant FreeRTOS reste
+distincte de ce chemin runtime.
+
+Les raccourcis de navigation clavier sont deposes dans le ring UI existant et
+consommes par UI_SERVICE. Le geste Patch, son double-tap et son echeance sont
+egalement servis dans UI_SERVICE; le double-tap transmet toujours Patch Save a
+CONTROL. Une navigation utilisateur ou un changement explicite de selection,
+mode ou sous-ecran annule uniquement le Patch differe devenu obsolete.
 
 Les clipboards transportent uniquement des etats logiques. Un collage MIDI FX applique MODEL avant ses parametres; un collage External conserve l'entree demandee et echoue sur conflit.

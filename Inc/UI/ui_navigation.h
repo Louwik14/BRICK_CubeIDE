@@ -22,8 +22,8 @@ typedef struct
 void ui_navigation_handle_event(const ui_event_t *event);
 uint8_t ui_navigation_is_ensemble_button_available(button_id_t button);
 button_id_t ui_navigation_get_button_for_page(uint8_t page_id);
+void ui_navigation_reconcile_current_page(void);
 void ui_navigation_sync_active_track_ensemble(void);
-void ui_navigation_sync_created_track_destination(void);
 void ui_navigation_request_ensemble_page(uint8_t page_id);
 void ui_navigation_request_page_with_availability(uint8_t page_id);
 void ui_navigation_remember_template_subpage(uint8_t page_id,
