@@ -43,7 +43,6 @@ uint8_t wav_convert_is_active(void);
 wav_convert_state_t wav_convert_get_state(void);
 wav_convert_error_t wav_convert_get_last_error(void);
 uint8_t wav_convert_get_progress_percent(void);
-void wav_convert_clear_finished(void);
 
 #ifdef __cplusplus
 }

@@ -1,4 +1,6 @@
 #include "Storage/project_product.h"
+#include "App/control_domain.h"
+#include "UI/ui_service_wakeup.h"
 #include "Storage/project_load_quiesce.h"
 #include "Storage/audio_recorder.h"
 #include "Sampler/sample_stream_transport.h"
@@ -42,6 +44,10 @@ static project_product_save_error_t g_save_error;
 static volatile project_product_command_t g_storage_request;
 static volatile uint8_t g_storage_slot;
 static int32_t g_save_detail;
+static volatile project_product_command_t g_project_admission_command;
+static uint8_t g_project_admission_slot;
+static project_product_terminal_t g_project_terminal;
+static volatile uint8_t g_project_terminal_valid;
 
 static void project_capture_metadata(persist_codec_project_metadata_t *out)
 {
@@ -176,8 +182,84 @@ static uint8_t side_path(char*out,uint32_t size,uint8_t slot,const char*extensio
 static uint8_t acquire(void){if(!sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT))return 0U;if(!sd_access_fs_mount_if_needed()){sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);return 0U;}return 1U;}
 static uint8_t ensure_directory(void){FRESULT r=f_mkdir("0:/BRICK");if(r!=FR_OK&&r!=FR_EXIST)return 0U;r=f_mkdir("0:/BRICK/PROJECT");return(r==FR_OK||r==FR_EXIST)?1U:0U;}
 
+static void project_product_publish_terminal(project_product_command_t operation,
+                                             uint8_t slot, uint8_t success,
+                                             uint8_t diagnostic)
+{
+    g_project_terminal = (project_product_terminal_t){
+        (uint8_t)operation, slot, (success != 0U) ? 1U : 0U, diagnostic};
+    __DMB();
+    g_project_terminal_valid = 1U;
+    ui_service_dirty_set();
+}
+
+uint8_t project_product_take_terminal(project_product_terminal_t *out_terminal)
+{
+    if ((out_terminal == NULL) || (g_project_terminal_valid == 0U)) return 0U;
+    *out_terminal = g_project_terminal;
+    __DMB();
+    g_project_terminal_valid = 0U;
+    if (g_project_save.state == PROJECT_SAVE_DONE)
+        memset(&g_project_save, 0, sizeof(g_project_save));
+    return 1U;
+}
+
+uint8_t project_product_admit_ui(project_product_command_t command, uint8_t slot)
+{
+    if (((command != PROJECT_PRODUCT_COMMAND_SAVE)
+         && (command != PROJECT_PRODUCT_COMMAND_LOAD))
+        || (slot >= PROJECT_PRODUCT_SLOT_COUNT)
+        || ((command == PROJECT_PRODUCT_COMMAND_LOAD) && (g_present[slot] == 0U))
+        || (project_transport_stopped_stable() == 0U)
+        || (project_load_allowed() == 0U)
+        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+        || (control_domain_settings_asset_mutation_active() != 0U)
+        || (g_project_terminal_valid != 0U)
+        || (g_project_admission_command != PROJECT_PRODUCT_COMMAND_NONE)
+        || (g_storage_request != PROJECT_PRODUCT_COMMAND_NONE)
+        || (project_product_save_busy() != 0U)
+        || (project_product_load_busy() != 0U)
+        || (project_replacement_is_active() != 0U)) return 0U;
+
+    if (command == PROJECT_PRODUCT_COMMAND_SAVE)
+    {
+        g_project_save.workspace = persistence_workspace_acquire_project_save();
+        if (g_project_save.workspace == NULL) return 0U;
+    }
+    else
+    {
+        g_project_load_workspace = persistence_workspace_acquire_project_restore();
+        if (g_project_load_workspace == NULL) return 0U;
+    }
+    g_project_admission_slot = slot;
+    __DMB();
+    g_project_admission_command = command;
+    return 1U;
+}
+
+void project_product_cancel_ui_admission(project_product_command_t command,
+                                         uint8_t slot)
+{
+    if ((g_project_admission_command != command)
+        || (g_project_admission_slot != slot)) return;
+    if ((command == PROJECT_PRODUCT_COMMAND_SAVE)
+        && (g_project_save.workspace != NULL))
+    {
+        persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);
+        g_project_save.workspace = NULL;
+    }
+    else if ((command == PROJECT_PRODUCT_COMMAND_LOAD)
+             && (g_project_load_workspace != NULL))
+    {
+        persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_RESTORE);
+        g_project_load_workspace = NULL;
+    }
+    g_project_admission_command = PROJECT_PRODUCT_COMMAND_NONE;
+    g_project_admission_slot = 0U;
+}
+
 void project_product_refresh_slots(void){if(project_replacement_is_active()!=0U||project_product_save_busy()!=0U||project_product_load_busy()!=0U)return;memset(g_present,0,sizeof(g_present));if(!acquire())return;if(!ensure_directory()){sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);return;}for(uint8_t s=0U;s<PROJECT_PRODUCT_SLOT_COUNT;++s){char x[48],tmp[48],bak[48];FILINFO i;if(path(x,sizeof(x),s)&&side_path(tmp,sizeof(tmp),s,"TMP")&&side_path(bak,sizeof(bak),s,"BAK")){(void)persistent_fatfs_recover_replace(x,tmp,bak);if(f_stat(x,&i)==FR_OK)g_present[s]=1U;}}sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);}
-void project_product_init(void){memset(&g_progress,0,sizeof(g_progress));memset(&g_project_save,0,sizeof(g_project_save));memset(&g_project_load,0,sizeof(g_project_load));g_project_load_workspace=NULL;g_storage_request=PROJECT_PRODUCT_COMMAND_NONE;g_storage_slot=0U;g_project_load_control_ready=0U;g_project_load_control_done=0U;g_project_load_control_result=0U;g_project_load_pattern_committed=0U;}
+void project_product_init(void){memset(&g_progress,0,sizeof(g_progress));memset(&g_project_save,0,sizeof(g_project_save));memset(&g_project_load,0,sizeof(g_project_load));g_project_load_workspace=NULL;g_storage_request=PROJECT_PRODUCT_COMMAND_NONE;g_storage_slot=0U;g_project_admission_command=PROJECT_PRODUCT_COMMAND_NONE;g_project_admission_slot=0U;memset(&g_project_terminal,0,sizeof(g_project_terminal));g_project_terminal_valid=0U;g_project_load_control_ready=0U;g_project_load_control_done=0U;g_project_load_control_result=0U;g_project_load_pattern_committed=0U;}
 void project_product_storage_init(void){project_product_refresh_slots();}
 uint8_t project_product_list_slots(uint8_t*out,uint8_t cap){uint8_t n=0U;if(out==NULL)return 0U;for(uint8_t s=0;s<PROJECT_PRODUCT_SLOT_COUNT&&n<cap;++s)if(g_present[s])out[n++]=s;return n;}
 uint8_t project_product_slot_present(uint8_t s){return(s<PROJECT_PRODUCT_SLOT_COUNT)?g_present[s]:0U;}
@@ -213,13 +295,21 @@ static sd_scheduler_background_admission_t project_save_admit(
 
 static void project_save_finish(uint8_t success)
 {
+    const uint8_t slot = g_project_save.slot;
+    if(success!=0U)
+    {
+        g_present[slot]=1U;
+        (void)boot_context_flash_commit(slot);
+    }
     if(g_project_save.workspace!=NULL)
         persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);
     g_project_save.workspace=NULL;g_project_save.project_open=0U;g_project_save.pattern_open=0U;
     g_project_save.success=(success!=0U)?1U:0U;g_project_save.result_ready=1U;
+    g_project_save.modal_state=PROJECT_SAVE_MODAL_INACTIVE;
     g_project_save.state=PROJECT_SAVE_DONE;g_progress.active=0U;g_progress.complete=1U;g_progress.result=(success!=0U)?PROJECT_PRODUCT_RESULT_SUCCESS:PROJECT_PRODUCT_RESULT_FAILED;
+    project_product_publish_terminal(PROJECT_PRODUCT_COMMAND_SAVE, slot,
+                                     success, (uint8_t)g_save_error);
     control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
-    if(success!=0U){g_present[g_project_save.slot]=1U;(void)boot_context_flash_commit(g_project_save.slot);}
 }
 
 static void project_save_fail(project_product_save_error_t error,int32_t detail)
@@ -278,38 +368,27 @@ static uint8_t project_save_encode_macros(void)
 uint8_t project_product_save(uint8_t slot)
 {
     g_save_error=PROJECT_PRODUCT_SAVE_ERROR_NONE;g_save_detail=0;
-    if ((project_load_allowed() == 0U)
-        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
-        || (pattern_storage_is_pending() != 0U)
-        || (pattern_storage_save_busy() != 0U)
-        || (pattern_control_bank_async_busy() != 0U))
-    {
-        g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SD_BUSY;
-        return 0U;
-    }
-    if(slot>=PROJECT_PRODUCT_SLOT_COUNT){g_save_error=PROJECT_PRODUCT_SAVE_ERROR_ARGUMENT;return 0U;}
-    if(project_replacement_is_active()!=0U
-        || project_product_save_busy()!=0U||project_product_load_busy()!=0U)
-    {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SD_BUSY;return 0U;}
-    if(g_project_save.state==PROJECT_SAVE_DONE)memset(&g_project_save,0,sizeof(g_project_save));
-    persistence_project_save_workspace_t *const workspace = persistence_workspace_acquire_project_save();
-    if(workspace==NULL){g_save_error=PROJECT_PRODUCT_SAVE_ERROR_WORKSPACE_BUSY;return 0U;}
+    if ((g_project_admission_command != PROJECT_PRODUCT_COMMAND_SAVE)
+        || (g_project_admission_slot != slot)
+        || (g_project_save.workspace == NULL)) return 0U;
+    persistence_project_save_workspace_t *const workspace = g_project_save.workspace;
+    g_project_admission_command = PROJECT_PRODUCT_COMMAND_NONE;
     persist_codec_result_t codec_result=persistent_pattern_control_capture(&workspace->working_pattern);
-    if(codec_result!=PERSIST_CODEC_OK){g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SNAPSHOT;g_save_detail=(int32_t)codec_result;persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);return 0U;}
+    if(codec_result!=PERSIST_CODEC_OK){g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SNAPSHOT;g_save_detail=(int32_t)codec_result;persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);g_project_save.workspace=NULL;project_product_publish_terminal(PROJECT_PRODUCT_COMMAND_SAVE,slot,0U,(uint8_t)g_save_error);return 0U;}
     memset(&g_project_save,0,sizeof(g_project_save));g_project_save.workspace=workspace;g_project_save.slot=slot;
     project_capture_metadata(&g_project_save.metadata);
     g_project_save.metadata.pattern_count=pattern_control_bank_count();
     g_project_save.metadata.asset_count=project_control_asset_count();
     if(g_project_save.metadata.asset_count>PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY
             || !project_control_capture_macros(&workspace->macros))
-    {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SNAPSHOT;persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);memset(&g_project_save,0,sizeof(g_project_save));return 0U;}
+    {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SNAPSHOT;persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);memset(&g_project_save,0,sizeof(g_project_save));project_product_publish_terminal(PROJECT_PRODUCT_COMMAND_SAVE,slot,0U,(uint8_t)g_save_error);return 0U;}
     for(uint16_t i=0U;i<g_project_save.metadata.asset_count;++i)
         if(!project_control_get_asset_ordinal(i,&workspace->assets[i]))
-        {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SNAPSHOT;persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);memset(&g_project_save,0,sizeof(g_project_save));return 0U;}
+        {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SNAPSHOT;persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);memset(&g_project_save,0,sizeof(g_project_save));project_product_publish_terminal(PROJECT_PRODUCT_COMMAND_SAVE,slot,0U,(uint8_t)g_save_error);return 0U;}
     if(!path(g_project_save.final_path,sizeof(g_project_save.final_path),slot)
             || !side_path(g_project_save.temporary_path,sizeof(g_project_save.temporary_path),slot,"TMP")
             || !side_path(g_project_save.backup_path,sizeof(g_project_save.backup_path),slot,"BAK"))
-    {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_ARGUMENT;persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);memset(&g_project_save,0,sizeof(g_project_save));return 0U;}
+    {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_ARGUMENT;persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);memset(&g_project_save,0,sizeof(g_project_save));project_product_publish_terminal(PROJECT_PRODUCT_COMMAND_SAVE,slot,0U,(uint8_t)g_save_error);return 0U;}
     g_project_save.media_epoch=sd_access_media_epoch();
     g_project_save.modal_state=PROJECT_SAVE_MODAL;
     g_project_save.state=PROJECT_SAVE_MOUNT;
@@ -319,7 +398,8 @@ uint8_t project_product_save(uint8_t slot)
 uint8_t project_product_save_busy(void)
 {
     return ((g_project_save.state!=PROJECT_SAVE_IDLE)
-            || (g_project_save.modal_state == PROJECT_SAVE_MODAL)) ? 1U : 0U;
+            || (g_project_save.modal_state == PROJECT_SAVE_MODAL)
+            || (g_project_admission_command == PROJECT_PRODUCT_COMMAND_SAVE)) ? 1U : 0U;
 }
 
 project_product_save_modal_state_t project_product_save_modal_state(void)
@@ -628,7 +708,8 @@ static void project_product_start_candidate(
 
 uint8_t project_product_load_busy(void)
 {
-    return (g_project_load.state != PROJECT_LOAD_IDLE) ? 1U : 0U;
+    return ((g_project_load.state != PROJECT_LOAD_IDLE)
+            || (g_project_admission_command == PROJECT_PRODUCT_COMMAND_LOAD)) ? 1U : 0U;
 }
 
 uint8_t project_product_ui_busy(void)
@@ -670,6 +751,7 @@ static void project_product_load_fail_post_p2(void)
 {
     persistence_project_restore_workspace_t *const restore =
         g_project_load_workspace;
+    const uint8_t slot = g_project_load.slot;
     const uint8_t quiesce_requested = g_project_load.quiesce_requested;
     if (restore != NULL && restore->pattern_bank_started != 0U)
     {
@@ -689,6 +771,8 @@ static void project_product_load_fail_post_p2(void)
     g_progress.result=PROJECT_PRODUCT_RESULT_FAILED;
     g_project_load_workspace=NULL;
     g_project_load.state=PROJECT_LOAD_IDLE;
+    project_product_publish_terminal(PROJECT_PRODUCT_COMMAND_LOAD,
+                                     slot, 0U, 1U);
     if (quiesce_requested != 0U)
         project_load_quiesce_end();
 }
@@ -843,6 +927,7 @@ static void project_product_load_finish(uint8_t success)
     g_progress.result=PROJECT_PRODUCT_RESULT_SUCCESS;
     if (quiesce_requested != 0U)
         project_load_quiesce_end();
+    project_product_publish_terminal(PROJECT_PRODUCT_COMMAND_LOAD, slot, 1U, 0U);
 }
 
 static uint8_t project_multi_result_internal(multi_sample_load_result_t result)
@@ -1118,16 +1203,6 @@ void project_product_control_process_intent(uint8_t operation, uint8_t slot)
 {
     if (operation == PROJECT_PRODUCT_COMMAND_SAVE)
     {
-        if ((g_storage_request != PROJECT_PRODUCT_COMMAND_NONE)
-            || (project_product_save_busy() != 0U)
-            || (project_product_load_busy() != 0U)
-            || (project_replacement_is_active() != 0U)
-            || (project_load_allowed() == 0U)
-            || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
-            || (pattern_storage_is_pending() != 0U)
-            || (pattern_storage_save_busy() != 0U)
-            || (pattern_control_bank_async_busy() != 0U))
-            return;
         if (project_product_save(slot) != 0U)
         {
             storage_io_owner_set(STORAGE_OWNER_PROJECT);
@@ -1135,9 +1210,23 @@ void project_product_control_process_intent(uint8_t operation, uint8_t slot)
         }
         return;
     }
+    if (operation == PROJECT_PRODUCT_COMMAND_LOAD)
+    {
+        if ((g_project_admission_command != PROJECT_PRODUCT_COMMAND_LOAD)
+            || (g_project_admission_slot != slot)
+            || (g_project_load_workspace == NULL)) return;
+        g_project_admission_command = PROJECT_PRODUCT_COMMAND_NONE;
+        g_storage_slot = slot;
+        __DMB();
+        g_storage_request = PROJECT_PRODUCT_COMMAND_LOAD;
+        storage_io_owner_set(STORAGE_OWNER_PROJECT);
+        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+        return;
+    }
     if ((operation == PROJECT_PRODUCT_COMMAND_LOAD
          && ((project_load_allowed() == 0U)
-             || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)))
+             || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+             || (control_domain_settings_asset_mutation_active() != 0U)))
         || g_storage_request != PROJECT_PRODUCT_COMMAND_NONE
         || project_product_save_busy() != 0U
         || project_product_load_busy() != 0U
@@ -1146,6 +1235,11 @@ void project_product_control_process_intent(uint8_t operation, uint8_t slot)
         || pattern_storage_save_busy() != 0U
         || pattern_control_bank_async_busy() != 0U)
         return;
+    if (operation == PROJECT_PRODUCT_COMMAND_RESTORE_BOOT)
+    {
+        g_project_load_workspace = persistence_workspace_acquire_project_restore();
+        if (g_project_load_workspace == NULL) return;
+    }
     g_storage_slot = slot;
     __DMB();
     g_storage_request = (project_product_command_t)operation;
@@ -1155,14 +1249,7 @@ void project_product_control_process_intent(uint8_t operation, uint8_t slot)
 
 uint8_t project_product_load(uint8_t slot)
 {
-    if (project_product_save_busy()!=0U || project_product_load_busy()!=0U
-        || project_replacement_is_active()!=0U
-        || sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA
-        || project_load_allowed()==0U
-        || slot>=PROJECT_PRODUCT_SLOT_COUNT || !g_present[slot]) return 0U;
-
-    persistence_project_restore_workspace_t *const restore =
-        persistence_workspace_acquire_project_restore();
+    persistence_project_restore_workspace_t *const restore = g_project_load_workspace;
     persist_codec_project_workspace_t *const workspace =
         (restore != NULL) ? &restore->codec : NULL;
     if (workspace == NULL) return 0U;
@@ -1205,7 +1292,10 @@ uint8_t project_product_load(uint8_t slot)
     if (ok == 0U)
     {
         project_discard_restore_workspace(restore);
+        g_project_load_workspace = NULL;
         g_progress = (project_product_progress_t){0U, 1U, 0U, 0U,PROJECT_PRODUCT_RESULT_FAILED};
+        project_product_publish_terminal(PROJECT_PRODUCT_COMMAND_LOAD, slot,
+                                         0U, (uint8_t)result);
         return 0U;
     }
 
@@ -1247,11 +1337,13 @@ project_product_boot_restore_result_t project_product_restore_boot(void)
     if (!boot_context_flash_load(&context))
     {
         persistence_project_restore_workspace_t *const restore =
-            persistence_workspace_acquire_project_restore();
+            (g_project_load_workspace != NULL) ? g_project_load_workspace
+                                               : persistence_workspace_acquire_project_restore();
         if (restore == NULL || project_product_build_default_candidate(restore) == 0U)
         {
             if (restore != NULL)
                 persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_RESTORE);
+            g_project_load_workspace = NULL;
             return PROJECT_PRODUCT_BOOT_RESTORE_FAILED;
         }
         g_progress=(project_product_progress_t){1U,0U,0U,1U,
@@ -1260,6 +1352,15 @@ project_product_boot_restore_result_t project_product_restore_boot(void)
         return PROJECT_PRODUCT_BOOT_RESTORE_DEFAULTS_READY;
     }
     if (context.active_project_slot >= PROJECT_PRODUCT_SLOT_COUNT)
+    {
+        if (g_project_load_workspace != NULL)
+            persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_RESTORE);
+        g_project_load_workspace = NULL;
+        return PROJECT_PRODUCT_BOOT_RESTORE_FAILED;
+    }
+    if (g_project_load_workspace == NULL)
+        g_project_load_workspace = persistence_workspace_acquire_project_restore();
+    if (g_project_load_workspace == NULL)
         return PROJECT_PRODUCT_BOOT_RESTORE_FAILED;
     return (project_product_load(context.active_project_slot) != 0U)
         ? PROJECT_PRODUCT_BOOT_RESTORE_PROJECT_READY
@@ -1303,7 +1404,8 @@ void project_product_storage_request_service(void)
     switch (command)
     {
         case PROJECT_PRODUCT_COMMAND_LOAD:
-            (void)project_product_load(slot);
+            if (project_product_load(slot) != 0U)
+                ui_service_asset_receipts_invalidate();
             break;
         case PROJECT_PRODUCT_COMMAND_DELETE:
             (void)project_product_delete(slot);

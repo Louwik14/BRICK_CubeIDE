@@ -16,5 +16,7 @@ uint8_t ui_service_dirty_is_set(void);
 void ui_service_led_dirty_set(void);
 uint8_t ui_service_led_dirty_take(void);
 uint8_t ui_service_led_dirty_is_set(void);
+void ui_service_asset_receipts_invalidate(void);
+uint8_t ui_service_asset_receipts_invalidation_take(void);
 
 #endif /* BRICK6_UI_SERVICE_WAKEUP_H */

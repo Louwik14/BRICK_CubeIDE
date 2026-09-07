@@ -39,14 +39,16 @@ uint8_t multi_sample_import_request_delete_index(const char *index_path);
 void multi_sample_import_storage_delete_service(void);
 uint8_t multi_sample_import_take_delete_result(uint8_t *result);
 const char *multi_sample_import_get_index_path(void);
-uint8_t multi_sample_import_clear_batch_begin(void);
-uint8_t multi_sample_import_clear_batch_add(const char *path);
+uint8_t multi_sample_import_clear_batch_begin(uint32_t catalog_sequence,
+                                              uint16_t presented_count);
 uint8_t multi_sample_import_clear_batch_commit(void);
 void multi_sample_import_clear_batch_cancel(void);
 uint8_t multi_sample_import_clear_batch_active(void);
+uint8_t multi_sample_import_clear_batch_work_active(void);
 uint32_t multi_sample_import_clear_batch_request_id(void);
-uint8_t multi_sample_import_take_clear_batch_result(uint16_t *deleted,
+uint8_t multi_sample_import_peek_clear_batch_result(uint16_t *deleted,
                                                     uint16_t *failed);
+uint8_t multi_sample_import_finish_clear_batch_result(uint32_t request_id);
 multi_sample_import_result_t multi_sample_import_get_last_result(void);
 const char *multi_sample_import_get_last_diagnostic(void);
 uint16_t multi_sample_import_get_last_sample_count(void);

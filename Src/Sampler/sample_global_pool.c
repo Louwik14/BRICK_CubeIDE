@@ -670,6 +670,14 @@ uint8_t sample_global_pool_classic_load_active(void)
                      || (g_classic_conversion_reserved != 0U));
 }
 
+uint8_t sample_global_pool_classic_mutation_active(void)
+{
+    return (uint8_t)((g_classic_active_request != 0U)
+                     || (g_classic_request_valid != 0U)
+                     || (g_classic_conversion_reserved != 0U)
+                     || (g_classic_result_valid != 0U));
+}
+
 uint32_t sample_global_pool_classic_load_request_id(void)
 {
     if (g_classic_conversion_reserved != 0U)

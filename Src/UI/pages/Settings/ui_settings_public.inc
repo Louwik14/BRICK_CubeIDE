@@ -97,6 +97,17 @@ uint8_t ui_page_settings_multi_clear_is_active(void)
 
 void ui_page_settings_service_storage_results(void)
 {
+    if (ui_service_asset_receipts_invalidation_take() != 0U)
+    {
+        control_asset_terminal_t discarded;
+        memset(g_ui_asset_receipts, 0, sizeof(g_ui_asset_receipts));
+        memset(g_ui_asset_receipt_valid, 0, sizeof(g_ui_asset_receipt_valid));
+        memset(g_ui_asset_receipt_presented, 0,
+               sizeof(g_ui_asset_receipt_presented));
+        for (control_asset_family_t family = CONTROL_ASSET_FAMILY_CLASSIC;
+             family < CONTROL_ASSET_FAMILY_COUNT; ++family)
+            (void)control_domain_take_asset_terminal(family, &discarded);
+    }
     for (control_asset_family_t family = CONTROL_ASSET_FAMILY_CLASSIC;
          family < CONTROL_ASSET_FAMILY_COUNT; ++family)
     {
@@ -127,8 +138,10 @@ static void ui_page_settings_present_storage_receipts(void)
          family < CONTROL_ASSET_FAMILY_COUNT; ++family)
     {
         if ((g_ui_asset_receipt_valid[family] == 0U)
-            || (g_ui_asset_receipts[family].request_id
-                == g_ui_asset_receipt_presented[family])) continue;
+            || ((g_ui_asset_receipts[family].request_id
+                 == g_ui_asset_receipt_presented[family].request_id)
+                && (g_ui_asset_receipts[family].stage
+                    == g_ui_asset_receipt_presented[family].stage))) continue;
         const control_asset_terminal_t *const receipt = &g_ui_asset_receipts[family];
         uint8_t relevant = 0U;
         if ((family == CONTROL_ASSET_FAMILY_CLASSIC)
@@ -146,8 +159,8 @@ static void ui_page_settings_present_storage_receipts(void)
         {
             if (receipt->stage == CONTROL_ASSET_STAGE_REMOVE)
             {
-                ui_page_settings_select_neighbor_before_delete();
-                (void)ui_page_settings_multi_browser_refresh();
+                ui_page_settings_multi_reconcile_after_remove(
+                    receipt->logical_id, receipt->success);
                 ui_page_settings_status((receipt->success != 0U)
                                             ? "UNLOAD OK" : "UNLOAD FAIL");
             }
@@ -191,7 +204,8 @@ static void ui_page_settings_present_storage_receipts(void)
                 ui_page_settings_refresh_sampler_slots();
             ui_page_settings_status((receipt->success != 0U) ? "LOAD OK" : "LOAD FAIL");
         }
-        g_ui_asset_receipt_presented[family] = receipt->request_id;
+        g_ui_asset_receipt_presented[family].request_id = receipt->request_id;
+        g_ui_asset_receipt_presented[family].stage = receipt->stage;
     }
     ui_page_settings_preview_apply_termination_status();
 }

@@ -108,10 +108,6 @@ uint8_t ui_core_pattern_handle_mode_event(const ui_event_t *ev,
     {
         if (pattern_live_capture_to_slot(g_ui_core_pattern.selected_bank, ev->id) != 0U)
         {
-            if (feedback != 0)
-            {
-                feedback("PAT STORED");
-            }
             ui_core_pattern_exit_to_previous_mode(set_hall_mode);
             return 1U;
         }

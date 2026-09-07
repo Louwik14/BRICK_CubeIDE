@@ -130,6 +130,7 @@ uint8_t sample_global_pool_start_reserved_classic_load(uint32_t request_id);
 uint8_t sample_global_pool_report_classic_load_failure_for_request(
     uint32_t request_id, const char *path, sample_classic_load_error_t error);
 uint8_t sample_global_pool_classic_load_active(void);
+uint8_t sample_global_pool_classic_mutation_active(void);
 uint32_t sample_global_pool_classic_load_request_id(void);
 uint8_t sample_global_pool_peek_classic_load_result(
     sample_classic_load_result_t *out_result);

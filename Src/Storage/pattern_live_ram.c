@@ -20,6 +20,8 @@
 #include "Storage/storage_io_wakeup.h"
 #include "App/control_rt_wakeup.h"
 #include "App/control_domain.h"
+#include "UI/ui_service_wakeup.h"
+#include "stm32h7xx.h"
 
 #define PATTERN_BANK_COUNT 16U
 #define PATTERN_PER_BANK   16U
@@ -63,35 +65,19 @@ static volatile uint8_t g_pattern_save_completion_valid;
 static volatile uint8_t g_pattern_save_completion_success;
 static volatile uint8_t g_pattern_save_completion_bank;
 static volatile uint8_t g_pattern_save_completion_pattern;
-UI_SDRAM static persist_control_pattern_t g_pattern_save_candidate;
 static volatile uint8_t g_pattern_save_request_valid;
 static volatile uint8_t g_pattern_save_request_bank;
 static volatile uint8_t g_pattern_save_request_pattern;
 static persistence_pattern_io_workspace_t *g_pattern_io_workspace;
 static pattern_control_bank_async_operation_t g_pattern_io_operation;
-
-typedef enum
-{
-    PATTERN_LIVE_INTENT_CAPTURE = 1U,
-    PATTERN_LIVE_INTENT_QUEUE = 2U
-} pattern_live_intent_kind_t;
-
-typedef struct
-{
-    uint8_t kind;
-    uint8_t bank;
-    uint8_t pattern;
-    uint8_t boundary_track;
-} pattern_live_intent_t;
-
-#define PATTERN_LIVE_INTENT_CAPACITY 32U
-
-_Static_assert((PATTERN_LIVE_INTENT_CAPACITY
-                & (PATTERN_LIVE_INTENT_CAPACITY - 1U)) == 0U,
-               "Pattern live intent capacity must be a power of two");
-static pattern_live_intent_t g_pattern_live_intents[PATTERN_LIVE_INTENT_CAPACITY];
-static volatile uint8_t g_pattern_live_intent_head;
-static volatile uint8_t g_pattern_live_intent_tail;
+static volatile uint8_t g_pattern_operation_engaged;
+static uint8_t g_pattern_operation;
+static uint8_t g_pattern_operation_bank;
+static uint8_t g_pattern_operation_pattern;
+static uint8_t g_pattern_operation_boundary_track;
+static uint32_t g_pattern_operation_media_epoch;
+static pattern_live_terminal_t g_pattern_terminal;
+static volatile uint8_t g_pattern_terminal_valid;
 
 typedef struct
 {
@@ -139,10 +125,50 @@ static void pattern_live_publish_state(void)
 #define PATTERN_LOAD_ERR_INVALID_SLOT 1U
 #define PATTERN_LOAD_ERR_SD_LOAD 2U
 #define PATTERN_LOAD_ERR_RECORD_ACTIVE 3U
+#define PATTERN_LOAD_ERR_APPLY 4U
+#define PATTERN_SAVE_ERR_CAPTURE 5U
+#define PATTERN_SAVE_ERR_IO 6U
 
 static uint8_t pattern_live_slot_is_valid(uint8_t bank, uint8_t pattern)
 {
     return (bank < PATTERN_BANK_COUNT) && (pattern < PATTERN_PER_BANK);
+}
+
+static void pattern_live_release_operation(void)
+{
+    if (g_pattern_io_workspace != NULL)
+        persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_IO);
+    g_pattern_io_workspace = NULL;
+    g_pattern_io_operation = PATTERN_CONTROL_BANK_ASYNC_NONE;
+    g_pattern_save_request_valid = 0U;
+    g_pattern_operation_engaged = 0U;
+}
+
+static void pattern_live_publish_terminal(uint8_t success, uint8_t diagnostic)
+{
+    const uint8_t operation = g_pattern_operation;
+    const uint8_t bank = g_pattern_operation_bank;
+    const uint8_t pattern = g_pattern_operation_pattern;
+    pattern_live_release_operation();
+    g_pattern_terminal = (pattern_live_terminal_t){
+        operation, bank, pattern, (success != 0U) ? 1U : 0U, diagnostic};
+    __DMB();
+    g_pattern_terminal_valid = 1U;
+    ui_service_dirty_set();
+}
+
+uint8_t pattern_live_operation_busy(void)
+{
+    return g_pattern_operation_engaged;
+}
+
+uint8_t pattern_live_take_terminal(pattern_live_terminal_t *out_terminal)
+{
+    if ((out_terminal == NULL) || (g_pattern_terminal_valid == 0U)) return 0U;
+    *out_terminal = g_pattern_terminal;
+    __DMB();
+    g_pattern_terminal_valid = 0U;
+    return 1U;
 }
 
 static void pattern_storage_publish_save_completion(uint8_t bank,
@@ -226,37 +252,11 @@ uint8_t pattern_live_apply_boot_snapshot(uint8_t resume_transport)
 
 uint8_t pattern_storage_request(uint8_t bank, uint8_t pattern)
 {
-    if ((project_replacement_is_active() != 0U)
-        || (control_domain_project_ui_busy() != 0U)
-        || (project_product_ui_busy() != 0U)) return 0U;
-    if (pattern_storage_save_busy() != 0U)
-        return 0U;
-    if((sd_preview_is_active() != 0U)
-            || (sd_preview_get_state() == SD_PREVIEW_STATE_STOPPING))
-    {
-        sd_preview_request_stop();
-    }
-
-    if (pattern_live_slot_is_valid(bank, pattern) == 0U)
-    {
-        g_pattern_load_state = PATTERN_LOAD_ERROR;
-        g_pattern_load_last_error = PATTERN_LOAD_ERR_INVALID_SLOT;
-        return 0U;
-    }
-
-    if (audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_LOOPER) != 0U)
-    {
-        g_pattern_load_state = PATTERN_LOAD_ERROR;
-        g_pattern_load_last_error = PATTERN_LOAD_ERR_RECORD_ACTIVE;
-        return 0U;
-    }
-
-    if ((g_pattern_load_state == PATTERN_LOAD_READY)
-        && (g_pattern_load_bank == bank)
-        && (g_pattern_load_pattern == pattern))
-    {
-        return 1U;
-    }
+    if ((g_pattern_operation_engaged == 0U)
+        || (g_pattern_operation != PATTERN_LIVE_OPERATION_RECALL)
+        || (g_pattern_operation_bank != bank)
+        || (g_pattern_operation_pattern != pattern)
+        || (g_pattern_io_workspace == NULL)) return 0U;
 
     g_pattern_load_bank = bank;
     g_pattern_load_pattern = pattern;
@@ -264,6 +264,9 @@ uint8_t pattern_storage_request(uint8_t bank, uint8_t pattern)
     g_pattern_slot_meta[bank][pattern].has_snapshot =
         pattern_control_bank_present(bank, pattern);
     g_pattern_load_state = PATTERN_LOAD_REQUESTED;
+    if((sd_preview_is_active() != 0U)
+            || (sd_preview_get_state() == SD_PREVIEW_STATE_STOPPING))
+        sd_preview_request_stop();
     storage_io_owner_set(STORAGE_OWNER_PATTERN);
     storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
@@ -271,7 +274,9 @@ uint8_t pattern_storage_request(uint8_t bank, uint8_t pattern)
 
 uint8_t pattern_storage_save_busy(void)
 {
-    return (uint8_t)((g_pattern_save_request_valid != 0U)
+    return (uint8_t)(((g_pattern_operation_engaged != 0U)
+                      && (g_pattern_operation == PATTERN_LIVE_OPERATION_STORE))
+        || (g_pattern_save_request_valid != 0U)
         || (g_pattern_save_completion_valid != 0U)
         || (g_pattern_io_workspace != NULL)
         || (pattern_control_bank_async_busy() != 0U));
@@ -279,15 +284,11 @@ uint8_t pattern_storage_save_busy(void)
 
 uint8_t pattern_storage_request_save(uint8_t bank, uint8_t pattern)
 {
-    if ((control_domain_project_ui_busy() != 0U)
-        || (project_product_ui_busy() != 0U)
-        || (pattern_live_slot_is_valid(bank, pattern) == 0U)
-        || (pattern_storage_is_pending() != 0U)
-        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
-        || (pattern_storage_save_busy() != 0U))
-    {
-        return 0U;
-    }
+    if ((g_pattern_operation_engaged == 0U)
+        || (g_pattern_operation != PATTERN_LIVE_OPERATION_STORE)
+        || (g_pattern_operation_bank != bank)
+        || (g_pattern_operation_pattern != pattern)
+        || (g_pattern_io_workspace == NULL)) return 0U;
     g_pattern_save_request_bank = bank;
     g_pattern_save_request_pattern = pattern;
     __DMB();
@@ -323,12 +324,10 @@ void pattern_storage_service(uint32_t byte_budget)
         {
             if (completed_success != 0U)
                 g_pattern_slot_meta[completed_bank][completed_pattern].has_snapshot = 1U;
+            g_pattern_io_operation = PATTERN_CONTROL_BANK_ASYNC_NONE;
             pattern_storage_publish_save_completion(completed_bank,
                                                     completed_pattern,
                                                     completed_success);
-            persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_IO);
-            g_pattern_io_workspace = 0;
-            g_pattern_io_operation = PATTERN_CONTROL_BANK_ASYNC_NONE;
         }
         else if ((completed_operation == PATTERN_CONTROL_BANK_ASYNC_LOAD)
                  && (g_pattern_io_workspace != 0)
@@ -351,34 +350,21 @@ void pattern_storage_service(uint32_t byte_budget)
                 control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
             }
         }
-        if (g_pattern_io_workspace != 0
-            && ((g_pattern_io_operation == PATTERN_CONTROL_BANK_ASYNC_SAVE)
-                || (g_pattern_load_state != PATTERN_LOAD_READY)))
-        {
-            persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_IO);
-            g_pattern_io_workspace = 0;
-            g_pattern_io_operation = PATTERN_CONTROL_BANK_ASYNC_NONE;
-        }
         return;
     }
 
     if ((g_pattern_save_request_valid != 0U)
-        && (g_pattern_io_workspace == NULL)
+        && (g_pattern_io_workspace != NULL)
         && (pattern_control_bank_async_busy() == 0U))
     {
-        g_pattern_io_workspace = persistence_workspace_acquire_pattern_io();
-        if (g_pattern_io_workspace == NULL)
-            return;
         g_pattern_save_request_valid = 0U;
         if (pattern_control_bank_store_async_begin(
                 g_pattern_save_request_bank,
                 g_pattern_save_request_pattern,
-                &g_pattern_save_candidate,
+                &g_pattern_io_workspace->pattern,
                 g_pattern_io_workspace->encoded,
                 sizeof(g_pattern_io_workspace->encoded)) == 0U)
         {
-            persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_IO);
-            g_pattern_io_workspace = NULL;
             pattern_storage_publish_save_completion(
                 g_pattern_save_request_bank,
                 g_pattern_save_request_pattern,
@@ -404,6 +390,15 @@ void pattern_storage_service(uint32_t byte_budget)
         return;
     }
 
+    if ((sd_access_storage_status() != SD_STORAGE_STATUS_READY)
+        || (sd_access_media_epoch() != g_pattern_operation_media_epoch))
+    {
+        g_pattern_load_state = PATTERN_LOAD_ERROR;
+        g_pattern_load_last_error = PATTERN_LOAD_ERR_SD_LOAD;
+        control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
+        return;
+    }
+
     if ((sd_preview_is_active() != 0U)
             || (sd_preview_get_state() == SD_PREVIEW_STATE_STOPPING))
     {
@@ -419,11 +414,6 @@ void pattern_storage_service(uint32_t byte_budget)
         return;
     }
 
-    g_pattern_io_workspace = persistence_workspace_acquire_pattern_io();
-    if (g_pattern_io_workspace == 0)
-    {
-        return;
-    }
     if (pattern_control_bank_load_async_begin(
             g_pattern_load_bank,
             g_pattern_load_pattern,
@@ -431,10 +421,8 @@ void pattern_storage_service(uint32_t byte_budget)
             sizeof(g_pattern_io_workspace->encoded),
             &g_pattern_io_workspace->pattern) == 0U)
     {
-        if (pattern_control_bank_present(g_pattern_load_bank, g_pattern_load_pattern) != 0U)
+        if (g_pattern_slot_meta[g_pattern_load_bank][g_pattern_load_pattern].has_snapshot != 0U)
         {
-            persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_IO);
-            g_pattern_io_workspace = 0;
             g_pattern_load_state = PATTERN_LOAD_ERROR;
             g_pattern_load_last_error = PATTERN_LOAD_ERR_SD_LOAD;
             control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
@@ -499,11 +487,7 @@ uint8_t pattern_storage_take_load(uint8_t *out_bank, uint8_t *out_pattern,
     }
     __DMB();
     *out_pattern_data = g_pattern_io_workspace->pattern;
-    persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_IO);
-    g_pattern_io_workspace = NULL;
     g_pattern_io_operation = PATTERN_CONTROL_BANK_ASYNC_NONE;
-    g_pattern_load_state = PATTERN_LOAD_IDLE;
-    g_pattern_load_last_error = 0U;
     return 1U;
 }
 
@@ -515,38 +499,16 @@ void pattern_storage_cancel(void)
     g_pattern_load_last_error = 0U;
     g_pattern_save_request_valid = 0U;
     g_pattern_save_completion_success = 0U;
-    if ((g_pattern_io_workspace != NULL)
-        && (pattern_control_bank_async_busy() == 0U))
-    {
-        persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_IO);
-        g_pattern_io_workspace = NULL;
-        g_pattern_io_operation = PATTERN_CONTROL_BANK_ASYNC_NONE;
-    }
+    if (pattern_control_bank_async_busy() == 0U)
+        pattern_live_release_operation();
     memset(&g_next_pattern, 0, sizeof(g_next_pattern));
 }
 
 static uint8_t pattern_live_capture_to_slot_control(uint8_t bank, uint8_t pattern)
 {
-    if (pattern_live_slot_is_valid(bank, pattern) == 0U)
-    {
-        return 0U;
-    }
-
-    if ((g_pattern_save_completion_valid != 0U)
-        || (pattern_storage_save_busy() != 0U))
-    {
-        return 0U;
-    }
-
-    if (audio_recorder_is_active() != 0U)
-    {
-        /* TODO pending budgeted pattern save: defer the SD store instead of blocking record drain. */
-        return 0U;
-    }
-    if (pattern_storage_save_busy() != 0U)
-        return 0U;
-    if (persistent_pattern_control_capture(&g_pattern_save_candidate) != PERSIST_CODEC_OK)
-        return 0U;
+    if ((g_pattern_io_workspace == NULL)
+        || (persistent_pattern_control_capture(&g_pattern_io_workspace->pattern)
+            != PERSIST_CODEC_OK)) return 0U;
     return pattern_storage_request_save(bank, pattern);
 }
 
@@ -568,97 +530,49 @@ static uint8_t pattern_live_queue_slot_control(uint8_t bank, uint8_t pattern, ui
     }
     uint32_t boundary_generation = 0U;
     (void)seq_runtime_get_track_loop_generation(boundary_track, &boundary_generation);
-
-    if (seq_runtime_is_running() == 0U)
-    {
-        uint8_t ready_bank = 0U;
-        uint8_t ready_pattern = 0U;
-        if ((pattern_storage_load_available(&ready_bank, &ready_pattern) == 0U)
-            || (ready_bank != bank)
-            || (ready_pattern != pattern)
-            || (pattern_storage_take_load(&ready_bank, &ready_pattern, &g_next_pattern) == 0U))
-        {
-            g_pending_queue_valid = 1U;
-            g_pending_queue_bank = bank;
-            g_pending_queue_pattern = pattern;
-            g_pending_boundary_track = boundary_track;
-            g_pending_boundary_generation = boundary_generation;
-            undo_v2_clear_all();
-            return 1U;
-        }
-
-        if (persistent_pattern_control_apply(&g_next_pattern, 0U) != PERSIST_CODEC_OK)
-        {
-            return 0U;
-        }
-        g_active_bank = bank;
-        g_active_pattern = pattern;
-        g_queued_valid = 0U;
-        g_pending_queue_valid = 0U;
-        g_queued_boundary_track = 0U;
-        g_queued_boundary_generation = 0U;
-        undo_v2_clear_all();
-        return 1U;
-    }
-
     g_pending_queue_valid = 1U;
     g_pending_queue_bank = bank;
     g_pending_queue_pattern = pattern;
     g_pending_boundary_track = boundary_track;
     g_pending_boundary_generation = boundary_generation;
 
-    uint8_t ready_bank = 0U;
-    uint8_t ready_pattern = 0U;
-    if ((pattern_storage_load_available(&ready_bank, &ready_pattern) != 0U)
-        && (ready_bank == bank)
-        && (ready_pattern == pattern)
-        && (pattern_storage_take_load(&ready_bank, &ready_pattern, &g_next_pattern) != 0U))
-    {
-        (void)pattern_live_arm_ready_queue(bank,
-                                           pattern,
-                                           &g_next_pattern,
-                                           boundary_track,
-                                           boundary_generation);
-    }
-    undo_v2_clear_all();
-    return 1U;
-}
-
-static uint8_t pattern_live_intent_push(pattern_live_intent_kind_t kind,
-                                        uint8_t bank,
-                                        uint8_t pattern,
-                                        uint8_t boundary_track)
-{
-    const uint8_t head = g_pattern_live_intent_head;
-    const uint8_t next = (uint8_t)((head + 1U) % PATTERN_LIVE_INTENT_CAPACITY);
-    if (next == g_pattern_live_intent_tail)
-        return 0U;
-    g_pattern_live_intents[head] = (pattern_live_intent_t){
-        kind, bank, pattern, boundary_track};
-    __DMB();
-    g_pattern_live_intent_head = next;
-    control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
-    return 1U;
-}
-
-static uint8_t pattern_live_intent_pop(pattern_live_intent_t *out)
-{
-    const uint8_t tail = g_pattern_live_intent_tail;
-    if (tail == g_pattern_live_intent_head)
-        return 0U;
-    if (out != NULL)
-        *out = g_pattern_live_intents[tail];
-    __DMB();
-    g_pattern_live_intent_tail =
-        (uint8_t)((tail + 1U) % PATTERN_LIVE_INTENT_CAPACITY);
     return 1U;
 }
 
 uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
 {
-    if (pattern_live_slot_is_valid(bank, pattern) == 0U)
+    if ((pattern_live_slot_is_valid(bank, pattern) == 0U)
+        || (sd_access_storage_status() != SD_STORAGE_STATUS_READY)
+        || (audio_recorder_is_active() != 0U)) return 0U;
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if ((g_pattern_operation_engaged != 0U)
+        || (g_pattern_terminal_valid != 0U)
+        || (project_product_ui_busy() != 0U)
+        || (control_domain_settings_asset_mutation_active() != 0U)
+        || (sd_access_storage_status() != SD_STORAGE_STATUS_READY)
+        || (audio_recorder_is_active() != 0U))
+    {
+        __set_PRIMASK(primask);
         return 0U;
-    return pattern_live_intent_push(PATTERN_LIVE_INTENT_CAPTURE, bank, pattern, 0U);
+    }
+    g_pattern_io_workspace = persistence_workspace_acquire_pattern_io();
+    if (g_pattern_io_workspace == NULL)
+    {
+        __set_PRIMASK(primask);
+        return 0U;
+    }
+    g_pattern_operation = PATTERN_LIVE_OPERATION_STORE;
+    g_pattern_operation_bank = bank;
+    g_pattern_operation_pattern = pattern;
+    g_pattern_operation_boundary_track = 0U;
+    g_pattern_operation_media_epoch = sd_access_media_epoch();
+    g_pattern_operation_engaged = 1U;
+    const uint8_t accepted = control_domain_request_pattern(
+        &(control_pattern_intent_t){CONTROL_PATTERN_STORE, bank, pattern, 0U});
+    if (accepted == 0U) pattern_live_release_operation();
+    __set_PRIMASK(primask);
+    return accepted;
 }
 
 uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern, uint8_t boundary_track)
@@ -667,8 +581,58 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern, uint8_t boundary_
         return 0U;
     if (boundary_track >= SEQ_LANE_CAPACITY)
         boundary_track = 0U;
-    return pattern_live_intent_push(PATTERN_LIVE_INTENT_QUEUE,
-                                    bank, pattern, boundary_track);
+    if ((sd_access_storage_status() != SD_STORAGE_STATUS_READY)
+        || (audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_LOOPER) != 0U))
+        return 0U;
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if ((g_pattern_operation_engaged != 0U)
+        || (g_pattern_terminal_valid != 0U)
+        || (project_product_ui_busy() != 0U)
+        || (control_domain_settings_asset_mutation_active() != 0U)
+        || (sd_access_storage_status() != SD_STORAGE_STATUS_READY)
+        || (audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_LOOPER) != 0U))
+    {
+        __set_PRIMASK(primask);
+        return 0U;
+    }
+    g_pattern_io_workspace = persistence_workspace_acquire_pattern_io();
+    if (g_pattern_io_workspace == NULL)
+    {
+        __set_PRIMASK(primask);
+        return 0U;
+    }
+    g_pattern_operation = PATTERN_LIVE_OPERATION_RECALL;
+    g_pattern_operation_bank = bank;
+    g_pattern_operation_pattern = pattern;
+    g_pattern_operation_boundary_track = boundary_track;
+    g_pattern_operation_media_epoch = sd_access_media_epoch();
+    g_pattern_operation_engaged = 1U;
+    const uint8_t accepted = control_domain_request_pattern(
+        &(control_pattern_intent_t){CONTROL_PATTERN_RECALL, bank, pattern,
+                                    boundary_track});
+    if (accepted == 0U) pattern_live_release_operation();
+    __set_PRIMASK(primask);
+    return accepted;
+}
+
+void pattern_live_control_process_intent(uint8_t operation, uint8_t bank,
+                                         uint8_t pattern, uint8_t boundary_track)
+{
+    if ((g_pattern_operation_engaged == 0U)
+        || (g_pattern_operation != operation)
+        || (g_pattern_operation_bank != bank)
+        || (g_pattern_operation_pattern != pattern)) return;
+    if (operation == PATTERN_LIVE_OPERATION_STORE)
+    {
+        if (pattern_live_capture_to_slot_control(bank, pattern) == 0U)
+            pattern_live_publish_terminal(0U, PATTERN_SAVE_ERR_CAPTURE);
+    }
+    else if (operation == PATTERN_LIVE_OPERATION_RECALL)
+    {
+        if (pattern_live_queue_slot_control(bank, pattern, boundary_track) == 0U)
+            pattern_live_publish_terminal(0U, PATTERN_LOAD_ERR_SD_LOAD);
+    }
 }
 
 static void pattern_live_control_set_active_state(uint8_t active_bank,
@@ -680,8 +644,6 @@ static void pattern_live_control_set_active_state(uint8_t active_bank,
 
 void pattern_live_control_process(void)
 {
-    pattern_live_intent_t intent;
-
     if (g_pattern_live_state_request_valid != 0U)
     {
         pattern_live_state_request_t request;
@@ -703,21 +665,19 @@ void pattern_live_control_process(void)
         const uint8_t success = g_pattern_save_completion_success;
         __DMB();
         g_pattern_save_completion_valid = 0U;
-        if ((success != 0U)
-            && (g_queued_valid != 0U)
-            && (g_queued_bank == bank)
-            && (g_queued_pattern == pattern))
-            g_next_pattern = g_pattern_save_candidate;
+        (void)bank;
+        (void)pattern;
+        pattern_live_publish_terminal(success,
+            (success != 0U) ? 0U : PATTERN_SAVE_ERR_IO);
     }
-
-    while (pattern_live_intent_pop(&intent) != 0U)
+    if ((g_pattern_operation_engaged != 0U)
+        && (g_pattern_operation == PATTERN_LIVE_OPERATION_RECALL)
+        && (g_pattern_load_state == PATTERN_LOAD_ERROR))
     {
-        if (intent.kind == PATTERN_LIVE_INTENT_CAPTURE)
-            (void)pattern_live_capture_to_slot_control(intent.bank, intent.pattern);
-        else if (intent.kind == PATTERN_LIVE_INTENT_QUEUE)
-            (void)pattern_live_queue_slot_control(intent.bank,
-                                                   intent.pattern,
-                                                   intent.boundary_track);
+        g_pending_queue_valid = 0U;
+        g_queued_valid = 0U;
+        pattern_live_publish_terminal(0U, g_pattern_load_last_error);
+        g_pattern_load_state = PATTERN_LOAD_IDLE;
     }
     pattern_live_publish_state();
 }
@@ -752,6 +712,9 @@ static uint8_t pattern_live_try_take_pending_ready(void)
     {
         if (persistent_pattern_control_apply(&g_next_pattern, 0U) != PERSIST_CODEC_OK)
         {
+            g_pattern_load_state = PATTERN_LOAD_IDLE;
+            g_pending_queue_valid = 0U;
+            pattern_live_publish_terminal(0U, PATTERN_LOAD_ERR_APPLY);
             return 0U;
         }
 
@@ -762,6 +725,8 @@ static uint8_t pattern_live_try_take_pending_ready(void)
         g_queued_boundary_track = 0U;
         g_queued_boundary_generation = 0U;
         undo_v2_clear_all();
+        g_pattern_load_state = PATTERN_LOAD_IDLE;
+        pattern_live_publish_terminal(1U, 0U);
         return 1U;
     }
 
@@ -778,10 +743,13 @@ void pattern_live_service(void)
 {
     (void)pattern_live_try_take_pending_ready();
 
-    if ((g_queued_valid == 0U) || (seq_runtime_is_running() == 0U))
+    if (g_queued_valid == 0U)
     {
         goto publish;
     }
+
+    if (seq_runtime_is_running() == 0U)
+        goto apply;
 
     uint32_t current_generation = 0U;
     if (seq_runtime_get_track_loop_generation(g_queued_boundary_track, &current_generation) == 0U)
@@ -806,7 +774,9 @@ void pattern_live_service(void)
         goto publish;
     }
 
-    if (persistent_pattern_control_apply(&g_next_pattern, 1U) == PERSIST_CODEC_OK)
+apply:
+    if (persistent_pattern_control_apply(&g_next_pattern,
+            (seq_runtime_is_running() != 0U) ? 1U : 0U) == PERSIST_CODEC_OK)
     {
         g_active_bank = g_queued_bank;
         g_active_pattern = g_queued_pattern;
@@ -820,6 +790,15 @@ void pattern_live_service(void)
             g_pending_queue_valid = 0U;
         }
         undo_v2_clear_all();
+        g_pattern_load_state = PATTERN_LOAD_IDLE;
+        pattern_live_publish_terminal(1U, 0U);
+    }
+    else
+    {
+        g_queued_valid = 0U;
+        g_pending_queue_valid = 0U;
+        g_pattern_load_state = PATTERN_LOAD_IDLE;
+        pattern_live_publish_terminal(0U, PATTERN_LOAD_ERR_APPLY);
     }
 
 publish:
@@ -854,9 +833,14 @@ void pattern_live_init(void)
     g_pattern_save_request_valid = 0U;
     g_pattern_save_request_bank = 0U;
     g_pattern_save_request_pattern = 0U;
-    memset(&g_pattern_save_candidate, 0, sizeof(g_pattern_save_candidate));
-    g_pattern_live_intent_head = 0U;
-    g_pattern_live_intent_tail = 0U;
+    g_pattern_operation_engaged = 0U;
+    g_pattern_operation = PATTERN_LIVE_OPERATION_STORE;
+    g_pattern_operation_bank = 0U;
+    g_pattern_operation_pattern = 0U;
+    g_pattern_operation_boundary_track = 0U;
+    g_pattern_operation_media_epoch = 0U;
+    memset(&g_pattern_terminal, 0, sizeof(g_pattern_terminal));
+    g_pattern_terminal_valid = 0U;
     g_pattern_live_state_request_valid = 0U;
     memset(&g_pattern_live_state_request, 0, sizeof(g_pattern_live_state_request));
     g_pattern_live_public_seq = 0U;

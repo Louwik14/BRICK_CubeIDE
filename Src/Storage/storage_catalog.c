@@ -30,6 +30,7 @@ STORAGE_STATE_SDRAM static storage_catalog_view_t g_storage_catalog_view;
 static storage_catalog_request_t g_storage_catalog_request;
 static volatile uint8_t g_storage_catalog_request_valid;
 static volatile uint32_t g_storage_catalog_seq;
+static volatile uint8_t g_storage_catalog_view_retained;
 
 #define STORAGE_CATALOG_ENTRIES_PER_PASS (8U)
 
@@ -435,6 +436,11 @@ void storage_catalog_service(void)
     if (g_storage_catalog_scan.active == 0U)
     {
         if (g_storage_catalog_request_valid == 0U) return;
+        if (g_storage_catalog_view_retained != 0U)
+        {
+            storage_io_owner_wait_resource(STORAGE_OWNER_CATALOG);
+            return;
+        }
         if (storage_catalog_begin_metadata() == 0U) return;
         background_gate_held = 1U;
         g_storage_catalog_scan.request = g_storage_catalog_request;
@@ -549,4 +555,40 @@ uint8_t storage_catalog_snapshot_end(const storage_catalog_snapshot_t *snapshot)
     if (snapshot == NULL) return 0U;
     __DMB();
     return (snapshot->sequence == g_storage_catalog_seq) ? 1U : 0U;
+}
+
+uint8_t storage_catalog_view_retain(storage_catalog_kind_t kind,
+                                    uint32_t sequence,
+                                    uint16_t presented_count,
+                                    storage_catalog_snapshot_t *snapshot)
+{
+    if ((snapshot == NULL) || ((sequence & 1U) != 0U)) return 0U;
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if ((g_storage_catalog_view_retained != 0U)
+        || (g_storage_catalog_scan.active != 0U)
+        || (g_storage_catalog_seq != sequence)
+        || (g_storage_catalog_view.kind != kind)
+        || (presented_count > g_storage_catalog_view.count))
+    {
+        __set_PRIMASK(primask);
+        return 0U;
+    }
+    g_storage_catalog_view_retained = 1U;
+    snapshot->entries = g_storage_catalog_view.entries;
+    snapshot->count = presented_count;
+    snapshot->sequence = sequence;
+    __set_PRIMASK(primask);
+    return 1U;
+}
+
+void storage_catalog_view_release(uint32_t sequence)
+{
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if ((g_storage_catalog_view_retained != 0U)
+        && (g_storage_catalog_seq == sequence))
+        g_storage_catalog_view_retained = 0U;
+    __set_PRIMASK(primask);
+    storage_io_resource_available();
 }

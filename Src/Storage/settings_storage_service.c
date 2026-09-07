@@ -12,6 +12,20 @@
 #include "Storage/sd_access_gate.h"
 #include "Storage/wav_convert.h"
 #include "Seq/seq_runtime.h"
+#include "Storage/persistence_workspace.h"
+
+static uint8_t storage_settings_mutation_admissible(uint8_t requires_media)
+{
+    if ((project_transport_stopped_stable() == 0U)
+        || (seq_runtime_is_start_pending() != 0U)
+        || (control_domain_project_ui_busy() != 0U)
+        || (persistence_workspace_owner() != PERSISTENCE_WORKSPACE_FREE)
+        || (control_domain_settings_asset_mutation_active() != 0U)
+        || ((requires_media != 0U)
+            && (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)))
+        return 0U;
+    return 1U;
+}
 
 uint8_t storage_settings_project_slot_present(uint8_t slot)
 {
@@ -36,17 +50,13 @@ uint8_t storage_settings_catalog_request(storage_catalog_kind_t kind, const char
 
 uint8_t storage_settings_request_classic_load(uint16_t slot, const char *path)
 {
-    if ((project_transport_stopped_stable() == 0U)
-        || (seq_runtime_is_start_pending() != 0U)
-        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)) return 0U;
+    if (storage_settings_mutation_admissible(1U) == 0U) return 0U;
     return sample_global_pool_request_classic_load(slot, path);
 }
 
 uint8_t storage_settings_request_ram_load(uint16_t slot, const char *path)
 {
-    if ((project_transport_stopped_stable() == 0U)
-        || (seq_runtime_is_start_pending() != 0U)
-        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)) return 0U;
+    if (storage_settings_mutation_admissible(1U) == 0U) return 0U;
     return sampler_ram_pool_request_load(slot, path);
 }
 
@@ -54,26 +64,20 @@ uint8_t storage_settings_request_wavetable_load(uint16_t slot,
                                                 const char *path,
                                                 wavetable_source_geometry_t geometry)
 {
-    if ((project_transport_stopped_stable() == 0U)
-        || (seq_runtime_is_start_pending() != 0U)
-        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)) return 0U;
+    if (storage_settings_mutation_admissible(1U) == 0U) return 0U;
     return wavetable_pool_request_load(slot, path, geometry);
 }
 
 uint8_t storage_settings_request_conversion(const char *path)
 {
-    if ((project_transport_stopped_stable() == 0U)
-        || (seq_runtime_is_start_pending() != 0U)
-        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)) return 0U;
+    if (storage_settings_mutation_admissible(1U) == 0U) return 0U;
     return wav_convert_request_start(path);
 }
 
 uint8_t storage_settings_request_classic_with_conversion(uint16_t slot,
                                                          const char *path)
 {
-    if ((project_transport_stopped_stable() == 0U)
-        || (seq_runtime_is_start_pending() != 0U)
-        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)) return 0U;
+    if (storage_settings_mutation_admissible(1U) == 0U) return 0U;
     return wav_convert_request_classic_cycle(slot, path);
 }
 
@@ -95,9 +99,7 @@ uint8_t storage_settings_begin_multi_import(uint16_t slot,
                                             const char *catalog_dir)
 {
     (void)catalog_dir;
-    if ((project_transport_stopped_stable() == 0U)
-        || (seq_runtime_is_start_pending() != 0U)
-        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)) return 0U;
+    if (storage_settings_mutation_admissible(1U) == 0U) return 0U;
     return multi_sample_import_request_folder_for_load(path, slot);
 }
 
@@ -107,9 +109,7 @@ uint8_t storage_settings_begin_multi_load(uint16_t slot,
 {
     (void)path;
     if ((index_path == NULL) || (index_path[0] == '\0')
-        || (project_transport_stopped_stable() == 0U)
-        || (seq_runtime_is_start_pending() != 0U)
-        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)) return 0U;
+        || (storage_settings_mutation_admissible(1U) == 0U)) return 0U;
     const multi_sample_load_result_t result =
         multi_sample_load_request_instrument(MULTI_SAMPLE_POOL_INVALID_ID,
                                              index_path, slot);
@@ -121,24 +121,18 @@ uint8_t storage_settings_begin_multi_replacement(
     uint16_t old_logical, uint16_t slot, const char *source_path,
     const char *index_path, uint8_t import_required)
 {
-    if ((project_transport_stopped_stable() == 0U)
-        || (seq_runtime_is_start_pending() != 0U)
-        || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)) return 0U;
+    if (storage_settings_mutation_admissible(1U) == 0U) return 0U;
     return (multi_sample_load_request_replacement(
                 old_logical, slot, source_path, index_path, import_required)
             == MULTI_SAMPLE_LOAD_OK) ? 1U : 0U;
 }
 
-uint8_t storage_settings_begin_multi_clear(void)
+uint8_t storage_settings_begin_multi_clear(uint32_t catalog_sequence,
+                                           uint16_t presented_count)
 {
-    if ((project_transport_stopped_stable() == 0U)
-        || (seq_runtime_is_start_pending() != 0U)) return 0U;
-    return multi_sample_import_clear_batch_begin();
-}
-
-uint8_t storage_settings_add_multi_clear_path(const char *path)
-{
-    return multi_sample_import_clear_batch_add(path);
+    if (storage_settings_mutation_admissible(0U) == 0U) return 0U;
+    return multi_sample_import_clear_batch_begin(catalog_sequence,
+                                                 presented_count);
 }
 
 uint8_t storage_settings_commit_multi_clear(void)
@@ -148,7 +142,9 @@ uint8_t storage_settings_commit_multi_clear(void)
 
 void storage_settings_cancel_multi(void)
 {
-    (void)control_domain_request_storage_ui(CONTROL_STORAGE_UI_CANCEL_MULTI_LOAD);
+    (void)control_domain_request_storage_ui(
+        CONTROL_STORAGE_UI_CANCEL_MULTI_LOAD,
+        multi_sample_load_external_request_id());
 }
 
 void storage_settings_cancel_multi_clear(void)

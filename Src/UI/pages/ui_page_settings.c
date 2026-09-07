@@ -178,6 +178,7 @@ typedef struct
     uint16_t sample_child_count;
     uint16_t sample_page_start;
     uint16_t multi_entry_count;
+    uint32_t multi_catalog_sequence;
     uint16_t sample_selected;
     uint16_t sample_slot_selected;
     uint16_t sample_left_scroll;
@@ -220,7 +221,12 @@ UI_STATE_SDRAM static control_asset_terminal_t
     g_ui_asset_receipts[CONTROL_ASSET_FAMILY_COUNT];
 UI_STATE_SDRAM static uint8_t
     g_ui_asset_receipt_valid[CONTROL_ASSET_FAMILY_COUNT];
-UI_STATE_SDRAM static uint32_t
+typedef struct
+{
+    uint32_t request_id;
+    uint8_t stage;
+} ui_asset_receipt_key_t;
+UI_STATE_SDRAM static ui_asset_receipt_key_t
     g_ui_asset_receipt_presented[CONTROL_ASSET_FAMILY_COUNT];
 
 static void ui_page_settings_status(const char *status);

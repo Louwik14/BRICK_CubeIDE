@@ -20,6 +20,20 @@ typedef struct
 
 typedef enum
 {
+    CONTROL_PATTERN_STORE = 0U,
+    CONTROL_PATTERN_RECALL
+} control_pattern_operation_t;
+
+typedef struct
+{
+    uint8_t operation;
+    uint8_t bank;
+    uint8_t pattern;
+    uint8_t boundary_track;
+} control_pattern_intent_t;
+
+typedef enum
+{
     CONTROL_PATCH_SAVE = 0,
     CONTROL_PATCH_APPLY,
     CONTROL_PATCH_RENAME,
@@ -336,13 +350,14 @@ typedef struct
 
 typedef enum
 {
-    CONTROL_STORAGE_UI_CANCEL_MULTI_LOAD = 0U,
-    CONTROL_STORAGE_UI_CLEAR_CONVERSION
+    CONTROL_STORAGE_UI_CANCEL_MULTI_LOAD = 0U
 } control_storage_ui_operation_t;
 
 typedef struct
 {
     uint8_t operation;
+    uint8_t reserved[3];
+    uint32_t request_id;
 } control_storage_ui_intent_t;
 
 typedef enum
@@ -406,12 +421,14 @@ typedef enum
     CONTROL_UI_MSG_PREVIEW_GAIN,
     CONTROL_UI_MSG_REC_BUS,
     CONTROL_UI_MSG_STORAGE,
-    CONTROL_UI_MSG_CALIBRATION
+    CONTROL_UI_MSG_CALIBRATION,
+    CONTROL_UI_MSG_PATTERN
 } control_ui_message_type_t;
 
 typedef union
 {
     control_project_intent_t project;
+    control_pattern_intent_t pattern;
     control_patch_intent_t patch;
     control_track_intent_t track;
     control_routing_intent_t routing;
@@ -452,6 +469,7 @@ extern "C" {
 void control_domain_init(void);
 void control_domain_start(float postgain, float output_compensation);
 uint8_t control_domain_request_project(const control_project_intent_t *intent);
+uint8_t control_domain_request_pattern(const control_pattern_intent_t *intent);
 uint8_t control_domain_request_patch(const control_patch_intent_t *intent);
 uint8_t control_domain_request_track(const control_track_intent_t *intent);
 uint8_t control_domain_request_routing(const control_routing_intent_t *intent);
@@ -465,10 +483,9 @@ uint8_t control_domain_publish_asset_terminal(const control_asset_terminal_t *te
 uint8_t control_domain_asset_terminal_available(control_asset_family_t family);
 uint8_t control_domain_take_asset_terminal(control_asset_family_t family,
                                            control_asset_terminal_t *out_terminal);
-uint8_t control_domain_peek_asset_remove(control_asset_family_t family,
-                                         control_asset_terminal_t *out_terminal);
-uint8_t control_domain_finish_asset_remove(control_asset_family_t family,
-                                           uint32_t request_id);
+uint8_t control_domain_peek_asset_remove(control_asset_terminal_t *out_terminal);
+uint8_t control_domain_finish_asset_remove(uint32_t request_id);
+uint8_t control_domain_settings_asset_mutation_active(void);
 uint8_t control_domain_request_clipboard(const control_clipboard_intent_t *intent);
 uint8_t control_domain_request_keyboard(uint8_t operation, int8_t value);
 uint8_t control_domain_request_audio_fx(const control_audio_fx_intent_t *intent);
@@ -481,7 +498,8 @@ uint8_t control_domain_request_rec_bus(uint16_t source_entity_mask,
                                        uint8_t arm, uint8_t source_flags,
                                        uint8_t has_sample_time,
                                        uint64_t sample_time);
-uint8_t control_domain_request_storage_ui(uint8_t operation);
+uint8_t control_domain_request_storage_ui(uint8_t operation,
+                                          uint32_t request_id);
 uint8_t control_domain_request_calibration(uint8_t operation);
 uint8_t control_domain_request_storage_audio_param(uint8_t entity,
                                                    uint16_t parameter_id,

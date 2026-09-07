@@ -148,6 +148,7 @@ uint8_t sampler_ram_pool_load_async_begin_prepared(uint16_t ram_slot,
 void sampler_ram_pool_load_async_service(void);
 uint8_t sampler_ram_pool_load_async_busy(void);
 uint8_t sampler_ram_pool_load_async_work_active(void);
+uint8_t sampler_ram_pool_ui_load_work_active(void);
 uint32_t sampler_ram_pool_load_async_request_id(void);
 sampler_ram_requester_t sampler_ram_pool_load_async_requester(void);
 uint8_t sampler_ram_pool_load_async_peek_result(

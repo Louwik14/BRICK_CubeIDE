@@ -1,11 +1,13 @@
 #include "UI/ui_service_wakeup.h"
 
 #include "cmsis_os.h"
+#include "stm32h7xx.h"
 
 extern osThreadId_t UI_SERVICEHandle;
 
 static volatile uint8_t g_ui_dirty;
 static volatile uint8_t g_ui_led_dirty;
+static volatile uint8_t g_ui_asset_receipts_invalidation_pending;
 
 void ui_service_wakeup(uint32_t flags)
 {
@@ -56,4 +58,20 @@ uint8_t ui_service_led_dirty_take(void)
 uint8_t ui_service_led_dirty_is_set(void)
 {
     return g_ui_led_dirty;
+}
+
+void ui_service_asset_receipts_invalidate(void)
+{
+    g_ui_asset_receipts_invalidation_pending = 1U;
+    ui_service_dirty_set();
+}
+
+uint8_t ui_service_asset_receipts_invalidation_take(void)
+{
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    const uint8_t pending = g_ui_asset_receipts_invalidation_pending;
+    g_ui_asset_receipts_invalidation_pending = 0U;
+    __set_PRIMASK(primask);
+    return pending;
 }

@@ -449,22 +449,11 @@ static void ui_page_settings_sample_confirm_accept(void)
             }
         }
 
-        if (storage_settings_begin_multi_clear() == 0U)
+        if (storage_settings_begin_multi_clear(g_ui_settings.multi_catalog_sequence,
+                                               g_ui_settings.multi_entry_count) == 0U)
         {
             ui_page_settings_status("CLEAR BUSY");
             return;
-        }
-        for (uint16_t i = 0U; i < g_ui_settings.multi_entry_count; ++i)
-        {
-            const ui_settings_multi_entry_t *const entry = &g_ui_settings.multi_entries[i];
-            if ((entry->type == UI_SETTINGS_MULTI_ENTRY_MULTI_ITEM)
-                && (entry->index_path[0] != '\0')
-                && (storage_settings_add_multi_clear_path(entry->index_path) == 0U))
-            {
-                storage_settings_cancel_multi_clear();
-                ui_page_settings_status("CLEAR BUSY");
-                return;
-            }
         }
         if (storage_settings_commit_multi_clear() == 0U)
         {

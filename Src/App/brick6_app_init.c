@@ -336,24 +336,13 @@ void brick6_app_storage_dispatch_once(void)
 
 static void brick6_app_control_process_storage_completions(void)
 {
-    uint8_t project_slot = 0U;
-    uint8_t project_success = 0U;
-    (void)project_product_save_take_result(&project_slot, &project_success);
-
-    for (control_asset_family_t family = CONTROL_ASSET_FAMILY_CLASSIC;
-         family < CONTROL_ASSET_FAMILY_COUNT; ++family)
+    control_asset_terminal_t remove_terminal;
+    if (control_domain_peek_asset_remove(&remove_terminal) != 0U)
     {
-        control_asset_terminal_t remove_terminal;
-        if ((control_domain_asset_terminal_available(family) == 0U)
-            && (control_domain_peek_asset_remove(family, &remove_terminal) != 0U))
+        if ((control_domain_asset_terminal_available(remove_terminal.family) == 0U)
+            && (control_domain_publish_asset_terminal(&remove_terminal) != 0U))
         {
-            if (control_domain_publish_asset_terminal(&remove_terminal) == 0U)
-            {
-                Error_Handler();
-                return;
-            }
-            (void)control_domain_finish_asset_remove(
-                family, remove_terminal.request_id);
+            (void)control_domain_finish_asset_remove(remove_terminal.request_id);
         }
     }
 
@@ -383,7 +372,7 @@ static void brick6_app_control_process_storage_completions(void)
     {
         uint16_t deleted = 0U;
         uint16_t failed = 0U;
-        if (multi_sample_import_take_clear_batch_result(&deleted, &failed) != 0U)
+        if (multi_sample_import_peek_clear_batch_result(&deleted, &failed) != 0U)
         {
             control_asset_terminal_t terminal = {0};
             terminal.family = CONTROL_ASSET_FAMILY_MULTI;
@@ -397,6 +386,8 @@ static void brick6_app_control_process_storage_completions(void)
                 Error_Handler();
                 return;
             }
+            (void)multi_sample_import_finish_clear_batch_result(
+                terminal.request_id);
         }
     }
 
@@ -597,10 +588,10 @@ void brick6_app_control_process_causes(uint32_t wake_flags)
     if (ui_boot_loading_restore_pending() != 0U
         && sd_access_storage_status() == SD_STORAGE_STATUS_READY)
     {
-        const project_product_boot_restore_result_t restore_result =
-            project_product_restore_boot();
+        project_product_control_process_intent(
+            PROJECT_PRODUCT_COMMAND_RESTORE_BOOT, 0U);
         ui_boot_loading_note_restore_started(
-            restore_result != PROJECT_PRODUCT_BOOT_RESTORE_FAILED);
+            project_product_ui_busy() != 0U);
     }
 
     if ((wake_flags & CONTROL_RT_WAKE_STREAM_RELEASE) != 0U)
@@ -628,7 +619,10 @@ void brick6_app_control_process_causes(uint32_t wake_flags)
         }
     }
     if ((wake_flags & CONTROL_RT_WAKE_UI) != 0U)
+    {
         control_domain_process_ui_messages();
+        pattern_live_service();
+    }
     if ((wake_flags & CONTROL_RT_WAKE_STORAGE) != 0U)
     {
         control_domain_process_storage_messages();

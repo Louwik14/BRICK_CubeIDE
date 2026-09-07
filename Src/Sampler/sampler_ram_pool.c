@@ -886,6 +886,17 @@ uint8_t sampler_ram_pool_load_async_work_active(void)
         || (g_sampler_ram_load_job.state != SAMPLER_RAM_LOAD_IDLE));
 }
 
+uint8_t sampler_ram_pool_ui_load_work_active(void)
+{
+    return (uint8_t)(((g_sampler_ram_load_request_valid != 0U)
+                      && (g_sampler_ram_load_requester
+                          == SAMPLER_RAM_REQUESTER_UI))
+                     || ((g_sampler_ram_load_job.state
+                          != SAMPLER_RAM_LOAD_IDLE)
+                         && (g_sampler_ram_load_job.requester
+                             == SAMPLER_RAM_REQUESTER_UI)));
+}
+
 uint32_t sampler_ram_pool_load_async_request_id(void)
 {
     return g_sampler_ram_load_job.request_id;

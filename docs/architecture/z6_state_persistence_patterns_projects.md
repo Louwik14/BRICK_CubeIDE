@@ -41,8 +41,11 @@ recuperable.
 
 Pattern Save/Load, Project Save, browser SD, Sample RAM, Wavetable et Clear Multi utilisent l'admission Background cooperative de `sd_scheduler_runtime`. Toute demande RT ou transaction active produit `NOT_NOW`; le client conserve son etat et rend la main.
 
-Pattern Save capture un DTO immutable au point d'admission; les mutations
-ulterieures ne modifient pas le document en cours d'ecriture. Pattern Load
+Pattern Save reserve son workspace a l'admission, puis capture son DTO lorsque
+CONTROL traite le petit message Store dans la FIFO UI->CONTROL. Les commandes
+anterieures de cette FIFO sont donc incluses et les commandes posterieures ne
+le sont pas; aucune garantie supplementaire n'est imposee aux sources qui ne
+passent pas par cette FIFO. Pattern Load
 valide puis committe le candidat comme nouvel etat CONTROL et peut donc
 remplacer les edits non sauvegardes presents au moment de l'application.
 
@@ -88,10 +91,21 @@ le contrat de remplacement l'exige.
 
 Les Project Save/Load et Pattern Save/Load sont mutuellement exclusifs au point
 d'admission: l'action incompatible est refusee, sans file d'attente ni retry
-differe. Les mutations utilisateur Multi (Load, Import, Delete, Clear, Replace)
-restent mutuellement exclusives au point d'admission. La gate SD reste une
-protection physique, pas le mecanisme normal de refus produit. Pattern Save/Load
-conserve son comportement non modal documente ci-dessus.
+differe. Dans Settings/Browser, une seule mutation d'asset utilisateur peut etre
+engagee a la fois, toutes familles confondues: Load, conversion, Import/Replace,
+Remove et Clear Indexes partagent ce contrat d'admission, sans owner global ni
+queue generale. Le predicat commun ne fait que lire leurs occupations locales;
+les continuations conversion vers Classic et Import vers Multi restent dans le
+meme cycle. Un Project Load est refuse tant qu'un tel cycle est engage. Apres
+son admission effective, il invalide les anciens recus asset conserves par l'UI;
+Project Save ne les invalide pas. La gate SD reste une protection physique, pas
+le mecanisme normal de refus produit. Pattern Save/Recall conserve son
+comportement non modal documente ci-dessus. Le ring utilisateur Pattern dedie
+n'existe plus: Store/Recall utilisent de petits messages dans la FIFO
+UI->CONTROL existante, sans DTO Pattern, sans redimensionnement et sans seconde
+chronologie. Le workspace persistence porte l'exclusion sans owner global
+supplementaire jusqu'au terminal fonctionnel; pour Recall, l'etat READY et
+l'attente de frontiere appartiennent au meme cycle.
 
 Les quatre Asset Loads (Multi, Stream, Wavetable et Sampler RAM) sont
 `STOPPED`-only, avec gate avant creation du job, mutation de pool, demande SD ou

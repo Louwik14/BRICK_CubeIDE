@@ -47,6 +47,13 @@ typedef enum {
     PROJECT_PRODUCT_COMMAND_BLANK,
     PROJECT_PRODUCT_COMMAND_RESTORE_BOOT
 } project_product_command_t;
+typedef struct
+{
+    uint8_t operation;
+    uint8_t slot;
+    uint8_t success;
+    uint8_t diagnostic;
+} project_product_terminal_t;
 void project_product_init(void);
 void project_product_storage_init(void);
 void project_product_refresh_slots(void);
@@ -69,6 +76,10 @@ project_product_boot_restore_result_t project_product_restore_boot(void);
 uint8_t project_product_get_progress(project_product_progress_t*out);
 uint8_t project_product_ui_busy(void);
 project_product_command_t project_product_ui_busy_command(void);
+uint8_t project_product_admit_ui(project_product_command_t command, uint8_t slot);
+void project_product_cancel_ui_admission(project_product_command_t command,
+                                         uint8_t slot);
+uint8_t project_product_take_terminal(project_product_terminal_t *out_terminal);
 void project_product_storage_request_service(void);
 void project_product_control_process_intent(uint8_t operation, uint8_t slot);
 #endif

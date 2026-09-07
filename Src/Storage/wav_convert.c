@@ -749,8 +749,11 @@ void wav_convert_service(uint32_t byte_budget)
         const uint32_t request_id = g_wav_convert_classic_request_id;
         char path_copy[SAMPLE_CLASSIC_PATH_MAX];
         (void)snprintf(path_copy, sizeof(path_copy), "%s", path);
+        const wav_convert_error_t error = g_wav_convert.error;
         g_wav_convert_classic_continuation = 0U;
         g_wav_convert_classic_request_id = 0U;
+        memset(&g_wav_convert, 0, sizeof(g_wav_convert));
+        g_wav_convert.error = error;
         (void)sample_global_pool_report_classic_load_failure_for_request(
             request_id, path_copy, SAMPLE_CLASSIC_LOAD_CONVERT_FAIL);
     }
@@ -767,6 +770,13 @@ void wav_convert_service(uint32_t byte_budget)
                 SAMPLE_CLASSIC_LOAD_CONVERT_FAIL);
         }
         g_wav_convert.state = WAV_CONVERT_STATE_IDLE;
+    }
+    if ((g_wav_convert.state == WAV_CONVERT_STATE_DONE)
+        || (g_wav_convert.state == WAV_CONVERT_STATE_FAILED))
+    {
+        const wav_convert_error_t error = g_wav_convert.error;
+        memset(&g_wav_convert, 0, sizeof(g_wav_convert));
+        g_wav_convert.error = error;
     }
     if ((g_wav_convert.state == WAV_CONVERT_STATE_ACTIVE)
             && ((g_wav_convert.state != state)
@@ -827,13 +837,4 @@ uint8_t wav_convert_get_progress_percent(void)
         percent = 100U;
     }
     return (uint8_t)percent;
-}
-
-void wav_convert_clear_finished(void)
-{
-    if ((g_wav_convert.state == WAV_CONVERT_STATE_DONE)
-        || (g_wav_convert.state == WAV_CONVERT_STATE_FAILED))
-    {
-        memset(&g_wav_convert, 0, sizeof(g_wav_convert));
-    }
 }

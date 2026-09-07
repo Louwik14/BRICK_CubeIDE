@@ -17,6 +17,7 @@
 #include "Param/live_parameter_migration.h"
 #include "Param/param_macro.h"
 #include "Sampler/multi_sample_loader.h"
+#include "Sampler/multi_sample_import.h"
 #include "Sampler/multi_sample_pool.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_global_pool.h"
@@ -39,6 +40,7 @@
 #include "Storage/project_audio_prepared_state.h"
 #include "Storage/project_load_quiesce.h"
 #include "Storage/project_product.h"
+#include "Storage/persistence_workspace.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/sd_preview.h"
 #include "Storage/sample_capture.h"
@@ -162,8 +164,15 @@ static volatile uint32_t g_control_storage_head;
 static volatile uint32_t g_control_storage_tail;
 static control_asset_terminal_t g_control_asset_terminals[CONTROL_ASSET_FAMILY_COUNT];
 static volatile uint8_t g_control_asset_terminal_valid[CONTROL_ASSET_FAMILY_COUNT];
-static control_asset_terminal_t g_control_asset_remove_pending[CONTROL_ASSET_FAMILY_COUNT];
-static volatile uint8_t g_control_asset_remove_valid[CONTROL_ASSET_FAMILY_COUNT];
+typedef struct
+{
+    control_asset_terminal_t terminal;
+    volatile uint8_t valid;
+    uint8_t physical_started;
+    uint8_t terminal_ready;
+} control_asset_remove_context_t;
+
+static control_asset_remove_context_t g_control_asset_remove;
 static uint32_t g_control_asset_request_id_counter;
 static volatile uint32_t g_control_storage_overflow_count;
 
@@ -260,23 +269,40 @@ uint8_t control_domain_request_##_name(const _intent_type *intent) \
 
 uint8_t control_domain_request_project(const control_project_intent_t *intent)
 {
-    if (intent == NULL)
-        return 0U;
+    if (intent == NULL) return 0U;
+    control_ui_message_payload_t payload = { 0 };
+    payload.project = *intent;
     if ((intent->operation == CONTROL_PROJECT_SAVE)
         || (intent->operation == CONTROL_PROJECT_LOAD))
     {
-        if ((project_load_allowed() == 0U)
-            || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
-            || (g_control_project_request_pending != 0U)
-            || (project_product_ui_busy() != 0U)
-            || (pattern_storage_is_pending() != 0U)
-            || (pattern_storage_save_busy() != 0U)
-            || (pattern_control_bank_async_busy() != 0U))
+        const project_product_command_t command =
+            (intent->operation == CONTROL_PROJECT_SAVE)
+                ? PROJECT_PRODUCT_COMMAND_SAVE : PROJECT_PRODUCT_COMMAND_LOAD;
+        const uint32_t primask = __get_PRIMASK();
+        __disable_irq();
+        if (project_product_admit_ui(command, intent->slot) == 0U)
+        {
+            __set_PRIMASK(primask);
             return 0U;
+        }
+        const uint8_t accepted = control_domain_submit_ui_message(
+            CONTROL_UI_MSG_PROJECT, &payload, 0U);
+        if (accepted == 0U)
+            project_product_cancel_ui_admission(command, intent->slot);
+        __set_PRIMASK(primask);
+        if (accepted != 0U) control_rt_wakeup(CONTROL_RT_WAKE_UI);
+        return accepted;
     }
-    control_ui_message_payload_t payload = { 0 };
-    payload.project = *intent;
     return control_domain_submit_ui_message(CONTROL_UI_MSG_PROJECT, &payload, 1U);
+}
+
+uint8_t control_domain_request_pattern(const control_pattern_intent_t *intent)
+{
+    if (intent == NULL) return 0U;
+    control_ui_message_payload_t payload = {0};
+    payload.pattern = *intent;
+    return control_domain_submit_ui_message(CONTROL_UI_MSG_PATTERN,
+                                            &payload, 1U);
 }
 CONTROL_DOMAIN_REQUEST(patch, CONTROL_UI_MSG_PATCH, patch,
                        control_patch_intent_t)
@@ -292,8 +318,6 @@ CONTROL_DOMAIN_REQUEST(mod, CONTROL_UI_MSG_MOD, mod,
                        control_mod_intent_t)
 CONTROL_DOMAIN_REQUEST(macro, CONTROL_UI_MSG_MACRO, macro,
                        control_macro_intent_t)
-CONTROL_DOMAIN_REQUEST(asset, CONTROL_UI_MSG_ASSET, asset,
-                       control_asset_intent_t)
 
 uint8_t control_domain_request_asset_deferred(const control_asset_intent_t *intent)
 {
@@ -340,12 +364,128 @@ static uint32_t control_domain_next_asset_request_id(void)
     return g_control_asset_request_id_counter;
 }
 
-uint8_t control_domain_peek_asset_remove(control_asset_family_t family,
-                                         control_asset_terminal_t *out_terminal)
+uint8_t control_domain_settings_asset_mutation_active(void)
 {
-    if ((family >= CONTROL_ASSET_FAMILY_COUNT) || (out_terminal == NULL)
-        || (g_control_asset_remove_valid[family] == 0U)) return 0U;
-    const uint16_t runtime = g_control_asset_remove_pending[family].physical_id;
+    if ((g_control_asset_remove.valid != 0U)
+        || (sample_global_pool_classic_mutation_active() != 0U)
+        || (wav_convert_is_active() != 0U)
+        || (sampler_ram_pool_ui_load_work_active() != 0U)
+        || (wavetable_pool_ui_load_work_active() != 0U)
+        || (multi_sample_user_mutation_active() != 0U)
+        || (multi_sample_import_is_busy() != 0U)
+        || (multi_sample_import_delete_is_busy() != 0U)
+        || (multi_sample_import_clear_batch_work_active() != 0U)
+        || (multi_sample_pool_clear_is_active() != 0U)) return 1U;
+    for (control_asset_family_t family = CONTROL_ASSET_FAMILY_CLASSIC;
+         family < CONTROL_ASSET_FAMILY_COUNT; ++family)
+    {
+        if (g_control_asset_terminal_valid[family] != 0U) return 1U;
+    }
+    return 0U;
+}
+
+static uint8_t control_domain_prepare_remove_terminal(
+    const control_asset_intent_t *intent, control_asset_terminal_t *terminal)
+{
+    if ((intent == NULL) || (terminal == NULL)) return 0U;
+    memset(terminal, 0, sizeof(*terminal));
+    terminal->stage = CONTROL_ASSET_STAGE_REMOVE;
+    terminal->logical_id = intent->logical;
+    terminal->physical_id = intent->runtime;
+    terminal->request_id = intent->request_id;
+    terminal->result = 1U;
+    if (intent->kind == PERSIST_ASSET_SAMPLE_STREAM)
+    {
+        const sample_global_slot_t *const slot =
+            sample_global_pool_get_slot(intent->runtime);
+        if (slot == NULL) return 0U;
+        terminal->family = CONTROL_ASSET_FAMILY_CLASSIC;
+        (void)snprintf(terminal->path, sizeof(terminal->path), "%s", slot->path);
+    }
+    else if (intent->kind == PERSIST_ASSET_SAMPLE_RAM)
+    {
+        const sampler_ram_slot_t *const slot =
+            sampler_ram_pool_get_slot(intent->runtime);
+        if (slot == NULL) return 0U;
+        terminal->family = CONTROL_ASSET_FAMILY_RAM;
+        (void)snprintf(terminal->path, sizeof(terminal->path), "%s", slot->path);
+    }
+    else if (intent->kind == PERSIST_ASSET_WAVETABLE)
+    {
+        const wavetable_slot_t *const slot = wavetable_pool_get_slot(intent->runtime);
+        if (slot == NULL) return 0U;
+        terminal->family = CONTROL_ASSET_FAMILY_WAVETABLE;
+        (void)snprintf(terminal->path, sizeof(terminal->path), "%s", slot->path);
+    }
+    else if (intent->kind == PERSIST_ASSET_MULTI)
+    {
+        const multi_sample_instrument_t *const slot =
+            multi_sample_pool_get_instrument(intent->runtime);
+        if (slot == NULL) return 0U;
+        terminal->family = CONTROL_ASSET_FAMILY_MULTI;
+        (void)snprintf(terminal->path, sizeof(terminal->path), "%s",
+                       slot->index_path);
+    }
+    else return 0U;
+    return (terminal->path[0] != '\0') ? 1U : 0U;
+}
+
+uint8_t control_domain_request_asset(const control_asset_intent_t *intent)
+{
+    if (intent == NULL) return 0U;
+    if (intent->operation != CONTROL_ASSET_REMOVE_RUNTIME)
+    {
+        control_ui_message_payload_t payload = {0};
+        payload.asset = *intent;
+        return control_domain_submit_ui_message(CONTROL_UI_MSG_ASSET,
+                                                &payload, 1U);
+    }
+    if ((control_domain_settings_asset_mutation_active() != 0U)
+        || (control_domain_project_ui_busy() != 0U)
+        || (persistence_workspace_owner() != PERSISTENCE_WORKSPACE_FREE)) return 0U;
+    control_asset_terminal_t terminal;
+    if (control_domain_prepare_remove_terminal(intent, &terminal) == 0U) return 0U;
+    control_ui_message_payload_t payload = {0};
+    payload.asset = *intent;
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if ((control_domain_settings_asset_mutation_active() != 0U)
+        || (control_domain_project_ui_busy() != 0U)
+        || (persistence_workspace_owner() != PERSISTENCE_WORKSPACE_FREE))
+    {
+        __set_PRIMASK(primask);
+        return 0U;
+    }
+    if (terminal.request_id == 0U)
+        terminal.request_id = control_domain_next_asset_request_id();
+    payload.asset.request_id = terminal.request_id;
+    memset(&g_control_asset_remove, 0, sizeof(g_control_asset_remove));
+    g_control_asset_remove.terminal = terminal;
+    __DMB();
+    g_control_asset_remove.valid = 1U;
+    if (control_domain_submit_ui_message(
+            CONTROL_UI_MSG_ASSET, &payload, 0U) == 0U)
+    {
+        g_control_asset_remove.valid = 0U;
+        __set_PRIMASK(primask);
+        return 0U;
+    }
+    __set_PRIMASK(primask);
+    control_rt_wakeup(CONTROL_RT_WAKE_UI);
+    return 1U;
+}
+
+uint8_t control_domain_peek_asset_remove(control_asset_terminal_t *out_terminal)
+{
+    if ((out_terminal == NULL) || (g_control_asset_remove.valid == 0U)) return 0U;
+    if (g_control_asset_remove.terminal_ready != 0U)
+    {
+        *out_terminal = g_control_asset_remove.terminal;
+        return 1U;
+    }
+    if (g_control_asset_remove.physical_started == 0U) return 0U;
+    const control_asset_family_t family = g_control_asset_remove.terminal.family;
+    const uint16_t runtime = g_control_asset_remove.terminal.physical_id;
     uint8_t empty = 0U;
     if (family == CONTROL_ASSET_FAMILY_CLASSIC)
         empty = (sample_global_pool_get_classic_state(runtime)
@@ -357,19 +497,16 @@ uint8_t control_domain_peek_asset_remove(control_asset_family_t family,
     else if (family == CONTROL_ASSET_FAMILY_MULTI)
         empty = (multi_sample_pool_get_state(runtime) == MULTI_SAMPLE_INSTRUMENT_EMPTY);
     if (empty == 0U) return 0U;
-    *out_terminal = g_control_asset_remove_pending[family];
+    *out_terminal = g_control_asset_remove.terminal;
     return 1U;
 }
 
-uint8_t control_domain_finish_asset_remove(control_asset_family_t family,
-                                           uint32_t request_id)
+uint8_t control_domain_finish_asset_remove(uint32_t request_id)
 {
-    if ((family >= CONTROL_ASSET_FAMILY_COUNT)
-        || (g_control_asset_remove_valid[family] == 0U)
-        || (g_control_asset_remove_pending[family].request_id != request_id)) return 0U;
-    g_control_asset_remove_valid[family] = 0U;
-    memset(&g_control_asset_remove_pending[family], 0,
-           sizeof(g_control_asset_remove_pending[family]));
+    if ((g_control_asset_remove.valid == 0U)
+        || (g_control_asset_remove.terminal.request_id != request_id)) return 0U;
+    g_control_asset_remove.valid = 0U;
+    memset(&g_control_asset_remove, 0, sizeof(g_control_asset_remove));
     return 1U;
 }
 
@@ -429,10 +566,12 @@ uint8_t control_domain_request_rec_bus(uint16_t source_entity_mask,
     return control_domain_submit_ui_message(CONTROL_UI_MSG_REC_BUS, &payload, 1U);
 }
 
-uint8_t control_domain_request_storage_ui(uint8_t operation)
+uint8_t control_domain_request_storage_ui(uint8_t operation,
+                                          uint32_t request_id)
 {
     control_ui_message_payload_t payload = { 0 };
     payload.storage.operation = operation;
+    payload.storage.request_id = request_id;
     return control_domain_submit_ui_message(CONTROL_UI_MSG_STORAGE, &payload, 1U);
 }
 
@@ -648,9 +787,7 @@ static void control_domain_apply_storage_ui_intent(
     const control_storage_ui_intent_t *intent)
 {
     if (intent->operation == CONTROL_STORAGE_UI_CANCEL_MULTI_LOAD)
-        (void)multi_sample_cancel_load();
-    else if (intent->operation == CONTROL_STORAGE_UI_CLEAR_CONVERSION)
-        wav_convert_clear_finished();
+        (void)multi_sample_cancel_load_request(intent->request_id);
 }
 
 uint8_t control_domain_request_storage_audio_param(uint8_t entity,
@@ -1107,85 +1244,57 @@ static void control_domain_apply_asset_intent(const control_asset_intent_t *inte
     }
 
     if (intent->operation != CONTROL_ASSET_REMOVE_RUNTIME) return;
-    control_asset_family_t family = CONTROL_ASSET_FAMILY_COUNT;
-    control_asset_terminal_t terminal = {0};
-    terminal.stage = CONTROL_ASSET_STAGE_REMOVE;
-    terminal.logical_id = intent->logical;
-    terminal.physical_id = intent->runtime;
-    terminal.request_id = (intent->request_id != 0U)
-        ? intent->request_id : control_domain_next_asset_request_id();
-    terminal.success = 0U;
-    terminal.result = 1U;
+    if ((g_control_asset_remove.valid == 0U)
+        || (g_control_asset_remove.physical_started != 0U)
+        || (g_control_asset_remove.terminal_ready != 0U)
+        || (g_control_asset_remove.terminal.request_id != intent->request_id)
+        || (g_control_asset_remove.terminal.logical_id != intent->logical)
+        || (g_control_asset_remove.terminal.physical_id != intent->runtime)) return;
     uint8_t accepted = 0U;
     if (intent->kind == PERSIST_ASSET_SAMPLE_STREAM)
-        family = CONTROL_ASSET_FAMILY_CLASSIC;
-    else if (intent->kind == PERSIST_ASSET_SAMPLE_RAM)
-        family = CONTROL_ASSET_FAMILY_RAM;
-    else if (intent->kind == PERSIST_ASSET_WAVETABLE)
-        family = CONTROL_ASSET_FAMILY_WAVETABLE;
-    else if (intent->kind == PERSIST_ASSET_MULTI)
-        family = CONTROL_ASSET_FAMILY_MULTI;
-    if ((family >= CONTROL_ASSET_FAMILY_COUNT)
-        || (g_control_asset_remove_valid[family] != 0U)) return;
-    const sample_global_slot_t *classic_slot = NULL;
-    if (intent->kind == PERSIST_ASSET_SAMPLE_STREAM)
     {
-        family = CONTROL_ASSET_FAMILY_CLASSIC;
-        classic_slot = sample_global_pool_get_slot(intent->runtime);
-        (void)snprintf(terminal.path, sizeof(terminal.path), "%s",
-                       (classic_slot != NULL) ? classic_slot->path : "");
         if (sample_global_pool_request_clear_classic(intent->runtime) != 0U)
         {
             accepted = 1U;
-            /* Classic logical identity is the physical slot; the clear
-             * request above is its canonical removal operation. */
-            terminal.success = 1U;
+            g_control_asset_remove.terminal.success = 1U;
         }
     }
     else if (intent->kind == PERSIST_ASSET_SAMPLE_RAM)
     {
-        family = CONTROL_ASSET_FAMILY_RAM;
-        const sampler_ram_slot_t *slot = sampler_ram_pool_get_slot(intent->runtime);
-        (void)snprintf(terminal.path, sizeof(terminal.path), "%s",
-                       (slot != NULL) ? slot->path : "");
         if (sampler_ram_pool_request_clear(intent->runtime) != 0U)
         {
             accepted = 1U;
-            terminal.success = project_control_remove_sample(intent->logical);
+            g_control_asset_remove.terminal.success =
+                project_control_remove_sample(intent->logical);
         }
     }
     else if (intent->kind == PERSIST_ASSET_WAVETABLE)
     {
-        family = CONTROL_ASSET_FAMILY_WAVETABLE;
-        const wavetable_slot_t *slot = wavetable_pool_get_slot(intent->runtime);
-        (void)snprintf(terminal.path, sizeof(terminal.path), "%s",
-                       (slot != NULL) ? slot->path : "");
         if (wavetable_pool_request_clear(intent->runtime) != 0U)
         {
             accepted = 1U;
-            terminal.success = project_control_remove_wavetable(intent->logical);
+            g_control_asset_remove.terminal.success =
+                project_control_remove_wavetable(intent->logical);
         }
     }
     else if (intent->kind == PERSIST_ASSET_MULTI)
     {
-        family = CONTROL_ASSET_FAMILY_MULTI;
-        const multi_sample_instrument_t *slot =
-            multi_sample_pool_get_instrument(intent->runtime);
-        (void)snprintf(terminal.path, sizeof(terminal.path), "%s",
-                       (slot != NULL) ? slot->index_path : "");
         if (multi_sample_pool_request_clear_instrument(intent->runtime) != 0U)
         {
             accepted = 1U;
-            terminal.success = project_control_remove_multi(intent->logical);
+            g_control_asset_remove.terminal.success =
+                project_control_remove_multi(intent->logical);
         }
     }
-    if ((family < CONTROL_ASSET_FAMILY_COUNT)
-        && (terminal.path[0] != '\0')
-        && (accepted != 0U))
+    if (accepted != 0U)
     {
-        terminal.family = family;
-        g_control_asset_remove_pending[family] = terminal;
-        g_control_asset_remove_valid[family] = 1U;
+        g_control_asset_remove.physical_started = 1U;
+    }
+    else
+    {
+        g_control_asset_remove.terminal.success = 0U;
+        g_control_asset_remove.terminal_ready = 1U;
+        control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
     }
 }
 
@@ -1211,7 +1320,8 @@ static uint8_t control_domain_project_busy_allows_message(
 {
     if (project_product_ui_busy() == 0U)
         return 1U;
-    return (type == CONTROL_UI_MSG_PROJECT) ? 1U : 0U;
+    return ((g_control_project_request_pending != 0U)
+            || (type == CONTROL_UI_MSG_PROJECT)) ? 1U : 0U;
 }
 
 void control_domain_process_ui_messages(void)
@@ -1235,6 +1345,14 @@ void control_domain_process_ui_messages(void)
         {
         case CONTROL_UI_MSG_PROJECT:
             control_domain_apply_project_intent(&message.payload.project);
+            g_control_project_request_pending = 0U;
+            break;
+        case CONTROL_UI_MSG_PATTERN:
+            pattern_live_control_process_intent(
+                message.payload.pattern.operation,
+                message.payload.pattern.bank,
+                message.payload.pattern.pattern,
+                message.payload.pattern.boundary_track);
             break;
         case CONTROL_UI_MSG_PATCH:
             control_domain_apply_patch_intent(&message.payload.patch);
@@ -1320,9 +1438,6 @@ void control_domain_process_ui_messages(void)
         && (g_control_ui_tail != g_control_ui_head))
         control_rt_wakeup(CONTROL_RT_WAKE_UI);
 
-    if (g_control_ui_tail == g_control_ui_head)
-        g_control_project_request_pending = 0U;
-
     if (processed != 0U)
     {
         ui_service_dirty_set();
@@ -1398,10 +1513,7 @@ void control_domain_init(void)
     memset(g_control_asset_terminals, 0, sizeof(g_control_asset_terminals));
     memset((void *)g_control_asset_terminal_valid, 0,
            sizeof(g_control_asset_terminal_valid));
-    memset(g_control_asset_remove_pending, 0,
-           sizeof(g_control_asset_remove_pending));
-    memset((void *)g_control_asset_remove_valid, 0,
-           sizeof(g_control_asset_remove_valid));
+    memset(&g_control_asset_remove, 0, sizeof(g_control_asset_remove));
     g_control_asset_request_id_counter = 0U;
     sample_stream_admission_control_init();
     g_control_ui_head = 0U;

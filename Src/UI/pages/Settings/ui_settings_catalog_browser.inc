@@ -81,6 +81,48 @@ static void ui_page_settings_select_neighbor_before_delete(void)
     g_ui_settings.sample_slot_selected = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
 }
 
+static void ui_page_settings_multi_reconcile_after_remove(
+    uint16_t removed_logical_id, uint8_t success)
+{
+    const uint16_t selected = g_ui_settings.sample_slot_selected;
+    ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_MULTI);
+    if (success == 0U)
+    {
+        for (uint16_t i = 0U; i < g_ui_settings.sampler_slot_count; ++i)
+        {
+            if (g_ui_settings.sampler_slots[i] == selected)
+            {
+                g_ui_settings.sample_slot_selected = selected;
+                break;
+            }
+        }
+        return;
+    }
+    for (uint16_t i = 0U; i < g_ui_settings.sampler_slot_count; ++i)
+    {
+        if ((selected != removed_logical_id)
+            && (g_ui_settings.sampler_slots[i] == selected))
+        {
+            g_ui_settings.sample_slot_selected = selected;
+            return;
+        }
+    }
+    uint16_t successor = MULTI_SAMPLE_POOL_INVALID_ID;
+    uint16_t predecessor = MULTI_SAMPLE_POOL_INVALID_ID;
+    for (uint16_t i = 0U; i < g_ui_settings.sampler_slot_count; ++i)
+    {
+        const uint16_t logical_id = g_ui_settings.sampler_slots[i];
+        if ((logical_id > removed_logical_id)
+            && ((successor == MULTI_SAMPLE_POOL_INVALID_ID)
+                || (logical_id < successor))) successor = logical_id;
+        if ((logical_id < removed_logical_id)
+            && ((predecessor == MULTI_SAMPLE_POOL_INVALID_ID)
+                || (logical_id > predecessor))) predecessor = logical_id;
+    }
+    g_ui_settings.sample_slot_selected =
+        (successor != MULTI_SAMPLE_POOL_INVALID_ID) ? successor : predecessor;
+}
+
 static void ui_page_settings_refresh_sampler_slots(void)
 {
     ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_CLASSIC);
@@ -594,7 +636,10 @@ static uint8_t ui_page_settings_multi_browser_refresh(void)
         }
 
         if (storage_settings_catalog_snapshot_end(&snapshot) != 0U)
+        {
+            g_ui_settings.multi_catalog_sequence = snapshot.sequence;
             goto multi_snapshot_valid;
+        }
     }
 
     (void)storage_settings_catalog_request(STORAGE_CATALOG_MULTI, g_ui_settings.sample_dir);

@@ -1467,6 +1467,15 @@ uint8_t multi_sample_load_is_active(void)
     return 0U;
 }
 
+uint8_t multi_sample_user_mutation_active(void)
+{
+    return (uint8_t)((g_multi_external_request_valid != 0U)
+        || (g_multi_external_request.used != 0U)
+        || ((g_multi_load_completion_valid != 0U)
+            && (g_multi_load_completion.requester
+                == MULTI_SAMPLE_LOAD_REQUESTER_UI)));
+}
+
 uint8_t multi_sample_load_peek_external(
     uint32_t request_id, multi_sample_external_request_t *out_request)
 {
@@ -1589,21 +1598,15 @@ uint8_t multi_sample_load_take_completion(
     return 1U;
 }
 
-uint8_t multi_sample_cancel_load(void)
+uint8_t multi_sample_cancel_load_request(uint32_t request_id)
 {
-    if (g_multi_external_request.used != 0U)
-    {
-        g_multi_external_request.cancelled = 1U;
-        storage_io_owner_set(STORAGE_OWNER_MULTI);
-        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
-        return 1U;
-    }
-    if (g_multi_load_active == 0U)
-    {
-        return 0U;
-    }
+    if ((request_id == 0U) || (g_multi_external_request.used == 0U)
+        || (g_multi_external_request.request_id != request_id)) return 0U;
 
-    g_multi_bulk.cancel_requested = 1U;
+    g_multi_external_request.cancelled = 1U;
+    if ((g_multi_load_active != 0U) && (g_multi_load_request.used != 0U)
+        && (g_multi_load_request.request_id == request_id))
+        g_multi_bulk.cancel_requested = 1U;
     storage_io_owner_set(STORAGE_OWNER_MULTI);
     storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
@@ -1611,7 +1614,11 @@ uint8_t multi_sample_cancel_load(void)
 
 void multi_sample_cancel_all_loads(void)
 {
-    (void)multi_sample_cancel_load();
+    if (g_multi_external_request.used != 0U)
+        (void)multi_sample_cancel_load_request(
+            g_multi_external_request.request_id);
+    else if (g_multi_load_active != 0U)
+        g_multi_bulk.cancel_requested = 1U;
     g_multi_external_request_valid = 0U;
     if (multi_loader_external_is_replacement() != 0U)
         g_multi_external_request.cancelled = 1U;

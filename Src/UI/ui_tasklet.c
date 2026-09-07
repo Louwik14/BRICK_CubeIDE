@@ -33,9 +33,12 @@
 #include "encoders.h"
 #include "font.h"
 #include "Storage/settings_storage_service.h"
+#include "Storage/pattern_live_ram.h"
+#include "Storage/project_product.h"
 #include "stm32h7xx_hal.h"
 #include "ui_boot_loading.h"
 #include "ui_core.h"
+#include "ui_core_feedback.h"
 #include "ui_event.h"
 #include "ui_page_manager.h"
 #include "pages/ui_page_audio_rec.h"
@@ -55,6 +58,28 @@
  * - init / main loop / tasklet selon le module.
  */
 static uint8_t g_ui_tasklet_init = 0U;
+
+static void ui_tasklet_service_product_terminals(void)
+{
+    pattern_live_terminal_t pattern_terminal;
+    if (pattern_live_take_terminal(&pattern_terminal) != 0U)
+    {
+        const char *message = "PAT FAIL";
+        if (pattern_terminal.success != 0U)
+            message = (pattern_terminal.operation == PATTERN_LIVE_OPERATION_STORE)
+                ? "PAT STORED" : "PAT APPLIED";
+        ui_core_feedback_set(message, HAL_GetTick());
+    }
+    project_product_terminal_t project_terminal;
+    if (project_product_take_terminal(&project_terminal) != 0U)
+    {
+        const char *message = "PROJECT FAIL";
+        if (project_terminal.success != 0U)
+            message = (project_terminal.operation == PROJECT_PRODUCT_COMMAND_SAVE)
+                ? "PROJECT SAVED" : "PROJECT LOADED";
+        ui_core_feedback_set(message, HAL_GetTick());
+    }
+}
 
 typedef enum
 {
@@ -642,6 +667,7 @@ void ui_tasklet_initialize(void)
 void ui_tasklet_process_input(void)
 {
     ui_tasklet_initialize();
+    ui_tasklet_service_product_terminals();
     ui_page_settings_service_storage_results();
     if (ui_boot_loading_is_active() != 0U)
     {
@@ -661,6 +687,7 @@ void ui_tasklet_process_input(void)
 void ui_tasklet_process_presentation(uint8_t deadline_due)
 {
     ui_tasklet_initialize();
+    ui_tasklet_service_product_terminals();
     ui_page_settings_service_storage_results();
     ui_boot_loading_service();
     if ((deadline_due != 0U) || (ui_service_dirty_is_set() != 0U))
