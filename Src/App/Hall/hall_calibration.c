@@ -763,6 +763,20 @@ uint8_t hall_calibration_load(void)
     const hall_calibration_blob_t *previous_format =
         (const hall_calibration_blob_t *)HALL_CAL_FLASH_ADDRESS;
 
+    g_calibration_active = 0U;
+    g_calibration_done = 0U;
+    g_calibration_stage = 0U;
+    g_calibration_next_sample_ms = UINT32_MAX;
+    for (uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
+    {
+        g_press_count[i] = 0U;
+        g_key_done[i] = 0U;
+        g_key_state[i] = KEY_STATE_RELEASED;
+        g_hold_start_tick[i] = 0U;
+        hall_median_buffer_reset(&g_min_buffer[i]);
+        hall_median_buffer_reset(&g_max_buffer[i]);
+    }
+
     memset(&g_user_profile, 0, sizeof(g_user_profile));
     hall_engine_set_user_velocity_profile(0);
 
@@ -778,6 +792,7 @@ uint8_t hall_calibration_load(void)
                                      stored->velocity_mode,
                                      stored->velocity_curve);
         hall_engine_set_calibration(g_cal_blob.min, g_cal_blob.max);
+        g_calibration_done = 1U;
         return 1U;
     }
 
@@ -792,8 +807,9 @@ uint8_t hall_calibration_load(void)
                                          ? (uint8_t)HALL_VEL_PROFILE_USER
                                          : (uint8_t)HALL_VEL_PROFILE_DEFAULT,
                                      (uint8_t)HALL_VEL_MODE_DV_PEAK,
-                                     (uint8_t)HALL_VEL_CURVE_LOG);
+                                       (uint8_t)HALL_VEL_CURVE_LOG);
         hall_engine_set_calibration(g_cal_blob.min, g_cal_blob.max);
+        g_calibration_done = 1U;
         return 1U;
     }
 
@@ -804,6 +820,7 @@ uint8_t hall_calibration_load(void)
 
     g_cal_blob = *previous_format;
     hall_engine_set_calibration(g_cal_blob.min, g_cal_blob.max);
+    g_calibration_done = 1U;
 
     return 1U;
 }

@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "Platform/memory_layout.h"
+#include "IPC/ui_visible_data.h"
 #include "stm32h7xx.h"
 
 #define SYNTH_WAVEFORM_PUBLISH_PERIOD_SAMPLES 2400U
@@ -163,6 +164,8 @@ static void synth_waveform_audio_publish(void)
     g_synth_waveform_layout.snapshot = snapshot;
     __DMB();
     g_synth_waveform_layout.sequence = sequence + 2U;
+    ui_visible_data_notify(UI_VISIBLE_DATA_SYNTH_WAVEFORM,
+                           snapshot.generation);
     g_audio_state.ready_mask = 0U;
     g_audio_state.cycle_started_mask = 0U;
     g_audio_state.selected_instance = SYNTH_WAVEFORM_INVALID_INSTANCE;

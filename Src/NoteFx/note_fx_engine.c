@@ -82,6 +82,11 @@ static uint64_t g_work_slot_mask;
 
 static uint8_t slot_has_owned(const note_fx_slot_runtime_t *runtime);
 
+uint8_t note_fx_engine_has_pending_work(void)
+{
+    return (g_work_slot_mask != 0U) ? 1U : 0U;
+}
+
 static uint64_t slot_work_bit(uint8_t track, uint8_t slot)
 {
     return UINT64_C(1) << ((uint32_t)track * NOTE_FX_SLOT_COUNT + slot);

@@ -90,8 +90,10 @@ static uint8_t g_control_user_calibration_count;
 static void brick6_app_control_calibration_service(uint32_t now_ms)
 {
     uint8_t calibration_changed = 0U;
+    uint8_t calibration_was_active = 0U;
     if (hall_calibration_is_active() != 0U)
     {
+        calibration_was_active = 1U;
         hall_calibration_process();
         if ((g_control_calibration_seen == 0U)
             || (g_control_calibration_stage != hall_calibration_get_stage()))
@@ -118,7 +120,8 @@ static void brick6_app_control_calibration_service(uint32_t now_ms)
 
     if (hall_calibration_is_done() != 0U)
     {
-        if (g_control_calibration_saved == 0U)
+        if ((calibration_was_active != 0U)
+            && (g_control_calibration_saved == 0U))
         {
             hall_calibration_save();
             g_control_calibration_saved = 1U;
@@ -602,7 +605,13 @@ void brick6_app_control_process_causes(uint32_t wake_flags)
     }
 
     if ((wake_flags & CONTROL_RT_WAKE_HALL) != 0U)
+    {
         hall_keyboard_bridge_process();
+        /* Hall notes enqueue timed NoteFx commands.  Keep the existing
+         * CONTROL service in the same wake cycle, including with STOPPED
+         * transport where no sequencer deadline is armed. */
+        seq_runtime_time_adapter_process();
+    }
     if ((wake_flags & CONTROL_RT_WAKE_ENCODER) != 0U)
         (void)encoder_control_dispatcher_service();
     if ((wake_flags & CONTROL_RT_WAKE_MIDI) != 0U)

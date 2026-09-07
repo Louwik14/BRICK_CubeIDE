@@ -60,6 +60,7 @@ uint8_t live_parameter_is_audio_owned(param_id_t parameter)
         case PARAM_WAVE_BALANCE:
         case PARAM_WAVE_TUNE:
         case PARAM_WAVE_DETUNE:
+        case PARAM_PRISM_OSC1_MODEL:
         case PARAM_PRISM_VOLUME:
         case PARAM_PRISM_TUNE:
         case PARAM_PRISM_PITCH_MOD1:
@@ -67,6 +68,7 @@ uint8_t live_parameter_is_audio_owned(param_id_t parameter)
         case PARAM_PRISM_OSC1_AMOD:
         case PARAM_PRISM_OSC1_PARAM2:
         case PARAM_PRISM_BALANCE:
+        case PARAM_PRISM_OSC2_MODEL:
         case PARAM_PRISM_DETUNE:
         case PARAM_PRISM_DRIFT:
         case PARAM_PRISM_PITCH_MOD2:
@@ -77,16 +79,21 @@ uint8_t live_parameter_is_audio_owned(param_id_t parameter)
         case PARAM_STACK_OSC2_LEVEL:
         case PARAM_STACK_OSC3_LEVEL:
         case PARAM_STACK_NOISE_LEVEL:
+        case PARAM_STACK_OSC1_MODEL:
         case PARAM_STACK_OSC1_TUNE:
         case PARAM_STACK_OSC1_TIMBRE:
         case PARAM_STACK_OSC1_COLOR:
+        case PARAM_STACK_OSC2_MODEL:
         case PARAM_STACK_OSC2_TUNE:
         case PARAM_STACK_OSC2_TIMBRE:
         case PARAM_STACK_OSC2_COLOR:
+        case PARAM_STACK_OSC3_MODEL:
         case PARAM_STACK_OSC3_TUNE:
         case PARAM_STACK_OSC3_TIMBRE:
         case PARAM_STACK_OSC3_COLOR:
         case PARAM_STACK_OSC_DETUNE:
+        case PARAM_FM_ALGORITHM:
+        case PARAM_DRUM_MD_MODEL:
         case PARAM_MIX_REVERB_WET:
         case PARAM_MODFX_MODEL:
         case PARAM_MODFX_RATE:

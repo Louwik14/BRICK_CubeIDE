@@ -1,6 +1,7 @@
 #include "Audio/audio_waveform_capture_audio.h"
 
 #include "Board/board_audio_format.h"
+#include "IPC/ui_visible_data.h"
 #include "Platform/memory_layout.h"
 #include "stm32h7xx.h"
 #include <string.h>
@@ -76,6 +77,8 @@ static void publish_invalid(brick_entity_id_t entity_id)
     ++g_audio_waveform_layout.generation;
     __DMB();
     g_audio_waveform_layout.sequence = sequence + 2U;
+    ui_visible_data_notify(UI_VISIBLE_DATA_AUDIO_WAVEFORM,
+                           g_audio_waveform_layout.generation);
 }
 
 static void publish_capture(void)
@@ -93,6 +96,9 @@ static void publish_capture(void)
     if (g_audio_waveform_layout.generation == 0U) g_audio_waveform_layout.generation = 1U;
     __DMB();
     g_audio_waveform_layout.sequence = sequence + 2U;
+
+    ui_visible_data_notify(UI_VISIBLE_DATA_AUDIO_WAVEFORM,
+                           g_audio_waveform_layout.generation);
 
     g_capture.write_buffer ^= 1U;
     g_capture.write_sample = 0U;

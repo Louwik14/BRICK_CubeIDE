@@ -21,6 +21,7 @@ _Static_assert(NOTE_FX_PIPELINE_MAX_STAGE_FANOUT == 3U,
 
 void note_fx_pipeline_init(void);
 uint16_t note_fx_pipeline_diagnostic_queue_depth(void);
+uint8_t note_fx_pipeline_has_pending_work(void);
 void note_fx_pipeline_panic(void);
 
 note_event_result_t note_fx_pipeline_submit(const note_event_t *event);

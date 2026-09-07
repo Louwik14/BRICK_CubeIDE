@@ -41,6 +41,9 @@ bool live_parameter_audio_publication_submit_bulk_now(
     const live_parameter_audio_bulk_t *bulk);
 bool live_parameter_audio_publication_submit_bulk_scheduled(
     const live_parameter_audio_bulk_t *bulk, uint64_t effective_sample_time);
+bool live_parameter_audio_publication_submit_program_and_tone_scheduled(
+    uint8_t track, uint32_t program_descriptor, track_runtime_type_t type,
+    uint64_t effective_sample_time);
 bool live_parameter_audio_publication_submit_tone_program_scheduled(
     uint8_t track, track_runtime_type_t type, uint64_t effective_sample_time);
 bool live_parameter_audio_publication_submit_dated(

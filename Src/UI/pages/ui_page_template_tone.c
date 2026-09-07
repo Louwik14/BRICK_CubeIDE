@@ -365,6 +365,8 @@ static ui_template_family_t g_ui_template_tone_family_drum = {
 /* TONE resolution/navigation, engine-specific widgets and lifecycle remain in their original sequence.
  * Private fragments share this translation unit to preserve UI state and call order. */
 
+static void ui_page_template_tone_update_synth_live_request(void);
+
 #include "Tone/ui_tone_navigation.inc"
 
 #include "Tone/ui_tone_synth_widgets.inc"

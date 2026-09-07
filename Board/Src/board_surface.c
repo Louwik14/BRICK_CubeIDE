@@ -5,6 +5,8 @@
 #include "tim.h"
 #include "App/control_rt_wakeup.h"
 
+#define MASTER_VOLUME_RAW_DEADBAND 128U
+
 static volatile uint16_t *g_adc1_mailbox;
 static volatile uint8_t g_master_volume_valid;
 static volatile uint16_t g_master_volume_last_raw;
@@ -133,15 +135,21 @@ uint8_t board_surface_is_hall_adc1_callback(void *handle)
     if (is_adc1 != 0U)
     {
         const uint16_t raw = (g_adc1_mailbox != 0) ? g_adc1_mailbox[2U] : 0U;
+        const uint16_t previous = g_master_volume_last_raw;
+        const uint16_t delta = (raw >= previous)
+            ? (uint16_t)(raw - previous) : (uint16_t)(previous - raw);
         const uint8_t changed = ((g_master_volume_valid == 0U)
-                                 || (raw != g_master_volume_last_raw)) ? 1U : 0U;
+                                 || (delta >= MASTER_VOLUME_RAW_DEADBAND))
+            ? 1U : 0U;
 
         /* Hall continuous sampling is consumed in this DMA callback.  CONTROL
-         * only needs a doorbell for the first valid pot value or a new value. */
+         * only needs a doorbell for the first valid pot value or a meaningful
+         * new value.  Keep the last accepted raw value as the local deadband
+         * reference so ADC noise cannot become a CONTROL event. */
         g_master_volume_valid = 1U;
-        g_master_volume_last_raw = raw;
         if (changed != 0U)
         {
+            g_master_volume_last_raw = raw;
             ++g_master_volume_version;
             control_rt_wakeup(CONTROL_RT_WAKE_LATEST);
         }

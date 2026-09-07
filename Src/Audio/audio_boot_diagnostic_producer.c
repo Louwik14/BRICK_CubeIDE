@@ -1,5 +1,6 @@
 #include "Audio/audio_boot_diagnostic_producer.h"
 #include "IPC/audio_boot_diagnostic_layout.h"
+#include "IPC/ui_visible_data.h"
 #include "stm32h7xx.h"
 #include <string.h>
 
@@ -53,6 +54,10 @@ void audio_boot_diag_producer_publish_cpu(uint8_t valid, uint32_t avg_permille)
     if (avg_permille > UINT16_MAX) avg_permille = UINT16_MAX;
     g_audio_diag.cpu_load_valid = (valid != 0U) ? 1U : 0U;
     g_audio_diag.avg_permille = (uint16_t)avg_permille;
+    const uint32_t visible_version =
+        ((uint32_t)g_audio_diag.cpu_load_valid << 16U)
+        | g_audio_diag.avg_permille;
     publish();
     audio_boot_diag_unlock(primask);
+    ui_visible_data_notify(UI_VISIBLE_DATA_CPU_LOAD, visible_version);
 }

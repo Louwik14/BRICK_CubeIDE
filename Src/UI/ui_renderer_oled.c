@@ -27,13 +27,13 @@
 
 #include "App/control_domain.h"
 #include "IPC/audio_boot_diagnostic_reader.h"
+#include "IPC/ui_visible_data.h"
 #include "main.h"
 #include "drv_display.h"
 #include "font.h"
 #include "Storage/settings_storage_service.h"
 #include "ui_boot_loading.h"
 #include "ui_page_manager.h"
-#include "ui_renderer_template.h"
 #include "pages/ui_page_calibration.h"
 #include "pages/ui_page_settings.h"
 #include "ui_roll_popup.h"
@@ -52,36 +52,11 @@
 static volatile uint8_t g_ui_rendering = 0U;
 static uint32_t g_ui_next_deadline_ms;
 
-static uint8_t ui_renderer_oled_live_waveform_visible(void)
+static uint8_t ui_renderer_oled_cpu_load_visible(void)
 {
-    const ui_page_t *const page = ui_page_get();
-    if (page == NULL)
-    {
-        return 0U;
-    }
-    if (ui_page_get_id() == UI_PAGE_AUDIO_REC)
-    {
-        return 1U;
-    }
-    switch (ui_page_get_id())
-    {
-        case UI_PAGE_TEMPLATE_ENV:
-        case UI_PAGE_TEMPLATE_CFG:
-        case UI_PAGE_TEMPLATE_REC_CFG:
-        case UI_PAGE_TEMPLATE_TONE:
-        case UI_PAGE_TEMPLATE_MOD:
-        case UI_PAGE_TEMPLATE_KEYBOARD:
-        case UI_PAGE_MIDI_FX:
-        case UI_PAGE_AUDIO_FX:
-        case UI_PAGE_TEMPLATE_SEQ:
-        case UI_PAGE_TEMPLATE_MACRO:
-        case UI_PAGE_TEMPLATE_MIX:
-        case UI_PAGE_TEMPLATE_PLAY:
-            return ui_renderer_template_has_live_waveform(
-                (const ui_template_page_state_t *)page->context);
-        default:
-            return 0U;
-    }
+    const uint8_t page_id = ui_page_get_id();
+    return (uint8_t)((page_id >= UI_PAGE_TEMPLATE_ENV)
+        && (page_id <= UI_PAGE_AUDIO_FX));
 }
 
 static const char *ui_audio_boot_error_label(board_audio_boot_error_t error)
@@ -169,6 +144,8 @@ void ui_renderer_oled_draw(void)
 {
     const ui_page_t *page = ui_page_get();
 
+    ui_visible_data_cpu_set_visible(ui_renderer_oled_cpu_load_visible());
+
     g_ui_rendering = 1U;
 
     drv_display_clear();
@@ -238,9 +215,8 @@ void ui_renderer_oled_service_deadline(void)
         ui_service_dirty_set();
     }
     else if ((control_domain_project_ui_busy() == 0U)
-             && ((ui_renderer_oled_live_waveform_visible() != 0U)
-             || ((ui_page_get_id() == UI_PAGE_TEMPLATE_SEQ)
-                 && (seq_runtime_is_running() != 0U))))
+             && (ui_page_get_id() == UI_PAGE_TEMPLATE_SEQ)
+             && (seq_runtime_is_running() != 0U))
     {
         ui_service_dirty_set();
     }
@@ -256,9 +232,8 @@ uint32_t ui_renderer_oled_next_render_wait_ticks(void)
     if (ui_boot_loading_is_active() != 0U)
         period = UI_BOOT_RENDER_PERIOD_MS;
     else if ((control_domain_project_ui_busy() == 0U)
-             && ((ui_renderer_oled_live_waveform_visible() != 0U)
-             || ((ui_page_get_id() == UI_PAGE_TEMPLATE_SEQ)
-                 && (seq_runtime_is_running() != 0U))))
+             && (ui_page_get_id() == UI_PAGE_TEMPLATE_SEQ)
+             && (seq_runtime_is_running() != 0U))
         period = UI_ACTIVE_RENDER_PERIOD_MS;
     else
         period = 0U;

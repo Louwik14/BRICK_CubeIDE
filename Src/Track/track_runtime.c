@@ -83,19 +83,11 @@ static uint8_t track_runtime_publish_program(brick_entity_id_t entity_id,
     };
     /* PROGRAM only changes the renderer.  The NOTE ledger remains authoritative
      * even while the selected renderer cannot render a live output. */
-    if (control_rt_publish_program(entity_id,
-                                      control_audio_program_pack(&descriptor),
-                                      due_sample) == 0U)
+    if (!live_parameter_audio_publication_submit_program_and_tone_scheduled(
+            entity_id, control_audio_program_pack(&descriptor),
+            (track_runtime_type_t)ctx->type, due_sample))
     {
-        /* A legal structural change is covered by the FIFO dimensioning
-         * contract.  Refusal is an invariant failure, not a runtime mode. */
-        Error_Handler();
-        return 0U;
-    }
-    if ((ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_FM)
-            && !live_parameter_audio_publication_submit_tone_program_scheduled(
-                entity_id, (track_runtime_type_t)ctx->type, due_sample))
-    {
+        /* PROGRAM and its complete TONE projection are one FIFO admission. */
         Error_Handler();
         return 0U;
     }

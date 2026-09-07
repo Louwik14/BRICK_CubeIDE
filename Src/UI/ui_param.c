@@ -43,6 +43,7 @@
 #include "App/live_parameter_audio_publication.h"
 #include "Param/live_parameter_migration.h"
 #include "IPC/live_parameter_event.h"
+#include "IPC/ui_visible_data.h"
 #include "Sampler/brick6_sampler_multi_contract.h"
 #include "Param/engine_model_catalog.h"
 #include "Track/synth_polyphony.h"

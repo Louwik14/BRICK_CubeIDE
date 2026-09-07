@@ -60,7 +60,6 @@ static const char *ui_page_user_calibration_stage_label(hall_user_calibration_st
 
 static void ui_page_calibration_enter(void)
 {
-    (void)control_domain_request_calibration(CONTROL_CALIBRATION_START_HALL);
     g_cal_done_tick = 0U;
     for (uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
     {

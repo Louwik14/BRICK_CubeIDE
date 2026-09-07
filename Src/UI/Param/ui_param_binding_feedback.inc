@@ -154,10 +154,14 @@ void ui_param_service_value_flash(uint32_t now_ms)
 
 void ui_param_note_user_tweak(uint8_t slot, param_id_t param)
 {
+    static uint32_t visible_version;
     if ((slot >= 4U) || (param >= PARAM_COUNT)) return;
     g_ui_param_tweak_slot = slot;
     g_ui_param_tweak_param = param;
     g_ui_param_tweak_until_ms = HAL_GetTick() + UI_PARAM_VALUE_FLASH_DURATION_MS;
+    visible_version++;
+    if (visible_version == 0U) visible_version = 1U;
+    ui_visible_data_notify(UI_VISIBLE_DATA_PARAMETER, visible_version);
 }
 
 uint8_t ui_param_is_user_tweak_active(uint8_t slot, param_id_t param)

@@ -361,6 +361,7 @@ void seq_runtime_start(void)
     if ((project_replacement_is_active() != 0U)
         || (project_product_save_busy() != 0U)) return;
     uint8_t begin_running_now = 0U;
+    uint64_t start_sample = 0U;
     if (g_seq_runtime_trigger_start_bypass == 0U)
     {
         if (seq_live_rec_session_rec_should_wait_trigger_start() != 0U)
@@ -378,6 +379,13 @@ void seq_runtime_start(void)
     if (seq_runtime_asset_cycle_engaged() != 0U)
     {
         seq_runtime_exit_critical(primask);
+        return;
+    }
+    if (control_rt_publication_resolve_asap_sample(
+            seq_runtime_exec_get_sample_timeline(), &start_sample) == 0U)
+    {
+        seq_runtime_exit_critical(primask);
+        Error_Handler();
         return;
     }
 
@@ -399,16 +407,13 @@ void seq_runtime_start(void)
     begin_running_now = (seq_transport_fsm_is_running(&g_seq_transport_fsm) != 0U) ? 1U : 0U;
     if (begin_running_now != 0U)
     {
-        const uint64_t start_sample =
-            control_music_output_first_unpublished_sample(
-                seq_runtime_get_now_sample());
         seq_runtime_exec_begin_running_at_sample_q16(&g_seq_runtime,
                                                      &g_seq_transport_fsm,
                                                      &g_seq_clock_bridge,
                                                      seq_runtime_get_now_tick(),
                                                      start_sample << 16);
     }
-    control_audio_transport_publish_changes();
+    control_audio_transport_publish_changes_at(start_sample);
     seq_runtime_exit_critical(primask);
 
     if (begin_running_now != 0U)
@@ -572,6 +577,8 @@ static void seq_runtime_process_core(void)
                     }
                     else if (event->type == SEQ_RUNTIME_AUDIO_EVENT_TRANSPORT_START)
                     {
+                        control_audio_transport_publish_changes_at(
+                            event->sample_abs);
                         audio_recorder_control_on_transport_start(
                             event->sample_abs);
                         sample_capture_control_on_transport_start(
@@ -674,24 +681,20 @@ uint8_t seq_runtime_control_deadline_timer_fired(void)
 {
     const uint8_t was_armed = g_seq_control_deadline_armed;
     seq_runtime_control_deadline_disarm();
-    if ((was_armed == 0U)
-        || (seq_runtime_get_clock_source_internal() != SEQ_CLOCK_SRC_INTERNAL)
-        || ((seq_runtime_is_running() == 0U)
-            && (seq_runtime_is_start_pending() == 0U)))
-    {
-        return 0U;
-    }
-    return 1U;
+    return was_armed;
 }
 
 void seq_runtime_control_deadline_service(void)
 {
+    const uint8_t live_note_deadline_active =
+        note_fx_pipeline_has_pending_work();
     const uint8_t musical_deadline_active =
         ((seq_runtime_get_clock_source_internal() == SEQ_CLOCK_SRC_INTERNAL)
          && ((seq_runtime_is_running() != 0U)
              || (seq_runtime_is_start_pending() != 0U))) ? 1U : 0U;
 
-    if (musical_deadline_active == 0U)
+    if ((musical_deadline_active == 0U)
+        && (live_note_deadline_active == 0U))
     {
         seq_runtime_control_deadline_disarm();
         return;
@@ -710,6 +713,7 @@ void seq_runtime_control_deadline_service(void)
     if (HAL_TIM_Base_Start_IT(&htim12) != HAL_OK)
     {
         g_seq_control_deadline_armed = 0U;
+        Error_Handler();
     }
 }
 

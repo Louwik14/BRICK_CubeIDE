@@ -343,6 +343,16 @@ uint16_t note_fx_pipeline_diagnostic_queue_depth(void)
     return depth;
 }
 
+uint8_t note_fx_pipeline_has_pending_work(void)
+{
+    const uint32_t primask = note_fx_pipeline_enter_critical();
+    const uint8_t queued =
+        ((g_note_fx_command_head != g_note_fx_command_tail)
+         || (g_note_fx_live_queue_count != 0U)) ? 1U : 0U;
+    note_fx_pipeline_exit_critical(primask);
+    return (queued != 0U) || (note_fx_engine_has_pending_work() != 0U);
+}
+
 uint8_t note_fx_pipeline_apply_control_override(uint8_t track, uint8_t slot,
                                                 uint8_t param, uint8_t value)
 {

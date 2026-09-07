@@ -287,7 +287,7 @@ typedef struct
 typedef struct
 {
     uint8_t track;
-    uint8_t voices;
+    int8_t delta;
 } control_polyphony_intent_t;
 
 typedef enum
@@ -514,7 +514,7 @@ uint8_t control_domain_settings_resolve_multi_runtime(
 uint8_t control_domain_request_clipboard(const control_clipboard_intent_t *intent);
 uint8_t control_domain_request_keyboard(uint8_t operation, int8_t value);
 uint8_t control_domain_request_audio_fx(const control_audio_fx_intent_t *intent);
-uint8_t control_domain_request_polyphony(uint8_t track, uint8_t voices);
+uint8_t control_domain_request_polyphony_step(uint8_t track, int8_t delta);
 uint8_t control_domain_request_audio_rec(const control_audio_rec_intent_t *intent);
 uint8_t control_domain_request_history(uint8_t redo);
 uint8_t control_domain_request_audio_visual(const control_audio_visual_intent_t *intent);

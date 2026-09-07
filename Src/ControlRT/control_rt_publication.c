@@ -6,6 +6,7 @@
 #include "IPC/control_audio_timing.h"
 #include "IPC/live_clock_control.h"
 #include "Platform/memory_layout.h"
+#include "Track/control_music_output.h"
 #include "stm32h7xx.h"
 
 typedef struct
@@ -23,6 +24,55 @@ CONTROL_STATE_SDRAM static control_audio_horizon_t g_control_audio_horizon;
 static volatile uint32_t g_control_audio_horizon_capacity_failure_count;
 static volatile uint8_t g_control_rt_publication_suppressed;
 
+volatile uint32_t g_control_rt_publish_debug_reason;
+volatile uint32_t g_control_rt_publish_debug_count;
+volatile uint32_t g_control_rt_publish_debug_suppressed;
+volatile uint32_t g_control_rt_publish_debug_horizon_active;
+volatile uint32_t g_control_rt_publish_debug_horizon_free;
+volatile uint32_t g_control_rt_publish_debug_stage_result;
+volatile uint32_t g_control_rt_publish_debug_fifo_result;
+
+volatile uint32_t g_control_rt_debug_reject_reason;
+volatile uint8_t g_control_rt_debug_horizon_active;
+volatile uint16_t g_control_rt_debug_horizon_used;
+volatile uint16_t g_control_rt_debug_horizon_limit;
+volatile uint8_t g_control_rt_debug_suppressed;
+volatile uint64_t g_control_rt_debug_command_timestamp;
+volatile uint64_t g_control_rt_debug_first_unpublished;
+
+static void control_rt_debug_capture(control_rt_debug_reject_reason_t reason,
+                                     const control_audio_command_t *command)
+{
+    if (g_control_rt_debug_reject_reason != CONTROL_RT_DEBUG_REJECT_NONE)
+        return;
+    g_control_rt_debug_horizon_active = g_control_audio_horizon.active;
+    g_control_rt_debug_horizon_used = g_control_audio_horizon.count;
+    g_control_rt_debug_horizon_limit = g_control_audio_horizon.limit;
+    g_control_rt_debug_suppressed = g_control_rt_publication_suppressed;
+    g_control_rt_debug_command_timestamp = command
+        ? command->effective_sample_time : 0U;
+    g_control_rt_debug_first_unpublished =
+        control_music_output_first_unpublished_sample(0U);
+    g_control_rt_debug_reject_reason = (uint32_t)reason;
+}
+
+static void control_rt_publish_debug_capture(
+    control_rt_publish_debug_reason_t reason, uint16_t count,
+    uint32_t suppressed, uint32_t horizon_active, uint32_t horizon_free,
+    uint32_t stage_result, uint32_t fifo_result)
+{
+    if (g_control_rt_publish_debug_reason != CONTROL_RT_PUBLISH_DEBUG_NONE)
+        return;
+    g_control_rt_publish_debug_count = count;
+    g_control_rt_publish_debug_suppressed = suppressed;
+    g_control_rt_publish_debug_horizon_active = horizon_active;
+    g_control_rt_publish_debug_horizon_free = horizon_free;
+    g_control_rt_publish_debug_stage_result = stage_result;
+    g_control_rt_publish_debug_fifo_result = fifo_result;
+    /* Publish the latch last, after all diagnostic fields are populated. */
+    g_control_rt_publish_debug_reason = (uint32_t)reason;
+}
+
 void control_rt_publication_init(void)
 {
     control_audio_fifo_control_init();
@@ -33,6 +83,8 @@ void control_rt_publication_init(void)
     g_control_audio_horizon.active = 0U;
     g_control_audio_horizon_capacity_failure_count = 0U;
     g_control_rt_publication_suppressed = 0U;
+    g_control_rt_publish_debug_reason = CONTROL_RT_PUBLISH_DEBUG_NONE;
+    g_control_rt_debug_reject_reason = CONTROL_RT_DEBUG_REJECT_NONE;
 }
 
 void control_rt_publication_suppress_begin(void)
@@ -55,6 +107,31 @@ uint8_t control_rt_publication_horizon_active(void)
 uint8_t control_rt_now_sample(uint64_t *out_sample_time)
 {
     return live_clock_read_audio_sample(out_sample_time) ? 1U : 0U;
+}
+
+uint8_t control_rt_publication_resolve_asap_sample(
+    uint64_t minimum_sample, uint64_t *out_sample_time)
+{
+    uint64_t sample_time = 0U;
+    if ((out_sample_time == NULL)
+            || (control_rt_now_sample(&sample_time) == 0U))
+        return 0U;
+    if (sample_time < minimum_sample)
+        sample_time = minimum_sample;
+    sample_time = control_music_output_first_unpublished_sample(sample_time);
+    if (g_control_audio_horizon.active != 0U)
+    {
+        if (sample_time < g_control_audio_horizon.first_sample)
+            sample_time = g_control_audio_horizon.first_sample;
+    }
+    else
+    {
+        const uint64_t fifo_floor = control_audio_fifo_control_floor();
+        if (sample_time < fifo_floor)
+            sample_time = fifo_floor;
+    }
+    *out_sample_time = sample_time;
+    return 1U;
 }
 
 uint8_t control_rt_capture_tick_to_sample(uint32_t capture_tick,
@@ -113,17 +190,30 @@ uint32_t control_rt_publication_capacity_failure_count(void)
 static uint8_t control_rt_publication_stage(
     const control_audio_command_t *commands, uint16_t count)
 {
-    if ((commands == NULL) || (count == 0U)
-            || ((uint32_t)g_control_audio_horizon.count + count
-                > g_control_audio_horizon.limit))
+    if ((commands == NULL) || (count == 0U))
+    {
+        control_rt_debug_capture(CONTROL_RT_DEBUG_REJECT_STAGE_ARGUMENT,
+                                 commands);
         return 0U;
+    }
+    if ((uint32_t)g_control_audio_horizon.count + count
+            > g_control_audio_horizon.limit)
+    {
+        control_rt_debug_capture(CONTROL_RT_DEBUG_REJECT_STAGE_CAPACITY,
+                                 commands);
+        return 0U;
+    }
     const uint64_t end = g_control_audio_horizon.first_sample
         + g_control_audio_horizon.frames;
     for (uint16_t i = 0U; i < count; ++i)
         if ((commands[i].effective_sample_time
                 < g_control_audio_horizon.first_sample)
                 || (commands[i].effective_sample_time >= end))
+        {
+            control_rt_debug_capture(CONTROL_RT_DEBUG_REJECT_STAGE_TIMESTAMP,
+                                     &commands[i]);
             return 0U;
+        }
     memcpy(&g_control_audio_horizon.command[g_control_audio_horizon.count],
            commands, (size_t)count * sizeof(commands[0]));
     g_control_audio_horizon.count = (uint16_t)(
@@ -171,11 +261,49 @@ uint8_t control_rt_publish_batch_scheduled(
     const control_audio_command_t *commands, uint16_t count)
 {
     if (g_control_rt_publication_suppressed != 0U)
-        return ((commands != NULL) && (count != 0U)) ? 1U : 0U;
-    return (g_control_audio_horizon.active != 0U)
-        ? ((control_rt_publication_free() >= count)
-            ? control_rt_publication_stage(commands, count) : 0U)
-        : control_audio_fifo_publish_batch(commands, count);
+    {
+        if ((commands != NULL) && (count != 0U)) return 1U;
+        control_rt_publish_debug_capture(
+            CONTROL_RT_PUBLISH_DEBUG_SUPPRESSED_INVALID_ARGS, count, 1U, 0U,
+            0U, 0U, 0U);
+        control_rt_debug_capture(
+            CONTROL_RT_DEBUG_REJECT_BATCH_SCHEDULED_ARGUMENT, commands);
+        return 0U;
+    }
+    if (g_control_audio_horizon.active != 0U)
+    {
+        const uint16_t free = control_rt_publication_free();
+        if (free < count)
+        {
+            control_rt_publish_debug_capture(
+                CONTROL_RT_PUBLISH_DEBUG_HORIZON_INSUFFICIENT_FREE, count,
+                0U, 1U, free, 0U, 0U);
+            control_rt_debug_capture(
+                CONTROL_RT_DEBUG_REJECT_BATCH_SCHEDULED_HORIZON_CAPACITY,
+                commands);
+            return 0U;
+        }
+        const uint8_t stage_result =
+            control_rt_publication_stage(commands, count);
+        if (stage_result == 0U)
+        {
+            control_rt_publish_debug_capture(
+                CONTROL_RT_PUBLISH_DEBUG_HORIZON_STAGE_REJECT, count,
+                0U, 1U, free, stage_result, 0U);
+            return 0U;
+        }
+        return 1U;
+    }
+    const uint8_t fifo_result =
+        control_audio_fifo_publish_batch(commands, count);
+    if (fifo_result == 0U)
+    {
+        control_rt_publish_debug_capture(
+            CONTROL_RT_PUBLISH_DEBUG_FIFO_DIRECT_REJECT, count, 0U, 0U,
+            control_rt_publication_free(), 0U, fifo_result);
+        return 0U;
+    }
+    return 1U;
 }
 
 uint8_t control_rt_publish_batch_captured(control_audio_command_t *commands,
@@ -200,12 +328,26 @@ uint8_t control_rt_publish_batch_now(control_audio_command_t *commands,
                                      uint16_t count)
 {
     if (g_control_rt_publication_suppressed != 0U)
-        return ((commands != NULL) && (count != 0U)) ? 1U : 0U;
+    {
+        if ((commands != NULL) && (count != 0U)) return 1U;
+        control_rt_debug_capture(CONTROL_RT_DEBUG_REJECT_BATCH_NOW_ARGUMENT,
+                                 commands);
+        return 0U;
+    }
     uint64_t sample_time = 0U;
     if ((commands == NULL) || (count == 0U)
-            || (count > CONTROL_AUDIO_FIFO_CONTRACT_BURST)
-            || !control_rt_now_sample(&sample_time))
+            || (count > CONTROL_AUDIO_FIFO_CONTRACT_BURST))
+    {
+        control_rt_debug_capture(CONTROL_RT_DEBUG_REJECT_BATCH_NOW_ARGUMENT,
+                                 commands);
         return 0U;
+    }
+    if (control_rt_publication_resolve_asap_sample(0U, &sample_time) == 0U)
+    {
+        control_rt_debug_capture(CONTROL_RT_DEBUG_REJECT_BATCH_NOW_CLOCK,
+                                 commands);
+        return 0U;
+    }
     for (uint16_t i = 0U; i < count; ++i)
         commands[i].effective_sample_time = sample_time;
     return control_rt_publish_batch_scheduled(commands, count);

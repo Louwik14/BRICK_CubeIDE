@@ -291,7 +291,7 @@ uint8_t ui_page_template_cfg_handle_encoder(uint8_t encoder,int16_t delta)
     if(encoder==0U){const track_family_t next=ui_track_catalog_cfg_family_step(ui_get_track_family(track),(delta>0)?1:-1,track,track_state_get_configs());return ui_set_track_family(track,next)?1U:0U;}
     if(encoder==1U){const track_family_t family=ui_get_track_family(track);const uint8_t count=ui_track_catalog_type_count_for_family(family,track,track_state_get_configs());if(count==0U)return 1U;int32_t index=(int32_t)ui_track_catalog_type_index_for_family(family,ui_get_track_type(track),track,track_state_get_configs())+((delta>0)?1:-1);if(index<0)index=0;if(index>=count)index=count-1;return ui_set_track_type(track,ui_track_catalog_type_from_family_index(family,(uint8_t)index,track,track_state_get_configs()))?1U:0U;}
     if(encoder==2U&&ui_get_track_family(track)==TRACK_FAMILY_EXTERNAL){const uint8_t current=ui_get_track_external_input(track);const uint8_t next=(delta>0)?((current==ENTITY_AUDIO_SOURCE_LINE)?ENTITY_AUDIO_SOURCE_USB:ENTITY_AUDIO_SOURCE_LINE):((current==ENTITY_AUDIO_SOURCE_USB)?ENTITY_AUDIO_SOURCE_LINE:ENTITY_AUDIO_SOURCE_USB);return ui_set_track_external_input(track,next)?1U:0U;}
-    if(encoder==2U&&ui_page_template_cfg_has_voices(track)){int32_t v=(int32_t)polyphony_control_get_voice_count(track)+((delta>0)?1:-1);const uint8_t minimum=control_music_output_count(track);if(v<minimum)v=minimum;if(v>8)v=8;return control_domain_request_polyphony(track,(uint8_t)v);}
+    if(encoder==2U&&ui_page_template_cfg_has_voices(track)){return control_domain_request_polyphony_step(track,(delta>0)?1:-1);}
     return 0U;
 }
 

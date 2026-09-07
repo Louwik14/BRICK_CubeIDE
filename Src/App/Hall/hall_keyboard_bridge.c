@@ -1,6 +1,7 @@
 #include "App/Hall/hall_keyboard_bridge.h"
 
 #include "App/Hall/hall_engine.h"
+#include "App/Hall/hall_keymap.h"
 #include "App/control_rt_wakeup.h"
 #include "IPC/live_event.h"
 #include "Keyboard/keyboard_runtime.h"
@@ -69,12 +70,17 @@ void hall_keyboard_bridge_process(void)
 
         const uint16_t consume_mask = (pressed != 0U)
             ? snapshot.consume_press_mask : snapshot.consume_release_mask;
+        hall_key_metadata_t metadata;
+        const uint8_t keyboard_shift_shortcut =
+            ((shift_down != 0U)
+             && (snapshot.hall_mode == (uint8_t)UI_HALL_MODE_KEYBOARD)
+             && (hall_keymap_metadata(key, &metadata) != 0U)
+             && (metadata.kind == HALL_KEY_KIND_BLACK)) ? 1U : 0U;
         const uint8_t ui_consumes_now =
             (key < HALL_UI_LANE_COUNT)
-            && (((consume_mask & (uint16_t)(1U << key)) != 0U)
-                || (track_select_armed != 0U)
-                || ((shift_down != 0U)
-                    && (snapshot.hall_mode == (uint8_t)UI_HALL_MODE_KEYBOARD)));
+            && ((((consume_mask & (uint16_t)(1U << key)) != 0U)
+                 && (keyboard_shift_shortcut == 0U))
+                || (track_select_armed != 0U));
         const uint8_t ui_owns_release =
             ((pressed == 0U) && (g_hall_ui_active[key] != 0U)) ? 1U : 0U;
         if (((pressed != 0U) && (ui_consumes_now != 0U))

@@ -5,6 +5,43 @@
 
 #include "IPC/control_audio_command.h"
 
+typedef enum
+{
+    CONTROL_RT_DEBUG_REJECT_NONE = 0U,
+    CONTROL_RT_DEBUG_REJECT_BATCH_NOW_ARGUMENT = 1U,
+    CONTROL_RT_DEBUG_REJECT_BATCH_NOW_CLOCK = 2U,
+    CONTROL_RT_DEBUG_REJECT_BATCH_SCHEDULED_ARGUMENT = 3U,
+    CONTROL_RT_DEBUG_REJECT_BATCH_SCHEDULED_HORIZON_CAPACITY = 4U,
+    CONTROL_RT_DEBUG_REJECT_STAGE_ARGUMENT = 5U,
+    CONTROL_RT_DEBUG_REJECT_STAGE_CAPACITY = 6U,
+    CONTROL_RT_DEBUG_REJECT_STAGE_TIMESTAMP = 7U
+} control_rt_debug_reject_reason_t;
+
+typedef enum
+{
+    CONTROL_RT_PUBLISH_DEBUG_NONE = 0U,
+    CONTROL_RT_PUBLISH_DEBUG_SUPPRESSED_INVALID_ARGS = 1U,
+    CONTROL_RT_PUBLISH_DEBUG_HORIZON_INSUFFICIENT_FREE = 2U,
+    CONTROL_RT_PUBLISH_DEBUG_HORIZON_STAGE_REJECT = 3U,
+    CONTROL_RT_PUBLISH_DEBUG_FIFO_DIRECT_REJECT = 4U
+} control_rt_publish_debug_reason_t;
+
+extern volatile uint32_t g_control_rt_publish_debug_reason;
+extern volatile uint32_t g_control_rt_publish_debug_count;
+extern volatile uint32_t g_control_rt_publish_debug_suppressed;
+extern volatile uint32_t g_control_rt_publish_debug_horizon_active;
+extern volatile uint32_t g_control_rt_publish_debug_horizon_free;
+extern volatile uint32_t g_control_rt_publish_debug_stage_result;
+extern volatile uint32_t g_control_rt_publish_debug_fifo_result;
+
+extern volatile uint32_t g_control_rt_debug_reject_reason;
+extern volatile uint8_t g_control_rt_debug_horizon_active;
+extern volatile uint16_t g_control_rt_debug_horizon_used;
+extern volatile uint16_t g_control_rt_debug_horizon_limit;
+extern volatile uint8_t g_control_rt_debug_suppressed;
+extern volatile uint64_t g_control_rt_debug_command_timestamp;
+extern volatile uint64_t g_control_rt_debug_first_unpublished;
+
 /*
  * CONTROL_RT is the sole CONTROL-side authority for publication of functional
  * CONTROL -> AUDIO commands. It owns publication mechanics and FIFO commit,
@@ -15,6 +52,8 @@ void control_rt_publication_suppress_begin(void);
 void control_rt_publication_suppress_end(void);
 uint8_t control_rt_publication_horizon_active(void);
 uint8_t control_rt_now_sample(uint64_t *out_sample_time);
+uint8_t control_rt_publication_resolve_asap_sample(
+    uint64_t minimum_sample, uint64_t *out_sample_time);
 uint8_t control_rt_capture_tick_to_sample(uint32_t capture_tick,
                                           uint64_t minimum_sample,
                                           uint64_t *out_sample_time);

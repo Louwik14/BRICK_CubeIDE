@@ -592,7 +592,11 @@ static uint8_t ui_renderer_template_prepare_param_slot_texts(const ui_template_p
         || (id == PARAM_PRISM_DETUNE)
         || (id == PARAM_PRISM_DRIFT)
         || (id == PARAM_PRISM_PITCH_MOD1)
-        || (id == PARAM_PRISM_PITCH_MOD2));
+        || (id == PARAM_PRISM_PITCH_MOD2)
+        || (((id == PARAM_PRISM_OSC1_MODEL)
+                || (id == PARAM_PRISM_OSC2_MODEL))
+            && (state != NULL)
+            && (state->navigation_subset == 0U)));
     const uint8_t flash_active = ((audio_fx_param != 0U) || (synth_immediate_param != 0U))
         ? ui_param_is_user_tweak_active(slot, id)
         : ui_param_get_slot_value_flash(slot,

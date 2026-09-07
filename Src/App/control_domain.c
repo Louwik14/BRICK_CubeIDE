@@ -55,6 +55,7 @@
 #include "Track/track_runtime.h"
 #include "Track/audio_fx_control_state.h"
 #include "Track/polyphony_control.h"
+#include "Track/synth_polyphony.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "Mod/mod_lfo_v1_control.h"
 #include "Mod/mod_matrix_control.h"
@@ -220,6 +221,30 @@ static uint8_t control_domain_take_ui_message(control_ui_message_t *message)
     __DMB();
     g_control_ui_tail = tail + 1U;
     return 1U;
+}
+
+static void control_domain_coalesce_track_type_messages(
+    control_ui_message_t *message)
+{
+    if ((message == NULL) || (message->type != CONTROL_UI_MSG_TRACK)
+            || (message->payload.track.operation != CONTROL_TRACK_SET_TYPE))
+        return;
+
+    uint32_t tail = g_control_ui_tail;
+    while (tail != g_control_ui_head)
+    {
+        const control_ui_message_t *const pending =
+            &g_control_ui_fifo[tail & CONTROL_UI_FIFO_MASK];
+        if ((pending->type != CONTROL_UI_MSG_TRACK)
+                || (pending->payload.track.operation
+                    != CONTROL_TRACK_SET_TYPE)
+                || (pending->payload.track.track
+                    != message->payload.track.track))
+            break;
+        *message = *pending;
+        ++tail;
+        g_control_ui_tail = tail;
+    }
 }
 
 static uint8_t control_domain_submit_storage_message(
@@ -610,11 +635,11 @@ CONTROL_DOMAIN_REQUEST(audio_visual, CONTROL_UI_MSG_AUDIO_VISUAL, audio_visual,
 
 #undef CONTROL_DOMAIN_REQUEST
 
-uint8_t control_domain_request_polyphony(uint8_t track, uint8_t voices)
+uint8_t control_domain_request_polyphony_step(uint8_t track, int8_t delta)
 {
     control_ui_message_payload_t payload = { 0 };
     payload.polyphony.track = track;
-    payload.polyphony.voices = voices;
+    payload.polyphony.delta = delta;
     return control_domain_submit_ui_message(CONTROL_UI_MSG_POLYPHONY, &payload, 1U);
 }
 
@@ -742,7 +767,11 @@ static void control_domain_apply_polyphony_intent(
     if ((polyphony_control_capture(intent->track, &polyphony) == 0U)
             || (audio_fx_control_state_capture(intent->track, &audio_fx) == 0U))
         return;
-    polyphony.voice_count = intent->voices;
+    int16_t voices = (int16_t)polyphony.voice_count + intent->delta;
+    if (voices < 1) voices = 1;
+    if (voices > SYNTH_POLYPHONY_MAX_VOICES)
+        voices = SYNTH_POLYPHONY_MAX_VOICES;
+    polyphony.voice_count = (uint8_t)voices;
     if ((polyphony_control_prepare(&polyphony, &prepared_polyphony) == 0U)
             || (audio_fx_control_state_prepare_for_polyphony(
                 intent->track, &audio_fx, prepared_polyphony.voice_count,
@@ -1427,6 +1456,7 @@ void control_domain_process_ui_messages(void)
             ++processed;
             continue;
         }
+        control_domain_coalesce_track_type_messages(&message);
         switch ((control_ui_message_type_t)message.type)
         {
         case CONTROL_UI_MSG_PROJECT:
@@ -1668,6 +1698,7 @@ void control_domain_start(float postgain, float output_compensation)
     }
     else
     {
+        hall_calibration_start();
         ui_page_set(UI_PAGE_CALIBRATION);
     }
     encoders_start_fast_poll();

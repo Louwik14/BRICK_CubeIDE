@@ -917,8 +917,7 @@ static uint8_t ui_core_handle_encoder_event(const ui_event_t *ev,
     {
         return 1U;
     }
-    if ((ui_page_get_id() == UI_PAGE_TEMPLATE_MOD)
-            || (ui_page_get_id() == UI_PAGE_MIDI_FX)
+    if ((ui_page_get_id() == UI_PAGE_MIDI_FX)
             || (ui_page_get_id() == UI_PAGE_AUDIO_FX))
     {
         return 0U;

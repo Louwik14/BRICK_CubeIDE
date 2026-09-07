@@ -61,5 +61,4 @@ void ui_bootstrap_init(void)
     ui_page_manager_register(UI_PAGE_SETTINGS, &g_ui_page_settings);
     ui_page_manager_register(UI_PAGE_RESERVED_DIAGNOSTIC, &g_ui_page_reserved_slot);
 
-    ui_page_set(UI_PAGE_CALIBRATION);
 }

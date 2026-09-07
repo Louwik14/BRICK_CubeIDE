@@ -1,4 +1,21 @@
-static void ui_page_template_tone_update_synth_live_request(void);
+static brick_entity_id_t g_ui_tone_synth_visual_entity;
+static synth_waveform_engine_t g_ui_tone_synth_visual_engine;
+static uint8_t g_ui_tone_synth_visual_mask;
+
+static void ui_page_template_tone_request_synth_visual(
+    brick_entity_id_t entity, synth_waveform_engine_t engine, uint8_t mask)
+{
+    if ((entity == g_ui_tone_synth_visual_entity)
+            && (engine == g_ui_tone_synth_visual_engine)
+            && (mask == g_ui_tone_synth_visual_mask))
+        return;
+    if (control_audio_visual_synth_request(
+            engine != SYNTH_WAVEFORM_ENGINE_NONE, entity, engine, mask) == 0U)
+        return;
+    g_ui_tone_synth_visual_entity = entity;
+    g_ui_tone_synth_visual_engine = engine;
+    g_ui_tone_synth_visual_mask = mask;
+}
 
 static void ui_page_template_tone_enter(void)
 {
@@ -31,13 +48,15 @@ static void ui_page_template_tone_update_synth_live_request(void)
             mask = (page == 0U) ? 0x01U : ((page == 1U) ? 0x02U : 0x03U);
         }
     }
-    (void)control_audio_visual_synth_request(enabled, entity, engine, mask);
+    ui_page_template_tone_request_synth_visual(
+        entity, enabled ? engine : SYNTH_WAVEFORM_ENGINE_NONE,
+        enabled ? mask : 0U);
 }
 
 static void ui_page_template_tone_leave(void)
 {
-    (void)control_audio_visual_synth_request(0U, 0U,
-                                            SYNTH_WAVEFORM_ENGINE_NONE, 0U);
+    ui_page_template_tone_request_synth_visual(
+        0U, SYNTH_WAVEFORM_ENGINE_NONE, 0U);
     ui_template_page_leave();
     g_ui_template_tone_global_master = 0U;
 }

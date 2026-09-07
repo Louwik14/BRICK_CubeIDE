@@ -700,6 +700,7 @@ draw_bottom_label:
         drv_display_set_draw_color(0U);
     }
 
+    drv_display_set_font(&FONT_4X6);
     drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, bottom_txt),
                           (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y),
                           bottom_txt);

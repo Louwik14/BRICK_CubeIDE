@@ -22,6 +22,7 @@ _Static_assert(NOTE_FX_EUCLID_MAX_OWNED >= NOTE_FX_EUCLID_MAX_SOURCES,
 typedef note_event_result_t (*note_fx_emit_fn)(const note_event_t *, void *);
 
 void note_fx_engine_init(void);
+uint8_t note_fx_engine_has_pending_work(void);
 note_event_result_t note_fx_engine_configure(
     uint8_t track, uint8_t slot, uint8_t model, uint8_t rate,
     uint8_t style, uint8_t range, uint64_t sample,

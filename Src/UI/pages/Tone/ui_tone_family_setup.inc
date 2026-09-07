@@ -180,6 +180,7 @@ void ui_page_template_tone_toggle_subset(void)
         g_ui_template_tone_subset = (g_ui_template_tone_subset == 0U) ? 1U : 0U;
         g_ui_template_tone_state.navigation_subset = g_ui_template_tone_subset;
         ui_template_page_select_subpage(&g_ui_template_tone_state, page);
+        ui_page_template_tone_update_synth_live_request();
         return;
     }
     if ((ui_get_track_family(active_track) != TRACK_FAMILY_SYNTH)
