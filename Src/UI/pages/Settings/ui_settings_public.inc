@@ -127,8 +127,10 @@ static void ui_page_settings_present_storage_receipts(void)
          family < CONTROL_ASSET_FAMILY_COUNT; ++family)
     {
         if ((g_ui_asset_receipt_valid[family] == 0U)
-            || (g_ui_asset_receipts[family].request_id
-                == g_ui_asset_receipt_presented[family])) continue;
+            || ((g_ui_asset_receipts[family].request_id
+                 == g_ui_asset_receipt_presented[family].request_id)
+                && (g_ui_asset_receipts[family].stage
+                    == g_ui_asset_receipt_presented[family].stage))) continue;
         const control_asset_terminal_t *const receipt = &g_ui_asset_receipts[family];
         uint8_t relevant = 0U;
         if ((family == CONTROL_ASSET_FAMILY_CLASSIC)
@@ -183,15 +185,19 @@ static void ui_page_settings_present_storage_receipts(void)
                 ui_page_settings_status((receipt->success != 0U)
                                             ? "CLEAR OK" : "CLEAR FAIL");
             }
-            else if (family == CONTROL_ASSET_FAMILY_RAM)
-                ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_RAM);
-            else if (family == CONTROL_ASSET_FAMILY_WAVETABLE)
-                ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_WAVETABLE);
             else
-                ui_page_settings_refresh_sampler_slots();
-            ui_page_settings_status((receipt->success != 0U) ? "LOAD OK" : "LOAD FAIL");
+            {
+                if (family == CONTROL_ASSET_FAMILY_RAM)
+                    ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_RAM);
+                else if (family == CONTROL_ASSET_FAMILY_WAVETABLE)
+                    ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_WAVETABLE);
+                else
+                    ui_page_settings_refresh_sampler_slots();
+                ui_page_settings_status((receipt->success != 0U)
+                                            ? "LOAD OK" : "LOAD FAIL");
+            }
         }
-        g_ui_asset_receipt_presented[family] = receipt->request_id;
+        g_ui_asset_receipt_presented[family] = *receipt;
     }
     ui_page_settings_preview_apply_termination_status();
 }

@@ -133,6 +133,7 @@ static uint16_t g_clear_batch_deleted;
 static uint16_t g_clear_batch_failed_count;
 static uint8_t g_clear_batch_failed;
 static volatile uint8_t g_clear_batch_active;
+static volatile uint8_t g_clear_batch_committed;
 static volatile uint8_t g_clear_batch_result_valid;
 static uint32_t g_clear_batch_request_id;
 static uint32_t g_clear_batch_request_id_counter;
@@ -1801,13 +1802,8 @@ uint8_t multi_sample_import_request_folder_for_load(const char *instrument_dir,
         || (multi_sample_pool_clear_is_active() != 0U)) return 0U;
     if (multi_sample_load_request_import(instrument_dir, instrument_id) == 0U)
         return 0U;
-    (void)snprintf(g_import_request_path, sizeof(g_import_request_path), "%s",
-                   instrument_dir);
-    g_import_load_instrument = instrument_id;
-    g_import_load_request_id = multi_sample_load_external_request_id();
-    __DMB();
-    g_import_load_continuation = 1U;
-    g_import_request_valid = 1U;
+    /* Admission belongs to the external Multi cycle.  Its STORAGE service is
+     * the sole site that starts the identified importer continuation. */
     storage_io_owner_set(STORAGE_OWNER_MULTI);
     storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
@@ -1953,6 +1949,7 @@ uint8_t multi_sample_import_clear_batch_begin(void)
         g_clear_batch_request_id_counter = 1U;
     g_clear_batch_request_id = g_clear_batch_request_id_counter;
     g_clear_batch_active = 1U;
+    g_clear_batch_committed = 0U;
     __set_PRIMASK(primask);
     return 1U;
 }
@@ -1971,14 +1968,8 @@ uint8_t multi_sample_import_clear_batch_add(const char *path)
 uint8_t multi_sample_import_clear_batch_commit(void)
 {
     if (g_clear_batch_active == 0U) return 0U;
-    if (g_clear_batch_count == 0U)
-    {
-        g_clear_batch_active = 0U;
-        g_clear_batch_result_valid = 1U;
-        control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
-        return 1U;
-    }
     if (multi_sample_pool_request_clear_begin() == 0U) return 0U;
+    g_clear_batch_committed = 1U;
     storage_io_owner_set(STORAGE_OWNER_MULTI);
     storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
@@ -1987,6 +1978,7 @@ uint8_t multi_sample_import_clear_batch_commit(void)
 void multi_sample_import_clear_batch_cancel(void)
 {
     g_clear_batch_active = 0U;
+    g_clear_batch_committed = 0U;
     g_clear_batch_count = 0U;
     g_clear_batch_index = 0U;
     g_clear_batch_deleted = 0U;
@@ -2057,6 +2049,10 @@ uint8_t multi_sample_import_request_delete_index(const char *index_path)
 
 void multi_sample_import_storage_delete_service(void)
 {
+    if ((g_clear_batch_active != 0U)
+        && (g_clear_batch_committed == 0U)) return;
+    if ((g_clear_batch_active != 0U)
+        && (multi_sample_pool_clear_is_committed() == 0U)) return;
     if ((g_clear_batch_active != 0U) && (g_delete_result_valid != 0U))
     {
         uint8_t result = 3U;
@@ -2085,6 +2081,7 @@ void multi_sample_import_storage_delete_service(void)
     if (g_delete_request_valid == 0U)
     {
         if ((g_clear_batch_active != 0U)
+            && (g_clear_batch_failed == 0U)
             && (g_clear_batch_index < g_clear_batch_count))
         {
             if (multi_sample_import_request_delete_index(
@@ -2094,23 +2091,30 @@ void multi_sample_import_storage_delete_service(void)
                 storage_io_owner_wait_resource(STORAGE_OWNER_MULTI);
         }
         else if ((g_clear_batch_active != 0U)
-                 && (g_clear_batch_index >= g_clear_batch_count)
+                 && ((g_clear_batch_failed != 0U)
+                     || (g_clear_batch_index >= g_clear_batch_count))
                  && (multi_sample_pool_clear_is_active() == 0U))
         {
             g_clear_batch_active = 0U;
+            g_clear_batch_committed = 0U;
             g_clear_batch_result_valid = 1U;
             control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
         }
         return;
     }
     uint8_t result = 3U;
-    if (sd_access_gate_try_acquire_for_owner(
-            SD_ACCESS_CLIENT_PROJECT, STORAGE_OWNER_MULTI) == 0U)
+    if (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
     {
-        storage_io_owner_wait_resource(STORAGE_OWNER_MULTI);
-        return;
+        result = 3U;
     }
+    else
     {
+        if (sd_access_gate_try_acquire_for_owner(
+                SD_ACCESS_CLIENT_PROJECT, STORAGE_OWNER_MULTI) == 0U)
+        {
+            storage_io_owner_wait_resource(STORAGE_OWNER_MULTI);
+            return;
+        }
         if (sd_access_fs_mount_if_needed() != 0U)
         {
             const FRESULT fr = f_unlink(g_delete_request_path);
@@ -2122,6 +2126,8 @@ void multi_sample_import_storage_delete_service(void)
     g_delete_result = result;
     __DMB();
     g_delete_result_valid = 1U;
+    storage_io_owner_set(STORAGE_OWNER_MULTI);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
 }
 
 uint8_t multi_sample_import_take_delete_result(uint8_t *result)

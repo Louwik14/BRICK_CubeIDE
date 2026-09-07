@@ -15,6 +15,7 @@
 #include "Storage/sd_access_gate.h"
 #include "Storage/storage_io_wakeup.h"
 #include "Storage/project_product.h"
+#include "Storage/project_load_quiesce.h"
 #include "Platform/memory_layout.h"
 #include "stm32h7xx.h"
 
@@ -49,14 +50,16 @@ void multi_sample_pool_clear_end(void)
 
 uint8_t multi_sample_pool_request_clear_begin(void)
 {
-    if ((g_multi_clear_request != 0U)
+    if ((project_transport_stopped_stable() == 0U)
+        || (g_multi_clear_request != 0U)
         || (g_multi_clear_active != 0U)
         || (multi_sample_import_is_busy() != 0U)
         || (multi_sample_import_delete_is_busy() != 0U)
         || (multi_sample_load_has_pending() != 0U)) return 0U;
     const uint32_t primask = __get_PRIMASK();
     __disable_irq();
-    if ((g_multi_clear_request != 0U)
+    if ((project_transport_stopped_stable() == 0U)
+        || (g_multi_clear_request != 0U)
         || (g_multi_clear_active != 0U)
         || (multi_sample_import_is_busy() != 0U)
         || (multi_sample_import_delete_is_busy() != 0U)
@@ -130,6 +133,11 @@ uint8_t multi_sample_pool_clear_is_active(void)
 {
     return ((g_multi_clear_active != 0U)
             || (g_multi_clear_request != 0U)) ? 1U : 0U;
+}
+
+uint8_t multi_sample_pool_clear_is_committed(void)
+{
+    return g_multi_clear_active;
 }
 
 static uint8_t multi_sample_instrument_id_valid(uint16_t instrument_id)

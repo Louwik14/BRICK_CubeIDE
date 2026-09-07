@@ -469,6 +469,15 @@ void StartUiTask(void *argument)
         wake_flags |= UI_SERVICE_WAKE_INPUT;
       if (ui_active_track_sync_is_pending() != 0U)
         wake_flags |= UI_SERVICE_WAKE_INPUT;
+      if ((control_domain_asset_terminal_available(
+              CONTROL_ASSET_FAMILY_CLASSIC) != 0U)
+          || (control_domain_asset_terminal_available(
+              CONTROL_ASSET_FAMILY_RAM) != 0U)
+          || (control_domain_asset_terminal_available(
+              CONTROL_ASSET_FAMILY_WAVETABLE) != 0U)
+          || (control_domain_asset_terminal_available(
+              CONTROL_ASSET_FAMILY_MULTI) != 0U))
+        wake_flags |= UI_SERVICE_WAKE_INPUT;
       if (ui_service_dirty_is_set() != 0U)
         wake_flags |= UI_SERVICE_WAKE_DIRTY;
       if ((ui_service_led_dirty_is_set() != 0U) && (led_hw_busy() == 0U))

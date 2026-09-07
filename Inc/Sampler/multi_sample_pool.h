@@ -93,6 +93,7 @@ uint8_t multi_sample_pool_request_clear_end(void);
 uint8_t multi_sample_pool_request_clear_instrument(uint16_t instrument_id);
 void multi_sample_pool_storage_request_service(void);
 uint8_t multi_sample_pool_clear_is_active(void);
+uint8_t multi_sample_pool_clear_is_committed(void);
 uint16_t multi_sample_pool_get_instrument_count(void);
 uint16_t multi_sample_pool_get_sample_capacity_used(void);
 /* Canonical Multi admission/display unit: mono sample=1, stereo sample=2. */

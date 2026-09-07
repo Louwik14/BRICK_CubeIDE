@@ -88,7 +88,7 @@ void wav_convert_init(void)
     g_wav_convert_classic_request_id = 0U;
 }
 
-uint8_t wav_convert_request_start(const char *path)
+static uint8_t wav_convert_request_prepare(const char *path)
 {
     if ((project_transport_stopped_stable() == 0U)
         || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
@@ -98,10 +98,21 @@ uint8_t wav_convert_request_start(const char *path)
         || (g_wav_convert.state != WAV_CONVERT_STATE_IDLE))
         return 0U;
     memcpy(g_wav_convert_request_path, path, strlen(path) + 1U);
+    return 1U;
+}
+
+static void wav_convert_request_publish(void)
+{
     __DMB();
     g_wav_convert_request_valid = 1U;
     storage_io_owner_set(STORAGE_OWNER_WAV_CONVERT);
     storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+}
+
+uint8_t wav_convert_request_start(const char *path)
+{
+    if (wav_convert_request_prepare(path) == 0U) return 0U;
+    wav_convert_request_publish();
     return 1U;
 }
 
@@ -112,7 +123,7 @@ uint8_t wav_convert_request_classic_cycle(uint16_t slot, const char *path)
     if (sample_global_pool_reserve_classic_conversion(
             slot, path, &request_id) == 0U)
         return 0U;
-    if (wav_convert_request_start(path) == 0U)
+    if (wav_convert_request_prepare(path) == 0U)
     {
         (void)sample_global_pool_cancel_classic_conversion(request_id);
         return 0U;
@@ -121,6 +132,7 @@ uint8_t wav_convert_request_classic_cycle(uint16_t slot, const char *path)
     g_wav_convert_classic_request_id = request_id;
     __DMB();
     g_wav_convert_classic_continuation = 1U;
+    wav_convert_request_publish();
     return 1U;
 }
 
@@ -758,14 +770,15 @@ void wav_convert_service(uint32_t byte_budget)
         && (g_wav_convert.state == WAV_CONVERT_STATE_DONE))
     {
         const uint32_t request_id = g_wav_convert_classic_request_id;
-        g_wav_convert_classic_continuation = 0U;
-        g_wav_convert_classic_request_id = 0U;
         if (sample_global_pool_start_reserved_classic_load(request_id) == 0U)
         {
             (void)sample_global_pool_report_classic_load_failure_for_request(
                 request_id, g_wav_convert.source_path,
                 SAMPLE_CLASSIC_LOAD_CONVERT_FAIL);
         }
+        __DMB();
+        g_wav_convert_classic_continuation = 0U;
+        g_wav_convert_classic_request_id = 0U;
         g_wav_convert.state = WAV_CONVERT_STATE_IDLE;
     }
     if ((g_wav_convert.state == WAV_CONVERT_STATE_ACTIVE)

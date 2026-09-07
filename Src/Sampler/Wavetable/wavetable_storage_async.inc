@@ -90,6 +90,8 @@ static uint8_t wavetable_pool_load_async_begin_prepared_internal(
     uint8_t wake)
 {
     wavetable_load_job_t *const job = &g_wavetable_load_job;
+    const wavetable_requester_t requester = (consume_request != 0U)
+        ? g_wavetable_load_requester : WAVETABLE_REQUESTER_STORAGE;
     if ((project_transport_stopped_stable() == 0U)
         || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
         || (job->state != WAVETABLE_LOAD_IDLE)
@@ -108,7 +110,7 @@ static uint8_t wavetable_pool_load_async_begin_prepared_internal(
         || (job->state != WAVETABLE_LOAD_IDLE)
         || (g_wavetable_clear_request_valid != 0U)
         || ((consume_request == 0U) && (g_wavetable_load_request_valid != 0U))
-        || ((g_wavetable_load_requester == WAVETABLE_REQUESTER_UI)
+        || ((requester == WAVETABLE_REQUESTER_UI)
             && (control_domain_asset_terminal_available(
                     CONTROL_ASSET_FAMILY_WAVETABLE) != 0U)))
     {
@@ -124,7 +126,7 @@ static uint8_t wavetable_pool_load_async_begin_prepared_internal(
     }
     job->wavetable_slot = wavetable_slot;
     job->request_id = wavetable_next_request_id();
-    job->requester = WAVETABLE_REQUESTER_STORAGE;
+    job->requester = requester;
     job->global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     job->media_epoch = sd_access_media_epoch();
     job->source_geometry = source_geometry;
@@ -150,6 +152,8 @@ static uint8_t wavetable_pool_load_async_begin_prepared_internal(
 uint8_t wavetable_pool_request_clear(uint16_t wavetable_slot)
 {
     if ((wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)
+        || (control_domain_asset_remove_occupies(
+                CONTROL_ASSET_FAMILY_WAVETABLE, wavetable_slot) != 0U)
         || (wavetable_pool_load_async_busy() != 0U)
         || (g_wavetable_load_request_valid != 0U)
         || (g_wavetable_clear_request_valid != 0U)
@@ -160,6 +164,8 @@ uint8_t wavetable_pool_request_clear(uint16_t wavetable_slot)
     const uint32_t primask = __get_PRIMASK();
     __disable_irq();
     if ((wavetable_pool_load_async_busy() != 0U)
+        || (control_domain_asset_remove_occupies(
+                CONTROL_ASSET_FAMILY_WAVETABLE, wavetable_slot) != 0U)
         || (g_wavetable_load_request_valid != 0U)
         || (g_wavetable_clear_request_valid != 0U)
         || (control_domain_asset_terminal_available(CONTROL_ASSET_FAMILY_WAVETABLE) != 0U))
@@ -183,6 +189,8 @@ uint8_t wavetable_pool_request_load(uint16_t wavetable_slot,
     if ((project_transport_stopped_stable() == 0U)
         || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
         || (wavetable_slot >= WAVETABLE_POOL_MAX_SLOTS)
+        || (control_domain_asset_remove_occupies(
+                CONTROL_ASSET_FAMILY_WAVETABLE, wavetable_slot) != 0U)
         || (path == 0) || (path[0] == '\0')
         || (strlen(path) >= sizeof(g_wavetable_load_request_path))
         || (wavetable_pool_path_ext_is_wav(path) == 0U)
@@ -200,6 +208,8 @@ uint8_t wavetable_pool_request_load(uint16_t wavetable_slot,
     const uint32_t primask = __get_PRIMASK();
     __disable_irq();
     if ((project_transport_stopped_stable() == 0U)
+        || (control_domain_asset_remove_occupies(
+                CONTROL_ASSET_FAMILY_WAVETABLE, wavetable_slot) != 0U)
         || (wavetable_pool_load_async_busy() != 0U)
         || (g_wavetable_load_request_valid != 0U)
         || (g_wavetable_clear_request_valid != 0U)

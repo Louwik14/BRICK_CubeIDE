@@ -292,8 +292,28 @@ CONTROL_DOMAIN_REQUEST(mod, CONTROL_UI_MSG_MOD, mod,
                        control_mod_intent_t)
 CONTROL_DOMAIN_REQUEST(macro, CONTROL_UI_MSG_MACRO, macro,
                        control_macro_intent_t)
-CONTROL_DOMAIN_REQUEST(asset, CONTROL_UI_MSG_ASSET, asset,
-                       control_asset_intent_t)
+uint8_t control_domain_request_asset(const control_asset_intent_t *intent)
+{
+    if (intent == NULL) return 0U;
+    if (intent->operation == CONTROL_ASSET_REMOVE_RUNTIME)
+    {
+        control_asset_family_t family = CONTROL_ASSET_FAMILY_COUNT;
+        if (intent->kind == PERSIST_ASSET_SAMPLE_STREAM)
+            family = CONTROL_ASSET_FAMILY_CLASSIC;
+        else if (intent->kind == PERSIST_ASSET_SAMPLE_RAM)
+            family = CONTROL_ASSET_FAMILY_RAM;
+        else if (intent->kind == PERSIST_ASSET_WAVETABLE)
+            family = CONTROL_ASSET_FAMILY_WAVETABLE;
+        else if (intent->kind == PERSIST_ASSET_MULTI)
+            family = CONTROL_ASSET_FAMILY_MULTI;
+        if ((family >= CONTROL_ASSET_FAMILY_COUNT)
+            || (g_control_asset_remove_valid[family] != 0U)
+            || (g_control_asset_terminal_valid[family] != 0U)) return 0U;
+    }
+    control_ui_message_payload_t payload = { 0 };
+    payload.asset = *intent;
+    return control_domain_submit_ui_message(CONTROL_UI_MSG_ASSET, &payload, 1U);
+}
 
 uint8_t control_domain_request_asset_deferred(const control_asset_intent_t *intent)
 {
@@ -373,6 +393,14 @@ uint8_t control_domain_finish_asset_remove(control_asset_family_t family,
     return 1U;
 }
 
+uint8_t control_domain_asset_remove_occupies(control_asset_family_t family,
+                                             uint16_t physical_id)
+{
+    return (uint8_t)((family < CONTROL_ASSET_FAMILY_COUNT)
+        && (g_control_asset_remove_valid[family] != 0U)
+        && (g_control_asset_remove_pending[family].physical_id == physical_id));
+}
+
 CONTROL_DOMAIN_REQUEST(clipboard, CONTROL_UI_MSG_CLIPBOARD, clipboard,
                        control_clipboard_intent_t)
 
@@ -433,6 +461,8 @@ uint8_t control_domain_request_storage_ui(uint8_t operation)
 {
     control_ui_message_payload_t payload = { 0 };
     payload.storage.operation = operation;
+    if (operation == CONTROL_STORAGE_UI_CANCEL_MULTI_LOAD)
+        payload.storage.request_id = multi_sample_load_external_request_id();
     return control_domain_submit_ui_message(CONTROL_UI_MSG_STORAGE, &payload, 1U);
 }
 
@@ -648,7 +678,7 @@ static void control_domain_apply_storage_ui_intent(
     const control_storage_ui_intent_t *intent)
 {
     if (intent->operation == CONTROL_STORAGE_UI_CANCEL_MULTI_LOAD)
-        (void)multi_sample_cancel_load();
+        (void)multi_sample_cancel_load_request(intent->request_id);
     else if (intent->operation == CONTROL_STORAGE_UI_CLEAR_CONVERSION)
         wav_convert_clear_finished();
 }
@@ -1186,6 +1216,13 @@ static void control_domain_apply_asset_intent(const control_asset_intent_t *inte
         terminal.family = family;
         g_control_asset_remove_pending[family] = terminal;
         g_control_asset_remove_valid[family] = 1U;
+    }
+    else if ((family < CONTROL_ASSET_FAMILY_COUNT)
+             && (control_domain_asset_terminal_available(family) == 0U))
+    {
+        terminal.family = family;
+        terminal.success = 0U;
+        (void)control_domain_publish_asset_terminal(&terminal);
     }
 }
 

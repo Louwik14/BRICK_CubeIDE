@@ -220,7 +220,7 @@ UI_STATE_SDRAM static control_asset_terminal_t
     g_ui_asset_receipts[CONTROL_ASSET_FAMILY_COUNT];
 UI_STATE_SDRAM static uint8_t
     g_ui_asset_receipt_valid[CONTROL_ASSET_FAMILY_COUNT];
-UI_STATE_SDRAM static uint32_t
+UI_STATE_SDRAM static control_asset_terminal_t
     g_ui_asset_receipt_presented[CONTROL_ASSET_FAMILY_COUNT];
 
 static void ui_page_settings_status(const char *status);

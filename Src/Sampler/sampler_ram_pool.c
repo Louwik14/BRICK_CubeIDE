@@ -130,6 +130,8 @@ void sampler_ram_pool_load_async_cancel(void)
 uint8_t sampler_ram_pool_request_clear(uint16_t ram_slot)
 {
     if ((ram_slot >= SAMPLER_RAM_POOL_MAX_SLOTS)
+        || (control_domain_asset_remove_occupies(
+                CONTROL_ASSET_FAMILY_RAM, ram_slot) != 0U)
         || (sampler_ram_pool_load_async_busy() != 0U)
         || (g_sampler_ram_load_request_valid != 0U)
         || (g_sampler_ram_clear_request_valid != 0U)
@@ -140,6 +142,8 @@ uint8_t sampler_ram_pool_request_clear(uint16_t ram_slot)
     const uint32_t primask = __get_PRIMASK();
     __disable_irq();
     if ((sampler_ram_pool_load_async_busy() != 0U)
+        || (control_domain_asset_remove_occupies(
+                CONTROL_ASSET_FAMILY_RAM, ram_slot) != 0U)
         || (g_sampler_ram_load_request_valid != 0U)
         || (g_sampler_ram_clear_request_valid != 0U)
         || (control_domain_asset_terminal_available(CONTROL_ASSET_FAMILY_RAM) != 0U))
@@ -801,6 +805,8 @@ uint8_t sampler_ram_pool_request_load(uint16_t ram_slot, const char *path)
     if ((project_transport_stopped_stable() == 0U)
         || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
         || (ram_slot >= SAMPLER_RAM_POOL_MAX_SLOTS)
+        || (control_domain_asset_remove_occupies(
+                CONTROL_ASSET_FAMILY_RAM, ram_slot) != 0U)
         || (path == 0) || (path[0] == '\0')
         || (strlen(path) >= sizeof(g_sampler_ram_load_request_path))
         || (sampler_ram_pool_load_async_busy() != 0U)
@@ -815,6 +821,8 @@ uint8_t sampler_ram_pool_request_load(uint16_t ram_slot, const char *path)
     const uint32_t primask = __get_PRIMASK();
     __disable_irq();
     if ((project_transport_stopped_stable() == 0U)
+        || (control_domain_asset_remove_occupies(
+                CONTROL_ASSET_FAMILY_RAM, ram_slot) != 0U)
         || (sampler_ram_pool_load_async_busy() != 0U)
         || (g_sampler_ram_load_request_valid != 0U)
         || (g_sampler_ram_clear_request_valid != 0U)
