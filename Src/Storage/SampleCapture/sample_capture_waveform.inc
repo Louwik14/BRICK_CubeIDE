@@ -232,8 +232,8 @@ static uint8_t sample_capture_global_overview_can_build(void)
     {
         return 0U;
     }
-    if((audio_recorder_is_active() != 0U)
-            || (sd_preview_is_active() != 0U)
+    if((audio_recorder_path_is_mutating(
+                g_sample_capture_global_overview.path) != 0U)
             || (pattern_storage_is_pending() != 0U)
             || (sample_stream_manager_io_in_flight() != 0U)
             || (storage_io_owner_test(STORAGE_OWNER_STREAM) != 0U))
@@ -832,16 +832,11 @@ static uint8_t sample_capture_editor_cache_can_fill(uint8_t *out_reason)
     {
         return 0U;
     }
-    if(audio_recorder_is_active() != 0U)
+    if(audio_recorder_path_is_mutating(
+            g_sample_capture_editor_cache.path) != 0U)
     {
         sample_capture_storage_wait_resource();
         if(out_reason != 0) { *out_reason = 1U; }
-        return 0U;
-    }
-    if(sd_preview_is_active() != 0U)
-    {
-        sample_capture_storage_wait_resource();
-        if(out_reason != 0) { *out_reason = 3U; }
         return 0U;
     }
     if(pattern_storage_is_pending() != 0U)
@@ -1277,8 +1272,8 @@ static uint8_t sample_capture_detail_can_build(void)
     {
         return 0U;
     }
-    if((audio_recorder_is_active() != 0U)
-            || (sd_preview_is_active() != 0U)
+    if((audio_recorder_path_is_mutating(
+                g_sample_capture.state.temp_path) != 0U)
             || (pattern_storage_is_pending() != 0U)
             || (sample_stream_manager_io_in_flight() != 0U)
             || (storage_io_owner_test(STORAGE_OWNER_STREAM) != 0U))
@@ -1301,8 +1296,8 @@ static uint8_t sample_capture_line_can_build(void)
     {
         return 0U;
     }
-    if((audio_recorder_is_active() != 0U)
-            || (sd_preview_is_active() != 0U)
+    if((audio_recorder_path_is_mutating(
+                g_sample_capture.state.temp_path) != 0U)
             || (pattern_storage_is_pending() != 0U)
             || (sample_stream_manager_io_in_flight() != 0U)
             || (storage_io_owner_test(STORAGE_OWNER_STREAM) != 0U))

@@ -407,7 +407,7 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
         sample_capture_publish_rec_bus();
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
         g_sample_capture.last_take_notified = 1U;
-        ui_service_dirty_set();
+        ui_service_audio_rec_data_notify();
         return;
     }
 
@@ -461,7 +461,7 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
     }
     g_sample_capture.rec_edit_enter_deferred_services = 2U;
     g_sample_capture.rec_edit_first_render_pending = 1U;
-    ui_service_dirty_set();
+    ui_service_audio_rec_data_notify();
 #if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
     sample_capture_debug_log("WAVEFORM_CACHE_%s path=%s\r\n",
                              (cache_queued != 0U) ? "JOB_QUEUED" : "DEFERRED",

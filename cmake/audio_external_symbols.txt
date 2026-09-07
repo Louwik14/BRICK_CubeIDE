@@ -52,3 +52,4 @@ sinf
 sqrtf
 tanf
 tanhf
+Error_Handler

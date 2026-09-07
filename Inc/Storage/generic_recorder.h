@@ -16,6 +16,7 @@ typedef enum
     GENERIC_RECORDER_IDLE = 0,
     GENERIC_RECORDER_CAPTURING,
     GENERIC_RECORDER_DRAINING,
+    GENERIC_RECORDER_CANCELING,
     GENERIC_RECORDER_FINALIZABLE,
     GENERIC_RECORDER_ERROR,
     GENERIC_RECORDER_ABORTED
@@ -209,6 +210,9 @@ uint8_t generic_recorder_begin(generic_recorder_t *recorder,
                                const generic_recorder_config_t *config);
 uint8_t generic_recorder_request_stop(generic_recorder_t *recorder,
                                       uint32_t now_us);
+/* Discard queued/unassigned PCM, but keep any physically active DMA owned
+ * until its normal completion. */
+uint8_t generic_recorder_request_cancel(generic_recorder_t *recorder);
 void generic_recorder_service(generic_recorder_t *recorder, uint32_t now_us);
 void generic_recorder_abort(generic_recorder_t *recorder);
 uint8_t generic_recorder_invariants_hold(const generic_recorder_t *recorder);

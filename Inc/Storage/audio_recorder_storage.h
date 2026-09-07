@@ -20,6 +20,7 @@ typedef enum
 {
     AUDIO_RECORDER_STORAGE_IDLE = 0,
     AUDIO_RECORDER_STORAGE_PREPARED,
+    AUDIO_RECORDER_STORAGE_CANCELING,
     AUDIO_RECORDER_STORAGE_DRAINING,
     AUDIO_RECORDER_STORAGE_FINALIZING,
     AUDIO_RECORDER_STORAGE_TAKE_READY,
@@ -59,6 +60,7 @@ uint8_t audio_recorder_storage_get_map_copy(
     audio_recorder_storage_map_copy_t *map);
 uint8_t audio_recorder_storage_get_paths(const char **temporary_rec_path,
                                          const char **final_wav_path);
+uint8_t audio_recorder_storage_has_immediate_work(uint32_t session_id);
 
 #ifdef __cplusplus
 }

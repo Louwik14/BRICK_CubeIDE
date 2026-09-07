@@ -1,6 +1,6 @@
 #include "Audio/audio_rec_level_producer.h"
 #include "IPC/audio_rec_level_contract.h"
-#include "App/control_rt_wakeup.h"
+#include "IPC/control_rt_wakeup.h"
 #include "stm32h7xx.h"
 
 static uint32_t g_trigger_config_sequence;

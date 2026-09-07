@@ -401,7 +401,8 @@ static uint8_t audio_recorder_storage_prepare_physical(
 
 static uint8_t audio_recorder_storage_cancel_physical(uint32_t request_id)
 {
-    if ((g_audio_recorder_storage.phase != AUDIO_RECORDER_STORAGE_PREPARED)
+    if (((g_audio_recorder_storage.phase != AUDIO_RECORDER_STORAGE_PREPARED)
+            && (g_audio_recorder_storage.phase != AUDIO_RECORDER_STORAGE_CANCELING))
             || (g_audio_recorder_storage.prepare_request_id != request_id))
         return 0U;
     if (sd_access_gate_try_acquire_for_owner(
@@ -426,8 +427,15 @@ static uint8_t audio_recorder_storage_cancel_physical(uint32_t request_id)
         g_audio_recorder_storage.phase = AUDIO_RECORDER_STORAGE_FAILED;
         return 2U;
     }
-    (void)f_unlink(g_audio_recorder_storage.temporary_path);
+    const FRESULT unlink_result =
+        f_unlink(g_audio_recorder_storage.temporary_path);
     sd_access_gate_release(SD_ACCESS_CLIENT_SCHEDULED_RECORDER);
+    if ((unlink_result != FR_OK) && (unlink_result != FR_NO_FILE))
+    {
+        g_audio_recorder_storage.error = AUDIO_RECORDER_ERROR_SD_IO;
+        g_audio_recorder_storage.phase = AUDIO_RECORDER_STORAGE_FAILED;
+        return 2U;
+    }
     g_audio_recorder_storage.phase = AUDIO_RECORDER_STORAGE_IDLE;
     g_audio_recorder_storage.error = AUDIO_RECORDER_ERROR_NONE;
     return 1U;
@@ -438,7 +446,9 @@ uint8_t audio_recorder_storage_cancel(uint32_t request_id)
     if ((g_audio_recorder_storage.prepare_request_id != request_id)
             || ((g_audio_recorder_storage.prepare_pending == 0U)
                 && (g_audio_recorder_storage.phase
-                    != AUDIO_RECORDER_STORAGE_PREPARED)))
+                    != AUDIO_RECORDER_STORAGE_PREPARED)
+                && (g_audio_recorder_storage.phase
+                    != AUDIO_RECORDER_STORAGE_DRAINING)))
         return 0U;
     g_audio_recorder_storage.cancel_requested = 1U;
     storage_io_owner_wakeup(STORAGE_OWNER_RECORDER);
@@ -557,7 +567,10 @@ void audio_recorder_storage_service(uint32_t session_id,
             audio_recorder_storage_publish_result();
             return;
         }
-        if (runtime->phase == AUDIO_RECORDER_STORAGE_PREPARED)
+        if ((runtime->phase == AUDIO_RECORDER_STORAGE_PREPARED)
+                && (runtime->recorder.state != GENERIC_RECORDER_CAPTURING)
+                && (runtime->recorder.state != GENERIC_RECORDER_DRAINING)
+                && (runtime->recorder.state != GENERIC_RECORDER_CANCELING))
         {
             const uint8_t cancel_result =
                 audio_recorder_storage_cancel_physical(cancel_request);
@@ -575,6 +588,34 @@ void audio_recorder_storage_service(uint32_t session_id,
             runtime->cancel_requested = 0U;
             audio_recorder_storage_set_result(
                 AUDIO_RECORDER_STORAGE_RESULT_CANCELED);
+            audio_recorder_storage_publish_result();
+            return;
+        }
+        if ((runtime->phase == AUDIO_RECORDER_STORAGE_DRAINING)
+                || (runtime->recorder.state == GENERIC_RECORDER_CAPTURING)
+                || (runtime->recorder.state == GENERIC_RECORDER_DRAINING)
+                || (runtime->recorder.state == GENERIC_RECORDER_CANCELING))
+        {
+            runtime->phase = AUDIO_RECORDER_STORAGE_CANCELING;
+            (void)generic_recorder_request_cancel(&runtime->recorder);
+            sd_scheduler_runtime_service();
+            generic_recorder_service(&runtime->recorder,
+                                     HAL_GetTick() * 1000U);
+            if (runtime->recorder.state != GENERIC_RECORDER_ABORTED)
+            {
+                storage_io_owner_wait_resource(STORAGE_OWNER_RECORDER);
+                return;
+            }
+            const uint8_t cancel_result =
+                audio_recorder_storage_cancel_physical(cancel_request);
+            if (cancel_result == 0U)
+                return;
+            runtime->cancel_requested = 0U;
+            if (cancel_result == 2U)
+                audio_recorder_storage_set_error_result(0U);
+            else
+                audio_recorder_storage_set_result(
+                    AUDIO_RECORDER_STORAGE_RESULT_CANCELED);
             audio_recorder_storage_publish_result();
             return;
         }
@@ -677,7 +718,8 @@ void audio_recorder_storage_service(uint32_t session_id,
     audio_recorder_storage_publish_result();
     if ((runtime->phase == AUDIO_RECORDER_STORAGE_IDLE)
             || (runtime->phase == AUDIO_RECORDER_STORAGE_TAKE_READY)
-            || (runtime->phase == AUDIO_RECORDER_STORAGE_FAILED)) return;
+            || (runtime->phase == AUDIO_RECORDER_STORAGE_FAILED)
+            || (runtime->phase == AUDIO_RECORDER_STORAGE_CANCELING)) return;
     if (capture_is_active != 0U)
     {
         const uint32_t accepted_frames = g_audio_recorder_capture.head_cursor;
@@ -828,4 +870,31 @@ uint8_t audio_recorder_storage_get_paths(const char **temporary_rec_path,
     *temporary_rec_path = g_audio_recorder_storage.temporary_path;
     *final_wav_path = g_audio_recorder_storage.final_path;
     return 1U;
+}
+
+uint8_t audio_recorder_storage_has_immediate_work(uint32_t session_id)
+{
+    const audio_recorder_storage_runtime_t *const runtime =
+        &g_audio_recorder_storage;
+    if ((runtime->prepare_pending != 0U)
+            || (runtime->cancel_requested != 0U)
+            || (runtime->result_pending != 0U)
+            || (runtime->phase == AUDIO_RECORDER_STORAGE_FINALIZING))
+        return 1U;
+    if ((g_audio_recorder_capture.closed_session == session_id)
+            && (runtime->recorder.state == GENERIC_RECORDER_CAPTURING))
+        return 1U;
+    for (uint32_t i = 0U; i < GENERIC_RECORDER_WRITE_BUFFER_COUNT; ++i)
+        if (runtime->recorder.descriptors[i].state
+                == GENERIC_RECORDER_DESCRIPTOR_READY)
+            return 1U;
+    const uint64_t head_bytes =
+        (uint64_t)g_audio_recorder_capture.head_cursor
+            * AUDIO_RECORDER_BYTES_PER_FRAME;
+    const uint64_t unassigned = (head_bytes > runtime->recorder.assigned_tail)
+        ? (head_bytes - runtime->recorder.assigned_tail) : 0U;
+    if ((runtime->recorder.state == GENERIC_RECORDER_DRAINING)
+            && (unassigned != 0U))
+        return 1U;
+    return (unassigned >= AUDIO_RECORDER_MINIMUM_WRITE_BYTES) ? 1U : 0U;
 }

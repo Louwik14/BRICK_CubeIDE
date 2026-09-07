@@ -384,6 +384,86 @@ uint8_t control_domain_settings_asset_mutation_active(void)
     return 0U;
 }
 
+uint8_t control_domain_settings_mutation_admissible(void)
+{
+    return (uint8_t)((project_transport_stopped_stable() != 0U)
+        && (control_domain_project_ui_busy() == 0U)
+        && (persistence_workspace_owner() == PERSISTENCE_WORKSPACE_FREE)
+        && (control_domain_settings_asset_mutation_active() == 0U));
+}
+
+uint8_t control_domain_settings_project_slot_present(uint8_t slot)
+{
+    return project_product_slot_present(slot);
+}
+
+uint8_t control_domain_settings_project_list_slots(uint8_t *out,
+                                                   uint8_t capacity)
+{
+    return project_product_list_slots(out, capacity);
+}
+
+uint8_t control_domain_settings_project_replacement_active(void)
+{
+    return project_replacement_is_active();
+}
+
+uint8_t control_domain_settings_project_progress(
+    struct project_product_progress *out_progress)
+{
+    return project_product_get_progress(out_progress);
+}
+
+uint8_t control_domain_settings_project_busy_command(void)
+{
+    return (uint8_t)project_product_ui_busy_command();
+}
+
+uint16_t control_domain_settings_list_samples(uint32_t kind, uint16_t *out,
+                                              uint16_t capacity)
+{
+    return project_control_list_samples(kind, out, capacity);
+}
+
+uint16_t control_domain_settings_list_wavetables(uint16_t *out,
+                                                 uint16_t capacity)
+{
+    return project_control_list_wavetables(out, capacity);
+}
+
+uint16_t control_domain_settings_list_multis(uint16_t *out,
+                                             uint16_t capacity)
+{
+    return project_control_list_multis(out, capacity);
+}
+
+uint8_t control_domain_settings_find_asset(uint32_t kind, const char *path,
+                                           uint16_t *out_logical)
+{
+    return project_control_find_asset(kind, path, out_logical);
+}
+
+uint8_t control_domain_settings_resolve_sample_runtime(
+    uint16_t logical, uint16_t *out_runtime_global, uint32_t *out_kind)
+{
+    return project_control_resolve_sample_runtime(logical, out_runtime_global,
+                                                  out_kind);
+}
+
+uint8_t control_domain_settings_resolve_wavetable_runtime(
+    uint16_t logical, uint16_t *out_runtime_global)
+{
+    return project_control_resolve_wavetable_runtime(logical,
+                                                     out_runtime_global);
+}
+
+uint8_t control_domain_settings_resolve_multi_runtime(
+    uint16_t logical, uint16_t *out_runtime_instrument)
+{
+    return project_control_resolve_multi_runtime(logical,
+                                                 out_runtime_instrument);
+}
+
 static uint8_t control_domain_prepare_remove_terminal(
     const control_asset_intent_t *intent, control_asset_terminal_t *terminal)
 {
@@ -740,6 +820,10 @@ static void control_domain_apply_audio_rec_intent(
                 (audio_recorder_client_t)intent->value0, sample_time);
         break;
     }
+    case CONTROL_AUDIO_REC_LEAVE_SAMPLING:
+        (void)audio_recorder_cancel_client(
+            AUDIO_RECORDER_CLIENT_AUDIO_REC);
+        break;
     default:
         break;
     }

@@ -414,6 +414,36 @@ uint8_t generic_recorder_request_stop(generic_recorder_t *recorder,
     return 1U;
 }
 
+uint8_t generic_recorder_request_cancel(generic_recorder_t *recorder)
+{
+    if (recorder == 0)
+        return 0U;
+    if ((recorder->state == GENERIC_RECORDER_CANCELING)
+            || (recorder->state == GENERIC_RECORDER_ABORTED))
+        return 1U;
+    if ((recorder->state != GENERIC_RECORDER_CAPTURING)
+            && (recorder->state != GENERIC_RECORDER_DRAINING))
+        return 0U;
+
+    uint64_t engaged_tail = recorder->committed_tail;
+    for (uint32_t i = 0U; i < GENERIC_RECORDER_WRITE_BUFFER_COUNT; ++i)
+    {
+        generic_recorder_write_descriptor_t *const descriptor =
+            &recorder->descriptors[i];
+        if (descriptor->state == GENERIC_RECORDER_DESCRIPTOR_READY)
+            memset(descriptor, 0, sizeof(*descriptor));
+        else if (descriptor->state == GENERIC_RECORDER_DESCRIPTOR_IN_FLIGHT)
+            engaged_tail += descriptor->active_valid_bytes;
+    }
+    recorder->accepted_tail = engaged_tail;
+    recorder->assigned_tail = engaged_tail;
+    recorder->accepted_frames = engaged_tail
+        / generic_recorder_bytes_per_frame(recorder);
+    recorder->extension_pending = 0U;
+    recorder->state = GENERIC_RECORDER_CANCELING;
+    return 1U;
+}
+
 uint64_t generic_recorder_ring_margin_us(const generic_recorder_t *recorder)
 {
     if ((recorder == 0) || (recorder->config.sample_rate_hz == 0U))
@@ -496,9 +526,23 @@ void generic_recorder_get_metrics(const generic_recorder_t *recorder,
 
 void generic_recorder_service(generic_recorder_t *recorder, uint32_t now_us)
 {
-    if ((recorder == 0)
-        || ((recorder->state != GENERIC_RECORDER_CAPTURING)
-            && (recorder->state != GENERIC_RECORDER_DRAINING)))
+    if (recorder == 0)
+        return;
+    if (recorder->state == GENERIC_RECORDER_CANCELING)
+    {
+        if (generic_recorder_in_flight_descriptor(recorder) == 0)
+        {
+            for (uint32_t i = 0U; i < GENERIC_RECORDER_WRITE_BUFFER_COUNT; ++i)
+                if (recorder->descriptors[i].state
+                        == GENERIC_RECORDER_DESCRIPTOR_READY)
+                    memset(&recorder->descriptors[i], 0,
+                           sizeof(recorder->descriptors[i]));
+            recorder->state = GENERIC_RECORDER_ABORTED;
+        }
+        return;
+    }
+    if ((recorder->state != GENERIC_RECORDER_CAPTURING)
+            && (recorder->state != GENERIC_RECORDER_DRAINING))
     {
         return;
     }

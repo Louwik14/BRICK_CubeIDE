@@ -171,7 +171,7 @@ uint8_t ui_page_audio_rec_is_open(void)
 
 const ui_page_t g_ui_page_audio_rec = {
     .enter = ui_page_audio_rec_enter,
-    .leave = 0,
+    .leave = ui_page_audio_rec_leave,
     .handle_event = ui_page_audio_rec_handle_event,
     .sync_active_context = 0,
     .render = ui_page_audio_rec_render,

@@ -20,6 +20,7 @@ typedef enum
     AUDIO_RECORDER_STATE_PREPARING,
     AUDIO_RECORDER_STATE_PREPARED,
     AUDIO_RECORDER_STATE_RECORDING,
+    AUDIO_RECORDER_STATE_CANCELING,
     AUDIO_RECORDER_STATE_DRAINING,
     AUDIO_RECORDER_STATE_FINALIZING,
     AUDIO_RECORDER_STATE_TAKE_READY,
@@ -72,6 +73,7 @@ uint8_t audio_recorder_prepare_client(audio_recorder_client_t client,
 uint8_t audio_recorder_start_client_at(audio_recorder_client_t client,
                                        uint64_t sample_time);
 uint8_t audio_recorder_cancel_prepared_client(audio_recorder_client_t client);
+uint8_t audio_recorder_cancel_client(audio_recorder_client_t client);
 uint8_t audio_recorder_request_stop_client(audio_recorder_client_t client);
 uint8_t audio_recorder_request_stop_client_at(audio_recorder_client_t client,
                                               uint64_t sample_time);
@@ -108,6 +110,8 @@ uint8_t audio_recorder_get_last_take_client(audio_recorder_client_t client,
 uint8_t audio_recorder_client_is_active(audio_recorder_client_t client);
 uint8_t audio_recorder_client_is_recording(audio_recorder_client_t client);
 uint8_t audio_recorder_looper_take_resource_retained(void);
+uint8_t audio_recorder_preview_conflict(void);
+uint8_t audio_recorder_path_is_mutating(const char *path);
 uint32_t audio_recorder_control_session(void);
 uint32_t audio_recorder_control_request_id(void);
 uint8_t audio_recorder_get_prepared_paths(const char **temporary_rec_path,

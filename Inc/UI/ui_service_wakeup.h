@@ -25,5 +25,8 @@ uint8_t ui_service_project_progress_is_pending(void);
 void ui_service_settings_progress_notify(void);
 uint8_t ui_service_settings_progress_take(void);
 uint8_t ui_service_settings_progress_is_pending(void);
+void ui_service_audio_rec_data_notify(void);
+uint8_t ui_service_audio_rec_data_take(void);
+uint8_t ui_service_audio_rec_data_is_pending(void);
 
 #endif /* BRICK6_UI_SERVICE_WAKEUP_H */

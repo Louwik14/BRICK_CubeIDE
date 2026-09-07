@@ -19,7 +19,7 @@ typedef enum
     PROJECT_PRODUCT_PHASE_PREPARING_ASSETS,
     PROJECT_PRODUCT_PHASE_INSTALLING
 } project_product_phase_t;
-typedef struct
+typedef struct project_product_progress
 {
     uint8_t active,complete;
     uint32_t done,total;

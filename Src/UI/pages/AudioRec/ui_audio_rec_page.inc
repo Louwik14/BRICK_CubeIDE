@@ -141,6 +141,13 @@ void ui_page_audio_rec_process_presentation(uint8_t deadline_due)
     }
 }
 
+static void ui_page_audio_rec_leave(void)
+{
+    (void)control_domain_request_audio_rec(&(control_audio_rec_intent_t){
+        .operation = CONTROL_AUDIO_REC_LEAVE_SAMPLING
+    });
+}
+
 static const char *ui_page_audio_rec_quant_label(sample_capture_quant_t quant)
 {
     switch(quant)

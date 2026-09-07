@@ -96,6 +96,8 @@ void ui_page_set(uint8_t page_id)
     {
         return;
     }
+    if (page_id == g_ui_current_page_id)
+        return;
 
     const ui_page_t *current_page = g_ui_pages[g_ui_current_page_id];
     const ui_page_t *next_page = g_ui_pages[page_id];

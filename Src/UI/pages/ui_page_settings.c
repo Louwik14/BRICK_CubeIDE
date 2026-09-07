@@ -18,6 +18,7 @@
 #include "ui_page_manager.h"
 #include "UI/ui_service_wakeup.h"
 #include "Storage/settings_storage_service.h"
+#include "Storage/persistent_control_model.h"
 
 #include "pages/ui_page_calibration.h"
 

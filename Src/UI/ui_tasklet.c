@@ -139,6 +139,14 @@ static void ui_tasklet_service_project_projection(void)
     }
 }
 
+static void ui_tasklet_service_audio_rec_data(void)
+{
+    if (ui_service_audio_rec_data_take() == 0U) return;
+    if ((ui_page_get_id() == UI_PAGE_AUDIO_REC)
+        || (ui_page_get_id() == UI_PAGE_REC_EDIT))
+        ui_service_dirty_set();
+}
+
 uint8_t ui_tasklet_project_presentation(project_product_command_t *command,
                                         project_product_progress_t *progress)
 {
@@ -739,6 +747,7 @@ void ui_tasklet_process_input(void)
 {
     ui_tasklet_initialize();
     ui_tasklet_service_product_terminals();
+    ui_tasklet_service_audio_rec_data();
     if ((ui_service_project_progress_take() != 0U)
         || (g_ui_project_projection_valid == 0U))
         ui_tasklet_service_project_projection();
@@ -766,6 +775,7 @@ void ui_tasklet_process_presentation(uint8_t deadline_due)
 {
     ui_tasklet_initialize();
     ui_tasklet_service_product_terminals();
+    ui_tasklet_service_audio_rec_data();
     if ((ui_service_project_progress_take() != 0U)
         || (g_ui_project_projection_valid == 0U))
         ui_tasklet_service_project_projection();

@@ -10,6 +10,7 @@ static volatile uint8_t g_ui_led_dirty;
 static volatile uint8_t g_ui_asset_receipts_invalidation_pending;
 static volatile uint8_t g_ui_project_progress_pending;
 static volatile uint8_t g_ui_settings_progress_pending;
+static volatile uint8_t g_ui_audio_rec_data_pending;
 
 static uint8_t ui_service_flag_take(volatile uint8_t *flag)
 {
@@ -114,4 +115,20 @@ uint8_t ui_service_settings_progress_take(void)
 uint8_t ui_service_settings_progress_is_pending(void)
 {
     return g_ui_settings_progress_pending;
+}
+
+void ui_service_audio_rec_data_notify(void)
+{
+    g_ui_audio_rec_data_pending = 1U;
+    ui_service_wakeup(UI_SERVICE_WAKE_INPUT);
+}
+
+uint8_t ui_service_audio_rec_data_take(void)
+{
+    return ui_service_flag_take(&g_ui_audio_rec_data_pending);
+}
+
+uint8_t ui_service_audio_rec_data_is_pending(void)
+{
+    return g_ui_audio_rec_data_pending;
 }

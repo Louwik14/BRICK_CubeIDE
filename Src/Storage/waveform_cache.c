@@ -11,7 +11,6 @@
 #include "Storage/storage_io_wakeup.h"
 #include "Storage/wav_audio_codec.h"
 #include "UI/ui_service_wakeup.h"
-#include "ui_page_manager.h"
 #include "wav_parser.h"
 #include "ff.h"
 
@@ -27,7 +26,7 @@
 #define WAVEFORM_CACHE_TILE_QUEUE_CAPACITY 8U
 #define WAVEFORM_CACHE_UI_REQUEST_CAPACITY 16U
 #define WAVEFORM_CACHE_RAM_TILE_COUNT 64U
-#define WAVEFORM_CACHE_IO_FRAMES 1024U
+#define WAVEFORM_CACHE_IO_FRAMES 512U
 #define WAVEFORM_CACHE_MAX_BLOCK_ALIGN 8U
 #define WAVEFORM_CACHE_ACTIVE_LEVEL_COUNT 4U
 #define WAVEFORM_CACHE_FORMAT_LEVEL_COUNT ((uint8_t)WAVEFORM_CACHE_LEVEL_COUNT)
@@ -116,6 +115,10 @@ typedef struct
     WAVEFORM_CACHE_ALIGNED4 waveform_cache_file_level_t table[WAVEFORM_CACHE_FORMAT_LEVEL_COUNT];
     waveform_cache_build_level_t levels[WAVEFORM_CACHE_ACTIVE_LEVEL_COUNT];
     uint32_t next_frame;
+    uint32_t identity_offset;
+    uint32_t identity_remaining;
+    uint64_t identity_hash;
+    uint8_t identity_phase;
     uint8_t header_written;
 } waveform_cache_job_t;
 
@@ -177,6 +180,8 @@ typedef struct
     waveform_cache_tile_request_t tile_queue[WAVEFORM_CACHE_TILE_QUEUE_CAPACITY];
     uint32_t tile_lru_tick;
     uint8_t service_defer_passes;
+    char ready_wav_path[96U];
+    waveform_cache_file_header_t ready_header;
 } waveform_cache_state_t;
 
 STORAGE_STATE_SDRAM static waveform_cache_state_t g_waveform_cache;
@@ -199,11 +204,8 @@ static const uint32_t g_waveform_cache_level_frames[WAVEFORM_CACHE_LEVEL_COUNT] 
 
 static void waveform_cache_ui_completion_wakeup(waveform_cache_reason_t reason)
 {
-    if((reason == WAVEFORM_CACHE_REASON_EDITOR_VISIBLE)
-            && (ui_page_get_id() == UI_PAGE_REC_EDIT))
-    {
-        ui_service_dirty_set();
-    }
+    if(reason == WAVEFORM_CACHE_REASON_EDITOR_VISIBLE)
+        ui_service_audio_rec_data_notify();
 }
 
 static void waveform_cache_owner_wakeup(void)
@@ -294,51 +296,14 @@ static uint8_t waveform_cache_path_has_suffix_ci(const char *path, const char *s
     return 1U;
 }
 
-static uint8_t waveform_cache_path_contains_ci(const char *path, const char *needle)
-{
-    if((path == 0) || (needle == 0) || (needle[0] == '\0'))
-    {
-        return 0U;
-    }
-    uint32_t needle_len = 0U;
-    while(needle[needle_len] != '\0') { needle_len++; }
-    for(uint32_t i = 0U; path[i] != '\0'; ++i)
-    {
-        uint32_t j = 0U;
-        while((j < needle_len) && (path[i + j] != '\0')
-                && (waveform_cache_path_char((uint8_t)path[i + j])
-                    == waveform_cache_path_char((uint8_t)needle[j])))
-        {
-            j++;
-        }
-        if(j == needle_len)
-        {
-            return 1U;
-        }
-    }
-    return 0U;
-}
-
 static uint8_t waveform_cache_path_is_temporary(const char *path)
 {
     if((path == 0) || (path[0] == '\0'))
     {
         return 1U;
     }
-    if(waveform_cache_path_has_suffix_ci(path, "/AUDIOREC_TMP.WAV") != 0U)
-    {
+    if(waveform_cache_path_has_suffix_ci(path, ".REC") != 0U)
         return 1U;
-    }
-    if(waveform_cache_path_contains_ci(path, "/PROJECT/REC/") != 0U)
-    {
-        return 1U;
-    }
-    if((waveform_cache_path_contains_ci(path, "_TMP.") != 0U)
-            || (waveform_cache_path_contains_ci(path, "_TMP/") != 0U)
-            || (waveform_cache_path_has_suffix_ci(path, "_TMP") != 0U))
-    {
-        return 1U;
-    }
     return 0U;
 }
 
@@ -441,165 +406,6 @@ static void waveform_cache_make_sample_id(waveform_cache_file_header_t *header)
         header->sample_id[i] = (uint8_t)((h0 >> (i * 8U)) & 0xFFU);
         header->sample_id[i + 8U] = (uint8_t)((h1 >> (i * 8U)) & 0xFFU);
     }
-}
-
-static uint8_t waveform_cache_hash_file_range(FIL *fp,
-                                               uint32_t offset,
-                                               uint32_t bytes,
-                                               uint32_t file_size,
-                                               uint64_t *out_hash)
-{
-    if((fp == 0) || (out_hash == 0))
-    {
-        return 0U;
-    }
-    *out_hash = waveform_cache_hash_init();
-    if((bytes == 0U) || (offset >= file_size))
-    {
-        return 0U;
-    }
-    if(bytes > (file_size - offset))
-    {
-        bytes = file_size - offset;
-    }
-    if(f_lseek(fp, offset) != FR_OK)
-    {
-        return 0U;
-    }
-    uint64_t hash = waveform_cache_hash_init();
-    uint32_t left = bytes;
-    while(left != 0U)
-    {
-        uint32_t chunk = left;
-        if(chunk > sizeof(g_waveform_cache_io))
-        {
-            chunk = sizeof(g_waveform_cache_io);
-        }
-        UINT br = 0U;
-        if((chunk == 0U) || (f_read(fp, g_waveform_cache_io, chunk, &br) != FR_OK))
-        {
-            return 0U;
-        }
-        if(br == 0U)
-        {
-            break;
-        }
-        hash = waveform_cache_hash_update(hash, g_waveform_cache_io, br);
-        left -= br;
-        if(br < chunk)
-        {
-            break;
-        }
-    }
-    *out_hash = hash;
-    return 1U;
-}
-
-static uint8_t waveform_cache_build_identity(const char *path,
-                                              waveform_cache_file_header_t *out_header)
-{
-    FIL fp;
-    FILINFO fno;
-    wav_info_t info;
-    WAVEFORM_CACHE_ALIGNED8 waveform_cache_file_header_t header;
-    uint8_t ok = 0U;
-
-    if((path == 0) || (path[0] == '\0') || (out_header == 0)
-            || (waveform_cache_path_is_temporary(path) != 0U))
-    {
-        return 0U;
-    }
-
-    memset(&header, 0, sizeof(header));
-    if(sd_access_fs_mount_if_needed() == 0U)
-    {
-        return 0U;
-    }
-    if(f_stat(path, &fno) != FR_OK)
-    {
-        return 0U;
-    }
-    if(f_open(&fp, path, FA_READ) != FR_OK)
-    {
-        return 0U;
-    }
-    do
-    {
-        memset(&info, 0, sizeof(info));
-        if(wav_parser_parse_info(&fp, &info) == 0)
-        {
-            break;
-        }
-        const uint32_t wav_size = (uint32_t)f_size(&fp);
-        if((info.channels == 0U) || (info.channels > 2U)
-                || ((info.bits_per_sample != 16U)
-                    && (info.bits_per_sample != 24U)
-                    && (info.bits_per_sample != 32U))
-                || (info.block_align == 0U)
-                || (info.block_align > WAVEFORM_CACHE_MAX_BLOCK_ALIGN)
-                || (info.data_size < info.block_align)
-                || (info.data_offset >= wav_size)
-                || (info.data_size > (wav_size - info.data_offset)))
-        {
-            break;
-        }
-
-        const uint32_t hashable_data_size = info.data_size;
-        const uint32_t head_bytes =
-            (hashable_data_size < WAVEFORM_CACHE_HASH_BYTES)
-                ? hashable_data_size : WAVEFORM_CACHE_HASH_BYTES;
-        const uint32_t tail_bytes = head_bytes;
-        const uint32_t tail_offset = info.data_offset + hashable_data_size - tail_bytes;
-
-        memcpy(header.magic, "BRKWAVE", 7U);
-        header.version = WAVEFORM_CACHE_VERSION;
-        header.endian = WAVEFORM_CACHE_ENDIAN_LE;
-        header.header_size =
-            (uint16_t)(sizeof(waveform_cache_file_header_t)
-                + (sizeof(waveform_cache_file_level_t) * WAVEFORM_CACHE_FORMAT_LEVEL_COUNT));
-        header.state = (uint8_t)WAVEFORM_CACHE_STATE_BUILDING;
-        header.path_hash = waveform_cache_hash_path(path);
-        header.wav_size = wav_size;
-        header.data_offset = info.data_offset;
-        header.frame_count = info.data_size / (uint32_t)info.block_align;
-        header.sample_rate = info.sample_rate;
-        header.channels = info.channels;
-        header.bits_per_sample = info.bits_per_sample;
-        header.block_align = info.block_align;
-        header.level_count = WAVEFORM_CACHE_ACTIVE_LEVEL_COUNT;
-        header.fat_date_time = ((uint32_t)fno.fdate << 16) | (uint32_t)fno.ftime;
-        uint64_t head_hash = 0ULL;
-        uint64_t tail_hash = 0ULL;
-        if((header.frame_count == 0U)
-                || (waveform_cache_hash_file_range(&fp,
-                                                   info.data_offset,
-                                                   head_bytes,
-                                                   wav_size,
-                                                   &head_hash) == 0U)
-                || (waveform_cache_hash_file_range(&fp,
-                                                   tail_offset,
-                                                   tail_bytes,
-                                                   wav_size,
-                                                   &tail_hash) == 0U))
-        {
-            break;
-        }
-        header.head_hash = head_hash;
-        header.tail_hash = tail_hash;
-        waveform_cache_make_sample_id(&header);
-        ok = 1U;
-    } while(0);
-
-    (void)f_close(&fp);
-    if(ok != 0U)
-    {
-        memcpy(out_header, &header, sizeof(header));
-    }
-    else
-    {
-        memset(out_header, 0, sizeof(*out_header));
-    }
-    return ok;
 }
 
 static void waveform_cache_make_cache_path(const uint8_t *sample_id, char *out, uint32_t out_len)
@@ -1098,6 +904,9 @@ uint8_t waveform_cache_storage_request_for_wav(const char *path,
     {
         return waveform_cache_finish_request(path, reason, 1U);
     }
+    if (strncmp(path, g_waveform_cache.ready_wav_path,
+                sizeof(g_waveform_cache.ready_wav_path)) == 0)
+        g_waveform_cache.ready_wav_path[0] = '\0';
     if((g_waveform_cache.active.state != WAVEFORM_CACHE_JOB_EMPTY)
             && (strncmp(g_waveform_cache.active.wav_path, path, sizeof(g_waveform_cache.active.wav_path)) == 0))
     {
@@ -1261,10 +1070,16 @@ uint8_t waveform_cache_request_for_wav_known_duration(const char *path,
 
 static void waveform_cache_service_validate(void)
 {
-    if(waveform_cache_path_is_temporary(g_waveform_cache.active.wav_path) != 0U)
+    waveform_cache_job_t *const job = &g_waveform_cache.active;
+    if (waveform_cache_path_is_temporary(job->wav_path) != 0U)
     {
-        memset(&g_waveform_cache.active, 0, sizeof(g_waveform_cache.active));
+        memset(job, 0, sizeof(*job));
         g_waveform_cache.diag.status = WAVEFORM_CACHE_STATUS_IDLE;
+        return;
+    }
+    if (audio_recorder_path_is_mutating(job->wav_path) != 0U)
+    {
+        storage_io_owner_wait_resource(STORAGE_OWNER_WAVEFORM_CACHE);
         return;
     }
     if(sd_access_gate_try_acquire(SD_ACCESS_CLIENT_WAVEFORM_CACHE) == 0U)
@@ -1272,41 +1087,152 @@ static void waveform_cache_service_validate(void)
         storage_io_owner_wait_resource(STORAGE_OWNER_WAVEFORM_CACHE);
         return;
     }
-    if(waveform_cache_build_identity(g_waveform_cache.active.wav_path,
-                                     &g_waveform_cache.active.header) == 0U)
+
+    FIL fp;
+    uint8_t file_open = 0U;
+    uint8_t ok = 1U;
+    if ((sd_access_fs_mount_if_needed() == 0U)
+            || (f_open(&fp, job->wav_path, FA_READ) != FR_OK))
+        ok = 0U;
+    else
+        file_open = 1U;
+
+    if ((ok != 0U) && (job->identity_phase == 0U))
+    {
+        FILINFO fno;
+        wav_info_t info;
+        memset(&info, 0, sizeof(info));
+        if ((f_stat(job->wav_path, &fno) != FR_OK)
+                || (wav_parser_parse_info(&fp, &info) == 0))
+            ok = 0U;
+        else
+        {
+            const uint32_t wav_size = (uint32_t)f_size(&fp);
+            if ((info.channels == 0U) || (info.channels > 2U)
+                    || ((info.bits_per_sample != 16U)
+                        && (info.bits_per_sample != 24U)
+                        && (info.bits_per_sample != 32U))
+                    || (info.block_align == 0U)
+                    || (info.block_align > WAVEFORM_CACHE_MAX_BLOCK_ALIGN)
+                    || (info.data_size < info.block_align)
+                    || (info.data_offset >= wav_size)
+                    || (info.data_size > (wav_size - info.data_offset)))
+                ok = 0U;
+            else
+            {
+                memset(&job->header, 0, sizeof(job->header));
+                memcpy(job->header.magic, "BRKWAVE", 7U);
+                job->header.version = WAVEFORM_CACHE_VERSION;
+                job->header.endian = WAVEFORM_CACHE_ENDIAN_LE;
+                job->header.header_size = (uint16_t)(
+                    sizeof(waveform_cache_file_header_t)
+                    + sizeof(waveform_cache_file_level_t)
+                        * WAVEFORM_CACHE_FORMAT_LEVEL_COUNT);
+                job->header.state = (uint8_t)WAVEFORM_CACHE_STATE_BUILDING;
+                job->header.path_hash = waveform_cache_hash_path(job->wav_path);
+                job->header.wav_size = wav_size;
+                job->header.data_offset = info.data_offset;
+                job->header.frame_count = info.data_size / info.block_align;
+                job->header.sample_rate = info.sample_rate;
+                job->header.channels = info.channels;
+                job->header.bits_per_sample = info.bits_per_sample;
+                job->header.block_align = info.block_align;
+                job->header.level_count = WAVEFORM_CACHE_ACTIVE_LEVEL_COUNT;
+                job->header.fat_date_time =
+                    ((uint32_t)fno.fdate << 16) | (uint32_t)fno.ftime;
+                job->identity_offset = info.data_offset;
+                job->identity_remaining = (info.data_size < WAVEFORM_CACHE_HASH_BYTES)
+                    ? info.data_size : WAVEFORM_CACHE_HASH_BYTES;
+                job->identity_hash = waveform_cache_hash_init();
+                job->identity_phase = 1U;
+            }
+        }
+    }
+    else if ((ok != 0U) && ((job->identity_phase == 1U)
+                            || (job->identity_phase == 2U)))
+    {
+        uint32_t chunk = job->identity_remaining;
+        if (chunk > 4096U) chunk = 4096U;
+        UINT br = 0U;
+        if ((chunk == 0U)
+                || (f_lseek(&fp, job->identity_offset) != FR_OK)
+                || (f_read(&fp, g_waveform_cache_io, chunk, &br) != FR_OK)
+                || (br != chunk))
+            ok = 0U;
+        else
+        {
+            job->identity_hash = waveform_cache_hash_update(
+                job->identity_hash, g_waveform_cache_io, br);
+            job->identity_offset += br;
+            job->identity_remaining -= br;
+            if (job->identity_remaining == 0U)
+            {
+                if (job->identity_phase == 1U)
+                {
+                    job->header.head_hash = job->identity_hash;
+                    const uint32_t data_bytes = job->header.frame_count
+                        * (uint32_t)job->header.block_align;
+                    const uint32_t tail_bytes =
+                        (data_bytes < WAVEFORM_CACHE_HASH_BYTES)
+                        ? data_bytes : WAVEFORM_CACHE_HASH_BYTES;
+                    job->identity_offset = job->header.data_offset
+                        + data_bytes - tail_bytes;
+                    job->identity_remaining = tail_bytes;
+                    job->identity_hash = waveform_cache_hash_init();
+                    job->identity_phase = 2U;
+                }
+                else
+                {
+                    job->header.tail_hash = job->identity_hash;
+                    waveform_cache_make_sample_id(&job->header);
+                    job->identity_phase = 3U;
+                }
+            }
+        }
+    }
+
+    if(file_open != 0U) (void)f_close(&fp);
+    if(ok == 0U)
     {
         g_waveform_cache.diag.last_fresult = (uint32_t)FR_INVALID_OBJECT;
         sd_access_gate_release(SD_ACCESS_CLIENT_WAVEFORM_CACHE);
         waveform_cache_fail_active();
         return;
     }
-    if(waveform_cache_duration_is_persistable(g_waveform_cache.active.header.frame_count,
-                                              g_waveform_cache.active.header.sample_rate) == 0U)
+    if(job->identity_phase != 3U)
     {
-        memset(&g_waveform_cache.active, 0, sizeof(g_waveform_cache.active));
+        sd_access_gate_release(SD_ACCESS_CLIENT_WAVEFORM_CACHE);
+        waveform_cache_owner_wakeup();
+        return;
+    }
+    if(waveform_cache_duration_is_persistable(job->header.frame_count,
+                                              job->header.sample_rate) == 0U)
+    {
+        memset(job, 0, sizeof(*job));
         g_waveform_cache.diag.status = WAVEFORM_CACHE_STATUS_IDLE;
         g_waveform_cache.diag.jobs_done++;
         sd_access_gate_release(SD_ACCESS_CLIENT_WAVEFORM_CACHE);
         return;
     }
-    waveform_cache_make_cache_path(g_waveform_cache.active.header.sample_id,
-                                   g_waveform_cache.active.cache_path,
-                                   sizeof(g_waveform_cache.active.cache_path));
-    if(waveform_cache_validate_existing(g_waveform_cache.active.cache_path,
-                                        &g_waveform_cache.active.header) != 0U)
+    waveform_cache_make_cache_path(job->header.sample_id, job->cache_path,
+                                   sizeof(job->cache_path));
+    if(waveform_cache_validate_existing(job->cache_path, &job->header) != 0U)
     {
-        waveform_cache_ui_completion_wakeup(g_waveform_cache.active.reason);
+        waveform_cache_copy_path(g_waveform_cache.ready_wav_path,
+            sizeof(g_waveform_cache.ready_wav_path), job->wav_path);
+        g_waveform_cache.ready_header = job->header;
+        waveform_cache_ui_completion_wakeup(job->reason);
         waveform_cache_owner_wakeup();
-        memset(&g_waveform_cache.active, 0, sizeof(g_waveform_cache.active));
+        memset(job, 0, sizeof(*job));
         g_waveform_cache.diag.status = WAVEFORM_CACHE_STATUS_READY;
         g_waveform_cache.diag.jobs_done++;
         sd_access_gate_release(SD_ACCESS_CLIENT_WAVEFORM_CACHE);
         return;
     }
-    waveform_cache_fill_table(&g_waveform_cache.active);
-    g_waveform_cache.active.state = WAVEFORM_CACHE_JOB_BUILDING;
+    waveform_cache_fill_table(job);
+    job->state = WAVEFORM_CACHE_JOB_BUILDING;
     g_waveform_cache.diag.status = WAVEFORM_CACHE_STATUS_BUILDING;
-    g_waveform_cache.diag.frame_count = g_waveform_cache.active.header.frame_count;
+    g_waveform_cache.diag.frame_count = job->header.frame_count;
     g_waveform_cache.diag.frames_done = 0U;
     sd_access_gate_release(SD_ACCESS_CLIENT_WAVEFORM_CACHE);
 }
@@ -1332,8 +1258,7 @@ static void waveform_cache_service_build(uint32_t byte_budget)
     }
     if((sample_stream_manager_io_in_flight() != 0U)
             || (storage_io_owner_test(STORAGE_OWNER_STREAM) != 0U)
-            || audio_recorder_is_active() != 0U
-            || sd_preview_is_active() != 0U
+            || audio_recorder_path_is_mutating(job->wav_path) != 0U
             || pattern_storage_is_pending() != 0U)
     {
         storage_io_owner_wait_resource(STORAGE_OWNER_WAVEFORM_CACHE);
@@ -1470,6 +1395,9 @@ static void waveform_cache_service_build(uint32_t byte_budget)
     }
     else if(completed != 0U)
     {
+        waveform_cache_copy_path(g_waveform_cache.ready_wav_path,
+            sizeof(g_waveform_cache.ready_wav_path), job->wav_path);
+        g_waveform_cache.ready_header = job->header;
         waveform_cache_ui_completion_wakeup(job->reason);
         waveform_cache_owner_wakeup();
         memset(job, 0, sizeof(*job));
@@ -1513,8 +1441,6 @@ static void waveform_cache_service_tile_request(uint32_t byte_budget)
     }
     if((sample_stream_manager_io_in_flight() != 0U)
             || (storage_io_owner_test(STORAGE_OWNER_STREAM) != 0U)
-            || audio_recorder_is_active() != 0U
-            || sd_preview_is_active() != 0U
             || pattern_storage_is_pending() != 0U)
     {
         storage_io_owner_wait_resource(STORAGE_OWNER_WAVEFORM_CACHE);
@@ -1655,8 +1581,6 @@ void waveform_cache_service(uint32_t byte_budget)
             || (waveform_cache_tile_work_pending() != 0U))
             && (sample_stream_manager_io_in_flight() == 0U)
             && (storage_io_owner_test(STORAGE_OWNER_STREAM) == 0U)
-            && (audio_recorder_is_active() == 0U)
-            && (sd_preview_is_active() == 0U)
             && (pattern_storage_is_pending() == 0U)
             && (g_waveform_cache.service_defer_passes == 0U)
             && (waveform_cache_storage_unavailable() == 0U)
@@ -1722,54 +1646,42 @@ uint8_t waveform_cache_open_for_wav(const char *path, waveform_cache_handle_t *o
     {
         return 0U;
     }
-    if(sd_access_gate_try_acquire(SD_ACCESS_CLIENT_WAVEFORM_CACHE) == 0U)
+    uint8_t validation_pending = 0U;
+    for (uint32_t cursor = g_waveform_cache_ui_request_tail;
+            cursor != g_waveform_cache_ui_request_head; ++cursor)
     {
-        return 0U;
+        const waveform_cache_ui_request_t *const request =
+            &g_waveform_cache_ui_requests[
+                cursor & (WAVEFORM_CACHE_UI_REQUEST_CAPACITY - 1U)];
+        if (((request->kind == WAVEFORM_CACHE_UI_REQUEST_WAV)
+                || (request->kind
+                    == WAVEFORM_CACHE_UI_REQUEST_WAV_KNOWN_DURATION))
+                && (strncmp(path, request->payload.wav.path,
+                    sizeof(request->payload.wav.path)) == 0))
+        {
+            validation_pending = 1U;
+            break;
+        }
     }
-
-    waveform_cache_file_header_t identity;
-    waveform_cache_file_header_t cached;
-    waveform_cache_file_level_t table[WAVEFORM_CACHE_FORMAT_LEVEL_COUNT];
-    uint8_t ok = 0U;
-    uint8_t request_allowed = 1U;
-    do
+    if ((validation_pending == 0U)
+            && (strncmp(path, g_waveform_cache.ready_wav_path,
+                sizeof(g_waveform_cache.ready_wav_path)) == 0)
+            )
     {
-        if(waveform_cache_build_identity(path, &identity) == 0U)
-        {
-            break;
-        }
-        if(waveform_cache_duration_is_persistable(identity.frame_count,
-                                                  identity.sample_rate) == 0U)
-        {
-            request_allowed = 0U;
-            break;
-        }
-        char cache_path[96U];
-        waveform_cache_make_cache_path(identity.sample_id, cache_path, sizeof(cache_path));
-        (void)cache_path;
-        if(waveform_cache_read_ready_header(identity.sample_id, &cached, table) == 0U)
-        {
-            break;
-        }
-        if(waveform_cache_header_matches(&cached, &identity) == 0U)
-        {
-            break;
-        }
+        const waveform_cache_file_header_t *const identity =
+            &g_waveform_cache.ready_header;
         memset(out_handle, 0, sizeof(*out_handle));
-        memcpy(out_handle->sample_id, identity.sample_id, WAVEFORM_CACHE_SAMPLE_ID_BYTES);
-        out_handle->frame_count = identity.frame_count;
-        out_handle->sample_rate = identity.sample_rate;
-        out_handle->channels = identity.channels;
-        out_handle->bits_per_sample = identity.bits_per_sample;
-        ok = 1U;
-    } while(0);
-
-    sd_access_gate_release(SD_ACCESS_CLIENT_WAVEFORM_CACHE);
-    if((ok == 0U) && (request_allowed != 0U))
-    {
-        (void)waveform_cache_request_for_wav(path, WAVEFORM_CACHE_REASON_EDITOR_VISIBLE);
+        memcpy(out_handle->sample_id, identity->sample_id,
+               WAVEFORM_CACHE_SAMPLE_ID_BYTES);
+        out_handle->frame_count = identity->frame_count;
+        out_handle->sample_rate = identity->sample_rate;
+        out_handle->channels = identity->channels;
+        out_handle->bits_per_sample = identity->bits_per_sample;
+        return 1U;
     }
-    return ok;
+    (void)waveform_cache_request_for_wav(
+        path, WAVEFORM_CACHE_REASON_EDITOR_VISIBLE);
+    return 0U;
 }
 
 uint8_t waveform_cache_storage_request_tiles(const waveform_cache_handle_t *handle,

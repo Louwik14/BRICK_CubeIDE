@@ -584,6 +584,11 @@ uint8_t sd_preview_request_begin_range(const char *path,
         return 0U;
     if (sd_preview_storage_unavailable() != 0U)
         return 0U;
+    if (audio_recorder_preview_conflict() != 0U)
+    {
+        sd_preview_set_error(SD_PREVIEW_ERROR_RECORD_ACTIVE);
+        return 0U;
+    }
     const size_t path_length = strlen(path) + 1U;
     const uint32_t primask = __get_PRIMASK();
     __disable_irq();
@@ -670,7 +675,7 @@ float sd_preview_get_gain(void)
 uint8_t sd_preview_begin_range(const char *path, uint32_t start_frame, uint32_t end_frame)
 {
     if (project_replacement_is_active() != 0U) return 0U;
-    if (audio_recorder_is_active() != 0U)
+    if (audio_recorder_preview_conflict() != 0U)
     {
         sd_preview_set_error(SD_PREVIEW_ERROR_RECORD_ACTIVE);
         return 0U;
@@ -820,6 +825,12 @@ uint8_t sd_preview_stop(void)
 void sd_preview_process(void)
 {
     g_sd_preview.gain = g_sd_preview_control_gain;
+    if ((audio_recorder_preview_conflict() != 0U)
+            && ((sd_preview_is_active() != 0U)
+                || (g_sd_preview_request == 1U)))
+    {
+        sd_preview_request_stop();
+    }
     uint8_t request = 0U;
     char request_path[SAMPLE_CLASSIC_PATH_MAX];
     uint32_t request_start_frame = 0U;

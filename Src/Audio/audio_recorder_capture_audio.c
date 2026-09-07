@@ -84,7 +84,7 @@ uint8_t audio_recorder_capture_audio_push(audio_recorder_client_t client,
     const uint32_t remaining = g_audio_capture.frame_limit - captured;
     if (frames > remaining) frames = remaining;
     const uint32_t tail = g_audio_recorder_capture.tail_cursor;
-    const uint8_t was_empty = (head == tail) ? 1U : 0U;
+    const uint32_t retained_before = head - tail;
     __DMB();
     const uint32_t retained = head - tail;
     if (frames > (AUDIO_RECORDER_CAPTURE_RING_FRAMES - retained))
@@ -104,7 +104,10 @@ uint8_t audio_recorder_capture_audio_push(audio_recorder_client_t client,
                (size_t)(frames - first) * AUDIO_RECORDER_CHANNELS * sizeof(int32_t));
     __DMB();
     g_audio_recorder_capture.head_cursor = head + frames;
-    if (was_empty != 0U)
+    const uint32_t retained_after = retained_before + frames;
+    if (((uint64_t)retained_before * AUDIO_RECORDER_BYTES_PER_FRAME < 8192U)
+            && ((uint64_t)retained_after * AUDIO_RECORDER_BYTES_PER_FRAME
+                >= 8192U))
     {
         storage_io_owner_wakeup(STORAGE_OWNER_RECORDER);
     }

@@ -7,20 +7,12 @@
 #include "Sampler/multi_sample_import.h"
 #include "App/control_domain.h"
 #include "Storage/audio_recorder.h"
-#include "Storage/project_control.h"
-#include "Storage/project_product.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/wav_convert.h"
-#include "Seq/seq_runtime.h"
-#include "Storage/persistence_workspace.h"
 
 static uint8_t storage_settings_mutation_admissible(uint8_t requires_media)
 {
-    if ((project_transport_stopped_stable() == 0U)
-        || (seq_runtime_is_start_pending() != 0U)
-        || (control_domain_project_ui_busy() != 0U)
-        || (persistence_workspace_owner() != PERSISTENCE_WORKSPACE_FREE)
-        || (control_domain_settings_asset_mutation_active() != 0U)
+    if ((control_domain_settings_mutation_admissible() == 0U)
         || ((requires_media != 0U)
             && (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)))
         return 0U;
@@ -29,12 +21,12 @@ static uint8_t storage_settings_mutation_admissible(uint8_t requires_media)
 
 uint8_t storage_settings_project_slot_present(uint8_t slot)
 {
-    return project_product_slot_present(slot);
+    return control_domain_settings_project_slot_present(slot);
 }
 
 uint8_t storage_settings_project_list_slots(uint8_t *out, uint8_t capacity)
 {
-    return project_product_list_slots(out, capacity);
+    return control_domain_settings_project_list_slots(out, capacity);
 }
 
 uint8_t storage_settings_request_catalog(uint8_t rebuild)
@@ -154,7 +146,7 @@ void storage_settings_cancel_multi_clear(void)
 
 uint8_t storage_settings_project_replacement_active(void)
 {
-    return project_replacement_is_active();
+    return control_domain_settings_project_replacement_active();
 }
 uint8_t storage_settings_convert_active(void) { return wav_convert_is_active(); }
 uint8_t storage_settings_multi_clear_active(void)
@@ -176,11 +168,12 @@ uint8_t storage_settings_multi_load_pending(void)
 
 uint8_t storage_settings_project_progress(project_product_progress_t *progress)
 {
-    return project_product_get_progress(progress);
+    return control_domain_settings_project_progress(progress);
 }
 project_product_command_t storage_settings_project_busy_command(void)
 {
-    return project_product_ui_busy_command();
+    return (project_product_command_t)
+        control_domain_settings_project_busy_command();
 }
 sd_storage_status_t storage_settings_sd_status(void)
 {
@@ -190,35 +183,38 @@ const char *storage_settings_sd_busy_label(void) { return sd_access_gate_busy_la
 
 uint16_t storage_settings_list_samples(uint32_t kind, uint16_t *out, uint16_t capacity)
 {
-    return project_control_list_samples(kind, out, capacity);
+    return control_domain_settings_list_samples(kind, out, capacity);
 }
 uint16_t storage_settings_list_wavetables(uint16_t *out, uint16_t capacity)
 {
-    return project_control_list_wavetables(out, capacity);
+    return control_domain_settings_list_wavetables(out, capacity);
 }
 uint16_t storage_settings_list_multis(uint16_t *out, uint16_t capacity)
 {
-    return project_control_list_multis(out, capacity);
+    return control_domain_settings_list_multis(out, capacity);
 }
 uint8_t storage_settings_find_asset(uint32_t kind, const char *path, uint16_t *out_logical)
 {
-    return project_control_find_asset(kind, path, out_logical);
+    return control_domain_settings_find_asset(kind, path, out_logical);
 }
 uint8_t storage_settings_resolve_sample_runtime(uint16_t logical,
                                                 uint16_t *out_runtime_global,
                                                 uint32_t *out_kind)
 {
-    return project_control_resolve_sample_runtime(logical, out_runtime_global, out_kind);
+    return control_domain_settings_resolve_sample_runtime(
+        logical, out_runtime_global, out_kind);
 }
 uint8_t storage_settings_resolve_wavetable_runtime(uint16_t logical,
                                                    uint16_t *out_runtime_global)
 {
-    return project_control_resolve_wavetable_runtime(logical, out_runtime_global);
+    return control_domain_settings_resolve_wavetable_runtime(
+        logical, out_runtime_global);
 }
 uint8_t storage_settings_resolve_multi_runtime(uint16_t logical,
                                                uint16_t *out_runtime_instrument)
 {
-    return project_control_resolve_multi_runtime(logical, out_runtime_instrument);
+    return control_domain_settings_resolve_multi_runtime(
+        logical, out_runtime_instrument);
 }
 
 const sample_global_slot_t *storage_settings_get_global_slot(uint16_t index)

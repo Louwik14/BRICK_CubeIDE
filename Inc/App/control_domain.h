@@ -3,6 +3,8 @@
 #include <stdint.h>
 #include "Param/param_ids.h"
 
+struct project_product_progress;
+
 typedef enum
 {
     CONTROL_PROJECT_SAVE = 0,
@@ -305,7 +307,8 @@ typedef enum
     CONTROL_AUDIO_REC_SAVE,
     CONTROL_AUDIO_REC_ASSIGN,
     CONTROL_AUDIO_REC_TOGGLE_ZCROSS,
-    CONTROL_AUDIO_REC_STOP_CLIENT
+    CONTROL_AUDIO_REC_STOP_CLIENT,
+    CONTROL_AUDIO_REC_LEAVE_SAMPLING
 } control_audio_rec_operation_t;
 
 typedef struct
@@ -486,6 +489,28 @@ uint8_t control_domain_take_asset_terminal(control_asset_family_t family,
 uint8_t control_domain_peek_asset_remove(control_asset_terminal_t *out_terminal);
 uint8_t control_domain_finish_asset_remove(uint32_t request_id);
 uint8_t control_domain_settings_asset_mutation_active(void);
+uint8_t control_domain_settings_mutation_admissible(void);
+uint8_t control_domain_settings_project_slot_present(uint8_t slot);
+uint8_t control_domain_settings_project_list_slots(uint8_t *out,
+                                                   uint8_t capacity);
+uint8_t control_domain_settings_project_replacement_active(void);
+uint8_t control_domain_settings_project_progress(
+    struct project_product_progress *out_progress);
+uint8_t control_domain_settings_project_busy_command(void);
+uint16_t control_domain_settings_list_samples(uint32_t kind, uint16_t *out,
+                                              uint16_t capacity);
+uint16_t control_domain_settings_list_wavetables(uint16_t *out,
+                                                 uint16_t capacity);
+uint16_t control_domain_settings_list_multis(uint16_t *out,
+                                             uint16_t capacity);
+uint8_t control_domain_settings_find_asset(uint32_t kind, const char *path,
+                                           uint16_t *out_logical);
+uint8_t control_domain_settings_resolve_sample_runtime(
+    uint16_t logical, uint16_t *out_runtime_global, uint32_t *out_kind);
+uint8_t control_domain_settings_resolve_wavetable_runtime(
+    uint16_t logical, uint16_t *out_runtime_global);
+uint8_t control_domain_settings_resolve_multi_runtime(
+    uint16_t logical, uint16_t *out_runtime_instrument);
 uint8_t control_domain_request_clipboard(const control_clipboard_intent_t *intent);
 uint8_t control_domain_request_keyboard(uint8_t operation, int8_t value);
 uint8_t control_domain_request_audio_fx(const control_audio_fx_intent_t *intent);
