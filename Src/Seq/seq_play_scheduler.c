@@ -162,6 +162,24 @@ static uint8_t g_seq_play_track_suspended[SEQ_LANE_CAPACITY];
  * before commit floor, at/after block end. */
 volatile uint32_t g_seq_play_rebuild_debug[7];
 
+typedef struct
+{
+    uint32_t armed;
+    uint32_t future_to_past_count;
+    uint32_t source_index;
+    uint32_t track_step;
+    uint64_t step_origin_sample;
+    uint64_t on_sample;
+    uint64_t future_block_start_sample;
+    uint64_t future_block_end_sample;
+    uint64_t future_commit_floor;
+    uint64_t past_block_start_sample;
+    uint64_t past_block_end_sample;
+    uint64_t past_commit_floor;
+} seq_play_future_past_debug_t;
+
+volatile seq_play_future_past_debug_t g_seq_play_future_past_debug;
+
 static void seq_play_scheduler_output_died(brick_entity_id_t entity_id,
                                            uint32_t output_id)
 {
@@ -951,12 +969,48 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                     else
                     {
                         ++g_seq_play_rebuild_debug[5];
+                        if ((g_seq_play_future_past_debug.armed != 0U)
+                                && (g_seq_play_future_past_debug.source_index
+                                    == source_index)
+                                && (g_seq_play_future_past_debug.step_origin_sample
+                                    == source->step_origin_sample)
+                                && (g_seq_play_future_past_debug.on_sample
+                                    == on_sample))
+                        {
+                            ++g_seq_play_future_past_debug.future_to_past_count;
+                            g_seq_play_future_past_debug.past_block_start_sample =
+                                block_start_sample;
+                            g_seq_play_future_past_debug.past_block_end_sample =
+                                block_end_sample;
+                            g_seq_play_future_past_debug.past_commit_floor =
+                                commit_floor;
+                            g_seq_play_future_past_debug.armed = 0U;
+                        }
                         continue;
                     }
                 }
                 if (on_sample >= block_end_sample)
                 {
                     ++g_seq_play_rebuild_debug[6];
+                    if ((g_seq_play_future_past_debug.armed == 0U)
+                            && (g_seq_play_future_past_debug.future_to_past_count
+                                == 0U))
+                    {
+                        g_seq_play_future_past_debug.source_index = source_index;
+                        g_seq_play_future_past_debug.track_step =
+                            (uint32_t)source->source_track
+                            | ((uint32_t)source->source_step << 8);
+                        g_seq_play_future_past_debug.step_origin_sample =
+                            source->step_origin_sample;
+                        g_seq_play_future_past_debug.on_sample = on_sample;
+                        g_seq_play_future_past_debug.future_block_start_sample =
+                            block_start_sample;
+                        g_seq_play_future_past_debug.future_block_end_sample =
+                            block_end_sample;
+                        g_seq_play_future_past_debug.future_commit_floor =
+                            commit_floor;
+                        g_seq_play_future_past_debug.armed = 1U;
+                    }
                     continue;
                 }
                 if ((g_seq_play_imminent_count + 2U)
@@ -1045,6 +1099,13 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                         .track_generation = source->track_generation,
                         .event_token = output_id
                     };
+                if ((g_seq_play_future_past_debug.armed != 0U)
+                        && (g_seq_play_future_past_debug.source_index
+                            == source_index)
+                        && (g_seq_play_future_past_debug.step_origin_sample
+                            == source->step_origin_sample)
+                        && (g_seq_play_future_past_debug.on_sample == on_sample))
+                    g_seq_play_future_past_debug.armed = 0U;
                 ++g_seq_note_path_debug[SEQ_NOTE_DBG_IMMINENT_NOTE_ON];
                 g_seq_note_path_debug[SEQ_NOTE_DBG_LAST_NOTE] =
                     (uint32_t)source->target_track | ((uint32_t)note << 8)
