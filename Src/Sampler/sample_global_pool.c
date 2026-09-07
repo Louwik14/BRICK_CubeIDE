@@ -9,6 +9,7 @@
 #include "Storage/sd_access_gate.h"
 #include "Storage/storage_io_wakeup.h"
 #include "App/control_rt_wakeup.h"
+#include "App/control_domain.h"
 #include "stm32h7xx.h"
 
 STORAGE_STATE_SDRAM static sample_global_slot_t
@@ -359,6 +360,8 @@ static uint8_t sample_global_pool_register_at(sample_global_kind_t kind,
     if ((project_transport_stopped_stable() == 0U)
         || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
         || (global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+        || (control_domain_asset_remove_occupies(
+                CONTROL_ASSET_FAMILY_CLASSIC, global_index) != 0U)
         || (sample_global_kind_valid(kind) == 0U)
         || (backend_index == SAMPLE_GLOBAL_POOL_INVALID_INDEX)
         || (sample_global_pool_validate_entries(kind, backend_index, entry_count) == 0U)
@@ -400,6 +403,8 @@ uint8_t sample_global_pool_register_classic_at(uint16_t global_index,
                                                uint32_t cost_bytes)
 {
     if ((global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+        || (control_domain_asset_remove_occupies(
+                CONTROL_ASSET_FAMILY_CLASSIC, global_index) != 0U)
         || ((g_sample_global_pool[global_index].kind != SAMPLE_GLOBAL_KIND_EMPTY)
             && (g_sample_global_pool[global_index].kind != SAMPLE_GLOBAL_KIND_CLASSIC))
         || (sample_global_pool_validate_entries(SAMPLE_GLOBAL_KIND_CLASSIC,
@@ -506,6 +511,8 @@ uint8_t sample_global_pool_request_classic_load(uint16_t global_index, const cha
     const uint32_t primask = __get_PRIMASK();
     __disable_irq();
     if ((project_transport_stopped_stable() == 0U)
+        || (control_domain_asset_remove_occupies(
+                CONTROL_ASSET_FAMILY_CLASSIC, global_index) != 0U)
         || (g_classic_active_request != 0U)
         || (g_classic_conversion_reserved != 0U)
         || (g_classic_result_valid != 0U)
@@ -535,6 +542,8 @@ uint8_t sample_global_pool_reserve_classic_conversion(uint16_t global_index,
     if ((project_transport_stopped_stable() == 0U)
         || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
         || (global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+        || (control_domain_asset_remove_occupies(
+                CONTROL_ASSET_FAMILY_CLASSIC, global_index) != 0U)
         || (path == NULL) || (path[0] == '\0')
         || (strlen(path) >= sizeof(g_classic_conversion_path))
         || (g_classic_active_request != 0U)
@@ -588,15 +597,18 @@ uint8_t sample_global_pool_start_reserved_classic_load(uint32_t request_id)
     const uint16_t slot = g_classic_conversion_slot;
     char path[SAMPLE_GLOBAL_POOL_PATH_MAX];
     (void)snprintf(path, sizeof(path), "%s", g_classic_conversion_path);
-    g_classic_conversion_reserved = 0U;
-    g_classic_conversion_request_id = 0U;
-    g_classic_conversion_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    g_classic_conversion_path[0] = '\0';
+    /* Publish the successor occupation before retiring the conversion
+     * reservation: observers must never see this identity as reusable. */
     g_classic_active_request_id = request_id;
     g_classic_active_request_slot = slot;
     (void)snprintf(g_classic_active_request_path,
                    sizeof(g_classic_active_request_path), "%s", path);
     g_classic_active_request = 1U;
+    __DMB();
+    g_classic_conversion_reserved = 0U;
+    g_classic_conversion_request_id = 0U;
+    g_classic_conversion_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    g_classic_conversion_path[0] = '\0';
     if (sample_global_pool_load_classic(slot, path) == 0U)
     {
         memset(&g_classic_result, 0, sizeof(g_classic_result));
@@ -654,7 +666,9 @@ void sample_global_pool_service_classic_completion(void)
     g_classic_result.request_id = g_classic_active_request_id;
     g_classic_result.slot = g_classic_active_request_slot;
     g_classic_result.success = (readiness == SAMPLE_CACHE_SLOT_PLAYABLE) ? 1U : 0U;
-    g_classic_result.error = g_sample_classic_last_error;
+    g_classic_result.error = (readiness == SAMPLE_CACHE_SLOT_ERROR)
+        ? sample_global_classic_error_from_cache(g_classic_active_request_slot)
+        : SAMPLE_CLASSIC_LOAD_OK;
     (void)snprintf(g_classic_result.path, sizeof(g_classic_result.path), "%s",
                    g_classic_active_request_path);
     __DMB();
@@ -706,6 +720,8 @@ uint8_t sample_global_pool_take_classic_load_result(sample_classic_load_result_t
 uint8_t sample_global_pool_request_clear_classic(uint16_t global_index)
 {
     if ((global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+        || (control_domain_asset_remove_occupies(
+                CONTROL_ASSET_FAMILY_CLASSIC, global_index) != 0U)
         || (g_classic_active_request != 0U)
         || (g_classic_result_valid != 0U)
         || (g_classic_request_valid != 0U)
@@ -717,6 +733,8 @@ uint8_t sample_global_pool_request_clear_classic(uint16_t global_index)
     const uint32_t primask = __get_PRIMASK();
     __disable_irq();
     if ((g_classic_active_request != 0U)
+        || (control_domain_asset_remove_occupies(
+                CONTROL_ASSET_FAMILY_CLASSIC, global_index) != 0U)
         || (g_classic_result_valid != 0U)
         || (g_classic_request_valid != 0U)
         || (g_classic_conversion_reserved != 0U)

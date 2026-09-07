@@ -416,24 +416,6 @@ static void brick6_app_control_process_storage_completions(void)
         terminal.result = (uint16_t)multi_completion.result;
         (void)snprintf(terminal.path, sizeof(terminal.path), "%s",
                        multi_completion.path);
-        multi_sample_external_request_t external_request;
-        const uint8_t cancelled =
-            (multi_sample_load_peek_external(multi_completion.request_id,
-                                              &external_request) != 0U)
-                ? external_request.cancelled : 0U;
-        if ((cancelled != 0U)
-            && (external_request.canonical_retired != 0U)
-            && (multi_sample_pool_get_state(multi_completion.instrument_id)
-                != MULTI_SAMPLE_INSTRUMENT_EMPTY))
-        {
-            storage_io_owner_wakeup(STORAGE_OWNER_MULTI);
-            return;
-        }
-        if (cancelled != 0U)
-        {
-            terminal.success = 0U;
-            terminal.result = MULTI_SAMPLE_LOAD_CANCELLED;
-        }
         const multi_sample_instrument_t *const instrument =
             multi_sample_pool_get_instrument(multi_completion.instrument_id);
         if ((terminal.success != 0U)

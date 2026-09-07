@@ -112,6 +112,7 @@ uint8_t multi_sample_is_ready(uint16_t instrument_id);
 uint8_t multi_sample_load_has_pending(void);
 uint8_t multi_sample_load_is_active(void);
 uint8_t multi_sample_cancel_load(void);
+uint8_t multi_sample_cancel_load_request(uint32_t request_id);
 void multi_sample_cancel_all_loads(void);
 uint8_t multi_sample_load_take_completion(
     multi_sample_load_completion_t *out_completion);

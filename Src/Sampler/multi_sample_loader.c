@@ -373,6 +373,13 @@ static void multi_loader_set_error(multi_sample_load_result_t error,
     g_multi_load_diag.state = MULTI_SAMPLE_INSTRUMENT_ERROR;
     (void)multi_sample_pool_clear_instrument(g_multi_load_diag.instrument_id);
     g_multi_load_active = 0U;
+    if ((error == MULTI_SAMPLE_LOAD_CANCELLED)
+        && (g_multi_external_request.used != 0U)
+        && (g_multi_external_request.request_id == g_multi_load_request.request_id))
+    {
+        g_multi_external_request.physical_retire_started = 1U;
+        return;
+    }
     multi_loader_publish_completion(0U);
 }
 
@@ -836,6 +843,8 @@ multi_sample_load_result_t multi_sample_load_request_replacement(
     if ((project_transport_stopped_stable() == 0U)
         || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
         || (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
+        || (control_domain_asset_remove_occupies(
+                CONTROL_ASSET_FAMILY_MULTI, instrument_id) != 0U)
         || (source_path == NULL) || (source_path[0] == '\0')
         || (index_path == NULL) || (index_path[0] == '\0')
         || (import_required > 1U)
@@ -921,7 +930,9 @@ multi_sample_load_result_t multi_sample_load_request_instrument(uint16_t logical
     if ((project_transport_stopped_stable() == 0U)
         || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
         || (index_path == 0) || (index_path[0] == '\0')
-        || (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS))
+        || (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
+        || (control_domain_asset_remove_occupies(
+                CONTROL_ASSET_FAMILY_MULTI, instrument_id) != 0U))
     {
         return MULTI_SAMPLE_LOAD_INVALID_ARG;
     }
@@ -976,6 +987,8 @@ uint8_t multi_sample_load_request_import(const char *source_path,
         || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
         || (source_path == NULL) || (source_path[0] == '\0')
         || (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
+        || (control_domain_asset_remove_occupies(
+                CONTROL_ASSET_FAMILY_MULTI, instrument_id) != 0U)
         || (strlen(source_path) >= sizeof(g_multi_external_request.source_path))
         || (g_multi_external_request.used != 0U)
         || (g_multi_external_request_valid != 0U)
@@ -1095,9 +1108,10 @@ void multi_sample_load_storage_request_service(void)
         }
         else if ((request->cancelled != 0U)
                  && (state == MULTI_SAMPLE_INSTRUMENT_EMPTY)
-                 && (g_multi_load_completion_valid != 0U))
+                 && (g_multi_load_completion_valid == 0U))
         {
-            control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
+            (void)multi_sample_load_publish_external_result(
+                request->request_id, MULTI_SAMPLE_LOAD_CANCELLED);
         }
         return;
     }
@@ -1591,9 +1605,18 @@ uint8_t multi_sample_load_take_completion(
 
 uint8_t multi_sample_cancel_load(void)
 {
-    if (g_multi_external_request.used != 0U)
+    return multi_sample_cancel_load_request(multi_sample_load_external_request_id());
+}
+
+uint8_t multi_sample_cancel_load_request(uint32_t request_id)
+{
+    if ((request_id != 0U) && (g_multi_external_request.used != 0U)
+        && (g_multi_external_request.request_id == request_id))
     {
         g_multi_external_request.cancelled = 1U;
+        if ((g_multi_load_active != 0U)
+            && (g_multi_load_request.request_id == request_id))
+            g_multi_bulk.cancel_requested = 1U;
         storage_io_owner_set(STORAGE_OWNER_MULTI);
         storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
         return 1U;

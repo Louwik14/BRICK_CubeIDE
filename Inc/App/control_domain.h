@@ -343,6 +343,7 @@ typedef enum
 typedef struct
 {
     uint8_t operation;
+    uint32_t request_id;
 } control_storage_ui_intent_t;
 
 typedef enum
@@ -469,6 +470,8 @@ uint8_t control_domain_peek_asset_remove(control_asset_family_t family,
                                          control_asset_terminal_t *out_terminal);
 uint8_t control_domain_finish_asset_remove(control_asset_family_t family,
                                            uint32_t request_id);
+uint8_t control_domain_asset_remove_occupies(control_asset_family_t family,
+                                             uint16_t physical_id);
 uint8_t control_domain_request_clipboard(const control_clipboard_intent_t *intent);
 uint8_t control_domain_request_keyboard(uint8_t operation, int8_t value);
 uint8_t control_domain_request_audio_fx(const control_audio_fx_intent_t *intent);

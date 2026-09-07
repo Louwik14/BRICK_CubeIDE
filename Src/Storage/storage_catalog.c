@@ -119,10 +119,7 @@ static uint8_t storage_catalog_make_index_path(char *out, uint32_t size, const c
     const char *const slash = (path != NULL) ? strrchr(path, '/') : NULL;
     const char *const name = (slash != NULL) ? slash + 1 : path;
     if ((name == NULL) || (name[0] == '\0')) return 0U;
-    const char *const folder = (slash != NULL) ? path : "0:";
-    const size_t folder_len = (slash != NULL) ? (size_t)(slash - path) : 2U;
-    const int written = snprintf(out, size, "%.*s/%s.brickmulti",
-                                 (int)folder_len, folder, name);
+    const int written = snprintf(out, size, "%s/%s.brickmulti", path, name);
     return (written >= 0 && (uint32_t)written < size) ? 1U : 0U;
 }
 
