@@ -154,7 +154,12 @@ static void pattern_live_publish_terminal(uint8_t success, uint8_t diagnostic)
         operation, bank, pattern, (success != 0U) ? 1U : 0U, diagnostic};
     __DMB();
     g_pattern_terminal_valid = 1U;
-    ui_service_dirty_set();
+    ui_service_wakeup(UI_SERVICE_WAKE_INPUT);
+}
+
+uint8_t pattern_live_terminal_available(void)
+{
+    return g_pattern_terminal_valid;
 }
 
 uint8_t pattern_live_operation_busy(void)

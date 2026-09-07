@@ -809,7 +809,7 @@ void wav_convert_service(uint32_t byte_budget)
         {
             storage_io_owner_set(STORAGE_OWNER_WAV_CONVERT);
             storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
-            ui_service_dirty_set();
+            ui_service_settings_progress_notify();
         }
     if ((g_wav_convert.state != state)
         && ((g_wav_convert.state == WAV_CONVERT_STATE_DONE)

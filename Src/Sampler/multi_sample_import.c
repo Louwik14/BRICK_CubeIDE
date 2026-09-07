@@ -1712,7 +1712,7 @@ static void multi_import_notify_progress(uint16_t done, uint16_t total)
 {
     g_import_progress_done = done;
     g_import_progress_total = (total == 0U) ? 1U : total;
-    ui_service_dirty_set();
+    ui_service_settings_progress_notify();
 }
 
 static multi_sample_import_result_t multi_import_count_direct_wavs(const char *scan_dir,

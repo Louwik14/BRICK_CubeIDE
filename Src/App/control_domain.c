@@ -335,7 +335,7 @@ uint8_t control_domain_publish_asset_terminal(const control_asset_terminal_t *te
     __DMB();
     g_control_asset_terminal_valid[terminal->family] = 1U;
     control_rt_wakeup(CONTROL_RT_WAKE_UI);
-    ui_service_dirty_set();
+    ui_service_wakeup(UI_SERVICE_WAKE_INPUT);
     return 1U;
 }
 
@@ -1328,6 +1328,8 @@ void control_domain_process_ui_messages(void)
 {
     control_ui_message_t message;
     uint16_t processed = 0U;
+    uint8_t oled_changed = 0U;
+    uint8_t led_changed = 0U;
 
     while ((processed < CONTROL_UI_PROCESS_BUDGET)
            && (control_domain_take_ui_message(&message) != 0U))
@@ -1356,52 +1358,66 @@ void control_domain_process_ui_messages(void)
             break;
         case CONTROL_UI_MSG_PATCH:
             control_domain_apply_patch_intent(&message.payload.patch);
+            oled_changed = 1U; led_changed = 1U;
             break;
         case CONTROL_UI_MSG_TRACK:
             control_domain_apply_track_intent(&message.payload.track);
+            oled_changed = 1U; led_changed = 1U;
             break;
         case CONTROL_UI_MSG_ROUTING:
             (void)control_routing_set_looper_source(
                 (brick_entity_id_t)message.payload.routing.looper,
                 (brick_entity_id_t)message.payload.routing.source,
                 message.payload.routing.enabled);
+            oled_changed = 1U;
             break;
         case CONTROL_UI_MSG_PARAM:
             control_domain_apply_param_intent(&message.payload.param);
+            oled_changed = 1U;
             break;
         case CONTROL_UI_MSG_SEQ:
             control_domain_apply_seq_intent(&message.payload.seq);
+            oled_changed = 1U; led_changed = 1U;
             break;
         case CONTROL_UI_MSG_MOD:
             control_domain_apply_mod_intent(&message.payload.mod);
+            oled_changed = 1U;
             break;
         case CONTROL_UI_MSG_MACRO:
             control_domain_apply_macro_intent(&message.payload.macro);
+            oled_changed = 1U;
             break;
         case CONTROL_UI_MSG_ASSET:
             control_domain_apply_asset_intent(&message.payload.asset);
             break;
         case CONTROL_UI_MSG_CLIPBOARD:
             control_clipboard_process(&message.payload.clipboard);
+            oled_changed = 1U; led_changed = 1U;
             break;
         case CONTROL_UI_MSG_KEYBOARD:
             control_domain_apply_keyboard_intent(&message.payload.keyboard);
+            oled_changed = 1U; led_changed = 1U;
             break;
         case CONTROL_UI_MSG_AUDIO_FX:
             control_domain_apply_audio_fx_intent(&message.payload.audio_fx);
+            oled_changed = 1U;
             break;
         case CONTROL_UI_MSG_POLYPHONY:
             control_domain_apply_polyphony_intent(&message.payload.polyphony);
+            oled_changed = 1U;
             break;
         case CONTROL_UI_MSG_AUDIO_REC:
             control_domain_apply_audio_rec_intent(&message.payload.audio_rec);
+            oled_changed = 1U;
             break;
         case CONTROL_UI_MSG_HISTORY:
             control_domain_apply_history_intent(&message.payload.history);
+            oled_changed = 1U;
             break;
         case CONTROL_UI_MSG_AUDIO_VISUAL:
             control_domain_apply_audio_visual_intent(
                 &message.payload.audio_visual);
+            oled_changed = 1U;
             break;
         case CONTROL_UI_MSG_PREVIEW_GAIN:
             sd_preview_set_gain(message.payload.preview_gain.gain);
@@ -1414,9 +1430,11 @@ void control_domain_process_ui_messages(void)
                         encoded.u, 0U) == 0U)
                     Error_Handler();
             }
+            oled_changed = 1U;
             break;
         case CONTROL_UI_MSG_REC_BUS:
             control_domain_apply_rec_bus_intent(&message.payload.rec_bus);
+            oled_changed = 1U;
             break;
         case CONTROL_UI_MSG_STORAGE:
             control_domain_apply_storage_ui_intent(&message.payload.storage);
@@ -1438,11 +1456,11 @@ void control_domain_process_ui_messages(void)
         && (g_control_ui_tail != g_control_ui_head))
         control_rt_wakeup(CONTROL_RT_WAKE_UI);
 
-    if (processed != 0U)
-    {
+    if (oled_changed != 0U)
         ui_service_dirty_set();
+    if (led_changed != 0U)
         ui_service_led_dirty_set();
-    }
+
 }
 
 void control_domain_process_storage_messages(void)

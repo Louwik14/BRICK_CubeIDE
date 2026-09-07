@@ -8,12 +8,24 @@ typedef enum
     PROJECT_PRODUCT_RESULT_SUCCESS,
     PROJECT_PRODUCT_RESULT_FAILED
 } project_product_result_t;
+typedef enum
+{
+    PROJECT_PRODUCT_PHASE_NONE = 0,
+    PROJECT_PRODUCT_PHASE_PREPARING,
+    PROJECT_PRODUCT_PHASE_WRITING,
+    PROJECT_PRODUCT_PHASE_VERIFYING,
+    PROJECT_PRODUCT_PHASE_FINALIZING,
+    PROJECT_PRODUCT_PHASE_VALIDATING,
+    PROJECT_PRODUCT_PHASE_PREPARING_ASSETS,
+    PROJECT_PRODUCT_PHASE_INSTALLING
+} project_product_phase_t;
 typedef struct
 {
     uint8_t active,complete;
     uint32_t done,total;
     uint16_t asset_warning_count;
     project_product_result_t result;
+    project_product_phase_t phase;
 } project_product_progress_t;
 typedef enum {
     PROJECT_PRODUCT_SAVE_ERROR_NONE=0,
@@ -80,6 +92,7 @@ uint8_t project_product_admit_ui(project_product_command_t command, uint8_t slot
 void project_product_cancel_ui_admission(project_product_command_t command,
                                          uint8_t slot);
 uint8_t project_product_take_terminal(project_product_terminal_t *out_terminal);
+uint8_t project_product_terminal_available(void);
 void project_product_storage_request_service(void);
 void project_product_control_process_intent(uint8_t operation, uint8_t slot);
 #endif

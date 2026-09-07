@@ -125,7 +125,7 @@ uint8_t ui_core_pattern_handle_mode_event(const ui_event_t *ev,
 
     if (feedback != 0)
     {
-        feedback("PAT FAIL");
+        feedback("PAT REFUSED");
     }
     ui_core_pattern_exit_to_previous_mode(set_hall_mode);
     return 1U;

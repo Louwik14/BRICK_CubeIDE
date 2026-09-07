@@ -571,3 +571,7 @@ static void ui_page_settings_multi_copy_right(uint8_t shift_down)
     ui_page_settings_multi_confirm_unload((uint8_t)backend_slot);
 }
 
+static void ui_page_settings_multi_prepare_flush_progress(void)
+{
+    ui_service_settings_progress_notify();
+}

@@ -36,6 +36,8 @@
 #include "UI/ui_hall_mode_flow.h"
 #include "UI/ui_renderer_oled.h"
 #include "UI/ui_service_wakeup.h"
+#include "Storage/project_product.h"
+#include "Storage/pattern_live_ram.h"
 #include "tusb.h"
 #include "usb_role_manager.h"
 #include "drv_display.h"
@@ -187,6 +189,11 @@ static uint8_t ui_service_work_pending(void)
                   CONTROL_ASSET_FAMILY_WAVETABLE) != 0U)
           || (control_domain_asset_terminal_available(
                   CONTROL_ASSET_FAMILY_MULTI) != 0U)
+          || (project_product_terminal_available() != 0U)
+          || (pattern_live_terminal_available() != 0U)
+          || (ui_service_asset_receipts_invalidation_is_pending() != 0U)
+          || (ui_service_project_progress_is_pending() != 0U)
+          || (ui_service_settings_progress_is_pending() != 0U)
           || ui_service_dirty_is_set() != 0U
           || ((ui_service_led_dirty_is_set() != 0U)
               && (led_hw_busy() == 0U))
@@ -468,6 +475,20 @@ void StartUiTask(void *argument)
       if (ui_event_pending_count() != 0U)
         wake_flags |= UI_SERVICE_WAKE_INPUT;
       if (ui_active_track_sync_is_pending() != 0U)
+        wake_flags |= UI_SERVICE_WAKE_INPUT;
+      if ((control_domain_asset_terminal_available(
+              CONTROL_ASSET_FAMILY_CLASSIC) != 0U)
+          || (control_domain_asset_terminal_available(
+              CONTROL_ASSET_FAMILY_RAM) != 0U)
+          || (control_domain_asset_terminal_available(
+              CONTROL_ASSET_FAMILY_WAVETABLE) != 0U)
+          || (control_domain_asset_terminal_available(
+              CONTROL_ASSET_FAMILY_MULTI) != 0U)
+          || (project_product_terminal_available() != 0U)
+          || (pattern_live_terminal_available() != 0U)
+          || (ui_service_asset_receipts_invalidation_is_pending() != 0U)
+          || (ui_service_project_progress_is_pending() != 0U)
+          || (ui_service_settings_progress_is_pending() != 0U))
         wake_flags |= UI_SERVICE_WAKE_INPUT;
       if (ui_service_dirty_is_set() != 0U)
         wake_flags |= UI_SERVICE_WAKE_DIRTY;

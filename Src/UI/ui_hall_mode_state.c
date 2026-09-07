@@ -5,6 +5,7 @@
 #include "ui_macro_interaction.h"
 #include "Seq/seq_edit.h"
 #include "Keyboard/keyboard_runtime.h"
+#include "UI/ui_service_wakeup.h"
 
 static ui_hall_mode_t g_ui_hall_mode = UI_HALL_MODE_SEQ;
 
@@ -50,4 +51,6 @@ void ui_set_hall_mode(ui_hall_mode_t mode)
         keyboard_runtime_on_hall_keyboard_deactivated();
     }
     g_ui_hall_mode = mode;
+    ui_service_dirty_set();
+    ui_service_led_dirty_set();
 }

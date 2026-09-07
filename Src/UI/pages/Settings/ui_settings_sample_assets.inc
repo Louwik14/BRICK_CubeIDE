@@ -361,7 +361,7 @@ static void ui_page_settings_sample_confirm_accept(void)
         {
             ui_page_settings_multi_prepare_finish(
                 (storage_settings_sd_status() == SD_STORAGE_STATUS_NO_MEDIA)
-                    ? "SD ABSENTE" : "LOAD FAIL");
+                    ? "SD ABSENTE" : "LOAD REFUSED");
             return;
         }
         return;
@@ -389,7 +389,7 @@ static void ui_page_settings_sample_confirm_accept(void)
             {
                 ui_page_settings_multi_prepare_finish(
                     (storage_settings_sd_status() == SD_STORAGE_STATUS_NO_MEDIA)
-                        ? "SD ABSENTE" : "LOAD FAIL");
+                        ? "SD ABSENTE" : "LOAD REFUSED");
                 return;
             }
             return;
@@ -411,7 +411,7 @@ static void ui_page_settings_sample_confirm_accept(void)
         }
         else
         {
-            ui_page_settings_status("UNLOAD FAIL");
+            ui_page_settings_status("UNLOAD REFUSED");
             return;
         }
         g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE;

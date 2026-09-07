@@ -21,6 +21,7 @@
 #include "Storage/sd_access_gate.h"
 #include "Storage/storage_io_wakeup.h"
 #include "Storage/wav_audio_codec.h"
+#include "UI/ui_service_wakeup.h"
 #include "IPC/control_audio_command.h"
 #include "IPC/sd_preview_ring_contract.h"
 #include "Storage/project_load_quiesce.h"
@@ -198,6 +199,8 @@ static uint8_t sd_preview_close_file(void)
 
 static uint8_t sd_preview_clear_session(uint8_t clear_error, uint8_t clear_state)
 {
+    const uint8_t was_active = (g_sd_preview.state != SD_PREVIEW_STATE_IDLE)
+        ? 1U : 0U;
     if (sd_preview_close_file() == 0U)
     {
         return 0U;
@@ -226,6 +229,8 @@ static uint8_t sd_preview_clear_session(uint8_t clear_error, uint8_t clear_state
     {
         g_sd_preview.last_error = SD_PREVIEW_ERROR_NONE;
     }
+    if (was_active != 0U)
+        ui_service_settings_progress_notify();
     return 1U;
 }
 
@@ -539,6 +544,7 @@ static void sd_preview_fill_ring(void)
             return;
         g_sd_preview.state = SD_PREVIEW_STATE_STREAMING;
         sd_preview_publish_active(1U);
+        ui_service_settings_progress_notify();
     }
 
     if ((g_sd_preview.stream_ended != 0U)

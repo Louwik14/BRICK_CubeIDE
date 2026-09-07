@@ -199,7 +199,12 @@ static void project_product_publish_terminal(project_product_command_t operation
         (uint8_t)operation, slot, (success != 0U) ? 1U : 0U, diagnostic};
     __DMB();
     g_project_terminal_valid = 1U;
-    ui_service_dirty_set();
+    ui_service_wakeup(UI_SERVICE_WAKE_INPUT);
+}
+
+uint8_t project_product_terminal_available(void)
+{
+    return g_project_terminal_valid;
 }
 
 uint8_t project_product_take_terminal(project_product_terminal_t *out_terminal)
@@ -631,6 +636,13 @@ void project_product_save_service(void)
     const uint16_t pattern_ordinal = g_project_save.pattern_ordinal;
 
     project_product_save_service_step();
+    if ((g_project_save.state != state)
+        || (g_project_save.file_offset != file_offset)
+        || (g_project_save.write_offset != write_offset)
+        || (g_project_save.pattern_read_offset != pattern_read_offset)
+        || (g_project_save.crc_remaining != crc_remaining)
+        || (g_project_save.pattern_ordinal != pattern_ordinal))
+        ui_service_project_progress_notify();
     if ((g_project_save.state != PROJECT_SAVE_IDLE)
             && (g_project_save.state != PROJECT_SAVE_DONE)
             && ((g_project_save.state != state)
@@ -1366,6 +1378,11 @@ void project_product_load_service(void)
     const uint8_t control_done = g_project_load_control_done;
 
     project_product_load_service_step();
+    if ((g_project_load.state != state)
+        || (g_project_load.asset_index != asset_index)
+        || (g_project_load_control_ready != control_ready)
+        || (g_project_load_control_done != control_done))
+        ui_service_project_progress_notify();
     if ((g_project_load.state != PROJECT_LOAD_IDLE)
             && (g_project_load.state != PROJECT_LOAD_FAILED)
             && ((g_project_load.state != state)
@@ -1652,20 +1669,56 @@ uint8_t project_product_get_progress(project_product_progress_t*out)
         out->active = 1U;
         out->complete = 0U;
         out->done = 0U;
-        out->total = 1U;
+        out->total = 0U;
         out->result = PROJECT_PRODUCT_RESULT_IN_PROGRESS;
     }
+    out->phase = PROJECT_PRODUCT_PHASE_NONE;
+    if ((g_storage_request != PROJECT_PRODUCT_COMMAND_NONE)
+        && (g_project_save.state == PROJECT_SAVE_IDLE)
+        && (g_project_load.state == PROJECT_LOAD_IDLE))
+        out->phase = PROJECT_PRODUCT_PHASE_PREPARING;
     if ((g_project_save.state != PROJECT_SAVE_IDLE)
         && (g_project_save.state != PROJECT_SAVE_DONE))
     {
-        /* Save byte totals are not known until the document is encoded.  The
-         * existing state machine is monotonic, so expose its real phase as a
-         * bounded progress source instead of a misleading byte percentage. */
         out->active = 1U;
         out->complete = 0U;
-        out->done = (uint32_t)g_project_save.state;
-        out->total = (uint32_t)PROJECT_SAVE_DONE;
+        out->done = 0U;
+        out->total = 0U;
         out->result = PROJECT_PRODUCT_RESULT_IN_PROGRESS;
+        if ((g_project_save.state == PROJECT_SAVE_WRITE)
+            || (g_project_save.state == PROJECT_SAVE_QUEUE_DOCUMENT_PLACEHOLDER)
+            || (g_project_save.state == PROJECT_SAVE_QUEUE_BANK_HEADER)
+            || (g_project_save.state == PROJECT_SAVE_QUEUE_BANK_COUNT)
+            || (g_project_save.state == PROJECT_SAVE_QUEUE_CORE)
+            || (g_project_save.state == PROJECT_SAVE_QUEUE_ASSETS)
+            || (g_project_save.state == PROJECT_SAVE_QUEUE_MACROS)
+            || (g_project_save.state == PROJECT_SAVE_QUEUE_PATTERN)
+            || (g_project_save.state == PROJECT_SAVE_WRITE_DOCUMENT_HEADER))
+            out->phase = PROJECT_PRODUCT_PHASE_WRITING;
+        else if ((g_project_save.state == PROJECT_SAVE_CRC_SEEK)
+                 || (g_project_save.state == PROJECT_SAVE_CRC_READ))
+            out->phase = PROJECT_PRODUCT_PHASE_VERIFYING;
+        else if ((g_project_save.state == PROJECT_SAVE_SYNC)
+                 || (g_project_save.state == PROJECT_SAVE_CLOSE)
+                 || (g_project_save.state == PROJECT_SAVE_COMMIT)
+                 || (g_project_save.state >= PROJECT_SAVE_CLEAN_PATTERN_CLOSE))
+            out->phase = PROJECT_PRODUCT_PHASE_FINALIZING;
+        else
+            out->phase = PROJECT_PRODUCT_PHASE_PREPARING;
+    }
+    else if ((g_project_load.state != PROJECT_LOAD_IDLE)
+             && (g_project_load.state != PROJECT_LOAD_FAILED))
+    {
+        if (g_project_load.state == PROJECT_LOAD_WAIT_SAFE)
+            out->phase = PROJECT_PRODUCT_PHASE_VALIDATING;
+        else if ((g_project_load.state == PROJECT_LOAD_ASSETS)
+                 || (g_project_load.state == PROJECT_LOAD_WAIT_STREAM)
+                 || (g_project_load.state == PROJECT_LOAD_WAIT_RAM)
+                 || (g_project_load.state == PROJECT_LOAD_WAIT_WAVETABLE)
+                 || (g_project_load.state == PROJECT_LOAD_WAIT_MULTI))
+            out->phase = PROJECT_PRODUCT_PHASE_PREPARING_ASSETS;
+        else
+            out->phase = PROJECT_PRODUCT_PHASE_INSTALLING;
     }
     return 1U;
 }

@@ -50,6 +50,7 @@
 #include "ui_track_catalog.h"
 #include "ui_core_clipboard.h"
 #include "ui_core_feedback.h"
+#include "UI/ui_service_wakeup.h"
 #include "ui_core_mute.h"
 #include "ui_core_pattern.h"
 #include "ui_core_shortcuts.h"
@@ -877,8 +878,7 @@ static uint8_t ui_core_handle_encoder_event(const ui_event_t *ev,
 
     if (ui_page_settings_is_open() != 0U)
     {
-        ui_page_settings_handle_encoder(ev->id, delta);
-        return 1U;
+        return ui_page_settings_handle_encoder(ev->id, delta);
     }
     if (ui_page_name_edit_is_open() != 0U)
     {
@@ -928,8 +928,7 @@ static uint8_t ui_core_handle_encoder_event(const ui_event_t *ev,
     {
         return 1U;
     }
-    (void)ui_param_handle_encoder_with_context(ctx, ev->id, delta);
-    return 1U;
+    return ui_param_handle_encoder_with_context(ctx, ev->id, delta);
 }
 
 static uint8_t ui_core_handle_keyboard_shortcut(const ui_event_t *ev)
@@ -1120,12 +1119,14 @@ void ui_core_process_inputs(void)
         }
         if (ev.type == UI_EVENT_KEYBOARD_SHORTCUT)
         {
-            (void)ui_core_handle_keyboard_shortcut(&ev);
+            if (ui_core_handle_keyboard_shortcut(&ev) != 0U)
+                ui_service_dirty_set();
             continue;
         }
         if (ev.type == UI_EVENT_ENCODER)
         {
-            (void)ui_core_handle_encoder_event(&ev, &encoder_ctx);
+            if (ui_core_handle_encoder_event(&ev, &encoder_ctx) != 0U)
+                ui_service_dirty_set();
             if ((ui_page_get_id() == UI_PAGE_TEMPLATE_MOD)
                     || (ui_page_get_id() == UI_PAGE_MIDI_FX)
                     || (ui_page_get_id() == UI_PAGE_AUDIO_FX))
@@ -1148,6 +1149,8 @@ void ui_core_process_inputs(void)
                     && (s->blocks_downstream != 0U)
                     && (s->handler(&ev) != 0U))
             {
+                ui_service_dirty_set();
+                ui_service_led_dirty_set();
                 goto next_event;
             }
         }

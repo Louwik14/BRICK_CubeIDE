@@ -22,6 +22,7 @@
 #include "ui_renderer_oled.h"
 
 #include <stdio.h>
+#include <string.h>
 #include "cmsis_os.h"
 
 #include "App/control_domain.h"
@@ -42,6 +43,7 @@
 #include "Seq/seq_runtime.h"
 #include "UI/display_flush_service.h"
 #include "UI/ui_core_feedback.h"
+#include "UI/ui_tasklet.h"
 #include "led_rgb.h"
 
 #define UI_BOOT_RENDER_PERIOD_MS 100U
@@ -102,22 +104,22 @@ static const char *ui_audio_boot_error_label(board_audio_boot_error_t error)
 static void ui_renderer_oled_draw_project_busy(void)
 {
     project_product_progress_t progress;
-    const project_product_command_t command =
-        storage_settings_project_busy_command();
+    project_product_command_t command = PROJECT_PRODUCT_COMMAND_NONE;
+    char counter[24];
+
+    if (ui_tasklet_project_presentation(&command, &progress) == 0U)
+        memset(&progress, 0, sizeof(progress));
     const char *title = (command == PROJECT_PRODUCT_COMMAND_SAVE)
         ? "SAVING PROJECT"
         : (command == PROJECT_PRODUCT_COMMAND_LOAD)
             ? "LOADING PROJECT" : "PROJECT BUSY";
-    char counter[24];
-
-    (void)storage_settings_project_progress(&progress);
     drv_display_set_draw_color(1U);
     drv_display_set_font(&FONT_5X7);
     drv_display_draw_text((uint8_t)((OLED_WIDTH - drv_display_text_width(title)) / 2U),
                           8U, title);
-    drv_display_draw_rect(8, 25, 112, 8);
     if (progress.total != 0U)
     {
+        drv_display_draw_rect(8, 25, 112, 8);
         uint32_t done = progress.done;
         if (done > progress.total) done = progress.total;
         const uint8_t fill = (uint8_t)(((uint64_t)done * 108U)
@@ -127,6 +129,20 @@ static void ui_renderer_oled_draw_project_busy(void)
     }
 
     drv_display_set_font(&FONT_4X6);
+    const char *phase = "PREPARING";
+    switch (progress.phase)
+    {
+        case PROJECT_PRODUCT_PHASE_WRITING: phase = "WRITING"; break;
+        case PROJECT_PRODUCT_PHASE_VERIFYING: phase = "VERIFYING"; break;
+        case PROJECT_PRODUCT_PHASE_FINALIZING: phase = "FINALIZING"; break;
+        case PROJECT_PRODUCT_PHASE_VALIDATING: phase = "VALIDATING"; break;
+        case PROJECT_PRODUCT_PHASE_PREPARING_ASSETS: phase = "PREPARING ASSETS"; break;
+        case PROJECT_PRODUCT_PHASE_INSTALLING: phase = "INSTALLING"; break;
+        default: break;
+    }
+    drv_display_draw_text(
+        (uint8_t)((OLED_WIDTH - drv_display_text_width(phase)) / 2U),
+        37U, phase);
     if (progress.total != 0U)
     {
         (void)snprintf(counter, sizeof(counter), "%lu/%lu",
@@ -134,7 +150,7 @@ static void ui_renderer_oled_draw_project_busy(void)
                        (unsigned long)progress.total);
         drv_display_draw_text(
             (uint8_t)((OLED_WIDTH - drv_display_text_width(counter)) / 2U),
-            43U, counter);
+            46U, counter);
     }
     drv_display_draw_text(42U, 56U, "PLEASE WAIT");
 }
@@ -184,6 +200,7 @@ void ui_renderer_oled_draw(void)
     {
         page->render();
         ui_roll_popup_render(HAL_GetTick());
+        ui_core_feedback_render(HAL_GetTick());
     }
 
     g_ui_rendering = 0U;
@@ -206,6 +223,9 @@ void ui_renderer_oled_service_render(void)
 void ui_renderer_oled_service_deadline(void)
 {
     const uint32_t now = HAL_GetTick();
+    if ((ui_boot_loading_is_active() == 0U)
+        && (control_domain_project_ui_busy() != 0U))
+        return;
     ui_core_feedback_service(now);
     ui_roll_popup_service(now);
     ui_page_settings_service_deadline(now);
@@ -217,9 +237,10 @@ void ui_renderer_oled_service_deadline(void)
         ui_boot_loading_advance_animation();
         ui_service_dirty_set();
     }
-    else if ((ui_renderer_oled_live_waveform_visible() != 0U)
+    else if ((control_domain_project_ui_busy() == 0U)
+             && ((ui_renderer_oled_live_waveform_visible() != 0U)
              || ((ui_page_get_id() == UI_PAGE_TEMPLATE_SEQ)
-                 && (seq_runtime_is_running() != 0U)))
+                 && (seq_runtime_is_running() != 0U))))
     {
         ui_service_dirty_set();
     }
@@ -234,9 +255,10 @@ uint32_t ui_renderer_oled_next_render_wait_ticks(void)
 
     if (ui_boot_loading_is_active() != 0U)
         period = UI_BOOT_RENDER_PERIOD_MS;
-    else if ((ui_renderer_oled_live_waveform_visible() != 0U)
+    else if ((control_domain_project_ui_busy() == 0U)
+             && ((ui_renderer_oled_live_waveform_visible() != 0U)
              || ((ui_page_get_id() == UI_PAGE_TEMPLATE_SEQ)
-                 && (seq_runtime_is_running() != 0U)))
+                 && (seq_runtime_is_running() != 0U))))
         period = UI_ACTIVE_RENDER_PERIOD_MS;
     else
         period = 0U;
@@ -244,22 +266,28 @@ uint32_t ui_renderer_oled_next_render_wait_ticks(void)
     if (period != 0U)
         candidate = now + period;
 
-    if (ui_core_feedback_next_deadline(now, &next_deadline) != 0U
+    if ((control_domain_project_ui_busy() == 0U)
+        && ui_core_feedback_next_deadline(now, &next_deadline) != 0U
         && ((candidate == 0U) || ((int32_t)(next_deadline - candidate) < 0)))
         candidate = next_deadline;
-    if (ui_roll_popup_next_deadline(now, &next_deadline) != 0U
+    if ((control_domain_project_ui_busy() == 0U)
+        && ui_roll_popup_next_deadline(now, &next_deadline) != 0U
         && ((candidate == 0U) || ((int32_t)(next_deadline - candidate) < 0)))
         candidate = next_deadline;
-    if (ui_page_calibration_next_deadline(now, &next_deadline) != 0U
+    if ((control_domain_project_ui_busy() == 0U)
+        && ui_page_calibration_next_deadline(now, &next_deadline) != 0U
         && ((candidate == 0U) || ((int32_t)(next_deadline - candidate) < 0)))
         candidate = next_deadline;
-    if (ui_page_settings_next_deadline(now, &next_deadline) != 0U
+    if ((control_domain_project_ui_busy() == 0U)
+        && ui_page_settings_next_deadline(now, &next_deadline) != 0U
         && ((candidate == 0U) || ((int32_t)(next_deadline - candidate) < 0)))
         candidate = next_deadline;
-    if (ui_param_next_value_flash_deadline(now, &next_deadline) != 0U
+    if ((control_domain_project_ui_busy() == 0U)
+        && ui_param_next_value_flash_deadline(now, &next_deadline) != 0U
         && ((candidate == 0U) || ((int32_t)(next_deadline - candidate) < 0)))
         candidate = next_deadline;
-    if (ui_hall_patch_feedback_next_deadline(now, &next_deadline) != 0U
+    if ((control_domain_project_ui_busy() == 0U)
+        && ui_hall_patch_feedback_next_deadline(now, &next_deadline) != 0U
         && ((candidate == 0U) || ((int32_t)(next_deadline - candidate) < 0)))
         candidate = next_deadline;
     if (led_presentation_next_deadline(now, &next_deadline) != 0U

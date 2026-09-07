@@ -721,21 +721,19 @@ static void ui_page_settings_render_multi_browser(void)
     const uint8_t visible_lines = UI_SETTINGS_SAMPLE_BROWSER_VISIBLE_LINES;
     const uint16_t selected_right_index =
         ui_page_settings_filtered_index_for_global(g_ui_settings.sample_slot_selected);
-    g_ui_settings.sample_left_scroll = ui_page_settings_clamp_scroll(g_ui_settings.sample_left_scroll,
-                                                                     g_ui_settings.sample_selected,
-                                                                     g_ui_settings.multi_entry_count,
-                                                                     visible_lines);
-    g_ui_settings.sample_right_scroll = ui_page_settings_clamp_scroll(g_ui_settings.sample_right_scroll,
-                                                                      selected_right_index,
-                                                                      g_ui_settings.sampler_slot_count,
-                                                                      visible_lines);
+    const uint16_t left_scroll = ui_page_settings_clamp_scroll(
+        g_ui_settings.sample_left_scroll, g_ui_settings.sample_selected,
+        g_ui_settings.multi_entry_count, visible_lines);
+    const uint16_t right_scroll = ui_page_settings_clamp_scroll(
+        g_ui_settings.sample_right_scroll, selected_right_index,
+        g_ui_settings.sampler_slot_count, visible_lines);
 
     for (uint8_t line = 0U; line < visible_lines; ++line)
     {
         const uint8_t y = (uint8_t)(UI_SETTINGS_SAMPLE_BROWSER_TEXT_Y0
                                     + (line * UI_SETTINGS_SAMPLE_BROWSER_TEXT_PITCH));
-        const uint16_t left_index = (uint16_t)(g_ui_settings.sample_left_scroll + line);
-        const uint16_t right_index = (uint16_t)(g_ui_settings.sample_right_scroll + line);
+        const uint16_t left_index = (uint16_t)(left_scroll + line);
+        const uint16_t right_index = (uint16_t)(right_scroll + line);
 
         if (left_index < g_ui_settings.multi_entry_count)
         {
@@ -788,11 +786,6 @@ static void ui_page_settings_render_multi_browser(void)
     drv_display_set_font(&FONT_5X7);
 }
 
-static void ui_page_settings_multi_prepare_flush_progress(void)
-{
-    ui_service_dirty_set();
-}
-
 static void ui_page_settings_render_sample_browser(void)
 {
     enum
@@ -813,16 +806,12 @@ static void ui_page_settings_render_sample_browser(void)
     const uint8_t visible_lines = UI_SETTINGS_SAMPLE_BROWSER_VISIBLE_LINES;
     const uint16_t selected_right_index =
         ui_page_settings_filtered_index_for_global(g_ui_settings.sample_slot_selected);
-    g_ui_settings.sample_left_scroll = ui_page_settings_clamp_scroll(g_ui_settings.sample_left_scroll,
-                                                                     g_ui_settings.sample_selected,
-                                                                     g_ui_settings.sample_child_count,
-                                                                     visible_lines);
-    g_ui_settings.sample_right_scroll = ui_page_settings_clamp_scroll(g_ui_settings.sample_right_scroll,
-                                                                      selected_right_index,
-                                                                      g_ui_settings.sampler_slot_count,
-                                                                      visible_lines);
-    const uint16_t left_start = g_ui_settings.sample_left_scroll;
-    const uint8_t right_start = g_ui_settings.sample_right_scroll;
+    const uint16_t left_start = ui_page_settings_clamp_scroll(
+        g_ui_settings.sample_left_scroll, g_ui_settings.sample_selected,
+        g_ui_settings.sample_child_count, visible_lines);
+    const uint16_t right_start = ui_page_settings_clamp_scroll(
+        g_ui_settings.sample_right_scroll, selected_right_index,
+        g_ui_settings.sampler_slot_count, visible_lines);
 
     for (uint8_t line = 0U; line < visible_lines; ++line)
     {
@@ -905,20 +894,18 @@ static void ui_page_settings_render_ram_browser(void)
     const uint8_t visible_lines = UI_SETTINGS_SAMPLE_BROWSER_VISIBLE_LINES;
     const uint16_t selected_right_index =
         ui_page_settings_filtered_index_for_global(g_ui_settings.sample_slot_selected);
-    g_ui_settings.sample_left_scroll = ui_page_settings_clamp_scroll(g_ui_settings.sample_left_scroll,
-                                                                     g_ui_settings.sample_selected,
-                                                                     g_ui_settings.sample_child_count,
-                                                                     visible_lines);
-    g_ui_settings.sample_right_scroll = ui_page_settings_clamp_scroll(g_ui_settings.sample_right_scroll,
-                                                                      selected_right_index,
-                                                                      g_ui_settings.sampler_slot_count,
-                                                                      visible_lines);
+    const uint16_t left_scroll = ui_page_settings_clamp_scroll(
+        g_ui_settings.sample_left_scroll, g_ui_settings.sample_selected,
+        g_ui_settings.sample_child_count, visible_lines);
+    const uint16_t right_scroll = ui_page_settings_clamp_scroll(
+        g_ui_settings.sample_right_scroll, selected_right_index,
+        g_ui_settings.sampler_slot_count, visible_lines);
     for (uint8_t line = 0U; line < visible_lines; ++line)
     {
         const uint8_t y = (uint8_t)(UI_SETTINGS_SAMPLE_BROWSER_TEXT_Y0
                                     + (line * UI_SETTINGS_SAMPLE_BROWSER_TEXT_PITCH));
-        const uint16_t left_index = (uint16_t)(g_ui_settings.sample_left_scroll + line);
-        const uint16_t right_index = (uint16_t)(g_ui_settings.sample_right_scroll + line);
+        const uint16_t left_index = (uint16_t)(left_scroll + line);
+        const uint16_t right_index = (uint16_t)(right_scroll + line);
 
         if ((left_index >= g_ui_settings.sample_page_start)
             && (left_index < (uint16_t)(g_ui_settings.sample_page_start
@@ -992,20 +979,18 @@ static void ui_page_settings_render_wavetable_browser(void)
     const uint8_t visible_lines = UI_SETTINGS_SAMPLE_BROWSER_VISIBLE_LINES;
     const uint16_t selected_right_index =
         ui_page_settings_filtered_index_for_global(g_ui_settings.sample_slot_selected);
-    g_ui_settings.sample_left_scroll = ui_page_settings_clamp_scroll(g_ui_settings.sample_left_scroll,
-                                                                     g_ui_settings.sample_selected,
-                                                                     g_ui_settings.sample_child_count,
-                                                                     visible_lines);
-    g_ui_settings.sample_right_scroll = ui_page_settings_clamp_scroll(g_ui_settings.sample_right_scroll,
-                                                                      selected_right_index,
-                                                                      g_ui_settings.sampler_slot_count,
-                                                                      visible_lines);
+    const uint16_t left_scroll = ui_page_settings_clamp_scroll(
+        g_ui_settings.sample_left_scroll, g_ui_settings.sample_selected,
+        g_ui_settings.sample_child_count, visible_lines);
+    const uint16_t right_scroll = ui_page_settings_clamp_scroll(
+        g_ui_settings.sample_right_scroll, selected_right_index,
+        g_ui_settings.sampler_slot_count, visible_lines);
     for (uint8_t line = 0U; line < visible_lines; ++line)
     {
         const uint8_t y = (uint8_t)(UI_SETTINGS_SAMPLE_BROWSER_TEXT_Y0
                                     + (line * UI_SETTINGS_SAMPLE_BROWSER_TEXT_PITCH));
-        const uint16_t left_index = (uint16_t)(g_ui_settings.sample_left_scroll + line);
-        const uint16_t right_index = (uint16_t)(g_ui_settings.sample_right_scroll + line);
+        const uint16_t left_index = (uint16_t)(left_scroll + line);
+        const uint16_t right_index = (uint16_t)(right_scroll + line);
 
         if (left_index < g_ui_settings.sample_entry_count)
         {
@@ -1059,7 +1044,6 @@ static void ui_page_settings_render_wavetable_browser(void)
 
 static void ui_page_settings_render(void)
 {
-    ui_page_settings_present_storage_receipts();
     ui_settings_menu_level_t *const level = ui_page_settings_current_level();
     if (level == 0)
     {

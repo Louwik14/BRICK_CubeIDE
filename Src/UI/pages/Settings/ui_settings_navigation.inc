@@ -456,7 +456,7 @@ static void ui_page_settings_apply_action(uint8_t shift_down)
             {
                 ui_page_settings_status(
                     (storage_settings_sd_status() == SD_STORAGE_STATUS_NO_MEDIA)
-                        ? "SD ABSENTE" : "LOAD FAIL");
+                        ? "SD ABSENTE" : "LOAD REFUSED");
             }
             break;
 
@@ -468,7 +468,7 @@ static void ui_page_settings_apply_action(uint8_t shift_down)
             else
             {                ui_page_settings_status(
                     (storage_settings_sd_status() == SD_STORAGE_STATUS_NO_MEDIA)
-                        ? "SD ABSENTE" : "SAVE FAIL");
+                        ? "SD ABSENTE" : "SAVE REFUSED");
             }
             break;
 
@@ -489,7 +489,7 @@ static void ui_page_settings_apply_action(uint8_t shift_down)
                 else
                 {                    ui_page_settings_status(
                     (storage_settings_sd_status() == SD_STORAGE_STATUS_NO_MEDIA)
-                        ? "SD ABSENTE" : "LOAD FROM FAIL");
+                        ? "SD ABSENTE" : "LOAD REFUSED");
                 }
             }
             else if (level->selected_index == (uint8_t)UI_SETTINGS_MANAGE_ACTION_SAVE_TO)
@@ -500,7 +500,7 @@ static void ui_page_settings_apply_action(uint8_t shift_down)
                 else
                 {                    ui_page_settings_status(
                     (storage_settings_sd_status() == SD_STORAGE_STATUS_NO_MEDIA)
-                        ? "SD ABSENTE" : "SAVE TO FAIL");
+                        ? "SD ABSENTE" : "SAVE REFUSED");
                 }
             }
             else if (control_domain_request_project(&(control_project_intent_t){CONTROL_PROJECT_DELETE, g_ui_settings.selected_slot}) != 0U)

@@ -41,6 +41,7 @@
 #include "ui_core_feedback.h"
 #include "ui_event.h"
 #include "ui_page_manager.h"
+#include "ui_roll_popup.h"
 #include "pages/ui_page_audio_rec.h"
 #include "pages/ui_page_calibration.h"
 #include "pages/ui_page_settings.h"
@@ -58,27 +59,94 @@
  * - init / main loop / tasklet selon le module.
  */
 static uint8_t g_ui_tasklet_init = 0U;
+static pattern_live_terminal_t g_ui_pattern_receipt;
+static project_product_terminal_t g_ui_project_receipt;
+static uint8_t g_ui_pattern_receipt_valid;
+static uint8_t g_ui_project_receipt_valid;
+static uint8_t g_ui_pattern_feedback_pending;
+static uint8_t g_ui_project_feedback_pending;
+static project_product_progress_t g_ui_project_projection;
+static project_product_command_t g_ui_project_projection_command;
+static uint8_t g_ui_project_projection_valid;
 
 static void ui_tasklet_service_product_terminals(void)
 {
     pattern_live_terminal_t pattern_terminal;
     if (pattern_live_take_terminal(&pattern_terminal) != 0U)
     {
-        const char *message = "PAT FAIL";
-        if (pattern_terminal.success != 0U)
-            message = (pattern_terminal.operation == PATTERN_LIVE_OPERATION_STORE)
-                ? "PAT STORED" : "PAT APPLIED";
-        ui_core_feedback_set(message, HAL_GetTick());
+        g_ui_pattern_receipt = pattern_terminal;
+        g_ui_pattern_receipt_valid = 1U;
+        g_ui_pattern_feedback_pending = 1U;
     }
     project_product_terminal_t project_terminal;
     if (project_product_take_terminal(&project_terminal) != 0U)
     {
-        const char *message = "PROJECT FAIL";
-        if (project_terminal.success != 0U)
-            message = (project_terminal.operation == PROJECT_PRODUCT_COMMAND_SAVE)
-                ? "PROJECT SAVED" : "PROJECT LOADED";
-        ui_core_feedback_set(message, HAL_GetTick());
+        g_ui_project_receipt = project_terminal;
+        g_ui_project_receipt_valid = 1U;
+        g_ui_project_feedback_pending = 1U;
     }
+}
+
+static void ui_tasklet_present_product_feedback(uint32_t now_ms)
+{
+    if ((g_ui_pattern_feedback_pending != 0U)
+        && (g_ui_pattern_receipt_valid != 0U))
+    {
+        const char *message = "PAT FAIL";
+        if (g_ui_pattern_receipt.success != 0U)
+            message = (g_ui_pattern_receipt.operation
+                       == PATTERN_LIVE_OPERATION_STORE)
+                ? "PAT STORED" : "PAT APPLIED";
+        ui_core_feedback_offer(message);
+        g_ui_pattern_feedback_pending = 0U;
+    }
+    if ((g_ui_project_feedback_pending != 0U)
+        && (g_ui_project_receipt_valid != 0U))
+    {
+        const char *message = "PROJECT FAIL";
+        if (g_ui_project_receipt.success != 0U)
+            message = (g_ui_project_receipt.operation
+                       == PROJECT_PRODUCT_COMMAND_SAVE)
+                ? "PROJECT SAVED" : "PROJECT LOADED";
+        ui_core_feedback_offer(message);
+        g_ui_project_feedback_pending = 0U;
+    }
+    ui_core_feedback_present_pending(now_ms);
+}
+
+static void ui_tasklet_service_project_projection(void)
+{
+    project_product_progress_t projection;
+    const project_product_command_t command =
+        storage_settings_project_busy_command();
+    (void)storage_settings_project_progress(&projection);
+    if ((g_ui_project_projection_valid == 0U)
+        || (g_ui_project_projection_command != command)
+        || (g_ui_project_projection.active != projection.active)
+        || (g_ui_project_projection.complete != projection.complete)
+        || (g_ui_project_projection.done != projection.done)
+        || (g_ui_project_projection.total != projection.total)
+        || (g_ui_project_projection.asset_warning_count
+            != projection.asset_warning_count)
+        || (g_ui_project_projection.result != projection.result)
+        || (g_ui_project_projection.phase != projection.phase))
+    {
+        g_ui_project_projection = projection;
+        g_ui_project_projection_command = command;
+        g_ui_project_projection_valid = 1U;
+        if (control_domain_project_ui_busy() != 0U)
+            ui_service_dirty_set();
+    }
+}
+
+uint8_t ui_tasklet_project_presentation(project_product_command_t *command,
+                                        project_product_progress_t *progress)
+{
+    if ((command == NULL) || (progress == NULL)
+        || (g_ui_project_projection_valid == 0U)) return 0U;
+    *command = g_ui_project_projection_command;
+    *progress = g_ui_project_projection;
+    return 1U;
 }
 
 typedef enum
@@ -578,8 +646,11 @@ void ui_boot_loading_service(void)
     if ((storage_status == SD_STORAGE_STATUS_NO_MEDIA)
         || (storage_status == SD_STORAGE_STATUS_FAULT))
     {
-        g_ui_boot_loading_phase = UI_BOOT_LOADING_INACTIVE;
-        ui_service_dirty_set();
+        if (g_ui_boot_loading_phase != UI_BOOT_LOADING_INACTIVE)
+        {
+            g_ui_boot_loading_phase = UI_BOOT_LOADING_INACTIVE;
+            ui_service_dirty_set();
+        }
         return;
     }
     if (storage_status != SD_STORAGE_STATUS_READY)
@@ -668,7 +739,13 @@ void ui_tasklet_process_input(void)
 {
     ui_tasklet_initialize();
     ui_tasklet_service_product_terminals();
+    if ((ui_service_project_progress_take() != 0U)
+        || (g_ui_project_projection_valid == 0U))
+        ui_tasklet_service_project_projection();
     ui_page_settings_service_storage_results();
+    if ((ui_boot_loading_is_active() == 0U)
+        && (control_domain_project_ui_busy() == 0U))
+        ui_tasklet_present_product_feedback(HAL_GetTick());
     if (ui_boot_loading_is_active() != 0U)
     {
         ui_boot_loading_discard_inputs();
@@ -682,14 +759,21 @@ void ui_tasklet_process_input(void)
     }
 
     ui_core_process_inputs();
+    ui_roll_popup_service(HAL_GetTick());
 }
 
 void ui_tasklet_process_presentation(uint8_t deadline_due)
 {
     ui_tasklet_initialize();
     ui_tasklet_service_product_terminals();
+    if ((ui_service_project_progress_take() != 0U)
+        || (g_ui_project_projection_valid == 0U))
+        ui_tasklet_service_project_projection();
     ui_page_settings_service_storage_results();
     ui_boot_loading_service();
+    if ((ui_boot_loading_is_active() == 0U)
+        && (control_domain_project_ui_busy() == 0U))
+        ui_tasklet_present_product_feedback(HAL_GetTick());
     if ((deadline_due != 0U) || (ui_service_dirty_is_set() != 0U))
     {
         if ((ui_boot_loading_is_active() == 0U)

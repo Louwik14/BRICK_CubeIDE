@@ -15,7 +15,7 @@ uint8_t ui_page_settings_is_open(void);
 uint8_t ui_page_settings_multi_clear_is_active(void);
 uint8_t ui_page_settings_next_deadline(uint32_t now_ms, uint32_t *out_deadline_ms);
 void ui_page_settings_service_deadline(uint32_t now_ms);
-void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta);
+uint8_t ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta);
 uint8_t ui_page_settings_handle_event(const ui_event_t *ev);
 
 #endif

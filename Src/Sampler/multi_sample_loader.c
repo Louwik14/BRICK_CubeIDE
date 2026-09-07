@@ -1304,7 +1304,7 @@ static uint8_t multi_loader_bulk_read_step(multi_sample_bulk_plan_t *plan,
         if (g_multi_load_diag.pages_remaining != 0U)
             g_multi_load_diag.pages_remaining--;
         g_multi_load_diag.pages_ready++;
-        ui_service_dirty_set();
+        ui_service_settings_progress_notify();
         plan->next_page++;
         if (plan->next_page > range_last)
         {

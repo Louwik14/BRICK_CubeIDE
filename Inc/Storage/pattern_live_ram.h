@@ -30,6 +30,7 @@ void pattern_live_control_process_intent(uint8_t operation, uint8_t bank,
                                          uint8_t pattern, uint8_t boundary_track);
 uint8_t pattern_live_operation_busy(void);
 uint8_t pattern_live_take_terminal(pattern_live_terminal_t *out_terminal);
+uint8_t pattern_live_terminal_available(void);
 uint8_t pattern_live_get_active(uint8_t *out_bank, uint8_t *out_pattern);
 uint8_t pattern_live_get_queued(uint8_t *out_valid, uint8_t *out_bank, uint8_t *out_pattern);
 uint8_t pattern_live_get_queued_boundary(uint8_t *out_track,

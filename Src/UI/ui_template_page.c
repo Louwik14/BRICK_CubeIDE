@@ -1,4 +1,5 @@
 #include "ui_template_page.h"
+#include "UI/ui_service_wakeup.h"
 #include "Track/entity_topology.h"
 
 #include <stddef.h>
@@ -412,10 +413,13 @@ void ui_template_page_select_subpage(ui_template_page_state_t *state, uint8_t su
         return;
     }
 
+    const uint8_t changed = (state->active_subpage != subpage_index) ? 1U : 0U;
     state->active_subpage = subpage_index;
     state->has_visited = 1U;
     ui_template_page_remember_if_active(state);
     ui_template_page_apply_active_bank(state);
+    if (changed != 0U)
+        ui_service_dirty_set();
 }
 
 void ui_template_page_select_nearest_subpage(ui_template_page_state_t *state, uint8_t subpage_index)

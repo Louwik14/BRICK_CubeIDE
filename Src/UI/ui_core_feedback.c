@@ -2,6 +2,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include "drv_display.h"
+#include "font.h"
 #include "UI/ui_service_wakeup.h"
 
 #define UI_CORE_FEEDBACK_DURATION_MS 1000U
@@ -10,18 +12,50 @@
 typedef struct
 {
     char message[UI_CORE_FEEDBACK_TEXT_MAX];
+    char pending[UI_CORE_FEEDBACK_TEXT_MAX];
     uint32_t until_ms;
 } ui_core_feedback_state_t;
 
 static ui_core_feedback_state_t g_ui_core_feedback = {
     .message = { 0 },
+    .pending = { 0 },
     .until_ms = 0U
 };
 
 void ui_core_feedback_init(void)
 {
     g_ui_core_feedback.message[0] = '\0';
+    g_ui_core_feedback.pending[0] = '\0';
     g_ui_core_feedback.until_ms = 0U;
+}
+
+void ui_core_feedback_offer(const char *message)
+{
+    if (message == 0) return;
+    (void)snprintf(g_ui_core_feedback.pending,
+                   sizeof(g_ui_core_feedback.pending), "%s", message);
+}
+
+void ui_core_feedback_present_pending(uint32_t now_ms)
+{
+    if (g_ui_core_feedback.pending[0] == '\0') return;
+    (void)snprintf(g_ui_core_feedback.message,
+                   sizeof(g_ui_core_feedback.message), "%s",
+                   g_ui_core_feedback.pending);
+    g_ui_core_feedback.pending[0] = '\0';
+    g_ui_core_feedback.until_ms = now_ms + UI_CORE_FEEDBACK_DURATION_MS;
+    ui_service_dirty_set();
+}
+
+void ui_core_feedback_render(uint32_t now_ms)
+{
+    if ((g_ui_core_feedback.message[0] == '\0')
+        || ((int32_t)(g_ui_core_feedback.until_ms - now_ms) <= 0)) return;
+    drv_display_fill_rect(0, 54, 128, 10);
+    drv_display_set_font(&FONT_4X6);
+    drv_display_draw_text_inverted(
+        (uint8_t)((128U - drv_display_text_width(g_ui_core_feedback.message)) / 2U),
+        56U, g_ui_core_feedback.message);
 }
 
 void ui_core_feedback_set(const char *message, uint32_t now_ms)
@@ -53,7 +87,8 @@ void ui_core_feedback_service(uint32_t now_ms)
     if ((g_ui_core_feedback.message[0] != '\0')
         && ((int32_t)(g_ui_core_feedback.until_ms - now_ms) <= 0))
     {
-        ui_core_feedback_init();
+        g_ui_core_feedback.message[0] = '\0';
+        g_ui_core_feedback.until_ms = 0U;
         ui_service_dirty_set();
     }
 }

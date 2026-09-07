@@ -27,6 +27,10 @@ indefiniment lorsqu'il n'existe ni travail ni deadline. UI_SERVICE dort sur
 ses evenements, dirty, DMA et deadlines visuelles locales; son chemin OLED
 unique est `dirty -> render -> frame ready -> flush service -> DMA`, et une
 completion DMA ne relance jamais le rendu. AUDIO_BG_LOCAL reste cooperatif.
+Les terminaux et progressions reveillent `UI_SERVICE` comme donnees a relire;
+le service les copie ou les projette hors rendu, puis pose `dirty` uniquement
+si la presentation actuellement visible change. Un terminal backend n'est
+donc ni un `dirty` ni un acquittement de presentation.
 CONTROL_RT n'a aucun fallback de reveil a 1 ms: hors evenements, il attend la
 prochaine deadline explicite de sampled-state, Power/holds ou calibration; le
 one-shot TIM12 n'est arme que pour la prochaine maintenance necessaire de

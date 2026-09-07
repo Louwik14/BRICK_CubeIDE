@@ -48,8 +48,6 @@ void ui_roll_popup_render(uint32_t now_ms)
             || ((int32_t)(g_ui_roll_popup.until_ms - now_ms) <= 0)
             || (seq_edit_step_is_pressed(g_ui_roll_popup.track, g_ui_roll_popup.step) == 0U))
     {
-        g_ui_roll_popup.active = 0U;
-        ui_service_dirty_set();
         return;
     }
 
@@ -83,7 +81,9 @@ void ui_roll_popup_render(uint32_t now_ms)
 void ui_roll_popup_service(uint32_t now_ms)
 {
     if ((g_ui_roll_popup.active != 0U)
-        && ((int32_t)(g_ui_roll_popup.until_ms - now_ms) <= 0))
+        && (((int32_t)(g_ui_roll_popup.until_ms - now_ms) <= 0)
+            || (seq_edit_step_is_pressed(g_ui_roll_popup.track,
+                                         g_ui_roll_popup.step) == 0U)))
     {
         g_ui_roll_popup.active = 0U;
         ui_service_dirty_set();
