@@ -157,6 +157,11 @@ SEQ_STATE_D2 static seq_play_active_occurrence_t
 static uint8_t g_seq_play_track_generation[SEQ_LANE_CAPACITY];
 static uint8_t g_seq_play_track_suspended[SEQ_LANE_CAPACITY];
 
+/* Diagnostic-only source reconstruction counters, in GDB index order:
+ * entered, generation, suspended, PLAY read, note/velocity,
+ * before commit floor, at/after block end. */
+volatile uint32_t g_seq_play_rebuild_debug[7];
+
 static void seq_play_scheduler_output_died(brick_entity_id_t entity_id,
                                            uint32_t output_id)
 {
@@ -856,12 +861,19 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                 g_seq_play_active_source[source_position];
             seq_play_scheduler_source_t *const source =
                 &g_seq_play_sources[source_index];
+            ++g_seq_play_rebuild_debug[0];
             if ((source->generation != g_seq_play_generation)
                     || (source->target_track >= SEQ_LANE_CAPACITY)
                     || (source->track_generation
-                        != g_seq_play_track_generation[source->target_track])
-                    || (g_seq_play_track_suspended[source->target_track] != 0U))
+                        != g_seq_play_track_generation[source->target_track]))
             {
+                ++g_seq_play_rebuild_debug[1];
+                seq_play_scheduler_deactivate_source_at(source_position);
+                continue;
+            }
+            if (g_seq_play_track_suspended[source->target_track] != 0U)
+            {
+                ++g_seq_play_rebuild_debug[2];
                 seq_play_scheduler_deactivate_source_at(source_position);
                 continue;
             }
@@ -884,6 +896,7 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                     || (seq_play_scheduler_get_play_locked_or_base(&item,
                      SEQ_PLAY_SCHEDULER_PLAY_PARAM_MICTIM, &mictim_value) == 0U))
             {
+                ++g_seq_play_rebuild_debug[3];
                 seq_play_scheduler_deactivate_source_at(source_position);
                 continue;
             }
@@ -893,6 +906,7 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
             const float mictim = (float)mictim_value;
             if ((note >= 128U) || (velocity == 0U))
             {
+                ++g_seq_play_rebuild_debug[4];
                 seq_play_scheduler_deactivate_source_at(source_position);
                 continue;
             }
@@ -936,11 +950,15 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                         on_sample = commit_floor;
                     else
                     {
+                        ++g_seq_play_rebuild_debug[5];
                         continue;
                     }
                 }
                 if (on_sample >= block_end_sample)
+                {
+                    ++g_seq_play_rebuild_debug[6];
                     continue;
+                }
                 if ((g_seq_play_imminent_count + 2U)
                         > SEQ_PLAY_SCHEDULER_IMMINENT_CAPACITY)
                 {
