@@ -969,9 +969,11 @@ multi_sample_load_result_t multi_sample_load_request_instrument(uint16_t logical
     return MULTI_SAMPLE_LOAD_OK;
 }
 
-uint8_t multi_sample_load_request_import(const char *source_path,
-                                         uint16_t instrument_id)
+uint8_t multi_sample_load_prepare_import(const char *source_path,
+                                         uint16_t instrument_id,
+                                         uint32_t *out_request_id)
 {
+    if (out_request_id != NULL) *out_request_id = 0U;
     if ((project_transport_stopped_stable() == 0U)
         || (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
         || (source_path == NULL) || (source_path[0] == '\0')
@@ -1005,7 +1007,6 @@ uint8_t multi_sample_load_request_import(const char *source_path,
         return 0U;
     }
     memset(&g_multi_external_request, 0, sizeof(g_multi_external_request));
-    g_multi_external_request.used = 1U;
     g_multi_external_request.request_id = request_id;
     g_multi_external_request.requester = MULTI_SAMPLE_LOAD_REQUESTER_UI;
     g_multi_external_request.old_logical_id = MULTI_SAMPLE_POOL_INVALID_ID;
@@ -1016,7 +1017,25 @@ uint8_t multi_sample_load_request_import(const char *source_path,
                                  source_copy);
     __DMB();
     __set_PRIMASK(primask);
+    if (out_request_id != NULL) *out_request_id = request_id;
     return 1U;
+}
+
+uint8_t multi_sample_load_commit_prepared_import(uint32_t request_id)
+{
+    if ((request_id == 0U) || (g_multi_external_request.used != 0U)
+        || (g_multi_external_request.request_id != request_id)
+        || (g_multi_external_request.import_required == 0U)) return 0U;
+    __DMB();
+    g_multi_external_request.used = 1U;
+    return 1U;
+}
+
+void multi_sample_load_abort_prepared_import(uint32_t request_id)
+{
+    if ((g_multi_external_request.used == 0U)
+        && (g_multi_external_request.request_id == request_id))
+        memset(&g_multi_external_request, 0, sizeof(g_multi_external_request));
 }
 
 uint32_t multi_sample_load_external_request_id(void)

@@ -1799,15 +1799,43 @@ uint8_t multi_sample_import_request_folder_for_load(const char *instrument_dir,
         || (g_delete_request_valid != 0U) || (g_delete_result_valid != 0U)
         || (g_import_load_continuation != 0U)
         || (multi_sample_pool_clear_is_active() != 0U)) return 0U;
-    if (multi_sample_load_request_import(instrument_dir, instrument_id) == 0U)
+    char path_copy[MULTI_SAMPLE_IMPORT_PATH_MAX];
+    (void)snprintf(path_copy, sizeof(path_copy), "%s", instrument_dir);
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if ((g_import_request_valid != 0U) || (g_import_busy != 0U)
+        || (g_delete_request_valid != 0U) || (g_delete_result_valid != 0U)
+        || (g_import_load_continuation != 0U)
+        || (multi_sample_pool_clear_is_active() != 0U))
+    {
+        __set_PRIMASK(primask);
         return 0U;
+    }
+    uint32_t request_id = 0U;
+    if (multi_sample_load_prepare_import(
+            path_copy, instrument_id, &request_id) == 0U)
+    {
+        __set_PRIMASK(primask);
+        return 0U;
+    }
     (void)snprintf(g_import_request_path, sizeof(g_import_request_path), "%s",
-                   instrument_dir);
+                   path_copy);
     g_import_load_instrument = instrument_id;
-    g_import_load_request_id = multi_sample_load_external_request_id();
-    __DMB();
+    g_import_load_request_id = request_id;
     g_import_load_continuation = 1U;
     g_import_request_valid = 1U;
+    __DMB();
+    if (multi_sample_load_commit_prepared_import(request_id) == 0U)
+    {
+        g_import_request_valid = 0U;
+        g_import_load_continuation = 0U;
+        g_import_load_instrument = MULTI_SAMPLE_POOL_INVALID_ID;
+        g_import_load_request_id = 0U;
+        multi_sample_load_abort_prepared_import(request_id);
+        __set_PRIMASK(primask);
+        return 0U;
+    }
+    __set_PRIMASK(primask);
     storage_io_owner_set(STORAGE_OWNER_MULTI);
     storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
     return 1U;
