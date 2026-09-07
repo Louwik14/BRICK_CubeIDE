@@ -44,12 +44,14 @@ uint8_t audio_recorder_storage_prepare_request(audio_recorder_client_t client,
                                                uint8_t looper_track,
                                                uint32_t frame_limit,
                                                uint32_t request_id);
-uint8_t audio_recorder_storage_cancel(uint32_t request_id);
+uint8_t audio_recorder_storage_cancel(uint32_t request_id,
+                                      uint32_t capture_session_to_close);
 void audio_recorder_storage_release(void);
 
 /* Observe the existing capture transport, drain and advance the SD writer. */
-void audio_recorder_storage_service(uint32_t session_id,
-                                    uint8_t capture_is_active);
+uint8_t audio_recorder_storage_service(uint32_t session_id,
+                                       uint8_t capture_start_engaged,
+                                       uint8_t *cancel_terminal_published);
 
 audio_recorder_storage_phase_t audio_recorder_storage_phase(void);
 audio_recorder_error_t audio_recorder_storage_error(void);
@@ -60,7 +62,8 @@ uint8_t audio_recorder_storage_get_map_copy(
     audio_recorder_storage_map_copy_t *map);
 uint8_t audio_recorder_storage_get_paths(const char **temporary_rec_path,
                                          const char **final_wav_path);
-uint8_t audio_recorder_storage_has_immediate_work(uint32_t session_id);
+uint8_t audio_recorder_storage_has_immediate_work(
+    uint32_t session_id, uint8_t capture_start_engaged);
 
 #ifdef __cplusplus
 }

@@ -75,7 +75,6 @@ uint8_t project_product_save(uint8_t slot);
 void project_product_save_service(void);
 uint8_t project_product_save_busy(void);
 project_product_save_modal_state_t project_product_save_modal_state(void);
-uint8_t project_product_save_take_result(uint8_t *slot,uint8_t *success);
 project_product_save_error_t project_product_save_last_error(void);
 int32_t project_product_save_last_detail(void);
 uint8_t project_product_load(uint8_t slot);

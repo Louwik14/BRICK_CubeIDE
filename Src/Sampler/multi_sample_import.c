@@ -149,6 +149,8 @@ static uint8_t g_import_progressive_dir_open;
 static uint8_t g_import_progressive_gate_held;
 static uint16_t g_import_progressive_wav_count;
 static uint32_t g_import_progressive_path_cursor;
+static const char *multi_import_clear_batch_next_path(void);
+static void multi_import_clear_batch_commit_result(void);
 static char g_import_progressive_name[MULTI_SAMPLE_POOL_NAME_MAX];
 
 static uint8_t multi_import_validate_wav_info(const wav_info_t *info);
@@ -1994,15 +1996,11 @@ uint8_t multi_sample_import_clear_batch_begin(uint32_t catalog_sequence,
 
 uint8_t multi_sample_import_clear_batch_commit(void)
 {
-    if (g_clear_batch_active == 0U) return 0U;
-    if (g_clear_batch_count == 0U)
+    if ((g_clear_batch_active == 0U)
+        || (multi_sample_import_delete_is_busy() != 0U)) return 0U;
+    if (multi_import_clear_batch_next_path() == NULL)
     {
-        g_clear_batch_active = 0U;
-        const uint32_t retained_sequence = g_clear_batch_view.sequence;
-        g_clear_batch_view.entries = NULL;
-        storage_catalog_view_release(retained_sequence);
-        g_clear_batch_result_valid = 1U;
-        control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
+        multi_import_clear_batch_commit_result();
         return 1U;
     }
     if (multi_sample_pool_request_clear_begin() == 0U) return 0U;
@@ -2032,9 +2030,10 @@ static const char *multi_import_clear_batch_next_path(void)
     while (g_clear_batch_index < g_clear_batch_count)
     {
         const storage_catalog_entry_t *const entry =
-            &g_clear_batch_view.entries[g_clear_batch_index++];
+            &g_clear_batch_view.entries[g_clear_batch_index];
         if ((entry->multi_type == 0U) && (entry->index_path[0] != '\0'))
             return entry->index_path;
+        ++g_clear_batch_index;
     }
     return NULL;
 }
@@ -2046,11 +2045,36 @@ static void multi_import_clear_batch_request_next(void)
     {
         (void)multi_sample_pool_request_clear_end();
     }
-    else if (multi_sample_import_request_delete_index(path) == 0U)
+    else if (multi_sample_import_request_delete_index(path) != 0U)
     {
-        --g_clear_batch_index;
+        ++g_clear_batch_index;
+    }
+    else
+    {
         storage_io_owner_wait_resource(STORAGE_OWNER_MULTI);
     }
+}
+
+static void multi_import_clear_batch_commit_result(void)
+{
+    const uint32_t request_id = g_clear_batch_request_id;
+    const uint16_t deleted = g_clear_batch_deleted;
+    const uint16_t failed_count = g_clear_batch_failed_count;
+    const uint32_t retained_sequence = g_clear_batch_view.sequence;
+
+    g_clear_batch_view.entries = NULL;
+    storage_catalog_view_release(retained_sequence);
+
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    g_clear_batch_request_id = request_id;
+    g_clear_batch_deleted = deleted;
+    g_clear_batch_failed_count = failed_count;
+    __DMB();
+    g_clear_batch_result_valid = 1U;
+    g_clear_batch_active = 0U;
+    __set_PRIMASK(primask);
+    control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
 }
 
 uint8_t multi_sample_import_clear_batch_active(void)
@@ -2129,51 +2153,62 @@ void multi_sample_import_storage_delete_service(void)
     if ((g_clear_batch_active != 0U) && (g_delete_result_valid != 0U))
     {
         uint8_t result = 3U;
-        (void)multi_sample_import_take_delete_result(&result);
-        if (result == 1U) ++g_clear_batch_deleted;
-        else if (result != 2U)
+        if (multi_sample_import_take_delete_result(&result) != 0U)
         {
-            g_clear_batch_failed = 1U;
-            ++g_clear_batch_failed_count;
+            if (result == 1U) ++g_clear_batch_deleted;
+            else if (result != 2U)
+            {
+                g_clear_batch_failed = 1U;
+                ++g_clear_batch_failed_count;
+            }
+            if (g_clear_batch_failed != 0U)
+                (void)multi_sample_pool_request_clear_end();
+            else
+                multi_import_clear_batch_request_next();
         }
-        if ((g_clear_batch_failed != 0U)
-            || (g_clear_batch_index >= g_clear_batch_count))
+        return;
+    }
+
+    if (g_delete_request_valid == 0U)
+    {
+        if (g_clear_batch_active == 0U) return;
+
+        if (g_clear_batch_failed != 0U)
+        {
+            if (multi_sample_pool_clear_is_active() != 0U)
+                (void)multi_sample_pool_request_clear_end();
+            else
+                multi_import_clear_batch_commit_result();
+        }
+        else if (multi_import_clear_batch_next_path() != NULL)
+        {
+            multi_import_clear_batch_request_next();
+        }
+        else if (multi_sample_pool_clear_is_active() != 0U)
         {
             (void)multi_sample_pool_request_clear_end();
         }
         else
         {
-            multi_import_clear_batch_request_next();
+            multi_import_clear_batch_commit_result();
         }
         return;
     }
-    if (g_delete_request_valid == 0U)
-    {
-        if ((g_clear_batch_active != 0U)
-            && (g_clear_batch_index < g_clear_batch_count))
-        {
-            multi_import_clear_batch_request_next();
-        }
-        else if ((g_clear_batch_active != 0U)
-                 && (g_clear_batch_index >= g_clear_batch_count)
-                 && (multi_sample_pool_clear_is_active() == 0U))
-        {
-            g_clear_batch_active = 0U;
-            const uint32_t retained_sequence = g_clear_batch_view.sequence;
-            g_clear_batch_view.entries = NULL;
-            storage_catalog_view_release(retained_sequence);
-            g_clear_batch_result_valid = 1U;
-            control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
-        }
-        return;
-    }
+
     uint8_t result = 3U;
-    if (sd_access_gate_try_acquire_for_owner(
-            SD_ACCESS_CLIENT_PROJECT, STORAGE_OWNER_MULTI) == 0U)
+    const sd_storage_status_t storage_status = sd_access_storage_status();
+    if ((storage_status == SD_STORAGE_STATUS_NO_MEDIA)
+        || (storage_status == SD_STORAGE_STATUS_FAULT))
+    {
+        result = 3U;
+    }
+    else if (sd_access_gate_try_acquire_for_owner(
+                 SD_ACCESS_CLIENT_PROJECT, STORAGE_OWNER_MULTI) == 0U)
     {
         storage_io_owner_wait_resource(STORAGE_OWNER_MULTI);
         return;
     }
+    else
     {
         if (sd_access_fs_mount_if_needed() != 0U)
         {
@@ -2186,6 +2221,8 @@ void multi_sample_import_storage_delete_service(void)
     g_delete_result = result;
     __DMB();
     g_delete_result_valid = 1U;
+    if (g_clear_batch_active != 0U)
+        storage_io_owner_wakeup(STORAGE_OWNER_MULTI);
 }
 
 uint8_t multi_sample_import_take_delete_result(uint8_t *result)

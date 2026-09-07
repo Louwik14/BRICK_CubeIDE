@@ -52,8 +52,8 @@ uint8_t audio_recorder_capture_audio_start(uint8_t client,
         .active = 1U
     };
     g_audio_recorder_capture.capture_fault = AUDIO_RECORDER_ERROR_NONE;
-    g_audio_recorder_capture.closed_session = 0U;
     __DMB();
+    g_audio_recorder_capture.closed_session = 0U;
     return 1U;
 }
 

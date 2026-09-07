@@ -99,11 +99,11 @@ static audio_recorder_state_t audio_recorder_observed_state(void)
         case AUDIO_RECORDER_STORAGE_DRAINING:
             return AUDIO_RECORDER_STATE_DRAINING;
         case AUDIO_RECORDER_STORAGE_PREPARED:
-            return (g_audio_recorder.state == AUDIO_RECORDER_STATE_PREPARING)
-                ? AUDIO_RECORDER_STATE_PREPARING
-                : (g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING)
-                ? AUDIO_RECORDER_STATE_RECORDING
-                : AUDIO_RECORDER_STATE_PREPARED;
+            if (g_audio_recorder.state >= AUDIO_RECORDER_STATE_RECORDING)
+                return g_audio_recorder.state;
+            if (g_audio_recorder.state == AUDIO_RECORDER_STATE_PREPARING)
+                return AUDIO_RECORDER_STATE_PREPARING;
+            return AUDIO_RECORDER_STATE_PREPARED;
         case AUDIO_RECORDER_STORAGE_IDLE:
         default:
             return g_audio_recorder.state;
@@ -348,8 +348,16 @@ uint8_t audio_recorder_prepare_client(audio_recorder_client_t client,
         : ((UINT32_MAX - AUDIO_RECORDER_WAV_HEADER_BYTES)
             / AUDIO_RECORDER_BYTES_PER_FRAME);
     uint16_t session = (uint16_t)(g_audio_recorder_control_session + 1U);
-    if ((session == 0U) || ((session & AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG) != 0U))
-        session = 1U;
+    const uint32_t closed_session = g_audio_recorder_capture.closed_session;
+    for (uint32_t attempts = 0U; attempts <= UINT16_MAX; ++attempts)
+    {
+        if ((session != 0U)
+                && ((session & AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG) == 0U)
+                && ((closed_session == 0U)
+                    || ((uint32_t)session != closed_session)))
+            break;
+        session = (uint16_t)(session + 1U);
+    }
     g_audio_recorder_control_session = session;
     ++g_audio_recorder_request_counter;
     if (g_audio_recorder_request_counter == 0U)
@@ -377,11 +385,11 @@ uint8_t audio_recorder_start_client_at(audio_recorder_client_t client,
 
 uint8_t audio_recorder_cancel_prepared_client(audio_recorder_client_t client)
 {
+    const audio_recorder_state_t control_state = g_audio_recorder.state;
     if ((client == AUDIO_RECORDER_CLIENT_NONE)
             || (g_audio_recorder.client != client)
-            || ((audio_recorder_observed_state() != AUDIO_RECORDER_STATE_PREPARED)
-                && (audio_recorder_observed_state()
-                    != AUDIO_RECORDER_STATE_PREPARING)))
+            || ((control_state != AUDIO_RECORDER_STATE_PREPARED)
+                && (control_state != AUDIO_RECORDER_STATE_PREPARING)))
         return 0U;
 
     if (g_audio_recorder.cancel_requested != 0U)
@@ -398,7 +406,7 @@ uint8_t audio_recorder_cancel_prepared_client(audio_recorder_client_t client)
                 g_audio_recorder_looper_control.track,
                 control_music_output_first_unpublished_sample(now_sample));
     }
-    if (audio_recorder_storage_cancel(g_audio_recorder.request_id) == 0U)
+    if (audio_recorder_storage_cancel(g_audio_recorder.request_id, 0U) == 0U)
         return 0U;
     g_audio_recorder.cancel_requested = 1U;
     g_audio_recorder.state = AUDIO_RECORDER_STATE_PREPARING;
@@ -407,27 +415,36 @@ uint8_t audio_recorder_cancel_prepared_client(audio_recorder_client_t client)
 
 uint8_t audio_recorder_cancel_client(audio_recorder_client_t client)
 {
-    const audio_recorder_state_t state = audio_recorder_observed_state();
+    const audio_recorder_state_t control_state = g_audio_recorder.state;
     if ((client == AUDIO_RECORDER_CLIENT_NONE)
             || (g_audio_recorder.client != client))
         return 0U;
-    if ((state == AUDIO_RECORDER_STATE_PREPARING)
-            || (state == AUDIO_RECORDER_STATE_PREPARED))
+    if ((control_state == AUDIO_RECORDER_STATE_PREPARING)
+            || (control_state == AUDIO_RECORDER_STATE_PREPARED))
         return audio_recorder_cancel_prepared_client(client);
-    if (state == AUDIO_RECORDER_STATE_CANCELING)
+    if (control_state == AUDIO_RECORDER_STATE_CANCELING)
         return 1U;
-    if (state != AUDIO_RECORDER_STATE_RECORDING)
+    if ((control_state == AUDIO_RECORDER_STATE_DRAINING)
+            || (control_state == AUDIO_RECORDER_STATE_FINALIZING)
+            || (control_state == AUDIO_RECORDER_STATE_TAKE_READY)
+            || (control_state != AUDIO_RECORDER_STATE_RECORDING))
         return 0U;
 
     uint64_t now_sample = 0U;
-    if ((control_rt_now_sample(&now_sample) == 0U)
-            || (control_rt_publish_record(CONTROL_AUDIO_RECORD_STOP, 0U,
-                g_audio_recorder_control_session, (uint8_t)client,
-                control_music_output_first_unpublished_sample(now_sample)) == 0U)
-            || (audio_recorder_storage_cancel(g_audio_recorder.request_id) == 0U))
+    if (control_rt_now_sample(&now_sample) == 0U)
+        return 0U;
+    if (control_rt_publish_record(CONTROL_AUDIO_RECORD_STOP, 0U,
+            g_audio_recorder_control_session, (uint8_t)client,
+            control_music_output_first_unpublished_sample(now_sample)) == 0U)
         return 0U;
     g_audio_recorder.cancel_requested = 1U;
     g_audio_recorder.state = AUDIO_RECORDER_STATE_CANCELING;
+    if (audio_recorder_storage_cancel(g_audio_recorder.request_id,
+            g_audio_recorder_control_session) == 0U)
+    {
+        Error_Handler();
+        return 0U;
+    }
     return 1U;
 }
 
@@ -732,12 +749,16 @@ void audio_recorder_control_on_transport_start(uint64_t sample_time)
 
 void audio_recorder_service(void)
 {
-    const audio_recorder_storage_phase_t phase_before =
-        audio_recorder_storage_phase();
-    audio_recorder_storage_service(
-        g_audio_recorder_control_session,
-        (audio_recorder_observed_state() == AUDIO_RECORDER_STATE_RECORDING)
-            || (audio_recorder_observed_state() == AUDIO_RECORDER_STATE_DRAINING));
+    const uint32_t session_id = g_audio_recorder_control_session;
+    const audio_recorder_state_t control_state = g_audio_recorder.state;
+    const uint8_t capture_start_engaged = (uint8_t)(
+        (control_state == AUDIO_RECORDER_STATE_RECORDING)
+        || (control_state == AUDIO_RECORDER_STATE_DRAINING));
+    uint8_t cancel_terminal_published = 0U;
+    const uint8_t continuation = audio_recorder_storage_service(
+        session_id, capture_start_engaged, &cancel_terminal_published);
+    if (cancel_terminal_published != 0U)
+        return;
     const audio_recorder_storage_phase_t storage_phase =
         audio_recorder_storage_phase();
     if ((storage_phase == AUDIO_RECORDER_STORAGE_DRAINING)
@@ -782,19 +803,12 @@ void audio_recorder_service(void)
             g_audio_recorder_looper_take_notified = 1U;
         }
     }
-    const audio_recorder_storage_phase_t phase_after =
-        audio_recorder_storage_phase();
-    if (((audio_recorder_storage_has_immediate_work(
-                g_audio_recorder_control_session) != 0U)
+    if ((continuation != 0U)
             && (sd_block_device_async_immediate_pending() == 0U))
-            || (phase_after != phase_before
-                && phase_after != AUDIO_RECORDER_STORAGE_IDLE
-                && phase_after != AUDIO_RECORDER_STORAGE_TAKE_READY
-                && phase_after != AUDIO_RECORDER_STORAGE_FAILED))
-        {
-            storage_io_owner_set(STORAGE_OWNER_RECORDER);
-            storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
-        }
+    {
+        storage_io_owner_set(STORAGE_OWNER_RECORDER);
+        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+    }
 }
 
 uint8_t audio_recorder_get_status_client(audio_recorder_client_t client,
@@ -978,7 +992,7 @@ void audio_recorder_control_on_storage_canceled(uint32_t request_id)
         audio_recorder_request_looper_admission_release(
             g_audio_recorder_looper_control.track);
     g_audio_recorder.state = AUDIO_RECORDER_STATE_IDLE;
-    g_audio_recorder.error = AUDIO_RECORDER_ERROR_NONE;
+    g_audio_recorder.error = audio_recorder_storage_error();
     g_audio_recorder.client = AUDIO_RECORDER_CLIENT_NONE;
     g_audio_recorder.cancel_requested = 0U;
     g_audio_recorder.temporary_path[0] = '\0';

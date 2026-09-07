@@ -213,8 +213,6 @@ uint8_t project_product_take_terminal(project_product_terminal_t *out_terminal)
     *out_terminal = g_project_terminal;
     __DMB();
     g_project_terminal_valid = 0U;
-    if (g_project_save.state == PROJECT_SAVE_DONE)
-        memset(&g_project_save, 0, sizeof(g_project_save));
     return 1U;
 }
 
@@ -315,15 +313,9 @@ static void project_save_finish(uint8_t success)
         g_present[slot]=1U;
         (void)boot_context_flash_commit(slot);
     }
-    if(g_project_save.workspace!=NULL)
-        persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);
-    g_project_save.workspace=NULL;g_project_save.project_open=0U;g_project_save.pattern_open=0U;
+    g_project_save.project_open=0U;g_project_save.pattern_open=0U;
     g_project_save.success=(success!=0U)?1U:0U;g_project_save.result_ready=1U;
-    g_project_save.modal_state=PROJECT_SAVE_MODAL_INACTIVE;
     g_project_save.state=PROJECT_SAVE_DONE;g_progress.active=0U;g_progress.complete=1U;g_progress.result=(success!=0U)?PROJECT_PRODUCT_RESULT_SUCCESS:PROJECT_PRODUCT_RESULT_FAILED;
-    project_product_publish_terminal(PROJECT_PRODUCT_COMMAND_SAVE, slot,
-                                     success, (uint8_t)g_save_error);
-    control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
 }
 
 static void project_save_fail(project_product_save_error_t error,int32_t detail)
@@ -411,22 +403,14 @@ uint8_t project_product_save(uint8_t slot)
 
 uint8_t project_product_save_busy(void)
 {
-    return ((g_project_save.state!=PROJECT_SAVE_IDLE)
-            || (g_project_save.modal_state == PROJECT_SAVE_MODAL)
+    return (((g_project_save.state!=PROJECT_SAVE_IDLE)
+             && (g_project_save.state!=PROJECT_SAVE_DONE))
             || (g_project_admission_command == PROJECT_PRODUCT_COMMAND_SAVE)) ? 1U : 0U;
 }
 
 project_product_save_modal_state_t project_product_save_modal_state(void)
 {
     return g_project_save.modal_state;
-}
-
-uint8_t project_product_save_take_result(uint8_t *slot,uint8_t *success)
-{
-    if(g_project_save.state!=PROJECT_SAVE_DONE||g_project_save.result_ready==0U)return 0U;
-    if(slot!=NULL)*slot=g_project_save.slot;
-    if(success!=NULL)*success=g_project_save.success;
-    memset(&g_project_save,0,sizeof(g_project_save));return 1U;
 }
 
 static void project_product_save_service_step(void)
@@ -636,6 +620,37 @@ void project_product_save_service(void)
     const uint16_t pattern_ordinal = g_project_save.pattern_ordinal;
 
     project_product_save_service_step();
+    if (g_project_save.state == PROJECT_SAVE_DONE)
+    {
+        const project_product_command_t operation =
+            PROJECT_PRODUCT_COMMAND_SAVE;
+        const uint8_t slot = g_project_save.slot;
+        const uint8_t success = g_project_save.success;
+        const uint8_t diagnostic = (uint8_t)g_save_error;
+        const uint32_t primask = __get_PRIMASK();
+
+        __disable_irq();
+        const uint8_t terminal_free = (g_project_terminal_valid == 0U)
+            ? 1U : 0U;
+        if (g_project_save.workspace != NULL)
+            persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);
+        g_project_save.workspace = NULL;
+        g_project_save.state = PROJECT_SAVE_IDLE;
+        g_project_save.modal_state = PROJECT_SAVE_MODAL_INACTIVE;
+        g_project_save.result_ready = 0U;
+        if (terminal_free != 0U)
+        {
+            g_project_terminal = (project_product_terminal_t){
+                (uint8_t)operation, slot, success, diagnostic};
+            __DMB();
+            g_project_terminal_valid = 1U;
+        }
+        __set_PRIMASK(primask);
+
+        ui_service_project_progress_notify();
+        ui_service_wakeup(UI_SERVICE_WAKE_INPUT);
+        return;
+    }
     if ((g_project_save.state != state)
         || (g_project_save.file_offset != file_offset)
         || (g_project_save.write_offset != write_offset)
@@ -655,11 +670,6 @@ void project_product_save_service(void)
             storage_io_owner_set(STORAGE_OWNER_PROJECT);
             storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
         }
-    else if (g_project_save.state == PROJECT_SAVE_DONE)
-    {
-        storage_io_owner_set(STORAGE_OWNER_PROJECT);
-        storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
-    }
 }
 
 project_product_save_error_t project_product_save_last_error(void){return g_save_error;}
