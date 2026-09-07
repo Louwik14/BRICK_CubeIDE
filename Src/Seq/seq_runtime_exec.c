@@ -20,6 +20,7 @@
 #include "Track/entity_topology.h"
 #include "Seq/seq_play_scheduler.h"
 #include "Seq/seq_runtime_control.h"
+#include "Seq/seq_stall_debug.h"
 #include "Seq/seq_transport_fsm.h"
 #include "midi.h"
 
@@ -242,6 +243,8 @@ static void seq_runtime_exec_schedule_hit_play_and_lookahead(const seq_runtime_s
     }
 
     ++g_seq_note_path_debug[SEQ_NOTE_DBG_RUNTIME_SCHEDULE_ENTRY];
+    g_seq_stall_debug.boundary_track_step =
+        (uint32_t)hit->track | ((uint32_t)hit->step << 8);
     g_seq_note_path_debug[SEQ_NOTE_DBG_LAST_TRACK_STEP] =
         (uint32_t)hit->track | ((uint32_t)hit->step << 8);
 
@@ -536,10 +539,13 @@ void seq_runtime_exec_process_step_pulse_at_sample_q16(seq_runtime_state_t *stat
             }
         }
         seq_live_rec_session_on_step_advanced(state, now_sample);
+        ++g_seq_stall_debug.boundary_count;
+        g_seq_stall_debug.boundary_sample = pulse_sample_q16 >> 16;
     }
 
     state->step_sample_q16 = pulse_sample_q16;
     g_seq_runtime_exec_metronome_step++;
+    g_seq_stall_debug.metronome_step = g_seq_runtime_exec_metronome_step;
     seq_runtime_exec_push_metronome_for_step(state->step_sample_q16 >> 16);
     if (seq_transport_fsm_allow_schedule_play(transport_fsm) != 0U)
     {
@@ -730,6 +736,7 @@ uint16_t seq_runtime_exec_collect_block_events(seq_runtime_state_t *state,
      * block behind their publication buckets after the first audio callback. */
     g_seq_runtime_exec_sample_timeline =
         block_start_sample + (uint64_t)block_frames;
+    g_seq_stall_debug.timeline = g_seq_runtime_exec_sample_timeline;
     const uint32_t now_tick = 0U;
     /* Progression guard: audio block collection drives cadence first, then exports due events. */
     seq_runtime_exec_drive_external_steps_for_block(state,

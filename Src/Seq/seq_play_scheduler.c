@@ -30,6 +30,7 @@
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_runtime_exec.h"
+#include "Seq/seq_stall_debug.h"
 
 #define SEQ_PLAY_SCHEDULER_SOURCE_CAPACITY \
     (SEQ_LANE_CAPACITY * SEQ_PLAY_MAX_CAPACITY * 3U)
@@ -156,29 +157,6 @@ SEQ_STATE_D2 static seq_play_active_occurrence_t
     g_seq_play_active_occurrence[SEQ_PLAY_SCHEDULER_ACTIVE_OUTPUT_CAPACITY];
 static uint8_t g_seq_play_track_generation[SEQ_LANE_CAPACITY];
 static uint8_t g_seq_play_track_suspended[SEQ_LANE_CAPACITY];
-
-/* Diagnostic-only source reconstruction counters, in GDB index order:
- * entered, generation, suspended, PLAY read, note/velocity,
- * before commit floor, at/after block end. */
-volatile uint32_t g_seq_play_rebuild_debug[7];
-
-typedef struct
-{
-    uint32_t armed;
-    uint32_t future_to_past_count;
-    uint32_t source_index;
-    uint32_t track_step;
-    uint64_t step_origin_sample;
-    uint64_t on_sample;
-    uint64_t future_block_start_sample;
-    uint64_t future_block_end_sample;
-    uint64_t future_commit_floor;
-    uint64_t past_block_start_sample;
-    uint64_t past_block_end_sample;
-    uint64_t past_commit_floor;
-} seq_play_future_past_debug_t;
-
-volatile seq_play_future_past_debug_t g_seq_play_future_past_debug;
 
 static void seq_play_scheduler_output_died(brick_entity_id_t entity_id,
                                            uint32_t output_id)
@@ -833,6 +811,14 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
     if (block_frames == 0U)
         block_frames = 1U;
 
+    ++g_seq_stall_debug.scheduler_pass_count;
+    g_seq_stall_debug.scheduler_active_sources =
+        g_seq_play_active_source_count;
+    g_seq_stall_debug.scheduler_imminent_count = g_seq_play_imminent_count;
+    g_seq_stall_debug.scheduler_block_start = block_start_sample;
+    g_seq_stall_debug.scheduler_block_end =
+        block_start_sample + block_frames;
+
     if ((g_seq_play_imminent_valid == 0U)
             || (g_seq_play_imminent_block_start != block_start_sample)
             || (g_seq_play_imminent_block_frames != block_frames))
@@ -879,19 +865,16 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                 g_seq_play_active_source[source_position];
             seq_play_scheduler_source_t *const source =
                 &g_seq_play_sources[source_index];
-            ++g_seq_play_rebuild_debug[0];
             if ((source->generation != g_seq_play_generation)
                     || (source->target_track >= SEQ_LANE_CAPACITY)
                     || (source->track_generation
                         != g_seq_play_track_generation[source->target_track]))
             {
-                ++g_seq_play_rebuild_debug[1];
                 seq_play_scheduler_deactivate_source_at(source_position);
                 continue;
             }
             if (g_seq_play_track_suspended[source->target_track] != 0U)
             {
-                ++g_seq_play_rebuild_debug[2];
                 seq_play_scheduler_deactivate_source_at(source_position);
                 continue;
             }
@@ -914,7 +897,6 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                     || (seq_play_scheduler_get_play_locked_or_base(&item,
                      SEQ_PLAY_SCHEDULER_PLAY_PARAM_MICTIM, &mictim_value) == 0U))
             {
-                ++g_seq_play_rebuild_debug[3];
                 seq_play_scheduler_deactivate_source_at(source_position);
                 continue;
             }
@@ -924,7 +906,6 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
             const float mictim = (float)mictim_value;
             if ((note >= 128U) || (velocity == 0U))
             {
-                ++g_seq_play_rebuild_debug[4];
                 seq_play_scheduler_deactivate_source_at(source_position);
                 continue;
             }
@@ -950,7 +931,8 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
             const uint64_t commit_floor = (source->committed_until_sample
                     > block_start_sample)
                 ? source->committed_until_sample : block_start_sample;
-
+            const uint64_t nominal_step_end = source->step_origin_sample
+                + ((source->step_span_q16 + 0xFFFFULL) >> 16);
             for (uint64_t offset_q16 = 0U;
                  offset_q16 < source->step_span_q16;
                  offset_q16 += interval_q16)
@@ -959,58 +941,22 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                     + ((offset_q16 + 0x8000ULL) >> 16);
                 if (on_sample < commit_floor)
                 {
-                    /* A newly opened source may request a negative lead before
-                     * the first mutable sample. Preserve the occurrence at the
-                     * causal horizon; already-published sources stay skipped. */
+                    /* A current source first discovered after its nominal
+                     * boundary has never published this occurrence. Materialize
+                     * it once at the causal horizon; stale steps and committed
+                     * occurrences stay skipped. */
                     if ((source->committed_until_sample == 0U)
                             && (offset_q16 == 0U)
-                            && (source->step_origin_sample >= commit_floor))
+                            && ((source->step_origin_sample >= commit_floor)
+                                || (commit_floor < nominal_step_end)))
                         on_sample = commit_floor;
                     else
                     {
-                        ++g_seq_play_rebuild_debug[5];
-                        if ((g_seq_play_future_past_debug.armed != 0U)
-                                && (g_seq_play_future_past_debug.source_index
-                                    == source_index)
-                                && (g_seq_play_future_past_debug.step_origin_sample
-                                    == source->step_origin_sample)
-                                && (g_seq_play_future_past_debug.on_sample
-                                    == on_sample))
-                        {
-                            ++g_seq_play_future_past_debug.future_to_past_count;
-                            g_seq_play_future_past_debug.past_block_start_sample =
-                                block_start_sample;
-                            g_seq_play_future_past_debug.past_block_end_sample =
-                                block_end_sample;
-                            g_seq_play_future_past_debug.past_commit_floor =
-                                commit_floor;
-                            g_seq_play_future_past_debug.armed = 0U;
-                        }
                         continue;
                     }
                 }
                 if (on_sample >= block_end_sample)
                 {
-                    ++g_seq_play_rebuild_debug[6];
-                    if ((g_seq_play_future_past_debug.armed == 0U)
-                            && (g_seq_play_future_past_debug.future_to_past_count
-                                == 0U))
-                    {
-                        g_seq_play_future_past_debug.source_index = source_index;
-                        g_seq_play_future_past_debug.track_step =
-                            (uint32_t)source->source_track
-                            | ((uint32_t)source->source_step << 8);
-                        g_seq_play_future_past_debug.step_origin_sample =
-                            source->step_origin_sample;
-                        g_seq_play_future_past_debug.on_sample = on_sample;
-                        g_seq_play_future_past_debug.future_block_start_sample =
-                            block_start_sample;
-                        g_seq_play_future_past_debug.future_block_end_sample =
-                            block_end_sample;
-                        g_seq_play_future_past_debug.future_commit_floor =
-                            commit_floor;
-                        g_seq_play_future_past_debug.armed = 1U;
-                    }
                     continue;
                 }
                 if ((g_seq_play_imminent_count + 2U)
@@ -1099,13 +1045,6 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                         .track_generation = source->track_generation,
                         .event_token = output_id
                     };
-                if ((g_seq_play_future_past_debug.armed != 0U)
-                        && (g_seq_play_future_past_debug.source_index
-                            == source_index)
-                        && (g_seq_play_future_past_debug.step_origin_sample
-                            == source->step_origin_sample)
-                        && (g_seq_play_future_past_debug.on_sample == on_sample))
-                    g_seq_play_future_past_debug.armed = 0U;
                 ++g_seq_note_path_debug[SEQ_NOTE_DBG_IMMINENT_NOTE_ON];
                 g_seq_note_path_debug[SEQ_NOTE_DBG_LAST_NOTE] =
                     (uint32_t)source->target_track | ((uint32_t)note << 8)

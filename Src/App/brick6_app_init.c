@@ -54,6 +54,7 @@
 #include "App/Hall/hall_calibration.h"
 #include "App/Hall/hall_loop.h"
 #include "Seq/seq_runtime.h"
+#include "Seq/seq_stall_debug.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_clock_bridge.h"
 #include "UI/ui_active_track_sync.h"
@@ -577,10 +578,13 @@ static void brick6_app_control_process_storage_completions(void)
 
 void brick6_app_control_process_causes(uint32_t wake_flags)
 {
+    ++g_seq_stall_debug.control_wake_count;
+    g_seq_stall_debug.control_last_wake_flags = wake_flags;
     const uint32_t now_ms = HAL_GetTick();
     control_rt_sampled_state_process(now_ms);
     if (power_shutdown_is_active() != 0U)
     {
+        ++g_seq_stall_debug.control_power_shutdown_return_count;
         seq_runtime_control_deadline_disarm();
         return;
     }
@@ -669,6 +673,7 @@ void brick6_app_control_process_causes(uint32_t wake_flags)
         brick6_master_control_process();
     }
 
+    ++g_seq_stall_debug.control_deadline_tail_count;
     seq_runtime_control_deadline_service();
 }
 
