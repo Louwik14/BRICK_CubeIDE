@@ -46,8 +46,8 @@ uint8_t storage_settings_begin_multi_load(uint16_t slot,
 uint8_t storage_settings_begin_multi_replacement(
     uint16_t old_logical, uint16_t slot, const char *source_path,
     const char *index_path, uint8_t import_required);
-uint8_t storage_settings_begin_multi_clear(void);
-uint8_t storage_settings_add_multi_clear_path(const char *path);
+uint8_t storage_settings_begin_multi_clear(uint32_t catalog_sequence,
+                                           uint16_t presented_count);
 uint8_t storage_settings_commit_multi_clear(void);
 void storage_settings_cancel_multi(void);
 void storage_settings_cancel_multi_clear(void);

@@ -41,5 +41,10 @@ uint8_t storage_catalog_snapshot_begin(storage_catalog_kind_t kind,
                                         const char *path,
                                         storage_catalog_snapshot_t *snapshot);
 uint8_t storage_catalog_snapshot_end(const storage_catalog_snapshot_t *snapshot);
+uint8_t storage_catalog_view_retain(storage_catalog_kind_t kind,
+                                    uint32_t sequence,
+                                    uint16_t presented_count,
+                                    storage_catalog_snapshot_t *snapshot);
+void storage_catalog_view_release(uint32_t sequence);
 
 #endif /* STORAGE_CATALOG_H */

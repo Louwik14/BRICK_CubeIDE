@@ -129,16 +129,12 @@ uint8_t storage_settings_begin_multi_replacement(
             == MULTI_SAMPLE_LOAD_OK) ? 1U : 0U;
 }
 
-uint8_t storage_settings_begin_multi_clear(void)
+uint8_t storage_settings_begin_multi_clear(uint32_t catalog_sequence,
+                                           uint16_t presented_count)
 {
     if ((project_transport_stopped_stable() == 0U)
         || (seq_runtime_is_start_pending() != 0U)) return 0U;
-    return multi_sample_import_clear_batch_begin();
-}
-
-uint8_t storage_settings_add_multi_clear_path(const char *path)
-{
-    return multi_sample_import_clear_batch_add(path);
+    return multi_sample_import_clear_batch_begin(catalog_sequence, presented_count);
 }
 
 uint8_t storage_settings_commit_multi_clear(void)

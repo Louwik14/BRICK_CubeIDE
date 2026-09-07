@@ -16,6 +16,7 @@
 #include "Storage/wav_parser.h"
 #include "Storage/project_load_quiesce.h"
 #include "Storage/storage_io_wakeup.h"
+#include "Storage/storage_catalog.h"
 #include "App/control_rt_wakeup.h"
 #include "UI/ui_service_wakeup.h"
 #include "stm32h7xx.h"
@@ -125,8 +126,6 @@ static char g_delete_request_path[MULTI_SAMPLE_IMPORT_PATH_MAX];
 static uint16_t g_import_load_instrument = MULTI_SAMPLE_POOL_INVALID_ID;
 static uint32_t g_import_load_request_id;
 static volatile uint8_t g_import_load_continuation;
-#define MULTI_IMPORT_CLEAR_BATCH_MAX 240U
-static char g_clear_batch_paths[MULTI_IMPORT_CLEAR_BATCH_MAX][MULTI_SAMPLE_IMPORT_PATH_MAX];
 static uint16_t g_clear_batch_count;
 static uint16_t g_clear_batch_index;
 static uint16_t g_clear_batch_deleted;
@@ -137,6 +136,7 @@ static volatile uint8_t g_clear_batch_committed;
 static volatile uint8_t g_clear_batch_result_valid;
 static uint32_t g_clear_batch_request_id;
 static uint32_t g_clear_batch_request_id_counter;
+static storage_catalog_snapshot_t g_clear_batch_view;
 typedef enum
 {
     MULTI_IMPORT_PROGRESSIVE_IDLE = 0,
@@ -1924,7 +1924,8 @@ const char *multi_sample_import_get_index_path(void)
     return g_import_index_path;
 }
 
-uint8_t multi_sample_import_clear_batch_begin(void)
+uint8_t multi_sample_import_clear_batch_begin(uint32_t catalog_sequence,
+                                              uint16_t presented_count)
 {
     if ((g_clear_batch_active != 0U) || (multi_sample_import_is_busy() != 0U)
         || (multi_sample_load_has_pending() != 0U)
@@ -1938,7 +1939,13 @@ uint8_t multi_sample_import_clear_batch_begin(void)
         __set_PRIMASK(primask);
         return 0U;
     }
-    g_clear_batch_count = 0U;
+    if (storage_catalog_view_retain(STORAGE_CATALOG_MULTI, catalog_sequence,
+                                    presented_count, &g_clear_batch_view) == 0U)
+    {
+        __set_PRIMASK(primask);
+        return 0U;
+    }
+    g_clear_batch_count = presented_count;
     g_clear_batch_index = 0U;
     g_clear_batch_deleted = 0U;
     g_clear_batch_failed_count = 0U;
@@ -1954,17 +1961,6 @@ uint8_t multi_sample_import_clear_batch_begin(void)
     return 1U;
 }
 
-uint8_t multi_sample_import_clear_batch_add(const char *path)
-{
-    if ((g_clear_batch_active == 0U) || (path == NULL)
-        || (path[0] == '\0') || (g_clear_batch_count >= MULTI_IMPORT_CLEAR_BATCH_MAX)
-        || (strlen(path) >= sizeof(g_clear_batch_paths[0]))) return 0U;
-    (void)snprintf(g_clear_batch_paths[g_clear_batch_count],
-                   sizeof(g_clear_batch_paths[0]), "%s", path);
-    ++g_clear_batch_count;
-    return 1U;
-}
-
 uint8_t multi_sample_import_clear_batch_commit(void)
 {
     if (g_clear_batch_active == 0U) return 0U;
@@ -1977,6 +1973,7 @@ uint8_t multi_sample_import_clear_batch_commit(void)
 
 void multi_sample_import_clear_batch_cancel(void)
 {
+    const uint32_t retained_sequence = g_clear_batch_view.sequence;
     g_clear_batch_active = 0U;
     g_clear_batch_committed = 0U;
     g_clear_batch_count = 0U;
@@ -1985,8 +1982,36 @@ void multi_sample_import_clear_batch_cancel(void)
     g_clear_batch_failed_count = 0U;
     g_clear_batch_failed = 0U;
     g_clear_batch_result_valid = 0U;
+    g_clear_batch_view.entries = NULL;
+    storage_catalog_view_release(retained_sequence);
     if (multi_sample_pool_clear_is_active() != 0U)
         (void)multi_sample_pool_request_clear_end();
+}
+
+static const char *multi_import_clear_batch_next_path(void)
+{
+    while (g_clear_batch_index < g_clear_batch_count)
+    {
+        const storage_catalog_entry_t *const entry =
+            &g_clear_batch_view.entries[g_clear_batch_index++];
+        if ((entry->multi_type == 0U) && (entry->index_path[0] != '\0'))
+            return entry->index_path;
+    }
+    return NULL;
+}
+
+static void multi_import_clear_batch_request_next(void)
+{
+    const char *const path = multi_import_clear_batch_next_path();
+    if (path == NULL)
+    {
+        (void)multi_sample_pool_request_clear_end();
+    }
+    else if (multi_sample_import_request_delete_index(path) == 0U)
+    {
+        --g_clear_batch_index;
+        storage_io_owner_wait_resource(STORAGE_OWNER_MULTI);
+    }
 }
 
 uint8_t multi_sample_import_clear_batch_active(void)
@@ -2070,11 +2095,7 @@ void multi_sample_import_storage_delete_service(void)
         }
         else
         {
-            if (multi_sample_import_request_delete_index(
-                    g_clear_batch_paths[g_clear_batch_index]) != 0U)
-                ++g_clear_batch_index;
-            else
-                storage_io_owner_wait_resource(STORAGE_OWNER_MULTI);
+            multi_import_clear_batch_request_next();
         }
         return;
     }
@@ -2084,11 +2105,7 @@ void multi_sample_import_storage_delete_service(void)
             && (g_clear_batch_failed == 0U)
             && (g_clear_batch_index < g_clear_batch_count))
         {
-            if (multi_sample_import_request_delete_index(
-                    g_clear_batch_paths[g_clear_batch_index]) != 0U)
-                ++g_clear_batch_index;
-            else
-                storage_io_owner_wait_resource(STORAGE_OWNER_MULTI);
+            multi_import_clear_batch_request_next();
         }
         else if ((g_clear_batch_active != 0U)
                  && ((g_clear_batch_failed != 0U)
@@ -2097,6 +2114,9 @@ void multi_sample_import_storage_delete_service(void)
         {
             g_clear_batch_active = 0U;
             g_clear_batch_committed = 0U;
+            const uint32_t retained_sequence = g_clear_batch_view.sequence;
+            g_clear_batch_view.entries = NULL;
+            storage_catalog_view_release(retained_sequence);
             g_clear_batch_result_valid = 1U;
             control_rt_wakeup(CONTROL_RT_WAKE_STORAGE);
         }
