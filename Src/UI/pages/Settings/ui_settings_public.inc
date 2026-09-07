@@ -123,82 +123,82 @@ static void ui_page_settings_present_storage_receipts(void)
     if (ui_page_settings_is_open() == 0U) return;
     const ui_settings_menu_level_t *const level = ui_page_settings_current_level();
     if (level == NULL) return;
-    for (control_asset_family_t family = CONTROL_ASSET_FAMILY_CLASSIC;
-         family < CONTROL_ASSET_FAMILY_COUNT; ++family)
+    control_asset_family_t family = CONTROL_ASSET_FAMILY_COUNT;
+    if ((level->view == UI_SETTINGS_VIEW_SAMPLER)
+        || (level->view == UI_SETTINGS_VIEW_SAMPLER_SLOT))
+        family = CONTROL_ASSET_FAMILY_CLASSIC;
+    else if (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM)
+        family = CONTROL_ASSET_FAMILY_RAM;
+    else if (level->view == UI_SETTINGS_VIEW_WAVETABLE)
+        family = CONTROL_ASSET_FAMILY_WAVETABLE;
+    else if (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
+        family = CONTROL_ASSET_FAMILY_MULTI;
+    if ((family >= CONTROL_ASSET_FAMILY_COUNT)
+        || (g_ui_asset_receipt_valid[family] == 0U)
+        || ((g_ui_asset_receipts[family].request_id
+             == g_ui_asset_receipt_presented[family].request_id)
+            && (g_ui_asset_receipts[family].stage
+                == g_ui_asset_receipt_presented[family].stage)))
     {
-        if ((g_ui_asset_receipt_valid[family] == 0U)
-            || ((g_ui_asset_receipts[family].request_id
-                 == g_ui_asset_receipt_presented[family].request_id)
-                && (g_ui_asset_receipts[family].stage
-                    == g_ui_asset_receipt_presented[family].stage))) continue;
-        const control_asset_terminal_t *const receipt = &g_ui_asset_receipts[family];
-        uint8_t relevant = 0U;
-        if ((family == CONTROL_ASSET_FAMILY_CLASSIC)
-            && ((level->view == UI_SETTINGS_VIEW_SAMPLER)
-                || (level->view == UI_SETTINGS_VIEW_SAMPLER_SLOT))) relevant = 1U;
-        else if ((family == CONTROL_ASSET_FAMILY_RAM)
-                 && (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM)) relevant = 1U;
-        else if ((family == CONTROL_ASSET_FAMILY_WAVETABLE)
-                 && (level->view == UI_SETTINGS_VIEW_WAVETABLE)) relevant = 1U;
-        else if ((family == CONTROL_ASSET_FAMILY_MULTI)
-                 && (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE)) relevant = 1U;
-        if (relevant == 0U) continue;
+        ui_page_settings_preview_apply_termination_status();
+        return;
+    }
+    const control_asset_terminal_t *const receipt = &g_ui_asset_receipts[family];
 
-        if (family == CONTROL_ASSET_FAMILY_MULTI)
+    if (family == CONTROL_ASSET_FAMILY_MULTI)
+    {
+        if (receipt->stage == CONTROL_ASSET_STAGE_REMOVE)
         {
-            if (receipt->stage == CONTROL_ASSET_STAGE_REMOVE)
-            {
-                ui_page_settings_select_neighbor_before_delete();
-                (void)ui_page_settings_multi_browser_refresh();
-                ui_page_settings_status((receipt->success != 0U)
-                                            ? "UNLOAD OK" : "UNLOAD FAIL");
-            }
-            else if (receipt->stage == CONTROL_ASSET_STAGE_CLEAR_INDEXES)
-            {
-                (void)ui_page_settings_multi_browser_refresh();
-                ui_page_settings_status((receipt->success != 0U)
-                                            ? ((receipt->result != 0U) ? "CLEAR OK" : "NO INDEX")
-                                            : "CLEAR FAIL");
-            }
-            else
-            {
-                if (receipt->logical_id != MULTI_SAMPLE_POOL_INVALID_ID)
-                    g_ui_settings.sample_slot_selected = receipt->logical_id;
-                ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_MULTI);
-                ui_page_settings_multi_prepare_finish(
-                    (receipt->success != 0U) ? "LOAD OK" : "LOAD FAIL");
-            }
+            ui_page_settings_select_neighbor_before_delete();
+            (void)ui_page_settings_multi_browser_refresh();
+            ui_page_settings_status((receipt->success != 0U)
+                                        ? "UNLOAD OK" : "UNLOAD FAIL");
+        }
+        else if (receipt->stage == CONTROL_ASSET_STAGE_CLEAR_INDEXES)
+        {
+            (void)ui_page_settings_multi_browser_refresh();
+            ui_page_settings_status((receipt->success != 0U)
+                                        ? ((receipt->result != 0U) ? "CLEAR OK" : "NO INDEX")
+                                        : "CLEAR FAIL");
         }
         else
         {
-            if (receipt->logical_id != SAMPLE_GLOBAL_POOL_INVALID_INDEX)
+            if (receipt->logical_id != MULTI_SAMPLE_POOL_INVALID_ID)
                 g_ui_settings.sample_slot_selected = receipt->logical_id;
-            if (receipt->stage == CONTROL_ASSET_STAGE_REMOVE)
-            {
-                ui_page_settings_select_neighbor_before_delete();
-                if (family == CONTROL_ASSET_FAMILY_RAM)
-                    ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_RAM);
-                else if (family == CONTROL_ASSET_FAMILY_WAVETABLE)
-                    ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_WAVETABLE);
-                else
-                    ui_page_settings_refresh_sampler_slots();
-                ui_page_settings_status((receipt->success != 0U)
-                                            ? "CLEAR OK" : "CLEAR FAIL");
-            }
-            else
-            {
-                if (family == CONTROL_ASSET_FAMILY_RAM)
-                    ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_RAM);
-                else if (family == CONTROL_ASSET_FAMILY_WAVETABLE)
-                    ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_WAVETABLE);
-                else
-                    ui_page_settings_refresh_sampler_slots();
-                ui_page_settings_status((receipt->success != 0U)
-                                            ? "LOAD OK" : "LOAD FAIL");
-            }
+            ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_MULTI);
+            ui_page_settings_multi_prepare_finish(
+                (receipt->success != 0U) ? "LOAD OK" : "LOAD FAIL");
         }
-        g_ui_asset_receipt_presented[family] = *receipt;
     }
+    else
+    {
+        if (receipt->logical_id != SAMPLE_GLOBAL_POOL_INVALID_INDEX)
+            g_ui_settings.sample_slot_selected = receipt->logical_id;
+        if (receipt->stage == CONTROL_ASSET_STAGE_REMOVE)
+        {
+            ui_page_settings_select_neighbor_before_delete();
+            if (family == CONTROL_ASSET_FAMILY_RAM)
+                ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_RAM);
+            else if (family == CONTROL_ASSET_FAMILY_WAVETABLE)
+                ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_WAVETABLE);
+            else
+                ui_page_settings_refresh_sampler_slots();
+            ui_page_settings_status((receipt->success != 0U)
+                                        ? "CLEAR OK" : "CLEAR FAIL");
+        }
+        else
+        {
+            if (family == CONTROL_ASSET_FAMILY_RAM)
+                ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_RAM);
+            else if (family == CONTROL_ASSET_FAMILY_WAVETABLE)
+                ui_page_settings_refresh_global_kind_slots(SAMPLE_GLOBAL_KIND_WAVETABLE);
+            else
+                ui_page_settings_refresh_sampler_slots();
+            ui_page_settings_status((receipt->success != 0U)
+                                        ? "LOAD OK" : "LOAD FAIL");
+        }
+    }
+    g_ui_asset_receipt_presented[family] = *receipt;
     ui_page_settings_preview_apply_termination_status();
 }
 
