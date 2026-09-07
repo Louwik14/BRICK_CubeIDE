@@ -567,7 +567,9 @@ static uint8_t ui_page_settings_multi_browser_refresh(void)
         if (storage_settings_catalog_snapshot_begin(STORAGE_CATALOG_MULTI, g_ui_settings.sample_dir,
                                             &snapshot) == 0U)
             break;
-        for (uint16_t i = 0U; i < snapshot.count; ++i)
+        const uint16_t presented_count = (snapshot.count < UI_SETTINGS_MULTI_BROWSER_MAX)
+            ? snapshot.count : UI_SETTINGS_MULTI_BROWSER_MAX;
+        for (uint16_t i = 0U; i < presented_count; ++i)
         {
             const storage_catalog_entry_t *const source = &snapshot.entries[i];
             ui_settings_multi_entry_t *const entry =
@@ -594,7 +596,10 @@ static uint8_t ui_page_settings_multi_browser_refresh(void)
         }
 
         if (storage_settings_catalog_snapshot_end(&snapshot) != 0U)
+        {
+            g_ui_settings.multi_catalog_sequence = snapshot.sequence;
             goto multi_snapshot_valid;
+        }
     }
 
     (void)storage_settings_catalog_request(STORAGE_CATALOG_MULTI, g_ui_settings.sample_dir);
@@ -828,4 +833,3 @@ static uint8_t ui_page_settings_sample_restore_dir_after_refresh(const char *dir
         }
     }
 }
-

@@ -178,6 +178,7 @@ typedef struct
     uint16_t sample_child_count;
     uint16_t sample_page_start;
     uint16_t multi_entry_count;
+    uint32_t multi_catalog_sequence;
     uint16_t sample_selected;
     uint16_t sample_slot_selected;
     uint16_t sample_left_scroll;
