@@ -55,7 +55,7 @@
 #define SEQ_RUNTIME_LIVE_REC_QUEUE_CAPACITY 128U
 /* TIM12 runs at 1500 Hz: one one-shot update is 32 audio frames.  CONTROL
  * refreshes the 64-frame publication horizon halfway through that horizon. */
-#define SEQ_RUNTIME_CONTROL_DEADLINE_TIMER_TICKS 1U
+#define SEQ_RUNTIME_CONTROL_DEADLINE_TIMER_TICKS 1000U
 
 /* Shared execution state lives in seq_runtime_exec. */
 #define g_seq_runtime (*seq_runtime_exec_state())

@@ -93,24 +93,28 @@ uint8_t ui_param_next_value_flash_deadline(uint32_t now_ms, uint32_t *out_deadli
     for (uint8_t i = 0U; i < 4U; ++i)
     {
         const ui_param_value_flash_slot_t *const flash = &g_ui_param_value_flash[i];
-        if ((flash->active == 0U)
-            || ((int32_t)(flash->until_ms - now_ms) <= 0))
+        if (flash->active == 0U)
         {
             continue;
         }
+        const uint32_t deadline = ((int32_t)(flash->until_ms - now_ms) <= 0)
+            ? now_ms : flash->until_ms;
         if ((candidate == 0U)
-            || ((int32_t)(flash->until_ms - candidate) < 0))
+            || ((int32_t)(deadline - candidate) < 0))
         {
-            candidate = flash->until_ms;
+            candidate = deadline;
         }
     }
 
-    if ((g_ui_param_tweak_param < PARAM_COUNT)
-        && ((int32_t)(g_ui_param_tweak_until_ms - now_ms) > 0)
-        && ((candidate == 0U)
-            || ((int32_t)(g_ui_param_tweak_until_ms - candidate) < 0)))
+    if (g_ui_param_tweak_param < PARAM_COUNT)
     {
-        candidate = g_ui_param_tweak_until_ms;
+        const uint32_t deadline = ((int32_t)(g_ui_param_tweak_until_ms - now_ms) <= 0)
+            ? now_ms : g_ui_param_tweak_until_ms;
+        if ((candidate == 0U)
+            || ((int32_t)(deadline - candidate) < 0))
+        {
+            candidate = deadline;
+        }
     }
 
     if (candidate == 0U)

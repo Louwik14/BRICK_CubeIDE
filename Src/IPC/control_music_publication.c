@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include "ControlRT/control_rt_publication.h"
 #include "Platform/memory_layout.h"
+#include "Seq/seq_note_path_debug.h"
 
 CONTROL_STATE_SDRAM static control_audio_command_t
     g_music_publish_scratch[2U * (CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST
@@ -79,5 +80,10 @@ uint8_t control_music_publication_publish_merged_window(
     }
     if ((internal_visited != internal_count)
             || (external_visited != external_count) || (emitted == 0U)) return 0U;
-    return control_rt_publish_batch_scheduled(g_music_publish_scratch, emitted);
+    g_seq_note_path_debug[SEQ_NOTE_DBG_PUBLICATION_ACTIONS] += emitted;
+    const uint8_t accepted =
+        control_rt_publish_batch_scheduled(g_music_publish_scratch, emitted);
+    ++g_seq_note_path_debug[(accepted != 0U)
+        ? SEQ_NOTE_DBG_PUBLICATION_ACCEPT : SEQ_NOTE_DBG_PUBLICATION_REJECT];
+    return accepted;
 }

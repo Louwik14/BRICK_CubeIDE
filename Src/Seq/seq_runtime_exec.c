@@ -16,6 +16,7 @@
 #include "Seq/seq_clock_bridge.h"
 #include "Seq/seq_live_rec_session.h"
 #include "Seq/seq_model.h"
+#include "Seq/seq_note_path_debug.h"
 #include "Track/entity_topology.h"
 #include "Seq/seq_play_scheduler.h"
 #include "Seq/seq_runtime_control.h"
@@ -43,6 +44,7 @@ static volatile uint32_t g_seq_runtime_exec_external_step_pulses_pending;
 static seq_runtime_exec_boundary_event_t g_seq_runtime_exec_boundary_events[SEQ_RUNTIME_EXEC_BOUNDARY_EVENT_CAP];
 static uint8_t g_seq_runtime_exec_boundary_event_count;
 static uint32_t g_seq_runtime_exec_metronome_step;
+volatile uint32_t g_seq_note_path_debug[SEQ_NOTE_DBG_COUNT];
 static void seq_runtime_exec_copy_scheduler_event(seq_runtime_control_event_t *out_event,
                                                         const seq_play_scheduler_event_t *scheduler_event);
 static void seq_runtime_exec_push_boundary_edge(seq_track_id_t track, uint64_t due_sample_time);
@@ -239,10 +241,15 @@ static void seq_runtime_exec_schedule_hit_play_and_lookahead(const seq_runtime_s
         return;
     }
 
+    ++g_seq_note_path_debug[SEQ_NOTE_DBG_RUNTIME_SCHEDULE_ENTRY];
+    g_seq_note_path_debug[SEQ_NOTE_DBG_LAST_TRACK_STEP] =
+        (uint32_t)hit->track | ((uint32_t)hit->step << 8);
+
     entity_topology_descriptor_t entity;
     if ((entity_topology_get((brick_entity_id_t)hit->track, &entity) == 0U)
             || (entity_topology_can_emit_notes(&entity) == 0U))
     {
+        ++g_seq_note_path_debug[SEQ_NOTE_DBG_RUNTIME_TOPOLOGY_REJECT];
         return;
     }
 

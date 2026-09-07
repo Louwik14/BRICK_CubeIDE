@@ -1,4 +1,5 @@
 #include "NoteFx/note_fx_pipeline.h"
+#include "Seq/seq_note_path_debug.h"
 #include <string.h>
 #include "stm32h7xx.h"
 
@@ -217,6 +218,7 @@ static note_event_result_t note_fx_pipeline_terminal(const note_event_t *event, 
         return NOTE_EVENT_RESULT_DROPPED_POLICY;
     }
     note_event_t terminal = *event;
+    ++g_seq_note_path_debug[SEQ_NOTE_DBG_NOTE_FX_TERMINAL];
     terminal.stage = NOTE_EVENT_STAGE_TERMINAL;
     terminal.flags |= NOTE_EVENT_FLAG_TERMINAL;
     const uint8_t channel = (terminal.destination_id == NOTE_EVENT_DESTINATION_DEFAULT)
@@ -243,6 +245,8 @@ static note_event_result_t note_fx_pipeline_terminal(const note_event_t *event, 
     };
     const uint8_t submitted = control_music_output_submit(
         &audio_event, terminal.source_token, terminal.generation);
+    ++g_seq_note_path_debug[(submitted != 0U)
+        ? SEQ_NOTE_DBG_OUTPUT_ACCEPT : SEQ_NOTE_DBG_OUTPUT_REJECT];
     if (submitted == 0U)
     {
         return NOTE_EVENT_RESULT_REJECTED_CAPACITY;

@@ -25,6 +25,7 @@
 #include "midi.h"
 
 #include "Seq/seq_model.h"
+#include "Seq/seq_note_path_debug.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
@@ -360,7 +361,10 @@ static uint8_t seq_play_scheduler_register_source(
 {
     if ((item == NULL) || (item->target_track >= SEQ_LANE_CAPACITY)
             || (g_seq_play_track_suspended[item->target_track] != 0U))
+    {
+        ++g_seq_note_path_debug[SEQ_NOTE_DBG_SOURCE_REJECT];
         return 0U;
+    }
 
     for (uint16_t active = 0U; active < g_seq_play_active_source_count; ++active)
     {
@@ -372,7 +376,10 @@ static uint8_t seq_play_scheduler_register_source(
                 && (source->source_step == item->source_step)
                 && (source->source_voice == item->source_voice)
                 && (source->step_origin_sample == step_origin_sample))
+        {
+            ++g_seq_note_path_debug[SEQ_NOTE_DBG_SOURCE_ACCEPT];
             return 1U;
+        }
     }
     for (uint16_t i = 0U; i < SEQ_PLAY_SCHEDULER_SOURCE_CAPACITY; ++i)
     {
@@ -395,8 +402,10 @@ static uint8_t seq_play_scheduler_register_source(
         };
         g_seq_play_active_source[g_seq_play_active_source_count++] = i;
         g_seq_play_imminent_valid = 0U;
+        ++g_seq_note_path_debug[SEQ_NOTE_DBG_SOURCE_ACCEPT];
         return 1U;
     }
+    ++g_seq_note_path_debug[SEQ_NOTE_DBG_SOURCE_REJECT];
     return 0U;
 }
 
@@ -679,16 +688,21 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
                                                      uint32_t samples_per_step_q16,
                                                      uint8_t swing_phase)
 {
+    ++g_seq_note_path_debug[SEQ_NOTE_DBG_SCHEDULER_ENTRY];
+    g_seq_note_path_debug[SEQ_NOTE_DBG_LAST_TRACK_STEP] =
+        (uint32_t)track | ((uint32_t)step << 8);
     entity_topology_descriptor_t entity;
     if ((entity_topology_get((brick_entity_id_t)track, &entity) == 0U)
             || (entity_topology_can_emit_notes(&entity) == 0U))
     {
+        ++g_seq_note_path_debug[SEQ_NOTE_DBG_SCHEDULER_TOPOLOGY_REJECT];
         return;
     }
 
 
     if (track_runtime_has_capability(track, TRACK_CAPABILITY_NOTES) == 0U)
     {
+        ++g_seq_note_path_debug[SEQ_NOTE_DBG_SCHEDULER_CAPABILITY_REJECT];
         if (track < SEQ_LANE_CAPACITY)
         {
         }
@@ -699,16 +713,19 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
     if ((seq_play_scheduler_resolve_play_context(track, step, &play_context) == 0U)
             || (play_context.item_count == 0U))
     {
+        ++g_seq_note_path_debug[SEQ_NOTE_DBG_SCHEDULER_CONTEXT_REJECT];
         goto finish;
     }
 
     if (seq_model_step_is_active(play_context.source_track, play_context.source_step) == 0U)
     {
+        ++g_seq_note_path_debug[SEQ_NOTE_DBG_SCHEDULER_INACTIVE_STEP];
         goto finish;
     }
 
     if (seq_model_track_can_store_play(track) == 0U)
     {
+        ++g_seq_note_path_debug[SEQ_NOTE_DBG_SCHEDULER_STORE_REJECT];
         goto finish;
     }
 
@@ -728,22 +745,26 @@ static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
                  SEQ_PLAY_SCHEDULER_PLAY_PARAM_VEL, &vel_value) == 0U)
                 || (seq_play_scheduler_get_play_locked_or_base(item,
                  SEQ_PLAY_SCHEDULER_PLAY_PARAM_NOTE, &note_value) == 0U))
+        {
+            ++g_seq_note_path_debug[SEQ_NOTE_DBG_SCHEDULER_PLAY_READ_REJECT];
             continue;
+        }
         const uint8_t vel = (uint8_t)vel_value;
         if (vel == 0U)
         {
+            ++g_seq_note_path_debug[SEQ_NOTE_DBG_SCHEDULER_VELOCITY_REJECT];
             continue;
         }
 
         const uint8_t note = (uint8_t)note_value;
         if (note >= 128U)
         {
+            ++g_seq_note_path_debug[SEQ_NOTE_DBG_SCHEDULER_NOTE_REJECT];
             continue;
         }
 
-        (void)seq_play_scheduler_register_source(
-            item, step_sample_time, track_step_span_q16,
-            samples_per_step_q16, swing_phase);
+        (void)seq_play_scheduler_register_source(item, step_sample_time,
+            track_step_span_q16, samples_per_step_q16, swing_phase);
     }
 
 finish:
@@ -1006,6 +1027,14 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                         .track_generation = source->track_generation,
                         .event_token = output_id
                     };
+                ++g_seq_note_path_debug[SEQ_NOTE_DBG_IMMINENT_NOTE_ON];
+                g_seq_note_path_debug[SEQ_NOTE_DBG_LAST_NOTE] =
+                    (uint32_t)source->target_track | ((uint32_t)note << 8)
+                    | ((uint32_t)velocity << 16);
+                g_seq_note_path_debug[SEQ_NOTE_DBG_LAST_SAMPLE_LO] =
+                    (uint32_t)on_sample;
+                g_seq_note_path_debug[SEQ_NOTE_DBG_LAST_SAMPLE_HI] =
+                    (uint32_t)(on_sample >> 32);
             }
             source->committed_until_sample = block_end_sample;
             const uint64_t source_end = first_on
@@ -1073,6 +1102,8 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
             .generation = event->generation,
             .event_token = event->event_token
         };
+        if (event->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON)
+            ++g_seq_note_path_debug[SEQ_NOTE_DBG_COLLECTED_NOTE_ON];
     }
     return count;
 }
@@ -1086,12 +1117,19 @@ static uint8_t seq_play_scheduler_control_apply_internal(
         return 0U;
     }
 
+    const uint8_t is_note_on =
+        (event->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON) ? 1U : 0U;
+    if (is_note_on != 0U)
+        ++g_seq_note_path_debug[SEQ_NOTE_DBG_APPLY_NOTE_ON];
+
     if ((event->track >= SEQ_LANE_CAPACITY)
             || (event->generation != g_seq_play_generation)
             || (event->track_generation != g_seq_play_track_generation[event->track])
             || ((g_seq_play_track_suspended[event->track] != 0U)
                 && (event->type != (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF)))
     {
+        if (is_note_on != 0U)
+            ++g_seq_note_path_debug[SEQ_NOTE_DBG_APPLY_STALE_REJECT];
         return 1U;
     }
 
@@ -1101,9 +1139,9 @@ static uint8_t seq_play_scheduler_control_apply_internal(
         return 1U;
     }
 
-    const uint8_t is_note_on = (event->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON) ? 1U : 0U;
     if ((is_note_on != 0U) && (track_mute_should_suppress_note_on(event->track) != 0U))
     {
+        ++g_seq_note_path_debug[SEQ_NOTE_DBG_APPLY_MUTE_REJECT];
         return 1U;
     }
     const note_event_t note_event = {
@@ -1122,6 +1160,8 @@ static uint8_t seq_play_scheduler_control_apply_internal(
     };
     const note_event_result_t result =
         note_fx_pipeline_submit_control(&note_event);
+    ++g_seq_note_path_debug[(result == NOTE_EVENT_RESULT_ACCEPTED)
+        ? SEQ_NOTE_DBG_NOTE_FX_ACCEPT : SEQ_NOTE_DBG_NOTE_FX_REJECT];
     return (result == NOTE_EVENT_RESULT_ACCEPTED) ? 1U : 0U;
 }
 
