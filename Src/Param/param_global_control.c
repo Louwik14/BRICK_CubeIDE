@@ -223,6 +223,31 @@ uint8_t param_global_control_capture(param_global_control_state_t *out_state)
     return 1U;
 }
 
+uint8_t param_global_control_validate(const param_global_control_state_t *state)
+{
+    if (state == 0) return 0U;
+    param_global_control_state_t canonical_state = *state;
+    float *const canonical = (float *)&canonical_state;
+    for (uint8_t i = 0U; i < (uint8_t)GLOBAL_CONTROL_VALUE_COUNT; ++i)
+    {
+        param_registry_prepared_value_t prepared;
+        if (!isfinite(canonical[i])
+            || (param_registry_prepare_value(
+                g_global_param_ids[i], canonical[i], &prepared) == 0U)) return 0U;
+        canonical[i] = prepared.value;
+    }
+    const uint8_t modfx_model = (uint8_t)(canonical[GLOBAL_MODFX_MODEL] + 0.5f);
+    for (uint8_t i = 0U; i < (uint8_t)GLOBAL_CONTROL_VALUE_COUNT; ++i)
+    {
+        const param_id_t id = g_global_param_ids[i];
+        float command_value = canonical[i];
+        if (((live_parameter_is_audio_owned(id) != 0U) || (id == PARAM_MASTER_GAIN))
+            && (param_registry_prepare_global_audio_command(
+                id, canonical[i], modfx_model, &command_value) == 0U)) return 0U;
+    }
+    return 1U;
+}
+
 uint8_t param_global_control_restore(const param_global_control_state_t *state)
 {
     if (state == 0) return 0U;

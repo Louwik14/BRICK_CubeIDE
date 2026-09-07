@@ -21,20 +21,33 @@ Project restaurent `LINE` / `USB` par le commit canonique d'ownership.
 
 Le decode commence par les controles de format, bornes et CRC, puis construit un
 candidat borne dans l'espace inactif. Les capacites topologiques sont derivees
-par `persistent_entity_topology`; la validation metier des owners reste dans la
-phase d'installation. Les providers/consumers Project reutilisent un workspace
-borne sans allocation dynamique.
+par `persistent_entity_topology`; Project valide FM ou TONE selon le type cible,
+filtre, VCA, mixer, polyphonie, Audio FX, globals, sequence, Note FX, modulation
+et routing avant R3. Un owner TONE requis absent invalide le document. Les
+providers/consumers Project reutilisent un workspace borne sans allocation
+dynamique.
 
 `persistent_pattern_control` et `persistent_patch_control` sont les facades CONTROL. `pattern_control_bank`, `patch_product` et `project_product` sont les facades produit. Une reference asset persistante est `{kind, canonical_path}`; elle est canonicalisee une fois a l'entree de l'owner, puis le codec la valide et l'encode sans transformation. `project_control` ne resout le slot AUDIO qu'apres chargement, au moment de la publication fonctionnelle. Sample et tables Wave ne possedent plus de stable key Param. L'owner FM unique est encode champ par champ, sans packs flottants ni copie operateur secondaire. Les tables et mipmaps restent des data planes immutables hors FIFO.
 
 ## Transactions
 
-Pour Project Load, P1 decode et valide un candidat minimal hors quiesce; P2
-impose ensuite le safe point et purge l'ancien etat; P3 installe les assets
-sequentiellement puis applique Pattern, macros et globals avant le commit du
-contexte de boot. Les autres
-operations de persistence conservent leur prevalidation locale. Pattern
-Store/delete/clear construisent le namespace inactif puis publient `COMMIT.BIN`.
+Pour Project Load, la frontiere R3 suit le decode/CRC, le staging Pattern, la
+validation CONTROL contre la topologie cible, la verification complete des
+sources et le budget cumule du candidat seul. Classic, RAM et Wavetable
+conservent info WAV, taille, CRC et cout prepare dans le workspace SDRAM; Multi
+valide index, tables, zones, chemins et chaque WAV source, puis agrege samples,
+zones et pages de preparation. Le budget est compare aux capacites des vrais
+pools apres retrait de l'ancien Project; la coexistence A+B n'est pas requise.
+Le record `COMMIT.TMP` du set Pattern inactif est ecrit, synchronise et ferme
+avant R3. R3 autorise alors seulement le retrait physique de A. Apres R3, les
+assets sont charges sequentiellement, CONTROL est installe sous suppression de
+publication, le prepared AUDIO existant est construit, le Pattern bank est
+publie par renommage du commit prepare, puis un unique `STATE_COMMIT` est emis.
+Une nouvelle panne media est un incident externe terminal; une impossibilite
+d'allocation, registration ou restore malgre la prevalidation est un invariant.
+Il n'existe ni rollback general vers A, ni double runtime. Les autres operations
+de persistence conservent leur prevalidation locale. Pattern Store/delete/clear
+construisent le namespace inactif puis publient `COMMIT.BIN`.
 Les Save utilisent des tranches DATA de 4096 octets et des etapes METADATA
 separees; `.TMP` n'est publie qu'apres header final, sync et close, avec `.BAK`
 recuperable.
@@ -50,20 +63,14 @@ valide puis committe le candidat comme nouvel etat CONTROL et peut donc
 remplacer les edits non sauvegardes presents au moment de l'application.
 
 Project Load decode et valide le document avant d'acquerir la quiesce et
-l'exclusivite scheduler, puis sequence les assets RAM avec le loader cooperatif
-canonique.
-Le safe-point ne conserve que le nettoyage des leases physiques, queues/tails
-residuels, etat AUDIO et coherence transactionnelle; le protocole de quiesce
-destine a transformer un Load live en arret n'existe plus.
-Chaque candidat RAM est complet avant retrait; un remplacement attend ensuite
-STOP AUDIO et `T_safe` cote CONTROL avant liberation et commit. Un slot EMPTY
-est commite directement. Le quiesce Project reste ferme jusqu'a la fin de cette
-sequence. Le restore installe d'abord l'etat CONTROL sous suppression de
-publication live, construit et valide avant la frontiere finale un prepared
-AUDIO state immutable couvrant PROGRAM, LFO, MIDI channel/source, ownership des
-entrees External, parametres audio, tempo/step transport, metronome, mute,
-routage, FX, polyphonie et assets deja prets. Le Pattern bank est ensuite
-committe, puis une seule commande `STATE_COMMIT` est publiee sur le canal
+l'exclusivite scheduler. La quiescence CONTROL peut fermer ingress, queues et
+tails, mais `project_load_quiesce_storage_retire()` reste bloque jusqu'a
+l'autorisation R3 explicite. Le restore installe l'etat CONTROL sous suppression
+de publication live et construit le prepared AUDIO state immutable couvrant
+PROGRAM, LFO, MIDI channel/source, ownership des entrees External, parametres
+audio, tempo/step transport, metronome, mute, routage, FX, polyphonie et assets
+prets. Le Pattern bank est ensuite publie, puis une seule commande
+`STATE_COMMIT` est publiee sur le canal
 CONTROL->AUDIO existant. AUDIO applique cette generation de maniere
 deterministe; aucun transport Project parallele, aucune deuxieme chronologie,
 aucun ACK M7->M4, aucune confirmation de commit et aucun nouveau retour

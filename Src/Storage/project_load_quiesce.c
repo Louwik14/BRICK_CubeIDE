@@ -33,6 +33,7 @@ uint8_t project_transport_stopped_stable(void)
 }
 static volatile uint8_t g_project_load_panic_committed;
 static volatile uint8_t g_project_load_retire_started;
+static volatile uint8_t g_project_load_retire_allowed;
 static volatile uint8_t g_project_load_requested;
 static volatile uint8_t g_project_load_request_pending;
 static volatile uint8_t g_project_load_release_pending;
@@ -59,6 +60,7 @@ uint8_t project_load_allowed(void)
     return (uint8_t)(project_transport_stopped_stable()
         && (pattern_control_bank_async_busy() == 0U)
         && (pattern_storage_is_pending() == 0U)
+        && (pattern_storage_save_busy() == 0U)
         && (project_load_recorder_busy() == 0U)
         && (sampler_ram_pool_load_async_busy() == 0U)
         && (wavetable_pool_load_async_busy() == 0U)
@@ -73,6 +75,7 @@ void project_load_quiesce_init(void)
 {
     g_project_load_panic_committed = 0U;
     g_project_load_retire_started = 0U;
+    g_project_load_retire_allowed = 0U;
     g_project_load_requested = 0U;
     g_project_load_request_pending = 0U;
     g_project_load_release_pending = 0U;
@@ -95,6 +98,7 @@ void project_load_quiesce_control_process(void)
         g_project_load_release_pending = 0U;
         g_project_load_panic_committed = 0U;
         g_project_load_retire_started = 0U;
+        g_project_load_retire_allowed = 0U;
         g_project_load_requested = 0U;
         __DMB();
         g_project_load_ingress_open = 1U;
@@ -122,10 +126,18 @@ void project_load_quiesce_control_process(void)
     storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
 }
 
+void project_load_quiesce_allow_retire(void)
+{
+    g_project_load_retire_allowed = 1U;
+    storage_io_owner_set(STORAGE_OWNER_PROJECT);
+    storage_io_wakeup(STORAGE_IO_WAKE_RUNNABLE);
+}
+
 void project_load_quiesce_storage_retire(void)
 {
     if (g_project_load_requested == 0U
         || g_project_load_panic_committed == 0U
+        || g_project_load_retire_allowed == 0U
         || g_project_load_retire_started != 0U)
         return;
 

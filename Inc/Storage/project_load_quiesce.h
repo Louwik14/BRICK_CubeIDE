@@ -6,6 +6,7 @@
 void project_load_quiesce_init(void);
 void project_load_quiesce_request(void);
 void project_load_quiesce_control_process(void);
+void project_load_quiesce_allow_retire(void);
 void project_load_quiesce_storage_retire(void);
 uint8_t project_load_quiesce_safe(void);
 uint8_t project_load_quiesce_failed(void);

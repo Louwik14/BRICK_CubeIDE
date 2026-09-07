@@ -2,6 +2,7 @@
 #define PERSISTENCE_WORKSPACE_H
 
 #include "Storage/persistent_control_codec.h"
+#include "Storage/wav_parser.h"
 
 typedef enum
 {
@@ -32,6 +33,12 @@ typedef struct
     persist_control_asset_ref_t assets[PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY];
     uint16_t asset_runtime[PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY];
     uint8_t asset_result[PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY];
+    wav_info_t asset_wav[PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY];
+    uint32_t asset_source_size[PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY];
+    uint32_t asset_source_crc32[PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY];
+    uint32_t asset_data_bytes[PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY];
+    uint32_t asset_page_count[PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY];
+    uint32_t asset_cost_bytes[PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY];
     persist_control_macros_t macros;
     persist_codec_project_metadata_t metadata;
     uint16_t asset_count;
