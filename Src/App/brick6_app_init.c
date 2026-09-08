@@ -22,6 +22,7 @@
 #include "Storage/pattern_live_ram.h"
 #include "Storage/patch_product.h"
 #include "Storage/project_product.h"
+#include "Storage/project_control.h"
 #include "Storage/sd_preview.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/waveform_cache.h"
@@ -117,6 +118,7 @@ static void brick6_app_service_storage(void)
         wavetable_pool_service_retire();
         sampler_ram_pool_load_async_service();
         wavetable_pool_load_async_service();
+        project_control_asset_load_service();
         sampler_ram_pool_waveform_service(BRICK6_STREAM_OTHER_SD_QUANTUM_FRAMES);
         multi_sample_service_load(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
         pattern_load_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES / 2U);

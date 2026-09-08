@@ -127,7 +127,7 @@ static void ui_page_settings_ram_load_to_slot(uint16_t slot, const char *path)
         return;
     }
     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
-    if (sampler_ram_pool_load_async_begin(slot, path) != 0U)
+    if (project_control_ram_load_begin(slot, path) != 0U)
     {
         ui_page_settings_status("LOADING");
     }
@@ -149,8 +149,7 @@ static void ui_page_settings_wavetable_load_to_slot(uint16_t slot, const char *p
         ui_page_settings_status("ALREADY LOADED");
         return;
     }
-    if (wavetable_pool_load_async_begin_with_geometry(
-            slot, path, WAVETABLE_SOURCE_GEOMETRY_2048) != 0U)
+    if (project_control_wavetable_load_begin(slot, path) != 0U)
     {
         ui_page_settings_status("LOADING");
     }

@@ -14,7 +14,11 @@
 #include "Storage/project_control.h"
 #include "Storage/asset_ref.h"
 #include "Sampler/multi_sample_loader.h"
+#include "Sampler/multi_sample_index.h"
 #include "Sampler/sample_cache.h"
+#include "Sampler/sample_global_pool.h"
+#include "Sampler/sample_page_cache_config.h"
+#include "Sampler/sample_page_cache_port.h"
 #include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
 #include "ff.h"
@@ -492,7 +496,10 @@ static uint8_t put_asset(void*ctx,const persist_control_asset_ref_t*a){persisten
 static uint8_t apply_working(void*ctx,const persist_codec_project_metadata_t*m,const persist_control_pattern_t*p){persistence_project_restore_workspace_t*w=ctx;if(w==NULL||m==NULL||p==NULL)return 0U;w->metadata=*m;w->working_pattern=*p;w->working_valid=1U;return 1U;}
 static uint8_t apply_macros(void*ctx,const persist_control_macros_t*m){persistence_project_restore_workspace_t*w=ctx;if(w==NULL||m==NULL)return 0U;w->macros=*m;w->macros_valid=1U;return 1U;}
 static uint8_t begin_patterns(void*ctx){persistence_project_restore_workspace_t*w=ctx;if(w==NULL)return 0U;w->pattern_bank_started=0U;w->pattern_bank_staged=0U;if(pattern_control_bank_begin_project()==0U)return 0U;w->pattern_bank_started=1U;return 1U;}
-static uint8_t put_pattern(void*ctx,const persist_control_pattern_record_t*r){persistence_project_restore_workspace_t*w=ctx;if(w==NULL||r==NULL)return 0U;if((r->bank==w->metadata.active_pattern_bank)&&(r->pattern==w->metadata.active_pattern))w->active_pattern_seen=1U;return (pattern_control_bank_put_record_project(r)!=0U)?1U:0U;}
+static uint8_t project_product_pattern_assets_resolved(
+    const persistence_project_restore_workspace_t *restore,
+    const persist_control_pattern_t *pattern);
+static uint8_t put_pattern(void*ctx,const persist_control_pattern_record_t*r){persistence_project_restore_workspace_t*w=ctx;if(w==NULL||r==NULL||persistent_pattern_control_validate(&r->content)!=PERSIST_CODEC_OK||project_product_pattern_assets_resolved(w,&r->content)==0U)return 0U;if((r->bank==w->metadata.active_pattern_bank)&&(r->pattern==w->metadata.active_pattern))w->active_pattern_seen=1U;return (pattern_control_bank_put_record_project(r)!=0U)?1U:0U;}
 static uint8_t stage_patterns(void*ctx){persistence_project_restore_workspace_t*w=ctx;if(w==NULL)return 0U;w->pattern_bank_staged=1U;return 1U;}
 
 static uint8_t project_product_build_default_candidate(
@@ -562,6 +569,226 @@ static void project_discard_restore_workspace(
     persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_RESTORE);
 }
 
+static uint8_t project_product_asset_equal(
+    const persist_control_asset_ref_t *a,
+    const persist_control_asset_ref_t *b)
+{
+    return (uint8_t)((a != NULL) && (b != NULL) && (a->kind == b->kind)
+        && (a->path_length == b->path_length)
+        && (memcmp(a->canonical_path, b->canonical_path, a->path_length) == 0));
+}
+
+static uint8_t project_product_pattern_assets_resolved(
+    const persistence_project_restore_workspace_t *restore,
+    const persist_control_pattern_t *pattern)
+{
+    if ((restore == NULL) || (pattern == NULL)) return 0U;
+    for (uint8_t entity = 0U; entity < PERSIST_CONTROL_ENTITY_COUNT; ++entity)
+        for (uint8_t role = 0U; role < pattern->entities[entity].asset_count; ++role)
+        {
+            uint8_t found = 0U;
+            for (uint16_t index = 0U; index < restore->asset_count; ++index)
+                if (project_product_asset_equal(
+                        &pattern->entities[entity].assets[role],
+                        &restore->assets[index]) != 0U)
+                {
+                    found = 1U;
+                    break;
+                }
+            if (found == 0U) return 0U;
+        }
+    return 1U;
+}
+
+static uint8_t project_product_u64_add(uint64_t *total, uint64_t value)
+{
+    if ((total == NULL) || (*total > (UINT64_MAX - value))) return 0U;
+    *total += value;
+    return 1U;
+}
+
+static uint8_t project_product_inspect_wav(
+    const char *asset_path, wav_info_t *out_info, uint32_t *out_size)
+{
+    if ((asset_path == NULL) || (out_info == NULL) || (out_size == NULL)
+        || (acquire() == 0U)) return 0U;
+    FIL file;
+    uint8_t ok = (f_open(&file, asset_path, FA_READ) == FR_OK) ? 1U : 0U;
+    if (ok != 0U)
+    {
+        const FSIZE_t size = f_size(&file);
+        ok = (uint8_t)((size > 0U) && (size <= UINT32_MAX)
+            && (wav_parser_parse_info(&file, out_info) != 0)
+            && (out_info->block_align != 0U)
+            && ((out_info->data_size % out_info->block_align) == 0U)
+            && ((uint64_t)out_info->data_offset + out_info->data_size <= size));
+        if (ok != 0U) *out_size = (uint32_t)size;
+        if (f_close(&file) != FR_OK) ok = 0U;
+    }
+    sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+    return ok;
+}
+
+static uint8_t project_product_parent_path(
+    const char *path_value, char *out, uint32_t out_size)
+{
+    if ((path_value == NULL) || (out == NULL) || (out_size == 0U)) return 0U;
+    const char *slash = strrchr(path_value, '/');
+    const char *backslash = strrchr(path_value, '\\');
+    if ((backslash != NULL) && ((slash == NULL) || (backslash > slash))) slash = backslash;
+    if (slash == NULL) return 0U;
+    const uint32_t length = (uint32_t)(slash - path_value);
+    if ((length == 0U) || (length >= out_size)) return 0U;
+    memcpy(out, path_value, length);
+    out[length] = '\0';
+    return 1U;
+}
+
+static uint8_t project_product_join_path(
+    char *out, uint32_t out_size, const char *base,
+    const char *relative, uint16_t relative_length)
+{
+    if ((out == NULL) || (base == NULL) || (relative == NULL)
+        || (relative_length == 0U)) return 0U;
+    const uint32_t base_length = (uint32_t)strlen(base);
+    const uint8_t separator = (uint8_t)((base_length != 0U)
+        && (base[base_length - 1U] != '/') && (base[base_length - 1U] != '\\'));
+    const uint32_t total = base_length + separator + relative_length;
+    if (total >= out_size) return 0U;
+    memcpy(out, base, base_length);
+    uint32_t position = base_length;
+    if (separator != 0U) out[position++] = '/';
+    memcpy(&out[position], relative, relative_length);
+    out[total] = '\0';
+    return 1U;
+}
+
+static uint8_t project_product_prevalidate_multi(
+    const char *index_path, uint64_t *global_bytes, uint64_t *global_entries,
+    uint64_t *multi_samples, uint64_t *multi_zones, uint64_t *multi_pages)
+{
+    multi_sample_index_t index;
+    uint32_t required_pages = 0U;
+    if (multi_sample_index_load(index_path, &index) != MULTI_SAMPLE_INDEX_OK
+        || (index.sample_count == 0U)
+        || (multi_sample_load_required_prep_pages(&index, &required_pages) == 0U)
+        || (required_pages > SAMPLE_PREP_MULTI_BUDGET_PAGES)) return 0U;
+    char base[PERSIST_CONTROL_ASSET_PATH_BYTES];
+    if (project_product_parent_path(index_path, base, sizeof(base)) == 0U) return 0U;
+    for (uint16_t i = 0U; i < index.sample_count; ++i)
+    {
+        const multi_sample_index_sample_t *const sample = &index.samples[i];
+        char source[PERSIST_CONTROL_ASSET_PATH_BYTES];
+        wav_info_t info;
+        uint32_t size = 0U;
+        if ((project_product_join_path(source, sizeof(source), base,
+                &index.strings[sample->path_offset], sample->path_len) == 0U)
+            || (strlen(source) >= MULTI_SAMPLE_POOL_PATH_MAX)
+            || (project_product_inspect_wav(source, &info, &size) == 0U)
+            || (info.sample_rate != sample->sample_rate)
+            || (info.channels != sample->channels)
+            || (info.bits_per_sample != sample->bits_per_sample)
+            || (sample_cache_wav_format_supported(&info) == 0U)
+            || (info.block_align != (uint16_t)(
+                info.channels * (info.bits_per_sample / 8U)))
+            || (info.data_offset != sample->data_offset)
+            || (info.data_size != sample->data_size)
+            || ((info.data_size / info.block_align) != sample->total_frames)
+            || ((sample->wav_size != 0U) && (sample->wav_size != size))) return 0U;
+    }
+    return (uint8_t)(project_product_u64_add(global_bytes,
+                (uint64_t)required_pages * SAMPLE_PAGE_BYTES)
+        && project_product_u64_add(global_entries, index.sample_count)
+        && project_product_u64_add(multi_samples, index.sample_count)
+        && project_product_u64_add(multi_zones, index.zone_count)
+        && project_product_u64_add(multi_pages, required_pages));
+}
+
+static uint8_t project_product_prevalidate_candidate(
+    const persistence_project_restore_workspace_t *restore)
+{
+    uint64_t global_bytes = 0U, global_entries = 0U;
+    uint64_t ram_bytes = 0U, wavetable_bytes = 0U;
+    uint64_t multi_samples = 0U, multi_zones = 0U, multi_pages = 0U;
+    uint16_t classic_slots = 0U, ram_slots = 0U, wavetable_slots = 0U;
+    uint16_t multi_instruments = 0U;
+    if ((restore == NULL)
+        || (project_product_pattern_assets_resolved(
+                restore, &restore->working_pattern) == 0U)) return 0U;
+    for (uint16_t index = 0U; index < restore->asset_count; ++index)
+    {
+        const persist_control_asset_ref_t *const asset = &restore->assets[index];
+        char asset_path[PERSIST_CONTROL_ASSET_PATH_BYTES];
+        if (project_control_validate_asset(asset) == 0U
+            || asset->path_length >= sizeof(asset_path)) return 0U;
+        memcpy(asset_path, asset->canonical_path, asset->path_length);
+        asset_path[asset->path_length] = '\0';
+        if (asset->kind == PERSIST_ASSET_MULTI)
+        {
+            ++multi_instruments;
+            if (project_product_prevalidate_multi(asset_path, &global_bytes,
+                    &global_entries, &multi_samples, &multi_zones,
+                    &multi_pages) == 0U) return 0U;
+            continue;
+        }
+        wav_info_t info;
+        uint32_t source_size = 0U, cost = 0U;
+        if (project_product_inspect_wav(asset_path, &info, &source_size) == 0U)
+            return 0U;
+        (void)source_size;
+        if (asset->kind == PERSIST_ASSET_SAMPLE_STREAM)
+        {
+            const uint32_t frames = info.data_size / info.block_align;
+            const sample_audio_format_t format =
+                sample_audio_format_from_channels(info.channels);
+            if ((sample_cache_wav_format_supported(&info) == 0U)
+                || (info.block_align != (uint16_t)(
+                    info.channels * (info.bits_per_sample / 8U)))
+                || (sample_audio_format_is_valid(format) == 0U)) return 0U;
+            cost = sample_cache_product_cost_bytes(frames, format);
+            ++classic_slots;
+        }
+        else if (asset->kind == PERSIST_ASSET_SAMPLE_RAM)
+        {
+            if (sampler_ram_pool_inspect_wav(&info, NULL, NULL, NULL, &cost) == 0U)
+                return 0U;
+            ++ram_slots;
+            if (project_product_u64_add(&ram_bytes, cost) == 0U) return 0U;
+        }
+        else if (asset->kind == PERSIST_ASSET_WAVETABLE)
+        {
+            if (wavetable_pool_inspect_source(&info,
+                    WAVETABLE_SOURCE_GEOMETRY_2048, NULL, NULL, &cost) == 0U)
+                return 0U;
+            ++wavetable_slots;
+            if (project_product_u64_add(&wavetable_bytes, cost) == 0U) return 0U;
+        }
+        else return 0U;
+        if ((cost == 0U) || (project_product_u64_add(&global_bytes, cost) == 0U)
+            || (project_product_u64_add(&global_entries, 1U) == 0U)) return 0U;
+    }
+    return (uint8_t)((classic_slots + ram_slots + wavetable_slots
+                           + multi_instruments <= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+        && (ram_slots <= SAMPLER_RAM_POOL_MAX_SLOTS)
+        && (wavetable_slots <= WAVETABLE_POOL_MAX_SLOTS)
+        && (multi_instruments <= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
+        && (ram_bytes <= SAMPLER_RAM_POOL_BYTES)
+        && (wavetable_bytes <= sample_page_cache_port_shared_total_bytes())
+        && (multi_samples <= MULTI_SAMPLE_POOL_MAX_SAMPLES)
+        && (multi_zones <= MULTI_SAMPLE_POOL_MAX_ZONES)
+        && (multi_pages <= SAMPLE_PREP_MULTI_BUDGET_PAGES)
+        && (global_entries <= SAMPLE_GLOBAL_POOL_ENTRY_CAPACITY)
+        && (global_bytes <= SAMPLE_GLOBAL_POOL_BUDGET_BYTES));
+}
+
+static uint8_t project_product_prepare_pattern_commit(void)
+{
+    if (acquire() == 0U) return 0U;
+    const uint8_t ok = pattern_control_bank_prepare_commit();
+    sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+    return ok;
+}
+
 static void project_product_load_fail_post_p2(void)
 {
     persistence_project_restore_workspace_t *const restore =
@@ -601,12 +828,6 @@ static void project_product_load_finish(uint8_t success)
             || project_product_asset_loads_pending() != 0U))
         success = 0U;
     if (success == 0U)
-    {
-        project_product_load_fail_post_p2();
-        return;
-    }
-    if (slot != PROJECT_PRODUCT_NO_SLOT
-        && boot_context_flash_commit(slot) == 0U)
     {
         project_product_load_fail_post_p2();
         return;
@@ -867,7 +1088,14 @@ uint8_t project_product_load(uint8_t slot)
         && (restore->working_valid != 0U) && (restore->macros_valid != 0U)
         && (restore->pattern_bank_staged != 0U)
         && (restore->active_pattern_seen != 0U)
-        && (restore->asset_count <= PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY);
+        && (restore->asset_count <= PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY)
+        && (persistent_pattern_control_validate(&restore->working_pattern)
+                == PERSIST_CODEC_OK)
+        && (persist_codec_validate_macros(&restore->macros)
+                == PERSIST_CODEC_OK)
+        && (project_product_prevalidate_candidate(restore) != 0U)
+        && (project_product_prepare_pattern_commit() != 0U)
+        && (boot_context_flash_commit(slot) != 0U);
     if (ok == 0U)
     {
         project_discard_restore_workspace(restore);
@@ -893,6 +1121,12 @@ uint8_t project_product_blank(void)
         if(restore!=NULL)persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_RESTORE);
         return 0U;
     }
+    if ((project_product_prevalidate_candidate(restore) == 0U)
+        || (project_product_prepare_pattern_commit() == 0U))
+    {
+        project_discard_restore_workspace(restore);
+        return 0U;
+    }
     g_progress=(project_product_progress_t){1U,0U,0U,1U,
         PROJECT_PRODUCT_RESULT_IN_PROGRESS};
     project_product_start_candidate(restore,PROJECT_PRODUCT_NO_SLOT,1U);
@@ -909,6 +1143,12 @@ project_product_boot_restore_result_t project_product_restore_boot(void)
         {
             if (restore != NULL)
                 persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_RESTORE);
+            return PROJECT_PRODUCT_BOOT_RESTORE_FAILED;
+        }
+        if ((project_product_prevalidate_candidate(restore) == 0U)
+            || (project_product_prepare_pattern_commit() == 0U))
+        {
+            project_discard_restore_workspace(restore);
             return PROJECT_PRODUCT_BOOT_RESTORE_FAILED;
         }
         g_progress=(project_product_progress_t){1U,0U,0U,1U,

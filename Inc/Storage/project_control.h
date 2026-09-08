@@ -12,6 +12,20 @@ typedef enum {
     PROJECT_CONTROL_ASSET_PENDING,
     PROJECT_CONTROL_ASSET_FAILED_INTERNAL
 } project_control_asset_result_t;
+typedef struct {
+    uint16_t backend_slot;
+    uint16_t global_slot;
+    uint16_t logical_slot;
+    uint16_t result;
+    uint8_t success;
+} project_control_ram_load_result_t;
+typedef struct {
+    uint16_t backend_slot;
+    uint16_t global_slot;
+    uint16_t logical_slot;
+    uint16_t result;
+    uint8_t success;
+} project_control_wavetable_load_result_t;
 typedef struct { uint8_t track; param_id_t param; float scene_value; } project_control_macro_lock_t;
 typedef enum {
     PROJECT_CONTROL_ASSET_SAMPLER = 0,
@@ -50,6 +64,15 @@ project_control_asset_result_t project_control_complete_ram_runtime(
 project_control_asset_result_t project_control_complete_wavetable_runtime(
     const char*path,uint16_t runtime_backend,uint16_t runtime_global,uint8_t success);
 uint8_t project_control_find_asset(uint32_t kind,const char*path,uint16_t*out_logical);
+
+/* UI starts physical loads through these entry points, but completion and
+ * logical registration remain owned by the superloop control service. */
+uint8_t project_control_ram_load_begin(uint16_t backend_slot,const char*path);
+uint8_t project_control_wavetable_load_begin(uint16_t backend_slot,const char*path);
+void project_control_asset_load_service(void);
+uint8_t project_control_ram_load_take_result(project_control_ram_load_result_t*out);
+uint8_t project_control_wavetable_load_take_result(
+    project_control_wavetable_load_result_t*out);
 
 /* Logical Project banks are lookup tables only. Track selection authority is
  * a typed asset reference; runtime pool/global/instrument slots are resolved

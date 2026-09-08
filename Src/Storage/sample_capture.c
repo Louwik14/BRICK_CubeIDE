@@ -100,7 +100,7 @@ typedef struct
     uint8_t rec_edit_first_render_pending;
     uint16_t final_counter;
     uint32_t trigger_threshold_peak_abs_pcm24;
-    uint32_t trigger_last_level_generation;
+    uint32_t trigger_arm_epoch;
 } sample_capture_model_t;
 
 typedef struct

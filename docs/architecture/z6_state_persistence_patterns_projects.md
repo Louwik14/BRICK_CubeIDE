@@ -25,19 +25,33 @@ borne sans allocation dynamique.
 
 ## Transactions
 
-Pour Project Load, P1 decode un candidat minimal; P2 impose le safe point et
+Pour Project Load, P1 decode le candidat et le prevalide integralement avant le
+safe point: chaque Pattern doit resoudre ses references dans le manifeste, les
+sources WAV/Multi doivent etre lisibles et compatibles, et les couts agreges
+doivent tenir dans les slots, pools et budgets physiques. Le contexte de boot
+et le record temporaire de publication du Pattern bank sont egalement prepares
+avant P2. Un refus abandonne le workspace et le staging sans fermer l'ingress,
+PANIC ni retirer une ressource courante. P2 impose ensuite le safe point et
 purge l'ancien etat; P3 installe les assets sequentiellement puis applique
-Pattern, macros et globals avant le commit du contexte de boot. Les autres
-operations de persistence conservent leur prevalidation locale. Pattern
-Store/delete/clear construisent le namespace inactif puis publient `COMMIT.BIN`.
+Pattern, macros et globals. Les autres operations de persistence conservent
+leur prevalidation locale. Pattern Store/delete/clear construisent le namespace
+inactif puis publient `COMMIT.BIN`.
 Les Save utilisent des tranches DATA de 4096 octets et des etapes METADATA
 separees; `.TMP` n'est publie qu'apres header final, sync et close, avec `.BAK`
 recuperable.
 
 Pattern Save/Load, Project Save, browser SD, Sample RAM, Wavetable et Clear Multi utilisent l'admission Background cooperative de `sd_scheduler_runtime`. Toute demande RT ou transaction active produit `NOT_NOW`; le client conserve son etat et rend la main.
 
-Project Load decode le document sous quiesce et exclusivite scheduler, puis rend
-l'exclusivite et sequence les assets RAM avec le loader cooperatif canonique.
+Pour les chargements utilisateur Sample RAM et Wavetable, la superloop consomme
+la completion physique, valide le slot, le global, le chemin et la resolution
+logique, puis retient un resultat terminal par famille. Settings ne fait que
+prendre ce resultat pour rafraichir sa vue. Un echec d'enregistrement n'est
+jamais publie comme succes; faute d'API de rollback transactionnel sure, la
+ressource physique deja READY peut rester residuelle jusqu'a son retrait normal.
+
+Apres cette prevalidation, Project Load entre en quiesce et exclusivite
+scheduler, puis rend l'exclusivite et sequence les assets RAM avec le loader
+cooperatif canonique.
 Chaque candidat RAM est complet avant retrait; un remplacement attend ensuite
 STOP AUDIO et `T_safe` cote CONTROL avant liberation et commit. Un slot EMPTY
 est commite directement. Le quiesce Project reste ferme jusqu'a la fin de cette

@@ -38,34 +38,39 @@ void sample_capture_model_service(void)
     {
         g_sample_capture.state.live_peak_abs_pcm24 = level.peak_abs_pcm24;
         g_sample_capture.state.live_peak_generation = level.generation;
-        if((g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_TRIG)
-                && (g_sample_capture.state.recording == 0U)
-                && (g_sample_capture.state.trigger_latched == 0U)
-                && (level.generation != g_sample_capture.trigger_last_level_generation))
+    }
+
+    audio_rec_trigger_event_t trigger_event;
+    if(audio_rec_level_reader_read_trigger_event(&trigger_event) != 0U)
+    {
+        const uint8_t trigger_current = (uint8_t)(
+            (trigger_event.arm_epoch == g_sample_capture.trigger_arm_epoch)
+            && (g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_TRIG)
+            && (g_sample_capture.state.recording == 0U)
+            && (g_sample_capture.state.trigger_latched == 0U));
+        if(trigger_current != 0U)
         {
-            g_sample_capture.trigger_last_level_generation = level.generation;
-            if(level.peak_abs_pcm24 >= g_sample_capture.trigger_threshold_peak_abs_pcm24)
+            g_sample_capture.state.trigger_latched = 1U;
+            g_sample_capture.state.armed_pending = 1U;
+            g_sample_capture.state.phase = (seq_runtime_is_running() != 0U)
+                ? SAMPLE_CAPTURE_PHASE_WAIT_QUANT
+                : SAMPLE_CAPTURE_PHASE_ARMED;
+            sample_capture_publish_trigger_config();
+            if((seq_runtime_is_running() != 0U)
+                    && (g_sample_capture.state.quant == SAMPLE_CAPTURE_QUANT_NOW))
             {
-                g_sample_capture.state.trigger_latched = 1U;
-                g_sample_capture.state.armed_pending = 1U;
-                g_sample_capture.state.phase = (seq_runtime_is_running() != 0U)
-                    ? SAMPLE_CAPTURE_PHASE_WAIT_QUANT
-                    : SAMPLE_CAPTURE_PHASE_ARMED;
-                if ((seq_runtime_is_running() != 0U)
-                        && (g_sample_capture.state.quant == SAMPLE_CAPTURE_QUANT_NOW))
+                uint64_t now_sample = 0U;
+                if(control_rt_now_sample(&now_sample) == 0U)
                 {
-                    uint64_t now_sample = 0U;
-                    if (control_rt_now_sample(&now_sample) == 0U)
-                    {
-                        Error_Handler();
-                        return;
-                    }
-                    const uint64_t sample_time =
-                        control_music_output_first_unpublished_sample(now_sample);
-                    (void)sample_capture_start_prepared_at(sample_time);
+                    Error_Handler();
+                    return;
                 }
+                const uint64_t sample_time =
+                    control_music_output_first_unpublished_sample(now_sample);
+                (void)sample_capture_start_prepared_at(sample_time);
             }
         }
+        audio_rec_level_reader_ack_trigger_event(trigger_event.sequence);
     }
 
     if((status.state == AUDIO_RECORDER_STATE_FAILED)
@@ -76,6 +81,7 @@ void sample_capture_model_service(void)
         g_sample_capture.state.armed_pending = 0U;
         g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
         g_sample_capture.state.trigger_latched = 0U;
+        sample_capture_publish_trigger_config();
         sample_capture_publish_rec_bus();
         sample_capture_set_error((status.error == AUDIO_RECORDER_ERROR_RING_OVERFLOW)
             ? SAMPLE_CAPTURE_ERROR_SAMPLE_ACTIVE

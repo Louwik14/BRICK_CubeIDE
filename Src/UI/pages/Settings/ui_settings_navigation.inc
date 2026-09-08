@@ -859,19 +859,14 @@ static void ui_page_settings_tick(void)
         }
     }
 
-    sampler_ram_result_t ram_result;
-    uint16_t ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
-    uint16_t ram_global = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    const char *ram_path = 0;
-    if (sampler_ram_pool_load_async_take_result(&ram_result, &ram_slot,
-                                                &ram_global, &ram_path) != 0U)
+    project_control_ram_load_result_t ram_completion;
+    if (project_control_ram_load_take_result(&ram_completion) != 0U)
     {
-        if (ram_result == SAMPLER_RAM_RESULT_OK)
+        const sampler_ram_result_t ram_result =
+            (sampler_ram_result_t)ram_completion.result;
+        if (ram_completion.success != 0U)
         {
-            uint16_t logical = 0U;
-            (void)project_control_register_sample_runtime(PERSIST_ASSET_SAMPLE_RAM,
-                                                          ram_path, ram_global, &logical);
-            g_ui_settings.sample_slot_selected = logical;
+            g_ui_settings.sample_slot_selected = ram_completion.logical_slot;
         }
         else if ((ram_result == SAMPLER_RAM_RESULT_GLOBAL_SLOT_FULL)
                  || (ram_result == SAMPLER_RAM_RESULT_POOL_FULL))
@@ -888,19 +883,14 @@ static void ui_page_settings_tick(void)
         ui_page_settings_status(sampler_ram_pool_result_label(ram_result));
     }
 
-    wavetable_result_t wavetable_result;
-    uint16_t wavetable_slot = WAVETABLE_POOL_INVALID_SLOT;
-    uint16_t wavetable_global = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    const char *wavetable_path = 0;
-    if (wavetable_pool_load_async_take_result(&wavetable_result, &wavetable_slot,
-                                              &wavetable_global, &wavetable_path) != 0U)
+    project_control_wavetable_load_result_t wavetable_completion;
+    if (project_control_wavetable_load_take_result(&wavetable_completion) != 0U)
     {
-        if (wavetable_result == WAVETABLE_RESULT_OK)
+        const wavetable_result_t wavetable_result =
+            (wavetable_result_t)wavetable_completion.result;
+        if (wavetable_completion.success != 0U)
         {
-            uint16_t logical = 0U;
-            (void)project_control_register_wavetable_runtime(wavetable_path,
-                                                             wavetable_global, &logical);
-            g_ui_settings.sample_slot_selected = logical;
+            g_ui_settings.sample_slot_selected = wavetable_completion.logical_slot;
         }
         else if ((wavetable_result == WAVETABLE_RESULT_GLOBAL_SLOT_FULL)
                  || (wavetable_result == WAVETABLE_RESULT_POOL_FULL))

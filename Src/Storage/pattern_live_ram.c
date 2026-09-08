@@ -423,7 +423,6 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern, uint8_t boundary_
             g_pending_queue_pattern = pattern;
             g_pending_boundary_track = boundary_track;
             g_pending_boundary_generation = boundary_generation;
-            undo_v2_clear_all();
             return 1U;
         }
 
@@ -460,7 +459,6 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern, uint8_t boundary_
                                            boundary_track,
                                            boundary_generation);
     }
-    undo_v2_clear_all();
     return 1U;
 }
 
