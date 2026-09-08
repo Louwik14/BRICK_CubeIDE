@@ -2,39 +2,6 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Configure Debug Lowcost",
-      "type": "shell",
-      "command": "cmake",
-      "args": [
-        "--preset",
-        "Debug"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Build Debug Lowcost",
-      "type": "shell",
-      "command": "cmake",
-      "args": [
-        "--build",
-        "--preset",
-        "Debug"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      },
-      "problemMatcher": [
-        "$gcc"
-      ]
-    },
-    {
       "label": "Configure Release Lowcost",
       "type": "shell",
       "command": "cmake",
@@ -96,40 +63,6 @@
         "cwd": "${workspaceFolder}"
       },
       "problemMatcher": []
-    },
-    {
-      "label": "Configure Premium",
-      "type": "shell",
-      "command": "cmake",
-      "args": [
-        "--preset",
-        "Premium"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Build Premium",
-      "type": "shell",
-      "command": "cmake",
-      "args": [
-        "--build",
-        "--preset",
-        "Premium"
-      ],
-      "options": {
-        "cwd": "${workspaceFolder}"
-      },
-      "dependsOn": [
-        "Configure Premium"
-      ],
-      "dependsOrder": "sequence",
-      "group": "build",
-      "problemMatcher": [
-        "$gcc"
-      ]
     }
   ]
 }

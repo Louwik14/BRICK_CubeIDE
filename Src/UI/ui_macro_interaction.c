@@ -2,9 +2,7 @@
 
 #include <stddef.h>
 
-#include "App/Hall/hall_engine.h"
 #include "App/Hall/hall_surface.h"
-#include "Board/board_product.h"
 #include "buttons.h"
 #include "Track/track_runtime.h"
 #include "Param/param_macro.h"
@@ -12,11 +10,6 @@
 #include "Storage/project_control.h"
 #include "ui_core.h"
 #include "ui_param.h"
-
-#define HALL_PRESSURE_RAW_NOISE_FLOOR 400U
-#define HALL_PRESSURE_RAW_NOISE_MARGIN 200U
-#define HALL_PRESSURE_HYST 150U
-#define HALL_PRESSURE_AMOUNT_DEADZONE 25U
 
 typedef struct
 {
@@ -33,120 +26,25 @@ typedef struct
 static ui_macro_interaction_state_t g_ui_macro_interaction;
 static uint8_t g_hall_pressure_active[HALL_UI_LANE_COUNT];
 
-static float ui_macro_interaction_clampf(float value, float min_value, float max_value)
-{
-    if (value < min_value)
-    {
-        return min_value;
-    }
-
-    if (value > max_value)
-    {
-        return max_value;
-    }
-
-    return value;
-}
-static uint16_t hall_pressure_delta(uint8_t hall)
-{
-    const uint16_t min_value = hall_engine_get_min(hall);
-    const uint16_t raw_value = hall_engine_get_raw(hall);
-
-    return (raw_value > min_value) ? (uint16_t)(raw_value - min_value) : 0U;
-}
-
-static uint8_t hall_pressure_uses_binary_surface(void)
-{
-    const board_product_capabilities_t *caps = board_product_capabilities();
-    return ((caps != 0)
-            && (caps->has_step_binary_lanes != 0U)
-            && (caps->has_analog_hall_lanes == 0U)) ? 1U : 0U;
-}
-
 static uint8_t hall_pressure_update(uint8_t hall)
 {
-    uint16_t min_value = 0U;
-    uint16_t max_value = 0U;
-    uint16_t delta = 0U;
-    const uint16_t on_delta = (uint16_t)(HALL_PRESSURE_RAW_NOISE_FLOOR + HALL_PRESSURE_RAW_NOISE_MARGIN);
-    const uint16_t off_delta = (on_delta > HALL_PRESSURE_HYST) ? (uint16_t)(on_delta - HALL_PRESSURE_HYST) : 0U;
-
     if (hall >= HALL_UI_LANE_COUNT)
     {
         return 0U;
     }
 
-    if (hall_pressure_uses_binary_surface() != 0U)
-    {
-        g_hall_pressure_active[hall] = hall_surface_is_pressed(hall);
-        return g_hall_pressure_active[hall];
-    }
-
-    min_value = hall_engine_get_min(hall);
-    max_value = hall_engine_get_max(hall);
-    delta = hall_pressure_delta(hall);
-
-    if ((max_value <= min_value) || ((uint16_t)(max_value - min_value) <= on_delta))
-    {
-        g_hall_pressure_active[hall] = 0U;
-        return 0U;
-    }
-
-    if (g_hall_pressure_active[hall] == 0U)
-    {
-        if (delta >= on_delta)
-        {
-            g_hall_pressure_active[hall] = 1U;
-        }
-    }
-    else if (delta <= off_delta)
-    {
-        g_hall_pressure_active[hall] = 0U;
-    }
-
+    g_hall_pressure_active[hall] = hall_surface_is_pressed(hall);
     return g_hall_pressure_active[hall];
 }
 
 static float hall_pressure_amount(uint8_t hall)
 {
-    uint16_t min_value = 0U;
-    uint16_t max_value = 0U;
-    uint16_t range = 0U;
-    uint16_t amount_start = 0U;
-    uint16_t delta = 0U;
-    float start = 0.0f;
-    float amount = 0.0f;
-
     if (hall >= HALL_UI_LANE_COUNT)
     {
         return 0.0f;
     }
 
-    if (hall_pressure_uses_binary_surface() != 0U)
-    {
-        return (hall_surface_is_pressed(hall) != 0U) ? 1.0f : 0.0f;
-    }
-
-    min_value = hall_engine_get_min(hall);
-    max_value = hall_engine_get_max(hall);
-    if (max_value <= min_value)
-    {
-        return 0.0f;
-    }
-
-    range = (uint16_t)(max_value - min_value);
-    amount_start = (uint16_t)(HALL_PRESSURE_RAW_NOISE_FLOOR
-                              + HALL_PRESSURE_RAW_NOISE_MARGIN
-                              + HALL_PRESSURE_AMOUNT_DEADZONE);
-    if (range <= amount_start)
-    {
-        return 0.0f;
-    }
-
-    delta = hall_pressure_delta(hall);
-    start = (float)amount_start;
-    amount = ((float)delta - start) / ((float)range - start);
-    return ui_macro_interaction_clampf(amount, 0.0f, 1.0f);
+    return (hall_surface_is_pressed(hall) != 0U) ? 1.0f : 0.0f;
 }
 
 static uint8_t ui_macro_interaction_is_scene_mode(void)

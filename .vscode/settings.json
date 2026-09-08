@@ -12,14 +12,6 @@
     {
       "label": "$(trash) Clean Release",
       "task": "Clean Release"
-    },
-    {
-      "label": "$(tools) Configure Debug",
-      "task": "Configure Debug"
-    },
-    {
-      "label": "$(debug) Debug",
-      "task": "Debug"
     }
   ],
   "git.ignoreLimitWarning": true

@@ -4,23 +4,13 @@
 #include "IPC/live_event.h"
 #include "stm32h7xx_hal.h"
 
-#if defined(BRICK6_VARIANT_LOWCOST)
 #define HALL_THRESHOLD_PPM                 200U
-#else
-#define HALL_THRESHOLD_PPM                 400U
-#endif
 #define HALL_HYST_PPM                      100U
 #define HALL_MIN_RANGE                     400U
 
-#if defined(BRICK6_VARIANT_LOWCOST)
 #define HALL_KEY_SAMPLE_PERIOD_US         2800U
 #define HALL_VEL_TIME_FAST_DT                4U
 #define HALL_VEL_TIME_SLOW_DT               56U
-#else
-#define HALL_KEY_SAMPLE_PERIOD_US          800U
-#define HALL_VEL_TIME_FAST_DT                1U
-#define HALL_VEL_TIME_SLOW_DT               14U
-#endif
 
 #define HALL_VEL_SLOW_SHIFT                5U
 #define HALL_VEL_FAST_SHIFT                1U
@@ -33,11 +23,7 @@
 
 #define HALL_USER_CAPTURE_FIFO_LEN         16U
 #define HALL_USER_VEL_POINT_COUNT          10U
-#if defined(BRICK6_VARIANT_LOWCOST)
 #define HALL_PRESS_DECREASES_RAW           1U
-#else
-#define HALL_PRESS_DECREASES_RAW           0U
-#endif
 
 typedef struct
 {
@@ -79,12 +65,8 @@ static volatile uint8_t  hall_note_off_pending[HALL_KEY_COUNT];
 
 static volatile hall_button_t hall_buttons[HALL_KEY_COUNT];
 static volatile uint8_t hall_calibrated = 0U;
-#if defined(BRICK6_VARIANT_LOWCOST)
 static volatile hall_velocity_mode_t  g_velocity_mode = HALL_VEL_MODE_DV_PEAK;
 static volatile hall_velocity_profile_t g_velocity_profile = HALL_VEL_PROFILE_USER;
-#else
-static volatile hall_velocity_mode_t  g_velocity_mode = HALL_VEL_MODE_USER;
-#endif
 static volatile hall_velocity_curve_t g_velocity_curve = HALL_VEL_CURVE_LOG;
 static volatile hall_user_velocity_profile_t g_user_velocity_profile = {0};
 static volatile uint8_t g_user_mode_fallback = 0U;
@@ -664,7 +646,6 @@ static uint8_t hall_velocity_compute(uint8_t key, uint16_t range)
 
     g_user_mode_fallback = 0U;
 
-#if defined(BRICK6_VARIANT_LOWCOST)
     if (g_velocity_profile == HALL_VEL_PROFILE_USER)
     {
         if (hall_engine_user_velocity_profile_is_valid() != 0U)
@@ -674,7 +655,6 @@ static uint8_t hall_velocity_compute(uint8_t key, uint16_t range)
 
         g_user_mode_fallback = 1U;
     }
-#endif
 
     switch (mode)
     {
@@ -1141,11 +1121,7 @@ uint8_t hall_engine_pop_velocity_capture(hall_velocity_capture_t *capture)
 
 void hall_set_velocity_mode(uint8_t mode)
 {
-#if defined(BRICK6_VARIANT_LOWCOST)
     if (mode < (uint8_t)HALL_VEL_MODE_USER)
-#else
-    if (mode < (uint8_t)HALL_VEL_MODE_COUNT)
-#endif
     {
         const uint32_t primask = hall_enter_critical();
         g_velocity_mode = (hall_velocity_mode_t)mode;
@@ -1155,16 +1131,12 @@ void hall_set_velocity_mode(uint8_t mode)
 
 void hall_set_velocity_profile(uint8_t profile)
 {
-#if defined(BRICK6_VARIANT_LOWCOST)
     if (profile < (uint8_t)HALL_VEL_PROFILE_COUNT)
     {
         const uint32_t primask = hall_enter_critical();
         g_velocity_profile = (hall_velocity_profile_t)profile;
         hall_exit_critical(primask);
     }
-#else
-    (void)profile;
-#endif
 }
 
 void hall_set_velocity_curve(uint8_t curve)
@@ -1184,13 +1156,7 @@ uint8_t hall_get_velocity_mode(void)
 
 uint8_t hall_get_velocity_profile(void)
 {
-#if defined(BRICK6_VARIANT_LOWCOST)
     return (uint8_t)g_velocity_profile;
-#else
-    return (g_velocity_mode == HALL_VEL_MODE_USER)
-        ? (uint8_t)HALL_VEL_PROFILE_USER
-        : (uint8_t)HALL_VEL_PROFILE_DEFAULT;
-#endif
 }
 
 uint8_t hall_get_velocity_curve(void)

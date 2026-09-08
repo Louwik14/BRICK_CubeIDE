@@ -26,14 +26,12 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/encoder_control_dispatcher.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/engine_tasklet.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/live_clock_control.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/mux_pots.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/ControlRT/control_rt_publication.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/control_music_publication.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/live_event.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/live_parameter_audio_publication.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/control_audio_visual.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/kbd_chords_dict.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/kbd_input_mapper.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/keyboard_engine.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/keyboard_input.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/keyboard_params.c"
@@ -142,7 +140,6 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/display_flush_service.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_audio_rec.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_calibration.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_debug_hall.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_midi_fx.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_name_edit.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI/pages/ui_page_patch_assign.c"
@@ -363,7 +360,6 @@ set(PLATFORM_H743_LOWCOST
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Src/board_display_lowcost.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Src/board_leds_lowcost.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Src/board_power_lowcost.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Src/board_product_lowcost.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Src/board_surface_lowcost.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Src/board_usb_lowcost.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/fusb302.c"
@@ -375,24 +371,7 @@ set(PLATFORM_H743_LOWCOST
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/usbh_conf.c"
 )
 
-set(PLATFORM_H743_PREMIUM
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src/board_audio_premium.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src/board_controls_premium.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src/board_display_transport_premium.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src/board_led_transport_premium.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src/board_power_premium.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src/board_product_premium.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src/board_surface_premium.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src/board_usb_premium.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/UsbStack/usb_device.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/UsbStack/usb_host.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/UsbStack/usbd_conf.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/UsbStack/usbd_desc.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/UsbStack/usbh_conf.c"
-)
-
 set(PLATFORM_H743
     ${PLATFORM_H743_COMMON}
     ${PLATFORM_H743_LOWCOST}
-    ${PLATFORM_H743_PREMIUM}
 )

@@ -1,7 +1,6 @@
 #include "ui_core_seq_transport.h"
 
 #include "stm32h7xx_hal.h"
-#include "Board/board_product.h"
 #include "buttons.h"
 #include "ui_page_manager.h"
 #include "pages/ui_page_template_cfg.h"
@@ -14,20 +13,7 @@
 
 static uint8_t ui_core_seq_transport_hall_steps_available_in_mode(ui_hall_mode_t hall_mode)
 {
-    if (ui_hall_is_seq_context(hall_mode) != 0U)
-    {
-        return 1U;
-    }
-
-    const board_product_capabilities_t *const caps = board_product_capabilities();
-    if ((caps == 0)
-        || (caps->has_step_binary_lanes == 0U)
-        || (caps->has_separate_hall_keyboard == 0U))
-    {
-        return 0U;
-    }
-
-    return (uint8_t)(hall_mode == UI_HALL_MODE_KEYBOARD);
+    return ui_hall_is_seq_context(hall_mode);
 }
 
 uint8_t ui_core_seq_transport_handle_seq_mode_event(const ui_event_t *ev,
@@ -86,7 +72,6 @@ uint8_t ui_core_seq_transport_handle_seq_mode_event(const ui_event_t *ev,
 
     if (shift_down != 0U)
     {
-#if defined(BRICK6_VARIANT_LOWCOST)
         if ((ev->type == UI_EVENT_HALL_PRESS)
             && (ev->id < SEQ_STEPS_PER_PAGE)
             && (seq_edit_lowcost_range_length_candidate(track, ev->id) != 0U))
@@ -94,7 +79,6 @@ uint8_t ui_core_seq_transport_handle_seq_mode_event(const ui_event_t *ev,
             seq_edit_step_press(track, ev->id);
             return 1U;
         }
-#endif
         return 0U;
     }
 

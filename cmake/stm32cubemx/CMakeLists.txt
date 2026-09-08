@@ -8,15 +8,8 @@ set(MX_Defines_Syms
     STM32H743xx
 )
 
-if(BRICK6_VARIANT STREQUAL "premium")
-    set(BRICK6_GENERATED_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../Board/Premium/Generated")
-    list(APPEND MX_Defines_Syms BRICK6_VARIANT_PREMIUM)
-elseif(BRICK6_VARIANT STREQUAL "lowcost")
-    set(BRICK6_GENERATED_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../Board/LowCost/Generated")
-    list(APPEND MX_Defines_Syms BRICK6_VARIANT_LOWCOST HAL_HCD_MODULE_ENABLED)
-else()
-    message(FATAL_ERROR "BRICK6_VARIANT='${BRICK6_VARIANT}' has no CubeMX generated source set")
-endif()
+set(BRICK6_GENERATED_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../Board/LowCost/Generated")
+list(APPEND MX_Defines_Syms HAL_HCD_MODULE_ENABLED)
 
 # STM32CubeMX generated include paths
 set(MX_Include_Dirs

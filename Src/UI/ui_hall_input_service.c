@@ -9,10 +9,8 @@
 #include "ui_hall_mode_flow.h"
 #include "Track/entity_topology.h"
 #include "Seq/seq_types.h"
-#if defined(BRICK6_VARIANT_LOWCOST)
 #include "Seq/seq_edit.h"
 #include "ui_core.h"
-#endif
 
 void ui_hall_input_service_handle_hall(uint8_t hall,
                                        uint8_t pressed,
@@ -53,14 +51,12 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
                        && (action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)));
 
     uint8_t lowcost_range_length_candidate = 0U;
-#if defined(BRICK6_VARIANT_LOWCOST)
     if ((action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)
         && (macro_overlay_hall_context == 0U)
         && (seq_edit_lowcost_range_length_candidate(ui_get_active_lane(), hall) != 0U))
     {
         lowcost_range_length_candidate = 1U;
     }
-#endif
 
     if ((action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)
         && (macro_overlay_hall_context == 0U)

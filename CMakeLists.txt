@@ -9,15 +9,6 @@ project(${CMAKE_PROJECT_NAME} LANGUAGES C CXX ASM)
 
 message("Build type: ${CMAKE_BUILD_TYPE}")
 
-set(BRICK6_VARIANT "premium" CACHE STRING "Firmware product variant")
-set_property(CACHE BRICK6_VARIANT PROPERTY STRINGS premium lowcost)
-
-if(NOT BRICK6_VARIANT STREQUAL "premium" AND NOT BRICK6_VARIANT STREQUAL "lowcost")
-    message(FATAL_ERROR "Unsupported BRICK6_VARIANT='${BRICK6_VARIANT}'. Expected 'premium' or 'lowcost'.")
-endif()
-
-message("BRICK6 variant: ${BRICK6_VARIANT}")
-
 set(FM_KERNEL_BENCH "0" CACHE STRING
     "Experimental DX7 algorithm-1 renderer: 0=MSFA, 1=sample-centric log kernel")
 set_property(CACHE FM_KERNEL_BENCH PROPERTY STRINGS 0 1)
@@ -76,7 +67,7 @@ add_subdirectory(cmake/stm32cubemx)
 
 # App / middleware
 set(APP_USB_STACK_SRC "")
-set(BRICK6_VARIANT_USB_INC_DIR "")
+set(BRICK6_BOARD_USB_INC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack")
 
 file(GLOB USB_DEVICE_LIB_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Device_Library/Core/Src/*.c"
@@ -186,20 +177,10 @@ set(MUTABLE_INSTRUMENTS_SRC
     ${MUTABLE_PLAITS_SPEECH_SRC} ${MUTABLE_BRAIDS_SRC}
     ${MUTABLE_STMLIB_DSP_SRC} ${MUTABLE_STMLIB_UTILS_SRC})
 
-set(BRICK6_VARIANT_DRIVER_INC_DIRS "")
-if(BRICK6_VARIANT STREQUAL "premium")
-    list(APPEND BRICK6_VARIANT_DRIVER_INC_DIRS
-        "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Drivers"
-        "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Src"
-        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Drivers")
-    set(BRICK6_VARIANT_USB_INC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/UsbStack")
-elseif(BRICK6_VARIANT STREQUAL "lowcost")
-    list(APPEND BRICK6_VARIANT_DRIVER_INC_DIRS
-        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Drivers"
-        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Src"
-        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack")
-    set(BRICK6_VARIANT_USB_INC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack")
-endif()
+set(BRICK6_BOARD_DRIVER_INC_DIRS
+    "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Drivers"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Src"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack")
 
 # --------------------------------------------------------------------------
 # Explicit BRICK execution-domain manifests
@@ -252,8 +233,7 @@ file(GLOB_RECURSE BRICK_FIRST_PARTY_INVENTORY CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/*.s" "${CMAKE_CURRENT_SOURCE_DIR}/Src/*.S"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/*.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/*.c" "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/*.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/*.c" "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/*.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/*.c" "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/*.cpp")
 list(FILTER BRICK_FIRST_PARTY_INVENTORY EXCLUDE REGEX "/Generated/")
 
 set(BRICK_DOMAIN_UNION ${DOMAIN_CONTROL} ${DOMAIN_STORAGE} ${DOMAIN_AUDIO} ${DOMAIN_CONTRACTS}
@@ -281,12 +261,7 @@ foreach(platform_source IN LISTS PLATFORM_H743)
     endif()
 endforeach()
 
-set(PLATFORM_H743_BUILD ${PLATFORM_H743_COMMON})
-if(BRICK6_VARIANT STREQUAL "premium")
-    list(APPEND PLATFORM_H743_BUILD ${PLATFORM_H743_PREMIUM})
-else()
-    list(APPEND PLATFORM_H743_BUILD ${PLATFORM_H743_LOWCOST})
-endif()
+set(PLATFORM_H743_BUILD ${PLATFORM_H743_COMMON} ${PLATFORM_H743_LOWCOST})
 set(DOMAIN_CONTROL_BUILD ${DOMAIN_CONTROL} ${USB_DEVICE_LIB_SRC} ${USB_HOST_LIB_SRC}
     ${FATFS_SRC} ${U8G2_SRC})
 set(DOMAIN_STORAGE_BUILD ${DOMAIN_STORAGE})
@@ -311,7 +286,7 @@ list(FILTER DOMAIN_CONTROL_CM4 INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
 # --------------------------------------------------------------------------
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/App
-    ${BRICK6_VARIANT_USB_INC_DIR}
+    ${BRICK6_BOARD_USB_INC_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Host_Library/Core/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Device_Library/Core/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Device_Library/Class/MIDI/Inc
@@ -328,7 +303,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/UI
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc/SD
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Inc
-    ${BRICK6_VARIANT_DRIVER_INC_DIRS}
+    ${BRICK6_BOARD_DRIVER_INC_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/U8g2
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS_DSP/Include
     ${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS_DSP/PrivateInclude
@@ -341,7 +316,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 set(CONTROL_CM4_INCLUDE_DIRS
     "${CMAKE_CURRENT_SOURCE_DIR}/App"
-    "${BRICK6_VARIANT_USB_INC_DIR}"
+    "${BRICK6_BOARD_USB_INC_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Host_Library/Core/Inc"
     "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Device_Library/Core/Inc"
     "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Device_Library/Class/MIDI/Inc"
@@ -364,7 +339,7 @@ set(CONTROL_CM4_INCLUDE_DIRS
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/UI"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/UI"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Inc"
-    ${BRICK6_VARIANT_DRIVER_INC_DIRS}
+    ${BRICK6_BOARD_DRIVER_INC_DIRS}
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/U8g2"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/STM32H7xx_HAL_Driver/Inc"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/STM32H7xx_HAL_Driver/Inc/Legacy"
@@ -373,15 +348,8 @@ set(CONTROL_CM4_INCLUDE_DIRS
     "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb"
 )
 
-if(BRICK6_VARIANT STREQUAL "premium")
-    set(CONTROL_CM4_VARIANT_DEFINE BRICK6_VARIANT_PREMIUM)
-    set(CONTROL_CM4_GENERATED_INC
-        "${CMAKE_CURRENT_SOURCE_DIR}/Board/Premium/Generated/Inc")
-else()
-    set(CONTROL_CM4_VARIANT_DEFINE BRICK6_VARIANT_LOWCOST)
-    set(CONTROL_CM4_GENERATED_INC
-        "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Generated/Inc")
-endif()
+set(CONTROL_CM4_GENERATED_INC
+    "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Generated/Inc")
 list(APPEND CONTROL_CM4_INCLUDE_DIRS "${CONTROL_CM4_GENERATED_INC}")
 
 set(CONTROL_CM4_STORAGE_SOURCES ${DOMAIN_STORAGE_BUILD})
@@ -463,18 +431,8 @@ target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
     "-Wl,--undefined=g_fx_audio_lofi_engine_build_id")
 
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
-    $<$<CONFIG:Debug>:DEBUG>
     FM_KERNEL_BENCH=${FM_KERNEL_BENCH}
 )
-
-if(BRICK6_VARIANT STREQUAL "premium")
-    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
-        BRICK6_VARIANT_PREMIUM
-        TLV320AIC3204_I2C_HANDLE=hi2c2
-    )
-elseif(BRICK6_VARIANT STREQUAL "lowcost")
-    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE BRICK6_VARIANT_LOWCOST)
-endif()
 
 # --------------------------------------------------------------------------
 # Compile options aligned with CubeIDE
@@ -489,8 +447,6 @@ target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
     -Wall
     --specs=nano.specs
 
-    $<$<CONFIG:Debug>:-Og>
-    $<$<CONFIG:Debug>:-g3>
     $<${BRICK6_RELEASE_LIKE_CONFIG}:-O1>
 
     $<$<AND:${BRICK6_RELEASE_LIKE_CONFIG},$<COMPILE_LANGUAGE:C>>:-fno-math-errno>
@@ -646,7 +602,7 @@ target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
     -mfpu=fpv5-d16
     -mfloat-abi=hard
     -mthumb
-    -T${CMAKE_CURRENT_SOURCE_DIR}/Board/$<IF:$<STREQUAL:${BRICK6_VARIANT},premium>,Premium,LowCost>/Generated/Linker/STM32H743IITX_FLASH.ld
+    -T${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Generated/Linker/STM32H743IITX_FLASH.ld
     --specs=nosys.specs
     --specs=nano.specs
     -Wl,-Map=${CMAKE_PROJECT_NAME}.map

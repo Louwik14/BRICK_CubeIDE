@@ -6,7 +6,6 @@ set(MX_Defines_Syms
 	USE_PWR_LDO_SUPPLY 
 	USE_HAL_DRIVER 
 	STM32H743xx
-    $<$<CONFIG:Debug>:DEBUG>
 )
 
 # STM32CubeMX generated include paths

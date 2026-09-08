@@ -15,9 +15,7 @@
 #include "Keyboard/keyboard_input.h"
 
 #include "App/Hall/hall_keymap.h"
-#include "Board/board_product.h"
 #include "Keyboard/kbd_chords_dict.h"
-#include "Keyboard/kbd_input_mapper.h"
 #include "Keyboard/keyboard_engine.h"
 #include "Keyboard/keyboard_params.h"
 #include "Keyboard/ui_keyboard_app.h"
@@ -90,12 +88,6 @@ static uint8_t keyboard_input_note_owner_pop(uint8_t note,
     *out_owner = g_keyboard_input_note_owner[note][index];
     g_keyboard_input_note_owner_count[note] = index;
     return 1U;
-}
-
-static uint8_t keyboard_input_has_separate_hall_keyboard(void)
-{
-    const board_product_capabilities_t *caps = board_product_capabilities();
-    return ((caps != 0) && (caps->has_separate_hall_keyboard != 0U)) ? 1U : 0U;
 }
 
 static uint8_t keyboard_input_scale_period(uint8_t scale)
@@ -427,19 +419,11 @@ void keyboard_input_init(void)
     };
 
     ui_keyboard_app_init(&sink);
-    kbd_input_mapper_init(keyboard_params_get_omnichord());
 }
 
 void keyboard_input_process_hall(uint8_t hall_index, bool pressed, uint8_t velocity)
 {
-    if (keyboard_input_has_separate_hall_keyboard() != 0U)
-    {
-        keyboard_input_process_lowcost_key(hall_index, pressed, velocity);
-        return;
-    }
-
-    ui_keyboard_app_set_velocity(velocity);
-    kbd_input_mapper_process((uint8_t)(hall_index + 1U), pressed);
+    keyboard_input_process_lowcost_key(hall_index, pressed, velocity);
 }
 
 void keyboard_input_process_hall_timed(uint8_t hall_index, bool pressed,

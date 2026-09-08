@@ -3,11 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#if defined(BRICK6_VARIANT_LOWCOST)
 #define BOARD_LED_TRANSPORT_COUNT 21U
-#else
-#define BOARD_LED_TRANSPORT_COUNT 25U
-#endif
 
 void board_led_transport_init(void);
 bool board_led_transport_busy(void);

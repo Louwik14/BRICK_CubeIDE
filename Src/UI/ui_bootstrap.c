@@ -1,6 +1,5 @@
 #include "ui_bootstrap.h"
 
-#include "pages/ui_page_debug_hall.h"
 #include "pages/ui_page_calibration.h"
 #include "pages/ui_page_template_env.h"
 #include "pages/ui_page_template_tone.h"
@@ -41,7 +40,6 @@ void ui_bootstrap_init(void)
      * Register pages once at boot against their stable IDs. Registration order
      * is intentionally irrelevant to the navigation rule table.
      */
-    ui_page_manager_register(UI_PAGE_HALL_KEY_DEBUG, &g_ui_page_debug_hall);
     ui_page_manager_register(UI_PAGE_CALIBRATION, &g_ui_page_calibration);
     ui_page_manager_register(UI_PAGE_USER_CALIBRATION, &g_ui_page_user_calibration);
     ui_page_manager_register(UI_PAGE_TEMPLATE_ENV, &g_ui_page_template_env);

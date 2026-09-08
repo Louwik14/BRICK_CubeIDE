@@ -1,7 +1,5 @@
 #include "App/Hall/hall_keymap.h"
 
-#include "Board/board_product.h"
-
 #define HALL_KEY_INVALID 0xFFU
 
 #define K_WHITE(id, white, chroma) { id, HALL_KEY_KIND_WHITE, white, 0U, chroma, 1U }
@@ -32,11 +30,6 @@ static const hall_key_metadata_t g_lowcost_key_metadata[HALL_KEY_COUNT] = {
     K_WHITE(21U, 13U, 21U), /* D3 */
     K_BLACK(22U, 10U, 22U), /* D#3 */
     K_WHITE(23U, 14U, 23U), /* E3 */
-};
-
-static const uint8_t g_premium_key_from_mux[2U][8U] = {
-    { 5U,  6U,  7U,  4U, 0U,  3U,  1U,  2U },
-    { 13U, 14U, 15U, 12U, 8U, 11U, 9U, 10U },
 };
 
 static const uint8_t g_lowcost_key_from_mux[3U][8U] = {
@@ -77,12 +70,6 @@ _Static_assert((LOWCOST_WHITE_KEY_MASK | LOWCOST_BLACK_KEY_MASK) == LOWCOST_KEY_
 _Static_assert((LOWCOST_WHITE_KEY_MASK & LOWCOST_BLACK_KEY_MASK) == 0U,
                "Low-cost Hall keyboard white/black key sets must not overlap");
 
-static uint8_t hall_keymap_is_lowcost(void)
-{
-    const board_product_capabilities_t *caps = board_product_capabilities();
-    return ((caps != 0) && (caps->has_separate_hall_keyboard != 0U)) ? 1U : 0U;
-}
-
 uint8_t hall_keymap_key_for_mux_channel(uint8_t mux_index, uint8_t channel, uint8_t *out_key)
 {
     if ((out_key == 0) || (channel >= 8U))
@@ -90,23 +77,12 @@ uint8_t hall_keymap_key_for_mux_channel(uint8_t mux_index, uint8_t channel, uint
         return 0U;
     }
 
-    if (hall_keymap_is_lowcost() != 0U)
-    {
-        if (mux_index >= 3U)
-        {
-            return 0U;
-        }
-        *out_key = g_lowcost_key_from_mux[mux_index][channel];
-        return (*out_key < HALL_KEY_COUNT) ? 1U : 0U;
-    }
-
-    if (mux_index >= 2U)
+    if (mux_index >= 3U)
     {
         return 0U;
     }
-
-    *out_key = g_premium_key_from_mux[mux_index][channel];
-    return (*out_key < HALL_UI_LANE_COUNT) ? 1U : 0U;
+    *out_key = g_lowcost_key_from_mux[mux_index][channel];
+    return (*out_key < HALL_KEY_COUNT) ? 1U : 0U;
 }
 
 uint8_t hall_keymap_metadata(uint8_t key, hall_key_metadata_t *out_meta)
@@ -114,17 +90,6 @@ uint8_t hall_keymap_metadata(uint8_t key, hall_key_metadata_t *out_meta)
     if ((out_meta == 0) || (key >= HALL_KEY_COUNT))
     {
         return 0U;
-    }
-
-    if (hall_keymap_is_lowcost() == 0U)
-    {
-        out_meta->logical_key_id = key;
-        out_meta->kind = HALL_KEY_KIND_WHITE;
-        out_meta->white_index = (uint8_t)(key + 1U);
-        out_meta->black_index = 0U;
-        out_meta->chromatic_position = key;
-        out_meta->valid = (key < HALL_UI_LANE_COUNT) ? 1U : 0U;
-        return out_meta->valid;
     }
 
     *out_meta = g_lowcost_key_metadata[key];

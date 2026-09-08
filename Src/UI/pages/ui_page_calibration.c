@@ -32,17 +32,11 @@ static uint8_t g_save_done = 0U;
 static uint32_t g_cal_done_tick = 0U;
 static uint8_t g_user_save_done = 0U;
 static uint32_t g_user_message_tick = 0U;
-#if defined(BRICK6_VARIANT_LOWCOST)
 static uint8_t g_calibration_return_page = UI_PAGE_TEMPLATE_CFG;
-#else
-static uint8_t g_calibration_return_page = UI_PAGE_TEMPLATE_ENV;
-#endif
 static uint8_t g_user_calibration_return_page = UI_PAGE_TEMPLATE_ENV;
-#if defined(BRICK6_VARIANT_LOWCOST)
 static uint8_t g_lowcost_cal_prev_done[HALL_KEY_COUNT];
 static uint8_t g_lowcost_cal_flash_key = LOWCOST_CAL_NO_FLASH_KEY;
 static uint32_t g_lowcost_cal_flash_start_tick = 0U;
-#endif
 
 static const char *ui_page_user_calibration_stage_label(hall_user_calibration_stage_t stage)
 {
@@ -69,14 +63,12 @@ static void ui_page_calibration_enter(void)
     hall_calibration_start();
     g_save_done = 0U;
     g_cal_done_tick = 0U;
-#if defined(BRICK6_VARIANT_LOWCOST)
     for (uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
     {
         g_lowcost_cal_prev_done[i] = 0U;
     }
     g_lowcost_cal_flash_key = LOWCOST_CAL_NO_FLASH_KEY;
     g_lowcost_cal_flash_start_tick = 0U;
-#endif
 }
 
 static void ui_page_calibration_leave(void)
@@ -92,7 +84,6 @@ static void ui_page_calibration_tick(void)
 {
     hall_calibration_process();
 
-#if defined(BRICK6_VARIANT_LOWCOST)
     for (uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
     {
         const uint8_t done = hall_calibration_is_key_done(i);
@@ -111,7 +102,6 @@ static void ui_page_calibration_tick(void)
     {
         g_lowcost_cal_flash_key = LOWCOST_CAL_NO_FLASH_KEY;
     }
-#endif
 
     if (hall_calibration_is_done() == 0U)
     {
@@ -128,15 +118,10 @@ static void ui_page_calibration_tick(void)
 
     if ((HAL_GetTick() - g_cal_done_tick) >= CAL_OK_DISPLAY_TIME_MS)
     {
-#if defined(BRICK6_VARIANT_LOWCOST)
         ui_page_set(g_calibration_return_page);
-#else
-        ui_navigation_request_ensemble_page(UI_PAGE_TEMPLATE_ENV);
-#endif
     }
 }
 
-#if defined(BRICK6_VARIANT_LOWCOST)
 static uint8_t ui_page_calibration_flash_fill_visible(uint8_t key)
 {
     uint32_t elapsed;
@@ -298,54 +283,10 @@ static void ui_page_calibration_render_lowcost(void)
         drv_display_draw_text(36U, 57U, "HOLD KEYS");
     }
 }
-#endif
 
 static void ui_page_calibration_render(void)
 {
-#if defined(BRICK6_VARIANT_LOWCOST)
     ui_page_calibration_render_lowcost();
-#else
-    drv_display_draw_text(0U, 0U, "CALIBRATION");
-
-    for (uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
-    {
-        const uint8_t col = i % CAL_GRID_COLS;
-        const uint8_t row = i / CAL_GRID_COLS;
-        const uint8_t x = CAL_GRID_X + (col * CAL_CELL_W);
-        const uint8_t y = CAL_GRID_Y + (row * CAL_CELL_H);
-
-        const uint8_t progress = hall_calibration_get_count(i);
-        const uint8_t done = hall_calibration_is_key_done(i);
-
-        drv_display_draw_rect(x, y, CAL_CELL_W - 1U, CAL_CELL_H - 1U);
-
-        if (done != 0U)
-        {
-            drv_display_draw_text((uint8_t)(x + 2U), (uint8_t)(y + 7U), "OK");
-        }
-        else if (progress > 0U)
-        {
-            const uint8_t fill_h =
-                (uint8_t)(((uint16_t)(CAL_CELL_H - 2U) * progress) / 100U);
-
-            drv_display_fill_rect(
-                (uint8_t)(x + 1U),
-                (uint8_t)(y + (CAL_CELL_H - 1U - fill_h)),
-                (uint8_t)(CAL_CELL_W - 2U),
-                fill_h
-            );
-        }
-    }
-
-    if (hall_calibration_is_done() != 0U)
-    {
-        drv_display_draw_text(48U, 58U, "CAL OK");
-    }
-    else
-    {
-        drv_display_draw_text(30U, 58U, "HOLD KEYS");
-    }
-#endif
 }
 
 static void ui_page_user_calibration_enter(void)
@@ -379,9 +320,7 @@ static void ui_page_user_calibration_tick(void)
 
         if (hall_user_calibration_was_successful() != 0U)
         {
-#if defined(BRICK6_VARIANT_LOWCOST)
             hall_set_velocity_profile((uint8_t)HALL_VEL_PROFILE_USER);
-#endif
             hall_calibration_save();
             g_user_save_done = 1U;
         }
@@ -394,11 +333,7 @@ static void ui_page_user_calibration_tick(void)
 
     if (g_user_save_done != 0U)
     {
-#if defined(BRICK6_VARIANT_LOWCOST)
         ui_page_set(g_user_calibration_return_page);
-#else
-        ui_navigation_request_ensemble_page(UI_PAGE_TEMPLATE_ENV);
-#endif
     }
     else
     {
@@ -482,11 +417,7 @@ void ui_page_calibration_open(uint8_t return_page_id)
 {
     g_calibration_return_page = (return_page_id < UI_PAGE_COUNT)
         ? return_page_id
-#if defined(BRICK6_VARIANT_LOWCOST)
         : UI_PAGE_TEMPLATE_CFG;
-#else
-        : UI_PAGE_TEMPLATE_ENV;
-#endif
     ui_page_set(UI_PAGE_CALIBRATION);
 }
 

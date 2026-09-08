@@ -9,82 +9,17 @@
             "toolchainFile": "${sourceDir}/cmake/gcc-arm-none-eabi.cmake"
         },
         {
-            "name": "Debug",
-            "inherits": "common-ninja-arm",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug",
-                "BRICK6_VARIANT": "lowcost"
-            }
-        },
-        {
-            "name": "DebugDiag",
-            "inherits": "common-ninja-arm",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_C_FLAGS_DEBUG": "-g3",
-                "CMAKE_CXX_FLAGS_DEBUG": "-g3",
-                "BRICK6_VARIANT": "lowcost"
-            }
-        },
-        {
             "name": "Release",
             "inherits": "common-ninja-arm",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release",
-                "BRICK6_VARIANT": "lowcost"
-            }
-        },
-        {
-            "name": "Premium",
-            "inherits": "common-ninja-arm",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release",
-                "BRICK6_VARIANT": "premium"
-            }
-        },
-        {
-            "name": "Calibration32Chunk16",
-            "inherits": "common-ninja-arm",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release",
-                "BRICK6_VARIANT": "lowcost",
-                "BRICK6_STREAM_READ_CHUNK_KIB": "16"
-            }
-        },
-        {
-            "name": "Calibration32Chunk32",
-            "inherits": "common-ninja-arm",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release",
-                "BRICK6_VARIANT": "lowcost",
-                "BRICK6_STREAM_READ_CHUNK_KIB": "32"
+                "CMAKE_BUILD_TYPE": "Release"
             }
         }
     ],
     "buildPresets": [
         {
-            "name": "Debug",
-            "configurePreset": "Debug"
-        },
-        {
-            "name": "DebugDiag",
-            "configurePreset": "DebugDiag"
-        },
-        {
             "name": "Release",
             "configurePreset": "Release"
-        },
-        {
-            "name": "Premium",
-            "configurePreset": "Premium"
-        },
-        {
-            "name": "Calibration32Chunk16",
-            "configurePreset": "Calibration32Chunk16"
-        },
-        {
-            "name": "Calibration32Chunk32",
-            "configurePreset": "Calibration32Chunk32"
         }
     ]
 }

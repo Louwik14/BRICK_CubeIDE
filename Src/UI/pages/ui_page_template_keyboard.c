@@ -12,11 +12,7 @@
 
 static const ui_template_family_t g_ui_template_keyboard_family = {
     .family_title = "KEYBOARD",
-#if defined(BRICK6_VARIANT_LOWCOST)
     .nav_labels = { "PLAY", "MODE", "VEL", "-" },
-#else
-    .nav_labels = { "PLAY", "MODE", "-", "-" },
-#endif
     .subpages = {
         {
             .title = "PLAY",
@@ -27,11 +23,7 @@ static const ui_template_family_t g_ui_template_keyboard_family = {
             .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
         {
-#if defined(BRICK6_VARIANT_LOWCOST)
             .title = "VELOCITY",
-#else
-            .title = "-",
-#endif
             .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } },
         },
         {
@@ -61,7 +53,6 @@ static ui_template_page_state_t g_ui_template_keyboard_state = {
     .has_visited = 0U,
 };
 
-#if defined(BRICK6_VARIANT_LOWCOST)
 static uint8_t g_ui_keyboard_velocity_settings_dirty;
 static uint32_t g_ui_keyboard_velocity_settings_dirty_since;
 
@@ -70,7 +61,6 @@ static void ui_page_template_keyboard_mark_settings_dirty(void)
     g_ui_keyboard_velocity_settings_dirty = 1U;
     g_ui_keyboard_velocity_settings_dirty_since = HAL_GetTick();
 }
-#endif
 
 static uint8_t ui_page_template_keyboard_virtual_slot_text(uint8_t slot,
                                                             char *out_name,
@@ -94,7 +84,6 @@ static uint8_t ui_page_template_keyboard_virtual_slot_text(uint8_t slot,
         if (slot == 2U) { (void)snprintf(out_name,out_name_len,"MONO LAST"); (void)snprintf(out_value,out_value_len,"%s",keyboard_runtime_get_mono_last()?"ON":"OFF"); return 1U; }
         return 0U;
     }
-#if defined(BRICK6_VARIANT_LOWCOST)
     static const char *const profile_labels[HALL_VEL_PROFILE_COUNT] = { "DEFAULT", "USER" };
     static const char *const mode_labels[HALL_VEL_MODE_USER] = { "DV", "TIME", "ENERGY" };
     static const char *const curve_labels[HALL_VEL_CURVE_COUNT] = {
@@ -134,12 +123,8 @@ static uint8_t ui_page_template_keyboard_virtual_slot_text(uint8_t slot,
         default:
             return 0U;
     }
-#else
-    return 0U;
-#endif
 }
 
-#if defined(BRICK6_VARIANT_LOWCOST)
 static void ui_page_template_keyboard_leave(void)
 {
     if (g_ui_keyboard_velocity_settings_dirty != 0U)
@@ -160,7 +145,6 @@ static void ui_page_template_keyboard_tick(void)
         g_ui_keyboard_velocity_settings_dirty = 0U;
     }
 }
-#endif
 
 static void ui_page_template_keyboard_handle_event(const ui_event_t *ev)
 {
@@ -205,7 +189,6 @@ uint8_t ui_page_template_keyboard_handle_encoder(uint8_t encoder, int16_t delta)
         else if (encoder == 2U) keyboard_runtime_set_mono_last(delta>0);
         return 1U;
     }
-#if defined(BRICK6_VARIANT_LOWCOST)
     if (g_ui_template_keyboard_state.active_subpage != 2U)
     {
         return 0U;
@@ -262,26 +245,13 @@ uint8_t ui_page_template_keyboard_handle_encoder(uint8_t encoder, int16_t delta)
     }
 
     return 1U;
-#else
-    (void)encoder;
-    (void)delta;
-    return 0U;
-#endif
 }
 
 const ui_page_t g_ui_page_template_keyboard = {
     .enter = ui_template_page_enter,
-#if defined(BRICK6_VARIANT_LOWCOST)
     .leave = ui_page_template_keyboard_leave,
-#else
-    .leave = ui_template_page_leave,
-#endif
     .handle_event = ui_page_template_keyboard_handle_event,
-#if defined(BRICK6_VARIANT_LOWCOST)
     .tick = ui_page_template_keyboard_tick,
-#else
-    .tick = ui_template_page_tick,
-#endif
     .sync_active_context = ui_template_page_sync_active_track_context,
     .render = ui_template_page_render,
     .context = &g_ui_template_keyboard_state,

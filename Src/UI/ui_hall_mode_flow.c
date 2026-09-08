@@ -1,6 +1,5 @@
 #include "ui_hall_mode_flow.h"
 
-#include "Board/board_product.h"
 #include "Track/entity_topology.h"
 #include "Storage/patch_product.h"
 #include "stm32h7xx_hal.h"
@@ -33,14 +32,6 @@ static ui_hall_mode_t g_lowcost_rec_return_mode = UI_HALL_MODE_SEQ;
 static uint8_t g_lowcost_rec_return_valid;
 
 static void ui_hall_mode_flow_leave_lowcost_modal_page(void);
-
-static uint8_t ui_hall_mode_flow_has_lowcost_step_modes(void)
-{
-    const board_product_capabilities_t *caps = board_product_capabilities();
-    return ((caps != 0)
-            && (caps->has_step_binary_lanes != 0U)
-            && (caps->has_separate_hall_keyboard != 0U)) ? 1U : 0U;
-}
 
 static void ui_hall_mode_flow_activate_mode(ui_hall_mode_t target_mode,
                                             uint8_t target_page,
@@ -141,11 +132,6 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
                                                            uint32_t mode_tap_ms[UI_HALL_MODE_COUNT],
                                                            uint8_t hall_note_suppressed[HALL_UI_LANE_COUNT])
 {
-    if (ui_hall_mode_flow_has_lowcost_step_modes() == 0U)
-    {
-        return 0U;
-    }
-
     hall_note_suppressed[hall] = 1U;
     g_patch_pending.active = 0U;
 
