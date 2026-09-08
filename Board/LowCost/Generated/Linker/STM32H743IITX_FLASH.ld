@@ -361,7 +361,7 @@ SECTIONS
   ASSERT(SIZEOF(.ram_d3_restore_ipc) <= 64,
          "Restore IPC exceeds its 64-byte contract")
 
-  .ram_d3_ipc (NOLOAD) :
+  .ram_d3_ipc ORIGIN(RAM_D3) + 32K + SIZEOF(.ram_d3_restore_ipc) (NOLOAD) :
   {
     . = ALIGN(32);
     *(.ram_d3_ipc)

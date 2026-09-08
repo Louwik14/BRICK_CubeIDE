@@ -27,24 +27,22 @@
 #endif
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm32h7xx.h"
-#include "stm32h7xx_hal.h"
-#include "usbd_def.h"
+#include <stdint.h>
 
 /* USER CODE BEGIN INCLUDE */
 
 /* USER CODE END INCLUDE */
 
-/** @addtogroup USBD_OTG_DRIVER
+/** @addtogroup BRICK6_TINYUSB_DEVICE
   * @{
   */
 
-/** @defgroup USBD_DEVICE USBD_DEVICE
+/** @defgroup BRICK6_TINYUSB_DEVICE_API BRICK6_TINYUSB_DEVICE_API
   * @brief Device file for Usb otg low level driver.
   * @{
   */
 
-/** @defgroup USBD_DEVICE_Exported_Variables USBD_DEVICE_Exported_Variables
+/** @defgroup BRICK6_TINYUSB_DEVICE_STATE BRICK6_TINYUSB_DEVICE_STATE
   * @brief Public variables.
   * @{
   */
@@ -69,13 +67,13 @@
   * @}
   */
 
-/** @defgroup USBD_DEVICE_Exported_FunctionsPrototype USBD_DEVICE_Exported_FunctionsPrototype
+/** @defgroup BRICK6_TINYUSB_DEVICE_FUNCTIONS BRICK6_TINYUSB_DEVICE_FUNCTIONS
   * @brief Declaration of public functions for Usb device.
   * @{
   */
 
 /** USB Device initialization function. */
-void MX_USB_DEVICE_Init(void);
+/* Device startup is owned by usb_role_manager. */
 
 /*
  * -- Insert functions declaration here --
@@ -84,6 +82,10 @@ void MX_USB_DEVICE_Init(void);
 uint8_t usb_device_start(void);
 uint8_t usb_device_stop(void);
 uint8_t usb_device_is_started(void);
+uint8_t usb_device_is_ready(void);
+void usb_device_process(void);
+void usb_device_irq(void);
+uint16_t usb_device_send_packets(const uint8_t *packets, uint16_t bytes_len);
 
 /* USER CODE END FD */
 /**

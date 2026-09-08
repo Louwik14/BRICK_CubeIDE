@@ -71,7 +71,6 @@ SEQ_STATE_D2 static control_music_window_internal_t
 SEQ_STATE_D2 static control_music_window_external_t
     g_control_music_window_external;
 static uint64_t g_control_music_window_first;
-static uint64_t g_control_music_first_unpublished;
 static uint16_t g_control_music_window_frames;
 static uint16_t g_control_music_window_internal_limit;
 static uint16_t g_control_music_window_external_limit;
@@ -105,8 +104,7 @@ uint8_t control_music_output_begin_window(uint64_t first_sample,
             || (g_control_music_window_prepared != 0U) || (frames == 0U)
             || (frames > CONTROL_MUSIC_WINDOW_MAX_FRAMES))
         return 0U;
-    if (first_sample < g_control_music_first_unpublished)
-        first_sample = g_control_music_first_unpublished;
+    first_sample = control_rt_first_unpublished_sample(first_sample);
     g_control_music_window_first = first_sample;
     g_control_music_window_frames = frames;
     g_control_music_window_internal_limit =
@@ -131,8 +129,7 @@ uint8_t control_music_output_begin_window(uint64_t first_sample,
 
 uint64_t control_music_output_first_unpublished_sample(uint64_t audio_sample)
 {
-    return (g_control_music_first_unpublished > audio_sample)
-        ? g_control_music_first_unpublished : audio_sample;
+    return control_rt_first_unpublished_sample(audio_sample);
 }
 
 void control_music_output_abort_window(void)
@@ -202,6 +199,12 @@ static uint8_t control_music_output_stage(const control_music_action_t *action)
 
 static uint8_t control_music_output_publish_batch(
     const control_music_action_t *actions, uint16_t count);
+static int8_t control_music_output_find_oldest(brick_entity_id_t entity_id,
+                                               uint8_t excluded_mask);
+static uint8_t control_music_output_cause_is_external(
+    uint32_t causal_source_id);
+static void control_music_output_send_midi_off(
+    const control_music_output_t *output);
 
 static uint8_t control_music_output_publish(const control_music_action_t *action)
 {
@@ -328,8 +331,8 @@ uint8_t control_music_output_finalize_window(void)
     memcpy(g_control_music_outputs, g_control_music_outputs_staged,
            sizeof(g_control_music_outputs));
     g_control_music_output_age = g_control_music_output_age_staged;
-    g_control_music_first_unpublished =
-        g_control_music_window_first + g_control_music_window_frames;
+    control_rt_advance_first_unpublished_sample(
+        g_control_music_window_first + g_control_music_window_frames);
     g_control_music_window_prepared = 0U;
     return 1U;
 }
@@ -469,6 +472,59 @@ static uint8_t control_music_output_live_count(brick_entity_id_t entity_id)
     for (uint8_t i = 0U; i < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++i)
         count += (control_music_output_ledger()[entity_id][i].alive != 0U) ? 1U : 0U;
     return count;
+}
+
+uint8_t control_music_output_trim_to_limit(brick_entity_id_t entity_id,
+                                           uint8_t limit)
+{
+    if ((entity_id >= BRICK_ENTITY_CAPACITY)
+            || (limit > CONTROL_MUSIC_OUTPUTS_PER_ENTITY))
+        return 0U;
+    const uint8_t live_count = control_music_output_live_count(entity_id);
+    if (live_count <= limit)
+        return 1U;
+
+    uint64_t due_sample = 0U;
+    if (g_control_music_window_active != 0U)
+        due_sample = g_control_music_window_first;
+    else if ((g_control_music_window_prepared != 0U)
+            || (control_rt_resolve_asap_sample(0U, &due_sample) == 0U))
+        return 0U;
+
+    control_music_action_t stops[CONTROL_MUSIC_OUTPUTS_PER_ENTITY];
+    uint8_t victims[CONTROL_MUSIC_OUTPUTS_PER_ENTITY];
+    uint8_t excluded_mask = 0U;
+    const uint8_t stop_count = (uint8_t)(live_count - limit);
+    for (uint8_t i = 0U; i < stop_count; ++i)
+    {
+        const int8_t victim = control_music_output_find_oldest(entity_id,
+                                                               excluded_mask);
+        if (victim < 0)
+            return 0U;
+        victims[i] = (uint8_t)victim;
+        excluded_mask |= (uint8_t)(1U << victims[i]);
+        const control_music_output_t *const output =
+            &control_music_output_ledger()[entity_id][victims[i]];
+        stops[i] = (control_music_action_t){
+            .due_sample = due_sample,
+            .output_id = output->output_id,
+            .entity_id = entity_id,
+            .kind = (uint8_t)(CONTROL_MUSIC_ACTION_STOP
+                | (control_music_output_cause_is_external(
+                    output->causal_source_id)
+                    ? CONTROL_MUSIC_ACTION_EXTERNAL_FLAG : 0U)),
+            .note = output->note
+        };
+    }
+    if (control_music_output_publish_batch(stops, stop_count) == 0U)
+        return 0U;
+    for (uint8_t i = 0U; i < stop_count; ++i)
+    {
+        control_music_output_send_midi_off(
+            &control_music_output_ledger()[entity_id][victims[i]]);
+        control_music_output_mark_dead(entity_id, victims[i]);
+    }
+    return 1U;
 }
 
 static int8_t control_music_output_find_free(brick_entity_id_t entity_id)

@@ -945,12 +945,12 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                     + ((offset_q16 + 0x8000ULL) >> 16);
                 if (on_sample < commit_floor)
                 {
-                    /* A newly opened source may request a negative lead before
-                     * the first mutable sample. Preserve the occurrence at the
-                     * causal horizon; already-published sources stay skipped. */
+                    /* A boundary may be discovered after CONTROL had to catch
+                     * its publication cursor up to AUDIO.  Its first occurrence
+                     * has never been published and must remain an immediate
+                     * occurrence, not disappear behind the commit floor. */
                     if ((source->committed_until_sample == 0U)
-                            && (offset_q16 == 0U)
-                            && (source->step_origin_sample >= commit_floor))
+                            && (offset_q16 == 0U))
                         on_sample = commit_floor;
                     else
                     {
@@ -1040,14 +1040,50 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                     &g_seq_play_active_occurrence[(uint16_t)active_index];
                 const uint32_t replaced_output_id =
                     (active->active != 0U) ? active->output_id : 0U;
-                if ((replaced_output_id != 0U)
-                        && (seq_note_trace_target(source->source_track,
-                                                  source->source_step) != 0U))
-                    seq_note_trace_record(
-                        SEQ_NOTE_TRACE_VICTIM_OFF_MISSING,
-                        source->source_track, source->source_step,
-                        on_sample, active->deadline_sample,
-                        replaced_output_id, 0U);
+                if (replaced_output_id != 0U)
+                {
+                    uint8_t victim_off_present = 0U;
+                    uint64_t victim_off_sample = on_sample;
+                    for (uint16_t event_index = 0U;
+                         event_index < g_seq_play_imminent_count;
+                         ++event_index)
+                    {
+                        seq_play_scheduler_evt_t *const pending =
+                            &g_seq_play_imminent[event_index];
+                        if ((pending->type
+                                != (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF)
+                                || (pending->event_token
+                                    != replaced_output_id))
+                            continue;
+                        if (pending->due_sample_time > on_sample)
+                            pending->due_sample_time = on_sample;
+                        victim_off_sample = pending->due_sample_time;
+                        victim_off_present = 1U;
+                        break;
+                    }
+                    if (victim_off_present == 0U)
+                    {
+                        g_seq_play_imminent[g_seq_play_imminent_count++] =
+                            (seq_play_scheduler_evt_t){
+                                .due_sample_time = on_sample,
+                                .track = active->track,
+                                .note = active->note,
+                                .velocity = 0U,
+                                .type = (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF,
+                                .generation = active->generation,
+                                .track_generation =
+                                    (uint8_t)active->track_generation,
+                                .event_token = replaced_output_id
+                            };
+                    }
+                    if (seq_note_trace_target(source->source_track,
+                                              source->source_step) != 0U)
+                        seq_note_trace_record(
+                            SEQ_NOTE_TRACE_VICTIM_OFF_GENERATED,
+                            source->source_track, source->source_step,
+                            victim_off_sample, active->deadline_sample,
+                            replaced_output_id, 0U);
+                }
                 const uint32_t output_id = seq_play_scheduler_alloc_event_token();
                 *active = (seq_play_active_occurrence_t){
                     .active = 1U,

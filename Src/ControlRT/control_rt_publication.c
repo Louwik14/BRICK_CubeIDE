@@ -21,6 +21,7 @@ typedef struct
 
 CONTROL_STATE_SDRAM static control_audio_horizon_t g_control_audio_horizon;
 static volatile uint32_t g_control_audio_horizon_capacity_failure_count;
+static uint64_t g_control_rt_first_unpublished_sample;
 
 void control_rt_publication_init(void)
 {
@@ -31,6 +32,7 @@ void control_rt_publication_init(void)
     g_control_audio_horizon.first_sample = 0U;
     g_control_audio_horizon.active = 0U;
     g_control_audio_horizon_capacity_failure_count = 0U;
+    g_control_rt_first_unpublished_sample = 0U;
 }
 
 uint8_t control_rt_publication_horizon_active(void)
@@ -43,6 +45,31 @@ uint8_t control_rt_now_sample(uint64_t *out_sample_time)
     return live_clock_read_audio_sample(out_sample_time) ? 1U : 0U;
 }
 
+uint64_t control_rt_first_unpublished_sample(uint64_t minimum_sample)
+{
+    return (g_control_rt_first_unpublished_sample > minimum_sample)
+        ? g_control_rt_first_unpublished_sample : minimum_sample;
+}
+
+void control_rt_advance_first_unpublished_sample(uint64_t first_sample)
+{
+    if (first_sample > g_control_rt_first_unpublished_sample)
+        g_control_rt_first_unpublished_sample = first_sample;
+}
+
+uint8_t control_rt_resolve_asap_sample(uint64_t minimum_sample,
+                                       uint64_t *out_sample_time)
+{
+    uint64_t sample_time = 0U;
+    if ((out_sample_time == NULL)
+            || (control_rt_now_sample(&sample_time) == 0U))
+        return 0U;
+    if (sample_time < minimum_sample)
+        sample_time = minimum_sample;
+    *out_sample_time = control_rt_first_unpublished_sample(sample_time);
+    return 1U;
+}
+
 uint8_t control_rt_capture_tick_to_sample(uint32_t capture_tick,
                                           uint64_t minimum_sample,
                                           uint64_t *out_sample_time)
@@ -52,6 +79,7 @@ uint8_t control_rt_capture_tick_to_sample(uint32_t capture_tick,
         return 0U;
     if (sample_time < minimum_sample)
         sample_time = minimum_sample;
+    sample_time = control_rt_first_unpublished_sample(sample_time);
     if (out_sample_time != NULL)
         *out_sample_time = sample_time;
     return (out_sample_time != NULL) ? 1U : 0U;
@@ -62,6 +90,8 @@ uint8_t control_rt_publication_begin_horizon(uint64_t first_sample,
 {
     if ((g_control_audio_horizon.active != 0U) || (frames == 0U)
             || (frames > CONTROL_AUDIO_MAX_PUBLICATION_HORIZON_FRAMES))
+        return 0U;
+    if (first_sample < g_control_rt_first_unpublished_sample)
         return 0U;
     const uint16_t free = control_audio_fifo_control_free();
     if (free < CONTROL_AUDIO_FIFO_CONTRACT_BURST)
@@ -145,6 +175,9 @@ uint8_t control_rt_publication_commit_horizon(void)
             : 0U;
     if (accepted != 0U)
     {
+        control_rt_advance_first_unpublished_sample(
+            g_control_audio_horizon.first_sample
+                + g_control_audio_horizon.frames);
         for (uint16_t i = 0U; i < ordered_count; ++i)
         {
             const control_audio_command_t *const command =
@@ -177,19 +210,25 @@ uint8_t control_rt_publication_commit_horizon(void)
 
 static uint8_t control_rt_publish(const control_audio_command_t *command)
 {
-    return (g_control_audio_horizon.active != 0U)
-        ? ((control_rt_publication_free() != 0U)
-            ? control_rt_publication_stage(command, 1U) : 0U)
-        : control_audio_fifo_publish(command);
+    return control_rt_publish_batch_scheduled(command, 1U);
 }
 
 uint8_t control_rt_publish_batch_scheduled(
     const control_audio_command_t *commands, uint16_t count)
 {
-    return (g_control_audio_horizon.active != 0U)
+    if ((g_control_audio_horizon.active == 0U)
+            && (commands != NULL) && (count != 0U)
+            && (commands[0].effective_sample_time
+                < g_control_rt_first_unpublished_sample))
+        return 0U;
+    const uint8_t accepted = (g_control_audio_horizon.active != 0U)
         ? ((control_rt_publication_free() >= count)
             ? control_rt_publication_stage(commands, count) : 0U)
         : control_audio_fifo_publish_batch(commands, count);
+    if ((accepted != 0U) && (g_control_audio_horizon.active == 0U))
+        control_rt_advance_first_unpublished_sample(
+            commands[count - 1U].effective_sample_time);
+    return accepted;
 }
 
 uint8_t control_rt_publish_batch_captured(control_audio_command_t *commands,
@@ -214,7 +253,7 @@ uint8_t control_rt_publish_batch_now(control_audio_command_t *commands,
     uint64_t sample_time = 0U;
     if ((commands == NULL) || (count == 0U)
             || (count > CONTROL_AUDIO_FIFO_CONTRACT_BURST)
-            || !control_rt_now_sample(&sample_time))
+            || !control_rt_resolve_asap_sample(0U, &sample_time))
         return 0U;
     for (uint16_t i = 0U; i < count; ++i)
         commands[i].effective_sample_time = sample_time;

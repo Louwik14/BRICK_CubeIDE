@@ -58,12 +58,11 @@ static uint8_t track_runtime_publish_program(brick_entity_id_t entity_id,
     if ((ctx == NULL) || (entity_id >= BRICK_ENTITY_CAPACITY))
         return 0U;
     uint64_t due_sample = 0U;
-    if (control_rt_now_sample(&due_sample) == 0U)
+    if (control_rt_resolve_asap_sample(0U, &due_sample) == 0U)
     {
         Error_Handler();
         return 0U;
     }
-    due_sample = control_music_output_first_unpublished_sample(due_sample);
     entity_topology_descriptor_t topology;
     uint8_t topology_flags = 0U;
     if (entity_topology_get(entity_id, &topology) != 0U)
@@ -81,6 +80,19 @@ static uint8_t track_runtime_publish_program(brick_entity_id_t entity_id,
         .type = ctx->type,
         .flags = (uint8_t)(ctx->flags | topology_flags)
     };
+    const uint8_t has_polyphony = (uint8_t)(
+        (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
+        || ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
+            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI)));
+    polyphony_control_state_t polyphony;
+    if ((has_polyphony != 0U)
+            && (!polyphony_control_capture(entity_id, &polyphony)
+                || !control_music_output_trim_to_limit(
+                    entity_id, polyphony.voice_count)))
+    {
+        Error_Handler();
+        return 0U;
+    }
     /* PROGRAM only changes the renderer.  The NOTE ledger remains authoritative
      * even while the selected renderer cannot render a live output. */
     if (control_rt_publish_program(entity_id,
@@ -95,6 +107,12 @@ static uint8_t track_runtime_publish_program(brick_entity_id_t entity_id,
     if ((ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_FM)
             && !live_parameter_audio_publication_submit_tone_program(
                 entity_id, (track_runtime_type_t)ctx->type))
+    {
+        Error_Handler();
+        return 0U;
+    }
+    if ((has_polyphony != 0U)
+            && (polyphony_control_restore(entity_id, &polyphony) == 0U))
     {
         Error_Handler();
         return 0U;
@@ -123,12 +141,11 @@ static uint8_t track_runtime_publish_midi_config(
     if ((ctx == NULL) || (entity_id >= BRICK_ENTITY_CAPACITY))
         return 0U;
     uint64_t due_sample = 0U;
-    if (control_rt_now_sample(&due_sample) == 0U)
+    if (control_rt_resolve_asap_sample(0U, &due_sample) == 0U)
     {
         Error_Handler();
         return 0U;
     }
-    due_sample = control_music_output_first_unpublished_sample(due_sample);
     const uint32_t packed = (uint32_t)ctx->midi_channel_1_16
         | ((uint32_t)ctx->midi_source << 8);
     if (control_rt_publish_param(entity_id,

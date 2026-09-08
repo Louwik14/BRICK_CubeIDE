@@ -20,11 +20,19 @@
 
 enum
 {
-    POT_RAW_MAX = 65535U
+    POT_RAW_MAX = 65535U,
+    POT_RAW_DEADBAND = 128U
 };
 
 static float g_boot_master_gain;
 static uint16_t g_master_last_raw;
+
+static uint16_t brick6_master_raw_delta(uint16_t raw, uint16_t reference)
+{
+    return (raw >= reference)
+        ? (uint16_t)(raw - reference)
+        : (uint16_t)(reference - raw);
+}
 
 
 uint8_t brick6_master_control_boot_capture(void)
@@ -54,7 +62,7 @@ void brick6_master_control_process(void)
         return;
     }
 
-    if (raw == g_master_last_raw)
+    if (brick6_master_raw_delta(raw, g_master_last_raw) < POT_RAW_DEADBAND)
     {
         return;
     }

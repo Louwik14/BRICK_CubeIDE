@@ -678,8 +678,27 @@ uint8_t audio_note_engine_adapter_initialize_held_outputs(
             continue;
         if (synth_engine != 0U)
         {
-            (void)synth_polyphony_bind_held_output(entity_id, held.note,
+            if (synth_polyphony_bind_held_output(entity_id, held.note,
+                    SYNTH_POLY_SOURCE_MUSICAL_OUTPUT, held.output_id) == 0U)
+                continue;
+            const uint8_t voice = synth_polyphony_voice_for_output(entity_id,
                 SYNTH_POLY_SOURCE_MUSICAL_OUTPUT, held.output_id);
+            if (voice == SYNTH_POLYPHONY_NO_VOICE)
+                continue;
+            if ((synth_polyphony_get_voice_count(entity_id) > 1U)
+                    && (program.has_mix_target != 0U))
+                mixer_track_poly_note_on(entity_id, program.mix_track_id,
+                                         voice, held.note, held.velocity);
+            else
+            {
+                if (program.has_filter_target != 0U)
+                    mixer_track_filter_note_on(program.filter_track_id,
+                                               held.note, held.velocity);
+                if ((program.supports_vca_gate != 0U)
+                        && (program.has_mix_target != 0U))
+                    mixer_track_vca_note_on(program.mix_track_id,
+                                            held.note, held.velocity);
+            }
         }
         if (audio_note_engine_adapter_initialize_held_renderer(&program,
                 held.note, held.velocity, held.output_id) == 0U)
@@ -727,7 +746,8 @@ uint8_t audio_note_engine_adapter_apply_polyphony(
         voice_count = 1U;
     const uint8_t previous_voice_count =
         synth_polyphony_get_voice_count(entity_id);
-    (void)synth_polyphony_set_voice_count(entity_id, voice_count);
+    if (synth_polyphony_set_voice_count(entity_id, voice_count) != voice_count)
+        return 0U;
     synth_polyphony_set_spread(entity_id, spread);
     if (previous_voice_count != synth_polyphony_get_voice_count(entity_id))
     {

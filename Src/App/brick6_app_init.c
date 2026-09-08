@@ -5,6 +5,7 @@
 #include "App/brick6_app_init.h"
 
 #include "App/control_domain.h"
+#include "App/brick6_boot_fx_policy.h"
 #include "App/engine_tasklet.h"
 #include "Audio/audio_domain.h"
 #include "midi.h"
@@ -86,6 +87,7 @@ void brick6_app_init(void)
     };
     control_domain_init();
     audio_domain_init(&audio_boot);
+    brick6_boot_fx_policy_init();
     control_domain_start(audio_boot.postgain, audio_boot.output_compensation);
     g_boot_audio_state = BRICK6_BOOT_WAIT_MASTER;
 }

@@ -79,7 +79,7 @@ uint8_t audio_recorder_control_set_looper_config(
     uint64_t sample = 0U;
     if (config->play_auto != g_audio_recorder_looper_config[track].play_auto)
     {
-        if ((control_rt_now_sample(&sample) == 0U)
+        if ((control_rt_resolve_asap_sample(0U, &sample) == 0U)
                 || (control_rt_publish_param(track,
                     CONTROL_AUDIO_LOOPER_PLAY_AUTO, config->play_auto,
                     0U, sample) == 0U))
@@ -293,7 +293,7 @@ uint8_t audio_recorder_cancel_prepared_client(audio_recorder_client_t client)
 uint8_t audio_recorder_request_stop_client(audio_recorder_client_t client)
 {
     uint64_t sample_time = 0U;
-    if (!control_rt_now_sample(&sample_time)) return 0U;
+    if (!control_rt_resolve_asap_sample(0U, &sample_time)) return 0U;
     return audio_recorder_publish_stop_client_at(client, sample_time);
 }
 
@@ -335,7 +335,7 @@ uint8_t audio_recorder_control_sync_looper_arm(uint8_t rec_armed,
                 AUDIO_RECORDER_CLIENT_LOOPER) != 0U)
         {
             uint64_t stop_sample = 0U;
-            if (control_rt_now_sample(&stop_sample) == 0U)
+            if (control_rt_resolve_asap_sample(0U, &stop_sample) == 0U)
             {
                 Error_Handler();
                 return 0U;
@@ -406,7 +406,7 @@ uint8_t audio_recorder_control_sync_looper_arm(uint8_t rec_armed,
     g_audio_recorder_looper_take_track = selected;
     g_audio_recorder_looper_take_notified = 0U;
     uint64_t start_sample = 0U;
-    if (control_rt_now_sample(&start_sample) == 0U)
+    if (control_rt_resolve_asap_sample(0U, &start_sample) == 0U)
     {
         Error_Handler();
         g_audio_recorder_looper_take_track = previous_take_track;

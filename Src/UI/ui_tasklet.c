@@ -32,6 +32,7 @@
 #include "encoders.h"
 #include "font.h"
 #include "Storage/project_product.h"
+#include "Storage/sd_access_gate.h"
 #include "stm32h7xx_hal.h"
 #include "ui_boot_loading.h"
 #include "ui_core.h"
@@ -541,6 +542,18 @@ void ui_boot_loading_begin(void)
 
 void ui_boot_loading_service(void)
 {
+    const sd_storage_status_t storage_status = sd_access_storage_status();
+    if ((storage_status == SD_STORAGE_STATUS_NO_MEDIA)
+        || (storage_status == SD_STORAGE_STATUS_FAULT))
+    {
+        g_ui_boot_loading_phase = UI_BOOT_LOADING_INACTIVE;
+        return;
+    }
+    if (storage_status != SD_STORAGE_STATUS_READY)
+    {
+        return;
+    }
+
     if (g_ui_boot_loading_phase == UI_BOOT_LOADING_RESTORE_PROJECT)
     {
         if (drv_display_flush_in_progress() != 0U)

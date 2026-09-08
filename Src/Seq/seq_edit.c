@@ -1032,6 +1032,17 @@ uint8_t seq_edit_note_capture_note_off(uint8_t note)
     return 1U;
 }
 
+void seq_edit_note_capture_on_track_change(void)
+{
+    /* The captured NOTE_ON occurrences still own their future NOTE_OFFs, but
+     * an edit target never crosses the selected-track context boundary. */
+    seq_edit_finish_snapshot_undo(g_seq_hold_state.note_capture_undo_open);
+    g_seq_hold_state.note_capture_undo_open = 0U;
+    g_seq_hold_state.note_capture_target_valid = 0U;
+    g_seq_hold_state.note_capture_step_count = 0U;
+    g_seq_hold_state.note_capture_note_count = 0U;
+}
+
 void seq_edit_note_capture_reset(void)
 {
     seq_edit_finish_snapshot_undo(g_seq_hold_state.note_capture_undo_open);

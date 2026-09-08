@@ -281,11 +281,10 @@ uint8_t param_registry_prepare_track_control_target(
     else
     {
         const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
-        if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-                && (live_parameter_is_audio_owned(id) != 0U))
+        if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
         {
             float current = 0.0f;
-            if ((id >= PARAM_FM_UI_FIRST) && (id <= PARAM_FM_OPERATOR_LAST))
+            if (param_id_is_fm_public(id) != 0U)
             {
                 if (fm_control_state_get_public_param(track, id, &current) == 0U)
                     return 0U;

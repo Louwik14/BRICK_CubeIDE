@@ -7,6 +7,7 @@ typedef struct
 {
     void (*enter)(void);
     void (*leave)(void);
+    uint8_t (*handle_encoder)(uint8_t encoder, int16_t delta);
     void (*handle_event)(const ui_event_t *);
     void (*tick)(void);
     void (*sync_active_context)(void);

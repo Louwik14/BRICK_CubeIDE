@@ -1,94 +1,24 @@
-/* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file           : usb_host.h
-  * @version        : v1.0_Cube
-  * @brief          : Header for usb_host.c file.
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
-/* USER CODE END Header */
+#ifndef BRICK6_USB_HOST_H_
+#define BRICK6_USB_HOST_H_
 
-/* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __USB_HOST__H__
-#define __USB_HOST__H__
+#include <stdint.h>
 
 #ifdef __cplusplus
- extern "C" {
+extern "C" {
 #endif
 
-/* Includes ------------------------------------------------------------------*/
-#include "stm32h7xx.h"
-#include "stm32h7xx_hal.h"
-
-/* USER CODE BEGIN INCLUDE */
-/* USER CODE END INCLUDE */
-
-/** @addtogroup USBH_OTG_DRIVER
-  * @{
-  */
-
-/** @defgroup USBH_HOST USBH_HOST
-  * @brief Host file for Usb otg low level driver.
-  * @{
-  */
-
-/** @defgroup USBH_HOST_Exported_Variables USBH_HOST_Exported_Variables
-  * @brief Public variables.
-  * @{
-  */
-
-/**
-  * @}
-  */
-
-/** Status of the application. */
-typedef enum {
-  APPLICATION_IDLE = 0,
-  APPLICATION_START,
-  APPLICATION_READY,
-  APPLICATION_DISCONNECT
-}ApplicationTypeDef;
-
-/** @defgroup USBH_HOST_Exported_FunctionsPrototype USBH_HOST_Exported_FunctionsPrototype
-  * @brief Declaration of public functions for Usb host.
-  * @{
-  */
-
-/* Exported functions -------------------------------------------------------*/
-
-/** @brief USB Host initialization function. */
-void MX_USB_HOST_Init(void);
-
-void MX_USB_HOST_Process(void);
 uint8_t usb_host_start(void);
+uint8_t usb_host_prepare(void);
 uint8_t usb_host_stop(void);
 uint8_t usb_host_is_started(void);
-void usb_host_tasklet_poll_bounded(uint32_t max_packets);
-
-/**
-  * @}
-  */
-
-/**
-  * @}
-  */
-
-/**
-  * @}
-  */
+uint8_t usb_host_is_ready(void);
+void usb_host_process(void);
+void usb_host_irq(void);
+void usb_host_power_on(void);
+void usb_host_power_off(void);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* __USB_HOST__H__ */
+#endif /* BRICK6_USB_HOST_H_ */

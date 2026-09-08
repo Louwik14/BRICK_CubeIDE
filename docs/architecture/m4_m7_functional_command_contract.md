@@ -54,6 +54,15 @@ l'ordre d'intention CONTROL est conserve. Les samples, wavetables, instruments
 Multi, pages Stream et rings PCM restent des data planes separes; seuls leurs
 identifiants traversent les commandes fonctionnelles.
 
+`control_rt_publication` possede aussi la frontiere globale du premier sample
+encore publiable. Chaque lot accepte avance cette frontiere jusqu'a sa derniere
+date; un horizon entier l'avance jusqu'a sa borne de fin, meme si ses derniers
+samples ne contiennent aucune commande. Les publications ASAP choisissent le
+maximum entre cette frontiere et l'horloge AUDIO/TIM5. Les publications datees
+restent exactes et sont refusees si elles tentent de revenir avant la frontiere.
+La frontiere musicale n'est donc pas une seconde horloge: elle delegue a cette
+autorite globale commune a PROGRAM, PARAM, NOTE, TRANSPORT, RECORD et PANIC.
+
 ## Consumer AUDIO
 
 `audio_command_executor` est l'unique consumer fonctionnel. Pour chaque

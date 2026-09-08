@@ -144,15 +144,13 @@ static void synth_polyphony_reset_slots_for_voice_count(uint8_t track)
     for (uint8_t voice = 0U; voice < poly->voice_count; ++voice)
     {
         const uint8_t slot = synth_polyphony_find_slot(track, voice);
-        if ((poly->engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
-                && (voice == 0U))
+        if (voice == 0U)
         {
-            /* Slot zero owns the Stack track configuration.  A voice-count
-             * rebuild may silence it, but must not reset that authority. */
-            brick6_stack_runtime_all_notes_off(slot);
-            brick6_stack_runtime_clear_trigger(slot);
-            mixer_synth_voice_slot_reset(slot);
-            mod_lfo_v1_poly_voice_reset(slot);
+            /* The primary slot is also the renderer's track-configuration
+             * authority.  A resize may silence its voice state, but must not
+             * reset the renderer object that subsequent voices synchronize
+             * from. */
+            synth_polyphony_silence_slot(slot);
         }
         else
         {
@@ -271,6 +269,8 @@ uint8_t synth_polyphony_set_voice_count(uint8_t track, uint8_t count)
         ? SYNTH_POLYPHONY_MAX_VOICES : count);
     if (g_synth_poly[track].active == 0U)
         return 0U;
+    if (count == g_synth_poly[track].voice_count)
+        return count;
     const uint8_t maximum = synth_polyphony_get_available_for_track(track);
     if (count > maximum)
         return 0U;

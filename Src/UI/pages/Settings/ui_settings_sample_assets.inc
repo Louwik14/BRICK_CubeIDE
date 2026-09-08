@@ -1,3 +1,19 @@
+static uint8_t ui_page_settings_sd_reprobe_for_refresh(void)
+{
+    if (sd_access_storage_status() == SD_STORAGE_STATUS_READY)
+    {
+        return 1U;
+    }
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PREVIEW) == 0U)
+    {
+        return 0U;
+    }
+
+    const uint8_t ready = sd_access_fs_reprobe_if_unavailable();
+    sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
+    return ready;
+}
+
 static void ui_page_settings_sample_catalog_refresh_action(uint8_t rebuild)
 {
     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
@@ -12,6 +28,13 @@ static void ui_page_settings_sample_catalog_refresh_action(uint8_t rebuild)
     }
 
     ui_page_settings_status((rebuild != 0U) ? "REBUILD" : "REFRESH");
+    if (ui_page_settings_sd_reprobe_for_refresh() == 0U)
+    {
+        ui_page_settings_status(
+            (sd_access_storage_status() == SD_STORAGE_STATUS_NO_MEDIA)
+                ? "SD ABSENTE" : "SD FAULT");
+        return;
+    }
     if (rebuild != 0U)
     {
         wav_loader_catalog_rebuild();

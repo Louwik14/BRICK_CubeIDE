@@ -740,7 +740,10 @@ static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
             {
                 if (level->view == UI_SETTINGS_VIEW_WAVETABLE)
                 {
-                    (void)ui_page_settings_wavetable_browser_refresh();
+                    if (ui_page_settings_sd_reprobe_for_refresh() != 0U)
+                        (void)ui_page_settings_wavetable_browser_refresh();
+                    else
+                        ui_page_settings_status("SD UNAVAILABLE");
                 }
                 else
                 {
@@ -797,6 +800,10 @@ static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
             }
             if (ev->id == (uint8_t)BTN_PAGE_4)
             {
+                if (ui_page_settings_sd_reprobe_for_refresh() != 0U)
+                    (void)ui_page_settings_multi_browser_refresh();
+                else
+                    ui_page_settings_status("SD UNAVAILABLE");
                 return;
             }
         }

@@ -71,13 +71,24 @@
   #define TUP_DCD_ENDPOINT_MAX 5
 
 #elif TU_CHECK_MCU(OPT_MCU_LPC54)
+  #include "fsl_device_registers.h"
+
   // TODO USB0 has 5, USB1 has 6
   #define TUP_USBIP_IP3511
+
+  #if !defined(LPC54114_cm4_SERIES) && !defined(LPC54114_cm0plus_SERIES)
+    #define TUP_USBIP_IP3516
+    #define TUP_USBIP_OHCI
+    #define TUP_USBIP_OHCI_NXP
+    #define TUP_OHCI_RHPORTS     1 // 1 downstream port
+  #endif
+
   #define TUP_DCD_ENDPOINT_MAX 6
 
 #elif TU_CHECK_MCU(OPT_MCU_LPC55)
   // TODO USB0 has 5, USB1 has 6
   #define TUP_USBIP_IP3511
+  #define TUP_USBIP_IP3516
   #define TUP_USBIP_OHCI
   #define TUP_USBIP_OHCI_NXP
   #define TUP_OHCI_RHPORTS     1 // 1 downstream port
@@ -155,6 +166,7 @@
   #define TUP_USBIP_DWC2
   #define TUP_USBIP_DWC2_NRF
   #define TUP_DCD_ENDPOINT_MAX            16
+  #define TUP_RHPORT_HIGHSPEED            1
   #define CFG_TUH_DWC2_DMA_ENABLE_DEFAULT 0
 
 //--------------------------------------------------------------------+
@@ -165,20 +177,24 @@
 
 #elif TU_CHECK_MCU(OPT_MCU_SAMG)
   #define TUP_DCD_ENDPOINT_MAX 6
-  #define TUD_ENDPOINT_ONE_DIRECTION_ONLY
+  #define CFG_TUD_ENDPOINT_ONE_DIRECTION_ONLY 1
 
 #elif TU_CHECK_MCU(OPT_MCU_SAMX7X)
   #define TUP_DCD_ENDPOINT_MAX 10
   #define TUP_RHPORT_HIGHSPEED 1
-  #define TUD_ENDPOINT_ONE_DIRECTION_ONLY
+  #define CFG_TUD_ENDPOINT_ONE_DIRECTION_ONLY 1
+
+  // Enable dcache if DMA is enabled
+  #define CFG_TUD_MEM_DCACHE_ENABLE_DEFAULT     CFG_TUD_SAMX7X_DMA_ENABLE
+  #define CFG_TUSB_MEM_DCACHE_LINE_SIZE_DEFAULT 32
 
 #elif TU_CHECK_MCU(OPT_MCU_PIC32MZ)
   #define TUP_DCD_ENDPOINT_MAX 8
-  #define TUD_ENDPOINT_ONE_DIRECTION_ONLY
+  #define CFG_TUD_ENDPOINT_ONE_DIRECTION_ONLY 1
 
 #elif TU_CHECK_MCU(OPT_MCU_PIC32MX, OPT_MCU_PIC32MM, OPT_MCU_PIC32MK) || TU_CHECK_MCU(OPT_MCU_PIC24, OPT_MCU_DSPIC33)
   #define TUP_DCD_ENDPOINT_MAX 16
-  #define TUD_ENDPOINT_ONE_DIRECTION_ONLY
+  #define CFG_TUD_ENDPOINT_ONE_DIRECTION_ONLY 1
   #define TUP_DCD_EDPT_CLOSE_API
 
 //--------------------------------------------------------------------+
@@ -187,6 +203,13 @@
 #elif TU_CHECK_MCU(OPT_MCU_STM32C0)
   #define TUP_USBIP_FSDEV
   #define TUP_USBIP_FSDEV_STM32
+  #define TUP_USBIP_FSDEV_DRD
+  #define CFG_TUSB_FSDEV_PMA_SIZE 2048u
+
+#elif TU_CHECK_MCU(OPT_MCU_STM32C5)
+  #define TUP_USBIP_FSDEV
+  #define TUP_USBIP_FSDEV_STM32
+  #define TUP_USBIP_FSDEV_DRD
   #define CFG_TUSB_FSDEV_PMA_SIZE 2048u
 
 #elif TU_CHECK_MCU(OPT_MCU_STM32F0)
@@ -226,9 +249,11 @@
 
   #if defined(STM32F302xB) || defined(STM32F302xC) || defined(STM32F303xB) || defined(STM32F303xC) || \
     defined(STM32F373xC)
+    // xB, and xC: 512
     #define CFG_TUSB_FSDEV_PMA_SIZE 512u
   #elif defined(STM32F302x6) || defined(STM32F302x8) || defined(STM32F302xD) || defined(STM32F302xE) || \
     defined(STM32F303xD) || defined(STM32F303xE)
+    // x6, x8, xD, and xE: 1024 + LPM Support
     #define CFG_TUSB_FSDEV_PMA_SIZE 1024u
   #else
     #error "Unsupported STM32F3 mcu"
@@ -261,6 +286,7 @@
 #elif TU_CHECK_MCU(OPT_MCU_STM32G0)
   #define TUP_USBIP_FSDEV
   #define TUP_USBIP_FSDEV_STM32
+  #define TUP_USBIP_FSDEV_DRD
   #define CFG_TUSB_FSDEV_PMA_SIZE 2048u
 
 #elif TU_CHECK_MCU(OPT_MCU_STM32G4)
@@ -276,6 +302,7 @@
 #elif TU_CHECK_MCU(OPT_MCU_STM32H5)
   #define TUP_USBIP_FSDEV
   #define TUP_USBIP_FSDEV_STM32
+  #define TUP_USBIP_FSDEV_DRD
   #define CFG_TUSB_FSDEV_PMA_SIZE 2048u
 
 #elif TU_CHECK_MCU(OPT_MCU_STM32H7)
@@ -349,6 +376,7 @@
 #elif TU_CHECK_MCU(OPT_MCU_STM32U3)
   #define TUP_USBIP_FSDEV
   #define TUP_USBIP_FSDEV_STM32
+  #define TUP_USBIP_FSDEV_DRD
   #define CFG_TUSB_FSDEV_PMA_SIZE 2048u
 
 #elif TU_CHECK_MCU(OPT_MCU_STM32U5)
@@ -356,6 +384,7 @@
   #if defined(STM32U535xx) || defined(STM32U545xx)
     #define TUP_USBIP_FSDEV
     #define TUP_USBIP_FSDEV_STM32
+    #define TUP_USBIP_FSDEV_DRD
     #define CFG_TUSB_FSDEV_PMA_SIZE 2048u
   #else
     #define TUP_USBIP_DWC2
@@ -370,6 +399,10 @@
       #define TUP_DCD_ENDPOINT_MAX 6
     #endif
   #endif
+
+  // TypeC controller
+  #define TUP_USBIP_TYPEC_STM32
+  #define TUP_TYPEC_RHPORTS_NUM 1
 
 #elif TU_CHECK_MCU(OPT_MCU_STM32WB)
   #define TUP_USBIP_FSDEV
@@ -388,7 +421,7 @@
 #elif TU_CHECK_MCU(OPT_MCU_CXD56)
   #define TUP_DCD_ENDPOINT_MAX 7
   #define TUP_RHPORT_HIGHSPEED 1
-  #define TUD_ENDPOINT_ONE_DIRECTION_ONLY
+  #define CFG_TUD_ENDPOINT_ONE_DIRECTION_ONLY 1
 
 //--------------------------------------------------------------------+
 // TI
@@ -432,7 +465,7 @@
   #define CFG_TUSB_OS_INC_PATH_DEFAULT freertos/
   // clang-format on
 
-  #if CFG_TUSB_MCU == OPT_MCU_ESP32S3
+  #if CFG_TUSB_MCU == OPT_MCU_ESP32S3 || CFG_TUSB_MCU == OPT_MCU_ESP32H4
     #define TUP_MCU_MULTIPLE_CORE 1
   #endif
 
@@ -452,6 +485,22 @@
   #define CFG_TUD_MEM_DCACHE_ENABLE_DEFAULT     CFG_TUD_DWC2_DMA_ENABLE
   #define CFG_TUH_MEM_DCACHE_ENABLE_DEFAULT     CFG_TUH_DWC2_DMA_ENABLE
   #define CFG_TUSB_MEM_DCACHE_LINE_SIZE_DEFAULT 64
+
+#elif TU_CHECK_MCU(OPT_MCU_ESP32S31)
+  #define TUP_USBIP_DWC2
+  #define TUP_USBIP_DWC2_ESP32
+  #define TUP_RHPORT_HIGHSPEED                  1
+  #define TUP_DCD_ENDPOINT_MAX                  16
+
+  // clang-format off
+  #define CFG_TUSB_OS_INC_PATH_DEFAULT          freertos/
+  // clang-format on
+
+  #define TUP_MCU_MULTIPLE_CORE                 1
+
+  // Disable slave if DMA is enabled
+  #define CFG_TUD_DWC2_SLAVE_ENABLE_DEFAULT     !CFG_TUD_DWC2_DMA_ENABLE
+  #define CFG_TUH_DWC2_SLAVE_ENABLE_DEFAULT     !CFG_TUH_DWC2_DMA_ENABLE
 
 #elif TU_CHECK_MCU(OPT_MCU_ESP32, OPT_MCU_ESP32C2, OPT_MCU_ESP32C3, OPT_MCU_ESP32C5, OPT_MCU_ESP32C6, \
                    OPT_MCU_ESP32C61, OPT_MCU_ESP32H2)
@@ -524,12 +573,12 @@
 #elif TU_CHECK_MCU(OPT_MCU_FT90X)
   #define TUP_DCD_ENDPOINT_MAX 8
   #define TUP_RHPORT_HIGHSPEED 1
-  #define TUD_ENDPOINT_ONE_DIRECTION_ONLY
+  #define CFG_TUD_ENDPOINT_ONE_DIRECTION_ONLY 1
 
 #elif TU_CHECK_MCU(OPT_MCU_FT93X)
   #define TUP_DCD_ENDPOINT_MAX 16
   #define TUP_RHPORT_HIGHSPEED 1
-  #define TUD_ENDPOINT_ONE_DIRECTION_ONLY
+  #define CFG_TUD_ENDPOINT_ONE_DIRECTION_ONLY 1
 
 //--------------------------------------------------------------------+
 // Allwinner
@@ -577,10 +626,6 @@
     #define CFG_TUH_WCH_USBIP_USBFS 1
   #endif
 
-  #define TUP_USBIP_FSDEV
-  #define TUP_USBIP_FSDEV_CH32
-  #define CFG_TUSB_FSDEV_PMA_SIZE 512u
-
   // default to FSDEV for device
   #if !defined(CFG_TUD_WCH_USBIP_USBFS)
     #define CFG_TUD_WCH_USBIP_USBFS 0
@@ -588,6 +633,12 @@
 
   #if !defined(CFG_TUD_WCH_USBIP_FSDEV)
     #define CFG_TUD_WCH_USBIP_FSDEV (CFG_TUD_WCH_USBIP_USBFS ? 0 : 1)
+  #endif
+
+  #if CFG_TUD_WCH_USBIP_FSDEV
+    #define TUP_USBIP_FSDEV
+    #define TUP_USBIP_FSDEV_CH32
+    #define CFG_TUSB_FSDEV_PMA_SIZE 512u
   #endif
 
   #define TUP_DCD_ENDPOINT_MAX 8
@@ -612,6 +663,19 @@
     #define TUP_DCD_EDPT_CLOSE_API
   #endif
 
+#elif TU_CHECK_MCU(OPT_MCU_CH583)
+  // CH582/583 USBFS: older WCH USBFS IP with a single combined per-endpoint control register
+  // (like CH32V103), driven by the shared dcd_ch32_usbfs.c on USB0 (rhport 0). Device only:
+  // the shared hcd_ch32_usbfs.c is CH32V20x-specific and does not support CH58x, so host /
+  // USB2 (rhport 1) is not provided here.
+  #define TUP_USBIP_WCH_USBFS
+
+  #ifndef CFG_TUD_WCH_USBIP_USBFS
+    #define CFG_TUD_WCH_USBIP_USBFS 1
+  #endif
+
+  #define TUP_DCD_ENDPOINT_MAX 8
+
 //--------------------------------------------------------------------+
 // Analog Devices
 //--------------------------------------------------------------------+
@@ -620,7 +684,7 @@
   #define TUP_USBIP_MUSB_ADI
   #define TUP_DCD_ENDPOINT_MAX 12
   #define TUP_RHPORT_HIGHSPEED 1
-  #define TUD_ENDPOINT_ONE_DIRECTION_ONLY
+  #define CFG_TUD_ENDPOINT_ONE_DIRECTION_ONLY 1
 
 //--------------------------------------------------------------------+
 // ArteryTek
@@ -703,4 +767,15 @@
 // USBIP implement dcd_edpt_close() and does not support ISO alloc & activate API
 #ifndef TUP_DCD_EDPT_CLOSE_API
   #define TUP_DCD_EDPT_ISO_ALLOC
+#endif
+
+// Some USBIPs (SAMG, SAMX7X, PIC32, MAX3266x/MAX78002) cannot assign the same endpoint
+// number to both IN and OUT. Default to 0 (same endpoint number may be used for IN and OUT).
+#ifndef CFG_TUD_ENDPOINT_ONE_DIRECTION_ONLY
+  #define CFG_TUD_ENDPOINT_ONE_DIRECTION_ONLY 0
+#endif
+
+// Backward-compatible alias: legacy code only tests defined(TUD_ENDPOINT_ONE_DIRECTION_ONLY)
+#if CFG_TUD_ENDPOINT_ONE_DIRECTION_ONLY && !defined(TUD_ENDPOINT_ONE_DIRECTION_ONLY)
+  #define TUD_ENDPOINT_ONE_DIRECTION_ONLY
 #endif

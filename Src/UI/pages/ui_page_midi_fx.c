@@ -489,22 +489,22 @@ static void ui_page_midi_fx_leave(void)
     ui_template_page_leave();
 }
 
-static void ui_page_midi_fx_handle_event(const ui_event_t *ev)
+static uint8_t ui_page_midi_fx_handle_encoder(uint8_t encoder, int16_t delta)
 {
-    if ((ui_page_get_id()==UI_PAGE_AUDIO_FX)&&(ev!=0)&&(ev->type==UI_EVENT_ENCODER)
-            &&(ev->id<4U)&&(ev->value!=0)&&(g_ui_template_audio_fx_state.active_subpage==2U))
+    if ((encoder >= 4U) || (delta == 0)) return 0U;
+    if ((ui_page_get_id()==UI_PAGE_AUDIO_FX)
+            &&(g_ui_template_audio_fx_state.active_subpage==2U))
     {
         audio_fx_control_config_t config;const brick_entity_id_t entity=ui_page_audio_fx_selected_entity();
-        if(audio_fx_control_state_get(entity,&config)==0U)return;
+        if(audio_fx_control_state_get(entity,&config)==0U)return 1U;
         const uint8_t group_master=(ui_page_audio_fx_resolve_family()==&g_ui_template_audio_fx_group_master_family)?1U:0U;
-        if(group_master!=0U){if(ev->id<2U){int32_t v=(int32_t)config.spatial_mode[ev->id]+((ev->value>0)?1:-1);if(v<0)v=0;if(v>3)v=3;(void)audio_fx_control_set_spatial_mode(entity,(audio_fx_slot_t)ev->id,(uint8_t)v);}return;}
-        if(ev->id==0U){int32_t v=(int32_t)config.filter_position+((ev->value>0)?1:-1);if(v<0)v=0;if(v>2)v=2;(void)audio_fx_control_set_filter_position(entity,(audio_fx_filter_pos_t)v);return;}
-        if(ev->id==1U){(void)audio_fx_control_set_order(entity,(ev->value>0)?AUDIO_FX_ORDER_B_A:AUDIO_FX_ORDER_A_B);return;}
-        {const uint8_t slot=(uint8_t)(ev->id-2U);int32_t v=(int32_t)config.spatial_mode[slot]+((ev->value>0)?1:-1);if(v<0)v=0;if(v>3)v=3;(void)audio_fx_control_set_spatial_mode(entity,(audio_fx_slot_t)slot,(uint8_t)v);return;}
+        if(group_master!=0U){if(encoder<2U){int32_t v=(int32_t)config.spatial_mode[encoder]+((delta>0)?1:-1);if(v<0)v=0;if(v>3)v=3;(void)audio_fx_control_set_spatial_mode(entity,(audio_fx_slot_t)encoder,(uint8_t)v);}return 1U;}
+        if(encoder==0U){int32_t v=(int32_t)config.filter_position+((delta>0)?1:-1);if(v<0)v=0;if(v>2)v=2;(void)audio_fx_control_set_filter_position(entity,(audio_fx_filter_pos_t)v);return 1U;}
+        if(encoder==1U){(void)audio_fx_control_set_order(entity,(delta>0)?AUDIO_FX_ORDER_B_A:AUDIO_FX_ORDER_A_B);return 1U;}
+        {const uint8_t slot=(uint8_t)(encoder-2U);int32_t v=(int32_t)config.spatial_mode[slot]+((delta>0)?1:-1);if(v<0)v=0;if(v>3)v=3;(void)audio_fx_control_set_spatial_mode(entity,(audio_fx_slot_t)slot,(uint8_t)v);return 1U;}
     }
     if ((ui_page_get_id() == UI_PAGE_MIDI_FX)
-            && (ev != 0) && (ev->type == UI_EVENT_ENCODER)
-            && (ev->id < 3U)
+            && (encoder < 3U)
             && (g_ui_template_midi_fx_state.active_subpage < NOTE_FX_SLOT_COUNT))
     {
         const param_id_t model = (param_id_t)(PARAM_MIDI_FX_S1_MODEL
@@ -513,9 +513,14 @@ static void ui_page_midi_fx_handle_event(const ui_event_t *ev)
         if ((note_fx_state_get_param(ui_get_active_lane(), model, &value) != 0U)
                 && ((uint8_t)value == NOTE_FX_MODEL_OFF))
         {
-            return;
+            return 1U;
         }
     }
+    return 0U;
+}
+
+static void ui_page_midi_fx_handle_event(const ui_event_t *ev)
+{
     ui_template_page_handle_event(ev);
     ui_page_midi_fx_sync_waveform_capture();
 }
@@ -588,6 +593,7 @@ void ui_page_template_midi_fx_register_families(void)
 const ui_page_t g_ui_page_midi_fx = {
     .enter = ui_page_midi_fx_enter,
     .leave = ui_page_midi_fx_leave,
+    .handle_encoder = ui_page_midi_fx_handle_encoder,
     .handle_event = ui_page_midi_fx_handle_event,
     .tick = ui_page_midi_fx_tick,
     .sync_active_context = ui_template_page_sync_active_track_context,
@@ -598,6 +604,7 @@ const ui_page_t g_ui_page_midi_fx = {
 const ui_page_t g_ui_page_audio_fx = {
     .enter = ui_page_midi_fx_enter,
     .leave = ui_page_midi_fx_leave,
+    .handle_encoder = ui_page_midi_fx_handle_encoder,
     .handle_event = ui_page_midi_fx_handle_event,
     .tick = ui_page_midi_fx_tick,
     .render = ui_page_midi_fx_render,

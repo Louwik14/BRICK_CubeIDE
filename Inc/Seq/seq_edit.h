@@ -42,6 +42,7 @@ uint8_t seq_edit_replace_step_play_notes(seq_track_id_t track,
 uint8_t seq_edit_capture_held_note_on(uint8_t note, uint8_t velocity);
 uint8_t seq_edit_note_capture_note_off(uint8_t note);
 void seq_edit_note_capture_reset(void);
+void seq_edit_note_capture_on_track_change(void);
 uint8_t seq_edit_adjust_held_step_roll(int8_t delta,
                                        seq_track_id_t *out_track,
                                        seq_step_id_t *out_step,

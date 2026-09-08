@@ -4,6 +4,16 @@
 
 L'audio travaille par demi-buffer de 64 frames a 48 kHz. L'IRQ SAI possede sa timeline audio locale et n'execute ni FatFs, ni scan de cache, ni travail Storage non borne. CONTROL se cadence seul: TIM12 porte le tick musical interne, TIM5, demarre avant les domaines, porte le temps physique commun et sa conversion nominale en samples. La superloop publie l'horizon musical glissant; aucun reveil AUDIO, compteur de frames periodique ou PendSV sequenceur ne traverse la frontiere. Scheduler, lifecycle et Note FX contribuent d'abord a une fenetre CONTROL fixe; ses 64 buckets sample/kind finalisent ensuite la FIFO en ordre chronologique, avec STOP avant START a timestamp egal.
 
+USB OTG FS est possede exclusivement par TinyUSB en mode bare-metal
+(`OPT_OS_NONE`). La superloop appelle le service USB cooperatif avant et apres
+la passe applicative: le role manager consomme les evenements FUSB302, puis un
+seul des pumps Device ou Host est execute. Le Device est composite UAC2 + MIDI
+et le role Host sert MIDI via TinyUSB. L'IRQ OTG ne fait que dispatcher vers
+TinyUSB. Les flux UAC2 duplex traversent deux rings SPSC de 288 frames places
+dans la moitie D3 non cachee; le chemin audio IRQ ne touche jamais la pile USB.
+Le role Host applique une attente VBUS de 200 ms par deadline, et les erreurs
+I2C FUSB utilisent un retry cadence au lieu d'une lecture a chaque tour.
+
 Le Hall Low-Cost execute la machine bornee depuis l'acquisition ADC. TIM5 est le compteur libre commun de capture. CONTROL en possede l'extension et la conversion; AUDIO initialise sa sample clock locale depuis TIM5 au premier callback valide et ne publie aucune ancre.
 
 ## Frontiere CONTROL/AUDIO

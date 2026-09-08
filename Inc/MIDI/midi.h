@@ -3,7 +3,7 @@
  * @brief Interface du module MIDI pour STM32 HAL (USB Device + backends futurs).
  *
  * Fournit une API unifiée pour l'envoi de messages MIDI sur différents transports :
- * - USB Device (usbd_midi)
+ * - USB Device composite TinyUSB
  * - USB Host (stub pour l'instant)
  * - DIN UART (stub pour l'instant)
  */
@@ -253,6 +253,7 @@ void midi_internal_receive_with_timestamp(const uint8_t *msg, size_t len,
  * @brief Alimente la file RX USB (appel depuis l'ISR USB OUT).
  */
 void midi_usb_rx_submit_from_isr(const uint8_t *packet, size_t len);
+uint16_t midi_usb_rx_free_packets(void);
 void midi_rx_discard_pending(void);
 
 #endif /* MIDI_H */

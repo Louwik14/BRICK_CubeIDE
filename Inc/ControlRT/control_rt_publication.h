@@ -13,6 +13,10 @@
 void control_rt_publication_init(void);
 uint8_t control_rt_publication_horizon_active(void);
 uint8_t control_rt_now_sample(uint64_t *out_sample_time);
+uint64_t control_rt_first_unpublished_sample(uint64_t minimum_sample);
+uint8_t control_rt_resolve_asap_sample(uint64_t minimum_sample,
+                                       uint64_t *out_sample_time);
+void control_rt_advance_first_unpublished_sample(uint64_t first_sample);
 uint8_t control_rt_capture_tick_to_sample(uint32_t capture_tick,
                                           uint64_t minimum_sample,
                                           uint64_t *out_sample_time);

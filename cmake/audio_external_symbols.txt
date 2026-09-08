@@ -44,3 +44,6 @@ sinf
 sqrtf
 tanf
 tanhf
+usb_audio_audio_input_active
+usb_audio_audio_read
+usb_audio_audio_write

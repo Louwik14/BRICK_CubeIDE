@@ -13,7 +13,22 @@ typedef uint8_t brick_entity_id_t;
 #define BRICK_ENTITY_FIRST_GROUP_CHILD_ID BRICK_ENTITY_TOP_LEVEL_COUNT
 #define BRICK_ENTITY_LAST_GROUP_CHILD_ID (BRICK_ENTITY_CAPACITY - 1U)
 
-#define ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT 1U
+#define ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT 2U
+
+typedef enum
+{
+    ENTITY_AUDIO_SOURCE_LINE = 0U,
+    ENTITY_AUDIO_SOURCE_USB,
+    ENTITY_AUDIO_SOURCE_COUNT
+} entity_audio_source_t;
+
+#ifdef __cplusplus
+static_assert(ENTITY_AUDIO_SOURCE_COUNT == ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT,
+              "audio source count must match input ownership");
+#else
+_Static_assert(ENTITY_AUDIO_SOURCE_COUNT == ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT,
+               "audio source count must match input ownership");
+#endif
 
 typedef enum
 {

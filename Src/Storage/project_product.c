@@ -1134,6 +1134,9 @@ uint8_t project_product_blank(void)
 }
 project_product_boot_restore_result_t project_product_restore_boot(void)
 {
+    if (sd_access_storage_status() != SD_STORAGE_STATUS_READY)
+        return PROJECT_PRODUCT_BOOT_RESTORE_FAILED;
+
     boot_context_flash_data_t context;
     if (!boot_context_flash_load(&context))
     {

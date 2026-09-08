@@ -1,7 +1,6 @@
 #include "App/control_domain.h"
 
 #include "App/brick6_boot_defaults.h"
-#include "App/brick6_boot_fx_policy.h"
 #include "App/engine_tasklet.h"
 #include "App/Hall/hall_calibration.h"
 #include "App/Hall/hall_keyboard_bridge.h"
@@ -44,7 +43,6 @@ void control_domain_init(void)
     live_clock_control_init();
     project_load_quiesce_init();
     board_usb_device_init();
-    brick6_boot_fx_policy_init();
 
     sd_access_gate_init();
     wav_convert_init();

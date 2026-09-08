@@ -31,9 +31,10 @@ static void ui_page_audio_rec_render(void)
     ui_page_audio_rec_draw_marker_bar(&state);
     ui_page_audio_rec_draw_live_meter(&state);
 
-    (void)snprintf(line, sizeof(line), "LINE %s MIC %s",
-                   state.line_enabled ? "ON" : "OFF",
-                   state.mic_enabled ? "ON" : "OFF");
+    (void)snprintf(line, sizeof(line), "U%u L%u M%u",
+                   (unsigned)state.usb_enabled,
+                   (unsigned)state.line_enabled,
+                   (unsigned)state.mic_enabled);
     drv_display_draw_text(UI_AUDIO_REC_STATUS_X, 50U, line);
 
     if(state.error != SAMPLE_CAPTURE_ERROR_NONE)

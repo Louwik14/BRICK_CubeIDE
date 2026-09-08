@@ -412,6 +412,12 @@ enum {
 #define PARAM_FM_UI_FIRST             PARAM_FM_TRANSPOSE
 #define PARAM_FM_UI_LAST              PARAM_FM_PITCH_L4
 
+static inline uint8_t param_id_is_fm_public(param_id_t id)
+{
+    return (uint8_t)(((id >= PARAM_FM_RATIO) && (id <= PARAM_FM_ENV_RELEASE))
+            || ((id >= PARAM_FM_PLAY_VEL) && (id <= PARAM_FM_UI_LAST)));
+}
+
 static inline uint8_t param_id_is_reserved(param_id_t id)
 {
     switch (id)

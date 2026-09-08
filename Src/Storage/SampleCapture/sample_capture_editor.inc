@@ -272,6 +272,19 @@ uint8_t sample_capture_model_toggle_mic(void)
         (uint8_t)(g_sample_capture.state.mic_enabled == 0U));
 }
 
+uint8_t sample_capture_model_set_usb_enabled(uint8_t enabled)
+{
+    g_sample_capture.state.usb_enabled = (enabled != 0U) ? 1U : 0U;
+    sample_capture_publish_rec_bus();
+    return 1U;
+}
+
+uint8_t sample_capture_model_toggle_usb(void)
+{
+    return sample_capture_model_set_usb_enabled(
+        (uint8_t)(g_sample_capture.state.usb_enabled == 0U));
+}
+
 uint8_t sample_capture_model_step_edit(uint8_t encoder, int16_t delta, uint8_t alt_held)
 {
     if((delta == 0) || (g_sample_capture.state.take_valid == 0U))

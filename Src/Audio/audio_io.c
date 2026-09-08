@@ -5,11 +5,26 @@
 
 #include "audio_io.h"
 
+#include <string.h>
+
 #include "Audio/metronome_runtime.h"
 #include "Board/board_audio.h"
 #include "Platform/memory_layout.h"
+#include "usb_audio.h"
 
 static AUDIO_HOT ALIGN32 audio_physical_inputs_t g_audio_physical_inputs;
+static AUDIO_HOT ALIGN32 int32_t g_usb_audio_input[AUDIO_BLOCK_SIZE * 2U];
+static AUDIO_HOT ALIGN32 int32_t g_usb_audio_output[AUDIO_BLOCK_SIZE * 2U];
+
+static inline float usb_audio_pcm24_to_float(int32_t sample, float gain)
+{
+    return (float)(sample >> 8U) * gain;
+}
+
+static inline int32_t usb_audio_pcm24_to_left_aligned(int32_t sample)
+{
+    return (int32_t)((uint32_t)(sample & 0x00FFFFFF) << 8U);
+}
 
 void audio_io_unpack(const int32_t *AUDIO_RESTRICT rx,
                      uint32_t frames,
@@ -19,6 +34,20 @@ void audio_io_unpack(const int32_t *AUDIO_RESTRICT rx,
                              &g_audio_physical_inputs,
                              frames,
                              in_scale);
+
+    memset(g_audio_physical_inputs.usb.left, 0, frames * sizeof(float));
+    memset(g_audio_physical_inputs.usb.right, 0, frames * sizeof(float));
+    if ((usb_audio_audio_input_active() != 0U)
+            && (usb_audio_audio_read(g_usb_audio_input, frames) == frames))
+    {
+        for (uint32_t n = 0U; n < frames; ++n)
+        {
+            g_audio_physical_inputs.usb.left[n] =
+                usb_audio_pcm24_to_float(g_usb_audio_input[n * 2U], in_scale);
+            g_audio_physical_inputs.usb.right[n] =
+                usb_audio_pcm24_to_float(g_usb_audio_input[n * 2U + 1U], in_scale);
+        }
+    }
 }
 
 const audio_physical_inputs_t *audio_io_get_current_physical_inputs(void)
@@ -74,4 +103,14 @@ void audio_io_pack_ramped(int32_t *AUDIO_RESTRICT tx,
                             monitor_main_l,
                             monitor_main_r,
                             frames);
+
+    for (uint32_t n = 0U; n < frames; ++n)
+    {
+        const uint32_t tx_offset = n * BOARD_AUDIO_TDM_SLOTS;
+        g_usb_audio_output[n * 2U] =
+            usb_audio_pcm24_to_left_aligned(tx[tx_offset]);
+        g_usb_audio_output[n * 2U + 1U] =
+            usb_audio_pcm24_to_left_aligned(tx[tx_offset + 1U]);
+    }
+    (void)usb_audio_audio_write(g_usb_audio_output, frames);
 }

@@ -1,12 +1,13 @@
 #include "fusb302.h"
 
 #include "main.h"
+#include "usb_role_manager.h"
 
 #include <string.h>
 
 #define FUSB302_I2C_ADDR_7BIT                 0x22U
 #define FUSB302_I2C_ADDR_HAL                  (FUSB302_I2C_ADDR_7BIT << 1U)
-#define FUSB302_I2C_TIMEOUT_MS                10U
+#define FUSB302_I2C_TIMEOUT_MS                2U
 #define FUSB302_READY_TRIALS                  2U
 
 #define FUSB302_REG_DEVICE_ID                 0x01U
@@ -431,8 +432,15 @@ fusb302_status_t fusb302_handle_interrupt(void)
         return FUSB302_STATUS_OK;
     }
 
-    g_fusb302.irq_pending = false;
-    return fusb302_read_state(true);
+    const fusb302_status_t status = fusb302_read_state(true);
+    if ((status == FUSB302_STATUS_OK)
+            && (HAL_GPIO_ReadPin(FUSB302_INT_N_GPIO_Port,
+                                 FUSB302_INT_N_Pin) == GPIO_PIN_SET)) {
+        g_fusb302.irq_pending = false;
+    } else {
+        g_fusb302.irq_pending = true;
+    }
+    return status;
 }
 
 bool fusb302_is_present(void)
@@ -459,5 +467,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     if (GPIO_Pin == FUSB302_INT_N_Pin) {
         g_fusb302.irq_pending = true;
+        __DMB();
+    } else if (GPIO_Pin == HOST_FLAG_Pin) {
+        usb_role_manager_host_flag_irq();
     }
 }

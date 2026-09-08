@@ -66,16 +66,20 @@ add_subdirectory(cmake/stm32cubemx)
 # --------------------------------------------------------------------------
 
 # App / middleware
-set(APP_USB_STACK_SRC "")
 set(BRICK6_BOARD_USB_INC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack")
 
-file(GLOB USB_DEVICE_LIB_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Device_Library/Core/Src/*.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Device_Library/Class/MIDI/Src/*.c"
-)
-
-file(GLOB USB_HOST_LIB_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Host_Library/Core/Src/*.c"
+set(TINYUSB_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src/tusb.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src/common/tusb_fifo.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src/device/usbd.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src/class/audio/audio_device.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src/class/midi/midi_device.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src/host/usbh.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src/host/hub.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src/class/midi/midi_host.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src/portable/synopsys/dwc2/dwc2_common.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src/portable/synopsys/dwc2/dcd_dwc2.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src/portable/synopsys/dwc2/hcd_dwc2.c"
 )
 
 file(GLOB FATFS_SRC
@@ -211,6 +215,7 @@ set(DOMAIN_CONTRACT_HEADERS
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/sampler_ram_audio_projection.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/sampler_ram_audio_projection_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/shared_memory_ref.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/usb_audio_pcm_ring.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/synth_waveform_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/sd_preview_ring_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Sampler/sample_audio_format.h"
@@ -261,8 +266,8 @@ foreach(platform_source IN LISTS PLATFORM_H743)
     endif()
 endforeach()
 
-set(PLATFORM_H743_BUILD ${PLATFORM_H743_COMMON} ${PLATFORM_H743_LOWCOST})
-set(DOMAIN_CONTROL_BUILD ${DOMAIN_CONTROL} ${USB_DEVICE_LIB_SRC} ${USB_HOST_LIB_SRC}
+set(PLATFORM_H743_BUILD ${PLATFORM_H743_COMMON} ${PLATFORM_H743_LOWCOST} ${TINYUSB_SRC})
+set(DOMAIN_CONTROL_BUILD ${DOMAIN_CONTROL}
     ${FATFS_SRC} ${U8G2_SRC})
 set(DOMAIN_STORAGE_BUILD ${DOMAIN_STORAGE})
 set(DOMAIN_AUDIO_BUILD ${DOMAIN_AUDIO} ${CMSIS_DSP_SRC} ${MUTABLE_INSTRUMENTS_SRC})
@@ -287,9 +292,6 @@ list(FILTER DOMAIN_CONTROL_CM4 INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/App
     ${BRICK6_BOARD_USB_INC_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Host_Library/Core/Inc
-    ${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Device_Library/Core/Inc
-    ${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Device_Library/Class/MIDI/Inc
     ${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/Third_Party/FatFs/src
 
     ${CMAKE_CURRENT_SOURCE_DIR}/Inc
@@ -311,15 +313,12 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
     ${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments
     ${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/stmlib
-    ${CMAKE_CURRENT_SOURCE_DIR}/tinyusb
+    ${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src
 )
 
 set(CONTROL_CM4_INCLUDE_DIRS
     "${CMAKE_CURRENT_SOURCE_DIR}/App"
     "${BRICK6_BOARD_USB_INC_DIR}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Host_Library/Core/Inc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Device_Library/Core/Inc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/ST/STM32_USB_Device_Library/Class/MIDI/Inc"
     "${CMAKE_CURRENT_SOURCE_DIR}/App/Middlewares/Third_Party/FatFs/src"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/App"
@@ -345,7 +344,7 @@ set(CONTROL_CM4_INCLUDE_DIRS
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/STM32H7xx_HAL_Driver/Inc/Legacy"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS/Device/ST/STM32H7xx/Include"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/CMSIS/Include"
-    "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tinyusb/src"
 )
 
 set(CONTROL_CM4_GENERATED_INC

@@ -21,6 +21,7 @@ usb_role_manager_role_t usb_role_manager_active_role(void);
 uint8_t usb_role_manager_is_device_active(void);
 uint8_t usb_role_manager_is_host_active(void);
 uint8_t usb_role_manager_host_fault_active(void);
+void usb_role_manager_host_flag_irq(void);
 void usb_role_irq_dispatch(void);
 
 #ifdef __cplusplus

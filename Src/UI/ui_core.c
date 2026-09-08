@@ -229,6 +229,7 @@ static void ui_core_set_active_track(uint8_t track)
         return;
     }
 
+    seq_edit_note_capture_on_track_change();
     if (g_ui_track_state.active_track != main_track)
     {
         (void)ui_core_select_active_track(main_track);
@@ -994,7 +995,12 @@ void ui_core_tick(void)
         }
         else
         {
-            if ((ui_page_template_keyboard_handle_encoder(encoder, delta) == 0U)
+            const ui_page_t *const encoder_page = ui_page_get();
+            const uint8_t page_consumed = ((encoder_page != 0)
+                    && (encoder_page->handle_encoder != 0))
+                ? encoder_page->handle_encoder(encoder, delta) : 0U;
+            if ((page_consumed == 0U)
+                && (ui_page_template_keyboard_handle_encoder(encoder, delta) == 0U)
                 && (ui_page_template_seq_handle_encoder(encoder, delta) == 0U)
                 && (ui_page_template_play_handle_encoder(encoder, delta) == 0U)
                 && (ui_page_template_cfg_handle_encoder(encoder, delta) == 0U)

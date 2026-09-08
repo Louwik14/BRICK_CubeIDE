@@ -27,7 +27,13 @@ void control_audio_transport_publish_changes(void)
         .step_q16 = seq_runtime_get_samples_per_step_q16(),
         .running = seq_runtime_is_running()
     };
-    const uint64_t sample = seq_runtime_exec_get_sample_timeline();
+    uint64_t sample = 0U;
+    if (control_rt_resolve_asap_sample(
+            seq_runtime_exec_get_sample_timeline(), &sample) == 0U)
+    {
+        Error_Handler();
+        return;
+    }
     control_audio_command_t commands[3];
     uint16_t count = 0U;
     if (next.running != g_last.running)

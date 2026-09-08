@@ -11,7 +11,6 @@
 #include "IPC/live_clock_control.h"
 #include "IPC/live_parameter_event.h"
 #include "App/live_parameter_audio_publication.h"
-#include "Track/control_music_output.h"
 #include "Track/track_input_ownership.h"
 #include "Seq/metronome_control.h"
 #include "Seq/seq_runtime.h"
@@ -156,6 +155,67 @@ static ui_template_custom_widget_kind_t ui_page_template_cfg_pick_custom_widget(
     (void)slot;(void)subpage;(void)id;return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
 }
 
+static ui_template_custom_widget_kind_t ui_page_template_cfg_pick_virtual_widget(
+    uint8_t slot, const ui_template_subpage_t *subpage)
+{
+    const uint8_t track = ui_get_active_lane();
+    const track_family_t family = ui_get_track_family(track);
+    if (subpage == NULL) return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+
+    if ((subpage->title != NULL) && (strcmp(subpage->title, "MIDI") == 0))
+    {
+        if (slot == 0U) return UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_MIDI_CHANNEL;
+        if (slot == 1U) return UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_MIDI_SOURCE;
+        return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+    }
+
+    if (slot == 0U) return UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TRACK;
+    if (family == TRACK_FAMILY_OFF)
+    {
+        return (slot < 4U) ? UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_INACTIVE
+                           : UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+    }
+    return (slot == 1U) ? UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TYPE
+                        : UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+}
+
+static uint8_t ui_page_template_cfg_virtual_slot_value(
+    const ui_param_seq_plock_feedback_frame_t *frame_ctx,
+    uint8_t slot,
+    float *out_value,
+    uint8_t *out_bipolar)
+{
+    (void)frame_ctx;
+    if ((out_value == NULL) || (out_bipolar == NULL)) return 0U;
+    *out_bipolar = 0U;
+    const uint8_t track = ui_get_active_lane();
+    const track_family_t family = ui_get_track_family(track);
+    if (g_ui_template_cfg_state.active_subpage == 1U)
+    {
+        if (slot == 0U) *out_value = (float)ui_get_track_midi_channel(track);
+        else if (slot == 1U) *out_value = (float)ui_get_track_midi_source(track);
+        else return 0U;
+        return 1U;
+    }
+    if (slot == 0U)
+    {
+        *out_value = (float)family;
+        return 1U;
+    }
+    if (family == TRACK_FAMILY_OFF)
+    {
+        *out_value = 0.0f;
+        return (slot < 4U) ? 1U : 0U;
+    }
+    if (slot == 1U)
+    {
+        *out_value = (float)ui_track_catalog_type_index_for_family(
+            family, ui_get_track_type(track), track, track_state_get_configs());
+        return 1U;
+    }
+    return 0U;
+}
+
 static const ui_template_family_t *ui_page_template_cfg_resolve_family(void)
 {
     const uint8_t active_track = ui_get_active_lane();
@@ -193,7 +253,7 @@ static uint8_t ui_page_template_cfg_virtual_slot_text(uint8_t slot,
     if(g_ui_template_cfg_state.active_subpage==1U){if(slot==0U){(void)snprintf(out_name,out_name_len,"MIDI CH");(void)snprintf(out_value,out_value_len,"%u",(unsigned)ui_get_track_midi_channel(track));return 1U;}if(slot==1U){static const char*const labels[]={"INT","EXT","ALL"};(void)snprintf(out_name,out_name_len,"MIDI SRC");(void)snprintf(out_value,out_value_len,"%s",labels[ui_get_track_midi_source(track)]);return 1U;}return 0U;}
     if(slot==0U){(void)snprintf(out_name,out_name_len,"TRACK");(void)snprintf(out_value,out_value_len,"%s",ui_track_catalog_family_display_name(family));return 1U;}
     if(slot==1U){(void)snprintf(out_name,out_name_len,"TYPE");(void)snprintf(out_value,out_value_len,"%s",ui_track_catalog_type_display_name(family,ui_get_track_type(track)));return 1U;}
-    if(slot==2U&&family==TRACK_FAMILY_EXTERNAL){(void)snprintf(out_name,out_name_len,"INPUT");(void)snprintf(out_value,out_value_len,"%u",(unsigned)(ui_get_track_external_input(track)+1U));return 1U;}
+    if(slot==2U&&family==TRACK_FAMILY_EXTERNAL){const uint8_t input=ui_get_track_external_input(track);(void)snprintf(out_name,out_name_len,"INPUT");(void)snprintf(out_value,out_value_len,"%s",(input==ENTITY_AUDIO_SOURCE_USB)?"USB":"LINE");return 1U;}
     if(slot==2U&&(family==TRACK_FAMILY_SYNTH||(family==TRACK_FAMILY_SAMPLER&&ui_get_track_type(track)==TRACK_TYPE_MULTI))){(void)snprintf(out_name,out_name_len,"VOICES");(void)snprintf(out_value,out_value_len,"%u",(unsigned)polyphony_control_get_voice_count(track));return 1U;}
     return 0U;
 }
@@ -203,7 +263,9 @@ static ui_template_page_state_t g_ui_template_cfg_state = {
     .family_resolver = ui_page_template_cfg_resolve_family,
     .widget_picker = ui_page_template_cfg_pick_widget,
     .custom_widget_picker = ui_page_template_cfg_pick_custom_widget,
+    .virtual_custom_widget_picker = ui_page_template_cfg_pick_virtual_widget,
     .virtual_slot_text = ui_page_template_cfg_virtual_slot_text,
+    .virtual_slot_value = ui_page_template_cfg_virtual_slot_value,
     .active_subpage = 0U,
     .has_visited = 0U,
 };
@@ -241,10 +303,10 @@ uint8_t ui_page_template_cfg_handle_encoder(uint8_t encoder,int16_t delta)
     if(ui_page_get_id()!=UI_PAGE_TEMPLATE_CFG||encoder>=4U||delta==0)return 0U;
     const uint8_t track=ui_get_active_lane();
     if(g_ui_template_cfg_state.active_subpage==1U){if(encoder==0U){int32_t v=(int32_t)ui_get_track_midi_channel(track)+((delta>0)?1:-1);if(v<1)v=1;if(v>16)v=16;return ui_set_track_midi_channel(track,(uint8_t)v)?1U:0U;}if(encoder==1U){int32_t v=(int32_t)ui_get_track_midi_source(track)+((delta>0)?1:-1);if(v<0)v=0;if(v>=TRACK_MIDI_SOURCE_COUNT)v=TRACK_MIDI_SOURCE_COUNT-1;return ui_set_track_midi_source(track,(track_midi_source_t)v)?1U:0U;}return 1U;}
-    if(encoder==0U){const track_family_t next=ui_track_catalog_cfg_family_step(ui_get_track_family(track),(delta>0)?1:-1,track,track_state_get_configs());return ui_set_track_family(track,next)?1U:0U;}
-    if(encoder==1U){const track_family_t family=ui_get_track_family(track);const uint8_t count=ui_track_catalog_type_count_for_family(family,track,track_state_get_configs());if(count==0U)return 1U;int32_t index=(int32_t)ui_track_catalog_type_index_for_family(family,ui_get_track_type(track),track,track_state_get_configs())+((delta>0)?1:-1);if(index<0)index=0;if(index>=count)index=count-1;return ui_set_track_type(track,ui_track_catalog_type_from_family_index(family,(uint8_t)index,track,track_state_get_configs()))?1U:0U;}
+    if(encoder==0U){track_family_t next=ui_get_track_family(track);const int8_t step=(delta>0)?1:-1;uint16_t count=(delta>0)?(uint16_t)delta:(uint16_t)(-delta);while(count--!=0U)next=ui_track_catalog_cfg_family_step(next,step,track,track_state_get_configs());return ui_set_track_family(track,next)?1U:0U;}
+    if(encoder==1U){const track_family_t family=ui_get_track_family(track);const uint8_t count=ui_track_catalog_type_count_for_family(family,track,track_state_get_configs());if(count==0U)return 1U;int32_t index=(int32_t)ui_track_catalog_type_index_for_family(family,ui_get_track_type(track),track,track_state_get_configs())+(int32_t)delta;if(index<0)index=0;if(index>=count)index=count-1;return ui_set_track_type(track,ui_track_catalog_type_from_family_index(family,(uint8_t)index,track,track_state_get_configs()))?1U:0U;}
     if(encoder==2U&&ui_get_track_family(track)==TRACK_FAMILY_EXTERNAL){int32_t v=(int32_t)ui_get_track_external_input(track)+((delta>0)?1:-1);if(v<0)v=0;if(v>=ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT)v=ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT-1;return ui_set_track_external_input(track,(uint8_t)v)?1U:0U;}
-    if(encoder==2U){int32_t v=(int32_t)polyphony_control_get_voice_count(track)+((delta>0)?1:-1);const uint8_t minimum=control_music_output_count(track);if(v<minimum)v=minimum;if(v>8)v=8;return ui_cfg_restore_polyphony_audio_fx(track,(uint8_t)v);}
+    if(encoder==2U){const track_family_t family=ui_get_track_family(track);if((family!=TRACK_FAMILY_SYNTH)&&!((family==TRACK_FAMILY_SAMPLER)&&(ui_get_track_type(track)==TRACK_TYPE_MULTI)))return 1U;const uint8_t current=polyphony_control_get_voice_count(track);int32_t v=(int32_t)current+(int32_t)delta;if(v<1)v=1;if(v>8)v=8;if((uint8_t)v==current)return 1U;return ui_cfg_restore_polyphony_audio_fx(track,(uint8_t)v);}
     return 0U;
 }
 

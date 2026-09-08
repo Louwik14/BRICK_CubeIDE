@@ -39,7 +39,6 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/ui_keyboard_app.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/MIDI/midi.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/MIDI/midi_host.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/MIDI/usbh_midi.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_destination_catalog_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_env3_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_lfo_control.c"
@@ -363,12 +362,11 @@ set(PLATFORM_H743_LOWCOST
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Src/board_surface_lowcost.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Src/board_usb_lowcost.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/fusb302.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/usb_audio.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/usb_audio_pcm_ring.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/usb_device.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/usb_host.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/usb_role_manager.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/usbd_conf.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/usbd_desc.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/usbh_conf.c"
 )
 
 set(PLATFORM_H743

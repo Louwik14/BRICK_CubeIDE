@@ -36,7 +36,10 @@
 
 static uint8_t g_runtime_track_enabled = 1U;
 static uint8_t g_runtime_last_drum_processed = 0xFFU;
-static uint8_t g_audio_input_owner[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT];
+static uint8_t g_audio_input_owner[ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT] = {
+    [ENTITY_AUDIO_SOURCE_LINE] = BRICK_ENTITY_INVALID_ID,
+    [ENTITY_AUDIO_SOURCE_USB] = BRICK_ENTITY_INVALID_ID
+};
 
 uint8_t brick6_audio_runtime_set_input_owner(uint8_t input, uint8_t owner)
 {
@@ -45,10 +48,12 @@ uint8_t brick6_audio_runtime_set_input_owner(uint8_t input, uint8_t owner)
     return 1U;
 }
 
-static void brick6_publish_owned_physical_line(uint32_t frames)
+static void brick6_publish_owned_external_source(uint8_t source,
+                                                  const float *left,
+                                                  const float *right,
+                                                  uint32_t frames)
 {
-    uint8_t owner = 0U;
-    owner = g_audio_input_owner[0U];
+    const uint8_t owner = g_audio_input_owner[source];
     if (owner >= BRICK_ENTITY_CAPACITY)
     {
         return;
@@ -66,12 +71,24 @@ static void brick6_publish_owned_physical_line(uint32_t frames)
         return;
     }
 
+    mixer_submit_external_stereo(ctx->program_route.mix_track_id,
+                                 left,
+                                 right,
+                                 frames);
+}
+
+static void brick6_publish_owned_external_sources(uint32_t frames)
+{
     const audio_physical_inputs_t *const inputs =
         audio_io_get_current_physical_inputs();
-    mixer_submit_external_stereo(ctx->program_route.mix_track_id,
-                                 inputs->line.left,
-                                 inputs->line.right,
-                                 frames);
+    brick6_publish_owned_external_source(ENTITY_AUDIO_SOURCE_LINE,
+                                         inputs->line.left,
+                                         inputs->line.right,
+                                         frames);
+    brick6_publish_owned_external_source(ENTITY_AUDIO_SOURCE_USB,
+                                         inputs->usb.left,
+                                         inputs->usb.right,
+                                         frames);
 }
 
 static drum_model_id_t brick6_map_runtime_type_to_drum_model(uint8_t runtime_type)
@@ -739,7 +756,7 @@ ITCM_TEXT void brick6_audio_runtime_dsp(StereoTrack *tracks,
                               uint32_t track_count,
                               uint32_t frames)
 {
-    brick6_publish_owned_physical_line(frames);
+    brick6_publish_owned_external_sources(frames);
     const uint16_t drum_entity_mask = audio_note_engine_adapter_entity_mask(
         TRACK_RUNTIME_ENGINE_DRUM);
     const uint8_t synth_runtime_enabled = (uint8_t)(

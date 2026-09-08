@@ -172,6 +172,72 @@ static const char *ui_page_template_mod_source_label(uint8_t source)
     return (source<MOD_MATRIX_SOURCE_COUNT)?labels[source]:"OFF";
 }
 
+static ui_template_custom_widget_kind_t ui_page_template_mod_pick_virtual_widget(
+    uint8_t slot, const ui_template_subpage_t *subpage)
+{
+    if ((subpage == NULL) || (slot >= 4U)) return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+    if ((g_ui_template_mod_subset == 0U)
+            && (g_ui_template_mod_state.active_subpage == 0U))
+    {
+        static const ui_template_custom_widget_kind_t matrix_widgets[] = {
+            UI_TEMPLATE_CUSTOM_WIDGET_MATRIX_SLOT,
+            UI_TEMPLATE_CUSTOM_WIDGET_MATRIX_SOURCE,
+            UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEST,
+            UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEPTH
+        };
+        return matrix_widgets[slot];
+    }
+    if ((g_ui_template_mod_subset != 0U)
+            && (g_ui_template_mod_state.active_subpage == 0U))
+    {
+        return UI_TEMPLATE_CUSTOM_WIDGET_MATRIX_SOURCE;
+    }
+    if ((g_ui_template_mod_subset != 0U)
+            && (g_ui_template_mod_state.active_subpage == 1U))
+    {
+        return ((slot & 1U) == 0U)
+            ? UI_TEMPLATE_CUSTOM_WIDGET_MATRIX_SOURCE
+            : UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEPTH;
+    }
+    return UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+}
+
+static uint8_t ui_page_template_mod_virtual_slot_value(
+    const ui_param_seq_plock_feedback_frame_t *frame_ctx,
+    uint8_t slot,
+    float *out_value,
+    uint8_t *out_bipolar)
+{
+    (void)frame_ctx;
+    if ((out_value == NULL) || (out_bipolar == NULL) || (slot >= 4U)) return 0U;
+    const uint8_t track = ui_get_active_lane();
+    *out_bipolar = 0U;
+    if ((g_ui_template_mod_subset == 0U)
+            && (g_ui_template_mod_state.active_subpage == 0U))
+    {
+        if (slot == 0U) return mod_matrix_get_selected_slot(track, out_value);
+        if (slot == 1U) return mod_matrix_get_selected_slot_source(track, out_value);
+        if (slot == 2U) return mod_matrix_get_selected_slot_destination_index(track, out_value);
+        *out_bipolar = 1U;
+        return mod_matrix_get_selected_slot_depth(track, out_value);
+    }
+    if ((g_ui_template_mod_subset != 0U)
+            && (g_ui_template_mod_state.active_subpage == 0U))
+    {
+        return mod_matrix_get_multi_source(track, (uint8_t)(slot >> 1U),
+                                           (uint8_t)(slot & 1U), out_value);
+    }
+    if ((g_ui_template_mod_subset != 0U)
+            && (g_ui_template_mod_state.active_subpage == 1U))
+    {
+        const uint8_t op = (uint8_t)(slot >> 1U);
+        if ((slot & 1U) == 0U)
+            return mod_matrix_get_slew_source(track, op, out_value);
+        return mod_matrix_get_slew_amount(track, op, out_value);
+    }
+    return 0U;
+}
+
 static uint8_t ui_page_template_mod_virtual_slot_text(uint8_t slot,char*out_name,
     uint32_t out_name_len,char*out_value,uint32_t out_value_len)
 {
@@ -186,13 +252,36 @@ static uint8_t ui_page_template_mod_virtual_slot_text(uint8_t slot,char*out_name
     return 0U;
 }
 
-static void ui_page_template_mod_handle_event(const ui_event_t *ev)
+static uint8_t ui_page_template_mod_handle_encoder(uint8_t encoder, int16_t delta)
 {
-    if(ev!=0&&ev->type==UI_EVENT_ENCODER&&ev->id<4U&&ev->value!=0){const uint8_t track=ui_get_active_lane();float value=0.0f;const float step=(ev->value>0)?1.0f:-1.0f;
-        if(g_ui_template_mod_subset==0U&&g_ui_template_mod_state.active_subpage==0U){if(ev->id==0U){(void)mod_matrix_get_selected_slot(track,&value);(void)mod_matrix_set_selected_slot(track,value+step);}else if(ev->id==1U){(void)mod_matrix_get_selected_slot_source(track,&value);(void)mod_matrix_set_selected_slot_source(track,value+step);}else if(ev->id==2U){(void)mod_matrix_get_selected_slot_destination_index(track,&value);(void)mod_matrix_set_selected_slot_destination_index(track,value+step);}else{(void)mod_matrix_get_selected_slot_depth(track,&value);(void)mod_matrix_set_selected_slot_depth(track,value+(float)ev->value);}return;}
-        if(g_ui_template_mod_subset!=0U&&g_ui_template_mod_state.active_subpage==0U){const uint8_t op=(uint8_t)(ev->id>>1U),input=(uint8_t)(ev->id&1U);(void)mod_matrix_get_multi_source(track,op,input,&value);(void)mod_matrix_set_multi_source(track,op,input,value+step);return;}
-        if(g_ui_template_mod_subset!=0U&&g_ui_template_mod_state.active_subpage==1U){const uint8_t op=(uint8_t)(ev->id>>1U);if((ev->id&1U)==0U){(void)mod_matrix_get_slew_source(track,op,&value);(void)mod_matrix_set_slew_source(track,op,value+step);}else{(void)mod_matrix_get_slew_amount(track,op,&value);(void)mod_matrix_set_slew_amount(track,op,value+(float)ev->value*0.01f);}return;}}
-    ui_template_page_handle_event(ev);
+    if ((encoder >= 4U) || (delta == 0)) return 0U;
+    const uint8_t track = ui_get_active_lane();
+    float value = 0.0f;
+    const float step = (delta > 0) ? 1.0f : -1.0f;
+    if ((g_ui_template_mod_subset == 0U) && (g_ui_template_mod_state.active_subpage == 0U))
+    {
+        if (encoder == 0U) { (void)mod_matrix_get_selected_slot(track, &value); (void)mod_matrix_set_selected_slot(track, value + step); }
+        else if (encoder == 1U) { (void)mod_matrix_get_selected_slot_source(track, &value); (void)mod_matrix_set_selected_slot_source(track, value + step); }
+        else if (encoder == 2U) { (void)mod_matrix_get_selected_slot_destination_index(track, &value); (void)mod_matrix_set_selected_slot_destination_index(track, value + step); }
+        else { (void)mod_matrix_get_selected_slot_depth(track, &value); (void)mod_matrix_set_selected_slot_depth(track, value + (float)delta); }
+        return 1U;
+    }
+    if ((g_ui_template_mod_subset != 0U) && (g_ui_template_mod_state.active_subpage == 0U))
+    {
+        const uint8_t op = (uint8_t)(encoder >> 1U);
+        const uint8_t input = (uint8_t)(encoder & 1U);
+        (void)mod_matrix_get_multi_source(track, op, input, &value);
+        (void)mod_matrix_set_multi_source(track, op, input, value + step);
+        return 1U;
+    }
+    if ((g_ui_template_mod_subset != 0U) && (g_ui_template_mod_state.active_subpage == 1U))
+    {
+        const uint8_t op = (uint8_t)(encoder >> 1U);
+        if ((encoder & 1U) == 0U) { (void)mod_matrix_get_slew_source(track, op, &value); (void)mod_matrix_set_slew_source(track, op, value + step); }
+        else { (void)mod_matrix_get_slew_amount(track, op, &value); (void)mod_matrix_set_slew_amount(track, op, value + (float)delta * 0.01f); }
+        return 1U;
+    }
+    return 0U;
 }
 
 static ui_template_page_state_t g_ui_template_mod_state = {
@@ -200,8 +289,10 @@ static ui_template_page_state_t g_ui_template_mod_state = {
     .family_resolver = ui_page_template_mod_resolve_family,
     .widget_picker = ui_page_template_mod_pick_widget,
     .custom_widget_picker = ui_page_template_mod_pick_custom_widget,
+    .virtual_custom_widget_picker = ui_page_template_mod_pick_virtual_widget,
     .param_text = ui_page_template_mod_param_text,
     .virtual_slot_text = ui_page_template_mod_virtual_slot_text,
+    .virtual_slot_value = ui_page_template_mod_virtual_slot_value,
     .active_subpage = 0U,
     .has_visited = 0U,
 };
@@ -244,7 +335,8 @@ void ui_page_template_mod_register_families(void)
 const ui_page_t g_ui_page_template_mod = {
     .enter = ui_template_page_enter,
     .leave = ui_template_page_leave,
-    .handle_event = ui_page_template_mod_handle_event,
+    .handle_encoder = ui_page_template_mod_handle_encoder,
+    .handle_event = ui_template_page_handle_event,
     .tick = ui_template_page_tick,
     .sync_active_context = ui_template_page_sync_active_track_context,
     .render = ui_template_page_render,

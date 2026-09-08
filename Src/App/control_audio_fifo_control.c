@@ -83,7 +83,7 @@ uint8_t control_audio_fifo_publish_batch(const control_audio_command_t *commands
     if ((commands == NULL) || (control_audio_fifo_batch_begin(&writer, count) == 0U)) return 0U;
     for (uint16_t i=0U; i<count; ++i)
         if (control_audio_fifo_batch_append(&writer, &commands[i]) == 0U)
-        { control_audio_fifo_batch_abort(&writer); ++FIFO.invariant_failure_count; return 0U; }
+        { control_audio_fifo_batch_abort(&writer); return 0U; }
     return control_audio_fifo_batch_commit(&writer);
 }
 

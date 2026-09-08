@@ -81,10 +81,18 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
                 || (scope != LIVE_PARAMETER_EVENT_SCOPE_TRACK)
                 || (live_parameter_audio_runtime_exact_u8(
                     decoded, &voices) == 0U)) return 0U;
+        track_audio_runtime_ctx_t ctx;
+        if ((audio_note_engine_adapter_current_ctx(entity, &ctx) != 0U)
+                && (ctx.program_route.active == 0U))
+        {
+            g_live_parameter_audio_poly_voices[entity] = (float)voices;
+            return 1U;
+        }
+        if (audio_note_engine_adapter_apply_polyphony(entity, voices,
+                g_live_parameter_audio_poly_spread[entity]) == 0U)
+            return 0U;
         g_live_parameter_audio_poly_voices[entity] = (float)voices;
-        return audio_note_engine_adapter_apply_polyphony(entity,
-            voices,
-            g_live_parameter_audio_poly_spread[entity]);
+        return 1U;
     }
     if ((parameter_id >= CONTROL_AUDIO_MOD_ROUTE_SOURCE)
             && (parameter_id <= CONTROL_AUDIO_MOD_SLEW_AMOUNT))
@@ -155,12 +163,22 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
     const float value = decoded;
     if (parameter_id == PARAM_CFG_POLY_SPREAD)
     {
-        g_live_parameter_audio_poly_spread[entity] = value;
+        track_audio_runtime_ctx_t ctx;
+        if ((audio_note_engine_adapter_current_ctx(entity, &ctx) != 0U)
+                && (ctx.program_route.active == 0U))
+        {
+            g_live_parameter_audio_poly_spread[entity] = value;
+            audio_mod_matrix_base_update(entity, parameter_id, value);
+            return 1U;
+        }
         const uint8_t applied = audio_note_engine_adapter_apply_polyphony(
             entity, (uint8_t)g_live_parameter_audio_poly_voices[entity],
-            g_live_parameter_audio_poly_spread[entity]);
+            value);
         if (applied != 0U)
+        {
+            g_live_parameter_audio_poly_spread[entity] = value;
             audio_mod_matrix_base_update(entity, parameter_id, value);
+        }
         return applied;
     }
 

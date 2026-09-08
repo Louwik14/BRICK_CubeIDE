@@ -31,11 +31,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "usb_device.h"
-#include "usb_host.h"
-#include "usb_role_manager.h"
-#include "midi.h"
-#include "midi_host.h"
+#include "Board/board_usb.h"
 #include "sdram.h"
 #include "App/engine_tasklet.h"
 #include "ui_tasklet.h"
@@ -75,9 +71,6 @@ void SystemClock_Config(void);
 void PeriphCommonClock_Config(void);
 /* USER CODE BEGIN PFP */
 static void MPU_Config(void);
-//void MX_USB_HOST_Process(void);
-//void MX_USB_HOST_Init(void);
-void MX_USB_DEVICE_Init(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -333,14 +326,10 @@ int main(void)
              continue;
          }
 
+	     board_usb_process();
 	     brick6_app_process();
+	     board_usb_process();
 	     lowcost_bootloader_shift_step16_service();
-
-	     if (usb_role_manager_is_host_active() != 0U)
-	     {
-	         MX_USB_HOST_Process();
-	         midi_host_poll_bounded(8);
-	     }
 
 	     uint32_t ui_ticks_processed = 0U;
 	     while ((engine_tick_count != last_tick) && (ui_ticks_processed < UI_TASKLET_CATCHUP_BUDGET))

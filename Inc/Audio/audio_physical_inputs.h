@@ -28,6 +28,7 @@ typedef struct
 {
     audio_physical_line_lane_t line;
     audio_physical_mic_lane_t mic;
+    audio_physical_line_lane_t usb;
 } audio_physical_inputs_t;
 
 #ifdef __cplusplus
