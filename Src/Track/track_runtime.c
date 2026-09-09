@@ -1050,6 +1050,7 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_MIDI_CC3_2:
         case PARAM_MIDI_CC3_3:
         case PARAM_MIDI_CC3_4:
+        case PARAM_EXT_GATE:
         case PARAM_SAMPLER_GAIN:
         case PARAM_SAMPLER_START:
         case PARAM_SAMPLER_LENGTH:
@@ -1343,6 +1344,12 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
                 {
                     return TRACK_RUNTIME_PARAM_UNAVAILABLE;
                 }
+            }
+            if ((param == PARAM_EXT_GATE)
+                    && ((ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_EXTERNAL)
+                        || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_EXTERNAL)))
+            {
+                return TRACK_RUNTIME_PARAM_UNAVAILABLE;
             }
             return TRACK_RUNTIME_PARAM_ALLOWED;
 

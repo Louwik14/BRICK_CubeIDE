@@ -4,6 +4,7 @@
 
 #include "IPC/usb_audio_pcm_ring.h"
 #include "Platform/memory_layout.h"
+#include "Platform/superloop_diag.h"
 #include "stm32h7xx.h"
 #include "tusb.h"
 
@@ -80,6 +81,10 @@ void usb_audio_transport_set_interface(uint8_t interface_number,
     }
 
     if (interface_number == USB_AUDIO_AS_OUT_INTERFACE) {
+        if ((alternate_setting != 0U) && (g_usb_audio_out_active == 0U)) {
+            usb_audio_pcm_diag_reset();
+            superloop_diag_reset();
+        }
         g_usb_audio_out_active = (alternate_setting != 0U) ? 1U : 0U;
     } else {
         g_usb_audio_in_active = (alternate_setting != 0U) ? 1U : 0U;
@@ -153,8 +158,24 @@ uint32_t usb_audio_audio_write(const int32_t *interleaved, uint32_t frames)
 void usb_audio_transport_process(void)
 {
     if (g_usb_audio_out_active != 0U) {
+        const uint32_t now = DWT->CYCCNT;
         uint16_t available = tud_audio_n_available(0U);
         uint32_t bytes = available;
+
+        if (g_usb_audio_diag_transport_call_count != 0U) {
+            const uint32_t gap = now - g_usb_audio_diag_transport_last_tick;
+
+            if (gap > g_usb_audio_diag_transport_max_gap_ticks) {
+                g_usb_audio_diag_transport_max_gap_ticks = gap;
+                g_usb_audio_diag_transport_gap_service_id =
+                    g_superloop_diag_interval_max_service_id;
+                g_usb_audio_diag_transport_gap_service_cycles =
+                    g_superloop_diag_interval_max_cycles;
+            }
+        }
+        g_usb_audio_diag_transport_last_tick = now;
+        ++g_usb_audio_diag_transport_call_count;
+        superloop_diag_interval_reset();
 
         if (bytes > (USB_AUDIO_SERVICE_MAX_FRAMES * USB_AUDIO_BYTES_PER_FRAME)) {
             bytes = USB_AUDIO_SERVICE_MAX_FRAMES * USB_AUDIO_BYTES_PER_FRAME;
@@ -230,6 +251,19 @@ bool tud_audio_rx_done_isr(uint8_t rhport, uint16_t n_bytes_received,
     (void)func_id;
     (void)ep_out;
     (void)cur_alt_setting;
+    if (g_usb_audio_out_active != 0U) {
+        const uint32_t now = DWT->CYCCNT;
+
+        if (g_usb_audio_diag_rx_event_count != 0U) {
+            const uint32_t gap = now - g_usb_audio_diag_rx_last_tick;
+
+            if (gap > g_usb_audio_diag_rx_max_gap_ticks) {
+                g_usb_audio_diag_rx_max_gap_ticks = gap;
+            }
+        }
+        g_usb_audio_diag_rx_last_tick = now;
+        ++g_usb_audio_diag_rx_event_count;
+    }
     return true;
 }
 

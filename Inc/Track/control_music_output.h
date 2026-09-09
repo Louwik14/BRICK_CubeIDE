@@ -56,6 +56,7 @@ static inline uint8_t control_music_action_channel(
 typedef void (*control_music_output_death_observer_t)(
     brick_entity_id_t entity_id, uint32_t output_id);
 
+void control_music_output_init(void);
 uint8_t control_music_output_register_death_observer(
     control_music_output_death_observer_t observer);
 

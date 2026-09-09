@@ -8,6 +8,7 @@
 
 #define USB_HOST_POWER_SETTLE_MS 200U
 #define USB_FUSB_RETRY_MS        100U
+#define USB_FUSB_POLL_MS         100U
 
 typedef struct
 {
@@ -20,6 +21,7 @@ typedef struct
     volatile uint8_t host_flag_event_pending;
     uint32_t host_power_deadline;
     uint32_t fusb_retry_deadline;
+    uint32_t fusb_poll_deadline;
 } usb_role_manager_ctx_t;
 
 static usb_role_manager_ctx_t g_usb_role;
@@ -133,6 +135,7 @@ void usb_role_manager_init(void)
     if (fusb302_init(&hi2c1) == FUSB302_STATUS_OK)
     {
         g_usb_role.initialized = 1U;
+        g_usb_role.fusb_poll_deadline = HAL_GetTick();
         apply_role(role_from_fusb302(fusb302_cached_role()));
     }
 }
@@ -165,20 +168,36 @@ void usb_role_manager_process(void)
         return;
     }
 
-    if (fusb302_irq_pending())
+    /* INT_N is level-signalled.  A falling edge can be missed when the line
+     * is already asserted as EXTI is armed, so retain the EXTI latch as the
+     * fast path and use the physical level as the recovery path. */
+    const uint8_t fusb_attention =
+        (fusb302_irq_pending()
+         || (HAL_GPIO_ReadPin(FUSB302_INT_N_GPIO_Port,
+                              FUSB302_INT_N_Pin) == GPIO_PIN_RESET)) ? 1U : 0U;
+    /* Reconcile the authoritative registers at a bounded rate as well.  DRP
+     * can complete after fusb302_init() sampled TOGSS=RUNNING, and INT_N is
+     * not a durable indication once an interrupt source has been consumed. */
+    const uint8_t fusb_poll_due =
+        deadline_reached(g_usb_role.fusb_poll_deadline);
+    if ((fusb_attention != 0U) || (fusb_poll_due != 0U))
     {
         if ((g_usb_role.fusb_retry_waiting != 0U)
                 && (deadline_reached(g_usb_role.fusb_retry_deadline) == 0U))
         {
             return;
         }
-        if (fusb302_handle_interrupt() != FUSB302_STATUS_OK)
+        const fusb302_status_t status = (fusb_attention != 0U)
+            ? fusb302_handle_interrupt()
+            : fusb302_refresh_state();
+        if (status != FUSB302_STATUS_OK)
         {
             g_usb_role.fusb_retry_waiting = 1U;
             g_usb_role.fusb_retry_deadline = HAL_GetTick() + USB_FUSB_RETRY_MS;
             return;
         }
         g_usb_role.fusb_retry_waiting = 0U;
+        g_usb_role.fusb_poll_deadline = HAL_GetTick() + USB_FUSB_POLL_MS;
     }
 
     const usb_role_manager_role_t requested =

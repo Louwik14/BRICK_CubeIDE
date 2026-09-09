@@ -61,6 +61,9 @@ static uint8_t param_audio_apply_non_filter(param_id_t id,
         return mod_lfo_v1_set_track_param_audio(track, lfo, lfo_param, value);
     if (id == PARAM_MIDI_PROGRAM)
         return 0U;
+    if (id == PARAM_EXT_GATE)
+        return audio_note_engine_adapter_set_external_gate_mode(
+            track, (value >= 0.5f) ? 1U : 0U);
     track_audio_runtime_ctx_t ctx;
     if ((audio_note_engine_adapter_current_ctx(track, &ctx) == 0U)
             || (audio_note_engine_adapter_ctx_is_audio_routable(&ctx) == 0U))

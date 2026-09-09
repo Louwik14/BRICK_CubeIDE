@@ -83,6 +83,8 @@ uint8_t audio_note_engine_adapter_current(
 uint8_t audio_note_engine_adapter_apply_output(
     brick_entity_id_t entity_id, uint8_t note, uint8_t velocity,
     uint8_t is_note_on, uint32_t output_id);
+uint8_t audio_note_engine_adapter_set_external_gate_mode(
+    brick_entity_id_t entity_id, uint8_t triggered);
 
 uint8_t audio_note_engine_adapter_install_prepared(
     const audio_note_engine_install_spec_t *spec);

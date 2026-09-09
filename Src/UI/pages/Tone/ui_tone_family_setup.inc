@@ -123,7 +123,7 @@ void ui_page_template_tone_register_families(void)
             }
             else if ((track_family == TRACK_FAMILY_EXTERNAL) && (track_type == TRACK_TYPE_EXTERNAL))
             {
-                family_template = &g_ui_template_tone_family_midi;
+                family_template = &g_ui_template_tone_family_external;
             }
             else if (track_family == TRACK_FAMILY_DRUM)
             {

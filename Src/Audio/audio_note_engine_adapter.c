@@ -20,6 +20,7 @@
 static track_audio_runtime_ctx_t g_audio_track_ctx[BRICK_ENTITY_CAPACITY];
 static uint16_t g_audio_entity_mask_by_engine[TRACK_RUNTIME_ENGINE_COUNT];
 static uint8_t g_audio_entity_by_mix_lane[MIXER_MAX_TRACKS];
+static uint8_t g_audio_external_gate_triggered[BRICK_ENTITY_CAPACITY];
 
 #define AUDIO_PHYSICAL_OUTPUT_CAPACITY 8U
 
@@ -128,6 +129,8 @@ void audio_note_engine_adapter_init(void)
 {
     memset(g_audio_track_ctx, 0, sizeof(g_audio_track_ctx));
     memset(g_audio_physical_output, 0, sizeof(g_audio_physical_output));
+    memset(g_audio_external_gate_triggered, 0,
+           sizeof(g_audio_external_gate_triggered));
     for (brick_entity_id_t entity = 0U;
          entity < BRICK_ENTITY_CAPACITY; ++entity)
     {
@@ -296,6 +299,10 @@ static uint8_t audio_note_engine_adapter_apply_physical(
     const uint8_t is_multi_sampler = (uint8_t)((engine
             == TRACK_RUNTIME_ENGINE_SAMPLER)
         && (program->type == TRACK_RUNTIME_TYPE_MULTI));
+    const uint8_t is_external = (uint8_t)(
+        program->type == TRACK_RUNTIME_TYPE_EXTERNAL);
+    const uint8_t output_was_active = (uint8_t)(
+        audio_note_engine_find_output(entity_id, output_id) >= 0);
 
     if ((is_poly_synth == 0U) && (is_multi_sampler == 0U)
             && (output_id != 0U))
@@ -355,10 +362,17 @@ static uint8_t audio_note_engine_adapter_apply_physical(
             && (program->has_mix_target != 0U)
             && (is_multi_sampler == 0U))
     {
-        if (is_note_on != 0U)
-            mixer_track_vca_note_on(program->mix_track_id, note, velocity);
-        else
-            mixer_track_vca_note_off(program->mix_track_id, note);
+        const uint8_t drive_vca = (uint8_t)((is_external == 0U)
+            || (g_audio_external_gate_triggered[entity_id] != 0U));
+        if (drive_vca != 0U)
+        {
+            if ((is_note_on != 0U) && ((is_external == 0U)
+                    || (output_was_active == 0U)))
+                mixer_track_vca_note_on(program->mix_track_id, note, velocity);
+            else if ((is_note_on == 0U) && ((is_external == 0U)
+                    || (output_was_active != 0U)))
+                mixer_track_vca_note_off(program->mix_track_id, note);
+        }
     }
 
     if (engine == TRACK_RUNTIME_ENGINE_DRUM)
@@ -458,6 +472,35 @@ uint8_t audio_note_engine_adapter_apply_output(
         is_note_on, output_id);
 }
 
+uint8_t audio_note_engine_adapter_set_external_gate_mode(
+    brick_entity_id_t entity_id, uint8_t triggered)
+{
+    if (entity_id >= BRICK_ENTITY_CAPACITY)
+        return 0U;
+    const track_audio_runtime_ctx_t *const ctx = &g_audio_track_ctx[entity_id];
+    if ((ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_EXTERNAL)
+            || (ctx->program_route.active == 0U)
+            || (ctx->program_route.mix_track_id >= MIXER_MAX_TRACKS))
+        return 0U;
+
+    triggered = (triggered != 0U) ? 1U : 0U;
+    g_audio_external_gate_triggered[entity_id] = triggered;
+    mixer_track_vca_all_notes_off(ctx->program_route.mix_track_id);
+    mixer_set_track_vca_enabled(ctx->program_route.mix_track_id, triggered);
+    if (triggered == 0U)
+        return 1U;
+
+    for (uint8_t i = 0U; i < AUDIO_PHYSICAL_OUTPUT_CAPACITY; ++i)
+    {
+        const audio_physical_output_t *const held =
+            &g_audio_physical_output[entity_id][i];
+        if (held->gate != 0U)
+            mixer_track_vca_note_on(ctx->program_route.mix_track_id,
+                                    held->note, held->velocity);
+    }
+    return 1U;
+}
+
 static uint8_t audio_note_engine_adapter_mix_target_available(
     brick_entity_id_t entity_id, uint8_t mix_track)
 {
@@ -520,6 +563,8 @@ uint8_t audio_note_engine_adapter_install_prepared(
         && (family == TRACK_RUNTIME_FAMILY_SYNTH)
         && (synth_polyphony_get_voice_count(entity_id) == requested_voices));
     const uint8_t previous_mix = ctx->program_route.mix_track_id;
+    const uint8_t previous_was_external = (uint8_t)(
+        ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_EXTERNAL);
     if (preserve_synth_slots == 0U)
         (void)synth_polyphony_set_track_active(entity_id, 0U, 0U);
     const uint8_t midi_channel = ctx->midi_channel_1_16;
@@ -639,6 +684,22 @@ uint8_t audio_note_engine_adapter_install_prepared(
             || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
             || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)
             || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_EXTERNAL)));
+    if ((previous_was_external != 0U)
+            || (type == TRACK_RUNTIME_TYPE_EXTERNAL))
+    {
+        if (previous_mix < MIXER_MAX_TRACKS)
+        {
+            mixer_track_vca_all_notes_off(previous_mix);
+            mixer_set_track_vca_enabled(previous_mix, 0U);
+        }
+        if ((installed.mix_track_id < MIXER_MAX_TRACKS)
+                && (installed.mix_track_id != previous_mix))
+        {
+            mixer_track_vca_all_notes_off(installed.mix_track_id);
+            mixer_set_track_vca_enabled(installed.mix_track_id, 0U);
+        }
+        g_audio_external_gate_triggered[entity_id] = 0U;
+    }
     audio_note_engine_adapter_rebuild_program_projections();
     mixer_rebuild_static_plan();
     audio_mod_matrix_rebuild_track(entity_id);

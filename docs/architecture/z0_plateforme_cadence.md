@@ -12,7 +12,9 @@ et le role Host sert MIDI via TinyUSB. L'IRQ OTG ne fait que dispatcher vers
 TinyUSB. Les flux UAC2 duplex traversent deux rings SPSC de 288 frames places
 dans la moitie D3 non cachee; le chemin audio IRQ ne touche jamais la pile USB.
 Le role Host applique une attente VBUS de 200 ms par deadline, et les erreurs
-I2C FUSB utilisent un retry cadence au lieu d'une lecture a chaque tour.
+I2C FUSB utilisent un retry cadence. Le latch/level `INT_N` reste le chemin
+rapide; une reconciliation bornee a 100 ms relit aussi les registres FUSB afin
+qu'un resultat DRP produit apres l'echantillon d'init ne reste pas hors cache.
 
 Le Hall Low-Cost execute la machine bornee depuis l'acquisition ADC. TIM5 est le compteur libre commun de capture. CONTROL en possede l'extension et la conversion; AUDIO initialise sa sample clock locale depuis TIM5 au premier callback valide et ne publie aucune ancre.
 

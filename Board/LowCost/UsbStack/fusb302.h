@@ -44,6 +44,7 @@ typedef struct {
 
 fusb302_status_t fusb302_init(I2C_HandleTypeDef *hi2c);
 fusb302_status_t fusb302_read_role(fusb302_role_t *role);
+fusb302_status_t fusb302_refresh_state(void);
 fusb302_status_t fusb302_handle_interrupt(void);
 bool fusb302_is_present(void);
 bool fusb302_irq_pending(void);

@@ -311,6 +311,7 @@ set(DOMAIN_AUDIO
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_backends.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_registry_tone_backends.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/cpu_load.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/superloop_diag.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_voice_reader.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/synth_polyphony.c"
 )

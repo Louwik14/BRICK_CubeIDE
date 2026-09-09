@@ -15,6 +15,7 @@ uint8_t param_registry_track_value_is_audio_command(param_id_t id,
                 track_runtime_get_ctx(track)) != 0U));
     return (uint8_t)(
         (live_parameter_is_audio_owned(id) != 0U)
+        || (id == PARAM_EXT_GATE)
         || (id == PARAM_CFG_POLY_SPREAD)
         || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
         || ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)

@@ -106,6 +106,7 @@ static const char *const g_midi_fx_model_labels[] = {"OFF", "ARP", NULL};
 static const char *const g_audio_fx_model_labels[] = {"OFF", "LOFI", "FOLD", "DRIVE", "-", "POINT", "-", "-", "SUB", "-", "RING", "SUB LIGHT", "VIBE", "DRIFT", NULL};
 static const char *const g_filter_mode_labels[] = {"OFF", "LOW", "HIGH", NULL};
 static const char *const g_fm_operator_mode_labels[] = {"RATIO", "FIXED", NULL};
+static const char *const g_ext_gate_labels[] = {"ON", "TRIG", NULL};
 static const char *const g_fm_algorithm_labels[] = {
     "1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16",
     "17","18","19","20","21","22","23","24","25","26","27","28","29","30","31","32",NULL

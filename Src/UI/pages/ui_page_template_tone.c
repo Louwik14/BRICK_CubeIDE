@@ -336,6 +336,18 @@ static const ui_template_family_t g_ui_template_tone_family_midi = {
     .default_subpage = 0U,
 };
 
+static const ui_template_family_t g_ui_template_tone_family_external = {
+    .family_title = "TONE",
+    .nav_labels = { "MAIN", "CC1", "CC2", "CC3" },
+    .subpages = {
+        { .title = "MAIN", .param_bank = { .params = { PARAM_EXT_GATE, PARAM_MIDI_PROGRAM, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "CC1", .param_bank = { .params = { PARAM_MIDI_CC1_1, PARAM_MIDI_CC1_2, PARAM_MIDI_CC1_3, PARAM_MIDI_CC1_4 } } },
+        { .title = "CC2", .param_bank = { .params = { PARAM_MIDI_CC2_1, PARAM_MIDI_CC2_2, PARAM_MIDI_CC2_3, PARAM_MIDI_CC2_4 } } },
+        { .title = "CC3", .param_bank = { .params = { PARAM_MIDI_CC3_1, PARAM_MIDI_CC3_2, PARAM_MIDI_CC3_3, PARAM_MIDI_CC3_4 } } },
+    },
+    .default_subpage = 0U,
+};
+
 
 static ui_template_family_t g_ui_template_tone_family_drum = {
     .family_title = "TONE",

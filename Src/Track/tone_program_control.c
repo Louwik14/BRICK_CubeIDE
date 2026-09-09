@@ -52,9 +52,14 @@ static float *tone_field(tone_program_control_t *p, param_id_t id)
         switch(id){F(PARAM_LOOPER_XFADE,p->state.looper.xfade);F(PARAM_LOOPER_STRETCH,p->state.looper.stretch);F(PARAM_LOOPER_PITCH,p->state.looper.pitch);F(PARAM_LOOPER_GRAIN,p->state.looper.grain);default:return NULL;}
     case TRACK_RUNTIME_TYPE_MULTI:
         switch(id){F(PARAM_SAMPLER_GAIN,p->state.multi.gain);F(PARAM_SAMPLER_MULTI_LOOP,p->state.multi.loop);default:return NULL;}
-    case TRACK_RUNTIME_TYPE_MIDI: case TRACK_RUNTIME_TYPE_EXTERNAL:
+    case TRACK_RUNTIME_TYPE_MIDI:
         if(id==PARAM_MIDI_PROGRAM)return &p->state.midi.program;
         if(id>=PARAM_MIDI_CC1_1&&id<=PARAM_MIDI_CC3_4)return &p->state.midi.cc[((uint16_t)id-(uint16_t)PARAM_MIDI_CC1_1)/4U][((uint16_t)id-(uint16_t)PARAM_MIDI_CC1_1)%4U];
+        return NULL;
+    case TRACK_RUNTIME_TYPE_EXTERNAL:
+        if(id==PARAM_EXT_GATE)return &p->state.external.gate;
+        if(id==PARAM_MIDI_PROGRAM)return &p->state.external.midi.program;
+        if(id>=PARAM_MIDI_CC1_1&&id<=PARAM_MIDI_CC3_4)return &p->state.external.midi.cc[((uint16_t)id-(uint16_t)PARAM_MIDI_CC1_1)/4U][((uint16_t)id-(uint16_t)PARAM_MIDI_CC1_1)%4U];
         return NULL;
     case TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG:
         switch(id){F(PARAM_DRUM_TRX_BD_PITCH,p->state.drum_analog.pitch);F(PARAM_DRUM_TRX_BD_DECAY,p->state.drum_analog.decay);F(PARAM_DRUM_TRX_BD_PITCH_SWEEP,p->state.drum_analog.pitch_sweep);

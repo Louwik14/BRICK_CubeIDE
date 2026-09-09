@@ -1,6 +1,7 @@
 #include "drv_display.h"
 
 #include "Board/board_display_transport.h"
+#include "Board/board_usb.h"
 #include "sdram.h"
 #include "Platform/memory_layout.h"
 #include "../../U8g2/u8g2.h"
@@ -24,6 +25,13 @@ static volatile uint8_t g_dma_payload_done;
 static volatile uint8_t g_dma_payload_error;
 static uint8_t g_flush_active;
 static uint8_t g_flush_page;
+
+static void cooperative_hvline(u8g2_t *u8g2, u8g2_uint_t x,
+                               u8g2_uint_t y, u8g2_uint_t len, uint8_t dir)
+{
+    board_usb_service_if_due();
+    u8g2_ll_hvline_vertical_top_lsb(u8g2, x, y, len, dir);
+}
 
 /* ====================================================================== */
 /*                             SPI / GPIO                                 */
@@ -325,7 +333,7 @@ void drv_display_init(void)
     u8g2_SetupDisplay(&g_u8g2, u8x8_d_ssd1309_128x64_noname0, u8x8_cad_001, u8x8_byte_empty, NULL);
 
     /* Setup U8g2 to use external buffer */
-    u8g2_SetupBuffer(&g_u8g2, buffer, 8, u8g2_ll_hvline_vertical_top_lsb, &u8g2_cb_r0);
+    u8g2_SetupBuffer(&g_u8g2, buffer, 8, cooperative_hvline, &u8g2_cb_r0);
 
     u8g2_SetFontMode(&g_u8g2, 1);
     u8g2_SetDrawColor(&g_u8g2, 1);

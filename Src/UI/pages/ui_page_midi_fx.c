@@ -88,8 +88,7 @@ static brick_entity_id_t ui_page_audio_fx_selected_entity(void)
 
 static uint8_t ui_page_is_audio_fx_slot_param(param_id_t id)
 {
-    return (uint8_t)(((id >= PARAM_AUDIO_FX_MODEL)
-                      && (id <= PARAM_AUDIO_FX_B_P3)) ? 1U : 0U);
+    return audio_fx_param_catalog_param_info(id, NULL, NULL);
 }
 
 static const ui_template_family_t *ui_page_audio_fx_resolve_family(void)

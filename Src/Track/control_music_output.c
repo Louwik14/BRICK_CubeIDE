@@ -97,6 +97,26 @@ static void control_music_output_reset_window_buckets(void)
     g_control_music_window_external.count = 0U;
 }
 
+void control_music_output_init(void)
+{
+    /* These ledgers live in NOLOAD SRAM2: C startup does not provide the
+     * zero-initialization normally guaranteed for static storage. */
+    memset(g_control_music_outputs, 0, sizeof(g_control_music_outputs));
+    memset(g_control_music_outputs_staged, 0,
+           sizeof(g_control_music_outputs_staged));
+    memset(g_control_music_output_death_observer, 0,
+           sizeof(g_control_music_output_death_observer));
+    g_control_music_output_age = 0U;
+    g_control_music_output_age_staged = 0U;
+    g_control_music_window_first = 0U;
+    g_control_music_window_frames = 0U;
+    g_control_music_window_internal_limit = 0U;
+    g_control_music_window_external_limit = 0U;
+    g_control_music_window_active = 0U;
+    g_control_music_window_prepared = 0U;
+    control_music_output_reset_window_buckets();
+}
+
 uint8_t control_music_output_begin_window(uint64_t first_sample,
                                           uint16_t frames)
 {

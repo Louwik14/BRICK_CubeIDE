@@ -268,7 +268,9 @@ enum {
     PARAM_COMP_DETECT,
     PARAM_COMP_KNEE_DB,
     PARAM_COMP_DELUGE_SAT,
-    PARAM_RESERVED_EXTERNAL_INPUT,
+    /* EXT TONE gate policy. Reuses the retired external-input slot so every
+     * following persisted parameter ordinal remains stable. */
+    PARAM_EXT_GATE,
 
     PARAM_MIDI_FX_S1_PARAM1,
     PARAM_MIDI_FX_S1_PARAM2,
@@ -458,7 +460,6 @@ static inline uint8_t param_id_is_reserved(param_id_t id)
         case PARAM_RESERVED_MOD_SLEW_1_AMOUNT:
         case PARAM_RESERVED_MOD_SLEW_2_SOURCE:
         case PARAM_RESERVED_MOD_SLEW_2_AMOUNT:
-        case PARAM_RESERVED_EXTERNAL_INPUT:
         case PARAM_RESERVED_AUDIO_FX_FILTER_POS:
         case PARAM_RESERVED_AUDIO_FX_ORDER:
         case PARAM_RESERVED_AUDIO_FX_MODE_A:
@@ -507,6 +508,7 @@ PARAM_ID_STATIC_ASSERT(PARAM_MIX_REVERB_DELAYS == 143, "Reverb parameter ID chan
 PARAM_ID_STATIC_ASSERT(PARAM_RESERVED_175 == 144, "Reserved parameter ID changed");
 PARAM_ID_STATIC_ASSERT(PARAM_COUNT == 365, "Parameter count changed");
 PARAM_ID_STATIC_ASSERT(PARAM_MIDI_FX_S1_PARAM1 == 250, "MIDI FX parameter boundary changed");
+PARAM_ID_STATIC_ASSERT(PARAM_EXT_GATE == 249, "EXT gate parameter ID changed");
 #undef PARAM_ID_STATIC_ASSERT
 
 #ifdef __cplusplus

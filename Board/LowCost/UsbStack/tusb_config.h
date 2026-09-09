@@ -22,6 +22,7 @@
 #define CFG_TUD_AUDIO_FUNC_1_EP_OUT_SW_BUF_SZ 2048
 #define CFG_TUD_AUDIO_CTRL_BUF_SZ       64
 #define CFG_TUD_ENDPOINT0_SIZE          64
+#define CFG_TUD_TASK_EVENTS_PER_RUN     4
 
 #define CFG_TUH_MIDI                    1
 #define CFG_TUH_MIDI_RX_BUFSIZE         256

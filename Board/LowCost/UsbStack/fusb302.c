@@ -421,15 +421,10 @@ fusb302_status_t fusb302_read_role(fusb302_role_t *role)
     return status;
 }
 
-fusb302_status_t fusb302_handle_interrupt(void)
+fusb302_status_t fusb302_refresh_state(void)
 {
     if (!g_fusb302.present) {
         return FUSB302_STATUS_NOT_PRESENT;
-    }
-
-    const bool int_asserted = (HAL_GPIO_ReadPin(FUSB302_INT_N_GPIO_Port, FUSB302_INT_N_Pin) == GPIO_PIN_RESET);
-    if (!g_fusb302.irq_pending && !int_asserted) {
-        return FUSB302_STATUS_OK;
     }
 
     const fusb302_status_t status = fusb302_read_state(true);
@@ -441,6 +436,20 @@ fusb302_status_t fusb302_handle_interrupt(void)
         g_fusb302.irq_pending = true;
     }
     return status;
+}
+
+fusb302_status_t fusb302_handle_interrupt(void)
+{
+    if (!g_fusb302.present) {
+        return FUSB302_STATUS_NOT_PRESENT;
+    }
+
+    const bool int_asserted = (HAL_GPIO_ReadPin(FUSB302_INT_N_GPIO_Port, FUSB302_INT_N_Pin) == GPIO_PIN_RESET);
+    if (!g_fusb302.irq_pending && !int_asserted) {
+        return FUSB302_STATUS_OK;
+    }
+
+    return fusb302_refresh_state();
 }
 
 bool fusb302_is_present(void)

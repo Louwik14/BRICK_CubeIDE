@@ -30,6 +30,7 @@
 #include "Storage/wav_loader.h"
 #include "Storage/waveform_cache.h"
 #include "Track/track_state.h"
+#include "Track/control_music_output.h"
 #include "UI/ui_active_track_sync.h"
 #include "ControlRT/control_rt_publication.h"
 #include "IPC/live_clock_control.h"
@@ -40,9 +41,9 @@
 void control_domain_init(void)
 {
     control_rt_publication_init();
+    control_music_output_init();
     live_clock_control_init();
     project_load_quiesce_init();
-    board_usb_device_init();
 
     sd_access_gate_init();
     wav_convert_init();
@@ -89,4 +90,5 @@ void control_domain_start(float postgain, float output_compensation)
     ui_active_track_sync_full_after_global_restore();
     brick6_stream_service_task_init();
     midi_init();
+    board_usb_device_init();
 }
