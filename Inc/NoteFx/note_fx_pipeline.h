@@ -44,6 +44,8 @@ uint8_t note_fx_pipeline_forget_causal_sources(
 uint8_t note_fx_pipeline_process(uint64_t block_start, uint16_t frames,
                                  uint32_t samples_per_step_q16);
 uint8_t note_fx_pipeline_apply_pending(void);
+uint8_t note_fx_pipeline_prepare_external_window(uint64_t block_start,
+                                                 uint16_t frames);
 uint8_t note_fx_pipeline_configure_track(uint8_t track);
 uint8_t note_fx_pipeline_apply_control_override(uint8_t track, uint8_t slot,
                                                 uint8_t param, uint8_t value);

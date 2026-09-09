@@ -208,6 +208,10 @@ const char *wavetable_pool_result_label(wavetable_result_t result)
             return "SD WRITE FAIL";
         case WAVETABLE_RESULT_REGISTER_FAIL:
             return "REGISTER FAIL";
+        case WAVETABLE_RESULT_TRANSPORT_ACTIVE:
+            return "STOP TO LOAD";
+        case WAVETABLE_RESULT_RECORDER_ACTIVE:
+            return "STOP REC TO LOAD";
         case WAVETABLE_RESULT_INVALID_ARG:
         default:
             return "LOAD FAIL";

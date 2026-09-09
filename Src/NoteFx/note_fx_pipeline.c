@@ -224,10 +224,10 @@ static note_event_result_t note_fx_pipeline_terminal(const note_event_t *event, 
         ? track_runtime_get_midi_channel_zero_based(terminal.track)
         : terminal.destination_id;
     const uint8_t external_flag = (uint8_t)(
-        (((terminal.occurrence_id
+        (((terminal.source_token
             & (uint32_t)~NOTE_EVENT_OCCURRENCE_COUNTER_MASK)
             == NOTE_EVENT_OCCURRENCE_NAMESPACE_KEY)
-        || ((terminal.occurrence_id
+        || ((terminal.source_token
             & (uint32_t)~NOTE_EVENT_OCCURRENCE_COUNTER_MASK)
             == NOTE_EVENT_OCCURRENCE_NAMESPACE_MIDI))
         ? CONTROL_MUSIC_ACTION_EXTERNAL_FLAG : 0U);
@@ -797,10 +797,6 @@ uint8_t note_fx_pipeline_configure_track(uint8_t track)
 uint8_t note_fx_pipeline_process(uint64_t block_start, uint16_t frames,
                                  uint32_t samples_per_step_q16)
 {
-    if (frames != 0U)
-        if (note_fx_pipeline_apply_due_live_events(
-                block_start + frames - 1U) == 0U)
-            return 0U;
     return (note_fx_engine_process(
         block_start, frames, samples_per_step_q16,
         note_fx_pipeline_stage_emit, 0) == NOTE_EVENT_RESULT_ACCEPTED) ? 1U : 0U;
@@ -809,4 +805,14 @@ uint8_t note_fx_pipeline_process(uint64_t block_start, uint16_t frames,
 uint8_t note_fx_pipeline_apply_pending(void)
 {
     return note_fx_pipeline_apply_pending_commands();
+}
+
+uint8_t note_fx_pipeline_prepare_external_window(uint64_t block_start,
+                                                 uint16_t frames)
+{
+    if (note_fx_pipeline_apply_pending_commands() == 0U)
+        return 0U;
+    return (frames == 0U)
+        ? 1U
+        : note_fx_pipeline_apply_due_live_events(block_start + frames - 1U);
 }

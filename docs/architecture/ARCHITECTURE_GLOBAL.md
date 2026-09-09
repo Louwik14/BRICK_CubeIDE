@@ -11,6 +11,9 @@ Le code courant est l'autorite finale. Ce document est l'unique porte d'entree d
 - L'ordre fonctionnel CONTROL vers AUDIO traverse exclusivement la FIFO SPSC
   unique PROGRAM/PARAM/NOTE/TRANSPORT/RECORD/PANIC. Les gros data planes et
   retours physiques utilisent des structures fixes, pointer-free et separees.
+- CONTROL valide l'etat logique final et ses budgets avant publication. AUDIO
+  applique sans negociation; l'impossibilite d'appliquer une commande admise est
+  un fatal source et non une erreur recuperable ou une commande depilee.
 - `STOP(output_id)` rend l'output musicalement mort dans CONTROL. AUDIO peut conserver une tail RELEASE et libere ou reutilise physiquement le slot sans ACK musical.
 - Pattern, Project et Patch utilisent exclusivement le codec CONTROL explicite version 4.
 

@@ -25,6 +25,7 @@ static uint8_t g_project_load_panic_committed;
 static uint8_t g_project_load_retire_started;
 static uint8_t g_project_load_requested;
 static volatile uint8_t g_project_load_ingress_open;
+static uint8_t g_resource_mutation_ingress_holds;
 
 static uint8_t project_load_recorder_busy(void)
 {
@@ -62,6 +63,7 @@ void project_load_quiesce_init(void)
     g_project_load_retire_started = 0U;
     g_project_load_requested = 0U;
     g_project_load_ingress_open = 1U;
+    g_resource_mutation_ingress_holds = 0U;
 }
 
 void project_load_quiesce_request(void)
@@ -122,7 +124,33 @@ void project_load_quiesce_end(void)
     g_project_load_retire_started = 0U;
     g_project_load_requested = 0U;
     __DMB();
-    g_project_load_ingress_open = 1U;
+    g_project_load_ingress_open =
+        (g_resource_mutation_ingress_holds == 0U) ? 1U : 0U;
+}
+
+void resource_mutation_ingress_close(void)
+{
+    if (g_resource_mutation_ingress_holds != UINT8_MAX)
+        g_resource_mutation_ingress_holds++;
+    g_project_load_ingress_open = 0U;
+    __DMB();
+    live_event_discard_pending();
+    midi_rx_discard_pending();
+    midi_host_rx_discard_pending();
+    note_fx_pipeline_panic();
+    seq_play_scheduler_clear();
+}
+
+void resource_mutation_ingress_open(void)
+{
+    if (g_resource_mutation_ingress_holds != 0U)
+        g_resource_mutation_ingress_holds--;
+    if ((g_resource_mutation_ingress_holds == 0U)
+        && (g_project_load_requested == 0U))
+    {
+        g_project_load_ingress_open = 1U;
+        __DMB();
+    }
 }
 
 uint8_t project_load_ingress_is_open(void)

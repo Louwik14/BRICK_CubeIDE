@@ -65,6 +65,7 @@ uint8_t control_music_output_register_death_observer(
  * chronologically without adding another persistent transport. */
 uint8_t control_music_output_begin_window(uint64_t first_sample,
                                           uint16_t frames);
+void control_music_output_preflight_product_window(uint64_t first_sample);
 void control_music_output_abort_window(void);
 uint8_t control_music_output_commit_window(void);
 uint8_t control_music_output_finalize_window(void);

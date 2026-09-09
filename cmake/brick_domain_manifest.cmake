@@ -2,6 +2,7 @@
 # Keep entries nominative: directory inference is intentionally forbidden.
 
 set(DOMAIN_CONTROL
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/brick_fatal.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/buttons.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/drv_encoders.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/encoders.c"

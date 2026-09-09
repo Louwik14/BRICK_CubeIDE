@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include "Track/entity_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -9,7 +10,7 @@ extern "C" {
 #define SYNTH_POLYPHONY_MAX_VOICES 8U
 #define SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET 16U
 #define SYNTH_POLYPHONY_NO_VOICE   0xFFU
-#define SYNTH_POLYPHONY_TRACK_CAPACITY 8U
+#define SYNTH_POLYPHONY_TRACK_CAPACITY BRICK_ENTITY_CAPACITY
 #define SYNTH_POLYPHONY_INSTANCE(track, voice) synth_polyphony_get_slot((track), (voice))
 
 typedef enum
@@ -44,6 +45,8 @@ uint8_t synth_polyphony_output_is_active(uint8_t track,
                                          uint32_t output_id);
 void synth_polyphony_all_notes_off(uint8_t track);
 uint8_t synth_polyphony_set_voice_count(uint8_t track, uint8_t count);
+uint8_t synth_polyphony_can_set_voice_count(uint8_t track, uint8_t count);
+uint8_t synth_polyphony_can_activate(uint8_t track, uint8_t voice_count);
 uint8_t synth_polyphony_set_track_active(uint8_t track, uint8_t active, uint8_t engine);
 uint8_t synth_polyphony_replace_renderer(uint8_t track, uint8_t engine);
 uint8_t synth_polyphony_voice_for_output(uint8_t track,

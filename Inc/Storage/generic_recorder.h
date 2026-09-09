@@ -122,31 +122,6 @@ typedef struct
 
 typedef struct
 {
-    uint64_t frames_accepted;
-    uint64_t bytes_accepted;
-    uint64_t bytes_assigned;
-    uint64_t bytes_committed;
-    uint32_t ring_high_watermark_frames;
-    uint32_t ring_min_free_frames;
-    uint64_t reservation_min_margin_bytes;
-    uint32_t extensions_requested;
-    uint32_t extensions_completed;
-    uint32_t extensions_failed;
-    uint32_t write_candidates;
-    uint32_t writes_submitted;
-    uint32_t writes_completed;
-    uint32_t writes_failed;
-    uint64_t write_bytes_submitted;
-    uint32_t max_write_bytes;
-    uint32_t extent_crossings;
-    uint64_t bytes_packed;
-    uint64_t max_backlog_bytes;
-    uint32_t ring_full_rejects;
-    uint32_t stop_drain_duration_us;
-} generic_recorder_metrics_t;
-
-typedef struct
-{
     generic_recorder_state_t state;
     generic_recorder_error_t error;
     uint64_t accepted_tail;
@@ -186,7 +161,6 @@ typedef struct
 typedef struct
 {
     generic_recorder_config_t config;
-    generic_recorder_metrics_t metrics;
     generic_recorder_write_descriptor_t descriptors[GENERIC_RECORDER_WRITE_BUFFER_COUNT];
     uint64_t accepted_tail;
     uint64_t assigned_tail;
@@ -195,29 +169,23 @@ typedef struct
     uint64_t reserved_capacity;
     uint32_t media_epoch;
     uint32_t generation;
-    uint32_t stop_started_us;
     uint32_t write_frame_index;
-    uint16_t last_extent_index;
     generic_recorder_state_t state;
     generic_recorder_error_t error;
-    uint8_t last_extent_valid;
     uint8_t extension_pending;
 } generic_recorder_t;
 
 void generic_recorder_init(generic_recorder_t *recorder);
 uint8_t generic_recorder_begin(generic_recorder_t *recorder,
                                const generic_recorder_config_t *config);
-uint8_t generic_recorder_request_stop(generic_recorder_t *recorder,
-                                      uint32_t now_us);
-void generic_recorder_service(generic_recorder_t *recorder, uint32_t now_us);
+uint8_t generic_recorder_request_stop(generic_recorder_t *recorder);
+void generic_recorder_service(generic_recorder_t *recorder);
 void generic_recorder_abort(generic_recorder_t *recorder);
 uint8_t generic_recorder_invariants_hold(const generic_recorder_t *recorder);
 uint64_t generic_recorder_ring_margin_us(const generic_recorder_t *recorder);
 uint64_t generic_recorder_reservation_margin_us(const generic_recorder_t *recorder);
 void generic_recorder_get_status(const generic_recorder_t *recorder,
                                  generic_recorder_status_t *status);
-void generic_recorder_get_metrics(const generic_recorder_t *recorder,
-                                  generic_recorder_metrics_t *metrics);
 sd_scheduler_provider_t generic_recorder_write_provider(generic_recorder_t *recorder);
 sd_scheduler_provider_t generic_recorder_filesystem_provider(generic_recorder_t *recorder);
 

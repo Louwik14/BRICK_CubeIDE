@@ -650,8 +650,6 @@ uint8_t audio_recorder_get_status_client(audio_recorder_client_t client,
     memset(status, 0, sizeof(*status));
     generic_recorder_status_t generic_status;
     audio_recorder_storage_get_status(&generic_status);
-    audio_recorder_metrics_t metrics;
-    audio_recorder_storage_get_metrics(&metrics);
     status->state = g_audio_recorder.state;
     status->error = g_audio_recorder.error;
     status->frames_received = g_audio_recorder_capture.head_cursor;
@@ -660,10 +658,6 @@ uint8_t audio_recorder_get_status_client(audio_recorder_client_t client,
     status->frames_committed = (uint32_t)(
         generic_status.committed_tail / AUDIO_RECORDER_BYTES_PER_FRAME);
     status->frames_pending = status->frames_received - status->frames_committed;
-    status->high_watermark =
-        metrics.recorder.ring_high_watermark_frames;
-    status->overflow_count = metrics.recorder.ring_full_rejects;
-    status->dropped_frames = 0U;
     return 1U;
 }
 
@@ -678,12 +672,6 @@ uint8_t audio_recorder_get_last_take_client(audio_recorder_client_t client,
     *frames = (uint32_t)(audio_recorder_storage_committed_tail()
                          / AUDIO_RECORDER_BYTES_PER_FRAME);
     return (*frames != 0U) ? 1U : 0U;
-}
-
-void audio_recorder_get_metrics(audio_recorder_metrics_t *metrics)
-{
-    if (metrics == 0) return;
-    audio_recorder_storage_get_metrics(metrics);
 }
 
 uint8_t audio_recorder_is_active(void)

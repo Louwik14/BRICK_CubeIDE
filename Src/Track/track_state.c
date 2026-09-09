@@ -7,12 +7,49 @@
 #include "Track/track_runtime.h"
 #include "Track/entity_topology.h"
 #include "Track/track_mute.h"
+#include "Track/polyphony_control.h"
+#include "Track/synth_polyphony.h"
+#include "Platform/brick_build_config.h"
 
 static track_config_t g_track_configs[TRACK_CONFIG_CAPACITY];
 static uint8_t g_track_midi_channel[TRACK_CONFIG_CAPACITY];
 static track_midi_source_t g_track_midi_source[TRACK_CONFIG_CAPACITY];
 static uint32_t g_track_revision[TRACK_CONFIG_CAPACITY];
 static uint32_t g_track_state_global_revision = 0U;
+
+static uint8_t track_state_audio_resources_are_valid(
+    const track_config_t configs[TRACK_CONFIG_CAPACITY], uint8_t group_active)
+{
+    uint16_t synth_voices = 0U;
+    uint8_t loopers = 0U;
+    for (brick_entity_id_t entity_id = 0U;
+         entity_id < BRICK_ENTITY_CAPACITY; ++entity_id)
+    {
+        entity_topology_descriptor_t entity;
+        if ((entity_topology_resolve(group_active, entity_id, &entity) == 0U)
+                || (entity.active == 0U))
+            continue;
+        const track_runtime_family_t family = track_runtime_family_from_ui(
+            configs[entity_id].family);
+        const track_runtime_type_t type = track_runtime_type_from_ui(
+            configs[entity_id].type);
+        const track_runtime_engine_t engine =
+            track_runtime_choose_engine(family, type);
+        if (engine == TRACK_RUNTIME_ENGINE_LOOPER) ++loopers;
+        if (family == TRACK_RUNTIME_FAMILY_SYNTH)
+            synth_voices = (uint16_t)(synth_voices
+                + polyphony_control_get_voice_count(entity_id));
+        else if (family == TRACK_RUNTIME_FAMILY_DRUM)
+            ++synth_voices;
+        else if ((family != TRACK_RUNTIME_FAMILY_OFF)
+                && (family != TRACK_RUNTIME_FAMILY_MIDI)
+                && (type != TRACK_RUNTIME_TYPE_GROUP)
+                && (engine == TRACK_RUNTIME_ENGINE_NONE))
+            return 0U;
+    }
+    return (uint8_t)((loopers <= BRICK6_LOOPER_GLOBAL_CAP)
+        && (synth_voices <= SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET));
+}
 
 static track_config_t track_state_default_config(void)
 {
@@ -314,6 +351,9 @@ static bool track_state_apply_entity_bulk_with_inputs(
             return false;
         }
     }
+
+    if (track_state_audio_resources_are_valid(next_configs, group_active) == 0U)
+        return false;
 
     if (track_input_ownership_apply_bulk(next_configs, external_input) == 0U)
     {

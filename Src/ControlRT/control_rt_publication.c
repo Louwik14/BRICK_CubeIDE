@@ -1,12 +1,276 @@
 #include "ControlRT/control_rt_publication.h"
 
 #include <string.h>
+#include <math.h>
 
 #include "IPC/control_audio_fifo_control.h"
 #include "IPC/control_audio_timing.h"
 #include "IPC/live_clock_control.h"
 #include "Platform/memory_layout.h"
 #include "Seq/seq_note_trace.h"
+#include "Track/track_runtime.h"
+#include "Track/entity_types.h"
+#include "Param/param_ids.h"
+#include "Param/param_spec.h"
+#include "IPC/live_parameter_event.h"
+#include "IPC/audio_recorder_capture_contract.h"
+#include "IPC/audio_rec_bus_contract.h"
+#include "IPC/audio_wave_table_projection.h"
+#include "IPC/fm_dsp_projection.h"
+#include "IPC/synth_waveform_contract.h"
+#include "Mod/mod_matrix.h"
+#include "Param/engine_model_catalog.h"
+
+#define CONTROL_AUDIO_PARAM_MULTI_RESOURCE_STOP 0xFFF5U
+#define CONTROL_AUDIO_PARAM_RAM_RESOURCE_STOP   0xFFF6U
+#define CONTROL_AUDIO_PARAM_WAVE_RESOURCE_STOP  0xFFF7U
+
+static uint8_t control_rt_program_is_valid(uint8_t entity, uint32_t value)
+{
+    if (entity >= BRICK_ENTITY_CAPACITY) return 0U;
+    const control_audio_program_descriptor_t d =
+        control_audio_program_unpack(value);
+    if ((d.engine >= (uint8_t)TRACK_RUNTIME_ENGINE_COUNT)
+            || (d.family > (uint8_t)TRACK_RUNTIME_FAMILY_OTHER)
+            || (d.type > (uint8_t)TRACK_RUNTIME_TYPE_OTHER)
+            || ((d.flags & (uint8_t)~CONTROL_AUDIO_PROGRAM_FLAG_MASK) != 0U)
+            || ((d.flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER) != 0U
+                && (d.flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD) != 0U))
+        return 0U;
+    if ((d.flags & (CONTROL_AUDIO_PROGRAM_FLAG_CAN_FILTER
+                    | CONTROL_AUDIO_PROGRAM_FLAG_CAN_SYNTH
+                    | CONTROL_AUDIO_PROGRAM_FLAG_CAN_PLAY))
+            != track_runtime_compute_flags((track_runtime_family_t)d.family,
+                (track_runtime_type_t)d.type))
+        return 0U;
+    if (((d.flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER) != 0U)
+            && (entity != BRICK_ENTITY_GROUP_MASTER_ID))
+        return 0U;
+    if (((d.flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD) != 0U)
+            && (entity < BRICK_ENTITY_FIRST_GROUP_CHILD_ID))
+        return 0U;
+    if ((d.family != TRACK_RUNTIME_FAMILY_SYNTH)
+            && ((d.flags & CONTROL_AUDIO_PROGRAM_VOICE_MASK) != 0U))
+        return 0U;
+    if ((d.flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER) != 0U)
+        return (uint8_t)((d.family == TRACK_RUNTIME_FAMILY_SAMPLER)
+            && (d.type == TRACK_RUNTIME_TYPE_GROUP)
+            && (d.engine == TRACK_RUNTIME_ENGINE_NONE));
+    if (d.type == TRACK_RUNTIME_TYPE_GROUP) return 0U;
+    if (d.family == TRACK_RUNTIME_FAMILY_OFF)
+        return (uint8_t)((d.type == TRACK_RUNTIME_TYPE_NONE)
+            && (d.engine == TRACK_RUNTIME_ENGINE_NONE));
+    if (d.family == TRACK_RUNTIME_FAMILY_MIDI)
+        return (uint8_t)((d.type == TRACK_RUNTIME_TYPE_MIDI)
+            && (d.engine == TRACK_RUNTIME_ENGINE_NONE));
+    return (uint8_t)(d.engine == (uint8_t)track_runtime_choose_engine(
+        (track_runtime_family_t)d.family, (track_runtime_type_t)d.type));
+}
+
+static uint8_t control_rt_param_is_valid(const control_audio_command_t *command)
+{
+    const uint8_t scope = CONTROL_AUDIO_COMMAND_KIND(command);
+    if (command->id < PARAM_COUNT)
+    {
+        const float value = live_parameter_event_decode_float(
+            (int32_t)command->value);
+        if (param_spec_value_is_valid((param_id_t)command->id, value) == 0U)
+            return 0U;
+        if (scope == LIVE_PARAMETER_EVENT_SCOPE_GLOBAL)
+            return (uint8_t)(track_runtime_get_effective_param_status(
+                0U, (param_id_t)command->id)
+                == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED);
+        if ((scope != LIVE_PARAMETER_EVENT_SCOPE_TRACK)
+                && (scope != LIVE_PARAMETER_AUDIO_SCOPE_RUNTIME_TEMP))
+            return 0U;
+        return (uint8_t)((command->entity < BRICK_ENTITY_CAPACITY)
+            && (track_runtime_get_effective_param_status(command->entity,
+                (param_id_t)command->id) == TRACK_RUNTIME_PARAM_ALLOWED));
+    }
+    if (command->id == CONTROL_AUDIO_CONFIG_POLY_VOICES)
+    {
+        const float voices = live_parameter_event_decode_float(
+            (int32_t)command->value);
+        return (uint8_t)((command->entity < BRICK_ENTITY_CAPACITY)
+            && (scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK)
+            && isfinite(voices) && (voices >= 1.0f)
+            && (voices <= 8.0f) && (voices == floorf(voices))
+            && track_runtime_validate_polyphony_budget(
+                command->entity, (uint8_t)voices));
+    }
+    if (command->id == CONTROL_AUDIO_PARAM_CLEAR_RUNTIME_TEMP)
+    {
+        const float endpoint = live_parameter_event_decode_float(
+            (int32_t)command->value);
+        return (uint8_t)((command->entity < BRICK_ENTITY_CAPACITY)
+            && (scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK)
+            && isfinite(endpoint) && (endpoint >= 0.0f)
+            && (endpoint < (float)PARAM_COUNT)
+            && (endpoint == floorf(endpoint)));
+    }
+    const uint16_t fm_base_words =
+        (uint16_t)((sizeof(track_tone_fm_base_voice_t) + 3U) / 4U);
+    if ((command->id >= CONTROL_AUDIO_FM_BASE_WORD_FIRST)
+            && (command->id < CONTROL_AUDIO_FM_BASE_WORD_FIRST + fm_base_words))
+        return (uint8_t)((scope == 0U)
+            && (command->entity < BRICK_ENTITY_CAPACITY));
+    if (command->id == CONTROL_AUDIO_PARAM_PREVIEW_GAIN)
+    {
+        const float gain = live_parameter_event_decode_float(
+            (int32_t)command->value);
+        return (uint8_t)((scope == 0U) && isfinite(gain));
+    }
+    if (command->id == CONTROL_AUDIO_PARAM_PREVIEW_ACTIVE)
+        return (uint8_t)((scope == 0U) && (command->entity <= 1U));
+    if (command->id == CONTROL_AUDIO_PARAM_REC_BUS)
+    {
+        const uint32_t allowed = 0xFFFFU | (3UL << 16)
+            | ((uint32_t)(AUDIO_REC_BUS_SOURCE_LINE_DIRECT
+                | AUDIO_REC_BUS_SOURCE_MIC_LOGICAL
+                | AUDIO_REC_BUS_CAPTURE_ENABLED
+                | AUDIO_REC_BUS_SOURCE_USB_DIRECT) << 18);
+        return (uint8_t)((scope == 0U)
+            && ((command->value & ~allowed) == 0U)
+            && (((command->value >> 16) & 3U) <= AUDIO_REC_BUS_ARM_TRIG));
+    }
+    if (command->id == CONTROL_AUDIO_PARAM_INPUT_OWNER)
+        return (uint8_t)((scope == 0U)
+            && (command->entity < ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT)
+            && (((uint8_t)command->value < BRICK_ENTITY_CAPACITY)
+                || ((uint8_t)command->value == BRICK_ENTITY_INVALID_ID)));
+    if (command->id == CONTROL_AUDIO_PARAM_LOOPER_ROUTE)
+        return (uint8_t)((scope == 0U)
+            && (command->entity < BRICK_ENTITY_CAPACITY)
+            && ((command->value & ~0xFFFFUL) == 0U));
+    if ((command->id == CONTROL_AUDIO_PARAM_WAVETABLE_GEN)
+            || (command->id == CONTROL_AUDIO_PARAM_WAVETABLE_SET))
+        return (uint8_t)((scope == 0U)
+            && (command->entity < (AUDIO_WAVETABLE_VOICE_INSTANCE_COUNT
+                * AUDIO_WAVETABLE_OSC_COUNT)));
+    if (command->id == CONTROL_AUDIO_PARAM_MIDI_CONFIG)
+        return (uint8_t)((command->entity < BRICK_ENTITY_CAPACITY)
+            && (scope == 0U)
+            && ((command->value & 0xFFU) >= 1U)
+            && ((command->value & 0xFFU) <= 16U)
+            && (((command->value >> 8) & 0xFFU)
+                <= TRACK_RUNTIME_MIDI_SOURCE_ALL)
+            && ((command->value & 0xFFFF0000UL) == 0U));
+    if (command->id == CONTROL_AUDIO_PARAM_AUDIO_WAVEFORM_REQUEST)
+        return (uint8_t)((scope == 0U)
+            && (command->entity < BRICK_ENTITY_CAPACITY)
+            && ((command->value & ~3UL) == 0U));
+    if (command->id == CONTROL_AUDIO_PARAM_SYNTH_WAVEFORM_REQUEST)
+        return (uint8_t)((scope == 0U)
+            && (command->entity < BRICK_ENTITY_CAPACITY)
+            && ((command->value & ~0x303UL) == 0U)
+            && ((command->value & 0xFFU) <= SYNTH_WAVEFORM_ENGINE_PRISM));
+    if ((command->id == CONTROL_AUDIO_PARAM_TRANSPORT_TEMPO)
+            || (command->id == CONTROL_AUDIO_PARAM_TRANSPORT_STEP_Q16))
+        return (uint8_t)((scope == 0U) && (command->value != 0U));
+    if (command->id == CONTROL_AUDIO_PARAM_METRONOME_LEVEL)
+        return (uint8_t)((scope == 0U) && (command->value <= 127U));
+    if (command->id == CONTROL_AUDIO_SAMPLER_ASSET)
+        return (uint8_t)((scope == 0U)
+            && (command->entity < BRICK_ENTITY_CAPACITY));
+    if (command->id == CONTROL_AUDIO_LOOPER_PLAY_AUTO)
+        return (uint8_t)((scope == 0U)
+            && (command->entity < BRICK_ENTITY_CAPACITY)
+            && (command->value <= 1U));
+    if ((command->id >= CONTROL_AUDIO_MOD_ROUTE_SOURCE)
+            && (command->id <= CONTROL_AUDIO_FX_SPATIAL_MODE))
+    {
+        const float value = live_parameter_event_decode_float(
+            (int32_t)command->value);
+        if ((command->entity >= SEQ_TRACK_COUNT) || !isfinite(value)
+                || (scope < LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_BASE)
+                || (scope > LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_LAST))
+            return 0U;
+        const uint8_t index = (uint8_t)(
+            scope - LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_BASE);
+        if ((command->id == CONTROL_AUDIO_MOD_ROUTE_SOURCE)
+                || (command->id == CONTROL_AUDIO_MOD_MULTI_SOURCE)
+                || (command->id == CONTROL_AUDIO_MOD_SLEW_SOURCE))
+        {
+            if ((value < 0.0f) || (value >= (float)MOD_MATRIX_SOURCE_COUNT)
+                    || (value != floorf(value))) return 0U;
+            if ((command->id == CONTROL_AUDIO_MOD_MULTI_SOURCE)
+                    && (index >= 4U)) return 0U;
+            if ((command->id == CONTROL_AUDIO_MOD_SLEW_SOURCE)
+                    && (index >= 2U)) return 0U;
+            return 1U;
+        }
+        if (command->id == CONTROL_AUDIO_MOD_ROUTE_DESTINATION)
+            return (uint8_t)((value >= 0.0f) && (value <= 65535.0f)
+                && (value == floorf(value)));
+        if (command->id == CONTROL_AUDIO_MOD_ROUTE_ENABLED)
+            return (uint8_t)((value == 0.0f) || (value == 1.0f));
+        if (command->id == CONTROL_AUDIO_MOD_SLEW_AMOUNT)
+            return (uint8_t)((index < 2U) && (value >= 0.0f)
+                && (value <= 1.0f));
+        if (command->id == CONTROL_AUDIO_MOD_ROUTE_DEPTH)
+            return (uint8_t)((value >= -127.0f) && (value <= 127.0f));
+        if (value != floorf(value)) return 0U;
+        if (command->id == CONTROL_AUDIO_FX_FILTER_POSITION)
+            return (uint8_t)((value >= 0.0f)
+                && (value < (float)AUDIO_FX_FILTER_POS_COUNT));
+        if (command->id == CONTROL_AUDIO_FX_ORDER)
+            return (uint8_t)((value >= 0.0f)
+                && (value < (float)AUDIO_FX_ORDER_COUNT));
+        return (uint8_t)((index < AUDIO_FX_SLOT_COUNT)
+            && (value >= 0.0f) && (value < 4.0f));
+    }
+    if ((command->id >= CONTROL_AUDIO_PARAM_MIX_INSERT_FIRST)
+            && (command->id <= CONTROL_AUDIO_PARAM_MIX_INSERT_LAST))
+        return (uint8_t)((scope == 0U)
+            && (command->entity <= BRICK_ENTITY_CAPACITY));
+    if (command->id == CONTROL_AUDIO_PARAM_MIX_ROUTE)
+        return (uint8_t)((scope == 0U)
+            && (command->entity <= BRICK_ENTITY_CAPACITY));
+    if ((command->id == CONTROL_AUDIO_PARAM_MULTI_RESOURCE_STOP)
+            || (command->id == CONTROL_AUDIO_PARAM_RAM_RESOURCE_STOP)
+            || (command->id == CONTROL_AUDIO_PARAM_WAVE_RESOURCE_STOP))
+        return scope == 0U;
+    return 0U;
+}
+
+static uint8_t control_rt_command_is_valid(
+    const control_audio_command_t *command)
+{
+    if (command == NULL) return 0U;
+    const uint8_t opcode = CONTROL_AUDIO_COMMAND_OPCODE(command);
+    const uint8_t kind = CONTROL_AUDIO_COMMAND_KIND(command);
+    switch (opcode)
+    {
+        case CONTROL_AUDIO_COMMAND_PROGRAM:
+            return (uint8_t)((kind == 0U)
+                && control_rt_program_is_valid(command->entity, command->value));
+        case CONTROL_AUDIO_COMMAND_PARAM:
+            return control_rt_param_is_valid(command);
+        case CONTROL_AUDIO_COMMAND_NOTE:
+            return (uint8_t)((command->entity < BRICK_ENTITY_CAPACITY)
+                && (kind <= CONTROL_AUDIO_NOTE_ON) && (command->value != 0U)
+                && ((command->id & 0xFFU) <= 127U)
+                && ((command->id >> 8) <= 127U));
+        case CONTROL_AUDIO_COMMAND_TRANSPORT:
+            return kind <= CONTROL_AUDIO_TRANSPORT_LOCATE;
+        case CONTROL_AUDIO_COMMAND_RECORD:
+            if (kind > CONTROL_AUDIO_RECORD_START) return 0U;
+            if ((command->id & AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG) != 0U)
+                return (uint8_t)((command->entity < BRICK_ENTITY_CAPACITY)
+                    && ((kind == CONTROL_AUDIO_RECORD_STOP)
+                        || (command->value != 0U)));
+            return (uint8_t)((command->entity != AUDIO_RECORDER_CLIENT_NONE)
+                && (command->id != 0U)
+                && ((kind == CONTROL_AUDIO_RECORD_STOP)
+                    || (command->value != 0U)));
+        case CONTROL_AUDIO_COMMAND_PANIC:
+            return (uint8_t)((kind <= CONTROL_AUDIO_PANIC_ENTITY)
+                && ((kind == CONTROL_AUDIO_PANIC_GLOBAL)
+                    || (command->entity < BRICK_ENTITY_CAPACITY)));
+        default:
+            return 0U;
+    }
+}
 
 typedef struct
 {
@@ -216,6 +480,9 @@ static uint8_t control_rt_publish(const control_audio_command_t *command)
 uint8_t control_rt_publish_batch_scheduled(
     const control_audio_command_t *commands, uint16_t count)
 {
+    if ((commands == NULL) || (count == 0U)) return 0U;
+    for (uint16_t i = 0U; i < count; ++i)
+        if (control_rt_command_is_valid(&commands[i]) == 0U) return 0U;
     if ((g_control_audio_horizon.active == 0U)
             && (commands != NULL) && (count != 0U)
             && (commands[0].effective_sample_time

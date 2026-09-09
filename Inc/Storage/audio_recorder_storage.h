@@ -51,7 +51,6 @@ void audio_recorder_storage_service(uint32_t session_id,
 audio_recorder_storage_phase_t audio_recorder_storage_phase(void);
 audio_recorder_error_t audio_recorder_storage_error(void);
 void audio_recorder_storage_get_status(generic_recorder_status_t *status);
-void audio_recorder_storage_get_metrics(audio_recorder_metrics_t *metrics);
 uint64_t audio_recorder_storage_committed_tail(void);
 uint8_t audio_recorder_storage_get_map_copy(
     audio_recorder_storage_map_copy_t *map);

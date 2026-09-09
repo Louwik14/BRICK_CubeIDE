@@ -124,6 +124,18 @@ static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path
     }
     else
     {
+        const sample_classic_load_error_t error =
+            sample_global_pool_get_last_classic_load_error();
+        if (error == SAMPLE_CLASSIC_LOAD_TRANSPORT_ACTIVE)
+        {
+            ui_page_settings_status("STOP TO LOAD");
+            return;
+        }
+        if (error == SAMPLE_CLASSIC_LOAD_RECORDER_ACTIVE)
+        {
+            ui_page_settings_status("STOP REC TO LOAD");
+            return;
+        }
         if (((sample_global_pool_get_last_classic_load_error() == SAMPLE_CLASSIC_LOAD_WAV_UNSUPPORTED_FORMAT)
              || (sample_global_pool_get_last_classic_load_error() == SAMPLE_CLASSIC_LOAD_WAV_48K_REQUIRED))
             && (wav_convert_path_needs_48k(path, 0) != 0U))
@@ -156,7 +168,11 @@ static void ui_page_settings_ram_load_to_slot(uint16_t slot, const char *path)
     }
     else
     {
-        ui_page_settings_status("LOAD BUSY");
+        const sampler_ram_result_t result = sampler_ram_pool_get_last_result();
+        ui_page_settings_status(
+            ((result == SAMPLER_RAM_RESULT_TRANSPORT_ACTIVE)
+             || (result == SAMPLER_RAM_RESULT_RECORDER_ACTIVE))
+                ? sampler_ram_pool_result_label(result) : "LOAD BUSY");
     }
 }
 
@@ -178,7 +194,11 @@ static void ui_page_settings_wavetable_load_to_slot(uint16_t slot, const char *p
     }
     else
     {
-        ui_page_settings_status("LOAD BUSY");
+        const wavetable_result_t result = wavetable_pool_get_last_result();
+        ui_page_settings_status(
+            ((result == WAVETABLE_RESULT_TRANSPORT_ACTIVE)
+             || (result == WAVETABLE_RESULT_RECORDER_ACTIVE))
+                ? wavetable_pool_result_label(result) : "LOAD BUSY");
     }
 }
 

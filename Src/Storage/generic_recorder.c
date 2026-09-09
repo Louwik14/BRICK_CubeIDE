@@ -215,7 +215,6 @@ static void generic_recorder_pack(generic_recorder_t *recorder,
     {
         memset(&destination[valid_bytes], 0, dma_bytes - valid_bytes);
     }
-    recorder->metrics.bytes_packed += valid_bytes;
 }
 
 static uint8_t generic_recorder_prepare_descriptor(generic_recorder_t *recorder,
@@ -313,16 +312,7 @@ static uint8_t generic_recorder_prepare_descriptor(generic_recorder_t *recorder,
                           valid_bytes,
                           dma_bytes);
     descriptor->state = GENERIC_RECORDER_DESCRIPTOR_READY;
-    if ((recorder->last_extent_valid != 0U)
-        && (recorder->last_extent_index != span.extent_index))
-    {
-        recorder->metrics.extent_crossings++;
-    }
-    recorder->last_extent_index = span.extent_index;
-    recorder->last_extent_valid = 1U;
     recorder->assigned_tail += valid_bytes;
-    recorder->metrics.bytes_assigned = recorder->assigned_tail;
-    recorder->metrics.write_candidates++;
     return 1U;
 }
 
@@ -386,14 +376,11 @@ uint8_t generic_recorder_begin(generic_recorder_t *recorder,
     recorder->media_epoch = snapshot.media_epoch;
     recorder->reserved_capacity =
         snapshot.reserved_file_bytes - config->reserved_header_bytes;
-    recorder->metrics.ring_min_free_frames = config->ring_capacity_frames;
-    recorder->metrics.reservation_min_margin_bytes = recorder->reserved_capacity;
     recorder->state = GENERIC_RECORDER_CAPTURING;
     return 1U;
 }
 
-uint8_t generic_recorder_request_stop(generic_recorder_t *recorder,
-                                      uint32_t now_us)
+uint8_t generic_recorder_request_stop(generic_recorder_t *recorder)
 {
     if (recorder == 0)
     {
@@ -410,7 +397,6 @@ uint8_t generic_recorder_request_stop(generic_recorder_t *recorder,
         return 0U;
     }
     recorder->state = GENERIC_RECORDER_DRAINING;
-    recorder->stop_started_us = now_us;
     return 1U;
 }
 
@@ -485,16 +471,7 @@ void generic_recorder_get_status(const generic_recorder_t *recorder,
         (recorder->committed_tail == recorder->accepted_tail) ? 1U : 0U;
 }
 
-void generic_recorder_get_metrics(const generic_recorder_t *recorder,
-                                  generic_recorder_metrics_t *metrics)
-{
-    if ((recorder != 0) && (metrics != 0))
-    {
-        *metrics = recorder->metrics;
-    }
-}
-
-void generic_recorder_service(generic_recorder_t *recorder, uint32_t now_us)
+void generic_recorder_service(generic_recorder_t *recorder)
 {
     if ((recorder == 0)
         || ((recorder->state != GENERIC_RECORDER_CAPTURING)
@@ -508,14 +485,6 @@ void generic_recorder_service(generic_recorder_t *recorder, uint32_t now_us)
         return;
     }
     const uint64_t accepted_tail = generic_recorder_accepted_snapshot(recorder);
-    const uint64_t reservation_margin =
-        (recorder->reserved_capacity > accepted_tail)
-            ? recorder->reserved_capacity - accepted_tail
-            : 0U;
-    if (reservation_margin < recorder->metrics.reservation_min_margin_bytes)
-    {
-        recorder->metrics.reservation_min_margin_bytes = reservation_margin;
-    }
     const uint64_t reservation_margin_us =
         generic_recorder_reservation_margin_us(recorder);
     if ((recorder->state == GENERIC_RECORDER_CAPTURING)
@@ -523,7 +492,6 @@ void generic_recorder_service(generic_recorder_t *recorder, uint32_t now_us)
         && (recorder->extension_pending == 0U))
     {
         recorder->extension_pending = 1U;
-        recorder->metrics.extensions_requested++;
     }
     (void)generic_recorder_prepare_descriptor(recorder, accepted_tail);
     if ((recorder->state == GENERIC_RECORDER_DRAINING)
@@ -532,7 +500,6 @@ void generic_recorder_service(generic_recorder_t *recorder, uint32_t now_us)
         && (generic_recorder_has_descriptors(recorder) == 0U))
     {
         recorder->state = GENERIC_RECORDER_FINALIZABLE;
-        recorder->metrics.stop_drain_duration_us = now_us - recorder->stop_started_us;
     }
 }
 
@@ -621,18 +588,11 @@ static sd_scheduler_start_result_t generic_recorder_write_start(
     if (result != GENERIC_RECORDER_TRANSPORT_STARTED)
     {
         descriptor->state = GENERIC_RECORDER_DESCRIPTOR_FAILED;
-        recorder->metrics.writes_failed++;
         recorder->error = GENERIC_RECORDER_ERROR_TRANSPORT;
         recorder->state = GENERIC_RECORDER_ERROR;
         return SD_SCHEDULER_START_ERROR;
     }
     descriptor->state = GENERIC_RECORDER_DESCRIPTOR_IN_FLIGHT;
-    recorder->metrics.writes_submitted++;
-    recorder->metrics.write_bytes_submitted += dma_bytes;
-    if (dma_bytes > recorder->metrics.max_write_bytes)
-    {
-        recorder->metrics.max_write_bytes = dma_bytes;
-    }
     return SD_SCHEDULER_START_STARTED;
 }
 
@@ -672,7 +632,6 @@ static sd_scheduler_poll_result_t generic_recorder_write_poll(void *context)
             != descriptor->buffer + descriptor->sent_dma_bytes))
     {
         descriptor->state = GENERIC_RECORDER_DESCRIPTOR_FAILED;
-        recorder->metrics.writes_failed++;
         recorder->error = (result == GENERIC_RECORDER_TRANSPORT_MEDIA_CHANGED)
                               ? GENERIC_RECORDER_ERROR_MEDIA_CHANGED
                               : GENERIC_RECORDER_ERROR_WRITE;
@@ -684,7 +643,6 @@ static sd_scheduler_poll_result_t generic_recorder_write_poll(void *context)
     if (recorder->committed_tail != expected)
     {
         descriptor->state = GENERIC_RECORDER_DESCRIPTOR_FAILED;
-        recorder->metrics.writes_failed++;
         recorder->error = GENERIC_RECORDER_ERROR_WRITE;
         recorder->state = GENERIC_RECORDER_ERROR;
         return SD_SCHEDULER_POLL_ERROR;
@@ -694,8 +652,6 @@ static sd_scheduler_poll_result_t generic_recorder_write_poll(void *context)
     generic_recorder_critical_enter(recorder);
     recorder->committed_tail += descriptor->active_valid_bytes;
     generic_recorder_critical_exit(recorder);
-    recorder->metrics.bytes_committed = recorder->committed_tail;
-    recorder->metrics.writes_completed++;
     descriptor->active_dma_bytes = 0U;
     descriptor->active_valid_bytes = 0U;
     if (descriptor->sent_dma_bytes == descriptor->dma_bytes)
@@ -703,7 +659,6 @@ static sd_scheduler_poll_result_t generic_recorder_write_poll(void *context)
         if (descriptor->sent_valid_bytes != descriptor->valid_bytes)
         {
             descriptor->state = GENERIC_RECORDER_DESCRIPTOR_FAILED;
-            recorder->metrics.writes_failed++;
             recorder->error = GENERIC_RECORDER_ERROR_WRITE;
             recorder->state = GENERIC_RECORDER_ERROR;
             return SD_SCHEDULER_POLL_ERROR;
@@ -766,7 +721,6 @@ static sd_scheduler_start_result_t generic_recorder_filesystem_start(
     if ((result != RECORDER_FILE_RESERVATION_OK)
         && (result != RECORDER_FILE_RESERVATION_PARTIAL))
     {
-        recorder->metrics.extensions_failed++;
         recorder->error = (result == RECORDER_FILE_RESERVATION_NO_SPACE)
                               ? GENERIC_RECORDER_ERROR_NO_SPACE
                               : GENERIC_RECORDER_ERROR_RESERVATION;
@@ -779,11 +733,9 @@ static sd_scheduler_start_result_t generic_recorder_filesystem_start(
     recorder_file_reservation_map_snapshot_t snapshot;
     if (generic_recorder_snapshot(recorder, &snapshot) == 0U)
     {
-        recorder->metrics.extensions_failed++;
         return SD_SCHEDULER_START_ERROR;
     }
     recorder->extension_pending = 0U;
-    recorder->metrics.extensions_completed++;
     return SD_SCHEDULER_START_COMPLETED;
 }
 

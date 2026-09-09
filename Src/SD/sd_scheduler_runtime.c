@@ -146,7 +146,7 @@ sd_scheduler_background_admission_t sd_scheduler_runtime_background_try_begin(
         || ((request->kind == SD_SCHEDULER_BACKGROUND_DATA)
             && ((request->byte_count == 0U)
                 || (request->byte_count
-                    > SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES)))
+                    > SD_SCHEDULER_HEAVY_MAX_DATA_BYTES)))
         || ((request->kind == SD_SCHEDULER_BACKGROUND_METADATA)
             && (request->byte_count != 0U))
         || (request->media_epoch != sd_access_media_epoch()))
@@ -225,9 +225,4 @@ sd_scheduler_owner_t sd_scheduler_runtime_owner(void)
         return SD_SCHEDULER_OWNER_FILESYSTEM;
     }
     return sd_scheduler_owner(&g_sd_scheduler_runtime);
-}
-
-void sd_scheduler_runtime_metrics_get(sd_scheduler_metrics_t *metrics)
-{
-    sd_scheduler_metrics_get(&g_sd_scheduler_runtime, metrics);
 }

@@ -31,29 +31,11 @@ typedef enum
 typedef struct
 {
     uint16_t instrument_id;
-    uint16_t total_samples;
-    uint16_t samples_ready;
     uint16_t pages_requested;
     uint16_t pages_ready;
     uint16_t prep_pages_required;
-    uint16_t prep_pages_budget;
-    uint16_t prep_samples_preparable;
-    uint16_t last_failed_sample;
     multi_sample_load_result_t last_error;
     multi_sample_instrument_state_t state;
-    uint16_t pages_remaining;
-    uint16_t samples_remaining;
-    uint32_t elapsed_ms;
-    uint32_t file_opens;
-    uint32_t seeks;
-    uint32_t read_calls;
-    uint32_t physical_reads;
-    uint32_t bytes_read;
-    uint32_t physical_bytes;
-    uint32_t max_read_bytes;
-    uint32_t decode_cycles;
-    uint32_t service_passes;
-    uint32_t saved_page_checks;
 } multi_sample_load_diag_t;
 
 void multi_sample_loader_init(void);

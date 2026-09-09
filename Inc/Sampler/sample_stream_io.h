@@ -36,13 +36,6 @@ typedef struct
     sample_page_load_result_t load_result;
     uint32_t source_bytes;
     uint32_t read_bytes;
-    uint16_t fatfs_ops;
-    uint8_t physical_reads;
-    uint8_t backend;
-    uint8_t file_opens;
-    uint8_t seeks;
-    uint16_t read_cache_hits;
-    uint32_t decode_cycles;
 } sample_stream_io_result_t;
 
 typedef enum

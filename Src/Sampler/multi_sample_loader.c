@@ -269,10 +269,8 @@ static void multi_loader_set_error(multi_sample_load_result_t error,
 {
     if (g_multi_bulk.started_at_ms != 0U)
     {
-        g_multi_load_diag.elapsed_ms = HAL_GetTick() - g_multi_bulk.started_at_ms;
     }
     g_multi_load_diag.last_error = error;
-    g_multi_load_diag.last_failed_sample = failed_sample;
     g_multi_load_diag.state = MULTI_SAMPLE_INSTRUMENT_ERROR;
     if (g_multi_load_request.used != 0U)
     {
@@ -488,7 +486,6 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
 {
     memset(&g_multi_load_diag, 0, sizeof(g_multi_load_diag));
     g_multi_load_diag.instrument_id = instrument_id;
-    g_multi_load_diag.last_failed_sample = MULTI_SAMPLE_POOL_INVALID_ID;
     g_multi_load_diag.last_error = MULTI_SAMPLE_LOAD_OK;
     g_multi_load_diag.state = multi_sample_pool_get_state(instrument_id);
     g_multi_load_active = 0U;
@@ -556,8 +553,6 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
     const multi_sample_prep_budget_t prep_budget =
         multi_loader_calc_prep_budget(&index);
     g_multi_load_diag.prep_pages_required = prep_budget.required_pages;
-    g_multi_load_diag.prep_pages_budget = prep_budget.budget_pages;
-    g_multi_load_diag.prep_samples_preparable = prep_budget.samples_preparable;
     if ((prep_budget.required_pages > prep_budget.budget_pages)
         || (prep_budget.samples_preparable < index.sample_count))
        
@@ -617,7 +612,6 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
     }
 
     g_multi_load_first_sample_id = instrument->first_sample_id;
-    g_multi_load_diag.total_samples = instrument->sample_count;
     g_multi_load_diag.state = MULTI_SAMPLE_INSTRUMENT_LOADING;
     (void)multi_sample_pool_set_state(instrument_id, MULTI_SAMPLE_INSTRUMENT_LOADING);
 
@@ -670,8 +664,6 @@ static multi_sample_load_result_t multi_loader_start_instrument(const char *inde
     g_multi_bulk.plan_count = index.sample_count;
     g_multi_bulk.current_plan = 0U;
     g_multi_bulk.started_at_ms = HAL_GetTick();
-    g_multi_load_diag.pages_remaining = g_multi_load_diag.pages_requested;
-    g_multi_load_diag.samples_remaining = index.sample_count;
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
     g_multi_load_active = 1U;
@@ -729,8 +721,11 @@ multi_sample_load_result_t multi_sample_load_instrument(uint16_t logical_id,
     if ((completion_done == 0U)
         && (result != MULTI_SAMPLE_LOAD_OK)
         && (result != MULTI_SAMPLE_LOAD_ALREADY_READY))
+    {
         (void)project_control_complete_multi_runtime(
             logical_id,index_path,instrument_id,0U);
+        (void)multi_sample_pool_clear_instrument(instrument_id);
+    }
     if (result != MULTI_SAMPLE_LOAD_OK)
         memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
     return result;
@@ -827,20 +822,6 @@ static uint8_t multi_loader_bulk_read_batch(multi_sample_bulk_plan_t *plan,
     {
         sample_stream_io_result_t result;
         sample_stream_transport_execute_monocore(&commands[i], &result);
-        g_multi_load_diag.read_calls++;
-        g_multi_load_diag.file_opens += result.file_opens;
-        g_multi_load_diag.seeks += result.seeks;
-        g_multi_load_diag.physical_reads += result.physical_reads;
-        g_multi_load_diag.bytes_read += result.source_bytes;
-        if (result.backend != 0U)
-        {
-            g_multi_load_diag.physical_bytes += result.read_bytes;
-            if (result.read_bytes > g_multi_load_diag.max_read_bytes)
-            {
-                g_multi_load_diag.max_read_bytes = result.read_bytes;
-            }
-        }
-        g_multi_load_diag.decode_cycles += result.decode_cycles;
         const uint8_t published = sample_page_cache_port_complete(&result);
         if ((result.load_result != SAMPLE_PAGE_LOAD_OK) || (published == 0U))
         {
@@ -851,10 +832,6 @@ static uint8_t multi_loader_bulk_read_batch(multi_sample_bulk_plan_t *plan,
         if (plan->pages_remaining != 0U)
         {
             plan->pages_remaining--;
-        }
-        if (g_multi_load_diag.pages_remaining != 0U)
-        {
-            g_multi_load_diag.pages_remaining--;
         }
         g_multi_load_diag.pages_ready++;
     }
@@ -886,7 +863,6 @@ static uint8_t multi_loader_bulk_finish_instrument(void)
     }
 
     g_multi_load_active = 0U;
-    g_multi_load_diag.elapsed_ms = HAL_GetTick() - g_multi_bulk.started_at_ms;
     g_multi_load_diag.state = MULTI_SAMPLE_INSTRUMENT_READY;
     g_multi_load_diag.last_error = MULTI_SAMPLE_LOAD_OK;
     (void)multi_sample_pool_set_state(g_multi_load_diag.instrument_id,
@@ -929,9 +905,6 @@ void multi_sample_service_load(uint32_t byte_budget)
         return;
     }
 
-    g_multi_load_diag.service_passes++;
-    g_multi_load_diag.saved_page_checks +=
-        (uint32_t)g_multi_load_diag.total_samples + g_multi_load_diag.pages_requested;
 
     multi_sample_bulk_plan_t *const plan =
         &g_multi_bulk_plans[g_multi_bulk.current_plan];
@@ -943,11 +916,6 @@ void multi_sample_service_load(uint32_t byte_budget)
     {
         sample_stream_io_release_key(sample_audio_key_multi(plan->sample_id));
         g_multi_bulk.current_plan++;
-        g_multi_load_diag.samples_ready++;
-        if (g_multi_load_diag.samples_remaining != 0U)
-        {
-            g_multi_load_diag.samples_remaining--;
-        }
     }
     if (ok == 0U)
     {

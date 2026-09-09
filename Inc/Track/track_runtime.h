@@ -156,6 +156,8 @@ track_runtime_engine_t track_runtime_choose_engine(
     track_runtime_family_t family, track_runtime_type_t type);
 uint8_t track_runtime_compute_flags(track_runtime_family_t family,
                                     track_runtime_type_t type);
+uint8_t track_runtime_validate_polyphony_budget(uint8_t track,
+                                                uint8_t voice_count);
 
 #ifdef __cplusplus
 }

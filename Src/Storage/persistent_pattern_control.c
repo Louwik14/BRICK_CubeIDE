@@ -237,8 +237,6 @@ static uint8_t apply_product_state(uint8_t entity,const persist_control_entity_t
         if (result == PROJECT_CONTROL_ASSET_FAILED_INTERNAL
             || result == PROJECT_CONTROL_ASSET_PENDING)
             return 0U;
-        if (result == PROJECT_CONTROL_ASSET_FAILED)
-            (void)project_control_track_assets_clear(entity);
         return 1U;
     }
     if(family==TRACK_FAMILY_SYNTH&&type==TRACK_TYPE_WAVE)
@@ -254,11 +252,6 @@ static uint8_t apply_product_state(uint8_t entity,const persist_control_entity_t
             if (result == PROJECT_CONTROL_ASSET_FAILED_INTERNAL
                 || result == PROJECT_CONTROL_ASSET_PENDING)
                 return 0U;
-            if (result == PROJECT_CONTROL_ASSET_FAILED)
-            {
-                (void)project_control_track_assets_clear(entity);
-                break;
-            }
         }
         return 1U;
     }

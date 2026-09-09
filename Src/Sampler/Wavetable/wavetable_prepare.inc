@@ -187,31 +187,6 @@ static uint8_t wavetable_pool_write_prepared_cache_file(const char *cache_path,
     return (uint8_t)((sync_result == FR_OK) && (close_result == FR_OK));
 }
 
-typedef struct
-{
-    uint32_t flags;
-    uint16_t sample_format;
-    uint16_t duplicate_sample_count;
-    uint32_t cycle_sample_count;
-    uint32_t cycle_count;
-    uint16_t band_count;
-    uint16_t band_entry_size;
-    uint32_t directory_offset;
-    uint32_t data_offset;
-    uint32_t data_bytes;
-    uint8_t transition_magnitude;
-    int32_t wave_index_multiplier;
-    uint32_t path_hash;
-    uint32_t source_size;
-    uint16_t source_date;
-    uint16_t source_time;
-    uint32_t prep_revision;
-    uint32_t source_crc32;
-    uint32_t base_crc32;
-    uint32_t payload_crc32;
-    uint32_t total_file_size;
-} wavetable_prepared_cache_header_t;
-
 static void wavetable_pool_decode_prepared_header(
     const uint8_t *src,
     wavetable_prepared_cache_header_t *header)
@@ -836,6 +811,107 @@ static uint8_t wavetable_pool_read_exact(FIL *fp,
     return 1U;
 }
 
+static uint8_t wavetable_pool_prepared_header_validate(
+    const uint8_t *encoded,
+    uint32_t file_size,
+    const char *source_path,
+    const FILINFO *source_info,
+    uint32_t source_crc32,
+    wavetable_slot_t *candidate,
+    wavetable_prepared_cache_header_t *out_header)
+{
+    if ((encoded == NULL) || (source_path == NULL) || (source_info == NULL)
+        || (candidate == NULL) || (out_header == NULL)
+        || (wavetable_pool_read_u32(&encoded[0]) != WAVETABLE_PREPARED_FILE_MAGIC)
+        || (wavetable_pool_read_u16(&encoded[4]) != WAVETABLE_PREPARED_FILE_VERSION)
+        || (wavetable_pool_read_u16(&encoded[6]) != WAVETABLE_PREPARED_HEADER_SIZE))
+        return 0U;
+    wavetable_pool_decode_prepared_header(encoded, out_header);
+    const uint16_t band_count = wavetable_pool_mipmap_band_count();
+    const uint32_t directory_bytes =
+        (uint32_t)band_count * WAVETABLE_PREPARED_BAND_ENTRY_SIZE;
+    const uint32_t expected_data_offset =
+        WAVETABLE_PREPARED_HEADER_SIZE + directory_bytes;
+    const uint32_t expected_total_size =
+        expected_data_offset + candidate->mipmap.data_bytes;
+    const uint8_t transition =
+        wavetable_pool_mipmap_transition_magnitude(candidate->frame_count);
+    int32_t wave_index_multiplier = 0;
+    if (candidate->frame_count > 1U)
+        wave_index_multiplier = (int32_t)(
+            (candidate->frame_count - 1U) << (31U - transition));
+    if ((out_header->flags != WAVETABLE_MIPMAP_FLAG_MULTIBAND)
+        || (out_header->sample_format != (uint16_t)WAVETABLE_FILE_SAMPLE_FLOAT32)
+        || (out_header->duplicate_sample_count != 0U)
+        || (out_header->cycle_sample_count != WAVETABLE_FRAME_SAMPLE_COUNT)
+        || (out_header->cycle_count != candidate->frame_count)
+        || (out_header->band_count != band_count)
+        || (out_header->band_entry_size != WAVETABLE_PREPARED_BAND_ENTRY_SIZE)
+        || (out_header->directory_offset != WAVETABLE_PREPARED_HEADER_SIZE)
+        || (out_header->data_offset != expected_data_offset)
+        || (out_header->data_bytes != candidate->mipmap.data_bytes)
+        || (out_header->transition_magnitude != transition)
+        || (out_header->wave_index_multiplier != wave_index_multiplier)
+        || (out_header->path_hash != wavetable_pool_path_hash(source_path))
+        || (out_header->source_size != (uint32_t)source_info->fsize)
+        || (out_header->source_date != source_info->fdate)
+        || (out_header->source_time != source_info->ftime)
+        || (out_header->prep_revision != WAVETABLE_MIPMAP_PREP_REVISION)
+        || (memcmp(&encoded[64], g_wavetable_mipmap_upstream_commit_sha1,
+                   sizeof(g_wavetable_mipmap_upstream_commit_sha1)) != 0)
+        || (out_header->source_crc32 != source_crc32)
+        || (out_header->total_file_size != expected_total_size)
+        || (file_size != expected_total_size))
+        return 0U;
+    wavetable_mipmap_view_t *const view = &candidate->mipmap;
+    view->band_count = band_count;
+    view->cycle_count = candidate->frame_count;
+    view->cycle_transition_magnitude = transition;
+    view->wave_index_multiplier = wave_index_multiplier;
+    return 1U;
+}
+
+static uint8_t wavetable_pool_prepared_band_decode_validate(
+    const uint8_t *encoded,
+    uint16_t index,
+    uint32_t payload_offset,
+    wavetable_slot_t *candidate,
+    uint32_t *out_next_offset)
+{
+    wavetable_mipmap_band_t *const band = &candidate->mipmap.bands[index];
+    band->max_phase_increment = wavetable_pool_read_u32(&encoded[0]);
+    band->from_cycle = wavetable_pool_read_u32(&encoded[4]);
+    band->to_cycle = wavetable_pool_read_u32(&encoded[8]);
+    band->cycle_sample_count = wavetable_pool_read_u32(&encoded[12]);
+    band->cycle_magnitude = wavetable_pool_read_u16(&encoded[16]);
+    band->flags = wavetable_pool_read_u16(&encoded[18]);
+    const uint32_t file_offset = wavetable_pool_read_u32(&encoded[20]);
+    band->sample_count = wavetable_pool_read_u32(&encoded[24]);
+    const uint32_t file_cycle_stride = wavetable_pool_read_u32(&encoded[28]);
+    const uint32_t magnitude = WAVETABLE_MIPMAP_INITIAL_CYCLE_MAGNITUDE - index;
+    const uint32_t cycle_samples = 1UL << magnitude;
+    const uint32_t cycle_stride = wavetable_pool_mipmap_cycle_stride(cycle_samples);
+    const uint32_t sample_count = candidate->frame_count * cycle_stride;
+    const uint32_t max_inc = (uint32_t)((double)(UINT32_MAX >> magnitude)
+        * WAVETABLE_PREP_PHASE_LIMIT_RATIO);
+    const uint32_t bytes = sample_count * sizeof(float);
+    wavetable_mipmap_view_t *const view = &candidate->mipmap;
+    if ((band->from_cycle != 0U) || (band->to_cycle != candidate->frame_count)
+        || (band->cycle_sample_count != cycle_samples)
+        || (file_cycle_stride != cycle_stride)
+        || (band->cycle_magnitude != magnitude)
+        || (band->max_phase_increment != max_inc)
+        || (band->flags != WAVETABLE_MIPMAP_FLAG_MULTIBAND)
+        || (band->sample_count != sample_count)
+        || (file_offset != payload_offset)
+        || (payload_offset > view->data_bytes)
+        || (bytes > (view->data_bytes - payload_offset)))
+        return 0U;
+    band->data = &view->data[payload_offset / sizeof(float)];
+    *out_next_offset = payload_offset + bytes;
+    return 1U;
+}
+
 static uint8_t wavetable_pool_load_prepared_cache(
     const char *cache_path,
     const char *source_path,
@@ -849,58 +925,15 @@ static uint8_t wavetable_pool_load_prepared_cache(
     if ((f_open(fp, cache_path, FA_READ) != FR_OK)
         || (f_read(fp, g_wavetable_pool_io,
                    WAVETABLE_PREPARED_HEADER_SIZE, &br) != FR_OK)
-        || (br != WAVETABLE_PREPARED_HEADER_SIZE)
-        || (wavetable_pool_read_u32(&g_wavetable_pool_io[0])
-            != WAVETABLE_PREPARED_FILE_MAGIC)
-        || (wavetable_pool_read_u16(&g_wavetable_pool_io[4])
-            != WAVETABLE_PREPARED_FILE_VERSION)
-        || (wavetable_pool_read_u16(&g_wavetable_pool_io[6])
-            != WAVETABLE_PREPARED_HEADER_SIZE))
+        || (br != WAVETABLE_PREPARED_HEADER_SIZE))
     {
         (void)f_close(fp);
         return 0U;
     }
 
-    wavetable_pool_decode_prepared_header(g_wavetable_pool_io, &header);
-    const uint16_t band_count = wavetable_pool_mipmap_band_count();
-    const uint32_t directory_bytes =
-        (uint32_t)band_count * WAVETABLE_PREPARED_BAND_ENTRY_SIZE;
-    const uint32_t expected_data_offset =
-        WAVETABLE_PREPARED_HEADER_SIZE + directory_bytes;
-    const uint32_t expected_total_size =
-        expected_data_offset + candidate->mipmap.data_bytes;
-    const uint8_t transition =
-        wavetable_pool_mipmap_transition_magnitude(candidate->frame_count);
-    int32_t wave_index_multiplier = 0;
-    if (candidate->frame_count > 1U)
-    {
-        wave_index_multiplier = (int32_t)(
-            (candidate->frame_count - 1U) << (31U - transition));
-    }
-
-    if ((header.flags != WAVETABLE_MIPMAP_FLAG_MULTIBAND)
-        || (header.sample_format != (uint16_t)WAVETABLE_FILE_SAMPLE_FLOAT32)
-        || (header.duplicate_sample_count != 0U)
-        || (header.cycle_sample_count != WAVETABLE_FRAME_SAMPLE_COUNT)
-        || (header.cycle_count != candidate->frame_count)
-        || (header.band_count != band_count)
-        || (header.band_entry_size != WAVETABLE_PREPARED_BAND_ENTRY_SIZE)
-        || (header.directory_offset != WAVETABLE_PREPARED_HEADER_SIZE)
-        || (header.data_offset != expected_data_offset)
-        || (header.data_bytes != candidate->mipmap.data_bytes)
-        || (header.transition_magnitude != transition)
-        || (header.wave_index_multiplier != wave_index_multiplier)
-        || (header.path_hash != wavetable_pool_path_hash(source_path))
-        || (header.source_size != (uint32_t)source_info->fsize)
-        || (header.source_date != source_info->fdate)
-        || (header.source_time != source_info->ftime)
-        || (header.prep_revision != WAVETABLE_MIPMAP_PREP_REVISION)
-        || (memcmp(&g_wavetable_pool_io[64],
-                   g_wavetable_mipmap_upstream_commit_sha1,
-                   sizeof(g_wavetable_mipmap_upstream_commit_sha1)) != 0)
-        || (header.source_crc32 != source_crc32)
-        || (header.total_file_size != expected_total_size)
-        || (f_size(fp) != (FSIZE_t)expected_total_size)
+    if ((wavetable_pool_prepared_header_validate(
+            g_wavetable_pool_io, (uint32_t)f_size(fp), source_path,
+            source_info, source_crc32, candidate, &header) == 0U)
         || (f_lseek(fp, header.directory_offset) != FR_OK))
     {
         (void)f_close(fp);
@@ -908,10 +941,7 @@ static uint8_t wavetable_pool_load_prepared_cache(
     }
 
     wavetable_mipmap_view_t *const view = &candidate->mipmap;
-    view->band_count = band_count;
-    view->cycle_count = candidate->frame_count;
-    view->cycle_transition_magnitude = transition;
-    view->wave_index_multiplier = wave_index_multiplier;
+    const uint16_t band_count = view->band_count;
     uint32_t payload_offset = 0U;
     for (uint16_t i = 0U; i < band_count; ++i)
     {
@@ -922,43 +952,15 @@ static uint8_t wavetable_pool_load_prepared_cache(
             (void)f_close(fp);
             return 0U;
         }
-        wavetable_mipmap_band_t *const band = &view->bands[i];
-        band->max_phase_increment = wavetable_pool_read_u32(&g_wavetable_pool_io[0]);
-        band->from_cycle = wavetable_pool_read_u32(&g_wavetable_pool_io[4]);
-        band->to_cycle = wavetable_pool_read_u32(&g_wavetable_pool_io[8]);
-        band->cycle_sample_count = wavetable_pool_read_u32(&g_wavetable_pool_io[12]);
-        band->cycle_magnitude = wavetable_pool_read_u16(&g_wavetable_pool_io[16]);
-        band->flags = wavetable_pool_read_u16(&g_wavetable_pool_io[18]);
-        const uint32_t file_offset = wavetable_pool_read_u32(&g_wavetable_pool_io[20]);
-        band->sample_count = wavetable_pool_read_u32(&g_wavetable_pool_io[24]);
-        const uint32_t file_cycle_stride =
-            wavetable_pool_read_u32(&g_wavetable_pool_io[28]);
-        const uint32_t magnitude = WAVETABLE_MIPMAP_INITIAL_CYCLE_MAGNITUDE - i;
-        const uint32_t cycle_samples = 1UL << magnitude;
-        const uint32_t cycle_stride =
-            wavetable_pool_mipmap_cycle_stride(cycle_samples);
-        const uint32_t sample_count = candidate->frame_count * cycle_stride;
-        const uint32_t max_inc =
-            (uint32_t)((double)(UINT32_MAX >> magnitude)
-                * WAVETABLE_PREP_PHASE_LIMIT_RATIO);
-        const uint32_t bytes = sample_count * sizeof(float);
-        if ((band->from_cycle != 0U)
-            || (band->to_cycle != candidate->frame_count)
-            || (band->cycle_sample_count != cycle_samples)
-            || (file_cycle_stride != cycle_stride)
-            || (band->cycle_magnitude != magnitude)
-            || (band->max_phase_increment != max_inc)
-            || (band->flags != WAVETABLE_MIPMAP_FLAG_MULTIBAND)
-            || (band->sample_count != sample_count)
-            || (file_offset != payload_offset)
-            || (payload_offset > view->data_bytes)
-            || (bytes > (view->data_bytes - payload_offset)))
+        uint32_t next_offset = 0U;
+        if (wavetable_pool_prepared_band_decode_validate(
+                g_wavetable_pool_io, i, payload_offset,
+                candidate, &next_offset) == 0U)
         {
             (void)f_close(fp);
             return 0U;
         }
-        band->data = &view->data[payload_offset / sizeof(float)];
-        payload_offset += bytes;
+        payload_offset = next_offset;
     }
     if ((payload_offset != view->data_bytes)
         || (f_lseek(fp, header.data_offset) != FR_OK))
@@ -1007,41 +1009,6 @@ static void wavetable_pool_release_slot_allocations(
     }
 }
 
-static uint8_t wavetable_pool_publish_audio_descriptor(
-    uint16_t wavetable_slot, const wavetable_slot_t *slot)
-{
-    audio_wavetable_descriptor_t descriptor;
-    memset(&descriptor, 0, sizeof(descriptor));
-    descriptor.generation = slot->generation;
-    descriptor.frame_count = slot->frame_count;
-    descriptor.frame_sample_count = slot->frame_sample_count;
-    descriptor.wavetable_slot = wavetable_slot;
-    descriptor.global_slot = slot->global_slot;
-    descriptor.band_count = slot->mipmap.band_count;
-    if (shared_memory_ref_make_page_pool(slot->first_page_slot, 0U,
-                                     slot->data_bytes, &descriptor.base_data) == 0U)
-        return 0U;
-    dcache_clean_by_addr_aligned(slot->data, slot->data_bytes);
-    uint32_t mip_offset = 0U;
-    for (uint16_t i = 0U; i < descriptor.band_count; ++i)
-    {
-        const wavetable_mipmap_band_t *const src = &slot->mipmap.bands[i];
-        audio_wavetable_band_t *const dst = &descriptor.bands[i];
-        const uint32_t bytes = src->sample_count * sizeof(float);
-        dst->max_phase_increment = src->max_phase_increment;
-        dst->cycle_sample_count = src->cycle_sample_count;
-        dst->sample_count = src->sample_count;
-        dst->cycle_magnitude = src->cycle_magnitude;
-        dst->flags = src->flags;
-        if (shared_memory_ref_make_page_pool(slot->mipmap.first_page_slot,
-                                         mip_offset, bytes, &dst->data) == 0U)
-            return 0U;
-        mip_offset += bytes;
-    }
-    dcache_clean_by_addr_aligned(slot->mipmap.data, slot->mipmap.data_bytes);
-    return audio_wave_table_projection_install_descriptor(&descriptor);
-}
-
 static wavetable_result_t wavetable_pool_commit_candidate(
     uint16_t wavetable_slot,
     uint16_t forced_global_slot,
@@ -1051,10 +1018,7 @@ static wavetable_result_t wavetable_pool_commit_candidate(
     g_wavetable_old_commit_snapshot = g_wavetable_pool.slots[wavetable_slot];
     const wavetable_slot_t *const old = &g_wavetable_old_commit_snapshot;
     if (old->state == WAVETABLE_SLOT_READY)
-    {
-        wavetable_pool_clear(wavetable_slot);
         return WAVETABLE_RESULT_SD_BUSY;
-    }
     if (old->state == WAVETABLE_SLOT_RETIRING)
         return WAVETABLE_RESULT_SD_BUSY;
     uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
@@ -1066,18 +1030,9 @@ static wavetable_result_t wavetable_pool_commit_candidate(
     {
         global_slot = old->global_slot;
     }
-
-    const uint8_t registered =
-        (global_slot < SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
-            ? sample_global_pool_register_wavetable_at(global_slot,
-                                                       wavetable_slot,
-                                                       candidate->path,
-                                                       candidate->cost_bytes_aligned)
-            : sample_global_pool_register_wavetable(wavetable_slot,
-                                                    candidate->path,
-                                                    candidate->cost_bytes_aligned,
-                                                    &global_slot);
-    if (registered == 0U)
+    else
+        global_slot = sample_global_pool_find_free_slot();
+    if (global_slot >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
     {
         return WAVETABLE_RESULT_REGISTER_FAIL;
     }
@@ -1094,6 +1049,14 @@ static wavetable_result_t wavetable_pool_commit_candidate(
     {
         candidate->preview.generation = candidate->generation;
     }
+    audio_wavetable_descriptor_t descriptor;
+    if (audio_wave_table_projection_build_descriptor(
+            wavetable_slot, candidate, &descriptor) == 0U)
+        return WAVETABLE_RESULT_REGISTER_FAIL;
+    if (sample_global_pool_register_wavetable_at(
+            global_slot, wavetable_slot, candidate->path,
+            candidate->cost_bytes_aligned) == 0U)
+        return WAVETABLE_RESULT_REGISTER_FAIL;
 
     const uint32_t primask = __get_PRIMASK();
     __disable_irq();
@@ -1106,9 +1069,7 @@ static wavetable_result_t wavetable_pool_commit_candidate(
 
     candidate->page_count = 0U;
     candidate->mipmap.page_count = 0U;
-    if (wavetable_pool_publish_audio_descriptor(
-            wavetable_slot, &g_wavetable_pool.slots[wavetable_slot]) == 0U)
-        return WAVETABLE_RESULT_REGISTER_FAIL;
+    audio_wave_table_projection_install_prepared(&descriptor);
     wavetable_pool_release_slot_allocations(old);
     if (out_global_slot != 0)
     {

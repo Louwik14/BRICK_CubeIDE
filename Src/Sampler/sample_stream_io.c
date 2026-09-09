@@ -163,11 +163,9 @@ static void sample_stream_io_decode_async(void)
         async->result.load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
         return;
     }
-    const uint32_t decode_begin = DWT->CYCCNT;
     async->result.load_result = sample_stream_decoder_decode_page(
         &async->command.stream_info, &async->target, async->source,
         async->result.source_bytes);
-    async->result.decode_cycles = DWT->CYCCNT - decode_begin;
 }
 
 uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
@@ -288,21 +286,16 @@ uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command,
         if ((source_offset <= UINT32_MAX)
             && (f_open(&file, command->stream_info.path, FA_READ) == FR_OK))
         {
-            async->result.file_opens = 1U;
-            async->result.fatfs_ops++;
             if ((f_lseek(&file, (FSIZE_t)source_offset) == FR_OK)
                 && (f_read(&file, async->scratch,
                            async->result.source_bytes, &read) == FR_OK)
                 && (read == async->result.source_bytes))
             {
-                async->result.seeks = 1U;
-                async->result.fatfs_ops += 2U;
                 async->result.read_bytes = read;
                 async->result.load_result = SAMPLE_PAGE_LOAD_OK;
                 async->source = async->scratch;
             }
             (void)f_close(&file);
-            async->result.fatfs_ops++;
         }
         async->state = SAMPLE_STREAM_IO_SCRATCH_RAW_READY;
         return 1U;
@@ -351,12 +344,13 @@ uint8_t sample_stream_io_poll(sample_stream_io_result_t *out_result)
     if ((async != 0) && (async->physical_active != 0U))
     {
         sample_page_load_result_t physical_result = SAMPLE_PAGE_LOAD_READ_FAILED;
+        uint8_t physical_reads;
         if (sample_stream_backend_physical_poll(
                 &async->physical,
                 &physical_result,
                 &async->source,
                 &async->result.source_bytes,
-                &async->result.physical_reads) == 0U)
+                &physical_reads) == 0U)
         {
             return 0U;
         }
@@ -364,7 +358,6 @@ uint8_t sample_stream_io_poll(sample_stream_io_result_t *out_result)
         async->result.load_result = physical_result;
         if (physical_result == SAMPLE_PAGE_LOAD_OK)
         {
-            async->result.backend = 1U;
             async->result.read_bytes = async->result.source_bytes;
         }
         async->state = SAMPLE_STREAM_IO_SCRATCH_RAW_READY;

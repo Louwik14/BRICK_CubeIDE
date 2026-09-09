@@ -30,6 +30,8 @@
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_runtime_exec.h"
 #include "Seq/seq_note_trace.h"
+#include "Seq/seq_capacity_contract.h"
+#include "Platform/brick_fatal.h"
 
 #define SEQ_PLAY_SCHEDULER_SOURCE_CAPACITY \
     (SEQ_LANE_CAPACITY * SEQ_PLAY_MAX_CAPACITY * 3U)
@@ -39,6 +41,17 @@
 #define SEQ_PLAY_SCHEDULER_HORIZON_FRAMES 64U
 #define SEQ_PLAY_SCHEDULER_PRIORITY_COUNT 3U
 
+_Static_assert(SEQ_PLAY_SCHEDULER_SOURCE_CAPACITY
+                   >= SEQ_PRODUCT_MAX_ACTIVE_SOURCES,
+               "scheduler source storage is below the product proof");
+_Static_assert(SEQ_PLAY_SCHEDULER_ACTIVE_OUTPUT_CAPACITY
+                   >= SEQ_PRODUCT_MAX_EMITTING_VOICES,
+               "scheduler occurrence ledger is below the product proof");
+_Static_assert(SEQ_PLAY_SCHEDULER_IMMINENT_CAPACITY
+                   >= SEQ_PRODUCT_MAX_MUSIC_ACTIONS_PER_HORIZON,
+               "scheduler imminent storage is below the product proof");
+_Static_assert(SEQ_PLAY_SCHEDULER_HORIZON_FRAMES == 64U,
+               "review scheduler event-density proof for a new horizon");
 
 typedef enum
 {
@@ -180,6 +193,30 @@ static void seq_play_scheduler_output_died(brick_entity_id_t entity_id,
             g_seq_play_imminent[i].event_token = 0U;
 }
 static uint32_t seq_play_scheduler_alloc_event_token(void);
+
+void seq_play_scheduler_preflight_product_window(uint16_t frames,
+                                                 uint64_t first_sample)
+{
+    if ((frames == 0U) || (frames > SEQ_PLAY_SCHEDULER_HORIZON_FRAMES))
+        brick_fatal_raise(BRICK_FATAL_SEQ_IMMINENT_CAPACITY, UINT32_MAX,
+                          (uint32_t)first_sample, frames,
+                          SEQ_PLAY_SCHEDULER_HORIZON_FRAMES);
+    if (g_seq_play_active_source_count > SEQ_PRODUCT_MAX_ACTIVE_SOURCES)
+        brick_fatal_raise(BRICK_FATAL_SEQ_SOURCE_CAPACITY, UINT32_MAX,
+                          (uint32_t)first_sample,
+                          g_seq_play_active_source_count,
+                          SEQ_PRODUCT_MAX_ACTIVE_SOURCES);
+
+    uint16_t active_outputs = 0U;
+    for (uint16_t i = 0U;
+         i < SEQ_PLAY_SCHEDULER_ACTIVE_OUTPUT_CAPACITY; ++i)
+        active_outputs += (g_seq_play_active_occurrence[i].active != 0U)
+            ? 1U : 0U;
+    if (active_outputs > SEQ_PRODUCT_MAX_EMITTING_VOICES)
+        brick_fatal_raise(BRICK_FATAL_SEQ_OCCURRENCE_CAPACITY, UINT32_MAX,
+                          (uint32_t)first_sample, active_outputs,
+                          SEQ_PRODUCT_MAX_EMITTING_VOICES);
+}
 
 static uint32_t seq_play_scheduler_enter_critical(void)
 {
@@ -419,7 +456,10 @@ static uint8_t seq_play_scheduler_register_source(
         g_seq_play_imminent_valid = 0U;
         return 1U;
     }
-    return 0U;
+    brick_fatal_raise(BRICK_FATAL_SEQ_SOURCE_CAPACITY,
+                      item->target_track, item->source_step,
+                      (uint32_t)g_seq_play_active_source_count + 1U,
+                      SEQ_PLAY_SCHEDULER_SOURCE_CAPACITY);
 }
 
 static seq_step_play_field_t seq_play_scheduler_field_for_play_kind(
@@ -835,7 +875,11 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                 continue;
             if (g_seq_play_imminent_count
                     >= SEQ_PLAY_SCHEDULER_IMMINENT_CAPACITY)
-                break;
+                brick_fatal_raise(BRICK_FATAL_SEQ_IMMINENT_CAPACITY,
+                                  active->track,
+                                  (uint32_t)block_start_sample,
+                                  (uint32_t)g_seq_play_imminent_count + 1U,
+                                  SEQ_PLAY_SCHEDULER_IMMINENT_CAPACITY);
             g_seq_play_imminent[g_seq_play_imminent_count++] =
                 (seq_play_scheduler_evt_t){
                     .due_sample_time = (active->deadline_sample < block_start_sample)
@@ -977,7 +1021,11 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                             source->source_track, source->source_step,
                             on_sample, g_seq_play_imminent_count,
                             0U, SEQ_PLAY_SCHEDULER_IMMINENT_CAPACITY);
-                    break;
+                    brick_fatal_raise(BRICK_FATAL_SEQ_IMMINENT_CAPACITY,
+                                      source->target_track,
+                                      source->source_step,
+                                      (uint32_t)g_seq_play_imminent_count + 2U,
+                                      SEQ_PLAY_SCHEDULER_IMMINENT_CAPACITY);
                 }
 
                 uint8_t active_count = 0U;
@@ -1034,7 +1082,11 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                             SEQ_NOTE_TRACE_REJECT_SCHED_CAPACITY,
                             source->source_track, source->source_step,
                             on_sample, active_count, 0U, voice_limit);
-                    break;
+                    brick_fatal_raise(BRICK_FATAL_SEQ_OCCURRENCE_CAPACITY,
+                                      source->target_track,
+                                      source->source_step,
+                                      (uint32_t)active_count + 1U,
+                                      voice_limit);
                 }
                 seq_play_active_occurrence_t *const active =
                     &g_seq_play_active_occurrence[(uint16_t)active_index];

@@ -52,7 +52,6 @@ void sd_scheduler_default_config(sd_scheduler_config_t *config)
     }
     config->critical_margin_us = 20000U;
     config->reservation_low_margin_us = 2000000U;
-    config->reservation_critical_margin_us = 500000U;
     config->transaction_guard_us = 2000U;
     config->worst_case_us_per_sector = 250U;
     config->max_write_sectors = 64U;
@@ -77,9 +76,6 @@ void sd_scheduler_init(sd_scheduler_t *scheduler,
     }
     scheduler->owner = SD_SCHEDULER_OWNER_IDLE;
     scheduler->round_robin_cursor = (uint8_t)SD_SCHEDULER_CLASS_READ;
-    scheduler->metrics.min_read_margin_us = SD_SCHEDULER_MARGIN_UNKNOWN;
-    scheduler->metrics.min_write_margin_us = SD_SCHEDULER_MARGIN_UNKNOWN;
-    scheduler->metrics.min_reservation_margin_us = SD_SCHEDULER_MARGIN_UNKNOWN;
 }
 
 uint8_t sd_scheduler_bind_provider(sd_scheduler_t *scheduler,
@@ -124,28 +120,6 @@ static uint32_t sd_scheduler_wait(const sd_scheduler_t *scheduler,
                : 0U;
 }
 
-static void sd_scheduler_record_margin(sd_scheduler_t *scheduler,
-                                       const sd_scheduler_candidate_t *candidate)
-{
-    uint32_t *minimum = 0;
-    if (candidate->type == SD_SCHEDULER_CLASS_READ)
-    {
-        minimum = &scheduler->metrics.min_read_margin_us;
-    }
-    else if (candidate->type == SD_SCHEDULER_CLASS_WRITE)
-    {
-        minimum = &scheduler->metrics.min_write_margin_us;
-    }
-    else if (candidate->type == SD_SCHEDULER_CLASS_FILESYSTEM)
-    {
-        minimum = &scheduler->metrics.min_reservation_margin_us;
-    }
-    if ((minimum != 0) && (candidate->margin_us < *minimum))
-    {
-        *minimum = candidate->margin_us;
-    }
-}
-
 static void sd_scheduler_collect(sd_scheduler_t *scheduler,
                                  uint32_t now,
                                  uint32_t media_epoch,
@@ -178,21 +152,13 @@ static void sd_scheduler_collect(sd_scheduler_t *scheduler,
         if ((candidate->type != type) || (candidate->media_epoch != media_epoch)
             || (invalid_transport != 0U))
         {
-            scheduler->metrics.errors++;
             sd_scheduler_note_wait(scheduler, type, now, 0U);
             continue;
         }
         snapshot->available[type] = 1U;
         sd_scheduler_note_wait(scheduler, type, now, 1U);
-        sd_scheduler_record_margin(scheduler, candidate);
         if (type == SD_SCHEDULER_CLASS_FILESYSTEM)
         {
-            if ((candidate->reservation == SD_SCHEDULER_RESERVATION_CRITICAL)
-                || (candidate->margin_us
-                    <= scheduler->config.reservation_critical_margin_us))
-            {
-                scheduler->metrics.reservation_policy_failures++;
-            }
             snapshot->urgent[type] =
                 ((candidate->reservation != SD_SCHEDULER_RESERVATION_SAFE)
                  || (candidate->margin_us
@@ -248,24 +214,12 @@ static sd_scheduler_class_t sd_scheduler_pick(sd_scheduler_t *scheduler,
             else
             {
                 picked = SD_SCHEDULER_CLASS_WRITE;
-                if (read_margin == write_margin)
-                {
-                    scheduler->metrics.critical_ties++;
-                }
             }
         }
         else
         {
             picked = (read_urgent != 0U) ? SD_SCHEDULER_CLASS_READ
                                          : SD_SCHEDULER_CLASS_WRITE;
-        }
-        if (picked == SD_SCHEDULER_CLASS_READ)
-        {
-            scheduler->metrics.urgent_read_decisions++;
-        }
-        else
-        {
-            scheduler->metrics.urgent_write_decisions++;
         }
         return picked;
     }
@@ -297,7 +251,6 @@ static sd_scheduler_class_t sd_scheduler_pick(sd_scheduler_t *scheduler,
     }
     if (starved != SD_SCHEDULER_CLASS_NONE)
     {
-        scheduler->metrics.starvation_prevented++;
         return starved;
     }
     return sd_scheduler_pick_rr(scheduler, s);
@@ -385,10 +338,6 @@ static uint32_t sd_scheduler_grant_sectors(sd_scheduler_t *scheduler,
             granted = safe_sectors;
         }
     }
-    if (granted < candidate->sector_count)
-    {
-        scheduler->metrics.write_burst_limits++;
-    }
     return granted;
 }
 
@@ -401,24 +350,7 @@ static void sd_scheduler_update_max_wait(sd_scheduler_t *scheduler,
     {
         return;
     }
-    const uint32_t wait = sd_scheduler_wait(scheduler, type, now);
-    uint32_t *maximum = 0;
-    if (type == SD_SCHEDULER_CLASS_READ)
-    {
-        maximum = &scheduler->metrics.max_read_wait_us;
-    }
-    else if (type == SD_SCHEDULER_CLASS_WRITE)
-    {
-        maximum = &scheduler->metrics.max_write_wait_us;
-    }
-    else if (type == SD_SCHEDULER_CLASS_FILESYSTEM)
-    {
-        maximum = &scheduler->metrics.max_filesystem_wait_us;
-    }
-    if ((maximum != 0) && (wait > *maximum))
-    {
-        *maximum = wait;
-    }
+    (void)now;
     scheduler->wait_active[type] = 0U;
 }
 
@@ -445,32 +377,6 @@ static void sd_scheduler_note_accepted(sd_scheduler_t *scheduler,
                                        uint32_t now)
 {
     sd_scheduler_update_max_wait(scheduler, type, now);
-    if (type == SD_SCHEDULER_CLASS_READ)
-    {
-        scheduler->metrics.read_transactions++;
-    }
-    else if (type == SD_SCHEDULER_CLASS_WRITE)
-    {
-        scheduler->metrics.write_transactions++;
-    }
-    else
-    {
-        scheduler->metrics.filesystem_slots++;
-    }
-    if ((scheduler->last_dma_class == SD_SCHEDULER_CLASS_READ)
-        && (type == SD_SCHEDULER_CLASS_WRITE))
-    {
-        scheduler->metrics.read_to_write_switches++;
-    }
-    else if ((scheduler->last_dma_class == SD_SCHEDULER_CLASS_WRITE)
-             && (type == SD_SCHEDULER_CLASS_READ))
-    {
-        scheduler->metrics.write_to_read_switches++;
-    }
-    if (type != SD_SCHEDULER_CLASS_FILESYSTEM)
-    {
-        scheduler->last_dma_class = type;
-    }
     scheduler->round_robin_cursor = (uint8_t)((type % 3U) + 1U);
 }
 
@@ -490,10 +396,6 @@ static void sd_scheduler_poll_active(sd_scheduler_t *scheduler)
     {
         scheduler->owner = SD_SCHEDULER_OWNER_RECOVERY_ABORT;
         return;
-    }
-    if (result == SD_SCHEDULER_POLL_ERROR)
-    {
-        scheduler->metrics.errors++;
     }
     scheduler->owner = SD_SCHEDULER_OWNER_IDLE;
     scheduler->active_class = SD_SCHEDULER_CLASS_NONE;
@@ -542,15 +444,8 @@ void sd_scheduler_service(sd_scheduler_t *scheduler,
         sd_scheduler_note_accepted(scheduler, picked, now_us);
         return;
     }
-    if (result == SD_SCHEDULER_START_BUSY)
-    {
-        scheduler->metrics.busy_rejects++;
-    }
-    else if (result == SD_SCHEDULER_START_ERROR)
-    {
-        scheduler->metrics.errors++;
-    }
-    else
+    if ((result != SD_SCHEDULER_START_BUSY)
+        && (result != SD_SCHEDULER_START_ERROR))
     {
         assert(picked == SD_SCHEDULER_CLASS_FILESYSTEM);
         sd_scheduler_note_accepted(scheduler, picked, now_us);
@@ -595,13 +490,4 @@ uint8_t sd_scheduler_background_can_start(sd_scheduler_t *scheduler,
 sd_scheduler_owner_t sd_scheduler_owner(const sd_scheduler_t *scheduler)
 {
     return (scheduler != 0) ? scheduler->owner : SD_SCHEDULER_OWNER_IDLE;
-}
-
-void sd_scheduler_metrics_get(const sd_scheduler_t *scheduler,
-                              sd_scheduler_metrics_t *metrics)
-{
-    if ((scheduler != 0) && (metrics != 0))
-    {
-        *metrics = scheduler->metrics;
-    }
 }

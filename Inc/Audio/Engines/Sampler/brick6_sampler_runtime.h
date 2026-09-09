@@ -37,6 +37,13 @@ typedef enum
     BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_REL_DONE
 } brick6_sampler_multi_diag_reason_t;
 
+typedef enum
+{
+    BRICK6_SAMPLER_NOTE_INVARIANT = 0,
+    BRICK6_SAMPLER_NOTE_RENDERED,
+    BRICK6_SAMPLER_NOTE_SILENT
+} brick6_sampler_note_result_t;
+
 typedef struct
 {
     uint32_t fast_path_blocks;
@@ -120,11 +127,9 @@ void brick6_sampler_runtime_set_clip_grain_size(uint8_t track_id, uint16_t grain
 void brick6_sampler_runtime_trigger(uint8_t track_id);
 void brick6_sampler_runtime_trigger_note(uint8_t track_id, uint8_t note);
 void brick6_sampler_runtime_trigger_note_velocity(uint8_t track_id, uint8_t note, uint8_t velocity);
-uint8_t brick6_sampler_runtime_initialize_held_note(uint8_t track_id,
-                                                    uint8_t note,
-                                                    uint8_t velocity,
-                                                    uint32_t output_id,
-                                                    uint8_t multi);
+brick6_sampler_note_result_t brick6_sampler_runtime_initialize_held_note(
+    uint8_t track_id, uint8_t note, uint8_t velocity, uint32_t output_id,
+    uint8_t multi);
 uint8_t brick6_sampler_runtime_trigger_multi_note_velocity(uint8_t track_id,
                                                            uint16_t instrument_id,
                                                            uint8_t note,
@@ -139,10 +144,9 @@ uint8_t brick6_sampler_runtime_trigger_multi_note_velocity_output(uint8_t track_
 uint8_t brick6_sampler_runtime_trigger_multi_track_note_velocity(uint8_t track_id,
                                                                   uint8_t note,
                                                                   uint8_t velocity);
-uint8_t brick6_sampler_runtime_trigger_multi_track_note_velocity_output(uint8_t track_id,
-                                                                       uint8_t note,
-                                                                       uint8_t velocity,
-                                                                       uint32_t output_id);
+brick6_sampler_note_result_t
+brick6_sampler_runtime_trigger_multi_track_note_velocity_output(
+    uint8_t track_id, uint8_t note, uint8_t velocity, uint32_t output_id);
 void brick6_sampler_runtime_set_multi_voice_count(uint8_t track_id, uint8_t count);
 uint8_t brick6_sampler_runtime_get_multi_voice_count(uint8_t track_id);
 void brick6_sampler_runtime_set_multi_spread(uint8_t track_id, float spread);

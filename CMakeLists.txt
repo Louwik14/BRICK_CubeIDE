@@ -192,6 +192,7 @@ set(BRICK6_BOARD_DRIVER_INC_DIRS
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/brick_domain_manifest.cmake")
 
 set(DOMAIN_CONTRACT_HEADERS
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Platform/brick_fatal.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Param/param_ids.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Param/param_spec.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/Mod/mod_lfo_types.h"

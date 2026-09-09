@@ -918,7 +918,6 @@ static void waveform_cache_fail_active(void)
     }
     memset(&g_waveform_cache.active, 0, sizeof(g_waveform_cache.active));
     g_waveform_cache.diag.status = WAVEFORM_CACHE_STATUS_ERROR;
-    g_waveform_cache.diag.jobs_failed++;
 }
 
 static uint8_t waveform_cache_start_next_job(void)
@@ -952,7 +951,6 @@ void waveform_cache_init(void)
 {
     memset(&g_waveform_cache, 0, sizeof(g_waveform_cache));
     memset(g_waveform_cache_ram_tiles, 0, sizeof(g_waveform_cache_ram_tiles));
-    g_waveform_cache.diag.active_level_count = WAVEFORM_CACHE_ACTIVE_LEVEL_COUNT;
 }
 
 uint8_t waveform_cache_ensure_dirs(void)
@@ -973,11 +971,9 @@ uint8_t waveform_cache_ensure_dirs(void)
                 ok = 1U;
             }
         }
-        g_waveform_cache.diag.last_fresult = (uint32_t)fr;
     }
     else
     {
-        g_waveform_cache.diag.last_fresult = (uint32_t)FR_NOT_READY;
     }
     g_waveform_cache.diag.dirs_ready = ok;
     sd_access_gate_release(SD_ACCESS_CLIENT_WAVEFORM_CACHE);
@@ -1024,7 +1020,6 @@ uint8_t waveform_cache_request_for_wav(const char *path, waveform_cache_reason_t
             }
             g_waveform_cache.queue[i].reason = reason;
             g_waveform_cache.queue[i].state = WAVEFORM_CACHE_JOB_QUEUED;
-            g_waveform_cache.diag.jobs_queued++;
             g_waveform_cache.diag.status = WAVEFORM_CACHE_STATUS_QUEUED;
             return waveform_cache_finish_request(path, reason, 1U);
         }
@@ -1063,7 +1058,6 @@ static void waveform_cache_service_validate(void)
     if(waveform_cache_build_identity(g_waveform_cache.active.wav_path,
                                      &g_waveform_cache.active.header) == 0U)
     {
-        g_waveform_cache.diag.last_fresult = (uint32_t)FR_INVALID_OBJECT;
         sd_access_gate_release(SD_ACCESS_CLIENT_WAVEFORM_CACHE);
         waveform_cache_fail_active();
         return;
@@ -1073,7 +1067,6 @@ static void waveform_cache_service_validate(void)
     {
         memset(&g_waveform_cache.active, 0, sizeof(g_waveform_cache.active));
         g_waveform_cache.diag.status = WAVEFORM_CACHE_STATUS_IDLE;
-        g_waveform_cache.diag.jobs_done++;
         sd_access_gate_release(SD_ACCESS_CLIENT_WAVEFORM_CACHE);
         return;
     }
@@ -1085,15 +1078,12 @@ static void waveform_cache_service_validate(void)
     {
         memset(&g_waveform_cache.active, 0, sizeof(g_waveform_cache.active));
         g_waveform_cache.diag.status = WAVEFORM_CACHE_STATUS_READY;
-        g_waveform_cache.diag.jobs_done++;
         sd_access_gate_release(SD_ACCESS_CLIENT_WAVEFORM_CACHE);
         return;
     }
     waveform_cache_fill_table(&g_waveform_cache.active);
     g_waveform_cache.active.state = WAVEFORM_CACHE_JOB_BUILDING;
     g_waveform_cache.diag.status = WAVEFORM_CACHE_STATUS_BUILDING;
-    g_waveform_cache.diag.frame_count = g_waveform_cache.active.header.frame_count;
-    g_waveform_cache.diag.frames_done = 0U;
     sd_access_gate_release(SD_ACCESS_CLIENT_WAVEFORM_CACHE);
 }
 
@@ -1181,7 +1171,6 @@ static void waveform_cache_service_build(uint32_t byte_budget)
             }
             memset(job, 0, sizeof(*job));
             g_waveform_cache.diag.status = WAVEFORM_CACHE_STATUS_READY;
-            g_waveform_cache.diag.jobs_done++;
             ok = 1U;
             break;
         }
@@ -1218,7 +1207,6 @@ static void waveform_cache_service_build(uint32_t byte_budget)
         {
             break;
         }
-        g_waveform_cache.diag.frames_done = job->next_frame;
         if(job->next_frame >= job->header.frame_count)
         {
             if(waveform_cache_write_header(&cache_fp, job, (uint8_t)WAVEFORM_CACHE_STATE_READY) == 0U)
@@ -1231,7 +1219,6 @@ static void waveform_cache_service_build(uint32_t byte_budget)
             }
             memset(job, 0, sizeof(*job));
             g_waveform_cache.diag.status = WAVEFORM_CACHE_STATUS_READY;
-            g_waveform_cache.diag.jobs_done++;
         }
         ok = 1U;
     } while(0);

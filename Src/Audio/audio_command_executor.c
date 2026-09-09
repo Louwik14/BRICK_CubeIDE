@@ -27,12 +27,24 @@
 #include "Mod/mod_lfo_v1_audio.h"
 #include "Mod/mod_env3.h"
 #include "Audio/sd_preview_audio.h"
+#include "Platform/brick_fatal.h"
+#include "main.h"
+#include "stm32h7xx.h"
 
 #define AUDIO_PARAM_MULTI_RESOURCE_STOP   0xFFF5U
 #define AUDIO_PARAM_RAM_RESOURCE_STOP     0xFFF6U
 #define AUDIO_PARAM_WAVE_RESOURCE_STOP    0xFFF7U
 
-static uint32_t g_audio_command_invariant_failures;
+typedef enum
+{
+    AUDIO_COMMAND_APPLY_OK = 0U,
+    AUDIO_COMMAND_APPLY_INVALID,
+    AUDIO_COMMAND_APPLY_PROGRAM_INSTALL,
+    AUDIO_COMMAND_APPLY_POLYPHONY,
+    AUDIO_COMMAND_APPLY_REBIND,
+    AUDIO_COMMAND_APPLY_MAPPING
+} audio_command_apply_result_t;
+brick_fatal_record_t g_audio_command_fatal_record;
 static uint32_t g_audio_wavetable_generation[
     BRICK6_WAVE_VOICE_INSTANCE_COUNT * BRICK6_WAVE_OSC_COUNT];
 static track_tone_fm_base_voice_t g_audio_fm_base_projection[BRICK_ENTITY_CAPACITY];
@@ -77,8 +89,11 @@ static void audio_command_close_external_entities(void)
     }
 }
 
-static uint8_t audio_command_apply_program(const control_audio_command_t *command)
+static audio_command_apply_result_t audio_command_apply_program(
+    const control_audio_command_t *command)
 {
+    if (CONTROL_AUDIO_COMMAND_KIND(command) != 0U)
+        return AUDIO_COMMAND_APPLY_INVALID;
     const control_audio_program_descriptor_t descriptor =
         control_audio_program_unpack(command->value);
     const audio_note_engine_install_spec_t spec = {
@@ -88,17 +103,11 @@ static uint8_t audio_command_apply_program(const control_audio_command_t *comman
         .type = descriptor.type,
         .flags = descriptor.flags
     };
-    track_audio_runtime_ctx_t current;
-    const uint8_t have_current =
-        audio_note_engine_adapter_current_ctx(command->entity, &current);
-    if ((have_current != 0U)
-            && ((current.program_route.engine
-                    == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
-                || (spec.engine == TRACK_RUNTIME_ENGINE_SAMPLER)))
-        brick6_sampler_runtime_replace_track_renderer(command->entity);
     if (audio_note_engine_adapter_install_prepared(&spec) == 0U)
-        return 0U;
-    return audio_note_engine_adapter_initialize_held_outputs(command->entity);
+        return AUDIO_COMMAND_APPLY_PROGRAM_INSTALL;
+    return (audio_note_engine_adapter_initialize_held_outputs(command->entity)
+            != 0U)
+        ? AUDIO_COMMAND_APPLY_OK : AUDIO_COMMAND_APPLY_REBIND;
 }
 
 static uint8_t audio_command_apply_param(const control_audio_command_t *command)
@@ -189,7 +198,8 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
         else
             brick6_sampler_runtime_set_sample(command->entity,
                                               (uint16_t)command->value);
-        return 1U;
+        return audio_note_engine_adapter_initialize_held_outputs(
+            command->entity);
     }
     if (command->id == CONTROL_AUDIO_LOOPER_PLAY_AUTO)
     {
@@ -225,6 +235,10 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
 
 static uint8_t audio_command_apply_note(const control_audio_command_t *command)
 {
+    if ((command->entity >= BRICK_ENTITY_CAPACITY)
+            || (CONTROL_AUDIO_COMMAND_KIND(command) > CONTROL_AUDIO_NOTE_ON)
+            || (command->value == 0U))
+        return 0U;
     if ((command->value & CONTROL_AUDIO_NOTE_METRONOME_MASK)
             == CONTROL_AUDIO_NOTE_METRONOME_PREFIX)
     {
@@ -263,6 +277,8 @@ static uint8_t audio_command_apply_transport(
 
 static uint8_t audio_command_apply_record(const control_audio_command_t *command)
 {
+    if (CONTROL_AUDIO_COMMAND_KIND(command) > CONTROL_AUDIO_RECORD_START)
+        return 0U;
     if ((command->id & AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG) != 0U)
     {
         if (CONTROL_AUDIO_COMMAND_KIND(command) == CONTROL_AUDIO_RECORD_START)
@@ -311,6 +327,11 @@ static uint8_t audio_command_apply_record(const control_audio_command_t *command
 
 static uint8_t audio_command_apply_panic(const control_audio_command_t *command)
 {
+    if ((CONTROL_AUDIO_COMMAND_KIND(command) > CONTROL_AUDIO_PANIC_ENTITY)
+            || ((CONTROL_AUDIO_COMMAND_KIND(command)
+                    == CONTROL_AUDIO_PANIC_ENTITY)
+                && (command->entity >= BRICK_ENTITY_CAPACITY)))
+        return 0U;
     if (CONTROL_AUDIO_COMMAND_KIND(command) == CONTROL_AUDIO_PANIC_ENTITY)
     {
         audio_command_close_entity(command->entity);
@@ -331,23 +352,61 @@ static uint8_t audio_command_apply_panic(const control_audio_command_t *command)
     return 1U;
 }
 
-static uint8_t audio_command_apply(const control_audio_command_t *command)
+static audio_command_apply_result_t audio_command_apply(
+    const control_audio_command_t *command)
 {
     switch (CONTROL_AUDIO_COMMAND_OPCODE(command))
     {
         case CONTROL_AUDIO_COMMAND_PROGRAM: return audio_command_apply_program(command);
-        case CONTROL_AUDIO_COMMAND_PARAM: return audio_command_apply_param(command);
-        case CONTROL_AUDIO_COMMAND_NOTE: return audio_command_apply_note(command);
-        case CONTROL_AUDIO_COMMAND_TRANSPORT: return audio_command_apply_transport(command);
-        case CONTROL_AUDIO_COMMAND_RECORD: return audio_command_apply_record(command);
-        case CONTROL_AUDIO_COMMAND_PANIC: return audio_command_apply_panic(command);
-        default: return 0U;
+        case CONTROL_AUDIO_COMMAND_PARAM:
+            if (audio_command_apply_param(command) != 0U)
+                return AUDIO_COMMAND_APPLY_OK;
+            if (command->id == CONTROL_AUDIO_SAMPLER_ASSET)
+                return AUDIO_COMMAND_APPLY_REBIND;
+            return (command->id == CONTROL_AUDIO_CONFIG_POLY_VOICES)
+                ? AUDIO_COMMAND_APPLY_POLYPHONY : AUDIO_COMMAND_APPLY_INVALID;
+        case CONTROL_AUDIO_COMMAND_NOTE:
+            return (audio_command_apply_note(command) != 0U)
+                ? AUDIO_COMMAND_APPLY_OK : AUDIO_COMMAND_APPLY_MAPPING;
+        case CONTROL_AUDIO_COMMAND_TRANSPORT:
+            return (audio_command_apply_transport(command) != 0U)
+                ? AUDIO_COMMAND_APPLY_OK : AUDIO_COMMAND_APPLY_INVALID;
+        case CONTROL_AUDIO_COMMAND_RECORD:
+            return (audio_command_apply_record(command) != 0U)
+                ? AUDIO_COMMAND_APPLY_OK : AUDIO_COMMAND_APPLY_INVALID;
+        case CONTROL_AUDIO_COMMAND_PANIC:
+            return (audio_command_apply_panic(command) != 0U)
+                ? AUDIO_COMMAND_APPLY_OK : AUDIO_COMMAND_APPLY_INVALID;
+        default: return AUDIO_COMMAND_APPLY_INVALID;
     }
+}
+
+static _Noreturn void audio_command_fatal(
+    const control_audio_command_t *command, audio_command_apply_result_t result)
+{
+    brick_fatal_code_t code = BRICK_FATAL_AUDIO_INVALID_COMMAND;
+    if (result == AUDIO_COMMAND_APPLY_PROGRAM_INSTALL)
+        code = BRICK_FATAL_AUDIO_PROGRAM_INSTALL;
+    else if (result == AUDIO_COMMAND_APPLY_POLYPHONY)
+        code = BRICK_FATAL_AUDIO_POLYPHONY;
+    else if (result == AUDIO_COMMAND_APPLY_REBIND)
+        code = BRICK_FATAL_AUDIO_REBIND;
+    else if (result == AUDIO_COMMAND_APPLY_MAPPING)
+        code = BRICK_FATAL_AUDIO_MAPPING;
+    __disable_irq();
+    g_audio_command_fatal_record.code = (uint32_t)code;
+    g_audio_command_fatal_record.entity = command->entity;
+    g_audio_command_fatal_record.context =
+        ((uint32_t)command->opcode_kind << 16) | command->id;
+    g_audio_command_fatal_record.requested = command->value;
+    g_audio_command_fatal_record.capacity = (uint32_t)result;
+    __DMB();
+    Error_Handler();
+    for (;;) {}
 }
 
 void audio_command_executor_init(void)
 {
-    g_audio_command_invariant_failures = 0U;
     memset(g_audio_wavetable_generation, 0,
            sizeof(g_audio_wavetable_generation));
 }
@@ -363,8 +422,10 @@ uint16_t __attribute__((noinline)) audio_command_executor_apply_due(
     {
         if (CONTROL_AUDIO_COMMAND_OPCODE(&command) != CONTROL_AUDIO_COMMAND_PARAM)
             brick6_fm_runtime_finalize_pending();
-        if (audio_command_apply(&command) == 0U)
-            ++g_audio_command_invariant_failures;
+        const audio_command_apply_result_t result =
+            audio_command_apply(&command);
+        if (result != AUDIO_COMMAND_APPLY_OK)
+            audio_command_fatal(&command, result);
         (void)control_audio_fifo_audio_pop();
         ++applied;
     }

@@ -8,13 +8,19 @@ Les moteurs rendent dans les lanes du programme courant de chaque entite. Le
 mapping d'execution AUDIO porte `output_id`, note, velocity et gate sans devenir
 une autorite d'admission. Le pool synth maintient son mapping vers les slots
 physiques. Tout PROGRAM remplace synchroniquement le renderer au sample
-commande, conserve les outputs logiques et initialise localement le nouveau DSP
+commande apres prevalidation de toute sa capacite, conserve les outputs logiques
+et initialise localement le nouveau DSP
 pour les notes rendables; aucun NOTE OFF/ON n'est fabrique. Un moteur incompatible
 peut donc rester silencieux sans fermer le ledger; son retour compatible
 reprojette les notes encore vivantes. Un NOTE OFF recu pendant cette phase
 silencieuse retire normalement l'output et interdit toute resurrection au retour
 d'un moteur compatible. Les etats chauds des voix restent en DTCM
 et aucun chemin audio n'alloue dynamiquement.
+
+La croissance polyphonique planifie tous ses slots avant la premiere mutation.
+Le rebind des outputs tenus ne masque aucun echec: l'absence volontaire de
+renderer est un succes silencieux, tandis qu'un renderer promis mais impossible
+declenche le fatal source du consumer.
 
 Le mixer applique filtre, VCA, niveau, pan, inserts, sends puis traitements globaux. Reverb, delay, compresseur et gain Master sont globaux. Send3 ne conserve que Daisy Stereo et Junologue; VIBE et DRIFT sont des inserts par entite. VIBE utilise le kernel Deluge Float avec politique `dry + wet` 1:1. DRIFT expose DELAY et FEEDBACK, sans LFO interne.
 

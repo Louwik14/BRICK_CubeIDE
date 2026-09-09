@@ -6,6 +6,7 @@
 #include "Track/entity_types.h"
 #include "Track/synth_polyphony.h"
 #include "Track/control_music_output.h"
+#include "Track/track_runtime.h"
 #include "Param/param_registry.h"
 #include "IPC/live_parameter_event.h"
 #include <math.h>
@@ -76,6 +77,7 @@ uint8_t polyphony_control_bulk_add(uint8_t track,
 {
     if(track>=BRICK_ENTITY_CAPACITY||prepared==NULL||bulk==NULL
             ||bulk->count>(LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS-2U))return 0U;
+    if(!track_runtime_validate_polyphony_budget(track,prepared->voice_count))return 0U;
     if(!control_music_output_trim_to_limit(track,prepared->voice_count))return 0U;
     bulk->item[bulk->count++]=(live_parameter_audio_bulk_item_t){
         .parameter_id=CONTROL_AUDIO_CONFIG_POLY_VOICES,

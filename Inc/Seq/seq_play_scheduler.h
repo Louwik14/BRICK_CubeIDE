@@ -27,6 +27,8 @@ typedef struct
 } seq_play_scheduler_event_t;
 
 void seq_play_scheduler_init(void);
+void seq_play_scheduler_preflight_product_window(uint16_t frames,
+                                                 uint64_t first_sample);
 void seq_play_scheduler_clear(void);
 void seq_play_scheduler_clear_tracks(const seq_track_id_t *tracks, uint8_t track_count);
 void seq_play_scheduler_suspend_tracks(const seq_track_id_t *tracks, uint8_t track_count);

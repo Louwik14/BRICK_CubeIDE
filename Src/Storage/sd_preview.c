@@ -78,7 +78,6 @@ typedef struct
  */
 static AUDIO_COLD_SDRAM uint8_t g_sd_preview_io[SD_PREVIEW_IO_BYTES];
 STORAGE_STATE_SDRAM static sd_preview_ctx_t g_sd_preview;
-STORAGE_STATE_SDRAM static sd_preview_diag_t g_sd_preview_diag;
 
 static void sd_preview_publish_active(uint8_t active)
 {
@@ -93,27 +92,6 @@ static uint32_t sd_preview_ring_producer_count(void)
     __DMB();
     const uint32_t write_count = g_sd_preview_ring_layout.write_count;
     return (read_count <= write_count) ? (write_count - read_count) : 0U;
-}
-
-static void sd_preview_diag_record_open_fail(const char *path, FRESULT fr)
-{
-    g_sd_preview_diag.preview_open_fail_count++;
-    g_sd_preview_diag.gate_owner = sd_access_gate_current_owner();
-    g_sd_preview_diag.gate_last_owner = sd_access_gate_last_owner();
-    g_sd_preview_diag.fatfs_result = fr;
-    if (path != 0)
-    {
-        const size_t path_len = strlen(path);
-        const size_t copy_len = (path_len < sizeof(g_sd_preview_diag.path))
-                                    ? path_len
-                                    : (sizeof(g_sd_preview_diag.path) - 1U);
-        memcpy(g_sd_preview_diag.path, path, copy_len);
-        g_sd_preview_diag.path[copy_len] = '\0';
-    }
-    else
-    {
-        g_sd_preview_diag.path[0] = '\0';
-    }
 }
 
 static uint8_t sd_preview_ring_push(float left, float right)
@@ -164,10 +142,6 @@ static void sd_preview_clear_session(uint8_t clear_error, uint8_t clear_state)
 
     if (g_sd_preview.gate_held != 0U)
     {
-        if ((clear_error == 0U) && (g_sd_preview.last_error != SD_PREVIEW_ERROR_NONE))
-        {
-            g_sd_preview_diag.gate_release_on_error_count++;
-        }
         sd_access_gate_release(SD_ACCESS_CLIENT_PREVIEW);
         g_sd_preview.gate_held = 0U;
     }
@@ -453,7 +427,6 @@ static void sd_preview_fill_ring(void)
 void sd_preview_init(void)
 {
     memset(&g_sd_preview, 0, sizeof(g_sd_preview));
-    memset(&g_sd_preview_diag, 0, sizeof(g_sd_preview_diag));
     g_sd_preview.state = SD_PREVIEW_STATE_IDLE;
     g_sd_preview.last_error = SD_PREVIEW_ERROR_NONE;
     g_sd_preview.gain = 1.0f;
@@ -475,11 +448,6 @@ sd_preview_state_t sd_preview_get_state(void)
 sd_preview_error_t sd_preview_get_last_error(void)
 {
     return g_sd_preview.last_error;
-}
-
-const sd_preview_diag_t *sd_preview_get_diag(void)
-{
-    return &g_sd_preview_diag;
 }
 
 const char *sd_preview_get_path(void)
@@ -570,7 +538,6 @@ uint8_t sd_preview_begin_range(const char *path, uint32_t start_frame, uint32_t 
     if (open_fr != FR_OK)
     {
         sd_preview_set_error(SD_PREVIEW_ERROR_OPEN_FAIL);
-        sd_preview_diag_record_open_fail(g_sd_preview.path, open_fr);
         sd_preview_clear_session(0U, 0U);
         return 0U;
     }
@@ -630,13 +597,11 @@ uint8_t sd_preview_begin_range(const char *path, uint32_t start_frame, uint32_t 
     if (seek_fr != FR_OK)
     {
         sd_preview_set_error(SD_PREVIEW_ERROR_OPEN_FAIL);
-        sd_preview_diag_record_open_fail(g_sd_preview.path, seek_fr);
         sd_preview_clear_session(0U, 0U);
         return 0U;
     }
 #else
     sd_preview_set_error(SD_PREVIEW_ERROR_OPEN_FAIL);
-    sd_preview_diag_record_open_fail(path, FR_INT_ERR);
     sd_preview_clear_session(0U, 0U);
     return 0U;
 #endif

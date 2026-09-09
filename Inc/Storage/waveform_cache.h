@@ -53,13 +53,6 @@ typedef struct
 {
     waveform_cache_status_t status;
     uint8_t dirs_ready;
-    uint8_t active_level_count;
-    uint32_t frames_done;
-    uint32_t frame_count;
-    uint32_t last_fresult;
-    uint32_t jobs_queued;
-    uint32_t jobs_done;
-    uint32_t jobs_failed;
 } waveform_cache_diag_t;
 
 typedef struct

@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "IPC/control_audio_command.h"
+#include "IPC/live_parameter_event.h"
 #include "ControlRT/control_rt_publication.h"
 #include "Platform/memory_layout.h"
 
@@ -132,7 +133,8 @@ static uint8_t fm_control_state_publish_value(
         commands[count++] = (control_audio_command_t){
             .value = bits, .id = (uint16_t)id,
             .entity = entity,
-            .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM, 0U)
+            .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM,
+                LIVE_PARAMETER_EVENT_SCOPE_TRACK)
         };
     }
     for (param_id_t id = PARAM_FM_PLAY_VEL;
@@ -146,7 +148,8 @@ static uint8_t fm_control_state_publish_value(
         commands[count++] = (control_audio_command_t){
             .value = bits, .id = (uint16_t)id,
             .entity = entity,
-            .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM, 0U)
+            .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM,
+                LIVE_PARAMETER_EVENT_SCOPE_TRACK)
         };
     }
     for (param_id_t id = PARAM_FM_OPERATOR_FIRST;
@@ -160,7 +163,8 @@ static uint8_t fm_control_state_publish_value(
         commands[count++] = (control_audio_command_t){
             .value = bits, .id = (uint16_t)id,
             .entity = entity,
-            .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM, 0U)
+            .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM,
+                LIVE_PARAMETER_EVENT_SCOPE_TRACK)
         };
     }
     const uint8_t *const base = (const uint8_t *)&state->base;

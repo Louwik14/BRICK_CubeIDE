@@ -38,9 +38,8 @@ Les seuls opcodes sont:
 PROGRAM PARAM NOTE TRANSPORT RECORD PANIC
 ```
 
-- `PROGRAM` porte directement `{family,type,topology_flags,reserved}` dans
-  `value`. Il n'existe aucun registre, ID, slot, lookup, release ou credit
-  PROGRAM.
+- `PROGRAM` porte directement `{family,type,flags,voice_count}` dans `value`.
+  Il n'existe aucun registre, ID, slot, lookup, release ou credit PROGRAM.
 - `PARAM` porte une propriete canonique finale. Son sous-type precise seulement
   la portee d'adressage; aucune provenance UI, p-lock ou encodeur ne traverse.
 - `NOTE ON` porte `entity`, `output_id`, note et velocite. `NOTE OFF` est
@@ -72,11 +71,18 @@ merge AUDIO ni seconde chronologie musicale.
 
 PROGRAM separe la vie musicale du renderer. CONTROL conserve son ledger et
 AUDIO conserve le mapping `{output_id,note,velocity,gate}` pendant un changement
-de moteur. A la date PROGRAM, AUDIO detruit l'ancien renderer, installe le
-nouveau et reprojette localement les notes compatibles sans fabriquer NOTE
-OFF/ON. Un renderer incompatible reste silencieux; un retour compatible rend de
+de moteur. CONTROL valide le type, les capacites, la polyphonie globale et le
+quota Looper avant publication. A la date PROGRAM, AUDIO prevalide le nouveau
+renderer et ses ressources, puis seulement remplace l'ancien et reprojette les
+notes compatibles sans fabriquer NOTE OFF/ON. Un etat volontairement non
+rendable reste silencieux; un retour compatible rend de
 nouveau les notes encore vivantes. Toute NOTE fermee pendant cette phase reste
 morte au retour d'un renderer compatible. PROGRAM ne reset ni NOTE ni TONE.
+
+Une commande admise qui echoue cote AUDIO est une rupture d'invariant: le
+consumer conserve la commande en tete et declenche un fatal source avec code,
+entite, opcode/kind, identifiant, valeur et phase. Il n'existe ni drop, ni
+fallback, ni continuation apres cet echec.
 
 PARAM est applique directement au backend final. Les setters FM se limitent au
 clamp, a l'ecriture de cible et aux masques dirty; les conversions et projections

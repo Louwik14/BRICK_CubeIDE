@@ -29,8 +29,7 @@ typedef struct
 
 SDRAM_STREAM_SERVICE static sample_stream_transport_mailbox_t
     g_sample_stream_transport_mailbox[SAMPLE_STREAM_TRANSPORT_MAILBOX_COUNT];
-static ALIGN32 sample_stream_transport_stats_t g_sample_stream_transport_stats;
-static ALIGN32 volatile uint32_t g_sample_stream_transport_worker_protocol_errors;
+static ALIGN32 uint32_t g_sample_stream_transport_next_sequence;
 
 #define SAMPLE_STREAM_TRANSPORT_RELEASE_CAPACITY (16U)
 typedef struct
@@ -70,9 +69,6 @@ void sample_stream_transport_init(void)
 {
     memset(g_sample_stream_transport_mailbox, 0,
            sizeof(g_sample_stream_transport_mailbox));
-    memset(&g_sample_stream_transport_stats, 0,
-           sizeof(g_sample_stream_transport_stats));
-    g_sample_stream_transport_worker_protocol_errors = 0U;
     memset(&g_sample_stream_transport_release_queue, 0,
            sizeof(g_sample_stream_transport_release_queue));
     for (uint32_t i = 0U; i < SAMPLE_STREAM_TRANSPORT_MAILBOX_COUNT; ++i)
@@ -80,13 +76,11 @@ void sample_stream_transport_init(void)
         g_sample_stream_transport_mailbox[i].abi_version =
             SAMPLE_STREAM_TRANSPORT_ABI_VERSION;
     }
-    g_sample_stream_transport_stats.next_sequence = 1U;
+    g_sample_stream_transport_next_sequence = 1U;
     sample_stream_transport_clean(g_sample_stream_transport_mailbox,
                                   sizeof(g_sample_stream_transport_mailbox));
     sample_stream_transport_clean(&g_sample_stream_transport_release_queue,
                                   sizeof(g_sample_stream_transport_release_queue));
-    sample_stream_transport_clean(&g_sample_stream_transport_worker_protocol_errors,
-                                  sizeof(g_sample_stream_transport_worker_protocol_errors));
     __DMB();
 }
 
@@ -111,14 +105,13 @@ uint8_t sample_stream_transport_submit(const sample_stream_io_command_t *command
     }
     if (mailbox == 0)
     {
-        g_sample_stream_transport_stats.busy_rejections++;
         return 0U;
     }
 
-    uint32_t sequence = g_sample_stream_transport_stats.next_sequence++;
+    uint32_t sequence = g_sample_stream_transport_next_sequence++;
     if (sequence == 0U)
     {
-        sequence = g_sample_stream_transport_stats.next_sequence++;
+        sequence = g_sample_stream_transport_next_sequence++;
     }
     mailbox->abi_version = SAMPLE_STREAM_TRANSPORT_ABI_VERSION;
     mailbox->sequence = sequence;
@@ -129,7 +122,6 @@ uint8_t sample_stream_transport_submit(const sample_stream_io_command_t *command
     mailbox->state = SAMPLE_STREAM_TRANSPORT_COMMAND_READY;
     sample_stream_transport_clean(&mailbox->state, sizeof(mailbox->state));
     __DMB();
-    g_sample_stream_transport_stats.submitted++;
     *out_sequence = sequence;
     return 1U;
 }
@@ -193,9 +185,6 @@ void sample_stream_transport_worker_poll(void)
             sample_stream_transport_mailbox_t, decoded_page));
     if ((ready != 0) && (ready->abi_version != SAMPLE_STREAM_TRANSPORT_ABI_VERSION))
     {
-        g_sample_stream_transport_worker_protocol_errors++;
-        sample_stream_transport_clean(&g_sample_stream_transport_worker_protocol_errors,
-                                      sizeof(g_sample_stream_transport_worker_protocol_errors));
         ready->result.token = ready->command.token;
         ready->result.load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
         sample_stream_transport_clean(&ready->result, sizeof(ready->result));
@@ -279,16 +268,12 @@ uint8_t sample_stream_transport_take_result(uint32_t expected_sequence,
             || (target.stride_floats != mailbox->command.target.stride_floats))
         {
             out_result->load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
-            g_sample_stream_transport_stats.stale_completions++;
         }
         else
         {
             memcpy(target.frames_interleaved, mailbox->decoded_page, decoded_bytes);
-            g_sample_stream_transport_stats.payload_bytes += decoded_bytes;
         }
     }
-    g_sample_stream_transport_stats.completed_sequence = expected_sequence;
-    g_sample_stream_transport_stats.completed++;
     __DMB();
     memset(mailbox, 0, sizeof(*mailbox));
     mailbox->abi_version = SAMPLE_STREAM_TRANSPORT_ABI_VERSION;
@@ -353,19 +338,7 @@ void sample_stream_transport_execute_monocore(const sample_stream_io_command_t *
     } while (sample_stream_transport_take_result(sequence, out_result) == 0U);
     if (out_result->token.page_generation != command->token.page_generation)
     {
-        g_sample_stream_transport_stats.protocol_errors++;
         out_result->token = command->token;
         out_result->load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
-    }
-}
-
-void sample_stream_transport_get_stats(sample_stream_transport_stats_t *out_stats)
-{
-    if (out_stats != 0)
-    {
-        *out_stats = g_sample_stream_transport_stats;
-        sample_stream_transport_invalidate(&g_sample_stream_transport_worker_protocol_errors,
-                                           sizeof(g_sample_stream_transport_worker_protocol_errors));
-        out_stats->protocol_errors += g_sample_stream_transport_worker_protocol_errors;
     }
 }

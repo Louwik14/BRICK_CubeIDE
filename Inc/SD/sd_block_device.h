@@ -53,24 +53,10 @@ typedef struct
     const void *src;
     uint32_t owner_generation;
     uint32_t media_epoch;
-    uint32_t duration_ms;
     sd_block_device_operation_t operation;
     sd_block_device_result_t result;
     uint8_t owner_client;
 } sd_block_device_async_completion_t;
-
-typedef struct
-{
-    uint32_t write_submitted;
-    uint32_t write_completed;
-    uint32_t write_failed;
-    uint32_t busy_rejects;
-    uint32_t max_transaction_duration_ms;
-    uint32_t max_card_ready_latency_ms;
-    uint32_t abort_count;
-    uint32_t read_to_write_switches;
-    uint32_t write_to_read_switches;
-} sd_block_device_async_metrics_t;
 
 void sd_block_device_async_init(void);
 sd_block_device_result_t sd_block_device_async_enqueue(uint32_t lba,
@@ -89,8 +75,6 @@ uint8_t sd_block_device_async_write_buffer_locked(const void *src);
 sd_block_device_hardware_state_t sd_block_device_async_hardware_state(void);
 sd_block_device_result_t sd_block_device_async_abort_active(void);
 void sd_block_device_async_cancel(void);
-void sd_block_device_async_metrics_reset(void);
-void sd_block_device_async_metrics_get(sd_block_device_async_metrics_t *out_metrics);
 void sd_block_device_async_read_complete_isr(void);
 void sd_block_device_async_write_complete_isr(void);
 void sd_block_device_async_abort_complete_isr(void);

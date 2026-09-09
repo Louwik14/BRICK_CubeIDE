@@ -1,4 +1,5 @@
 # Exact AUDIO platform/runtime imports. No patterns are accepted.
+Error_Handler
 __aeabi_atexit
 __aeabi_d2ulz
 __aeabi_f2ulz

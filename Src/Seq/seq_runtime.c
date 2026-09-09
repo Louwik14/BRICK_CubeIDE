@@ -14,6 +14,8 @@
 
 #include "Platform/memory_layout.h"
 #include "IPC/control_audio_command.h"
+#include "IPC/control_audio_fifo_layout.h"
+#include "IPC/control_music_publication.h"
 #include "ControlRT/control_rt_publication.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include "App/engine_tasklet.h"
@@ -24,6 +26,9 @@
 #include "Storage/sample_capture.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/project_load_quiesce.h"
+#include "Sampler/sampler_ram_pool.h"
+#include "Sampler/wavetable_pool.h"
+#include "Sampler/multi_sample_loader.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "midi.h"
 
@@ -39,6 +44,7 @@
 #include "Seq/seq_clock_bridge.h"
 #include "Seq/metronome_control.h"
 #include "main.h"
+#include "Platform/brick_fatal.h"
 
 #define SEQ_RUNTIME_DEFAULT_TEMPO_BPM_MILLI 120000U
 #define SEQ_RUNTIME_AUDIO_SAMPLE_RATE 48000U
@@ -336,6 +342,9 @@ void seq_runtime_init(void)
 void seq_runtime_start(void)
 {
     if (project_replacement_is_active() != 0U) return;
+    if ((sampler_ram_pool_load_async_busy() != 0U)
+        || (wavetable_pool_load_async_busy() != 0U)
+        || (multi_sample_load_has_pending() != 0U)) return;
     uint8_t begin_running_now = 0U;
     if (g_seq_runtime_trigger_start_bypass == 0U)
     {
@@ -505,6 +514,17 @@ static void seq_runtime_process_core(void)
             control_rt_publication_abort_horizon();
             return;
         }
+        control_music_output_preflight_product_window(window_first);
+        seq_play_scheduler_preflight_product_window(frames, window_first);
+        /* External ingress may legitimately apply its own overload policy.
+         * Resolve it before scheduler cursors or occurrence ledgers advance. */
+        if (note_fx_pipeline_prepare_external_window(
+                window_first, frames) == 0U)
+        {
+            control_music_output_abort_window();
+            control_rt_publication_abort_horizon();
+            return;
+        }
         seq_runtime_control_event_t events[128];
         uint16_t count = seq_runtime_exec_collect_block_events(
             &g_seq_runtime, &g_seq_transport_fsm, &g_seq_clock_bridge,
@@ -512,13 +532,6 @@ static void seq_runtime_process_core(void)
             events, 128U, window_first, frames,
             seq_runtime_get_clock_source_internal(),
             g_seq_runtime.running);
-        if (note_fx_pipeline_apply_pending() == 0U)
-        {
-            control_music_output_abort_window();
-            control_rt_publication_abort_horizon();
-            return;
-        }
-
         for (;;)
         {
             for (uint16_t i = 0U; i < count; ++i)
@@ -563,9 +576,11 @@ static void seq_runtime_process_core(void)
                 {
                     if (seq_runtime_control_apply_event(event) == 0U)
                     {
-                        control_music_output_abort_window();
-                        control_rt_publication_abort_horizon();
-                        return;
+                        brick_fatal_raise(
+                            BRICK_FATAL_MUSIC_STAGING_CAPACITY,
+                            event->track, (uint32_t)event->sample_abs,
+                            CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST,
+                            CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST);
                     }
                 }
             }
@@ -579,23 +594,24 @@ static void seq_runtime_process_core(void)
                 window_first,
                 frames, g_seq_runtime.samples_per_step_q16) == 0U)
         {
-            control_music_output_abort_window();
-            control_rt_publication_abort_horizon();
-            return;
+            brick_fatal_raise(BRICK_FATAL_MUSIC_STAGING_CAPACITY,
+                              UINT32_MAX, (uint32_t)window_first,
+                              CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST,
+                              CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST);
         }
         if (control_music_output_commit_window() == 0U)
         {
-            control_music_output_abort_window();
-            control_rt_publication_abort_horizon();
-            Error_Handler();
-            return;
+            brick_fatal_raise(BRICK_FATAL_MUSIC_STAGING_CAPACITY,
+                              UINT32_MAX, (uint32_t)window_first,
+                              CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST,
+                              CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST);
         }
         if (control_rt_publication_commit_horizon() == 0U)
         {
-            control_music_output_abort_window();
-            control_rt_publication_abort_horizon();
-            Error_Handler();
-            return;
+            brick_fatal_raise(BRICK_FATAL_CONTROL_AUDIO_FIFO_CONTRACT,
+                              UINT32_MAX, (uint32_t)window_first,
+                              CONTROL_AUDIO_FIFO_CONTRACT_BURST,
+                              CONTROL_AUDIO_FIFO_CAPACITY);
         }
         if (control_music_output_finalize_window() == 0U)
             return;

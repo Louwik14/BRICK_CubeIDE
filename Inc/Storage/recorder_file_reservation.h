@@ -37,28 +37,10 @@ typedef struct
 
 typedef struct
 {
-    uint32_t last_operation_ms;
-    uint32_t max_create_ms;
-    uint32_t max_extend_ms;
-    uint32_t max_commit_ms;
-    uint32_t max_release_ms;
-    uint32_t operation_count;
-    uint32_t metadata_sectors_read;
-    uint32_t metadata_sectors_written;
-    uint32_t sync_count;
-    uint32_t clusters_allocated;
-    uint32_t clusters_released;
-    uint32_t extents_added;
-    uint32_t last_fresult;
-} recorder_file_reservation_metrics_t;
-
-typedef struct
-{
     FIL file;
     FF_BRICK_REC_STATE fs_state;
     FF_BRICK_REC_EXTENT fs_extents[RECORDER_FILE_RESERVATION_MAX_EXTENTS];
     sample_stream_physical_extent_t physical_extents[RECORDER_FILE_RESERVATION_MAX_EXTENTS];
-    recorder_file_reservation_metrics_t metrics;
     char path[RECORDER_FILE_RESERVATION_PATH_MAX];
     volatile uint32_t publish_sequence;
     volatile uint64_t published_reserved_file_bytes;

@@ -1,4 +1,5 @@
 #include "IPC/control_music_publication.h"
+#include "IPC/control_audio_fifo_layout.h"
 
 #include <stddef.h>
 #include "ControlRT/control_rt_publication.h"
@@ -10,7 +11,7 @@ CONTROL_STATE_SDRAM static control_audio_command_t
 
 _Static_assert((2U * (CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST
                       + CONTROL_MUSIC_EXTERNAL_STAGING_CAPACITY))
-                   == 722U,
+                   == CONTROL_AUDIO_FIFO_MAX_NOTE_BURST,
                "NOTE admission no longer matches the functional FIFO proof");
 
 static uint16_t control_music_convert(const control_music_action_t *action,

@@ -86,7 +86,6 @@ typedef struct
 {
     uint32_t critical_margin_us;
     uint32_t reservation_low_margin_us;
-    uint32_t reservation_critical_margin_us;
     uint32_t transaction_guard_us;
     uint32_t worst_case_us_per_sector;
     uint32_t max_write_sectors;
@@ -95,37 +94,12 @@ typedef struct
 
 typedef struct
 {
-    uint32_t read_transactions;
-    uint32_t write_transactions;
-    uint32_t filesystem_slots;
-    uint32_t read_to_write_switches;
-    uint32_t write_to_read_switches;
-    uint32_t max_read_wait_us;
-    uint32_t max_write_wait_us;
-    uint32_t max_filesystem_wait_us;
-    uint32_t min_read_margin_us;
-    uint32_t min_write_margin_us;
-    uint32_t min_reservation_margin_us;
-    uint32_t urgent_read_decisions;
-    uint32_t urgent_write_decisions;
-    uint32_t critical_ties;
-    uint32_t starvation_prevented;
-    uint32_t busy_rejects;
-    uint32_t errors;
-    uint32_t reservation_policy_failures;
-    uint32_t write_burst_limits;
-} sd_scheduler_metrics_t;
-
-typedef struct
-{
     sd_scheduler_config_t config;
     sd_scheduler_provider_t providers[SD_SCHEDULER_CLASS_COUNT];
-    sd_scheduler_metrics_t metrics;
     uint32_t wait_since_us[SD_SCHEDULER_CLASS_COUNT];
     uint32_t active_media_epoch;
     sd_scheduler_owner_t owner;
     sd_scheduler_class_t active_class;
-    sd_scheduler_class_t last_dma_class;
     uint8_t wait_active[SD_SCHEDULER_CLASS_COUNT];
     uint8_t round_robin_cursor;
 } sd_scheduler_t;
@@ -142,8 +116,6 @@ void sd_scheduler_service(sd_scheduler_t *scheduler,
 uint8_t sd_scheduler_background_can_start(sd_scheduler_t *scheduler,
                                           uint32_t media_epoch);
 sd_scheduler_owner_t sd_scheduler_owner(const sd_scheduler_t *scheduler);
-void sd_scheduler_metrics_get(const sd_scheduler_t *scheduler,
-                              sd_scheduler_metrics_t *metrics);
 
 #ifdef __cplusplus
 }

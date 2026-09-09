@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 #define SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES (4096U)
+#define SD_SCHEDULER_HEAVY_MAX_DATA_BYTES      (16384U)
 
 typedef enum
 {
@@ -43,7 +44,6 @@ void sd_scheduler_runtime_exclusive_request(void);
 uint8_t sd_scheduler_runtime_exclusive_try_begin(void);
 void sd_scheduler_runtime_exclusive_end(void);
 sd_scheduler_owner_t sd_scheduler_runtime_owner(void);
-void sd_scheduler_runtime_metrics_get(sd_scheduler_metrics_t *metrics);
 
 #ifdef __cplusplus
 }

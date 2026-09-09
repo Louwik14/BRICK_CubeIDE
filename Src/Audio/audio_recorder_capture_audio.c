@@ -59,6 +59,11 @@ uint8_t audio_recorder_capture_audio_stop(uint8_t client,
                                           uint32_t session_id)
 {
     if ((g_audio_capture.active == 0U)
+            && (g_audio_capture.client == client)
+            && (g_audio_capture.session_id == session_id)
+            && (g_audio_recorder_capture.closed_session == session_id))
+        return 1U;
+    if ((g_audio_capture.active == 0U)
             || (g_audio_capture.client != client)
             || (g_audio_capture.session_id != session_id)) return 0U;
     audio_recorder_capture_audio_close(AUDIO_RECORDER_ERROR_NONE);

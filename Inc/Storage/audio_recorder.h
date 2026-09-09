@@ -31,28 +31,10 @@ typedef struct
     audio_recorder_state_t state;
     audio_recorder_error_t error;
     uint32_t frames_pending;
-    uint32_t high_watermark;
-    uint32_t overflow_count;
-    uint32_t dropped_frames;
     uint32_t frames_received;
     uint32_t frames_assigned;
     uint32_t frames_committed;
 } audio_recorder_status_t;
-
-typedef struct
-{
-    generic_recorder_metrics_t recorder;
-    sd_scheduler_metrics_t scheduler;
-    recorder_file_reservation_metrics_t reservation;
-    sd_block_device_async_metrics_t block_device;
-    uint32_t release_duration_us;
-    uint32_t header_duration_us;
-    uint32_t sync_duration_us;
-    uint32_t close_duration_us;
-    uint32_t rename_duration_us;
-    uint32_t finalization_duration_us;
-    uint32_t superloop_iterations_during_write;
-} audio_recorder_metrics_t;
 
 typedef struct
 {
@@ -63,7 +45,6 @@ typedef struct
 
 void audio_recorder_init(void);
 void audio_recorder_service(void);
-void audio_recorder_get_metrics(audio_recorder_metrics_t *metrics);
 uint8_t audio_recorder_is_active(void);
 uint8_t audio_recorder_prepare_client(audio_recorder_client_t client,
                                       const char *temporary_rec_path,

@@ -15,10 +15,6 @@ typedef struct
 {
     usb_audio_pcm_ring_t pc_to_brick;
     usb_audio_pcm_ring_t brick_to_pc;
-    volatile uint32_t pc_to_brick_overflow_frames;
-    volatile uint32_t pc_to_brick_underflow_frames;
-    volatile uint32_t brick_to_pc_overflow_frames;
-    volatile uint32_t brick_to_pc_underflow_frames;
 } usb_audio_pcm_rings_t;
 
 D3_IPC static usb_audio_pcm_rings_t g_usb_audio_pcm_rings;
@@ -41,8 +37,7 @@ static uint32_t usb_audio_pcm_available(const usb_audio_pcm_ring_t *ring)
 
 static uint32_t usb_audio_pcm_write(usb_audio_pcm_ring_t *ring,
                                     const int32_t *interleaved,
-                                    uint32_t frames,
-                                    volatile uint32_t *overflow_counter)
+                                    uint32_t frames)
 {
     const uint32_t write_count = ring->write_count;
     const uint32_t read_count = ring->read_count;
@@ -54,7 +49,6 @@ static uint32_t usb_audio_pcm_write(usb_audio_pcm_ring_t *ring,
     writable = (available < USB_AUDIO_PCM_RING_CAPACITY_FRAMES)
              ? USB_AUDIO_PCM_RING_CAPACITY_FRAMES - available : 0U;
     if (frames > writable) {
-        *overflow_counter += frames - writable;
         frames = writable;
     }
 
@@ -73,14 +67,13 @@ static uint32_t usb_audio_pcm_write(usb_audio_pcm_ring_t *ring,
 static uint32_t usb_audio_pcm_read(usb_audio_pcm_ring_t *ring,
                                    int32_t *interleaved,
                                    uint32_t frames,
-                                   volatile uint32_t *underflow_counter)
+                                   uint8_t allow_partial)
 {
     const uint32_t read_count = ring->read_count;
     const uint32_t available = usb_audio_pcm_available(ring);
 
     if (frames > available) {
-        if (underflow_counter != NULL) {
-            *underflow_counter += frames - available;
+        if (allow_partial == 0U) {
             return 0U;
         }
         frames = available;
@@ -136,8 +129,7 @@ uint32_t usb_audio_pcm_write_pc_to_brick(const int32_t *interleaved,
         return 0U;
     }
     return usb_audio_pcm_write(&g_usb_audio_pcm_rings.pc_to_brick,
-                               interleaved, frames,
-                               &g_usb_audio_pcm_rings.pc_to_brick_overflow_frames);
+                               interleaved, frames);
 }
 
 uint32_t usb_audio_pcm_read_pc_to_brick(int32_t *interleaved,
@@ -147,8 +139,7 @@ uint32_t usb_audio_pcm_read_pc_to_brick(int32_t *interleaved,
         return 0U;
     }
     return usb_audio_pcm_read(&g_usb_audio_pcm_rings.pc_to_brick,
-                              interleaved, frames,
-                              &g_usb_audio_pcm_rings.pc_to_brick_underflow_frames);
+                              interleaved, frames, 0U);
 }
 
 uint32_t usb_audio_pcm_write_brick_to_pc(const int32_t *interleaved,
@@ -158,8 +149,7 @@ uint32_t usb_audio_pcm_write_brick_to_pc(const int32_t *interleaved,
         return 0U;
     }
     return usb_audio_pcm_write(&g_usb_audio_pcm_rings.brick_to_pc,
-                               interleaved, frames,
-                               &g_usb_audio_pcm_rings.brick_to_pc_overflow_frames);
+                               interleaved, frames);
 }
 
 uint32_t usb_audio_pcm_read_brick_to_pc(int32_t *interleaved,
@@ -169,7 +159,7 @@ uint32_t usb_audio_pcm_read_brick_to_pc(int32_t *interleaved,
         return 0U;
     }
     return usb_audio_pcm_read(&g_usb_audio_pcm_rings.brick_to_pc,
-                              interleaved, frames, NULL);
+                              interleaved, frames, 1U);
 }
 
 uint32_t usb_audio_pcm_peek_brick_to_pc(int32_t *interleaved,

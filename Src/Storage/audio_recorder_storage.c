@@ -36,11 +36,9 @@ typedef struct
     generic_recorder_t recorder;
     recorder_file_reservation_t reservation;
     sd_scheduler_provider_t recorder_filesystem_provider;
-    audio_recorder_metrics_t metrics;
     audio_recorder_storage_phase_t phase;
     audio_recorder_error_t error;
     audio_recorder_final_phase_t final_phase;
-    uint32_t final_started_ms;
     char temporary_path[AUDIO_RECORDER_PATH_MAX];
     char final_path[AUDIO_RECORDER_PATH_MAX];
 } audio_recorder_storage_runtime_t;
@@ -94,7 +92,6 @@ static uint8_t audio_recorder_storage_filesystem_peek(
 static sd_scheduler_start_result_t audio_recorder_storage_finalization_step(
     audio_recorder_storage_runtime_t *runtime)
 {
-    const uint32_t started = HAL_GetTick();
     recorder_file_reservation_result_t reservation_result;
     FRESULT fr;
     UINT written;
@@ -114,8 +111,6 @@ static sd_scheduler_start_result_t audio_recorder_storage_finalization_step(
         case AUDIO_RECORDER_FINAL_RELEASE:
             reservation_result = recorder_file_reservation_release_unused(
                 &runtime->reservation);
-            runtime->metrics.release_duration_us =
-                (HAL_GetTick() - started) * 1000U;
             if (reservation_result == RECORDER_FILE_RESERVATION_SD_BUSY)
                 return SD_SCHEDULER_START_BUSY;
             if (reservation_result != RECORDER_FILE_RESERVATION_OK)
@@ -135,8 +130,6 @@ static sd_scheduler_start_result_t audio_recorder_storage_finalization_step(
             if (fr == FR_OK)
                 fr = f_write(&runtime->reservation.file, header,
                              sizeof(header), &written);
-            runtime->metrics.header_duration_us =
-                (HAL_GetTick() - started) * 1000U;
             if ((fr != FR_OK) || (written != sizeof(header)))
                 return SD_SCHEDULER_START_ERROR;
             runtime->final_phase = AUDIO_RECORDER_FINAL_SYNC;
@@ -144,8 +137,6 @@ static sd_scheduler_start_result_t audio_recorder_storage_finalization_step(
 
         case AUDIO_RECORDER_FINAL_SYNC:
             fr = f_sync(&runtime->reservation.file);
-            runtime->metrics.sync_duration_us =
-                (HAL_GetTick() - started) * 1000U;
             if (fr != FR_OK) return SD_SCHEDULER_START_ERROR;
             runtime->final_phase = AUDIO_RECORDER_FINAL_CLOSE;
             return SD_SCHEDULER_START_COMPLETED;
@@ -153,8 +144,6 @@ static sd_scheduler_start_result_t audio_recorder_storage_finalization_step(
         case AUDIO_RECORDER_FINAL_CLOSE:
             reservation_result = recorder_file_reservation_close(
                 &runtime->reservation);
-            runtime->metrics.close_duration_us =
-                (HAL_GetTick() - started) * 1000U;
             if (reservation_result == RECORDER_FILE_RESERVATION_SD_BUSY)
                 return SD_SCHEDULER_START_BUSY;
             if (reservation_result != RECORDER_FILE_RESERVATION_OK)
@@ -165,15 +154,11 @@ static sd_scheduler_start_result_t audio_recorder_storage_finalization_step(
         case AUDIO_RECORDER_FINAL_RENAME:
             reservation_result = recorder_file_reservation_rename_closed(
                 &runtime->reservation, runtime->final_path);
-            runtime->metrics.rename_duration_us =
-                (HAL_GetTick() - started) * 1000U;
             if (reservation_result == RECORDER_FILE_RESERVATION_SD_BUSY)
                 return SD_SCHEDULER_START_BUSY;
             if (reservation_result != RECORDER_FILE_RESERVATION_OK)
                 return SD_SCHEDULER_START_ERROR;
             runtime->final_phase = AUDIO_RECORDER_FINAL_DONE;
-            runtime->metrics.finalization_duration_us =
-                (HAL_GetTick() - runtime->final_started_ms) * 1000U;
             runtime->phase = AUDIO_RECORDER_STORAGE_TAKE_READY;
             return SD_SCHEDULER_START_COMPLETED;
 
@@ -238,8 +223,6 @@ uint8_t audio_recorder_storage_prepare(const char *temporary_rec_path,
             || (strlen(final_wav_path) >= AUDIO_RECORDER_PATH_MAX)) return 0U;
     (void)strcpy(g_audio_recorder_storage.temporary_path, temporary_rec_path);
     (void)strcpy(g_audio_recorder_storage.final_path, final_wav_path);
-    memset(&g_audio_recorder_storage.metrics, 0,
-           sizeof(g_audio_recorder_storage.metrics));
     generic_recorder_init(&g_audio_recorder_storage.recorder);
     recorder_file_reservation_init(&g_audio_recorder_storage.reservation);
     g_audio_recorder_storage.error = AUDIO_RECORDER_ERROR_NONE;
@@ -344,25 +327,11 @@ void audio_recorder_storage_service(uint32_t session_id,
             (uint64_t)accepted_frames * AUDIO_RECORDER_BYTES_PER_FRAME;
         runtime->recorder.accepted_frames = accepted_frames;
         runtime->recorder.accepted_tail = accepted_tail;
-        runtime->recorder.metrics.frames_accepted = accepted_frames;
-        runtime->recorder.metrics.bytes_accepted = accepted_tail;
         const uint32_t committed_frames = (uint32_t)(
             runtime->recorder.committed_tail
                 / AUDIO_RECORDER_BYTES_PER_FRAME);
         __DMB();
         g_audio_recorder_capture.tail_cursor = committed_frames;
-        const uint32_t retained = accepted_frames - committed_frames;
-        if (retained > runtime->recorder.metrics.ring_high_watermark_frames)
-            runtime->recorder.metrics.ring_high_watermark_frames = retained;
-        const uint32_t free_frames =
-            AUDIO_RECORDER_CAPTURE_RING_FRAMES - retained;
-        if (free_frames < runtime->recorder.metrics.ring_min_free_frames)
-            runtime->recorder.metrics.ring_min_free_frames = free_frames;
-        const uint64_t backlog = accepted_tail
-            - runtime->recorder.committed_tail;
-        if (backlog > runtime->recorder.metrics.max_backlog_bytes)
-            runtime->recorder.metrics.max_backlog_bytes = backlog;
-
         if (g_audio_recorder_capture.capture_fault
                 != AUDIO_RECORDER_ERROR_NONE)
         {
@@ -373,13 +342,12 @@ void audio_recorder_storage_service(uint32_t session_id,
         if ((g_audio_recorder_capture.closed_session == session_id)
                 && (runtime->recorder.state == GENERIC_RECORDER_CAPTURING))
         {
-            (void)generic_recorder_request_stop(
-                &runtime->recorder, HAL_GetTick() * 1000U);
+            (void)generic_recorder_request_stop(&runtime->recorder);
             runtime->phase = AUDIO_RECORDER_STORAGE_DRAINING;
         }
     }
 
-    generic_recorder_service(&runtime->recorder, HAL_GetTick() * 1000U);
+    generic_recorder_service(&runtime->recorder);
     if ((runtime->recorder.state == GENERIC_RECORDER_ERROR)
             || (runtime->recorder.state == GENERIC_RECORDER_ABORTED))
     {
@@ -399,12 +367,9 @@ void audio_recorder_storage_service(uint32_t session_id,
     {
         runtime->phase = AUDIO_RECORDER_STORAGE_FINALIZING;
         runtime->final_phase = AUDIO_RECORDER_FINAL_COMMIT;
-        runtime->final_started_ms = HAL_GetTick();
     }
-    if (sd_scheduler_runtime_owner() == SD_SCHEDULER_OWNER_WRITE_DMA)
-        runtime->metrics.superloop_iterations_during_write++;
     sd_scheduler_runtime_service();
-    generic_recorder_service(&runtime->recorder, HAL_GetTick() * 1000U);
+    generic_recorder_service(&runtime->recorder);
 }
 
 audio_recorder_storage_phase_t audio_recorder_storage_phase(void)
@@ -421,16 +386,6 @@ void audio_recorder_storage_get_status(generic_recorder_status_t *status)
 {
     if (status != 0) generic_recorder_get_status(
         &g_audio_recorder_storage.recorder, status);
-}
-
-void audio_recorder_storage_get_metrics(audio_recorder_metrics_t *metrics)
-{
-    if (metrics == 0) return;
-    *metrics = g_audio_recorder_storage.metrics;
-    metrics->recorder = g_audio_recorder_storage.recorder.metrics;
-    metrics->reservation = g_audio_recorder_storage.reservation.metrics;
-    sd_scheduler_runtime_metrics_get(&metrics->scheduler);
-    sd_block_device_async_metrics_get(&metrics->block_device);
 }
 
 uint64_t audio_recorder_storage_committed_tail(void)

@@ -33,6 +33,11 @@ typedef enum {
     PROJECT_CONTROL_ASSET_WAVE_OSC2,
     PROJECT_CONTROL_ASSET_ROLE_COUNT
 } project_control_asset_role_t;
+typedef enum {
+    PROJECT_CONTROL_ASSET_EMPTY = 0,
+    PROJECT_CONTROL_ASSET_LOADED,
+    PROJECT_CONTROL_ASSET_UNAVAILABLE
+} project_control_asset_availability_t;
 
 void project_control_init(void);
 void project_control_reset_macros(void);
@@ -104,6 +109,9 @@ uint8_t project_control_resolve_multi_runtime(uint16_t logical,uint16_t*out_runt
 uint8_t project_control_track_asset_get(uint8_t entity,
                                         project_control_asset_role_t role,
                                         persist_control_asset_ref_t *out_asset);
+uint8_t project_control_track_asset_get_availability(
+    uint8_t entity, project_control_asset_role_t role,
+    project_control_asset_availability_t *out_availability);
 uint8_t project_control_track_asset_get_logical(uint8_t entity,
                                                 project_control_asset_role_t role,
                                                 uint16_t *out_logical);

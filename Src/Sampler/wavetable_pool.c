@@ -18,8 +18,19 @@
 #include "Storage/wav_audio_codec.h"
 #include "Storage/wav_parser.h"
 #include "stm32h7xx.h"
+#include "stm32h7xx_hal.h"
+#include "Seq/seq_runtime.h"
+#include "Storage/audio_recorder.h"
+#include "Platform/brick_fatal.h"
+#include "Storage/project_load_quiesce.h"
+#include "Sampler/multi_sample_loader.h"
+#include "Sampler/sampler_ram_pool.h"
+#include "Sampler/sample_stream_manager.h"
 
-#define WAVETABLE_POOL_IO_BYTES (8192U)
+#define WAVETABLE_POOL_IO_BYTES (SD_SCHEDULER_HEAVY_MAX_DATA_BYTES)
+#define WAVETABLE_LOAD_SERVICE_BUDGET_MS (2U)
+#define WAVETABLE_LOAD_SERVICE_MAX_STEPS (24U)
+#define WAVETABLE_DECODE_QUANTUM_SAMPLES (1024U)
 #define WAVETABLE_POOL_CACHE_DIR "0:/WAVETABLES/.CACHE"
 #define WAVETABLE_SOURCE_2048_SAMPLE_COUNT (2048U)
 #define WAVETABLE_MIPMAP_INITIAL_CYCLE_MAGNITUDE (10U)
@@ -73,6 +84,14 @@ typedef enum
     WAVETABLE_LOAD_CRC_READ,
     WAVETABLE_LOAD_PARSE,
     WAVETABLE_LOAD_ALLOCATE,
+    WAVETABLE_LOAD_CACHE_LOOKUP,
+    WAVETABLE_LOAD_CACHE_HIT_OPEN,
+    WAVETABLE_LOAD_CACHE_HIT_HEADER,
+    WAVETABLE_LOAD_CACHE_HIT_BAND,
+    WAVETABLE_LOAD_CACHE_HIT_PAYLOAD,
+    WAVETABLE_LOAD_CACHE_HIT_BASE,
+    WAVETABLE_LOAD_CACHE_HIT_BASE_CRC,
+    WAVETABLE_LOAD_CACHE_HIT_CLOSE,
     WAVETABLE_LOAD_DATA_SEEK,
     WAVETABLE_LOAD_DATA_READ,
     WAVETABLE_LOAD_DECODE,
@@ -96,11 +115,36 @@ typedef enum
     WAVETABLE_LOAD_SOURCE_CLOSE,
     WAVETABLE_LOAD_PREVIEW_INIT,
     WAVETABLE_LOAD_PREVIEW_FRAME,
-    WAVETABLE_LOAD_WAIT_RETIRE,
+    WAVETABLE_LOAD_WAIT_SAFE,
     WAVETABLE_LOAD_PUBLISH,
     WAVETABLE_LOAD_CLEANUP,
     WAVETABLE_LOAD_DONE
 } wavetable_load_state_t;
+
+typedef struct
+{
+    uint32_t flags;
+    uint16_t sample_format;
+    uint16_t duplicate_sample_count;
+    uint32_t cycle_sample_count;
+    uint32_t cycle_count;
+    uint16_t band_count;
+    uint16_t band_entry_size;
+    uint32_t directory_offset;
+    uint32_t data_offset;
+    uint32_t data_bytes;
+    uint8_t transition_magnitude;
+    int32_t wave_index_multiplier;
+    uint32_t path_hash;
+    uint32_t source_size;
+    uint16_t source_date;
+    uint16_t source_time;
+    uint32_t prep_revision;
+    uint32_t source_crc32;
+    uint32_t base_crc32;
+    uint32_t payload_crc32;
+    uint32_t total_file_size;
+} wavetable_prepared_cache_header_t;
 
 typedef struct
 {
@@ -132,15 +176,53 @@ typedef struct
     uint8_t prepared;
     uint32_t prepared_file_size;
     uint32_t prepared_expected_crc;
+    wavetable_prepared_cache_header_t cache_header;
+    audio_wavetable_descriptor_t prepared_descriptor;
+    wavetable_slot_t old_snapshot;
+    uint64_t retire_not_before_sample;
+    uint8_t global_reserved;
+    uint8_t retain_old_for_commit;
+    uint8_t quiesce_committed;
+    uint8_t ingress_closed;
     wavetable_source_geometry_t source_geometry;
 } wavetable_load_job_t;
 
 STORAGE_STATE_SDRAM static wavetable_load_job_t g_wavetable_load_job;
+static void wavetable_restore_retained_old(void);
 static CTRL_STATE uint64_t
     g_wavetable_retire_not_before_sample[WAVETABLE_POOL_MAX_SLOTS];
 static CTRL_STATE uint8_t
     g_wavetable_retire_stop_committed[WAVETABLE_POOL_MAX_SLOTS];
 static CTRL_STATE uint8_t g_wavetable_retire_invariant_failed;
+
+static void wavetable_restore_retained_old(void)
+{
+    wavetable_load_job_t *const job = &g_wavetable_load_job;
+    if (job->retain_old_for_commit == 0U) return;
+    const wavetable_slot_t *const old = &job->old_snapshot;
+    if (sample_global_pool_register_wavetable_at(
+            old->global_slot, job->wavetable_slot, old->path,
+            old->cost_bytes_aligned) == 0U)
+        brick_fatal_raise(BRICK_FATAL_WAVETABLE_COMMIT,
+                          job->wavetable_slot, old->global_slot,
+                          old->cost_bytes_aligned,
+                          SAMPLE_GLOBAL_POOL_BUDGET_BYTES);
+    g_wavetable_pool.slots[job->wavetable_slot] = *old;
+    audio_wavetable_descriptor_t descriptor;
+    if (audio_wave_table_projection_build_descriptor(
+            job->wavetable_slot, old, &descriptor) == 0U)
+        brick_fatal_raise(BRICK_FATAL_WAVETABLE_COMMIT,
+                          job->wavetable_slot, old->global_slot,
+                          old->data_bytes, old->cost_bytes_aligned);
+    audio_wave_table_projection_install_prepared(&descriptor);
+    g_wavetable_retire_stop_committed[job->wavetable_slot] = 0U;
+    job->retain_old_for_commit = 0U;
+    if (job->ingress_closed != 0U)
+    {
+        resource_mutation_ingress_open();
+        job->ingress_closed = 0U;
+    }
+}
 
 static void wavetable_load_job_boot_init(void);
 

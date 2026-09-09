@@ -4,15 +4,9 @@
 #include "stm32h7xx_hal.h"
 
 static volatile uint8_t g_sd_access_owner;
-static volatile uint8_t g_sd_access_last_owner;
 static volatile uint8_t g_sd_access_total_count;
 static volatile uint8_t g_sd_access_client_count[SD_ACCESS_CLIENT_MAX + 1U];
-static volatile uint32_t g_sd_access_acquire_fail_count[SD_ACCESS_CLIENT_MAX + 1U];
 static volatile uint8_t g_sd_access_streaming_critical;
-static volatile uint32_t g_sd_access_owner_acquire_tick;
-static volatile uint32_t g_sd_access_max_hold_ticks;
-static volatile uint32_t g_sd_access_owner_acquire_cycle;
-static volatile uint32_t g_sd_access_client_cycles[SD_ACCESS_CLIENT_MAX + 1U];
 STORAGE_STATE_SDRAM static FATFS g_sd_fs;
 static uint8_t g_sd_fs_mounted;
 static volatile uint32_t g_sd_media_epoch;
@@ -23,16 +17,11 @@ static volatile sd_storage_status_t g_sd_storage_status;
 void sd_access_gate_init(void)
 {
     g_sd_access_owner = (uint8_t)SD_ACCESS_CLIENT_NONE;
-    g_sd_access_last_owner = (uint8_t)SD_ACCESS_CLIENT_NONE;
     g_sd_access_total_count = 0U;
     g_sd_access_streaming_critical = 0U;
-    g_sd_access_owner_acquire_tick = 0U;
-    g_sd_access_max_hold_ticks = 0U;
     for (uint8_t i = 0U; i <= (uint8_t)SD_ACCESS_CLIENT_MAX; ++i)
     {
         g_sd_access_client_count[i] = 0U;
-        g_sd_access_acquire_fail_count[i] = 0U;
-        g_sd_access_client_cycles[i] = 0U;
     }
     g_sd_fs_mounted = 0U;
     g_sd_media_present_known = 0U;
@@ -43,7 +32,6 @@ void sd_access_gate_init(void)
     {
         g_sd_media_epoch = 1U;
     }
-    g_sd_access_owner_acquire_cycle = 0U;
 }
 
 uint8_t sd_access_fs_mount_if_needed(void)
@@ -166,7 +154,6 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
         && (client != SD_ACCESS_CLIENT_SAMPLE_STREAM)
         && (client != SD_ACCESS_CLIENT_SCHEDULED_RECORDER))
     {
-        g_sd_access_acquire_fail_count[(uint8_t)client]++;
         __enable_irq();
         return 0U;
     }
@@ -174,8 +161,6 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
     if (g_sd_access_total_count == 0U)
     {
         g_sd_access_owner = (uint8_t)client;
-        g_sd_access_owner_acquire_tick = HAL_GetTick();
-        g_sd_access_owner_acquire_cycle = DWT->CYCCNT;
     }
     else if (g_sd_access_owner != (uint8_t)client)
     {
@@ -192,7 +177,6 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
             || (client == SD_ACCESS_CLIENT_SAMPLE_STREAM)
             || (g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_SAMPLE_STREAM))
         {
-            g_sd_access_acquire_fail_count[(uint8_t)client]++;
             __enable_irq();
             return 0U;
         }
@@ -212,7 +196,6 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
 
         if ((owner_is_project_pattern == 0U) || (requester_is_project_pattern == 0U))
         {
-            g_sd_access_acquire_fail_count[(uint8_t)client]++;
             __enable_irq();
             return 0U;
         }
@@ -238,35 +221,9 @@ void sd_access_gate_release(sd_access_client_t client)
 
     if (g_sd_access_total_count == 0U)
     {
-        if (g_sd_access_owner != (uint8_t)SD_ACCESS_CLIENT_NONE)
-        {
-            g_sd_access_client_cycles[g_sd_access_owner] +=
-                DWT->CYCCNT - g_sd_access_owner_acquire_cycle;
-        }
-        const uint32_t hold_ticks = HAL_GetTick() - g_sd_access_owner_acquire_tick;
-        if ((g_sd_access_owner != (uint8_t)SD_ACCESS_CLIENT_NONE)
-            && (hold_ticks > g_sd_access_max_hold_ticks))
-        {
-            g_sd_access_max_hold_ticks = hold_ticks;
-        }
-        g_sd_access_last_owner = g_sd_access_owner;
         g_sd_access_owner = (uint8_t)SD_ACCESS_CLIENT_NONE;
-        g_sd_access_owner_acquire_tick = 0U;
     }
     __enable_irq();
-}
-
-uint32_t sd_access_gate_client_cycles(sd_access_client_t client)
-{
-    uint32_t cycles = 0U;
-    if ((client == SD_ACCESS_CLIENT_NONE) || (client > SD_ACCESS_CLIENT_MAX))
-    {
-        return 0U;
-    }
-    __disable_irq();
-    cycles = g_sd_access_client_cycles[(uint8_t)client];
-    __enable_irq();
-    return cycles;
 }
 
 void sd_access_gate_set_streaming_critical(uint8_t active)
@@ -292,38 +249,6 @@ sd_access_client_t sd_access_gate_current_owner(void)
     owner = g_sd_access_owner;
     __enable_irq();
     return (sd_access_client_t)owner;
-}
-
-sd_access_client_t sd_access_gate_last_owner(void)
-{
-    uint8_t owner;
-    __disable_irq();
-    owner = g_sd_access_last_owner;
-    __enable_irq();
-    return (sd_access_client_t)owner;
-}
-
-uint32_t sd_access_gate_max_hold_ticks(void)
-{
-    uint32_t ticks;
-    __disable_irq();
-    ticks = g_sd_access_max_hold_ticks;
-    __enable_irq();
-    return ticks;
-}
-
-uint32_t sd_access_gate_acquire_fail_count(sd_access_client_t client)
-{
-    uint32_t count = 0U;
-    if ((client == SD_ACCESS_CLIENT_NONE) || (client > SD_ACCESS_CLIENT_MAX))
-    {
-        return 0U;
-    }
-
-    __disable_irq();
-    count = g_sd_access_acquire_fail_count[(uint8_t)client];
-    __enable_irq();
-    return count;
 }
 
 const char *sd_access_gate_client_label(sd_access_client_t client)

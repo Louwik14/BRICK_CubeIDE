@@ -2,9 +2,12 @@
 
 #include <stdint.h>
 #include "IPC/control_audio_command.h"
+#include "IPC/control_music_capacity.h"
 
 #define CONTROL_AUDIO_FIFO_MAX_PARAM_BURST   1024U
-#define CONTROL_AUDIO_FIFO_MAX_NOTE_BURST     722U
+#define CONTROL_AUDIO_FIFO_MAX_NOTE_BURST \
+    (2U * (CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST \
+        + CONTROL_MUSIC_EXTERNAL_STAGING_CAPACITY))
 #define CONTROL_AUDIO_FIFO_MAX_GENERAL_BURST   35U
 #define CONTROL_AUDIO_FIFO_CONTRACT_BURST \
     (CONTROL_AUDIO_FIFO_MAX_PARAM_BURST + CONTROL_AUDIO_FIFO_MAX_NOTE_BURST \
@@ -16,6 +19,10 @@ _Static_assert((CONTROL_AUDIO_FIFO_CAPACITY
                "functional FIFO capacity must be a power of two");
 _Static_assert(CONTROL_AUDIO_FIFO_CAPACITY >= CONTROL_AUDIO_FIFO_CONTRACT_BURST,
                "functional FIFO cannot contain the contractual worst burst");
+_Static_assert(CONTROL_AUDIO_FIFO_MAX_NOTE_BURST == 768U,
+               "music action conversion proof changed");
+_Static_assert(CONTROL_AUDIO_FIFO_CONTRACT_BURST == 1827U,
+               "functional FIFO aggregate proof changed");
 
 typedef struct
 {

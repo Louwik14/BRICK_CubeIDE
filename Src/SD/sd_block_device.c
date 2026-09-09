@@ -23,8 +23,6 @@ typedef struct
     uint32_t media_epoch;
     uint32_t queued_tick;
     uint32_t start_tick;
-    uint32_t callback_tick;
-    uint32_t duration_ms;
     sd_block_device_operation_t operation;
     sd_block_device_result_t result;
     sd_block_device_result_t abort_result;
@@ -40,14 +38,11 @@ static uint8_t g_sd_block_device_async_head;
 static uint8_t g_sd_block_device_async_tail;
 static uint8_t g_sd_block_device_async_count;
 static uint8_t g_sd_block_device_abort_discard;
-static sd_block_device_operation_t g_sd_block_device_last_hw_operation;
 static volatile sd_block_device_hardware_state_t g_sd_block_device_hw_state;
 static volatile uint8_t g_sd_block_device_async_rx_complete;
 static volatile uint8_t g_sd_block_device_async_tx_complete;
 static volatile uint8_t g_sd_block_device_async_abort_complete;
 static volatile uint8_t g_sd_block_device_async_error;
-static volatile uint32_t g_sd_block_device_async_callback_tick;
-static sd_block_device_async_metrics_t g_sd_block_device_metrics;
 
 static void sd_block_device_queue_reset(void)
 {
@@ -61,77 +56,18 @@ static void sd_block_device_queue_reset(void)
     g_sd_block_device_async_tx_complete = 0U;
     g_sd_block_device_async_abort_complete = 0U;
     g_sd_block_device_async_error = 0U;
-    g_sd_block_device_async_callback_tick = 0U;
-}
-
-void sd_block_device_async_metrics_reset(void)
-{
-    memset(&g_sd_block_device_metrics, 0, sizeof(g_sd_block_device_metrics));
-}
-
-void sd_block_device_async_metrics_get(sd_block_device_async_metrics_t *out_metrics)
-{
-    if(out_metrics != 0)
-    {
-        *out_metrics = g_sd_block_device_metrics;
-    }
 }
 
 void sd_block_device_async_init(void)
 {
     sd_block_device_queue_reset();
-    sd_block_device_async_metrics_reset();
-    g_sd_block_device_last_hw_operation = SD_BLOCK_DEVICE_OPERATION_NONE;
-}
-
-static void sd_block_device_note_direction(sd_block_device_operation_t operation)
-{
-    if((g_sd_block_device_last_hw_operation == SD_BLOCK_DEVICE_OPERATION_READ)
-            && (operation == SD_BLOCK_DEVICE_OPERATION_WRITE))
-    {
-        g_sd_block_device_metrics.read_to_write_switches++;
-    }
-    else if((g_sd_block_device_last_hw_operation == SD_BLOCK_DEVICE_OPERATION_WRITE)
-            && (operation == SD_BLOCK_DEVICE_OPERATION_READ))
-    {
-        g_sd_block_device_metrics.write_to_read_switches++;
-    }
-    g_sd_block_device_last_hw_operation = operation;
 }
 
 static void sd_block_device_complete(sd_block_device_async_entry_t *entry,
                                      sd_block_device_result_t result)
 {
-    const uint32_t now = HAL_GetTick();
-    const uint32_t origin = (entry->started != 0U)
-        ? entry->start_tick : entry->queued_tick;
-    const uint32_t duration = now - origin;
     entry->result = result;
-    entry->duration_ms = duration;
     entry->completed = 1U;
-    if(duration > g_sd_block_device_metrics.max_transaction_duration_ms)
-    {
-        g_sd_block_device_metrics.max_transaction_duration_ms = duration;
-    }
-    if((entry->callback_seen != 0U) && (result == SD_BLOCK_DEVICE_OK))
-    {
-        const uint32_t ready_latency = now - entry->callback_tick;
-        if(ready_latency > g_sd_block_device_metrics.max_card_ready_latency_ms)
-        {
-            g_sd_block_device_metrics.max_card_ready_latency_ms = ready_latency;
-        }
-    }
-    if(entry->operation == SD_BLOCK_DEVICE_OPERATION_WRITE)
-    {
-        if(result == SD_BLOCK_DEVICE_OK)
-        {
-            g_sd_block_device_metrics.write_completed++;
-        }
-        else
-        {
-            g_sd_block_device_metrics.write_failed++;
-        }
-    }
     g_sd_block_device_hw_state = (result == SD_BLOCK_DEVICE_OK)
         ? SD_BLOCK_DEVICE_HW_IDLE : SD_BLOCK_DEVICE_HW_ERROR_LATCHED;
 }
@@ -163,7 +99,6 @@ static void sd_block_device_request_abort(sd_block_device_async_entry_t *entry,
     }
     entry->abort_result = result;
     g_sd_block_device_abort_discard = discard;
-    g_sd_block_device_metrics.abort_count++;
     g_sd_block_device_async_abort_complete = 0U;
     if(HAL_SD_Abort_IT(&hsd1) == HAL_OK)
     {
@@ -218,7 +153,6 @@ static void sd_block_device_async_start_head(void)
     g_sd_block_device_async_tx_complete = 0U;
     g_sd_block_device_async_abort_complete = 0U;
     g_sd_block_device_async_error = 0U;
-    g_sd_block_device_async_callback_tick = 0U;
     entry->started = 1U;
     entry->start_tick = HAL_GetTick();
 
@@ -251,7 +185,6 @@ static void sd_block_device_async_start_head(void)
     }
     else
     {
-        sd_block_device_note_direction(entry->operation);
     }
 }
 
@@ -323,7 +256,6 @@ sd_block_device_result_t sd_block_device_async_write_submit(
     }
     if(g_sd_block_device_async_count != 0U)
     {
-        g_sd_block_device_metrics.busy_rejects++;
         return SD_BLOCK_DEVICE_BUSY;
     }
 
@@ -342,7 +274,6 @@ sd_block_device_result_t sd_block_device_async_write_submit(
     g_sd_block_device_async_tail = (uint8_t)(
         (g_sd_block_device_async_tail + 1U) % SD_BLOCK_DEVICE_ASYNC_FIFO_DEPTH);
     g_sd_block_device_async_count++;
-    g_sd_block_device_metrics.write_submitted++;
     sd_block_device_async_start_head();
     return SD_BLOCK_DEVICE_OK;
 }
@@ -418,7 +349,6 @@ void sd_block_device_async_poll(void)
         if(entry->callback_seen == 0U)
         {
             entry->callback_seen = 1U;
-            entry->callback_tick = g_sd_block_device_async_callback_tick;
             g_sd_block_device_hw_state =
                 (entry->operation == SD_BLOCK_DEVICE_OPERATION_WRITE)
                     ? SD_BLOCK_DEVICE_HW_WRITE_WAIT_CARD_READY
@@ -459,7 +389,6 @@ uint8_t sd_block_device_async_take_completion(
         ? entry->buffer : 0;
     out_completion->owner_generation = entry->owner_generation;
     out_completion->media_epoch = entry->media_epoch;
-    out_completion->duration_ms = entry->duration_ms;
     out_completion->operation = entry->operation;
     out_completion->result = entry->result;
     out_completion->owner_client = entry->owner_client;
@@ -559,24 +488,20 @@ void sd_block_device_async_cancel(void)
 
 void sd_block_device_async_read_complete_isr(void)
 {
-    g_sd_block_device_async_callback_tick = HAL_GetTick();
     g_sd_block_device_async_rx_complete = 1U;
 }
 
 void sd_block_device_async_write_complete_isr(void)
 {
-    g_sd_block_device_async_callback_tick = HAL_GetTick();
     g_sd_block_device_async_tx_complete = 1U;
 }
 
 void sd_block_device_async_abort_complete_isr(void)
 {
-    g_sd_block_device_async_callback_tick = HAL_GetTick();
     g_sd_block_device_async_abort_complete = 1U;
 }
 
 void sd_block_device_async_error_isr(void)
 {
-    g_sd_block_device_async_callback_tick = HAL_GetTick();
     g_sd_block_device_async_error = 1U;
 }

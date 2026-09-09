@@ -10,15 +10,6 @@
 
 #define RECORDER_FILE_RESERVATION_SECTOR_BYTES 512U
 
-typedef enum
-{
-    RECORDER_FILE_METRIC_CREATE = 0,
-    RECORDER_FILE_METRIC_EXTEND,
-    RECORDER_FILE_METRIC_COMMIT,
-    RECORDER_FILE_METRIC_RELEASE,
-    RECORDER_FILE_METRIC_OTHER
-} recorder_file_metric_operation_t;
-
 static volatile uint8_t g_recorder_file_reservation_operation_active;
 static uint8_t recorder_file_copy_path(char *dst, const char *src)
 {
@@ -85,36 +76,6 @@ static void recorder_file_end_storage_operation(void)
     sd_access_gate_release(SD_ACCESS_CLIENT_SCHEDULED_RECORDER);
 }
 
-static void recorder_file_note_metrics(recorder_file_reservation_t *session,
-                                       const FF_BRICK_REC_METRICS *io,
-                                       recorder_file_metric_operation_t operation,
-                                       uint32_t elapsed_ms,
-                                       FRESULT fr)
-{
-    recorder_file_reservation_metrics_t *const metrics = &session->metrics;
-    metrics->last_operation_ms = elapsed_ms;
-    metrics->last_fresult = (uint32_t)fr;
-    metrics->operation_count++;
-    if(io != 0)
-    {
-        metrics->metadata_sectors_read += io->metadata_sectors_read;
-        metrics->metadata_sectors_written += io->metadata_sectors_written;
-        metrics->sync_count += io->sync_count;
-        metrics->clusters_allocated += io->clusters_allocated;
-        metrics->clusters_released += io->clusters_released;
-        metrics->extents_added += io->extents_added;
-    }
-    uint32_t *max_value = 0;
-    if(operation == RECORDER_FILE_METRIC_CREATE) max_value = &metrics->max_create_ms;
-    else if(operation == RECORDER_FILE_METRIC_EXTEND) max_value = &metrics->max_extend_ms;
-    else if(operation == RECORDER_FILE_METRIC_COMMIT) max_value = &metrics->max_commit_ms;
-    else if(operation == RECORDER_FILE_METRIC_RELEASE) max_value = &metrics->max_release_ms;
-    if((max_value != 0) && (elapsed_ms > *max_value))
-    {
-        *max_value = elapsed_ms;
-    }
-}
-
 static void recorder_file_publish(recorder_file_reservation_t *session)
 {
     session->publish_sequence++;
@@ -167,8 +128,7 @@ void recorder_file_reservation_init(recorder_file_reservation_t *session)
 
 static recorder_file_reservation_result_t recorder_file_extend_locked(
     recorder_file_reservation_t *session,
-    uint64_t additional_bytes,
-    recorder_file_metric_operation_t metric_operation)
+    uint64_t additional_bytes)
 {
     if((additional_bytes == 0U)
             || (session->fs_state.reserved_bytes > (uint64_t)((FSIZE_t)-1) - additional_bytes))
@@ -179,17 +139,13 @@ static recorder_file_reservation_result_t recorder_file_extend_locked(
     const FSIZE_t target = before + (FSIZE_t)additional_bytes;
     const uint16_t old_count = session->extent_count;
     UINT added = 0U;
-    FF_BRICK_REC_METRICS io;
-    const uint32_t started = HAL_GetTick();
     const FRESULT fr = f_brick_rec_reserve(&session->file,
                                            target,
                                            &session->fs_state,
                                            &session->fs_extents[old_count],
                                            RECORDER_FILE_RESERVATION_MAX_EXTENTS - old_count,
                                            &added,
-                                           &io);
-    recorder_file_note_metrics(session, &io, metric_operation,
-                               HAL_GetTick() - started, fr);
+                                           0);
     if(fr != FR_OK)
     {
         if((fr != FR_DENIED) && (fr != FR_NOT_ENOUGH_CORE))
@@ -238,31 +194,24 @@ recorder_file_reservation_result_t recorder_file_reservation_create(
         recorder_file_end_storage_operation();
         return RECORDER_FILE_RESERVATION_INVALID_ARG;
     }
-    uint32_t started = HAL_GetTick();
     FRESULT fr = f_open(&session->file, temporary_path,
                         FA_CREATE_NEW | FA_WRITE | FA_READ);
     if(fr != FR_OK)
     {
-        recorder_file_note_metrics(session, 0, RECORDER_FILE_METRIC_CREATE,
-                                   HAL_GetTick() - started, fr);
         recorder_file_end_storage_operation();
         return recorder_file_fs_result(fr);
     }
     session->open = 1U;
     UINT recovered_count = 0U;
-    FF_BRICK_REC_METRICS recover_io;
     fr = f_brick_rec_recover(&session->file, &session->fs_state,
                              session->fs_extents,
                              RECORDER_FILE_RESERVATION_MAX_EXTENTS,
-                             &recovered_count, &recover_io);
-    recorder_file_note_metrics(session, &recover_io, RECORDER_FILE_METRIC_CREATE,
-                               HAL_GetTick() - started, fr);
+                             &recovered_count, 0);
     recorder_file_reservation_result_t result = recorder_file_fs_result(fr);
     if(fr == FR_OK)
     {
         const uint64_t total = (uint64_t)header_bytes + initial_reserve_bytes;
-        result = recorder_file_extend_locked(session, total,
-                                             RECORDER_FILE_METRIC_CREATE);
+        result = recorder_file_extend_locked(session, total);
     }
     if((result != RECORDER_FILE_RESERVATION_OK)
             && (result != RECORDER_FILE_RESERVATION_PARTIAL))
@@ -270,11 +219,6 @@ recorder_file_reservation_result_t recorder_file_reservation_create(
         (void)f_close(&session->file);
         session->open = 0U;
         session->failed = 1U;
-    }
-    const uint32_t create_elapsed = HAL_GetTick() - started;
-    if(create_elapsed > session->metrics.max_create_ms)
-    {
-        session->metrics.max_create_ms = create_elapsed;
     }
     recorder_file_end_storage_operation();
     return result;
@@ -300,19 +244,15 @@ recorder_file_reservation_result_t recorder_file_reservation_recover(
         recorder_file_end_storage_operation();
         return RECORDER_FILE_RESERVATION_INVALID_ARG;
     }
-    const uint32_t started = HAL_GetTick();
     FRESULT fr = f_open(&session->file, temporary_path, FA_WRITE | FA_READ);
     if(fr == FR_OK)
     {
         session->open = 1U;
         UINT count = 0U;
-        FF_BRICK_REC_METRICS io;
         fr = f_brick_rec_recover(&session->file, &session->fs_state,
                                  session->fs_extents,
                                  RECORDER_FILE_RESERVATION_MAX_EXTENTS,
-                                 &count, &io);
-        recorder_file_note_metrics(session, &io, RECORDER_FILE_METRIC_OTHER,
-                                   HAL_GetTick() - started, fr);
+                                 &count, 0);
         if((fr == FR_OK) && (count <= RECORDER_FILE_RESERVATION_MAX_EXTENTS)
                 && (recorder_file_import_extents(session, 0U, (uint16_t)count) != 0U))
         {
@@ -330,8 +270,6 @@ recorder_file_reservation_result_t recorder_file_reservation_recover(
     }
     else
     {
-        recorder_file_note_metrics(session, 0, RECORDER_FILE_METRIC_OTHER,
-                                   HAL_GetTick() - started, fr);
     }
     recorder_file_end_storage_operation();
     return recorder_file_fs_result(fr);
@@ -351,8 +289,7 @@ recorder_file_reservation_result_t recorder_file_reservation_extend(
         return RECORDER_FILE_RESERVATION_SD_BUSY;
     }
     const recorder_file_reservation_result_t result =
-        recorder_file_extend_locked(session, additional_bytes,
-                                    RECORDER_FILE_METRIC_EXTEND);
+        recorder_file_extend_locked(session, additional_bytes);
     recorder_file_end_storage_operation();
     return result;
 }
@@ -371,13 +308,9 @@ recorder_file_reservation_result_t recorder_file_reservation_commit_valid(
     {
         return RECORDER_FILE_RESERVATION_SD_BUSY;
     }
-    FF_BRICK_REC_METRICS io;
-    const uint32_t started = HAL_GetTick();
     const FRESULT fr = f_brick_rec_commit(&session->file,
                                           (FSIZE_t)(session->header_bytes + valid_bytes),
-                                          &session->fs_state, &io);
-    recorder_file_note_metrics(session, &io, RECORDER_FILE_METRIC_COMMIT,
-                               HAL_GetTick() - started, fr);
+                                          &session->fs_state, 0);
     if(fr == FR_OK)
     {
         session->valid_bytes = valid_bytes;
@@ -436,16 +369,12 @@ recorder_file_reservation_result_t recorder_file_reservation_release_unused(
     {
         return RECORDER_FILE_RESERVATION_SD_BUSY;
     }
-    FF_BRICK_REC_METRICS io;
-    const uint32_t started = HAL_GetTick();
     const FRESULT fr = f_brick_rec_release_tail(&session->file,
                                                 (FSIZE_t)keep_bytes,
                                                 keep_last,
                                                 first_unused,
                                                 &session->fs_state,
-                                                &io);
-    recorder_file_note_metrics(session, &io, RECORDER_FILE_METRIC_RELEASE,
-                               HAL_GetTick() - started, fr);
+                                                0);
     if(fr == FR_OK)
     {
         uint16_t retained = 0U;

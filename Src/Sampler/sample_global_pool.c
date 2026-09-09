@@ -1,4 +1,6 @@
 #include "Sampler/sample_global_pool.h"
+#include "Seq/seq_runtime.h"
+#include "Storage/audio_recorder.h"
 
 #include <string.h>
 
@@ -409,6 +411,17 @@ static sample_classic_load_error_t sample_global_classic_error_from_cache(uint16
 
 uint8_t sample_global_pool_load_classic(uint16_t global_index, const char *path)
 {
+    if ((seq_runtime_is_running() != 0U)
+        || (seq_runtime_is_start_pending() != 0U))
+    {
+        g_sample_classic_last_error = SAMPLE_CLASSIC_LOAD_TRANSPORT_ACTIVE;
+        return 0U;
+    }
+    if (audio_recorder_is_active() != 0U)
+    {
+        g_sample_classic_last_error = SAMPLE_CLASSIC_LOAD_RECORDER_ACTIVE;
+        return 0U;
+    }
     if (global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
     {
         g_sample_classic_last_error = SAMPLE_CLASSIC_LOAD_INVALID_ID;
@@ -446,6 +459,17 @@ uint8_t sample_global_pool_load_classic_prepared(uint16_t global_index,
                                                  uint32_t source_crc32,
                                                  uint32_t prepared_cost_bytes)
 {
+    if ((seq_runtime_is_running() != 0U)
+        || (seq_runtime_is_start_pending() != 0U))
+    {
+        g_sample_classic_last_error = SAMPLE_CLASSIC_LOAD_TRANSPORT_ACTIVE;
+        return 0U;
+    }
+    if (audio_recorder_is_active() != 0U)
+    {
+        g_sample_classic_last_error = SAMPLE_CLASSIC_LOAD_RECORDER_ACTIVE;
+        return 0U;
+    }
     if ((global_index >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
         || (path == NULL) || (path[0] == '\0')
         || (strlen(path) >= SAMPLE_GLOBAL_POOL_PATH_MAX)

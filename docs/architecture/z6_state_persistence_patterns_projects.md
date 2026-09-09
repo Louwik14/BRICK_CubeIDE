@@ -2,7 +2,7 @@
 
 ## Modele et format
 
-Pattern, Project et Patch utilisent exclusivement `persistent_control_model` et le codec explicite `B6CP` version 4. Les DTO ne sont ni des snapshots runtime ni une ABI disque; chaque champ est encode explicitement. Header, kind, sections, longueurs et CRC sont stricts. Aucune ancienne version ni dump de structure n'est lu.
+Pattern, Project et Patch utilisent exclusivement `persistent_control_model` et le codec explicite `B6CP` version 5. Les DTO ne sont ni des snapshots runtime ni une ABI disque; chaque champ est encode explicitement. Header, kind, sections, longueurs et CRC sont stricts. Aucune ancienne version ni dump de structure n'est lu.
 
 Les cles persistantes de famille, type, parametre, MIDI, clock, Note FX, modulation et asset sont explicites et independantes des ordinaux C. Les FLOAT32 conservent leurs bits. Les indices runtime, contextes AUDIO installes, pointeurs, caches, voix, phases, playheads et UI sont exclus.
 
@@ -25,17 +25,21 @@ borne sans allocation dynamique.
 
 ## Transactions
 
-Pour Project Load, P1 decode le candidat et le prevalide integralement avant le
-safe point: chaque Pattern doit resoudre ses references dans le manifeste, les
-sources WAV/Multi doivent etre lisibles et compatibles, et les couts agreges
-doivent tenir dans les slots, pools et budgets physiques. Le contexte de boot
-et le record temporaire de publication du Pattern bank sont egalement prepares
-avant P2. Un refus abandonne le workspace et le staging sans fermer l'ingress,
-PANIC ni retirer une ressource courante. P2 impose ensuite le safe point et
-purge l'ancien etat; P3 installe les assets sequentiellement puis applique
-Pattern, macros et globals. Les autres operations de persistence conservent
-leur prevalidation locale. Pattern Store/delete/clear construisent le namespace
-inactif puis publient `COMMIT.BIN`.
+Pour Project Load, P1 valide integralement le document Project avant le safe
+point: magic/version, taille exacte, sections, bornes, CRC, semantique des
+Patterns et coherence de leurs references avec le manifeste. P1 ne lit pas les
+fichiers d'assets externes. Un refus abandonne le workspace et le staging sans
+fermer l'ingress, PANIC ni retirer une ressource courante, et ne publie pas le
+contexte de boot. Apres STOP, quiescence et `T_safe`, l'ancien catalogue et ses
+gros payloads sont retires; les assets du nouveau Project sont alors charges
+sequentiellement dans la memoire liberee. Une erreur locale de fichier conserve
+la reference et la configuration Track, publie une source silencieuse et marque
+l'asset `UNAVAILABLE`; elle n'annule pas le Project. Pour Multi, toute erreur
+d'index ou de child invalide l'instrument entier. Un changement de media epoch,
+une SD absente ou un mount globalement perdu arrete le load. Le contexte de boot
+n'est publie qu'apres installation reussie du runtime. Les autres operations de
+persistence conservent leur prevalidation locale. Pattern Store/delete/clear
+construisent le namespace inactif puis publient `COMMIT.BIN`.
 Les Save utilisent des tranches DATA de 4096 octets et des etapes METADATA
 separees; `.TMP` n'est publie qu'apres header final, sync et close, avec `.BAK`
 recuperable.
@@ -45,22 +49,21 @@ Pattern Save/Load, Project Save, browser SD, Sample RAM, Wavetable et Clear Mult
 Pour les chargements utilisateur Sample RAM et Wavetable, la superloop consomme
 la completion physique, valide le slot, le global, le chemin et la resolution
 logique, puis retient un resultat terminal par famille. Settings ne fait que
-prendre ce resultat pour rafraichir sa vue. Un echec d'enregistrement n'est
-jamais publie comme succes; faute d'API de rollback transactionnel sure, la
-ressource physique deja READY peut rester residuelle jusqu'a son retrait normal.
+prendre ce resultat pour rafraichir sa vue. Un echec de preparation n'est
+jamais publie comme succes et laisse l'ancien asset READY intact. Descriptor,
+identite globale et capacite sont valides avant la frontiere de commit; apres
+`T_safe`, le swap ne possede plus d'echec produit recuperable et les anciennes
+pages ne sont liberees qu'apres installation.
 
-Apres cette prevalidation, Project Load entre en quiesce et exclusivite
-scheduler, puis rend l'exclusivite et sequence les assets RAM avec le loader
-cooperatif canonique.
-Chaque candidat RAM est complet avant retrait; un remplacement attend ensuite
-STOP AUDIO et `T_safe` cote CONTROL avant liberation et commit. Un slot EMPTY
-est commite directement. Le quiesce Project reste ferme jusqu'a la fin de cette
-sequence, puis le restore republie PROGRAM/PARAM/TRANSPORT/RECORD par la FIFO
-avant publication UI. Aucun loader RAM synchrone ni ACK AUDIO de restore
-n'existe. Patch utilise le meme loader et differe son application lorsqu'un
-asset RAM reference est absent.
+Project Load ne double-bufferise pas les gros payloads RAM, Wavetable ou Multi:
+le quiesce reste ferme, l'ancien payload est retire, puis le loader cooperatif
+canonique reutilise ses pages. Seuls le DTO Project, le Pattern bank inactif et
+un catalogue borne de references indisponibles coexistent temporairement. Le
+restore republie ensuite PROGRAM/PARAM/TRANSPORT/RECORD par la FIFO. Les etats
+de selection exposes a l'UI sont `EMPTY`, `LOADED` et `UNAVAILABLE`. Patch garde
+sa transaction asset locale distincte.
 
-Une application Pattern ou Project reussie reconstruit runtime/AUDIO et invalide Undo/Redo. Un rejet conserve integralement l'etat courant.
+Une application Pattern ou Project reussie reconstruit runtime/AUDIO et invalide Undo/Redo. Un Project structurellement rejete conserve integralement l'etat courant; apres entree en remplacement, aucun rollback complet des gros assets n'est maintenu.
 
 Le DTO Pattern porte sous forme typee Keyboard, niveau de metronome, structure
 Track/MIDI, nombre de voix, routing Audio FX et configuration Mod. Ces champs

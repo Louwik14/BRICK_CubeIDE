@@ -37,6 +37,8 @@ La frontiere suit `M4 CONTROL decide -> commande finale 16 octets -> M7 AUDIO ex
 
 Les ingress Hall/MIDI et les sources scheduler restent des buffers locaux CONTROL. CONTROL resout et fusionne leur fenetre, transforme un retrigger en NOTE OFF puis NOTE ON au meme sample, puis publie un lot atomique dans la FIFO unique. AUDIO ne fusionne aucune queue et l'ordre physique FIFO est l'ordre fonctionnel a timestamp egal.
 
+Le contrat maximal d'une publication est 1024 commandes parametres, 768 commandes NOTE (`2 * (256 internes + 128 externes)`) et 35 commandes generales, soit 1827 commandes pour une FIFO de 2048. Ces constantes sont liees par assertions statiques; aucune fenetre interne n'est construite si ce budget complet n'est pas disponible.
+
 La frontiere physique de plateforme est regroupee dans `Inc/Platform` et
 `Src/Platform`. Les types, layouts et `extern` purs appartiennent a
 `DOMAIN_CONTRACTS`; leurs definitions physiques appartiennent au groupe
