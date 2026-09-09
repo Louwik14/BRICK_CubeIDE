@@ -15,6 +15,7 @@ resolution locale d'un ID ne font jamais partie de l'ABI M4/M7.
 | Preview PCM | M4 Preview -> M7 MAIN | ring non-cacheable `AUDIO_STORAGE_SHARED_SDRAM`, 2048 x 2 floats (16 384) + deux curseurs `D3_IPC` | samples seulement, aucun pointeur | payload, DMB, `write_count` M4 | M7 publie uniquement `read_count`; active/gain sont AUDIO-locaux via PARAM, sans epoch ni reset croise |
 | Recorder PCM | M7 AUDIO -> M4 Storage/SD | ring non-cacheable `SDRAM_RECORDER`, 12 001 x 2 x 32 bits (96 008) + layout 16 octets `D3_IPC` | `head_cursor`, `tail_cursor`, `closed_session`, `capture_fault`; aucun config/etat fonctionnel partage | PCM, DMB, `head_cursor`; fermeture AUDIO publie session/fault | M4 ecrit seulement `tail_cursor` apres copie/commit |
 | Looper live take | M7 capture -> M4 recorder, puis M4 map -> M7 reader | Recorder PCM ci-dessus; carte live CONTROL locale puis projection Stream existante | path borne et extents possedes en valeur; aucun pointeur. Le preroll (96 000 octets) est cacheable et M7-prive | meme head/fermeture Recorder; map Stream existante | tail Recorder, puis generation de map et credits pages; retrait apres stop/fence |
+| Snapshot AUDIO restore | M4 CONTROL -> M7 AUDIO | singleton `.sdram_audio_state_snapshot`, 73 920 octets cacheables | generation, count, checksum, valid magic et commandes finales pointer-free | contenu immutable, clean, magic, DMB, puis `AUDIO_STATE_COMMIT(generation)` | M4 attend que le tail FIFO franchisse le commit, apres application M7; aucun ACK |
 
 Les contexts FatFs, loaders, diagnostics, paths de catalogue, pointeurs de
 buffers DMA et function pointers du generic recorder restent prives a M4. Les
@@ -29,6 +30,8 @@ traverse aucune commande ou mailbox.
 - `.ram_d2_ipc`, SRAM3 complete: shareable non-cacheable, MPU region 6.
 - `.sdram_recorder`, derniers 256 KiB: shareable non-cacheable, MPU region 4.
 - registries RAM/Wavetable/Multi: `.sdram_recorder`, non-cacheable.
+- snapshot AUDIO singleton: `.sdram_audio_state_snapshot`, SDRAM partagee
+  cacheable; clean M4 puis invalidate M7 autour de la publication generationnee.
 - page pool: SDRAM cacheable. Le producteur nettoie le payload et le descriptor
   avant le flag/ID; le consommateur invalide sa cache privee
   avec `BRICK6_H747_DUAL_CORE` avant la copie. Sur H743, ces hooks sont des
@@ -52,15 +55,17 @@ Recorder n'installe plus de callback `__disable_irq()` dans le generic recorder.
 
 STREAM conserve sa politique de besoins/credits et son scheduler. Recorder,
 Preview et Looper conservent leurs semantiques, leur framing et leur longueur
-STOP. Les six opcodes et la cadence CONTROL ne changent pas. Les requetes
-visuelles typees utilisent PARAM dans la FIFO fonctionnelle existante.
+STOP. Les sept opcodes et la cadence CONTROL ne changent pas. Le septieme,
+`AUDIO_STATE_COMMIT`, reference uniquement une generation de snapshot partage;
+il ne transporte aucun pointeur. Les requetes visuelles typees utilisent PARAM
+dans la FIFO fonctionnelle existante.
 
 ## Controle de purete
 
 `RESOURCE READY` ne vaut jamais `RESOURCE ACTIVE`. Les flags `ready`,
 generations, maps, compteurs et seqlocks publient une disponibilite ou un droit
 de reutilisation. L'activation audible reste ordonnee par PROGRAM/PARAM/NOTE,
-TRANSPORT, RECORD ou PANIC dans la FIFO.
+TRANSPORT, RECORD, PANIC ou AUDIO_STATE_COMMIT dans la FIFO.
 
 | Data plane | Pur data/ownership | Fonction cachee | Verdict |
 |---|---|---|---|

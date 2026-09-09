@@ -560,6 +560,14 @@ SECTIONS
     . = ALIGN(32);
   } >SDRAM
 
+  .sdram_audio_state_snapshot (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.sdram_audio_state_snapshot)
+    *(.sdram_audio_state_snapshot*)
+    . = ALIGN(32);
+  } >SDRAM
+
   .sdram_recorder (NOLOAD) :
   {
     . = ALIGN(32);

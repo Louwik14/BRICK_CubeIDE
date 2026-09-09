@@ -33,11 +33,11 @@ Le Hall Low-Cost execute la machine bornee depuis l'acquisition ADC. TIM5 est le
 
 ## Frontiere CONTROL/AUDIO
 
-La frontiere suit `M4 CONTROL decide -> commande finale 16 octets -> M7 AUDIO execute`. La FIFO SPSC unique de 2048 commandes transporte PROGRAM, PARAM, NOTE, TRANSPORT, RECORD et PANIC. Les requetes visuelles typees AUDIO waveform et synth waveform empruntent egalement PARAM dans cette FIFO; elles n'ont ni mailbox ni file secondaire. Aucun pointeur, callback, contexte mutable, Pattern ou Project ne la traverse.
+La frontiere suit `M4 CONTROL decide -> commande finale 16 octets -> M7 AUDIO execute`. La FIFO SPSC unique de 4096 commandes transporte PROGRAM, PARAM, NOTE, TRANSPORT, RECORD, PANIC et AUDIO_STATE_COMMIT. Les requetes visuelles typees AUDIO waveform et synth waveform empruntent egalement PARAM dans cette FIFO; elles n'ont ni mailbox ni file secondaire. Aucun pointeur, callback, contexte mutable, Pattern ou Project ne la traverse.
 
 Les ingress Hall/MIDI et les sources scheduler restent des buffers locaux CONTROL. CONTROL resout et fusionne leur fenetre, transforme un retrigger en NOTE OFF puis NOTE ON au meme sample, puis publie un lot atomique dans la FIFO unique. AUDIO ne fusionne aucune queue et l'ordre physique FIFO est l'ordre fonctionnel a timestamp egal.
 
-Le contrat maximal d'une publication est 1024 commandes parametres, 768 commandes NOTE (`2 * (256 internes + 128 externes)`) et 35 commandes generales, soit 1827 commandes pour une FIFO de 2048. Ces constantes sont liees par assertions statiques; aucune fenetre interne n'est construite si ce budget complet n'est pas disponible.
+Le contrat maximal d'un horizon est 1024 commandes parametres, 768 commandes NOTE (`2 * (256 internes + 128 externes)`) et 35 commandes generales, soit 1827 commandes. Pattern et Project ne poussent plus leurs milliers de commandes dans la FIFO: CONTROL publie la projection AUDIO complete dans un snapshot partage unique, puis une seule commande `AUDIO_STATE_COMMIT`. CONTROL attend ensuite que le `tail` FIFO ait franchi le commit; AUDIO ne le publie qu'apres application, ce qui rend le snapshot reutilisable sans ACK. La FIFO de 4096 couvre l'horizon, le pire cumul hors horizon de 953 commandes et une marge explicite de 512: besoin prouve 3292. Il n'existe ni partition `1827 + 221`, ni admission utilisateur temporairement refusable. A l'interieur d'un horizon, la reservation locale bornee a 1827 porte tout le produit de la fenetre avant un commit FIFO unique.
 
 La frontiere physique de plateforme est regroupee dans `Inc/Platform` et
 `Src/Platform`. Les types, layouts et `extern` purs appartiennent a
@@ -54,7 +54,7 @@ finales et PANIC emprunte la meme FIFO; aucune generation musicale, queue
 prioritaire ou plan fonctionnel de restore ne traverse la frontiere. L'etat
 restore est valide puis republie par CONTROL avec le contrat final.
 
-Sur H743, les objets IPC resident dans la moitie haute de SRAM4 `0x38008000..0x3800FFFF`, shareable et non-cacheable; les registres Stream fixes resident dans la fenetre IPC partagee SRAM3/D2, et la projection complete du Recorder dans la zone SDRAM partagee non-cacheable. `DMB` ordonne la publication mais ne remplace pas le protocole d'ownership. Les payloads SDRAM cacheables exigent clean producteur puis invalidate consommateur. La zone Recorder de 256 KiB est shareable non-cacheable; les buffers DMA SAI sont en D2 non-cacheable.
+Sur H743, les objets IPC resident dans la moitie haute de SRAM4 `0x38008000..0x3800FFFF`, shareable et non-cacheable; les registres Stream fixes resident dans la fenetre IPC partagee SRAM3/D2, et la projection complete du Recorder dans la zone SDRAM partagee non-cacheable. Le snapshot AUDIO unique de 73920 octets reside dans `.sdram_audio_state_snapshot`, en SDRAM cacheable partagee avec clean producteur et invalidate consommateur sur H747. `DMB` ordonne la publication mais ne remplace pas le protocole d'ownership. La zone Recorder de 256 KiB est shareable non-cacheable; les buffers DMA SAI sont en D2 non-cacheable.
 
 Les principaux sens sont:
 

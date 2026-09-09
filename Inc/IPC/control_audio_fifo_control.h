@@ -14,6 +14,8 @@ typedef struct
 
 void control_audio_fifo_control_init(void);
 uint16_t control_audio_fifo_control_free(void);
+uint32_t control_audio_fifo_control_head_snapshot(void);
+uint8_t control_audio_fifo_control_head_consumed(uint32_t head);
 uint8_t control_audio_fifo_publish(const control_audio_command_t *command);
 uint8_t control_audio_fifo_publish_batch(const control_audio_command_t *commands,
                                          uint16_t count);

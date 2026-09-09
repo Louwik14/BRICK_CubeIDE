@@ -50,6 +50,10 @@ uint8_t audio_fx_control_state_prepare_for_polyphony(
 uint8_t audio_fx_control_state_bulk_add_prepared(
     brick_entity_id_t entity, const audio_fx_control_state_t *prepared,
     live_parameter_audio_bulk_t *bulk);
+uint8_t audio_fx_control_state_bulk_add_delta(
+    brick_entity_id_t entity, const audio_fx_control_state_t *before,
+    const audio_fx_control_state_t *prepared,
+    live_parameter_audio_bulk_t *bulk);
 uint8_t audio_fx_control_state_install_prepared(
     brick_entity_id_t entity, const audio_fx_control_state_t *prepared);
 uint8_t audio_fx_control_state_validate(const audio_fx_control_state_t *state);

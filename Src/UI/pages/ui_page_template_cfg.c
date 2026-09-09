@@ -35,7 +35,7 @@ static uint8_t ui_cfg_restore_polyphony_audio_fx(uint8_t track,uint8_t voices)
             ||!audio_fx_control_state_prepare_for_polyphony(track,&audio_fx,
                 prepared_polyphony.voice_count,&prepared_audio_fx)
             ||!polyphony_control_bulk_add(track,&prepared_polyphony,&bulk)
-            ||!audio_fx_control_state_bulk_add_prepared(track,
+            ||!audio_fx_control_state_bulk_add_delta(track,&audio_fx,
                 &prepared_audio_fx,&bulk)
             ||!live_parameter_audio_publication_submit_bulk(&bulk))return 0U;
     return polyphony_control_install_prepared(track,&prepared_polyphony)

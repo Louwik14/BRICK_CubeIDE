@@ -9,6 +9,7 @@
 
 #include "Platform/memory_layout.h"
 #include "Track/entity_types.h"
+#include "Track/track_runtime.h"
 
 CONTROL_STATE_SDRAM static mixer_control_state_t
     g_mixer_control[BRICK_ENTITY_CAPACITY];
@@ -89,15 +90,18 @@ uint8_t mixer_control_state_restore(uint8_t entity,const mixer_control_state_t*s
         if(!param_registry_prepare_value(ids[i],values[i],&prepared))return 0U;
         values[i]=prepared.value;}
     live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),
-        .source=LIVE_PARAMETER_EVENT_SOURCE_BULK,.count=5U};
-    for(uint8_t i=0U;i<5U;++i)bulk.item[i]=
+        .source=LIVE_PARAMETER_EVENT_SOURCE_BULK,.count=0U};
+    for(uint8_t i=0U;i<5U;++i){
+        if(track_runtime_get_effective_param_status(entity,ids[i])
+                !=TRACK_RUNTIME_PARAM_ALLOWED)continue;
+        bulk.item[bulk.count++]=
         (live_parameter_audio_bulk_item_t){.parameter_id=(uint16_t)ids[i],
         .scope=LIVE_PARAMETER_EVENT_SCOPE_TRACK,.track=entity,
         .slot=LIVE_PARAMETER_EVENT_INVALID_INDEX,
         .flags=(uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
             |LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
-        .value=live_parameter_event_encode_float(values[i])};
-    if(!live_parameter_audio_publication_submit_bulk(&bulk))return 0U;
+        .value=live_parameter_event_encode_float(values[i])};}
+    if((bulk.count!=0U)&&!live_parameter_audio_publication_submit_bulk(&bulk))return 0U;
     g_mixer_control[entity]=canonical_state;
     return 1U;
 }

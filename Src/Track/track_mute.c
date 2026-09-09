@@ -159,7 +159,7 @@ uint8_t track_mute_set(uint8_t track, uint8_t muted)
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
         .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
-        .count = affected_count
+        .count = 0U
     };
     for (uint8_t i = 0U; i < affected_count; ++i)
     {
@@ -171,7 +171,9 @@ uint8_t track_mute_set(uint8_t track, uint8_t muted)
             if (child_local < 0) return 0U;
             effective_after[i] = (uint8_t)((child_local != 0) || (muted != 0U));
         }
-        bulk.item[i] = (live_parameter_audio_bulk_item_t){
+        if (effective_before[i] == effective_after[i])
+            continue;
+        bulk.item[bulk.count++] = (live_parameter_audio_bulk_item_t){
             .parameter_id = (uint16_t)PARAM_MIX_MUTE,
             .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
             .track = affected[i],
@@ -182,7 +184,8 @@ uint8_t track_mute_set(uint8_t track, uint8_t muted)
                 (float)effective_after[i])
         };
     }
-    if (!live_parameter_audio_publication_submit_bulk(&bulk)) return 0U;
+    if ((bulk.count != 0U)
+            && !live_parameter_audio_publication_submit_bulk(&bulk)) return 0U;
     if (track_mute_install(track, muted) == 0U) return 0U;
 
     for (uint8_t i = 0U; i < affected_count; ++i)

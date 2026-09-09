@@ -50,7 +50,8 @@ MEMORY
   SRAM2_D2 (xrw) : ORIGIN = 0x30020000, LENGTH = 128K
   SRAM3_D2 (xrw) : ORIGIN = 0x30040000, LENGTH = 32K
   RAM_D3 (xrw)    : ORIGIN = 0x38000000, LENGTH = 64K
-  SDRAM (xrw)     : ORIGIN = 0xC0000000, LENGTH = 32M
+  SDRAM (xrw)          : ORIGIN = 0xC0000000, LENGTH = 32512K
+  SDRAM_RECORDER (xrw) : ORIGIN = 0xC1FC0000, LENGTH = 256K
   ITCMRAM (xrw)   : ORIGIN = 0x00000000, LENGTH = 64K
 }
 
@@ -362,13 +363,21 @@ SECTIONS
     . = ALIGN(32);
   } >SDRAM
 
+  .sdram_audio_state_snapshot (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.sdram_audio_state_snapshot)
+    *(.sdram_audio_state_snapshot*)
+    . = ALIGN(32);
+  } >SDRAM
+
   .sdram_recorder (NOLOAD) :
   {
     . = ALIGN(32);
     *(.sdram_recorder)
     *(.sdram_recorder*)
     . = ALIGN(32);
-  } >SDRAM
+  } >SDRAM_RECORDER
 
   .sdram_audio_cold (NOLOAD) :
   {

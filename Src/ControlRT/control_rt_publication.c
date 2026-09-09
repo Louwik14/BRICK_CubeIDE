@@ -16,10 +16,13 @@
 #include "IPC/audio_recorder_capture_contract.h"
 #include "IPC/audio_rec_bus_contract.h"
 #include "IPC/audio_wave_table_projection.h"
+#include "IPC/audio_state_snapshot.h"
+#include "ControlRT/audio_state_snapshot_control.h"
 #include "IPC/fm_dsp_projection.h"
 #include "IPC/synth_waveform_contract.h"
 #include "Mod/mod_matrix.h"
 #include "Param/engine_model_catalog.h"
+#include "main.h"
 
 #define CONTROL_AUDIO_PARAM_MULTI_RESOURCE_STOP 0xFFF5U
 #define CONTROL_AUDIO_PARAM_RAM_RESOURCE_STOP   0xFFF6U
@@ -267,6 +270,8 @@ static uint8_t control_rt_command_is_valid(
             return (uint8_t)((kind <= CONTROL_AUDIO_PANIC_ENTITY)
                 && ((kind == CONTROL_AUDIO_PANIC_GLOBAL)
                     || (command->entity < BRICK_ENTITY_CAPACITY)));
+        case CONTROL_AUDIO_COMMAND_AUDIO_STATE_COMMIT:
+            return (uint8_t)((kind == 0U) && (command->value != 0U));
         default:
             return 0U;
     }
@@ -284,12 +289,203 @@ typedef struct
 } control_audio_horizon_t;
 
 CONTROL_STATE_SDRAM static control_audio_horizon_t g_control_audio_horizon;
+static uint8_t g_audio_state_snapshot_depth;
 static volatile uint32_t g_control_audio_horizon_capacity_failure_count;
 static uint64_t g_control_rt_first_unpublished_sample;
+
+static uint8_t audio_state_snapshot_command_is_transient(
+    const control_audio_command_t *command)
+{
+    if ((command == NULL)
+            || (CONTROL_AUDIO_COMMAND_OPCODE(command)
+                != CONTROL_AUDIO_COMMAND_PARAM)) return 0U;
+    return (uint8_t)((command->id == CONTROL_AUDIO_PARAM_CLEAR_RUNTIME_TEMP)
+        || (command->id == CONTROL_AUDIO_PARAM_MULTI_RESOURCE_STOP)
+        || (command->id == CONTROL_AUDIO_PARAM_RAM_RESOURCE_STOP)
+        || (command->id == CONTROL_AUDIO_PARAM_WAVE_RESOURCE_STOP)
+        || (command->id == CONTROL_AUDIO_PARAM_AUDIO_WAVEFORM_REQUEST)
+        || (command->id == CONTROL_AUDIO_PARAM_SYNTH_WAVEFORM_REQUEST));
+}
+
+static uint8_t audio_state_snapshot_same_key(
+    const control_audio_command_t *left,
+    const control_audio_command_t *right)
+{
+    const uint8_t opcode = CONTROL_AUDIO_COMMAND_OPCODE(left);
+    if (opcode != CONTROL_AUDIO_COMMAND_OPCODE(right)) return 0U;
+    if (opcode == CONTROL_AUDIO_COMMAND_PROGRAM)
+        return (uint8_t)(left->entity == right->entity);
+    return (uint8_t)((opcode == CONTROL_AUDIO_COMMAND_PARAM)
+        && (left->entity == right->entity) && (left->id == right->id)
+        && (CONTROL_AUDIO_COMMAND_KIND(left)
+            == CONTROL_AUDIO_COMMAND_KIND(right)));
+}
+
+static uint8_t audio_state_snapshot_command_is_current(
+    const control_audio_command_t *command)
+{
+    if (control_rt_command_is_valid(command) == 0U) return 0U;
+    if (CONTROL_AUDIO_COMMAND_OPCODE(command) != CONTROL_AUDIO_COMMAND_PARAM)
+        return 1U;
+    track_runtime_descriptor_t descriptor;
+    const uint16_t fm_words =
+        (uint16_t)((sizeof(track_tone_fm_base_voice_t) + 3U) / 4U);
+    if ((command->id >= CONTROL_AUDIO_FM_BASE_WORD_FIRST)
+            && (command->id < CONTROL_AUDIO_FM_BASE_WORD_FIRST + fm_words))
+        return (uint8_t)(track_runtime_get_descriptor(
+            command->entity, &descriptor)
+            && (descriptor.engine == TRACK_RUNTIME_ENGINE_FM));
+    if (command->id == CONTROL_AUDIO_SAMPLER_ASSET)
+        return (uint8_t)(track_runtime_get_descriptor(
+            command->entity, &descriptor)
+            && ((descriptor.type == TRACK_RUNTIME_TYPE_STREAM)
+                || (descriptor.type == TRACK_RUNTIME_TYPE_RAM)
+                || (descriptor.type == TRACK_RUNTIME_TYPE_MULTI)));
+    if (command->id == CONTROL_AUDIO_LOOPER_PLAY_AUTO)
+        return (uint8_t)(track_runtime_get_descriptor(
+            command->entity, &descriptor)
+            && (descriptor.type == TRACK_RUNTIME_TYPE_LOOPER));
+    return 1U;
+}
+
+void audio_state_snapshot_control_init(void)
+{
+    memset(&g_audio_prepared_state, 0, sizeof(g_audio_prepared_state));
+    g_audio_state_snapshot_depth = 0U;
+}
+
+uint8_t audio_state_snapshot_control_active(void)
+{
+    return (g_audio_state_snapshot_depth != 0U) ? 1U : 0U;
+}
+
+uint8_t audio_state_snapshot_control_begin(void)
+{
+    if (g_audio_state_snapshot_depth == UINT8_MAX) return 0U;
+    if (g_audio_state_snapshot_depth == 0U)
+        g_audio_prepared_state.valid_magic = 0U;
+    ++g_audio_state_snapshot_depth;
+    return 1U;
+}
+
+void audio_state_snapshot_control_abort(void)
+{
+    g_audio_state_snapshot_depth = 0U;
+}
+
+uint8_t audio_state_snapshot_control_batch_is_projectable(
+    const control_audio_command_t *commands, uint16_t count)
+{
+    if ((commands == NULL) || (count == 0U)) return 0U;
+    for (uint16_t i = 0U; i < count; ++i)
+    {
+        const uint8_t opcode = CONTROL_AUDIO_COMMAND_OPCODE(&commands[i]);
+        if (((opcode != CONTROL_AUDIO_COMMAND_PROGRAM)
+                && (opcode != CONTROL_AUDIO_COMMAND_PARAM))
+                || (audio_state_snapshot_command_is_transient(
+                    &commands[i]) != 0U)) return 0U;
+    }
+    return 1U;
+}
+
+uint8_t audio_state_snapshot_control_absorb(
+    const control_audio_command_t *commands, uint16_t count)
+{
+    if ((commands == NULL) || (count == 0U)) return 0U;
+    for (uint16_t input = 0U; input < count; ++input)
+    {
+        control_audio_command_t command = commands[input];
+        const uint8_t opcode = CONTROL_AUDIO_COMMAND_OPCODE(&command);
+        if (((opcode != CONTROL_AUDIO_COMMAND_PROGRAM)
+                && (opcode != CONTROL_AUDIO_COMMAND_PARAM))
+                || (audio_state_snapshot_command_is_transient(&command) != 0U))
+            continue;
+        command.effective_sample_time = 0U;
+        uint16_t index = 0U;
+        while ((index < g_audio_prepared_state.count)
+                && (audio_state_snapshot_same_key(
+                    &g_audio_prepared_state.command[index], &command) == 0U))
+            ++index;
+        if (index < g_audio_prepared_state.count)
+            g_audio_prepared_state.command[index] = command;
+        else
+        {
+            if (g_audio_prepared_state.count
+                    >= AUDIO_STATE_SNAPSHOT_COMMAND_CAPACITY) return 0U;
+            g_audio_prepared_state.command[g_audio_prepared_state.count++] = command;
+        }
+        if (opcode != CONTROL_AUDIO_COMMAND_PROGRAM) continue;
+        for (uint16_t old = 0U; old < g_audio_prepared_state.count; )
+        {
+            control_audio_command_t *const candidate =
+                &g_audio_prepared_state.command[old];
+            if ((CONTROL_AUDIO_COMMAND_OPCODE(candidate)
+                    == CONTROL_AUDIO_COMMAND_PARAM)
+                    && (candidate->entity == command.entity)
+                    && (CONTROL_AUDIO_COMMAND_KIND(candidate)
+                        != LIVE_PARAMETER_EVENT_SCOPE_GLOBAL)
+                    && (audio_state_snapshot_command_is_current(
+                        candidate) == 0U))
+            {
+                g_audio_prepared_state.command[old] =
+                    g_audio_prepared_state.command[--g_audio_prepared_state.count];
+                continue;
+            }
+            ++old;
+        }
+    }
+    return 1U;
+}
+
+uint8_t audio_state_snapshot_control_commit(void)
+{
+    if (g_audio_state_snapshot_depth == 0U) return 0U;
+    --g_audio_state_snapshot_depth;
+    if (g_audio_state_snapshot_depth != 0U) return 1U;
+    uint16_t count = 0U;
+    for (uint16_t i = 0U; i < g_audio_prepared_state.count; ++i)
+        if (audio_state_snapshot_command_is_current(
+                &g_audio_prepared_state.command[i]) != 0U)
+            g_audio_prepared_state.command[count++] =
+                g_audio_prepared_state.command[i];
+    g_audio_prepared_state.count = count;
+    uint16_t program_count = 0U;
+    for (uint16_t i = 0U; i < count; ++i)
+    {
+        if (CONTROL_AUDIO_COMMAND_OPCODE(&g_audio_prepared_state.command[i])
+                != CONTROL_AUDIO_COMMAND_PROGRAM) continue;
+        const control_audio_command_t program =
+            g_audio_prepared_state.command[i];
+        memmove(&g_audio_prepared_state.command[program_count + 1U],
+                &g_audio_prepared_state.command[program_count],
+                (size_t)(i - program_count)
+                    * sizeof(g_audio_prepared_state.command[0]));
+        g_audio_prepared_state.command[program_count++] = program;
+    }
+    uint32_t generation = 0U;
+    if ((count == 0U) || (audio_state_snapshot_publish(
+            g_audio_prepared_state.command, count, &generation) == 0U))
+        return 0U;
+    control_audio_command_t commit = {
+        .value = generation,
+        .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(
+            CONTROL_AUDIO_COMMAND_AUDIO_STATE_COMMIT, 0U)
+    };
+    if (control_rt_publish_batch_now(&commit, 1U) == 0U) return 0U;
+    const uint32_t commit_head = control_audio_fifo_control_head_snapshot();
+    while (control_audio_fifo_control_head_consumed(commit_head) == 0U)
+    {
+        /* SAI preempts CONTROL every 64 frames on H743; on H747 the AUDIO
+         * core advances tail concurrently.  Crossing tail proves apply done. */
+        __DMB();
+    }
+    return 1U;
+}
 
 void control_rt_publication_init(void)
 {
     control_audio_fifo_control_init();
+    audio_state_snapshot_control_init();
     g_control_audio_horizon.count = 0U;
     g_control_audio_horizon.limit = 0U;
     g_control_audio_horizon.frames = 0U;
@@ -466,13 +662,9 @@ uint8_t control_rt_publication_commit_horizon(void)
                 + g_control_audio_horizon.frames);
     }
     else
-    {
-        ++g_seq_step_debug.fifo_publication_refused_count;
-        g_seq_step_debug.last_skip_reason = SEQ_STEP_DEBUG_SKIP_FIFO_REJECTED;
         seq_note_trace_horizon_abort(g_control_audio_horizon.first_sample,
             g_control_audio_horizon.first_sample
                 + g_control_audio_horizon.frames);
-    }
     return accepted;
 }
 
@@ -492,10 +684,21 @@ uint8_t control_rt_publish_batch_scheduled(
             && (commands[0].effective_sample_time
                 < g_control_rt_first_unpublished_sample))
         return 0U;
-    const uint8_t accepted = (g_control_audio_horizon.active != 0U)
-        ? ((control_rt_publication_free() >= count)
-            ? control_rt_publication_stage(commands, count) : 0U)
-        : control_audio_fifo_publish_batch(commands, count);
+    uint8_t accepted = 0U;
+    if (g_control_audio_horizon.active != 0U)
+        accepted = (control_rt_publication_free() >= count)
+            ? control_rt_publication_stage(commands, count) : 0U;
+    else if ((audio_state_snapshot_control_active() != 0U)
+            && (audio_state_snapshot_control_batch_is_projectable(
+                commands, count) != 0U))
+        accepted = audio_state_snapshot_control_absorb(commands, count);
+    else
+    {
+        accepted = control_audio_fifo_publish_batch(commands, count);
+        if ((accepted != 0U)
+                && (audio_state_snapshot_control_absorb(
+                    commands, count) == 0U)) Error_Handler();
+    }
     if ((accepted != 0U) && (g_control_audio_horizon.active == 0U))
         control_rt_advance_first_unpublished_sample(
             commands[count - 1U].effective_sample_time);

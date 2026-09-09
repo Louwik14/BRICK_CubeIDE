@@ -6,6 +6,8 @@
 #include "App/live_parameter_audio_publication.h"
 #include "IPC/live_clock_control.h"
 #include "IPC/live_parameter_event.h"
+#include "IPC/control_audio_fifo_layout.h"
+#include "ControlRT/audio_state_snapshot_control.h"
 #include "Track/entity_topology.h"
 #include "Track/track_input_ownership.h"
 #include "Track/track_mute.h"
@@ -42,6 +44,9 @@
 #include "Storage/project_control.h"
 #include <math.h>
 #include <string.h>
+
+_Static_assert(PERSIST_CONTROL_ENTITY_COUNT == 16U,
+               "AUDIO full-projection entity proof changed");
 
 static uint8_t capture_play(uint8_t entity,uint8_t step,persist_control_step_t*out){uint8_t cap=seq_model_play_capacity(entity);out->play_count=0U;for(uint8_t v=0U;v<cap;++v){persist_control_play_item_t*p=&out->play[v];int16_t x;if(seq_model_play_get(entity,step,v,SEQ_STEP_PLAY_FIELD_NOTE,&x)!=0U){p->note=(uint8_t)x;p->present_mask|=SEQ_STEP_PLAY_PRESENT_NOTE;}if(seq_model_play_get(entity,step,v,SEQ_STEP_PLAY_FIELD_VELOCITY,&x)!=0U){p->velocity=(uint8_t)x;p->present_mask|=SEQ_STEP_PLAY_PRESENT_VELOCITY;}if(seq_model_play_get(entity,step,v,SEQ_STEP_PLAY_FIELD_LENGTH,&x)!=0U){p->length=(uint8_t)x;p->present_mask|=SEQ_STEP_PLAY_PRESENT_LENGTH;}if(seq_model_play_get(entity,step,v,SEQ_STEP_PLAY_FIELD_MICROTIMING,&x)!=0U){p->microtiming=(int8_t)x;p->present_mask|=SEQ_STEP_PLAY_PRESENT_MICROTIMING;}if(p->present_mask!=0U)out->play_count=(uint8_t)(v+1U);}return 1U;}
 static uint8_t capture_plock_value(param_id_t id, seq_value16_t raw,
@@ -221,7 +226,7 @@ static uint8_t apply_sequence(uint8_t e,const persist_control_entity_t*x){seq_mo
 static uint8_t apply_note_fx(uint8_t e,uint8_t active,const persist_control_entity_t*x){persist_entity_caps_t caps;if(persist_entity_caps_resolve(active,e,&caps)==0U)return 0U;if(caps.note_fx_owner==0U)return x->note_fx_count==0U;note_fx_track_state_t state;memset(&state,0,sizeof(state));for(uint8_t slot=0U;slot<x->note_fx_count;++slot){note_fx_model_t model;if(persist_key_note_fx_from_disk(x->note_fx[slot].model_key,&model)==0U)return 0U;memcpy(state.value[slot],x->note_fx[slot].values,NOTE_FX_PARAM_COUNT);state.value[slot][3U]=(uint8_t)model;}if(note_fx_state_restore_track(e,&state)==0U)return 0U;return note_fx_pipeline_configure_track(e);}
 static uint8_t restore_polyphony_audio_fx(uint8_t entity,
     const polyphony_control_state_t*polyphony,const audio_fx_control_state_t*audio_fx)
-{polyphony_control_state_t pp;audio_fx_control_state_t pa;live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),.source=LIVE_PARAMETER_EVENT_SOURCE_BULK};if(!polyphony_control_prepare(polyphony,&pp)||!audio_fx_control_state_prepare_for_polyphony(entity,audio_fx,pp.voice_count,&pa)||!polyphony_control_bulk_add(entity,&pp,&bulk)||!audio_fx_control_state_bulk_add_prepared(entity,&pa,&bulk)||!live_parameter_audio_publication_submit_bulk(&bulk))return 0U;return polyphony_control_install_prepared(entity,&pp)&&audio_fx_control_state_install_prepared(entity,&pa);}
+{polyphony_control_state_t pp;audio_fx_control_state_t pa;live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),.source=LIVE_PARAMETER_EVENT_SOURCE_BULK};if(!polyphony_control_prepare(polyphony,&pp)||!audio_fx_control_state_prepare_for_polyphony(entity,audio_fx,pp.voice_count,&pa)||!polyphony_control_bulk_add(entity,&pp,&bulk)||!audio_fx_control_state_bulk_add_prepared(entity,&pa,&bulk)||((bulk.count!=0U)&&!live_parameter_audio_publication_submit_bulk(&bulk)))return 0U;return polyphony_control_install_prepared(entity,&pp)&&audio_fx_control_state_install_prepared(entity,&pa);}
 static uint8_t apply_entity_owners(uint8_t entity,const persist_control_entity_t*x){if(x->fm_present){if(!fm_control_state_restore(entity,&x->fm))return 0U;}else if(x->tone_present&&!tone_program_control_restore(entity,&x->tone))return 0U;return param_filter_control_restore(entity,&x->filter)&&vca_control_state_restore(entity,&x->vca)&&mixer_control_state_restore(entity,&x->mixer)&&restore_polyphony_audio_fx(entity,&x->polyphony,&x->audio_fx);}
 static uint8_t apply_product_state(uint8_t entity,const persist_control_entity_t*x)
 {
@@ -398,6 +403,19 @@ static persist_codec_result_t persistent_pattern_control_install_internal(
 persist_codec_result_t persistent_pattern_control_apply(
     const persist_control_pattern_t *pattern, uint8_t resume_transport)
 {
-    return persistent_pattern_control_install_internal(pattern,
-                                                       resume_transport);
+    if (audio_state_snapshot_control_begin() == 0U)
+        return PERSIST_CODEC_IO_ERROR;
+    const persist_codec_result_t result =
+        persistent_pattern_control_install_internal(pattern, resume_transport);
+    if (result != PERSIST_CODEC_OK)
+    {
+        audio_state_snapshot_control_abort();
+        return result;
+    }
+    if (audio_state_snapshot_control_commit() == 0U)
+    {
+        audio_state_snapshot_control_abort();
+        return PERSIST_CODEC_IO_ERROR;
+    }
+    return PERSIST_CODEC_OK;
 }

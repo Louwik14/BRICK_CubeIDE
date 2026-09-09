@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "IPC/control_audio_command.h"
+#include "IPC/control_audio_fifo_layout.h"
 #include "IPC/live_parameter_event.h"
 #include "ControlRT/control_rt_publication.h"
 #include "Platform/memory_layout.h"
@@ -120,7 +121,8 @@ static uint8_t fm_control_state_publish_value(
     uint8_t entity, const fm_control_state_t *state)
 {
     if ((entity >= BRICK_ENTITY_CAPACITY) || (state == NULL)) return 0U;
-    control_audio_command_t commands[160U];
+    control_audio_command_t
+        commands[CONTROL_AUDIO_FIFO_MAX_SINGLE_NON_HORIZON_BURST];
     uint16_t count = 0U;
     for (param_id_t id = PARAM_FM_RATIO;
          id <= PARAM_FM_ENV_RELEASE; ++id)

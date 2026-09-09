@@ -21,13 +21,29 @@ uint16_t control_audio_fifo_control_free(void)
         ? (uint16_t)(CONTROL_AUDIO_FIFO_CAPACITY - used) : 0U;
 }
 
+uint32_t control_audio_fifo_control_head_snapshot(void)
+{
+    const uint32_t head = FIFO.head;
+    __DMB();
+    return head;
+}
+
+uint8_t control_audio_fifo_control_head_consumed(uint32_t head)
+{
+    const uint32_t tail = FIFO.tail;
+    __DMB();
+    return ((int32_t)(tail - head) >= 0) ? 1U : 0U;
+}
+
 static uint8_t command_valid(const control_audio_command_t *command)
 {
     const uint8_t opcode = command ? CONTROL_AUDIO_COMMAND_OPCODE(command) : UINT8_MAX;
-    if ((command == NULL) || (opcode > CONTROL_AUDIO_COMMAND_PANIC)) return 0U;
+    if ((command == NULL)
+            || (opcode > CONTROL_AUDIO_COMMAND_AUDIO_STATE_COMMIT)) return 0U;
     return ((opcode == CONTROL_AUDIO_COMMAND_TRANSPORT)
             || (opcode == CONTROL_AUDIO_COMMAND_RECORD)
             || (opcode == CONTROL_AUDIO_COMMAND_PANIC)
+            || (opcode == CONTROL_AUDIO_COMMAND_AUDIO_STATE_COMMIT)
             || (command->entity < BRICK_ENTITY_CAPACITY)) ? 1U : 0U;
 }
 

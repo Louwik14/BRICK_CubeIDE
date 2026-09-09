@@ -8,6 +8,7 @@
 #include "IPC/live_parameter_event.h"
 #include "Platform/memory_layout.h"
 #include "Track/entity_types.h"
+#include "Track/track_runtime.h"
 
 CONTROL_STATE_SDRAM static mod_env3_control_state_t
     g_mod_env3_control[BRICK_ENTITY_CAPACITY];
@@ -92,14 +93,17 @@ uint8_t mod_env3_control_restore(uint8_t entity,const mod_env3_control_state_t*s
     float *const values=&canonical.attack;
     live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),
         .source=LIVE_PARAMETER_EVENT_SOURCE_BULK};
-    for(uint8_t i=0U;i<5U;++i)bulk.item[bulk.count++]=
+    for(uint8_t i=0U;i<5U;++i){
+        if(track_runtime_get_effective_param_status(entity,ids[i])
+                !=TRACK_RUNTIME_PARAM_ALLOWED)continue;
+        bulk.item[bulk.count++]=
         (live_parameter_audio_bulk_item_t){.parameter_id=(uint16_t)ids[i],
         .scope=LIVE_PARAMETER_EVENT_SCOPE_TRACK,.track=entity,
         .slot=LIVE_PARAMETER_EVENT_INVALID_INDEX,
         .flags=(uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
             |LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
-        .value=live_parameter_event_encode_float(values[i])};
-    if(!live_parameter_audio_publication_submit_bulk(&bulk))return 0U;
+        .value=live_parameter_event_encode_float(values[i])};}
+    if((bulk.count!=0U)&&!live_parameter_audio_publication_submit_bulk(&bulk))return 0U;
     g_mod_env3_control[entity]=canonical;
     return 1U;
 }

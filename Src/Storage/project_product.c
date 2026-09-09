@@ -1,5 +1,6 @@
 #include "Storage/project_product.h"
 #include "Storage/project_load_quiesce.h"
+#include "ControlRT/audio_state_snapshot_control.h"
 #include "Storage/audio_recorder.h"
 #include "Sampler/sample_stream_transport.h"
 #include "SD/sd_scheduler_runtime.h"
@@ -157,6 +158,7 @@ STORAGE_STATE_SDRAM static project_load_runtime_t g_project_load;
 
 static uint8_t path(char*out,uint32_t size,uint8_t slot){int n=snprintf(out,size,"0:/BRICK/PROJECT/P%02u.B6C",slot);return(n>0&&(uint32_t)n<size)?1U:0U;}
 static uint8_t side_path(char*out,uint32_t size,uint8_t slot,const char*extension){int n=snprintf(out,size,"0:/BRICK/PROJECT/P%02u.%s",slot,extension);return(n>0&&(uint32_t)n<size)?1U:0U;}
+#define PROJECT_DIAGNOSTIC_CLEAN_MARKER "0:/BRICK/PROJECT/DIAGCLN1.OK"
 static uint8_t acquire(void){if(!sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT))return 0U;if(!sd_access_fs_mount_if_needed()){sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);return 0U;}return 1U;}
 static uint8_t ensure_directory(void){FRESULT r=f_mkdir("0:/BRICK");if(r!=FR_OK&&r!=FR_EXIST)return 0U;r=f_mkdir("0:/BRICK/PROJECT");return(r==FR_OK||r==FR_EXIST)?1U:0U;}
 
@@ -924,8 +926,11 @@ void project_product_load_service(void)
         {
             project_product_internal_fail(PROJECT_FATAL_PENDING_AT_COMMIT);
         }
-        uint8_t ok=(persistent_pattern_control_apply(&restore->working_pattern,0U)==PERSIST_CODEC_OK)?1U:0U;
+        uint8_t ok = audio_state_snapshot_control_begin();
+        if(ok)ok=(persistent_pattern_control_apply(&restore->working_pattern,0U)==PERSIST_CODEC_OK)?1U:0U;
         if(ok)ok=project_control_apply_macros(&restore->macros);
+        if(ok)ok=audio_state_snapshot_control_commit();
+        else audio_state_snapshot_control_abort();
         if(ok)pattern_live_set_active_state(restore->metadata.active_pattern_bank,restore->metadata.active_pattern,0U,0U,0U,0U);
         if (ok == 0U)
             project_product_internal_fail(PROJECT_FATAL_PATTERN_APPLY);
@@ -995,7 +1000,68 @@ uint8_t project_product_load(uint8_t slot)
     return 1U;
 }
 
-uint8_t project_product_delete(uint8_t slot){if(project_replacement_is_active()!=0U||project_product_save_busy()!=0U||project_product_load_busy()!=0U||slot>=PROJECT_PRODUCT_SLOT_COUNT||!acquire())return 0U;char x[48];FRESULT r=FR_INVALID_NAME;if(path(x,sizeof(x),slot))r=f_unlink(x);sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);uint8_t ok=(r==FR_OK||r==FR_NO_FILE);if(ok){g_present[slot]=0U;if(g_active_valid&&g_active==slot)g_active_valid=0U;}return ok;}
+uint8_t project_product_delete(uint8_t slot){if(project_replacement_is_active()!=0U||project_product_save_busy()!=0U||project_product_load_busy()!=0U||slot>=PROJECT_PRODUCT_SLOT_COUNT||!acquire())return 0U;char x[48];FRESULT r=FR_INVALID_NAME;if(path(x,sizeof(x),slot))r=f_unlink(x);sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);uint8_t ok=(r==FR_OK||r==FR_NO_FILE);if(ok){g_present[slot]=0U;if(g_active_valid&&g_active==slot){g_active_valid=0U;boot_context_flash_clear();}}return ok;}
+
+uint8_t project_product_diagnostic_clean_persistence_once(void)
+{
+    FILINFO info;
+    uint8_t ok = acquire();
+    if (ok == 0U) return 0U;
+    if (f_stat(PROJECT_DIAGNOSTIC_CLEAN_MARKER, &info) == FR_OK)
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+        return 1U;
+    }
+    ok = ensure_directory();
+    for (uint8_t slot = 0U; slot < PROJECT_PRODUCT_SLOT_COUNT; ++slot)
+    {
+        char final_path[48], temporary_path[48], backup_path[48];
+        if (path(final_path, sizeof(final_path), slot) == 0U
+            || side_path(temporary_path, sizeof(temporary_path), slot, "TMP") == 0U
+            || side_path(backup_path, sizeof(backup_path), slot, "BAK") == 0U)
+        {
+            ok = 0U;
+            continue;
+        }
+        const FRESULT final_result = f_unlink(final_path);
+        const FRESULT temporary_result = f_unlink(temporary_path);
+        const FRESULT backup_result = f_unlink(backup_path);
+        if ((final_result != FR_OK && final_result != FR_NO_FILE)
+            || (temporary_result != FR_OK && temporary_result != FR_NO_FILE)
+            || (backup_result != FR_OK && backup_result != FR_NO_FILE))
+            ok = 0U;
+    }
+    sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+
+    if (pattern_control_bank_diagnostic_clear_persistence() == 0U)
+        ok = 0U;
+    boot_context_flash_clear();
+    boot_context_flash_data_t context;
+    if (boot_context_flash_load(&context) != 0U)
+        ok = 0U;
+
+    if (ok != 0U && acquire() != 0U)
+    {
+        FIL marker;
+        UINT written = 0U;
+        static const uint8_t signature[] = {'B','6','C','L','E','A','N','1'};
+        ok = (uint8_t)(f_open(&marker, PROJECT_DIAGNOSTIC_CLEAN_MARKER,
+                              FA_CREATE_ALWAYS | FA_WRITE) == FR_OK);
+        if (ok != 0U)
+        {
+            ok = (uint8_t)(f_write(&marker, signature, sizeof(signature),
+                                   &written) == FR_OK
+                           && written == sizeof(signature)
+                           && f_sync(&marker) == FR_OK);
+            if (f_close(&marker) != FR_OK) ok = 0U;
+        }
+        sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+    }
+    else
+        ok = 0U;
+    return ok;
+}
+
 uint8_t project_product_blank(void)
 {
     if(project_replacement_is_active()!=0U||project_product_save_busy()!=0U
@@ -1018,6 +1084,29 @@ uint8_t project_product_blank(void)
     project_product_start_candidate(restore,PROJECT_PRODUCT_NO_SLOT,1U);
     return 1U;
 }
+
+static project_product_boot_restore_result_t project_product_restore_boot_defaults(void)
+{
+    persistence_project_restore_workspace_t *const restore =
+        persistence_workspace_acquire_project_restore();
+    if (restore == NULL || project_product_build_default_candidate(restore) == 0U)
+    {
+        if (restore != NULL)
+            persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_RESTORE);
+        return PROJECT_PRODUCT_BOOT_RESTORE_FAILED;
+    }
+    if ((project_product_prevalidate_candidate(restore) == 0U)
+        || (project_product_prepare_pattern_commit() == 0U))
+    {
+        project_discard_restore_workspace(restore);
+        return PROJECT_PRODUCT_BOOT_RESTORE_FAILED;
+    }
+    g_progress=(project_product_progress_t){1U,0U,0U,1U,
+        PROJECT_PRODUCT_RESULT_IN_PROGRESS};
+    project_product_start_candidate(restore,PROJECT_PRODUCT_NO_SLOT,0U);
+    return PROJECT_PRODUCT_BOOT_RESTORE_DEFAULTS_READY;
+}
+
 project_product_boot_restore_result_t project_product_restore_boot(void)
 {
     if (sd_access_storage_status() != SD_STORAGE_STATUS_READY)
@@ -1025,28 +1114,10 @@ project_product_boot_restore_result_t project_product_restore_boot(void)
 
     boot_context_flash_data_t context;
     if (!boot_context_flash_load(&context))
-    {
-        persistence_project_restore_workspace_t *const restore =
-            persistence_workspace_acquire_project_restore();
-        if (restore == NULL || project_product_build_default_candidate(restore) == 0U)
-        {
-            if (restore != NULL)
-                persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_RESTORE);
-            return PROJECT_PRODUCT_BOOT_RESTORE_FAILED;
-        }
-        if ((project_product_prevalidate_candidate(restore) == 0U)
-            || (project_product_prepare_pattern_commit() == 0U))
-        {
-            project_discard_restore_workspace(restore);
-            return PROJECT_PRODUCT_BOOT_RESTORE_FAILED;
-        }
-        g_progress=(project_product_progress_t){1U,0U,0U,1U,
-            PROJECT_PRODUCT_RESULT_IN_PROGRESS};
-        project_product_start_candidate(restore,PROJECT_PRODUCT_NO_SLOT,0U);
-        return PROJECT_PRODUCT_BOOT_RESTORE_DEFAULTS_READY;
-    }
-    if (context.active_project_slot >= PROJECT_PRODUCT_SLOT_COUNT)
-        return PROJECT_PRODUCT_BOOT_RESTORE_FAILED;
+        return project_product_restore_boot_defaults();
+    if (context.active_project_slot >= PROJECT_PRODUCT_SLOT_COUNT
+        || g_present[context.active_project_slot] == 0U)
+        return project_product_restore_boot_defaults();
     return (project_product_load(context.active_project_slot) != 0U)
         ? PROJECT_PRODUCT_BOOT_RESTORE_PROJECT_READY
         : PROJECT_PRODUCT_BOOT_RESTORE_FAILED;

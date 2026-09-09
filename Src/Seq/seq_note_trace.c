@@ -19,7 +19,6 @@ volatile uint32_t g_seq_note_trace_overwrite_count;
 volatile uint8_t g_seq_note_trace_enabled = 1U;
 volatile uint8_t g_seq_note_trace_track = 0U;
 volatile uint8_t g_seq_note_trace_step = 0U;
-volatile seq_step_debug_t g_seq_step_debug;
 
 SEQ_STATE_D2 static seq_note_trace_watched_output_t
     g_seq_note_trace_watched_outputs[SEQ_NOTE_TRACE_WATCHED_OUTPUT_CAPACITY];
@@ -39,32 +38,6 @@ void seq_note_trace_record(uint16_t kind, uint8_t track, uint8_t step,
 {
     if (g_seq_note_trace_enabled == 0U)
         return;
-    if (seq_note_trace_target(track, step) != 0U)
-    {
-        g_seq_step_debug.track = track;
-        g_seq_step_debug.processed_step = step;
-        g_seq_step_debug.sample_time = sample;
-        g_seq_step_debug.last_output_id = output_id;
-        if ((kind == SEQ_NOTE_TRACE_ACTIVE_CREATED)
-                || (kind == SEQ_NOTE_TRACE_ACTIVE_REPLACED))
-            ++g_seq_step_debug.note_on_generated_count;
-        else if ((kind == SEQ_NOTE_TRACE_TERMINAL_ON)
-                || (kind == SEQ_NOTE_TRACE_TERMINAL_OFF))
-            ++g_seq_step_debug.actions_staged_count;
-        else if ((kind == SEQ_NOTE_TRACE_FIFO_NOTE_ON)
-                || (kind == SEQ_NOTE_TRACE_FIFO_NOTE_OFF))
-            ++g_seq_step_debug.actions_published_count;
-        if (kind == SEQ_NOTE_TRACE_SKIP_COMMIT_FLOOR)
-            g_seq_step_debug.last_skip_reason = SEQ_STEP_DEBUG_SKIP_COMMIT_FLOOR;
-        else if (kind == SEQ_NOTE_TRACE_SKIP_INVALIDATED)
-            g_seq_step_debug.last_skip_reason = SEQ_STEP_DEBUG_SKIP_INVALIDATED;
-        else if (kind == SEQ_NOTE_TRACE_REJECT_STALE_SCHEDULER)
-            g_seq_step_debug.last_skip_reason = SEQ_STEP_DEBUG_SKIP_STALE;
-        else if (kind == SEQ_NOTE_TRACE_SUPPRESS_MUTED)
-            g_seq_step_debug.last_skip_reason = SEQ_STEP_DEBUG_SKIP_MUTED;
-        else if (kind == SEQ_NOTE_TRACE_REJECT_NOTE_FX)
-            g_seq_step_debug.last_skip_reason = SEQ_STEP_DEBUG_SKIP_NOTE_FX;
-    }
     const uint32_t sequence = g_seq_note_trace_head;
     const uint32_t index = sequence & (SEQ_NOTE_TRACE_CAPACITY - 1U);
     volatile seq_note_trace_entry_t *const entry =
@@ -130,15 +103,13 @@ uint8_t seq_note_trace_output_is_watched(uint32_t output_id,
 
 void seq_note_trace_horizon_begin(uint64_t first_sample)
 {
-    g_seq_step_debug.horizon_first = first_sample;
+    (void)first_sample;
     g_seq_note_trace_horizon_dirty = 0U;
 }
 
 void seq_note_trace_horizon_commit(uint64_t first_sample,
                                    uint64_t end_sample)
 {
-    g_seq_step_debug.horizon_first = first_sample;
-    g_seq_step_debug.horizon_end = end_sample;
     if (g_seq_note_trace_horizon_dirty != 0U)
         seq_note_trace_record(SEQ_NOTE_TRACE_HORIZON_COMMIT,
             g_seq_note_trace_track, g_seq_note_trace_step,
@@ -149,76 +120,9 @@ void seq_note_trace_horizon_commit(uint64_t first_sample,
 void seq_note_trace_horizon_abort(uint64_t first_sample,
                                   uint64_t end_sample)
 {
-    g_seq_step_debug.horizon_first = first_sample;
-    g_seq_step_debug.horizon_end = end_sample;
-    ++g_seq_step_debug.musical_window_aborted_count;
-    g_seq_step_debug.last_skip_reason = SEQ_STEP_DEBUG_SKIP_WINDOW_ABORTED;
     if (g_seq_note_trace_horizon_dirty != 0U)
         seq_note_trace_record(SEQ_NOTE_TRACE_HORIZON_ABORT,
             g_seq_note_trace_track, g_seq_note_trace_step,
             first_sample, end_sample, 0U, 0U);
     g_seq_note_trace_horizon_dirty = 0U;
-}
-
-void seq_step_debug_expect(uint8_t track, uint8_t step, uint64_t sample_time)
-{
-    if (seq_note_trace_target(track, step) == 0U) return;
-    g_seq_step_debug.track = track;
-    g_seq_step_debug.expected_step = step;
-    g_seq_step_debug.sample_time = sample_time;
-    ++g_seq_step_debug.expected_count;
-}
-
-void seq_step_debug_scheduler_processed(uint8_t track, uint8_t step,
-                                        uint64_t sample_time,
-                                        uint8_t generated_any)
-{
-    if (seq_note_trace_target(track, step) == 0U) return;
-    g_seq_step_debug.processed_step = step;
-    g_seq_step_debug.sample_time = sample_time;
-    ++g_seq_step_debug.scheduler_processed_count;
-    if (generated_any == 0U)
-        ++g_seq_step_debug.step_advance_without_event_count;
-}
-
-void seq_step_debug_source_refused(uint8_t track, uint8_t step,
-                                   uint64_t sample_time)
-{
-    if (seq_note_trace_target(track, step) == 0U) return;
-    ++g_seq_step_debug.scheduler_source_refused_count;
-    g_seq_step_debug.sample_time = sample_time;
-    g_seq_step_debug.last_skip_reason = SEQ_STEP_DEBUG_SKIP_SOURCE_REJECTED;
-}
-
-void seq_step_debug_imminent_refused(uint8_t track, uint8_t step,
-                                     uint64_t sample_time)
-{
-    if (seq_note_trace_target(track, step) == 0U) return;
-    ++g_seq_step_debug.imminent_occurrence_refused_count;
-    g_seq_step_debug.sample_time = sample_time;
-    g_seq_step_debug.last_skip_reason = SEQ_STEP_DEBUG_SKIP_IMMINENT_REJECTED;
-}
-
-void seq_step_debug_note_off_generated(uint8_t track, uint8_t step,
-                                       uint64_t sample_time,
-                                       uint32_t output_id)
-{
-    if (seq_note_trace_target(track, step) == 0U) return;
-    ++g_seq_step_debug.note_off_generated_count;
-    g_seq_step_debug.sample_time = sample_time;
-    g_seq_step_debug.last_output_id = output_id;
-}
-
-void seq_step_debug_audio(uint32_t output_id, uint64_t sample_time,
-                          uint8_t applied)
-{
-    uint8_t track = 0U, step = 0U;
-    if (seq_note_trace_output_is_watched(output_id, &track, &step) == 0U)
-        return;
-    ++g_seq_step_debug.audio_consumed_count;
-    if (applied != 0U) ++g_seq_step_debug.audio_applied_count;
-    g_seq_step_debug.track = track;
-    g_seq_step_debug.processed_step = step;
-    g_seq_step_debug.sample_time = sample_time;
-    g_seq_step_debug.last_output_id = output_id;
 }

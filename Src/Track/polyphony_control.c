@@ -77,6 +77,8 @@ uint8_t polyphony_control_bulk_add(uint8_t track,
 {
     if(track>=BRICK_ENTITY_CAPACITY||prepared==NULL||bulk==NULL
             ||bulk->count>(LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS-2U))return 0U;
+    if(track_runtime_get_effective_param_status(track,PARAM_CFG_POLY_SPREAD)
+            !=TRACK_RUNTIME_PARAM_ALLOWED)return 1U;
     if(!track_runtime_validate_polyphony_budget(track,prepared->voice_count))return 0U;
     if(!control_music_output_trim_to_limit(track,prepared->voice_count))return 0U;
     bulk->item[bulk->count++]=(live_parameter_audio_bulk_item_t){
@@ -102,4 +104,4 @@ uint8_t polyphony_control_install_prepared(uint8_t track,
     return 1U;
 }
 uint8_t polyphony_control_restore(uint8_t track,const polyphony_control_state_t*state)
-{polyphony_control_state_t prepared;live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),.source=LIVE_PARAMETER_EVENT_SOURCE_BULK};if(track>=BRICK_ENTITY_CAPACITY||!polyphony_control_prepare(state,&prepared)||!polyphony_control_bulk_add(track,&prepared,&bulk)||!live_parameter_audio_publication_submit_bulk(&bulk))return 0U;return polyphony_control_install_prepared(track,&prepared);}
+{polyphony_control_state_t prepared;live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),.source=LIVE_PARAMETER_EVENT_SOURCE_BULK};if(track>=BRICK_ENTITY_CAPACITY||!polyphony_control_prepare(state,&prepared)||!polyphony_control_bulk_add(track,&prepared,&bulk)||((bulk.count!=0U)&&!live_parameter_audio_publication_submit_bulk(&bulk)))return 0U;return polyphony_control_install_prepared(track,&prepared);}

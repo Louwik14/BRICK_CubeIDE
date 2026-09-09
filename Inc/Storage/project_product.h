@@ -50,6 +50,7 @@ void project_product_load_service(void);
 uint8_t project_product_load_busy(void);
 uint8_t project_product_delete(uint8_t slot);
 uint8_t project_product_blank(void);
+uint8_t project_product_diagnostic_clean_persistence_once(void);
 project_product_boot_restore_result_t project_product_restore_boot(void);
 uint8_t project_product_get_progress(project_product_progress_t*out);
 #endif

@@ -14,6 +14,7 @@
 #include "Platform/memory_layout.h"
 #include "Seq/seq_types.h"
 #include "Track/entity_topology.h"
+#include "Track/track_runtime.h"
 
 typedef struct
 {
@@ -169,8 +170,12 @@ uint8_t mod_lfo_v1_restore_track(uint8_t track,
         const float *const values = &canonical.lfo[lfo].rate;
         for (uint8_t param = 0U; param < MOD_LFO_PARAM_COUNT; ++param)
         {
+            const param_id_t id = (param_id_t)(
+                PARAM_LFO1_RATE + lfo * 4U + param);
+            if (track_runtime_get_effective_param_status(owner, id)
+                    != TRACK_RUNTIME_PARAM_ALLOWED) continue;
             bulk.item[bulk.count++] = (live_parameter_audio_bulk_item_t){
-                .parameter_id = (uint16_t)(PARAM_LFO1_RATE + lfo * 4U + param),
+                .parameter_id = (uint16_t)id,
                 .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
                 .track = owner,
                 .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
@@ -181,7 +186,8 @@ uint8_t mod_lfo_v1_restore_track(uint8_t track,
             };
         }
     }
-    if (!live_parameter_audio_publication_submit_bulk(&bulk)) return 0U;
+    if ((bulk.count != 0U)
+            && !live_parameter_audio_publication_submit_bulk(&bulk)) return 0U;
     for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
         memcpy(g_mod_lfo_control_state[owner][lfo].value,
             &canonical.lfo[lfo].rate, sizeof(g_mod_lfo_control_state[owner][lfo].value));

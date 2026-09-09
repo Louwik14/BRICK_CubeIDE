@@ -107,14 +107,19 @@ static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path
     if (sample_global_pool_load_classic(slot, path) != 0U)
     {
         const uint16_t global_slot = slot;
-        if (sample_global_pool_get_classic_state(global_slot) == SAMPLE_CLASSIC_SLOT_LOADED)
+        const sample_classic_slot_state_t state =
+            sample_global_pool_get_classic_state(global_slot);
+        if ((state == SAMPLE_CLASSIC_SLOT_LOADED)
+            || (state == SAMPLE_CLASSIC_SLOT_PREPARING))
         {
             uint16_t logical=0U;
             if(project_control_register_sample_runtime(PERSIST_ASSET_SAMPLE_STREAM,path,global_slot,&logical)!=0U)
             {
                 ui_page_settings_refresh_sampler_slots();
                 g_ui_settings.sample_slot_selected = logical;
-                ui_page_settings_status("LOAD OK");
+                ui_page_settings_status(
+                    (state == SAMPLE_CLASSIC_SLOT_LOADED)
+                        ? "LOAD OK" : "LOADING");
                 return;
             }
         }

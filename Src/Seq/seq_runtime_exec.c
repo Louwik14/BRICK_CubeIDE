@@ -18,7 +18,6 @@
 #include "Seq/seq_model.h"
 #include "Track/entity_topology.h"
 #include "Seq/seq_play_scheduler.h"
-#include "Seq/seq_note_trace.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_transport_fsm.h"
 #include "midi.h"
@@ -248,7 +247,6 @@ static void seq_runtime_exec_schedule_hit_play_and_lookahead(const seq_runtime_s
     }
 
     const uint64_t scheduled_sample_time = (state->step_sample_q16 >> 16);
-    seq_step_debug_expect(hit->track, hit->step, scheduled_sample_time);
     seq_play_scheduler_schedule_step(hit->track,
                                      hit->step,
                                      state->ticks_per_step,

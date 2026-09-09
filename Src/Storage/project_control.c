@@ -14,6 +14,7 @@
 #include "Sampler/sample_cache.h"
 #include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
+#include "Platform/brick_fatal.h"
 #include "Platform/memory_layout.h"
 #include "Storage/persistent_key_catalog.h"
 #include "Storage/persistence_workspace.h"
@@ -45,6 +46,8 @@ typedef struct {
     project_control_ram_load_result_t result;
     char expected_path[SAMPLER_RAM_POOL_PATH_MAX];
     uint16_t expected_backend;
+    uint16_t expected_logical;
+    uint16_t replaced_logical;
     uint8_t pending;
     uint8_t valid;
 } project_control_ram_load_t;
@@ -53,6 +56,8 @@ typedef struct {
     project_control_wavetable_load_result_t result;
     char expected_path[WAVETABLE_POOL_PATH_MAX];
     uint16_t expected_backend;
+    uint16_t expected_logical;
+    uint16_t replaced_logical;
     uint8_t pending;
     uint8_t valid;
 } project_control_wavetable_load_t;
@@ -63,6 +68,8 @@ CONTROL_STATE_SDRAM static project_control_wavetable_load_t g_wavetable_load;
 static uint8_t bank_set(project_control_bank_slot_t*bank,uint16_t capacity,uint16_t logical,uint32_t kind,const char*path,uint16_t runtime){persist_control_asset_ref_t ref;if(bank==NULL||logical>=capacity||asset_ref_make_canonical(kind,path,&ref)==0U)return 0U;project_control_bank_slot_t next={.used=1U,.kind=kind,.runtime=runtime,.pending_runtime=PROJECT_CONTROL_INVALID_RUNTIME};memcpy(next.canonical_path,ref.canonical_path,ref.path_length);next.canonical_path[ref.path_length]='\0';bank[logical]=next;return 1U;}
 static uint8_t bank_find(const project_control_bank_slot_t*bank,uint16_t capacity,uint32_t kind,const char*path,uint16_t*out_logical){persist_control_asset_ref_t ref;if(bank==NULL||out_logical==NULL||asset_ref_make_canonical(kind,path,&ref)==0U)return 0U;for(uint16_t i=0U;i<capacity;++i)if(bank[i].used!=0U&&bank[i].kind==kind&&strcmp(bank[i].canonical_path,ref.canonical_path)==0){*out_logical=i;return 1U;}return 0U;}
 static uint8_t bank_register(project_control_bank_slot_t*bank,uint16_t capacity,uint32_t kind,const char*path,uint16_t runtime,uint16_t*out_logical){uint16_t existing;if(bank==NULL||path==NULL||path[0]=='\0')return 0U;if(bank_find(bank,capacity,kind,path,&existing)!=0U){if(bank[existing].runtime==PROJECT_CONTROL_INVALID_RUNTIME)bank[existing].runtime=runtime;if(out_logical!=NULL)*out_logical=existing;return 1U;}for(uint16_t i=0U;i<capacity;++i)if(bank[i].used==0U){if(bank_set(bank,capacity,i,kind,path,runtime)==0U)return 0U;if(out_logical!=NULL)*out_logical=i;return 1U;}return 0U;}
+static uint8_t bank_reserve_runtime(project_control_bank_slot_t*bank,uint16_t capacity,uint32_t kind,const char*path,uint16_t pending_runtime,uint16_t*out_logical){uint16_t logical;if(bank==NULL||out_logical==NULL||pending_runtime==PROJECT_CONTROL_INVALID_RUNTIME)return 0U;if(bank_find(bank,capacity,kind,path,&logical)!=0U){if(bank[logical].runtime!=PROJECT_CONTROL_INVALID_RUNTIME||bank[logical].pending_runtime!=PROJECT_CONTROL_INVALID_RUNTIME)return 0U;}else{if(bank_register(bank,capacity,kind,path,PROJECT_CONTROL_INVALID_RUNTIME,&logical)==0U)return 0U;}bank[logical].runtime=PROJECT_CONTROL_INVALID_RUNTIME;bank[logical].pending_runtime=pending_runtime;*out_logical=logical;return 1U;}
+static uint16_t bank_find_runtime(const project_control_bank_slot_t*bank,uint16_t capacity,uint32_t kind,uint16_t runtime){if(bank==NULL||runtime==PROJECT_CONTROL_INVALID_RUNTIME)return PROJECT_CONTROL_INVALID_RUNTIME;for(uint16_t i=0U;i<capacity;++i)if(bank[i].used!=0U&&bank[i].kind==kind&&bank[i].runtime==runtime)return i;return PROJECT_CONTROL_INVALID_RUNTIME;}
 static uint8_t bank_remove(project_control_bank_slot_t*bank,uint16_t capacity,uint16_t logical){if(bank==NULL||logical>=capacity||bank[logical].used==0U)return 0U;memset(&bank[logical],0,sizeof(bank[logical]));return 1U;}
 static uint8_t bank_has(const project_control_bank_slot_t*bank,uint16_t capacity,uint16_t logical,uint32_t*out_kind){if(bank==NULL||logical>=capacity||bank[logical].used==0U)return 0U;if(out_kind!=NULL)*out_kind=bank[logical].kind;return 1U;}
 static uint16_t bank_list(const project_control_bank_slot_t*bank,uint16_t bank_capacity,uint32_t kind,uint16_t*out,uint16_t capacity){uint16_t n=0U;if(out==NULL)return 0U;for(uint16_t i=0U;i<bank_capacity&&n<capacity;++i)if(bank[i].used!=0U&&(kind==0U||bank[i].kind==kind))out[n++]=i;return n;}
@@ -84,6 +91,19 @@ static uint8_t unavailable_find_ref(const persist_control_asset_ref_t *asset,
             return 1U;
         }
     return 0U;
+}
+
+static uint8_t project_control_asset_paths_equal(uint32_t kind,
+                                                 const char *left,
+                                                 const char *right)
+{
+    persist_control_asset_ref_t lhs;
+    persist_control_asset_ref_t rhs;
+    return (uint8_t)(asset_ref_make_canonical(kind, left, &lhs) != 0U
+        && asset_ref_make_canonical(kind, right, &rhs) != 0U
+        && lhs.path_length == rhs.path_length
+        && memcmp(lhs.canonical_path, rhs.canonical_path,
+                  lhs.path_length) == 0);
 }
 
 static uint8_t unavailable_set(uint32_t kind, const char *path)
@@ -191,8 +211,22 @@ uint8_t project_control_find_asset(uint32_t kind,const char*path,uint16_t*out_lo
 uint8_t project_control_ram_load_begin(uint16_t backend_slot,const char*path)
 {
     if(g_ram_load.pending!=0U||g_ram_load.valid!=0U)return 0U;
-    if(sampler_ram_pool_load_async_begin(backend_slot,path)==0U)return 0U;
+    const sampler_ram_slot_t*const old=sampler_ram_pool_get_slot(backend_slot);
+    const uint16_t replaced=(old!=NULL&&old->state==SAMPLER_RAM_SLOT_READY)
+        ?bank_find_runtime(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
+            PERSIST_ASSET_SAMPLE_RAM,old->global_slot)
+        :PROJECT_CONTROL_INVALID_RUNTIME;
+    uint16_t logical=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    if(bank_reserve_runtime(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
+            PERSIST_ASSET_SAMPLE_RAM,path,backend_slot,&logical)==0U)return 0U;
+    if(sampler_ram_pool_load_async_begin(backend_slot,path)==0U)
+    {
+        (void)bank_remove(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical);
+        return 0U;
+    }
     g_ram_load.expected_backend=backend_slot;
+    g_ram_load.expected_logical=logical;
+    g_ram_load.replaced_logical=replaced;
     (void)snprintf(g_ram_load.expected_path,sizeof(g_ram_load.expected_path),
                    "%s",path);
     g_ram_load.pending=1U;
@@ -202,9 +236,23 @@ uint8_t project_control_ram_load_begin(uint16_t backend_slot,const char*path)
 uint8_t project_control_wavetable_load_begin(uint16_t backend_slot,const char*path)
 {
     if(g_wavetable_load.pending!=0U||g_wavetable_load.valid!=0U)return 0U;
+    const wavetable_slot_t*const old=wavetable_pool_get_slot(backend_slot);
+    const uint16_t replaced=(old!=NULL&&old->state==WAVETABLE_SLOT_READY)
+        ?bank_find_runtime(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
+            PERSIST_ASSET_WAVETABLE,old->global_slot)
+        :PROJECT_CONTROL_INVALID_RUNTIME;
+    uint16_t logical=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    if(bank_reserve_runtime(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
+            PERSIST_ASSET_WAVETABLE,path,backend_slot,&logical)==0U)return 0U;
     if(wavetable_pool_load_async_begin_with_geometry(
-            backend_slot,path,WAVETABLE_SOURCE_GEOMETRY_2048)==0U)return 0U;
+            backend_slot,path,WAVETABLE_SOURCE_GEOMETRY_2048)==0U)
+    {
+        (void)bank_remove(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical);
+        return 0U;
+    }
     g_wavetable_load.expected_backend=backend_slot;
+    g_wavetable_load.expected_logical=logical;
+    g_wavetable_load.replaced_logical=replaced;
     (void)snprintf(g_wavetable_load.expected_path,
                    sizeof(g_wavetable_load.expected_path),"%s",path);
     g_wavetable_load.pending=1U;
@@ -218,10 +266,13 @@ static uint8_t project_control_ram_completion_valid(
     const sample_global_slot_t*const global_slot=sample_global_pool_get_slot(global);
     return (uint8_t)(path!=NULL&&slot!=NULL
         &&slot->state==SAMPLER_RAM_SLOT_READY&&slot->global_slot==global
-        &&strcmp(slot->path,path)==0&&global_slot!=NULL
+        &&project_control_asset_paths_equal(PERSIST_ASSET_SAMPLE_RAM,
+            slot->path,path)!=0U&&global_slot!=NULL
         &&global_slot->state==SAMPLE_GLOBAL_STATE_READY
         &&global_slot->kind==SAMPLE_GLOBAL_KIND_RAM
-        &&global_slot->backend_index==backend&&strcmp(global_slot->path,path)==0);
+        &&global_slot->backend_index==backend
+        &&project_control_asset_paths_equal(PERSIST_ASSET_SAMPLE_RAM,
+            global_slot->path,path)!=0U);
 }
 
 static uint8_t project_control_wavetable_completion_valid(
@@ -231,10 +282,13 @@ static uint8_t project_control_wavetable_completion_valid(
     const sample_global_slot_t*const global_slot=sample_global_pool_get_slot(global);
     return (uint8_t)(path!=NULL&&slot!=NULL
         &&slot->state==WAVETABLE_SLOT_READY&&slot->global_slot==global
-        &&strcmp(slot->path,path)==0&&global_slot!=NULL
+        &&project_control_asset_paths_equal(PERSIST_ASSET_WAVETABLE,
+            slot->path,path)!=0U&&global_slot!=NULL
         &&global_slot->state==SAMPLE_GLOBAL_STATE_READY
         &&global_slot->kind==SAMPLE_GLOBAL_KIND_WAVETABLE
-        &&global_slot->backend_index==backend&&strcmp(global_slot->path,path)==0);
+        &&global_slot->backend_index==backend
+        &&project_control_asset_paths_equal(PERSIST_ASSET_WAVETABLE,
+            global_slot->path,path)!=0U);
 }
 
 void project_control_asset_load_service(void)
@@ -257,22 +311,42 @@ void project_control_asset_load_service(void)
                 &&path!=NULL&&strcmp(path,g_ram_load.expected_path)==0
                 &&project_control_ram_completion_valid(backend,global,path)!=0U)
             {
-                uint16_t logical=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+                const uint16_t logical=g_ram_load.expected_logical;
                 uint16_t resolved=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
                 uint32_t kind=0U;
-                if(project_control_register_sample_runtime(
-                        PERSIST_ASSET_SAMPLE_RAM,path,global,&logical)!=0U
+                if(logical<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS
+                    &&g_sample_bank[logical].used!=0U
+                    &&g_sample_bank[logical].kind==PERSIST_ASSET_SAMPLE_RAM
+                    &&g_sample_bank[logical].pending_runtime==backend)
+                {
+                    g_sample_bank[logical].runtime=global;
+                    g_sample_bank[logical].pending_runtime=
+                        PROJECT_CONTROL_INVALID_RUNTIME;
+                    unavailable_remove(PERSIST_ASSET_SAMPLE_RAM,path);
+                }
+                if(logical<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS
                     &&project_control_resolve_sample_runtime(
                         logical,&resolved,&kind)!=0U
                     &&resolved==global&&kind==PERSIST_ASSET_SAMPLE_RAM)
                 {
                     terminal.logical_slot=logical;
                     terminal.success=1U;
+                    if(g_ram_load.replaced_logical<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS
+                        &&g_ram_load.replaced_logical!=logical)
+                        (void)bank_remove(g_sample_bank,
+                            SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
+                            g_ram_load.replaced_logical);
                 }
-                else terminal.result=(uint16_t)SAMPLER_RAM_RESULT_REGISTER_FAIL;
+                else brick_fatal_raise(BRICK_FATAL_PROJECT_COMMIT,backend,
+                        global,logical,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS);
             }
             else if(result==SAMPLER_RAM_RESULT_OK)
-                terminal.result=(uint16_t)SAMPLER_RAM_RESULT_REGISTER_FAIL;
+                brick_fatal_raise(BRICK_FATAL_PROJECT_COMMIT,backend,global,
+                        g_ram_load.expected_logical,
+                        SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS);
+            else if(g_ram_load.expected_logical<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+                (void)bank_remove(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
+                                  g_ram_load.expected_logical);
             g_ram_load.result=terminal;
             g_ram_load.pending=0U;
             g_ram_load.valid=1U;
@@ -298,20 +372,41 @@ void project_control_asset_load_service(void)
                 &&project_control_wavetable_completion_valid(
                     backend,global,path)!=0U)
             {
-                uint16_t logical=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+                const uint16_t logical=g_wavetable_load.expected_logical;
                 uint16_t resolved=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-                if(project_control_register_wavetable_runtime(
-                        path,global,&logical)!=0U
+                if(logical<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS
+                    &&g_wavetable_bank[logical].used!=0U
+                    &&g_wavetable_bank[logical].kind==PERSIST_ASSET_WAVETABLE
+                    &&g_wavetable_bank[logical].pending_runtime==backend)
+                {
+                    g_wavetable_bank[logical].runtime=global;
+                    g_wavetable_bank[logical].pending_runtime=
+                        PROJECT_CONTROL_INVALID_RUNTIME;
+                    unavailable_remove(PERSIST_ASSET_WAVETABLE,path);
+                }
+                if(logical<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS
                     &&project_control_resolve_wavetable_runtime(
                         logical,&resolved)!=0U&&resolved==global)
                 {
                     terminal.logical_slot=logical;
                     terminal.success=1U;
+                    if(g_wavetable_load.replaced_logical<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS
+                        &&g_wavetable_load.replaced_logical!=logical)
+                        (void)bank_remove(g_wavetable_bank,
+                            SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
+                            g_wavetable_load.replaced_logical);
                 }
-                else terminal.result=(uint16_t)WAVETABLE_RESULT_REGISTER_FAIL;
+                else brick_fatal_raise(BRICK_FATAL_PROJECT_COMMIT,backend,
+                        global,logical,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS);
             }
             else if(result==WAVETABLE_RESULT_OK)
-                terminal.result=(uint16_t)WAVETABLE_RESULT_REGISTER_FAIL;
+                brick_fatal_raise(BRICK_FATAL_PROJECT_COMMIT,backend,global,
+                        g_wavetable_load.expected_logical,
+                        SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS);
+            else if(g_wavetable_load.expected_logical<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+                (void)bank_remove(g_wavetable_bank,
+                                  SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
+                                  g_wavetable_load.expected_logical);
             g_wavetable_load.result=terminal;
             g_wavetable_load.pending=0U;
             g_wavetable_load.valid=1U;

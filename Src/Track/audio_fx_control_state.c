@@ -352,6 +352,28 @@ uint8_t audio_fx_control_state_bulk_add_prepared(
     return 1U;
 }
 
+uint8_t audio_fx_control_state_bulk_add_delta(
+    brick_entity_id_t entity, const audio_fx_control_state_t *before,
+    const audio_fx_control_state_t *prepared,
+    live_parameter_audio_bulk_t *bulk)
+{
+    if ((entity >= BRICK_ENTITY_TOP_LEVEL_COUNT) || (before == NULL)
+            || (prepared == NULL) || (bulk == NULL)) return 0U;
+    if (before->config.filter_position == prepared->config.filter_position)
+        return 1U;
+    if (bulk->count >= LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS) return 0U;
+    bulk->item[bulk->count++] = (live_parameter_audio_bulk_item_t){
+        .parameter_id = CONTROL_AUDIO_FX_FILTER_POSITION,
+        .scope = LIVE_PARAMETER_EVENT_SCOPE_SLOT,
+        .track = entity,
+        .slot = 0U,
+        .flags = LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
+        .value = live_parameter_event_encode_float(
+            (float)prepared->config.filter_position)
+    };
+    return 1U;
+}
+
 uint8_t audio_fx_control_state_install_prepared(
     brick_entity_id_t entity, const audio_fx_control_state_t *prepared)
 {

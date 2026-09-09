@@ -145,9 +145,6 @@ uint8_t param_filter_control_restore(uint8_t track,
         PARAM_FILTER_DECIMATOR_BITS, PARAM_FILTER_DECIMATOR_RATE,
         PARAM_FILTER_DECIMATOR_RATE2, PARAM_ENV_RETRIG_FILTER
     };
-    track_runtime_resolved_track_t resolved;
-    if ((track_runtime_resolve_track(track, &resolved) == 0U)
-            || (resolved.has_filter_target == 0U)) return 0U;
     param_filter_control_state_t canonical_state = *state;
     float *const values = (float *)&canonical_state;
     for (uint8_t i = 0U; i < (uint8_t)(sizeof(ids) / sizeof(ids[0])); ++i)
@@ -160,10 +157,13 @@ uint8_t param_filter_control_restore(uint8_t track,
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
         .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
-        .count = (uint8_t)(sizeof(ids) / sizeof(ids[0]))
+        .count = 0U
     };
-    for (uint8_t i = 0U; i < bulk.count; ++i)
-        bulk.item[i] = (live_parameter_audio_bulk_item_t){
+    for (uint8_t i = 0U; i < (uint8_t)(sizeof(ids) / sizeof(ids[0])); ++i)
+    {
+        if (track_runtime_get_effective_param_status(track, ids[i])
+                != TRACK_RUNTIME_PARAM_ALLOWED) continue;
+        bulk.item[bulk.count++] = (live_parameter_audio_bulk_item_t){
             .parameter_id = (uint16_t)ids[i],
             .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
             .track = track,
@@ -172,7 +172,9 @@ uint8_t param_filter_control_restore(uint8_t track,
                                 | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
             .value = live_parameter_event_encode_float(values[i])
         };
-    if (!live_parameter_audio_publication_submit_bulk(&bulk)) return 0U;
+    }
+    if ((bulk.count != 0U)
+            && !live_parameter_audio_publication_submit_bulk(&bulk)) return 0U;
     g_param_filter_control[track] = canonical_state;
     return 1U;
 }

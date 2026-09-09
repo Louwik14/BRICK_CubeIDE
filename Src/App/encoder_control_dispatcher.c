@@ -2,6 +2,7 @@
 
 #include "App/live_parameter_audio_publication.h"
 #include "IPC/live_parameter_event.h"
+#include "IPC/control_audio_fifo_layout.h"
 #include "Param/live_parameter_migration.h"
 #include "Param/param_registry.h"
 #include "Track/track_mute.h"
@@ -10,6 +11,15 @@
 #include "main.h"
 
 #define ENCODER_CONTROL_DISPATCH_MAX_EVENTS_PER_TICK ENCODER_DETENT_QUEUE_CAPACITY
+
+_Static_assert(ENCODER_DETENT_QUEUE_CAPACITY
+                   == CONTROL_AUDIO_FIFO_ENCODER_PENDING,
+               "FIFO encoder pending proof changed");
+_Static_assert(ENC_COUNT == CONTROL_AUDIO_FIFO_ENCODER_COUNT,
+               "FIFO encoder fan-in proof changed");
+_Static_assert((BRICK_ENTITY_GROUP_CHILD_COUNT + 1U)
+                   == CONTROL_AUDIO_FIFO_ENCODER_MAX_DELTA,
+               "FIFO group-mute delta proof changed");
 
 void encoder_control_dispatcher_init(void)
 {

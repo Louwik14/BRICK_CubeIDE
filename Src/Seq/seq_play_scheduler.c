@@ -414,12 +414,7 @@ static uint8_t seq_play_scheduler_register_source(
 {
     if ((item == NULL) || (item->target_track >= SEQ_LANE_CAPACITY)
             || (g_seq_play_track_suspended[item->target_track] != 0U))
-    {
-        if (item != NULL)
-            seq_step_debug_source_refused(item->source_track,
-                item->source_step, step_origin_sample);
         return 0U;
-    }
 
     for (uint16_t active = 0U; active < g_seq_play_active_source_count; ++active)
     {
@@ -465,9 +460,6 @@ static uint8_t seq_play_scheduler_register_source(
                       item->target_track, item->source_step,
                       (uint32_t)g_seq_play_active_source_count + 1U,
                       SEQ_PLAY_SCHEDULER_SOURCE_CAPACITY);
-    seq_step_debug_source_refused(item->source_track, item->source_step,
-                                  step_origin_sample);
-    return 0U;
 }
 
 static seq_step_play_field_t seq_play_scheduler_field_for_play_kind(
@@ -743,7 +735,7 @@ static uint8_t seq_play_scheduler_resolve_play_context(seq_track_id_t scheduler_
     return 1U;
 }
 
-static uint8_t seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
+static void seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
                                                      seq_step_id_t step,
                                                      uint64_t step_sample_time,
                                                      uint32_t samples_per_step_q16,
@@ -753,7 +745,7 @@ static uint8_t seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
     if ((entity_topology_get((brick_entity_id_t)track, &entity) == 0U)
             || (entity_topology_can_emit_notes(&entity) == 0U))
     {
-        return 0U;
+        return;
     }
 
 
@@ -762,11 +754,10 @@ static uint8_t seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
         if (track < SEQ_LANE_CAPACITY)
         {
         }
-        return 0U;
+        return;
     }
 
     seq_play_scheduler_play_context_t play_context;
-    uint8_t registered = 0U;
     if ((seq_play_scheduler_resolve_play_context(track, step, &play_context) == 0U)
             || (play_context.item_count == 0U))
     {
@@ -812,14 +803,12 @@ static uint8_t seq_play_scheduler_schedule_step_filtered(seq_track_id_t track,
             continue;
         }
 
-        if (seq_play_scheduler_register_source(item, step_sample_time,
-                track_step_span_q16, samples_per_step_q16,
-                swing_phase) != 0U)
-            registered = 1U;
+        (void)seq_play_scheduler_register_source(
+            item, step_sample_time, track_step_span_q16,
+            samples_per_step_q16, swing_phase);
     }
 
 finish:
-    return registered;
 }
 
 void seq_play_scheduler_schedule_step(seq_track_id_t track,
@@ -833,10 +822,11 @@ void seq_play_scheduler_schedule_step(seq_track_id_t track,
     /* Scheduling seam: consume resolved step boundaries and queue sample-domain events only. */
     (void)ticks_per_step;
     (void)step_tick;
-    const uint8_t generated_any = seq_play_scheduler_schedule_step_filtered(
-        track, step, step_sample_time, samples_per_step_q16, swing_phase);
-    seq_step_debug_scheduler_processed(track, step, step_sample_time,
-                                       generated_any);
+    seq_play_scheduler_schedule_step_filtered(track,
+                                              step,
+                                              step_sample_time,
+                                              samples_per_step_q16,
+                                              swing_phase);
 }
 
 void seq_play_scheduler_schedule_step_lookahead_negative(seq_track_id_t track,
@@ -845,8 +835,11 @@ void seq_play_scheduler_schedule_step_lookahead_negative(seq_track_id_t track,
                                                          uint32_t samples_per_step_q16,
                                                          uint8_t swing_phase)
 {
-    (void)seq_play_scheduler_schedule_step_filtered(track, step,
-        step_sample_time, samples_per_step_q16, swing_phase);
+    seq_play_scheduler_schedule_step_filtered(track,
+                                              step,
+                                              step_sample_time,
+                                              samples_per_step_q16,
+                                              swing_phase);
 }
 uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_events,
                                                        uint16_t max_events,
@@ -899,9 +892,6 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                     .track_generation = (uint8_t)active->track_generation,
                     .event_token = active->output_id
                 };
-            seq_step_debug_note_off_generated(active->source_track,
-                active->source_step, active->deadline_sample,
-                active->output_id);
         }
 
         uint16_t source_position = 0U;
@@ -1024,8 +1014,6 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                 if ((g_seq_play_imminent_count + 2U)
                         > SEQ_PLAY_SCHEDULER_IMMINENT_CAPACITY)
                 {
-                    seq_step_debug_imminent_refused(source->source_track,
-                        source->source_step, on_sample);
                     if (seq_note_trace_target(source->source_track,
                                               source->source_step) != 0U)
                         seq_note_trace_record(
@@ -1088,8 +1076,6 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                     active_index = oldest_index;
                 if (active_index < 0)
                 {
-                    seq_step_debug_imminent_refused(source->source_track,
-                        source->source_step, on_sample);
                     if (seq_note_trace_target(source->source_track,
                                               source->source_step) != 0U)
                         seq_note_trace_record(
@@ -1141,9 +1127,6 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                                     (uint8_t)active->track_generation,
                                 .event_token = replaced_output_id
                             };
-                        seq_step_debug_note_off_generated(
-                            active->source_track, active->source_step,
-                            on_sample, replaced_output_id);
                     }
                     if (seq_note_trace_target(source->source_track,
                                               source->source_step) != 0U)
