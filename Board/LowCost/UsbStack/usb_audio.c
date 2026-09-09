@@ -4,7 +4,6 @@
 
 #include "IPC/usb_audio_pcm_ring.h"
 #include "Platform/memory_layout.h"
-#include "Platform/superloop_diag.h"
 #include "stm32h7xx.h"
 #include "tusb.h"
 
@@ -16,6 +15,7 @@
 #define USB_AUDIO_BYTES_PER_SAMPLE       4U
 #define USB_AUDIO_BYTES_PER_FRAME        (USB_AUDIO_CHANNELS * USB_AUDIO_BYTES_PER_SAMPLE)
 #define USB_AUDIO_SERVICE_MAX_FRAMES     96U
+#define USB_AUDIO_IRQ_PACKET_MAX_BYTES   CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX
 #define USB_AUDIO_SAMPLES_PER_USB_FRAME  (USB_AUDIO_SAMPLE_RATE_HZ / 1000U)
 #define USB_AUDIO_FEEDBACK_NOMINAL       (USB_AUDIO_SAMPLES_PER_USB_FRAME << 16)
 #define USB_AUDIO_FEEDBACK_GAIN_DENOM    256U
@@ -30,6 +30,12 @@ static volatile uint8_t g_usb_audio_in_active;
 static uint8_t g_usb_audio_out_ready;
 static uint8_t g_usb_audio_in_ready;
 static ALIGN32 int32_t g_usb_audio_scratch[USB_AUDIO_SERVICE_MAX_FRAMES * USB_AUDIO_CHANNELS];
+static ALIGN32 uint8_t g_usb_audio_out_irq_scratch[USB_AUDIO_IRQ_PACKET_MAX_BYTES];
+
+_Static_assert(CFG_TUSB_OS == OPT_OS_NONE,
+               "USB Audio IRQ drain requires TinyUSB bare-metal mode");
+_Static_assert((USB_AUDIO_IRQ_PACKET_MAX_BYTES % USB_AUDIO_BYTES_PER_FRAME) == 0U,
+               "USB Audio OUT packet must contain complete PCM frames");
 
 static void usb_audio_feedback_update(void)
 {
@@ -81,10 +87,6 @@ void usb_audio_transport_set_interface(uint8_t interface_number,
     }
 
     if (interface_number == USB_AUDIO_AS_OUT_INTERFACE) {
-        if ((alternate_setting != 0U) && (g_usb_audio_out_active == 0U)) {
-            usb_audio_pcm_diag_reset();
-            superloop_diag_reset();
-        }
         g_usb_audio_out_active = (alternate_setting != 0U) ? 1U : 0U;
     } else {
         g_usb_audio_in_active = (alternate_setting != 0U) ? 1U : 0U;
@@ -158,39 +160,6 @@ uint32_t usb_audio_audio_write(const int32_t *interleaved, uint32_t frames)
 void usb_audio_transport_process(void)
 {
     if (g_usb_audio_out_active != 0U) {
-        const uint32_t now = DWT->CYCCNT;
-        uint16_t available = tud_audio_n_available(0U);
-        uint32_t bytes = available;
-
-        if (g_usb_audio_diag_transport_call_count != 0U) {
-            const uint32_t gap = now - g_usb_audio_diag_transport_last_tick;
-
-            if (gap > g_usb_audio_diag_transport_max_gap_ticks) {
-                g_usb_audio_diag_transport_max_gap_ticks = gap;
-                g_usb_audio_diag_transport_gap_service_id =
-                    g_superloop_diag_interval_max_service_id;
-                g_usb_audio_diag_transport_gap_service_cycles =
-                    g_superloop_diag_interval_max_cycles;
-            }
-        }
-        g_usb_audio_diag_transport_last_tick = now;
-        ++g_usb_audio_diag_transport_call_count;
-        superloop_diag_interval_reset();
-
-        if (bytes > (USB_AUDIO_SERVICE_MAX_FRAMES * USB_AUDIO_BYTES_PER_FRAME)) {
-            bytes = USB_AUDIO_SERVICE_MAX_FRAMES * USB_AUDIO_BYTES_PER_FRAME;
-        }
-        bytes -= bytes % USB_AUDIO_BYTES_PER_FRAME;
-        if (bytes != 0U) {
-            const uint16_t read_bytes = tud_audio_n_read(0U,
-                                                         g_usb_audio_scratch,
-                                                         (uint16_t)bytes);
-            const uint32_t read_frames = read_bytes / USB_AUDIO_BYTES_PER_FRAME;
-            if ((read_bytes % USB_AUDIO_BYTES_PER_FRAME) == 0U) {
-                (void)usb_audio_pcm_write_pc_to_brick(g_usb_audio_scratch,
-                                                      read_frames);
-            }
-        }
         usb_audio_feedback_update();
     }
 
@@ -246,23 +215,31 @@ bool tud_audio_rx_done_isr(uint8_t rhport, uint16_t n_bytes_received,
                            uint8_t func_id, uint8_t ep_out,
                            uint8_t cur_alt_setting)
 {
+    uint16_t bytes_to_read;
+    uint16_t read_bytes;
+    uint32_t read_frames;
+
     (void)rhport;
-    (void)n_bytes_received;
     (void)func_id;
     (void)ep_out;
     (void)cur_alt_setting;
     if (g_usb_audio_out_active != 0U) {
-        const uint32_t now = DWT->CYCCNT;
-
-        if (g_usb_audio_diag_rx_event_count != 0U) {
-            const uint32_t gap = now - g_usb_audio_diag_rx_last_tick;
-
-            if (gap > g_usb_audio_diag_rx_max_gap_ticks) {
-                g_usb_audio_diag_rx_max_gap_ticks = gap;
-            }
+        /* TinyUSB has already copied this isochronous OUT packet into its
+         * software FIFO and rearmed the endpoint.  Move only this packet to
+         * the SPSC AUDIO ring here; feedback and all other class work remain
+         * deferred to the superloop. */
+        bytes_to_read = n_bytes_received;
+        if (bytes_to_read > (uint16_t)sizeof(g_usb_audio_out_irq_scratch)) {
+            bytes_to_read = (uint16_t)sizeof(g_usb_audio_out_irq_scratch);
         }
-        g_usb_audio_diag_rx_last_tick = now;
-        ++g_usb_audio_diag_rx_event_count;
+        read_bytes = tud_audio_n_read(0U, g_usb_audio_out_irq_scratch,
+                                      bytes_to_read);
+        read_frames = read_bytes / USB_AUDIO_BYTES_PER_FRAME;
+        if (read_frames != 0U) {
+            (void)usb_audio_pcm_write_pc_to_brick(
+                (const int32_t *)(const void *)g_usb_audio_out_irq_scratch,
+                read_frames);
+        }
     }
     return true;
 }

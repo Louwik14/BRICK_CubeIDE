@@ -541,5 +541,15 @@ void ui_template_page_sync_active_track_context(void)
 
 void ui_template_page_render(void)
 {
-    ui_renderer_template_draw(ui_template_page_get_active_state());
+    (void)ui_renderer_template_draw_step(ui_template_page_get_active_state());
+}
+
+uint8_t ui_template_page_render_pending(void)
+{
+    return ui_renderer_template_draw_pending();
+}
+
+void ui_template_page_render_cancel(void)
+{
+    ui_renderer_template_draw_cancel();
 }

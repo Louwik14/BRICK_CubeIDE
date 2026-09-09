@@ -12,6 +12,8 @@ typedef struct
     void (*tick)(void);
     void (*sync_active_context)(void);
     void (*render)(void);
+    uint8_t (*render_pending)(void);
+    void (*render_cancel)(void);
     const void *context;
 
 } ui_page_t;

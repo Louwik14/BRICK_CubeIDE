@@ -5,12 +5,25 @@
 L'audio travaille par demi-buffer de 64 frames a 48 kHz. L'IRQ SAI possede sa timeline audio locale et n'execute ni FatFs, ni scan de cache, ni travail Storage non borne. CONTROL se cadence seul: TIM12 porte le tick musical interne, TIM5, demarre avant les domaines, porte le temps physique commun et sa conversion nominale en samples. La superloop publie l'horizon musical glissant; aucun reveil AUDIO, compteur de frames periodique ou PendSV sequenceur ne traverse la frontiere. Scheduler, lifecycle et Note FX contribuent d'abord a une fenetre CONTROL fixe; ses 64 buckets sample/kind finalisent ensuite la FIFO en ordre chronologique, avec STOP avant START a timestamp egal.
 
 USB OTG FS est possede exclusivement par TinyUSB en mode bare-metal
-(`OPT_OS_NONE`). La superloop appelle le service USB cooperatif avant et apres
-la passe applicative: le role manager consomme les evenements FUSB302, puis un
-seul des pumps Device ou Host est execute. Le Device est composite UAC2 + MIDI
-et le role Host sert MIDI via TinyUSB. L'IRQ OTG ne fait que dispatcher vers
-TinyUSB. Les flux UAC2 duplex traversent deux rings SPSC de 288 frames places
-dans la moitie D3 non cachee; le chemin audio IRQ ne touche jamais la pile USB.
+(`OPT_OS_NONE`). Sur H743, l'IRQ OTG FS de priorite 6 fait recevoir le paquet
+Audio OUT par TinyUSB, rearme l'endpoint, puis `tud_audio_rx_done_isr()` retire
+exactement ce paquet de la FIFO TinyUSB et le publie immediatement dans le ring
+PC vers BRICK. Un callback traite un seul paquet, sans boucle de vidage. Les
+paquets observes portent 47 a 49 frames stereo; le maximum FS declare est de
+392 octets, soit 49 frames de 8 octets. L'IRQ SAI AUDIO, de priorite 1, reste
+plus prioritaire et peut interrompre cette publication USB.
+
+L'IRQ USB ne lance jamais le pump general `tud_task_ext()` et n'execute ni
+MIDI, ni controle USB, ni calcul complet de feedback. La superloop conserve le
+role manager, le pump TinyUSB general borne a quatre evenements, le feedback
+UAC2, Audio IN BRICK vers PC, USB MIDI Device et le role Host MIDI. Elle appelle
+le service USB normal avant et apres la passe applicative. La cadence de cette
+superloop n'est plus dans le chemin d'ingress Audio OUT PC vers BRICK.
+
+Les flux UAC2 traversent deux rings SPSC de 288 frames places dans la moitie D3
+non cachee. Pour PC vers BRICK, le writer unique est le callback IRQ Audio OUT
+USB et le reader unique est AUDIO. Pour BRICK vers PC, AUDIO reste writer et le
+service USB differe reste reader. L'IRQ AUDIO ne touche jamais TinyUSB.
 Le role Host applique une attente VBUS de 200 ms par deadline, et les erreurs
 I2C FUSB utilisent un retry cadence. Le latch/level `INT_N` reste le chemin
 rapide; une reconciliation bornee a 100 ms relit aussi les registres FUSB afin
@@ -57,7 +70,14 @@ Au boot, `track_state` est initialise avant la projection finale `track_runtime`
 
 Les budgets DTCM, D1, D2, SRAM2, SRAM3, SRAM4, ITCM et SDRAM sont controles par les linkers; toute croissance d'une region proche de sa limite exige un budget explicite. Les voix et etats chauds restent en DTCM; les arenas AUDIO volumineuses resident en SDRAM selon leur contrat cache.
 
-La migration H747 conserve les payloads et protocoles. Restent physiques: deux images CM7/CM4, boot/HSEM, clocks, linkers, MPU des deux coeurs, repartition IRQ/DMA et initialisation FMC/SDRAM unique. M7 recoit SAI/audio; M4 recoit UI/MIDI/SD/display.
+La migration H747 conserve les payloads et protocoles. Restent physiques: deux images CM7/CM4, boot/HSEM, clocks, linkers, MPU des deux coeurs, repartition IRQ/DMA et initialisation FMC/SDRAM unique. M7 recoit SAI/audio; M4 recoit USB/UI/MIDI/SD/display.
+
+La cible USB Audio H747 place TinyUSB, l'IRQ USB et l'ingress Audio OUT sur M4.
+Le M4 publie le paquet recu dans le meme ring IPC SPSC pointer-free; l'IRQ AUDIO
+du M7 lit ce ring avant mixer/DSP. L'IRQ USB M4 ne preemptera donc plus
+directement l'IRQ AUDIO M7. Ce port n'est pas valide hardware: placement du
+ring, attributs MPU/cache sur les deux coeurs, barrieres de publication et
+contention memoire inter-coeurs devront etre revalides.
 
 ## Ownership de build prepare pour H747
 

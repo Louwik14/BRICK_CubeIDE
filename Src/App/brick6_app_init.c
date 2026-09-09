@@ -28,14 +28,12 @@
 #include "Storage/audio_recorder.h"
 #include "Storage/waveform_cache.h"
 #include "Platform/brick6_sd_config.h"
-#include "Platform/superloop_diag.h"
 
 #include "App/Hall/hall_keyboard_bridge.h"
 #include "App/Hall/hall_calibration.h"
 #include "App/Hall/hall_loop.h"
 #include "Seq/seq_runtime.h"
 #include "UI/ui_active_track_sync.h"
-#include "Board/board_usb.h"
 
 typedef enum
 {
@@ -133,37 +131,16 @@ static void brick6_app_service_storage(void)
 
 void brick6_app_process(void)
 {
-    uint32_t started;
-
-    started = superloop_diag_begin();
     engine_tasklet_poll();
-    superloop_diag_end(SUPERLOOP_DIAG_ENGINE, started);
-    board_usb_service_if_due();
-    started = superloop_diag_begin();
     brick6_stream_service_task_poll();
-    superloop_diag_end(SUPERLOOP_DIAG_STREAM_1, started);
-    board_usb_service_if_due();
-    started = superloop_diag_begin();
     audio_domain_background_poll(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
-    superloop_diag_end(SUPERLOOP_DIAG_AUDIO_BG, started);
-    board_usb_service_if_due();
     /*
      * Seq runtime core is serviced from superloop for both clock domains.
      * TIM12 IRQ only advances INTERNAL time ticks.
      */
-    started = superloop_diag_begin();
     seq_runtime_time_adapter_process();
-    superloop_diag_end(SUPERLOOP_DIAG_SEQ, started);
-    board_usb_service_if_due();
-    started = superloop_diag_begin();
     brick6_app_service_storage();
-    superloop_diag_end(SUPERLOOP_DIAG_STORAGE, started);
-    board_usb_service_if_due();
-    started = superloop_diag_begin();
     pattern_live_service();
-    superloop_diag_end(SUPERLOOP_DIAG_PATTERN, started);
-    board_usb_service_if_due();
-    started = superloop_diag_begin();
     if (g_boot_audio_state == BRICK6_BOOT_WAIT_MASTER)
     {
         if (brick6_master_control_boot_capture() != 0U)
@@ -183,18 +160,8 @@ void brick6_app_process(void)
     {
         brick6_master_control_process();
     }
-    superloop_diag_end(SUPERLOOP_DIAG_MASTER, started);
-    board_usb_service_if_due();
-
-    started = superloop_diag_begin();
     brick6_stream_service_task_poll();
-    superloop_diag_end(SUPERLOOP_DIAG_STREAM_2, started);
-    board_usb_service_if_due();
-    started = superloop_diag_begin();
     ui_boot_loading_service();
-    superloop_diag_end(SUPERLOOP_DIAG_UI_BOOT, started);
-    board_usb_service_if_due();
-    started = superloop_diag_begin();
     if (ui_boot_loading_is_active() != 0U)
     {
         hall_loop_process();
@@ -203,11 +170,5 @@ void brick6_app_process(void)
     {
         brick6_process_hall_ui_keyboard_chain();
     }
-    superloop_diag_end(SUPERLOOP_DIAG_HALL_UI, started);
-    board_usb_service_if_due();
-
-    started = superloop_diag_begin();
     midi_poll();
-    superloop_diag_end(SUPERLOOP_DIAG_MIDI, started);
-    board_usb_service_if_due();
 }

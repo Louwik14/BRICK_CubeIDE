@@ -46,7 +46,6 @@
 #include "Board/board_power.h"
 #include "buttons.h"
 #include "App/power_shutdown.h"
-#include "Platform/superloop_diag.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -310,8 +309,6 @@ int main(void)
   led_init();
   uint32_t last_tick = 0;
   uint32_t ui_tasklet_divider = 0U;
-  uint32_t diag_started;
-  uint8_t shutdown_requested;
 
   /* USER CODE END 2 */
 
@@ -324,25 +321,15 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-         diag_started = superloop_diag_begin();
-         shutdown_requested = power_shutdown_service(HAL_GetTick());
-         superloop_diag_end(SUPERLOOP_DIAG_POWER, diag_started);
-         if (shutdown_requested != 0U)
+         if (power_shutdown_service(HAL_GetTick()) != 0U)
          {
              continue;
          }
 
-	     diag_started = superloop_diag_begin();
 	     board_usb_process();
-	     superloop_diag_end(SUPERLOOP_DIAG_USB, diag_started);
 	     brick6_app_process();
-	     diag_started = superloop_diag_begin();
 	     board_usb_process();
-	     superloop_diag_end(SUPERLOOP_DIAG_USB, diag_started);
-	     diag_started = superloop_diag_begin();
 	     lowcost_bootloader_shift_step16_service();
-	     superloop_diag_end(SUPERLOOP_DIAG_BOOTLOADER, diag_started);
-	     board_usb_service_if_due();
 
 	     uint32_t ui_ticks_processed = 0U;
 	     while ((engine_tick_count != last_tick) && (ui_ticks_processed < UI_TASKLET_CATCHUP_BUDGET))
@@ -355,24 +342,14 @@ int main(void)
 	         }
 
 	         ui_tasklet_divider = 0U;
-	         diag_started = superloop_diag_begin();
 	         ui_tasklet_poll();
-	         superloop_diag_end(SUPERLOOP_DIAG_UI_TASKLET, diag_started);
-	         board_usb_service_if_due();
 	         ui_ticks_processed++;
 	     }
 
 	     if (ui_tasklet_is_initialized() != 0U)
 	     {
-	         board_usb_service_if_due();
-	         diag_started = superloop_diag_begin();
 	         ui_renderer_oled_service_poll();
-	         superloop_diag_end(SUPERLOOP_DIAG_UI_RENDER, diag_started);
-	         board_usb_service_if_due();
-	         diag_started = superloop_diag_begin();
 	         display_flush_service_poll();
-	         superloop_diag_end(SUPERLOOP_DIAG_DISPLAY, diag_started);
-	         board_usb_service_if_due();
 	     }
 
 

@@ -42,6 +42,7 @@
 #include "ui_bootstrap.h"
 #include "ui_event.h"
 #include "ui_navigation.h"
+#include "ui_renderer_oled.h"
 #include "ui_hall_input_service.h"
 #include "ui_hall_mode_state.h"
 #include "ui_hall_mode_flow.h"
@@ -966,6 +967,7 @@ void ui_core_tick(void)
 
     ui_event_t ev;
     ui_param_encoder_context_t encoder_ctx;
+    uint8_t render_invalidated = 0U;
 
     ui_param_capture_encoder_context(&encoder_ctx);
     ui_param_begin_encoder_edit_group(&encoder_ctx);
@@ -976,6 +978,10 @@ void ui_core_tick(void)
         if (encoder == 1U)
         {
             delta = (int16_t)-delta;
+        }
+        if (delta != 0)
+        {
+            render_invalidated = 1U;
         }
         if (ui_page_settings_is_open() != 0U)
         {
@@ -1019,6 +1025,7 @@ void ui_core_tick(void)
 
     while (ui_event_pop(&ev))
     {
+        render_invalidated = 1U;
         /* Must stay first: updates shift/track modifier state consumed by later stages. */
         ui_core_handle_track_selection_event(&ev);
 
@@ -1049,6 +1056,11 @@ void ui_core_tick(void)
 
 next_event:
         ;
+    }
+
+    if (render_invalidated != 0U)
+    {
+        ui_renderer_oled_invalidate();
     }
 
     sample_capture_model_service();

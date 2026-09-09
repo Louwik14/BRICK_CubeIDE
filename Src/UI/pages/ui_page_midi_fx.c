@@ -481,10 +481,20 @@ static void ui_page_midi_fx_enter(void)
     ui_page_midi_fx_sync_waveform_capture();
 }
 
+static uint8_t g_ui_page_midi_fx_overlay_phase;
+static uint8_t g_ui_page_midi_fx_overlay_entity;
+
+static void ui_page_midi_fx_render_cancel(void)
+{
+    g_ui_page_midi_fx_overlay_phase = 0U;
+}
+
 static void ui_page_midi_fx_leave(void)
 {
     if (control_audio_visual_waveform_request(0U, 0U, 0U) == 0U)
         Error_Handler();
+    ui_page_midi_fx_render_cancel();
+    ui_template_page_render_cancel();
     ui_template_page_leave();
 }
 
@@ -532,38 +542,67 @@ static void ui_page_midi_fx_tick(void)
 
 static void ui_page_midi_fx_render(void)
 {
-    ui_template_page_render();
-
-    const uint8_t active_track = ui_get_active_track();
-    if (ui_hall_mode_resolve_rout_context(active_track, ui_get_hall_mode())
-            == UI_HALL_ROUT_CONTEXT_NONE)
+    if (g_ui_page_midi_fx_overlay_phase == 0U)
     {
+        ui_template_page_render();
+        if (ui_template_page_render_pending() != 0U)
+        {
+            return;
+        }
+
+        const uint8_t active_track = ui_get_active_track();
+        if (ui_hall_mode_resolve_rout_context(active_track, ui_get_hall_mode())
+                == UI_HALL_ROUT_CONTEXT_NONE)
+        {
+            return;
+        }
+
+        drv_display_clear_rect(0, 16, 128, 48);
+        drv_display_set_font(&FONT_5X7);
+        g_ui_page_midi_fx_overlay_entity = active_track;
+        g_ui_page_midi_fx_overlay_phase = 1U;
         return;
     }
 
-    drv_display_clear_rect(0, 16, 128, 48);
-    drv_display_set_font(&FONT_5X7);
-    for (uint8_t track = 0U; track < TRACK_COUNT; ++track)
+    const uint8_t active_track = ui_get_active_track();
+    if (active_track != g_ui_page_midi_fx_overlay_entity)
     {
-        const uint8_t column = (uint8_t)(track & 3U);
-        const uint8_t row = (uint8_t)(track >> 2U);
-        const uint8_t x = (uint8_t)(2U + (column * 32U));
-        const uint8_t y = (uint8_t)(19U + (row * 22U));
-        const uint8_t routed = control_routing_get_looper_source(active_track, track);
-        char label[4];
-        (void)snprintf(label, sizeof(label), "T%u", (unsigned int)(track + 1U));
-
-        if (routed != 0U)
-        {
-            drv_display_fill_rect(x, y, 28, 18);
-            drv_display_draw_text_inverted((uint8_t)(x + 8U), (uint8_t)(y + 5U), label);
-        }
-        else
-        {
-            drv_display_draw_rect(x, y, 28, 18);
-            drv_display_draw_text((uint8_t)(x + 8U), (uint8_t)(y + 5U), label);
-        }
+        g_ui_page_midi_fx_overlay_phase = 0U;
+        drv_display_clear();
+        ui_template_page_render();
+        return;
     }
+
+    const uint8_t track = (uint8_t)(g_ui_page_midi_fx_overlay_phase - 1U);
+    const uint8_t column = (uint8_t)(track & 3U);
+    const uint8_t row = (uint8_t)(track >> 2U);
+    const uint8_t x = (uint8_t)(2U + (column * 32U));
+    const uint8_t y = (uint8_t)(19U + (row * 22U));
+    const uint8_t routed = control_routing_get_looper_source(active_track, track);
+    char label[6];
+    (void)snprintf(label, sizeof(label), "T%u", (unsigned int)(track + 1U));
+
+    if (routed != 0U)
+    {
+        drv_display_fill_rect(x, y, 28, 18);
+        drv_display_draw_text_inverted((uint8_t)(x + 8U), (uint8_t)(y + 5U), label);
+    }
+    else
+    {
+        drv_display_draw_rect(x, y, 28, 18);
+        drv_display_draw_text((uint8_t)(x + 8U), (uint8_t)(y + 5U), label);
+    }
+
+    g_ui_page_midi_fx_overlay_phase++;
+    if (g_ui_page_midi_fx_overlay_phase > TRACK_COUNT)
+    {
+        g_ui_page_midi_fx_overlay_phase = 0U;
+    }
+}
+
+static uint8_t ui_page_midi_fx_render_pending(void)
+{
+    return (g_ui_page_midi_fx_overlay_phase != 0U) ? 1U : 0U;
 }
 
 void ui_page_template_midi_fx_register_families(void)
@@ -597,6 +636,8 @@ const ui_page_t g_ui_page_midi_fx = {
     .tick = ui_page_midi_fx_tick,
     .sync_active_context = ui_template_page_sync_active_track_context,
     .render = ui_page_midi_fx_render,
+    .render_pending = ui_page_midi_fx_render_pending,
+    .render_cancel = ui_page_midi_fx_render_cancel,
     .context = &g_ui_template_midi_fx_state,
 };
 
@@ -607,5 +648,7 @@ const ui_page_t g_ui_page_audio_fx = {
     .handle_event = ui_page_midi_fx_handle_event,
     .tick = ui_page_midi_fx_tick,
     .render = ui_page_midi_fx_render,
+    .render_pending = ui_page_midi_fx_render_pending,
+    .render_cancel = ui_page_midi_fx_render_cancel,
     .context = &g_ui_template_audio_fx_state,
 };

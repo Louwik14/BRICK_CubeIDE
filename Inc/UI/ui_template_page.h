@@ -132,6 +132,8 @@ void ui_template_page_handle_event(const ui_event_t *ev);
 void ui_template_page_tick(void);
 void ui_template_page_sync_active_track_context(void);
 void ui_template_page_render(void);
+uint8_t ui_template_page_render_pending(void);
+void ui_template_page_render_cancel(void);
 
 void ui_template_page_select_subpage(ui_template_page_state_t *state, uint8_t subpage_index);
 void ui_template_page_select_nearest_subpage(ui_template_page_state_t *state, uint8_t subpage_index);

@@ -343,168 +343,339 @@ static uint8_t ui_renderer_template_draw_audio_fx_group(
     return 1U;
 }
 
-void ui_renderer_template_draw(const ui_template_page_state_t *state)
+typedef enum
+{
+    UI_TEMPLATE_RENDER_IDLE = 0,
+    UI_TEMPLATE_RENDER_HEADER,
+    UI_TEMPLATE_RENDER_PREPARE,
+    UI_TEMPLATE_RENDER_SPECIAL,
+    UI_TEMPLATE_RENDER_AUDIO_FX,
+    UI_TEMPLATE_RENDER_SLOT_0,
+    UI_TEMPLATE_RENDER_SLOT_1,
+    UI_TEMPLATE_RENDER_SLOT_2,
+    UI_TEMPLATE_RENDER_SLOT_3,
+    UI_TEMPLATE_RENDER_GROUP,
+    UI_TEMPLATE_RENDER_FOOTER,
+    UI_TEMPLATE_RENDER_FINALIZE
+} ui_renderer_template_phase_t;
+
+typedef enum
+{
+    UI_TEMPLATE_BODY_SLOTS = 0,
+    UI_TEMPLATE_BODY_SAMPLER_RAM,
+    UI_TEMPLATE_BODY_SYNTH_LIVE,
+    UI_TEMPLATE_BODY_WAVE_WAVETABLE,
+    UI_TEMPLATE_BODY_WAVE_CLASSIC
+} ui_renderer_template_body_t;
+
+typedef struct
+{
+    ui_renderer_template_phase_t phase;
+    const ui_template_page_state_t *source_state;
+    const ui_template_family_t *source_family;
+    ui_template_page_state_t state;
+    ui_template_family_t family;
+    ui_param_seq_plock_feedback_frame_t plock_frame;
+    ui_renderer_template_body_t body;
+    ui_template_custom_widget_kind_t grouped_widget;
+    ui_renderer_template_adsr_shape_t grouped_adsr_shape;
+    uint8_t grouped_widget_drawn;
+    uint8_t grouped_filter_first_slot;
+    uint8_t osc_mask;
+    uint8_t large_wave;
+    uint8_t selected_entity;
+    param_id_t grouped_filter_position;
+    param_id_t grouped_filter_width;
+    param_id_t grouped_lfo_shape_id;
+    param_id_t grouped_lfo_phase_id;
+    synth_waveform_engine_t synth_engine;
+} ui_renderer_template_job_t;
+
+static ui_renderer_template_job_t g_ui_renderer_template_job;
+
+static uint8_t ui_renderer_template_job_is_current(const ui_renderer_template_job_t *job,
+                                                    const ui_template_page_state_t *state)
+{
+    if (state == NULL)
+    {
+        return 0U;
+    }
+    const ui_template_family_t *family = ui_template_page_get_active_family(state);
+    if ((family == NULL)
+            || (state != job->source_state) || (family != job->source_family))
+    {
+        return 0U;
+    }
+
+    if ((ui_renderer_template_get_selected_entity() != job->selected_entity)
+            || (state->active_subpage != job->state.active_subpage)
+            || (state->navigation_subset != job->state.navigation_subset)
+            || (state->resolved_navigation_subset != job->state.resolved_navigation_subset)
+            || (memcmp(family, &job->family, sizeof(job->family)) != 0))
+    {
+        return 0U;
+    }
+
+    return 1U;
+}
+
+static uint8_t ui_renderer_template_job_begin(const ui_template_page_state_t *state)
 {
     const ui_template_family_t *family = ui_template_page_get_active_family(state);
 
     if ((state == NULL) || (family == NULL))
     {
+        g_ui_renderer_template_job.phase = UI_TEMPLATE_RENDER_IDLE;
+        return 0U;
+    }
+
+    memset(&g_ui_renderer_template_job, 0, sizeof(g_ui_renderer_template_job));
+    g_ui_renderer_template_job.source_state = state;
+    g_ui_renderer_template_job.source_family = family;
+    g_ui_renderer_template_job.state = *state;
+    g_ui_renderer_template_job.family = *family;
+    g_ui_renderer_template_job.selected_entity = ui_renderer_template_get_selected_entity();
+    /* Freeze navigation/layout for the duration of the frame. */
+    g_ui_renderer_template_job.state.family_resolver = NULL;
+    g_ui_renderer_template_job.state.family = &g_ui_renderer_template_job.family;
+    g_ui_renderer_template_job.state.resolved_family = &g_ui_renderer_template_job.family;
+    g_ui_renderer_template_job.phase = UI_TEMPLATE_RENDER_HEADER;
+    return 1U;
+}
+
+static void ui_renderer_template_job_prepare(ui_renderer_template_job_t *job)
+{
+    const ui_template_page_state_t *state = &job->state;
+    const ui_template_family_t *family = &job->family;
+    const ui_template_subpage_t *subpage = ui_template_page_get_active_subpage(state);
+
+    ui_param_seq_plock_feedback_frame_begin(&job->plock_frame);
+    job->body = UI_TEMPLATE_BODY_SLOTS;
+    job->grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_NONE;
+    job->grouped_filter_position = PARAM_COUNT;
+    job->grouped_filter_width = PARAM_COUNT;
+    job->grouped_lfo_shape_id = PARAM_COUNT;
+    job->grouped_lfo_phase_id = PARAM_COUNT;
+
+    if (subpage == NULL)
+    {
         return;
     }
 
-    ui_renderer_template_draw_header(state);
-
-    ui_param_seq_plock_feedback_frame_t plock_frame_ctx;
-    ui_param_seq_plock_feedback_frame_begin(&plock_frame_ctx);
-
-    const ui_template_subpage_t *subpage = ui_template_page_get_active_subpage(state);
-    if (subpage != NULL)
+    const uint8_t wave_wavetable_subpage =
+        ui_renderer_template_is_wave_wavetable_subpage(subpage);
+    const uint8_t wave_classic_page = (uint8_t)((wave_wavetable_subpage != 0U)
+        && (family->family_title != NULL)
+        && (strcmp(family->family_title, "TONE 2/2") == 0));
+    if (ui_renderer_template_is_sampler_ram_tone(state, family) != 0U)
     {
-        const uint8_t wave_wavetable_subpage =
-            ui_renderer_template_is_wave_wavetable_subpage(subpage);
-        const uint8_t wave_classic_page = (uint8_t)((wave_wavetable_subpage != 0U)
-            && (family->family_title != NULL)
-            && (strcmp(family->family_title, "TONE 2/2") == 0));
-        if (ui_renderer_template_is_sampler_ram_tone(state, family) != 0U)
-        {
-            ui_renderer_template_draw_sampler_ram_wave_placeholder(state, &plock_frame_ctx, subpage);
-        }
-        else if ((wave_wavetable_subpage != 0U) && (wave_classic_page == 0U))
-        {
-            const uint8_t osc_mask = (subpage->param_bank.params[0] == UI_PARAM_LOCAL_WAVE_OSC2)
-                ? 0x02U : 0x01U;
-            ui_renderer_template_draw_synth_live_placeholder(state, &plock_frame_ctx,
-                                                             subpage, osc_mask, 1U,
-                                                             SYNTH_WAVEFORM_ENGINE_WAVE);
-        }
-        else if ((state->navigation_subset == 0U)
-                && (ui_renderer_template_is_wave_common_subpage(subpage) != 0U))
-        {
-            ui_renderer_template_draw_synth_live_placeholder(state, &plock_frame_ctx,
-                                                             subpage, 0x03U, 0U,
-                                                             SYNTH_WAVEFORM_ENGINE_WAVE);
-        }
-        else if ((state->navigation_subset == 0U)
-                && (ui_renderer_template_is_prism_tone_subpage(subpage) != 0U))
-        {
-            const param_id_t first = subpage->param_bank.params[0];
-            const uint8_t osc_mask = (first == PARAM_PRISM_OSC1_MODEL) ? 0x01U
-                : ((first == PARAM_PRISM_OSC2_MODEL) ? 0x02U : 0x03U);
-            ui_renderer_template_draw_synth_live_placeholder(state, &plock_frame_ctx,
-                                                             subpage, osc_mask, 0U,
-                                                             SYNTH_WAVEFORM_ENGINE_PRISM);
-        }
-        else if (wave_classic_page != 0U)
-        {
-            ui_renderer_template_draw_wave_wavetable_placeholder(state, &plock_frame_ctx, subpage);
-        }
-        else if ((state->navigation_subset != 0U)
-                && (ui_renderer_template_is_wave_common_subpage(subpage) != 0U))
-        {
-            ui_renderer_template_draw_wave_classic_common(state, &plock_frame_ctx, subpage);
-        }
-        else
-        {
-            ui_renderer_template_adsr_shape_t grouped_adsr_shape;
-            ui_template_custom_widget_kind_t grouped_widget =
-                ui_renderer_template_resolve_grouped_custom_widget(state, subpage);
-            uint8_t grouped_widget_drawn =
-                (uint8_t)((grouped_widget != UI_TEMPLATE_CUSTOM_WIDGET_NONE)
-                        && (ui_renderer_template_prepare_custom_adsr(&plock_frame_ctx, grouped_widget, &grouped_adsr_shape) != 0U));
-            if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_AUDIO_FX_GROUP)
-            {
-                grouped_widget_drawn = 1U;
-            }
-
-            if (ui_renderer_template_filter_curve_group_is_active(state, subpage, &plock_frame_ctx) != 0U)
-            {
-                grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP;
-                grouped_widget_drawn = 1U;
-            }
-            uint8_t grouped_filter_first_slot = 0U;
-            param_id_t grouped_filter_position = PARAM_COUNT;
-            param_id_t grouped_filter_width = PARAM_COUNT;
-            if (ui_renderer_template_spectral_window_group_is_active(state,
-                                                                      subpage,
-                                                                      &grouped_filter_first_slot,
-                                                                      &grouped_filter_position,
-                                                                      &grouped_filter_width) != 0U)
-            {
-                grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_SPECTRAL_WINDOW_GROUP;
-                grouped_widget_drawn = 1U;
-            }
-            param_id_t grouped_lfo_shape_id = PARAM_COUNT;
-            param_id_t grouped_lfo_phase_id = PARAM_COUNT;
-            if (ui_renderer_template_lfo_shape_phase_group_is_active(state,
-                                                                     subpage,
-                                                                     &grouped_lfo_shape_id,
-                                                                     &grouped_lfo_phase_id) != 0U)
-            {
-                grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE_PHASE_GROUP;
-                grouped_widget_drawn = 1U;
-            }
-            if (ui_renderer_template_fm_pitch_eg_group_is_active(state, subpage) != 0U)
-            {
-                grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_FM_PITCH_EG_GROUP;
-                grouped_widget_drawn = 1U;
-            }
-            if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_AUDIO_FX_GROUP)
-            {
-                (void)ui_renderer_template_draw_audio_fx_group(&plock_frame_ctx);
-            }
-            for (uint8_t i = 0U; i < 4U; i++)
-            {
-                ui_renderer_template_draw_param_slot(state,
-                                                     &plock_frame_ctx,
-                                                     subpage,
-                                                     grouped_widget,
-                                                     grouped_widget_drawn,
-                                                     i,
-                                                     subpage->param_bank.params[i]);
-            }
-            ui_renderer_template_draw_mod_link_arrows(subpage);
-
-            if (grouped_widget_drawn != 0U)
-            {
-                if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP)
-                {
-                    (void)ui_renderer_template_draw_filter_curve_group(&plock_frame_ctx);
-                }
-                else if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE_PHASE_GROUP)
-                {
-                    (void)ui_renderer_template_draw_lfo_shape_phase_group(&plock_frame_ctx,
-                                                                          grouped_lfo_shape_id,
-                                                                          grouped_lfo_phase_id);
-                }
-                else if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_SPECTRAL_WINDOW_GROUP)
-                {
-                    ui_renderer_template_draw_spectral_window_group(&plock_frame_ctx,
-                                                                     grouped_filter_first_slot,
-                                                                     grouped_filter_position,
-                                                                     grouped_filter_width);
-                }
-                else if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_FM_PITCH_EG_GROUP)
-                {
-                    (void)ui_renderer_template_draw_fm_pitch_eg_group(&plock_frame_ctx);
-                }
-                else if (grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_AUDIO_FX_GROUP)
-                {
-                    /* The live graph is drawn before the parameter values. */
-                }
-                else
-                {
-                    (void)ui_renderer_template_draw_custom_adsr_shape(&grouped_adsr_shape,
-                                                                      UI_TEMPLATE_GROUP_WIDGET_X,
-                                                                      UI_TEMPLATE_GROUP_WIDGET_Y,
-                                                                      UI_TEMPLATE_GROUP_WIDGET_W,
-                                                                      UI_TEMPLATE_GROUP_WIDGET_H,
-                                                                      1U);
-                }
-            }
-        }
+        job->body = UI_TEMPLATE_BODY_SAMPLER_RAM;
+        return;
+    }
+    if ((wave_wavetable_subpage != 0U) && (wave_classic_page == 0U))
+    {
+        job->body = UI_TEMPLATE_BODY_SYNTH_LIVE;
+        job->osc_mask = (subpage->param_bank.params[0] == UI_PARAM_LOCAL_WAVE_OSC2)
+            ? 0x02U : 0x01U;
+        job->large_wave = 1U;
+        job->synth_engine = SYNTH_WAVEFORM_ENGINE_WAVE;
+        return;
+    }
+    if ((state->navigation_subset == 0U)
+            && (ui_renderer_template_is_wave_common_subpage(subpage) != 0U))
+    {
+        job->body = UI_TEMPLATE_BODY_SYNTH_LIVE;
+        job->osc_mask = 0x03U;
+        job->synth_engine = SYNTH_WAVEFORM_ENGINE_WAVE;
+        return;
+    }
+    if ((state->navigation_subset == 0U)
+            && (ui_renderer_template_is_prism_tone_subpage(subpage) != 0U))
+    {
+        const param_id_t first = subpage->param_bank.params[0];
+        job->body = UI_TEMPLATE_BODY_SYNTH_LIVE;
+        job->osc_mask = (first == PARAM_PRISM_OSC1_MODEL) ? 0x01U
+            : ((first == PARAM_PRISM_OSC2_MODEL) ? 0x02U : 0x03U);
+        job->synth_engine = SYNTH_WAVEFORM_ENGINE_PRISM;
+        return;
+    }
+    if (wave_classic_page != 0U)
+    {
+        job->body = UI_TEMPLATE_BODY_WAVE_WAVETABLE;
+        return;
+    }
+    if ((state->navigation_subset != 0U)
+            && (ui_renderer_template_is_wave_common_subpage(subpage) != 0U))
+    {
+        job->body = UI_TEMPLATE_BODY_WAVE_CLASSIC;
+        return;
     }
 
-    ui_renderer_template_draw_footer(state);
+    job->grouped_widget = ui_renderer_template_resolve_grouped_custom_widget(state, subpage);
+    job->grouped_widget_drawn =
+        (uint8_t)((job->grouped_widget != UI_TEMPLATE_CUSTOM_WIDGET_NONE)
+                && (ui_renderer_template_prepare_custom_adsr(&job->plock_frame,
+                        job->grouped_widget, &job->grouped_adsr_shape) != 0U));
+    if (job->grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_AUDIO_FX_GROUP)
+    {
+        job->grouped_widget_drawn = 1U;
+    }
+    if (ui_renderer_template_filter_curve_group_is_active(state, subpage,
+                                                           &job->plock_frame) != 0U)
+    {
+        job->grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP;
+        job->grouped_widget_drawn = 1U;
+    }
+    if (ui_renderer_template_spectral_window_group_is_active(state, subpage,
+            &job->grouped_filter_first_slot, &job->grouped_filter_position,
+            &job->grouped_filter_width) != 0U)
+    {
+        job->grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_SPECTRAL_WINDOW_GROUP;
+        job->grouped_widget_drawn = 1U;
+    }
+    if (ui_renderer_template_lfo_shape_phase_group_is_active(state, subpage,
+            &job->grouped_lfo_shape_id, &job->grouped_lfo_phase_id) != 0U)
+    {
+        job->grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE_PHASE_GROUP;
+        job->grouped_widget_drawn = 1U;
+    }
+    if (ui_renderer_template_fm_pitch_eg_group_is_active(state, subpage) != 0U)
+    {
+        job->grouped_widget = UI_TEMPLATE_CUSTOM_WIDGET_FM_PITCH_EG_GROUP;
+        job->grouped_widget_drawn = 1U;
+    }
+}
 
-    drv_display_set_font(&FONT_5X7);
+static void ui_renderer_template_job_draw_special(ui_renderer_template_job_t *job)
+{
+    const ui_template_page_state_t *state = &job->state;
+    const ui_template_subpage_t *subpage = ui_template_page_get_active_subpage(state);
+    if (subpage == NULL) return;
+
+    switch (job->body)
+    {
+        case UI_TEMPLATE_BODY_SAMPLER_RAM:
+            ui_renderer_template_draw_sampler_ram_wave_placeholder(state, &job->plock_frame, subpage);
+            break;
+        case UI_TEMPLATE_BODY_SYNTH_LIVE:
+            ui_renderer_template_draw_synth_live_placeholder(state, &job->plock_frame,
+                subpage, job->osc_mask, job->large_wave, job->synth_engine);
+            break;
+        case UI_TEMPLATE_BODY_WAVE_WAVETABLE:
+            ui_renderer_template_draw_wave_wavetable_placeholder(state, &job->plock_frame, subpage);
+            break;
+        case UI_TEMPLATE_BODY_WAVE_CLASSIC:
+            ui_renderer_template_draw_wave_classic_common(state, &job->plock_frame, subpage);
+            break;
+        default:
+            break;
+    }
+}
+
+static void ui_renderer_template_job_draw_group(ui_renderer_template_job_t *job)
+{
+    if (job->grouped_widget_drawn == 0U) return;
+    switch (job->grouped_widget)
+    {
+        case UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP:
+            (void)ui_renderer_template_draw_filter_curve_group(&job->plock_frame);
+            break;
+        case UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE_PHASE_GROUP:
+            (void)ui_renderer_template_draw_lfo_shape_phase_group(&job->plock_frame,
+                job->grouped_lfo_shape_id, job->grouped_lfo_phase_id);
+            break;
+        case UI_TEMPLATE_CUSTOM_WIDGET_SPECTRAL_WINDOW_GROUP:
+            ui_renderer_template_draw_spectral_window_group(&job->plock_frame,
+                job->grouped_filter_first_slot, job->grouped_filter_position,
+                job->grouped_filter_width);
+            break;
+        case UI_TEMPLATE_CUSTOM_WIDGET_FM_PITCH_EG_GROUP:
+            (void)ui_renderer_template_draw_fm_pitch_eg_group(&job->plock_frame);
+            break;
+        case UI_TEMPLATE_CUSTOM_WIDGET_AUDIO_FX_GROUP:
+            break;
+        default:
+            (void)ui_renderer_template_draw_custom_adsr_shape(&job->grouped_adsr_shape,
+                UI_TEMPLATE_GROUP_WIDGET_X, UI_TEMPLATE_GROUP_WIDGET_Y,
+                UI_TEMPLATE_GROUP_WIDGET_W, UI_TEMPLATE_GROUP_WIDGET_H, 1U);
+            break;
+    }
+}
+
+uint8_t ui_renderer_template_draw_step(const ui_template_page_state_t *state)
+{
+    ui_renderer_template_job_t *job = &g_ui_renderer_template_job;
+    if ((job->phase == UI_TEMPLATE_RENDER_IDLE)
+            && (ui_renderer_template_job_begin(state) == 0U))
+    {
+        return 1U;
+    }
+    if (ui_renderer_template_job_is_current(job, state) == 0U)
+    {
+        drv_display_clear();
+        if (ui_renderer_template_job_begin(state) == 0U) return 1U;
+    }
+
+    const ui_template_subpage_t *subpage = ui_template_page_get_active_subpage(&job->state);
+    switch (job->phase)
+    {
+        case UI_TEMPLATE_RENDER_HEADER:
+            ui_renderer_template_draw_header(&job->state);
+            job->phase = UI_TEMPLATE_RENDER_PREPARE;
+            break;
+        case UI_TEMPLATE_RENDER_PREPARE:
+            ui_renderer_template_job_prepare(job);
+            job->phase = (job->body == UI_TEMPLATE_BODY_SLOTS)
+                ? UI_TEMPLATE_RENDER_AUDIO_FX : UI_TEMPLATE_RENDER_SPECIAL;
+            break;
+        case UI_TEMPLATE_RENDER_SPECIAL:
+            ui_renderer_template_job_draw_special(job);
+            job->phase = UI_TEMPLATE_RENDER_FOOTER;
+            break;
+        case UI_TEMPLATE_RENDER_AUDIO_FX:
+            if (job->grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_AUDIO_FX_GROUP)
+                (void)ui_renderer_template_draw_audio_fx_group(&job->plock_frame);
+            job->phase = UI_TEMPLATE_RENDER_SLOT_0;
+            break;
+        case UI_TEMPLATE_RENDER_SLOT_0:
+        case UI_TEMPLATE_RENDER_SLOT_1:
+        case UI_TEMPLATE_RENDER_SLOT_2:
+        case UI_TEMPLATE_RENDER_SLOT_3:
+        {
+            const uint8_t slot = (uint8_t)(job->phase - UI_TEMPLATE_RENDER_SLOT_0);
+            if (subpage != NULL)
+                ui_renderer_template_draw_param_slot(&job->state, &job->plock_frame,
+                    subpage, job->grouped_widget, job->grouped_widget_drawn,
+                    slot, subpage->param_bank.params[slot]);
+            job->phase = (ui_renderer_template_phase_t)(job->phase + 1);
+            break;
+        }
+        case UI_TEMPLATE_RENDER_GROUP:
+            ui_renderer_template_draw_mod_link_arrows(subpage);
+            ui_renderer_template_job_draw_group(job);
+            job->phase = UI_TEMPLATE_RENDER_FOOTER;
+            break;
+        case UI_TEMPLATE_RENDER_FOOTER:
+            ui_renderer_template_draw_footer(&job->state);
+            job->phase = UI_TEMPLATE_RENDER_FINALIZE;
+            break;
+        case UI_TEMPLATE_RENDER_FINALIZE:
+            drv_display_set_font(&FONT_5X7);
+            job->phase = UI_TEMPLATE_RENDER_IDLE;
+            return 1U;
+        default:
+            job->phase = UI_TEMPLATE_RENDER_IDLE;
+            return 1U;
+    }
+    return 0U;
+}
+
+uint8_t ui_renderer_template_draw_pending(void)
+{
+    return (g_ui_renderer_template_job.phase != UI_TEMPLATE_RENDER_IDLE) ? 1U : 0U;
+}
+
+void ui_renderer_template_draw_cancel(void)
+{
+    g_ui_renderer_template_job.phase = UI_TEMPLATE_RENDER_IDLE;
 }

@@ -6,5 +6,6 @@
 void ui_renderer_oled_draw(void);
 void ui_renderer_oled_service_poll(void);
 uint8_t ui_renderer_oled_is_rendering(void);
+void ui_renderer_oled_invalidate(void);
 
 #endif /* UI_RENDERER_OLED_H */

@@ -64,6 +64,7 @@ implementation dans `Src`. Aucun domaine generique `Core` ne subsiste.
 - [z3_param_modulation_control.md](z3_param_modulation_control.md): parametres, valeur canonique, p-locks, modulation et commandes AUDIO datees.
 - [z4_seq_clock_scheduler.md](z4_seq_clock_scheduler.md): sequence, Note FX, horodatage live, files et Undo/Redo.
 - [z5_ui_navigation_interaction.md](z5_ui_navigation_interaction.md): navigation, modes, selection, Master et ordre des handlers.
+- [ui_render_cooperative.md](ui_render_cooperative.md): rendu OLED fractionne, annulation, coalescence et atomicite de frame.
 - [z6_state_persistence_patterns_projects.md](z6_state_persistence_patterns_projects.md): modele, codec, cles, Pattern, Patch, Project et transactions Storage.
 - [stream_need_contract.md](stream_need_contract.md): Sampler RAM, Wavetable, Multi, streaming, page-cache et transport I/O.
 - [recorder_sd.md](recorder_sd.md): bus AUDIO REC unique, ARM TRIG/peak pointer-free, Recorder, capture Looper, reservation fichier et relecture de prise.
