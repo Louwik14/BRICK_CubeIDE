@@ -99,6 +99,12 @@ uint8_t ui_param_resolve_encoder_detent_from_binding(param_id_t param,
                                                      int8_t direction,
                                                      float current_value,
                                                      ui_param_encoder_target_t *out_target);
+uint8_t ui_param_try_apply_held_seq_plock_from_binding(uint8_t encoder,
+                                                       param_id_t param,
+                                                       uint8_t scope,
+                                                       uint8_t track,
+                                                       uint8_t shift_down,
+                                                       int8_t direction);
 void ui_param_seq_plock_feedback_frame_begin(ui_param_seq_plock_feedback_frame_t *frame_ctx);
 uint8_t ui_param_try_get_seq_plock_feedback_with_frame(const ui_param_seq_plock_feedback_frame_t *frame_ctx,
                                                        param_id_t param,

@@ -27,6 +27,7 @@
 #include "Audio/Engines/stack_engine.h"
 #include "Audio/Engines/wavetable_engine.h"
 #include "Audio/Engines/fm_engine.h"
+#include "Audio/Engines/tb303_engine.h"
 #include "Track/synth_polyphony.h"
 #include "Audio/sd_preview_audio.h"
 #include "mixer.h"
@@ -745,6 +746,57 @@ static __attribute__((noinline)) void brick6_render_stack_tracks(uint16_t entity
     }
 }
 
+static __attribute__((noinline)) void brick6_render_tb303_tracks(uint16_t entity_mask,
+                                        uint32_t frames)
+{
+    static float tmp[AUDIO_BLOCK_SIZE];
+    while(entity_mask!=0U)
+    {
+        const uint8_t track=(uint8_t)__builtin_ctz((unsigned int)entity_mask);
+        entity_mask&=(uint16_t)(entity_mask-1U);
+        track_audio_runtime_ctx_t ctx;
+        if((audio_note_engine_adapter_current_ctx(track,&ctx)==0U)
+                ||(ctx.program_route.engine!=(uint8_t)TRACK_RUNTIME_ENGINE_TB303))continue;
+        const uint8_t voice_count=synth_polyphony_get_render_voice_count(track);
+        if(voice_count==0U)continue;
+        if(voice_count>1U)
+        {
+            uint8_t renderable=synth_polyphony_get_renderable_voice_mask(track);
+            uint8_t published=0U;
+            if((renderable==0U)
+                    ||(mixer_begin_external_poly(ctx.program_route.mix_track_id,frames)==0U))continue;
+            while(renderable!=0U)
+            {
+                const uint8_t voice=(uint8_t)__builtin_ctz((unsigned int)renderable);
+                renderable&=(uint8_t)(renderable-1U);
+                const uint8_t instance=SYNTH_POLYPHONY_INSTANCE(track,voice);
+                brick6_tb303_runtime_sync_voice(ctx.program_route.instance_id,instance);
+                (void)brick6_tb303_runtime_render_instance(instance,tmp,frames);
+                const uint8_t running=mixer_process_external_poly_voice(
+                    ctx.program_route.mix_track_id,track,voice,tmp,frames,
+                    synth_polyphony_get_voice_pan(track,voice));
+                published=1U;
+                if(running==0U)synth_polyphony_voice_release_complete(track,voice);
+            }
+            if(published!=0U)mixer_commit_external_poly(ctx.program_route.mix_track_id,frames);
+            continue;
+        }
+        float *direct=NULL;
+        if(mixer_begin_external_mono_native(ctx.program_route.mix_track_id,frames,&direct)!=0U)
+        {
+            if(brick6_tb303_runtime_render_instance(ctx.program_route.instance_id,direct,frames)!=0U)
+                mixer_commit_external_mono_native(ctx.program_route.mix_track_id,frames);
+            else synth_polyphony_voice_release_complete(track,0U);
+        }
+        else
+        {
+            if(brick6_tb303_runtime_render_instance(ctx.program_route.instance_id,tmp,frames)!=0U)
+                mixer_submit_external_mono_native(ctx.program_route.mix_track_id,tmp,frames);
+            else synth_polyphony_voice_release_complete(track,0U);
+        }
+    }
+}
+
 void brick6_audio_runtime_init(void)
 {
     g_runtime_track_enabled = 1U;
@@ -832,6 +884,11 @@ ITCM_TEXT void brick6_audio_runtime_dsp(StereoTrack *tracks,
         brick6_render_fm_tracks(fm_entity_mask, frames, &fm_tracks);
         (void)fm_tracks;
     }
+
+    const uint16_t tb303_entity_mask = audio_note_engine_adapter_entity_mask(
+        TRACK_RUNTIME_ENGINE_TB303);
+    if (tb303_entity_mask != 0U)
+        brick6_render_tb303_tracks(tb303_entity_mask, frames);
 
     mixer_process(tracks, track_count, frames);
 

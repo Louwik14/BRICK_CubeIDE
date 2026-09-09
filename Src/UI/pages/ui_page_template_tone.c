@@ -288,6 +288,18 @@ static const ui_template_family_t g_ui_template_tone_family_stack = {
     .default_subpage = 0U,
 };
 
+static const ui_template_family_t g_ui_template_tone_family_tb303 = {
+    .family_title = "TONE",
+    .nav_labels = { "VCO", "VCF/VCA", "QUALITY", "-" },
+    .subpages = {
+        { .title = "VCO", .param_bank = { .params = { PARAM_TB303_WAVE, PARAM_TB303_TUNE, PARAM_TB303_SLIDE, PARAM_TB303_ACCENT } } },
+        { .title = "VCF / VCA", .param_bank = { .params = { PARAM_TB303_CUT, PARAM_TB303_RES, PARAM_TB303_ENV_MOD, PARAM_TB303_DECAY } } },
+        { .title = "QUALITY", .param_bank = { .params = { PARAM_TB303_VCF_RATE, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
 static ui_template_family_t g_ui_template_tone_family_fm = {
     .family_title = "TONE 1/2",
     .nav_labels = { "GLOBAL", "OP QUICK", "PITCH R", "PITCH L" },

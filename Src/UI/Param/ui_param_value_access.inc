@@ -208,6 +208,9 @@ static uint8_t ui_param_resolve_seq_slot(uint8_t track,
         case TRACK_RUNTIME_PARAM_DOMAIN_MIDI_FX:
             set_id = (uint8_t)SEQ_PLOCK_SET_MIDI_FX;
             break;
+        case TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX:
+            set_id = (uint8_t)SEQ_PLOCK_SET_AUDIO_FX;
+            break;
         case TRACK_RUNTIME_PARAM_DOMAIN_MIX:
             set_id = (uint8_t)SEQ_PLOCK_SET_MIX;
             break;

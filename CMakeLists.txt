@@ -507,6 +507,7 @@ set(AUDIO_LTO_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/audio_engine_dispatch.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/prism_engine.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/stack_engine.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/tb303_engine.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/wavetable_engine.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/Sampler/brick6_sampler_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/brick6_looper_runtime.c
@@ -533,6 +534,7 @@ set(AUDIO_O3_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/audio_engine_dispatch.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/prism_engine.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/stack_engine.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/tb303_engine.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/wavetable_engine.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/Sampler/brick6_sampler_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/brick6_looper_runtime.c

@@ -20,6 +20,7 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
 uint8_t param_backend_apply_tone_looper(uint8_t track, param_id_t id, float value);
 uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value);
 uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value);
+uint8_t param_backend_apply_tone_tb303(uint8_t track, param_id_t id, float value);
 uint8_t param_backend_apply_tone_drum(uint8_t track,
                                       const track_audio_runtime_ctx_t *ctx,
                                       param_id_t id,

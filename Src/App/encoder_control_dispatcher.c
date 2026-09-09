@@ -67,6 +67,18 @@ uint8_t encoder_control_dispatcher_service(void)
             direction = (int8_t)-direction;
         }
 
+        if (ui_param_try_apply_held_seq_plock_from_binding(
+                detent.encoder_id,
+                parameter,
+                scope,
+                track,
+                encoder_binding_shift_down(binding),
+                direction) != 0U)
+        {
+            submitted++;
+            continue;
+        }
+
         ui_param_encoder_target_t target;
         if (ui_param_resolve_encoder_detent_from_binding(parameter,
                                                          scope,

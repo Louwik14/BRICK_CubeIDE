@@ -42,7 +42,7 @@ aucune seconde chronologie fonctionnelle.
 Inc/ et Src/
 |-- App/                 bootstrap et orchestration produit
 |-- Audio/               runtime AUDIO, mixer, DSP et effets
-|   `-- Engines/         moteurs Prism, Stack, FM, Wavetable et Sampler AUDIO
+|   `-- Engines/         moteurs Prism, Stack, FM, TB-303, Wavetable et Sampler AUDIO
 |-- IPC/                 contrats, transports et projections CONTROL/AUDIO
 |-- Platform/            configuration physique, memoire, faults et diagnostics
 |-- Track/               identites, topologie et etat/runtime de piste

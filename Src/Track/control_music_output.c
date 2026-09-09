@@ -415,7 +415,6 @@ static uint8_t control_music_output_limit(brick_entity_id_t entity_id)
                 && !((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
                     && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI))))
         return 1U;
-
     float configured = 1.0f;
     configured = (float)polyphony_control_get_voice_count(entity_id);
     uint8_t limit = (configured >= 1.0f) ? (uint8_t)configured : 1U;

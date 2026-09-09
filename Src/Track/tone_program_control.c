@@ -41,6 +41,9 @@ static float *tone_field(tone_program_control_t *p, param_id_t id)
         switch(id){F(PARAM_WAVE_OSC1_POS,p->state.wave.osc[0].position);F(PARAM_WAVE_OSC1_START,p->state.wave.osc[0].start);F(PARAM_WAVE_OSC1_LEN,p->state.wave.osc[0].length);
         F(PARAM_WAVE_OSC2_POS,p->state.wave.osc[1].position);F(PARAM_WAVE_OSC2_START,p->state.wave.osc[1].start);F(PARAM_WAVE_OSC2_LEN,p->state.wave.osc[1].length);
         F(PARAM_WAVE_VOLUME,p->state.wave.volume);F(PARAM_WAVE_BALANCE,p->state.wave.balance);F(PARAM_WAVE_TUNE,p->state.wave.tune);F(PARAM_WAVE_DETUNE,p->state.wave.detune);default:return NULL;}
+    case TRACK_RUNTIME_TYPE_TB303:
+        switch(id){F(PARAM_TB303_WAVE,p->state.tb303.wave);F(PARAM_TB303_TUNE,p->state.tb303.tune);F(PARAM_TB303_CUT,p->state.tb303.cut);F(PARAM_TB303_RES,p->state.tb303.res);
+        F(PARAM_TB303_ENV_MOD,p->state.tb303.env_mod);F(PARAM_TB303_DECAY,p->state.tb303.decay);F(PARAM_TB303_ACCENT,p->state.tb303.accent);F(PARAM_TB303_SLIDE,p->state.tb303.slide);F(PARAM_TB303_VCF_RATE,p->state.tb303.vcf_rate);default:return NULL;}
     case TRACK_RUNTIME_TYPE_RAM:
         switch(id){F(PARAM_SAMPLER_GAIN,p->state.ram.gain);F(PARAM_SAMPLER_START,p->state.ram.start);F(PARAM_SAMPLER_LENGTH,p->state.ram.length);F(PARAM_SAMPLER_MODE,p->state.ram.mode);
         F(PARAM_SAMPLER_TUNE,p->state.ram.tune);F(PARAM_SAMPLER_LOOP_START,p->state.ram.loop_start);F(PARAM_SAMPLER_SLICE_COUNT,p->state.ram.slice_count);default:return NULL;}
@@ -90,7 +93,7 @@ uint8_t tone_program_control_set(uint8_t track,param_id_t id,float value)
 uint8_t tone_program_control_get_slot_normalized(uint8_t track,uint8_t slot,float*out)
 {param_id_t id;float v;if(track>=SEQ_LANE_CAPACITY||out==NULL||!tone_param_codec_slot_to_param(g_tone_program[track].tag,slot,&id)||!tone_program_control_get(track,id,&v))return 0U;const float span=param_registry[id].max-param_registry[id].min;*out=span>0.0f?(v-param_registry[id].min)/span:0.0f;return 1U;}
 uint8_t tone_program_control_set_slot_normalized(uint8_t track,uint8_t slot,float value)
-{param_id_t id;if(track>=SEQ_LANE_CAPACITY||!tone_param_codec_slot_to_param(g_tone_program[track].tag,slot,&id))return 0U;if(value<0.0f)value=0.0f;else if(value>1.0f)value=1.0f;return tone_program_control_set(track,id,param_registry[id].min+value*(param_registry[id].max-param_registry[id].min));}
+{param_id_t id;param_registry_prepared_value_t canonical;if(track>=SEQ_LANE_CAPACITY||!tone_param_codec_slot_to_param(g_tone_program[track].tag,slot,&id))return 0U;if(value<0.0f)value=0.0f;else if(value>1.0f)value=1.0f;if(!param_registry_prepare_value(id,param_registry[id].min+value*(param_registry[id].max-param_registry[id].min),&canonical))return 0U;return tone_program_control_set(track,id,canonical.value);}
 track_runtime_type_t tone_program_control_get_type(uint8_t track){return track<SEQ_LANE_CAPACITY?g_tone_program[track].tag:TRACK_RUNTIME_TYPE_NONE;}
 uint32_t tone_program_control_size_bytes(void){return (uint32_t)sizeof(tone_program_control_t);}
 uint8_t tone_program_control_capture(uint8_t track,tone_program_control_t*out_program)

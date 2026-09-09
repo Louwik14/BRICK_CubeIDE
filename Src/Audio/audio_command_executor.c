@@ -12,6 +12,7 @@
 #include "Audio/audio_transport_runtime.h"
 #include "Audio/brick6_looper_runtime.h"
 #include "Audio/Engines/fm_engine.h"
+#include "Audio/Engines/tb303_engine.h"
 #include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
 #include "Audio/Engines/wavetable_engine.h"
 #include "Audio/Engines/audio_engine_dispatch.h"
@@ -28,6 +29,7 @@
 #include "Mod/mod_env3.h"
 #include "Audio/sd_preview_audio.h"
 #include "Platform/brick_fatal.h"
+#include "Seq/seq_note_trace.h"
 #include "main.h"
 #include "stm32h7xx.h"
 
@@ -58,6 +60,8 @@ static void audio_command_close_entity(uint8_t entity)
         if (current.program_route.engine == TRACK_RUNTIME_ENGINE_DRUM)
             drum_synth_all_notes_off_for_instance(
                 current.program_route.instance_id);
+        if (current.program_route.engine == TRACK_RUNTIME_ENGINE_TB303)
+            brick6_tb303_runtime_all_notes_off(current.program_route.instance_id);
         if (current.program_route.mix_track_id < MIXER_MAX_TRACKS)
         {
             mixer_track_vca_all_notes_off(current.program_route.mix_track_id);
@@ -345,6 +349,10 @@ static uint8_t audio_command_apply_panic(const control_audio_command_t *command)
         audio_command_close_external_entities();
         for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
         {
+            audio_note_engine_program_t current;
+            if ((audio_note_engine_adapter_current(entity,&current)!=0U)
+                    && (current.program_route.engine==TRACK_RUNTIME_ENGINE_TB303))
+                brick6_tb303_runtime_all_notes_off(current.program_route.instance_id);
             brick6_looper_runtime_stop_playback(entity);
             audio_note_engine_adapter_forget_outputs(entity);
         }
@@ -424,6 +432,9 @@ uint16_t __attribute__((noinline)) audio_command_executor_apply_due(
             brick6_fm_runtime_finalize_pending();
         const audio_command_apply_result_t result =
             audio_command_apply(&command);
+        if (CONTROL_AUDIO_COMMAND_OPCODE(&command) == CONTROL_AUDIO_COMMAND_NOTE)
+            seq_step_debug_audio(command.value, sample_time,
+                (uint8_t)(result == AUDIO_COMMAND_APPLY_OK));
         if (result != AUDIO_COMMAND_APPLY_OK)
             audio_command_fatal(&command, result);
         (void)control_audio_fifo_audio_pop();

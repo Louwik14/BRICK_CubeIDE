@@ -232,6 +232,7 @@ set(DOMAIN_AUDIO
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/fm_engine.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/prism_engine.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/stack_engine.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/tb303_engine.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/wavetable_engine.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/adsr_daisy.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio.c"

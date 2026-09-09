@@ -59,6 +59,15 @@ uint8_t live_parameter_is_audio_owned(param_id_t parameter)
         case PARAM_WAVE_BALANCE:
         case PARAM_WAVE_TUNE:
         case PARAM_WAVE_DETUNE:
+        case PARAM_TB303_WAVE:
+        case PARAM_TB303_TUNE:
+        case PARAM_TB303_CUT:
+        case PARAM_TB303_RES:
+        case PARAM_TB303_ENV_MOD:
+        case PARAM_TB303_DECAY:
+        case PARAM_TB303_ACCENT:
+        case PARAM_TB303_SLIDE:
+        case PARAM_TB303_VCF_RATE:
         case PARAM_PRISM_VOLUME:
         case PARAM_PRISM_TUNE:
         case PARAM_PRISM_PITCH_MOD1:

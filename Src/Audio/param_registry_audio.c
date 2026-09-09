@@ -93,9 +93,7 @@ uint8_t param_audio_apply_track(
     const param_id_t id = prepared->id;
     const float value = prepared->value;
     if (param_spec_value_is_valid(id, value) == 0U) return 0U;
-    uint8_t fx_slot = 0U;
-    uint8_t fx_param = 0U;
-    if (audio_fx_param_catalog_param_info(id, &fx_slot, &fx_param) != 0U)
+    if (audio_fx_runtime_is_param(id) != 0U)
         return audio_fx_runtime_apply_param((brick_entity_id_t)track, id, value);
     if (id == PARAM_CFG_POLY_SPREAD) return 0U;
     if (param_filter_audio_is_param(id) != 0U)

@@ -403,6 +403,17 @@ enum {
     PARAM_GROUP_FX_A_LEVEL,
     PARAM_GROUP_FX_B_LEVEL,
 
+    /* TB-303 TONE controls. Appended for persistence ordinal stability. */
+    PARAM_TB303_WAVE,
+    PARAM_TB303_TUNE,
+    PARAM_TB303_CUT,
+    PARAM_TB303_RES,
+    PARAM_TB303_ENV_MOD,
+    PARAM_TB303_DECAY,
+    PARAM_TB303_ACCENT,
+    PARAM_TB303_SLIDE,
+    PARAM_TB303_VCF_RATE,
+
     PARAM_COUNT
 };
 
@@ -506,7 +517,7 @@ PARAM_ID_STATIC_ASSERT(PARAM_DRUM_MD_P1 == 22, "Drum MD parameter IDs changed");
 PARAM_ID_STATIC_ASSERT(PARAM_DRUM_MD_P8 == 29, "Drum MD parameter IDs changed");
 PARAM_ID_STATIC_ASSERT(PARAM_MIX_REVERB_DELAYS == 143, "Reverb parameter ID changed");
 PARAM_ID_STATIC_ASSERT(PARAM_RESERVED_175 == 144, "Reserved parameter ID changed");
-PARAM_ID_STATIC_ASSERT(PARAM_COUNT == 365, "Parameter count changed");
+PARAM_ID_STATIC_ASSERT(PARAM_COUNT == 374, "Parameter count changed");
 PARAM_ID_STATIC_ASSERT(PARAM_MIDI_FX_S1_PARAM1 == 250, "MIDI FX parameter boundary changed");
 PARAM_ID_STATIC_ASSERT(PARAM_EXT_GATE == 249, "EXT gate parameter ID changed");
 #undef PARAM_ID_STATIC_ASSERT

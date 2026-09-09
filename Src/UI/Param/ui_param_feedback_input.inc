@@ -47,7 +47,8 @@ uint8_t ui_param_handle_encoder_with_context(const ui_param_encoder_context_t *c
     float max_value = 0.0f;
     (void)ui_param_resolve_edit_bounds(param, edit_track, &min_value, &max_value);
 
-    if (ui_param_try_apply_seq_plock(encoder, param, desc, delta, min_value, max_value, edit_track) != 0U)
+    if (ui_param_try_apply_seq_plock(encoder, param, desc, delta, min_value, max_value,
+                                     edit_track, ctx->shift_down) != 0U)
     {
         return 1U;
     }

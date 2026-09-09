@@ -8,6 +8,7 @@
 #include "Audio/Engines/audio_engine_dispatch.h"
 #include "Audio/Engines/prism_engine.h"
 #include "Audio/Engines/fm_engine.h"
+#include "Audio/Engines/tb303_engine.h"
 #include "Audio/Engines/stack_engine.h"
 #include "Audio/Engines/wavetable_engine.h"
 
@@ -70,6 +71,7 @@ uint8_t brick6_audio_boot_apply_engines(const brick6_audio_boot_intent_t *intent
     brick6_stack_runtime_init();
     brick6_wave_runtime_init();
     brick6_fm_runtime_init();
+    brick6_tb303_runtime_init();
     brick6_audio_runtime_init();
     return 1U;
 }

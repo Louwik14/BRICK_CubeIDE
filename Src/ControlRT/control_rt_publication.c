@@ -32,7 +32,7 @@ static uint8_t control_rt_program_is_valid(uint8_t entity, uint32_t value)
         control_audio_program_unpack(value);
     if ((d.engine >= (uint8_t)TRACK_RUNTIME_ENGINE_COUNT)
             || (d.family > (uint8_t)TRACK_RUNTIME_FAMILY_OTHER)
-            || (d.type > (uint8_t)TRACK_RUNTIME_TYPE_OTHER)
+            || (d.type >= (uint8_t)TRACK_RUNTIME_TYPE_COUNT)
             || ((d.flags & (uint8_t)~CONTROL_AUDIO_PROGRAM_FLAG_MASK) != 0U)
             || ((d.flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER) != 0U
                 && (d.flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD) != 0U))
@@ -466,9 +466,13 @@ uint8_t control_rt_publication_commit_horizon(void)
                 + g_control_audio_horizon.frames);
     }
     else
+    {
+        ++g_seq_step_debug.fifo_publication_refused_count;
+        g_seq_step_debug.last_skip_reason = SEQ_STEP_DEBUG_SKIP_FIFO_REJECTED;
         seq_note_trace_horizon_abort(g_control_audio_horizon.first_sample,
             g_control_audio_horizon.first_sample
                 + g_control_audio_horizon.frames);
+    }
     return accepted;
 }
 

@@ -9,6 +9,7 @@
 #include "Audio/Engines/stack_engine.h"
 #include "Audio/Engines/wavetable_engine.h"
 #include "Audio/Engines/fm_engine.h"
+#include "Audio/Engines/tb303_engine.h"
 #include "Mod/mod_lfo_v1_audio.h"
 #include "stm32h7xx.h"
 
@@ -109,6 +110,7 @@ static void synth_polyphony_reset_slot(uint8_t slot)
     brick6_stack_runtime_all_notes_off(slot);
     brick6_wave_runtime_all_notes_off(slot);
     brick6_fm_runtime_all_notes_off(slot);
+    brick6_tb303_runtime_all_notes_off(slot);
     mixer_synth_voice_slot_reset(slot);
     mod_lfo_v1_poly_voice_reset(slot);
 }
@@ -130,6 +132,7 @@ static void synth_polyphony_silence_slot(uint8_t slot)
     brick6_stack_runtime_clear_trigger(slot);
     brick6_wave_runtime_all_notes_off(slot);
     brick6_wave_runtime_clear_trigger(slot);
+    brick6_tb303_runtime_all_notes_off(slot);
     mixer_synth_voice_slot_reset(slot);
     mod_lfo_v1_poly_voice_reset(slot);
 }
@@ -280,6 +283,7 @@ uint8_t synth_polyphony_replace_renderer(uint8_t track, uint8_t engine)
         brick6_stack_runtime_all_notes_off(slot);
         brick6_wave_runtime_all_notes_off(slot);
         brick6_fm_runtime_all_notes_off(slot);
+        brick6_tb303_runtime_all_notes_off(slot);
     }
     poly->engine = engine;
     __DMB();

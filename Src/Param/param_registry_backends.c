@@ -11,6 +11,7 @@
 #include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
 #include "Audio/Engines/stack_engine.h"
 #include "Audio/Engines/wavetable_engine.h"
+#include "Audio/Engines/tb303_engine.h"
 #include "Param/md_model_catalog.h"
 #include "Audio/vca_env.h"
 #include "Param/param_filter_audio.h"
@@ -28,6 +29,26 @@ static float param_backend_clamp_value(float v, float lo, float hi)
         return hi;
     }
     return v;
+}
+
+uint8_t param_backend_apply_tone_tb303(uint8_t track,param_id_t id,float value)
+{
+    track_audio_runtime_ctx_t ctx;
+    if((audio_note_engine_adapter_current_ctx(track,&ctx)==0U)
+        ||(ctx.program_route.engine!=(uint8_t)TRACK_RUNTIME_ENGINE_TB303)
+        ||(ctx.program_route.instance_id>=BRICK6_TB303_INSTANCE_COUNT))return 0U;
+    const uint8_t instance=ctx.program_route.instance_id;
+    switch(id){
+    case PARAM_TB303_WAVE:brick6_tb303_runtime_set_wave(instance,value>=0.5f);return 1U;
+    case PARAM_TB303_TUNE:brick6_tb303_runtime_set_tune(instance,param_backend_clamp_value(value,-12,12));return 1U;
+    case PARAM_TB303_CUT:brick6_tb303_runtime_set_cut(instance,param_backend_clamp_value(value,0,1));return 1U;
+    case PARAM_TB303_RES:brick6_tb303_runtime_set_res(instance,param_backend_clamp_value(value,0,1));return 1U;
+    case PARAM_TB303_ENV_MOD:brick6_tb303_runtime_set_env_mod(instance,param_backend_clamp_value(value,0,1));return 1U;
+    case PARAM_TB303_DECAY:brick6_tb303_runtime_set_decay(instance,param_backend_clamp_value(value,0,1));return 1U;
+    case PARAM_TB303_ACCENT:brick6_tb303_runtime_set_accent(instance,param_backend_clamp_value(value,0,1));return 1U;
+    case PARAM_TB303_SLIDE:brick6_tb303_runtime_set_slide(instance,value>=0.5f);return 1U;
+    case PARAM_TB303_VCF_RATE:brick6_tb303_runtime_set_vcf_rate(instance,value>=0.5f);return 1U;
+    default:return 0U;}
 }
 
 static uint8_t param_backend_fm_store_ui(track_tone_fm_base_voice_t *base,

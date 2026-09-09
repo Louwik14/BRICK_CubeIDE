@@ -881,7 +881,10 @@ void ui_core_service_track_selection_inputs(void)
      * - Keeps modifier mirrors (shift_down / track_select_armed) coherent with raw
      *   button state, so downstream queued handlers read fresh flags.
      */
-    (void)encoder_control_dispatcher_service();
+    if (encoder_control_dispatcher_service() != 0U)
+    {
+        ui_renderer_oled_invalidate();
+    }
 
     const uint8_t mute_active = (ui_core_mute_is_active() != 0U) ? 1U : 0U;
     const uint8_t shift_down = button_down(BTN_SHIFT);

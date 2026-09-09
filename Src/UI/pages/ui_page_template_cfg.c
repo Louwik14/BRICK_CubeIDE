@@ -254,7 +254,7 @@ static uint8_t ui_page_template_cfg_virtual_slot_text(uint8_t slot,
     if(slot==0U){(void)snprintf(out_name,out_name_len,"TRACK");(void)snprintf(out_value,out_value_len,"%s",ui_track_catalog_family_display_name(family));return 1U;}
     if(slot==1U){(void)snprintf(out_name,out_name_len,"TYPE");(void)snprintf(out_value,out_value_len,"%s",ui_track_catalog_type_display_name(family,ui_get_track_type(track)));return 1U;}
     if(slot==2U&&family==TRACK_FAMILY_EXTERNAL){const uint8_t input=ui_get_track_external_input(track);(void)snprintf(out_name,out_name_len,"INPUT");(void)snprintf(out_value,out_value_len,"%s",(input==ENTITY_AUDIO_SOURCE_USB)?"USB":"LINE");return 1U;}
-    if(slot==2U&&(family==TRACK_FAMILY_SYNTH||(family==TRACK_FAMILY_SAMPLER&&ui_get_track_type(track)==TRACK_TYPE_MULTI))){(void)snprintf(out_name,out_name_len,"VOICES");(void)snprintf(out_value,out_value_len,"%u",(unsigned)polyphony_control_get_voice_count(track));return 1U;}
+    if(slot==2U&&((family==TRACK_FAMILY_SYNTH)||(family==TRACK_FAMILY_SAMPLER&&ui_get_track_type(track)==TRACK_TYPE_MULTI))){(void)snprintf(out_name,out_name_len,"VOICES");(void)snprintf(out_value,out_value_len,"%u",(unsigned)polyphony_control_get_voice_count(track));return 1U;}
     return 0U;
 }
 

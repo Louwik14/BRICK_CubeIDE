@@ -213,7 +213,8 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
                                             int16_t delta,
                                             float min_value,
                                             float max_value,
-                                            uint8_t active_track)
+                                            uint8_t active_track,
+                                            uint8_t shift_down)
 {
     if ((ui_hall_is_seq_context(ui_get_hall_mode()) == 0U) || (desc == 0))
     {
@@ -266,7 +267,7 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
         float next_value = 0.0f;
         if (ui_param_apply_delta_value(param, param_track, source_value, delta,
                                        min_value, max_value,
-                                       button_down(BTN_SHIFT) != 0U,
+                                       shift_down,
                                        &next_value) == 0U)
             return 1U;
         if (seq_param_iface_encode_param_value(
@@ -332,6 +333,38 @@ static uint8_t ui_param_try_apply_seq_plock(uint8_t encoder,
                                    UI_PARAM_VALUE_FLASH_PLOCK);
 
     return 1U;
+}
+
+uint8_t ui_param_try_apply_held_seq_plock_from_binding(uint8_t encoder,
+                                                       param_id_t param,
+                                                       uint8_t scope,
+                                                       uint8_t track,
+                                                       uint8_t shift_down,
+                                                       int8_t direction)
+{
+    if ((encoder >= 4U) || (param >= PARAM_COUNT)
+            || (scope != LIVE_PARAMETER_EVENT_SCOPE_TRACK)
+            || (track >= SEQ_LANE_CAPACITY)
+            || ((direction != -1) && (direction != 1)))
+    {
+        return 0U;
+    }
+
+    float min_value = 0.0f;
+    float max_value = 0.0f;
+    if (ui_param_resolve_edit_bounds(param, track, &min_value, &max_value) == 0U)
+    {
+        return 0U;
+    }
+
+    return ui_param_try_apply_seq_plock(encoder,
+                                        param,
+                                        &param_registry[param],
+                                        (int16_t)direction,
+                                        min_value,
+                                        max_value,
+                                        track,
+                                        shift_down);
 }
 
 static uint8_t ui_param_try_apply_live_rec_plock(uint8_t encoder,
