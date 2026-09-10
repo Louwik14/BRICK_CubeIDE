@@ -198,11 +198,13 @@ void seq_play_scheduler_preflight_product_window(uint16_t frames,
                                                  uint64_t first_sample)
 {
     if ((frames == 0U) || (frames > SEQ_PLAY_SCHEDULER_HORIZON_FRAMES))
-        brick_fatal_raise(BRICK_FATAL_SEQ_IMMINENT_CAPACITY, UINT32_MAX,
+        BRICK_FATAL_CONTEXT("SEQ_HORIZON_FRAMES_INVALID",
+                          BRICK_FATAL_SEQ_IMMINENT_CAPACITY, UINT32_MAX,
                           (uint32_t)first_sample, frames,
                           SEQ_PLAY_SCHEDULER_HORIZON_FRAMES);
     if (g_seq_play_active_source_count > SEQ_PRODUCT_MAX_ACTIVE_SOURCES)
-        brick_fatal_raise(BRICK_FATAL_SEQ_SOURCE_CAPACITY, UINT32_MAX,
+        BRICK_FATAL_CONTEXT("SEQ_ACTIVE_SOURCE_LIMIT_EXCEEDED",
+                          BRICK_FATAL_SEQ_SOURCE_CAPACITY, UINT32_MAX,
                           (uint32_t)first_sample,
                           g_seq_play_active_source_count,
                           SEQ_PRODUCT_MAX_ACTIVE_SOURCES);
@@ -213,7 +215,8 @@ void seq_play_scheduler_preflight_product_window(uint16_t frames,
         active_outputs += (g_seq_play_active_occurrence[i].active != 0U)
             ? 1U : 0U;
     if (active_outputs > SEQ_PRODUCT_MAX_EMITTING_VOICES)
-        brick_fatal_raise(BRICK_FATAL_SEQ_OCCURRENCE_CAPACITY, UINT32_MAX,
+        BRICK_FATAL_CONTEXT("SEQ_ACTIVE_VOICE_LIMIT_EXCEEDED",
+                          BRICK_FATAL_SEQ_OCCURRENCE_CAPACITY, UINT32_MAX,
                           (uint32_t)first_sample, active_outputs,
                           SEQ_PRODUCT_MAX_EMITTING_VOICES);
 }
@@ -456,7 +459,8 @@ static uint8_t seq_play_scheduler_register_source(
         g_seq_play_imminent_valid = 0U;
         return 1U;
     }
-    brick_fatal_raise(BRICK_FATAL_SEQ_SOURCE_CAPACITY,
+    BRICK_FATAL_CONTEXT("SEQ_SOURCE_REGISTRATION_CAPACITY_EXCEEDED",
+                      BRICK_FATAL_SEQ_SOURCE_CAPACITY,
                       item->target_track, item->source_step,
                       (uint32_t)g_seq_play_active_source_count + 1U,
                       SEQ_PLAY_SCHEDULER_SOURCE_CAPACITY);
@@ -875,7 +879,8 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                 continue;
             if (g_seq_play_imminent_count
                     >= SEQ_PLAY_SCHEDULER_IMMINENT_CAPACITY)
-                brick_fatal_raise(BRICK_FATAL_SEQ_IMMINENT_CAPACITY,
+                BRICK_FATAL_CONTEXT("SEQ_NOTE_OFF_QUEUE_CAPACITY_EXCEEDED",
+                                  BRICK_FATAL_SEQ_IMMINENT_CAPACITY,
                                   active->track,
                                   (uint32_t)block_start_sample,
                                   (uint32_t)g_seq_play_imminent_count + 1U,
@@ -1021,7 +1026,8 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                             source->source_track, source->source_step,
                             on_sample, g_seq_play_imminent_count,
                             0U, SEQ_PLAY_SCHEDULER_IMMINENT_CAPACITY);
-                    brick_fatal_raise(BRICK_FATAL_SEQ_IMMINENT_CAPACITY,
+                    BRICK_FATAL_CONTEXT("SEQ_NOTE_PAIR_QUEUE_CAPACITY_EXCEEDED",
+                                      BRICK_FATAL_SEQ_IMMINENT_CAPACITY,
                                       source->target_track,
                                       source->source_step,
                                       (uint32_t)g_seq_play_imminent_count + 2U,
@@ -1082,7 +1088,8 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                             SEQ_NOTE_TRACE_REJECT_SCHED_CAPACITY,
                             source->source_track, source->source_step,
                             on_sample, active_count, 0U, voice_limit);
-                    brick_fatal_raise(BRICK_FATAL_SEQ_OCCURRENCE_CAPACITY,
+                    BRICK_FATAL_CONTEXT("SEQ_VOICE_ALLOCATION_CAPACITY_EXCEEDED",
+                                      BRICK_FATAL_SEQ_OCCURRENCE_CAPACITY,
                                       source->target_track,
                                       source->source_step,
                                       (uint32_t)active_count + 1U,

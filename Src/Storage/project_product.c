@@ -743,14 +743,11 @@ enum
     PROJECT_FATAL_ASSET_RESET
 };
 
-static _Noreturn void project_product_internal_fail(uint32_t context)
-{
-    brick_fatal_raise(BRICK_FATAL_PROJECT_COMMIT,
-                      g_project_load.asset_index, context,
-                      g_project_load.asset_index,
-                      (g_project_load.restore != NULL)
-                          ? g_project_load.restore->asset_count : 0U);
-}
+#define PROJECT_PRODUCT_FATAL(message, context) \
+    BRICK_FATAL_CONTEXT((message), BRICK_FATAL_PROJECT_COMMIT, \
+        g_project_load.asset_index, (context), g_project_load.asset_index, \
+        (g_project_load.restore != NULL) \
+            ? g_project_load.restore->asset_count : 0U)
 
 void project_product_load_service(void)
 {
@@ -765,7 +762,8 @@ void project_product_load_service(void)
             && project_load_quiesce_safe() == 0U)
         {
             if (project_load_quiesce_failed() != 0U)
-                project_product_internal_fail(PROJECT_FATAL_QUIESCE);
+                PROJECT_PRODUCT_FATAL("PROJECT_LOAD_QUIESCE_FAILED",
+                                      PROJECT_FATAL_QUIESCE);
             return;
         }
         project_product_load_finish(0U);
@@ -775,7 +773,8 @@ void project_product_load_service(void)
         && g_project_load.quiesce_requested != 0U
         && project_load_quiesce_failed() != 0U)
     {
-        project_product_internal_fail(PROJECT_FATAL_QUIESCE);
+        PROJECT_PRODUCT_FATAL("PROJECT_LOAD_QUIESCE_FAILED",
+                              PROJECT_FATAL_QUIESCE);
     }
     if(g_project_load.state==PROJECT_LOAD_WAIT_MULTI)
     {
@@ -794,7 +793,8 @@ void project_product_load_service(void)
             if (project_multi_result_internal(diag.last_error)
                 || diag.last_error == MULTI_SAMPLE_LOAD_OK)
             {
-                project_product_internal_fail(
+                PROJECT_PRODUCT_FATAL(
+                    "PROJECT_MULTI_ASSET_COMPLETION_FAILED",
                     PROJECT_FATAL_ASSET_COMPLETION);
             }
             ++g_progress.asset_warning_count;
@@ -811,7 +811,8 @@ void project_product_load_service(void)
         if(result==PROJECT_CONTROL_ASSET_PENDING)return;
         if(result==PROJECT_CONTROL_ASSET_FAILED_INTERNAL)
         {
-            project_product_internal_fail(PROJECT_FATAL_ASSET_REGISTRATION);
+            PROJECT_PRODUCT_FATAL("PROJECT_STREAM_ASSET_REGISTRATION_FAILED",
+                                  PROJECT_FATAL_ASSET_REGISTRATION);
         }
         if(result==PROJECT_CONTROL_ASSET_FAILED)++g_progress.asset_warning_count;
         ++g_project_load.asset_index;
@@ -836,7 +837,8 @@ void project_product_load_service(void)
         if (project_control_begin_asset_restore() == 0U)
         {
             sd_scheduler_runtime_exclusive_end();
-            project_product_internal_fail(PROJECT_FATAL_ASSET_RESET);
+            PROJECT_PRODUCT_FATAL("PROJECT_ASSET_RESET_FAILED",
+                                  PROJECT_FATAL_ASSET_RESET);
         }
         g_project_load.state = PROJECT_LOAD_ASSETS;
         g_progress=(project_product_progress_t){1U,0U,0U,
@@ -857,7 +859,8 @@ void project_product_load_service(void)
         if (completion == PROJECT_CONTROL_ASSET_FAILED_INTERNAL
             || project_ram_result_internal(result) != 0U)
         {
-            project_product_internal_fail(PROJECT_FATAL_ASSET_COMPLETION);
+            PROJECT_PRODUCT_FATAL("PROJECT_RAM_ASSET_COMPLETION_FAILED",
+                                  PROJECT_FATAL_ASSET_COMPLETION);
         }
         if (result!=SAMPLER_RAM_RESULT_OK) ++g_progress.asset_warning_count;
         ++g_project_load.asset_index;
@@ -882,7 +885,8 @@ void project_product_load_service(void)
         if (completion == PROJECT_CONTROL_ASSET_FAILED_INTERNAL
             || project_wavetable_result_internal(result) != 0U)
         {
-            project_product_internal_fail(PROJECT_FATAL_ASSET_COMPLETION);
+            PROJECT_PRODUCT_FATAL("PROJECT_WAVETABLE_ASSET_COMPLETION_FAILED",
+                                  PROJECT_FATAL_ASSET_COMPLETION);
         }
         if (result != WAVETABLE_RESULT_OK) ++g_progress.asset_warning_count;
         ++g_project_load.asset_index;
@@ -908,8 +912,8 @@ void project_product_load_service(void)
             }
             if(result==PROJECT_CONTROL_ASSET_FAILED_INTERNAL)
             {
-                project_product_internal_fail(
-                    PROJECT_FATAL_ASSET_REGISTRATION);
+                PROJECT_PRODUCT_FATAL("PROJECT_ASSET_REGISTRATION_FAILED",
+                                      PROJECT_FATAL_ASSET_REGISTRATION);
             }
             if(result==PROJECT_CONTROL_ASSET_FAILED)
                 ++g_progress.asset_warning_count;
@@ -923,7 +927,8 @@ void project_product_load_service(void)
     {
         if (project_product_asset_loads_pending() != 0U)
         {
-            project_product_internal_fail(PROJECT_FATAL_PENDING_AT_COMMIT);
+            PROJECT_PRODUCT_FATAL("PROJECT_ASSET_PENDING_AT_COMMIT",
+                                  PROJECT_FATAL_PENDING_AT_COMMIT);
         }
         uint8_t ok = audio_state_snapshot_control_begin();
         if(ok)ok=(persistent_pattern_control_apply(&restore->working_pattern,0U)==PERSIST_CODEC_OK)?1U:0U;
@@ -932,7 +937,8 @@ void project_product_load_service(void)
         else audio_state_snapshot_control_abort();
         if(ok)pattern_live_set_active_state(restore->metadata.active_pattern_bank,restore->metadata.active_pattern,0U,0U,0U,0U);
         if (ok == 0U)
-            project_product_internal_fail(PROJECT_FATAL_PATTERN_APPLY);
+            PROJECT_PRODUCT_FATAL("PROJECT_PATTERN_APPLY_FAILED",
+                                  PROJECT_FATAL_PATTERN_APPLY);
         project_product_load_finish(1U);
     }
 }

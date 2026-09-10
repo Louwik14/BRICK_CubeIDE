@@ -154,7 +154,8 @@ void control_music_output_preflight_product_window(uint64_t first_sample)
             || (g_control_music_window_internal.count != 0U)
             || (g_control_music_window_internal_limit
                 < CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST))
-        brick_fatal_raise(BRICK_FATAL_MUSIC_STAGING_CAPACITY, UINT32_MAX,
+        BRICK_FATAL_CONTEXT("MUSIC_OUTPUT_WINDOW_PREFLIGHT_FAILED",
+                          BRICK_FATAL_MUSIC_STAGING_CAPACITY, UINT32_MAX,
                           (uint32_t)first_sample,
                           CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST,
                           g_control_music_window_internal_limit);

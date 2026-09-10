@@ -1,5 +1,6 @@
 #include "Param/param_registry_backends.h"
 #include "Audio/audio_note_engine_adapter.h"
+#include "Param/tone_param_catalog.h"
 #include <stddef.h>
 
 uint8_t param_backend_apply_prepared_track_value_audio(
@@ -21,6 +22,8 @@ uint8_t param_backend_apply_prepared_track_value_audio(
     uint8_t applied = param_backend_apply_mix_track(
         ctx, track, id, effective_value);
     if (applied != 0U) return applied;
+    if (tone_param_catalog_contains((track_runtime_type_t)ctx->type, id) == 0U)
+        return 0U;
     if ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
             && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))
     {

@@ -889,20 +889,13 @@ void drum_synth_init(float sample_rate)
 
 uint8_t drum_synth_set_model_for_instance(uint8_t instance_id, drum_model_id_t model_type)
 {
-    drum_synth_instance_t *const instance = drum_instance(instance_id);
-    if (instance == nullptr)
+    if (drum_synth_model_transition_is_valid(instance_id, model_type) == 0U)
     {
         return 0U;
     }
+    drum_synth_instance_t *const instance = drum_instance(instance_id);
 
     drum_instance_ensure_init(instance);
-
-    if ((model_type != DRUM_MODEL_ID_NONE)
-            && (model_type != DRUM_MODEL_ID_MD)
-            && (model_type != DRUM_MODEL_ID_BD_ANALOG))
-    {
-        return 0U;
-    }
 
     if (instance->model != model_type)
     {
@@ -925,6 +918,15 @@ uint8_t drum_synth_set_model_for_instance(uint8_t instance_id, drum_model_id_t m
     }
 
     return 1U;
+}
+
+uint8_t drum_synth_model_transition_is_valid(uint8_t instance_id,
+                                              drum_model_id_t model_type)
+{
+    return (uint8_t)((instance_id < BRICK_ENTITY_TOP_LEVEL_COUNT)
+        && ((model_type == DRUM_MODEL_ID_NONE)
+            || (model_type == DRUM_MODEL_ID_MD)
+            || (model_type == DRUM_MODEL_ID_BD_ANALOG)));
 }
 
 drum_model_id_t drum_synth_get_model_for_instance(uint8_t instance_id)

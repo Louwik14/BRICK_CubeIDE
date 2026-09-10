@@ -576,7 +576,8 @@ static void seq_runtime_process_core(void)
                 {
                     if (seq_runtime_control_apply_event(event) == 0U)
                     {
-                        brick_fatal_raise(
+                        BRICK_FATAL_CONTEXT(
+                            "SEQ_EVENT_APPLY_FAILED",
                             BRICK_FATAL_MUSIC_STAGING_CAPACITY,
                             event->track, (uint32_t)event->sample_abs,
                             CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST,
@@ -594,21 +595,24 @@ static void seq_runtime_process_core(void)
                 window_first,
                 frames, g_seq_runtime.samples_per_step_q16) == 0U)
         {
-            brick_fatal_raise(BRICK_FATAL_MUSIC_STAGING_CAPACITY,
+            BRICK_FATAL_CONTEXT("NOTE_FX_PIPELINE_PROCESS_FAILED",
+                              BRICK_FATAL_MUSIC_STAGING_CAPACITY,
                               UINT32_MAX, (uint32_t)window_first,
                               CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST,
                               CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST);
         }
         if (control_music_output_commit_window() == 0U)
         {
-            brick_fatal_raise(BRICK_FATAL_MUSIC_STAGING_CAPACITY,
+            BRICK_FATAL_CONTEXT("MUSIC_OUTPUT_WINDOW_COMMIT_FAILED",
+                              BRICK_FATAL_MUSIC_STAGING_CAPACITY,
                               UINT32_MAX, (uint32_t)window_first,
                               CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST,
                               CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST);
         }
         if (control_rt_publication_commit_horizon() == 0U)
         {
-            brick_fatal_raise(BRICK_FATAL_CONTROL_AUDIO_FIFO_CONTRACT,
+            BRICK_FATAL_CONTEXT("CONTROL_FIFO_HORIZON_COMMIT_FAILED",
+                              BRICK_FATAL_CONTROL_AUDIO_FIFO_CONTRACT,
                               UINT32_MAX, (uint32_t)window_first,
                               CONTROL_AUDIO_FIFO_CONTRACT_BURST,
                               CONTROL_AUDIO_FIFO_CAPACITY);

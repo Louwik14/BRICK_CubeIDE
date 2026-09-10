@@ -203,7 +203,8 @@ static void wavetable_restore_retained_old(void)
     if (sample_global_pool_register_wavetable_at(
             old->global_slot, job->wavetable_slot, old->path,
             old->cost_bytes_aligned) == 0U)
-        brick_fatal_raise(BRICK_FATAL_WAVETABLE_COMMIT,
+        BRICK_FATAL_CONTEXT("WAVETABLE_ROLLBACK_REGISTRATION_FAILED",
+                          BRICK_FATAL_WAVETABLE_COMMIT,
                           job->wavetable_slot, old->global_slot,
                           old->cost_bytes_aligned,
                           SAMPLE_GLOBAL_POOL_BUDGET_BYTES);
@@ -211,7 +212,8 @@ static void wavetable_restore_retained_old(void)
     audio_wavetable_descriptor_t descriptor;
     if (audio_wave_table_projection_build_descriptor(
             job->wavetable_slot, old, &descriptor) == 0U)
-        brick_fatal_raise(BRICK_FATAL_WAVETABLE_COMMIT,
+        BRICK_FATAL_CONTEXT("WAVETABLE_ROLLBACK_PROJECTION_FAILED",
+                          BRICK_FATAL_WAVETABLE_COMMIT,
                           job->wavetable_slot, old->global_slot,
                           old->data_bytes, old->cost_bytes_aligned);
     audio_wave_table_projection_install_prepared(&descriptor);

@@ -33,10 +33,6 @@
 #include "main.h"
 #include "stm32h7xx.h"
 
-#define AUDIO_PARAM_MULTI_RESOURCE_STOP   0xFFF5U
-#define AUDIO_PARAM_RAM_RESOURCE_STOP     0xFFF6U
-#define AUDIO_PARAM_WAVE_RESOURCE_STOP    0xFFF7U
-
 typedef enum
 {
     AUDIO_COMMAND_APPLY_OK = 0U,
@@ -221,17 +217,17 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
         return mixer_audio_set_insert_slot(command->entity,
             command->id - CONTROL_AUDIO_PARAM_MIX_INSERT_FIRST,
             (int8_t)(int32_t)command->value);
-    if (command->id == AUDIO_PARAM_MULTI_RESOURCE_STOP)
+    if (command->id == CONTROL_AUDIO_PARAM_MULTI_RESOURCE_STOP)
     {
         brick6_sampler_runtime_stop_multi_instrument(command->entity);
         return 1U;
     }
-    if (command->id == AUDIO_PARAM_RAM_RESOURCE_STOP)
+    if (command->id == CONTROL_AUDIO_PARAM_RAM_RESOURCE_STOP)
     {
         brick6_sampler_runtime_stop_ram_slot(command->entity, command->value);
         return 1U;
     }
-    if (command->id == AUDIO_PARAM_WAVE_RESOURCE_STOP)
+    if (command->id == CONTROL_AUDIO_PARAM_WAVE_RESOURCE_STOP)
     {
         brick6_wave_runtime_stop_wavetable_slot(command->entity, command->value);
         return 1U;
@@ -426,19 +422,37 @@ static audio_command_apply_result_t audio_command_apply(
     }
 }
 
-static _Noreturn void audio_command_fatal(
-    const control_audio_command_t *command, audio_command_apply_result_t result)
+static _Noreturn void audio_command_fatal_at(
+    const control_audio_command_t *command, audio_command_apply_result_t result,
+    const char *file, uint32_t line, const char *function)
 {
     brick_fatal_code_t code = BRICK_FATAL_AUDIO_INVALID_COMMAND;
+    const char *message = "AUDIO_COMMAND_INVALID";
     if (result == AUDIO_COMMAND_APPLY_PROGRAM_INSTALL)
+    {
         code = BRICK_FATAL_AUDIO_PROGRAM_INSTALL;
+        message = "AUDIO_PROGRAM_INSTALL_FAILED";
+    }
     else if (result == AUDIO_COMMAND_APPLY_POLYPHONY)
+    {
         code = BRICK_FATAL_AUDIO_POLYPHONY;
+        message = "AUDIO_POLYPHONY_APPLY_FAILED";
+    }
     else if (result == AUDIO_COMMAND_APPLY_REBIND)
+    {
         code = BRICK_FATAL_AUDIO_REBIND;
+        message = "AUDIO_RESOURCE_REBIND_FAILED";
+    }
     else if (result == AUDIO_COMMAND_APPLY_MAPPING)
+    {
         code = BRICK_FATAL_AUDIO_MAPPING;
+        message = "AUDIO_PARAMETER_MAPPING_FAILED";
+    }
     __disable_irq();
+    g_audio_command_fatal_record.message = message;
+    g_audio_command_fatal_record.file = file;
+    g_audio_command_fatal_record.line = line;
+    g_audio_command_fatal_record.function = function;
     g_audio_command_fatal_record.code = (uint32_t)code;
     g_audio_command_fatal_record.entity = command->entity;
     g_audio_command_fatal_record.context =
@@ -449,6 +463,10 @@ static _Noreturn void audio_command_fatal(
     Error_Handler();
     for (;;) {}
 }
+
+#define AUDIO_COMMAND_FATAL(command, result) \
+    audio_command_fatal_at((command), (result), __FILE__, (uint32_t)__LINE__, \
+                           __func__)
 
 void audio_command_executor_init(void)
 {
@@ -470,7 +488,7 @@ uint16_t __attribute__((noinline)) audio_command_executor_apply_due(
         const audio_command_apply_result_t result =
             audio_command_apply(&command);
         if (result != AUDIO_COMMAND_APPLY_OK)
-            audio_command_fatal(&command, result);
+            AUDIO_COMMAND_FATAL(&command, result);
         (void)control_audio_fifo_audio_pop();
         ++applied;
     }

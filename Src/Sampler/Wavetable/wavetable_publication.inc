@@ -72,7 +72,8 @@ void wavetable_pool_service_retire(void)
         if (g_wavetable_retire_stop_committed[i] == 0U)
         {
             if (control_rt_publication_horizon_active() != 0U) continue;
-            if (control_rt_publish_param_now((uint8_t)i, 0xFFF7U,
+            if (control_rt_publish_param_now((uint8_t)i,
+                    CONTROL_AUDIO_PARAM_WAVE_RESOURCE_STOP,
                     slot->generation, 0U) == 0U)
             {
                 g_wavetable_retire_invariant_failed = 1U;

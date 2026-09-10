@@ -14,6 +14,7 @@
 #include "Track/track_input_ownership.h"
 #include "Track/track_state.h"
 #include "Track/tone_program_control.h"
+#include "Param/tone_param_catalog.h"
 #include "App/live_parameter_audio_publication.h"
 #include "Seq/seq_model.h"
 #include "stm32h7xx_hal.h"
@@ -1305,6 +1306,11 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
         return TRACK_RUNTIME_PARAM_UNAVAILABLE;
     }
     const uint8_t active = track_runtime_ctx_is_active(ctx);
+
+    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+            && (tone_param_catalog_contains(
+                (track_runtime_type_t)ctx->type, param) == 0U))
+        return TRACK_RUNTIME_PARAM_UNAVAILABLE;
 
     if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX)
     {

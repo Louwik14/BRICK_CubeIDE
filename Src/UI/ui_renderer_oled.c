@@ -88,9 +88,14 @@ void ui_renderer_oled_draw(void)
 {
     const ui_page_t *page = ui_page_get();
 
-    if ((g_ui_rendering != 0U)
-            && ((page != g_ui_render_page)
-                || (g_ui_render_generation != g_ui_render_job_generation)))
+    /*
+     * A generation delta only means that fresher VALUE state is available for
+     * the next frame.  Do not discard the coherent multiphase frame currently
+     * being built: once it completes, the next periodic job captures the
+     * latest generation.  Structural page changes still cancel immediately;
+     * template structure changes are revalidated by the template job itself.
+     */
+    if ((g_ui_rendering != 0U) && (page != g_ui_render_page))
     {
         ui_renderer_oled_cancel_active();
     }

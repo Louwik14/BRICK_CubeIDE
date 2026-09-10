@@ -46,6 +46,7 @@
 #include "Board/board_power.h"
 #include "buttons.h"
 #include "App/power_shutdown.h"
+#include "Platform/idle_latency_diag.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -64,6 +65,7 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+volatile idle_latency_diag_t g_idle_latency_diag;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -306,6 +308,8 @@ int main(void)
   HAL_TIM_Base_Start_IT(&htim12);
   MX_FATFS_Init();
   brick6_app_init();
+  g_idle_latency_diag.core_clock_hz = SystemCoreClock;
+  g_idle_latency_diag.threshold_cycles = SystemCoreClock / 1000U;
   led_init();
   uint32_t last_tick = 0;
   uint32_t ui_tasklet_divider = 0U;
@@ -326,9 +330,13 @@ int main(void)
              continue;
          }
 
+	     uint32_t diag_started = idle_latency_diag_begin();
 	     board_usb_process();
+	     idle_latency_diag_end(IDLE_LATENCY_SERVICE_USB, diag_started);
 	     brick6_app_process();
+	     diag_started = idle_latency_diag_begin();
 	     board_usb_process();
+	     idle_latency_diag_end(IDLE_LATENCY_SERVICE_USB, diag_started);
 	     lowcost_bootloader_shift_step16_service();
 
 	     uint32_t ui_ticks_processed = 0U;
@@ -342,14 +350,20 @@ int main(void)
 	         }
 
 	         ui_tasklet_divider = 0U;
+	         diag_started = idle_latency_diag_begin();
 	         ui_tasklet_poll();
+	         idle_latency_diag_end(IDLE_LATENCY_SERVICE_UI, diag_started);
 	         ui_ticks_processed++;
 	     }
 
 	     if (ui_tasklet_is_initialized() != 0U)
 	     {
+	         diag_started = idle_latency_diag_begin();
 	         ui_renderer_oled_service_poll();
+	         idle_latency_diag_end(IDLE_LATENCY_SERVICE_RENDER, diag_started);
+	         diag_started = idle_latency_diag_begin();
 	         display_flush_service_poll();
+	         idle_latency_diag_end(IDLE_LATENCY_SERVICE_DISPLAY_FLUSH, diag_started);
 	     }
 
 

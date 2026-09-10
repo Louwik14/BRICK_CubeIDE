@@ -130,14 +130,16 @@ static void sampler_ram_restore_retained_old(void)
     if (sample_global_pool_register_ram_at(old->global_slot, job->ram_slot,
                                            old->path,
                                            old->cost_bytes_aligned) == 0U)
-        brick_fatal_raise(BRICK_FATAL_SAMPLE_RAM_COMMIT, job->ram_slot,
+        BRICK_FATAL_CONTEXT("SAMPLE_RAM_ROLLBACK_REGISTRATION_FAILED",
+                          BRICK_FATAL_SAMPLE_RAM_COMMIT, job->ram_slot,
                           old->global_slot, old->cost_bytes_aligned,
                           SAMPLE_GLOBAL_POOL_BUDGET_BYTES);
     g_sampler_ram_pool.slots[job->ram_slot] = *old;
     sampler_ram_audio_descriptor_t descriptor;
     if (sampler_ram_audio_projection_build(job->ram_slot, old,
                                            &descriptor) == 0U)
-        brick_fatal_raise(BRICK_FATAL_SAMPLE_RAM_COMMIT, job->ram_slot,
+        BRICK_FATAL_CONTEXT("SAMPLE_RAM_ROLLBACK_PROJECTION_FAILED",
+                          BRICK_FATAL_SAMPLE_RAM_COMMIT, job->ram_slot,
                           old->global_slot, old->data_bytes,
                           old->cost_bytes_aligned);
     sampler_ram_audio_projection_install_prepared(&descriptor);
@@ -929,7 +931,10 @@ static void sampler_ram_pool_load_async_step(void)
             job->candidate.global_slot = global_slot;
             job->candidate.generation = sampler_ram_next_generation();
             job->candidate.state = SAMPLER_RAM_SLOT_READY;
-            sampler_ram_waveform_begin(&job->candidate);
+            /* The overview is a UI asset.  Building it eagerly makes every
+             * post-load superloop consume a full frame quantum even when the
+             * waveform page is never displayed. */
+            sampler_ram_waveform_set_empty(&job->candidate);
             if (sampler_ram_audio_projection_build(
                     job->ram_slot, &job->candidate,
                     &job->prepared_descriptor) == 0U)
@@ -955,7 +960,7 @@ static void sampler_ram_pool_load_async_step(void)
                 || (control_rt_resolve_asap_sample(now_sample,
                                                    &stop_sample) == 0U)
                 || (control_rt_publish_param_now((uint8_t)job->ram_slot,
-                                                 0xFFF6U,
+                                                 CONTROL_AUDIO_PARAM_RAM_RESOURCE_STOP,
                                                  old->generation, 0U) == 0U))
                 return;
             job->retire_not_before_sample = stop_sample
@@ -973,7 +978,8 @@ static void sampler_ram_pool_load_async_step(void)
         if (sample_global_pool_register_ram_at(
                 job->global_slot, job->ram_slot, job->path,
                 job->allocation.capacity_bytes) == 0U)
-            brick_fatal_raise(BRICK_FATAL_SAMPLE_RAM_COMMIT, job->ram_slot,
+            BRICK_FATAL_CONTEXT("SAMPLE_RAM_COMMIT_REGISTRATION_FAILED",
+                              BRICK_FATAL_SAMPLE_RAM_COMMIT, job->ram_slot,
                               job->global_slot, job->allocation.capacity_bytes,
                               SAMPLE_GLOBAL_POOL_BUDGET_BYTES);
         job->global_reserved = 0U;
@@ -1247,7 +1253,8 @@ void sampler_ram_pool_service_retire(void)
         if (g_sampler_ram_retire_stop_committed[i] == 0U)
         {
             if (control_rt_publication_horizon_active() != 0U) continue;
-            if (control_rt_publish_param_now((uint8_t)i, 0xFFF6U,
+            if (control_rt_publish_param_now((uint8_t)i,
+                    CONTROL_AUDIO_PARAM_RAM_RESOURCE_STOP,
                     slot->generation, 0U) == 0U)
             {
                 g_sampler_ram_retire_invariant_failed = 1U;
@@ -1368,16 +1375,29 @@ void sampler_ram_pool_waveform_service(uint32_t frame_budget)
                                : SAMPLER_RAM_WAVEFORM_DEFAULT_SERVICE_FRAMES;
     for (uint16_t i = 0U; (i < SAMPLER_RAM_POOL_MAX_SLOTS) && (frames_left > 0U); ++i)
     {
+        if (g_sampler_ram_pool.slots[i].waveform.state
+            != SAMPLE_RAM_WAVEFORM_BUILDING)
+        {
+            continue;
+        }
         sampler_ram_waveform_service_slot(&g_sampler_ram_pool.slots[i], &frames_left);
     }
 }
 
 const sample_ram_waveform_overview_t *sampler_ram_pool_get_waveform(uint16_t ram_slot)
 {
-    const sampler_ram_slot_t *const slot = sampler_ram_pool_get_slot(ram_slot);
-    if ((slot == 0) || (sampler_ram_waveform_matches_slot(slot) == 0U))
+    if (ram_slot >= SAMPLER_RAM_POOL_MAX_SLOTS)
     {
         return 0;
+    }
+    sampler_ram_slot_t *const slot = &g_sampler_ram_pool.slots[ram_slot];
+    if (sampler_ram_waveform_slot_ready(slot) == 0U)
+    {
+        return 0;
+    }
+    if (sampler_ram_waveform_matches_slot(slot) == 0U)
+    {
+        sampler_ram_waveform_begin(slot);
     }
     return &slot->waveform;
 }

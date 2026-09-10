@@ -10,6 +10,8 @@ extern "C" {
 #endif
 
 void drum_synth_init(float sample_rate);
+uint8_t drum_synth_model_transition_is_valid(uint8_t instance_id,
+                                              drum_model_id_t model_type);
 uint8_t drum_synth_set_model_for_instance(uint8_t instance_id, drum_model_id_t model_type);
 drum_model_id_t drum_synth_get_model_for_instance(uint8_t instance_id);
 uint8_t drum_synth_get_md_model_for_instance(uint8_t instance_id);

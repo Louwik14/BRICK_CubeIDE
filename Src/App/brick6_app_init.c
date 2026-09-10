@@ -28,6 +28,7 @@
 #include "Storage/audio_recorder.h"
 #include "Storage/waveform_cache.h"
 #include "Platform/brick6_sd_config.h"
+#include "Platform/idle_latency_diag.h"
 
 #include "App/Hall/hall_keyboard_bridge.h"
 #include "App/Hall/hall_calibration.h"
@@ -105,41 +106,91 @@ void brick6_app_init(void)
  */
 static void brick6_app_service_storage(void)
 {
+    uint32_t started = idle_latency_diag_begin();
     audio_recorder_service();
+    idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_RECORDER, started);
+    started = idle_latency_diag_begin();
     project_product_save_service();
+    idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_PROJECT_SAVE, started);
+    started = idle_latency_diag_begin();
     project_product_load_service();
+    idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_PROJECT_LOAD, started);
+    started = idle_latency_diag_begin();
     patch_product_apply_service();
+    idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_PATCH, started);
     if (multi_sample_load_has_pending() != 0U)
     {
+        started = idle_latency_diag_begin();
         multi_sample_service_load(0U);
+        idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_MULTI_PRIORITY,
+                                      started);
     }
     else
     {
+        started = idle_latency_diag_begin();
         multi_sample_pool_service_retire();
+        idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_MULTI_RETIRE,
+                                      started);
+        started = idle_latency_diag_begin();
         sampler_ram_pool_service_retire();
+        idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_RAM_RETIRE, started);
+        started = idle_latency_diag_begin();
         wavetable_pool_service_retire();
+        idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_WAVETABLE_RETIRE,
+                                      started);
+        started = idle_latency_diag_begin();
         sampler_ram_pool_load_async_service();
+        idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_RAM_LOADER, started);
+        started = idle_latency_diag_begin();
         wavetable_pool_load_async_service();
+        idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_WAVETABLE_LOADER,
+                                      started);
+        started = idle_latency_diag_begin();
         project_control_asset_load_service();
+        idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_PROJECT_ASSET,
+                                      started);
+        started = idle_latency_diag_begin();
         sampler_ram_pool_waveform_service(BRICK6_STREAM_OTHER_SD_QUANTUM_FRAMES);
+        idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_RAM_WAVEFORM,
+                                      started);
+        started = idle_latency_diag_begin();
         multi_sample_service_load(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
+        idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_MULTI, started);
+        started = idle_latency_diag_begin();
         pattern_load_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES / 2U);
+        idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_PATTERN, started);
+        started = idle_latency_diag_begin();
         waveform_cache_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
+        idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_WAVEFORM_CACHE,
+                                      started);
+        started = idle_latency_diag_begin();
         sd_preview_process();
+        idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_PREVIEW, started);
     }
 }
 
 void brick6_app_process(void)
 {
+    uint32_t diag_started = idle_latency_diag_begin();
     engine_tasklet_poll();
+    idle_latency_diag_end(IDLE_LATENCY_SERVICE_ENGINE_TICK, diag_started);
+    diag_started = idle_latency_diag_begin();
     brick6_stream_service_task_poll();
+    idle_latency_diag_end(IDLE_LATENCY_SERVICE_STREAM, diag_started);
+    diag_started = idle_latency_diag_begin();
     audio_domain_background_poll(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
+    idle_latency_diag_end(IDLE_LATENCY_SERVICE_AUDIO_BG_LOCAL, diag_started);
     /*
      * Seq runtime core is serviced from superloop for both clock domains.
      * TIM12 IRQ only advances INTERNAL time ticks.
      */
+    diag_started = idle_latency_diag_begin();
     seq_runtime_time_adapter_process();
+    idle_latency_diag_end(IDLE_LATENCY_SERVICE_SEQ, diag_started);
+    diag_started = idle_latency_diag_begin();
     brick6_app_service_storage();
+    idle_latency_diag_end(IDLE_LATENCY_SERVICE_STORAGE, diag_started);
+    diag_started = idle_latency_diag_begin();
     pattern_live_service();
     if (g_boot_audio_state == BRICK6_BOOT_WAIT_MASTER)
     {
@@ -160,8 +211,12 @@ void brick6_app_process(void)
     {
         brick6_master_control_process();
     }
+    idle_latency_diag_end(IDLE_LATENCY_SERVICE_CONTROL, diag_started);
+    diag_started = idle_latency_diag_begin();
     brick6_stream_service_task_poll();
+    idle_latency_diag_end(IDLE_LATENCY_SERVICE_STREAM, diag_started);
     ui_boot_loading_service();
+    diag_started = idle_latency_diag_begin();
     if (ui_boot_loading_is_active() != 0U)
     {
         hall_loop_process();
@@ -171,4 +226,5 @@ void brick6_app_process(void)
         brick6_process_hall_ui_keyboard_chain();
     }
     midi_poll();
+    idle_latency_diag_end(IDLE_LATENCY_SERVICE_HALL_MIDI, diag_started);
 }

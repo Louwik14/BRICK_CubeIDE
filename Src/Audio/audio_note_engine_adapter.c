@@ -628,6 +628,19 @@ static uint8_t audio_note_engine_adapter_flags_match(
             | CONTROL_AUDIO_PROGRAM_FLAG_CAN_PLAY)) == expected);
 }
 
+static uint8_t audio_note_engine_adapter_drum_model_for_type(
+    track_runtime_type_t type, drum_model_id_t *out_model)
+{
+    if (out_model == NULL) return 0U;
+    if (type == TRACK_RUNTIME_TYPE_DRUM_MD)
+        *out_model = DRUM_MODEL_ID_MD;
+    else if (type == TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG)
+        *out_model = DRUM_MODEL_ID_BD_ANALOG;
+    else
+        return 0U;
+    return 1U;
+}
+
 uint8_t audio_note_engine_adapter_install_prepared(
     const audio_note_engine_install_spec_t *spec)
 {
@@ -763,6 +776,40 @@ uint8_t audio_note_engine_adapter_install_prepared(
             installed.instance_id = synth_polyphony_get_slot(entity_id, 0U);
         }
     }
+
+    const uint8_t previous_drum = (uint8_t)(
+        (ctx->program_route.active != 0U)
+        && (ctx->program_route.engine
+            == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM));
+    const uint8_t installed_drum = (uint8_t)(
+        (installed.active != 0U)
+        && (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM));
+    drum_model_id_t installed_drum_model = DRUM_MODEL_ID_NONE;
+    if ((installed_drum != 0U)
+            && ((audio_note_engine_adapter_drum_model_for_type(
+                    type, &installed_drum_model) == 0U)
+                || (drum_synth_model_transition_is_valid(
+                    installed.instance_id, installed_drum_model) == 0U)))
+        return 0U;
+    if ((previous_drum != 0U)
+            && (drum_synth_model_transition_is_valid(
+                ctx->program_route.instance_id, DRUM_MODEL_ID_NONE) == 0U))
+        return 0U;
+
+    if ((previous_drum != 0U)
+            && ((installed_drum == 0U)
+                || (ctx->program_route.instance_id != installed.instance_id)))
+    {
+        if (drum_synth_set_model_for_instance(
+                ctx->program_route.instance_id, DRUM_MODEL_ID_NONE) == 0U)
+            return 0U;
+    }
+    if ((installed_drum != 0U)
+            && ((drum_synth_set_model_for_instance(
+                    installed.instance_id, installed_drum_model) == 0U)
+                || (drum_synth_get_model_for_instance(installed.instance_id)
+                    != installed_drum_model)))
+        return 0U;
 
     const uint8_t midi_channel = ctx->midi_channel_1_16;
     const uint8_t midi_source = ctx->midi_source;

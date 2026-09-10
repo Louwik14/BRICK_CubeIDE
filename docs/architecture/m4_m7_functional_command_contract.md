@@ -80,9 +80,10 @@ nouveau les notes encore vivantes. Toute NOTE fermee pendant cette phase reste
 morte au retour d'un renderer compatible. PROGRAM ne reset ni NOTE ni TONE.
 
 Une commande admise qui echoue cote AUDIO est une rupture d'invariant: le
-consumer conserve la commande en tete et declenche un fatal source avec code,
-entite, opcode/kind, identifiant, valeur et phase. Il n'existe ni drop, ni
-fallback, ni continuation apres cet echec.
+consumer conserve la commande en tete et declenche un fatal source avec message,
+fichier, ligne et fonction, en conservant code, entite, opcode/kind, identifiant,
+valeur et phase. Il n'existe ni drop, ni fallback, ni continuation apres cet
+echec.
 
 PARAM est applique directement au backend final. Les setters FM se limitent au
 clamp, a l'ecriture de cible et aux masques dirty; les conversions et projections

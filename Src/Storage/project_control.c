@@ -337,11 +337,14 @@ void project_control_asset_load_service(void)
                             SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
                             g_ram_load.replaced_logical);
                 }
-                else brick_fatal_raise(BRICK_FATAL_PROJECT_COMMIT,backend,
-                        global,logical,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS);
+                else BRICK_FATAL_CONTEXT(
+                        "PROJECT_RAM_RUNTIME_RESOLUTION_FAILED",
+                        BRICK_FATAL_PROJECT_COMMIT, backend, global, logical,
+                        SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS);
             }
             else if(result==SAMPLER_RAM_RESULT_OK)
-                brick_fatal_raise(BRICK_FATAL_PROJECT_COMMIT,backend,global,
+                BRICK_FATAL_CONTEXT("PROJECT_RAM_COMPLETION_MISMATCH",
+                        BRICK_FATAL_PROJECT_COMMIT, backend, global,
                         g_ram_load.expected_logical,
                         SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS);
             else if(g_ram_load.expected_logical<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
@@ -396,11 +399,14 @@ void project_control_asset_load_service(void)
                             SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
                             g_wavetable_load.replaced_logical);
                 }
-                else brick_fatal_raise(BRICK_FATAL_PROJECT_COMMIT,backend,
-                        global,logical,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS);
+                else BRICK_FATAL_CONTEXT(
+                        "PROJECT_WAVETABLE_RUNTIME_RESOLUTION_FAILED",
+                        BRICK_FATAL_PROJECT_COMMIT, backend, global, logical,
+                        SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS);
             }
             else if(result==WAVETABLE_RESULT_OK)
-                brick_fatal_raise(BRICK_FATAL_PROJECT_COMMIT,backend,global,
+                BRICK_FATAL_CONTEXT("PROJECT_WAVETABLE_COMPLETION_MISMATCH",
+                        BRICK_FATAL_PROJECT_COMMIT, backend, global,
                         g_wavetable_load.expected_logical,
                         SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS);
             else if(g_wavetable_load.expected_logical<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)

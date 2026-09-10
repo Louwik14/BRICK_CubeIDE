@@ -26,8 +26,10 @@ USB et le reader unique est AUDIO. Pour BRICK vers PC, AUDIO reste writer et le
 service USB differe reste reader. L'IRQ AUDIO ne touche jamais TinyUSB.
 Le role Host applique une attente VBUS de 200 ms par deadline, et les erreurs
 I2C FUSB utilisent un retry cadence. Le latch/level `INT_N` reste le chemin
-rapide; une reconciliation bornee a 100 ms relit aussi les registres FUSB afin
-qu'un resultat DRP produit apres l'echantillon d'init ne reste pas hors cache.
+normal. Les registres read-to-clear distinguent attach, detach, changement CC
+et erreur. Un detach arrete le role puis relance le DRP. Les retries I2C et la
+ligne `INT_N` persistante sont bornes a 100 ms; une reconciliation watchdog a
+5 s couvre uniquement une EXTI perdue ou un reset silencieux du FUSB.
 
 Le Hall Low-Cost execute la machine bornee depuis l'acquisition ADC. TIM5 est le compteur libre commun de capture. CONTROL en possede l'extension et la conversion; AUDIO initialise sa sample clock locale depuis TIM5 au premier callback valide et ne publie aucune ancre.
 

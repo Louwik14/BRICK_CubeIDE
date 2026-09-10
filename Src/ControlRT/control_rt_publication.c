@@ -24,10 +24,6 @@
 #include "Param/engine_model_catalog.h"
 #include "main.h"
 
-#define CONTROL_AUDIO_PARAM_MULTI_RESOURCE_STOP 0xFFF5U
-#define CONTROL_AUDIO_PARAM_RAM_RESOURCE_STOP   0xFFF6U
-#define CONTROL_AUDIO_PARAM_WAVE_RESOURCE_STOP  0xFFF7U
-
 static uint8_t control_rt_program_is_valid(uint8_t entity, uint32_t value)
 {
     if (entity >= BRICK_ENTITY_CAPACITY) return 0U;

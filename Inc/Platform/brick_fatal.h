@@ -22,6 +22,10 @@ typedef enum
 
 typedef struct
 {
+    const char * volatile message;
+    const char * volatile file;
+    volatile uint32_t line;
+    const char * volatile function;
     volatile uint32_t code;
     volatile uint32_t entity;
     volatile uint32_t context;
@@ -31,10 +35,22 @@ typedef struct
 
 extern brick_fatal_record_t g_brick_fatal_record;
 
-_Noreturn void brick_fatal_raise(brick_fatal_code_t code,
-                       uint32_t entity,
-                       uint32_t context,
-                       uint32_t requested,
-                       uint32_t capacity);
+_Noreturn void brick_fatal_raise_at(const char *message,
+                                    const char *file,
+                                    uint32_t line,
+                                    const char *function,
+                                    brick_fatal_code_t code,
+                                    uint32_t entity,
+                                    uint32_t context,
+                                    uint32_t requested,
+                                    uint32_t capacity);
+
+#define BRICK_FATAL(message) \
+    brick_fatal_raise_at((message), __FILE__, (uint32_t)__LINE__, __func__, \
+                         (brick_fatal_code_t)0U, UINT32_MAX, 0U, 0U, 0U)
+
+#define BRICK_FATAL_CONTEXT(message, code, entity, context, requested, capacity) \
+    brick_fatal_raise_at((message), __FILE__, (uint32_t)__LINE__, __func__, \
+                         (code), (entity), (context), (requested), (capacity))
 
 #endif

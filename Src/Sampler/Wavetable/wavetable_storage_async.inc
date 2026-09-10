@@ -429,7 +429,8 @@ static void wavetable_pool_load_async_step(void)
                     || (control_rt_resolve_asap_sample(now_sample,
                                                        &stop_sample) == 0U)
                     || (control_rt_publish_param_now(
-                            (uint8_t)job->wavetable_slot, 0xFFF7U,
+                            (uint8_t)job->wavetable_slot,
+                            CONTROL_AUDIO_PARAM_WAVE_RESOURCE_STOP,
                             destination->generation, 0U) == 0U))
                     return;
                 job->retire_not_before_sample = stop_sample
@@ -446,7 +447,8 @@ static void wavetable_pool_load_async_step(void)
             if (sample_global_pool_register_wavetable_at(
                     job->global_slot, job->wavetable_slot, candidate->path,
                     candidate->cost_bytes_aligned) == 0U)
-                brick_fatal_raise(BRICK_FATAL_WAVETABLE_COMMIT,
+                BRICK_FATAL_CONTEXT("WAVETABLE_COMMIT_REGISTRATION_FAILED",
+                                  BRICK_FATAL_WAVETABLE_COMMIT,
                                   job->wavetable_slot, job->global_slot,
                                   candidate->cost_bytes_aligned,
                                   SAMPLE_GLOBAL_POOL_BUDGET_BYTES);

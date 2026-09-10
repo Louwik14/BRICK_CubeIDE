@@ -92,19 +92,6 @@ static void brick6_publish_owned_external_sources(uint32_t frames)
                                          frames);
 }
 
-static drum_model_id_t brick6_map_runtime_type_to_drum_model(uint8_t runtime_type)
-{
-    switch ((track_runtime_type_t)runtime_type)
-    {
-        case TRACK_RUNTIME_TYPE_DRUM_MD:
-            return DRUM_MODEL_ID_MD;
-        case TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG:
-            return DRUM_MODEL_ID_BD_ANALOG;
-        default:
-            return DRUM_MODEL_ID_NONE;
-    }
-}
-
 static __attribute__((noinline)) void brick6_render_synth_tracks(uint16_t entity_mask,
                                        uint32_t frames,
                                        uint8_t *out_drum_tracks)
@@ -122,16 +109,6 @@ static __attribute__((noinline)) void brick6_render_synth_tracks(uint16_t entity
                 ? &ctx_value : NULL;
 
         {
-            const drum_model_id_t model_id = brick6_map_runtime_type_to_drum_model(ctx->type);
-            if ((model_id == DRUM_MODEL_ID_COUNT) || (model_id == DRUM_MODEL_ID_NONE))
-            {
-                (void)drum_synth_set_model_for_instance(ctx->program_route.instance_id, DRUM_MODEL_ID_NONE);
-            }
-            else if (drum_synth_set_model_for_instance(ctx->program_route.instance_id, model_id) == 0U)
-            {
-                continue;
-            }
-
             float *direct_mono = NULL;
             if (mixer_begin_external_mono_native(ctx->program_route.mix_track_id,
                                                  frames,

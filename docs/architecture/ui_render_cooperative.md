@@ -57,10 +57,14 @@ partiel. Le popup est dessine uniquement apres `FINALIZE`; aucune frame partiell
 n'est donc visible.
 
 La page et la structure de navigation sont revalidees avant chaque quantum. Un
-changement de page, track, famille, sous-page ou banque annule le job, efface le
-back-buffer partiel et redemarre depuis la derniere demande. Une generation
-d'invalidation couvre tout delta encodeur ou evenement UI et coalesce les
-demandes rapides sans accumuler de dette de frames.
+changement structurel de page, track, famille, sous-page ou banque annule le
+job, efface le back-buffer partiel et redemarre depuis la derniere demande. Une
+generation d'invalidation couvre tout delta encodeur ou evenement UI et
+coalesce les demandes rapides sans accumuler de dette de frames. Une variation
+de cette generation pendant un job ne l'annule pas : la frame coherente en
+cours atteint `FINALIZE`, puis le prochain lancement cadence capture la valeur
+la plus recente. La generation joue ainsi le role de `rerender pending` sans
+file de frames ni historique de valeurs.
 
 Les callbacks et caches U8g2 restent utilises dans leur ordre normal; aucun etat
 U8g2 n'est suspendu au milieu d'une primitive. Le popup prend sa valeur la plus
@@ -72,8 +76,9 @@ atomique historique.
 Il n'existe qu'une machine d'etats UI : `ui_renderer_template_job_t`. Le curseur
 MIDI FX est une extension de page executee apres `FINALIZE`, sous les memes
 callbacks `render_pending/render_cancel`; ce n'est pas un second renderer. La
-generation OLED est l'unique coalescence des demandes et la cancellation est
-centralisee par `ui_renderer_oled_cancel_active()`.
+generation OLED est l'unique coalescence des demandes. La cancellation,
+centralisee par `ui_renderer_oled_cancel_active()`, est reservee aux changements
+structurels; une invalidation de valeur ne jette jamais une frame active.
 
 L'ancien point d'entree synchrone `ui_renderer_template_draw()` n'est pas
 conserve. Le rendu ne porte aucune politique USB; apres chaque quantum, il rend

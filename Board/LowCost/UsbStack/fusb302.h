@@ -26,6 +26,15 @@ typedef enum {
 } fusb302_role_t;
 
 typedef enum {
+    FUSB302_EVENT_NONE = 0U,
+    FUSB302_EVENT_ATTACH = (1U << 0),
+    FUSB302_EVENT_DETACH = (1U << 1),
+    FUSB302_EVENT_CC_CHANGE = (1U << 2),
+    FUSB302_EVENT_ERROR = (1U << 3),
+    FUSB302_EVENT_RESET = (1U << 4)
+} fusb302_event_t;
+
+typedef enum {
     FUSB302_CC_OPEN = 0,
     FUSB302_CC_ACTIVE_CC1,
     FUSB302_CC_ACTIVE_CC2,
@@ -44,8 +53,10 @@ typedef struct {
 
 fusb302_status_t fusb302_init(I2C_HandleTypeDef *hi2c);
 fusb302_status_t fusb302_read_role(fusb302_role_t *role);
-fusb302_status_t fusb302_refresh_state(void);
-fusb302_status_t fusb302_handle_interrupt(void);
+fusb302_status_t fusb302_refresh_state(uint32_t *events);
+fusb302_status_t fusb302_handle_interrupt(uint32_t *events);
+fusb302_status_t fusb302_restart_drp(void);
+fusb302_status_t fusb302_watchdog(uint32_t *events);
 bool fusb302_is_present(void);
 bool fusb302_irq_pending(void);
 fusb302_role_t fusb302_cached_role(void);
