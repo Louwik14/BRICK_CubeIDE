@@ -24,6 +24,7 @@ static uint8_t live_parameter_audio_runtime_changes_matrix_context(param_id_t id
         case PARAM_PRISM_OSC1_MODEL: case PARAM_PRISM_OSC2_MODEL:
         case PARAM_STACK_OSC1_MODEL: case PARAM_STACK_OSC2_MODEL:
         case PARAM_STACK_OSC3_MODEL:
+        case PARAM_AUDIO_FX_MODEL: case PARAM_AUDIO_FX_B_MODEL:
         case PARAM_LFO1_TRIG: case PARAM_LFO2_TRIG: case PARAM_LFO3_TRIG:
             return 1U;
         default: return 0U;

@@ -2,6 +2,12 @@
 
 #include "midi.h"
 
+#include "Seq/seq_types.h"
+
+static uint8_t g_param_backend_midi_cc_valid[SEQ_LANE_CAPACITY][12U];
+static uint8_t g_param_backend_midi_cc_last[SEQ_LANE_CAPACITY][12U];
+static uint8_t g_param_backend_midi_cc_channel[SEQ_LANE_CAPACITY][12U];
+
 static float param_backend_control_clampf(float value, float minimum, float maximum)
 {
     if (value < minimum) return minimum;
@@ -39,11 +45,23 @@ uint8_t param_backend_track_supports_midi_tone_descriptor(
 
 uint8_t param_backend_send_midi_cc(uint8_t track, param_id_t id, float value)
 {
-    if (param_backend_is_midi_cc_id(id) == 0U) return 0U;
+    if ((track >= SEQ_LANE_CAPACITY)
+            || (param_backend_is_midi_cc_id(id) == 0U)) return 0U;
+    const uint8_t index = (uint8_t)(id - PARAM_MIDI_CC1_1);
+    const uint8_t quantized = (uint8_t)(
+        param_backend_control_clampf(value, 0.0f, 127.0f) + 0.5f);
+    const uint8_t channel = track_runtime_get_midi_channel_zero_based(track);
+    if ((g_param_backend_midi_cc_valid[track][index] != 0U)
+            && (g_param_backend_midi_cc_last[track][index] == quantized)
+            && (g_param_backend_midi_cc_channel[track][index] == channel))
+        return 1U;
     midi_cc(MIDI_DEST_BOTH,
-            track_runtime_get_midi_channel_zero_based(track),
+            channel,
             param_backend_midi_cc_number_from_id(id),
-            (uint8_t)(param_backend_control_clampf(value, 0.0f, 127.0f) + 0.5f));
+            quantized);
+    g_param_backend_midi_cc_valid[track][index] = 1U;
+    g_param_backend_midi_cc_last[track][index] = quantized;
+    g_param_backend_midi_cc_channel[track][index] = channel;
     return 1U;
 }
 

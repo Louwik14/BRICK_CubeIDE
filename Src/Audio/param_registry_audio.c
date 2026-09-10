@@ -59,6 +59,8 @@ static uint8_t param_audio_apply_non_filter(param_id_t id,
     mod_lfo_param_t lfo_param = MOD_LFO_PARAM_RATE;
     if (param_audio_lfo_map(id, &lfo, &lfo_param) != 0U)
         return mod_lfo_v1_set_track_param_audio(track, lfo, lfo_param, value);
+    if (audio_fx_runtime_is_param(id) != 0U)
+        return audio_fx_runtime_apply_param((brick_entity_id_t)track, id, value);
     if (id == PARAM_MIDI_PROGRAM)
         return 0U;
     if (id == PARAM_EXT_GATE)

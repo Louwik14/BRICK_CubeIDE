@@ -80,6 +80,8 @@ uint8_t control_music_output_submit(const control_music_action_t *action,
                                     uint32_t generation);
 uint8_t control_music_output_trim_to_limit(brick_entity_id_t entity_id,
                                            uint8_t limit);
+uint8_t control_music_output_admit_multi_transition(
+    brick_entity_id_t entity_id);
 uint8_t control_music_output_close_causal_sources(
     const uint32_t *causal_source_ids, uint16_t source_count,
     uint64_t due_sample);

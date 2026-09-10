@@ -196,8 +196,20 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
         if (audio_note_engine_adapter_current_ctx(command->entity, &ctx) == 0U)
             return 0U;
         if (ctx.type == TRACK_RUNTIME_TYPE_MULTI)
+        {
+            uint16_t current_instrument = 0U;
+            if (brick6_sampler_runtime_get_multi_instrument(
+                    command->entity, &current_instrument) == 0U)
+                return 0U;
+            if (current_instrument == (uint16_t)command->value)
+                return 1U;
             brick6_sampler_runtime_set_multi_instrument(command->entity,
                                                         (uint16_t)command->value);
+            if ((brick6_sampler_runtime_get_multi_instrument(
+                    command->entity, &current_instrument) == 0U)
+                    || (current_instrument != (uint16_t)command->value))
+                return 0U;
+        }
         else
             brick6_sampler_runtime_set_sample(command->entity,
                                               (uint16_t)command->value);

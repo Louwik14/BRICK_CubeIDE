@@ -320,6 +320,9 @@ static uint8_t audio_note_engine_adapter_apply_physical(
             || (engine == TRACK_RUNTIME_ENGINE_FM)
             || (engine == TRACK_RUNTIME_ENGINE_TB303)));
     const uint8_t uses_voice_allocator = (uint8_t)((is_poly_synth != 0U)
+        || (engine == TRACK_RUNTIME_ENGINE_PRISM)
+        || (engine == TRACK_RUNTIME_ENGINE_STACK)
+        || (engine == TRACK_RUNTIME_ENGINE_WAVE)
         || (engine == TRACK_RUNTIME_ENGINE_FM)
         || (engine == TRACK_RUNTIME_ENGINE_TB303));
     const uint8_t is_multi_sampler = (uint8_t)((engine

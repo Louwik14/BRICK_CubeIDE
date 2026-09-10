@@ -23,6 +23,7 @@
 #include "param_registry.h"
 #include "Track/tone_program_control.h"
 #include "midi.h"
+#include "Mod/mod_lfo_v1_control.h"
 
 #include "Seq/seq_model.h"
 #include "Seq/seq_param_iface.h"
@@ -1305,6 +1306,8 @@ static uint8_t seq_play_scheduler_control_apply_internal(
                 event->event_token, event->track);
         return 1U;
     }
+    if (is_note_on != 0U)
+        mod_lfo_v1_control_note_trigger(event->track);
     const note_event_t note_event = {
         .sample_abs = event->sample_abs,
         .track = event->track,

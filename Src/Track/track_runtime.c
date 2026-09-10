@@ -59,12 +59,6 @@ static uint8_t track_runtime_publish_program(brick_entity_id_t entity_id,
 {
     if ((ctx == NULL) || (entity_id >= BRICK_ENTITY_CAPACITY))
         return 0U;
-    uint64_t due_sample = 0U;
-    if (control_rt_resolve_asap_sample(0U, &due_sample) == 0U)
-    {
-        Error_Handler();
-        return 0U;
-    }
     entity_topology_descriptor_t topology;
     uint8_t topology_flags = 0U;
     if (entity_topology_get(entity_id, &topology) != 0U)
@@ -99,6 +93,21 @@ static uint8_t track_runtime_publish_program(brick_entity_id_t entity_id,
     if ((uses_polyphony != 0U)
             && (polyphony_control_install_prepared(
                 entity_id, &polyphony) == 0U))
+    {
+        Error_Handler();
+        return 0U;
+    }
+    const uint8_t is_multi = (uint8_t)(
+        (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
+        && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI));
+    if ((is_multi != 0U)
+            && (control_music_output_admit_multi_transition(entity_id) == 0U))
+    {
+        Error_Handler();
+        return 0U;
+    }
+    uint64_t due_sample = 0U;
+    if (control_rt_resolve_asap_sample(0U, &due_sample) == 0U)
     {
         Error_Handler();
         return 0U;
@@ -138,9 +147,8 @@ static uint8_t track_runtime_publish_program(brick_entity_id_t entity_id,
         Error_Handler();
         return 0U;
     }
-    control_music_output_set_multi(entity_id,
-        (uint8_t)((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI)));
+    if (is_multi == 0U)
+        control_music_output_set_multi(entity_id, 0U);
     return 1U;
 }
 

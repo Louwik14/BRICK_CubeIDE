@@ -560,6 +560,78 @@ uint8_t control_music_output_trim_to_limit(brick_entity_id_t entity_id,
     return 1U;
 }
 
+uint8_t control_music_output_admit_multi_transition(
+    brick_entity_id_t entity_id)
+{
+    if (entity_id >= BRICK_ENTITY_CAPACITY)
+        return 0U;
+
+    uint8_t incoming_count = 0U;
+    for (uint8_t i = 0U; i < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++i)
+    {
+        const control_music_output_t *const output =
+            &control_music_output_ledger()[entity_id][i];
+        incoming_count += ((output->alive != 0U) && (output->multi == 0U))
+            ? 1U : 0U;
+    }
+
+    const uint8_t multi_live_count = control_music_output_multi_live_count();
+    const uint16_t final_multi_count =
+        (uint16_t)multi_live_count + incoming_count;
+    const uint8_t victim_count = (final_multi_count
+            > BRICK6_SAMPLER_MULTI_MAX_VOICES)
+        ? (uint8_t)(final_multi_count
+            - BRICK6_SAMPLER_MULTI_MAX_VOICES)
+        : 0U;
+    if (victim_count > CONTROL_MUSIC_OUTPUTS_PER_ENTITY)
+        return 0U;
+    brick_entity_id_t victim_entities[CONTROL_MUSIC_OUTPUTS_PER_ENTITY];
+    uint8_t victim_indices[CONTROL_MUSIC_OUTPUTS_PER_ENTITY];
+    control_music_action_t stops[CONTROL_MUSIC_OUTPUTS_PER_ENTITY];
+    uint64_t due_sample = 0U;
+    if ((victim_count != 0U)
+            && (g_control_music_window_active != 0U))
+        due_sample = g_control_music_window_first;
+    else if ((victim_count != 0U)
+            && ((g_control_music_window_prepared != 0U)
+                || (control_rt_resolve_asap_sample(0U, &due_sample) == 0U)))
+        return 0U;
+
+    for (uint8_t i = 0U; i < victim_count; ++i)
+    {
+        if (control_music_output_find_oldest_multi(
+                victim_entities, victim_indices, i,
+                &victim_entities[i], &victim_indices[i]) == 0U)
+            return 0U;
+        const control_music_output_t *const victim =
+            &control_music_output_ledger()[victim_entities[i]]
+                [victim_indices[i]];
+        stops[i] = (control_music_action_t){
+            .due_sample = due_sample,
+            .output_id = victim->output_id,
+            .entity_id = victim_entities[i],
+            .kind = (uint8_t)(CONTROL_MUSIC_ACTION_STOP
+                | (control_music_output_cause_is_external(
+                    victim->causal_source_id)
+                    ? CONTROL_MUSIC_ACTION_EXTERNAL_FLAG : 0U)),
+            .note = victim->note
+        };
+    }
+    if ((victim_count != 0U)
+            && (control_music_output_publish_batch(stops, victim_count) == 0U))
+        return 0U;
+
+    for (uint8_t i = 0U; i < victim_count; ++i)
+    {
+        control_music_output_send_midi_off(
+            &control_music_output_ledger()[victim_entities[i]]
+                [victim_indices[i]]);
+        control_music_output_mark_dead(victim_entities[i], victim_indices[i]);
+    }
+    control_music_output_set_multi(entity_id, 1U);
+    return 1U;
+}
+
 static int8_t control_music_output_find_free(brick_entity_id_t entity_id)
 {
     for (uint8_t i = 0U; i < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++i)

@@ -13,8 +13,13 @@
 #include "Param/param_registry.h"
 #include "Platform/memory_layout.h"
 #include "Seq/seq_types.h"
+#include "Seq/seq_param_iface.h"
+#include "Seq/seq_runtime.h"
 #include "Track/entity_topology.h"
 #include "Track/track_runtime.h"
+#include "Track/track_sound_state.h"
+#include "Track/tone_param_codec.h"
+#include "Param/param_control_backends.h"
 
 typedef struct
 {
@@ -24,6 +29,26 @@ typedef struct
 /* Canonical CONTROL authority for the three LFOs of each modulation owner. */
 SEQ_STATE_D2 static mod_lfo_control_state_t
     g_mod_lfo_control_state[BRICK_ENTITY_CAPACITY][MOD_LFO_COUNT_PER_TRACK];
+
+typedef struct
+{
+    uint32_t phase;
+    uint32_t rng;
+    float hold;
+    uint8_t active;
+    uint8_t hold_valid;
+    uint8_t one_done;
+} mod_lfo_control_midi_runtime_t;
+
+static mod_lfo_control_midi_runtime_t
+    g_mod_lfo_control_midi_runtime[BRICK_ENTITY_CAPACITY][MOD_LFO_COUNT_PER_TRACK];
+static uint8_t g_mod_lfo_control_midi_active[SEQ_LANE_CAPACITY][12U];
+
+static const float g_mod_lfo_control_sync_bars_per_cycle[MOD_LFO_SYNC_RATE_COUNT] = {
+    8.0f, 4.0f, 2.0f, 1.0f, 0.5f, 0.33333334f, 0.25f, 0.16666667f,
+    0.125f, 0.08333334f, 0.0625f, 0.04166667f, 0.03125f,
+    0.020833334f, 0.015625f, 0.0078125f
+};
 
 static float mod_lfo_control_clampf(float value, float minimum, float maximum)
 {
@@ -89,6 +114,10 @@ uint8_t mod_lfo_v1_prepare_bank(const mod_lfo_control_bank_t *state,
 
 void mod_lfo_v1_init(void)
 {
+    memset(g_mod_lfo_control_midi_runtime, 0,
+           sizeof(g_mod_lfo_control_midi_runtime));
+    memset(g_mod_lfo_control_midi_active, 0,
+           sizeof(g_mod_lfo_control_midi_active));
     for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
     {
         for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
@@ -150,6 +179,10 @@ uint8_t mod_lfo_v1_install_prepared_track_param(uint8_t owner,
             || !isfinite(canonical_value)) return 0U;
     g_mod_lfo_control_state[owner][lfo_index].value[(uint8_t)param] =
         canonical_value;
+    if ((param == MOD_LFO_PARAM_SHAPE) || (param == MOD_LFO_PARAM_TRIG)
+            || (param == MOD_LFO_PARAM_PHASE))
+        memset(&g_mod_lfo_control_midi_runtime[owner][lfo_index], 0,
+               sizeof(g_mod_lfo_control_midi_runtime[owner][lfo_index]));
     return 1U;
 }
 
@@ -191,6 +224,8 @@ uint8_t mod_lfo_v1_restore_track(uint8_t track,
     for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
         memcpy(g_mod_lfo_control_state[owner][lfo].value,
             &canonical.lfo[lfo].rate, sizeof(g_mod_lfo_control_state[owner][lfo].value));
+    memset(g_mod_lfo_control_midi_runtime[owner], 0,
+           sizeof(g_mod_lfo_control_midi_runtime[owner]));
     return 1U;
 }
 
@@ -266,6 +301,197 @@ void mod_lfo_v1_invalidate_dest_cache_track(uint8_t track)
 void mod_lfo_v1_invalidate_dest_cache_all(void)
 {
     mod_destination_catalog_invalidate_all();
+}
+
+static uint32_t mod_lfo_control_midi_phase_from_degrees(float degrees)
+{
+    if ((degrees <= 0.0f) || (degrees >= 360.0f)) return 0U;
+    return (uint32_t)((double)degrees * (4294967296.0 / 360.0));
+}
+
+static uint32_t mod_lfo_control_midi_phase_delta(float rate,
+                                                  uint32_t bpm_milli,
+                                                  uint32_t frames)
+{
+    float hz = 0.0f;
+    if (rate < -0.0001f)
+        hz = -rate;
+    else if (rate > 0.0001f)
+    {
+        uint8_t index = (uint8_t)(rate + 0.5f);
+        if (index < 1U) index = 1U;
+        if (index > MOD_LFO_SYNC_RATE_COUNT) index = MOD_LFO_SYNC_RATE_COUNT;
+        float bpm = (float)bpm_milli * 0.001f;
+        bpm = mod_lfo_control_clampf(bpm, 40.0f, 300.0f);
+        const float seconds = g_mod_lfo_control_sync_bars_per_cycle[index - 1U]
+            * (240.0f / bpm);
+        hz = 1.0f / mod_lfo_control_clampf(seconds, 0.0005f, 60.0f);
+    }
+    if ((hz <= 0.0f) || (frames == 0U)) return 0U;
+    const double delta = (double)hz * (double)frames
+        * (4294967296.0 / 48000.0);
+    return (delta >= 4294967295.0) ? 0xFFFFFFFFU
+        : (uint32_t)(delta + 0.5);
+}
+
+static float mod_lfo_control_midi_random(mod_lfo_control_midi_runtime_t *rt)
+{
+    if (rt->rng == 0U) rt->rng = 0xA341316CU;
+    rt->rng = rt->rng * 1664525U + 1013904223U;
+    return ((float)((rt->rng >> 8) & 0x00FFFFFFU)
+        * (2.0f / 16777215.0f)) - 1.0f;
+}
+
+static float mod_lfo_control_midi_source(uint8_t owner, uint8_t lfo,
+                                         uint32_t frames, uint32_t bpm_milli,
+                                         uint8_t *out_valid)
+{
+    const mod_lfo_control_state_t *const state =
+        &g_mod_lfo_control_state[owner][lfo];
+    mod_lfo_control_midi_runtime_t *const rt =
+        &g_mod_lfo_control_midi_runtime[owner][lfo];
+    const uint32_t delta = mod_lfo_control_midi_phase_delta(
+        state->value[MOD_LFO_PARAM_RATE], bpm_milli, frames);
+    if ((delta == 0U) || (rt->one_done != 0U))
+    {
+        *out_valid = 0U;
+        return 0.0f;
+    }
+    const mod_lfo_trig_mode_t trig = (mod_lfo_trig_mode_t)(uint8_t)(
+        state->value[MOD_LFO_PARAM_TRIG] + 0.5f);
+    if (rt->active == 0U)
+    {
+        if (trig != MOD_LFO_TRIG_FREE)
+        {
+            *out_valid = 0U;
+            return 0.0f;
+        }
+        rt->active = 1U;
+        rt->phase = mod_lfo_control_midi_phase_from_degrees(
+            state->value[MOD_LFO_PARAM_PHASE]);
+    }
+    const mod_lfo_shape_t shape = (mod_lfo_shape_t)(uint8_t)(
+        state->value[MOD_LFO_PARAM_SHAPE] + 0.5f);
+    float value;
+    if (rt->hold_valid != 0U)
+        value = rt->hold;
+    else if (shape == MOD_LFO_SHAPE_RANDOM_SH)
+    {
+        if (rt->rng == 0U) rt->hold = mod_lfo_control_midi_random(rt);
+        value = rt->hold;
+    }
+    else
+        value = mod_lfo_segment_wave((uint8_t)shape, rt->phase, 0.0f);
+    const uint32_t previous = rt->phase;
+    rt->phase += delta;
+    if (rt->phase < previous)
+    {
+        if (shape == MOD_LFO_SHAPE_RANDOM_SH)
+            rt->hold = mod_lfo_control_midi_random(rt);
+        if ((trig == MOD_LFO_TRIG_ONE) || (trig == MOD_LFO_TRIG_POLY_ONE))
+            rt->one_done = 1U;
+    }
+    *out_valid = 1U;
+    return value;
+}
+
+void mod_lfo_v1_control_note_trigger(uint8_t track)
+{
+    brick_entity_id_t owner = track;
+    if ((entity_topology_mod_owner(track, &owner) == 0U)
+            || (owner >= BRICK_ENTITY_CAPACITY)) return;
+    for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
+    {
+        const mod_lfo_control_state_t *const state =
+            &g_mod_lfo_control_state[owner][lfo];
+        const mod_lfo_trig_mode_t trig = (mod_lfo_trig_mode_t)(uint8_t)(
+            state->value[MOD_LFO_PARAM_TRIG] + 0.5f);
+        if (trig == MOD_LFO_TRIG_FREE) continue;
+        mod_lfo_control_midi_runtime_t *const rt =
+            &g_mod_lfo_control_midi_runtime[owner][lfo];
+        rt->active = 1U;
+        rt->one_done = 0U;
+        rt->hold_valid = 0U;
+        if ((trig == MOD_LFO_TRIG_HOLD) || (trig == MOD_LFO_TRIG_POLY_HOLD))
+        {
+            const mod_lfo_shape_t shape = (mod_lfo_shape_t)(uint8_t)(
+                state->value[MOD_LFO_PARAM_SHAPE] + 0.5f);
+            rt->hold = (shape == MOD_LFO_SHAPE_RANDOM_SH)
+                ? mod_lfo_control_midi_random(rt)
+                : mod_lfo_segment_wave((uint8_t)shape, rt->phase, 0.0f);
+            rt->hold_valid = 1U;
+        }
+        else
+            rt->phase = mod_lfo_control_midi_phase_from_degrees(
+                state->value[MOD_LFO_PARAM_PHASE]);
+    }
+}
+
+static uint8_t mod_lfo_control_midi_base(uint8_t track, param_id_t id,
+                                         float *out_value)
+{
+    track_runtime_descriptor_t descriptor;
+    uint8_t slot = 0U;
+    seq_value16_t encoded = 0U;
+    if ((out_value != NULL)
+            && (track_runtime_get_descriptor(track, &descriptor) != 0U)
+            && (tone_param_codec_param_to_slot(descriptor.type, id, &slot) != 0U)
+            && (seq_param_iface_get_runtime_value(track, SEQ_PLOCK_SET_TONE,
+                                                  slot, &encoded) != 0U))
+        return seq_param_iface_decode_param_value(id, encoded, out_value);
+    return param_registry_get_track_value(id, track, out_value);
+}
+
+void mod_lfo_v1_control_process(uint32_t frames)
+{
+    float source[BRICK_ENTITY_CAPACITY][MOD_LFO_COUNT_PER_TRACK] = {{0.0f}};
+    uint8_t source_valid[BRICK_ENTITY_CAPACITY][MOD_LFO_COUNT_PER_TRACK] = {{0U}};
+    float sum[SEQ_LANE_CAPACITY][12U] = {{0.0f}};
+    uint8_t active[SEQ_LANE_CAPACITY][12U] = {{0U}};
+    const uint32_t bpm_milli = seq_runtime_get_effective_tempo_bpm_milli();
+    for (uint8_t owner = 0U; owner < BRICK_ENTITY_CAPACITY; ++owner)
+        for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
+            source[owner][lfo] = mod_lfo_control_midi_source(
+                owner, lfo, frames, bpm_milli, &source_valid[owner][lfo]);
+
+    for (uint8_t owner = 0U; owner < SEQ_LANE_CAPACITY; ++owner)
+    {
+        const track_sound_state_t *const matrix = track_sound_state_get_const(owner);
+        if (matrix == NULL) continue;
+        for (uint8_t route = 0U; route < MOD_MATRIX_SLOT_COUNT; ++route)
+        {
+            const track_mod_matrix_slot_t *const item = &matrix->mod_matrix[route];
+            uint8_t target = 0U;
+            param_id_t id = PARAM_COUNT;
+            if ((item->enabled == 0U) || (item->depth == 0.0f)
+                    || (item->source < (uint8_t)MOD_MATRIX_SOURCE_LFO1)
+                    || (item->source > (uint8_t)MOD_MATRIX_SOURCE_LFO3)
+                    || (mod_destination_address_resolve(
+                        item->destination, &target, &id) == 0U)
+                    || (target >= SEQ_LANE_CAPACITY)
+                    || (param_backend_is_midi_cc_id(id) == 0U))
+                continue;
+            const uint8_t lfo = (uint8_t)(item->source
+                - (uint8_t)MOD_MATRIX_SOURCE_LFO1);
+            if (source_valid[owner][lfo] == 0U) continue;
+            const uint8_t cc = (uint8_t)(id - PARAM_MIDI_CC1_1);
+            sum[target][cc] += source[owner][lfo] * item->depth;
+            active[target][cc] = 1U;
+        }
+    }
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
+        for (uint8_t cc = 0U; cc < 12U; ++cc)
+        {
+            if ((active[track][cc] == 0U)
+                    && (g_mod_lfo_control_midi_active[track][cc] == 0U))
+                continue;
+            const param_id_t id = (param_id_t)(PARAM_MIDI_CC1_1 + cc);
+            float base = 0.0f;
+            if (mod_lfo_control_midi_base(track, id, &base) != 0U)
+                (void)param_backend_send_midi_cc(track, id,
+                    mod_lfo_control_clampf(base + sum[track][cc], 0.0f, 127.0f));
+            g_mod_lfo_control_midi_active[track][cc] = active[track][cc];
+        }
 }
 
 uint8_t mod_lfo_v1_dest_label(uint8_t track, uint16_t dest_index,

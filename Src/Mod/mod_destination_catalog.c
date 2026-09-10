@@ -734,12 +734,11 @@ static uint8_t mod_destination_prepared_opcode(param_id_t dest,
         case PARAM_MIX_PAN: opcode = MOD_DEST_APPLY_MIX_PAN; break;
         case PARAM_MIX_SEND1: case PARAM_MIX_SEND2: case PARAM_MIX_SEND3:
             opcode = MOD_DEST_APPLY_MIX_SEND;
-            subindex = (uint8_t)(dest - PARAM_MIX_SEND1);
+            subindex = (dest == PARAM_MIX_SEND1) ? 0U
+                : ((dest == PARAM_MIX_SEND2) ? 1U : 2U);
             break;
         case PARAM_AUDIO_FX_P1:
         case PARAM_AUDIO_FX_B_P1:
-        case PARAM_GROUP_FX_A_LEVEL:
-        case PARAM_GROUP_FX_B_LEVEL:
             opcode = MOD_DEST_APPLY_AUDIO_FX_DELAY;
             subindex = (dest == PARAM_AUDIO_FX_B_P1) ? 1U : 0U;
             break;
@@ -836,6 +835,13 @@ uint8_t mod_destination_catalog_prepare(uint8_t target,
         .endpoint = ctx->program_route.instance_id,
         .aux = ctx->program_route.engine
     };
+    uint8_t fx_slot = 0U;
+    uint8_t fx_param = 0U;
+    if (audio_fx_param_catalog_param_info(dest, &fx_slot, &fx_param) != 0U)
+    {
+        if ((models == NULL) || (fx_param >= audio_fx_param_catalog_count(
+                models->audio_fx_model[fx_slot]))) return 0U;
+    }
     if (mod_destination_prepared_opcode(dest, &prepared.opcode,
                                         &prepared.subindex) == 0U)
         return 0U;
@@ -1354,10 +1360,18 @@ uint8_t mod_destination_catalog_supported_audio(uint8_t track,
 {
     (void)family;
     (void)type;
-    (void)models;
+    uint8_t fx_slot = 0U;
+    uint8_t fx_param = 0U;
+    if (audio_fx_param_catalog_param_info(dest, &fx_slot, &fx_param) != 0U)
+    {
+        if ((models == NULL) || (fx_param >= audio_fx_param_catalog_count(
+                models->audio_fx_model[fx_slot]))) return 0U;
+    }
     /* CONTROL owns destination policy.  AUDIO checks only the command ABI and
      * resolves the already-authorized destination to a terminal DSP opcode. */
     return ((track < SEQ_TRACK_COUNT) && (dest < PARAM_COUNT)
+            && (dest != PARAM_MIDI_PROGRAM)
+            && !((dest >= PARAM_MIDI_CC1_1) && (dest <= PARAM_MIDI_CC3_4))
             && (ctx != NULL) && (ctx->program_route.active != 0U)) ? 1U : 0U;
 }
 void audio_mod_destination_catalog_reset_runtime(void) {}

@@ -18,6 +18,29 @@
 #include "param_registry.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include "NoteFx/note_fx_state.h"
+#include "Param/param_control_backends.h"
+#include "Seq/seq_runtime.h"
+#include "Track/audio_fx_control_state.h"
+#include "Param/audio_fx_param_catalog.h"
+
+static uint8_t seq_param_iface_apply_control_midi(param_id_t param,
+                                                  uint8_t track,
+                                                  seq_value16_t value16)
+{
+    float value = 0.0f;
+    if ((seq_param_iface_decode_param_value(param, value16, &value) == 0U)
+            || (param_backend_track_supports_midi_tone_ctx(
+                track_runtime_get_ctx(track)) == 0U))
+        return 0U;
+    if (param_backend_is_midi_cc_id(param) != 0U)
+        return param_backend_send_midi_cc(track, param, value);
+    if (param == PARAM_MIDI_PROGRAM)
+    {
+        seq_runtime_on_midi_program_live_change(track, value);
+        return 1U;
+    }
+    return 0U;
+}
 
 typedef struct
 {
@@ -632,6 +655,23 @@ static uint8_t seq_param_iface_slot_is_supported_internal(
             return 0U;
         }
     }
+    if ((allow_refused_euclid_param == 0U)
+            && (set_id == (uint8_t)SEQ_PLOCK_SET_AUDIO_FX))
+    {
+        uint8_t fx_slot = 0U;
+        uint8_t fx_param = 0U;
+        if (audio_fx_param_catalog_param_info(
+                param, &fx_slot, &fx_param) != 0U)
+        {
+            float model = 0.0f;
+            if ((audio_fx_control_state_get_param(track,
+                    (fx_slot != 0U) ? PARAM_AUDIO_FX_B_MODEL
+                                    : PARAM_AUDIO_FX_MODEL, &model) == 0U)
+                    || (fx_param >= audio_fx_param_catalog_count(
+                        (uint8_t)(model + 0.5f))))
+                return 0U;
+        }
+    }
 
     const track_runtime_param_status_t status =
         track_runtime_get_effective_param_status(track, param);
@@ -1082,6 +1122,15 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
         return 1U;
     }
 
+    if (param_registry_track_value_is_audio_command(param, track) == 0U)
+    {
+        if (seq_param_iface_apply_control_midi(param, track, value16) == 0U)
+            return 0U;
+        state->runtime_value = value16;
+        seq_param_set_runtime_locked(track, set_id, param_slot, 1U);
+        return 1U;
+    }
+
     if (!live_parameter_audio_publication_submit_dated(
             due_sample, param, track, value16))
     {
@@ -1123,6 +1172,17 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
         uint8_t slot = 0U, fx_param = 0U;
         if (note_fx_state_param_map(param, &slot, &fx_param) == 0U ||
             note_fx_pipeline_release_control_override(track, slot, fx_param) == 0U)
+            return 0U;
+        state->base_value = base_value16;
+        state->runtime_value = base_value16;
+        seq_param_set_base_valid(track, set_id, param_slot, 1U);
+        seq_param_set_runtime_locked(track, set_id, param_slot, 0U);
+        return 1U;
+    }
+
+    if (param_registry_track_value_is_audio_command(param, track) == 0U)
+    {
+        if (seq_param_iface_apply_control_midi(param, track, base_value16) == 0U)
             return 0U;
         state->base_value = base_value16;
         state->runtime_value = base_value16;

@@ -30,6 +30,7 @@
 #include "App/engine_tasklet.h"
 #include "stm32h7xx_hal.h"
 #include "IPC/live_clock_control.h"
+#include "Mod/mod_lfo_v1_control.h"
 
 #include "buttons.h"
 #include "encoders.h"
@@ -71,6 +72,8 @@ static uint64_t engine_control_frames_pending;
 static void engine_tick(uint32_t dt_ms)
 {
   engine_tick_count++;
+
+  mod_lfo_v1_control_process(engine_frames_per_tick);
 
   buttons_update(dt_ms);
   encoders_update(dt_ms);

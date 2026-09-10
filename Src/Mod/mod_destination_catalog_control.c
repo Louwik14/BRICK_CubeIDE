@@ -7,6 +7,8 @@
 #include "Track/entity_topology.h"
 #include "Track/track_runtime.h"
 #include "Track/tone_param_codec.h"
+#include "Track/audio_fx_control_state.h"
+#include "Param/audio_fx_param_catalog.h"
 
 /* CONTROL owns presentation and address enumeration.  The list is derived
  * directly from the canonical track descriptor; no AUDIO cache is mirrored. */
@@ -47,6 +49,7 @@ static uint8_t mod_destination_control_is_structural_sampler(param_id_t id)
 static uint8_t mod_destination_control_supported(uint8_t track, param_id_t id)
 {
     if ((track >= BRICK_ENTITY_CAPACITY) || (id >= PARAM_COUNT)
+            || (id == PARAM_MIDI_PROGRAM)
             || (id == PARAM_AUDIO_FX_MODEL)
             || (id == PARAM_AUDIO_FX_B_MODEL)
             || (mod_destination_control_is_internal_lfo(id) != 0U)
@@ -55,6 +58,18 @@ static uint8_t mod_destination_control_supported(uint8_t track, param_id_t id)
     if ((id == PARAM_LFO1_RATE) || (id == PARAM_LFO2_RATE)
             || (id == PARAM_LFO3_RATE))
         return 1U;
+    uint8_t fx_slot = 0U;
+    uint8_t fx_param = 0U;
+    if (audio_fx_param_catalog_param_info(id, &fx_slot, &fx_param) != 0U)
+    {
+        float model = 0.0f;
+        if ((audio_fx_control_state_get_param(track,
+                (fx_slot != 0U) ? PARAM_AUDIO_FX_B_MODEL
+                                : PARAM_AUDIO_FX_MODEL, &model) == 0U)
+                || (fx_param >= audio_fx_param_catalog_count(
+                    (uint8_t)(model + 0.5f))))
+            return 0U;
+    }
 
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
     if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_ENV)
@@ -98,7 +113,8 @@ uint8_t mod_destination_catalog_address_is_supported_projected(
                 || (target_topology.parent_entity_id == owner))
             : (target != owner))
         return 0U;
-    if ((id == PARAM_AUDIO_FX_MODEL) || (id == PARAM_AUDIO_FX_B_MODEL)
+    if ((id == PARAM_MIDI_PROGRAM)
+            || (id == PARAM_AUDIO_FX_MODEL) || (id == PARAM_AUDIO_FX_B_MODEL)
             || (mod_destination_control_is_internal_lfo(id) != 0U)
             || (mod_destination_control_is_structural_sampler(id) != 0U))
         return 0U;

@@ -44,6 +44,8 @@ uint8_t mod_lfo_v1_dest_label(uint8_t track, uint16_t dest_index, char *out, uin
 uint8_t mod_lfo_v1_dest_short_label(uint8_t track, uint16_t dest_index, char *out, uint32_t out_len);
 void mod_lfo_v1_invalidate_dest_cache_track(uint8_t track);
 void mod_lfo_v1_invalidate_dest_cache_all(void);
+void mod_lfo_v1_control_process(uint32_t frames);
+void mod_lfo_v1_control_note_trigger(uint8_t track);
 
 uint8_t mod_lfo_v1_shape_is_random(uint8_t track, uint8_t lfo_index);
 uint8_t mod_lfo_v1_waveform_point(uint8_t track, uint8_t lfo_index, uint8_t x, uint8_t width, int8_t *out_y_q7);

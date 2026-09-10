@@ -46,7 +46,14 @@ uint8_t param_registry_install_prepared_track_control_target(
         case PARAM_CONTROL_OWNER_MUTE:
             return track_mute_install(track, (value >= 0.5f) ? 1U : 0U);
         case PARAM_CONTROL_OWNER_AUDIO_FX:
-            return audio_fx_control_install_prepared_param(track, id, value);
+        {
+            const uint8_t installed =
+                audio_fx_control_install_prepared_param(track, id, value);
+            if ((installed != 0U) && ((id == PARAM_AUDIO_FX_MODEL)
+                    || (id == PARAM_AUDIO_FX_B_MODEL)))
+                mod_destination_catalog_invalidate_track(track);
+            return installed;
+        }
         case PARAM_CONTROL_OWNER_FILTER:
             return param_filter_control_set(track, id, value);
         case PARAM_CONTROL_OWNER_VCA:
