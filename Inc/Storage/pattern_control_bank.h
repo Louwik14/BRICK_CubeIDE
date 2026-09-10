@@ -26,7 +26,6 @@ uint8_t pattern_control_bank_staging_present(uint8_t bank, uint8_t pattern);
 uint8_t pattern_control_bank_prepare_commit(void);
 uint8_t pattern_control_bank_commit(void*context);
 void pattern_control_bank_abort(void*context);
-uint8_t pattern_control_bank_diagnostic_clear_persistence(void);
 uint8_t pattern_control_bank_store_async_begin(
     uint8_t bank,
     uint8_t pattern,

@@ -38,9 +38,6 @@
 #include "ui_core.h"
 #include "ui_page_manager.h"
 
-/* TEMPORARY hardware diagnostic. Set to 0U or revert after the clean boot. */
-#define BRICK6_DIAGNOSTIC_CLEAN_PROJECT_PERSISTENCE_ONCE 1U
-
 void control_domain_init(void)
 {
     control_rt_publication_init();
@@ -75,9 +72,6 @@ void control_domain_start(float postgain, float output_compensation)
     (void)param_registry_commit_global(PARAM_OUTPUT_COMP, output_compensation);
     brick6_boot_apply_param_defaults();
     project_control_init();
-#if BRICK6_DIAGNOSTIC_CLEAN_PROJECT_PERSISTENCE_ONCE
-    (void)project_product_diagnostic_clean_persistence_once();
-#endif
     pattern_live_init();
     patch_product_init();
     project_product_init();

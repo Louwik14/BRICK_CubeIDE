@@ -158,7 +158,6 @@ STORAGE_STATE_SDRAM static project_load_runtime_t g_project_load;
 
 static uint8_t path(char*out,uint32_t size,uint8_t slot){int n=snprintf(out,size,"0:/BRICK/PROJECT/P%02u.B6C",slot);return(n>0&&(uint32_t)n<size)?1U:0U;}
 static uint8_t side_path(char*out,uint32_t size,uint8_t slot,const char*extension){int n=snprintf(out,size,"0:/BRICK/PROJECT/P%02u.%s",slot,extension);return(n>0&&(uint32_t)n<size)?1U:0U;}
-#define PROJECT_DIAGNOSTIC_CLEAN_MARKER "0:/BRICK/PROJECT/DIAGCLN1.OK"
 static uint8_t acquire(void){if(!sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT))return 0U;if(!sd_access_fs_mount_if_needed()){sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);return 0U;}return 1U;}
 static uint8_t ensure_directory(void){FRESULT r=f_mkdir("0:/BRICK");if(r!=FR_OK&&r!=FR_EXIST)return 0U;r=f_mkdir("0:/BRICK/PROJECT");return(r==FR_OK||r==FR_EXIST)?1U:0U;}
 
@@ -1001,66 +1000,6 @@ uint8_t project_product_load(uint8_t slot)
 }
 
 uint8_t project_product_delete(uint8_t slot){if(project_replacement_is_active()!=0U||project_product_save_busy()!=0U||project_product_load_busy()!=0U||slot>=PROJECT_PRODUCT_SLOT_COUNT||!acquire())return 0U;char x[48];FRESULT r=FR_INVALID_NAME;if(path(x,sizeof(x),slot))r=f_unlink(x);sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);uint8_t ok=(r==FR_OK||r==FR_NO_FILE);if(ok){g_present[slot]=0U;if(g_active_valid&&g_active==slot){g_active_valid=0U;boot_context_flash_clear();}}return ok;}
-
-uint8_t project_product_diagnostic_clean_persistence_once(void)
-{
-    FILINFO info;
-    uint8_t ok = acquire();
-    if (ok == 0U) return 0U;
-    if (f_stat(PROJECT_DIAGNOSTIC_CLEAN_MARKER, &info) == FR_OK)
-    {
-        sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
-        return 1U;
-    }
-    ok = ensure_directory();
-    for (uint8_t slot = 0U; slot < PROJECT_PRODUCT_SLOT_COUNT; ++slot)
-    {
-        char final_path[48], temporary_path[48], backup_path[48];
-        if (path(final_path, sizeof(final_path), slot) == 0U
-            || side_path(temporary_path, sizeof(temporary_path), slot, "TMP") == 0U
-            || side_path(backup_path, sizeof(backup_path), slot, "BAK") == 0U)
-        {
-            ok = 0U;
-            continue;
-        }
-        const FRESULT final_result = f_unlink(final_path);
-        const FRESULT temporary_result = f_unlink(temporary_path);
-        const FRESULT backup_result = f_unlink(backup_path);
-        if ((final_result != FR_OK && final_result != FR_NO_FILE)
-            || (temporary_result != FR_OK && temporary_result != FR_NO_FILE)
-            || (backup_result != FR_OK && backup_result != FR_NO_FILE))
-            ok = 0U;
-    }
-    sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
-
-    if (pattern_control_bank_diagnostic_clear_persistence() == 0U)
-        ok = 0U;
-    boot_context_flash_clear();
-    boot_context_flash_data_t context;
-    if (boot_context_flash_load(&context) != 0U)
-        ok = 0U;
-
-    if (ok != 0U && acquire() != 0U)
-    {
-        FIL marker;
-        UINT written = 0U;
-        static const uint8_t signature[] = {'B','6','C','L','E','A','N','1'};
-        ok = (uint8_t)(f_open(&marker, PROJECT_DIAGNOSTIC_CLEAN_MARKER,
-                              FA_CREATE_ALWAYS | FA_WRITE) == FR_OK);
-        if (ok != 0U)
-        {
-            ok = (uint8_t)(f_write(&marker, signature, sizeof(signature),
-                                   &written) == FR_OK
-                           && written == sizeof(signature)
-                           && f_sync(&marker) == FR_OK);
-            if (f_close(&marker) != FR_OK) ok = 0U;
-        }
-        sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
-    }
-    else
-        ok = 0U;
-    return ok;
-}
 
 uint8_t project_product_blank(void)
 {
