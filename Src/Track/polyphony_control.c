@@ -32,7 +32,11 @@ uint8_t polyphony_control_reset(uint8_t track)
 
 uint8_t polyphony_control_get_voice_count(uint8_t track)
 {
-    return (track < BRICK_ENTITY_CAPACITY) ? g_polyphony_voice_count[track] : 1U;
+    if (track >= BRICK_ENTITY_CAPACITY) return 1U;
+    const track_runtime_ctx_t *const ctx = track_runtime_get_ctx(track);
+    return (ctx == NULL) ? 1U : track_runtime_effective_voice_count(
+        (track_runtime_family_t)ctx->family,
+        (track_runtime_type_t)ctx->type, g_polyphony_voice_count[track]);
 }
 
 uint8_t polyphony_control_set_voice_count(uint8_t track, uint8_t voices)
@@ -59,7 +63,7 @@ uint8_t polyphony_control_set_spread(uint8_t track, float spread)
 }
 
 uint8_t polyphony_control_capture(uint8_t track,polyphony_control_state_t*out_state)
-{if(track>=BRICK_ENTITY_CAPACITY||out_state==NULL)return 0U;out_state->voice_count=g_polyphony_voice_count[track];out_state->spread=g_polyphony_spread[track];return 1U;}
+{if(track>=BRICK_ENTITY_CAPACITY||out_state==NULL)return 0U;out_state->voice_count=polyphony_control_get_voice_count(track);out_state->spread=g_polyphony_spread[track];return 1U;}
 uint8_t polyphony_control_prepare(const polyphony_control_state_t*state,
                                   polyphony_control_state_t*out_prepared)
 {
@@ -99,7 +103,11 @@ uint8_t polyphony_control_install_prepared(uint8_t track,
     const polyphony_control_state_t*prepared)
 {
     if(track>=BRICK_ENTITY_CAPACITY||prepared==NULL)return 0U;
-    g_polyphony_voice_count[track]=prepared->voice_count;
+    const track_runtime_ctx_t *const ctx=track_runtime_get_ctx(track);
+    g_polyphony_voice_count[track]=(ctx==NULL)?1U:
+        track_runtime_effective_voice_count(
+            (track_runtime_family_t)ctx->family,
+            (track_runtime_type_t)ctx->type,prepared->voice_count);
     g_polyphony_spread[track]=prepared->spread;
     return 1U;
 }

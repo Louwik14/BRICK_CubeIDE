@@ -36,11 +36,11 @@ static uint8_t track_state_audio_resources_are_valid(
         const track_runtime_engine_t engine =
             track_runtime_choose_engine(family, type);
         if (engine == TRACK_RUNTIME_ENGINE_LOOPER) ++loopers;
-        if (family == TRACK_RUNTIME_FAMILY_SYNTH)
+        if ((family == TRACK_RUNTIME_FAMILY_SYNTH)
+                || (engine == TRACK_RUNTIME_ENGINE_DRUM))
             synth_voices = (uint16_t)(synth_voices
-                + polyphony_control_get_voice_count(entity_id));
-        else if (family == TRACK_RUNTIME_FAMILY_DRUM)
-            ++synth_voices;
+                + track_runtime_effective_voice_count(family, type,
+                    polyphony_control_get_voice_count(entity_id)));
         else if ((family != TRACK_RUNTIME_FAMILY_OFF)
                 && (family != TRACK_RUNTIME_FAMILY_MIDI)
                 && (type != TRACK_RUNTIME_TYPE_GROUP)

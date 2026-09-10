@@ -74,20 +74,31 @@ static uint8_t track_runtime_publish_program(brick_entity_id_t entity_id,
         else if (topology.role == ENTITY_ROLE_GROUP_CHILD)
             topology_flags |= CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD;
     }
-    const uint8_t has_polyphony = (uint8_t)(
+    const uint8_t uses_polyphony = (uint8_t)(
         (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
+        || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)
         || ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
             && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI)));
     polyphony_control_state_t polyphony = { .voice_count = 1U };
-    if ((has_polyphony != 0U)
+    if ((uses_polyphony != 0U)
             && !polyphony_control_capture(entity_id, &polyphony))
     {
         Error_Handler();
         return 0U;
     }
-    if ((has_polyphony != 0U)
+    polyphony.voice_count = track_runtime_effective_voice_count(
+        (track_runtime_family_t)ctx->family,
+        (track_runtime_type_t)ctx->type, polyphony.voice_count);
+    if ((uses_polyphony != 0U)
             && !control_music_output_trim_to_limit(
                 entity_id, polyphony.voice_count))
+    {
+        Error_Handler();
+        return 0U;
+    }
+    if ((uses_polyphony != 0U)
+            && (polyphony_control_install_prepared(
+                entity_id, &polyphony) == 0U))
     {
         Error_Handler();
         return 0U;
@@ -121,7 +132,7 @@ static uint8_t track_runtime_publish_program(brick_entity_id_t entity_id,
         Error_Handler();
         return 0U;
     }
-    if ((has_polyphony != 0U)
+    if ((uses_polyphony != 0U)
             && (polyphony_control_restore(entity_id, &polyphony) == 0U))
     {
         Error_Handler();
@@ -265,6 +276,31 @@ track_runtime_engine_t track_runtime_choose_engine(
     return TRACK_RUNTIME_ENGINE_NONE;
 }
 
+uint8_t track_runtime_has_configurable_polyphony(
+    track_runtime_family_t family, track_runtime_type_t type)
+{
+    if ((family == TRACK_RUNTIME_FAMILY_SAMPLER)
+            && (type == TRACK_RUNTIME_TYPE_MULTI))
+        return 1U;
+    return (uint8_t)((family == TRACK_RUNTIME_FAMILY_SYNTH)
+        && ((type == TRACK_RUNTIME_TYPE_PRISM)
+            || (type == TRACK_RUNTIME_TYPE_STACK)
+            || (type == TRACK_RUNTIME_TYPE_WAVE)
+            || (type == TRACK_RUNTIME_TYPE_FM)));
+}
+
+uint8_t track_runtime_effective_voice_count(track_runtime_family_t family,
+                                            track_runtime_type_t type,
+                                            uint8_t configured_voice_count)
+{
+    if (track_runtime_has_configurable_polyphony(family, type) == 0U)
+        return 1U;
+    if (configured_voice_count < 1U) return 1U;
+    if (configured_voice_count > SYNTH_POLYPHONY_MAX_VOICES)
+        return SYNTH_POLYPHONY_MAX_VOICES;
+    return configured_voice_count;
+}
+
 static uint8_t track_runtime_logical_equal(const track_runtime_ctx_t *left,
                                            const track_runtime_ctx_t *right)
 {
@@ -356,11 +392,17 @@ uint8_t track_runtime_validate_polyphony_budget(uint8_t track,
     {
         const track_runtime_ctx_t *const ctx = &g_track_runtime_ctx[entity];
         if (track_runtime_ctx_is_active(ctx) == 0U) continue;
-        if (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
-            required = (uint16_t)(required + ((entity == track)
-                ? voice_count : polyphony_control_get_voice_count(entity)));
-        else if (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)
-            ++required;
+        const track_runtime_family_t family =
+            (track_runtime_family_t)ctx->family;
+        const track_runtime_type_t type = (track_runtime_type_t)ctx->type;
+        const track_runtime_engine_t engine =
+            track_runtime_choose_engine(family, type);
+        if ((engine == TRACK_RUNTIME_ENGINE_DRUM)
+                || (family == TRACK_RUNTIME_FAMILY_SYNTH))
+            required = (uint16_t)(required
+                + track_runtime_effective_voice_count(family, type,
+                    (entity == track) ? voice_count
+                        : polyphony_control_get_voice_count(entity)));
     }
     return (uint8_t)(required <= SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET);
 }
@@ -1361,12 +1403,9 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
             {
                 return TRACK_RUNTIME_PARAM_UNAVAILABLE;
             }
-            if ((ctx->flags & TRACK_RUNTIME_FLAG_CAN_SYNTH) != 0U)
-            {
-                return TRACK_RUNTIME_PARAM_ALLOWED;
-            }
-            return ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-                    && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI))
+            return (track_runtime_has_configurable_polyphony(
+                    (track_runtime_family_t)ctx->family,
+                    (track_runtime_type_t)ctx->type) != 0U)
                     ? TRACK_RUNTIME_PARAM_ALLOWED
                     : TRACK_RUNTIME_PARAM_UNAVAILABLE;
 

@@ -154,6 +154,11 @@ track_runtime_family_t track_runtime_family_from_ui(track_family_t family);
 track_runtime_type_t track_runtime_type_from_ui(track_type_t type);
 track_runtime_engine_t track_runtime_choose_engine(
     track_runtime_family_t family, track_runtime_type_t type);
+uint8_t track_runtime_has_configurable_polyphony(
+    track_runtime_family_t family, track_runtime_type_t type);
+uint8_t track_runtime_effective_voice_count(track_runtime_family_t family,
+                                            track_runtime_type_t type,
+                                            uint8_t configured_voice_count);
 uint8_t track_runtime_compute_flags(track_runtime_family_t family,
                                     track_runtime_type_t type);
 uint8_t track_runtime_validate_polyphony_budget(uint8_t track,
