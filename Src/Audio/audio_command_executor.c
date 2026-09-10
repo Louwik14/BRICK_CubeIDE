@@ -26,6 +26,9 @@
 #include "Audio/synth_waveform_audio.h"
 #include "IPC/live_parameter_event.h"
 #include "Track/synth_polyphony.h"
+#include "Sampler/multi_sample_config.h"
+#include "Sampler/sampler_ram_pool.h"
+#include "Sampler/wavetable_config.h"
 #include "Mod/mod_lfo_v1_audio.h"
 #include "Mod/mod_env3.h"
 #include "Audio/sd_preview_audio.h"
@@ -44,7 +47,7 @@ typedef enum
 } audio_command_apply_result_t;
 brick_fatal_record_t g_audio_command_fatal_record;
 static uint32_t g_audio_wavetable_generation[
-    BRICK6_WAVE_VOICE_INSTANCE_COUNT * BRICK6_WAVE_OSC_COUNT];
+    BRICK_ENTITY_CAPACITY * BRICK6_WAVE_OSC_COUNT];
 static track_tone_fm_base_voice_t g_audio_fm_base_projection[BRICK_ENTITY_CAPACITY];
 
 static audio_command_apply_result_t audio_command_apply(
@@ -151,20 +154,35 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
                                                (uint16_t)command->value);
     if (command->id == CONTROL_AUDIO_PARAM_WAVETABLE_GEN)
     {
-        if (command->entity >= (BRICK6_WAVE_VOICE_INSTANCE_COUNT
+        if (command->entity >= (BRICK_ENTITY_CAPACITY
                                 * BRICK6_WAVE_OSC_COUNT)) return 0U;
         g_audio_wavetable_generation[command->entity] = command->value;
         return 1U;
     }
     if (command->id == CONTROL_AUDIO_PARAM_WAVETABLE_SET)
     {
-        if (command->entity >= (BRICK6_WAVE_VOICE_INSTANCE_COUNT
+        if (command->entity >= (BRICK_ENTITY_CAPACITY
                                 * BRICK6_WAVE_OSC_COUNT)) return 0U;
-        const uint8_t instance = command->entity / BRICK6_WAVE_OSC_COUNT;
+        const uint8_t track = command->entity / BRICK6_WAVE_OSC_COUNT;
         const uint8_t osc = command->entity % BRICK6_WAVE_OSC_COUNT;
-        brick6_wave_runtime_set_osc_table_wavetable_generation(
-            instance, osc, (uint16_t)command->value,
-            g_audio_wavetable_generation[command->entity]);
+        track_audio_runtime_ctx_t ctx;
+        if ((audio_note_engine_adapter_current_ctx(track, &ctx) == 0U)
+                || (ctx.program_route.active == 0U)
+                || (ctx.program_route.engine != TRACK_RUNTIME_ENGINE_WAVE))
+            return 0U;
+        const uint8_t voice_count = synth_polyphony_get_voice_count(track);
+        if ((voice_count == 0U)
+                || (voice_count > SYNTH_POLYPHONY_MAX_VOICES)) return 0U;
+        for (uint8_t voice = 0U; voice < voice_count; ++voice)
+            if (synth_polyphony_get_slot(track, voice)
+                    >= BRICK6_WAVE_VOICE_INSTANCE_COUNT) return 0U;
+        for (uint8_t voice = 0U; voice < voice_count; ++voice)
+        {
+            const uint8_t instance = synth_polyphony_get_slot(track, voice);
+            brick6_wave_runtime_set_osc_table_wavetable_generation(
+                instance, osc, (uint16_t)command->value,
+                g_audio_wavetable_generation[command->entity]);
+        }
         return 1U;
     }
     if (command->id == CONTROL_AUDIO_PARAM_MIDI_CONFIG)
@@ -231,16 +249,19 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
             (int8_t)(int32_t)command->value);
     if (command->id == CONTROL_AUDIO_PARAM_MULTI_RESOURCE_STOP)
     {
+        if (command->entity >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS) return 0U;
         brick6_sampler_runtime_stop_multi_instrument(command->entity);
         return 1U;
     }
     if (command->id == CONTROL_AUDIO_PARAM_RAM_RESOURCE_STOP)
     {
+        if (command->entity >= SAMPLER_RAM_POOL_MAX_SLOTS) return 0U;
         brick6_sampler_runtime_stop_ram_slot(command->entity, command->value);
         return 1U;
     }
     if (command->id == CONTROL_AUDIO_PARAM_WAVE_RESOURCE_STOP)
     {
+        if (command->entity >= WAVETABLE_POOL_MAX_SLOTS) return 0U;
         brick6_wave_runtime_stop_wavetable_slot(command->entity, command->value);
         return 1U;
     }

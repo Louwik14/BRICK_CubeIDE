@@ -42,6 +42,10 @@ PROGRAM PARAM NOTE TRANSPORT RECORD PANIC
   Il n'existe aucun registre, ID, slot, lookup, release ou credit PROGRAM.
 - `PARAM` porte une propriete canonique finale. Son sous-type precise seulement
   la portee d'adressage; aucune provenance UI, p-lock ou encodeur ne traverse.
+  Son champ `entity` est valide selon l'identifiant prive: entite musicale,
+  adresse logique Wave, lane mixer ou slot de ressource ne partagent pas leur
+  borne. Le bus GROUP 16, les destinations Wave 0..31 et les STOP Multi/RAM/Wave
+  utilisent donc leurs capacites canoniques respectives.
 - `NOTE ON` porte `entity`, `output_id`, note et velocite. `NOTE OFF` est
   identifie par `output_id`. Un retrigger est un OFF puis un ON au meme sample.
 - `TRANSPORT` porte START, STOP, CONTINUE ou LOCATE.

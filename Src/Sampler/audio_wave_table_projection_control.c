@@ -17,7 +17,7 @@
 #include "stm32h7xx.h"
 
 #define AUDIO_WAVE_TABLE_SELECTION_COUNT \
-    (AUDIO_WAVETABLE_VOICE_INSTANCE_COUNT * AUDIO_WAVETABLE_OSC_COUNT)
+    (BRICK_ENTITY_CAPACITY * AUDIO_WAVETABLE_OSC_COUNT)
 
 static audio_wave_table_selection_t
     g_control_selection[AUDIO_WAVE_TABLE_SELECTION_COUNT];
@@ -145,10 +145,9 @@ uint8_t audio_wave_table_projection_publish_track(
     track_runtime_descriptor_t descriptor;
     if ((osc >= AUDIO_WAVETABLE_OSC_COUNT)
         || !track_runtime_get_descriptor(track, &descriptor)
-        || (descriptor.engine != TRACK_RUNTIME_ENGINE_WAVE)
-        || (descriptor.instance_id >= AUDIO_WAVETABLE_VOICE_INSTANCE_COUNT))
+        || (descriptor.engine != TRACK_RUNTIME_ENGINE_WAVE))
         return 0U;
-    const uint8_t index = (uint8_t)(descriptor.instance_id
+    const uint8_t index = (uint8_t)(track
         * AUDIO_WAVETABLE_OSC_COUNT + osc);
     audio_wave_table_selection_t selection = {
         .wavetable_slot = WAVETABLE_POOL_INVALID_SLOT };
@@ -163,10 +162,9 @@ uint8_t audio_wave_table_projection_clear_track(uint8_t track, uint8_t osc)
     track_runtime_descriptor_t descriptor;
     if ((osc >= AUDIO_WAVETABLE_OSC_COUNT)
         || !track_runtime_get_descriptor(track, &descriptor)
-        || (descriptor.engine != TRACK_RUNTIME_ENGINE_WAVE)
-        || (descriptor.instance_id >= AUDIO_WAVETABLE_VOICE_INSTANCE_COUNT))
+        || (descriptor.engine != TRACK_RUNTIME_ENGINE_WAVE))
         return 0U;
-    const uint8_t index = (uint8_t)(descriptor.instance_id
+    const uint8_t index = (uint8_t)(track
         * AUDIO_WAVETABLE_OSC_COUNT + osc);
     const audio_wave_table_selection_t invalid = {
         .wavetable_slot = WAVETABLE_POOL_INVALID_SLOT };

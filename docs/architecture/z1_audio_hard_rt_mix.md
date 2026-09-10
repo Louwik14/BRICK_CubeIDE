@@ -22,6 +22,10 @@ Le rebind des outputs tenus ne masque aucun echec: l'absence volontaire de
 renderer est un succes silencieux, tandis qu'un renderer promis mais impossible
 declenche le fatal source du consumer.
 
+Drum reste monophonique mais son backend couvre les 16 slots physiques du pool
+synth; toute admission valide possede ainsi une instance representable, y
+compris lorsqu'elle recoit un slot 8..15.
+
 Le mixer applique filtre, VCA, niveau, pan, inserts, sends puis traitements globaux. Reverb, delay, compresseur et gain Master sont globaux. Send3 ne conserve que Daisy Stereo et Junologue; VIBE et DRIFT sont des inserts par entite. VIBE utilise le kernel Deluge Float avec politique `dry + wet` 1:1. DRIFT expose DELAY et FEEDBACK, sans LFO interne.
 
 La track EXT possede son entree physique via l'ownership CONTROL, puis AUDIO la publie dans la lane du programme. Son parametre TONE `GATE` est CONTROL-owned et publie vers AUDIO: `ON` desactive le VCA de gate et laisse passer l'entree en continu, tandis que `TRIG` active le VCA et reconstruit son compteur depuis le mapping AUDIO des `output_id` vivants. Les NOTE OFF inconnus et les NOTE ON deja presents ne modifient pas ce compteur; le dernier output ferme seul le gate. Le mute reste applique plus loin dans le mixer et conserve donc son autorite dans les deux modes.
@@ -38,7 +42,7 @@ Le format est immutable pendant la voix. Une page physique de 16 KiB contient 40
 
 ## Wave
 
-Wave possede OSC1, OSC2 et COMMON. TABLE est un slot logique projete vers un slot/generation AUDIO. Les deux oscillateurs sont independants; WAVE ne possede aucun routage ou etat de modulation croisee. L'interpolation de frame et de sample est permanente, POS reste l'axe des frames et aucun smoothing POS n'est applique. START (0..100 %) et LEN (1..100 %) definissent une fenetre lineaire interne bornee a la fin du cycle : `effective_len = min(LEN, 1 - START)`, puis `read_phase = START + phase_porteuse * effective_len`. La phase porteuse et le pitch restent possedes par la voix, aucun wrap de lecture n'est applique, et START=0/LEN=100 conserve le chemin historique bit-identique.
+Wave possede OSC1, OSC2 et COMMON. TABLE est un slot logique projete vers un slot/generation AUDIO. CONTROL adresse `{entite logique, oscillateur}`; AUDIO resout cette destination vers les slots physiques courants du mapping `synth_polyphony` et applique la selection a chaque voix allouee. Les deux oscillateurs sont independants; WAVE ne possede aucun routage ou etat de modulation croisee. L'interpolation de frame et de sample est permanente, POS reste l'axe des frames et aucun smoothing POS n'est applique. START (0..100 %) et LEN (1..100 %) definissent une fenetre lineaire interne bornee a la fin du cycle : `effective_len = min(LEN, 1 - START)`, puis `read_phase = START + phase_porteuse * effective_len`. La phase porteuse et le pitch restent possedes par la voix, aucun wrap de lecture n'est applique, et START=0/LEN=100 conserve le chemin historique bit-identique.
 
 Le snapshot de waveform est une publication seqlock AUDIO->CONTROL fixe et sans pointeur. Il capture au plus 48 points par oscillateur, a 20 Hz maximum, sans second rendu. Desactive, il n'ajoute aucun cout par sample.
 

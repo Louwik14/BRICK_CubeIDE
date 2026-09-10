@@ -22,6 +22,10 @@
 #include "IPC/synth_waveform_contract.h"
 #include "Mod/mod_matrix.h"
 #include "Param/engine_model_catalog.h"
+#include "Audio/mixer.h"
+#include "Sampler/multi_sample_config.h"
+#include "Sampler/sampler_ram_pool.h"
+#include "Sampler/wavetable_config.h"
 #include "main.h"
 
 static uint8_t control_rt_program_is_valid(uint8_t entity, uint32_t value)
@@ -144,7 +148,7 @@ static uint8_t control_rt_param_is_valid(const control_audio_command_t *command)
     if ((command->id == CONTROL_AUDIO_PARAM_WAVETABLE_GEN)
             || (command->id == CONTROL_AUDIO_PARAM_WAVETABLE_SET))
         return (uint8_t)((scope == 0U)
-            && (command->entity < (AUDIO_WAVETABLE_VOICE_INSTANCE_COUNT
+            && (command->entity < (BRICK_ENTITY_CAPACITY
                 * AUDIO_WAVETABLE_OSC_COUNT)));
     if (command->id == CONTROL_AUDIO_PARAM_MIDI_CONFIG)
         return (uint8_t)((command->entity < BRICK_ENTITY_CAPACITY)
@@ -221,14 +225,19 @@ static uint8_t control_rt_param_is_valid(const control_audio_command_t *command)
     if ((command->id >= CONTROL_AUDIO_PARAM_MIX_INSERT_FIRST)
             && (command->id <= CONTROL_AUDIO_PARAM_MIX_INSERT_LAST))
         return (uint8_t)((scope == 0U)
-            && (command->entity <= BRICK_ENTITY_CAPACITY));
+            && (command->entity < MIXER_MAX_TRACKS));
     if (command->id == CONTROL_AUDIO_PARAM_MIX_ROUTE)
         return (uint8_t)((scope == 0U)
-            && (command->entity <= BRICK_ENTITY_CAPACITY));
-    if ((command->id == CONTROL_AUDIO_PARAM_MULTI_RESOURCE_STOP)
-            || (command->id == CONTROL_AUDIO_PARAM_RAM_RESOURCE_STOP)
-            || (command->id == CONTROL_AUDIO_PARAM_WAVE_RESOURCE_STOP))
-        return scope == 0U;
+            && (command->entity < MIXER_MAX_TRACKS));
+    if (command->id == CONTROL_AUDIO_PARAM_MULTI_RESOURCE_STOP)
+        return (uint8_t)((scope == 0U)
+            && (command->entity < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS));
+    if (command->id == CONTROL_AUDIO_PARAM_RAM_RESOURCE_STOP)
+        return (uint8_t)((scope == 0U)
+            && (command->entity < SAMPLER_RAM_POOL_MAX_SLOTS));
+    if (command->id == CONTROL_AUDIO_PARAM_WAVE_RESOURCE_STOP)
+        return (uint8_t)((scope == 0U)
+            && (command->entity < WAVETABLE_POOL_MAX_SLOTS));
     return 0U;
 }
 

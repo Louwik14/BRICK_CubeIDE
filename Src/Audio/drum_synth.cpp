@@ -4,7 +4,7 @@
 
 #include <cstring>
 
-#include "Track/entity_types.h"
+#include "Track/synth_polyphony.h"
 
 
 namespace
@@ -147,7 +147,7 @@ typedef struct
 } drum_synth_instance_t;
 
 static drum_synth_instance_t
-    g_drum_instances[BRICK_ENTITY_TOP_LEVEL_COUNT];
+    g_drum_instances[SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET];
 
 static inline float clampf_local(float value, float lo, float hi)
 {
@@ -164,7 +164,7 @@ static inline float clampf_local(float value, float lo, float hi)
 
 static inline drum_synth_instance_t *drum_instance(uint8_t instance_id)
 {
-    return (instance_id < BRICK_ENTITY_TOP_LEVEL_COUNT)
+    return (instance_id < SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
         ? &g_drum_instances[instance_id] : nullptr;
 }
 
@@ -859,7 +859,7 @@ void drum_synth_init(float sample_rate)
 {
     (void)sample_rate;
 
-    for (uint8_t i = 0U; i < BRICK_ENTITY_TOP_LEVEL_COUNT; ++i)
+    for (uint8_t i = 0U; i < SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET; ++i)
     {
         drum_instance_init(&g_drum_instances[i]);
     }
@@ -891,7 +891,7 @@ uint8_t drum_synth_set_model_for_instance(uint8_t instance_id, drum_model_id_t m
 uint8_t drum_synth_model_transition_is_valid(uint8_t instance_id,
                                               drum_model_id_t model_type)
 {
-    return (uint8_t)((instance_id < BRICK_ENTITY_TOP_LEVEL_COUNT)
+    return (uint8_t)((instance_id < SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
         && ((model_type == DRUM_MODEL_ID_NONE)
             || (model_type == DRUM_MODEL_ID_MD)));
 }
@@ -1097,7 +1097,7 @@ uint8_t drum_synth_get_md_model_for_instance(uint8_t instance_id)
 
 void drum_synth_all_notes_off_all(void)
 {
-    for (uint8_t i = 0U; i < BRICK_ENTITY_TOP_LEVEL_COUNT; ++i)
+    for (uint8_t i = 0U; i < SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET; ++i)
     {
         drum_synth_all_notes_off_for_instance(i);
     }
