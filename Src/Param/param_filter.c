@@ -71,13 +71,6 @@ uint8_t param_filter_control_get(uint8_t track, param_id_t id,
         case PARAM_FILTER_KEYTRK: *out_value = state->keytrack; return 1U;
         case PARAM_FILTER_ENVRST: *out_value = state->env_reset; return 1U;
         case PARAM_FILTER_ENVDLY: *out_value = state->env_delay; return 1U;
-        case PARAM_FILTER_DRIVE: *out_value = state->drive; return 1U;
-        case PARAM_FILTER_DECIMATOR_BITS:
-            *out_value = state->decimator_bits; return 1U;
-        case PARAM_FILTER_DECIMATOR_RATE:
-            *out_value = state->decimator_rate; return 1U;
-        case PARAM_FILTER_DECIMATOR_RATE2:
-            *out_value = state->decimator_rate2; return 1U;
         case PARAM_ENV_RETRIG_FILTER: *out_value = state->retrigger; return 1U;
         default: return 0U;
     }
@@ -101,13 +94,6 @@ uint8_t param_filter_control_set(uint8_t track, param_id_t id, float value)
         case PARAM_FILTER_ENVRST:
             state->env_reset = (value >= 0.5f) ? 1.0f : 0.0f; return 1U;
         case PARAM_FILTER_ENVDLY: state->env_delay = filter_ui127_clamp(value); return 1U;
-        case PARAM_FILTER_DRIVE: state->drive = filter_ui127_clamp(value); return 1U;
-        case PARAM_FILTER_DECIMATOR_BITS:
-            state->decimator_bits = filter_ui127_clamp(value); return 1U;
-        case PARAM_FILTER_DECIMATOR_RATE:
-            state->decimator_rate = filter_ui127_clamp(value); return 1U;
-        case PARAM_FILTER_DECIMATOR_RATE2:
-            state->decimator_rate2 = filter_ui127_clamp(value); return 1U;
         case PARAM_ENV_RETRIG_FILTER:
             state->retrigger = (value >= 0.5f) ? 1.0f : 0.0f; return 1U;
         default: return 0U;
@@ -141,15 +127,15 @@ uint8_t param_filter_control_restore(uint8_t track,
         PARAM_FILTER_MORPH, PARAM_FILTER_CUTOFF, PARAM_FILTER_RESONANCE,
         PARAM_FILTER_EG_AMT, PARAM_FILTER_ATTACK, PARAM_FILTER_DECAY,
         PARAM_FILTER_SUSTAIN, PARAM_FILTER_RELEASE, PARAM_FILTER_KEYTRK,
-        PARAM_FILTER_ENVRST, PARAM_FILTER_ENVDLY, PARAM_FILTER_DRIVE,
-        PARAM_FILTER_DECIMATOR_BITS, PARAM_FILTER_DECIMATOR_RATE,
-        PARAM_FILTER_DECIMATOR_RATE2, PARAM_ENV_RETRIG_FILTER
+        PARAM_FILTER_ENVRST, PARAM_FILTER_ENVDLY, PARAM_COUNT,
+        PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_ENV_RETRIG_FILTER
     };
     param_filter_control_state_t canonical_state = *state;
     float *const values = (float *)&canonical_state;
     for (uint8_t i = 0U; i < (uint8_t)(sizeof(ids) / sizeof(ids[0])); ++i)
     {
         param_registry_prepared_value_t prepared;
+        if (ids[i] == PARAM_COUNT) continue;
         if (param_registry_prepare_value(ids[i], values[i], &prepared) == 0U)
             return 0U;
         values[i] = prepared.value;
@@ -161,8 +147,9 @@ uint8_t param_filter_control_restore(uint8_t track,
     };
     for (uint8_t i = 0U; i < (uint8_t)(sizeof(ids) / sizeof(ids[0])); ++i)
     {
-        if (track_runtime_get_effective_param_status(track, ids[i])
-                != TRACK_RUNTIME_PARAM_ALLOWED) continue;
+        if ((ids[i] == PARAM_COUNT)
+                || (track_runtime_get_effective_param_status(track, ids[i])
+                != TRACK_RUNTIME_PARAM_ALLOWED)) continue;
         bulk.item[bulk.count++] = (live_parameter_audio_bulk_item_t){
             .parameter_id = (uint16_t)ids[i],
             .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,

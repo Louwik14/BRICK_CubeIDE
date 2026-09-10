@@ -65,7 +65,6 @@ typedef enum
     PATCH_ASSIGN_TYPE_STREAM,
     PATCH_ASSIGN_TYPE_MULTI,
     PATCH_ASSIGN_TYPE_DRUM_MD,
-    PATCH_ASSIGN_TYPE_DRUM_BD_ANALOG,
     PATCH_ASSIGN_TYPE_COUNT
 } patch_assign_type_filter_t;
 
@@ -172,7 +171,6 @@ static const char *ui_page_patch_assign_type_filter_label(patch_assign_type_filt
         case PATCH_ASSIGN_TYPE_STREAM: return "STREAM";
         case PATCH_ASSIGN_TYPE_MULTI: return "MULTI";
         case PATCH_ASSIGN_TYPE_DRUM_MD: return "DRUM MD";
-        case PATCH_ASSIGN_TYPE_DRUM_BD_ANALOG: return "BD ANA";
         default: return "ALL";
     }
 }
@@ -216,7 +214,6 @@ static patch_assign_type_filter_t ui_page_patch_assign_type_filter_from_track(tr
             switch (type)
             {
                 case TRACK_TYPE_DRUM_MD: return PATCH_ASSIGN_TYPE_DRUM_MD;
-                case TRACK_TYPE_DRUM_BD_ANALOG: return PATCH_ASSIGN_TYPE_DRUM_BD_ANALOG;
                 default: return PATCH_ASSIGN_TYPE_ALL;
             }
 
@@ -248,8 +245,7 @@ static uint8_t ui_page_patch_assign_type_filter_allowed(patch_assign_family_filt
                     || (type == PATCH_ASSIGN_TYPE_MULTI)) ? 1U : 0U;
 
         case PATCH_ASSIGN_FAMILY_DRUM:
-            return ((type == PATCH_ASSIGN_TYPE_DRUM_MD)
-                    || (type == PATCH_ASSIGN_TYPE_DRUM_BD_ANALOG)) ? 1U : 0U;
+            return (type == PATCH_ASSIGN_TYPE_DRUM_MD) ? 1U : 0U;
 
         case PATCH_ASSIGN_FAMILY_ALL:
         default:
@@ -337,8 +333,6 @@ static uint8_t ui_page_patch_assign_type_matches(track_type_t type)
             return (type == TRACK_TYPE_MULTI) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_DRUM_MD:
             return (type == TRACK_TYPE_DRUM_MD) ? 1U : 0U;
-        case PATCH_ASSIGN_TYPE_DRUM_BD_ANALOG:
-            return (type == TRACK_TYPE_DRUM_BD_ANALOG) ? 1U : 0U;
         case PATCH_ASSIGN_TYPE_ALL:
         default:
             return 1U;

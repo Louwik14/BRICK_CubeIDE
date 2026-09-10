@@ -37,25 +37,6 @@ static void ui_page_template_tone_sync_drum_family(void)
         return;
     }
 
-    if ((ui_get_track_family(active_track) == TRACK_FAMILY_DRUM)
-            && (ui_get_track_type(active_track) == TRACK_TYPE_DRUM_BD_ANALOG))
-    {
-        g_ui_template_tone_family_drum.nav_labels[0] = "BD";
-        g_ui_template_tone_family_drum.nav_labels[1] = "-";
-        g_ui_template_tone_family_drum.nav_labels[2] = "-";
-        g_ui_template_tone_family_drum.nav_labels[3] = "-";
-        ui_page_template_tone_set_subpage(0U,
-                                          "BD",
-                                          PARAM_DRUM_TRX_BD_PITCH,
-                                          PARAM_DRUM_TRX_BD_DECAY,
-                                          PARAM_DRUM_TRX_BD_HARMONICS,
-                                          PARAM_DRUM_TRX_BD_PITCH_SWEEP);
-        ui_page_template_tone_set_subpage(1U, "-", PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT);
-        ui_page_template_tone_set_subpage(2U, "-", PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT);
-        ui_page_template_tone_set_subpage(3U, "-", PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT);
-        return;
-    }
-
     g_ui_template_tone_family_drum.nav_labels[0] = "MAIN";
     g_ui_template_tone_family_drum.nav_labels[1] = "-";
     g_ui_template_tone_family_drum.nav_labels[2] = "-";

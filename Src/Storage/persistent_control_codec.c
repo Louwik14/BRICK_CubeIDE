@@ -142,7 +142,7 @@ static uint8_t codec_type_valid(uint32_t key)
 {
     switch(key){case PERSIST_TYPE_NONE:case PERSIST_TYPE_PRISM:case PERSIST_TYPE_WAVE:
     case PERSIST_TYPE_STACK:case PERSIST_TYPE_FM:case PERSIST_TYPE_DRUM_MD:
-    case PERSIST_TYPE_DRUM_ANALOG_BD:case PERSIST_TYPE_MIDI:case PERSIST_TYPE_RAM_SAMPLE:
+    case PERSIST_TYPE_RESERVED_LEGACY_DRUM_ANALOG_BD:case PERSIST_TYPE_MIDI:case PERSIST_TYPE_RAM_SAMPLE:
     case PERSIST_TYPE_STREAM_SAMPLE:case PERSIST_TYPE_MULTI_SAMPLE:case PERSIST_TYPE_LOOPER:
     case PERSIST_TYPE_EXTERNAL:case PERSIST_TYPE_GROUP:case PERSIST_TYPE_TB303:return 1U;default:return 0U;}
 }
@@ -321,7 +321,10 @@ static void codec_tone(codec_io_t *io,tone_program_control_t*t)
     case TRACK_RUNTIME_TYPE_MULTI:codec_float_block(io,&t->state.multi.gain,2U);break;
     case TRACK_RUNTIME_TYPE_MIDI:codec_float_block(io,&t->state.midi.program,13U);break;
     case TRACK_RUNTIME_TYPE_EXTERNAL:codec_float_block(io,&t->state.external.midi.program,14U);break;
-    case TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG:codec_float_block(io,&t->state.drum_analog.pitch,8U);break;
+    case TRACK_RUNTIME_TYPE_RESERVED_LEGACY_DRUM_BD_ANALOG:
+        codec_float_block(io,&t->state.reserved_legacy_drum_analog[0],8U);
+        if(io->mode==CODEC_READ){memset(&t->state,0,sizeof(t->state));t->tag=TRACK_RUNTIME_TYPE_DRUM_MD;}
+        break;
     case TRACK_RUNTIME_TYPE_DRUM_MD:codec_float_block(io,&t->state.drum_md.model,9U);break;
     case TRACK_RUNTIME_TYPE_NONE:case TRACK_RUNTIME_TYPE_FM:case TRACK_RUNTIME_TYPE_GROUP:break;
     default:io->result=PERSIST_CODEC_INVALID_ENTITY;break;}

@@ -64,10 +64,6 @@ static float *tone_field(tone_program_control_t *p, param_id_t id)
         if(id==PARAM_MIDI_PROGRAM)return &p->state.external.midi.program;
         if(id>=PARAM_MIDI_CC1_1&&id<=PARAM_MIDI_CC3_4)return &p->state.external.midi.cc[((uint16_t)id-(uint16_t)PARAM_MIDI_CC1_1)/4U][((uint16_t)id-(uint16_t)PARAM_MIDI_CC1_1)%4U];
         return NULL;
-    case TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG:
-        switch(id){F(PARAM_DRUM_TRX_BD_PITCH,p->state.drum_analog.pitch);F(PARAM_DRUM_TRX_BD_DECAY,p->state.drum_analog.decay);F(PARAM_DRUM_TRX_BD_PITCH_SWEEP,p->state.drum_analog.pitch_sweep);
-        F(PARAM_DRUM_TRX_BD_SWEEP_DECAY,p->state.drum_analog.sweep_decay);F(PARAM_DRUM_TRX_BD_ATTACK,p->state.drum_analog.attack);F(PARAM_DRUM_TRX_BD_NOISE,p->state.drum_analog.noise);
-        F(PARAM_DRUM_TRX_BD_HARMONICS,p->state.drum_analog.harmonics);F(PARAM_DRUM_TRX_BD_DRIVE,p->state.drum_analog.drive);default:return NULL;}
     case TRACK_RUNTIME_TYPE_DRUM_MD:
         if(id==PARAM_DRUM_MD_MODEL)return &p->state.drum_md.model;
         if(id>=PARAM_DRUM_MD_P1&&id<=PARAM_DRUM_MD_P8)return &p->state.drum_md.p[(uint16_t)id-(uint16_t)PARAM_DRUM_MD_P1];

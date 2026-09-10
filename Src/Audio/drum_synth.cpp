@@ -3,19 +3,12 @@
 #include "Audio/md_dsp.h"
 
 #include <cstring>
-#include <new>
 
 #include "Track/entity_types.h"
 
-#include "plaits/dsp/drums/analog_bass_drum.h"
-#include "plaits/dsp/engine/engine.h"
 
 namespace
 {
-constexpr float kDefaultPitch = 0.0f;
-constexpr float kDefaultDecay = 0.4f;
-constexpr float kDefaultTone = 0.0f;
-constexpr float kDefaultFm = 0.3f;
 constexpr float kMdSampleRate = 48000.0f;
 
 typedef md_decay_env_t md_internal_env_t;
@@ -132,7 +125,6 @@ typedef struct
 
 union drum_engine_state_t
 {
-    plaits::AnalogBassDrum bd;
     md_trx_bd_state_t trx_bd;
     md_trx_sd_state_t trx_sd;
     md_trx_ch_state_t trx_ch;
@@ -148,15 +140,8 @@ typedef struct
     drum_engine_state_t engine;
     drum_model_id_t model;
     float midi_note;
-    float accent;
-    float pitch;
-    float frequency_current;
-    float decay;
-    float tone;
-    float fm;
     uint8_t initialized;
     uint8_t triggered;
-    uint8_t trigger_pending;
     uint8_t md_model;
     uint8_t md_slots[8];
 } drum_synth_instance_t;
@@ -845,14 +830,7 @@ static void md_model_reset(drum_synth_instance_t *instance)
 static void drum_instance_reset_params(drum_synth_instance_t *instance)
 {
     instance->midi_note = 36.0f;
-    instance->accent = 1.0f;
-    instance->pitch = kDefaultPitch;
-    instance->frequency_current = plaits::NoteToFrequency(instance->midi_note);
-    instance->decay = kDefaultDecay;
-    instance->tone = kDefaultTone;
-    instance->fm = kDefaultFm;
     instance->triggered = 0U;
-    instance->trigger_pending = 0U;
     instance->md_model = (uint8_t)MD_MODEL_TRX_BD;
     const md_model_profile_t *const profile = md_model_profile_get(instance->md_model);
     for (uint8_t slot = 0U; slot < 8U; ++slot)
@@ -899,21 +877,11 @@ uint8_t drum_synth_set_model_for_instance(uint8_t instance_id, drum_model_id_t m
 
     if (instance->model != model_type)
     {
-        if (instance->model == DRUM_MODEL_ID_BD_ANALOG)
-        {
-            instance->engine.bd.~AnalogBassDrum();
-        }
         instance->model = model_type;
         instance->triggered = 0U;
-        instance->trigger_pending = 0U;
         if (model_type == DRUM_MODEL_ID_MD)
         {
             md_model_reset(instance);
-        }
-        else if (model_type == DRUM_MODEL_ID_BD_ANALOG)
-        {
-            new (&instance->engine.bd) plaits::AnalogBassDrum();
-            instance->engine.bd.Init();
         }
     }
 
@@ -925,8 +893,7 @@ uint8_t drum_synth_model_transition_is_valid(uint8_t instance_id,
 {
     return (uint8_t)((instance_id < BRICK_ENTITY_TOP_LEVEL_COUNT)
         && ((model_type == DRUM_MODEL_ID_NONE)
-            || (model_type == DRUM_MODEL_ID_MD)
-            || (model_type == DRUM_MODEL_ID_BD_ANALOG)));
+            || (model_type == DRUM_MODEL_ID_MD)));
 }
 
 drum_model_id_t drum_synth_get_model_for_instance(uint8_t instance_id)
@@ -984,17 +951,6 @@ void drum_synth_note_on_for_instance(uint8_t instance_id, uint8_t midi_note, uin
         }
         return;
     }
-    if (instance->model != DRUM_MODEL_ID_BD_ANALOG)
-    {
-        return;
-    }
-
-    instance->midi_note = (float)midi_note;
-    instance->frequency_current =
-        plaits::NoteToFrequency(instance->midi_note + instance->pitch);
-    instance->accent = clampf_local((float)velocity / 127.0f, 0.0f, 1.0f);
-    instance->triggered = 1U;
-    instance->trigger_pending = 1U;
 }
 
 void drum_synth_note_off_for_instance(uint8_t instance_id, uint8_t midi_note)
@@ -1016,12 +972,7 @@ void drum_synth_all_notes_off_for_instance(uint8_t instance_id)
     {
         md_model_reset(instance);
     }
-    else if (instance->model == DRUM_MODEL_ID_BD_ANALOG)
-    {
-        instance->engine.bd.Init();
-    }
     instance->triggered = 0U;
-    instance->trigger_pending = 0U;
 }
 
 void drum_synth_process_block_for_instance(uint8_t instance_id, float *mono_out, uint32_t frames)
@@ -1076,45 +1027,7 @@ void drum_synth_process_block_for_instance(uint8_t instance_id, float *mono_out,
         }
         return;
     }
-    if ((instance->model != DRUM_MODEL_ID_BD_ANALOG) || (instance->triggered == 0U))
-    {
-        std::memset(mono_out, 0, (size_t)frames * sizeof(float));
-        return;
-    }
-
-    const bool trigger = (instance->trigger_pending != 0U);
-    instance->trigger_pending = 0U;
-
-    const float note = instance->midi_note + instance->pitch;
-    const float frequency_target = plaits::NoteToFrequency(note);
-    const float accent = clampf_local(instance->accent, 0.0f, 1.0f);
-    const float tone = clampf_local(instance->tone, 0.0f, 1.0f);
-    const float decay = clampf_local(instance->decay * 0.5f, 0.0f, 1.0f);
-    const float attack_fm = clampf_local(instance->fm, 0.0f, 1.0f);
-
-    const float frequency_start = instance->frequency_current;
-    for (uint32_t offset = 0U; offset < frames; offset += 8U)
-    {
-        uint32_t chunk = frames - offset;
-        if (chunk > 8U)
-        {
-            chunk = 8U;
-        }
-        const float progress = (float)(offset + chunk) / (float)frames;
-        const float f0 = frequency_start
-            + ((frequency_target - frequency_start) * progress);
-        instance->engine.bd.Render(false,
-                            trigger && (offset == 0U),
-                            accent,
-                            f0,
-                            tone,
-                            decay,
-                            attack_fm,
-                            0.0f,
-                            &mono_out[offset],
-                            (size_t)chunk);
-    }
-    instance->frequency_current = frequency_target;
+    std::memset(mono_out, 0, (size_t)frames * sizeof(float));
 }
 
 uint8_t drum_synth_set_param_for_instance(uint8_t instance_id, param_id_t param, float value)
@@ -1171,28 +1084,7 @@ uint8_t drum_synth_set_param_for_instance(uint8_t instance_id, param_id_t param,
         }
         return 1U;
     }
-    if (instance->model != DRUM_MODEL_ID_BD_ANALOG)
-    {
-        return 0U;
-    }
-
-    switch (param)
-    {
-        case PARAM_DRUM_TRX_BD_PITCH:
-            instance->pitch = clampf_local(value, -48.0f, 24.0f);
-            return 1U;
-        case PARAM_DRUM_TRX_BD_DECAY:
-            instance->decay = clampf_local(value, 0.01f, 2.0f);
-            return 1U;
-        case PARAM_DRUM_TRX_BD_HARMONICS:
-            instance->tone = clampf_local(value, 0.0f, 1.0f);
-            return 1U;
-        case PARAM_DRUM_TRX_BD_PITCH_SWEEP:
-            instance->fm = clampf_local(value, 0.0f, 1.0f);
-            return 1U;
-        default:
-            return 0U;
-    }
+    return 0U;
 }
 
 uint8_t drum_synth_get_md_model_for_instance(uint8_t instance_id)

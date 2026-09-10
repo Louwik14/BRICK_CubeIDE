@@ -37,7 +37,7 @@ static const ui_template_family_t g_ui_template_env_family_retrig = {
     .subpages = {
         {
             .title = "MODE",
-            .param_bank = { .params = { PARAM_ENV_RETRIG_FILTER, PARAM_ENV_RETRIG_VCA, PARAM_ENV_RETRIG_MOD, PARAM_FILTER_MODE } },
+            .param_bank = { .params = { PARAM_ENV_RETRIG_FILTER, PARAM_ENV_RETRIG_VCA, PARAM_FILTER_KEYTRK, PARAM_FILTER_MODE } },
         },
         {
             .title = "-",
@@ -71,7 +71,7 @@ static const ui_template_family_t g_ui_template_env_family_group_retrig = {
     .family_title = "ENV 2/2",
     .nav_labels = { "MODE", "-", "-", "-" },
     .subpages = {
-        { .title = "MODE", .param_bank = { .params = { PARAM_ENV_RETRIG_MOD, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "MODE", .param_bank = { .params = { PARAM_FILTER_KEYTRK, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },

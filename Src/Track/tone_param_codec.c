@@ -16,7 +16,6 @@ static const param_id_t looper[] = { TONE_PARAM_CATALOG_LOOPER(TONE_PARAM_CODEC_
 static const param_id_t multi[] = { TONE_PARAM_CATALOG_MULTI(TONE_PARAM_CODEC_ITEM) };
 static const param_id_t midi[] = { TONE_PARAM_CATALOG_MIDI(TONE_PARAM_CODEC_ITEM) };
 static const param_id_t external[] = { TONE_PARAM_CATALOG_EXTERNAL(TONE_PARAM_CODEC_ITEM) };
-static const param_id_t analog[] = { TONE_PARAM_CATALOG_DRUM_ANALOG(TONE_PARAM_CODEC_ITEM) };
 static const param_id_t md[] = { TONE_PARAM_CATALOG_DRUM_MD(TONE_PARAM_CODEC_ITEM) };
 #undef TONE_PARAM_CODEC_ITEM
 
@@ -33,7 +32,7 @@ static uint8_t table_for(track_runtime_type_t type,const param_id_t **table,uint
  case TRACK_RUNTIME_TYPE_TB303:T(tb303);
  case TRACK_RUNTIME_TYPE_STREAM:T(stream); case TRACK_RUNTIME_TYPE_LOOPER:T(looper);
  case TRACK_RUNTIME_TYPE_MULTI:T(multi); case TRACK_RUNTIME_TYPE_MIDI:T(midi);
- case TRACK_RUNTIME_TYPE_EXTERNAL:T(external); case TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG:T(analog);
+ case TRACK_RUNTIME_TYPE_EXTERNAL:T(external);
  case TRACK_RUNTIME_TYPE_DRUM_MD:T(md); default:return 0U;}
 #undef T
 }

@@ -132,7 +132,7 @@ uint8_t mod_destination_catalog_address_is_supported_projected(
             || (id == PARAM_FILTER_CUTOFF) || (id == PARAM_FILTER_RESONANCE)
             || (id == PARAM_FILTER_KEYTRK) || (id == PARAM_ENV3_ATTACK)
             || (id == PARAM_ENV3_DECAY) || (id == PARAM_ENV3_SUSTAIN)
-            || (id == PARAM_ENV3_RELEASE) || (id == PARAM_ENV_RETRIG_MOD));
+            || (id == PARAM_ENV3_RELEASE));
     if (rule.resource == TRACK_RUNTIME_RESOURCE_FILTER)
         return (uint8_t)((config.family == TRACK_FAMILY_SYNTH)
             || (config.family == TRACK_FAMILY_SAMPLER)
@@ -153,7 +153,7 @@ static const mod_destination_param_range_t g_mod_destination_param_ranges[] = {
     { PARAM_MIX_MUTE, PARAM_MIX_MUTE },
     { PARAM_DRUM_MD_MODEL, PARAM_DRUM_MD_P8 },
     { PARAM_MIX_LEVEL, PARAM_MIX_SEND2 },
-    { PARAM_FILTER_MORPH, PARAM_ENV_RETRIG_MOD },
+    { PARAM_FILTER_MORPH, PARAM_ENV_RETRIG_VCA },
     { PARAM_SAMPLER_GAIN, PARAM_SAMPLER_CLIP_GRAIN },
     { PARAM_FILTER_MODE, PARAM_FM_ENV_RELEASE },
     { PARAM_LOOPER_XFADE, PARAM_WAVE_DETUNE },

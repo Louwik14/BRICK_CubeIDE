@@ -218,8 +218,6 @@ track_runtime_type_t track_runtime_type_from_ui(track_type_t type)
             return TRACK_RUNTIME_TYPE_DRUM_MD;
         case TRACK_TYPE_MIDI:
             return TRACK_RUNTIME_TYPE_MIDI;
-        case TRACK_TYPE_DRUM_BD_ANALOG:
-            return TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG;
         case TRACK_TYPE_LOOPER:
             return TRACK_RUNTIME_TYPE_LOOPER;
         case TRACK_TYPE_MULTI:
@@ -247,8 +245,7 @@ track_runtime_engine_t track_runtime_choose_engine(
             && (type == TRACK_RUNTIME_TYPE_EXTERNAL))
         return TRACK_RUNTIME_ENGINE_AUDIO_TRACK;
     if (family == TRACK_RUNTIME_FAMILY_DRUM)
-        return ((type == TRACK_RUNTIME_TYPE_DRUM_MD)
-                || (type == TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG))
+        return (type == TRACK_RUNTIME_TYPE_DRUM_MD)
             ? TRACK_RUNTIME_ENGINE_DRUM : TRACK_RUNTIME_ENGINE_NONE;
     if (family == TRACK_RUNTIME_FAMILY_SAMPLER)
     {
@@ -1001,10 +998,6 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_FILTER_KEYTRK:
         case PARAM_FILTER_ENVRST:
         case PARAM_FILTER_ENVDLY:
-        case PARAM_FILTER_DRIVE:
-        case PARAM_FILTER_DECIMATOR_BITS:
-        case PARAM_FILTER_DECIMATOR_RATE:
-        case PARAM_FILTER_DECIMATOR_RATE2:
         case PARAM_ENV_RETRIG_FILTER:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_ENV;
             rule.resource = TRACK_RUNTIME_RESOURCE_FILTER;
@@ -1024,19 +1017,10 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_ENV3_DECAY:
         case PARAM_ENV3_SUSTAIN:
         case PARAM_ENV3_RELEASE:
-        case PARAM_ENV_RETRIG_MOD:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_ENV;
             rule.resource = TRACK_RUNTIME_RESOURCE_PLAY;
             rule.status = TRACK_RUNTIME_PARAM_ALLOWED;
             return rule;
-        case PARAM_DRUM_TRX_BD_PITCH:
-        case PARAM_DRUM_TRX_BD_DECAY:
-        case PARAM_DRUM_TRX_BD_PITCH_SWEEP:
-        case PARAM_DRUM_TRX_BD_SWEEP_DECAY:
-        case PARAM_DRUM_TRX_BD_ATTACK:
-        case PARAM_DRUM_TRX_BD_NOISE:
-        case PARAM_DRUM_TRX_BD_HARMONICS:
-        case PARAM_DRUM_TRX_BD_DRIVE:
         case PARAM_DRUM_MD_MODEL:
         case PARAM_DRUM_MD_P1:
         case PARAM_DRUM_MD_P2:
@@ -1348,7 +1332,6 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
             case PARAM_ENV3_DECAY:
             case PARAM_ENV3_SUSTAIN:
             case PARAM_ENV3_RELEASE:
-            case PARAM_ENV_RETRIG_MOD:
                 return TRACK_RUNTIME_PARAM_ALLOWED;
             default:
                 return TRACK_RUNTIME_PARAM_UNAVAILABLE;

@@ -649,9 +649,6 @@ static uint8_t ui_renderer_template_draw_custom_track_cfg(const ui_param_seq_plo
             case TRACK_TYPE_DRUM_MD:
                 return ui_renderer_template_draw_cfg_stacked_text(x, y, w, h, "DRUM", "MD");
 
-            case TRACK_TYPE_DRUM_BD_ANALOG:
-                return ui_renderer_template_draw_cfg_stacked_text(x, y, w, h, "BD", "Ana");
-
                 return ui_renderer_template_draw_filter_big_text(x, y, w, h, "FX", &FONT_OFF_COMPACT);
 
             default:

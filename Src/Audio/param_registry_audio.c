@@ -101,11 +101,6 @@ uint8_t param_audio_apply_track(
     mod_env3_param_t env_param;
     if (param_audio_env_map(id, &env_param) != 0U)
         return mod_env3_audio_apply_track_param(track, env_param, value);
-    if (id == PARAM_ENV_RETRIG_MOD)
-    {
-        mod_env3_audio_apply_retrigger(track, value);
-        return 1U;
-    }
     return param_audio_apply_non_filter(id, track, value);
 }
 

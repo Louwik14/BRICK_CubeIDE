@@ -4,6 +4,7 @@
 
 #include "Param/param_ids.h"
 
+/* Fifth float is retained only to preserve the serialized legacy layout. */
 typedef struct { float attack, decay, sustain, release, retrigger; } mod_env3_control_state_t;
 
 void mod_env3_control_init(void);

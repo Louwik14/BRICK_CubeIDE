@@ -1146,44 +1146,6 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
         return 1U;
     }
 
-    if ((ui_get_track_family(active_track) == TRACK_FAMILY_DRUM)
-            && (ui_get_track_type(active_track) == TRACK_TYPE_DRUM_BD_ANALOG))
-    {
-        const char *name = NULL;
-        switch (id)
-        {
-            case PARAM_DRUM_TRX_BD_PITCH:
-                name = "Pitch";
-                break;
-            case PARAM_DRUM_TRX_BD_DECAY:
-                name = "Decay";
-                break;
-            case PARAM_DRUM_TRX_BD_HARMONICS:
-                name = "Tone";
-                break;
-            case PARAM_DRUM_TRX_BD_PITCH_SWEEP:
-                name = "FM";
-                break;
-            default:
-                break;
-        }
-
-        if (name == NULL)
-        {
-            return 0U;
-        }
-
-        if ((out_name != NULL) && (out_name_len > 0U))
-        {
-            (void)snprintf(out_name, out_name_len, "%s", name);
-        }
-        (void)slot;
-        (void)value;
-        (void)out_value;
-        (void)out_value_len;
-        return 1U;
-    }
-
     return 0U;
 }
 

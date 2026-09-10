@@ -303,8 +303,7 @@ uint8_t param_registry_prepare_track_control_target(
         else if (((id >= PARAM_VCA_ATTACK) && (id <= PARAM_VCA_RELEASE))
                 || (id == PARAM_FILTER_MODE) || (id == PARAM_ENV_RETRIG_VCA))
             owner_kind = PARAM_CONTROL_OWNER_VCA;
-        else if (((id >= PARAM_ENV3_ATTACK) && (id <= PARAM_ENV3_RELEASE))
-                || (id == PARAM_ENV_RETRIG_MOD))
+        else if ((id >= PARAM_ENV3_ATTACK) && (id <= PARAM_ENV3_RELEASE))
             owner_kind = PARAM_CONTROL_OWNER_ENV3;
         else if ((id == PARAM_MIX_LEVEL) || (id == PARAM_MIX_PAN)
                 || (id == PARAM_MIX_SEND1) || (id == PARAM_MIX_SEND2)

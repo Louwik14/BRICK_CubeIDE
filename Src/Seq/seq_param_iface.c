@@ -62,7 +62,7 @@ static const param_id_t g_seq_param_env_slot_to_id[SEQ_PARAM_ENV_SLOT_COUNT] = {
     PARAM_ENV3_RELEASE,
     PARAM_ENV_RETRIG_FILTER,
     PARAM_ENV_RETRIG_VCA,
-    PARAM_ENV_RETRIG_MOD
+    PARAM_COUNT
 };
 
 static const param_id_t g_seq_param_mod_slot_to_id[SEQ_PARAM_MOD_SLOT_COUNT] = {
@@ -132,7 +132,6 @@ static const seq_param_compact_map_t g_seq_param_param_to_slot[PARAM_COUNT] = {
     [PARAM_ENV3_RELEASE] = { (uint8_t)SEQ_PLOCK_SET_ENV, 21U },
     [PARAM_ENV_RETRIG_FILTER] = { (uint8_t)SEQ_PLOCK_SET_ENV, 22U },
     [PARAM_ENV_RETRIG_VCA] = { (uint8_t)SEQ_PLOCK_SET_ENV, 23U },
-    [PARAM_ENV_RETRIG_MOD] = { (uint8_t)SEQ_PLOCK_SET_ENV, 24U },
     [PARAM_LFO1_RATE] = { (uint8_t)SEQ_PLOCK_SET_MOD, 0U },
     [PARAM_LFO1_SHAPE] = { (uint8_t)SEQ_PLOCK_SET_MOD, 1U },
     [PARAM_LFO1_TRIG] = { (uint8_t)SEQ_PLOCK_SET_MOD, 2U },

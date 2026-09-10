@@ -30,7 +30,7 @@ typedef enum
     TRACK_TYPE_DRUM_MD,
     TRACK_TYPE_MIDI,
     TRACK_TYPE_STREAM,
-    TRACK_TYPE_DRUM_BD_ANALOG,
+    TRACK_TYPE_RESERVED_LEGACY_DRUM_BD_ANALOG,
     TRACK_TYPE_LOOPER,
     TRACK_TYPE_MULTI,
     TRACK_TYPE_STACK,
@@ -84,7 +84,7 @@ typedef enum
     TRACK_RUNTIME_TYPE_DRUM_MD,
     TRACK_RUNTIME_TYPE_MIDI,
     TRACK_RUNTIME_TYPE_STREAM,
-    TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG,
+    TRACK_RUNTIME_TYPE_RESERVED_LEGACY_DRUM_BD_ANALOG,
     TRACK_RUNTIME_TYPE_LOOPER,
     TRACK_RUNTIME_TYPE_MULTI,
     TRACK_RUNTIME_TYPE_STACK,
@@ -96,6 +96,18 @@ typedef enum
     TRACK_RUNTIME_TYPE_TB303,
     TRACK_RUNTIME_TYPE_COUNT
 } track_runtime_type_t;
+
+#ifdef __cplusplus
+static_assert(TRACK_TYPE_RESERVED_LEGACY_DRUM_BD_ANALOG == 6,
+              "Legacy track type ABI changed");
+static_assert(TRACK_RUNTIME_TYPE_RESERVED_LEGACY_DRUM_BD_ANALOG == 6,
+              "Legacy runtime type ABI changed");
+#else
+_Static_assert(TRACK_TYPE_RESERVED_LEGACY_DRUM_BD_ANALOG == 6,
+               "Legacy track type ABI changed");
+_Static_assert(TRACK_RUNTIME_TYPE_RESERVED_LEGACY_DRUM_BD_ANALOG == 6,
+               "Legacy runtime type ABI changed");
+#endif
 
 typedef enum
 {

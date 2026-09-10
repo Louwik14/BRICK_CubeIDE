@@ -12,9 +12,7 @@ static const track_type_t k_sampler_types[] = {
 };
 static const track_type_t k_midi_types[] = { TRACK_TYPE_MIDI };
 static const track_type_t k_external_types[] = { TRACK_TYPE_EXTERNAL };
-static const track_type_t k_drum_types[] = {
-    TRACK_TYPE_DRUM_MD, TRACK_TYPE_DRUM_BD_ANALOG
-};
+static const track_type_t k_drum_types[] = { TRACK_TYPE_DRUM_MD };
 
 static const track_type_t *track_catalog_types_for_family(
     track_family_t family, uint8_t *out_count)

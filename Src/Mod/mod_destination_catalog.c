@@ -241,10 +241,6 @@ static uint8_t mod_destination_is_direct_drum(param_id_t dest)
 {
     switch (dest)
     {
-        case PARAM_DRUM_TRX_BD_PITCH:
-        case PARAM_DRUM_TRX_BD_DECAY:
-        case PARAM_DRUM_TRX_BD_HARMONICS:
-        case PARAM_DRUM_TRX_BD_PITCH_SWEEP:
         case PARAM_DRUM_MD_P1:
         case PARAM_DRUM_MD_P2:
         case PARAM_DRUM_MD_P3:
@@ -696,8 +692,7 @@ static uint8_t mod_destination_apply_drum_rt(uint8_t track,
     if ((ctx == NULL)
             || (ctx->program_route.active == 0U)
             || (ctx->program_route.engine != (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
-            || ((ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG)
-                && (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_DRUM_MD)))
+            || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_DRUM_MD))
     {
         return 0U;
     }
@@ -715,19 +710,6 @@ static uint8_t mod_destination_apply_drum_rt(uint8_t track,
             return drum_synth_set_param_for_instance(ctx->program_route.instance_id,
                                                      dest,
                                                      mod_destination_clampf(value, 0.0f, 127.0f));
-        case PARAM_DRUM_TRX_BD_PITCH:
-            return drum_synth_set_param_for_instance(ctx->program_route.instance_id,
-                                                     dest,
-                                                     mod_destination_clampf(value, -48.0f, 24.0f));
-        case PARAM_DRUM_TRX_BD_DECAY:
-            return drum_synth_set_param_for_instance(ctx->program_route.instance_id,
-                                                     dest,
-                                                     mod_destination_clampf(value, 0.01f, 2.0f));
-        case PARAM_DRUM_TRX_BD_HARMONICS:
-        case PARAM_DRUM_TRX_BD_PITCH_SWEEP:
-            return drum_synth_set_param_for_instance(ctx->program_route.instance_id,
-                                                     dest,
-                                                     mod_destination_clampf(value, 0.0f, 1.0f));
         default:
             return 0U;
     }
@@ -874,9 +856,7 @@ uint8_t mod_destination_catalog_prepare(uint8_t target,
         prepared.aux = ctx->type;
     else if (prepared.opcode == MOD_DEST_APPLY_DRUM_PARAM)
     {
-        prepared.aux = ((dest >= PARAM_DRUM_MD_P1) && (dest <= PARAM_DRUM_MD_P8)) ? 0U
-            : (dest == PARAM_DRUM_TRX_BD_PITCH) ? 1U
-            : (dest == PARAM_DRUM_TRX_BD_DECAY) ? 2U : 3U;
+        prepared.aux = 0U;
     }
     if (mod_destination_is_continuous_rampable(dest) != 0U)
         prepared.flags |= MOD_DEST_PREPARED_RAMP_CONTINUOUS;
@@ -1309,8 +1289,6 @@ static uint8_t mod_destination_is_continuous_rampable(param_id_t dest)
         case PARAM_WAVE_BALANCE:
         case PARAM_WAVE_TUNE:
         case PARAM_WAVE_DETUNE:
-        case PARAM_DRUM_TRX_BD_PITCH:
-        case PARAM_DRUM_TRX_BD_PITCH_SWEEP:
             return 1U;
         default:
             return 0U;
@@ -1330,8 +1308,6 @@ static uint8_t mod_destination_is_segment_rate(param_id_t dest)
         case PARAM_STACK_OSC3_TUNE:
         case PARAM_WAVE_TUNE:
         case PARAM_WAVE_DETUNE:
-        case PARAM_DRUM_TRX_BD_PITCH:
-        case PARAM_DRUM_TRX_BD_PITCH_SWEEP:
             return 1U;
         default:
             return 0U;

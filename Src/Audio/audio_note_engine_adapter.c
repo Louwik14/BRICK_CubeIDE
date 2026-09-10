@@ -570,8 +570,7 @@ static uint8_t audio_note_engine_adapter_engine_matches(
         return (uint8_t)((type == TRACK_RUNTIME_TYPE_EXTERNAL)
             && (engine == TRACK_RUNTIME_ENGINE_AUDIO_TRACK));
     if (family == TRACK_RUNTIME_FAMILY_DRUM)
-        return (uint8_t)(((type == TRACK_RUNTIME_TYPE_DRUM_MD)
-            || (type == TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG))
+        return (uint8_t)((type == TRACK_RUNTIME_TYPE_DRUM_MD)
             && (engine == TRACK_RUNTIME_ENGINE_DRUM));
     if (family == TRACK_RUNTIME_FAMILY_SYNTH)
     {
@@ -634,8 +633,6 @@ static uint8_t audio_note_engine_adapter_drum_model_for_type(
     if (out_model == NULL) return 0U;
     if (type == TRACK_RUNTIME_TYPE_DRUM_MD)
         *out_model = DRUM_MODEL_ID_MD;
-    else if (type == TRACK_RUNTIME_TYPE_DRUM_BD_ANALOG)
-        *out_model = DRUM_MODEL_ID_BD_ANALOG;
     else
         return 0U;
     return 1U;
