@@ -4,6 +4,7 @@
 #include "IPC/control_audio_fifo_layout.h"
 
 void control_audio_fifo_audio_init(void);
+void control_audio_fifo_audio_publish_sample_clock(uint64_t sample_time);
 uint8_t control_audio_fifo_audio_peek(control_audio_command_t *out_command);
 uint8_t control_audio_fifo_audio_pop(void);
 uint32_t control_audio_fifo_audio_head_snapshot(void);

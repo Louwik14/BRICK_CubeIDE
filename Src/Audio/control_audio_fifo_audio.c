@@ -8,6 +8,25 @@
 void control_audio_fifo_audio_init(void)
 {
     FIFO.tail = 0U;
+    FIFO.audio_sample_clock_sequence = 0U;
+    FIFO.audio_sample_clock_low = 0U;
+    FIFO.audio_sample_clock_high = 0U;
+    FIFO.audio_sample_clock_valid = 0U;
+    __DMB();
+}
+
+void control_audio_fifo_audio_publish_sample_clock(uint64_t sample_time)
+{
+    uint32_t sequence = FIFO.audio_sample_clock_sequence;
+    if ((sequence & 1U) != 0U)
+        ++sequence;
+    FIFO.audio_sample_clock_sequence = sequence + 1U;
+    __DMB();
+    FIFO.audio_sample_clock_low = (uint32_t)sample_time;
+    FIFO.audio_sample_clock_high = (uint32_t)(sample_time >> 32);
+    __DMB();
+    FIFO.audio_sample_clock_sequence = sequence + 2U;
+    FIFO.audio_sample_clock_valid = 1U;
     __DMB();
 }
 

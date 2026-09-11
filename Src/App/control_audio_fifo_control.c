@@ -9,6 +9,10 @@ void control_audio_fifo_control_init(void)
     FIFO.head = 0U;
     FIFO.overflow_count = 0U;
     FIFO.invariant_failure_count = 0U;
+    FIFO.audio_sample_clock_sequence = 0U;
+    FIFO.audio_sample_clock_low = 0U;
+    FIFO.audio_sample_clock_high = 0U;
+    FIFO.audio_sample_clock_valid = 0U;
     __DMB();
 }
 
@@ -17,6 +21,35 @@ uint16_t control_audio_fifo_control_free(void)
     const uint32_t used = FIFO.head - FIFO.tail;
     return (used < CONTROL_AUDIO_FIFO_CAPACITY)
         ? (uint16_t)(CONTROL_AUDIO_FIFO_CAPACITY - used) : 0U;
+}
+
+uint8_t control_audio_fifo_control_audio_sample_now(
+    uint64_t *out_sample_time)
+{
+    if (out_sample_time == NULL)
+        return 0U;
+
+    uint32_t sequence_start;
+    uint32_t sequence_end;
+    uint32_t low;
+    uint32_t high;
+    do
+    {
+        sequence_start = FIFO.audio_sample_clock_sequence;
+        if ((sequence_start & 1U) != 0U)
+            continue;
+        low = FIFO.audio_sample_clock_low;
+        high = FIFO.audio_sample_clock_high;
+        __DMB();
+        sequence_end = FIFO.audio_sample_clock_sequence;
+    }
+    while ((sequence_start != sequence_end)
+        || ((sequence_end & 1U) != 0U));
+
+    if (FIFO.audio_sample_clock_valid == 0U)
+        return 0U;
+    *out_sample_time = ((uint64_t)high << 32) | low;
+    return 1U;
 }
 
 uint32_t control_audio_fifo_control_head_snapshot(void)

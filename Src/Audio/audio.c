@@ -346,6 +346,7 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
         cpu_load_irq_begin();
 
         process_half(0);
+        control_audio_fifo_audio_publish_sample_clock(g_audio_sample_clock);
 
         cpu_load_irq_end();
         audio_boot_diag_producer_publish_cpu((uint8_t)cpu_load_is_valid(),
@@ -385,6 +386,7 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
         cpu_load_irq_begin();
 
         process_half(1);
+        control_audio_fifo_audio_publish_sample_clock(g_audio_sample_clock);
 
         cpu_load_irq_end();
         audio_boot_diag_producer_publish_cpu((uint8_t)cpu_load_is_valid(),

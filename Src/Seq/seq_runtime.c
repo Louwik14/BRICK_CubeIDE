@@ -469,7 +469,9 @@ static void seq_runtime_process_core(void)
         control_audio_transport_publish_changes();
     }
 
-    const uint64_t audio_sample = seq_runtime_get_now_sample();
+    uint64_t audio_sample = 0U;
+    if (control_rt_audio_sample_now(&audio_sample) == 0U)
+        audio_sample = seq_runtime_get_now_sample();
     const uint64_t publish_limit = audio_sample + 64U;
     if ((g_seq_runtime_control_sample_cursor < audio_sample)
             || (g_seq_runtime_control_sample_cursor > publish_limit))

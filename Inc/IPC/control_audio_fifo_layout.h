@@ -82,6 +82,12 @@ typedef struct
     volatile uint32_t tail;
     volatile uint32_t overflow_count;
     volatile uint32_t invariant_failure_count;
+    /* AUDIO publishes its completed sample boundary for CONTROL backpressure.
+     * The sequence makes the 64-bit value coherent on Cortex-M accesses. */
+    volatile uint32_t audio_sample_clock_sequence;
+    volatile uint32_t audio_sample_clock_low;
+    volatile uint32_t audio_sample_clock_high;
+    volatile uint8_t audio_sample_clock_valid;
 } control_audio_fifo_layout_t;
 
 extern control_audio_fifo_layout_t g_control_audio_fifo_layout;

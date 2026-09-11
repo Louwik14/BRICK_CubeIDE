@@ -400,6 +400,11 @@ uint8_t control_rt_now_sample(uint64_t *out_sample_time)
     return live_clock_read_audio_sample(out_sample_time) ? 1U : 0U;
 }
 
+uint8_t control_rt_audio_sample_now(uint64_t *out_sample_time)
+{
+    return control_audio_fifo_control_audio_sample_now(out_sample_time);
+}
+
 uint64_t control_rt_first_unpublished_sample(uint64_t minimum_sample)
 {
     return (g_control_rt_first_unpublished_sample > minimum_sample)
