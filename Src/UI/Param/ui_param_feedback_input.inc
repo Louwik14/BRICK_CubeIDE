@@ -129,7 +129,7 @@ uint8_t ui_param_resolve_encoder_detent(const ui_param_encoder_context_t *ctx,
 
     out_target->parameter_id = param;
     out_target->scope = (ui_param_is_track_scoped(param) != 0U) ? 1U : 0U;
-    out_target->track = (ui_param_is_track_scoped(param) != 0U) ? edit_track : 0xFFU;
+    out_target->track = (ui_param_is_track_scoped(param) != 0U) ? edit_track : 0U;
     out_target->slot = 0xFFU;
     out_target->value = value;
     return 1U;
@@ -173,7 +173,7 @@ uint8_t ui_param_resolve_encoder_detent_from_binding(param_id_t param,
 
     out_target->parameter_id = param;
     out_target->scope = scope;
-    out_target->track = (scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK) ? track : 0xFFU;
+    out_target->track = (scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK) ? track : 0U;
     out_target->slot = slot;
     if (ui_param_apply_delta_value(param, binding_context.active_track,
                                    current_value, direction,
