@@ -35,7 +35,7 @@ d'interaction et lit l'autorite a la demande.
 
 `param_desc_t::value_policy` possede conversions canonique/affichee, pas normal/SHIFT et politique d'automation. Les p-locks continus utilisent toute la plage `uint16_t`; les discrets utilisent leur pas. La persistance stocke la valeur CONTROL typee, notamment FLOAT32, jamais une representation UI.
 
-Un p-lock AUDIO est resolu par CONTROL en valeur finale puis transporte comme PARAM `TEMP` date. La restauration emet `BASE` pour Tone/Filter/FX, ou `CLEAR_TEMP` pour LFO/ENV3 afin de retirer leur override explicite. Le timestamp reste independant de cette semantique. La FIFO unique est dimensionnee pour les 1024 ecritures d'une boundary maximale plus l'horizon NOTE et les commandes de controle. Les p-locks MIDI FX restent integralement CONTROL: leur override canonique est applique au runtime Note FX avant la NOTE de la meme boundary. AUDIO ne connait ni la provenance, ni la notion de p-lock. NOTE, VELOCITY, LENGTH et MICROTIMING sont des champs PLAY structurels et non des p-locks generiques.
+Un p-lock AUDIO est resolu par CONTROL en valeur finale puis transporte comme PARAM `TEMP` date. La restauration relit toujours la base canonique CONTROL courante, puis emet `BASE` pour Tone/Filter/FX, ou `CLEAR_TEMP` pour LFO/ENV3 afin de retirer leur override explicite; une edition de base intervenue pendant le lock n'est donc jamais remplacee par une ancienne capture Seq. Le timestamp reste independant de cette semantique. La FIFO unique est dimensionnee pour les 1024 ecritures d'une boundary maximale plus l'horizon NOTE et les commandes de controle. Les p-locks MIDI FX restent integralement CONTROL: leur override canonique est applique au runtime Note FX avant la NOTE de la meme boundary. AUDIO ne connait ni la provenance, ni la notion de p-lock. NOTE, VELOCITY, LENGTH et MICROTIMING sont des champs PLAY structurels et non des p-locks generiques.
 
 LFO conserve sa validite temporaire par champ. ENV3 conserve volontairement sa
 validite temporaire globale actuelle; `CLEAR_TEMP` d'un champ retire donc
@@ -105,6 +105,10 @@ les identifiants PARAM moteur ne sont que le catalogue de label, plage et
 conversion du moteur courant. Snapshot, Clipboard, Patch, Pattern et Project
 serialisent ces 26 ordinaux, y compris les slots dormants. Les p-locks TONE
 serialisent egalement l'ordinal normalise, sans dependance au moteur actif.
+Le ledger runtime memorise en plus l'identifiant PARAM canonique resolu a
+l'application. Si un changement de moteur donne ensuite un autre sens au meme
+ordinal, l'ancien lock est invalide sans restauration vers ce nouveau parametre;
+le lock du moteur courant peut alors etre applique normalement.
 Les runtimes moteur et voix ne conservent que leurs projections natives ou
 leurs etats DSP.
 

@@ -15,7 +15,7 @@ typedef struct
     uint8_t set_id;
     seq_param_slot_t param_slot;
     uint8_t reserved;
-    seq_value16_t base_value16;
+    param_id_t parameter_id;
 } seq_runtime_active_lock_t;
 
 typedef struct

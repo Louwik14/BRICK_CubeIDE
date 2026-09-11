@@ -400,7 +400,7 @@ static uint8_t param_macro_apply_non_audio_releases(void)
                     || (last->param >= PARAM_COUNT)
                     || (last->resolved_value == last->base_value)
                     || (param_registry_track_temp_is_applicable(
-                            last->track, last->param) != 0U))
+                            last->param, last->track) != 0U))
             {
                 continue;
             }
@@ -427,7 +427,7 @@ static uint8_t param_macro_apply_non_audio_collected(
     {
         const param_macro_resolution_t *const resolution = &collected[i].resolution;
         if (param_registry_track_temp_is_applicable(
-                    resolution->track, resolution->param) != 0U)
+                    resolution->param, resolution->track) != 0U)
             continue;
         if (param_macro_apply_backend_value(resolution->track,
                                             resolution->param,
@@ -501,7 +501,7 @@ static uint8_t param_macro_recompute_sources(
             }
 
             if (param_registry_track_temp_is_applicable(
-                    last->track, last->param) != 0U)
+                    last->param, last->track) != 0U)
             {
                 if (param_registry_temp_is_clearable(last->param) != 0U)
                 {
@@ -670,7 +670,7 @@ uint8_t param_macro_apply_resolution(const param_macro_resolution_t *resolution)
     }
 
     if (param_registry_track_temp_is_applicable(
-            resolution->track, resolution->param) == 0U)
+            resolution->param, resolution->track) == 0U)
     {
         return param_macro_apply_backend_value(resolution->track,
                                                resolution->param,
