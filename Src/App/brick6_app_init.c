@@ -116,6 +116,7 @@ static void brick6_app_service_storage(void)
     project_product_load_service();
     idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_PROJECT_LOAD, started);
     started = idle_latency_diag_begin();
+    patch_product_service();
     patch_product_apply_service();
     idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_PATCH, started);
     if (multi_sample_load_has_pending() != 0U)

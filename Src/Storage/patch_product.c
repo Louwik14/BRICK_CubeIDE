@@ -1,125 +1,1137 @@
 #include "Storage/patch_product.h"
-#include "Storage/persistent_patch_control.h"
+
+#include <stdio.h>
+#include <string.h>
+
+#include "App/name_contract.h"
+#include "Platform/memory_layout.h"
+#include "SD/sd_scheduler_runtime.h"
+#include "Sampler/sampler_ram_pool.h"
 #include "Storage/persistent_fatfs_io.h"
 #include "Storage/persistent_key_catalog.h"
-#include "Storage/sd_access_gate.h"
+#include "Storage/persistent_patch_control.h"
 #include "Storage/project_control.h"
 #include "Storage/project_load_quiesce.h"
-#include "Sampler/sampler_ram_pool.h"
-#include "Platform/memory_layout.h"
+#include "Storage/project_product.h"
+#include "Storage/sd_access_gate.h"
 #include "Track/track_catalog.h"
 #include "Track/track_state.h"
 #include "ff.h"
-#include <stdio.h>
-#include <string.h>
-static uint8_t g_present[PATCH_PRODUCT_SLOT_COUNT],g_invalid[PATCH_PRODUCT_SLOT_COUNT];
+
+static uint8_t g_present[PATCH_PRODUCT_SLOT_COUNT];
+static uint8_t g_invalid[PATCH_PRODUCT_SLOT_COUNT];
 STORAGE_STATE_SDRAM static patch_product_metadata_t g_meta[PATCH_PRODUCT_SLOT_COUNT];
-static uint16_t g_current=PATCH_PRODUCT_INVALID_SLOT;
+static uint16_t g_current = PATCH_PRODUCT_INVALID_SLOT;
 STORAGE_STATE_SDRAM static persist_codec_patch_staging_t g_stage;
-typedef struct { uint8_t active; uint16_t slot,target_mask; } patch_apply_runtime_t;
+
+typedef struct
+{
+    uint8_t active;
+    uint16_t slot;
+    uint16_t target_mask;
+} patch_apply_runtime_t;
+
 STORAGE_STATE_SDRAM static patch_apply_runtime_t g_patch_apply;
+
 #define PATCH_PRODUCT_SECTION_BODY 0x3001U
-static uint32_t crc32(uint32_t crc,const uint8_t*d,uint32_t n){for(uint32_t i=0;i<n;++i){crc^=d[i];for(uint8_t b=0;b<8U;++b)crc=(crc>>1U)^(0xEDB88320UL&((uint32_t)-(int32_t)(crc&1U)));}return crc;}
-static uint8_t path(char*out,uint32_t size,uint16_t slot){int n=snprintf(out,size,"0:/BRICK/PATCH/P%04u.B6C",slot);return(n>0&&(uint32_t)n<size)?1U:0U;}
-static uint8_t acquire(void){if(!sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PATCH))return 0U;if(!sd_access_fs_mount_if_needed()){sd_access_gate_release(SD_ACCESS_CLIENT_PATCH);return 0U;}return 1U;}
-static void meta_from_patch(uint16_t slot,const persist_control_patch_t*p){patch_product_metadata_t*m=&g_meta[slot];memset(m,0,sizeof(*m));uint16_t n=p->name_length;if(n>32U)n=32U;memcpy(m->name,p->name,n);track_family_t f;track_type_t t;if(persist_key_family_from_disk(p->family,&f))m->family=(uint8_t)f;if(persist_key_type_from_disk(p->type,&t))m->type=(uint8_t)t;m->summary_family=m->family;m->summary_type=m->type;}
-static uint16_t le16(const uint8_t*p){return(uint16_t)((uint16_t)p[0]|((uint16_t)p[1]<<8U));}
-static uint32_t le32(const uint8_t*p){return(uint32_t)p[0]|((uint32_t)p[1]<<8U)|((uint32_t)p[2]<<16U)|((uint32_t)p[3]<<24U);}
+#define PATCH_PRODUCT_IO_BUFFER_BYTES (16U * 1024U)
+
+typedef enum
+{
+    PATCH_IO_IDLE = 0,
+    PATCH_IO_MOUNT,
+    PATCH_IO_MKDIR_BRICK,
+    PATCH_IO_MKDIR_PATCH,
+    PATCH_IO_RECOVER,
+    PATCH_IO_OPEN_READ,
+    PATCH_IO_READ,
+    PATCH_IO_CLOSE_READ,
+    PATCH_IO_DECODE,
+    PATCH_IO_ENCODE,
+    PATCH_IO_OPEN_WRITE,
+    PATCH_IO_WRITE,
+    PATCH_IO_SYNC,
+    PATCH_IO_CLOSE_WRITE,
+    PATCH_IO_COMMIT,
+    PATCH_IO_CLOSE_READ_FAILED,
+    PATCH_IO_CLOSE_WRITE_FAILED,
+    PATCH_IO_CLEAN_TEMP,
+    PATCH_IO_DONE
+} patch_io_state_t;
+
+typedef struct
+{
+    patch_io_state_t state;
+    patch_product_operation_t operation;
+    patch_product_result_t result;
+    uint8_t result_ready;
+    uint8_t prepared;
+    uint8_t read_open;
+    uint8_t write_open;
+    uint16_t slot;
+    uint16_t prepared_slot;
+    uint32_t media_epoch;
+    uint32_t file_size;
+    uint32_t file_offset;
+    uint32_t encoded_size;
+    char requested_name[NAME_CONTRACT_BUFFER_BYTES];
+    char final_path[48];
+    char temporary_path[56];
+    char backup_path[56];
+    persist_control_patch_t prepared_patch;
+    persist_control_patch_t patch;
+    persist_codec_patch_staging_t decoded;
+    persistent_fatfs_file_t file;
+    uint8_t io_buffer[PATCH_PRODUCT_IO_BUFFER_BYTES];
+} patch_io_runtime_t;
+
+STORAGE_STATE_SDRAM static patch_io_runtime_t g_patch_io;
+
+typedef struct
+{
+    const uint8_t *data;
+    uint32_t size;
+    uint32_t offset;
+} patch_memory_source_t;
+
+static uint32_t crc32(uint32_t crc, const uint8_t *data, uint32_t length)
+{
+    for (uint32_t i = 0U; i < length; ++i)
+    {
+        crc ^= data[i];
+        for (uint8_t bit = 0U; bit < 8U; ++bit)
+        {
+            crc = (crc >> 1U)
+                ^ (0xEDB88320UL & ((uint32_t)-(int32_t)(crc & 1U)));
+        }
+    }
+    return crc;
+}
+
+static uint8_t path(char *out, uint32_t size, uint16_t slot)
+{
+    const int written = snprintf(out, size, "0:/BRICK/PATCH/P%04u.B6C", slot);
+    return (written > 0) && ((uint32_t)written < size);
+}
+
+static uint8_t side_path(char *out, uint32_t size, const char *final_path,
+                         const char *suffix)
+{
+    const int written = snprintf(out, size, "%s.%s", final_path, suffix);
+    return (written > 0) && ((uint32_t)written < size);
+}
+
+static uint8_t acquire(void)
+{
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PATCH) == 0U)
+    {
+        return 0U;
+    }
+    if (sd_access_fs_mount_if_needed() == 0U)
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_PATCH);
+        return 0U;
+    }
+    return 1U;
+}
+
+static void meta_from_patch(uint16_t slot, const persist_control_patch_t *patch)
+{
+    patch_product_metadata_t *const meta = &g_meta[slot];
+    memset(meta, 0, sizeof(*meta));
+    uint16_t length = patch->name_length;
+    if (length > NAME_CONTRACT_MAX_CHARS)
+    {
+        length = NAME_CONTRACT_MAX_CHARS;
+    }
+    memcpy(meta->name, patch->name, length);
+
+    track_family_t family;
+    track_type_t type;
+    if (persist_key_family_from_disk(patch->family, &family) != 0U)
+    {
+        meta->family = (uint8_t)family;
+    }
+    if (persist_key_type_from_disk(patch->type, &type) != 0U)
+    {
+        meta->type = (uint8_t)type;
+    }
+    meta->summary_family = meta->family;
+    meta->summary_type = meta->type;
+}
+
+static uint16_t le16(const uint8_t *data)
+{
+    return (uint16_t)((uint16_t)data[0] | ((uint16_t)data[1] << 8U));
+}
+
+static uint32_t le32(const uint8_t *data)
+{
+    return (uint32_t)data[0]
+        | ((uint32_t)data[1] << 8U)
+        | ((uint32_t)data[2] << 16U)
+        | ((uint32_t)data[3] << 24U);
+}
+
 static uint8_t scan_meta(uint16_t slot)
 {
-    char x[48];FIL f;UINT n=0U;uint8_t h[PERSIST_CODEC_HEADER_BYTES];
-    if(!path(x,sizeof(x),slot)||f_open(&f,x,FA_READ)!=FR_OK)return 0U;
-    uint8_t ok=(f_read(&f,h,sizeof(h),&n)==FR_OK&&n==sizeof(h));
-    const uint32_t total=ok?le32(&h[12]):0U;
-    const uint32_t header_crc=ok?le32(&h[20]):0U;
-    ok=(ok&&h[0]=='B'&&h[1]=='6'&&h[2]=='P'&&h[3]=='C'
-        &&h[4]==PERSIST_CODEC_VERSION&&h[5]==0U
-        &&h[6]==PERSIST_CODEC_DOCUMENT_PATCH&&h[7]==0U
-        &&le16(&h[8])==1U&&h[10]==0U&&h[11]==0U
-        &&total==(uint32_t)f_size(&f)
-        &&total<=PERSIST_CODEC_MAX_DOCUMENT_BYTES
-        &&total>=PERSIST_CODEC_HEADER_BYTES+PERSIST_CODEC_SECTION_HEADER_BYTES+10U
-        &&header_crc==~crc32(0xFFFFFFFFUL,h,20U));
-    uint8_t sh[PERSIST_CODEC_SECTION_HEADER_BYTES];
-    if(ok)ok=(f_read(&f,sh,sizeof(sh),&n)==FR_OK&&n==sizeof(sh));
-    const uint32_t section_length=ok?le32(&sh[4]):0U;
-    ok=(ok&&le16(sh)==PATCH_PRODUCT_SECTION_BODY&&le16(&sh[2])==1U
-        &&section_length==total-PERSIST_CODEC_HEADER_BYTES-PERSIST_CODEC_SECTION_HEADER_BYTES
-        &&section_length>=10U);
-    uint8_t nl[2];if(ok)ok=(f_read(&f,nl,sizeof(nl),&n)==FR_OK&&n==sizeof(nl));
-    const uint16_t name_len=ok?le16(nl):0U;
-    ok=(ok&&name_len<=PERSIST_CONTROL_PATCH_NAME_BYTES
-        &&section_length>=(uint32_t)name_len+10U);
-    if(ok){uint8_t buf[PERSIST_CONTROL_PATCH_NAME_BYTES+8U];ok=(f_read(&f,buf,name_len+8U,&n)==FR_OK&&n==name_len+8U);if(ok){persist_control_patch_t p;memset(&p,0,sizeof(p));p.name_length=name_len;memcpy(p.name,buf,name_len);p.family=le32(&buf[name_len]);p.type=le32(&buf[name_len+4U]);track_family_t family;track_type_t type;ok=(persist_key_family_from_disk(p.family,&family)&&persist_key_type_from_disk(p.type,&type));if(ok)meta_from_patch(slot,&p);}}
-    (void)f_close(&f);g_present[slot]=1U;g_invalid[slot]=ok?0U:1U;return ok;
+    char final_path[48];
+    FIL file;
+    UINT transferred = 0U;
+    uint8_t header[PERSIST_CODEC_HEADER_BYTES];
+    if ((path(final_path, sizeof(final_path), slot) == 0U)
+            || (f_open(&file, final_path, FA_READ) != FR_OK))
+    {
+        return 0U;
+    }
+
+    uint8_t valid = (f_read(&file, header, sizeof(header), &transferred) == FR_OK)
+        && (transferred == sizeof(header));
+    const uint32_t total = valid ? le32(&header[12]) : 0U;
+    const uint32_t header_crc = valid ? le32(&header[20]) : 0U;
+    valid = valid
+        && (header[0] == 'B') && (header[1] == '6')
+        && (header[2] == 'P') && (header[3] == 'C')
+        && (header[4] == PERSIST_CODEC_VERSION) && (header[5] == 0U)
+        && (header[6] == PERSIST_CODEC_DOCUMENT_PATCH) && (header[7] == 0U)
+        && (le16(&header[8]) == 1U) && (header[10] == 0U) && (header[11] == 0U)
+        && (total == (uint32_t)f_size(&file))
+        && (total <= PERSIST_CODEC_MAX_DOCUMENT_BYTES)
+        && (total >= PERSIST_CODEC_HEADER_BYTES + PERSIST_CODEC_SECTION_HEADER_BYTES + 10U)
+        && (header_crc == ~crc32(0xFFFFFFFFUL, header, 20U));
+
+    uint8_t section_header[PERSIST_CODEC_SECTION_HEADER_BYTES];
+    if (valid)
+    {
+        valid = (f_read(&file, section_header, sizeof(section_header), &transferred) == FR_OK)
+            && (transferred == sizeof(section_header));
+    }
+    const uint32_t section_length = valid ? le32(&section_header[4]) : 0U;
+    valid = valid
+        && (le16(section_header) == PATCH_PRODUCT_SECTION_BODY)
+        && (le16(&section_header[2]) == 1U)
+        && (section_length == total - PERSIST_CODEC_HEADER_BYTES
+            - PERSIST_CODEC_SECTION_HEADER_BYTES)
+        && (section_length >= 10U);
+
+    uint8_t name_length_bytes[2];
+    if (valid)
+    {
+        valid = (f_read(&file, name_length_bytes, sizeof(name_length_bytes), &transferred) == FR_OK)
+            && (transferred == sizeof(name_length_bytes));
+    }
+    const uint16_t name_length = valid ? le16(name_length_bytes) : 0U;
+    valid = valid
+        && (name_length <= PERSIST_CONTROL_PATCH_NAME_BYTES)
+        && (section_length >= (uint32_t)name_length + 10U);
+    if (valid)
+    {
+        uint8_t prefix[PERSIST_CONTROL_PATCH_NAME_BYTES + 8U];
+        valid = (f_read(&file, prefix, (UINT)(name_length + 8U), &transferred) == FR_OK)
+            && (transferred == (UINT)(name_length + 8U));
+        if (valid)
+        {
+            persist_control_patch_t patch;
+            memset(&patch, 0, sizeof(patch));
+            patch.name_length = name_length;
+            memcpy(patch.name, prefix, name_length);
+            patch.family = le32(&prefix[name_length]);
+            patch.type = le32(&prefix[name_length + 4U]);
+            track_family_t family;
+            track_type_t type;
+            valid = (persist_key_family_from_disk(patch.family, &family) != 0U)
+                && (persist_key_type_from_disk(patch.type, &type) != 0U);
+            if (valid)
+            {
+                meta_from_patch(slot, &patch);
+            }
+        }
+    }
+    (void)f_close(&file);
+    g_present[slot] = 1U;
+    g_invalid[slot] = (valid != 0U) ? 0U : 1U;
+    return valid;
 }
-static uint8_t load(uint16_t slot,persist_control_patch_t*out){if(slot>=PATCH_PRODUCT_SLOT_COUNT||out==NULL||!g_present[slot]||!acquire())return 0U;char x[48];persistent_fatfs_file_t f;uint8_t ok=path(x,sizeof(x),slot)&&persistent_fatfs_open_read(&f,x);if(ok){persist_codec_source_t s=persistent_fatfs_source(&f);ok=(persist_codec_decode_patch(&s,&g_stage)==PERSIST_CODEC_OK);persistent_fatfs_close(&f);}sd_access_gate_release(SD_ACCESS_CLIENT_PATCH);if(ok){*out=g_stage.patch;meta_from_patch(slot,out);g_invalid[slot]=0U;}else g_invalid[slot]=1U;return ok;}
-static uint8_t store(uint16_t slot,const persist_control_patch_t*p){if(slot>=PATCH_PRODUCT_SLOT_COUNT||p==NULL||!acquire())return 0U;char x[48],tmp[52];persistent_fatfs_file_t f;uint8_t ok=path(x,sizeof(x),slot);if(ok){snprintf(tmp,sizeof(tmp),"%s.TMP",x);ok=persistent_fatfs_open_write(&f,tmp);if(ok){persist_codec_sink_t s=persistent_fatfs_sink(&f);ok=(persist_codec_encode_patch(p,&s,NULL)==PERSIST_CODEC_OK)&&(f_sync(&f.file)==FR_OK);persistent_fatfs_close(&f);}if(ok){(void)f_unlink(x);ok=(f_rename(tmp,x)==FR_OK);}else(void)f_unlink(tmp);}sd_access_gate_release(SD_ACCESS_CLIENT_PATCH);if(ok){g_present[slot]=1U;g_invalid[slot]=0U;meta_from_patch(slot,p);}return ok;}
-void patch_product_init(void){memset(g_present,0,sizeof(g_present));memset(g_invalid,0,sizeof(g_invalid));memset(g_meta,0,sizeof(g_meta));memset(&g_patch_apply,0,sizeof(g_patch_apply));g_current=PATCH_PRODUCT_INVALID_SLOT;if(!acquire())return;(void)f_mkdir("0:/BRICK");(void)f_mkdir("0:/BRICK/PATCH");for(uint16_t s=0;s<PATCH_PRODUCT_SLOT_COUNT;++s){char x[48];FILINFO i;if(path(x,sizeof(x),s)&&f_stat(x,&i)==FR_OK)(void)scan_meta(s);}sd_access_gate_release(SD_ACCESS_CLIENT_PATCH);}
-uint16_t patch_product_first_empty(void){for(uint16_t s=0;s<PATCH_PRODUCT_SLOT_COUNT;++s)if(!g_present[s])return s;return PATCH_PRODUCT_INVALID_SLOT;}
-patch_product_result_t patch_product_save(uint8_t e,uint16_t*out){if(g_patch_apply.active!=0U)return PATCH_PRODUCT_IO_BUSY;uint16_t s=(g_current<PATCH_PRODUCT_SLOT_COUNT&&!g_invalid[g_current])?g_current:patch_product_first_empty();if(s==PATCH_PRODUCT_INVALID_SLOT)return PATCH_PRODUCT_NO_SLOT;persist_control_patch_t p;char generated[33];const char*name=(g_present[s]&&g_meta[s].name[0])?g_meta[s].name:generated;if(name==generated)(void)snprintf(generated,sizeof(generated),"T%02u %s",(unsigned)(e+1U),track_catalog_family_short_name(track_state_get_family(e)));if(persistent_patch_control_capture(e,name,&p)!=PERSIST_CODEC_OK)return PATCH_PRODUCT_INVALID;if(!store(s,&p))return PATCH_PRODUCT_IO_ERROR;g_current=s;if(out)*out=s;return PATCH_PRODUCT_OK;}
-patch_product_result_t patch_product_apply(uint16_t s,uint8_t e)
+
+static uint8_t load(uint16_t slot, persist_control_patch_t *out)
+{
+    if ((slot >= PATCH_PRODUCT_SLOT_COUNT) || (out == 0)
+            || (g_present[slot] == 0U) || (acquire() == 0U))
+    {
+        return 0U;
+    }
+
+    char final_path[48];
+    persistent_fatfs_file_t file;
+    uint8_t valid = path(final_path, sizeof(final_path), slot)
+        && persistent_fatfs_open_read(&file, final_path);
+    if (valid)
+    {
+        persist_codec_source_t source = persistent_fatfs_source(&file);
+        valid = (persist_codec_decode_patch(&source, &g_stage) == PERSIST_CODEC_OK);
+        persistent_fatfs_close(&file);
+    }
+    sd_access_gate_release(SD_ACCESS_CLIENT_PATCH);
+    if (valid)
+    {
+        *out = g_stage.patch;
+        meta_from_patch(slot, out);
+        g_invalid[slot] = 0U;
+    }
+    else
+    {
+        g_invalid[slot] = 1U;
+    }
+    return valid;
+}
+
+static uint8_t patch_name_normalize(const char *name,
+                                    char output[NAME_CONTRACT_BUFFER_BYTES])
+{
+    return (name_contract_normalize(name, output) == NAME_CONTRACT_RESULT_OK) ? 1U : 0U;
+}
+
+static uint8_t patch_name_is_canonical(const persist_control_patch_t *patch)
+{
+    if ((patch == 0) || (patch->name_length == 0U)
+            || (patch->name_length > PERSIST_CONTROL_PATCH_NAME_BYTES))
+    {
+        return 0U;
+    }
+
+    char source[NAME_CONTRACT_BUFFER_BYTES] = { 0 };
+    memcpy(source, patch->name, patch->name_length);
+    char normalized[NAME_CONTRACT_BUFFER_BYTES];
+    if (name_contract_normalize(source, normalized) != NAME_CONTRACT_RESULT_OK)
+    {
+        return 0U;
+    }
+    return (strlen(normalized) == patch->name_length)
+        && (memcmp(normalized, source, NAME_CONTRACT_BUFFER_BYTES) == 0);
+}
+
+static uint8_t patch_io_busy(void)
+{
+    return (g_patch_io.state != PATCH_IO_IDLE)
+        || (g_patch_io.result_ready != 0U)
+        || (g_patch_io.prepared != 0U);
+}
+
+static uint8_t patch_io_common_available(void)
+{
+    return (patch_io_busy() == 0U)
+        && (g_patch_apply.active == 0U)
+        && (project_product_save_busy() == 0U)
+        && (project_product_load_busy() == 0U)
+        && (project_replacement_is_active() == 0U);
+}
+
+static uint8_t patch_io_prepare_paths(uint16_t slot)
+{
+    return path(g_patch_io.final_path, sizeof(g_patch_io.final_path), slot)
+        && side_path(g_patch_io.temporary_path, sizeof(g_patch_io.temporary_path),
+                     g_patch_io.final_path, "TMP")
+        && side_path(g_patch_io.backup_path, sizeof(g_patch_io.backup_path),
+                     g_patch_io.final_path, "BAK");
+}
+
+static void patch_io_start(patch_product_operation_t operation, uint16_t slot)
+{
+    const uint32_t media_epoch = sd_access_media_epoch();
+    g_patch_io.state = PATCH_IO_MOUNT;
+    g_patch_io.operation = operation;
+    g_patch_io.result = PATCH_PRODUCT_PENDING;
+    g_patch_io.result_ready = 0U;
+    g_patch_io.slot = slot;
+    g_patch_io.media_epoch = media_epoch;
+    g_patch_io.file_size = 0U;
+    g_patch_io.file_offset = 0U;
+    g_patch_io.encoded_size = 0U;
+    g_patch_io.read_open = 0U;
+    g_patch_io.write_open = 0U;
+}
+
+static void patch_io_finish(patch_product_result_t result)
+{
+    g_patch_io.result = result;
+    g_patch_io.result_ready = 1U;
+    g_patch_io.state = PATCH_IO_DONE;
+
+    if (result != PATCH_PRODUCT_OK)
+    {
+        return;
+    }
+    g_present[g_patch_io.slot] = 1U;
+    g_invalid[g_patch_io.slot] = 0U;
+    meta_from_patch(g_patch_io.slot, &g_patch_io.patch);
+    if (g_patch_io.operation == PATCH_PRODUCT_OPERATION_SAVE)
+    {
+        g_current = g_patch_io.slot;
+    }
+}
+
+static void patch_io_fail(patch_product_result_t result)
+{
+    if (g_patch_io.result != PATCH_PRODUCT_PENDING)
+    {
+        return;
+    }
+    g_patch_io.result = result;
+    if (g_patch_io.read_open != 0U)
+    {
+        g_patch_io.state = PATCH_IO_CLOSE_READ_FAILED;
+    }
+    else if (g_patch_io.write_open != 0U)
+    {
+        g_patch_io.state = PATCH_IO_CLOSE_WRITE_FAILED;
+    }
+    else
+    {
+        g_patch_io.state = PATCH_IO_CLEAN_TEMP;
+    }
+}
+
+static uint8_t patch_memory_read(void *context, uint8_t *data, uint32_t length)
+{
+    patch_memory_source_t *const source = context;
+    if ((source == 0) || (data == 0) || (length > source->size - source->offset))
+    {
+        return 0U;
+    }
+    memcpy(data, &source->data[source->offset], length);
+    source->offset += length;
+    return 1U;
+}
+
+static uint8_t patch_memory_reset(void *context)
+{
+    patch_memory_source_t *const source = context;
+    if (source == 0)
+    {
+        return 0U;
+    }
+    source->offset = 0U;
+    return 1U;
+}
+
+static uint8_t patch_memory_size(void *context, uint32_t *size)
+{
+    patch_memory_source_t *const source = context;
+    if ((source == 0) || (size == 0))
+    {
+        return 0U;
+    }
+    *size = source->size;
+    return 1U;
+}
+
+static uint8_t patch_memory_write(void *context, const uint8_t *data,
+                                  uint32_t length)
+{
+    if ((context == 0) || (data == 0))
+    {
+        return 0U;
+    }
+    patch_io_runtime_t *const io = context;
+    if (length > PATCH_PRODUCT_IO_BUFFER_BYTES - io->encoded_size)
+    {
+        return 0U;
+    }
+    memcpy(&io->io_buffer[io->encoded_size], data, length);
+    io->encoded_size += length;
+    return 1U;
+}
+
+static sd_scheduler_background_admission_t patch_io_admit(
+    sd_scheduler_background_kind_t kind, uint32_t bytes)
+{
+    const sd_scheduler_background_request_t request = {
+        bytes, g_patch_io.media_epoch, kind
+    };
+    return sd_scheduler_runtime_background_try_begin(&request);
+}
+
+static void patch_io_decode(void)
+{
+    patch_memory_source_t memory = {
+        g_patch_io.io_buffer, g_patch_io.file_size, 0U
+    };
+    const persist_codec_source_t source = {
+        patch_memory_read, patch_memory_reset, patch_memory_size, &memory
+    };
+    if (persist_codec_decode_patch(&source, &g_patch_io.decoded) != PERSIST_CODEC_OK)
+    {
+        patch_io_fail(PATCH_PRODUCT_RESULT_DECODE_ERROR);
+        return;
+    }
+    g_patch_io.patch = g_patch_io.decoded.patch;
+    memcpy(g_patch_io.patch.name, g_patch_io.requested_name,
+           sizeof(g_patch_io.patch.name));
+    g_patch_io.patch.name_length = (uint16_t)strlen(g_patch_io.requested_name);
+    g_patch_io.state = PATCH_IO_ENCODE;
+}
+
+static void patch_io_encode(void)
+{
+    g_patch_io.encoded_size = 0U;
+    const persist_codec_sink_t sink = { patch_memory_write, &g_patch_io };
+    if (persist_codec_encode_patch(&g_patch_io.patch, &sink, NULL) != PERSIST_CODEC_OK)
+    {
+        patch_io_fail(PATCH_PRODUCT_RESULT_ENCODE_ERROR);
+        return;
+    }
+    g_patch_io.file_offset = 0U;
+    g_patch_io.state = PATCH_IO_OPEN_WRITE;
+}
+
+patch_product_result_t patch_product_save_prepare(uint8_t entity,
+                                                   uint16_t slot,
+                                                   const char *name)
+{
+    if (slot >= PATCH_PRODUCT_SLOT_COUNT)
+    {
+        return PATCH_PRODUCT_RESULT_INVALID_SLOT;
+    }
+    if (patch_io_common_available() == 0U)
+    {
+        return PATCH_PRODUCT_IO_BUSY;
+    }
+
+    char normalized[NAME_CONTRACT_BUFFER_BYTES];
+    if (patch_name_normalize(name, normalized) == 0U)
+    {
+        return PATCH_PRODUCT_RESULT_INVALID_NAME;
+    }
+    if (persistent_patch_control_capture(entity, normalized,
+                                         &g_patch_io.prepared_patch) != PERSIST_CODEC_OK)
+    {
+        return PATCH_PRODUCT_INVALID;
+    }
+    g_patch_io.prepared = 1U;
+    g_patch_io.prepared_slot = slot;
+    return PATCH_PRODUCT_OK;
+}
+
+patch_product_result_t patch_product_save_begin(uint16_t slot,
+                                                const persist_control_patch_t *snapshot)
+{
+    if (slot >= PATCH_PRODUCT_SLOT_COUNT)
+    {
+        return PATCH_PRODUCT_RESULT_INVALID_SLOT;
+    }
+    if (patch_io_common_available() == 0U)
+    {
+        return PATCH_PRODUCT_IO_BUSY;
+    }
+
+    const persist_control_patch_t *source = snapshot;
+    if (source == 0)
+    {
+        if ((g_patch_io.prepared == 0U) || (g_patch_io.prepared_slot != slot))
+        {
+            return PATCH_PRODUCT_INVALID;
+        }
+        source = &g_patch_io.prepared_patch;
+    }
+    if ((persist_codec_validate_patch(source) != PERSIST_CODEC_OK)
+            || (patch_name_is_canonical(source) == 0U)
+            || (patch_io_prepare_paths(slot) == 0U))
+    {
+        return PATCH_PRODUCT_INVALID;
+    }
+
+    memcpy(&g_patch_io.patch, source, sizeof(g_patch_io.patch));
+    g_patch_io.prepared = 0U;
+    patch_io_start(PATCH_PRODUCT_OPERATION_SAVE, slot);
+    return PATCH_PRODUCT_PENDING;
+}
+
+patch_product_result_t patch_product_rename_begin(uint16_t slot, const char *name)
+{
+    if (slot >= PATCH_PRODUCT_SLOT_COUNT)
+    {
+        return PATCH_PRODUCT_RESULT_INVALID_SLOT;
+    }
+    if (g_present[slot] == 0U)
+    {
+        return PATCH_PRODUCT_EMPTY;
+    }
+    if (g_invalid[slot] != 0U)
+    {
+        return PATCH_PRODUCT_INVALID;
+    }
+    if (patch_io_common_available() == 0U)
+    {
+        return PATCH_PRODUCT_IO_BUSY;
+    }
+    if (patch_name_normalize(name, g_patch_io.requested_name) == 0U)
+    {
+        return PATCH_PRODUCT_RESULT_INVALID_NAME;
+    }
+    if (patch_io_prepare_paths(slot) == 0U)
+    {
+        return PATCH_PRODUCT_INVALID;
+    }
+
+    patch_io_start(PATCH_PRODUCT_OPERATION_RENAME, slot);
+    return PATCH_PRODUCT_PENDING;
+}
+
+patch_product_result_t patch_product_save(uint8_t entity, uint16_t *out_slot)
+{
+    if (patch_io_common_available() == 0U)
+    {
+        return PATCH_PRODUCT_IO_BUSY;
+    }
+    const uint16_t slot = (g_current < PATCH_PRODUCT_SLOT_COUNT
+            && g_invalid[g_current] == 0U)
+        ? g_current : patch_product_first_empty();
+    if (slot == PATCH_PRODUCT_INVALID_SLOT)
+    {
+        return PATCH_PRODUCT_NO_SLOT;
+    }
+
+    char generated[NAME_CONTRACT_BUFFER_BYTES];
+    const char *name = (g_present[slot] != 0U && g_meta[slot].name[0] != '\0')
+        ? g_meta[slot].name : generated;
+    if (name == generated)
+    {
+        (void)snprintf(generated, sizeof(generated), "T%02u %s",
+                       (unsigned)(entity + 1U),
+                       track_catalog_family_short_name(track_state_get_family(entity)));
+    }
+    patch_product_result_t result = patch_product_save_prepare(entity, slot, name);
+    if (result == PATCH_PRODUCT_OK)
+    {
+        result = patch_product_save_begin(slot, 0);
+    }
+    if (out_slot != 0)
+    {
+        *out_slot = slot;
+    }
+    return result;
+}
+
+patch_product_result_t patch_product_apply(uint16_t slot, uint8_t entity)
 {
     if (project_replacement_is_active() != 0U)
-        return PATCH_PRODUCT_IO_BUSY;
-    if(g_patch_apply.active!=0U)
     {
-        if(s==g_patch_apply.slot&&e<BRICK_ENTITY_CAPACITY)
+        return PATCH_PRODUCT_IO_BUSY;
+    }
+    if (patch_io_busy() != 0U)
+    {
+        return PATCH_PRODUCT_IO_BUSY;
+    }
+    if (g_patch_apply.active != 0U)
+    {
+        if ((slot == g_patch_apply.slot) && (entity < BRICK_ENTITY_CAPACITY))
         {
-            g_patch_apply.target_mask|=(uint16_t)(1UL<<e);
+            g_patch_apply.target_mask |= (uint16_t)(1UL << entity);
             return PATCH_PRODUCT_PENDING;
         }
         return PATCH_PRODUCT_IO_BUSY;
     }
-    if(s>=PATCH_PRODUCT_SLOT_COUNT)return PATCH_PRODUCT_INVALID;
-    if(!g_present[s])return PATCH_PRODUCT_EMPTY;
-    persist_control_patch_t p;
-    if(!load(s,&p))return PATCH_PRODUCT_IO_ERROR;
-    if(persistent_patch_control_validate(&p,e)!=PERSIST_CODEC_OK)return PATCH_PRODUCT_INVALID;
-    for(uint8_t asset_index=0U;asset_index<p.asset_count;++asset_index)
+    if (slot >= PATCH_PRODUCT_SLOT_COUNT)
     {
-        const persist_control_asset_ref_t*const selected=&p.assets[asset_index];
-        if(selected->kind!=PERSIST_ASSET_SAMPLE_RAM)continue;
-        char asset_path[PERSIST_CONTROL_ASSET_PATH_BYTES+1U];uint16_t logical=0U;
-        memcpy(asset_path,selected->canonical_path,selected->path_length);asset_path[selected->path_length]='\0';
-        const project_control_asset_result_t asset=
-            project_control_ensure_asset(selected->kind,asset_path,&logical);
-        if(asset==PROJECT_CONTROL_ASSET_FAILED
-            || asset==PROJECT_CONTROL_ASSET_FAILED_INTERNAL)
+        return PATCH_PRODUCT_RESULT_INVALID_SLOT;
+    }
+    if (g_present[slot] == 0U)
+    {
+        return PATCH_PRODUCT_EMPTY;
+    }
+
+    persist_control_patch_t patch;
+    if (load(slot, &patch) == 0U)
+    {
+        return PATCH_PRODUCT_RESULT_FILE_ABSENT;
+    }
+    if (persistent_patch_control_validate(&patch, entity) != PERSIST_CODEC_OK)
+    {
+        return PATCH_PRODUCT_INVALID;
+    }
+    for (uint8_t asset_index = 0U; asset_index < patch.asset_count; ++asset_index)
+    {
+        const persist_control_asset_ref_t *const selected = &patch.assets[asset_index];
+        if (selected->kind != PERSIST_ASSET_SAMPLE_RAM)
+        {
+            continue;
+        }
+        char asset_path[PERSIST_CONTROL_ASSET_PATH_BYTES + 1U];
+        uint16_t logical = 0U;
+        memcpy(asset_path, selected->canonical_path, selected->path_length);
+        asset_path[selected->path_length] = '\0';
+        const project_control_asset_result_t asset =
+            project_control_ensure_asset(selected->kind, asset_path, &logical);
+        if ((asset == PROJECT_CONTROL_ASSET_FAILED)
+                || (asset == PROJECT_CONTROL_ASSET_FAILED_INTERNAL))
+        {
             return PATCH_PRODUCT_INVALID;
-        if(asset==PROJECT_CONTROL_ASSET_PENDING)
+        }
+        if (asset == PROJECT_CONTROL_ASSET_PENDING)
         {
-            g_patch_apply.active=1U;g_patch_apply.target_mask=(uint16_t)(1UL<<e);g_patch_apply.slot=s;
+            g_patch_apply.active = 1U;
+            g_patch_apply.target_mask = (uint16_t)(1UL << entity);
+            g_patch_apply.slot = slot;
             return PATCH_PRODUCT_PENDING;
         }
     }
-    if(persistent_patch_control_apply(&p,e)!=PERSIST_CODEC_OK)return PATCH_PRODUCT_INVALID;
-    g_current=s;return PATCH_PRODUCT_OK;
+    if (persistent_patch_control_apply(&patch, entity) != PERSIST_CODEC_OK)
+    {
+        return PATCH_PRODUCT_INVALID;
+    }
+    g_current = slot;
+    return PATCH_PRODUCT_OK;
 }
 
 void patch_product_apply_service(void)
 {
-    if(g_patch_apply.active==0U)return;
-    sampler_ram_result_t result=SAMPLER_RAM_RESULT_INVALID_ARG;
-    uint16_t backend=SAMPLER_RAM_POOL_INVALID_SLOT;
-    uint16_t runtime=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    const char *path_value=NULL;
-    if(sampler_ram_pool_load_async_take_result(&result,&backend,&runtime,&path_value)==0U)return;
-    project_control_complete_ram_runtime(path_value,backend,runtime,
-                                         (result==SAMPLER_RAM_RESULT_OK)?1U:0U);
-    uint8_t applied=0U;
-    if(result==SAMPLER_RAM_RESULT_OK)
-        for(uint8_t target=0U;target<BRICK_ENTITY_CAPACITY;++target)
-            if((g_patch_apply.target_mask&(uint16_t)(1UL<<target))!=0U
-                &&persistent_patch_control_apply(&g_stage.patch,target)==PERSIST_CODEC_OK)
-                applied=1U;
-    if(applied!=0U)g_current=g_patch_apply.slot;
-    memset(&g_patch_apply,0,sizeof(g_patch_apply));
+    if (g_patch_apply.active == 0U)
+    {
+        return;
+    }
+    sampler_ram_result_t result = SAMPLER_RAM_RESULT_INVALID_ARG;
+    uint16_t backend = SAMPLER_RAM_POOL_INVALID_SLOT;
+    uint16_t runtime = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    const char *path_value = NULL;
+    if (sampler_ram_pool_load_async_take_result(&result, &backend, &runtime, &path_value) == 0U)
+    {
+        return;
+    }
+    project_control_complete_ram_runtime(path_value, backend, runtime,
+                                         (result == SAMPLER_RAM_RESULT_OK) ? 1U : 0U);
+    uint8_t applied = 0U;
+    if (result == SAMPLER_RAM_RESULT_OK)
+    {
+        for (uint8_t target = 0U; target < BRICK_ENTITY_CAPACITY; ++target)
+        {
+            if ((g_patch_apply.target_mask & (uint16_t)(1UL << target)) != 0U
+                    && (persistent_patch_control_apply(&g_stage.patch, target)
+                        == PERSIST_CODEC_OK))
+            {
+                applied = 1U;
+            }
+        }
+    }
+    if (applied != 0U)
+    {
+        g_current = g_patch_apply.slot;
+    }
+    memset(&g_patch_apply, 0, sizeof(g_patch_apply));
 }
-patch_product_result_t patch_product_rename(uint16_t s,const char*n){if(g_patch_apply.active!=0U)return PATCH_PRODUCT_IO_BUSY;persist_control_patch_t p;if(n==NULL||!load(s,&p))return PATCH_PRODUCT_IO_ERROR;size_t z=strlen(n);if(z>PERSIST_CONTROL_PATCH_NAME_BYTES)return PATCH_PRODUCT_INVALID;memset(p.name,0,sizeof(p.name));memcpy(p.name,n,z);p.name_length=(uint16_t)z;return store(s,&p)?PATCH_PRODUCT_OK:PATCH_PRODUCT_IO_ERROR;}
-patch_product_result_t patch_product_delete(uint16_t s,uint16_t*out){if(g_patch_apply.active!=0U)return PATCH_PRODUCT_IO_BUSY;if(s>=PATCH_PRODUCT_SLOT_COUNT)return PATCH_PRODUCT_INVALID;if(!g_present[s])return PATCH_PRODUCT_EMPTY;if(!acquire())return PATCH_PRODUCT_IO_BUSY;char x[48];FRESULT r=FR_INVALID_NAME;if(path(x,sizeof(x),s))r=f_unlink(x);sd_access_gate_release(SD_ACCESS_CLIENT_PATCH);if(r!=FR_OK&&r!=FR_NO_FILE)return PATCH_PRODUCT_IO_ERROR;g_present[s]=g_invalid[s]=0U;memset(&g_meta[s],0,sizeof(g_meta[s]));uint16_t next=PATCH_PRODUCT_INVALID_SLOT;for(uint16_t i=1;i<=PATCH_PRODUCT_SLOT_COUNT;++i){uint16_t c=(uint16_t)((s+i)%PATCH_PRODUCT_SLOT_COUNT);if(g_present[c]&&!g_invalid[c]){next=c;break;}}g_current=next;if(out)*out=next;return PATCH_PRODUCT_OK;}
-patch_product_slot_state_t patch_product_slot_state(uint16_t s){return(s>=PATCH_PRODUCT_SLOT_COUNT||g_invalid[s])?PATCH_PRODUCT_SLOT_INVALID:(g_present[s]?PATCH_PRODUCT_SLOT_VALID:PATCH_PRODUCT_SLOT_EMPTY);}
-uint8_t patch_product_metadata(uint16_t s,patch_product_metadata_t*out){if(out==NULL||patch_product_slot_state(s)!=PATCH_PRODUCT_SLOT_VALID)return 0U;*out=g_meta[s];return 1U;}
-void patch_product_set_current(uint16_t s){if(s<PATCH_PRODUCT_SLOT_COUNT)g_current=s;}
-uint16_t patch_product_get_current(void){return g_current;}
-const char*patch_product_result_label(patch_product_result_t r){switch(r){case PATCH_PRODUCT_OK:return "OK";case PATCH_PRODUCT_PENDING:return "LOADING";case PATCH_PRODUCT_EMPTY:return "EMPTY";case PATCH_PRODUCT_IO_BUSY:return "SD BUSY";case PATCH_PRODUCT_NO_SLOT:return "BANK FULL";case PATCH_PRODUCT_IO_ERROR:return "SD ERROR";default:return "INVALID";}}
+
+void patch_product_service(void)
+{
+    if ((g_patch_io.state == PATCH_IO_IDLE) || (g_patch_io.state == PATCH_IO_DONE))
+    {
+        return;
+    }
+
+    /* Failure cleanup must still terminate if the media epoch changed. */
+    if (g_patch_io.result != PATCH_PRODUCT_PENDING)
+    {
+        if (g_patch_io.state == PATCH_IO_CLOSE_READ_FAILED)
+        {
+            (void)persistent_fatfs_close_result(&g_patch_io.file);
+            g_patch_io.read_open = 0U;
+            patch_io_finish(g_patch_io.result);
+            return;
+        }
+        if (g_patch_io.state == PATCH_IO_CLOSE_WRITE_FAILED)
+        {
+            (void)persistent_fatfs_close_result(&g_patch_io.file);
+            g_patch_io.write_open = 0U;
+            g_patch_io.state = PATCH_IO_CLEAN_TEMP;
+            return;
+        }
+        if (g_patch_io.state == PATCH_IO_CLEAN_TEMP)
+        {
+            (void)f_unlink(g_patch_io.temporary_path);
+            patch_io_finish(g_patch_io.result);
+            return;
+        }
+    }
+
+    uint32_t bytes = 0U;
+    sd_scheduler_background_kind_t kind = SD_SCHEDULER_BACKGROUND_METADATA;
+    if ((g_patch_io.state == PATCH_IO_READ)
+            || (g_patch_io.state == PATCH_IO_WRITE))
+    {
+        kind = SD_SCHEDULER_BACKGROUND_DATA;
+        bytes = (g_patch_io.state == PATCH_IO_READ)
+            ? (g_patch_io.file_size - g_patch_io.file_offset)
+            : (g_patch_io.encoded_size - g_patch_io.file_offset);
+        if (bytes > SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES)
+        {
+            bytes = SD_SCHEDULER_BACKGROUND_MAX_DATA_BYTES;
+        }
+    }
+
+    const sd_scheduler_background_admission_t admission = patch_io_admit(kind, bytes);
+    if (admission == SD_SCHEDULER_BACKGROUND_NOT_NOW)
+    {
+        return;
+    }
+    if (admission != SD_SCHEDULER_BACKGROUND_GO)
+    {
+        patch_io_fail(PATCH_PRODUCT_IO_ERROR);
+        return;
+    }
+
+    FRESULT file_result = FR_OK;
+    UINT transferred = 0U;
+    switch (g_patch_io.state)
+    {
+        case PATCH_IO_MOUNT:
+            if (sd_access_fs_mount_if_needed() == 0U)
+            {
+                patch_io_fail(PATCH_PRODUCT_IO_ERROR);
+            }
+            else
+            {
+                g_patch_io.state = PATCH_IO_MKDIR_BRICK;
+            }
+            break;
+        case PATCH_IO_MKDIR_BRICK:
+            file_result = f_mkdir("0:/BRICK");
+            if ((file_result != FR_OK) && (file_result != FR_EXIST))
+            {
+                patch_io_fail(PATCH_PRODUCT_IO_ERROR);
+            }
+            else
+            {
+                g_patch_io.state = PATCH_IO_MKDIR_PATCH;
+            }
+            break;
+        case PATCH_IO_MKDIR_PATCH:
+            file_result = f_mkdir("0:/BRICK/PATCH");
+            if ((file_result != FR_OK) && (file_result != FR_EXIST))
+            {
+                patch_io_fail(PATCH_PRODUCT_IO_ERROR);
+            }
+            else
+            {
+                g_patch_io.state = PATCH_IO_RECOVER;
+            }
+            break;
+        case PATCH_IO_RECOVER:
+            file_result = persistent_fatfs_recover_replace(
+                g_patch_io.final_path, g_patch_io.temporary_path,
+                g_patch_io.backup_path);
+            if (file_result != FR_OK)
+            {
+                patch_io_fail(PATCH_PRODUCT_IO_ERROR);
+            }
+            else
+            {
+                g_patch_io.state = (g_patch_io.operation == PATCH_PRODUCT_OPERATION_RENAME)
+                    ? PATCH_IO_OPEN_READ : PATCH_IO_ENCODE;
+            }
+            break;
+        case PATCH_IO_OPEN_READ:
+            if (persistent_fatfs_open_read(&g_patch_io.file, g_patch_io.final_path) == 0U)
+            {
+                patch_io_fail((g_patch_io.file.last_result == FR_NO_FILE)
+                                  ? PATCH_PRODUCT_RESULT_FILE_ABSENT : PATCH_PRODUCT_IO_ERROR);
+            }
+            else if (g_patch_io.file.size > PATCH_PRODUCT_IO_BUFFER_BYTES)
+            {
+                g_patch_io.read_open = 1U;
+                patch_io_fail(PATCH_PRODUCT_RESULT_DECODE_ERROR);
+            }
+            else
+            {
+                g_patch_io.file_size = g_patch_io.file.size;
+                g_patch_io.file_offset = 0U;
+                g_patch_io.read_open = 1U;
+                g_patch_io.state = PATCH_IO_READ;
+            }
+            break;
+        case PATCH_IO_READ:
+            file_result = f_read(&g_patch_io.file.file,
+                                 &g_patch_io.io_buffer[g_patch_io.file_offset],
+                                 (UINT)bytes, &transferred);
+            if ((file_result != FR_OK) || (transferred != (UINT)bytes))
+            {
+                patch_io_fail(PATCH_PRODUCT_IO_ERROR);
+            }
+            else
+            {
+                g_patch_io.file_offset += bytes;
+                if (g_patch_io.file_offset == g_patch_io.file_size)
+                {
+                    g_patch_io.state = PATCH_IO_CLOSE_READ;
+                }
+            }
+            break;
+        case PATCH_IO_CLOSE_READ:
+            file_result = persistent_fatfs_close_result(&g_patch_io.file);
+            g_patch_io.read_open = 0U;
+            if (file_result != FR_OK)
+            {
+                patch_io_fail(PATCH_PRODUCT_IO_ERROR);
+            }
+            else
+            {
+                g_patch_io.state = PATCH_IO_DECODE;
+            }
+            break;
+        case PATCH_IO_DECODE:
+            patch_io_decode();
+            break;
+        case PATCH_IO_ENCODE:
+            patch_io_encode();
+            break;
+        case PATCH_IO_OPEN_WRITE:
+            if (persistent_fatfs_open_write(&g_patch_io.file,
+                                            g_patch_io.temporary_path) == 0U)
+            {
+                patch_io_fail(PATCH_PRODUCT_IO_ERROR);
+            }
+            else
+            {
+                g_patch_io.write_open = 1U;
+                g_patch_io.file_offset = 0U;
+                g_patch_io.state = PATCH_IO_WRITE;
+            }
+            break;
+        case PATCH_IO_WRITE:
+            file_result = f_write(&g_patch_io.file.file,
+                                  &g_patch_io.io_buffer[g_patch_io.file_offset],
+                                  (UINT)bytes, &transferred);
+            if ((file_result != FR_OK) || (transferred != (UINT)bytes))
+            {
+                patch_io_fail(PATCH_PRODUCT_IO_ERROR);
+            }
+            else
+            {
+                g_patch_io.file_offset += bytes;
+                if (g_patch_io.file_offset == g_patch_io.encoded_size)
+                {
+                    g_patch_io.state = PATCH_IO_SYNC;
+                }
+            }
+            break;
+        case PATCH_IO_SYNC:
+            file_result = f_sync(&g_patch_io.file.file);
+            if (file_result != FR_OK)
+            {
+                patch_io_fail(PATCH_PRODUCT_IO_ERROR);
+            }
+            else
+            {
+                g_patch_io.state = PATCH_IO_CLOSE_WRITE;
+            }
+            break;
+        case PATCH_IO_CLOSE_WRITE:
+            file_result = persistent_fatfs_close_result(&g_patch_io.file);
+            g_patch_io.write_open = 0U;
+            if (file_result != FR_OK)
+            {
+                patch_io_fail(PATCH_PRODUCT_IO_ERROR);
+            }
+            else
+            {
+                g_patch_io.state = PATCH_IO_COMMIT;
+            }
+            break;
+        case PATCH_IO_COMMIT:
+            file_result = persistent_fatfs_commit_replace(
+                g_patch_io.final_path, g_patch_io.temporary_path,
+                g_patch_io.backup_path);
+            if (file_result != FR_OK)
+            {
+                patch_io_fail(PATCH_PRODUCT_IO_ERROR);
+            }
+            else
+            {
+                patch_io_finish(PATCH_PRODUCT_OK);
+            }
+            break;
+        case PATCH_IO_CLOSE_READ_FAILED:
+            break;
+        case PATCH_IO_CLOSE_WRITE_FAILED:
+            break;
+        case PATCH_IO_CLEAN_TEMP:
+            break;
+        default:
+            patch_io_fail(PATCH_PRODUCT_IO_ERROR);
+            break;
+    }
+    sd_scheduler_runtime_background_end();
+}
+
+uint8_t patch_product_result_pending(patch_product_operation_t operation)
+{
+    return (g_patch_io.state == PATCH_IO_DONE)
+        && (g_patch_io.result_ready != 0U)
+        && (g_patch_io.operation == operation);
+}
+
+uint8_t patch_product_take_result(patch_product_operation_t *operation,
+                                  uint16_t *slot,
+                                  patch_product_result_t *result)
+{
+    if ((g_patch_io.state != PATCH_IO_DONE) || (g_patch_io.result_ready == 0U))
+    {
+        return 0U;
+    }
+    if (operation != 0)
+    {
+        *operation = g_patch_io.operation;
+    }
+    if (slot != 0)
+    {
+        *slot = g_patch_io.slot;
+    }
+    if (result != 0)
+    {
+        *result = g_patch_io.result;
+    }
+    memset(&g_patch_io, 0, sizeof(g_patch_io));
+    g_patch_io.state = PATCH_IO_IDLE;
+    return 1U;
+}
+
+void patch_product_init(void)
+{
+    memset(g_present, 0, sizeof(g_present));
+    memset(g_invalid, 0, sizeof(g_invalid));
+    memset(g_meta, 0, sizeof(g_meta));
+    memset(&g_patch_apply, 0, sizeof(g_patch_apply));
+    memset(&g_patch_io, 0, sizeof(g_patch_io));
+    g_patch_io.state = PATCH_IO_IDLE;
+    g_current = PATCH_PRODUCT_INVALID_SLOT;
+    if (acquire() == 0U)
+    {
+        return;
+    }
+    (void)f_mkdir("0:/BRICK");
+    (void)f_mkdir("0:/BRICK/PATCH");
+    for (uint16_t slot = 0U; slot < PATCH_PRODUCT_SLOT_COUNT; ++slot)
+    {
+        char final_path[48];
+        FILINFO info;
+        if (path(final_path, sizeof(final_path), slot)
+                && (f_stat(final_path, &info) == FR_OK))
+        {
+            (void)scan_meta(slot);
+        }
+    }
+    sd_access_gate_release(SD_ACCESS_CLIENT_PATCH);
+}
+
+uint16_t patch_product_first_empty(void)
+{
+    for (uint16_t slot = 0U; slot < PATCH_PRODUCT_SLOT_COUNT; ++slot)
+    {
+        if (g_present[slot] == 0U)
+        {
+            return slot;
+        }
+    }
+    return PATCH_PRODUCT_INVALID_SLOT;
+}
+
+patch_product_result_t patch_product_rename(uint16_t slot, const char *name)
+{
+    return patch_product_rename_begin(slot, name);
+}
+
+patch_product_result_t patch_product_delete(uint16_t slot, uint16_t *out_next)
+{
+    if (patch_io_busy() != 0U || g_patch_apply.active != 0U)
+    {
+        return PATCH_PRODUCT_IO_BUSY;
+    }
+    if (slot >= PATCH_PRODUCT_SLOT_COUNT)
+    {
+        return PATCH_PRODUCT_RESULT_INVALID_SLOT;
+    }
+    if (g_present[slot] == 0U)
+    {
+        return PATCH_PRODUCT_EMPTY;
+    }
+    if (acquire() == 0U)
+    {
+        return PATCH_PRODUCT_IO_BUSY;
+    }
+    char final_path[48];
+    FRESULT file_result = path(final_path, sizeof(final_path), slot)
+        ? f_unlink(final_path) : FR_INVALID_NAME;
+    sd_access_gate_release(SD_ACCESS_CLIENT_PATCH);
+    if ((file_result != FR_OK) && (file_result != FR_NO_FILE))
+    {
+        return PATCH_PRODUCT_IO_ERROR;
+    }
+    g_present[slot] = 0U;
+    g_invalid[slot] = 0U;
+    memset(&g_meta[slot], 0, sizeof(g_meta[slot]));
+    uint16_t next = PATCH_PRODUCT_INVALID_SLOT;
+    for (uint16_t offset = 1U; offset <= PATCH_PRODUCT_SLOT_COUNT; ++offset)
+    {
+        const uint16_t candidate = (uint16_t)((slot + offset) % PATCH_PRODUCT_SLOT_COUNT);
+        if ((g_present[candidate] != 0U) && (g_invalid[candidate] == 0U))
+        {
+            next = candidate;
+            break;
+        }
+    }
+    g_current = next;
+    if (out_next != 0)
+    {
+        *out_next = next;
+    }
+    return PATCH_PRODUCT_OK;
+}
+
+patch_product_slot_state_t patch_product_slot_state(uint16_t slot)
+{
+    if ((slot >= PATCH_PRODUCT_SLOT_COUNT) || (g_invalid[slot] != 0U))
+    {
+        return PATCH_PRODUCT_SLOT_INVALID;
+    }
+    return (g_present[slot] != 0U)
+        ? PATCH_PRODUCT_SLOT_VALID : PATCH_PRODUCT_SLOT_EMPTY;
+}
+
+uint8_t patch_product_metadata(uint16_t slot, patch_product_metadata_t *out)
+{
+    if ((out == 0) || (patch_product_slot_state(slot) != PATCH_PRODUCT_SLOT_VALID))
+    {
+        return 0U;
+    }
+    *out = g_meta[slot];
+    return 1U;
+}
+
+void patch_product_set_current(uint16_t slot)
+{
+    if (slot < PATCH_PRODUCT_SLOT_COUNT)
+    {
+        g_current = slot;
+    }
+}
+
+uint16_t patch_product_get_current(void)
+{
+    return g_current;
+}
+
+const char *patch_product_result_label(patch_product_result_t result)
+{
+    switch (result)
+    {
+        case PATCH_PRODUCT_OK: return "OK";
+        case PATCH_PRODUCT_PENDING: return "LOADING";
+        case PATCH_PRODUCT_EMPTY: return "EMPTY";
+        case PATCH_PRODUCT_IO_BUSY: return "SD BUSY";
+        case PATCH_PRODUCT_NO_SLOT: return "BANK FULL";
+        case PATCH_PRODUCT_RESULT_INVALID_NAME: return "NAME INVALID";
+        case PATCH_PRODUCT_RESULT_FILE_ABSENT: return "FILE ABSENT";
+        case PATCH_PRODUCT_RESULT_DECODE_ERROR: return "DECODE ERROR";
+        case PATCH_PRODUCT_RESULT_ENCODE_ERROR: return "ENCODE ERROR";
+        case PATCH_PRODUCT_RESULT_INVALID_SLOT: return "BAD SLOT";
+        case PATCH_PRODUCT_IO_ERROR: return "SD ERROR";
+        default: return "INVALID";
+    }
+}

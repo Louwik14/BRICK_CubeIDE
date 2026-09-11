@@ -44,6 +44,13 @@ Les Save utilisent des tranches DATA de 4096 octets et des etapes METADATA
 separees; `.TMP` n'est publie qu'apres header final, sync et close, avec `.BAK`
 recuperable.
 
+Patch Save et Rename utilisent une seule machine Storage cooperative. Le Save
+capture un DTO immutable avant soumission; Rename relit le DTO du slot puis ne
+remplace que `metadata.name`. Les deux operations ecrivent `P%04u.B6C.TMP`,
+sync/close, commitent via `.BAK`, puis publient un resultat terminal consommable
+une seule fois. Le slot, le filename et les metadonnees ne sont mis a jour
+qu'apres commit reussi.
+
 Pattern Save/Load, Project Save, browser SD, Sample RAM, Wavetable et Clear Multi utilisent l'admission Background cooperative de `sd_scheduler_runtime`. Toute demande RT ou transaction active produit `NOT_NOW`; le client conserve son etat et rend la main.
 
 Pour les chargements utilisateur Sample RAM et Wavetable, la superloop consomme

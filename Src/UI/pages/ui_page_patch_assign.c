@@ -1150,11 +1150,33 @@ static void ui_page_patch_assign_render(void)
     }
 }
 
+static void ui_page_patch_assign_tick(void)
+{
+    if (patch_product_result_pending(PATCH_PRODUCT_OPERATION_RENAME) == 0U)
+    {
+        return;
+    }
+
+    patch_product_operation_t operation;
+    patch_product_result_t result;
+    uint16_t slot;
+    if (patch_product_take_result(&operation, &slot, &result) == 0U)
+    {
+        return;
+    }
+    (void)operation;
+    (void)slot;
+    ui_page_patch_assign_ensure_visible_selection();
+    ui_page_patch_assign_set_status((result == PATCH_PRODUCT_OK)
+                                    ? "PATCH RENAMED"
+                                    : patch_product_result_label(result));
+}
+
 const ui_page_t g_ui_page_patch_assign = {
     .enter = ui_page_patch_assign_enter,
     .leave = ui_page_patch_assign_leave,
     .handle_event = ui_page_patch_assign_handle_event,
-    .tick = 0,
+    .tick = ui_page_patch_assign_tick,
     .sync_active_context = 0,
     .render = ui_page_patch_assign_render,
     .context = 0,

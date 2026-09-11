@@ -401,6 +401,19 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
 
 void ui_hall_mode_flow_service_pending(uint32_t now_ms)
 {
+    if (patch_product_result_pending(PATCH_PRODUCT_OPERATION_SAVE) != 0U)
+    {
+        patch_product_operation_t operation;
+        patch_product_result_t result;
+        uint16_t slot;
+        if (patch_product_take_result(&operation, &slot, &result) != 0U)
+        {
+            (void)operation;
+            (void)slot;
+            ui_core_feedback_set(patch_product_result_label(result), now_ms);
+        }
+    }
+
     if (g_patch_pending.save_pending != 0U)
     {
         if ((int32_t)(now_ms - g_patch_pending.save_due_ms) < 0)
