@@ -628,6 +628,13 @@ target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
 # C++ linker because project contains cpp files
 set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES LINKER_LANGUAGE CXX)
 
+add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_OBJCOPY} -O binary
+            $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+            $<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/${CMAKE_PROJECT_NAME}.bin
+    COMMENT "Generating ${CMAKE_PROJECT_NAME}.bin"
+)
+
 # Remove wrong implicit lib if present
 list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
 

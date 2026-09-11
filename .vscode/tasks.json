@@ -36,9 +36,22 @@
       ]
     },
     {
-      "label": "Flash Release",
+      "label": "Flash Pill",
       "type": "shell",
       "command": "${workspaceFolder}\\flash_release.bat",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "dependsOn": [
+        "Build Release"
+      ],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
+      "label": "Flash USB",
+      "type": "shell",
+      "command": "${workspaceFolder}\\flash_usb.bat",
       "options": {
         "cwd": "${workspaceFolder}"
       },
