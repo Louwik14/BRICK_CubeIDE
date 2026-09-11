@@ -5,10 +5,12 @@
 #include "pages/ui_page_template_mix.h"
 #include "pages/ui_page_template_env.h"
 #include "pages/ui_page_template_play.h"
+#include "pages/ui_page_audio_rec.h"
 #include "pages/ui_page_template_tone.h"
 #include "pages/ui_page_template_mod.h"
 #include "ui_page_manager.h"
 #include "ui_template_page.h"
+#include "ui_hall_mode_flow.h"
 
 /*
  * Data-driven navigation table.
@@ -132,9 +134,12 @@ static uint8_t ui_navigation_resolve_effective_ensemble_page(void)
 
 void ui_navigation_request_ensemble_page(uint8_t page_id)
 {
-
     if (page_id == UI_PAGE_TEMPLATE_CFG)
     {
+        if (ui_page_audio_rec_is_open() != 0U)
+        {
+            ui_hall_mode_flow_leave_lowcost_modal_page();
+        }
         g_ui_requested_ensemble_page = page_id;
         if (ui_page_get_id() != UI_PAGE_TEMPLATE_CFG)
         {
@@ -151,6 +156,11 @@ void ui_navigation_request_ensemble_page(uint8_t page_id)
     if (ui_navigation_is_page_available(page_id) == 0U)
     {
         return;
+    }
+
+    if (ui_page_audio_rec_is_open() != 0U)
+    {
+        ui_hall_mode_flow_leave_lowcost_modal_page();
     }
 
     g_ui_requested_ensemble_page = page_id;

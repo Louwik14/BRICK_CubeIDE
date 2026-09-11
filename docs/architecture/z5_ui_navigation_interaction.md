@@ -8,6 +8,18 @@ STEP 1..8 selectionnent les top-level. En GROUP, STEP 9..16 selectionnent les ch
 
 Le chemin Hall direct met a jour modifiers, selection, mode et double-tap avant le drain de la queue UI. SHIFT+HALL precede TRACK_MOD+HALL. Un evenement consomme par un stage masque les suivants.
 
+Le contexte temporaire TRACK est resolu par `ui_hall_mode_track_overlay_active`,
+utilise par le dispatch Hall et la projection LED. Il prime sur la page active
+pour la selection des tracks, puis disparait au relachement de TRACK; la page
+reprend alors sa projection propre. Les overlays MUTE, MACRO et SHIFT restent
+prioritaires selon leur contrat.
+
+Audio REC est une page modale Low-Cost, mais les boutons d'ensemble restent
+navigables lorsqu'une destination est disponible. La navigation standard ferme
+alors la page REC, restaure le mode/page de retour et ouvre l'ensemble demande;
+le changement n'est pas traite comme une capture de bouton par REC. REC CFG
+reste une page dediee au reglage de l'enregistrement.
+
 Ordre contractuel du tick:
 
 ```text

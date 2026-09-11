@@ -36,6 +36,7 @@
 #include "Storage/project_control.h"
 #include "Storage/sample_capture.h"
 #include "UI/ui_core.h"
+#include "UI/ui_core_mute.h"
 #include "Track/control_routing.h"
 #include "UI/ui_hall_mode_projection.h"
 #include "UI/ui_navigation.h"
@@ -710,6 +711,12 @@ static void led_apply_fixed_scene(void)
     const uint8_t active_page_id = ui_page_get_id();
     const ui_hall_rout_context_t rout_context =
         ui_hall_mode_resolve_rout_context(active_track, hall_mode);
+    const uint8_t track_overlay_active =
+        ui_hall_mode_track_overlay_active(
+            button_down(BTN_SHIFT),
+            ui_is_track_modifier_held(),
+            ui_core_mute_is_active(),
+            ui_macro_overlay_is_active());
     const button_id_t active_button = ui_navigation_get_button_for_page(active_page_id);
     const led_id_t active_param_led = led_remap_param_led_for_button(active_button);
     if (ui_macro_interaction_get_active_lock_param(&macro_param) != 0U)
@@ -742,6 +749,13 @@ static void led_apply_fixed_scene(void)
             }
         }
     }
+    else if (track_overlay_active != 0U)
+    {
+        for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
+        {
+            led_apply_track_select_hall_scene(hall);
+        }
+    }
     else if (ui_step_led_ownership_page_needs_step_leds(active_page_id) != 0U)
     {
         seq_led_render_active_track_page(ui_get_active_lane());
@@ -751,13 +765,6 @@ static void led_apply_fixed_scene(void)
         for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
         {
             (void)led_apply_mute_hall_scene(hall);
-        }
-    }
-    else if (ui_is_track_modifier_held() != 0U)
-    {
-        for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
-        {
-            led_apply_track_select_hall_scene(hall);
         }
     }
     else if (led_hall_mode_uses_seq_scene(hall_mode))

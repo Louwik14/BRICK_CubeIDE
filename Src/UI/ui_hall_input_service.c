@@ -42,7 +42,12 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
                                                 pressed);
     const uint32_t now_ms = HAL_GetTick();
     const uint8_t track_select_without_shift =
-        (uint8_t)((action == UI_HALL_DIRECT_ACTION_TRACK_SELECT) && (shift_down == 0U));
+        (uint8_t)((action == UI_HALL_DIRECT_ACTION_TRACK_SELECT)
+                  && (ui_hall_mode_track_overlay_active(
+                          shift_down,
+                          track_select_armed,
+                          mute_active,
+                          ui_macro_overlay_is_active()) != 0U));
     const uint8_t macro_overlay_hall_context =
         (uint8_t)((ui_macro_overlay_is_active() != 0U)
                   && (track_select_without_shift == 0U)

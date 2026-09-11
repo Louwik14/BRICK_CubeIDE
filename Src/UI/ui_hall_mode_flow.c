@@ -2,6 +2,7 @@
 
 #include "Track/entity_topology.h"
 #include "Storage/patch_product.h"
+#include "Storage/sample_capture.h"
 #include "stm32h7xx_hal.h"
 #include "pages/ui_page_audio_rec.h"
 #include "pages/ui_page_patch_assign.h"
@@ -30,8 +31,7 @@ static ui_hall_mode_flow_patch_pending_t g_patch_pending;
 static uint8_t g_lowcost_rec_return_page = UI_PAGE_TEMPLATE_CFG;
 static ui_hall_mode_t g_lowcost_rec_return_mode = UI_HALL_MODE_SEQ;
 static uint8_t g_lowcost_rec_return_valid;
-
-static void ui_hall_mode_flow_leave_lowcost_modal_page(void);
+static uint8_t g_lowcost_rec_closing;
 
 static void ui_hall_mode_flow_activate_mode(ui_hall_mode_t target_mode,
                                             uint8_t target_page,
@@ -85,7 +85,7 @@ static uint8_t ui_hall_mode_flow_open_looper_rout(void)
 
 static void ui_hall_mode_flow_close_lowcost_rec(void)
 {
-    if (ui_page_audio_rec_is_open() == 0U)
+    if ((ui_page_audio_rec_is_open() == 0U) || (g_lowcost_rec_closing != 0U))
     {
         return;
     }
@@ -97,12 +97,20 @@ static void ui_hall_mode_flow_close_lowcost_rec(void)
         ? g_lowcost_rec_return_mode
         : UI_HALL_MODE_SEQ;
     g_lowcost_rec_return_valid = 0U;
+    (void)sample_capture_model_return_to_audio_rec();
     ui_set_hall_mode(return_mode);
+    g_lowcost_rec_closing = 1U;
     ui_navigation_request_page_with_availability(return_page);
+    g_lowcost_rec_closing = 0U;
 }
 
-static void ui_hall_mode_flow_leave_lowcost_modal_page(void)
+void ui_hall_mode_flow_leave_lowcost_modal_page(void)
 {
+    if (g_lowcost_rec_closing != 0U)
+    {
+        return;
+    }
+
     if (ui_page_patch_assign_is_open() != 0U)
     {
         ui_page_patch_assign_close();

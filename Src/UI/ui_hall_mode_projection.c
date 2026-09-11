@@ -82,6 +82,17 @@ ui_hall_mode_effective_view_t ui_hall_mode_resolve_effective_view(uint8_t track,
     }
 }
 
+uint8_t ui_hall_mode_track_overlay_active(uint8_t shift_down,
+                                          uint8_t track_modifier_held,
+                                          uint8_t mute_active,
+                                          uint8_t macro_overlay_active)
+{
+    return (uint8_t)((track_modifier_held != 0U)
+                     && (shift_down == 0U)
+                     && (mute_active == 0U)
+                     && (macro_overlay_active == 0U));
+}
+
 uint8_t ui_hall_allows_injection(uint8_t track, ui_hall_mode_t raw_mode)
 {
     if (entity_topology_has_capability(track, TRACK_CAPABILITY_KEYBOARD) == 0U)
