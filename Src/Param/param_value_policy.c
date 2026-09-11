@@ -361,19 +361,19 @@ static uint8_t prism_discrete_domain_for_model(param_id_t id,
     {
         out->raw_step = 256U; out->count = 128U; return 1U; /* FM ratio table */
     }
-    if ((model == 23U) && (second_param != 0U))
+    if ((model == 22U) && (second_param != 0U))
     {
         out->raw_step = 1639U; out->count = 20U; return 1U; /* WT bank */
     }
-    if ((model == 25U) && (second_param != 0U))
+    if ((model == 24U) && (second_param != 0U))
     {
         out->raw_step = 8192U; out->count = 4U; return 1U; /* WLINE interpolation */
     }
-    if ((model == 26U) && (second_param != 0U))
+    if ((model == 25U) && (second_param != 0U))
     {
-        out->raw_step = 2048U; out->count = 17U; return 1U; /* WPARAM chord */
+        out->raw_step = 2048U; out->count = 17U; return 1U; /* WPARA chord */
     }
-    if ((model == 29U) && (second_param != 0U))
+    if ((model == 28U) && (second_param != 0U))
     {
         out->first_raw = 1024U; out->raw_step = 1024U; out->count = 31U; return 1U; /* CLOCK steps 2..32 */
     }

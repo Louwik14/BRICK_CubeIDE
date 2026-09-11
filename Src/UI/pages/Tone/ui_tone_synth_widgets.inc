@@ -267,7 +267,8 @@ static void ui_page_template_tone_prism_format_stepped(uint8_t edit_index,
                                                       out,
                                                       out_len);
     }
-    else if ((edit_index == 25U) && (id == PARAM_PRISM_OSC1_PARAM2))
+    else if ((edit_index == 24U)
+            && ((id == PARAM_PRISM_OSC1_PARAM2) || (id == PARAM_PRISM_OSC2_PARAM2)))
     {
         static const char *const k_labels[] = { "SMTH", "XFADE", "ROUGH", "LOFI" };
         uint8_t index = (uint8_t)(raw >> 13);
@@ -277,7 +278,8 @@ static void ui_page_template_tone_prism_format_stepped(uint8_t edit_index,
         }
         (void)snprintf(out, out_len, "%s", k_labels[index]);
     }
-    else if ((edit_index == 29U) && (id == PARAM_PRISM_OSC1_PARAM2))
+    else if ((edit_index == 28U)
+            && ((id == PARAM_PRISM_OSC1_PARAM2) || (id == PARAM_PRISM_OSC2_PARAM2)))
     {
         uint8_t steps = (uint8_t)(1U + (raw >> 10));
         if (steps == 1U)
@@ -298,7 +300,8 @@ static void ui_page_template_tone_prism_format_enum(uint8_t edit_index,
                                                    char *out,
                                                    uint32_t out_len)
 {
-    if ((edit_index == 23U) && (id == PARAM_PRISM_OSC1_PARAM2))
+    if ((edit_index == 22U)
+            && ((id == PARAM_PRISM_OSC1_PARAM2) || (id == PARAM_PRISM_OSC2_PARAM2)))
     {
         uint8_t bank = (uint8_t)(((uint32_t)raw * 20U) >> 15);
         if (bank > 19U)
@@ -307,9 +310,10 @@ static void ui_page_template_tone_prism_format_enum(uint8_t edit_index,
         }
         (void)snprintf(out, out_len, "%u/20", (unsigned int)(bank + 1U));
     }
-    else if ((edit_index == 26U) && (id == PARAM_PRISM_OSC1_PARAM2))
+    else if ((edit_index == 25U)
+            && ((id == PARAM_PRISM_OSC1_PARAM2) || (id == PARAM_PRISM_OSC2_PARAM2)))
     {
-        uint8_t chord = (uint8_t)(raw >> 11);
+        uint8_t chord = (uint8_t)(((uint32_t)raw + 1024U) >> 11);
         if (chord > 16U)
         {
             chord = 16U;
