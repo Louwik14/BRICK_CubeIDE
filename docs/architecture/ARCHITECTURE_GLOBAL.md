@@ -14,13 +14,17 @@ Le code courant est l'autorite finale. Ce document est l'unique porte d'entree d
 - CONTROL valide l'etat logique final et ses budgets avant publication. AUDIO
   applique sans negociation; l'impossibilite d'appliquer une commande admise est
   un fatal source et non une erreur recuperable ou une commande depilee.
+- Un restore Pattern/Project publie une projection AUDIO fraiche des autorites
+  CONTROL finales. Project libere puis reconstruit toutes les installations;
+  Pattern ne remplace que les PROGRAM modifies et conserve les outputs vivants.
 - `STOP(output_id)` rend l'output musicalement mort dans CONTROL. AUDIO peut conserver une tail RELEASE et libere ou reutilise physiquement le slot sans ACK musical.
 - Pattern, Project et Patch utilisent exclusivement le codec CONTROL explicite version 4.
 
 ## Flux principaux
 
 ```text
-configuration CONTROL -> validation globale -> FIFO fonctionnelle -> AUDIO
+configuration CONTROL -> decision produit canonique -> contrat IPC structurel
+-> FIFO mecanique -> validation physique et application AUDIO
 SEQ/live -> resolution CONTROL -> START/STOP/RETRIGGER dates -> AUDIO
 capture TIM5 -> conversion audio -> file datee -> segmentation -> rendu
 credit de fenetre stream AUDIO -> I/O Storage tokenisee -> page AUDIO

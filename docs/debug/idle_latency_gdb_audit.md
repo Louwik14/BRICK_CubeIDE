@@ -108,12 +108,10 @@ permettent précisément de prouver ou exclure ces signatures.
   `head-tail` doit rester faible et revenir à zéro ; `overflow_count` et
   `invariant_failure_count` ne doivent pas progresser.
 - Snapshot FIFO : `g_audio_state_snapshot_depth` doit être 0 après boot.
-  `g_audio_prepared_state.count` peut rester élevé. Depuis `06975b963`, chaque
-  publication hors horizon appelle `audio_state_snapshot_control_absorb()` même
-  quand le snapshot n'est pas actif. Le scan est linéaire par commande et un
-  PROGRAM peut rescanner tout le snapshot. C'est un multiplicateur crédible
-  lors d'une rafale d'encodeur ou d'une publication parasite, mais pas une
-  source autonome de travail en idle strict.
+  `g_audio_prepared_state.count` reste nul hors restore. Une transaction
+  Pattern/Project repart d'un snapshot vide et absorbe uniquement sa projection
+  canonique pendant le restore. Elle ne collecte plus les publications live et
+  ne constitue donc plus une source de travail en idle strict.
 - `sample_stream_transport_worker_poll()` draine sans quantum la file release,
   mais sa capacité est 16 ; les mailboxes sont au nombre de 2.
 - NoteFx draine jusqu'à 31 commandes et 31 événements live ; live-rec peut en

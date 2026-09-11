@@ -5,7 +5,6 @@
 #include "IPC/live_clock_control.h"
 #include "App/live_parameter_audio_publication.h"
 #include "IPC/live_parameter_event.h"
-#include "Param/live_parameter_migration.h"
 
 typedef enum
 {
@@ -242,26 +241,24 @@ uint8_t param_global_control_restore(const param_global_control_state_t *state)
         canonical[GLOBAL_MODFX_MODEL] + 0.5f);
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
         .count = 0U
     };
     for (uint8_t i = 0U; i < (uint8_t)GLOBAL_CONTROL_VALUE_COUNT; ++i)
     {
         const param_global_slot_t slot = (param_global_slot_t)i;
         const param_id_t id = g_global_param_ids[i];
-        if (((live_parameter_is_audio_owned(id) == 0U)
-                    && (id != PARAM_MASTER_GAIN))) continue;
+        if (param_registry_track_value_is_audio_command(id, 0U) == 0U)
+            continue;
         float command_value = canonical[slot];
         if (param_registry_prepare_global_audio_command(
                 id, canonical[slot], modfx_model, &command_value) == 0U)
             return 0U;
-        bulk.item[bulk.count++] = (live_parameter_audio_bulk_item_t){
+        bulk.item[bulk.count++] = (live_parameter_audio_target_t){
             .parameter_id = (uint16_t)id,
             .scope = LIVE_PARAMETER_EVENT_SCOPE_GLOBAL,
             .track = 0U,
             .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-            .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                                | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+            .semantic = CONTROL_AUDIO_PARAM_BASE,
             .value = live_parameter_event_encode_float(command_value)
         };
     }

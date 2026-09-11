@@ -3,7 +3,6 @@
 #include "App/live_parameter_audio_publication.h"
 #include "IPC/live_parameter_event.h"
 #include "IPC/control_audio_fifo_layout.h"
-#include "Param/live_parameter_migration.h"
 #include "Param/param_registry.h"
 #include "Track/track_mute.h"
 #include "UI/ui_param.h"
@@ -58,7 +57,8 @@ uint8_t encoder_control_dispatcher_service(void)
         const uint8_t track = encoder_binding_track(binding);
         const uint8_t slot = encoder_binding_slot(binding);
         if ((parameter >= PARAM_COUNT)
-                || (live_parameter_is_audio_owned(parameter) == 0U))
+                || (param_registry_track_value_is_audio_command(
+                    parameter, track) == 0U))
         {
             continue;
         }
@@ -145,22 +145,17 @@ uint8_t encoder_control_dispatcher_service(void)
             continue;
         }
 
-        const live_parameter_audio_bulk_t bulk = {
-            .capture_tick = detent.capture_tick,
-            .source = LIVE_PARAMETER_EVENT_SOURCE_ENCODER,
-            .count = 1U,
-            .item = {{
-                .parameter_id = target.parameter_id,
-                .scope = target.scope,
-                .track = target.track,
-                .slot = target.slot,
-                .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                                    | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
-                .value = live_parameter_event_encode_float(command_value)
-            }}
+        const live_parameter_audio_target_t command_target = {
+            .parameter_id = target.parameter_id,
+            .scope = target.scope,
+            .track = target.track,
+            .slot = target.slot,
+            .semantic = CONTROL_AUDIO_PARAM_BASE,
+            .value = live_parameter_event_encode_float(command_value)
         };
 
-        if (live_parameter_audio_publication_submit_bulk(&bulk))
+        if (live_parameter_audio_publication_submit(
+                detent.capture_tick, &command_target))
         {
             const uint8_t installed = (track_scope != 0U)
                 ? param_registry_install_prepared_track_control_target(&prepared_track)

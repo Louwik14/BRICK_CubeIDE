@@ -42,13 +42,21 @@ void control_audio_transport_publish_changes(void)
             .opcode_kind=CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_TRANSPORT,
                 next.running ? CONTROL_AUDIO_TRANSPORT_START : CONTROL_AUDIO_TRANSPORT_STOP) };
     if (next.tempo != g_last.tempo)
-        commands[count++] = (control_audio_command_t){ .effective_sample_time=sample,
-            .value=next.tempo, .id=CONTROL_AUDIO_PARAM_TRANSPORT_TEMPO,
-            .opcode_kind=CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM,0U) };
+    {
+        if (control_rt_build_param_command(0U,
+                CONTROL_AUDIO_PARAM_TRANSPORT_TEMPO, next.tempo,
+                CONTROL_AUDIO_PARAM_KIND_BASE_GLOBAL, sample,
+                &commands[count]) == 0U) Error_Handler();
+        ++count;
+    }
     if (next.step_q16 != g_last.step_q16)
-        commands[count++] = (control_audio_command_t){ .effective_sample_time=sample,
-            .value=next.step_q16, .id=CONTROL_AUDIO_PARAM_TRANSPORT_STEP_Q16,
-            .opcode_kind=CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM,0U) };
+    {
+        if (control_rt_build_param_command(0U,
+                CONTROL_AUDIO_PARAM_TRANSPORT_STEP_Q16, next.step_q16,
+                CONTROL_AUDIO_PARAM_KIND_BASE_GLOBAL, sample,
+                &commands[count]) == 0U) Error_Handler();
+        ++count;
+    }
     if (count == 0U)
     {
         g_last=next;

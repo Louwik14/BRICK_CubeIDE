@@ -134,21 +134,16 @@ static uint8_t param_registry_submit_audio_value(param_id_t id,
                                                  float value,
                                                  uint8_t scope)
 {
-    live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
-        .count = 1U,
-        .item = {{
-            .parameter_id = (uint16_t)id,
-            .scope = scope,
-            .track = track,
-            .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-            .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                                | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
-            .value = live_parameter_event_encode_float(value)
-        }}
+    const live_parameter_audio_target_t target = {
+        .parameter_id = (uint16_t)id,
+        .scope = scope,
+        .track = track,
+        .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
+        .semantic = CONTROL_AUDIO_PARAM_BASE,
+        .value = live_parameter_event_encode_float(value)
     };
-    return live_parameter_audio_publication_submit_bulk(&bulk) ? 1U : 0U;
+    return live_parameter_audio_publication_submit(
+        live_clock_capture_tick(), &target) ? 1U : 0U;
 }
 
 uint8_t param_registry_publish_track_base_audio(param_id_t id,

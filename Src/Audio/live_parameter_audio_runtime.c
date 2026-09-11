@@ -64,22 +64,22 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
                                                  uint32_t value_bits,
                                                  uint8_t scope)
 {
-    const float decoded = live_parameter_event_decode_float((int32_t)value_bits);
-    if (parameter_id == CONTROL_AUDIO_PARAM_CLEAR_RUNTIME_TEMP)
+    if ((scope == CONTROL_AUDIO_PARAM_KIND_CLEAR_TEMP_TRACK)
+            && (parameter_id < PARAM_COUNT)
+            && (entity < BRICK_ENTITY_CAPACITY))
     {
-        uint16_t endpoint = 0U;
-        if ((entity >= BRICK_ENTITY_CAPACITY)
-                || (scope != LIVE_PARAMETER_EVENT_SCOPE_TRACK)
-                || (live_parameter_audio_runtime_exact_u16(
-                    decoded, &endpoint) == 0U)
-                || (endpoint >= PARAM_COUNT)) return 0U;
-        return param_audio_clear_track_temp((param_id_t)endpoint, entity);
+        const uint8_t applied = param_audio_clear_track_temp(
+            (param_id_t)parameter_id, entity);
+        return (applied != 0U)
+            ? audio_note_engine_adapter_project_track_configuration(entity)
+            : 0U;
     }
+    const float decoded = live_parameter_event_decode_float((int32_t)value_bits);
     if (parameter_id == CONTROL_AUDIO_CONFIG_POLY_VOICES)
     {
         uint8_t voices = 0U;
         if ((entity >= BRICK_ENTITY_CAPACITY)
-                || (scope != LIVE_PARAMETER_EVENT_SCOPE_TRACK)
+                || (scope != CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)
                 || (live_parameter_audio_runtime_exact_u8(
                     decoded, &voices) == 0U)) return 0U;
         track_audio_runtime_ctx_t ctx;
@@ -99,8 +99,8 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
             && (parameter_id <= CONTROL_AUDIO_MOD_SLEW_AMOUNT))
     {
         if ((entity >= BRICK_ENTITY_CAPACITY)
-                || (scope < LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_BASE)) return 0U;
-        const uint8_t index = (uint8_t)(scope - LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_BASE);
+                || (scope < CONTROL_AUDIO_PARAM_KIND_BASE_MATRIX_FIRST)) return 0U;
+        const uint8_t index = (uint8_t)(scope - CONTROL_AUDIO_PARAM_KIND_BASE_MATRIX_FIRST);
         uint8_t value_u8 = 0U;
         uint16_t value_u16 = 0U;
         switch (parameter_id)
@@ -131,8 +131,8 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
             && (parameter_id <= CONTROL_AUDIO_FX_SPATIAL_MODE))
     {
         if ((entity >= BRICK_ENTITY_CAPACITY)
-                || (scope < LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_BASE)) return 0U;
-        const uint8_t index=(uint8_t)(scope-LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_BASE);
+                || (scope < CONTROL_AUDIO_PARAM_KIND_BASE_MATRIX_FIRST)) return 0U;
+        const uint8_t index=(uint8_t)(scope-CONTROL_AUDIO_PARAM_KIND_BASE_MATRIX_FIRST);
         uint8_t typed_value=0U;
         if(live_parameter_audio_runtime_exact_u8(decoded,&typed_value)==0U)return 0U;
         if(parameter_id==CONTROL_AUDIO_FX_FILTER_POSITION)
@@ -145,22 +145,22 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
             entity,(audio_fx_slot_t)index,typed_value);
     }
     if (parameter_id >= PARAM_COUNT) return 0U;
-    if ((scope >= LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_BASE)
-            && (scope <= LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_LAST))
+    if ((scope >= CONTROL_AUDIO_PARAM_KIND_BASE_MATRIX_FIRST)
+            && (scope <= CONTROL_AUDIO_PARAM_KIND_BASE_MATRIX_LAST))
         return 0U;
-    if (scope == LIVE_PARAMETER_EVENT_SCOPE_GLOBAL)
+    if (param_spec_value_is_valid((param_id_t)parameter_id, decoded) == 0U)
+        return 0U;
+    if (scope == CONTROL_AUDIO_PARAM_KIND_BASE_GLOBAL)
     {
         if (parameter_id == PARAM_MASTER_GAIN)
             return audio_note_engine_adapter_set_master(decoded);
         return audio_global_runtime_apply(parameter_id, decoded);
     }
-    if (((scope != LIVE_PARAMETER_EVENT_SCOPE_TRACK)
-            && (scope != LIVE_PARAMETER_AUDIO_SCOPE_RUNTIME_TEMP))
+    if (((scope != CONTROL_AUDIO_PARAM_KIND_BASE_TRACK)
+            && (scope != CONTROL_AUDIO_PARAM_KIND_TEMP_TRACK))
             || (entity >= BRICK_ENTITY_CAPACITY))
         return 0U;
 
-    if (param_spec_value_is_valid((param_id_t)parameter_id, decoded) == 0U)
-        return 0U;
     const float value = decoded;
     if (parameter_id == PARAM_CFG_POLY_SPREAD)
     {
@@ -184,7 +184,7 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
     }
 
     uint8_t applied = 0U;
-    if (scope == LIVE_PARAMETER_AUDIO_SCOPE_RUNTIME_TEMP)
+    if (scope == CONTROL_AUDIO_PARAM_KIND_TEMP_TRACK)
         applied = param_audio_apply_track_temp(
             (param_id_t)parameter_id, entity, value);
     else
@@ -196,7 +196,7 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
         applied = param_audio_apply_track(&(const param_audio_value_t){
             .id = (param_id_t)parameter_id, .value = value }, entity);
     }
-    if ((applied != 0U) && (scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK))
+    if ((applied != 0U) && (scope == CONTROL_AUDIO_PARAM_KIND_BASE_TRACK))
     {
         audio_mod_matrix_base_update(entity, parameter_id, value);
         if (live_parameter_audio_runtime_changes_matrix_context(
@@ -205,5 +205,7 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
             audio_mod_matrix_rebuild_track(entity);
         }
     }
-    return applied;
+    if (applied != 0U)
+        return audio_note_engine_adapter_project_track_configuration(entity);
+    return 0U;
 }

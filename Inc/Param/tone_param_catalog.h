@@ -26,6 +26,24 @@
     X(PARAM_STACK_OSC3_TIMBRE) X(PARAM_STACK_OSC3_COLOR) \
     X(PARAM_STACK_OSC_DETUNE) X(PARAM_STACK_PHASE_RESET)
 
+#define TONE_PARAM_CATALOG_STACK_VISIBLE(X) \
+    X(PARAM_STACK_OSC1_LEVEL) X(PARAM_STACK_OSC2_LEVEL) \
+    X(PARAM_STACK_OSC3_LEVEL) X(PARAM_STACK_NOISE_LEVEL) \
+    X(PARAM_STACK_OSC1_MODEL) X(PARAM_STACK_OSC1_TUNE) \
+    X(PARAM_STACK_OSC2_MODEL) X(PARAM_STACK_OSC2_TUNE) \
+    X(PARAM_STACK_OSC3_MODEL) X(PARAM_STACK_OSC3_TUNE) \
+    X(PARAM_STACK_OSC3_TIMBRE) X(PARAM_STACK_OSC3_COLOR) \
+    X(PARAM_STACK_OSC_DETUNE) X(PARAM_STACK_PHASE_RESET)
+
+/* Parameters physically presented by the two current FM TONE surfaces.
+ * Operator parameters use their dedicated compact p-lock set. */
+#define TONE_PARAM_CATALOG_FM(X) \
+    X(PARAM_FM_ALGORITHM) X(PARAM_FM_ENV_ATTACK) X(PARAM_FM_ENV_DECAY) \
+    X(PARAM_FM_TRANSPOSE) \
+    X(PARAM_FM_PITCH_R1) X(PARAM_FM_PITCH_R2) X(PARAM_FM_PITCH_R3) \
+    X(PARAM_FM_PITCH_R4) X(PARAM_FM_PITCH_L1) X(PARAM_FM_PITCH_L2) \
+    X(PARAM_FM_PITCH_L3) X(PARAM_FM_PITCH_L4)
+
 #define TONE_PARAM_CATALOG_WAVE(X) \
     X(PARAM_WAVE_OSC1_POS) X(PARAM_WAVE_OSC1_START) X(PARAM_WAVE_OSC1_LEN) \
     X(PARAM_WAVE_OSC2_POS) X(PARAM_WAVE_OSC2_START) X(PARAM_WAVE_OSC2_LEN) \
@@ -79,6 +97,7 @@
 #endif
 TONE_PARAM_CATALOG_PRISM(TONE_PARAM_CATALOG_ASSERT)
 TONE_PARAM_CATALOG_STACK(TONE_PARAM_CATALOG_ASSERT)
+TONE_PARAM_CATALOG_FM(TONE_PARAM_CATALOG_ASSERT)
 TONE_PARAM_CATALOG_WAVE(TONE_PARAM_CATALOG_ASSERT)
 TONE_PARAM_CATALOG_TB303(TONE_PARAM_CATALOG_ASSERT)
 TONE_PARAM_CATALOG_RAM(TONE_PARAM_CATALOG_ASSERT)
@@ -158,4 +177,26 @@ static inline uint8_t tone_param_catalog_contains(track_runtime_type_t type,
             return 0U;
     }
 #undef TONE_PARAM_CATALOG_CASE
+}
+
+/* User-visible TONE surface, kept separate from the wider engine ownership
+ * catalogue so internal FM/Stack state remains routable by its backend. */
+static inline uint8_t tone_param_catalog_is_user_visible(
+    track_runtime_type_t type, param_id_t id)
+{
+#define TONE_PARAM_VISIBLE_CASE(param) case param:
+    if (type == TRACK_RUNTIME_TYPE_FM)
+    {
+        if ((id >= PARAM_FM_OPERATOR_FIRST)
+                && (id <= PARAM_FM_OPERATOR_LAST)) return 1U;
+        switch (id) { TONE_PARAM_CATALOG_FM(TONE_PARAM_VISIBLE_CASE)
+            return 1U; default: return 0U; }
+    }
+    if (type == TRACK_RUNTIME_TYPE_STACK)
+    {
+        switch (id) { TONE_PARAM_CATALOG_STACK_VISIBLE(TONE_PARAM_VISIBLE_CASE)
+            return 1U; default: return 0U; }
+    }
+#undef TONE_PARAM_VISIBLE_CASE
+    return tone_param_catalog_contains(type, id);
 }

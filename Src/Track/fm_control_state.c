@@ -132,12 +132,10 @@ static uint8_t fm_control_state_publish_value(
         if (count >= (uint16_t)(sizeof(commands) / sizeof(commands[0]))) return 0U;
         uint32_t bits;
         memcpy(&bits, &value, sizeof(bits));
-        commands[count++] = (control_audio_command_t){
-            .value = bits, .id = (uint16_t)id,
-            .entity = entity,
-            .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM,
-                LIVE_PARAMETER_EVENT_SCOPE_TRACK)
-        };
+        if (control_rt_build_param_command(entity, (uint16_t)id, bits,
+                CONTROL_AUDIO_PARAM_KIND_BASE_TRACK, 0U,
+                &commands[count]) == 0U) return 0U;
+        ++count;
     }
     for (param_id_t id = PARAM_FM_PLAY_VEL;
          id <= PARAM_FM_PLAY_PITCH_TIME; ++id)
@@ -147,12 +145,10 @@ static uint8_t fm_control_state_publish_value(
         if (count >= (uint16_t)(sizeof(commands) / sizeof(commands[0]))) return 0U;
         uint32_t bits;
         memcpy(&bits, &value, sizeof(bits));
-        commands[count++] = (control_audio_command_t){
-            .value = bits, .id = (uint16_t)id,
-            .entity = entity,
-            .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM,
-                LIVE_PARAMETER_EVENT_SCOPE_TRACK)
-        };
+        if (control_rt_build_param_command(entity, (uint16_t)id, bits,
+                CONTROL_AUDIO_PARAM_KIND_BASE_TRACK, 0U,
+                &commands[count]) == 0U) return 0U;
+        ++count;
     }
     for (param_id_t id = PARAM_FM_OPERATOR_FIRST;
          id <= PARAM_FM_OPERATOR_LAST; ++id)
@@ -162,12 +158,10 @@ static uint8_t fm_control_state_publish_value(
         if (count >= (uint16_t)(sizeof(commands) / sizeof(commands[0]))) return 0U;
         uint32_t bits;
         memcpy(&bits, &value, sizeof(bits));
-        commands[count++] = (control_audio_command_t){
-            .value = bits, .id = (uint16_t)id,
-            .entity = entity,
-            .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM,
-                LIVE_PARAMETER_EVENT_SCOPE_TRACK)
-        };
+        if (control_rt_build_param_command(entity, (uint16_t)id, bits,
+                CONTROL_AUDIO_PARAM_KIND_BASE_TRACK, 0U,
+                &commands[count]) == 0U) return 0U;
+        ++count;
     }
     const uint8_t *const base = (const uint8_t *)&state->base;
     const uint16_t words = (uint16_t)((sizeof(state->base) + 3U) / 4U);
@@ -178,12 +172,11 @@ static uint8_t fm_control_state_publish_value(
         uint16_t bytes = (uint16_t)(sizeof(state->base) - offset);
         if (bytes > 4U) bytes = 4U;
         memcpy(&bits, &base[offset], bytes);
-        commands[count++] = (control_audio_command_t){
-            .value = bits,
-            .id = (uint16_t)(CONTROL_AUDIO_FM_BASE_WORD_FIRST + word),
-            .entity = entity,
-            .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM, 0U)
-        };
+        if (control_rt_build_param_command(entity,
+                (uint16_t)(CONTROL_AUDIO_FM_BASE_WORD_FIRST + word), bits,
+                CONTROL_AUDIO_PARAM_KIND_BASE_GLOBAL, 0U,
+                &commands[count]) == 0U) return 0U;
+        ++count;
     }
     return control_rt_publish_batch_now(commands, count);
 }

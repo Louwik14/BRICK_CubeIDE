@@ -6,7 +6,8 @@
 #include "IPC/control_audio_command.h"
 
 void audio_state_snapshot_control_init(void);
-uint8_t audio_state_snapshot_control_begin(void);
+uint8_t audio_state_snapshot_control_begin(
+    control_audio_state_transition_kind_t transition);
 uint8_t audio_state_snapshot_control_commit(void);
 void audio_state_snapshot_control_abort(void);
 uint8_t audio_state_snapshot_control_active(void);

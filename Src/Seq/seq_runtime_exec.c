@@ -11,6 +11,7 @@
 
 #include "Seq/seq_runtime_exec.h"
 
+#include "stm32h7xx_hal.h"
 #include "Platform/memory_layout.h"
 #include "Seq/seq_boundary_engine.h"
 #include "Seq/seq_clock_bridge.h"
@@ -464,11 +465,21 @@ void seq_runtime_exec_increment_external_step_pulses_pending(void)
     }
 }
 
+static uint32_t seq_runtime_exec_take_external_step_pulses_pending(
+    uint32_t maximum)
+{
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    const uint32_t pending = g_seq_runtime_exec_external_step_pulses_pending;
+    const uint32_t taken = (pending > maximum) ? maximum : pending;
+    g_seq_runtime_exec_external_step_pulses_pending = pending - taken;
+    __set_PRIMASK(primask);
+    return taken;
+}
+
 uint32_t seq_runtime_exec_consume_external_step_pulses_pending(void)
 {
-    const uint32_t pending = g_seq_runtime_exec_external_step_pulses_pending;
-    g_seq_runtime_exec_external_step_pulses_pending = 0U;
-    return pending;
+    return seq_runtime_exec_take_external_step_pulses_pending(UINT32_MAX);
 }
 
 uint32_t seq_runtime_exec_external_step_pulses_pending(void)
@@ -635,7 +646,9 @@ void seq_runtime_exec_drive_external_steps_for_block(seq_runtime_state_t *state,
     }
 
     /* Progression guard: external cadence consumes pending pulses only inside the audio block domain. */
-    const uint32_t pending_steps = seq_runtime_exec_consume_external_step_pulses_pending();
+    const uint32_t pending_steps =
+        seq_runtime_exec_take_external_step_pulses_pending(
+            SEQ_RUNTIME_EXEC_MAX_EXTERNAL_PULSES_PER_BLOCK);
     if (pending_steps == 0U)
     {
         return;
@@ -643,10 +656,6 @@ void seq_runtime_exec_drive_external_steps_for_block(seq_runtime_state_t *state,
 
     const uint64_t pulse_sample_q16 = block_start_sample << 16;
     uint32_t pulses_to_process = pending_steps;
-    if (pulses_to_process > SEQ_RUNTIME_EXEC_MAX_EXTERNAL_PULSES_PER_BLOCK)
-    {
-        pulses_to_process = SEQ_RUNTIME_EXEC_MAX_EXTERNAL_PULSES_PER_BLOCK;
-    }
 
     while (pulses_to_process > 0U)
     {
@@ -660,44 +669,6 @@ void seq_runtime_exec_drive_external_steps_for_block(seq_runtime_state_t *state,
         pulses_to_process--;
     }
 
-    if (pending_steps > SEQ_RUNTIME_EXEC_MAX_EXTERNAL_PULSES_PER_BLOCK)
-    {
-        const uint32_t skipped = pending_steps
-                               - SEQ_RUNTIME_EXEC_MAX_EXTERNAL_PULSES_PER_BLOCK;
-        for (seq_track_id_t track = 0U; track < (seq_track_id_t)SEQ_LANE_CAPACITY; ++track)
-        {
-            uint8_t div = 1U;
-            uint8_t length = seq_model_get_track_playback_length(track);
-            (void)seq_runtime_get_track_div(track, &div);
-            if ((div != 1U) && (div != 2U) && (div != 4U) && (div != 8U))
-            {
-                div = 1U;
-            }
-            if (length == 0U)
-            {
-                length = 1U;
-            }
-
-            const uint32_t first_advance = (uint32_t)div
-                                           - (uint32_t)state->track_div_phase[track];
-            uint32_t advances = 0U;
-            if (skipped >= first_advance)
-            {
-                advances = 1U + ((skipped - first_advance) / (uint32_t)div);
-            }
-            track_loop_generation[track] +=
-                ((uint32_t)state->play_step[track] + advances) / (uint32_t)length;
-            state->track_div_phase[track] = (uint8_t)(((uint32_t)state->track_div_phase[track]
-                                                       + skipped) % (uint32_t)div);
-            state->track_swing_phase[track] ^= (uint8_t)(advances & 1U);
-            state->play_step[track] = (uint8_t)(((uint32_t)state->play_step[track]
-                                                 + (advances % (uint32_t)length))
-                                                % (uint32_t)length);
-            state->prev_step_valid[track] = 0U;
-        }
-        /* The skipped pulses advance logical phase only; no intermediate boundary is replayed. */
-        state->step_sample_q16 = pulse_sample_q16;
-    }
 }
 
 uint16_t seq_runtime_exec_collect_block_events(seq_runtime_state_t *state,

@@ -19,6 +19,7 @@
 #include "ui_template_page.h"
 #include "ui_core.h"
 #include "ui_track_catalog.h"
+#include "main.h"
 
 static ui_template_page_state_t g_ui_template_cfg_state;
 
@@ -27,7 +28,7 @@ static uint8_t ui_cfg_restore_polyphony_audio_fx(uint8_t track,uint8_t voices)
     polyphony_control_state_t polyphony,prepared_polyphony;
     audio_fx_control_state_t audio_fx,prepared_audio_fx;
     live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),
-        .source=LIVE_PARAMETER_EVENT_SOURCE_BULK};
+        .count=0U};
     if(!polyphony_control_capture(track,&polyphony)
             ||!audio_fx_control_state_capture(track,&audio_fx))return 0U;
     polyphony.voice_count=voices;
@@ -38,8 +39,11 @@ static uint8_t ui_cfg_restore_polyphony_audio_fx(uint8_t track,uint8_t voices)
             ||!audio_fx_control_state_bulk_add_delta(track,&audio_fx,
                 &prepared_audio_fx,&bulk)
             ||!live_parameter_audio_publication_submit_bulk(&bulk))return 0U;
-    return polyphony_control_install_prepared(track,&prepared_polyphony)
-        &&audio_fx_control_state_install_prepared(track,&prepared_audio_fx);
+    const uint8_t installed=(uint8_t)(
+        polyphony_control_install_prepared(track,&prepared_polyphony)
+        &&audio_fx_control_state_install_prepared(track,&prepared_audio_fx));
+    if(installed==0U)Error_Handler();
+    return installed;
 }
 
 static const ui_template_family_t g_ui_template_cfg_family = {

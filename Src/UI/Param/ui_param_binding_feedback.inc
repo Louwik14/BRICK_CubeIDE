@@ -21,7 +21,8 @@ void ui_param_publish_encoder_binding(uint8_t active_track, uint8_t shift_down)
                 scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK;
                 track = ui_param_resolve_effective_edit_track(parameter, active_track);
             }
-            if (live_parameter_is_audio_owned(parameter) != 0U)
+            if (param_registry_track_value_is_audio_command(
+                    parameter, track) != 0U)
             {
                 route = ENCODER_BINDING_ROUTE_AUDIO;
             }

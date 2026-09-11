@@ -111,7 +111,7 @@ uint8_t tone_program_control_restore(uint8_t track,const tone_program_control_t*
  if(track>=SEQ_LANE_CAPACITY||program==NULL||tone_program_control_validate(program,program->tag)==0U)return 0U;
  tone_program_control_t prepared=*program;
  live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),
-  .source=LIVE_PARAMETER_EVENT_SOURCE_BULK,.count=0U};
+  .count=0U};
  const uint8_t count=tone_param_codec_count(prepared.tag);
  for(uint8_t slot=0U;slot<count;++slot){param_id_t id;float*value;
   param_registry_prepared_value_t canonical;
@@ -120,11 +120,10 @@ uint8_t tone_program_control_restore(uint8_t track,const tone_program_control_t*
       ||!param_registry_prepare_value(id,*value,&canonical))return 0U;
   *value=canonical.value;
   if(param_registry_track_value_is_audio_command(id,track)==0U)continue;
-  bulk.item[bulk.count++]=(live_parameter_audio_bulk_item_t){
+  bulk.item[bulk.count++]=(live_parameter_audio_target_t){
    .parameter_id=(uint16_t)id,.scope=LIVE_PARAMETER_EVENT_SCOPE_TRACK,
    .track=track,.slot=LIVE_PARAMETER_EVENT_INVALID_INDEX,
-   .flags=(uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-       |LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+   .semantic=CONTROL_AUDIO_PARAM_BASE,
    .value=live_parameter_event_encode_float(*value)};}
  if((bulk.count!=0U)&&!live_parameter_audio_publication_submit_bulk(&bulk))return 0U;
  g_tone_program[track]=prepared;

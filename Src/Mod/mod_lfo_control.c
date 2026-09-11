@@ -196,7 +196,6 @@ uint8_t mod_lfo_v1_restore_track(uint8_t track,
     if (mod_lfo_v1_prepare_bank(state, &canonical) == 0U) return 0U;
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK
     };
     for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
     {
@@ -207,13 +206,12 @@ uint8_t mod_lfo_v1_restore_track(uint8_t track,
                 PARAM_LFO1_RATE + lfo * 4U + param);
             if (track_runtime_get_effective_param_status(owner, id)
                     != TRACK_RUNTIME_PARAM_ALLOWED) continue;
-            bulk.item[bulk.count++] = (live_parameter_audio_bulk_item_t){
+            bulk.item[bulk.count++] = (live_parameter_audio_target_t){
                 .parameter_id = (uint16_t)id,
                 .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
                 .track = owner,
                 .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-                .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                    | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+                .semantic = CONTROL_AUDIO_PARAM_BASE,
                 .value = live_parameter_event_encode_float(
                     values[param])
             };

@@ -87,6 +87,9 @@ uint8_t control_music_output_close_causal_sources(
     uint64_t due_sample);
 void control_music_output_set_multi(brick_entity_id_t entity_id,
                                     uint8_t is_multi);
+void control_music_output_bind_multi_instrument(brick_entity_id_t entity_id,
+                                                uint16_t instrument_id);
+void control_music_output_retire_multi_instrument(uint16_t instrument_id);
 uint8_t control_music_output_count(brick_entity_id_t entity_id);
 uint8_t control_music_output_panic_all(uint8_t send_transport_stop);
 uint8_t control_music_output_has_alive(void);

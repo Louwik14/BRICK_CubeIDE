@@ -6,6 +6,7 @@
 #include "Track/track_runtime.h"
 #include "Track/polyphony_control.h"
 #include "Sampler/brick6_sampler_multi_contract.h"
+#include "Sampler/multi_sample_config.h"
 #include "ControlRT/control_rt_publication.h"
 #include "IPC/control_music_publication.h"
 #include "IPC/control_audio_command.h"
@@ -42,6 +43,18 @@ static control_music_output_death_observer_t
 CONTROL_M4_SRAM2 static control_music_output_t
     g_control_music_outputs_staged[BRICK_ENTITY_CAPACITY][CONTROL_MUSIC_OUTPUTS_PER_ENTITY];
 static uint32_t g_control_music_output_age_staged;
+CONTROL_M4_SRAM2 static uint16_t
+    g_control_music_multi_instrument[BRICK_ENTITY_CAPACITY];
+
+typedef struct
+{
+    uint32_t output_id;
+    brick_entity_id_t entity_id;
+} control_music_output_death_t;
+
+SEQ_STATE_D2 static control_music_output_death_t
+    g_control_music_output_staged_death[CONTROL_MUSIC_ACTION_CAPACITY];
+static uint16_t g_control_music_output_staged_death_count;
 
 #define CONTROL_MUSIC_WINDOW_MAX_FRAMES 64U
 #define CONTROL_MUSIC_WINDOW_KIND_COUNT 3U
@@ -109,6 +122,11 @@ void control_music_output_init(void)
            sizeof(g_control_music_output_death_observer));
     g_control_music_output_age = 0U;
     g_control_music_output_age_staged = 0U;
+    g_control_music_output_staged_death_count = 0U;
+    for (brick_entity_id_t entity_id = 0U;
+         entity_id < BRICK_ENTITY_CAPACITY; ++entity_id)
+        g_control_music_multi_instrument[entity_id] =
+            MULTI_SAMPLE_POOL_INVALID_ID;
     g_control_music_window_first = 0U;
     g_control_music_window_frames = 0U;
     g_control_music_window_internal_limit = 0U;
@@ -144,6 +162,7 @@ uint8_t control_music_output_begin_window(uint64_t first_sample,
     memcpy(g_control_music_outputs_staged, g_control_music_outputs,
            sizeof(g_control_music_outputs));
     g_control_music_output_age_staged = g_control_music_output_age;
+    g_control_music_output_staged_death_count = 0U;
     g_control_music_window_active = 1U;
     return 1U;
 }
@@ -174,6 +193,7 @@ void control_music_output_abort_window(void)
     control_music_output_reset_window_buckets();
     g_control_music_window_active = 0U;
     g_control_music_window_prepared = 0U;
+    g_control_music_output_staged_death_count = 0U;
 }
 
 static uint8_t control_music_output_stage(const control_music_action_t *action)
@@ -341,33 +361,22 @@ uint8_t control_music_output_finalize_window(void)
 {
     if (g_control_music_window_prepared == 0U)
         return 0U;
-    for (brick_entity_id_t entity_id = 0U;
-         entity_id < BRICK_ENTITY_CAPACITY; ++entity_id)
-        for (uint8_t i = 0U; i < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++i)
-        {
-            const control_music_output_t *const old =
-                &g_control_music_outputs[entity_id][i];
-            uint8_t survives = 0U;
-            if (old->alive != 0U)
-                for (uint8_t j = 0U; j < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++j)
-                    if ((g_control_music_outputs_staged[entity_id][j].alive != 0U)
-                            && (g_control_music_outputs_staged[entity_id][j].output_id
-                                == old->output_id))
-                        survives = 1U;
-            if ((old->alive != 0U) && (survives == 0U))
-                for (uint8_t observer = 0U;
-                     observer < CONTROL_MUSIC_OUTPUT_DEATH_OBSERVER_CAPACITY;
-                     ++observer)
-                    if (g_control_music_output_death_observer[observer] != NULL)
-                        g_control_music_output_death_observer[observer](
-                            entity_id, old->output_id);
-        }
+    for (uint16_t death = 0U;
+         death < g_control_music_output_staged_death_count; ++death)
+        for (uint8_t observer = 0U;
+             observer < CONTROL_MUSIC_OUTPUT_DEATH_OBSERVER_CAPACITY;
+             ++observer)
+            if (g_control_music_output_death_observer[observer] != NULL)
+                g_control_music_output_death_observer[observer](
+                    g_control_music_output_staged_death[death].entity_id,
+                    g_control_music_output_staged_death[death].output_id);
     memcpy(g_control_music_outputs, g_control_music_outputs_staged,
            sizeof(g_control_music_outputs));
     g_control_music_output_age = g_control_music_output_age_staged;
     control_rt_advance_first_unpublished_sample(
         g_control_music_window_first + g_control_music_window_frames);
     g_control_music_window_prepared = 0U;
+    g_control_music_output_staged_death_count = 0U;
     return 1U;
 }
 
@@ -382,7 +391,22 @@ static void control_music_output_mark_dead(brick_entity_id_t entity_id,
     output->alive = 0U;
     if ((g_control_music_window_active != 0U)
             || (g_control_music_window_prepared != 0U))
+    {
+        if (g_control_music_output_staged_death_count
+                >= CONTROL_MUSIC_ACTION_CAPACITY)
+            BRICK_FATAL_CONTEXT("MUSIC_OUTPUT_DEATH_CAPACITY_EXCEEDED",
+                              BRICK_FATAL_MUSIC_STAGING_CAPACITY, entity_id,
+                              output_id,
+                              g_control_music_output_staged_death_count + 1U,
+                              CONTROL_MUSIC_ACTION_CAPACITY);
+        g_control_music_output_staged_death[
+            g_control_music_output_staged_death_count++] =
+                (control_music_output_death_t){
+                    .output_id = output_id,
+                    .entity_id = entity_id
+                };
         return;
+    }
     for (uint8_t i = 0U;
          i < CONTROL_MUSIC_OUTPUT_DEATH_OBSERVER_CAPACITY; ++i)
         if (g_control_music_output_death_observer[i] != NULL)
@@ -712,6 +736,15 @@ uint8_t control_music_output_submit(const control_music_action_t *action,
         return 1U;
     }
 
+    if ((control_music_output_is_multi(entity_id) != 0U)
+        && (g_control_music_multi_instrument[entity_id]
+            == MULTI_SAMPLE_POOL_INVALID_ID))
+    {
+        /* Retirement closes CONTROL admission without invalidating already
+         * published commands or the logical NOTE ledger. */
+        return 0U;
+    }
+
     if (existing >= 0)
     {
         control_music_action_t retrigger = *action;
@@ -848,10 +881,34 @@ void control_music_output_set_multi(brick_entity_id_t entity_id,
 {
     if (entity_id >= BRICK_ENTITY_CAPACITY)
         return;
+    if (is_multi == 0U)
+        g_control_music_multi_instrument[entity_id] =
+            MULTI_SAMPLE_POOL_INVALID_ID;
     for (uint8_t i = 0U; i < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++i)
         if (control_music_output_ledger()[entity_id][i].alive != 0U)
             control_music_output_ledger()[entity_id][i].multi =
                 (is_multi != 0U) ? 1U : 0U;
+}
+
+void control_music_output_bind_multi_instrument(brick_entity_id_t entity_id,
+                                                uint16_t instrument_id)
+{
+    if (entity_id >= BRICK_ENTITY_CAPACITY)
+        return;
+    g_control_music_multi_instrument[entity_id] =
+        (instrument_id < MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
+            ? instrument_id : MULTI_SAMPLE_POOL_INVALID_ID;
+}
+
+void control_music_output_retire_multi_instrument(uint16_t instrument_id)
+{
+    if (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)
+        return;
+    for (brick_entity_id_t entity_id = 0U;
+         entity_id < BRICK_ENTITY_CAPACITY; ++entity_id)
+        if (g_control_music_multi_instrument[entity_id] == instrument_id)
+            g_control_music_multi_instrument[entity_id] =
+                MULTI_SAMPLE_POOL_INVALID_ID;
 }
 
 uint8_t control_music_output_count(brick_entity_id_t entity_id)

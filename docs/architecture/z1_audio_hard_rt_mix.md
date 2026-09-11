@@ -22,6 +22,13 @@ Le rebind des outputs tenus ne masque aucun echec: l'absence volontaire de
 renderer est un succes silencieux, tandis qu'un renderer promis mais impossible
 declenche le fatal source du consumer.
 
+La configuration moteur reste canonique sur l'instance primaire de la track.
+L'adapter AUDIO porte le geste commun de projection vers tous les slots physiques:
+une application PARAM live, une croissance de polyphonie et l'initialisation
+d'une voix passent par cette meme projection propre a Prism, Stack, Wave, FM ou
+TB303. Phase, gate, enveloppes, position et historique DSP restent possedes par
+chaque voix; Drum et TB303 conservent leur polyphonie effective de un.
+
 Drum reste monophonique mais son backend couvre les 16 slots physiques du pool
 synth; toute admission valide possede ainsi une instance representable, y
 compris lorsqu'elle recoit un slot 8..15.

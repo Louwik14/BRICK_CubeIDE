@@ -26,6 +26,33 @@ typedef enum
 } control_audio_transport_kind_t;
 typedef enum { CONTROL_AUDIO_RECORD_STOP = 0U, CONTROL_AUDIO_RECORD_START } control_audio_record_kind_t;
 typedef enum { CONTROL_AUDIO_PANIC_GLOBAL = 0U, CONTROL_AUDIO_PANIC_ENTITY } control_audio_panic_kind_t;
+typedef enum
+{
+    CONTROL_AUDIO_PARAM_BASE = 0U,
+    CONTROL_AUDIO_PARAM_TEMP,
+    CONTROL_AUDIO_PARAM_CLEAR_TEMP
+} control_audio_param_semantic_t;
+
+/* PARAM kinds encode both the target and its explicit base/override semantic. */
+#define CONTROL_AUDIO_PARAM_KIND_BASE_GLOBAL       0U
+#define CONTROL_AUDIO_PARAM_KIND_BASE_TRACK        1U
+#define CONTROL_AUDIO_PARAM_KIND_BASE_MATRIX_FIRST 2U
+#define CONTROL_AUDIO_PARAM_KIND_BASE_MATRIX_LAST  9U
+#define CONTROL_AUDIO_PARAM_KIND_TEMP_TRACK         10U
+#define CONTROL_AUDIO_PARAM_KIND_CLEAR_TEMP_TRACK   11U
+typedef enum
+{
+    CONTROL_AUDIO_STATE_PATTERN = 0U,
+    CONTROL_AUDIO_STATE_PROJECT
+} control_audio_state_transition_kind_t;
+
+typedef enum
+{
+    CONTROL_AUDIO_COMMAND_DURABLE_STATE = 0U,
+    CONTROL_AUDIO_COMMAND_TRANSIENT_ACTION,
+    CONTROL_AUDIO_COMMAND_RESOURCE_LIFECYCLE,
+    CONTROL_AUDIO_COMMAND_REQUEST
+} control_audio_command_state_class_t;
 
 /* Reserved NOTE output identity for the one-shot monitor click.  It bypasses
  * the musical output ledger and is consumed before NOTE engine dispatch. */
@@ -84,6 +111,20 @@ static inline control_audio_program_descriptor_t control_audio_program_unpack(
     return descriptor;
 }
 
+/* Pure wire-format assertion.  The limits are ABI catalog limits supplied by
+ * each endpoint; no mutable CONTROL or AUDIO state participates. */
+static inline uint8_t control_audio_program_descriptor_is_structural(
+    const control_audio_program_descriptor_t *descriptor,
+    uint8_t engine_count, uint8_t family_max, uint8_t type_count)
+{
+    return (uint8_t)((descriptor != 0)
+        && (descriptor->engine < engine_count)
+        && (descriptor->family <= family_max)
+        && (descriptor->type < type_count)
+        && ((descriptor->flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER) == 0U
+            || (descriptor->flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD) == 0U));
+}
+
 typedef struct
 {
     uint64_t effective_sample_time;
@@ -125,7 +166,6 @@ _Static_assert(sizeof(control_audio_command_t) == 16U,
 #define CONTROL_AUDIO_FX_FILTER_POSITION             0xFFD8U
 #define CONTROL_AUDIO_FX_ORDER                       0xFFD9U
 #define CONTROL_AUDIO_FX_SPATIAL_MODE                0xFFDAU
-#define CONTROL_AUDIO_PARAM_CLEAR_RUNTIME_TEMP       0xFFDBU
 #define CONTROL_AUDIO_SAMPLER_ASSET                  0xFFDFU
 #define CONTROL_AUDIO_LOOPER_PLAY_AUTO               0xFFCFU
 #define CONTROL_AUDIO_PARAM_TRANSPORT_TEMPO        0xFFDCU
@@ -144,5 +184,30 @@ _Static_assert(CONTROL_AUDIO_PARAM_MULTI_RESOURCE_STOP + 1U
 _Static_assert(CONTROL_AUDIO_PARAM_RAM_RESOURCE_STOP + 1U
                    == CONTROL_AUDIO_PARAM_WAVE_RESOURCE_STOP,
                "resource-stop ABI ids must remain consecutive");
+
+/* Durable/transient is a property of the wire command, not of PARAM identity.
+ * This structural classification carries no CONTROL or AUDIO runtime policy. */
+static inline control_audio_command_state_class_t
+control_audio_command_state_class(const control_audio_command_t *command)
+{
+    if (command == 0) return CONTROL_AUDIO_COMMAND_TRANSIENT_ACTION;
+    const uint8_t opcode = CONTROL_AUDIO_COMMAND_OPCODE(command);
+    if (opcode == CONTROL_AUDIO_COMMAND_PROGRAM)
+        return CONTROL_AUDIO_COMMAND_DURABLE_STATE;
+    if (opcode != CONTROL_AUDIO_COMMAND_PARAM)
+        return CONTROL_AUDIO_COMMAND_TRANSIENT_ACTION;
+    if ((command->id == CONTROL_AUDIO_PARAM_AUDIO_WAVEFORM_REQUEST)
+            || (command->id == CONTROL_AUDIO_PARAM_SYNTH_WAVEFORM_REQUEST))
+        return CONTROL_AUDIO_COMMAND_REQUEST;
+    if ((command->id >= CONTROL_AUDIO_PARAM_MULTI_RESOURCE_STOP)
+            && (command->id <= CONTROL_AUDIO_PARAM_WAVE_RESOURCE_STOP))
+        return CONTROL_AUDIO_COMMAND_RESOURCE_LIFECYCLE;
+    if ((CONTROL_AUDIO_COMMAND_KIND(command)
+                == CONTROL_AUDIO_PARAM_KIND_TEMP_TRACK)
+            || (CONTROL_AUDIO_COMMAND_KIND(command)
+                == CONTROL_AUDIO_PARAM_KIND_CLEAR_TEMP_TRACK))
+        return CONTROL_AUDIO_COMMAND_TRANSIENT_ACTION;
+    return CONTROL_AUDIO_COMMAND_DURABLE_STATE;
+}
 
 #endif

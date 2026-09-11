@@ -12,6 +12,13 @@ Autorites d'ecriture:
 - configuration LFO: `mod_lfo_v1_set_track_param`;
 - override AUDIO temporaire: chemin RT/audio dedie.
 
+Les classifications CONTROL ont chacune une autorite: `track_runtime_get_param_rule`
+porte domaine/ressource, `param_registry_is_plockable` porte la decision produit
+p-lock, et `param_registry_track_value_is_audio_command` derive le routage AUDIO
+du domaine et du contexte MIDI. L'ancienne allowlist AUDIO parallele n'existe plus.
+L'applicabilite TEMP et la restauration `BASE`/`CLEAR_TEMP` sont derivees par le
+registre; elles ne sont ni des proprietes de persistance ni des copies UI/Seq.
+
 Le routeur Param ne stocke aucune valeur. Keyboard, configuration Seq, PLAY et
 Transport/Metronome ne sont pas des Param: leurs UI et leur persistance parlent
 directement a `keyboard_runtime`, `seq_model`/`seq_runtime`/`seq_edit` et
@@ -28,7 +35,12 @@ d'interaction et lit l'autorite a la demande.
 
 `param_desc_t::value_policy` possede conversions canonique/affichee, pas normal/SHIFT et politique d'automation. Les p-locks continus utilisent toute la plage `uint16_t`; les discrets utilisent leur pas. La persistance stocke la valeur CONTROL typee, notamment FLOAT32, jamais une representation UI.
 
-Un p-lock AUDIO est resolu par CONTROL en valeur finale puis transporte comme PARAM date; la restauration de base suit le meme chemin. La FIFO unique est dimensionnee pour les 1024 ecritures d'une boundary maximale plus l'horizon NOTE et les commandes de controle. Les p-locks MIDI FX restent integralement CONTROL: leur override canonique est applique au runtime Note FX avant la NOTE de la meme boundary. AUDIO ne connait ni la provenance, ni la notion de p-lock. NOTE, VELOCITY, LENGTH et MICROTIMING sont des champs PLAY structurels et non des p-locks generiques.
+Un p-lock AUDIO est resolu par CONTROL en valeur finale puis transporte comme PARAM `TEMP` date. La restauration emet `BASE` pour Tone/Filter/FX, ou `CLEAR_TEMP` pour LFO/ENV3 afin de retirer leur override explicite. Le timestamp reste independant de cette semantique. La FIFO unique est dimensionnee pour les 1024 ecritures d'une boundary maximale plus l'horizon NOTE et les commandes de controle. Les p-locks MIDI FX restent integralement CONTROL: leur override canonique est applique au runtime Note FX avant la NOTE de la meme boundary. AUDIO ne connait ni la provenance, ni la notion de p-lock. NOTE, VELOCITY, LENGTH et MICROTIMING sont des champs PLAY structurels et non des p-locks generiques.
+
+LFO conserve sa validite temporaire par champ. ENV3 conserve volontairement sa
+validite temporaire globale actuelle; `CLEAR_TEMP` d'un champ retire donc
+l'override ENV3 complet. Une commande `BASE` ne retire jamais implicitement un
+override LFO/ENV3 actif.
 
 ## Modulation
 
@@ -97,6 +109,12 @@ Les runtimes moteur et voix ne conservent que leurs projections natives ou
 leurs etats DSP.
 
 Les slots Audio FX A/B possedent MODEL/P1/P2/P3. MODEL reste un endpoint musical stable de slot; un changement conserve P1/P2/P3 et ne publie que MODEL. Filter position, ordre et modes spatiaux appartiennent a `audio_fx_control_state` et utilisent des commandes typees. Les restores preparent, publient, puis installent directement l'etat final, sans passer par les defaults du modele. Seuls P1/P2/P3 sont p-lockables. En GROUP, les models appartiennent au master et les children n'exposent que LEVEL A/B.
+
+La liste MOD parcourt le catalogue PARAM canonique puis conserve les parametres
+a la fois affiches, p-lockables et applicables au moteur/modele courant. Les
+sends utilisent un mapping explicite `SEND1 -> 0`, `SEND2 -> 1`, `SEND3 -> 2`;
+leurs IDs ne sont pas supposes contigus. Les slots FX restent adresses P1/P2/P3
+en interne, mais leurs labels MOD viennent du catalogue du modele A/B courant.
 # FM parameter authority
 
 Public `PARAM_FM_*` queries and commits address the semantic FM CONTROL state

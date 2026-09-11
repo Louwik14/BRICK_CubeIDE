@@ -1,8 +1,6 @@
 #include "IPC/control_audio_fifo_control.h"
 
-#include <stddef.h>
 #include "stm32h7xx.h"
-#include "Track/entity_topology.h"
 
 #define FIFO g_control_audio_fifo_layout
 
@@ -35,18 +33,6 @@ uint8_t control_audio_fifo_control_head_consumed(uint32_t head)
     return ((int32_t)(tail - head) >= 0) ? 1U : 0U;
 }
 
-static uint8_t command_valid(const control_audio_command_t *command)
-{
-    const uint8_t opcode = command ? CONTROL_AUDIO_COMMAND_OPCODE(command) : UINT8_MAX;
-    if ((command == NULL)
-            || (opcode > CONTROL_AUDIO_COMMAND_AUDIO_STATE_COMMIT)) return 0U;
-    return ((opcode == CONTROL_AUDIO_COMMAND_TRANSPORT)
-            || (opcode == CONTROL_AUDIO_COMMAND_RECORD)
-            || (opcode == CONTROL_AUDIO_COMMAND_PANIC)
-            || (opcode == CONTROL_AUDIO_COMMAND_AUDIO_STATE_COMMIT)
-            || (command->entity < BRICK_ENTITY_CAPACITY)) ? 1U : 0U;
-}
-
 uint8_t control_audio_fifo_batch_begin(control_audio_fifo_batch_writer_t *writer,
                                        uint16_t count)
 {
@@ -68,7 +54,7 @@ uint8_t control_audio_fifo_batch_append(control_audio_fifo_batch_writer_t *write
                                         const control_audio_command_t *command)
 {
     if ((writer == NULL) || (writer->active == 0U)
-            || (writer->written >= writer->count) || (command_valid(command) == 0U)) return 0U;
+            || (writer->written >= writer->count) || (command == NULL)) return 0U;
     if (command->effective_sample_time < writer->floor)
     {
         /* Publication order is an invariant.  Never rewrite a producer's
@@ -102,6 +88,3 @@ uint8_t control_audio_fifo_publish_batch(const control_audio_command_t *commands
         { control_audio_fifo_batch_abort(&writer); return 0U; }
     return control_audio_fifo_batch_commit(&writer);
 }
-
-uint8_t control_audio_fifo_publish(const control_audio_command_t *command)
-{ return control_audio_fifo_publish_batch(command, 1U); }

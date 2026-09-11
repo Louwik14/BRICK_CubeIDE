@@ -930,7 +930,8 @@ void project_product_load_service(void)
             PROJECT_PRODUCT_FATAL("PROJECT_ASSET_PENDING_AT_COMMIT",
                                   PROJECT_FATAL_PENDING_AT_COMMIT);
         }
-        uint8_t ok = audio_state_snapshot_control_begin();
+        uint8_t ok = audio_state_snapshot_control_begin(
+            CONTROL_AUDIO_STATE_PROJECT);
         if(ok)ok=(persistent_pattern_control_apply(&restore->working_pattern,0U)==PERSIST_CODEC_OK)?1U:0U;
         if(ok)ok=project_control_apply_macros(&restore->macros);
         if(ok)ok=audio_state_snapshot_control_commit();

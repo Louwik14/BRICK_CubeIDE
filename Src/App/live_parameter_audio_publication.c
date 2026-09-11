@@ -7,6 +7,7 @@
 #include "IPC/live_clock_control.h"
 #include "IPC/live_parameter_event.h"
 #include "Param/param_value_policy.h"
+#include "Param/param_registry.h"
 #include "Track/track_runtime.h"
 #include "Track/tone_param_codec.h"
 #include "Track/tone_program_control.h"
@@ -21,31 +22,58 @@ static bool live_parameter_audio_publish_failed(void)
     return false;
 }
 
-static uint8_t live_parameter_audio_make_command(
-    uint16_t parameter_id, uint8_t scope,
-    uint8_t track, uint8_t slot, uint16_t flags, int32_t raw_value,
+static uint8_t live_parameter_audio_build_param_command(
+    const live_parameter_audio_target_t *target,
+    uint64_t effective_sample_time,
     control_audio_command_t *out_command)
 {
-    if ((out_command == NULL)
-            || ((parameter_id >= PARAM_COUNT)
-                && (parameter_id < CONTROL_AUDIO_CONFIG_POLY_VOICES)))
+    if ((target == NULL) || (out_command == NULL)
+            || ((target->parameter_id >= PARAM_COUNT)
+                && (target->parameter_id < CONTROL_AUDIO_CONFIG_POLY_VOICES))
+            || (target->track >= BRICK_ENTITY_CAPACITY))
         return 0U;
-    float value = ((flags & LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS) != 0U)
-        ? live_parameter_event_decode_float(raw_value) : (float)raw_value;
-    uint8_t command_scope = scope;
-    if (scope == LIVE_PARAMETER_EVENT_SCOPE_SLOT)
+    uint8_t kind = 0U;
+    if (target->semantic == CONTROL_AUDIO_PARAM_BASE)
     {
-        if (slot >= 8U) return 0U;
-        command_scope = (uint8_t)(LIVE_PARAMETER_AUDIO_SCOPE_MATRIX_SLOT_BASE + slot);
+        if (target->scope == LIVE_PARAMETER_EVENT_SCOPE_GLOBAL)
+        {
+            if ((target->track != 0U)
+                    || (target->slot != LIVE_PARAMETER_EVENT_INVALID_INDEX))
+                return 0U;
+            kind = CONTROL_AUDIO_PARAM_KIND_BASE_GLOBAL;
+        }
+        else if (target->scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK)
+        {
+            if (target->slot != LIVE_PARAMETER_EVENT_INVALID_INDEX) return 0U;
+            kind = CONTROL_AUDIO_PARAM_KIND_BASE_TRACK;
+        }
+        else if (target->scope == LIVE_PARAMETER_EVENT_SCOPE_SLOT)
+        {
+            if (target->slot >= 8U) return 0U;
+            kind = (uint8_t)(CONTROL_AUDIO_PARAM_KIND_BASE_MATRIX_FIRST
+                + target->slot);
+        }
+        else return 0U;
     }
-    *out_command = (control_audio_command_t){
-        .value = (uint32_t)live_parameter_event_encode_float(value),
-        .id = parameter_id,
-        .entity = (track < BRICK_ENTITY_CAPACITY) ? track : 0U,
-        .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(
-            CONTROL_AUDIO_COMMAND_PARAM, command_scope & 0x1FU)
-    };
-    return 1U;
+    else if ((target->semantic == CONTROL_AUDIO_PARAM_TEMP)
+            || (target->semantic == CONTROL_AUDIO_PARAM_CLEAR_TEMP))
+    {
+        if ((target->scope != LIVE_PARAMETER_EVENT_SCOPE_TRACK)
+                || (target->slot != LIVE_PARAMETER_EVENT_INVALID_INDEX)
+                || (target->parameter_id >= PARAM_COUNT)
+                || (param_registry_track_temp_is_applicable(
+                    (param_id_t)target->parameter_id, target->track) == 0U)
+                || ((target->semantic == CONTROL_AUDIO_PARAM_CLEAR_TEMP)
+                    && (param_registry_temp_is_clearable(
+                        (param_id_t)target->parameter_id) == 0U))) return 0U;
+        kind = (target->semantic == CONTROL_AUDIO_PARAM_TEMP)
+            ? CONTROL_AUDIO_PARAM_KIND_TEMP_TRACK
+            : CONTROL_AUDIO_PARAM_KIND_CLEAR_TEMP_TRACK;
+    }
+    else return 0U;
+    return control_rt_build_param_command(target->track,
+        target->parameter_id, (uint32_t)target->value, kind,
+        effective_sample_time, out_command);
 }
 
 bool live_parameter_audio_publication_submit_tone_program(
@@ -55,7 +83,6 @@ bool live_parameter_audio_publication_submit_tone_program(
         return live_parameter_audio_publish_failed();
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
         .count = 0U
     };
     const uint8_t count = tone_param_codec_count(type);
@@ -67,13 +94,12 @@ bool live_parameter_audio_publication_submit_tone_program(
                 || (tone_program_control_get(track, id, &value) == 0U)
                 || (param_registry_track_value_is_audio_command(id, track) == 0U))
             continue;
-        bulk.item[bulk.count++] = (live_parameter_audio_bulk_item_t){
+        bulk.item[bulk.count++] = (live_parameter_audio_target_t){
             .parameter_id = id,
             .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
             .track = track,
             .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-            .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                                | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+            .semantic = CONTROL_AUDIO_PARAM_BASE,
             .value = live_parameter_event_encode_float(value)
         };
     }
@@ -93,28 +119,28 @@ bool live_parameter_audio_publication_submit_bulk(
             || (bulk->count > LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS))
         return live_parameter_audio_publish_failed();
     control_audio_command_t commands[LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS];
+    uint64_t sample_time = 0U;
+    if (control_rt_capture_tick_to_sample(bulk->capture_tick,
+            seq_runtime_exec_get_sample_timeline(), &sample_time) == 0U)
+        return live_parameter_audio_publish_failed();
     for (uint8_t i = 0U; i < bulk->count; ++i)
     {
-        const live_parameter_audio_bulk_item_t *const item = &bulk->item[i];
+        const live_parameter_audio_target_t *const item = &bulk->item[i];
         for (uint8_t previous = 0U; previous < i; ++previous)
         {
-            const live_parameter_audio_bulk_item_t *const prior = &bulk->item[previous];
+            const live_parameter_audio_target_t *const prior = &bulk->item[previous];
             if ((prior->parameter_id == item->parameter_id)
                     && (prior->scope == item->scope)
                     && (prior->track == item->track)
                     && (prior->slot == item->slot)
-                    && ((item->parameter_id != CONTROL_AUDIO_PARAM_CLEAR_RUNTIME_TEMP)
-                        || (prior->value == item->value)))
+                    && (prior->semantic == item->semantic))
                 return live_parameter_audio_publish_failed();
         }
-        if (live_parameter_audio_make_command(
-                item->parameter_id, item->scope, item->track,
-                item->slot, item->flags, item->value, &commands[i]) == 0U)
+        if (live_parameter_audio_build_param_command(
+                item, sample_time, &commands[i]) == 0U)
             return live_parameter_audio_publish_failed();
     }
-    if (control_rt_publish_batch_captured(
-        commands, bulk->count, bulk->capture_tick,
-        seq_runtime_exec_get_sample_timeline()) == 0U)
+    if (control_rt_publish_batch_scheduled(commands, bulk->count) == 0U)
     {
         /* A valid CONTROL batch is dimensioned before publication.  A refusal
          * is an invariant failure, never a deferred parameter update. */
@@ -124,46 +150,44 @@ bool live_parameter_audio_publication_submit_bulk(
     return true;
 }
 
-bool live_parameter_audio_publication_submit_poly_pair(
-    uint32_t capture_tick, uint8_t track, float voices, float spread)
+bool live_parameter_audio_publication_submit(
+    uint32_t capture_tick, const live_parameter_audio_target_t *target)
 {
-    if (track >= SEQ_LANE_CAPACITY)
+    uint64_t sample_time = 0U;
+    control_audio_command_t command;
+    if ((target == NULL) || (control_rt_capture_tick_to_sample(capture_tick,
+            seq_runtime_exec_get_sample_timeline(), &sample_time) == 0U)
+            || (live_parameter_audio_build_param_command(
+                target, sample_time, &command) == 0U))
         return live_parameter_audio_publish_failed();
-    live_parameter_audio_bulk_t bulk = {
-        .capture_tick = capture_tick,
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
-        .count = 2U
-    };
-    bulk.item[0] = (live_parameter_audio_bulk_item_t){
-        .parameter_id = CONTROL_AUDIO_CONFIG_POLY_VOICES,
-        .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
-        .track = track,
-        .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-        .flags = LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
-        .value = live_parameter_event_encode_float(voices)
-    };
-    bulk.item[1] = (live_parameter_audio_bulk_item_t){
-        .parameter_id = PARAM_CFG_POLY_SPREAD,
-        .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
-        .track = track,
-        .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-        .flags = LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
-        .value = live_parameter_event_encode_float(spread)
-    };
-    return live_parameter_audio_publication_submit_bulk(&bulk);
+    if (control_rt_publish_batch_scheduled(&command, 1U) == 0U)
+    {
+        Error_Handler();
+        return false;
+    }
+    return true;
 }
 
 bool live_parameter_audio_publication_submit_dated(
     uint64_t effective_sample_time, uint16_t parameter_id, uint8_t track,
-    uint16_t value16)
+    uint16_t value16, control_audio_param_semantic_t semantic)
 {
     if ((parameter_id >= PARAM_COUNT) || (track >= SEQ_LANE_CAPACITY))
         return live_parameter_audio_publish_failed();
     float final_value = param_value_policy_decode_u16(
         &param_registry[parameter_id], value16);
-    if (control_rt_publish_param(track, parameter_id,
-        (uint32_t)live_parameter_event_encode_float(final_value),
-        LIVE_PARAMETER_AUDIO_SCOPE_RUNTIME_TEMP, effective_sample_time) == 0U)
+    const live_parameter_audio_target_t target = {
+        .parameter_id = parameter_id,
+        .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
+        .track = track,
+        .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
+        .semantic = (uint8_t)semantic,
+        .value = live_parameter_event_encode_float(final_value)
+    };
+    control_audio_command_t command;
+    if ((live_parameter_audio_build_param_command(
+            &target, effective_sample_time, &command) == 0U)
+            || (control_rt_publish_batch_scheduled(&command, 1U) == 0U))
     {
         Error_Handler();
         return false;

@@ -2,6 +2,7 @@
 
 #include "Track/track_state.h"
 #include "Track/track_runtime.h"
+#include "Track/control_music_output.h"
 #include "Sampler/audio_wave_table_projection_control.h"
 #include "IPC/control_audio_command.h"
 #include "ControlRT/control_rt_publication.h"
@@ -184,7 +185,7 @@ static void project_control_fill_default_macros(persist_control_macros_t *out)
 }
 void project_control_reset_macros(void){project_control_fill_default_macros(&g_macros);}
 uint8_t project_control_get_default_macros(persist_control_macros_t *out){if(out==NULL)return 0U;project_control_fill_default_macros(out);return 1U;}
-void project_control_reset_asset_banks(void){memset(g_sample_bank,0,sizeof(g_sample_bank));memset(g_wavetable_bank,0,sizeof(g_wavetable_bank));memset(g_multi_bank,0,sizeof(g_multi_bank));memset(g_unavailable_assets,0,sizeof(g_unavailable_assets));g_unavailable_asset_count=0U;memset(g_track_assets,0,sizeof(g_track_assets));memset(g_track_asset_availability,0,sizeof(g_track_asset_availability));}
+void project_control_reset_asset_banks(void){memset(g_sample_bank,0,sizeof(g_sample_bank));memset(g_wavetable_bank,0,sizeof(g_wavetable_bank));memset(g_multi_bank,0,sizeof(g_multi_bank));memset(g_unavailable_assets,0,sizeof(g_unavailable_assets));g_unavailable_asset_count=0U;memset(g_track_assets,0,sizeof(g_track_assets));memset(g_track_asset_availability,0,sizeof(g_track_asset_availability));for(uint8_t entity=0U;entity<BRICK_ENTITY_CAPACITY;++entity)control_music_output_bind_multi_instrument(entity,MULTI_SAMPLE_POOL_INVALID_ID);}
 void project_control_init(void){project_control_reset_macros();project_control_reset_asset_banks();memset(&g_ram_load,0,sizeof(g_ram_load));memset(&g_wavetable_load,0,sizeof(g_wavetable_load));audio_wave_table_projection_init();}
 project_control_hall_mode_t project_control_get_hall_mode(void){return(g_macros.hall_switch_key==PERSIST_MACRO_HALL_SWITCH)?PROJECT_CONTROL_HALL_SWITCH:PROJECT_CONTROL_HALL_SCENE;}
 uint8_t project_control_set_hall_mode(project_control_hall_mode_t mode){if(mode>PROJECT_CONTROL_HALL_SWITCH)return 0U;g_macros.hall_switch_key=(mode==PROJECT_CONTROL_HALL_SWITCH)?PERSIST_MACRO_HALL_SWITCH:PERSIST_MACRO_HALL_SCENE;return 1U;}
@@ -532,8 +533,12 @@ static uint8_t project_control_publish_sampler_asset(uint8_t entity,
             || ((resolved.descriptor.type == TRACK_RUNTIME_TYPE_RAM)
                 && (kind != PERSIST_ASSET_SAMPLE_RAM))) return 0U;
     }
-    return control_rt_publish_param_now(entity, CONTROL_AUDIO_SAMPLER_ASSET,
-                                         runtime, 0U);
+    if (control_rt_publish_param_now(entity, CONTROL_AUDIO_SAMPLER_ASSET,
+                                     runtime, 0U) == 0U) return 0U;
+    control_music_output_bind_multi_instrument(entity,
+        (resolved.descriptor.type == TRACK_RUNTIME_TYPE_MULTI)
+            ? runtime : MULTI_SAMPLE_POOL_INVALID_ID);
+    return 1U;
 }
 
 uint8_t project_control_track_asset_get(uint8_t entity,
@@ -612,6 +617,9 @@ static uint8_t project_control_track_asset_mark_unavailable(
         : audio_wave_table_projection_clear_track(entity,
             (uint8_t)(role - PROJECT_CONTROL_ASSET_WAVE_OSC1));
     if (silent == 0U) return 0U;
+    if (role == PROJECT_CONTROL_ASSET_SAMPLER)
+        control_music_output_bind_multi_instrument(
+            entity, MULTI_SAMPLE_POOL_INVALID_ID);
     g_track_assets[entity][role] = *asset;
     g_track_asset_availability[entity][role] =
         PROJECT_CONTROL_ASSET_UNAVAILABLE;
@@ -687,6 +695,8 @@ uint8_t project_control_track_assets_clear(uint8_t entity)
     memset(g_track_assets[entity], 0, sizeof(g_track_assets[entity]));
     memset(g_track_asset_availability[entity], 0,
            sizeof(g_track_asset_availability[entity]));
+    control_music_output_bind_multi_instrument(
+        entity, MULTI_SAMPLE_POOL_INVALID_ID);
     return 1U;
 }
 

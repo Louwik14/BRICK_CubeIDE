@@ -272,7 +272,7 @@ static uint8_t ui_param_set_track_value(uint8_t encoder,
                                         float value,
                                         uint8_t track)
 {
-    if (live_parameter_is_audio_owned(param) != 0U)
+    if (param_registry_track_value_is_audio_command(param, track) != 0U)
     {
         const param_desc_t *const desc = &param_registry[param];
         float edit_min = desc->min;

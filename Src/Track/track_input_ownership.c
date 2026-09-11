@@ -93,13 +93,11 @@ uint8_t track_input_ownership_apply_bulk(
          input < ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT; ++input)
     {
         if (next_owners[input] == g_external_owner[input]) continue;
-        commands[command_count++] = (control_audio_command_t){
-            .value = next_owners[input],
-            .id = CONTROL_AUDIO_PARAM_INPUT_OWNER,
-            .entity = input,
-            .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(
-                CONTROL_AUDIO_COMMAND_PARAM, 0U)
-        };
+        if (control_rt_build_param_command(input,
+                CONTROL_AUDIO_PARAM_INPUT_OWNER, next_owners[input],
+                CONTROL_AUDIO_PARAM_KIND_BASE_GLOBAL, 0U,
+                &commands[command_count]) == 0U) return 0U;
+        ++command_count;
     }
     if ((command_count != 0U)
             && (control_rt_publish_batch_now(commands, command_count) == 0U))

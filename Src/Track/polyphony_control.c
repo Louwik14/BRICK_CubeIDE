@@ -9,6 +9,7 @@
 #include "Track/track_runtime.h"
 #include "Param/param_registry.h"
 #include "IPC/live_parameter_event.h"
+#include "main.h"
 #include <math.h>
 #include <stddef.h>
 
@@ -85,17 +86,17 @@ uint8_t polyphony_control_bulk_add(uint8_t track,
             !=TRACK_RUNTIME_PARAM_ALLOWED)return 1U;
     if(!track_runtime_validate_polyphony_budget(track,prepared->voice_count))return 0U;
     if(!control_music_output_trim_to_limit(track,prepared->voice_count))return 0U;
-    bulk->item[bulk->count++]=(live_parameter_audio_bulk_item_t){
+    bulk->item[bulk->count++]=(live_parameter_audio_target_t){
         .parameter_id=CONTROL_AUDIO_CONFIG_POLY_VOICES,
         .scope=LIVE_PARAMETER_EVENT_SCOPE_TRACK,.track=track,
         .slot=LIVE_PARAMETER_EVENT_INVALID_INDEX,
-        .flags=LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
+        .semantic=CONTROL_AUDIO_PARAM_BASE,
         .value=live_parameter_event_encode_float((float)prepared->voice_count)};
-    bulk->item[bulk->count++]=(live_parameter_audio_bulk_item_t){
+    bulk->item[bulk->count++]=(live_parameter_audio_target_t){
         .parameter_id=PARAM_CFG_POLY_SPREAD,
         .scope=LIVE_PARAMETER_EVENT_SCOPE_TRACK,.track=track,
         .slot=LIVE_PARAMETER_EVENT_INVALID_INDEX,
-        .flags=LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
+        .semantic=CONTROL_AUDIO_PARAM_BASE,
         .value=live_parameter_event_encode_float(prepared->spread)};
     return 1U;
 }
@@ -112,4 +113,4 @@ uint8_t polyphony_control_install_prepared(uint8_t track,
     return 1U;
 }
 uint8_t polyphony_control_restore(uint8_t track,const polyphony_control_state_t*state)
-{polyphony_control_state_t prepared;live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),.source=LIVE_PARAMETER_EVENT_SOURCE_BULK};if(track>=BRICK_ENTITY_CAPACITY||!polyphony_control_prepare(state,&prepared)||!polyphony_control_bulk_add(track,&prepared,&bulk)||((bulk.count!=0U)&&!live_parameter_audio_publication_submit_bulk(&bulk)))return 0U;return polyphony_control_install_prepared(track,&prepared);}
+{polyphony_control_state_t prepared;live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick()};if(track>=BRICK_ENTITY_CAPACITY||!polyphony_control_prepare(state,&prepared)||!polyphony_control_bulk_add(track,&prepared,&bulk)||((bulk.count!=0U)&&!live_parameter_audio_publication_submit_bulk(&bulk)))return 0U;const uint8_t installed=polyphony_control_install_prepared(track,&prepared);if(installed==0U)Error_Handler();return installed;}

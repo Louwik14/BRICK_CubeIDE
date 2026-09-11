@@ -5,6 +5,46 @@ uint8_t param_registry_is_lfo_param(param_id_t id)
     return param_lfo_map(id, &lfo_index, &lfo_param);
 }
 
+uint8_t param_registry_is_plockable(param_id_t id)
+{
+    if (id >= PARAM_COUNT) return 0U;
+    if ((id >= PARAM_FM_OPERATOR_FIRST) && (id <= PARAM_FM_OPERATOR_LAST))
+        return 1U;
+
+    switch (id)
+    {
+        case PARAM_SAMPLER_SLICE_COUNT:
+        case PARAM_AUDIO_FX_MODEL:
+        case PARAM_AUDIO_FX_B_MODEL:
+        case PARAM_LOOPER_STRETCH:
+        case PARAM_LOOPER_PITCH:
+        case PARAM_LOOPER_GRAIN:
+        case PARAM_FM_TRANSPOSE:
+        case PARAM_FM_PITCH_R1:
+        case PARAM_FM_PITCH_R2:
+        case PARAM_FM_PITCH_R3:
+        case PARAM_FM_PITCH_R4:
+        case PARAM_FM_PITCH_L1:
+        case PARAM_FM_PITCH_L2:
+        case PARAM_FM_PITCH_L3:
+        case PARAM_FM_PITCH_L4:
+            return 0U;
+        default:
+            break;
+    }
+
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
+        return (uint8_t)((id == PARAM_MIX_LEVEL) || (id == PARAM_MIX_PAN)
+            || (id == PARAM_MIX_SEND1) || (id == PARAM_MIX_SEND2)
+            || (id == PARAM_MIX_SEND3));
+    return (uint8_t)((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
+        || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+        || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD)
+        || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIDI_FX)
+        || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX));
+}
+
 uint8_t param_registry_track_value_is_audio_command(param_id_t id,
                                                     uint8_t track)
 {
@@ -14,13 +54,34 @@ uint8_t param_registry_track_value_is_audio_command(param_id_t id,
         && (param_backend_track_supports_midi_tone_ctx(
                 track_runtime_get_ctx(track)) != 0U));
     return (uint8_t)(
-        (live_parameter_is_audio_owned(id) != 0U)
-        || (id == PARAM_EXT_GATE)
+        (id == PARAM_EXT_GATE)
         || (id == PARAM_CFG_POLY_SPREAD)
+        || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_GLOBAL)
         || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
         || ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
             && (midi_tone == 0U))
-        || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX));
+        || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
+        || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX));
+}
+
+uint8_t param_registry_track_temp_is_applicable(param_id_t id, uint8_t track)
+{
+    if ((id >= PARAM_COUNT) || (track >= SEQ_LANE_CAPACITY)) return 0U;
+    if (param_registry_is_lfo_param(id) != 0U) return 1U;
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+    if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_ENV)
+            && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+            && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX)
+            && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX))
+        return 0U;
+    return param_registry_track_value_is_audio_command(id, track);
+}
+
+uint8_t param_registry_temp_is_clearable(param_id_t id)
+{
+    return (uint8_t)((id < PARAM_COUNT)
+        && ((param_registry_is_lfo_param(id) != 0U)
+            || ((id >= PARAM_ENV3_ATTACK) && (id <= PARAM_ENV3_RELEASE))));
 }
 
 uint8_t param_registry_install_prepared_track_control_target(
@@ -91,7 +152,10 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                 id, track, target.canonical_value,
                 LIVE_PARAMETER_EVENT_SCOPE_TRACK) == 0U)
             return 0U;
-        return param_registry_install_prepared_track_control_target(&target);
+        const uint8_t installed =
+            param_registry_install_prepared_track_control_target(&target);
+        if (installed == 0U) Error_Handler();
+        return installed;
     }
 
     param_registry_prepared_value_t prepared;
@@ -130,8 +194,10 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
                         id, owner, canonical,
                         LIVE_PARAMETER_EVENT_SCOPE_TRACK) == 0U))
                 return 0U;
-            return mod_lfo_v1_install_prepared_track_param(
+            const uint8_t installed = mod_lfo_v1_install_prepared_track_param(
                 owner, lfo_index, lfo_param, canonical);
+            if (installed == 0U) Error_Handler();
+            return installed;
         }
     }
 
@@ -216,7 +282,8 @@ uint8_t param_registry_install_prepared_global_control_target(
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-/* Command surface: commit to the resolved CONTROL owner, then publish AUDIO. */
+/* Durable command surface: prepare, publish AUDIO, then deterministically
+ * install the exact prepared value in its CONTROL owner. */
 uint8_t param_registry_commit_global(param_id_t id, float value)
 {
     if ((id >= PARAM_COUNT) || (param_id_is_reserved(id) != 0U))
@@ -232,8 +299,7 @@ uint8_t param_registry_commit_global(param_id_t id, float value)
     if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_GLOBAL)
             || (rule.status != TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)) return 0U;
 
-    if ((live_parameter_is_audio_owned(id) != 0U)
-            || (id == PARAM_MASTER_GAIN))
+    if (param_registry_track_value_is_audio_command(id, 0U) != 0U)
     {
         float model_value;
         if (id == PARAM_MODFX_MODEL)
@@ -251,7 +317,9 @@ uint8_t param_registry_commit_global(param_id_t id, float value)
         {
             return 0U;
         }
-        return param_global_control_set(id, canonical);
+        const uint8_t installed = param_global_control_set(id, canonical);
+        if (installed == 0U) Error_Handler();
+        return installed;
     }
 
     if (param_global_control_set(id, canonical) == 0U) return 0U;

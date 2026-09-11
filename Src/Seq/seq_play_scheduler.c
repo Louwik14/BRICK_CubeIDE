@@ -18,7 +18,6 @@
 #include "ControlRT/control_rt_publication.h"
 #include "Track/track_mute.h"
 #include "Track/control_music_output.h"
-#include "Track/polyphony_control.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include "param_registry.h"
 #include "Track/tone_program_control.h"
@@ -37,10 +36,11 @@
 #define SEQ_PLAY_SCHEDULER_SOURCE_CAPACITY \
     (SEQ_LANE_CAPACITY * SEQ_PLAY_MAX_CAPACITY * 3U)
 #define SEQ_PLAY_SCHEDULER_ACTIVE_OUTPUT_CAPACITY \
-    (SEQ_LANE_CAPACITY * SEQ_PLAY_MAX_CAPACITY)
+    SEQ_PRODUCT_MAX_ACTIVE_SOURCES
 #define SEQ_PLAY_SCHEDULER_IMMINENT_CAPACITY 512U
 #define SEQ_PLAY_SCHEDULER_HORIZON_FRAMES 64U
 #define SEQ_PLAY_SCHEDULER_PRIORITY_COUNT 3U
+#define SEQ_PLAY_SCHEDULER_ROLL_GRID_UNITS 60U
 
 _Static_assert(SEQ_PLAY_SCHEDULER_SOURCE_CAPACITY
                    >= SEQ_PRODUCT_MAX_ACTIVE_SOURCES,
@@ -96,6 +96,7 @@ typedef struct
     uint8_t active;
     uint8_t swing_phase;
     uint8_t trace_sample_logged;
+    uint64_t emitted_grid_mask;
     uint32_t generation;
 } seq_play_scheduler_source_t;
 
@@ -395,6 +396,15 @@ static uint64_t seq_play_scheduler_resolve_first_on_sample(
 
     const uint64_t early = (uint64_t)(-effective_microtiming_samples);
     return (early < swung_sample) ? (swung_sample - early) : 0U;
+}
+
+static uint8_t seq_play_scheduler_roll_grid_point(uint16_t divisor,
+                                                  uint16_t occurrence)
+{
+    if (divisor == 0U)
+        return 0U;
+    return (uint8_t)(((uint32_t)occurrence
+        * (16U * SEQ_PLAY_SCHEDULER_ROLL_GRID_UNITS)) / divisor);
 }
 
 static void seq_play_scheduler_deactivate_source_at(uint16_t active_position)
@@ -987,33 +997,24 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                     > block_start_sample)
                 ? source->committed_until_sample : block_start_sample;
 
+            uint16_t occurrence = 0U;
             for (uint64_t offset_q16 = 0U;
                  offset_q16 < source->step_span_q16;
-                 offset_q16 += interval_q16)
+                 offset_q16 += interval_q16, ++occurrence)
             {
+                const uint8_t grid_point =
+                    seq_play_scheduler_roll_grid_point(divisor, occurrence);
+                const uint64_t grid_bit = UINT64_C(1) << grid_point;
+                if ((source->emitted_grid_mask & grid_bit) != 0U)
+                    continue;
                 uint64_t on_sample = first_on
                     + ((offset_q16 + 0x8000ULL) >> 16);
                 if (on_sample < commit_floor)
                 {
-                    /* A boundary may be discovered after CONTROL had to catch
-                     * its publication cursor up to AUDIO.  Its first occurrence
-                     * has never been published and must remain an immediate
-                     * occurrence, not disappear behind the commit floor. */
-                    if ((source->committed_until_sample == 0U)
-                            && (offset_q16 == 0U))
-                        on_sample = commit_floor;
-                    else
-                    {
-                        if ((offset_q16 == 0U)
-                                && (seq_note_trace_target(
-                                    source->source_track,
-                                    source->source_step) != 0U))
-                            seq_note_trace_record(
-                                SEQ_NOTE_TRACE_SKIP_COMMIT_FLOOR,
-                                source->source_track, source->source_step,
-                                on_sample, commit_floor, 0U, source_index);
-                        continue;
-                    }
+                    /* Lookahead observation is not publication.  A grid point
+                     * which has never materialized remains due even when
+                     * CONTROL has advanced beyond its nominal timestamp. */
+                    on_sample = commit_floor;
                 }
                 if (on_sample >= block_end_sample)
                     continue;
@@ -1035,115 +1036,36 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                                       SEQ_PLAY_SCHEDULER_IMMINENT_CAPACITY);
                 }
 
-                uint8_t active_count = 0U;
                 int16_t free_index = -1;
-                int16_t oldest_index = -1;
-                uint64_t oldest_start = UINT64_MAX;
-                const track_runtime_ctx_t *const ctx =
-                    track_runtime_get_ctx(source->target_track);
-                uint8_t voice_limit = 1U;
-                if ((ctx != NULL)
-                        && ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
-                            || ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-                                && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_MULTI))))
+                for (uint16_t i = 0U;
+                     i < SEQ_PLAY_SCHEDULER_ACTIVE_OUTPUT_CAPACITY; ++i)
                 {
-                    float configured = 1.0f;
-                    configured = (float)polyphony_control_get_voice_count(
-                        source->target_track);
-                    voice_limit = (configured >= 1.0f) ? (uint8_t)configured : 1U;
-                    if (voice_limit > SEQ_PLAY_MAX_CAPACITY)
-                        voice_limit = SEQ_PLAY_MAX_CAPACITY;
-                }
-                const uint16_t track_output_begin =
-                    (uint16_t)source->target_track * SEQ_PLAY_MAX_CAPACITY;
-                const uint16_t track_output_end =
-                    track_output_begin + SEQ_PLAY_MAX_CAPACITY;
-                for (uint16_t i = track_output_begin;
-                     i < track_output_end; ++i)
-                {
-                    seq_play_active_occurrence_t *const active =
-                        &g_seq_play_active_occurrence[i];
-                    if (active->active == 0U)
+                    if (g_seq_play_active_occurrence[i].active == 0U)
                     {
-                        if (free_index < 0) free_index = (int16_t)i;
-                        continue;
-                    }
-                    if (active->track == source->target_track)
-                    {
-                        ++active_count;
-                        if (active->start_sample < oldest_start)
-                        {
-                            oldest_start = active->start_sample;
-                            oldest_index = (int16_t)i;
-                        }
+                        free_index = (int16_t)i;
+                        break;
                     }
                 }
-                int16_t active_index = free_index;
-                if (active_count >= voice_limit)
-                    active_index = oldest_index;
-                if (active_index < 0)
+                if (free_index < 0)
                 {
                     if (seq_note_trace_target(source->source_track,
                                               source->source_step) != 0U)
                         seq_note_trace_record(
                             SEQ_NOTE_TRACE_REJECT_SCHED_CAPACITY,
                             source->source_track, source->source_step,
-                            on_sample, active_count, 0U, voice_limit);
+                            on_sample,
+                            SEQ_PLAY_SCHEDULER_ACTIVE_OUTPUT_CAPACITY,
+                            0U, SEQ_PLAY_SCHEDULER_ACTIVE_OUTPUT_CAPACITY);
                     BRICK_FATAL_CONTEXT("SEQ_VOICE_ALLOCATION_CAPACITY_EXCEEDED",
                                       BRICK_FATAL_SEQ_OCCURRENCE_CAPACITY,
                                       source->target_track,
                                       source->source_step,
-                                      (uint32_t)active_count + 1U,
-                                      voice_limit);
+                                      SEQ_PLAY_SCHEDULER_ACTIVE_OUTPUT_CAPACITY
+                                          + 1U,
+                                      SEQ_PLAY_SCHEDULER_ACTIVE_OUTPUT_CAPACITY);
                 }
                 seq_play_active_occurrence_t *const active =
-                    &g_seq_play_active_occurrence[(uint16_t)active_index];
-                const uint32_t replaced_output_id =
-                    (active->active != 0U) ? active->output_id : 0U;
-                if (replaced_output_id != 0U)
-                {
-                    uint8_t victim_off_present = 0U;
-                    uint64_t victim_off_sample = on_sample;
-                    for (uint16_t event_index = 0U;
-                         event_index < g_seq_play_imminent_count;
-                         ++event_index)
-                    {
-                        seq_play_scheduler_evt_t *const pending =
-                            &g_seq_play_imminent[event_index];
-                        if ((pending->type
-                                != (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF)
-                                || (pending->event_token
-                                    != replaced_output_id))
-                            continue;
-                        if (pending->due_sample_time > on_sample)
-                            pending->due_sample_time = on_sample;
-                        victim_off_sample = pending->due_sample_time;
-                        victim_off_present = 1U;
-                        break;
-                    }
-                    if (victim_off_present == 0U)
-                    {
-                        g_seq_play_imminent[g_seq_play_imminent_count++] =
-                            (seq_play_scheduler_evt_t){
-                                .due_sample_time = on_sample,
-                                .track = active->track,
-                                .note = active->note,
-                                .velocity = 0U,
-                                .type = (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF,
-                                .generation = active->generation,
-                                .track_generation =
-                                    (uint8_t)active->track_generation,
-                                .event_token = replaced_output_id
-                            };
-                    }
-                    if (seq_note_trace_target(source->source_track,
-                                              source->source_step) != 0U)
-                        seq_note_trace_record(
-                            SEQ_NOTE_TRACE_VICTIM_OFF_GENERATED,
-                            source->source_track, source->source_step,
-                            victim_off_sample, active->deadline_sample,
-                            replaced_output_id, 0U);
-                }
+                    &g_seq_play_active_occurrence[(uint16_t)free_index];
                 const uint32_t output_id = seq_play_scheduler_alloc_event_token();
                 *active = (seq_play_active_occurrence_t){
                     .active = 1U,
@@ -1168,12 +1090,10 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                                                 source->source_step,
                                                 output_id);
                     seq_note_trace_record(
-                        (replaced_output_id != 0U)
-                            ? SEQ_NOTE_TRACE_ACTIVE_REPLACED
-                            : SEQ_NOTE_TRACE_ACTIVE_CREATED,
+                        SEQ_NOTE_TRACE_ACTIVE_CREATED,
                         source->source_track, source->source_step,
                         on_sample, active->deadline_sample,
-                        output_id, replaced_output_id);
+                        output_id, 0U);
                 }
                 g_seq_play_imminent[g_seq_play_imminent_count++] =
                     (seq_play_scheduler_evt_t){
@@ -1186,6 +1106,7 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                         .track_generation = source->track_generation,
                         .event_token = output_id
                     };
+                source->emitted_grid_mask |= grid_bit;
             }
             source->committed_until_sample = block_end_sample;
             const uint64_t source_end = first_on

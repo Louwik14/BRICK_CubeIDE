@@ -117,6 +117,9 @@ typedef struct
 void track_runtime_init(void);
 void track_runtime_rebuild_track(uint8_t track);
 void track_runtime_rebuild_all(void);
+uint8_t track_runtime_project_audio_state_all(void);
+uint8_t track_runtime_audio_projection_param_is_current(uint8_t entity,
+                                                        uint16_t parameter_id);
 /*
  * Revision guards:
  * - track_runtime_get_revision / track_runtime_get_track_revision are coherence markers only.

@@ -32,7 +32,7 @@
 #include "IPC/live_clock_control.h"
 #include "App/live_parameter_audio_publication.h"
 #include "IPC/live_parameter_event.h"
-#include "Param/live_parameter_migration.h"
+#include "main.h"
 #include "NoteFx/note_fx_state.h"
 #include "NoteFx/note_fx_pipeline.h"
 #include "param_registry.h"
@@ -494,13 +494,12 @@ static uint8_t ui_core_clipboard_bulk_add(live_parameter_audio_bulk_t *bulk,
         return 0U;
     else
         command_value = next.track.canonical_value;
-    live_parameter_audio_bulk_item_t *const item = &bulk->item[bulk->count++];
+    live_parameter_audio_target_t *const item = &bulk->item[bulk->count++];
     item->parameter_id = (uint16_t)id;
     item->scope = scope;
     item->track = event_track;
     item->slot = LIVE_PARAMETER_EVENT_INVALID_INDEX;
-    item->flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                             | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS);
+    item->semantic = CONTROL_AUDIO_PARAM_BASE;
     item->value = live_parameter_event_encode_float(command_value);
     prepared[(*prepared_count)++] = next;
     return 1U;
@@ -516,7 +515,11 @@ static uint8_t ui_core_clipboard_bulk_accept_control_values(
             ? param_registry_install_prepared_global_control_target(
                 prepared[i].global_id, prepared[i].global_value)
             : param_registry_install_prepared_track_control_target(&prepared[i].track);
-        if (ok == 0U) return 0U;
+        if (ok == 0U)
+        {
+            Error_Handler();
+            return 0U;
+        }
     }
     return 1U;
 }
@@ -548,7 +551,6 @@ static uint8_t ui_core_clipboard_clear_param_list_to_min(uint8_t track,
 
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
         .count = 0U
     };
     ui_clipboard_prepared_control_t prepared[UI_ENSEMBLE_CLIPBOARD_CAPACITY];
@@ -575,7 +577,7 @@ static uint8_t ui_core_clipboard_clear_param_list_to_min(uint8_t track,
             if (id < PARAM_COUNT)
             {
                 const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
-                if (live_parameter_is_audio_owned(id) != 0U)
+                if (param_registry_track_value_is_audio_command(id, track) != 0U)
                 {
                     if (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
                     {
@@ -1058,7 +1060,7 @@ static uint8_t ui_track_clipboard_restore_payload(
     polyphony_control_state_t prepared_polyphony;
     audio_fx_control_state_t prepared_audio_fx;
     live_parameter_audio_bulk_t owner_bulk={.capture_tick=live_clock_capture_tick(),
-        .source=LIVE_PARAMETER_EVENT_SOURCE_BULK,.count=0U};
+        .count=0U};
     track_runtime_resolved_track_t resolved;
     if ((track_runtime_resolve_track(target, &resolved) == 0U)
             || !polyphony_control_prepare(&payload->polyphony,&prepared_polyphony)
@@ -1075,10 +1077,15 @@ static uint8_t ui_track_clipboard_restore_payload(
             || ((resolved.has_filter_target != 0U)
                 && (param_filter_control_restore(target, &payload->filter) == 0U))
             || (vca_control_state_restore(target, &payload->vca) == 0U)
-            || !live_parameter_audio_publication_submit_bulk(&owner_bulk)
-            || !polyphony_control_install_prepared(target,&prepared_polyphony)
-            || !audio_fx_control_state_install_prepared(target,&prepared_audio_fx)
-            || (mixer_control_state_restore(target, &payload->mixer) == 0U)
+            || !live_parameter_audio_publication_submit_bulk(&owner_bulk))
+        return 0U;
+    if (!polyphony_control_install_prepared(target,&prepared_polyphony)
+            || !audio_fx_control_state_install_prepared(target,&prepared_audio_fx))
+    {
+        Error_Handler();
+        return 0U;
+    }
+    if ((mixer_control_state_restore(target, &payload->mixer) == 0U)
             || (note_fx_state_restore_track(target, &payload->note_fx) == 0U)
             || (note_fx_pipeline_configure_track(target) == 0U)
             || (ui_track_clipboard_restore_modulation(source, target, payload) == 0U)
@@ -1323,7 +1330,6 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
     uint8_t common = 0U;
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
         .count = 0U
     };
     ui_clipboard_prepared_control_t prepared[UI_ENSEMBLE_CLIPBOARD_CAPACITY];
@@ -1376,7 +1382,7 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
             }
 
             ++common;
-            if (live_parameter_is_audio_owned(target) != 0U)
+            if (param_registry_track_value_is_audio_command(target, track) != 0U)
             {
                 const track_runtime_param_rule_t rule = track_runtime_get_param_rule(target);
                 if (rule.status == TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)
@@ -1418,7 +1424,8 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
                 }
             }
             const track_runtime_param_rule_t rule = track_runtime_get_param_rule(target);
-            if ((found == 0U) || ((live_parameter_is_audio_owned(target) != 0U)
+            if ((found == 0U) || ((param_registry_track_value_is_audio_command(
+                    target, track) != 0U)
                     && (rule.status != TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)))
                 continue;
             if (ui_core_clipboard_param_phase(target) != pass)

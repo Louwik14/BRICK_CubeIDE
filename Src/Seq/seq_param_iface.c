@@ -328,21 +328,6 @@ static uint8_t seq_param_iface_track_is_valid(seq_track_id_t track)
     return entity_topology_is_active((brick_entity_id_t)track);
 }
 
-static uint8_t seq_param_iface_is_mix_param_plockable(param_id_t param)
-{
-    switch (param)
-    {
-        case PARAM_MIX_LEVEL:
-        case PARAM_MIX_PAN:
-        case PARAM_MIX_SEND1:
-        case PARAM_MIX_SEND2:
-        case PARAM_MIX_SEND3:
-            return 1U;
-        default:
-            return 0U;
-    }
-}
-
 static seq_param_slot_state_t *seq_param_iface_state_at(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot)
 {
     if ((seq_param_iface_track_is_valid(track) == 0U)
@@ -367,66 +352,6 @@ static seq_param_slot_state_t *seq_param_iface_state_at(seq_track_id_t track, ui
     return &g_seq_param_runtime_state[track][g_seq_param_set_offsets[set_id] + param_slot];
 }
 
-static uint8_t seq_param_iface_is_excluded_from_plock(param_id_t param_id)
-{
-    switch (param_id)
-    {
-        case PARAM_SAMPLER_SLICE_COUNT:
-        case PARAM_AUDIO_FX_MODEL:
-        case PARAM_AUDIO_FX_B_MODEL:
-        /* Looper decision for the current firmware: ARM/LEN/PLAY/XFADE are
-         * p-lockable; STRETCH/PITCH/GRAIN are intentionally excluded. */
-        case PARAM_LOOPER_STRETCH:
-        case PARAM_LOOPER_PITCH:
-        case PARAM_LOOPER_GRAIN:
-        case PARAM_FM_TRANSPOSE:
-        case PARAM_FM_PITCH_R1:
-        case PARAM_FM_PITCH_R2:
-        case PARAM_FM_PITCH_R3:
-        case PARAM_FM_PITCH_R4:
-        case PARAM_FM_PITCH_L1:
-        case PARAM_FM_PITCH_L2:
-        case PARAM_FM_PITCH_L3:
-        case PARAM_FM_PITCH_L4:
-            return 1U;
-        default:
-            return 0U;
-    }
-}
-
-uint8_t seq_param_iface_is_param_plockable(param_id_t param_id)
-{
-    if (param_id >= PARAM_COUNT)
-    {
-        return 0U;
-    }
-
-    if ((param_id >= PARAM_FM_OPERATOR_FIRST) && (param_id <= PARAM_FM_OPERATOR_LAST))
-    {
-        return 1U;
-    }
-
-    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param_id);
-    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_CFG)
-            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_NONE)
-            || (seq_param_iface_is_excluded_from_plock(param_id) != 0U))
-    {
-        return 0U;
-    }
-    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
-            && (seq_param_iface_is_mix_param_plockable(param_id) == 0U))
-    {
-        return 0U;
-    }
-
-    return (uint8_t)((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
-                     || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-                     || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD)
-                     || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIDI_FX)
-                     || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX)
-                     || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX));
-}
-
 static uint8_t seq_param_iface_param_matches_set_domain(seq_track_id_t track,
                                                         uint8_t set_id,
                                                         param_id_t param)
@@ -446,7 +371,7 @@ static uint8_t seq_param_iface_param_matches_set_domain_context(
     }
 
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
-    if (seq_param_iface_is_param_plockable(param) == 0U)
+    if (param_registry_is_plockable(param) == 0U)
     {
         return 0U;
     }
@@ -1132,7 +1057,7 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
     }
 
     if (!live_parameter_audio_publication_submit_dated(
-            due_sample, param, track, value16))
+            due_sample, param, track, value16, CONTROL_AUDIO_PARAM_TEMP))
     {
         return 0U;
     }
@@ -1191,8 +1116,11 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
         return 1U;
     }
 
+    const control_audio_param_semantic_t restore_semantic =
+        (param_registry_temp_is_clearable(param) != 0U)
+        ? CONTROL_AUDIO_PARAM_CLEAR_TEMP : CONTROL_AUDIO_PARAM_BASE;
     if (!live_parameter_audio_publication_submit_dated(
-            due_sample, param, track, base_value16))
+            due_sample, param, track, base_value16, restore_semantic))
     {
         return 0U;
     }

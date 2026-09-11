@@ -95,6 +95,11 @@ uint8_t param_registry_prepare_value(param_id_t id,
                                      float value,
                                      param_registry_prepared_value_t *out_value);
 uint8_t param_registry_track_value_is_audio_command(param_id_t id,uint8_t track);
+/* Canonical, track-independent product decision. Contextual engine/FX
+ * applicability is evaluated separately by track_runtime/slot mapping. */
+uint8_t param_registry_is_plockable(param_id_t id);
+uint8_t param_registry_track_temp_is_applicable(param_id_t id, uint8_t track);
+uint8_t param_registry_temp_is_clearable(param_id_t id);
 /* CONTROL target-only seam used by bulk preparation/commit work.  It performs
  * no queue publication, retry bookkeeping, transition or UI synchronization. */
 uint8_t param_registry_install_prepared_track_control_target(

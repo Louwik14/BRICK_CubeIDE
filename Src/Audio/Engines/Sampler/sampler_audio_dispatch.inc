@@ -136,6 +136,17 @@ void brick6_sampler_runtime_set_sample(uint8_t track_id, uint16_t sample_id)
     g_sampler_voice[track_id].position = 0.0f;
 }
 
+uint8_t brick6_sampler_runtime_get_sample(uint8_t track_id,
+                                          uint16_t *out_sample_id)
+{
+    if ((track_id >= SEQ_TRACK_COUNT) || (out_sample_id == NULL))
+        return 0U;
+    *out_sample_id = (brick6_sampler_runtime_track_is_clip(track_id) != 0U)
+        ? g_sampler_clip_runtime[track_id].sample_id
+        : g_sampler_voice[track_id].sample_id;
+    return 1U;
+}
+
 void brick6_sampler_runtime_set_gain(uint8_t track_id, float gain)
 {
     if (track_id >= SEQ_TRACK_COUNT)
@@ -191,6 +202,13 @@ void brick6_sampler_runtime_stop_multi_instrument(uint16_t instrument_id)
                 voice,
                 (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_STEAL);
         }
+    }
+    for (uint8_t track_id = 0U; track_id < SEQ_TRACK_COUNT; ++track_id)
+    {
+        if (g_sampler_multi_track_state[track_id].instrument_id
+                == instrument_id)
+            g_sampler_multi_track_state[track_id].instrument_id =
+                MULTI_SAMPLE_POOL_INVALID_ID;
     }
     /* All reader leases and DSP slots are released synchronously
      * before the command consumer advances its physical tail. */

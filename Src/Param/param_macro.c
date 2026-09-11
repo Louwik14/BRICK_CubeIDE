@@ -45,34 +45,15 @@ static uint32_t g_param_macro_touch_seq;
 CONTROL_STATE_SDRAM static param_macro_collected_resolution_t
     g_param_macro_collected_resolutions[PARAM_MACRO_COLLECTED_RESOLUTION_CAPACITY];
 
-static uint8_t param_macro_target_has_runtime_temp(uint8_t track,
-                                                   param_id_t param)
+static uint8_t param_macro_prepare_temp_target(param_id_t param,
+                                               uint8_t track,
+                                               float value,
+                                               live_parameter_audio_target_t *out,
+                                               float *out_canonical_value)
 {
-    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(param);
-    if (param_registry_is_lfo_param(param) != 0U) return 1U;
-    if ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
-            || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)) return 1U;
-    if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-            || (param == PARAM_MIDI_PROGRAM)) return 0U;
-    return (uint8_t)(param_backend_track_supports_midi_tone_ctx(
-        track_runtime_get_ctx(track)) == 0U);
-}
-
-static uint8_t param_macro_target_has_clearable_temp(param_id_t param)
-{
-    return (uint8_t)((param_registry_is_lfo_param(param) != 0U)
-        || ((param >= PARAM_ENV3_ATTACK) && (param <= PARAM_ENV3_RELEASE)));
-}
-
-static uint8_t param_macro_bulk_add(live_parameter_audio_bulk_t *bulk,
-                                    param_id_t param,
-                                    uint8_t track,
-                                    float value,
-                                    float *out_canonical_value)
-{
-    if ((bulk == NULL) || (param >= PARAM_COUNT) || (track >= SEQ_LANE_CAPACITY)
+    if ((out == NULL) || (param >= PARAM_COUNT) || (track >= SEQ_LANE_CAPACITY)
             || (out_canonical_value == NULL)
-            || (param_macro_target_has_runtime_temp(track, param) == 0U))
+            || (param_registry_track_temp_is_applicable(param, track) == 0U))
     {
         return 0U;
     }
@@ -98,16 +79,37 @@ static uint8_t param_macro_bulk_add(live_parameter_audio_bulk_t *bulk,
         value = prepared.value;
     }
     *out_canonical_value = value;
+    *out = (live_parameter_audio_target_t){
+        .parameter_id = (uint16_t)param,
+        .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
+        .track = event_track,
+        .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
+        .semantic = CONTROL_AUDIO_PARAM_TEMP,
+        .value = live_parameter_event_encode_float(value)
+    };
+    return 1U;
+}
+
+static uint8_t param_macro_bulk_add(live_parameter_audio_bulk_t *bulk,
+                                    param_id_t param,
+                                    uint8_t track,
+                                    float value,
+                                    float *out_canonical_value)
+{
+    live_parameter_audio_target_t target;
+    if ((bulk == NULL) || (param_macro_prepare_temp_target(param, track, value,
+            &target, out_canonical_value) == 0U)) return 0U;
 
     for (uint8_t i = 0U; i < bulk->count; ++i)
     {
-        live_parameter_audio_bulk_item_t *const item = &bulk->item[i];
-        if ((item->parameter_id == (uint16_t)param)
-                && (item->scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK)
-                && (item->track == event_track)
-                && (item->slot == LIVE_PARAMETER_EVENT_INVALID_INDEX))
+        live_parameter_audio_target_t *const item = &bulk->item[i];
+        if ((item->parameter_id == target.parameter_id)
+                && (item->scope == target.scope)
+                && (item->track == target.track)
+                && (item->slot == target.slot)
+                && (item->semantic == target.semantic))
         {
-            item->value = live_parameter_event_encode_float(value);
+            *item = target;
             return 1U;
         }
     }
@@ -117,17 +119,7 @@ static uint8_t param_macro_bulk_add(live_parameter_audio_bulk_t *bulk,
         return 0U;
     }
 
-    live_parameter_audio_bulk_item_t *const item = &bulk->item[bulk->count++];
-    *item = (live_parameter_audio_bulk_item_t){
-        .parameter_id = (uint16_t)param,
-        .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
-        .track = event_track,
-        .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-        .flags = (uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                            | LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS
-                            | LIVE_PARAMETER_EVENT_FLAG_RUNTIME_TEMP),
-        .value = live_parameter_event_encode_float(value)
-    };
+    bulk->item[bulk->count++] = target;
     return 1U;
 }
 
@@ -135,23 +127,22 @@ static uint8_t param_macro_bulk_add_clear_temp(
     live_parameter_audio_bulk_t *bulk, param_id_t param, uint8_t track)
 {
     if ((bulk == NULL) || (track >= SEQ_LANE_CAPACITY)
-            || (param_macro_target_has_clearable_temp(param) == 0U)) return 0U;
+            || (param_registry_temp_is_clearable(param) == 0U)) return 0U;
     for (uint8_t i = 0U; i < bulk->count; ++i)
     {
-        const live_parameter_audio_bulk_item_t *const item = &bulk->item[i];
-        if ((item->parameter_id == CONTROL_AUDIO_PARAM_CLEAR_RUNTIME_TEMP)
+        const live_parameter_audio_target_t *const item = &bulk->item[i];
+        if ((item->parameter_id == (uint16_t)param)
                 && (item->track == track)
-                && (live_parameter_event_decode_float(item->value)
-                    == (float)param)) return 1U;
+                && (item->semantic == CONTROL_AUDIO_PARAM_CLEAR_TEMP)) return 1U;
     }
     if (bulk->count >= LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS) return 0U;
-    bulk->item[bulk->count++] = (live_parameter_audio_bulk_item_t){
-        .parameter_id = CONTROL_AUDIO_PARAM_CLEAR_RUNTIME_TEMP,
+    bulk->item[bulk->count++] = (live_parameter_audio_target_t){
+        .parameter_id = (uint16_t)param,
         .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
         .track = track,
         .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-        .flags = LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
-        .value = live_parameter_event_encode_float((float)param)
+        .semantic = CONTROL_AUDIO_PARAM_CLEAR_TEMP,
+        .value = 0
     };
     return 1U;
 }
@@ -301,7 +292,7 @@ static uint8_t param_macro_apply_backend_value(uint8_t track, param_id_t param, 
 {
     track_runtime_resolved_track_t resolved;
 
-    if ((param_macro_target_has_runtime_temp(track, param) != 0U)
+    if ((param_registry_track_temp_is_applicable(param, track) != 0U)
             || (param_macro_lock_target_is_supported(track, param) == 0U))
     {
         return 0U;
@@ -332,7 +323,7 @@ static uint8_t param_macro_collect_value(live_parameter_audio_bulk_t *bulk,
                                          float *value)
 {
     if (value == NULL) return 0U;
-    if (param_macro_target_has_runtime_temp(track, param) != 0U)
+    if (param_registry_track_temp_is_applicable(param, track) != 0U)
     {
         return param_macro_bulk_add(bulk, param, track, *value, value);
     }
@@ -408,7 +399,7 @@ static uint8_t param_macro_apply_non_audio_releases(void)
             if ((last->track >= SEQ_LANE_CAPACITY)
                     || (last->param >= PARAM_COUNT)
                     || (last->resolved_value == last->base_value)
-                    || (param_macro_target_has_runtime_temp(
+                    || (param_registry_track_temp_is_applicable(
                             last->track, last->param) != 0U))
             {
                 continue;
@@ -435,7 +426,7 @@ static uint8_t param_macro_apply_non_audio_collected(
     for (uint16_t i = 0U; i < collected_count; ++i)
     {
         const param_macro_resolution_t *const resolution = &collected[i].resolution;
-        if (param_macro_target_has_runtime_temp(
+        if (param_registry_track_temp_is_applicable(
                     resolution->track, resolution->param) != 0U)
             continue;
         if (param_macro_apply_backend_value(resolution->track,
@@ -492,7 +483,6 @@ static uint8_t param_macro_recompute_sources(
     uint32_t last_applied_seq = 0U;
     live_parameter_audio_bulk_t bulk = {
         .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
         .count = 0U
     };
     uint16_t collected_count = 0U;
@@ -510,10 +500,10 @@ static uint8_t param_macro_recompute_sources(
                 continue;
             }
 
-            if (param_macro_target_has_runtime_temp(
+            if (param_registry_track_temp_is_applicable(
                     last->track, last->param) != 0U)
             {
-                if (param_macro_target_has_clearable_temp(last->param) != 0U)
+                if (param_registry_temp_is_clearable(last->param) != 0U)
                 {
                     if (param_macro_bulk_add_clear_temp(
                             &bulk, last->param, last->track) == 0U) return 0U;
@@ -671,8 +661,6 @@ uint8_t param_macro_resolve_lock(uint8_t scene,
 
 uint8_t param_macro_apply_resolution(const param_macro_resolution_t *resolution)
 {
-    live_parameter_audio_bulk_t bulk;
-
     if ((resolution == NULL)
             || (resolution->track >= SEQ_LANE_CAPACITY)
             || (resolution->param >= PARAM_COUNT)
@@ -681,7 +669,7 @@ uint8_t param_macro_apply_resolution(const param_macro_resolution_t *resolution)
         return 0U;
     }
 
-    if (param_macro_target_has_runtime_temp(
+    if (param_registry_track_temp_is_applicable(
             resolution->track, resolution->param) == 0U)
     {
         return param_macro_apply_backend_value(resolution->track,
@@ -689,18 +677,13 @@ uint8_t param_macro_apply_resolution(const param_macro_resolution_t *resolution)
                                                resolution->resolved_value);
     }
 
-    bulk = (live_parameter_audio_bulk_t){
-        .capture_tick = live_clock_capture_tick(),
-        .source = LIVE_PARAMETER_EVENT_SOURCE_BULK,
-        .count = 0U
-    };
+    live_parameter_audio_target_t target;
     float canonical = 0.0f;
-    if ((param_macro_bulk_add(&bulk,
-                              resolution->param,
-                              resolution->track,
-                              resolution->resolved_value,
-                              &canonical) == 0U)
-            || (live_parameter_audio_publication_submit_bulk(&bulk) == false))
+    if ((param_macro_prepare_temp_target(resolution->param,
+            resolution->track, resolution->resolved_value,
+            &target, &canonical) == 0U)
+            || (live_parameter_audio_publication_submit(
+                live_clock_capture_tick(), &target) == false))
     {
         return 0U;
     }

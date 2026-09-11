@@ -8,6 +8,7 @@
 #define TONE_PARAM_CODEC_ITEM(id) id,
 static const param_id_t prism[] = { TONE_PARAM_CATALOG_PRISM(TONE_PARAM_CODEC_ITEM) };
 static const param_id_t stack[] = { TONE_PARAM_CATALOG_STACK(TONE_PARAM_CODEC_ITEM) };
+static const param_id_t fm[] = { TONE_PARAM_CATALOG_FM(TONE_PARAM_CODEC_ITEM) };
 static const param_id_t wave[] = { TONE_PARAM_CATALOG_WAVE(TONE_PARAM_CODEC_ITEM) };
 static const param_id_t tb303[] = { TONE_PARAM_CATALOG_TB303(TONE_PARAM_CODEC_ITEM) };
 static const param_id_t ram[] = { TONE_PARAM_CATALOG_RAM(TONE_PARAM_CODEC_ITEM) };
@@ -30,6 +31,7 @@ static uint8_t table_for(track_runtime_type_t type,const param_id_t **table,uint
  case TRACK_RUNTIME_TYPE_PRISM:T(prism); case TRACK_RUNTIME_TYPE_STACK:T(stack);
  case TRACK_RUNTIME_TYPE_WAVE:T(wave); case TRACK_RUNTIME_TYPE_RAM:T(ram);
  case TRACK_RUNTIME_TYPE_TB303:T(tb303);
+ case TRACK_RUNTIME_TYPE_FM:T(fm);
  case TRACK_RUNTIME_TYPE_STREAM:T(stream); case TRACK_RUNTIME_TYPE_LOOPER:T(looper);
  case TRACK_RUNTIME_TYPE_MULTI:T(multi); case TRACK_RUNTIME_TYPE_MIDI:T(midi);
  case TRACK_RUNTIME_TYPE_EXTERNAL:T(external);

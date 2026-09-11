@@ -45,7 +45,7 @@ CONTROL. La valeur DSP privee n'est plus publiee ni relue par UI/CONTROL.
 |---|---|---|---|
 | Sample RAM | M4/Storage | M7/AUDIO | slot retire apres fence `tail`; token de load protege les completions SD tardives |
 | Wavetable/mipmaps | M4/Storage | M7/AUDIO | projection immutable; pages liberees apres fence `tail`; generation de load/registry physique conservee |
-| Multi descriptors/pages | M4/Storage | M7/AUDIO | descripteurs publies puis pages protegees par le credit de fenetre; retrait apres fence `tail` |
+| Multi descriptors/pages | M4/Storage | M7/AUDIO | `RETIRING` bloque toute nouvelle programmation; la projection reste resolvable jusqu'au `MULTI_RESOURCE_STOP`, puis le slot n'est libere qu'apres franchissement wrap-safe du `head` capture par `tail` et extinction des leases |
 | STREAM pages | M4/Storage | M7/AUDIO | cache partage; un lease par lecteur, union M4, `EVICTING` puis relecture; aucun pin/use-count/refcount |
 | Preview PCM | M4/Storage | M7/AUDIO | ring SPSC separe; reutilisation par consumer tail |
 | Recorder PCM | M7/AUDIO | M4/Storage | ring SPSC; M7 head `accepted_frames`, M4 tail `released_frames`; stop fixe le head final |

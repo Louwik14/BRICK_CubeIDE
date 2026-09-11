@@ -49,7 +49,6 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/NoteFx/note_fx_euclid.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/NoteFx/note_fx_pipeline.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/NoteFx/note_fx_state.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/live_parameter_migration.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_filter.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_global_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/param_macro.c"

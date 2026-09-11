@@ -8,6 +8,7 @@
 #include "IPC/live_parameter_event.h"
 #include "Track/track_runtime.h"
 #include "Track/polyphony_control.h"
+#include "main.h"
 
 typedef struct
 {
@@ -193,12 +194,12 @@ uint8_t audio_fx_control_install_prepared_param(
 static uint8_t audio_fx_control_publish(brick_entity_id_t entity,
                                         uint16_t command, uint8_t index, float value)
 {
-    const live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),
-        .source=LIVE_PARAMETER_EVENT_SOURCE_BULK,.count=1U,.item={{
+    const live_parameter_audio_target_t target={
         .parameter_id=command,.scope=LIVE_PARAMETER_EVENT_SCOPE_SLOT,.track=entity,
-        .slot=index,.flags=LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
-        .value=live_parameter_event_encode_float(value)}}};
-    return live_parameter_audio_publication_submit_bulk(&bulk)?1U:0U;
+        .slot=index,.semantic=CONTROL_AUDIO_PARAM_BASE,
+        .value=live_parameter_event_encode_float(value)};
+    return live_parameter_audio_publication_submit(
+        live_clock_capture_tick(),&target)?1U:0U;
 }
 
 void audio_fx_control_state_init(void)
@@ -333,20 +334,19 @@ uint8_t audio_fx_control_state_bulk_add_prepared(
             (float)prepared->config.order,(float)prepared->config.spatial_mode[0],
             (float)prepared->config.spatial_mode[1]};
         for(uint8_t i=0U;i<4U;++i)bulk->item[bulk->count++]=
-            (live_parameter_audio_bulk_item_t){.parameter_id=commands[i],
+            (live_parameter_audio_target_t){.parameter_id=commands[i],
             .scope=LIVE_PARAMETER_EVENT_SCOPE_SLOT,.track=entity,.slot=slots[i],
-            .flags=LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
+            .semantic=CONTROL_AUDIO_PARAM_BASE,
             .value=live_parameter_event_encode_float(config_values[i])};
     }
     for(uint8_t i=0U;i<10U;++i)
     {
         if(track_runtime_get_effective_param_status(entity,ids[i])
                 !=TRACK_RUNTIME_PARAM_ALLOWED)continue;
-        bulk->item[bulk->count++]=(live_parameter_audio_bulk_item_t){
+        bulk->item[bulk->count++]=(live_parameter_audio_target_t){
             .parameter_id=(uint16_t)ids[i],.scope=LIVE_PARAMETER_EVENT_SCOPE_TRACK,
             .track=entity,.slot=LIVE_PARAMETER_EVENT_INVALID_INDEX,
-            .flags=(uint16_t)(LIVE_PARAMETER_EVENT_FLAG_SET_TARGET
-                |LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS),
+            .semantic=CONTROL_AUDIO_PARAM_BASE,
             .value=live_parameter_event_encode_float(values[i])};
     }
     return 1U;
@@ -362,12 +362,12 @@ uint8_t audio_fx_control_state_bulk_add_delta(
     if (before->config.filter_position == prepared->config.filter_position)
         return 1U;
     if (bulk->count >= LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS) return 0U;
-    bulk->item[bulk->count++] = (live_parameter_audio_bulk_item_t){
+    bulk->item[bulk->count++] = (live_parameter_audio_target_t){
         .parameter_id = CONTROL_AUDIO_FX_FILTER_POSITION,
         .scope = LIVE_PARAMETER_EVENT_SCOPE_SLOT,
         .track = entity,
         .slot = 0U,
-        .flags = LIVE_PARAMETER_EVENT_FLAG_VALUE_FLOAT_BITS,
+        .semantic = CONTROL_AUDIO_PARAM_BASE,
         .value = live_parameter_event_encode_float(
             (float)prepared->config.filter_position)
     };
@@ -393,10 +393,12 @@ uint8_t audio_fx_control_state_restore(brick_entity_id_t entity,
 {
     audio_fx_control_state_t prepared;
     live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),
-        .source=LIVE_PARAMETER_EVENT_SOURCE_BULK,.count=0U};
+        .count=0U};
     if(!audio_fx_control_state_prepare_for_polyphony(entity,state,
             polyphony_control_get_voice_count(entity),&prepared)
             ||!audio_fx_control_state_bulk_add_prepared(entity,&prepared,&bulk)
             ||((bulk.count!=0U)&&!live_parameter_audio_publication_submit_bulk(&bulk)))return 0U;
-    return audio_fx_control_state_install_prepared(entity,&prepared);
+    const uint8_t installed=audio_fx_control_state_install_prepared(entity,&prepared);
+    if(installed==0U)Error_Handler();
+    return installed;
 }

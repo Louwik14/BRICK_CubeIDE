@@ -2,7 +2,7 @@
 
 ## Autorite et transport
 
-CONTROL est l'unique autorite fonctionnelle. `control_audio_publication` est le
+CONTROL est l'unique autorite fonctionnelle. `control_rt_publication` est le
 seul point final de publication et le seul appelant du writer de
 `control_audio_fifo`. La FIFO est SPSC: CONTROL possede `head`, AUDIO possede
 `tail`. AUDIO n'avance `tail` qu'apres l'application synchrone complete de la
@@ -15,10 +15,12 @@ complete, par une publication unique de `head` precedee de `DMB`. Il n'existe ni
 retry tardif, ni fallback, ni perte silencieuse: un manque de place refuse la
 publication et incremente le diagnostic d'overflow.
 
-La FIFO contient 2048 commandes de 16 octets. Son burst maximal est de 1781:
-1024 PARAM, au plus deux commandes pour chacune des 233 actions NOTE internes et
-128 actions externes, puis 35 PROGRAM/TRANSPORT/RECORD/PANIC. Les assertions de
-compilation figent la capacite, sa propriete puissance de deux et cette marge.
+La FIFO contient 4096 commandes de 16 octets. Son burst maximal est de 1827:
+1024 PARAM, au plus deux commandes pour chacune des 256 actions NOTE internes et
+128 actions externes, puis 35 PROGRAM/TRANSPORT/RECORD/PANIC. Le pire cumul hors
+horizon vaut 953 commandes; avec 512 commandes de marge, le besoin prouve est
+3292. Les assertions de compilation figent la capacite, sa propriete puissance
+de deux et cette marge de 804 commandes.
 
 ## ABI partagee
 
@@ -35,7 +37,7 @@ u8  opcode_kind       // opcode bits 0..2, sous-type bits 3..7
 Les seuls opcodes sont:
 
 ```text
-PROGRAM PARAM NOTE TRANSPORT RECORD PANIC
+PROGRAM PARAM NOTE TRANSPORT RECORD PANIC AUDIO_STATE_COMMIT
 ```
 
 - `PROGRAM` porte directement `{family,type,flags,voice_count}` dans `value`.
@@ -51,6 +53,12 @@ PROGRAM PARAM NOTE TRANSPORT RECORD PANIC
 - `TRANSPORT` porte START, STOP, CONTINUE ou LOCATE.
 - `RECORD` porte START ou STOP, un `session_id`, une configuration et un client.
 - `PANIC` est global ou limite a une entite.
+- `AUDIO_STATE_COMMIT` rend visible un snapshot pointer-free Pattern/Project.
+
+La classification wire `DURABLE_STATE`, `TRANSIENT_ACTION`,
+`RESOURCE_LIFECYCLE`, `REQUEST` est structurelle et independante du runtime
+AUDIO. Le snapshot absorbe exclusivement `DURABLE_STATE`; le caractere
+transitoire vient donc de la commande (`TEMP`/`CLEAR_TEMP`), jamais de l'ID PARAM.
 
 `effective_sample_time` utilise la timeline sample absolue. A date egale,
 l'ordre d'intention CONTROL est conserve. Les samples, wavetables, instruments

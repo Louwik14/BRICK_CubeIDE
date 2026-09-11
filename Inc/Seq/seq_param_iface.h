@@ -62,9 +62,6 @@ typedef struct
 
 void seq_param_iface_init(void);
 
-/* Track-independent compact-slot allowlist. TONE remains engine-specific at mapping time. */
-uint8_t seq_param_iface_is_param_plockable(param_id_t param_id);
-
 uint8_t seq_param_iface_is_set_plockable(uint8_t set_id);
 uint8_t seq_param_iface_set_to_mask(uint8_t set_id);
 uint8_t seq_param_iface_address_to_key(uint8_t set_id,

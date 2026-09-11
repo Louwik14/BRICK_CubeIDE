@@ -25,9 +25,9 @@
 #include "Audio/audio_waveform_capture_audio.h"
 #include "Audio/synth_waveform_audio.h"
 #include "IPC/live_parameter_event.h"
+#include "IPC/sampler_ram_audio_projection.h"
 #include "Track/synth_polyphony.h"
 #include "Sampler/multi_sample_config.h"
-#include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_config.h"
 #include "Mod/mod_lfo_v1_audio.h"
 #include "Mod/mod_env3.h"
@@ -49,6 +49,8 @@ brick_fatal_record_t g_audio_command_fatal_record;
 static uint32_t g_audio_wavetable_generation[
     BRICK_ENTITY_CAPACITY * BRICK6_WAVE_OSC_COUNT];
 static track_tone_fm_base_voice_t g_audio_fm_base_projection[BRICK_ENTITY_CAPACITY];
+static uint8_t g_audio_state_rebind_deferred;
+static uint16_t g_audio_state_rebind_mask;
 
 static audio_command_apply_result_t audio_command_apply(
     const control_audio_command_t *command);
@@ -95,7 +97,7 @@ static void audio_command_close_external_entities(void)
     }
 }
 
-static audio_command_apply_result_t audio_command_apply_program(
+static audio_command_apply_result_t audio_command_install_program(
     const control_audio_command_t *command)
 {
     if (CONTROL_AUDIO_COMMAND_KIND(command) != 0U)
@@ -111,6 +113,20 @@ static audio_command_apply_result_t audio_command_apply_program(
     };
     if (audio_note_engine_adapter_install_prepared(&spec) == 0U)
         return AUDIO_COMMAND_APPLY_PROGRAM_INSTALL;
+    return AUDIO_COMMAND_APPLY_OK;
+}
+
+static audio_command_apply_result_t audio_command_apply_program(
+    const control_audio_command_t *command)
+{
+    const audio_command_apply_result_t result =
+        audio_command_install_program(command);
+    if (result != AUDIO_COMMAND_APPLY_OK) return result;
+    if (g_audio_state_rebind_deferred != 0U)
+    {
+        g_audio_state_rebind_mask |= (uint16_t)(1U << command->entity);
+        return AUDIO_COMMAND_APPLY_OK;
+    }
     return (audio_note_engine_adapter_initialize_held_outputs(command->entity)
             != 0U)
         ? AUDIO_COMMAND_APPLY_OK : AUDIO_COMMAND_APPLY_REBIND;
@@ -137,6 +153,9 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
                     || (ctx.program_route.engine != TRACK_RUNTIME_ENGINE_FM)) return 0U;
             brick6_fm_runtime_set_base_voice(ctx.program_route.instance_id,
                 &g_audio_fm_base_projection[command->entity]);
+            if (audio_note_engine_adapter_project_track_configuration(
+                    command->entity) == 0U)
+                return 0U;
         }
         return 1U;
     }
@@ -229,8 +248,20 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
                 return 0U;
         }
         else
+        {
+            uint16_t current_sample = 0U;
+            if ((brick6_sampler_runtime_get_sample(
+                    command->entity, &current_sample) != 0U)
+                    && (current_sample == (uint16_t)command->value))
+                return 1U;
             brick6_sampler_runtime_set_sample(command->entity,
                                               (uint16_t)command->value);
+        }
+        if (g_audio_state_rebind_deferred != 0U)
+        {
+            g_audio_state_rebind_mask |= (uint16_t)(1U << command->entity);
+            return 1U;
+        }
         return audio_note_engine_adapter_initialize_held_outputs(
             command->entity);
     }
@@ -255,7 +286,7 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
     }
     if (command->id == CONTROL_AUDIO_PARAM_RAM_RESOURCE_STOP)
     {
-        if (command->entity >= SAMPLER_RAM_POOL_MAX_SLOTS) return 0U;
+        if (command->entity >= SAMPLER_RAM_AUDIO_MAX_SLOTS) return 0U;
         brick6_sampler_runtime_stop_ram_slot(command->entity, command->value);
         return 1U;
     }
@@ -397,28 +428,108 @@ static audio_command_apply_result_t audio_command_apply_state_commit(
 {
     const control_audio_command_t *commands = NULL;
     uint16_t count = 0U;
-    if ((CONTROL_AUDIO_COMMAND_KIND(commit) != 0U)
+    const uint8_t transition = CONTROL_AUDIO_COMMAND_KIND(commit);
+    if ((transition > CONTROL_AUDIO_STATE_PROJECT)
             || (audio_state_snapshot_resolve(
                 commit->value, &commands, &count) == 0U))
         return AUDIO_COMMAND_APPLY_INVALID;
-    const control_audio_command_t panic = {
-        .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(
-            CONTROL_AUDIO_COMMAND_PANIC, CONTROL_AUDIO_PANIC_GLOBAL)
-    };
-    if (audio_command_apply_panic(&panic) == 0U)
-        return AUDIO_COMMAND_APPLY_INVALID;
+
+    const control_audio_command_t *programs[BRICK_ENTITY_CAPACITY] = {0};
     for (uint16_t i = 0U; i < count; ++i)
     {
         const uint8_t opcode = CONTROL_AUDIO_COMMAND_OPCODE(&commands[i]);
         if ((opcode != CONTROL_AUDIO_COMMAND_PROGRAM)
                 && (opcode != CONTROL_AUDIO_COMMAND_PARAM))
             return AUDIO_COMMAND_APPLY_INVALID;
-        if (opcode != CONTROL_AUDIO_COMMAND_PARAM)
-            brick6_fm_runtime_finalize_pending();
+        if (opcode != CONTROL_AUDIO_COMMAND_PROGRAM) continue;
+        if ((commands[i].entity >= BRICK_ENTITY_CAPACITY)
+                || (programs[commands[i].entity] != NULL))
+            return AUDIO_COMMAND_APPLY_INVALID;
+        programs[commands[i].entity] = &commands[i];
+    }
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+        if (programs[entity] == NULL) return AUDIO_COMMAND_APPLY_INVALID;
+
+    uint16_t changed = 0U;
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        const control_audio_program_descriptor_t target =
+            control_audio_program_unpack(programs[entity]->value);
+        track_audio_runtime_ctx_t current;
+        const uint8_t same = (uint8_t)(
+            (audio_note_engine_adapter_current_ctx(entity, &current) != 0U)
+            && (current.program_route.engine == target.engine)
+            && (current.family == target.family)
+            && (current.type == target.type)
+            && (current.flags == target.flags));
+        if ((transition == CONTROL_AUDIO_STATE_PROJECT) || (same == 0U))
+            changed |= (uint16_t)(1U << entity);
+    }
+
+    if (transition == CONTROL_AUDIO_STATE_PROJECT)
+    {
+        const control_audio_command_t panic = {
+            .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(
+                CONTROL_AUDIO_COMMAND_PANIC, CONTROL_AUDIO_PANIC_GLOBAL)
+        };
+        if (audio_command_apply_panic(&panic) == 0U)
+            return AUDIO_COMMAND_APPLY_INVALID;
+    }
+
+    /* Release every installation which changes before acquiring any target.
+     * The AUDIO output ledger is retained for Pattern and rebound once after
+     * the final programs and resource parameters are installed. */
+    const control_audio_command_t off = {
+        .value = (uint32_t)TRACK_RUNTIME_FAMILY_OFF << 8,
+        .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(
+            CONTROL_AUDIO_COMMAND_PROGRAM, 0U)
+    };
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        if ((changed & (uint16_t)(1U << entity)) == 0U) continue;
+        audio_command_close_entity(entity);
+        control_audio_command_t release = off;
+        release.entity = entity;
         const audio_command_apply_result_t result =
-            audio_command_apply(&commands[i]);
+            audio_command_install_program(&release);
         if (result != AUDIO_COMMAND_APPLY_OK) return result;
     }
+
+    g_audio_state_rebind_deferred = 1U;
+    g_audio_state_rebind_mask = changed;
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        if ((changed & (uint16_t)(1U << entity)) == 0U) continue;
+        const audio_command_apply_result_t result =
+            audio_command_install_program(programs[entity]);
+        if (result != AUDIO_COMMAND_APPLY_OK)
+        {
+            g_audio_state_rebind_deferred = 0U;
+            return result;
+        }
+    }
+    brick6_fm_runtime_finalize_pending();
+    for (uint16_t i = 0U; i < count; ++i)
+    {
+        if (CONTROL_AUDIO_COMMAND_OPCODE(&commands[i])
+                != CONTROL_AUDIO_COMMAND_PARAM) continue;
+        const audio_command_apply_result_t result =
+            audio_command_apply(&commands[i]);
+        if (result != AUDIO_COMMAND_APPLY_OK)
+        {
+            g_audio_state_rebind_deferred = 0U;
+            return result;
+        }
+    }
+    g_audio_state_rebind_deferred = 0U;
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        if ((g_audio_state_rebind_mask & (uint16_t)(1U << entity)) == 0U)
+            continue;
+        if (audio_note_engine_adapter_initialize_held_outputs(entity) == 0U)
+            return AUDIO_COMMAND_APPLY_REBIND;
+    }
+    g_audio_state_rebind_mask = 0U;
     brick6_fm_runtime_finalize_pending();
     audio_mod_matrix_finalize_dirty();
     return AUDIO_COMMAND_APPLY_OK;
@@ -505,6 +616,8 @@ void audio_command_executor_init(void)
 {
     memset(g_audio_wavetable_generation, 0,
            sizeof(g_audio_wavetable_generation));
+    g_audio_state_rebind_deferred = 0U;
+    g_audio_state_rebind_mask = 0U;
 }
 
 uint16_t __attribute__((noinline)) audio_command_executor_apply_due(

@@ -1,7 +1,7 @@
 #include "Storage/persistent_key_catalog.h"
 #include "Track/entity_topology.h"
 #include "Track/track_runtime.h"
-#include "Seq/seq_param_iface.h"
+#include "Param/param_registry.h"
 #include <stddef.h>
 
 static const persist_control_parameter_key_t g_param_keys[PARAM_COUNT]={
@@ -323,7 +323,7 @@ uint8_t persist_key_param_descriptor(param_id_t id,persist_param_descriptor_t *o
     out->key=g_param_keys[id];
     out->kind=param_kind(id);
     if(param_scope(id,&out->scope)==0U)return 0U;
-    out->plockable=seq_param_iface_is_param_plockable(id);
+    out->plockable=param_registry_is_plockable(id);
     return 1U;
 }
 uint8_t persist_key_param_to_disk(param_id_t id,persist_control_parameter_key_t *out){persist_param_descriptor_t d;if(out==NULL||persist_key_param_descriptor(id,&d)==0U||d.key==0U)return 0U;*out=d.key;return 1U;}

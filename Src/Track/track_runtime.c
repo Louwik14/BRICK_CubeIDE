@@ -8,6 +8,7 @@
 
 #include "Platform/memory_layout.h"
 #include "IPC/control_audio_command.h"
+#include "IPC/fm_dsp_projection.h"
 #include "ControlRT/control_rt_publication.h"
 #include "Track/control_music_output.h"
 #include "Platform/brick_build_config.h"
@@ -169,6 +170,11 @@ static uint8_t track_runtime_publish_midi_config(
 {
     if ((ctx == NULL) || (entity_id >= BRICK_ENTITY_CAPACITY))
         return 0U;
+    /* Inactive GROUP-child slots have no final AUDIO context and their
+     * prepared CONTROL context is deliberately zeroed.  In particular,
+     * midi_channel_1_16 is 0 rather than a publishable MIDI channel. */
+    if (entity_topology_is_active(entity_id) == 0U)
+        return 1U;
     uint64_t due_sample = 0U;
     if (control_rt_resolve_asap_sample(0U, &due_sample) == 0U)
     {
@@ -672,6 +678,46 @@ void track_runtime_rebuild_all(void)
     ++g_track_runtime_revision;
     for (uint8_t track = 0U; track < (uint8_t)SEQ_LANE_CAPACITY; ++track)
         g_track_runtime_track_revision[track] = g_track_runtime_revision;
+}
+
+uint8_t track_runtime_project_audio_state_all(void)
+{
+    for (brick_entity_id_t entity = 0U;
+         entity < (brick_entity_id_t)SEQ_LANE_CAPACITY; ++entity)
+    {
+        if ((track_runtime_publish_program(entity,
+                &g_track_runtime_ctx[entity]) == 0U)
+                || (track_runtime_publish_midi_config(entity,
+                    &g_track_runtime_ctx[entity]) == 0U))
+            return 0U;
+    }
+    return 1U;
+}
+
+uint8_t track_runtime_audio_projection_param_is_current(
+    uint8_t entity, uint16_t parameter_id)
+{
+    const uint16_t fm_words =
+        (uint16_t)((sizeof(track_tone_fm_base_voice_t) + 3U) / 4U);
+    const uint8_t is_fm_word = (uint8_t)(
+        (parameter_id >= CONTROL_AUDIO_FM_BASE_WORD_FIRST)
+        && (parameter_id < CONTROL_AUDIO_FM_BASE_WORD_FIRST + fm_words));
+    if ((is_fm_word == 0U)
+            && (parameter_id != CONTROL_AUDIO_SAMPLER_ASSET)
+            && (parameter_id != CONTROL_AUDIO_LOOPER_PLAY_AUTO))
+        return 1U;
+    track_runtime_descriptor_t descriptor;
+    if (track_runtime_get_descriptor(entity, &descriptor) == 0U)
+        return 0U;
+    if (is_fm_word != 0U)
+        return descriptor.engine == TRACK_RUNTIME_ENGINE_FM;
+    if (parameter_id == CONTROL_AUDIO_SAMPLER_ASSET)
+        return (uint8_t)((descriptor.type == TRACK_RUNTIME_TYPE_STREAM)
+            || (descriptor.type == TRACK_RUNTIME_TYPE_RAM)
+            || (descriptor.type == TRACK_RUNTIME_TYPE_MULTI));
+    if (parameter_id == CONTROL_AUDIO_LOOPER_PLAY_AUTO)
+        return descriptor.type == TRACK_RUNTIME_TYPE_LOOPER;
+    return 1U;
 }
 
 uint8_t track_runtime_is_track_prism_available(uint8_t track)

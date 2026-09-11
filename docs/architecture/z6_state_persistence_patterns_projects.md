@@ -59,7 +59,14 @@ Project Load ne double-bufferise pas les gros payloads RAM, Wavetable ou Multi:
 le quiesce reste ferme, l'ancien payload est retire, puis le loader cooperatif
 canonique reutilise ses pages. Seuls le DTO Project, le Pattern bank inactif et
 un catalogue borne de references indisponibles coexistent temporairement. Le
-restore republie ensuite PROGRAM/PARAM/TRANSPORT/RECORD par la FIFO. Les etats
+restore reconstruit ensuite une projection PROGRAM/PARAM fraiche depuis les
+autorites CONTROL finales. Le commit Project libere toutes les installations
+AUDIO avant leur reconstruction; le commit Pattern ne libere que les PROGRAM
+modifies, sans PANIC global, puis rebind une fois les outputs encore vivants.
+Le contrat wire classe chaque commande comme etat durable, action transitoire,
+cycle de vie ressource ou requete. Le snapshot ne conserve que l'etat durable;
+les commandes PARAM `TEMP` et `CLEAR_TEMP` sont donc exclues de cette projection,
+comme les STOP de ressources et les requetes de waveform. Les etats
 de selection exposes a l'UI sont `EMPTY`, `LOADED` et `UNAVAILABLE`. Patch garde
 sa transaction asset locale distincte.
 

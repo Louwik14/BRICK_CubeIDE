@@ -80,14 +80,16 @@ uint8_t audio_wave_table_projection_install_descriptor(
         || (descriptor->band_count > WAVETABLE_MIPMAP_MAX_BANDS)) return 0U;
     audio_wavetable_registry_slot_t *const dst =
         &g_audio_wavetable_registry[descriptor->wavetable_slot];
-    dst->sequence++;
-    dst->ready = 0U;
-    intercore_cache_publish(dst, sizeof(*dst));
-    dst->descriptor = *descriptor;
-    dst->ready = 1U;
-    __DMB();
-    dst->sequence++;
-    intercore_cache_publish(dst, sizeof(*dst));
+    const uint32_t inactive = dst->active_snapshot ^ 1U;
+    audio_wavetable_registry_snapshot_t *const next =
+        &dst->snapshots[inactive];
+    next->ready = 0U;
+    next->descriptor = *descriptor;
+    next->ready = 1U;
+    intercore_cache_publish(next, sizeof(*next));
+    dst->active_snapshot = inactive;
+    intercore_cache_publish((const void *)&dst->active_snapshot,
+                            sizeof(dst->active_snapshot));
     return 1U;
 }
 
@@ -96,14 +98,16 @@ void audio_wave_table_projection_install_prepared(
 {
     audio_wavetable_registry_slot_t *const dst =
         &g_audio_wavetable_registry[descriptor->wavetable_slot];
-    dst->sequence++;
-    dst->ready = 0U;
-    intercore_cache_publish(dst, sizeof(*dst));
-    dst->descriptor = *descriptor;
-    dst->ready = 1U;
-    __DMB();
-    dst->sequence++;
-    intercore_cache_publish(dst, sizeof(*dst));
+    const uint32_t inactive = dst->active_snapshot ^ 1U;
+    audio_wavetable_registry_snapshot_t *const next =
+        &dst->snapshots[inactive];
+    next->ready = 0U;
+    next->descriptor = *descriptor;
+    next->ready = 1U;
+    intercore_cache_publish(next, sizeof(*next));
+    dst->active_snapshot = inactive;
+    intercore_cache_publish((const void *)&dst->active_snapshot,
+                            sizeof(dst->active_snapshot));
 }
 
 static uint8_t resolve_selection(uint16_t logical,
@@ -128,14 +132,14 @@ static uint8_t publish_selection(
     uint8_t index, const audio_wave_table_selection_t *selection)
 {
     if (selection == NULL) return 0U;
-    control_audio_command_t commands[2] = {
-        { .value = selection->generation,
-          .id = CONTROL_AUDIO_PARAM_WAVETABLE_GEN, .entity = index,
-          .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM, 0U) },
-        { .value = selection->wavetable_slot,
-          .id = CONTROL_AUDIO_PARAM_WAVETABLE_SET, .entity = index,
-          .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM, 0U) }
-    };
+    control_audio_command_t commands[2];
+    if ((control_rt_build_param_command(index,
+            CONTROL_AUDIO_PARAM_WAVETABLE_GEN, selection->generation,
+            CONTROL_AUDIO_PARAM_KIND_BASE_GLOBAL, 0U, &commands[0]) == 0U)
+            || (control_rt_build_param_command(index,
+                CONTROL_AUDIO_PARAM_WAVETABLE_SET, selection->wavetable_slot,
+                CONTROL_AUDIO_PARAM_KIND_BASE_GLOBAL, 0U,
+                &commands[1]) == 0U)) return 0U;
     return control_rt_publish_batch_now(commands, 2U);
 }
 
@@ -180,14 +184,21 @@ void audio_wave_table_projection_withdraw_slot(uint16_t slot,
     {
         audio_wavetable_registry_slot_t *const registry =
             &g_audio_wavetable_registry[slot];
+        const uint32_t active = registry->active_snapshot;
+        const audio_wavetable_registry_snapshot_t *const current =
+            &registry->snapshots[active];
         if ((generation == 0U)
-            || (registry->descriptor.generation == generation))
+            || ((current->ready != 0U)
+                && (current->descriptor.generation == generation)))
         {
-            registry->sequence++;
-            registry->ready = 0U;
-            intercore_cache_publish(registry, sizeof(*registry));
-            registry->sequence++;
-            intercore_cache_publish(registry, sizeof(*registry));
+            const uint32_t inactive = active ^ 1U;
+            audio_wavetable_registry_snapshot_t *const next =
+                &registry->snapshots[inactive];
+            memset(next, 0, sizeof(*next));
+            intercore_cache_publish(next, sizeof(*next));
+            registry->active_snapshot = inactive;
+            intercore_cache_publish((const void *)&registry->active_snapshot,
+                                    sizeof(registry->active_snapshot));
         }
     }
     for (uint8_t i = 0U; i < AUDIO_WAVE_TABLE_SELECTION_COUNT; ++i)

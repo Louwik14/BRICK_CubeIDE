@@ -41,7 +41,6 @@
 #include "Storage/audio_recorder.h"
 #include "IPC/live_clock_control.h"
 #include "App/live_parameter_audio_publication.h"
-#include "Param/live_parameter_migration.h"
 #include "IPC/live_parameter_event.h"
 #include "Sampler/brick6_sampler_multi_contract.h"
 #include "Param/engine_model_catalog.h"
@@ -234,7 +233,8 @@ static uint8_t ui_param_control_value_get(param_id_t param,
                                           float *out_value)
 {
     if ((out_value == 0) || (param >= PARAM_COUNT)
-            || (live_parameter_is_audio_owned(param) == 0U))
+            || (param_registry_track_value_is_audio_command(
+                param, track) == 0U))
     {
         return 0U;
     }

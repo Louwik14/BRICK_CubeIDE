@@ -6,9 +6,13 @@
 #include "Param/param_registry.h"
 #include "Track/entity_topology.h"
 #include "Track/track_runtime.h"
-#include "Track/tone_param_codec.h"
 #include "Track/audio_fx_control_state.h"
 #include "Param/audio_fx_param_catalog.h"
+#include "Param/md_model_catalog.h"
+#include "Param/param_prism_labels.h"
+#include "Param/param_stack_labels.h"
+#include "Param/tone_param_catalog.h"
+#include "Seq/seq_param_iface.h"
 
 /* CONTROL owns presentation and address enumeration.  The list is derived
  * directly from the canonical track descriptor; no AUDIO cache is mirrored. */
@@ -26,34 +30,11 @@ static uint8_t mod_destination_control_is_internal_lfo(param_id_t id)
     }
 }
 
-static uint8_t mod_destination_control_is_structural_sampler(param_id_t id)
-{
-    switch (id)
-    {
-        case PARAM_SAMPLER_MODE:
-        case PARAM_SAMPLER_SLICE_COUNT:
-        case PARAM_SAMPLER_CLIP_SOURCE_BPM:
-        case PARAM_SAMPLER_CLIP_SYNC_LENGTH:
-        case PARAM_SAMPLER_CLIP_PITCH:
-        case PARAM_SAMPLER_CLIP_PLAY_MODE:
-        case PARAM_SAMPLER_CLIP_LOOP:
-        case PARAM_SAMPLER_CLIP_STRETCH_MODE:
-        case PARAM_SAMPLER_CLIP_GRAIN:
-        case PARAM_SAMPLER_MULTI_LOOP:
-            return 1U;
-        default:
-            return 0U;
-    }
-}
-
 static uint8_t mod_destination_control_supported(uint8_t track, param_id_t id)
 {
     if ((track >= BRICK_ENTITY_CAPACITY) || (id >= PARAM_COUNT)
             || (id == PARAM_MIDI_PROGRAM)
-            || (id == PARAM_AUDIO_FX_MODEL)
-            || (id == PARAM_AUDIO_FX_B_MODEL)
-            || (mod_destination_control_is_internal_lfo(id) != 0U)
-            || (mod_destination_control_is_structural_sampler(id) != 0U))
+            || (mod_destination_control_is_internal_lfo(id) != 0U))
         return 0U;
     if ((id == PARAM_LFO1_RATE) || (id == PARAM_LFO2_RATE)
             || (id == PARAM_LFO3_RATE))
@@ -80,12 +61,35 @@ static uint8_t mod_destination_control_supported(uint8_t track, param_id_t id)
     if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
     {
         track_runtime_descriptor_t descriptor;
-        uint8_t slot = 0U;
         if ((track_runtime_get_descriptor(track, &descriptor) == 0U)
-                || (tone_param_codec_param_to_slot(
-                    descriptor.type, id, &slot) == 0U))
+                || (tone_param_catalog_is_user_visible(
+                    descriptor.type, id) == 0U))
             return 0U;
+        if ((descriptor.type == TRACK_RUNTIME_TYPE_DRUM_MD)
+                && (id >= PARAM_DRUM_MD_P1) && (id <= PARAM_DRUM_MD_P8))
+        {
+            float model = 0.0f;
+            if ((param_registry_get_track_value(
+                    PARAM_DRUM_MD_MODEL, track, &model) == 0U)
+                    || ((uint8_t)(id - PARAM_DRUM_MD_P1)
+                        >= md_model_profile_get(md_model_validate(model))->slot_count))
+                return 0U;
+        }
     }
+    uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_COUNT;
+    if ((id >= PARAM_FM_OPERATOR_FIRST) && (id <= PARAM_FM_OPERATOR_LAST))
+        set_id = (uint8_t)SEQ_PLOCK_SET_FM_OPERATOR;
+    else if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
+        set_id = (uint8_t)SEQ_PLOCK_SET_ENV;
+    else if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+        set_id = (uint8_t)SEQ_PLOCK_SET_TONE;
+    else if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
+        set_id = (uint8_t)SEQ_PLOCK_SET_MIX;
+    else if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX)
+        set_id = (uint8_t)SEQ_PLOCK_SET_AUDIO_FX;
+    if ((set_id >= (uint8_t)SEQ_PLOCK_SET_COUNT)
+            || (seq_param_iface_param_is_supported(track, set_id, id) == 0U))
+        return 0U;
     const track_runtime_param_status_t status =
         track_runtime_get_effective_param_status(track, id);
     return ((status == TRACK_RUNTIME_PARAM_ALLOWED)
@@ -114,10 +118,9 @@ uint8_t mod_destination_catalog_address_is_supported_projected(
             : (target != owner))
         return 0U;
     if ((id == PARAM_MIDI_PROGRAM)
-            || (id == PARAM_AUDIO_FX_MODEL) || (id == PARAM_AUDIO_FX_B_MODEL)
-            || (mod_destination_control_is_internal_lfo(id) != 0U)
-            || (mod_destination_control_is_structural_sampler(id) != 0U))
+            || (mod_destination_control_is_internal_lfo(id) != 0U))
         return 0U;
+    if (param_registry_is_plockable(id) == 0U) return 0U;
     if ((id == PARAM_LFO1_RATE) || (id == PARAM_LFO2_RATE)
             || (id == PARAM_LFO3_RATE)) return 1U;
     const track_config_t config = configs[target];
@@ -130,9 +133,18 @@ uint8_t mod_destination_catalog_address_is_supported_projected(
         return 0U;
     if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
     {
-        uint8_t slot = 0U;
-        return tone_param_codec_param_to_slot(
-            track_runtime_type_from_ui(config.type), id, &slot);
+        const track_runtime_type_t runtime_type =
+            track_runtime_type_from_ui(config.type);
+        if (tone_param_catalog_is_user_visible(runtime_type, id) == 0U)
+            return 0U;
+        const uint8_t set_id = ((id >= PARAM_FM_OPERATOR_FIRST)
+                && (id <= PARAM_FM_OPERATOR_LAST))
+            ? (uint8_t)SEQ_PLOCK_SET_FM_OPERATOR
+            : (uint8_t)SEQ_PLOCK_SET_TONE;
+        seq_param_slot_t slot = 0U;
+        return seq_param_iface_param_to_slot_for_type((uint8_t)runtime_type,
+            (uint8_t)(target_topology.role == ENTITY_ROLE_GROUP_MASTER),
+            set_id, id, &slot);
     }
     if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX)
     {
@@ -157,53 +169,14 @@ uint8_t mod_destination_catalog_address_is_supported_projected(
     return 1U;
 }
 
-typedef struct
-{
-    param_id_t first;
-    param_id_t last;
-} mod_destination_param_range_t;
-
-/* Candidate ranges are the owner domains, kept in stable parameter order.
- * Applicability remains owned by mod_destination_control_supported(). */
-static const mod_destination_param_range_t g_mod_destination_param_ranges[] = {
-    { PARAM_MIX_MUTE, PARAM_MIX_MUTE },
-    { PARAM_DRUM_MD_MODEL, PARAM_DRUM_MD_P8 },
-    { PARAM_MIX_LEVEL, PARAM_MIX_SEND2 },
-    { PARAM_FILTER_MORPH, PARAM_ENV_RETRIG_VCA },
-    { PARAM_SAMPLER_GAIN, PARAM_SAMPLER_CLIP_GRAIN },
-    { PARAM_FILTER_MODE, PARAM_FM_ENV_RELEASE },
-    { PARAM_LOOPER_XFADE, PARAM_WAVE_DETUNE },
-    { PARAM_FM_PLAY_VEL, PARAM_FM_OPERATOR_LAST },
-    { PARAM_AUDIO_FX_P1, PARAM_GROUP_FX_B_LEVEL },
-};
-
 static uint16_t mod_destination_control_candidate_count(void)
 {
-    uint16_t count = 0U;
-    for (uint8_t i = 0U;
-         i < (uint8_t)(sizeof(g_mod_destination_param_ranges)
-                       / sizeof(g_mod_destination_param_ranges[0])); ++i)
-    {
-        count = (uint16_t)(count
-            + (g_mod_destination_param_ranges[i].last
-               - g_mod_destination_param_ranges[i].first + 1U));
-    }
-    return count;
+    return (uint16_t)PARAM_COUNT;
 }
 
 static param_id_t mod_destination_control_candidate_at(uint16_t index)
 {
-    for (uint8_t i = 0U;
-         i < (uint8_t)(sizeof(g_mod_destination_param_ranges)
-                       / sizeof(g_mod_destination_param_ranges[0])); ++i)
-    {
-        const mod_destination_param_range_t range =
-            g_mod_destination_param_ranges[i];
-        const uint16_t count = (uint16_t)(range.last - range.first + 1U);
-        if (index < count) return (param_id_t)(range.first + index);
-        index = (uint16_t)(index - count);
-    }
-    return PARAM_COUNT;
+    return (index < (uint16_t)PARAM_COUNT) ? (param_id_t)index : PARAM_COUNT;
 }
 
 static uint16_t mod_destination_control_count_local(uint8_t track)
@@ -319,6 +292,35 @@ static uint8_t mod_destination_control_resolve_label(
     }
     if (mod_destination_address_resolve(address, out_target, &param) == 0U)
         return 0U;
+    uint8_t fx_slot = 0U;
+    uint8_t fx_param = 0U;
+    if (audio_fx_param_catalog_param_info(param, &fx_slot, &fx_param) != 0U)
+    {
+        float model = 0.0f;
+        if ((audio_fx_control_state_get_param(*out_target,
+                (fx_slot != 0U) ? PARAM_AUDIO_FX_B_MODEL
+                                : PARAM_AUDIO_FX_MODEL, &model) == 0U)
+                || (audio_fx_param_catalog_resolve(
+                    (uint8_t)(model + 0.5f), fx_param, out_name) == 0U))
+            return 0U;
+        return 1U;
+    }
+    if ((param >= PARAM_DRUM_MD_P1) && (param <= PARAM_DRUM_MD_P8))
+    {
+        float model = 0.0f;
+        if (param_registry_get_track_value(
+                PARAM_DRUM_MD_MODEL, *out_target, &model) == 0U) return 0U;
+        const md_model_profile_t *const profile =
+            md_model_profile_get(md_model_validate(model));
+        const uint8_t slot = (uint8_t)(param - PARAM_DRUM_MD_P1);
+        if (slot >= profile->slot_count) return 0U;
+        *out_name = profile->slot_labels[slot];
+        return (*out_name != NULL) ? 1U : 0U;
+    }
+    if (param_prism_label_for_track_param(*out_target, param, out_name) != 0U)
+        return 1U;
+    if (param_stack_label_for_track_param(*out_target, param, out_name) != 0U)
+        return 1U;
     *out_name = param_registry[param].name;
     return (*out_name != NULL) ? 1U : 0U;
 }
