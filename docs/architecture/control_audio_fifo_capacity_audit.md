@@ -121,9 +121,12 @@ deja en file (348), le backlog encodeur maximal plus les sept remplissages TIM7
 (540), et un tour de services/assignments borne par le bulk commun (64). Ils
 peuvent tous se cumuler, d'ou 953, sans compter deux fois Pattern/Project qui ne
 publient plus leur projection dans la FIFO. Avec l'horizon maximal et la marge,
-`3292 < 4096`, soit 804 entrees encore libres. FIFO full au nominal est donc une
-rupture d'invariant. Le test de capacite demeure obligatoire contre la corruption;
-les chemins produit ne l'utilisent pas comme backpressure ou retry fonctionnel.
+`3292 < 4096`, soit 804 entrees encore libres. La reservation du prochain
+horizon n'est toutefois admise que si ses 1827 places restent libres: CONTROL
+cede alors la passe sans avancer son curseur et reprend apres le drain AUDIO.
+Le test de capacite demeure obligatoire contre la corruption; une pression
+transitoire devient ainsi une backpressure cooperative, tandis qu'un refus de
+forme, de plancher ou de commit reste une rupture d'invariant.
 
 La FIFO occupe 65536 octets, contre 262144 dans le dimensionnement compensant
 les anciens restores. Le snapshot unique ajoute 73920 octets: l'ensemble vaut

@@ -511,8 +511,16 @@ static void seq_runtime_process_core(void)
             if (before_boundary < frames)
                 frames = (uint16_t)before_boundary;
         }
-        if (control_rt_publication_begin_horizon(
-                window_first, frames) == 0U)
+        const uint8_t begin_result = control_rt_publication_begin_horizon(
+            window_first, frames);
+        if (begin_result == CONTROL_RT_PUBLICATION_BEGIN_BACKPRESSURE)
+        {
+            /* AUDIO owns the only progress that can release FIFO capacity.
+             * Keep the cursor and all musical ledgers unchanged; the next
+             * ordinary CONTROL pass will retry admission cooperatively. */
+            return;
+        }
+        if (begin_result == CONTROL_RT_PUBLICATION_BEGIN_REJECTED)
         {
             BRICK_FATAL_CONTEXT(
                 "CONTROL_FIFO_HORIZON_BEGIN_FAILED",

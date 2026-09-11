@@ -5,6 +5,12 @@
 
 #include "IPC/control_audio_command.h"
 
+#define CONTROL_RT_PUBLICATION_BEGIN_REJECTED       0U
+#define CONTROL_RT_PUBLICATION_BEGIN_ACCEPTED       1U
+/* The FIFO is temporarily below the worst-case reservation.  The caller may
+ * leave its cursor untouched and continue on a later cooperative pass. */
+#define CONTROL_RT_PUBLICATION_BEGIN_BACKPRESSURE    2U
+
 /*
  * CONTROL_RT is the sole CONTROL-side authority for publication of functional
  * CONTROL -> AUDIO commands. It owns publication mechanics and FIFO commit,

@@ -455,14 +455,14 @@ uint8_t control_rt_publication_begin_horizon(uint64_t first_sample,
         return 0U;
     const uint16_t free = control_audio_fifo_control_free();
     if (free < CONTROL_AUDIO_FIFO_CONTRACT_BURST)
-        return 0U;
+        return CONTROL_RT_PUBLICATION_BEGIN_BACKPRESSURE;
     g_control_audio_horizon.count = 0U;
     g_control_audio_horizon.limit = CONTROL_AUDIO_FIFO_CONTRACT_BURST;
     g_control_audio_horizon.frames = frames;
     g_control_audio_horizon.first_sample = first_sample;
     g_control_audio_horizon.active = 1U;
     seq_note_trace_horizon_begin(first_sample);
-    return 1U;
+    return CONTROL_RT_PUBLICATION_BEGIN_ACCEPTED;
 }
 
 void control_rt_publication_abort_horizon(void)

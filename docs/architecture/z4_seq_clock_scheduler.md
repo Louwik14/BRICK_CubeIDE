@@ -48,8 +48,11 @@ Panic CC120/123 publie PANIC dans la FIFO fonctionnelle unique. L'ordre FIFO pla
 ## Commit d'horizon
 
 La construction d'un horizon ne commence que si les 1827 places du burst
-contractuel sont disponibles. Collecte, Note FX et sorties terminales restent
+contractuel sont disponibles. Si AUDIO n'a pas encore libere cette capacite,
+CONTROL quitte la passe sans modifier son curseur ni aucun ledger; l'admission
+reprend lors d'une passe cooperative ulterieure. Les refus de forme, de plancher
+ou d'etat restent fatals. Collecte, Note FX et sorties terminales restent
 invisibles jusqu'au commit FIFO unique. Le curseur
-`g_seq_runtime_control_sample_cursor` avance seulement apres ce commit; un refus
-de reservation declenche le fatal d'invariant et ne consomme aucun etat
-producteur ni aucune fenetre musicale.
+`g_seq_runtime_control_sample_cursor` avance seulement apres ce commit; une
+pression FIFO temporaire ne consomme donc aucun etat producteur ni aucune
+fenetre musicale.
