@@ -839,6 +839,11 @@ uint8_t mod_lfo_v1_set_track_param_audio(uint8_t track, uint8_t lfo_index,
     const mod_lfo_trig_mode_t old_trig = (mod_lfo_trig_mode_t)(uint8_t)(
         mod_lfo_effective_field(rt, config, MOD_LFO_PARAM_TRIG) + 0.5f);
     uint8_t reset = MOD_LFO_SNAPSHOT_RESET_SHAPE;
+    /* A durable live edit becomes the effective value immediately.  Keeping
+     * the old per-field TEMP bit here makes mod_lfo_effective_field() ignore
+     * the freshly installed AUDIO config until that override is cleared. */
+    rt->temp_valid_mask = (uint8_t)(rt->temp_valid_mask
+        & (uint8_t)~mod_lfo_runtime_param_mask(param));
     switch (param)
     {
         case MOD_LFO_PARAM_RATE:
