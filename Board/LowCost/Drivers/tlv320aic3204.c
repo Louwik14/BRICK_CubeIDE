@@ -65,7 +65,9 @@ static tlv320aic3204_analog_input_t g_tlv_analog_input =
 
 #define TLV_MIC_RIGHT_PGA_GAIN_20_DB 0x28U
 /* MIC uses IN3_R; weakly bias the disconnected IN1_R input to common mode. */
-#define TLV_MIC_FLOATING_INPUT 0x7BU
+#define TLV_LINE_FLOATING_INPUT 0x3CU
+#define TLV_MIC_FLOATING_INPUT 0x78U
+#define TLV_MICBIAS_2V5_AVDD 0x60U
 
 static void tlv_set_stage(tlv320aic3204_stage_t stage)
 {
@@ -274,37 +276,6 @@ static tlv320aic3204_status_t tlv_write_checked(I2C_HandleTypeDef *i2c,
   return TLV320AIC3204_STATUS_OK;
 }
 
-static tlv320aic3204_status_t tlv_write_checked_mask(I2C_HandleTypeDef *i2c,
-                                                     uint8_t address,
-                                                     uint8_t page,
-                                                     uint8_t reg,
-                                                     uint8_t value,
-                                                     uint8_t mask)
-{
-  tlv320aic3204_status_t status =
-      TLV320AIC3204_WriteReg(i2c, address, page, reg, value);
-  if (status != TLV320AIC3204_STATUS_OK)
-  {
-    return status;
-  }
-
-  uint8_t readback = 0U;
-  status = TLV320AIC3204_ReadReg(i2c, address, page, reg, &readback);
-  g_tlv_diag.expected = value;
-  g_tlv_diag.mask = mask;
-  if (status != TLV320AIC3204_STATUS_OK)
-  {
-    return status;
-  }
-
-  if ((readback & mask) != (value & mask))
-  {
-    g_tlv_diag.readback_errors++;
-    return tlv_record_status(TLV320AIC3204_STATUS_VERIFY_ERROR);
-  }
-  return TLV320AIC3204_STATUS_OK;
-}
-
 static tlv320aic3204_status_t tlv_write_extended(I2C_HandleTypeDef *i2c,
                                                  uint8_t address,
                                                  uint8_t page,
@@ -433,7 +404,7 @@ static tlv320aic3204_status_t tlv_init(const tlv320aic3204_config_t *config)
   tlv_set_stage(TLV320AIC3204_STAGE_ANALOG_POWER);
   status = tlv_write_extended(config->i2c, config->address_7bit, 1U, TLV_P1_MICBIAS, 0x00U);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
-  status = tlv_write_extended(config->i2c, config->address_7bit, 1U, TLV_P1_FLOATING_INPUT, 0x3FU);
+  status = tlv_write_extended(config->i2c, config->address_7bit, 1U, TLV_P1_FLOATING_INPUT, TLV_LINE_FLOATING_INPUT);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
   status = tlv_write_extended(config->i2c, config->address_7bit, 1U, TLV_P1_LEFT_P_ROUTE, config->left_p_route);
   if (status != TLV320AIC3204_STATUS_OK) { return status; }
@@ -580,17 +551,19 @@ tlv320aic3204_status_t TLV320AIC3204_SetAnalogInput(
     return TLV320AIC3204_STATUS_OK;
   }
 
-  const uint8_t micbias = (input == TLV320AIC3204_ANALOG_INPUT_MIC) ? 0x68U : 0x00U;
+  const uint8_t micbias = (input == TLV320AIC3204_ANALOG_INPUT_MIC)
+      ? TLV_MICBIAS_2V5_AVDD : 0x00U;
   const uint8_t floating = (input == TLV320AIC3204_ANALOG_INPUT_MIC)
-      ? TLV_MIC_FLOATING_INPUT : 0x3FU;
+      ? TLV_MIC_FLOATING_INPUT : TLV_LINE_FLOATING_INPUT;
   const uint8_t right_p = (input == TLV320AIC3204_ANALOG_INPUT_MIC) ? 0x04U : 0x80U;
   const uint8_t right_pga = (input == TLV320AIC3204_ANALOG_INPUT_MIC)
       ? TLV_MIC_RIGHT_PGA_GAIN_20_DB : 0x00U;
   const uint8_t restore_micbias =
-      (g_tlv_analog_input == TLV320AIC3204_ANALOG_INPUT_MIC) ? 0x68U : 0x00U;
+      (g_tlv_analog_input == TLV320AIC3204_ANALOG_INPUT_MIC)
+          ? TLV_MICBIAS_2V5_AVDD : 0x00U;
   const uint8_t restore_floating =
       (g_tlv_analog_input == TLV320AIC3204_ANALOG_INPUT_MIC)
-          ? TLV_MIC_FLOATING_INPUT : 0x3FU;
+          ? TLV_MIC_FLOATING_INPUT : TLV_LINE_FLOATING_INPUT;
   const uint8_t restore_right_p =
       (g_tlv_analog_input == TLV320AIC3204_ANALOG_INPUT_MIC) ? 0x04U : 0x80U;
   const uint8_t restore_right_pga =
@@ -602,9 +575,9 @@ tlv320aic3204_status_t TLV320AIC3204_SetAnalogInput(
       1U, TLV_P1_MICBIAS, micbias);
   if (status == TLV320AIC3204_STATUS_OK)
   {
-    status = tlv_write_checked_mask(
+    status = tlv_write_checked(
         &TLV320AIC3204_I2C_HANDLE, TLV320AIC3204_I2C_ADDR_7BIT,
-        1U, TLV_P1_FLOATING_INPUT, floating, 0xFCU);
+        1U, TLV_P1_FLOATING_INPUT, floating);
   }
   if (status == TLV320AIC3204_STATUS_OK)
   {
@@ -624,9 +597,9 @@ tlv320aic3204_status_t TLV320AIC3204_SetAnalogInput(
     (void)tlv_write_checked(
         &TLV320AIC3204_I2C_HANDLE, TLV320AIC3204_I2C_ADDR_7BIT,
         1U, TLV_P1_MICBIAS, restore_micbias);
-    (void)tlv_write_checked_mask(
+    (void)tlv_write_checked(
         &TLV320AIC3204_I2C_HANDLE, TLV320AIC3204_I2C_ADDR_7BIT,
-        1U, TLV_P1_FLOATING_INPUT, restore_floating, 0xFCU);
+        1U, TLV_P1_FLOATING_INPUT, restore_floating);
     (void)tlv_write_checked(
         &TLV320AIC3204_I2C_HANDLE, TLV320AIC3204_I2C_ADDR_7BIT,
         1U, TLV_P1_RIGHT_P_ROUTE, restore_right_p);

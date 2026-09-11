@@ -44,10 +44,10 @@ celui du *TLV320AIC3204 Application Reference Guide* SLAA557.
 | P1/R1 | `0x08` | D3=1 coupe le faible lien AVDD-DVDD; conforme avec AVDD alimente par le LDO. |
 | P1/R2 | `0x01` | D3=0 active les blocs analogiques, D0=1 active le LDO AVDD; conforme. |
 | P1/R10 | `0x00` | D6=0 fixe le common-mode global a 0,9 V; les autres bits concernent les sorties; conforme. |
-| P1/R51 | `0x68` | D6=1 MICBIAS actif, D5:D4=`10` donne 2,5 V avec CM=0,9 V, D3=1 choisit LDOIN; conforme aux 2,45 V mesures. |
+| P1/R51 | `0x60` | D6=1 MICBIAS actif, D5:D4=`10` donne 2,5 V avec CM=0,9 V, D3=0 choisit AVDD. |
 | P1/R55 | `0x04` | D3:D2=`01` route exclusivement IN3_R vers Right MICPGA+ par 10 kohm; conforme. A 1 uF, ce choix place le pole d'entree vers 16 Hz pour une source d'impedance faible. |
 | P1/R57 | `0x40` | D7:D6=`01` route CM1R vers Right MICPGA- par 10 kohm; tous les autres chemins sont coupes. C'est la reference single-ended correcte et elle est symetrique avec les 10 kohm de R55. |
-| P1/R58 | `0x7B` ecrit, `0x78` utile | D7=0 laisse IN1_L disponible, D6=1 reference IN1_R inutilise, D5:D3=111 referencent IN2_L, IN2_R et IN3_L inutilises, D2=0 ne charge pas IN3_R. D1:D0 sont reserves, lus a zero et exclus du masque de verification: les `11` ecrits sont non canoniques mais sans effet sur le silicium ni sur le niveau MIC. |
+| P1/R58 | `0x78` | D7=0 laisse IN1_L disponible, D6=1 reference IN1_R inutilise, D5:D3=111 referencent IN2_L, IN2_R et IN3_L inutilises, D2=0 ne charge pas IN3_R. D1:D0 reserves restent a zero et la valeur complete est verifiee au readback. |
 | P1/R60 | `0x28` | D7=0 active le gain programme; D6:D0=40, soit 40 x 0,5 dB = +20 dB avec l'impedance 10 kohm de R55. Conforme, non mute. |
 | P1/R61 | `0x00` | ADC PowerTune PTM_R4; conforme. |
 | P1/R71 | `0x32` | charge rapide des entrees analogiques en 6,4 ms; conforme. |
@@ -67,7 +67,7 @@ haute impedance augmente le bruit ou reduit la dynamique dans un chemin micro a
 fort gain. Les 10 kohm sont donc coherents ici, avec une charge restant nettement
 superieure aux 2,2 kohm de polarisation de la capsule.
 
-LINE et MIC ne different que sur P1/R51 (`0x00`/`0x68`), P1/R55
+LINE et MIC ne different que sur P1/R51 (`0x00`/`0x60`), P1/R55
 (`0x80`, IN1_R par 20 kohm / `0x04`, IN3_R par 10 kohm), les bits utiles de
 P1/R58 (`0x3C`/`0x78`) et P1/R60 (`0x00`/`0x28`). P1/R57 reste volontairement
 `0x40`: CM1R par 10 kohm est la reference negative correcte dans les deux modes.
