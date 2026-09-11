@@ -6,8 +6,12 @@
       "task": "Build Release"
     },
     {
-      "label": "$(arrow-up) Flash Release",
-      "task": "Flash Release"
+      "label": "Flash Pill",
+      "task": "Flash Pill"
+    },
+    {
+      "label": "Flash USB",
+      "task": "Flash USB"
     },
     {
       "label": "$(trash) Clean Release",
