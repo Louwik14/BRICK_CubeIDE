@@ -1,26 +1,28 @@
 @echo off
 setlocal
 
-set "GDB=C:\ChibiStudio\tools\GNU Tools ARM Embedded\11.3 2022.08\bin\arm-none-eabi-gdb.exe"
-set "OPENOCD=C:\openocd\OpenOCD-20250710-0.12.0\bin\openocd.exe"
-set "OPENOCD_SCRIPTS=C:\openocd\OpenOCD-20250710-0.12.0\share\openocd\scripts"
-set "ELF=C:\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\build\Release\BRICK6_CUBE.elf"
+set "BMP_PORT=COM11"
+set "GDB=C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin\arm-none-eabi-gdb.exe"
+set "ELF=%~dp0build\Release\BRICK6_CUBE.elf"
 
-start "OpenOCD STM32H7" "%OPENOCD%" ^
--s "%OPENOCD_SCRIPTS%" ^
--f interface/stlink.cfg ^
--f target/stm32h7x.cfg ^
--c "transport select swd" ^
--c "adapter speed 200" ^
--c "init" ^
--c "halt"
+if not exist "%GDB%" (
+    echo arm-none-eabi-gdb introuvable :
+    echo %GDB%
+    endlocal & exit /b 1
+)
 
-timeout /t 3 /nobreak >nul
+if not exist "%ELF%" (
+    echo ELF Release introuvable :
+    echo %ELF%
+    endlocal & exit /b 1
+)
 
-start "GDB STM32H7" "%GDB%" "%ELF%" ^
--ex "set confirm off" ^
--ex "target extended-remote localhost:3333" ^
--ex "monitor reset halt" ^
--ex "break HardFault_Handler"
+start "GDB STM32H7 Black Magic" "%GDB%" "%ELF%" ^
+    -ex "set confirm off" ^
+    -ex "set pagination off" ^
+    -ex "target extended-remote \\.\%BMP_PORT%" ^
+    -ex "monitor swd_scan" ^
+    -ex "attach 1" ^
+    -ex "break HardFault_Handler"
 
-endlocal
+endlocal & exit /b 0

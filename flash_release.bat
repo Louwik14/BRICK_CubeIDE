@@ -1,41 +1,44 @@
 @echo off
+setlocal
 
-set "OPENOCD=C:\openocd\OpenOCD-20250710-0.12.0\bin\openocd.exe"
-set "ELF=C:\Users\developpeur\Documents\BRICK5_H743_176\BRICK6\build\Release\BRICK6_CUBE.elf"
+set "BMP_PORT=COM11"
+set "GDB=C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin\arm-none-eabi-gdb.exe"
+set "ELF=%~dp0build\Release\BRICK6_CUBE.elf"
 
-if not exist "%OPENOCD%" (
-    echo OpenOCD introuvable
-    pause
-    exit /b 1
+if not exist "%GDB%" (
+    echo arm-none-eabi-gdb introuvable :
+    echo %GDB%
+    endlocal & exit /b 1
 )
 
 if not exist "%ELF%" (
     echo ELF lowcost introuvable :
     echo %ELF%
-    pause
-    exit /b 1
+    endlocal & exit /b 1
 )
 
 echo.
-echo === FLASH LOWCOST ===
+echo === FLASH LOWCOST BLACK MAGIC ===
 echo %ELF%
 echo.
 
-"%OPENOCD%" ^
--f interface/stlink.cfg ^
--c "transport select swd" ^
--c "set DUAL_BANK 1" ^
--f target/stm32h7x.cfg ^
--c "adapter speed 125" ^
--c "init; halt; program {%ELF%} verify reset exit"
+"%GDB%" "%ELF%" ^
+    -ex "set confirm off" ^
+    -ex "set pagination off" ^
+    -ex "target extended-remote \\.\%BMP_PORT%" ^
+    -ex "monitor swd_scan" ^
+    -ex "attach 1" ^
+    -ex "load" ^
+    -ex "compare-sections" ^
+    -ex "detach" ^
+    -ex "quit"
 
 if errorlevel 1 (
     echo.
     echo ECHEC DU FLASH
-    pause
-    exit /b 1
+    endlocal & exit /b 1
 )
 
 echo.
 echo FLASH LOWCOST TERMINE
-pause
+endlocal & exit /b 0
