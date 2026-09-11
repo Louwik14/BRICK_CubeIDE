@@ -26,10 +26,10 @@ echo.
     -ex "set confirm off" ^
     -ex "set pagination off" ^
     -ex "target extended-remote \\.\%BMP_PORT%" ^
+    -ex "monitor frequency 4M" ^
     -ex "monitor swd_scan" ^
     -ex "attach 1" ^
     -ex "load" ^
-    -ex "compare-sections" ^
     -ex "detach" ^
     -ex "quit"
 
