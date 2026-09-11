@@ -45,6 +45,26 @@ uint8_t param_registry_is_plockable(param_id_t id)
         || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX));
 }
 
+uint8_t param_registry_is_modulation_target(param_id_t id)
+{
+    if ((id >= PARAM_COUNT)
+            || (id == PARAM_MIDI_PROGRAM)
+            || ((id >= PARAM_MIDI_CC1_1) && (id <= PARAM_MIDI_CC3_4))
+            || (param_registry_is_plockable(id) == 0U))
+        return 0U;
+
+    uint8_t lfo_index = 0U;
+    mod_lfo_param_t lfo_param = MOD_LFO_PARAM_RATE;
+    if (param_lfo_map(id, &lfo_index, &lfo_param) != 0U)
+        return (uint8_t)(lfo_param == MOD_LFO_PARAM_RATE);
+
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+    return (uint8_t)((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
+        || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+        || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
+        || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX));
+}
+
 uint8_t param_registry_track_value_is_audio_command(param_id_t id,
                                                     uint8_t track)
 {

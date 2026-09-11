@@ -17,27 +17,14 @@
 /* CONTROL owns presentation and address enumeration.  The list is derived
  * directly from the canonical track descriptor; no AUDIO cache is mirrored. */
 
-static uint8_t mod_destination_control_is_internal_lfo(param_id_t id)
-{
-    switch (id)
-    {
-        case PARAM_LFO1_SHAPE: case PARAM_LFO1_TRIG: case PARAM_LFO1_PHASE:
-        case PARAM_LFO2_SHAPE: case PARAM_LFO2_TRIG: case PARAM_LFO2_PHASE:
-        case PARAM_LFO3_SHAPE: case PARAM_LFO3_TRIG: case PARAM_LFO3_PHASE:
-            return 1U;
-        default:
-            return 0U;
-    }
-}
-
 static uint8_t mod_destination_control_supported(uint8_t track, param_id_t id)
 {
     if ((track >= BRICK_ENTITY_CAPACITY) || (id >= PARAM_COUNT)
-            || (id == PARAM_MIDI_PROGRAM)
-            || (mod_destination_control_is_internal_lfo(id) != 0U))
+            || (param_registry_is_modulation_target(id) == 0U))
         return 0U;
-    if ((id == PARAM_LFO1_RATE) || (id == PARAM_LFO2_RATE)
-            || (id == PARAM_LFO3_RATE))
+
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD)
         return 1U;
     uint8_t fx_slot = 0U;
     uint8_t fx_param = 0U;
@@ -52,7 +39,6 @@ static uint8_t mod_destination_control_supported(uint8_t track, param_id_t id)
             return 0U;
     }
 
-    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
     if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_ENV)
             && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
             && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX)
@@ -117,15 +103,12 @@ uint8_t mod_destination_catalog_address_is_supported_projected(
                 || (target_topology.parent_entity_id == owner))
             : (target != owner))
         return 0U;
-    if ((id == PARAM_MIDI_PROGRAM)
-            || (mod_destination_control_is_internal_lfo(id) != 0U))
+    if (param_registry_is_modulation_target(id) == 0U)
         return 0U;
-    if (param_registry_is_plockable(id) == 0U) return 0U;
-    if ((id == PARAM_LFO1_RATE) || (id == PARAM_LFO2_RATE)
-            || (id == PARAM_LFO3_RATE)) return 1U;
     const track_config_t config = configs[target];
     if (config.family == TRACK_FAMILY_OFF) return 0U;
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD) return 1U;
     if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_ENV)
             && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
             && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX)

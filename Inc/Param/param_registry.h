@@ -99,6 +99,10 @@ uint8_t param_registry_track_value_is_audio_command(param_id_t id,uint8_t track)
 /* Canonical, track-independent product decision. Contextual engine/FX
  * applicability is evaluated separately by track_runtime/slot mapping. */
 uint8_t param_registry_is_plockable(param_id_t id);
+/* Canonical Matrix destination capability.  This is narrower than
+ * p-lockability: internal LFO fields remain editable/p-lockable, but only
+ * RATE is a Matrix destination. Track/engine applicability is contextual. */
+uint8_t param_registry_is_modulation_target(param_id_t id);
 uint8_t param_registry_track_temp_is_applicable(param_id_t id, uint8_t track);
 uint8_t param_registry_temp_is_clearable(param_id_t id);
 /* CONTROL target-only seam used by bulk preparation/commit work.  It performs

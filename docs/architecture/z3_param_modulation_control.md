@@ -14,10 +14,14 @@ Autorites d'ecriture:
 
 Les classifications CONTROL ont chacune une autorite: `track_runtime_get_param_rule`
 porte domaine/ressource, `param_registry_is_plockable` porte la decision produit
-p-lock, et `param_registry_track_value_is_audio_command` derive le routage AUDIO
-du domaine et du contexte MIDI. L'ancienne allowlist AUDIO parallele n'existe plus.
-L'applicabilite TEMP et la restauration `BASE`/`CLEAR_TEMP` sont derivees par le
-registre; elles ne sont ni des proprietes de persistance ni des copies UI/Seq.
+p-lock, et `param_registry_is_modulation_target` porte la capacite canonique de
+destination Matrix. Cette derniere est volontairement plus etroite: les champs
+LFO internes restent des Param editables/p-lockables, mais seul RATE est une
+destination; l'applicabilite par piste, moteur et modele reste contextuelle.
+`param_registry_track_value_is_audio_command` derive le routage AUDIO du domaine
+et du contexte MIDI. L'applicabilite TEMP et la restauration `BASE`/`CLEAR_TEMP`
+sont derivees par le registre; elles ne sont ni des proprietes de persistance ni
+des copies UI/Seq.
 
 Le routeur Param ne stocke aucune valeur. Keyboard, configuration Seq, PLAY et
 Transport/Metronome ne sont pas des Param: leurs UI et leur persistance parlent
@@ -123,7 +127,8 @@ leurs etats DSP.
 Les slots Audio FX A/B possedent MODEL/P1/P2/P3. MODEL reste un endpoint musical stable de slot; un changement conserve P1/P2/P3 et ne publie que MODEL. Filter position, ordre et modes spatiaux appartiennent a `audio_fx_control_state` et utilisent des commandes typees. Les restores preparent, publient, puis installent directement l'etat final, sans passer par les defaults du modele. Seuls P1/P2/P3 sont p-lockables. En GROUP, les models appartiennent au master et les children n'exposent que LEVEL A/B.
 
 La liste MOD parcourt le catalogue PARAM canonique puis conserve les parametres
-a la fois affiches, p-lockables et applicables au moteur/modele courant. Les
+a la fois declares destinations par le registre, affiches et applicables au
+moteur/modele courant. Les
 sends utilisent un mapping explicite `SEND1 -> 0`, `SEND2 -> 1`, `SEND3 -> 2`;
 leurs IDs ne sont pas supposes contigus. Les slots FX restent adresses P1/P2/P3
 en interne, mais leurs labels MOD viennent du catalogue du modele A/B courant.
