@@ -474,13 +474,19 @@ static void seq_runtime_process_core(void)
     if ((g_seq_runtime_control_sample_cursor < audio_sample)
             || (g_seq_runtime_control_sample_cursor > publish_limit))
         g_seq_runtime_control_sample_cursor = audio_sample;
-    const uint64_t first_unpublished =
-        control_music_output_first_unpublished_sample(
-            g_seq_runtime_control_sample_cursor);
-    if (g_seq_runtime_control_sample_cursor < first_unpublished)
-        g_seq_runtime_control_sample_cursor = first_unpublished;
     while (g_seq_runtime_control_sample_cursor < publish_limit)
     {
+        /* CONTROL_RT may have advanced the common publication floor since the
+         * previous window.  Resolve each candidate at admission time; the
+         * horizon builder remains strict and therefore still catches a stale
+         * producer instead of silently rewriting its date. */
+        const uint64_t first_unpublished =
+            control_music_output_first_unpublished_sample(
+                g_seq_runtime_control_sample_cursor);
+        if (g_seq_runtime_control_sample_cursor < first_unpublished)
+            g_seq_runtime_control_sample_cursor = first_unpublished;
+        if (g_seq_runtime_control_sample_cursor >= publish_limit)
+            break;
         const uint64_t remaining = publish_limit - g_seq_runtime_control_sample_cursor;
         uint16_t frames = (remaining > UINT16_MAX)
             ? UINT16_MAX : (uint16_t)remaining;
@@ -506,8 +512,12 @@ static void seq_runtime_process_core(void)
         if (control_rt_publication_begin_horizon(
                 window_first, frames) == 0U)
         {
-            Error_Handler();
-            return;
+            BRICK_FATAL_CONTEXT(
+                "CONTROL_FIFO_HORIZON_BEGIN_FAILED",
+                BRICK_FATAL_CONTROL_AUDIO_FIFO_CONTRACT,
+                (uint32_t)window_first,
+                (uint32_t)control_rt_first_unpublished_sample(window_first),
+                frames, control_rt_publication_free());
         }
         if (control_music_output_begin_window(window_first, frames) == 0U)
         {
