@@ -72,6 +72,17 @@ static int8_t audio_note_engine_find_free_output(brick_entity_id_t entity_id)
     return -1;
 }
 
+uint8_t audio_note_engine_adapter_entity_has_held_output(
+    brick_entity_id_t entity_id)
+{
+    if (entity_id >= BRICK_ENTITY_CAPACITY)
+        return 0U;
+    for (uint8_t i = 0U; i < AUDIO_PHYSICAL_OUTPUT_CAPACITY; ++i)
+        if (g_audio_physical_output[entity_id][i].gate != 0U)
+            return 1U;
+    return 0U;
+}
+
 static uint8_t audio_note_engine_commit_output(brick_entity_id_t entity_id,
                                                uint32_t output_id,
                                                uint8_t note,
@@ -394,6 +405,9 @@ static uint8_t audio_note_engine_adapter_apply_physical(
         program->type == TRACK_RUNTIME_TYPE_EXTERNAL);
     const uint8_t output_was_active = (uint8_t)(
         audio_note_engine_find_output(entity_id, output_id) >= 0);
+    const uint8_t ram_hold = (uint8_t)((engine == TRACK_RUNTIME_ENGINE_SAMPLER)
+        && (program->type == TRACK_RUNTIME_TYPE_RAM)
+        && (brick6_sampler_runtime_ram_mode_is_hold(entity_id) != 0U));
 
     if ((uses_voice_vca == 0U) && (is_multi_sampler == 0U)
             && (output_id != 0U))
@@ -463,8 +477,8 @@ static uint8_t audio_note_engine_adapter_apply_physical(
             if ((is_note_on != 0U) && ((is_external == 0U)
                     || (output_was_active == 0U)))
                 mixer_track_vca_note_on(program->mix_track_id, note, velocity);
-            else if ((is_note_on == 0U) && ((is_external == 0U)
-                    || (output_was_active != 0U)))
+            else if ((is_note_on == 0U) && (ram_hold == 0U)
+                    && ((is_external == 0U) || (output_was_active != 0U)))
                 mixer_track_vca_note_off(program->mix_track_id, note);
         }
     }

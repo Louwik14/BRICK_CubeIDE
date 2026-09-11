@@ -185,7 +185,10 @@ static void brick6_sampler_runtime_trigger_ram_slice(uint8_t track_id)
         if ((region_end > region_begin) && (region_end <= ram->frames))
         {
             const uint8_t mode = voice->mode;
-            const uint8_t reverse = (mode == 1U) ? 1U : 0U;
+            const uint8_t playback_mode =
+                brick6_sampler_runtime_ram_mode_playback(mode);
+            const uint8_t reverse =
+                (playback_mode == BRICK6_SAMPLER_RAM_MODE_REVERSE_ONE) ? 1U : 0U;
             uint32_t loop_begin = region_begin;
             const uint8_t loop_mode =
                 brick6_sampler_runtime_ram_mode_to_loop_mode(mode,
@@ -343,6 +346,8 @@ static uint8_t brick6_sampler_runtime_trigger_ram(uint8_t track_id)
     uint32_t region_end = ram->frames;
     uint32_t loop_begin = 0U;
     const uint8_t mode = voice->mode;
+    const uint8_t playback_mode =
+        brick6_sampler_runtime_ram_mode_playback(mode);
     brick6_sampler_runtime_build_effective_ram_bounds(ram->frames,
                                                       voice->start,
                                                       voice->length,
@@ -352,7 +357,8 @@ static uint8_t brick6_sampler_runtime_trigger_ram(uint8_t track_id)
                                                       &region_begin,
                                                       &region_end,
                                                       &loop_begin);
-    const uint8_t reverse = (mode == 1U) ? 1U : 0U;
+    const uint8_t reverse =
+        (playback_mode == BRICK6_SAMPLER_RAM_MODE_REVERSE_ONE) ? 1U : 0U;
     const uint32_t step_q16 = brick6_sampler_runtime_ram_step_q16(voice, ram);
     const uint8_t loop_mode =
         brick6_sampler_runtime_ram_mode_to_loop_mode(mode,
@@ -469,7 +475,9 @@ static void brick6_sampler_runtime_build_effective_ram_bounds(uint32_t length_fr
                                                                   length);
         loop_begin = region_begin;
 
-        if ((mode == 2U) && (use_loop_marker != 0U))
+        if ((brick6_sampler_runtime_ram_mode_playback(mode)
+             == BRICK6_SAMPLER_RAM_MODE_LOOP)
+            && (use_loop_marker != 0U))
         {
             loop_begin = brick6_sampler_runtime_clamp_region_begin(length_frames, loop_start);
             if (loop_begin < region_begin)
@@ -588,17 +596,35 @@ static uint8_t brick6_sampler_runtime_ram_mode_to_loop_mode(uint8_t mode,
                                                             uint8_t loop_valid)
 {
     (void)loop_valid;
-    if ((mode == 2U) && (region_end > region_begin))
+    const uint8_t playback_mode =
+        brick6_sampler_runtime_ram_mode_playback(mode);
+    if ((playback_mode == BRICK6_SAMPLER_RAM_MODE_LOOP)
+            && (region_end > region_begin))
     {
         return (uint8_t)BRICK6_SAMPLER_LOOP_FORWARD;
     }
-    if (mode == 3U)
+    if (playback_mode == BRICK6_SAMPLER_RAM_MODE_PINGPONG)
     {
         return ((region_end - region_begin) > 1U)
                    ? (uint8_t)BRICK6_SAMPLER_LOOP_PINGPONG
                    : (uint8_t)BRICK6_SAMPLER_LOOP_NONE;
     }
     return (uint8_t)BRICK6_SAMPLER_LOOP_NONE;
+}
+
+static uint8_t brick6_sampler_runtime_ram_mode_playback(uint8_t mode)
+{
+    switch ((brick6_sampler_ram_mode_t)mode)
+    {
+        case BRICK6_SAMPLER_RAM_MODE_HOLD_ONE:
+            return BRICK6_SAMPLER_RAM_MODE_ONE;
+        case BRICK6_SAMPLER_RAM_MODE_HOLD_LOOP:
+            return BRICK6_SAMPLER_RAM_MODE_LOOP;
+        case BRICK6_SAMPLER_RAM_MODE_HOLD_PINGPONG:
+            return BRICK6_SAMPLER_RAM_MODE_PINGPONG;
+        default:
+            return mode;
+    }
 }
 
 static void brick6_sampler_runtime_reconcile_ram_voice_bounds_live(uint8_t track_id)
@@ -671,7 +697,9 @@ static void brick6_sampler_runtime_reconcile_ram_voice_bounds_live(uint8_t track
     voice->loop_begin = loop_begin;
     voice->loop_frames = region_end - loop_begin;
     voice->loop_mode = loop_mode;
-    if (voice->mode == 1U)
+    const uint8_t playback_mode =
+        brick6_sampler_runtime_ram_mode_playback(voice->mode);
+    if (playback_mode == BRICK6_SAMPLER_RAM_MODE_REVERSE_ONE)
     {
         voice->reverse = 1U;
     }
@@ -682,7 +710,7 @@ static void brick6_sampler_runtime_reconcile_ram_voice_bounds_live(uint8_t track
 
     uint64_t reconciled_q16 = position_q16;
     uint8_t recaled = 0U;
-    if (voice->mode == 2U)
+    if (playback_mode == BRICK6_SAMPLER_RAM_MODE_LOOP)
     {
         voice->reverse = 0U;
         if (position_q16 < begin_q16)
@@ -696,7 +724,7 @@ static void brick6_sampler_runtime_reconcile_ram_voice_bounds_live(uint8_t track
             recaled = 1U;
         }
     }
-    else if (voice->mode == 3U)
+    else if (playback_mode == BRICK6_SAMPLER_RAM_MODE_PINGPONG)
     {
         if (position_q16 < begin_q16)
         {
@@ -717,7 +745,9 @@ static void brick6_sampler_runtime_reconcile_ram_voice_bounds_live(uint8_t track
         recaled = 1U;
     }
 
-    if ((voice->mode <= 1U) && (position_q16 >= end_q16))
+    if (((playback_mode == BRICK6_SAMPLER_RAM_MODE_ONE)
+            || (playback_mode == BRICK6_SAMPLER_RAM_MODE_REVERSE_ONE))
+            && (position_q16 >= end_q16))
     {
         reconciled_q16 = (uint64_t)(region_end - 1U) << 16U;
         recaled = 1U;

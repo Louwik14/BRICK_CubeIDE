@@ -24,6 +24,20 @@ struct multi_voice_dsp_slot_t;
 #define SAMPLER_MULTI_MAX_GLOBAL_VOICES    (BRICK6_SAMPLER_MULTI_MAX_VOICES)
 #define STREAM_SAMPLER_ROOT_NOTE            (60U)
 
+/* Values 0..3 are disk-compatible with the existing Sample RAM contract.
+ * HOLD variants are appended so current projects retain their meaning. */
+typedef enum
+{
+    BRICK6_SAMPLER_RAM_MODE_ONE = 0,
+    BRICK6_SAMPLER_RAM_MODE_REVERSE_ONE = 1,
+    BRICK6_SAMPLER_RAM_MODE_LOOP = 2,
+    BRICK6_SAMPLER_RAM_MODE_PINGPONG = 3,
+    BRICK6_SAMPLER_RAM_MODE_HOLD_ONE = 4,
+    BRICK6_SAMPLER_RAM_MODE_HOLD_LOOP = 5,
+    BRICK6_SAMPLER_RAM_MODE_HOLD_PINGPONG = 6,
+    BRICK6_SAMPLER_RAM_MODE_COUNT
+} brick6_sampler_ram_mode_t;
+
 typedef enum
 {
     BRICK6_SAMPLER_MULTI_DIAG_REASON_NONE = 0,
@@ -116,6 +130,7 @@ uint8_t brick6_sampler_runtime_multi_instrument_is_ready(uint8_t track_id);
 void brick6_sampler_runtime_set_start(uint8_t track_id, float start);
 void brick6_sampler_runtime_set_length(uint8_t track_id, float length);
 void brick6_sampler_runtime_set_mode(uint8_t track_id, uint8_t mode);
+uint8_t brick6_sampler_runtime_ram_mode_is_hold(uint8_t track_id);
 void brick6_sampler_runtime_set_tune(uint8_t track_id, float tune);
 void brick6_sampler_runtime_set_loop_start(uint8_t track_id, float loop_start);
 void brick6_sampler_runtime_set_slice_count(uint8_t track_id, uint8_t slice_count);

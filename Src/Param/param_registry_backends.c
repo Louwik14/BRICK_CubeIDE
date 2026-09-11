@@ -529,11 +529,8 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             return 1U;
         case PARAM_SAMPLER_MODE:
         {
-            uint8_t mode = (uint8_t)(param_backend_clamp_value(value, 0.0f, 5.0f) + 0.5f);
-            if (mode >= 4U)
-            {
-                mode = 0U;
-            }
+            const uint8_t mode = (uint8_t)(
+                param_backend_clamp_value(value, 0.0f, 6.0f) + 0.5f);
             brick6_sampler_runtime_set_mode(track, mode);
             return 1U;
         }

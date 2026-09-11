@@ -88,7 +88,10 @@ static const char *const g_delay_time_labels[] = {"1/32", "1/16T", "1/16", "1/8T
 static const char *const g_delay_type_labels[] = {"CLASSIC", "DUAL", NULL};
 static const char *const g_delay_mode_labels[] = {"Normal", "PingPong", "Tap", "ClassicPP", NULL};
 static const char *const g_reverb_delays_labels[] = {"DELUGE", "TBD", NULL};
-static const char *const g_sampler_mode_labels[] = {"Shot", "RevShot", "Loop", "PingPong", NULL};
+static const char *const g_sampler_mode_labels[] = {
+    "ONE", "REV.ONE", "LOOP", "PINGPONG",
+    "H.ONE", "H.LOOP", "H.PINGPONG", NULL
+};
 static const char *const g_sampler_slice_count_labels[] = {"Off", "2", "4", "8", "16", "32", "64", NULL};
 static const char *const g_sampler_clip_sync_length_labels[] = {"Off", "1 bar", "2 bars", "4 bars", "Auto", NULL};
 static const char *const g_sampler_clip_play_mode_labels[] = {"Gate", "Launch", NULL};

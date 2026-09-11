@@ -314,6 +314,7 @@ static uint8_t brick6_sampler_runtime_ram_mode_to_loop_mode(uint8_t mode,
                                                             uint32_t region_begin,
                                                             uint32_t region_end,
                                                             uint8_t loop_valid);
+static uint8_t brick6_sampler_runtime_ram_mode_playback(uint8_t mode);
 static void brick6_sampler_runtime_reconcile_ram_voice_bounds_live(uint8_t track_id);
 static void brick6_sampler_runtime_reproject_ram_voice_tune_live(uint8_t track_id);
 static float brick6_sampler_runtime_pitch_ratio(float semitones);

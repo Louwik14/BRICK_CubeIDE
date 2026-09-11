@@ -1472,6 +1472,8 @@ ITCM_TEXT void brick6_sampler_runtime_render_ram_track(const track_audio_runtime
     brick6_sampler_voice_t *const voice = &g_sampler_voice[ctx->program_route.entity_id];
     if ((voice->active != 0U)
         && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_RAM)
+        && (brick6_sampler_runtime_ram_mode_is_hold(
+                ctx->program_route.entity_id) == 0U)
         && (ctx->program_route.mix_track_id < MIXER_MAX_TRACKS)
         && (mixer_track_vca_is_running(ctx->program_route.mix_track_id) == 0U))
     {
@@ -1509,6 +1511,8 @@ void brick6_sampler_runtime_render_ram_track_mono(const track_audio_runtime_ctx_
     brick6_sampler_voice_t *const voice = &g_sampler_voice[ctx->program_route.entity_id];
     if ((voice->active != 0U)
         && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_RAM)
+        && (brick6_sampler_runtime_ram_mode_is_hold(
+                ctx->program_route.entity_id) == 0U)
         && (ctx->program_route.mix_track_id < MIXER_MAX_TRACKS)
         && (mixer_track_vca_is_running(ctx->program_route.mix_track_id) == 0U))
     {

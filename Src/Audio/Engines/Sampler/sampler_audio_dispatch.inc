@@ -336,8 +336,31 @@ void brick6_sampler_runtime_set_mode(uint8_t track_id, uint8_t mode)
     {
         return;
     }
-    g_sampler_voice[track_id].mode = (mode > 5U) ? 0U : mode;
+    const uint8_t previous_hold =
+        brick6_sampler_runtime_ram_mode_is_hold(track_id);
+    g_sampler_voice[track_id].mode =
+        (mode < BRICK6_SAMPLER_RAM_MODE_COUNT)
+            ? mode : BRICK6_SAMPLER_RAM_MODE_ONE;
     brick6_sampler_runtime_reconcile_ram_voice_bounds_live(track_id);
+    if ((previous_hold != 0U)
+            && (brick6_sampler_runtime_ram_mode_is_hold(track_id) == 0U)
+            && (audio_note_engine_adapter_entity_has_held_output(track_id) == 0U))
+    {
+        track_audio_runtime_ctx_t ctx;
+        if ((audio_note_engine_adapter_current_ctx(track_id, &ctx) != 0U)
+                && (ctx.program_route.mix_track_id < MIXER_MAX_TRACKS))
+            mixer_track_vca_all_notes_off(ctx.program_route.mix_track_id);
+    }
+}
+
+uint8_t brick6_sampler_runtime_ram_mode_is_hold(uint8_t track_id)
+{
+    if (track_id >= SEQ_TRACK_COUNT)
+        return 0U;
+    const uint8_t mode = g_sampler_voice[track_id].mode;
+    return (uint8_t)((mode == BRICK6_SAMPLER_RAM_MODE_HOLD_ONE)
+        || (mode == BRICK6_SAMPLER_RAM_MODE_HOLD_LOOP)
+        || (mode == BRICK6_SAMPLER_RAM_MODE_HOLD_PINGPONG));
 }
 
 void brick6_sampler_runtime_set_tune(uint8_t track_id, float tune)

@@ -424,7 +424,7 @@ static uint8_t mod_destination_apply_sampler_rt(uint8_t track,
             return 1U;
         case PARAM_SAMPLER_MODE:
             if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_RAM) { return 0U; }
-            brick6_sampler_runtime_set_mode(track, (uint8_t)(mod_destination_clampf(value, 0.0f, 3.0f) + 0.5f));
+            brick6_sampler_runtime_set_mode(track, (uint8_t)(mod_destination_clampf(value, 0.0f, 6.0f) + 0.5f));
             return 1U;
         case PARAM_SAMPLER_TUNE:
             if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_RAM) { return 0U; }
