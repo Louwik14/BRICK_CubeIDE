@@ -48,7 +48,8 @@ void seq_runtime_exec_begin_running_at_sample_q16(seq_runtime_state_t *state,
  * - execution lifecycle helper for STOP / flush.
  * - clears runtime execution state and scheduler queue, but does not own transport policy.
  */
-void seq_runtime_exec_stop_lifecycle_apply(seq_runtime_state_t *state);
+void seq_runtime_exec_stop_lifecycle_apply(seq_runtime_state_t *state,
+                                           uint64_t effective_sample);
 void seq_runtime_exec_set_midi_clock_enabled(uint8_t enabled);
 void seq_runtime_exec_set_midi_clock_period_q16(uint32_t period_q16);
 uint32_t seq_runtime_exec_get_midi_clock_period_q16(void);

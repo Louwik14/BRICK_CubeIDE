@@ -240,7 +240,7 @@ static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_pan
     sample_capture_control_on_transport_stop(stop_sample);
     (void)audio_recorder_control_request_looper_stop(stop_sample, 0U);
     seq_edit_note_capture_reset();
-    seq_runtime_exec_stop_lifecycle_apply(&g_seq_runtime);
+    seq_runtime_exec_stop_lifecycle_apply(&g_seq_runtime, stop_sample);
     if (emit_transport_stop_and_panic != 0U)
     {
         const uint8_t send_stop = (uint8_t)(
@@ -1387,6 +1387,9 @@ void seq_runtime_clear_tracks(const seq_track_id_t *tracks, uint8_t track_count)
 
 void seq_runtime_begin_track_restore(const seq_track_id_t *tracks, uint8_t track_count)
 {
+    const uint64_t effective_sample =
+        control_music_output_first_unpublished_sample(
+            seq_runtime_get_now_sample());
     seq_play_scheduler_suspend_tracks(tracks, track_count);
     for (uint8_t i = 0U; i < track_count; ++i)
     {
@@ -1394,19 +1397,24 @@ void seq_runtime_begin_track_restore(const seq_track_id_t *tracks, uint8_t track
         {
             continue;
         }
-        seq_boundary_engine_restore_all_active_locks(&g_seq_runtime, tracks[i]);
+        seq_boundary_engine_restore_all_active_locks(
+            &g_seq_runtime, tracks[i], effective_sample);
     }
 }
 
 void seq_runtime_end_track_restore(const seq_track_id_t *tracks, uint8_t track_count)
 {
+    const uint64_t effective_sample =
+        control_music_output_first_unpublished_sample(
+            seq_runtime_get_now_sample());
     for (uint8_t i = 0U; i < track_count; ++i)
     {
         if (tracks[i] >= SEQ_TRACK_COUNT)
         {
             continue;
         }
-        seq_boundary_engine_restore_all_active_locks(&g_seq_runtime, tracks[i]);
+        seq_boundary_engine_restore_all_active_locks(
+            &g_seq_runtime, tracks[i], effective_sample);
     }
     seq_play_scheduler_resume_tracks(tracks, track_count);
 }

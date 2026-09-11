@@ -1047,7 +1047,7 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
         return 1U;
     }
 
-    if (param_registry_track_value_is_audio_command(param, track) == 0U)
+    if (param_registry_track_temp_is_applicable(param, track) == 0U)
     {
         if (seq_param_iface_apply_control_midi(param, track, value16) == 0U)
             return 0U;
@@ -1105,7 +1105,7 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
         return 1U;
     }
 
-    if (param_registry_track_value_is_audio_command(param, track) == 0U)
+    if (param_registry_track_temp_is_applicable(param, track) == 0U)
     {
         if (seq_param_iface_apply_control_midi(param, track, base_value16) == 0U)
             return 0U;

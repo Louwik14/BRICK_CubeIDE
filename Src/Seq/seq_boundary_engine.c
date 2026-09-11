@@ -294,7 +294,8 @@ static uint8_t seq_boundary_engine_collect_non_play_locks(seq_track_id_t track,
 }
 
 void seq_boundary_engine_restore_all_active_locks(seq_runtime_state_t *state,
-                                                  seq_track_id_t track)
+                                                  seq_track_id_t track,
+                                                  uint64_t effective_sample)
 {
     if ((state == 0) || (seq_boundary_engine_track_is_valid(track) == 0U))
     {
@@ -319,7 +320,7 @@ void seq_boundary_engine_restore_all_active_locks(seq_runtime_state_t *state,
                                          active[i].set_id,
                                          active[i].param_slot,
                                          active[i].base_value16,
-                                         state->step_sample_q16 >> 16) == 0U)
+                                         effective_sample) == 0U)
             return;
     }
 
@@ -343,7 +344,8 @@ void seq_boundary_engine_invalidate_track(seq_runtime_state_t *state,
 static void seq_boundary_engine_step_apply_restore(seq_runtime_state_t *state,
                                                    seq_track_id_t track,
                                                    uint8_t has_prev,
-                                                   seq_step_id_t step)
+                                                   seq_step_id_t step,
+                                                   uint64_t effective_sample)
 {
     seq_boundary_engine_step_lock_t next_locks[SEQ_STEP_MAX_LOCKS];
     uint8_t next_count = 0U;
@@ -378,7 +380,7 @@ static void seq_boundary_engine_step_apply_restore(seq_runtime_state_t *state,
                                                  active[i].set_id,
                                                  active[i].param_slot,
                                                  active[i].base_value16,
-                                                 state->step_sample_q16 >> 16) == 0U)
+                                                 effective_sample) == 0U)
                     return;
             }
         }
@@ -414,7 +416,7 @@ static void seq_boundary_engine_step_apply_restore(seq_runtime_state_t *state,
                                       next_locks[i].set_id,
                                       next_locks[i].target_slot,
                                       next_locks[i].value16,
-                                      state->step_sample_q16 >> 16) == 0U)
+                                      effective_sample) == 0U)
             return;
     }
 
@@ -436,7 +438,8 @@ static void seq_boundary_engine_step_apply_restore(seq_runtime_state_t *state,
 void seq_boundary_engine_process(seq_runtime_state_t *state,
                                  seq_boundary_hit_t *out_hits,
                                  uint8_t max_hits,
-                                 uint8_t *out_hit_count)
+                                 uint8_t *out_hit_count,
+                                 uint64_t effective_sample)
 {
     if (out_hit_count != 0)
     {
@@ -469,7 +472,8 @@ void seq_boundary_engine_process(seq_runtime_state_t *state,
             seq_boundary_engine_step_apply_restore(state,
                                                    track,
                                                    state->prev_step_valid[track],
-                                                   current_step);
+                                                   current_step,
+                                                   effective_sample);
             state->prev_step[track] = current_step;
             state->prev_step_valid[track] = 1U;
 

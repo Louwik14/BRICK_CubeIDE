@@ -17,13 +17,15 @@ typedef struct
 } seq_boundary_hit_t;
 
 void seq_boundary_engine_restore_all_active_locks(seq_runtime_state_t *state,
-                                                  seq_track_id_t track);
+                                                  seq_track_id_t track,
+                                                  uint64_t effective_sample);
 void seq_boundary_engine_invalidate_track(seq_runtime_state_t *state,
                                           seq_track_id_t track);
 void seq_boundary_engine_advance_one_step(seq_runtime_state_t *state);
 void seq_boundary_engine_process(seq_runtime_state_t *state,
                                  seq_boundary_hit_t *out_hits,
                                  uint8_t max_hits,
-                                 uint8_t *out_hit_count);
+                                 uint8_t *out_hit_count,
+                                 uint64_t effective_sample);
 
 #endif /* SEQ_BOUNDARY_ENGINE_H */

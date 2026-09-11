@@ -393,7 +393,8 @@ void seq_runtime_exec_begin_running_at_sample_q16(seq_runtime_state_t *state,
         state->prev_step[track] = 0U;
         state->track_div_phase[track] = 0U;
         state->track_swing_phase[track] = 0U;
-        seq_boundary_engine_restore_all_active_locks(state, track);
+        seq_boundary_engine_restore_all_active_locks(
+            state, track, start_sample_q16 >> 16);
     }
 
     state->ticks_per_step = (uint16_t)((clock_bridge->internal_next_step_ticks == 0U)
@@ -409,7 +410,8 @@ void seq_runtime_exec_begin_running_at_sample_q16(seq_runtime_state_t *state,
     {
         seq_boundary_hit_t hits[SEQ_LANE_CAPACITY];
         uint8_t hit_count = 0U;
-        seq_boundary_engine_process(state, hits, SEQ_LANE_CAPACITY, &hit_count);
+        seq_boundary_engine_process(state, hits, SEQ_LANE_CAPACITY,
+                                    &hit_count, start_sample_q16 >> 16);
 
         for (uint8_t i = 0U; i < hit_count; ++i)
         {
@@ -425,7 +427,8 @@ void seq_runtime_exec_begin_running_at_sample_q16(seq_runtime_state_t *state,
     seq_live_rec_session_on_transport_start();
 }
 
-void seq_runtime_exec_stop_lifecycle_apply(seq_runtime_state_t *state)
+void seq_runtime_exec_stop_lifecycle_apply(seq_runtime_state_t *state,
+                                           uint64_t effective_sample)
 {
     /* Seam boundary: lifecycle stop flushes runtime execution and clears scheduler state. */
     if (state == 0)
@@ -445,7 +448,8 @@ void seq_runtime_exec_stop_lifecycle_apply(seq_runtime_state_t *state)
 
     for (seq_track_id_t track = 0U; track < (seq_track_id_t)SEQ_LANE_CAPACITY; ++track)
     {
-        seq_boundary_engine_restore_all_active_locks(state, track);
+        seq_boundary_engine_restore_all_active_locks(
+            state, track, effective_sample);
         state->prev_step_valid[track] = 0U;
         state->track_div_phase[track] = 0U;
         state->track_swing_phase[track] = 0U;
@@ -550,7 +554,8 @@ void seq_runtime_exec_process_step_pulse_at_sample_q16(seq_runtime_state_t *stat
         /* Progression guard: scheduling follows the same transport running state as advancement. */
         seq_boundary_hit_t hits[SEQ_LANE_CAPACITY];
         uint8_t hit_count = 0U;
-        seq_boundary_engine_process(state, hits, SEQ_LANE_CAPACITY, &hit_count);
+        seq_boundary_engine_process(state, hits, SEQ_LANE_CAPACITY,
+                                    &hit_count, now_sample);
 
         for (uint8_t i = 0U; i < hit_count; ++i)
         {
@@ -608,7 +613,10 @@ void seq_runtime_exec_drive_internal_steps_for_block(seq_runtime_state_t *state,
                                                           track_loop_generation,
                                                           next_pulse_sample_q16,
                                                           now_tick,
-                                                          next_pulse_sample_q16 >> 16);
+                                                          (next_pulse_sample_q16
+                                                              < (block_start_sample << 16))
+                                                            ? block_start_sample
+                                                            : (next_pulse_sample_q16 >> 16));
         next_pulse_sample_q16 = state->step_sample_q16 + (uint64_t)state->samples_per_step_q16;
     }
 }
