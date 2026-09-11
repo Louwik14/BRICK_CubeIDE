@@ -1036,12 +1036,38 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
             {
                 (void)snprintf(out_name, out_name_len, "%s", name);
             }
+            if ((id == UI_PARAM_LOCAL_ASSET)
+                    && (out_value != NULL) && (out_value_len > 0U))
+            {
+                if (isnan(value) != 0)
+                    (void)snprintf(out_value, out_value_len, "NONE");
+                else
+                    (void)snprintf(out_value, out_value_len, "S%03u",
+                                   (unsigned int)((value < 0.0f) ? 0U
+                                       : (uint16_t)(value + 0.5f)));
+            }
             (void)slot;
-            (void)value;
-            (void)out_value;
-            (void)out_value_len;
             return 1U;
         }
+    }
+
+    if ((ui_get_track_family(active_track) == TRACK_FAMILY_SAMPLER)
+            && (ui_get_track_type(active_track) == TRACK_TYPE_STREAM)
+            && (id == UI_PARAM_LOCAL_ASSET))
+    {
+        if ((out_name != NULL) && (out_name_len > 0U))
+            (void)snprintf(out_name, out_name_len, "SAMPLE");
+        if ((out_value != NULL) && (out_value_len > 0U))
+        {
+            if (isnan(value) != 0)
+                (void)snprintf(out_value, out_value_len, "NONE");
+            else
+                (void)snprintf(out_value, out_value_len, "S%03u",
+                               (unsigned int)((value < 0.0f) ? 0U
+                                   : (uint16_t)(value + 0.5f)));
+        }
+        (void)slot;
+        return 1U;
     }
 
     if ((ui_get_track_family(active_track) == TRACK_FAMILY_SAMPLER)

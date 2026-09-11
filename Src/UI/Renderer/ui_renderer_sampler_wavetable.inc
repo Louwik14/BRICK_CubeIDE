@@ -21,12 +21,22 @@ static const char *ui_renderer_template_path_basename(const char *path)
 static uint16_t ui_renderer_template_sampler_ram_selected_global_slot(void)
 {
     const float sample_value = ui_renderer_template_get_param_display_value(UI_PARAM_LOCAL_ASSET);
-    uint16_t sample_index = 0U;
+    if (isnan(sample_value) != 0)
+        return SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    uint16_t logical_slot = 0U;
     if (sample_value > 0.0f)
     {
-        sample_index = (uint16_t)(sample_value + 0.5f);
+        logical_slot = (uint16_t)(sample_value + 0.5f);
     }
-    return sample_index;
+    uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    uint32_t kind = 0U;
+    if ((project_control_resolve_sample_runtime(logical_slot, &global_slot,
+                                                &kind) == 0U)
+            || (kind != PERSIST_ASSET_SAMPLE_RAM))
+    {
+        return SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+    }
+    return global_slot;
 }
 
 static void ui_renderer_template_sampler_ram_sample_label(char *out, uint32_t out_len)
@@ -702,40 +712,14 @@ static void ui_renderer_template_draw_sampler_ram_playhead(uint16_t global_slot,
                                                            int inner_w,
                                                            int inner_h)
 {
-    float start = ui_renderer_template_get_param_display_value(PARAM_SAMPLER_START);
-    const float length = ui_renderer_template_get_param_display_value(PARAM_SAMPLER_LENGTH);
-    float end = start + length;
-    const float mode_value =
-        ui_renderer_template_get_param_display_value(PARAM_SAMPLER_MODE);
-    if (start < 0.0f) start = 0.0f;
-    if (end > 1.0f) end = 1.0f;
-    if (end <= start)
-        return;
-    uint32_t source_rate = BOARD_AUDIO_SAMPLE_RATE_HZ;
-    uint16_t ram_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
-    if (sample_global_pool_resolve_backend(global_slot, SAMPLE_GLOBAL_KIND_RAM,
-                                           &ram_slot) != 0U)
-    {
-        const sampler_ram_slot_t *const ram = sampler_ram_pool_get_slot(ram_slot);
-        if ((ram != NULL) && (ram->sample_rate != 0U))
-            source_rate = ram->sample_rate;
-    }
-    const uint64_t region_frames =
-        (uint64_t)((end - start) * (float)frame_count);
-    const uint32_t duration = (uint32_t)(
-        (region_frames * BOARD_AUDIO_SAMPLE_RATE_HZ) / source_rate);
-    uint64_t now_sample = 0U;
-    (void)control_rt_now_sample(&now_sample);
     const ui_sampler_playhead_view_t view = ui_sampler_playhead_view(
-        ui_renderer_template_get_edit_owner_track(), now_sample,
-        duration, (uint8_t)(mode_value + 0.5f));
+        ui_renderer_template_get_edit_owner_track(), global_slot);
     if (view.active == 0U)
     {
         return;
     }
 
-    const float normalized = start + ((end - start) * view.normalized_position);
-    const uint32_t frame = (uint32_t)(normalized * (float)frame_count);
+    const uint32_t frame = (uint32_t)(view.normalized_position * (float)frame_count);
     const int x = ui_renderer_template_sampler_ram_frame_to_x(
         frame, frame_count, inner_x, inner_w);
     if (x < 0)
@@ -998,6 +982,11 @@ static void ui_renderer_template_draw_sampler_ram_slot_text(const ui_template_pa
                                                         (uint32_t)sizeof(bottom_txt),
                                                         NULL);
     (void)value;
+
+    if ((id == UI_PARAM_LOCAL_ASSET) && (draw_name_inverted == 0U))
+    {
+        (void)snprintf(bottom_txt, sizeof(bottom_txt), "%s", value_txt);
+    }
 
     drv_display_set_font(&FONT_4X6);
     ui_renderer_template_fit_text(bottom_txt, UI_TEMPLATE_SAMPLER_TEXT_MAX_PX);

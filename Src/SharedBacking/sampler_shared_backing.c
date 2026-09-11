@@ -2,6 +2,7 @@
 #include "IPC/multi_sample_audio_projection_contract.h"
 #include "IPC/sample_classic_audio_projection_contract.h"
 #include "IPC/sampler_ram_audio_projection_contract.h"
+#include "IPC/sampler_ram_playhead_contract.h"
 #include "Platform/memory_layout.h"
 #include "Sampler/sample_page_cache_shared_contract.h"
 #include "Sampler/sample_page_lease.h"
@@ -34,6 +35,9 @@ AUDIO_SHARED_REGISTRY_SDRAM sampler_ram_audio_slot_t
     g_sampler_ram_audio_slots[SAMPLER_RAM_AUDIO_SLOT_COUNT];
 D2_IPC volatile uint16_t
     g_sampler_ram_audio_global_to_slot[SAMPLER_RAM_AUDIO_SLOT_COUNT];
+
+D2_IPC sampler_ram_playhead_slot_t
+    g_sampler_ram_playhead[BRICK_ENTITY_CAPACITY];
 
 AUDIO_STATE_SHARED_SDRAM audio_wavetable_registry_slot_t
     g_audio_wavetable_registry[WAVETABLE_POOL_MAX_SLOTS];

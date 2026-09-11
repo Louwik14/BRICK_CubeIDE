@@ -17,7 +17,6 @@
 #include "Param/engine_model_catalog.h"
 #include "Param/stack_waveform.h"
 #include "Storage/project_control.h"
-#include "ControlRT/control_rt_publication.h"
 #include "UI/ui_sampler_playhead.h"
 #include "Track/track_runtime.h"
 #include "Track/track_state.h"
@@ -33,7 +32,6 @@
 #include "Param/spectral_window.h"
 #include "IPC/audio_waveform_reader.h"
 #include "IPC/synth_waveform_reader.h"
-#include "Board/board_audio_format.h"
 
 #define UI_TEMPLATE_FRAME_W          32
 #define UI_TEMPLATE_FRAME_H          38

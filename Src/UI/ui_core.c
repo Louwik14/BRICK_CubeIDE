@@ -59,7 +59,6 @@
 #include "ui_active_track_sync.h"
 #include "ui_page_manager.h"
 #include "ui_param.h"
-#include "UI/ui_sampler_playhead.h"
 #include "App/encoder_control_dispatcher.h"
 #include "Track/track_runtime.h"
 #include "Track/track_state.h"
@@ -842,7 +841,6 @@ static uint8_t ui_core_handle_macro_mode_event(const ui_event_t *ev)
 
 void ui_core_init(void)
 {
-    ui_sampler_playhead_init();
     ui_core_clipboard_init();
     ui_core_feedback_init();
     ui_core_pattern_init();

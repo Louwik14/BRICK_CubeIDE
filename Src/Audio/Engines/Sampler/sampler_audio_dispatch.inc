@@ -96,6 +96,8 @@ static void brick6_sampler_runtime_reset_track_internal(uint8_t track_id,
         brick6_sampler_runtime_clip_reset(track_id);
     }
     brick6_sampler_runtime_refresh_track_activity(track_id);
+    brick6_sampler_runtime_publish_ram_playhead(track_id,
+                                                &g_sampler_voice[track_id]);
 }
 
 void brick6_sampler_runtime_reset_track(uint8_t track_id)
@@ -131,9 +133,18 @@ void brick6_sampler_runtime_set_sample(uint8_t track_id, uint16_t sample_id)
         return;
     }
 
-    g_sampler_voice[track_id].sample_id = sample_id;
-    g_sampler_voice[track_id].note = 60U;
-    g_sampler_voice[track_id].position = 0.0f;
+    brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
+    if ((voice->sample_id != sample_id)
+            && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_RAM))
+    {
+        if (voice->active != 0U)
+            brick6_sampler_runtime_begin_declick_tail(track_id, voice);
+        brick6_sampler_runtime_clear_ram_voice(voice);
+    }
+    voice->sample_id = sample_id;
+    voice->note = 60U;
+    voice->position = 0.0f;
+    brick6_sampler_runtime_publish_ram_playhead(track_id, voice);
 }
 
 uint8_t brick6_sampler_runtime_get_sample(uint8_t track_id,
@@ -306,6 +317,7 @@ void brick6_sampler_runtime_set_start(uint8_t track_id, float start)
         return;
     }
     g_sampler_voice[track_id].start = start;
+    brick6_sampler_runtime_reconcile_ram_voice_bounds_live(track_id);
 }
 
 void brick6_sampler_runtime_set_length(uint8_t track_id, float length)
@@ -315,6 +327,7 @@ void brick6_sampler_runtime_set_length(uint8_t track_id, float length)
         return;
     }
     g_sampler_voice[track_id].length = length;
+    brick6_sampler_runtime_reconcile_ram_voice_bounds_live(track_id);
 }
 
 void brick6_sampler_runtime_set_mode(uint8_t track_id, uint8_t mode)

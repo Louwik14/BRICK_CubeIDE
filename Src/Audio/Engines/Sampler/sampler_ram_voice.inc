@@ -1305,6 +1305,40 @@ static void brick6_sampler_runtime_clear_ram_voice(brick6_sampler_voice_t *voice
     voice->ram_sample_rate = 0U;
 }
 
+static ITCM_TEXT void brick6_sampler_runtime_publish_ram_playhead(
+    uint8_t track_id, const brick6_sampler_voice_t *voice)
+{
+    if (track_id >= BRICK_ENTITY_CAPACITY)
+        return;
+    sampler_ram_playhead_slot_t *const slot = &g_sampler_ram_playhead[track_id];
+    uint32_t sequence = slot->sequence;
+    if ((sequence & 1U) != 0U)
+        ++sequence;
+    slot->sequence = sequence + 1U;
+    __DMB();
+    sampler_ram_playhead_snapshot_t snapshot = {
+        .generation = slot->snapshot.generation + 1U,
+        .global_slot = UINT16_MAX
+    };
+    if ((voice != NULL) && (voice->active != 0U)
+            && (voice->source_kind == (uint8_t)BRICK6_SAMPLER_VOICE_RAM)
+            && (voice->ram_frames != 0U))
+    {
+        uint32_t frame = (uint32_t)(voice->ram_position_q16 >> 16U);
+        if (frame >= voice->ram_frames)
+            frame = voice->ram_frames - 1U;
+        snapshot.frame = frame;
+        snapshot.frame_count = voice->ram_frames;
+        snapshot.global_slot = voice->sample_id;
+        snapshot.active = 1U;
+        snapshot.reverse = voice->reverse;
+    }
+    slot->snapshot = snapshot;
+    __DMB();
+    slot->sequence = sequence + 2U;
+    __DMB();
+}
+
 uint8_t brick6_sampler_runtime_track_has_active_ram_voice(uint8_t track_id)
 {
     if (track_id >= SEQ_TRACK_COUNT)
@@ -1450,6 +1484,9 @@ ITCM_TEXT void brick6_sampler_runtime_render_ram_track(const track_audio_runtime
         brick6_sampler_runtime_render_ram(voice, out_l, out_r, frames);
     }
 
+    brick6_sampler_runtime_publish_ram_playhead(ctx->program_route.entity_id,
+                                                voice);
+
     brick6_sampler_runtime_mix_declick_tails(ctx->program_route.entity_id, out_l, out_r, frames);
 }
 
@@ -1482,5 +1519,7 @@ void brick6_sampler_runtime_render_ram_track_mono(const track_audio_runtime_ctx_
     {
         brick6_sampler_runtime_render_ram_mono(voice, out_mono, frames);
     }
+    brick6_sampler_runtime_publish_ram_playhead(ctx->program_route.entity_id,
+                                                voice);
     brick6_sampler_runtime_mix_declick_tails_mono(ctx->program_route.entity_id, out_mono, frames);
 }

@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#include "Track/entity_topology.h"
+#include "Track/entity_types.h"
 
 typedef struct
 {
@@ -11,17 +11,8 @@ typedef struct
     float normalized_position;
 } ui_sampler_playhead_view_t;
 
-void ui_sampler_playhead_init(void);
-
-/* CONTROL-side notification emitted only after the logical note event has
- * been accepted for AUDIO projection. */
-void ui_sampler_playhead_note_trigger(brick_entity_id_t entity_id,
-                                      uint64_t due_sample);
-
 ui_sampler_playhead_view_t ui_sampler_playhead_view(
     brick_entity_id_t entity_id,
-    uint64_t now_sample,
-    uint32_t duration_samples,
-    uint8_t mode);
+    uint16_t global_slot);
 
 #endif /* UI_SAMPLER_PLAYHEAD_H */

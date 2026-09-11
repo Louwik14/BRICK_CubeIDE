@@ -507,15 +507,20 @@ static void ui_renderer_template_build_param_text(const ui_template_page_state_t
                                                   char *value_txt,
                                                   uint32_t value_len)
 {
-    const param_desc_t *desc = &param_registry[id];
-
-    if ((name_txt != NULL) && (name_len > 0U))
+    if (ui_param_is_local_control(id) == 0U)
     {
-        (void)snprintf(name_txt, name_len, "%s", desc->name);
+        const param_desc_t *desc = &param_registry[id];
+        if ((name_txt != NULL) && (name_len > 0U))
+            (void)snprintf(name_txt, name_len, "%s", desc->name);
+        if ((value_txt != NULL) && (value_len > 0U))
+            ui_renderer_template_format_value(id, value, value_txt, value_len);
     }
-    if ((value_txt != NULL) && (value_len > 0U))
+    else
     {
-        ui_renderer_template_format_value(id, value, value_txt, value_len);
+        if ((name_txt != NULL) && (name_len > 0U))
+            (void)snprintf(name_txt, name_len, "-");
+        if ((value_txt != NULL) && (value_len > 0U))
+            (void)snprintf(value_txt, value_len, "-");
     }
 
     if ((state != NULL) && (state->param_text != NULL))
@@ -544,7 +549,8 @@ static uint8_t ui_renderer_template_prepare_param_slot_texts(const ui_template_p
                                                              uint32_t bottom_len,
                                                              uint8_t *out_flash_active)
 {
-    if ((id >= PARAM_COUNT) || (out_value == NULL) || (out_draw_name_inverted == NULL)
+    if (((id >= PARAM_COUNT) && (ui_param_is_local_control(id) == 0U))
+            || (out_value == NULL) || (out_draw_name_inverted == NULL)
             || (name_txt == NULL) || (name_len == 0U)
             || (value_txt == NULL) || (value_len == 0U)
             || (bottom_txt == NULL) || (bottom_len == 0U))
@@ -566,8 +572,10 @@ static uint8_t ui_renderer_template_prepare_param_slot_texts(const ui_template_p
 
     float flash_value = 0.0f;
     ui_param_value_flash_kind_t flash_kind = UI_PARAM_VALUE_FLASH_DIRECT;
-    const uint8_t audio_owned_param = param_registry_track_value_is_audio_command(
-        id, ui_renderer_template_get_param_authority_track(id));
+    const uint8_t audio_owned_param = (ui_param_is_local_control(id) == 0U)
+        ? param_registry_track_value_is_audio_command(
+            id, ui_renderer_template_get_param_authority_track(id))
+        : 0U;
     const uint8_t flash_active = (audio_owned_param != 0U)
         ? ui_param_is_user_tweak_active(slot, id)
         : ui_param_get_slot_value_flash(slot,

@@ -29,6 +29,7 @@
 #include "Sampler/sample_page_cache_audio.h"
 #include "Sampler/sample_voice_reader.h"
 #include "Audio/sampler_ram_audio_projection_audio.h"
+#include "IPC/sampler_ram_playhead_contract.h"
 #include "Audio/audio_shared_memory.h"
 
 /* The sampler voice table is a lane resource.  GROUP children reuse this
@@ -391,6 +392,8 @@ static void brick6_sampler_runtime_render_ram_mono(brick6_sampler_voice_t *voice
                                                    float *out_mono,
                                                    uint32_t frames);
 static void brick6_sampler_runtime_clear_ram_voice(brick6_sampler_voice_t *voice);
+static void brick6_sampler_runtime_publish_ram_playhead(
+    uint8_t track_id, const brick6_sampler_voice_t *voice);
 static void brick6_sampler_render_sample_segment_cursor(brick6_sampler_voice_t *voice,
                                                         float *out_l,
                                                         float *out_r,
