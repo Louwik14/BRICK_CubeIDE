@@ -2,27 +2,52 @@
 setlocal
 
 set "BMP_PORT=COM11"
+set "BMP_FREQ=4M"
+
 set "GDB=C:\ST\STM32CubeIDE_2.0.0\STM32CubeIDE\plugins\com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.13.3.rel1.win32_1.0.100.202509120712\tools\bin\arm-none-eabi-gdb.exe"
 set "ELF=%~dp0build\Release\BRICK6_CUBE.elf"
 
 if not exist "%GDB%" (
-    echo arm-none-eabi-gdb introuvable :
+    echo.
+    echo ERREUR : arm-none-eabi-gdb introuvable
     echo %GDB%
+    echo.
+    pause
     endlocal & exit /b 1
 )
 
 if not exist "%ELF%" (
-    echo ELF Release introuvable :
+    echo.
+    echo ERREUR : ELF Release introuvable
     echo %ELF%
+    echo.
+    pause
     endlocal & exit /b 1
 )
 
-start "GDB STM32H7 Black Magic" "%GDB%" --quiet "%ELF%" ^
+echo.
+echo === GDB BRICK / BLACK MAGIC ===
+echo Port : %BMP_PORT%
+echo ELF  : %ELF%
+echo.
+echo Le CPU sera attache et HALTE.
+echo.
+echo Commandes utiles :
+echo   c              = reprendre l'execution
+echo   Ctrl+C         = interrompre / halter
+echo   bt             = backtrace
+echo   info registers = registres CPU
+echo   detach         = detacher proprement
+echo   quit           = quitter GDB
+echo.
+
+"%GDB%" --quiet "%ELF%" ^
     -ex "set confirm off" ^
     -ex "set pagination off" ^
     -ex "target extended-remote \\.\%BMP_PORT%" ^
+    -ex "monitor frequency %BMP_FREQ%" ^
     -ex "monitor swd_scan" ^
     -ex "attach 1" ^
     -ex "break HardFault_Handler"
 
-endlocal & exit /b 0
+endlocal
