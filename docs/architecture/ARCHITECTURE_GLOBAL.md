@@ -8,6 +8,7 @@ Le code courant est l'autorite finale. Ce document est l'unique porte d'entree d
 - `entity_topology` derive activite, role, parent et capacites. `track_state` possede la configuration CONTROL; `track_runtime` la projette vers les moteurs, ressources et voies physiques.
 - Looper est un type de Sampler assignable. External est un moteur dont l'entree physique est arbitree par `track_input_ownership`. Ressource physique, voie mixer et quota ne sont jamais des identites logiques.
 - CONTROL possede UI, MIDI, sequence, ROLL, Note FX, p-locks, outputs logiques, deadlines, stealing musical et catalogue Sample. STORAGE possede le Stream, son I/O et son page-cache. AUDIO possede IRQ, mapping d'execution `{output_id,note,velocity,gate} -> slot DSP`, RELEASE physique, lecteurs, positions, moteurs et mixer. PROGRAM peut remplacer un renderer compatible sans tuer l'output logique ni emettre NOTE OFF/ON.
+- Les objets nommes utilisent le contrat canonique partage: 32 caracteres visibles maximum, buffer de 33 octets, alphabet espace/ASCII alphanumerique/`_`/`-`, validation finale avec trim des espaces externes, sans allocation ni remplacement silencieux.
 - L'ordre fonctionnel CONTROL vers AUDIO traverse exclusivement la FIFO SPSC
   unique PROGRAM/PARAM/NOTE/TRANSPORT/RECORD/PANIC. Les gros data planes et
   retours physiques utilisent des structures fixes, pointer-free et separees.

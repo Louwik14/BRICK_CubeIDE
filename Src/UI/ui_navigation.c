@@ -11,6 +11,7 @@
 #include "ui_page_manager.h"
 #include "ui_template_page.h"
 #include "ui_hall_mode_flow.h"
+#include "pages/ui_page_name_edit.h"
 
 /*
  * Data-driven navigation table.
@@ -198,6 +199,11 @@ void ui_navigation_request_page_with_availability(uint8_t page_id)
 void ui_navigation_handle_event(const ui_event_t *event)
 {
     if ((event == 0) || (event->type != UI_EVENT_BUTTON_PRESS))
+    {
+        return;
+    }
+
+    if (ui_page_name_edit_is_open() != 0U)
     {
         return;
     }

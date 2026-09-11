@@ -798,6 +798,11 @@ static uint8_t ui_core_handle_pattern_mode_event(const ui_event_t *ev)
 
 static uint8_t ui_core_handle_global_shortcuts(const ui_event_t *ev)
 {
+    if (ui_page_name_edit_is_open() != 0U)
+    {
+        return 0U;
+    }
+
     if ((ev != 0) && (ev->type == UI_EVENT_BUTTON_PRESS)
             && (ev->id == (uint8_t)BTN_SETTINGS)
             && (g_ui_track_state.shift_down != 0U)
@@ -994,10 +999,6 @@ void ui_core_tick(void)
         {
             ui_page_settings_handle_encoder(encoder, delta);
         }
-        else if (ui_page_name_edit_is_open() != 0U)
-        {
-            (void)ui_page_name_edit_handle_encoder(encoder, delta);
-        }
         else if (ui_page_patch_assign_is_open() != 0U)
         {
             (void)ui_page_patch_assign_handle_encoder(encoder, delta);
@@ -1033,8 +1034,19 @@ void ui_core_tick(void)
     while (ui_event_pop(&ev))
     {
         render_invalidated = 1U;
+
         /* Must stay first: updates shift/track modifier state consumed by later stages. */
         ui_core_handle_track_selection_event(&ev);
+
+        if (ui_page_name_edit_is_open() != 0U)
+        {
+            const ui_page_t *const modal_page = ui_page_get();
+            if ((modal_page != 0) && (modal_page->handle_event != 0))
+            {
+                modal_page->handle_event(&ev);
+            }
+            goto next_event;
+        }
 
         for (uint8_t stage = 0U; stage < (uint8_t)(sizeof(k_event_stages) / sizeof(k_event_stages[0])); ++stage)
         {

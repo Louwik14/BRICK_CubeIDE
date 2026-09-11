@@ -31,6 +31,7 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/control_music_publication.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/live_event.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/live_parameter_audio_publication.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/name_contract.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/control_audio_visual.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/kbd_chords_dict.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/keyboard_engine.c"

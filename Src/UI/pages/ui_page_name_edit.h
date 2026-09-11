@@ -3,14 +3,17 @@
 
 #include <stdint.h>
 
+#include "App/name_contract.h"
 #include "ui_page.h"
 
-#define UI_PAGE_NAME_EDIT_TEXT_MAX 32U
+#define UI_PAGE_NAME_EDIT_TEXT_MAX NAME_CONTRACT_BUFFER_BYTES
 
 typedef enum
 {
     UI_PAGE_NAME_EDIT_RESULT_CANCEL = 0,
-    UI_PAGE_NAME_EDIT_RESULT_OK
+    UI_PAGE_NAME_EDIT_RESULT_CONFIRM,
+    /* Source-compatible alias for existing callers. */
+    UI_PAGE_NAME_EDIT_RESULT_OK = UI_PAGE_NAME_EDIT_RESULT_CONFIRM
 } ui_page_name_edit_result_t;
 
 typedef void (*ui_page_name_edit_done_fn)(ui_page_name_edit_result_t result,
@@ -19,6 +22,7 @@ typedef void (*ui_page_name_edit_done_fn)(ui_page_name_edit_result_t result,
 
 extern const ui_page_t g_ui_page_name_edit;
 
+/* Opens the modal; max_len is capacity in bytes, including the NUL. */
 uint8_t ui_page_name_edit_open(uint8_t return_page,
                                const char *title,
                                const char *context,
