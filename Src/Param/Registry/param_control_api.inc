@@ -56,6 +56,7 @@ uint8_t param_registry_track_value_is_audio_command(param_id_t id,
     return (uint8_t)(
         (id == PARAM_EXT_GATE)
         || (id == PARAM_CFG_POLY_SPREAD)
+        || (param_registry_is_lfo_param(id) != 0U)
         || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_GLOBAL)
         || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
         || ((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
@@ -125,6 +126,14 @@ uint8_t param_registry_install_prepared_track_control_target(
             return mixer_control_state_set_param(track, id, value);
         case PARAM_CONTROL_OWNER_POLYPHONY:
             return polyphony_control_set_spread(track, value);
+        case PARAM_CONTROL_OWNER_LFO:
+        {
+            uint8_t lfo_index = 0U;
+            mod_lfo_param_t lfo_param = MOD_LFO_PARAM_RATE;
+            return (uint8_t)((param_lfo_map(id, &lfo_index, &lfo_param) != 0U)
+                && (mod_lfo_v1_install_prepared_track_param(
+                    track, lfo_index, lfo_param, value) != 0U));
+        }
         default: return 0U;
     }
 }
@@ -344,7 +353,19 @@ uint8_t param_registry_prepare_track_control_target(
         return 0U;
     value = prepared.value;
     param_control_owner_kind_t owner_kind = PARAM_CONTROL_OWNER_AUDIO_ONLY;
-    if (id == PARAM_MIX_MUTE)
+    if (param_registry_is_lfo_param(id) != 0U)
+    {
+        uint8_t lfo_index = 0U;
+        uint8_t owner = 0U;
+        mod_lfo_param_t lfo_param = MOD_LFO_PARAM_RATE;
+        if ((param_lfo_map(id, &lfo_index, &lfo_param) == 0U)
+                || (mod_lfo_v1_prepare_track_param(track, lfo_index, lfo_param,
+                    value, &owner, &value) == 0U))
+            return 0U;
+        track = owner;
+        owner_kind = PARAM_CONTROL_OWNER_LFO;
+    }
+    else if (id == PARAM_MIX_MUTE)
         owner_kind = PARAM_CONTROL_OWNER_MUTE;
     else if (param_registry_is_audio_fx_param(id) != 0U)
     {
