@@ -64,6 +64,8 @@ static tlv320aic3204_analog_input_t g_tlv_analog_input =
     TLV320AIC3204_ANALOG_INPUT_LINE;
 
 #define TLV_MIC_RIGHT_PGA_GAIN_20_DB 0x28U
+/* MIC uses IN3_R; weakly bias the disconnected IN1_R input to common mode. */
+#define TLV_MIC_FLOATING_INPUT 0x7BU
 
 static void tlv_set_stage(tlv320aic3204_stage_t stage)
 {
@@ -579,14 +581,16 @@ tlv320aic3204_status_t TLV320AIC3204_SetAnalogInput(
   }
 
   const uint8_t micbias = (input == TLV320AIC3204_ANALOG_INPUT_MIC) ? 0x68U : 0x00U;
-  const uint8_t floating = (input == TLV320AIC3204_ANALOG_INPUT_MIC) ? 0x3BU : 0x3FU;
+  const uint8_t floating = (input == TLV320AIC3204_ANALOG_INPUT_MIC)
+      ? TLV_MIC_FLOATING_INPUT : 0x3FU;
   const uint8_t right_p = (input == TLV320AIC3204_ANALOG_INPUT_MIC) ? 0x04U : 0x80U;
   const uint8_t right_pga = (input == TLV320AIC3204_ANALOG_INPUT_MIC)
       ? TLV_MIC_RIGHT_PGA_GAIN_20_DB : 0x00U;
   const uint8_t restore_micbias =
       (g_tlv_analog_input == TLV320AIC3204_ANALOG_INPUT_MIC) ? 0x68U : 0x00U;
   const uint8_t restore_floating =
-      (g_tlv_analog_input == TLV320AIC3204_ANALOG_INPUT_MIC) ? 0x3BU : 0x3FU;
+      (g_tlv_analog_input == TLV320AIC3204_ANALOG_INPUT_MIC)
+          ? TLV_MIC_FLOATING_INPUT : 0x3FU;
   const uint8_t restore_right_p =
       (g_tlv_analog_input == TLV320AIC3204_ANALOG_INPUT_MIC) ? 0x04U : 0x80U;
   const uint8_t restore_right_pga =
