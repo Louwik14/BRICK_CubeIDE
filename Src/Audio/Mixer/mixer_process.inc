@@ -1328,6 +1328,19 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
 
     if((audio_rec_bus_active != 0U)
             && ((audio_rec_projection.source_flags
+                & AUDIO_REC_BUS_SOURCE_MIC_LOGICAL) != 0U))
+    {
+        const audio_physical_inputs_t *const inputs =
+            audio_io_get_current_physical_inputs();
+        for(uint32_t i = 0U; i < frames; ++i)
+        {
+            audio_rec_bus_l[i] += inputs->mic.mono[i];
+            audio_rec_bus_r[i] += inputs->mic.mono[i];
+        }
+    }
+
+    if((audio_rec_bus_active != 0U)
+            && ((audio_rec_projection.source_flags
                 & AUDIO_REC_BUS_SOURCE_USB_DIRECT) != 0U))
     {
         const audio_physical_inputs_t *const inputs =

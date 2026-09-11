@@ -2,6 +2,7 @@
 
 #include "audio_float.h"
 #include "Audio/audio_physical_inputs.h"
+#include "Board/board_audio_input.h"
 #include "IPC/audio_boot_diagnostic.h"
 
 #include <stdint.h>

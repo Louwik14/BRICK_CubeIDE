@@ -19,6 +19,7 @@
 
 #include "Audio/drum_synth.h"
 #include "Audio/audio_io.h"
+#include "Audio/audio_rec_bus_runtime.h"
 #include "Audio/metronome_runtime.h"
 #include "Audio/synth_waveform_audio.h"
 #include "Audio/Engines/prism_engine.h"
@@ -82,10 +83,14 @@ static void brick6_publish_owned_external_sources(uint32_t frames)
 {
     const audio_physical_inputs_t *const inputs =
         audio_io_get_current_physical_inputs();
-    brick6_publish_owned_external_source(ENTITY_AUDIO_SOURCE_LINE,
-                                         inputs->line.left,
-                                         inputs->line.right,
-                                         frames);
+    const audio_rec_bus_runtime_t *const rec_bus = audio_rec_bus_runtime_get();
+    if ((rec_bus->source_flags & AUDIO_REC_BUS_SOURCE_MIC_LOGICAL) == 0U)
+    {
+        brick6_publish_owned_external_source(ENTITY_AUDIO_SOURCE_LINE,
+                                             inputs->line.left,
+                                             inputs->line.right,
+                                             frames);
+    }
     brick6_publish_owned_external_source(ENTITY_AUDIO_SOURCE_USB,
                                          inputs->usb.left,
                                          inputs->usb.right,

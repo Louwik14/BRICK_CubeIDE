@@ -248,7 +248,25 @@ uint8_t sample_capture_model_step_threshold(int16_t delta)
 
 uint8_t sample_capture_model_set_line_enabled(uint8_t enabled)
 {
-    g_sample_capture.state.line_enabled = (enabled != 0U) ? 1U : 0U;
+    const uint8_t next = (enabled != 0U) ? 1U : 0U;
+    if(next == g_sample_capture.state.line_enabled)
+    {
+        return 1U;
+    }
+    if((next != 0U) && (g_sample_capture.state.mic_enabled != 0U))
+    {
+        if((g_sample_capture.state.recording != 0U)
+                || (g_sample_capture.state.arm != SAMPLE_CAPTURE_ARM_OFF))
+        {
+            return 0U;
+        }
+        if(board_audio_set_analog_input_mode(BOARD_AUDIO_ANALOG_INPUT_LINE) == 0U)
+        {
+            return 0U;
+        }
+        g_sample_capture.state.mic_enabled = 0U;
+    }
+    g_sample_capture.state.line_enabled = next;
     sample_capture_publish_rec_bus();
     return 1U;
 }
@@ -261,7 +279,26 @@ uint8_t sample_capture_model_toggle_line(void)
 
 uint8_t sample_capture_model_set_mic_enabled(uint8_t enabled)
 {
-    g_sample_capture.state.mic_enabled = (enabled != 0U) ? 1U : 0U;
+    const uint8_t next = (enabled != 0U) ? 1U : 0U;
+    if(next == g_sample_capture.state.mic_enabled)
+    {
+        return 1U;
+    }
+    if((g_sample_capture.state.recording != 0U)
+            || (g_sample_capture.state.arm != SAMPLE_CAPTURE_ARM_OFF))
+    {
+        return 0U;
+    }
+    if(board_audio_set_analog_input_mode((next != 0U)
+            ? BOARD_AUDIO_ANALOG_INPUT_MIC : BOARD_AUDIO_ANALOG_INPUT_LINE) == 0U)
+    {
+        return 0U;
+    }
+    g_sample_capture.state.mic_enabled = next;
+    if(next != 0U)
+    {
+        g_sample_capture.state.line_enabled = 0U;
+    }
     sample_capture_publish_rec_bus();
     return 1U;
 }

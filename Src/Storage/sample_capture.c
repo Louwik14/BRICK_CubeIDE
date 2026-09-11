@@ -1,5 +1,7 @@
 #include "Storage/sample_capture.h"
 
+#include "Board/board_audio_input.h"
+
 #include "IPC/control_audio_rec_bus.h"
 #include "IPC/control_music_publication.h"
 #include "Track/track_input_ownership.h"

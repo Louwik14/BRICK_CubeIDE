@@ -49,6 +49,12 @@ typedef enum
 
 typedef enum
 {
+  TLV320AIC3204_ANALOG_INPUT_LINE = 0,
+  TLV320AIC3204_ANALOG_INPUT_MIC
+} tlv320aic3204_analog_input_t;
+
+typedef enum
+{
   TLV320AIC3204_STAGE_NONE = 0,
   TLV320AIC3204_STAGE_DEVICE_ACK,
   TLV320AIC3204_STAGE_RESET,
@@ -129,6 +135,8 @@ tlv320aic3204_status_t TLV320AIC3204_SoftwareReset(I2C_HandleTypeDef *i2c,
                                                    uint8_t address_7bit);
 tlv320aic3204_status_t TLV320AIC3204_Init(const tlv320aic3204_config_t *config);
 tlv320aic3204_status_t TLV320AIC3204_InitDefault(void);
+tlv320aic3204_status_t TLV320AIC3204_SetAnalogInput(
+    tlv320aic3204_analog_input_t input);
 void TLV320AIC3204_GetDiag(tlv320aic3204_diag_t *out_diag);
 
 #endif /* TLV320AIC3204_H */

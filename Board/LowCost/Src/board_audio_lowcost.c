@@ -6,7 +6,6 @@
 
 #include <arm_acle.h>
 #include "stm32h743xx.h"
-#include <string.h>
 #include "Platform/memory_layout.h"
 
 #define BOARD_AUDIO_INIT_ATTEMPTS 3U
@@ -230,6 +229,26 @@ void board_audio_get_boot_diag(board_audio_boot_diag_t *out_diag)
     }
 }
 
+uint8_t board_audio_set_analog_input_mode(board_audio_analog_input_mode_t mode)
+{
+    tlv320aic3204_analog_input_t input;
+    if (mode == BOARD_AUDIO_ANALOG_INPUT_LINE)
+    {
+        input = TLV320AIC3204_ANALOG_INPUT_LINE;
+    }
+    else if (mode == BOARD_AUDIO_ANALOG_INPUT_MIC)
+    {
+        input = TLV320AIC3204_ANALOG_INPUT_MIC;
+    }
+    else
+    {
+        return 0U;
+    }
+
+    return (TLV320AIC3204_SetAnalogInput(input) == TLV320AIC3204_STATUS_OK)
+        ? 1U : 0U;
+}
+
 uint8_t board_audio_is_rx_callback_handle(void *handle)
 {
     return (handle == (void *)&hsai_BlockB1) ? 1U : 0U;
@@ -266,6 +285,7 @@ ITCM_TEXT void board_audio_unpack_input(const int32_t *AUDIO_RESTRICT rx,
 {
     float *AUDIO_RESTRICT line_l = physical_inputs->line.left;
     float *AUDIO_RESTRICT line_r = physical_inputs->line.right;
+    float *AUDIO_RESTRICT mic = physical_inputs->mic.mono;
     const int32_t *AUDIO_RESTRICT prx = rx;
     for (uint32_t n = 0; n < frames; n++)
     {
@@ -273,10 +293,9 @@ ITCM_TEXT void board_audio_unpack_input(const int32_t *AUDIO_RESTRICT rx,
         const float right = s242f_fast(prx[1], in_scale);
         line_l[n] = left;
         line_r[n] = right;
+        mic[n] = right;
         prx += BOARD_AUDIO_TDM_SLOTS;
     }
-
-    memset(physical_inputs->mic.mono, 0, frames * sizeof(float));
 }
 
 ITCM_TEXT void board_audio_pack_output(int32_t *AUDIO_RESTRICT tx,

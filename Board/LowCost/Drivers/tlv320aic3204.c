@@ -60,6 +60,8 @@ enum
 };
 
 static tlv320aic3204_diag_t g_tlv_diag;
+static tlv320aic3204_analog_input_t g_tlv_analog_input =
+    TLV320AIC3204_ANALOG_INPUT_LINE;
 
 static void tlv_set_stage(tlv320aic3204_stage_t stage)
 {
@@ -505,6 +507,7 @@ static tlv320aic3204_status_t tlv_init(const tlv320aic3204_config_t *config)
 
   tlv_set_stage(TLV320AIC3204_STAGE_COMPLETE);
   g_tlv_diag.status = TLV320AIC3204_STATUS_OK;
+  g_tlv_analog_input = TLV320AIC3204_ANALOG_INPUT_LINE;
   return TLV320AIC3204_STATUS_OK;
 }
 
@@ -527,6 +530,63 @@ tlv320aic3204_status_t TLV320AIC3204_InitDefault(void)
   };
 
   return TLV320AIC3204_Init(&config);
+}
+
+tlv320aic3204_status_t TLV320AIC3204_SetAnalogInput(
+    tlv320aic3204_analog_input_t input)
+{
+  if ((input != TLV320AIC3204_ANALOG_INPUT_LINE)
+      && (input != TLV320AIC3204_ANALOG_INPUT_MIC))
+  {
+    return tlv_record_status(TLV320AIC3204_STATUS_CONFIG_ERROR);
+  }
+  if (input == g_tlv_analog_input)
+  {
+    return TLV320AIC3204_STATUS_OK;
+  }
+
+  const uint8_t micbias = (input == TLV320AIC3204_ANALOG_INPUT_MIC) ? 0x68U : 0x00U;
+  const uint8_t floating = (input == TLV320AIC3204_ANALOG_INPUT_MIC) ? 0x3BU : 0x3FU;
+  const uint8_t right_p = (input == TLV320AIC3204_ANALOG_INPUT_MIC) ? 0x04U : 0x80U;
+  const uint8_t restore_micbias =
+      (g_tlv_analog_input == TLV320AIC3204_ANALOG_INPUT_MIC) ? 0x68U : 0x00U;
+  const uint8_t restore_floating =
+      (g_tlv_analog_input == TLV320AIC3204_ANALOG_INPUT_MIC) ? 0x3BU : 0x3FU;
+  const uint8_t restore_right_p =
+      (g_tlv_analog_input == TLV320AIC3204_ANALOG_INPUT_MIC) ? 0x04U : 0x80U;
+
+  tlv320aic3204_status_t status = tlv_write_checked(
+      &TLV320AIC3204_I2C_HANDLE, TLV320AIC3204_I2C_ADDR_7BIT,
+      1U, TLV_P1_MICBIAS, micbias);
+  if (status == TLV320AIC3204_STATUS_OK)
+  {
+    status = tlv_write_checked(
+        &TLV320AIC3204_I2C_HANDLE, TLV320AIC3204_I2C_ADDR_7BIT,
+        1U, TLV_P1_FLOATING_INPUT, floating);
+  }
+  if (status == TLV320AIC3204_STATUS_OK)
+  {
+    status = tlv_write_checked(
+        &TLV320AIC3204_I2C_HANDLE, TLV320AIC3204_I2C_ADDR_7BIT,
+        1U, TLV_P1_RIGHT_P_ROUTE, right_p);
+  }
+  if (status != TLV320AIC3204_STATUS_OK)
+  {
+    const tlv320aic3204_status_t failed_status = status;
+    (void)tlv_write_checked(
+        &TLV320AIC3204_I2C_HANDLE, TLV320AIC3204_I2C_ADDR_7BIT,
+        1U, TLV_P1_MICBIAS, restore_micbias);
+    (void)tlv_write_checked(
+        &TLV320AIC3204_I2C_HANDLE, TLV320AIC3204_I2C_ADDR_7BIT,
+        1U, TLV_P1_FLOATING_INPUT, restore_floating);
+    (void)tlv_write_checked(
+        &TLV320AIC3204_I2C_HANDLE, TLV320AIC3204_I2C_ADDR_7BIT,
+        1U, TLV_P1_RIGHT_P_ROUTE, restore_right_p);
+    return tlv_record_status(failed_status);
+  }
+
+  g_tlv_analog_input = input;
+  return tlv_record_status(TLV320AIC3204_STATUS_OK);
 }
 
 void TLV320AIC3204_GetDiag(tlv320aic3204_diag_t *out_diag)
