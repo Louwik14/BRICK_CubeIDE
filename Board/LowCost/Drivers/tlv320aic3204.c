@@ -270,6 +270,37 @@ static tlv320aic3204_status_t tlv_write_checked(I2C_HandleTypeDef *i2c,
   return TLV320AIC3204_STATUS_OK;
 }
 
+static tlv320aic3204_status_t tlv_write_checked_mask(I2C_HandleTypeDef *i2c,
+                                                     uint8_t address,
+                                                     uint8_t page,
+                                                     uint8_t reg,
+                                                     uint8_t value,
+                                                     uint8_t mask)
+{
+  tlv320aic3204_status_t status =
+      TLV320AIC3204_WriteReg(i2c, address, page, reg, value);
+  if (status != TLV320AIC3204_STATUS_OK)
+  {
+    return status;
+  }
+
+  uint8_t readback = 0U;
+  status = TLV320AIC3204_ReadReg(i2c, address, page, reg, &readback);
+  g_tlv_diag.expected = value;
+  g_tlv_diag.mask = mask;
+  if (status != TLV320AIC3204_STATUS_OK)
+  {
+    return status;
+  }
+
+  if ((readback & mask) != (value & mask))
+  {
+    g_tlv_diag.readback_errors++;
+    return tlv_record_status(TLV320AIC3204_STATUS_VERIFY_ERROR);
+  }
+  return TLV320AIC3204_STATUS_OK;
+}
+
 static tlv320aic3204_status_t tlv_write_extended(I2C_HandleTypeDef *i2c,
                                                  uint8_t address,
                                                  uint8_t page,
@@ -560,9 +591,9 @@ tlv320aic3204_status_t TLV320AIC3204_SetAnalogInput(
       1U, TLV_P1_MICBIAS, micbias);
   if (status == TLV320AIC3204_STATUS_OK)
   {
-    status = tlv_write_checked(
+    status = tlv_write_checked_mask(
         &TLV320AIC3204_I2C_HANDLE, TLV320AIC3204_I2C_ADDR_7BIT,
-        1U, TLV_P1_FLOATING_INPUT, floating);
+        1U, TLV_P1_FLOATING_INPUT, floating, 0xFCU);
   }
   if (status == TLV320AIC3204_STATUS_OK)
   {
@@ -576,9 +607,9 @@ tlv320aic3204_status_t TLV320AIC3204_SetAnalogInput(
     (void)tlv_write_checked(
         &TLV320AIC3204_I2C_HANDLE, TLV320AIC3204_I2C_ADDR_7BIT,
         1U, TLV_P1_MICBIAS, restore_micbias);
-    (void)tlv_write_checked(
+    (void)tlv_write_checked_mask(
         &TLV320AIC3204_I2C_HANDLE, TLV320AIC3204_I2C_ADDR_7BIT,
-        1U, TLV_P1_FLOATING_INPUT, restore_floating);
+        1U, TLV_P1_FLOATING_INPUT, restore_floating, 0xFCU);
     (void)tlv_write_checked(
         &TLV320AIC3204_I2C_HANDLE, TLV320AIC3204_I2C_ADDR_7BIT,
         1U, TLV_P1_RIGHT_P_ROUTE, restore_right_p);
