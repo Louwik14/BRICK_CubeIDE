@@ -1,12 +1,12 @@
 @echo off
 setlocal
 
+set "PROGRAMMER=C:\Program Files\STMicroelectronics\STM32Cube\STM32CubeProgrammer\bin\STM32_Programmer_CLI.exe"
 set "FIRMWARE=%~dp0build\Release\BRICK6_CUBE.bin"
-set "DFU_LIST=%TEMP%\brick_dfu_%RANDOM%_%RANDOM%.txt"
 
-where dfu-util >nul 2>&1
-if errorlevel 1 (
-    echo dfu-util introuvable dans PATH.
+if not exist "%PROGRAMMER%" (
+    echo STM32_Programmer_CLI.exe introuvable :
+    echo %PROGRAMMER%
     goto :failure
 )
 
@@ -16,29 +16,19 @@ if not exist "%FIRMWARE%" (
     goto :failure
 )
 
-dfu-util -l >"%DFU_LIST%" 2>&1
-set "DFU_LIST_RESULT=%ERRORLEVEL%"
-type "%DFU_LIST%"
-if not "%DFU_LIST_RESULT%"=="0" (
-    del "%DFU_LIST%" >nul 2>&1
-    goto :failure
-)
-
-%SystemRoot%\System32\findstr.exe /I /C:"0483:df11" "%DFU_LIST%" >nul
+"%PROGRAMMER%" -c port=USB1
 if errorlevel 1 (
-    del "%DFU_LIST%" >nul 2>&1
     echo.
     echo BRICK DFU introuvable. Faire SHIFT + PLAY/PAUSE puis relancer Flash USB.
     goto :failure
 )
-del "%DFU_LIST%" >nul 2>&1
 
 echo.
 echo === FLASH USB DFU ===
 echo %FIRMWARE%
 echo.
 
-dfu-util -d 0483:df11 -a 0 -s 0x08000000:leave -D "%FIRMWARE%"
+"%PROGRAMMER%" -c port=USB1 -w "%FIRMWARE%" 0x08000000 -v
 if errorlevel 1 goto :failure
 
 echo.
