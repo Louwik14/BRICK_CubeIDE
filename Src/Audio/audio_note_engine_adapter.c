@@ -22,7 +22,6 @@ static track_audio_runtime_ctx_t g_audio_track_ctx[BRICK_ENTITY_CAPACITY];
 static uint16_t g_audio_entity_mask_by_engine[TRACK_RUNTIME_ENGINE_COUNT];
 static uint8_t g_audio_entity_by_mix_lane[MIXER_MAX_TRACKS];
 static uint8_t g_audio_external_gate_triggered[BRICK_ENTITY_CAPACITY];
-static uint32_t g_tb303_released_output[BRICK6_TB303_INSTANCE_COUNT];
 
 #define AUDIO_PHYSICAL_OUTPUT_CAPACITY 8U
 
@@ -541,19 +540,13 @@ static uint8_t audio_note_engine_adapter_apply_physical(
     {
         if (is_note_on != 0U)
         {
-            const uint8_t continue_slide = (uint8_t)(
-                g_tb303_released_output[instance] == output_id);
             audio_note_engine_adapter_project_voice_configuration(
                 program, instance);
-            if (continue_slide == 0U)
-                brick6_tb303_runtime_restart_voice(instance);
             brick6_tb303_runtime_note_on(instance, note, velocity);
-            g_tb303_released_output[instance] = 0U;
         }
         else
         {
             brick6_tb303_runtime_note_off(instance, note);
-            g_tb303_released_output[instance] = output_id;
         }
     }
     else if (engine == TRACK_RUNTIME_ENGINE_SAMPLER)

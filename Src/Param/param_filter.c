@@ -49,7 +49,8 @@ uint8_t param_filter_control_reset(uint8_t track)
 uint8_t param_filter_is_param(param_id_t id)
 {
     return (uint8_t)(((id >= PARAM_FILTER_MORPH)
-                      && (id <= PARAM_FILTER_ENVDLY)) ? 1U : 0U);
+                      && (id <= PARAM_FILTER_ENVDLY))
+        || (id == PARAM_ENV_RETRIG_FILTER) ? 1U : 0U);
 }
 
 uint8_t param_filter_control_get(uint8_t track, param_id_t id,

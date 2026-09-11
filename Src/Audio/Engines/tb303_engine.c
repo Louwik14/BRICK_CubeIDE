@@ -254,7 +254,7 @@ void brick6_tb303_runtime_note_on(uint8_t id,uint8_t note,uint8_t velocity)
 {
     (void)velocity;if(id>=BRICK6_TB303_INSTANCE_COUNT)return;tb303_runtime_t *v=&g_tb303[id];
     const uint8_t legato=(uint8_t)((v->slide!=0U)&&((v->gate!=0U)||(v->pending_release!=0U)));
-    if(v->active==0U)tb303_clear_signal_state(v);
+    if(legato==0U)tb303_clear_signal_state(v);
     v->pending_release=0U;v->target_frequency=tb303_note_hz(note,v->tune);v->note=note;
     const uint8_t accented=(v->accent>0.0f)?1U:0U;tb303_update_decay(v,accented);
     if(legato==0U){v->frequency=v->target_frequency;v->main_env=1.0f/v->main_env_coeff;v->accent_env=v->main_env;v->amp_env=1.0f;}
