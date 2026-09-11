@@ -56,6 +56,12 @@ frontiere: les backends CONTROL couvrent l'etat canonique/MIDI, tandis que
 `param_registry_audio`, `param_filter_audio` et les backends moteur appliquent
 les commandes cote AUDIO. Aucun getter UI ne lit un runtime AUDIO.
 
+Le premier bind d'une route LFO depuis `DEST OFF` publie dans le meme lot la
+configuration canonique complete du LFO source avant destination, activation
+et base de destination. AUDIO ne depend donc ni d'un tweak anterieur ni d'un
+second bind pour initialiser RATE, SHAPE, TRIG et PHASE. Les binds LFO1, LFO2 et
+LFO3 partagent ce contrat; un changement de destination ne reset pas la phase.
+
 Le catalogue CONTROL LFO/Matrix derive et valide ses destinations depuis les
 regles Param et le descripteur canonique de piste. AUDIO ne consulte aucune
 politique Track: il verifie l'ABI puis prepare l'opcode DSP de la destination

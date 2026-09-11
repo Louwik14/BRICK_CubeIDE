@@ -85,6 +85,29 @@ static uint8_t mod_matrix_publish_slot_candidate(uint8_t track, uint8_t slot,
         .capture_tick = live_clock_capture_tick(),
         .count = 0U
     };
+    if ((include_destination_base != 0U)
+            && (candidate->destination != MOD_DESTINATION_NONE)
+            && (candidate->source >= (uint8_t)MOD_MATRIX_SOURCE_LFO1)
+            && (candidate->source <= (uint8_t)MOD_MATRIX_SOURCE_LFO3))
+    {
+        const uint8_t lfo = (uint8_t)(
+            candidate->source - (uint8_t)MOD_MATRIX_SOURCE_LFO1);
+        for (uint8_t param = 0U; param < (uint8_t)MOD_LFO_PARAM_COUNT; ++param)
+        {
+            float value = 0.0f;
+            if (mod_lfo_v1_get_track_param(track, lfo,
+                    (mod_lfo_param_t)param, &value) == 0U) return 0U;
+            bulk.item[bulk.count++] = (live_parameter_audio_target_t){
+                .parameter_id = (uint16_t)(
+                    PARAM_LFO1_RATE + lfo * MOD_LFO_PARAM_COUNT + param),
+                .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
+                .track = track,
+                .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
+                .semantic = CONTROL_AUDIO_PARAM_BASE,
+                .value = live_parameter_event_encode_float(value)
+            };
+        }
+    }
 #define ADD_MATRIX_FIELD(condition, parameter, field_value) do { \
     if (condition) bulk.item[bulk.count++] = (live_parameter_audio_target_t){ \
         .parameter_id = (uint16_t)(parameter), .scope = LIVE_PARAMETER_EVENT_SCOPE_SLOT, \

@@ -5,6 +5,7 @@
 #include "App/live_parameter_audio_publication.h"
 #include "IPC/live_parameter_event.h"
 #include "Mod/mod_destination_control.h"
+#include "Mod/mod_lfo_v1_control.h"
 #include "Param/param_registry.h"
 #include "Track/entity_topology.h"
 #include "Track/track_sound_state.h"
