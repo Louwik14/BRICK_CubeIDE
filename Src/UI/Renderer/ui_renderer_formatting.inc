@@ -566,34 +566,9 @@ static uint8_t ui_renderer_template_prepare_param_slot_texts(const ui_template_p
 
     float flash_value = 0.0f;
     ui_param_value_flash_kind_t flash_kind = UI_PARAM_VALUE_FLASH_DIRECT;
-    const uint8_t audio_fx_param = (uint8_t)((id == PARAM_AUDIO_FX_P1)
-        || (id == PARAM_AUDIO_FX_P2) || (id == PARAM_AUDIO_FX_P3)
-        || (id == PARAM_AUDIO_FX_B_P1) || (id == PARAM_AUDIO_FX_B_P2)
-        || (id == PARAM_AUDIO_FX_B_P3));
-    const uint8_t synth_immediate_param = (uint8_t)((id == PARAM_WAVE_VOLUME)
-        || (id == PARAM_WAVE_BALANCE)
-        || (id == PARAM_WAVE_TUNE)
-        || (id == PARAM_WAVE_DETUNE)
-        || (id == PARAM_WAVE_OSC1_POS)
-        || (id == PARAM_WAVE_OSC2_POS)
-        || (id == PARAM_WAVE_OSC1_START)
-        || (id == PARAM_WAVE_OSC2_START)
-        || (id == PARAM_WAVE_OSC1_LEN)
-        || (id == PARAM_WAVE_OSC2_LEN)
-        || (id == PARAM_PRISM_OSC1_PARAM1)
-        || (id == PARAM_PRISM_OSC1_PARAM2)
-        || (id == PARAM_PRISM_OSC1_AMOD)
-        || (id == PARAM_PRISM_OSC2_PARAM1)
-        || (id == PARAM_PRISM_OSC2_PARAM2)
-        || (id == PARAM_PRISM_OSC2_AMOD)
-        || (id == PARAM_PRISM_VOLUME)
-        || (id == PARAM_PRISM_BALANCE)
-        || (id == PARAM_PRISM_TUNE)
-        || (id == PARAM_PRISM_DETUNE)
-        || (id == PARAM_PRISM_DRIFT)
-        || (id == PARAM_PRISM_PITCH_MOD1)
-        || (id == PARAM_PRISM_PITCH_MOD2));
-    const uint8_t flash_active = ((audio_fx_param != 0U) || (synth_immediate_param != 0U))
+    const uint8_t audio_owned_param = param_registry_track_value_is_audio_command(
+        id, ui_renderer_template_get_param_authority_track(id));
+    const uint8_t flash_active = (audio_owned_param != 0U)
         ? ui_param_is_user_tweak_active(slot, id)
         : ui_param_get_slot_value_flash(slot,
                                         id,
@@ -608,7 +583,7 @@ static uint8_t ui_renderer_template_prepare_param_slot_texts(const ui_template_p
     {
         char flash_name[24];
         (void)flash_kind;
-        if ((audio_fx_param != 0U) || (synth_immediate_param != 0U)) flash_value = *out_value;
+        if (audio_owned_param != 0U) flash_value = *out_value;
         ui_renderer_template_build_param_text(state,
                                               slot,
                                               id,
