@@ -17,7 +17,7 @@ if not exist "%ELF%" (
     endlocal & exit /b 1
 )
 
-start "GDB STM32H7 Black Magic" "%GDB%" "%ELF%" ^
+start "GDB STM32H7 Black Magic" "%GDB%" --quiet "%ELF%" ^
     -ex "set confirm off" ^
     -ex "set pagination off" ^
     -ex "target extended-remote \\.\%BMP_PORT%" ^

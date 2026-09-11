@@ -22,7 +22,7 @@ echo === FLASH LOWCOST BLACK MAGIC ===
 echo %ELF%
 echo.
 
-"%GDB%" "%ELF%" ^
+"%GDB%" --batch --quiet "%ELF%" ^
     -ex "set confirm off" ^
     -ex "set pagination off" ^
     -ex "target extended-remote \\.\%BMP_PORT%" ^
