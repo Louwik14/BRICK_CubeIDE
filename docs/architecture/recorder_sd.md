@@ -32,6 +32,59 @@ AUDIO.
 
 Audio Rec possede un unique bus stereo AUDIO, somme des entites resolues par CONTROL et, si necessaire, de LINE directe. CONTROL publie le masque d'entites, ARM et les sources effectives comme PARAM final dans la FIFO unique; AUDIO conserve ensuite cette configuration privee. LINE directe est exclue lorsque l'entree physique est deja representee par une track External routee vers REC; cette decision est derivee de `track_input_ownership`, `entity_topology` et `track_runtime`. Sur Low-Cost, MIC Audio Rec selectionne la source physique mono `IN3_R` du TLV320AIC3204, routee avec un gain MICPGA fixe de +20 dB par le Right MICPGA et le Right ADC; l'ancien `IN1_R`, alors inutilise, est faiblement reference au common-mode. Le sample SAI droit alimente `mic.mono`, puis les deux canaux du bus REC existant. LINE_R et MIC partagent ce Right ADC et sont donc exclusifs. En mode MIC, LINE physique n'est pas publiee comme source External stereo; MIC n'est pas encore une source External et aucun second chemin Recorder n'est cree.
 
+### Audit analogique TLV320AIC3204
+
+L'etat MIC est obtenu apres reset et initialisation LINE, puis quatre ecritures de
+transition. Les valeurs ci-dessous sont celles effectivement programmees ou,
+pour les registres non reecrits, leur valeur de reset conservee. Le decodage est
+celui du *TLV320AIC3204 Application Reference Guide* SLAA557.
+
+| Page/reg. | MIC | Decodage utile et valeur attendue |
+|---|---:|---|
+| P1/R1 | `0x08` | D3=1 coupe le faible lien AVDD-DVDD; conforme avec AVDD alimente par le LDO. |
+| P1/R2 | `0x01` | D3=0 active les blocs analogiques, D0=1 active le LDO AVDD; conforme. |
+| P1/R10 | `0x00` | D6=0 fixe le common-mode global a 0,9 V; les autres bits concernent les sorties; conforme. |
+| P1/R51 | `0x68` | D6=1 MICBIAS actif, D5:D4=`10` donne 2,5 V avec CM=0,9 V, D3=1 choisit LDOIN; conforme aux 2,45 V mesures. |
+| P1/R55 | `0x04` | D3:D2=`01` route exclusivement IN3_R vers Right MICPGA+ par 10 kohm; conforme. A 1 uF, ce choix place le pole d'entree vers 16 Hz pour une source d'impedance faible. |
+| P1/R57 | `0x40` | D7:D6=`01` route CM1R vers Right MICPGA- par 10 kohm; tous les autres chemins sont coupes. C'est la reference single-ended correcte et elle est symetrique avec les 10 kohm de R55. |
+| P1/R58 | `0x7B` ecrit, `0x78` utile | D7=0 laisse IN1_L disponible, D6=1 reference IN1_R inutilise, D5:D3=111 referencent IN2_L, IN2_R et IN3_L inutilises, D2=0 ne charge pas IN3_R. D1:D0 sont reserves, lus a zero et exclus du masque de verification: les `11` ecrits sont non canoniques mais sans effet sur le silicium ni sur le niveau MIC. |
+| P1/R60 | `0x28` | D7=0 active le gain programme; D6:D0=40, soit 40 x 0,5 dB = +20 dB avec l'impedance 10 kohm de R55. Conforme, non mute. |
+| P1/R61 | `0x00` | ADC PowerTune PTM_R4; conforme. |
+| P1/R71 | `0x32` | charge rapide des entrees analogiques en 6,4 ms; conforme. |
+| P1/R123 | `0x05` | force la reference analogique avec montee en 40 ms; conforme. |
+| P0/R18, R19, R20 | `0x81`, `0x82`, `0x80` | NADC=/1, MADC=/2, AOSR=128: 48 kHz depuis 12,288 MHz; conforme. |
+| P0/R61 | `0x01` (reset) | PRB_R1, traitement ADC par defaut a gain unitaire; aucun coefficient custom ni attenuation. |
+| P0/R81 | `0xC0` | D7:D6=11 alimente les deux ADC, D3:D2=00 conserve les entrees analogiques, D1:D0=00 soft-step normal; Right ADC actif. |
+| P0/R82 | `0x00` | D7=0 et D3=0 demutent les ADC; gains fins gauche et droit a 0 dB. |
+| P0/R83, R84 | `0x00`, `0x00` (reset) | volumes numeriques ADC gauche et droit a 0 dB; aucune attenuation. |
+| P0/R86, R94 | `0x00`, `0x00` | AGC gauche et droit desactives par D7=0; les autres registres AGC restent sans effet. |
+
+Le choix 10 kohm de P1/R55 n'est pas une attenuation cachee: la table de gain
+du codec definit le gain MICPGA nominal pour 10 kohm. A code PGA identique,
+20 kohm retrancherait 6 dB et 40 kohm 12 dB. Le guide recommande de choisir
+l'impedance selon le compromis charge/bruit; il signale explicitement que la
+haute impedance augmente le bruit ou reduit la dynamique dans un chemin micro a
+fort gain. Les 10 kohm sont donc coherents ici, avec une charge restant nettement
+superieure aux 2,2 kohm de polarisation de la capsule.
+
+LINE et MIC ne different que sur P1/R51 (`0x00`/`0x68`), P1/R55
+(`0x80`, IN1_R par 20 kohm / `0x04`, IN3_R par 10 kohm), les bits utiles de
+P1/R58 (`0x3C`/`0x78`) et P1/R60 (`0x00`/`0x28`). P1/R57 reste volontairement
+`0x40`: CM1R par 10 kohm est la reference negative correcte dans les deux modes.
+Les ADC, leur demute, leur volume, PRB_R1, AGC, reference et common-mode sont
+communs et immuables apres l'initialisation. Les transitions LINE->MIC,
+MIC->LINE et LINE->MIC reconstruisent ainsi le meme etat final; aucun reglage
+LINE incompatible ne subsiste sur le Right ADC.
+
+L'audit ne prouve donc aucune cause codec du faible niveau. Le suspect restant
+est le trajet AC capsule+ -> C13 -> IN3_R. Sans oscilloscope, verifier sous
+tension environ 1,65 V cote capsule de C13 et environ 0,9 V cote IN3_R, puis
+comparer au multimetre en mode AC millivolts la variation de parole sur les deux
+cotes. Hors tension, verifier separement la continuite capsule+-pad C13 et
+pad C13-IN3_R; une mesure de capacite ou un remplacement controle de C13 permet
+de confirmer le composant, la continuite DC ne pouvant pas traverser le
+condensateur.
+
 Le meme bus alimente la conversion PCM24 du Recorder et le peak brut par bloc. AUDIO publie seulement `{generation_io, peak_abs_pcm24}` avant capture; ce fait physique minimal est requis car le ring PCM ne recoit encore aucun sample avant THR. CONTROL compare le peak au seuil, latch ARM TRIG puis reutilise la quantification NOW/BAR/PATTERN de `sample_capture`. Le writer n'est active qu'apres trigger et echeance. Le vu-metre est diagnostique/UI et ne modifie ni le peak brut, ni la waveform de la prise, ni le WAV.
 
 Une seule capture peut etre preparee ou active. La preparation Storage cree reservation et writer; CONTROL publie REC_BUS puis START/STOP dates. L'IRQ mixer appelle directement l'endpoint Recorder AUDIO, copie dans le ring puis publie le head avec une barriere. STOP, limite ou overflow ferment localement AUDIO et publient seulement `closed_session` et `capture_fault`; Storage draine puis finalise. Aucun ACK fonctionnel, config preparee, `active`, `error`, client ou generation partage ne subsiste.
