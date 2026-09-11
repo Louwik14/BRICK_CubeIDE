@@ -27,6 +27,11 @@ enum
 static float g_boot_master_gain;
 static uint16_t g_master_last_raw;
 
+volatile uint32_t g_master_volume_raw;
+volatile uint32_t g_master_volume_raw_min = 0xFFFFFFFFU;
+volatile uint32_t g_master_volume_raw_max;
+volatile uint32_t g_master_volume_publish_count;
+
 static uint16_t brick6_master_raw_delta(uint16_t raw, uint16_t reference)
 {
     return (raw >= reference)
@@ -43,6 +48,16 @@ uint8_t brick6_master_control_boot_capture(void)
         return 0U;
     }
 
+    g_master_volume_raw = raw;
+    if ((uint32_t)raw < g_master_volume_raw_min)
+    {
+        g_master_volume_raw_min = raw;
+    }
+    if ((uint32_t)raw > g_master_volume_raw_max)
+    {
+        g_master_volume_raw_max = raw;
+    }
+
     const float level = (float)raw / (float)POT_RAW_MAX;
     g_boot_master_gain = level * level;
     g_master_last_raw = raw;
@@ -51,7 +66,10 @@ uint8_t brick6_master_control_boot_capture(void)
 
 void brick6_master_control_boot_publish(void)
 {
-    (void)param_registry_commit_global(PARAM_MASTER_GAIN, g_boot_master_gain);
+    if (param_registry_commit_global(PARAM_MASTER_GAIN, g_boot_master_gain) != 0U)
+    {
+        ++g_master_volume_publish_count;
+    }
 }
 
 void brick6_master_control_process(void)
@@ -62,12 +80,25 @@ void brick6_master_control_process(void)
         return;
     }
 
+    g_master_volume_raw = raw;
+    if ((uint32_t)raw < g_master_volume_raw_min)
+    {
+        g_master_volume_raw_min = raw;
+    }
+    if ((uint32_t)raw > g_master_volume_raw_max)
+    {
+        g_master_volume_raw_max = raw;
+    }
+
     if (brick6_master_raw_delta(raw, g_master_last_raw) < POT_RAW_DEADBAND)
     {
         return;
     }
 
     const float level = (float)raw / (float)POT_RAW_MAX;
-    (void)param_registry_commit_global(PARAM_MASTER_GAIN, level * level);
+    if (param_registry_commit_global(PARAM_MASTER_GAIN, level * level) != 0U)
+    {
+        ++g_master_volume_publish_count;
+    }
     g_master_last_raw = raw;
 }
