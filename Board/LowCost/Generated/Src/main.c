@@ -98,7 +98,6 @@ extern uint32_t __ram_d2_dma_cacheable_end__;
 #define UI_TASKLET_CATCHUP_BUDGET         (8UL)
 #define LOWCOST_BOOTLOADER_SHIFT_STEP16_ENABLE     1U
 #define LOWCOST_BOOTLOADER_HOLD_MS                 2000UL
-#define LOWCOST_BOOTLOADER_BOOT0_CHARGE_MS         10UL
 
 static void MPU_Config(void)
 {
@@ -202,19 +201,8 @@ static void lowcost_bootloader_shift_step16_service(void)
 
   if ((fired == 0U) && ((uint32_t)(now_ms - hold_start_ms) >= LOWCOST_BOOTLOADER_HOLD_MS))
   {
-    GPIO_InitTypeDef GPIO_InitStruct = {0};
-
     fired = 1U;
-    __HAL_RCC_GPIOB_CLK_ENABLE();
-    GPIO_InitStruct.Pin = BOOTLOADER_TRIGGER_Pin;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    HAL_GPIO_Init(BOOTLOADER_TRIGGER_GPIO_Port, &GPIO_InitStruct);
-
-    HAL_GPIO_WritePin(BOOTLOADER_TRIGGER_GPIO_Port, BOOTLOADER_TRIGGER_Pin, GPIO_PIN_SET);
-    HAL_Delay(LOWCOST_BOOTLOADER_BOOT0_CHARGE_MS);
-    NVIC_SystemReset();
+    board_power_enter_rom_dfu();
   }
 #endif
 }

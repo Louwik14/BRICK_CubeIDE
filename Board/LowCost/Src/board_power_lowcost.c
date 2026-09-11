@@ -7,6 +7,7 @@
 #define POWER_BOOT_PRESS_MS 1000UL
 #define POWER_OFF_HOLD_MS 2000UL
 #define POWER_BUTTON_DEBOUNCE_MS 20UL
+#define BOOTLOADER_BOOT0_CHARGE_MS 10UL
 void board_power_delay_ms(uint32_t ms)
 {
     HAL_Delay(ms);
@@ -83,6 +84,28 @@ void board_power_usb_host_off(void)
 void board_power_shutdown_cut(void)
 {
     HAL_GPIO_WritePin(POWER_HOLD_GPIO_Port, POWER_HOLD_Pin, GPIO_PIN_RESET);
+}
+
+void board_power_enter_rom_dfu(void)
+{
+    GPIO_InitTypeDef gpio = {0};
+
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    gpio.Pin = BOOTLOADER_TRIGGER_Pin;
+    gpio.Mode = GPIO_MODE_OUTPUT_PP;
+    gpio.Pull = GPIO_NOPULL;
+    gpio.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(BOOTLOADER_TRIGGER_GPIO_Port, &gpio);
+
+    HAL_GPIO_WritePin(BOOTLOADER_TRIGGER_GPIO_Port,
+                      BOOTLOADER_TRIGGER_Pin,
+                      GPIO_PIN_SET);
+    HAL_Delay(BOOTLOADER_BOOT0_CHARGE_MS);
+    NVIC_SystemReset();
+
+    for (;;)
+    {
+    }
 }
 
 void board_power_hold_enable_after_boot_press(void)

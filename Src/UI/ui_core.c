@@ -54,6 +54,7 @@
 #include "ui_core_pattern.h"
 #include "ui_core_shortcuts.h"
 #include "ui_core_seq_transport.h"
+#include "Board/board_power.h"
 #include "ui_edit_context_sync.h"
 #include "ui_active_track_sync.h"
 #include "ui_page_manager.h"
@@ -746,6 +747,11 @@ static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
     if ((ev != 0) && (ev->type == UI_EVENT_BUTTON_PRESS)
             && (ev->id == (uint8_t)BTN_PLAY))
     {
+        if (g_ui_track_state.shift_down != 0U)
+        {
+            board_power_enter_rom_dfu();
+            return 1U;
+        }
         seq_runtime_toggle_play_stop();
         return 1U;
     }
