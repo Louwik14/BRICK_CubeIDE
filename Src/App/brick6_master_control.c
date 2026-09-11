@@ -21,16 +21,48 @@
 enum
 {
     POT_RAW_MAX = 65535U,
-    POT_RAW_DEADBAND = 128U
+    POT_FILTER_SHIFT = 3U,
+    POT_PUBLISH_HYSTERESIS = 64U
 };
 
 static float g_boot_master_gain;
-static uint16_t g_master_last_raw;
+static uint16_t g_master_filtered_raw;
+static uint16_t g_master_last_published_raw;
+static uint8_t g_master_filter_initialized;
 
-volatile uint32_t g_master_volume_raw;
-volatile uint32_t g_master_volume_raw_min = 0xFFFFFFFFU;
-volatile uint32_t g_master_volume_raw_max;
-volatile uint32_t g_master_volume_publish_count;
+static uint16_t brick6_master_filter_raw(uint16_t raw)
+{
+    if (g_master_filter_initialized == 0U)
+    {
+        g_master_filter_initialized = 1U;
+        g_master_filtered_raw = raw;
+        g_master_last_published_raw = raw;
+        return raw;
+    }
+
+    if (raw > g_master_filtered_raw)
+    {
+        uint16_t step = (uint16_t)((raw - g_master_filtered_raw)
+            >> POT_FILTER_SHIFT);
+        if (step == 0U)
+        {
+            step = 1U;
+        }
+        g_master_filtered_raw = (uint16_t)(g_master_filtered_raw + step);
+    }
+    else if (raw < g_master_filtered_raw)
+    {
+        uint16_t step = (uint16_t)((g_master_filtered_raw - raw)
+            >> POT_FILTER_SHIFT);
+        if (step == 0U)
+        {
+            step = 1U;
+        }
+        g_master_filtered_raw = (uint16_t)(g_master_filtered_raw - step);
+    }
+
+    return g_master_filtered_raw;
+}
 
 static uint16_t brick6_master_raw_delta(uint16_t raw, uint16_t reference)
 {
@@ -48,28 +80,15 @@ uint8_t brick6_master_control_boot_capture(void)
         return 0U;
     }
 
-    g_master_volume_raw = raw;
-    if ((uint32_t)raw < g_master_volume_raw_min)
-    {
-        g_master_volume_raw_min = raw;
-    }
-    if ((uint32_t)raw > g_master_volume_raw_max)
-    {
-        g_master_volume_raw_max = raw;
-    }
-
-    const float level = (float)raw / (float)POT_RAW_MAX;
+    const uint16_t filtered_raw = brick6_master_filter_raw(raw);
+    const float level = (float)filtered_raw / (float)POT_RAW_MAX;
     g_boot_master_gain = level * level;
-    g_master_last_raw = raw;
     return 1U;
 }
 
 void brick6_master_control_boot_publish(void)
 {
-    if (param_registry_commit_global(PARAM_MASTER_GAIN, g_boot_master_gain) != 0U)
-    {
-        ++g_master_volume_publish_count;
-    }
+    (void)param_registry_commit_global(PARAM_MASTER_GAIN, g_boot_master_gain);
 }
 
 void brick6_master_control_process(void)
@@ -80,25 +99,16 @@ void brick6_master_control_process(void)
         return;
     }
 
-    g_master_volume_raw = raw;
-    if ((uint32_t)raw < g_master_volume_raw_min)
-    {
-        g_master_volume_raw_min = raw;
-    }
-    if ((uint32_t)raw > g_master_volume_raw_max)
-    {
-        g_master_volume_raw_max = raw;
-    }
-
-    if (brick6_master_raw_delta(raw, g_master_last_raw) < POT_RAW_DEADBAND)
+    const uint16_t filtered_raw = brick6_master_filter_raw(raw);
+    if (brick6_master_raw_delta(filtered_raw, g_master_last_published_raw)
+        < POT_PUBLISH_HYSTERESIS)
     {
         return;
     }
 
-    const float level = (float)raw / (float)POT_RAW_MAX;
+    const float level = (float)filtered_raw / (float)POT_RAW_MAX;
     if (param_registry_commit_global(PARAM_MASTER_GAIN, level * level) != 0U)
     {
-        ++g_master_volume_publish_count;
+        g_master_last_published_raw = filtered_raw;
     }
-    g_master_last_raw = raw;
 }
