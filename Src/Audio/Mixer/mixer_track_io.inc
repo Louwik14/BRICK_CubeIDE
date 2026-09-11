@@ -738,6 +738,7 @@ ITCM_TEXT uint8_t mixer_process_external_poly_voice_prepared(uint32_t mix_track_
     {
         const float vca = vca_gain[i];
         filter->vca_env_value = vca;
+        g_track_filters[mix_track_id].vca_env_value = vca;
         const float scaled = mono[i] * vca;
         const float attenuated = scaled * attenuated_pan;
         if (poly_initialized == 0U)
@@ -768,6 +769,7 @@ ITCM_TEXT uint8_t mixer_process_external_poly_voice_prepared(uint32_t mix_track_
     {
         memset(&mono[i], 0, (frames - i) * sizeof(float));
         filter->vca_env_value = 0.0f;
+        g_track_filters[mix_track_id].vca_env_value = 0.0f;
     }
     return (vca_env_stage(&filter->synth_vca_env) != VCA_ENV_IDLE);
 }
@@ -923,22 +925,6 @@ void mixer_synth_voice_slot_reset(uint8_t slot)
         g_poly_cutoff_override[slot].effective_hz = MIXER_FILTER_CUTOFF_MAX_HZ;
         g_poly_cutoff_override[slot].valid = 0U;
     }
-}
-
-static void mixer_copy_voice_envelope_state(mixer_track_filter_t *destination,
-                                            const mixer_track_filter_t *source)
-{
-    destination->filter_env = source->filter_env;
-    destination->vca_env = source->vca_env;
-    destination->synth_vca_env = source->synth_vca_env;
-    destination->vca_env_value = source->vca_env_value;
-    destination->filter_env_value = source->filter_env_value;
-    destination->note_active = source->note_active;
-    destination->current_note = source->current_note;
-    destination->vca_note_active = source->vca_note_active;
-    destination->vca_note_count = source->vca_note_count;
-    destination->vca_current_note = source->vca_current_note;
-    destination->vca_gate = source->vca_gate;
 }
 
 #define MIXER_SEND_MASK_BIT(send_index) ((uint8_t)(1U << (send_index)))
@@ -1301,39 +1287,6 @@ static void mixer_accumulate_send_plan_stereo(
         }
         plan->current[active] = current;
     }
-}
-
-void mixer_synth_voice_slot_copy(uint8_t source_slot, uint8_t destination_slot)
-{
-    if ((source_slot >= SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
-            || (destination_slot >= SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
-            || (source_slot == destination_slot))
-        return;
-    mixer_copy_voice_envelope_state(&g_poly_filters_hot[destination_slot],
-                                    &g_poly_filters_hot[source_slot]);
-    g_poly_cutoff_override[destination_slot] = g_poly_cutoff_override[source_slot];
-}
-
-void mixer_track_voice_state_to_poly(uint32_t mix_track_id,
-                                     uint32_t poly_track_id,
-                                     uint8_t voice)
-{
-    mixer_track_filter_t *const destination = mixer_poly_filter(poly_track_id, voice);
-    if ((destination == NULL) || (mix_track_id >= MIXER_MAX_TRACKS))
-        return;
-    mixer_poly_filter_sync_config(destination, &g_track_filters[mix_track_id]);
-    mixer_copy_voice_envelope_state(destination, &g_track_filters[mix_track_id]);
-    destination->vca_enabled = 1U;
-}
-
-void mixer_track_voice_state_from_poly(uint32_t mix_track_id,
-                                       uint32_t poly_track_id,
-                                       uint8_t voice)
-{
-    mixer_track_filter_t *const source = mixer_poly_filter(poly_track_id, voice);
-    if ((source == NULL) || (mix_track_id >= MIXER_MAX_TRACKS))
-        return;
-    mixer_copy_voice_envelope_state(&g_track_filters[mix_track_id], source);
 }
 
 /**

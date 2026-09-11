@@ -201,8 +201,6 @@ uint8_t persist_codec_build_project_document_header(
 uint32_t persist_codec_crc32_update(uint32_t crc,
                                     const uint8_t *data,
                                     uint32_t length);
-persist_codec_result_t persist_codec_prevalidate_project(const persist_codec_source_t *source,
-                                                          uint32_t *out_total_bytes);
 persist_codec_result_t persist_codec_decode_project_progressive(
     const persist_codec_source_t *source,
     persist_codec_project_workspace_t *workspace,

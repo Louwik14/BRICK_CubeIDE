@@ -1033,23 +1033,11 @@ uint8_t project_product_blank(void)
 
 static project_product_boot_restore_result_t project_product_restore_boot_defaults(void)
 {
-    persistence_project_restore_workspace_t *const restore =
-        persistence_workspace_acquire_project_restore();
-    if (restore == NULL || project_product_build_default_candidate(restore) == 0U)
-    {
-        if (restore != NULL)
-            persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_RESTORE);
-        return PROJECT_PRODUCT_BOOT_RESTORE_FAILED;
-    }
-    if ((project_product_prevalidate_candidate(restore) == 0U)
-        || (project_product_prepare_pattern_commit() == 0U))
-    {
-        project_discard_restore_workspace(restore);
-        return PROJECT_PRODUCT_BOOT_RESTORE_FAILED;
-    }
-    g_progress=(project_product_progress_t){1U,0U,0U,1U,
-        PROJECT_PRODUCT_RESULT_IN_PROGRESS};
-    project_product_start_candidate(restore,PROJECT_PRODUCT_NO_SLOT,0U);
+    g_active=0U;
+    g_active_valid=0U;
+    boot_context_flash_clear();
+    g_progress=(project_product_progress_t){0U,1U,0U,0U,
+        PROJECT_PRODUCT_RESULT_SUCCESS};
     return PROJECT_PRODUCT_BOOT_RESTORE_DEFAULTS_READY;
 }
 

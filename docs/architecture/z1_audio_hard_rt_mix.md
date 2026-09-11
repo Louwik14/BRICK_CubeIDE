@@ -22,6 +22,15 @@ Le rebind des outputs tenus ne masque aucun echec: l'absence volontaire de
 renderer est un succes silencieux, tandis qu'un renderer promis mais impossible
 declenche le fatal source du consumer.
 
+Prism, Stack, Wave et FM utilisent le meme filtre/VCA physique par voix pour
+`VOICES=1` et `VOICES=N`: le passage mono/poly ne change donc plus de
+representation d'enveloppe. Un resize conserve les slots portant les outputs
+HELD, puis autant de tails RELEASE que la nouvelle capacite le permet; seuls les
+slots retires sont reinitialises. Le mapping logique est compacte autour de ces
+slots sans recopier ni retrigger leur etat DSP. L'instance devenue voice 0 est
+publiee comme nouvelle source de projection moteur et les plans AUDIO qui
+adressent cette instance sont reconstruits.
+
 La configuration moteur reste canonique sur l'instance primaire de la track.
 L'adapter AUDIO porte le geste commun de projection vers tous les slots physiques:
 une application PARAM live, une croissance de polyphonie et l'initialisation

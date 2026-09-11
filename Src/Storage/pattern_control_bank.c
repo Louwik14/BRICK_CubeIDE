@@ -76,13 +76,115 @@ static uint32_t le32(const uint8_t*p){return(uint32_t)p[0]|((uint32_t)p[1]<<8U)|
 static void put32(uint8_t*p,uint32_t v){for(uint8_t i=0U;i<4U;++i)p[i]=(uint8_t)(v>>(8U*i));}
 static uint8_t side_path(char*out,uint32_t size,const char*base,const char*suffix){int n=snprintf(out,size,"%s.%s",base,suffix);return(n>0&&(uint32_t)n<size)?1U:0U;}
 static void recover_slot(uint8_t set,uint8_t b,uint8_t p){char x[48],tmp[52],bak[52];if(path_for_set(x,sizeof(x),set,b,p)&&side_path(tmp,sizeof(tmp),x,"TMP")&&side_path(bak,sizeof(bak),x,"BAK"))(void)persistent_fatfs_recover_replace(x,tmp,bak);}
-static void scan_active(void){memset(g_present,0,sizeof(g_present));for(uint8_t b=0;b<BANKS;++b)for(uint8_t p=0;p<SLOTS;++p){char x[48];FILINFO i;recover_slot(g_active_set,b,p);if(path_for_set(x,sizeof(x),g_active_set,b,p)&&f_stat(x,&i)==FR_OK)g_present[b][p]=1U;}}
-static void clear_set(uint8_t set){char commit[48],tmp[48];if(commit_path(commit,sizeof(commit),set,0U))(void)f_unlink(commit);if(commit_path(tmp,sizeof(tmp),set,1U))(void)f_unlink(tmp);for(uint8_t b=0;b<BANKS;++b)for(uint8_t p=0;p<SLOTS;++p){char x[48],slot_tmp[52],bak[52];if(path_for_set(x,sizeof(x),set,b,p)){(void)f_unlink(x);if(side_path(slot_tmp,sizeof(slot_tmp),x,"TMP"))(void)f_unlink(slot_tmp);if(side_path(bak,sizeof(bak),x,"BAK"))(void)f_unlink(bak);}}}
+
+typedef struct
+{
+    uint8_t final[32];
+    uint8_t temporary[32];
+    uint8_t backup[32];
+    uint8_t commit_bin;
+    uint8_t commit_tmp;
+    uint8_t commit_bak;
+} pattern_set_files_t;
+
+static uint8_t pattern_set_file_slot(const char *name,const char *suffix,
+                                     uint8_t *out_bank,uint8_t *out_pattern)
+{
+    if(name==NULL||suffix==NULL||out_bank==NULL||out_pattern==NULL)return 0U;
+    if(strlen(name)!=(size_t)(11U+strlen(suffix))||name[0]!='B'
+        ||name[3]!='_'||name[4]!='P'||name[7]!='.'
+        ||name[8]!='B'||name[9]!='6'||name[10]!='C'
+        ||memcmp(&name[11],suffix,strlen(suffix))!=0)return 0U;
+    if(name[1]<'0'||name[1]>'9'||name[2]<'0'||name[2]>'9'
+        ||name[5]<'0'||name[5]>'9'||name[6]<'0'||name[6]>'9')return 0U;
+    const uint8_t bank=(uint8_t)((name[1]-'0')*10+(name[2]-'0'));
+    const uint8_t pattern=(uint8_t)((name[5]-'0')*10+(name[6]-'0'));
+    if(!valid(bank,pattern))return 0U;
+    *out_bank=bank;*out_pattern=pattern;return 1U;
+}
+
+static uint8_t pattern_set_collect(uint8_t set,pattern_set_files_t *files)
+{
+    char directory[24];DIR dir;FILINFO info;
+    if(files==NULL)return 0U;
+    memset(files,0,sizeof(*files));
+    const int n=snprintf(directory,sizeof(directory),"0:/PATTERN/S%u",set);
+    if(n<=0||(uint32_t)n>=sizeof(directory)||f_opendir(&dir,directory)!=FR_OK)return 0U;
+    for(;;)
+    {
+        if(f_readdir(&dir,&info)!=FR_OK){(void)f_closedir(&dir);return 0U;}
+        if(info.fname[0]=='\0')break;
+        uint8_t bank=0U,pattern=0U;
+        if(pattern_set_file_slot(info.fname,"",&bank,&pattern)!=0U)
+            files->final[((uint16_t)bank*SLOTS+pattern)>>3U]|=(uint8_t)(1U<<(((uint16_t)bank*SLOTS+pattern)&7U));
+        else if(pattern_set_file_slot(info.fname,".TMP",&bank,&pattern)!=0U)
+            files->temporary[((uint16_t)bank*SLOTS+pattern)>>3U]|=(uint8_t)(1U<<(((uint16_t)bank*SLOTS+pattern)&7U));
+        else if(pattern_set_file_slot(info.fname,".BAK",&bank,&pattern)!=0U)
+            files->backup[((uint16_t)bank*SLOTS+pattern)>>3U]|=(uint8_t)(1U<<(((uint16_t)bank*SLOTS+pattern)&7U));
+        else if(strcmp(info.fname,"COMMIT.BIN")==0)files->commit_bin=1U;
+        else if(strcmp(info.fname,"COMMIT.TMP")==0)files->commit_tmp=1U;
+        else if(strcmp(info.fname,"COMMIT.BAK")==0)files->commit_bak=1U;
+    }
+    (void)f_closedir(&dir);return 1U;
+}
+
+static uint8_t pattern_bitmap_has(const uint8_t *bitmap,uint8_t b,uint8_t p)
+{
+    const uint16_t slot=(uint16_t)b*SLOTS+p;
+    return (uint8_t)((bitmap[slot>>3U]&(uint8_t)(1U<<(slot&7U)))!=0U);
+}
+
+static uint8_t pattern_remove_file(const char *path)
+{
+    const FRESULT result=f_unlink(path);
+    return (uint8_t)((result==FR_OK||result==FR_NO_FILE)?1U:0U);
+}
+
+static void scan_active(void)
+{
+    pattern_set_files_t files;
+    memset(g_present,0,sizeof(g_present));
+    if(pattern_set_collect(g_active_set,&files)==0U)return;
+    for(uint8_t b=0U;b<BANKS;++b)for(uint8_t p=0U;p<SLOTS;++p)
+        if(pattern_bitmap_has(files.final,b,p)||pattern_bitmap_has(files.temporary,b,p)
+            ||pattern_bitmap_has(files.backup,b,p))
+        {
+            char x[48];FILINFO info;recover_slot(g_active_set,b,p);
+            if(path_for_set(x,sizeof(x),g_active_set,b,p)&&f_stat(x,&info)==FR_OK)
+                g_present[b][p]=1U;
+        }
+}
+
+static uint8_t clear_set(uint8_t set)
+{
+    pattern_set_files_t files;
+    if(pattern_set_collect(set,&files)==0U)return 0U;
+    uint8_t ok=1U;
+    char x[52];
+    if(files.commit_bin&&commit_path(x,sizeof(x),set,0U))ok&=pattern_remove_file(x);
+    if(files.commit_tmp&&commit_path(x,sizeof(x),set,1U))ok&=pattern_remove_file(x);
+    if(files.commit_bak)
+    {
+        char commit[48];
+        if(commit_path(commit,sizeof(commit),set,0U)&&side_path(x,sizeof(x),commit,"BAK"))ok&=pattern_remove_file(x);
+    }
+    for(uint8_t b=0U;b<BANKS;++b)for(uint8_t p=0U;p<SLOTS;++p)
+    {
+        if(!pattern_bitmap_has(files.final,b,p)&&!pattern_bitmap_has(files.temporary,b,p)
+            &&!pattern_bitmap_has(files.backup,b,p))continue;
+        if(!path_for_set(x,sizeof(x),set,b,p))continue;
+        if(pattern_bitmap_has(files.final,b,p))ok&=pattern_remove_file(x);
+        char side[52];
+        if(pattern_bitmap_has(files.temporary,b,p)&&side_path(side,sizeof(side),x,"TMP"))ok&=pattern_remove_file(side);
+        if(pattern_bitmap_has(files.backup,b,p)&&side_path(side,sizeof(side),x,"BAK"))ok&=pattern_remove_file(side);
+    }
+    return ok;
+}
 static uint8_t write_commit(uint8_t set,uint32_t generation,const uint8_t*bitmap){uint8_t r[COMMIT_BYTES]={0};r[0]='B';r[1]='6';r[2]='P';r[3]='B';r[4]=1U;r[5]=set;put32(&r[8],generation);memcpy(&r[12],bitmap,32U);put32(&r[40],~crc32(0xFFFFFFFFUL,r,40U));char x[48],tmp[48];FIL f;UINT n=0U;if(!commit_path(x,sizeof(x),set,0U)||!commit_path(tmp,sizeof(tmp),set,1U)||f_open(&f,tmp,FA_CREATE_ALWAYS|FA_WRITE)!=FR_OK)return 0U;uint8_t ok=(f_write(&f,r,sizeof(r),&n)==FR_OK&&n==sizeof(r)&&f_sync(&f)==FR_OK);(void)f_close(&f);if(ok){(void)f_unlink(x);ok=(f_rename(tmp,x)==FR_OK);}if(!ok)(void)f_unlink(tmp);return ok;}
 static uint8_t read_commit(uint8_t set,uint32_t*out_generation){uint8_t r[COMMIT_BYTES];char x[48];FIL f;UINT n=0U;if(!commit_path(x,sizeof(x),set,0U)||f_open(&f,x,FA_READ)!=FR_OK)return 0U;uint8_t ok=((uint32_t)f_size(&f)==sizeof(r)&&f_read(&f,r,sizeof(r),&n)==FR_OK&&n==sizeof(r));(void)f_close(&f);ok=(ok&&r[0]=='B'&&r[1]=='6'&&r[2]=='P'&&r[3]=='B'&&r[4]==1U&&r[5]==set&&r[6]==0U&&r[7]==0U&&le32(&r[40])==~crc32(0xFFFFFFFFUL,r,40U));if(ok)*out_generation=le32(&r[8]);return ok;}
 static uint8_t store_to_set(uint8_t set,uint8_t b,uint8_t p,const persist_control_pattern_t*in){char x[48],tmp[52];persistent_fatfs_file_t f;uint8_t ok=path_for_set(x,sizeof(x),set,b,p);if(ok){snprintf(tmp,sizeof(tmp),"%s.TMP",x);ok=persistent_fatfs_open_write(&f,tmp);if(ok){persist_codec_sink_t s=persistent_fatfs_sink(&f);ok=(persist_codec_encode_pattern(in,&s,NULL)==PERSIST_CODEC_OK)&&(f_sync(&f.file)==FR_OK);persistent_fatfs_close(&f);}if(ok){(void)f_unlink(x);ok=(f_rename(tmp,x)==FR_OK);}else(void)f_unlink(tmp);}return ok;}
 
-static uint8_t begin_staging(void){if(g_active_set>=SET_COUNT||g_staging_set!=INVALID_SET)return 0U;g_staging_set=(uint8_t)(g_active_set^1U);clear_set(g_staging_set);memset(g_staging_bitmap,0,sizeof(g_staging_bitmap));g_staging_commit_prepared=0U;return 1U;}
+static uint8_t begin_staging(void){if(g_active_set>=SET_COUNT||g_staging_set!=INVALID_SET)return 0U;g_staging_set=(uint8_t)(g_active_set^1U);if(clear_set(g_staging_set)==0U){g_staging_set=INVALID_SET;return 0U;}memset(g_staging_bitmap,0,sizeof(g_staging_bitmap));g_staging_commit_prepared=0U;return 1U;}
 uint8_t pattern_control_bank_staging_present(uint8_t bank,uint8_t pattern)
 {
     if ((g_staging_set == INVALID_SET) || (bank >= BANKS) || (pattern >= SLOTS))
@@ -518,5 +620,5 @@ uint8_t pattern_control_bank_get_ordinal_project_path(uint16_t ordinal,char*out_
 uint8_t pattern_control_bank_begin_project(void){return begin_staging();}
 uint8_t pattern_control_bank_put_record_project(const persist_control_pattern_record_t*r){if(r==NULL||r->present!=1U||!valid(r->bank,r->pattern)||g_staging_set>=SET_COUNT||!store_to_set(g_staging_set,r->bank,r->pattern,&r->content))return 0U;uint8_t slot=(uint8_t)(r->bank*SLOTS+r->pattern);g_staging_bitmap[slot>>3U]|=(uint8_t)(1U<<(slot&7U));return 1U;}
 uint8_t pattern_control_bank_prepare_commit(void){if(g_staging_set>=SET_COUNT)return 0U;const uint32_t next=g_generation+1U;uint8_t record[COMMIT_BYTES]={0};char temporary[48];FIL file;UINT written=0U;record[0]='B';record[1]='6';record[2]='P';record[3]='B';record[4]=1U;record[5]=g_staging_set;put32(&record[8],next);memcpy(&record[12],g_staging_bitmap,32U);put32(&record[40],~crc32(0xFFFFFFFFUL,record,40U));if(!commit_path(temporary,sizeof(temporary),g_staging_set,1U)||f_open(&file,temporary,FA_CREATE_ALWAYS|FA_WRITE)!=FR_OK)return 0U;uint8_t ok=(f_write(&file,record,sizeof(record),&written)==FR_OK&&written==sizeof(record)&&f_sync(&file)==FR_OK)?1U:0U;if(f_close(&file)!=FR_OK)ok=0U;if(ok==0U){(void)f_unlink(temporary);return 0U;}g_staging_commit_prepared=1U;return 1U;}
-uint8_t pattern_control_bank_commit(void*context){(void)context;if(g_staging_set>=SET_COUNT||g_staging_commit_prepared==0U)return 0U;const uint8_t old=g_active_set;const uint32_t next=g_generation+1U;char final_path[48],temporary[48];if(!commit_path(final_path,sizeof(final_path),g_staging_set,0U)||!commit_path(temporary,sizeof(temporary),g_staging_set,1U))return 0U;(void)f_unlink(final_path);if(f_rename(temporary,final_path)!=FR_OK)return 0U;g_active_set=g_staging_set;g_generation=next;g_staging_set=INVALID_SET;g_staging_commit_prepared=0U;scan_active();clear_set(old);return 1U;}
+uint8_t pattern_control_bank_commit(void*context){(void)context;if(g_staging_set>=SET_COUNT||g_staging_commit_prepared==0U)return 0U;const uint8_t old=g_active_set;const uint32_t next=g_generation+1U;char final_path[48],temporary[48];if(!commit_path(final_path,sizeof(final_path),g_staging_set,0U)||!commit_path(temporary,sizeof(temporary),g_staging_set,1U))return 0U;(void)f_unlink(final_path);if(f_rename(temporary,final_path)!=FR_OK)return 0U;g_active_set=g_staging_set;g_generation=next;g_staging_set=INVALID_SET;g_staging_commit_prepared=0U;memset(g_present,0,sizeof(g_present));for(uint8_t b=0U;b<BANKS;++b)for(uint8_t p=0U;p<SLOTS;++p)g_present[b][p]=pattern_bitmap_has(g_staging_bitmap,b,p);clear_set(old);return 1U;}
 void pattern_control_bank_abort(void*context){(void)context;if(g_staging_set<SET_COUNT){clear_set(g_staging_set);g_staging_set=INVALID_SET;g_staging_commit_prepared=0U;}}

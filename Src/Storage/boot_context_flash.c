@@ -12,6 +12,7 @@ extern const uint8_t __boot_context_flash_start__[];
 
 static boot_context_flash_data_t g_boot_ctx_cache;
 static uint8_t g_boot_ctx_cache_valid;
+static uint8_t g_boot_ctx_cache_known_clear;
 
 static uint32_t boot_context_flash_crc32(const boot_context_flash_data_t *ctx)
 {
@@ -111,6 +112,7 @@ void boot_context_flash_init(void)
     boot_context_flash_data_t raw;
     memset(&g_boot_ctx_cache, 0, sizeof(g_boot_ctx_cache));
     g_boot_ctx_cache_valid = 0U;
+    g_boot_ctx_cache_known_clear = 0U;
 
     if (boot_context_flash_read_raw(&raw) == 0U)
     {
@@ -121,6 +123,12 @@ void boot_context_flash_init(void)
     {
         memcpy(&g_boot_ctx_cache, &raw, sizeof(g_boot_ctx_cache));
         g_boot_ctx_cache_valid = 1U;
+    }
+    else if ((raw.version == BOOT_CONTEXT_FLASH_VERSION)
+             && (raw.valid == 0U)
+             && (raw.crc == boot_context_flash_crc32(&raw)))
+    {
+        g_boot_ctx_cache_known_clear = 1U;
     }
 }
 
@@ -140,6 +148,7 @@ uint8_t boot_context_flash_load(boot_context_flash_data_t *out_ctx)
     memcpy(out_ctx, &raw, sizeof(*out_ctx));
     memcpy(&g_boot_ctx_cache, &raw, sizeof(g_boot_ctx_cache));
     g_boot_ctx_cache_valid = 1U;
+    g_boot_ctx_cache_known_clear = 0U;
     return 1U;
 }
 
@@ -165,12 +174,19 @@ uint8_t boot_context_flash_commit(uint8_t active_project_slot)
 
     memcpy(&g_boot_ctx_cache, &next_ctx, sizeof(g_boot_ctx_cache));
     g_boot_ctx_cache_valid = 1U;
+    g_boot_ctx_cache_known_clear = 0U;
     return 1U;
 }
 
 void boot_context_flash_clear(void)
 {
     boot_context_flash_data_t ctx;
+
+    if (g_boot_ctx_cache_known_clear != 0U)
+    {
+        return;
+    }
+
     memset(&ctx, 0, sizeof(ctx));
     ctx.version = BOOT_CONTEXT_FLASH_VERSION;
     ctx.valid = 0U;
@@ -181,5 +197,6 @@ void boot_context_flash_clear(void)
     {
         memset(&g_boot_ctx_cache, 0, sizeof(g_boot_ctx_cache));
         g_boot_ctx_cache_valid = 0U;
+        g_boot_ctx_cache_known_clear = 1U;
     }
 }

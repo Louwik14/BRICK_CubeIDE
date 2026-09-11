@@ -92,3 +92,22 @@ does not own an identity registry.
 FM patch and pattern persistence serializes the typed FM CONTROL owner once.
 FM parameters are endpoint addresses into that owner; generic tone parameter
 storage is not a second persistent representation for FM.
+
+# Project-load storage cost
+
+The Pattern bank no longer probes all 256 slot names and transactional variants
+on the nominal path. `g_present` remains the active-set index, the staging
+bitmap remains the authority for the set under construction, and the dedicated
+`S0`/`S1` directories are enumerated to discover only files that actually
+exist. The same enumeration recovers and removes `.TMP`/`.BAK` crash residue.
+Commit publishes the staging bitmap directly and cleans only real entries from
+the retired set.
+
+Project decode retains one complete non-mutating pass before staging and one
+application pass. Semantic validation and CRC now share the first pass; the
+former separate CRC pre-read has been removed. The two remaining passes are
+still synchronous and bounded by the on-disk format.
+
+Boot-context Flash distinguishes valid, known-clear and unknown/corrupt state.
+Clearing an already persisted clear context is a no-op; unknown state is still
+erased and rewritten.

@@ -383,9 +383,8 @@ static __attribute__((noinline)) void brick6_render_prism_tracks(uint16_t entity
             synth_waveform_audio_select_instance(track, SYNTH_WAVEFORM_ENGINE_PRISM,
                                                  capture_instance);
         }
-        if (voice_count > 1U)
+        const uint8_t poly_lfo_active = (mod_matrix_poly_route_mask(track) != 0U);
         {
-            const uint8_t poly_lfo_active = (mod_matrix_poly_route_mask(track) != 0U);
             uint8_t published = 0U;
             uint8_t renderable = synth_polyphony_get_renderable_voice_mask(track);
             if (renderable == 0U)
@@ -423,23 +422,6 @@ static __attribute__((noinline)) void brick6_render_prism_tracks(uint16_t entity
             }
             continue;
         }
-
-        float *direct_mono = NULL;
-        if (mixer_begin_external_mono_native(ctx->program_route.mix_track_id, frames, &direct_mono) != 0U)
-        {
-            if (brick6_braids_runtime_render_instance(ctx->program_route.instance_id, direct_mono, frames) != 0U)
-            {
-                mixer_commit_external_mono_native(ctx->program_route.mix_track_id, frames);
-                prism_tracks++;
-            }
-            continue;
-        }
-
-        if (brick6_braids_runtime_render_instance(ctx->program_route.instance_id, prism_tmp, frames) != 0U)
-        {
-            mixer_submit_external_mono_native(ctx->program_route.mix_track_id, prism_tmp, frames);
-            prism_tracks++;
-        }
     }
 
     if (out_prism_tracks != NULL)
@@ -467,9 +449,8 @@ static __attribute__((noinline)) void brick6_render_fm_tracks(uint16_t entity_ma
         const uint8_t voice_count = synth_polyphony_get_render_voice_count(track);
         if (voice_count == 0U)
             continue;
-        if (voice_count > 1U)
+        const uint8_t renderable = synth_polyphony_get_renderable_voice_mask(track);
         {
-            const uint8_t renderable = synth_polyphony_get_renderable_voice_mask(track);
             if (renderable == 0U)
                 continue;
             if (mixer_begin_external_poly(ctx->program_route.mix_track_id, frames) == 0U)
@@ -497,28 +478,6 @@ static __attribute__((noinline)) void brick6_render_fm_tracks(uint16_t entity_ma
             }
             continue;
         }
-
-        const uint8_t instance = ctx->program_route.instance_id;
-        float *direct_mono = NULL;
-        if (mixer_begin_external_mono_native(ctx->program_route.mix_track_id, frames, &direct_mono) != 0U)
-        {
-            if (brick6_fm_runtime_render_instance(instance, direct_mono, frames) != 0U)
-            {
-                mixer_commit_external_mono_native(ctx->program_route.mix_track_id, frames);
-                fm_tracks++;
-            }
-            else
-                synth_polyphony_voice_release_complete(track, 0U);
-            continue;
-        }
-
-        if (brick6_fm_runtime_render_instance(instance, fm_tmp, frames) != 0U)
-        {
-            mixer_submit_external_mono_native(ctx->program_route.mix_track_id, fm_tmp, frames);
-            fm_tracks++;
-        }
-        else
-            synth_polyphony_voice_release_complete(track, 0U);
     }
 
     if (out_fm_tracks != NULL)
@@ -556,9 +515,8 @@ static __attribute__((noinline)) void brick6_render_wave_tracks(uint16_t entity_
             synth_waveform_audio_select_instance(track, SYNTH_WAVEFORM_ENGINE_WAVE,
                                                  capture_instance);
         }
-        if (voice_count > 1U)
+        const uint8_t poly_lfo_active = (mod_matrix_poly_route_mask(track) != 0U);
         {
-            const uint8_t poly_lfo_active = (mod_matrix_poly_route_mask(track) != 0U);
             uint8_t published = 0U;
             uint8_t renderable = synth_polyphony_get_renderable_voice_mask(track);
             if (renderable == 0U)
@@ -597,31 +555,6 @@ static __attribute__((noinline)) void brick6_render_wave_tracks(uint16_t entity_
             }
             continue;
         }
-
-        if (brick6_wave_runtime_prepare_block(
-                ctx->program_route.instance_id,
-                frames,
-                mixer_track_vca_requires_source(ctx->program_route.mix_track_id)) == 0U)
-        {
-            continue;
-        }
-
-        float *direct_mono = NULL;
-        if (mixer_begin_external_mono_native(ctx->program_route.mix_track_id, frames, &direct_mono) != 0U)
-        {
-            if (brick6_wave_runtime_render_instance(ctx->program_route.instance_id, direct_mono, frames) != 0U)
-            {
-                mixer_commit_external_mono_native(ctx->program_route.mix_track_id, frames);
-                wave_tracks++;
-            }
-            continue;
-        }
-
-        if (brick6_wave_runtime_render_instance(ctx->program_route.instance_id, wave_tmp, frames) != 0U)
-        {
-            mixer_submit_external_mono_native(ctx->program_route.mix_track_id, wave_tmp, frames);
-            wave_tracks++;
-        }
     }
 
     if (out_wave_tracks != NULL)
@@ -648,9 +581,8 @@ static __attribute__((noinline)) void brick6_render_stack_tracks(uint16_t entity
         const uint8_t voice_count = synth_polyphony_get_render_voice_count(track);
         if (voice_count == 0U)
             continue;
-        if (voice_count > 1U)
+        const uint8_t poly_lfo_active = (mod_matrix_poly_route_mask(track) != 0U);
         {
-            const uint8_t poly_lfo_active = (mod_matrix_poly_route_mask(track) != 0U);
             uint8_t published = 0U;
             uint8_t renderable = synth_polyphony_get_renderable_voice_mask(track);
             if (renderable == 0U)
@@ -687,33 +619,6 @@ static __attribute__((noinline)) void brick6_render_stack_tracks(uint16_t entity
                 stack_tracks++;
             }
             continue;
-        }
-
-        const uint8_t downstream_source_required =
-            mixer_track_vca_requires_source(ctx->program_route.mix_track_id);
-        float *direct_mono = NULL;
-        if (mixer_begin_external_mono_native(ctx->program_route.mix_track_id, frames, &direct_mono) != 0U)
-        {
-            if (brick6_stack_runtime_render_instance(
-                    ctx->program_route.instance_id,
-                    direct_mono,
-                    frames,
-                    downstream_source_required) != 0U)
-            {
-                mixer_commit_external_mono_native(ctx->program_route.mix_track_id, frames);
-                stack_tracks++;
-            }
-            continue;
-        }
-
-        if (brick6_stack_runtime_render_instance(
-                ctx->program_route.instance_id,
-                stack_tmp,
-                frames,
-                downstream_source_required) != 0U)
-        {
-            mixer_submit_external_mono_native(ctx->program_route.mix_track_id, stack_tmp, frames);
-            stack_tracks++;
         }
     }
 

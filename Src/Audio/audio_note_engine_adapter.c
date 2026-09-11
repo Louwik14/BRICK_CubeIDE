@@ -185,6 +185,15 @@ uint8_t audio_note_engine_adapter_ctx_supports_vca_gate(
     return ctx->supports_vca_gate;
 }
 
+static uint8_t audio_note_engine_adapter_engine_uses_voice_vca(
+    track_runtime_engine_t engine)
+{
+    return (uint8_t)((engine == TRACK_RUNTIME_ENGINE_PRISM)
+        || (engine == TRACK_RUNTIME_ENGINE_STACK)
+        || (engine == TRACK_RUNTIME_ENGINE_WAVE)
+        || (engine == TRACK_RUNTIME_ENGINE_FM));
+}
+
 uint8_t audio_note_engine_adapter_ctx_filter_target(
     const track_audio_runtime_ctx_t *ctx,
     uint8_t *out_track)
@@ -370,14 +379,9 @@ static uint8_t audio_note_engine_adapter_apply_physical(
     const brick_entity_id_t entity_id = program->program_route.entity_id;
     const track_runtime_engine_t engine =
         (track_runtime_engine_t)program->program_route.engine;
-    const uint8_t poly_count = synth_polyphony_get_voice_count(entity_id);
-    const uint8_t is_poly_synth = (uint8_t)((poly_count > 1U)
-        && ((engine == TRACK_RUNTIME_ENGINE_PRISM)
-            || (engine == TRACK_RUNTIME_ENGINE_STACK)
-            || (engine == TRACK_RUNTIME_ENGINE_WAVE)
-            || (engine == TRACK_RUNTIME_ENGINE_FM)
-            || (engine == TRACK_RUNTIME_ENGINE_TB303)));
-    const uint8_t uses_voice_allocator = (uint8_t)((is_poly_synth != 0U)
+    const uint8_t uses_voice_vca =
+        audio_note_engine_adapter_engine_uses_voice_vca(engine);
+    const uint8_t uses_voice_allocator = (uint8_t)((uses_voice_vca != 0U)
         || (engine == TRACK_RUNTIME_ENGINE_PRISM)
         || (engine == TRACK_RUNTIME_ENGINE_STACK)
         || (engine == TRACK_RUNTIME_ENGINE_WAVE)
@@ -391,7 +395,7 @@ static uint8_t audio_note_engine_adapter_apply_physical(
     const uint8_t output_was_active = (uint8_t)(
         audio_note_engine_find_output(entity_id, output_id) >= 0);
 
-    if ((is_poly_synth == 0U) && (is_multi_sampler == 0U)
+    if ((uses_voice_vca == 0U) && (is_multi_sampler == 0U)
             && (output_id != 0U))
     {
         if ((is_note_on == 0U)
@@ -425,14 +429,14 @@ static uint8_t audio_note_engine_adapter_apply_physical(
     const uint8_t instance = (voice == SYNTH_POLYPHONY_NO_VOICE)
         ? program->program_route.instance_id
         : SYNTH_POLYPHONY_INSTANCE(entity_id, voice);
-    if ((is_note_on != 0U) && (is_poly_synth != 0U)
+    if ((is_note_on != 0U) && (uses_voice_vca != 0U)
             && (voice != SYNTH_POLYPHONY_NO_VOICE))
     {
         mod_lfo_v1_poly_voice_reset(instance);
         mod_lfo_v1_poly_note_trigger(entity_id, instance);
     }
 
-    if ((is_poly_synth != 0U) && (voice != SYNTH_POLYPHONY_NO_VOICE)
+    if ((uses_voice_vca != 0U) && (voice != SYNTH_POLYPHONY_NO_VOICE)
             && (program->has_mix_target != 0U))
     {
         if (is_note_on != 0U)
@@ -448,7 +452,7 @@ static uint8_t audio_note_engine_adapter_apply_physical(
         else
             mixer_track_filter_note_off(program->filter_track_id, note);
     }
-    if ((is_poly_synth == 0U) && (program->supports_vca_gate != 0U)
+    if ((uses_voice_vca == 0U) && (program->supports_vca_gate != 0U)
             && (program->has_mix_target != 0U)
             && (is_multi_sampler == 0U))
     {
@@ -861,6 +865,8 @@ uint8_t audio_note_engine_adapter_initialize_held_outputs(
         || (engine == TRACK_RUNTIME_ENGINE_WAVE)
         || (engine == TRACK_RUNTIME_ENGINE_FM)
         || (engine == TRACK_RUNTIME_ENGINE_TB303));
+    const uint8_t uses_voice_vca =
+        audio_note_engine_adapter_engine_uses_voice_vca(engine);
     uint8_t held_count = 0U;
     for (uint8_t i = 0U; i < AUDIO_PHYSICAL_OUTPUT_CAPACITY; ++i)
         held_count += (g_audio_physical_output[entity_id][i].gate != 0U)
@@ -883,7 +889,7 @@ uint8_t audio_note_engine_adapter_initialize_held_outputs(
                 SYNTH_POLY_SOURCE_MUSICAL_OUTPUT, held.output_id);
             if (voice == SYNTH_POLYPHONY_NO_VOICE)
                 return 0U;
-            if ((synth_polyphony_get_voice_count(entity_id) > 1U)
+            if ((uses_voice_vca != 0U)
                     && (program.has_mix_target != 0U))
                 mixer_track_poly_note_on(entity_id, program.mix_track_id,
                                          voice, held.note, held.velocity);
@@ -969,15 +975,18 @@ uint8_t audio_note_engine_adapter_apply_polyphony(
         return 0U;
     const uint8_t previous_voice_count =
         synth_polyphony_get_voice_count(entity_id);
+    if (audio_note_engine_adapter_project_track_configuration(entity_id) == 0U)
+        return 0U;
     if (synth_polyphony_set_voice_count(entity_id, voice_count) != voice_count)
         return 0U;
+    g_audio_track_ctx[entity_id].program_route.instance_id =
+        synth_polyphony_get_slot(entity_id, 0U);
     synth_polyphony_set_spread(entity_id, spread);
     if (audio_note_engine_adapter_project_track_configuration(entity_id) == 0U)
         return 0U;
     if (previous_voice_count != synth_polyphony_get_voice_count(entity_id))
     {
-        if (audio_note_engine_adapter_initialize_held_outputs(entity_id) == 0U)
-            return 0U;
+        audio_mod_matrix_rebuild_track(entity_id);
         audio_fx_runtime_rebuild_entity_plan(entity_id);
     }
     return 1U;

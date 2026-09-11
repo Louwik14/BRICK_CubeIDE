@@ -1346,21 +1346,6 @@ void brick6_fm_runtime_sync_voice_if_needed(uint8_t source_instance_id,
         brick6_fm_runtime_sync_voice(source_instance_id, destination_instance_id);
 }
 
-void brick6_fm_runtime_move_voice(uint8_t source_instance_id, uint8_t destination_instance_id)
-{
-    if ((valid_instance(source_instance_id) == 0U)
-            || (valid_instance(destination_instance_id) == 0U)
-            || (source_instance_id == destination_instance_id))
-        return;
-    g_fm_voice[destination_instance_id] = g_fm_voice[source_instance_id];
-    reset_voice(&g_fm_voice[source_instance_id]);
-}
-
-uint8_t brick6_fm_runtime_voice_is_active(uint8_t instance_id)
-{
-    return (valid_instance(instance_id) != 0U) ? g_fm_voice[instance_id].active : 0U;
-}
-
 ITCM_TEXT uint8_t brick6_fm_runtime_render_instance(uint8_t instance_id,
                                           float *out_mono,
                                           uint32_t frames)
