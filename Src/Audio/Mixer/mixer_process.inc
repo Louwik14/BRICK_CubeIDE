@@ -1355,6 +1355,14 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     uint32_t audio_rec_peak_abs_pcm24 = 0U;
     if(audio_rec_bus_active != 0U)
     {
+        const uint8_t debug_mic_rec = (uint8_t)(
+            (g_debug_mic_measurement_enabled != 0U)
+            && ((audio_rec_projection.source_flags
+                & AUDIO_REC_BUS_SOURCE_MIC_LOGICAL) != 0U));
+        int32_t debug_rec_min = INT32_MAX;
+        int32_t debug_rec_max = INT32_MIN;
+        uint32_t debug_rec_peak_abs = 0U;
+        uint32_t debug_rec_last_abs = 0U;
         for(uint32_t i = 0U; i < frames; ++i)
         {
             const uint32_t out = i * AUDIO_RECORDER_CHANNELS;
@@ -1370,11 +1378,31 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
             {
                 audio_rec_peak_abs_pcm24 = abs_r;
             }
+            if(debug_mic_rec != 0U)
+            {
+                debug_rec_last_abs = (abs_l > abs_r) ? abs_l : abs_r;
+                if(pcm_l < debug_rec_min) debug_rec_min = pcm_l;
+                if(pcm_r < debug_rec_min) debug_rec_min = pcm_r;
+                if(pcm_l > debug_rec_max) debug_rec_max = pcm_l;
+                if(pcm_r > debug_rec_max) debug_rec_max = pcm_r;
+                if(debug_rec_last_abs > debug_rec_peak_abs)
+                    debug_rec_peak_abs = debug_rec_last_abs;
+            }
             if(audio_rec_capture_active != 0U)
             {
                 audio_rec_bus_i32[out] = pcm_l;
                 audio_rec_bus_i32[out + 1U] = pcm_r;
             }
+        }
+        if((debug_mic_rec != 0U) && (frames != 0U))
+        {
+            g_debug_mic_rec_abs = debug_rec_last_abs;
+            if(debug_rec_min < g_debug_mic_rec_min)
+                g_debug_mic_rec_min = debug_rec_min;
+            if(debug_rec_max > g_debug_mic_rec_max)
+                g_debug_mic_rec_max = debug_rec_max;
+            if(debug_rec_peak_abs > g_debug_mic_rec_peak_abs)
+                g_debug_mic_rec_peak_abs = debug_rec_peak_abs;
         }
         if(audio_rec_capture_active != 0U)
         {

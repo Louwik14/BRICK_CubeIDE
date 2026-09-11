@@ -3,6 +3,7 @@
 
 #include "sai.h"
 #include "tlv320aic3204.h"
+#include "Audio/audio_mic_debug.h"
 
 #include <arm_acle.h>
 #include "stm32h743xx.h"
@@ -245,8 +246,13 @@ uint8_t board_audio_set_analog_input_mode(board_audio_analog_input_mode_t mode)
         return 0U;
     }
 
-    return (TLV320AIC3204_SetAnalogInput(input) == TLV320AIC3204_STATUS_OK)
-        ? 1U : 0U;
+    if (TLV320AIC3204_SetAnalogInput(input) != TLV320AIC3204_STATUS_OK)
+    {
+        return 0U;
+    }
+    audio_mic_debug_set_enabled(
+        (uint8_t)(mode == BOARD_AUDIO_ANALOG_INPUT_MIC));
+    return 1U;
 }
 
 uint8_t board_audio_is_rx_callback_handle(void *handle)
@@ -287,14 +293,58 @@ ITCM_TEXT void board_audio_unpack_input(const int32_t *AUDIO_RESTRICT rx,
     float *AUDIO_RESTRICT line_r = physical_inputs->line.right;
     float *AUDIO_RESTRICT mic = physical_inputs->mic.mono;
     const int32_t *AUDIO_RESTRICT prx = rx;
+    const uint8_t debug_mic = g_debug_mic_measurement_enabled;
+    int32_t raw_min = INT32_MAX;
+    int32_t raw_max = INT32_MIN;
+    uint32_t raw_peak_abs = 0U;
+    uint32_t raw_last_abs = 0U;
+    float mono_min = __FLT_MAX__;
+    float mono_max = -__FLT_MAX__;
+    float mono_peak_abs = 0.0f;
+    float mono_last_abs = 0.0f;
     for (uint32_t n = 0; n < frames; n++)
     {
         const float left = s242f_fast(prx[0], in_scale);
         const float right = s242f_fast(prx[1], in_scale);
+        if (debug_mic != 0U)
+        {
+            const int32_t raw_right = s24_sign_extend(prx[1]);
+            const uint32_t raw_abs = (raw_right < 0)
+                ? (uint32_t)(-raw_right) : (uint32_t)raw_right;
+            const float mono_abs = __builtin_fabsf(right);
+
+            raw_last_abs = raw_abs;
+            if (raw_right < raw_min) raw_min = raw_right;
+            if (raw_right > raw_max) raw_max = raw_right;
+            if (raw_abs > raw_peak_abs) raw_peak_abs = raw_abs;
+
+            mono_last_abs = mono_abs;
+            if (right < mono_min) mono_min = right;
+            if (right > mono_max) mono_max = right;
+            if (mono_abs > mono_peak_abs) mono_peak_abs = mono_abs;
+        }
         line_l[n] = left;
         line_r[n] = right;
         mic[n] = right;
         prx += BOARD_AUDIO_TDM_SLOTS;
+    }
+    if ((debug_mic != 0U) && (frames != 0U))
+    {
+        g_debug_mic_sai_right_abs = raw_last_abs;
+        if (raw_min < g_debug_mic_sai_right_min)
+            g_debug_mic_sai_right_min = raw_min;
+        if (raw_max > g_debug_mic_sai_right_max)
+            g_debug_mic_sai_right_max = raw_max;
+        if (raw_peak_abs > g_debug_mic_sai_right_peak_abs)
+            g_debug_mic_sai_right_peak_abs = raw_peak_abs;
+
+        g_debug_mic_mono_abs = mono_last_abs;
+        if (mono_min < g_debug_mic_mono_min)
+            g_debug_mic_mono_min = mono_min;
+        if (mono_max > g_debug_mic_mono_max)
+            g_debug_mic_mono_max = mono_max;
+        if (mono_peak_abs > g_debug_mic_mono_peak_abs)
+            g_debug_mic_mono_peak_abs = mono_peak_abs;
     }
 }
 

@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "Audio/metronome_runtime.h"
+#include "Audio/audio_mic_debug.h"
 #include "Board/board_audio.h"
 #include "Platform/memory_layout.h"
 #include "usb_audio.h"
@@ -15,6 +16,45 @@
 static AUDIO_HOT ALIGN32 audio_physical_inputs_t g_audio_physical_inputs;
 static AUDIO_HOT ALIGN32 int32_t g_usb_audio_input[AUDIO_BLOCK_SIZE * 2U];
 static AUDIO_HOT ALIGN32 int32_t g_usb_audio_output[AUDIO_BLOCK_SIZE * 2U];
+
+volatile uint8_t g_debug_mic_measurement_enabled;
+
+volatile uint32_t g_debug_mic_sai_right_abs;
+volatile int32_t g_debug_mic_sai_right_min;
+volatile int32_t g_debug_mic_sai_right_max;
+volatile uint32_t g_debug_mic_sai_right_peak_abs;
+
+volatile float g_debug_mic_mono_abs;
+volatile float g_debug_mic_mono_min;
+volatile float g_debug_mic_mono_max;
+volatile float g_debug_mic_mono_peak_abs;
+
+volatile uint32_t g_debug_mic_rec_abs;
+volatile int32_t g_debug_mic_rec_min;
+volatile int32_t g_debug_mic_rec_max;
+volatile uint32_t g_debug_mic_rec_peak_abs;
+
+void audio_mic_debug_set_enabled(uint8_t enabled)
+{
+    g_debug_mic_measurement_enabled = 0U;
+
+    g_debug_mic_sai_right_abs = 0U;
+    g_debug_mic_sai_right_min = INT32_MAX;
+    g_debug_mic_sai_right_max = INT32_MIN;
+    g_debug_mic_sai_right_peak_abs = 0U;
+
+    g_debug_mic_mono_abs = 0.0f;
+    g_debug_mic_mono_min = __FLT_MAX__;
+    g_debug_mic_mono_max = -__FLT_MAX__;
+    g_debug_mic_mono_peak_abs = 0.0f;
+
+    g_debug_mic_rec_abs = 0U;
+    g_debug_mic_rec_min = INT32_MAX;
+    g_debug_mic_rec_max = INT32_MIN;
+    g_debug_mic_rec_peak_abs = 0U;
+
+    g_debug_mic_measurement_enabled = (enabled != 0U) ? 1U : 0U;
+}
 
 static inline float usb_audio_pcm24_to_float(int32_t sample, float gain)
 {
