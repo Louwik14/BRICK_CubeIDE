@@ -299,6 +299,37 @@ typedef struct {
 	BYTE durable_writes;
 } FF_META_CREATE_CHAIN_CONT;
 
+#define FF_META_XDIR_BUFFER_SIZE (((_MAX_LFN + 44U) / 15U) * 32U)
+
+typedef struct {
+	FIL* fp;
+	FF_META_WINDOW_CONT window;
+	_FDID directory_obj;
+	BYTE* staging;
+	FF_META_REQUEST request;
+	FSIZE_t data_length;
+	FSIZE_t valid_length;
+	DWORD timestamp;
+	DWORD fragment_current;
+	DWORD fragment_remaining;
+	DWORD fragment_term;
+	DWORD directory_cluster;
+	DWORD directory_offset;
+	DWORD directory_within_cluster;
+	DWORD fat_value;
+	DWORD next_sequence;
+	FRESULT result;
+	UINT staging_size;
+	UINT entry_index;
+	UINT entry_count;
+	BYTE phase;
+	BYTE after_window;
+	BYTE after_next_cluster;
+	BYTE request_valid;
+	BYTE io_completed;
+	BYTE xdir[FF_META_XDIR_BUFFER_SIZE];
+} FF_META_OBJECT_SYNC_CONT;
+
 FRESULT f_brick_meta_window_begin (FF_META_WINDOW_CONT* cont, FATFS* fs,
 	DWORD target_sector, BYTE load_target, BYTE* staging, UINT staging_size);
 FF_META_STEP_RESULT f_brick_meta_window_step (FF_META_WINDOW_CONT* cont,
@@ -315,6 +346,15 @@ FF_META_STEP_RESULT f_brick_meta_create_chain_step (
 FRESULT f_brick_meta_create_chain_io_started (FF_META_CREATE_CHAIN_CONT* cont,
 	DWORD sequence);
 FRESULT f_brick_meta_create_chain_io_complete (FF_META_CREATE_CHAIN_CONT* cont,
+	DWORD sequence, FRESULT result);
+FRESULT f_brick_meta_object_sync_begin (FF_META_OBJECT_SYNC_CONT* cont,
+	FIL* fp, FSIZE_t data_length, FSIZE_t valid_length, BYTE* staging,
+	UINT staging_size);
+FF_META_STEP_RESULT f_brick_meta_object_sync_step (
+	FF_META_OBJECT_SYNC_CONT* cont, const FF_META_REQUEST** request);
+FRESULT f_brick_meta_object_sync_io_started (FF_META_OBJECT_SYNC_CONT* cont,
+	DWORD sequence);
+FRESULT f_brick_meta_object_sync_io_complete (FF_META_OBJECT_SYNC_CONT* cont,
 	DWORD sequence, FRESULT result);
 #endif
 
@@ -389,6 +429,7 @@ typedef struct {
 	UINT* extent_count;
 	FF_BRICK_REC_METRICS* metrics;
 	FF_META_CREATE_CHAIN_CONT create;
+	FF_META_OBJECT_SYNC_CONT sync;
 	BYTE* staging;
 	FSIZE_t target_reserved_bytes;
 	DWORD target_clusters;
@@ -401,6 +442,7 @@ typedef struct {
 	BYTE phase;
 	BYTE no_space;
 	BYTE stop_requested;
+	BYTE sync_started;
 } FF_BRICK_REC_RESERVE_CONT;
 
 FRESULT f_brick_rec_recover (FIL* fp, FF_BRICK_REC_STATE* state,

@@ -4516,10 +4516,27 @@ FRESULT f_write (
 /* Synchronize the File                                                  */
 /*-----------------------------------------------------------------------*/
 
+#if _BRICK_REC_RESERVE && !_FS_READONLY
+static FRESULT brick_meta_object_sync_run_sync (FF_META_OBJECT_SYNC_CONT* cont);
+#endif
+
 FRESULT f_sync (
 	FIL* fp		/* Pointer to the file object */
 )
 {
+#if _BRICK_REC_RESERVE && !_FS_READONLY
+	FRESULT res;
+	FATFS* fs;
+	FF_META_OBJECT_SYNC_CONT cont;
+
+	res = validate(&fp->obj, &fs);
+	if (res == FR_OK && (fp->flag & FA_MODIFIED)) {
+		res = f_brick_meta_object_sync_begin(&cont, fp, fp->obj.objsize,
+			fp->obj.objsize, 0, 0);
+		if (res == FR_OK) res = brick_meta_object_sync_run_sync(&cont);
+	}
+	LEAVE_FF(fs, res);
+#else
 	FRESULT res;
 	FATFS *fs;
 	DWORD tm;
@@ -4586,6 +4603,7 @@ FRESULT f_sync (
 	}
 
 	LEAVE_FF(fs, res);
+#endif
 }
 
 #endif /* !_FS_READONLY */
@@ -6013,6 +6031,562 @@ FRESULT f_expand (
 /* BRICK recorder progressive reservation                               */
 /*-----------------------------------------------------------------------*/
 
+enum {
+	FF_META_SYNC_PHASE_INIT = 0,
+	FF_META_SYNC_PHASE_DATA_ISSUE,
+	FF_META_SYNC_PHASE_DATA_WAIT,
+	FF_META_SYNC_PHASE_FIRST_FRAGMENT,
+	FF_META_SYNC_PHASE_FIRST_FRAGMENT_LOADED,
+	FF_META_SYNC_PHASE_LAST_FRAGMENT,
+	FF_META_SYNC_PHASE_LAST_FRAGMENT_LOADED,
+	FF_META_SYNC_PHASE_DIRECTORY_INIT,
+	FF_META_SYNC_PHASE_DIRECTORY_SEEK,
+	FF_META_SYNC_PHASE_DIRECTORY_NEXT_LOADED,
+	FF_META_SYNC_PHASE_XDIR_LOAD,
+	FF_META_SYNC_PHASE_XDIR_LOADED,
+	FF_META_SYNC_PHASE_XDIR_UPDATE,
+	FF_META_SYNC_PHASE_XDIR_STORE_INIT,
+	FF_META_SYNC_PHASE_XDIR_STORE,
+	FF_META_SYNC_PHASE_XDIR_STORED,
+	FF_META_SYNC_PHASE_FAT_DIRECTORY,
+	FF_META_SYNC_PHASE_FAT_DIRECTORY_LOADED,
+	FF_META_SYNC_PHASE_FLUSH,
+	FF_META_SYNC_PHASE_FSINFO,
+	FF_META_SYNC_PHASE_FSINFO_WRITTEN,
+	FF_META_SYNC_PHASE_BARRIER,
+	FF_META_SYNC_PHASE_WINDOW,
+	FF_META_SYNC_PHASE_DONE,
+	FF_META_SYNC_PHASE_ERROR
+};
+
+
+static FF_META_STEP_RESULT brick_meta_sync_error (
+	FF_META_OBJECT_SYNC_CONT* cont,
+	FRESULT result)
+{
+	cont->result = result;
+	cont->phase = FF_META_SYNC_PHASE_ERROR;
+	return FF_META_STEP_ERROR;
+}
+
+
+static FF_META_STEP_RESULT brick_meta_sync_window (
+	FF_META_OBJECT_SYNC_CONT* cont,
+	DWORD sector,
+	BYTE load_target,
+	BYTE after_window)
+{
+	FRESULT result = f_brick_meta_window_begin(&cont->window, cont->fp->obj.fs,
+		sector, load_target, cont->staging, cont->staging_size);
+	if (result != FR_OK) return brick_meta_sync_error(cont, result);
+	cont->after_window = after_window;
+	cont->phase = FF_META_SYNC_PHASE_WINDOW;
+	return FF_META_STEP_YIELD;
+}
+
+
+static FRESULT brick_meta_sync_directory_next (
+	FF_META_OBJECT_SYNC_CONT* cont)
+{
+	DWORD next;
+
+	if (brick_meta_exfat_synthetic_value(&cont->directory_obj,
+		cont->directory_cluster, &next)) {
+		cont->fat_value = next;
+		return FR_OK;
+	}
+	return FR_NO_FILE;
+}
+
+
+static FRESULT brick_meta_sync_accept_next_directory_cluster (
+	FF_META_OBJECT_SYNC_CONT* cont)
+{
+	FATFS* fs = cont->fp->obj.fs;
+	DWORD next = cont->fat_value;
+	if (next == 0xFFFFFFFF) return FR_DISK_ERR;
+	if (next < 2 || next >= fs->n_fatent) return FR_INT_ERR;
+	cont->directory_cluster = next;
+	return FR_OK;
+}
+
+
+FRESULT f_brick_meta_object_sync_begin (
+	FF_META_OBJECT_SYNC_CONT* cont,
+	FIL* fp,
+	FSIZE_t data_length,
+	FSIZE_t valid_length,
+	BYTE* staging,
+	UINT staging_size)
+{
+	FATFS* fs;
+	FRESULT result;
+	if (!cont || !fp || valid_length > data_length) return FR_INVALID_PARAMETER;
+	result = validate(&fp->obj, &fs);
+	if (result != FR_OK) return result;
+	if (fp->err != FR_OK) return (FRESULT)fp->err;
+	if (!(fp->flag & FA_WRITE)) return FR_DENIED;
+	if (staging && staging_size < SS(fs)) return FR_INVALID_PARAMETER;
+	if (fs->fs_type == FS_FAT32 && valid_length > 0xFFFFFFFFUL) {
+		return FR_INVALID_PARAMETER;
+	}
+	mem_set(cont, 0, sizeof(*cont));
+	cont->fp = fp;
+	cont->staging = staging;
+	cont->staging_size = staging ? staging_size : 0;
+	cont->data_length = data_length;
+	cont->valid_length = valid_length;
+	cont->timestamp = GET_FATTIME();
+	cont->next_sequence = 1;
+	cont->result = FR_OK;
+	cont->phase = FF_META_SYNC_PHASE_INIT;
+	return FR_OK;
+}
+
+
+FF_META_STEP_RESULT f_brick_meta_object_sync_step (
+	FF_META_OBJECT_SYNC_CONT* cont,
+	const FF_META_REQUEST** request)
+{
+	FATFS* fs;
+	FF_META_STEP_RESULT child;
+	FRESULT result;
+	DWORD cluster_bytes;
+	DWORD sector;
+	UINT offset;
+	BYTE* dir;
+
+	if (request) *request = 0;
+	if (!cont || !cont->fp || !cont->fp->obj.fs) return FF_META_STEP_ERROR;
+	fs = cont->fp->obj.fs;
+	cluster_bytes = (DWORD)fs->csize * SS(fs);
+
+	switch (cont->phase) {
+	case FF_META_SYNC_PHASE_INIT:
+		cont->fp->obj.objsize = cont->data_length;
+#if !_FS_TINY
+		if (cont->fp->flag & FA_DIRTY) {
+			cont->phase = FF_META_SYNC_PHASE_DATA_ISSUE;
+			return FF_META_STEP_YIELD;
+		}
+#endif
+		cont->phase = FF_META_SYNC_PHASE_FIRST_FRAGMENT;
+		return FF_META_STEP_YIELD;
+
+	case FF_META_SYNC_PHASE_DATA_ISSUE:
+#if !_FS_TINY
+		if (!cont->request_valid) {
+			cont->request.operation = FF_META_IO_WRITE;
+			cont->request.sector = cont->fp->sect;
+			cont->request.count = 1;
+			cont->request.buffer = cont->fp->buf;
+			cont->request.sequence = cont->next_sequence++;
+			cont->request_valid = 1;
+		}
+		if (request) *request = &cont->request;
+		return FF_META_STEP_NEED_IO;
+#else
+		return brick_meta_sync_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_META_SYNC_PHASE_DATA_WAIT:
+		if (!cont->io_completed) return FF_META_STEP_WAIT_IO;
+		cont->io_completed = 0;
+		cont->request_valid = 0;
+		if (cont->result != FR_OK) return brick_meta_sync_error(cont, cont->result);
+		cont->fp->flag &= (BYTE)~FA_DIRTY;
+		cont->phase = FF_META_SYNC_PHASE_FIRST_FRAGMENT;
+		return FF_META_STEP_YIELD;
+
+	case FF_META_SYNC_PHASE_FIRST_FRAGMENT:
+#if _FS_EXFAT
+		if (fs->fs_type == FS_EXFAT && cont->fp->obj.stat == 3) {
+			if (cont->fragment_remaining == 0) {
+				cont->fragment_current = cont->fp->obj.sclust;
+				cont->fragment_remaining = cont->fp->obj.n_cont;
+			}
+			if (cont->fragment_remaining != 0) {
+				return brick_meta_sync_window(cont,
+					brick_meta_fat_sector(fs, cont->fragment_current), 1,
+					FF_META_SYNC_PHASE_FIRST_FRAGMENT_LOADED);
+			}
+			cont->fp->obj.stat = 0;
+		}
+#endif
+		cont->fragment_remaining = 0;
+		cont->phase = FF_META_SYNC_PHASE_LAST_FRAGMENT;
+		return FF_META_STEP_YIELD;
+
+	case FF_META_SYNC_PHASE_FIRST_FRAGMENT_LOADED:
+#if _FS_EXFAT
+		st_dword(fs->win + cont->fragment_current * 4 % SS(fs),
+			cont->fragment_current + 1);
+		fs->wflag = 1;
+		cont->fragment_current++;
+		cont->fragment_remaining--;
+		cont->phase = FF_META_SYNC_PHASE_FIRST_FRAGMENT;
+		return FF_META_STEP_YIELD;
+#else
+		return brick_meta_sync_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_META_SYNC_PHASE_LAST_FRAGMENT:
+#if _FS_EXFAT
+		if (fs->fs_type == FS_EXFAT && cont->fp->obj.n_frag != 0) {
+			if (cont->fragment_remaining == 0) {
+				cont->fragment_remaining = cont->fp->obj.n_frag;
+				cont->fragment_current = cont->fp->clust - cont->fragment_remaining + 1;
+				cont->fragment_term = 0xFFFFFFFF;
+			}
+			return brick_meta_sync_window(cont,
+				brick_meta_fat_sector(fs, cont->fragment_current), 1,
+				FF_META_SYNC_PHASE_LAST_FRAGMENT_LOADED);
+		}
+#endif
+		cont->phase = FF_META_SYNC_PHASE_DIRECTORY_INIT;
+		return FF_META_STEP_YIELD;
+
+	case FF_META_SYNC_PHASE_LAST_FRAGMENT_LOADED:
+#if _FS_EXFAT
+		st_dword(fs->win + cont->fragment_current * 4 % SS(fs),
+			cont->fragment_remaining > 1 ? cont->fragment_current + 1 : cont->fragment_term);
+		fs->wflag = 1;
+		cont->fragment_current++;
+		if (--cont->fragment_remaining == 0) cont->fp->obj.n_frag = 0;
+		cont->phase = FF_META_SYNC_PHASE_LAST_FRAGMENT;
+		return FF_META_STEP_YIELD;
+#else
+		return brick_meta_sync_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_META_SYNC_PHASE_DIRECTORY_INIT:
+#if _FS_EXFAT
+		if (fs->fs_type == FS_EXFAT) {
+			if (cont->fp->obj.c_ofs >= MAX_DIR_EX
+				|| cont->fp->obj.c_ofs % SZDIRE) {
+				return brick_meta_sync_error(cont, FR_INT_ERR);
+			}
+			mem_set(&cont->directory_obj, 0, sizeof(cont->directory_obj));
+			cont->directory_obj.fs = fs;
+			cont->directory_obj.sclust = cont->fp->obj.c_scl;
+			cont->directory_obj.stat = (BYTE)cont->fp->obj.c_size;
+			cont->directory_obj.objsize = cont->fp->obj.c_size & 0xFFFFFF00;
+			cont->directory_cluster = cont->directory_obj.sclust;
+			if (cont->directory_cluster == 0) {
+				cont->directory_cluster = fs->dirbase;
+				cont->directory_obj.stat = 0;
+			}
+			cont->directory_offset = cont->fp->obj.c_ofs;
+			cont->entry_index = 0;
+			cont->entry_count = 0;
+			cont->after_next_cluster = FF_META_SYNC_PHASE_DIRECTORY_SEEK;
+			cont->phase = FF_META_SYNC_PHASE_DIRECTORY_SEEK;
+			return FF_META_STEP_YIELD;
+		}
+#endif
+		cont->phase = FF_META_SYNC_PHASE_FAT_DIRECTORY;
+		return FF_META_STEP_YIELD;
+
+	case FF_META_SYNC_PHASE_DIRECTORY_SEEK:
+#if _FS_EXFAT
+		if (cont->directory_cluster < 2 || cont->directory_cluster >= fs->n_fatent) {
+			return brick_meta_sync_error(cont, FR_INT_ERR);
+		}
+		if (cont->directory_offset < cluster_bytes) {
+			cont->directory_within_cluster = cont->directory_offset;
+			cont->phase = cont->entry_count == 0
+				? FF_META_SYNC_PHASE_XDIR_LOAD : FF_META_SYNC_PHASE_XDIR_STORE;
+			return FF_META_STEP_YIELD;
+		}
+		cont->directory_offset -= cluster_bytes;
+		if (brick_meta_sync_directory_next(cont) == FR_OK) {
+			result = brick_meta_sync_accept_next_directory_cluster(cont);
+			if (result != FR_OK) return brick_meta_sync_error(cont, result);
+			return FF_META_STEP_YIELD;
+		}
+		return brick_meta_sync_window(cont,
+			brick_meta_fat_sector(fs, cont->directory_cluster), 1,
+			FF_META_SYNC_PHASE_DIRECTORY_NEXT_LOADED);
+#else
+		return brick_meta_sync_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_META_SYNC_PHASE_DIRECTORY_NEXT_LOADED:
+#if _FS_EXFAT
+		cont->fat_value = brick_meta_fat_value_loaded(&cont->directory_obj,
+			cont->directory_cluster);
+		result = brick_meta_sync_accept_next_directory_cluster(cont);
+		if (result != FR_OK) return brick_meta_sync_error(cont, result);
+		cont->phase = cont->after_next_cluster;
+		return FF_META_STEP_YIELD;
+#else
+		return brick_meta_sync_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_META_SYNC_PHASE_XDIR_LOAD:
+#if _FS_EXFAT
+		sector = clust2sect(fs, cont->directory_cluster);
+		if (!sector) return brick_meta_sync_error(cont, FR_INT_ERR);
+		sector += cont->directory_within_cluster / SS(fs);
+		return brick_meta_sync_window(cont, sector, 1,
+			FF_META_SYNC_PHASE_XDIR_LOADED);
+#else
+		return brick_meta_sync_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_META_SYNC_PHASE_XDIR_LOADED:
+#if _FS_EXFAT
+		offset = (UINT)(cont->directory_within_cluster % SS(fs));
+		dir = fs->win + offset;
+		if ((cont->entry_index == 0 && dir[XDIR_Type] != 0x85)
+			|| (cont->entry_index == 1 && dir[XDIR_Type] != 0xC0)
+			|| (cont->entry_index >= 2 && dir[XDIR_Type] != 0xC1)) {
+			return brick_meta_sync_error(cont, FR_INT_ERR);
+		}
+		mem_cpy(cont->xdir + cont->entry_index * SZDIRE, dir, SZDIRE);
+		if (cont->entry_index == 0) {
+			cont->entry_count = cont->xdir[XDIR_NumSec] + 1;
+			if (cont->entry_count < 3 || cont->entry_count > 19
+				|| cont->entry_count * SZDIRE > sizeof(cont->xdir)) {
+				return brick_meta_sync_error(cont, FR_INT_ERR);
+			}
+		}
+		if (cont->entry_index == 1
+			&& MAXDIRB(cont->xdir[XDIR_NumName]) > cont->entry_count * SZDIRE) {
+			return brick_meta_sync_error(cont, FR_INT_ERR);
+		}
+		cont->entry_index++;
+		if (cont->entry_index >= cont->entry_count) {
+			if (xdir_sum(cont->xdir) != ld_word(cont->xdir + XDIR_SetSum)) {
+				return brick_meta_sync_error(cont, FR_INT_ERR);
+			}
+			cont->phase = FF_META_SYNC_PHASE_XDIR_UPDATE;
+			return FF_META_STEP_YIELD;
+		}
+		cont->directory_within_cluster += SZDIRE;
+		if (cont->directory_within_cluster >= cluster_bytes) {
+			cont->directory_within_cluster = 0;
+			cont->after_next_cluster = FF_META_SYNC_PHASE_XDIR_LOAD;
+			if (brick_meta_sync_directory_next(cont) == FR_OK) {
+				result = brick_meta_sync_accept_next_directory_cluster(cont);
+				if (result != FR_OK) return brick_meta_sync_error(cont, result);
+				cont->phase = FF_META_SYNC_PHASE_XDIR_LOAD;
+				return FF_META_STEP_YIELD;
+			}
+			return brick_meta_sync_window(cont,
+				brick_meta_fat_sector(fs, cont->directory_cluster), 1,
+				FF_META_SYNC_PHASE_DIRECTORY_NEXT_LOADED);
+		}
+		cont->phase = FF_META_SYNC_PHASE_XDIR_LOAD;
+		return FF_META_STEP_YIELD;
+#else
+		return brick_meta_sync_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_META_SYNC_PHASE_XDIR_UPDATE:
+#if _FS_EXFAT
+		cont->xdir[XDIR_Attr] |= AM_ARC;
+		cont->xdir[XDIR_GenFlags] = cont->fp->obj.stat | 1;
+		st_dword(cont->xdir + XDIR_FstClus, cont->fp->obj.sclust);
+		st_qword(cont->xdir + XDIR_FileSize, cont->data_length);
+		st_qword(cont->xdir + XDIR_ValidFileSize, cont->valid_length);
+		st_dword(cont->xdir + XDIR_ModTime, cont->timestamp);
+		cont->xdir[XDIR_ModTime10] = 0;
+		st_dword(cont->xdir + XDIR_AccTime, 0);
+		st_word(cont->xdir + XDIR_SetSum, xdir_sum(cont->xdir));
+		cont->phase = FF_META_SYNC_PHASE_XDIR_STORE_INIT;
+		return FF_META_STEP_YIELD;
+#else
+		return brick_meta_sync_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_META_SYNC_PHASE_XDIR_STORE_INIT:
+#if _FS_EXFAT
+		cont->directory_cluster = cont->directory_obj.sclust;
+		if (cont->directory_cluster == 0) cont->directory_cluster = fs->dirbase;
+		cont->directory_offset = cont->fp->obj.c_ofs;
+		cont->entry_index = 0;
+		cont->after_next_cluster = FF_META_SYNC_PHASE_DIRECTORY_SEEK;
+		cont->phase = FF_META_SYNC_PHASE_DIRECTORY_SEEK;
+		return FF_META_STEP_YIELD;
+#else
+		return brick_meta_sync_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_META_SYNC_PHASE_XDIR_STORE:
+#if _FS_EXFAT
+		sector = clust2sect(fs, cont->directory_cluster);
+		if (!sector) return brick_meta_sync_error(cont, FR_INT_ERR);
+		sector += cont->directory_within_cluster / SS(fs);
+		return brick_meta_sync_window(cont, sector, 1,
+			FF_META_SYNC_PHASE_XDIR_STORED);
+#else
+		return brick_meta_sync_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_META_SYNC_PHASE_XDIR_STORED:
+#if _FS_EXFAT
+		offset = (UINT)(cont->directory_within_cluster % SS(fs));
+		mem_cpy(fs->win + offset, cont->xdir + cont->entry_index * SZDIRE, SZDIRE);
+		fs->wflag = 1;
+		cont->entry_index++;
+		if (cont->entry_index >= cont->entry_count) {
+			cont->phase = FF_META_SYNC_PHASE_FLUSH;
+			return FF_META_STEP_YIELD;
+		}
+		cont->directory_within_cluster += SZDIRE;
+		if (cont->directory_within_cluster >= cluster_bytes) {
+			cont->directory_within_cluster = 0;
+			cont->after_next_cluster = FF_META_SYNC_PHASE_XDIR_STORE;
+			if (brick_meta_sync_directory_next(cont) == FR_OK) {
+				result = brick_meta_sync_accept_next_directory_cluster(cont);
+				if (result != FR_OK) return brick_meta_sync_error(cont, result);
+				cont->phase = FF_META_SYNC_PHASE_XDIR_STORE;
+				return FF_META_STEP_YIELD;
+			}
+			return brick_meta_sync_window(cont,
+				brick_meta_fat_sector(fs, cont->directory_cluster), 1,
+				FF_META_SYNC_PHASE_DIRECTORY_NEXT_LOADED);
+		}
+		cont->phase = FF_META_SYNC_PHASE_XDIR_STORE;
+		return FF_META_STEP_YIELD;
+#else
+		return brick_meta_sync_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_META_SYNC_PHASE_FAT_DIRECTORY:
+		if (!cont->fp->dir_sect) return brick_meta_sync_error(cont, FR_INT_ERR);
+		return brick_meta_sync_window(cont, cont->fp->dir_sect, 1,
+			FF_META_SYNC_PHASE_FAT_DIRECTORY_LOADED);
+
+	case FF_META_SYNC_PHASE_FAT_DIRECTORY_LOADED:
+		offset = (UINT)(cont->fp->dir_ptr - fs->win);
+		if (offset > SS(fs) - SZDIRE) return brick_meta_sync_error(cont, FR_INT_ERR);
+		dir = fs->win + offset;
+		dir[DIR_Attr] |= AM_ARC;
+		st_clust(fs, dir, cont->fp->obj.sclust);
+		st_dword(dir + DIR_FileSize, (DWORD)cont->valid_length);
+		st_dword(dir + DIR_ModTime, cont->timestamp);
+		st_word(dir + DIR_LstAccDate, 0);
+		fs->wflag = 1;
+		cont->phase = FF_META_SYNC_PHASE_FLUSH;
+		return FF_META_STEP_YIELD;
+
+	case FF_META_SYNC_PHASE_FLUSH:
+		return brick_meta_sync_window(cont, fs->winsect, 0,
+			FF_META_SYNC_PHASE_FSINFO);
+
+	case FF_META_SYNC_PHASE_FSINFO:
+		if (fs->fs_type == FS_FAT32 && fs->fsi_flag == 1) {
+			mem_set(fs->win, 0, SS(fs));
+			st_word(fs->win + BS_55AA, 0xAA55);
+			st_dword(fs->win + FSI_LeadSig, 0x41615252);
+			st_dword(fs->win + FSI_StrucSig, 0x61417272);
+			st_dword(fs->win + FSI_Free_Count, fs->free_clst);
+			st_dword(fs->win + FSI_Nxt_Free, fs->last_clst);
+			fs->winsect = fs->volbase + 1;
+			fs->wflag = 1;
+			return brick_meta_sync_window(cont, fs->winsect, 0,
+				FF_META_SYNC_PHASE_FSINFO_WRITTEN);
+		}
+		cont->phase = FF_META_SYNC_PHASE_BARRIER;
+		return FF_META_STEP_YIELD;
+
+	case FF_META_SYNC_PHASE_FSINFO_WRITTEN:
+		fs->fsi_flag = 0;
+		cont->phase = FF_META_SYNC_PHASE_BARRIER;
+		return FF_META_STEP_YIELD;
+
+	case FF_META_SYNC_PHASE_BARRIER:
+		BRICK_REC_NOTE_SYNC();
+		if (disk_ioctl(fs->drv, CTRL_SYNC, 0) != RES_OK) {
+			return brick_meta_sync_error(cont, FR_DISK_ERR);
+		}
+		cont->fp->flag &= (BYTE)~FA_MODIFIED;
+		cont->result = FR_OK;
+		cont->phase = FF_META_SYNC_PHASE_DONE;
+		return FF_META_STEP_DONE;
+
+	case FF_META_SYNC_PHASE_WINDOW:
+		child = f_brick_meta_window_step(&cont->window, request);
+		if (child == FF_META_STEP_DONE) {
+			cont->phase = cont->after_window;
+			return FF_META_STEP_YIELD;
+		}
+		if (child == FF_META_STEP_ERROR) {
+			return brick_meta_sync_error(cont, cont->window.result);
+		}
+		return child;
+
+	case FF_META_SYNC_PHASE_DONE:
+		return FF_META_STEP_DONE;
+
+	default:
+		return brick_meta_sync_error(cont,
+			cont->result != FR_OK ? cont->result : FR_INT_ERR);
+	}
+}
+
+
+FRESULT f_brick_meta_object_sync_io_started (
+	FF_META_OBJECT_SYNC_CONT* cont,
+	DWORD sequence)
+{
+	if (!cont) return FR_INVALID_PARAMETER;
+	if (cont->phase == FF_META_SYNC_PHASE_WINDOW) {
+		return f_brick_meta_window_io_started(&cont->window, sequence);
+	}
+	if (cont->phase != FF_META_SYNC_PHASE_DATA_ISSUE
+		|| !cont->request_valid || cont->request.sequence != sequence) {
+		return FR_INVALID_PARAMETER;
+	}
+	BRICK_REC_NOTE_WRITE(1);
+	cont->phase = FF_META_SYNC_PHASE_DATA_WAIT;
+	return FR_OK;
+}
+
+
+FRESULT f_brick_meta_object_sync_io_complete (
+	FF_META_OBJECT_SYNC_CONT* cont,
+	DWORD sequence,
+	FRESULT result)
+{
+	if (!cont) return FR_INVALID_PARAMETER;
+	if (cont->phase == FF_META_SYNC_PHASE_WINDOW) {
+		return f_brick_meta_window_io_complete(&cont->window, sequence, result);
+	}
+	if (cont->phase != FF_META_SYNC_PHASE_DATA_WAIT
+		|| !cont->request_valid || cont->request.sequence != sequence
+		|| cont->io_completed) return FR_INVALID_PARAMETER;
+	cont->result = result;
+	cont->io_completed = 1;
+	return FR_OK;
+}
+
+
+static FRESULT brick_meta_object_sync_run_sync (
+	FF_META_OBJECT_SYNC_CONT* cont)
+{
+	const FF_META_REQUEST* request;
+	FF_META_STEP_RESULT step;
+	DRESULT io_result;
+	for (;;) {
+		step = f_brick_meta_object_sync_step(cont, &request);
+		if (step == FF_META_STEP_DONE) return FR_OK;
+		if (step == FF_META_STEP_ERROR) return cont->result;
+		if (step == FF_META_STEP_YIELD) continue;
+		if (step != FF_META_STEP_NEED_IO || !request) return FR_INT_ERR;
+		if (f_brick_meta_object_sync_io_started(cont, request->sequence) != FR_OK) {
+			return FR_INT_ERR;
+		}
+		io_result = request->operation == FF_META_IO_WRITE
+			? disk_write(cont->fp->obj.fs->drv, request->buffer, request->sector, request->count)
+			: disk_read(cont->fp->obj.fs->drv, request->buffer, request->sector, request->count);
+		if (f_brick_meta_object_sync_io_complete(cont, request->sequence,
+			io_result == RES_OK ? FR_OK : FR_DISK_ERR) != FR_OK) return FR_INT_ERR;
+	}
+}
+
 static void brick_rec_metrics_begin (FF_BRICK_REC_METRICS* metrics)
 {
 	if (metrics) mem_set(metrics, 0, sizeof(*metrics));
@@ -6040,68 +6614,17 @@ static FRESULT brick_rec_validate (FIL* fp, FATFS** rfs)
 
 static FRESULT brick_rec_sync_metadata (FIL* fp, FF_BRICK_REC_STATE* state)
 {
-	FATFS* fs = fp->obj.fs;
+	FF_META_OBJECT_SYNC_CONT cont;
 	FRESULT res;
-	DWORD tm = GET_FATTIME();
-#if _FS_EXFAT
-	DIR dj;
-	DEF_NAMBUF
-#endif
-
-#if !_FS_TINY
-	if (fp->flag & FA_DIRTY) {
-		BRICK_REC_NOTE_WRITE(1);
-		if (disk_write(fs->drv, fp->buf, fp->sect, 1) != RES_OK) return FR_DISK_ERR;
-		fp->flag &= (BYTE)~FA_DIRTY;
-	}
-#endif
-	fp->obj.objsize = state->reserved_bytes;
 	if (state->cluster_count == 0) {
 		fp->obj.sclust = 0;
 		fp->clust = 0;
 	}
-
-#if _FS_EXFAT
-	if (fs->fs_type == FS_EXFAT) {
-		if (state->cluster_count != 0) {
-			res = fill_first_frag(&fp->obj);
-			if (res != FR_OK) return res;
-			res = fill_last_frag(&fp->obj, state->last_cluster, 0xFFFFFFFF);
-			if (res != FR_OK) return res;
-		}
-		INIT_NAMBUF(fs);
-		res = load_obj_dir(&dj, &fp->obj);
-		if (res == FR_OK) {
-			fs->dirbuf[XDIR_Attr] |= AM_ARC;
-			fs->dirbuf[XDIR_GenFlags] = fp->obj.stat | 1;
-			st_dword(fs->dirbuf + XDIR_FstClus, fp->obj.sclust);
-			st_qword(fs->dirbuf + XDIR_FileSize, state->reserved_bytes);
-			st_qword(fs->dirbuf + XDIR_ValidFileSize, state->valid_bytes);
-			st_dword(fs->dirbuf + XDIR_ModTime, tm);
-			fs->dirbuf[XDIR_ModTime10] = 0;
-			st_dword(fs->dirbuf + XDIR_AccTime, 0);
-			res = store_xdir(&dj);
-			if (res == FR_OK) res = sync_fs(fs);
-		}
-		FREE_NAMBUF();
-	} else
-#endif
-	{
-		res = move_window(fs, fp->dir_sect);
-		if (res == FR_OK) {
-			BYTE* dir = fp->dir_ptr;
-			dir[DIR_Attr] |= AM_ARC;
-			st_clust(fs, dir, fp->obj.sclust);
-			st_dword(dir + DIR_FileSize, (DWORD)state->valid_bytes);
-			st_dword(dir + DIR_ModTime, tm);
-			st_word(dir + DIR_LstAccDate, 0);
-			fs->wflag = 1;
-			res = sync_fs(fs);
-		}
-	}
+	res = f_brick_meta_object_sync_begin(&cont, fp, state->reserved_bytes,
+		state->valid_bytes, 0, 0);
+	if (res == FR_OK) res = brick_meta_object_sync_run_sync(&cont);
 	if (res == FR_OK) {
 		state->chain_status = fp->obj.stat;
-		fp->flag &= (BYTE)~FA_MODIFIED;
 	}
 	return res;
 }
@@ -6421,8 +6944,24 @@ FF_META_STEP_RESULT f_brick_rec_reserve_step (
 
 	case FF_BRICK_REC_RESERVE_PHASE_SYNC:
 		cont->fp->clust = cont->state->last_cluster;
-		res = brick_rec_sync_metadata(cont->fp, cont->state);
-		if (res != FR_OK) return brick_rec_reserve_error(cont, res);
+		if (!cont->sync_started) {
+			res = f_brick_meta_object_sync_begin(&cont->sync, cont->fp,
+				cont->state->reserved_bytes, cont->state->valid_bytes,
+				cont->staging, cont->staging_size);
+			if (res != FR_OK) return brick_rec_reserve_error(cont, res);
+			cont->sync_started = 1;
+			brick_rec_metrics_end();
+			return FF_META_STEP_YIELD;
+		}
+		child = f_brick_meta_object_sync_step(&cont->sync, request);
+		if (child == FF_META_STEP_ERROR) {
+			return brick_rec_reserve_error(cont, cont->sync.result);
+		}
+		if (child != FF_META_STEP_DONE) {
+			brick_rec_metrics_end();
+			return child;
+		}
+		cont->state->chain_status = cont->fp->obj.stat;
 		*cont->extent_count = cont->added;
 		if (cont->metrics) {
 			cont->metrics->clusters_allocated =
@@ -6449,11 +6988,14 @@ FRESULT f_brick_rec_reserve_io_started (
 	DWORD sequence)
 {
 	FRESULT result;
-	if (!cont || cont->phase != FF_BRICK_REC_RESERVE_PHASE_ALLOC_STEP) {
+	if (!cont || (cont->phase != FF_BRICK_REC_RESERVE_PHASE_ALLOC_STEP
+		&& cont->phase != FF_BRICK_REC_RESERVE_PHASE_SYNC)) {
 		return FR_INVALID_PARAMETER;
 	}
 	BrickRecMetrics = cont->metrics;
-	result = f_brick_meta_create_chain_io_started(&cont->create, sequence);
+	result = cont->phase == FF_BRICK_REC_RESERVE_PHASE_SYNC
+		? f_brick_meta_object_sync_io_started(&cont->sync, sequence)
+		: f_brick_meta_create_chain_io_started(&cont->create, sequence);
 	brick_rec_metrics_end();
 	return result;
 }
@@ -6464,10 +7006,13 @@ FRESULT f_brick_rec_reserve_io_complete (
 	DWORD sequence,
 	FRESULT result)
 {
-	if (!cont || cont->phase != FF_BRICK_REC_RESERVE_PHASE_ALLOC_STEP) {
+	if (!cont || (cont->phase != FF_BRICK_REC_RESERVE_PHASE_ALLOC_STEP
+		&& cont->phase != FF_BRICK_REC_RESERVE_PHASE_SYNC)) {
 		return FR_INVALID_PARAMETER;
 	}
-	return f_brick_meta_create_chain_io_complete(&cont->create, sequence, result);
+	return cont->phase == FF_BRICK_REC_RESERVE_PHASE_SYNC
+		? f_brick_meta_object_sync_io_complete(&cont->sync, sequence, result)
+		: f_brick_meta_create_chain_io_complete(&cont->create, sequence, result);
 }
 
 
