@@ -376,7 +376,17 @@ SECTIONS
   ASSERT(SIZEOF(.ram_d3_restore_ipc) + SIZEOF(.ram_d3_ipc) <= 32K,
          "SRAM4 non-cacheable IPC half overflow")
 
-  .backup_sram (NOLOAD) :
+  /* Fixed crash-library runtime/GDB ABI. Keep this first and exact. */
+  .crash_gdb_view ORIGIN(BKPSRAM) (NOLOAD) :
+  {
+    . = ALIGN(32);
+    KEEP(*(.crash_gdb_view))
+    . = ALIGN(32);
+  } >BKPSRAM
+  ASSERT(SIZEOF(.crash_gdb_view) == 512,
+         "Crash GDB view ABI must remain 512 bytes")
+
+  .backup_sram ORIGIN(BKPSRAM) + 512 (NOLOAD) :
   {
     . = ALIGN(32);
     __backup_sram_start__ = .;
@@ -385,7 +395,7 @@ SECTIONS
     . = ALIGN(32);
     __backup_sram_end__ = .;
   } >BKPSRAM
-  ASSERT((__backup_sram_end__ - __backup_sram_start__) <= LENGTH(BKPSRAM),
+  ASSERT((__backup_sram_end__ - ORIGIN(BKPSRAM)) <= LENGTH(BKPSRAM),
          "Backup SRAM overflow")
 
   .multi_load_sdram (NOLOAD) :

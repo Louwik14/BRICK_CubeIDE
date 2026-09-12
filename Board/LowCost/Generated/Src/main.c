@@ -47,6 +47,7 @@
 #include "buttons.h"
 #include "App/power_shutdown.h"
 #include "Platform/idle_latency_diag.h"
+#include "Platform/crash_library.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -117,6 +118,21 @@ static void MPU_Config(void)
   MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
   MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
 
+  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+
+  /* Crash-library GDB view/command mailbox: debugger-coherent and retained.
+     Region 2 was intentionally free; do not let D-cache hide CPU writes from
+     GDB or a GDB CLEAR write from the firmware. */
+  MPU_InitStruct.Number = MPU_REGION_NUMBER2;
+  MPU_InitStruct.BaseAddress = BACKUP_SRAM_MPU_BASE;
+  MPU_InitStruct.Size = MPU_REGION_SIZE_4KB;
+  MPU_InitStruct.SubRegionDisable = 0x00U;
+  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL1;
+  MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+  MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+  MPU_InitStruct.IsShareable = MPU_ACCESS_SHAREABLE;
+  MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
+  MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
   HAL_MPU_ConfigRegion(&MPU_InitStruct);
 
   MPU_InitStruct.Number = MPU_REGION_NUMBER3;
@@ -269,6 +285,10 @@ int main(void)
   PeriphCommonClock_Config();
 
   /* USER CODE BEGIN SysInit */
+
+  /* Flash HAL and clocks are ready; establish the fatal destination before
+     peripheral/application initialization can raise a BRICK fatal. */
+  crash_library_init();
 
   /* USER CODE END SysInit */
 

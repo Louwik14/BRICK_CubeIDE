@@ -64,7 +64,12 @@ typedef struct
     uint32_t magic, version, valid_count, newest_sequence;
     uint32_t oldest_sequence, newest_address, next_address, active_generation;
     crash_gdb_descriptor_t descriptors[CRASH_SLOT_COUNT];
-    uint8_t reserved[156];
+    uint32_t writer_status;
+    uint32_t writer_address;
+    uint32_t writer_offset;
+    uint32_t writer_hal_error;
+    uint32_t oldest_address;
+    uint8_t reserved[136];
     volatile uint32_t clear_command;
 } crash_gdb_view_t;
 
@@ -73,7 +78,7 @@ _Static_assert(sizeof(crash_capsule_t) == CRASH_SLOT_SIZE, "capsule ABI");
 _Static_assert(offsetof(crash_capsule_t, commit_magic) == CRASH_SLOT_SIZE - 32U, "commit flashword");
 _Static_assert(sizeof(crash_gdb_view_t) == 512U, "fixed GDB ABI");
 
-__attribute__((section(".backup_sram.crash_gdb"), used))
+__attribute__((section(".crash_gdb_view"), used))
 static crash_gdb_view_t g_crash_gdb_view;
 static __attribute__((aligned(32))) crash_capsule_t g_crash_capsule;
 static volatile uint32_t g_writer_active;
@@ -154,13 +159,23 @@ static uint8_t write_sector_header(uint32_t base, uint32_t generation)
     return flashword_program(base, &h);
 }
 
-static uint8_t write_capsule(uint32_t address, const crash_capsule_t *c)
+static crash_writer_status_t write_capsule(uint32_t address,
+                                            const crash_capsule_t *c,
+                                            uint32_t *failed_offset)
 {
     const uint8_t *p = (const uint8_t *)c;
-    for (uint32_t off = 0U; off < CRASH_SLOT_SIZE - 32U; off += 32U)
-        if (!flashword_program(address + off, p + off)) return 0U;
-    return flashword_program(address + CRASH_SLOT_SIZE - 32U,
-                             p + CRASH_SLOT_SIZE - 32U);
+    for (uint32_t off = 0U; off < CRASH_SLOT_SIZE - 32U; off += 32U) {
+        if (!flashword_program(address + off, p + off)) {
+            if (failed_offset) *failed_offset = off;
+            return CRASH_WRITER_PROGRAM_FAILED;
+        }
+    }
+    if (!flashword_program(address + CRASH_SLOT_SIZE - 32U,
+                           p + CRASH_SLOT_SIZE - 32U)) {
+        if (failed_offset) *failed_offset = CRASH_SLOT_SIZE - 32U;
+        return CRASH_WRITER_COMMIT_FAILED;
+    }
+    return CRASH_WRITER_OK;
 }
 
 static uint32_t slot_address(uint32_t base, uint32_t slot)
@@ -169,6 +184,13 @@ static uint32_t slot_address(uint32_t base, uint32_t slot)
 static void rebuild_view(void)
 {
     crash_gdb_view_t next; memset(&next, 0, sizeof(next));
+    if ((g_crash_gdb_view.magic == CRASH_VIEW_MAGIC)
+            && (g_crash_gdb_view.version == CRASH_FORMAT_VERSION)) {
+        next.writer_status = g_crash_gdb_view.writer_status;
+        next.writer_address = g_crash_gdb_view.writer_address;
+        next.writer_offset = g_crash_gdb_view.writer_offset;
+        next.writer_hal_error = g_crash_gdb_view.writer_hal_error;
+    }
     next.magic = CRASH_VIEW_MAGIC; next.version = CRASH_FORMAT_VERSION;
     uint32_t active = 0U;
     if (sector_valid(CRASH_LIBRARY_BASE)) active = CRASH_LIBRARY_BASE;
@@ -183,6 +205,16 @@ static void rebuild_view(void)
             uint32_t address = slot_address(base, slot);
             if (!capsule_valid(address)) continue;
             const crash_capsule_t *c = (const crash_capsule_t *)address;
+            uint8_t duplicate = 0U;
+            for (uint32_t i=0U;i<next.valid_count;++i) {
+                if (next.descriptors[i].sequence == c->header.sequence) {
+                    if (base == active)
+                        next.descriptors[i] = (crash_gdb_descriptor_t){c->header.sequence,address,c->header.crc32,1U};
+                    duplicate = 1U;
+                    break;
+                }
+            }
+            if (duplicate != 0U) continue;
             uint32_t pos = next.valid_count;
             if (pos < CRASH_SLOT_COUNT) next.valid_count++;
             else { pos = 0U; for (uint32_t i=1U;i<CRASH_SLOT_COUNT;++i)
@@ -195,6 +227,7 @@ static void rebuild_view(void)
             crash_gdb_descriptor_t t=next.descriptors[i]; next.descriptors[i]=next.descriptors[j]; next.descriptors[j]=t; }
     if (next.valid_count) {
         next.oldest_sequence=next.descriptors[0].sequence;
+        next.oldest_address=next.descriptors[0].address;
         next.newest_sequence=next.descriptors[next.valid_count-1U].sequence;
         next.newest_address=next.descriptors[next.valid_count-1U].address;
     }
@@ -203,6 +236,8 @@ static void rebuild_view(void)
             (*(const uint32_t *)slot_address(active,slot)!=0xFFFFFFFFUL)) ++slot;
         if (slot<CRASH_SLOT_COUNT) next.next_address=slot_address(active,slot);
     }
+    if (next.writer_status == CRASH_WRITER_UNINITIALIZED)
+        next.writer_status = CRASH_WRITER_READY;
     next.clear_command=0U; memcpy(&g_crash_gdb_view,&next,sizeof(next)); __DMB();
 }
 
@@ -216,7 +251,8 @@ static void compact_if_full(void)
     if (erase_sector(target_sector) && write_sector_header(target,g_crash_gdb_view.active_generation+1U)) {
         for (uint32_t i=1U;i<CRASH_SLOT_COUNT;++i) {
             memcpy(&g_crash_capsule,(const void *)g_crash_gdb_view.descriptors[i].address,CRASH_SLOT_SIZE);
-            if (!write_capsule(slot_address(target,i-1U),&g_crash_capsule)) break;
+            if (write_capsule(slot_address(target,i-1U),&g_crash_capsule,NULL)
+                    != CRASH_WRITER_OK) break;
         }
     }
     HAL_FLASH_Lock(); rebuild_view();
@@ -224,8 +260,13 @@ static void compact_if_full(void)
 
 void crash_library_init(void)
 {
+    /* Backup SRAM is clock-gated after reset. Without this, CPU reads return
+     * zero and writes to the fixed GDB/runtime view never become observable. */
+    __HAL_RCC_BKPRAM_CLK_ENABLE();
+    __DSB();
     if (g_crash_gdb_view.clear_command == CRASH_GDB_CLEAR_MAGIC) {
         HAL_FLASH_Unlock(); (void)erase_sector(FLASH_SECTOR_4); (void)erase_sector(FLASH_SECTOR_5); HAL_FLASH_Lock();
+        memset(&g_crash_gdb_view, 0, sizeof(g_crash_gdb_view));
     }
     rebuild_view();
     if ((g_crash_gdb_view.active_generation == 0U) && (g_crash_gdb_view.valid_count == 0U)) {
@@ -242,7 +283,13 @@ static void bounded_copy(char *dst, uint32_t size, const char *src)
 
 void crash_library_capture_and_persist(const brick_fatal_record_t *fatal)
 {
-    if ((fatal == NULL) || (g_writer_active != 0U) || (g_crash_gdb_view.next_address == 0U)) return;
+    if (fatal == NULL) return;
+    if (g_writer_active != 0U) {
+        g_crash_gdb_view.writer_status=CRASH_WRITER_ALREADY_ACTIVE; __DMB(); return;
+    }
+    if (g_crash_gdb_view.next_address == 0U) {
+        g_crash_gdb_view.writer_status=CRASH_WRITER_NO_DESTINATION; __DMB(); return;
+    }
     g_writer_active=1U; memset(&g_crash_capsule,0,sizeof(g_crash_capsule));
     crash_capsule_t *c=&g_crash_capsule;
     c->header.magic=CRASH_CAPSULE_MAGIC; c->header.version=CRASH_FORMAT_VERSION;
@@ -272,5 +319,16 @@ void crash_library_capture_and_persist(const brick_fatal_record_t *fatal)
     if (c->payload.extra_count>CRASH_EXTRA_WORDS) c->payload.extra_count=CRASH_EXTRA_WORDS;
     c->header.crc32=capsule_crc(c); c->commit_magic=CRASH_COMMIT_MAGIC;
     c->commit_sequence=c->header.sequence; c->commit_crc=c->header.crc32; c->commit_inverse=~c->header.crc32;
-    HAL_FLASH_Unlock(); (void)write_capsule(g_crash_gdb_view.next_address,c); HAL_FLASH_Lock();
+    const uint32_t destination=g_crash_gdb_view.next_address;
+    g_crash_gdb_view.writer_address=destination;
+    g_crash_gdb_view.writer_offset=0U;
+    g_crash_gdb_view.writer_hal_error=0U;
+    if (HAL_FLASH_Unlock() != HAL_OK) {
+        g_crash_gdb_view.writer_status=CRASH_WRITER_UNLOCK_FAILED;
+        g_crash_gdb_view.writer_hal_error=HAL_FLASH_GetError(); __DMB(); return;
+    }
+    crash_writer_status_t status=write_capsule(destination,c,&g_crash_gdb_view.writer_offset);
+    g_crash_gdb_view.writer_hal_error=HAL_FLASH_GetError();
+    g_crash_gdb_view.writer_status=(uint32_t)status;
+    HAL_FLASH_Lock(); __DMB();
 }

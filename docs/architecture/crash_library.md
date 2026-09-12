@@ -43,19 +43,42 @@ retournent sans récursion.
 
 Une vue reconstruite au boot réside à `0x38800000`: magic/version/count/latest,
 oldest/latest-address/next-address/generation (8 mots), puis 20 descripteurs de
-4 mots `{sequence,address,crc,status}`. Le dernier descripteur valide est le
-plus récent.
+4 mots `{sequence,address,crc,status}`. `next_address` est le mot à `+0x18`
+(le `state+24` du writer). Les mots à `+0x160` sont writer_status/address/
+failed_offset/HAL_error/oldest_address. Statuts: 1 READY, 0x1000 OK,
+0xE001 NO_DESTINATION, 0xE002 UNLOCK_FAILED, 0xE003 PROGRAM_FAILED,
+0xE004 COMMIT_FAILED, 0xE005 ALREADY_ACTIVE. Le dernier descripteur valide est
+le plus récent. Le clock BKPRAM est activé avant toute reconstruction et sa
+région MPU de 4 KiB est non-cacheable; ni clock-gating ni D-cache ne peuvent
+donc faire lire une vue à zéro alors que sa reconstruction a été exécutée.
+L'init s'exécute dans `main`, après HAL/clock et avant les initialisations de
+périphériques et de l'application.
+
+État attendu de la vue : après création/CLEAR, count=0, newest/oldest_address=0,
+next=0x08181000, generation=1; après une capsule, count=1, séquence=1,
+newest/oldest=0x08181000, next=0x08182000; à 20 capsules, next=0 avant la
+compaction de boot; après compaction, les séquences 2..20 sont dans la nouvelle
+génération, les doublons de séquence entre secteurs sont dédupliqués et next
+pointe son slot 19. Une rotation interrompue reste reconstructible depuis la
+génération source et les commits valides de la cible.
 
 ```gdb
 shell cls
-x/88wx 0x38800000
+x/128wx 0x38800000
 x/8wx 0x08180000
 x/8wx 0x081A0000
 x/1024wx 0x08181000
-# lire le dernier: relever newest_address à 0x38800014 puis x/1024wx ADRESSE
+set $latest = *(unsigned int *)0x38800014
+x/1024wx $latest
+x/8wx ($latest + 0xfe0)
 set {unsigned int}0x388001fc = 0x434c5243
 monitor reset
 ```
+
+Après CLEAR et reboot, `x/8wx 0x38800000` doit commencer par
+`0x43525657, 1, 0, 0, 0, 0, 0x08181000, 1`. Après un fatal et reboot, count
+vaut 1, newest_address vaut `0x08181000`, `x/wx 0x08181000` vaut `0x43524153`
+et `x/wx 0x08181fe0` vaut `0x434f4d54`.
 
 Le clear est détecté au boot et efface proprement les deux secteurs. Coûts :
 256 KiB Flash réservée, 4096 octets de buffer fatal et 512 octets BKPSRAM;
