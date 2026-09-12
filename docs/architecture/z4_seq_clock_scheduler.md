@@ -45,14 +45,27 @@ Project, precedent un terminal CONTROL explicite. Les evenements ROLL, produits
 par le scheduler avant la chaine, passent dans deux buffers ping-pong bornes et
 une boucle commune aux quatre slots. Ils portent une identite source scheduler,
 un `occurrence_id` d'activation, un `group_id` de correlation sans ownership et
-la generation de chaine. ARP et EUCLID conservent seulement leur phase,
-deadline et jusqu'a huit pitches HELD; ils n'ont ni pool source/owned ni ledger
-source parallele. La borne logique admise avant ces FX est huit pitches
-distincts par track, ou la borne inferieure prouvee par la chaine. Un changement
-structurel ferme les sorties, purge les futurs, reset les etats temporels et
-incremente la generation sans runtime current/retiring. A sample egal, le
-contrat est OFF, mise a jour, ON. AUDIO ne connait ni PLAY, ni ROLL, ni ARP, ni
-EUCLID.
+la generation de chaine. Le pipeline CONTROL conserve desormais, separement
+des sorties terminales, jusqu'a huit sources musicales HELD par track. ARP et
+EUCLID possedent leur phase, leur prochaine deadline et leur projection locale
+de ces pitches; chaque frontiere de slot conserve ses entrees HELD. CHORD et
+HARMONIZER les utilisent pour revoicer, et un cutover TYPE reprend directement
+a la premiere frontiere modifiee sans rejouer les effets amont. La borne
+logique admise avant ces FX est huit
+pitches distincts par track, ou la borne inferieure prouvee par la chaine.
+AUDIO ne connait ni PLAY, ni ROLL, ni ARP, ni EUCLID.
+
+Un changement parametrique ne change plus la generation de chaine, ne ferme
+plus l'entite et ne purge plus la future queue. ARP conserve phase et prochaine
+deadline: MODE/OCTAVE sont lus a la prochaine occurrence et RATE fixe la duree
+et la deadline suivante depuis cette occurrence. EUCLID conserve de meme sa
+deadline; LENGTH/PULSES reconstruisent le masque a la prochaine decision et la
+phase est projetee modulo la nouvelle longueur. Probability, Gate et Groove
+lisent l'etat effectif lorsqu'une occurrence atteint leur slot. Une decision
+Probability, une fin Gate ou une projection Groove deja materialisee n'est pas
+rejouee. CHORD et HARMONIZER ferment seulement les sorties causees par leurs
+entrees encore HELD, puis republient l'ancienne matiere avec le nouveau voicing
+au meme premier sample CONTROL modifiable; STOP precede START dans le bucket.
 
 PASS 3 ajoute six transformateurs a la meme chaine ordonnee: PROBABILITY
 (CHANCE/CONDITION/LOT), GATE (LENGTH/VARIATION/MODE), GROOVE
@@ -73,6 +86,22 @@ slots precedents. La meme regle couvre les fins datees de Gate. La tete de file
 est consommee par date, puis OFF avant ON a date egale. Un cutover, STOP/PANIC,
 mute, remplacement Pattern ou Project ferme les derives, purge ces entrees et
 reset les deadlines ARP/EUCLID. Un unmute ne restaure aucun futur ancien.
+TIME/REPEATS/DECAY sont donc captures lors de la materialisation de chaque
+repetition Echo: une repetition deja en queue reste immuable, tandis que la
+prochaine occurrence qui entre dans Echo utilise l'etat courant.
+
+Un changement TYPE est le seul changement MIDI FX live structurel: les sorties
+de la track sont fermees, les futurs de l'ancienne structure sont purges, les
+runtimes du premier slot modifie jusqu'a S4 sont reconstruits et la generation
+de chaine avance. Les slots temporels situes avant le cutover conservent ainsi
+phase et deadline. Le
+ledger de sources HELD survit a cette operation et ses sources sont reevaluees
+immediatement depuis S1 dans la nouvelle chaine; TYPE A->B, TYPE->OFF et
+OFF->TYPE n'attendent donc ni reloop ni nouveau NOTE_ON. Les resets explicites
+(mute/cutover/Panic/restore Project) effacent au contraire ce ledger. BASE et
+TEMP/p-lock convergent vers ce meme owner: application et restore TEMP suivent
+les regles parametriques ou structurelles du parametre effectif, sans chemin
+de teardown propre aux p-locks.
 
 L'admission centrale est l'unique preuve de chaine. Avant installation de
 l'etat, elle multiplie les `instant_fanout` et `temporal_fanout` des quatre
@@ -88,12 +117,9 @@ afin que son activation ulterieure ne puisse contourner la preuve globale. La
 limite source devient `floor(8/fanout)` et vaut huit sans expansion, deux pour
 Harmonizer ou Echo.
 
-Les buffers A/B font chacun 1280 octets; la future queue reste 24576 octets et
-les 64 etats de slot 13824 octets. Par rapport a PASS 2, les buffers ajoutent
-1920 octets et les reservations/limites 64 octets, tandis que la suppression du
-payload evenement mort dans les 32 commandes recupere 1536 octets: delta RAM
-statique final `+448 octets`. Les templates Groove et harmonie restent en FLASH,
-sans allocation dynamique. L'insertion future est bornee a 512 deplacements;
+Les buffers A/B et la future queue restent bornes; le ledger source ajoute au
+plus huit `note_event_t` par track, sans allocation dynamique. Les templates
+Groove et harmonie restent en FLASH. L'insertion future est bornee a 512 deplacements;
 la consommation ordonnee lit la tete. Le pipeline reste
 `O(4 x evenements admis)`; les traitements de groupe et deduplications portent
 au plus sur huit notes.

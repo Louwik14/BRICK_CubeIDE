@@ -35,6 +35,14 @@ note_event_result_t note_fx_engine_transform(
 note_event_result_t note_fx_engine_process(uint64_t block_start, uint16_t frames,
                                         uint32_t samples_per_step_q16,
                                         note_fx_emit_fn emit, void *context);
+/* Snapshot the musical inputs still held at a slot boundary.  The caller may
+ * feed them back after a live type/revoicing change without manufacturing a
+ * new source NOTE_ON or replaying already processed upstream effects. */
+note_event_result_t note_fx_engine_collect_held(
+    uint8_t track, uint8_t slot, uint64_t sample_time,
+    note_event_t *output, uint8_t output_capacity, uint8_t *output_count);
+note_event_result_t note_fx_engine_reset_from_slot(uint8_t track,
+                                                   uint8_t first_slot);
 /* Cleanup is transactional with respect to logical ownership: a refused STOP
  * is returned immediately and the corresponding owner remains live. */
 note_event_result_t note_fx_engine_cleanup(uint8_t track);
