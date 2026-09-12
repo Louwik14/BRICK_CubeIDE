@@ -330,6 +330,20 @@ typedef struct {
 	BYTE xdir[FF_META_XDIR_BUFFER_SIZE];
 } FF_META_OBJECT_SYNC_CONT;
 
+typedef struct {
+	_FDID obj;
+	FF_META_WINDOW_CONT window;
+	BYTE* staging;
+	DWORD current;
+	DWORD previous;
+	DWORD next;
+	DWORD released;
+	FRESULT result;
+	UINT staging_size;
+	BYTE phase;
+	BYTE after_window;
+} FF_META_REMOVE_CHAIN_CONT;
+
 FRESULT f_brick_meta_window_begin (FF_META_WINDOW_CONT* cont, FATFS* fs,
 	DWORD target_sector, BYTE load_target, BYTE* staging, UINT staging_size);
 FF_META_STEP_RESULT f_brick_meta_window_step (FF_META_WINDOW_CONT* cont,
@@ -355,6 +369,15 @@ FF_META_STEP_RESULT f_brick_meta_object_sync_step (
 FRESULT f_brick_meta_object_sync_io_started (FF_META_OBJECT_SYNC_CONT* cont,
 	DWORD sequence);
 FRESULT f_brick_meta_object_sync_io_complete (FF_META_OBJECT_SYNC_CONT* cont,
+	DWORD sequence, FRESULT result);
+FRESULT f_brick_meta_remove_chain_begin (FF_META_REMOVE_CHAIN_CONT* cont,
+	const _FDID* obj, DWORD first, DWORD previous, BYTE* staging,
+	UINT staging_size);
+FF_META_STEP_RESULT f_brick_meta_remove_chain_step (
+	FF_META_REMOVE_CHAIN_CONT* cont, const FF_META_REQUEST** request);
+FRESULT f_brick_meta_remove_chain_io_started (FF_META_REMOVE_CHAIN_CONT* cont,
+	DWORD sequence);
+FRESULT f_brick_meta_remove_chain_io_complete (FF_META_REMOVE_CHAIN_CONT* cont,
 	DWORD sequence, FRESULT result);
 #endif
 
@@ -445,6 +468,23 @@ typedef struct {
 	BYTE sync_started;
 } FF_BRICK_REC_RESERVE_CONT;
 
+typedef struct {
+	FIL* fp;
+	FF_BRICK_REC_STATE* state;
+	FF_BRICK_REC_METRICS* metrics;
+	FF_META_OBJECT_SYNC_CONT sync;
+	FF_META_REMOVE_CHAIN_CONT remove;
+	BYTE* staging;
+	FSIZE_t keep_bytes;
+	DWORD keep_clusters;
+	DWORD keep_last_cluster;
+	DWORD first_unused_cluster;
+	DWORD released_clusters;
+	FRESULT result;
+	UINT staging_size;
+	BYTE phase;
+} FF_BRICK_REC_RELEASE_CONT;
+
 FRESULT f_brick_rec_recover (FIL* fp, FF_BRICK_REC_STATE* state,
 	FF_BRICK_REC_EXTENT* extents, UINT extent_capacity, UINT* extent_count,
 	FF_BRICK_REC_METRICS* metrics);
@@ -462,6 +502,16 @@ FRESULT f_brick_rec_reserve_io_started (FF_BRICK_REC_RESERVE_CONT* cont,
 FRESULT f_brick_rec_reserve_io_complete (FF_BRICK_REC_RESERVE_CONT* cont,
 	DWORD sequence, FRESULT result);
 void f_brick_rec_reserve_request_stop (FF_BRICK_REC_RESERVE_CONT* cont);
+FRESULT f_brick_rec_release_begin (FF_BRICK_REC_RELEASE_CONT* cont,
+	FIL* fp, FSIZE_t keep_bytes, DWORD keep_last_cluster,
+	DWORD first_unused_cluster, FF_BRICK_REC_STATE* state,
+	FF_BRICK_REC_METRICS* metrics, BYTE* staging, UINT staging_size);
+FF_META_STEP_RESULT f_brick_rec_release_step (FF_BRICK_REC_RELEASE_CONT* cont,
+	const FF_META_REQUEST** request);
+FRESULT f_brick_rec_release_io_started (FF_BRICK_REC_RELEASE_CONT* cont,
+	DWORD sequence);
+FRESULT f_brick_rec_release_io_complete (FF_BRICK_REC_RELEASE_CONT* cont,
+	DWORD sequence, FRESULT result);
 FRESULT f_brick_rec_commit (FIL* fp, FSIZE_t valid_bytes,
 	FF_BRICK_REC_STATE* state, FF_BRICK_REC_METRICS* metrics);
 FRESULT f_brick_rec_release_tail (FIL* fp, FSIZE_t keep_bytes,

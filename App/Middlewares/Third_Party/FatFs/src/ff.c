@@ -6587,6 +6587,257 @@ static FRESULT brick_meta_object_sync_run_sync (
 	}
 }
 
+
+enum {
+	FF_META_REMOVE_PHASE_INIT = 0,
+	FF_META_REMOVE_PHASE_PREVIOUS,
+	FF_META_REMOVE_PHASE_PREVIOUS_LOADED,
+	FF_META_REMOVE_PHASE_PREVIOUS_FLUSHED,
+	FF_META_REMOVE_PHASE_READ_NEXT,
+	FF_META_REMOVE_PHASE_NEXT_LOADED,
+	FF_META_REMOVE_PHASE_CLEAR,
+	FF_META_REMOVE_PHASE_CLEAR_LOADED,
+	FF_META_REMOVE_PHASE_CLEAR_FLUSHED,
+	FF_META_REMOVE_PHASE_WINDOW,
+	FF_META_REMOVE_PHASE_DONE,
+	FF_META_REMOVE_PHASE_ERROR
+};
+
+
+static FF_META_STEP_RESULT brick_meta_remove_error (
+	FF_META_REMOVE_CHAIN_CONT* cont,
+	FRESULT result)
+{
+	cont->result = result;
+	cont->phase = FF_META_REMOVE_PHASE_ERROR;
+	return FF_META_STEP_ERROR;
+}
+
+
+static FF_META_STEP_RESULT brick_meta_remove_window (
+	FF_META_REMOVE_CHAIN_CONT* cont,
+	DWORD sector,
+	BYTE load_target,
+	BYTE after_window)
+{
+	FRESULT result = f_brick_meta_window_begin(&cont->window, cont->obj.fs,
+		sector, load_target, cont->staging, cont->staging_size);
+	if (result != FR_OK) return brick_meta_remove_error(cont, result);
+	cont->after_window = after_window;
+	cont->phase = FF_META_REMOVE_PHASE_WINDOW;
+	return FF_META_STEP_YIELD;
+}
+
+
+static FF_META_STEP_RESULT brick_meta_remove_finish (
+	FF_META_REMOVE_CHAIN_CONT* cont)
+{
+#if _FS_EXFAT
+	if (cont->obj.fs->fs_type == FS_EXFAT) {
+		if (cont->previous == 0) {
+			cont->obj.stat = 0;
+		} else if (cont->obj.stat == 3
+			&& cont->previous >= cont->obj.sclust
+			&& cont->previous <= cont->obj.sclust + cont->obj.n_cont) {
+			cont->obj.stat = 2;
+		}
+	}
+#endif
+	cont->result = FR_OK;
+	cont->phase = FF_META_REMOVE_PHASE_DONE;
+	return FF_META_STEP_DONE;
+}
+
+
+FRESULT f_brick_meta_remove_chain_begin (
+	FF_META_REMOVE_CHAIN_CONT* cont,
+	const _FDID* obj,
+	DWORD first,
+	DWORD previous,
+	BYTE* staging,
+	UINT staging_size)
+{
+	if (!cont || !obj || !obj->fs
+		|| first < 2 || first >= obj->fs->n_fatent
+		|| (previous && (previous < 2 || previous >= obj->fs->n_fatent))
+		|| (staging && staging_size < SS(obj->fs))) return FR_INVALID_PARAMETER;
+	if (obj->fs->fs_type != FS_FAT32
+#if _FS_EXFAT
+		&& obj->fs->fs_type != FS_EXFAT
+#endif
+	) return FR_DENIED;
+	mem_set(cont, 0, sizeof(*cont));
+	cont->obj = *obj;
+	cont->staging = staging;
+	cont->staging_size = staging ? staging_size : 0;
+	cont->current = first;
+	cont->previous = previous;
+	cont->result = FR_OK;
+	cont->phase = FF_META_REMOVE_PHASE_INIT;
+	return FR_OK;
+}
+
+
+FF_META_STEP_RESULT f_brick_meta_remove_chain_step (
+	FF_META_REMOVE_CHAIN_CONT* cont,
+	const FF_META_REQUEST** request)
+{
+	FATFS* fs;
+	FF_META_STEP_RESULT child;
+	DWORD bit;
+	DWORD value;
+
+	if (request) *request = 0;
+	if (!cont || !cont->obj.fs) return FF_META_STEP_ERROR;
+	fs = cont->obj.fs;
+
+	switch (cont->phase) {
+	case FF_META_REMOVE_PHASE_INIT:
+		cont->phase = cont->previous
+			? FF_META_REMOVE_PHASE_PREVIOUS : FF_META_REMOVE_PHASE_READ_NEXT;
+		return FF_META_STEP_YIELD;
+
+	case FF_META_REMOVE_PHASE_PREVIOUS:
+		if (brick_meta_exfat_synthetic_value(&cont->obj, cont->previous, &value)) {
+			if (value != cont->current) return brick_meta_remove_error(cont, FR_INT_ERR);
+#if _FS_EXFAT
+			if (fs->fs_type == FS_EXFAT && cont->obj.stat == 2) {
+				cont->phase = FF_META_REMOVE_PHASE_READ_NEXT;
+				return FF_META_STEP_YIELD;
+			}
+#endif
+		}
+		return brick_meta_remove_window(cont,
+			brick_meta_fat_sector(fs, cont->previous), 1,
+			FF_META_REMOVE_PHASE_PREVIOUS_LOADED);
+
+	case FF_META_REMOVE_PHASE_PREVIOUS_LOADED:
+		value = brick_meta_fat_value_loaded(&cont->obj, cont->previous);
+		if (value != cont->current) return brick_meta_remove_error(cont, FR_INT_ERR);
+		if (fs->fs_type == FS_FAT32) {
+			value = ld_dword(fs->win + cont->previous * 4 % SS(fs));
+			value = (value & 0xF0000000) | 0x0FFFFFFF;
+			st_dword(fs->win + cont->previous * 4 % SS(fs), value);
+		} else {
+			st_dword(fs->win + cont->previous * 4 % SS(fs), 0xFFFFFFFF);
+		}
+		fs->wflag = 1;
+		return brick_meta_remove_window(cont, fs->winsect, 0,
+			FF_META_REMOVE_PHASE_PREVIOUS_FLUSHED);
+
+	case FF_META_REMOVE_PHASE_PREVIOUS_FLUSHED:
+		cont->phase = FF_META_REMOVE_PHASE_READ_NEXT;
+		return FF_META_STEP_YIELD;
+
+	case FF_META_REMOVE_PHASE_READ_NEXT:
+		if (brick_meta_exfat_synthetic_value(&cont->obj, cont->current,
+			&cont->next)) {
+			cont->phase = FF_META_REMOVE_PHASE_NEXT_LOADED;
+			return FF_META_STEP_YIELD;
+		}
+		return brick_meta_remove_window(cont,
+			brick_meta_fat_sector(fs, cont->current), 1,
+			FF_META_REMOVE_PHASE_NEXT_LOADED);
+
+	case FF_META_REMOVE_PHASE_NEXT_LOADED:
+		if (!(fs->fs_type == FS_EXFAT
+			&& brick_meta_exfat_synthetic_value(&cont->obj, cont->current,
+				&cont->next))) {
+			cont->next = brick_meta_fat_value_loaded(&cont->obj, cont->current);
+		}
+		if (cont->next == 0) return brick_meta_remove_finish(cont);
+		if (cont->next == 1) return brick_meta_remove_error(cont, FR_INT_ERR);
+		if (cont->next == 0xFFFFFFFF) return brick_meta_remove_error(cont, FR_DISK_ERR);
+		cont->phase = FF_META_REMOVE_PHASE_CLEAR;
+		return FF_META_STEP_YIELD;
+
+	case FF_META_REMOVE_PHASE_CLEAR:
+#if _FS_EXFAT
+		if (fs->fs_type == FS_EXFAT) {
+			bit = cont->current - 2;
+			return brick_meta_remove_window(cont,
+				fs->database + bit / 8 / SS(fs), 1,
+				FF_META_REMOVE_PHASE_CLEAR_LOADED);
+		}
+#endif
+		return brick_meta_remove_window(cont,
+			brick_meta_fat_sector(fs, cont->current), 1,
+			FF_META_REMOVE_PHASE_CLEAR_LOADED);
+
+	case FF_META_REMOVE_PHASE_CLEAR_LOADED:
+#if _FS_EXFAT
+		if (fs->fs_type == FS_EXFAT) {
+			bit = cont->current - 2;
+			if (!(fs->win[bit / 8 % SS(fs)] & (1U << (bit % 8)))) {
+				return brick_meta_remove_error(cont, FR_INT_ERR);
+			}
+			fs->win[bit / 8 % SS(fs)] &= (BYTE)~(1U << (bit % 8));
+		} else
+#endif
+		{
+			value = ld_dword(fs->win + cont->current * 4 % SS(fs));
+			st_dword(fs->win + cont->current * 4 % SS(fs), value & 0xF0000000);
+		}
+		fs->wflag = 1;
+		return brick_meta_remove_window(cont, fs->winsect, 0,
+			FF_META_REMOVE_PHASE_CLEAR_FLUSHED);
+
+	case FF_META_REMOVE_PHASE_CLEAR_FLUSHED:
+		if (fs->free_clst < fs->n_fatent - 2) {
+			fs->free_clst++;
+			fs->fsi_flag |= 1;
+		}
+		cont->released++;
+		if (cont->next < 2 || cont->next >= fs->n_fatent) {
+			return brick_meta_remove_finish(cont);
+		}
+		cont->current = cont->next;
+		cont->phase = FF_META_REMOVE_PHASE_READ_NEXT;
+		return FF_META_STEP_YIELD;
+
+	case FF_META_REMOVE_PHASE_WINDOW:
+		child = f_brick_meta_window_step(&cont->window, request);
+		if (child == FF_META_STEP_DONE) {
+			cont->phase = cont->after_window;
+			return FF_META_STEP_YIELD;
+		}
+		if (child == FF_META_STEP_ERROR) {
+			return brick_meta_remove_error(cont, cont->window.result);
+		}
+		return child;
+
+	case FF_META_REMOVE_PHASE_DONE:
+		return FF_META_STEP_DONE;
+
+	default:
+		return brick_meta_remove_error(cont,
+			cont->result != FR_OK ? cont->result : FR_INT_ERR);
+	}
+}
+
+
+FRESULT f_brick_meta_remove_chain_io_started (
+	FF_META_REMOVE_CHAIN_CONT* cont,
+	DWORD sequence)
+{
+	if (!cont || cont->phase != FF_META_REMOVE_PHASE_WINDOW) {
+		return FR_INVALID_PARAMETER;
+	}
+	return f_brick_meta_window_io_started(&cont->window, sequence);
+}
+
+
+FRESULT f_brick_meta_remove_chain_io_complete (
+	FF_META_REMOVE_CHAIN_CONT* cont,
+	DWORD sequence,
+	FRESULT result)
+{
+	if (!cont || cont->phase != FF_META_REMOVE_PHASE_WINDOW) {
+		return FR_INVALID_PARAMETER;
+	}
+	return f_brick_meta_window_io_complete(&cont->window, sequence, result);
+}
+
 static void brick_rec_metrics_begin (FF_BRICK_REC_METRICS* metrics)
 {
 	if (metrics) mem_set(metrics, 0, sizeof(*metrics));
@@ -6626,53 +6877,6 @@ static FRESULT brick_rec_sync_metadata (FIL* fp, FF_BRICK_REC_STATE* state)
 	if (res == FR_OK) {
 		state->chain_status = fp->obj.stat;
 	}
-	return res;
-}
-
-static FRESULT brick_rec_publish_final_size (FIL* fp, FF_BRICK_REC_STATE* state)
-{
-	FATFS* fs = fp->obj.fs;
-	FRESULT res;
-	DWORD tm = GET_FATTIME();
-#if _FS_EXFAT
-	DIR dj;
-	DEF_NAMBUF
-#endif
-
-	fp->obj.objsize = state->valid_bytes;
-#if _FS_EXFAT
-	if (fs->fs_type == FS_EXFAT) {
-		INIT_NAMBUF(fs);
-		res = load_obj_dir(&dj, &fp->obj);
-		if (res == FR_OK) {
-			fs->dirbuf[XDIR_Attr] |= AM_ARC;
-			fs->dirbuf[XDIR_GenFlags] = fp->obj.stat | 1;
-			st_dword(fs->dirbuf + XDIR_FstClus, fp->obj.sclust);
-			st_qword(fs->dirbuf + XDIR_FileSize, state->valid_bytes);
-			st_qword(fs->dirbuf + XDIR_ValidFileSize, state->valid_bytes);
-			st_dword(fs->dirbuf + XDIR_ModTime, tm);
-			fs->dirbuf[XDIR_ModTime10] = 0;
-			st_dword(fs->dirbuf + XDIR_AccTime, 0);
-			res = store_xdir(&dj);
-			if (res == FR_OK) res = sync_fs(fs);
-		}
-		FREE_NAMBUF();
-	} else
-#endif
-	{
-		res = move_window(fs, fp->dir_sect);
-		if (res == FR_OK) {
-			BYTE* dir = fp->dir_ptr;
-			dir[DIR_Attr] |= AM_ARC;
-			st_clust(fs, dir, fp->obj.sclust);
-			st_dword(dir + DIR_FileSize, (DWORD)state->valid_bytes);
-			st_dword(dir + DIR_ModTime, tm);
-			st_word(dir + DIR_LstAccDate, 0);
-			fs->wflag = 1;
-			res = sync_fs(fs);
-		}
-	}
-	if (res == FR_OK) fp->flag &= (BYTE)~FA_MODIFIED;
 	return res;
 }
 
@@ -7089,52 +7293,86 @@ done:
 	return res;
 }
 
-FRESULT f_brick_rec_release_tail (
+enum {
+	FF_BRICK_REC_RELEASE_PHASE_PRE_SYNC_BEGIN = 0,
+	FF_BRICK_REC_RELEASE_PHASE_PRE_SYNC_STEP,
+	FF_BRICK_REC_RELEASE_PHASE_REMOVE_STEP,
+	FF_BRICK_REC_RELEASE_PHASE_POST_SYNC_BEGIN,
+	FF_BRICK_REC_RELEASE_PHASE_POST_SYNC_STEP,
+	FF_BRICK_REC_RELEASE_PHASE_FINAL_SYNC_BEGIN,
+	FF_BRICK_REC_RELEASE_PHASE_FINAL_SYNC_STEP,
+	FF_BRICK_REC_RELEASE_PHASE_DONE,
+	FF_BRICK_REC_RELEASE_PHASE_ERROR
+};
+
+
+static FF_META_STEP_RESULT brick_rec_release_error (
+	FF_BRICK_REC_RELEASE_CONT* cont,
+	FRESULT result)
+{
+	cont->result = result;
+	cont->phase = FF_BRICK_REC_RELEASE_PHASE_ERROR;
+	brick_rec_metrics_end();
+	return FF_META_STEP_ERROR;
+}
+
+
+FRESULT f_brick_rec_release_begin (
+	FF_BRICK_REC_RELEASE_CONT* cont,
 	FIL* fp,
 	FSIZE_t keep_bytes,
 	DWORD keep_last_cluster,
 	DWORD first_unused_cluster,
 	FF_BRICK_REC_STATE* state,
-	FF_BRICK_REC_METRICS* metrics)
+	FF_BRICK_REC_METRICS* metrics,
+	BYTE* staging,
+	UINT staging_size)
 {
 	FATFS* fs;
 	FRESULT res;
-	DWORD keep_clusters, released_clusters;
-	_FDID release_obj;
-	FSIZE_t old_reserved;
+	DWORD keep_clusters;
 
-	if (!fp || !state || keep_bytes < state->valid_bytes || keep_bytes > state->reserved_bytes) {
+	if (!cont || !fp || !state || keep_bytes < state->valid_bytes
+		|| keep_bytes > state->reserved_bytes) {
 		return FR_INVALID_PARAMETER;
 	}
 	brick_rec_metrics_begin(metrics);
 	res = brick_rec_validate(fp, &fs);
-	if (res != FR_OK) goto done;
+	brick_rec_metrics_end();
+	if (res != FR_OK) return res;
+	if (staging && staging_size < SS(fs)) return FR_INVALID_PARAMETER;
 	if (state->cluster_bytes != (DWORD)fs->csize * SS(fs)
 		|| state->fs_type != fs->fs_type
 		|| state->reserved_bytes != (FSIZE_t)state->cluster_count * state->cluster_bytes
 		|| state->valid_bytes > state->reserved_bytes) {
-		res = FR_INVALID_OBJECT; goto done;
+		return FR_INVALID_OBJECT;
 	}
 	keep_clusters = (DWORD)(keep_bytes / state->cluster_bytes);
 	if (keep_bytes % state->cluster_bytes) keep_clusters++;
+	mem_set(cont, 0, sizeof(*cont));
+	cont->fp = fp;
+	cont->state = state;
+	cont->metrics = metrics;
+	cont->staging = staging;
+	cont->staging_size = staging ? staging_size : 0;
+	cont->keep_bytes = keep_bytes;
+	cont->keep_clusters = keep_clusters;
+	cont->keep_last_cluster = keep_last_cluster;
+	cont->first_unused_cluster = first_unused_cluster;
+	cont->result = FR_OK;
 	if (keep_clusters >= state->cluster_count) {
-		res = brick_rec_publish_final_size(fp, state);
-		goto done;
+		cont->phase = FF_BRICK_REC_RELEASE_PHASE_FINAL_SYNC_BEGIN;
+		return FR_OK;
 	}
 	if ((keep_clusters == 0 && (keep_last_cluster != 0 || first_unused_cluster != state->first_cluster))
 		|| (keep_clusters != 0 && (keep_last_cluster < 2 || first_unused_cluster < 2))) {
-		res = FR_INVALID_PARAMETER; goto done;
+		return FR_INVALID_PARAMETER;
 	}
 
-	old_reserved = state->reserved_bytes;
-	released_clusters = state->cluster_count - keep_clusters;
-	release_obj = fp->obj;
-	release_obj.objsize = old_reserved;
-	if (keep_clusters != 0) {
-		DWORD expected = get_fat(&release_obj, keep_last_cluster);
-		if (expected == 0xFFFFFFFF) { res = FR_DISK_ERR; goto done; }
-		if (expected != first_unused_cluster) { res = FR_INVALID_PARAMETER; goto done; }
-	}
+	cont->released_clusters = state->cluster_count - keep_clusters;
+	res = f_brick_meta_remove_chain_begin(&cont->remove, &fp->obj,
+		first_unused_cluster, keep_last_cluster, staging, staging_size);
+	if (res != FR_OK) return res;
 
 	/* On exFAT publish the shorter DataLength before clearing bitmap bits.
 	 * A reset can then leak an orphan tail, but can never expose freed clusters
@@ -7150,20 +7388,186 @@ FRESULT f_brick_rec_release_tail (
 		fp->obj.sclust = 0;
 		fp->obj.stat = 0;
 	}
-	res = brick_rec_sync_metadata(fp, state);
-	if (res != FR_OK) goto done;
+	cont->phase = FF_BRICK_REC_RELEASE_PHASE_PRE_SYNC_BEGIN;
+	return FR_OK;
+}
 
-	res = remove_chain(&release_obj, first_unused_cluster, keep_last_cluster);
-	if (res != FR_OK) goto done;
-	fp->obj.stat = release_obj.stat;
-	fp->obj.n_frag = 0;
-	state->chain_status = fp->obj.stat;
-	res = brick_rec_sync_metadata(fp, state);
-	if (res == FR_OK) res = brick_rec_publish_final_size(fp, state);
-	if (res == FR_OK && metrics) metrics->clusters_released = released_clusters;
-done:
+
+FF_META_STEP_RESULT f_brick_rec_release_step (
+	FF_BRICK_REC_RELEASE_CONT* cont,
+	const FF_META_REQUEST** request)
+{
+	FF_META_STEP_RESULT child;
+	FRESULT result;
+	if (request) *request = 0;
+	if (!cont || !cont->fp || !cont->state) return FF_META_STEP_ERROR;
+	BrickRecMetrics = cont->metrics;
+
+	switch (cont->phase) {
+	case FF_BRICK_REC_RELEASE_PHASE_PRE_SYNC_BEGIN:
+		result = f_brick_meta_object_sync_begin(&cont->sync, cont->fp,
+			cont->state->reserved_bytes, cont->state->valid_bytes,
+			cont->staging, cont->staging_size);
+		if (result != FR_OK) return brick_rec_release_error(cont, result);
+		cont->phase = FF_BRICK_REC_RELEASE_PHASE_PRE_SYNC_STEP;
+		brick_rec_metrics_end();
+		return FF_META_STEP_YIELD;
+
+	case FF_BRICK_REC_RELEASE_PHASE_PRE_SYNC_STEP:
+		child = f_brick_meta_object_sync_step(&cont->sync, request);
+		if (child == FF_META_STEP_ERROR) {
+			return brick_rec_release_error(cont, cont->sync.result);
+		}
+		if (child == FF_META_STEP_DONE) {
+			cont->phase = FF_BRICK_REC_RELEASE_PHASE_REMOVE_STEP;
+			brick_rec_metrics_end();
+			return FF_META_STEP_YIELD;
+		}
+		brick_rec_metrics_end();
+		return child;
+
+	case FF_BRICK_REC_RELEASE_PHASE_REMOVE_STEP:
+		child = f_brick_meta_remove_chain_step(&cont->remove, request);
+		if (child == FF_META_STEP_ERROR) {
+			return brick_rec_release_error(cont, cont->remove.result);
+		}
+		if (child == FF_META_STEP_DONE) {
+			cont->fp->obj.stat = cont->remove.obj.stat;
+			cont->fp->obj.n_frag = 0;
+			cont->state->chain_status = cont->fp->obj.stat;
+			cont->phase = FF_BRICK_REC_RELEASE_PHASE_POST_SYNC_BEGIN;
+			brick_rec_metrics_end();
+			return FF_META_STEP_YIELD;
+		}
+		brick_rec_metrics_end();
+		return child;
+
+	case FF_BRICK_REC_RELEASE_PHASE_POST_SYNC_BEGIN:
+		result = f_brick_meta_object_sync_begin(&cont->sync, cont->fp,
+			cont->state->reserved_bytes, cont->state->valid_bytes,
+			cont->staging, cont->staging_size);
+		if (result != FR_OK) return brick_rec_release_error(cont, result);
+		cont->phase = FF_BRICK_REC_RELEASE_PHASE_POST_SYNC_STEP;
+		brick_rec_metrics_end();
+		return FF_META_STEP_YIELD;
+
+	case FF_BRICK_REC_RELEASE_PHASE_POST_SYNC_STEP:
+		child = f_brick_meta_object_sync_step(&cont->sync, request);
+		if (child == FF_META_STEP_ERROR) {
+			return brick_rec_release_error(cont, cont->sync.result);
+		}
+		if (child == FF_META_STEP_DONE) {
+			cont->phase = FF_BRICK_REC_RELEASE_PHASE_FINAL_SYNC_BEGIN;
+			brick_rec_metrics_end();
+			return FF_META_STEP_YIELD;
+		}
+		brick_rec_metrics_end();
+		return child;
+
+	case FF_BRICK_REC_RELEASE_PHASE_FINAL_SYNC_BEGIN:
+		result = f_brick_meta_object_sync_begin(&cont->sync, cont->fp,
+			cont->state->valid_bytes, cont->state->valid_bytes,
+			cont->staging, cont->staging_size);
+		if (result != FR_OK) return brick_rec_release_error(cont, result);
+		cont->phase = FF_BRICK_REC_RELEASE_PHASE_FINAL_SYNC_STEP;
+		brick_rec_metrics_end();
+		return FF_META_STEP_YIELD;
+
+	case FF_BRICK_REC_RELEASE_PHASE_FINAL_SYNC_STEP:
+		child = f_brick_meta_object_sync_step(&cont->sync, request);
+		if (child == FF_META_STEP_ERROR) {
+			return brick_rec_release_error(cont, cont->sync.result);
+		}
+		if (child != FF_META_STEP_DONE) {
+			brick_rec_metrics_end();
+			return child;
+		}
+		if (cont->metrics) cont->metrics->clusters_released = cont->released_clusters;
+		cont->result = FR_OK;
+		cont->phase = FF_BRICK_REC_RELEASE_PHASE_DONE;
+		brick_rec_metrics_end();
+		return FF_META_STEP_DONE;
+
+	case FF_BRICK_REC_RELEASE_PHASE_DONE:
+		brick_rec_metrics_end();
+		return FF_META_STEP_DONE;
+
+	default:
+		return brick_rec_release_error(cont,
+			cont->result != FR_OK ? cont->result : FR_INT_ERR);
+	}
+}
+
+
+FRESULT f_brick_rec_release_io_started (
+	FF_BRICK_REC_RELEASE_CONT* cont,
+	DWORD sequence)
+{
+	FRESULT result;
+	if (!cont) return FR_INVALID_PARAMETER;
+	BrickRecMetrics = cont->metrics;
+	if (cont->phase == FF_BRICK_REC_RELEASE_PHASE_REMOVE_STEP) {
+		result = f_brick_meta_remove_chain_io_started(&cont->remove, sequence);
+	} else if (cont->phase == FF_BRICK_REC_RELEASE_PHASE_PRE_SYNC_STEP
+		|| cont->phase == FF_BRICK_REC_RELEASE_PHASE_POST_SYNC_STEP
+		|| cont->phase == FF_BRICK_REC_RELEASE_PHASE_FINAL_SYNC_STEP) {
+		result = f_brick_meta_object_sync_io_started(&cont->sync, sequence);
+	} else {
+		result = FR_INVALID_PARAMETER;
+	}
 	brick_rec_metrics_end();
-	return res;
+	return result;
+}
+
+
+FRESULT f_brick_rec_release_io_complete (
+	FF_BRICK_REC_RELEASE_CONT* cont,
+	DWORD sequence,
+	FRESULT result)
+{
+	if (!cont) return FR_INVALID_PARAMETER;
+	if (cont->phase == FF_BRICK_REC_RELEASE_PHASE_REMOVE_STEP) {
+		return f_brick_meta_remove_chain_io_complete(&cont->remove, sequence, result);
+	}
+	if (cont->phase == FF_BRICK_REC_RELEASE_PHASE_PRE_SYNC_STEP
+		|| cont->phase == FF_BRICK_REC_RELEASE_PHASE_POST_SYNC_STEP
+		|| cont->phase == FF_BRICK_REC_RELEASE_PHASE_FINAL_SYNC_STEP) {
+		return f_brick_meta_object_sync_io_complete(&cont->sync, sequence, result);
+	}
+	return FR_INVALID_PARAMETER;
+}
+
+
+FRESULT f_brick_rec_release_tail (
+	FIL* fp,
+	FSIZE_t keep_bytes,
+	DWORD keep_last_cluster,
+	DWORD first_unused_cluster,
+	FF_BRICK_REC_STATE* state,
+	FF_BRICK_REC_METRICS* metrics)
+{
+	FF_BRICK_REC_RELEASE_CONT cont;
+	const FF_META_REQUEST* request;
+	FF_META_STEP_RESULT step;
+	DRESULT io_result;
+	FRESULT result = f_brick_rec_release_begin(&cont, fp, keep_bytes,
+		keep_last_cluster, first_unused_cluster, state, metrics, 0, 0);
+	if (result != FR_OK) return result;
+	for (;;) {
+		step = f_brick_rec_release_step(&cont, &request);
+		if (step == FF_META_STEP_DONE) return FR_OK;
+		if (step == FF_META_STEP_ERROR) return cont.result;
+		if (step == FF_META_STEP_YIELD) continue;
+		if (step != FF_META_STEP_NEED_IO || !request) return FR_INT_ERR;
+		if (f_brick_rec_release_io_started(&cont, request->sequence) != FR_OK) {
+			return FR_INT_ERR;
+		}
+		io_result = request->operation == FF_META_IO_WRITE
+			? disk_write(fp->obj.fs->drv, request->buffer, request->sector, request->count)
+			: disk_read(fp->obj.fs->drv, request->buffer, request->sector, request->count);
+		if (f_brick_rec_release_io_complete(&cont, request->sequence,
+			io_result == RES_OK ? FR_OK : FR_DISK_ERR) != FR_OK) return FR_INT_ERR;
+	}
 }
 
 #endif /* _BRICK_REC_RESERVE && !_FS_READONLY */

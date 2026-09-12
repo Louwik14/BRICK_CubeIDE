@@ -34,6 +34,7 @@ typedef enum
     RECORDER_FILE_JOB_NONE = 0,
     RECORDER_FILE_JOB_EXTEND,
     RECORDER_FILE_JOB_COMMIT,
+    RECORDER_FILE_JOB_RELEASE,
     RECORDER_FILE_JOB_SYNC,
     RECORDER_FILE_JOB_TERMINAL
 } recorder_file_job_phase_t;
@@ -65,8 +66,12 @@ typedef struct
     uint64_t reserved_bytes;
     uint64_t valid_bytes;
     uint64_t job_target_file_bytes;
-    FF_BRICK_REC_RESERVE_CONT reserve_cont;
-    FF_META_OBJECT_SYNC_CONT sync_cont;
+    union
+    {
+        FF_BRICK_REC_RESERVE_CONT reserve;
+        FF_BRICK_REC_RELEASE_CONT release;
+        FF_META_OBJECT_SYNC_CONT sync;
+    } job_cont;
     recorder_file_reservation_result_t job_result;
     recorder_file_job_phase_t job_phase;
     uint32_t job_media_epoch;
@@ -105,6 +110,8 @@ recorder_file_reservation_result_t recorder_file_reservation_commit_begin(
     recorder_file_reservation_t *session,
     uint64_t valid_bytes);
 recorder_file_reservation_result_t recorder_file_reservation_sync_begin(
+    recorder_file_reservation_t *session);
+recorder_file_reservation_result_t recorder_file_reservation_release_begin(
     recorder_file_reservation_t *session);
 recorder_file_reservation_result_t recorder_file_reservation_job_step(
     recorder_file_reservation_t *session);

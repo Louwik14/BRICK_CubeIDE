@@ -208,7 +208,7 @@ recorder_file_reservation_result_t recorder_file_reservation_extend_begin(
     session->job_media_epoch = sd_access_media_epoch();
     session->job_old_extent_count = session->extent_count;
     session->job_added_extent_count = 0U;
-    const FRESULT fr = f_brick_rec_reserve_begin(&session->reserve_cont,
+    const FRESULT fr = f_brick_rec_reserve_begin(&session->job_cont.reserve,
         &session->file, (FSIZE_t)session->job_target_file_bytes,
         &session->fs_state, &session->fs_extents[session->extent_count],
         RECORDER_FILE_RESERVATION_MAX_EXTENTS - session->extent_count,
@@ -237,7 +237,7 @@ static recorder_file_reservation_result_t recorder_file_sync_begin(
     {
         return RECORDER_FILE_RESERVATION_INVALID_STATE;
     }
-    const FRESULT fr = f_brick_meta_object_sync_begin(&session->sync_cont,
+    const FRESULT fr = f_brick_meta_object_sync_begin(&session->job_cont.sync,
         &session->file, data_file_bytes, valid_file_bytes,
         session->metadata_staging, sizeof(session->metadata_staging));
     if(fr != FR_OK) return recorder_file_fs_result(fr);
@@ -271,6 +271,106 @@ recorder_file_reservation_result_t recorder_file_reservation_sync_begin(
         session->file.obj.objsize, session->file.obj.objsize);
 }
 
+static recorder_file_reservation_result_t recorder_file_release_targets(
+    const recorder_file_reservation_t *session,
+    FSIZE_t *keep_bytes,
+    uint32_t *keep_clusters,
+    uint32_t *keep_last,
+    uint32_t *first_unused)
+{
+    if(session->fs_state.cluster_bytes == 0U)
+        return RECORDER_FILE_RESERVATION_INVALID_STATE;
+    const uint64_t keep = (uint64_t)session->header_bytes + session->valid_bytes;
+    uint32_t clusters = (uint32_t)(keep / session->fs_state.cluster_bytes);
+    if((keep % session->fs_state.cluster_bytes) != 0U) clusters++;
+    uint32_t last = 0U;
+    uint32_t first = session->fs_state.first_cluster;
+    if(clusters != 0U)
+    {
+        const uint32_t keep_index = clusters - 1U;
+        for(uint16_t i = 0U; i < session->extent_count; ++i)
+        {
+            const FF_BRICK_REC_EXTENT *const extent = &session->fs_extents[i];
+            const uint32_t first_index = (uint32_t)(extent->file_sector_start
+                / (session->fs_state.cluster_bytes / RECORDER_FILE_RESERVATION_SECTOR_BYTES));
+            if((keep_index >= first_index)
+                    && (keep_index < (first_index + extent->cluster_count)))
+            {
+                last = extent->first_cluster + (keep_index - first_index);
+                if((keep_index + 1U) < (first_index + extent->cluster_count))
+                {
+                    first = last + 1U;
+                }
+                else if((uint16_t)(i + 1U) < session->extent_count)
+                {
+                    first = session->fs_extents[i + 1U].first_cluster;
+                }
+                break;
+            }
+        }
+        if(last == 0U) return RECORDER_FILE_RESERVATION_INVALID_STATE;
+    }
+    *keep_bytes = (FSIZE_t)keep;
+    *keep_clusters = clusters;
+    *keep_last = last;
+    *first_unused = first;
+    return RECORDER_FILE_RESERVATION_OK;
+}
+
+static void recorder_file_retain_extents(
+    recorder_file_reservation_t *session,
+    uint32_t keep_clusters)
+{
+    uint16_t retained = 0U;
+    uint32_t remaining = keep_clusters;
+    while((retained < session->extent_count) && (remaining != 0U))
+    {
+        FF_BRICK_REC_EXTENT *const extent = &session->fs_extents[retained];
+        sample_stream_physical_extent_t *const physical = &session->physical_extents[retained];
+        if(remaining < extent->cluster_count)
+        {
+            extent->cluster_count = remaining;
+            extent->sector_count = remaining
+                * (session->fs_state.cluster_bytes / RECORDER_FILE_RESERVATION_SECTOR_BYTES);
+            physical->sector_count = extent->sector_count;
+            remaining = 0U;
+            retained++;
+            break;
+        }
+        remaining -= extent->cluster_count;
+        retained++;
+    }
+    session->extent_count = retained;
+}
+
+recorder_file_reservation_result_t recorder_file_reservation_release_begin(
+    recorder_file_reservation_t *session)
+{
+    if((session == 0) || (session->open == 0U) || (session->failed != 0U)
+            || (session->job_phase != RECORDER_FILE_JOB_NONE))
+    {
+        return RECORDER_FILE_RESERVATION_INVALID_STATE;
+    }
+    FSIZE_t keep_bytes;
+    uint32_t keep_clusters;
+    uint32_t keep_last;
+    uint32_t first_unused;
+    const recorder_file_reservation_result_t targets = recorder_file_release_targets(
+        session, &keep_bytes, &keep_clusters, &keep_last, &first_unused);
+    if(targets != RECORDER_FILE_RESERVATION_OK) return targets;
+    const FRESULT fr = f_brick_rec_release_begin(&session->job_cont.release,
+        &session->file, keep_bytes, keep_last, first_unused, &session->fs_state,
+        0, session->metadata_staging, sizeof(session->metadata_staging));
+    if(fr != FR_OK) return recorder_file_fs_result(fr);
+    session->finalizing = 1U;
+    session->job_target_file_bytes = keep_clusters;
+    session->job_media_epoch = sd_access_media_epoch();
+    session->job_result = RECORDER_FILE_RESERVATION_SD_BUSY;
+    session->job_phase = RECORDER_FILE_JOB_RELEASE;
+    sd_access_gate_set_recorder_fs_logical_active(1U);
+    return RECORDER_FILE_RESERVATION_OK;
+}
+
 recorder_file_reservation_result_t recorder_file_reservation_job_step(
     recorder_file_reservation_t *session)
 {
@@ -301,8 +401,10 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
     const recorder_file_job_phase_t active_phase = session->job_phase;
     const FF_META_REQUEST *request = 0;
     const FF_META_STEP_RESULT step = (active_phase == RECORDER_FILE_JOB_EXTEND)
-        ? f_brick_rec_reserve_step(&session->reserve_cont, &request)
-        : f_brick_meta_object_sync_step(&session->sync_cont, &request);
+        ? f_brick_rec_reserve_step(&session->job_cont.reserve, &request)
+        : (active_phase == RECORDER_FILE_JOB_RELEASE)
+            ? f_brick_rec_release_step(&session->job_cont.release, &request)
+            : f_brick_meta_object_sync_step(&session->job_cont.sync, &request);
     if(step == FF_META_STEP_NEED_IO)
     {
         if((request == 0) || (request->count != 1U))
@@ -339,10 +441,13 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
         session->job_io_buffer = request->buffer;
         session->job_io_active = 1U;
         const FRESULT started = (active_phase == RECORDER_FILE_JOB_EXTEND)
-            ? f_brick_rec_reserve_io_started(&session->reserve_cont,
+            ? f_brick_rec_reserve_io_started(&session->job_cont.reserve,
                 request->sequence)
-            : f_brick_meta_object_sync_io_started(&session->sync_cont,
-                request->sequence);
+            : (active_phase == RECORDER_FILE_JOB_RELEASE)
+                ? f_brick_rec_release_io_started(&session->job_cont.release,
+                    request->sequence)
+                : f_brick_meta_object_sync_io_started(&session->job_cont.sync,
+                    request->sequence);
         if(started != FR_OK)
         {
             Error_Handler();
@@ -355,7 +460,9 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
     if(step == FF_META_STEP_ERROR)
     {
         const FRESULT result = (active_phase == RECORDER_FILE_JOB_EXTEND)
-            ? session->reserve_cont.result : session->sync_cont.result;
+            ? session->job_cont.reserve.result
+            : (active_phase == RECORDER_FILE_JOB_RELEASE)
+                ? session->job_cont.release.result : session->job_cont.sync.result;
         session->job_result = recorder_file_fs_result(result);
         session->failed = 1U;
         session->job_phase = RECORDER_FILE_JOB_TERMINAL;
@@ -381,6 +488,11 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
         else if(active_phase == RECORDER_FILE_JOB_COMMIT)
         {
             session->fs_state.valid_bytes = (FSIZE_t)session->job_target_file_bytes;
+        }
+        else if(active_phase == RECORDER_FILE_JOB_RELEASE)
+        {
+            recorder_file_retain_extents(session,
+                (uint32_t)session->job_target_file_bytes);
         }
         if(active_phase != RECORDER_FILE_JOB_EXTEND)
         {
@@ -427,10 +539,13 @@ recorder_file_reservation_result_t recorder_file_reservation_job_poll(
             || (completion.media_epoch != session->job_media_epoch)
             || (completion.owner_generation != session->job_io_identity)
             || (((session->job_phase == RECORDER_FILE_JOB_EXTEND)
-                ? f_brick_rec_reserve_io_complete(&session->reserve_cont,
+                ? f_brick_rec_reserve_io_complete(&session->job_cont.reserve,
                     session->job_io_sequence, io_result)
-                : f_brick_meta_object_sync_io_complete(&session->sync_cont,
-                    session->job_io_sequence, io_result)) != FR_OK))
+                : (session->job_phase == RECORDER_FILE_JOB_RELEASE)
+                    ? f_brick_rec_release_io_complete(&session->job_cont.release,
+                        session->job_io_sequence, io_result)
+                    : f_brick_meta_object_sync_io_complete(&session->job_cont.sync,
+                        session->job_io_sequence, io_result)) != FR_OK))
     {
         session->failed = 1U;
         session->job_result = RECORDER_FILE_RESERVATION_FS_ERROR;
@@ -467,7 +582,7 @@ void recorder_file_reservation_job_cancel(recorder_file_reservation_t *session)
 {
     if((session != 0) && (session->job_phase == RECORDER_FILE_JOB_EXTEND))
     {
-        f_brick_rec_reserve_request_stop(&session->reserve_cont);
+        f_brick_rec_reserve_request_stop(&session->job_cont.reserve);
         session->job_target_file_bytes = session->fs_state.reserved_bytes;
     }
 }
@@ -632,39 +747,13 @@ recorder_file_reservation_result_t recorder_file_reservation_release_unused(
         return RECORDER_FILE_RESERVATION_INVALID_STATE;
     }
     session->finalizing = 1U;
-    const uint64_t keep_bytes = (uint64_t)session->header_bytes + session->valid_bytes;
-    uint32_t keep_clusters = (uint32_t)(keep_bytes / session->fs_state.cluster_bytes);
-    if((keep_bytes % session->fs_state.cluster_bytes) != 0U) keep_clusters++;
-    uint32_t keep_last = 0U;
-    uint32_t first_unused = session->fs_state.first_cluster;
-    if(keep_clusters != 0U)
-    {
-        const uint32_t keep_index = keep_clusters - 1U;
-        for(uint16_t i = 0U; i < session->extent_count; ++i)
-        {
-            const FF_BRICK_REC_EXTENT *const extent = &session->fs_extents[i];
-            const uint32_t first_index = (uint32_t)(extent->file_sector_start
-                / (session->fs_state.cluster_bytes / RECORDER_FILE_RESERVATION_SECTOR_BYTES));
-            if((keep_index >= first_index)
-                    && (keep_index < (first_index + extent->cluster_count)))
-            {
-                keep_last = extent->first_cluster + (keep_index - first_index);
-                if((keep_index + 1U) < (first_index + extent->cluster_count))
-                {
-                    first_unused = keep_last + 1U;
-                }
-                else if((uint16_t)(i + 1U) < session->extent_count)
-                {
-                    first_unused = session->fs_extents[i + 1U].first_cluster;
-                }
-                break;
-            }
-        }
-        if(keep_last == 0U)
-        {
-            return RECORDER_FILE_RESERVATION_INVALID_STATE;
-        }
-    }
+    FSIZE_t keep_bytes;
+    uint32_t keep_clusters;
+    uint32_t keep_last;
+    uint32_t first_unused;
+    const recorder_file_reservation_result_t targets = recorder_file_release_targets(
+        session, &keep_bytes, &keep_clusters, &keep_last, &first_unused);
+    if(targets != RECORDER_FILE_RESERVATION_OK) return targets;
     if(recorder_file_begin_storage_operation() == 0U)
     {
         return RECORDER_FILE_RESERVATION_SD_BUSY;
@@ -677,26 +766,7 @@ recorder_file_reservation_result_t recorder_file_reservation_release_unused(
                                                 0);
     if(fr == FR_OK)
     {
-        uint16_t retained = 0U;
-        uint32_t remaining = keep_clusters;
-        while((retained < session->extent_count) && (remaining != 0U))
-        {
-            FF_BRICK_REC_EXTENT *const extent = &session->fs_extents[retained];
-            sample_stream_physical_extent_t *const physical = &session->physical_extents[retained];
-            if(remaining < extent->cluster_count)
-            {
-                extent->cluster_count = remaining;
-                extent->sector_count = remaining
-                    * (session->fs_state.cluster_bytes / RECORDER_FILE_RESERVATION_SECTOR_BYTES);
-                physical->sector_count = extent->sector_count;
-                remaining = 0U;
-                retained++;
-                break;
-            }
-            remaining -= extent->cluster_count;
-            retained++;
-        }
-        session->extent_count = retained;
+        recorder_file_retain_extents(session, keep_clusters);
         recorder_file_update_public_sizes(session);
         recorder_file_publish(session);
     }
