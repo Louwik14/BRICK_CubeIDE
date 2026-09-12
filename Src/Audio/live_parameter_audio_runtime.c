@@ -70,9 +70,11 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
     {
         const uint8_t applied = param_audio_clear_track_temp(
             (param_id_t)parameter_id, entity);
-        return (applied != 0U)
-            ? audio_note_engine_adapter_project_track_configuration(entity)
-            : 0U;
+        if (applied == 0U) return 0U;
+        if (live_parameter_audio_runtime_changes_matrix_context(
+                (param_id_t)parameter_id) != 0U)
+            audio_mod_matrix_rebuild_track(entity);
+        return audio_note_engine_adapter_project_track_configuration(entity);
     }
     const float decoded = live_parameter_event_decode_float((int32_t)value_bits);
     if (parameter_id == CONTROL_AUDIO_CONFIG_POLY_VOICES)
@@ -185,8 +187,14 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
 
     uint8_t applied = 0U;
     if (scope == CONTROL_AUDIO_PARAM_KIND_TEMP_TRACK)
+    {
         applied = param_audio_apply_track_temp(
             (param_id_t)parameter_id, entity, value);
+        if ((applied != 0U)
+                && (live_parameter_audio_runtime_changes_matrix_context(
+                    (param_id_t)parameter_id) != 0U))
+            audio_mod_matrix_rebuild_track(entity);
+    }
     else
     {
         /* A Matrix destination command may immediately precede its durable

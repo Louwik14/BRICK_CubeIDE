@@ -83,6 +83,14 @@ et MIDI OUT reste exclusivement CONTROL.
 
 La valeur CONTROL du parametre est l'unique autorite de sa base. Elle est projetee par le chemin normal des commandes parametre et met a jour directement la destination AUDIO, y compris pendant une modulation. Les routes Matrix sont adressees par `{track, slot, field}` et Multi/Slew par leurs APIs typees; source, destination, depth et enable ne traversent jamais Param. Des commandes fonctionnelles typees mettent a jour l'etat Matrix M7, marquent l'owner dirty et finalisent une seule recompilation apres toutes les commandes dues au meme sample. Min/max, endpoints, plans et caches restent derives localement; les MODEL et le nombre de slots Drum sont lus dans le runtime moteur. Aucun descripteur partage, pool, ACK ou canal fonctionnel parallele n'existe.
 
+Le runtime de destination AUDIO suit la destination configuree, independamment
+de l'efficacite instantanee de la route. Une profondeur nulle retire la route du
+plan compile et restaure la base, mais ne detruit ni l'endpoint prepare ni la
+projection de base recue avec `DEST`; le retour a une profondeur non nulle est
+donc une simple recompilation reversible. La meme regle vaut pour disable/enable
+et source NONE/source valide. Un changement TEMP ou CLEAR_TEMP de TRIG marque
+egalement la Matrix dirty, car le passage mono/poly change le plan par voix.
+
 Les selections Sample et Wavetable appartiennent a `project_control` sous forme
 de references asset typees stables; leur resolution en slot runtime n'a lieu
 qu'a la publication AUDIO. Elles ne sont ni Param, ni destinations de p-lock,

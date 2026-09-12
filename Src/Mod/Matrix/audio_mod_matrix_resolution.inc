@@ -175,7 +175,7 @@ static uint8_t mod_matrix_slot_is_effective(uint8_t track,
         &models);
 }
 
-static void mod_matrix_release_destination(mod_matrix_runtime_destination_t *dst)
+static void mod_matrix_deactivate_destination(mod_matrix_runtime_destination_t *dst)
 {
     if ((dst == NULL) || (dst->valid == 0U))
     {
@@ -186,16 +186,27 @@ static void mod_matrix_release_destination(mod_matrix_runtime_destination_t *dst
         (void)mod_destination_catalog_apply_prepared(&dst->prepared,
                                                      dst->base_value);
 
-    dst->valid = 0U;
-    dst->base_valid = 0U;
     dst->modulation_active = 0U;
-    dst->destination = MOD_DESTINATION_NONE;
-    dst->base_value = 0.0f;
     dst->sum = 0.0f;
     dst->sum_end = 0.0f;
+    dst->ramp = (mod_destination_ramp_t){0};
+}
+
+static void mod_matrix_release_destination(mod_matrix_runtime_destination_t *dst)
+{
+    if ((dst == NULL) || (dst->valid == 0U))
+    {
+        return;
+    }
+
+    mod_matrix_deactivate_destination(dst);
+
+    dst->valid = 0U;
+    dst->base_valid = 0U;
+    dst->destination = MOD_DESTINATION_NONE;
+    dst->base_value = 0.0f;
     dst->min_value = 0.0f;
     dst->max_value = 127.0f;
-    dst->ramp = (mod_destination_ramp_t){0};
     dst->prepared = (mod_destination_prepared_t){0};
 }
 
@@ -356,15 +367,19 @@ static void mod_matrix_rebuild_track_plan(uint8_t track,
         }
     }
 
+    /* A destination is part of the applied Matrix configuration even while
+     * its route is ineffective (zero depth, disabled, or source NONE).  Keep
+     * its runtime entry alive so the BASE command paired with DEST always has
+     * an owner, and so making the route effective again cannot lose that base. */
     for (uint8_t runtime_index = 0U; runtime_index < MOD_MATRIX_SLOT_COUNT; ++runtime_index)
     {
         mod_matrix_runtime_destination_t *const dst = &rt->destinations[runtime_index];
         uint8_t still_used = 0U;
         if ((dst->valid != 0U) && (dst->destination != MOD_DESTINATION_NONE))
         {
-            for (uint8_t candidate = 0U; candidate < candidate_count; ++candidate)
+            for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
             {
-                if (candidates[candidate].destination == dst->destination)
+                if (state->slots[slot].destination == dst->destination)
                 {
                     still_used = 1U;
                     break;
@@ -375,6 +390,50 @@ static void mod_matrix_rebuild_track_plan(uint8_t track,
         {
             mod_matrix_release_destination(dst);
         }
+    }
+
+    for (uint8_t slot = 0U; slot < MOD_MATRIX_SLOT_COUNT; ++slot)
+    {
+        const mod_destination_address_t address = state->slots[slot].destination;
+        uint8_t target = 0U;
+        param_id_t destination = PARAM_COUNT;
+        if ((address == MOD_DESTINATION_NONE)
+                || (mod_destination_address_resolve(
+                    address, &target, &destination) == 0U))
+            continue;
+
+        float minimum = param_spec[destination].min;
+        float maximum = param_spec[destination].max;
+        if ((destination == PARAM_AUDIO_FX_P1)
+                || (destination == PARAM_AUDIO_FX_B_P1))
+        {
+            const uint8_t model = (destination == PARAM_AUDIO_FX_B_P1)
+                ? audio_fx_runtime_get_model(target, AUDIO_FX_SLOT_B)
+                : audio_fx_runtime_get_model(target, AUDIO_FX_SLOT_A);
+            if (model == AUDIO_FX_MODEL_DRIFT)
+                maximum = FX_AUDIO_DRIFT_DELAY_MOD_MAX_CONTROL;
+        }
+        mod_matrix_runtime_destination_t *configured = NULL;
+        (void)mod_matrix_runtime_destination_prepare(
+            track, rt, address, minimum, maximum, &configured);
+    }
+
+    for (uint8_t runtime_index = 0U; runtime_index < MOD_MATRIX_SLOT_COUNT;
+            ++runtime_index)
+    {
+        mod_matrix_runtime_destination_t *const dst =
+            &rt->destinations[runtime_index];
+        uint8_t effective = 0U;
+        for (uint8_t candidate = 0U; candidate < candidate_count; ++candidate)
+        {
+            if (candidates[candidate].destination == dst->destination)
+            {
+                effective = 1U;
+                break;
+            }
+        }
+        if ((dst->valid != 0U) && (effective == 0U))
+            mod_matrix_deactivate_destination(dst);
     }
 
     for (uint8_t candidate = 0U; candidate < candidate_count; ++candidate)
