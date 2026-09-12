@@ -1120,6 +1120,32 @@ void seq_param_iface_discard_runtime_lock(seq_track_id_t track,
     g_seq_param_runtime_locked_bits[index >> 3U] &=
         (uint8_t)~(1U << (index & 7U));
 }
+
+uint8_t seq_param_iface_clear_patch_runtime(seq_track_id_t track)
+{
+    static const uint8_t patch_sets[] = {
+        SEQ_PLOCK_SET_ENV, SEQ_PLOCK_SET_TONE, SEQ_PLOCK_SET_MOD,
+        SEQ_PLOCK_SET_FM_OPERATOR, SEQ_PLOCK_SET_AUDIO_FX
+    };
+    if (seq_param_iface_track_is_valid(track) == 0U) return 0U;
+    for (uint8_t set = 0U; set < sizeof(patch_sets); ++set)
+    {
+        const uint8_t set_id = patch_sets[set];
+        for (seq_param_slot_t slot = 0U;
+             slot < g_seq_param_set_capacities[set_id]; ++slot)
+        {
+            if (seq_param_get_runtime_locked(track, set_id, slot) == 0U)
+                continue;
+            if (seq_param_iface_restore_base(track, set_id, slot, 0U) == 0U)
+            {
+                /* Engine-specific slots can disappear in the projected
+                 * engine. Their runtime ownership must still be dropped. */
+                seq_param_iface_discard_runtime_lock(track, set_id, slot);
+            }
+        }
+    }
+    return 1U;
+}
 uint8_t seq_param_iface_encode_param_value(param_id_t param, float value,
                                            seq_value16_t *out_value16)
 {

@@ -64,6 +64,8 @@ uint8_t project_control_begin_asset_restore(void);
 uint8_t project_control_validate_asset(const persist_control_asset_ref_t*asset);
 project_control_asset_result_t project_control_put_asset(const persist_control_asset_ref_t*asset);
 project_control_asset_result_t project_control_ensure_asset(uint32_t kind,const char*path,uint16_t*out_logical);
+project_control_asset_result_t project_control_prepare_asset(
+    uint32_t kind, const char *path, uint16_t *out_logical);
 project_control_asset_result_t project_control_complete_ram_runtime(
     const char*path,uint16_t runtime_backend,uint16_t runtime_global,uint8_t success);
 project_control_asset_result_t project_control_complete_wavetable_runtime(
@@ -121,6 +123,9 @@ uint8_t project_control_track_asset_select_logical(uint8_t entity,
 uint8_t project_control_track_asset_restore(uint8_t entity,
                                             project_control_asset_role_t role,
                                             const persist_control_asset_ref_t *asset);
+uint8_t project_control_track_asset_can_restore(
+    uint8_t entity, project_control_asset_role_t role,
+    const persist_control_asset_ref_t *asset);
 project_control_asset_result_t project_control_track_asset_restore_status(
     uint8_t entity, project_control_asset_role_t role,
     const persist_control_asset_ref_t *asset);

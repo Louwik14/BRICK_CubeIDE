@@ -18,6 +18,7 @@ typedef struct
 
 void param_filter_init(void);
 uint8_t param_filter_control_reset(uint8_t track);
+void param_filter_control_make_default(param_filter_control_state_t *out);
 uint8_t param_filter_is_param(param_id_t id);
 uint8_t param_filter_control_get(uint8_t track, param_id_t id,
                                  float *out_value);

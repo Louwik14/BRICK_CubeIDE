@@ -25,9 +25,16 @@ void polyphony_control_init(void)
     }
 }
 
+void polyphony_control_make_default(polyphony_control_state_t *out)
+{
+    if (out == NULL) return;
+    *out = (polyphony_control_state_t){ .voice_count = 1U };
+}
+
 uint8_t polyphony_control_reset(uint8_t track)
 {
-    const polyphony_control_state_t state = { .voice_count = 1U };
+    polyphony_control_state_t state;
+    polyphony_control_make_default(&state);
     return polyphony_control_restore(track, &state);
 }
 

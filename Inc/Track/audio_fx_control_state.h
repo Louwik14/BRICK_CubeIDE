@@ -30,6 +30,7 @@ typedef struct
 } audio_fx_control_prepare_context_t;
 
 void audio_fx_control_state_init(void);
+void audio_fx_control_state_make_default(audio_fx_control_state_t *out);
 uint8_t audio_fx_control_state_reset(brick_entity_id_t entity);
 uint8_t audio_fx_control_state_get(brick_entity_id_t entity,
                                    audio_fx_control_config_t *out);

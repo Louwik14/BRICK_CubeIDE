@@ -17,22 +17,23 @@ void mod_env3_control_init(void)
 {
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
     {
-        g_mod_env3_control[entity] = (mod_env3_control_state_t){
-            .attack = 0.0f,
-            .decay = 32.0f,
-            .sustain = 127.0f,
-            .release = 32.0f,
-            .retrigger = 1.0f
-        };
+        mod_env3_control_make_default(&g_mod_env3_control[entity]);
     }
+}
+
+void mod_env3_control_make_default(mod_env3_control_state_t *out)
+{
+    if (out == NULL) return;
+    *out = (mod_env3_control_state_t){
+        .decay = 32.0f, .sustain = 127.0f, .release = 32.0f,
+        .retrigger = 1.0f
+    };
 }
 
 uint8_t mod_env3_control_reset(uint8_t entity)
 {
-    const mod_env3_control_state_t state = {
-        .decay = 32.0f, .sustain = 127.0f, .release = 32.0f,
-        .retrigger = 1.0f
-    };
+    mod_env3_control_state_t state;
+    mod_env3_control_make_default(&state);
     return mod_env3_control_restore(entity, &state);
 }
 

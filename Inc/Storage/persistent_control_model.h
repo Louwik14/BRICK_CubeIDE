@@ -405,7 +405,6 @@ typedef struct
     tone_program_control_t tone;
     param_filter_control_state_t filter;
     vca_control_state_t vca;
-    mod_env3_control_state_t env3;
     audio_fx_control_state_t audio_fx;
     polyphony_control_state_t polyphony;
     persist_control_modulation_t modulation;

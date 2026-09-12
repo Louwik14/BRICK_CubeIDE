@@ -634,6 +634,35 @@ uint8_t project_control_track_asset_restore(uint8_t entity,
                 == PROJECT_CONTROL_ASSET_READY) ? 1U : 0U;
 }
 
+uint8_t project_control_track_asset_can_restore(
+    uint8_t entity, project_control_asset_role_t role,
+    const persist_control_asset_ref_t *asset)
+{
+    if (asset == NULL || project_control_validate_asset(asset) == 0U
+        || entity >= BRICK_ENTITY_CAPACITY
+        || role >= PROJECT_CONTROL_ASSET_ROLE_COUNT
+        || unavailable_find_ref(asset, NULL) != 0U)
+        return 0U;
+    char path[PROJECT_CONTROL_ASSET_PATH_BYTES];
+    memcpy(path, asset->canonical_path, asset->path_length);
+    path[asset->path_length] = '\0';
+    uint16_t logical = 0U;
+    if (project_control_find_asset(asset->kind, path, &logical) == 0U)
+        return 0U;
+    if (asset->kind == PERSIST_ASSET_SAMPLE_STREAM)
+        return sample_cache_is_ready(logical);
+    if (asset->kind == PERSIST_ASSET_SAMPLE_RAM)
+        return project_control_ram_runtime_valid(logical);
+    if (asset->kind == PERSIST_ASSET_WAVETABLE)
+        return project_control_wavetable_runtime_valid(logical);
+    if (asset->kind == PERSIST_ASSET_MULTI)
+    {
+        uint16_t runtime;
+        return project_control_resolve_multi_runtime(logical, &runtime);
+    }
+    return 0U;
+}
+
 project_control_asset_result_t project_control_track_asset_restore_status(
     uint8_t entity, project_control_asset_role_t role,
     const persist_control_asset_ref_t *asset)
@@ -908,6 +937,44 @@ project_control_asset_result_t project_control_ensure_asset(uint32_t kind,const 
     }
     for(uint16_t i=0U;i<capacity;++i)if(!bank[i].used){const project_control_asset_result_t result=apply_bank_asset(kind,i,path);if(bank[i].used){*out_logical=i;return result;}return result;}
     return PROJECT_CONTROL_ASSET_FAILED;
+}
+
+project_control_asset_result_t project_control_prepare_asset(
+    uint32_t kind, const char *path, uint16_t *out_logical)
+{
+    persist_control_asset_ref_t ref;
+    if ((asset_ref_make_canonical(kind, path, &ref) == 0U)
+            || (unavailable_find_ref(&ref, NULL) != 0U))
+        return PROJECT_CONTROL_ASSET_FAILED;
+    project_control_asset_result_t status =
+        project_control_ensure_asset(kind, path, out_logical);
+    if (status != PROJECT_CONTROL_ASSET_PENDING) return status;
+    if (kind == PERSIST_ASSET_SAMPLE_RAM)
+    {
+        sampler_ram_result_t result;
+        uint16_t backend, runtime;
+        const char *completed_path;
+        if (sampler_ram_pool_load_async_take_result(
+                &result, &backend, &runtime, &completed_path) == 0U)
+            return PROJECT_CONTROL_ASSET_PENDING;
+        if (completed_path == NULL) return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+        return project_control_complete_ram_runtime(completed_path, backend,
+            runtime, (result == SAMPLER_RAM_RESULT_OK) ? 1U : 0U);
+    }
+    if (kind == PERSIST_ASSET_WAVETABLE)
+    {
+        wavetable_result_t result;
+        uint16_t backend, runtime;
+        const char *completed_path;
+        if (wavetable_pool_load_async_take_result(
+                &result, &backend, &runtime, &completed_path) == 0U)
+            return PROJECT_CONTROL_ASSET_PENDING;
+        if (completed_path == NULL) return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+        return project_control_complete_wavetable_runtime(completed_path,
+            backend, runtime, (result == WAVETABLE_RESULT_OK) ? 1U : 0U);
+    }
+    return (kind == PERSIST_ASSET_MULTI)
+        ? PROJECT_CONTROL_ASSET_PENDING : PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
 }
 
 project_control_asset_result_t project_control_complete_ram_runtime(

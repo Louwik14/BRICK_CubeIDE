@@ -7,6 +7,8 @@
 #include "Platform/memory_layout.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "Sampler/sampler_ram_pool.h"
+#include "Sampler/multi_sample_loader.h"
+#include "Sampler/wavetable_pool.h"
 #include "Storage/persistent_fatfs_io.h"
 #include "Storage/persistent_key_catalog.h"
 #include "Storage/persistent_patch_control.h"
@@ -650,6 +652,11 @@ patch_product_result_t patch_product_load_begin(uint16_t slot, uint16_t target_m
     if (g_present[slot] == 0U) return PATCH_PRODUCT_EMPTY;
     if (g_invalid[slot] != 0U) return PATCH_PRODUCT_INVALID;
     if (patch_io_common_available() == 0U) return PATCH_PRODUCT_IO_BUSY;
+    if ((project_control_asset_loads_pending() != 0U)
+            || (sampler_ram_pool_load_async_busy() != 0U)
+            || (wavetable_pool_load_async_busy() != 0U)
+            || (multi_sample_load_has_pending() != 0U))
+        return PATCH_PRODUCT_IO_BUSY;
     if (!path(g_patch_io.final_path, sizeof(g_patch_io.final_path), slot))
         return PATCH_PRODUCT_INVALID;
     patch_io_start(PATCH_PRODUCT_OPERATION_LOAD, slot);
@@ -675,7 +682,7 @@ static project_control_asset_result_t patch_product_prepare_assets(void)
         memcpy(asset_path, selected->canonical_path, selected->path_length);
         asset_path[selected->path_length] = '\0';
         const project_control_asset_result_t result =
-            project_control_ensure_asset(selected->kind, asset_path, &logical);
+            project_control_prepare_asset(selected->kind, asset_path, &logical);
         if (result != PROJECT_CONTROL_ASSET_READY) return result;
     }
     return PROJECT_CONTROL_ASSET_READY;
@@ -687,21 +694,6 @@ void patch_product_apply_service(void)
             || ((g_patch_io.state != PATCH_IO_PREPARE_LOAD)
                 && (g_patch_io.state != PATCH_IO_WAIT_ASSET)))
         return;
-    sampler_ram_result_t ram_result;
-    uint16_t backend, runtime;
-    const char *path_value;
-    if ((g_patch_io.state == PATCH_IO_WAIT_ASSET)
-            && sampler_ram_pool_load_async_take_result(&ram_result, &backend,
-                                                       &runtime, &path_value))
-    {
-        project_control_complete_ram_runtime(path_value, backend, runtime,
-            (ram_result == SAMPLER_RAM_RESULT_OK) ? 1U : 0U);
-        if (ram_result != SAMPLER_RAM_RESULT_OK)
-        {
-            patch_io_finish(PATCH_PRODUCT_INVALID);
-            return;
-        }
-    }
     const project_control_asset_result_t assets = patch_product_prepare_assets();
     if (assets == PROJECT_CONTROL_ASSET_PENDING)
     {

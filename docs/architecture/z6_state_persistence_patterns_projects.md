@@ -12,6 +12,8 @@ Patch contient une entite, ses parametres logiques, zero a deux references
 d'assets typees et, pour FM, le DTO de l'owner. Project contient metadata,
 Pattern de travail, manifeste d'assets, macros/scenes et jusqu'a 256 records
 Pattern diffuses progressivement.
+ENV3 n'existe qu'une fois dans le Patch, dans l'enveloppe de modulation; capture,
+Init, codec et application utilisent cette representation unique.
 
 ## Codec et application
 
@@ -25,12 +27,15 @@ borne sans allocation dynamique.
 
 Le Patch Load lit et decode cooperativement dans STORAGE_IO, precharge ses assets,
 puis prevalide la topologie, les capacites, la polyphonie et tous les owners pour
-l'ensemble du masque avant un unique commit structurel CONTROL. Les targets ne
-sont jamais appliquees une par une par l'UI. Le commit publie ensuite moteur,
-parametres, polyphonie, FX et modulation dans leur ordre owner; il ne stoppe ni
-transport ni voix globalement. `persistent_patch_control_make_default` est la
-source canonique du Patch Init utilisee par CLEAR, appliquee par le meme contrat
-que LOAD sans toucher sequence, mute, MIDI, slot ou fichiers.
+l'ensemble du masque avant un unique commit structurel CONTROL. Sample RAM,
+Wavetable et Multi possedent tous un resultat de preparation terminal; aucune
+target n'est mutee avant que toutes les references du masque soient READY. Les
+targets ne sont jamais appliquees une par une par l'UI. Le remplacement purge
+les overrides TEMP runtime Patch actifs (sans modifier les p-locks stockes dans
+la sequence), installe les owners CONTROL, puis publie un snapshot AUDIO unique
+et attend son acquittement. `persistent_patch_control_make_default` derive ses
+valeurs des factories CONTROL canoniques et est utilise par CLEAR via exactement
+le meme contrat que LOAD, sans toucher sequence, mute, MIDI, slot ou fichiers.
 
 ## Transactions
 
@@ -68,6 +73,11 @@ temporaire/backup que le snapshot. Le decoder conserve la lecture des CORE
 version 1, affiches avec un nom de slot de repli. Project Save revalide que le
 transport est arrete avant le snapshot; un refus ou une erreur ne publie ni STOP
 ni PANIC et ne modifie pas le son.
+Le resultat terminal de Project Save reste dans sa mailbox jusqu'a
+`project_product_save_take_result`; Save, Load et les autres operations Project
+sont refusees jusque-la. Sur Load reussi, le slot actif et le nom decode sont
+publies ensemble dans l'etat produit courant, puis seulement refletes dans le
+cache browser. Cancel ou erreur conservent le couple precedent.
 
 Pour les chargements utilisateur Sample RAM et Wavetable, la superloop consomme
 la completion physique, valide le slot, le global, le chemin et la resolution
@@ -88,8 +98,9 @@ AUDIO avant leur reconstruction; le commit Pattern ne libere que les PROGRAM
 modifies, sans PANIC global, puis rebind une fois les outputs encore vivants.
 Le contrat wire classe chaque commande comme etat durable, action transitoire,
 cycle de vie ressource ou requete. Le snapshot ne conserve que l'etat durable;
-les commandes PARAM `TEMP` et `CLEAR_TEMP` sont donc exclues de cette projection,
-comme les STOP de ressources et les requetes de waveform. Les etats
+les commandes PARAM `TEMP` sont donc exclues de cette projection; `CLEAR_TEMP`
+est admis uniquement pour invalider atomiquement les overrides d'un Patch
+remplace. Les STOP de ressources et les requetes de waveform restent exclus. Les etats
 de selection exposes a l'UI sont `EMPTY`, `LOADED` et `UNAVAILABLE`. Patch garde
 sa transaction asset locale distincte.
 

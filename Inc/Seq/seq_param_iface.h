@@ -116,6 +116,7 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
 void seq_param_iface_discard_runtime_lock(seq_track_id_t track,
                                           uint8_t set_id,
                                           seq_param_slot_t param_slot);
+uint8_t seq_param_iface_clear_patch_runtime(seq_track_id_t track);
 
 uint8_t seq_param_iface_encode_param_value(param_id_t param, float value,
                                            seq_value16_t *out_value16);

@@ -24,25 +24,24 @@ void param_filter_init(void)
 {
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
-        g_param_filter_control[track] = (param_filter_control_state_t){
-            .cutoff = 127.0f,
-            .attack = 34.3f,
-            .decay = 68.7f,
-            .sustain = 127.0f,
-            .release = 68.7f,
-            .env_reset = 1.0f,
-            .retrigger = 1.0f
-        };
+        param_filter_control_make_default(&g_param_filter_control[track]);
     }
 }
 
-uint8_t param_filter_control_reset(uint8_t track)
+void param_filter_control_make_default(param_filter_control_state_t *out)
 {
-    const param_filter_control_state_t state = {
+    if (out == NULL) return;
+    *out = (param_filter_control_state_t){
         .cutoff = 127.0f, .attack = 34.3f, .decay = 68.7f,
         .sustain = 127.0f, .release = 68.7f, .env_reset = 1.0f,
         .retrigger = 1.0f
     };
+}
+
+uint8_t param_filter_control_reset(uint8_t track)
+{
+    param_filter_control_state_t state;
+    param_filter_control_make_default(&state);
     return param_filter_control_restore(track, &state);
 }
 

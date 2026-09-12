@@ -231,6 +231,16 @@ static uint8_t audio_state_snapshot_command_is_current(
     return 1U;
 }
 
+static uint8_t audio_state_snapshot_command_is_projectable(
+    const control_audio_command_t *command)
+{
+    return (uint8_t)((control_audio_command_state_class(command)
+                == CONTROL_AUDIO_COMMAND_DURABLE_STATE)
+        || ((CONTROL_AUDIO_COMMAND_OPCODE(command) == CONTROL_AUDIO_COMMAND_PARAM)
+            && (CONTROL_AUDIO_COMMAND_KIND(command)
+                == CONTROL_AUDIO_PARAM_KIND_CLEAR_TEMP_TRACK)));
+}
+
 void audio_state_snapshot_control_init(void)
 {
     memset(&g_audio_prepared_state, 0, sizeof(g_audio_prepared_state));
@@ -241,6 +251,12 @@ void audio_state_snapshot_control_init(void)
 uint8_t audio_state_snapshot_control_active(void)
 {
     return (g_audio_state_snapshot_depth != 0U) ? 1U : 0U;
+}
+
+uint8_t audio_state_snapshot_control_preflight(void)
+{
+    return (audio_state_snapshot_control_active() == 0U
+            && control_rt_publication_free() >= 1U) ? 1U : 0U;
 }
 
 uint8_t audio_state_snapshot_control_begin(
@@ -269,8 +285,8 @@ uint8_t audio_state_snapshot_control_batch_is_projectable(
     if ((commands == NULL) || (count == 0U)) return 0U;
     for (uint16_t i = 0U; i < count; ++i)
     {
-        if (control_audio_command_state_class(&commands[i])
-                != CONTROL_AUDIO_COMMAND_DURABLE_STATE) return 0U;
+        if (audio_state_snapshot_command_is_projectable(&commands[i]) == 0U)
+            return 0U;
     }
     return 1U;
 }
@@ -283,8 +299,7 @@ uint8_t audio_state_snapshot_control_absorb(
     {
         control_audio_command_t command = commands[input];
         const uint8_t opcode = CONTROL_AUDIO_COMMAND_OPCODE(&command);
-        if (control_audio_command_state_class(&command)
-                != CONTROL_AUDIO_COMMAND_DURABLE_STATE)
+        if (audio_state_snapshot_command_is_projectable(&command) == 0U)
             continue;
         command.effective_sample_time = 0U;
         uint16_t index = 0U;

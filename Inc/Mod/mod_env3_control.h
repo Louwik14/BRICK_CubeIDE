@@ -9,6 +9,7 @@ typedef struct { float attack, decay, sustain, release, retrigger; } mod_env3_co
 
 void mod_env3_control_init(void);
 uint8_t mod_env3_control_reset(uint8_t entity);
+void mod_env3_control_make_default(mod_env3_control_state_t *out);
 uint8_t mod_env3_control_get_param(uint8_t entity, param_id_t id,
                                    float *out_value);
 uint8_t mod_env3_control_set_param(uint8_t entity, param_id_t id, float value);

@@ -212,13 +212,20 @@ void audio_fx_control_state_init(void)
         g_audio_fx_control[entity].config.spatial_mode[1]=1U;}
 }
 
+void audio_fx_control_state_make_default(audio_fx_control_state_t *out)
+{
+    if (out == NULL) return;
+    memset(out, 0, sizeof(*out));
+    out->config.filter_position = AUDIO_FX_FILTER_POS_PRE;
+    out->config.order = AUDIO_FX_ORDER_A_B;
+    out->config.spatial_mode[0] = 1U;
+    out->config.spatial_mode[1] = 1U;
+}
+
 uint8_t audio_fx_control_state_reset(brick_entity_id_t entity)
 {
-    audio_fx_control_state_t state = {0};
-    state.config.filter_position = AUDIO_FX_FILTER_POS_PRE;
-    state.config.order = AUDIO_FX_ORDER_A_B;
-    state.config.spatial_mode[0] = 1U;
-    state.config.spatial_mode[1] = 1U;
+    audio_fx_control_state_t state;
+    audio_fx_control_state_make_default(&state);
     return audio_fx_control_state_restore(entity, &state);
 }
 

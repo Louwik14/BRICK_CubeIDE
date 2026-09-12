@@ -7,6 +7,7 @@
 typedef struct { uint8_t voice_count; float spread; } polyphony_control_state_t;
 
 void polyphony_control_init(void);
+void polyphony_control_make_default(polyphony_control_state_t *out);
 uint8_t polyphony_control_reset(uint8_t track);
 uint8_t polyphony_control_get_voice_count(uint8_t track);
 uint8_t polyphony_control_set_voice_count(uint8_t track, uint8_t voices);

@@ -18,22 +18,20 @@ void vca_control_state_init(void)
 {
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
     {
-        g_vca_control[entity] = (vca_control_state_t){
-            .attack = 0.0f,
-            .decay = 0.0f,
-            .sustain = 127.0f,
-            .release = 0.0f,
-            .filter_mode = 0.0f,
-            .retrigger = 1.0f
-        };
+        vca_control_state_make_default(&g_vca_control[entity]);
     }
+}
+
+void vca_control_state_make_default(vca_control_state_t *out)
+{
+    if (out == NULL) return;
+    *out = (vca_control_state_t){ .sustain = 127.0f, .retrigger = 1.0f };
 }
 
 uint8_t vca_control_state_reset(uint8_t entity)
 {
-    const vca_control_state_t state = {
-        .sustain = 127.0f, .retrigger = 1.0f
-    };
+    vca_control_state_t state;
+    vca_control_state_make_default(&state);
     return vca_control_state_restore(entity, &state);
 }
 

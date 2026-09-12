@@ -11,6 +11,7 @@ typedef struct
 
 void vca_control_state_init(void);
 uint8_t vca_control_state_reset(uint8_t entity);
+void vca_control_state_make_default(vca_control_state_t *out);
 uint8_t vca_control_state_get_param(uint8_t entity, param_id_t id,
                                     float *out_value);
 uint8_t vca_control_state_set_param(uint8_t entity, param_id_t id,
