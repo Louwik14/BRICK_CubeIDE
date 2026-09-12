@@ -134,12 +134,16 @@ void sample_stream_backend_physical_cancel(
 {
     if ((async != 0) && (g_sample_stream_physical_pending == async))
     {
-        sd_block_device_async_cancel();
-        g_sample_stream_physical_pending = 0;
-    }
-    if (async != 0)
-    {
-        memset(async, 0, sizeof(*async));
+        async->cancel_requested = 1U;
+        async->failed = 1U;
+        if (async->active_sector_count == 0U)
+        {
+            async->completed = 1U;
+        }
+        else
+        {
+            (void)sd_block_device_async_abort_active();
+        }
     }
 }
 
@@ -152,6 +156,7 @@ static uint8_t sample_stream_backend_physical_read_peek(
         g_sample_stream_physical_pending;
     sample_stream_physical_span_t span;
     if ((candidate == 0) || (async == 0) || (async->active == 0U)
+            || (async->cancel_requested != 0U)
             || (async->completed != 0U)
             || (sample_stream_backend_physical_next_span(async, &span) == 0U))
     {
@@ -287,5 +292,12 @@ sd_scheduler_provider_t sample_stream_backend_physical_read_provider(void)
 
 uint8_t sample_stream_backend_physical_busy(void)
 {
+    if ((g_sample_stream_physical_pending != 0)
+            && (g_sample_stream_physical_pending->cancel_requested != 0U)
+            && (g_sample_stream_physical_pending->completed != 0U))
+    {
+        g_sample_stream_physical_pending->active = 0U;
+        g_sample_stream_physical_pending = 0;
+    }
     return (g_sample_stream_physical_pending != 0) ? 1U : 0U;
 }

@@ -185,6 +185,17 @@ uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command,
     {
         return 0U;
     }
+    (void)sample_stream_backend_physical_busy();
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_SCRATCH_COUNT; ++i)
+    {
+        if ((g_sample_stream_io_async[i].physical_active != 0U)
+                && (g_sample_stream_io_async[i].physical.cancel_requested != 0U)
+                && (g_sample_stream_io_async[i].physical.completed != 0U))
+        {
+            memset(&g_sample_stream_io_async[i], 0,
+                   sizeof(g_sample_stream_io_async[i]));
+        }
+    }
     for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_SCRATCH_COUNT; ++i)
     {
         if ((g_sample_stream_io_async[i].active != 0U)
@@ -374,6 +385,10 @@ void sample_stream_io_cancel(void)
         {
             sample_stream_backend_physical_cancel(&g_sample_stream_io_async[i].physical);
         }
+        else
+        {
+            memset(&g_sample_stream_io_async[i], 0,
+                   sizeof(g_sample_stream_io_async[i]));
+        }
     }
-    memset(g_sample_stream_io_async, 0, sizeof(g_sample_stream_io_async));
 }

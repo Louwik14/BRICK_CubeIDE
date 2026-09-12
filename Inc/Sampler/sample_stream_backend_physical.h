@@ -22,6 +22,7 @@ typedef struct
     uint8_t active;
     uint8_t failed;
     uint8_t completed;
+    uint8_t cancel_requested;
     uint32_t deadline_margin_us;
     uint32_t deadline_started_ms;
     uint32_t active_lba;
