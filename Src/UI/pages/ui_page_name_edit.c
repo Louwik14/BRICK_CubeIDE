@@ -141,8 +141,7 @@ static uint8_t ui_page_name_edit_name_len(void)
 static void ui_page_name_edit_clamp_pos(void)
 {
     const uint8_t len = ui_page_name_edit_name_len();
-    const uint8_t max_pos = (len < g_name_edit.max_chars)
-        ? len : (uint8_t)(g_name_edit.max_chars - 1U);
+    const uint8_t max_pos = len;
     if (g_name_edit.pos > max_pos)
     {
         g_name_edit.pos = max_pos;
@@ -187,7 +186,7 @@ static uint8_t ui_page_name_edit_glyph_w(void)
 static void ui_page_name_edit_write_current_char(void)
 {
     ui_page_name_edit_clamp_pos();
-    if (g_name_edit.max_chars == 0U)
+    if ((g_name_edit.max_chars == 0U) || (g_name_edit.pos >= g_name_edit.max_chars))
     {
         return;
     }
@@ -230,9 +229,10 @@ static void ui_page_name_edit_random(void)
 
     if (name_contract_normalize(candidate, g_name_edit.name) != NAME_CONTRACT_RESULT_OK)
     {
+        memset(g_name_edit.name, 0, sizeof(g_name_edit.name));
         (void)snprintf(g_name_edit.name, sizeof(g_name_edit.name), "Flux");
     }
-    g_name_edit.pos = 0U;
+    g_name_edit.pos = ui_page_name_edit_name_len();
     ui_page_name_edit_sync_char_to_pos();
     ui_page_name_edit_set_status(0);
 }
@@ -327,6 +327,7 @@ uint8_t ui_page_name_edit_open(uint8_t return_page,
                    (context != 0) ? context : "");
     memcpy(g_name_edit.name, initial_name, sizeof(g_name_edit.name));
     g_name_edit.name[g_name_edit.max_chars] = '\0';
+    g_name_edit.pos = ui_page_name_edit_name_len();
     ui_page_name_edit_clamp_pos();
     ui_page_name_edit_sync_char_to_pos();
     ui_page_set(UI_PAGE_NAME_EDIT);
@@ -369,9 +370,9 @@ uint8_t ui_page_name_edit_handle_encoder(uint8_t encoder, int16_t delta)
         {
             next = 0;
         }
-        if (next >= (int32_t)g_name_edit.max_chars)
+        if (next > (int32_t)g_name_edit.max_chars)
         {
-            next = (int32_t)g_name_edit.max_chars - 1;
+            next = (int32_t)g_name_edit.max_chars;
         }
         g_name_edit.pos = (uint8_t)next;
         ui_page_name_edit_clamp_pos();
@@ -448,17 +449,17 @@ static void ui_page_name_edit_draw_name(void)
     {
         first = (uint8_t)(g_name_edit.pos - (visible / 2U));
     }
-    if ((first + visible) > g_name_edit.max_chars)
+    if ((first + visible) > (uint8_t)(g_name_edit.max_chars + 1U))
     {
-        first = (g_name_edit.max_chars > visible)
-            ? (uint8_t)(g_name_edit.max_chars - visible) : 0U;
+        first = (g_name_edit.max_chars >= visible)
+            ? (uint8_t)(g_name_edit.max_chars + 1U - visible) : 0U;
     }
 
     memset(text, 0, sizeof(text));
     for (uint8_t i = 0U; i < visible; ++i)
     {
         const uint8_t src = (uint8_t)(first + i);
-        if (src >= g_name_edit.max_chars)
+        if (src > g_name_edit.max_chars)
         {
             break;
         }

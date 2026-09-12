@@ -1,5 +1,7 @@
 #include "App/name_contract.h"
 
+#include <string.h>
+
 static const char g_name_contract_alphabet[] =
     " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-";
 
@@ -50,12 +52,15 @@ name_contract_result_t name_contract_normalize(
     const char *input,
     char output[NAME_CONTRACT_BUFFER_BYTES])
 {
-    if ((input == 0) || (output == 0))
+    if (output == 0)
     {
         return NAME_CONTRACT_RESULT_INVALID_ARGUMENT;
     }
-
-    output[0] = '\0';
+    if (input == 0)
+    {
+        memset(output, 0, NAME_CONTRACT_BUFFER_BYTES);
+        return NAME_CONTRACT_RESULT_INVALID_ARGUMENT;
+    }
 
     uint32_t input_length = 0U;
     while (input[input_length] != '\0')
@@ -77,19 +82,23 @@ name_contract_result_t name_contract_normalize(
 
     if (first == last)
     {
+        memset(output, 0, NAME_CONTRACT_BUFFER_BYTES);
         return NAME_CONTRACT_RESULT_EMPTY;
     }
 
     const uint32_t output_length = last - first;
     if (output_length > NAME_CONTRACT_MAX_CHARS)
     {
+        memset(output, 0, NAME_CONTRACT_BUFFER_BYTES);
         return NAME_CONTRACT_RESULT_TOO_LONG;
     }
 
+    memset(output, 0, NAME_CONTRACT_BUFFER_BYTES);
     for (uint32_t i = first; i < last; ++i)
     {
         if (name_contract_is_allowed_char(input[i]) == 0U)
         {
+            memset(output, 0, NAME_CONTRACT_BUFFER_BYTES);
             return NAME_CONTRACT_RESULT_INVALID_CHARACTER;
         }
         output[i - first] = input[i];

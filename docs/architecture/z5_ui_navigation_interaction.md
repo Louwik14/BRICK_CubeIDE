@@ -17,6 +17,10 @@ commande Save: il ouvre le contexte PATCH, dont le Save est porte par PAGE 1.
 L'etat vide d'une liste filtree est rendu dans la zone de contenu sous la forme
 `NO PATCH`; il ne remplace jamais le footer PAGE 1..4, qui reste la navigation
 canonique de PATCH. Les messages transitoires sont rendus au-dessus du footer.
+Ils ont une echeance propre; seuls une operation en cours et la confirmation
+`CLEAR?` constituent un etat persistant. Le Name/Edit commun charge le nom pour
+un Rename, ouvre un Save de nouveau Patch sur un buffer vide et place le curseur
+sur la terminaison, apres le dernier caractere d'un nom charge ou genere.
 Les browsers dynamiques de SETTINGS appliquent le meme contrat de separation
 entre statut et footer.
 
