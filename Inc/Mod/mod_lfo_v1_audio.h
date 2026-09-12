@@ -14,6 +14,8 @@ uint8_t mod_lfo_v1_set_track_param_audio(uint8_t track, uint8_t lfo_index,
                                          mod_lfo_param_t param, float value);
 uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param, float value);
 uint8_t mod_lfo_v1_clear_track_param_temp_audio(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param);
+uint8_t mod_lfo_v1_apply_track_param_matrix(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param, float value);
+uint8_t mod_lfo_v1_clear_track_param_matrix(uint8_t track, uint8_t lfo_index, mod_lfo_param_t param);
 
 void mod_lfo_v1_process_sample_all(void);
 void mod_lfo_v1_process_block(uint32_t frames);

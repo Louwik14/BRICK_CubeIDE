@@ -883,7 +883,7 @@ uint8_t mod_destination_catalog_apply_prepared(
     if ((p == NULL) || (p->opcode == MOD_DEST_APPLY_NONE)) return 0U;
     switch ((mod_destination_apply_opcode_t)p->opcode)
     {
-        case MOD_DEST_APPLY_LFO_RATE: return mod_lfo_v1_apply_track_param_temp(p->target, p->subindex, MOD_LFO_PARAM_RATE, value);
+        case MOD_DEST_APPLY_LFO_RATE: return mod_lfo_v1_apply_track_param_matrix(p->target, p->subindex, MOD_LFO_PARAM_RATE, value);
         case MOD_DEST_APPLY_MIX_LEVEL: mixer_set_track_gain(p->endpoint, mod_destination_clampf(value, 0.0f, 2.0f)); return 1U;
         case MOD_DEST_APPLY_MIX_PAN: mixer_set_track_pan(p->endpoint, mod_destination_clampf(value, -1.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_MIX_SEND: mixer_set_track_send_level(p->endpoint, p->subindex, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
@@ -905,7 +905,7 @@ uint8_t mod_destination_catalog_apply_prepared(
                 brick6_braids_runtime_set_vca_release_seconds(p->subindex, seconds);
             return 1U;
         }
-        case MOD_DEST_APPLY_ENV3: return mod_env3_apply_track_param_temp(
+        case MOD_DEST_APPLY_ENV3: return mod_env3_apply_track_param_matrix(
             p->target, (mod_env3_param_t)p->subindex, value);
         case MOD_DEST_APPLY_SAMPLER_GAIN:
             if (p->aux == (uint8_t)TRACK_RUNTIME_TYPE_MULTI) brick6_sampler_runtime_set_multi_gain(p->target, mod_destination_clampf(value, 0.0f, 2.0f));
@@ -967,6 +967,19 @@ uint8_t mod_destination_catalog_apply_prepared(
         case MOD_DEST_APPLY_GENERIC: return param_audio_apply_track_rt((param_id_t)p->param, p->target, value);
         default: return 0U;
     }
+}
+
+uint8_t mod_destination_catalog_clear_prepared(
+    const mod_destination_prepared_t *p, float effective_base_value)
+{
+    if ((p == NULL) || (p->opcode == MOD_DEST_APPLY_NONE)) return 0U;
+    if (p->opcode == MOD_DEST_APPLY_LFO_RATE)
+        return mod_lfo_v1_clear_track_param_matrix(
+            p->target, p->subindex, MOD_LFO_PARAM_RATE);
+    if (p->opcode == MOD_DEST_APPLY_ENV3)
+        return mod_env3_clear_track_param_matrix(
+            p->target, (mod_env3_param_t)p->subindex);
+    return mod_destination_catalog_apply_prepared(p, effective_base_value);
 }
 
 uint8_t mod_destination_catalog_apply_ramp_prepared(
@@ -1373,11 +1386,4 @@ uint8_t mod_destination_catalog_supported_audio(uint8_t track,
             && (dest != PARAM_MIDI_PROGRAM)
             && !((dest >= PARAM_MIDI_CC1_1) && (dest <= PARAM_MIDI_CC3_4))
             && (ctx != NULL) && (ctx->program_route.active != 0U)) ? 1U : 0U;
-}
-void audio_mod_destination_catalog_reset_runtime(void) {}
-
-void audio_mod_destination_catalog_invalidate_runtime_value(uint8_t track, param_id_t id)
-{
-    (void)track;
-    (void)id;
 }

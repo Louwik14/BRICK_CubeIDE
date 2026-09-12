@@ -314,10 +314,10 @@ void mod_matrix_process_track_ramped(uint8_t track,
             continue;
         }
 
-        const float start = mod_matrix_clampf(dst->base_value + dst->sum,
+        const float start = mod_matrix_clampf(dst->effective_base_value + dst->sum,
                                               dst->min_value,
                                               dst->max_value);
-        const float end = mod_matrix_clampf(dst->base_value + dst->sum_end,
+        const float end = mod_matrix_clampf(dst->effective_base_value + dst->sum_end,
                                             dst->min_value,
                                             dst->max_value);
         const uint8_t discontinuous =
@@ -387,7 +387,7 @@ void mod_matrix_process_poly_voice_ramped(uint8_t track,
             &g_mod_matrix_runtime[track].destinations[runtime_index];
         if (destination->base_valid == 0U)
             continue;
-        const float value = mod_matrix_clampf(destination->base_value + sums[i],
+        const float value = mod_matrix_clampf(destination->effective_base_value + sums[i],
                                               destination->min_value,
                                               destination->max_value);
         (void)mod_destination_catalog_apply_poly_prepared(
@@ -416,7 +416,7 @@ void mod_matrix_reset_poly_voice(uint8_t track,
             continue;
         (void)mod_destination_catalog_apply_poly_prepared(
             &runtime_destination->prepared, voice_slot,
-            runtime_destination->base_value);
+            runtime_destination->effective_base_value);
     }
 }
 
@@ -453,7 +453,6 @@ void audio_mod_matrix_base_update(uint8_t track, param_id_t id, float value)
         return;
     }
 
-    audio_mod_destination_catalog_invalidate_runtime_value(track, id);
     uint8_t owner = 0U;
     if (mod_matrix_audio_resolve_owner(track, &owner) == 0U) return;
     const mod_destination_address_t address = mod_destination_address_make(track, id);
@@ -461,7 +460,35 @@ void audio_mod_matrix_base_update(uint8_t track, param_id_t id, float value)
         mod_matrix_find_runtime_destination(&g_mod_matrix_runtime[owner], address);
     if (dst != NULL)
     {
-        dst->base_value = value;
+        dst->control_base_value = value;
+        dst->effective_base_value = value;
         dst->base_valid = 1U;
     }
+}
+
+
+void audio_mod_matrix_temp_update(uint8_t track, param_id_t id, float value)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (id >= PARAM_COUNT)) return;
+    uint8_t owner = 0U;
+    if (mod_matrix_audio_resolve_owner(track, &owner) == 0U) return;
+    mod_matrix_runtime_destination_t *const dst =
+        mod_matrix_find_runtime_destination(&g_mod_matrix_runtime[owner],
+            mod_destination_address_make(track, id));
+    if (dst == NULL) return;
+    dst->effective_base_value = value;
+    dst->base_valid = 1U;
+}
+
+
+void audio_mod_matrix_temp_clear(uint8_t track, param_id_t id)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (id >= PARAM_COUNT)) return;
+    uint8_t owner = 0U;
+    if (mod_matrix_audio_resolve_owner(track, &owner) == 0U) return;
+    mod_matrix_runtime_destination_t *const dst =
+        mod_matrix_find_runtime_destination(&g_mod_matrix_runtime[owner],
+            mod_destination_address_make(track, id));
+    if (dst == NULL) return;
+    dst->effective_base_value = dst->control_base_value;
 }

@@ -30,9 +30,11 @@ typedef struct
 {
     env_adsr_t env;
     uint8_t held_notes;
-    uint8_t temp_valid;
+    uint8_t temp_valid_mask;
+    uint8_t matrix_valid_mask;
     mod_env3_values_t applied;
     mod_env3_values_t temp;
+    mod_env3_values_t matrix;
 } mod_env3_runtime_track_t;
 
 static mod_env3_runtime_track_t g_mod_env3_runtime[SEQ_TRACK_COUNT];
@@ -108,18 +110,33 @@ static void mod_env3_apply_settings(uint8_t track)
     }
 
     mod_env3_runtime_track_t *const rt = &g_mod_env3_runtime[track];
-    const mod_env3_values_t *const s = (rt->temp_valid != 0U)
-        ? &rt->temp : &g_mod_env3_audio_config[track];
-    if (memcmp(&rt->applied, s, sizeof(rt->applied)) == 0)
+    mod_env3_values_t effective = g_mod_env3_audio_config[track];
+    if ((rt->temp_valid_mask & (1U << MOD_ENV3_PARAM_ATTACK)) != 0U)
+        effective.attack = rt->temp.attack;
+    if ((rt->temp_valid_mask & (1U << MOD_ENV3_PARAM_DECAY)) != 0U)
+        effective.decay = rt->temp.decay;
+    if ((rt->temp_valid_mask & (1U << MOD_ENV3_PARAM_SUSTAIN)) != 0U)
+        effective.sustain = rt->temp.sustain;
+    if ((rt->temp_valid_mask & (1U << MOD_ENV3_PARAM_RELEASE)) != 0U)
+        effective.release = rt->temp.release;
+    if ((rt->matrix_valid_mask & (1U << MOD_ENV3_PARAM_ATTACK)) != 0U)
+        effective.attack = rt->matrix.attack;
+    if ((rt->matrix_valid_mask & (1U << MOD_ENV3_PARAM_DECAY)) != 0U)
+        effective.decay = rt->matrix.decay;
+    if ((rt->matrix_valid_mask & (1U << MOD_ENV3_PARAM_SUSTAIN)) != 0U)
+        effective.sustain = rt->matrix.sustain;
+    if ((rt->matrix_valid_mask & (1U << MOD_ENV3_PARAM_RELEASE)) != 0U)
+        effective.release = rt->matrix.release;
+    if (memcmp(&rt->applied, &effective, sizeof(rt->applied)) == 0)
     {
         return;
     }
 
-    env_adsr_set_attack(&rt->env, mod_env3_seconds_to_u16(param_filter_audio_attack_s(s->attack)));
-    env_adsr_set_decay(&rt->env, mod_env3_seconds_to_u16(param_filter_audio_decay_s(s->decay)));
-    env_adsr_set_sustain(&rt->env, mod_env3_sustain_to_u15(s->sustain));
-    env_adsr_set_release(&rt->env, mod_env3_seconds_to_u16(param_filter_audio_release_s(s->release)));
-    rt->applied = *s;
+    env_adsr_set_attack(&rt->env, mod_env3_seconds_to_u16(param_filter_audio_attack_s(effective.attack)));
+    env_adsr_set_decay(&rt->env, mod_env3_seconds_to_u16(param_filter_audio_decay_s(effective.decay)));
+    env_adsr_set_sustain(&rt->env, mod_env3_sustain_to_u15(effective.sustain));
+    env_adsr_set_release(&rt->env, mod_env3_seconds_to_u16(param_filter_audio_release_s(effective.release)));
+    rt->applied = effective;
 }
 
 static void mod_env3_audio_invalidate_applied(uint8_t track)
@@ -176,6 +193,8 @@ uint8_t mod_env3_audio_apply_track_param(uint8_t track, mod_env3_param_t param, 
     uint8_t owner = 0U;
     if (mod_env3_audio_resolve_owner(track, &owner) == 0U) return 0U;
     if (mod_env3_write_param(&g_mod_env3_audio_config[owner], param, value) == 0U) return 0U;
+    g_mod_env3_runtime[owner].temp_valid_mask &=
+        (uint8_t)~(1U << (uint8_t)param);
     mod_env3_apply_settings(owner);
     return 1U;
 }
@@ -195,15 +214,9 @@ uint8_t mod_env3_apply_track_param_temp(uint8_t track, mod_env3_param_t param, f
     if (mod_env3_audio_resolve_owner(track, &owner) == 0U) return 0U;
     track = owner;
     mod_env3_runtime_track_t *const rt = &g_mod_env3_runtime[track];
-    if (rt->temp_valid == 0U)
+    if (rt->temp_valid_mask == 0U)
     {
-        const mod_env3_values_t *const base = &g_mod_env3_audio_config[track];
-        if (base == NULL)
-        {
-            return 0U;
-        }
-        rt->temp = *base;
-        rt->temp_valid = 1U;
+        rt->temp = g_mod_env3_audio_config[track];
     }
 
     if (mod_env3_write_param(&rt->temp, param, value) == 0U)
@@ -211,6 +224,7 @@ uint8_t mod_env3_apply_track_param_temp(uint8_t track, mod_env3_param_t param, f
         return 0U;
     }
 
+    rt->temp_valid_mask |= (uint8_t)(1U << (uint8_t)param);
     mod_env3_apply_settings(track);
     return 1U;
 }
@@ -218,8 +232,7 @@ uint8_t mod_env3_apply_track_param_temp(uint8_t track, mod_env3_param_t param, f
 uint8_t mod_env3_clear_track_param_temp_audio(uint8_t track, mod_env3_param_t param)
 {
     if (g_mod_env3_audio_initialized == 0U) mod_env3_audio_init();
-    (void)param;
-    if (track >= SEQ_TRACK_COUNT)
+    if ((track >= SEQ_TRACK_COUNT) || (param >= MOD_ENV3_PARAM_COUNT))
     {
         return 0U;
     }
@@ -227,8 +240,37 @@ uint8_t mod_env3_clear_track_param_temp_audio(uint8_t track, mod_env3_param_t pa
     uint8_t owner = 0U;
     if (mod_env3_audio_resolve_owner(track, &owner) == 0U) return 0U;
     track = owner;
-    g_mod_env3_runtime[track].temp_valid = 0U;
+    g_mod_env3_runtime[track].temp_valid_mask &=
+        (uint8_t)~(1U << (uint8_t)param);
     mod_env3_apply_settings(track);
+    return 1U;
+}
+
+uint8_t mod_env3_apply_track_param_matrix(uint8_t track,
+                                           mod_env3_param_t param,
+                                           float value)
+{
+    if (g_mod_env3_audio_initialized == 0U) mod_env3_audio_init();
+    if ((track >= SEQ_TRACK_COUNT) || (param >= MOD_ENV3_PARAM_COUNT)) return 0U;
+    uint8_t owner = 0U;
+    if (mod_env3_audio_resolve_owner(track, &owner) == 0U) return 0U;
+    mod_env3_runtime_track_t *const rt = &g_mod_env3_runtime[owner];
+    if (mod_env3_write_param(&rt->matrix, param, value) == 0U) return 0U;
+    rt->matrix_valid_mask |= (uint8_t)(1U << (uint8_t)param);
+    mod_env3_apply_settings(owner);
+    return 1U;
+}
+
+uint8_t mod_env3_clear_track_param_matrix(uint8_t track,
+                                           mod_env3_param_t param)
+{
+    if (g_mod_env3_audio_initialized == 0U) mod_env3_audio_init();
+    if ((track >= SEQ_TRACK_COUNT) || (param >= MOD_ENV3_PARAM_COUNT)) return 0U;
+    uint8_t owner = 0U;
+    if (mod_env3_audio_resolve_owner(track, &owner) == 0U) return 0U;
+    g_mod_env3_runtime[owner].matrix_valid_mask &=
+        (uint8_t)~(1U << (uint8_t)param);
+    mod_env3_apply_settings(owner);
     return 1U;
 }
 

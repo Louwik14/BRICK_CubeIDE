@@ -27,7 +27,6 @@ void audio_mod_matrix_init(void)
             g_mod_matrix_runtime[track].destinations[i].max_value = 127.0f;
         }
     }
-    audio_mod_destination_catalog_reset_runtime();
 }
 
 static uint16_t mod_matrix_required_mask_expand(uint8_t track,

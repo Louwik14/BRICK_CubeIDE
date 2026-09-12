@@ -71,6 +71,7 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
         const uint8_t applied = param_audio_clear_track_temp(
             (param_id_t)parameter_id, entity);
         if (applied == 0U) return 0U;
+        audio_mod_matrix_temp_clear(entity, (param_id_t)parameter_id);
         if (live_parameter_audio_runtime_changes_matrix_context(
                 (param_id_t)parameter_id) != 0U)
             audio_mod_matrix_rebuild_track(entity);
@@ -190,6 +191,9 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
     {
         applied = param_audio_apply_track_temp(
             (param_id_t)parameter_id, entity, value);
+        if (applied != 0U)
+            audio_mod_matrix_temp_update(
+                entity, (param_id_t)parameter_id, value);
         if ((applied != 0U)
                 && (live_parameter_audio_runtime_changes_matrix_context(
                     (param_id_t)parameter_id) != 0U))

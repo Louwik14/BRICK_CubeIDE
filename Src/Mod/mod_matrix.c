@@ -49,7 +49,8 @@ typedef struct
     uint8_t base_valid;
     uint8_t modulation_active;
     uint16_t destination;
-    float base_value;
+    float control_base_value;
+    float effective_base_value;
     float sum;
     float sum_end;
     float min_value;

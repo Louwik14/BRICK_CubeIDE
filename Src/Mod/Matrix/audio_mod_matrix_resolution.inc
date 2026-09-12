@@ -183,8 +183,8 @@ static void mod_matrix_deactivate_destination(mod_matrix_runtime_destination_t *
     }
 
     if (dst->base_valid != 0U)
-        (void)mod_destination_catalog_apply_prepared(&dst->prepared,
-                                                     dst->base_value);
+        (void)mod_destination_catalog_clear_prepared(&dst->prepared,
+                                                     dst->effective_base_value);
 
     dst->modulation_active = 0U;
     dst->sum = 0.0f;
@@ -204,7 +204,8 @@ static void mod_matrix_release_destination(mod_matrix_runtime_destination_t *dst
     dst->valid = 0U;
     dst->base_valid = 0U;
     dst->destination = MOD_DESTINATION_NONE;
-    dst->base_value = 0.0f;
+    dst->control_base_value = 0.0f;
+    dst->effective_base_value = 0.0f;
     dst->min_value = 0.0f;
     dst->max_value = 127.0f;
     dst->prepared = (mod_destination_prepared_t){0};
@@ -286,7 +287,8 @@ static uint8_t mod_matrix_runtime_destination_prepare(uint8_t track,
         dst->base_valid = 0U;
         dst->modulation_active = 0U;
         dst->destination = destination;
-        dst->base_value = 0.0f;
+        dst->control_base_value = 0.0f;
+        dst->effective_base_value = 0.0f;
         dst->sum = 0.0f;
         dst->sum_end = 0.0f;
         dst->min_value = min_value;
@@ -308,8 +310,8 @@ static void mod_matrix_restore_destination_value(
         return;
     }
 
-    (void)mod_destination_catalog_apply_prepared(&dst->prepared,
-                                                 dst->base_value);
+    (void)mod_destination_catalog_clear_prepared(&dst->prepared,
+                                                 dst->effective_base_value);
 }
 
 static void mod_matrix_rebuild_track_plan(uint8_t track,

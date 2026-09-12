@@ -18,5 +18,7 @@ uint8_t audio_mod_matrix_set_slew_amount(uint8_t track, uint8_t op, float amount
 void audio_mod_matrix_rebuild_track(uint8_t track);
 void audio_mod_matrix_finalize_dirty(void);
 void audio_mod_matrix_base_update(uint8_t track, param_id_t id, float value);
+void audio_mod_matrix_temp_update(uint8_t track, param_id_t id, float value);
+void audio_mod_matrix_temp_clear(uint8_t track, param_id_t id);
 
 #endif /* AUDIO_MOD_MATRIX_H */

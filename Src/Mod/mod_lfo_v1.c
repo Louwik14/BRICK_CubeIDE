@@ -92,6 +92,8 @@ typedef struct
     uint8_t ramp_discontinuous;
     uint8_t temp_valid_mask;
     track_mod_lfo_state_t temp;
+    uint8_t matrix_valid_mask;
+    track_mod_lfo_state_t matrix;
 } mod_lfo_runtime_state_t;
 
 static mod_lfo_runtime_state_t g_mod_lfo_runtime[SEQ_TRACK_COUNT][MOD_LFO_COUNT_PER_TRACK];
@@ -239,7 +241,9 @@ static float mod_lfo_effective_field(const mod_lfo_runtime_state_t *rt,
 {
     const uint8_t mask = mod_lfo_runtime_param_mask(param);
     const track_mod_lfo_state_t *const source =
-        ((rt != NULL) && ((rt->temp_valid_mask & mask) != 0U)) ? &rt->temp : s;
+        ((rt != NULL) && ((rt->matrix_valid_mask & mask) != 0U)) ? &rt->matrix
+        : ((rt != NULL) && ((rt->temp_valid_mask & mask) != 0U)) ? &rt->temp
+        : s;
 
     if (source == NULL)
     {
@@ -383,6 +387,31 @@ static uint32_t mod_lfo_phase_from_degrees(float degrees)
         return 0U;
     }
     return (uint32_t)(((double)degrees / 360.0) * 4294967296.0);
+}
+
+static void mod_lfo_apply_phase_offset_change(uint8_t track,
+                                               uint8_t lfo_index,
+                                               float old_phase,
+                                               float new_phase)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (lfo_index >= MOD_LFO_COUNT_PER_TRACK)
+            || (old_phase == new_phase)) return;
+    const track_mod_lfo_state_t *const config =
+        &g_mod_lfo_audio_config[track][lfo_index];
+    const mod_lfo_runtime_state_t *const shared =
+        &g_mod_lfo_runtime[track][lfo_index];
+    const mod_lfo_shape_t shape = (mod_lfo_shape_t)(uint8_t)(
+        mod_lfo_effective_field(shared, config, MOD_LFO_PARAM_SHAPE) + 0.5f);
+    if (shape == MOD_LFO_SHAPE_RANDOM_SH) return;
+    const uint32_t delta = mod_lfo_phase_from_degrees(new_phase)
+        - mod_lfo_phase_from_degrees(old_phase);
+    g_mod_lfo_runtime[track][lfo_index].phase += delta;
+    for (uint8_t voice = 0U; voice < MOD_LFO_POLY_SLOT_COUNT; ++voice)
+    {
+        if ((g_mod_lfo_poly_owner[voice] == track)
+                && (g_mod_lfo_poly_runtime[voice][lfo_index].active != 0U))
+            g_mod_lfo_poly_runtime[voice][lfo_index].phase += delta;
+    }
 }
 
 static void mod_lfo_start_phase(mod_lfo_runtime_state_t *rt, mod_lfo_shape_t shape, float phase)
@@ -838,6 +867,8 @@ uint8_t mod_lfo_v1_set_track_param_audio(uint8_t track, uint8_t lfo_index,
     mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo_index];
     const mod_lfo_trig_mode_t old_trig = (mod_lfo_trig_mode_t)(uint8_t)(
         mod_lfo_effective_field(rt, config, MOD_LFO_PARAM_TRIG) + 0.5f);
+    const float old_phase = mod_lfo_effective_field(
+        rt, config, MOD_LFO_PARAM_PHASE);
     uint8_t reset = MOD_LFO_SNAPSHOT_RESET_SHAPE;
     /* A durable live edit becomes the effective value immediately.  Keeping
      * the old per-field TEMP bit here makes mod_lfo_effective_field() ignore
@@ -896,6 +927,9 @@ uint8_t mod_lfo_v1_set_track_param_audio(uint8_t track, uint8_t lfo_index,
         if (old_trig != new_trig)
             mod_lfo_poly_mode_changed(track, lfo_index, old_trig, new_trig);
     }
+    if (param == MOD_LFO_PARAM_PHASE)
+        mod_lfo_apply_phase_offset_change(
+            track, lfo_index, old_phase, config->phase);
     return 1U;
 }
 
@@ -916,6 +950,8 @@ uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_
         return 0U;
     }
 
+    const float old_phase = mod_lfo_effective_field(
+        rt, s, MOD_LFO_PARAM_PHASE);
     if (rt->temp_valid_mask == 0U)
     {
         rt->temp = *s;
@@ -975,6 +1011,9 @@ uint8_t mod_lfo_v1_apply_track_param_temp(uint8_t track, uint8_t lfo_index, mod_
     }
 
     rt->temp_valid_mask |= mod_lfo_runtime_param_mask(param);
+    if (param == MOD_LFO_PARAM_PHASE)
+        mod_lfo_apply_phase_offset_change(
+            track, lfo_index, old_phase, rt->temp.phase);
     return 1U;
 }
 
@@ -994,6 +1033,10 @@ uint8_t mod_lfo_v1_clear_track_param_temp_audio(uint8_t track,
     }
     track = owner;
     mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[track][lfo_index];
+    const track_mod_lfo_state_t *const config =
+        mod_lfo_audio_settings_const(track, lfo_index);
+    const float old_phase = mod_lfo_effective_field(
+        rt, config, MOD_LFO_PARAM_PHASE);
     rt->temp_valid_mask = (uint8_t)(
         rt->temp_valid_mask & (uint8_t)~mod_lfo_runtime_param_mask(param));
     if (param == MOD_LFO_PARAM_TRIG)
@@ -1008,6 +1051,45 @@ uint8_t mod_lfo_v1_clear_track_param_temp_audio(uint8_t track,
             track, lfo_index,
             (uint8_t)(((uint8_t)config->trig) >= MOD_LFO_TRIG_POLY_TRIG));
     }
+    if (param == MOD_LFO_PARAM_PHASE)
+        mod_lfo_apply_phase_offset_change(
+            track, lfo_index, old_phase,
+            mod_lfo_effective_field(rt, config, MOD_LFO_PARAM_PHASE));
+    return 1U;
+}
+
+uint8_t mod_lfo_v1_apply_track_param_matrix(uint8_t track,
+                                             uint8_t lfo_index,
+                                             mod_lfo_param_t param,
+                                             float value)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (lfo_index >= MOD_LFO_COUNT_PER_TRACK)
+            || ((uint8_t)param >= (uint8_t)MOD_LFO_PARAM_COUNT)
+            || !isfinite(value)) return 0U;
+    uint8_t owner = 0U;
+    if (mod_lfo_audio_resolve_owner(track, &owner) == 0U) return 0U;
+    mod_lfo_runtime_state_t *const rt = &g_mod_lfo_runtime[owner][lfo_index];
+    const track_mod_lfo_state_t *const config =
+        &g_mod_lfo_audio_config[owner][lfo_index];
+    if (rt->matrix_valid_mask == 0U) rt->matrix = *config;
+    if (param != MOD_LFO_PARAM_RATE) return 0U;
+    if ((value < -LFO_FREE_MAX_HZ)
+            || (value > (float)MOD_LFO_SYNC_RATE_COUNT)) return 0U;
+    rt->matrix.rate = value;
+    rt->matrix_valid_mask |= mod_lfo_runtime_param_mask(param);
+    return 1U;
+}
+
+uint8_t mod_lfo_v1_clear_track_param_matrix(uint8_t track,
+                                             uint8_t lfo_index,
+                                             mod_lfo_param_t param)
+{
+    if ((track >= SEQ_TRACK_COUNT) || (lfo_index >= MOD_LFO_COUNT_PER_TRACK)
+            || ((uint8_t)param >= (uint8_t)MOD_LFO_PARAM_COUNT)) return 0U;
+    uint8_t owner = 0U;
+    if (mod_lfo_audio_resolve_owner(track, &owner) == 0U) return 0U;
+    g_mod_lfo_runtime[owner][lfo_index].matrix_valid_mask &=
+        (uint8_t)~mod_lfo_runtime_param_mask(param);
     return 1U;
 }
 

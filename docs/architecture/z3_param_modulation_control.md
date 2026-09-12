@@ -42,12 +42,10 @@ d'interaction et lit l'autorite a la demande.
 
 Un p-lock AUDIO est resolu par CONTROL en valeur finale puis transporte comme PARAM `TEMP` date. La restauration relit toujours la base canonique CONTROL courante, puis emet `BASE` pour Tone/Filter/FX, ou `CLEAR_TEMP` pour LFO/ENV3 afin de retirer leur override explicite; une edition de base intervenue pendant le lock n'est donc jamais remplacee par une ancienne capture Seq. Le timestamp reste independant de cette semantique. La FIFO unique est dimensionnee pour les 1024 ecritures d'une boundary maximale plus l'horizon NOTE et les commandes de controle. Les p-locks MIDI FX restent integralement CONTROL: leur override canonique est applique au runtime Note FX avant la NOTE de la meme boundary. AUDIO ne connait ni la provenance, ni la notion de p-lock. NOTE, VELOCITY, LENGTH et MICROTIMING sont des champs PLAY structurels et non des p-locks generiques.
 
-LFO conserve sa validite temporaire par champ. Une commande LFO `BASE` retire
-l'override du seul champ concerne: la nouvelle base devient donc audible sans
-attendre un changement de route ou une restauration de p-lock. Les autres
-champs LFO restent intacts. ENV3 conserve volontairement sa validite temporaire
-globale actuelle; `CLEAR_TEMP` d'un champ retire donc l'override ENV3 complet et
-une commande ENV3 `BASE` ne retire pas implicitement son override actif.
+LFO et ENV3 conservent leur validite temporaire par champ. Une commande `BASE`
+retire l'override du seul champ concerne: la nouvelle base devient donc audible
+sans attendre un changement de route ou une restauration de p-lock. Les autres
+champs temporaires restent intacts.
 
 ## Modulation
 
@@ -90,6 +88,10 @@ projection de base recue avec `DEST`; le retour a une profondeur non nulle est
 donc une simple recompilation reversible. La meme regle vaut pour disable/enable
 et source NONE/source valide. Un changement TEMP ou CLEAR_TEMP de TRIG marque
 egalement la Matrix dirty, car le passage mono/poly change le plan par voix.
+Les overrides de modulation Matrix sont distincts des overrides TEMP du
+sequenceur. Pour une destination deja modulee, TEMP remplace temporairement la
+base de calcul et CLEAR_TEMP restaure la base CONTROL; retirer la route revele
+donc TEMP ou BASE sans laisser de valid mask appartenant a la Matrix.
 
 Les selections Sample et Wavetable appartiennent a `project_control` sous forme
 de references asset typees stables; leur resolution en slot runtime n'a lieu
@@ -114,6 +116,8 @@ octets avant alignement linker (343111 avant, 11398 apres, runtime derive
 compris).
 
 Les LFO produisent des segments `{start, step, frames}`. Les formes continues sont interpolees; wraps et transitions discretes creent des frontieres. Un changement de mode poly invalide la source de la voix jusqu'au prochain trigger sans redemarrer la voix.
+Un changement live de PHASE translate la phase courante mono et celle des voix
+poly actives; pour Random S&H, ce champ reste le controle de slew.
 
 ## Parametres AUDIO dates
 
