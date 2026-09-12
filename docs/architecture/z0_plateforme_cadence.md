@@ -2,7 +2,7 @@
 
 ## Execution
 
-L'audio travaille par demi-buffer de 64 frames a 48 kHz. L'IRQ SAI possede sa timeline audio locale et n'execute ni FatFs, ni scan de cache, ni travail Storage non borne. CONTROL se cadence seul: TIM12 porte le tick musical interne, TIM5, demarre avant les domaines, porte le temps physique commun et sa conversion nominale en samples. AUDIO publie aussi dans le contrat FIFO le dernier sample effectivement termine, qui borne le prochain horizon CONTROL a un seul demi-buffer et bloque l'empilement pendant un retard AUDIO. La superloop publie l'horizon musical glissant; aucun reveil AUDIO, compteur de frames periodique ou PendSV sequenceur ne traverse la frontiere. Scheduler, lifecycle et Note FX contribuent d'abord a une fenetre CONTROL fixe; ses 64 buckets sample/kind finalisent ensuite la FIFO en ordre chronologique, avec STOP avant START a timestamp egal.
+L'audio travaille par demi-buffer de 64 frames a 48 kHz et n'execute ni FatFs, ni scan de cache, ni travail Storage non borne. TIM5 a 1 MHz, demarre avant les domaines, est l'unique media clock BRICK; `brick_media_clock` possede son extension 32 vers 64 bits et l'unique conversion rationnelle en samples. CONTROL et AUDIO lisent cette meme timeline. L'IRQ SAI conserve seulement un curseur de rendu intra-bloc cale sur la phase DMA; un callback manque cree un xrun et repositionne ce curseur sans retard temporel permanent. TIM12 reste le tick musical interne. La superloop publie l'horizon musical glissant; aucun reveil AUDIO, compteur de frames periodique ou PendSV sequenceur ne traverse la frontiere. Scheduler, lifecycle et Note FX contribuent d'abord a une fenetre CONTROL fixe; ses 64 buckets sample/kind finalisent ensuite la FIFO en ordre chronologique, avec STOP avant START a timestamp egal.
 
 USB OTG FS est possede exclusivement par TinyUSB en mode bare-metal
 (`OPT_OS_NONE`). Sur H743, l'IRQ OTG FS de priorite 6 fait recevoir le paquet
@@ -31,7 +31,7 @@ et erreur. Un detach arrete le role puis relance le DRP. Les retries I2C et la
 ligne `INT_N` persistante sont bornes a 100 ms; une reconciliation watchdog a
 5 s couvre uniquement une EXTI perdue ou un reset silencieux du FUSB.
 
-Le Hall Low-Cost execute la machine bornee depuis l'acquisition ADC. TIM5 est le compteur libre commun de capture. CONTROL en possede l'extension et la conversion; AUDIO initialise sa sample clock locale depuis TIM5 au premier callback valide et ne publie aucune ancre.
+Le Hall Low-Cost execute la machine bornee depuis l'acquisition ADC. TIM5 est le compteur libre commun de capture et de media time. La plateforme possede son extension et sa conversion; aucune sample clock locale AUDIO n'est publiee vers CONTROL.
 
 ## Frontiere CONTROL/AUDIO
 
@@ -66,7 +66,7 @@ AUDIO -> CONTROL : niveau REC, waveforms audio/synth et diagnostic Audio; plus l
 Storage <-> AUDIO : registration, token, completion de page et payloads bornes
 ```
 
-Preview est un ring PCM SPSC M4->M7: CONTROL possede payload/`write_count`, AUDIO `read_count` et le gain/active local applique par PARAM. Recorder est le ring inverse: AUDIO possede payload/`head_cursor`/fermeture/fault, CONTROL uniquement `tail_cursor`, writer et erreurs SD. Le Looper AUDIO date son DSP avec sa timeline locale. Le transport et le REC bus sont des runtimes AUDIO locaux alimentes par TRANSPORT/PARAM; aucun snapshot parallele n'en revient. FILTER POS affiche la valeur CONTROL canonique; aucune valeur DSP n'est une autorite UI.
+Preview est un ring PCM SPSC M4->M7: CONTROL possede payload/`write_count`, AUDIO `read_count` et le gain/active local applique par PARAM. Recorder est le ring inverse: AUDIO possede payload/`head_cursor`/fermeture/fault, CONTROL uniquement `tail_cursor`, writer et erreurs SD. Le Looper AUDIO date son DSP avec la media clock TIM5 canonique. Le transport et le REC bus sont des runtimes AUDIO locaux alimentes par TRANSPORT/PARAM; aucun snapshot parallele n'en revient. FILTER POS affiche la valeur CONTROL canonique; aucune valeur DSP n'est une autorite UI.
 
 Au boot, `track_state` est initialise avant la projection finale `track_runtime`; le bridge Hall/keyboard et son focus sont ensuite initialises et synchronises depuis cette autorite canonique. PLAY/PAUSE ou une reconfiguration moteur ne font pas partie du protocole d'activation Hall.
 

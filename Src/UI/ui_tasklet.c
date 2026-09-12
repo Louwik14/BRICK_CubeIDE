@@ -20,7 +20,7 @@
  */
 
 #include "ui_tasklet.h"
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "Track/track_runtime.h"
 
 #include <stdbool.h>

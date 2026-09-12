@@ -143,7 +143,7 @@ static uint8_t param_registry_submit_audio_value(param_id_t id,
         .value = live_parameter_event_encode_float(value)
     };
     return live_parameter_audio_publication_submit(
-        live_clock_capture_tick(), &target) ? 1U : 0U;
+        brick_media_clock_now_tick(), &target) ? 1U : 0U;
 }
 
 uint8_t param_registry_publish_track_base_audio(param_id_t id,

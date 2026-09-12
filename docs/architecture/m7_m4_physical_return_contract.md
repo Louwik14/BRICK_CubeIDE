@@ -27,7 +27,7 @@ faits physiques.
 M4 avance de facon autonome. TIM12 porte le tick du tempo interne; TIM5,
 demarre avant les domaines et derive du meme HSE que SAI, est la reference
 absolue commune. CONTROL possede son extension et sa conversion; M7 initialise
-sa sample clock locale depuis TIM5 au premier callback valide. Les callbacks SAI ne reveillent aucun code CONTROL. PendSV reste reserve
+son curseur de rendu intra-bloc depuis la phase DMA placee dans la media clock TIM5 canonique. Les callbacks SAI ne reveillent aucun code CONTROL. PendSV reste reserve
 au transport USB MIDI local et ne sert plus le sequenceur.
 
 Le nominal ne lit aucun etat boot AUDIO et aucun transport Clock M7->M4

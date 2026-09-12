@@ -42,6 +42,7 @@
 #include "Audio/brick6_looper_runtime.h"
 #include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
 #include "Audio/Engines/wavetable_engine.h"
+#include "Platform/brick_media_clock.h"
 
 #include <string.h>
 #include <stdint.h>
@@ -89,29 +90,80 @@ static AUDIO_DMA_BUFFER_NONCACHEABLE int32_t tx_buffer[AUDIO_BUFFER_WORDS];
    ============================================================ */
 
 static volatile audio_init_state_t g_audio_init_state = AUDIO_INIT_NOT_STARTED;
-static uint64_t g_audio_sample_clock;
-static uint8_t g_audio_sample_clock_valid;
+static uint64_t g_audio_render_cursor;
+static uint64_t g_audio_phase_boundary_sample;
+static uint64_t g_audio_last_block_start;
+static uint64_t g_audio_lost_frames;
+static uint32_t g_audio_xrun_count;
+static uint32_t g_audio_stale_callback_count;
+static uint8_t g_audio_phase_half;
+static uint8_t g_audio_phase_valid;
+static uint8_t g_audio_last_block_valid;
 
-static uint64_t audio_tim5_to_sample_clock(uint32_t tick)
+/* Allow ordinary IRQ-entry jitter without moving the 64-frame DMA lattice. */
+#define AUDIO_DMA_PHASE_TOLERANCE_FRAMES (AUDIO_FRAMES_PER_HALF / 2U)
+
+static uint8_t audio_resolve_block_start(uint8_t half_index,
+                                         uint64_t *out_block_start,
+                                         uint8_t *out_recovering)
 {
-    uint32_t tim_kernel_hz = HAL_RCC_GetPCLK1Freq();
-    if ((RCC->D2CFGR & RCC_D2CFGR_D2PPRE1) != RCC_APB1_DIV1)
+    uint64_t media_now;
+    if ((out_block_start == NULL) || (out_recovering == NULL)
+            || !brick_media_clock_now_sample(&media_now))
     {
-        tim_kernel_hz *= 2U;
+        return 0U;
     }
-    const uint32_t tim5_hz = tim_kernel_hz / ((uint32_t)TIM5->PSC + 1U);
-    if (tim5_hz == 0U) return 0U;
-    return (((uint64_t)tick * BOARD_AUDIO_SAMPLE_RATE_HZ)
-            + (tim5_hz / 2U)) / tim5_hz;
-}
 
-static void audio_sample_clock_init_on_first_callback(void)
-{
-    if (g_audio_sample_clock_valid != 0U) return;
-    const uint64_t callback_sample = audio_tim5_to_sample_clock(TIM5->CNT);
-    g_audio_sample_clock = (callback_sample >= AUDIO_FRAMES_PER_HALF)
-        ? callback_sample - AUDIO_FRAMES_PER_HALF : 0U;
-    g_audio_sample_clock_valid = 1U;
+    if (g_audio_phase_valid == 0U)
+    {
+        /* The first IRQ establishes only the DMA phase on the canonical TIM5
+         * timeline.  It does not create or start another clock. */
+        g_audio_phase_boundary_sample = media_now;
+        g_audio_phase_half = half_index;
+        g_audio_phase_valid = 1U;
+    }
+
+    const uint64_t phase_offset = (half_index == g_audio_phase_half)
+        ? 0U : AUDIO_FRAMES_PER_HALF;
+    const uint64_t phase_boundary = g_audio_phase_boundary_sample + phase_offset;
+    const uint64_t phase_period = 2U * AUDIO_FRAMES_PER_HALF;
+    const uint64_t limit = (media_now <= UINT64_MAX
+            - AUDIO_DMA_PHASE_TOLERANCE_FRAMES)
+        ? media_now + AUDIO_DMA_PHASE_TOLERANCE_FRAMES : UINT64_MAX;
+    uint64_t boundary = phase_boundary;
+    if (limit >= phase_boundary)
+    {
+        boundary += ((limit - phase_boundary) / phase_period) * phase_period;
+    }
+
+    const uint64_t block_start = (boundary >= AUDIO_FRAMES_PER_HALF)
+        ? boundary - AUDIO_FRAMES_PER_HALF : 0U;
+    if ((g_audio_last_block_valid != 0U)
+            && (block_start <= g_audio_last_block_start))
+    {
+        /* HAL can expose both sticky DMA flags after a long halt.  Never
+         * render an old half after a newer canonical boundary was recovered. */
+        ++g_audio_stale_callback_count;
+        return 0U;
+    }
+
+    *out_recovering = 0U;
+    if (g_audio_last_block_valid != 0U)
+    {
+        const uint64_t expected =
+            g_audio_last_block_start + AUDIO_FRAMES_PER_HALF;
+        if (block_start > expected)
+        {
+            ++g_audio_xrun_count;
+            g_audio_lost_frames += block_start - expected;
+            *out_recovering = 1U;
+        }
+    }
+
+    g_audio_last_block_start = block_start;
+    g_audio_last_block_valid = 1U;
+    *out_block_start = block_start;
+    return 1U;
 }
 /* ============================================================
    INTERNAL PROCESSING
@@ -170,24 +222,28 @@ static ITCM_TEXT void audio_process_event_segment(int32_t *rx,
                           block_start_sample,
                           block_frames);
 }
-static ITCM_TEXT void audio_process_half_common_hot(int32_t *rx, int32_t *tx)
+static ITCM_TEXT void audio_process_half_common_hot(int32_t *rx, int32_t *tx,
+                                                    uint64_t block_start_sample,
+                                                    uint8_t recovering)
 {
     const uint32_t command_head_limit =
         control_audio_fifo_audio_head_snapshot();
     uint32_t half_cursor = 0U;
+    g_audio_render_cursor = block_start_sample;
     while (half_cursor < AUDIO_FRAMES_PER_HALF)
     {
-        (void)audio_command_executor_apply_due(g_audio_sample_clock,
-                                                command_head_limit);
+        (void)audio_command_executor_apply_due(
+            g_audio_render_cursor, command_head_limit,
+            (recovering != 0U) ? block_start_sample : 0U);
         const uint16_t remaining = (uint16_t)(AUDIO_FRAMES_PER_HALF - half_cursor);
         const uint16_t block_frames = control_audio_fifo_audio_frames_until_due(
-            g_audio_sample_clock, remaining, command_head_limit);
+            g_audio_render_cursor, remaining, command_head_limit);
         if (block_frames == 0U) continue;
 
-        const uint64_t block_start_sample = g_audio_sample_clock;
-        g_audio_sample_clock += (uint64_t)block_frames;
+        const uint64_t segment_start_sample = g_audio_render_cursor;
+        g_audio_render_cursor += (uint64_t)block_frames;
         audio_process_event_segment(rx, tx, half_cursor,
-                                    block_start_sample, block_frames);
+                                    segment_start_sample, block_frames);
         half_cursor += block_frames;
     }
 }
@@ -205,11 +261,19 @@ static void process_half(uint32_t half_index)
         return;
     }
 
+    uint64_t block_start_sample;
+    uint8_t recovering;
+    if (audio_resolve_block_start((uint8_t)half_index,
+                                  &block_start_sample, &recovering) == 0U)
+    {
+        return;
+    }
+
     /* RX DMA -> CPU: la zone est non-cacheable par contrat MPU. */
 #if AUDIO_DMA_BUFFER_IS_CACHEABLE
     dcache_invalidate_by_addr_aligned(rx, half_bytes);
 #endif
-    audio_process_half_common_hot(rx, tx);
+    audio_process_half_common_hot(rx, tx, block_start_sample, recovering);
 
 #if AUDIO_DMA_BUFFER_IS_CACHEABLE
     dcache_clean_by_addr_aligned(tx, half_bytes);
@@ -249,8 +313,15 @@ void audio_boot_init_binding_io(void)
     audio_boot_diag_producer_init();
     board_audio_init();
     g_audio_init_state = AUDIO_INIT_NOT_STARTED;
-    g_audio_sample_clock = 0U;
-    g_audio_sample_clock_valid = 0U;
+    g_audio_render_cursor = 0U;
+    g_audio_phase_boundary_sample = 0U;
+    g_audio_last_block_start = 0U;
+    g_audio_lost_frames = 0U;
+    g_audio_xrun_count = 0U;
+    g_audio_stale_callback_count = 0U;
+    g_audio_phase_half = 0U;
+    g_audio_phase_valid = 0U;
+    g_audio_last_block_valid = 0U;
     audio_boot_diag_producer_publish_state(AUDIO_INIT_NOT_STARTED, BOARD_AUDIO_BOOT_OK);
 
     memset(rx_buffer, 0, sizeof(rx_buffer));
@@ -301,13 +372,23 @@ uint8_t audio_start(void)
 void audio_stop(void)
 {
     board_audio_stop_stream();
+    g_audio_phase_valid = 0U;
+    g_audio_last_block_valid = 0U;
     g_audio_init_state = AUDIO_INIT_NOT_STARTED;
     audio_boot_diag_producer_publish_state(AUDIO_INIT_NOT_STARTED, BOARD_AUDIO_BOOT_OK);
 }
 
-uint64_t audio_sample_clock_now(void)
+void audio_timing_diag_snapshot(audio_timing_diag_t *out_diag)
 {
-    return g_audio_sample_clock;
+    if (out_diag == NULL) return;
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    *out_diag = (audio_timing_diag_t){
+        .xrun_count = g_audio_xrun_count,
+        .stale_callback_count = g_audio_stale_callback_count,
+        .lost_frames = g_audio_lost_frames
+    };
+    __set_PRIMASK(primask);
 }
 
 /* ============================================================
@@ -342,11 +423,9 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
     if ((g_audio_init_state == AUDIO_INIT_READY)
             && (board_audio_is_rx_callback_handle(hsai) != 0U))
     {
-        audio_sample_clock_init_on_first_callback();
         cpu_load_irq_begin();
 
         process_half(0);
-        control_audio_fifo_audio_publish_sample_clock(g_audio_sample_clock);
 
         cpu_load_irq_end();
         audio_boot_diag_producer_publish_cpu((uint8_t)cpu_load_is_valid(),
@@ -382,11 +461,9 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
     if ((g_audio_init_state == AUDIO_INIT_READY)
             && (board_audio_is_rx_callback_handle(hsai) != 0U))
     {
-        audio_sample_clock_init_on_first_callback();
         cpu_load_irq_begin();
 
         process_half(1);
-        control_audio_fifo_audio_publish_sample_clock(g_audio_sample_clock);
 
         cpu_load_irq_end();
         audio_boot_diag_producer_publish_cpu((uint8_t)cpu_load_is_valid(),

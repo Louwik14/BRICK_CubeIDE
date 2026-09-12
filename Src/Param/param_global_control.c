@@ -2,7 +2,7 @@
 
 #include "Param/param_registry.h"
 #include <math.h>
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "App/live_parameter_audio_publication.h"
 #include "IPC/live_parameter_event.h"
 
@@ -240,7 +240,7 @@ uint8_t param_global_control_restore(const param_global_control_state_t *state)
     const uint8_t modfx_model = (uint8_t)(
         canonical[GLOBAL_MODFX_MODEL] + 0.5f);
     live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
+        .capture_tick = brick_media_clock_now_tick(),
         .count = 0U
     };
     for (uint8_t i = 0U; i < (uint8_t)GLOBAL_CONTROL_VALUE_COUNT; ++i)

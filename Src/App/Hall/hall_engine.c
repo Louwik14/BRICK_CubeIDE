@@ -1,6 +1,6 @@
 #include "App/Hall/hall_engine.h"
 
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "IPC/live_event.h"
 #include "stm32h7xx_hal.h"
 
@@ -720,7 +720,7 @@ void hall_engine_set_calibration(const uint16_t *min_values,
     }
 
     hall_calibrated = 0U;
-    const uint32_t tim5_tick = live_clock_capture_tick();
+    const uint32_t tim5_tick = brick_media_clock_now_tick();
 
     for (uint8_t i = 0U; i < HALL_KEY_COUNT; i++)
     {

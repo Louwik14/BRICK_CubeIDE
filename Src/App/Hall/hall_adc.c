@@ -3,7 +3,7 @@
 #include "App/Hall/hall_engine.h"
 #include "App/Hall/hall_keymap.h"
 #include "Board/board_surface.h"
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "Platform/memory_layout.h"
 #include "stm32h7xx_hal.h"
 
@@ -35,7 +35,7 @@ static void hall_mux_select(uint8_t index)
 static void hall_adc_queue_sample(uint8_t key, uint16_t raw)
 {
     const uint32_t sample_count = hall_sample_count[key] + 1U;
-    const uint32_t tim5_tick = live_clock_capture_tick();
+    const uint32_t tim5_tick = brick_media_clock_now_tick();
 
     hall_raw[key] = raw;
     hall_sample_count[key] = sample_count;

@@ -1,7 +1,7 @@
 #include "midi_host.h"
 
 #include "stm32h7xx.h"
-#include "live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "midi.h"
 #include "usb_host.h"
 #include <host/usbh.h>
@@ -170,7 +170,7 @@ void midi_host_transport_poll_bounded(uint32_t max_msgs)
     }
     midi_host_ingress_serial = ingress_serial;
     if (!midi_host_event_push(midi_host_rx_packet,
-                              live_clock_capture_tick(),
+                              brick_media_clock_now_tick(),
                               ingress_serial)) {
       break;
     }

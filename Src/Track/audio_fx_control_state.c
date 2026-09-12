@@ -3,7 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include "IPC/control_audio_command.h"
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "App/live_parameter_audio_publication.h"
 #include "IPC/live_parameter_event.h"
 #include "Track/track_runtime.h"
@@ -199,7 +199,7 @@ static uint8_t audio_fx_control_publish(brick_entity_id_t entity,
         .slot=index,.semantic=CONTROL_AUDIO_PARAM_BASE,
         .value=live_parameter_event_encode_float(value)};
     return live_parameter_audio_publication_submit(
-        live_clock_capture_tick(),&target)?1U:0U;
+        brick_media_clock_now_tick(),&target)?1U:0U;
 }
 
 void audio_fx_control_state_init(void)
@@ -399,7 +399,7 @@ uint8_t audio_fx_control_state_restore(brick_entity_id_t entity,
                                        const audio_fx_control_state_t *state)
 {
     audio_fx_control_state_t prepared;
-    live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),
+    live_parameter_audio_bulk_t bulk={.capture_tick=brick_media_clock_now_tick(),
         .count=0U};
     if(!audio_fx_control_state_prepare_for_polyphony(entity,state,
             polyphony_control_get_voice_count(entity),&prepared)

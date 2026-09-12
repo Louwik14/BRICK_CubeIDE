@@ -29,7 +29,7 @@
 #include "Mod/mod_env3_control.h"
 #include "Mod/mod_lfo_v1_control.h"
 #include "Storage/asset_ref.h"
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "App/live_parameter_audio_publication.h"
 #include "IPC/live_parameter_event.h"
 #include "main.h"
@@ -550,7 +550,7 @@ static uint8_t ui_core_clipboard_clear_param_list_to_min(uint8_t track,
     }
 
     live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
+        .capture_tick = brick_media_clock_now_tick(),
         .count = 0U
     };
     ui_clipboard_prepared_control_t prepared[UI_ENSEMBLE_CLIPBOARD_CAPACITY];
@@ -1059,7 +1059,7 @@ static uint8_t ui_track_clipboard_restore_payload(
 {
     polyphony_control_state_t prepared_polyphony;
     audio_fx_control_state_t prepared_audio_fx;
-    live_parameter_audio_bulk_t owner_bulk={.capture_tick=live_clock_capture_tick(),
+    live_parameter_audio_bulk_t owner_bulk={.capture_tick=brick_media_clock_now_tick(),
         .count=0U};
     track_runtime_resolved_track_t resolved;
     if ((track_runtime_resolve_track(target, &resolved) == 0U)
@@ -1329,7 +1329,7 @@ static uint8_t ui_core_clipboard_apply_intersection(uint8_t track,
     uint8_t applied = 0U;
     uint8_t common = 0U;
     live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
+        .capture_tick = brick_media_clock_now_tick(),
         .count = 0U
     };
     ui_clipboard_prepared_control_t prepared[UI_ENSEMBLE_CLIPBOARD_CAPACITY];

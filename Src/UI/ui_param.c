@@ -39,7 +39,7 @@
 #include "Track/entity_topology.h"
 #include "Storage/project_control.h"
 #include "Storage/audio_recorder.h"
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "App/live_parameter_audio_publication.h"
 #include "IPC/live_parameter_event.h"
 #include "Sampler/brick6_sampler_multi_contract.h"

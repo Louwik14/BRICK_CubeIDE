@@ -1,6 +1,6 @@
 #include "Track/polyphony_control.h"
 
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "IPC/control_audio_command.h"
 #include "App/live_parameter_audio_publication.h"
 #include "Track/entity_types.h"
@@ -120,4 +120,4 @@ uint8_t polyphony_control_install_prepared(uint8_t track,
     return 1U;
 }
 uint8_t polyphony_control_restore(uint8_t track,const polyphony_control_state_t*state)
-{polyphony_control_state_t prepared;live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick()};if(track>=BRICK_ENTITY_CAPACITY||!polyphony_control_prepare(state,&prepared)||!polyphony_control_bulk_add(track,&prepared,&bulk)||((bulk.count!=0U)&&!live_parameter_audio_publication_submit_bulk(&bulk)))return 0U;const uint8_t installed=polyphony_control_install_prepared(track,&prepared);if(installed==0U)Error_Handler();return installed;}
+{polyphony_control_state_t prepared;live_parameter_audio_bulk_t bulk={.capture_tick=brick_media_clock_now_tick()};if(track>=BRICK_ENTITY_CAPACITY||!polyphony_control_prepare(state,&prepared)||!polyphony_control_bulk_add(track,&prepared,&bulk)||((bulk.count!=0U)&&!live_parameter_audio_publication_submit_bulk(&bulk)))return 0U;const uint8_t installed=polyphony_control_install_prepared(track,&prepared);if(installed==0U)Error_Handler();return installed;}

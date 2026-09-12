@@ -32,7 +32,7 @@
 #include "usb_device.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "Seq/seq_runtime.h"
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "Storage/project_load_quiesce.h"
 #include <string.h>
 
@@ -103,29 +103,15 @@ static inline uint32_t midi_clock_compute_next_delta_ticks(void) {
   return delta;
 }
 
-static uint32_t midi_clock_get_tim5_counter_hz(void) {
-  uint32_t tim_kernel_hz = HAL_RCC_GetPCLK1Freq();
-  const uint32_t apb1_presc = (RCC->D2CFGR & RCC_D2CFGR_D2PPRE1);
-
-  if (apb1_presc != RCC_APB1_DIV1) {
-    tim_kernel_hz *= 2U;
-  }
-
-  const uint32_t psc = ((uint32_t)(htim5.Instance->PSC) + 1U);
-  if (psc == 0U) {
-    return MIDI_CLOCK_TIMER_HZ_DEFAULT;
-  }
-
-  const uint32_t counter_hz = tim_kernel_hz / psc;
-  return (counter_hz > 0U) ? counter_hz : MIDI_CLOCK_TIMER_HZ_DEFAULT;
-}
-
 static void midi_clock_recompute_period(uint32_t bpm_milli) {
   if (bpm_milli == 0U) {
     bpm_milli = MIDI_CLOCK_DEFAULT_BPM_MILLI;
   }
 
-  midi_clock_timer_hz = midi_clock_get_tim5_counter_hz();
+  midi_clock_timer_hz = brick_media_clock_tick_hz();
+  if (midi_clock_timer_hz == 0U) {
+    midi_clock_timer_hz = MIDI_CLOCK_TIMER_HZ_DEFAULT;
+  }
 
   const uint32_t den = (uint32_t)(MIDI_CLOCK_PPQN * (uint64_t)bpm_milli);
   const uint64_t num = ((uint64_t)midi_clock_timer_hz * 60ULL * 1000ULL);
@@ -1176,8 +1162,18 @@ void midi_clock_on_timer_tick(void) {
     midi_clock_tx_probe.clock_f8_generated_count++;
 #endif
     midi_clock(midi_clock_dest);
-    const uint32_t delta = midi_clock_compute_next_delta_ticks();
+    const uint32_t now = __HAL_TIM_GET_COUNTER(&htim5);
+    uint32_t delta = midi_clock_compute_next_delta_ticks();
     midi_clock_next_ccr += delta;
+    /* A halted CPU can service one stale CC1 flag after TIM5 has advanced far
+     * beyond CCR1.  Skip missed pulses and always arm a future comparison;
+     * otherwise the next match would wait for the 32-bit counter wrap. */
+    if ((int32_t)(now - midi_clock_next_ccr) >= 0)
+    {
+      midi_clock_rem_accum = 0U;
+      delta = midi_clock_compute_next_delta_ticks();
+      midi_clock_next_ccr = now + delta;
+    }
     __HAL_TIM_SET_COMPARE(&htim5, TIM_CHANNEL_1, midi_clock_next_ccr);
     return;
   }
@@ -1859,7 +1855,7 @@ void midi_usb_rx_submit_from_isr(const uint8_t *packet, size_t len) {
     return;
   }
 
-  const uint32_t tim5_tick = live_clock_capture_tick();
+  const uint32_t tim5_tick = brick_media_clock_now_tick();
   size_t packets = len / 4U;
   for (size_t i = 0U; i < packets; i++) {
     uint32_t ingress_serial = midi_usb_rx_ingress_serial + 1U;

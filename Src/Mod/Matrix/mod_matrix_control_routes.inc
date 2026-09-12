@@ -82,7 +82,7 @@ static uint8_t mod_matrix_publish_slot_candidate(uint8_t track, uint8_t slot,
             || (owner >= SEQ_TRACK_COUNT) || (slot >= MOD_MATRIX_SLOT_COUNT)
             || (candidate == NULL)) return 0U;
     live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
+        .capture_tick = brick_media_clock_now_tick(),
         .count = 0U
     };
     if ((include_destination_base != 0U)
@@ -180,7 +180,7 @@ static uint8_t mod_matrix_publish_operator_candidate(uint8_t track, uint16_t id,
         .value = live_parameter_event_encode_float(value)
     };
     return live_parameter_audio_publication_submit(
-        live_clock_capture_tick(), &target) ? 1U : 0U;
+        brick_media_clock_now_tick(), &target) ? 1U : 0U;
 }
 
 uint8_t mod_matrix_set_slot_destination_index(uint8_t track, uint8_t slot, float value)

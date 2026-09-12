@@ -26,7 +26,6 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/control_domain.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/encoder_control_dispatcher.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/engine_tasklet.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/App/live_clock_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/ControlRT/control_rt_publication.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/control_music_publication.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/live_event.c"
@@ -342,6 +341,7 @@ set(SHARED_BACKING
 )
 
 set(PLATFORM_H743_COMMON
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/brick_media_clock.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Drivers/tlv320aic3204.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/buttons_hw.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/drv_display.c"

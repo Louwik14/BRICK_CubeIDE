@@ -4,7 +4,7 @@
 
 #include "IPC/control_audio_fifo_control.h"
 #include "IPC/control_audio_timing.h"
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "Platform/memory_layout.h"
 #include "Seq/seq_note_trace.h"
 #include "Track/track_runtime.h"
@@ -412,12 +412,7 @@ uint8_t control_rt_publication_horizon_active(void)
 
 uint8_t control_rt_now_sample(uint64_t *out_sample_time)
 {
-    return live_clock_read_audio_sample(out_sample_time) ? 1U : 0U;
-}
-
-uint8_t control_rt_audio_sample_now(uint64_t *out_sample_time)
-{
-    return control_audio_fifo_control_audio_sample_now(out_sample_time);
+    return brick_media_clock_now_sample(out_sample_time) ? 1U : 0U;
 }
 
 uint64_t control_rt_first_unpublished_sample(uint64_t minimum_sample)
@@ -450,7 +445,7 @@ uint8_t control_rt_capture_tick_to_sample(uint32_t capture_tick,
                                           uint64_t *out_sample_time)
 {
     uint64_t sample_time = 0U;
-    if (!live_clock_tim5_to_guarded_sample_time(capture_tick, &sample_time))
+    if (!brick_media_clock_tick_to_guarded_sample(capture_tick, &sample_time))
         return 0U;
     if (sample_time < minimum_sample)
         sample_time = minimum_sample;

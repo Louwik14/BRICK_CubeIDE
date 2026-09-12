@@ -33,7 +33,7 @@
 #include "Track/control_music_output.h"
 #include "UI/ui_active_track_sync.h"
 #include "ControlRT/control_rt_publication.h"
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "ui_boot_loading.h"
 #include "ui_core.h"
 #include "ui_page_manager.h"
@@ -42,7 +42,7 @@ void control_domain_init(void)
 {
     control_rt_publication_init();
     control_music_output_init();
-    live_clock_control_init();
+    brick_media_clock_init();
     project_load_quiesce_init();
 
     sd_access_gate_init();

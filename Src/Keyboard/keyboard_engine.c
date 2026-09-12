@@ -21,7 +21,7 @@
 #include "Track/track_catalog.h"
 #include "Track/track_runtime.h"
 #include "Track/entity_topology.h"
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "Track/track_mute.h"
 #include "Mod/mod_lfo_v1.h"
 #include "Seq/seq_runtime.h"

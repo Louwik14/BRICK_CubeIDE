@@ -2,7 +2,7 @@
 
 #include <string.h>
 
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "IPC/control_audio_command.h"
 #include "App/live_parameter_audio_publication.h"
 #include "IPC/live_parameter_event.h"
@@ -482,7 +482,7 @@ static uint8_t param_macro_recompute_sources(
 {
     uint32_t last_applied_seq = 0U;
     live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
+        .capture_tick = brick_media_clock_now_tick(),
         .count = 0U
     };
     uint16_t collected_count = 0U;
@@ -683,7 +683,7 @@ uint8_t param_macro_apply_resolution(const param_macro_resolution_t *resolution)
             resolution->track, resolution->resolved_value,
             &target, &canonical) == 0U)
             || (live_parameter_audio_publication_submit(
-                live_clock_capture_tick(), &target) == false))
+                brick_media_clock_now_tick(), &target) == false))
     {
         return 0U;
     }

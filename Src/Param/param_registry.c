@@ -57,7 +57,7 @@
 #include "App/live_parameter_audio_publication.h"
 #include "IPC/live_parameter_event.h"
 #include "IPC/control_audio_command.h"
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "Mod/mod_lfo_v1_control.h"
 #include "Mod/mod_env3.h"
 #include "Mod/mod_matrix_control.h"

@@ -9,7 +9,7 @@
 #include "IPC/control_audio_command.h"
 #include "ControlRT/control_rt_publication.h"
 #include "IPC/audio_recorder_capture_contract.h"
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "Storage/looper_storage.h"
 #include "Storage/wav_loader.h"
 #include "Storage/waveform_cache.h"

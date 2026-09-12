@@ -1,6 +1,6 @@
 #include "Mod/mod_matrix_control.h"
 
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "IPC/control_audio_command.h"
 #include "App/live_parameter_audio_publication.h"
 #include "IPC/live_parameter_event.h"

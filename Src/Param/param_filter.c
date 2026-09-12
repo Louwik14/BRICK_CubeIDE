@@ -6,7 +6,7 @@
 #include "Platform/memory_layout.h"
 #include "Seq/seq_types.h"
 #include "Track/track_runtime.h"
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "App/live_parameter_audio_publication.h"
 #include "IPC/live_parameter_event.h"
 
@@ -141,7 +141,7 @@ uint8_t param_filter_control_restore(uint8_t track,
         values[i] = prepared.value;
     }
     live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
+        .capture_tick = brick_media_clock_now_tick(),
         .count = 0U
     };
     for (uint8_t i = 0U; i < (uint8_t)(sizeof(ids) / sizeof(ids[0])); ++i)

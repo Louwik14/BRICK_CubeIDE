@@ -2,7 +2,7 @@
 #include <string.h>
 #include "App/live_parameter_audio_publication.h"
 #include "ControlRT/audio_state_snapshot_control.h"
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "IPC/live_parameter_event.h"
 #include "Mod/mod_env3_control.h"
 #include "Mod/mod_destination_control.h"
@@ -90,7 +90,7 @@ static uint8_t restore_polyphony_audio_fx(uint8_t entity,const polyphony_control
 {
     polyphony_control_state_t pp;
     audio_fx_control_state_t pa;
-    live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick()};
+    live_parameter_audio_bulk_t bulk={.capture_tick=brick_media_clock_now_tick()};
     if(!polyphony_control_prepare(polyphony,&pp)
             ||!audio_fx_control_state_prepare_for_polyphony(
                 entity,audio_fx,pp.voice_count,&pa)

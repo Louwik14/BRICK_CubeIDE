@@ -1,7 +1,7 @@
 #include "encoders_hw.h"
 
 #include "Board/board_controls.h"
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 
 #include "cmsis_gcc.h"
 
@@ -68,7 +68,7 @@ static void encoders_hw_read_binding_snapshot(encoder_binding_snapshot_t *out_sn
 
 static uint8_t encoders_hw_publish_detent(uint8_t encoder, int8_t direction)
 {
-    const uint32_t capture_tick = live_clock_capture_tick();
+    const uint32_t capture_tick = brick_media_clock_now_tick();
     const uint32_t ingress_serial = encoders_hw_next_ingress_serial();
     encoder_binding_snapshot_t binding;
     encoders_hw_read_binding_snapshot(&binding);

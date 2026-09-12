@@ -4,7 +4,7 @@
 
 #include "IPC/control_audio_command.h"
 #include "ControlRT/control_rt_publication.h"
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "IPC/live_parameter_event.h"
 #include "Param/param_value_policy.h"
 #include "Param/param_registry.h"
@@ -82,7 +82,7 @@ bool live_parameter_audio_publication_submit_tone_program(
     if (track >= SEQ_LANE_CAPACITY)
         return live_parameter_audio_publish_failed();
     live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
+        .capture_tick = brick_media_clock_now_tick(),
         .count = 0U
     };
     const uint8_t count = tone_param_codec_count(type);

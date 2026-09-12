@@ -621,7 +621,8 @@ void audio_command_executor_init(void)
 }
 
 uint16_t __attribute__((noinline)) audio_command_executor_apply_due(
-    uint64_t sample_time, uint32_t head_limit)
+    uint64_t sample_time, uint32_t head_limit,
+    uint64_t discard_transient_before)
 {
     uint16_t applied = 0U;
     control_audio_command_t command;
@@ -629,6 +630,24 @@ uint16_t __attribute__((noinline)) audio_command_executor_apply_due(
             && (control_audio_fifo_audio_peek(&command) != 0U)
             && (command.effective_sample_time <= sample_time))
     {
+        const uint8_t opcode = CONTROL_AUDIO_COMMAND_OPCODE(&command);
+        const uint8_t stale_note_on = (uint8_t)(
+            (opcode == CONTROL_AUDIO_COMMAND_NOTE)
+            && (CONTROL_AUDIO_COMMAND_KIND(&command) == CONTROL_AUDIO_NOTE_ON));
+        const uint8_t stale_temporary_param = (uint8_t)(
+            (opcode == CONTROL_AUDIO_COMMAND_PARAM)
+            && (control_audio_command_state_class(&command)
+                == CONTROL_AUDIO_COMMAND_TRANSIENT_ACTION));
+        if ((discard_transient_before != 0U)
+                && (command.effective_sample_time < discard_transient_before)
+                && ((stale_note_on != 0U) || (stale_temporary_param != 0U)))
+        {
+            /* An xrun made this transient inaudible.  Durable state, NOTE_OFF,
+             * transport, record and panic commands still run in FIFO order. */
+            (void)control_audio_fifo_audio_pop();
+            ++applied;
+            continue;
+        }
         if (CONTROL_AUDIO_COMMAND_OPCODE(&command) != CONTROL_AUDIO_COMMAND_PARAM)
             brick6_fm_runtime_finalize_pending();
         const audio_command_apply_result_t result =

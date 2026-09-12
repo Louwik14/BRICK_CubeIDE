@@ -29,7 +29,7 @@
 
 #include "App/engine_tasklet.h"
 #include "stm32h7xx_hal.h"
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "Mod/mod_lfo_v1_control.h"
 
 #include "buttons.h"
@@ -104,8 +104,8 @@ void engine_tasklet_init(uint32_t sample_rate)
 {
   engine_tick_count = 0U;
   engine_sample_rate_hz = (sample_rate != 0U) ? sample_rate : 48000U;
-  engine_tim5_hz = live_clock_get_tim5_hz();
-  engine_tim5_last_tick = live_clock_capture_tick();
+  engine_tim5_hz = brick_media_clock_tick_hz();
+  engine_tim5_last_tick = brick_media_clock_now_tick();
   engine_tim5_frame_remainder = 0U;
   engine_control_frames_pending = 0U;
 
@@ -144,7 +144,7 @@ void engine_tasklet_poll(void)
 
   if (engine_tim5_hz != 0U)
   {
-    const uint32_t now_tick = live_clock_capture_tick();
+    const uint32_t now_tick = brick_media_clock_now_tick();
     const uint32_t elapsed_ticks = now_tick - engine_tim5_last_tick;
     engine_tim5_last_tick = now_tick;
     const uint64_t scaled = engine_tim5_frame_remainder

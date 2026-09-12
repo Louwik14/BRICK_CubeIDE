@@ -3,7 +3,7 @@
 #include "Storage/persistent_key_catalog.h"
 #include "Track/control_routing.h"
 #include "App/live_parameter_audio_publication.h"
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "IPC/live_parameter_event.h"
 #include "IPC/control_audio_fifo_layout.h"
 #include "main.h"
@@ -231,7 +231,7 @@ static uint8_t restore_polyphony_audio_fx(uint8_t entity,
 {
     polyphony_control_state_t pp;
     audio_fx_control_state_t pa;
-    live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick()};
+    live_parameter_audio_bulk_t bulk={.capture_tick=brick_media_clock_now_tick()};
     if(!polyphony_control_prepare(polyphony,&pp)
             ||!audio_fx_control_state_prepare_for_polyphony(
                 entity,audio_fx,pp.voice_count,&pa)

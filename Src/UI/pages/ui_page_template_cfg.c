@@ -8,7 +8,7 @@
 #include "Track/track_state.h"
 #include "Track/polyphony_control.h"
 #include "Track/audio_fx_control_state.h"
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "IPC/live_parameter_event.h"
 #include "App/live_parameter_audio_publication.h"
 #include "Track/track_input_ownership.h"
@@ -27,7 +27,7 @@ static uint8_t ui_cfg_restore_polyphony_audio_fx(uint8_t track,uint8_t voices)
 {
     polyphony_control_state_t polyphony,prepared_polyphony;
     audio_fx_control_state_t audio_fx,prepared_audio_fx;
-    live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),
+    live_parameter_audio_bulk_t bulk={.capture_tick=brick_media_clock_now_tick(),
         .count=0U};
     if(!polyphony_control_capture(track,&polyphony)
             ||!audio_fx_control_state_capture(track,&audio_fx))return 0U;

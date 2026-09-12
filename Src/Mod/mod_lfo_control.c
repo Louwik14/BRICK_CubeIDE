@@ -7,7 +7,7 @@
 
 #include "Mod/mod_destination_control.h"
 #include "Mod/mod_lfo_segment.h"
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "App/live_parameter_audio_publication.h"
 #include "IPC/live_parameter_event.h"
 #include "Param/param_registry.h"
@@ -195,7 +195,7 @@ uint8_t mod_lfo_v1_restore_track(uint8_t track,
     mod_lfo_control_bank_t canonical;
     if (mod_lfo_v1_prepare_bank(state, &canonical) == 0U) return 0U;
     live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
+        .capture_tick = brick_media_clock_now_tick(),
     };
     for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
     {

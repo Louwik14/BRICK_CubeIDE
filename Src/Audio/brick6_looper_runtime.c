@@ -5,7 +5,7 @@
 #include "Audio/audio_float.h"
 #include "Audio/brick6_clip_shifter.h"
 #include "Audio/audio_transport_runtime.h"
-#include "Audio/audio.h"
+#include "Platform/brick_media_clock.h"
 #include "Sampler/sample_page_cache_audio.h"
 #include "Sampler/sample_page_cache_config.h"
 #include "Audio/sample_page_lease_audio.h"
@@ -37,6 +37,13 @@
 #define BRICK6_LOOPER_TIMING_NEUTRAL_EPSILON 0.001f
 #define BRICK6_LOOPER_RESYNC_STABLE_BLOCKS 2U
 #define BRICK6_LOOPER_RESYNC_XFADE_FRAMES 96U
+
+static uint64_t brick6_looper_media_now_sample(void)
+{
+    uint64_t sample = 0U;
+    (void)brick_media_clock_now_sample(&sample);
+    return sample;
+}
 
 static uint8_t looper_transport_running(void)
 {
@@ -826,7 +833,7 @@ static void looper_update_ready_state(brick6_looper_track_state_t *state)
 
         if(state->scheduled_start_valid != 0U)
         {
-            const uint64_t now_sample = audio_sample_clock_now();
+            const uint64_t now_sample = brick6_looper_media_now_sample();
             if(now_sample < state->scheduled_start_sample)
             {
                 looper_set_state(state, BRICK6_LOOPER_RUNTIME_STATE_READY);
@@ -1688,7 +1695,7 @@ static uint32_t looper_expected_frame_from_timeline(const brick6_looper_track_st
         return 0U;
     }
 
-    const uint64_t now_sample = audio_sample_clock_now();
+    const uint64_t now_sample = brick6_looper_media_now_sample();
     const uint64_t elapsed =
         (now_sample > state->playback_start_sample)
             ? (now_sample - state->playback_start_sample)

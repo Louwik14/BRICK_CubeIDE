@@ -1,7 +1,7 @@
 #include "Track/vca_control_state.h"
 
 #include <math.h>
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "App/live_parameter_audio_publication.h"
 #include "IPC/live_parameter_event.h"
 #include "Param/param_registry.h"
@@ -95,7 +95,7 @@ uint8_t vca_control_state_restore(uint8_t entity,const vca_control_state_t *stat
     for(uint8_t i=0U;i<6U;++i){param_registry_prepared_value_t prepared;
         if(!param_registry_prepare_value(ids[i],values[i],&prepared))return 0U;
         values[i]=prepared.value;}
-    live_parameter_audio_bulk_t bulk={.capture_tick=live_clock_capture_tick(),
+    live_parameter_audio_bulk_t bulk={.capture_tick=brick_media_clock_now_tick(),
         .count=0U};
     for(uint8_t i=0U;i<6U;++i){
         if(track_runtime_get_effective_param_status(entity,ids[i])

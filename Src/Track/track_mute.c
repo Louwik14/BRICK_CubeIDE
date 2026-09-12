@@ -5,7 +5,7 @@
 #include "Track/entity_topology.h"
 #include "Seq/seq_runtime_control.h"
 #include "Seq/seq_types.h"
-#include "IPC/live_clock_control.h"
+#include "Platform/brick_media_clock.h"
 #include "App/live_parameter_audio_publication.h"
 #include "IPC/live_parameter_event.h"
 
@@ -157,7 +157,7 @@ uint8_t track_mute_set(uint8_t track, uint8_t muted)
     muted = (muted != 0U) ? 1U : 0U;
     uint8_t effective_after[BRICK_ENTITY_GROUP_CHILD_COUNT + 1U];
     live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
+        .capture_tick = brick_media_clock_now_tick(),
         .count = 0U
     };
     for (uint8_t i = 0U; i < affected_count; ++i)
@@ -233,7 +233,7 @@ uint8_t track_mute_publish_topology_projection(
         return 0U;
 
     live_parameter_audio_bulk_t bulk = {
-        .capture_tick = live_clock_capture_tick(),
+        .capture_tick = brick_media_clock_now_tick(),
         .count = 0U
     };
     for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
