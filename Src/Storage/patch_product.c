@@ -326,6 +326,16 @@ static uint8_t patch_io_common_available(void)
         && (project_replacement_is_active() == 0U);
 }
 
+static uint8_t patch_io_common_available_for_prepared_save(void)
+{
+    return (g_patch_io.state == PATCH_IO_IDLE)
+        && (g_patch_io.result_ready == 0U)
+        && (g_patch_apply.active == 0U)
+        && (project_product_save_busy() == 0U)
+        && (project_product_load_busy() == 0U)
+        && (project_replacement_is_active() == 0U);
+}
+
 static uint8_t patch_io_prepare_paths(uint16_t slot)
 {
     return path(g_patch_io.final_path, sizeof(g_patch_io.final_path), slot)
@@ -519,7 +529,9 @@ patch_product_result_t patch_product_save_begin(uint16_t slot,
     {
         return PATCH_PRODUCT_RESULT_INVALID_SLOT;
     }
-    if (patch_io_common_available() == 0U)
+    if (((snapshot != 0) && (patch_io_common_available() == 0U))
+            || ((snapshot == 0)
+                && (patch_io_common_available_for_prepared_save() == 0U)))
     {
         return PATCH_PRODUCT_IO_BUSY;
     }
@@ -544,6 +556,44 @@ patch_product_result_t patch_product_save_begin(uint16_t slot,
     g_patch_io.prepared = 0U;
     patch_io_start(PATCH_PRODUCT_OPERATION_SAVE, slot);
     return PATCH_PRODUCT_PENDING;
+}
+
+patch_product_result_t patch_product_save_submit(uint16_t slot, const char *name)
+{
+    if (slot >= PATCH_PRODUCT_SLOT_COUNT)
+    {
+        return PATCH_PRODUCT_RESULT_INVALID_SLOT;
+    }
+    if ((g_patch_io.prepared == 0U) || (g_patch_io.prepared_slot != slot))
+    {
+        return PATCH_PRODUCT_INVALID;
+    }
+    if (patch_io_common_available_for_prepared_save() == 0U)
+    {
+        return PATCH_PRODUCT_IO_BUSY;
+    }
+
+    char normalized[NAME_CONTRACT_BUFFER_BYTES];
+    if (patch_name_normalize(name, normalized) == 0U)
+    {
+        return PATCH_PRODUCT_RESULT_INVALID_NAME;
+    }
+    memset(g_patch_io.prepared_patch.name, 0,
+           sizeof(g_patch_io.prepared_patch.name));
+    memcpy(g_patch_io.prepared_patch.name, normalized,
+           sizeof(g_patch_io.prepared_patch.name));
+    g_patch_io.prepared_patch.name_length = (uint16_t)strlen(normalized);
+    return patch_product_save_begin(slot, 0);
+}
+
+void patch_product_save_cancel_prepare(void)
+{
+    if ((g_patch_io.state == PATCH_IO_IDLE) && (g_patch_io.result_ready == 0U))
+    {
+        g_patch_io.prepared = 0U;
+        g_patch_io.prepared_slot = PATCH_PRODUCT_INVALID_SLOT;
+        memset(&g_patch_io.prepared_patch, 0, sizeof(g_patch_io.prepared_patch));
+    }
 }
 
 patch_product_result_t patch_product_rename_begin(uint16_t slot, const char *name)

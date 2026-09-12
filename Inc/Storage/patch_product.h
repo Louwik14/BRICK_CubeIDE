@@ -34,6 +34,8 @@ patch_product_result_t patch_product_save_prepare(uint8_t entity,
                                                    const char *name);
 patch_product_result_t patch_product_save_begin(uint16_t slot,
                                                 const persist_control_patch_t *snapshot);
+patch_product_result_t patch_product_save_submit(uint16_t slot, const char *name);
+void patch_product_save_cancel_prepare(void);
 patch_product_result_t patch_product_apply(uint16_t slot,uint8_t entity);
 void patch_product_apply_service(void);
 patch_product_result_t patch_product_rename(uint16_t slot,const char*name);

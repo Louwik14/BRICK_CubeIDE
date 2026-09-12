@@ -1,9 +1,7 @@
 #include "ui_hall_mode_flow.h"
 
 #include "Track/entity_topology.h"
-#include "Storage/patch_product.h"
 #include "Storage/sample_capture.h"
-#include "stm32h7xx_hal.h"
 #include "pages/ui_page_audio_rec.h"
 #include "pages/ui_page_patch_assign.h"
 #include "pages/ui_page_settings.h"
@@ -14,7 +12,6 @@
 #include "ui_navigation.h"
 
 #define UI_HALL_MODE_DOUBLE_TAP_MS 400U
-#define UI_HALL_PATCH_SAVE_ARM_MS 80U
 
 typedef struct
 {
@@ -22,9 +19,6 @@ typedef struct
     uint32_t tap_ms;
     uint8_t target_track;
     ui_hall_mode_t previous_mode;
-    uint8_t save_pending;
-    uint32_t save_due_ms;
-    uint8_t save_track;
 } ui_hall_mode_flow_patch_pending_t;
 
 static ui_hall_mode_flow_patch_pending_t g_patch_pending;
@@ -32,6 +26,17 @@ static uint8_t g_lowcost_rec_return_page = UI_PAGE_TEMPLATE_CFG;
 static ui_hall_mode_t g_lowcost_rec_return_mode = UI_HALL_MODE_SEQ;
 static uint8_t g_lowcost_rec_return_valid;
 static uint8_t g_lowcost_rec_closing;
+
+static void ui_hall_mode_flow_open_patch_page(uint8_t target_track,
+                                              ui_hall_mode_t previous_mode)
+{
+    if (ui_macro_overlay_is_active() != 0U)
+    {
+        ui_macro_overlay_on_hall_mode_changed();
+    }
+    ui_set_hall_mode(UI_HALL_MODE_PATCH);
+    ui_page_patch_assign_open(target_track, previous_mode);
+}
 
 static void ui_hall_mode_flow_activate_mode(ui_hall_mode_t target_mode,
                                             uint8_t target_page,
@@ -327,12 +332,9 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
         if ((g_patch_pending.active != 0U)
                 && ((now_ms - g_patch_pending.tap_ms) <= UI_HALL_MODE_DOUBLE_TAP_MS))
         {
-            ui_hall_patch_feedback_begin(now_ms);
-            ui_core_feedback_set("PATCH SAVE", now_ms);
-            g_patch_pending.save_pending = 1U;
-            g_patch_pending.save_due_ms = now_ms + UI_HALL_PATCH_SAVE_ARM_MS;
-            g_patch_pending.save_track = ui_get_active_track();
             g_patch_pending.active = 0U;
+            ui_hall_mode_flow_open_patch_page(ui_get_active_track(),
+                                              g_patch_pending.previous_mode);
             return;
         }
 
@@ -401,37 +403,6 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
 
 void ui_hall_mode_flow_service_pending(uint32_t now_ms)
 {
-    if (patch_product_result_pending(PATCH_PRODUCT_OPERATION_SAVE) != 0U)
-    {
-        patch_product_operation_t operation;
-        patch_product_result_t result;
-        uint16_t slot;
-        if (patch_product_take_result(&operation, &slot, &result) != 0U)
-        {
-            (void)operation;
-            (void)slot;
-            ui_core_feedback_set(patch_product_result_label(result), now_ms);
-        }
-    }
-
-    if (g_patch_pending.save_pending != 0U)
-    {
-        if ((int32_t)(now_ms - g_patch_pending.save_due_ms) < 0)
-        {
-            return;
-        }
-
-        uint16_t saved_slot = PATCH_PRODUCT_INVALID_SLOT;
-        const patch_product_result_t result =
-            patch_product_save(g_patch_pending.save_track, &saved_slot);
-        (void)saved_slot;
-        const uint32_t done_ms = HAL_GetTick();
-        ui_hall_patch_feedback_end(done_ms);
-        g_patch_pending.save_pending = 0U;
-        ui_core_feedback_set(patch_product_result_label(result), done_ms);
-        return;
-    }
-
     if (g_patch_pending.active != 0U)
     {
         if ((now_ms - g_patch_pending.tap_ms) <= UI_HALL_MODE_DOUBLE_TAP_MS)
@@ -442,12 +413,7 @@ void ui_hall_mode_flow_service_pending(uint32_t now_ms)
         const uint8_t target_track = g_patch_pending.target_track;
         const ui_hall_mode_t previous_mode = g_patch_pending.previous_mode;
         g_patch_pending.active = 0U;
-        if (ui_macro_overlay_is_active() != 0U)
-        {
-            ui_macro_overlay_on_hall_mode_changed();
-        }
-        ui_set_hall_mode(UI_HALL_MODE_PATCH);
-        ui_page_patch_assign_open(target_track, previous_mode);
+        ui_hall_mode_flow_open_patch_page(target_track, previous_mode);
         return;
     }
 }
