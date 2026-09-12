@@ -36,6 +36,7 @@
 #include "ui_page_manager.h"
 
 #include "pages/ui_page_calibration.h"
+#include "pages/ui_page_name_edit.h"
 
 typedef enum
 {
@@ -240,12 +241,16 @@ UI_SETTINGS_STATIC_ASSERT(convert_path_aligned, UI_SETTINGS_OFFSET_ALIGNED(ui_se
 UI_SETTINGS_STATIC_ASSERT(status_line_aligned, UI_SETTINGS_OFFSET_ALIGNED(ui_settings_state_t, status_line));
 
 UI_STATE_SDRAM static ui_settings_state_t g_ui_settings;
+typedef enum { UI_PROJECT_SAVE_IDLE=0,UI_PROJECT_SAVE_EDIT,UI_PROJECT_SAVE_WRITING } ui_project_save_phase_t;
+static ui_project_save_phase_t g_ui_project_save_phase;
+static uint8_t g_ui_project_save_slot;
 
 static void ui_page_settings_status(const char *status);
 static void ui_page_settings_sd_busy_status(void);
 static void ui_page_settings_preview_stop(ui_settings_preview_stop_origin_t origin);
 static const char *ui_page_settings_preview_error_label(sd_preview_error_t error);
 static void ui_page_settings_back(void);
+static void ui_page_settings_project_save_begin(uint8_t slot);
 static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path);
 static void ui_page_settings_ram_load_to_slot(uint16_t slot, const char *path);
 static void ui_page_settings_wavetable_load_to_slot(uint16_t slot, const char *path);

@@ -13,6 +13,7 @@ extern "C" {
 #define PERSIST_CODEC_HEADER_BYTES 24U
 #define PERSIST_CODEC_SECTION_HEADER_BYTES 8U
 #define PERSIST_CODEC_MAX_DOCUMENT_BYTES 0x3FFFFFFFUL
+#define PERSIST_CODEC_PROJECT_NAME_BYTES 32U
 
 typedef enum
 {
@@ -95,6 +96,8 @@ typedef struct
 
 typedef struct
 {
+    uint16_t name_length;
+    char name[PERSIST_CODEC_PROJECT_NAME_BYTES];
     uint8_t active_pattern_bank;
     uint8_t active_pattern;
     uint16_t pattern_count;

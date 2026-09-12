@@ -37,3 +37,8 @@ track selection -> mute -> track hall gate -> transport -> settings
 Les deltas encodeur utilisent un snapshot du contexte pris au debut du tick. Les modifications structurelles et restores appellent directement les owners Track; la mise a jour de contexte UI reste explicite via `ui_active_track_sync` et `ui_edit_context_sync`.
 
 Les clipboards transportent uniquement des etats logiques. Un collage MIDI FX applique MODEL avant ses parametres; un collage External conserve l'entree demandee et echoue sur conflit.
+
+Project Save est modal et reutilise le Name Editor generique. L'entree SAVE AS
+ou SAVE TO est refusee tant que le transport est RUNNING ou START_PENDING; elle
+ne demande jamais de STOP. Apres confirmation du nom, les inputs Settings restent
+bloques jusqu'au resultat terminal du backend asynchrone.

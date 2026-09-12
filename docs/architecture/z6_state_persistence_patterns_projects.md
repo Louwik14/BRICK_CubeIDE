@@ -62,6 +62,13 @@ qu'apres commit reussi.
 
 Pattern Save/Load, Project Save, browser SD, Sample RAM, Wavetable et Clear Multi utilisent l'admission Background cooperative de `sd_scheduler_runtime`. Toute demande RT ou transaction active produit `NOT_NOW`; le client conserve son etat et rend la main.
 
+Le nom Project canonique (32 caracteres maximum, contrat `name_contract`) fait
+partie du CORE Project version 2 et est donc engage dans la meme transaction
+temporaire/backup que le snapshot. Le decoder conserve la lecture des CORE
+version 1, affiches avec un nom de slot de repli. Project Save revalide que le
+transport est arrete avant le snapshot; un refus ou une erreur ne publie ni STOP
+ni PANIC et ne modifie pas le son.
+
 Pour les chargements utilisateur Sample RAM et Wavetable, la superloop consomme
 la completion physique, valide le slot, le global, le chemin et la resolution
 logique, puis retient un resultat terminal par famille. Settings ne fait que

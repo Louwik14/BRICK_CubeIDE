@@ -122,19 +122,26 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
             {
                 return "-";
             }
-            (void)snprintf(out, out_size, "PROJECT %02u", (unsigned)g_ui_settings.project_slots[index - 1U]);
+            {project_product_metadata_t meta;const uint8_t slot=g_ui_settings.project_slots[index-1U];
+            if(project_product_metadata(slot,&meta)!=0U)(void)snprintf(out,out_size,"%.*s",(int)(out_size-1U),meta.name);
+            else (void)snprintf(out,out_size,"PROJECT %02u",(unsigned)slot);}
             return out;
         case UI_SETTINGS_VIEW_PROJECT_MANAGE:
             if (index >= g_ui_settings.project_slot_count)
             {
                 return "-";
             }
-            (void)snprintf(out, out_size, "PROJECT %02u", (unsigned)g_ui_settings.project_slots[index]);
+            {project_product_metadata_t meta;const uint8_t slot=g_ui_settings.project_slots[index];
+            if(project_product_metadata(slot,&meta)!=0U)(void)snprintf(out,out_size,"%.*s",(int)(out_size-1U),meta.name);
+            else (void)snprintf(out,out_size,"PROJECT %02u",(unsigned)slot);}
             return out;
         case UI_SETTINGS_VIEW_PROJECT_SAVE_AS:
             if (project_product_slot_present(index) != 0U)
             {
-                (void)snprintf(out, out_size, "PROJECT %02u *", (unsigned)index);
+                project_product_metadata_t meta;
+                if(project_product_metadata(index,&meta)!=0U)
+                    (void)snprintf(out,out_size,"%.*s *",(int)(out_size>3U?out_size-3U:0U),meta.name);
+                else (void)snprintf(out, out_size, "PROJECT %02u *", (unsigned)index);
             }
             else
             {
@@ -298,6 +305,52 @@ static void ui_page_settings_push(ui_settings_view_t view)
     g_ui_settings.depth++;
 }
 
+static void ui_page_settings_project_save_done(ui_page_name_edit_result_t result,
+                                                const char *name,void *user)
+{
+    (void)user;
+    if(result!=UI_PAGE_NAME_EDIT_RESULT_CONFIRM)
+    {
+        g_ui_project_save_phase=UI_PROJECT_SAVE_IDLE;
+        ui_page_settings_status(0);
+        return;
+    }
+    if(project_product_save_named(g_ui_project_save_slot,name)!=0U)
+    {
+        g_ui_project_save_phase=UI_PROJECT_SAVE_WRITING;
+        ui_page_settings_status("SAVING");
+        return;
+    }
+    g_ui_project_save_phase=UI_PROJECT_SAVE_IDLE;
+    ui_page_settings_status((project_product_save_last_error()
+        ==PROJECT_PRODUCT_SAVE_ERROR_TRANSPORT_ACTIVE)?"STOP TRANSPORT":"SAVE FAIL");
+}
+
+static void ui_page_settings_project_save_begin(uint8_t slot)
+{
+    if((seq_runtime_is_running()!=0U)||(seq_runtime_is_start_pending()!=0U))
+    {
+        ui_page_settings_status("STOP TRANSPORT");
+        return;
+    }
+    if(project_product_save_busy()!=0U||project_product_load_busy()!=0U)
+    {
+        ui_page_settings_status("BUSY");
+        return;
+    }
+    project_product_metadata_t metadata;char initial[PROJECT_PRODUCT_NAME_BYTES+1U]={0};
+    if(project_product_metadata(slot,&metadata)!=0U)
+        memcpy(initial,metadata.name,sizeof(initial));
+    else (void)snprintf(initial,sizeof(initial),"PROJECT %02u",(unsigned)slot);
+    g_ui_project_save_slot=slot;g_ui_project_save_phase=UI_PROJECT_SAVE_EDIT;
+    if(ui_page_name_edit_open(UI_PAGE_SETTINGS,"PROJECT","SAVE",initial,
+            sizeof(initial),ui_page_settings_project_save_done,NULL)==0U)
+    {
+        g_ui_project_save_phase=UI_PROJECT_SAVE_IDLE;
+        ui_page_settings_status("NAME ERROR");
+    }
+}
+
 static void ui_page_settings_back(void)
 {
     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
@@ -387,7 +440,9 @@ static void ui_page_settings_apply_action(void)
             }
             else if (level->selected_index == 1U)
             {
-                ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT_SAVE_AS);
+                if((seq_runtime_is_running()!=0U)||(seq_runtime_is_start_pending()!=0U))
+                    ui_page_settings_status("STOP TRANSPORT");
+                else ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT_SAVE_AS);
             }
             else
             {
@@ -426,13 +481,7 @@ static void ui_page_settings_apply_action(void)
             break;
 
         case UI_SETTINGS_VIEW_PROJECT_SAVE_AS:
-            if (project_product_save(level->selected_index) != 0U)
-            {
-                ui_page_settings_status("SAVING");
-            }
-            else
-            {                ui_page_settings_status("SAVE FAIL");
-            }
+            ui_page_settings_project_save_begin(level->selected_index);
             break;
 
         case UI_SETTINGS_VIEW_PROJECT_MANAGE:
@@ -455,12 +504,7 @@ static void ui_page_settings_apply_action(void)
             }
             else if (level->selected_index == (uint8_t)UI_SETTINGS_MANAGE_ACTION_SAVE_TO)
             {
-                if (project_product_save(g_ui_settings.selected_slot) != 0U)
-                {                    ui_page_settings_status("SAVING");
-                }
-                else
-                {                    ui_page_settings_status("SAVE TO FAIL");
-                }
+                ui_page_settings_project_save_begin(g_ui_settings.selected_slot);
             }
             else if (project_product_delete(g_ui_settings.selected_slot) != 0U)
             {                ui_page_settings_refresh_project_slots();
@@ -621,6 +665,7 @@ static void ui_page_settings_apply_action(void)
 
 static void ui_page_settings_enter(void)
 {
+    if(g_ui_project_save_phase!=UI_PROJECT_SAVE_IDLE)return;
     const uint8_t return_page_id = g_ui_settings.return_page_id;
     memset(&g_ui_settings, 0, sizeof(g_ui_settings));
     g_ui_settings.return_page_id = return_page_id;
@@ -649,11 +694,13 @@ static void ui_page_settings_leave(void)
 {
     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
     sd_preview_set_gain(1.0f);
-    g_ui_settings.depth = 0U;
+    if(g_ui_project_save_phase==UI_PROJECT_SAVE_IDLE)g_ui_settings.depth = 0U;
 }
 
 static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
 {
+    if((g_ui_project_save_phase==UI_PROJECT_SAVE_WRITING)
+            ||(project_product_save_busy()!=0U))return;
     if ((wav_convert_is_active() != 0U) || (g_ui_settings.convert_slot_valid != 0U))
     {
         return;
@@ -854,6 +901,7 @@ static void ui_page_settings_tick(void)
     uint8_t project_success = 0U;
     if (project_product_save_take_result(&project_slot, &project_success) != 0U)
     {
+        g_ui_project_save_phase=UI_PROJECT_SAVE_IDLE;
         (void)project_slot;
         if (project_success != 0U)
         {
