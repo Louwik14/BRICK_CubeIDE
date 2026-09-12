@@ -26,6 +26,7 @@ typedef enum
     RECORDER_FILE_RESERVATION_SD_BUSY,
     RECORDER_FILE_RESERVATION_NO_SPACE,
     RECORDER_FILE_RESERVATION_MAP_FULL,
+    RECORDER_FILE_RESERVATION_NAME_EXISTS,
     RECORDER_FILE_RESERVATION_FS_ERROR
 } recorder_file_reservation_result_t;
 
@@ -36,6 +37,7 @@ typedef enum
     RECORDER_FILE_JOB_COMMIT,
     RECORDER_FILE_JOB_RELEASE,
     RECORDER_FILE_JOB_SYNC,
+    RECORDER_FILE_JOB_RENAME,
     RECORDER_FILE_JOB_TERMINAL
 } recorder_file_job_phase_t;
 
@@ -56,6 +58,7 @@ typedef struct
     FF_BRICK_REC_EXTENT fs_extents[RECORDER_FILE_RESERVATION_MAX_EXTENTS];
     sample_stream_physical_extent_t physical_extents[RECORDER_FILE_RESERVATION_MAX_EXTENTS];
     char path[RECORDER_FILE_RESERVATION_PATH_MAX];
+    char job_final_path[RECORDER_FILE_RESERVATION_PATH_MAX];
     volatile uint32_t publish_sequence;
     volatile uint64_t published_reserved_file_bytes;
     volatile uint64_t published_valid_file_bytes;
@@ -71,6 +74,7 @@ typedef struct
         FF_BRICK_REC_RESERVE_CONT reserve;
         FF_BRICK_REC_RELEASE_CONT release;
         FF_META_OBJECT_SYNC_CONT sync;
+        FF_BRICK_REC_RENAME_CONT rename;
     } job_cont;
     recorder_file_reservation_result_t job_result;
     recorder_file_job_phase_t job_phase;
@@ -111,6 +115,9 @@ recorder_file_reservation_result_t recorder_file_reservation_commit_begin(
     uint64_t valid_bytes);
 recorder_file_reservation_result_t recorder_file_reservation_sync_begin(
     recorder_file_reservation_t *session);
+recorder_file_reservation_result_t recorder_file_reservation_rename_begin(
+    recorder_file_reservation_t *session,
+    const char *final_path);
 recorder_file_reservation_result_t recorder_file_reservation_release_begin(
     recorder_file_reservation_t *session);
 recorder_file_reservation_result_t recorder_file_reservation_job_step(
@@ -128,9 +135,6 @@ recorder_file_reservation_result_t recorder_file_reservation_release_unused(
     recorder_file_reservation_t *session);
 recorder_file_reservation_result_t recorder_file_reservation_close(
     recorder_file_reservation_t *session);
-recorder_file_reservation_result_t recorder_file_reservation_rename_closed(
-    recorder_file_reservation_t *session,
-    const char *final_path);
 uint8_t recorder_file_reservation_map_snapshot(
     const recorder_file_reservation_t *session,
     recorder_file_reservation_map_snapshot_t *out_snapshot);

@@ -4211,6 +4211,16 @@ FRESULT f_open (
 				mode |= FA_MODIFIED;
 			fp->dir_sect = fs->winsect;			/* Pointer to the directory entry */
 			fp->dir_ptr = dj.dir;
+#if _BRICK_REC_RESERVE
+			fp->brick_dir_obj = dj.obj;
+			fp->brick_dir_obj.id = fs->id;
+#if _USE_LFN != 0
+			fp->brick_dir_block_ofs = dj.blk_ofs;
+#else
+			fp->brick_dir_block_ofs = dj.dptr;
+#endif
+			fp->brick_dir_entry_ofs = dj.dptr;
+#endif
 #if _FS_LOCK != 0
 			fp->obj.lockid = inc_lock(&dj, (mode & ~FA_READ) ? 1 : 0);
 			if (!fp->obj.lockid) res = FR_INT_ERR;
@@ -6836,6 +6846,543 @@ FRESULT f_brick_meta_remove_chain_io_complete (
 		return FR_INVALID_PARAMETER;
 	}
 	return f_brick_meta_window_io_complete(&cont->window, sequence, result);
+}
+
+
+enum {
+	FF_BRICK_RENAME_PHASE_SEEK = 0,
+	FF_BRICK_RENAME_PHASE_NEXT_LOADED,
+	FF_BRICK_RENAME_PHASE_SCAN_READ,
+	FF_BRICK_RENAME_PHASE_SCAN_ENTRY,
+	FF_BRICK_RENAME_PHASE_XDIR_READ,
+	FF_BRICK_RENAME_PHASE_XDIR_ENTRY,
+	FF_BRICK_RENAME_PHASE_SOURCE_SFN_READ,
+	FF_BRICK_RENAME_PHASE_SOURCE_SFN_ENTRY,
+	FF_BRICK_RENAME_PHASE_FAT_REWRITE_READ,
+	FF_BRICK_RENAME_PHASE_FAT_REWRITE_ENTRY,
+	FF_BRICK_RENAME_PHASE_XDIR_UPDATE,
+	FF_BRICK_RENAME_PHASE_XDIR_STORE_READ,
+	FF_BRICK_RENAME_PHASE_XDIR_STORE_ENTRY,
+	FF_BRICK_RENAME_PHASE_FLUSH,
+	FF_BRICK_RENAME_PHASE_BARRIER,
+	FF_BRICK_RENAME_PHASE_WINDOW,
+	FF_BRICK_RENAME_PHASE_DONE,
+	FF_BRICK_RENAME_PHASE_ERROR
+};
+
+
+static FF_META_STEP_RESULT brick_rec_rename_error (
+	FF_BRICK_REC_RENAME_CONT* cont,
+	FRESULT result)
+{
+	cont->result = result;
+	cont->phase = FF_BRICK_RENAME_PHASE_ERROR;
+	return FF_META_STEP_ERROR;
+}
+
+
+static FF_META_STEP_RESULT brick_rec_rename_window (
+	FF_BRICK_REC_RENAME_CONT* cont,
+	DWORD sector,
+	BYTE load_target,
+	BYTE after_window)
+{
+	FRESULT result = f_brick_meta_window_begin(&cont->window, cont->fs, sector,
+		load_target, cont->staging, cont->staging_size);
+	if (result != FR_OK) return brick_rec_rename_error(cont, result);
+	cont->after_window = after_window;
+	cont->phase = FF_BRICK_RENAME_PHASE_WINDOW;
+	return FF_META_STEP_YIELD;
+}
+
+
+static void brick_rec_rename_cursor_reset (
+	FF_BRICK_REC_RENAME_CONT* cont,
+	DWORD offset,
+	BYTE after_seek)
+{
+	cont->cursor_cluster = cont->directory_obj.sclust;
+	if (cont->cursor_cluster == 0) {
+		cont->cursor_cluster = cont->fs->dirbase;
+		cont->directory_obj.stat = 0;
+	}
+	cont->cursor_offset = offset;
+	cont->cursor_remaining = offset;
+	cont->cursor_within_cluster = 0;
+	cont->after_seek = after_seek;
+	cont->phase = FF_BRICK_RENAME_PHASE_SEEK;
+}
+
+
+static FF_META_STEP_RESULT brick_rec_rename_load_source (
+	FF_BRICK_REC_RENAME_CONT* cont)
+{
+	cont->loading_source = 1;
+	brick_rec_rename_cursor_reset(cont,
+		cont->fs->fs_type == FS_EXFAT ? cont->source_block_offset
+			: cont->source_entry_offset,
+		cont->fs->fs_type == FS_EXFAT ? FF_BRICK_RENAME_PHASE_SCAN_READ
+			: FF_BRICK_RENAME_PHASE_SOURCE_SFN_READ);
+	return FF_META_STEP_YIELD;
+}
+
+
+static FRESULT brick_rec_rename_accept_next (
+	FF_BRICK_REC_RENAME_CONT* cont)
+{
+	if (cont->fat_value >= cont->fs->n_fatent) return FR_NO_FILE;
+	if (cont->fat_value < 2) return FR_INT_ERR;
+	cont->cursor_cluster = cont->fat_value;
+	return FR_OK;
+}
+
+
+static FF_META_STEP_RESULT brick_rec_rename_next_cluster (
+	FF_BRICK_REC_RENAME_CONT* cont,
+	BYTE after_next)
+{
+	DWORD value;
+	FRESULT result;
+	cont->after_next_cluster = after_next;
+	if (brick_meta_exfat_synthetic_value(&cont->directory_obj,
+		cont->cursor_cluster, &value)) {
+		cont->fat_value = value;
+		result = brick_rec_rename_accept_next(cont);
+		if (result == FR_NO_FILE && !cont->loading_source) {
+			return brick_rec_rename_load_source(cont);
+		}
+		if (result != FR_OK) return brick_rec_rename_error(cont, result);
+		cont->phase = after_next;
+		return FF_META_STEP_YIELD;
+	}
+	return brick_rec_rename_window(cont,
+		brick_meta_fat_sector(cont->fs, cont->cursor_cluster), 1,
+		FF_BRICK_RENAME_PHASE_NEXT_LOADED);
+}
+
+
+static FF_META_STEP_RESULT brick_rec_rename_advance (
+	FF_BRICK_REC_RENAME_CONT* cont,
+	BYTE next_phase)
+{
+	DWORD cluster_bytes = (DWORD)cont->fs->csize * SS(cont->fs);
+	cont->cursor_offset += SZDIRE;
+	cont->cursor_within_cluster += SZDIRE;
+	if (cont->cursor_within_cluster < cluster_bytes) {
+		cont->phase = next_phase;
+		return FF_META_STEP_YIELD;
+	}
+	cont->cursor_within_cluster = 0;
+	return brick_rec_rename_next_cluster(cont, next_phase);
+}
+
+
+static FF_META_STEP_RESULT brick_rec_rename_read_cursor (
+	FF_BRICK_REC_RENAME_CONT* cont,
+	BYTE loaded_phase)
+{
+	DWORD sector = clust2sect(cont->fs, cont->cursor_cluster);
+	if (!sector) return brick_rec_rename_error(cont, FR_INT_ERR);
+	sector += cont->cursor_within_cluster / SS(cont->fs);
+	return brick_rec_rename_window(cont, sector, 1, loaded_phase);
+}
+
+
+static int brick_rec_rename_xdir_matches (FF_BRICK_REC_RENAME_CONT* cont)
+{
+#if _FS_EXFAT
+	UINT remaining, di, ni;
+	if (xdir_sum(cont->xdir) != ld_word(cont->xdir + XDIR_SetSum)
+		|| cont->xdir[XDIR_NumName] != cont->target_length
+		|| ld_word(cont->xdir + XDIR_NameHash) != xname_sum(cont->target_lfn)) {
+		return 0;
+	}
+	remaining = cont->target_length;
+	di = SZDIRE * 2;
+	ni = 0;
+	while (remaining--) {
+		if ((di % SZDIRE) == 0) di += 2;
+		if (ff_wtoupper(ld_word(cont->xdir + di))
+			!= ff_wtoupper(cont->target_lfn[ni++])) return 0;
+		di += 2;
+	}
+	return cont->target_lfn[ni] == 0;
+#else
+	(void)cont;
+	return 0;
+#endif
+}
+
+
+FRESULT f_brick_rec_rename_begin (
+	FF_BRICK_REC_RENAME_CONT* cont,
+	const FIL* closed_file,
+	const TCHAR* new_name,
+	BYTE* staging,
+	UINT staging_size)
+{
+	DIR name;
+	FATFS* fs;
+	WCHAR* saved_lfn;
+	const TCHAR* path;
+	FRESULT result;
+	UINT length;
+
+	if (!cont || !closed_file || !new_name || closed_file->obj.fs
+		|| !closed_file->brick_dir_obj.fs) return FR_INVALID_PARAMETER;
+	fs = closed_file->brick_dir_obj.fs;
+	if (fs->id != closed_file->brick_dir_obj.id
+		|| (staging && staging_size < SS(fs))) return FR_INVALID_OBJECT;
+	if (fs->fs_type != FS_FAT32
+#if _FS_EXFAT
+		&& fs->fs_type != FS_EXFAT
+#endif
+	) return FR_DENIED;
+	mem_set(cont, 0, sizeof(*cont));
+	cont->fs = fs;
+	cont->directory_obj = closed_file->brick_dir_obj;
+	cont->source_block_offset = closed_file->brick_dir_block_ofs;
+	cont->source_entry_offset = closed_file->brick_dir_entry_ofs;
+	cont->staging = staging;
+	cont->staging_size = staging ? staging_size : 0;
+	cont->scan_lfn_order = 0xFF;
+	cont->scan_lfn_sum = 0xFF;
+	cont->result = FR_OK;
+	mem_set(&name, 0, sizeof(name));
+	name.obj.fs = fs;
+	saved_lfn = fs->lfnbuf;
+	fs->lfnbuf = cont->target_lfn;
+	path = new_name;
+	result = create_name(&name, &path);
+	fs->lfnbuf = saved_lfn;
+	if (result != FR_OK || !(name.fn[NSFLAG] & NS_LAST) || *path) {
+		return result == FR_OK ? FR_INVALID_NAME : result;
+	}
+	mem_cpy(cont->target_fn, name.fn, sizeof(cont->target_fn));
+	for (length = 0; cont->target_lfn[length]; length++) ;
+	if (length == 0 || length > _MAX_LFN) return FR_INVALID_NAME;
+	cont->target_length = length;
+	brick_rec_rename_cursor_reset(cont, 0, FF_BRICK_RENAME_PHASE_SCAN_READ);
+	return FR_OK;
+}
+
+
+FF_META_STEP_RESULT f_brick_rec_rename_step (
+	FF_BRICK_REC_RENAME_CONT* cont,
+	const FF_META_REQUEST** request)
+{
+	FF_META_STEP_RESULT child;
+	FRESULT result;
+	DWORD cluster_bytes;
+	DWORD limit;
+	UINT offset;
+	BYTE* dir;
+	BYTE c, attr;
+	UINT needed;
+	UINT i, name_index;
+
+	if (request) *request = 0;
+	if (!cont || !cont->fs) return FF_META_STEP_ERROR;
+	cluster_bytes = (DWORD)cont->fs->csize * SS(cont->fs);
+	limit = cont->fs->fs_type == FS_EXFAT ? MAX_DIR_EX : MAX_DIR;
+
+	switch (cont->phase) {
+	case FF_BRICK_RENAME_PHASE_SEEK:
+		if (cont->cursor_cluster < 2 || cont->cursor_cluster >= cont->fs->n_fatent
+			|| cont->cursor_offset >= limit || cont->cursor_offset % SZDIRE) {
+			return brick_rec_rename_error(cont, FR_INT_ERR);
+		}
+		if (cont->cursor_remaining < cluster_bytes) {
+			cont->cursor_within_cluster = cont->cursor_remaining;
+			cont->phase = cont->after_seek;
+			return FF_META_STEP_YIELD;
+		}
+		cont->cursor_remaining -= cluster_bytes;
+		return brick_rec_rename_next_cluster(cont, FF_BRICK_RENAME_PHASE_SEEK);
+
+	case FF_BRICK_RENAME_PHASE_NEXT_LOADED:
+		cont->fat_value = brick_meta_fat_value_loaded(&cont->directory_obj,
+			cont->cursor_cluster);
+		result = brick_rec_rename_accept_next(cont);
+		if (result == FR_NO_FILE && !cont->loading_source) {
+			return brick_rec_rename_load_source(cont);
+		}
+		if (result != FR_OK) return brick_rec_rename_error(cont, result);
+		cont->phase = cont->after_next_cluster;
+		return FF_META_STEP_YIELD;
+
+	case FF_BRICK_RENAME_PHASE_SCAN_READ:
+		if (cont->cursor_offset >= limit
+			|| (cont->fs->fs_type == FS_EXFAT && cont->directory_obj.objsize
+				&& cont->cursor_offset >= cont->directory_obj.objsize)) {
+			if (cont->loading_source) {
+				return brick_rec_rename_error(cont, FR_INT_ERR);
+			}
+			return brick_rec_rename_load_source(cont);
+		}
+		return brick_rec_rename_read_cursor(cont, FF_BRICK_RENAME_PHASE_SCAN_ENTRY);
+
+	case FF_BRICK_RENAME_PHASE_SCAN_ENTRY:
+		offset = (UINT)(cont->cursor_within_cluster % SS(cont->fs));
+		dir = cont->fs->win + offset;
+		c = dir[DIR_Name];
+		if (c == 0) {
+			if (cont->loading_source) {
+				return brick_rec_rename_error(cont, FR_INT_ERR);
+			}
+			return brick_rec_rename_load_source(cont);
+		}
+#if _FS_EXFAT
+		if (cont->fs->fs_type == FS_EXFAT) {
+			if (c == 0x85) {
+				cont->entry_count = dir[XDIR_NumSec] + 1;
+				if (cont->entry_count < 3 || cont->entry_count > 19) {
+					return brick_rec_rename_error(cont, FR_INT_ERR);
+				}
+				cont->entry_index = 1;
+				cont->candidate_source = cont->cursor_offset == cont->source_block_offset;
+				mem_cpy(cont->xdir, dir, SZDIRE);
+				return brick_rec_rename_advance(cont, FF_BRICK_RENAME_PHASE_XDIR_READ);
+			}
+			if (cont->loading_source) {
+				return brick_rec_rename_error(cont, FR_INT_ERR);
+			}
+			return brick_rec_rename_advance(cont, FF_BRICK_RENAME_PHASE_SCAN_READ);
+		}
+#endif
+		attr = dir[DIR_Attr] & AM_MASK;
+		if (c == DDEM || ((attr & AM_VOL) && attr != AM_LFN)) {
+			cont->scan_lfn_order = 0xFF;
+		} else if (attr == AM_LFN) {
+			if (c & LLEF) {
+				cont->scan_lfn_sum = dir[LDIR_Chksum];
+				c &= (BYTE)~LLEF;
+				cont->scan_lfn_order = c;
+			}
+			cont->scan_lfn_order = (c == cont->scan_lfn_order
+				&& cont->scan_lfn_sum == dir[LDIR_Chksum]
+				&& cmp_lfn(cont->target_lfn, dir))
+				? cont->scan_lfn_order - 1 : 0xFF;
+		} else {
+			int matched = (!cont->scan_lfn_order
+				&& cont->scan_lfn_sum == sum_sfn(dir))
+				|| (!(cont->target_fn[NSFLAG] & NS_LOSS)
+					&& !mem_cmp(dir, cont->target_fn, 11));
+			if (matched && cont->cursor_offset != cont->source_entry_offset) {
+				return brick_rec_rename_error(cont, FR_EXIST);
+			}
+			cont->scan_lfn_order = 0xFF;
+		}
+		return brick_rec_rename_advance(cont, FF_BRICK_RENAME_PHASE_SCAN_READ);
+
+	case FF_BRICK_RENAME_PHASE_XDIR_READ:
+		return brick_rec_rename_read_cursor(cont, FF_BRICK_RENAME_PHASE_XDIR_ENTRY);
+
+	case FF_BRICK_RENAME_PHASE_XDIR_ENTRY:
+#if _FS_EXFAT
+		offset = (UINT)(cont->cursor_within_cluster % SS(cont->fs));
+		dir = cont->fs->win + offset;
+		if ((cont->entry_index == 1 && dir[XDIR_Type] != 0xC0)
+			|| (cont->entry_index >= 2 && dir[XDIR_Type] != 0xC1)) {
+			return brick_rec_rename_error(cont, FR_INT_ERR);
+		}
+		mem_cpy(cont->xdir + cont->entry_index * SZDIRE, dir, SZDIRE);
+		if (++cont->entry_index < cont->entry_count) {
+			return brick_rec_rename_advance(cont, FF_BRICK_RENAME_PHASE_XDIR_READ);
+		}
+		if (cont->loading_source) {
+			if (xdir_sum(cont->xdir) != ld_word(cont->xdir + XDIR_SetSum)) {
+				return brick_rec_rename_error(cont, FR_INT_ERR);
+			}
+			cont->phase = FF_BRICK_RENAME_PHASE_XDIR_UPDATE;
+			return FF_META_STEP_YIELD;
+		}
+		if (!cont->candidate_source && brick_rec_rename_xdir_matches(cont)) {
+			return brick_rec_rename_error(cont, FR_EXIST);
+		}
+		return brick_rec_rename_advance(cont, FF_BRICK_RENAME_PHASE_SCAN_READ);
+#else
+		return brick_rec_rename_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_BRICK_RENAME_PHASE_SOURCE_SFN_READ:
+		return brick_rec_rename_read_cursor(cont,
+			FF_BRICK_RENAME_PHASE_SOURCE_SFN_ENTRY);
+
+	case FF_BRICK_RENAME_PHASE_SOURCE_SFN_ENTRY:
+		offset = (UINT)(cont->cursor_within_cluster % SS(cont->fs));
+		dir = cont->fs->win + offset;
+		if (dir[DIR_Name] == 0 || dir[DIR_Name] == DDEM
+			|| (dir[DIR_Attr] & AM_MASK) == AM_LFN) {
+			return brick_rec_rename_error(cont, FR_INT_ERR);
+		}
+		cont->source_sfn_sum = sum_sfn(dir);
+		if (cont->source_block_offset == 0xFFFFFFFF) {
+			if (cont->target_fn[NSFLAG] & NS_LFN) {
+				return brick_rec_rename_error(cont, FR_INVALID_NAME);
+			}
+			mem_cpy(dir, cont->target_fn, 11);
+			dir[DIR_NTres] = cont->target_fn[NSFLAG] & (NS_BODY | NS_EXT);
+			cont->fs->wflag = 1;
+			cont->phase = FF_BRICK_RENAME_PHASE_FLUSH;
+			return FF_META_STEP_YIELD;
+		}
+		cont->source_lfn_entries = (BYTE)((cont->source_entry_offset
+			- cont->source_block_offset) / SZDIRE);
+		needed = (cont->target_length + 12) / 13;
+		if (needed != cont->source_lfn_entries) {
+			return brick_rec_rename_error(cont, FR_INVALID_NAME);
+		}
+		cont->entry_index = 0;
+		brick_rec_rename_cursor_reset(cont, cont->source_block_offset,
+			FF_BRICK_RENAME_PHASE_FAT_REWRITE_READ);
+		return FF_META_STEP_YIELD;
+
+	case FF_BRICK_RENAME_PHASE_FAT_REWRITE_READ:
+		return brick_rec_rename_read_cursor(cont,
+			FF_BRICK_RENAME_PHASE_FAT_REWRITE_ENTRY);
+
+	case FF_BRICK_RENAME_PHASE_FAT_REWRITE_ENTRY:
+		offset = (UINT)(cont->cursor_within_cluster % SS(cont->fs));
+		dir = cont->fs->win + offset;
+		put_lfn(cont->target_lfn, dir,
+			(BYTE)(cont->source_lfn_entries - cont->entry_index),
+			cont->source_sfn_sum);
+		cont->fs->wflag = 1;
+		if (++cont->entry_index >= cont->source_lfn_entries) {
+			cont->phase = FF_BRICK_RENAME_PHASE_FLUSH;
+			return FF_META_STEP_YIELD;
+		}
+		return brick_rec_rename_advance(cont,
+			FF_BRICK_RENAME_PHASE_FAT_REWRITE_READ);
+
+	case FF_BRICK_RENAME_PHASE_XDIR_UPDATE:
+#if _FS_EXFAT
+		needed = 2 + (cont->target_length + 14) / 15;
+		if (needed != cont->entry_count) {
+			return brick_rec_rename_error(cont, FR_INVALID_NAME);
+		}
+		for (i = SZDIRE * 2; i < cont->entry_count * SZDIRE; i++) {
+			cont->xdir[i] = 0;
+		}
+		name_index = 0;
+		i = SZDIRE * 2;
+		while (i < cont->entry_count * SZDIRE) {
+			cont->xdir[i++] = 0xC1;
+			cont->xdir[i++] = 0;
+			while (i % SZDIRE) {
+				WCHAR wc = name_index < cont->target_length
+					? cont->target_lfn[name_index++] : 0;
+				st_word(cont->xdir + i, wc);
+				i += 2;
+			}
+		}
+		cont->xdir[XDIR_NumName] = (BYTE)cont->target_length;
+		st_word(cont->xdir + XDIR_NameHash, xname_sum(cont->target_lfn));
+		st_word(cont->xdir + XDIR_SetSum, xdir_sum(cont->xdir));
+		cont->entry_index = 0;
+		brick_rec_rename_cursor_reset(cont, cont->source_block_offset,
+			FF_BRICK_RENAME_PHASE_XDIR_STORE_READ);
+		return FF_META_STEP_YIELD;
+#else
+		return brick_rec_rename_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_BRICK_RENAME_PHASE_XDIR_STORE_READ:
+		return brick_rec_rename_read_cursor(cont,
+			FF_BRICK_RENAME_PHASE_XDIR_STORE_ENTRY);
+
+	case FF_BRICK_RENAME_PHASE_XDIR_STORE_ENTRY:
+#if _FS_EXFAT
+		offset = (UINT)(cont->cursor_within_cluster % SS(cont->fs));
+		mem_cpy(cont->fs->win + offset,
+			cont->xdir + cont->entry_index * SZDIRE, SZDIRE);
+		cont->fs->wflag = 1;
+		if (++cont->entry_index >= cont->entry_count) {
+			cont->phase = FF_BRICK_RENAME_PHASE_FLUSH;
+			return FF_META_STEP_YIELD;
+		}
+		return brick_rec_rename_advance(cont,
+			FF_BRICK_RENAME_PHASE_XDIR_STORE_READ);
+#else
+		return brick_rec_rename_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_BRICK_RENAME_PHASE_FLUSH:
+		return brick_rec_rename_window(cont, cont->fs->winsect, 0,
+			FF_BRICK_RENAME_PHASE_BARRIER);
+
+	case FF_BRICK_RENAME_PHASE_BARRIER:
+		BRICK_REC_NOTE_SYNC();
+		if (disk_ioctl(cont->fs->drv, CTRL_SYNC, 0) != RES_OK) {
+			return brick_rec_rename_error(cont, FR_DISK_ERR);
+		}
+		cont->result = FR_OK;
+		cont->phase = FF_BRICK_RENAME_PHASE_DONE;
+		return FF_META_STEP_DONE;
+
+	case FF_BRICK_RENAME_PHASE_WINDOW:
+		child = f_brick_meta_window_step(&cont->window, request);
+		if (child == FF_META_STEP_DONE) {
+			cont->phase = cont->after_window;
+			return FF_META_STEP_YIELD;
+		}
+		if (child == FF_META_STEP_ERROR) {
+			return brick_rec_rename_error(cont, cont->window.result);
+		}
+		return child;
+
+	case FF_BRICK_RENAME_PHASE_DONE:
+		return FF_META_STEP_DONE;
+
+	default:
+		return brick_rec_rename_error(cont,
+			cont->result != FR_OK ? cont->result : FR_INT_ERR);
+	}
+}
+
+
+FRESULT f_brick_rec_rename_io_started (
+	FF_BRICK_REC_RENAME_CONT* cont,
+	DWORD sequence)
+{
+	if (!cont || cont->phase != FF_BRICK_RENAME_PHASE_WINDOW) {
+		return FR_INVALID_PARAMETER;
+	}
+	return f_brick_meta_window_io_started(&cont->window, sequence);
+}
+
+
+FRESULT f_brick_rec_rename_io_complete (
+	FF_BRICK_REC_RENAME_CONT* cont,
+	DWORD sequence,
+	FRESULT result)
+{
+	if (!cont || cont->phase != FF_BRICK_RENAME_PHASE_WINDOW) {
+		return FR_INVALID_PARAMETER;
+	}
+	return f_brick_meta_window_io_complete(&cont->window, sequence, result);
+}
+
+
+FRESULT f_brick_rec_close_synced (FIL* fp)
+{
+	FRESULT result;
+	FATFS* fs;
+
+	if (!fp) return FR_INVALID_OBJECT;
+	result = validate(&fp->obj, &fs);
+	if (result == FR_OK) {
+		if (fp->err != FR_OK) result = (FRESULT)fp->err;
+		if (result == FR_OK && (fp->flag & (FA_MODIFIED | FA_DIRTY))) {
+			result = FR_INT_ERR;
+		}
+#if _FS_LOCK != 0
+		if (result == FR_OK) result = dec_lock(fp->obj.lockid);
+#endif
+		if (result == FR_OK) fp->obj.fs = 0;
+	}
+	LEAVE_FF(fs, result);
 }
 
 static void brick_rec_metrics_begin (FF_BRICK_REC_METRICS* metrics)

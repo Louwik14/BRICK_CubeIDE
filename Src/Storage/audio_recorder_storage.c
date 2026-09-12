@@ -294,12 +294,26 @@ static sd_scheduler_start_result_t audio_recorder_storage_finalization_step(
             return SD_SCHEDULER_START_COMPLETED;
 
         case AUDIO_RECORDER_FINAL_RENAME:
-            reservation_result = recorder_file_reservation_rename_closed(
-                &runtime->reservation, runtime->final_path);
+            if (recorder_file_reservation_job_active(&runtime->reservation) == 0U)
+            {
+                reservation_result = recorder_file_reservation_rename_begin(
+                    &runtime->reservation, runtime->final_path);
+                if (reservation_result == RECORDER_FILE_RESERVATION_SD_BUSY)
+                    return SD_SCHEDULER_START_BUSY;
+                return (reservation_result == RECORDER_FILE_RESERVATION_OK)
+                    ? SD_SCHEDULER_START_COMPLETED : SD_SCHEDULER_START_ERROR;
+            }
+            reservation_result = recorder_file_reservation_job_step(
+                &runtime->reservation);
+            if (reservation_result == RECORDER_FILE_RESERVATION_IO_STARTED)
+                return SD_SCHEDULER_START_STARTED;
+            if (reservation_result == RECORDER_FILE_RESERVATION_PROGRESS)
+                return SD_SCHEDULER_START_COMPLETED;
             if (reservation_result == RECORDER_FILE_RESERVATION_SD_BUSY)
                 return SD_SCHEDULER_START_BUSY;
             if (reservation_result != RECORDER_FILE_RESERVATION_OK)
                 return SD_SCHEDULER_START_ERROR;
+            recorder_file_reservation_job_finish(&runtime->reservation);
             runtime->final_phase = AUDIO_RECORDER_FINAL_DONE;
             runtime->phase = AUDIO_RECORDER_STORAGE_TAKE_READY;
             sd_access_gate_set_recorder_fs_logical_active(0U);
@@ -321,7 +335,8 @@ static sd_scheduler_poll_result_t audio_recorder_storage_filesystem_poll(
         if ((runtime->phase == AUDIO_RECORDER_STORAGE_PREPARING)
                 || (runtime->reservation.job_phase == RECORDER_FILE_JOB_COMMIT)
                 || (runtime->reservation.job_phase == RECORDER_FILE_JOB_RELEASE)
-                || (runtime->reservation.job_phase == RECORDER_FILE_JOB_SYNC))
+                || (runtime->reservation.job_phase == RECORDER_FILE_JOB_SYNC)
+                || (runtime->reservation.job_phase == RECORDER_FILE_JOB_RENAME))
         {
             const recorder_file_reservation_result_t result =
                 recorder_file_reservation_job_poll(&runtime->reservation);

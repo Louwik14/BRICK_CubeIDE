@@ -162,6 +162,11 @@ typedef struct {
 #if !_FS_READONLY
 	DWORD	dir_sect;		/* Sector number containing the directory entry */
 	BYTE*	dir_ptr;		/* Pointer to the directory entry in the win[] */
+#if _BRICK_REC_RESERVE
+	_FDID	brick_dir_obj;	/* Containing directory retained for recorder rename */
+	DWORD	brick_dir_block_ofs;
+	DWORD	brick_dir_entry_ofs;
+#endif
 #endif
 #if _USE_FASTSEEK
 	DWORD*	cltbl;			/* Pointer to the cluster link map table (nulled on open, set by application) */
@@ -344,6 +349,38 @@ typedef struct {
 	BYTE after_window;
 } FF_META_REMOVE_CHAIN_CONT;
 
+typedef struct {
+	FATFS* fs;
+	_FDID directory_obj;
+	FF_META_WINDOW_CONT window;
+	BYTE* staging;
+	DWORD source_block_offset;
+	DWORD source_entry_offset;
+	DWORD cursor_cluster;
+	DWORD cursor_offset;
+	DWORD cursor_remaining;
+	DWORD cursor_within_cluster;
+	DWORD fat_value;
+	FRESULT result;
+	UINT staging_size;
+	UINT entry_index;
+	UINT entry_count;
+	UINT target_length;
+	BYTE phase;
+	BYTE after_window;
+	BYTE after_next_cluster;
+	BYTE after_seek;
+	BYTE scan_lfn_order;
+	BYTE scan_lfn_sum;
+	BYTE source_sfn_sum;
+	BYTE source_lfn_entries;
+	BYTE loading_source;
+	BYTE candidate_source;
+	BYTE target_fn[12];
+	WCHAR target_lfn[_MAX_LFN + 1];
+	BYTE xdir[FF_META_XDIR_BUFFER_SIZE];
+} FF_BRICK_REC_RENAME_CONT;
+
 FRESULT f_brick_meta_window_begin (FF_META_WINDOW_CONT* cont, FATFS* fs,
 	DWORD target_sector, BYTE load_target, BYTE* staging, UINT staging_size);
 FF_META_STEP_RESULT f_brick_meta_window_step (FF_META_WINDOW_CONT* cont,
@@ -379,6 +416,16 @@ FRESULT f_brick_meta_remove_chain_io_started (FF_META_REMOVE_CHAIN_CONT* cont,
 	DWORD sequence);
 FRESULT f_brick_meta_remove_chain_io_complete (FF_META_REMOVE_CHAIN_CONT* cont,
 	DWORD sequence, FRESULT result);
+FRESULT f_brick_rec_rename_begin (FF_BRICK_REC_RENAME_CONT* cont,
+	const FIL* closed_file, const TCHAR* new_name, BYTE* staging,
+	UINT staging_size);
+FF_META_STEP_RESULT f_brick_rec_rename_step (FF_BRICK_REC_RENAME_CONT* cont,
+	const FF_META_REQUEST** request);
+FRESULT f_brick_rec_rename_io_started (FF_BRICK_REC_RENAME_CONT* cont,
+	DWORD sequence);
+FRESULT f_brick_rec_rename_io_complete (FF_BRICK_REC_RENAME_CONT* cont,
+	DWORD sequence, FRESULT result);
+FRESULT f_brick_rec_close_synced (FIL* fp);
 #endif
 
 

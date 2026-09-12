@@ -29,6 +29,31 @@ static uint8_t recorder_file_copy_path(char *dst, const char *src)
     return 0U;
 }
 
+static const char *recorder_file_same_directory_leaf(const char *source,
+                                                      const char *target)
+{
+    const char *source_leaf = source;
+    const char *target_leaf = target;
+    if((source == 0) || (target == 0)) return 0;
+    for(const char *p = source; *p != '\0'; ++p)
+    {
+        if((*p == '/') || (*p == '\\')) source_leaf = p + 1;
+    }
+    for(const char *p = target; *p != '\0'; ++p)
+    {
+        if((*p == '/') || (*p == '\\')) target_leaf = p + 1;
+    }
+    const size_t source_prefix = (size_t)(source_leaf - source);
+    const size_t target_prefix = (size_t)(target_leaf - target);
+    if((source_prefix != target_prefix) || (source_leaf[0] == '\0')
+            || (target_leaf[0] == '\0')
+            || (memcmp(source, target, source_prefix) != 0))
+    {
+        return 0;
+    }
+    return target_leaf;
+}
+
 static recorder_file_reservation_result_t recorder_file_fs_result(FRESULT fr)
 {
     if(fr == FR_OK)
@@ -42,6 +67,10 @@ static recorder_file_reservation_result_t recorder_file_fs_result(FRESULT fr)
     if(fr == FR_NOT_ENOUGH_CORE)
     {
         return RECORDER_FILE_RESERVATION_MAP_FULL;
+    }
+    if(fr == FR_EXIST)
+    {
+        return RECORDER_FILE_RESERVATION_NAME_EXISTS;
     }
     return RECORDER_FILE_RESERVATION_FS_ERROR;
 }
@@ -271,6 +300,38 @@ recorder_file_reservation_result_t recorder_file_reservation_sync_begin(
         session->file.obj.objsize, session->file.obj.objsize);
 }
 
+recorder_file_reservation_result_t recorder_file_reservation_rename_begin(
+    recorder_file_reservation_t *session,
+    const char *final_path)
+{
+    if((session == 0) || (final_path == 0) || (session->open != 0U)
+            || (session->failed != 0U) || (session->path[0] == '\0')
+            || (session->job_phase != RECORDER_FILE_JOB_NONE))
+    {
+        return RECORDER_FILE_RESERVATION_INVALID_STATE;
+    }
+    const char *const leaf = recorder_file_same_directory_leaf(session->path,
+        final_path);
+    if((leaf == 0) || (recorder_file_copy_path(session->job_final_path,
+        final_path) == 0U))
+    {
+        return RECORDER_FILE_RESERVATION_INVALID_ARG;
+    }
+    const FRESULT fr = f_brick_rec_rename_begin(&session->job_cont.rename,
+        &session->file, leaf, session->metadata_staging,
+        sizeof(session->metadata_staging));
+    if(fr != FR_OK)
+    {
+        session->job_final_path[0] = '\0';
+        return recorder_file_fs_result(fr);
+    }
+    session->job_media_epoch = sd_access_media_epoch();
+    session->job_result = RECORDER_FILE_RESERVATION_SD_BUSY;
+    session->job_phase = RECORDER_FILE_JOB_RENAME;
+    sd_access_gate_set_recorder_fs_logical_active(1U);
+    return RECORDER_FILE_RESERVATION_OK;
+}
+
 static recorder_file_reservation_result_t recorder_file_release_targets(
     const recorder_file_reservation_t *session,
     FSIZE_t *keep_bytes,
@@ -404,7 +465,9 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
         ? f_brick_rec_reserve_step(&session->job_cont.reserve, &request)
         : (active_phase == RECORDER_FILE_JOB_RELEASE)
             ? f_brick_rec_release_step(&session->job_cont.release, &request)
-            : f_brick_meta_object_sync_step(&session->job_cont.sync, &request);
+            : (active_phase == RECORDER_FILE_JOB_RENAME)
+                ? f_brick_rec_rename_step(&session->job_cont.rename, &request)
+                : f_brick_meta_object_sync_step(&session->job_cont.sync, &request);
     if(step == FF_META_STEP_NEED_IO)
     {
         if((request == 0) || (request->count != 1U))
@@ -446,8 +509,11 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
             : (active_phase == RECORDER_FILE_JOB_RELEASE)
                 ? f_brick_rec_release_io_started(&session->job_cont.release,
                     request->sequence)
-                : f_brick_meta_object_sync_io_started(&session->job_cont.sync,
-                    request->sequence);
+                : (active_phase == RECORDER_FILE_JOB_RENAME)
+                    ? f_brick_rec_rename_io_started(&session->job_cont.rename,
+                        request->sequence)
+                    : f_brick_meta_object_sync_io_started(&session->job_cont.sync,
+                        request->sequence);
         if(started != FR_OK)
         {
             Error_Handler();
@@ -462,7 +528,9 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
         const FRESULT result = (active_phase == RECORDER_FILE_JOB_EXTEND)
             ? session->job_cont.reserve.result
             : (active_phase == RECORDER_FILE_JOB_RELEASE)
-                ? session->job_cont.release.result : session->job_cont.sync.result;
+                ? session->job_cont.release.result
+                : (active_phase == RECORDER_FILE_JOB_RENAME)
+                    ? session->job_cont.rename.result : session->job_cont.sync.result;
         session->job_result = recorder_file_fs_result(result);
         session->failed = 1U;
         session->job_phase = RECORDER_FILE_JOB_TERMINAL;
@@ -494,7 +562,16 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
             recorder_file_retain_extents(session,
                 (uint32_t)session->job_target_file_bytes);
         }
-        if(active_phase != RECORDER_FILE_JOB_EXTEND)
+        else if(active_phase == RECORDER_FILE_JOB_RENAME)
+        {
+            if(recorder_file_copy_path(session->path, session->job_final_path) == 0U)
+            {
+                Error_Handler();
+            }
+            session->job_final_path[0] = '\0';
+        }
+        if((active_phase != RECORDER_FILE_JOB_EXTEND)
+                && (active_phase != RECORDER_FILE_JOB_RENAME))
         {
             session->fs_state.chain_status = session->file.obj.stat;
         }
@@ -544,8 +621,11 @@ recorder_file_reservation_result_t recorder_file_reservation_job_poll(
                 : (session->job_phase == RECORDER_FILE_JOB_RELEASE)
                     ? f_brick_rec_release_io_complete(&session->job_cont.release,
                         session->job_io_sequence, io_result)
-                    : f_brick_meta_object_sync_io_complete(&session->job_cont.sync,
-                        session->job_io_sequence, io_result)) != FR_OK))
+                    : (session->job_phase == RECORDER_FILE_JOB_RENAME)
+                        ? f_brick_rec_rename_io_complete(&session->job_cont.rename,
+                            session->job_io_sequence, io_result)
+                        : f_brick_meta_object_sync_io_complete(&session->job_cont.sync,
+                            session->job_io_sequence, io_result)) != FR_OK))
     {
         session->failed = 1U;
         session->job_result = RECORDER_FILE_RESERVATION_FS_ERROR;
@@ -781,7 +861,8 @@ recorder_file_reservation_result_t recorder_file_reservation_release_unused(
 recorder_file_reservation_result_t recorder_file_reservation_close(
     recorder_file_reservation_t *session)
 {
-    if((session == 0) || (session->open == 0U))
+    if((session == 0) || (session->open == 0U)
+            || (session->job_phase != RECORDER_FILE_JOB_NONE))
     {
         return RECORDER_FILE_RESERVATION_INVALID_STATE;
     }
@@ -789,31 +870,9 @@ recorder_file_reservation_result_t recorder_file_reservation_close(
     {
         return RECORDER_FILE_RESERVATION_SD_BUSY;
     }
-    const FRESULT fr = f_close(&session->file);
+    const FRESULT fr = f_brick_rec_close_synced(&session->file);
     if(fr == FR_OK) session->open = 0U;
     else session->failed = 1U;
-    recorder_file_end_storage_operation();
-    return recorder_file_fs_result(fr);
-}
-
-recorder_file_reservation_result_t recorder_file_reservation_rename_closed(
-    recorder_file_reservation_t *session,
-    const char *final_path)
-{
-    if((session == 0) || (final_path == 0) || (session->open != 0U)
-            || (session->path[0] == '\0'))
-    {
-        return RECORDER_FILE_RESERVATION_INVALID_STATE;
-    }
-    if(recorder_file_begin_storage_operation() == 0U)
-    {
-        return RECORDER_FILE_RESERVATION_SD_BUSY;
-    }
-    const FRESULT fr = f_rename(session->path, final_path);
-    if((fr == FR_OK) && (recorder_file_copy_path(session->path, final_path) == 0U))
-    {
-        session->path[0] = '\0';
-    }
     recorder_file_end_storage_operation();
     return recorder_file_fs_result(fr);
 }
