@@ -90,6 +90,8 @@ typedef uint8_t (*generic_recorder_reservation_resolve_fn)(
 typedef recorder_file_reservation_result_t (*generic_recorder_reservation_extend_fn)(
     void *context,
     uint64_t additional_bytes);
+typedef recorder_file_reservation_result_t (*generic_recorder_reservation_poll_fn)(
+    void *context);
 
 typedef struct
 {
@@ -97,6 +99,7 @@ typedef struct
     generic_recorder_reservation_snapshot_fn snapshot;
     generic_recorder_reservation_resolve_fn resolve;
     generic_recorder_reservation_extend_fn extend;
+    generic_recorder_reservation_poll_fn poll;
 } generic_recorder_reservation_t;
 
 typedef struct

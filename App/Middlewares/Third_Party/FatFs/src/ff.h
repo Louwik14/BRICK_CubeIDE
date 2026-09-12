@@ -279,6 +279,26 @@ typedef struct {
 	BYTE io_completed;
 } FF_META_WINDOW_CONT;
 
+typedef struct {
+	_FDID* obj;
+	FF_META_WINDOW_CONT window;
+	BYTE* staging;
+	DWORD previous;
+	DWORD suggestion;
+	DWORD candidate;
+	DWORD scanned;
+	DWORD value;
+	DWORD fragment_current;
+	DWORD fragment_remaining;
+	DWORD result_cluster;
+	FRESULT result;
+	UINT staging_size;
+	BYTE phase;
+	BYTE after_window;
+	BYTE mutation_started;
+	BYTE durable_writes;
+} FF_META_CREATE_CHAIN_CONT;
+
 FRESULT f_brick_meta_window_begin (FF_META_WINDOW_CONT* cont, FATFS* fs,
 	DWORD target_sector, BYTE load_target, BYTE* staging, UINT staging_size);
 FF_META_STEP_RESULT f_brick_meta_window_step (FF_META_WINDOW_CONT* cont,
@@ -286,6 +306,15 @@ FF_META_STEP_RESULT f_brick_meta_window_step (FF_META_WINDOW_CONT* cont,
 FRESULT f_brick_meta_window_io_started (FF_META_WINDOW_CONT* cont,
 	DWORD sequence);
 FRESULT f_brick_meta_window_io_complete (FF_META_WINDOW_CONT* cont,
+	DWORD sequence, FRESULT result);
+FRESULT f_brick_meta_create_chain_begin (FF_META_CREATE_CHAIN_CONT* cont,
+	_FDID* obj, DWORD previous, BYTE durable_writes,
+	BYTE* staging, UINT staging_size);
+FF_META_STEP_RESULT f_brick_meta_create_chain_step (
+	FF_META_CREATE_CHAIN_CONT* cont, const FF_META_REQUEST** request);
+FRESULT f_brick_meta_create_chain_io_started (FF_META_CREATE_CHAIN_CONT* cont,
+	DWORD sequence);
+FRESULT f_brick_meta_create_chain_io_complete (FF_META_CREATE_CHAIN_CONT* cont,
 	DWORD sequence, FRESULT result);
 #endif
 
@@ -353,12 +382,44 @@ typedef struct {
 	DWORD extents_added;
 } FF_BRICK_REC_METRICS;
 
+typedef struct {
+	FIL* fp;
+	FF_BRICK_REC_STATE* state;
+	FF_BRICK_REC_EXTENT* extents;
+	UINT* extent_count;
+	FF_BRICK_REC_METRICS* metrics;
+	FF_META_CREATE_CHAIN_CONT create;
+	BYTE* staging;
+	FSIZE_t target_reserved_bytes;
+	DWORD target_clusters;
+	DWORD old_clusters;
+	DWORD previous;
+	FRESULT result;
+	UINT extent_capacity;
+	UINT added;
+	UINT staging_size;
+	BYTE phase;
+	BYTE no_space;
+	BYTE stop_requested;
+} FF_BRICK_REC_RESERVE_CONT;
+
 FRESULT f_brick_rec_recover (FIL* fp, FF_BRICK_REC_STATE* state,
 	FF_BRICK_REC_EXTENT* extents, UINT extent_capacity, UINT* extent_count,
 	FF_BRICK_REC_METRICS* metrics);
 FRESULT f_brick_rec_reserve (FIL* fp, FSIZE_t target_reserved_bytes,
 	FF_BRICK_REC_STATE* state, FF_BRICK_REC_EXTENT* new_extents,
 	UINT extent_capacity, UINT* extent_count, FF_BRICK_REC_METRICS* metrics);
+FRESULT f_brick_rec_reserve_begin (FF_BRICK_REC_RESERVE_CONT* cont,
+	FIL* fp, FSIZE_t target_reserved_bytes, FF_BRICK_REC_STATE* state,
+	FF_BRICK_REC_EXTENT* new_extents, UINT extent_capacity, UINT* extent_count,
+	FF_BRICK_REC_METRICS* metrics, BYTE* staging, UINT staging_size);
+FF_META_STEP_RESULT f_brick_rec_reserve_step (FF_BRICK_REC_RESERVE_CONT* cont,
+	const FF_META_REQUEST** request);
+FRESULT f_brick_rec_reserve_io_started (FF_BRICK_REC_RESERVE_CONT* cont,
+	DWORD sequence);
+FRESULT f_brick_rec_reserve_io_complete (FF_BRICK_REC_RESERVE_CONT* cont,
+	DWORD sequence, FRESULT result);
+void f_brick_rec_reserve_request_stop (FF_BRICK_REC_RESERVE_CONT* cont);
 FRESULT f_brick_rec_commit (FIL* fp, FSIZE_t valid_bytes,
 	FF_BRICK_REC_STATE* state, FF_BRICK_REC_METRICS* metrics);
 FRESULT f_brick_rec_release_tail (FIL* fp, FSIZE_t keep_bytes,

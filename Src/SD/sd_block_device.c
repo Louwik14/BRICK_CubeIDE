@@ -245,9 +245,11 @@ static sd_block_device_result_t sd_block_device_validate_submit(
     return SD_BLOCK_DEVICE_OK;
 }
 
-sd_block_device_result_t sd_block_device_async_enqueue(uint32_t lba,
-                                                       uint32_t sector_count,
-                                                       void *dst)
+static sd_block_device_result_t sd_block_device_async_read_submit_internal(
+    uint32_t lba,
+    uint32_t sector_count,
+    void *dst,
+    uint32_t owner_generation)
 {
     const sd_block_device_result_t valid =
         sd_block_device_validate_submit(sector_count, dst);
@@ -268,6 +270,7 @@ sd_block_device_result_t sd_block_device_async_enqueue(uint32_t lba,
     entry->buffer = (uint8_t *)dst;
     entry->operation = SD_BLOCK_DEVICE_OPERATION_READ;
     entry->result = SD_BLOCK_DEVICE_BUSY;
+    entry->owner_generation = owner_generation;
     entry->queued_tick = HAL_GetTick();
     entry->media_epoch = sd_access_media_epoch();
     entry->owner_client = (uint8_t)sd_access_gate_current_owner();
@@ -276,6 +279,23 @@ sd_block_device_result_t sd_block_device_async_enqueue(uint32_t lba,
     g_sd_block_device_async_count++;
     sd_block_device_async_start_head();
     return SD_BLOCK_DEVICE_OK;
+}
+
+sd_block_device_result_t sd_block_device_async_enqueue(uint32_t lba,
+                                                       uint32_t sector_count,
+                                                       void *dst)
+{
+    return sd_block_device_async_read_submit_internal(lba, sector_count, dst, 0U);
+}
+
+sd_block_device_result_t sd_block_device_async_read_submit(
+    uint32_t lba,
+    uint32_t sector_count,
+    void *dst,
+    uint32_t owner_generation)
+{
+    return sd_block_device_async_read_submit_internal(
+        lba, sector_count, dst, owner_generation);
 }
 
 sd_block_device_result_t sd_block_device_async_write_submit(

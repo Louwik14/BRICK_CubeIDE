@@ -1228,6 +1228,547 @@ DWORD clust2sect (	/* !=0:Sector number, 0:Failed (invalid cluster#) */
 
 
 
+#if _BRICK_REC_RESERVE && !_FS_READONLY
+#define FF_META_FAT_SCAN_QUANTUM 64U
+#define FF_META_BITMAP_SCAN_QUANTUM 128U
+
+enum {
+	FF_META_CREATE_PHASE_INIT = 0,
+	FF_META_CREATE_PHASE_CHECK_PREVIOUS,
+	FF_META_CREATE_PHASE_CHECK_PREVIOUS_LOADED,
+	FF_META_CREATE_PHASE_SCAN_FAT,
+	FF_META_CREATE_PHASE_SCAN_FAT_LOADED,
+	FF_META_CREATE_PHASE_SCAN_BITMAP,
+	FF_META_CREATE_PHASE_SCAN_BITMAP_LOADED,
+	FF_META_CREATE_PHASE_SET_BITMAP,
+	FF_META_CREATE_PHASE_SET_BITMAP_LOADED,
+	FF_META_CREATE_PHASE_BITMAP_FLUSHED,
+	FF_META_CREATE_PHASE_WRITE_NEW,
+	FF_META_CREATE_PHASE_WRITE_NEW_LOADED,
+	FF_META_CREATE_PHASE_NEW_FLUSHED,
+	FF_META_CREATE_PHASE_WRITE_PREVIOUS,
+	FF_META_CREATE_PHASE_WRITE_PREVIOUS_LOADED,
+	FF_META_CREATE_PHASE_PREVIOUS_FLUSHED,
+	FF_META_CREATE_PHASE_FIRST_FRAGMENT_WRITE,
+	FF_META_CREATE_PHASE_FIRST_FRAGMENT_WRITE_LOADED,
+	FF_META_CREATE_PHASE_FRAGMENT_WRITE,
+	FF_META_CREATE_PHASE_FRAGMENT_WRITE_LOADED,
+	FF_META_CREATE_PHASE_FRAGMENT_FLUSHED,
+	FF_META_CREATE_PHASE_WINDOW,
+	FF_META_CREATE_PHASE_DONE,
+	FF_META_CREATE_PHASE_ERROR
+};
+
+
+static DWORD brick_meta_fat_sector (FATFS* fs, DWORD clst)
+{
+	return fs->fatbase + clst / (SS(fs) / 4);
+}
+
+
+static DWORD brick_meta_fat_value_loaded (_FDID* obj, DWORD clst)
+{
+	DWORD val = ld_dword(obj->fs->win + clst * 4 % SS(obj->fs));
+	return val & ((obj->fs->fs_type == FS_EXFAT) ? 0x7FFFFFFF : 0x0FFFFFFF);
+}
+
+
+static int brick_meta_exfat_synthetic_value (_FDID* obj, DWORD clst, DWORD* value)
+{
+#if _FS_EXFAT
+	if (obj->fs->fs_type == FS_EXFAT && obj->objsize) {
+		DWORD cofs = clst - obj->sclust;
+		DWORD clen = (DWORD)((obj->objsize - 1) / SS(obj->fs)) / obj->fs->csize;
+		if (obj->stat == 2 && cofs <= clen) {
+			*value = (cofs == clen) ? 0x7FFFFFFF : clst + 1;
+			return 1;
+		}
+		if (obj->stat == 3 && cofs < obj->n_cont) {
+			*value = clst + 1;
+			return 1;
+		}
+		if (obj->stat != 2 && obj->n_frag != 0) {
+			*value = 0x7FFFFFFF;
+			return 1;
+		}
+	}
+#else
+	(void)obj;
+	(void)clst;
+	(void)value;
+#endif
+	return 0;
+}
+
+
+static FF_META_STEP_RESULT brick_meta_create_error (
+	FF_META_CREATE_CHAIN_CONT* cont,
+	FRESULT result
+)
+{
+	cont->result = result;
+	cont->phase = FF_META_CREATE_PHASE_ERROR;
+	return FF_META_STEP_ERROR;
+}
+
+
+static FF_META_STEP_RESULT brick_meta_create_window (
+	FF_META_CREATE_CHAIN_CONT* cont,
+	DWORD sector,
+	BYTE load_target,
+	BYTE after_window
+)
+{
+	FRESULT result = f_brick_meta_window_begin(&cont->window, cont->obj->fs,
+		sector, load_target, cont->staging, cont->staging_size);
+	if (result != FR_OK) return brick_meta_create_error(cont, result);
+	cont->after_window = after_window;
+	cont->phase = FF_META_CREATE_PHASE_WINDOW;
+	return FF_META_STEP_YIELD;
+}
+
+
+static FF_META_STEP_RESULT brick_meta_create_finish (
+	FF_META_CREATE_CHAIN_CONT* cont
+)
+{
+	FATFS* fs = cont->obj->fs;
+	fs->last_clst = cont->candidate;
+	if (fs->free_clst <= fs->n_fatent - 2) fs->free_clst--;
+	fs->fsi_flag |= 1;
+	cont->result_cluster = cont->candidate;
+	cont->result = FR_OK;
+	cont->phase = FF_META_CREATE_PHASE_DONE;
+	return FF_META_STEP_DONE;
+}
+
+
+FRESULT f_brick_meta_create_chain_begin (
+	FF_META_CREATE_CHAIN_CONT* cont,
+	_FDID* obj,
+	DWORD previous,
+	BYTE durable_writes,
+	BYTE* staging,
+	UINT staging_size
+)
+{
+	if (!cont || !obj || !obj->fs
+		|| (staging && staging_size < SS(obj->fs))) return FR_INVALID_PARAMETER;
+	if (obj->fs->fs_type != FS_FAT32
+#if _FS_EXFAT
+		&& obj->fs->fs_type != FS_EXFAT
+#endif
+	) return FR_DENIED;
+	mem_set(cont, 0, sizeof(*cont));
+	cont->obj = obj;
+	cont->previous = previous;
+	cont->durable_writes = durable_writes ? 1 : 0;
+	cont->staging = staging;
+	cont->staging_size = staging ? staging_size : 0;
+	cont->result = FR_OK;
+	cont->phase = FF_META_CREATE_PHASE_INIT;
+	return FR_OK;
+}
+
+
+FF_META_STEP_RESULT f_brick_meta_create_chain_step (
+	FF_META_CREATE_CHAIN_CONT* cont,
+	const FF_META_REQUEST** request
+)
+{
+	FATFS* fs;
+	DWORD total;
+	DWORD bit;
+	DWORD sector;
+	UINT budget;
+	FF_META_STEP_RESULT child;
+
+	if (request) *request = 0;
+	if (!cont || !cont->obj || !cont->obj->fs) return FF_META_STEP_ERROR;
+	fs = cont->obj->fs;
+	total = fs->n_fatent - 2;
+
+	switch (cont->phase) {
+	case FF_META_CREATE_PHASE_INIT:
+		if (cont->previous != 0) {
+			if (cont->previous < 2 || cont->previous >= fs->n_fatent) {
+				return brick_meta_create_error(cont, FR_INT_ERR);
+			}
+			cont->phase = FF_META_CREATE_PHASE_CHECK_PREVIOUS;
+			return FF_META_STEP_YIELD;
+		}
+		cont->suggestion = fs->last_clst;
+		if (cont->suggestion == 0 || cont->suggestion >= fs->n_fatent) {
+			cont->suggestion = 1;
+		}
+		cont->phase = (fs->fs_type == FS_EXFAT)
+			? FF_META_CREATE_PHASE_SCAN_BITMAP : FF_META_CREATE_PHASE_SCAN_FAT;
+		return FF_META_STEP_YIELD;
+
+	case FF_META_CREATE_PHASE_CHECK_PREVIOUS:
+		if (brick_meta_exfat_synthetic_value(cont->obj, cont->previous,
+			&cont->value)) {
+			cont->phase = FF_META_CREATE_PHASE_CHECK_PREVIOUS_LOADED;
+			return FF_META_STEP_YIELD;
+		}
+		return brick_meta_create_window(cont,
+			brick_meta_fat_sector(fs, cont->previous), 1,
+			FF_META_CREATE_PHASE_CHECK_PREVIOUS_LOADED);
+
+	case FF_META_CREATE_PHASE_CHECK_PREVIOUS_LOADED:
+		if (!(fs->fs_type == FS_EXFAT
+			&& brick_meta_exfat_synthetic_value(cont->obj, cont->previous,
+				&cont->value))) {
+			cont->value = brick_meta_fat_value_loaded(cont->obj, cont->previous);
+		}
+		if (cont->value < 2) return brick_meta_create_error(cont, FR_INT_ERR);
+		if (cont->value == 0xFFFFFFFF) return brick_meta_create_error(cont, FR_DISK_ERR);
+		if (cont->value < fs->n_fatent) {
+			cont->result_cluster = cont->value;
+			cont->phase = FF_META_CREATE_PHASE_DONE;
+			return FF_META_STEP_DONE;
+		}
+		cont->suggestion = cont->previous;
+		cont->phase = (fs->fs_type == FS_EXFAT)
+			? FF_META_CREATE_PHASE_SCAN_BITMAP : FF_META_CREATE_PHASE_SCAN_FAT;
+		return FF_META_STEP_YIELD;
+
+	case FF_META_CREATE_PHASE_SCAN_FAT:
+		if (cont->scanned >= total) {
+			cont->result_cluster = 0;
+			cont->phase = FF_META_CREATE_PHASE_DONE;
+			return FF_META_STEP_DONE;
+		}
+		cont->candidate = cont->suggestion + 1;
+		if (cont->candidate >= fs->n_fatent) cont->candidate = 2;
+		cont->suggestion = cont->candidate;
+		cont->scanned++;
+		return brick_meta_create_window(cont,
+			brick_meta_fat_sector(fs, cont->candidate), 1,
+			FF_META_CREATE_PHASE_SCAN_FAT_LOADED);
+
+	case FF_META_CREATE_PHASE_SCAN_FAT_LOADED:
+		budget = FF_META_FAT_SCAN_QUANTUM;
+		for (;;) {
+			cont->value = brick_meta_fat_value_loaded(cont->obj, cont->candidate);
+			if (cont->value == 0) {
+				cont->phase = FF_META_CREATE_PHASE_WRITE_NEW;
+				return FF_META_STEP_YIELD;
+			}
+			if (cont->value == 1 || cont->value == 0xFFFFFFFF) {
+				return brick_meta_create_error(cont,
+					cont->value == 0xFFFFFFFF ? FR_DISK_ERR : FR_INT_ERR);
+			}
+			if (cont->scanned >= total) {
+				cont->result_cluster = 0;
+				cont->phase = FF_META_CREATE_PHASE_DONE;
+				return FF_META_STEP_DONE;
+			}
+			if (--budget == 0) {
+				cont->phase = FF_META_CREATE_PHASE_SCAN_FAT;
+				return FF_META_STEP_YIELD;
+			}
+			cont->candidate++;
+			if (cont->candidate >= fs->n_fatent) cont->candidate = 2;
+			cont->suggestion = cont->candidate;
+			cont->scanned++;
+			sector = brick_meta_fat_sector(fs, cont->candidate);
+			if (sector != fs->winsect) {
+				return brick_meta_create_window(cont, sector, 1,
+					FF_META_CREATE_PHASE_SCAN_FAT_LOADED);
+			}
+		}
+
+	case FF_META_CREATE_PHASE_SCAN_BITMAP:
+#if _FS_EXFAT
+		if (cont->scanned >= total) {
+			cont->result_cluster = 0;
+			cont->phase = FF_META_CREATE_PHASE_DONE;
+			return FF_META_STEP_DONE;
+		}
+		if (cont->scanned == 0) {
+			bit = cont->suggestion - 2;
+			if (bit >= total) bit = 0;
+			cont->candidate = bit;
+		}
+		sector = fs->database + cont->candidate / 8 / SS(fs);
+		return brick_meta_create_window(cont, sector, 1,
+			FF_META_CREATE_PHASE_SCAN_BITMAP_LOADED);
+#else
+		return brick_meta_create_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_META_CREATE_PHASE_SCAN_BITMAP_LOADED:
+#if _FS_EXFAT
+		budget = FF_META_BITMAP_SCAN_QUANTUM;
+		while (budget-- && cont->scanned < total) {
+			bit = cont->candidate;
+			if ((fs->win[bit / 8 % SS(fs)] & (1U << (bit % 8))) == 0) {
+				cont->candidate = bit + 2;
+				cont->phase = FF_META_CREATE_PHASE_SET_BITMAP;
+				return FF_META_STEP_YIELD;
+			}
+			cont->candidate = bit + 1;
+			if (cont->candidate >= total) cont->candidate = 0;
+			cont->scanned++;
+			sector = fs->database + cont->candidate / 8 / SS(fs);
+			if (cont->scanned < total && sector != fs->winsect) {
+				return brick_meta_create_window(cont, sector, 1,
+					FF_META_CREATE_PHASE_SCAN_BITMAP_LOADED);
+			}
+		}
+		cont->phase = FF_META_CREATE_PHASE_SCAN_BITMAP;
+		return FF_META_STEP_YIELD;
+#else
+		return brick_meta_create_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_META_CREATE_PHASE_SET_BITMAP:
+#if _FS_EXFAT
+		bit = cont->candidate - 2;
+		return brick_meta_create_window(cont,
+			fs->database + bit / 8 / SS(fs), 1,
+			FF_META_CREATE_PHASE_SET_BITMAP_LOADED);
+#else
+		return brick_meta_create_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_META_CREATE_PHASE_SET_BITMAP_LOADED:
+#if _FS_EXFAT
+		bit = cont->candidate - 2;
+		if (fs->win[bit / 8 % SS(fs)] & (1U << (bit % 8))) {
+			return brick_meta_create_error(cont, FR_INT_ERR);
+		}
+		cont->mutation_started = 1;
+		fs->win[bit / 8 % SS(fs)] |= (BYTE)(1U << (bit % 8));
+		fs->wflag = 1;
+		if (!cont->durable_writes) {
+			cont->phase = FF_META_CREATE_PHASE_BITMAP_FLUSHED;
+			return FF_META_STEP_YIELD;
+		}
+		return brick_meta_create_window(cont, fs->winsect, 0,
+			FF_META_CREATE_PHASE_BITMAP_FLUSHED);
+#else
+		return brick_meta_create_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_META_CREATE_PHASE_BITMAP_FLUSHED:
+#if _FS_EXFAT
+		if (cont->previous == 0) {
+			cont->obj->stat = 2;
+			return brick_meta_create_finish(cont);
+		}
+		if (cont->obj->stat == 2 && cont->candidate != cont->previous + 1) {
+			cont->obj->n_cont = cont->previous - cont->obj->sclust;
+			cont->obj->stat = 3;
+			if (cont->durable_writes) {
+				cont->fragment_current = cont->obj->sclust;
+				cont->fragment_remaining = cont->obj->n_cont;
+				if (cont->fragment_remaining != 0) {
+					cont->phase = FF_META_CREATE_PHASE_FIRST_FRAGMENT_WRITE;
+					return FF_META_STEP_YIELD;
+				}
+				cont->obj->stat = 0;
+			}
+		}
+		if (cont->obj->stat == 2) return brick_meta_create_finish(cont);
+		if (!cont->durable_writes && cont->candidate == cont->previous + 1) {
+			cont->obj->n_frag = cont->obj->n_frag ? cont->obj->n_frag + 1 : 2;
+			return brick_meta_create_finish(cont);
+		}
+		if (cont->obj->n_frag == 0) cont->obj->n_frag = 1;
+		cont->fragment_remaining = cont->obj->n_frag;
+		cont->fragment_current = cont->previous - cont->fragment_remaining + 1;
+		cont->phase = FF_META_CREATE_PHASE_FRAGMENT_WRITE;
+		return FF_META_STEP_YIELD;
+#else
+		return brick_meta_create_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_META_CREATE_PHASE_WRITE_NEW:
+		return brick_meta_create_window(cont,
+			brick_meta_fat_sector(fs, cont->candidate), 1,
+			FF_META_CREATE_PHASE_WRITE_NEW_LOADED);
+
+	case FF_META_CREATE_PHASE_WRITE_NEW_LOADED:
+		cont->mutation_started = 1;
+		cont->value = ld_dword(fs->win + cont->candidate * 4 % SS(fs));
+		cont->value = (cont->value & 0xF0000000) | 0x0FFFFFFF;
+		st_dword(fs->win + cont->candidate * 4 % SS(fs), cont->value);
+		fs->wflag = 1;
+		if (!cont->durable_writes) {
+			cont->phase = FF_META_CREATE_PHASE_NEW_FLUSHED;
+			return FF_META_STEP_YIELD;
+		}
+		return brick_meta_create_window(cont, fs->winsect, 0,
+			FF_META_CREATE_PHASE_NEW_FLUSHED);
+
+	case FF_META_CREATE_PHASE_NEW_FLUSHED:
+		if (cont->previous == 0) return brick_meta_create_finish(cont);
+		cont->phase = FF_META_CREATE_PHASE_WRITE_PREVIOUS;
+		return FF_META_STEP_YIELD;
+
+	case FF_META_CREATE_PHASE_WRITE_PREVIOUS:
+		return brick_meta_create_window(cont,
+			brick_meta_fat_sector(fs, cont->previous), 1,
+			FF_META_CREATE_PHASE_WRITE_PREVIOUS_LOADED);
+
+	case FF_META_CREATE_PHASE_WRITE_PREVIOUS_LOADED:
+		cont->value = ld_dword(fs->win + cont->previous * 4 % SS(fs));
+		cont->value = (cont->value & 0xF0000000) | cont->candidate;
+		st_dword(fs->win + cont->previous * 4 % SS(fs), cont->value);
+		fs->wflag = 1;
+		if (!cont->durable_writes) return brick_meta_create_finish(cont);
+		return brick_meta_create_window(cont, fs->winsect, 0,
+			FF_META_CREATE_PHASE_PREVIOUS_FLUSHED);
+
+	case FF_META_CREATE_PHASE_PREVIOUS_FLUSHED:
+		return brick_meta_create_finish(cont);
+
+	case FF_META_CREATE_PHASE_FIRST_FRAGMENT_WRITE:
+#if _FS_EXFAT
+		return brick_meta_create_window(cont,
+			brick_meta_fat_sector(fs, cont->fragment_current), 1,
+			FF_META_CREATE_PHASE_FIRST_FRAGMENT_WRITE_LOADED);
+#else
+		return brick_meta_create_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_META_CREATE_PHASE_FIRST_FRAGMENT_WRITE_LOADED:
+#if _FS_EXFAT
+		cont->mutation_started = 1;
+		st_dword(fs->win + cont->fragment_current * 4 % SS(fs),
+			cont->fragment_current + 1);
+		fs->wflag = 1;
+		cont->fragment_current++;
+		cont->fragment_remaining--;
+		if (cont->fragment_remaining != 0) {
+			cont->phase = FF_META_CREATE_PHASE_FIRST_FRAGMENT_WRITE;
+			return FF_META_STEP_YIELD;
+		}
+		cont->obj->stat = 0;
+		cont->obj->n_frag = 1;
+		cont->fragment_current = cont->previous;
+		cont->fragment_remaining = 1;
+		cont->phase = FF_META_CREATE_PHASE_FRAGMENT_WRITE;
+		return FF_META_STEP_YIELD;
+#else
+		return brick_meta_create_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_META_CREATE_PHASE_FRAGMENT_WRITE:
+#if _FS_EXFAT
+		return brick_meta_create_window(cont,
+			brick_meta_fat_sector(fs, cont->fragment_current), 1,
+			FF_META_CREATE_PHASE_FRAGMENT_WRITE_LOADED);
+#else
+		return brick_meta_create_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_META_CREATE_PHASE_FRAGMENT_WRITE_LOADED:
+#if _FS_EXFAT
+		cont->mutation_started = 1;
+		cont->value = (cont->fragment_remaining > 1)
+			? cont->fragment_current + 1 : cont->candidate;
+		st_dword(fs->win + cont->fragment_current * 4 % SS(fs), cont->value);
+		fs->wflag = 1;
+		cont->fragment_current++;
+		cont->fragment_remaining--;
+		if (cont->fragment_remaining != 0) {
+			cont->phase = FF_META_CREATE_PHASE_FRAGMENT_WRITE;
+			return FF_META_STEP_YIELD;
+		}
+		if (!cont->durable_writes) {
+			cont->phase = FF_META_CREATE_PHASE_FRAGMENT_FLUSHED;
+			return FF_META_STEP_YIELD;
+		}
+		return brick_meta_create_window(cont, fs->winsect, 0,
+			FF_META_CREATE_PHASE_FRAGMENT_FLUSHED);
+#else
+		return brick_meta_create_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_META_CREATE_PHASE_FRAGMENT_FLUSHED:
+#if _FS_EXFAT
+		cont->obj->n_frag = 1;
+		return brick_meta_create_finish(cont);
+#else
+		return brick_meta_create_error(cont, FR_INT_ERR);
+#endif
+
+	case FF_META_CREATE_PHASE_WINDOW:
+		child = f_brick_meta_window_step(&cont->window, request);
+		if (child == FF_META_STEP_DONE) {
+			cont->phase = cont->after_window;
+			return FF_META_STEP_YIELD;
+		}
+		if (child == FF_META_STEP_ERROR) {
+			return brick_meta_create_error(cont, cont->window.result);
+		}
+		return child;
+
+	case FF_META_CREATE_PHASE_DONE:
+		return FF_META_STEP_DONE;
+
+	default:
+		return brick_meta_create_error(cont, FR_INT_ERR);
+	}
+}
+
+
+FRESULT f_brick_meta_create_chain_io_started (
+	FF_META_CREATE_CHAIN_CONT* cont,
+	DWORD sequence
+)
+{
+	if (!cont || cont->phase != FF_META_CREATE_PHASE_WINDOW) {
+		return FR_INVALID_PARAMETER;
+	}
+	return f_brick_meta_window_io_started(&cont->window, sequence);
+}
+
+
+FRESULT f_brick_meta_create_chain_io_complete (
+	FF_META_CREATE_CHAIN_CONT* cont,
+	DWORD sequence,
+	FRESULT result
+)
+{
+	if (!cont || cont->phase != FF_META_CREATE_PHASE_WINDOW) {
+		return FR_INVALID_PARAMETER;
+	}
+	return f_brick_meta_window_io_complete(&cont->window, sequence, result);
+}
+
+
+static DWORD brick_meta_create_chain_run_sync (_FDID* obj, DWORD previous)
+{
+	FF_META_CREATE_CHAIN_CONT cont;
+	const FF_META_REQUEST* request;
+	FF_META_STEP_RESULT step;
+	DRESULT io_result;
+
+	if (f_brick_meta_create_chain_begin(&cont, obj, previous, 0, 0, 0) != FR_OK) return 1;
+	for (;;) {
+		step = f_brick_meta_create_chain_step(&cont, &request);
+		if (step == FF_META_STEP_DONE) return cont.result_cluster;
+		if (step == FF_META_STEP_ERROR) {
+			return cont.result == FR_DISK_ERR ? 0xFFFFFFFF : 1;
+		}
+		if (step == FF_META_STEP_YIELD) continue;
+		if (step != FF_META_STEP_NEED_IO || !request) return 1;
+		if (f_brick_meta_create_chain_io_started(&cont, request->sequence) != FR_OK) return 1;
+		io_result = request->operation == FF_META_IO_WRITE
+			? disk_write(obj->fs->drv, request->buffer, request->sector, request->count)
+			: disk_read(obj->fs->drv, request->buffer, request->sector, request->count);
+		if (f_brick_meta_create_chain_io_complete(&cont, request->sequence,
+			io_result == RES_OK ? FR_OK : FR_DISK_ERR) != FR_OK) return 1;
+	}
+}
+#endif
+
+
+
 
 /*-----------------------------------------------------------------------*/
 /* FAT access - Read value of a FAT entry                                */
@@ -1593,6 +2134,16 @@ DWORD create_chain (	/* 0:No free cluster, 1:Internal error, 0xFFFFFFFF:Disk err
 	FRESULT res;
 	FATFS *fs = obj->fs;
 
+
+#if _BRICK_REC_RESERVE
+	if (fs->fs_type == FS_FAT32
+#if _FS_EXFAT
+		|| fs->fs_type == FS_EXFAT
+#endif
+	) {
+		return brick_meta_create_chain_run_sync(obj, clst);
+	}
+#endif
 
 	if (clst == 0) {	/* Create a new chain */
 		scl = fs->last_clst;				/* Get suggested cluster to start from */
@@ -5698,6 +6249,236 @@ done:
 	return res;
 }
 
+enum {
+	FF_BRICK_REC_RESERVE_PHASE_ALLOC_BEGIN = 0,
+	FF_BRICK_REC_RESERVE_PHASE_ALLOC_STEP,
+	FF_BRICK_REC_RESERVE_PHASE_SYNC,
+	FF_BRICK_REC_RESERVE_PHASE_DONE,
+	FF_BRICK_REC_RESERVE_PHASE_ERROR
+};
+
+
+FRESULT f_brick_rec_reserve_begin (
+	FF_BRICK_REC_RESERVE_CONT* cont,
+	FIL* fp,
+	FSIZE_t target_reserved_bytes,
+	FF_BRICK_REC_STATE* state,
+	FF_BRICK_REC_EXTENT* new_extents,
+	UINT extent_capacity,
+	UINT* extent_count,
+	FF_BRICK_REC_METRICS* metrics,
+	BYTE* staging,
+	UINT staging_size)
+{
+	FATFS* fs;
+	FRESULT res;
+
+	if (!cont || !fp || !state || !extent_count
+		|| (extent_capacity && !new_extents)) return FR_INVALID_PARAMETER;
+	brick_rec_metrics_begin(metrics);
+	brick_rec_metrics_end();
+	*extent_count = 0;
+	res = brick_rec_validate(fp, &fs);
+	if (res != FR_OK) return res;
+	if (staging && staging_size < SS(fs)) return FR_INVALID_PARAMETER;
+	if (state->cluster_bytes != (DWORD)fs->csize * SS(fs)
+		|| state->fs_type != fs->fs_type
+		|| state->reserved_bytes != (FSIZE_t)state->cluster_count * state->cluster_bytes
+		|| state->valid_bytes > state->reserved_bytes) return FR_INVALID_OBJECT;
+	if (target_reserved_bytes > (FSIZE_t)(fs->n_fatent - 2) * state->cluster_bytes
+		|| (fs->fs_type == FS_FAT32 && target_reserved_bytes > 0xFFFFFFFFUL)) {
+		return FR_DENIED;
+	}
+
+	mem_set(cont, 0, sizeof(*cont));
+	cont->fp = fp;
+	cont->state = state;
+	cont->extents = new_extents;
+	cont->extent_capacity = extent_capacity;
+	cont->extent_count = extent_count;
+	cont->metrics = metrics;
+	cont->staging = staging;
+	cont->staging_size = staging ? staging_size : 0;
+	cont->target_reserved_bytes = target_reserved_bytes;
+	cont->target_clusters = (DWORD)(target_reserved_bytes / state->cluster_bytes);
+	if (target_reserved_bytes % state->cluster_bytes) cont->target_clusters++;
+	cont->old_clusters = state->cluster_count;
+	cont->previous = state->last_cluster;
+	cont->result = FR_OK;
+	fp->obj.objsize = state->reserved_bytes;
+	if (cont->target_clusters <= state->cluster_count) {
+		cont->phase = FF_BRICK_REC_RESERVE_PHASE_DONE;
+	} else if (extent_capacity == 0) {
+		cont->result = FR_NOT_ENOUGH_CORE;
+		cont->phase = FF_BRICK_REC_RESERVE_PHASE_ERROR;
+	} else {
+		cont->phase = FF_BRICK_REC_RESERVE_PHASE_ALLOC_BEGIN;
+	}
+	return FR_OK;
+}
+
+
+static FF_META_STEP_RESULT brick_rec_reserve_error (
+	FF_BRICK_REC_RESERVE_CONT* cont,
+	FRESULT result)
+{
+	cont->result = result;
+	cont->phase = FF_BRICK_REC_RESERVE_PHASE_ERROR;
+	brick_rec_metrics_end();
+	return FF_META_STEP_ERROR;
+}
+
+
+FF_META_STEP_RESULT f_brick_rec_reserve_step (
+	FF_BRICK_REC_RESERVE_CONT* cont,
+	const FF_META_REQUEST** request)
+{
+	FATFS* fs;
+	FF_META_STEP_RESULT child;
+	DWORD clst;
+	DWORD lba;
+	FRESULT res;
+
+	if (request) *request = 0;
+	if (!cont || !cont->fp || !cont->state || !cont->fp->obj.fs) {
+		return FF_META_STEP_ERROR;
+	}
+	fs = cont->fp->obj.fs;
+	BrickRecMetrics = cont->metrics;
+	if (cont->stop_requested
+		&& cont->phase == FF_BRICK_REC_RESERVE_PHASE_ALLOC_STEP
+		&& !cont->create.mutation_started) {
+		cont->phase = (cont->state->cluster_count == cont->old_clusters)
+			? FF_BRICK_REC_RESERVE_PHASE_DONE : FF_BRICK_REC_RESERVE_PHASE_SYNC;
+	}
+	if (cont->stop_requested
+		&& cont->phase == FF_BRICK_REC_RESERVE_PHASE_ALLOC_BEGIN) {
+		cont->phase = (cont->state->cluster_count == cont->old_clusters)
+			? FF_BRICK_REC_RESERVE_PHASE_DONE : FF_BRICK_REC_RESERVE_PHASE_SYNC;
+	}
+
+	switch (cont->phase) {
+	case FF_BRICK_REC_RESERVE_PHASE_ALLOC_BEGIN:
+		if (cont->state->cluster_count >= cont->target_clusters) {
+			cont->phase = FF_BRICK_REC_RESERVE_PHASE_SYNC;
+			brick_rec_metrics_end();
+			return FF_META_STEP_YIELD;
+		}
+		if (cont->added >= cont->extent_capacity) {
+			if (cont->state->cluster_count == cont->old_clusters) {
+				return brick_rec_reserve_error(cont, FR_NOT_ENOUGH_CORE);
+			}
+			cont->phase = FF_BRICK_REC_RESERVE_PHASE_SYNC;
+			brick_rec_metrics_end();
+			return FF_META_STEP_YIELD;
+		}
+		res = f_brick_meta_create_chain_begin(&cont->create, &cont->fp->obj,
+			cont->previous, 1, cont->staging, cont->staging_size);
+		if (res != FR_OK) return brick_rec_reserve_error(cont, res);
+		cont->phase = FF_BRICK_REC_RESERVE_PHASE_ALLOC_STEP;
+		brick_rec_metrics_end();
+		return FF_META_STEP_YIELD;
+
+	case FF_BRICK_REC_RESERVE_PHASE_ALLOC_STEP:
+		child = f_brick_meta_create_chain_step(&cont->create, request);
+		if (child == FF_META_STEP_ERROR) {
+			return brick_rec_reserve_error(cont, cont->create.result);
+		}
+		if (child != FF_META_STEP_DONE) {
+			brick_rec_metrics_end();
+			return child;
+		}
+		clst = cont->create.result_cluster;
+		if (clst == 0) {
+			cont->no_space = 1;
+			if (cont->state->cluster_count == cont->old_clusters) {
+				return brick_rec_reserve_error(cont, FR_DENIED);
+			}
+			cont->phase = FF_BRICK_REC_RESERVE_PHASE_SYNC;
+			brick_rec_metrics_end();
+			return FF_META_STEP_YIELD;
+		}
+		if (clst < 2 || clst >= fs->n_fatent) {
+			return brick_rec_reserve_error(cont, FR_INT_ERR);
+		}
+		if (cont->state->cluster_count == 0) cont->fp->obj.sclust = clst;
+		lba = clust2sect(fs, clst);
+		if (!lba) return brick_rec_reserve_error(cont, FR_INT_ERR);
+		res = brick_rec_append_extent(cont->extents, cont->extent_capacity,
+			&cont->added, (FSIZE_t)cont->state->cluster_count * fs->csize,
+			clst, lba, fs->csize, cont->added == 0);
+		if (res != FR_OK) return brick_rec_reserve_error(cont, res);
+		cont->state->cluster_count++;
+		cont->state->reserved_bytes =
+			(FSIZE_t)cont->state->cluster_count * cont->state->cluster_bytes;
+		cont->state->first_cluster = cont->fp->obj.sclust;
+		cont->state->last_cluster = clst;
+		cont->previous = clst;
+		cont->fp->obj.objsize = cont->state->reserved_bytes;
+		cont->phase = FF_BRICK_REC_RESERVE_PHASE_ALLOC_BEGIN;
+		brick_rec_metrics_end();
+		return FF_META_STEP_YIELD;
+
+	case FF_BRICK_REC_RESERVE_PHASE_SYNC:
+		cont->fp->clust = cont->state->last_cluster;
+		res = brick_rec_sync_metadata(cont->fp, cont->state);
+		if (res != FR_OK) return brick_rec_reserve_error(cont, res);
+		*cont->extent_count = cont->added;
+		if (cont->metrics) {
+			cont->metrics->clusters_allocated =
+				cont->state->cluster_count - cont->old_clusters;
+			cont->metrics->extents_added = cont->added;
+		}
+		cont->phase = FF_BRICK_REC_RESERVE_PHASE_DONE;
+		brick_rec_metrics_end();
+		return FF_META_STEP_DONE;
+
+	case FF_BRICK_REC_RESERVE_PHASE_DONE:
+		brick_rec_metrics_end();
+		return FF_META_STEP_DONE;
+
+	default:
+		return brick_rec_reserve_error(cont,
+			cont->result != FR_OK ? cont->result : FR_INT_ERR);
+	}
+}
+
+
+FRESULT f_brick_rec_reserve_io_started (
+	FF_BRICK_REC_RESERVE_CONT* cont,
+	DWORD sequence)
+{
+	FRESULT result;
+	if (!cont || cont->phase != FF_BRICK_REC_RESERVE_PHASE_ALLOC_STEP) {
+		return FR_INVALID_PARAMETER;
+	}
+	BrickRecMetrics = cont->metrics;
+	result = f_brick_meta_create_chain_io_started(&cont->create, sequence);
+	brick_rec_metrics_end();
+	return result;
+}
+
+
+FRESULT f_brick_rec_reserve_io_complete (
+	FF_BRICK_REC_RESERVE_CONT* cont,
+	DWORD sequence,
+	FRESULT result)
+{
+	if (!cont || cont->phase != FF_BRICK_REC_RESERVE_PHASE_ALLOC_STEP) {
+		return FR_INVALID_PARAMETER;
+	}
+	return f_brick_meta_create_chain_io_complete(&cont->create, sequence, result);
+}
+
+
+void f_brick_rec_reserve_request_stop (FF_BRICK_REC_RESERVE_CONT* cont)
+{
+	if (!cont) return;
+	cont->stop_requested = 1;
+	cont->target_clusters = cont->state ? cont->state->cluster_count : 0;
+}
+
+
 FRESULT f_brick_rec_reserve (
 	FIL* fp,
 	FSIZE_t target_reserved_bytes,
@@ -5707,79 +6488,29 @@ FRESULT f_brick_rec_reserve (
 	UINT* extent_count,
 	FF_BRICK_REC_METRICS* metrics)
 {
-	FATFS* fs;
-	FRESULT res;
-	DWORD target_clusters, old_clusters, prev, clst, lba;
-	UINT added = 0;
-	int no_space = 0;
+	FF_BRICK_REC_RESERVE_CONT cont;
+	const FF_META_REQUEST* request;
+	FF_META_STEP_RESULT step;
+	DRESULT io_result;
+	FRESULT res = f_brick_rec_reserve_begin(&cont, fp, target_reserved_bytes,
+		state, new_extents, extent_capacity, extent_count, metrics, 0, 0);
+	if (res != FR_OK) return res;
 
-	if (!fp || !state || !extent_count || (extent_capacity && !new_extents)) return FR_INVALID_PARAMETER;
-	brick_rec_metrics_begin(metrics);
-	*extent_count = 0;
-	res = brick_rec_validate(fp, &fs);
-	if (res != FR_OK) goto done;
-	if (state->cluster_bytes != (DWORD)fs->csize * SS(fs)
-		|| state->fs_type != fs->fs_type
-		|| state->reserved_bytes != (FSIZE_t)state->cluster_count * state->cluster_bytes
-		|| state->valid_bytes > state->reserved_bytes) {
-		res = FR_INVALID_OBJECT; goto done;
-	}
-	if (target_reserved_bytes > (FSIZE_t)(fs->n_fatent - 2) * state->cluster_bytes) {
-		res = FR_DENIED; goto done;
-	}
-	if (fs->fs_type == FS_FAT32 && target_reserved_bytes > 0xFFFFFFFFUL) {
-		res = FR_DENIED; goto done;
-	}
-	target_clusters = (DWORD)(target_reserved_bytes / state->cluster_bytes);
-	if (target_reserved_bytes % state->cluster_bytes) target_clusters++;
-	if (target_clusters <= state->cluster_count) { res = FR_OK; goto done; }
-	if (extent_capacity == 0) { res = FR_NOT_ENOUGH_CORE; goto done; }
-
-	old_clusters = state->cluster_count;
-	prev = state->last_cluster;
-	fp->obj.objsize = state->reserved_bytes;
-	while (state->cluster_count < target_clusters) {
-		_FDID obj_before = fp->obj;
-		clst = create_chain(&fp->obj, prev);
-		if (clst == 0) { no_space = 1; break; }
-		if (clst == 1) { res = FR_INT_ERR; goto done; }
-		if (clst == 0xFFFFFFFF) { res = FR_DISK_ERR; goto done; }
-		if (state->cluster_count == 0) fp->obj.sclust = clst;
-		lba = clust2sect(fs, clst);
-		if (!lba) { res = FR_INT_ERR; goto done; }
-		res = brick_rec_append_extent(new_extents, extent_capacity, &added,
-			(FSIZE_t)state->cluster_count * fs->csize, clst, lba, fs->csize,
-			added == 0);
-		if (res != FR_OK) {
-			_FDID rollback = fp->obj;
-			rollback.objsize = (FSIZE_t)(state->cluster_count + 1) * state->cluster_bytes;
-			(void)remove_chain(&rollback, clst, prev);
-			fp->obj = obj_before;
-			break;
+	for (;;) {
+		step = f_brick_rec_reserve_step(&cont, &request);
+		if (step == FF_META_STEP_DONE) return FR_OK;
+		if (step == FF_META_STEP_ERROR) return cont.result;
+		if (step == FF_META_STEP_YIELD) continue;
+		if (step != FF_META_STEP_NEED_IO || !request) return FR_INT_ERR;
+		if (f_brick_rec_reserve_io_started(&cont, request->sequence) != FR_OK) {
+			return FR_INT_ERR;
 		}
-		state->cluster_count++;
-		state->reserved_bytes = (FSIZE_t)state->cluster_count * state->cluster_bytes;
-		state->first_cluster = fp->obj.sclust;
-		state->last_cluster = clst;
-		prev = clst;
-		fp->obj.objsize = state->reserved_bytes;
+		io_result = request->operation == FF_META_IO_WRITE
+			? disk_write(fp->obj.fs->drv, request->buffer, request->sector, request->count)
+			: disk_read(fp->obj.fs->drv, request->buffer, request->sector, request->count);
+		if (f_brick_rec_reserve_io_complete(&cont, request->sequence,
+			io_result == RES_OK ? FR_OK : FR_DISK_ERR) != FR_OK) return FR_INT_ERR;
 	}
-	if (state->cluster_count == old_clusters) {
-		res = no_space ? FR_DENIED : FR_NOT_ENOUGH_CORE;
-		goto done;
-	}
-	fp->clust = state->last_cluster;
-	res = brick_rec_sync_metadata(fp, state);
-	if (res == FR_OK) {
-		*extent_count = added;
-		if (metrics) {
-			metrics->clusters_allocated = state->cluster_count - old_clusters;
-			metrics->extents_added = added;
-		}
-	}
-done:
-	brick_rec_metrics_end();
-	return res;
 }
 
 FRESULT f_brick_rec_commit (

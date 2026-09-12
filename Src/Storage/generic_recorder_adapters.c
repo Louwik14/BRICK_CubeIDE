@@ -41,6 +41,11 @@ static recorder_file_reservation_result_t generic_recorder_fatfs_extend(
     return result;
 }
 
+static recorder_file_reservation_result_t generic_recorder_fatfs_poll(void *context)
+{
+    return recorder_file_reservation_job_poll(context);
+}
+
 generic_recorder_reservation_t generic_recorder_fatfs_reservation_adapter(
     recorder_file_reservation_t *session)
 {
@@ -49,6 +54,7 @@ generic_recorder_reservation_t generic_recorder_fatfs_reservation_adapter(
         .snapshot = generic_recorder_fatfs_snapshot,
         .resolve = generic_recorder_fatfs_resolve,
         .extend = generic_recorder_fatfs_extend,
+        .poll = generic_recorder_fatfs_poll,
     };
     return adapter;
 }

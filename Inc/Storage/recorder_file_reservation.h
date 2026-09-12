@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include "Platform/memory_layout.h"
 #include "Sampler/sample_stream_fatfs_map.h"
 #include "ff.h"
 
@@ -17,6 +18,9 @@ typedef enum
 {
     RECORDER_FILE_RESERVATION_OK = 0,
     RECORDER_FILE_RESERVATION_PARTIAL,
+    RECORDER_FILE_RESERVATION_PROGRESS,
+    RECORDER_FILE_RESERVATION_IO_STARTED,
+    RECORDER_FILE_RESERVATION_RECOVERY_ABORT,
     RECORDER_FILE_RESERVATION_INVALID_ARG,
     RECORDER_FILE_RESERVATION_INVALID_STATE,
     RECORDER_FILE_RESERVATION_SD_BUSY,
@@ -59,9 +63,18 @@ typedef struct
     uint64_t reserved_bytes;
     uint64_t valid_bytes;
     uint64_t job_target_file_bytes;
+    FF_BRICK_REC_RESERVE_CONT reserve_cont;
     recorder_file_reservation_result_t job_result;
     recorder_file_job_phase_t job_phase;
     uint32_t job_media_epoch;
+    uint32_t job_io_lba;
+    uint32_t job_io_sequence;
+    uint32_t job_io_identity;
+    uint16_t job_old_extent_count;
+    UINT job_added_extent_count;
+    ALIGN32 uint8_t metadata_staging[512U];
+    uint8_t job_io_operation;
+    uint8_t job_io_active;
     uint8_t open;
     uint8_t finalizing;
     uint8_t failed;
@@ -85,6 +98,8 @@ recorder_file_reservation_result_t recorder_file_reservation_extend_begin(
     recorder_file_reservation_t *session,
     uint64_t additional_bytes);
 recorder_file_reservation_result_t recorder_file_reservation_job_step(
+    recorder_file_reservation_t *session);
+recorder_file_reservation_result_t recorder_file_reservation_job_poll(
     recorder_file_reservation_t *session);
 uint8_t recorder_file_reservation_job_active(
     const recorder_file_reservation_t *session);

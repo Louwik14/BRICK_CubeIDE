@@ -206,6 +206,18 @@ recorder_file_reservation_result_t recorder_file_reservation_extend_begin(
     }
     session->job_target_file_bytes = session->fs_state.reserved_bytes + additional_bytes;
     session->job_media_epoch = sd_access_media_epoch();
+    session->job_old_extent_count = session->extent_count;
+    session->job_added_extent_count = 0U;
+    const FRESULT fr = f_brick_rec_reserve_begin(&session->reserve_cont,
+        &session->file, (FSIZE_t)session->job_target_file_bytes,
+        &session->fs_state, &session->fs_extents[session->extent_count],
+        RECORDER_FILE_RESERVATION_MAX_EXTENTS - session->extent_count,
+        &session->job_added_extent_count, 0, session->metadata_staging,
+        sizeof(session->metadata_staging));
+    if(fr != FR_OK)
+    {
+        return recorder_file_fs_result(fr);
+    }
     session->job_result = RECORDER_FILE_RESERVATION_SD_BUSY;
     session->job_phase = RECORDER_FILE_JOB_EXTEND;
     sd_access_gate_set_recorder_fs_logical_active(1U);
@@ -230,39 +242,138 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
         session->job_phase = RECORDER_FILE_JOB_TERMINAL;
         return session->job_result;
     }
+    if(session->job_io_active != 0U)
+    {
+        return RECORDER_FILE_RESERVATION_IO_STARTED;
+    }
     if(recorder_file_begin_storage_operation() == 0U)
     {
         return RECORDER_FILE_RESERVATION_SD_BUSY;
     }
 
-    /* One allocation unit is the recorder metadata CPU/I/O quantum.  The
-     * FatFs recorder primitive makes that unit coherent before returning, so
-     * the physical gate can be released and RT LBA traffic can be arbitrated
-     * before the next unit. */
-    uint64_t target = session->fs_state.reserved_bytes + session->fs_state.cluster_bytes;
-    if((session->fs_state.cluster_bytes == 0U)
-            || (target > session->job_target_file_bytes))
+    const FF_META_REQUEST *request = 0;
+    const FF_META_STEP_RESULT step =
+        f_brick_rec_reserve_step(&session->reserve_cont, &request);
+    if(step == FF_META_STEP_NEED_IO)
     {
-        target = session->job_target_file_bytes;
+        if((request == 0) || (request->count != 1U))
+        {
+            recorder_file_end_storage_operation();
+            session->failed = 1U;
+            session->job_result = RECORDER_FILE_RESERVATION_FS_ERROR;
+            session->job_phase = RECORDER_FILE_JOB_TERMINAL;
+            return session->job_result;
+        }
+        session->job_io_identity++;
+        if(session->job_io_identity == 0U) session->job_io_identity = 1U;
+        const sd_block_device_result_t submit = (request->operation == FF_META_IO_WRITE)
+            ? sd_block_device_async_write_submit(request->sector, request->count,
+                request->buffer, session->job_io_identity)
+            : sd_block_device_async_read_submit(request->sector, request->count,
+                request->buffer, session->job_io_identity);
+        if((submit == SD_BLOCK_DEVICE_BUSY) || (submit == SD_BLOCK_DEVICE_QUEUE_FULL))
+        {
+            recorder_file_end_storage_operation();
+            return RECORDER_FILE_RESERVATION_SD_BUSY;
+        }
+        if(submit != SD_BLOCK_DEVICE_OK)
+        {
+            recorder_file_end_storage_operation();
+            session->failed = 1U;
+            session->job_result = RECORDER_FILE_RESERVATION_FS_ERROR;
+            session->job_phase = RECORDER_FILE_JOB_TERMINAL;
+            return session->job_result;
+        }
+        session->job_io_lba = request->sector;
+        session->job_io_sequence = request->sequence;
+        session->job_io_operation = (uint8_t)request->operation;
+        session->job_io_active = 1U;
+        if(f_brick_rec_reserve_io_started(&session->reserve_cont,
+                request->sequence) != FR_OK)
+        {
+            Error_Handler();
+        }
+        recorder_file_end_storage_operation();
+        return RECORDER_FILE_RESERVATION_IO_STARTED;
     }
-    const recorder_file_reservation_result_t result =
-        recorder_file_extend_locked(session, target - session->fs_state.reserved_bytes);
     recorder_file_end_storage_operation();
 
-    if((result != RECORDER_FILE_RESERVATION_OK)
-            && (result != RECORDER_FILE_RESERVATION_PARTIAL))
+    if(step == FF_META_STEP_ERROR)
     {
-        session->job_result = result;
+        session->job_result = recorder_file_fs_result(session->reserve_cont.result);
+        session->failed = 1U;
         session->job_phase = RECORDER_FILE_JOB_TERMINAL;
-        return result;
+        return session->job_result;
     }
-    if(session->fs_state.reserved_bytes >= session->job_target_file_bytes)
+    if(step == FF_META_STEP_DONE)
     {
+        uint16_t added = (uint16_t)session->job_added_extent_count;
+        const uint16_t old_count = session->job_old_extent_count;
+        if((session->job_added_extent_count > UINT16_MAX)
+                || ((uint32_t)old_count + added > RECORDER_FILE_RESERVATION_MAX_EXTENTS)
+                || (recorder_file_import_extents(session, old_count, added) == 0U))
+        {
+            session->failed = 1U;
+            session->job_result = RECORDER_FILE_RESERVATION_MAP_FULL;
+            session->job_phase = RECORDER_FILE_JOB_TERMINAL;
+            return session->job_result;
+        }
+        session->extent_count = (uint16_t)(old_count + added);
+        recorder_file_update_public_sizes(session);
+        recorder_file_publish(session);
         session->job_result = RECORDER_FILE_RESERVATION_OK;
         session->job_phase = RECORDER_FILE_JOB_TERMINAL;
         return RECORDER_FILE_RESERVATION_OK;
     }
-    return RECORDER_FILE_RESERVATION_SD_BUSY;
+    return RECORDER_FILE_RESERVATION_PROGRESS;
+}
+
+recorder_file_reservation_result_t recorder_file_reservation_job_poll(
+    recorder_file_reservation_t *session)
+{
+    if((session == 0) || (session->job_io_active == 0U)
+            || (session->job_phase != RECORDER_FILE_JOB_EXTEND))
+    {
+        return RECORDER_FILE_RESERVATION_INVALID_STATE;
+    }
+    sd_block_device_async_poll();
+    sd_block_device_async_completion_t completion;
+    if(sd_block_device_async_take_completion(&completion) == 0U)
+    {
+        return (sd_block_device_async_hardware_state() == SD_BLOCK_DEVICE_HW_ABORTING)
+            ? RECORDER_FILE_RESERVATION_RECOVERY_ABORT
+            : RECORDER_FILE_RESERVATION_IO_STARTED;
+    }
+    session->job_io_active = 0U;
+    const sd_block_device_operation_t expected_operation =
+        (session->job_io_operation == FF_META_IO_WRITE)
+            ? SD_BLOCK_DEVICE_OPERATION_WRITE : SD_BLOCK_DEVICE_OPERATION_READ;
+    const void *const completed_buffer = (expected_operation == SD_BLOCK_DEVICE_OPERATION_WRITE)
+        ? completion.src : completion.dst;
+    const FRESULT io_result = (completion.result == SD_BLOCK_DEVICE_OK)
+        ? FR_OK : FR_DISK_ERR;
+    if((completion.operation != expected_operation)
+            || (completion.lba != session->job_io_lba)
+            || (completion.sector_count != 1U)
+            || (completed_buffer != session->metadata_staging)
+            || (completion.media_epoch != session->job_media_epoch)
+            || (completion.owner_generation != session->job_io_identity)
+            || (f_brick_rec_reserve_io_complete(&session->reserve_cont,
+                session->job_io_sequence, io_result) != FR_OK))
+    {
+        session->failed = 1U;
+        session->job_result = RECORDER_FILE_RESERVATION_FS_ERROR;
+        session->job_phase = RECORDER_FILE_JOB_TERMINAL;
+        return session->job_result;
+    }
+    if(io_result != FR_OK)
+    {
+        session->failed = 1U;
+        session->job_result = RECORDER_FILE_RESERVATION_FS_ERROR;
+        session->job_phase = RECORDER_FILE_JOB_TERMINAL;
+        return session->job_result;
+    }
+    return RECORDER_FILE_RESERVATION_PROGRESS;
 }
 
 uint8_t recorder_file_reservation_job_active(
@@ -285,11 +396,8 @@ void recorder_file_reservation_job_cancel(recorder_file_reservation_t *session)
 {
     if((session != 0) && (session->job_phase == RECORDER_FILE_JOB_EXTEND))
     {
-        /* Every returned allocation quantum is already coherent and published;
-         * cancelling only suppresses allocation units not yet started. */
-        session->job_phase = RECORDER_FILE_JOB_NONE;
-        session->job_target_file_bytes = 0U;
-        sd_access_gate_set_recorder_fs_logical_active(0U);
+        f_brick_rec_reserve_request_stop(&session->reserve_cont);
+        session->job_target_file_bytes = session->fs_state.reserved_bytes;
     }
 }
 
@@ -299,8 +407,7 @@ recorder_file_reservation_result_t recorder_file_reservation_create(
     uint32_t header_bytes,
     uint64_t initial_reserve_bytes)
 {
-    if((session == 0) || (temporary_path == 0) || (initial_reserve_bytes == 0U)
-            || (session->open != 0U)
+    if((session == 0) || (temporary_path == 0) || (session->open != 0U)
             || (initial_reserve_bytes > (uint64_t)((FSIZE_t)-1) - header_bytes))
     {
         return RECORDER_FILE_RESERVATION_INVALID_ARG;
@@ -330,7 +437,7 @@ recorder_file_reservation_result_t recorder_file_reservation_create(
                              RECORDER_FILE_RESERVATION_MAX_EXTENTS,
                              &recovered_count, 0);
     recorder_file_reservation_result_t result = recorder_file_fs_result(fr);
-    if(fr == FR_OK)
+    if((fr == FR_OK) && (initial_reserve_bytes != 0U))
     {
         const uint64_t total = (uint64_t)header_bytes + initial_reserve_bytes;
         result = recorder_file_extend_locked(session, total);
