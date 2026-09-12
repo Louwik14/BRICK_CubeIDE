@@ -397,6 +397,9 @@ uint8_t generic_recorder_request_stop(generic_recorder_t *recorder)
         return 0U;
     }
     recorder->state = GENERIC_RECORDER_DRAINING;
+    recorder->extension_pending = 0U;
+    recorder_file_reservation_job_cancel(
+        (recorder_file_reservation_t *)recorder->config.reservation.context);
     return 1U;
 }
 

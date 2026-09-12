@@ -25,7 +25,20 @@ static recorder_file_reservation_result_t generic_recorder_fatfs_extend(
     void *context,
     uint64_t additional_bytes)
 {
-    return recorder_file_reservation_extend(context, additional_bytes);
+    recorder_file_reservation_t *const session = context;
+    if (recorder_file_reservation_job_active(session) == 0U)
+    {
+        const recorder_file_reservation_result_t begun =
+            recorder_file_reservation_extend_begin(session, additional_bytes);
+        if (begun != RECORDER_FILE_RESERVATION_OK) return begun;
+    }
+    const recorder_file_reservation_result_t result =
+        recorder_file_reservation_job_step(session);
+    if (session->job_phase == RECORDER_FILE_JOB_TERMINAL)
+    {
+        recorder_file_reservation_job_finish(session);
+    }
+    return result;
 }
 
 generic_recorder_reservation_t generic_recorder_fatfs_reservation_adapter(

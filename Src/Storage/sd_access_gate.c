@@ -7,6 +7,7 @@ static volatile uint8_t g_sd_access_owner;
 static volatile uint8_t g_sd_access_total_count;
 static volatile uint8_t g_sd_access_client_count[SD_ACCESS_CLIENT_MAX + 1U];
 static volatile uint8_t g_sd_access_streaming_critical;
+static volatile uint8_t g_sd_access_recorder_fs_logical_active;
 STORAGE_STATE_SDRAM static FATFS g_sd_fs;
 static uint8_t g_sd_fs_mounted;
 static volatile uint32_t g_sd_media_epoch;
@@ -19,6 +20,7 @@ void sd_access_gate_init(void)
     g_sd_access_owner = (uint8_t)SD_ACCESS_CLIENT_NONE;
     g_sd_access_total_count = 0U;
     g_sd_access_streaming_critical = 0U;
+    g_sd_access_recorder_fs_logical_active = 0U;
     for (uint8_t i = 0U; i <= (uint8_t)SD_ACCESS_CLIENT_MAX; ++i)
     {
         g_sd_access_client_count[i] = 0U;
@@ -149,6 +151,13 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
     }
 
     __disable_irq();
+    if ((g_sd_access_recorder_fs_logical_active != 0U)
+        && (client != SD_ACCESS_CLIENT_SAMPLE_STREAM)
+        && (client != SD_ACCESS_CLIENT_SCHEDULED_RECORDER))
+    {
+        __enable_irq();
+        return 0U;
+    }
     if ((g_sd_access_streaming_critical != 0U)
         && (g_sd_access_total_count == 0U)
         && (client != SD_ACCESS_CLIENT_SAMPLE_STREAM)
@@ -238,6 +247,22 @@ uint8_t sd_access_gate_streaming_critical_active(void)
     uint8_t active;
     __disable_irq();
     active = g_sd_access_streaming_critical;
+    __enable_irq();
+    return active;
+}
+
+void sd_access_gate_set_recorder_fs_logical_active(uint8_t active)
+{
+    __disable_irq();
+    g_sd_access_recorder_fs_logical_active = (active != 0U) ? 1U : 0U;
+    __enable_irq();
+}
+
+uint8_t sd_access_gate_recorder_fs_logical_active(void)
+{
+    uint8_t active;
+    __disable_irq();
+    active = g_sd_access_recorder_fs_logical_active;
     __enable_irq();
     return active;
 }

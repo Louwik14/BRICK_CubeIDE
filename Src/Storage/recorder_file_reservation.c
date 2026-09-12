@@ -164,11 +164,133 @@ static recorder_file_reservation_result_t recorder_file_extend_locked(
         session->failed = 1U;
         return RECORDER_FILE_RESERVATION_MAP_FULL;
     }
+    if((session->job_phase == RECORDER_FILE_JOB_EXTEND) && (old_count != 0U)
+            && (added == 1U))
+    {
+        FF_BRICK_REC_EXTENT *const previous = &session->fs_extents[old_count - 1U];
+        const FF_BRICK_REC_EXTENT *const next = &session->fs_extents[old_count];
+        sample_stream_physical_extent_t *const physical =
+            &session->physical_extents[old_count - 1U];
+        if((previous->first_cluster + previous->cluster_count == next->first_cluster)
+                && (previous->lba_start + previous->sector_count == next->lba_start)
+                && (previous->file_sector_start + previous->sector_count
+                    == next->file_sector_start))
+        {
+            previous->cluster_count += next->cluster_count;
+            previous->sector_count += next->sector_count;
+            physical->sector_count += next->sector_count;
+            added = 0U;
+        }
+    }
     session->extent_count = (uint16_t)(old_count + added);
     recorder_file_update_public_sizes(session);
     recorder_file_publish(session);
     return (session->fs_state.reserved_bytes < target)
         ? RECORDER_FILE_RESERVATION_PARTIAL : RECORDER_FILE_RESERVATION_OK;
+}
+
+recorder_file_reservation_result_t recorder_file_reservation_extend_begin(
+    recorder_file_reservation_t *session,
+    uint64_t additional_bytes)
+{
+    if((session == 0) || (session->open == 0U) || (session->failed != 0U)
+            || (session->finalizing != 0U) || (session->job_phase != RECORDER_FILE_JOB_NONE))
+    {
+        return RECORDER_FILE_RESERVATION_INVALID_STATE;
+    }
+    if((additional_bytes == 0U)
+            || (session->fs_state.reserved_bytes
+                > (uint64_t)((FSIZE_t)-1) - additional_bytes))
+    {
+        return RECORDER_FILE_RESERVATION_INVALID_ARG;
+    }
+    session->job_target_file_bytes = session->fs_state.reserved_bytes + additional_bytes;
+    session->job_media_epoch = sd_access_media_epoch();
+    session->job_result = RECORDER_FILE_RESERVATION_SD_BUSY;
+    session->job_phase = RECORDER_FILE_JOB_EXTEND;
+    sd_access_gate_set_recorder_fs_logical_active(1U);
+    return RECORDER_FILE_RESERVATION_OK;
+}
+
+recorder_file_reservation_result_t recorder_file_reservation_job_step(
+    recorder_file_reservation_t *session)
+{
+    if((session == 0) || (session->job_phase == RECORDER_FILE_JOB_NONE))
+    {
+        return RECORDER_FILE_RESERVATION_INVALID_STATE;
+    }
+    if(session->job_phase == RECORDER_FILE_JOB_TERMINAL)
+    {
+        return session->job_result;
+    }
+    if(session->job_media_epoch != sd_access_media_epoch())
+    {
+        session->failed = 1U;
+        session->job_result = RECORDER_FILE_RESERVATION_FS_ERROR;
+        session->job_phase = RECORDER_FILE_JOB_TERMINAL;
+        return session->job_result;
+    }
+    if(recorder_file_begin_storage_operation() == 0U)
+    {
+        return RECORDER_FILE_RESERVATION_SD_BUSY;
+    }
+
+    /* One allocation unit is the recorder metadata CPU/I/O quantum.  The
+     * FatFs recorder primitive makes that unit coherent before returning, so
+     * the physical gate can be released and RT LBA traffic can be arbitrated
+     * before the next unit. */
+    uint64_t target = session->fs_state.reserved_bytes + session->fs_state.cluster_bytes;
+    if((session->fs_state.cluster_bytes == 0U)
+            || (target > session->job_target_file_bytes))
+    {
+        target = session->job_target_file_bytes;
+    }
+    const recorder_file_reservation_result_t result =
+        recorder_file_extend_locked(session, target - session->fs_state.reserved_bytes);
+    recorder_file_end_storage_operation();
+
+    if((result != RECORDER_FILE_RESERVATION_OK)
+            && (result != RECORDER_FILE_RESERVATION_PARTIAL))
+    {
+        session->job_result = result;
+        session->job_phase = RECORDER_FILE_JOB_TERMINAL;
+        return result;
+    }
+    if(session->fs_state.reserved_bytes >= session->job_target_file_bytes)
+    {
+        session->job_result = RECORDER_FILE_RESERVATION_OK;
+        session->job_phase = RECORDER_FILE_JOB_TERMINAL;
+        return RECORDER_FILE_RESERVATION_OK;
+    }
+    return RECORDER_FILE_RESERVATION_SD_BUSY;
+}
+
+uint8_t recorder_file_reservation_job_active(
+    const recorder_file_reservation_t *session)
+{
+    return ((session != 0) && (session->job_phase != RECORDER_FILE_JOB_NONE)) ? 1U : 0U;
+}
+
+void recorder_file_reservation_job_finish(recorder_file_reservation_t *session)
+{
+    if((session != 0) && (session->job_phase == RECORDER_FILE_JOB_TERMINAL))
+    {
+        session->job_phase = RECORDER_FILE_JOB_NONE;
+        session->job_target_file_bytes = 0U;
+        sd_access_gate_set_recorder_fs_logical_active(0U);
+    }
+}
+
+void recorder_file_reservation_job_cancel(recorder_file_reservation_t *session)
+{
+    if((session != 0) && (session->job_phase == RECORDER_FILE_JOB_EXTEND))
+    {
+        /* Every returned allocation quantum is already coherent and published;
+         * cancelling only suppresses allocation units not yet started. */
+        session->job_phase = RECORDER_FILE_JOB_NONE;
+        session->job_target_file_bytes = 0U;
+        sd_access_gate_set_recorder_fs_logical_active(0U);
+    }
 }
 
 recorder_file_reservation_result_t recorder_file_reservation_create(

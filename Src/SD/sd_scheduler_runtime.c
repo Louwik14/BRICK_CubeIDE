@@ -90,8 +90,7 @@ static uint8_t sd_scheduler_runtime_bind_wrapped(
         .context = wrapper,
         .peek = sd_scheduler_runtime_peek,
         .start = sd_scheduler_runtime_start,
-        .poll = (type == SD_SCHEDULER_CLASS_FILESYSTEM)
-            ? 0 : sd_scheduler_runtime_poll,
+        .poll = (provider->poll != 0) ? sd_scheduler_runtime_poll : 0,
     };
     return sd_scheduler_bind_provider(&g_sd_scheduler_runtime, type, &exposed);
 }

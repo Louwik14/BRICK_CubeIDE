@@ -25,6 +25,13 @@ typedef enum
     RECORDER_FILE_RESERVATION_FS_ERROR
 } recorder_file_reservation_result_t;
 
+typedef enum
+{
+    RECORDER_FILE_JOB_NONE = 0,
+    RECORDER_FILE_JOB_EXTEND,
+    RECORDER_FILE_JOB_TERMINAL
+} recorder_file_job_phase_t;
+
 typedef struct
 {
     const sample_stream_physical_extent_t *extents;
@@ -51,6 +58,10 @@ typedef struct
     uint32_t header_bytes;
     uint64_t reserved_bytes;
     uint64_t valid_bytes;
+    uint64_t job_target_file_bytes;
+    recorder_file_reservation_result_t job_result;
+    recorder_file_job_phase_t job_phase;
+    uint32_t job_media_epoch;
     uint8_t open;
     uint8_t finalizing;
     uint8_t failed;
@@ -70,6 +81,15 @@ recorder_file_reservation_result_t recorder_file_reservation_recover(
 recorder_file_reservation_result_t recorder_file_reservation_extend(
     recorder_file_reservation_t *session,
     uint64_t additional_bytes);
+recorder_file_reservation_result_t recorder_file_reservation_extend_begin(
+    recorder_file_reservation_t *session,
+    uint64_t additional_bytes);
+recorder_file_reservation_result_t recorder_file_reservation_job_step(
+    recorder_file_reservation_t *session);
+uint8_t recorder_file_reservation_job_active(
+    const recorder_file_reservation_t *session);
+void recorder_file_reservation_job_finish(recorder_file_reservation_t *session);
+void recorder_file_reservation_job_cancel(recorder_file_reservation_t *session);
 recorder_file_reservation_result_t recorder_file_reservation_commit_valid(
     recorder_file_reservation_t *session,
     uint64_t valid_bytes);

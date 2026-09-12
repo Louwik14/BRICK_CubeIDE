@@ -411,11 +411,6 @@ void sd_scheduler_service(sd_scheduler_t *scheduler,
     }
     if (scheduler->owner != SD_SCHEDULER_OWNER_IDLE)
     {
-        if (scheduler->owner == SD_SCHEDULER_OWNER_FILESYSTEM)
-        {
-            assert(0 && "filesystem work must complete synchronously");
-            return;
-        }
         sd_scheduler_snapshot_t waiting_snapshot;
         sd_scheduler_collect(scheduler, now_us, media_epoch, &waiting_snapshot);
         scheduler->wait_active[scheduler->active_class] = 0U;
@@ -440,14 +435,13 @@ void sd_scheduler_service(sd_scheduler_t *scheduler,
         provider->context, &snapshot.candidate[picked], sectors);
     if (result == SD_SCHEDULER_START_STARTED)
     {
-        assert(picked != SD_SCHEDULER_CLASS_FILESYSTEM);
+        assert(provider->poll != 0);
         sd_scheduler_note_accepted(scheduler, picked, now_us);
         return;
     }
     if ((result != SD_SCHEDULER_START_BUSY)
         && (result != SD_SCHEDULER_START_ERROR))
     {
-        assert(picked == SD_SCHEDULER_CLASS_FILESYSTEM);
         sd_scheduler_note_accepted(scheduler, picked, now_us);
     }
     scheduler->owner = SD_SCHEDULER_OWNER_IDLE;
