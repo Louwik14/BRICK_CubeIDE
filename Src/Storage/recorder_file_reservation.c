@@ -461,8 +461,10 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
 
     const recorder_file_job_phase_t active_phase = session->job_phase;
     const FF_META_REQUEST *request = 0;
-    const FF_META_STEP_RESULT step = (active_phase == RECORDER_FILE_JOB_EXTEND)
-        ? f_brick_rec_reserve_step(&session->job_cont.reserve, &request)
+    const FF_META_STEP_RESULT step = (active_phase == RECORDER_FILE_JOB_PREPARE)
+        ? f_brick_rec_prepare_step(&session->job_cont.prepare, &request)
+        : (active_phase == RECORDER_FILE_JOB_EXTEND)
+            ? f_brick_rec_reserve_step(&session->job_cont.reserve, &request)
         : (active_phase == RECORDER_FILE_JOB_RELEASE)
             ? f_brick_rec_release_step(&session->job_cont.release, &request)
             : (active_phase == RECORDER_FILE_JOB_RENAME)
@@ -503,8 +505,11 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
         session->job_io_operation = (uint8_t)request->operation;
         session->job_io_buffer = request->buffer;
         session->job_io_active = 1U;
-        const FRESULT started = (active_phase == RECORDER_FILE_JOB_EXTEND)
-            ? f_brick_rec_reserve_io_started(&session->job_cont.reserve,
+        const FRESULT started = (active_phase == RECORDER_FILE_JOB_PREPARE)
+            ? f_brick_rec_prepare_io_started(&session->job_cont.prepare,
+                request->sequence)
+            : (active_phase == RECORDER_FILE_JOB_EXTEND)
+                ? f_brick_rec_reserve_io_started(&session->job_cont.reserve,
                 request->sequence)
             : (active_phase == RECORDER_FILE_JOB_RELEASE)
                 ? f_brick_rec_release_io_started(&session->job_cont.release,
@@ -525,8 +530,10 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
 
     if(step == FF_META_STEP_ERROR)
     {
-        const FRESULT result = (active_phase == RECORDER_FILE_JOB_EXTEND)
-            ? session->job_cont.reserve.result
+        const FRESULT result = (active_phase == RECORDER_FILE_JOB_PREPARE)
+            ? session->job_cont.prepare.result
+            : (active_phase == RECORDER_FILE_JOB_EXTEND)
+                ? session->job_cont.reserve.result
             : (active_phase == RECORDER_FILE_JOB_RELEASE)
                 ? session->job_cont.release.result
                 : (active_phase == RECORDER_FILE_JOB_RENAME)
@@ -538,7 +545,25 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
     }
     if(step == FF_META_STEP_DONE)
     {
-        if(active_phase == RECORDER_FILE_JOB_EXTEND)
+        if(active_phase == RECORDER_FILE_JOB_PREPARE)
+        {
+            FATFS *const fs = session->file.obj.fs;
+            if((fs == 0) || (session->file.obj.objsize != 0U))
+            {
+                session->failed = 1U;
+                session->job_result = RECORDER_FILE_RESERVATION_FS_ERROR;
+                session->job_phase = RECORDER_FILE_JOB_TERMINAL;
+                return session->job_result;
+            }
+            memset(&session->fs_state, 0, sizeof(session->fs_state));
+            session->fs_state.cluster_bytes =
+                (DWORD)fs->csize * RECORDER_FILE_RESERVATION_SECTOR_BYTES;
+            session->fs_state.fs_type = fs->fs_type;
+            session->fs_state.chain_status = session->file.obj.stat;
+            session->extent_count = 0U;
+            session->open = 1U;
+        }
+        else if(active_phase == RECORDER_FILE_JOB_EXTEND)
         {
             uint16_t added = (uint16_t)session->job_added_extent_count;
             const uint16_t old_count = session->job_old_extent_count;
@@ -570,7 +595,8 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
             }
             session->job_final_path[0] = '\0';
         }
-        if((active_phase != RECORDER_FILE_JOB_EXTEND)
+        if((active_phase != RECORDER_FILE_JOB_PREPARE)
+                && (active_phase != RECORDER_FILE_JOB_EXTEND)
                 && (active_phase != RECORDER_FILE_JOB_RENAME))
         {
             session->fs_state.chain_status = session->file.obj.stat;
@@ -615,8 +641,11 @@ recorder_file_reservation_result_t recorder_file_reservation_job_poll(
             || (completed_buffer != session->job_io_buffer)
             || (completion.media_epoch != session->job_media_epoch)
             || (completion.owner_generation != session->job_io_identity)
-            || (((session->job_phase == RECORDER_FILE_JOB_EXTEND)
-                ? f_brick_rec_reserve_io_complete(&session->job_cont.reserve,
+            || (((session->job_phase == RECORDER_FILE_JOB_PREPARE)
+                ? f_brick_rec_prepare_io_complete(&session->job_cont.prepare,
+                    session->job_io_sequence, io_result)
+                : (session->job_phase == RECORDER_FILE_JOB_EXTEND)
+                    ? f_brick_rec_reserve_io_complete(&session->job_cont.reserve,
                     session->job_io_sequence, io_result)
                 : (session->job_phase == RECORDER_FILE_JOB_RELEASE)
                     ? f_brick_rec_release_io_complete(&session->job_cont.release,
@@ -667,56 +696,34 @@ void recorder_file_reservation_job_cancel(recorder_file_reservation_t *session)
     }
 }
 
-recorder_file_reservation_result_t recorder_file_reservation_create(
+recorder_file_reservation_result_t recorder_file_reservation_prepare_begin(
     recorder_file_reservation_t *session,
     const char *temporary_path,
-    uint32_t header_bytes,
-    uint64_t initial_reserve_bytes)
+    uint32_t header_bytes)
 {
     if((session == 0) || (temporary_path == 0) || (session->open != 0U)
-            || (initial_reserve_bytes > (uint64_t)((FSIZE_t)-1) - header_bytes))
+            || (session->job_phase != RECORDER_FILE_JOB_NONE))
     {
         return RECORDER_FILE_RESERVATION_INVALID_ARG;
-    }
-    if(recorder_file_begin_storage_operation() == 0U)
-    {
-        return RECORDER_FILE_RESERVATION_SD_BUSY;
     }
     recorder_file_reservation_init(session);
     session->header_bytes = header_bytes;
     if(recorder_file_copy_path(session->path, temporary_path) == 0U)
     {
-        recorder_file_end_storage_operation();
         return RECORDER_FILE_RESERVATION_INVALID_ARG;
     }
-    FRESULT fr = f_open(&session->file, temporary_path,
-                        FA_CREATE_NEW | FA_WRITE | FA_READ);
+    const FRESULT fr = f_brick_rec_prepare_begin(&session->job_cont.prepare,
+        &session->file, temporary_path, session->metadata_staging,
+        sizeof(session->metadata_staging));
     if(fr != FR_OK)
     {
-        recorder_file_end_storage_operation();
         return recorder_file_fs_result(fr);
     }
-    session->open = 1U;
-    UINT recovered_count = 0U;
-    fr = f_brick_rec_recover(&session->file, &session->fs_state,
-                             session->fs_extents,
-                             RECORDER_FILE_RESERVATION_MAX_EXTENTS,
-                             &recovered_count, 0);
-    recorder_file_reservation_result_t result = recorder_file_fs_result(fr);
-    if((fr == FR_OK) && (initial_reserve_bytes != 0U))
-    {
-        const uint64_t total = (uint64_t)header_bytes + initial_reserve_bytes;
-        result = recorder_file_extend_locked(session, total);
-    }
-    if((result != RECORDER_FILE_RESERVATION_OK)
-            && (result != RECORDER_FILE_RESERVATION_PARTIAL))
-    {
-        (void)f_close(&session->file);
-        session->open = 0U;
-        session->failed = 1U;
-    }
-    recorder_file_end_storage_operation();
-    return result;
+    session->job_media_epoch = sd_access_media_epoch();
+    session->job_result = RECORDER_FILE_RESERVATION_SD_BUSY;
+    session->job_phase = RECORDER_FILE_JOB_PREPARE;
+    sd_access_gate_set_recorder_fs_logical_active(1U);
+    return RECORDER_FILE_RESERVATION_OK;
 }
 
 recorder_file_reservation_result_t recorder_file_reservation_recover(

@@ -33,6 +33,7 @@ typedef enum
 typedef enum
 {
     RECORDER_FILE_JOB_NONE = 0,
+    RECORDER_FILE_JOB_PREPARE,
     RECORDER_FILE_JOB_EXTEND,
     RECORDER_FILE_JOB_COMMIT,
     RECORDER_FILE_JOB_RELEASE,
@@ -71,6 +72,7 @@ typedef struct
     uint64_t job_target_file_bytes;
     union
     {
+        FF_BRICK_REC_PREPARE_CONT prepare;
         FF_BRICK_REC_RESERVE_CONT reserve;
         FF_BRICK_REC_RELEASE_CONT release;
         FF_META_OBJECT_SYNC_CONT sync;
@@ -95,11 +97,10 @@ typedef struct
 } recorder_file_reservation_t;
 
 void recorder_file_reservation_init(recorder_file_reservation_t *session);
-recorder_file_reservation_result_t recorder_file_reservation_create(
+recorder_file_reservation_result_t recorder_file_reservation_prepare_begin(
     recorder_file_reservation_t *session,
     const char *temporary_path,
-    uint32_t header_bytes,
-    uint64_t initial_reserve_bytes);
+    uint32_t header_bytes);
 recorder_file_reservation_result_t recorder_file_reservation_recover(
     recorder_file_reservation_t *session,
     const char *temporary_path,

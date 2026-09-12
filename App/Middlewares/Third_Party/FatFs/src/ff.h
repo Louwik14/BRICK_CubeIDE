@@ -349,6 +349,54 @@ typedef struct {
 	BYTE after_window;
 } FF_META_REMOVE_CHAIN_CONT;
 
+#define FF_BRICK_REC_PATH_MAX 96U
+
+typedef struct {
+	FATFS* fs;
+	FIL* fp;
+	_FDID directory_obj;
+	_FDID source_obj;
+	FF_META_WINDOW_CONT window;
+	FF_META_REMOVE_CHAIN_CONT remove;
+	BYTE* staging;
+	DWORD cursor_cluster;
+	DWORD cursor_offset;
+	DWORD cursor_remaining;
+	DWORD cursor_within_cluster;
+	DWORD fat_value;
+	DWORD source_block_offset;
+	DWORD source_entry_offset;
+	DWORD destination_block_offset;
+	DWORD destination_entry_offset;
+	DWORD free_run_offset;
+	DWORD created_dir_sector;
+	DWORD timestamp;
+	FRESULT result;
+	UINT staging_size;
+	UINT path_index;
+	UINT next_path_index;
+	UINT target_length;
+	UINT required_entries;
+	UINT free_run_count;
+	UINT entry_index;
+	UINT entry_count;
+	BYTE phase;
+	BYTE after_window;
+	BYTE after_next_cluster;
+	BYTE after_seek;
+	BYTE scan_purpose;
+	BYTE scan_lfn_order;
+	BYTE scan_lfn_sum;
+	BYTE alias_attempt;
+	BYTE alias_collision;
+	BYTE target_last;
+	BYTE target_fn[12];
+	BYTE target_fn_base[12];
+	TCHAR path[FF_BRICK_REC_PATH_MAX];
+	WCHAR target_lfn[_MAX_LFN + 1];
+	BYTE xdir[FF_META_XDIR_BUFFER_SIZE];
+} FF_BRICK_REC_PREPARE_CONT;
+
 typedef struct {
 	FATFS* fs;
 	_FDID directory_obj;
@@ -356,6 +404,9 @@ typedef struct {
 	BYTE* staging;
 	DWORD source_block_offset;
 	DWORD source_entry_offset;
+	DWORD destination_block_offset;
+	DWORD destination_entry_offset;
+	DWORD free_run_offset;
 	DWORD cursor_cluster;
 	DWORD cursor_offset;
 	DWORD cursor_remaining;
@@ -366,6 +417,8 @@ typedef struct {
 	UINT entry_index;
 	UINT entry_count;
 	UINT target_length;
+	UINT required_entries;
+	UINT free_run_count;
 	BYTE phase;
 	BYTE after_window;
 	BYTE after_next_cluster;
@@ -376,7 +429,11 @@ typedef struct {
 	BYTE source_lfn_entries;
 	BYTE loading_source;
 	BYTE candidate_source;
+	BYTE alias_attempt;
+	BYTE alias_collision;
 	BYTE target_fn[12];
+	BYTE target_fn_base[12];
+	BYTE source_entry[32U];
 	WCHAR target_lfn[_MAX_LFN + 1];
 	BYTE xdir[FF_META_XDIR_BUFFER_SIZE];
 } FF_BRICK_REC_RENAME_CONT;
@@ -415,6 +472,14 @@ FF_META_STEP_RESULT f_brick_meta_remove_chain_step (
 FRESULT f_brick_meta_remove_chain_io_started (FF_META_REMOVE_CHAIN_CONT* cont,
 	DWORD sequence);
 FRESULT f_brick_meta_remove_chain_io_complete (FF_META_REMOVE_CHAIN_CONT* cont,
+	DWORD sequence, FRESULT result);
+FRESULT f_brick_rec_prepare_begin (FF_BRICK_REC_PREPARE_CONT* cont, FIL* fp,
+	const TCHAR* path, BYTE* staging, UINT staging_size);
+FF_META_STEP_RESULT f_brick_rec_prepare_step (FF_BRICK_REC_PREPARE_CONT* cont,
+	const FF_META_REQUEST** request);
+FRESULT f_brick_rec_prepare_io_started (FF_BRICK_REC_PREPARE_CONT* cont,
+	DWORD sequence);
+FRESULT f_brick_rec_prepare_io_complete (FF_BRICK_REC_PREPARE_CONT* cont,
 	DWORD sequence, FRESULT result);
 FRESULT f_brick_rec_rename_begin (FF_BRICK_REC_RENAME_CONT* cont,
 	const FIL* closed_file, const TCHAR* new_name, BYTE* staging,

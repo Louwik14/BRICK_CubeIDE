@@ -138,19 +138,23 @@ static sd_scheduler_start_result_t audio_recorder_storage_preparation_step(
     switch (runtime->prepare_phase)
     {
         case AUDIO_RECORDER_PREP_REMOVE_TEMPORARY:
-        {
-            const FRESULT fr = f_unlink(runtime->temporary_path);
-            if ((fr != FR_OK) && (fr != FR_NO_FILE)) return SD_SCHEDULER_START_ERROR;
+            rr = recorder_file_reservation_prepare_begin(&runtime->reservation,
+                runtime->temporary_path, AUDIO_RECORDER_WAV_HEADER_BYTES);
+            if (rr != RECORDER_FILE_RESERVATION_OK)
+                return (rr == RECORDER_FILE_RESERVATION_SD_BUSY)
+                    ? SD_SCHEDULER_START_BUSY : SD_SCHEDULER_START_ERROR;
             runtime->prepare_phase = AUDIO_RECORDER_PREP_CREATE;
             return SD_SCHEDULER_START_COMPLETED;
-        }
         case AUDIO_RECORDER_PREP_CREATE:
-            rr = recorder_file_reservation_create(&runtime->reservation,
-                runtime->temporary_path, AUDIO_RECORDER_WAV_HEADER_BYTES, 0U);
-            if (rr == RECORDER_FILE_RESERVATION_SD_BUSY) return SD_SCHEDULER_START_BUSY;
-            if ((rr != RECORDER_FILE_RESERVATION_OK)
-                    && (rr != RECORDER_FILE_RESERVATION_PARTIAL))
-                return SD_SCHEDULER_START_ERROR;
+            rr = recorder_file_reservation_job_step(&runtime->reservation);
+            if (rr == RECORDER_FILE_RESERVATION_IO_STARTED)
+                return SD_SCHEDULER_START_STARTED;
+            if (rr == RECORDER_FILE_RESERVATION_PROGRESS)
+                return SD_SCHEDULER_START_COMPLETED;
+            if (rr == RECORDER_FILE_RESERVATION_SD_BUSY)
+                return SD_SCHEDULER_START_BUSY;
+            if (rr != RECORDER_FILE_RESERVATION_OK) return SD_SCHEDULER_START_ERROR;
+            recorder_file_reservation_job_finish(&runtime->reservation);
             rr = recorder_file_reservation_extend_begin(&runtime->reservation,
                 (AUDIO_RECORDER_INITIAL_RESERVE_BYTES + AUDIO_RECORDER_WAV_HEADER_BYTES)
                     - runtime->reservation.fs_state.reserved_bytes);
