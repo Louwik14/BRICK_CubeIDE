@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "Track/entity_types.h"
 #include "Param/param_ids.h"
+#include "NoteFx/note_fx_contract.h"
 
 #define SEQ_TRACK_COUNT        BRICK_ENTITY_TOP_LEVEL_COUNT
 #define SEQ_LANE_CAPACITY      BRICK_ENTITY_CAPACITY
@@ -24,7 +25,7 @@
 #define SEQ_PARAM_ENV_SLOT_COUNT       25U
 #define SEQ_PARAM_TONE_SLOT_COUNT      26U
 #define SEQ_PARAM_MOD_SLOT_COUNT       12U
-#define SEQ_PARAM_MIDI_FX_SLOT_COUNT   12U
+#define SEQ_PARAM_MIDI_FX_SLOT_COUNT   NOTE_FX_CANONICAL_PARAM_COUNT
 #define SEQ_PARAM_MIX_SLOT_COUNT        5U
 #define SEQ_PARAM_FM_OPERATOR_SLOT_COUNT (PARAM_FM_OPERATOR_COUNT * PARAM_FM_OPERATOR_PARAM_COUNT)
 #define SEQ_PARAM_AUDIO_FX_SLOT_COUNT      8U

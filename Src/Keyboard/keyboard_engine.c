@@ -39,6 +39,9 @@ static uint8_t g_kbd_rec_note_stack_count[128U];
 static uint8_t g_kbd_rec_track_note_channel[BRICK_ENTITY_TOP_LEVEL_COUNT][128U];
 static uint8_t g_kbd_rec_track_note_count[BRICK_ENTITY_TOP_LEVEL_COUNT][128U];
 
+/* Physical ingress correlation only.  Musical source admission/liveness is
+ * owned by seq_play_scheduler; this table only pairs a later key/MIDI OFF
+ * with the source key allocated for its physical ON. */
 typedef struct
 {
     uint8_t active;
@@ -215,6 +218,11 @@ static void keyboard_engine_send_note_for_owner_track_with_capture(
             g_keyboard_engine_source_occurrence[(uint8_t)index].occurrence_id;
     }
 
+    if ((is_note_on != 0U)
+            && (seq_play_scheduler_admit_live_source(
+                owner_track, note, occurrence_id, 1U) == 0U))
+        return;
+
     const note_event_result_t result = (capture_tick_valid != 0U)
         ? note_fx_pipeline_submit_source_capture_tick(
             owner_track, note, velocity, is_note_on, capture_tick,
@@ -224,6 +232,9 @@ static void keyboard_engine_send_note_for_owner_track_with_capture(
             NOTE_FX_SAMPLE_TIME_CONTROL_ANCHOR, provenance, occurrence_id);
     if (result != NOTE_EVENT_RESULT_ACCEPTED)
     {
+        if (is_note_on != 0U)
+            (void)seq_play_scheduler_admit_live_source(
+                owner_track, note, occurrence_id, 0U);
         return;
     }
 
@@ -241,6 +252,8 @@ static void keyboard_engine_send_note_for_owner_track_with_capture(
     else
     {
         g_keyboard_engine_source_occurrence[(uint8_t)index].active = 0U;
+        (void)seq_play_scheduler_admit_live_source(
+            owner_track, note, occurrence_id, 0U);
     }
 }
 

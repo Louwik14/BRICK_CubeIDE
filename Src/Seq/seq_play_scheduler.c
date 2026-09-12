@@ -40,7 +40,6 @@
 #define SEQ_PLAY_SCHEDULER_IMMINENT_CAPACITY 512U
 #define SEQ_PLAY_SCHEDULER_HORIZON_FRAMES 64U
 #define SEQ_PLAY_SCHEDULER_PRIORITY_COUNT 3U
-#define SEQ_PLAY_SCHEDULER_ROLL_GRID_UNITS 60U
 
 _Static_assert(SEQ_PLAY_SCHEDULER_SOURCE_CAPACITY
                    >= SEQ_PRODUCT_MAX_ACTIVE_SOURCES,
@@ -79,6 +78,7 @@ typedef struct
     uint32_t generation;
     uint8_t track_generation;
     uint32_t event_token;
+    uint32_t group_id;
 } seq_play_scheduler_evt_t;
 
 typedef struct
@@ -161,6 +161,7 @@ typedef struct
     uint8_t source_voice;
     uint8_t target_voice;
     uint32_t output_id;
+    uint32_t group_id;
     uint32_t generation;
     uint32_t track_generation;
     uint64_t start_sample;
@@ -173,6 +174,29 @@ SEQ_STATE_D2 static seq_play_active_occurrence_t
 static uint8_t g_seq_play_track_generation[SEQ_LANE_CAPACITY];
 static uint8_t g_seq_play_track_suspended[SEQ_LANE_CAPACITY];
 
+static uint8_t seq_play_scheduler_distinct_pitch_count(seq_track_id_t track,
+                                                       uint8_t query_note,
+                                                       uint8_t *out_present)
+{
+    uint8_t seen[128] = {0U};
+    uint8_t count = 0U;
+    if (out_present != NULL) *out_present = 0U;
+    for (uint16_t i = 0U;
+         i < SEQ_PLAY_SCHEDULER_ACTIVE_OUTPUT_CAPACITY; ++i)
+    {
+        const seq_play_active_occurrence_t *const active =
+            &g_seq_play_active_occurrence[i];
+        if ((active->active == 0U) || (active->track != track)) continue;
+        if (active->note == query_note && out_present != NULL) *out_present = 1U;
+        if (seen[active->note] == 0U)
+        {
+            seen[active->note] = 1U;
+            ++count;
+        }
+    }
+    return count;
+}
+
 static void seq_play_scheduler_output_died(brick_entity_id_t entity_id,
                                            uint32_t output_id)
 {
@@ -183,16 +207,16 @@ static void seq_play_scheduler_output_died(brick_entity_id_t entity_id,
                                          &trace_track, &trace_step) != 0U)
         seq_note_trace_record(SEQ_NOTE_TRACE_SKIP_INVALIDATED,
             trace_track, trace_step, 0U, 0U, output_id, entity_id);
+    /* CONTROL reports logical replacement (same pitch or product steal) to
+     * the scheduler, which remains the sole source-lifecycle authority. */
     for (uint16_t i = 0U;
          i < SEQ_PLAY_SCHEDULER_ACTIVE_OUTPUT_CAPACITY; ++i)
         if ((g_seq_play_active_occurrence[i].active != 0U)
                 && (g_seq_play_active_occurrence[i].output_id == output_id))
+        {
             g_seq_play_active_occurrence[i].active = 0U;
-    for (uint16_t i = 0U; i < g_seq_play_imminent_count; ++i)
-        if ((g_seq_play_imminent[i].type
-                == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF)
-                && (g_seq_play_imminent[i].event_token == output_id))
-            g_seq_play_imminent[i].event_token = 0U;
+            break;
+        }
 }
 static uint32_t seq_play_scheduler_alloc_event_token(void);
 
@@ -404,7 +428,7 @@ static uint8_t seq_play_scheduler_roll_grid_point(uint16_t divisor,
     if (divisor == 0U)
         return 0U;
     return (uint8_t)(((uint32_t)occurrence
-        * (16U * SEQ_PLAY_SCHEDULER_ROLL_GRID_UNITS)) / divisor);
+        * (16U * SEQ_STEP_ROLL_GRID_POINT_COUNT)) / divisor);
 }
 
 static void seq_play_scheduler_deactivate_source_at(uint16_t active_position)
@@ -639,6 +663,8 @@ void seq_play_scheduler_clear(void)
         tracks[track] = track;
     (void)seq_play_scheduler_remove_sources(
         tracks, SEQ_LANE_CAPACITY, 0U);
+    for (seq_track_id_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
+        (void)note_fx_pipeline_reset_track(track);
     seq_play_scheduler_next_generation();
 }
 
@@ -648,6 +674,9 @@ void seq_play_scheduler_clear_tracks(const seq_track_id_t *tracks, uint8_t track
         return;
 
     (void)seq_play_scheduler_remove_sources(tracks, track_count, 1U);
+    for (uint8_t i = 0U; i < track_count; ++i)
+        if (tracks[i] < SEQ_LANE_CAPACITY)
+            (void)note_fx_pipeline_reset_track(tracks[i]);
 }
 void seq_play_scheduler_suspend_tracks(const seq_track_id_t *tracks, uint8_t track_count)
 {
@@ -656,6 +685,10 @@ void seq_play_scheduler_suspend_tracks(const seq_track_id_t *tracks, uint8_t tra
         return;
     }
 
+    (void)seq_play_scheduler_remove_sources(tracks, track_count, 1U);
+    for (uint8_t i = 0U; i < track_count; ++i)
+        if (tracks[i] < SEQ_LANE_CAPACITY)
+            (void)note_fx_pipeline_reset_track(tracks[i]);
     const uint32_t primask = seq_play_scheduler_enter_critical();
     for (uint8_t i = 0U; i < track_count; ++i)
     {
@@ -906,7 +939,8 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                     .type = (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF,
                     .generation = active->generation,
                     .track_generation = (uint8_t)active->track_generation,
-                    .event_token = active->output_id
+                    .event_token = active->output_id,
+                    .group_id = active->group_id
                 };
         }
 
@@ -1004,6 +1038,13 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
             {
                 const uint8_t grid_point =
                     seq_play_scheduler_roll_grid_point(divisor, occurrence);
+                if (grid_point >= SEQ_STEP_ROLL_GRID_POINT_COUNT)
+                    BRICK_FATAL_CONTEXT("SEQ_ROLL_GRID_POINT_INVALID",
+                                      BRICK_FATAL_SEQ_SOURCE_CAPACITY,
+                                      source->target_track,
+                                      source->source_step,
+                                      grid_point,
+                                      SEQ_STEP_ROLL_GRID_POINT_COUNT);
                 const uint64_t grid_bit = UINT64_C(1) << grid_point;
                 if ((source->emitted_grid_mask & grid_bit) != 0U)
                     continue;
@@ -1037,6 +1078,25 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                 }
 
                 int16_t free_index = -1;
+                uint8_t pitch_present = 0U;
+                const uint8_t distinct_count =
+                    seq_play_scheduler_distinct_pitch_count(
+                        source->target_track, note, &pitch_present);
+                const uint8_t note_limit = note_fx_pipeline_source_note_limit(
+                    source->target_track);
+                if ((pitch_present == 0U)
+                        && ((note_limit == 0U)
+                            || (distinct_count >= note_limit)))
+                {
+                    source->emitted_grid_mask |= grid_bit;
+                    if (seq_note_trace_target(source->source_track,
+                                              source->source_step) != 0U)
+                        seq_note_trace_record(
+                            SEQ_NOTE_TRACE_REJECT_SCHED_CAPACITY,
+                            source->source_track, source->source_step,
+                            on_sample, distinct_count + 1U, 0U, note_limit);
+                    continue;
+                }
                 for (uint16_t i = 0U;
                      i < SEQ_PLAY_SCHEDULER_ACTIVE_OUTPUT_CAPACITY; ++i)
                 {
@@ -1067,6 +1127,12 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                 seq_play_active_occurrence_t *const active =
                     &g_seq_play_active_occurrence[(uint16_t)free_index];
                 const uint32_t output_id = seq_play_scheduler_alloc_event_token();
+                uint32_t group_id = (uint32_t)source->step_origin_sample
+                    ^ (uint32_t)(source->step_origin_sample >> 32)
+                    ^ ((uint32_t)source->source_track << 24)
+                    ^ ((uint32_t)source->source_step << 8)
+                    ^ grid_point;
+                if (group_id == 0U) group_id = 1U;
                 *active = (seq_play_active_occurrence_t){
                     .active = 1U,
                     .note = note,
@@ -1076,6 +1142,7 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                     .source_voice = source->source_voice,
                     .target_voice = source->target_voice,
                     .output_id = output_id,
+                    .group_id = group_id,
                     .generation = source->generation,
                     .track_generation = source->track_generation,
                     .start_sample = on_sample,
@@ -1104,7 +1171,8 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                         .type = (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON,
                         .generation = source->generation,
                         .track_generation = source->track_generation,
-                        .event_token = output_id
+                        .event_token = output_id,
+                        .group_id = group_id
                     };
                 source->emitted_grid_mask |= grid_bit;
             }
@@ -1172,7 +1240,8 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
                 ? 0U : (uint16_t)(event->due_sample_time - block_start_sample),
             .sample_abs = event->due_sample_time,
             .generation = event->generation,
-            .event_token = event->event_token
+            .event_token = event->event_token,
+            .group_id = event->group_id
         };
     }
     return count;
@@ -1241,10 +1310,22 @@ static uint8_t seq_play_scheduler_control_apply_internal(
         .flags = 0U,
         .source_token = event->event_token,
         .occurrence_id = event->event_token,
-        .generation = event->generation
+        .generation = event->generation,
+        .group_id = event->group_id
     };
     const note_event_result_t result =
         note_fx_pipeline_submit_control(&note_event);
+    if ((result == NOTE_EVENT_RESULT_ACCEPTED) && (is_note_on == 0U))
+        for (uint16_t i = 0U;
+             i < SEQ_PLAY_SCHEDULER_ACTIVE_OUTPUT_CAPACITY; ++i)
+            if ((g_seq_play_active_occurrence[i].active != 0U)
+                    && (g_seq_play_active_occurrence[i].output_id
+                        == event->event_token)
+                    && (g_seq_play_active_occurrence[i].generation
+                        == event->generation)
+                    && (g_seq_play_active_occurrence[i].track_generation
+                        == event->track_generation))
+                g_seq_play_active_occurrence[i].active = 0U;
     if (result != NOTE_EVENT_RESULT_ACCEPTED)
     {
         uint8_t trace_track = 0U;
@@ -1278,6 +1359,99 @@ uint8_t seq_play_scheduler_control_apply_event(
     }
 
     return seq_play_scheduler_control_apply_internal(event);
+}
+
+uint8_t seq_play_scheduler_control_apply_events(
+    const seq_play_scheduler_event_t *events, uint8_t event_count)
+{
+    if ((events == NULL) || (event_count == 0U)
+            || (event_count > SEQ_PLAY_MAX_CAPACITY)) return 0U;
+    if (event_count == 1U)
+        return seq_play_scheduler_control_apply_event(events);
+    note_event_t notes[SEQ_PLAY_MAX_CAPACITY];
+    for (uint8_t event_index = 0U; event_index < event_count; ++event_index)
+    {
+        const seq_play_scheduler_event_t *const event = &events[event_index];
+        if ((event->track >= SEQ_LANE_CAPACITY)
+                || (event->track != events[0].track)
+                || (event->type != events[0].type)
+                || (event->sample_abs != events[0].sample_abs)
+                || (event->group_id != events[0].group_id)
+                || (event->generation != g_seq_play_generation)
+                || (event->track_generation
+                    != g_seq_play_track_generation[event->track])
+                || (event->type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_PROGRAM_CHANGE))
+            return 0U;
+        const uint8_t is_note_on = (event->type
+            == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_ON);
+        if ((is_note_on != 0U)
+                && (track_mute_should_suppress_note_on(event->track) != 0U))
+            return 1U;
+        if (is_note_on != 0U) mod_lfo_v1_control_note_trigger(event->track);
+        notes[event_index] = (note_event_t){
+            .sample_abs=event->sample_abs,.track=event->track,
+            .destination_id=track_runtime_get_midi_channel_zero_based(event->track),
+            .note=event->note,.velocity=is_note_on?event->velocity:0U,
+            .kind=is_note_on?NOTE_EVENT_KIND_ON:NOTE_EVENT_KIND_OFF,
+            .provenance=NOTE_EVENT_SOURCE_STEP,.stage=NOTE_EVENT_STAGE_SOURCE,
+            .source_token=event->event_token,.occurrence_id=event->event_token,
+            .generation=event->generation,.group_id=event->group_id};
+    }
+    const note_event_result_t result = note_fx_pipeline_submit_control_batch(
+        notes, event_count);
+    if ((result == NOTE_EVENT_RESULT_ACCEPTED)
+            && (events[0].type == (uint8_t)SEQ_PLAY_SCHEDULER_EVT_NOTE_OFF))
+        for (uint8_t event_index = 0U; event_index < event_count; ++event_index)
+            for (uint16_t i = 0U;
+                 i < SEQ_PLAY_SCHEDULER_ACTIVE_OUTPUT_CAPACITY; ++i)
+                if ((g_seq_play_active_occurrence[i].active != 0U)
+                        && (g_seq_play_active_occurrence[i].output_id
+                            == events[event_index].event_token)
+                        && (g_seq_play_active_occurrence[i].generation
+                            == events[event_index].generation))
+                    g_seq_play_active_occurrence[i].active = 0U;
+    return result == NOTE_EVENT_RESULT_ACCEPTED;
+}
+
+uint8_t seq_play_scheduler_admit_live_source(seq_track_id_t track,
+                                              uint8_t note,
+                                              uint32_t occurrence_id,
+                                              uint8_t is_note_on)
+{
+    if ((track >= SEQ_LANE_CAPACITY) || (note >= 128U)
+            || (occurrence_id == 0U)) return 0U;
+    if (is_note_on == 0U)
+    {
+        for (uint16_t i = 0U;
+             i < SEQ_PLAY_SCHEDULER_ACTIVE_OUTPUT_CAPACITY; ++i)
+            if ((g_seq_play_active_occurrence[i].active != 0U)
+                    && (g_seq_play_active_occurrence[i].output_id
+                        == occurrence_id))
+            {
+                g_seq_play_active_occurrence[i].active = 0U;
+                break;
+            }
+        return 1U;
+    }
+    uint8_t pitch_present = 0U;
+    const uint8_t count = seq_play_scheduler_distinct_pitch_count(
+        track, note, &pitch_present);
+    const uint8_t limit = note_fx_pipeline_source_note_limit(track);
+    if ((pitch_present == 0U) && ((limit == 0U) || (count >= limit)))
+        return 0U;
+    for (uint16_t i = 0U;
+         i < SEQ_PLAY_SCHEDULER_ACTIVE_OUTPUT_CAPACITY; ++i)
+        if (g_seq_play_active_occurrence[i].active == 0U)
+        {
+            g_seq_play_active_occurrence[i] = (seq_play_active_occurrence_t){
+                .active=1U,.note=note,.track=track,.source_track=track,
+                .output_id=occurrence_id,.group_id=occurrence_id,
+                .generation=g_seq_play_generation,
+                .track_generation=g_seq_play_track_generation[track],
+                .deadline_sample=UINT64_MAX};
+            return 1U;
+        }
+    return 0U;
 }
 
 void seq_play_scheduler_live_midi_program_changed(seq_track_id_t track, float program_value)

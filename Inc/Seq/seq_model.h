@@ -88,6 +88,12 @@ typedef enum
     SEQ_STEP_ROLL_COUNT
 } seq_step_roll_t;
 
+/* LCM grid for the supported 1/20..1/80 retrigger divisors.  Four bits in
+ * the uint64_t storage are padding, not addressable grid points. */
+#define SEQ_STEP_ROLL_GRID_POINT_COUNT 60U
+_Static_assert(SEQ_STEP_ROLL_GRID_POINT_COUNT <= 64U,
+               "ROLL grid no longer fits its emission mask");
+
 typedef struct
 {
     seq_step_t steps[SEQ_MAX_STEPS];

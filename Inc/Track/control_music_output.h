@@ -78,6 +78,9 @@ uint64_t control_music_output_first_unpublished_sample(uint64_t audio_sample);
 uint8_t control_music_output_submit(const control_music_action_t *action,
                                     uint32_t causal_source_id,
                                     uint32_t generation);
+uint8_t control_music_output_legato(const control_music_action_t *action,
+                                    uint32_t causal_source_id,
+                                    uint32_t generation);
 uint8_t control_music_output_trim_to_limit(brick_entity_id_t entity_id,
                                            uint8_t limit);
 uint8_t control_music_output_admit_multi_transition(
@@ -85,6 +88,8 @@ uint8_t control_music_output_admit_multi_transition(
 uint8_t control_music_output_close_causal_sources(
     const uint32_t *causal_source_ids, uint16_t source_count,
     uint64_t due_sample);
+uint8_t control_music_output_close_entity(brick_entity_id_t entity_id,
+                                          uint64_t due_sample);
 void control_music_output_set_multi(brick_entity_id_t entity_id,
                                     uint8_t is_multi);
 void control_music_output_bind_multi_instrument(brick_entity_id_t entity_id,

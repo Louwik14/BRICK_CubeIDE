@@ -73,7 +73,8 @@ static uint8_t capture_plock_value(param_id_t id, seq_value16_t raw,
             (mod_lfo_trig_mode_t)(uint8_t)(value + 0.5f), &out->value.u32);
     }
     if ((id == PARAM_MIDI_FX_S1_MODEL) || (id == PARAM_MIDI_FX_S2_MODEL)
-            || (id == PARAM_MIDI_FX_S3_MODEL))
+            || (id == PARAM_MIDI_FX_S3_MODEL)
+            || (id == PARAM_MIDI_FX_S4_MODEL))
     {
         out->kind = PERSIST_VALUE_U32;
         return persist_key_note_fx_to_disk(
@@ -161,7 +162,8 @@ static uint8_t apply_plock_value(param_id_t id,
         value = (float)v;
     }
     else if ((id == PARAM_MIDI_FX_S1_MODEL) || (id == PARAM_MIDI_FX_S2_MODEL)
-            || (id == PARAM_MIDI_FX_S3_MODEL))
+            || (id == PARAM_MIDI_FX_S3_MODEL)
+            || (id == PARAM_MIDI_FX_S4_MODEL))
     {
         note_fx_model_t v;
         if (persist_key_note_fx_from_disk(lock->value.u32, &v) == 0U)

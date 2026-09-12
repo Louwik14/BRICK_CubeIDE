@@ -118,15 +118,22 @@ sans reecrire le mute personnel des enfants.
 
 `control_music_output` est l'unique autorite CONTROL des sorties musicales. Son
 ledger porte l'identite finale, la cause source, la generation, l'age de
-stealing et les destinations MIDI admises. Le scheduler ne possede que ses
-sources et echeances; Note FX ne possede que ses sources et sorties derivees.
-Une mort terminale notifie ces proprietaires afin qu'aucun derive ne puisse
-maintenir ou ressusciter la sortie.
+stealing et les destinations MIDI admises. Le scheduler possede seul ses
+sources et echeances. Note FX transporte cette identite et ne conserve, pour
+ARP/EUCLID, que huit pitches HELD et l'etat temporel local. Un remplacement
+terminal notifie le scheduler, qui retire l'occurrence logique supplantee; son
+OFF canonique ulterieur reste idempotent.
 
 Le remplacement d'une source ferme les sorties ayant le meme identifiant
-causal, sans fermer les notes live independantes. Un changement de moteur ne
-reset ni scheduler ni Note FX. Les NOTE OFF datees Euclid, generations et tokens
-causaux restent des faits musicaux.
+causal, sans fermer les notes live independantes. Une modification structurelle
+de chaine ferme les sorties de l'ancienne generation, purge ses futurs Note FX,
+reset ses etats temporels puis admet les nouveaux ON sur la generation suivante.
+L'admission musicale refuse avant les FX toute neuvieme pitch logique d'une
+track (ou toute pitch au-dela de la limite inferieure imposee par le fanout
+admis). La meme admission compose les quatre slots contre 32 evenements
+intermediaires, 512 futurs et 256 actions internes. Mute, STOP, PANIC et
+remplacement Pattern/Project ferment la track, purgent ses futurs et reset ses
+etats ARP/EUCLID; un unmute ne rejoue aucun derive anterieur.
 
 ## Publication atomique et metronome
 

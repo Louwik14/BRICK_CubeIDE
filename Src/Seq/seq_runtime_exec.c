@@ -104,6 +104,7 @@ static void seq_runtime_exec_copy_scheduler_event(seq_runtime_control_event_t *o
     out_event->sample_abs = scheduler_event->sample_abs;
     out_event->generation = scheduler_event->generation;
     out_event->event_token = scheduler_event->event_token;
+    out_event->group_id = scheduler_event->group_id;
 }
 
 static void seq_runtime_exec_push_boundary_edge(seq_track_id_t track, uint64_t due_sample_time)
@@ -196,6 +197,7 @@ static uint16_t seq_runtime_exec_collect_boundary_commands(seq_runtime_control_e
         out->generation = 0U;
         out->sample_offset_in_block = (uint16_t)(marker->due_sample_time - block_start_sample);
         out->event_token = 0U;
+        out->group_id = 0U;
     }
 
     return count;
@@ -267,13 +269,38 @@ static void seq_runtime_exec_schedule_hit_play_and_lookahead(const seq_runtime_s
                                                         hit->swing_phase ^ 1U);
 }
 
+static uint8_t seq_runtime_exec_control_priority(uint8_t type)
+{
+    if (type == 1U) return 0U; /* NOTE OFF */
+    if ((type == SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE)
+            || (type == 2U)) return 1U; /* config/program */
+    if (type == 0U) return 2U; /* NOTE ON */
+    return 1U;
+}
+
 static void seq_runtime_exec_sort_control_events(seq_runtime_control_event_t *events, uint16_t count)
 {
     for (uint16_t i = 1U; i < count; ++i)
     {
         const seq_runtime_control_event_t key = events[i];
         uint16_t j = i;
-        while ((j > 0U) && (events[j - 1U].sample_offset_in_block > key.sample_offset_in_block))
+        while ((j > 0U)
+                && ((events[j - 1U].sample_offset_in_block
+                        > key.sample_offset_in_block)
+                    || ((events[j - 1U].sample_offset_in_block
+                            == key.sample_offset_in_block)
+                        && (seq_runtime_exec_control_priority(
+                                events[j - 1U].type)
+                            > seq_runtime_exec_control_priority(key.type)))
+                    || ((events[j - 1U].sample_offset_in_block
+                            == key.sample_offset_in_block)
+                        && (seq_runtime_exec_control_priority(
+                                events[j - 1U].type)
+                            == seq_runtime_exec_control_priority(key.type))
+                        && ((events[j - 1U].track > key.track)
+                            || ((events[j - 1U].track == key.track)
+                                && (events[j - 1U].group_id
+                                    > key.group_id))))))
         {
             events[j] = events[j - 1U];
             j--;

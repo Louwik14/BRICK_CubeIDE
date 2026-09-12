@@ -236,6 +236,7 @@ uint8_t seq_model_play_capacity(seq_track_id_t track)
     {
         return 0U;
     }
+    if (entity.role == ENTITY_ROLE_GROUP_MASTER) return 0U;
     return (entity.role == ENTITY_ROLE_GROUP_CHILD) ? 1U : SEQ_PLAY_MAX_CAPACITY;
 }
 

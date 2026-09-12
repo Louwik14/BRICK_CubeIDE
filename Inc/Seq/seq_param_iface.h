@@ -30,10 +30,10 @@ _Static_assert(SEQ_PARAM_ENV_SLOT_OFFSET == 0U, "ENV p-lock offset changed");
 _Static_assert(SEQ_PARAM_TONE_SLOT_OFFSET == 25U, "TONE p-lock offset changed");
 _Static_assert(SEQ_PARAM_MOD_SLOT_OFFSET == 51U, "MOD p-lock offset changed");
 _Static_assert(SEQ_PARAM_MIDI_FX_SLOT_OFFSET == 63U, "MIDI FX p-lock offset changed");
-_Static_assert(SEQ_PARAM_MIX_SLOT_OFFSET == 75U, "MIX p-lock offset changed");
-_Static_assert(SEQ_PARAM_FM_OPERATOR_SLOT_OFFSET == 80U, "FM operator p-lock offset changed");
-_Static_assert(SEQ_PARAM_AUDIO_FX_SLOT_OFFSET == 146U, "Audio FX p-lock offset changed");
-_Static_assert(SEQ_PARAM_RUNTIME_SLOT_COUNT == 154U, "runtime p-lock slot count changed");
+_Static_assert(SEQ_PARAM_MIX_SLOT_OFFSET == 79U, "MIX p-lock offset changed");
+_Static_assert(SEQ_PARAM_FM_OPERATOR_SLOT_OFFSET == 84U, "FM operator p-lock offset changed");
+_Static_assert(SEQ_PARAM_AUDIO_FX_SLOT_OFFSET == 150U, "Audio FX p-lock offset changed");
+_Static_assert(SEQ_PARAM_RUNTIME_SLOT_COUNT == 158U, "runtime p-lock slot count changed");
 _Static_assert(SEQ_PARAM_ENV_SLOT_COUNT <= 255U, "ENV p-lock capacity exceeds slot type");
 _Static_assert(SEQ_PARAM_TONE_SLOT_COUNT <= 255U, "TONE p-lock capacity exceeds slot type");
 _Static_assert(SEQ_PARAM_MOD_SLOT_COUNT <= 255U, "MOD p-lock capacity exceeds slot type");
@@ -41,8 +41,8 @@ _Static_assert(SEQ_PARAM_MIDI_FX_SLOT_COUNT <= 255U, "MIDI FX p-lock capacity ex
 _Static_assert(SEQ_PARAM_MIX_SLOT_COUNT <= 255U, "MIX p-lock capacity exceeds slot type");
 _Static_assert(SEQ_PARAM_FM_OPERATOR_SLOT_COUNT <= 255U, "FM operator p-lock capacity exceeds slot type");
 _Static_assert(SEQ_PARAM_AUDIO_FX_SLOT_COUNT <= 255U, "Audio FX p-lock capacity exceeds slot type");
-_Static_assert(SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT == 308U, "runtime p-lock bitmap size changed");
-_Static_assert((PARAM_MIDI_FX_S3_MODEL - PARAM_MIDI_FX_S1_PARAM1 + 1U) == SEQ_PARAM_MIDI_FX_SLOT_COUNT,
+_Static_assert(SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT == 316U, "runtime p-lock bitmap size changed");
+_Static_assert((PARAM_MIDI_FX_S4_MODEL - PARAM_MIDI_FX_S1_PARAM1 + 1U) == SEQ_PARAM_MIDI_FX_SLOT_COUNT,
                "MIDI FX inverse table capacity changed");
 
 typedef enum

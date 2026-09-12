@@ -45,7 +45,6 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_env3_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_lfo_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_matrix_control.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/NoteFx/note_fx_arp.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/NoteFx/note_fx_engine.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/NoteFx/note_fx_euclid.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/NoteFx/note_fx_pipeline.c"

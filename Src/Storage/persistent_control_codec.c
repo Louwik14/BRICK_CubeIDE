@@ -154,7 +154,7 @@ static uint8_t codec_midi_source_valid(uint32_t key)
 static uint8_t codec_clock_valid(uint32_t key)
 { return (uint8_t)((key==PERSIST_CLOCK_INTERNAL)||(key==PERSIST_CLOCK_MIDI)||(key==PERSIST_CLOCK_USB)); }
 static uint8_t codec_note_fx_valid(uint32_t key)
-{ return (uint8_t)((key==PERSIST_NOTE_FX_OFF)||(key==PERSIST_NOTE_FX_ARP)||(key==PERSIST_NOTE_FX_EUCLID)); }
+{ note_fx_model_t model; return persist_key_note_fx_from_disk(key,&model); }
 static uint8_t codec_mod_source_valid(uint32_t key)
 { return (uint8_t)((key==PERSIST_MOD_SOURCE_NONE)||(key==PERSIST_MOD_SOURCE_LFO1)||(key==PERSIST_MOD_SOURCE_LFO2)||(key==PERSIST_MOD_SOURCE_LFO3)||(key==PERSIST_MOD_SOURCE_ENV_FLT)||(key==PERSIST_MOD_SOURCE_ENV_VCA)||(key==PERSIST_MOD_SOURCE_ENV_MOD)||(key==PERSIST_MOD_SOURCE_MULTI1)||(key==PERSIST_MOD_SOURCE_MULTI2)||(key==PERSIST_MOD_SOURCE_SLEW1)||(key==PERSIST_MOD_SOURCE_SLEW2)); }
 
@@ -433,7 +433,8 @@ static uint8_t codec_plock_value_valid(param_id_t id,
     { mod_lfo_trig_mode_t ignored;return (uint8_t)((lock->kind == PERSIST_VALUE_U32)
                 && persist_key_lfo_trigger_from_disk(lock->value.u32,&ignored)); }
     if ((id == PARAM_MIDI_FX_S1_MODEL) || (id == PARAM_MIDI_FX_S2_MODEL)
-            || (id == PARAM_MIDI_FX_S3_MODEL))
+            || (id == PARAM_MIDI_FX_S3_MODEL)
+            || (id == PARAM_MIDI_FX_S4_MODEL))
     { note_fx_model_t ignored;return (uint8_t)((lock->kind == PERSIST_VALUE_U32)
                 && persist_key_note_fx_from_disk(lock->value.u32,&ignored)); }
     return codec_parameter_value_valid(id,lock->kind,&lock->value);

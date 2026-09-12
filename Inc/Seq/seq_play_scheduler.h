@@ -24,6 +24,7 @@ typedef struct
     uint64_t sample_abs;
     uint32_t generation;
     uint32_t event_token;
+    uint32_t group_id;
 } seq_play_scheduler_event_t;
 
 void seq_play_scheduler_init(void);
@@ -66,6 +67,12 @@ uint16_t seq_play_scheduler_collect_due_events(seq_play_scheduler_event_t *out_e
  */
 uint8_t seq_play_scheduler_control_apply_event(
     const seq_play_scheduler_event_t *event);
+uint8_t seq_play_scheduler_control_apply_events(
+    const seq_play_scheduler_event_t *events, uint8_t event_count);
+uint8_t seq_play_scheduler_admit_live_source(seq_track_id_t track,
+                                              uint8_t note,
+                                              uint32_t occurrence_id,
+                                              uint8_t is_note_on);
 /*
  * Contract surface:
  * - post-commit notifications from runtime/transport.

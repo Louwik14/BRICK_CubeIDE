@@ -115,6 +115,10 @@ static const param_id_t g_seq_param_midi_fx_slot_to_id[SEQ_PARAM_MIDI_FX_SLOT_CO
     PARAM_MIDI_FX_S3_PARAM2,
     PARAM_MIDI_FX_S3_PARAM3,
     PARAM_MIDI_FX_S3_MODEL,
+    PARAM_MIDI_FX_S4_PARAM1,
+    PARAM_MIDI_FX_S4_PARAM2,
+    PARAM_MIDI_FX_S4_PARAM3,
+    PARAM_MIDI_FX_S4_MODEL,
 };
 
 static const param_id_t g_seq_param_mix_slot_to_id[SEQ_PARAM_MIX_SLOT_COUNT] = {
@@ -182,7 +186,11 @@ static const seq_param_compact_map_t g_seq_param_param_to_slot[PARAM_COUNT] = {
     [PARAM_MIDI_FX_S3_PARAM1] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 8U },
     [PARAM_MIDI_FX_S3_PARAM2] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 9U },
     [PARAM_MIDI_FX_S3_PARAM3] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 10U },
-    [PARAM_MIDI_FX_S3_MODEL] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 11U }
+    [PARAM_MIDI_FX_S3_MODEL] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 11U },
+    [PARAM_MIDI_FX_S4_PARAM1] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 12U },
+    [PARAM_MIDI_FX_S4_PARAM2] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 13U },
+    [PARAM_MIDI_FX_S4_PARAM3] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 14U },
+    [PARAM_MIDI_FX_S4_MODEL] = { (uint8_t)SEQ_PLOCK_SET_MIDI_FX, 15U }
     ,[PARAM_AUDIO_FX_P1] = { (uint8_t)SEQ_PLOCK_SET_AUDIO_FX, 0U }
     ,[PARAM_AUDIO_FX_P2] = { (uint8_t)SEQ_PLOCK_SET_AUDIO_FX, 1U }
     ,[PARAM_AUDIO_FX_P3] = { (uint8_t)SEQ_PLOCK_SET_AUDIO_FX, 2U }
@@ -524,7 +532,7 @@ static uint8_t seq_param_iface_is_group_master(seq_track_id_t track)
 
 static uint8_t seq_param_iface_slot_is_supported_internal(
     seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot,
-    uint8_t allow_refused_euclid_param)
+    uint8_t allow_inactive_model_param)
 {
     if ((seq_param_iface_track_is_valid(track) == 0U)
             || (seq_param_iface_is_set_plockable(set_id) == 0U))
@@ -546,26 +554,7 @@ static uint8_t seq_param_iface_slot_is_supported_internal(
             return 0U;
         }
     }
-    if ((allow_refused_euclid_param == 0U)
-            && (set_id == (uint8_t)SEQ_PLOCK_SET_MIDI_FX))
-    {
-        uint8_t fx_slot = 0U;
-        uint8_t fx_param = 0U;
-        float model_value = 0.0f;
-        if ((note_fx_state_param_map(param, &fx_slot, &fx_param) != 0U)
-                && (fx_param < 3U)
-                && (note_fx_state_get_param(
-                    track,
-                    (param_id_t)(PARAM_MIDI_FX_S1_MODEL
-                        + (fx_slot * NOTE_FX_PARAM_COUNT)),
-                    &model_value) != 0U)
-                && (note_fx_state_is_param_plock_allowed(
-                    (uint8_t)(model_value + 0.5f), fx_param) == 0U))
-        {
-            return 0U;
-        }
-    }
-    if ((allow_refused_euclid_param == 0U)
+    if ((allow_inactive_model_param == 0U)
             && (set_id == (uint8_t)SEQ_PLOCK_SET_AUDIO_FX))
     {
         uint8_t fx_slot = 0U;
@@ -1045,9 +1034,8 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
                                      seq_param_slot_t param_slot,
                                      uint64_t due_sample)
 {
-    /* Restoring an already-active lock is not a new p-lock admission.  It
-     * must remain possible when the target model is EUCLID and the old lock
-     * was created while the slot was ARP/OFF. */
+    /* Restoring an already-active lock is not a new admission and remains
+     * valid if an Audio FX model changed while that lock was active. */
     if (seq_param_iface_slot_is_supported_internal(track, set_id,
                                                     param_slot, 1U) == 0U)
     {

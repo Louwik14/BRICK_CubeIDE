@@ -72,6 +72,7 @@ typedef struct
     uint64_t sample_abs;
     uint32_t generation;
     uint32_t event_token;
+    uint32_t group_id;
 } seq_runtime_control_event_t;
 
 /*

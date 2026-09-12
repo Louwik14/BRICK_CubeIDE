@@ -11,6 +11,7 @@
 #include "Track/audio_fx_control_state.h"
 #include "Track/polyphony_control.h"
 #include "Param/param_global_control.h"
+#include "NoteFx/note_fx_contract.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,8 +34,8 @@ extern "C" {
 #define PERSIST_CONTROL_PLAY_ITEM_COUNT            8U
 #define PERSIST_CONTROL_CHILD_PLAY_ITEM_COUNT      1U
 #define PERSIST_CONTROL_STEP_LOCK_COUNT            32U
-#define PERSIST_CONTROL_NOTE_FX_COUNT               3U
-#define PERSIST_CONTROL_NOTE_FX_VALUE_COUNT         4U
+#define PERSIST_CONTROL_NOTE_FX_COUNT               NOTE_FX_SLOT_COUNT
+#define PERSIST_CONTROL_NOTE_FX_VALUE_COUNT         NOTE_FX_PARAM_COUNT
 #define PERSIST_CONTROL_MOD_LFO_COUNT               3U
 #define PERSIST_CONTROL_MOD_ROUTE_COUNT             8U
 #define PERSIST_CONTROL_PATTERN_BANK_COUNT         16U
@@ -125,7 +126,13 @@ typedef enum
 {
     PERSIST_NOTE_FX_OFF    = 0x4F464620UL, /* OFF  */
     PERSIST_NOTE_FX_ARP    = 0x41525020UL, /* ARP  */
-    PERSIST_NOTE_FX_EUCLID = 0x4555434CUL  /* EUCL */
+    PERSIST_NOTE_FX_EUCLID = 0x4555434CUL, /* EUCL */
+    PERSIST_NOTE_FX_PROBABILITY = 0x50524F42UL, /* PROB */
+    PERSIST_NOTE_FX_GATE = 0x47415445UL, /* GATE */
+    PERSIST_NOTE_FX_GROOVE = 0x47524F56UL, /* GROV */
+    PERSIST_NOTE_FX_ECHO = 0x4543484FUL, /* ECHO */
+    PERSIST_NOTE_FX_HARMONIZER = 0x4841524DUL, /* HARM */
+    PERSIST_NOTE_FX_CHORD = 0x43484F52UL /* CHOR */
 } persist_control_note_fx_model_key_value_t;
 
 typedef enum

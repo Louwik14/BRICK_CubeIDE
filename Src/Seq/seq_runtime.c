@@ -85,8 +85,6 @@ static uint64_t g_seq_runtime_control_sample_cursor;
 static uint8_t g_seq_runtime_trigger_start_bypass;
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic);
 static void seq_runtime_process_core(void);
-static uint8_t seq_runtime_control_apply_event(
-    const seq_runtime_control_event_t *event);
 static uint32_t seq_runtime_get_now_tick_for_source(seq_clock_src_t source);
 static uint32_t seq_runtime_get_now_tick(void);
 static uint64_t seq_runtime_get_now_sample(void);
@@ -147,6 +145,7 @@ static void seq_runtime_copy_control_event(seq_play_scheduler_event_t *scheduler
     scheduler_event->sample_abs = event->sample_abs;
     scheduler_event->generation = event->generation;
     scheduler_event->event_token = event->event_token;
+    scheduler_event->group_id = event->group_id;
 }
 
 static uint8_t seq_runtime_rec_start_mode_to_roll_mode(uint8_t mode)
@@ -594,7 +593,25 @@ static void seq_runtime_process_core(void)
                 }
                 else
                 {
-                    if (seq_runtime_control_apply_event(event) == 0U)
+                    seq_play_scheduler_event_t grouped[SEQ_PLAY_MAX_CAPACITY];
+                    uint8_t grouped_count = 1U;
+                    seq_runtime_copy_control_event(&grouped[0], event);
+                    while (((uint16_t)(i + grouped_count) < count)
+                            && (grouped_count < SEQ_PLAY_MAX_CAPACITY))
+                    {
+                        const seq_runtime_control_event_t *const next =
+                            &events[i + grouped_count];
+                        if ((next->type != event->type)
+                                || (next->track != event->track)
+                                || (next->sample_abs != event->sample_abs)
+                                || (next->group_id != event->group_id))
+                            break;
+                        seq_runtime_copy_control_event(
+                            &grouped[grouped_count], next);
+                        ++grouped_count;
+                    }
+                    if (seq_play_scheduler_control_apply_events(
+                            grouped, grouped_count) == 0U)
                     {
                         BRICK_FATAL_CONTEXT(
                             "SEQ_EVENT_APPLY_FAILED",
@@ -603,6 +620,7 @@ static void seq_runtime_process_core(void)
                             CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST,
                             CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST);
                     }
+                    i = (uint16_t)(i + grouped_count - 1U);
                 }
             }
             if (count < 128U)
@@ -676,17 +694,6 @@ void seq_runtime_time_adapter_process_internal_from_irq(void)
     {
         g_seq_internal_time_tick++;
     }
-}
-
-static uint8_t seq_runtime_control_apply_event(
-    const seq_runtime_control_event_t *event)
-{
-    if (event == NULL)
-        return 0U;
-    /* Audio apply seam: runtime forwards collected events to scheduler/engines only. */
-    seq_play_scheduler_event_t scheduler_event;
-    seq_runtime_copy_control_event(&scheduler_event, event);
-    return seq_play_scheduler_control_apply_event(&scheduler_event);
 }
 
 void seq_runtime_set_clock_source(seq_clock_src_t src)

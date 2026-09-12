@@ -777,12 +777,26 @@ uint8_t control_music_output_submit(const control_music_action_t *action,
     uint8_t victim_indices[CONTROL_MUSIC_OUTPUTS_PER_ENTITY + 1U];
     uint16_t count = 0U;
     uint8_t victim_count = 0U;
+    uint8_t excluded_mask = 0U;
+    for (uint8_t i = 0U; i < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++i)
+    {
+        const control_music_output_t *const output =
+            &control_music_output_ledger()[entity_id][i];
+        if ((output->alive != 0U) && (output->note == action->note)
+                && (output->midi_channel == control_music_action_channel(action)))
+        {
+            victim_entities[victim_count] = entity_id;
+            victim_indices[victim_count++] = i;
+            excluded_mask |= (uint8_t)(1U << i);
+            break;
+        }
+    }
     if (control_music_output_is_multi(entity_id) != 0U)
     {
-        const uint8_t per_track_stops = (live_count >= limit)
-            ? (uint8_t)(live_count - limit + 1U) : 0U;
-        uint8_t excluded_mask = 0U;
-        for (; victim_count < per_track_stops; ++victim_count)
+        const uint8_t survivors = (uint8_t)(live_count - victim_count);
+        const uint8_t capacity_stops = (survivors >= limit)
+            ? (uint8_t)(survivors - limit + 1U) : 0U;
+        for (uint8_t i = 0U; i < capacity_stops; ++i)
         {
             const int8_t target = control_music_output_find_oldest(
                 entity_id, excluded_mask);
@@ -791,6 +805,7 @@ uint8_t control_music_output_submit(const control_music_action_t *action,
             victim_entities[victim_count] = entity_id;
             victim_indices[victim_count] = (uint8_t)target;
             excluded_mask |= (uint8_t)(1U << (uint8_t)target);
+            ++victim_count;
         }
         const uint8_t multi_live_count = control_music_output_multi_live_count();
         if (((uint16_t)multi_live_count - victim_count + 1U)
@@ -808,10 +823,10 @@ uint8_t control_music_output_submit(const control_music_action_t *action,
     }
     else
     {
-        const uint8_t stop_count = (live_count >= limit)
-            ? (uint8_t)(live_count - limit + 1U) : 0U;
-        uint8_t excluded_mask = 0U;
-        for (victim_count = 0U; victim_count < stop_count; ++victim_count)
+        const uint8_t survivors = (uint8_t)(live_count - victim_count);
+        const uint8_t capacity_stops = (survivors >= limit)
+            ? (uint8_t)(survivors - limit + 1U) : 0U;
+        for (uint8_t i = 0U; i < capacity_stops; ++i)
         {
             const int8_t target = control_music_output_find_oldest(
                 entity_id, excluded_mask);
@@ -820,6 +835,7 @@ uint8_t control_music_output_submit(const control_music_action_t *action,
             victim_entities[victim_count] = entity_id;
             victim_indices[victim_count] = (uint8_t)target;
             excluded_mask |= (uint8_t)(1U << (uint8_t)target);
+            ++victim_count;
         }
     }
     for (uint8_t i = 0U; i < victim_count; ++i)
@@ -874,6 +890,31 @@ uint8_t control_music_output_submit(const control_music_action_t *action,
                 action->note, action->velocity),
         };
     return 1U;
+}
+
+uint8_t control_music_output_legato(const control_music_action_t *action,
+                                    uint32_t causal_source_id,
+                                    uint32_t generation)
+{
+    if ((action == NULL) || (action->entity_id >= BRICK_ENTITY_CAPACITY)
+            || (action->output_id == 0U)) return 0U;
+    control_music_output_t *const outputs =
+        control_music_output_ledger()[action->entity_id];
+    for (uint8_t i = 0U; i < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++i)
+        if ((outputs[i].alive != 0U) && (outputs[i].note == action->note)
+                && (outputs[i].midi_channel
+                    == control_music_action_channel(action)))
+        {
+            outputs[i].output_id = action->output_id;
+            outputs[i].causal_source_id = causal_source_id;
+            outputs[i].generation = generation;
+            outputs[i].velocity = action->velocity;
+            outputs[i].age = (g_control_music_window_active != 0U)
+                ? ++g_control_music_output_age_staged
+                : ++g_control_music_output_age;
+            return 1U;
+        }
+    return control_music_output_submit(action, causal_source_id, generation);
 }
 
 void control_music_output_set_multi(brick_entity_id_t entity_id,
@@ -1041,6 +1082,18 @@ uint8_t control_music_output_close_causal_sources(
                     break;
                 }
         }
+    return control_music_output_close_selected(selected, due_sample);
+}
+
+uint8_t control_music_output_close_entity(brick_entity_id_t entity_id,
+                                          uint64_t due_sample)
+{
+    if (entity_id >= BRICK_ENTITY_CAPACITY) return 0U;
+    uint8_t selected[BRICK_ENTITY_CAPACITY]
+                    [CONTROL_MUSIC_OUTPUTS_PER_ENTITY] = {{0U}};
+    for (uint8_t i = 0U; i < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++i)
+        selected[entity_id][i] =
+            control_music_output_ledger()[entity_id][i].alive;
     return control_music_output_close_selected(selected, due_sample);
 }
 

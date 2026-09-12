@@ -27,11 +27,76 @@ lane. CONTROL applique alors le nouveau Pattern avant de construire la fenetre
 suivante; aucune NOTE, restauration de p-lock ou occurrence ROLL de l'ancien
 Pattern ne peut franchir cette boundary.
 
-LENGTH est une deadline CONTROL associee a l'output actif. Le scheduler propose les actions datees sans appliquer de quota. `control_music_output` arbitre seul l'admission et le stealing, ajoute le STOP de la victime avant le START au meme sample, puis notifie les proprietaires apres commit, y compris lorsqu'un output cree et vole dans la meme fenetre n'avait jamais rejoint le ledger precedent. L'occurrence scheduler morte et tout STOP imminent correspondant sont invalides. Une extension ne fait que repousser une deadline encore vivante. ROLL reste reference a l'origine du PLAY et ne materialise que ses retriggers imminents. NOTE, VELOCITY, MICROTIMING et ROLL live n'affectent que les occurrences non publiees.
+LENGTH est une deadline CONTROL de la source scheduler. Le scheduler reste
+l'autorite de sa fin canonique. `control_music_output` arbitre l'admission
+terminale et le stealing puis notifie le scheduler de l'occurrence logique
+remplacee. Pour `(track, destination, pitch)`, il ferme l'activation HELD
+courante avant le nouveau START au meme sample; l'ancien OFF supersede devient
+un no-op. ROLL reste reference a l'origine du PLAY, utilise exactement 60
+points de grille representables dans son masque `uint64_t`, puis chaque
+occurrence traverse les quatre slots MIDI FX. NOTE, VELOCITY, MICROTIMING et
+ROLL live n'affectent que les occurrences non publiees.
 
 La cible de capture NOTE d'edition appartient au contexte de track selectionne. Un changement de track ferme la transaction de la cible sans oublier les occurrences NOTE_ON deja capturees: leurs NOTE_OFF restent consommes, mais aucune note ulterieure ne peut modifier l'ancienne track.
 
-Trois slots MIDI FX S1..S3 precedent un terminal CONTROL explicite. A chaque boundary, restaurations puis overrides MIDI FX sont appliques directement par CONTROL avant la note. Le ledger source ARP/LIVE conserve uniquement les sources musicalement actives et l'ownership necessaire aux sorties Note FX. Les reservations On/Off, quotas de demi-buffer, pending closures et retries Off ont ete retires. Le terminal transforme ses actions en NOTE ON/OFF finales; un retrigger est toujours OFF puis ON au meme sample. AUDIO ne connait ni PLAY, ni ROLL, ni ARP, ni EUCLID et ne refuse pas normalement une NOTE legale.
+Quatre slots MIDI FX S1..S4, chacun avec la meme grammaire
+TYPE/PARAM1/PARAM2/PARAM3 et integralement p-lockable/persistee avec Pattern et
+Project, precedent un terminal CONTROL explicite. Les evenements ROLL, produits
+par le scheduler avant la chaine, passent dans deux buffers ping-pong bornes et
+une boucle commune aux quatre slots. Ils portent une identite source scheduler,
+un `occurrence_id` d'activation, un `group_id` de correlation sans ownership et
+la generation de chaine. ARP et EUCLID conservent seulement leur phase,
+deadline et jusqu'a huit pitches HELD; ils n'ont ni pool source/owned ni ledger
+source parallele. La borne logique admise avant ces FX est huit pitches
+distincts par track, ou la borne inferieure prouvee par la chaine. Un changement
+structurel ferme les sorties, purge les futurs, reset les etats temporels et
+incremente la generation sans runtime current/retiring. A sample egal, le
+contrat est OFF, mise a jour, ON. AUDIO ne connait ni PLAY, ni ROLL, ni ARP, ni
+EUCLID.
+
+PASS 3 ajoute six transformateurs a la meme chaine ordonnee: PROBABILITY
+(CHANCE/CONDITION/LOT), GATE (LENGTH/VARIATION/MODE), GROOVE
+(TYPE/TIMING/VELOCITY), ECHO (TIME/REPEATS/DECAY), HARMONIZER
+(TYPE/SPREAD/INVERT) et CHORD (SHIFT/SPREAD/INVERT). `group_id` reste une
+correlation: Probability prend une decision commune, Groove applique une phase
+commune, Echo derive un groupe enfant par repetition, Harmonizer produit les
+voix d'un meme groupe et Chord conserve le groupe polyphonique. Il ne porte
+aucun lifecycle. Harmonizer est le transformateur mono vers poly; Chord deplace
+diatoniquement et revoice un groupe polyphonique selon la gamme KBD. Le terminal
+conserve l'unicite HELD `(track,destination,pitch)` et traite LEGATO comme une
+reprise sans attaque, RETRIG comme OFF puis ON.
+
+Echo n'a pas de queue locale. Ses repetitions, bornees a deux apres l'original,
+entrent dans la future queue centrale triee avec un `occurrence_id` enfant, le
+`source_token` conserve et `resume_slot=N+1`; elles ne retraversent jamais les
+slots precedents. La meme regle couvre les fins datees de Gate. La tete de file
+est consommee par date, puis OFF avant ON a date egale. Un cutover, STOP/PANIC,
+mute, remplacement Pattern ou Project ferme les derives, purge ces entrees et
+reset les deadlines ARP/EUCLID. Un unmute ne restaure aucun futur ancien.
+
+L'admission centrale est l'unique preuve de chaine. Avant installation de
+l'etat, elle multiplie les `instant_fanout` et `temporal_fanout` des quatre
+slots, verifie chaque stage contre les buffers A/B de 32 evenements, reserve le
+futur global dans 512 entrees et reserve les actions de toutes les tracks contre
+les 256 actions terminales par horizon. Le facteur ROLL maximal est inclus dans
+les quatre actions source par voix. Le staging live de 128 actions impose un
+fanout compose maximal de quatre; une chaine Harmonizer/Echo, dans les deux
+ordres, est donc refusee proprement au lieu d'etre acceptee puis tronquee. Deux
+Harmonizer, deux Echo et EUCLID/Echo sans reservation future disponible sont
+egalement refuses. Un child GROUP mono n'admet pas de fanout superieur a un,
+afin que son activation ulterieure ne puisse contourner la preuve globale. La
+limite source devient `floor(8/fanout)` et vaut huit sans expansion, deux pour
+Harmonizer ou Echo.
+
+Les buffers A/B font chacun 1280 octets; la future queue reste 24576 octets et
+les 64 etats de slot 13824 octets. Par rapport a PASS 2, les buffers ajoutent
+1920 octets et les reservations/limites 64 octets, tandis que la suppression du
+payload evenement mort dans les 32 commandes recupere 1536 octets: delta RAM
+statique final `+448 octets`. Les templates Groove et harmonie restent en FLASH,
+sans allocation dynamique. L'insertion future est bornee a 512 deplacements;
+la consommation ordonnee lit la tete. Le pipeline reste
+`O(4 x evenements admis)`; les traitements de groupe et deduplications portent
+au plus sur huit notes.
 
 Undo/Redo conserve huit transactions structurelles. No-op n'est pas capture, une nouvelle branche purge Redo, Copy ne cree pas de transaction et Paste pre-valide le pool avant mutation atomique. Pattern/Project reussis invalident l'historique.
 

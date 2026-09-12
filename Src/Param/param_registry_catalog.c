@@ -104,7 +104,10 @@ _Static_assert((sizeof(g_prism_edit_labels) / sizeof(g_prism_edit_labels[0])) - 
                "Prism labels and active model count must stay aligned");
 static const char *const g_stack_model_labels[] = {"SINE", "TRI", "SQUARE", "SAW", "SHAPE", "TRIPLE SAW", NULL};
 static const char *const g_md_model_labels[] = {"TRX-BD", "TRX-SD", "TRX-CH", "EFM-BD", "EFM-SD", "EFM-CB", NULL};
-static const char *const g_midi_fx_model_labels[] = {"OFF", "ARP", NULL};
+static const char *const g_midi_fx_model_labels[] = {
+    "OFF", "ARP", "EUCLID", "PROBABILITY", "GATE", "GROOVE", "ECHO",
+    "HARMONIZER", "CHORD", NULL
+};
 /* ID 4 is intentionally a retired hole: persisted COMP values resolve OFF. */
 static const char *const g_audio_fx_model_labels[] = {"OFF", "LOFI", "FOLD", "DRIVE", "-", "POINT", "-", "-", "SUB", "-", "RING", "SUB LIGHT", "VIBE", "DRIFT", NULL};
 static const char *const g_filter_mode_labels[] = {"OFF", "LOW", "HIGH", NULL};
@@ -116,7 +119,6 @@ static const char *const g_fm_algorithm_labels[] = {
     "1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16",
     "17","18","19","20","21","22","23","24","25","26","27","28","29","30","31","32",NULL
 };
-static const char *const g_midi_fx_style_labels[] = {"ORDER", "UP", "DOWN", "UP/DOWN", "RANDOM", NULL};
 static const char *const g_lfo_shape_labels[] = {"SIN", "TRI", "SAW", "SQR", "RND", "SIN+", "TRI+", "SQR+", "RSAW", NULL};
 static const char *const g_lfo_trig_labels[] = {
     "FREE", "TRIG", "HOLD", "ONE", "P.Trig", "P.Hold", "P.One", NULL

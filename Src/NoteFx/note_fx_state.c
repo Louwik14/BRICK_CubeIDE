@@ -4,6 +4,7 @@
 
 #include "Track/entity_topology.h"
 #include "Seq/seq_division_catalog.h"
+#include "NoteFx/note_fx_pipeline.h"
 
 static note_fx_track_state_t g_note_fx_state[NOTE_FX_TRACK_COUNT];
 
@@ -17,6 +18,12 @@ static const uint8_t g_note_fx_model_defaults[NOTE_FX_MODEL_COUNT][NOTE_FX_PARAM
         SEQ_DIVISION_ARP_DEFAULT_INDEX,
         NOTE_FX_MODEL_EUCLID
     },
+    { 100U, 0U, 0U, NOTE_FX_MODEL_PROBABILITY },
+    { 100U, 0U, NOTE_FX_GATE_MODE_CLIP, NOTE_FX_MODEL_GATE },
+    { 0U, 100U, 100U, NOTE_FX_MODEL_GROOVE },
+    { 2U, 2U, 32U, NOTE_FX_MODEL_ECHO },
+    { 0U, 0U, 0U, NOTE_FX_MODEL_HARMONIZER },
+    { 7U, 0U, 0U, NOTE_FX_MODEL_CHORD },
 };
 
 static uint8_t note_fx_state_default_for_model(uint8_t model, uint8_t param)
@@ -47,7 +54,7 @@ uint8_t note_fx_state_get_param_schema(uint8_t model,
     }
 
     model = note_fx_state_clamp_model(model);
-    if (param == 3U)
+    if (param == (NOTE_FX_PARAM_COUNT - 1U))
     {
         out_schema->min = NOTE_FX_MODEL_OFF;
         out_schema->max = NOTE_FX_MODEL_COUNT - 1U;
@@ -68,20 +75,29 @@ uint8_t note_fx_state_get_param_schema(uint8_t model,
         return 1U;
     }
 
-    static const note_fx_param_schema_t arp_schema[NOTE_FX_PARAM_COUNT - 1U] =
+    static const note_fx_param_schema_t schemas[NOTE_FX_MODEL_COUNT]
+        [NOTE_FX_PARAM_COUNT - 1U] =
     {
-        { 0U, 7U, 2U },
-        { 0U, 4U, 0U },
-        { 1U, 4U, 1U },
+        [NOTE_FX_MODEL_OFF] = { {0U,7U,2U}, {0U,4U,0U}, {1U,4U,1U} },
+        [NOTE_FX_MODEL_ARP] = { {0U,7U,2U}, {0U,4U,0U}, {1U,4U,1U} },
+        [NOTE_FX_MODEL_PROBABILITY] = {
+            {0U,100U,100U}, {0U,NOTE_FX_PROBABILITY_CONDITION_COUNT-1U,0U},
+            {0U,SEQ_DIVISION_ARP_COUNT,0U} },
+        [NOTE_FX_MODEL_GATE] = {
+            {1U,200U,100U}, {0U,100U,0U},
+            {NOTE_FX_GATE_MODE_CLIP,NOTE_FX_GATE_MODE_RETRIG,NOTE_FX_GATE_MODE_CLIP} },
+        [NOTE_FX_MODEL_GROOVE] = {
+            {0U,NOTE_FX_GROOVE_TYPE_COUNT-1U,0U}, {0U,100U,100U}, {0U,100U,100U} },
+        [NOTE_FX_MODEL_ECHO] = {
+            {0U,SEQ_DIVISION_ARP_COUNT-1U,2U}, {0U,NOTE_FX_ECHO_REPEAT_MAX,2U},
+            {0U,100U,32U} },
+        [NOTE_FX_MODEL_HARMONIZER] = {
+            {0U,NOTE_FX_HARMONIZER_TYPE_COUNT-1U,0U}, {0U,2U,0U}, {0U,3U,0U} },
+        [NOTE_FX_MODEL_CHORD] = {
+            {0U,14U,7U}, {0U,2U,0U}, {0U,3U,0U} },
     };
-    *out_schema = arp_schema[param];
+    *out_schema = schemas[model][param];
     return 1U;
-}
-
-uint8_t note_fx_state_is_param_plock_allowed(uint8_t model, uint8_t param)
-{
-    model = note_fx_state_clamp_model(model);
-    return (model == NOTE_FX_MODEL_EUCLID) && (param < 3U) ? 0U : 1U;
 }
 
 static uint8_t note_fx_state_clamp_param(uint8_t model,
@@ -89,7 +105,7 @@ static uint8_t note_fx_state_clamp_param(uint8_t model,
                                          uint8_t value,
                                          uint8_t length)
 {
-    if (param == 3U)
+    if (param == (NOTE_FX_PARAM_COUNT - 1U))
     {
         return note_fx_state_clamp_model(value);
     }
@@ -121,8 +137,9 @@ uint8_t note_fx_state_normalize_track(note_fx_track_state_t *state)
 
     for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
     {
-        uint8_t model = note_fx_state_clamp_model(state->value[slot][3U]);
-        state->value[slot][3U] = model;
+        uint8_t model = note_fx_state_clamp_model(
+            state->value[slot][NOTE_FX_PARAM_COUNT - 1U]);
+        state->value[slot][NOTE_FX_PARAM_COUNT - 1U] = model;
         state->value[slot][0U] = note_fx_state_clamp_param(
             model, 0U, state->value[slot][0U], 0U);
         const uint8_t length = state->value[slot][0U];
@@ -152,7 +169,7 @@ void note_fx_state_init(void)
 
 uint8_t note_fx_state_param_map(param_id_t id, uint8_t *out_slot, uint8_t *out_param)
 {
-    if ((id < PARAM_MIDI_FX_S1_PARAM1) || (id > PARAM_MIDI_FX_S3_MODEL)
+    if ((id < PARAM_MIDI_FX_S1_PARAM1) || (id > PARAM_MIDI_FX_S4_MODEL)
             || (out_slot == 0) || (out_param == 0))
     {
         return 0U;
@@ -190,13 +207,14 @@ uint8_t note_fx_state_set_param(uint8_t track, param_id_t id, float value)
 
     const uint8_t raw_value = note_fx_state_round_value(value);
     note_fx_track_state_t next = g_note_fx_state[track];
-    const uint8_t model = (param == 3U)
+    const uint8_t model = (param == (NOTE_FX_PARAM_COUNT - 1U))
         ? note_fx_state_clamp_model(raw_value)
-        : next.value[slot][3U];
-    const uint8_t raw = (param == 3U)
+        : next.value[slot][NOTE_FX_PARAM_COUNT - 1U];
+    const uint8_t raw = (param == (NOTE_FX_PARAM_COUNT - 1U))
         ? model
         : note_fx_state_clamp_param(model, param, raw_value, next.value[slot][0U]);
-    if ((param == 3U) && (next.value[slot][3U] != raw))
+    if ((param == (NOTE_FX_PARAM_COUNT - 1U))
+            && (next.value[slot][NOTE_FX_PARAM_COUNT - 1U] != raw))
     {
         for (uint8_t index = 0U; index < NOTE_FX_PARAM_COUNT; ++index)
         {
@@ -208,6 +226,7 @@ uint8_t note_fx_state_set_param(uint8_t track, param_id_t id, float value)
         next.value[slot][param] = raw;
     }
     (void)note_fx_state_normalize_track(&next);
+    if (note_fx_pipeline_reserve_state(track, &next) == 0U) return 0U;
     g_note_fx_state[track] = next;
     return 1U;
 }
@@ -230,22 +249,8 @@ uint8_t note_fx_state_restore_track(uint8_t track, const note_fx_track_state_t *
     }
     note_fx_track_state_t normalized = *state;
     (void)note_fx_state_normalize_track(&normalized);
+    if (note_fx_pipeline_reserve_state(track, &normalized) == 0U) return 0U;
 
-    /* A restore is also a model transition.  Do not let a valid payload from
-     * the previous model leak into the target model: the target model owns
-     * the complete default tuple.  A restore within the same model remains a
-     * regular value round-trip. */
-    for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
-    {
-        if (g_note_fx_state[track].value[slot][3U]
-                != normalized.value[slot][3U])
-        {
-            const uint8_t model = normalized.value[slot][3U];
-            for (uint8_t param = 0U; param < NOTE_FX_PARAM_COUNT - 1U; ++param)
-                normalized.value[slot][param] =
-                    note_fx_state_default_for_model(model, param);
-        }
-    }
     g_note_fx_state[track] = normalized;
     return 1U;
 }
@@ -254,6 +259,7 @@ uint8_t note_fx_state_install_prepared_track(uint8_t track,
                                              const note_fx_track_state_t *state)
 {
     if ((track >= NOTE_FX_TRACK_COUNT) || (state == NULL)) return 0U;
+    if (note_fx_pipeline_reserve_state(track, state) == 0U) return 0U;
     g_note_fx_state[track] = *state;
     return 1U;
 }

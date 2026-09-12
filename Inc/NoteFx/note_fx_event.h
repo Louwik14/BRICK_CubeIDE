@@ -29,9 +29,9 @@ typedef enum
 } note_event_result_t;
 
 #define NOTE_EVENT_STAGE_SOURCE   0U
-#define NOTE_EVENT_STAGE_TERMINAL 4U
-/* Stage 3 is the hand-off emitted by the third MIDI FX slot. */
-#define NOTE_EVENT_STAGE_TERMINAL_HANDOFF (NOTE_EVENT_STAGE_TERMINAL - 1U)
+#include "NoteFx/note_fx_contract.h"
+
+#define NOTE_EVENT_STAGE_TERMINAL (NOTE_FX_SLOT_COUNT + 1U)
 #define NOTE_EVENT_DESTINATION_DEFAULT 0xFFU
 #define NOTE_EVENT_OCCURRENCE_COUNTER_MASK 0x3FFFFFFFU
 #define NOTE_EVENT_OCCURRENCE_NAMESPACE_STEP 0x00000000U
@@ -41,10 +41,20 @@ typedef enum
 #define NOTE_EVENT_FLAG_GENERATED 0x01U
 #define NOTE_EVENT_FLAG_TERMINAL  0x04U
 #define NOTE_EVENT_FLAG_STALE     0x08U
+#define NOTE_EVENT_FLAG_LEGATO    0x10U
+#define NOTE_EVENT_FLAG_RETRIGGER 0x20U
+#define NOTE_EVENT_FLAG_FUTURE    0x40U
+#define NOTE_EVENT_DURATION_OPEN UINT32_MAX
 
 typedef struct
 {
     uint64_t sample_abs;
+    uint32_t duration_samples;
+    uint32_t source_token;
+    uint32_t occurrence_id;
+    uint32_t generation;
+    uint32_t group_id;
+    uint16_t chain_generation;
     uint8_t track;
     uint8_t destination_id;
     uint8_t note;
@@ -52,13 +62,10 @@ typedef struct
     uint8_t kind;
     uint8_t provenance;
     uint8_t stage;
-    uint32_t source_token;
-    uint32_t occurrence_id;
-    uint32_t generation;
     uint8_t flags;
 } note_event_t;
 
-_Static_assert(sizeof(note_event_t) == 32U, "note_event_t layout must remain fixed");
+_Static_assert(sizeof(note_event_t) == 40U, "note_event_t layout must remain fixed");
 
 static inline uint32_t note_event_occurrence_namespace(
     note_event_provenance_t provenance)
@@ -84,12 +91,6 @@ static inline uint8_t note_event_is_valid(const note_event_t *event)
         && (event->source_token != 0U)
         && (event->occurrence_id != 0U)
         && (event->generation != 0U);
-}
-
-static inline uint8_t note_event_is_terminal_handoff(const note_event_t *event)
-{
-    return (event != 0)
-        && (event->stage >= NOTE_EVENT_STAGE_TERMINAL_HANDOFF);
 }
 
 #endif
