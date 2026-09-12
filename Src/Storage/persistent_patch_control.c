@@ -3,6 +3,7 @@
 #include "App/live_parameter_audio_publication.h"
 #include "ControlRT/audio_state_snapshot_control.h"
 #include "Platform/brick_media_clock.h"
+#include "Platform/memory_layout.h"
 #include "IPC/live_parameter_event.h"
 #include "Mod/mod_env3_control.h"
 #include "Mod/mod_destination_control.h"
@@ -24,6 +25,9 @@
 #include "Track/vca_control_state.h"
 #include "Track/track_catalog.h"
 #include "Track/track_runtime.h"
+
+STORAGE_STATE_SDRAM static persist_control_patch_t
+    g_patch_transaction_backup[BRICK_ENTITY_CAPACITY];
 
 static uint8_t validate_mod(const persist_control_modulation_t*m,const track_config_t*c,uint8_t owner)
 {
@@ -103,7 +107,128 @@ static uint8_t restore_polyphony_audio_fx(uint8_t entity,const polyphony_control
     if(installed==0U)Error_Handler();
     return installed;
 }
-persist_codec_result_t persistent_patch_control_apply_mask(const persist_control_patch_t*p,uint16_t mask){persist_codec_result_t r=persistent_patch_control_validate_mask(p,mask);if(r!=PERSIST_CODEC_OK||!audio_state_snapshot_control_preflight())return(r!=PERSIST_CODEC_OK)?r:PERSIST_CODEC_IO_ERROR;uint8_t f[BRICK_ENTITY_CAPACITY],t[BRICK_ENTITY_CAPACITY],m[BRICK_ENTITY_CAPACITY],s[BRICK_ENTITY_CAPACITY],in[TRACK_COUNT];track_family_t family;track_type_t type;(void)persist_key_family_from_disk(p->family,&family);(void)persist_key_type_from_disk(p->type,&type);for(uint8_t e=0U;e<BRICK_ENTITY_CAPACITY;++e){f[e]=track_state_get_family(e);t[e]=track_state_get_type(e);m[e]=track_state_get_midi_channel(e);s[e]=track_state_get_midi_source(e);if(e<TRACK_COUNT)in[e]=track_state_get_external_input(e);if(mask&(uint16_t)(1UL<<e)){f[e]=family;t[e]=type;if(!assets_can_apply(p,e,family,type))return PERSIST_CODEC_INVALID_ENTITY;}}if(!audio_state_snapshot_control_begin(CONTROL_AUDIO_STATE_PATTERN))return PERSIST_CODEC_IO_ERROR;for(uint8_t e=0U;e<BRICK_ENTITY_CAPACITY;++e)if((mask&(uint16_t)(1UL<<e))&&!seq_param_iface_clear_patch_runtime(e)){audio_state_snapshot_control_abort();return PERSIST_CODEC_INVALID_ENTITY;}if(!track_structure_apply_entity_bulk_with_inputs(f,t,m,s,in)){audio_state_snapshot_control_abort();return PERSIST_CODEC_INVALID_ENTITY;}for(uint8_t e=0U;e<BRICK_ENTITY_CAPACITY;++e){if(!(mask&(uint16_t)(1UL<<e)))continue;if(!assets_apply(p,e,family,type)||((p->fm_present)?!fm_control_state_restore(e,&p->fm):!tone_program_control_restore(e,&p->tone))||!param_filter_control_restore(e,&p->filter)||!vca_control_state_restore(e,&p->vca)||!restore_polyphony_audio_fx(e,&p->polyphony,&p->audio_fx)||!restore_mod(e,&p->modulation)){audio_state_snapshot_control_abort();return PERSIST_CODEC_INVALID_ENTITY;}}if(!audio_state_snapshot_control_commit()){audio_state_snapshot_control_abort();return PERSIST_CODEC_IO_ERROR;}return PERSIST_CODEC_OK;}
+
+static uint8_t restore_patch_owners(uint8_t entity,
+                                    const persist_control_patch_t *patch,
+                                    track_family_t family, track_type_t type)
+{
+    return assets_apply(patch, entity, family, type)
+        && (patch->fm_present
+            ? fm_control_state_restore(entity, &patch->fm)
+            : tone_program_control_restore(entity, &patch->tone))
+        && param_filter_control_restore(entity, &patch->filter)
+        && vca_control_state_restore(entity, &patch->vca)
+        && restore_polyphony_audio_fx(entity, &patch->polyphony,
+                                      &patch->audio_fx)
+        && restore_mod(entity, &patch->modulation);
+}
+
+static uint8_t patch_transaction_restore_previous(uint16_t mask)
+{
+    uint8_t family[BRICK_ENTITY_CAPACITY];
+    uint8_t type[BRICK_ENTITY_CAPACITY];
+    uint8_t midi_channel[BRICK_ENTITY_CAPACITY];
+    uint8_t midi_source[BRICK_ENTITY_CAPACITY];
+    uint8_t external_input[TRACK_COUNT];
+    audio_state_snapshot_control_abort();
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        family[entity] = (uint8_t)track_state_get_family(entity);
+        type[entity] = (uint8_t)track_state_get_type(entity);
+        midi_channel[entity] = track_state_get_midi_channel(entity);
+        midi_source[entity] = track_state_get_midi_source(entity);
+        if (entity < TRACK_COUNT)
+            external_input[entity] = track_state_get_external_input(entity);
+        if ((mask & (uint16_t)(1UL << entity)) != 0U)
+        {
+            track_family_t saved_family;
+            track_type_t saved_type;
+            if (!persist_key_family_from_disk(
+                    g_patch_transaction_backup[entity].family, &saved_family)
+                    || !persist_key_type_from_disk(
+                        g_patch_transaction_backup[entity].type, &saved_type))
+                return 0U;
+            family[entity] = (uint8_t)saved_family;
+            type[entity] = (uint8_t)saved_type;
+        }
+    }
+    if (!audio_state_snapshot_control_begin(CONTROL_AUDIO_STATE_PATCH)
+            || !track_structure_apply_entity_bulk_with_inputs(family, type,
+                midi_channel, midi_source, external_input)) return 0U;
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        if ((mask & (uint16_t)(1UL << entity)) == 0U) continue;
+        if (!restore_patch_owners(entity, &g_patch_transaction_backup[entity],
+                (track_family_t)family[entity], (track_type_t)type[entity]))
+            return 0U;
+    }
+    return seq_param_iface_patch_runtime_transaction_rollback()
+        && audio_state_snapshot_control_commit();
+}
+
+persist_codec_result_t persistent_patch_control_apply_mask(
+    const persist_control_patch_t *patch, uint16_t mask)
+{
+    persist_codec_result_t result =
+        persistent_patch_control_validate_mask(patch, mask);
+    if (result != PERSIST_CODEC_OK) return result;
+    if (!audio_state_snapshot_control_preflight()) return PERSIST_CODEC_IO_ERROR;
+
+    uint8_t family[BRICK_ENTITY_CAPACITY];
+    uint8_t type[BRICK_ENTITY_CAPACITY];
+    uint8_t midi_channel[BRICK_ENTITY_CAPACITY];
+    uint8_t midi_source[BRICK_ENTITY_CAPACITY];
+    uint8_t external_input[TRACK_COUNT];
+    track_family_t patch_family;
+    track_type_t patch_type;
+    (void)persist_key_family_from_disk(patch->family, &patch_family);
+    (void)persist_key_type_from_disk(patch->type, &patch_type);
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        family[entity] = (uint8_t)track_state_get_family(entity);
+        type[entity] = (uint8_t)track_state_get_type(entity);
+        midi_channel[entity] = track_state_get_midi_channel(entity);
+        midi_source[entity] = track_state_get_midi_source(entity);
+        if (entity < TRACK_COUNT)
+            external_input[entity] = track_state_get_external_input(entity);
+        if ((mask & (uint16_t)(1UL << entity)) == 0U) continue;
+        family[entity] = (uint8_t)patch_family;
+        type[entity] = (uint8_t)patch_type;
+        if (!assets_can_apply(patch, entity, patch_family, patch_type)
+                || (persistent_patch_control_capture(entity, NULL,
+                    &g_patch_transaction_backup[entity]) != PERSIST_CODEC_OK))
+            return PERSIST_CODEC_INVALID_ENTITY;
+    }
+    if (!seq_param_iface_patch_runtime_transaction_begin(mask))
+        return PERSIST_CODEC_IO_ERROR;
+    if (!audio_state_snapshot_control_begin(CONTROL_AUDIO_STATE_PATCH))
+    {
+        (void)seq_param_iface_patch_runtime_transaction_rollback();
+        return PERSIST_CODEC_IO_ERROR;
+    }
+
+    result = PERSIST_CODEC_INVALID_ENTITY;
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+        if (((mask & (uint16_t)(1UL << entity)) != 0U)
+                && !seq_param_iface_clear_patch_runtime(entity)) goto rollback;
+    if (!track_structure_apply_entity_bulk_with_inputs(family, type,
+            midi_channel, midi_source, external_input)) goto rollback;
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+        if (((mask & (uint16_t)(1UL << entity)) != 0U)
+                && !restore_patch_owners(entity, patch,
+                    patch_family, patch_type)) goto rollback;
+    if (!audio_state_snapshot_control_commit())
+    {
+        result = PERSIST_CODEC_IO_ERROR;
+        goto rollback;
+    }
+    seq_param_iface_patch_runtime_transaction_commit();
+    return PERSIST_CODEC_OK;
+
+rollback:
+    if (!patch_transaction_restore_previous(mask)) Error_Handler();
+    return result;
+}
 persist_codec_result_t persistent_patch_control_apply(const persist_control_patch_t*p,uint8_t target){return(target<PERSIST_CONTROL_ENTITY_COUNT)?persistent_patch_control_apply_mask(p,(uint16_t)(1UL<<target)):PERSIST_CODEC_INVALID_ENTITY;}
 
 persist_codec_result_t persistent_patch_control_make_default(uint8_t e,persist_control_patch_t*p)

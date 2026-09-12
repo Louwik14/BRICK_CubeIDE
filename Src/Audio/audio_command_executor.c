@@ -429,7 +429,7 @@ static audio_command_apply_result_t audio_command_apply_state_commit(
     const control_audio_command_t *commands = NULL;
     uint16_t count = 0U;
     const uint8_t transition = CONTROL_AUDIO_COMMAND_KIND(commit);
-    if ((transition > CONTROL_AUDIO_STATE_PROJECT)
+    if ((transition > CONTROL_AUDIO_STATE_PATCH)
             || (audio_state_snapshot_resolve(
                 commit->value, &commands, &count) == 0U))
         return AUDIO_COMMAND_APPLY_INVALID;

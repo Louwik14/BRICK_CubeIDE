@@ -43,7 +43,8 @@ typedef enum
 typedef enum
 {
     CONTROL_AUDIO_STATE_PATTERN = 0U,
-    CONTROL_AUDIO_STATE_PROJECT
+    CONTROL_AUDIO_STATE_PROJECT,
+    CONTROL_AUDIO_STATE_PATCH
 } control_audio_state_transition_kind_t;
 
 typedef enum

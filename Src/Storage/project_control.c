@@ -720,11 +720,23 @@ project_control_asset_result_t project_control_track_asset_restore_status(
 
 uint8_t project_control_track_assets_clear(uint8_t entity)
 {
-    if (entity >= BRICK_ENTITY_CAPACITY) return 0U;
-    if ((control_rt_publish_param_now(entity, CONTROL_AUDIO_SAMPLER_ASSET,
-                                      UINT16_MAX, 0U) == 0U)
-            || (audio_wave_table_projection_clear_track(entity, 0U) == 0U)
-            || (audio_wave_table_projection_clear_track(entity, 1U) == 0U))
+    track_runtime_descriptor_t descriptor;
+    if ((entity >= BRICK_ENTITY_CAPACITY)
+            || (track_runtime_get_descriptor(entity, &descriptor) == 0U))
+        return 0U;
+
+    /* Asset selectors are engine-owned parameters.  Publishing every kind
+     * unconditionally is invalid: in particular the wavetable owner rejects
+     * a clear as soon as the target PROGRAM is not WAVE. */
+    if (((descriptor.type == TRACK_RUNTIME_TYPE_STREAM)
+            || (descriptor.type == TRACK_RUNTIME_TYPE_RAM)
+            || (descriptor.type == TRACK_RUNTIME_TYPE_MULTI))
+            && (control_rt_publish_param_now(entity,
+                CONTROL_AUDIO_SAMPLER_ASSET, UINT16_MAX, 0U) == 0U))
+        return 0U;
+    if ((descriptor.engine == TRACK_RUNTIME_ENGINE_WAVE)
+            && ((audio_wave_table_projection_clear_track(entity, 0U) == 0U)
+                || (audio_wave_table_projection_clear_track(entity, 1U) == 0U)))
         return 0U;
     memset(g_track_assets[entity], 0, sizeof(g_track_assets[entity]));
     memset(g_track_asset_availability[entity], 0,

@@ -51,6 +51,12 @@ typedef struct
 SEQ_STATE_D2 static seq_param_slot_state_t
     g_seq_param_runtime_state[SEQ_LANE_CAPACITY][SEQ_PARAM_RUNTIME_SLOT_COUNT];
 SEQ_STATE_D2 static uint8_t g_seq_param_runtime_locked_bits[SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT];
+STORAGE_STATE_SDRAM static seq_param_slot_state_t
+    g_seq_param_patch_transaction_state[SEQ_LANE_CAPACITY][SEQ_PARAM_RUNTIME_SLOT_COUNT];
+STORAGE_STATE_SDRAM static uint8_t
+    g_seq_param_patch_transaction_locked_bits[SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT];
+static uint16_t g_seq_param_patch_transaction_mask;
+static uint8_t g_seq_param_patch_transaction_active;
 #define SEQ_PARAM_SLOT_UNMAPPED ((seq_param_slot_t)0xFFU)
 
 typedef struct
@@ -581,6 +587,12 @@ static uint8_t seq_param_iface_slot_is_supported_internal(
 void seq_param_iface_init(void)
 {
     memset(&g_seq_param_runtime_state, 0, sizeof(g_seq_param_runtime_state));
+    memset(&g_seq_param_patch_transaction_state, 0,
+           sizeof(g_seq_param_patch_transaction_state));
+    memset(&g_seq_param_patch_transaction_locked_bits, 0,
+           sizeof(g_seq_param_patch_transaction_locked_bits));
+    g_seq_param_patch_transaction_mask = 0U;
+    g_seq_param_patch_transaction_active = 0U;
     seq_param_clear_flags();
     track_runtime_init();
 }
@@ -1133,6 +1145,62 @@ uint8_t seq_param_iface_clear_patch_runtime(seq_track_id_t track)
         }
     }
     return 1U;
+}
+
+uint8_t seq_param_iface_patch_runtime_transaction_begin(uint16_t track_mask)
+{
+    if ((track_mask == 0U) || (g_seq_param_patch_transaction_active != 0U))
+        return 0U;
+    memcpy(g_seq_param_patch_transaction_state, g_seq_param_runtime_state,
+           sizeof(g_seq_param_patch_transaction_state));
+    memcpy(g_seq_param_patch_transaction_locked_bits,
+           g_seq_param_runtime_locked_bits,
+           sizeof(g_seq_param_patch_transaction_locked_bits));
+    g_seq_param_patch_transaction_mask = track_mask;
+    g_seq_param_patch_transaction_active = 1U;
+    return 1U;
+}
+
+uint8_t seq_param_iface_patch_runtime_transaction_rollback(void)
+{
+    static const uint8_t patch_sets[] = {
+        SEQ_PLOCK_SET_ENV, SEQ_PLOCK_SET_TONE, SEQ_PLOCK_SET_MOD,
+        SEQ_PLOCK_SET_FM_OPERATOR, SEQ_PLOCK_SET_AUDIO_FX
+    };
+    if (g_seq_param_patch_transaction_active == 0U) return 0U;
+    memcpy(g_seq_param_runtime_state, g_seq_param_patch_transaction_state,
+           sizeof(g_seq_param_runtime_state));
+    memcpy(g_seq_param_runtime_locked_bits,
+           g_seq_param_patch_transaction_locked_bits,
+           sizeof(g_seq_param_runtime_locked_bits));
+    for (seq_track_id_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
+    {
+        if ((g_seq_param_patch_transaction_mask
+                & (uint16_t)(1UL << track)) == 0U) continue;
+        for (uint8_t set = 0U; set < sizeof(patch_sets); ++set)
+        {
+            const uint8_t set_id = patch_sets[set];
+            for (seq_param_slot_t slot = 0U;
+                 slot < g_seq_param_set_capacities[set_id]; ++slot)
+            {
+                if (seq_param_get_runtime_locked(track, set_id, slot) == 0U)
+                    continue;
+                seq_param_slot_state_t *const state =
+                    seq_param_iface_state_at(track, set_id, slot);
+                if ((state == 0) || (seq_param_iface_apply_lock(track, set_id,
+                        slot, state->runtime_value, 0U) == 0U)) return 0U;
+            }
+        }
+    }
+    g_seq_param_patch_transaction_active = 0U;
+    g_seq_param_patch_transaction_mask = 0U;
+    return 1U;
+}
+
+void seq_param_iface_patch_runtime_transaction_commit(void)
+{
+    g_seq_param_patch_transaction_active = 0U;
+    g_seq_param_patch_transaction_mask = 0U;
 }
 uint8_t seq_param_iface_encode_param_value(param_id_t param, float value,
                                            seq_value16_t *out_value16)

@@ -117,6 +117,9 @@ void seq_param_iface_discard_runtime_lock(seq_track_id_t track,
                                           uint8_t set_id,
                                           seq_param_slot_t param_slot);
 uint8_t seq_param_iface_clear_patch_runtime(seq_track_id_t track);
+uint8_t seq_param_iface_patch_runtime_transaction_begin(uint16_t track_mask);
+uint8_t seq_param_iface_patch_runtime_transaction_rollback(void);
+void seq_param_iface_patch_runtime_transaction_commit(void);
 
 uint8_t seq_param_iface_encode_param_value(param_id_t param, float value,
                                            seq_value16_t *out_value16);

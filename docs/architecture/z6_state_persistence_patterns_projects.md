@@ -40,7 +40,13 @@ target n'est mutee avant que toutes les references du masque soient READY. Les
 targets ne sont jamais appliquees une par une par l'UI. Le remplacement purge
 les overrides TEMP runtime Patch actifs (sans modifier les p-locks stockes dans
 la sequence), installe les owners CONTROL, puis publie un snapshot AUDIO unique
-et attend son acquittement. `persistent_patch_control_make_default` derive ses
+de type `CONTROL_AUDIO_STATE_PATCH` et attend que le consumer ait franchi le
+commit. Les selectors d'asset sont projetes uniquement vers leur moteur owner:
+un clear Wavetable n'est jamais adresse a FM, Prism, Stack ou Sampler. Avant la
+premiere mutation, la transaction capture le Patch CONTROL et les overrides
+runtime de chaque cible. Tout refus apres ce point annule le snapshot candidat,
+restaure ces autorites dans un second snapshot PATCH et ne publie aucun nouveau
+slot courant. `persistent_patch_control_make_default` derive ses
 valeurs des factories CONTROL canoniques et est utilise par CLEAR via exactement
 le meme contrat que LOAD, sans toucher sequence, mute, MIDI, slot ou fichiers.
 

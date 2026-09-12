@@ -181,7 +181,7 @@ static uint8_t control_rt_command_is_structural(
                 && ((kind == CONTROL_AUDIO_PANIC_GLOBAL)
                     || (command->entity < BRICK_ENTITY_CAPACITY)));
         case CONTROL_AUDIO_COMMAND_AUDIO_STATE_COMMIT:
-            return (uint8_t)((kind <= CONTROL_AUDIO_STATE_PROJECT)
+            return (uint8_t)((kind <= CONTROL_AUDIO_STATE_PATCH)
                 && (command->value != 0U));
         default:
             return 0U;
@@ -262,7 +262,7 @@ uint8_t audio_state_snapshot_control_preflight(void)
 uint8_t audio_state_snapshot_control_begin(
     control_audio_state_transition_kind_t transition)
 {
-    if ((transition > CONTROL_AUDIO_STATE_PROJECT)
+    if ((transition > CONTROL_AUDIO_STATE_PATCH)
             || (g_audio_state_snapshot_depth == UINT8_MAX)) return 0U;
     if (g_audio_state_snapshot_depth == 0U)
     {
