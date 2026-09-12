@@ -6233,7 +6233,7 @@ FF_META_STEP_RESULT f_brick_meta_object_sync_step (
 			cont->fragment_current + 1);
 		fs->wflag = 1;
 		cont->fragment_current++;
-		cont->fragment_remaining--;
+		if (--cont->fragment_remaining == 0) cont->fp->obj.stat = 0;
 		cont->phase = FF_META_SYNC_PHASE_FIRST_FRAGMENT;
 		return FF_META_STEP_YIELD;
 #else
