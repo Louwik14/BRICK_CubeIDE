@@ -702,31 +702,17 @@ static void ui_page_patch_assign_begin_save(void)
         return;
     }
 
-    uint16_t slot = PATCH_PRODUCT_INVALID_SLOT;
+    const uint16_t slot = patch_product_first_empty();
     char name[NAME_CONTRACT_BUFFER_BYTES] = { 0 };
-    if ((g_patch_assign.selected_slot < PATCH_PRODUCT_SLOT_COUNT)
-            && (ui_page_patch_assign_slot_valid(g_patch_assign.selected_slot) != 0U))
+    if (slot == PATCH_PRODUCT_INVALID_SLOT)
     {
-        patch_product_metadata_t meta;
-        if ((patch_product_metadata(g_patch_assign.selected_slot, &meta) == 0U)
-                || (meta.name[0] == '\0'))
-        {
-            ui_page_patch_assign_set_temporary_status("BAD PATCH");
-            return;
-        }
-        slot = g_patch_assign.selected_slot;
-        memcpy(name, meta.name, sizeof(name));
-        name[sizeof(name) - 1U] = '\0';
+        ui_page_patch_assign_set_temporary_status("BANK FULL");
+        return;
     }
-    else
-    {
-        slot = patch_product_first_empty();
-        if (slot == PATCH_PRODUCT_INVALID_SLOT)
-        {
-            ui_page_patch_assign_set_temporary_status("BANK FULL");
-            return;
-        }
-    }
+    (void)snprintf(name, sizeof(name), "T%02u %s",
+                   (unsigned)(g_patch_assign.target_track + 1U),
+                   ui_get_track_family_short_name(
+                       ui_get_track_family(g_patch_assign.target_track)));
 
     const patch_product_result_t result =
         patch_product_save_prepare(g_patch_assign.target_track, slot,
@@ -805,9 +791,11 @@ static void ui_page_patch_assign_name_done(ui_page_name_edit_result_t result,
 
 static void ui_page_patch_assign_clear_action(void)
 {
-    if (entity_topology_is_active(g_patch_assign.target_track) == 0U)
+    if ((g_patch_assign.selected_slot >= PATCH_PRODUCT_SLOT_COUNT)
+            || (patch_product_slot_state(g_patch_assign.selected_slot)
+                == PATCH_PRODUCT_SLOT_EMPTY))
     {
-        ui_page_patch_assign_set_temporary_status("NO TARGET");
+        ui_page_patch_assign_set_temporary_status("EMPTY");
         g_patch_assign.clear_confirm = 0U;
         return;
     }
@@ -817,7 +805,17 @@ static void ui_page_patch_assign_clear_action(void)
         ui_page_patch_assign_set_status("CLEAR?");
         return;
     }
-    const patch_product_result_t result = patch_product_clear(g_patch_assign.target_track);
+    uint16_t next = PATCH_PRODUCT_INVALID_SLOT;
+    const patch_product_result_t result = patch_product_delete(
+        g_patch_assign.selected_slot, &next);
+    if (result == PATCH_PRODUCT_OK)
+    {
+        const uint16_t first_empty = patch_product_first_empty();
+        g_patch_assign.selected_slot = (next < PATCH_PRODUCT_SLOT_COUNT)
+            ? next : ((first_empty < PATCH_PRODUCT_SLOT_COUNT)
+                ? first_empty : 0U);
+        patch_product_set_current(g_patch_assign.selected_slot);
+    }
     ui_page_patch_assign_set_temporary_status((result == PATCH_PRODUCT_OK)
                                               ? "PATCH CLEARED"
                                               : patch_product_result_label(result));

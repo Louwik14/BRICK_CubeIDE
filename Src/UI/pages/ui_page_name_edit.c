@@ -6,8 +6,10 @@
 #include "buttons.h"
 #include "drv_display.h"
 #include "font.h"
+#include "Platform/brick_media_clock.h"
 #include "ui_event.h"
 #include "ui_page_manager.h"
+#include "stm32h7xx_hal.h"
 
 #define NAME_EDIT_HEADER_LINE_Y 7U
 #define NAME_EDIT_NAME_Y 15U
@@ -36,7 +38,18 @@ static ui_page_name_edit_state_t g_name_edit = {
 };
 
 static uint32_t g_name_edit_random_state = 0x6D2B79F5U;
-static uint8_t g_name_edit_random_format = 0U;
+static uint32_t g_name_edit_random_nonce;
+
+static uint32_t ui_page_name_edit_random_next(void)
+{
+    uint32_t state = g_name_edit_random_state;
+    if (state == 0U) state = 0x6D2B79F5U;
+    state ^= state << 13U;
+    state ^= state >> 17U;
+    state ^= state << 5U;
+    g_name_edit_random_state = state;
+    return state;
+}
 
 static const char *const g_name_edit_techno[] = {
     "Flux", "Pulse", "Chrome", "Neon", "Vector", "Phase", "Circuit"
@@ -198,15 +211,19 @@ static void ui_page_name_edit_write_current_char(void)
 static void ui_page_name_edit_random(void)
 {
     char candidate[NAME_CONTRACT_BUFFER_BYTES];
-    const uint32_t state = g_name_edit_random_state =
-        (g_name_edit_random_state * 1664525U) + 1013904223U;
-    const uint8_t family_index = (uint8_t)(state % (sizeof(g_name_edit_families)
-                                                    / sizeof(g_name_edit_families[0])));
+    g_name_edit_random_state ^= brick_media_clock_now_tick()
+        ^ (HAL_GetTick() * 0x9E3779B9UL)
+        ^ (++g_name_edit_random_nonce * 0x85EBCA6BUL);
+    const uint32_t family_random = ui_page_name_edit_random_next();
+    const uint32_t first_random = ui_page_name_edit_random_next();
+    const uint32_t second_random = ui_page_name_edit_random_next();
+    const uint32_t format_random = ui_page_name_edit_random_next();
+    const uint8_t family_index = (uint8_t)(family_random
+        % (sizeof(g_name_edit_families) / sizeof(g_name_edit_families[0])));
     const ui_page_name_edit_word_family_t *const family = &g_name_edit_families[family_index];
-    const char *const first = family->words[(state >> 8U) % family->count];
-    const char *const second = family->words[(state >> 16U) % family->count];
-    const uint8_t format = g_name_edit_random_format;
-    g_name_edit_random_format = (uint8_t)((g_name_edit_random_format + 1U) % 4U);
+    const char *const first = family->words[first_random % family->count];
+    const char *const second = family->words[second_random % family->count];
+    const uint8_t format = (uint8_t)(format_random % 4U);
 
     switch (format)
     {
@@ -218,12 +235,12 @@ static void ui_page_name_edit_random(void)
             break;
         case 2U:
             (void)snprintf(candidate, sizeof(candidate), "%s %02u", first,
-                           (unsigned)((state >> 4U) % 100U));
+                           (unsigned)(ui_page_name_edit_random_next() % 100U));
             break;
         default:
             (void)snprintf(candidate, sizeof(candidate), "%s %c%u", first,
-                           (char)('A' + ((state >> 12U) % 26U)),
-                           (unsigned)((state >> 20U) % 10U));
+                           (char)('A' + (ui_page_name_edit_random_next() % 26U)),
+                           (unsigned)(ui_page_name_edit_random_next() % 10U));
             break;
     }
 

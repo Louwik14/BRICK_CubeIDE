@@ -72,11 +72,25 @@ separees; `.TMP` n'est publie qu'apres header final, sync et close, avec `.BAK`
 recuperable.
 
 Patch Save et Rename utilisent une seule machine Storage cooperative. Le Save
-capture un DTO immutable avant soumission; Rename relit le DTO du slot puis ne
-remplace que `metadata.name`. Les deux operations ecrivent `P%04u.B6C.TMP`,
+capture un DTO immutable avant soumission. Les tweaks UI ordinaires installent
+d'abord leur valeur dans l'owner CONTROL canonique: Tone, FM, Filter, VCA, FX,
+polyphonie et modulation sont donc captures avec leur valeur editee. Les
+overrides TEMP de p-lock restent volontairement du runtime Sequence et ne sont
+pas persistants. Save choisit exclusivement le premier slot vide et refuse au
+niveau produit toute destination deja presente; le focus browser ne participe
+pas a cette decision. Rename relit le DTO du slot puis ne remplace que
+`metadata.name`. Les deux operations ecrivent `P%04u.B6C.TMP`,
 sync/close, commitent via `.BAK`, puis publient un resultat terminal consommable
 une seule fois. Le slot, le filename et les metadonnees ne sont mis a jour
 qu'apres commit reussi.
+
+Au boot, le scan Patch execute d'abord la recovery `.TMP/.BAK`, puis decode le
+document complet avec `persist_codec_decode_patch`. Il n'existe plus de parseur
+de header reduit divergent du codec: magic `B6CP`, version, taille, CRC header,
+CRC payload, sections, cles et bornes suivent exactement le meme validateur que
+LOAD. CLEAR dans le browser supprime le slot selectionne, y compris un document
+invalide impossible a decoder, ainsi que ses sidecars; il ne signifie pas Init
+du Track. Le cache RAM passe a EMPTY uniquement apres les unlink storage.
 
 Pattern Save/Load, Project Save, browser SD, Sample RAM, Wavetable et Clear Multi utilisent l'admission Background cooperative de `sd_scheduler_runtime`. Toute demande RT ou transaction active produit `NOT_NOW`; le client conserve son etat et rend la main.
 
