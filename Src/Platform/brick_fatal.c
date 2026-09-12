@@ -1,6 +1,7 @@
 #include "Platform/brick_fatal.h"
 
 #include "main.h"
+#include "Platform/crash_library.h"
 #include "stm32h7xx.h"
 
 brick_fatal_record_t g_brick_fatal_record;
@@ -25,7 +26,11 @@ _Noreturn void brick_fatal_raise_at(const char *message,
     g_brick_fatal_record.context = context;
     g_brick_fatal_record.requested = requested;
     g_brick_fatal_record.capacity = capacity;
+    g_brick_fatal_record.caller_pc =
+        (uint32_t)(uintptr_t)__builtin_return_address(0);
+    __asm volatile("mov %0, sp" : "=r"(g_brick_fatal_record.caller_sp));
     __DMB();
+    crash_library_capture_and_persist(&g_brick_fatal_record);
     Error_Handler();
     for (;;)
     {

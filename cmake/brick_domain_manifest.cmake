@@ -341,6 +341,7 @@ set(SHARED_BACKING
 )
 
 set(PLATFORM_H743_COMMON
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/crash_library.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/brick_media_clock.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Drivers/tlv320aic3204.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Drivers/Drv_app/Src/buttons_hw.c"

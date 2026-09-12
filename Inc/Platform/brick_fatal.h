@@ -31,6 +31,8 @@ typedef struct
     volatile uint32_t context;
     volatile uint32_t requested;
     volatile uint32_t capacity;
+    volatile uint32_t caller_pc;
+    volatile uint32_t caller_sp;
 } brick_fatal_record_t;
 
 extern brick_fatal_record_t g_brick_fatal_record;

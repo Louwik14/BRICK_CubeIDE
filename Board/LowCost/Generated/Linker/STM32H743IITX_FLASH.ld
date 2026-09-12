@@ -43,8 +43,11 @@ _Min_Stack_Size = 0x400; /* required amount of stack */
 /* Specify the memory areas */
 MEMORY
 {
-  /* Application firmware area (bank1 + bank2 sectors 0..5) */
-  FLASH (rx)          : ORIGIN = 0x08000000, LENGTH = 1792K
+  /* Application firmware area (bank1 + bank2 sectors 0..3). */
+  FLASH (rx)          : ORIGIN = 0x08000000, LENGTH = 1536K
+  /* Crash generations: bank2 sectors 4 and 5, never linked as firmware. */
+  CRASH_FLASH_A (rx)  : ORIGIN = 0x08180000, LENGTH = 128K
+  CRASH_FLASH_B (rx)  : ORIGIN = 0x081A0000, LENGTH = 128K
   /* Dedicated bank2 sector6 for minimal boot context persistence */
   BOOT_CTX_FLASH (rx) : ORIGIN = 0x081C0000, LENGTH = 128K
   DTCMRAM (xrw)  : ORIGIN = 0x20000000, LENGTH = 128K
@@ -63,6 +66,8 @@ MEMORY
 /* Exported symbols for boot context backend */
 __boot_context_flash_start__ = ORIGIN(BOOT_CTX_FLASH);
 __boot_context_flash_end__ = ORIGIN(BOOT_CTX_FLASH) + LENGTH(BOOT_CTX_FLASH);
+__crash_library_start__ = ORIGIN(CRASH_FLASH_A);
+__crash_library_end__ = ORIGIN(CRASH_FLASH_B) + LENGTH(CRASH_FLASH_B);
 __sdram_global_start__ = ORIGIN(SDRAM);
 __sdram_global_end__ = ORIGIN(SDRAM_RECORDER) + LENGTH(SDRAM_RECORDER);
 __sdram_cacheable_start__ = ORIGIN(SDRAM);
