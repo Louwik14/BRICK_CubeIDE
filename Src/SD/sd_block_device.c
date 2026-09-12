@@ -38,6 +38,7 @@ static uint8_t g_sd_block_device_async_head;
 static uint8_t g_sd_block_device_async_tail;
 static uint8_t g_sd_block_device_async_count;
 static uint8_t g_sd_block_device_abort_discard;
+static uint8_t g_sd_block_device_fault_latched;
 static volatile sd_block_device_hardware_state_t g_sd_block_device_hw_state;
 static volatile uint8_t g_sd_block_device_async_rx_complete;
 static volatile uint8_t g_sd_block_device_async_tx_complete;
@@ -51,7 +52,8 @@ static void sd_block_device_queue_reset(void)
     g_sd_block_device_async_tail = 0U;
     g_sd_block_device_async_count = 0U;
     g_sd_block_device_abort_discard = 0U;
-    g_sd_block_device_hw_state = SD_BLOCK_DEVICE_HW_IDLE;
+    g_sd_block_device_hw_state = (g_sd_block_device_fault_latched != 0U)
+        ? SD_BLOCK_DEVICE_HW_ERROR_LATCHED : SD_BLOCK_DEVICE_HW_IDLE;
     g_sd_block_device_async_rx_complete = 0U;
     g_sd_block_device_async_tx_complete = 0U;
     g_sd_block_device_async_abort_complete = 0U;
@@ -60,6 +62,7 @@ static void sd_block_device_queue_reset(void)
 
 void sd_block_device_async_init(void)
 {
+    g_sd_block_device_fault_latched = 0U;
     sd_block_device_queue_reset();
 }
 
@@ -68,8 +71,34 @@ static void sd_block_device_complete(sd_block_device_async_entry_t *entry,
 {
     entry->result = result;
     entry->completed = 1U;
-    g_sd_block_device_hw_state = (result == SD_BLOCK_DEVICE_OK)
-        ? SD_BLOCK_DEVICE_HW_IDLE : SD_BLOCK_DEVICE_HW_ERROR_LATCHED;
+    g_sd_block_device_hw_state = (g_sd_block_device_fault_latched != 0U)
+        ? SD_BLOCK_DEVICE_HW_ERROR_LATCHED : SD_BLOCK_DEVICE_HW_IDLE;
+}
+
+static void sd_block_device_force_quiescence(void)
+{
+    HAL_NVIC_DisableIRQ(SDMMC1_IRQn);
+    (void)HAL_SD_DeInit(&hsd1);
+    HAL_NVIC_ClearPendingIRQ(SDMMC1_IRQn);
+    brick_sd_media_fault();
+    g_sd_block_device_async_rx_complete = 0U;
+    g_sd_block_device_async_tx_complete = 0U;
+    g_sd_block_device_async_abort_complete = 0U;
+    g_sd_block_device_async_error = 0U;
+    g_sd_block_device_fault_latched = 1U;
+}
+
+static void sd_block_device_finish_abort(sd_block_device_async_entry_t *entry,
+                                         sd_block_device_result_t result)
+{
+    const uint8_t discard = g_sd_block_device_abort_discard;
+    g_sd_block_device_abort_discard = 0U;
+    g_sd_block_device_async_abort_complete = 0U;
+    sd_block_device_complete(entry, result);
+    if(discard != 0U)
+    {
+        sd_block_device_queue_reset();
+    }
 }
 
 static uint8_t sd_block_device_media_valid(
@@ -100,14 +129,17 @@ static void sd_block_device_request_abort(sd_block_device_async_entry_t *entry,
     entry->abort_result = result;
     g_sd_block_device_abort_discard = discard;
     g_sd_block_device_async_abort_complete = 0U;
-    if(HAL_SD_Abort_IT(&hsd1) == HAL_OK)
+    entry->start_tick = HAL_GetTick();
+    g_sd_block_device_hw_state = SD_BLOCK_DEVICE_HW_ABORTING;
+    if(HAL_SD_Abort_IT(&hsd1) != HAL_OK)
     {
-        g_sd_block_device_hw_state = SD_BLOCK_DEVICE_HW_ABORTING;
-    }
-    else
-    {
-        entry->result = SD_BLOCK_DEVICE_ABORT_FAILED;
-        g_sd_block_device_hw_state = SD_BLOCK_DEVICE_HW_ERROR_LATCHED;
+        if(g_sd_block_device_async_abort_complete != 0U)
+        {
+            sd_block_device_finish_abort(entry, result);
+            return;
+        }
+        sd_block_device_force_quiescence();
+        sd_block_device_finish_abort(entry, SD_BLOCK_DEVICE_ABORT_FAILED);
     }
 }
 
@@ -206,6 +238,10 @@ static sd_block_device_result_t sd_block_device_validate_submit(
     {
         return SD_BLOCK_DEVICE_GATE_NOT_HELD;
     }
+    if(g_sd_block_device_fault_latched != 0U)
+    {
+        return SD_BLOCK_DEVICE_ABORT_FAILED;
+    }
     return SD_BLOCK_DEVICE_OK;
 }
 
@@ -295,19 +331,18 @@ void sd_block_device_async_poll(void)
     {
         if(g_sd_block_device_async_abort_complete != 0U)
         {
-            if(g_sd_block_device_abort_discard != 0U)
-            {
-                sd_block_device_queue_reset();
-            }
-            else
-            {
-                sd_block_device_complete(entry, entry->abort_result);
-            }
+            sd_block_device_finish_abort(entry, entry->abort_result);
+        }
+        else if((HAL_GetTick() - entry->start_tick) >= BRICK6_SD_TIMEOUT_MS)
+        {
+            sd_block_device_force_quiescence();
+            sd_block_device_finish_abort(entry, SD_BLOCK_DEVICE_ABORT_FAILED);
         }
         return;
     }
     if(g_sd_block_device_hw_state == SD_BLOCK_DEVICE_HW_ERROR_LATCHED)
     {
+        sd_block_device_complete(entry, SD_BLOCK_DEVICE_ABORT_FAILED);
         return;
     }
     if(sd_block_device_media_valid(entry, &media_failure) == 0U)
@@ -330,8 +365,7 @@ void sd_block_device_async_poll(void)
         const sd_block_device_result_t failure =
             (entry->operation == SD_BLOCK_DEVICE_OPERATION_WRITE)
                 ? SD_BLOCK_DEVICE_WRITE_FAIL : SD_BLOCK_DEVICE_READ_FAIL;
-        sd_block_device_complete(entry, failure);
-        brick_sd_media_fault();
+        sd_block_device_fail_or_abort(entry, failure);
         return;
     }
     if((HAL_GetTick() - entry->start_tick) >= BRICK6_SD_TIMEOUT_MS)
@@ -396,7 +430,8 @@ uint8_t sd_block_device_async_take_completion(
     g_sd_block_device_async_head = (uint8_t)(
         (g_sd_block_device_async_head + 1U) % SD_BLOCK_DEVICE_ASYNC_FIFO_DEPTH);
     g_sd_block_device_async_count--;
-    g_sd_block_device_hw_state = SD_BLOCK_DEVICE_HW_IDLE;
+    g_sd_block_device_hw_state = (g_sd_block_device_fault_latched != 0U)
+        ? SD_BLOCK_DEVICE_HW_ERROR_LATCHED : SD_BLOCK_DEVICE_HW_IDLE;
     if(g_sd_block_device_async_count != 0U)
     {
         g_sd_block_device_async_fifo[g_sd_block_device_async_head].queued_tick =
@@ -408,8 +443,7 @@ uint8_t sd_block_device_async_take_completion(
 
 uint32_t sd_block_device_async_pending_count(void)
 {
-    if((g_sd_block_device_hw_state == SD_BLOCK_DEVICE_HW_ABORTING)
-            && (g_sd_block_device_async_abort_complete != 0U))
+    if(g_sd_block_device_hw_state == SD_BLOCK_DEVICE_HW_ABORTING)
     {
         sd_block_device_async_poll();
     }
@@ -488,20 +522,35 @@ void sd_block_device_async_cancel(void)
 
 void sd_block_device_async_read_complete_isr(void)
 {
-    g_sd_block_device_async_rx_complete = 1U;
+    if(g_sd_block_device_hw_state == SD_BLOCK_DEVICE_HW_READ_DMA)
+    {
+        g_sd_block_device_async_rx_complete = 1U;
+    }
 }
 
 void sd_block_device_async_write_complete_isr(void)
 {
-    g_sd_block_device_async_tx_complete = 1U;
+    if(g_sd_block_device_hw_state == SD_BLOCK_DEVICE_HW_WRITE_DMA)
+    {
+        g_sd_block_device_async_tx_complete = 1U;
+    }
 }
 
 void sd_block_device_async_abort_complete_isr(void)
 {
-    g_sd_block_device_async_abort_complete = 1U;
+    if(g_sd_block_device_hw_state == SD_BLOCK_DEVICE_HW_ABORTING)
+    {
+        g_sd_block_device_async_abort_complete = 1U;
+    }
 }
 
 void sd_block_device_async_error_isr(void)
 {
-    g_sd_block_device_async_error = 1U;
+    if((g_sd_block_device_hw_state == SD_BLOCK_DEVICE_HW_READ_DMA)
+            || (g_sd_block_device_hw_state == SD_BLOCK_DEVICE_HW_READ_WAIT_CARD_READY)
+            || (g_sd_block_device_hw_state == SD_BLOCK_DEVICE_HW_WRITE_DMA)
+            || (g_sd_block_device_hw_state == SD_BLOCK_DEVICE_HW_WRITE_WAIT_CARD_READY))
+    {
+        g_sd_block_device_async_error = 1U;
+    }
 }
