@@ -24,8 +24,89 @@ static void sample_capture_waveform_cache_service_handle(void)
     g_sample_capture.wave_cache_retry_countdown = 32U;
 }
 
+static void sample_capture_terminal_cleanup_service(void)
+{
+    if ((g_sample_capture.state.arm != SAMPLE_CAPTURE_ARM_OFF)
+            || (g_sample_capture.state.recording != 0U)
+            || (g_sample_capture.state.take_valid != 0U))
+        return;
+
+    audio_recorder_status_t status;
+    if (audio_recorder_get_status_client(AUDIO_RECORDER_CLIENT_AUDIO_REC,
+                                         &status) == 0U)
+        return;
+    if ((status.state != AUDIO_RECORDER_STATE_PREPARED)
+            && (status.state != AUDIO_RECORDER_STATE_TAKE_READY)
+            && (status.state != AUDIO_RECORDER_STATE_FAILED))
+        return;
+
+    const audio_recorder_lifecycle_result_t discarded =
+        audio_recorder_discard_client(AUDIO_RECORDER_CLIENT_AUDIO_REC);
+    if ((discarded == AUDIO_RECORDER_LIFECYCLE_OK)
+            && (g_sample_capture.state.phase == SAMPLE_CAPTURE_PHASE_STOPPING))
+        g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_IDLE;
+}
+
+static uint8_t sample_capture_service_pending_admission(void)
+{
+    if ((g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_OFF)
+            || (g_sample_capture.state.recording != 0U)
+            || (g_sample_capture.state.phase != SAMPLE_CAPTURE_PHASE_IDLE))
+        return 1U;
+
+    audio_recorder_status_t status;
+    if ((audio_recorder_get_status_client(AUDIO_RECORDER_CLIENT_AUDIO_REC,
+                                          &status) != 0U)
+            && (status.state == AUDIO_RECORDER_STATE_PREPARED))
+    {
+        const audio_recorder_lifecycle_result_t discarded =
+            audio_recorder_discard_client(AUDIO_RECORDER_CLIENT_AUDIO_REC);
+        if (discarded == AUDIO_RECORDER_LIFECYCLE_NOT_NOW) return 0U;
+        if (discarded == AUDIO_RECORDER_LIFECYCLE_ERROR)
+        {
+            sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
+            return 0U;
+        }
+    }
+
+    const audio_recorder_lifecycle_result_t prepared =
+        sample_capture_prepare_session();
+    if (prepared == AUDIO_RECORDER_LIFECYCLE_NOT_NOW) return 0U;
+    if (prepared == AUDIO_RECORDER_LIFECYCLE_ERROR)
+    {
+        g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
+        g_sample_capture.state.armed_pending = 0U;
+        g_sample_capture.state.trigger_latched = 0U;
+        sample_capture_publish_trigger_config();
+        sample_capture_publish_rec_bus();
+        if (g_sample_capture.state.error == SAMPLE_CAPTURE_ERROR_NONE)
+            sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
+        return 0U;
+    }
+    g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_ARMED;
+    g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
+    sample_capture_publish_trigger_config();
+    if ((g_sample_capture.state.armed_pending != 0U)
+            && (g_sample_capture.state.quant == SAMPLE_CAPTURE_QUANT_NOW)
+            && (seq_runtime_is_running() != 0U))
+    {
+        uint64_t now_sample = 0U;
+        if (control_rt_now_sample(&now_sample) == 0U)
+        {
+            Error_Handler();
+            return 0U;
+        }
+        (void)sample_capture_start_prepared_at(
+            control_music_output_first_unpublished_sample(now_sample));
+    }
+    return 1U;
+}
+
 void sample_capture_model_service(void)
 {
+    sample_capture_terminal_cleanup_service();
+    if (sample_capture_service_pending_admission() == 0U) return;
+
     audio_recorder_status_t status;
     if(audio_recorder_get_status_client(AUDIO_RECORDER_CLIENT_AUDIO_REC,
                                         &status) == 0U)
@@ -82,6 +163,7 @@ void sample_capture_model_service(void)
         g_sample_capture.state.armed_pending = 0U;
         g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
         g_sample_capture.state.trigger_latched = 0U;
+        sample_capture_reset_take_transients(0U);
         sample_capture_publish_trigger_config();
         sample_capture_publish_rec_bus();
         sample_capture_set_error((status.error == AUDIO_RECORDER_ERROR_RING_OVERFLOW)

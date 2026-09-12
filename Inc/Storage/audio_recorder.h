@@ -36,6 +36,13 @@ typedef struct
     uint32_t frames_committed;
 } audio_recorder_status_t;
 
+typedef enum
+{
+    AUDIO_RECORDER_LIFECYCLE_NOT_NOW = 0,
+    AUDIO_RECORDER_LIFECYCLE_OK,
+    AUDIO_RECORDER_LIFECYCLE_ERROR
+} audio_recorder_lifecycle_result_t;
+
 typedef struct
 {
     uint8_t arm_mode;
@@ -50,9 +57,16 @@ uint8_t audio_recorder_prepare_client(audio_recorder_client_t client,
                                       const char *temporary_rec_path,
                                       const char *final_wav_path,
                                       uint32_t frame_limit);
+audio_recorder_lifecycle_result_t audio_recorder_prepare_client_cooperative(
+    audio_recorder_client_t client,
+    const char *temporary_rec_path,
+    const char *final_wav_path,
+    uint32_t frame_limit);
 uint8_t audio_recorder_start_client_at(audio_recorder_client_t client,
                                        uint64_t sample_time);
 uint8_t audio_recorder_cancel_prepared_client(audio_recorder_client_t client);
+audio_recorder_lifecycle_result_t audio_recorder_discard_client(
+    audio_recorder_client_t client);
 uint8_t audio_recorder_request_stop_client(audio_recorder_client_t client);
 uint8_t audio_recorder_request_stop_client_at(audio_recorder_client_t client,
                                               uint64_t sample_time);

@@ -1,6 +1,7 @@
 static void sample_capture_editor_cache_reset(void);
 static void sample_capture_global_overview_reset(void);
 static void sample_capture_set_capture_enabled(uint8_t enabled);
+static void sample_capture_reset_take_transients(uint8_t preserve_final_path);
 
 static uint32_t sample_capture_threshold_to_peak_abs_pcm24(int8_t threshold_dbfs)
 {
@@ -22,6 +23,8 @@ static void sample_capture_publish_trigger_config(void)
 {
     const uint8_t enabled = (uint8_t)(
         (g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_TRIG)
+        && ((g_sample_capture.state.phase == SAMPLE_CAPTURE_PHASE_ARMED)
+            || (g_sample_capture.state.phase == SAMPLE_CAPTURE_PHASE_WAIT_QUANT))
         && (g_sample_capture.state.recording == 0U)
         && (g_sample_capture.state.trigger_latched == 0U));
     audio_rec_level_control_publish_trigger_config(

@@ -287,12 +287,11 @@ static uint32_t sample_capture_snap_to_zcross(uint32_t current,
     return candidate;
 }
 
-static uint8_t sample_capture_prepare_paths(void)
+static audio_recorder_lifecycle_result_t sample_capture_prepare_paths(void)
 {
     if(sd_access_gate_try_acquire(SD_ACCESS_CLIENT_RECORDER) == 0U)
     {
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_BUSY);
-        return 0U;
+        return AUDIO_RECORDER_LIFECYCLE_NOT_NOW;
     }
 
     uint8_t ok = 0U;
@@ -310,7 +309,8 @@ static uint8_t sample_capture_prepare_paths(void)
     }
 
     sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
-    return ok;
+    return (ok != 0U) ? AUDIO_RECORDER_LIFECYCLE_OK
+                      : AUDIO_RECORDER_LIFECYCLE_ERROR;
 }
 
 static uint8_t sample_capture_make_next_final_path(char *out_path, uint32_t out_len)
@@ -351,7 +351,7 @@ static uint8_t sample_capture_make_next_final_path(char *out_path, uint32_t out_
     return ok;
 }
 
-static uint8_t sample_capture_prepare_session(void)
+static audio_recorder_lifecycle_result_t sample_capture_prepare_session(void)
 {
     if(sd_preview_is_active() != 0U)
     {
@@ -361,35 +361,44 @@ static uint8_t sample_capture_prepare_session(void)
     if(sample_capture_has_route() == 0U)
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_NO_ROUTE);
-        return 0U;
+        return AUDIO_RECORDER_LIFECYCLE_ERROR;
     }
 
     if(sample_capture_looper_record_conflict() != 0U)
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_LOOPER_ACTIVE);
-        return 0U;
+        return AUDIO_RECORDER_LIFECYCLE_ERROR;
     }
 
-    if(sample_capture_prepare_paths() == 0U)
+    const audio_recorder_lifecycle_result_t paths =
+        sample_capture_prepare_paths();
+    if(paths != AUDIO_RECORDER_LIFECYCLE_OK)
     {
-        return 0U;
+        return paths;
     }
 
     const uint32_t frame_limit = sample_capture_len_to_frames(g_sample_capture.state.len_bars);
-    if(audio_recorder_prepare_client(AUDIO_RECORDER_CLIENT_AUDIO_REC,
-                                     g_sample_capture.state.temp_path,
-                                     SAMPLE_CAPTURE_WORKING_WAV_PATH,
-                                     frame_limit) == 0U)
+    const audio_recorder_lifecycle_result_t prepared =
+        audio_recorder_prepare_client_cooperative(
+            AUDIO_RECORDER_CLIENT_AUDIO_REC,
+            g_sample_capture.state.temp_path,
+            SAMPLE_CAPTURE_WORKING_WAV_PATH,
+            frame_limit);
+    if(prepared != AUDIO_RECORDER_LIFECYCLE_OK)
     {
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
-        return 0U;
+        return prepared;
     }
 
     g_sample_capture.state.planned_frames = frame_limit;
-    return 1U;
+    return AUDIO_RECORDER_LIFECYCLE_OK;
 }
 static uint8_t sample_capture_start_prepared_at(uint64_t sample_time)
 {
+    audio_recorder_status_t status;
+    if((audio_recorder_get_status_client(AUDIO_RECORDER_CLIENT_AUDIO_REC,
+                                         &status) == 0U)
+            || (status.state != AUDIO_RECORDER_STATE_PREPARED))
+        return 0U;
     if(sample_capture_publish_rec_bus_at(sample_time) == 0U)
         return 0U;
     if(audio_recorder_start_client_at(AUDIO_RECORDER_CLIENT_AUDIO_REC,

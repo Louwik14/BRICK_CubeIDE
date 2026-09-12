@@ -10,14 +10,23 @@ Le Recorder CONTROL enregistre directement la source page-cache generique a
 l'entree `DRAINING`, depuis le track et la session qu'il possede. Il ne publie
 aucun DTO live et aucun service Looper ne sonde son etat.
 
-ARM prepare integralement la session Recorder avant toute echeance musicale:
-chemins, nettoyage, reservation, writer et configuration AUDIO sont deja en
-etat `PREPARED`. En mode REC, `seq_runtime` reste l'autorite du transport et
+La demande ARM conserve son intention lorsque l'admission Storage repond
+`NOT_NOW`; la superloop reprend la preparation sans boucle d'attente. Aucun
+trigger ni START n'est publie avant que chemins, nettoyage, reservation et
+writer soient integralement en etat `PREPARED`. En mode REC, `seq_runtime`
+reste l'autorite du transport et
 injecte une unique transition datee avant la publication du premier horizon.
 PLAY UI, MIDI START/CONTINUE et le demarrage par note convergent sur cette
 transition; `audio_recorder` effectue alors `PREPARED -> RECORDING` au meme
 sample que l'activation du bus. Aucun acces FatFs/SD, polling UI ou deduction
 depuis le playhead n'appartient au START.
+
+Apres SAVE, les caches waveform derives peuvent continuer en Background, mais
+la session transitoire Recorder est liberee. RETURN/DISCARD annule les travaux
+editor propres a la prise, ferme la reservation, supprime les fichiers de
+travail et converge vers IDLE. ERROR et CANCEL utilisent le meme teardown
+cooperatif; un resultat produit/UI terminal ne conserve aucun handle ni owner
+Storage.
 
 ## Autorites
 

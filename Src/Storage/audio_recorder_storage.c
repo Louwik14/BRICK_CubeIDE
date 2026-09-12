@@ -215,12 +215,15 @@ void audio_recorder_storage_init(void)
         &write_provider, &filesystem_provider);
 }
 
-uint8_t audio_recorder_storage_prepare(const char *temporary_rec_path,
-                                       const char *final_wav_path)
+audio_recorder_lifecycle_result_t audio_recorder_storage_prepare(
+    const char *temporary_rec_path,
+    const char *final_wav_path)
 {
-    if ((temporary_rec_path == 0) || (final_wav_path == 0)) return 0U;
+    if ((temporary_rec_path == 0) || (final_wav_path == 0))
+        return AUDIO_RECORDER_LIFECYCLE_ERROR;
     if ((strlen(temporary_rec_path) >= AUDIO_RECORDER_PATH_MAX)
-            || (strlen(final_wav_path) >= AUDIO_RECORDER_PATH_MAX)) return 0U;
+            || (strlen(final_wav_path) >= AUDIO_RECORDER_PATH_MAX))
+        return AUDIO_RECORDER_LIFECYCLE_ERROR;
     (void)strcpy(g_audio_recorder_storage.temporary_path, temporary_rec_path);
     (void)strcpy(g_audio_recorder_storage.final_path, final_wav_path);
     generic_recorder_init(&g_audio_recorder_storage.recorder);
@@ -231,9 +234,7 @@ uint8_t audio_recorder_storage_prepare(const char *temporary_rec_path,
     if (sd_access_gate_try_acquire(
             SD_ACCESS_CLIENT_SCHEDULED_RECORDER) == 0U)
     {
-        g_audio_recorder_storage.error = AUDIO_RECORDER_ERROR_SD_IO;
-        g_audio_recorder_storage.phase = AUDIO_RECORDER_STORAGE_FAILED;
-        return 0U;
+        return AUDIO_RECORDER_LIFECYCLE_NOT_NOW;
     }
     (void)f_unlink(g_audio_recorder_storage.temporary_path);
     (void)f_unlink(g_audio_recorder_storage.final_path);
@@ -247,11 +248,13 @@ uint8_t audio_recorder_storage_prepare(const char *temporary_rec_path,
     if ((created != RECORDER_FILE_RESERVATION_OK)
             && (created != RECORDER_FILE_RESERVATION_PARTIAL))
     {
+        if (created == RECORDER_FILE_RESERVATION_SD_BUSY)
+            return AUDIO_RECORDER_LIFECYCLE_NOT_NOW;
         g_audio_recorder_storage.error =
             (created == RECORDER_FILE_RESERVATION_NO_SPACE)
                 ? AUDIO_RECORDER_ERROR_NO_SPACE : AUDIO_RECORDER_ERROR_SD_IO;
         g_audio_recorder_storage.phase = AUDIO_RECORDER_STORAGE_FAILED;
-        return 0U;
+        return AUDIO_RECORDER_LIFECYCLE_ERROR;
     }
 
     generic_recorder_config_t config;
@@ -278,27 +281,48 @@ uint8_t audio_recorder_storage_prepare(const char *temporary_rec_path,
     {
         g_audio_recorder_storage.error = AUDIO_RECORDER_ERROR_SD_IO;
         g_audio_recorder_storage.phase = AUDIO_RECORDER_STORAGE_FAILED;
-        return 0U;
+        return AUDIO_RECORDER_LIFECYCLE_ERROR;
     }
     g_audio_recorder_capture.tail_cursor = 0U;
     g_audio_recorder_storage.phase = AUDIO_RECORDER_STORAGE_PREPARED;
     g_audio_recorder_storage.error = AUDIO_RECORDER_ERROR_NONE;
-    return 1U;
+    return AUDIO_RECORDER_LIFECYCLE_OK;
 }
 
-uint8_t audio_recorder_storage_cancel(void)
+audio_recorder_lifecycle_result_t audio_recorder_storage_cancel(void)
 {
-    if (recorder_file_reservation_close(
-            &g_audio_recorder_storage.reservation)
-            != RECORDER_FILE_RESERVATION_OK)
-        return 0U;
+    if (g_audio_recorder_storage.phase == AUDIO_RECORDER_STORAGE_IDLE)
+        return AUDIO_RECORDER_LIFECYCLE_OK;
+
+    generic_recorder_abort(&g_audio_recorder_storage.recorder);
+    if (g_audio_recorder_storage.reservation.open != 0U)
+    {
+        const recorder_file_reservation_result_t closed =
+            recorder_file_reservation_close(
+                &g_audio_recorder_storage.reservation);
+        if (closed == RECORDER_FILE_RESERVATION_SD_BUSY)
+            return AUDIO_RECORDER_LIFECYCLE_NOT_NOW;
+        if (closed != RECORDER_FILE_RESERVATION_OK)
+        {
+            g_audio_recorder_storage.error = AUDIO_RECORDER_ERROR_SD_IO;
+            g_audio_recorder_storage.phase = AUDIO_RECORDER_STORAGE_FAILED;
+            return AUDIO_RECORDER_LIFECYCLE_ERROR;
+        }
+    }
     if (sd_access_gate_try_acquire(
             SD_ACCESS_CLIENT_SCHEDULED_RECORDER) == 0U)
-        return 0U;
-    (void)f_unlink(g_audio_recorder_storage.temporary_path);
+        return AUDIO_RECORDER_LIFECYCLE_NOT_NOW;
+    const FRESULT temporary_result =
+        (g_audio_recorder_storage.temporary_path[0] != '\0')
+            ? f_unlink(g_audio_recorder_storage.temporary_path) : FR_NO_FILE;
+    const FRESULT final_result =
+        (g_audio_recorder_storage.final_path[0] != '\0')
+            ? f_unlink(g_audio_recorder_storage.final_path) : FR_NO_FILE;
     sd_access_gate_release(SD_ACCESS_CLIENT_SCHEDULED_RECORDER);
     audio_recorder_storage_release();
-    return 1U;
+    return (((temporary_result == FR_OK) || (temporary_result == FR_NO_FILE))
+            && ((final_result == FR_OK) || (final_result == FR_NO_FILE)))
+        ? AUDIO_RECORDER_LIFECYCLE_OK : AUDIO_RECORDER_LIFECYCLE_ERROR;
 }
 
 void audio_recorder_storage_release(void)

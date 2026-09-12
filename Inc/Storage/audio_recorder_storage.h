@@ -39,9 +39,10 @@ typedef struct
 } audio_recorder_storage_map_copy_t;
 
 void audio_recorder_storage_init(void);
-uint8_t audio_recorder_storage_prepare(const char *temporary_rec_path,
-                                       const char *final_wav_path);
-uint8_t audio_recorder_storage_cancel(void);
+audio_recorder_lifecycle_result_t audio_recorder_storage_prepare(
+    const char *temporary_rec_path,
+    const char *final_wav_path);
+audio_recorder_lifecycle_result_t audio_recorder_storage_cancel(void);
 void audio_recorder_storage_release(void);
 
 /* Observe the existing capture transport, drain and advance the SD writer. */

@@ -1,3 +1,22 @@
+static void sample_capture_reset_take_transients(uint8_t preserve_final_path)
+{
+    sample_capture_detail_reset();
+    g_sample_capture.state.take_valid = 0U;
+    g_sample_capture.state.recorded_frames = 0U;
+    g_sample_capture.state.edit_start_frame = 0U;
+    g_sample_capture.state.edit_end_frame = 0U;
+    g_sample_capture.state.edit_loop_start_frame = 0U;
+    g_sample_capture.state.edit_loop_end_frame = 0U;
+    g_sample_capture.state.edit_zoom = 0U;
+    g_sample_capture.state.edit_scroll_frame = 0U;
+    g_sample_capture.state.temp_path[0] = '\0';
+    if (preserve_final_path == 0U)
+        g_sample_capture.state.final_path[0] = '\0';
+    g_sample_capture.last_take_notified = 0U;
+    g_sample_capture.rec_edit_enter_deferred_services = 0U;
+    g_sample_capture.rec_edit_first_render_pending = 0U;
+}
+
 uint8_t sample_capture_model_return_to_audio_rec(void)
 {
     if(sd_preview_is_active() != 0U)
@@ -5,13 +24,32 @@ uint8_t sample_capture_model_return_to_audio_rec(void)
         sd_preview_stop();
     }
 
+    if ((g_sample_capture.state.recording != 0U)
+            || (g_sample_capture.state.armed_pending != 0U))
+        return 0U;
+
     g_sample_capture.state.view = SAMPLE_CAPTURE_VIEW_AUDIO_REC;
-    if(g_sample_capture.state.recording == 0U && g_sample_capture.state.armed_pending == 0U)
+    g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
+    g_sample_capture.state.trigger_latched = 0U;
+    sample_capture_set_capture_enabled(0U);
+    sample_capture_reset_take_transients(0U);
+    sample_capture_publish_trigger_config();
+    sample_capture_publish_rec_bus();
+
+    const audio_recorder_lifecycle_result_t discarded =
+        audio_recorder_discard_client(AUDIO_RECORDER_CLIENT_AUDIO_REC);
+    if (discarded == AUDIO_RECORDER_LIFECYCLE_NOT_NOW)
     {
-        g_sample_capture.state.phase = (g_sample_capture.state.take_valid != 0U)
-            ? SAMPLE_CAPTURE_PHASE_REC_EDIT
-            : SAMPLE_CAPTURE_PHASE_IDLE;
+        g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_STOPPING;
+        return 1U;
     }
+    if (discarded == AUDIO_RECORDER_LIFECYCLE_ERROR)
+    {
+        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
+        return 0U;
+    }
+    g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_IDLE;
+    g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
     return 1U;
 }
 
@@ -198,14 +236,14 @@ uint8_t sample_capture_model_save_trimmed(void)
         sd_preview_stop();
     }
 
+    if(g_sample_capture.state.final_path[0] != '\0')
+    {
+        return 1U;
+    }
     if(g_sample_capture.state.take_valid == 0U)
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_NO_TAKE);
         return 0U;
-    }
-    if(g_sample_capture.state.final_path[0] != '\0')
-    {
-        return 1U;
     }
 
     char final_path[SAMPLE_CAPTURE_PATH_MAX];
@@ -222,13 +260,23 @@ uint8_t sample_capture_model_save_trimmed(void)
         return 0U;
     }
 
+    const uint32_t saved_frames = g_sample_capture.state.edit_end_frame
+        - g_sample_capture.state.edit_start_frame;
     sample_capture_copy_path(g_sample_capture.state.final_path, final_path);
+    const audio_recorder_lifecycle_result_t discarded =
+        audio_recorder_discard_client(AUDIO_RECORDER_CLIENT_AUDIO_REC);
+    sample_capture_reset_take_transients(1U);
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_SAVED;
     (void)waveform_cache_request_for_wav_known_duration(
         final_path,
         WAVEFORM_CACHE_REASON_EDITOR_VISIBLE,
-        g_sample_capture.state.edit_end_frame - g_sample_capture.state.edit_start_frame,
+        saved_frames,
         AUDIO_RECORDER_SAMPLE_RATE_HZ);
+    if (discarded == AUDIO_RECORDER_LIFECYCLE_ERROR)
+    {
+        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
+        return 0U;
+    }
     return 1U;
 }
 
