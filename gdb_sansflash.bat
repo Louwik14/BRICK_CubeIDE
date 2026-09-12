@@ -31,6 +31,7 @@ echo Port : %BMP_PORT%
 echo ELF  : %ELF%
 echo.
 echo Le CPU sera attache et HALTE.
+echo TIM5 sera automatiquement gele pendant chaque HALT debug.
 echo.
 echo Commandes utiles :
 echo   c              = reprendre l'execution
@@ -44,10 +45,12 @@ echo.
 "%GDB%" --quiet "%ELF%" ^
     -ex "set confirm off" ^
     -ex "set pagination off" ^
+    -ex "set mem inaccessible-by-default off" ^
     -ex "target extended-remote \\.\%BMP_PORT%" ^
     -ex "monitor frequency %BMP_FREQ%" ^
     -ex "monitor swd_scan" ^
     -ex "attach 1" ^
+    -ex "set {unsigned int}0x5C00103C = (*(unsigned int*)0x5C00103C) | 0x8" ^
     -ex "break HardFault_Handler"
 
 endlocal
