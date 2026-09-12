@@ -483,10 +483,15 @@ static uint8_t ui_page_midi_fx_virtual_slot_text(uint8_t slot,
         (void)snprintf(out_value,out_value_len,"%u %%",(unsigned)(uint8_t)value);
     else if (model_index == NOTE_FX_MODEL_ECHO && slot == 0U)
         (void)snprintf(out_value,out_value_len,"%s",seq_division_arp_label((uint8_t)value));
+    else if (model_index == NOTE_FX_MODEL_ECHO && slot == 1U)
+        (void)snprintf(out_value,out_value_len,"%u",(unsigned)(uint8_t)value);
     else if (model_index == NOTE_FX_MODEL_ECHO && slot == 2U)
         (void)snprintf(out_value,out_value_len,"%u %%",(unsigned)(uint8_t)value);
     else if (model_index == NOTE_FX_MODEL_HARMONIZER && slot == 0U)
     { static const char *const harmony[]={"MAJOR","MINOR","SUS4","SUS2","7TH","MAJ7","DIM7","AUG"};const uint8_t index=((uint8_t)value<8U)?(uint8_t)value:0U;(void)snprintf(out_value,out_value_len,"%s",harmony[index]); }
+    else if ((model_index == NOTE_FX_MODEL_HARMONIZER
+            || model_index == NOTE_FX_MODEL_CHORD) && slot == 1U)
+        (void)snprintf(out_value,out_value_len,"%u",(unsigned)(uint8_t)value);
     else if (model_index == NOTE_FX_MODEL_CHORD && slot == 0U)
         (void)snprintf(out_value,out_value_len,"%+d",(int)(uint8_t)value-7);
     else if (is_euclid != 0U && slot < 2U)

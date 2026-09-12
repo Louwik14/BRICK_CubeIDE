@@ -1,134 +1,125 @@
-# NoteFx capacity and output-lifetime audit
+# NoteFx: transitions, capacities et lifetimes
 
-## Verdict and root causes
+## Ancien modele et cause commune
 
-The pipeline remains appropriate provided that CONTROL is the only musical
-lifetime authority and that its horizon reserve includes both of its independent
-producers.  The implementation had two contract defects.
+L'ancien terminal utilisait directement `occurrence_id` comme `output_id`.
+`control_music_output` simulait correctement chaque steal, mais rangeait ensuite
+les actions dans des buckets STOP, START et RETRIGGER distincts. Une suite
+`START A, STOP A, START B` devenait `STOP A, START A, START B` dans la FIFO. Sur
+une piste mono, Harmony, Euclid, Gate ou un revoice pouvaient donc presenter un
+second START a AUDIO alors que le premier etait encore HELD. Gate LEGATO pouvait
+en outre remplacer l'id uniquement dans le ledger CONTROL. Ces deux divergences
+expliquaient les fatals `AUDIO_PARAMETER_MAPPING_FAILED`.
 
-Bug A was not an invalid Gate parameter and `capacity = 5` was not a five-voice
-limit.  Five was the numeric value of `AUDIO_COMMAND_APPLY_MAPPING`, copied into
-the generic fatal field.  Gate RETRIG marks an ON as a retrigger.  When its
-generated `0xC...` occurrence was not already alive, CONTROL nevertheless
-published RETRIGGER, which expands to OFF then ON.  A synth voice allocator
-rejected that invented OFF because the id had never been mapped.  CONTROL now
-normalizes a first RETRIGGER to START, preserves RETRIGGER only for an existing
-lifetime, and AUDIO treats every unknown STOP as the explicitly idempotent
-operation required by the wire contract.  Mapping fatals now report the actual
-eight-entry physical mapping capacity.
+L'ancienne reservation future additionnait des constantes par modele sans
+definir ce qui arrivait aux projections Gate/Echo supersedees. Le test 9^4
+recalculait ces constantes mais ne simulait ni les lifetimes, ni l'accumulation.
 
-Bug B was a split capacity proof.  The 256-action staging array covered the
-sequencer/source producer only.  `note_fx_engine_process()` is a second producer:
-ARP and EUCLID can autonomously materialize terminal pairs from held state in the
-same horizon.  Static chain admission was compared against 256, but runtime put
-both producer classes into that same 256-entry array.  Thus an admitted horizon
-could fill it exactly and fail on action 257.  The single product bound is now
-256 source-driven actions plus 128 temporal NoteFx actions = 384.  Source fanout
-admission deliberately still compares against its own 256 reserve, so enlarging
-the shared scratch cannot accidentally admit a wider chain.
+## Pipeline courant
 
-## Real pipeline and ownership
+```text
+source semantic event
+-> S1 -> S2 -> S3 -> S4
+-> intent {semantic_event_id, source, generation, note, velocity, date}
+-> control_music_output
+-> transition ordonnee {output_handle, START|STOP|RETRIGGER, date}
+-> FIFO CONTROL->AUDIO
+-> mapping physique AUDIO
+```
 
-`seq_play_scheduler` and live KEY/MIDI ingress allocate source occurrence ids in
-their reserved namespaces.  `note_fx_pipeline` owns persistent source HELD state,
-the four-stage chain, delayed events and chain/source generations.  The engine
-transforms grouped events; Echo and Gate materialize dated future events, while
-ARP/Euclid retain compact held/phase/deadline state and generate only the current
-horizon.  The terminal submits `{entity, occurrence_id, cause, generation}` to
-`control_music_output`.  That CONTROL ledger owns admission, same-pitch/global
-Multi stealing and the active lifetime.  It publishes an ordered STOP/START
-stream through the CONTROL-to-AUDIO FIFO.  AUDIO owns only the eight-entry
-execution mapping, renderer voice binding and physical release tails.
+NoteFx possede les sources HELD, les frontieres HELD de slots, les phases
+ARP/Euclid et la queue future. Il ne cree aucun handle AUDIO.
+`control_music_output` est l'unique owner des sorties actives, du stealing et
+de l'allocation de handle. AUDIO applique les transitions et conserve seulement
+le mapping physique et les tails RELEASE.
 
-An output id denotes one logical sounding lifetime.  Echo and Harmonizer derive
-stable child ids from the parent occurrence and stage/voice/repeat coordinates;
-ARP and Euclid allocate FX-namespace tokens.  A retrigger keeps the id and means
-STOP+START at one sample.  Revoice closes old CONTROL outputs and starts the new
-set.  STOP is idempotent after stealing, panic, type change or stale-future
-cleanup.  START of an already-live id is normalized to retrigger by CONTROL;
-RETRIGGER of a non-live id is normalized to START.
+`semantic_event_id` est une identite musicale. Elle peut etre derivee de la
+causalite d'un FX, mais la recherche CONTROL utilise aussi source et generation.
+`output_handle` est un entier non nul alloue par CONTROL, unique parmi tous les
+handles actifs et independant des hash/counters NoteFx. Seul ce handle traverse
+l'ABI AUDIO. Les observers de mort recoivent l'identite semantique.
 
-## Capacities
+## Ordre et LEGATO
 
-| Storage/limit | Owner | Capacity and unit | Lifetime/full behavior |
-|---|---|---:|---|
-| source HELD | pipeline | 8 notes/track | source ON to matching OFF/reset; admission lowers usable count |
-| slot HELD | engine | 8 notes/slot/track | stage ON to OFF/reset; ARP/Euclid compact state |
-| A/B batch | pipeline | 32 events | one grouped stage pass; chain rejected if composed stage fanout exceeds it |
-| future | pipeline | 512 dated events global | until due, causal purge, type reset or panic; aggregate config reservation must fit |
-| command ring | ingress/pipeline | 31 usable commands | until CONTROL consumption; producer receives rejection when full |
-| live queue | pipeline | 31 events | capture tick to due CONTROL window; stale policy is explicit |
-| source action reserve | CONTROL | 256 actions/horizon | 64 emitting voices x two adjacent generations x transition pair |
-| temporal FX reserve | CONTROL | 128 actions/horizon | 64 admitted terminal outputs x STOP/START pair |
-| internal staging | CONTROL | 384 actions/horizon | exact sum of the two independent producer reserves |
-| external staging | CONTROL | 128 actions/horizon | separate ingress overload domain |
-| logical outputs | CONTROL | 8/entity | product polyphony; deterministic oldest/same-pitch victim selection |
-| physical mapping | AUDIO | 8/entity | mirrors legal CONTROL lifetimes; no AUDIO musical admission |
-| FIFO NOTE burst | IPC | 1024 commands | worst case two commands per 384 internal + 128 external actions |
+Une fenetre contient un bucket par sample. Chaque insertion recoit un numero
+d'ordre commun aux producteurs internes et externes; le merge FIFO conserve ce
+numero. A date egale, la regle est donc l'ordre exact des decisions CONTROL. Un
+steal atomique reste `STOP victime, START entrant`; deux steals successifs
+restent `STOP A, START B, STOP B, START C`.
 
-The future capacity is not a horizon product limit.  It is persistent storage
-whose 512 slots are reserved transactionally across track configurations.  The
-32-entry A/B arrays are scratch, not musical polyphony.  The 384 horizon count is
-a product bound, not a scratch guess; it is derived from the admitted source and
-temporal producers and remains below the existing 4096-command FIFO proof
-(`required = 3548`).
+RETRIGGER publie OFF puis ON adjacents avec le meme handle. LEGATO utilise cette
+meme transition explicite: sa semantique actuelle est une reprise coherente,
+pas un changement de ledger invisible. CONTROL et AUDIO gardent toujours le
+meme handle actif.
 
-## FX audit
+## Futurs et admission
 
-OFF, Probability and Groove have 1x fanout and no persistent future event.
-Chord revoices/deduplicates a group without increasing its count.  Harmonizer
-has up to four immediate voices.  Echo has one original plus at most two repeats
-and reserves both ON and OFF repeats.  Gate passes one ON and owns one delayed
-OFF per admitted source; repeated Gate stages replace, rather than multiply,
-the prior OFF.  ARP retains up to eight held pitches but emits one selected pair
-per deadline.  Euclid emits one pair per held pitch on a pulse.  At the shortest
-division and maximum supported tempo a 64-frame horizon contains at most one
-temporal deadline; downstream admission limits the resulting terminal fanout to
-64 outputs globally.  More than one Echo, more than one Harmonizer, composed
-fanout above four, a 32-event intermediate overflow, and GROUP-child fanout are
-rejected before activation.
+La queue globale conserve 512 evenements. Gate et Echo marquent explicitement
+leurs projections temporelles. Pour une meme cle
+`{track,slot,destination,note,kind,repeat}`, la projection la plus recente
+supersede l'ancienne: le terminal ne peut de toute facon posseder qu'un lifetime
+vivant pour ce pitch. Le debit ROLL augmente donc le nombre de remplacements,
+pas le nombre de slots persistants.
 
-Parameter tweaks preserve chain generation.  Chord/Harmonizer revoice closes
-causal outputs and replays HELD at the cutover sample.  ARP/Euclid keep phase and
-deadline for non-type parameter changes.  Type changes close affected outputs,
-purge obsolete futures, reset downstream state, increment chain generation and
-replay from HELD.  Echo events already materialized survive ordinary tweaks.
-Transport recovery drops expired delayed ONs; OFFs remain idempotent.  Panic and
-track reset clear commands, futures, HELD state and generations after closing
-CONTROL ownership.
+La reservation est derivee de cette representation runtime unique:
 
-## Verified failure-family paths and invariants
+- Gate: un STOP futur par pitch a la frontiere;
+- Echo: `pitches x 2 kinds x REPEATS`;
+- ARP/Euclid: un OFF courant par pitch temporel;
+- fanout amont: applique au nombre de pitches de la frontiere;
+- scratch: produit instantane/temporel maximal inferieur ou egal a 32;
+- terminal: fanout compose inferieur ou egal a quatre;
+- global: somme des reservations de toutes les pistes inferieure ou egale a
+  512, avec 256 actions source et 128 actions temporelles par horizon.
 
-The audit covered pipeline rejection, window preflight/commit, FIFO horizon
-commit, scheduler apply, future/held/live/command saturation and AUDIO NOTE
-mapping.  The corrected invariants are:
+Il n'existe plus de `max_future_pending` ou `max_delay_divisions` arbitraire par
+modele. Admission, remplacement runtime et regression host emploient le meme
+nombre de cles temporelles.
 
-- no admitted chain exceeds 32 intermediate events, fanout four or its reserved
-  share of 512 futures;
-- source and temporal work have separate bounds and one summed staging bound;
-- the CONTROL ledger has at most eight unique active ids per entity and selects
-  every musical victim once;
-- first retrigger is START, live retrigger is OFF then ON with the same id;
-- unknown/duplicate STOP is idempotent at both CONTROL and AUDIO;
-- AUDIO does not steal or perform musical admission;
-- STOP buckets precede START, which precedes RETRIGGER, at the same sample;
-- stale generations cannot release a newer lifetime and expired delayed ONs are
-  not replayed after an xrun;
-- future and staging overflow remain invariant failures, but their deterministic
-  product cases are rejected at configuration or covered by the common proof.
+## Groove, ordre et revoice
 
-The host regression enumerates all 9^4 model chains, checks admitted fanout,
-batch and future bounds, covers Gate/Echo, Arp/Gate, Euclid/Gate and Chord/Echo,
-checks the explicit preflight rejection of Harmonizer/Echo and other
-multiplicative Echo/Harmonizer chains, and pins the
-first-retrigger/unknown-STOP semantics and shared capacity constants.  Hardware
-validation should still repeat rapid retrigger, type/revoice changes, panic,
-transport/xrun recovery and near-full future/FIFO scenarios because renderer and
-dual-core timing cannot be simulated by the host contract test.
+Groove derive sa phase de la grille musicale absolue au sixieme de step, grille
+commune aux divisions binaires et ternaires. Aucun hash d'identite n'intervient.
+`ARP -> Groove` varie donc timing et accent de pulse en pulse. `Groove -> ARP`
+ne groove que l'ancre/velocity entree dans l'ARP; cette asymetrie est la
+semantique normale de la chaine S1 -> S4.
 
-If NoteFx were rebuilt today, this architecture would be kept but simplified in
-exactly this way: compact temporal state, one persistent future queue, one
-CONTROL lifetime ledger, one derived capacity contract, and no AUDIO admission.
-The fanout/future/staging/lifetime family is architecturally closed for the
-declared product bounds; remaining risk is hardware timing validation rather
-than an unowned capacity or identity decision.
+Un futur produit par le slot N reprend a N+1. Un TYPE change collecte la matiere
+HELD a la premiere frontiere modifiee, ferme les sorties, purge les futurs de la
+generation, reset cette frontiere et son downstream, puis rejoue la matiere.
+Un tweak CHORD/HARMONIZER collecte ses sources, ferme les sorties causales,
+purge seulement leurs futurs downstream, reset le slot de revoice et ses
+dependances, puis rejoue. Les slots amont et leurs phases independantes
+survivent.
+
+L'etat UI/persistence est installe seulement apres reservation et enqueue de la
+configuration complete. Si la command ring refuse, reservations et etat
+canonique restent anciens.
+
+## Capacites et validation
+
+| Ressource | Borne |
+|---|---:|
+| source HELD | 8/piste |
+| slot HELD | 8/slot/piste |
+| buffers A/B | 32 evenements |
+| future | 512 global |
+| command/live queue | 31 chacune |
+| outputs logiques / mapping AUDIO | 8/entite |
+| staging interne | 384 actions/horizon |
+| staging externe | 128 actions/horizon |
+
+La regression host enumere les 6561 chaines et simule des ledgers CONTROL/AUDIO
+pour Harmony quatre voix sur mono, Euclid polyphonique, Gate RETRIG et LEGATO.
+Elle exerce aussi 1000 occurrences ROLL sur huit pistes avec Gate et Echo,
+verifie la compaction future, la phase Groove temporelle, le reset/purge revoice
+et la transaction state/enqueue. Les builds M7 et firmware complet restent les
+preuves compilees; les tests hardware demeurent requis pour la sonorite LEGATO,
+les cutovers en charge et les xruns.
+
+## Verdict
+
+Avec les besoins produit actuels: **OUI MAIS PLUS SIMPLE**. Les quatre slots,
+les buffers bornes et les etats compacts restent utiles. Les kind-buckets, les
+handles derives des FX, le remap LEGATO invisible, les constantes futures
+historiques et le chemin `state puis enqueue` ont ete supprimes.

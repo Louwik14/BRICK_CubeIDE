@@ -1087,7 +1087,6 @@ static uint8_t ui_track_clipboard_restore_payload(
     }
     if ((mixer_control_state_restore(target, &payload->mixer) == 0U)
             || (note_fx_state_restore_track(target, &payload->note_fx) == 0U)
-            || (note_fx_pipeline_configure_track(target) == 0U)
             || (ui_track_clipboard_restore_modulation(source, target, payload) == 0U)
             || (ui_track_clipboard_restore_sequence(target, &payload->sequence) == 0U))
         return 0U;
@@ -1185,7 +1184,6 @@ static uint8_t ui_track_clipboard_clear_active_entity(uint8_t track)
             || (polyphony_control_reset(track) == 0U)
             || (mixer_control_state_reset(track) == 0U)
             || (note_fx_state_restore_track(track, &note_fx) == 0U)
-            || (note_fx_pipeline_configure_track(track) == 0U)
             || (ui_track_clipboard_clear_sequence(track) == 0U))
         return 0U;
     if (owns_modulation != 0U)

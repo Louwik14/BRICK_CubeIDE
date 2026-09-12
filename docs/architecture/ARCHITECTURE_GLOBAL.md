@@ -7,7 +7,7 @@ Le code courant est l'autorite finale. Ce document est l'unique porte d'entree d
 - Seize identites logiques stables existent: huit entites top-level `0..7` et huit children GROUP `8..15`, actives uniquement lorsque l'entite 7 est GROUP master.
 - `entity_topology` derive activite, role, parent et capacites. `track_state` possede la configuration CONTROL; `track_runtime` la projette vers les moteurs, ressources et voies physiques.
 - Looper est un type de Sampler assignable. External est un moteur dont l'entree physique est arbitree par `track_input_ownership`. Ressource physique, voie mixer et quota ne sont jamais des identites logiques.
-- CONTROL possede UI, MIDI, sequence, ROLL, Note FX, p-locks, outputs logiques, deadlines, stealing musical et catalogue Sample. STORAGE possede le Stream, son I/O et son page-cache. AUDIO possede IRQ, mapping d'execution `{output_id,note,velocity,gate} -> slot DSP`, RELEASE physique, lecteurs, positions, moteurs et mixer. PROGRAM peut remplacer un renderer compatible sans tuer l'output logique ni emettre NOTE OFF/ON.
+- CONTROL possede UI, MIDI, sequence, ROLL, Note FX, p-locks, outputs logiques, allocation des `output_handle`, deadlines, stealing musical et catalogue Sample. STORAGE possede le Stream, son I/O et son page-cache. AUDIO possede IRQ, mapping d'execution `{output_handle,note,velocity,gate} -> slot DSP`, RELEASE physique, lecteurs, positions, moteurs et mixer. PROGRAM peut remplacer un renderer compatible sans tuer l'output logique ni emettre NOTE OFF/ON.
 - Les objets nommes utilisent le contrat canonique partage: 32 caracteres visibles maximum, buffer de 33 octets, alphabet espace/ASCII alphanumerique/`_`/`-`, validation finale avec trim des espaces externes, sans allocation ni remplacement silencieux.
 - L'ordre fonctionnel CONTROL vers AUDIO traverse exclusivement la FIFO SPSC
   unique PROGRAM/PARAM/NOTE/TRANSPORT/RECORD/PANIC. Les gros data planes et
@@ -18,7 +18,7 @@ Le code courant est l'autorite finale. Ce document est l'unique porte d'entree d
 - Un restore Pattern/Project publie une projection AUDIO fraiche des autorites
   CONTROL finales. Project libere puis reconstruit toutes les installations;
   Pattern ne remplace que les PROGRAM modifies et conserve les outputs vivants.
-- `STOP(output_id)` rend l'output musicalement mort dans CONTROL. AUDIO peut conserver une tail RELEASE et libere ou reutilise physiquement le slot sans ACK musical.
+- `STOP(output_handle)` rend l'output musicalement mort dans CONTROL. L'identite semantique NoteFx/SEQ ne traverse pas l'ABI AUDIO. AUDIO peut conserver une tail RELEASE et libere ou reutilise physiquement le slot sans ACK musical.
 - Pattern, Project et Patch utilisent exclusivement le codec CONTROL explicite version 4.
 
 ## Flux principaux
@@ -26,7 +26,7 @@ Le code courant est l'autorite finale. Ce document est l'unique porte d'entree d
 ```text
 configuration CONTROL -> decision produit canonique -> contrat IPC structurel
 -> FIFO mecanique -> validation physique et application AUDIO
-SEQ/live -> resolution CONTROL -> START/STOP/RETRIGGER dates -> AUDIO
+SEQ/live -> identite semantique -> allocation handle et transitions CONTROL ordonnees -> AUDIO
 capture TIM5 -> conversion audio -> file datee -> segmentation -> rendu
 credit de fenetre stream AUDIO -> I/O Storage tokenisee -> page AUDIO
 Save/Load -> decode safety -> safe quiesce -> progressive install -> publication
@@ -71,6 +71,7 @@ implementation dans `Src`. Aucun domaine generique `Core` ne subsiste.
 - [z2_track_runtime_authority.md](z2_track_runtime_authority.md): identites, topologie, programmes, Looper et External.
 - [z3_param_modulation_control.md](z3_param_modulation_control.md): parametres, valeur canonique, p-locks, modulation et commandes AUDIO datees.
 - [z4_seq_clock_scheduler.md](z4_seq_clock_scheduler.md): sequence, Note FX, horodatage live, files et Undo/Redo.
+- [note_fx_capacity_lifetime_audit.md](note_fx_capacity_lifetime_audit.md): transitions NoteFx, identites, handles, admission et revoice.
 - [z5_ui_navigation_interaction.md](z5_ui_navigation_interaction.md): navigation, modes, selection, Master et ordre des handlers.
 - [ui_render_cooperative.md](ui_render_cooperative.md): rendu OLED fractionne, annulation, coalescence et atomicite de frame.
 - [z6_state_persistence_patterns_projects.md](z6_state_persistence_patterns_projects.md): modele, codec, cles, Pattern, Patch, Project et transactions Storage.

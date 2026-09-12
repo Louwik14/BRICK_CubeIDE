@@ -48,7 +48,8 @@ uint8_t note_fx_pipeline_reserve_state(
     uint8_t track, const note_fx_track_state_t *state);
 uint8_t note_fx_pipeline_prepare_external_window(uint64_t block_start,
                                                  uint16_t frames);
-uint8_t note_fx_pipeline_configure_track(uint8_t track);
+uint8_t note_fx_pipeline_commit_state(uint8_t track,
+                                      const note_fx_track_state_t *state);
 uint8_t note_fx_pipeline_apply_control_override(uint8_t track, uint8_t slot,
                                                 uint8_t param, uint8_t value);
 uint8_t note_fx_pipeline_release_control_override(uint8_t track, uint8_t slot,

@@ -226,9 +226,7 @@ uint8_t note_fx_state_set_param(uint8_t track, param_id_t id, float value)
         next.value[slot][param] = raw;
     }
     (void)note_fx_state_normalize_track(&next);
-    if (note_fx_pipeline_reserve_state(track, &next) == 0U) return 0U;
-    g_note_fx_state[track] = next;
-    return 1U;
+    return note_fx_pipeline_commit_state(track, &next);
 }
 
 uint8_t note_fx_state_capture_track(uint8_t track, note_fx_track_state_t *out_state)
@@ -249,17 +247,13 @@ uint8_t note_fx_state_restore_track(uint8_t track, const note_fx_track_state_t *
     }
     note_fx_track_state_t normalized = *state;
     (void)note_fx_state_normalize_track(&normalized);
-    if (note_fx_pipeline_reserve_state(track, &normalized) == 0U) return 0U;
-
-    g_note_fx_state[track] = normalized;
-    return 1U;
+    return note_fx_pipeline_commit_state(track, &normalized);
 }
 
 uint8_t note_fx_state_install_prepared_track(uint8_t track,
                                              const note_fx_track_state_t *state)
 {
     if ((track >= NOTE_FX_TRACK_COUNT) || (state == NULL)) return 0U;
-    if (note_fx_pipeline_reserve_state(track, state) == 0U) return 0U;
     g_note_fx_state[track] = *state;
     return 1U;
 }

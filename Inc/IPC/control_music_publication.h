@@ -18,11 +18,13 @@ _Static_assert(CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST
 
 uint16_t control_music_publication_free(void);
 uint8_t control_music_publication_publish_merged_window(
-    const control_music_action_t *internal_actions,
+    const control_music_transition_t *internal_actions,
     const uint16_t *internal_next, const uint16_t *internal_heads,
+    const uint32_t *internal_order,
     uint16_t internal_count,
-    const control_music_action_t *external_actions,
+    const control_music_transition_t *external_actions,
     const uint16_t *external_next, const uint16_t *external_heads,
+    const uint32_t *external_order,
     uint16_t external_count, uint16_t bucket_count);
 
 #endif

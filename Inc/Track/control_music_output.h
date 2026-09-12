@@ -23,32 +23,60 @@ typedef enum
 typedef struct
 {
     uint64_t due_sample;
-    uint32_t output_id;
+    uint32_t output_handle;
     brick_entity_id_t entity_id;
     uint8_t kind;
     uint8_t note;
     uint8_t velocity;
-} control_music_action_t;
+} control_music_transition_t;
 
-_Static_assert(sizeof(control_music_action_t) == 16U,
+_Static_assert(sizeof(control_music_transition_t) == 16U,
                "CONTROL note staging action must remain compact");
 
+/* NoteFx and the sequencer identify a musical lifetime.  Only this module
+ * turns that semantic identity into the handle carried by the AUDIO ABI. */
+typedef struct
+{
+    uint64_t due_sample;
+    uint32_t semantic_event_id;
+    brick_entity_id_t entity_id;
+    uint8_t kind;
+    uint8_t note;
+    uint8_t velocity;
+} control_music_intent_t;
+
+_Static_assert(sizeof(control_music_intent_t) == 16U,
+               "CONTROL musical intent must remain compact");
+
 static inline uint8_t control_music_action_kind(
-    const control_music_action_t *action)
+    const control_music_transition_t *action)
 {
     return action->kind & CONTROL_MUSIC_ACTION_KIND_MASK;
 }
 
 static inline uint8_t control_music_action_is_external(
-    const control_music_action_t *action)
+    const control_music_transition_t *action)
 {
     return (action->kind & CONTROL_MUSIC_ACTION_EXTERNAL_FLAG) != 0U;
 }
 
 static inline uint8_t control_music_action_channel(
-    const control_music_action_t *action)
+    const control_music_transition_t *action)
 {
     return (uint8_t)((action->kind & CONTROL_MUSIC_ACTION_CHANNEL_MASK)
+        >> CONTROL_MUSIC_ACTION_CHANNEL_SHIFT);
+}
+
+static inline uint8_t control_music_intent_kind(
+    const control_music_intent_t *intent)
+{
+    return intent->kind & CONTROL_MUSIC_ACTION_KIND_MASK;
+}
+
+static inline uint8_t control_music_intent_channel(
+    const control_music_intent_t *intent)
+{
+    return (uint8_t)((intent->kind & CONTROL_MUSIC_ACTION_CHANNEL_MASK)
         >> CONTROL_MUSIC_ACTION_CHANNEL_SHIFT);
 }
 
@@ -56,7 +84,7 @@ static inline uint8_t control_music_action_channel(
 #define CONTROL_MUSIC_OUTPUT_DEATH_OBSERVER_CAPACITY 2U
 
 typedef void (*control_music_output_death_observer_t)(
-    brick_entity_id_t entity_id, uint32_t output_id);
+    brick_entity_id_t entity_id, uint32_t semantic_event_id);
 
 void control_music_output_init(void);
 uint8_t control_music_output_register_death_observer(
@@ -77,10 +105,10 @@ uint64_t control_music_output_first_unpublished_sample(uint64_t audio_sample);
  * logical victim (including the global Multi pool victim). Calls made between
  * windows are staged and committed through the same dated buckets. AUDIO only
  * receives final, dated actions. */
-uint8_t control_music_output_submit(const control_music_action_t *action,
+uint8_t control_music_output_submit(const control_music_intent_t *intent,
                                     uint32_t causal_source_id,
                                     uint32_t generation);
-uint8_t control_music_output_legato(const control_music_action_t *action,
+uint8_t control_music_output_legato(const control_music_intent_t *intent,
                                     uint32_t causal_source_id,
                                     uint32_t generation);
 uint8_t control_music_output_trim_to_limit(brick_entity_id_t entity_id,

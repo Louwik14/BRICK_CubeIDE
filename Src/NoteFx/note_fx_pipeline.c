@@ -326,9 +326,9 @@ static note_event_result_t note_fx_pipeline_terminal(const note_event_t *event, 
             & (uint32_t)~NOTE_EVENT_OCCURRENCE_COUNTER_MASK)
             == NOTE_EVENT_OCCURRENCE_NAMESPACE_MIDI))
         ? CONTROL_MUSIC_ACTION_EXTERNAL_FLAG : 0U);
-    const control_music_action_t audio_event = {
+    const control_music_intent_t audio_event = {
         .due_sample = terminal.sample_abs,
-        .output_id = terminal.occurrence_id,
+        .semantic_event_id = terminal.occurrence_id,
         .kind = (uint8_t)(((terminal.kind == NOTE_EVENT_KIND_ON)
             ? (((terminal.flags & NOTE_EVENT_FLAG_RETRIGGER) != 0U)
                 ? CONTROL_MUSIC_ACTION_RETRIGGER : CONTROL_MUSIC_ACTION_START)
@@ -457,6 +457,32 @@ static uint8_t note_fx_future_precedes(const note_fx_future_t *left,
 static note_event_result_t note_fx_pipeline_schedule_future(
     const note_event_t *event)
 {
+    const uint8_t temporal_kind = (uint8_t)(
+        ((event->flags & NOTE_EVENT_FLAG_GATE) != 0U)
+            ? NOTE_EVENT_FLAG_GATE
+            : (event->flags & NOTE_EVENT_FLAG_ECHO));
+    if (temporal_kind != 0U)
+    {
+        uint16_t write = 0U;
+        for (uint16_t read = 0U; read < g_note_fx_future_count; ++read)
+        {
+            const note_fx_future_t old = g_note_fx_future[read];
+            const uint8_t old_kind = (uint8_t)(
+                ((old.event.flags & NOTE_EVENT_FLAG_GATE) != 0U)
+                    ? NOTE_EVENT_FLAG_GATE
+                    : (old.event.flags & NOTE_EVENT_FLAG_ECHO));
+            const uint8_t superseded = (uint8_t)(
+                (old.event.track == event->track)
+                && (old.resume_slot == event->stage)
+                && (old.event.destination_id == event->destination_id)
+                && (old.event.note == event->note)
+                && (old.event.kind == event->kind)
+                && (old.event.temporal_index == event->temporal_index)
+                && (old_kind == temporal_kind));
+            if (superseded == 0U) g_note_fx_future[write++] = old;
+        }
+        g_note_fx_future_count = write;
+    }
     if (g_note_fx_future_count >= NOTE_FX_FUTURE_CAPACITY)
         return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
     note_fx_future_t item = { .event = *event,
@@ -492,6 +518,23 @@ static void note_fx_pipeline_purge_future_track(uint8_t track)
     for (uint16_t read = 0U; read < g_note_fx_future_count; ++read)
         if (g_note_fx_future[read].event.track != track)
             g_note_fx_future[write++] = g_note_fx_future[read];
+    g_note_fx_future_count = write;
+}
+
+static void note_fx_pipeline_purge_future_sources(
+    uint8_t track, const uint32_t *source_ids, uint16_t source_count,
+    uint8_t first_resume_slot)
+{
+    uint16_t write = 0U;
+    for (uint16_t read = 0U; read < g_note_fx_future_count; ++read)
+    {
+        const note_fx_future_t item = g_note_fx_future[read];
+        const uint8_t obsolete = (uint8_t)((item.event.track == track)
+            && (item.resume_slot >= first_resume_slot)
+            && (note_fx_pipeline_source_id_selected(item.event.source_token,
+                source_ids, source_count) != 0U));
+        if (obsolete == 0U) g_note_fx_future[write++] = item;
+    }
     g_note_fx_future_count = write;
 }
 
@@ -554,15 +597,12 @@ static uint8_t note_fx_pipeline_admit_effective(
     const uint8_t effective[NOTE_FX_SLOT_COUNT][NOTE_FX_PARAM_COUNT],
     note_fx_admission_t *out)
 {
-    uint8_t echo_count = 0U;
-    uint8_t harmonizer_count = 0U;
     uint8_t instant_fanout = 1U;
     uint8_t temporal_fanout = 1U;
     uint8_t stage_fanout = 1U;
     uint8_t maximum_stage_fanout = 1U;
     uint8_t group_source_limit = NOTE_FX_HELD_PITCH_CAPACITY;
     uint16_t future_per_track = 0U;
-    uint8_t has_euclid = 0U;
     if ((track >= NOTE_FX_TRACK_COUNT) || (effective == NULL) || (out == NULL))
         return 0U;
     for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
@@ -570,9 +610,6 @@ static uint8_t note_fx_pipeline_admit_effective(
         note_fx_capacity_desc_t capacity;
         const uint8_t model = effective[slot][NOTE_FX_PARAM_COUNT - 1U];
         if (note_fx_engine_capacity(model, &capacity) == 0U) return 0U;
-        if (model == NOTE_FX_MODEL_ECHO) ++echo_count;
-        if (model == NOTE_FX_MODEL_HARMONIZER) ++harmonizer_count;
-        if (model == NOTE_FX_MODEL_EUCLID) has_euclid = 1U;
         const uint8_t model_temporal = (model == NOTE_FX_MODEL_ECHO)
             ? (uint8_t)(effective[slot][1] + 1U)
             : capacity.temporal_fanout;
@@ -592,14 +629,20 @@ static uint8_t note_fx_pipeline_admit_effective(
             capacity.max_notes_per_group / stage_fanout);
         if (group_source_limit > model_group_limit)
             group_source_limit = model_group_limit;
-        future_per_track = (uint16_t)(future_per_track
-            + ((uint16_t)capacity.max_future_pending
-                * (stage_fanout / model_temporal)));
+        const uint16_t pitches_at_stage = (uint16_t)(
+            NOTE_FX_HELD_PITCH_CAPACITY
+            * (stage_fanout / model_temporal));
+        if (model == NOTE_FX_MODEL_GATE)
+            future_per_track = (uint16_t)(future_per_track
+                + pitches_at_stage);
+        else if (model == NOTE_FX_MODEL_ECHO)
+            future_per_track = (uint16_t)(future_per_track
+                + (pitches_at_stage * 2U * effective[slot][1]));
+        else if ((model == NOTE_FX_MODEL_ARP)
+                || (model == NOTE_FX_MODEL_EUCLID))
+            future_per_track = (uint16_t)(future_per_track
+                + pitches_at_stage);
     }
-    if ((echo_count > 1U) || (harmonizer_count > 1U)) return 0U;
-    if ((echo_count != 0U) && (has_euclid != 0U)
-            && (future_per_track < 256U))
-        future_per_track = 256U;
     if (future_per_track > NOTE_FX_FUTURE_CAPACITY) return 0U;
     const uint16_t composed_fanout = (uint16_t)instant_fanout
         * temporal_fanout;
@@ -806,6 +849,12 @@ static uint8_t note_fx_pipeline_configure_track_owner(
         if ((source_count != 0U)
                 && (control_music_output_close_causal_sources(
                     source_ids, source_count, sample) == 0U))
+            return 0U;
+        if (source_count != 0U)
+            note_fx_pipeline_purge_future_sources(track, source_ids,
+                source_count, (uint8_t)(revoice_slot + 1U));
+        if (note_fx_engine_reset_from_slot(track, revoice_slot)
+                != NOTE_EVENT_RESULT_ACCEPTED)
             return 0U;
         if (note_fx_pipeline_replay_grouped(
                 held, held_count, revoice_slot, sample,
@@ -1299,21 +1348,30 @@ void note_fx_pipeline_panic(void)
         (void)note_fx_engine_cleanup(track);
 }
 
-uint8_t note_fx_pipeline_configure_track(uint8_t track)
+uint8_t note_fx_pipeline_commit_state(uint8_t track,
+                                      const note_fx_track_state_t *state)
 {
-    if (track >= NOTE_FX_TRACK_COUNT)
+    if ((track >= NOTE_FX_TRACK_COUNT) || (state == NULL)) return 0U;
+    note_fx_track_state_t normalized = *state;
+    if (note_fx_state_normalize_track(&normalized) == 0U) return 0U;
+    const uint16_t old_future = g_note_fx_admitted_future[track];
+    const uint8_t old_limit = g_note_fx_source_note_limit[track];
+    const uint8_t old_fanout = g_note_fx_admitted_fanout[track];
+    if (note_fx_pipeline_reserve_state(track, &normalized) == 0U) return 0U;
+    const note_fx_command_t command = {
+        .kind = NOTE_FX_COMMAND_CONFIGURE_TRACK,
+        .track = track,
+        .track_state_valid = 1U,
+        .track_state = normalized
+    };
+    if (note_fx_pipeline_enqueue(&command) == 0U)
     {
+        g_note_fx_admitted_future[track] = old_future;
+        g_note_fx_source_note_limit[track] = old_limit;
+        g_note_fx_admitted_fanout[track] = old_fanout;
         return 0U;
     }
-    note_fx_command_t command = {
-        .kind = NOTE_FX_COMMAND_CONFIGURE_TRACK,
-        .track = track
-    };
-    command.track_state_valid = note_fx_state_capture_track(
-        track, &command.track_state);
-    if (command.track_state_valid == 0U)
-        return 0U;
-    return note_fx_pipeline_enqueue(&command);
+    return note_fx_state_install_prepared_track(track, &normalized);
 }
 
 uint8_t note_fx_pipeline_process(uint64_t block_start, uint16_t frames,

@@ -39,11 +39,13 @@ typedef enum
 #define NOTE_EVENT_OCCURRENCE_NAMESPACE_MIDI 0x80000000U
 #define NOTE_EVENT_OCCURRENCE_NAMESPACE_FX   0xC0000000U
 #define NOTE_EVENT_FLAG_GENERATED 0x01U
+#define NOTE_EVENT_FLAG_ECHO      0x02U
 #define NOTE_EVENT_FLAG_TERMINAL  0x04U
 #define NOTE_EVENT_FLAG_STALE     0x08U
 #define NOTE_EVENT_FLAG_LEGATO    0x10U
 #define NOTE_EVENT_FLAG_RETRIGGER 0x20U
 #define NOTE_EVENT_FLAG_FUTURE    0x40U
+#define NOTE_EVENT_FLAG_GATE      0x80U
 #define NOTE_EVENT_DURATION_OPEN UINT32_MAX
 
 typedef struct
@@ -63,6 +65,8 @@ typedef struct
     uint8_t provenance;
     uint8_t stage;
     uint8_t flags;
+    uint8_t temporal_index;
+    uint8_t reserved;
 } note_event_t;
 
 _Static_assert(sizeof(note_event_t) == 40U, "note_event_t layout must remain fixed");

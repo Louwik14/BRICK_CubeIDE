@@ -14,16 +14,16 @@ _Static_assert((2U * (CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST
                    == CONTROL_AUDIO_FIFO_MAX_NOTE_BURST,
                "NOTE admission no longer matches the functional FIFO proof");
 
-static uint16_t control_music_convert(const control_music_action_t *action,
+static uint16_t control_music_convert(const control_music_transition_t *action,
                                       control_audio_command_t *out)
 {
     if ((action == NULL) || (out == NULL)
             || (action->entity_id >= BRICK_ENTITY_CAPACITY)
             || (control_music_action_kind(action) > CONTROL_MUSIC_ACTION_RETRIGGER)
-            || (action->output_id == 0U)) return 0U;
+            || (action->output_handle == 0U)) return 0U;
     const control_audio_command_t base = {
         .effective_sample_time = action->due_sample,
-        .value = action->output_id,
+        .value = action->output_handle,
         .id = (uint16_t)action->note | ((uint16_t)action->velocity << 8),
         .entity = action->entity_id
     };
@@ -44,38 +44,51 @@ uint16_t control_music_publication_free(void)
 }
 
 uint8_t control_music_publication_publish_merged_window(
-    const control_music_action_t *internal_actions,
+    const control_music_transition_t *internal_actions,
     const uint16_t *internal_next, const uint16_t *internal_heads,
+    const uint32_t *internal_order,
     uint16_t internal_count,
-    const control_music_action_t *external_actions,
+    const control_music_transition_t *external_actions,
     const uint16_t *external_next, const uint16_t *external_heads,
+    const uint32_t *external_order,
     uint16_t external_count, uint16_t bucket_count)
 {
     if ((internal_actions == NULL) || (internal_next == NULL)
-            || (internal_heads == NULL) || (external_actions == NULL)
-            || (external_next == NULL) || (external_heads == NULL)) return 0U;
+            || (internal_heads == NULL) || (internal_order == NULL)
+            || (external_actions == NULL) || (external_next == NULL)
+            || (external_heads == NULL) || (external_order == NULL)) return 0U;
     uint16_t emitted = 0U;
     uint16_t internal_visited = 0U;
     uint16_t external_visited = 0U;
     for (uint16_t bucket = 0U; bucket < bucket_count; ++bucket)
     {
-        for (uint8_t source = 0U; source < 2U; ++source)
+        uint16_t internal_index = internal_heads[bucket];
+        uint16_t external_index = external_heads[bucket];
+        while ((internal_index != UINT16_MAX)
+                || (external_index != UINT16_MAX))
         {
-            const control_music_action_t *const actions = source
+            if (((internal_index != UINT16_MAX)
+                    && (internal_index >= internal_count))
+                    || ((external_index != UINT16_MAX)
+                        && (external_index >= external_count))) return 0U;
+            const uint8_t external = (uint8_t)(
+                (internal_index == UINT16_MAX)
+                || ((external_index != UINT16_MAX)
+                    && (external_order[external_index]
+                        < internal_order[internal_index])));
+            const control_music_transition_t *const actions = external
                 ? external_actions : internal_actions;
-            const uint16_t *const next = source ? external_next : internal_next;
-            uint16_t index = source ? external_heads[bucket] : internal_heads[bucket];
-            while (index != UINT16_MAX)
-            {
-                const uint16_t count = source ? external_count : internal_count;
-                if (index >= count) return 0U;
-                if (source) ++external_visited; else ++internal_visited;
-                const uint16_t n = control_music_convert(&actions[index],
-                    &g_music_publish_scratch[emitted]);
-                if (n == 0U) return 0U;
-                emitted = (uint16_t)(emitted + n);
-                index = next[index];
-            }
+            const uint16_t *const next = external
+                ? external_next : internal_next;
+            uint16_t *const index = external ? &external_index : &internal_index;
+            const uint16_t count = external ? external_count : internal_count;
+            if (*index >= count) return 0U;
+            if (external != 0U) ++external_visited; else ++internal_visited;
+            const uint16_t n = control_music_convert(&actions[*index],
+                &g_music_publish_scratch[emitted]);
+            if (n == 0U) return 0U;
+            emitted = (uint16_t)(emitted + n);
+            *index = next[*index];
         }
     }
     if ((internal_visited != internal_count)

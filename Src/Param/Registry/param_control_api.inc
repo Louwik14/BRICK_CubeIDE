@@ -349,11 +349,7 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         }
         /* NoteFx owns the model-aware schema.  The static catalog only carries
          * the generic ARP/p-lock bounds and cannot clamp EUCLID LENGTH/PULSE. */
-        if (note_fx_state_set_param(track, id, value) == 0U)
-        {
-            return 0U;
-        }
-        return note_fx_pipeline_configure_track(track);
+        return note_fx_state_set_param(track, id, value);
     }
 
     {

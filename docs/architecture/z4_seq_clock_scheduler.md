@@ -46,7 +46,7 @@ TYPE/PARAM1/PARAM2/PARAM3 et integralement p-lockable/persistee avec Pattern et
 Project, precedent un terminal CONTROL explicite. Les evenements ROLL, produits
 par le scheduler avant la chaine, passent dans deux buffers ping-pong bornes et
 une boucle commune aux quatre slots. Ils portent une identite source scheduler,
-un `occurrence_id` d'activation, un `group_id` de correlation sans ownership et
+un `semantic_event_id` d'activation, un `group_id` de correlation sans ownership et
 la generation de chaine. Le pipeline CONTROL conserve desormais, separement
 des sorties terminales, jusqu'a huit sources musicales HELD par track. ARP et
 EUCLID possedent leur phase, leur prochaine deadline et leur projection locale
@@ -55,7 +55,9 @@ HARMONIZER les utilisent pour revoicer, et un cutover TYPE reprend directement
 a la premiere frontiere modifiee sans rejouer les effets amont. La borne
 logique admise avant ces FX est huit
 pitches distincts par track, ou la borne inferieure prouvee par la chaine.
-AUDIO ne connait ni PLAY, ni ROLL, ni ARP, ni EUCLID.
+AUDIO ne connait ni PLAY, ni ROLL, ni ARP, ni EUCLID. Le terminal transmet une
+intention semantique a `control_music_output`, qui alloue seul le
+`output_handle` physique.
 
 Un changement parametrique ne change plus la generation de chaine, ne ferme
 plus l'entite et ne purge plus la future queue. ARP conserve phase et prochaine
@@ -67,19 +69,21 @@ lisent l'etat effectif lorsqu'une occurrence atteint leur slot. Une decision
 Probability, une fin Gate ou une projection Groove deja materialisee n'est pas
 rejouee. CHORD et HARMONIZER ferment seulement les sorties causees par leurs
 entrees encore HELD, puis republient l'ancienne matiere avec le nouveau voicing
-au meme premier sample CONTROL modifiable; STOP precede START dans le bucket.
+au meme premier sample CONTROL modifiable; l'ordre de decision STOP puis START
+est conserve dans le flux chronologique.
 
 PASS 3 ajoute six transformateurs a la meme chaine ordonnee: PROBABILITY
 (CHANCE/CONDITION/LOT), GATE (LENGTH/VARIATION/MODE), GROOVE
 (TYPE/TIMING/VELOCITY), ECHO (TIME/REPEATS/DECAY), HARMONIZER
 (TYPE/SPREAD/INVERT) et CHORD (SHIFT/SPREAD/INVERT). `group_id` reste une
-correlation: Probability prend une decision commune, Groove applique une phase
-commune, Echo derive un groupe enfant par repetition, Harmonizer produit les
+correlation: Probability prend une decision commune, Echo derive un groupe
+enfant par repetition, Harmonizer produit les
 voix d'un meme groupe et Chord conserve le groupe polyphonique. Il ne porte
-aucun lifecycle. Harmonizer est le transformateur mono vers poly; Chord deplace
-diatoniquement et revoice un groupe polyphonique selon la gamme KBD. Le terminal
-conserve l'unicite HELD `(track,destination,pitch)` et traite LEGATO comme une
-reprise sans attaque, RETRIG comme OFF puis ON.
+aucun lifecycle. Groove derive sa phase de la position temporelle sur la grille,
+jamais de `group_id`. Harmonizer est le transformateur mono vers poly; Chord
+deplace diatoniquement et revoice un groupe polyphonique selon la gamme KBD. Le
+terminal conserve l'unicite HELD `(track,destination,pitch)` et traduit LEGATO
+et RETRIG en OFF puis ON adjacents sur le meme handle.
 
 Echo n'a pas de queue locale. Ses repetitions, bornees a deux apres l'original,
 entrent dans la future queue centrale triee avec un `occurrence_id` enfant, le
@@ -97,15 +101,19 @@ de la track sont fermees, les futurs de l'ancienne structure sont purges, les
 runtimes du premier slot modifie jusqu'a S4 sont reconstruits et la generation
 de chaine avance. Les slots temporels situes avant le cutover conservent ainsi
 phase et deadline. Le
-ledger de sources HELD survit a cette operation et ses sources sont reevaluees
-immediatement depuis S1 dans la nouvelle chaine; TYPE A->B, TYPE->OFF et
+ledger de sources HELD survit a cette operation et la matiere HELD a la
+frontiere modifiee est reevaluee immediatement depuis ce slot; TYPE A->B,
+TYPE->OFF et
 OFF->TYPE n'attendent donc ni reloop ni nouveau NOTE_ON. Les resets explicites
 (mute/cutover/Panic/restore Project) effacent au contraire ce ledger. BASE et
 TEMP/p-lock convergent vers ce meme owner: application et restore TEMP suivent
 les regles parametriques ou structurelles du parametre effectif, sans chemin
 de teardown propre aux p-locks.
 
-L'admission centrale est l'unique preuve de chaine. Avant installation de
+L'admission centrale est l'unique preuve de chaine. Gate/Echo remplacent toute
+projection temporelle supersedee portant la meme cle de pitch/slot/repetition;
+leur reservation est derivee de ces cles runtime et non de constantes de delai.
+Avant installation de
 l'etat, elle multiplie les `instant_fanout` et `temporal_fanout` des quatre
 slots, verifie chaque stage contre les buffers A/B de 32 evenements, reserve le
 futur global dans 512 entrees et reserve les actions de toutes les tracks contre
@@ -114,7 +122,7 @@ les quatre actions source par voix. Le staging live de 128 actions impose un
 fanout compose maximal de quatre; une chaine Harmonizer/Echo, dans les deux
 ordres, est donc refusee proprement au lieu d'etre acceptee puis tronquee. Deux
 Harmonizer, deux Echo et EUCLID/Echo sans reservation future disponible sont
-egalement refuses. Un child GROUP mono n'admet pas de fanout superieur a un,
+egalement refuses par le fanout compose. Un child GROUP mono n'admet pas de fanout superieur a un,
 afin que son activation ulterieure ne puisse contourner la preuve globale. La
 limite source devient `floor(8/fanout)` et vaut huit sans expansion, deux pour
 Harmonizer ou Echo.

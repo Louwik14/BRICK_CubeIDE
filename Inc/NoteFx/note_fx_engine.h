@@ -13,8 +13,6 @@ typedef struct
     uint8_t instant_fanout;
     uint8_t temporal_fanout;
     uint8_t max_notes_per_group;
-    uint8_t max_future_pending;
-    uint8_t max_delay_divisions;
 } note_fx_capacity_desc_t;
 
 _Static_assert(NOTE_FX_HELD_PITCH_CAPACITY == 8U,
