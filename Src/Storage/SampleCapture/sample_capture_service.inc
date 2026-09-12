@@ -52,12 +52,13 @@ void sample_capture_model_service(void)
         {
             g_sample_capture.state.trigger_latched = 1U;
             g_sample_capture.state.armed_pending = 1U;
-            g_sample_capture.state.phase = (seq_runtime_is_running() != 0U)
+            const uint8_t transport_running = seq_runtime_is_running();
+            g_sample_capture.state.phase = (transport_running != 0U)
                 ? SAMPLE_CAPTURE_PHASE_WAIT_QUANT
                 : SAMPLE_CAPTURE_PHASE_ARMED;
             sample_capture_publish_trigger_config();
-            if((seq_runtime_is_running() != 0U)
-                    && (g_sample_capture.state.quant == SAMPLE_CAPTURE_QUANT_NOW))
+            if((transport_running == 0U)
+                    || (g_sample_capture.state.quant == SAMPLE_CAPTURE_QUANT_NOW))
             {
                 uint64_t now_sample = 0U;
                 if(control_rt_now_sample(&now_sample) == 0U)

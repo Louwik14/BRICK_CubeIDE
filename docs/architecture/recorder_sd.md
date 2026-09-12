@@ -12,12 +12,12 @@ aucun DTO live et aucun service Looper ne sonde son etat.
 
 ARM prepare integralement la session Recorder avant toute echeance musicale:
 chemins, nettoyage, reservation, writer et configuration AUDIO sont deja en
-etat `PREPARED`. `seq_runtime` reste l'autorite du transport et injecte une
-unique transition datee avant la publication du premier horizon. PLAY UI,
-MIDI START/CONTINUE et le demarrage par note convergent sur cette transition;
-`audio_recorder` effectue alors `PREPARED -> RECORDING` au meme sample que
-l'activation du bus. Aucun acces FatFs/SD, polling UI ou deduction depuis le
-playhead n'appartient au START.
+etat `PREPARED`. En mode REC, `seq_runtime` reste l'autorite du transport et
+injecte une unique transition datee avant la publication du premier horizon.
+PLAY UI, MIDI START/CONTINUE et le demarrage par note convergent sur cette
+transition; `audio_recorder` effectue alors `PREPARED -> RECORDING` au meme
+sample que l'activation du bus. Aucun acces FatFs/SD, polling UI ou deduction
+depuis le playhead n'appartient au START.
 
 ## Autorites
 
@@ -85,7 +85,17 @@ pad C13-IN3_R; une mesure de capacite ou un remplacement controle de C13 permet
 de confirmer le composant, la continuite DC ne pouvant pas traverser le
 condensateur.
 
-Le meme bus alimente la conversion PCM24 du Recorder et le peak brut par bloc. AUDIO publie seulement `{generation_io, peak_abs_pcm24}` avant capture; ce fait physique minimal est requis car le ring PCM ne recoit encore aucun sample avant THR. CONTROL compare le peak au seuil, latch ARM TRIG puis reutilise la quantification NOW/BAR/PATTERN de `sample_capture`. Le writer n'est active qu'apres trigger et echeance. Le vu-metre est diagnostique/UI et ne modifie ni le peak brut, ni la waveform de la prise, ni le WAV.
+Le meme bus alimente la conversion PCM24 du Recorder et le peak brut par bloc.
+ARM TRIG publie vers AUDIO le seuil et un epoch d'armement. AUDIO observe le
+signal et possede la detection physique du franchissement sous-vers-au-dessus;
+il publie un evenement unique pour cet epoch. Cette surveillance est active
+independamment de l'etat du transport. CONTROL consomme l'evenement et demarre
+la capture immediatement lorsque le transport est arrete; lorsque celui-ci est
+deja actif, NOW demarre immediatement et BAR/PATTERN conserve leur quantification.
+TRANSPORT START n'est ni requis ni interprete comme le trigger et ne rearme pas
+un evenement consomme. Le writer n'est active qu'apres ce trigger et son
+echeance. Le vu-metre est diagnostique/UI et ne modifie ni la detection, ni la
+waveform de la prise, ni le WAV.
 
 Une seule capture peut etre preparee ou active. La preparation Storage cree reservation et writer; CONTROL publie REC_BUS puis START/STOP dates. L'IRQ mixer appelle directement l'endpoint Recorder AUDIO, copie dans le ring puis publie le head avec une barriere. STOP, limite ou overflow ferment localement AUDIO et publient seulement `closed_session` et `capture_fault`; Storage draine puis finalise. Aucun ACK fonctionnel, config preparee, `active`, `error`, client ou generation partage ne subsiste.
 
