@@ -2,7 +2,7 @@
 
 ## Execution
 
-L'audio travaille par demi-buffer de 64 frames a 48 kHz et n'execute ni FatFs, ni scan de cache, ni travail Storage non borne. TIM5 a 1 MHz, demarre avant les domaines, est l'unique media clock BRICK; `brick_media_clock` possede son extension 32 vers 64 bits et l'unique conversion rationnelle en samples. CONTROL et AUDIO lisent cette meme timeline. L'IRQ SAI conserve seulement un curseur de rendu intra-bloc cale sur la phase DMA; un callback manque cree un xrun et repositionne ce curseur sans retard temporel permanent. TIM12 reste le tick musical interne. La superloop publie l'horizon musical glissant; aucun reveil AUDIO, compteur de frames periodique ou PendSV sequenceur ne traverse la frontiere. Scheduler, lifecycle et Note FX contribuent d'abord a une fenetre CONTROL fixe; ses 64 buckets sample/kind finalisent ensuite la FIFO en ordre chronologique, avec STOP avant START a timestamp egal.
+L'audio travaille par demi-buffer de 64 frames a 48 kHz et n'execute ni FatFs, ni scan de cache, ni travail Storage non borne. TIM5 a 1 MHz, demarre avant les domaines, est l'unique media clock BRICK; `brick_media_clock` possede son extension 32 vers 64 bits, l'IRQ d'overflow et l'unique conversion rationnelle en samples. CONTROL et AUDIO lisent cette meme timeline. L'origine de la grille AUDIO est capturee au demarrage effectif du RX DMA; chaque callback est valide contre la moitie physiquement active, puis sa frontiere est reconstruite sur cette origine sans ancrage sur la latence IRQ. Des flags coalesces ne rendent que la derniere moitie sure; un callback manque cree un xrun, compte les frames sautees et reprend directement sans replay. TIM12 reste le tick musical interne. La superloop publie l'horizon musical glissant; aucun reveil AUDIO, compteur de frames periodique ou PendSV sequenceur ne traverse la frontiere. Scheduler, lifecycle et Note FX contribuent d'abord a une fenetre CONTROL fixe; ses 64 buckets sample/kind finalisent ensuite la FIFO en ordre chronologique, avec STOP avant START a timestamp egal.
 
 USB OTG FS est possede exclusivement par TinyUSB en mode bare-metal
 (`OPT_OS_NONE`). Sur H743, l'IRQ OTG FS de priorite 6 fait recevoir le paquet
@@ -74,7 +74,7 @@ Au boot, `track_state` est initialise avant la projection finale `track_runtime`
 
 Les budgets DTCM, D1, D2, SRAM2, SRAM3, SRAM4, ITCM et SDRAM sont controles par les linkers; toute croissance d'une region proche de sa limite exige un budget explicite. Les voix et etats chauds restent en DTCM; les arenas AUDIO volumineuses resident en SDRAM selon leur contrat cache.
 
-La migration H747 conserve les payloads et protocoles. Restent physiques: deux images CM7/CM4, boot/HSEM, clocks, linkers, MPU des deux coeurs, repartition IRQ/DMA et initialisation FMC/SDRAM unique. M7 recoit SAI/audio; M4 recoit USB/UI/MIDI/SD/display.
+La migration H747 conserve les payloads et protocoles. Restent physiques: deux images CM7/CM4, boot/HSEM, clocks, linkers, MPU des deux coeurs, repartition IRQ/DMA et initialisation FMC/SDRAM unique. M7 recoit SAI/audio; M4 recoit USB/UI/MIDI/SD/display. M7 est l'unique owner de l'initialisation TIM5 et de son overflow; le petit etat d'extension (`sequence`, `wrap_count`, `tick_hz`) est place a une adresse SRAM partagee coherente et lu par seqlock depuis M4. Aucun anchor periodique ni mailbox temporelle M7 vers M4 n'est requis.
 
 La cible USB Audio H747 place TinyUSB, l'IRQ USB et l'ingress Audio OUT sur M4.
 Le M4 publie le paquet recu dans le meme ring IPC SPSC pointer-free; l'IRQ AUDIO

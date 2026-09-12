@@ -26,6 +26,7 @@
 /* USER CODE BEGIN Includes */
 #include "encoders_hw.h"
 #include "usb_role_manager.h"
+#include "Platform/brick_media_clock.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -379,7 +380,11 @@ void SDMMC1_IRQHandler(void)
 void TIM5_IRQHandler(void)
 {
   /* USER CODE BEGIN TIM5_IRQn 0 */
-
+  if ((__HAL_TIM_GET_FLAG(&htim5, TIM_FLAG_UPDATE) != RESET) &&
+      (__HAL_TIM_GET_IT_SOURCE(&htim5, TIM_IT_UPDATE) != RESET))
+  {
+    brick_media_clock_on_tim5_update_irq();
+  }
   /* USER CODE END TIM5_IRQn 0 */
   HAL_TIM_IRQHandler(&htim5);
   /* USER CODE BEGIN TIM5_IRQn 1 */

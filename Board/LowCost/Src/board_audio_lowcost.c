@@ -4,6 +4,7 @@
 #include "sai.h"
 #include "tlv320aic3204.h"
 #include "Audio/audio_mic_debug.h"
+#include "Platform/brick_media_clock.h"
 
 #include <arm_acle.h>
 #include "stm32h743xx.h"
@@ -95,10 +96,12 @@ void board_audio_init(void)
 uint8_t board_audio_start_stream(int32_t *rx_buffer,
                                  int32_t *tx_buffer,
                                  uint32_t word_count,
-                                 volatile audio_init_state_t *init_state)
+                                 volatile audio_init_state_t *init_state,
+                                 uint32_t *out_rx_start_tick)
 {
     if ((rx_buffer == NULL) || (tx_buffer == NULL) || (word_count == 0U)
-            || (word_count > UINT16_MAX) || (init_state == NULL))
+            || (word_count > UINT16_MAX) || (init_state == NULL)
+            || (out_rx_start_tick == NULL))
     {
         g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_BAD_ARGUMENT;
         g_board_audio_boot_diag.failure_count++;
@@ -187,6 +190,7 @@ uint8_t board_audio_start_stream(int32_t *rx_buffer,
         }
         g_board_audio_boot_diag.tx_started = 1U;
 
+        const uint32_t rx_start_tick = brick_media_clock_now_tick();
         if (HAL_SAI_Receive_DMA(&hsai_BlockB1, (uint8_t *)rx_buffer,
                                 (uint16_t)word_count) != HAL_OK)
         {
@@ -200,7 +204,7 @@ uint8_t board_audio_start_stream(int32_t *rx_buffer,
         g_board_audio_boot_diag.rx_started = 1U;
         g_board_audio_boot_diag.stream_started = 1U;
         g_board_audio_boot_diag.last_error = BOARD_AUDIO_BOOT_OK;
-        *init_state = AUDIO_INIT_READY;
+        *out_rx_start_tick = rx_start_tick;
         return 1U;
     }
 
@@ -211,6 +215,22 @@ uint8_t board_audio_start_stream(int32_t *rx_buffer,
     g_board_audio_boot_diag.rx_started = 0U;
     *init_state = AUDIO_INIT_ERROR;
     return 0U;
+}
+
+uint8_t board_audio_rx_dma_active_half(uint8_t *out_half)
+{
+    if ((out_half == NULL) || (hsai_BlockB1.hdmarx == NULL)
+            || (hsai_BlockB1.hdmarx->Instance == NULL)
+            || (hsai_BlockB1.hdmarx->Init.Mode != DMA_CIRCULAR))
+    {
+        return 0U;
+    }
+    const uint32_t remaining = __HAL_DMA_GET_COUNTER(hsai_BlockB1.hdmarx);
+    const uint32_t half_words = BOARD_AUDIO_CONTRACT_FRAMES_PER_HALF
+        * BOARD_AUDIO_TDM_SLOTS;
+    *out_half = (remaining > half_words) ? 0U : 1U;
+    if (remaining == 0U) *out_half = 0U;
+    return 1U;
 }
 
 void board_audio_stop_stream(void)

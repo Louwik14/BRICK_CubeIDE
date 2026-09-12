@@ -636,14 +636,19 @@ uint16_t __attribute__((noinline)) audio_command_executor_apply_due(
             && (CONTROL_AUDIO_COMMAND_KIND(&command) == CONTROL_AUDIO_NOTE_ON));
         const uint8_t stale_temporary_param = (uint8_t)(
             (opcode == CONTROL_AUDIO_COMMAND_PARAM)
-            && (control_audio_command_state_class(&command)
-                == CONTROL_AUDIO_COMMAND_TRANSIENT_ACTION));
+            && (CONTROL_AUDIO_COMMAND_KIND(&command)
+                == CONTROL_AUDIO_PARAM_KIND_TEMP_TRACK));
+        const uint8_t stale_request = (uint8_t)(
+            control_audio_command_state_class(&command)
+                == CONTROL_AUDIO_COMMAND_REQUEST);
         if ((discard_transient_before != 0U)
                 && (command.effective_sample_time < discard_transient_before)
-                && ((stale_note_on != 0U) || (stale_temporary_param != 0U)))
+                && ((stale_note_on != 0U) || (stale_temporary_param != 0U)
+                    || (stale_request != 0U)))
         {
-            /* An xrun made this transient inaudible.  Durable state, NOTE_OFF,
-             * transport, record and panic commands still run in FIFO order. */
+            /* An xrun made this one-shot action inaudible.  CLEAR_TEMP is a
+             * required release, so it follows durable state, NOTE_OFF,
+             * transport, record and panic through normal FIFO order. */
             (void)control_audio_fifo_audio_pop();
             ++applied;
             continue;

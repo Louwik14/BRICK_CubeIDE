@@ -5,8 +5,6 @@
 #include "Seq/seq_clock_bridge.h"
 #include "Seq/seq_transport_fsm.h"
 
-#define SEQ_RUNTIME_EXEC_MAX_EXTERNAL_PULSES_PER_BLOCK 4U
-
 seq_runtime_state_t *seq_runtime_exec_state(void);
 /*
  * Contract surface:

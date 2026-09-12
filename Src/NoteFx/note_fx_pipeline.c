@@ -527,6 +527,14 @@ static note_event_result_t note_fx_pipeline_apply_due_future(uint64_t end)
         if (first.event.chain_generation
                 != g_note_fx_chain_generation[first.event.track])
             continue;
+        if ((g_note_fx_window_active != 0U)
+                && (first.event.sample_abs < g_note_fx_window_start)
+                && (first.event.kind == NOTE_EVENT_KIND_ON))
+        {
+            /* Delayed ECHO/NOTE_ON events which fell behind a halted CONTROL
+             * window are expired actions, not notes to retrigger at resume. */
+            continue;
+        }
         const note_event_result_t result = note_fx_pipeline_run_batch(
             group, group_count);
         if (result != NOTE_EVENT_RESULT_ACCEPTED) return result;

@@ -596,6 +596,45 @@ void seq_runtime_exec_process_step_pulse_at_sample_q16(seq_runtime_state_t *stat
 
 }
 
+static void seq_runtime_exec_skip_step_pulses(seq_runtime_state_t *state,
+                                              uint32_t *track_loop_generation,
+                                              uint64_t skipped,
+                                              uint64_t resume_sample)
+{
+    if ((state == NULL) || (track_loop_generation == NULL) || (skipped == 0U))
+    {
+        return;
+    }
+
+    for (seq_track_id_t track = 0U;
+         track < (seq_track_id_t)SEQ_LANE_CAPACITY; ++track)
+    {
+        seq_boundary_engine_restore_all_active_locks(state, track,
+                                                      resume_sample);
+        uint8_t div = 1U;
+        (void)seq_runtime_get_track_div(track, &div);
+        if ((div != 1U) && (div != 2U) && (div != 4U) && (div != 8U)) div = 1U;
+
+        const uint64_t phase_total = (uint64_t)state->track_div_phase[track]
+            + skipped;
+        const uint64_t track_steps = phase_total / div;
+        state->track_div_phase[track] = (uint8_t)(phase_total % div);
+        if ((track_steps & 1U) != 0U) state->track_swing_phase[track] ^= 1U;
+
+        const uint8_t length = seq_model_get_track_playback_length(track);
+        if (length != 0U)
+        {
+            const uint64_t position = (uint64_t)state->play_step[track]
+                + track_steps;
+            state->play_step[track] = (uint8_t)(position % length);
+            track_loop_generation[track] += (uint32_t)(position / length);
+        }
+        state->prev_step_valid[track] = 0U;
+    }
+    g_seq_runtime_exec_metronome_step += (uint32_t)skipped;
+    seq_live_rec_session_on_step_advanced(state, resume_sample);
+}
+
 void seq_runtime_exec_drive_internal_steps_for_block(seq_runtime_state_t *state,
                                                      seq_transport_fsm_t *transport_fsm,
                                                      seq_clock_bridge_t *clock_bridge,
@@ -630,8 +669,29 @@ void seq_runtime_exec_drive_internal_steps_for_block(seq_runtime_state_t *state,
     }
 
     /* Progression guard: internal cadence only advances from the audio block timeline. */
+    const uint64_t block_start_q16 = block_start_sample << 16;
     const uint64_t block_end_q16 = (block_start_sample + (uint64_t)block_frames) << 16;
     uint64_t next_pulse_sample_q16 = state->step_sample_q16 + (uint64_t)state->samples_per_step_q16;
+    if (next_pulse_sample_q16 < block_start_q16)
+    {
+        if (seq_transport_fsm_is_running(transport_fsm) != 0U)
+        {
+            const uint64_t skipped = ((block_start_q16 - 1U
+                - next_pulse_sample_q16) / state->samples_per_step_q16) + 1U;
+            seq_runtime_exec_skip_step_pulses(state, track_loop_generation,
+                                              skipped, block_start_sample);
+            state->step_sample_q16 += skipped
+                * (uint64_t)state->samples_per_step_q16;
+        }
+        else
+        {
+            const uint64_t period = (uint64_t)state->samples_per_step_q16;
+            state->step_sample_q16 = (block_start_q16 >= period)
+                ? block_start_q16 - period : 0U;
+        }
+        next_pulse_sample_q16 = state->step_sample_q16
+            + (uint64_t)state->samples_per_step_q16;
+    }
     while (next_pulse_sample_q16 < block_end_q16)
     {
         seq_runtime_exec_process_step_pulse_at_sample_q16(state,
@@ -640,10 +700,7 @@ void seq_runtime_exec_drive_internal_steps_for_block(seq_runtime_state_t *state,
                                                           track_loop_generation,
                                                           next_pulse_sample_q16,
                                                           now_tick,
-                                                          (next_pulse_sample_q16
-                                                              < (block_start_sample << 16))
-                                                            ? block_start_sample
-                                                            : (next_pulse_sample_q16 >> 16));
+                                                          next_pulse_sample_q16 >> 16);
         next_pulse_sample_q16 = state->step_sample_q16 + (uint64_t)state->samples_per_step_q16;
     }
 }
@@ -682,8 +739,7 @@ void seq_runtime_exec_drive_external_steps_for_block(seq_runtime_state_t *state,
 
     /* Progression guard: external cadence consumes pending pulses only inside the audio block domain. */
     const uint32_t pending_steps =
-        seq_runtime_exec_take_external_step_pulses_pending(
-            SEQ_RUNTIME_EXEC_MAX_EXTERNAL_PULSES_PER_BLOCK);
+        seq_runtime_exec_consume_external_step_pulses_pending();
     if (pending_steps == 0U)
     {
         return;
@@ -691,6 +747,19 @@ void seq_runtime_exec_drive_external_steps_for_block(seq_runtime_state_t *state,
 
     const uint64_t pulse_sample_q16 = block_start_sample << 16;
     uint32_t pulses_to_process = pending_steps;
+    if ((pulses_to_process > 1U)
+            && (seq_transport_fsm_is_running(transport_fsm) != 0U))
+    {
+        const uint32_t skipped = pulses_to_process - 1U;
+        seq_runtime_exec_skip_step_pulses(state, track_loop_generation,
+                                          skipped, block_start_sample);
+        pulses_to_process = 1U;
+    }
+    else if (pulses_to_process > 1U)
+    {
+        /* START_PENDING has no musical phase to catch up. */
+        pulses_to_process = 1U;
+    }
 
     while (pulses_to_process > 0U)
     {

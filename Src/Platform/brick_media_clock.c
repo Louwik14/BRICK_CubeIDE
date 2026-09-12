@@ -2,9 +2,20 @@
 
 #include "stm32h7xx_hal.h"
 
-static uint32_t g_media_clock_tick_hz;
-static uint32_t g_media_clock_last_tick;
-static uint64_t g_media_clock_extended_ticks;
+typedef struct
+{
+    volatile uint32_t sequence;
+    volatile uint32_t wrap_count;
+    volatile uint32_t tick_hz;
+} brick_media_clock_shared_state_t;
+
+#if defined(BRICK_MEDIA_CLOCK_SHARED_STATE_ADDRESS)
+#define BRICK_MEDIA_CLOCK_STATE \
+    (*(brick_media_clock_shared_state_t *)(uintptr_t)BRICK_MEDIA_CLOCK_SHARED_STATE_ADDRESS)
+#else
+static brick_media_clock_shared_state_t g_media_clock_state;
+#define BRICK_MEDIA_CLOCK_STATE g_media_clock_state
+#endif
 
 static uint32_t brick_media_clock_tim5_frequency(void)
 {
@@ -34,35 +45,79 @@ static void brick_media_clock_exit_critical(uint32_t primask)
     __set_PRIMASK(primask);
 }
 
-static uint64_t brick_media_clock_extend_now(uint32_t now_tick)
+static uint8_t brick_media_clock_snapshot(uint32_t *out_tick,
+                                          uint64_t *out_extended)
 {
-    const uint32_t primask = brick_media_clock_enter_critical();
-    g_media_clock_extended_ticks +=
-        (uint32_t)(now_tick - g_media_clock_last_tick);
-    g_media_clock_last_tick = now_tick;
-    const uint64_t extended = g_media_clock_extended_ticks;
-    brick_media_clock_exit_critical(primask);
-    return extended;
+    if ((out_tick == NULL) || (out_extended == NULL)) return 0U;
+
+    uint32_t sequence_before;
+    uint32_t sequence_after;
+    uint32_t wraps;
+    uint32_t tick_before;
+    uint32_t tick_after;
+    uint32_t status;
+    do
+    {
+        sequence_before = BRICK_MEDIA_CLOCK_STATE.sequence;
+        __DMB();
+        wraps = BRICK_MEDIA_CLOCK_STATE.wrap_count;
+        tick_before = TIM5->CNT;
+        status = TIM5->SR;
+        tick_after = TIM5->CNT;
+        __DMB();
+        sequence_after = BRICK_MEDIA_CLOCK_STATE.sequence;
+    } while (((sequence_before & 1U) != 0U)
+             || (sequence_before != sequence_after));
+
+    /* If UPDATE is pending, the sole IRQ owner has not published this wrap
+     * yet.  Project it for this read without modifying the shared state. */
+    if (((status & TIM_SR_UIF) != 0U) || (tick_after < tick_before))
+    {
+        ++wraps;
+    }
+    *out_tick = tick_after;
+    *out_extended = ((uint64_t)wraps << 32) | tick_after;
+    return 1U;
 }
 
 static uint64_t brick_media_clock_extended_tick_to_sample(uint64_t ticks)
 {
-    const uint64_t whole = ticks / g_media_clock_tick_hz;
-    const uint64_t remainder = ticks % g_media_clock_tick_hz;
+    const uint32_t tick_hz = BRICK_MEDIA_CLOCK_STATE.tick_hz;
+    const uint64_t whole = ticks / tick_hz;
+    const uint64_t remainder = ticks % tick_hz;
     return whole * BOARD_AUDIO_SAMPLE_RATE_HZ
-        + (remainder * BOARD_AUDIO_SAMPLE_RATE_HZ) / g_media_clock_tick_hz;
+        + (remainder * BOARD_AUDIO_SAMPLE_RATE_HZ) / tick_hz;
 }
 
 void brick_media_clock_init(void)
 {
     const uint32_t tick_hz = brick_media_clock_tim5_frequency();
-    const uint32_t now_tick = TIM5->CNT;
     const uint32_t primask = brick_media_clock_enter_critical();
 
-    g_media_clock_tick_hz = tick_hz;
-    g_media_clock_last_tick = now_tick;
-    g_media_clock_extended_ticks = now_tick;
+    BRICK_MEDIA_CLOCK_STATE.sequence = 1U;
+    __DMB();
+    BRICK_MEDIA_CLOCK_STATE.wrap_count = 0U;
+    BRICK_MEDIA_CLOCK_STATE.tick_hz = tick_hz;
+    TIM5->SR &= ~TIM_SR_UIF;
+    TIM5->DIER |= TIM_DIER_UIE;
+    __DMB();
+    BRICK_MEDIA_CLOCK_STATE.sequence = 2U;
 
+    brick_media_clock_exit_critical(primask);
+}
+
+void brick_media_clock_on_tim5_update_irq(void)
+{
+    /* TIM5 is lower priority than AUDIO.  Keep the seqlock write
+     * non-preemptible so a higher-priority reader can never spin on this
+     * core while the writer is suspended. */
+    const uint32_t primask = brick_media_clock_enter_critical();
+    BRICK_MEDIA_CLOCK_STATE.sequence++;
+    __DMB();
+    BRICK_MEDIA_CLOCK_STATE.wrap_count++;
+    TIM5->SR &= ~TIM_SR_UIF;
+    __DMB();
+    BRICK_MEDIA_CLOCK_STATE.sequence++;
     brick_media_clock_exit_critical(primask);
 }
 
@@ -74,13 +129,17 @@ uint32_t brick_media_clock_now_tick(void)
 bool brick_media_clock_tick_to_sample(uint32_t capture_tick,
                                       uint64_t *out_sample_time)
 {
-    if ((out_sample_time == NULL) || (g_media_clock_tick_hz == 0U))
+    if ((out_sample_time == NULL) || (BRICK_MEDIA_CLOCK_STATE.tick_hz == 0U))
     {
         return false;
     }
 
-    const uint32_t now_tick = TIM5->CNT;
-    const uint64_t now_extended = brick_media_clock_extend_now(now_tick);
+    uint32_t now_tick;
+    uint64_t now_extended;
+    if (brick_media_clock_snapshot(&now_tick, &now_extended) == 0U)
+    {
+        return false;
+    }
     const int32_t capture_from_now = (int32_t)(capture_tick - now_tick);
     uint64_t capture_extended;
     if (capture_from_now < 0)
@@ -122,10 +181,22 @@ bool brick_media_clock_tick_to_guarded_sample(uint32_t capture_tick,
 
 bool brick_media_clock_now_sample(uint64_t *out_sample_time)
 {
-    return brick_media_clock_tick_to_sample(TIM5->CNT, out_sample_time);
+    if ((out_sample_time == NULL) || (BRICK_MEDIA_CLOCK_STATE.tick_hz == 0U))
+    {
+        return false;
+    }
+    uint32_t now_tick;
+    uint64_t now_extended;
+    if (brick_media_clock_snapshot(&now_tick, &now_extended) == 0U)
+    {
+        return false;
+    }
+    (void)now_tick;
+    *out_sample_time = brick_media_clock_extended_tick_to_sample(now_extended);
+    return true;
 }
 
 uint32_t brick_media_clock_tick_hz(void)
 {
-    return g_media_clock_tick_hz;
+    return BRICK_MEDIA_CLOCK_STATE.tick_hz;
 }

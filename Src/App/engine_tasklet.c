@@ -109,8 +109,8 @@ void engine_tasklet_init(uint32_t sample_rate)
   engine_tim5_frame_remainder = 0U;
   engine_control_frames_pending = 0U;
 
-  /* Tick aligned with AUDIO_FRAMES_PER_HALF = 32
-     => 48kHz / 32 = 1500 Hz stable */
+  /* CONTROL service quantum: 32 frames => 48 kHz / 32 = 1500 Hz stable.
+     This is deliberately independent of the 64-frame AUDIO DMA half. */
   engine_frames_per_tick = 32U;
   engine_last_poll_ms = HAL_GetTick();
 
