@@ -13,11 +13,12 @@ Autorites d'ecriture:
 - override AUDIO temporaire: chemin RT/audio dedie.
 
 Les classifications CONTROL ont chacune une autorite: `track_runtime_get_param_rule`
-porte domaine/ressource, `param_registry_is_plockable` porte la decision produit
-p-lock, et `param_registry_is_modulation_target` porte la capacite canonique de
-destination Matrix. Cette derniere est volontairement plus etroite: les champs
-LFO internes restent des Param editables/p-lockables, mais seul RATE est une
-destination; l'applicabilite par piste, moteur et modele reste contextuelle.
+porte domaine/ressource et `param_registry_is_plockable` porte la decision produit
+p-lock et destination Matrix: tout Param p-lockable est modulable.
+`param_registry_resolve_track_param` compose ensuite l'applicabilite par piste,
+moteur, modele et topologie avec le label produit resolu. Le catalogue MOD DEST
+ne maintient aucune policy moteur ou modele et consomme uniquement cette
+projection CONTROL.
 `param_registry_track_value_is_audio_command` derive le routage AUDIO du domaine
 et du contexte MIDI. L'applicabilite TEMP et la restauration `BASE`/`CLEAR_TEMP`
 sont derivees par le registre; elles ne sont ni des proprietes de persistance ni
@@ -66,11 +67,13 @@ et base de destination. AUDIO ne depend donc ni d'un tweak anterieur ni d'un
 second bind pour initialiser RATE, SHAPE, TRIG et PHASE. Les binds LFO1, LFO2 et
 LFO3 partagent ce contrat; un changement de destination ne reset pas la phase.
 
-Le catalogue CONTROL LFO/Matrix derive et valide ses destinations depuis les
-regles Param et le descripteur canonique de piste. AUDIO ne consulte aucune
-politique Track: il verifie l'ABI puis prepare l'opcode DSP de la destination
-deja legitime. Les destinations MIDI CC n'existent plus cote AUDIO et MIDI OUT
-reste exclusivement CONTROL.
+Le catalogue CONTROL LFO/Matrix enumere les Param et consomme leur descripteur
+contextuel resolu. Les catalogues Prism, Stack, Drum MD et Audio FX restent les
+sources des labels et de l'applicabilite de modele; MOD DEST ne les connait pas.
+Les trois LFO conservent leur identite dans ce label resolu. AUDIO ne consulte
+aucune politique Track: il verifie l'ABI puis prepare l'opcode DSP de la
+destination deja legitime. Les destinations MIDI CC n'existent plus cote AUDIO
+et MIDI OUT reste exclusivement CONTROL.
 
 La valeur CONTROL du parametre est l'unique autorite de sa base. Elle est projetee par le chemin normal des commandes parametre et met a jour directement la destination AUDIO, y compris pendant une modulation. Les routes Matrix sont adressees par `{track, slot, field}` et Multi/Slew par leurs APIs typees; source, destination, depth et enable ne traversent jamais Param. Des commandes fonctionnelles typees mettent a jour l'etat Matrix M7, marquent l'owner dirty et finalisent une seule recompilation apres toutes les commandes dues au meme sample. Min/max, endpoints, plans et caches restent derives localement; les MODEL et le nombre de slots Drum sont lus dans le runtime moteur. Aucun descripteur partage, pool, ACK ou canal fonctionnel parallele n'existe.
 

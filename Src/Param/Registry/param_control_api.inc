@@ -45,24 +45,164 @@ uint8_t param_registry_is_plockable(param_id_t id)
         || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX));
 }
 
-uint8_t param_registry_is_modulation_target(param_id_t id)
+uint8_t param_registry_resolve_track_param(
+    uint8_t track, param_id_t id,
+    param_registry_resolved_track_param_t *out_param)
 {
-    if ((id >= PARAM_COUNT)
-            || (id == PARAM_MIDI_PROGRAM)
-            || ((id >= PARAM_MIDI_CC1_1) && (id <= PARAM_MIDI_CC3_4))
-            || (param_registry_is_plockable(id) == 0U))
-        return 0U;
+    if (out_param == NULL) return 0U;
+    *out_param = (param_registry_resolved_track_param_t){
+        .id = id, .applicable = 0U, .plockable = 0U, .label = NULL
+    };
+    if ((track >= BRICK_ENTITY_CAPACITY) || (id >= PARAM_COUNT)
+            || (param_id_is_reserved(id) != 0U)) return 0U;
+
+    out_param->plockable = param_registry_is_plockable(id);
+    out_param->label = param_registry[id].name;
+    const track_runtime_param_status_t status =
+        track_runtime_get_effective_param_status(track, id);
+    if ((status != TRACK_RUNTIME_PARAM_ALLOWED)
+            && (status != TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)) return 1U;
+    if (param_registry_track_temp_is_applicable(id, track) == 0U) return 1U;
 
     uint8_t lfo_index = 0U;
     mod_lfo_param_t lfo_param = MOD_LFO_PARAM_RATE;
     if (param_lfo_map(id, &lfo_index, &lfo_param) != 0U)
-        return (uint8_t)(lfo_param == MOD_LFO_PARAM_RATE);
+    {
+        static const char *const labels[MOD_LFO_COUNT_PER_TRACK]
+            [MOD_LFO_PARAM_COUNT] = {
+            { "LFO1 RATE", "LFO1 SHAPE", "LFO1 TRIG", "LFO1 PHASE" },
+            { "LFO2 RATE", "LFO2 SHAPE", "LFO2 TRIG", "LFO2 PHASE" },
+            { "LFO3 RATE", "LFO3 SHAPE", "LFO3 TRIG", "LFO3 PHASE" }
+        };
+        out_param->label = labels[lfo_index][lfo_param];
+        out_param->applicable = 1U;
+        return 1U;
+    }
 
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
-    return (uint8_t)((rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
-        || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
-        || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
-        || (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX));
+    uint8_t set_id = (uint8_t)SEQ_PLOCK_SET_COUNT;
+    if ((id >= PARAM_FM_OPERATOR_FIRST) && (id <= PARAM_FM_OPERATOR_LAST))
+        set_id = (uint8_t)SEQ_PLOCK_SET_FM_OPERATOR;
+    else if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_ENV)
+        set_id = (uint8_t)SEQ_PLOCK_SET_ENV;
+    else if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+        set_id = (uint8_t)SEQ_PLOCK_SET_TONE;
+    else if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
+        set_id = (uint8_t)SEQ_PLOCK_SET_MIX;
+    else if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX)
+        set_id = (uint8_t)SEQ_PLOCK_SET_AUDIO_FX;
+    if ((set_id >= (uint8_t)SEQ_PLOCK_SET_COUNT)
+            || (seq_param_iface_param_is_supported(track, set_id, id) == 0U))
+        return 1U;
+
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX)
+    {
+        uint8_t fx_slot = 0U;
+        uint8_t fx_param = 0U;
+        if (audio_fx_param_catalog_param_info(
+                id, &fx_slot, &fx_param) != 0U)
+        {
+            float model = 0.0f;
+            if ((audio_fx_control_state_get_param(track,
+                    (fx_slot != 0U) ? PARAM_AUDIO_FX_B_MODEL
+                                    : PARAM_AUDIO_FX_MODEL, &model) == 0U)
+                    || (audio_fx_param_catalog_resolve(
+                        (uint8_t)(model + 0.5f), fx_param,
+                        &out_param->label) == 0U)) return 1U;
+        }
+    }
+    else if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+    {
+        if ((id >= PARAM_DRUM_MD_P1) && (id <= PARAM_DRUM_MD_P8))
+        {
+            float model = 0.0f;
+            if (param_registry_get_track_value(
+                    PARAM_DRUM_MD_MODEL, track, &model) == 0U) return 1U;
+            const md_model_profile_t *const profile =
+                md_model_profile_get(md_model_validate(model));
+            const uint8_t slot = (uint8_t)(id - PARAM_DRUM_MD_P1);
+            if ((slot >= profile->slot_count)
+                    || (profile->slot_labels[slot] == NULL)) return 1U;
+            out_param->label = profile->slot_labels[slot];
+        }
+        else
+        {
+            uint8_t dynamic_slot = 0U;
+            uint8_t dynamic_param = 0U;
+            if (param_stack_dynamic_param_info(
+                    id, &dynamic_slot, &dynamic_param) != 0U)
+            {
+                if (param_stack_label_for_track_param(
+                        track, id, &out_param->label) == 0U) return 1U;
+            }
+            else
+            {
+                const char *prism_label = NULL;
+                if (param_prism_label_for_track_param(
+                        track, id, &prism_label) != 0U)
+                {
+                    if ((prism_label == NULL)
+                            || (strcmp(prism_label, "-") == 0)) return 1U;
+                    out_param->label = prism_label;
+                }
+            }
+        }
+    }
+
+    if ((out_param->label != NULL) && (out_param->label[0] != '\0'))
+        out_param->applicable = 1U;
+    return 1U;
+}
+
+uint8_t param_registry_projected_track_param_is_applicable(
+    param_id_t id, track_family_t family, track_runtime_type_t type,
+    uint8_t is_group_master, uint8_t is_group_child)
+{
+    if ((id >= PARAM_COUNT) || (family == TRACK_FAMILY_OFF)
+            || (param_registry_is_plockable(id) == 0U)) return 0U;
+    const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD) return 1U;
+    if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_ENV)
+            && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+            && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX)
+            && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX))
+        return 0U;
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_TONE)
+    {
+        if ((family == TRACK_FAMILY_MIDI)
+                || (id == PARAM_MIDI_PROGRAM)
+                || ((id >= PARAM_MIDI_CC1_1) && (id <= PARAM_MIDI_CC3_4)))
+            return 0U;
+        const uint8_t set_id = ((id >= PARAM_FM_OPERATOR_FIRST)
+                && (id <= PARAM_FM_OPERATOR_LAST))
+            ? (uint8_t)SEQ_PLOCK_SET_FM_OPERATOR
+            : (uint8_t)SEQ_PLOCK_SET_TONE;
+        seq_param_slot_t slot = 0U;
+        return seq_param_iface_param_to_slot_for_type((uint8_t)type,
+            is_group_master, set_id, id, &slot);
+    }
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX)
+    {
+        const uint8_t group_level = (uint8_t)(
+            (id == PARAM_GROUP_FX_A_LEVEL)
+            || (id == PARAM_GROUP_FX_B_LEVEL));
+        return (is_group_child != 0U) ? group_level
+                                     : (uint8_t)(group_level == 0U);
+    }
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIX)
+        return (uint8_t)(family != TRACK_FAMILY_MIDI);
+    if (is_group_master != 0U)
+        return (uint8_t)((id == PARAM_FILTER_MORPH)
+            || (id == PARAM_FILTER_CUTOFF) || (id == PARAM_FILTER_RESONANCE)
+            || (id == PARAM_FILTER_KEYTRK) || (id == PARAM_ENV3_ATTACK)
+            || (id == PARAM_ENV3_DECAY) || (id == PARAM_ENV3_SUSTAIN)
+            || (id == PARAM_ENV3_RELEASE));
+    if (rule.resource == TRACK_RUNTIME_RESOURCE_FILTER)
+        return (uint8_t)((family == TRACK_FAMILY_SYNTH)
+            || (family == TRACK_FAMILY_SAMPLER)
+            || (family == TRACK_FAMILY_DRUM)
+            || (family == TRACK_FAMILY_EXTERNAL));
+    return 1U;
 }
 
 uint8_t param_registry_track_value_is_audio_command(param_id_t id,

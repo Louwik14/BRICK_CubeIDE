@@ -80,6 +80,14 @@ typedef struct
 
 typedef struct { param_id_t id; float value; } param_registry_prepared_value_t;
 
+typedef struct
+{
+    param_id_t id;
+    uint8_t applicable;
+    uint8_t plockable;
+    const char *label;
+} param_registry_resolved_track_param_t;
+
 void param_registry_init(void);
 
 /* Query surface: pure reads only. */
@@ -99,10 +107,14 @@ uint8_t param_registry_track_value_is_audio_command(param_id_t id,uint8_t track)
 /* Canonical, track-independent product decision. Contextual engine/FX
  * applicability is evaluated separately by track_runtime/slot mapping. */
 uint8_t param_registry_is_plockable(param_id_t id);
-/* Canonical Matrix destination capability.  This is narrower than
- * p-lockability: internal LFO fields remain editable/p-lockable, but only
- * RATE is a Matrix destination. Track/engine applicability is contextual. */
-uint8_t param_registry_is_modulation_target(param_id_t id);
+/* Canonical CONTROL projection of a Param in a concrete track/model context.
+ * The returned label is owned by the static/model catalogues. */
+uint8_t param_registry_resolve_track_param(
+    uint8_t track, param_id_t id,
+    param_registry_resolved_track_param_t *out_param);
+uint8_t param_registry_projected_track_param_is_applicable(
+    param_id_t id, track_family_t family, track_runtime_type_t type,
+    uint8_t is_group_master, uint8_t is_group_child);
 uint8_t param_registry_track_temp_is_applicable(param_id_t id, uint8_t track);
 uint8_t param_registry_temp_is_clearable(param_id_t id);
 /* CONTROL target-only seam used by bulk preparation/commit work.  It performs
