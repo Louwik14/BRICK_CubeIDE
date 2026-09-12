@@ -165,7 +165,8 @@ void ui_renderer_oled_service_poll(void)
         return;
     }
 
-    if ((now - last_render) < UI_RENDER_PERIOD_MS)
+    if ((now - last_render) < UI_RENDER_PERIOD_MS
+            && (g_ui_render_generation == g_ui_render_job_generation))
     {
         return;
     }

@@ -23,6 +23,7 @@
 #include "ui_core_mute.h"
 #include "ui_navigation.h"
 #include "ui_param.h"
+#include "ui_renderer_oled.h"
 
 #define UI_PAGE_MANAGER_MAX_PAGES UI_PAGE_COUNT
 
@@ -114,6 +115,14 @@ void ui_page_set(uint8_t page_id)
         next_page->enter();
     }
     ui_navigation_restore_current_template_subpage();
+
+    /*
+     * Page entry is also a render invalidation boundary.  Some page changes
+     * originate in the hall/track service, outside ui_core_tick(), so they do
+     * not pass through the event invalidation path.  Invalidate after enter
+     * and template-subpage restoration have settled the new page context.
+     */
+    ui_renderer_oled_invalidate();
 }
 const ui_page_t *ui_page_get(void)
 {

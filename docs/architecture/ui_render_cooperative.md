@@ -56,15 +56,18 @@ DMA deja demarre depuis `flush_snapshot`, mais ne peut capturer le framebuffer
 partiel. Le popup est dessine uniquement apres `FINALIZE`; aucune frame partielle
 n'est donc visible.
 
-La page et la structure de navigation sont revalidees avant chaque quantum. Un
-changement structurel de page, track, famille, sous-page ou banque annule le
-job, efface le back-buffer partiel et redemarre depuis la derniere demande. Une
-generation d'invalidation couvre tout delta encodeur ou evenement UI et
-coalesce les demandes rapides sans accumuler de dette de frames. Une variation
-de cette generation pendant un job ne l'annule pas : la frame coherente en
-cours atteint `FINALIZE`, puis le prochain lancement cadence capture la valeur
-la plus recente. La generation joue ainsi le role de `rerender pending` sans
-file de frames ni historique de valeurs.
+La page et la structure de navigation sont revalidees avant chaque quantum. Le
+page manager marque chaque entree invalide apres `enter` et la restauration de
+sous-page : les changements provenant des services Hall/track suivent donc le
+meme contrat que ceux provenant de `ui_core_tick()`. Un changement structurel
+de page, track, famille, sous-page ou banque annule le job, efface le
+back-buffer partiel et redemarre depuis la derniere demande. Une generation
+d'invalidation couvre tout delta encodeur ou evenement UI et coalesce les
+demandes rapides sans accumuler de dette de frames. Une variation de cette
+generation pendant un job ne l'annule pas : la frame coherente en cours atteint
+`FINALIZE`, puis le prochain lancement capture la valeur la plus recente sans
+attendre l'echeance periodique. La generation joue ainsi le role de `rerender
+pending` sans file de frames ni historique de valeurs.
 
 Les callbacks et caches U8g2 restent utilises dans leur ordre normal; aucun etat
 U8g2 n'est suspendu au milieu d'une primitive. Le popup prend sa valeur la plus
