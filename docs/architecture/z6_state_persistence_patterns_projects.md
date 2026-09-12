@@ -25,6 +25,13 @@ borne sans allocation dynamique.
 
 `persistent_pattern_control` et `persistent_patch_control` sont les facades CONTROL. `pattern_control_bank`, `patch_product` et `project_product` sont les facades produit. Une reference asset persistante est `{kind, canonical_path}`; elle est canonicalisee une fois a l'entree de l'owner, puis le codec la valide et l'encode sans transformation. `project_control` ne resout le slot AUDIO qu'apres chargement, au moment de la publication fonctionnelle. Sample et tables Wave ne possedent plus de stable key Param. L'owner FM unique est encode champ par champ, sans packs flottants, copie operateur secondaire ni codec historique. Les tables et mipmaps restent des data planes immutables hors FIFO.
 
+Pour PATCH SAVE, `prepare` capture un snapshot complet et son slot dans l'owner
+produit. Ce snapshot reste admis pendant une modale de nommage et n'est libere que
+par `submit`, par une annulation produit explicite, ou par la reinitialisation de
+l'owner. La validation canonique du nom compare uniquement les `name_length`
+octets persistants; les octets hors chaine d'un buffer de travail ne font pas
+partie du format ni de l'admission transactionnelle.
+
 Le Patch Load lit et decode cooperativement dans STORAGE_IO, precharge ses assets,
 puis prevalide la topologie, les capacites, la polyphonie et tous les owners pour
 l'ensemble du masque avant un unique commit structurel CONTROL. Sample RAM,

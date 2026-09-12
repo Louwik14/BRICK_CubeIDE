@@ -13,6 +13,7 @@
 #include "ui_core.h"
 #include "ui_event.h"
 #include "ui_page_manager.h"
+#include "stm32h7xx_hal.h"
 
 typedef struct
 {
@@ -24,6 +25,7 @@ typedef struct
     uint8_t clear_confirm;
     patch_product_operation_t name_edit_operation;
     uint16_t name_edit_slot;
+    uint32_t status_until_ms;
     char status[24];
 } ui_page_patch_assign_state_t;
 
@@ -49,6 +51,7 @@ static ui_page_patch_assign_state_t g_patch_assign = {
 #define PATCH_ASSIGN_STATUS_Y 52U
 #define PATCH_ASSIGN_FOOTER_LABEL_Y 58U
 #define PATCH_ASSIGN_SCROLL_X 126U
+#define PATCH_ASSIGN_STATUS_DURATION_MS 1000U
 
 typedef enum
 {
@@ -84,10 +87,20 @@ static void ui_page_patch_assign_name_done(ui_page_name_edit_result_t result,
 
 static void ui_page_patch_assign_set_status(const char *status)
 {
+    g_patch_assign.status_until_ms = 0U;
     memset(g_patch_assign.status, 0, sizeof(g_patch_assign.status));
     if (status != 0)
     {
         (void)snprintf(g_patch_assign.status, sizeof(g_patch_assign.status), "%s", status);
+    }
+}
+
+static void ui_page_patch_assign_set_temporary_status(const char *status)
+{
+    ui_page_patch_assign_set_status(status);
+    if (status != 0)
+    {
+        g_patch_assign.status_until_ms = HAL_GetTick() + PATCH_ASSIGN_STATUS_DURATION_MS;
     }
 }
 
@@ -788,7 +801,7 @@ static void ui_page_patch_assign_name_done(ui_page_name_edit_result_t result,
     }
     state->name_edit_operation = PATCH_PRODUCT_OPERATION_NONE;
     state->name_edit_slot = PATCH_PRODUCT_INVALID_SLOT;
-    ui_page_patch_assign_set_status(
+    ui_page_patch_assign_set_temporary_status(
         (submit_result == PATCH_PRODUCT_IO_BUSY) ? "BUSY"
         : patch_product_result_label(submit_result));
 }
@@ -1203,6 +1216,12 @@ static void ui_page_patch_assign_render(void)
 
 static void ui_page_patch_assign_tick(void)
 {
+    if ((g_patch_assign.status_until_ms != 0U)
+            && ((int32_t)(g_patch_assign.status_until_ms - HAL_GetTick()) <= 0))
+    {
+        ui_page_patch_assign_set_status(0);
+    }
+
     if (g_patch_assign.name_edit_operation == PATCH_PRODUCT_OPERATION_NONE)
     {
         return;
@@ -1227,12 +1246,13 @@ static void ui_page_patch_assign_tick(void)
         g_patch_assign.selected_slot = slot;
         patch_product_set_current(slot);
     }
-    ui_page_patch_assign_set_status((result == PATCH_PRODUCT_OK)
-                                    ? ((operation == PATCH_PRODUCT_OPERATION_SAVE)
-                                       ? "PATCH SAVED"
-                                       : ((operation == PATCH_PRODUCT_OPERATION_LOAD)
-                                          ? "PATCH LOADED" : "PATCH RENAMED"))
-                                    : patch_product_result_label(result));
+    ui_page_patch_assign_set_temporary_status(
+        (result == PATCH_PRODUCT_OK)
+            ? ((operation == PATCH_PRODUCT_OPERATION_SAVE)
+               ? "PATCH SAVED"
+               : ((operation == PATCH_PRODUCT_OPERATION_LOAD)
+                  ? "PATCH LOADED" : "PATCH RENAMED"))
+            : patch_product_result_label(result));
 }
 
 const ui_page_t g_ui_page_patch_assign = {

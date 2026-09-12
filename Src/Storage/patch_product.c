@@ -270,7 +270,7 @@ static uint8_t patch_name_is_canonical(const persist_control_patch_t *patch)
         return 0U;
     }
     return (strlen(normalized) == patch->name_length)
-        && (memcmp(normalized, source, NAME_CONTRACT_BUFFER_BYTES) == 0);
+        && (memcmp(normalized, source, patch->name_length) == 0);
 }
 
 static uint8_t patch_io_busy(void)
