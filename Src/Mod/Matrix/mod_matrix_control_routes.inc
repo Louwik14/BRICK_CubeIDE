@@ -129,21 +129,39 @@ static uint8_t mod_matrix_publish_slot_candidate(uint8_t track, uint8_t slot,
     {
         uint8_t target = 0U;
         param_id_t destination = PARAM_COUNT;
-        float base = 0.0f;
-        param_registry_prepared_value_t prepared;
-        if ((mod_destination_address_resolve(candidate->destination,
-                    &target, &destination) == 0U)
-                || (param_registry_get_track_value(destination, target, &base) == 0U)
-                || (param_registry_prepare_value(destination, base, &prepared) == 0U))
+        if (mod_destination_address_resolve(candidate->destination,
+                &target, &destination) == 0U)
             return 0U;
-        bulk.item[bulk.count++] = (live_parameter_audio_target_t){
-            .parameter_id = (uint16_t)destination,
-            .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
-            .track = target,
-            .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
-            .semantic = CONTROL_AUDIO_PARAM_BASE,
-            .value = live_parameter_event_encode_float(prepared.value)
-        };
+        uint8_t base_already_present = 0U;
+        for (uint8_t i = 0U; i < bulk.count; ++i)
+        {
+            const live_parameter_audio_target_t *const item = &bulk.item[i];
+            if ((item->parameter_id == (uint16_t)destination)
+                    && (item->scope == LIVE_PARAMETER_EVENT_SCOPE_TRACK)
+                    && (item->track == target)
+                    && (item->slot == LIVE_PARAMETER_EVENT_INVALID_INDEX)
+                    && (item->semantic == CONTROL_AUDIO_PARAM_BASE))
+            {
+                base_already_present = 1U;
+                break;
+            }
+        }
+        if (base_already_present == 0U)
+        {
+            float base = 0.0f;
+            param_registry_prepared_value_t prepared;
+            if ((param_registry_get_track_value(destination, target, &base) == 0U)
+                    || (param_registry_prepare_value(
+                        destination, base, &prepared) == 0U)) return 0U;
+            bulk.item[bulk.count++] = (live_parameter_audio_target_t){
+                .parameter_id = (uint16_t)destination,
+                .scope = LIVE_PARAMETER_EVENT_SCOPE_TRACK,
+                .track = target,
+                .slot = LIVE_PARAMETER_EVENT_INVALID_INDEX,
+                .semantic = CONTROL_AUDIO_PARAM_BASE,
+                .value = live_parameter_event_encode_float(prepared.value)
+            };
+        }
     }
     return live_parameter_audio_publication_submit_bulk(&bulk) ? 1U : 0U;
 }
@@ -267,7 +285,7 @@ uint8_t mod_matrix_set_slot_state(uint8_t track,
     if ((source >= MOD_MATRIX_SOURCE_COUNT)
             || (entity_topology_mod_owner(track, &owner) == 0U)
             || ((destination != MOD_DESTINATION_NONE)
-                && (mod_destination_catalog_index_from_address(owner, destination) == UINT16_MAX)))
+                && (mod_destination_catalog_index_from_address(owner, destination) == 0U)))
     {
         return 0U;
     }

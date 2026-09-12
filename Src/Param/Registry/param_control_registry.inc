@@ -57,6 +57,24 @@ static uint8_t param_lfo_map(param_id_t id, uint8_t *out_lfo_index, mod_lfo_para
     return 0U;
 }
 
+static uint8_t param_registry_param_changes_destination_catalog(param_id_t id)
+{
+    switch (id)
+    {
+        case PARAM_DRUM_MD_MODEL:
+        case PARAM_PRISM_OSC1_MODEL:
+        case PARAM_PRISM_OSC2_MODEL:
+        case PARAM_STACK_OSC1_MODEL:
+        case PARAM_STACK_OSC2_MODEL:
+        case PARAM_STACK_OSC3_MODEL:
+        case PARAM_AUDIO_FX_MODEL:
+        case PARAM_AUDIO_FX_B_MODEL:
+            return 1U;
+        default:
+            return 0U;
+    }
+}
+
 static uint8_t param_registry_set_track_tone_value(param_id_t id,
                                                     uint8_t track,
                                                     float value)
@@ -71,9 +89,10 @@ static uint8_t param_registry_set_track_tone_value(param_id_t id,
         const uint8_t model = (raw_model < (uint8_t)MD_MODEL_COUNT)
             ? raw_model : (uint8_t)MD_MODEL_TRX_BD;
         value = (float)model;
-        mod_destination_catalog_invalidate_track(track);
     }
     (void)tone_program_control_set(track, id, value);
+    if (param_registry_param_changes_destination_catalog(id) != 0U)
+        mod_destination_catalog_invalidate_track(track);
     return 1U;
 }
 
@@ -217,7 +236,11 @@ static uint8_t param_track_exec_apply_backend(const param_track_exec_ctx_t *ctx)
     const uint8_t applied = param_backend_apply_track_value_control(
         ctx->track, ctx->id, ctx->clamped);
     if ((applied != 0U) && (ctx->rt_fast == 0U))
+    {
         (void)tone_program_control_set(ctx->track, ctx->id, ctx->clamped);
+        if (param_registry_param_changes_destination_catalog(ctx->id) != 0U)
+            mod_destination_catalog_invalidate_track(ctx->track);
+    }
     return applied;
 }
 

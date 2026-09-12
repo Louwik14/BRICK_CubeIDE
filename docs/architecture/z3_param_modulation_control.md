@@ -65,11 +65,17 @@ Le premier bind d'une route LFO depuis `DEST OFF` publie dans le meme lot la
 configuration canonique complete du LFO source avant destination, activation
 et base de destination. AUDIO ne depend donc ni d'un tweak anterieur ni d'un
 second bind pour initialiser RATE, SHAPE, TRIG et PHASE. Les binds LFO1, LFO2 et
-LFO3 partagent ce contrat; un changement de destination ne reset pas la phase.
+LFO3 partagent ce contrat; si la destination est elle-meme un champ de ce LFO,
+sa base deja presente est dedupliquee dans le lot. Un changement de destination
+ne reset pas la phase.
 
 Le catalogue CONTROL LFO/Matrix enumere les Param et consomme leur descripteur
 contextuel resolu. Les catalogues Prism, Stack, Drum MD et Audio FX restent les
 sources des labels et de l'applicabilite de modele; MOD DEST ne les connait pas.
+L'ordre est celui des sets p-lock canoniques puis de leurs slots, jamais celui
+des ordinaux `param_id`. La projection locale derivee est mise en cache et
+invalidee lors des changements de moteur, modele FX/Drum/Prism/Stack ou
+topologie; le rendu UI ne reconstruit donc pas le catalogue a chaque frame.
 Les trois LFO conservent leur identite dans ce label resolu. AUDIO ne consulte
 aucune politique Track: il verifie l'ABI puis prepare l'opcode DSP de la
 destination deja legitime. Les destinations MIDI CC n'existent plus cote AUDIO

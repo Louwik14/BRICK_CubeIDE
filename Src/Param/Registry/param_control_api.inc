@@ -262,7 +262,13 @@ uint8_t param_registry_install_prepared_track_control_target(
     {
         case PARAM_CONTROL_OWNER_AUDIO_ONLY: return 1U;
         case PARAM_CONTROL_OWNER_TONE:
-            return tone_program_control_set(track, id, value);
+        {
+            const uint8_t installed = tone_program_control_set(track, id, value);
+            if ((installed != 0U)
+                    && (param_registry_param_changes_destination_catalog(id) != 0U))
+                mod_destination_catalog_invalidate_track(track);
+            return installed;
+        }
         case PARAM_CONTROL_OWNER_FM:
             return fm_control_state_set_public_param(track, id, value);
         case PARAM_CONTROL_OWNER_MUTE:
@@ -271,8 +277,8 @@ uint8_t param_registry_install_prepared_track_control_target(
         {
             const uint8_t installed =
                 audio_fx_control_install_prepared_param(track, id, value);
-            if ((installed != 0U) && ((id == PARAM_AUDIO_FX_MODEL)
-                    || (id == PARAM_AUDIO_FX_B_MODEL)))
+            if ((installed != 0U)
+                    && (param_registry_param_changes_destination_catalog(id) != 0U))
                 mod_destination_catalog_invalidate_track(track);
             return installed;
         }
