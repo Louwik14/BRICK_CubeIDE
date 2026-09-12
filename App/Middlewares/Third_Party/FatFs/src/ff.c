@@ -891,11 +891,221 @@ void clear_lock (	/* Clear lock entries of the volume */
 /* Move/Flush disk access window in the file system object               */
 /*-----------------------------------------------------------------------*/
 #if !_FS_READONLY
+
+#if _BRICK_REC_RESERVE
+enum {
+	FF_META_WINDOW_PHASE_DONE = 0,
+	FF_META_WINDOW_PHASE_WRITE_ISSUE,
+	FF_META_WINDOW_PHASE_WRITE_WAIT,
+	FF_META_WINDOW_PHASE_READ_ISSUE,
+	FF_META_WINDOW_PHASE_READ_WAIT,
+	FF_META_WINDOW_PHASE_ERROR
+};
+
+
+FRESULT f_brick_meta_window_begin (
+	FF_META_WINDOW_CONT* cont,
+	FATFS* fs,
+	DWORD target_sector,
+	BYTE load_target,
+	BYTE* staging,
+	UINT staging_size
+)
+{
+	if (!cont || !fs || (staging && staging_size < SS(fs))) return FR_INVALID_PARAMETER;
+
+	mem_set(cont, 0, sizeof(*cont));
+	cont->fs = fs;
+	cont->staging = staging ? staging : fs->win;
+	cont->staging_size = staging ? staging_size : SS(fs);
+	cont->target_sector = target_sector;
+	cont->load_target = load_target ? 1 : 0;
+	cont->next_sequence = 1;
+	cont->result = FR_OK;
+
+	if (load_target && target_sector == fs->winsect) {
+		cont->phase = FF_META_WINDOW_PHASE_DONE;
+		return FR_OK;
+	}
+
+	if (fs->wflag) {
+		cont->flush_sector = fs->winsect;
+		cont->mirror_count = 1;
+		if (cont->flush_sector - fs->fatbase < fs->fsize) {
+			cont->mirror_count = fs->n_fats;
+		}
+		if (cont->staging != fs->win) {
+			mem_cpy(cont->staging, fs->win, SS(fs));
+		}
+		cont->phase = FF_META_WINDOW_PHASE_WRITE_ISSUE;
+	} else if (load_target) {
+		cont->phase = FF_META_WINDOW_PHASE_READ_ISSUE;
+	} else {
+		cont->phase = FF_META_WINDOW_PHASE_DONE;
+	}
+	return FR_OK;
+}
+
+
+static void brick_meta_window_prepare_request (FF_META_WINDOW_CONT* cont)
+{
+	cont->request.count = 1;
+	cont->request.buffer = cont->staging;
+	cont->request.sequence = cont->next_sequence++;
+	if (cont->phase == FF_META_WINDOW_PHASE_WRITE_ISSUE) {
+		cont->request.operation = FF_META_IO_WRITE;
+		cont->request.sector = cont->flush_sector
+			+ (DWORD)cont->mirror_index * cont->fs->fsize;
+	} else {
+		cont->request.operation = FF_META_IO_READ;
+		cont->request.sector = cont->target_sector;
+	}
+	cont->request_valid = 1;
+}
+
+
+FF_META_STEP_RESULT f_brick_meta_window_step (
+	FF_META_WINDOW_CONT* cont,
+	const FF_META_REQUEST** request
+)
+{
+	FATFS* fs;
+
+	if (request) *request = 0;
+	if (!cont || !cont->fs) return FF_META_STEP_ERROR;
+	fs = cont->fs;
+
+	switch (cont->phase) {
+	case FF_META_WINDOW_PHASE_WRITE_ISSUE:
+	case FF_META_WINDOW_PHASE_READ_ISSUE:
+		if (!cont->request_valid) brick_meta_window_prepare_request(cont);
+		if (request) *request = &cont->request;
+		return FF_META_STEP_NEED_IO;
+
+	case FF_META_WINDOW_PHASE_WRITE_WAIT:
+		if (!cont->io_completed) return FF_META_STEP_WAIT_IO;
+		cont->io_completed = 0;
+		cont->request_valid = 0;
+		if (cont->result != FR_OK) {
+			cont->phase = FF_META_WINDOW_PHASE_ERROR;
+			return FF_META_STEP_ERROR;
+		}
+		if (++cont->mirror_index < cont->mirror_count) {
+			cont->phase = FF_META_WINDOW_PHASE_WRITE_ISSUE;
+			return FF_META_STEP_YIELD;
+		}
+		fs->wflag = 0;
+		if (cont->load_target) {
+			cont->phase = FF_META_WINDOW_PHASE_READ_ISSUE;
+			return FF_META_STEP_YIELD;
+		}
+		cont->phase = FF_META_WINDOW_PHASE_DONE;
+		return FF_META_STEP_DONE;
+
+	case FF_META_WINDOW_PHASE_READ_WAIT:
+		if (!cont->io_completed) return FF_META_STEP_WAIT_IO;
+		cont->io_completed = 0;
+		cont->request_valid = 0;
+		if (cont->result != FR_OK) {
+			fs->winsect = 0xFFFFFFFF;
+			cont->phase = FF_META_WINDOW_PHASE_ERROR;
+			return FF_META_STEP_ERROR;
+		}
+		if (cont->staging != fs->win) {
+			mem_cpy(fs->win, cont->staging, SS(fs));
+		}
+		fs->winsect = cont->target_sector;
+		cont->phase = FF_META_WINDOW_PHASE_DONE;
+		return FF_META_STEP_DONE;
+
+	case FF_META_WINDOW_PHASE_DONE:
+		return FF_META_STEP_DONE;
+
+	default:
+		cont->result = FR_INT_ERR;
+		cont->phase = FF_META_WINDOW_PHASE_ERROR;
+		return FF_META_STEP_ERROR;
+	}
+}
+
+
+FRESULT f_brick_meta_window_io_started (
+	FF_META_WINDOW_CONT* cont,
+	DWORD sequence
+)
+{
+	if (!cont || !cont->request_valid || cont->request.sequence != sequence) {
+		return FR_INVALID_PARAMETER;
+	}
+	if (cont->phase == FF_META_WINDOW_PHASE_WRITE_ISSUE) {
+		BRICK_REC_NOTE_WRITE(1);
+		cont->phase = FF_META_WINDOW_PHASE_WRITE_WAIT;
+	} else if (cont->phase == FF_META_WINDOW_PHASE_READ_ISSUE) {
+		BRICK_REC_NOTE_READ(1);
+		cont->phase = FF_META_WINDOW_PHASE_READ_WAIT;
+	} else {
+		return FR_INVALID_PARAMETER;
+	}
+	return FR_OK;
+}
+
+
+FRESULT f_brick_meta_window_io_complete (
+	FF_META_WINDOW_CONT* cont,
+	DWORD sequence,
+	FRESULT result
+)
+{
+	if (!cont || !cont->request_valid || cont->request.sequence != sequence
+		|| cont->io_completed
+		|| (cont->phase != FF_META_WINDOW_PHASE_WRITE_WAIT
+			&& cont->phase != FF_META_WINDOW_PHASE_READ_WAIT)) {
+		return FR_INVALID_PARAMETER;
+	}
+	cont->result = result;
+	cont->io_completed = 1;
+	return FR_OK;
+}
+
+
+static FRESULT brick_meta_window_run_sync (FF_META_WINDOW_CONT* cont)
+{
+	const FF_META_REQUEST* request;
+	FF_META_STEP_RESULT step;
+	DRESULT io_result;
+
+	for (;;) {
+		step = f_brick_meta_window_step(cont, &request);
+		if (step == FF_META_STEP_DONE) return FR_OK;
+		if (step == FF_META_STEP_ERROR) return cont->result;
+		if (step == FF_META_STEP_YIELD) continue;
+		if (step != FF_META_STEP_NEED_IO || !request) return FR_INT_ERR;
+		if (f_brick_meta_window_io_started(cont, request->sequence) != FR_OK) {
+			return FR_INT_ERR;
+		}
+		io_result = request->operation == FF_META_IO_WRITE
+			? disk_write(cont->fs->drv, request->buffer, request->sector, request->count)
+			: disk_read(cont->fs->drv, request->buffer, request->sector, request->count);
+		if (f_brick_meta_window_io_complete(cont, request->sequence,
+			io_result == RES_OK ? FR_OK : FR_DISK_ERR) != FR_OK) {
+			return FR_INT_ERR;
+		}
+	}
+}
+#endif
+
 static
 FRESULT sync_window (	/* Returns FR_OK or FR_DISK_ERROR */
 	FATFS* fs			/* File system object */
 )
 {
+#if _BRICK_REC_RESERVE
+	FF_META_WINDOW_CONT cont;
+	FRESULT res;
+
+	res = f_brick_meta_window_begin(&cont, fs, fs->winsect, 0, 0, 0);
+	return res == FR_OK ? brick_meta_window_run_sync(&cont) : res;
+#else
 	DWORD wsect;
 	UINT nf;
 	FRESULT res = FR_OK;
@@ -918,6 +1128,7 @@ FRESULT sync_window (	/* Returns FR_OK or FR_DISK_ERROR */
 		}
 	}
 	return res;
+#endif
 }
 #endif
 
@@ -928,6 +1139,13 @@ FRESULT move_window (	/* Returns FR_OK or FR_DISK_ERROR */
 	DWORD sector		/* Sector number to make appearance in the fs->win[] */
 )
 {
+#if _BRICK_REC_RESERVE && !_FS_READONLY
+	FF_META_WINDOW_CONT cont;
+	FRESULT res;
+
+	res = f_brick_meta_window_begin(&cont, fs, sector, 1, 0, 0);
+	return res == FR_OK ? brick_meta_window_run_sync(&cont) : res;
+#else
 	FRESULT res = FR_OK;
 
 
@@ -945,6 +1163,7 @@ FRESULT move_window (	/* Returns FR_OK or FR_DISK_ERROR */
 		}
 	}
 	return res;
+#endif
 }
 
 

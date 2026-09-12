@@ -236,6 +236,61 @@ typedef enum {
 
 
 
+/* Internal metadata continuation contract used by the BRICK recorder.  It is
+ * deliberately separate from FRESULT: public FatFs calls remain synchronous
+ * and only expose a terminal FRESULT. */
+#if _BRICK_REC_RESERVE && !_FS_READONLY
+typedef enum {
+	FF_META_STEP_YIELD = 0,
+	FF_META_STEP_NEED_IO,
+	FF_META_STEP_WAIT_IO,
+	FF_META_STEP_DONE,
+	FF_META_STEP_ERROR
+} FF_META_STEP_RESULT;
+
+typedef enum {
+	FF_META_IO_NONE = 0,
+	FF_META_IO_READ,
+	FF_META_IO_WRITE
+} FF_META_IO_OPERATION;
+
+typedef struct {
+	FF_META_IO_OPERATION operation;
+	DWORD sector;
+	UINT count;
+	BYTE* buffer;
+	DWORD sequence;
+} FF_META_REQUEST;
+
+typedef struct {
+	FATFS* fs;
+	BYTE* staging;
+	FF_META_REQUEST request;
+	DWORD target_sector;
+	DWORD flush_sector;
+	DWORD next_sequence;
+	FRESULT result;
+	UINT staging_size;
+	BYTE phase;
+	BYTE load_target;
+	BYTE mirror_index;
+	BYTE mirror_count;
+	BYTE request_valid;
+	BYTE io_completed;
+} FF_META_WINDOW_CONT;
+
+FRESULT f_brick_meta_window_begin (FF_META_WINDOW_CONT* cont, FATFS* fs,
+	DWORD target_sector, BYTE load_target, BYTE* staging, UINT staging_size);
+FF_META_STEP_RESULT f_brick_meta_window_step (FF_META_WINDOW_CONT* cont,
+	const FF_META_REQUEST** request);
+FRESULT f_brick_meta_window_io_started (FF_META_WINDOW_CONT* cont,
+	DWORD sequence);
+FRESULT f_brick_meta_window_io_complete (FF_META_WINDOW_CONT* cont,
+	DWORD sequence, FRESULT result);
+#endif
+
+
+
 /*--------------------------------------------------------------*/
 /* FatFs module application interface                           */
 
