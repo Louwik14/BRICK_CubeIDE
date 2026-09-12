@@ -46,6 +46,7 @@ static ui_page_patch_assign_state_t g_patch_assign = {
 #define PATCH_ASSIGN_LIST_PITCH 8U
 #define PATCH_ASSIGN_LIST_VISIBLE_LINES 4U
 #define PATCH_ASSIGN_SELECT_H 8U
+#define PATCH_ASSIGN_STATUS_Y 52U
 #define PATCH_ASSIGN_FOOTER_LABEL_Y 58U
 #define PATCH_ASSIGN_SCROLL_X 126U
 
@@ -473,7 +474,6 @@ static void ui_page_patch_assign_step_selection(int16_t delta)
     const uint16_t count = ui_page_patch_assign_visible_count();
     if (count == 0U)
     {
-        ui_page_patch_assign_set_status("NO PATCH");
         return;
     }
 
@@ -522,9 +522,7 @@ static void ui_page_patch_assign_step_family_filter(int16_t delta)
     }
     ui_page_patch_assign_cancel_actions();
     ui_page_patch_assign_ensure_visible_selection();
-    ui_page_patch_assign_set_status(ui_page_patch_assign_visible_count() == 0U
-                                    ? "NO PATCH"
-                                    : 0);
+    ui_page_patch_assign_set_status(0);
 }
 
 static void ui_page_patch_assign_step_type_filter(int16_t delta)
@@ -534,9 +532,7 @@ static void ui_page_patch_assign_step_type_filter(int16_t delta)
         : ui_page_patch_assign_type_filter_next(delta);
     ui_page_patch_assign_cancel_actions();
     ui_page_patch_assign_ensure_visible_selection();
-    ui_page_patch_assign_set_status(ui_page_patch_assign_visible_count() == 0U
-                                    ? "NO PATCH"
-                                    : 0);
+    ui_page_patch_assign_set_status(0);
 }
 
 static uint8_t ui_page_patch_assign_slot_valid(uint16_t slot)
@@ -620,7 +616,6 @@ static void ui_page_patch_assign_apply_selected(void)
     }
     if (ui_page_patch_assign_selection_is_visible() == 0U)
     {
-        ui_page_patch_assign_set_status("NO PATCH");
         return;
     }
     if (patch_product_metadata(g_patch_assign.selected_slot, &meta) == 0U)
@@ -646,7 +641,6 @@ static void ui_page_patch_assign_begin_rename(void)
     char name[33];
     if (ui_page_patch_assign_selection_is_visible() == 0U)
     {
-        ui_page_patch_assign_set_status("NO PATCH");
         return;
     }
     if (ui_page_patch_assign_slot_valid(g_patch_assign.selected_slot) == 0U)
@@ -872,9 +866,7 @@ void ui_page_patch_assign_open(uint8_t target_track, ui_hall_mode_t previous_hal
     }
     ui_page_patch_assign_ensure_visible_selection();
 
-    ui_page_patch_assign_set_status(ui_page_patch_assign_visible_count() == 0U
-                                    ? "NO PATCH"
-                                    : 0);
+    ui_page_patch_assign_set_status(0);
     ui_page_set(UI_PAGE_PATCH_ASSIGN);
 }
 
@@ -1204,12 +1196,9 @@ static void ui_page_patch_assign_render(void)
     if (g_patch_assign.status[0] != '\0')
     {
         drv_display_set_font(&FONT_4X6);
-        drv_display_draw_text(0U, 54U, g_patch_assign.status);
+        drv_display_draw_text(0U, PATCH_ASSIGN_STATUS_Y, g_patch_assign.status);
     }
-    else
-    {
-        ui_page_patch_assign_draw_footer();
-    }
+    ui_page_patch_assign_draw_footer();
 }
 
 static void ui_page_patch_assign_tick(void)

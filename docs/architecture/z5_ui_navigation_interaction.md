@@ -14,6 +14,11 @@ de targets; CLEAR demande une confirmation locale puis remet uniquement le Patch
 live de la track courante a son etat Init. CLEAR ne supprime jamais le fichier du
 slot et ne change pas la selection du browser. Le double-tap Hall n'est plus une
 commande Save: il ouvre le contexte PATCH, dont le Save est porte par PAGE 1.
+L'etat vide d'une liste filtree est rendu dans la zone de contenu sous la forme
+`NO PATCH`; il ne remplace jamais le footer PAGE 1..4, qui reste la navigation
+canonique de PATCH. Les messages transitoires sont rendus au-dessus du footer.
+Les browsers dynamiques de SETTINGS appliquent le meme contrat de separation
+entre statut et footer.
 
 Le contexte temporaire TRACK est resolu par `ui_hall_mode_track_overlay_active`,
 utilise par le dispatch Hall et la projection LED. Il prime sur la page active

@@ -781,9 +781,7 @@ static void ui_page_settings_render_multi_browser(void)
 
     if (g_ui_settings.status_line[0] != '\0')
     {
-        drv_display_draw_text(0U, 54U, g_ui_settings.status_line);
-        drv_display_set_font(&FONT_5X7);
-        return;
+        drv_display_draw_text(0U, UI_SETTINGS_STATUS_Y, g_ui_settings.status_line);
     }
 
     ui_page_settings_draw_page_footer_ex("CLEAR", "-");
@@ -881,9 +879,7 @@ static void ui_page_settings_render_sample_browser(void)
 
     if (g_ui_settings.status_line[0] != '\0')
     {
-        drv_display_draw_text(0U, 54U, g_ui_settings.status_line);
-        drv_display_set_font(&FONT_5X7);
-        return;
+        drv_display_draw_text(0U, UI_SETTINGS_STATUS_Y, g_ui_settings.status_line);
     }
 
     ui_page_settings_draw_sample_footer();
@@ -968,9 +964,7 @@ static void ui_page_settings_render_ram_browser(void)
 
     if (g_ui_settings.status_line[0] != '\0')
     {
-        drv_display_draw_text(0U, 54U, g_ui_settings.status_line);
-        drv_display_set_font(&FONT_5X7);
-        return;
+        drv_display_draw_text(0U, UI_SETTINGS_STATUS_Y, g_ui_settings.status_line);
     }
 
     ui_page_settings_draw_sample_footer();
@@ -1052,9 +1046,7 @@ static void ui_page_settings_render_wavetable_browser(void)
 
     if (g_ui_settings.status_line[0] != '\0')
     {
-        drv_display_draw_text(0U, 54U, g_ui_settings.status_line);
-        drv_display_set_font(&FONT_5X7);
-        return;
+        drv_display_draw_text(0U, UI_SETTINGS_STATUS_Y, g_ui_settings.status_line);
     }
 
     ui_page_settings_draw_sample_footer();
@@ -1132,9 +1124,9 @@ static void ui_page_settings_render(void)
 
     if (g_ui_settings.status_line[0] != '\0')
     {
-        drv_display_draw_text(0U, 54U, g_ui_settings.status_line);
+        drv_display_draw_text(0U, UI_SETTINGS_STATUS_Y, g_ui_settings.status_line);
     }
-    else if (level->view == UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT)
+    if (level->view == UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT)
     {
         char slot_line[24];
         (void)snprintf(slot_line, sizeof(slot_line), "SLOT %02u", (unsigned)g_ui_settings.selected_slot);
@@ -1167,7 +1159,7 @@ static void ui_page_settings_render(void)
         drv_display_draw_text(0U, 42U, slot_line);
         ui_page_settings_draw_page_footer("-");
     }
-    else if (g_ui_settings.status_line[0] == '\0')
+    else
     {
         ui_page_settings_draw_page_footer("-");
     }
