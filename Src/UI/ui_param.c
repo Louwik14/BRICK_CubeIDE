@@ -97,6 +97,62 @@ uint8_t ui_param_is_local_control(param_id_t id)
         && (id <= UI_PARAM_LOCAL_FM_OPERATOR));
 }
 
+static const char *const g_ui_local_bool_labels[] = {
+    "Off", "On", NULL
+};
+static const char *const g_ui_local_looper_arm_labels[] = {
+    "Off", "REC", "OVERDUB", NULL
+};
+static const char *const g_ui_local_looper_length_labels[] = {
+    "Free", "1", "2", "4", "8", "16", NULL
+};
+
+static const param_desc_t g_ui_local_asset_desc = {
+    .id = UI_PARAM_LOCAL_ASSET, .name = "ASSET", .type = PARAM_TYPE_INT,
+    .min = 0.0f, .max = 65535.0f, .step = 1.0f, .default_value = 0.0f,
+    .display_type = PARAM_DISPLAY_INT, .unit = "", .labels = NULL,
+};
+static const param_desc_t g_ui_local_wave_desc = {
+    .id = UI_PARAM_LOCAL_WAVE_OSC1, .name = "TABLE", .type = PARAM_TYPE_INT,
+    .min = 0.0f, .max = 65535.0f, .step = 1.0f, .default_value = 0.0f,
+    .display_type = PARAM_DISPLAY_INT, .unit = "", .labels = NULL,
+};
+static const param_desc_t g_ui_local_looper_arm_desc = {
+    .id = UI_PARAM_LOCAL_LOOPER_ARM, .name = "ARM", .type = PARAM_TYPE_ENUM,
+    .min = 0.0f, .max = 2.0f, .step = 1.0f, .default_value = 0.0f,
+    .display_type = PARAM_DISPLAY_ENUM, .unit = "", .labels = g_ui_local_looper_arm_labels,
+};
+static const param_desc_t g_ui_local_looper_length_desc = {
+    .id = UI_PARAM_LOCAL_LOOPER_LENGTH, .name = "LENGTH", .type = PARAM_TYPE_ENUM,
+    .min = 0.0f, .max = 5.0f, .step = 1.0f, .default_value = 0.0f,
+    .display_type = PARAM_DISPLAY_ENUM, .unit = "", .labels = g_ui_local_looper_length_labels,
+};
+static const param_desc_t g_ui_local_looper_play_desc = {
+    .id = UI_PARAM_LOCAL_LOOPER_PLAY, .name = "PLAY", .type = PARAM_TYPE_BOOL,
+    .min = 0.0f, .max = 1.0f, .step = 1.0f, .default_value = 0.0f,
+    .display_type = PARAM_DISPLAY_BOOL, .unit = "", .labels = g_ui_local_bool_labels,
+};
+static const param_desc_t g_ui_local_fm_operator_desc = {
+    .id = UI_PARAM_LOCAL_FM_OPERATOR, .name = "OP", .type = PARAM_TYPE_INT,
+    .min = 0.0f, .max = (float)(PARAM_FM_OPERATOR_COUNT - 1U), .step = 1.0f,
+    .default_value = 0.0f, .display_type = PARAM_DISPLAY_INT, .unit = "", .labels = NULL,
+};
+
+const param_desc_t *ui_param_get_local_desc(param_id_t id)
+{
+    switch (id)
+    {
+        case UI_PARAM_LOCAL_ASSET: return &g_ui_local_asset_desc;
+        case UI_PARAM_LOCAL_WAVE_OSC1:
+        case UI_PARAM_LOCAL_WAVE_OSC2: return &g_ui_local_wave_desc;
+        case UI_PARAM_LOCAL_LOOPER_ARM: return &g_ui_local_looper_arm_desc;
+        case UI_PARAM_LOCAL_LOOPER_LENGTH: return &g_ui_local_looper_length_desc;
+        case UI_PARAM_LOCAL_LOOPER_PLAY: return &g_ui_local_looper_play_desc;
+        case UI_PARAM_LOCAL_FM_OPERATOR: return &g_ui_local_fm_operator_desc;
+        default: return NULL;
+    }
+}
+
 static uint8_t ui_param_local_control_get(param_id_t id, uint8_t track,
                                           float *out_value)
 {

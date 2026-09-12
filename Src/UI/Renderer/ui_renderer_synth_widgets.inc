@@ -349,7 +349,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
         }
     }
 
-    if (id >= PARAM_COUNT)
+    if ((id >= PARAM_COUNT) && (ui_param_is_local_control(id) == 0U))
     {
         if (slot_locked != 0U)
         {
@@ -384,7 +384,12 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
         return;
     }
 
-    const param_desc_t *desc = &param_registry[id];
+    const param_desc_t *desc = (id < PARAM_COUNT)
+        ? &param_registry[id] : ui_param_get_local_desc(id);
+    if (desc == NULL)
+    {
+        return;
+    }
     float value = 0.0f;
     uint8_t draw_name_inverted = 0U;
     const char *enum_label = NULL;

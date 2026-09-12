@@ -172,7 +172,14 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
         return;
     }
 
-    const param_desc_t *desc = &param_registry[id];
+    const uint8_t is_local = ui_param_is_local_control(id);
+    const param_desc_t *desc = (is_local != 0U)
+        ? ui_param_get_local_desc(id) : &param_registry[id];
+    if (desc == NULL)
+    {
+        (void)snprintf(out, out_len, "--");
+        return;
+    }
 
     if ((id == PARAM_LFO1_RATE) || (id == PARAM_LFO2_RATE) || (id == PARAM_LFO3_RATE))
     {
@@ -198,8 +205,10 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
         return;
     }
 
-    const float display_value = param_value_policy_canonical_to_display(
-        id, ui_renderer_template_get_param_authority_track(id), value);
+    const float display_value = (is_local != 0U)
+        ? value
+        : param_value_policy_canonical_to_display(
+            id, ui_renderer_template_get_param_authority_track(id), value);
 
     if ((desc->display_type == PARAM_DISPLAY_INT)
             && (desc->unit != NULL)
@@ -223,7 +232,8 @@ static void ui_renderer_template_format_value(param_id_t id, float value, char *
         {
             const int32_t index = (int32_t)(value + 0.5f);
             const char *label = NULL;
-            if ((desc->labels != NULL) && (index >= 0))
+            if ((desc->labels != NULL) && (index >= 0)
+                    && (index <= (int32_t)desc->max))
             {
                 label = desc->labels[index];
             }
@@ -507,9 +517,10 @@ static void ui_renderer_template_build_param_text(const ui_template_page_state_t
                                                   char *value_txt,
                                                   uint32_t value_len)
 {
-    if (ui_param_is_local_control(id) == 0U)
+    const param_desc_t *const desc = (id < PARAM_COUNT)
+        ? &param_registry[id] : ui_param_get_local_desc(id);
+    if (desc != NULL)
     {
-        const param_desc_t *desc = &param_registry[id];
         if ((name_txt != NULL) && (name_len > 0U))
             (void)snprintf(name_txt, name_len, "%s", desc->name);
         if ((value_txt != NULL) && (value_len > 0U))

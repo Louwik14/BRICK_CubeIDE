@@ -5,6 +5,9 @@
 
 #include "Param/param_ids.h"
 
+struct param_desc;
+typedef struct param_desc param_desc_t;
+
 typedef struct
 {
     param_id_t params[4];
@@ -88,6 +91,7 @@ uint8_t ui_param_resolve_encoder_detent(const ui_param_encoder_context_t *ctx,
 void ui_param_handle_encoder(uint8_t encoder, int16_t delta);
 float ui_param_get_active_track_display_value(param_id_t param, uint8_t active_track);
 uint8_t ui_param_is_local_control(param_id_t id);
+const param_desc_t *ui_param_get_local_desc(param_id_t id);
 uint8_t ui_param_get_audio_owned_command_value(param_id_t param,
                                                uint8_t track,
                                                float *out_value);

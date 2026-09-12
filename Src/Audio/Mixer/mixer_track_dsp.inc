@@ -283,6 +283,17 @@ static uint8_t mixer_lane_routes_to_looper(uint8_t looper_track,
 
 static float mixer_get_looper_xfade(float target)
 {
+    if (target <= MIXER_LOOPER_XFADE_EPS)
+    {
+        g_looper_xfade_smoothed = 0.0f;
+        return 0.0f;
+    }
+    if (target >= (1.0f - MIXER_LOOPER_XFADE_EPS))
+    {
+        g_looper_xfade_smoothed = 1.0f;
+        return 1.0f;
+    }
+
     float value = g_looper_xfade_smoothed;
     value += (target - value) * 0.25f;
     if (value < 0.0f) value = 0.0f;

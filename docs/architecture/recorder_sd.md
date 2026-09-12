@@ -141,6 +141,23 @@ La reserve fixe recorder comprend le ring Audio Rec/Looper de 12 001 frames (`~9
 
 Les `f_write` restants hors recorder servent l'editeur REC EDIT (copie Save/Assign) et les transactions fichiers ordinaires; ils ne sont pas sur le hot path de capture. Toute evolution doit conserver: aucune attente SD en IRQ, publication du tail seulement sur completion physique, carte append-only, une commande block-device active, passage obligatoire par le scheduler pour READ/WRITE/FILESYSTEM concurrents, et finalisation WAV seulement apres drainage complet.
 
+## Monitoring Looper et XFADE
+
+Les entrees physiques LINE et USB sont materialisees comme voies `External` du
+mixer lorsqu'elles sont possedees par une piste routable. Elles rejoignent
+alors le bus live principal. L'entree MIC logique, elle, est actuellement une
+source directe de `audio_rec_bus` (capture) et n'est pas une voie de monitoring
+master. Les flags `AUDIO_REC_BUS_SOURCE_*` alimentent uniquement
+`audio_rec_bus` pour l'enregistrement et ne constituent pas un monitoring
+parallele.
+
+Pendant la lecture Looper, la sortie Looper reste sur un bus playback dedie et
+`XFADE` melange ce bus avec le bus live apres les retours de sends. La valeur
+canonique est bornee a `[0, 1]`, avec des extremites deterministes: `0` donne
+live seul et `1` loop seul. Les voies live USB/LINE et les sources internes
+sont donc toutes soumises au meme gain live; aucune voie physique n'est
+reinjectee directement dans le master.
+
 ## Validation
 
 Les tests hote conserves couvrent le state machine generique, le WAV et ses erreurs produit, l'ecriture block-device asynchrone, l'arbitrage scheduler et la reservation FAT32/exFAT avec extension, preservation des voisins, liberation de queue et recovery. La validation cible doit compiler LowCost puis exercer capture longue, LEN, stop pendant charge streamer, carte lente/fragmentee, retrait media et reloop immediat.

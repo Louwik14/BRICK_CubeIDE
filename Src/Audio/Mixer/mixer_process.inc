@@ -125,8 +125,12 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         looper_xfade_start = 0.0f;
         looper_xfade_end = 0.0f;
     }
+    /* Keep Looper playback on its own bus for the complete live/loop
+     * crossfade range.  In particular, XFADE=0 must not fall back to the
+     * ordinary lane fan-out, otherwise the loop can bypass the crossfade
+     * while the live bus remains authoritative. */
     looper_playback_mix_active =
-        ((looper_playback_active != 0U) && (looper_xfade_apply_active != 0U)) ? 1U : 0U;
+        ((looper_playback_active != 0U) && (looper_playback_routes_main != 0U)) ? 1U : 0U;
     uint8_t looper_record_track = 0U;
     const uint8_t looper_record_active = mixer_looper_record_capture_is_active(&looper_record_track);
     const uint8_t audio_rec_capture_active = (uint8_t)(
