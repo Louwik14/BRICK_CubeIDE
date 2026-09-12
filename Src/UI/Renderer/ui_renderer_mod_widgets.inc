@@ -96,15 +96,22 @@ static uint8_t ui_renderer_template_draw_lfo_dest_text(int x, int y, int w, int 
         return 0U;
     }
 
-    char label[20];
-    if (mod_lfo_v1_dest_short_label(ui_renderer_template_get_edit_owner_track(), (uint16_t)(value + 0.5f), label, (uint32_t)sizeof(label)) == 0U)
+    ui_mod_destination_projection_t projection;
+    if (ui_page_template_mod_project_destination(
+            ui_renderer_template_get_edit_owner_track(),
+            (uint16_t)(value + 0.5f), &projection) == 0U)
     {
-        (void)snprintf(label, sizeof(label), "-");
+        (void)snprintf(projection.widget_line1, sizeof(projection.widget_line1), "Mod");
+        (void)snprintf(projection.widget_line2, sizeof(projection.widget_line2), "-");
     }
 
     drv_display_set_font(&FONT_OFF_COMPACT);
-    ui_renderer_template_fit_text(label, (uint8_t)((w > 2) ? (w - 2) : w));
-    return ui_renderer_template_draw_filter_text(x, y, w, h, label, &FONT_OFF_COMPACT, 4);
+    const int line_h = (int)drv_display_font_height();
+    const int text_y = y + ((h - (2 * line_h)) / 2);
+    (void)ui_renderer_template_draw_filter_text(
+        x, text_y, w, line_h, projection.widget_line1, &FONT_OFF_COMPACT, 0);
+    return ui_renderer_template_draw_filter_text(
+        x, text_y + line_h, w, line_h, projection.widget_line2, &FONT_OFF_COMPACT, 0);
 }
 
 static uint8_t ui_renderer_template_lfo_shape_from_value(float value)

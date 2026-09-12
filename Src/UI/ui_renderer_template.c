@@ -14,6 +14,7 @@
 #include "ui_param.h"
 #include "ui_widgets.h"
 #include "pages/ui_page_template_play.h"
+#include "pages/ui_page_template_mod.h"
 #include "Param/engine_model_catalog.h"
 #include "Param/stack_waveform.h"
 #include "Storage/project_control.h"

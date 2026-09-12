@@ -295,7 +295,9 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
                                                                   virt_value);
                     }
                     drv_display_set_font(&FONT_4X6);
-                    ui_renderer_template_fit_text(virt_name, UI_TEMPLATE_CARD_LABEL_MAX_PX);
+                    ui_renderer_template_fit_text(virt_name,
+                        (virtual_widget == UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEST)
+                            ? UI_TEMPLATE_FRAME_W : UI_TEMPLATE_CARD_LABEL_MAX_PX);
                     drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, virt_name),
                                           (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y), virt_name);
                     return;
