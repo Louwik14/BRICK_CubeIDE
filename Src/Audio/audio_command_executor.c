@@ -602,7 +602,9 @@ static _Noreturn void audio_command_fatal_at(
     g_audio_command_fatal_record.context =
         ((uint32_t)command->opcode_kind << 16) | command->id;
     g_audio_command_fatal_record.requested = command->value;
-    g_audio_command_fatal_record.capacity = (uint32_t)result;
+    g_audio_command_fatal_record.capacity =
+        (result == AUDIO_COMMAND_APPLY_MAPPING)
+        ? AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY : (uint32_t)result;
     __DMB();
     Error_Handler();
     for (;;) {}

@@ -23,7 +23,7 @@ static uint16_t g_audio_entity_mask_by_engine[TRACK_RUNTIME_ENGINE_COUNT];
 static uint8_t g_audio_entity_by_mix_lane[MIXER_MAX_TRACKS];
 static uint8_t g_audio_external_gate_triggered[BRICK_ENTITY_CAPACITY];
 
-#define AUDIO_PHYSICAL_OUTPUT_CAPACITY 8U
+#define AUDIO_PHYSICAL_OUTPUT_CAPACITY AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY
 
 _Static_assert(AUDIO_PHYSICAL_OUTPUT_CAPACITY >= SYNTH_POLYPHONY_MAX_VOICES,
                "AUDIO output mapping must cover synth polyphony");
@@ -408,15 +408,12 @@ static uint8_t audio_note_engine_adapter_apply_physical(
         && (program->type == TRACK_RUNTIME_TYPE_RAM)
         && (brick6_sampler_runtime_ram_mode_is_hold(entity_id) != 0U));
 
-    if ((uses_voice_vca == 0U) && (is_multi_sampler == 0U)
-            && (output_id != 0U))
-    {
-        if ((is_note_on == 0U)
-                && (audio_note_engine_find_output(entity_id, output_id) < 0))
-        {
-            return 1U;
-        }
-    }
+    /* STOP is idempotent for every renderer.  CONTROL normally filters stale
+     * deaths, but an already-stolen or recovery-era STOP must not ask a voice
+     * allocator to rediscover musical ownership or become an AUDIO fatal. */
+    if ((is_note_on == 0U) && (output_id != 0U)
+            && (output_was_active == 0U))
+        return 1U;
 
     const uint8_t voice = (uses_voice_allocator == 0U)
         ? SYNTH_POLYPHONY_NO_VOICE

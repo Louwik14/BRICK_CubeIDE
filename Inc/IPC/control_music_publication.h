@@ -6,9 +6,15 @@
 #include "IPC/control_music_capacity.h"
 #include "Seq/seq_capacity_contract.h"
 
-_Static_assert(CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST
+_Static_assert(CONTROL_MUSIC_SOURCE_MAX_HORIZON_BURST
                    == SEQ_PRODUCT_MAX_MUSIC_ACTIONS_PER_HORIZON,
-               "internal music staging must cover the product horizon");
+               "source music reserve must cover the sequencer horizon");
+_Static_assert(CONTROL_MUSIC_NOTE_FX_MAX_TEMPORAL_OUTPUTS_PER_HORIZON
+                   == SEQ_PRODUCT_MAX_EMITTING_VOICES,
+               "temporal Note FX reserve must cover product polyphony");
+_Static_assert(CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST
+                   >= CONTROL_MUSIC_SOURCE_MAX_HORIZON_BURST,
+               "internal music staging must cover every producer");
 
 uint16_t control_music_publication_free(void);
 uint8_t control_music_publication_publish_merged_window(

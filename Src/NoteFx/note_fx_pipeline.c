@@ -639,7 +639,10 @@ static uint8_t note_fx_pipeline_admit_effective(
         global_future = (uint16_t)(global_future
             + g_note_fx_admitted_future[owner]);
     }
-    if ((global_actions > CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST)
+    /* This admission term covers source-driven transformations only.  The
+     * separate temporal-engine reserve is added by the music-window contract;
+     * using the combined limit here would over-admit source fanout. */
+    if ((global_actions > CONTROL_MUSIC_SOURCE_MAX_HORIZON_BURST)
             || (global_future > NOTE_FX_FUTURE_CAPACITY))
         return 0U;
     out->future = future_per_track;

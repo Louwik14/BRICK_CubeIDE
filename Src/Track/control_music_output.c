@@ -770,6 +770,15 @@ uint8_t control_music_output_submit(const control_music_action_t *action,
         return 1U;
     }
 
+    /* RETRIGGER is a transition of an already-live identity.  Gate/temporal
+     * FX legitimately mark their first ON as retrigger-style, but there is no
+     * old lifetime to stop in that case.  Normalize at the CONTROL lifetime
+     * authority so AUDIO never receives an invented OFF for an unknown id. */
+    control_music_action_t admitted_start = *action;
+    admitted_start.kind = (uint8_t)(CONTROL_MUSIC_ACTION_START
+        | (action->kind & (CONTROL_MUSIC_ACTION_EXTERNAL_FLAG
+            | CONTROL_MUSIC_ACTION_CHANNEL_MASK)));
+
     const uint8_t live_count = control_music_output_live_count(entity_id);
     const uint8_t limit = control_music_output_limit(entity_id);
     control_music_action_t batch[CONTROL_MUSIC_OUTPUTS_PER_ENTITY + 1U];
@@ -855,7 +864,7 @@ uint8_t control_music_output_submit(const control_music_action_t *action,
             .note = victim->note
         };
     }
-    batch[count++] = *action;
+    batch[count++] = admitted_start;
     if (control_music_output_publish_batch(batch, count) == 0U)
     {
         return 0U;

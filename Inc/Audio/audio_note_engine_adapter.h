@@ -6,6 +6,8 @@
 #include "Track/entity_types.h"
 #include "Track/track_types.h"
 
+#define AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY 8U
+
 typedef struct
 {
     brick_entity_id_t entity_id;

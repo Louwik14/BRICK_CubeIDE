@@ -3,9 +3,11 @@
 
 #include <stdint.h>
 
+#include "IPC/control_music_capacity.h"
 #include "Track/entity_topology.h"
 
-#define CONTROL_MUSIC_ACTION_CAPACITY 384U
+#define CONTROL_MUSIC_ACTION_CAPACITY \
+    CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST
 #define CONTROL_MUSIC_ACTION_EXTERNAL_FLAG 0x80U
 #define CONTROL_MUSIC_ACTION_KIND_MASK 0x03U
 #define CONTROL_MUSIC_ACTION_CHANNEL_SHIFT 2U

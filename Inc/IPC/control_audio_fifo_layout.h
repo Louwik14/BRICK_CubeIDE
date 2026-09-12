@@ -57,9 +57,9 @@ _Static_assert((CONTROL_AUDIO_FIFO_CAPACITY
                "functional FIFO capacity must be a power of two");
 _Static_assert(CONTROL_AUDIO_FIFO_CAPACITY >= CONTROL_AUDIO_FIFO_CONTRACT_BURST,
                "functional FIFO cannot contain the contractual worst burst");
-_Static_assert(CONTROL_AUDIO_FIFO_MAX_NOTE_BURST == 768U,
+_Static_assert(CONTROL_AUDIO_FIFO_MAX_NOTE_BURST == 1024U,
                "music action conversion proof changed");
-_Static_assert(CONTROL_AUDIO_FIFO_CONTRACT_BURST == 1827U,
+_Static_assert(CONTROL_AUDIO_FIFO_CONTRACT_BURST == 2083U,
                "functional FIFO aggregate proof changed");
 _Static_assert(AUDIO_STATE_SNAPSHOT_COMMAND_CAPACITY == 4618U,
                "complete AUDIO projection bound changed");
@@ -69,7 +69,7 @@ _Static_assert(CONTROL_AUDIO_FIFO_MAX_ENCODER_ACCUMULATION == 540U,
                "encoder publication proof changed");
 _Static_assert(CONTROL_AUDIO_FIFO_MAX_NON_HORIZON_IN_FLIGHT == 953U,
                "non-horizon accumulation proof changed");
-_Static_assert(CONTROL_AUDIO_FIFO_REQUIRED == 3292U,
+_Static_assert(CONTROL_AUDIO_FIFO_REQUIRED == 3548U,
                "global in-flight publication proof changed");
 _Static_assert(CONTROL_AUDIO_FIFO_CAPACITY >= CONTROL_AUDIO_FIFO_REQUIRED,
                "functional FIFO is below the global in-flight proof");
