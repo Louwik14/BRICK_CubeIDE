@@ -21,7 +21,7 @@ typedef struct
     uint16_t target_mask;
     uint8_t previous_page;
     ui_hall_mode_t previous_hall_mode;
-    uint8_t delete_confirm;
+    uint8_t clear_confirm;
     patch_product_operation_t name_edit_operation;
     uint16_t name_edit_slot;
     char status[24];
@@ -33,7 +33,7 @@ static ui_page_patch_assign_state_t g_patch_assign = {
     .target_mask = 1U,
     .previous_page = UI_PAGE_TEMPLATE_CFG,
     .previous_hall_mode = UI_HALL_MODE_SEQ,
-    .delete_confirm = 0U,
+    .clear_confirm = 0U,
     .name_edit_operation = PATCH_PRODUCT_OPERATION_NONE,
     .name_edit_slot = PATCH_PRODUCT_INVALID_SLOT,
     .status = { 0 },
@@ -560,7 +560,7 @@ static uint8_t ui_page_patch_assign_selection_is_visible(void)
 
 static void ui_page_patch_assign_cancel_actions(void)
 {
-    g_patch_assign.delete_confirm = 0U;
+    g_patch_assign.clear_confirm = 0U;
 }
 
 static uint8_t ui_page_patch_assign_target_count(void)
@@ -628,50 +628,16 @@ static void ui_page_patch_assign_apply_selected(void)
         ui_page_patch_assign_set_status("BAD PATCH");
         return;
     }
-    patch_product_set_current(g_patch_assign.selected_slot);
-    uint8_t applied = 0U;
-    uint8_t requested = 0U;
-    patch_product_result_t first_error = PATCH_PRODUCT_OK;
-
-    for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
+    const patch_product_result_t result = patch_product_load_begin(
+        g_patch_assign.selected_slot, g_patch_assign.target_mask);
+    if (result == PATCH_PRODUCT_PENDING)
     {
-        if ((g_patch_assign.target_mask & (uint16_t)(1UL << track)) == 0U)
-        {
-            continue;
-        }
-
-        ++requested;
-        const patch_product_result_t result =
-            patch_product_apply(g_patch_assign.selected_slot, track);
-        if (result == PATCH_PRODUCT_OK)
-        {
-            ++applied;
-        }
-        else if (first_error == PATCH_PRODUCT_OK)
-        {
-            first_error = result;
-        }
+        g_patch_assign.name_edit_operation = PATCH_PRODUCT_OPERATION_LOAD;
+        g_patch_assign.name_edit_slot = g_patch_assign.selected_slot;
+        ui_page_patch_assign_set_status("LOADING");
     }
-
-    if ((requested != 0U) && (applied == requested))
-    {
-        ui_page_patch_assign_set_status((applied > 1U) ? "PATCHES APPLIED" : "PATCH APPLIED");
-    }
-    else if (applied != 0U)
-    {
-        char status[24];
-        (void)snprintf(status,
-                       sizeof(status),
-                       "AP %u/%u %s",
-                       (unsigned)applied,
-                       (unsigned)requested,
-                       patch_product_result_label(first_error));
-        ui_page_patch_assign_set_status(status);
-    }
-    else
-    {
-        ui_page_patch_assign_set_status(patch_product_result_label(first_error));
-    }
+    else ui_page_patch_assign_set_status(
+        (result == PATCH_PRODUCT_IO_BUSY) ? "BUSY" : patch_product_result_label(result));
 }
 
 static void ui_page_patch_assign_begin_rename(void)
@@ -704,7 +670,7 @@ static void ui_page_patch_assign_begin_rename(void)
         ui_page_patch_assign_set_status("BAD PATCH");
         return;
     }
-    g_patch_assign.delete_confirm = 0U;
+    g_patch_assign.clear_confirm = 0U;
     g_patch_assign.name_edit_operation = PATCH_PRODUCT_OPERATION_RENAME;
     g_patch_assign.name_edit_slot = g_patch_assign.selected_slot;
 
@@ -768,7 +734,7 @@ static void ui_page_patch_assign_begin_save(void)
         return;
     }
 
-    g_patch_assign.delete_confirm = 0U;
+    g_patch_assign.clear_confirm = 0U;
     g_patch_assign.name_edit_operation = PATCH_PRODUCT_OPERATION_SAVE;
     g_patch_assign.name_edit_slot = slot;
     if (ui_page_name_edit_open(UI_PAGE_PATCH_ASSIGN,
@@ -833,46 +799,25 @@ static void ui_page_patch_assign_name_done(ui_page_name_edit_result_t result,
         : patch_product_result_label(submit_result));
 }
 
-static void ui_page_patch_assign_delete_action(void)
+static void ui_page_patch_assign_clear_action(void)
 {
-    if (ui_page_patch_assign_selection_is_visible() == 0U)
+    if (entity_topology_is_active(g_patch_assign.target_track) == 0U)
     {
-        ui_page_patch_assign_set_status("NO PATCH");
-        g_patch_assign.delete_confirm = 0U;
+        ui_page_patch_assign_set_status("NO TARGET");
+        g_patch_assign.clear_confirm = 0U;
         return;
     }
-
-    if (ui_page_patch_assign_slot_valid(g_patch_assign.selected_slot) == 0U)
+    if (g_patch_assign.clear_confirm == 0U)
     {
-        ui_page_patch_assign_set_status(
-            (patch_product_slot_state(g_patch_assign.selected_slot) == PATCH_PRODUCT_SLOT_EMPTY)
-            ? "EMPTY"
-            : "BAD PATCH");
-        g_patch_assign.delete_confirm = 0U;
+        g_patch_assign.clear_confirm = 1U;
+        ui_page_patch_assign_set_status("CLEAR?");
         return;
     }
-
-    if (g_patch_assign.delete_confirm == 0U)
-    {
-        g_patch_assign.delete_confirm = 1U;
-        ui_page_patch_assign_set_status("DELETE?");
-        return;
-    }
-
-    uint16_t next_slot = g_patch_assign.selected_slot;
-    const patch_product_result_t result =
-        patch_product_delete(g_patch_assign.selected_slot, &next_slot);
-    if (result == PATCH_PRODUCT_OK)
-    {
-        g_patch_assign.selected_slot = next_slot;
-        ui_page_patch_assign_ensure_visible_selection();
-        ui_page_patch_assign_set_status("PATCH DELETED");
-    }
-    else
-    {
-        ui_page_patch_assign_set_status(patch_product_result_label(result));
-    }
-    g_patch_assign.delete_confirm = 0U;
+    const patch_product_result_t result = patch_product_clear(g_patch_assign.target_track);
+    ui_page_patch_assign_set_status((result == PATCH_PRODUCT_OK)
+                                    ? "PATCH CLEARED"
+                                    : patch_product_result_label(result));
+    g_patch_assign.clear_confirm = 0U;
 }
 
 static void ui_page_patch_assign_enter(void)
@@ -974,7 +919,7 @@ static void ui_page_patch_assign_handle_event(const ui_event_t *ev)
             break;
 
         case BTN_PAGE_2:
-            g_patch_assign.delete_confirm = 0U;
+            g_patch_assign.clear_confirm = 0U;
             ui_page_patch_assign_apply_selected();
             break;
 
@@ -983,11 +928,11 @@ static void ui_page_patch_assign_handle_event(const ui_event_t *ev)
             break;
 
         case BTN_PAGE_4:
-            ui_page_patch_assign_delete_action();
+            ui_page_patch_assign_clear_action();
             break;
 
         default:
-            g_patch_assign.delete_confirm = 0U;
+            g_patch_assign.clear_confirm = 0U;
             break;
     }
 }
@@ -1003,7 +948,7 @@ uint8_t ui_page_patch_assign_handle_encoder(uint8_t encoder, int16_t delta)
         return 1U;
     }
 
-    g_patch_assign.delete_confirm = 0U;
+    g_patch_assign.clear_confirm = 0U;
 
     if (encoder == 0U)
     {
@@ -1287,14 +1232,17 @@ static void ui_page_patch_assign_tick(void)
     }
     g_patch_assign.name_edit_operation = PATCH_PRODUCT_OPERATION_NONE;
     g_patch_assign.name_edit_slot = PATCH_PRODUCT_INVALID_SLOT;
-    if (operation == PATCH_PRODUCT_OPERATION_SAVE)
+    if ((operation == PATCH_PRODUCT_OPERATION_SAVE)
+            || (operation == PATCH_PRODUCT_OPERATION_LOAD))
     {
         g_patch_assign.selected_slot = slot;
         patch_product_set_current(slot);
     }
     ui_page_patch_assign_set_status((result == PATCH_PRODUCT_OK)
                                     ? ((operation == PATCH_PRODUCT_OPERATION_SAVE)
-                                       ? "PATCH SAVED" : "PATCH RENAMED")
+                                       ? "PATCH SAVED"
+                                       : ((operation == PATCH_PRODUCT_OPERATION_LOAD)
+                                          ? "PATCH LOADED" : "PATCH RENAMED"))
                                     : patch_product_result_label(result));
 }
 

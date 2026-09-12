@@ -64,7 +64,7 @@ static void fm_operator_set_frequency(track_tone_fm_operator_base_t *op,
     op->fine = best_fine;
 }
 
-static void fm_control_state_make_default(fm_control_state_t *state)
+void fm_control_state_make_default(fm_control_state_t *state)
 {
     static const uint8_t s_default_output_level[TRACK_TONE_FM_OPERATOR_COUNT] = {
         99U, 82U, 76U, 70U, 64U, 58U

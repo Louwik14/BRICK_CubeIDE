@@ -51,6 +51,60 @@ static uint8_t track_state_audio_resources_are_valid(
         && (synth_voices <= SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET));
 }
 
+bool track_structure_validate_entity_bulk_with_polyphony(
+    const uint8_t family[BRICK_ENTITY_CAPACITY],
+    const uint8_t type[BRICK_ENTITY_CAPACITY],
+    const uint8_t external_input[TRACK_COUNT],
+    const uint8_t voice_count[BRICK_ENTITY_CAPACITY])
+{
+    if ((family == NULL) || (type == NULL) || (external_input == NULL)
+            || (voice_count == NULL)) return false;
+    track_config_t configs[BRICK_ENTITY_CAPACITY];
+    uint16_t synth_voices = 0U;
+    uint8_t loopers = 0U;
+    const uint8_t group_active = (uint8_t)(
+        type[BRICK_ENTITY_GROUP_MASTER_ID] == TRACK_TYPE_GROUP);
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        configs[entity] = (track_config_t){
+            .family = (track_family_t)family[entity],
+            .type = (track_type_t)type[entity]
+        };
+    }
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        entity_topology_descriptor_t topology;
+        if ((entity_topology_resolve(group_active, entity, &topology) == 0U)
+                || (topology.active == 0U)) continue;
+        const track_family_t ui_family = configs[entity].family;
+        const track_type_t ui_type = configs[entity].type;
+        if (((uint8_t)ui_family >= TRACK_FAMILY_COUNT)
+                || ((uint8_t)ui_type >= TRACK_TYPE_COUNT)
+                || ((ui_family != TRACK_FAMILY_OFF)
+                    && !track_catalog_type_is_available(entity, ui_family,
+                                                        ui_type, configs)))
+            return false;
+        const track_runtime_family_t runtime_family =
+            track_runtime_family_from_ui(ui_family);
+        const track_runtime_type_t runtime_type = track_runtime_type_from_ui(ui_type);
+        const track_runtime_engine_t engine =
+            track_runtime_choose_engine(runtime_family, runtime_type);
+        if (engine == TRACK_RUNTIME_ENGINE_LOOPER) ++loopers;
+        if ((runtime_family == TRACK_RUNTIME_FAMILY_SYNTH)
+                || (engine == TRACK_RUNTIME_ENGINE_DRUM))
+            synth_voices = (uint16_t)(synth_voices
+                + track_runtime_effective_voice_count(runtime_family,
+                    runtime_type, voice_count[entity]));
+        else if ((runtime_family != TRACK_RUNTIME_FAMILY_OFF)
+                && (runtime_family != TRACK_RUNTIME_FAMILY_MIDI)
+                && (runtime_type != TRACK_RUNTIME_TYPE_GROUP)
+                && (engine == TRACK_RUNTIME_ENGINE_NONE)) return false;
+    }
+    return (loopers <= BRICK6_LOOPER_GLOBAL_CAP)
+        && (synth_voices <= SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
+        && (track_input_ownership_validate_bulk(configs, external_input) != 0U);
+}
+
 static track_config_t track_state_default_config(void)
 {
     track_config_t config = {

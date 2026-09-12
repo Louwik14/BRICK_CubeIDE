@@ -8,11 +8,12 @@ STEP 1..8 selectionnent les top-level. En GROUP, STEP 9..16 selectionnent les ch
 
 Le chemin Hall direct met a jour modifiers, selection, mode et double-tap avant le drain de la queue UI. SHIFT+HALL precede TRACK_MOD+HALL. Un evenement consomme par un stage masque les suivants.
 
-La page PATCH conserve une grammaire locale PAGE 1 SAVE, PAGE 2 LOAD, PAGE 3 RENAME,
-PAGE 4 CLEAR. Cette passe branche uniquement SAVE et RENAME via le Name Editor
-generique; LOAD et CLEAR gardent leur comportement existant. Le double-tap Hall
-n'est plus une commande Save: il ouvre le contexte PATCH, dont le Save est porte
-par PAGE 1.
+La page PATCH porte la grammaire locale canonique PAGE 1 SAVE, PAGE 2 LOAD,
+PAGE 3 RENAME, PAGE 4 CLEAR. LOAD soumet en une fois le slot visible et le masque
+de targets; CLEAR demande une confirmation locale puis remet uniquement le Patch
+live de la track courante a son etat Init. CLEAR ne supprime jamais le fichier du
+slot et ne change pas la selection du browser. Le double-tap Hall n'est plus une
+commande Save: il ouvre le contexte PATCH, dont le Save est porte par PAGE 1.
 
 Le contexte temporaire TRACK est resolu par `ui_hall_mode_track_overlay_active`,
 utilise par le dispatch Hall et la projection LED. Il prime sur la page active

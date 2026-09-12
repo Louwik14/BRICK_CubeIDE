@@ -15,6 +15,7 @@
 #include "Storage/project_product.h"
 #include "Storage/sd_access_gate.h"
 #include "Track/track_catalog.h"
+#include "Track/entity_topology.h"
 #include "Track/track_state.h"
 #include "ff.h"
 
@@ -22,17 +23,6 @@ static uint8_t g_present[PATCH_PRODUCT_SLOT_COUNT];
 static uint8_t g_invalid[PATCH_PRODUCT_SLOT_COUNT];
 STORAGE_STATE_SDRAM static patch_product_metadata_t g_meta[PATCH_PRODUCT_SLOT_COUNT];
 static uint16_t g_current = PATCH_PRODUCT_INVALID_SLOT;
-STORAGE_STATE_SDRAM static persist_codec_patch_staging_t g_stage;
-
-typedef struct
-{
-    uint8_t active;
-    uint16_t slot;
-    uint16_t target_mask;
-} patch_apply_runtime_t;
-
-STORAGE_STATE_SDRAM static patch_apply_runtime_t g_patch_apply;
-
 #define PATCH_PRODUCT_SECTION_BODY 0x3001U
 #define PATCH_PRODUCT_IO_BUFFER_BYTES (16U * 1024U)
 
@@ -47,6 +37,8 @@ typedef enum
     PATCH_IO_READ,
     PATCH_IO_CLOSE_READ,
     PATCH_IO_DECODE,
+    PATCH_IO_PREPARE_LOAD,
+    PATCH_IO_WAIT_ASSET,
     PATCH_IO_ENCODE,
     PATCH_IO_OPEN_WRITE,
     PATCH_IO_WRITE,
@@ -69,6 +61,7 @@ typedef struct
     uint8_t read_open;
     uint8_t write_open;
     uint16_t slot;
+    uint16_t target_mask;
     uint16_t prepared_slot;
     uint32_t media_epoch;
     uint32_t file_size;
@@ -253,38 +246,6 @@ static uint8_t scan_meta(uint16_t slot)
     return valid;
 }
 
-static uint8_t load(uint16_t slot, persist_control_patch_t *out)
-{
-    if ((slot >= PATCH_PRODUCT_SLOT_COUNT) || (out == 0)
-            || (g_present[slot] == 0U) || (acquire() == 0U))
-    {
-        return 0U;
-    }
-
-    char final_path[48];
-    persistent_fatfs_file_t file;
-    uint8_t valid = path(final_path, sizeof(final_path), slot)
-        && persistent_fatfs_open_read(&file, final_path);
-    if (valid)
-    {
-        persist_codec_source_t source = persistent_fatfs_source(&file);
-        valid = (persist_codec_decode_patch(&source, &g_stage) == PERSIST_CODEC_OK);
-        persistent_fatfs_close(&file);
-    }
-    sd_access_gate_release(SD_ACCESS_CLIENT_PATCH);
-    if (valid)
-    {
-        *out = g_stage.patch;
-        meta_from_patch(slot, out);
-        g_invalid[slot] = 0U;
-    }
-    else
-    {
-        g_invalid[slot] = 1U;
-    }
-    return valid;
-}
-
 static uint8_t patch_name_normalize(const char *name,
                                     char output[NAME_CONTRACT_BUFFER_BYTES])
 {
@@ -320,7 +281,6 @@ static uint8_t patch_io_busy(void)
 static uint8_t patch_io_common_available(void)
 {
     return (patch_io_busy() == 0U)
-        && (g_patch_apply.active == 0U)
         && (project_product_save_busy() == 0U)
         && (project_product_load_busy() == 0U)
         && (project_replacement_is_active() == 0U);
@@ -330,7 +290,6 @@ static uint8_t patch_io_common_available_for_prepared_save(void)
 {
     return (g_patch_io.state == PATCH_IO_IDLE)
         && (g_patch_io.result_ready == 0U)
-        && (g_patch_apply.active == 0U)
         && (project_product_save_busy() == 0U)
         && (project_product_load_busy() == 0U)
         && (project_replacement_is_active() == 0U);
@@ -387,6 +346,12 @@ static void patch_io_fail(patch_product_result_t result)
         return;
     }
     g_patch_io.result = result;
+    if ((g_patch_io.operation == PATCH_PRODUCT_OPERATION_LOAD)
+            && (g_patch_io.read_open == 0U))
+    {
+        patch_io_finish(result);
+        return;
+    }
     if (g_patch_io.read_open != 0U)
     {
         g_patch_io.state = PATCH_IO_CLOSE_READ_FAILED;
@@ -475,6 +440,17 @@ static void patch_io_decode(void)
         return;
     }
     g_patch_io.patch = g_patch_io.decoded.patch;
+    if (g_patch_io.operation == PATCH_PRODUCT_OPERATION_LOAD)
+    {
+        if (persistent_patch_control_validate_mask(&g_patch_io.patch,
+                g_patch_io.target_mask) != PERSIST_CODEC_OK)
+        {
+            patch_io_fail(PATCH_PRODUCT_INVALID);
+            return;
+        }
+        g_patch_io.state = PATCH_IO_PREPARE_LOAD;
+        return;
+    }
     memcpy(g_patch_io.patch.name, g_patch_io.requested_name,
            sizeof(g_patch_io.patch.name));
     g_patch_io.patch.name_length = (uint16_t)strlen(g_patch_io.requested_name);
@@ -662,116 +638,103 @@ patch_product_result_t patch_product_save(uint8_t entity, uint16_t *out_slot)
     return result;
 }
 
+patch_product_result_t patch_product_load_begin(uint16_t slot, uint16_t target_mask)
+{
+    if (slot >= PATCH_PRODUCT_SLOT_COUNT)
+        return PATCH_PRODUCT_RESULT_INVALID_SLOT;
+    if (target_mask == 0U) return PATCH_PRODUCT_INVALID;
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+        if (((target_mask & (uint16_t)(1UL << entity)) != 0U)
+                && (entity_topology_is_active(entity) == 0U))
+            return PATCH_PRODUCT_INVALID;
+    if (g_present[slot] == 0U) return PATCH_PRODUCT_EMPTY;
+    if (g_invalid[slot] != 0U) return PATCH_PRODUCT_INVALID;
+    if (patch_io_common_available() == 0U) return PATCH_PRODUCT_IO_BUSY;
+    if (!path(g_patch_io.final_path, sizeof(g_patch_io.final_path), slot))
+        return PATCH_PRODUCT_INVALID;
+    patch_io_start(PATCH_PRODUCT_OPERATION_LOAD, slot);
+    g_patch_io.target_mask = target_mask;
+    return PATCH_PRODUCT_PENDING;
+}
+
 patch_product_result_t patch_product_apply(uint16_t slot, uint8_t entity)
 {
-    if (project_replacement_is_active() != 0U)
-    {
-        return PATCH_PRODUCT_IO_BUSY;
-    }
-    if (patch_io_busy() != 0U)
-    {
-        return PATCH_PRODUCT_IO_BUSY;
-    }
-    if (g_patch_apply.active != 0U)
-    {
-        if ((slot == g_patch_apply.slot) && (entity < BRICK_ENTITY_CAPACITY))
-        {
-            g_patch_apply.target_mask |= (uint16_t)(1UL << entity);
-            return PATCH_PRODUCT_PENDING;
-        }
-        return PATCH_PRODUCT_IO_BUSY;
-    }
-    if (slot >= PATCH_PRODUCT_SLOT_COUNT)
-    {
-        return PATCH_PRODUCT_RESULT_INVALID_SLOT;
-    }
-    if (g_present[slot] == 0U)
-    {
-        return PATCH_PRODUCT_EMPTY;
-    }
+    if (entity >= BRICK_ENTITY_CAPACITY) return PATCH_PRODUCT_INVALID;
+    return patch_product_load_begin(slot, (uint16_t)(1UL << entity));
+}
 
-    persist_control_patch_t patch;
-    if (load(slot, &patch) == 0U)
+static project_control_asset_result_t patch_product_prepare_assets(void)
+{
+    for (uint8_t asset_index = 0U;
+         asset_index < g_patch_io.patch.asset_count; ++asset_index)
     {
-        return PATCH_PRODUCT_RESULT_FILE_ABSENT;
-    }
-    if (persistent_patch_control_validate(&patch, entity) != PERSIST_CODEC_OK)
-    {
-        return PATCH_PRODUCT_INVALID;
-    }
-    for (uint8_t asset_index = 0U; asset_index < patch.asset_count; ++asset_index)
-    {
-        const persist_control_asset_ref_t *const selected = &patch.assets[asset_index];
-        if (selected->kind != PERSIST_ASSET_SAMPLE_RAM)
-        {
-            continue;
-        }
+        const persist_control_asset_ref_t *const selected =
+            &g_patch_io.patch.assets[asset_index];
         char asset_path[PERSIST_CONTROL_ASSET_PATH_BYTES + 1U];
         uint16_t logical = 0U;
         memcpy(asset_path, selected->canonical_path, selected->path_length);
         asset_path[selected->path_length] = '\0';
-        const project_control_asset_result_t asset =
+        const project_control_asset_result_t result =
             project_control_ensure_asset(selected->kind, asset_path, &logical);
-        if ((asset == PROJECT_CONTROL_ASSET_FAILED)
-                || (asset == PROJECT_CONTROL_ASSET_FAILED_INTERNAL))
-        {
-            return PATCH_PRODUCT_INVALID;
-        }
-        if (asset == PROJECT_CONTROL_ASSET_PENDING)
-        {
-            g_patch_apply.active = 1U;
-            g_patch_apply.target_mask = (uint16_t)(1UL << entity);
-            g_patch_apply.slot = slot;
-            return PATCH_PRODUCT_PENDING;
-        }
+        if (result != PROJECT_CONTROL_ASSET_READY) return result;
     }
-    if (persistent_patch_control_apply(&patch, entity) != PERSIST_CODEC_OK)
-    {
-        return PATCH_PRODUCT_INVALID;
-    }
-    g_current = slot;
-    return PATCH_PRODUCT_OK;
+    return PROJECT_CONTROL_ASSET_READY;
 }
 
 void patch_product_apply_service(void)
 {
-    if (g_patch_apply.active == 0U)
-    {
+    if ((g_patch_io.operation != PATCH_PRODUCT_OPERATION_LOAD)
+            || ((g_patch_io.state != PATCH_IO_PREPARE_LOAD)
+                && (g_patch_io.state != PATCH_IO_WAIT_ASSET)))
         return;
-    }
-    sampler_ram_result_t result = SAMPLER_RAM_RESULT_INVALID_ARG;
-    uint16_t backend = SAMPLER_RAM_POOL_INVALID_SLOT;
-    uint16_t runtime = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    const char *path_value = NULL;
-    if (sampler_ram_pool_load_async_take_result(&result, &backend, &runtime, &path_value) == 0U)
+    sampler_ram_result_t ram_result;
+    uint16_t backend, runtime;
+    const char *path_value;
+    if ((g_patch_io.state == PATCH_IO_WAIT_ASSET)
+            && sampler_ram_pool_load_async_take_result(&ram_result, &backend,
+                                                       &runtime, &path_value))
     {
-        return;
-    }
-    project_control_complete_ram_runtime(path_value, backend, runtime,
-                                         (result == SAMPLER_RAM_RESULT_OK) ? 1U : 0U);
-    uint8_t applied = 0U;
-    if (result == SAMPLER_RAM_RESULT_OK)
-    {
-        for (uint8_t target = 0U; target < BRICK_ENTITY_CAPACITY; ++target)
+        project_control_complete_ram_runtime(path_value, backend, runtime,
+            (ram_result == SAMPLER_RAM_RESULT_OK) ? 1U : 0U);
+        if (ram_result != SAMPLER_RAM_RESULT_OK)
         {
-            if ((g_patch_apply.target_mask & (uint16_t)(1UL << target)) != 0U
-                    && (persistent_patch_control_apply(&g_stage.patch, target)
-                        == PERSIST_CODEC_OK))
-            {
-                applied = 1U;
-            }
+            patch_io_finish(PATCH_PRODUCT_INVALID);
+            return;
         }
     }
-    if (applied != 0U)
+    const project_control_asset_result_t assets = patch_product_prepare_assets();
+    if (assets == PROJECT_CONTROL_ASSET_PENDING)
     {
-        g_current = g_patch_apply.slot;
+        g_patch_io.state = PATCH_IO_WAIT_ASSET;
+        return;
     }
-    memset(&g_patch_apply, 0, sizeof(g_patch_apply));
+    if ((assets == PROJECT_CONTROL_ASSET_FAILED)
+            || (assets == PROJECT_CONTROL_ASSET_FAILED_INTERNAL)
+            || (persistent_patch_control_apply_mask(&g_patch_io.patch,
+                g_patch_io.target_mask) != PERSIST_CODEC_OK))
+    {
+        patch_io_finish(PATCH_PRODUCT_INVALID);
+        return;
+    }
+    g_current = g_patch_io.slot;
+    patch_io_finish(PATCH_PRODUCT_OK);
+}
+
+patch_product_result_t patch_product_clear(uint8_t entity)
+{
+    if (patch_io_common_available() == 0U) return PATCH_PRODUCT_IO_BUSY;
+    persist_control_patch_t patch;
+    if ((persistent_patch_control_make_default(entity, &patch) != PERSIST_CODEC_OK)
+            || (persistent_patch_control_apply(&patch, entity) != PERSIST_CODEC_OK))
+        return PATCH_PRODUCT_INVALID;
+    return PATCH_PRODUCT_OK;
 }
 
 void patch_product_service(void)
 {
-    if ((g_patch_io.state == PATCH_IO_IDLE) || (g_patch_io.state == PATCH_IO_DONE))
+    if ((g_patch_io.state == PATCH_IO_IDLE) || (g_patch_io.state == PATCH_IO_DONE)
+            || (g_patch_io.state == PATCH_IO_PREPARE_LOAD)
+            || (g_patch_io.state == PATCH_IO_WAIT_ASSET))
     {
         return;
     }
@@ -838,7 +801,8 @@ void patch_product_service(void)
             }
             else
             {
-                g_patch_io.state = PATCH_IO_MKDIR_BRICK;
+                g_patch_io.state = (g_patch_io.operation == PATCH_PRODUCT_OPERATION_LOAD)
+                    ? PATCH_IO_OPEN_READ : PATCH_IO_MKDIR_BRICK;
             }
             break;
         case PATCH_IO_MKDIR_BRICK:
@@ -1047,7 +1011,6 @@ void patch_product_init(void)
     memset(g_present, 0, sizeof(g_present));
     memset(g_invalid, 0, sizeof(g_invalid));
     memset(g_meta, 0, sizeof(g_meta));
-    memset(&g_patch_apply, 0, sizeof(g_patch_apply));
     memset(&g_patch_io, 0, sizeof(g_patch_io));
     g_patch_io.state = PATCH_IO_IDLE;
     g_current = PATCH_PRODUCT_INVALID_SLOT;
@@ -1089,7 +1052,7 @@ patch_product_result_t patch_product_rename(uint16_t slot, const char *name)
 
 patch_product_result_t patch_product_delete(uint16_t slot, uint16_t *out_next)
 {
-    if (patch_io_busy() != 0U || g_patch_apply.active != 0U)
+    if (patch_io_busy() != 0U)
     {
         return PATCH_PRODUCT_IO_BUSY;
     }

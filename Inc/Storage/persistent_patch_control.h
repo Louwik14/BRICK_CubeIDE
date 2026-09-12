@@ -4,4 +4,10 @@
 persist_codec_result_t persistent_patch_control_capture(uint8_t entity,const char*name,persist_control_patch_t*out);
 persist_codec_result_t persistent_patch_control_validate(const persist_control_patch_t*patch,uint8_t target_entity);
 persist_codec_result_t persistent_patch_control_apply(const persist_control_patch_t*patch,uint8_t target_entity);
+persist_codec_result_t persistent_patch_control_validate_mask(const persist_control_patch_t *patch,
+                                                              uint16_t target_mask);
+persist_codec_result_t persistent_patch_control_apply_mask(const persist_control_patch_t *patch,
+                                                           uint16_t target_mask);
+persist_codec_result_t persistent_patch_control_make_default(uint8_t entity,
+                                                             persist_control_patch_t *out);
 #endif

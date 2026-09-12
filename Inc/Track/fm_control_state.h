@@ -14,6 +14,7 @@ typedef struct
 } fm_control_state_t;
 
 void fm_control_state_init(void);
+void fm_control_state_make_default(fm_control_state_t *state);
 uint8_t fm_control_state_reset(uint8_t entity);
 uint8_t fm_control_state_get(uint8_t entity, fm_control_state_t *out_state);
 uint8_t fm_control_state_restore(uint8_t entity,

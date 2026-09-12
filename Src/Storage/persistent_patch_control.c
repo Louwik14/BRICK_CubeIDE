@@ -4,6 +4,7 @@
 #include "IPC/live_clock_control.h"
 #include "IPC/live_parameter_event.h"
 #include "Mod/mod_env3_control.h"
+#include "Mod/mod_destination_control.h"
 #include "Mod/mod_destination_contract.h"
 #include "Mod/mod_lfo_v1_control.h"
 #include "Mod/mod_matrix_control.h"
@@ -20,13 +21,52 @@
 #include "Track/track_state.h"
 #include "Track/vca_control_state.h"
 #include "Track/track_catalog.h"
+#include "Track/track_runtime.h"
+
+static uint8_t validate_mod(const persist_control_modulation_t*m,const track_config_t*c,uint8_t owner)
+{
+    mod_lfo_control_bank_t lfos;mod_env3_control_state_t env,prepared;
+    const uint8_t active=(uint8_t)(c[BRICK_ENTITY_GROUP_MASTER_ID].type==TRACK_TYPE_GROUP);
+    for(uint8_t i=0U;i<3U;++i){mod_lfo_shape_t sh;mod_lfo_trig_mode_t tr;
+        if(!persist_key_lfo_shape_from_disk(m->lfos[i].shape_key,&sh)
+                ||!persist_key_lfo_trigger_from_disk(m->lfos[i].trigger_key,&tr))return 0U;
+        lfos.lfo[i]=(mod_lfo_control_value_t){m->lfos[i].rate,(float)sh,(float)tr,m->lfos[i].phase_offset};}
+    env=(mod_env3_control_state_t){m->envelope.attack,m->envelope.decay,m->envelope.sustain,m->envelope.release,(float)m->envelope.retrigger_hard};
+    if(!mod_lfo_v1_prepare_bank(&lfos,&lfos)||!mod_env3_control_prepare(&env,&prepared))return 0U;
+    for(uint8_t i=0U;i<2U;++i){uint8_t a,b,s;if(!persist_key_mod_source_from_disk(m->multi[i].source_a_key,&a)||!persist_key_mod_source_from_disk(m->multi[i].source_b_key,&b)||!persist_key_mod_source_from_disk(m->slew[i].source_key,&s))return 0U;}
+    for(uint8_t i=0U;i<8U;++i){uint8_t src,de;param_id_t dp;if(!persist_key_mod_source_from_disk(m->routes[i].source_key,&src))return 0U;if(m->routes[i].destination_parameter!=PERSIST_CONTROL_KEY_NONE&&(!persist_key_mod_destination_from_disk(m->routes[i].destination_entity,m->routes[i].destination_parameter,active,&de,&dp)||!mod_destination_catalog_address_is_supported_projected(owner,mod_destination_address_make(de,dp),c)))return 0U;}
+    return 1U;
+}
+
+static uint8_t validate_assets(const persist_control_patch_t*p,track_family_t f,track_type_t t)
+{
+    if(f==TRACK_FAMILY_SAMPLER){if(p->asset_count==0U)return 1U;if(p->asset_count!=1U)return 0U;if(t==TRACK_TYPE_STREAM)return p->assets[0].kind==PERSIST_ASSET_SAMPLE_STREAM;if(t==TRACK_TYPE_RAM)return p->assets[0].kind==PERSIST_ASSET_SAMPLE_RAM;if(t==TRACK_TYPE_MULTI)return p->assets[0].kind==PERSIST_ASSET_MULTI;return 0U;}
+    if(f==TRACK_FAMILY_SYNTH&&t==TRACK_TYPE_WAVE){if(p->asset_count==0U)return 1U;return(p->asset_count==2U&&p->assets[0].kind==PERSIST_ASSET_WAVETABLE&&p->assets[1].kind==PERSIST_ASSET_WAVETABLE)?1U:0U;}
+    return(p->asset_count==0U)?1U:0U;
+}
 
 static uint8_t copy_name(const char*n,persist_control_patch_t*p){if(n==NULL)return 1U;while(p->name_length<PERSIST_CONTROL_PATCH_NAME_BYTES&&n[p->name_length]){p->name[p->name_length]=n[p->name_length];++p->name_length;}return n[p->name_length]=='\0';}
 static void capture_assets(uint8_t e,track_family_t f,track_type_t t,persist_control_patch_t*p){if(f==TRACK_FAMILY_SAMPLER&&(t==TRACK_TYPE_STREAM||t==TRACK_TYPE_RAM||t==TRACK_TYPE_MULTI)){if(project_control_track_asset_get(e,PROJECT_CONTROL_ASSET_SAMPLER,&p->assets[0]))p->asset_count=1U;}else if(f==TRACK_FAMILY_SYNTH&&t==TRACK_TYPE_WAVE)for(uint8_t i=0U;i<2U;++i)if(project_control_track_asset_get(e,(project_control_asset_role_t)(PROJECT_CONTROL_ASSET_WAVE_OSC1+i),&p->assets[p->asset_count]))++p->asset_count;}
 static uint8_t capture_mod(uint8_t e,persist_control_modulation_t*m){track_sound_state_t s;mod_env3_control_state_t env;if(!track_sound_state_capture(e,&s)||!mod_env3_control_capture(e,&env))return 0U;for(uint8_t i=0U;i<3U;++i){float sh,tr;if(!mod_lfo_v1_get_track_param(e,i,MOD_LFO_PARAM_RATE,&m->lfos[i].rate)||!mod_lfo_v1_get_track_param(e,i,MOD_LFO_PARAM_SHAPE,&sh)||!mod_lfo_v1_get_track_param(e,i,MOD_LFO_PARAM_TRIG,&tr)||!mod_lfo_v1_get_track_param(e,i,MOD_LFO_PARAM_PHASE,&m->lfos[i].phase_offset)||!persist_key_lfo_shape_to_disk((mod_lfo_shape_t)(uint8_t)sh,&m->lfos[i].shape_key)||!persist_key_lfo_trigger_to_disk((mod_lfo_trig_mode_t)(uint8_t)tr,&m->lfos[i].trigger_key))return 0U;}m->envelope=(persist_control_mod_envelope_t){env.attack,env.decay,env.sustain,env.release,(uint8_t)(env.retrigger>=0.5f)};for(uint8_t i=0U;i<2U;++i){if(!persist_key_mod_source_to_disk(s.mod_multi_source[i][0],&m->multi[i].source_a_key)||!persist_key_mod_source_to_disk(s.mod_multi_source[i][1],&m->multi[i].source_b_key)||!persist_key_mod_source_to_disk(s.mod_slew_source[i],&m->slew[i].source_key))return 0U;m->slew[i].amount=s.mod_slew_amount[i];}for(uint8_t i=0U;i<8U;++i){track_mod_matrix_slot_t*r=&s.mod_matrix[i];persist_control_mod_route_t*d=&m->routes[i];if(!persist_key_mod_source_to_disk(r->source,&d->source_key))return 0U;d->depth=r->depth;d->enabled=r->enabled;if(r->destination==MOD_DESTINATION_NONE){d->destination_entity=e;d->destination_parameter=PERSIST_CONTROL_KEY_NONE;d->enabled=0U;}else{uint8_t de;param_id_t dp;if(!mod_destination_address_resolve(r->destination,&de,&dp)||!persist_key_mod_destination_to_disk(de,dp,&d->destination_entity,&d->destination_parameter))return 0U;}}return 1U;}
 
 persist_codec_result_t persistent_patch_control_capture(uint8_t e,const char*n,persist_control_patch_t*p){if(p==NULL||e>=PERSIST_CONTROL_ENTITY_COUNT)return PERSIST_CODEC_INVALID_ARGUMENT;memset(p,0,sizeof(*p));track_family_t f=track_state_get_family(e);track_type_t t=track_state_get_type(e);if(!copy_name(n,p)||!persist_key_family_to_disk(f,&p->family)||!persist_key_type_to_disk(t,&p->type))return PERSIST_CODEC_UNKNOWN_KEY;capture_assets(e,f,t,p);if(f==TRACK_FAMILY_SYNTH&&t==TRACK_TYPE_FM){p->fm_present=1U;if(!fm_control_state_get(e,&p->fm))return PERSIST_CODEC_INVALID_ENTITY;}else{p->tone_present=1U;if(!tone_program_control_capture(e,&p->tone))return PERSIST_CODEC_INVALID_ENTITY;}if(!param_filter_control_capture(e,&p->filter)||!vca_control_state_capture(e,&p->vca)||!mod_env3_control_capture(e,&p->env3)||!audio_fx_control_state_capture(e,&p->audio_fx)||!polyphony_control_capture(e,&p->polyphony)||!capture_mod(e,&p->modulation))return PERSIST_CODEC_INVALID_ENTITY;return persist_codec_validate_patch(p);}
-persist_codec_result_t persistent_patch_control_validate(const persist_control_patch_t*p,uint8_t target){persist_codec_result_t r=persist_codec_validate_patch(p);if(r!=PERSIST_CODEC_OK)return r;if(target>=PERSIST_CONTROL_ENTITY_COUNT)return PERSIST_CODEC_INVALID_ENTITY;track_family_t f;track_type_t t;if(!persist_key_family_from_disk(p->family,&f)||!persist_key_type_from_disk(p->type,&t))return PERSIST_CODEC_UNKNOWN_KEY;track_config_t c[BRICK_ENTITY_CAPACITY];memcpy(c,track_state_get_configs(),sizeof(c));c[target].family=f;c[target].type=t;return track_catalog_type_is_available(target,f,t,c)?PERSIST_CODEC_OK:PERSIST_CODEC_INVALID_ENTITY;}
+persist_codec_result_t persistent_patch_control_validate_mask(const persist_control_patch_t*p,uint16_t mask)
+{
+    persist_codec_result_t r=persist_codec_validate_patch(p);if(r!=PERSIST_CODEC_OK)return r;if(mask==0U)return PERSIST_CODEC_INVALID_ENTITY;
+    track_family_t f;track_type_t t;if(!persist_key_family_from_disk(p->family,&f)||!persist_key_type_from_disk(p->type,&t))return PERSIST_CODEC_UNKNOWN_KEY;
+    uint8_t fs[BRICK_ENTITY_CAPACITY],ts[BRICK_ENTITY_CAPACITY],voices[BRICK_ENTITY_CAPACITY],inputs[TRACK_COUNT];track_config_t c[BRICK_ENTITY_CAPACITY];
+    for(uint8_t e=0U;e<BRICK_ENTITY_CAPACITY;++e){fs[e]=track_state_get_family(e);ts[e]=track_state_get_type(e);voices[e]=polyphony_control_get_voice_count(e);if(e<TRACK_COUNT)inputs[e]=track_state_get_external_input(e);if(mask&(uint16_t)(1UL<<e)){if(!entity_topology_is_active(e))return PERSIST_CODEC_INVALID_ENTITY;fs[e]=(uint8_t)f;ts[e]=(uint8_t)t;voices[e]=p->polyphony.voice_count;}}
+    for(uint8_t e=0U;e<BRICK_ENTITY_CAPACITY;++e)c[e]=(track_config_t){(track_family_t)fs[e],(track_type_t)ts[e]};
+    polyphony_control_state_t pp;audio_fx_control_state_t pa;
+    const uint8_t expect_fm=(uint8_t)(f==TRACK_FAMILY_SYNTH&&t==TRACK_TYPE_FM);
+    if((p->fm_present!=expect_fm)||(p->tone_present==(uint8_t)expect_fm)
+            ||!validate_assets(p,f,t)||!track_structure_validate_entity_bulk_with_polyphony(fs,ts,inputs,voices)
+            ||((f==TRACK_FAMILY_SYNTH&&t==TRACK_TYPE_FM)?!fm_control_state_validate(&p->fm):!tone_program_control_validate(&p->tone,track_runtime_type_from_ui(t)))
+            ||!param_filter_control_validate(&p->filter)||!vca_control_state_validate(&p->vca)||!audio_fx_control_state_validate(&p->audio_fx)||!polyphony_control_prepare(&p->polyphony,&pp))return PERSIST_CODEC_INVALID_ENTITY;
+    for(uint8_t e=0U;e<BRICK_ENTITY_CAPACITY;++e)if((mask&(uint16_t)(1UL<<e))&&(!audio_fx_control_state_prepare_for_polyphony(e,&p->audio_fx,pp.voice_count,&pa)||!validate_mod(&p->modulation,c,e)))return PERSIST_CODEC_INVALID_ENTITY;
+    return PERSIST_CODEC_OK;
+}
+persist_codec_result_t persistent_patch_control_validate(const persist_control_patch_t*p,uint8_t target){return(target<PERSIST_CONTROL_ENTITY_COUNT)?persistent_patch_control_validate_mask(p,(uint16_t)(1UL<<target)):PERSIST_CODEC_INVALID_ENTITY;}
 static uint8_t restore_mod(uint8_t e,const persist_control_modulation_t*m)
 {
     mod_lfo_control_bank_t lfos;
@@ -42,7 +82,7 @@ static uint8_t restore_mod(uint8_t e,const persist_control_modulation_t*m)
     for(uint8_t i=0U;i<8U;++i){const persist_control_mod_route_t*r=&m->routes[i];uint8_t src,de;param_id_t dp;mod_destination_address_t dst=MOD_DESTINATION_NONE;if(!persist_key_mod_source_from_disk(r->source_key,&src))return 0U;if(r->destination_parameter!=PERSIST_CONTROL_KEY_NONE){if(!persist_key_mod_destination_from_disk(r->destination_entity,r->destination_parameter,entity_topology_group_is_active(),&de,&dp))return 0U;dst=mod_destination_address_make(de,dp);}if(!mod_matrix_set_slot_state(e,i,src,dst,r->depth,r->enabled))return 0U;}
     return 1U;
 }
-static uint8_t assets_apply(const persist_control_patch_t*p,uint8_t e,track_family_t f,track_type_t t){if(p->asset_count==0U)return 1U;if(f==TRACK_FAMILY_SAMPLER)return p->asset_count==1U&&project_control_track_asset_restore(e,PROJECT_CONTROL_ASSET_SAMPLER,&p->assets[0]);if(f==TRACK_FAMILY_SYNTH&&t==TRACK_TYPE_WAVE){if(p->asset_count!=2U)return 0U;for(uint8_t i=0U;i<2U;++i)if(!project_control_track_asset_restore(e,(project_control_asset_role_t)(PROJECT_CONTROL_ASSET_WAVE_OSC1+i),&p->assets[i]))return 0U;return 1U;}return 0U;}
+static uint8_t assets_apply(const persist_control_patch_t*p,uint8_t e,track_family_t f,track_type_t t){if(!project_control_track_assets_clear(e))return 0U;if(p->asset_count==0U)return 1U;if(f==TRACK_FAMILY_SAMPLER)return p->asset_count==1U&&project_control_track_asset_restore(e,PROJECT_CONTROL_ASSET_SAMPLER,&p->assets[0]);if(f==TRACK_FAMILY_SYNTH&&t==TRACK_TYPE_WAVE){if(p->asset_count!=2U)return 0U;for(uint8_t i=0U;i<2U;++i)if(!project_control_track_asset_restore(e,(project_control_asset_role_t)(PROJECT_CONTROL_ASSET_WAVE_OSC1+i),&p->assets[i]))return 0U;return 1U;}return 0U;}
 static uint8_t restore_polyphony_audio_fx(uint8_t entity,const polyphony_control_state_t*polyphony,const audio_fx_control_state_t*audio_fx)
 {
     polyphony_control_state_t pp;
@@ -60,4 +100,19 @@ static uint8_t restore_polyphony_audio_fx(uint8_t entity,const polyphony_control
     if(installed==0U)Error_Handler();
     return installed;
 }
-persist_codec_result_t persistent_patch_control_apply(const persist_control_patch_t*p,uint8_t target){persist_codec_result_t r=persistent_patch_control_validate(p,target);if(r!=PERSIST_CODEC_OK)return r;uint8_t f[BRICK_ENTITY_CAPACITY],t[BRICK_ENTITY_CAPACITY],m[BRICK_ENTITY_CAPACITY],s[BRICK_ENTITY_CAPACITY],in[TRACK_COUNT];for(uint8_t e=0U;e<BRICK_ENTITY_CAPACITY;++e){f[e]=track_state_get_family(e);t[e]=track_state_get_type(e);m[e]=track_state_get_midi_channel(e);s[e]=track_state_get_midi_source(e);if(e<TRACK_COUNT)in[e]=track_state_get_external_input(e);}track_family_t family;track_type_t type;(void)persist_key_family_from_disk(p->family,&family);(void)persist_key_type_from_disk(p->type,&type);f[target]=family;t[target]=type;if(!track_structure_apply_entity_bulk_with_inputs(f,t,m,s,in)||!assets_apply(p,target,family,type))return PERSIST_CODEC_INVALID_ENTITY;if(p->fm_present){if(!fm_control_state_restore(target,&p->fm))return PERSIST_CODEC_INVALID_ENTITY;}else if(!tone_program_control_restore(target,&p->tone))return PERSIST_CODEC_INVALID_ENTITY;if(!param_filter_control_restore(target,&p->filter)||!vca_control_state_restore(target,&p->vca)||!mod_env3_control_restore(target,&p->env3)||!restore_polyphony_audio_fx(target,&p->polyphony,&p->audio_fx)||!restore_mod(target,&p->modulation))return PERSIST_CODEC_INVALID_ENTITY;return PERSIST_CODEC_OK;}
+persist_codec_result_t persistent_patch_control_apply_mask(const persist_control_patch_t*p,uint16_t mask){persist_codec_result_t r=persistent_patch_control_validate_mask(p,mask);if(r!=PERSIST_CODEC_OK)return r;uint8_t f[BRICK_ENTITY_CAPACITY],t[BRICK_ENTITY_CAPACITY],m[BRICK_ENTITY_CAPACITY],s[BRICK_ENTITY_CAPACITY],in[TRACK_COUNT];track_family_t family;track_type_t type;(void)persist_key_family_from_disk(p->family,&family);(void)persist_key_type_from_disk(p->type,&type);for(uint8_t e=0U;e<BRICK_ENTITY_CAPACITY;++e){f[e]=track_state_get_family(e);t[e]=track_state_get_type(e);m[e]=track_state_get_midi_channel(e);s[e]=track_state_get_midi_source(e);if(e<TRACK_COUNT)in[e]=track_state_get_external_input(e);if(mask&(uint16_t)(1UL<<e)){f[e]=family;t[e]=type;}}if(!track_structure_apply_entity_bulk_with_inputs(f,t,m,s,in))return PERSIST_CODEC_INVALID_ENTITY;for(uint8_t e=0U;e<BRICK_ENTITY_CAPACITY;++e){if(!(mask&(uint16_t)(1UL<<e)))continue;if(!assets_apply(p,e,family,type)||((p->fm_present)?!fm_control_state_restore(e,&p->fm):!tone_program_control_restore(e,&p->tone))||!param_filter_control_restore(e,&p->filter)||!vca_control_state_restore(e,&p->vca)||!mod_env3_control_restore(e,&p->env3)||!restore_polyphony_audio_fx(e,&p->polyphony,&p->audio_fx)||!restore_mod(e,&p->modulation))return PERSIST_CODEC_INVALID_ENTITY;}return PERSIST_CODEC_OK;}
+persist_codec_result_t persistent_patch_control_apply(const persist_control_patch_t*p,uint8_t target){return(target<PERSIST_CONTROL_ENTITY_COUNT)?persistent_patch_control_apply_mask(p,(uint16_t)(1UL<<target)):PERSIST_CODEC_INVALID_ENTITY;}
+
+persist_codec_result_t persistent_patch_control_make_default(uint8_t e,persist_control_patch_t*p)
+{
+    if(p==NULL||e>=PERSIST_CONTROL_ENTITY_COUNT||!entity_topology_is_active(e))return PERSIST_CODEC_INVALID_ENTITY;
+    memset(p,0,sizeof(*p));
+    const track_family_t f=track_state_get_family(e);const track_type_t t=track_state_get_type(e);if(!copy_name("Init",p)||!persist_key_family_to_disk(f,&p->family)||!persist_key_type_to_disk(t,&p->type))return PERSIST_CODEC_UNKNOWN_KEY;
+    if(f==TRACK_FAMILY_SYNTH&&t==TRACK_TYPE_FM){p->fm_present=1U;fm_control_state_make_default(&p->fm);}else{p->tone_present=1U;if(!tone_program_control_make_default(track_runtime_type_from_ui(t),&p->tone))return PERSIST_CODEC_INVALID_ENTITY;}
+    p->filter=(param_filter_control_state_t){.cutoff=127.0f,.attack=34.3f,.decay=68.7f,.sustain=127.0f,.release=68.7f,.env_reset=1.0f,.retrigger=1.0f};p->vca=(vca_control_state_t){.sustain=127.0f,.retrigger=1.0f};p->env3=(mod_env3_control_state_t){.sustain=127.0f,.retrigger=1.0f};p->audio_fx.config.filter_position=AUDIO_FX_FILTER_POS_PRE;p->audio_fx.config.order=AUDIO_FX_ORDER_A_B;p->audio_fx.config.spatial_mode[0]=1U;p->audio_fx.config.spatial_mode[1]=1U;p->polyphony.voice_count=1U;
+    track_sound_state_t sound;track_sound_state_make_default(&sound);p->modulation.envelope=(persist_control_mod_envelope_t){0.0f,0.0f,127.0f,0.0f,1U};
+    for(uint8_t i=0U;i<3U;++i){p->modulation.lfos[i].rate=param_registry[PARAM_LFO1_RATE+i*4U].default_value;p->modulation.lfos[i].phase_offset=param_registry[PARAM_LFO1_PHASE+i*4U].default_value;if(!persist_key_lfo_shape_to_disk((mod_lfo_shape_t)(uint8_t)param_registry[PARAM_LFO1_SHAPE+i*4U].default_value,&p->modulation.lfos[i].shape_key)||!persist_key_lfo_trigger_to_disk((mod_lfo_trig_mode_t)(uint8_t)param_registry[PARAM_LFO1_TRIG+i*4U].default_value,&p->modulation.lfos[i].trigger_key))return PERSIST_CODEC_UNKNOWN_KEY;}
+    for(uint8_t i=0U;i<2U;++i){if(!persist_key_mod_source_to_disk(sound.mod_multi_source[i][0],&p->modulation.multi[i].source_a_key)||!persist_key_mod_source_to_disk(sound.mod_multi_source[i][1],&p->modulation.multi[i].source_b_key)||!persist_key_mod_source_to_disk(sound.mod_slew_source[i],&p->modulation.slew[i].source_key))return PERSIST_CODEC_UNKNOWN_KEY;}
+    for(uint8_t i=0U;i<8U;++i){if(!persist_key_mod_source_to_disk(sound.mod_matrix[i].source,&p->modulation.routes[i].source_key))return PERSIST_CODEC_UNKNOWN_KEY;p->modulation.routes[i].destination_entity=e;p->modulation.routes[i].destination_parameter=PERSIST_CONTROL_KEY_NONE;}
+    return persist_codec_validate_patch(p);
+}

@@ -73,14 +73,21 @@ static float *tone_field(tone_program_control_t *p, param_id_t id)
 #undef F
 }
 
+uint8_t tone_program_control_make_default(track_runtime_type_t type,
+                                          tone_program_control_t *out_program)
+{
+ if(out_program==NULL)return 0U;
+ tone_program_control_t*p=out_program;memset(p,0,sizeof(*p));p->tag=type;
+ const uint8_t count=tone_param_codec_count(type);
+ if((count==0U)&&(type!=TRACK_RUNTIME_TYPE_NONE)&&(type!=TRACK_RUNTIME_TYPE_GROUP))return 0U;
+ for(uint8_t slot=0;slot<count;++slot){param_id_t id;if(tone_param_codec_slot_to_param(type,slot,&id)){float*f=tone_field(p,id);if(f!=NULL)*f=param_registry[id].default_value;}}
+ return 1U;
+}
 void tone_program_control_init(void){memset(g_tone_program,0,sizeof(g_tone_program));}
 uint8_t tone_program_control_activate(uint8_t track,track_runtime_type_t type)
 {
  if(track>=SEQ_LANE_CAPACITY)return 0U;
- tone_program_control_t*p=&g_tone_program[track];memset(p,0,sizeof(*p));p->tag=type;
- const uint8_t count=tone_param_codec_count(type);
- for(uint8_t slot=0;slot<count;++slot){param_id_t id;if(tone_param_codec_slot_to_param(type,slot,&id)){float*f=tone_field(p,id);if(f!=NULL)*f=param_registry[id].default_value;}}
- return 1U;
+ return tone_program_control_make_default(type,&g_tone_program[track]);
 }
 uint8_t tone_program_control_get(uint8_t track,param_id_t id,float*out)
 {if(track>=SEQ_LANE_CAPACITY||out==NULL)return 0U;float*f=tone_field(&g_tone_program[track],id);if(f==NULL)return 0U;*out=*f;return 1U;}

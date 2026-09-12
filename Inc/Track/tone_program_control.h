@@ -51,6 +51,8 @@ typedef struct {
 } tone_program_control_t;
 
 void tone_program_control_init(void);
+uint8_t tone_program_control_make_default(track_runtime_type_t type,
+                                          tone_program_control_t *out_program);
 uint8_t tone_program_control_activate(uint8_t track, track_runtime_type_t type);
 uint8_t tone_program_control_get(uint8_t track, param_id_t id, float *out_value);
 uint8_t tone_program_control_set(uint8_t track, param_id_t id, float value);

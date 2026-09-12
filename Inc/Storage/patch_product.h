@@ -23,7 +23,8 @@ typedef enum
 {
     PATCH_PRODUCT_OPERATION_NONE = 0,
     PATCH_PRODUCT_OPERATION_SAVE,
-    PATCH_PRODUCT_OPERATION_RENAME
+    PATCH_PRODUCT_OPERATION_RENAME,
+    PATCH_PRODUCT_OPERATION_LOAD
 } patch_product_operation_t;
 typedef enum { PATCH_PRODUCT_SLOT_EMPTY=0,PATCH_PRODUCT_SLOT_VALID,PATCH_PRODUCT_SLOT_INVALID } patch_product_slot_state_t;
 typedef struct { char name[33]; uint8_t family,type,source_track,summary_family,summary_type; } patch_product_metadata_t;
@@ -36,8 +37,10 @@ patch_product_result_t patch_product_save_begin(uint16_t slot,
                                                 const persist_control_patch_t *snapshot);
 patch_product_result_t patch_product_save_submit(uint16_t slot, const char *name);
 void patch_product_save_cancel_prepare(void);
+patch_product_result_t patch_product_load_begin(uint16_t slot,uint16_t target_mask);
 patch_product_result_t patch_product_apply(uint16_t slot,uint8_t entity);
 void patch_product_apply_service(void);
+patch_product_result_t patch_product_clear(uint8_t entity);
 patch_product_result_t patch_product_rename(uint16_t slot,const char*name);
 patch_product_result_t patch_product_rename_begin(uint16_t slot,const char *name);
 void patch_product_service(void);
