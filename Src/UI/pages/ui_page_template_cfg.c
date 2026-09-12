@@ -187,10 +187,12 @@ static uint8_t ui_page_template_cfg_virtual_slot_value(
     const ui_param_seq_plock_feedback_frame_t *frame_ctx,
     uint8_t slot,
     float *out_value,
-    uint8_t *out_bipolar)
+    uint8_t *out_bipolar,
+    uint8_t *out_inverted)
 {
     (void)frame_ctx;
     if ((out_value == NULL) || (out_bipolar == NULL)) return 0U;
+    if (out_inverted != NULL) *out_inverted = 0U;
     *out_bipolar = 0U;
     const uint8_t track = ui_get_active_lane();
     const track_family_t family = ui_get_track_family(track);

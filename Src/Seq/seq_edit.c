@@ -1362,7 +1362,7 @@ uint8_t seq_edit_paste_steps(seq_track_id_t track,
     const uint8_t ok = seq_clipboard_paste(track, dest_steps, dest_count, out_result);
     seq_edit_finish_snapshot_undo(undo_started);
     if ((ok != 0U) && (dest_count != 0U))
-        seq_play_scheduler_notify_track_pattern_change(track);
+        seq_runtime_on_track_pattern_change(track);
     return ok;
 }
 
@@ -1398,7 +1398,7 @@ void seq_edit_clear_steps_without_undo(seq_track_id_t track,
     }
 
     if (seq_edit_clear_steps_impl(track, steps, step_count) != 0U)
-        seq_play_scheduler_notify_track_pattern_change(track);
+        seq_runtime_on_track_pattern_change(track);
 }
 
 void seq_edit_clear_steps(seq_track_id_t track,
@@ -1414,6 +1414,6 @@ void seq_edit_clear_steps(seq_track_id_t track,
                                                               steps,
                                                               step_count);
     if (seq_edit_clear_steps_impl(track, steps, step_count) != 0U)
-        seq_play_scheduler_notify_track_pattern_change(track);
+        seq_runtime_on_track_pattern_change(track);
     seq_edit_finish_snapshot_undo(undo_started);
 }

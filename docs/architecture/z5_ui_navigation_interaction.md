@@ -36,6 +36,17 @@ track selection -> mute -> track hall gate -> transport -> settings
 
 Les deltas encodeur utilisent un snapshot du contexte pris au debut du tick. Les modifications structurelles et restores appellent directement les owners Track; la mise a jour de contexte UI reste explicite via `ui_active_track_sync` et `ui_edit_context_sync`.
 
+Les mutations structurelles de sequence (clear, paste et restore Track) passent
+par `seq_runtime_on_track_pattern_change`: ce point invalide le scheduler si le
+transport tourne et ferme toujours la capture NOTE/Undo qui projetait l'ancien
+pattern. Une selection de track ne sert donc plus d'invalidation implicite.
+
+Le rendu p-lock possede deux adresses canoniques: les `param_id_t` utilisent le
+feedback de `ui_param`, et les slots virtuels publient avec leur valeur un flag
+`inverted`. PLAY derive ce flag de la presence effective du champ Voice/Step;
+le renderer applique ensuite la meme convention de label inverse que pour les
+parametres catalogues. Les pages virtuelles non p-lockables publient zero.
+
 Les clipboards transportent uniquement des etats logiques. Un collage MIDI FX applique MODEL avant ses parametres; un collage External conserve l'entree demandee et echoue sur conflit.
 
 Project Save est modal et reutilise le Name Editor generique. L'entree SAVE AS

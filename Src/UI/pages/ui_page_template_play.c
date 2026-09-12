@@ -58,7 +58,8 @@ static uint8_t ui_page_template_play_virtual_slot_value(
     const ui_param_seq_plock_feedback_frame_t *frame_ctx,
     uint8_t slot,
     float *out_value,
-    uint8_t *out_bipolar);
+    uint8_t *out_bipolar,
+    uint8_t *out_inverted);
 
 static uint8_t ui_page_template_play_virtual_slot_text(uint8_t slot,
                                                         char *out_name,
@@ -72,7 +73,8 @@ static uint8_t ui_page_template_play_virtual_slot_text(uint8_t slot,
     if ((slot >= SEQ_STEP_PLAY_FIELD_COUNT)
             || (ui_page_template_play_virtual_slot_value(NULL, slot,
                                                           &visible_value,
-                                                          &bipolar) == 0U)) return 0U;
+                                                          &bipolar,
+                                                          NULL) == 0U)) return 0U;
     (void)bipolar;
     const int16_t value = (int16_t)visible_value;
     (void)snprintf(out_name, out_name_len, "%s", names[slot]);
@@ -111,11 +113,13 @@ static uint8_t ui_page_template_play_virtual_slot_value(
     const ui_param_seq_plock_feedback_frame_t *frame_ctx,
     uint8_t slot,
     float *out_value,
-    uint8_t *out_bipolar)
+    uint8_t *out_bipolar,
+    uint8_t *out_inverted)
 {
     (void)frame_ctx;
     if ((out_value == NULL) || (out_bipolar == NULL)
             || (slot >= SEQ_STEP_PLAY_FIELD_COUNT)) return 0U;
+    if (out_inverted != NULL) *out_inverted = 0U;
     const seq_track_id_t track = (seq_track_id_t)ui_get_active_lane();
     const uint8_t voice = (uint8_t)(g_ui_template_play_subset * 4U
                                      + g_ui_template_play_state.active_subpage);
@@ -138,6 +142,7 @@ static uint8_t ui_page_template_play_virtual_slot_value(
         {
             *out_value = (float)value;
             *out_bipolar = 0U;
+            if (out_inverted != NULL) *out_inverted = 1U;
             return 1U;
         }
     }

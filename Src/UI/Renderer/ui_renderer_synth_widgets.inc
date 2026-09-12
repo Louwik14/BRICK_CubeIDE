@@ -274,6 +274,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             ui_template_custom_widget_kind_t virtual_widget = UI_TEMPLATE_CUSTOM_WIDGET_NONE;
             float virtual_value = 0.0f;
             uint8_t virtual_bipolar = 0U;
+            uint8_t virtual_inverted = 0U;
             if ((state->virtual_custom_widget_picker != NULL)
                     && (state->virtual_slot_value != NULL))
             {
@@ -281,7 +282,8 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
                 if ((virtual_widget != UI_TEMPLATE_CUSTOM_WIDGET_NONE)
                         && (state->virtual_slot_value(plock_frame_ctx, slot,
                                                       &virtual_value,
-                                                      &virtual_bipolar) != 0U)
+                                                      &virtual_bipolar,
+                                                      &virtual_inverted) != 0U)
                         && (ui_renderer_template_draw_virtual_custom_widget(
                                 plock_frame_ctx, virtual_widget, widget_x, widget_y,
                                 UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H,
@@ -298,8 +300,22 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
                     ui_renderer_template_fit_text(virt_name,
                         (virtual_widget == UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEST)
                             ? UI_TEMPLATE_FRAME_W : UI_TEMPLATE_CARD_LABEL_MAX_PX);
-                    drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, virt_name),
-                                          (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y), virt_name);
+                    const uint8_t label_x = (uint8_t)ui_renderer_template_center_x(
+                        x, UI_TEMPLATE_FRAME_W, virt_name);
+                    if (virtual_inverted != 0U)
+                    {
+                        const uint8_t label_w = drv_display_text_width(virt_name);
+                        ui_renderer_template_fill_lock_label_frame(label_x,
+                            (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y - 1), label_w,
+                            UI_TEMPLATE_CARD_LABEL_H + 1);
+                        drv_display_draw_text_inverted(label_x,
+                            (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y), virt_name);
+                    }
+                    else
+                    {
+                        drv_display_draw_text(label_x,
+                            (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y), virt_name);
+                    }
                     return;
                 }
             }
@@ -308,9 +324,27 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             ui_renderer_template_fit_text(virt_value, UI_TEMPLATE_CARD_LABEL_MAX_PX);
             uiw_draw_enum_text(widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H, virt_value);
             drv_display_set_font(&FONT_4X6);
-            drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, virt_name),
-                                  (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y),
-                                  virt_name);
+            virtual_inverted = 0U;
+            if ((state->virtual_slot_value != NULL)
+                    && (state->virtual_slot_value(plock_frame_ctx, slot,
+                        &virtual_value, &virtual_bipolar, &virtual_inverted) != 0U)
+                    && (virtual_inverted != 0U))
+            {
+                const uint8_t label_x = (uint8_t)ui_renderer_template_center_x(
+                    x, UI_TEMPLATE_FRAME_W, virt_name);
+                const uint8_t label_w = drv_display_text_width(virt_name);
+                ui_renderer_template_fill_lock_label_frame(label_x,
+                    (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y - 1), label_w,
+                    UI_TEMPLATE_CARD_LABEL_H + 1);
+                drv_display_draw_text_inverted(label_x,
+                    (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y), virt_name);
+            }
+            else
+            {
+                drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, virt_name),
+                                      (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y),
+                                      virt_name);
+            }
             return;
         }
     }

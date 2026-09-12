@@ -98,7 +98,8 @@ typedef uint8_t (*ui_template_virtual_slot_value_fn)(
     const ui_param_seq_plock_feedback_frame_t *frame_ctx,
     uint8_t slot,
     float *out_value,
-    uint8_t *out_bipolar);
+    uint8_t *out_bipolar,
+    uint8_t *out_inverted);
 typedef uint8_t (*ui_template_param_text_fn)(uint8_t slot,
                                              param_id_t id,
                                              float value,

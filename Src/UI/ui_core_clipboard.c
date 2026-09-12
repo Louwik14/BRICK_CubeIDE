@@ -1032,7 +1032,7 @@ static uint8_t ui_track_clipboard_restore_sequence(
     uint8_t target, const ui_track_clipboard_sequence_t *seq)
 {
     seq_runtime_begin_track_restore(&target, 1U);
-    seq_play_scheduler_notify_track_pattern_change(target);
+    seq_runtime_on_track_pattern_change(target);
     for (uint8_t step = 0U; step < SEQ_MAX_STEPS; ++step)
     {
         seq_model_set_trig(target, step, 0U);
@@ -1123,7 +1123,7 @@ static uint8_t ui_core_clipboard_paste_track(uint8_t track)
 static uint8_t ui_track_clipboard_clear_sequence(uint8_t track)
 {
     seq_runtime_begin_track_restore(&track, 1U);
-    seq_play_scheduler_notify_track_pattern_change(track);
+    seq_runtime_on_track_pattern_change(track);
     for (uint8_t step = 0U; step < SEQ_MAX_STEPS; ++step)
     {
         seq_model_set_trig(track, step, 0U);
