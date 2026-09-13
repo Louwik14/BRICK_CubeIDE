@@ -759,6 +759,19 @@ static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
     if ((ev != 0) && (ev->type == UI_EVENT_BUTTON_PRESS)
             && (ev->id == (uint8_t)BTN_REC))
     {
+        if (button_down(UI_TRACK_MOD_BUTTON) != 0U)
+        {
+            if (seq_runtime_rec_is_armed() != 0U)
+                (void)seq_runtime_rec_toggle_arm(ui_get_active_lane());
+            (void)sample_capture_model_toggle_record();
+            ui_page_set(UI_PAGE_AUDIO_REC);
+            return 1U;
+        }
+        if (sample_capture_model_cancel_for_note_rec() == 0U)
+        {
+            ui_core_set_feedback("AUDIO REC BUSY");
+            return 1U;
+        }
         memset((void *)&g_brick6_looper_record_probe, 0,
                sizeof(g_brick6_looper_record_probe));
         g_brick6_looper_record_probe.ui_count++;

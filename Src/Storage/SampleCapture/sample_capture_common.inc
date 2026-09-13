@@ -192,21 +192,6 @@ static uint8_t sample_capture_path_is_temp(const char *path)
     return 0U;
 }
 
-static uint8_t sample_capture_has_route(void)
-{
-    if((g_sample_capture.state.line_enabled != 0U)
-            || (g_sample_capture.state.mic_enabled != 0U)
-            || (g_sample_capture.state.usb_enabled != 0U))
-    {
-        return 1U;
-    }
-    for (uint8_t track = 0U; track < SAMPLE_CAPTURE_TRACK_COUNT; ++track)
-        if ((g_sample_capture.route_mask[track] != 0U)
-                && (entity_topology_is_active((brick_entity_id_t)track) != 0U)
-                && (track_runtime_is_audio_routable(track) != 0U)) return 1U;
-    return 0U;
-}
-
 static uint32_t sample_capture_len_to_frames(uint8_t len_bars)
 {
     if(len_bars == 0U)
@@ -220,7 +205,7 @@ static uint32_t sample_capture_len_to_frames(uint8_t len_bars)
         return 0U;
     }
 
-    const uint64_t steps = (uint64_t)len_bars;
+    const uint64_t steps = (uint64_t)len_bars * SAMPLE_CAPTURE_STEPS_PER_BAR;
     uint64_t frames = ((steps * (uint64_t)samples_per_step_q16) + 0xFFFFULL) >> 16;
     if(frames > 0xFFFFFFFFULL)
     {

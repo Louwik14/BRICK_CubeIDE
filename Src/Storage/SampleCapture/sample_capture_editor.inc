@@ -4,6 +4,7 @@ void sample_capture_model_init(void)
     sample_capture_debug_reset();
     g_sample_capture.state.view = SAMPLE_CAPTURE_VIEW_AUDIO_REC;
     g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
+    g_sample_capture.state.trig = SAMPLE_CAPTURE_TRIG_NOW;
     g_sample_capture.state.len_bars = 1U;
     g_sample_capture.state.quant = SAMPLE_CAPTURE_QUANT_NOW;
     g_sample_capture.state.threshold_dbfs = SAMPLE_CAPTURE_THRESHOLD_DBFS_DEFAULT;
@@ -114,12 +115,6 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_LOOPER_ACTIVE);
         return 0U;
     }
-    if(sample_capture_has_route() == 0U)
-    {
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_NO_ROUTE);
-        return 0U;
-    }
-
     g_sample_capture.state.arm = arm;
     (void)sample_capture_next_trigger_arm_epoch();
     g_sample_capture.state.armed_pending =
@@ -171,6 +166,55 @@ uint8_t sample_capture_model_step_arm(int16_t delta)
     return sample_capture_model_set_arm((sample_capture_arm_t)next);
 }
 
+uint8_t sample_capture_model_step_trig(int16_t delta)
+{
+    if((delta == 0) || (g_sample_capture.state.arm != SAMPLE_CAPTURE_ARM_OFF)
+            || (g_sample_capture.state.recording != 0U)) return 0U;
+    int16_t next = (int16_t)g_sample_capture.state.trig + ((delta > 0) ? 1 : -1);
+    if(next < 0) next = 0;
+    if(next >= (int16_t)SAMPLE_CAPTURE_TRIG_COUNT)
+        next = (int16_t)SAMPLE_CAPTURE_TRIG_COUNT - 1;
+    if(next == (int16_t)g_sample_capture.state.trig) return 0U;
+    g_sample_capture.state.trig = (sample_capture_trig_t)next;
+    return 1U;
+}
+
+uint8_t sample_capture_model_toggle_record(void)
+{
+    if((g_sample_capture.state.arm != SAMPLE_CAPTURE_ARM_OFF)
+            || (g_sample_capture.state.recording != 0U))
+        return sample_capture_model_set_arm(SAMPLE_CAPTURE_ARM_OFF);
+    const sample_capture_arm_t arm =
+        ((g_sample_capture.state.trig == SAMPLE_CAPTURE_TRIG_THRESHOLD)
+         || (g_sample_capture.state.trig == SAMPLE_CAPTURE_TRIG_THRESHOLD_PLAY))
+            ? SAMPLE_CAPTURE_ARM_TRIG : SAMPLE_CAPTURE_ARM_REC;
+    if(sample_capture_model_set_arm(arm) == 0U) return 0U;
+    if(g_sample_capture.state.trig == SAMPLE_CAPTURE_TRIG_NOW)
+    {
+        g_sample_capture.state.armed_pending = 1U;
+        if(g_sample_capture.state.phase == SAMPLE_CAPTURE_PHASE_ARMED)
+        {
+            uint64_t now_sample = 0U;
+            if(control_rt_now_sample(&now_sample) == 0U) return 0U;
+            return sample_capture_start_prepared_at(
+                control_music_output_first_unpublished_sample(now_sample));
+        }
+    }
+    else if(g_sample_capture.state.trig == SAMPLE_CAPTURE_TRIG_PATTERN)
+    {
+        g_sample_capture.state.armed_pending = 1U;
+        g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_WAIT_QUANT;
+    }
+    return 1U;
+}
+
+uint8_t sample_capture_model_cancel_for_note_rec(void)
+{
+    if((g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_OFF)
+            && (g_sample_capture.state.recording == 0U)) return 1U;
+    return sample_capture_model_set_arm(SAMPLE_CAPTURE_ARM_OFF);
+}
+
 uint8_t sample_capture_model_step_len(int16_t delta)
 {
     if(delta == 0)
@@ -183,16 +227,13 @@ uint8_t sample_capture_model_step_len(int16_t delta)
         return 0U;
     }
 
-    int16_t next = (int16_t)g_sample_capture.state.len_bars + ((delta > 0) ? 1 : -1);
-    if(next < 0)
-    {
-        next = 0;
-    }
-    if(next > (int16_t)SAMPLE_CAPTURE_LEN_FIXED_MAX)
-    {
-        next = SAMPLE_CAPTURE_LEN_FIXED_MAX;
-    }
-    g_sample_capture.state.len_bars = (uint8_t)next;
+    static const uint8_t lengths[] = {0U, 1U, 2U, 4U, 8U, 16U, 32U, 64U};
+    uint8_t index = 0U;
+    while((index + 1U < sizeof(lengths))
+            && (lengths[index] < g_sample_capture.state.len_bars)) index++;
+    if((delta > 0) && (index + 1U < sizeof(lengths))) index++;
+    else if((delta < 0) && (index > 0U)) index--;
+    g_sample_capture.state.len_bars = lengths[index];
     return 1U;
 }
 

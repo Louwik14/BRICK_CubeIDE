@@ -29,7 +29,7 @@ static void ui_page_audio_rec_handle_event(const ui_event_t *ev)
         }
         else if(ev->id == (uint8_t)BTN_PAGE_4)
         {
-            (void)sample_capture_model_toggle_mic();
+            (void)sample_capture_model_save_trimmed();
         }
         return;
     }

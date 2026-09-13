@@ -35,17 +35,6 @@ static uint32_t g_ui_page_audio_rec_last_waveform_ms;
 static uint8_t g_ui_rec_edit_assign_popup;
 static uint32_t g_ui_audio_rec_smoothed_peak;
 
-static const char *ui_page_audio_rec_arm_label(sample_capture_arm_t arm)
-{
-    switch(arm)
-    {
-        case SAMPLE_CAPTURE_ARM_OFF: return "OFF";
-        case SAMPLE_CAPTURE_ARM_REC: return "REC";
-        case SAMPLE_CAPTURE_ARM_TRIG: return "TRIG";
-        default: return "?";
-    }
-}
-
 static uint8_t ui_page_audio_rec_peak_to_meter(uint32_t peak_abs_pcm24,
                                                uint8_t width)
 {

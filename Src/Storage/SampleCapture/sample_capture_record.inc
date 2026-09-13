@@ -379,12 +379,6 @@ static audio_recorder_lifecycle_result_t sample_capture_prepare_session(void)
         sd_preview_stop();
     }
 
-    if(sample_capture_has_route() == 0U)
-    {
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_NO_ROUTE);
-        return AUDIO_RECORDER_LIFECYCLE_ERROR;
-    }
-
     if(sample_capture_looper_record_conflict() != 0U)
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_LOOPER_ACTIVE);

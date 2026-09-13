@@ -87,8 +87,7 @@ static uint8_t sample_capture_service_pending_admission(void)
     g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
     sample_capture_publish_trigger_config();
     if ((g_sample_capture.state.armed_pending != 0U)
-            && (g_sample_capture.state.quant == SAMPLE_CAPTURE_QUANT_NOW)
-            && (seq_runtime_is_running() != 0U))
+            && (g_sample_capture.state.trig == SAMPLE_CAPTURE_TRIG_NOW))
     {
         uint64_t now_sample = 0U;
         if (control_rt_now_sample(&now_sample) == 0U)
@@ -138,8 +137,10 @@ void sample_capture_model_service(void)
                 ? SAMPLE_CAPTURE_PHASE_WAIT_QUANT
                 : SAMPLE_CAPTURE_PHASE_ARMED;
             sample_capture_publish_trigger_config();
-            if((transport_running == 0U)
-                    || (g_sample_capture.state.quant == SAMPLE_CAPTURE_QUANT_NOW))
+            if(g_sample_capture.state.trig == SAMPLE_CAPTURE_TRIG_THRESHOLD_PLAY)
+                seq_runtime_start();
+            if((g_sample_capture.state.trig == SAMPLE_CAPTURE_TRIG_THRESHOLD)
+                    || (g_sample_capture.state.trig == SAMPLE_CAPTURE_TRIG_THRESHOLD_PLAY))
             {
                 uint64_t now_sample = 0U;
                 if(control_rt_now_sample(&now_sample) == 0U)
@@ -228,10 +229,8 @@ void sample_capture_control_on_transport_start(uint64_t sample_time)
 {
     if ((g_sample_capture.state.recording == 0U)
             && (g_sample_capture.state.armed_pending != 0U)
-            && (((g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_REC)
-                    && (seq_runtime_rec_is_armed() != 0U))
-                || ((g_sample_capture.state.arm == SAMPLE_CAPTURE_ARM_TRIG)
-                    && (g_sample_capture.state.trigger_latched != 0U))))
+            && (g_sample_capture.state.trig == SAMPLE_CAPTURE_TRIG_PATTERN)
+            && (g_sample_capture.state.quant == SAMPLE_CAPTURE_QUANT_NOW))
         (void)sample_capture_start_prepared_at(sample_time);
 }
 
@@ -240,6 +239,7 @@ void sample_capture_control_on_musical_boundary(uint8_t track,
 {
     if ((track != 0U) || (g_sample_capture.state.recording != 0U)
             || (g_sample_capture.state.armed_pending == 0U)
+            || (g_sample_capture.state.trig != SAMPLE_CAPTURE_TRIG_PATTERN)
             || (g_sample_capture.state.quant == SAMPLE_CAPTURE_QUANT_NOW))
         return;
     (void)sample_capture_start_prepared_at(sample_time);

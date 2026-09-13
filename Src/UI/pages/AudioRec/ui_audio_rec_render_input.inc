@@ -13,7 +13,8 @@ static void ui_page_audio_rec_render(void)
 
     drv_display_set_font(&FONT_4X6);
     const uint8_t live_label_y = (uint8_t)(UI_AUDIO_REC_WAVE_Y - drv_display_font_height() - 2U);
-    (void)snprintf(line, sizeof(line), "ARM %s", ui_page_audio_rec_arm_label(state.arm));
+    static const char *const trig_labels[] = {"NOW", "THR", "PAT", "THR+P"};
+    (void)snprintf(line, sizeof(line), "TRG %s", trig_labels[state.trig]);
     drv_display_draw_text(0U, live_label_y, line);
     if(state.len_bars == 0U)
     {
@@ -24,18 +25,20 @@ static void ui_page_audio_rec_render(void)
         (void)snprintf(line, sizeof(line), "LEN %u", (unsigned)state.len_bars);
     }
     drv_display_draw_text(34U, live_label_y, line);
-    (void)snprintf(line, sizeof(line), "Q %s", ui_page_audio_rec_quant_label(state.quant));
-    drv_display_draw_text(68U, live_label_y, line);
     (void)snprintf(line, sizeof(line), "THR %d", (int)state.threshold_dbfs);
+    drv_display_draw_text(68U, live_label_y, line);
+    (void)snprintf(line, sizeof(line), "Q %s", ui_page_audio_rec_quant_label(state.quant));
     drv_display_draw_text(96U, live_label_y, line);
     ui_page_audio_rec_draw_marker_bar(&state);
     ui_page_audio_rec_draw_live_meter(&state);
 
-    (void)snprintf(line, sizeof(line), "U%u L%u M%u",
+    (void)snprintf(line, sizeof(line), "U%u L%u",
                    (unsigned)state.usb_enabled,
-                   (unsigned)state.line_enabled,
-                   (unsigned)state.mic_enabled);
+                   (unsigned)state.line_enabled);
     drv_display_draw_text(UI_AUDIO_REC_STATUS_X, 50U, line);
+    drv_display_draw_text(34U, 58U, "USB");
+    drv_display_draw_text(68U, 58U, "LINE");
+    drv_display_draw_text(108U, 58U, "SAVE");
 
     if(state.error != SAMPLE_CAPTURE_ERROR_NONE)
     {
@@ -139,13 +142,13 @@ uint8_t ui_page_audio_rec_handle_encoder(uint8_t encoder, int16_t delta)
     switch(encoder)
     {
         case 0U:
-            return sample_capture_model_step_arm(delta);
+            return sample_capture_model_step_trig(delta);
         case 1U:
             return sample_capture_model_step_len(delta);
         case 2U:
-            return sample_capture_model_step_quant(delta);
-        case 3U:
             return sample_capture_model_step_threshold(delta);
+        case 3U:
+            return sample_capture_model_step_quant(delta);
         default:
             return 0U;
     }

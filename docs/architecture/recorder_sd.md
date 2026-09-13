@@ -23,6 +23,16 @@ compile jusqu'a la migration du CONTROL Recorder. `XFADE` appartient desormais
 au Streamer: il melange le bus live et les voies Stream `SOURCE=REC`, sans
 dependre d'un etat PLAYING ni de l'existence d'un REC valide.
 
+Le controle produit Audio Rec est desormais independant du REC notes et
+automation: `TRACK+REC` arme, annule ou arrete la capture Audio Rec, tandis que
+`REC` annule d'abord cette capture avant de reprendre le REC sequenceur. Les
+declenchements `NOW`, `THR`, `PATTERN` et `THR+PLAY`, les longueurs
+`FREE/1/2/4/.../64` mesures et le routage vide silencieux sont portes par le
+modele Recorder. Les encodeurs suivent l'ordre TRIG, LEN, THRESHOLD, QUANTIZE;
+USB et LINE restent combinables avec les huit routes internes. Le controle
+Looper historique reste seulement compile pour la future passe OVERDUB, qui
+reprendra puis supprimera ce dernier chemin.
+
 ## Frontieres P0-4
 
 Les decisions START/STOP Looper sont prises par CONTROL et publiees comme

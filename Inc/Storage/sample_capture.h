@@ -37,6 +37,15 @@ typedef enum
 
 typedef enum
 {
+    SAMPLE_CAPTURE_TRIG_NOW = 0,
+    SAMPLE_CAPTURE_TRIG_THRESHOLD,
+    SAMPLE_CAPTURE_TRIG_PATTERN,
+    SAMPLE_CAPTURE_TRIG_THRESHOLD_PLAY,
+    SAMPLE_CAPTURE_TRIG_COUNT
+} sample_capture_trig_t;
+
+typedef enum
+{
     SAMPLE_CAPTURE_LEN_FREE = 0,
     SAMPLE_CAPTURE_LEN_FIXED_MIN = 1,
     SAMPLE_CAPTURE_LEN_FIXED_MAX = 64
@@ -108,7 +117,8 @@ typedef struct
     sample_capture_view_t view;
     sample_capture_phase_t phase;
     sample_capture_arm_t arm;
-    uint8_t len_bars; /* 0 = FREE, otherwise 1..64 steps */
+    sample_capture_trig_t trig;
+    uint8_t len_bars; /* 0 = FREE, otherwise 1/2/4/.../64 bars */
     sample_capture_quant_t quant;
     int8_t threshold_dbfs;
     uint8_t line_enabled;
@@ -160,6 +170,9 @@ uint8_t sample_capture_model_toggle_route(uint8_t track);
 uint8_t sample_capture_model_source_track_is_enabled(uint8_t track);
 uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm);
 uint8_t sample_capture_model_step_arm(int16_t delta);
+uint8_t sample_capture_model_step_trig(int16_t delta);
+uint8_t sample_capture_model_toggle_record(void);
+uint8_t sample_capture_model_cancel_for_note_rec(void);
 uint8_t sample_capture_model_step_len(int16_t delta);
 uint8_t sample_capture_model_step_quant(int16_t delta);
 uint8_t sample_capture_model_set_threshold_dbfs(int8_t threshold_dbfs);
