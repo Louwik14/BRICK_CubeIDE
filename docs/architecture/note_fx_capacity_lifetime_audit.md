@@ -27,8 +27,10 @@ source semantic event
 -> mapping physique AUDIO
 ```
 
-NoteFx possede les sources HELD, les frontieres HELD de slots, les phases
-ARP/Euclid et la queue future. Il ne cree aucun handle AUDIO.
+NoteFx possede les sources HELD, les vues HELD des generateurs/revoicers et la
+queue future. Probability, Groove, Gate et Echo ne dupliquent aucun HELD. La
+phase ARP/Euclid est derivee du temps musical canonique. NoteFx ne cree aucun
+handle AUDIO.
 `control_music_output` est l'unique owner des sorties actives, du stealing et
 de l'allocation de handle. AUDIO applique les transitions et conserve seulement
 le mapping physique et les tails RELEASE.
@@ -87,15 +89,21 @@ commune aux divisions binaires et ternaires. Aucun hash d'identite n'intervient.
 ne groove que l'ancre/velocity entree dans l'ARP; cette asymetrie est la
 semantique normale de la chaine S1 -> S4.
 
-Un futur produit par le slot N reprend a N+1 et porte `(owner_slot,
-owner_version)`. Un TYPE change collecte la matiere HELD a la premiere
-frontiere modifiee, ferme seulement les sorties de ses sources causales, purge
-leurs futurs downstream, reset cette frontiere et son downstream, puis rejoue
-la matiere.
-Un tweak CHORD/HARMONIZER collecte ses sources, ferme les sorties causales,
-purge seulement leurs futurs downstream, reset le slot de revoice et ses
-dependances, puis rejoue. Les slots amont et leurs phases independantes
-survivent.
+Un futur produit par plusieurs slots reprend au stage suivant et porte un masque
+de dependances ainsi que leurs quatre versions locales compactees sur quatre
+bits chacune. Une mutation purge d'abord uniquement les futurs portant son bit,
+puis incremente la version du slot; aucun compteur global de chaine ne subsiste.
+
+Un TYPE change collecte la matiere HELD a la premiere frontiere modifiee, ferme
+seulement les sorties de ses sources causales, retire ces seules sources des
+vues aval, puis rejoue la matiere a cette frontiere. Un tweak CHORD/HARMONIZER
+applique le meme revoice local. Les slots amont et leurs generateurs survivent.
+Une deadline terminale encore pendante est projetee en duree restante avant le
+replay: un Gate amont n'est ni perdu, ni redemarre a sa duree initiale.
+Gate/Echo invalident leurs propres futurs et les vues aval qui portent leur
+dependance, sans reset de track. Probability/Groove sont FORWARD_ONLY. Un reset
+global reste reserve a panic, reset transport incompatible ou destruction de
+route/entite.
 
 L'etat UI/persistence est AUTHORITATIVE. La configuration `applied` est l'etat
 runtime actif derive; l'override est une projection PREPARED superposee avant
@@ -108,7 +116,7 @@ refuse, reservations et etat canonique restent anciens.
 | Ressource | Borne |
 |---|---:|
 | source HELD | 8/piste |
-| slot HELD | 8/slot/piste |
+| HELD generateur/revoice | 8/slot concerne/piste |
 | buffers A/B | 32 evenements |
 | future | 320 global |
 | command/live queue | 31 chacune |
@@ -138,6 +146,8 @@ RAM statique PASS 4 (octets):
 
 Le linker confirme SRAM2 `119648 -> 111968` (-7680 octets) et RAM_D1
 `481056 -> 480992` (-64 octets). Aucun candidat rejete ne devient persistent.
+Le round final retire aussi `next_sample` et compacte les versions de slot;
+RAM_D1 passe a 480608 octets (-384), SRAM2 reste a 111968 octets.
 
 Les refus previsibles sont tous en amont de la mutation: schema/famille invalide,
 command ring pleine, ou neuvieme source HELD. `batch full`, `HELD full`, future
@@ -147,11 +157,12 @@ produit valide; ils restent des sentinelles de corruption, de violation du
 preflight ou de bug interne. Les versions obsoletes sont compactees au changement
 de leur owner et ne peuvent donc pas consommer artificiellement les 320 futures.
 
-La regression host enumere les 10000 chaines candidates, filtre les familles
+La regression host compile et execute le moteur C pour verifier les HELD locaux,
+la liberation terminale et la composition des dependances. Elle enumere aussi les 10000 chaines candidates, filtre les familles
 produit valides et simule des ledgers CONTROL/AUDIO
 pour Harmony quatre voix sur mono, Euclid polyphonique, Gate RETRIG et LEGATO.
 Elle exerce aussi 1000 occurrences ROLL sur huit pistes avec Gate et Echo,
-verifie la compaction future, la phase Groove temporelle, le reset/purge revoice
+verifie la compaction future, la phase Groove temporelle, le cutover/revoice local
 et la transaction state/enqueue. Les builds M7 et firmware complet restent les
 preuves compilees; les tests hardware demeurent requis pour la sonorite LEGATO,
 les cutovers en charge et les xruns.

@@ -155,9 +155,10 @@ Assert-Contract $control.Contains('control_music_output_allocate_handle') 'singl
 Assert-Contract $control.Contains('g_control_music_window_order++') 'chronological transition order'
 Assert-Contract (-not $control.Contains('CONTROL_MUSIC_WINDOW_KIND_COUNT')) 'no kind buckets'
 Assert-Contract $pipeline.Contains('note_fx_pipeline_purge_future_sources') 'causal revoice purge'
-Assert-Contract $pipeline.Contains('note_fx_pipeline_purge_future_owner') 'owner future compaction'
-Assert-Contract $pipeline.Contains('note_fx_engine_reset_from_slot(track, revoice_slot)') 'downstream revoice reset'
-Assert-Contract $pipeline.Contains('note_fx_pipeline_purge_future_track(track)') 'TYPE future purge'
+Assert-Contract $pipeline.Contains('note_fx_pipeline_purge_future_dependency') 'causal dependency compaction'
+Assert-Contract $pipeline.Contains('note_fx_engine_forget_causal_sources_from_slot') 'local causal revoice'
+Assert-Contract (-not $pipeline.Contains('note_fx_engine_reset_from_slot')) 'global slot reset removed'
+Assert-Contract $pipeline.Contains('note_fx_pipeline_purge_future_track(track)') 'explicit track reset purge'
 Assert-Contract (-not $pipeline.Contains('composed_fanout')) 'legacy composed fanout removed'
 Assert-Contract (-not $pipeline.Contains('g_note_fx_admitted_fanout')) 'legacy admission mirror removed'
 Assert-Contract $pipeline.Contains('note_fx_engine_cleanup(track)') 'panic/transport cleanup'
@@ -170,4 +171,28 @@ Assert-Contract $engine.Contains('seq_runtime_get_musical_time') 'canonical musi
 Assert-Contract $pipeline.Contains('deadline.duration_samples') 'terminal duration deadline'
 Assert-Contract (-not $pipeline.Contains('uint8_t resume_slot;')) 'duplicate future resume slot removed'
 
-Write-Output 'NoteFx runtime contract tests: PASS (10000 chains + lifetimes + temporal accumulation)'
+$gccCandidates = @(
+    'C:\msys64\ucrt64\bin\gcc.exe',
+    'C:\msys64\mingw64\bin\gcc.exe'
+)
+$gcc = $gccCandidates | Where-Object { Test-Path -LiteralPath $_ } |
+    Select-Object -First 1
+Assert-Contract ($null -ne $gcc) 'native C compiler unavailable'
+$runtimeExe = Join-Path ([System.IO.Path]::GetTempPath()) 'brick_note_fx_runtime.exe'
+$savedPath = $env:PATH
+try {
+    $env:PATH = "$(Split-Path -Parent $gcc);$savedPath"
+    & $gcc -std=c11 -Wall -Wextra -Werror "-I$((Join-Path $root 'Inc'))" `
+        (Join-Path $root 'tools/test_note_fx_runtime.c') `
+        (Join-Path $root 'Src/NoteFx/note_fx_engine.c') `
+        (Join-Path $root 'Src/NoteFx/note_fx_euclid.c') `
+        -o $runtimeExe
+    Assert-Contract ($LASTEXITCODE -eq 0) 'native NoteFx runtime build failed'
+    & $runtimeExe
+    Assert-Contract ($LASTEXITCODE -eq 0) 'native NoteFx runtime assertions failed'
+} finally {
+    $env:PATH = $savedPath
+    Remove-Item -LiteralPath $runtimeExe -Force -ErrorAction SilentlyContinue
+}
+
+Write-Output 'NoteFx runtime contract tests: PASS (native C + 10000 chains + lifetimes + temporal accumulation)'

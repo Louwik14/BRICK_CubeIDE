@@ -46,12 +46,12 @@ TYPE/PARAM1/PARAM2/PARAM3 et integralement p-lockable/persistee avec Pattern et
 Project, precedent un terminal CONTROL explicite. Les evenements ROLL, produits
 par le scheduler avant la chaine, passent dans deux buffers ping-pong bornes et
 une boucle commune aux quatre slots. Ils portent une identite source scheduler,
-un `semantic_event_id` d'activation, un `group_id` de correlation sans ownership et
-la generation de chaine. Le pipeline CONTROL conserve desormais, separement
-des sorties terminales, jusqu'a huit sources musicales HELD par track. ARP et
-EUCLID possedent leur phase, leur prochaine deadline et leur projection locale
-de ces pitches; chaque frontiere de slot conserve ses entrees HELD. CHORD et
-HARMONIZER les utilisent pour revoicer, et un cutover TYPE reprend directement
+un `semantic_event_id` d'activation, un `group_id` de correlation sans ownership
+et une generation de source. Le pipeline CONTROL conserve, separement des
+sorties terminales, jusqu'a huit sources musicales HELD par track. Seuls ARP,
+EUCLID, CHORD et HARMONIZER conservent une vue HELD locale: les generateurs pour
+leurs entrees musicales, les revoicers pour leurs sorties encore actives. Un
+cutover TYPE reprend directement
 a la premiere frontiere modifiee sans rejouer les effets amont. La borne
 logique admise avant ces FX est huit
 pitches distincts par track, ou la borne inferieure prouvee par la chaine.
@@ -71,14 +71,12 @@ alias de migration de `source_id`/`intent_id`, sans second stockage.
 Une famille produit ne peut occuper qu'un slot de la chaine. Cette validation
 est centrale et precede l'admission technique; ARP FREE et ARP SYNC partagent
 la famille ARP. OFF n'occupe aucune famille. Quatre familles distinctes restent
-valides au niveau produit. Les anciennes limites composees et de sources sont
-encore appliquees transitoirement par l'admission existante jusqu'au
-redimensionnement/admission a huit lifetimes de la PASS 4.
+valides au niveau produit. L'admission canonique borne chaque batch ON a huit
+avant toute persistance temporelle.
 
-PASS 2 retire l'autorite de phase mutable des generateurs. A chaque fenetre,
+Les generateurs n'ont aucune autorite de phase mutable. A chaque fenetre,
 ARP FREE derive son ordinal de la position transport, ARP SYNC de la position
-pattern, et EUCLID de cette meme position pattern. `next_sample` n'est plus
-qu'un cache de prochaine visite. RANDOM est un hash pur de l'ordinal, de la
+pattern, et EUCLID de cette meme position pattern. RANDOM est un hash pur de l'ordinal, de la
 track et du slot: une meme position redonne le meme choix. ARP emet une note du
 HELD; un pulse EUCLID actif emet tout le HELD, puis les deux reprennent le meme
 `musical_event_t` au slot suivant sans pre-expansion d'horizon.
@@ -95,7 +93,7 @@ dernier slot, CONTROL materialise une seule deadline terminale depuis cette
 duree. Echo reste une decision discrete et conserve au plus les deux repeats
 produit; chacun reprend au slot suivant. La file temporelle unique ne duplique
 plus `resume_slot`, deja canonique dans `event.stage`, ce qui reduit son element
-de 48 a 40 octets. PASS 4 borne ensuite la queue a 320 entrees causales.
+de 48 a 40 octets. La queue est bornee a 320 entrees causales.
 
 Avant qu'un batch ON entre dans Gate ou Echo, CONTROL le borne a huit candidats.
 Une expansion amont superieure ne peut donc creer ni deadline Gate ni repeat
@@ -103,15 +101,17 @@ Echo virtuel au-dela de la polyphonie produit; le ledger terminal existant
 reste l'autorite d'admission/stealing des huit lifetimes reels.
 
 Un changement parametrique ne ferme plus l'entite et ne purge plus la future
-queue. Chaque slot possede une version locale; une future Echo/Gate/generateur
-est obsolete seulement si sa version d'owner ne correspond plus. ARP et EUCLID recalculent leur
+queue. Chaque slot possede une version locale sur quatre bits. Chaque futur
+porte un masque des slots dont il depend et les quatre versions compactees;
+une mutation purge seulement les futurs qui portent son bit avant d'incrementer
+sa version. Le rebouclage 15 vers 1 est donc sans ambiguite. ARP et EUCLID recalculent leur
 ordinal depuis le temps musical a chaque fenetre; RATE, MODE, OCTAVE,
 LENGTH et PULSES affectent donc la prochaine decision sans phase cachee.
 Probability et Groove lisent l'etat effectif lorsqu'une occurrence atteint
 leur slot (FORWARD_ONLY). Une decision Probability ou une projection Groove
-deja materialisee n'est pas rejouee. Gate ferme/rejoue uniquement ses sources
-actives et remplace ses propres deadlines. CHORD et HARMONIZER ferment seulement les sorties causees par leurs
-entrees encore HELD, puis republient l'ancienne matiere avec le nouveau voicing
+deja materialisee n'est pas rejouee. Gate et Echo invalident uniquement leurs
+futurs et les vues aval qui en dependent. CHORD et HARMONIZER ferment seulement
+les sorties causees par leurs entrees encore HELD, puis republient cette matiere avec le nouveau voicing
 au meme premier sample CONTROL modifiable; l'ordre de decision STOP puis START
 est conserve dans le flux chronologique.
 
