@@ -41,6 +41,15 @@ retombe volontairement sur un REC normal. Le controle Looper historique ne
 participe pas a ce datapath et peut maintenant etre retire avec ses derniers
 relais de compatibilite.
 
+SAVE resout directement `REC_SOURCE.current`, jamais le fichier interne du
+dernier client Recorder. Sans edition il exporte toute la generation courante;
+avec des marqueurs valides sur cette meme generation, CROP exporte la plage
+selectionnee. L'export `RECxxxx.WAV` est une copie persistante, necessaire car
+le workspace A/B reste l'objet immutable lu par les Streamers et peut encore
+etre lease. Une erreur de copie supprime le fichier export partiel. SAVE ne
+retire ni ne republie `REC_SOURCE.current` et n'est jamais requis pour sa
+lecture.
+
 ## Frontieres P0-4
 
 Les decisions START/STOP Looper sont prises par CONTROL et publiees comme

@@ -193,3 +193,18 @@ uint8_t rec_source_current_snapshot(rec_source_snapshot_t *out_snapshot)
     *out_snapshot = g_rec_source_projection.snapshots[active];
     return out_snapshot->ready;
 }
+
+uint8_t rec_source_current_path(const char **out_path,
+                                rec_source_snapshot_t *out_snapshot)
+{
+    if((out_path == NULL) || (out_snapshot == NULL)
+            || (g_rec_source_current_slot >= REC_SOURCE_SLOT_COUNT)) return 0U;
+    rec_source_slot_t *const current =
+        &g_rec_source_slots[g_rec_source_current_slot];
+    if((current->state != REC_SOURCE_SLOT_CURRENT)
+            || (rec_source_current_snapshot(out_snapshot) == 0U)
+            || (sample_audio_key_equal(&current->key, &out_snapshot->key) == 0U))
+        return 0U;
+    *out_path = current->final_path;
+    return 1U;
+}

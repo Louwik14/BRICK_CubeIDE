@@ -21,3 +21,5 @@ uint8_t rec_source_publish_building(uint32_t frame_count,
 void rec_source_abort_building(void);
 void rec_source_service(void);
 uint8_t rec_source_current_snapshot(rec_source_snapshot_t *out_snapshot);
+uint8_t rec_source_current_path(const char **out_path,
+                                rec_source_snapshot_t *out_snapshot);

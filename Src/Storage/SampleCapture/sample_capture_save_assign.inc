@@ -225,6 +225,8 @@ done:
     {
         (void)f_close(&src);
     }
+    if((ok == 0U) && (dst_open != 0U))
+        (void)f_unlink(dst_path);
     sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
     return ok;
 }
@@ -240,10 +242,24 @@ uint8_t sample_capture_model_save_trimmed(void)
     {
         return 1U;
     }
-    if(g_sample_capture.state.take_valid == 0U)
+    rec_source_snapshot_t current;
+    const char *current_path = 0;
+    if(rec_source_current_path(&current_path, &current) == 0U)
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_NO_TAKE);
         return 0U;
+    }
+
+    uint32_t save_start = 0U;
+    uint32_t save_end = current.frame_count;
+    if((g_sample_capture.state.take_valid != 0U)
+            && (strcmp(g_sample_capture.state.temp_path, current_path) == 0)
+            && (g_sample_capture.state.edit_end_frame
+                > g_sample_capture.state.edit_start_frame)
+            && (g_sample_capture.state.edit_end_frame <= current.frame_count))
+    {
+        save_start = g_sample_capture.state.edit_start_frame;
+        save_end = g_sample_capture.state.edit_end_frame;
     }
 
     char final_path[SAMPLE_CAPTURE_PATH_MAX];
@@ -252,16 +268,15 @@ uint8_t sample_capture_model_save_trimmed(void)
         return 0U;
     }
 
-    if(sample_capture_copy_trimmed_take(g_sample_capture.state.temp_path,
+    if(sample_capture_copy_trimmed_take(current_path,
                                         final_path,
-                                        g_sample_capture.state.edit_start_frame,
-                                        g_sample_capture.state.edit_end_frame) == 0U)
+                                        save_start,
+                                        save_end) == 0U)
     {
         return 0U;
     }
 
-    const uint32_t saved_frames = g_sample_capture.state.edit_end_frame
-        - g_sample_capture.state.edit_start_frame;
+    const uint32_t saved_frames = save_end - save_start;
     sample_capture_copy_path(g_sample_capture.state.final_path, final_path);
     const audio_recorder_lifecycle_result_t discarded =
         audio_recorder_discard_client(AUDIO_RECORDER_CLIENT_AUDIO_REC);
