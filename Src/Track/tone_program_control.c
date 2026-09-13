@@ -13,6 +13,11 @@
 
 SEQ_STATE_D2 static tone_program_control_t g_tone_program[SEQ_LANE_CAPACITY];
 
+volatile uint32_t dbg_xfade_control_count;
+volatile float dbg_xfade_control_value;
+volatile uint16_t dbg_xfade_control_param_id;
+volatile uint8_t dbg_xfade_control_track;
+
 static float *tone_field(tone_program_control_t *p, param_id_t id)
 {
     if (p == NULL) return NULL;
@@ -92,7 +97,7 @@ uint8_t tone_program_control_activate(uint8_t track,track_runtime_type_t type)
 uint8_t tone_program_control_get(uint8_t track,param_id_t id,float*out)
 {if(track>=SEQ_LANE_CAPACITY||out==NULL)return 0U;float*f=tone_field(&g_tone_program[track],id);if(f==NULL)return 0U;*out=*f;return 1U;}
 uint8_t tone_program_control_set(uint8_t track,param_id_t id,float value)
-{if(track>=SEQ_LANE_CAPACITY)return 0U;float*f=tone_field(&g_tone_program[track],id);if(f==NULL)return 0U;*f=value;return 1U;}
+{if(track>=SEQ_LANE_CAPACITY)return 0U;float*f=tone_field(&g_tone_program[track],id);if(f==NULL)return 0U;*f=value;if(id==PARAM_LOOPER_XFADE){dbg_xfade_control_value=*f;dbg_xfade_control_param_id=(uint16_t)id;dbg_xfade_control_track=track;dbg_xfade_control_count++;}return 1U;}
 uint8_t tone_program_control_get_slot_normalized(uint8_t track,uint8_t slot,float*out)
 {param_id_t id;float v;if(track>=SEQ_LANE_CAPACITY||out==NULL||!tone_param_codec_slot_to_param(g_tone_program[track].tag,slot,&id)||!tone_program_control_get(track,id,&v))return 0U;const float span=param_registry[id].max-param_registry[id].min;*out=span>0.0f?(v-param_registry[id].min)/span:0.0f;return 1U;}
 uint8_t tone_program_control_set_slot_normalized(uint8_t track,uint8_t slot,float value)

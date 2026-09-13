@@ -18,6 +18,11 @@
 #include "Sampler/sample_page_cache_config.h"
 #include "mixer.h"
 
+volatile uint32_t dbg_xfade_backend_count;
+volatile float dbg_xfade_backend_value;
+volatile uint16_t dbg_xfade_backend_param_id;
+volatile uint8_t dbg_xfade_backend_track;
+
 static float param_backend_clamp_value(float v, float lo, float hi)
 {
     if (v < lo)
@@ -645,6 +650,10 @@ uint8_t param_backend_apply_tone_looper(uint8_t track, param_id_t id, float valu
         case PARAM_LOOPER_XFADE:
         {
             const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
+            dbg_xfade_backend_value = clamped;
+            dbg_xfade_backend_param_id = (uint16_t)id;
+            dbg_xfade_backend_track = track;
+            dbg_xfade_backend_count++;
             brick6_looper_runtime_set_main_xfade(track, clamped);
             return 1U;
         }

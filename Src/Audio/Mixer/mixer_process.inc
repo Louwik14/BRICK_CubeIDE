@@ -111,6 +111,9 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     {
         const float looper_xfade_target =
             brick6_looper_runtime_get_main_xfade(looper_playback_main_track);
+        dbg_xfade_mixer_value = looper_xfade_target;
+        dbg_xfade_mixer_track = looper_playback_main_track;
+        dbg_xfade_mixer_count++;
         looper_xfade_end = mixer_get_looper_xfade(looper_xfade_target);
         looper_xfade_start = g_looper_xfade_prev;
         g_looper_xfade_prev = looper_xfade_end;

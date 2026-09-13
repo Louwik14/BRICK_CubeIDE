@@ -11,6 +11,11 @@
 
 #define ENCODER_CONTROL_DISPATCH_MAX_EVENTS_PER_TICK ENCODER_DETENT_QUEUE_CAPACITY
 
+volatile uint32_t dbg_xfade_ui_count;
+volatile float dbg_xfade_ui_value;
+volatile uint16_t dbg_xfade_ui_param_id;
+volatile uint8_t dbg_xfade_ui_track;
+
 _Static_assert(ENCODER_DETENT_QUEUE_CAPACITY
                    == CONTROL_AUDIO_FIFO_ENCODER_PENDING,
                "FIFO encoder pending proof changed");
@@ -100,6 +105,14 @@ uint8_t encoder_control_dispatcher_service(void)
                                                          &target) == 0U)
         {
             continue;
+        }
+
+        if (target.parameter_id == PARAM_LOOPER_XFADE)
+        {
+            dbg_xfade_ui_value = target.value;
+            dbg_xfade_ui_param_id = (uint16_t)target.parameter_id;
+            dbg_xfade_ui_track = target.track;
+            dbg_xfade_ui_count++;
         }
 
         float command_value = target.value;

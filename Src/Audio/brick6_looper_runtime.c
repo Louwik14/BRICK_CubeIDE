@@ -148,6 +148,11 @@ typedef struct
 static AUDIO_HOT brick6_looper_track_state_t g_looper_tracks[BRICK6_LOOPER_TRACK_CAP];
 static AUDIO_HOT uint16_t g_looper_playing_mask;
 static AUDIO_HOT uint16_t g_looper_scheduled_start_mask;
+
+volatile uint32_t dbg_xfade_runtime_count;
+volatile float dbg_xfade_runtime_input_value;
+volatile float dbg_xfade_runtime_stored_value;
+volatile uint8_t dbg_xfade_runtime_track;
 static brick6_looper_runtime_diag_snapshot_t g_looper_runtime_diag;
 AUDIO_M7_PRIVATE_SDRAM static int32_t
     g_looper_preroll_pcm[BRICK6_LOOPER_PREROLL_FRAMES * BRICK6_LOOPER_PREROLL_CHANNELS];
@@ -1183,7 +1188,11 @@ void brick6_looper_runtime_set_main_xfade(uint8_t track_id, float xfade)
 {
     if (looper_track_valid(track_id) == 0U)
         return;
+    dbg_xfade_runtime_input_value = xfade;
+    dbg_xfade_runtime_track = track_id;
     g_looper_tracks[track_id].main_xfade = looper_clampf(xfade, 0.0f, 1.0f);
+    dbg_xfade_runtime_stored_value = g_looper_tracks[track_id].main_xfade;
+    dbg_xfade_runtime_count++;
 }
 
 float brick6_looper_runtime_get_main_xfade(uint8_t track_id)

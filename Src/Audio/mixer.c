@@ -206,6 +206,10 @@ volatile uint32_t g_mixer_lane_rebind_count[MIXER_MAX_TRACKS];
 static float g_looper_xfade_smoothed = 0.0f;
 static float g_looper_xfade_prev = 0.0f;
 
+volatile uint32_t dbg_xfade_mixer_count;
+volatile float dbg_xfade_mixer_value;
+volatile uint8_t dbg_xfade_mixer_track;
+
 enum
 {
     MIXER_STATIC_GROUP_CHILD = 1U << 0,
