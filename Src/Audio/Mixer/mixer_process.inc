@@ -1278,6 +1278,17 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
      * mixer_process() would bypass live_gain at XFADE=1. */
     (void)sd_preview_render_main(bus_main_l, bus_main_r, frames);
 
+    g_brick6_looper_output_probe.block_count++;
+    g_brick6_looper_output_probe.xfade_apply_active =
+        looper_xfade_apply_active;
+    g_brick6_looper_output_probe.xfade_track =
+        looper_xfade_authority_track;
+    g_brick6_looper_output_probe.xfade_value = looper_xfade_end;
+    g_brick6_looper_output_probe.looper_bus_pre_xfade_peak =
+        mixer_probe_stereo_peak(looper_bus_main_l, looper_bus_main_r, frames);
+    g_brick6_looper_output_probe.main_pre_xfade_peak =
+        mixer_probe_stereo_peak(bus_main_l, bus_main_r, frames);
+
     if(looper_xfade_apply_active != 0U)
     {
         if((mixer_looper_xfade_value_is_full(looper_xfade_start) != 0U)
@@ -1336,6 +1347,9 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         }
     }
 
+    g_brick6_looper_output_probe.main_post_xfade_peak =
+        mixer_probe_stereo_peak(bus_main_l, bus_main_r, frames);
+
     /* One authoritative master dynamics slot, post returns/Looper crossfade. */
     fx_slot_t *const master_slot = fx_pool_get_slot(2U);
     if ((master_slot != NULL) && (master_slot->active != 0U)
@@ -1343,6 +1357,8 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     {
         fx_chain_process_global_slot(2U, bus_main_l, bus_main_r, frames);
     }
+    g_brick6_looper_output_probe.master_post_peak =
+        mixer_probe_stereo_peak(bus_main_l, bus_main_r, frames);
 
     if((audio_rec_bus_active != 0U)
             && ((audio_rec_projection.source_flags

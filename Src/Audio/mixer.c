@@ -206,6 +206,21 @@ volatile uint32_t g_mixer_lane_rebind_count[MIXER_MAX_TRACKS];
 static float g_looper_xfade_smoothed = 0.0f;
 static float g_looper_xfade_prev = 0.0f;
 
+static float mixer_probe_stereo_peak(const float *left,
+                                     const float *right,
+                                     uint32_t frames)
+{
+    float peak = 0.0f;
+    for (uint32_t i = 0U; i < frames; ++i)
+    {
+        const float abs_l = (left[i] < 0.0f) ? -left[i] : left[i];
+        const float abs_r = (right[i] < 0.0f) ? -right[i] : right[i];
+        if (abs_l > peak) peak = abs_l;
+        if (abs_r > peak) peak = abs_r;
+    }
+    return peak;
+}
+
 enum
 {
     MIXER_STATIC_GROUP_CHILD = 1U << 0,
