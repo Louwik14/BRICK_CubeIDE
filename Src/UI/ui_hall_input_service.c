@@ -1,6 +1,7 @@
 #include "ui_hall_input_service.h"
 
 #include "App/Hall/hall_engine.h"
+#include "App/Hall/hall_keymap.h"
 #include "buttons.h"
 #include "stm32h7xx_hal.h"
 #include "ui_core_mute.h"
@@ -55,9 +56,14 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
                        && (shift_down != 0U)
                        && (action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)));
 
+    hall_key_metadata_t hall_key;
+    const uint8_t global_navigation_key =
+        (uint8_t)((hall_keymap_metadata(hall, &hall_key) != 0U)
+                  && (hall_key.kind == HALL_KEY_KIND_BLACK));
     uint8_t lowcost_range_length_candidate = 0U;
     if ((action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)
         && (macro_overlay_hall_context == 0U)
+        && (global_navigation_key == 0U)
         && (seq_edit_lowcost_range_length_candidate(ui_get_active_lane(), hall) != 0U))
     {
         lowcost_range_length_candidate = 1U;

@@ -34,7 +34,6 @@ static void ui_hall_mode_flow_open_patch_page(uint8_t target_track,
     {
         ui_macro_overlay_on_hall_mode_changed();
     }
-    ui_set_hall_mode(UI_HALL_MODE_PATCH);
     ui_page_patch_assign_open(target_track, previous_mode);
 }
 
@@ -181,9 +180,7 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
             {
                 ui_macro_overlay_on_hall_mode_changed();
             }
-            const ui_hall_mode_t previous_mode = ui_get_hall_mode();
-            ui_set_hall_mode(UI_HALL_MODE_PATCH);
-            ui_page_patch_assign_open(ui_get_active_track(), previous_mode);
+            ui_page_patch_assign_open(ui_get_active_track(), ui_get_hall_mode());
             return 1U;
 
         case 4U:
