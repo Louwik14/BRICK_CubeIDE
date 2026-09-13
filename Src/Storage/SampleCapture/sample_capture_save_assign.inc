@@ -267,6 +267,7 @@ uint8_t sample_capture_model_save_trimmed(void)
         audio_recorder_discard_client(AUDIO_RECORDER_CLIENT_AUDIO_REC);
     sample_capture_reset_take_transients(1U);
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_SAVED;
+    (void)sample_capture_model_assign_refresh();
     (void)waveform_cache_request_for_wav_known_duration(
         final_path,
         WAVEFORM_CACHE_REASON_EDITOR_VISIBLE,
@@ -278,6 +279,129 @@ uint8_t sample_capture_model_save_trimmed(void)
         return 0U;
     }
     return 1U;
+}
+
+uint8_t sample_capture_model_assign_refresh(void)
+{
+    g_sample_capture.assign_count = 0U;
+    g_sample_capture.assign_index = 0U;
+    g_sample_capture.assign_loading = 0U;
+    for(uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        entity_topology_descriptor_t topology;
+        if((entity_topology_get(entity, &topology) == 0U)
+                || (topology.active == 0U)
+                || (topology.role == ENTITY_ROLE_GROUP_MASTER))
+            continue;
+        const track_type_t type = track_state_get_type(entity);
+        if((type == TRACK_TYPE_RAM) || (type == TRACK_TYPE_STREAM))
+            g_sample_capture.assign_tracks[g_sample_capture.assign_count++] = entity;
+    }
+    return g_sample_capture.assign_count;
+}
+
+uint8_t sample_capture_model_assign_count(void)
+{
+    return g_sample_capture.assign_count;
+}
+
+uint8_t sample_capture_model_assign_selected(uint8_t *out_track)
+{
+    if((out_track == 0) || (g_sample_capture.assign_count == 0U)) return 0U;
+    *out_track = g_sample_capture.assign_tracks[g_sample_capture.assign_index];
+    return 1U;
+}
+
+uint8_t sample_capture_model_assign_step(int16_t delta)
+{
+    if((g_sample_capture.assign_count == 0U) || (g_sample_capture.assign_loading != 0U))
+        return 0U;
+    int16_t next = (int16_t)g_sample_capture.assign_index + ((delta > 0) ? 1 : -1);
+    if(next < 0) next = (int16_t)g_sample_capture.assign_count - 1;
+    if(next >= g_sample_capture.assign_count) next = 0;
+    g_sample_capture.assign_index = (uint8_t)next;
+    return 1U;
+}
+
+static uint8_t sample_capture_assign_commit(uint8_t track, uint32_t kind,
+                                            uint16_t logical)
+{
+    uint16_t runtime;
+    if(project_control_resolve_sample_runtime_kind(kind, logical, &runtime) == 0U)
+        return 0U;
+    return project_control_track_asset_select_logical(
+        track, PROJECT_CONTROL_ASSET_SAMPLER, logical);
+}
+
+uint8_t sample_capture_model_assign_selected_take(void)
+{
+    uint8_t track;
+    uint16_t logical;
+    uint16_t runtime;
+    if((g_sample_capture.state.final_path[0] == '\0')
+            || (sample_capture_model_assign_selected(&track) == 0U)
+            || (g_sample_capture.assign_loading != 0U)) return 0U;
+    const track_type_t type = track_state_get_type(track);
+    const uint32_t kind = (type == TRACK_TYPE_RAM)
+        ? PERSIST_ASSET_SAMPLE_RAM : PERSIST_ASSET_SAMPLE_STREAM;
+    if(project_control_find_asset(kind, g_sample_capture.state.final_path,
+                                  &logical) != 0U
+            && project_control_resolve_sample_runtime_kind(kind, logical,
+                                                           &runtime) != 0U)
+        return sample_capture_assign_commit(track, kind, logical);
+    if(type == TRACK_TYPE_STREAM)
+    {
+        const uint16_t slot = sample_global_pool_find_free_slot();
+        if((slot >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+                || (sample_global_pool_load_classic(
+                    slot, g_sample_capture.state.final_path) == 0U)
+                || (project_control_register_sample_runtime(
+                    kind, g_sample_capture.state.final_path, slot, &logical) == 0U)
+                || (sample_capture_assign_commit(track, kind, logical) == 0U))
+        {
+            sample_capture_set_error(SAMPLE_CAPTURE_ERROR_LOAD_FAIL);
+            return 0U;
+        }
+        return 1U;
+    }
+    if(type == TRACK_TYPE_RAM)
+    {
+        const uint16_t slot = sampler_ram_pool_find_free_slot();
+        if((slot >= SAMPLER_RAM_POOL_MAX_SLOTS)
+                || (project_control_ram_load_begin(
+                    slot, g_sample_capture.state.final_path) == 0U))
+        {
+            sample_capture_set_error(SAMPLE_CAPTURE_ERROR_LOAD_FAIL);
+            return 0U;
+        }
+        g_sample_capture.assign_loading = 1U;
+        g_sample_capture.assign_target = track;
+        return 1U;
+    }
+    return 0U;
+}
+
+void sample_capture_model_assign_service(void)
+{
+    if(g_sample_capture.assign_loading == 0U) return;
+    project_control_ram_load_result_t result;
+    if(project_control_ram_load_take_result(&result) == 0U) return;
+    g_sample_capture.assign_loading = 0U;
+    if((result.success == 0U)
+            || (sample_capture_assign_commit(g_sample_capture.assign_target,
+                PERSIST_ASSET_SAMPLE_RAM, result.logical_slot) == 0U))
+        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_LOAD_FAIL);
+    else
+        g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
+}
+
+void sample_capture_model_assign_cancel(void)
+{
+    if(g_sample_capture.assign_loading == 0U)
+    {
+        g_sample_capture.assign_count = 0U;
+        g_sample_capture.assign_index = 0U;
+    }
 }
 
 uint8_t sample_capture_model_assign_trimmed(void)

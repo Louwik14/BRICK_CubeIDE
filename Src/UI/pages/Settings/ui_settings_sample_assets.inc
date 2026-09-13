@@ -94,10 +94,9 @@ static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path
     if (project_replacement_is_active() != 0U) return;
     uint16_t existing_logical = 0U;
     uint16_t existing_runtime = 0U;
-    uint32_t existing_kind = 0U;
     if ((project_control_find_asset(PERSIST_ASSET_SAMPLE_STREAM,path,&existing_logical) != 0U)
-        && (project_control_resolve_sample_runtime(existing_logical,&existing_runtime,&existing_kind) != 0U)
-        && (existing_kind == PERSIST_ASSET_SAMPLE_STREAM))
+        && (project_control_resolve_sample_runtime_kind(PERSIST_ASSET_SAMPLE_STREAM,
+                existing_logical,&existing_runtime) != 0U))
     {
         g_ui_settings.sample_slot_selected = existing_logical;
         ui_page_settings_status("ALREADY LOADED");
@@ -157,10 +156,9 @@ static void ui_page_settings_ram_load_to_slot(uint16_t slot, const char *path)
     if (project_replacement_is_active() != 0U) return;
     uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     uint16_t existing_logical = 0U;
-    uint32_t existing_kind = 0U;
     if ((project_control_find_asset(PERSIST_ASSET_SAMPLE_RAM,path,&existing_logical) != 0U)
-        && (project_control_resolve_sample_runtime(existing_logical,&global_slot,&existing_kind) != 0U)
-        && (existing_kind == PERSIST_ASSET_SAMPLE_RAM))
+        && (project_control_resolve_sample_runtime_kind(PERSIST_ASSET_SAMPLE_RAM,
+                existing_logical,&global_slot) != 0U))
     {
         g_ui_settings.sample_slot_selected = existing_logical;
         ui_page_settings_status("ALREADY LOADED");

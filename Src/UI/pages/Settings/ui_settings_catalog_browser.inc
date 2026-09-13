@@ -189,8 +189,8 @@ static uint8_t ui_page_settings_stream_backend_from_global(uint16_t global_slot,
     }
 
     uint16_t runtime_global=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    uint32_t runtime_kind=0U;
-    if(project_control_resolve_sample_runtime(global_slot,&runtime_global,&runtime_kind)==0U||runtime_kind!=PERSIST_ASSET_SAMPLE_STREAM)return 0U;
+    if(project_control_resolve_sample_runtime_kind(PERSIST_ASSET_SAMPLE_STREAM,
+            global_slot,&runtime_global)==0U)return 0U;
     const sample_global_slot_t *const slot = sample_global_pool_get_slot(runtime_global);
     if ((slot == 0)
         || (slot->kind != SAMPLE_GLOBAL_KIND_CLASSIC)
@@ -250,8 +250,8 @@ static uint8_t ui_page_settings_ram_backend_from_global(uint16_t global_slot,
     }
 
     uint16_t runtime_global=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    uint32_t runtime_kind=0U;
-    if(project_control_resolve_sample_runtime(global_slot,&runtime_global,&runtime_kind)==0U||runtime_kind!=PERSIST_ASSET_SAMPLE_RAM)return 0U;
+    if(project_control_resolve_sample_runtime_kind(PERSIST_ASSET_SAMPLE_RAM,
+            global_slot,&runtime_global)==0U)return 0U;
     const sample_global_slot_t *const slot = sample_global_pool_get_slot(runtime_global);
     if ((slot == 0)
         || (slot->kind != SAMPLE_GLOBAL_KIND_RAM)

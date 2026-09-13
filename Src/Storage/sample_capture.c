@@ -9,10 +9,14 @@
 #include "IPC/audio_rec_level_reader.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_global_pool.h"
+#include "Sampler/sampler_ram_pool.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
 #include "ControlRT/control_rt_publication.h"
 #include "Storage/audio_recorder_wav.h"
+#include "Storage/project_control.h"
+#include "Storage/asset_ref.h"
+#include "Track/track_state.h"
 #include "Platform/memory_layout.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/sd_access_gate.h"
@@ -36,10 +40,9 @@
 #define SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART 0U
 #endif
 
-#define SAMPLE_CAPTURE_TEMP_REC_DIR "0:/PROJECT/REC"
-#define SAMPLE_CAPTURE_TEMP_PATH "0:/PROJECT/REC/AUDIOREC_TMP.REC"
-#define SAMPLE_CAPTURE_WORKING_WAV_PATH "0:/PROJECT/REC/AUDIOREC_TMP.WAV"
-#define SAMPLE_CAPTURE_FINAL_DIR "0:/Samples"
+#define SAMPLE_CAPTURE_REC_DIR "0:/REC"
+#define SAMPLE_CAPTURE_TEMP_PATH SAMPLE_CAPTURE_REC_DIR "/AUDIOREC_TMP.REC"
+#define SAMPLE_CAPTURE_WORKING_WAV_PATH SAMPLE_CAPTURE_REC_DIR "/AUDIOREC_TMP.WAV"
 #define SAMPLE_CAPTURE_FINAL_TRIES 10000U
 #define SAMPLE_CAPTURE_COPY_FRAMES 1024U
 #define SAMPLE_CAPTURE_WAV_DATA_OFFSET AUDIO_RECORDER_WAV_HEADER_BYTES
@@ -103,6 +106,11 @@ typedef struct
     uint16_t final_counter;
     uint32_t trigger_threshold_peak_abs_pcm24;
     uint32_t trigger_arm_epoch;
+    uint8_t assign_tracks[BRICK_ENTITY_CAPACITY];
+    uint8_t assign_count;
+    uint8_t assign_index;
+    uint8_t assign_loading;
+    uint8_t assign_target;
 } sample_capture_model_t;
 
 typedef struct

@@ -49,18 +49,26 @@ static void ui_page_rec_edit_handle_event(const ui_event_t *ev)
 
     if(g_ui_rec_edit_assign_popup != 0U)
     {
+        if(ev->type == UI_EVENT_ENCODER)
+        {
+            (void)sample_capture_model_assign_step(ev->value);
+            return;
+        }
         if(ev->type != UI_EVENT_BUTTON_PRESS)
         {
             return;
         }
         if(ev->id == (uint8_t)BTN_PAGE_1)
         {
+            sample_capture_model_assign_cancel();
             g_ui_rec_edit_assign_popup = 0U;
+            (void)sample_capture_model_return_to_audio_rec();
+            ui_page_set(UI_PAGE_AUDIO_REC);
         }
         else if(ev->id == (uint8_t)BTN_PAGE_2)
         {
-            (void)sample_capture_model_assign_saved_take_to_pool();
-            g_ui_rec_edit_assign_popup = 0U;
+            if(sample_capture_model_assign_selected_take() != 0U)
+                g_ui_rec_edit_assign_popup = 0U;
         }
         return;
     }
@@ -91,7 +99,13 @@ static void ui_page_rec_edit_handle_event(const ui_event_t *ev)
         case BTN_PAGE_2:
             if(sample_capture_model_save_trimmed() != 0U)
             {
-                g_ui_rec_edit_assign_popup = 1U;
+                if(sample_capture_model_assign_count() != 0U)
+                    g_ui_rec_edit_assign_popup = 1U;
+                else
+                {
+                    (void)sample_capture_model_return_to_audio_rec();
+                    ui_page_set(UI_PAGE_AUDIO_REC);
+                }
             }
             break;
 
@@ -106,6 +120,7 @@ static void ui_page_rec_edit_handle_event(const ui_event_t *ev)
 
 static void ui_page_audio_rec_tick(void)
 {
+    sample_capture_model_assign_service();
     sample_capture_model_service();
     sample_capture_state_t state;
     sample_capture_model_get_state(&state);

@@ -41,6 +41,12 @@ AUDIO.
 
 Audio Rec possede un unique bus stereo AUDIO, somme des entites resolues par CONTROL et, si necessaire, de LINE directe. CONTROL publie le masque d'entites, ARM et les sources effectives comme PARAM final dans la FIFO unique; AUDIO conserve ensuite cette configuration privee. LINE directe est exclue lorsque l'entree physique est deja representee par une track External routee vers REC; cette decision est derivee de `track_input_ownership`, `entity_topology` et `track_runtime`. Sur Low-Cost, MIC Audio Rec selectionne la source physique mono `IN3_R` du TLV320AIC3204, routee avec un gain MICPGA fixe de +20 dB par le Right MICPGA et le Right ADC; l'ancien `IN1_R`, alors inutilise, est faiblement reference au common-mode. Le sample SAI droit alimente `mic.mono`, puis les deux canaux du bus REC existant. LINE_R et MIC partagent ce Right ADC et sont donc exclusifs. En mode MIC, LINE physique n'est pas publiee comme source External stereo; MIC n'est pas encore une source External et aucun second chemin Recorder n'est cree.
 
+Les prises Audio Rec vivent integralement sous `0:/REC`: le couple transactionnel
+`AUDIOREC_TMP.REC`/`AUDIOREC_TMP.WAV` puis le WAV edite `RECnnnn.WAV`. Apres la
+durabilite du SAVE, l'UI derive des identites logiques actives la liste des tracks
+Sampler RAM/Stream et peut affecter directement cette reference canonique, sans
+rescanner le browser. SAVE et ASSIGN restent deux transactions independantes.
+
 ### Audit analogique TLV320AIC3204
 
 L'etat MIC est obtenu apres reset et initialisation LINE, puis quatre ecritures de

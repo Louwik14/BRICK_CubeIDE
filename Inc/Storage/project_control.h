@@ -106,6 +106,9 @@ uint16_t project_control_list_wavetables(uint16_t *out,uint16_t capacity);
 uint16_t project_control_list_multis(uint16_t *out,uint16_t capacity);
 uint8_t project_control_get_logical_asset(uint32_t kind,uint16_t logical,persist_control_asset_ref_t*out);
 uint8_t project_control_resolve_sample_runtime(uint16_t logical,uint16_t*out_runtime_global,uint32_t*out_kind);
+uint8_t project_control_resolve_sample_runtime_kind(uint32_t kind,
+                                                    uint16_t logical,
+                                                    uint16_t *out_runtime_global);
 uint8_t project_control_resolve_wavetable_runtime(uint16_t logical,uint16_t*out_runtime_global);
 uint8_t project_control_resolve_multi_runtime(uint16_t logical,uint16_t*out_runtime_instrument);
 uint8_t project_control_track_asset_get(uint8_t entity,

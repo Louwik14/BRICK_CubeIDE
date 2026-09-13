@@ -29,10 +29,9 @@ static uint16_t ui_renderer_template_sampler_ram_selected_global_slot(void)
         logical_slot = (uint16_t)(sample_value + 0.5f);
     }
     uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    uint32_t kind = 0U;
-    if ((project_control_resolve_sample_runtime(logical_slot, &global_slot,
-                                                &kind) == 0U)
-            || (kind != PERSIST_ASSET_SAMPLE_RAM))
+    if (project_control_resolve_sample_runtime_kind(PERSIST_ASSET_SAMPLE_RAM,
+                                                    logical_slot,
+                                                    &global_slot) == 0U)
     {
         return SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     }

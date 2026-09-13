@@ -297,10 +297,15 @@ static audio_recorder_lifecycle_result_t sample_capture_prepare_paths(void)
     uint8_t ok = 0U;
     if(sd_access_fs_mount_if_needed() != 0U)
     {
-        (void)f_mkdir("0:/PROJECT");
-        (void)f_mkdir(SAMPLE_CAPTURE_TEMP_REC_DIR);
-        (void)f_mkdir(SAMPLE_CAPTURE_FINAL_DIR);
-        sample_capture_copy_path(g_sample_capture.state.temp_path, SAMPLE_CAPTURE_TEMP_PATH);
+        const FRESULT made = f_mkdir(SAMPLE_CAPTURE_REC_DIR);
+        if((made != FR_OK) && (made != FR_EXIST))
+        {
+            sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
+            sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
+            return AUDIO_RECORDER_LIFECYCLE_ERROR;
+        }
+        sample_capture_copy_path(g_sample_capture.state.temp_path,
+                                 SAMPLE_CAPTURE_TEMP_PATH);
         ok = 1U;
     }
     else
@@ -329,11 +334,18 @@ static uint8_t sample_capture_make_next_final_path(char *out_path, uint32_t out_
     uint8_t ok = 0U;
     if(sd_access_fs_mount_if_needed() != 0U)
     {
-        (void)f_mkdir(SAMPLE_CAPTURE_FINAL_DIR);
+        const FRESULT made = f_mkdir(SAMPLE_CAPTURE_REC_DIR);
+        if((made != FR_OK) && (made != FR_EXIST))
+        {
+            sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
+            sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
+            return 0U;
+        }
         for(uint32_t attempt = 0U; attempt < SAMPLE_CAPTURE_FINAL_TRIES; ++attempt)
         {
             const uint16_t n = g_sample_capture.final_counter++;
-            (void)snprintf(out_path, out_len, SAMPLE_CAPTURE_FINAL_DIR "/REC%04u.WAV", (unsigned)n);
+            (void)snprintf(out_path, out_len, "%s/REC%04u.WAV",
+                           SAMPLE_CAPTURE_REC_DIR, (unsigned)n);
             FILINFO info;
             if(f_stat(out_path, &info) == FR_NO_FILE)
             {

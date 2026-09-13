@@ -90,10 +90,16 @@ static void ui_page_rec_edit_render(void)
     }
     if(g_ui_rec_edit_assign_popup != 0U)
     {
+        uint8_t target = 0U;
+        char target_label[16];
+        if(sample_capture_model_assign_selected(&target) != 0U)
+            (void)snprintf(target_label, sizeof(target_label), "TRACK %u",
+                           (unsigned)(target + 1U));
+        else
+            (void)snprintf(target_label, sizeof(target_label), "NO TRACK");
         drv_display_fill_rect(24U, 26U, 80U, 20U);
-        drv_display_draw_text_inverted(42U, 30U, "ASSIGN?");
-        drv_display_draw_text_inverted(30U, 40U, "NO");
-        drv_display_draw_text_inverted(78U, 40U, "YES");
+        drv_display_draw_text_inverted(42U, 28U, "ASSIGN?");
+        drv_display_draw_text_inverted(42U, 36U, target_label);
         drv_display_draw_text(0U, 54U, "NO");
         drv_display_draw_text(34U, 54U, "YES");
         drv_display_draw_text(72U, 54U, "-");
@@ -125,7 +131,7 @@ uint8_t ui_page_audio_rec_handle_encoder(uint8_t encoder, int16_t delta)
     {
         if(g_ui_rec_edit_assign_popup != 0U)
         {
-            return 1U;
+            return sample_capture_model_assign_step(delta);
         }
         return sample_capture_model_step_edit(encoder, delta, button_down(BTN_SHIFT));
     }
