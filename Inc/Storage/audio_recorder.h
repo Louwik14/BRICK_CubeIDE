@@ -50,6 +50,25 @@ typedef struct
     uint8_t play_auto;
 } audio_recorder_looper_config_t;
 
+typedef struct
+{
+    volatile uint32_t request_create_count;
+    volatile uint32_t request_prepare_count;
+    volatile uint32_t request_prepare_result;
+    volatile uint32_t request_publish_count;
+    volatile uint32_t request_cancel_count;
+    volatile uint32_t request_reject_count;
+    volatile uint32_t request_reject_reason;
+    volatile uint32_t request_clear_count;
+    volatile uint32_t request_clear_reason;
+    volatile uint32_t request_track;
+    volatile uint32_t request_mode;
+    volatile uint32_t request_phase;
+} audio_recorder_looper_request_probe_t;
+
+extern volatile audio_recorder_looper_request_probe_t
+    g_audio_recorder_looper_request_probe;
+
 void audio_recorder_init(void);
 void audio_recorder_service(void);
 uint8_t audio_recorder_is_active(void);
