@@ -78,6 +78,34 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     uint8_t looper_playback_routes_main = 0U;
     uint8_t looper_playback_main_track = 0U;
     uint16_t looper_mask = brick6_looper_runtime_playing_mask();
+    dbg_xfade_gate_block_count++;
+    dbg_xfade_gate_candidate_count = 0U;
+    dbg_xfade_gate_accepted_count = 0U;
+    dbg_xfade_gate_looper_present_mask = 0U;
+    dbg_xfade_gate_playing_mask = looper_mask;
+    dbg_xfade_gate_ctx_mask = 0U;
+    dbg_xfade_gate_ctx_active_mask = 0U;
+    dbg_xfade_gate_mix_valid_mask = 0U;
+    dbg_xfade_gate_static_looper_mask = 0U;
+    dbg_xfade_gate_unmuted_mask = 0U;
+    dbg_xfade_gate_runtime_playing_mask = 0U;
+    dbg_xfade_gate_accepted_mask = 0U;
+    dbg_xfade_gate_route_main_mask = 0U;
+    dbg_xfade_gate_candidate_track = 0xFFU;
+    dbg_xfade_gate_candidate_mix_track = 0xFFU;
+    dbg_xfade_gate_candidate_static_flags = 0U;
+    dbg_xfade_gate_candidate_runtime_value = 0.0f;
+    for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
+    {
+        track_audio_runtime_ctx_t present_ctx;
+        if ((audio_note_engine_adapter_current_ctx(entity, &present_ctx) != 0U)
+                && (present_ctx.program_route.active != 0U)
+                && (present_ctx.family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
+                && (present_ctx.type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))
+        {
+            dbg_xfade_gate_looper_present_mask |= (uint16_t)(1U << entity);
+        }
+    }
     if (looper_mask != 0U)
     {
         memset(looper_output_active, 0, sizeof(looper_output_active));
@@ -86,10 +114,37 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     {
         const uint8_t logical_track = (uint8_t)__builtin_ctz((unsigned)looper_mask);
         looper_mask &= (uint16_t)(looper_mask - 1U);
+        const uint16_t track_bit = (uint16_t)(1U << logical_track);
+        dbg_xfade_gate_candidate_count++;
+        dbg_xfade_gate_candidate_track = logical_track;
+        dbg_xfade_gate_candidate_runtime_value =
+            brick6_looper_runtime_get_main_xfade(logical_track);
         track_audio_runtime_ctx_t ctx_value;
         const track_audio_runtime_ctx_t *const ctx =
             (audio_note_engine_adapter_current_ctx(
                 logical_track, &ctx_value) != 0U) ? &ctx_value : NULL;
+        if (ctx != NULL)
+        {
+            dbg_xfade_gate_ctx_mask |= track_bit;
+            if (ctx->program_route.active != 0U)
+                dbg_xfade_gate_ctx_active_mask |= track_bit;
+            dbg_xfade_gate_candidate_mix_track = ctx->program_route.mix_track_id;
+            if (ctx->program_route.mix_track_id < MIXER_MAX_TRACKS)
+            {
+                const uint8_t flags =
+                    g_mixer_static_lane_flags[ctx->program_route.mix_track_id];
+                dbg_xfade_gate_mix_valid_mask |= track_bit;
+                dbg_xfade_gate_candidate_static_flags = flags;
+                if ((flags & MIXER_STATIC_LOOPER) != 0U)
+                    dbg_xfade_gate_static_looper_mask |= track_bit;
+                if (g_tracks[ctx->program_route.mix_track_id].mute == 0U)
+                    dbg_xfade_gate_unmuted_mask |= track_bit;
+                if ((flags & MIXER_STATIC_ROUTE_MAIN) != 0U)
+                    dbg_xfade_gate_route_main_mask |= track_bit;
+            }
+        }
+        if (brick6_looper_runtime_is_playing(logical_track) != 0U)
+            dbg_xfade_gate_runtime_playing_mask |= track_bit;
         if((ctx != 0)
                 && (ctx->program_route.mix_track_id < MIXER_MAX_TRACKS)
                 && ((g_mixer_static_lane_flags[ctx->program_route.mix_track_id]
@@ -97,6 +152,8 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                 && (g_tracks[ctx->program_route.mix_track_id].mute == 0U)
                 && (brick6_looper_runtime_is_playing(logical_track) != 0U))
         {
+            dbg_xfade_gate_accepted_mask |= track_bit;
+            dbg_xfade_gate_accepted_count++;
             looper_output_active[logical_track] = 1U;
             looper_playback_active = 1U;
             if((g_mixer_static_lane_flags[ctx->program_route.mix_track_id]
@@ -134,6 +191,13 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
      * while the live bus remains authoritative. */
     looper_playback_mix_active =
         ((looper_playback_active != 0U) && (looper_playback_routes_main != 0U)) ? 1U : 0U;
+    dbg_xfade_gate_playback_active = looper_playback_active;
+    dbg_xfade_gate_routes_main = looper_playback_routes_main;
+    dbg_xfade_gate_main_track = looper_playback_main_track;
+    dbg_xfade_gate_apply_active = looper_xfade_apply_active;
+    dbg_xfade_gate_mix_active = looper_playback_mix_active;
+    dbg_xfade_gate_start = looper_xfade_start;
+    dbg_xfade_gate_end = looper_xfade_end;
     uint8_t looper_record_track = 0U;
     const uint8_t looper_record_active = mixer_looper_record_capture_is_active(&looper_record_track);
     const uint8_t audio_rec_capture_active = (uint8_t)(
