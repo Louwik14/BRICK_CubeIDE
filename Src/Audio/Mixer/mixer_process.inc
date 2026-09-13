@@ -898,12 +898,6 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
             audio_waveform_capture_tap_stereo_block(L, R, frames);
         }
 
-        if (source_entity == 0U)
-        {
-            mixer_debug_measure_stereo(L, R, frames,
-                                       &dbg_t1_peak, &dbg_t1_rms);
-        }
-
         if (group_child != 0U)
         {
             mixer_accumulate_group_fx(mt, L, R,
@@ -1246,13 +1240,6 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
      * mixer_process() would bypass live_gain at XFADE=1. */
     (void)sd_preview_render_main(bus_main_l, bus_main_r, frames);
 
-    mixer_debug_measure_stereo(bus_main_l, bus_main_r, frames,
-                               &dbg_main_pre_peak, &dbg_main_pre_rms);
-    mixer_debug_measure_stereo(looper_bus_main_l, looper_bus_main_r, frames,
-                               &dbg_loop_pre_peak, &dbg_loop_pre_rms);
-    dbg_xfade_start = looper_xfade_start;
-    dbg_xfade = looper_xfade_end;
-
     if(looper_xfade_apply_active != 0U)
     {
         if((mixer_looper_xfade_value_is_full(looper_xfade_start) != 0U)
@@ -1327,9 +1314,6 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         }
     }
 
-    mixer_debug_measure_stereo(bus_main_l, bus_main_r, frames,
-                               &dbg_main_post_peak, &dbg_main_post_rms);
-
     /* One authoritative master dynamics slot, post returns/Looper crossfade. */
     fx_slot_t *const master_slot = fx_pool_get_slot(2U);
     if ((master_slot != NULL) && (master_slot->active != 0U)
@@ -1337,10 +1321,6 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     {
         fx_chain_process_global_slot(2U, bus_main_l, bus_main_r, frames);
     }
-
-    mixer_debug_measure_stereo(bus_main_l, bus_main_r, frames,
-                               &dbg_master_post_peak, &dbg_master_post_rms);
-    dbg_xfade_block++;
 
     if((audio_rec_bus_active != 0U)
             && ((audio_rec_projection.source_flags

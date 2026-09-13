@@ -206,40 +206,6 @@ volatile uint32_t g_mixer_lane_rebind_count[MIXER_MAX_TRACKS];
 static float g_looper_xfade_smoothed = 0.0f;
 static float g_looper_xfade_prev = 0.0f;
 
-volatile uint32_t dbg_xfade_block;
-volatile float dbg_t1_peak;
-volatile float dbg_t1_rms;
-volatile float dbg_main_pre_peak;
-volatile float dbg_main_pre_rms;
-volatile float dbg_loop_pre_peak;
-volatile float dbg_loop_pre_rms;
-volatile float dbg_xfade_start;
-volatile float dbg_xfade;
-volatile float dbg_main_post_peak;
-volatile float dbg_main_post_rms;
-volatile float dbg_master_post_peak;
-volatile float dbg_master_post_rms;
-
-static void mixer_debug_measure_stereo(const float *left,
-                                       const float *right,
-                                       uint32_t frames,
-                                       volatile float *out_peak,
-                                       volatile float *out_rms)
-{
-    float peak = 0.0f;
-    float sum_sq = 0.0f;
-    for (uint32_t i = 0U; i < frames; ++i)
-    {
-        const float l = fabsf(left[i]);
-        const float r = fabsf(right[i]);
-        if (l > peak) peak = l;
-        if (r > peak) peak = r;
-        sum_sq += (left[i] * left[i]) + (right[i] * right[i]);
-    }
-    *out_peak = peak;
-    *out_rms = (frames != 0U) ? sqrtf(sum_sq / (2.0f * (float)frames)) : 0.0f;
-}
-
 enum
 {
     MIXER_STATIC_GROUP_CHILD = 1U << 0,
