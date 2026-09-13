@@ -75,12 +75,38 @@ valides au niveau produit. Les anciennes limites composees et de sources sont
 encore appliquees transitoirement par l'admission existante jusqu'au
 redimensionnement/admission a huit lifetimes de la PASS 4.
 
+PASS 2 retire l'autorite de phase mutable des generateurs. A chaque fenetre,
+ARP FREE derive son ordinal de la position transport, ARP SYNC de la position
+pattern, et EUCLID de cette meme position pattern. `next_sample` n'est plus
+qu'un cache de prochaine visite. RANDOM est un hash pur de l'ordinal, de la
+track et du slot: une meme position redonne le meme choix. ARP emet une note du
+HELD; un pulse EUCLID actif emet tout le HELD, puis les deux reprennent le meme
+`musical_event_t` au slot suivant sans pre-expansion d'horizon.
+
+Groove choisit maintenant sa cellule depuis `seq_musical_time_t` et transforme
+la coordonnee en sample final; il n'entretient aucun compteur. Le pipeline ne
+clampe plus un offset negatif sur le debut de fenetre: le lookahead CONTROL doit
+rendre la source disponible avant sa date finale, sinon le contrat signale une
+date obsolete.
+
+Gate ecrit directement `duration_samples` sur le lifetime candidat. ARP,
+EUCLID et Gate ne fabriquent plus leur paire ON/OFF dans les slots: apres le
+dernier slot, CONTROL materialise une seule deadline terminale depuis cette
+duree. Echo reste une decision discrete et conserve au plus les deux repeats
+produit; chacun reprend au slot suivant. La file temporelle unique ne duplique
+plus `resume_slot`, deja canonique dans `event.stage`, ce qui reduit son element
+de 48 a 40 octets et libere 4096 octets pour 512 entrees.
+
+Avant qu'un batch ON entre dans Gate ou Echo, CONTROL le borne a huit candidats.
+Une expansion amont superieure ne peut donc creer ni deadline Gate ni repeat
+Echo virtuel au-dela de la polyphonie produit; le ledger terminal existant
+reste l'autorite d'admission/stealing des huit lifetimes reels.
+
 Un changement parametrique ne change plus la generation de chaine, ne ferme
-plus l'entite et ne purge plus la future queue. ARP conserve phase et prochaine
-deadline: MODE/OCTAVE sont lus a la prochaine occurrence et RATE fixe la duree
-et la deadline suivante depuis cette occurrence. EUCLID conserve de meme sa
-deadline; LENGTH/PULSES reconstruisent le masque a la prochaine decision et la
-phase est projetee modulo la nouvelle longueur. Probability, Gate et Groove
+plus l'entite et ne purge plus la future queue. ARP et EUCLID recalculent leur
+ordinal depuis le temps musical a chaque fenetre; RATE, MODE, OCTAVE,
+LENGTH et PULSES affectent donc la prochaine decision sans phase cachee.
+Probability, Gate et Groove
 lisent l'etat effectif lorsqu'une occurrence atteint leur slot. Une decision
 Probability, une fin Gate ou une projection Groove deja materialisee n'est pas
 rejouee. CHORD et HARMONIZER ferment seulement les sorties causees par leurs
@@ -103,11 +129,12 @@ et RETRIG en OFF puis ON adjacents sur le meme handle.
 
 Echo n'a pas de queue locale. Ses repetitions, bornees a deux apres l'original,
 entrent dans la future queue centrale triee avec un `occurrence_id` enfant, le
-`source_token` conserve et `resume_slot=N+1`; elles ne retraversent jamais les
-slots precedents. La meme regle couvre les fins datees de Gate. La tete de file
+`source_id` conserve et `stage=N+1`; elles ne retraversent jamais les
+slots precedents. Les fins de duree Gate et generateur entrent seulement comme
+deadlines terminales apres le dernier slot. La tete de file
 est consommee par date, puis OFF avant ON a date egale. Un cutover, STOP/PANIC,
 mute, remplacement Pattern ou Project ferme les derives, purge ces entrees et
-reset les deadlines ARP/EUCLID. Un unmute ne restaure aucun futur ancien.
+reset les caches ARP/EUCLID. Un unmute ne restaure aucun futur ancien.
 TIME/REPEATS/DECAY sont donc captures lors de la materialisation de chaque
 repetition Echo: une repetition deja en queue reste immuable, tandis que la
 prochaine occurrence qui entre dans Echo utilise l'etat courant.
@@ -115,8 +142,8 @@ prochaine occurrence qui entre dans Echo utilise l'etat courant.
 Un changement TYPE est le seul changement MIDI FX live structurel: les sorties
 de la track sont fermees, les futurs de l'ancienne structure sont purges, les
 runtimes du premier slot modifie jusqu'a S4 sont reconstruits et la generation
-de chaine avance. Les slots temporels situes avant le cutover conservent ainsi
-phase et deadline. Le
+de chaine avance. Les generateurs situes avant le cutover retrouvent leur phase
+depuis la position musicale canonique. Le
 ledger de sources HELD survit a cette operation et la matiere HELD a la
 frontiere modifiee est reevaluee immediatement depuis ce slot; TYPE A->B,
 TYPE->OFF et

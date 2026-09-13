@@ -28,7 +28,6 @@ static uint32_t g_note_fx_source_generation[NOTE_FX_TRACK_COUNT];
 typedef struct
 {
     note_event_t event;
-    uint8_t resume_slot;
 } note_fx_future_t;
 
 static note_event_t g_note_fx_buffer_a[NOTE_FX_BATCH_CAPACITY];
@@ -392,6 +391,13 @@ static note_event_result_t note_fx_pipeline_run_batch(const note_event_t *events
     note_event_t *output = g_note_fx_buffer_b;
     for (uint8_t slot = start_stage; slot < NOTE_FX_SLOT_COUNT; ++slot)
     {
+        const uint8_t slot_model = g_note_fx_applied[events[0].track][slot]
+            [NOTE_FX_PARAM_COUNT - 1U];
+        if ((input[0].kind == NOTE_EVENT_KIND_ON)
+                && ((slot_model == NOTE_FX_MODEL_GATE)
+                    || (slot_model == NOTE_FX_MODEL_ECHO))
+                && (count > CONTROL_MUSIC_OUTPUTS_PER_ENTITY))
+            count = CONTROL_MUSIC_OUTPUTS_PER_ENTITY;
         uint8_t output_count = 0U;
         const note_event_result_t result = note_fx_engine_transform(
             slot, input, count, output, NOTE_FX_BATCH_CAPACITY, &output_count);
@@ -403,7 +409,7 @@ static note_event_result_t note_fx_pipeline_run_batch(const note_event_t *events
             {
                 if ((g_note_fx_window_active != 0U)
                         && (output[i].sample_abs < g_note_fx_window_start))
-                    output[i].sample_abs = g_note_fx_window_start;
+                    return NOTE_EVENT_RESULT_REJECTED_STALE;
                 if (((output[i].flags & NOTE_EVENT_FLAG_FUTURE) != 0U)
                         || ((g_note_fx_window_active != 0U)
                             && (output[i].sample_abs >= g_note_fx_window_end)))
@@ -427,6 +433,25 @@ static note_event_result_t note_fx_pipeline_run_batch(const note_event_t *events
     }
     for (uint8_t i = 0U; i < count; ++i)
     {
+        if ((input[i].kind == NOTE_EVENT_KIND_ON)
+                && (input[i].duration_samples != NOTE_EVENT_DURATION_OPEN)
+                && (((input[i].flags & NOTE_EVENT_FLAG_GENERATED) != 0U)
+                    || ((input[i].flags & NOTE_EVENT_FLAG_GATE) != 0U)))
+        {
+            note_event_t deadline = input[i];
+            deadline.sample_abs += (deadline.duration_samples != 0U)
+                ? deadline.duration_samples : 1U;
+            deadline.duration_samples = 0U;
+            deadline.velocity = 0U;
+            deadline.kind = NOTE_EVENT_KIND_OFF;
+            deadline.stage = NOTE_EVENT_STAGE_TERMINAL;
+            deadline.flags &= (uint8_t)~(NOTE_EVENT_FLAG_LEGATO
+                | NOTE_EVENT_FLAG_RETRIGGER | NOTE_EVENT_FLAG_ECHO);
+            deadline.flags |= NOTE_EVENT_FLAG_FUTURE;
+            const note_event_result_t scheduled =
+                note_fx_pipeline_schedule_future(&deadline);
+            if (scheduled != NOTE_EVENT_RESULT_ACCEPTED) return scheduled;
+        }
         const note_event_result_t result = note_fx_pipeline_terminal(&input[i], NULL);
         if (result != NOTE_EVENT_RESULT_ACCEPTED) return result;
     }
@@ -447,8 +472,8 @@ static uint8_t note_fx_future_precedes(const note_fx_future_t *left,
         return left->event.kind < right->event.kind;
     if (left->event.track != right->event.track)
         return left->event.track < right->event.track;
-    if (left->resume_slot != right->resume_slot)
-        return left->resume_slot < right->resume_slot;
+    if (left->event.stage != right->event.stage)
+        return left->event.stage < right->event.stage;
     if (left->event.group_id != right->event.group_id)
         return left->event.group_id < right->event.group_id;
     return left->event.occurrence_id < right->event.occurrence_id;
@@ -473,7 +498,7 @@ static note_event_result_t note_fx_pipeline_schedule_future(
                     : (old.event.flags & NOTE_EVENT_FLAG_ECHO));
             const uint8_t superseded = (uint8_t)(
                 (old.event.track == event->track)
-                && (old.resume_slot == event->stage)
+                && (old.event.stage == event->stage)
                 && (old.event.destination_id == event->destination_id)
                 && (old.event.note == event->note)
                 && (old.event.kind == event->kind)
@@ -485,8 +510,7 @@ static note_event_result_t note_fx_pipeline_schedule_future(
     }
     if (g_note_fx_future_count >= NOTE_FX_FUTURE_CAPACITY)
         return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
-    note_fx_future_t item = { .event = *event,
-        .resume_slot = event->stage };
+    note_fx_future_t item = { .event = *event };
     uint16_t position = g_note_fx_future_count;
     while ((position != 0U)
             && note_fx_future_precedes(
@@ -530,7 +554,7 @@ static void note_fx_pipeline_purge_future_sources(
     {
         const note_fx_future_t item = g_note_fx_future[read];
         const uint8_t obsolete = (uint8_t)((item.event.track == track)
-            && (item.resume_slot >= first_resume_slot)
+            && (item.event.stage >= first_resume_slot)
             && (note_fx_pipeline_source_id_selected(item.event.source_token,
                 source_ids, source_count) != 0U));
         if (obsolete == 0U) g_note_fx_future[write++] = item;
@@ -555,10 +579,10 @@ static note_event_result_t note_fx_pipeline_apply_due_future(uint64_t end)
                     || (item->event.kind != first.event.kind)
                     || (item->event.track != first.event.track)
                     || (item->event.group_id != first.event.group_id)
-                    || (item->resume_slot != first.resume_slot))
+                    || (item->event.stage != first.event.stage))
                 break;
             group[group_count] = item->event;
-            group[group_count].stage = item->resume_slot;
+            group[group_count].stage = item->event.stage;
             ++group_count;
             ++consumed;
         }

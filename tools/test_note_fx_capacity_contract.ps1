@@ -171,5 +171,11 @@ Assert-Contract $pipeline.Contains('note_fx_pipeline_purge_future_track(track)')
 Assert-Contract $pipeline.Contains('note_fx_engine_cleanup(track)') 'panic/transport cleanup'
 Assert-Contract $state.Contains('note_fx_pipeline_commit_state(track, &next)') 'state/enqueue transaction'
 Assert-Contract $state.Contains('note_fx_state_validate_unique_families') 'product family uniqueness'
+$engine = Get-Content -Raw (Join-Path $root 'Src/NoteFx/note_fx_engine.c')
+Assert-Contract (-not $engine.Contains('r->phase++')) 'generator phase authority removed'
+Assert-Contract (-not $engine.Contains('random_state')) 'mutable ARP random removed'
+Assert-Contract $engine.Contains('seq_runtime_get_musical_time') 'canonical musical time used'
+Assert-Contract $pipeline.Contains('deadline.duration_samples') 'terminal duration deadline'
+Assert-Contract (-not $pipeline.Contains('uint8_t resume_slot;')) 'duplicate future resume slot removed'
 
 Write-Output 'NoteFx runtime contract tests: PASS (10000 chains + lifetimes + temporal accumulation)'
