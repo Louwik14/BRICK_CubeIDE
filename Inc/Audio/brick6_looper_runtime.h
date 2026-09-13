@@ -74,6 +74,33 @@ typedef struct
 
 extern volatile brick6_looper_signal_probe_t g_brick6_looper_signal_probe;
 
+typedef struct
+{
+    volatile uint32_t rec_command_count;
+    volatile uint32_t capture_start_command_count;
+    volatile uint32_t runtime_arm_count;
+    volatile uint32_t runtime_start_count;
+    volatile uint32_t runtime_flags;
+    volatile uint32_t source_mask;
+    volatile uint32_t capture_gate_count;
+    volatile uint32_t capture_active;
+    volatile uint32_t capture_active_count;
+    volatile uint32_t contributor_count;
+    volatile uint32_t contributor_mask;
+    volatile uint32_t capture_call_count;
+    volatile uint32_t recorder_start_count;
+    volatile uint32_t recorder_start_result;
+    volatile uint32_t recorder_push_count;
+    volatile uint32_t recorder_push_result;
+    volatile uint32_t command_value;
+    volatile uint32_t command_id;
+    volatile uint32_t frames;
+    volatile uint32_t track;
+    volatile uint32_t flags;
+} brick6_looper_record_probe_t;
+
+extern volatile brick6_looper_record_probe_t g_brick6_looper_record_probe;
+
 void brick6_looper_runtime_init(void);
 void brick6_looper_runtime_service(uint32_t byte_budget);
 void brick6_looper_runtime_stop_playback(uint8_t track_id);

@@ -150,6 +150,17 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         ((looper_playback_active != 0U) && (looper_playback_routes_main != 0U)) ? 1U : 0U;
     uint8_t looper_record_track = 0U;
     const uint8_t looper_record_active = mixer_looper_record_capture_is_active(&looper_record_track);
+    g_brick6_looper_record_probe.capture_gate_count++;
+    g_brick6_looper_record_probe.capture_active = looper_record_active;
+    if(looper_record_active != 0U)
+    {
+        g_brick6_looper_record_probe.capture_active_count++;
+        g_brick6_looper_record_probe.track = looper_record_track;
+    }
+    const uint8_t looper_probe_track = (looper_record_active != 0U)
+        ? looper_record_track : (uint8_t)g_brick6_looper_record_probe.track;
+    g_brick6_looper_record_probe.source_mask =
+        control_routing_audio_get_looper_source_mask(looper_probe_track);
     const uint8_t audio_rec_capture_active = (uint8_t)(
         (audio_rec_projection.source_flags & AUDIO_REC_BUS_CAPTURE_ENABLED) != 0U);
     const uint8_t audio_rec_track_routes_active = (uint8_t)(
@@ -969,6 +980,9 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                     && (source_track != looper_record_track)
                     && (control_routing_audio_get_looper_source(looper_record_track, source_track) != 0U))
             {
+                g_brick6_looper_record_probe.contributor_count++;
+                g_brick6_looper_record_probe.contributor_mask |=
+                    (uint32_t)(1UL << source_track);
                 for(uint32_t i = 0U; i < frames; ++i)
                 {
                     looper_record_l[i] += L[i];

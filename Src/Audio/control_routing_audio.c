@@ -26,3 +26,9 @@ uint8_t control_routing_audio_get_looper_source(uint8_t looper,
     return (uint8_t)((g_audio_looper_source_mask[looper]
                       & (uint16_t)(1U << source)) != 0U);
 }
+
+uint16_t control_routing_audio_get_looper_source_mask(uint8_t looper)
+{
+    return (looper < BRICK_ENTITY_CAPACITY)
+        ? g_audio_looper_source_mask[looper] : 0U;
+}

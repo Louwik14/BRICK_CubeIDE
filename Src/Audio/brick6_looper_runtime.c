@@ -157,6 +157,7 @@ static float g_looper_stretch_r[AUDIO_BLOCK_SIZE];
 static brick6_looper_preroll_state_t g_looper_preroll;
 static brick6_looper_record_boundary_state_t g_looper_record_boundary;
 volatile brick6_looper_signal_probe_t g_brick6_looper_signal_probe;
+volatile brick6_looper_record_probe_t g_brick6_looper_record_probe;
 
 static void looper_update_primary_lease(const brick6_looper_track_state_t *state);
 static uint8_t looper_preroll_can_read(const brick6_looper_track_state_t *state,
@@ -1005,6 +1006,8 @@ void brick6_looper_runtime_on_record_start(uint64_t sample_time)
     }
 
     const uint8_t track = g_looper_record_boundary.track_id;
+    g_brick6_looper_record_probe.runtime_start_count++;
+    g_brick6_looper_record_probe.track = track;
     memset((void *)&g_brick6_looper_signal_probe, 0,
            sizeof(g_brick6_looper_signal_probe));
     g_looper_preroll.active = 0U;
@@ -1021,6 +1024,12 @@ void brick6_looper_runtime_on_record_start(uint64_t sample_time)
         (g_looper_record_boundary.expected_frames != 0U)
             ? (sample_time + (uint64_t)g_looper_record_boundary.expected_frames)
             : 0U;
+    g_brick6_looper_record_probe.runtime_flags =
+        ((uint32_t)g_looper_record_boundary.start_armed << 0)
+        | ((uint32_t)g_looper_record_boundary.stop_armed << 1)
+        | ((uint32_t)g_looper_record_boundary.recording << 2)
+        | ((uint32_t)g_looper_record_boundary.overdub << 3)
+        | ((uint32_t)g_looper_record_boundary.play_auto << 4);
 }
 
 void brick6_looper_runtime_init(void)
@@ -1123,6 +1132,8 @@ void brick6_looper_runtime_arm_live_record_start(uint8_t track_id,
         return;
     }
     looper_record_clear_boundary_state();
+    g_brick6_looper_record_probe.runtime_arm_count++;
+    g_brick6_looper_record_probe.track = track_id;
     g_looper_record_boundary.start_armed = 1U;
     g_looper_record_boundary.track_id = track_id;
     g_looper_record_boundary.len_mode = len_mode;
@@ -1133,6 +1144,12 @@ void brick6_looper_runtime_arm_live_record_start(uint8_t track_id,
     g_looper_record_boundary.expected_steps_q16 =
         (expected_steps != 0U) ? (expected_steps << 16) : 0U;
     g_looper_record_boundary.request_start_sample = request_sample;
+    g_brick6_looper_record_probe.runtime_flags =
+        ((uint32_t)g_looper_record_boundary.start_armed << 0)
+        | ((uint32_t)g_looper_record_boundary.stop_armed << 1)
+        | ((uint32_t)g_looper_record_boundary.recording << 2)
+        | ((uint32_t)g_looper_record_boundary.overdub << 3)
+        | ((uint32_t)g_looper_record_boundary.play_auto << 4);
 }
 
 void brick6_looper_runtime_arm_record_stop(uint64_t request_sample)
@@ -1208,6 +1225,9 @@ uint8_t brick6_looper_runtime_capture_from_irq(uint8_t track_id,
                                                const int32_t *lr_interleaved,
                                                uint32_t frames)
 {
+    g_brick6_looper_record_probe.capture_call_count++;
+    g_brick6_looper_record_probe.track = track_id;
+    g_brick6_looper_record_probe.frames = frames;
     const float peak = looper_probe_pcm24_peak(lr_interleaved, frames);
     uint32_t recorder_frames_before = 0U;
     (void)audio_recorder_capture_audio_frames(AUDIO_RECORDER_CLIENT_LOOPER,

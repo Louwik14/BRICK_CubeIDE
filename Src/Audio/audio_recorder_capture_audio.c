@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "IPC/audio_recorder_capture_contract.h"
+#include "Audio/brick6_looper_runtime.h"
 #include "stm32h7xx.h"
 
 typedef struct
@@ -38,9 +39,19 @@ uint8_t audio_recorder_capture_audio_start(uint8_t client,
                                            uint32_t session_id,
                                            uint32_t frame_limit)
 {
+    if(client == (uint8_t)AUDIO_RECORDER_CLIENT_LOOPER)
+    {
+        g_brick6_looper_record_probe.recorder_start_count++;
+        g_brick6_looper_record_probe.frames = frame_limit;
+    }
     if ((client == (uint8_t)AUDIO_RECORDER_CLIENT_NONE)
             || (session_id == 0U) || (frame_limit == 0U)
-            || (g_audio_capture.active != 0U)) return 0U;
+            || (g_audio_capture.active != 0U))
+    {
+        if(client == (uint8_t)AUDIO_RECORDER_CLIENT_LOOPER)
+            g_brick6_looper_record_probe.recorder_start_result = 0U;
+        return 0U;
+    }
     g_audio_recorder_capture.head_cursor = 0U;
     g_audio_capture = (audio_recorder_capture_audio_state_t){
         .session_id = session_id,
@@ -52,6 +63,8 @@ uint8_t audio_recorder_capture_audio_start(uint8_t client,
     g_audio_recorder_capture.capture_fault = AUDIO_RECORDER_ERROR_NONE;
     g_audio_recorder_capture.closed_session = 0U;
     __DMB();
+    if(client == (uint8_t)AUDIO_RECORDER_CLIENT_LOOPER)
+        g_brick6_looper_record_probe.recorder_start_result = 1U;
     return 1U;
 }
 
@@ -74,6 +87,12 @@ uint8_t audio_recorder_capture_audio_push(audio_recorder_client_t client,
                                           const int32_t *lr_interleaved,
                                           uint32_t frames)
 {
+    if(client == AUDIO_RECORDER_CLIENT_LOOPER)
+    {
+        g_brick6_looper_record_probe.recorder_push_count++;
+        g_brick6_looper_record_probe.frames = frames;
+        g_brick6_looper_record_probe.recorder_push_result = 0U;
+    }
     if ((g_audio_capture.active == 0U)
             || (g_audio_capture.client != (uint8_t)client)
             || (lr_interleaved == NULL) || (frames == 0U)) return 0U;
@@ -108,6 +127,8 @@ uint8_t audio_recorder_capture_audio_push(audio_recorder_client_t client,
     g_audio_recorder_capture.head_cursor = head + frames;
     if ((captured + frames) >= g_audio_capture.frame_limit)
         audio_recorder_capture_audio_close(AUDIO_RECORDER_ERROR_NONE);
+    if(client == AUDIO_RECORDER_CLIENT_LOOPER)
+        g_brick6_looper_record_probe.recorder_push_result = 1U;
     return 1U;
 }
 

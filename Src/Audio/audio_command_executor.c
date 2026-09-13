@@ -348,6 +348,16 @@ static uint8_t audio_command_apply_record(const control_audio_command_t *command
         return 0U;
     if ((command->id & AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG) != 0U)
     {
+        if(CONTROL_AUDIO_COMMAND_KIND(command) == CONTROL_AUDIO_RECORD_START)
+        {
+            memset((void *)&g_brick6_looper_record_probe, 0,
+                   sizeof(g_brick6_looper_record_probe));
+            g_brick6_looper_record_probe.rec_command_count++;
+            g_brick6_looper_record_probe.command_value = command->value;
+            g_brick6_looper_record_probe.command_id = command->id;
+            g_brick6_looper_record_probe.track = command->entity;
+            g_brick6_looper_record_probe.flags = command->id;
+        }
         if (CONTROL_AUDIO_COMMAND_KIND(command) == CONTROL_AUDIO_RECORD_START)
         {
             const uint8_t replace_valid = (uint8_t)(
@@ -376,6 +386,12 @@ static uint8_t audio_command_apply_record(const control_audio_command_t *command
     }
     if (CONTROL_AUDIO_COMMAND_KIND(command) == CONTROL_AUDIO_RECORD_START)
     {
+        if(command->entity == (uint8_t)AUDIO_RECORDER_CLIENT_LOOPER)
+        {
+            g_brick6_looper_record_probe.capture_start_command_count++;
+            g_brick6_looper_record_probe.command_value = command->value;
+            g_brick6_looper_record_probe.command_id = command->id;
+        }
         const uint8_t applied = audio_recorder_capture_audio_start(command->entity,
             command->id, command->value);
         if ((applied != 0U)
