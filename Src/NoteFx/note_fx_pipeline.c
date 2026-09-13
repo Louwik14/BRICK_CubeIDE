@@ -638,7 +638,8 @@ static uint8_t note_fx_pipeline_admit_effective(
         else if (model == NOTE_FX_MODEL_ECHO)
             future_per_track = (uint16_t)(future_per_track
                 + (pitches_at_stage * 2U * effective[slot][1]));
-        else if ((model == NOTE_FX_MODEL_ARP)
+        else if ((model == NOTE_FX_MODEL_ARP_FREE)
+                || (model == NOTE_FX_MODEL_ARP_SYNC)
                 || (model == NOTE_FX_MODEL_EUCLID))
             future_per_track = (uint16_t)(future_per_track
                 + pitches_at_stage);
@@ -723,12 +724,22 @@ static uint8_t note_fx_pipeline_resolve_effective(
     return 1U;
 }
 
+static uint8_t note_fx_pipeline_validate_effective_families(
+    const uint8_t effective[NOTE_FX_SLOT_COUNT][NOTE_FX_PARAM_COUNT])
+{
+    note_fx_track_state_t projected;
+    memcpy(projected.value, effective, sizeof(projected.value));
+    return note_fx_state_validate_unique_families(&projected);
+}
+
 uint8_t note_fx_pipeline_reserve_state(
     uint8_t track, const note_fx_track_state_t *state)
 {
     uint8_t effective[NOTE_FX_SLOT_COUNT][NOTE_FX_PARAM_COUNT];
     note_fx_admission_t admission;
-    if ((note_fx_pipeline_resolve_effective(track, state, effective) == 0U)
+    if ((note_fx_state_validate_unique_families(state) == 0U)
+            || (note_fx_pipeline_resolve_effective(track, state, effective) == 0U)
+            || (note_fx_pipeline_validate_effective_families(effective) == 0U)
             || (note_fx_pipeline_admit_effective(
                 track, effective, &admission) == 0U))
         return 0U;
@@ -760,6 +771,8 @@ static uint8_t note_fx_pipeline_configure_track_owner(
     note_event_t cutover_held[NOTE_FX_HELD_PITCH_CAPACITY];
     uint8_t cutover_held_count = 0U;
     if (note_fx_pipeline_resolve_effective(track, state, next) == 0U)
+        return 0U;
+    if (note_fx_pipeline_validate_effective_families(next) == 0U)
         return 0U;
     for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
     {

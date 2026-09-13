@@ -74,6 +74,11 @@ const seq_runtime_state_t *seq_runtime_exec_state_const(void)
     return &g_seq_runtime_exec_state;
 }
 
+uint32_t seq_runtime_exec_get_transport_step(void)
+{
+    return g_seq_runtime_exec_metronome_step;
+}
+
 void seq_runtime_exec_init(void)
 {
     g_seq_runtime_exec_state = (seq_runtime_state_t){0};

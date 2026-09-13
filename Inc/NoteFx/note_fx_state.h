@@ -16,7 +16,8 @@
 typedef enum
 {
     NOTE_FX_MODEL_OFF = 0,
-    NOTE_FX_MODEL_ARP,
+    NOTE_FX_MODEL_ARP_FREE,
+    NOTE_FX_MODEL_ARP_SYNC,
     NOTE_FX_MODEL_EUCLID,
     NOTE_FX_MODEL_PROBABILITY,
     NOTE_FX_MODEL_GATE,
@@ -26,6 +27,20 @@ typedef enum
     NOTE_FX_MODEL_CHORD,
     NOTE_FX_MODEL_COUNT
 } note_fx_model_t;
+
+typedef enum
+{
+    NOTE_FX_FAMILY_OFF = 0,
+    NOTE_FX_FAMILY_ARP,
+    NOTE_FX_FAMILY_EUCLID,
+    NOTE_FX_FAMILY_PROBABILITY,
+    NOTE_FX_FAMILY_GATE,
+    NOTE_FX_FAMILY_GROOVE,
+    NOTE_FX_FAMILY_ECHO,
+    NOTE_FX_FAMILY_HARMONIZER,
+    NOTE_FX_FAMILY_CHORD,
+    NOTE_FX_FAMILY_COUNT
+} note_fx_family_t;
 
 #define NOTE_FX_PROBABILITY_CONDITION_COUNT 10U
 #define NOTE_FX_GATE_MODE_CLIP 0U
@@ -59,5 +74,8 @@ uint8_t note_fx_state_restore_track(uint8_t track, const note_fx_track_state_t *
 uint8_t note_fx_state_install_prepared_track(uint8_t track,
                                              const note_fx_track_state_t *state);
 uint8_t note_fx_state_normalize_track(note_fx_track_state_t *state);
+note_fx_family_t note_fx_state_model_family(uint8_t model);
+uint8_t note_fx_state_validate_unique_families(
+    const note_fx_track_state_t *state);
 
 #endif

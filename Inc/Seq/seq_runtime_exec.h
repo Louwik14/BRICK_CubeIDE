@@ -27,6 +27,7 @@ void seq_runtime_exec_reset_sample_timeline(uint64_t start_sample);
  * - returns the current audio-block timeline sample owned by runtime-exec.
  */
 uint64_t seq_runtime_exec_get_sample_timeline(void);
+uint32_t seq_runtime_exec_get_transport_step(void);
 void seq_runtime_exec_prepare_start_lifecycle(seq_runtime_state_t *state,
                                               seq_clock_bridge_t *clock_bridge,
                                               uint32_t now_tick);

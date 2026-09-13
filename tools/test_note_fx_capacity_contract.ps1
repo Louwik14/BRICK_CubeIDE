@@ -3,13 +3,25 @@ $ErrorActionPreference = 'Stop'
 $held = 8
 $batch = 32
 $futureCapacity = 512
-$models = @('OFF','ARP','EUCLID','PROBABILITY','GATE','GROOVE','ECHO','HARMONIZER','CHORD')
+$models = @('OFF','ARP_FREE','ARP_SYNC','EUCLID','PROBABILITY','GATE','GROOVE','ECHO','HARMONIZER','CHORD')
 
 function Assert-Contract([bool]$condition, [string]$message) {
     if (-not $condition) { throw $message }
 }
 
+function Test-ProductChain([string[]]$chain) {
+    $families = @{}
+    foreach ($name in $chain) {
+        if ($name -eq 'OFF') { continue }
+        $family = if (($name -eq 'ARP_FREE') -or ($name -eq 'ARP_SYNC')) { 'ARP' } else { $name }
+        if ($families.ContainsKey($family)) { return $false }
+        $families[$family] = $true
+    }
+    return $true
+}
+
 function Get-ChainBound([string[]]$chain) {
+    if (-not (Test-ProductChain $chain)) { return @($false,0,0,0,0) }
     $stage = 1
     $maximumStage = 1
     $instant = 1
@@ -28,7 +40,7 @@ function Get-ChainBound([string[]]$chain) {
         $pitches = $held * [Math]::Floor($stage / $temporalModel)
         if ($name -eq 'GATE') { $future += $pitches }
         if ($name -eq 'ECHO') { $future += $pitches * 4 }
-        if (($name -eq 'ARP') -or ($name -eq 'EUCLID')) { $future += $pitches }
+        if (($name -eq 'ARP_FREE') -or ($name -eq 'ARP_SYNC') -or ($name -eq 'EUCLID')) { $future += $pitches }
     }
     $composed = $instant * $temporal
     $sourceLimit = [Math]::Min($sourceLimit, [Math]::Floor($held / $composed))
@@ -49,17 +61,20 @@ foreach ($a in $models) { foreach ($b in $models) {
 }}
 
 foreach ($scenario in @(
-    @('ARP','ECHO','OFF','OFF'),
-    @('ECHO','ARP','OFF','OFF'),
-    @('HARMONIZER','ARP','OFF','OFF'),
-    @('ARP','HARMONIZER','OFF','OFF'),
-    @('GROOVE','ARP','OFF','OFF'),
-    @('ARP','GROOVE','OFF','OFF'),
+    @('ARP_FREE','ECHO','OFF','OFF'),
+    @('ECHO','ARP_SYNC','OFF','OFF'),
+    @('HARMONIZER','ARP_FREE','OFF','OFF'),
+    @('ARP_SYNC','HARMONIZER','OFF','OFF'),
+    @('GROOVE','ARP_FREE','OFF','OFF'),
+    @('ARP_SYNC','GROOVE','OFF','OFF'),
     @('GATE','ECHO','OFF','OFF')
 )) {
     $bound = Get-ChainBound $scenario
     Assert-Contract $bound[0] "required chain rejected: $($scenario -join ' -> ')"
 }
+Assert-Contract (-not (Test-ProductChain @('ARP_FREE','ARP_SYNC','OFF','OFF'))) 'ARP family duplicated'
+Assert-Contract (-not (Test-ProductChain @('ECHO','ECHO','OFF','OFF'))) 'FX family duplicated'
+Assert-Contract (Test-ProductChain @('HARMONIZER','ECHO','GATE','GROOVE')) 'four distinct FX rejected by product rule'
 
 function New-Ledger([int]$polyphony) {
     return @{ Polyphony=$polyphony; NextHandle=0; Live=@(); Transitions=[System.Collections.ArrayList]::new() }
@@ -155,5 +170,6 @@ Assert-Contract $pipeline.Contains('note_fx_engine_reset_from_slot(track, revoic
 Assert-Contract $pipeline.Contains('note_fx_pipeline_purge_future_track(track)') 'TYPE future purge'
 Assert-Contract $pipeline.Contains('note_fx_engine_cleanup(track)') 'panic/transport cleanup'
 Assert-Contract $state.Contains('note_fx_pipeline_commit_state(track, &next)') 'state/enqueue transaction'
+Assert-Contract $state.Contains('note_fx_state_validate_unique_families') 'product family uniqueness'
 
-Write-Output 'NoteFx runtime contract tests: PASS (6561 chains + lifetimes + temporal accumulation)'
+Write-Output 'NoteFx runtime contract tests: PASS (10000 chains + lifetimes + temporal accumulation)'

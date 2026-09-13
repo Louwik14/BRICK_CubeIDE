@@ -11,7 +11,8 @@ static note_fx_track_state_t g_note_fx_state[NOTE_FX_TRACK_COUNT];
 static const uint8_t g_note_fx_model_defaults[NOTE_FX_MODEL_COUNT][NOTE_FX_PARAM_COUNT] =
 {
     { SEQ_DIVISION_ARP_DEFAULT_INDEX, 0U, 1U, NOTE_FX_MODEL_OFF },
-    { SEQ_DIVISION_ARP_DEFAULT_INDEX, 0U, 1U, NOTE_FX_MODEL_ARP },
+    { SEQ_DIVISION_ARP_DEFAULT_INDEX, 0U, 1U, NOTE_FX_MODEL_ARP_FREE },
+    { SEQ_DIVISION_ARP_DEFAULT_INDEX, 0U, 1U, NOTE_FX_MODEL_ARP_SYNC },
     {
         NOTE_FX_EUCLID_LENGTH_DEFAULT,
         NOTE_FX_EUCLID_PULSE_DEFAULT,
@@ -79,7 +80,8 @@ uint8_t note_fx_state_get_param_schema(uint8_t model,
         [NOTE_FX_PARAM_COUNT - 1U] =
     {
         [NOTE_FX_MODEL_OFF] = { {0U,7U,2U}, {0U,4U,0U}, {1U,4U,1U} },
-        [NOTE_FX_MODEL_ARP] = { {0U,7U,2U}, {0U,4U,0U}, {1U,4U,1U} },
+        [NOTE_FX_MODEL_ARP_FREE] = { {0U,7U,2U}, {0U,4U,0U}, {1U,4U,1U} },
+        [NOTE_FX_MODEL_ARP_SYNC] = { {0U,7U,2U}, {0U,4U,0U}, {1U,4U,1U} },
         [NOTE_FX_MODEL_PROBABILITY] = {
             {0U,100U,100U}, {0U,NOTE_FX_PROBABILITY_CONDITION_COUNT-1U,0U},
             {0U,SEQ_DIVISION_ARP_COUNT,0U} },
@@ -148,6 +150,43 @@ uint8_t note_fx_state_normalize_track(note_fx_track_state_t *state)
             state->value[slot][param] = note_fx_state_clamp_param(
                 model, param, state->value[slot][param], length);
         }
+    }
+    return 1U;
+}
+
+note_fx_family_t note_fx_state_model_family(uint8_t model)
+{
+    static const note_fx_family_t families[NOTE_FX_MODEL_COUNT] =
+    {
+        [NOTE_FX_MODEL_OFF] = NOTE_FX_FAMILY_OFF,
+        [NOTE_FX_MODEL_ARP_FREE] = NOTE_FX_FAMILY_ARP,
+        [NOTE_FX_MODEL_ARP_SYNC] = NOTE_FX_FAMILY_ARP,
+        [NOTE_FX_MODEL_EUCLID] = NOTE_FX_FAMILY_EUCLID,
+        [NOTE_FX_MODEL_PROBABILITY] = NOTE_FX_FAMILY_PROBABILITY,
+        [NOTE_FX_MODEL_GATE] = NOTE_FX_FAMILY_GATE,
+        [NOTE_FX_MODEL_GROOVE] = NOTE_FX_FAMILY_GROOVE,
+        [NOTE_FX_MODEL_ECHO] = NOTE_FX_FAMILY_ECHO,
+        [NOTE_FX_MODEL_HARMONIZER] = NOTE_FX_FAMILY_HARMONIZER,
+        [NOTE_FX_MODEL_CHORD] = NOTE_FX_FAMILY_CHORD,
+    };
+    return (model < NOTE_FX_MODEL_COUNT) ? families[model]
+                                         : NOTE_FX_FAMILY_OFF;
+}
+
+uint8_t note_fx_state_validate_unique_families(
+    const note_fx_track_state_t *state)
+{
+    if (state == NULL) return 0U;
+    uint16_t occupied = 0U;
+    for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
+    {
+        const uint8_t model = state->value[slot][NOTE_FX_PARAM_COUNT - 1U];
+        if (model >= NOTE_FX_MODEL_COUNT) return 0U;
+        const note_fx_family_t family = note_fx_state_model_family(model);
+        if (family == NOTE_FX_FAMILY_OFF) continue;
+        const uint16_t bit = (uint16_t)(1U << (uint8_t)family);
+        if ((occupied & bit) != 0U) return 0U;
+        occupied = (uint16_t)(occupied | bit);
     }
     return 1U;
 }

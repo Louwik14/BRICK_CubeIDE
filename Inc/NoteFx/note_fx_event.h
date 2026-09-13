@@ -48,13 +48,15 @@ typedef enum
 #define NOTE_EVENT_FLAG_GATE      0x80U
 #define NOTE_EVENT_DURATION_OPEN UINT32_MAX
 
+/* Canonical inter-slot musical event.  Legacy member aliases remain during
+ * PASS 1 so the temporal pipeline can migrate without a parallel event type. */
 typedef struct
 {
     uint64_t sample_abs;
     uint32_t duration_samples;
-    uint32_t source_token;
-    uint32_t occurrence_id;
-    uint32_t generation;
+    union { uint32_t source_id; uint32_t source_token; };
+    union { uint32_t intent_id; uint32_t occurrence_id; };
+    union { uint32_t source_generation; uint32_t generation; };
     uint32_t group_id;
     uint16_t chain_generation;
     uint8_t track;
@@ -67,9 +69,12 @@ typedef struct
     uint8_t flags;
     uint8_t temporal_index;
     uint8_t reserved;
-} note_event_t;
+} musical_event_t;
 
-_Static_assert(sizeof(note_event_t) == 40U, "note_event_t layout must remain fixed");
+typedef musical_event_t note_event_t;
+
+_Static_assert(sizeof(musical_event_t) == 40U,
+               "musical_event_t layout must remain fixed");
 
 static inline uint32_t note_event_occurrence_namespace(
     note_event_provenance_t provenance)

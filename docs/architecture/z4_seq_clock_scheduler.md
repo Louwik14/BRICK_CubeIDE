@@ -59,6 +59,22 @@ AUDIO ne connait ni PLAY, ni ROLL, ni ARP, ni EUCLID. Le terminal transmet une
 intention semantique a `control_music_output`, qui alloue seul le
 `output_handle` physique.
 
+Le contrat canonique PASS 1 expose `seq_musical_time_t`, projection immutable
+calculee par CONTROL pour un sample demande depuis l'ancre TIM5/runtime. Il
+porte le `sample_time`, la position transport continue Q16, la position pattern
+Q16 et la generation de boucle derivee. Il ne possede ni compteur ni cadence:
+ARP FREE choisira la position transport et ARP SYNC la position pattern dans la
+PASS 2. `musical_event_t` est l'unique representation inter-slot; l'ancien nom
+`note_event_t` et les membres `source_token`/`occurrence_id` ne sont que des
+alias de migration de `source_id`/`intent_id`, sans second stockage.
+
+Une famille produit ne peut occuper qu'un slot de la chaine. Cette validation
+est centrale et precede l'admission technique; ARP FREE et ARP SYNC partagent
+la famille ARP. OFF n'occupe aucune famille. Quatre familles distinctes restent
+valides au niveau produit. Les anciennes limites composees et de sources sont
+encore appliquees transitoirement par l'admission existante jusqu'au
+redimensionnement/admission a huit lifetimes de la PASS 4.
+
 Un changement parametrique ne change plus la generation de chaine, ne ferme
 plus l'entite et ne purge plus la future queue. ARP conserve phase et prochaine
 deadline: MODE/OCTAVE sont lus a la prochaine occurrence et RATE fixe la duree
@@ -118,11 +134,10 @@ l'etat, elle multiplie les `instant_fanout` et `temporal_fanout` des quatre
 slots, verifie chaque stage contre les buffers A/B de 32 evenements, reserve le
 futur global dans 512 entrees et reserve les actions de toutes les tracks contre
 les 256 actions terminales par horizon. Le facteur ROLL maximal est inclus dans
-les quatre actions source par voix. Le staging live de 128 actions impose un
+les quatre actions source par voix. Le staging live de 128 actions impose encore transitoirement un
 fanout compose maximal de quatre; une chaine Harmonizer/Echo, dans les deux
-ordres, est donc refusee proprement au lieu d'etre acceptee puis tronquee. Deux
-Harmonizer, deux Echo et EUCLID/Echo sans reservation future disponible sont
-egalement refuses par le fanout compose. Un child GROUP mono n'admet pas de fanout superieur a un,
+ordres, est donc refusee avant mutation en attendant la PASS 4. Les doublons de
+famille sont refuses par la regle produit, independamment de ce calcul. Un child GROUP mono n'admet pas encore de fanout superieur a un,
 afin que son activation ulterieure ne puisse contourner la preuve globale. La
 limite source devient `floor(8/fanout)` et vaut huit sans expansion, deux pour
 Harmonizer ou Echo.

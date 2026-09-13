@@ -39,6 +39,7 @@
 #include "Seq/seq_play_scheduler.h"
 #include "Seq/seq_boundary_engine.h"
 #include "Seq/seq_runtime_exec.h"
+#include "Seq/seq_musical_time.h"
 #include "Seq/seq_live_rec_session.h"
 #include "Seq/seq_transport_fsm.h"
 #include "Seq/seq_clock_bridge.h"
@@ -895,6 +896,73 @@ uint8_t seq_runtime_get_track_loop_generation(seq_track_id_t track, uint32_t *ou
     }
 
     *out_generation = g_seq_track_loop_generation[track];
+    return 1U;
+}
+
+static uint64_t seq_runtime_sample_delta_to_step_q16(uint64_t samples,
+                                                      uint32_t step_q16)
+{
+    if (step_q16 == 0U) return 0U;
+    const uint64_t sample_q16 = (samples > (UINT64_MAX >> 16U))
+        ? UINT64_MAX : (samples << 16U);
+    const uint64_t whole = sample_q16 / step_q16;
+    const uint64_t remainder = sample_q16 % step_q16;
+    if (whole > (UINT64_MAX >> 16U)) return UINT64_MAX;
+    return (whole << 16U) + ((remainder << 16U) / step_q16);
+}
+
+uint8_t seq_runtime_get_musical_time(seq_track_id_t track,
+                                     uint64_t sample_time,
+                                     seq_musical_time_t *out_time)
+{
+    if ((out_time == NULL) || (seq_runtime_track_is_valid(track) == 0U)
+            || (g_seq_runtime.samples_per_step_q16 == 0U))
+        return 0U;
+
+    const uint64_t anchor_sample = g_seq_runtime.step_sample_q16 >> 16U;
+    const uint8_t forward = (sample_time >= anchor_sample) ? 1U : 0U;
+    const uint64_t sample_delta = forward
+        ? sample_time - anchor_sample : anchor_sample - sample_time;
+    const uint64_t transport_delta = seq_runtime_sample_delta_to_step_q16(
+        sample_delta, g_seq_runtime.samples_per_step_q16);
+    const uint64_t anchor_transport =
+        (uint64_t)seq_runtime_exec_get_transport_step() << 16U;
+    const uint64_t transport_position = forward
+        ? ((UINT64_MAX - anchor_transport < transport_delta)
+            ? UINT64_MAX : anchor_transport + transport_delta)
+        : ((anchor_transport > transport_delta)
+            ? anchor_transport - transport_delta : 0U);
+
+    const uint8_t track_div = seq_runtime_clamp_track_div(
+        g_seq_runtime_control.track_div[track]);
+    const int64_t track_delta = (int64_t)(transport_delta / track_div);
+    int64_t pattern_unwrapped = (int64_t)(
+        (uint64_t)g_seq_runtime.play_step[track] << 16U);
+    pattern_unwrapped += (forward != 0U) ? track_delta : -track_delta;
+    const uint8_t length = seq_model_get_track_playback_length(track);
+    const int64_t modulus = (int64_t)((uint64_t)length << 16U);
+    int64_t loop_delta = pattern_unwrapped / modulus;
+    int64_t pattern_position = pattern_unwrapped % modulus;
+    if (pattern_position < 0)
+    {
+        pattern_position += modulus;
+        --loop_delta;
+    }
+    int64_t epoch = (int64_t)g_seq_track_loop_generation[track] + loop_delta;
+    if (epoch < 0) epoch = 0;
+    if (epoch > UINT32_MAX) epoch = UINT32_MAX;
+
+    *out_time = (seq_musical_time_t)
+    {
+        .sample_time = sample_time,
+        .transport_position_q16 = transport_position,
+        .pattern_position_q16 = (uint32_t)pattern_position,
+        .loop_epoch = (uint32_t)epoch,
+        .samples_per_step_q16 = g_seq_runtime.samples_per_step_q16,
+        .track_div = track_div,
+        .running = g_seq_runtime.running,
+        .reserved = { 0U, 0U },
+    };
     return 1U;
 }
 

@@ -408,7 +408,8 @@ static uint8_t ui_page_midi_fx_virtual_slot_text(uint8_t slot,
     static const char *const style_labels[] = { "ORDER", "UP", "DOWN", "UP/DOWN", "RANDOM" };
     static const char *const names[NOTE_FX_MODEL_COUNT][NOTE_FX_PARAM_COUNT] = {
         [NOTE_FX_MODEL_OFF] = { "PARAM1", "PARAM2", "PARAM3", "TYPE" },
-        [NOTE_FX_MODEL_ARP] = { "RATE", "STYLE", "RANGE", "TYPE" },
+        [NOTE_FX_MODEL_ARP_FREE] = { "RATE", "STYLE", "RANGE", "TYPE" },
+        [NOTE_FX_MODEL_ARP_SYNC] = { "RATE", "STYLE", "RANGE", "TYPE" },
         [NOTE_FX_MODEL_EUCLID] = { "LENGTH", "PULSE", "DIV", "TYPE" },
         [NOTE_FX_MODEL_PROBABILITY] = { "CHANCE", "CONDITION", "LOT", "TYPE" },
         [NOTE_FX_MODEL_GATE] = { "LENGTH", "VARIATION", "MODE", "TYPE" },
@@ -418,7 +419,7 @@ static uint8_t ui_page_midi_fx_virtual_slot_text(uint8_t slot,
         [NOTE_FX_MODEL_CHORD] = { "SHIFT", "SPREAD", "INVERT", "TYPE" }
     };
     static const char *const model_labels[NOTE_FX_MODEL_COUNT] = {
-        "OFF","ARP","EUCLID","PROBABILITY","GATE","GROOVE","ECHO",
+        "OFF","ARP FREE","ARP SYNC","EUCLID","PROBABILITY","GATE","GROOVE","ECHO",
         "HARMONIZER","CHORD" };
     if (ui_page_get_id() == UI_PAGE_AUDIO_FX)
     {
