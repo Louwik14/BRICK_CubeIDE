@@ -131,7 +131,7 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         ? looper_record_track : (uint8_t)g_brick6_looper_record_probe.track;
     g_brick6_looper_record_probe.source_mask =
         control_routing_audio_get_looper_source_mask(looper_probe_track);
-    const uint8_t audio_rec_capture_active = (uint8_t)(
+    uint8_t audio_rec_capture_active = (uint8_t)(
         (audio_rec_projection.source_flags & AUDIO_REC_BUS_CAPTURE_ENABLED) != 0U);
     const uint8_t audio_rec_track_routes_active = (uint8_t)(
         audio_rec_projection.source_entity_mask != 0U);
@@ -1365,6 +1365,14 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
             audio_rec_bus_r[i] += inputs->usb.right[i];
         }
     }
+
+    const uint8_t audio_rec_overdub_enabled = (uint8_t)(
+        (audio_rec_capture_active != 0U)
+        && ((audio_rec_projection.source_flags
+            & AUDIO_REC_BUS_OVERDUB_CURRENT) != 0U));
+    if(audio_rec_overdub_mix(audio_rec_overdub_enabled,
+                             audio_rec_bus_l, audio_rec_bus_r, frames) == 0U)
+        audio_rec_capture_active = 0U;
 
     uint32_t audio_rec_peak_abs_pcm24 = 0U;
     if(audio_rec_bus_active != 0U)

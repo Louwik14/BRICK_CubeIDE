@@ -29,9 +29,17 @@ automation: `TRACK+REC` arme, annule ou arrete la capture Audio Rec, tandis que
 declenchements `NOW`, `THR`, `PATTERN` et `THR+PLAY`, les longueurs
 `FREE/1/2/4/.../64` mesures et le routage vide silencieux sont portes par le
 modele Recorder. Les encodeurs suivent l'ordre TRIG, LEN, THRESHOLD, QUANTIZE;
-USB et LINE restent combinables avec les huit routes internes. Le controle
-Looper historique reste seulement compile pour la future passe OVERDUB, qui
-reprendra puis supprimera ce dernier chemin.
+USB et LINE restent combinables avec les huit routes internes.
+
+Le mode OVERDUB est porte par Audio Rec. Au START, AUDIO lie un reader dedie au
+snapshot immutable `REC_SOURCE.current`; son playhead et sa lease REC sont
+independants de ceux des Streamers. Les pages restent partagees dans le cache,
+le contenu N est boucle et somme aux sources live avant conversion PCM24 et
+ecriture de N+1. Une page manquante ferme la capture en erreur SD au lieu
+d'enregistrer une lacune silencieuse. Sans snapshot courant valide, OVERDUB
+retombe volontairement sur un REC normal. Le controle Looper historique ne
+participe pas a ce datapath et peut maintenant etre retire avec ses derniers
+relais de compatibilite.
 
 ## Frontieres P0-4
 

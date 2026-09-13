@@ -244,6 +244,7 @@ set(DOMAIN_AUDIO
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_io.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_note_engine_adapter.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_rec_bus_runtime.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_rec_overdub.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_rec_level_producer.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_recorder_capture_audio.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_shared_memory.c"

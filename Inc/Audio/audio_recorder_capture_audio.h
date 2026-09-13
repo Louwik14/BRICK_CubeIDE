@@ -13,3 +13,5 @@ uint8_t audio_recorder_capture_audio_push(audio_recorder_client_t client,
                                           uint32_t frames);
 uint8_t audio_recorder_capture_audio_frames(audio_recorder_client_t client,
                                             uint32_t *out_frames);
+void audio_recorder_capture_audio_fault(audio_recorder_client_t client,
+                                        audio_recorder_error_t fault);

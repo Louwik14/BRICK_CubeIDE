@@ -19,7 +19,11 @@ static void ui_page_audio_rec_handle_event(const ui_event_t *ev)
 
     if(ev->type == UI_EVENT_BUTTON_PRESS)
     {
-        if(ev->id == (uint8_t)BTN_PAGE_2)
+        if(ev->id == (uint8_t)BTN_PAGE_1)
+        {
+            (void)sample_capture_model_toggle_overdub();
+        }
+        else if(ev->id == (uint8_t)BTN_PAGE_2)
         {
             (void)sample_capture_model_toggle_usb();
         }

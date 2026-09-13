@@ -36,8 +36,9 @@ static void ui_page_audio_rec_render(void)
                    (unsigned)state.usb_enabled,
                    (unsigned)state.line_enabled);
     drv_display_draw_text(UI_AUDIO_REC_STATUS_X, 50U, line);
-    drv_display_draw_text(34U, 58U, "USB");
-    drv_display_draw_text(68U, 58U, "LINE");
+    ui_page_audio_rec_draw_label(0U, 58U, "OVR", state.overdub_enabled);
+    ui_page_audio_rec_draw_label(34U, 58U, "USB", state.usb_enabled);
+    ui_page_audio_rec_draw_label(68U, 58U, "LINE", state.line_enabled);
     drv_display_draw_text(108U, 58U, "SAVE");
 
     if(state.error != SAMPLE_CAPTURE_ERROR_NONE)

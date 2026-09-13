@@ -215,6 +215,16 @@ uint8_t sample_capture_model_cancel_for_note_rec(void)
     return sample_capture_model_set_arm(SAMPLE_CAPTURE_ARM_OFF);
 }
 
+uint8_t sample_capture_model_toggle_overdub(void)
+{
+    if((g_sample_capture.state.arm != SAMPLE_CAPTURE_ARM_OFF)
+            || (g_sample_capture.state.recording != 0U)) return 0U;
+    g_sample_capture.state.overdub_enabled =
+        (g_sample_capture.state.overdub_enabled == 0U) ? 1U : 0U;
+    sample_capture_publish_rec_bus();
+    return 1U;
+}
+
 uint8_t sample_capture_model_step_len(int16_t delta)
 {
     if(delta == 0)

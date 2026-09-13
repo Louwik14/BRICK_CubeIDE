@@ -46,6 +46,7 @@
 #include "Track/synth_polyphony.h"
 #include "Track/track_types.h"
 #include "Audio/audio_rec_bus_runtime.h"
+#include "Audio/audio_rec_overdub.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/multi_voice_dsp.h"
 

@@ -140,3 +140,11 @@ uint8_t audio_recorder_capture_audio_frames(audio_recorder_client_t client,
     *out_frames = g_audio_recorder_capture.head_cursor - g_audio_capture.start_cursor;
     return (g_audio_recorder_capture.capture_fault == AUDIO_RECORDER_ERROR_NONE) ? 1U : 0U;
 }
+
+void audio_recorder_capture_audio_fault(audio_recorder_client_t client,
+                                        audio_recorder_error_t fault)
+{
+    if((g_audio_capture.active != 0U)
+            && (g_audio_capture.client == (uint8_t)client))
+        audio_recorder_capture_audio_close(fault);
+}
