@@ -5,6 +5,7 @@
 
 #include "audio_io.h"
 
+#include <math.h>
 #include <string.h>
 
 #include "Audio/metronome_runtime.h"
@@ -33,6 +34,10 @@ volatile uint32_t g_debug_mic_rec_abs;
 volatile int32_t g_debug_mic_rec_min;
 volatile int32_t g_debug_mic_rec_max;
 volatile uint32_t g_debug_mic_rec_peak_abs;
+
+volatile uint32_t dbg_output_block;
+volatile float dbg_output_peak;
+volatile float dbg_output_rms;
 
 void audio_mic_debug_set_enabled(uint8_t enabled)
 {
@@ -143,6 +148,23 @@ void audio_io_pack_ramped(int32_t *AUDIO_RESTRICT tx,
                             monitor_main_l,
                             monitor_main_r,
                             frames);
+
+    float output_peak = 0.0f;
+    float output_sum_sq = 0.0f;
+    for (uint32_t n = 0U; n < frames; ++n)
+    {
+        const uint32_t offset = n * BOARD_AUDIO_TDM_SLOTS;
+        const float l = (float)tx[offset] * (1.0f / 8388608.0f);
+        const float r = (float)tx[offset + 1U] * (1.0f / 8388608.0f);
+        const float abs_l = fabsf(l);
+        const float abs_r = fabsf(r);
+        if (abs_l > output_peak) output_peak = abs_l;
+        if (abs_r > output_peak) output_peak = abs_r;
+        output_sum_sq += (l * l) + (r * r);
+    }
+    dbg_output_peak = output_peak;
+    dbg_output_rms = sqrtf(output_sum_sq / (2.0f * (float)frames));
+    dbg_output_block++;
 
     for (uint32_t n = 0U; n < frames; ++n)
     {
