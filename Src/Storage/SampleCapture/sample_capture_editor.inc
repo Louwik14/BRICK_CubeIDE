@@ -95,6 +95,20 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
         return 1U;
     }
 
+    if (audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_AUDIO_REC) != 0U)
+    {
+        const audio_recorder_lifecycle_result_t discarded =
+            audio_recorder_discard_client(AUDIO_RECORDER_CLIENT_AUDIO_REC);
+        if (discarded == AUDIO_RECORDER_LIFECYCLE_NOT_NOW)
+            return 0U;
+        if (discarded == AUDIO_RECORDER_LIFECYCLE_ERROR)
+        {
+            if (g_sample_capture.state.error == SAMPLE_CAPTURE_ERROR_NONE)
+                sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
+            return 0U;
+        }
+    }
+
     if(sample_capture_looper_record_conflict() != 0U)
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_LOOPER_ACTIVE);
@@ -116,27 +130,6 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_IDLE;
     sample_capture_reset_take_transients(0U);
 
-    if (audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_AUDIO_REC) != 0U)
-    {
-        const audio_recorder_lifecycle_result_t cancelled =
-            audio_recorder_discard_client(AUDIO_RECORDER_CLIENT_AUDIO_REC);
-        if (cancelled == AUDIO_RECORDER_LIFECYCLE_ERROR)
-        {
-            g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
-            g_sample_capture.state.armed_pending = 0U;
-            if (g_sample_capture.state.error == SAMPLE_CAPTURE_ERROR_NONE)
-                sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
-            sample_capture_publish_trigger_config();
-            sample_capture_publish_rec_bus();
-            return 0U;
-        }
-        if (cancelled == AUDIO_RECORDER_LIFECYCLE_NOT_NOW)
-        {
-            sample_capture_publish_trigger_config();
-            sample_capture_publish_rec_bus();
-            return 1U;
-        }
-    }
     const audio_recorder_lifecycle_result_t prepared =
         sample_capture_prepare_session();
     if (prepared == AUDIO_RECORDER_LIFECYCLE_ERROR)

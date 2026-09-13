@@ -337,7 +337,7 @@ audio_recorder_lifecycle_result_t audio_recorder_discard_client(
     if ((g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING)
             || (g_audio_recorder.state == AUDIO_RECORDER_STATE_DRAINING)
             || (g_audio_recorder.state == AUDIO_RECORDER_STATE_FINALIZING))
-        return AUDIO_RECORDER_LIFECYCLE_ERROR;
+        return AUDIO_RECORDER_LIFECYCLE_NOT_NOW;
 
     const audio_recorder_lifecycle_result_t discarded =
         audio_recorder_storage_cancel();

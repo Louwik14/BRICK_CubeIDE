@@ -388,12 +388,6 @@ void sd_block_device_async_poll(void)
         sd_block_device_fail_or_abort(entry, failure);
         return;
     }
-    if((HAL_GetTick() - entry->start_tick) >= BRICK6_SD_TIMEOUT_MS)
-    {
-        sd_block_device_fail_or_abort(entry, SD_BLOCK_DEVICE_TIMEOUT);
-        return;
-    }
-
     const uint8_t dma_complete =
         (entry->operation == SD_BLOCK_DEVICE_OPERATION_WRITE)
             ? g_sd_block_device_async_tx_complete
@@ -417,7 +411,13 @@ void sd_block_device_async_poll(void)
                     (size_t)entry->sector_count * SD_BLOCK_DEVICE_SECTOR_BYTES);
             }
             sd_block_device_complete(entry, SD_BLOCK_DEVICE_OK);
+            return;
         }
+    }
+    if((HAL_GetTick() - entry->start_tick) >= BRICK6_SD_TIMEOUT_MS)
+    {
+        sd_block_device_fail_or_abort(entry, SD_BLOCK_DEVICE_TIMEOUT);
+        return;
     }
 }
 
