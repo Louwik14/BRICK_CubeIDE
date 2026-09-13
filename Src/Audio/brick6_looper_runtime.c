@@ -156,6 +156,7 @@ static float g_looper_stretch_l[AUDIO_BLOCK_SIZE];
 static float g_looper_stretch_r[AUDIO_BLOCK_SIZE];
 static brick6_looper_preroll_state_t g_looper_preroll;
 static brick6_looper_record_boundary_state_t g_looper_record_boundary;
+volatile brick6_looper_signal_probe_t g_brick6_looper_signal_probe;
 
 static void looper_update_primary_lease(const brick6_looper_track_state_t *state);
 static uint8_t looper_preroll_can_read(const brick6_looper_track_state_t *state,
@@ -291,6 +292,43 @@ static sample_audio_key_t looper_cache_key(uint8_t track_id)
 static float looper_pcm24_to_float(int32_t sample)
 {
     return (float)sample * BRICK6_LOOPER_PCM24_FLOAT_SCALE;
+}
+
+static float looper_absf(float value)
+{
+    return (value < 0.0f) ? -value : value;
+}
+
+static void looper_probe_float_peak(volatile float *peak,
+                                    float left,
+                                    float right)
+{
+    const float abs_l = looper_absf(left);
+    const float abs_r = looper_absf(right);
+    const float block_peak = (abs_l > abs_r) ? abs_l : abs_r;
+    if(block_peak > *peak)
+    {
+        *peak = block_peak;
+    }
+}
+
+static float looper_probe_pcm24_peak(const int32_t *lr_interleaved,
+                                     uint32_t frames)
+{
+    float peak = 0.0f;
+    if(lr_interleaved == 0)
+    {
+        return peak;
+    }
+    for(uint32_t i = 0U; i < (frames * BRICK6_LOOPER_PREROLL_CHANNELS); ++i)
+    {
+        const float value = looper_absf(looper_pcm24_to_float(lr_interleaved[i]));
+        if(value > peak)
+        {
+            peak = value;
+        }
+    }
+    return peak;
 }
 
 static float looper_clampf(float value, float min_value, float max_value)
@@ -967,6 +1005,8 @@ void brick6_looper_runtime_on_record_start(uint64_t sample_time)
     }
 
     const uint8_t track = g_looper_record_boundary.track_id;
+    memset((void *)&g_brick6_looper_signal_probe, 0,
+           sizeof(g_brick6_looper_signal_probe));
     g_looper_preroll.active = 0U;
     g_looper_preroll.frames = 0U;
     g_looper_preroll.track_id = track;
@@ -1168,10 +1208,34 @@ uint8_t brick6_looper_runtime_capture_from_irq(uint8_t track_id,
                                                const int32_t *lr_interleaved,
                                                uint32_t frames)
 {
+    const float peak = looper_probe_pcm24_peak(lr_interleaved, frames);
+    uint32_t recorder_frames_before = 0U;
+    (void)audio_recorder_capture_audio_frames(AUDIO_RECORDER_CLIENT_LOOPER,
+                                              &recorder_frames_before);
+    g_brick6_looper_signal_probe.capture_blocks++;
+    g_brick6_looper_signal_probe.capture_frames += frames;
+    if(peak > g_brick6_looper_signal_probe.capture_peak)
+    {
+        g_brick6_looper_signal_probe.capture_peak = peak;
+    }
     brick6_looper_runtime_preroll_capture_from_irq(
         track_id, lr_interleaved, frames);
-    return audio_recorder_capture_audio_push(
+    const uint8_t accepted = audio_recorder_capture_audio_push(
         AUDIO_RECORDER_CLIENT_LOOPER, lr_interleaved, frames);
+    uint32_t recorder_frames_after = recorder_frames_before;
+    if((accepted != 0U)
+            && (audio_recorder_capture_audio_frames(AUDIO_RECORDER_CLIENT_LOOPER,
+                                                    &recorder_frames_after) != 0U)
+            && (recorder_frames_after > recorder_frames_before))
+    {
+        g_brick6_looper_signal_probe.recorder_blocks++;
+        g_brick6_looper_signal_probe.recorder_frames = recorder_frames_after;
+        if(peak > g_brick6_looper_signal_probe.recorder_peak)
+        {
+            g_brick6_looper_signal_probe.recorder_peak = peak;
+        }
+    }
+    return accepted;
 }
 
 void brick6_looper_runtime_set_play_auto(uint8_t track_id, uint8_t play_auto)
@@ -1556,6 +1620,10 @@ static ITCM_TEXT void looper_render_varispeed(brick6_looper_track_state_t *state
             continue;
         }
 
+        looper_probe_float_peak(&g_brick6_looper_signal_probe.playback_source_peak,
+                                sample_l, sample_r);
+        g_brick6_looper_signal_probe.playback_source_reads++;
+
         out_l[produced] += sample_l;
         out_r[produced] += sample_r;
         if((g_looper_runtime_diag.first_output_valid == 0U)
@@ -1605,6 +1673,9 @@ static uint32_t looper_render_preroll_bridge(brick6_looper_track_state_t *state,
         const uint32_t src = base + (i * BRICK6_LOOPER_PREROLL_CHANNELS);
         out_l[i] += looper_pcm24_to_float(g_looper_preroll_pcm[src]);
         out_r[i] += looper_pcm24_to_float(g_looper_preroll_pcm[src + 1U]);
+        looper_probe_float_peak(&g_brick6_looper_signal_probe.playback_source_peak,
+                                out_l[i], out_r[i]);
+        g_brick6_looper_signal_probe.playback_source_reads++;
     }
 
     state->preroll_used_reported = 1U;
@@ -1667,6 +1738,9 @@ static void looper_render_normal_raw(brick6_looper_track_state_t *state,
             const uint32_t src = i * SAMPLE_PAGE_FRAME_STRIDE_FLOATS;
             out_l[produced + i] += src_base[src];
             out_r[produced + i] += src_base[src + 1U];
+            looper_probe_float_peak(&g_brick6_looper_signal_probe.playback_source_peak,
+                                    src_base[src], src_base[src + 1U]);
+            g_brick6_looper_signal_probe.playback_source_reads++;
             if((g_looper_runtime_diag.first_output_valid == 0U)
                     && ((src_base[src] != 0.0f) || (src_base[src + 1U] != 0.0f)))
             {
@@ -2014,4 +2088,36 @@ void brick6_looper_runtime_diag_get_snapshot(brick6_looper_runtime_diag_snapshot
     }
 
     *out_snapshot = g_looper_runtime_diag;
+}
+
+void brick6_looper_runtime_probe_rendered(const float *out_l,
+                                          const float *out_r,
+                                          uint32_t frames)
+{
+    if((out_l == 0) || (out_r == 0) || (frames == 0U))
+    {
+        return;
+    }
+    g_brick6_looper_signal_probe.renderer_blocks++;
+    for(uint32_t i = 0U; i < frames; ++i)
+    {
+        looper_probe_float_peak(&g_brick6_looper_signal_probe.renderer_peak,
+                                out_l[i], out_r[i]);
+    }
+}
+
+void brick6_looper_runtime_probe_bus(const float *left,
+                                     const float *right,
+                                     uint32_t frames)
+{
+    if((left == 0) || (right == 0) || (frames == 0U))
+    {
+        return;
+    }
+    g_brick6_looper_signal_probe.looper_bus_blocks++;
+    for(uint32_t i = 0U; i < frames; ++i)
+    {
+        looper_probe_float_peak(&g_brick6_looper_signal_probe.looper_bus_peak,
+                                left[i], right[i]);
+    }
 }

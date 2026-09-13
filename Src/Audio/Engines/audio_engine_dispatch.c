@@ -338,6 +338,7 @@ static __attribute__((noinline)) void brick6_render_looper_tracks(uint32_t frame
             memset(direct_l, 0, frames * sizeof(float));
             memset(direct_r, 0, frames * sizeof(float));
             brick6_looper_runtime_render_track(ctx, direct_l, direct_r, frames);
+            brick6_looper_runtime_probe_rendered(direct_l, direct_r, frames);
             mixer_commit_external_stereo(ctx->program_route.mix_track_id, frames);
             looper_tracks++;
             continue;
@@ -346,6 +347,7 @@ static __attribute__((noinline)) void brick6_render_looper_tracks(uint32_t frame
         memset(looper_tmp_l, 0, frames * sizeof(float));
         memset(looper_tmp_r, 0, frames * sizeof(float));
         brick6_looper_runtime_render_track(ctx, looper_tmp_l, looper_tmp_r, frames);
+        brick6_looper_runtime_probe_rendered(looper_tmp_l, looper_tmp_r, frames);
         mixer_submit_external_stereo(ctx->program_route.mix_track_id, looper_tmp_l, looper_tmp_r, frames);
         looper_tracks++;
     }

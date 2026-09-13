@@ -1168,6 +1168,13 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                                                      frames);
     }
 
+    if(looper_playback_mix_active != 0U)
+    {
+        brick6_looper_runtime_probe_bus(looper_bus_main_l,
+                                       looper_bus_main_r,
+                                       frames);
+    }
+
     mixer_external_inputs_clear();
 
     if(send_bus_active != 0U)

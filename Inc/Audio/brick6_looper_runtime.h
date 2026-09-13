@@ -55,6 +55,25 @@ typedef struct
     uint32_t wrap_count;
 } brick6_looper_runtime_diag_snapshot_t;
 
+/* Temporary hardware probe: reset at the effective Looper record start. */
+typedef struct
+{
+    volatile uint32_t capture_blocks;
+    volatile uint32_t capture_frames;
+    volatile uint32_t recorder_blocks;
+    volatile uint32_t recorder_frames;
+    volatile uint32_t playback_source_reads;
+    volatile uint32_t renderer_blocks;
+    volatile uint32_t looper_bus_blocks;
+    volatile float capture_peak;
+    volatile float recorder_peak;
+    volatile float playback_source_peak;
+    volatile float renderer_peak;
+    volatile float looper_bus_peak;
+} brick6_looper_signal_probe_t;
+
+extern volatile brick6_looper_signal_probe_t g_brick6_looper_signal_probe;
+
 void brick6_looper_runtime_init(void);
 void brick6_looper_runtime_service(uint32_t byte_budget);
 void brick6_looper_runtime_stop_playback(uint8_t track_id);
@@ -103,6 +122,12 @@ void brick6_looper_runtime_render_track(const track_audio_runtime_ctx_t *ctx,
                                         float *out_l,
                                         float *out_r,
                                         uint32_t frames);
+void brick6_looper_runtime_probe_rendered(const float *out_l,
+                                          const float *out_r,
+                                          uint32_t frames);
+void brick6_looper_runtime_probe_bus(const float *left,
+                                     const float *right,
+                                     uint32_t frames);
 void brick6_looper_runtime_diag_get_snapshot(brick6_looper_runtime_diag_snapshot_t *out_snapshot);
 
 #ifdef __cplusplus
