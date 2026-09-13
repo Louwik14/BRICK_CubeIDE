@@ -17,12 +17,6 @@
 SEQ_STATE_D2 static float g_live_parameter_audio_poly_voices[BRICK_ENTITY_CAPACITY];
 SEQ_STATE_D2 static float g_live_parameter_audio_poly_spread[BRICK_ENTITY_CAPACITY];
 
-volatile uint32_t dbg_xfade_audio_apply_count;
-volatile float dbg_xfade_audio_apply_value;
-volatile uint32_t dbg_xfade_audio_apply_raw;
-volatile uint16_t dbg_xfade_audio_apply_param_id;
-volatile uint8_t dbg_xfade_audio_apply_track;
-volatile uint8_t dbg_xfade_audio_apply_scope;
 static uint8_t live_parameter_audio_runtime_changes_matrix_context(param_id_t id)
 {
     switch (id)
@@ -85,15 +79,6 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
         return audio_note_engine_adapter_project_track_configuration(entity);
     }
     const float decoded = live_parameter_event_decode_float((int32_t)value_bits);
-    if (parameter_id == PARAM_LOOPER_XFADE)
-    {
-        dbg_xfade_audio_apply_raw = value_bits;
-        dbg_xfade_audio_apply_value = decoded;
-        dbg_xfade_audio_apply_param_id = parameter_id;
-        dbg_xfade_audio_apply_track = entity;
-        dbg_xfade_audio_apply_scope = scope;
-        dbg_xfade_audio_apply_count++;
-    }
     if (parameter_id == CONTROL_AUDIO_CONFIG_POLY_VOICES)
     {
         uint8_t voices = 0U;

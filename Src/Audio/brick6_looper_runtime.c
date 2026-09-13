@@ -148,11 +148,6 @@ typedef struct
 static AUDIO_HOT brick6_looper_track_state_t g_looper_tracks[BRICK6_LOOPER_TRACK_CAP];
 static AUDIO_HOT uint16_t g_looper_playing_mask;
 static AUDIO_HOT uint16_t g_looper_scheduled_start_mask;
-
-volatile uint32_t dbg_xfade_runtime_count;
-volatile float dbg_xfade_runtime_input_value;
-volatile float dbg_xfade_runtime_stored_value;
-volatile uint8_t dbg_xfade_runtime_track;
 static brick6_looper_runtime_diag_snapshot_t g_looper_runtime_diag;
 AUDIO_M7_PRIVATE_SDRAM static int32_t
     g_looper_preroll_pcm[BRICK6_LOOPER_PREROLL_FRAMES * BRICK6_LOOPER_PREROLL_CHANNELS];
@@ -747,6 +742,21 @@ static void looper_start_playback(brick6_looper_track_state_t *state,
     looper_update_primary_lease(state);
 }
 
+static void looper_start_ready_if_requested(brick6_looper_track_state_t *state,
+                                            uint64_t start_sample)
+{
+    if ((state == 0)
+            || (state->state != BRICK6_LOOPER_RUNTIME_STATE_READY)
+            || (state->play_auto == 0U)
+            || (state->want_play_when_ready == 0U)
+            || (looper_transport_running() == 0U))
+    {
+        return;
+    }
+
+    looper_start_playback(state, start_sample, 0U);
+}
+
 static uint8_t looper_acquire_page_for_frame(brick6_looper_track_state_t *state,
                                              uint32_t frame)
 {
@@ -854,6 +864,7 @@ static void looper_update_ready_state(brick6_looper_track_state_t *state)
         }
 
         looper_set_state(state, BRICK6_LOOPER_RUNTIME_STATE_READY);
+        looper_start_ready_if_requested(state, brick6_looper_media_now_sample());
         looper_diag_update_take((uint8_t)(state - g_looper_tracks), state);
     }
 }
@@ -943,11 +954,7 @@ void brick6_looper_runtime_on_record_stop(uint64_t sample_time)
     if(track < BRICK6_LOOPER_TRACK_CAP)
     {
         brick6_looper_track_state_t *const state = &g_looper_tracks[track];
-        if((state->state == BRICK6_LOOPER_RUNTIME_STATE_READY)
-                && (state->play_auto != 0U)
-                && (state->want_play_when_ready != 0U)
-                && (looper_transport_running() != 0U))
-            looper_start_playback(state, sample_time, 0U);
+        looper_start_ready_if_requested(state, sample_time);
     }
 }
 
@@ -1181,6 +1188,7 @@ void brick6_looper_runtime_set_play_auto(uint8_t track_id, uint8_t play_auto)
     }
 
     state->want_play_when_ready = (looper_transport_running() != 0U) ? 1U : 0U;
+    looper_start_ready_if_requested(state, brick6_looper_media_now_sample());
     looper_diag_update_take(track_id, state);
 }
 
@@ -1188,11 +1196,7 @@ void brick6_looper_runtime_set_main_xfade(uint8_t track_id, float xfade)
 {
     if (looper_track_valid(track_id) == 0U)
         return;
-    dbg_xfade_runtime_input_value = xfade;
-    dbg_xfade_runtime_track = track_id;
     g_looper_tracks[track_id].main_xfade = looper_clampf(xfade, 0.0f, 1.0f);
-    dbg_xfade_runtime_stored_value = g_looper_tracks[track_id].main_xfade;
-    dbg_xfade_runtime_count++;
 }
 
 float brick6_looper_runtime_get_main_xfade(uint8_t track_id)
@@ -1308,9 +1312,7 @@ void brick6_looper_runtime_on_transport_start(uint64_t sample_time)
     {
         brick6_looper_track_state_t *state = &g_looper_tracks[track];
         state->want_play_when_ready = (state->play_auto != 0U) ? 1U : 0U;
-        if ((state->state == BRICK6_LOOPER_RUNTIME_STATE_READY)
-                && (state->want_play_when_ready != 0U))
-            looper_start_playback(state, sample_time, 0U);
+        looper_start_ready_if_requested(state, sample_time);
         looper_diag_update_take(track, state);
     }
 }
@@ -1387,14 +1389,8 @@ void brick6_looper_runtime_on_scheduled_start(uint64_t sample_time)
 
         looper_set_scheduled_start(state, 0U);
         state->scheduled_start_sample = 0U;
-        if((state->state == BRICK6_LOOPER_RUNTIME_STATE_READY)
-                && (state->play_auto != 0U)
-                && (state->want_play_when_ready != 0U)
-                && (looper_transport_running() != 0U))
-        {
-            looper_start_playback(state, sample_time, 0U);
-        }
-        else if(state->state != BRICK6_LOOPER_RUNTIME_STATE_PLAYING)
+        looper_start_ready_if_requested(state, sample_time);
+        if(state->state != BRICK6_LOOPER_RUNTIME_STATE_PLAYING)
         {
             state->want_play_when_ready = 0U;
             looper_set_state(state, BRICK6_LOOPER_RUNTIME_STATE_FAILED);

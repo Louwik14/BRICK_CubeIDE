@@ -16,13 +16,6 @@
 
 static uint32_t g_live_parameter_audio_publish_failure_count;
 
-volatile uint32_t dbg_xfade_publish_count;
-volatile float dbg_xfade_publish_value;
-volatile uint32_t dbg_xfade_publish_raw;
-volatile uint16_t dbg_xfade_publish_param_id;
-volatile uint8_t dbg_xfade_publish_track;
-volatile uint64_t dbg_xfade_publish_sample_time;
-
 static bool live_parameter_audio_publish_failed(void)
 {
     ++g_live_parameter_audio_publish_failure_count;
@@ -78,20 +71,9 @@ static uint8_t live_parameter_audio_build_param_command(
             : CONTROL_AUDIO_PARAM_KIND_CLEAR_TEMP_TRACK;
     }
     else return 0U;
-    const uint8_t built = control_rt_build_param_command(target->track,
+    return control_rt_build_param_command(target->track,
         target->parameter_id, (uint32_t)target->value, kind,
         effective_sample_time, out_command);
-    if ((built != 0U) && (target->parameter_id == PARAM_LOOPER_XFADE))
-    {
-        dbg_xfade_publish_raw = out_command->value;
-        dbg_xfade_publish_value = live_parameter_event_decode_float(
-            (int32_t)out_command->value);
-        dbg_xfade_publish_param_id = out_command->id;
-        dbg_xfade_publish_track = out_command->entity;
-        dbg_xfade_publish_sample_time = out_command->effective_sample_time;
-        dbg_xfade_publish_count++;
-    }
-    return built;
 }
 
 bool live_parameter_audio_publication_submit_tone_program(

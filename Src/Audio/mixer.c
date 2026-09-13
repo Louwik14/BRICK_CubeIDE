@@ -206,34 +206,6 @@ volatile uint32_t g_mixer_lane_rebind_count[MIXER_MAX_TRACKS];
 static float g_looper_xfade_smoothed = 0.0f;
 static float g_looper_xfade_prev = 0.0f;
 
-volatile uint32_t dbg_xfade_mixer_count;
-volatile float dbg_xfade_mixer_value;
-volatile uint8_t dbg_xfade_mixer_track;
-volatile uint32_t dbg_xfade_gate_block_count;
-volatile uint32_t dbg_xfade_gate_candidate_count;
-volatile uint32_t dbg_xfade_gate_accepted_count;
-volatile uint16_t dbg_xfade_gate_looper_present_mask;
-volatile uint16_t dbg_xfade_gate_playing_mask;
-volatile uint16_t dbg_xfade_gate_ctx_mask;
-volatile uint16_t dbg_xfade_gate_ctx_active_mask;
-volatile uint16_t dbg_xfade_gate_mix_valid_mask;
-volatile uint16_t dbg_xfade_gate_static_looper_mask;
-volatile uint16_t dbg_xfade_gate_unmuted_mask;
-volatile uint16_t dbg_xfade_gate_runtime_playing_mask;
-volatile uint16_t dbg_xfade_gate_accepted_mask;
-volatile uint16_t dbg_xfade_gate_route_main_mask;
-volatile uint8_t dbg_xfade_gate_candidate_track;
-volatile uint8_t dbg_xfade_gate_candidate_mix_track;
-volatile uint8_t dbg_xfade_gate_candidate_static_flags;
-volatile float dbg_xfade_gate_candidate_runtime_value;
-volatile uint8_t dbg_xfade_gate_playback_active;
-volatile uint8_t dbg_xfade_gate_routes_main;
-volatile uint8_t dbg_xfade_gate_main_track;
-volatile uint8_t dbg_xfade_gate_apply_active;
-volatile uint8_t dbg_xfade_gate_mix_active;
-volatile float dbg_xfade_gate_start;
-volatile float dbg_xfade_gate_end;
-
 enum
 {
     MIXER_STATIC_GROUP_CHILD = 1U << 0,

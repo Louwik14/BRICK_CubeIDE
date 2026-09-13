@@ -52,14 +52,6 @@ static track_tone_fm_base_voice_t g_audio_fm_base_projection[BRICK_ENTITY_CAPACI
 static uint8_t g_audio_state_rebind_deferred;
 static uint16_t g_audio_state_rebind_mask;
 
-volatile uint32_t dbg_xfade_fifo_count;
-volatile float dbg_xfade_fifo_value;
-volatile uint32_t dbg_xfade_fifo_raw;
-volatile uint16_t dbg_xfade_fifo_param_id;
-volatile uint8_t dbg_xfade_fifo_track;
-volatile uint8_t dbg_xfade_fifo_kind;
-volatile uint64_t dbg_xfade_fifo_sample_time;
-
 static audio_command_apply_result_t audio_command_apply(
     const control_audio_command_t *command);
 
@@ -142,17 +134,6 @@ static audio_command_apply_result_t audio_command_apply_program(
 
 static uint8_t audio_command_apply_param(const control_audio_command_t *command)
 {
-    if (command->id == PARAM_LOOPER_XFADE)
-    {
-        dbg_xfade_fifo_raw = command->value;
-        dbg_xfade_fifo_value = live_parameter_event_decode_float(
-            (int32_t)command->value);
-        dbg_xfade_fifo_param_id = command->id;
-        dbg_xfade_fifo_track = command->entity;
-        dbg_xfade_fifo_kind = CONTROL_AUDIO_COMMAND_KIND(command);
-        dbg_xfade_fifo_sample_time = command->effective_sample_time;
-        dbg_xfade_fifo_count++;
-    }
     const uint16_t fm_base_words =
         (uint16_t)((sizeof(track_tone_fm_base_voice_t) + 3U) / 4U);
     if ((command->id >= CONTROL_AUDIO_FM_BASE_WORD_FIRST)
