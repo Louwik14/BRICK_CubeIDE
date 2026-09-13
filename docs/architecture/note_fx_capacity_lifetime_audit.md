@@ -54,27 +54,30 @@ meme handle actif.
 
 ## Futurs et admission
 
-La queue globale conserve 512 evenements. Gate et Echo marquent explicitement
+La queue globale conserve 320 evenements. Gate et Echo marquent explicitement
 leurs projections temporelles. Pour une meme cle
 `{track,slot,destination,note,kind,repeat}`, la projection la plus recente
 supersede l'ancienne: le terminal ne peut de toute facon posseder qu'un lifetime
 vivant pour ce pitch. Le debit ROLL augmente donc le nombre de remplacements,
 pas le nombre de slots persistants.
 
-La reservation est derivee de cette representation runtime unique:
+La borne est derivee de cette representation runtime unique:
 
 - Gate: un STOP futur par pitch a la frontiere;
 - Echo: `pitches x 2 kinds x REPEATS`;
 - ARP/Euclid: un OFF courant par pitch temporel;
-- fanout amont: applique au nombre de pitches de la frontiere;
-- scratch: produit instantane/temporel maximal inferieur ou egal a 32;
-- terminal: fanout compose inferieur ou egal a quatre;
-- global: somme des reservations de toutes les pistes inferieure ou egale a
-  512, avec 256 actions source et 128 actions temporelles par horizon.
+- candidats immediats: `8 x 4 = 32` au maximum pour Harmonizer;
+- admission: huit candidats ON apres chaque transformateur immediat et avant
+  tout transformateur temporel aval;
+- Echo: 8 lifetimes admis x 2 repeats x ON/OFF = 32 futures par piste;
+- Gate/generateur: au plus 8 deadlines terminales additionnelles par piste;
+- global: huit pistes polyphoniques equivalentes x 40 = 320 futures (la
+  topologie GROUP remplace une piste huit voix par huit children mono).
 
-Il n'existe plus de `max_future_pending` ou `max_delay_divisions` arbitraire par
-modele. Admission, remplacement runtime et regression host emploient le meme
-nombre de cles temporelles.
+Il n'existe plus de `max_future_pending`, de `max_delay_divisions` arbitraire ou
+de calcul de fanout compose. Toute chaine valide par famille est acceptee, puis
+les candidats sont tronques deterministement a huit avant de devenir des
+lifetimes ou des futures.
 
 ## Groove, ordre et revoice
 
@@ -107,13 +110,45 @@ refuse, reservations et etat canonique restent anciens.
 | source HELD | 8/piste |
 | slot HELD | 8/slot/piste |
 | buffers A/B | 32 evenements |
-| future | 512 global |
+| future | 320 global |
 | command/live queue | 31 chacune |
 | outputs logiques / mapping AUDIO | 8/entite |
 | staging interne | 384 actions/horizon |
 | staging externe | 128 actions/horizon |
 
-La regression host enumere les 6561 chaines et simule des ledgers CONTROL/AUDIO
+Le staging interne 384 reste necessaire: 128 NOTE_ON source peuvent tomber
+dans un horizon de 64 frames et demander chacun STOP+START, soit 256 actions;
+les generateurs NoteFx peuvent aligner 64 sorties demandant aussi STOP+START,
+soit 128 actions independantes. Le staging externe 128 couvre 64 transitions
+externes avec remplacement. La conversion maximale est donc
+`2 x (384 + 128) = 1024` commandes NOTE. Avec les autres producteurs, la preuve
+FIFO reste 3548 commandes et la puissance de deux statique demeure 4096.
+
+RAM statique PASS 4 (octets):
+
+| Zone | Avant | Apres | Delta |
+|---|---:|---:|---:|
+| future SRAM2 | 20480 | 12800 | -7680 |
+| work buffers | 2560 | 2560 | 0 |
+| slot runtime / HELD | 13824 max | 13824 max | 0 |
+| source HELD | 5120 | 5120 | 0 |
+| terminal ledgers actif+prepare | 6144 | 6144 | 0 |
+| staging interne/externe | 11792 | 11792 | 0 |
+| config/version runtime | 912 | 848 | -64 |
+
+Le linker confirme SRAM2 `119648 -> 111968` (-7680 octets) et RAM_D1
+`481056 -> 480992` (-64 octets). Aucun candidat rejete ne devient persistent.
+
+Les refus previsibles sont tous en amont de la mutation: schema/famille invalide,
+command ring pleine, ou neuvieme source HELD. `batch full`, `HELD full`, future
+pleine, refus terminal, `NOTE_FX_PIPELINE_PROCESS_FAILED` et
+`BRICK_FATAL_MUSIC_STAGING_CAPACITY` ne sont plus atteignables par une operation
+produit valide; ils restent des sentinelles de corruption, de violation du
+preflight ou de bug interne. Les versions obsoletes sont compactees au changement
+de leur owner et ne peuvent donc pas consommer artificiellement les 320 futures.
+
+La regression host enumere les 10000 chaines candidates, filtre les familles
+produit valides et simule des ledgers CONTROL/AUDIO
 pour Harmony quatre voix sur mono, Euclid polyphonique, Gate RETRIG et LEGATO.
 Elle exerce aussi 1000 occurrences ROLL sur huit pistes avec Gate et Echo,
 verifie la compaction future, la phase Groove temporelle, le reset/purge revoice

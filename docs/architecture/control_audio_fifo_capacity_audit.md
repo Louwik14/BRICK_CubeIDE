@@ -100,9 +100,9 @@ identique sur H747.
 | Source simultanement en vol | Commandes |
 |---|---:|
 | Horizon PARAM | 1024 |
-| Horizon NOTE, `2 * (256 + 128)` | 768 |
+| Horizon NOTE, `2 * (384 + 128)` | 1024 |
 | Horizon general | 35 |
-| **Horizon maximal** | **1827** |
+| **Horizon maximal** | **2083** |
 | Commit restore serialise | 1 |
 | Patch deja queue | 348 |
 | Encodeurs: `(32 + 7 * 4) * mute-groupe 9` | 540 |
@@ -111,7 +111,7 @@ identique sur H747.
 | Marge explicite | 512 |
 
 ```text
-FIFO_REQUIRED = 1827 + 953 + 512 = 3292 commandes
+FIFO_REQUIRED = 2083 + 953 + 512 = 3548 commandes
 FIFO_CAPACITY = puissance de deux suivante = 4096 commandes
 ```
 

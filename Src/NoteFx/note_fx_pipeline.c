@@ -10,10 +10,8 @@
 #include "Storage/project_load_quiesce.h"
 #include "Track/track_runtime.h"
 #include "Track/control_music_output.h"
-#include "Track/entity_topology.h"
+#include "Track/entity_types.h"
 #include "Seq/seq_runtime_exec.h"
-#include "Seq/seq_model.h"
-#include "IPC/control_music_capacity.h"
 #include "Platform/memory_layout.h"
 #include "Seq/seq_note_trace.h"
 #include "main.h"
@@ -23,7 +21,7 @@ static uint8_t g_note_fx_override_value[NOTE_FX_TRACK_COUNT][NOTE_FX_SLOT_COUNT]
 static uint32_t g_note_fx_source_generation[NOTE_FX_TRACK_COUNT];
 
 #define NOTE_FX_FUTURE_CAPACITY \
-    (NOTE_FX_TRACK_COUNT * NOTE_FX_SLOT_COUNT * NOTE_FX_HELD_PITCH_CAPACITY)
+    (BRICK_ENTITY_TOP_LEVEL_COUNT * 5U * NOTE_FX_HELD_PITCH_CAPACITY)
 
 typedef struct
 {
@@ -39,9 +37,6 @@ static uint16_t g_note_fx_slot_version[NOTE_FX_TRACK_COUNT][NOTE_FX_SLOT_COUNT];
 static uint8_t g_note_fx_applied[NOTE_FX_TRACK_COUNT][NOTE_FX_SLOT_COUNT]
                                 [NOTE_FX_PARAM_COUNT];
 static uint8_t g_note_fx_applied_valid[NOTE_FX_TRACK_COUNT];
-static uint16_t g_note_fx_admitted_future[NOTE_FX_TRACK_COUNT];
-static uint8_t g_note_fx_source_note_limit[NOTE_FX_TRACK_COUNT];
-static uint8_t g_note_fx_admitted_fanout[NOTE_FX_TRACK_COUNT];
 static note_event_t g_note_fx_held_source[NOTE_FX_TRACK_COUNT]
                                          [NOTE_FX_HELD_PITCH_CAPACITY];
 static uint8_t g_note_fx_held_source_count[NOTE_FX_TRACK_COUNT];
@@ -57,7 +52,7 @@ static uint16_t note_fx_pipeline_bump_slot_version(uint8_t track, uint8_t slot)
     return version;
 }
 
-_Static_assert(NOTE_FX_FUTURE_CAPACITY == 512U,
+_Static_assert(NOTE_FX_FUTURE_CAPACITY == 320U,
                "Note FX future proof changed");
 
 #define NOTE_FX_COMMAND_CAPACITY 32U
@@ -170,6 +165,34 @@ static uint8_t note_fx_pipeline_held_source_update(const note_event_t *event)
     }
     g_note_fx_held_source[track][index] = *event;
     return 1U;
+}
+
+static uint8_t note_fx_pipeline_held_source_can_admit(
+    const note_event_t *events, uint8_t event_count)
+{
+    if ((events == NULL) || (event_count == 0U)
+            || (events[0].track >= NOTE_FX_TRACK_COUNT))
+        return 0U;
+    if (events[0].kind == NOTE_EVENT_KIND_OFF) return 1U;
+    const uint8_t track = events[0].track;
+    uint8_t new_count = 0U;
+    for (uint8_t i = 0U; i < event_count; ++i)
+    {
+        if ((note_fx_pipeline_held_source_find(
+                track, events[i].occurrence_id) >= 0)
+                || (note_fx_pipeline_held_pitch_find(&events[i]) >= 0))
+            continue;
+        uint8_t duplicate = 0U;
+        for (uint8_t j = 0U; j < i; ++j)
+            if ((events[j].occurrence_id == events[i].occurrence_id)
+                    || ((events[j].note == events[i].note)
+                        && (events[j].destination_id
+                            == events[i].destination_id)))
+                duplicate = 1U;
+        if (duplicate == 0U) ++new_count;
+    }
+    return ((uint16_t)g_note_fx_held_source_count[track] + new_count
+        <= NOTE_FX_HELD_PITCH_CAPACITY) ? 1U : 0U;
 }
 
 static note_event_result_t note_fx_pipeline_replay_grouped(
@@ -395,6 +418,9 @@ static note_event_result_t note_fx_pipeline_run_batch(const note_event_t *events
         g_note_fx_buffer_a[i] = events[i];
     }
     uint8_t count = event_count;
+    if ((events[0].kind == NOTE_EVENT_KIND_ON)
+            && (count > NOTE_FX_HELD_PITCH_CAPACITY))
+        count = NOTE_FX_HELD_PITCH_CAPACITY;
     note_event_t *input = g_note_fx_buffer_a;
     note_event_t *output = g_note_fx_buffer_b;
     for (uint8_t slot = start_stage; slot < NOTE_FX_SLOT_COUNT; ++slot)
@@ -410,6 +436,14 @@ static note_event_result_t note_fx_pipeline_run_batch(const note_event_t *events
         const note_event_result_t result = note_fx_engine_transform(
             slot, input, count, output, NOTE_FX_BATCH_CAPACITY, &output_count);
         if (result != NOTE_EVENT_RESULT_ACCEPTED) return result;
+        /* Immediate fanout is candidate work only.  Admission happens after
+         * every non-temporal transform, before any downstream slot can create
+         * persistent Echo/Gate state.  Echo receives at most eight admitted
+         * inputs and may materialize its two bounded repeats separately. */
+        if ((input[0].kind == NOTE_EVENT_KIND_ON)
+                && (slot_model != NOTE_FX_MODEL_ECHO)
+                && (output_count > NOTE_FX_HELD_PITCH_CAPACITY))
+            output_count = NOTE_FX_HELD_PITCH_CAPACITY;
         if ((slot_model == NOTE_FX_MODEL_GATE)
                 || (slot_model == NOTE_FX_MODEL_ECHO))
             for (uint8_t i = 0U; i < output_count; ++i)
@@ -580,6 +614,19 @@ static void note_fx_pipeline_purge_future_sources(
     g_note_fx_future_count = write;
 }
 
+static void note_fx_pipeline_purge_future_owner(uint8_t track, uint8_t slot)
+{
+    uint16_t write = 0U;
+    for (uint16_t read = 0U; read < g_note_fx_future_count; ++read)
+    {
+        const note_fx_future_t item = g_note_fx_future[read];
+        if ((item.event.track == track) && (item.event.owner_slot == slot))
+            continue;
+        g_note_fx_future[write++] = item;
+    }
+    g_note_fx_future_count = write;
+}
+
 static note_event_result_t note_fx_pipeline_apply_due_future(uint64_t end)
 {
     while ((g_note_fx_future_count != 0U)
@@ -628,116 +675,6 @@ static note_event_result_t note_fx_pipeline_apply_due_future(uint64_t end)
     return NOTE_EVENT_RESULT_ACCEPTED;
 }
 
-typedef struct
-{
-    uint16_t future;
-    uint8_t source_note_limit;
-    uint8_t fanout;
-} note_fx_admission_t;
-
-static uint8_t note_fx_pipeline_admit_effective(
-    uint8_t track,
-    const uint8_t effective[NOTE_FX_SLOT_COUNT][NOTE_FX_PARAM_COUNT],
-    note_fx_admission_t *out)
-{
-    uint8_t instant_fanout = 1U;
-    uint8_t temporal_fanout = 1U;
-    uint8_t stage_fanout = 1U;
-    uint8_t maximum_stage_fanout = 1U;
-    uint8_t group_source_limit = NOTE_FX_HELD_PITCH_CAPACITY;
-    uint16_t future_per_track = 0U;
-    if ((track >= NOTE_FX_TRACK_COUNT) || (effective == NULL) || (out == NULL))
-        return 0U;
-    for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
-    {
-        note_fx_capacity_desc_t capacity;
-        const uint8_t model = effective[slot][NOTE_FX_PARAM_COUNT - 1U];
-        if (note_fx_engine_capacity(model, &capacity) == 0U) return 0U;
-        const uint8_t model_temporal = (model == NOTE_FX_MODEL_ECHO)
-            ? (uint8_t)(effective[slot][1] + 1U)
-            : capacity.temporal_fanout;
-        if (((uint16_t)instant_fanout * capacity.instant_fanout > UINT8_MAX)
-                || ((uint16_t)temporal_fanout * model_temporal > UINT8_MAX)
-                || ((uint16_t)stage_fanout * capacity.instant_fanout
-                    * model_temporal > NOTE_FX_BATCH_CAPACITY))
-            return 0U;
-        instant_fanout = (uint8_t)(instant_fanout * capacity.instant_fanout);
-        temporal_fanout = (uint8_t)(temporal_fanout * model_temporal);
-        stage_fanout = (uint8_t)(stage_fanout
-            * capacity.instant_fanout * model_temporal);
-        if (stage_fanout > maximum_stage_fanout)
-            maximum_stage_fanout = stage_fanout;
-        if (capacity.max_notes_per_group == 0U) return 0U;
-        const uint8_t model_group_limit = (uint8_t)(
-            capacity.max_notes_per_group / stage_fanout);
-        if (group_source_limit > model_group_limit)
-            group_source_limit = model_group_limit;
-        const uint16_t pitches_at_stage = (uint16_t)(
-            NOTE_FX_HELD_PITCH_CAPACITY
-            * (stage_fanout / model_temporal));
-        if (model == NOTE_FX_MODEL_GATE)
-            future_per_track = (uint16_t)(future_per_track
-                + pitches_at_stage);
-        else if (model == NOTE_FX_MODEL_ECHO)
-            future_per_track = (uint16_t)(future_per_track
-                + (pitches_at_stage * 2U * effective[slot][1]));
-        else if ((model == NOTE_FX_MODEL_ARP_FREE)
-                || (model == NOTE_FX_MODEL_ARP_SYNC)
-                || (model == NOTE_FX_MODEL_EUCLID))
-            future_per_track = (uint16_t)(future_per_track
-                + pitches_at_stage);
-    }
-    if (future_per_track > NOTE_FX_FUTURE_CAPACITY) return 0U;
-    const uint16_t composed_fanout = (uint16_t)instant_fanout
-        * temporal_fanout;
-    /* 31 live commands x four actions fit the fixed 128-action staging area.
-     * Larger composed chains are rejected before their state becomes active. */
-    if ((composed_fanout == 0U) || (composed_fanout > 4U)) return 0U;
-    entity_topology_descriptor_t topology;
-    if ((entity_topology_get((brick_entity_id_t)track, &topology) == 0U)
-            || ((topology.role == ENTITY_ROLE_GROUP_CHILD)
-                && (composed_fanout != 1U)))
-        return 0U;
-    uint8_t source_note_limit = (uint8_t)(
-        NOTE_FX_HELD_PITCH_CAPACITY / composed_fanout);
-    const uint8_t stage_note_limit = (uint8_t)(
-        NOTE_FX_BATCH_CAPACITY / maximum_stage_fanout);
-    if (source_note_limit > stage_note_limit)
-        source_note_limit = stage_note_limit;
-    if (source_note_limit > group_source_limit)
-        source_note_limit = group_source_limit;
-    if (source_note_limit == 0U) return 0U;
-    const uint8_t play_capacity = seq_model_play_capacity(track);
-    const uint16_t action_reservation = (uint16_t)(4U
-        * ((play_capacity < source_note_limit)
-            ? play_capacity : source_note_limit)
-        * composed_fanout);
-    uint16_t global_actions = action_reservation;
-    uint16_t global_future = future_per_track;
-    for (uint8_t owner = 0U; owner < NOTE_FX_TRACK_COUNT; ++owner)
-    {
-        if (owner == track) continue;
-        const uint8_t owner_capacity = seq_model_play_capacity(owner);
-        const uint8_t owner_limit = g_note_fx_source_note_limit[owner];
-        const uint8_t owner_sources = (owner_capacity < owner_limit)
-            ? owner_capacity : owner_limit;
-        global_actions = (uint16_t)(global_actions + 4U * owner_sources
-            * g_note_fx_admitted_fanout[owner]);
-        global_future = (uint16_t)(global_future
-            + g_note_fx_admitted_future[owner]);
-    }
-    /* This admission term covers source-driven transformations only.  The
-     * separate temporal-engine reserve is added by the music-window contract;
-     * using the combined limit here would over-admit source fanout. */
-    if ((global_actions > CONTROL_MUSIC_SOURCE_MAX_HORIZON_BURST)
-            || (global_future > NOTE_FX_FUTURE_CAPACITY))
-        return 0U;
-    out->future = future_per_track;
-    out->source_note_limit = source_note_limit;
-    out->fanout = (uint8_t)composed_fanout;
-    return 1U;
-}
-
 static uint8_t note_fx_pipeline_resolve_effective(
     uint8_t track, const note_fx_track_state_t *state,
     uint8_t out[NOTE_FX_SLOT_COUNT][NOTE_FX_PARAM_COUNT])
@@ -779,16 +716,10 @@ uint8_t note_fx_pipeline_reserve_state(
     uint8_t track, const note_fx_track_state_t *state)
 {
     uint8_t effective[NOTE_FX_SLOT_COUNT][NOTE_FX_PARAM_COUNT];
-    note_fx_admission_t admission;
     if ((note_fx_state_validate_unique_families(state) == 0U)
             || (note_fx_pipeline_resolve_effective(track, state, effective) == 0U)
-            || (note_fx_pipeline_validate_effective_families(effective) == 0U)
-            || (note_fx_pipeline_admit_effective(
-                track, effective, &admission) == 0U))
+            || (note_fx_pipeline_validate_effective_families(effective) == 0U))
         return 0U;
-    g_note_fx_admitted_future[track] = admission.future;
-    g_note_fx_source_note_limit[track] = admission.source_note_limit;
-    g_note_fx_admitted_fanout[track] = admission.fanout;
     return 1U;
 }
 
@@ -847,9 +778,6 @@ static uint8_t note_fx_pipeline_configure_track_owner(
                         && (slot < revoice_slot))
                     revoice_slot = slot;
     }
-    note_fx_admission_t admission;
-    if (note_fx_pipeline_admit_effective(track, next, &admission) == 0U)
-        return 0U;
     if (model_change != 0U)
     {
         if (note_fx_engine_collect_held(track, first_model_change, sample,
@@ -883,7 +811,10 @@ static uint8_t note_fx_pipeline_configure_track_owner(
         if ((g_note_fx_applied_valid[track] == 0U)
                 || (memcmp(next[slot], g_note_fx_applied[track][slot],
                     NOTE_FX_PARAM_COUNT) != 0))
+        {
+            note_fx_pipeline_purge_future_owner(track, slot);
             (void)note_fx_pipeline_bump_slot_version(track, slot);
+        }
         if (note_fx_engine_configure(
                 track, slot, next[slot][3], next[slot][0], next[slot][1],
                 next[slot][2], g_note_fx_slot_version[track][slot])
@@ -892,9 +823,6 @@ static uint8_t note_fx_pipeline_configure_track_owner(
     }
     memcpy(g_note_fx_applied[track], next, sizeof(next));
     g_note_fx_applied_valid[track] = 1U;
-    g_note_fx_admitted_future[track] = admission.future;
-    g_note_fx_source_note_limit[track] = admission.source_note_limit;
-    g_note_fx_admitted_fanout[track] = admission.fanout;
     if (model_change != 0U)
     {
         note_event_t held[NOTE_FX_HELD_PITCH_CAPACITY];
@@ -953,10 +881,6 @@ void note_fx_pipeline_init(void)
     memset(g_note_fx_live_queue, 0, sizeof(g_note_fx_live_queue));
     memset(g_note_fx_future, 0, sizeof(g_note_fx_future));
     memset(g_note_fx_applied_valid, 0, sizeof(g_note_fx_applied_valid));
-    memset(g_note_fx_admitted_future, 0, sizeof(g_note_fx_admitted_future));
-    memset(g_note_fx_admitted_fanout, 0, sizeof(g_note_fx_admitted_fanout));
-    memset(g_note_fx_source_note_limit, NOTE_FX_HELD_PITCH_CAPACITY,
-           sizeof(g_note_fx_source_note_limit));
     memset(g_note_fx_held_source, 0, sizeof(g_note_fx_held_source));
     memset(g_note_fx_held_source_count, 0,
            sizeof(g_note_fx_held_source_count));
@@ -1051,6 +975,8 @@ note_event_result_t note_fx_pipeline_submit_control(const note_event_t *event)
     source.owner_version = 0U;
     source.owner_slot = NOTE_EVENT_OWNER_NONE;
     source.stage = NOTE_EVENT_STAGE_SOURCE;
+    if (note_fx_pipeline_held_source_can_admit(&source, 1U) == 0U)
+        return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
     const note_event_result_t result = note_fx_pipeline_run(&source);
     if ((result == NOTE_EVENT_RESULT_ACCEPTED)
             && (note_fx_pipeline_held_source_update(&source) == 0U))
@@ -1083,6 +1009,8 @@ note_event_result_t note_fx_pipeline_submit_control_batch(
         source[i].owner_slot = NOTE_EVENT_OWNER_NONE;
         source[i].stage = NOTE_EVENT_STAGE_SOURCE;
     }
+    if (note_fx_pipeline_held_source_can_admit(source, event_count) == 0U)
+        return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
     const note_event_result_t result = note_fx_pipeline_run_batch(
         source, event_count);
     if (result != NOTE_EVENT_RESULT_ACCEPTED) return result;
@@ -1095,7 +1023,7 @@ note_event_result_t note_fx_pipeline_submit_control_batch(
 uint8_t note_fx_pipeline_source_note_limit(uint8_t track)
 {
     return (track < NOTE_FX_TRACK_COUNT)
-        ? g_note_fx_source_note_limit[track] : 0U;
+        ? NOTE_FX_HELD_PITCH_CAPACITY : 0U;
 }
 
 uint8_t note_fx_pipeline_reset_track(uint8_t track)
@@ -1435,9 +1363,6 @@ uint8_t note_fx_pipeline_commit_state(uint8_t track,
     if ((track >= NOTE_FX_TRACK_COUNT) || (state == NULL)) return 0U;
     note_fx_track_state_t normalized = *state;
     if (note_fx_state_normalize_track(&normalized) == 0U) return 0U;
-    const uint16_t old_future = g_note_fx_admitted_future[track];
-    const uint8_t old_limit = g_note_fx_source_note_limit[track];
-    const uint8_t old_fanout = g_note_fx_admitted_fanout[track];
     if (note_fx_pipeline_reserve_state(track, &normalized) == 0U) return 0U;
     const note_fx_command_t command = {
         .kind = NOTE_FX_COMMAND_CONFIGURE_TRACK,
@@ -1446,12 +1371,7 @@ uint8_t note_fx_pipeline_commit_state(uint8_t track,
         .track_state = normalized
     };
     if (note_fx_pipeline_enqueue(&command) == 0U)
-    {
-        g_note_fx_admitted_future[track] = old_future;
-        g_note_fx_source_note_limit[track] = old_limit;
-        g_note_fx_admitted_fanout[track] = old_fanout;
         return 0U;
-    }
     return note_fx_state_install_prepared_track(track, &normalized);
 }
 

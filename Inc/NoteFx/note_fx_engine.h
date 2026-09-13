@@ -8,13 +8,6 @@
 
 #define NOTE_FX_BATCH_CAPACITY 32U
 
-typedef struct
-{
-    uint8_t instant_fanout;
-    uint8_t temporal_fanout;
-    uint8_t max_notes_per_group;
-} note_fx_capacity_desc_t;
-
 _Static_assert(NOTE_FX_HELD_PITCH_CAPACITY == 8U,
                "Note FX held-pitch contract changed");
 
@@ -22,8 +15,6 @@ typedef note_event_result_t (*note_fx_emit_fn)(const note_event_t *, void *);
 
 void note_fx_engine_init(void);
 void note_fx_engine_set_samples_per_step_q16(uint32_t samples_per_step_q16);
-uint8_t note_fx_engine_capacity(uint8_t model,
-                                note_fx_capacity_desc_t *out_capacity);
 note_event_result_t note_fx_engine_configure(
     uint8_t track, uint8_t slot, uint8_t model, uint8_t rate,
     uint8_t style, uint8_t range, uint16_t owner_version);

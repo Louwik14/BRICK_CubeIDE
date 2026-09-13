@@ -21,13 +21,6 @@ static const uint8_t g_scale_count[7]={7,7,7,7,5,5,12};
 static const uint8_t g_scale[7][12]={{0,2,4,5,7,9,11},{0,2,3,5,7,8,10},
  {0,2,3,5,7,9,10},{0,2,4,5,7,9,10},{0,2,4,7,9},{0,3,5,7,10},
  {0,1,2,3,4,5,6,7,8,9,10,11}};
-static const note_fx_capacity_desc_t g_capacity[NOTE_FX_MODEL_COUNT]={
- [NOTE_FX_MODEL_OFF]={1,1,8},[NOTE_FX_MODEL_ARP_FREE]={1,1,8},
- [NOTE_FX_MODEL_ARP_SYNC]={1,1,8},
- [NOTE_FX_MODEL_EUCLID]={1,1,8},[NOTE_FX_MODEL_PROBABILITY]={1,1,8},
- [NOTE_FX_MODEL_GATE]={1,1,8},[NOTE_FX_MODEL_GROOVE]={1,1,8},
- [NOTE_FX_MODEL_ECHO]={1,3,8},[NOTE_FX_MODEL_HARMONIZER]={4,1,8},
- [NOTE_FX_MODEL_CHORD]={1,1,8}};
 _Static_assert(sizeof(note_fx_slot_runtime_t)<=224U,"Note FX slot runtime budget");
 _Static_assert(sizeof(g_groove)==64U,"Groove table proof");
 _Static_assert(sizeof(g_harmony)==32U,"Harmony table proof");
@@ -79,7 +72,6 @@ static note_event_result_t chord_group(uint8_t slot,note_fx_slot_runtime_t*r,
 
 void note_fx_engine_init(void){memset(g_slot,0,sizeof(g_slot));g_work_slot_mask=0;g_token=0;}
 void note_fx_engine_set_samples_per_step_q16(uint32_t v){g_samples_per_step_q16=v?v:1U;}
-uint8_t note_fx_engine_capacity(uint8_t model,note_fx_capacity_desc_t*out){if(!out||model>=NOTE_FX_MODEL_COUNT)return 0;*out=g_capacity[model];return 1;}
 note_event_result_t note_fx_engine_configure(uint8_t t,uint8_t s,uint8_t model,uint8_t p1,uint8_t p2,uint8_t p3,uint16_t owner_version){if(t>=NOTE_FX_TRACK_COUNT||s>=NOTE_FX_SLOT_COUNT)return NOTE_EVENT_RESULT_DROPPED_POLICY;note_fx_slot_runtime_t*r=&g_slot[t][s];if(model>=NOTE_FX_MODEL_COUNT)model=NOTE_FX_MODEL_OFF;if(r->model!=model)memset(r,0,sizeof(*r));r->model=model;r->p1=p1;r->p2=p2;r->p3=p3;r->owner_version=owner_version;refresh_work(t,s);return NOTE_EVENT_RESULT_ACCEPTED;}
 note_event_result_t note_fx_engine_transform(uint8_t s,const note_event_t*in,uint8_t n,note_event_t*out,uint8_t cap,uint8_t*count){if(!in||!out||!count||!n||s>=NOTE_FX_SLOT_COUNT)return NOTE_EVENT_RESULT_DROPPED_POLICY;for(uint8_t i=0;i<n;++i)if(!note_event_is_valid(&in[i])||in[i].track>=NOTE_FX_TRACK_COUNT||in[i].stage!=s||in[i].track!=in[0].track||in[i].group_id!=in[0].group_id||in[i].kind!=in[0].kind)return NOTE_EVENT_RESULT_DROPPED_POLICY;note_fx_slot_runtime_t*r=&g_slot[in[0].track][s];for(uint8_t i=0;i<n;++i){const note_event_result_t held_result=held_ingest(r,&in[i]);if(held_result!=NOTE_EVENT_RESULT_ACCEPTED)return held_result;}refresh_work(in[0].track,s);if(r->model==NOTE_FX_MODEL_CHORD)return chord_group(s,r,in,n,out,cap,count);*count=0;for(uint8_t i=0;i<n;++i){const note_event_t*e=&in[i];if(!model_is_arp(r->model)&&r->model!=NOTE_FX_MODEL_EUCLID){const note_event_result_t result=direct(s,r,e,out,cap,count);if(result!=NOTE_EVENT_RESULT_ACCEPTED)return result;}}return NOTE_EVENT_RESULT_ACCEPTED;}
 note_event_result_t note_fx_engine_collect_held(uint8_t t,uint8_t s,uint64_t sample,note_event_t*out,uint8_t cap,uint8_t*count){if(t>=NOTE_FX_TRACK_COUNT||s>=NOTE_FX_SLOT_COUNT||!out||!count)return NOTE_EVENT_RESULT_DROPPED_POLICY;note_fx_slot_runtime_t*r=&g_slot[t][s];*count=0;if(r->held_count>cap)return NOTE_EVENT_RESULT_REJECTED_CAPACITY;for(uint8_t i=0;i<r->held_count;++i){const note_fx_held_pitch_t*h=&r->held[i];out[i]=(note_event_t){.sample_abs=sample,.duration_samples=NOTE_EVENT_DURATION_OPEN,.source_token=h->source_token,.occurrence_id=h->occurrence_id,.generation=h->generation,.group_id=h->group_id,.track=t,.destination_id=h->destination,.note=h->note,.velocity=h->velocity,.kind=NOTE_EVENT_KIND_ON,.provenance=h->provenance,.stage=s,.flags=0U,.owner_slot=NOTE_EVENT_OWNER_NONE};++*count;}return NOTE_EVENT_RESULT_ACCEPTED;}

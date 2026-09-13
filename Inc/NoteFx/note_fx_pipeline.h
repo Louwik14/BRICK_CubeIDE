@@ -7,13 +7,6 @@
 #include "NoteFx/note_fx_arp.h"
 #include "NoteFx/note_fx_state.h"
 
-#define NOTE_FX_PIPELINE_MAX_STAGE_FANOUT NOTE_FX_SLOT_COUNT
-#define NOTE_FX_PIPELINE_MAX_TEMPORAL_HELD_PER_TRACK \
-    (NOTE_FX_SLOT_COUNT * NOTE_FX_HELD_PITCH_CAPACITY)
-
-_Static_assert(NOTE_FX_PIPELINE_MAX_STAGE_FANOUT == NOTE_FX_SLOT_COUNT,
-               "Note FX pipeline must cover every canonical slot");
-
 /* A live source is queued by a non-audio producer.  The audio owner resolves
  * this marker at command consumption so the event sample is the application
  * sample, not the producer's earlier timeline projection. */

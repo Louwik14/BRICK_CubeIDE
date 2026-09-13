@@ -95,7 +95,7 @@ dernier slot, CONTROL materialise une seule deadline terminale depuis cette
 duree. Echo reste une decision discrete et conserve au plus les deux repeats
 produit; chacun reprend au slot suivant. La file temporelle unique ne duplique
 plus `resume_slot`, deja canonique dans `event.stage`, ce qui reduit son element
-de 48 a 40 octets et libere 4096 octets pour 512 entrees.
+de 48 a 40 octets. PASS 4 borne ensuite la queue a 320 entrees causales.
 
 Avant qu'un batch ON entre dans Gate ou Echo, CONTROL le borne a huit candidats.
 Une expansion amont superieure ne peut donc creer ni deadline Gate ni repeat
@@ -154,25 +154,18 @@ TEMP/p-lock convergent vers ce meme owner: application et restore TEMP suivent
 les regles parametriques ou structurelles du parametre effectif, sans chemin
 de teardown propre aux p-locks.
 
-L'admission centrale est l'unique preuve de chaine. Gate/Echo remplacent toute
-projection temporelle supersedee portant la meme cle de pitch/slot/repetition;
-leur reservation est derivee de ces cles runtime et non de constantes de delai.
-Avant installation de
-l'etat, elle multiplie les `instant_fanout` et `temporal_fanout` des quatre
-slots, verifie chaque stage contre les buffers A/B de 32 evenements, reserve le
-futur global dans 512 entrees et reserve les actions de toutes les tracks contre
-les 256 actions terminales par horizon. Le facteur ROLL maximal est inclus dans
-les quatre actions source par voix. Le staging live de 128 actions impose encore transitoirement un
-fanout compose maximal de quatre; une chaine Harmonizer/Echo, dans les deux
-ordres, est donc refusee avant mutation en attendant la PASS 4. Les doublons de
-famille sont refuses par la regle produit, independamment de ce calcul. Un child GROUP mono n'admet pas encore de fanout superieur a un,
-afin que son activation ulterieure ne puisse contourner la preuve globale. La
-limite source devient `floor(8/fanout)` et vaut huit sans expansion, deux pour
-Harmonizer ou Echo.
+L'admission centrale est le contrat runtime: au plus huit ON entrent dans une
+transformation temporelle et au plus huit ON quittent chaque transformation
+immediate. Harmonizer peut produire 32 candidats dans le scratch, mais seuls
+les huit premiers poursuivent la chaine. Les candidats ecartes ne creent ni
+HELD, ni Echo, ni deadline Gate. Toute chaine valide par la regle d'unicite des
+familles est admise, y compris Harmonizer/Echo dans les deux ordres;
+`composed_fanout`, `source_limit`, `group_source_limit` et les descripteurs de
+fanout ont ete supprimes.
 
 Les buffers A/B et la future queue restent bornes; le ledger source ajoute au
 plus huit `note_event_t` par track, sans allocation dynamique. Les templates
-Groove et harmonie restent en FLASH. L'insertion future est bornee a 512 deplacements;
+Groove et harmonie restent en FLASH. L'insertion future est bornee a 320 deplacements;
 la consommation ordonnee lit la tete. Le pipeline reste
 `O(4 x evenements admis)`; les traitements de groupe et deduplications portent
 au plus sur huit notes.

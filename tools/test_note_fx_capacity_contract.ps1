@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 
 $held = 8
 $batch = 32
-$futureCapacity = 512
+$futureCapacity = 320
 $models = @('OFF','ARP_FREE','ARP_SYNC','EUCLID','PROBABILITY','GATE','GROOVE','ECHO','HARMONIZER','CHORD')
 
 function Assert-Contract([bool]$condition, [string]$message) {
@@ -22,40 +22,25 @@ function Test-ProductChain([string[]]$chain) {
 
 function Get-ChainBound([string[]]$chain) {
     if (-not (Test-ProductChain $chain)) { return @($false,0,0,0,0) }
-    $stage = 1
-    $maximumStage = 1
-    $instant = 1
-    $temporal = 1
-    $future = 0
-    $sourceLimit = $held
+    $admitted = $held
+    $maximumCandidates = $held
     foreach ($name in $chain) {
-        $instantModel = if ($name -eq 'HARMONIZER') { 4 } else { 1 }
-        $temporalModel = if ($name -eq 'ECHO') { 3 } else { 1 }
-        $stage *= $instantModel * $temporalModel
-        $maximumStage = [Math]::Max($maximumStage, $stage)
-        $instant *= $instantModel
-        $temporal *= $temporalModel
-        $sourceLimit = [Math]::Min($sourceLimit, [Math]::Floor($held / $stage))
-        $sourceLimit = [Math]::Min($sourceLimit, [Math]::Floor($batch / $maximumStage))
-        $pitches = $held * [Math]::Floor($stage / $temporalModel)
-        if ($name -eq 'GATE') { $future += $pitches }
-        if ($name -eq 'ECHO') { $future += $pitches * 4 }
-        if (($name -eq 'ARP_FREE') -or ($name -eq 'ARP_SYNC') -or ($name -eq 'EUCLID')) { $future += $pitches }
+        $candidates = if ($name -eq 'HARMONIZER') { 4 * $admitted } else { $admitted }
+        $maximumCandidates = [Math]::Max($maximumCandidates, $candidates)
+        if ($name -ne 'ECHO') { $admitted = [Math]::Min($held, $candidates) }
     }
-    $composed = $instant * $temporal
-    $sourceLimit = [Math]::Min($sourceLimit, [Math]::Floor($held / $composed))
-    return @(($stage -le $batch) -and ($composed -le 4) -and
-        ($sourceLimit -gt 0) -and ($future -le $futureCapacity),
-        $composed, $sourceLimit, $maximumStage, $future)
+    $futurePerTrack = 5 * $held
+    return @(($maximumCandidates -le $batch) -and ($admitted -le $held),
+        $admitted, $held, $maximumCandidates, $futurePerTrack)
 }
 
 foreach ($a in $models) { foreach ($b in $models) {
     foreach ($c in $models) { foreach ($d in $models) {
         $bound = Get-ChainBound @($a,$b,$c,$d)
         if ($bound[0]) {
-            Assert-Contract ($bound[1] * $bound[2] -le $held) "fanout: $a $b $c $d"
+            Assert-Contract ($bound[1] -le $held) "admission: $a $b $c $d"
             Assert-Contract ($bound[3] -le $batch) "batch: $a $b $c $d"
-            Assert-Contract ($bound[4] -le $futureCapacity) "future: $a $b $c $d"
+            Assert-Contract (8 * $bound[4] -le $futureCapacity) "future: $a $b $c $d"
         }
     }}
 }}
@@ -67,7 +52,11 @@ foreach ($scenario in @(
     @('ARP_SYNC','HARMONIZER','OFF','OFF'),
     @('GROOVE','ARP_FREE','OFF','OFF'),
     @('ARP_SYNC','GROOVE','OFF','OFF'),
-    @('GATE','ECHO','OFF','OFF')
+    @('GATE','ECHO','OFF','OFF'),
+    @('EUCLID','HARMONIZER','ECHO','GATE'),
+    @('HARMONIZER','EUCLID','ECHO','GATE'),
+    @('ECHO','HARMONIZER','GATE','GROOVE'),
+    @('GATE','ECHO','HARMONIZER','CHORD')
 )) {
     $bound = Get-ChainBound $scenario
     Assert-Contract $bound[0] "required chain rejected: $($scenario -join ' -> ')"
@@ -166,8 +155,11 @@ Assert-Contract $control.Contains('control_music_output_allocate_handle') 'singl
 Assert-Contract $control.Contains('g_control_music_window_order++') 'chronological transition order'
 Assert-Contract (-not $control.Contains('CONTROL_MUSIC_WINDOW_KIND_COUNT')) 'no kind buckets'
 Assert-Contract $pipeline.Contains('note_fx_pipeline_purge_future_sources') 'causal revoice purge'
+Assert-Contract $pipeline.Contains('note_fx_pipeline_purge_future_owner') 'owner future compaction'
 Assert-Contract $pipeline.Contains('note_fx_engine_reset_from_slot(track, revoice_slot)') 'downstream revoice reset'
 Assert-Contract $pipeline.Contains('note_fx_pipeline_purge_future_track(track)') 'TYPE future purge'
+Assert-Contract (-not $pipeline.Contains('composed_fanout')) 'legacy composed fanout removed'
+Assert-Contract (-not $pipeline.Contains('g_note_fx_admitted_fanout')) 'legacy admission mirror removed'
 Assert-Contract $pipeline.Contains('note_fx_engine_cleanup(track)') 'panic/transport cleanup'
 Assert-Contract $state.Contains('note_fx_pipeline_commit_state(track, &next)') 'state/enqueue transaction'
 Assert-Contract $state.Contains('note_fx_state_validate_unique_families') 'product family uniqueness'
