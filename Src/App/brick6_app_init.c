@@ -29,6 +29,7 @@
 #include "Storage/waveform_cache.h"
 #include "Platform/brick6_sd_config.h"
 #include "Platform/idle_latency_diag.h"
+#include "Platform/crash_library.h"
 
 #include "App/Hall/hall_keyboard_bridge.h"
 #include "App/Hall/hall_calibration.h"
@@ -74,6 +75,8 @@ static void brick6_process_hall_ui_keyboard_chain(void)
  */
 void brick6_app_init(void)
 {
+    /* Keep Flash maintenance outside the fragile pre-peripheral boot path. */
+    crash_library_init();
     SDRAM_Init();
 
     static const brick6_audio_boot_intent_t audio_boot = {

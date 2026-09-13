@@ -48,11 +48,21 @@ oldest/latest-address/next-address/generation (8 mots), puis 20 descripteurs de
 failed_offset/HAL_error/oldest_address. Statuts: 1 READY, 0x1000 OK,
 0xE001 NO_DESTINATION, 0xE002 UNLOCK_FAILED, 0xE003 PROGRAM_FAILED,
 0xE004 COMMIT_FAILED, 0xE005 ALREADY_ACTIVE. Le dernier descripteur valide est
-le plus récent. Le clock BKPRAM est activé avant toute reconstruction et sa
+le plus récent. Le clock BKPRAM et l'accès au domaine backup (`PWR_CR1.DBP`)
+sont activés avant toute reconstruction et sa
 région MPU de 4 KiB est non-cacheable; ni clock-gating ni D-cache ne peuvent
 donc faire lire une vue à zéro alors que sa reconstruction a été exécutée.
-L'init s'exécute dans `main`, après HAL/clock et avant les initialisations de
-périphériques et de l'application.
+L'init s'exécute au début de `brick6_app_init()`, après HAL, l'arbre d'horloges
+et les initialisations de périphériques CubeMX. Les erase/rotations éventuels
+ne font ainsi plus partie du chemin fragile de boot pré-périphériques.
+
+Le CLEAR conserve sa magic tant que la transaction n'est pas complètement
+validée. Les statuts à `+0x160` sont `0xC100` CLEAR_OK, `0xC101`
+UNLOCK_FAILED, `0xC102` ERASE_A_FAILED, `0xC103` ERASE_B_FAILED et `0xC104`
+VERIFY_FAILED. `writer_address`, `writer_offset` (secteur HAL fautif) et
+`writer_hal_error` complètent le diagnostic. Après les deux retours HAL OK,
+les 256 KiB réservés sont relus comme mots `0xFFFFFFFF` avant consommation de
+la commande. Un échec garde `0x434C5243` à `0x388001FC` pour le boot suivant.
 
 État attendu de la vue : après création/CLEAR, count=0, newest/oldest_address=0,
 next=0x08181000, generation=1; après une capsule, count=1, séquence=1,

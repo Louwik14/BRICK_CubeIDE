@@ -142,12 +142,24 @@ static uint8_t flashword_program(uint32_t address, const void *source)
         (uint32_t)(uintptr_t)source) == HAL_OK;
 }
 
-static uint8_t erase_sector(uint32_t sector)
+static uint8_t erase_sector(uint32_t sector, uint32_t *sector_error)
 {
     FLASH_EraseInitTypeDef e = {0}; uint32_t error = 0U;
     e.TypeErase = FLASH_TYPEERASE_SECTORS; e.Banks = FLASH_BANK_2;
     e.Sector = sector; e.NbSectors = 1U; e.VoltageRange = FLASH_VOLTAGE_RANGE_3;
-    return HAL_FLASHEx_Erase(&e, &error) == HAL_OK;
+    const uint8_t ok = HAL_FLASHEx_Erase(&e, &error) == HAL_OK;
+    if (sector_error != NULL) *sector_error = error;
+    return ok;
+}
+
+static uint8_t flash_region_is_erased(uint32_t base, uint32_t size)
+{
+    SCB_InvalidateDCache_by_Addr((uint32_t *)(uintptr_t)base, (int32_t)size);
+    __DSB();
+    const volatile uint32_t *word = (const volatile uint32_t *)(uintptr_t)base;
+    for (uint32_t i = 0U; i < size / sizeof(uint32_t); ++i)
+        if (word[i] != 0xFFFFFFFFUL) return 0U;
+    return 1U;
 }
 
 static uint8_t write_sector_header(uint32_t base, uint32_t generation)
@@ -238,7 +250,58 @@ static void rebuild_view(void)
     }
     if (next.writer_status == CRASH_WRITER_UNINITIALIZED)
         next.writer_status = CRASH_WRITER_READY;
-    next.clear_command=0U; memcpy(&g_crash_gdb_view,&next,sizeof(next)); __DMB();
+    next.clear_command = (g_crash_gdb_view.clear_command == CRASH_GDB_CLEAR_MAGIC)
+        ? CRASH_GDB_CLEAR_MAGIC : 0U;
+    memcpy(&g_crash_gdb_view,&next,sizeof(next)); __DMB();
+}
+
+static uint8_t clear_requested_library(void)
+{
+    g_crash_gdb_view.writer_address = 0U;
+    g_crash_gdb_view.writer_offset = 0U;
+    g_crash_gdb_view.writer_hal_error = 0U;
+
+    if (HAL_FLASH_Unlock() != HAL_OK) {
+        g_crash_gdb_view.writer_status = CRASH_CLEAR_UNLOCK_FAILED;
+        g_crash_gdb_view.writer_hal_error = HAL_FLASH_GetError();
+        __DMB();
+        return 0U;
+    }
+
+    uint32_t sector_error = 0U;
+    if (erase_sector(FLASH_SECTOR_4, &sector_error) == 0U) {
+        g_crash_gdb_view.writer_status = CRASH_CLEAR_ERASE_A_FAILED;
+        g_crash_gdb_view.writer_address = CRASH_LIBRARY_BASE;
+        g_crash_gdb_view.writer_offset = sector_error;
+        g_crash_gdb_view.writer_hal_error = HAL_FLASH_GetError();
+        HAL_FLASH_Lock();
+        __DMB();
+        return 0U;
+    }
+    if (erase_sector(FLASH_SECTOR_5, &sector_error) == 0U) {
+        g_crash_gdb_view.writer_status = CRASH_CLEAR_ERASE_B_FAILED;
+        g_crash_gdb_view.writer_address = CRASH_LIBRARY_SECTOR_B;
+        g_crash_gdb_view.writer_offset = sector_error;
+        g_crash_gdb_view.writer_hal_error = HAL_FLASH_GetError();
+        HAL_FLASH_Lock();
+        __DMB();
+        return 0U;
+    }
+    HAL_FLASH_Lock();
+
+    if ((flash_region_is_erased(CRASH_LIBRARY_BASE, CRASH_LIBRARY_SECTOR_SIZE) == 0U)
+            || (flash_region_is_erased(CRASH_LIBRARY_SECTOR_B,
+                                       CRASH_LIBRARY_SECTOR_SIZE) == 0U)) {
+        g_crash_gdb_view.writer_status = CRASH_CLEAR_VERIFY_FAILED;
+        g_crash_gdb_view.writer_hal_error = HAL_FLASH_GetError();
+        __DMB();
+        return 0U;
+    }
+
+    memset(&g_crash_gdb_view, 0, sizeof(g_crash_gdb_view));
+    g_crash_gdb_view.writer_status = CRASH_CLEAR_OK;
+    __DMB();
+    return 1U;
 }
 
 static void compact_if_full(void)
@@ -248,7 +311,7 @@ static void compact_if_full(void)
     uint32_t target = source == CRASH_LIBRARY_BASE ? CRASH_LIBRARY_SECTOR_B : CRASH_LIBRARY_BASE;
     uint32_t target_sector = target == CRASH_LIBRARY_BASE ? FLASH_SECTOR_4 : FLASH_SECTOR_5;
     HAL_FLASH_Unlock();
-    if (erase_sector(target_sector) && write_sector_header(target,g_crash_gdb_view.active_generation+1U)) {
+    if (erase_sector(target_sector, NULL) && write_sector_header(target,g_crash_gdb_view.active_generation+1U)) {
         for (uint32_t i=1U;i<CRASH_SLOT_COUNT;++i) {
             memcpy(&g_crash_capsule,(const void *)g_crash_gdb_view.descriptors[i].address,CRASH_SLOT_SIZE);
             if (write_capsule(slot_address(target,i-1U),&g_crash_capsule,NULL)
@@ -263,12 +326,14 @@ void crash_library_init(void)
     /* Backup SRAM is clock-gated after reset. Without this, CPU reads return
      * zero and writes to the fixed GDB/runtime view never become observable. */
     __HAL_RCC_BKPRAM_CLK_ENABLE();
+    HAL_PWR_EnableBkUpAccess();
     __DSB();
-    if (g_crash_gdb_view.clear_command == CRASH_GDB_CLEAR_MAGIC) {
-        HAL_FLASH_Unlock(); (void)erase_sector(FLASH_SECTOR_4); (void)erase_sector(FLASH_SECTOR_5); HAL_FLASH_Lock();
-        memset(&g_crash_gdb_view, 0, sizeof(g_crash_gdb_view));
-    }
+    const uint8_t clear_requested =
+        (g_crash_gdb_view.clear_command == CRASH_GDB_CLEAR_MAGIC) ? 1U : 0U;
+    const uint8_t clear_succeeded =
+        (clear_requested != 0U) ? clear_requested_library() : 0U;
     rebuild_view();
+    if ((clear_requested != 0U) && (clear_succeeded == 0U)) return;
     if ((g_crash_gdb_view.active_generation == 0U) && (g_crash_gdb_view.valid_count == 0U)) {
         HAL_FLASH_Unlock(); (void)write_sector_header(CRASH_LIBRARY_BASE,1U); HAL_FLASH_Lock(); rebuild_view();
     }

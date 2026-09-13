@@ -47,7 +47,6 @@
 #include "buttons.h"
 #include "App/power_shutdown.h"
 #include "Platform/idle_latency_diag.h"
-#include "Platform/crash_library.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -285,10 +284,6 @@ int main(void)
   PeriphCommonClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
-  /* Flash HAL and clocks are ready; establish the fatal destination before
-     peripheral/application initialization can raise a BRICK fatal. */
-  crash_library_init();
 
   /* USER CODE END SysInit */
 
