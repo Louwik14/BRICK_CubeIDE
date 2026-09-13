@@ -30,7 +30,6 @@
 #include "Audio/Engines/fm_engine.h"
 #include "Audio/Engines/tb303_engine.h"
 #include "Track/synth_polyphony.h"
-#include "Audio/sd_preview_audio.h"
 #include "mixer.h"
 #include "Track/track_types.h"
 #include "Mod/mod_lfo_v1_audio.h"
@@ -778,10 +777,5 @@ ITCM_TEXT void brick6_audio_runtime_dsp(StereoTrack *tracks,
         brick6_render_tb303_tracks(tb303_entity_mask, frames);
 
     mixer_process(tracks, track_count, frames);
-
-    if (track_count > 0U)
-    {
-        (void)sd_preview_render_main(tracks[0].L, tracks[0].R, frames);
-    }
 
 }

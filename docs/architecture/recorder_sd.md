@@ -164,6 +164,11 @@ live seul et `1` loop seul. Les voies live USB/LINE et les sources internes
 sont donc toutes soumises au meme gain live; aucune voie physique n'est
 reinjectee directement dans le master.
 
+La preecoute SD rejoint elle aussi le bus live avant ce melange. Elle ne peut
+donc plus contourner `live_gain` par une addition tardive apres le mixer. Le
+clic metronome reste volontairement un monitor de transport ajoute au dernier
+etage de sortie; ce n'est ni une source live du Looper ni une source de capture.
+
 ## Validation
 
 Les tests hote conserves couvrent le state machine generique, le WAV et ses erreurs produit, l'ecriture block-device asynchrone, l'arbitrage scheduler et la reservation FAT32/exFAT avec extension, preservation des voisins, liberation de queue et recovery. La validation cible doit compiler LowCost puis exercer capture longue, LEN, stop pendant charge streamer, carte lente/fragmentee, retrait media et reloop immediat.

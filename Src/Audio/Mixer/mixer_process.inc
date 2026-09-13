@@ -1235,6 +1235,11 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         }
     }
 
+    /* Preview is another live contribution.  It must join the authoritative
+     * live bus before the Looper crossfade; adding it to tracks[0] after
+     * mixer_process() would bypass live_gain at XFADE=1. */
+    (void)sd_preview_render_main(bus_main_l, bus_main_r, frames);
+
     if(looper_xfade_apply_active != 0U)
     {
         if((mixer_looper_xfade_value_is_full(looper_xfade_start) != 0U)

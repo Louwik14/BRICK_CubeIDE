@@ -28,6 +28,7 @@
 #include "Audio/audio_io.h"
 #include "Audio/audio_rec_level_producer.h"
 #include "Audio/audio_mic_debug.h"
+#include "Audio/sd_preview_audio.h"
 #include "IPC/control_audio_command.h"
 
 #include "env_adsr.h"
