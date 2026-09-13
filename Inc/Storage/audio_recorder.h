@@ -82,9 +82,11 @@ uint8_t audio_recorder_control_arm_looper(uint8_t track,
                                           uint8_t overdub,
                                           uint64_t request_sample);
 uint8_t audio_recorder_control_sync_looper_arm(uint8_t rec_armed,
+                                               uint8_t target_track,
                                                uint32_t samples_per_step_q16);
 uint8_t audio_recorder_control_looper_take_track(uint8_t *out_track);
 void audio_recorder_control_set_looper_admission(uint8_t open);
+void audio_recorder_control_on_active_track_changed(uint8_t active_track);
 uint8_t audio_recorder_control_release_looper_take(void);
 uint8_t audio_recorder_control_request_looper_stop(uint64_t request_sample,
                                                    uint8_t wait_boundary);

@@ -33,7 +33,7 @@ uint8_t seq_runtime_get_track_quant(seq_track_id_t track, uint8_t *out_quant);
 void seq_runtime_set_track_swing(seq_track_id_t track, uint8_t swing);
 uint8_t seq_runtime_get_track_swing(seq_track_id_t track, uint8_t *out_swing);
 
-void seq_runtime_rec_toggle_arm(void);
+uint8_t seq_runtime_rec_toggle_arm(seq_track_id_t target_track);
 void seq_runtime_set_pattern_rec_target_track(seq_track_id_t track);
 uint8_t seq_runtime_rec_is_armed(void);
 void seq_runtime_set_rec_start_mode(uint8_t mode);

@@ -1121,7 +1121,7 @@ uint8_t seq_runtime_get_track_swing(seq_track_id_t track, uint8_t *out_swing)
     return 1U;
 }
 
-void seq_runtime_rec_toggle_arm(void)
+uint8_t seq_runtime_rec_toggle_arm(seq_track_id_t target_track)
 {
     const uint8_t pending_before = seq_live_rec_session_rec_is_pattern_pending_start();
     const uint8_t armed_before = seq_live_rec_session_rec_is_armed();
@@ -1132,9 +1132,15 @@ void seq_runtime_rec_toggle_arm(void)
         g_brick6_looper_record_probe.ui_track;
     g_brick6_looper_record_probe.control_value =
         seq_live_rec_session_rec_is_armed();
-    (void)audio_recorder_control_sync_looper_arm(
+    if (audio_recorder_control_sync_looper_arm(
         seq_live_rec_session_rec_is_armed(),
-        g_seq_runtime.samples_per_step_q16);
+        target_track,
+        g_seq_runtime.samples_per_step_q16) == 0U)
+    {
+        seq_live_rec_session_toggle_arm(seq_runtime_get_now_sample(),
+                                        g_seq_runtime.samples_per_step_q16);
+        return 0U;
+    }
     sample_capture_control_on_global_rec_arm(
         seq_live_rec_session_rec_is_armed());
 
@@ -1145,6 +1151,7 @@ void seq_runtime_rec_toggle_arm(void)
         seq_transport_fsm_abort_pending(&g_seq_transport_fsm);
         g_seq_runtime.running = (seq_transport_fsm_is_running(&g_seq_transport_fsm) != 0U) ? 1U : 0U;
     }
+    return 1U;
 }
 
 uint8_t seq_runtime_rec_is_armed(void)

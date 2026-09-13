@@ -237,6 +237,7 @@ static void ui_core_set_active_track(uint8_t track)
         (void)ui_core_select_active_track(main_track);
     }
     g_ui_track_state.active_lane = track;
+    audio_recorder_control_on_active_track_changed(track);
     ui_param_publish_encoder_binding(g_ui_track_state.active_lane,
                                      g_ui_track_state.shift_down);
     ui_edit_context_sync_active_track(1U);
@@ -772,7 +773,8 @@ static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
         else
         {
             seq_runtime_set_pattern_rec_target_track(ui_get_active_lane());
-            seq_runtime_rec_toggle_arm();
+            if (seq_runtime_rec_toggle_arm(ui_get_active_lane()) == 0U)
+                ui_core_set_feedback("LOOP REC FAIL");
         }
         return 1U;
     }

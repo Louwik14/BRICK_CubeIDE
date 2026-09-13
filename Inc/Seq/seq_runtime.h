@@ -93,7 +93,7 @@ void seq_runtime_toggle_play_stop(void);
 void seq_runtime_set_rec_start_mode(uint8_t mode);
 void seq_runtime_set_rec_len_mode(uint8_t mode);
 void seq_runtime_set_pattern_rec_target_track(seq_track_id_t track);
-void seq_runtime_rec_toggle_arm(void);
+uint8_t seq_runtime_rec_toggle_arm(seq_track_id_t target_track);
 /* Command surface: live-rec write routed through the runtime policy layer. */
 uint8_t seq_runtime_live_rec_param_write(seq_track_id_t track,
                                          uint8_t set_id,
