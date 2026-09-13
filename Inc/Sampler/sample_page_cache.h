@@ -132,6 +132,8 @@ uint8_t sample_page_cache_get_stream_info(uint16_t sample_id,
                                           sample_page_stream_info_t *out_info);
 uint8_t sample_page_cache_get_stream_info_key(sample_audio_key_t key,
                                               sample_page_stream_info_t *out_info);
+uint8_t sample_page_cache_get_registration_epoch_key(
+    sample_audio_key_t key, uint32_t *out_registration_epoch);
 uint8_t sample_page_cache_register_prepared_stream(
     const sample_page_stream_info_t *registration);
 uint8_t sample_page_cache_begin_full_reservation(

@@ -78,6 +78,25 @@ static CTRL_STATE uint16_t g_sample_page_evict_cursor;
 
 #include "PageCache/sample_page_cache_audio_refs.inc"
 
+uint8_t sample_page_cache_get_registration_epoch_key(
+    sample_audio_key_t key, uint32_t *out_registration_epoch)
+{
+    const uint16_t key_slot = sample_page_cache_key_slot(key);
+    if ((key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES)
+            || (out_registration_epoch == 0))
+        return 0U;
+
+    const sample_page_sample_desc_t *const sample =
+        &g_sample_page_sample_desc[key_slot];
+    if ((sample->valid == 0U)
+            || (sample_audio_key_equal(&sample->key, &key) == 0U)
+            || (sample->registration_epoch == 0U))
+        return 0U;
+
+    *out_registration_epoch = sample->registration_epoch;
+    return 1U;
+}
+
 uint8_t sample_page_cache_control_resolve_page(uint16_t sample_id,
                                                uint32_t page_index,
                                                sample_page_span_t *out_span)

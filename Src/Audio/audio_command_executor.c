@@ -367,8 +367,7 @@ static uint8_t audio_command_apply_record(const control_audio_command_t *command
                 & AUDIO_RECORDER_LOOPER_REPLACE_TRACK_MASK);
             if ((replace_valid != 0U) && (replace_track != command->entity))
                 brick6_looper_runtime_prepare_replace(replace_track);
-            if ((overdub == 0U)
-                    && ((replace_valid == 0U) || (replace_track != command->entity)))
+            if (overdub == 0U)
                 brick6_looper_runtime_prepare_replace(command->entity);
             brick6_looper_runtime_arm_live_record_start(command->entity,
                 (uint8_t)command->id, command->value,

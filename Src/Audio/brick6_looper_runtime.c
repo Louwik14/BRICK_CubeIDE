@@ -7,6 +7,7 @@
 #include "Audio/audio_transport_runtime.h"
 #include "Platform/brick_media_clock.h"
 #include "Sampler/sample_page_cache_audio.h"
+#include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_page_cache_config.h"
 #include "Audio/sample_page_lease_audio.h"
 #include "IPC/audio_recorder_capture.h"
@@ -105,7 +106,9 @@ typedef struct
     uint8_t preroll_used_reported;
     uint8_t preroll_consumed;
     uint8_t preroll_relay_done;
+    uint8_t registration_pending;
     uint32_t preroll_frames;
+    uint32_t registration_wait_epoch;
     uint64_t scheduled_start_sample;
 } brick6_looper_track_state_t;
 
@@ -656,6 +659,21 @@ static void looper_release_pages(brick6_looper_track_state_t *state)
     state->registration_epoch = 0U;
 }
 
+static void looper_update_take_registration(brick6_looper_track_state_t *state)
+{
+    if ((state == 0) || (state->registration_pending == 0U))
+        return;
+
+    uint32_t registration_epoch = 0U;
+    if ((sample_page_cache_get_registration_epoch_key(
+            state->cache_key, &registration_epoch) == 0U)
+            || (registration_epoch == state->registration_wait_epoch))
+        return;
+
+    state->registration_epoch = registration_epoch;
+    state->registration_pending = 0U;
+}
+
 static void looper_reset_take_state(brick6_looper_track_state_t *state)
 {
     if(state == 0)
@@ -675,6 +693,8 @@ static void looper_reset_take_state(brick6_looper_track_state_t *state)
     state->resync_old_frac_q16 = 0U;
     state->play_auto = 0U;
     state->want_play_when_ready = 0U;
+    state->registration_pending = 0U;
+    state->registration_wait_epoch = 0U;
     looper_set_scheduled_start(state, 0U);
     state->scheduled_start_sample = 0U;
     looper_preroll_reset_take_state(state);
@@ -698,11 +718,14 @@ static void looper_fail(brick6_looper_track_state_t *state)
     state->resync_xfade_remaining = 0U;
     state->resync_old_playhead = 0U;
     state->resync_old_frac_q16 = 0U;
+    state->registration_pending = 0U;
+    state->registration_wait_epoch = 0U;
 }
 
 static void looper_update_primary_lease(const brick6_looper_track_state_t *state)
 {
-    if (state != 0) looper_publish_lease(state, state->playhead, 0U);
+    if ((state != 0) && (state->registration_pending == 0U))
+        looper_publish_lease(state, state->playhead, 0U);
 }
 
 static uint8_t looper_preroll_can_read(const brick6_looper_track_state_t *state,
@@ -970,6 +993,10 @@ void brick6_looper_runtime_on_record_stop(uint64_t sample_time)
     if(span_frames != 0U)
     {
         brick6_looper_track_state_t *const state = &g_looper_tracks[track];
+        const uint32_t previous_registration_epoch =
+            (state->registration_epoch != 0U)
+                ? state->registration_epoch
+                : state->registration_wait_epoch;
         looper_release_pages(state);
         state->play_auto = (g_looper_record_boundary.play_auto != 0U) ? 1U : 0U;
         state->want_play_when_ready = ((state->play_auto != 0U)
@@ -978,6 +1005,9 @@ void brick6_looper_runtime_on_record_stop(uint64_t sample_time)
         state->scheduled_start_sample = 0U;
         state->frames_total = span_frames;
         state->playhead = 0U;
+        state->playhead_frac_q16 = 0U;
+        state->registration_wait_epoch = previous_registration_epoch;
+        state->registration_pending = 1U;
         looper_adopt_preroll_live_take(state, track, span_frames);
         state->preroll_consumed = 0U;
         state->preroll_relay_done = 0U;
@@ -1081,6 +1111,7 @@ void brick6_looper_runtime_service(uint32_t byte_budget)
     for(uint8_t track = 0U; track < BRICK6_LOOPER_TRACK_CAP; ++track)
     {
         brick6_looper_track_state_t *state = &g_looper_tracks[track];
+        looper_update_take_registration(state);
         if (state->frames_total != 0U) looper_update_primary_lease(state);
         looper_update_ready_state(state);
     }
@@ -1117,7 +1148,9 @@ void brick6_looper_runtime_prepare_replace(uint8_t track_id)
         return;
 
     brick6_looper_track_state_t *state = &g_looper_tracks[track_id];
+    const uint32_t previous_registration_epoch = state->registration_epoch;
     looper_reset_take_state(state);
+    state->registration_wait_epoch = previous_registration_epoch;
 }
 
 void brick6_looper_runtime_arm_live_record_start(uint8_t track_id,
@@ -1973,7 +2006,6 @@ void brick6_looper_runtime_render_track(const track_audio_runtime_ctx_t *ctx,
         {
             g_looper_runtime_diag.page_miss_seen = 1U;
             g_looper_runtime_diag.fallback_miss++;
-            looper_advance_playhead(state, frames);
             looper_diag_update_take(track, state);
             return;
         }
