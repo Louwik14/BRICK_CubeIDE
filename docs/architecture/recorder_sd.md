@@ -164,6 +164,34 @@ live seul et `1` loop seul. Les voies live USB/LINE et les sources internes
 sont donc toutes soumises au meme gain live; aucune voie physique n'est
 reinjectee directement dans le master.
 
+Le trajet de valeur est egalement unique: l'affichage `0..127` est converti en
+canonique `0..1` par `param_value_policy`, transporte bit-a-bit comme `float`
+dans la commande CONTROL/AUDIO, puis installe dans `main_xfade`. Ainsi, pour
+`XFADE=127`: CONTROL canonique `1.0`, transport `0x3f800000`, AUDIO `1.0`,
+`live_gain=0.0` et `loop_gain=1.0`. Le lissage rejoint explicitement les deux
+extremites; apres le premier bloc de transition, le endpoint plein remplace le
+bus live par le bus playback, ce qui rend sa contribution exactement nulle.
+
+Inventaire des contributions MAIN pendant la lecture:
+
+| Source | Chemin et sommation | Gain avant XFADE | Soumise au XFADE |
+|---|---|---:|---|
+| moteurs internes | voie DSP -> dry ou GROUP -> `bus_main` | trim/voie/GROUP | oui |
+| External LINE/USB | entree physique -> voie External -> dry ou GROUP -> `bus_main` | trim/voie/GROUP | oui |
+| retours sends/FX globaux | sends voie/GROUP -> retour -> `bus_main` | niveau send/retour | oui |
+| preview SD | `sd_preview_render_main` -> `bus_main` | gain preview | oui |
+| playback Looper | voie Looper -> `looper_bus_main` | trim/voie | cote loop |
+| master dynamics | traitement en place du resultat XFADE | gain du slot | deja post-XFADE, sans entree parallele |
+| metronome | ajout dans `audio_io_pack_ramped` | niveau metronome | non; monitor transport, pas du live |
+
+`audio_rec_bus` (dont LINE/USB directs et MIC logique) et le bus de capture
+Looper ne sont jamais sommes dans MAIN. Sur Low-Cost, les sorties casque du
+TLV320AIC3204 sont routees depuis les DAC (`0x08`) et non depuis les entrees
+analogiques. En consequence, au HEAD qui contient `a0de39475`, une source live
+LINE/USB/interne/GROUP ne peut pas subsister a `127`; le seul bypass logiciel
+identifie etait la preview SD post-mixer, et ce commit l'a correctement replacee
+avant le XFADE. Il explique le symptome uniquement si une preview etait active.
+
 La preecoute SD rejoint elle aussi le bus live avant ce melange. Elle ne peut
 donc plus contourner `live_gain` par une addition tardive apres le mixer. Le
 clic metronome reste volontairement un monitor de transport ajoute au dernier
