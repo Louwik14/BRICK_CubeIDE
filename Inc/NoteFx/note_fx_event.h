@@ -58,7 +58,7 @@ typedef struct
     union { uint32_t intent_id; uint32_t occurrence_id; };
     union { uint32_t source_generation; uint32_t generation; };
     uint32_t group_id;
-    uint16_t chain_generation;
+    uint16_t owner_version;
     uint8_t track;
     uint8_t destination_id;
     uint8_t note;
@@ -68,8 +68,10 @@ typedef struct
     uint8_t stage;
     uint8_t flags;
     uint8_t temporal_index;
-    uint8_t reserved;
+    uint8_t owner_slot;
 } musical_event_t;
+
+#define NOTE_EVENT_OWNER_NONE 0xFFU
 
 typedef musical_event_t note_event_t;
 

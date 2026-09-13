@@ -26,7 +26,7 @@ uint8_t note_fx_engine_capacity(uint8_t model,
                                 note_fx_capacity_desc_t *out_capacity);
 note_event_result_t note_fx_engine_configure(
     uint8_t track, uint8_t slot, uint8_t model, uint8_t rate,
-    uint8_t style, uint8_t range);
+    uint8_t style, uint8_t range, uint16_t owner_version);
 note_event_result_t note_fx_engine_transform(
     uint8_t slot, const note_event_t *input, uint8_t input_count,
     note_event_t *output, uint8_t output_capacity, uint8_t *output_count);

@@ -84,17 +84,21 @@ commune aux divisions binaires et ternaires. Aucun hash d'identite n'intervient.
 ne groove que l'ancre/velocity entree dans l'ARP; cette asymetrie est la
 semantique normale de la chaine S1 -> S4.
 
-Un futur produit par le slot N reprend a N+1. Un TYPE change collecte la matiere
-HELD a la premiere frontiere modifiee, ferme les sorties, purge les futurs de la
-generation, reset cette frontiere et son downstream, puis rejoue la matiere.
+Un futur produit par le slot N reprend a N+1 et porte `(owner_slot,
+owner_version)`. Un TYPE change collecte la matiere HELD a la premiere
+frontiere modifiee, ferme seulement les sorties de ses sources causales, purge
+leurs futurs downstream, reset cette frontiere et son downstream, puis rejoue
+la matiere.
 Un tweak CHORD/HARMONIZER collecte ses sources, ferme les sorties causales,
 purge seulement leurs futurs downstream, reset le slot de revoice et ses
 dependances, puis rejoue. Les slots amont et leurs phases independantes
 survivent.
 
-L'etat UI/persistence est installe seulement apres reservation et enqueue de la
-configuration complete. Si la command ring refuse, reservations et etat
-canonique restent anciens.
+L'etat UI/persistence est AUTHORITATIVE. La configuration `applied` est l'etat
+runtime actif derive; l'override est une projection PREPARED superposee avant
+validation/admission, jamais une seconde autorite. L'etat est installe seulement
+apres reservation et enqueue de la configuration complete. Si la command ring
+refuse, reservations et etat canonique restent anciens.
 
 ## Capacites et validation
 

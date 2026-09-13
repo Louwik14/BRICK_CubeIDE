@@ -102,14 +102,15 @@ Une expansion amont superieure ne peut donc creer ni deadline Gate ni repeat
 Echo virtuel au-dela de la polyphonie produit; le ledger terminal existant
 reste l'autorite d'admission/stealing des huit lifetimes reels.
 
-Un changement parametrique ne change plus la generation de chaine, ne ferme
-plus l'entite et ne purge plus la future queue. ARP et EUCLID recalculent leur
+Un changement parametrique ne ferme plus l'entite et ne purge plus la future
+queue. Chaque slot possede une version locale; une future Echo/Gate/generateur
+est obsolete seulement si sa version d'owner ne correspond plus. ARP et EUCLID recalculent leur
 ordinal depuis le temps musical a chaque fenetre; RATE, MODE, OCTAVE,
 LENGTH et PULSES affectent donc la prochaine decision sans phase cachee.
-Probability, Gate et Groove
-lisent l'etat effectif lorsqu'une occurrence atteint leur slot. Une decision
-Probability, une fin Gate ou une projection Groove deja materialisee n'est pas
-rejouee. CHORD et HARMONIZER ferment seulement les sorties causees par leurs
+Probability et Groove lisent l'etat effectif lorsqu'une occurrence atteint
+leur slot (FORWARD_ONLY). Une decision Probability ou une projection Groove
+deja materialisee n'est pas rejouee. Gate ferme/rejoue uniquement ses sources
+actives et remplace ses propres deadlines. CHORD et HARMONIZER ferment seulement les sorties causees par leurs
 entrees encore HELD, puis republient l'ancienne matiere avec le nouveau voicing
 au meme premier sample CONTROL modifiable; l'ordre de decision STOP puis START
 est conserve dans le flux chronologique.
@@ -135,16 +136,16 @@ deadlines terminales apres le dernier slot. La tete de file
 est consommee par date, puis OFF avant ON a date egale. Un cutover, STOP/PANIC,
 mute, remplacement Pattern ou Project ferme les derives, purge ces entrees et
 reset les caches ARP/EUCLID. Un unmute ne restaure aucun futur ancien.
-TIME/REPEATS/DECAY sont donc captures lors de la materialisation de chaque
-repetition Echo: une repetition deja en queue reste immuable, tandis que la
-prochaine occurrence qui entre dans Echo utilise l'etat courant.
+TIME/REPEATS/DECAY sont captures lors de la materialisation. Une mutation Echo
+incremente la version du slot: ses repeats deja en queue deviennent obsoletes,
+sans toucher les futures appartenant aux autres slots.
 
-Un changement TYPE est le seul changement MIDI FX live structurel: les sorties
-de la track sont fermees, les futurs de l'ancienne structure sont purges, les
-runtimes du premier slot modifie jusqu'a S4 sont reconstruits et la generation
-de chaine avance. Les generateurs situes avant le cutover retrouvent leur phase
+Un changement TYPE est un cutover local: seules les sorties causees par les
+entrees HELD a sa frontiere sont fermees, leurs futurs downstream sont retires,
+et les runtimes du premier slot modifie jusqu'a S4 sont reconstruits. Les
+generateurs situes avant le cutover retrouvent leur phase
 depuis la position musicale canonique. Le
-ledger de sources HELD survit a cette operation et la matiere HELD a la
+ledger de sources HELD survit a cette operation et la vue HELD de frontiere a la
 frontiere modifiee est reevaluee immediatement depuis ce slot; TYPE A->B,
 TYPE->OFF et
 OFF->TYPE n'attendent donc ni reloop ni nouveau NOTE_ON. Les resets explicites
