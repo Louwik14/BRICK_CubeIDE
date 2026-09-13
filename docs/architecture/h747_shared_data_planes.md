@@ -14,12 +14,12 @@ resolution locale d'un ID ne font jamais partie de l'ABI M4/M7.
 | STREAM pages | M4 Storage -> M7 readers | payload cacheable `.sdram_sample_page_pool`, 24 641 536 octets | descriptor M4 avec `data_offset`; token I/O pointer-free; resolution locale seulement | decode dans page, clean payload, clean descriptor, etat `READY` en dernier | un lease seqlocke par lecteur; `EVICTING` puis relecture de leur union avant recyclage |
 | Preview PCM | M4 Preview -> M7 MAIN | ring non-cacheable `AUDIO_STORAGE_SHARED_SDRAM`, 2048 x 2 floats (16 384) + deux curseurs `D3_IPC` | samples seulement, aucun pointeur | payload, DMB, `write_count` M4 | M7 publie uniquement `read_count`; active/gain sont AUDIO-locaux via PARAM, sans epoch ni reset croise |
 | Recorder PCM | M7 AUDIO -> M4 Storage/SD | ring non-cacheable `SDRAM_RECORDER`, 12 001 x 2 x 32 bits (96 008) + layout 16 octets `D3_IPC` | `head_cursor`, `tail_cursor`, `closed_session`, `capture_fault`; aucun config/etat fonctionnel partage | PCM, DMB, `head_cursor`; fermeture AUDIO publie session/fault | M4 ecrit seulement `tail_cursor` apres copie/commit |
-| Looper live take | M7 capture -> M4 recorder, puis M4 map -> M7 reader | Recorder PCM ci-dessus; carte live CONTROL locale puis projection Stream existante | path borne et extents possedes en valeur; aucun pointeur. Le preroll (96 000 octets) est cacheable et M7-prive | meme head/fermeture Recorder; map Stream existante | tail Recorder, puis generation de map et credits pages; retrait apres stop/fence |
+| REC_SOURCE | M4 Recorder -> M7 Streamer | workspaces A/B et pages STREAM existantes | snapshot `{key, frame_count, registration_epoch}`; aucun pointeur | building prechauffe puis publication atomique current | ancienne generation retiree apres extinction des leases |
 | Snapshot AUDIO restore | M4 CONTROL -> M7 AUDIO | singleton `.sdram_audio_state_snapshot`, 73 920 octets cacheables | generation, count, checksum, valid magic et commandes finales pointer-free | contenu immutable, clean, magic, DMB, puis `AUDIO_STATE_COMMIT(generation)` | M4 attend que le tail FIFO franchisse le commit, apres application M7; aucun ACK |
 
 Les contexts FatFs, loaders, diagnostics, paths de catalogue, pointeurs de
 buffers DMA et function pointers du generic recorder restent prives a M4. Les
-voices, pointeurs DSP chauds et le preroll Looper restent prives a M7. Les API
+voices et pointeurs DSP chauds restent prives a M7. Les API
 `audio_shared_memory_resolve()` et `sample_page_cache_data_resolve()` creent une
 adresse locale seulement apres validation de region/offset; cette adresse ne
 traverse aucune commande ou mailbox.
@@ -54,7 +54,7 @@ des writers M4 locaux; elles ne fournissent aucune exclusion inter-core. Le
 Recorder n'installe plus de callback `__disable_irq()` dans le generic recorder.
 
 STREAM conserve sa politique de besoins/credits et son scheduler. Recorder,
-Preview et Looper conservent leurs semantiques, leur framing et leur longueur
+Preview conservent leurs semantiques, leur framing et leur longueur
 STOP. Les sept opcodes et la cadence CONTROL ne changent pas. Le septieme,
 `AUDIO_STATE_COMMIT`, reference uniquement une generation de snapshot partage;
 il ne transporte aucun pointeur. Les requetes visuelles typees utilisent PARAM
@@ -75,7 +75,7 @@ TRANSPORT, RECORD, PANIC ou AUDIO_STATE_COMMIT dans la FIFO.
 | STREAM | oui | non; la fenetre est une projection physique d'execution | DATA PLANE PUR |
 | Preview PCM | oui | non; active et gain passent par PARAM | DATA PLANE PUR |
 | Recorder PCM | oui | non; start/stop passent par RECORD | DATA PLANE PUR |
-| Looper live take | oui | non; RECORD/TRANSPORT ordonnent le lifecycle | DATA PLANE PUR |
+| REC_SOURCE | oui | non; RECORD ordonne la capture et SOURCE=REC la lecture | DATA PLANE PUR |
 | Mod Matrix | non | PARAM canoniques indexes par slot; etat et plans locaux M7 | COMMANDE PURE |
 Restore n'est plus un data plane: le Pattern decode est valide directement,
 puis installe comme etat CONTROL final. Les seules consequences AUDIO sont les
@@ -93,7 +93,7 @@ SD. `STREAM M7->M4 = LEASES PHYSIQUES UNIQUEMENT : OUI`.
 
 Les ranges ne decrivent aucune phase musicale. Ils changent seulement lorsque
 l'ensemble des pages encore lisibles change: bind, entree de page, wrap,
-debut/fin du crossfade Looper et release physique. La publication supprime les
+debut/fin du crossfade REC et release physique. La publication supprime les
 ecritures identiques; aucun heartbeat periodique n'existe.
 
 Hors retours physiques necessaires au recyclage (tail FIFO, leases STREAM et
@@ -108,7 +108,7 @@ invalide d'abord la projection, commit le STOP, puis attend localement
 `L + 2*H`, avec `L` l'horizon maximal de publication et `H` la taille d'un
 demi-buffer AUDIO. Les valeurs actuelles `L=64`, `H=64` donnent 192 samples;
 elles sont derivees des constantes contractuelles, jamais d'une duree en ms.
-Multi, Classic et Looper ne sont recyclables que lorsque leurs leases physiques
+Multi, Classic et REC_SOURCE ne sont recyclables que lorsque leurs leases physiques
 existantes ne referencent plus leurs cles. Aucun `released_generation`, fence
 consumer ou ACK fonctionnel M7->M4 n'existe.
 

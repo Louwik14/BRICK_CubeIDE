@@ -33,6 +33,7 @@
 static uint32_t g_ui_page_audio_rec_last_waveform_ms;
 #endif
 static uint8_t g_ui_rec_edit_assign_popup;
+static uint8_t g_ui_rec_edit_save_requested;
 static uint32_t g_ui_audio_rec_smoothed_peak;
 
 static uint8_t ui_page_audio_rec_peak_to_meter(uint32_t peak_abs_pcm24,

@@ -23,7 +23,6 @@
 #include "Audio/metronome_runtime.h"
 #include "Audio/synth_waveform_audio.h"
 #include "Audio/Engines/prism_engine.h"
-#include "Audio/brick6_looper_runtime.h"
 #include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
 #include "Audio/Engines/stack_engine.h"
 #include "Audio/Engines/wavetable_engine.h"
@@ -673,10 +672,6 @@ ITCM_TEXT void brick6_audio_runtime_dsp(StereoTrack *tracks,
         uint8_t sampler_tracks = 0U;
         brick6_render_sampler_tracks(frames, &sampler_tracks);
         (void)sampler_tracks;
-    }
-
-    if (brick6_looper_runtime_playing_mask() != 0U)
-    {
     }
 
     const uint16_t prism_entity_mask = audio_note_engine_adapter_entity_mask(

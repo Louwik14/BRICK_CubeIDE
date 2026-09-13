@@ -1,8 +1,3 @@
-static uint8_t sample_capture_looper_record_conflict(void)
-{
-    return audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_LOOPER);
-}
-
 static uint32_t sample_capture_edit_marker_step(void)
 {
     const uint8_t zoom = (g_sample_capture.state.edit_zoom > SAMPLE_CAPTURE_EDIT_ZOOM_MAX)
@@ -327,62 +322,11 @@ static audio_recorder_lifecycle_result_t sample_capture_prepare_paths(void)
                       : AUDIO_RECORDER_LIFECYCLE_ERROR;
 }
 
-static uint8_t sample_capture_make_next_final_path(char *out_path, uint32_t out_len)
-{
-    if((out_path == 0) || (out_len == 0U))
-    {
-        return 0U;
-    }
-
-    if(sd_access_gate_try_acquire(SD_ACCESS_CLIENT_RECORDER) == 0U)
-    {
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_BUSY);
-        return 0U;
-    }
-
-    uint8_t ok = 0U;
-    if(sd_access_fs_mount_if_needed() != 0U)
-    {
-        const FRESULT made = f_mkdir(SAMPLE_CAPTURE_REC_DIR);
-        if((made != FR_OK) && (made != FR_EXIST))
-        {
-            sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
-            sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
-            return 0U;
-        }
-        for(uint32_t attempt = 0U; attempt < SAMPLE_CAPTURE_FINAL_TRIES; ++attempt)
-        {
-            const uint16_t n = g_sample_capture.final_counter++;
-            (void)snprintf(out_path, out_len, "%s/REC%04u.WAV",
-                           SAMPLE_CAPTURE_REC_DIR, (unsigned)n);
-            FILINFO info;
-            if(f_stat(out_path, &info) == FR_NO_FILE)
-            {
-                ok = 1U;
-                break;
-            }
-        }
-    }
-    else
-    {
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
-    }
-
-    sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
-    return ok;
-}
-
 static audio_recorder_lifecycle_result_t sample_capture_prepare_session(void)
 {
     if(sd_preview_is_active() != 0U)
     {
         sd_preview_stop();
-    }
-
-    if(sample_capture_looper_record_conflict() != 0U)
-    {
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_LOOPER_ACTIVE);
-        return AUDIO_RECORDER_LIFECYCLE_ERROR;
     }
 
     const audio_recorder_lifecycle_result_t paths =

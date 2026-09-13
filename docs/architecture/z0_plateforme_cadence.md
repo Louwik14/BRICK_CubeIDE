@@ -66,7 +66,7 @@ AUDIO -> CONTROL : niveau REC, waveforms audio/synth et diagnostic Audio; plus l
 Storage <-> AUDIO : registration, token, completion de page et payloads bornes
 ```
 
-Preview est un ring PCM SPSC M4->M7: CONTROL possede payload/`write_count`, AUDIO `read_count` et le gain/active local applique par PARAM. Recorder est le ring inverse: AUDIO possede payload/`head_cursor`/fermeture/fault, CONTROL uniquement `tail_cursor`, writer et erreurs SD. Le Looper AUDIO date son DSP avec la media clock TIM5 canonique. Le transport et le REC bus sont des runtimes AUDIO locaux alimentes par TRANSPORT/PARAM; aucun snapshot parallele n'en revient. FILTER POS affiche la valeur CONTROL canonique; aucune valeur DSP n'est une autorite UI.
+Preview est un ring PCM SPSC M4->M7: CONTROL possede payload/`write_count`, AUDIO `read_count` et le gain/active local applique par PARAM. Recorder est le ring inverse: AUDIO possede payload/`head_cursor`/fermeture/fault, CONTROL uniquement `tail_cursor`, writer et erreurs SD. Le Streamer AUDIO date son DSP avec la media clock TIM5 canonique. Le transport et le REC bus sont des runtimes AUDIO locaux alimentes par TRANSPORT/PARAM; aucun snapshot parallele n'en revient. FILTER POS affiche la valeur CONTROL canonique; aucune valeur DSP n'est une autorite UI.
 
 Au boot, `track_state` est initialise avant la projection finale `track_runtime`; le bridge Hall/keyboard et son focus sont ensuite initialises et synchronises depuis cette autorite canonique. PLAY/PAUSE ou une reconfiguration moteur ne font pas partie du protocole d'activation Hall.
 

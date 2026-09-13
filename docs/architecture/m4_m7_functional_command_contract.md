@@ -83,8 +83,8 @@ merge AUDIO ni seconde chronologie musicale.
 
 PROGRAM separe la vie musicale du renderer. CONTROL conserve son ledger et
 AUDIO conserve le mapping `{output_id,note,velocity,gate}` pendant un changement
-de moteur. CONTROL valide le type, les capacites, la polyphonie globale et le
-quota Looper avant publication. A la date PROGRAM, AUDIO prevalide le nouveau
+de moteur. CONTROL valide le type, les capacites et la polyphonie globale avant
+publication. A la date PROGRAM, AUDIO prevalide le nouveau
 renderer et ses ressources, puis seulement remplace l'ancien et reprojette les
 notes compatibles sans fabriquer NOTE OFF/ON. Un etat volontairement non
 rendable reste silencieux; un retour compatible rend de

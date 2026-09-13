@@ -69,8 +69,6 @@
 #include "Mod/mod_lfo_v1_control.h"
 #include "Seq/seq_edit.h"
 #include "Seq/seq_runtime.h"
-#include "Storage/audio_recorder.h"
-#include "Audio/brick6_looper_runtime.h"
 #include "Storage/pattern_live_ram.h"
 
 #define UI_TRACK_MOD_BUTTON BTN_TRACK
@@ -237,7 +235,6 @@ static void ui_core_set_active_track(uint8_t track)
         (void)ui_core_select_active_track(main_track);
     }
     g_ui_track_state.active_lane = track;
-    audio_recorder_control_on_active_track_changed(track);
     ui_param_publish_encoder_binding(g_ui_track_state.active_lane,
                                      g_ui_track_state.shift_down);
     ui_edit_context_sync_active_track(1U);
@@ -556,50 +553,6 @@ static void ui_core_transport_enter_pattern(ui_pattern_mode_t mode)
     ui_core_pattern_enter(mode, ui_get_hall_mode(), ui_set_hall_mode);
 }
 
-static uint8_t ui_core_track_is_sampler_looper(uint8_t track)
-{
-    return (uint8_t)((track < BRICK_ENTITY_CAPACITY)
-        && (track_state_get_family(track) == TRACK_FAMILY_SAMPLER)
-        && (track_state_get_type(track) == TRACK_TYPE_LOOPER));
-}
-
-static uint8_t ui_core_handle_looper_save(void)
-{
-    const uint8_t track = ui_get_active_lane();
-    if (ui_core_track_is_sampler_looper(track) == 0U)
-    {
-        return 0U;
-    }
-
-    audio_recorder_status_t status;
-    if (audio_recorder_get_status_client(AUDIO_RECORDER_CLIENT_LOOPER, &status) == 0U)
-    {
-        ui_core_set_feedback("NO LOOP");
-        return 1U;
-    }
-    if ((status.state == AUDIO_RECORDER_STATE_PREPARED)
-            || (status.state == AUDIO_RECORDER_STATE_RECORDING)
-            || (status.state == AUDIO_RECORDER_STATE_DRAINING)
-            || (status.state == AUDIO_RECORDER_STATE_FINALIZING))
-    {
-        ui_core_set_feedback("LOOP BUSY");
-        return 1U;
-    }
-    if ((status.state == AUDIO_RECORDER_STATE_FAILED)
-            || (status.error != AUDIO_RECORDER_ERROR_NONE))
-    {
-        ui_core_set_feedback("LOOP FAIL");
-        return 1U;
-    }
-
-    uint8_t take_track = 0xFFU;
-    (void)audio_recorder_control_looper_take_track(&take_track);
-    ui_core_set_feedback(((status.state == AUDIO_RECORDER_STATE_TAKE_READY)
-            && (status.frames_committed != 0U)
-            && (take_track == track)) ? "LOOP SAVED" : "NO LOOP");
-    return 1U;
-}
-
 static void ui_core_finish_track_structure_change(
     uint8_t track, uint8_t all_tracks, uint8_t active_track_touched,
     uint8_t created_from_off)
@@ -719,29 +672,6 @@ static uint8_t ui_core_is_suppressed_hall_press_event_consumed(const ui_event_t 
     return (g_ui_track_state.hall_note_suppressed[ev->id] != 0U) ? 1U : 0U;
 }
 
-static uint8_t ui_core_handle_routing_event(const ui_event_t *ev)
-{
-    const uint8_t active_track = ui_get_active_track();
-    if ((ev == 0) || (ui_core_track_is_sampler_looper(active_track) == 0U)
-            || (ui_page_get_id() != UI_PAGE_MIDI_FX)
-            || (g_ui_track_state.track_select_armed != 0U)
-            || (ev->type != UI_EVENT_HALL_PRESS)
-            || (ev->id >= HALL_UI_LANE_COUNT))
-        return 0U;
-
-    const uint8_t hall = ev->id;
-    if ((hall >= TRACK_COUNT) || (hall == active_track))
-    {
-        ui_core_mute_suppress_hall_note(hall);
-        return 1U;
-    }
-
-    (void)control_routing_set_looper_source(active_track, hall,
-        (control_routing_get_looper_source(active_track, hall) == 0U) ? 1U : 0U);
-    ui_core_mute_suppress_hall_note(hall);
-    return 1U;
-}
-
 static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
 {
     (void)ui_core_mute_is_active();
@@ -772,12 +702,6 @@ static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
             ui_core_set_feedback("AUDIO REC BUSY");
             return 1U;
         }
-        memset((void *)&g_brick6_looper_record_probe, 0,
-               sizeof(g_brick6_looper_record_probe));
-        g_brick6_looper_record_probe.ui_count++;
-        g_brick6_looper_record_probe.ui_command_id = ev->id;
-        g_brick6_looper_record_probe.ui_track = ui_get_active_lane();
-        g_brick6_looper_record_probe.ui_value = g_ui_track_state.shift_down;
         if (g_ui_track_state.shift_down != 0U)
         {
             ui_page_template_rec_cfg_open_main();
@@ -787,7 +711,7 @@ static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
         {
             seq_runtime_set_pattern_rec_target_track(ui_get_active_lane());
             if (seq_runtime_rec_toggle_arm(ui_get_active_lane()) == 0U)
-                ui_core_set_feedback("LOOP REC FAIL");
+                ui_core_set_feedback("REC FAIL");
         }
         return 1U;
     }
@@ -825,13 +749,6 @@ static uint8_t ui_core_handle_global_shortcuts(const ui_event_t *ev)
         return 0U;
     }
 
-    if ((ev != 0) && (ev->type == UI_EVENT_BUTTON_PRESS)
-            && (ev->id == (uint8_t)BTN_SETTINGS)
-            && (g_ui_track_state.shift_down != 0U)
-            && (g_ui_track_state.track_select_armed == 0U)
-            && (ui_core_mute_is_active() == 0U)
-            && (ui_core_handle_looper_save() != 0U))
-        return 1U;
     return ui_core_shortcuts_handle_global_event(ev,
         g_ui_track_state.shift_down, g_ui_track_state.track_select_armed,
         ui_core_mute_is_active(), ui_core_set_feedback);
@@ -989,7 +906,6 @@ void ui_core_tick(void)
         { ui_core_handle_mute_event, 1U, 1U },
         { ui_core_is_suppressed_hall_press_event_consumed, 1U, 1U },
         { ui_core_is_track_hall_event_consumed, 1U, 1U },
-        { ui_core_handle_routing_event, 1U, 1U },
         { ui_core_handle_transport_event, 1U, 1U },
         { ui_page_settings_handle_event, 1U, 1U },
         /* Intentionally before pattern/seq: global shortcuts can fully mask them. */

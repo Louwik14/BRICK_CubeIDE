@@ -147,7 +147,7 @@ uint8_t pattern_load_request(uint8_t bank, uint8_t pattern)
         return 0U;
     }
 
-    if (audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_LOOPER) != 0U)
+    if (audio_recorder_is_active() != 0U)
     {
         g_pattern_load_state = PATTERN_LOAD_ERROR;
         g_pattern_load_last_error = PATTERN_LOAD_ERR_RECORD_ACTIVE;
@@ -244,7 +244,7 @@ void pattern_load_service(uint32_t byte_budget)
         return;
     }
 
-    if (audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_LOOPER) != 0U)
+    if (audio_recorder_is_active() != 0U)
     {
         g_pattern_load_state = PATTERN_LOAD_ERROR;
         g_pattern_load_last_error = PATTERN_LOAD_ERR_RECORD_ACTIVE;

@@ -40,7 +40,6 @@
 #include "Audio/fx_modfx_global.h"
 #include "fx_reverb.h"
 #include "Param/spectral_window.h"
-#include "Audio/brick6_looper_runtime.h"
 #include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
 #include "Audio/Engines/fm_engine.h"
 #include "Track/synth_polyphony.h"
@@ -51,7 +50,6 @@
 #include "Audio/multi_voice_dsp.h"
 
 #include "Audio/audio_recorder_capture_audio.h"
-#include "Audio/control_routing_audio.h"
 
 #include <math.h>
 #include <string.h>
@@ -226,7 +224,6 @@ static float mixer_probe_stereo_peak(const float *left,
 enum
 {
     MIXER_STATIC_GROUP_CHILD = 1U << 0,
-    MIXER_STATIC_LOOPER = 1U << 1,
     MIXER_STATIC_ROUTE_MAIN = 1U << 2,
     MIXER_STATIC_AUDIO_FX_ACTIVE = 1U << 3,
     MIXER_STATIC_AUDIO_FX_PRE_FILTER = 1U << 4,

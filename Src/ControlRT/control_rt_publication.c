@@ -11,7 +11,6 @@
 #include "Track/entity_types.h"
 #include "Param/param_ids.h"
 #include "IPC/audio_recorder_capture_contract.h"
-#include "Audio/brick6_looper_runtime.h"
 #include "IPC/audio_rec_bus_contract.h"
 #include "IPC/audio_wave_table_projection.h"
 #include "IPC/audio_state_snapshot.h"
@@ -169,11 +168,7 @@ static uint8_t control_rt_command_is_structural(
             return kind <= CONTROL_AUDIO_TRANSPORT_LOCATE;
         case CONTROL_AUDIO_COMMAND_RECORD:
             if (kind > CONTROL_AUDIO_RECORD_START) return 0U;
-            if ((command->id & AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG) != 0U)
-                return (uint8_t)((command->entity < BRICK_ENTITY_CAPACITY)
-                    && ((kind == CONTROL_AUDIO_RECORD_STOP)
-                        || (command->value != 0U)));
-            return (uint8_t)((command->entity != AUDIO_RECORDER_CLIENT_NONE)
+            return (uint8_t)((command->entity == AUDIO_RECORDER_CLIENT_AUDIO_REC)
                 && (command->id != 0U)
                 && ((kind == CONTROL_AUDIO_RECORD_STOP)
                     || (command->value != 0U)));
@@ -679,24 +674,11 @@ uint8_t control_rt_publish_record(uint8_t kind, uint32_t session_id,
                                   uint32_t config, uint8_t client,
                                   uint64_t sample_time)
 {
-    const uint8_t looper_command = (uint8_t)(
-        ((uint16_t)config & AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG) != 0U);
-    if(looper_command != 0U)
-    {
-        g_brick6_looper_record_probe.publish_count++;
-        g_brick6_looper_record_probe.publish_command_id = (uint16_t)config;
-        g_brick6_looper_record_probe.publish_track = client;
-        g_brick6_looper_record_probe.publish_value = session_id;
-        g_brick6_looper_record_probe.publish_result = 0U;
-    }
     const control_audio_command_t c = { .effective_sample_time = sample_time,
         .value = session_id, .id = (uint16_t)config, .entity = client,
         .opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_RECORD,
             kind) };
-    const uint8_t result = control_rt_publish(&c);
-    if(looper_command != 0U)
-        g_brick6_looper_record_probe.publish_result = result;
-    return result;
+    return control_rt_publish(&c);
 }
 
 uint8_t control_rt_publish_panic(uint8_t kind, uint8_t entity,

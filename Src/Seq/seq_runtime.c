@@ -23,7 +23,6 @@
 #include "Track/track_runtime.h"
 #include "Track/control_music_output.h"
 #include "Storage/audio_recorder.h"
-#include "Audio/brick6_looper_runtime.h"
 #include "Storage/sample_capture.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/project_load_quiesce.h"
@@ -239,7 +238,6 @@ static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_pan
         control_music_output_first_unpublished_sample(
             seq_runtime_get_now_sample());
     sample_capture_control_on_transport_stop(stop_sample);
-    (void)audio_recorder_control_request_looper_stop(stop_sample, 0U);
     seq_edit_note_capture_reset();
     seq_runtime_exec_stop_lifecycle_apply(&g_seq_runtime, stop_sample);
     if (emit_transport_stop_and_panic != 0U)
@@ -563,16 +561,12 @@ static void seq_runtime_process_core(void)
                     uint8_t published;
                     if (event->type == SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE)
                     {
-                        audio_recorder_control_on_looper_boundary(
-                            event->track, event->sample_abs);
                         sample_capture_control_on_musical_boundary(
                             event->track, event->sample_abs);
                         published = 1U;
                     }
                     else if (event->type == SEQ_RUNTIME_AUDIO_EVENT_TRANSPORT_START)
                     {
-                        audio_recorder_control_on_transport_start(
-                            event->sample_abs);
                         sample_capture_control_on_transport_start(
                             event->sample_abs);
                         published = 1U;
@@ -1126,21 +1120,7 @@ uint8_t seq_runtime_rec_toggle_arm(seq_track_id_t target_track)
     const uint8_t pending_before = seq_live_rec_session_rec_is_pattern_pending_start();
     const uint8_t armed_before = seq_live_rec_session_rec_is_armed();
     seq_live_rec_session_toggle_arm(seq_runtime_get_now_sample(), g_seq_runtime.samples_per_step_q16);
-    g_brick6_looper_record_probe.control_count++;
-    g_brick6_looper_record_probe.control_command_id = CONTROL_AUDIO_COMMAND_RECORD;
-    g_brick6_looper_record_probe.control_track =
-        g_brick6_looper_record_probe.ui_track;
-    g_brick6_looper_record_probe.control_value =
-        seq_live_rec_session_rec_is_armed();
-    if (audio_recorder_control_sync_looper_arm(
-        seq_live_rec_session_rec_is_armed(),
-        target_track,
-        g_seq_runtime.samples_per_step_q16) == 0U)
-    {
-        seq_live_rec_session_toggle_arm(seq_runtime_get_now_sample(),
-                                        g_seq_runtime.samples_per_step_q16);
-        return 0U;
-    }
+    (void)target_track;
     sample_capture_control_on_global_rec_arm(
         seq_live_rec_session_rec_is_armed());
 

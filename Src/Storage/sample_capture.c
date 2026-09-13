@@ -22,6 +22,7 @@
 #include "Storage/pattern_live_ram.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/sd_preview.h"
+#include "SD/sd_scheduler_runtime.h"
 #include "Storage/waveform_cache.h"
 #include "ff.h"
 #include "main.h"
@@ -83,6 +84,45 @@
         / SAMPLE_CAPTURE_EDITOR_LEVEL2_BLOCK_FRAMES)
 #define SAMPLE_CAPTURE_EDITOR_DIRECT_SCAN_MAX_FRAMES 4096U
 #define SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILD_CHUNK_FRAMES 2048U
+#define SAMPLE_CAPTURE_SAVE_CHUNK_BYTES 4096U
+
+typedef enum
+{
+    SAMPLE_CAPTURE_SAVE_IDLE = 0,
+    SAMPLE_CAPTURE_SAVE_SELECT_PATH,
+    SAMPLE_CAPTURE_SAVE_OPEN_SOURCE,
+    SAMPLE_CAPTURE_SAVE_OPEN_DESTINATION,
+    SAMPLE_CAPTURE_SAVE_READ_HEADER,
+    SAMPLE_CAPTURE_SAVE_WRITE_HEADER,
+    SAMPLE_CAPTURE_SAVE_SEEK_DATA,
+    SAMPLE_CAPTURE_SAVE_READ_DATA,
+    SAMPLE_CAPTURE_SAVE_WRITE_DATA,
+    SAMPLE_CAPTURE_SAVE_SYNC,
+    SAMPLE_CAPTURE_SAVE_CLOSE_DESTINATION,
+    SAMPLE_CAPTURE_SAVE_CLOSE_SOURCE,
+    SAMPLE_CAPTURE_SAVE_RENAME,
+    SAMPLE_CAPTURE_SAVE_ROLLBACK_DESTINATION,
+    SAMPLE_CAPTURE_SAVE_ROLLBACK_SOURCE,
+    SAMPLE_CAPTURE_SAVE_ROLLBACK_UNLINK
+} sample_capture_save_phase_t;
+
+typedef struct
+{
+    FIL source;
+    FIL destination;
+    sample_capture_save_phase_t phase;
+    uint32_t bytes_left;
+    uint32_t chunk_bytes;
+    uint32_t saved_frames;
+    uint32_t start_frame;
+    uint16_t path_attempts;
+    uint8_t source_open;
+    uint8_t destination_open;
+    char source_path[SAMPLE_CAPTURE_PATH_MAX];
+    char temporary_path[SAMPLE_CAPTURE_PATH_MAX];
+    char final_path[SAMPLE_CAPTURE_PATH_MAX];
+    uint8_t header[SAMPLE_CAPTURE_WAV_DATA_OFFSET];
+} sample_capture_save_job_t;
 
 typedef struct
 {
@@ -110,6 +150,7 @@ typedef struct
     uint8_t assign_index;
     uint8_t assign_loading;
     uint8_t assign_target;
+    sample_capture_save_job_t save_job;
 } sample_capture_model_t;
 
 typedef struct

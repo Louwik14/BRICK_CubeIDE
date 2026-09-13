@@ -17,7 +17,7 @@ retours M7 vers M4 restants ne transportent aucune decision musicale:
 
 Les retours physiques restent limites au `tail` FIFO, aux credits STREAM et au
 PCM/framing Recorder. Les projections sont limitees au niveau
-REC, aux deux waveforms et au diagnostic Audio. Les boundaries Recorder/Looper ne
+REC, aux deux waveforms et au diagnostic Audio. Les boundaries Recorder ne
 necessitent aucun evenement AUDIO vers CONTROL separe: CONTROL publie
 directement le RECORD date; le head final et le framing de session sont des
 faits physiques.
@@ -49,7 +49,7 @@ CONTROL. La valeur DSP privee n'est plus publiee ni relue par UI/CONTROL.
 | STREAM pages | M4/Storage | M7/AUDIO | cache partage; un lease par lecteur, union M4, `EVICTING` puis relecture; aucun pin/use-count/refcount |
 | Preview PCM | M4/Storage | M7/AUDIO | ring SPSC separe; reutilisation par consumer tail |
 | Recorder PCM | M7/AUDIO | M4/Storage | ring SPSC; M7 head `accepted_frames`, M4 tail `released_frames`; stop fixe le head final |
-| Looper preroll/live map | M7/AUDIO puis M4/Storage | M7/AUDIO | preroll borne puis carte physique append-only; lecture limitee au tail SD committed |
+| REC_SOURCE | M4/Storage | M7/AUDIO | snapshot immutable current; generation A/B retiree apres extinction des leases |
 
 Les tokens/generations conserves appartiennent aux loads SD, registrations de
 buffers et sessions Recorder. Ils rejettent une completion I/O obsolete; ils

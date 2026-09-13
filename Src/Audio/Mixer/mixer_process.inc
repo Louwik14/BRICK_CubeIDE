@@ -12,13 +12,10 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     AUDIO_HOT ALIGN32 static float send_r[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float delay_reverb_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float delay_reverb_r[AUDIO_BLOCK_SIZE];
-    AUDIO_HOT ALIGN32 static float looper_record_l[AUDIO_BLOCK_SIZE];
-    AUDIO_HOT ALIGN32 static float looper_record_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float rec_stream_bus_main_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float rec_stream_bus_main_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float audio_rec_bus_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float audio_rec_bus_r[AUDIO_BLOCK_SIZE];
-    AUDIO_HOT ALIGN32 static int32_t looper_record_i32[AUDIO_BLOCK_SIZE * AUDIO_RECORDER_CHANNELS];
     AUDIO_HOT ALIGN32 static int32_t audio_rec_bus_i32[AUDIO_BLOCK_SIZE * AUDIO_RECORDER_CHANNELS];
 
     const audio_rec_bus_runtime_t audio_rec_projection =
@@ -118,19 +115,6 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
      * ordinary lane fan-out, otherwise the loop can bypass the crossfade
      * while the live bus remains authoritative. */
     looper_playback_mix_active = looper_xfade_authority_active;
-    uint8_t looper_record_track = 0U;
-    const uint8_t looper_record_active = mixer_looper_record_capture_is_active(&looper_record_track);
-    g_brick6_looper_record_probe.capture_gate_count++;
-    g_brick6_looper_record_probe.capture_active = looper_record_active;
-    if(looper_record_active != 0U)
-    {
-        g_brick6_looper_record_probe.capture_active_count++;
-        g_brick6_looper_record_probe.track = looper_record_track;
-    }
-    const uint8_t looper_probe_track = (looper_record_active != 0U)
-        ? looper_record_track : (uint8_t)g_brick6_looper_record_probe.track;
-    g_brick6_looper_record_probe.source_mask =
-        control_routing_audio_get_looper_source_mask(looper_probe_track);
     uint8_t audio_rec_capture_active = (uint8_t)(
         (audio_rec_projection.source_flags & AUDIO_REC_BUS_CAPTURE_ENABLED) != 0U);
     const uint8_t audio_rec_track_routes_active = (uint8_t)(
@@ -146,11 +130,6 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     {
         memset(rec_stream_bus_main_l, 0, sizeof(rec_stream_bus_main_l));
         memset(rec_stream_bus_main_r, 0, sizeof(rec_stream_bus_main_r));
-    }
-    if(looper_record_active != 0U)
-    {
-        memset(looper_record_l, 0, sizeof(looper_record_l));
-        memset(looper_record_r, 0, sizeof(looper_record_r));
     }
     if(audio_rec_bus_active != 0U)
     {
@@ -260,20 +239,15 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
 
         /*
          * Common mono-native fan-out. Keep the historical L/R path when
-         * an insert, diagnostic, or auxiliary capture/looper route needs the
+         * an insert, diagnostic, or auxiliary capture route needs the
          * materialized stereo buffers.  The direct path preserves the same
          * post-pan L/R values and the existing stereo send contracts, but
          * accumulates every destination while the source sample is live.
          */
         uint8_t direct_mono_fanout = 0U;
-        const uint8_t looper_record_route_active =
-            (looper_record_active != 0U)
-                ? mixer_lane_routes_to_looper(looper_record_track, (uint8_t)t)
-                : 0U;
         if ((is_mono_native_lane != 0U)
                 && (lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
                 && (audio_rec_track_routes_active == 0U)
-                && (looper_record_route_active == 0U)
                 && (looper_playback_mix_active == 0U))
         {
             direct_mono_fanout = (requires_stereo == 0U) ? 1U : 0U;
@@ -439,13 +413,12 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         /*
          * POLY_STEREO final fan-out.  The external poly buffers are already
          * accumulated L/R, so keep them read-only and feed every active final
-         * destination from one pass.  Auxiliary capture/looper routes and
+         * destination from one pass.  Auxiliary capture routes and
          * diagnostics keep the historical materialized-buffer path.
          */
         uint8_t poly_stereo_fanout = 0U;
         if ((lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_POLY_STEREO)
                 && (audio_rec_track_routes_active == 0U)
-                && (looper_record_route_active == 0U)
                 && (looper_playback_mix_active == 0U)
                 && (route_main != 0U)
                 && (modfx_active == 0U)
@@ -909,9 +882,7 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
             const uint8_t stream_rec = (uint8_t)(
                 (source_track < BRICK_ENTITY_CAPACITY)
                 && (brick6_sampler_runtime_clip_source_is_rec(source_track) != 0U));
-            if((source_track < MIXER_MAX_TRACKS)
-                    && (((static_flags & MIXER_STATIC_LOOPER) != 0U)
-                        || (stream_rec != 0U)))
+            if((source_track < MIXER_MAX_TRACKS) && (stream_rec != 0U))
             {
                 if((audio_rec_bus_active != 0U)
                         && (source_track < BRICK_ENTITY_CAPACITY)
@@ -936,32 +907,7 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                         }
                     }
                 }
-                if((stream_rec == 0U) && (looper_record_active != 0U)
-                        && (source_track == looper_record_track)
-                        && (brick6_looper_runtime_is_overdub_recording(
-                            looper_record_track) != 0U))
-                {
-                    for(uint32_t i = 0U; i < frames; ++i)
-                    {
-                        looper_record_l[i] += L[i];
-                        looper_record_r[i] += R[i];
-                    }
-                }
                 continue;
-            }
-            if((looper_record_active != 0U)
-                    && (source_track < MIXER_MAX_TRACKS)
-                    && (source_track != looper_record_track)
-                    && (control_routing_audio_get_looper_source(looper_record_track, source_track) != 0U))
-            {
-                g_brick6_looper_record_probe.contributor_count++;
-                g_brick6_looper_record_probe.contributor_mask |=
-                    (uint32_t)(1UL << source_track);
-                for(uint32_t i = 0U; i < frames; ++i)
-                {
-                    looper_record_l[i] += L[i];
-                    looper_record_r[i] += R[i];
-                }
             }
 
             if((audio_rec_bus_active != 0U)
@@ -1143,19 +1089,6 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         }
     }
 
-    if(looper_record_active != 0U)
-    {
-        for(uint32_t i = 0U; i < frames; ++i)
-        {
-            const uint32_t out = i * AUDIO_RECORDER_CHANNELS;
-            looper_record_i32[out] = mixer_looper_float_to_pcm24(looper_record_l[i]);
-            looper_record_i32[out + 1U] = mixer_looper_float_to_pcm24(looper_record_r[i]);
-        }
-        (void)brick6_looper_runtime_capture_from_irq(looper_record_track,
-                                                     looper_record_i32,
-                                                     frames);
-    }
-
     mixer_external_inputs_clear();
 
     if(send_bus_active != 0U)
@@ -1245,15 +1178,15 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
      * mixer_process() would bypass live_gain at XFADE=1. */
     (void)sd_preview_render_main(bus_main_l, bus_main_r, frames);
 
-    g_brick6_looper_output_probe.block_count++;
-    g_brick6_looper_output_probe.xfade_apply_active =
+    g_brick6_rec_output_probe.block_count++;
+    g_brick6_rec_output_probe.xfade_apply_active =
         looper_xfade_apply_active;
-    g_brick6_looper_output_probe.xfade_track =
+    g_brick6_rec_output_probe.xfade_track =
         looper_xfade_authority_track;
-    g_brick6_looper_output_probe.xfade_value = looper_xfade_end;
-    g_brick6_looper_output_probe.looper_bus_pre_xfade_peak =
+    g_brick6_rec_output_probe.xfade_value = looper_xfade_end;
+    g_brick6_rec_output_probe.rec_bus_pre_xfade_peak =
         mixer_probe_stereo_peak(rec_stream_bus_main_l, rec_stream_bus_main_r, frames);
-    g_brick6_looper_output_probe.main_pre_xfade_peak =
+    g_brick6_rec_output_probe.main_pre_xfade_peak =
         mixer_probe_stereo_peak(bus_main_l, bus_main_r, frames);
 
     if(looper_xfade_apply_active != 0U)
@@ -1314,7 +1247,7 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         }
     }
 
-    g_brick6_looper_output_probe.main_post_xfade_peak =
+    g_brick6_rec_output_probe.main_post_xfade_peak =
         mixer_probe_stereo_peak(bus_main_l, bus_main_r, frames);
 
     /* One authoritative master dynamics slot, post returns/Looper crossfade. */
@@ -1324,7 +1257,7 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     {
         fx_chain_process_global_slot(2U, bus_main_l, bus_main_r, frames);
     }
-    g_brick6_looper_output_probe.master_post_peak =
+    g_brick6_rec_output_probe.master_post_peak =
         mixer_probe_stereo_peak(bus_main_l, bus_main_r, frames);
 
     if((audio_rec_bus_active != 0U)
@@ -1388,8 +1321,8 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         for(uint32_t i = 0U; i < frames; ++i)
         {
             const uint32_t out = i * AUDIO_RECORDER_CHANNELS;
-            const int32_t pcm_l = mixer_looper_float_to_pcm24(audio_rec_bus_l[i]);
-            const int32_t pcm_r = mixer_looper_float_to_pcm24(audio_rec_bus_r[i]);
+            const int32_t pcm_l = mixer_rec_float_to_pcm24(audio_rec_bus_l[i]);
+            const int32_t pcm_r = mixer_rec_float_to_pcm24(audio_rec_bus_r[i]);
             const uint32_t abs_l = (pcm_l < 0) ? (uint32_t)(-pcm_l) : (uint32_t)pcm_l;
             const uint32_t abs_r = (pcm_r < 0) ? (uint32_t)(-pcm_r) : (uint32_t)pcm_r;
             if(abs_l > audio_rec_peak_abs_pcm24)

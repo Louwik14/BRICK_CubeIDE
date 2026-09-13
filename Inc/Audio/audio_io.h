@@ -9,16 +9,16 @@ typedef struct
     volatile uint32_t block_count;
     volatile uint32_t xfade_apply_active;
     volatile uint32_t xfade_track;
-    volatile float looper_bus_pre_xfade_peak;
+    volatile float rec_bus_pre_xfade_peak;
     volatile float main_pre_xfade_peak;
     volatile float xfade_value;
     volatile float main_post_xfade_peak;
     volatile float master_post_peak;
     volatile float output_float_peak;
     volatile uint32_t output_pcm_peak;
-} brick6_looper_output_probe_t;
+} brick6_rec_output_probe_t;
 
-extern volatile brick6_looper_output_probe_t g_brick6_looper_output_probe;
+extern volatile brick6_rec_output_probe_t g_brick6_rec_output_probe;
 
 /**
  * @file audio_io.h

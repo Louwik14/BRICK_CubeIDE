@@ -87,7 +87,7 @@ $valuePolicy = Get-Content -Raw (Join-Path $root 'Src\Param\param_value_policy.c
 $publication = Get-Content -Raw (Join-Path $root 'Src\App\live_parameter_audio_publication.c')
 $audioRuntime = Get-Content -Raw (Join-Path $root 'Src\Audio\live_parameter_audio_runtime.c')
 $backend = Get-Content -Raw (Join-Path $root 'Src\Param\param_registry_backends.c')
-$looperRuntime = Get-Content -Raw (Join-Path $root 'Src\Audio\brick6_looper_runtime.c')
+$samplerRuntime = Get-Content -Raw (Join-Path $root 'Src\Audio\Engines\Sampler\sampler_audio_dispatch.inc')
 $codec = Get-Content -Raw (Join-Path $root 'Board\LowCost\Drivers\tlv320aic3204.c')
 
 $returns = $mixer.IndexOf('fx_reverb_global_process_block_add(')
@@ -114,16 +114,16 @@ Assert-Contains $publication 'live_parameter_event_encode_float(value)' `
     'CONTROL does not transport the canonical float'
 Assert-Contains $audioRuntime 'live_parameter_event_decode_float((int32_t)value_bits)' `
     'AUDIO does not decode the transported float'
-Assert-Contains $backend 'brick6_looper_runtime_set_main_xfade(track, clamped);' `
-    'AUDIO parameter backend does not install Looper XFADE'
-Assert-Contains $looperRuntime 'g_looper_tracks[track_id].main_xfade = looper_clampf(xfade, 0.0f, 1.0f);' `
-    'Looper runtime does not retain canonical XFADE'
+Assert-Contains $backend 'brick6_sampler_runtime_set_clip_xfade(' `
+    'AUDIO parameter backend does not install REC Streamer XFADE'
+Assert-Contains $samplerRuntime 'g_sampler_clip_runtime[track_id].xfade = xfade;' `
+    'Streamer runtime does not retain canonical XFADE'
 Assert-Contains $mixer 'const float live_gain = 1.0f - xfade;' `
     'mixer live gain is not complementary'
 Assert-Contains $mixer 'const float loop_gain = xfade;' `
     'mixer loop gain is not canonical XFADE'
-Assert-Contains $mixer 'memcpy(bus_main_l, looper_bus_main_l, sizeof(float) * frames);' `
-    'full endpoint is not constructed exclusively from Looper playback'
+Assert-Contains $mixer 'memcpy(bus_main_l, rec_stream_bus_main_l, sizeof(float) * frames);' `
+    'full endpoint is not constructed exclusively from REC playback'
 Assert-Contains $audioIo 'metronome_runtime_render_main_monitor(monitor_main_l, monitor_main_r, frames);' `
     'post-XFADE monitor contribution inventory changed'
 Assert-Contains $codec 'TLV_P1_HPL_ROUTE, 0x08U' `

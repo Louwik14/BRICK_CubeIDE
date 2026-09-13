@@ -95,6 +95,8 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
         sample_capture_publish_rec_bus();
         return 1U;
     }
+    if((arm != SAMPLE_CAPTURE_ARM_OFF)
+            && (g_sample_capture.state.save_pending != 0U)) return 0U;
 
     if (audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_AUDIO_REC) != 0U)
     {
@@ -110,11 +112,6 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
         }
     }
 
-    if(sample_capture_looper_record_conflict() != 0U)
-    {
-        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_LOOPER_ACTIVE);
-        return 0U;
-    }
     g_sample_capture.state.arm = arm;
     (void)sample_capture_next_trigger_arm_epoch();
     g_sample_capture.state.armed_pending =
@@ -181,6 +178,7 @@ uint8_t sample_capture_model_step_trig(int16_t delta)
 
 uint8_t sample_capture_model_toggle_record(void)
 {
+    if(g_sample_capture.state.save_pending != 0U) return 0U;
     if((g_sample_capture.state.arm != SAMPLE_CAPTURE_ARM_OFF)
             || (g_sample_capture.state.recording != 0U))
         return sample_capture_model_set_arm(SAMPLE_CAPTURE_ARM_OFF);

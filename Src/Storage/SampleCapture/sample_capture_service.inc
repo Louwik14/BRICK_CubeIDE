@@ -103,6 +103,7 @@ static uint8_t sample_capture_service_pending_admission(void)
 
 void sample_capture_model_service(void)
 {
+    sample_capture_save_service();
     sample_capture_terminal_cleanup_service();
     if (sample_capture_service_pending_admission() == 0U) return;
 
@@ -169,7 +170,8 @@ void sample_capture_model_service(void)
         sample_capture_publish_rec_bus();
         sample_capture_set_error((status.error == AUDIO_RECORDER_ERROR_RING_OVERFLOW)
             ? SAMPLE_CAPTURE_ERROR_SAMPLE_ACTIVE
-            : SAMPLE_CAPTURE_ERROR_SD_IO);
+            : ((status.error == AUDIO_RECORDER_ERROR_OVERDUB_UNDERRUN)
+                ? SAMPLE_CAPTURE_ERROR_OVERDUB : SAMPLE_CAPTURE_ERROR_SD_IO));
         return;
     }
 

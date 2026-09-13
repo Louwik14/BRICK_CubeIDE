@@ -38,7 +38,6 @@
 #include "Track/track_runtime.h"
 #include "Track/entity_topology.h"
 #include "Storage/project_control.h"
-#include "Storage/audio_recorder.h"
 #include "Platform/brick_media_clock.h"
 #include "App/live_parameter_audio_publication.h"
 #include "IPC/live_parameter_event.h"
@@ -171,18 +170,6 @@ static uint8_t ui_param_local_control_get(param_id_t id, uint8_t track,
         *out_value = (float)logical;
         return 1U;
     }
-    if ((id == UI_PARAM_LOCAL_LOOPER_ARM)
-            || (id == UI_PARAM_LOCAL_LOOPER_LENGTH)
-            || (id == UI_PARAM_LOCAL_LOOPER_PLAY))
-    {
-        audio_recorder_looper_config_t config;
-        if (audio_recorder_control_get_looper_config(track, &config) == 0U)
-            return 0U;
-        *out_value = (float)((id == UI_PARAM_LOCAL_LOOPER_ARM)
-            ? config.arm_mode : ((id == UI_PARAM_LOCAL_LOOPER_LENGTH)
-                ? config.length_mode : config.play_auto));
-        return 1U;
-    }
     if (id == UI_PARAM_LOCAL_FM_OPERATOR)
     {
         *out_value = (float)g_ui_param_fm_operator;
@@ -230,22 +217,6 @@ static uint8_t ui_param_local_control_apply(param_id_t id, uint8_t track,
             pos = (uint16_t)moved;
         }
         return project_control_track_asset_select_logical(track, role, list[pos]);
-    }
-    if ((id == UI_PARAM_LOCAL_LOOPER_ARM)
-            || (id == UI_PARAM_LOCAL_LOOPER_LENGTH)
-            || (id == UI_PARAM_LOCAL_LOOPER_PLAY))
-    {
-        audio_recorder_looper_config_t config;
-        if (audio_recorder_control_get_looper_config(track, &config) == 0U)
-            return 0U;
-        const int32_t maximum = (id == UI_PARAM_LOCAL_LOOPER_ARM) ? 2
-            : ((id == UI_PARAM_LOCAL_LOOPER_LENGTH) ? 5 : 1);
-        if (next < 0) next = 0;
-        if (next > maximum) next = maximum;
-        if (id == UI_PARAM_LOCAL_LOOPER_ARM) config.arm_mode = (uint8_t)next;
-        else if (id == UI_PARAM_LOCAL_LOOPER_LENGTH) config.length_mode = (uint8_t)next;
-        else config.play_auto = (uint8_t)next;
-        return audio_recorder_control_set_looper_config(track, &config);
     }
     if (id == UI_PARAM_LOCAL_FM_OPERATOR)
     {

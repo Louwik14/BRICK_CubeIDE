@@ -2,23 +2,12 @@
 
 #include <string.h>
 
-#include "Sampler/sample_audio_key.h"
-#include "Sampler/sample_page_cache.h"
-#include "Sampler/sample_page_lease_control.h"
-#include "Storage/audio_recorder_storage.h"
-#include "IPC/control_audio_command.h"
 #include "ControlRT/control_rt_publication.h"
 #include "IPC/audio_recorder_capture_contract.h"
-#include "Platform/brick_media_clock.h"
-#include "Storage/looper_storage.h"
-#include "Storage/rec_source.h"
-#include "Storage/wav_loader.h"
-#include "Storage/waveform_cache.h"
+#include "Sampler/sample_page_cache.h"
+#include "Storage/audio_recorder_storage.h"
 #include "Storage/project_load_quiesce.h"
-#include "Track/control_routing.h"
-#include "Track/track_state.h"
-#include "Audio/brick6_looper_runtime.h"
-#define AUDIO_RECORDER_LOOPER_STEPS_PER_BAR 16U
+#include "Storage/rec_source.h"
 
 typedef struct
 {
@@ -30,342 +19,139 @@ typedef struct
     char final_path[AUDIO_RECORDER_PATH_MAX];
 } audio_recorder_runtime_t;
 
-/* Product/session state only; physical writer state belongs to Storage. */
 static audio_recorder_runtime_t g_audio_recorder;
-
 static uint16_t g_audio_recorder_control_session;
+static uint8_t g_build_stream_registered;
+static sample_audio_key_t g_build_stream_key;
+static uint32_t g_build_stream_readable_frames;
 
-typedef struct
+static void forget_build_stream(void)
 {
-    uint64_t actual_start_sample;
-    uint64_t target_stop_sample;
-    uint32_t expected_frames;
-    uint8_t track;
-    uint8_t start_armed;
-    uint8_t stop_armed;
-    uint8_t recording;
-    uint8_t overdub;
-} audio_recorder_looper_control_t;
-
-static audio_recorder_looper_control_t g_audio_recorder_looper_control;
-
-typedef enum
-{
-    AUDIO_RECORDER_LOOPER_REQUEST_NONE = 0,
-    AUDIO_RECORDER_LOOPER_REQUEST_PREPARE,
-    AUDIO_RECORDER_LOOPER_REQUEST_CANCEL
-} audio_recorder_looper_request_phase_t;
-
-enum
-{
-    AUDIO_RECORDER_LOOPER_CLEAR_NONE = 0U,
-    AUDIO_RECORDER_LOOPER_CLEAR_PATH_REJECT = 1U,
-    AUDIO_RECORDER_LOOPER_CLEAR_PUBLISHED = 2U,
-    AUDIO_RECORDER_LOOPER_CLEAR_USER_CANCEL = 3U,
-    AUDIO_RECORDER_LOOPER_CLEAR_INVALID_PROJECT = 4U,
-    AUDIO_RECORDER_LOOPER_CLEAR_INVALID_ADMISSION = 5U,
-    AUDIO_RECORDER_LOOPER_CLEAR_INVALID_ROUTING = 6U,
-    AUDIO_RECORDER_LOOPER_CLEAR_TRACK_CHANGED = 7U,
-    AUDIO_RECORDER_LOOPER_CLEAR_PREPARE_ERROR = 8U,
-    AUDIO_RECORDER_LOOPER_CLEAR_PUBLISH_ERROR = 9U,
-    AUDIO_RECORDER_LOOPER_CLEAR_CANCEL_ERROR = 10U,
-    AUDIO_RECORDER_LOOPER_REJECT_ROUTING = 11U,
-    AUDIO_RECORDER_LOOPER_REJECT_PENDING = 12U,
-    AUDIO_RECORDER_LOOPER_REJECT_LOOPER_ACTIVE = 13U,
-    AUDIO_RECORDER_LOOPER_REJECT_RECORDER_ACTIVE = 14U
-};
-
-typedef struct
-{
-    uint32_t expected_frames;
-    uint8_t track;
-    uint8_t replace_track;
-    uint8_t len_mode;
-    uint8_t play_auto;
-    uint8_t overdub;
-    uint8_t cancel_reason;
-    audio_recorder_looper_request_phase_t phase;
-    char temporary_path[AUDIO_RECORDER_PATH_MAX];
-    char final_path[AUDIO_RECORDER_PATH_MAX];
-} audio_recorder_looper_request_t;
-
-static audio_recorder_looper_request_t g_audio_recorder_looper_request;
-volatile audio_recorder_looper_request_probe_t
-    g_audio_recorder_looper_request_probe;
-static audio_recorder_looper_config_t
-    g_audio_recorder_looper_config[BRICK_ENTITY_CAPACITY];
-static uint8_t g_audio_recorder_looper_take_track = 0xFFU;
-static uint8_t g_audio_recorder_looper_take_notified;
-static uint8_t g_audio_recorder_looper_admission_open;
-static uint8_t g_audio_recorder_looper_stream_registered;
-static sample_audio_key_t g_audio_recorder_looper_stream_key;
-static uint32_t g_audio_recorder_looper_stream_readable_frames;
-
-static void audio_recorder_reset_looper_request(uint32_t clear_reason)
-{
-    if (clear_reason != AUDIO_RECORDER_LOOPER_CLEAR_NONE)
-    {
-        g_audio_recorder_looper_request_probe.request_clear_count++;
-        g_audio_recorder_looper_request_probe.request_clear_reason =
-            clear_reason;
-    }
-    memset(&g_audio_recorder_looper_request, 0,
-           sizeof(g_audio_recorder_looper_request));
-    g_audio_recorder_looper_request.track = 0xFFU;
-    g_audio_recorder_looper_request.replace_track = 0xFFU;
-    g_audio_recorder_looper_request_probe.request_track = 0xFFU;
-    g_audio_recorder_looper_request_probe.request_mode = 0U;
-    g_audio_recorder_looper_request_probe.request_phase =
-        AUDIO_RECORDER_LOOPER_REQUEST_NONE;
+    g_build_stream_registered = 0U;
+    memset(&g_build_stream_key, 0, sizeof(g_build_stream_key));
+    g_build_stream_readable_frames = 0U;
 }
 
-static void audio_recorder_reset_looper_control(void)
+static void reset_session(void)
 {
-    memset(&g_audio_recorder_looper_control, 0,
-           sizeof(g_audio_recorder_looper_control));
-    g_audio_recorder_looper_control.track = 0xFFU;
-}
-
-static void audio_recorder_reset_product_session(void)
-{
+    memset(&g_audio_recorder, 0, sizeof(g_audio_recorder));
     g_audio_recorder.state = AUDIO_RECORDER_STATE_IDLE;
-    g_audio_recorder.error = AUDIO_RECORDER_ERROR_NONE;
-    g_audio_recorder.client = AUDIO_RECORDER_CLIENT_NONE;
-    g_audio_recorder.frame_limit = 0U;
-    g_audio_recorder.temporary_path[0] = '\0';
-    g_audio_recorder.final_path[0] = '\0';
 }
 
-uint8_t audio_recorder_control_get_looper_config(
-    uint8_t track, audio_recorder_looper_config_t *out_config)
+static uint8_t copy_path(char *dst, const char *src)
 {
-    if ((track >= BRICK_ENTITY_CAPACITY) || (out_config == NULL)) return 0U;
-    *out_config = g_audio_recorder_looper_config[track];
-    return 1U;
-}
-
-uint8_t audio_recorder_control_set_looper_config(
-    uint8_t track, const audio_recorder_looper_config_t *config)
-{
-    if ((track >= BRICK_ENTITY_CAPACITY) || (config == NULL)
-            || (config->arm_mode > 2U) || (config->length_mode > 5U)
-            || (config->play_auto > 1U)) return 0U;
-    uint64_t sample = 0U;
-    if (config->play_auto != g_audio_recorder_looper_config[track].play_auto)
-    {
-        if ((control_rt_resolve_asap_sample(0U, &sample) == 0U)
-                || (control_rt_publish_param(track,
-                    CONTROL_AUDIO_LOOPER_PLAY_AUTO, config->play_auto,
-                    0U, sample) == 0U))
-        {
-            Error_Handler();
-            return 0U;
-        }
-    }
-    g_audio_recorder_looper_config[track] = *config;
-    return 1U;
-}
-
-static void audio_recorder_retire_looper_stream(void)
-{
-    if (g_audio_recorder_looper_stream_registered == 0U) return;
-    sample_page_cache_clear_key(g_audio_recorder_looper_stream_key);
-    g_audio_recorder_looper_stream_registered = 0U;
-    memset(&g_audio_recorder_looper_stream_key, 0,
-           sizeof(g_audio_recorder_looper_stream_key));
-    g_audio_recorder_looper_stream_readable_frames = 0U;
-}
-
-static void audio_recorder_register_looper_stream(void)
-{
-    audio_recorder_storage_map_copy_t map;
-    const uint32_t total_frames = g_audio_recorder_capture.head_cursor;
-    const uint32_t readable_frames = (uint32_t)(
-        audio_recorder_storage_committed_tail()
-            / AUDIO_RECORDER_BYTES_PER_FRAME);
-    const uint8_t track = g_audio_recorder_looper_take_track;
-    const uint8_t rec_client = (uint8_t)(
-        (g_audio_recorder.client == AUDIO_RECORDER_CLIENT_AUDIO_REC)
-        && (rec_source_building_active() != 0U));
-    if ((g_audio_recorder.client != AUDIO_RECORDER_CLIENT_LOOPER)
-            && (rec_client == 0U)) return;
-
-    if (rec_client == 0U) audio_recorder_retire_looper_stream();
-    if (((rec_client == 0U) && (g_audio_recorder_looper_admission_open == 0U))
-            || ((rec_client == 0U) && (track >= BRICK_ENTITY_CAPACITY))
-            || (total_frames == 0U)
-            || (audio_recorder_storage_get_map_copy(&map) == 0U)
-            || (map.reserved_file_bytes > UINT32_MAX))
-        return;
-
-    const sample_audio_key_t key = (rec_client != 0U)
-        ? rec_source_building_key() : sample_audio_key_looper(track);
-    if (sample_page_cache_register_live_pcm24_stereo_sample_key(
-            key, g_audio_recorder.temporary_path, total_frames,
-            readable_frames, AUDIO_RECORDER_WAV_HEADER_BYTES,
-            (uint32_t)map.reserved_file_bytes, map.extents,
-            map.extent_count, map.media_epoch) == 0U)
-        return;
-    g_audio_recorder_looper_stream_registered = 1U;
-    g_audio_recorder_looper_stream_key = key;
-    g_audio_recorder_looper_stream_readable_frames = readable_frames;
-    (void)sample_page_cache_reserve_start_pages_key(
-        key, 0U, SAMPLE_PAGE_MIN_READY_PAGES);
-}
-
-static void audio_recorder_enter_draining(void)
-{
-    if (g_audio_recorder.state == AUDIO_RECORDER_STATE_DRAINING) return;
-    g_audio_recorder.state = AUDIO_RECORDER_STATE_DRAINING;
-    audio_recorder_register_looper_stream();
-}
-
-static void audio_recorder_update_looper_stream_readable(void)
-{
-    if (g_audio_recorder_looper_stream_registered == 0U) return;
-    const uint32_t readable_frames = (uint32_t)(
-        audio_recorder_storage_committed_tail()
-            / AUDIO_RECORDER_BYTES_PER_FRAME);
-    if (readable_frames == g_audio_recorder_looper_stream_readable_frames) return;
-    if (sample_page_cache_update_readable_frames_key(
-            g_audio_recorder_looper_stream_key,
-            readable_frames) != 0U)
-        g_audio_recorder_looper_stream_readable_frames = readable_frames;
-}
-
-static uint8_t audio_recorder_publish_start_client_at(
-    audio_recorder_client_t client, uint64_t sample_time)
-{
-    if ((g_audio_recorder.state != AUDIO_RECORDER_STATE_PREPARED)
-            || (g_audio_recorder.client != client)
-            || (g_audio_recorder_control_session == 0U))
-        return 0U;
-    const uint8_t published = control_rt_publish_record(CONTROL_AUDIO_RECORD_START,
-        g_audio_recorder.frame_limit, g_audio_recorder_control_session,
-        (uint8_t)client, sample_time);
-    if (published == 0U)
-    {
-        Error_Handler();
-        return 0U;
-    }
-    g_audio_recorder.state = AUDIO_RECORDER_STATE_RECORDING;
-    return published;
-}
-
-static uint8_t audio_recorder_publish_stop_client_at(
-    audio_recorder_client_t client, uint64_t sample_time)
-{
-    if (g_audio_recorder.client != client)
-        return 0U;
-    if (control_rt_publish_record(CONTROL_AUDIO_RECORD_STOP,
-            0U, g_audio_recorder_control_session, (uint8_t)client,
-            sample_time) == 0U)
-    {
-        Error_Handler();
-        return 0U;
-    }
-    return 1U;
-}
-
-static uint8_t audio_recorder_copy_path(char *dst, const char *src)
-{
-    if ((dst == 0) || (src == 0) || (src[0] == '\0'))
-    {
-        return 0U;
-    }
-    for (uint32_t i = 0U; i < AUDIO_RECORDER_PATH_MAX; ++i)
+    if((dst == NULL) || (src == NULL) || (src[0] == '\0')) return 0U;
+    for(uint32_t i = 0U; i < AUDIO_RECORDER_PATH_MAX; ++i)
     {
         dst[i] = src[i];
-        if (src[i] == '\0')
-        {
-            return 1U;
-        }
+        if(src[i] == '\0') return 1U;
     }
     dst[0] = '\0';
     return 0U;
 }
 
+static void register_build_stream(void)
+{
+    audio_recorder_storage_map_copy_t map;
+    const uint32_t total_frames = g_audio_recorder_capture.head_cursor;
+    const uint32_t readable_frames = (uint32_t)(
+        audio_recorder_storage_committed_tail() / AUDIO_RECORDER_BYTES_PER_FRAME);
+    if((g_audio_recorder.client != AUDIO_RECORDER_CLIENT_AUDIO_REC)
+            || (rec_source_building_active() == 0U) || (total_frames == 0U)
+            || (audio_recorder_storage_get_map_copy(&map) == 0U)
+            || (map.reserved_file_bytes > UINT32_MAX)) return;
+    const sample_audio_key_t key = rec_source_building_key();
+    if(sample_page_cache_register_live_pcm24_stereo_sample_key(
+            key, g_audio_recorder.temporary_path, total_frames,
+            readable_frames, AUDIO_RECORDER_WAV_HEADER_BYTES,
+            (uint32_t)map.reserved_file_bytes, map.extents,
+            map.extent_count, map.media_epoch) == 0U) return;
+    g_build_stream_registered = 1U;
+    g_build_stream_key = key;
+    g_build_stream_readable_frames = readable_frames;
+    (void)sample_page_cache_reserve_start_pages_key(
+        key, 0U, SAMPLE_PAGE_MIN_READY_PAGES);
+}
+
+static void update_build_stream(void)
+{
+    if(g_build_stream_registered == 0U) return;
+    const uint32_t readable_frames = (uint32_t)(
+        audio_recorder_storage_committed_tail() / AUDIO_RECORDER_BYTES_PER_FRAME);
+    if(readable_frames == g_build_stream_readable_frames) return;
+    if(sample_page_cache_update_readable_frames_key(
+            g_build_stream_key, readable_frames) != 0U)
+        g_build_stream_readable_frames = readable_frames;
+}
+
+static uint8_t publish_start(audio_recorder_client_t client, uint64_t sample_time)
+{
+    if((g_audio_recorder.state != AUDIO_RECORDER_STATE_PREPARED)
+            || (g_audio_recorder.client != client)
+            || (g_audio_recorder_control_session == 0U)) return 0U;
+    if(control_rt_publish_record(CONTROL_AUDIO_RECORD_START,
+            g_audio_recorder.frame_limit, g_audio_recorder_control_session,
+            (uint8_t)client, sample_time) == 0U) return 0U;
+    g_audio_recorder.state = AUDIO_RECORDER_STATE_RECORDING;
+    return 1U;
+}
+
+static uint8_t publish_stop(audio_recorder_client_t client, uint64_t sample_time)
+{
+    if(g_audio_recorder.client != client) return 0U;
+    return control_rt_publish_record(CONTROL_AUDIO_RECORD_STOP, 0U,
+        g_audio_recorder_control_session, (uint8_t)client, sample_time);
+}
+
 void audio_recorder_init(void)
 {
-    memset(&g_audio_recorder, 0, sizeof(g_audio_recorder));
+    reset_session();
     audio_recorder_storage_init();
     rec_source_init();
-    g_audio_recorder.state = AUDIO_RECORDER_STATE_IDLE;
     g_audio_recorder_control_session = 0U;
-    audio_recorder_reset_looper_control();
-    memset((void *)&g_audio_recorder_looper_request_probe, 0,
-           sizeof(g_audio_recorder_looper_request_probe));
-    audio_recorder_reset_looper_request(AUDIO_RECORDER_LOOPER_CLEAR_NONE);
-    memset(g_audio_recorder_looper_config, 0,
-           sizeof(g_audio_recorder_looper_config));
-    g_audio_recorder_looper_admission_open = 1U;
-    g_audio_recorder_looper_stream_registered = 0U;
-    memset(&g_audio_recorder_looper_stream_key, 0,
-           sizeof(g_audio_recorder_looper_stream_key));
-    g_audio_recorder_looper_stream_readable_frames = 0U;
+    forget_build_stream();
 }
 
 audio_recorder_lifecycle_result_t audio_recorder_prepare_client_cooperative(
-    audio_recorder_client_t client,
-    const char *temporary_rec_path,
-    const char *final_wav_path,
-    uint32_t frame_limit)
+    audio_recorder_client_t client, const char *temporary_rec_path,
+    const char *final_wav_path, uint32_t frame_limit)
 {
-    if (project_replacement_is_active() != 0U)
+    if(project_replacement_is_active() != 0U)
         return AUDIO_RECORDER_LIFECYCLE_NOT_NOW;
-    if ((client == AUDIO_RECORDER_CLIENT_NONE)
-            || (temporary_rec_path == 0) || (final_wav_path == 0)
-            || ((client == AUDIO_RECORDER_CLIENT_LOOPER)
-                && (g_audio_recorder_looper_admission_open == 0U)))
-    {
+    if((client != AUDIO_RECORDER_CLIENT_AUDIO_REC)
+            || (temporary_rec_path == NULL) || (final_wav_path == NULL))
         return AUDIO_RECORDER_LIFECYCLE_ERROR;
-    }
-    if ((g_audio_recorder.state == AUDIO_RECORDER_STATE_TAKE_READY)
+    if((g_audio_recorder.state == AUDIO_RECORDER_STATE_TAKE_READY)
             || (g_audio_recorder.state == AUDIO_RECORDER_STATE_FAILED))
     {
-        if ((g_audio_recorder.client == AUDIO_RECORDER_CLIENT_AUDIO_REC)
-                || (g_audio_recorder.state == AUDIO_RECORDER_STATE_FAILED))
-        {
-            const audio_recorder_lifecycle_result_t discarded =
-                audio_recorder_discard_client(g_audio_recorder.client);
-            if (discarded != AUDIO_RECORDER_LIFECYCLE_OK) return discarded;
-        }
-        else
-        {
-            audio_recorder_storage_release();
-            audio_recorder_reset_product_session();
-        }
+        const audio_recorder_lifecycle_result_t discarded =
+            audio_recorder_discard_client(g_audio_recorder.client);
+        if(discarded != AUDIO_RECORDER_LIFECYCLE_OK) return discarded;
     }
-    if (g_audio_recorder.state != AUDIO_RECORDER_STATE_IDLE)
+    if(g_audio_recorder.state != AUDIO_RECORDER_STATE_IDLE)
         return AUDIO_RECORDER_LIFECYCLE_NOT_NOW;
-
     char temporary_copy[AUDIO_RECORDER_PATH_MAX];
     char final_copy[AUDIO_RECORDER_PATH_MAX];
-    if ((audio_recorder_copy_path(temporary_copy, temporary_rec_path) == 0U)
-            || (audio_recorder_copy_path(final_copy, final_wav_path) == 0U))
+    if((copy_path(temporary_copy, temporary_rec_path) == 0U)
+            || (copy_path(final_copy, final_wav_path) == 0U))
         return AUDIO_RECORDER_LIFECYCLE_ERROR;
-
     const audio_recorder_lifecycle_result_t prepared =
         audio_recorder_storage_prepare(temporary_copy, final_copy);
-    if (prepared == AUDIO_RECORDER_LIFECYCLE_NOT_NOW) return prepared;
-
-    (void)audio_recorder_copy_path(g_audio_recorder.temporary_path,
-                                   temporary_copy);
-    (void)audio_recorder_copy_path(g_audio_recorder.final_path, final_copy);
+    if(prepared == AUDIO_RECORDER_LIFECYCLE_NOT_NOW) return prepared;
+    (void)copy_path(g_audio_recorder.temporary_path, temporary_copy);
+    (void)copy_path(g_audio_recorder.final_path, final_copy);
     g_audio_recorder.client = client;
-    g_audio_recorder.frame_limit = (frame_limit != 0U)
-        ? frame_limit
+    g_audio_recorder.frame_limit = (frame_limit != 0U) ? frame_limit
         : ((UINT32_MAX - AUDIO_RECORDER_WAV_HEADER_BYTES)
             / AUDIO_RECORDER_BYTES_PER_FRAME);
-    if (prepared != AUDIO_RECORDER_LIFECYCLE_OK)
+    if(prepared != AUDIO_RECORDER_LIFECYCLE_OK)
     {
         g_audio_recorder.error = audio_recorder_storage_error();
         g_audio_recorder.state = AUDIO_RECORDER_STATE_FAILED;
         return AUDIO_RECORDER_LIFECYCLE_ERROR;
     }
     uint16_t session = (uint16_t)(g_audio_recorder_control_session + 1U);
-    if ((session == 0U) || ((session & AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG) != 0U))
-        session = 1U;
+    if(session == 0U) session = 1U;
     g_audio_recorder_control_session = session;
     g_audio_recorder.state = AUDIO_RECORDER_STATE_PREPARED;
     g_audio_recorder.error = AUDIO_RECORDER_ERROR_NONE;
@@ -373,559 +159,109 @@ audio_recorder_lifecycle_result_t audio_recorder_prepare_client_cooperative(
 }
 
 uint8_t audio_recorder_prepare_client(audio_recorder_client_t client,
-                                      const char *temporary_rec_path,
-                                      const char *final_wav_path,
-                                      uint32_t frame_limit)
+    const char *temporary_rec_path, const char *final_wav_path,
+    uint32_t frame_limit)
 {
     return (audio_recorder_prepare_client_cooperative(client,
-                temporary_rec_path, final_wav_path, frame_limit)
-            == AUDIO_RECORDER_LIFECYCLE_OK) ? 1U : 0U;
+        temporary_rec_path, final_wav_path, frame_limit)
+        == AUDIO_RECORDER_LIFECYCLE_OK) ? 1U : 0U;
 }
 
 uint8_t audio_recorder_start_client_at(audio_recorder_client_t client,
                                        uint64_t sample_time)
 {
-    if (project_replacement_is_active() != 0U) return 0U;
-    return audio_recorder_publish_start_client_at(client, sample_time);
+    if(project_replacement_is_active() != 0U) return 0U;
+    return publish_start(client, sample_time);
 }
 
 uint8_t audio_recorder_cancel_prepared_client(audio_recorder_client_t client)
 {
-    if ((client == AUDIO_RECORDER_CLIENT_NONE)
+    if((client == AUDIO_RECORDER_CLIENT_NONE)
             || (g_audio_recorder.client != client)
-            || (g_audio_recorder.state != AUDIO_RECORDER_STATE_PREPARED))
-        return 0U;
-
+            || (g_audio_recorder.state != AUDIO_RECORDER_STATE_PREPARED)) return 0U;
     return (audio_recorder_discard_client(client)
-            == AUDIO_RECORDER_LIFECYCLE_OK) ? 1U : 0U;
+        == AUDIO_RECORDER_LIFECYCLE_OK) ? 1U : 0U;
 }
 
 audio_recorder_lifecycle_result_t audio_recorder_discard_client(
     audio_recorder_client_t client)
 {
-    if ((client == AUDIO_RECORDER_CLIENT_NONE)
+    if((client == AUDIO_RECORDER_CLIENT_NONE)
             || (g_audio_recorder.client != client))
-    {
         return (g_audio_recorder.state == AUDIO_RECORDER_STATE_IDLE)
             ? AUDIO_RECORDER_LIFECYCLE_OK : AUDIO_RECORDER_LIFECYCLE_ERROR;
-    }
-    if ((g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING)
+    if((g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING)
             || (g_audio_recorder.state == AUDIO_RECORDER_STATE_DRAINING)
             || (g_audio_recorder.state == AUDIO_RECORDER_STATE_FINALIZING))
         return AUDIO_RECORDER_LIFECYCLE_NOT_NOW;
-
-    if ((client == AUDIO_RECORDER_CLIENT_AUDIO_REC)
-            && (rec_source_building_active() == 0U)
+    if((rec_source_building_active() == 0U)
             && (g_audio_recorder.state == AUDIO_RECORDER_STATE_TAKE_READY))
     {
         audio_recorder_storage_release();
-        audio_recorder_reset_product_session();
+        reset_session();
         return AUDIO_RECORDER_LIFECYCLE_OK;
     }
     const audio_recorder_lifecycle_result_t discarded =
         audio_recorder_storage_cancel();
-    if (discarded == AUDIO_RECORDER_LIFECYCLE_NOT_NOW) return discarded;
-    if ((discarded == AUDIO_RECORDER_LIFECYCLE_ERROR)
-            && (audio_recorder_storage_phase()
-                != AUDIO_RECORDER_STORAGE_IDLE))
+    if(discarded == AUDIO_RECORDER_LIFECYCLE_NOT_NOW) return discarded;
+    if((discarded == AUDIO_RECORDER_LIFECYCLE_ERROR)
+            && (audio_recorder_storage_phase() != AUDIO_RECORDER_STORAGE_IDLE))
     {
         g_audio_recorder.error = AUDIO_RECORDER_ERROR_SD_IO;
         g_audio_recorder.state = AUDIO_RECORDER_STATE_FAILED;
         return discarded;
     }
-    audio_recorder_reset_product_session();
-    if (client == AUDIO_RECORDER_CLIENT_AUDIO_REC)
-        rec_source_abort_building();
-    if (client == AUDIO_RECORDER_CLIENT_LOOPER)
-        audio_recorder_reset_looper_control();
+    rec_source_abort_building();
+    forget_build_stream();
+    reset_session();
     return discarded;
 }
 
 uint8_t audio_recorder_request_stop_client(audio_recorder_client_t client)
 {
     uint64_t sample_time = 0U;
-    if (!control_rt_resolve_asap_sample(0U, &sample_time)) return 0U;
-    return audio_recorder_publish_stop_client_at(client, sample_time);
+    if(control_rt_resolve_asap_sample(0U, &sample_time) == 0U) return 0U;
+    return publish_stop(client, sample_time);
 }
 
 uint8_t audio_recorder_request_stop_client_at(audio_recorder_client_t client,
                                               uint64_t sample_time)
 {
-    return audio_recorder_publish_stop_client_at(client, sample_time);
-}
-
-static uint8_t audio_recorder_looper_target_is_recordable(uint8_t track)
-{
-    if ((track >= BRICK_ENTITY_CAPACITY)
-            || (track_state_get_family(track) != TRACK_FAMILY_SAMPLER)
-            || (track_state_get_type(track) != TRACK_TYPE_LOOPER))
-        return 0U;
-    for (uint8_t source = 0U; source < BRICK_ENTITY_CAPACITY; ++source)
-        if ((source != track)
-                && (control_routing_get_looper_source(track, source) != 0U))
-            return 1U;
-    return 0U;
-}
-
-uint8_t audio_recorder_control_sync_looper_arm(uint8_t rec_armed,
-                                               uint8_t target_track,
-                                               uint32_t samples_per_step_q16)
-{
-    g_audio_recorder_looper_request_probe.request_track = target_track;
-    g_audio_recorder_looper_request_probe.request_phase =
-        g_audio_recorder_looper_request.phase;
-    g_brick6_looper_record_probe.backend_count++;
-    g_brick6_looper_record_probe.backend_command_id =
-        AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG;
-    g_brick6_looper_record_probe.backend_track = target_track;
-    g_brick6_looper_record_probe.backend_value = rec_armed;
-    if (rec_armed == 0U)
-    {
-        if (g_audio_recorder_looper_request.phase
-                != AUDIO_RECORDER_LOOPER_REQUEST_NONE)
-        {
-            g_audio_recorder_looper_request.phase =
-                AUDIO_RECORDER_LOOPER_REQUEST_CANCEL;
-            g_audio_recorder_looper_request.cancel_reason =
-                AUDIO_RECORDER_LOOPER_CLEAR_USER_CANCEL;
-            g_audio_recorder_looper_request_probe.request_phase =
-                AUDIO_RECORDER_LOOPER_REQUEST_CANCEL;
-            return 1U;
-        }
-        if ((g_audio_recorder.client == AUDIO_RECORDER_CLIENT_LOOPER)
-                && (g_audio_recorder.state == AUDIO_RECORDER_STATE_PREPARED))
-            return audio_recorder_cancel_prepared_client(
-                AUDIO_RECORDER_CLIENT_LOOPER);
-        if (audio_recorder_client_is_recording(
-                AUDIO_RECORDER_CLIENT_LOOPER) != 0U)
-        {
-            uint64_t stop_sample = 0U;
-            if (control_rt_resolve_asap_sample(0U, &stop_sample) == 0U)
-            {
-                Error_Handler();
-                return 0U;
-            }
-            return audio_recorder_control_request_looper_stop(
-                stop_sample, 0U);
-        }
-        return 1U;
-    }
-    if ((target_track >= BRICK_ENTITY_CAPACITY)
-            || (track_state_get_family(target_track) != TRACK_FAMILY_SAMPLER)
-            || (track_state_get_type(target_track) != TRACK_TYPE_LOOPER))
-        return 1U;
-    if (audio_recorder_looper_target_is_recordable(target_track) == 0U)
-    {
-        g_audio_recorder_looper_request_probe.request_reject_count++;
-        g_audio_recorder_looper_request_probe.request_reject_reason =
-            AUDIO_RECORDER_LOOPER_REJECT_ROUTING;
-        return 0U;
-    }
-    if (g_audio_recorder_looper_request.phase
-            != AUDIO_RECORDER_LOOPER_REQUEST_NONE)
-    {
-        g_audio_recorder_looper_request_probe.request_reject_count++;
-        g_audio_recorder_looper_request_probe.request_reject_reason =
-            AUDIO_RECORDER_LOOPER_REJECT_PENDING;
-        return (g_audio_recorder_looper_request.track == target_track) ? 1U : 0U;
-    }
-    if (audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_LOOPER) != 0U)
-    {
-        g_audio_recorder_looper_request_probe.request_reject_count++;
-        g_audio_recorder_looper_request_probe.request_reject_reason =
-            AUDIO_RECORDER_LOOPER_REJECT_LOOPER_ACTIVE;
-        return 1U;
-    }
-    if (audio_recorder_is_active() != 0U)
-    {
-        g_audio_recorder_looper_request_probe.request_reject_count++;
-        g_audio_recorder_looper_request_probe.request_reject_reason =
-            AUDIO_RECORDER_LOOPER_REJECT_RECORDER_ACTIVE;
-        return 0U;
-    }
-
-    const audio_recorder_looper_config_t config =
-        g_audio_recorder_looper_config[target_track];
-    const uint8_t overdub = (config.arm_mode == 2U) ? 1U : 0U;
-    g_audio_recorder_looper_request_probe.request_mode = overdub;
-    const uint8_t len_mode = config.length_mode;
-    uint32_t bars = 0U;
-    switch (len_mode)
-    {
-        case 1U: bars = 1U; break;
-        case 2U: bars = 2U; break;
-        case 3U: bars = 4U; break;
-        case 4U: bars = 8U; break;
-        case 5U: bars = 16U; break;
-        default: break;
-    }
-    uint32_t expected_frames = 0U;
-    if ((bars != 0U) && (samples_per_step_q16 != 0U))
-    {
-        uint64_t frames = ((uint64_t)bars
-            * AUDIO_RECORDER_LOOPER_STEPS_PER_BAR * samples_per_step_q16
-            + 0xFFFFULL) >> 16;
-        expected_frames = (frames > UINT32_MAX) ? UINT32_MAX
-                                                 : (uint32_t)frames;
-    }
-    audio_recorder_looper_request_t *const request =
-        &g_audio_recorder_looper_request;
-    if ((looper_storage_make_next_path(target_track, request->final_path,
-                                       sizeof(request->final_path))
-            != LOOPER_STORAGE_PATH_OK)
-            || (looper_storage_copy_wav_path_as_rec(request->final_path,
-                request->temporary_path, sizeof(request->temporary_path)) == 0U))
-    {
-        g_audio_recorder_looper_request_probe.request_reject_count++;
-        g_audio_recorder_looper_request_probe.request_reject_reason =
-            AUDIO_RECORDER_LOOPER_CLEAR_PATH_REJECT;
-        audio_recorder_reset_looper_request(
-            AUDIO_RECORDER_LOOPER_CLEAR_PATH_REJECT);
-        return 0U;
-    }
-    request->expected_frames = expected_frames;
-    request->track = target_track;
-    request->replace_track = g_audio_recorder_looper_take_track;
-    request->len_mode = len_mode;
-    request->play_auto = config.play_auto;
-    request->overdub = overdub;
-    request->phase = AUDIO_RECORDER_LOOPER_REQUEST_PREPARE;
-    g_audio_recorder_looper_request_probe.request_create_count++;
-    g_audio_recorder_looper_request_probe.request_track = target_track;
-    g_audio_recorder_looper_request_probe.request_mode = overdub;
-    g_audio_recorder_looper_request_probe.request_phase =
-        AUDIO_RECORDER_LOOPER_REQUEST_PREPARE;
-    return 1U;
-}
-
-uint8_t audio_recorder_control_looper_take_track(uint8_t *out_track)
-{
-    if ((out_track == 0)
-            || (g_audio_recorder_looper_take_track >= BRICK_ENTITY_CAPACITY))
-        return 0U;
-    *out_track = g_audio_recorder_looper_take_track;
-    return 1U;
-}
-
-void audio_recorder_control_set_looper_admission(uint8_t open)
-{
-    g_audio_recorder_looper_admission_open = (open != 0U) ? 1U : 0U;
-    if ((open == 0U) && (g_audio_recorder_looper_request.phase
-            != AUDIO_RECORDER_LOOPER_REQUEST_NONE))
-    {
-        g_audio_recorder_looper_request.phase =
-            AUDIO_RECORDER_LOOPER_REQUEST_CANCEL;
-        g_audio_recorder_looper_request.cancel_reason =
-            AUDIO_RECORDER_LOOPER_CLEAR_INVALID_ADMISSION;
-        g_audio_recorder_looper_request_probe.request_phase =
-            AUDIO_RECORDER_LOOPER_REQUEST_CANCEL;
-    }
-}
-
-void audio_recorder_control_on_active_track_changed(uint8_t active_track)
-{
-    if ((g_audio_recorder_looper_request.phase
-            == AUDIO_RECORDER_LOOPER_REQUEST_PREPARE)
-            && (g_audio_recorder_looper_request.track != active_track))
-    {
-        g_audio_recorder_looper_request.phase =
-            AUDIO_RECORDER_LOOPER_REQUEST_CANCEL;
-        g_audio_recorder_looper_request.cancel_reason =
-            AUDIO_RECORDER_LOOPER_CLEAR_TRACK_CHANGED;
-        g_audio_recorder_looper_request_probe.request_phase =
-            AUDIO_RECORDER_LOOPER_REQUEST_CANCEL;
-    }
-}
-
-uint8_t audio_recorder_control_release_looper_take(void)
-{
-    if (audio_recorder_client_is_active(AUDIO_RECORDER_CLIENT_LOOPER) != 0U)
-        return 0U;
-    if ((g_audio_recorder.client == AUDIO_RECORDER_CLIENT_LOOPER)
-            && (g_audio_recorder.state != AUDIO_RECORDER_STATE_TAKE_READY)
-            && (g_audio_recorder.state != AUDIO_RECORDER_STATE_FAILED))
-        return 0U;
-    if (g_audio_recorder_looper_stream_registered != 0U)
-    {
-        if (sample_page_lease_control_references_key(
-                g_audio_recorder_looper_stream_key) != 0U) return 0U;
-        audio_recorder_retire_looper_stream();
-    }
-    g_audio_recorder_looper_take_track = 0xFFU;
-    g_audio_recorder_looper_take_notified = 0U;
-    if (g_audio_recorder.client == AUDIO_RECORDER_CLIENT_LOOPER)
-    {
-        audio_recorder_storage_release();
-        g_audio_recorder.state = AUDIO_RECORDER_STATE_IDLE;
-        g_audio_recorder.error = AUDIO_RECORDER_ERROR_NONE;
-        g_audio_recorder.client = AUDIO_RECORDER_CLIENT_NONE;
-        g_audio_recorder.temporary_path[0] = '\0';
-        g_audio_recorder.final_path[0] = '\0';
-    }
-    audio_recorder_reset_looper_control();
-    return 1U;
-}
-
-uint8_t audio_recorder_control_arm_looper(uint8_t track,
-                                          uint8_t replace_track,
-                                          uint8_t len_mode,
-                                          uint32_t expected_frames,
-                                          uint8_t play_auto,
-                                          uint8_t overdub,
-                                          uint64_t request_sample)
-{
-    g_brick6_looper_record_probe.backend_count++;
-    g_brick6_looper_record_probe.backend_command_id =
-        AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG | len_mode;
-    g_brick6_looper_record_probe.backend_track = track;
-    g_brick6_looper_record_probe.backend_value = expected_frames;
-    if (project_replacement_is_active() != 0U) return 0U;
-    if ((g_audio_recorder.client != AUDIO_RECORDER_CLIENT_LOOPER)
-            || (g_audio_recorder.state != AUDIO_RECORDER_STATE_PREPARED)
-            || (g_audio_recorder_looper_admission_open == 0U))
-        return 0U;
-    const uint16_t replace_config = (replace_track < BRICK_ENTITY_CAPACITY)
-        ? (uint16_t)(AUDIO_RECORDER_LOOPER_REPLACE_VALID_FLAG
-            | ((uint16_t)replace_track
-                << AUDIO_RECORDER_LOOPER_REPLACE_TRACK_SHIFT)) : 0U;
-    const uint16_t config = (uint16_t)(AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG
-        | ((uint16_t)(overdub != 0U) * AUDIO_RECORDER_LOOPER_OVERDUB_FLAG)
-        | replace_config | len_mode
-        | ((uint16_t)(play_auto != 0U)
-            << AUDIO_RECORDER_LOOPER_PLAY_AUTO_SHIFT));
-    if (control_rt_publish_record(CONTROL_AUDIO_RECORD_START,
-            expected_frames, config, track, request_sample) == 0U)
-    {
-        Error_Handler();
-        return 0U;
-    }
-    g_audio_recorder_looper_control = (audio_recorder_looper_control_t){
-        .expected_frames = expected_frames,
-        .track = track,
-        .start_armed = 1U,
-        .overdub = (overdub != 0U) ? 1U : 0U
-    };
-    return 1U;
-}
-
-static void audio_recorder_control_service_looper_request(void)
-{
-    audio_recorder_looper_request_t *const request =
-        &g_audio_recorder_looper_request;
-    if (request->phase == AUDIO_RECORDER_LOOPER_REQUEST_NONE)
-        return;
-
-    g_audio_recorder_looper_request_probe.request_track = request->track;
-    g_audio_recorder_looper_request_probe.request_mode = request->overdub;
-    g_audio_recorder_looper_request_probe.request_phase = request->phase;
-    if ((request->phase == AUDIO_RECORDER_LOOPER_REQUEST_PREPARE)
-            && (project_replacement_is_active() != 0U))
-    {
-        request->phase = AUDIO_RECORDER_LOOPER_REQUEST_CANCEL;
-        request->cancel_reason = AUDIO_RECORDER_LOOPER_CLEAR_INVALID_PROJECT;
-    }
-    else if ((request->phase == AUDIO_RECORDER_LOOPER_REQUEST_PREPARE)
-            && (g_audio_recorder_looper_admission_open == 0U))
-    {
-        request->phase = AUDIO_RECORDER_LOOPER_REQUEST_CANCEL;
-        request->cancel_reason = AUDIO_RECORDER_LOOPER_CLEAR_INVALID_ADMISSION;
-    }
-    else if ((request->phase == AUDIO_RECORDER_LOOPER_REQUEST_PREPARE)
-            && (audio_recorder_looper_target_is_recordable(
-                request->track) == 0U))
-    {
-        request->phase = AUDIO_RECORDER_LOOPER_REQUEST_CANCEL;
-        request->cancel_reason = AUDIO_RECORDER_LOOPER_CLEAR_INVALID_ROUTING;
-    }
-    g_audio_recorder_looper_request_probe.request_phase = request->phase;
-
-    if (request->phase == AUDIO_RECORDER_LOOPER_REQUEST_CANCEL)
-    {
-        g_audio_recorder_looper_request_probe.request_cancel_count++;
-        audio_recorder_lifecycle_result_t cancelled;
-        if (g_audio_recorder.client == AUDIO_RECORDER_CLIENT_LOOPER)
-        {
-            cancelled = audio_recorder_discard_client(
-                AUDIO_RECORDER_CLIENT_LOOPER);
-        }
-        else if (g_audio_recorder.client == AUDIO_RECORDER_CLIENT_NONE)
-        {
-            cancelled = audio_recorder_storage_cancel();
-            if (cancelled == AUDIO_RECORDER_LIFECYCLE_OK)
-                audio_recorder_reset_product_session();
-        }
-        else
-        {
-            cancelled = AUDIO_RECORDER_LIFECYCLE_OK;
-        }
-        if (cancelled != AUDIO_RECORDER_LIFECYCLE_NOT_NOW)
-            audio_recorder_reset_looper_request(
-                (cancelled == AUDIO_RECORDER_LIFECYCLE_OK)
-                    ? request->cancel_reason
-                    : AUDIO_RECORDER_LOOPER_CLEAR_CANCEL_ERROR);
-        return;
-    }
-
-    g_audio_recorder_looper_request_probe.request_prepare_count++;
-    const audio_recorder_lifecycle_result_t prepared =
-        audio_recorder_prepare_client_cooperative(
-            AUDIO_RECORDER_CLIENT_LOOPER,
-            request->temporary_path,
-            request->final_path,
-            request->expected_frames);
-    g_audio_recorder_looper_request_probe.request_prepare_result = prepared;
-    if (prepared == AUDIO_RECORDER_LIFECYCLE_NOT_NOW)
-        return;
-    if (prepared != AUDIO_RECORDER_LIFECYCLE_OK)
-    {
-        request->phase = AUDIO_RECORDER_LOOPER_REQUEST_CANCEL;
-        request->cancel_reason = AUDIO_RECORDER_LOOPER_CLEAR_PREPARE_ERROR;
-        g_audio_recorder_looper_request_probe.request_phase =
-            AUDIO_RECORDER_LOOPER_REQUEST_CANCEL;
-        return;
-    }
-
-    const uint8_t previous_take_track = request->replace_track;
-    g_audio_recorder_looper_take_track = request->track;
-    g_audio_recorder_looper_take_notified = 0U;
-    uint64_t start_sample = 0U;
-    if ((control_rt_resolve_asap_sample(0U, &start_sample) == 0U)
-            || (audio_recorder_control_arm_looper(request->track,
-                request->replace_track, request->len_mode,
-                request->expected_frames, request->play_auto,
-                request->overdub, start_sample) == 0U))
-    {
-        g_audio_recorder_looper_take_track = previous_take_track;
-        request->phase = AUDIO_RECORDER_LOOPER_REQUEST_CANCEL;
-        request->cancel_reason = AUDIO_RECORDER_LOOPER_CLEAR_PUBLISH_ERROR;
-        g_audio_recorder_looper_request_probe.request_phase =
-            AUDIO_RECORDER_LOOPER_REQUEST_CANCEL;
-        return;
-    }
-
-    g_audio_recorder_looper_request_probe.request_publish_count++;
-    audio_recorder_reset_looper_request(
-        AUDIO_RECORDER_LOOPER_CLEAR_PUBLISHED);
-}
-
-uint8_t audio_recorder_control_request_looper_stop(uint64_t request_sample,
-                                                   uint8_t wait_boundary)
-{
-    audio_recorder_looper_control_t *const control =
-        &g_audio_recorder_looper_control;
-    if ((control->start_armed == 0U) && (control->recording == 0U))
-        return 0U;
-    const uint16_t config = AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG;
-    if ((control->recording != 0U) && (wait_boundary == 0U))
-    {
-        if (audio_recorder_publish_stop_client_at(
-                AUDIO_RECORDER_CLIENT_LOOPER, request_sample) == 0U)
-            return 0U;
-        control->recording = 0U;
-        control->stop_armed = 0U;
-        return 1U;
-    }
-    if (control_rt_publish_record(CONTROL_AUDIO_RECORD_STOP,
-            0U, config, control->track, request_sample) == 0U)
-    {
-        Error_Handler();
-        return 0U;
-    }
-    if (control->recording == 0U)
-    {
-        audio_recorder_reset_looper_control();
-        return 1U;
-    }
-    control->stop_armed = 1U;
-    if (wait_boundary != 0U)
-        return 1U;
-    return 0U;
-}
-
-void audio_recorder_control_on_looper_boundary(uint8_t track,
-                                               uint64_t sample_time)
-{
-    audio_recorder_looper_control_t *const control =
-        &g_audio_recorder_looper_control;
-    if (track != control->track)
-        return;
-    if ((control->start_armed == 0U) && (control->recording == 0U))
-        return;
-    if (control->start_armed != 0U)
-    {
-        if (audio_recorder_publish_start_client_at(
-                AUDIO_RECORDER_CLIENT_LOOPER, sample_time) == 0U)
-            return;
-        control->start_armed = 0U;
-        control->recording = 1U;
-        control->actual_start_sample = sample_time;
-        control->target_stop_sample = (control->expected_frames != 0U)
-            ? sample_time + control->expected_frames : 0U;
-        g_audio_recorder_looper_config[control->track].arm_mode = 0U;
-    }
-    if ((control->recording != 0U)
-            && (((control->target_stop_sample != 0U)
-                    && (sample_time >= control->target_stop_sample)
-                    && (sample_time > control->actual_start_sample))
-                || (control->stop_armed != 0U)))
-    {
-        if (audio_recorder_publish_stop_client_at(
-                AUDIO_RECORDER_CLIENT_LOOPER, sample_time) == 0U)
-            return;
-        control->recording = 0U;
-        control->stop_armed = 0U;
-    }
-}
-
-void audio_recorder_control_on_transport_start(uint64_t sample_time)
-{
-    if (g_audio_recorder_looper_control.track < BRICK_ENTITY_CAPACITY)
-        audio_recorder_control_on_looper_boundary(
-            g_audio_recorder_looper_control.track, sample_time);
+    return publish_stop(client, sample_time);
 }
 
 void audio_recorder_service(void)
 {
     rec_source_service();
-    audio_recorder_storage_service(
-        g_audio_recorder_control_session,
-        (g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING)
-            || (g_audio_recorder.state == AUDIO_RECORDER_STATE_DRAINING));
-    const audio_recorder_storage_phase_t storage_phase =
-        audio_recorder_storage_phase();
-    if (storage_phase == AUDIO_RECORDER_STORAGE_FAILED)
+    audio_recorder_storage_service(g_audio_recorder_control_session,
+        (uint8_t)((g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING)
+            || (g_audio_recorder.state == AUDIO_RECORDER_STATE_DRAINING)));
+    const audio_recorder_storage_phase_t phase = audio_recorder_storage_phase();
+    if(phase == AUDIO_RECORDER_STORAGE_FAILED)
     {
-        if (g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING)
-            if (audio_recorder_request_stop_client(g_audio_recorder.client) == 0U)
-                Error_Handler();
+        if((g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING)
+                && (audio_recorder_request_stop_client(
+                    g_audio_recorder.client) == 0U))
+            Error_Handler();
         g_audio_recorder.error = audio_recorder_storage_error();
         g_audio_recorder.state = AUDIO_RECORDER_STATE_FAILED;
-        if (g_audio_recorder.client == AUDIO_RECORDER_CLIENT_AUDIO_REC)
-            rec_source_abort_building();
+        rec_source_abort_building();
+        forget_build_stream();
         (void)audio_recorder_storage_cancel();
     }
-    else if ((storage_phase == AUDIO_RECORDER_STORAGE_DRAINING)
+    else if((phase == AUDIO_RECORDER_STORAGE_DRAINING)
             && (g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING))
     {
         g_audio_recorder.error = audio_recorder_storage_error();
-        audio_recorder_enter_draining();
+        g_audio_recorder.state = AUDIO_RECORDER_STATE_DRAINING;
+        register_build_stream();
     }
-    else if ((storage_phase == AUDIO_RECORDER_STORAGE_FINALIZING)
-            && (g_audio_recorder.state != AUDIO_RECORDER_STATE_FINALIZING))
-    {
+    else if(phase == AUDIO_RECORDER_STORAGE_FINALIZING)
         g_audio_recorder.state = AUDIO_RECORDER_STATE_FINALIZING;
-    }
-    else if (storage_phase == AUDIO_RECORDER_STORAGE_TAKE_READY)
+    else if(phase == AUDIO_RECORDER_STORAGE_TAKE_READY)
     {
-        if ((g_audio_recorder.state != AUDIO_RECORDER_STATE_TAKE_READY)
-                && (g_audio_recorder.client == AUDIO_RECORDER_CLIENT_LOOPER)
-                && (g_audio_recorder_looper_stream_registered != 0U))
-            (void)sample_page_cache_update_stream_path_key(
-                g_audio_recorder_looper_stream_key,
-                g_audio_recorder.final_path);
         g_audio_recorder.state = AUDIO_RECORDER_STATE_TAKE_READY;
-        if ((g_audio_recorder.client == AUDIO_RECORDER_CLIENT_AUDIO_REC)
-                && (g_audio_recorder_looper_stream_registered != 0U)
+        if((g_build_stream_registered != 0U)
                 && (rec_source_building_active() != 0U))
         {
             uint32_t epoch = 0U;
@@ -934,58 +270,33 @@ void audio_recorder_service(void)
                 audio_recorder_storage_committed_tail()
                     / AUDIO_RECORDER_BYTES_PER_FRAME);
             uint32_t ready_pages = (frames + SAMPLE_PAGE_FRAMES - 1U)
-                                     / SAMPLE_PAGE_FRAMES;
-            if (ready_pages > SAMPLE_PAGE_MIN_READY_PAGES)
+                / SAMPLE_PAGE_FRAMES;
+            if(ready_pages > SAMPLE_PAGE_MIN_READY_PAGES)
                 ready_pages = SAMPLE_PAGE_MIN_READY_PAGES;
             (void)sample_page_cache_update_stream_path_key(
                 key, g_audio_recorder.final_path);
-            (void)sample_page_cache_reserve_start_pages_key(
-                key, 0U, ready_pages);
+            (void)sample_page_cache_reserve_start_pages_key(key, 0U, ready_pages);
             uint8_t pages_ready = (ready_pages != 0U) ? 1U : 0U;
-            for (uint32_t page = 0U; page < ready_pages; ++page)
-                if (sample_page_cache_get_page_state_key(key, page)
-                        != SAMPLE_PAGE_READY)
-                    pages_ready = 0U;
-            if ((sample_page_cache_get_registration_epoch_key(
-                    key, &epoch) != 0U)
+            for(uint32_t page = 0U; page < ready_pages; ++page)
+                if(sample_page_cache_get_page_state_key(key, page)
+                        != SAMPLE_PAGE_READY) pages_ready = 0U;
+            if((sample_page_cache_get_registration_epoch_key(key, &epoch) != 0U)
                     && (pages_ready != 0U)
                     && (rec_source_publish_building(frames, epoch) != 0U))
             {
-                g_audio_recorder_looper_stream_registered = 0U;
-                memset(&g_audio_recorder_looper_stream_key, 0,
-                       sizeof(g_audio_recorder_looper_stream_key));
-                g_audio_recorder_looper_stream_readable_frames = 0U;
+                forget_build_stream();
             }
         }
     }
-    audio_recorder_control_service_looper_request();
-    audio_recorder_update_looper_stream_readable();
-    if ((g_audio_recorder.client == AUDIO_RECORDER_CLIENT_LOOPER)
-            && (g_audio_recorder.state == AUDIO_RECORDER_STATE_TAKE_READY)
-            && (g_audio_recorder.error == AUDIO_RECORDER_ERROR_NONE)
-            && (g_audio_recorder_looper_take_notified == 0U))
-    {
-        const char *path = 0;
-        uint32_t frames = 0U;
-        if (audio_recorder_get_last_take_client(AUDIO_RECORDER_CLIENT_LOOPER,
-                                                &path, &frames) != 0U)
-        {
-            (void)wav_loader_catalog_notify_file_created(path);
-            (void)waveform_cache_request_for_wav_known_duration(
-                path, WAVEFORM_CACHE_REASON_POST_LOOPER_SAVE, frames,
-                AUDIO_RECORDER_SAMPLE_RATE_HZ);
-            g_audio_recorder_looper_take_notified = 1U;
-        }
-    }
+    update_build_stream();
 }
 
 uint8_t audio_recorder_get_status_client(audio_recorder_client_t client,
                                          audio_recorder_status_t *status)
 {
-    if ((status == 0) || (client == AUDIO_RECORDER_CLIENT_NONE)
+    if((status == NULL) || (client != AUDIO_RECORDER_CLIENT_AUDIO_REC)
             || ((g_audio_recorder.client != AUDIO_RECORDER_CLIENT_NONE)
-                && (g_audio_recorder.client != client)))
-        return 0U;
+                && (g_audio_recorder.client != client))) return 0U;
     memset(status, 0, sizeof(*status));
     generic_recorder_status_t generic_status;
     audio_recorder_storage_get_status(&generic_status);
@@ -1001,42 +312,36 @@ uint8_t audio_recorder_get_status_client(audio_recorder_client_t client,
 }
 
 uint8_t audio_recorder_get_last_take_client(audio_recorder_client_t client,
-                                            const char **path,
-                                            uint32_t *frames)
+                                            const char **path, uint32_t *frames)
 {
-    if ((g_audio_recorder.client != client) || (path == 0) || (frames == 0)
-            || (g_audio_recorder.state != AUDIO_RECORDER_STATE_TAKE_READY))
-        return 0U;
+    if((client != AUDIO_RECORDER_CLIENT_AUDIO_REC)
+            || (g_audio_recorder.client != client) || (path == NULL)
+            || (frames == NULL)
+            || (g_audio_recorder.state != AUDIO_RECORDER_STATE_TAKE_READY)) return 0U;
     *path = g_audio_recorder.final_path;
     *frames = (uint32_t)(audio_recorder_storage_committed_tail()
-                         / AUDIO_RECORDER_BYTES_PER_FRAME);
+        / AUDIO_RECORDER_BYTES_PER_FRAME);
     return (*frames != 0U) ? 1U : 0U;
 }
 
 uint8_t audio_recorder_is_active(void)
 {
-    return ((g_audio_recorder.state == AUDIO_RECORDER_STATE_PREPARED)
-            || (g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING)
-            || (g_audio_recorder.state == AUDIO_RECORDER_STATE_DRAINING)
-            || (g_audio_recorder.state == AUDIO_RECORDER_STATE_FINALIZING))
-        ? 1U : 0U;
+    return (uint8_t)((g_audio_recorder.state == AUDIO_RECORDER_STATE_PREPARED)
+        || (g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING)
+        || (g_audio_recorder.state == AUDIO_RECORDER_STATE_DRAINING)
+        || (g_audio_recorder.state == AUDIO_RECORDER_STATE_FINALIZING));
 }
 
 uint8_t audio_recorder_client_is_active(audio_recorder_client_t client)
 {
     return (uint8_t)((g_audio_recorder.client == client)
-            && (audio_recorder_is_active() != 0U));
+        && (audio_recorder_is_active() != 0U));
 }
 
 uint8_t audio_recorder_client_is_recording(audio_recorder_client_t client)
 {
     return (uint8_t)((g_audio_recorder.client == client)
-            && (g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING)
-            && (g_audio_recorder_capture.closed_session
-                != g_audio_recorder_control_session));
-}
-
-uint8_t audio_recorder_looper_take_resource_retained(void)
-{
-    return g_audio_recorder_looper_stream_registered;
+        && (g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING)
+        && (g_audio_recorder_capture.closed_session
+            != g_audio_recorder_control_session));
 }

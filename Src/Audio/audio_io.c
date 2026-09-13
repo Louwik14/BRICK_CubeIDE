@@ -17,7 +17,7 @@ static AUDIO_HOT ALIGN32 audio_physical_inputs_t g_audio_physical_inputs;
 static AUDIO_HOT ALIGN32 int32_t g_usb_audio_input[AUDIO_BLOCK_SIZE * 2U];
 static AUDIO_HOT ALIGN32 int32_t g_usb_audio_output[AUDIO_BLOCK_SIZE * 2U];
 
-volatile brick6_looper_output_probe_t g_brick6_looper_output_probe;
+volatile brick6_rec_output_probe_t g_brick6_rec_output_probe;
 
 static float audio_io_probe_stereo_peak(const float *left,
                                         const float *right,
@@ -156,7 +156,7 @@ void audio_io_pack_ramped(int32_t *AUDIO_RESTRICT tx,
     }
 
     metronome_runtime_render_main_monitor(monitor_main_l, monitor_main_r, frames);
-    g_brick6_looper_output_probe.output_float_peak =
+    g_brick6_rec_output_probe.output_float_peak =
         audio_io_probe_stereo_peak(monitor_main_l, monitor_main_r, frames);
     board_audio_pack_output(tx,
                             monitor_main_l,
@@ -176,7 +176,7 @@ void audio_io_pack_ramped(int32_t *AUDIO_RESTRICT tx,
         if (abs_l > pcm_peak) pcm_peak = abs_l;
         if (abs_r > pcm_peak) pcm_peak = abs_r;
     }
-    g_brick6_looper_output_probe.output_pcm_peak = pcm_peak;
+    g_brick6_rec_output_probe.output_pcm_peak = pcm_peak;
 
     for (uint32_t n = 0U; n < frames; ++n)
     {

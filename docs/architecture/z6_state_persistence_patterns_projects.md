@@ -139,10 +139,9 @@ sont remis directement a leurs owners et ne possedent ni stable key Param ni
 scan `PARAM_COUNT`. Les valeurs PLAY de base appartiennent au snapshot Seq type
 et sont copiees/restaurees avec le snapshot Track.
 
-Le routing Looper restaure est projete directement comme seize masques finaux
-dans un seul batch FIFO. Les masques CONTROL ne deviennent canoniques qu'apres
-publication complete du batch; une ancienne route ne peut donc pas survivre a
-un restore annonce comme reussi.
+Le routing d'une capture Audio REC est un etat de session Recorder et n'est pas
+un backend de playback persistant par track. Les anciennes routes Looper du
+codec v4 ne sont pas appliquees au data-plane AUDIO.
 # Asset identity and FM ownership
 
 Persistent asset selections are typed canonical references `{kind, path}`.

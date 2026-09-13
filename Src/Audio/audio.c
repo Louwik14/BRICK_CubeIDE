@@ -39,7 +39,6 @@
 #include "Mod/mod_env3.h"
 #include "Board/board_audio.h"
 #include "Board/board_audio_format.h"
-#include "Audio/brick6_looper_runtime.h"
 #include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
 #include "Audio/Engines/wavetable_engine.h"
 #include "Platform/brick_media_clock.h"
@@ -208,7 +207,6 @@ static ITCM_TEXT void audio_process_event_segment(int32_t *rx,
                                             uint64_t block_start_sample,
                                             uint16_t block_frames)
 {
-    brick6_looper_runtime_on_scheduled_start(block_start_sample);
     process_audio_segment(&rx[half_cursor * AUDIO_WORDS_PER_FRAME],
                           &tx[half_cursor * AUDIO_WORDS_PER_FRAME],
                           block_frames);

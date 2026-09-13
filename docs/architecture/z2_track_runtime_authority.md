@@ -29,9 +29,9 @@ Le GROUP master utilise le bus post-somme sans moteur de notes. Les children
 conservent leur configuration meme inactifs. Le mute CONTROL de chaque entite
 est local; le mute effectif child derive du local ou du parent.
 
-Looper est `Sampler / Looper` et peut occuper tout top-level `0..7`. Son quota
-global est pre-valide par CONTROL. Etat, prises, parametres, p-locks et routes
-restent indexes par l'entite.
+Les boucles utilisent une track Stream avec `SOURCE=REC`. Le Streamer porte les
+parametres de lecture; Recorder et REC_SOURCE portent la prise sans etat
+playback indexe par track.
 
 External est l'unique proprietaire possible de l'entree physique selectionnee.
 `track_input_ownership` interdit deux proprietaires pour une entree. Les

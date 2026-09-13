@@ -2,6 +2,7 @@ static void sample_capture_editor_cache_reset(void);
 static void sample_capture_global_overview_reset(void);
 static void sample_capture_set_capture_enabled(uint8_t enabled);
 static void sample_capture_reset_take_transients(uint8_t preserve_final_path);
+static void sample_capture_save_service(void);
 
 static uint32_t sample_capture_threshold_to_peak_abs_pcm24(int8_t threshold_dbfs)
 {

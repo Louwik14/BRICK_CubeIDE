@@ -626,7 +626,11 @@ void audio_recorder_storage_service(uint32_t session_id,
         {
             runtime->error = (audio_recorder_error_t)
                 g_audio_recorder_capture.capture_fault;
-            runtime->recorder.error = GENERIC_RECORDER_ERROR_RING_FULL;
+            runtime->recorder.error =
+                (runtime->error == AUDIO_RECORDER_ERROR_RING_OVERFLOW)
+                ? GENERIC_RECORDER_ERROR_RING_FULL
+                : GENERIC_RECORDER_ERROR_TRANSPORT;
+            runtime->recorder.state = GENERIC_RECORDER_ERROR;
         }
         if ((g_audio_recorder_capture.closed_session == session_id)
                 && (runtime->recorder.state == GENERIC_RECORDER_CAPTURING))
@@ -640,8 +644,9 @@ void audio_recorder_storage_service(uint32_t session_id,
     if ((runtime->recorder.state == GENERIC_RECORDER_ERROR)
             || (runtime->recorder.state == GENERIC_RECORDER_ABORTED))
     {
-        runtime->error = audio_recorder_storage_map_error(
-            runtime->recorder.error);
+        if (runtime->error == AUDIO_RECORDER_ERROR_NONE)
+            runtime->error = audio_recorder_storage_map_error(
+                runtime->recorder.error);
         runtime->phase = AUDIO_RECORDER_STORAGE_FAILED;
     }
     else if ((runtime->recorder.state == GENERIC_RECORDER_DRAINING)

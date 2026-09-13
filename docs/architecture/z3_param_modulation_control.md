@@ -96,8 +96,8 @@ donc TEMP ou BASE sans laisser de valid mask appartenant a la Matrix.
 Les selections Sample et Wavetable appartiennent a `project_control` sous forme
 de references asset typees stables; leur resolution en slot runtime n'a lieu
 qu'a la publication AUDIO. Elles ne sont ni Param, ni destinations de p-lock,
-modulation ou MIDI. Arm, longueur et lecture automatique du Looper appartiennent
-a `audio_recorder`; l'UI appelle directement cet owner. La selection d'operateur
+modulation ou MIDI. Arm, trigger, longueur et OVERDUB appartiennent à Audio REC;
+lecture, pitch, stretch et XFADE appartiennent au Streamer. La selection d'operateur
 FM est un contexte local de l'editeur. L'etat interne FM est possede par
 `fm_control_state` cote CONTROL et publie comme un DTO coherent unique vers
 AUDIO; aucun pack FM interne ne traverse Param.

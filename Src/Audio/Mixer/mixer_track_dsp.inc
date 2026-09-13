@@ -235,7 +235,7 @@ static AUDIO_HOT mixer_reverb_state_t g_reverb;
 static float g_delay_spectral_position = 0.50f;
 static float g_delay_spectral_width = 1.0f;
 
-static int32_t mixer_looper_float_to_pcm24(float sample)
+static int32_t mixer_rec_float_to_pcm24(float sample)
 {
     float scaled = sample * MIXER_LOOPER_RECORD_PCM24_MAX;
     if(scaled > MIXER_LOOPER_RECORD_PCM24_MAX)
@@ -248,37 +248,6 @@ static int32_t mixer_looper_float_to_pcm24(float sample)
     }
 
     return (int32_t)scaled;
-}
-
-static uint8_t mixer_looper_record_capture_is_active(uint8_t *out_looper_track)
-{
-    if((out_looper_track == NULL)
-            || (brick6_looper_runtime_get_record_capture_track(out_looper_track) == 0U)
-            || (*out_looper_track >= MIXER_MAX_TRACKS))
-    {
-        return 0U;
-    }
-
-    return 1U;
-}
-
-static uint8_t mixer_lane_routes_to_looper(uint8_t looper_track,
-                                           uint8_t mix_track)
-{
-    const brick_entity_id_t entity =
-        audio_note_engine_adapter_entity_for_mix_lane(mix_track);
-    const uint8_t source_track = (entity < BRICK_ENTITY_CAPACITY)
-        ? entity : mix_track;
-    if ((looper_track >= MIXER_MAX_TRACKS)
-            || (source_track >= MIXER_MAX_TRACKS)
-            || (source_track == looper_track)
-            || ((g_mixer_static_lane_flags[mix_track]
-                & MIXER_STATIC_LOOPER) != 0U))
-    {
-        return 0U;
-    }
-
-    return control_routing_audio_get_looper_source(looper_track, source_track);
 }
 
 static float mixer_get_looper_xfade(float target)

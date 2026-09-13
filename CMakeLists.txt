@@ -513,7 +513,6 @@ set(AUDIO_LTO_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/tb303_engine.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/wavetable_engine.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/Sampler/brick6_sampler_runtime.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/brick6_looper_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/synth_polyphony.c
 )
 set_source_files_properties(${AUDIO_LTO_SOURCES} PROPERTIES
@@ -540,15 +539,10 @@ set(AUDIO_O3_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/tb303_engine.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/wavetable_engine.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/Sampler/brick6_sampler_runtime.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/brick6_looper_runtime.c
     ${MUTABLE_INSTRUMENTS_SRC}
 )
 set_source_files_properties(${AUDIO_O3_SOURCES} PROPERTIES
     COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
-)
-set_property(SOURCE
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/brick6_looper_runtime.c"
-    APPEND PROPERTY COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-g3>"
 )
 
 set_source_files_properties(

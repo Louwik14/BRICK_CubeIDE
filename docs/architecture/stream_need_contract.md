@@ -18,8 +18,8 @@ M7 ne publie aucun snapshot de playhead, frame cursor, deadline, pitch, phase,
 loop state ou demande I/O. Chaque lecteur expose uniquement le lease seqlocke
 `{seq, key, registration_epoch, ranges[2]}`. Un range est
 `{first_page, page_count}`. Il enumere les pages physiques que le lecteur peut
-encore lire; le second range sert au wrap discontinu. Le Looper emploie un
-second slot du meme type uniquement pendant son crossfade de resynchronisation.
+encore lire; le second range sert au wrap discontinu. Les lecteurs Streamer et
+OVERDUB possedent chacun leur lease et peuvent partager les memes pages immuables.
 
 Le scheduler M4 sert les lecteurs actifs en round-robin. Il derive localement
 le lookahead produit a partir des ranges proteges; AUDIO ne publie ni liste de
@@ -55,10 +55,10 @@ Sample RAM charge par etapes sous un budget cooperatif de 2 ms, avec lectures ad
 
 Les payloads Sampler RAM/Wavetable sont des references `{region, offset, length}`. CONTROL clean avant publication, AUDIO invalidate avant installation. Un unload/remplacement suit `STOP -> invalidation voix synchrone -> avancee du tail FIFO -> FREE CONTROL`. Les ACK Multi/RAM/Wavetable et leur ring IPC ont ete supprimes; seul le fence du consumer physique est lu.
 
-Le registre compact de leases Stream est fixe, pointer-free, seqlocke et place explicitement dans la fenetre IPC partagee SRAM3/D2. Les snapshots de besoins, pins, use-counts et refcounts de pages ont ete supprimes. Le Looper ne publie aucun intent Stream: CONTROL derive directement track, chemin, longueur, reservation et finalisation depuis son Recorder; AUDIO ne conserve que son runtime, ses playheads et ses leases.
+Le registre compact de leases Stream est fixe, pointer-free, seqlocke et place explicitement dans la fenetre IPC partagee SRAM3/D2. Les snapshots de besoins, pins, use-counts et refcounts de pages ont ete supprimes. REC_SOURCE publie seulement une generation immutable READY; AUDIO conserve ses playheads et ses leases.
 
 ## Format audio
 
 Une page produit de 32 KiB porte 8192 frames mono FLOAT32 ou 4096 frames stereo. Format, stride et frames/page sont derives par `sample_audio_format.h` et restent immutables pendant la voix. Mono reste mono jusqu'au pan/spread final; aucune duplication droite de rejet n'est conservee.
 
-Preview est un ring PCM SPSC distinct. Les prises Looper actives utilisent la carte append-only du Recorder et ne lisent jamais au-dela du tail physiquement committed; le detail appartient a [recorder_sd.md](recorder_sd.md).
+Preview est un ring PCM SPSC distinct. Le building REC utilise la carte append-only du Recorder; il n'est publie qu'apres finalisation et prechauffage des pages initiales. Le detail appartient a [recorder_sd.md](recorder_sd.md).

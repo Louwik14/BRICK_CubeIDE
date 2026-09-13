@@ -31,16 +31,13 @@ static uint8_t project_load_recorder_busy(void)
 {
     audio_recorder_status_t status;
     if (audio_recorder_get_status_client(AUDIO_RECORDER_CLIENT_AUDIO_REC,
-                                         &status) == 0U
-        && audio_recorder_get_status_client(AUDIO_RECORDER_CLIENT_LOOPER,
-                                            &status) == 0U)
+                                         &status) == 0U)
         return 0U;
     if ((status.state != AUDIO_RECORDER_STATE_IDLE)
         && (status.state != AUDIO_RECORDER_STATE_FAILED)
         && (status.state != AUDIO_RECORDER_STATE_TAKE_READY))
         return 1U;
-    return (uint8_t)((status.state == AUDIO_RECORDER_STATE_TAKE_READY)
-        && (audio_recorder_looper_take_resource_retained() != 0U));
+    return 0U;
 }
 
 uint8_t project_load_allowed(void)

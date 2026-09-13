@@ -82,14 +82,14 @@ typedef enum
     SAMPLE_CAPTURE_ERROR_NONE = 0,
     SAMPLE_CAPTURE_ERROR_INVALID_ARG,
     SAMPLE_CAPTURE_ERROR_NO_ROUTE,
-    SAMPLE_CAPTURE_ERROR_LOOPER_ACTIVE,
     SAMPLE_CAPTURE_ERROR_SAMPLE_ACTIVE,
     SAMPLE_CAPTURE_ERROR_SD_BUSY,
     SAMPLE_CAPTURE_ERROR_SD_IO,
     SAMPLE_CAPTURE_ERROR_NO_TAKE,
     SAMPLE_CAPTURE_ERROR_NO_SLOT,
     SAMPLE_CAPTURE_ERROR_LOAD_FAIL,
-    SAMPLE_CAPTURE_ERROR_PREVIEW_FAIL
+    SAMPLE_CAPTURE_ERROR_PREVIEW_FAIL,
+    SAMPLE_CAPTURE_ERROR_OVERDUB
 } sample_capture_error_t;
 
 typedef enum
@@ -132,6 +132,7 @@ typedef struct
     uint8_t armed_pending;
     uint8_t recording;
     uint8_t take_valid;
+    uint8_t save_pending;
     uint32_t planned_frames;
     uint32_t recorded_frames;
     uint32_t edit_start_frame;
@@ -220,7 +221,6 @@ void sample_capture_model_debug_note_flush_cost(uint32_t flush_ms, uint8_t conti
 uint8_t sample_capture_model_return_to_audio_rec(void);
 uint8_t sample_capture_model_audition_trimmed(void);
 uint8_t sample_capture_model_save_trimmed(void);
-uint8_t sample_capture_model_assign_trimmed(void);
 uint8_t sample_capture_model_assign_saved_take_to_pool(void);
 uint8_t sample_capture_model_assign_refresh(void);
 uint8_t sample_capture_model_assign_count(void);

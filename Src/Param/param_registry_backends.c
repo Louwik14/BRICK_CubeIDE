@@ -7,7 +7,6 @@
 #include "Audio/drum_synth.h"
 #include "Audio/Engines/prism_engine.h"
 #include "Audio/Engines/fm_engine.h"
-#include "Audio/brick6_looper_runtime.h"
 #include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
 #include "Audio/Engines/stack_engine.h"
 #include "Audio/Engines/wavetable_engine.h"
@@ -655,15 +654,15 @@ uint8_t param_backend_apply_tone_looper(uint8_t track, param_id_t id, float valu
     switch (id)
     {
         case PARAM_LOOPER_STRETCH:
-            brick6_looper_runtime_set_stretch_mode(
+            brick6_sampler_runtime_set_clip_stretch_mode(
                 track, (uint8_t)(param_backend_clamp_value(value, 0.0f, 2.0f) + 0.5f));
             return 1U;
         case PARAM_LOOPER_PITCH:
-            brick6_looper_runtime_set_stretch_pitch(
+            brick6_sampler_runtime_set_clip_pitch(
                 track, param_backend_clamp_value(value, -12.0f, 12.0f));
             return 1U;
         case PARAM_LOOPER_GRAIN:
-            brick6_looper_runtime_set_stretch_grain(
+            brick6_sampler_runtime_set_clip_grain_size(
                 track, param_backend_clip_grain_size_value(
                     (uint8_t)(param_backend_clamp_value(value, 0.0f, 5.0f) + 0.5f)));
             return 1U;

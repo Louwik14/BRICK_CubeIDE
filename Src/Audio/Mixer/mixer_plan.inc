@@ -14,10 +14,6 @@ void mixer_rebuild_static_plan(void)
         if ((ctx != NULL)
                 && ((ctx->flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD) != 0U))
             flags |= MIXER_STATIC_GROUP_CHILD;
-        if ((ctx != NULL)
-                && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-                && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))
-            flags |= MIXER_STATIC_LOOPER;
         if ((entity < BRICK_ENTITY_CAPACITY)
                 && ((ctx == NULL)
                     || ((ctx->flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_MASTER) == 0U))

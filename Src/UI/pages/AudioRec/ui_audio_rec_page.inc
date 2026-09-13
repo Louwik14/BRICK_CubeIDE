@@ -8,6 +8,7 @@ static void ui_page_rec_edit_enter(void)
 {
     sample_capture_model_set_view(SAMPLE_CAPTURE_VIEW_REC_EDIT);
     g_ui_rec_edit_assign_popup = 0U;
+    g_ui_rec_edit_save_requested = 0U;
 }
 
 static void ui_page_audio_rec_handle_event(const ui_event_t *ev)
@@ -102,15 +103,7 @@ static void ui_page_rec_edit_handle_event(const ui_event_t *ev)
 
         case BTN_PAGE_2:
             if(sample_capture_model_save_trimmed() != 0U)
-            {
-                if(sample_capture_model_assign_count() != 0U)
-                    g_ui_rec_edit_assign_popup = 1U;
-                else
-                {
-                    (void)sample_capture_model_return_to_audio_rec();
-                    ui_page_set(UI_PAGE_AUDIO_REC);
-                }
-            }
+                g_ui_rec_edit_save_requested = 1U;
             break;
 
         case BTN_PAGE_3:
@@ -128,6 +121,20 @@ static void ui_page_audio_rec_tick(void)
     sample_capture_model_service();
     sample_capture_state_t state;
     sample_capture_model_get_state(&state);
+    if((g_ui_rec_edit_save_requested != 0U) && (state.save_pending == 0U))
+    {
+        g_ui_rec_edit_save_requested = 0U;
+        if(state.phase == SAMPLE_CAPTURE_PHASE_SAVED)
+        {
+            if(sample_capture_model_assign_count() != 0U)
+                g_ui_rec_edit_assign_popup = 1U;
+            else
+            {
+                (void)sample_capture_model_return_to_audio_rec();
+                ui_page_set(UI_PAGE_AUDIO_REC);
+            }
+        }
+    }
     if(state.view == SAMPLE_CAPTURE_VIEW_AUDIO_REC)
     {
         ui_page_audio_rec_update_meter(state.live_peak_abs_pcm24);
@@ -172,7 +179,6 @@ static const char *ui_page_audio_rec_error_label(sample_capture_error_t error)
         case SAMPLE_CAPTURE_ERROR_NONE: return "";
         case SAMPLE_CAPTURE_ERROR_INVALID_ARG: return "INVALID";
         case SAMPLE_CAPTURE_ERROR_NO_ROUTE: return "NO ROUTE";
-        case SAMPLE_CAPTURE_ERROR_LOOPER_ACTIVE: return "LOOPER REC";
         case SAMPLE_CAPTURE_ERROR_SAMPLE_ACTIVE: return "REC BUSY";
         case SAMPLE_CAPTURE_ERROR_SD_BUSY: return "SD BUSY";
         case SAMPLE_CAPTURE_ERROR_SD_IO: return "SD IO";
@@ -180,6 +186,7 @@ static const char *ui_page_audio_rec_error_label(sample_capture_error_t error)
         case SAMPLE_CAPTURE_ERROR_NO_SLOT: return "POOL FULL";
         case SAMPLE_CAPTURE_ERROR_LOAD_FAIL: return "LOAD FAIL";
         case SAMPLE_CAPTURE_ERROR_PREVIEW_FAIL: return "PREVIEW";
+        case SAMPLE_CAPTURE_ERROR_OVERDUB: return "OVERDUB";
         default: return "ERROR";
     }
 }
