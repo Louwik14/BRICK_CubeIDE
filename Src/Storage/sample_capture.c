@@ -14,6 +14,7 @@
 #include "Seq/seq_runtime_control.h"
 #include "ControlRT/control_rt_publication.h"
 #include "Storage/audio_recorder_wav.h"
+#include "Storage/rec_source.h"
 #include "Storage/project_control.h"
 #include "Storage/asset_ref.h"
 #include "Track/track_state.h"
@@ -41,8 +42,6 @@
 #endif
 
 #define SAMPLE_CAPTURE_REC_DIR "0:/REC"
-#define SAMPLE_CAPTURE_TEMP_PATH SAMPLE_CAPTURE_REC_DIR "/AUDIOREC_TMP.REC"
-#define SAMPLE_CAPTURE_WORKING_WAV_PATH SAMPLE_CAPTURE_REC_DIR "/AUDIOREC_TMP.WAV"
 #define SAMPLE_CAPTURE_FINAL_TRIES 10000U
 #define SAMPLE_CAPTURE_COPY_FRAMES 1024U
 #define SAMPLE_CAPTURE_WAV_DATA_OFFSET AUDIO_RECORDER_WAV_HEADER_BYTES

@@ -92,7 +92,9 @@ uint8_t sample_page_cache_update_readable_frames_key(sample_audio_key_t key,
         return 0U;
     }
     sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
-    if ((sample->valid == 0U) || (readable_frames > sample->total_frames))
+    if ((sample->valid == 0U)
+            || (sample_audio_key_equal(&sample->key, &key) == 0U)
+            || (readable_frames > sample->total_frames))
     {
         return 0U;
     }
@@ -110,7 +112,9 @@ uint8_t sample_page_cache_update_stream_path_key(sample_audio_key_t key,
 {
     const uint16_t key_slot = sample_page_cache_key_slot(key);
     if ((key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES) || (path == 0)
-            || (g_sample_page_sample_desc[key_slot].valid == 0U))
+            || (g_sample_page_sample_desc[key_slot].valid == 0U)
+            || (sample_audio_key_equal(
+                &g_sample_page_sample_desc[key_slot].key, &key) == 0U))
     {
         return 0U;
     }
@@ -131,11 +135,11 @@ uint8_t sample_page_cache_get_reserved_load_target_domain_range(
     }
     for (uint16_t offset_id = 0U; offset_id < object_count; ++offset_id)
     {
-        const sample_audio_key_t key = {
+        const sample_audio_key_t slot_key = {
             .domain = domain,
             .object_id = (uint16_t)(first_object_id + offset_id),
         };
-        const uint16_t key_slot = sample_page_cache_key_slot(key);
+        const uint16_t key_slot = sample_page_cache_key_slot(slot_key);
         if (key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES)
         {
             continue;
@@ -146,6 +150,9 @@ uint8_t sample_page_cache_get_reserved_load_target_domain_range(
         {
             continue;
         }
+        const sample_audio_key_t key = sample->key;
+        if ((key.domain != slot_key.domain)
+                || (key.object_id != slot_key.object_id)) continue;
 
         for (uint32_t i = 0U; i < SAMPLE_PAGE_MAX_COUNT; ++i)
         {

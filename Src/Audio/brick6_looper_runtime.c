@@ -91,7 +91,6 @@ typedef struct
     const float *current_base;
     uint32_t current_start_frame;
     uint32_t current_frame_count;
-    float main_xfade;
     float stretch_pitch_semitones;
     uint16_t stretch_grain_frames;
     uint8_t stretch_mode;
@@ -1311,19 +1310,6 @@ void brick6_looper_runtime_set_play_auto(uint8_t track_id, uint8_t play_auto)
     state->want_play_when_ready = (looper_transport_running() != 0U) ? 1U : 0U;
     looper_start_ready_if_requested(state, brick6_looper_media_now_sample());
     looper_diag_update_take(track_id, state);
-}
-
-void brick6_looper_runtime_set_main_xfade(uint8_t track_id, float xfade)
-{
-    if (looper_track_valid(track_id) == 0U)
-        return;
-    g_looper_tracks[track_id].main_xfade = looper_clampf(xfade, 0.0f, 1.0f);
-}
-
-float brick6_looper_runtime_get_main_xfade(uint8_t track_id)
-{
-    return (looper_track_valid(track_id) != 0U)
-        ? g_looper_tracks[track_id].main_xfade : 0.0f;
 }
 
 void brick6_looper_runtime_set_stretch(uint8_t track_id,

@@ -304,9 +304,18 @@ static audio_recorder_lifecycle_result_t sample_capture_prepare_paths(void)
             sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
             return AUDIO_RECORDER_LIFECYCLE_ERROR;
         }
-        sample_capture_copy_path(g_sample_capture.state.temp_path,
-                                 SAMPLE_CAPTURE_TEMP_PATH);
-        ok = 1U;
+        const char *temporary_path = rec_source_building_temporary_path();
+        const char *final_path = rec_source_building_final_path();
+        sample_audio_key_t building_key;
+        const uint8_t building_ready = (rec_source_building_active() != 0U)
+            ? 1U : rec_source_begin_build(&temporary_path, &final_path,
+                                          &building_key);
+        if (building_ready != 0U)
+        {
+            sample_capture_copy_path(g_sample_capture.state.temp_path,
+                                     temporary_path);
+            ok = 1U;
+        }
     }
     else
     {
@@ -394,7 +403,7 @@ static audio_recorder_lifecycle_result_t sample_capture_prepare_session(void)
         audio_recorder_prepare_client_cooperative(
             AUDIO_RECORDER_CLIENT_AUDIO_REC,
             g_sample_capture.state.temp_path,
-            SAMPLE_CAPTURE_WORKING_WAV_PATH,
+            rec_source_building_final_path(),
             frame_limit);
     if(prepared != AUDIO_RECORDER_LIFECYCLE_OK)
     {

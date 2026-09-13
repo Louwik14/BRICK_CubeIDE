@@ -214,6 +214,7 @@ set(DOMAIN_CONTRACT_HEADERS
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/multi_sample_audio_projection.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/multi_sample_audio_projection_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/sample_classic_audio_projection_contract.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/rec_source_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/sampler_ram_audio_projection.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/sampler_ram_audio_projection_contract.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/Inc/IPC/sampler_ram_playhead_contract.h"

@@ -153,8 +153,6 @@ uint8_t brick6_looper_runtime_capture_from_irq(uint8_t track_id,
                                                const int32_t *lr_interleaved,
                                                uint32_t frames);
 void brick6_looper_runtime_set_play_auto(uint8_t track_id, uint8_t play_auto);
-void brick6_looper_runtime_set_main_xfade(uint8_t track_id, float xfade);
-float brick6_looper_runtime_get_main_xfade(uint8_t track_id);
 void brick6_looper_runtime_set_stretch(uint8_t track_id,
                                        uint8_t mode,
                                        float pitch_semitones,

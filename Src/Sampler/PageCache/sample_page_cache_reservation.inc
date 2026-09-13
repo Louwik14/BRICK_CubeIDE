@@ -51,9 +51,10 @@ uint8_t sample_page_cache_has_reserved_domain_range(sample_audio_domain_t domain
 
     for (uint16_t offset_id = 0U; offset_id < object_count; ++offset_id)
     {
-        sample_audio_key_t key;
-        key.domain = domain;
-        key.object_id = (uint16_t)(first_object_id + offset_id);
+        const sample_audio_key_t key = {
+            .domain = (uint8_t)domain,
+            .object_id = (uint16_t)(first_object_id + offset_id)
+        };
         const uint16_t key_slot = sample_page_cache_key_slot(key);
         if (key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES)
         {

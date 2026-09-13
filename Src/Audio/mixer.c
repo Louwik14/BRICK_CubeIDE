@@ -41,6 +41,7 @@
 #include "fx_reverb.h"
 #include "Param/spectral_window.h"
 #include "Audio/brick6_looper_runtime.h"
+#include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
 #include "Audio/Engines/fm_engine.h"
 #include "Track/synth_polyphony.h"
 #include "Track/track_types.h"

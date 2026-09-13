@@ -97,6 +97,7 @@ static const char *const g_sampler_clip_sync_length_labels[] = {"Off", "1 bar", 
 static const char *const g_sampler_clip_play_mode_labels[] = {"Gate", "Launch", NULL};
 static const char *const g_sampler_clip_stretch_mode_labels[] = {"Off", "Speed", "Shifter", NULL};
 static const char *const g_sampler_clip_grain_labels[] = {"384", "512", "768", "1024", "1536", "2048", NULL};
+static const char *const g_stream_source_labels[] = {"POOL", "REC", NULL};
 
 
 static const char *const g_prism_edit_labels[] = {"CSAW", "Morph", "SawSq", "SinTri", "Buzz", "SqSub", "SawSub", "SqSync", "SawSync", "TriSaw", "TriSq", "TriTri", "TriSin", "Ring", "Swarm", "Toy", "Vosim", "Vowel", "FOF", "FM", "FB FM", "Chaos", "WTbl", "WMap", "WLine", "WPara", "Noise", "TwinPk", "Clock", "Cloud", "Particle", "DigiMod", "????", NULL};

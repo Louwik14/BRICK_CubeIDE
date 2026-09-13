@@ -41,7 +41,8 @@ static uint32_t sample_stream_manager_collect_candidates(
 static uint8_t sample_stream_manager_finish_io(
     sample_stream_manager_pending_io_t *pending,
     sample_stream_io_result_t *io_result);
-static uint8_t sample_stream_manager_submit_classic_prefill(void);
+static uint8_t sample_stream_manager_submit_prefill(
+    sample_audio_domain_t domain, uint16_t capacity);
 static void sample_stream_manager_init_storage_once(void)
 {
     if (g_sample_stream_manager_initialized != 0U)
@@ -86,6 +87,16 @@ void sample_stream_manager_release_key(sample_audio_key_t key)
     }
     (void)sample_stream_transport_request_release(key);
     (void)sample_page_cache_cancel_reserved_key(key, SAMPLE_STREAM_CANCEL_REASON_RELEASE_KEY);
+}
+
+uint8_t sample_stream_manager_key_busy(sample_audio_key_t key)
+{
+    for (uint8_t i = 0U; i < g_sample_stream_manager_pending_count; ++i)
+        if ((g_sample_stream_manager_pending_io[i].active != 0U)
+                && (sample_audio_key_equal(
+                    &g_sample_stream_manager_pending_io[i].target.key,
+                    &key) != 0U)) return 1U;
+    return 0U;
 }
 
 static uint8_t sample_stream_manager_finish_io(
@@ -290,13 +301,13 @@ static uint8_t sample_stream_manager_pick_next(
     return 1U;
 }
 
-static uint8_t sample_stream_manager_submit_classic_prefill(void)
+static uint8_t sample_stream_manager_submit_prefill(
+    sample_audio_domain_t domain, uint16_t capacity)
 {
     sample_page_load_target_t target;
     if ((g_sample_stream_manager_pending_count >= 2U)
         || (sample_page_cache_get_reserved_load_target_domain_range(
-                SAMPLE_AUDIO_DOMAIN_CLASSIC, 0U,
-                SAMPLE_CLASSIC_CAPACITY, &target) == 0U))
+                domain, 0U, capacity, &target) == 0U))
     {
         return 0U;
     }
@@ -483,7 +494,10 @@ void sample_stream_manager_service(uint32_t byte_budget)
         byte_budget -= consumed;
 
     }
-    (void)sample_stream_manager_submit_classic_prefill();
+    if (sample_stream_manager_submit_prefill(
+            SAMPLE_AUDIO_DOMAIN_REC, SAMPLE_PAGE_CACHE_REC_ID_CAPACITY) == 0U)
+        (void)sample_stream_manager_submit_prefill(
+            SAMPLE_AUDIO_DOMAIN_CLASSIC, SAMPLE_CLASSIC_CAPACITY);
 }
 
 uint8_t sample_stream_manager_has_pending_sd_work(void)
@@ -496,7 +510,11 @@ uint8_t sample_stream_manager_has_pending_sd_work(void)
     uint32_t loading_pages = 0U;
     const uint32_t candidate_count = sample_stream_manager_collect_candidates(
         candidates, SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES, 0, &loading_pages);
-    return ((candidate_count != 0U) || (loading_pages != 0U)) ? 1U : 0U;
+    if ((candidate_count != 0U) || (loading_pages != 0U)) return 1U;
+    sample_page_load_target_t prefill_target;
+    return sample_page_cache_get_reserved_load_target_domain_range(
+        SAMPLE_AUDIO_DOMAIN_REC, 0U, SAMPLE_PAGE_CACHE_REC_ID_CAPACITY,
+        &prefill_target);
 }
 
 uint8_t sample_stream_manager_io_in_flight(void)

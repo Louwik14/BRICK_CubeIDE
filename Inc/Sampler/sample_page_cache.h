@@ -61,8 +61,8 @@ typedef enum
 } sample_page_finish_result_t;
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
-_Static_assert(sizeof(sample_page_load_token_t) == 20U,
-               "page load token ABI must remain 20 bytes");
+_Static_assert(sizeof(sample_page_load_token_t) == 24U,
+               "page load token ABI must remain 24 bytes");
 #endif
 
 typedef enum

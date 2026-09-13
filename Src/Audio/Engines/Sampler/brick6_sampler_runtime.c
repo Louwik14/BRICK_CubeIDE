@@ -25,6 +25,7 @@
 #include "Platform/memory_layout.h"
 #include "Audio/multi_sample_audio_projection_audio.h"
 #include "Audio/sample_classic_audio_projection_audio.h"
+#include "Audio/rec_source_audio.h"
 #include "Sampler/sample_reader_contract.h"
 #include "Sampler/sample_page_cache_audio.h"
 #include "Sampler/sample_voice_reader.h"
@@ -147,7 +148,9 @@ typedef enum
 typedef struct
 {
     uint16_t sample_id;
+    uint8_t source;
     float gain;
+    float xfade;
     float source_bpm;
     uint16_t grain_size;
     uint8_t sync_length;
@@ -242,9 +245,9 @@ static AUDIO_HOT brick6_sampler_voice_t
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(SAMPLER_MULTI_MAX_GLOBAL_VOICES == 8U,
                "Multi runtime pool must remain globally capped at eight voices");
-_Static_assert(sizeof(brick6_sampler_voice_t) == 472U,
+_Static_assert(sizeof(brick6_sampler_voice_t) == 488U,
                "Sampler voice size changed; remeasure DTCM before accepting it");
-_Static_assert(sizeof(g_sampler_multi_voice) == 3776U,
+_Static_assert(sizeof(g_sampler_multi_voice) == 3904U,
                "Multi sampler voice pool size changed; remeasure DTCM before accepting it");
 #endif
 static brick6_sampler_clip_runtime_t g_sampler_clip_runtime[SEQ_TRACK_COUNT];

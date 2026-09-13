@@ -1,6 +1,7 @@
 #include "IPC/audio_wavetable_registry_contract.h"
 #include "IPC/multi_sample_audio_projection_contract.h"
 #include "IPC/sample_classic_audio_projection_contract.h"
+#include "IPC/rec_source_contract.h"
 #include "IPC/sampler_ram_audio_projection_contract.h"
 #include "IPC/sampler_ram_playhead_contract.h"
 #include "Platform/memory_layout.h"
@@ -23,6 +24,7 @@ CONTROL_STREAM_INDEX_SDRAM sample_page_shared_index_entry_t
 
 AUDIO_STATE_SHARED_SDRAM sample_classic_audio_source_t
     g_sample_classic_audio_source[SAMPLE_CLASSIC_CAPACITY];
+AUDIO_STATE_SHARED_SDRAM rec_source_projection_t g_rec_source_projection;
 
 D2_IPC multi_audio_instrument_t
     g_multi_audio_instruments[MULTI_SAMPLE_POOL_MAX_INSTRUMENTS];
@@ -42,13 +44,13 @@ D2_IPC sampler_ram_playhead_slot_t
 AUDIO_STATE_SHARED_SDRAM audio_wavetable_registry_slot_t
     g_audio_wavetable_registry[WAVETABLE_POOL_MAX_SLOTS];
 
-_Static_assert(sizeof(sample_page_shared_descriptor_t) == 56U,
+_Static_assert(sizeof(sample_page_shared_descriptor_t) == 60U,
                "Page descriptor ABI changed");
-_Static_assert(sizeof(sample_page_shared_index_entry_t) == 12U,
+_Static_assert(sizeof(sample_page_shared_index_entry_t) == 20U,
                "Page index ABI changed");
-_Static_assert(sizeof(sample_classic_audio_snapshot_t) == 44U,
+_Static_assert(sizeof(sample_classic_audio_snapshot_t) == 48U,
                "Classic snapshot ABI changed");
-_Static_assert(sizeof(sample_classic_audio_source_t) == 92U,
+_Static_assert(sizeof(sample_classic_audio_source_t) == 100U,
                "Classic source ABI changed");
 _Static_assert(sizeof(multi_audio_instrument_t) == 16U,
                "Multi instrument ABI changed");

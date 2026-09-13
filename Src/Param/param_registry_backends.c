@@ -554,6 +554,18 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             }
             brick6_sampler_runtime_set_clip_source_bpm(track, param_backend_clamp_value(value, 40.0f, 300.0f));
             return 1U;
+        case PARAM_SAMPLER_CLIP_SOURCE:
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
+                return 0U;
+            brick6_sampler_runtime_set_clip_source(track,
+                (uint8_t)(param_backend_clamp_value(value, 0.0f, 1.0f) + 0.5f));
+            return 1U;
+        case PARAM_STREAM_XFADE:
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
+                return 0U;
+            brick6_sampler_runtime_set_clip_xfade(
+                track, param_backend_clamp_value(value, 0.0f, 1.0f));
+            return 1U;
         case PARAM_SAMPLER_CLIP_SYNC_LENGTH:
             if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM))
             {
@@ -642,12 +654,6 @@ uint8_t param_backend_apply_tone_looper(uint8_t track, param_id_t id, float valu
 
     switch (id)
     {
-        case PARAM_LOOPER_XFADE:
-        {
-            const float clamped = param_backend_clamp_value(value, 0.0f, 1.0f);
-            brick6_looper_runtime_set_main_xfade(track, clamped);
-            return 1U;
-        }
         case PARAM_LOOPER_STRETCH:
             brick6_looper_runtime_set_stretch_mode(
                 track, (uint8_t)(param_backend_clamp_value(value, 0.0f, 2.0f) + 0.5f));

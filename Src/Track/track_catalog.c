@@ -7,8 +7,7 @@ static const track_type_t k_synth_types[] = {
     TRACK_TYPE_TB303
 };
 static const track_type_t k_sampler_types[] = {
-    TRACK_TYPE_RAM, TRACK_TYPE_STREAM, TRACK_TYPE_LOOPER,
-    TRACK_TYPE_MULTI, TRACK_TYPE_GROUP
+    TRACK_TYPE_RAM, TRACK_TYPE_STREAM, TRACK_TYPE_MULTI, TRACK_TYPE_GROUP
 };
 static const track_type_t k_midi_types[] = { TRACK_TYPE_MIDI };
 static const track_type_t k_external_types[] = { TRACK_TYPE_EXTERNAL };

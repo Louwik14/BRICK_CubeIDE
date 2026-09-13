@@ -316,7 +316,7 @@ static void codec_tone(codec_io_t *io,tone_program_control_t*t)
     case TRACK_RUNTIME_TYPE_WAVE:codec_float_block(io,&t->state.wave.osc[0].position,10U);break;
     case TRACK_RUNTIME_TYPE_TB303:codec_float_block(io,&t->state.tb303.wave,9U);break;
     case TRACK_RUNTIME_TYPE_RAM:codec_float_block(io,&t->state.ram.gain,7U);break;
-    case TRACK_RUNTIME_TYPE_STREAM:codec_float_block(io,&t->state.stream.gain,8U);break;
+    case TRACK_RUNTIME_TYPE_STREAM:codec_float_block(io,&t->state.stream.gain,10U);break;
     case TRACK_RUNTIME_TYPE_LOOPER:codec_float_block(io,&t->state.looper.xfade,4U);break;
     case TRACK_RUNTIME_TYPE_MULTI:codec_float_block(io,&t->state.multi.gain,2U);break;
     case TRACK_RUNTIME_TYPE_MIDI:codec_float_block(io,&t->state.midi.program,13U);break;

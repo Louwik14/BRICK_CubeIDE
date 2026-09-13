@@ -165,8 +165,7 @@ static void sample_page_cache_index_put_key(sample_audio_key_t key, uint32_t pag
             sample_page_index_entry_t *const dst =
                 (first_deleted != UINT32_MAX) ? &g_sample_page_index[first_deleted] : entry;
             dst->used = 1U;
-            dst->key.domain = key.domain;
-            dst->key.object_id = key.object_id;
+            dst->key = key;
     dst->page_index = page_index;
     dst->slot_index = slot_index;
     intercore_cache_publish(dst, sizeof(*dst));
@@ -178,8 +177,7 @@ static void sample_page_cache_index_put_key(sample_audio_key_t key, uint32_t pag
     {
         sample_page_index_entry_t *const dst = &g_sample_page_index[first_deleted];
         dst->used = 1U;
-        dst->key.domain = key.domain;
-        dst->key.object_id = key.object_id;
+        dst->key = key;
         dst->page_index = page_index;
         dst->slot_index = slot_index;
         intercore_cache_publish(dst, sizeof(*dst));

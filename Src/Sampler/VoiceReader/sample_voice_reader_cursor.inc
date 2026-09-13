@@ -10,6 +10,8 @@ static uint8_t sample_voice_reader_lease_slot(sample_audio_key_t key,
         return sample_page_lease_classic_slot(reader_id);
     if (key.domain == SAMPLE_AUDIO_DOMAIN_MULTI)
         return sample_page_lease_multi_slot(reader_id);
+    if (key.domain == SAMPLE_AUDIO_DOMAIN_REC)
+        return sample_page_lease_rec_slot(reader_id);
     return UINT8_MAX;
 }
 

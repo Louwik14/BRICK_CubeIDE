@@ -406,6 +406,40 @@ void brick6_sampler_runtime_set_clip_source_bpm(uint8_t track_id, float source_b
     g_sampler_clip_runtime[track_id].source_bpm = source_bpm;
 }
 
+void brick6_sampler_runtime_set_clip_source(uint8_t track_id, uint8_t source)
+{
+    if ((track_id >= SEQ_TRACK_COUNT)
+            || (brick6_sampler_runtime_track_is_clip(track_id) == 0U)) return;
+    brick6_sampler_clip_runtime_t *const clip = &g_sampler_clip_runtime[track_id];
+    const uint8_t next = (source != 0U) ? 1U : 0U;
+    if (clip->source == next) return;
+    brick6_sampler_runtime_clip_stop_playback(track_id);
+    clip->source = next;
+}
+
+uint8_t brick6_sampler_runtime_clip_source_is_rec(uint8_t track_id)
+{
+    return ((track_id < SEQ_TRACK_COUNT)
+            && (brick6_sampler_runtime_track_is_clip(track_id) != 0U)
+            && (g_sampler_clip_runtime[track_id].source != 0U)) ? 1U : 0U;
+}
+
+void brick6_sampler_runtime_set_clip_xfade(uint8_t track_id, float xfade)
+{
+    if ((track_id >= SEQ_TRACK_COUNT)
+            || (brick6_sampler_runtime_track_is_clip(track_id) == 0U)) return;
+    if (xfade < 0.0f) xfade = 0.0f;
+    else if (xfade > 1.0f) xfade = 1.0f;
+    g_sampler_clip_runtime[track_id].xfade = xfade;
+}
+
+float brick6_sampler_runtime_get_clip_xfade(uint8_t track_id)
+{
+    return ((track_id < SEQ_TRACK_COUNT)
+            && (brick6_sampler_runtime_track_is_clip(track_id) != 0U))
+        ? g_sampler_clip_runtime[track_id].xfade : 0.0f;
+}
+
 void brick6_sampler_runtime_set_clip_sync_length(uint8_t track_id, uint8_t sync_length)
 {
     brick6_sampler_clip_runtime_t *clip;

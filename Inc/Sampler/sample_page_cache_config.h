@@ -66,8 +66,11 @@ typedef enum
 #define SAMPLE_PAGE_CACHE_MULTI_ID_BASE       (SAMPLE_PAGE_CACHE_LOOPER_ID_BASE \
                                                + SAMPLE_PAGE_CACHE_LOOPER_ID_CAPACITY)
 #define SAMPLE_PAGE_CACHE_MULTI_ID_CAPACITY   (MULTI_SAMPLE_MAX_SAMPLES)
-#define SAMPLE_PAGE_CACHE_ID_CAPACITY         (SAMPLE_PAGE_CACHE_MULTI_ID_BASE \
+#define SAMPLE_PAGE_CACHE_REC_ID_BASE         (SAMPLE_PAGE_CACHE_MULTI_ID_BASE \
                                                + SAMPLE_PAGE_CACHE_MULTI_ID_CAPACITY)
+#define SAMPLE_PAGE_CACHE_REC_ID_CAPACITY     (2U)
+#define SAMPLE_PAGE_CACHE_ID_CAPACITY         (SAMPLE_PAGE_CACHE_REC_ID_BASE \
+                                               + SAMPLE_PAGE_CACHE_REC_ID_CAPACITY)
 #define SAMPLE_PAGE_CACHE_MAX_SAMPLES         (SAMPLE_PAGE_CACHE_ID_CAPACITY)
 /* Multi page-window reserve; Stream admits at most 8 active voices. */
 #define SAMPLE_PAGE_CACHE_MAX_VOICES          BRICK6_SAMPLER_MULTI_MAX_VOICES

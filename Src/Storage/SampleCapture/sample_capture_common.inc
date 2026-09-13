@@ -181,7 +181,7 @@ static uint8_t sample_capture_path_is_temp(const char *path)
     {
         return 1U;
     }
-    if(strcmp(path, SAMPLE_CAPTURE_TEMP_PATH) == 0)
+    if(strstr(path, "REC_WORK_") != 0)
     {
         return 1U;
     }

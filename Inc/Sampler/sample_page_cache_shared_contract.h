@@ -64,6 +64,10 @@ static inline uint16_t sample_page_cache_key_slot(sample_audio_key_t key)
             return (key.object_id < SAMPLE_PAGE_CACHE_MULTI_ID_CAPACITY)
                 ? (uint16_t)(SAMPLE_PAGE_CACHE_MULTI_ID_BASE + key.object_id)
                 : UINT16_MAX;
+        case SAMPLE_AUDIO_DOMAIN_REC:
+            return (key.object_id < SAMPLE_PAGE_CACHE_REC_ID_CAPACITY)
+                ? (uint16_t)(SAMPLE_PAGE_CACHE_REC_ID_BASE + key.object_id)
+                : UINT16_MAX;
         default:
             return UINT16_MAX;
     }

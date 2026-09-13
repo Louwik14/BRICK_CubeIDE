@@ -12,6 +12,16 @@ static uint8_t brick6_sampler_runtime_track_is_clip(uint8_t track_id)
     return (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_STREAM) ? 1U : 0U;
 }
 
+static uint8_t brick6_sampler_runtime_clip_resolve_source(
+    const brick6_sampler_clip_runtime_t *clip,
+    sample_resolved_source_t *source)
+{
+    if ((clip == NULL) || (source == NULL)) return 0U;
+    return (clip->source != 0U)
+        ? rec_source_audio_resolve(source)
+        : sample_classic_audio_projection_resolve(clip->sample_id, source);
+}
+
 static uint8_t brick6_sampler_runtime_clip_mode_is_off(const brick6_sampler_clip_runtime_t *clip)
 {
     return ((clip != NULL) && (clip->stretch_mode == 0U)) ? 1U : 0U;
@@ -166,6 +176,7 @@ static void brick6_sampler_runtime_clip_reset(uint8_t track_id)
 
     brick6_sampler_runtime_clip_release_slot(track_id);
     g_sampler_clip_runtime[track_id].sample_id = 0U;
+    g_sampler_clip_runtime[track_id].source = 0U;
     g_sampler_clip_runtime[track_id].gain = 1.0f;
     g_sampler_clip_runtime[track_id].source_bpm = 120.0f;
     g_sampler_clip_runtime[track_id].grain_size = BRICK6_SAMPLER_CLIP_DEFAULT_GRAIN_FRAMES;
@@ -379,10 +390,9 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     uint32_t region_begin = 0U;
     uint32_t region_end = 0U;
 
-    if ((clip->sample_id >= SAMPLE_CLASSIC_CAPACITY)
-            || (sample_classic_audio_projection_resolve(clip->sample_id, &source) == 0U)
-            || (source.total_frames == 0U)
-            || (sample_classic_audio_projection_is_ready(clip->sample_id) == 0U))
+    if (((clip->source == 0U) && (clip->sample_id >= SAMPLE_CLASSIC_CAPACITY))
+            || (brick6_sampler_runtime_clip_resolve_source(clip, &source) == 0U)
+            || (source.total_frames == 0U))
     {
         if (clip->use_shifter_engine != 0U)
         {
@@ -418,7 +428,7 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     memset(&play_plan, 0, sizeof(play_plan));
     sample_resolved_source_t stream_source;
     sample_resolved_source_init(&stream_source);
-    if (sample_classic_audio_projection_resolve(clip->sample_id, &stream_source) == 0U)
+    if (brick6_sampler_runtime_clip_resolve_source(clip, &stream_source) == 0U)
     {
         if (use_shifter != 0U)
         {
@@ -427,7 +437,7 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
         return 0U;
     }
     play_plan.sample_id = clip->sample_id;
-    play_plan.key = sample_audio_key_classic(clip->sample_id);
+    play_plan.key = stream_source.key;
     play_plan.format = stream_source.format;
     play_plan.stride_floats = stream_source.stride_floats;
     play_plan.frames_per_page = stream_source.frames_per_page;
@@ -509,6 +519,22 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
         brick6_sampler_runtime_clip_reset_shifter(clip, slot);
     }
     return 1U;
+}
+
+static void brick6_sampler_runtime_clip_rebind_rec(uint8_t track_id)
+{
+    if (track_id >= SEQ_TRACK_COUNT) return;
+    brick6_sampler_clip_runtime_t *const clip = &g_sampler_clip_runtime[track_id];
+    brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
+    if ((clip->source == 0U)
+            || (clip->state != (uint8_t)BRICK6_SAMPLER_CLIP_STATE_PLAYING)
+            || (voice->active == 0U)) return;
+    sample_resolved_source_t current;
+    if ((rec_source_audio_resolve(&current) == 0U)
+            || (sample_audio_key_equal(
+                &current.key, &voice->play_plan.key) != 0U)) return;
+    if (brick6_sampler_runtime_clip_start_playback(track_id) == 0U)
+        clip->state = (uint8_t)BRICK6_SAMPLER_CLIP_STATE_STOPPED;
 }
 
 static void brick6_sampler_runtime_clip_stop_playback_internal(uint8_t track_id,

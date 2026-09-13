@@ -1,4 +1,27 @@
-# Recorder SD, Looper et streamer
+# Recorder SD, REC_SOURCE et Streamer
+
+## Etat de migration REC_SOURCE
+
+Audio Rec produit maintenant une generation immutable dans deux workspaces
+alternes: `REC_WORK_A.REC/.WAV` et `REC_WORK_B.REC/.WAV`. `REC_SOURCE` publie
+par double snapshot la cle complete `{domain, slot, generation}`, la longueur,
+l'epoch d'enregistrement page-cache et l'etat READY. La generation precedente
+reste intacte tant qu'une lease AUDIO la reference; son cache et ses fichiers
+ne sont recycles qu'apres liberation.
+
+Le Streamer porte le choix canonique `SOURCE=POOL/REC`. `POOL` conserve la
+resolution Classic; `REC` resout uniquement le snapshot READY de `REC_SOURCE`
+et rend le silence en son absence. Les premieres pages de la generation en
+construction sont reservees pendant `DRAINING`; la publication attend la
+finalisation WAV et leur etat READY. Un Streamer REC deja actif se rebind au
+bloc suivant sur la nouvelle cle et libere ainsi son ancienne lease. Aucun
+preroll RAM ni relais RAM-vers-SD n'intervient dans ce chemin.
+
+Le playback Looper n'est plus dispatchable et Looper n'est plus propose par le
+catalogue de types. Son ancien code de capture/boundary reste transitoirement
+compile jusqu'a la migration du CONTROL Recorder. `XFADE` appartient desormais
+au Streamer: il melange le bus live et les voies Stream `SOURCE=REC`, sans
+dependre d'un etat PLAYING ni de l'existence d'un REC valide.
 
 ## Frontieres P0-4
 
@@ -41,8 +64,8 @@ AUDIO.
 
 Audio Rec possede un unique bus stereo AUDIO, somme des entites resolues par CONTROL et, si necessaire, de LINE directe. CONTROL publie le masque d'entites, ARM et les sources effectives comme PARAM final dans la FIFO unique; AUDIO conserve ensuite cette configuration privee. LINE directe est exclue lorsque l'entree physique est deja representee par une track External routee vers REC; cette decision est derivee de `track_input_ownership`, `entity_topology` et `track_runtime`. Sur Low-Cost, MIC Audio Rec selectionne la source physique mono `IN3_R` du TLV320AIC3204, routee avec un gain MICPGA fixe de +20 dB par le Right MICPGA et le Right ADC; l'ancien `IN1_R`, alors inutilise, est faiblement reference au common-mode. Le sample SAI droit alimente `mic.mono`, puis les deux canaux du bus REC existant. LINE_R et MIC partagent ce Right ADC et sont donc exclusifs. En mode MIC, LINE physique n'est pas publiee comme source External stereo; MIC n'est pas encore une source External et aucun second chemin Recorder n'est cree.
 
-Les prises Audio Rec vivent integralement sous `0:/REC`: le couple transactionnel
-`AUDIOREC_TMP.REC`/`AUDIOREC_TMP.WAV` puis le WAV edite `RECnnnn.WAV`. Apres la
+Les prises Audio Rec vivent integralement sous `0:/REC`: les couples transactionnels
+`REC_WORK_A.REC/.WAV` et `REC_WORK_B.REC/.WAV`, puis le WAV edite `RECnnnn.WAV`. Apres la
 durabilite du SAVE, l'UI derive des identites logiques actives la liste des tracks
 Sampler RAM/Stream et peut affecter directement cette reference canonique, sans
 rescanner le browser. SAVE et ASSIGN restent deux transactions independantes.
@@ -147,7 +170,7 @@ La reserve fixe recorder comprend le ring Audio Rec/Looper de 12 001 frames (`~9
 
 Les `f_write` restants hors recorder servent l'editeur REC EDIT (copie Save/Assign) et les transactions fichiers ordinaires; ils ne sont pas sur le hot path de capture. Toute evolution doit conserver: aucune attente SD en IRQ, publication du tail seulement sur completion physique, carte append-only, une commande block-device active, passage obligatoire par le scheduler pour READ/WRITE/FILESYSTEM concurrents, et finalisation WAV seulement apres drainage complet.
 
-## Monitoring Looper et XFADE
+## Monitoring REC et XFADE
 
 Les entrees physiques LINE et USB sont materialisees comme voies `External` du
 mixer lorsqu'elles sont possedees par une piste routable. Elles rejoignent
@@ -157,8 +180,8 @@ master. Les flags `AUDIO_REC_BUS_SOURCE_*` alimentent uniquement
 `audio_rec_bus` pour l'enregistrement et ne constituent pas un monitoring
 parallele.
 
-Pendant la lecture Looper, la sortie Looper reste sur un bus playback dedie et
-`XFADE` melange ce bus avec le bus live apres les retours de sends. La valeur
+Pendant la lecture REC, les voies Stream `SOURCE=REC` rejoignent un bus playback
+dedie et `XFADE` melange ce bus avec le bus live apres les retours de sends. La valeur
 canonique est bornee a `[0, 1]`, avec des extremites deterministes: `0` donne
 live seul et `1` loop seul. Les voies live USB/LINE et les sources internes
 sont donc toutes soumises au meme gain live; aucune voie physique n'est
@@ -168,7 +191,7 @@ Le trajet de valeur est egalement unique: l'affichage `0..127` est converti en
 canonique `0..1` par `param_value_policy`, transporte bit-a-bit comme `float`
 dans la commande CONTROL/AUDIO, puis installe dans `main_xfade`. Ainsi, pour
 `XFADE=127`: CONTROL canonique `1.0`, transport `0x3f800000`, AUDIO `1.0`,
-`live_gain=0.0` et `loop_gain=1.0`. Le lissage rejoint explicitement les deux
+`live_gain=0.0` et `rec_gain=1.0`. Le lissage rejoint explicitement les deux
 extremites; apres le premier bloc de transition, le endpoint plein remplace le
 bus live par le bus playback, ce qui rend sa contribution exactement nulle.
 
@@ -180,7 +203,7 @@ Inventaire des contributions MAIN pendant la lecture:
 | External LINE/USB | entree physique -> voie External -> dry ou GROUP -> `bus_main` | trim/voie/GROUP | oui |
 | retours sends/FX globaux | sends voie/GROUP -> retour -> `bus_main` | niveau send/retour | oui |
 | preview SD | `sd_preview_render_main` -> `bus_main` | gain preview | oui |
-| playback Looper | voie Looper -> `looper_bus_main` | trim/voie | cote loop |
+| playback REC | voie Stream REC -> `rec_stream_bus_main` | trim/voie | cote REC |
 | master dynamics | traitement en place du resultat XFADE | gain du slot | deja post-XFADE, sans entree parallele |
 | metronome | ajout dans `audio_io_pack_ramped` | niveau metronome | non; monitor transport, pas du live |
 

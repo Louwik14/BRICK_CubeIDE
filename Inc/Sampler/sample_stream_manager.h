@@ -20,6 +20,7 @@ extern "C" {
 void sample_stream_manager_init(void);
 void sample_stream_manager_reset(void);
 void sample_stream_manager_release_key(sample_audio_key_t key);
+uint8_t sample_stream_manager_key_busy(sample_audio_key_t key);
 void sample_stream_manager_release_sample(uint16_t sample_id);
 void sample_stream_manager_service(uint32_t byte_budget);
 uint8_t sample_stream_manager_has_pending_sd_work(void);

@@ -304,60 +304,6 @@ static __attribute__((noinline)) void brick6_render_sampler_tracks(uint32_t fram
     }
 }
 
-static __attribute__((noinline)) void brick6_render_looper_tracks(uint32_t frames, uint8_t *out_looper_tracks)
-{
-    static float looper_tmp_l[AUDIO_BLOCK_SIZE];
-    static float looper_tmp_r[AUDIO_BLOCK_SIZE];
-    uint8_t looper_tracks = 0U;
-
-    uint16_t playing_mask = brick6_looper_runtime_playing_mask();
-    while (playing_mask != 0U)
-    {
-        const uint8_t track = (uint8_t)__builtin_ctz((unsigned)playing_mask);
-        playing_mask &= (uint16_t)(playing_mask - 1U);
-        track_audio_runtime_ctx_t ctx_value;
-        const track_audio_runtime_ctx_t *const ctx =
-            (audio_note_engine_adapter_current_ctx(track, &ctx_value) != 0U)
-                ? &ctx_value : NULL;
-        if ((ctx == NULL)
-                || (ctx->program_route.active == 0U)
-                || (ctx->program_route.engine != (uint8_t)TRACK_RUNTIME_ENGINE_LOOPER)
-                || (audio_note_engine_adapter_ctx_is_audio_routable(ctx) == 0U)
-                || (brick6_looper_runtime_is_playing(track) == 0U))
-        {
-            continue;
-        }
-
-        float *direct_l = NULL;
-        float *direct_r = NULL;
-        if (mixer_begin_external_stereo(ctx->program_route.mix_track_id,
-                                        frames,
-                                        &direct_l,
-                                        &direct_r) != 0U)
-        {
-            memset(direct_l, 0, frames * sizeof(float));
-            memset(direct_r, 0, frames * sizeof(float));
-            brick6_looper_runtime_render_track(ctx, direct_l, direct_r, frames);
-            brick6_looper_runtime_probe_rendered(direct_l, direct_r, frames);
-            mixer_commit_external_stereo(ctx->program_route.mix_track_id, frames);
-            looper_tracks++;
-            continue;
-        }
-
-        memset(looper_tmp_l, 0, frames * sizeof(float));
-        memset(looper_tmp_r, 0, frames * sizeof(float));
-        brick6_looper_runtime_render_track(ctx, looper_tmp_l, looper_tmp_r, frames);
-        brick6_looper_runtime_probe_rendered(looper_tmp_l, looper_tmp_r, frames);
-        mixer_submit_external_stereo(ctx->program_route.mix_track_id, looper_tmp_l, looper_tmp_r, frames);
-        looper_tracks++;
-    }
-
-    if (out_looper_tracks != NULL)
-    {
-        *out_looper_tracks = looper_tracks;
-    }
-}
-
 static __attribute__((noinline)) void brick6_render_prism_tracks(uint16_t entity_mask,
                                        uint32_t frames,
                                        uint8_t *out_prism_tracks)
@@ -731,9 +677,6 @@ ITCM_TEXT void brick6_audio_runtime_dsp(StereoTrack *tracks,
 
     if (brick6_looper_runtime_playing_mask() != 0U)
     {
-        uint8_t looper_tracks = 0U;
-        brick6_render_looper_tracks(frames, &looper_tracks);
-        (void)looper_tracks;
     }
 
     const uint16_t prism_entity_mask = audio_note_engine_adapter_entity_mask(

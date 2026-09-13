@@ -16,6 +16,7 @@ void brick6_sampler_runtime_render_stream_track(const track_audio_runtime_ctx_t 
         return;
     }
 
+    brick6_sampler_runtime_clip_rebind_rec(ctx->program_route.entity_id);
     brick6_sampler_clip_runtime_t *const clip = &g_sampler_clip_runtime[ctx->program_route.entity_id];
     brick6_sampler_clip_slot_t *const slot = brick6_sampler_runtime_clip_get_slot(ctx->program_route.entity_id);
     brick6_sampler_voice_t *const voice = &g_sampler_voice[ctx->program_route.entity_id];
@@ -93,6 +94,7 @@ void brick6_sampler_runtime_render_stream_track_mono(const track_audio_runtime_c
         return;
     }
 
+    brick6_sampler_runtime_clip_rebind_rec(track_id);
     brick6_sampler_clip_runtime_t *const clip = &g_sampler_clip_runtime[track_id];
     brick6_sampler_voice_t *const voice = &g_sampler_voice[track_id];
     if (clip->state != (uint8_t)BRICK6_SAMPLER_CLIP_STATE_PLAYING)

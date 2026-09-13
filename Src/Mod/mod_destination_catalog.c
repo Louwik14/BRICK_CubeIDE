@@ -11,7 +11,6 @@
 #include "Audio/Engines/prism_engine.h"
 #include "Audio/Engines/fm_engine.h"
 #include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
-#include "Audio/brick6_looper_runtime.h"
 #include "Track/synth_polyphony.h"
 #include "Audio/Engines/stack_engine.h"
 #include "Audio/Engines/wavetable_engine.h"
@@ -126,7 +125,7 @@ static uint8_t mod_destination_is_direct_sampler(param_id_t dest)
         case PARAM_SAMPLER_CLIP_STRETCH_MODE:
         case PARAM_SAMPLER_CLIP_GRAIN:
         case PARAM_SAMPLER_MULTI_LOOP:
-        case PARAM_LOOPER_XFADE:
+        case PARAM_STREAM_XFADE:
             return 1U;
         default:
             return 0U;
@@ -474,9 +473,9 @@ static uint8_t mod_destination_apply_sampler_rt(uint8_t track,
             if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_MULTI) { return 0U; }
             brick6_sampler_runtime_set_multi_loop(track, (mod_destination_clampf(value, 0.0f, 1.0f) >= 0.5f) ? 1U : 0U);
             return 1U;
-        case PARAM_LOOPER_XFADE:
-            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_LOOPER) { return 0U; }
-            brick6_looper_runtime_set_main_xfade(track, mod_destination_clampf(value, 0.0f, 1.0f));
+        case PARAM_STREAM_XFADE:
+            if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM) { return 0U; }
+            brick6_sampler_runtime_set_clip_xfade(track, mod_destination_clampf(value, 0.0f, 1.0f));
             return 1U;
         default:
             return 0U;
@@ -763,7 +762,7 @@ static uint8_t mod_destination_prepared_opcode(param_id_t dest,
         case PARAM_SAMPLER_LENGTH: opcode = MOD_DEST_APPLY_SAMPLER_LENGTH; break;
         case PARAM_SAMPLER_LOOP_START: opcode = MOD_DEST_APPLY_SAMPLER_LOOP_START; break;
         case PARAM_SAMPLER_TUNE: opcode = MOD_DEST_APPLY_SAMPLER_TUNE; break;
-        case PARAM_LOOPER_XFADE: opcode = MOD_DEST_APPLY_LOOPER_XFADE; break;
+        case PARAM_STREAM_XFADE: opcode = MOD_DEST_APPLY_STREAM_XFADE; break;
         case PARAM_PRISM_TUNE: opcode = MOD_DEST_APPLY_PRISM_TUNE; break;
         case PARAM_PRISM_DETUNE: opcode = MOD_DEST_APPLY_PRISM_DETUNE; break;
         case PARAM_PRISM_DRIFT: opcode = MOD_DEST_APPLY_PRISM_DRIFT; break;
@@ -915,7 +914,7 @@ uint8_t mod_destination_catalog_apply_prepared(
         case MOD_DEST_APPLY_SAMPLER_LENGTH: brick6_sampler_runtime_set_length(p->target, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_SAMPLER_LOOP_START: brick6_sampler_runtime_set_loop_start(p->target, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_SAMPLER_TUNE: brick6_sampler_runtime_set_tune(p->target, mod_destination_clampf(value, -24.0f, 24.0f)); return 1U;
-        case MOD_DEST_APPLY_LOOPER_XFADE: brick6_looper_runtime_set_main_xfade(p->target, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
+        case MOD_DEST_APPLY_STREAM_XFADE: brick6_sampler_runtime_set_clip_xfade(p->target, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
         case MOD_DEST_APPLY_PRISM_TUNE: brick6_braids_runtime_set_tune(p->endpoint, mod_destination_clampf(value, -60.0f, 60.0f)); return 1U;
         case MOD_DEST_APPLY_PRISM_DETUNE: brick6_braids_runtime_set_detune(p->endpoint, mod_destination_clampf(value, -24.0f, 24.0f)); return 1U;
         case MOD_DEST_APPLY_PRISM_DRIFT: brick6_braids_runtime_set_drift(p->endpoint, mod_destination_clampf(value, 0.0f, 1.0f)); return 1U;
