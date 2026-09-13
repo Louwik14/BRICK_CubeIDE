@@ -220,10 +220,15 @@ static recorder_file_reservation_result_t recorder_file_extend_locked(
 
 recorder_file_reservation_result_t recorder_file_reservation_extend_begin(
     recorder_file_reservation_t *session,
-    uint64_t additional_bytes)
+    uint64_t additional_bytes,
+    recorder_file_job_owner_t owner)
 {
     if((session == 0) || (session->open == 0U) || (session->failed != 0U)
-            || (session->finalizing != 0U) || (session->job_phase != RECORDER_FILE_JOB_NONE))
+            || (session->finalizing != 0U)
+            || ((owner != RECORDER_FILE_JOB_OWNER_PREPARATION)
+                && (owner != RECORDER_FILE_JOB_OWNER_LIVE_EXTEND))
+            || (session->job_phase != RECORDER_FILE_JOB_NONE)
+            || (session->job_owner != RECORDER_FILE_JOB_OWNER_NONE))
     {
         return RECORDER_FILE_RESERVATION_INVALID_STATE;
     }
@@ -249,6 +254,7 @@ recorder_file_reservation_result_t recorder_file_reservation_extend_begin(
     }
     session->job_result = RECORDER_FILE_RESERVATION_SD_BUSY;
     session->job_phase = RECORDER_FILE_JOB_EXTEND;
+    session->job_owner = owner;
     sd_access_gate_set_recorder_fs_logical_active(1U);
     return RECORDER_FILE_RESERVATION_OK;
 }
@@ -261,6 +267,7 @@ static recorder_file_reservation_result_t recorder_file_sync_begin(
 {
     if((session == 0) || (session->open == 0U) || (session->failed != 0U)
             || (session->job_phase != RECORDER_FILE_JOB_NONE)
+            || (session->job_owner != RECORDER_FILE_JOB_OWNER_NONE)
             || (valid_file_bytes > data_file_bytes)
             || (data_file_bytes > session->fs_state.reserved_bytes))
     {
@@ -274,6 +281,7 @@ static recorder_file_reservation_result_t recorder_file_sync_begin(
     session->job_media_epoch = sd_access_media_epoch();
     session->job_result = RECORDER_FILE_RESERVATION_SD_BUSY;
     session->job_phase = phase;
+    session->job_owner = RECORDER_FILE_JOB_OWNER_FINALIZATION;
     sd_access_gate_set_recorder_fs_logical_active(1U);
     return RECORDER_FILE_RESERVATION_OK;
 }
@@ -306,7 +314,8 @@ recorder_file_reservation_result_t recorder_file_reservation_rename_begin(
 {
     if((session == 0) || (final_path == 0) || (session->open != 0U)
             || (session->failed != 0U) || (session->path[0] == '\0')
-            || (session->job_phase != RECORDER_FILE_JOB_NONE))
+            || (session->job_phase != RECORDER_FILE_JOB_NONE)
+            || (session->job_owner != RECORDER_FILE_JOB_OWNER_NONE))
     {
         return RECORDER_FILE_RESERVATION_INVALID_STATE;
     }
@@ -328,6 +337,7 @@ recorder_file_reservation_result_t recorder_file_reservation_rename_begin(
     session->job_media_epoch = sd_access_media_epoch();
     session->job_result = RECORDER_FILE_RESERVATION_SD_BUSY;
     session->job_phase = RECORDER_FILE_JOB_RENAME;
+    session->job_owner = RECORDER_FILE_JOB_OWNER_FINALIZATION;
     sd_access_gate_set_recorder_fs_logical_active(1U);
     return RECORDER_FILE_RESERVATION_OK;
 }
@@ -408,7 +418,8 @@ recorder_file_reservation_result_t recorder_file_reservation_release_begin(
     recorder_file_reservation_t *session)
 {
     if((session == 0) || (session->open == 0U) || (session->failed != 0U)
-            || (session->job_phase != RECORDER_FILE_JOB_NONE))
+            || (session->job_phase != RECORDER_FILE_JOB_NONE)
+            || (session->job_owner != RECORDER_FILE_JOB_OWNER_NONE))
     {
         return RECORDER_FILE_RESERVATION_INVALID_STATE;
     }
@@ -428,14 +439,44 @@ recorder_file_reservation_result_t recorder_file_reservation_release_begin(
     session->job_media_epoch = sd_access_media_epoch();
     session->job_result = RECORDER_FILE_RESERVATION_SD_BUSY;
     session->job_phase = RECORDER_FILE_JOB_RELEASE;
+    session->job_owner = RECORDER_FILE_JOB_OWNER_FINALIZATION;
     sd_access_gate_set_recorder_fs_logical_active(1U);
     return RECORDER_FILE_RESERVATION_OK;
 }
 
-recorder_file_reservation_result_t recorder_file_reservation_job_step(
-    recorder_file_reservation_t *session)
+static uint8_t recorder_file_job_owner_matches_phase(
+    const recorder_file_reservation_t *session,
+    recorder_file_job_owner_t owner)
 {
-    if((session == 0) || (session->job_phase == RECORDER_FILE_JOB_NONE))
+    if ((session == 0) || (owner == RECORDER_FILE_JOB_OWNER_NONE)
+            || (owner > RECORDER_FILE_JOB_OWNER_FINALIZATION)
+            || (session->job_owner != owner))
+        return 0U;
+    if (session->job_phase == RECORDER_FILE_JOB_TERMINAL)
+        return 1U;
+    if (owner == RECORDER_FILE_JOB_OWNER_PREPARATION)
+    {
+        return ((session->job_phase == RECORDER_FILE_JOB_PREPARE)
+                || (session->job_phase == RECORDER_FILE_JOB_EXTEND)) ? 1U : 0U;
+    }
+    if (owner == RECORDER_FILE_JOB_OWNER_LIVE_EXTEND)
+        return (session->job_phase == RECORDER_FILE_JOB_EXTEND) ? 1U : 0U;
+    if (owner == RECORDER_FILE_JOB_OWNER_FINALIZATION)
+    {
+        return ((session->job_phase == RECORDER_FILE_JOB_COMMIT)
+                || (session->job_phase == RECORDER_FILE_JOB_RELEASE)
+                || (session->job_phase == RECORDER_FILE_JOB_SYNC)
+                || (session->job_phase == RECORDER_FILE_JOB_RENAME)) ? 1U : 0U;
+    }
+    return 0U;
+}
+
+recorder_file_reservation_result_t recorder_file_reservation_job_step(
+    recorder_file_reservation_t *session,
+    recorder_file_job_owner_t owner)
+{
+    if((recorder_file_job_owner_matches_phase(session, owner) == 0U)
+            || (session->job_phase == RECORDER_FILE_JOB_NONE))
     {
         return RECORDER_FILE_RESERVATION_INVALID_STATE;
     }
@@ -611,9 +652,11 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
 }
 
 recorder_file_reservation_result_t recorder_file_reservation_job_poll(
-    recorder_file_reservation_t *session)
+    recorder_file_reservation_t *session,
+    recorder_file_job_owner_t owner)
 {
     if((session == 0) || (session->job_io_active == 0U)
+            || (recorder_file_job_owner_matches_phase(session, owner) == 0U)
             || (session->job_phase == RECORDER_FILE_JOB_NONE)
             || (session->job_phase == RECORDER_FILE_JOB_TERMINAL))
     {
@@ -671,25 +714,36 @@ recorder_file_reservation_result_t recorder_file_reservation_job_poll(
     return RECORDER_FILE_RESERVATION_PROGRESS;
 }
 
-uint8_t recorder_file_reservation_job_active(
+recorder_file_job_owner_t recorder_file_reservation_job_owner(
     const recorder_file_reservation_t *session)
 {
-    return ((session != 0) && (session->job_phase != RECORDER_FILE_JOB_NONE)) ? 1U : 0U;
+    return (session != 0) ? session->job_owner
+                          : RECORDER_FILE_JOB_OWNER_NONE;
 }
 
-void recorder_file_reservation_job_finish(recorder_file_reservation_t *session)
+uint8_t recorder_file_reservation_job_finish(
+    recorder_file_reservation_t *session,
+    recorder_file_job_owner_t owner)
 {
-    if((session != 0) && (session->job_phase == RECORDER_FILE_JOB_TERMINAL))
+    if((recorder_file_job_owner_matches_phase(session, owner) == 0U)
+            || (session->job_phase != RECORDER_FILE_JOB_TERMINAL))
     {
-        session->job_phase = RECORDER_FILE_JOB_NONE;
-        session->job_target_file_bytes = 0U;
-        sd_access_gate_set_recorder_fs_logical_active(0U);
+        return 0U;
     }
+    session->job_phase = RECORDER_FILE_JOB_NONE;
+    session->job_owner = RECORDER_FILE_JOB_OWNER_NONE;
+    session->job_target_file_bytes = 0U;
+    sd_access_gate_set_recorder_fs_logical_active(0U);
+    return 1U;
 }
 
-void recorder_file_reservation_job_cancel(recorder_file_reservation_t *session)
+void recorder_file_reservation_job_cancel(
+    recorder_file_reservation_t *session,
+    recorder_file_job_owner_t owner)
 {
-    if((session != 0) && (session->job_phase == RECORDER_FILE_JOB_EXTEND))
+    if((session != 0) && (owner == RECORDER_FILE_JOB_OWNER_LIVE_EXTEND)
+            && (session->job_owner == owner)
+            && (session->job_phase == RECORDER_FILE_JOB_EXTEND))
     {
         f_brick_rec_reserve_request_stop(&session->job_cont.reserve);
         session->job_target_file_bytes = session->fs_state.reserved_bytes;
@@ -702,7 +756,8 @@ recorder_file_reservation_result_t recorder_file_reservation_prepare_begin(
     uint32_t header_bytes)
 {
     if((session == 0) || (temporary_path == 0) || (session->open != 0U)
-            || (session->job_phase != RECORDER_FILE_JOB_NONE))
+            || (session->job_phase != RECORDER_FILE_JOB_NONE)
+            || (session->job_owner != RECORDER_FILE_JOB_OWNER_NONE))
     {
         return RECORDER_FILE_RESERVATION_INVALID_ARG;
     }
@@ -722,6 +777,7 @@ recorder_file_reservation_result_t recorder_file_reservation_prepare_begin(
     session->job_media_epoch = sd_access_media_epoch();
     session->job_result = RECORDER_FILE_RESERVATION_SD_BUSY;
     session->job_phase = RECORDER_FILE_JOB_PREPARE;
+    session->job_owner = RECORDER_FILE_JOB_OWNER_PREPARATION;
     sd_access_gate_set_recorder_fs_logical_active(1U);
     return RECORDER_FILE_RESERVATION_OK;
 }

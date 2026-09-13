@@ -26,24 +26,35 @@ static recorder_file_reservation_result_t generic_recorder_fatfs_extend(
     uint64_t additional_bytes)
 {
     recorder_file_reservation_t *const session = context;
-    if (recorder_file_reservation_job_active(session) == 0U)
+    const recorder_file_job_owner_t owner =
+        recorder_file_reservation_job_owner(session);
+    if (owner == RECORDER_FILE_JOB_OWNER_NONE)
     {
         const recorder_file_reservation_result_t begun =
-            recorder_file_reservation_extend_begin(session, additional_bytes);
+            recorder_file_reservation_extend_begin(session, additional_bytes,
+                RECORDER_FILE_JOB_OWNER_LIVE_EXTEND);
         if (begun != RECORDER_FILE_RESERVATION_OK) return begun;
     }
+    else if (owner != RECORDER_FILE_JOB_OWNER_LIVE_EXTEND)
+    {
+        return RECORDER_FILE_RESERVATION_INVALID_STATE;
+    }
     const recorder_file_reservation_result_t result =
-        recorder_file_reservation_job_step(session);
+        recorder_file_reservation_job_step(session,
+            RECORDER_FILE_JOB_OWNER_LIVE_EXTEND);
     if (session->job_phase == RECORDER_FILE_JOB_TERMINAL)
     {
-        recorder_file_reservation_job_finish(session);
+        if (recorder_file_reservation_job_finish(session,
+                RECORDER_FILE_JOB_OWNER_LIVE_EXTEND) == 0U)
+            return RECORDER_FILE_RESERVATION_INVALID_STATE;
     }
     return result;
 }
 
 static recorder_file_reservation_result_t generic_recorder_fatfs_poll(void *context)
 {
-    return recorder_file_reservation_job_poll(context);
+    return recorder_file_reservation_job_poll(context,
+        RECORDER_FILE_JOB_OWNER_LIVE_EXTEND);
 }
 
 generic_recorder_reservation_t generic_recorder_fatfs_reservation_adapter(

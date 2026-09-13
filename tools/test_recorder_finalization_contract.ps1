@@ -8,6 +8,11 @@ $root = Split-Path -Parent $PSScriptRoot
 $recorder = Get-Content -Raw (Join-Path $root 'Src/Storage/audio_recorder.c')
 $capture = Get-Content -Raw (Join-Path $root 'Src/Storage/SampleCapture/sample_capture_editor.inc')
 $block = Get-Content -Raw (Join-Path $root 'Src/SD/sd_block_device.c')
+$reservationHeader = Get-Content -Raw (Join-Path $root 'Inc/Storage/recorder_file_reservation.h')
+$reservation = Get-Content -Raw (Join-Path $root 'Src/Storage/recorder_file_reservation.c')
+$adapter = Get-Content -Raw (Join-Path $root 'Src/Storage/generic_recorder_adapters.c')
+$generic = Get-Content -Raw (Join-Path $root 'Src/Storage/generic_recorder.c')
+$storage = Get-Content -Raw (Join-Path $root 'Src/Storage/audio_recorder_storage.c')
 
 $busyStates = '(?s)AUDIO_RECORDER_STATE_RECORDING\).*?' +
     'AUDIO_RECORDER_STATE_DRAINING\).*?' +
@@ -55,5 +60,56 @@ Assert-Contract (($completionIndex -ge 0) -and ($cardReadyIndex -gt $completionI
     'A valid DMA callback/card-ready completion must be consumed before timeout recovery'
 Assert-Contract (($hardwareErrorIndex -ge 0) -and ($hardwareErrorIndex -lt $completionIndex)) `
     'A real block-device hardware error must remain terminal'
+
+foreach ($owner in @('PREPARATION', 'LIVE_EXTEND', 'FINALIZATION')) {
+    Assert-Contract $reservationHeader.Contains("RECORDER_FILE_JOB_OWNER_$owner") `
+        "Missing explicit Recorder filesystem owner: $owner"
+}
+Assert-Contract $reservationHeader.Contains('recorder_file_job_owner_t job_owner;') `
+    'Reservation jobs must store their functional owner'
+Assert-Contract $reservation.Contains(
+    'recorder_file_job_owner_matches_phase(session, owner)') `
+    'step/poll/finish must validate owner and phase'
+Assert-Contract (-not $generic.Contains('recorder_file_reservation_job_active(')) `
+    'Live filesystem provider must not infer ownership from generic job activity'
+Assert-Contract $generic.Contains('job_owner == RECORDER_FILE_JOB_OWNER_LIVE_EXTEND') `
+    'Live filesystem provider must expose only LIVE_EXTEND jobs'
+Assert-Contract $adapter.Contains(
+    'else if (owner != RECORDER_FILE_JOB_OWNER_LIVE_EXTEND)') `
+    'Extension adapter must reject foreign jobs before stepping them'
+Assert-Contract $adapter.Contains(
+    'RECORDER_FILE_JOB_OWNER_LIVE_EXTEND) == 0U') `
+    'Extension adapter must finish only its own terminal'
+Assert-Contract (-not $adapter.Contains('RECORDER_FILE_JOB_OWNER_FINALIZATION')) `
+    'Extension adapter must have no path to finalization jobs'
+
+$finalTransitions = @{
+    COMMIT = 'RELEASE'
+    RELEASE = 'HEADER'
+    SYNC = 'CLOSE'
+    RENAME = 'DONE'
+}
+foreach ($transition in $finalTransitions.GetEnumerator()) {
+    $pattern = '(?s)case AUDIO_RECORDER_FINAL_' + $transition.Key +
+        ':.*?runtime->final_phase = AUDIO_RECORDER_FINAL_' + $transition.Value +
+        ';.*?recorder_file_reservation_job_finish\(.*?' +
+        'RECORDER_FILE_JOB_OWNER_FINALIZATION\)'
+    Assert-Contract ([regex]::IsMatch($storage, $pattern)) `
+        "Finalization owner did not consume $($transition.Key) -> $($transition.Value)"
+}
+Assert-Contract $storage.Contains(
+    'runtime->phase = AUDIO_RECORDER_STORAGE_TAKE_READY;') `
+    'RENAME terminal must advance to TAKE_READY'
+
+function Invoke-OwnerOperation([string]$actualOwner, [string]$callerOwner) {
+    return ($actualOwner -eq $callerOwner)
+}
+
+foreach ($foreign in @('PREPARATION', 'LIVE_EXTEND')) {
+    Assert-Contract (-not (Invoke-OwnerOperation 'FINALIZATION' $foreign)) `
+        "Foreign owner accepted for finalization: $foreign"
+}
+Assert-Contract (Invoke-OwnerOperation 'LIVE_EXTEND' 'LIVE_EXTEND') `
+    'LIVE_EXTEND owner must retain its own cooperative job'
 
 Write-Output 'Recorder lifecycle/finalization contract tests: PASS'

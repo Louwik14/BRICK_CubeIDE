@@ -42,6 +42,14 @@ typedef enum
     RECORDER_FILE_JOB_TERMINAL
 } recorder_file_job_phase_t;
 
+typedef enum
+{
+    RECORDER_FILE_JOB_OWNER_NONE = 0,
+    RECORDER_FILE_JOB_OWNER_PREPARATION,
+    RECORDER_FILE_JOB_OWNER_LIVE_EXTEND,
+    RECORDER_FILE_JOB_OWNER_FINALIZATION
+} recorder_file_job_owner_t;
+
 typedef struct
 {
     const sample_stream_physical_extent_t *extents;
@@ -80,6 +88,7 @@ typedef struct
     } job_cont;
     recorder_file_reservation_result_t job_result;
     recorder_file_job_phase_t job_phase;
+    recorder_file_job_owner_t job_owner;
     uint32_t job_media_epoch;
     uint32_t job_io_lba;
     uint32_t job_io_sequence;
@@ -110,7 +119,8 @@ recorder_file_reservation_result_t recorder_file_reservation_extend(
     uint64_t additional_bytes);
 recorder_file_reservation_result_t recorder_file_reservation_extend_begin(
     recorder_file_reservation_t *session,
-    uint64_t additional_bytes);
+    uint64_t additional_bytes,
+    recorder_file_job_owner_t owner);
 recorder_file_reservation_result_t recorder_file_reservation_commit_begin(
     recorder_file_reservation_t *session,
     uint64_t valid_bytes);
@@ -122,13 +132,19 @@ recorder_file_reservation_result_t recorder_file_reservation_rename_begin(
 recorder_file_reservation_result_t recorder_file_reservation_release_begin(
     recorder_file_reservation_t *session);
 recorder_file_reservation_result_t recorder_file_reservation_job_step(
-    recorder_file_reservation_t *session);
+    recorder_file_reservation_t *session,
+    recorder_file_job_owner_t owner);
 recorder_file_reservation_result_t recorder_file_reservation_job_poll(
-    recorder_file_reservation_t *session);
-uint8_t recorder_file_reservation_job_active(
+    recorder_file_reservation_t *session,
+    recorder_file_job_owner_t owner);
+recorder_file_job_owner_t recorder_file_reservation_job_owner(
     const recorder_file_reservation_t *session);
-void recorder_file_reservation_job_finish(recorder_file_reservation_t *session);
-void recorder_file_reservation_job_cancel(recorder_file_reservation_t *session);
+uint8_t recorder_file_reservation_job_finish(
+    recorder_file_reservation_t *session,
+    recorder_file_job_owner_t owner);
+void recorder_file_reservation_job_cancel(
+    recorder_file_reservation_t *session,
+    recorder_file_job_owner_t owner);
 recorder_file_reservation_result_t recorder_file_reservation_commit_valid(
     recorder_file_reservation_t *session,
     uint64_t valid_bytes);

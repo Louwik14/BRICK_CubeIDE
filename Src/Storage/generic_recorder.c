@@ -400,7 +400,8 @@ uint8_t generic_recorder_request_stop(generic_recorder_t *recorder)
     recorder->state = GENERIC_RECORDER_DRAINING;
     recorder->extension_pending = 0U;
     recorder_file_reservation_job_cancel(
-        (recorder_file_reservation_t *)recorder->config.reservation.context);
+        (recorder_file_reservation_t *)recorder->config.reservation.context,
+        RECORDER_FILE_JOB_OWNER_LIVE_EXTEND);
     return 1U;
 }
 
@@ -681,11 +682,15 @@ static uint8_t generic_recorder_filesystem_peek(
     sd_scheduler_candidate_t *candidate)
 {
     generic_recorder_t *const recorder = context;
-    const uint8_t job_active = recorder_file_reservation_job_active(
+    const recorder_file_job_owner_t job_owner =
+        recorder_file_reservation_job_owner(
         (const recorder_file_reservation_t *)recorder->config.reservation.context);
+    const uint8_t live_job = (job_owner == RECORDER_FILE_JOB_OWNER_LIVE_EXTEND)
+        ? 1U : 0U;
     if ((candidate == 0)
-        || ((recorder->extension_pending == 0U) && (job_active == 0U))
-        || ((recorder->state != GENERIC_RECORDER_CAPTURING) && (job_active == 0U)))
+        || ((job_owner != RECORDER_FILE_JOB_OWNER_NONE) && (live_job == 0U))
+        || ((recorder->extension_pending == 0U) && (live_job == 0U))
+        || ((recorder->state != GENERIC_RECORDER_CAPTURING) && (live_job == 0U)))
     {
         return 0U;
     }
@@ -711,9 +716,14 @@ static sd_scheduler_start_result_t generic_recorder_filesystem_start(
 {
     generic_recorder_t *const recorder = context;
     (void)granted_sector_count;
-    const uint8_t job_active = recorder_file_reservation_job_active(
+    const recorder_file_job_owner_t job_owner =
+        recorder_file_reservation_job_owner(
         (const recorder_file_reservation_t *)recorder->config.reservation.context);
-    if ((candidate == 0) || ((recorder->extension_pending == 0U) && (job_active == 0U))
+    const uint8_t live_job = (job_owner == RECORDER_FILE_JOB_OWNER_LIVE_EXTEND)
+        ? 1U : 0U;
+    if ((candidate == 0)
+        || ((job_owner != RECORDER_FILE_JOB_OWNER_NONE) && (live_job == 0U))
+        || ((recorder->extension_pending == 0U) && (live_job == 0U))
         || (candidate->owner_generation != recorder->generation)
         || (candidate->media_epoch != recorder->media_epoch))
     {
@@ -777,8 +787,15 @@ static sd_scheduler_poll_result_t generic_recorder_filesystem_poll(void *context
     {
         return SD_SCHEDULER_POLL_COMPLETED;
     }
-    recorder_file_reservation_job_finish(
-        (recorder_file_reservation_t *)recorder->config.reservation.context);
+    if (recorder_file_reservation_job_finish(
+            (recorder_file_reservation_t *)recorder->config.reservation.context,
+            RECORDER_FILE_JOB_OWNER_LIVE_EXTEND) == 0U)
+    {
+        recorder->error = GENERIC_RECORDER_ERROR_RESERVATION;
+        recorder->state = GENERIC_RECORDER_ERROR;
+        recorder->extension_pending = 0U;
+        return SD_SCHEDULER_POLL_ERROR;
+    }
     recorder->error = (result == RECORDER_FILE_RESERVATION_NO_SPACE)
         ? GENERIC_RECORDER_ERROR_NO_SPACE : GENERIC_RECORDER_ERROR_RESERVATION;
     recorder->state = GENERIC_RECORDER_ERROR;

@@ -146,7 +146,8 @@ static sd_scheduler_start_result_t audio_recorder_storage_preparation_step(
             runtime->prepare_phase = AUDIO_RECORDER_PREP_CREATE;
             return SD_SCHEDULER_START_COMPLETED;
         case AUDIO_RECORDER_PREP_CREATE:
-            rr = recorder_file_reservation_job_step(&runtime->reservation);
+            rr = recorder_file_reservation_job_step(&runtime->reservation,
+                RECORDER_FILE_JOB_OWNER_PREPARATION);
             if (rr == RECORDER_FILE_RESERVATION_IO_STARTED)
                 return SD_SCHEDULER_START_STARTED;
             if (rr == RECORDER_FILE_RESERVATION_PROGRESS)
@@ -154,15 +155,19 @@ static sd_scheduler_start_result_t audio_recorder_storage_preparation_step(
             if (rr == RECORDER_FILE_RESERVATION_SD_BUSY)
                 return SD_SCHEDULER_START_BUSY;
             if (rr != RECORDER_FILE_RESERVATION_OK) return SD_SCHEDULER_START_ERROR;
-            recorder_file_reservation_job_finish(&runtime->reservation);
+            if (recorder_file_reservation_job_finish(&runtime->reservation,
+                    RECORDER_FILE_JOB_OWNER_PREPARATION) == 0U)
+                return SD_SCHEDULER_START_ERROR;
             rr = recorder_file_reservation_extend_begin(&runtime->reservation,
                 (AUDIO_RECORDER_INITIAL_RESERVE_BYTES + AUDIO_RECORDER_WAV_HEADER_BYTES)
-                    - runtime->reservation.fs_state.reserved_bytes);
+                    - runtime->reservation.fs_state.reserved_bytes,
+                RECORDER_FILE_JOB_OWNER_PREPARATION);
             if (rr != RECORDER_FILE_RESERVATION_OK) return SD_SCHEDULER_START_ERROR;
             runtime->prepare_phase = AUDIO_RECORDER_PREP_RESERVE;
             return SD_SCHEDULER_START_COMPLETED;
         case AUDIO_RECORDER_PREP_RESERVE:
-            rr = recorder_file_reservation_job_step(&runtime->reservation);
+            rr = recorder_file_reservation_job_step(&runtime->reservation,
+                RECORDER_FILE_JOB_OWNER_PREPARATION);
             if (rr == RECORDER_FILE_RESERVATION_IO_STARTED)
                 return SD_SCHEDULER_START_STARTED;
             if (rr == RECORDER_FILE_RESERVATION_PROGRESS)
@@ -170,7 +175,9 @@ static sd_scheduler_start_result_t audio_recorder_storage_preparation_step(
             if (rr == RECORDER_FILE_RESERVATION_SD_BUSY)
                 return SD_SCHEDULER_START_BUSY;
             if (rr != RECORDER_FILE_RESERVATION_OK) return SD_SCHEDULER_START_ERROR;
-            recorder_file_reservation_job_finish(&runtime->reservation);
+            if (recorder_file_reservation_job_finish(&runtime->reservation,
+                    RECORDER_FILE_JOB_OWNER_PREPARATION) == 0U)
+                return SD_SCHEDULER_START_ERROR;
             if (audio_recorder_storage_start_writer(runtime) == 0U)
                 return SD_SCHEDULER_START_ERROR;
             g_audio_recorder_capture.tail_cursor = 0U;
@@ -190,7 +197,10 @@ static sd_scheduler_start_result_t audio_recorder_storage_finalization_step(
     switch (runtime->final_phase)
     {
         case AUDIO_RECORDER_FINAL_COMMIT:
-            if (recorder_file_reservation_job_active(&runtime->reservation) == 0U)
+        {
+            const recorder_file_job_owner_t commit_owner =
+                recorder_file_reservation_job_owner(&runtime->reservation);
+            if (commit_owner == RECORDER_FILE_JOB_OWNER_NONE)
             {
                 reservation_result = recorder_file_reservation_commit_begin(
                     &runtime->reservation, runtime->recorder.committed_tail);
@@ -199,8 +209,10 @@ static sd_scheduler_start_result_t audio_recorder_storage_finalization_step(
                 return (reservation_result == RECORDER_FILE_RESERVATION_OK)
                     ? SD_SCHEDULER_START_COMPLETED : SD_SCHEDULER_START_ERROR;
             }
+            if (commit_owner != RECORDER_FILE_JOB_OWNER_FINALIZATION)
+                return SD_SCHEDULER_START_ERROR;
             reservation_result = recorder_file_reservation_job_step(
-                &runtime->reservation);
+                &runtime->reservation, RECORDER_FILE_JOB_OWNER_FINALIZATION);
             if (reservation_result == RECORDER_FILE_RESERVATION_IO_STARTED)
                 return SD_SCHEDULER_START_STARTED;
             if (reservation_result == RECORDER_FILE_RESERVATION_PROGRESS)
@@ -209,13 +221,19 @@ static sd_scheduler_start_result_t audio_recorder_storage_finalization_step(
                 return SD_SCHEDULER_START_BUSY;
             if (reservation_result != RECORDER_FILE_RESERVATION_OK)
                 return SD_SCHEDULER_START_ERROR;
-            recorder_file_reservation_job_finish(&runtime->reservation);
-            sd_access_gate_set_recorder_fs_logical_active(1U);
             runtime->final_phase = AUDIO_RECORDER_FINAL_RELEASE;
+            if (recorder_file_reservation_job_finish(&runtime->reservation,
+                    RECORDER_FILE_JOB_OWNER_FINALIZATION) == 0U)
+                return SD_SCHEDULER_START_ERROR;
+            sd_access_gate_set_recorder_fs_logical_active(1U);
             return SD_SCHEDULER_START_COMPLETED;
+        }
 
         case AUDIO_RECORDER_FINAL_RELEASE:
-            if (recorder_file_reservation_job_active(&runtime->reservation) == 0U)
+        {
+            const recorder_file_job_owner_t release_owner =
+                recorder_file_reservation_job_owner(&runtime->reservation);
+            if (release_owner == RECORDER_FILE_JOB_OWNER_NONE)
             {
                 reservation_result = recorder_file_reservation_release_begin(
                     &runtime->reservation);
@@ -224,8 +242,10 @@ static sd_scheduler_start_result_t audio_recorder_storage_finalization_step(
                 return (reservation_result == RECORDER_FILE_RESERVATION_OK)
                     ? SD_SCHEDULER_START_COMPLETED : SD_SCHEDULER_START_ERROR;
             }
+            if (release_owner != RECORDER_FILE_JOB_OWNER_FINALIZATION)
+                return SD_SCHEDULER_START_ERROR;
             reservation_result = recorder_file_reservation_job_step(
-                &runtime->reservation);
+                &runtime->reservation, RECORDER_FILE_JOB_OWNER_FINALIZATION);
             if (reservation_result == RECORDER_FILE_RESERVATION_IO_STARTED)
                 return SD_SCHEDULER_START_STARTED;
             if (reservation_result == RECORDER_FILE_RESERVATION_PROGRESS)
@@ -234,10 +254,13 @@ static sd_scheduler_start_result_t audio_recorder_storage_finalization_step(
                 return SD_SCHEDULER_START_BUSY;
             if (reservation_result != RECORDER_FILE_RESERVATION_OK)
                 return SD_SCHEDULER_START_ERROR;
-            recorder_file_reservation_job_finish(&runtime->reservation);
-            sd_access_gate_set_recorder_fs_logical_active(1U);
             runtime->final_phase = AUDIO_RECORDER_FINAL_HEADER;
+            if (recorder_file_reservation_job_finish(&runtime->reservation,
+                    RECORDER_FILE_JOB_OWNER_FINALIZATION) == 0U)
+                return SD_SCHEDULER_START_ERROR;
+            sd_access_gate_set_recorder_fs_logical_active(1U);
             return SD_SCHEDULER_START_COMPLETED;
+        }
 
         case AUDIO_RECORDER_FINAL_HEADER:
             if ((runtime->recorder.committed_tail > UINT32_MAX)
@@ -263,7 +286,10 @@ static sd_scheduler_start_result_t audio_recorder_storage_finalization_step(
             return SD_SCHEDULER_START_STARTED;
 
         case AUDIO_RECORDER_FINAL_SYNC:
-            if (recorder_file_reservation_job_active(&runtime->reservation) == 0U)
+        {
+            const recorder_file_job_owner_t sync_owner =
+                recorder_file_reservation_job_owner(&runtime->reservation);
+            if (sync_owner == RECORDER_FILE_JOB_OWNER_NONE)
             {
                 reservation_result = recorder_file_reservation_sync_begin(
                     &runtime->reservation);
@@ -272,8 +298,10 @@ static sd_scheduler_start_result_t audio_recorder_storage_finalization_step(
                 return (reservation_result == RECORDER_FILE_RESERVATION_OK)
                     ? SD_SCHEDULER_START_COMPLETED : SD_SCHEDULER_START_ERROR;
             }
+            if (sync_owner != RECORDER_FILE_JOB_OWNER_FINALIZATION)
+                return SD_SCHEDULER_START_ERROR;
             reservation_result = recorder_file_reservation_job_step(
-                &runtime->reservation);
+                &runtime->reservation, RECORDER_FILE_JOB_OWNER_FINALIZATION);
             if (reservation_result == RECORDER_FILE_RESERVATION_IO_STARTED)
                 return SD_SCHEDULER_START_STARTED;
             if (reservation_result == RECORDER_FILE_RESERVATION_PROGRESS)
@@ -282,10 +310,13 @@ static sd_scheduler_start_result_t audio_recorder_storage_finalization_step(
                 return SD_SCHEDULER_START_BUSY;
             if (reservation_result != RECORDER_FILE_RESERVATION_OK)
                 return SD_SCHEDULER_START_ERROR;
-            recorder_file_reservation_job_finish(&runtime->reservation);
-            sd_access_gate_set_recorder_fs_logical_active(1U);
             runtime->final_phase = AUDIO_RECORDER_FINAL_CLOSE;
+            if (recorder_file_reservation_job_finish(&runtime->reservation,
+                    RECORDER_FILE_JOB_OWNER_FINALIZATION) == 0U)
+                return SD_SCHEDULER_START_ERROR;
+            sd_access_gate_set_recorder_fs_logical_active(1U);
             return SD_SCHEDULER_START_COMPLETED;
+        }
 
         case AUDIO_RECORDER_FINAL_CLOSE:
             reservation_result = recorder_file_reservation_close(
@@ -298,7 +329,10 @@ static sd_scheduler_start_result_t audio_recorder_storage_finalization_step(
             return SD_SCHEDULER_START_COMPLETED;
 
         case AUDIO_RECORDER_FINAL_RENAME:
-            if (recorder_file_reservation_job_active(&runtime->reservation) == 0U)
+        {
+            const recorder_file_job_owner_t rename_owner =
+                recorder_file_reservation_job_owner(&runtime->reservation);
+            if (rename_owner == RECORDER_FILE_JOB_OWNER_NONE)
             {
                 reservation_result = recorder_file_reservation_rename_begin(
                     &runtime->reservation, runtime->final_path);
@@ -307,8 +341,10 @@ static sd_scheduler_start_result_t audio_recorder_storage_finalization_step(
                 return (reservation_result == RECORDER_FILE_RESERVATION_OK)
                     ? SD_SCHEDULER_START_COMPLETED : SD_SCHEDULER_START_ERROR;
             }
+            if (rename_owner != RECORDER_FILE_JOB_OWNER_FINALIZATION)
+                return SD_SCHEDULER_START_ERROR;
             reservation_result = recorder_file_reservation_job_step(
-                &runtime->reservation);
+                &runtime->reservation, RECORDER_FILE_JOB_OWNER_FINALIZATION);
             if (reservation_result == RECORDER_FILE_RESERVATION_IO_STARTED)
                 return SD_SCHEDULER_START_STARTED;
             if (reservation_result == RECORDER_FILE_RESERVATION_PROGRESS)
@@ -317,11 +353,13 @@ static sd_scheduler_start_result_t audio_recorder_storage_finalization_step(
                 return SD_SCHEDULER_START_BUSY;
             if (reservation_result != RECORDER_FILE_RESERVATION_OK)
                 return SD_SCHEDULER_START_ERROR;
-            recorder_file_reservation_job_finish(&runtime->reservation);
             runtime->final_phase = AUDIO_RECORDER_FINAL_DONE;
             runtime->phase = AUDIO_RECORDER_STORAGE_TAKE_READY;
-            sd_access_gate_set_recorder_fs_logical_active(0U);
+            if (recorder_file_reservation_job_finish(&runtime->reservation,
+                    RECORDER_FILE_JOB_OWNER_FINALIZATION) == 0U)
+                return SD_SCHEDULER_START_ERROR;
             return SD_SCHEDULER_START_COMPLETED;
+        }
 
         default:
             return SD_SCHEDULER_START_ERROR;
@@ -336,27 +374,35 @@ static sd_scheduler_poll_result_t audio_recorder_storage_filesystem_poll(
         return SD_SCHEDULER_POLL_ERROR;
     if (runtime->reservation.job_io_active != 0U)
     {
-        if ((runtime->phase == AUDIO_RECORDER_STORAGE_PREPARING)
-                || (runtime->reservation.job_phase == RECORDER_FILE_JOB_COMMIT)
-                || (runtime->reservation.job_phase == RECORDER_FILE_JOB_RELEASE)
-                || (runtime->reservation.job_phase == RECORDER_FILE_JOB_SYNC)
-                || (runtime->reservation.job_phase == RECORDER_FILE_JOB_RENAME))
+        const recorder_file_job_owner_t owner =
+            recorder_file_reservation_job_owner(&runtime->reservation);
+        const recorder_file_job_owner_t expected_owner =
+            (runtime->phase == AUDIO_RECORDER_STORAGE_PREPARING)
+                ? RECORDER_FILE_JOB_OWNER_PREPARATION
+                : (runtime->phase == AUDIO_RECORDER_STORAGE_FINALIZING)
+                    ? RECORDER_FILE_JOB_OWNER_FINALIZATION
+                    : RECORDER_FILE_JOB_OWNER_NONE;
+        if ((expected_owner != RECORDER_FILE_JOB_OWNER_NONE)
+                && (owner == expected_owner))
         {
             const recorder_file_reservation_result_t result =
-                recorder_file_reservation_job_poll(&runtime->reservation);
+                recorder_file_reservation_job_poll(&runtime->reservation,
+                    owner);
             if (result == RECORDER_FILE_RESERVATION_IO_STARTED)
                 return SD_SCHEDULER_POLL_ACTIVE;
             if (result == RECORDER_FILE_RESERVATION_RECOVERY_ABORT)
                 return SD_SCHEDULER_POLL_RECOVERY_ABORT;
             if (result == RECORDER_FILE_RESERVATION_PROGRESS)
                 return SD_SCHEDULER_POLL_COMPLETED;
-            recorder_file_reservation_job_finish(&runtime->reservation);
+            (void)recorder_file_reservation_job_finish(
+                &runtime->reservation, owner);
             runtime->error = AUDIO_RECORDER_ERROR_SD_IO;
             runtime->phase = AUDIO_RECORDER_STORAGE_FAILED;
             sd_access_gate_set_recorder_fs_logical_active(0U);
             return SD_SCHEDULER_POLL_ERROR;
         }
-        if (runtime->recorder_filesystem_provider.poll != 0)
+        if ((owner == RECORDER_FILE_JOB_OWNER_LIVE_EXTEND)
+                && (runtime->recorder_filesystem_provider.poll != 0))
         {
             return runtime->recorder_filesystem_provider.poll(
                 runtime->recorder_filesystem_provider.context);
@@ -405,7 +451,9 @@ static sd_scheduler_start_result_t audio_recorder_storage_filesystem_start(
             audio_recorder_storage_preparation_step(runtime);
         if (prep == SD_SCHEDULER_START_ERROR)
         {
-            recorder_file_reservation_job_finish(&runtime->reservation);
+            (void)recorder_file_reservation_job_finish(
+                &runtime->reservation,
+                RECORDER_FILE_JOB_OWNER_PREPARATION);
             runtime->error = AUDIO_RECORDER_ERROR_SD_IO;
             runtime->phase = AUDIO_RECORDER_STORAGE_FAILED;
             sd_access_gate_set_recorder_fs_logical_active(0U);
