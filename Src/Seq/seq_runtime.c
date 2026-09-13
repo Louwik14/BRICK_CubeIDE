@@ -23,6 +23,7 @@
 #include "Track/track_runtime.h"
 #include "Track/control_music_output.h"
 #include "Storage/audio_recorder.h"
+#include "Audio/brick6_looper_runtime.h"
 #include "Storage/sample_capture.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/project_load_quiesce.h"
@@ -1125,6 +1126,12 @@ void seq_runtime_rec_toggle_arm(void)
     const uint8_t pending_before = seq_live_rec_session_rec_is_pattern_pending_start();
     const uint8_t armed_before = seq_live_rec_session_rec_is_armed();
     seq_live_rec_session_toggle_arm(seq_runtime_get_now_sample(), g_seq_runtime.samples_per_step_q16);
+    g_brick6_looper_record_probe.control_count++;
+    g_brick6_looper_record_probe.control_command_id = CONTROL_AUDIO_COMMAND_RECORD;
+    g_brick6_looper_record_probe.control_track =
+        g_brick6_looper_record_probe.ui_track;
+    g_brick6_looper_record_probe.control_value =
+        seq_live_rec_session_rec_is_armed();
     (void)audio_recorder_control_sync_looper_arm(
         seq_live_rec_session_rec_is_armed(),
         g_seq_runtime.samples_per_step_q16);

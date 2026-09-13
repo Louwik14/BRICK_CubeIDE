@@ -16,6 +16,7 @@
 #include "Storage/project_load_quiesce.h"
 #include "Track/control_routing.h"
 #include "Track/track_state.h"
+#include "Audio/brick6_looper_runtime.h"
 #define AUDIO_RECORDER_LOOPER_STEPS_PER_BAR 16U
 
 typedef struct
@@ -391,6 +392,12 @@ static uint8_t audio_recorder_looper_record_eligible(uint8_t track,
 uint8_t audio_recorder_control_sync_looper_arm(uint8_t rec_armed,
                                                uint32_t samples_per_step_q16)
 {
+    g_brick6_looper_record_probe.backend_count++;
+    g_brick6_looper_record_probe.backend_command_id =
+        AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG;
+    g_brick6_looper_record_probe.backend_track =
+        g_brick6_looper_record_probe.control_track;
+    g_brick6_looper_record_probe.backend_value = rec_armed;
     if (rec_armed == 0U)
     {
         if ((g_audio_recorder.client == AUDIO_RECORDER_CLIENT_LOOPER)
@@ -544,6 +551,11 @@ uint8_t audio_recorder_control_arm_looper(uint8_t track,
                                           uint8_t overdub,
                                           uint64_t request_sample)
 {
+    g_brick6_looper_record_probe.backend_count++;
+    g_brick6_looper_record_probe.backend_command_id =
+        AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG | len_mode;
+    g_brick6_looper_record_probe.backend_track = track;
+    g_brick6_looper_record_probe.backend_value = expected_frames;
     if (project_replacement_is_active() != 0U) return 0U;
     if ((g_audio_recorder.client != AUDIO_RECORDER_CLIENT_LOOPER)
             || (g_audio_recorder.state != AUDIO_RECORDER_STATE_PREPARED)

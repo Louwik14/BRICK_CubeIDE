@@ -76,6 +76,35 @@ extern volatile brick6_looper_signal_probe_t g_brick6_looper_signal_probe;
 
 typedef struct
 {
+    volatile uint32_t ui_count;
+    volatile uint32_t ui_command_id;
+    volatile uint32_t ui_track;
+    volatile uint32_t ui_value;
+    volatile uint32_t control_count;
+    volatile uint32_t control_command_id;
+    volatile uint32_t control_track;
+    volatile uint32_t control_value;
+    volatile uint32_t publish_count;
+    volatile uint32_t publish_command_id;
+    volatile uint32_t publish_track;
+    volatile uint32_t publish_value;
+    volatile uint32_t publish_result;
+    volatile uint32_t fifo_count;
+    volatile uint32_t fifo_command_id;
+    volatile uint32_t fifo_track;
+    volatile uint32_t fifo_value;
+    volatile uint32_t audio_apply_count;
+    volatile uint32_t audio_apply_command_id;
+    volatile uint32_t audio_apply_track;
+    volatile uint32_t audio_apply_value;
+    volatile uint32_t backend_count;
+    volatile uint32_t backend_command_id;
+    volatile uint32_t backend_track;
+    volatile uint32_t backend_value;
+    volatile uint32_t runtime_entry_count;
+    volatile uint32_t runtime_command_id;
+    volatile uint32_t runtime_track;
+    volatile uint32_t runtime_value;
     volatile uint32_t rec_command_count;
     volatile uint32_t capture_start_command_count;
     volatile uint32_t runtime_arm_count;

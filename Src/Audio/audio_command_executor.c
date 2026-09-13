@@ -350,8 +350,6 @@ static uint8_t audio_command_apply_record(const control_audio_command_t *command
     {
         if(CONTROL_AUDIO_COMMAND_KIND(command) == CONTROL_AUDIO_RECORD_START)
         {
-            memset((void *)&g_brick6_looper_record_probe, 0,
-                   sizeof(g_brick6_looper_record_probe));
             g_brick6_looper_record_probe.rec_command_count++;
             g_brick6_looper_record_probe.command_value = command->value;
             g_brick6_looper_record_probe.command_id = command->id;
@@ -571,6 +569,13 @@ static audio_command_apply_result_t audio_command_apply(
             return (audio_command_apply_transport(command) != 0U)
                 ? AUDIO_COMMAND_APPLY_OK : AUDIO_COMMAND_APPLY_INVALID;
         case CONTROL_AUDIO_COMMAND_RECORD:
+            if((command->id & AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG) != 0U)
+            {
+                g_brick6_looper_record_probe.audio_apply_count++;
+                g_brick6_looper_record_probe.audio_apply_command_id = command->id;
+                g_brick6_looper_record_probe.audio_apply_track = command->entity;
+                g_brick6_looper_record_probe.audio_apply_value = command->value;
+            }
             return (audio_command_apply_record(command) != 0U)
                 ? AUDIO_COMMAND_APPLY_OK : AUDIO_COMMAND_APPLY_INVALID;
         case CONTROL_AUDIO_COMMAND_PANIC:
@@ -649,6 +654,14 @@ uint16_t __attribute__((noinline)) audio_command_executor_apply_due(
             && (command.effective_sample_time <= sample_time))
     {
         const uint8_t opcode = CONTROL_AUDIO_COMMAND_OPCODE(&command);
+        if((opcode == CONTROL_AUDIO_COMMAND_RECORD)
+                && ((command.id & AUDIO_RECORDER_LOOPER_RECORD_ID_FLAG) != 0U))
+        {
+            g_brick6_looper_record_probe.fifo_count++;
+            g_brick6_looper_record_probe.fifo_command_id = command.id;
+            g_brick6_looper_record_probe.fifo_track = command.entity;
+            g_brick6_looper_record_probe.fifo_value = command.value;
+        }
         const uint8_t stale_note_on = (uint8_t)(
             (opcode == CONTROL_AUDIO_COMMAND_NOTE)
             && (CONTROL_AUDIO_COMMAND_KIND(&command) == CONTROL_AUDIO_NOTE_ON));

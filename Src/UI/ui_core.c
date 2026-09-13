@@ -70,6 +70,7 @@
 #include "Seq/seq_edit.h"
 #include "Seq/seq_runtime.h"
 #include "Storage/audio_recorder.h"
+#include "Audio/brick6_looper_runtime.h"
 #include "Storage/pattern_live_ram.h"
 
 #define UI_TRACK_MOD_BUTTON BTN_TRACK
@@ -757,6 +758,12 @@ static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
     if ((ev != 0) && (ev->type == UI_EVENT_BUTTON_PRESS)
             && (ev->id == (uint8_t)BTN_REC))
     {
+        memset((void *)&g_brick6_looper_record_probe, 0,
+               sizeof(g_brick6_looper_record_probe));
+        g_brick6_looper_record_probe.ui_count++;
+        g_brick6_looper_record_probe.ui_command_id = ev->id;
+        g_brick6_looper_record_probe.ui_track = ui_get_active_lane();
+        g_brick6_looper_record_probe.ui_value = g_ui_track_state.shift_down;
         if (g_ui_track_state.shift_down != 0U)
         {
             ui_page_template_rec_cfg_open_main();

@@ -1127,6 +1127,10 @@ void brick6_looper_runtime_arm_live_record_start(uint8_t track_id,
                                                  uint8_t overdub,
                                                  uint64_t request_sample)
 {
+    g_brick6_looper_record_probe.runtime_entry_count++;
+    g_brick6_looper_record_probe.runtime_command_id = len_mode;
+    g_brick6_looper_record_probe.runtime_track = track_id;
+    g_brick6_looper_record_probe.runtime_value = expected_frames;
     if(looper_track_valid(track_id) == 0U)
     {
         return;
