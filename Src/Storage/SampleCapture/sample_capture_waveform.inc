@@ -205,6 +205,36 @@ static void sample_capture_global_overview_request(void)
         return;
     }
 
+    rec_source_snapshot_t current_snapshot;
+    const char *current_path = 0;
+    const audio_recorder_waveform_summary_t *const captured =
+        rec_source_current_waveform();
+    if ((captured != 0) && (captured->ready != 0U)
+            && (captured->frame_count == g_sample_capture.state.recorded_frames)
+            && (rec_source_current_path(&current_path, &current_snapshot) != 0U)
+            && (strncmp(current_path, g_sample_capture.state.temp_path,
+                        SAMPLE_CAPTURE_PATH_MAX) == 0))
+    {
+        sample_capture_copy_path(g_sample_capture_global_overview.path, current_path);
+        g_sample_capture_global_overview.frame_count = captured->frame_count;
+        g_sample_capture_global_overview.point_count = captured->bin_count;
+        g_sample_capture_global_overview.build_next_frame = captured->frame_count;
+        uint16_t peak = 0U;
+        for (uint16_t i = 0U; i < captured->bin_count; ++i)
+        {
+            g_sample_capture_global_overview_points[i].min = captured->min[i];
+            g_sample_capture_global_overview_points[i].max = captured->max[i];
+            const uint16_t amin = sample_capture_abs_i16(captured->min[i]);
+            const uint16_t amax = sample_capture_abs_i16(captured->max[i]);
+            if (amin > peak) peak = amin;
+            if (amax > peak) peak = amax;
+        }
+        g_sample_capture_global_overview.peak = peak;
+        g_sample_capture_global_overview.state = SAMPLE_CAPTURE_GLOBAL_OVERVIEW_READY;
+        g_sample_capture_global_overview.generation++;
+        return;
+    }
+
     sample_capture_copy_path(g_sample_capture_global_overview.path,
                              g_sample_capture.state.temp_path);
     g_sample_capture_global_overview.frame_count = g_sample_capture.state.recorded_frames;

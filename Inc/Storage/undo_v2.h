@@ -5,7 +5,8 @@
 
 #include "Seq/seq_step_snapshot.h"
 
-#define UNDO_V2_MAX_TRANSACTIONS 8U
+#define UNDO_V2_MAX_SEQUENCE_TRANSACTIONS 8U
+#define UNDO_V2_MAX_TRANSACTIONS (UNDO_V2_MAX_SEQUENCE_TRANSACTIONS + 1U)
 
 typedef enum
 {
@@ -26,6 +27,9 @@ undo_v2_status_t undo_v2_begin_sequence_transaction(seq_track_id_t track,
                                                     const seq_step_id_t *steps,
                                                     uint8_t step_count);
 undo_v2_status_t undo_v2_commit_sequence_transaction(void);
+undo_v2_status_t undo_v2_commit_audio_transition(uint32_t before_generation,
+                                                 uint32_t after_generation);
+void undo_v2_expire_audio(void);
 void undo_v2_cancel_transaction(void);
 
 undo_v2_status_t undo_v2_undo(void);

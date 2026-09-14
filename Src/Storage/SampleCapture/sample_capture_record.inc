@@ -433,6 +433,9 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
     g_sample_capture.state.view = SAMPLE_CAPTURE_VIEW_AUDIO_REC;
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_TAKE_READY;
     sample_capture_copy_path(g_sample_capture.state.temp_path, path);
+    rec_source_snapshot_t current;
+    if (rec_source_current_snapshot(&current) != 0U)
+        g_sample_capture.visible_rec_generation = current.key.generation;
     sample_capture_detail_reset();
     uint8_t cache_queued = 0U;
     if(sample_capture_path_is_temp(path) == 0U)

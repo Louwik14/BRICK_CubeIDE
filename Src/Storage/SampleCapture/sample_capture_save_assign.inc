@@ -29,6 +29,12 @@ uint8_t sample_capture_model_return_to_audio_rec(void)
             || (g_sample_capture.state.armed_pending != 0U))
         return 0U;
 
+    /* Leaving an unsaved take is the product's explicit REC_SOURCE CLEAR. */
+    if ((g_sample_capture.state.take_valid != 0U)
+            && (g_sample_capture.state.final_path[0] == '\0')
+            && (rec_source_clear_current() == 0U))
+        return 0U;
+
     g_sample_capture.state.view = SAMPLE_CAPTURE_VIEW_AUDIO_REC;
     g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
     g_sample_capture.state.trigger_latched = 0U;
@@ -193,13 +199,27 @@ static void sample_capture_save_service(void)
             job->path_attempts++;
             if(fr == FR_NO_FILE)
             {
-                (void)snprintf(job->temporary_path, sizeof(job->temporary_path),
-                               "0:/REC/REC%04u.TMP", (unsigned int)candidate);
-                job->phase = SAMPLE_CAPTURE_SAVE_OPEN_SOURCE;
+                if(job->no_copy != 0U)
+                    job->phase = SAMPLE_CAPTURE_SAVE_PROMOTE;
+                else
+                {
+                    (void)snprintf(job->temporary_path, sizeof(job->temporary_path),
+                                   "0:/REC/REC%04u.TMP", (unsigned int)candidate);
+                    job->phase = SAMPLE_CAPTURE_SAVE_OPEN_SOURCE;
+                }
             }
             else if(fr != FR_OK) sample_capture_save_fail();
             break;
         }
+        case SAMPLE_CAPTURE_SAVE_PROMOTE:
+            if(rec_source_promote_current(job->final_path) == 0U)
+                sample_capture_save_fail();
+            else
+            {
+                g_rec_latency_probe.t_save_rename_done = rec_latency_probe_now();
+                sample_capture_save_finish();
+            }
+            break;
         case SAMPLE_CAPTURE_SAVE_OPEN_SOURCE:
             if(g_rec_latency_probe.t_save_open_source_start == 0U)
                 g_rec_latency_probe.t_save_open_source_start = rec_latency_probe_now();
@@ -400,7 +420,10 @@ uint8_t sample_capture_model_save_trimmed(void)
     sample_capture_copy_path(job->source_path, current_path);
     job->start_frame = save_start;
     job->saved_frames = save_end - save_start;
-    job->bytes_left = job->saved_frames * AUDIO_RECORDER_BYTES_PER_FRAME;
+    job->no_copy = (uint8_t)((save_start == 0U)
+                    && (save_end == current.frame_count));
+    job->bytes_left = (job->no_copy != 0U) ? 0U
+        : (job->saved_frames * AUDIO_RECORDER_BYTES_PER_FRAME);
     g_rec_latency_probe.save_bytes_total = job->bytes_left;
     g_rec_latency_probe.save_bytes_remaining = job->bytes_left;
     job->phase = SAMPLE_CAPTURE_SAVE_SELECT_PATH;

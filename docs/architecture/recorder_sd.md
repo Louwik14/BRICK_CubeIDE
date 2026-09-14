@@ -12,8 +12,8 @@ immuable et le Streamer assure la lecture.
   résultat en PCM24 stocké dans des mots `int32_t`.
 - STORAGE draine le ring, réserve et mappe le fichier, arbitre les accès SD,
   finalise le WAV et publie la nouvelle génération.
-- `REC_SOURCE` possède les workspaces A/B et leur cycle
-  building/current/retired.
+- `REC_SOURCE` possède quatre descripteurs générationnels bornés et leur cycle
+  `FREE/PREPARED`, `BUILDING`, `CURRENT`, `UNDO`, `RETIRED`.
 - Le Streamer est l'unique moteur de playback. Une track Stream utilise
   `SOURCE=POOL` ou `SOURCE=REC` avec le même reader, le même cache paginé, le
   même décodeur PCM24 et les mêmes leases.
@@ -53,22 +53,41 @@ Après STOP, STORAGE continue à drainer le ring. La finalisation progresse par
 écriture du header WAV, synchronisation, fermeture puis rename `.REC` vers
 `.WAV`. Aucun `f_write` FatFs ne se trouve dans le data-plane live.
 
-## REC_SOURCE et workspaces A/B
+Le trigger `PATTERN` ne gouverne que le départ. Dès qu'une longueur fixe est
+configurée, le compteur de frames gouverne l'arrêt automatique, quel que soit
+le trigger qui a démarré la prise.
+
+## REC_SOURCE et générations
 
 ```text
-0:/REC/REC_WORK_A.REC -> 0:/REC/REC_WORK_A.WAV
-0:/REC/REC_WORK_B.REC -> 0:/REC/REC_WORK_B.WAV
+RETIRED + UNDO + CURRENT + BUILDING = 4 descripteurs maximum
 ```
 
-Une prise crée `building` dans le slot libre. Pendant DRAINING, STORAGE
+Les noms physiques `REC_GEN_n` ne portent aucun rôle. Le descripteur est
+l'autorité et porte la clé de génération, l'état, l'ownership
+`TEMPORARY/PERSISTENT`, le chemin, la carte d'extents, l'epoch média et le
+résumé waveform. Une prise crée `BUILDING` dans un descripteur libre. Pendant DRAINING, STORAGE
 enregistre la source live dans le page-cache avec une clé comprenant slot et
 génération, met à jour `readable_frames` et réserve les premières pages.
 
 Lorsque le fichier est finalisé, le chemin du cache devient le `.WAV`. La
-publication attend une identité d'enregistrement valide et les premières pages
-READY. `current` bascule alors atomiquement. L'ancien current devient retired
-et reste intact tant que des readers ou leases le référencent. Sa clé, son
-cache et son workspace ne sont recyclés qu'après libération complète.
+publication attend une identité d'enregistrement valide, son waveform READY et
+les premières pages READY. La même opération canonique bascule `CURRENT` pour
+une publication, un Undo ou un Redo. L'ancien `CURRENT` devient `UNDO`.
+L'expiration de l'unique action audio le rend `RETIRED`; sa clé, son cache et
+son workspace ne sont recyclés qu'après extinction des leases, readers et I/O.
+Un descripteur `PERSISTENT` peut être libéré du cache mais son fichier n'est
+jamais supprimé par ce recyclage.
+
+## Undo/Redo global
+
+L'historique unique est une chronologie typée SEQ/AUDIO. Il conserve huit
+transactions SEQ et au plus une transaction AUDIO supplémentaire. Une
+transaction AUDIO porte `before_generation` et `after_generation`; zéro est
+l'état EMPTY. Undo et Redo ne reconstruisent aucun PCM : ils rebasculent le
+`CURRENT`, sa waveform et ses pages initiales. Une nouvelle action après Undo
+supprime la branche Redo. Une nouvelle action AUDIO retire sélectivement
+l'ancienne action AUDIO sans modifier l'ordre relatif des entrées SEQ.
 
 Cette préparation fournit le reloop immédiat par le reader normal du Streamer,
 sans preroll global ni relais RAM -> SD spécifique.
@@ -97,11 +116,28 @@ Un page miss ou une invalidation du snapshot ferme la prise avec
 status produit; elle n'est pas reclassée en ring overflow. Les erreurs média,
 état invalide et manque d'espace restent distinctes.
 
+## Waveform de prise
+
+AUDIO alimente 4096 couples min/max int16 depuis le PCM24 final, au point
+d'entrée du ring Recorder. Une longueur fixe utilise le mapping direct
+frames-vers-bins. Une longueur libre utilise des niveaux bornés et compacte
+progressivement; la finition éventuelle se fait hors IRQ. Le résumé READY
+(environ 16 KiB) est copié dans le descripteur `BUILDING` et publié avec lui.
+L'éditeur l'utilise directement pour une prise fraîche; le scan SD reste le
+fallback des fichiers externes, anciens, récupérés ou sans résumé valide.
+
 ## SAVE / CROP
 
-SAVE n'est pas nécessaire au playback. Il exporte `REC_SOURCE.current` vers un
-fichier utilisateur `0:/REC/RECxxxx.WAV`. Un crop sélectionne une plage de
-frames et recopie uniquement son PCM dans cet export.
+SAVE n'est pas nécessaire au playback. Pour une prise complète temporaire, il
+écrit et synchronise d'abord `REC_PROMOTE.JRN`, renomme le workspace sur le
+même volume, met à jour le chemin du page-cache puis passe la même génération
+en ownership `PERSISTENT`. Aucune copie PCM n'a lieu. Ce checkpoint expire
+seulement l'action AUDIO; les entrées SEQ restent en place.
+
+Au boot, ancien chemin seul signifie rollback, nouveau chemin seul signifie
+promotion achevée. En cas d'état ambigu, aucun des deux côtés n'est supprimé.
+Un vrai crop reste l'export transactionnel séquentiel 32 KiB : il sélectionne
+une plage de frames et recopie uniquement son PCM.
 
 L'export est un job de superloop. Les `FIL` source et destination restent
 ouverts et avancent séquentiellement. Chaque appel réalise au plus une opération

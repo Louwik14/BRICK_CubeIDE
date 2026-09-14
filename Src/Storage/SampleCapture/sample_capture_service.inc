@@ -101,9 +101,44 @@ static uint8_t sample_capture_service_pending_admission(void)
     return 1U;
 }
 
+static void sample_capture_sync_current_generation(void)
+{
+    if ((g_sample_capture.state.recording != 0U)
+            || (g_sample_capture.state.armed_pending != 0U)
+            || (g_sample_capture.state.save_pending != 0U)) return;
+    rec_source_snapshot_t current;
+    const char *path = 0;
+    if (rec_source_current_path(&path, &current) == 0U)
+    {
+        if (g_sample_capture.visible_rec_generation != 0U)
+        {
+            sample_capture_reset_take_transients(0U);
+            g_sample_capture.visible_rec_generation = 0U;
+            g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_IDLE;
+            sample_capture_global_overview_reset();
+            sample_capture_editor_cache_reset();
+        }
+        return;
+    }
+    if (current.key.generation == g_sample_capture.visible_rec_generation) return;
+    sample_capture_reset_take_transients(0U);
+    g_sample_capture.visible_rec_generation = current.key.generation;
+    g_sample_capture.state.take_valid = 1U;
+    g_sample_capture.state.recorded_frames = current.frame_count;
+    g_sample_capture.state.edit_end_frame = current.frame_count;
+    g_sample_capture.state.edit_loop_end_frame = current.frame_count;
+    g_sample_capture.state.edit_vzoom = SAMPLE_CAPTURE_EDIT_VZOOM_DEFAULT;
+    sample_capture_copy_path(g_sample_capture.state.temp_path, path);
+    g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_TAKE_READY;
+    sample_capture_global_overview_reset();
+    sample_capture_editor_cache_reset();
+    sample_capture_global_overview_request();
+}
+
 void sample_capture_model_service(void)
 {
     sample_capture_save_service();
+    sample_capture_sync_current_generation();
     sample_capture_terminal_cleanup_service();
     if (sample_capture_service_pending_admission() == 0U) return;
 

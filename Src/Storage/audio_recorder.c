@@ -303,6 +303,7 @@ void audio_recorder_service(void)
                 && (rec_source_building_active() != 0U))
         {
             uint32_t epoch = 0U;
+            audio_recorder_storage_map_copy_t map;
             const sample_audio_key_t key = rec_source_building_key();
             const uint32_t frames = (uint32_t)(
                 audio_recorder_storage_committed_tail()
@@ -325,8 +326,9 @@ void audio_recorder_service(void)
                 g_rec_latency_probe.preload_pages_ready = ready_pages;
             }
             if((sample_page_cache_get_registration_epoch_key(key, &epoch) != 0U)
+                    && (audio_recorder_storage_get_map_copy(&map) != 0U)
                     && (pages_ready != 0U)
-                    && (rec_source_publish_building(frames, epoch) != 0U))
+                    && (rec_source_publish_building(frames, epoch, &map) != 0U))
             {
                 g_rec_latency_probe.t_rec_source_published = rec_latency_probe_now();
                 forget_build_stream();

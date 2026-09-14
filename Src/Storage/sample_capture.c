@@ -92,6 +92,7 @@ typedef enum
 {
     SAMPLE_CAPTURE_SAVE_IDLE = 0,
     SAMPLE_CAPTURE_SAVE_SELECT_PATH,
+    SAMPLE_CAPTURE_SAVE_PROMOTE,
     SAMPLE_CAPTURE_SAVE_OPEN_SOURCE,
     SAMPLE_CAPTURE_SAVE_OPEN_DESTINATION,
     SAMPLE_CAPTURE_SAVE_READ_HEADER,
@@ -120,6 +121,7 @@ typedef struct
     uint16_t path_attempts;
     uint8_t source_open;
     uint8_t destination_open;
+    uint8_t no_copy;
     char source_path[SAMPLE_CAPTURE_PATH_MAX];
     char temporary_path[SAMPLE_CAPTURE_PATH_MAX];
     char final_path[SAMPLE_CAPTURE_PATH_MAX];
@@ -152,6 +154,7 @@ typedef struct
     uint8_t assign_index;
     uint8_t assign_loading;
     uint8_t assign_target;
+    uint32_t visible_rec_generation;
     sample_capture_save_job_t save_job;
 } sample_capture_model_t;
 
