@@ -7,7 +7,28 @@
 #include "Sampler/sample_page_cache.h"
 #include "Storage/audio_recorder_storage.h"
 #include "Storage/project_load_quiesce.h"
+#include "Storage/rec_latency_probe.h"
 #include "Storage/rec_source.h"
+#include "stm32h7xx.h"
+
+volatile rec_latency_probe_t g_rec_latency_probe __attribute__((used));
+uint32_t rec_latency_probe_now(void) { return TIM5->CNT; }
+void rec_latency_probe_reset(void) {
+    volatile uint32_t *p = (volatile uint32_t *)&g_rec_latency_probe;
+    for(uint32_t i = 0U; i < sizeof(g_rec_latency_probe) / sizeof(uint32_t); ++i) p[i] = 0U;
+}
+void rec_latency_probe_service_reset(void) {
+    if(g_rec_latency_probe.reset_request != 0U) rec_latency_probe_reset();
+}
+void rec_latency_probe_progress(void) {
+    const uint32_t now = rec_latency_probe_now();
+    if(g_rec_latency_probe.save_last_progress_t != 0U) {
+        const uint32_t gap = now - g_rec_latency_probe.save_last_progress_t;
+        if(gap > g_rec_latency_probe.save_max_progress_gap) g_rec_latency_probe.save_max_progress_gap = gap;
+    }
+    g_rec_latency_probe.save_last_progress_t = now;
+    g_rec_latency_probe.save_progress_count++;
+}
 
 typedef struct
 {
@@ -71,6 +92,8 @@ static void register_build_stream(void)
     g_build_stream_readable_frames = readable_frames;
     (void)sample_page_cache_reserve_start_pages_key(
         key, 0U, SAMPLE_PAGE_MIN_READY_PAGES);
+    if(g_rec_latency_probe.t_preload_requested == 0U)
+        g_rec_latency_probe.t_preload_requested = rec_latency_probe_now();
 }
 
 static void update_build_stream(void)
@@ -92,6 +115,7 @@ static uint8_t publish_start(audio_recorder_client_t client, uint64_t sample_tim
     if(control_rt_publish_record(CONTROL_AUDIO_RECORD_START,
             g_audio_recorder.frame_limit, g_audio_recorder_control_session,
             (uint8_t)client, sample_time) == 0U) return 0U;
+    g_rec_latency_probe.t_rec_start = rec_latency_probe_now();
     g_audio_recorder.state = AUDIO_RECORDER_STATE_RECORDING;
     return 1U;
 }
@@ -99,6 +123,8 @@ static uint8_t publish_start(audio_recorder_client_t client, uint64_t sample_tim
 static uint8_t publish_stop(audio_recorder_client_t client, uint64_t sample_time)
 {
     if(g_audio_recorder.client != client) return 0U;
+    if(g_rec_latency_probe.t_stop_requested == 0U)
+        g_rec_latency_probe.t_stop_requested = rec_latency_probe_now();
     return control_rt_publish_record(CONTROL_AUDIO_RECORD_STOP, 0U,
         g_audio_recorder_control_session, (uint8_t)client, sample_time);
 }
@@ -232,6 +258,7 @@ uint8_t audio_recorder_request_stop_client_at(audio_recorder_client_t client,
 
 void audio_recorder_service(void)
 {
+    rec_latency_probe_service_reset();
     rec_source_service();
     audio_recorder_storage_service(g_audio_recorder_control_session,
         (uint8_t)((g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING)
@@ -280,10 +307,13 @@ void audio_recorder_service(void)
             for(uint32_t page = 0U; page < ready_pages; ++page)
                 if(sample_page_cache_get_page_state_key(key, page)
                         != SAMPLE_PAGE_READY) pages_ready = 0U;
+            if((pages_ready != 0U) && (g_rec_latency_probe.t_pages_ready == 0U))
+                g_rec_latency_probe.t_pages_ready = rec_latency_probe_now();
             if((sample_page_cache_get_registration_epoch_key(key, &epoch) != 0U)
                     && (pages_ready != 0U)
                     && (rec_source_publish_building(frames, epoch) != 0U))
             {
+                g_rec_latency_probe.t_rec_source_published = rec_latency_probe_now();
                 forget_build_stream();
             }
         }

@@ -420,9 +420,6 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
                              path,
                              (unsigned long)frames);
 #endif
-#if SAMPLE_CAPTURE_DEBUG_UART
-    sample_capture_debug_log("REC_EDIT_ENTER_REQUEST path=%s\r\n", path);
-#endif
     g_sample_capture.state.take_valid = 1U;
     g_sample_capture.state.recorded_frames = frames;
     g_sample_capture.state.edit_start_frame = 0U;
@@ -433,11 +430,10 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
     g_sample_capture.state.edit_vzoom = SAMPLE_CAPTURE_EDIT_VZOOM_DEFAULT;
     g_sample_capture.state.edit_zcross_enabled = 0U;
     g_sample_capture.state.edit_scroll_frame = 0U;
-    g_sample_capture.state.view = SAMPLE_CAPTURE_VIEW_REC_EDIT;
-    g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_REC_EDIT;
+    g_sample_capture.state.view = SAMPLE_CAPTURE_VIEW_AUDIO_REC;
+    g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_TAKE_READY;
     sample_capture_copy_path(g_sample_capture.state.temp_path, path);
     sample_capture_detail_reset();
-    sample_capture_global_overview_request();
     uint8_t cache_queued = 0U;
     if(sample_capture_path_is_temp(path) == 0U)
     {
@@ -459,17 +455,14 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
     {
         g_sample_capture.wave_cache_retry_countdown = 0U;
     }
-    g_sample_capture.rec_edit_enter_deferred_services = 2U;
-    g_sample_capture.rec_edit_first_render_pending = 1U;
+    g_sample_capture.rec_edit_enter_deferred_services = 0U;
+    g_sample_capture.rec_edit_first_render_pending = 0U;
 #if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
     sample_capture_debug_log("WAVEFORM_CACHE_%s path=%s\r\n",
                              (cache_queued != 0U) ? "JOB_QUEUED" : "DEFERRED",
                              path);
 #else
     (void)cache_queued;
-#endif
-#if SAMPLE_CAPTURE_DEBUG_UART
-    sample_capture_debug_log("REC_EDIT_ENTER_OK\r\n");
 #endif
     g_sample_capture.last_take_notified = 1U;
     (void)status;

@@ -108,6 +108,21 @@ static void ui_hall_mode_flow_close_lowcost_rec(void)
     g_lowcost_rec_closing = 0U;
 }
 
+void ui_hall_mode_flow_enter_audio_rec(void)
+{
+    if (ui_page_audio_rec_is_open() == 0U)
+    {
+        ui_hall_mode_flow_leave_lowcost_modal_page();
+        g_lowcost_rec_return_page = ui_page_get_id();
+        g_lowcost_rec_return_mode = ui_get_hall_mode();
+        g_lowcost_rec_return_valid = 1U;
+    }
+
+    ui_hall_mode_flow_activate_mode(UI_HALL_MODE_AUDIO_REC,
+                                    UI_PAGE_AUDIO_REC,
+                                    0U);
+}
+
 void ui_hall_mode_flow_leave_lowcost_modal_page(void)
 {
     if (g_lowcost_rec_closing != 0U)
@@ -199,13 +214,8 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
                 ui_hall_mode_flow_close_lowcost_rec();
                 return 1U;
             }
-            ui_hall_mode_flow_leave_lowcost_modal_page();
-            g_lowcost_rec_return_page = ui_page_get_id();
-            g_lowcost_rec_return_mode = ui_get_hall_mode();
-            g_lowcost_rec_return_valid = 1U;
-            target_mode = UI_HALL_MODE_AUDIO_REC;
-            target_page = UI_PAGE_AUDIO_REC;
-            break;
+            ui_hall_mode_flow_enter_audio_rec();
+            return 1U;
 
         case 6U:
             if (ui_hall_mode_resolve_rout_context(ui_get_active_track(), ui_get_hall_mode())

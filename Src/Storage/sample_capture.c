@@ -15,6 +15,7 @@
 #include "ControlRT/control_rt_publication.h"
 #include "Storage/audio_recorder_wav.h"
 #include "Storage/rec_source.h"
+#include "Storage/rec_latency_probe.h"
 #include "Storage/project_control.h"
 #include "Storage/asset_ref.h"
 #include "Track/track_state.h"

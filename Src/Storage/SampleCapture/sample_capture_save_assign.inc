@@ -123,6 +123,7 @@ static void sample_capture_save_fail(void)
 static void sample_capture_save_finish(void)
 {
     sample_capture_save_job_t *const job = &g_sample_capture.save_job;
+    g_rec_latency_probe.t_save_done = rec_latency_probe_now();
     sample_capture_copy_path(g_sample_capture.state.final_path, job->final_path);
     (void)audio_recorder_discard_client(AUDIO_RECORDER_CLIENT_AUDIO_REC);
     sample_capture_reset_take_transients(1U);
@@ -140,6 +141,9 @@ static void sample_capture_save_service(void)
 {
     sample_capture_save_job_t *const job = &g_sample_capture.save_job;
     if(job->phase == SAMPLE_CAPTURE_SAVE_IDLE) return;
+    g_rec_latency_probe.save_service_count++;
+    g_rec_latency_probe.save_phase = (uint32_t)job->phase;
+    g_rec_latency_probe.save_quantum_bytes = SAMPLE_CAPTURE_SAVE_CHUNK_BYTES;
     if((job->phase == SAMPLE_CAPTURE_SAVE_READ_DATA) && (job->chunk_bytes == 0U))
         job->chunk_bytes = (job->bytes_left > SAMPLE_CAPTURE_SAVE_CHUNK_BYTES)
             ? SAMPLE_CAPTURE_SAVE_CHUNK_BYTES : job->bytes_left;
@@ -153,7 +157,11 @@ static void sample_capture_save_service(void)
             ? SAMPLE_CAPTURE_WAV_DATA_OFFSET : job->chunk_bytes) : 0U;
     if(sample_capture_save_admit(data_phase != 0U
             ? SD_SCHEDULER_BACKGROUND_DATA : SD_SCHEDULER_BACKGROUND_METADATA,
-            quantum) == 0U) return;
+            quantum) == 0U) {
+        g_rec_latency_probe.save_admission_denied_count++;
+        g_rec_latency_probe.save_not_now_count++;
+        return;
+    }
 
     FRESULT fr = FR_OK;
     UINT transferred = 0U;
@@ -242,13 +250,25 @@ static void sample_capture_save_service(void)
             fr = f_read(&job->source, g_sample_capture_copy_buf,
                         job->chunk_bytes, &transferred);
             if((fr != FR_OK) || (transferred != job->chunk_bytes)) sample_capture_save_fail();
-            else job->phase = SAMPLE_CAPTURE_SAVE_WRITE_DATA;
+            else {
+                g_rec_latency_probe.save_read_bytes += transferred;
+                g_rec_latency_probe.save_last_chunk_bytes = transferred;
+                if(transferred > g_rec_latency_probe.save_max_bytes_per_service)
+                    g_rec_latency_probe.save_max_bytes_per_service = transferred;
+                rec_latency_probe_progress();
+                job->phase = SAMPLE_CAPTURE_SAVE_WRITE_DATA;
+            }
             break;
         case SAMPLE_CAPTURE_SAVE_WRITE_DATA:
             fr = f_write(&job->destination, g_sample_capture_copy_buf,
                          job->chunk_bytes, &transferred);
             if((fr != FR_OK) || (transferred != job->chunk_bytes)) sample_capture_save_fail();
-            else { job->bytes_left -= job->chunk_bytes; job->chunk_bytes = 0U; job->phase =
+            else { g_rec_latency_probe.save_write_bytes += transferred;
+                g_rec_latency_probe.save_last_chunk_bytes = transferred;
+                if(transferred > g_rec_latency_probe.save_max_bytes_per_service)
+                    g_rec_latency_probe.save_max_bytes_per_service = transferred;
+                rec_latency_probe_progress();
+                job->bytes_left -= job->chunk_bytes; job->chunk_bytes = 0U; job->phase =
                 (job->bytes_left != 0U) ? SAMPLE_CAPTURE_SAVE_READ_DATA
                                         : SAMPLE_CAPTURE_SAVE_SYNC; }
             break;
@@ -331,6 +351,7 @@ uint8_t sample_capture_model_save_trimmed(void)
     job->saved_frames = save_end - save_start;
     job->bytes_left = job->saved_frames * AUDIO_RECORDER_BYTES_PER_FRAME;
     job->phase = SAMPLE_CAPTURE_SAVE_SELECT_PATH;
+    g_rec_latency_probe.t_save_start = rec_latency_probe_now();
     g_sample_capture.state.save_pending = 1U;
     g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
     return 1U;

@@ -39,9 +39,38 @@ void sample_capture_model_get_state(sample_capture_state_t *out_state)
     }
 }
 
+sample_capture_rec_led_state_t sample_capture_model_rec_led_state(void)
+{
+    if (g_sample_capture.state.armed_pending != 0U)
+        return SAMPLE_CAPTURE_REC_LED_WAITING;
+    if (g_sample_capture.state.recording != 0U)
+        return SAMPLE_CAPTURE_REC_LED_ACTIVE;
+    return SAMPLE_CAPTURE_REC_LED_OFF;
+}
+
 void sample_capture_model_set_view(sample_capture_view_t view)
 {
     g_sample_capture.state.view = view;
+}
+
+uint8_t sample_capture_model_open_crop(void)
+{
+    if ((g_sample_capture.state.take_valid == 0U)
+            || (g_sample_capture.state.recording != 0U)
+            || (g_sample_capture.state.armed_pending != 0U)
+            || (g_sample_capture.state.save_pending != 0U))
+    {
+        sample_capture_set_error(SAMPLE_CAPTURE_ERROR_NO_TAKE);
+        return 0U;
+    }
+
+    g_sample_capture.state.view = SAMPLE_CAPTURE_VIEW_REC_EDIT;
+    g_rec_latency_probe.t_crop_enter = rec_latency_probe_now();
+    g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_REC_EDIT;
+    g_sample_capture.rec_edit_enter_deferred_services = 2U;
+    g_sample_capture.rec_edit_first_render_pending = 1U;
+    sample_capture_global_overview_request();
+    return 1U;
 }
 
 uint8_t sample_capture_model_toggle_route(uint8_t track)

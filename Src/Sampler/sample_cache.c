@@ -679,6 +679,13 @@ uint8_t sample_cache_has_pending_sd_work(void)
         return 1U;
     }
 
+    if (sample_page_cache_has_reserved_domain_range(
+            SAMPLE_AUDIO_DOMAIN_REC, 0U,
+            SAMPLE_PAGE_CACHE_REC_ID_CAPACITY) != 0U)
+    {
+        return 1U;
+    }
+
     return 0U;
 }
 

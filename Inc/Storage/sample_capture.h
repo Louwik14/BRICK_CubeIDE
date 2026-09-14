@@ -67,11 +67,19 @@ typedef enum
 
 typedef enum
 {
+    SAMPLE_CAPTURE_REC_LED_OFF = 0,
+    SAMPLE_CAPTURE_REC_LED_WAITING,
+    SAMPLE_CAPTURE_REC_LED_ACTIVE
+} sample_capture_rec_led_state_t;
+
+typedef enum
+{
     SAMPLE_CAPTURE_PHASE_IDLE = 0,
     SAMPLE_CAPTURE_PHASE_ARMED,
     SAMPLE_CAPTURE_PHASE_WAIT_QUANT,
     SAMPLE_CAPTURE_PHASE_RECORDING,
     SAMPLE_CAPTURE_PHASE_STOPPING,
+    SAMPLE_CAPTURE_PHASE_TAKE_READY,
     SAMPLE_CAPTURE_PHASE_REC_EDIT,
     SAMPLE_CAPTURE_PHASE_SAVED,
     SAMPLE_CAPTURE_PHASE_ERROR
@@ -167,7 +175,9 @@ void sample_capture_control_on_musical_boundary(uint8_t track,
 void sample_capture_control_on_transport_stop(uint64_t sample_time);
 void sample_capture_control_on_global_rec_arm(uint8_t armed);
 void sample_capture_model_get_state(sample_capture_state_t *out_state);
+sample_capture_rec_led_state_t sample_capture_model_rec_led_state(void);
 void sample_capture_model_set_view(sample_capture_view_t view);
+uint8_t sample_capture_model_open_crop(void);
 uint8_t sample_capture_model_toggle_route(uint8_t track);
 uint8_t sample_capture_model_source_track_is_enabled(uint8_t track);
 uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm);

@@ -675,6 +675,27 @@ static bool led_hall_mode_uses_seq_scene(ui_hall_mode_t mode)
 static void led_apply_normal_rec_scene(led_id_t led)
 {
     uint8_t blink = 0U;
+    const sample_capture_rec_led_state_t audio_rec =
+        sample_capture_model_rec_led_state();
+
+    if (audio_rec == SAMPLE_CAPTURE_REC_LED_WAITING)
+    {
+        blink = (uint8_t)(((HAL_GetTick() / 150U) & 0x1U) != 0U ? 1U : 0U);
+        led_layer_set(LED_LAYER_UI, led,
+                      blink ? LED_FIXED_VIOLET_R : 0U,
+                      blink ? LED_FIXED_VIOLET_G : 0U,
+                      blink ? LED_FIXED_VIOLET_B : 0U);
+        return;
+    }
+
+    if (audio_rec == SAMPLE_CAPTURE_REC_LED_ACTIVE)
+    {
+        led_layer_set(LED_LAYER_UI, led,
+                      LED_FIXED_VIOLET_R,
+                      LED_FIXED_VIOLET_G,
+                      LED_FIXED_VIOLET_B);
+        return;
+    }
 
     if (seq_runtime_rec_is_armed() != 0U)
     {

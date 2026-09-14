@@ -1,0 +1,27 @@
+#ifndef REC_LATENCY_PROBE_H
+#define REC_LATENCY_PROBE_H
+#include <stdint.h>
+typedef struct {
+ uint32_t reset_request,t_rec_start,t_stop_requested,t_closed_session,t_ring_drained,t_finalizable;
+ uint32_t t_commit_start,t_commit_done,t_release_start,t_release_done,t_header_start,t_header_done;
+ uint32_t t_sync_start,t_sync_done,t_close_start,t_close_done,t_rename_start,t_rename_done;
+ uint32_t t_preload_requested,t_pages_ready,t_rec_source_published;
+ uint32_t prepare_count,prepare_last_start_t,prepare_last_done_t,prepare_max_duration;
+ uint32_t extend_count,extend_last_start_t,extend_last_done_t,extend_max_duration,extend_total_time;
+ uint32_t commit_count,release_count,sync_count,rename_count;
+ uint32_t filesystem_job_step_count,filesystem_job_progress_count,filesystem_job_not_now_count;
+ uint32_t filesystem_job_io_started_count,filesystem_job_error_count;
+ uint32_t filesystem_last_job_type,filesystem_last_phase,filesystem_last_result;
+ uint32_t reserved_bytes,accepted_bytes,assigned_bytes,committed_bytes;
+ uint32_t extend_requested_bytes,extend_granted_bytes;
+ uint32_t t_crop_enter,t_save_start,t_save_done,save_service_count,save_progress_count;
+ uint32_t save_read_bytes,save_write_bytes,save_admission_denied_count,save_not_now_count;
+ uint32_t save_last_progress_t,save_max_progress_gap,save_phase,save_quantum_bytes;
+ uint32_t save_last_chunk_bytes,save_max_bytes_per_service;
+} rec_latency_probe_t;
+extern volatile rec_latency_probe_t g_rec_latency_probe;
+uint32_t rec_latency_probe_now(void);
+void rec_latency_probe_reset(void);
+void rec_latency_probe_service_reset(void);
+void rec_latency_probe_progress(void);
+#endif

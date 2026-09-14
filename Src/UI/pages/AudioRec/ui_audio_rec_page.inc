@@ -34,7 +34,8 @@ static void ui_page_audio_rec_handle_event(const ui_event_t *ev)
         }
         else if(ev->id == (uint8_t)BTN_PAGE_4)
         {
-            (void)sample_capture_model_save_trimmed();
+            if(sample_capture_model_open_crop() != 0U)
+                ui_page_set(UI_PAGE_REC_EDIT);
         }
         return;
     }
@@ -154,6 +155,7 @@ static const char *ui_page_audio_rec_phase_label(sample_capture_phase_t phase)
         case SAMPLE_CAPTURE_PHASE_WAIT_QUANT: return "WAIT";
         case SAMPLE_CAPTURE_PHASE_RECORDING: return "REC";
         case SAMPLE_CAPTURE_PHASE_STOPPING: return "STOP";
+        case SAMPLE_CAPTURE_PHASE_TAKE_READY: return "READY";
         case SAMPLE_CAPTURE_PHASE_REC_EDIT: return "EDIT";
         case SAMPLE_CAPTURE_PHASE_SAVED: return "SAVED";
         case SAMPLE_CAPTURE_PHASE_ERROR: return "ERROR";
