@@ -159,6 +159,17 @@ static void sample_capture_editor_cache_reset(void)
 
 static void sample_capture_global_overview_reset(void)
 {
+    if(g_sample_capture_global_overview.file_open != 0U)
+    {
+        if(sd_access_gate_try_acquire(SD_ACCESS_CLIENT_EDITOR_CACHE) == 0U)
+        {
+            g_sample_capture_global_overview.reset_pending = 1U;
+            g_sample_capture_global_overview.state = SAMPLE_CAPTURE_GLOBAL_OVERVIEW_ERROR;
+            return;
+        }
+        (void)f_close(&g_sample_capture_global_overview.file);
+        sd_access_gate_release(SD_ACCESS_CLIENT_EDITOR_CACHE);
+    }
     memset(&g_sample_capture_global_overview, 0, sizeof(g_sample_capture_global_overview));
     g_sample_capture_global_overview.state = SAMPLE_CAPTURE_GLOBAL_OVERVIEW_EMPTY;
 }
@@ -173,6 +184,8 @@ static uint8_t sample_capture_global_overview_path_matches(void)
 
 static void sample_capture_global_overview_request(void)
 {
+    if(g_sample_capture_global_overview.reset_pending != 0U)
+        return;
     if((g_sample_capture.state.take_valid == 0U)
             || (g_sample_capture.state.recorded_frames == 0U)
             || (g_sample_capture.state.temp_path[0] == '\0'))
@@ -339,6 +352,19 @@ static void sample_capture_waveform_probe_service_end(uint32_t start,
 
 static void sample_capture_global_overview_service(void)
 {
+    if(g_sample_capture_global_overview.reset_pending != 0U)
+    {
+        if(sd_access_gate_try_acquire(SD_ACCESS_CLIENT_EDITOR_CACHE) != 0U)
+        {
+            if(g_sample_capture_global_overview.file_open != 0U)
+                (void)f_close(&g_sample_capture_global_overview.file);
+            sd_access_gate_release(SD_ACCESS_CLIENT_EDITOR_CACHE);
+            memset(&g_sample_capture_global_overview, 0,
+                   sizeof(g_sample_capture_global_overview));
+            g_sample_capture_global_overview.state = SAMPLE_CAPTURE_GLOBAL_OVERVIEW_EMPTY;
+        }
+        return;
+    }
     const uint8_t probe_active = (uint8_t)(
         g_sample_capture_global_overview.state == SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILDING);
     const uint32_t service_start = rec_latency_probe_now();
@@ -386,48 +412,44 @@ static void sample_capture_global_overview_service(void)
         return;
     }
 
-    FIL fp;
-    uint8_t file_open = 0U;
     uint8_t ok = 0U;
-    uint32_t op_start = rec_latency_probe_now();
-    const uint8_t mount_ok = sd_access_fs_mount_if_needed();
-    uint32_t op_ticks = rec_latency_probe_now() - op_start;
-    g_rec_latency_probe.waveform_mount_total_ticks += op_ticks;
-    if(op_ticks > g_rec_latency_probe.waveform_mount_max_ticks)
-        g_rec_latency_probe.waveform_mount_max_ticks = op_ticks;
-    if(mount_ok == 0U)
+    uint32_t op_start;
+    uint32_t op_ticks;
+    if(g_sample_capture_global_overview.file_open == 0U)
     {
-        goto done;
-    }
-    op_start = rec_latency_probe_now();
-    const FRESULT open_result = f_open(&fp, g_sample_capture_global_overview.path, FA_READ);
-    op_ticks = rec_latency_probe_now() - op_start;
-    g_rec_latency_probe.waveform_open_total_ticks += op_ticks;
-    if(op_ticks > g_rec_latency_probe.waveform_open_max_ticks)
-        g_rec_latency_probe.waveform_open_max_ticks = op_ticks;
-    if(open_result != FR_OK)
-    {
-        goto done;
-    }
-    file_open = 1U;
+        op_start = rec_latency_probe_now();
+        const uint8_t mount_ok = sd_access_fs_mount_if_needed();
+        op_ticks = rec_latency_probe_now() - op_start;
+        g_rec_latency_probe.waveform_mount_total_ticks += op_ticks;
+        if(op_ticks > g_rec_latency_probe.waveform_mount_max_ticks)
+            g_rec_latency_probe.waveform_mount_max_ticks = op_ticks;
+        if(mount_ok == 0U) goto done;
 
-    op_start = rec_latency_probe_now();
-    const FRESULT seek_result = f_lseek(&fp, SAMPLE_CAPTURE_WAV_DATA_OFFSET
-        + (g_sample_capture_global_overview.build_next_frame
-           * AUDIO_RECORDER_BYTES_PER_FRAME));
-    op_ticks = rec_latency_probe_now() - op_start;
-    g_rec_latency_probe.waveform_seek_total_ticks += op_ticks;
-    if(op_ticks > g_rec_latency_probe.waveform_seek_max_ticks)
-        g_rec_latency_probe.waveform_seek_max_ticks = op_ticks;
-    if(seek_result != FR_OK)
-    {
-        goto done;
+        op_start = rec_latency_probe_now();
+        const FRESULT open_result = f_open(&g_sample_capture_global_overview.file,
+            g_sample_capture_global_overview.path, FA_READ);
+        op_ticks = rec_latency_probe_now() - op_start;
+        g_rec_latency_probe.waveform_open_total_ticks += op_ticks;
+        if(op_ticks > g_rec_latency_probe.waveform_open_max_ticks)
+            g_rec_latency_probe.waveform_open_max_ticks = op_ticks;
+        if(open_result != FR_OK) goto done;
+        g_sample_capture_global_overview.file_open = 1U;
+
+        op_start = rec_latency_probe_now();
+        const FRESULT seek_result = f_lseek(&g_sample_capture_global_overview.file,
+            SAMPLE_CAPTURE_WAV_DATA_OFFSET);
+        op_ticks = rec_latency_probe_now() - op_start;
+        g_rec_latency_probe.waveform_seek_total_ticks += op_ticks;
+        if(op_ticks > g_rec_latency_probe.waveform_seek_max_ticks)
+            g_rec_latency_probe.waveform_seek_max_ticks = op_ticks;
+        if(seek_result != FR_OK) goto done;
     }
 
     const uint32_t bytes_to_read = frames_left * AUDIO_RECORDER_BYTES_PER_FRAME;
     UINT br = 0U;
     const uint32_t read_start = rec_latency_probe_now();
-    const FRESULT read_result = f_read(&fp, g_sample_capture_detail_buf, bytes_to_read, &br);
+    const FRESULT read_result = f_read(&g_sample_capture_global_overview.file,
+        g_sample_capture_detail_buf, bytes_to_read, &br);
     const uint32_t read_ticks = rec_latency_probe_now() - read_start;
     g_rec_latency_probe.waveform_read_count++;
     g_rec_latency_probe.waveform_read_total_ticks += read_ticks;
@@ -500,14 +522,17 @@ static void sample_capture_global_overview_service(void)
     }
 
 done:
-    if(file_open != 0U)
+    if((g_sample_capture_global_overview.file_open != 0U)
+            && ((ok == 0U)
+                || (g_sample_capture_global_overview.state != SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILDING)))
     {
         op_start = rec_latency_probe_now();
-        (void)f_close(&fp);
+        (void)f_close(&g_sample_capture_global_overview.file);
         op_ticks = rec_latency_probe_now() - op_start;
         g_rec_latency_probe.waveform_close_total_ticks += op_ticks;
         if(op_ticks > g_rec_latency_probe.waveform_close_max_ticks)
             g_rec_latency_probe.waveform_close_max_ticks = op_ticks;
+        g_sample_capture_global_overview.file_open = 0U;
     }
     sd_access_gate_release(SD_ACCESS_CLIENT_EDITOR_CACHE);
     if(ok == 0U)
