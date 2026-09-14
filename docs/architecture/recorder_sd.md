@@ -118,10 +118,11 @@ status produit; elle n'est pas reclassée en ring overflow. Les erreurs média,
 
 ## Waveform de prise
 
-AUDIO alimente 4096 couples min/max int16 depuis le PCM24 final, au point
-d'entrée du ring Recorder. Une longueur fixe utilise le mapping direct
+AUDIO publie dans le ring le PCM24 final qui est l'unique point source du
+résumé. Avant de rendre les frames du ring recyclables, STORAGE alimente 4096
+couples min/max int16. Une longueur fixe utilise le mapping direct
 frames-vers-bins. Une longueur libre utilise des niveaux bornés et compacte
-progressivement; la finition éventuelle se fait hors IRQ. Le résumé READY
+progressivement, entièrement hors IRQ. Le résumé READY
 (environ 16 KiB) est copié dans le descripteur `BUILDING` et publié avec lui.
 L'éditeur l'utilise directement pour une prise fraîche; le scan SD reste le
 fallback des fichiers externes, anciens, récupérés ou sans résumé valide.
@@ -129,13 +130,15 @@ fallback des fichiers externes, anciens, récupérés ou sans résumé valide.
 ## SAVE / CROP
 
 SAVE n'est pas nécessaire au playback. Pour une prise complète temporaire, il
-écrit et synchronise d'abord `REC_PROMOTE.JRN`, renomme le workspace sur le
-même volume, met à jour le chemin du page-cache puis passe la même génération
-en ownership `PERSISTENT`. Aucune copie PCM n'a lieu. Ce checkpoint expire
-seulement l'action AUDIO; les entrées SEQ restent en place.
+écrit et synchronise d'abord un des deux slots `REC_PROMOTE.0/1`, renomme le
+workspace sur le même volume, met à jour le chemin du page-cache puis passe la
+même génération en ownership `PERSISTENT`. Aucune copie PCM n'a lieu. Ce
+checkpoint expire seulement l'action AUDIO; les entrées SEQ restent en place.
 
-Au boot, ancien chemin seul signifie rollback, nouveau chemin seul signifie
-promotion achevée. En cas d'état ambigu, aucun des deux côtés n'est supprimé.
+Le journal redondant, séquencé et contrôlé par checksum publie successivement
+`INTENT`, `RENAMED` et `COMMITTED`. Au boot, ancien chemin seul signifie
+rollback, nouveau chemin seul signifie adoption `PERSISTENT` et rebind du
+cache. En cas d'état ambigu, aucun des deux côtés n'est supprimé.
 Un vrai crop reste l'export transactionnel séquentiel 32 KiB : il sélectionne
 une plage de frames et recopie uniquement son PCM.
 

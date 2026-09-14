@@ -26,6 +26,7 @@
 #include "Storage/project_control.h"
 #include "Storage/sd_preview.h"
 #include "Storage/audio_recorder.h"
+#include "Storage/undo_v2.h"
 #include "Storage/waveform_cache.h"
 #include "Platform/brick6_sd_config.h"
 #include "Platform/idle_latency_diag.h"
@@ -110,6 +111,7 @@ void brick6_app_init(void)
 static void brick6_app_service_storage(void)
 {
     uint32_t started = idle_latency_diag_begin();
+    undo_v2_service();
     audio_recorder_service();
     idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_RECORDER, started);
     started = idle_latency_diag_begin();

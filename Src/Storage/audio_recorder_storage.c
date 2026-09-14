@@ -9,6 +9,7 @@
 #include "Storage/sd_access_gate.h"
 #include "IPC/audio_recorder_capture_contract.h"
 #include "Storage/rec_latency_probe.h"
+#include "Storage/rec_source_waveform.h"
 #include "ff.h"
 #include "stm32h7xx_hal.h"
 #include "main.h"
@@ -748,6 +749,15 @@ void audio_recorder_storage_service(uint32_t session_id,
     g_rec_latency_probe.accepted_bytes = (uint32_t)runtime->recorder.accepted_tail;
     g_rec_latency_probe.assigned_bytes = (uint32_t)runtime->recorder.assigned_tail;
     g_rec_latency_probe.committed_bytes = (uint32_t)runtime->recorder.committed_tail;
+    if ((capture_is_active != 0U)
+            || (runtime->phase == AUDIO_RECORDER_STORAGE_FINALIZING)
+            || (runtime->phase == AUDIO_RECORDER_STORAGE_TAKE_READY))
+    {
+        const uint32_t published_frames = g_audio_recorder_capture.head_cursor;
+        __DMB();
+        rec_source_waveform_capture_service(g_audio_recorder_capture_ring,
+            AUDIO_RECORDER_CAPTURE_RING_FRAMES, published_frames);
+    }
     if ((runtime->phase == AUDIO_RECORDER_STORAGE_IDLE)
             || (runtime->phase == AUDIO_RECORDER_STORAGE_TAKE_READY)
             || (runtime->phase == AUDIO_RECORDER_STORAGE_FAILED)) return;
@@ -776,8 +786,11 @@ void audio_recorder_storage_service(uint32_t session_id,
         const uint32_t committed_frames = (uint32_t)(
             runtime->recorder.committed_tail
                 / AUDIO_RECORDER_BYTES_PER_FRAME);
+        const uint32_t waveform_frames = rec_source_waveform_captured_frames();
+        const uint32_t recyclable_frames = (committed_frames < waveform_frames)
+            ? committed_frames : waveform_frames;
         __DMB();
-        g_audio_recorder_capture.tail_cursor = committed_frames;
+        g_audio_recorder_capture.tail_cursor = recyclable_frames;
         if (g_audio_recorder_capture.capture_fault
                 != AUDIO_RECORDER_ERROR_NONE)
         {

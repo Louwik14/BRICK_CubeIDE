@@ -190,9 +190,12 @@ static uint8_t sample_capture_path_is_temp(const char *path)
     {
         return 1U;
     }
-    if(strstr(path, "REC_WORK_") != 0)
+    const char *current_path = 0;
+    rec_source_snapshot_t current;
+    if ((rec_source_current_path(&current_path, &current) != 0U)
+            && (strcmp(path, current_path) == 0))
     {
-        return 1U;
+        return rec_source_current_is_temporary();
     }
     if((strstr(path, "_TMP") != 0) || (strstr(path, "_tmp") != 0))
     {

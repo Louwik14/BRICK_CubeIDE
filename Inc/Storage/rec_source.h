@@ -5,7 +5,7 @@
 #include "IPC/rec_source_contract.h"
 
 #include "Storage/audio_recorder_storage.h"
-#include "Audio/audio_recorder_capture_audio.h"
+#include "Storage/rec_source_waveform.h"
 
 /* RETIRED + UNDO + CURRENT + BUILDING is the bounded worst case. */
 #define REC_SOURCE_SLOT_COUNT 4U
@@ -48,4 +48,5 @@ uint8_t rec_source_promote_current(const char *persistent_path);
 uint8_t rec_source_current_snapshot(rec_source_snapshot_t *out_snapshot);
 uint8_t rec_source_current_path(const char **out_path,
                                 rec_source_snapshot_t *out_snapshot);
-const audio_recorder_waveform_summary_t *rec_source_current_waveform(void);
+uint8_t rec_source_current_is_temporary(void);
+const rec_source_waveform_summary_t *rec_source_current_waveform(void);

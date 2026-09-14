@@ -207,11 +207,12 @@ static void sample_capture_global_overview_request(void)
 
     rec_source_snapshot_t current_snapshot;
     const char *current_path = 0;
-    const audio_recorder_waveform_summary_t *const captured =
+    const rec_source_waveform_summary_t *const captured =
         rec_source_current_waveform();
     if ((captured != 0) && (captured->ready != 0U)
             && (captured->frame_count == g_sample_capture.state.recorded_frames)
             && (rec_source_current_path(&current_path, &current_snapshot) != 0U)
+            && (captured->generation == current_snapshot.key.generation)
             && (strncmp(current_path, g_sample_capture.state.temp_path,
                         SAMPLE_CAPTURE_PATH_MAX) == 0))
     {

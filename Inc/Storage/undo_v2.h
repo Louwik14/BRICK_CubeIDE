@@ -29,6 +29,8 @@ undo_v2_status_t undo_v2_begin_sequence_transaction(seq_track_id_t track,
 undo_v2_status_t undo_v2_commit_sequence_transaction(void);
 undo_v2_status_t undo_v2_commit_audio_transition(uint32_t before_generation,
                                                  uint32_t after_generation);
+uint8_t undo_v2_audio_transition_can_commit(uint32_t before_generation,
+                                            uint32_t after_generation);
 void undo_v2_expire_audio(void);
 void undo_v2_cancel_transaction(void);
 
@@ -36,5 +38,6 @@ undo_v2_status_t undo_v2_undo(void);
 undo_v2_status_t undo_v2_redo(void);
 
 void undo_v2_set_capture_suspended(uint8_t suspended);
+void undo_v2_service(void);
 
 #endif /* UNDO_V2_H */

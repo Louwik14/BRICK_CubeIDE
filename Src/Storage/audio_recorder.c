@@ -190,6 +190,7 @@ audio_recorder_lifecycle_result_t audio_recorder_prepare_client_cooperative(
     uint16_t session = (uint16_t)(g_audio_recorder_control_session + 1U);
     if(session == 0U) session = 1U;
     g_audio_recorder_control_session = session;
+    rec_source_waveform_begin(g_audio_recorder.frame_limit);
     g_audio_recorder.state = AUDIO_RECORDER_STATE_PREPARED;
     g_audio_recorder.error = AUDIO_RECORDER_ERROR_NONE;
     return AUDIO_RECORDER_LIFECYCLE_OK;
@@ -298,7 +299,6 @@ void audio_recorder_service(void)
         g_audio_recorder.state = AUDIO_RECORDER_STATE_FINALIZING;
     else if(phase == AUDIO_RECORDER_STORAGE_TAKE_READY)
     {
-        g_audio_recorder.state = AUDIO_RECORDER_STATE_TAKE_READY;
         if((g_build_stream_registered != 0U)
                 && (rec_source_building_active() != 0U))
         {
@@ -334,6 +334,8 @@ void audio_recorder_service(void)
                 forget_build_stream();
             }
         }
+        if(rec_source_building_active() == 0U)
+            g_audio_recorder.state = AUDIO_RECORDER_STATE_TAKE_READY;
     }
     update_build_stream();
 }

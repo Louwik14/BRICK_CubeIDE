@@ -137,9 +137,10 @@ static void sample_capture_save_finish(void)
     g_sample_capture.state.save_pending = 0U;
     g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
     (void)sample_capture_model_assign_refresh();
-    (void)waveform_cache_request_for_wav_known_duration(
-        job->final_path, WAVEFORM_CACHE_REASON_EDITOR_VISIBLE,
-        job->saved_frames, AUDIO_RECORDER_SAMPLE_RATE_HZ);
+    if (rec_source_current_waveform() == 0)
+        (void)waveform_cache_request_for_wav_known_duration(
+            job->final_path, WAVEFORM_CACHE_REASON_EDITOR_VISIBLE,
+            job->saved_frames, AUDIO_RECORDER_SAMPLE_RATE_HZ);
     memset(job, 0, sizeof(*job));
 }
 

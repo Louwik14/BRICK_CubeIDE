@@ -66,6 +66,7 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/multi_sample_pool.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_classic_audio_projection_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/rec_source.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/rec_source_waveform.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_global_pool.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sampler_ram_audio_projection_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sampler_ram_pool.c"

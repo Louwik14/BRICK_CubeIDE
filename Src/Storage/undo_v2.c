@@ -27,7 +27,8 @@ typedef struct
 typedef struct
 {
     uint8_t tx_open, count, cursor, apply_in_progress;
-    uint8_t capture_suspended, pending_track, reserved[2];
+    uint8_t capture_suspended, pending_track, audio_apply_pending;
+    uint8_t audio_apply_redo;
     undo_v2_status_t last_status;
 } undo_v2_runtime_t;
 
@@ -91,7 +92,9 @@ static uint8_t sequence_count(void)
 static uint8_t capture_allowed(void)
 {
     return (uint8_t)((g_undo_v2_runtime.capture_suspended == 0U)
-        && (g_undo_v2_runtime.apply_in_progress == 0U) && (__get_IPSR() == 0U));
+        && (g_undo_v2_runtime.apply_in_progress == 0U)
+        && (g_undo_v2_runtime.audio_apply_pending == 0U)
+        && (__get_IPSR() == 0U));
 }
 
 static void clear_pending(void)
@@ -222,8 +225,8 @@ undo_v2_status_t undo_v2_commit_sequence_transaction(void)
 undo_v2_status_t undo_v2_commit_audio_transition(uint32_t before_generation,
                                                  uint32_t after_generation)
 {
-    if ((g_undo_v2_runtime.tx_open != 0U) || (capture_allowed() == 0U)
-            || (before_generation == after_generation))
+    if (undo_v2_audio_transition_can_commit(before_generation,
+                                            after_generation) == 0U)
     { set_status(UNDO_V2_STATUS_ERR_INVALID_ARG); return g_undo_v2_runtime.last_status; }
     purge_redo();
     undo_v2_expire_audio();
@@ -236,6 +239,14 @@ undo_v2_status_t undo_v2_commit_audio_transition(uint32_t before_generation,
     g_undo_v2_runtime.cursor = g_undo_v2_runtime.count;
     set_status(UNDO_V2_STATUS_OK);
     return UNDO_V2_STATUS_OK;
+}
+
+uint8_t undo_v2_audio_transition_can_commit(uint32_t before_generation,
+                                            uint32_t after_generation)
+{
+    return (uint8_t)((g_undo_v2_runtime.tx_open == 0U)
+        && (capture_allowed() != 0U)
+        && (before_generation != after_generation));
 }
 
 void undo_v2_cancel_transaction(void)
@@ -260,12 +271,23 @@ static undo_v2_status_t apply_entry(undo_v2_entry_t *entry, uint8_t redo)
 
 undo_v2_status_t undo_v2_undo(void)
 {
-    if ((g_undo_v2_runtime.tx_open != 0U) || (g_undo_v2_runtime.cursor == 0U))
+    if ((g_undo_v2_runtime.tx_open != 0U)
+            || (g_undo_v2_runtime.audio_apply_pending != 0U)
+            || (g_undo_v2_runtime.cursor == 0U))
     { set_status(UNDO_V2_STATUS_ERR_NO_TX); return g_undo_v2_runtime.last_status; }
     g_undo_v2_runtime.apply_in_progress = 1U;
     const undo_v2_status_t status = apply_entry(
         &g_undo_v2_entries[g_undo_v2_runtime.cursor - 1U], 0U);
     g_undo_v2_runtime.apply_in_progress = 0U;
+    if ((status == UNDO_V2_STATUS_ERR_APPLY_FAILED)
+            && (g_undo_v2_entries[g_undo_v2_runtime.cursor - 1U].kind
+                == UNDO_V2_ENTRY_AUDIO))
+    {
+        g_undo_v2_runtime.audio_apply_pending = 1U;
+        g_undo_v2_runtime.audio_apply_redo = 0U;
+        set_status(UNDO_V2_STATUS_OK);
+        return UNDO_V2_STATUS_OK;
+    }
     if (status == UNDO_V2_STATUS_OK) g_undo_v2_runtime.cursor--;
     set_status(status);
     return status;
@@ -274,12 +296,22 @@ undo_v2_status_t undo_v2_undo(void)
 undo_v2_status_t undo_v2_redo(void)
 {
     if ((g_undo_v2_runtime.tx_open != 0U)
+            || (g_undo_v2_runtime.audio_apply_pending != 0U)
             || (g_undo_v2_runtime.cursor >= g_undo_v2_runtime.count))
     { set_status(UNDO_V2_STATUS_ERR_NO_TX); return g_undo_v2_runtime.last_status; }
     g_undo_v2_runtime.apply_in_progress = 1U;
     const undo_v2_status_t status = apply_entry(
         &g_undo_v2_entries[g_undo_v2_runtime.cursor], 1U);
     g_undo_v2_runtime.apply_in_progress = 0U;
+    if ((status == UNDO_V2_STATUS_ERR_APPLY_FAILED)
+            && (g_undo_v2_entries[g_undo_v2_runtime.cursor].kind
+                == UNDO_V2_ENTRY_AUDIO))
+    {
+        g_undo_v2_runtime.audio_apply_pending = 1U;
+        g_undo_v2_runtime.audio_apply_redo = 1U;
+        set_status(UNDO_V2_STATUS_OK);
+        return UNDO_V2_STATUS_OK;
+    }
     if (status == UNDO_V2_STATUS_OK) g_undo_v2_runtime.cursor++;
     set_status(status);
     return status;
@@ -288,5 +320,28 @@ undo_v2_status_t undo_v2_redo(void)
 void undo_v2_set_capture_suspended(uint8_t suspended)
 {
     g_undo_v2_runtime.capture_suspended = (suspended != 0U) ? 1U : 0U;
+    set_status(UNDO_V2_STATUS_OK);
+}
+
+void undo_v2_service(void)
+{
+    if (g_undo_v2_runtime.audio_apply_pending == 0U) return;
+    const uint8_t redo = g_undo_v2_runtime.audio_apply_redo;
+    const uint8_t index = (redo != 0U) ? g_undo_v2_runtime.cursor
+                                      : (uint8_t)(g_undo_v2_runtime.cursor - 1U);
+    if ((index >= g_undo_v2_runtime.count)
+            || (g_undo_v2_entries[index].kind != UNDO_V2_ENTRY_AUDIO))
+    {
+        g_undo_v2_runtime.audio_apply_pending = 0U;
+        set_status(UNDO_V2_STATUS_ERR_APPLY_FAILED);
+        return;
+    }
+    g_undo_v2_runtime.apply_in_progress = 1U;
+    const undo_v2_status_t status = apply_entry(&g_undo_v2_entries[index], redo);
+    g_undo_v2_runtime.apply_in_progress = 0U;
+    if (status != UNDO_V2_STATUS_OK) return;
+    if (redo != 0U) g_undo_v2_runtime.cursor++;
+    else g_undo_v2_runtime.cursor--;
+    g_undo_v2_runtime.audio_apply_pending = 0U;
     set_status(UNDO_V2_STATUS_OK);
 }
