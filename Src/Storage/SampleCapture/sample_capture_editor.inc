@@ -15,6 +15,8 @@ void sample_capture_model_init(void)
         g_sample_capture.trigger_threshold_peak_abs_pcm24);
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_IDLE;
     g_sample_capture.state.edit_vzoom = SAMPLE_CAPTURE_EDIT_VZOOM_DEFAULT;
+    memset(&g_sample_capture_global_overview, 0,
+           sizeof(g_sample_capture_global_overview));
     sample_capture_detail_reset();
     control_audio_rec_bus_init();
     sample_capture_publish_rec_bus();
