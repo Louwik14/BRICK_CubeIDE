@@ -3,6 +3,7 @@
 #include <math.h>
 
 #include "Param/engine_model_catalog.h"
+#include "Audio/fx_audio_xfade.h"
 #include "Mod/mod_lfo_v1_control.h"
 #include "Param/param_registry.h"
 
@@ -489,6 +490,21 @@ float param_value_policy_apply_delta(param_id_t id,
         if (next < 0) next = 0;
         if (next >= prism_domain.count) next = (int32_t)prism_domain.count - 1;
         return prism_discrete_value((uint8_t)next, &prism_domain);
+    }
+
+    if ((id == PARAM_AUDIO_FX_P2) || (id == PARAM_AUDIO_FX_B_P2))
+    {
+        uint8_t model=0U;
+        if ((audio_fx_model_for_param(id,track,&model)!=0U)
+                && (model==AUDIO_FX_MODEL_XFADE))
+        {
+            const int32_t last=(int32_t)FX_AUDIO_XFADE_TARGET_COUNT-1;
+            int32_t target=(int32_t)(canonical_value*(float)last+0.5f)
+                +(int32_t)delta;
+            if(target<0)target=0;
+            if(target>last)target=last;
+            return (float)target/(float)last;
+        }
     }
 
     if ((id == PARAM_MODFX_OFFSET)

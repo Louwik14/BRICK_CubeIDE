@@ -403,7 +403,7 @@ static uint8_t ui_page_midi_fx_param_text(uint8_t slot,
             (void)snprintf(out_value,out_value_len,"%u",(unsigned)(value*127.0f+0.5f));
         else if (id == PARAM_AUDIO_FX_P2)
         {
-            static const char *const targets[] = {"MASTER","REC","TRACK 1","TRACK 2","TRACK 3","TRACK 4","TRACK 5","TRACK 6","TRACK 7","TRACK 8","LINE","USB"};
+            static const char *const targets[] = {"MASTER","REC","T1","T2","T3","T4","T5","T6","T7","T8","LINE","USB"};
             uint8_t target=(uint8_t)(value*(float)(FX_AUDIO_XFADE_TARGET_COUNT-1U)+0.5f);
             if(target>=FX_AUDIO_XFADE_TARGET_COUNT)target=0U;
             (void)snprintf(out_value,out_value_len,"%s",targets[target]);
