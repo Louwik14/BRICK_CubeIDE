@@ -224,6 +224,13 @@ static void sample_capture_global_overview_request(void)
     g_rec_latency_probe.waveform_admission_denied_count = 0U;
     g_rec_latency_probe.waveform_last_progress_t = 0U;
     g_rec_latency_probe.waveform_max_progress_gap = 0U;
+    g_rec_latency_probe.waveform_service_total_ticks = 0U;
+    g_rec_latency_probe.waveform_service_max_ticks = 0U;
+    g_rec_latency_probe.waveform_compute_total_ticks = 0U;
+    g_rec_latency_probe.waveform_compute_max_ticks = 0U;
+    g_rec_latency_probe.waveform_interservice_total_ticks = 0U;
+    g_rec_latency_probe.waveform_interservice_max_ticks = 0U;
+    g_rec_latency_probe.waveform_last_service_t = 0U;
     g_sample_capture_global_overview.generation++;
     for(uint16_t i = 0U; i < SAMPLE_CAPTURE_GLOBAL_OVERVIEW_POINTS; ++i)
     {
@@ -290,14 +297,35 @@ static void sample_capture_global_overview_finish(void)
 #endif
 }
 
+static void sample_capture_waveform_probe_service_end(uint32_t start)
+{
+    const uint32_t now = rec_latency_probe_now();
+    const uint32_t elapsed = now - start;
+    g_rec_latency_probe.waveform_service_total_ticks += elapsed;
+    if(elapsed > g_rec_latency_probe.waveform_service_max_ticks)
+        g_rec_latency_probe.waveform_service_max_ticks = elapsed;
+    g_rec_latency_probe.waveform_last_service_t = now;
+}
+
 static void sample_capture_global_overview_service(void)
 {
-    if(g_sample_capture_global_overview.state == SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILDING)
+    const uint8_t probe_active = (uint8_t)(
+        g_sample_capture_global_overview.state == SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILDING);
+    const uint32_t service_start = rec_latency_probe_now();
+    if(probe_active != 0U) {
+        if(g_rec_latency_probe.waveform_last_service_t != 0U) {
+            const uint32_t gap = service_start - g_rec_latency_probe.waveform_last_service_t;
+            g_rec_latency_probe.waveform_interservice_total_ticks += gap;
+            if(gap > g_rec_latency_probe.waveform_interservice_max_ticks)
+                g_rec_latency_probe.waveform_interservice_max_ticks = gap;
+        }
         g_rec_latency_probe.waveform_service_count++;
+    }
     if(sample_capture_global_overview_can_build() == 0U)
     {
         if(g_sample_capture_global_overview.state == SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILDING)
             g_rec_latency_probe.waveform_not_now_count++;
+        if(probe_active != 0U) sample_capture_waveform_probe_service_end(service_start);
         return;
     }
 
@@ -306,6 +334,7 @@ static void sample_capture_global_overview_service(void)
     if(frames_left == 0U)
     {
         sample_capture_global_overview_finish();
+        sample_capture_waveform_probe_service_end(service_start);
         return;
     }
     if(frames_left > SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILD_CHUNK_FRAMES)
@@ -317,6 +346,7 @@ static void sample_capture_global_overview_service(void)
     {
         g_rec_latency_probe.waveform_admission_denied_count++;
         g_rec_latency_probe.waveform_not_now_count++;
+        sample_capture_waveform_probe_service_end(service_start);
         return;
     }
 
@@ -368,6 +398,7 @@ static void sample_capture_global_overview_service(void)
     }
 
     const uint32_t frames_read = br / AUDIO_RECORDER_BYTES_PER_FRAME;
+    const uint32_t compute_start = rec_latency_probe_now();
     for(uint32_t i = 0U; i < frames_read; ++i)
     {
         const uint32_t frame_index = g_sample_capture_global_overview.build_next_frame + i;
@@ -393,6 +424,12 @@ static void sample_capture_global_overview_service(void)
             g_sample_capture_global_overview_points[point].max = sample_max;
         }
     }
+    {
+        const uint32_t compute_ticks = rec_latency_probe_now() - compute_start;
+        g_rec_latency_probe.waveform_compute_total_ticks += compute_ticks;
+        if(compute_ticks > g_rec_latency_probe.waveform_compute_max_ticks)
+            g_rec_latency_probe.waveform_compute_max_ticks = compute_ticks;
+    }
 
     g_sample_capture_global_overview.build_next_frame += frames_read;
     ok = 1U;
@@ -413,6 +450,7 @@ done:
     {
         g_sample_capture_global_overview.state = SAMPLE_CAPTURE_GLOBAL_OVERVIEW_ERROR;
     }
+    sample_capture_waveform_probe_service_end(service_start);
 }
 
 static uint16_t sample_capture_editor_level_count(uint32_t frames, uint32_t block_frames)
