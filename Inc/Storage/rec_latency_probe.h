@@ -56,6 +56,14 @@ typedef struct {
  uint32_t streamer_underrun_count,streamer_last_underrun_t;
  uint32_t recorder_wait_count,recorder_wait_max_ticks;
  uint32_t recorder_ring_max_used_frames,recorder_overflow_count,recorder_last_overflow_t;
+ uint32_t workspace_delete_total_ticks,workspace_delete_max_ticks;
+ uint32_t workspace_create_total_ticks,workspace_create_max_ticks;
+ uint32_t workspace_reserve_total_ticks,workspace_reserve_max_ticks;
+ uint32_t workspace_mapping_total_ticks,workspace_mapping_max_ticks;
+ uint32_t workspace_sync_total_ticks,workspace_sync_max_ticks;
+ uint32_t workspace_prepare_total_ticks,workspace_prepare_max_ticks;
+ uint32_t workspace_clusters_allocated,workspace_extents_created,workspace_reserved_bytes;
+ uint32_t workspace_old_file_bytes,workspace_delete_cluster_count;
 } rec_latency_probe_t;
 extern volatile rec_latency_probe_t g_rec_latency_probe;
 uint32_t rec_latency_probe_now(void);

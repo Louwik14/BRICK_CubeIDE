@@ -632,6 +632,7 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
         }
         else if(active_phase == RECORDER_FILE_JOB_EXTEND)
         {
+            const uint32_t mapping_start = rec_latency_probe_now();
             uint16_t added = (uint16_t)session->job_added_extent_count;
             const uint16_t old_count = session->job_old_extent_count;
             if((session->job_added_extent_count > UINT16_MAX)
@@ -644,6 +645,13 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
                 return session->job_result;
             }
             session->extent_count = (uint16_t)(old_count + added);
+            if(session->job_owner == RECORDER_FILE_JOB_OWNER_PREPARATION)
+            {
+                const uint32_t mapping_ticks = rec_latency_probe_now() - mapping_start;
+                g_rec_latency_probe.workspace_mapping_total_ticks += mapping_ticks;
+                if(mapping_ticks > g_rec_latency_probe.workspace_mapping_max_ticks)
+                    g_rec_latency_probe.workspace_mapping_max_ticks = mapping_ticks;
+            }
             g_rec_latency_probe.extend_last_done_t = rec_latency_probe_now();
             {
                 const uint32_t d = g_rec_latency_probe.extend_last_done_t

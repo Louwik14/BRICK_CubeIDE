@@ -65,6 +65,67 @@ RECORDER_SCRATCH_SDRAM static uint8_t
     g_audio_recorder_write_buffers[GENERIC_RECORDER_WRITE_BUFFER_COUNT]
                                   [AUDIO_RECORDER_WRITE_BUFFER_BYTES];
 
+/* Temporary Release/LTO probe state. */
+#define REC_PROBE_PREP_SCAN_CREATE 1U
+#define REC_PROBE_RESERVE_SYNC 2U
+typedef struct
+{
+    uint32_t prepare_start;
+    uint32_t create_start;
+    uint32_t reserve_start;
+    uint32_t sync_start;
+    uint32_t mapping_ticks_at_sync_start;
+    uint8_t old_workspace_seen;
+    uint8_t create_started;
+    uint8_t sync_started;
+} audio_recorder_workspace_probe_state_t;
+static audio_recorder_workspace_probe_state_t g_workspace_probe;
+
+static void audio_recorder_workspace_probe_add(uint32_t elapsed,
+    volatile uint32_t *total, volatile uint32_t *maximum)
+{
+    *total += elapsed;
+    if(elapsed > *maximum) *maximum = elapsed;
+}
+
+static void audio_recorder_workspace_probe_prepare_observe(
+    audio_recorder_storage_runtime_t *runtime)
+{
+    const FF_BRICK_REC_PREPARE_CONT *const prep =
+        &runtime->reservation.job_cont.prepare;
+    if((g_workspace_probe.old_workspace_seen == 0U)
+            && (prep->source_obj.objsize != 0U))
+    {
+        g_workspace_probe.old_workspace_seen = 1U;
+        g_rec_latency_probe.workspace_old_file_bytes =
+            (uint32_t)prep->source_obj.objsize;
+    }
+    if((g_workspace_probe.create_started == 0U)
+            && (prep->scan_purpose == REC_PROBE_PREP_SCAN_CREATE))
+    {
+        const uint32_t now = rec_latency_probe_now();
+        if(g_workspace_probe.old_workspace_seen != 0U)
+        {
+            audio_recorder_workspace_probe_add(
+                now - g_workspace_probe.prepare_start,
+                &g_rec_latency_probe.workspace_delete_total_ticks,
+                &g_rec_latency_probe.workspace_delete_max_ticks);
+            if(prep->remove.released != 0U)
+                g_rec_latency_probe.workspace_delete_cluster_count = prep->remove.released;
+            else if((prep->fs != 0) && (prep->fs->csize != 0U))
+            {
+                const uint32_t cluster_bytes = (uint32_t)prep->fs->csize * 512U;
+                g_rec_latency_probe.workspace_delete_cluster_count =
+                    (g_rec_latency_probe.workspace_old_file_bytes
+                        + cluster_bytes - 1U) / cluster_bytes;
+            }
+        }
+        g_workspace_probe.create_start = (g_workspace_probe.old_workspace_seen != 0U)
+            ? now : g_workspace_probe.prepare_start;
+        g_workspace_probe.create_started = 1U;
+    }
+}
+
 static audio_recorder_error_t audio_recorder_storage_map_error(
     generic_recorder_error_t error)
 {
@@ -149,6 +210,7 @@ static sd_scheduler_start_result_t audio_recorder_storage_preparation_step(
         case AUDIO_RECORDER_PREP_CREATE:
             rr = recorder_file_reservation_job_step(&runtime->reservation,
                 RECORDER_FILE_JOB_OWNER_PREPARATION);
+            audio_recorder_workspace_probe_prepare_observe(runtime);
             if (rr == RECORDER_FILE_RESERVATION_IO_STARTED)
                 return SD_SCHEDULER_START_STARTED;
             if (rr == RECORDER_FILE_RESERVATION_PROGRESS)
@@ -159,16 +221,40 @@ static sd_scheduler_start_result_t audio_recorder_storage_preparation_step(
             if (recorder_file_reservation_job_finish(&runtime->reservation,
                     RECORDER_FILE_JOB_OWNER_PREPARATION) == 0U)
                 return SD_SCHEDULER_START_ERROR;
+            {
+                const uint32_t now = rec_latency_probe_now();
+                if(g_workspace_probe.create_started == 0U)
+                    g_workspace_probe.create_start = g_workspace_probe.prepare_start;
+                audio_recorder_workspace_probe_add(
+                    now - g_workspace_probe.create_start,
+                    &g_rec_latency_probe.workspace_create_total_ticks,
+                    &g_rec_latency_probe.workspace_create_max_ticks);
+            }
             rr = recorder_file_reservation_extend_begin(&runtime->reservation,
                 (AUDIO_RECORDER_INITIAL_RESERVE_BYTES + AUDIO_RECORDER_WAV_HEADER_BYTES)
                     - runtime->reservation.fs_state.reserved_bytes,
                 RECORDER_FILE_JOB_OWNER_PREPARATION);
             if (rr != RECORDER_FILE_RESERVATION_OK) return SD_SCHEDULER_START_ERROR;
+            g_workspace_probe.reserve_start = rec_latency_probe_now();
             runtime->prepare_phase = AUDIO_RECORDER_PREP_RESERVE;
             return SD_SCHEDULER_START_COMPLETED;
         case AUDIO_RECORDER_PREP_RESERVE:
             rr = recorder_file_reservation_job_step(&runtime->reservation,
                 RECORDER_FILE_JOB_OWNER_PREPARATION);
+            if((g_workspace_probe.sync_started == 0U)
+                    && (runtime->reservation.job_cont.reserve.phase
+                        == REC_PROBE_RESERVE_SYNC))
+            {
+                const uint32_t now = rec_latency_probe_now();
+                audio_recorder_workspace_probe_add(
+                    now - g_workspace_probe.reserve_start,
+                    &g_rec_latency_probe.workspace_reserve_total_ticks,
+                    &g_rec_latency_probe.workspace_reserve_max_ticks);
+                g_workspace_probe.sync_start = now;
+                g_workspace_probe.mapping_ticks_at_sync_start =
+                    g_rec_latency_probe.workspace_mapping_total_ticks;
+                g_workspace_probe.sync_started = 1U;
+            }
             if (rr == RECORDER_FILE_RESERVATION_IO_STARTED)
                 return SD_SCHEDULER_START_STARTED;
             if (rr == RECORDER_FILE_RESERVATION_PROGRESS)
@@ -179,6 +265,30 @@ static sd_scheduler_start_result_t audio_recorder_storage_preparation_step(
             if (recorder_file_reservation_job_finish(&runtime->reservation,
                     RECORDER_FILE_JOB_OWNER_PREPARATION) == 0U)
                 return SD_SCHEDULER_START_ERROR;
+            {
+                const uint32_t now = rec_latency_probe_now();
+                if(g_workspace_probe.sync_started != 0U)
+                {
+                    const uint32_t mapping_ticks =
+                        g_rec_latency_probe.workspace_mapping_total_ticks
+                        - g_workspace_probe.mapping_ticks_at_sync_start;
+                    audio_recorder_workspace_probe_add(
+                        (now - g_workspace_probe.sync_start) - mapping_ticks,
+                        &g_rec_latency_probe.workspace_sync_total_ticks,
+                        &g_rec_latency_probe.workspace_sync_max_ticks);
+                }
+                else
+                    audio_recorder_workspace_probe_add(
+                        now - g_workspace_probe.reserve_start,
+                        &g_rec_latency_probe.workspace_reserve_total_ticks,
+                        &g_rec_latency_probe.workspace_reserve_max_ticks);
+                g_rec_latency_probe.workspace_clusters_allocated =
+                    runtime->reservation.fs_state.cluster_count;
+                g_rec_latency_probe.workspace_extents_created =
+                    runtime->reservation.extent_count;
+                g_rec_latency_probe.workspace_reserved_bytes =
+                    (uint32_t)runtime->reservation.fs_state.reserved_bytes;
+            }
             if (audio_recorder_storage_start_writer(runtime) == 0U)
                 return SD_SCHEDULER_START_ERROR;
             g_audio_recorder_capture.tail_cursor = 0U;
@@ -190,6 +300,9 @@ static sd_scheduler_start_result_t audio_recorder_storage_preparation_step(
                     - g_rec_latency_probe.prepare_last_start_t;
                 if(d > g_rec_latency_probe.prepare_max_duration)
                     g_rec_latency_probe.prepare_max_duration = d;
+                audio_recorder_workspace_probe_add(d,
+                    &g_rec_latency_probe.workspace_prepare_total_ticks,
+                    &g_rec_latency_probe.workspace_prepare_max_ticks);
             }
             sd_access_gate_set_recorder_fs_logical_active(0U);
             return SD_SCHEDULER_START_COMPLETED;
@@ -570,8 +683,10 @@ audio_recorder_lifecycle_result_t audio_recorder_storage_prepare(
         g_audio_recorder_storage.filesystem_generation = 1U;
     g_audio_recorder_storage.filesystem_media_epoch = sd_access_media_epoch();
     g_audio_recorder_storage.prepare_phase = AUDIO_RECORDER_PREP_REMOVE_TEMPORARY;
+    memset(&g_workspace_probe, 0, sizeof(g_workspace_probe));
     g_rec_latency_probe.prepare_count++;
     g_rec_latency_probe.prepare_last_start_t = rec_latency_probe_now();
+    g_workspace_probe.prepare_start = g_rec_latency_probe.prepare_last_start_t;
     g_audio_recorder_storage.phase = AUDIO_RECORDER_STORAGE_PREPARING;
     sd_access_gate_set_recorder_fs_logical_active(1U);
     return AUDIO_RECORDER_LIFECYCLE_NOT_NOW;
