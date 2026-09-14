@@ -231,6 +231,18 @@ static void sample_capture_global_overview_request(void)
     g_rec_latency_probe.waveform_interservice_total_ticks = 0U;
     g_rec_latency_probe.waveform_interservice_max_ticks = 0U;
     g_rec_latency_probe.waveform_last_service_t = 0U;
+    g_rec_latency_probe.waveform_mount_total_ticks = 0U;
+    g_rec_latency_probe.waveform_mount_max_ticks = 0U;
+    g_rec_latency_probe.waveform_open_total_ticks = 0U;
+    g_rec_latency_probe.waveform_open_max_ticks = 0U;
+    g_rec_latency_probe.waveform_seek_total_ticks = 0U;
+    g_rec_latency_probe.waveform_seek_max_ticks = 0U;
+    g_rec_latency_probe.waveform_close_total_ticks = 0U;
+    g_rec_latency_probe.waveform_close_max_ticks = 0U;
+    g_rec_latency_probe.waveform_publish_total_ticks = 0U;
+    g_rec_latency_probe.waveform_publish_max_ticks = 0U;
+    g_rec_latency_probe.waveform_other_total_ticks = 0U;
+    g_rec_latency_probe.waveform_other_max_ticks = 0U;
     g_sample_capture_global_overview.generation++;
     for(uint16_t i = 0U; i < SAMPLE_CAPTURE_GLOBAL_OVERVIEW_POINTS; ++i)
     {
@@ -297,13 +309,31 @@ static void sample_capture_global_overview_finish(void)
 #endif
 }
 
-static void sample_capture_waveform_probe_service_end(uint32_t start)
+static uint32_t sample_capture_waveform_probe_attributed_ticks(void)
+{
+    return g_rec_latency_probe.waveform_read_total_ticks
+        + g_rec_latency_probe.waveform_compute_total_ticks
+        + g_rec_latency_probe.waveform_mount_total_ticks
+        + g_rec_latency_probe.waveform_open_total_ticks
+        + g_rec_latency_probe.waveform_seek_total_ticks
+        + g_rec_latency_probe.waveform_close_total_ticks
+        + g_rec_latency_probe.waveform_publish_total_ticks;
+}
+
+static void sample_capture_waveform_probe_service_end(uint32_t start,
+                                                       uint32_t attributed_start)
 {
     const uint32_t now = rec_latency_probe_now();
     const uint32_t elapsed = now - start;
     g_rec_latency_probe.waveform_service_total_ticks += elapsed;
     if(elapsed > g_rec_latency_probe.waveform_service_max_ticks)
         g_rec_latency_probe.waveform_service_max_ticks = elapsed;
+    const uint32_t attributed = sample_capture_waveform_probe_attributed_ticks()
+        - attributed_start;
+    const uint32_t other = (elapsed > attributed) ? (elapsed - attributed) : 0U;
+    g_rec_latency_probe.waveform_other_total_ticks += other;
+    if(other > g_rec_latency_probe.waveform_other_max_ticks)
+        g_rec_latency_probe.waveform_other_max_ticks = other;
     g_rec_latency_probe.waveform_last_service_t = now;
 }
 
@@ -312,6 +342,7 @@ static void sample_capture_global_overview_service(void)
     const uint8_t probe_active = (uint8_t)(
         g_sample_capture_global_overview.state == SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILDING);
     const uint32_t service_start = rec_latency_probe_now();
+    const uint32_t attributed_start = sample_capture_waveform_probe_attributed_ticks();
     if(probe_active != 0U) {
         if(g_rec_latency_probe.waveform_last_service_t != 0U) {
             const uint32_t gap = service_start - g_rec_latency_probe.waveform_last_service_t;
@@ -325,7 +356,7 @@ static void sample_capture_global_overview_service(void)
     {
         if(g_sample_capture_global_overview.state == SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILDING)
             g_rec_latency_probe.waveform_not_now_count++;
-        if(probe_active != 0U) sample_capture_waveform_probe_service_end(service_start);
+        if(probe_active != 0U) sample_capture_waveform_probe_service_end(service_start, attributed_start);
         return;
     }
 
@@ -333,8 +364,13 @@ static void sample_capture_global_overview_service(void)
         - g_sample_capture_global_overview.build_next_frame;
     if(frames_left == 0U)
     {
+        const uint32_t publish_start = rec_latency_probe_now();
         sample_capture_global_overview_finish();
-        sample_capture_waveform_probe_service_end(service_start);
+        const uint32_t publish_ticks = rec_latency_probe_now() - publish_start;
+        g_rec_latency_probe.waveform_publish_total_ticks += publish_ticks;
+        if(publish_ticks > g_rec_latency_probe.waveform_publish_max_ticks)
+            g_rec_latency_probe.waveform_publish_max_ticks = publish_ticks;
+        sample_capture_waveform_probe_service_end(service_start, attributed_start);
         return;
     }
     if(frames_left > SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILD_CHUNK_FRAMES)
@@ -346,26 +382,44 @@ static void sample_capture_global_overview_service(void)
     {
         g_rec_latency_probe.waveform_admission_denied_count++;
         g_rec_latency_probe.waveform_not_now_count++;
-        sample_capture_waveform_probe_service_end(service_start);
+        sample_capture_waveform_probe_service_end(service_start, attributed_start);
         return;
     }
 
     FIL fp;
     uint8_t file_open = 0U;
     uint8_t ok = 0U;
-    if(sd_access_fs_mount_if_needed() == 0U)
+    uint32_t op_start = rec_latency_probe_now();
+    const uint8_t mount_ok = sd_access_fs_mount_if_needed();
+    uint32_t op_ticks = rec_latency_probe_now() - op_start;
+    g_rec_latency_probe.waveform_mount_total_ticks += op_ticks;
+    if(op_ticks > g_rec_latency_probe.waveform_mount_max_ticks)
+        g_rec_latency_probe.waveform_mount_max_ticks = op_ticks;
+    if(mount_ok == 0U)
     {
         goto done;
     }
-    if(f_open(&fp, g_sample_capture_global_overview.path, FA_READ) != FR_OK)
+    op_start = rec_latency_probe_now();
+    const FRESULT open_result = f_open(&fp, g_sample_capture_global_overview.path, FA_READ);
+    op_ticks = rec_latency_probe_now() - op_start;
+    g_rec_latency_probe.waveform_open_total_ticks += op_ticks;
+    if(op_ticks > g_rec_latency_probe.waveform_open_max_ticks)
+        g_rec_latency_probe.waveform_open_max_ticks = op_ticks;
+    if(open_result != FR_OK)
     {
         goto done;
     }
     file_open = 1U;
 
-    if(f_lseek(&fp, SAMPLE_CAPTURE_WAV_DATA_OFFSET
-            + (g_sample_capture_global_overview.build_next_frame
-               * AUDIO_RECORDER_BYTES_PER_FRAME)) != FR_OK)
+    op_start = rec_latency_probe_now();
+    const FRESULT seek_result = f_lseek(&fp, SAMPLE_CAPTURE_WAV_DATA_OFFSET
+        + (g_sample_capture_global_overview.build_next_frame
+           * AUDIO_RECORDER_BYTES_PER_FRAME));
+    op_ticks = rec_latency_probe_now() - op_start;
+    g_rec_latency_probe.waveform_seek_total_ticks += op_ticks;
+    if(op_ticks > g_rec_latency_probe.waveform_seek_max_ticks)
+        g_rec_latency_probe.waveform_seek_max_ticks = op_ticks;
+    if(seek_result != FR_OK)
     {
         goto done;
     }
@@ -437,20 +491,30 @@ static void sample_capture_global_overview_service(void)
             || (g_sample_capture_global_overview.build_next_frame
                 >= g_sample_capture_global_overview.frame_count))
     {
+        const uint32_t publish_start = rec_latency_probe_now();
         sample_capture_global_overview_finish();
+        const uint32_t publish_ticks = rec_latency_probe_now() - publish_start;
+        g_rec_latency_probe.waveform_publish_total_ticks += publish_ticks;
+        if(publish_ticks > g_rec_latency_probe.waveform_publish_max_ticks)
+            g_rec_latency_probe.waveform_publish_max_ticks = publish_ticks;
     }
 
 done:
     if(file_open != 0U)
     {
+        op_start = rec_latency_probe_now();
         (void)f_close(&fp);
+        op_ticks = rec_latency_probe_now() - op_start;
+        g_rec_latency_probe.waveform_close_total_ticks += op_ticks;
+        if(op_ticks > g_rec_latency_probe.waveform_close_max_ticks)
+            g_rec_latency_probe.waveform_close_max_ticks = op_ticks;
     }
     sd_access_gate_release(SD_ACCESS_CLIENT_EDITOR_CACHE);
     if(ok == 0U)
     {
         g_sample_capture_global_overview.state = SAMPLE_CAPTURE_GLOBAL_OVERVIEW_ERROR;
     }
-    sample_capture_waveform_probe_service_end(service_start);
+    sample_capture_waveform_probe_service_end(service_start, attributed_start);
 }
 
 static uint16_t sample_capture_editor_level_count(uint32_t frames, uint32_t block_frames)

@@ -42,6 +42,12 @@ typedef struct {
  uint32_t waveform_compute_total_ticks,waveform_compute_max_ticks;
  uint32_t waveform_interservice_total_ticks,waveform_interservice_max_ticks;
  uint32_t waveform_last_service_t;
+ uint32_t waveform_mount_total_ticks,waveform_mount_max_ticks;
+ uint32_t waveform_open_total_ticks,waveform_open_max_ticks;
+ uint32_t waveform_seek_total_ticks,waveform_seek_max_ticks;
+ uint32_t waveform_close_total_ticks,waveform_close_max_ticks;
+ uint32_t waveform_publish_total_ticks,waveform_publish_max_ticks;
+ uint32_t waveform_other_total_ticks,waveform_other_max_ticks;
 } rec_latency_probe_t;
 extern volatile rec_latency_probe_t g_rec_latency_probe;
 uint32_t rec_latency_probe_now(void);
