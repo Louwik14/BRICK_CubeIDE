@@ -425,7 +425,7 @@ uint8_t audio_fx_runtime_is_param(param_id_t id){return (uint8_t)(audio_fx_runti
 uint8_t audio_fx_runtime_get_model(brick_entity_id_t e,audio_fx_slot_t slot){uint8_t owner;return(audio_fx_owner(e,&owner)&&slot<AUDIO_FX_SLOT_COUNT)?g_audio_fx_runtime[owner][slot].config.model:AUDIO_FX_MODEL_OFF;}
 uint8_t audio_fx_runtime_is_active(brick_entity_id_t e){return(audio_fx_runtime_get_model(e,AUDIO_FX_SLOT_A)!=AUDIO_FX_MODEL_OFF||audio_fx_runtime_get_model(e,AUDIO_FX_SLOT_B)!=AUDIO_FX_MODEL_OFF)?1U:0U;}
 uint8_t audio_fx_runtime_is_comp(brick_entity_id_t e){(void)e;return 0U;}
-uint8_t audio_fx_runtime_xfade_target(brick_entity_id_t e,fx_audio_xfade_target_t*out){uint8_t owner;if(!audio_fx_owner(e,&owner)||out==NULL)return 0U;for(uint8_t si=0U;si<AUDIO_FX_SLOT_COUNT;++si){audio_fx_runtime_slot_t*r=&g_audio_fx_runtime[owner][si];if(r->config.model==AUDIO_FX_MODEL_XFADE){*out=(fx_audio_xfade_target_t)r->dsp.xfade.target;return 1U;}}return 0U;}
+uint8_t audio_fx_runtime_xfade_target(brick_entity_id_t e,fx_audio_xfade_target_t*out){uint8_t owner;if(!audio_fx_owner(e,&owner)||out==NULL)return 0U;for(uint8_t si=0U;si<AUDIO_FX_SLOT_COUNT;++si){audio_fx_runtime_slot_t*r=&g_audio_fx_runtime[owner][si];if(r->config.model==AUDIO_FX_MODEL_XFADE){if(fx_audio_xfade_target_is_self(e,r->dsp.xfade.target)!=0U)return 0U;*out=(fx_audio_xfade_target_t)r->dsp.xfade.target;return 1U;}}return 0U;}
 uint8_t audio_fx_runtime_requires_stereo(brick_entity_id_t e){uint8_t owner;if(!audio_fx_owner(e,&owner))return 0U;for(uint8_t si=0U;si<AUDIO_FX_SLOT_COUNT;++si){const uint8_t m=g_audio_fx_runtime[owner][si].config.model;if(m==AUDIO_FX_MODEL_XFADE||m==AUDIO_FX_MODEL_DJ_EQ)return 1U;}return(g_audio_fx_plan[owner].filter_pos!=AUDIO_FX_FILTER_POS_PRE)?1U:0U;}
 uint8_t audio_fx_runtime_pre_filter_supported(brick_entity_id_t e)
 {
@@ -463,7 +463,7 @@ uint8_t audio_fx_runtime_apply_param(brick_entity_id_t e,param_id_t id,float val
     if(!audio_fx_runtime_param_slot(id,&si))return 0U;
     audio_fx_runtime_slot_t*r=&g_audio_fx_runtime[owner][si];
     if(param_kind(id)==1U){r->config.p1=value;prepare(r);}
-    else if(param_kind(id)==2U){r->config.p2=value;prepare(r);}
+    else if(param_kind(id)==2U){if((r->config.model==AUDIO_FX_MODEL_XFADE)&&fx_audio_xfade_target_is_self(e,(uint8_t)(clamp01(value)*(float)(FX_AUDIO_XFADE_TARGET_COUNT-1U)+0.5f))!=0U)return 0U;r->config.p2=value;prepare(r);}
     else if(param_kind(id)==3U){r->config.p3=value;prepare(r);}
     else
     {
@@ -471,7 +471,7 @@ uint8_t audio_fx_runtime_apply_param(brick_entity_id_t e,param_id_t id,float val
                 ||value!=(float)(uint8_t)value)return 0U;
         const uint8_t model=(uint8_t)value;
         if(audio_fx_runtime_model_is_valid(model)==0U)return 0U;
-        if(r->config.model!=model){r->config.model=model;if(model==AUDIO_FX_MODEL_XFADE){r->config.p1=0.0f;r->config.p2=(float)FX_AUDIO_XFADE_TARGET_REC/(float)(FX_AUDIO_XFADE_TARGET_COUNT-1U);r->config.p3=0.0f;}else if(model==AUDIO_FX_MODEL_DJ_EQ){r->config.p1=0.5f;r->config.p2=0.5f;r->config.p3=63.5f;}reset_light_state(r);prepare(r);rebuild_plan(owner);mixer_rebuild_static_plan();}
+        if(r->config.model!=model){r->config.model=model;if(model==AUDIO_FX_MODEL_XFADE){r->config.p1=0.0f;r->config.p2=(float)fx_audio_xfade_target_default(e)/(float)(FX_AUDIO_XFADE_TARGET_COUNT-1U);r->config.p3=0.0f;}else if(model==AUDIO_FX_MODEL_DJ_EQ){r->config.p1=0.5f;r->config.p2=0.5f;r->config.p3=63.5f;}reset_light_state(r);prepare(r);rebuild_plan(owner);mixer_rebuild_static_plan();}
     }
     return 1U;
 }

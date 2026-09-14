@@ -255,6 +255,34 @@ static void mixer_track_filter_process_biquad_mono_block(mixer_track_filter_t *f
     filter->filter_env_prepared_consumed = 1U;
 }
 
+static mixer_lane_source_kind_t mixer_resolve_lane_source_kind(
+                                               uint8_t hw_enabled,
+                                               uint8_t ext_enabled,
+                                               uint8_t ext_format,
+                                               uint32_t ext_frames,
+                                               uint32_t frames)
+{
+    const uint8_t ext_valid=(uint8_t)((ext_enabled!=0U)
+        &&(ext_frames==frames)
+        &&((ext_format==MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
+            ||(ext_format==MIXER_EXTERNAL_FORMAT_STEREO)
+            ||(ext_format==MIXER_EXTERNAL_FORMAT_POLY_STEREO)
+            ||(ext_format==MIXER_EXTERNAL_FORMAT_MULTI_STEREO)
+            ||(ext_format==MIXER_EXTERNAL_FORMAT_MULTI_MONO)));
+    if(hw_enabled!=0U)
+    {
+        if(ext_valid==0U)return MIXER_LANE_SOURCE_HW_STEREO;
+        return ((ext_format==MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
+                ||(ext_format==MIXER_EXTERNAL_FORMAT_MULTI_MONO))
+            ?MIXER_LANE_SOURCE_HW_PLUS_EXT_MONO
+            :MIXER_LANE_SOURCE_HW_PLUS_EXT_STEREO;
+    }
+    if(ext_valid==0U)return MIXER_LANE_SOURCE_NONE;
+    return ((ext_format==MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
+            ||(ext_format==MIXER_EXTERNAL_FORMAT_MULTI_MONO))
+        ?MIXER_LANE_SOURCE_EXT_MONO_NATIVE:MIXER_LANE_SOURCE_EXT_STEREO;
+}
+
 static mixer_lane_plan_t mixer_build_lane_plan(uint32_t track_id,
                                                const mixer_audio_track_runtime_t *track,
                                                const mixer_track_filter_t *filter,
@@ -306,43 +334,12 @@ static mixer_lane_plan_t mixer_build_lane_plan(uint32_t track_id,
     plan.active = 1U;
     plan.exec_kind = MIXER_LANE_EXEC_STEREO;
 
-    if (plan.hw_enabled != 0U)
+    plan.source_kind=mixer_resolve_lane_source_kind(plan.hw_enabled,
+        plan.ext_enabled,plan.ext_format,plan.ext_frames,frames);
+    if(plan.source_kind==MIXER_LANE_SOURCE_EXT_MONO_NATIVE)
     {
-        if ((plan.ext_enabled != 0U)
-            && ((plan.ext_format == MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
-                || (plan.ext_format == MIXER_EXTERNAL_FORMAT_MULTI_MONO)))
-        {
-            plan.source_kind = MIXER_LANE_SOURCE_HW_PLUS_EXT_MONO;
-        }
-        else if (plan.ext_enabled != 0U)
-        {
-            plan.source_kind = MIXER_LANE_SOURCE_HW_PLUS_EXT_STEREO;
-        }
-        else
-        {
-            plan.source_kind = MIXER_LANE_SOURCE_HW_STEREO;
-        }
-
-        return plan;
-    }
-
-    if ((plan.ext_enabled != 0U)
-            && ((plan.ext_format == MIXER_EXTERNAL_FORMAT_STEREO)
-                || (plan.ext_format == MIXER_EXTERNAL_FORMAT_POLY_STEREO)
-                || (plan.ext_format == MIXER_EXTERNAL_FORMAT_MULTI_STEREO)))
-    {
-        plan.source_kind = MIXER_LANE_SOURCE_EXT_STEREO;
-        return plan;
-    }
-
-    if ((plan.ext_enabled != 0U)
-            && ((plan.ext_format == MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
-                || (plan.ext_format == MIXER_EXTERNAL_FORMAT_MULTI_MONO)))
-    {
-        plan.source_kind = MIXER_LANE_SOURCE_EXT_MONO_NATIVE;
         plan.exec_kind = MIXER_LANE_EXEC_MONO_NATIVE;
     }
-
     return plan;
 }
 

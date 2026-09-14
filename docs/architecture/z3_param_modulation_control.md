@@ -145,7 +145,7 @@ le lock du moteur courant peut alors etre applique normalement.
 Les runtimes moteur et voix ne conservent que leurs projections natives ou
 leurs etats DSP.
 
-Les slots Audio FX A/B possedent MODEL/P1/P2/P3. MODEL reste un endpoint musical stable de slot. XFADE initialise `XFADE/TARGET/CURVE` a `0/REC/POWER`; DJ EQ initialise `LOW/MID/HIGH` a 0 dB. Filter position, ordre et modes spatiaux appartiennent a `audio_fx_control_state` et utilisent des commandes typees. Les restores preparent, publient, puis installent directement l'etat final. Seuls P1/P2/P3 sont p-lockables. En GROUP, les models appartiennent au master et les children n'exposent que LEVEL A/B; XFADE est reserve aux tracks ordinaires.
+Les slots Audio FX A/B possedent MODEL/P1/P2/P3. MODEL reste un endpoint musical stable de slot. XFADE initialise `XFADE/TARGET/CURVE` a `0/track suivante/POWER`; ses cibles sont MASTER, les sept autres tracks, LINE et USB. CONTROL refuse self-target et le restore le canonicalise vers la track suivante. Le restore reconnait aussi l'ancien codage a 12 valeurs: il conserve les anciennes cibles encore valides et remplace REC par la track suivante. DJ EQ initialise `LOW/MID/HIGH` a 0 dB. Filter position, ordre et modes spatiaux appartiennent a `audio_fx_control_state` et utilisent des commandes typees. Les restores preparent, publient, puis installent directement l'etat final. Seuls P1/P2/P3 sont p-lockables. En GROUP, les models appartiennent au master et les children n'exposent que LEVEL A/B; XFADE est reserve aux tracks ordinaires.
 
 La liste MOD parcourt le catalogue PARAM canonique puis conserve les parametres
 a la fois declares destinations par le registre, affiches et applicables au

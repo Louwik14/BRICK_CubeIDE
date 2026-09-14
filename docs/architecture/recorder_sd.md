@@ -99,8 +99,9 @@ snapshot immutable READY de `REC_SOURCE.current`; sans current valide, il rend
 du silence.
 
 Le Streamer ne porte aucun crossfade produit. Le crossfade entre une track et
-REC, MASTER, LINE, USB ou une autre track est le modèle XFADE du domaine
-Insert Audio FX.
+MASTER, LINE, USB ou une autre track est le modèle XFADE du domaine Insert
+Audio FX. `REC_SOURCE` ne constitue pas un bus live et n'est pas une cible
+XFADE; il reste lisible uniquement par un Streamer.
 
 ## OVERDUB
 

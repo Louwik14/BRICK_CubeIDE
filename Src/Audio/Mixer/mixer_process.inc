@@ -69,9 +69,11 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     }
     const uint32_t ntracks = (track_count < MIXER_MAX_TRACKS) ? track_count : MIXER_MAX_TRACKS;
     uint8_t xfade_master_active = 0U;
-    uint8_t xfade_track_taps_active = 0U;
+    uint32_t xfade_track_tap_mask = 0U;
+    fx_audio_xfade_target_t xfade_lane_target[MIXER_MAX_TRACKS];
+    for(uint8_t lane=0U;lane<MIXER_MAX_TRACKS;++lane)
+        xfade_lane_target[lane]=FX_AUDIO_XFADE_TARGET_COUNT;
     brick_entity_id_t xfade_master_entity = BRICK_ENTITY_INVALID_ID;
-    uint8_t rec_target_lane = MIXER_MAX_TRACKS;
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
     {
         track_audio_runtime_ctx_t ctx;
@@ -79,14 +81,11 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                 && (ctx.program_route.active != 0U)
                 && (ctx.program_route.mix_track_id < MIXER_MAX_TRACKS))
         {
-            if ((rec_target_lane >= MIXER_MAX_TRACKS)
-                    && (ctx.family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-                    && (ctx.type == (uint8_t)TRACK_RUNTIME_TYPE_STREAM)
-                    && (brick6_sampler_runtime_clip_source_is_rec(entity) != 0U))
-                rec_target_lane=ctx.program_route.mix_track_id;
             fx_audio_xfade_target_t target;
+            if(audio_fx_runtime_xfade_target(entity,&target)==0U)
+                continue;
+            xfade_lane_target[ctx.program_route.mix_track_id]=target;
             if ((xfade_master_active == 0U)
-                    && (audio_fx_runtime_xfade_target(entity,&target) != 0U)
                     && (target == FX_AUDIO_XFADE_TARGET_MASTER)
                     && ((g_mixer_static_lane_flags[ctx.program_route.mix_track_id]
                          & MIXER_STATIC_ROUTE_MAIN) != 0U))
@@ -94,29 +93,60 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                 xfade_master_active = 1U;
                 xfade_master_entity = entity;
             }
-            if((audio_fx_runtime_xfade_target(entity,&target)!=0U)
-                    &&((target==FX_AUDIO_XFADE_TARGET_REC)
-                       ||((target>=FX_AUDIO_XFADE_TARGET_TRACK_1)
-                          &&(target<=FX_AUDIO_XFADE_TARGET_TRACK_8))))
-                xfade_track_taps_active=1U;
+            if(fx_audio_xfade_target_is_track(target)!=0U)
+                xfade_track_tap_mask|=(uint32_t)1UL
+                    <<(uint8_t)(target-FX_AUDIO_XFADE_TARGET_TRACK_1);
         }
     }
-    memset(xfade_carrier_l, 0, sizeof(xfade_carrier_l));
-    memset(xfade_carrier_r, 0, sizeof(xfade_carrier_r));
-    for(uint32_t lane=0U;(xfade_track_taps_active!=0U)&&(lane<MIXER_MAX_TRACKS);++lane)
+    if(xfade_master_active!=0U)
     {
-        for(uint32_t i=0U;i<frames;++i)
+        memset(xfade_carrier_l,0,sizeof(xfade_carrier_l));
+        memset(xfade_carrier_r,0,sizeof(xfade_carrier_r));
+    }
+    for(uint32_t lane=0U;lane<MIXER_MAX_TRACKS;++lane)
+    {
+        if((xfade_track_tap_mask&((uint32_t)1UL<<lane))==0U)
+            continue;
+        const uint8_t hw_enabled=(lane<ntracks)?tracks[lane].enabled:0U;
+        const mixer_lane_source_kind_t source_kind=mixer_resolve_lane_source_kind(
+            hw_enabled,g_external_track_enabled[lane],g_external_track_format[lane],
+            g_external_track_frames_valid[lane],frames);
+        if(source_kind==MIXER_LANE_SOURCE_HW_STEREO)
         {
-            float l=(lane<ntracks&&tracks[lane].enabled!=0U)?tracks[lane].L[i]:0.0f;
-            float r=(lane<ntracks&&tracks[lane].enabled!=0U)?tracks[lane].R[i]:0.0f;
-            if(g_external_track_enabled[lane]!=0U)
+            memcpy(xfade_track_tap_l[lane],tracks[lane].L,sizeof(float)*frames);
+            memcpy(xfade_track_tap_r[lane],tracks[lane].R,sizeof(float)*frames);
+        }
+        else if(source_kind==MIXER_LANE_SOURCE_EXT_STEREO)
+        {
+            memcpy(xfade_track_tap_l[lane],g_external_track_l[lane],sizeof(float)*frames);
+            memcpy(xfade_track_tap_r[lane],g_external_track_r[lane],sizeof(float)*frames);
+        }
+        else if(source_kind==MIXER_LANE_SOURCE_EXT_MONO_NATIVE)
+        {
+            memcpy(xfade_track_tap_l[lane],g_external_track_mono[lane],sizeof(float)*frames);
+            memcpy(xfade_track_tap_r[lane],g_external_track_mono[lane],sizeof(float)*frames);
+        }
+        else if(source_kind==MIXER_LANE_SOURCE_HW_PLUS_EXT_STEREO)
+        {
+            for(uint32_t i=0U;i<frames;++i)
             {
-                if((g_external_track_format[lane]==MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
-                        ||(g_external_track_format[lane]==MIXER_EXTERNAL_FORMAT_MULTI_MONO))
-                    l+=g_external_track_mono[lane][i],r+=g_external_track_mono[lane][i];
-                else l+=g_external_track_l[lane][i],r+=g_external_track_r[lane][i];
+                xfade_track_tap_l[lane][i]=tracks[lane].L[i]+g_external_track_l[lane][i];
+                xfade_track_tap_r[lane][i]=tracks[lane].R[i]+g_external_track_r[lane][i];
             }
-            xfade_track_tap_l[lane][i]=l;xfade_track_tap_r[lane][i]=r;
+        }
+        else if(source_kind==MIXER_LANE_SOURCE_HW_PLUS_EXT_MONO)
+        {
+            for(uint32_t i=0U;i<frames;++i)
+            {
+                const float ext=g_external_track_mono[lane][i];
+                xfade_track_tap_l[lane][i]=tracks[lane].L[i]+ext;
+                xfade_track_tap_r[lane][i]=tracks[lane].R[i]+ext;
+            }
+        }
+        else
+        {
+            memset(xfade_track_tap_l[lane],0,sizeof(float)*frames);
+            memset(xfade_track_tap_r[lane],0,sizeof(float)*frames);
         }
     }
     uint8_t audio_rec_capture_active = (uint8_t)(
@@ -863,9 +893,9 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                 mixer_lane_run_stereo_path(t,mt,&g_track_filters[t],L,R,frames);
             audio_fx_runtime_process_after_filter(audio_fx_entity,L,R,frames);
         }
-        fx_audio_xfade_target_t xfade_target;
-        if ((audio_fx_runtime_xfade_target(audio_fx_entity,&xfade_target)!=0U)
-                && (xfade_target!=FX_AUDIO_XFADE_TARGET_MASTER))
+        const fx_audio_xfade_target_t xfade_target=xfade_lane_target[t];
+        if ((xfade_target<FX_AUDIO_XFADE_TARGET_COUNT)
+                &&(xfade_target!=FX_AUDIO_XFADE_TARGET_MASTER))
         {
             const float *target_l=NULL,*target_r=NULL;
             const audio_physical_inputs_t *physical=audio_io_get_current_physical_inputs();
@@ -873,8 +903,7 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
             else if(xfade_target==FX_AUDIO_XFADE_TARGET_USB){target_l=physical->usb.left;target_r=physical->usb.right;}
             else
             {
-                uint8_t lane=(xfade_target==FX_AUDIO_XFADE_TARGET_REC)?rec_target_lane:
-                    (uint8_t)(xfade_target-FX_AUDIO_XFADE_TARGET_TRACK_1);
+                uint8_t lane=(uint8_t)(xfade_target-FX_AUDIO_XFADE_TARGET_TRACK_1);
                 if(lane<MIXER_MAX_TRACKS){target_l=xfade_track_tap_l[lane];target_r=xfade_track_tap_r[lane];}
             }
             (void)audio_fx_runtime_process_xfade(audio_fx_entity,L,R,target_l,target_r,frames);

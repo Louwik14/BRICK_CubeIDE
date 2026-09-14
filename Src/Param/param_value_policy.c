@@ -79,7 +79,7 @@ DEFINE_AFFINE_POLICY_TRANSFORMS(normalized127, 0.0f, (1.0f / 127.0f))
 DEFINE_AFFINE_POLICY_TRANSFORMS(modfx_width_percent, 0.0f, (100.0f / 127.0f))
 DEFINE_AFFINE_POLICY_TRANSFORMS(modfx_juno_mode, 0.0f, (2.0f / 127.0f))
 DEFINE_AFFINE_POLICY_TRANSFORMS(xfade_position, 0.0f, 127.0f)
-DEFINE_AFFINE_POLICY_TRANSFORMS(xfade_target, 0.0f, 11.0f)
+DEFINE_AFFINE_POLICY_TRANSFORMS(xfade_target, 0.0f, 10.0f)
 
 static float dj_eq_to_display(float value, float min_value, float max_value)
 {
@@ -499,8 +499,12 @@ float param_value_policy_apply_delta(param_id_t id,
                 && (model==AUDIO_FX_MODEL_XFADE))
         {
             const int32_t last=(int32_t)FX_AUDIO_XFADE_TARGET_COUNT-1;
-            int32_t target=(int32_t)(canonical_value*(float)last+0.5f)
-                +(int32_t)delta;
+            const int32_t current=(int32_t)(canonical_value*(float)last+0.5f);
+            const int32_t self=(int32_t)fx_audio_xfade_target_for_track(track);
+            int32_t target=current+(int32_t)delta;
+            if((delta>0)&&(current<self)&&(target>=self))++target;
+            else if((delta<0)&&(current>self)&&(target<=self))--target;
+            else if(target==self)target+=(delta>0)?1:-1;
             if(target<0)target=0;
             if(target>last)target=last;
             return (float)target/(float)last;
