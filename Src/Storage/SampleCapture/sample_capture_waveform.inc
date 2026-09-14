@@ -206,6 +206,24 @@ static void sample_capture_global_overview_request(void)
     g_sample_capture_global_overview.build_next_frame = 0U;
     g_sample_capture_global_overview.peak = 0U;
     g_sample_capture_global_overview.state = SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILDING;
+    g_rec_latency_probe.t_waveform_start = rec_latency_probe_now();
+    g_rec_latency_probe.t_waveform_first_progress = 0U;
+    g_rec_latency_probe.t_waveform_done = 0U;
+    g_rec_latency_probe.waveform_bytes_total =
+        g_sample_capture_global_overview.frame_count * AUDIO_RECORDER_BYTES_PER_FRAME;
+    g_rec_latency_probe.waveform_bytes_processed = 0U;
+    g_rec_latency_probe.waveform_service_count = 0U;
+    g_rec_latency_probe.waveform_progress_count = 0U;
+    g_rec_latency_probe.waveform_read_count = 0U;
+    g_rec_latency_probe.waveform_read_total_ticks = 0U;
+    g_rec_latency_probe.waveform_read_max_ticks = 0U;
+    g_rec_latency_probe.waveform_chunk_bytes =
+        SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILD_CHUNK_FRAMES * AUDIO_RECORDER_BYTES_PER_FRAME;
+    g_rec_latency_probe.waveform_max_bytes_per_service = 0U;
+    g_rec_latency_probe.waveform_not_now_count = 0U;
+    g_rec_latency_probe.waveform_admission_denied_count = 0U;
+    g_rec_latency_probe.waveform_last_progress_t = 0U;
+    g_rec_latency_probe.waveform_max_progress_gap = 0U;
     g_sample_capture_global_overview.generation++;
     for(uint16_t i = 0U; i < SAMPLE_CAPTURE_GLOBAL_OVERVIEW_POINTS; ++i)
     {
@@ -263,6 +281,7 @@ static void sample_capture_global_overview_finish(void)
     }
     g_sample_capture_global_overview.peak = peak;
     g_sample_capture_global_overview.state = SAMPLE_CAPTURE_GLOBAL_OVERVIEW_READY;
+    g_rec_latency_probe.t_waveform_done = rec_latency_probe_now();
 #if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
     sample_capture_debug_log("GOVERVIEW DONE points=%u frames=%lu peak=%u\r\n",
                              (unsigned)g_sample_capture_global_overview.point_count,
@@ -273,8 +292,12 @@ static void sample_capture_global_overview_finish(void)
 
 static void sample_capture_global_overview_service(void)
 {
+    if(g_sample_capture_global_overview.state == SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILDING)
+        g_rec_latency_probe.waveform_service_count++;
     if(sample_capture_global_overview_can_build() == 0U)
     {
+        if(g_sample_capture_global_overview.state == SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILDING)
+            g_rec_latency_probe.waveform_not_now_count++;
         return;
     }
 
@@ -292,6 +315,8 @@ static void sample_capture_global_overview_service(void)
 
     if(sd_access_gate_try_acquire(SD_ACCESS_CLIENT_EDITOR_CACHE) == 0U)
     {
+        g_rec_latency_probe.waveform_admission_denied_count++;
+        g_rec_latency_probe.waveform_not_now_count++;
         return;
     }
 
@@ -317,10 +342,29 @@ static void sample_capture_global_overview_service(void)
 
     const uint32_t bytes_to_read = frames_left * AUDIO_RECORDER_BYTES_PER_FRAME;
     UINT br = 0U;
-    if((f_read(&fp, g_sample_capture_detail_buf, bytes_to_read, &br) != FR_OK)
-            || (br < AUDIO_RECORDER_BYTES_PER_FRAME))
-    {
+    const uint32_t read_start = rec_latency_probe_now();
+    const FRESULT read_result = f_read(&fp, g_sample_capture_detail_buf, bytes_to_read, &br);
+    const uint32_t read_ticks = rec_latency_probe_now() - read_start;
+    g_rec_latency_probe.waveform_read_count++;
+    g_rec_latency_probe.waveform_read_total_ticks += read_ticks;
+    if(read_ticks > g_rec_latency_probe.waveform_read_max_ticks)
+        g_rec_latency_probe.waveform_read_max_ticks = read_ticks;
+    if((read_result != FR_OK) || (br < AUDIO_RECORDER_BYTES_PER_FRAME))
         goto done;
+    if(br > g_rec_latency_probe.waveform_max_bytes_per_service)
+        g_rec_latency_probe.waveform_max_bytes_per_service = br;
+    {
+        const uint32_t now = rec_latency_probe_now();
+        if(g_rec_latency_probe.t_waveform_first_progress == 0U)
+            g_rec_latency_probe.t_waveform_first_progress = now;
+        if(g_rec_latency_probe.waveform_last_progress_t != 0U) {
+            const uint32_t gap = now - g_rec_latency_probe.waveform_last_progress_t;
+            if(gap > g_rec_latency_probe.waveform_max_progress_gap)
+                g_rec_latency_probe.waveform_max_progress_gap = gap;
+        }
+        g_rec_latency_probe.waveform_last_progress_t = now;
+        g_rec_latency_probe.waveform_progress_count++;
+        g_rec_latency_probe.waveform_bytes_processed += br;
     }
 
     const uint32_t frames_read = br / AUDIO_RECORDER_BYTES_PER_FRAME;

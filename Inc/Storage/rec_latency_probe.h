@@ -31,6 +31,13 @@ typedef struct {
  uint32_t t_save_close_start,t_save_close_done,t_save_rename_start,t_save_rename_done;
  uint32_t save_bytes_total,save_bytes_remaining,save_read_io_count,save_write_io_count;
  uint32_t save_read_total_ticks,save_write_total_ticks,save_read_max_ticks,save_write_max_ticks;
+ uint32_t t_waveform_start,t_waveform_first_progress,t_waveform_done;
+ uint32_t waveform_bytes_total,waveform_bytes_processed;
+ uint32_t waveform_service_count,waveform_progress_count;
+ uint32_t waveform_read_count,waveform_read_total_ticks,waveform_read_max_ticks;
+ uint32_t waveform_chunk_bytes,waveform_max_bytes_per_service;
+ uint32_t waveform_not_now_count,waveform_admission_denied_count;
+ uint32_t waveform_last_progress_t,waveform_max_progress_gap;
 } rec_latency_probe_t;
 extern volatile rec_latency_probe_t g_rec_latency_probe;
 uint32_t rec_latency_probe_now(void);
