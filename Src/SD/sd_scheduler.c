@@ -55,7 +55,8 @@ void sd_scheduler_default_config(sd_scheduler_config_t *config)
     config->reservation_low_margin_us = 2000000U;
     config->transaction_guard_us = 2000U;
     config->worst_case_us_per_sector = 250U;
-    config->max_write_sectors = 64U;
+    config->max_write_sectors =
+        SD_SCHEDULER_SEQUENTIAL_DATA_BYTES / SD_SCHEDULER_SECTOR_BYTES;
     config->starvation_limit_us = 100000U;
 }
 

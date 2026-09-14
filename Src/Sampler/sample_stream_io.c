@@ -16,7 +16,7 @@
 #ifndef BRICK6_STREAM_READ_CHUNK_KIB
 #define BRICK6_STREAM_READ_CHUNK_KIB (32U)
 #endif
-#define SAMPLE_STREAM_IO_MAX_CHUNK_BYTES (32768U)
+#define SAMPLE_STREAM_IO_MAX_CHUNK_BYTES SD_SCHEDULER_SEQUENTIAL_DATA_BYTES
 #define SAMPLE_STREAM_IO_SECTOR_BYTES (512U)
 #define SAMPLE_STREAM_IO_READ_SCRATCH_BYTES \
     (((SAMPLE_PAGE_BYTES + SAMPLE_STREAM_IO_SECTOR_BYTES + 31U) / 32U) * 32U)
@@ -24,6 +24,8 @@
 
 _Static_assert(SAMPLE_STREAM_IO_READ_SCRATCH_BYTES >= (SAMPLE_PAGE_BYTES + 511U),
                "Physical reads require one page plus sector alignment headroom");
+_Static_assert(SAMPLE_PAGE_BYTES == SAMPLE_STREAM_IO_MAX_CHUNK_BYTES,
+               "Streamer I/O admission must cover one complete page");
 
 typedef enum
 {

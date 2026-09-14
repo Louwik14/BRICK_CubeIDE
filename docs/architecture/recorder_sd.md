@@ -128,6 +128,13 @@ La récupération, la préparation, le drain et la finalisation du Recorder sont
 des machines d'état progressées par `audio_recorder_service()` et
 `generic_recorder_service()`. Les opérations FatFs sont exécutées hors IRQ.
 
+La granularité canonique des gros transferts séquentiels est une page de
+32 KiB: une lecture Streamer contiguë, un buffer PCM Recorder ou une phase de
+copie SAVE/CROP peut consommer au plus cette quantité par admission. Une limite
+plus petite reste volontaire pour les services couplant I/O et calcul sous un
+budget CPU, ainsi que pour Preview. EXTEND, RELEASE, allocation et sync restent
+à la granularité native secteur/cluster des métadonnées FAT/exFAT.
+
 ## Looper historique
 
 Le backend `brick6_looper_runtime`, son preroll, ses masques PLAYING/start, son
