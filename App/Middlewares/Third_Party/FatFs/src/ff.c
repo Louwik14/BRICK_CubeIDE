@@ -6789,15 +6789,36 @@ FF_META_STEP_RESULT f_brick_meta_remove_chain_step (
 			st_dword(fs->win + cont->current * 4 % SS(fs), value & 0xF0000000);
 		}
 		fs->wflag = 1;
-		return brick_meta_remove_window(cont, fs->winsect, 0,
-			FF_META_REMOVE_PHASE_CLEAR_FLUSHED);
-
-	case FF_META_REMOVE_PHASE_CLEAR_FLUSHED:
 		if (fs->free_clst < fs->n_fatent - 2) {
 			fs->free_clst++;
 			fs->fsi_flag |= 1;
 		}
 		cont->released++;
+
+		/* Accumulate every mutation covered by this logical metadata sector.
+		 * Moving to another FAT/bitmap sector remains the cooperative flush and
+		 * yield boundary. */
+		if (cont->next >= 2 && cont->next < fs->n_fatent) {
+			DWORD next_sector;
+#if _FS_EXFAT
+			if (fs->fs_type == FS_EXFAT) {
+				bit = cont->next - 2;
+				next_sector = fs->database + bit / 8 / SS(fs);
+			} else
+#endif
+			{
+				next_sector = brick_meta_fat_sector(fs, cont->next);
+			}
+			if (next_sector == fs->winsect) {
+				cont->current = cont->next;
+				cont->phase = FF_META_REMOVE_PHASE_READ_NEXT;
+				return FF_META_STEP_YIELD;
+			}
+		}
+		return brick_meta_remove_window(cont, fs->winsect, 0,
+			FF_META_REMOVE_PHASE_CLEAR_FLUSHED);
+
+	case FF_META_REMOVE_PHASE_CLEAR_FLUSHED:
 		if (cont->next < 2 || cont->next >= fs->n_fatent) {
 			return brick_meta_remove_finish(cont);
 		}
@@ -8386,8 +8407,13 @@ FF_META_STEP_RESULT f_brick_rec_reserve_step (
 			brick_rec_metrics_end();
 			return FF_META_STEP_YIELD;
 		}
+		/* Keep mutations in the shared metadata window until it has to move to
+		 * another sector (or until the final object sync).  Publishing the file
+		 * length is still deferred to FF_BRICK_REC_RESERVE_PHASE_SYNC, so a
+		 * reset can at worst leak an already-flushed allocation; it cannot make
+		 * an uncommitted cluster range visible through the file. */
 		res = f_brick_meta_create_chain_begin(&cont->create, &cont->fp->obj,
-			cont->previous, 1, cont->staging, cont->staging_size);
+			cont->previous, 0, cont->staging, cont->staging_size);
 		if (res != FR_OK) return brick_rec_reserve_error(cont, res);
 		cont->phase = FF_BRICK_REC_RESERVE_PHASE_ALLOC_STEP;
 		brick_rec_metrics_end();
