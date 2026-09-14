@@ -10,6 +10,8 @@
 #include "stm32h7xx_hal.h"
 
 #define RECORDER_FILE_RESERVATION_SECTOR_BYTES 512U
+#define RECORDER_FILE_PREPARE_RAM_BUDGET_US 40U
+#define RECORDER_FILE_PREPARE_RAM_STEP_LIMIT 64U
 
 static volatile uint8_t g_recorder_file_reservation_operation_active;
 static uint32_t g_recorder_extend_meta_active_phase;
@@ -105,6 +107,22 @@ static void recorder_file_end_storage_operation(void)
 {
     g_recorder_file_reservation_operation_active = 0U;
     sd_access_gate_release(SD_ACCESS_CLIENT_SCHEDULED_RECORDER);
+}
+
+static FF_META_STEP_RESULT recorder_file_job_continuation_step(
+    recorder_file_reservation_t *session,
+    recorder_file_job_phase_t phase,
+    const FF_META_REQUEST **request)
+{
+    return (phase == RECORDER_FILE_JOB_PREPARE)
+        ? f_brick_rec_prepare_step(&session->job_cont.prepare, request)
+        : (phase == RECORDER_FILE_JOB_EXTEND)
+            ? f_brick_rec_reserve_step(&session->job_cont.reserve, request)
+        : (phase == RECORDER_FILE_JOB_RELEASE)
+            ? f_brick_rec_release_step(&session->job_cont.release, request)
+            : (phase == RECORDER_FILE_JOB_RENAME)
+                ? f_brick_rec_rename_step(&session->job_cont.rename, request)
+                : f_brick_meta_object_sync_step(&session->job_cont.sync, request);
 }
 
 static void recorder_file_publish(recorder_file_reservation_t *session)
@@ -517,15 +535,32 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
     g_rec_latency_probe.filesystem_last_job_type = (uint32_t)active_phase;
     g_rec_latency_probe.filesystem_last_phase = (uint32_t)active_phase;
     const FF_META_REQUEST *request = 0;
-    const FF_META_STEP_RESULT step = (active_phase == RECORDER_FILE_JOB_PREPARE)
-        ? f_brick_rec_prepare_step(&session->job_cont.prepare, &request)
-        : (active_phase == RECORDER_FILE_JOB_EXTEND)
-            ? f_brick_rec_reserve_step(&session->job_cont.reserve, &request)
-        : (active_phase == RECORDER_FILE_JOB_RELEASE)
-            ? f_brick_rec_release_step(&session->job_cont.release, &request)
-            : (active_phase == RECORDER_FILE_JOB_RENAME)
-                ? f_brick_rec_rename_step(&session->job_cont.rename, &request)
-                : f_brick_meta_object_sync_step(&session->job_cont.sync, &request);
+    FF_META_STEP_RESULT step;
+    const uint8_t collapse_ram_yields =
+        ((owner == RECORDER_FILE_JOB_OWNER_PREPARATION)
+            && ((active_phase == RECORDER_FILE_JOB_PREPARE)
+                || (active_phase == RECORDER_FILE_JOB_EXTEND))) ? 1U : 0U;
+    const uint32_t ram_started = rec_latency_probe_now();
+    uint32_t ram_steps = 0U;
+    /* PREPARE continuations deliberately expose small state-machine steps.
+     * Consume adjacent RAM-only steps under a short wall-time and transition
+     * budget, while preserving every I/O and metadata-sector yield. */
+    do
+    {
+        FATFS *const fs = session->file.obj.fs;
+        const DWORD winsect_before = (fs != 0) ? fs->winsect : 0U;
+        request = 0;
+        step = recorder_file_job_continuation_step(session, active_phase, &request);
+        ram_steps++;
+        if((step != FF_META_STEP_YIELD) || (collapse_ram_yields == 0U)
+                || (fs == 0) || (fs->winsect != winsect_before)
+                || (ram_steps >= RECORDER_FILE_PREPARE_RAM_STEP_LIMIT)
+                || ((rec_latency_probe_now() - ram_started)
+                    >= RECORDER_FILE_PREPARE_RAM_BUDGET_US))
+        {
+            break;
+        }
+    } while(1);
     if(step == FF_META_STEP_NEED_IO)
     {
         if((request == 0) || (request->count != 1U))
