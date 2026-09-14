@@ -1,4 +1,5 @@
 #include "SD/sd_scheduler.h"
+#include "Storage/rec_latency_probe.h"
 
 #include <assert.h>
 #include <string.h>
@@ -376,6 +377,19 @@ static void sd_scheduler_note_accepted(sd_scheduler_t *scheduler,
                                        sd_scheduler_class_t type,
                                        uint32_t now)
 {
+    const uint32_t waited = sd_scheduler_wait(scheduler, type, now);
+    if((type == SD_SCHEDULER_CLASS_READ) && (waited != 0U))
+    {
+        g_rec_latency_probe.streamer_wait_count++;
+        if(waited > g_rec_latency_probe.streamer_wait_max_ticks)
+            g_rec_latency_probe.streamer_wait_max_ticks = waited;
+    }
+    else if((type == SD_SCHEDULER_CLASS_WRITE) && (waited != 0U))
+    {
+        g_rec_latency_probe.recorder_wait_count++;
+        if(waited > g_rec_latency_probe.recorder_wait_max_ticks)
+            g_rec_latency_probe.recorder_wait_max_ticks = waited;
+    }
     sd_scheduler_update_max_wait(scheduler, type, now);
     scheduler->round_robin_cursor = (uint8_t)((type % 3U) + 1U);
 }
@@ -391,6 +405,14 @@ static void sd_scheduler_poll_active(sd_scheduler_t *scheduler)
     if (result == SD_SCHEDULER_POLL_ACTIVE)
     {
         return;
+    }
+    if(scheduler->active_class == SD_SCHEDULER_CLASS_FILESYSTEM)
+    {
+        const uint32_t done = rec_latency_probe_now();
+        const uint32_t elapsed = done - g_rec_latency_probe.filesystem_owner_start_t;
+        g_rec_latency_probe.filesystem_owner_last_done_t = done;
+        if(elapsed > g_rec_latency_probe.filesystem_owner_max_continuous_ticks)
+            g_rec_latency_probe.filesystem_owner_max_continuous_ticks = elapsed;
     }
     if (result == SD_SCHEDULER_POLL_RECOVERY_ABORT)
     {
@@ -431,6 +453,8 @@ void sd_scheduler_service(sd_scheduler_t *scheduler,
     const uint32_t sectors =
         sd_scheduler_grant_sectors(scheduler, &snapshot, picked);
     sd_scheduler_claim(scheduler, picked);
+    if(picked == SD_SCHEDULER_CLASS_FILESYSTEM)
+        g_rec_latency_probe.filesystem_owner_start_t = rec_latency_probe_now();
     const sd_scheduler_start_result_t result = provider->start(
         provider->context, &snapshot.candidate[picked], sectors);
     if (result == SD_SCHEDULER_START_STARTED)
@@ -438,6 +462,14 @@ void sd_scheduler_service(sd_scheduler_t *scheduler,
         assert(provider->poll != 0);
         sd_scheduler_note_accepted(scheduler, picked, now_us);
         return;
+    }
+    if(picked == SD_SCHEDULER_CLASS_FILESYSTEM)
+    {
+        const uint32_t done = rec_latency_probe_now();
+        const uint32_t elapsed = done - g_rec_latency_probe.filesystem_owner_start_t;
+        g_rec_latency_probe.filesystem_owner_last_done_t = done;
+        if(elapsed > g_rec_latency_probe.filesystem_owner_max_continuous_ticks)
+            g_rec_latency_probe.filesystem_owner_max_continuous_ticks = elapsed;
     }
     if ((result != SD_SCHEDULER_START_BUSY)
         && (result != SD_SCHEDULER_START_ERROR))

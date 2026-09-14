@@ -12,6 +12,7 @@
 #define RECORDER_FILE_RESERVATION_SECTOR_BYTES 512U
 
 static volatile uint8_t g_recorder_file_reservation_operation_active;
+static uint32_t g_recorder_extend_meta_active_phase;
 static uint8_t recorder_file_copy_path(char *dst, const char *src)
 {
     if((dst == 0) || (src == 0) || (src[0] == '\0'))
@@ -556,6 +557,14 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
             session->job_phase = RECORDER_FILE_JOB_TERMINAL;
             return session->job_result;
         }
+        if(active_phase == RECORDER_FILE_JOB_EXTEND)
+        {
+            g_rec_latency_probe.extend_meta_io_count++;
+            g_rec_latency_probe.extend_meta_last_start_t = rec_latency_probe_now();
+            g_recorder_extend_meta_active_phase =
+                ((uint32_t)session->job_cont.reserve.phase << 16)
+                | (uint32_t)session->job_cont.reserve.create.phase;
+        }
         session->job_io_lba = request->sector;
         session->job_io_sequence = request->sequence;
         session->job_io_operation = (uint8_t)request->operation;
@@ -705,6 +714,18 @@ recorder_file_reservation_result_t recorder_file_reservation_job_poll(
         return (sd_block_device_async_hardware_state() == SD_BLOCK_DEVICE_HW_ABORTING)
             ? RECORDER_FILE_RESERVATION_RECOVERY_ABORT
             : RECORDER_FILE_RESERVATION_IO_STARTED;
+    }
+    if(session->job_phase == RECORDER_FILE_JOB_EXTEND)
+    {
+        const uint32_t done = rec_latency_probe_now();
+        const uint32_t elapsed = done - g_rec_latency_probe.extend_meta_last_start_t;
+        g_rec_latency_probe.extend_meta_last_done_t = done;
+        g_rec_latency_probe.extend_meta_io_total_ticks += elapsed;
+        if(elapsed > g_rec_latency_probe.extend_meta_io_max_ticks)
+        {
+            g_rec_latency_probe.extend_meta_io_max_ticks = elapsed;
+            g_rec_latency_probe.extend_meta_max_phase = g_recorder_extend_meta_active_phase;
+        }
     }
     session->job_io_active = 0U;
     const sd_block_device_operation_t expected_operation =

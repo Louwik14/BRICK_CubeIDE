@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "IPC/audio_recorder_capture_contract.h"
+#include "Storage/rec_latency_probe.h"
 #include "stm32h7xx.h"
 
 typedef struct
@@ -94,9 +95,14 @@ uint8_t audio_recorder_capture_audio_push(audio_recorder_client_t client,
     const uint32_t retained = head - tail;
     if (frames > (AUDIO_RECORDER_CAPTURE_RING_FRAMES - retained))
     {
+        g_rec_latency_probe.recorder_overflow_count++;
+        g_rec_latency_probe.recorder_last_overflow_t = rec_latency_probe_now();
         audio_recorder_capture_audio_close(AUDIO_RECORDER_ERROR_RING_OVERFLOW);
         return 0U;
     }
+    const uint32_t used_after_push = retained + frames;
+    if(used_after_push > g_rec_latency_probe.recorder_ring_max_used_frames)
+        g_rec_latency_probe.recorder_ring_max_used_frames = used_after_push;
     const uint32_t write = head % AUDIO_RECORDER_CAPTURE_RING_FRAMES;
     uint32_t first = AUDIO_RECORDER_CAPTURE_RING_FRAMES - write;
     if (first > frames) first = frames;

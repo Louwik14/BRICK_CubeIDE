@@ -32,6 +32,13 @@
 #include "Audio/sampler_ram_audio_projection_audio.h"
 #include "IPC/sampler_ram_playhead_contract.h"
 #include "Audio/audio_shared_memory.h"
+#include "Storage/rec_latency_probe.h"
+
+#define BRICK6_NOTE_STREAMER_UNDERRUN(counter_) do { \
+    (counter_)++; \
+    g_rec_latency_probe.streamer_underrun_count++; \
+    g_rec_latency_probe.streamer_last_underrun_t = rec_latency_probe_now(); \
+} while (0)
 
 /* The sampler voice table is a lane resource.  GROUP children reuse this
  * table; they do not allocate a second sampler pool. */

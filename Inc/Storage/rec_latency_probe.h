@@ -48,6 +48,14 @@ typedef struct {
  uint32_t waveform_close_total_ticks,waveform_close_max_ticks;
  uint32_t waveform_publish_total_ticks,waveform_publish_max_ticks;
  uint32_t waveform_other_total_ticks,waveform_other_max_ticks;
+ uint32_t extend_meta_io_count,extend_meta_io_total_ticks,extend_meta_io_max_ticks;
+ uint32_t extend_meta_last_start_t,extend_meta_last_done_t,extend_meta_max_phase;
+ uint32_t filesystem_owner_start_t,filesystem_owner_last_done_t;
+ uint32_t filesystem_owner_max_continuous_ticks;
+ uint32_t streamer_wait_count,streamer_wait_max_ticks;
+ uint32_t streamer_underrun_count,streamer_last_underrun_t;
+ uint32_t recorder_wait_count,recorder_wait_max_ticks;
+ uint32_t recorder_ring_max_used_frames,recorder_overflow_count,recorder_last_overflow_t;
 } rec_latency_probe_t;
 extern volatile rec_latency_probe_t g_rec_latency_probe;
 uint32_t rec_latency_probe_now(void);
