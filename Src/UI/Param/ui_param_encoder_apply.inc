@@ -112,19 +112,22 @@ static uint8_t ui_param_apply_delta_value(param_id_t param,
     }
     if((param==PARAM_AUDIO_FX_MODEL)||(param==PARAM_AUDIO_FX_B_MODEL))
     {
-        static const uint8_t valid[]={0U,1U,2U,3U,5U,8U,10U,11U,12U,13U};
+        static const uint8_t valid[]={0U,1U,2U,3U,5U,8U,10U,11U,12U,13U,
+                                     AUDIO_FX_MODEL_XFADE,AUDIO_FX_MODEL_DJ_EQ};
+        const uint8_t count=(uint8_t)(sizeof(valid)/sizeof(valid[0]));
         uint8_t pos = 0U;
         const uint8_t current = (uint8_t)(current_value + 0.5f);
-        while ((pos < 10U) && (valid[pos] != current)) ++pos;
-        if (pos >= 10U)
+        while ((pos < count) && (valid[pos] != current)) ++pos;
+        const uint8_t original_pos=(pos<count)?pos:0U;
+        if (pos >= count)
         {
-            pos = (delta > 0) ? 0U : 9U;
+            pos = (delta > 0) ? 0U : (uint8_t)(count-1U);
         }
         else
         {
             int32_t next = (int32_t)pos + delta;
             if (next < 0) next = 0;
-            if (next > 9) next = 9;
+            if (next >= count) next = (int32_t)count-1;
             pos = (uint8_t)next;
         }
         float peer_value = 0.0f;
@@ -133,12 +136,25 @@ static uint8_t ui_param_apply_delta_value(param_id_t param,
         if (param_registry_get_track_value(peer, track, &peer_value) == 0U)
             return 0U;
         const uint8_t peer_model = (uint8_t)(peer_value + 0.5f);
-        if ((valid[pos] != 0U) && (valid[pos] == peer_model))
+        track_runtime_descriptor_t descriptor;
+        const uint8_t xfade_allowed=(uint8_t)(
+            (track_runtime_get_descriptor(track,&descriptor)!=0U)
+            &&(descriptor.type!=TRACK_RUNTIME_TYPE_GROUP));
+        const int8_t direction = (delta >= 0) ? 1 : -1;
+        while (((valid[pos] != AUDIO_FX_MODEL_OFF)
+                    && ((valid[pos] == peer_model)
+                        || ((valid[pos] == AUDIO_FX_MODEL_XFADE)
+                            && (peer_model != AUDIO_FX_MODEL_OFF))
+                        || (peer_model == AUDIO_FX_MODEL_XFADE)))
+                || ((valid[pos] == AUDIO_FX_MODEL_XFADE)
+                    && (xfade_allowed == 0U)))
         {
-            const int8_t direction = (delta >= 0) ? 1 : -1;
             int32_t next = (int32_t)pos + direction;
-            if (next < 0) next = 0;
-            if (next > 9) next = 9;
+            if ((next < 0) || (next >= count))
+            {
+                pos=original_pos;
+                break;
+            }
             pos = (uint8_t)next;
         }
         *out_value = (float)valid[pos];
