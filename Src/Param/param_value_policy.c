@@ -77,6 +77,27 @@ DEFINE_AFFINE_POLICY_TRANSFORMS(bipolar2, -1.0f, 2.0f)
 DEFINE_AFFINE_POLICY_TRANSFORMS(normalized127, 0.0f, (1.0f / 127.0f))
 DEFINE_AFFINE_POLICY_TRANSFORMS(modfx_width_percent, 0.0f, (100.0f / 127.0f))
 DEFINE_AFFINE_POLICY_TRANSFORMS(modfx_juno_mode, 0.0f, (2.0f / 127.0f))
+DEFINE_AFFINE_POLICY_TRANSFORMS(xfade_position, 0.0f, 127.0f)
+DEFINE_AFFINE_POLICY_TRANSFORMS(xfade_target, 0.0f, 11.0f)
+
+static float dj_eq_to_display(float value, float min_value, float max_value)
+{
+    (void)min_value; (void)max_value;
+    return (value <= 0.5f) ? (-160.0f * (0.5f - value))
+                           : (24.0f * (value - 0.5f));
+}
+
+static float dj_eq_to_canonical(float value, float min_value, float max_value)
+{
+    (void)min_value; (void)max_value;
+    return (value <= 0.0f) ? (0.5f + value / 160.0f)
+                           : (0.5f + value / 24.0f);
+}
+
+static float dj_eq_p3_to_display(float value, float min_value, float max_value)
+{ return dj_eq_to_display(value/127.0f,min_value,max_value); }
+static float dj_eq_p3_to_canonical(float value, float min_value, float max_value)
+{ return dj_eq_to_canonical(value,min_value,max_value)*127.0f; }
 
 static float mix_pan_to_display(float value, float min_value, float max_value)
 {
@@ -242,6 +263,25 @@ uint8_t param_value_policy_resolve(param_id_t id,
     const uint8_t p1 = (uint8_t)((id == PARAM_AUDIO_FX_P1) || (id == PARAM_AUDIO_FX_B_P1));
     const uint8_t p2 = (uint8_t)((id == PARAM_AUDIO_FX_P2) || (id == PARAM_AUDIO_FX_B_P2));
     const uint8_t p3 = (uint8_t)((id == PARAM_AUDIO_FX_P3) || (id == PARAM_AUDIO_FX_B_P3));
+    if (model == AUDIO_FX_MODEL_XFADE)
+    {
+        if (p1 != 0U) policy = affine_policy(xfade_position_to_display, xfade_position_to_canonical);
+        else if (p2 != 0U)
+        {
+            policy = affine_policy(xfade_target_to_display, xfade_target_to_canonical);
+            policy.normal_step_display=1.0f;
+            policy.fine_step_display=1.0f;
+            policy.automation=PARAM_AUTOMATION_DISCRETE_STEP;
+        }
+        else { policy.normal_step_display=1.0f;policy.fine_step_display=1.0f;policy.automation=PARAM_AUTOMATION_DISCRETE_STEP; }
+        *out_policy=policy;return 1U;
+    }
+    if (model == AUDIO_FX_MODEL_DJ_EQ)
+    {
+        policy=affine_policy(dj_eq_to_display,dj_eq_to_canonical);
+        if(p3!=0U){policy.canonical_to_display=dj_eq_p3_to_display;policy.display_to_canonical=dj_eq_p3_to_canonical;}
+        *out_policy=policy;return 1U;
+    }
     if (p3 != 0U)
     {
         if (model == AUDIO_FX_MODEL_DRIVE)

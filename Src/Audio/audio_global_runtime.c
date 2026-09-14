@@ -62,9 +62,6 @@ uint8_t audio_global_runtime_apply(uint16_t parameter_id, float value)
         case PARAM_MODFX_DEPTH_B: fx_modfx_global_set_depth_b(value); return 1U;
         case PARAM_MODFX_WIDTH: fx_modfx_global_set_width(value); return 1U;
 
-        case PARAM_EQ_LOW_DB: audio_float_set_dj_eq_low_db(value); return 1U;
-        case PARAM_EQ_MID_DB: audio_float_set_dj_eq_mid_db(value); return 1U;
-        case PARAM_EQ_HIGH_DB: audio_float_set_dj_eq_high_db(value); return 1U;
         case PARAM_SAT_TONE: audio_float_set_saturation_tone(value); return 1U;
         case PARAM_SAT_BIAS: audio_float_set_saturation_bias(value); return 1U;
         case PARAM_SAT_DRIVE: audio_float_set_saturation_drive(value); return 1U;

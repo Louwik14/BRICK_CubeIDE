@@ -21,7 +21,6 @@
 
 #include "fx_chain.h"
 #include "fx_pool.h"
-#include "fx_dj_eq3_cmsis.h"
 #include "fx_saturation.h"
 #include "fx_comp_lab.h"
 #include "Audio/audio_fx_runtime.h"
@@ -64,10 +63,6 @@ static void fx_chain_process_fx_slot(fx_slot_t* s, float* L, float* R, uint32_t 
 
     switch (s->type)
     {
-        case FX_EQ3:
-            fx_dj_eq3_process_block((fx_dj_eq3_t*)s->state, L, R, frames);
-            break;
-
         case FX_SAT:
             fx_saturation_process_block((fx_saturation_t*)s->state, L, R, frames);
             break;

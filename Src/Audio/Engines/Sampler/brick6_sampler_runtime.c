@@ -157,7 +157,6 @@ typedef struct
     uint16_t sample_id;
     uint8_t source;
     float gain;
-    float xfade;
     float source_bpm;
     uint16_t grain_size;
     uint8_t sync_length;

@@ -11,6 +11,7 @@
 #include "drv_display.h"
 #include "font.h"
 #include "Track/control_routing.h"
+#include "Audio/fx_audio_xfade.h"
 #include "ui_page_manager.h"
 #include "ui_param.h"
 #include "ui_template_page.h"
@@ -393,7 +394,33 @@ static uint8_t ui_page_midi_fx_param_text(uint8_t slot,
                                (uint8_t)entity,
                                value));
         else
+                (void)snprintf(out_value,out_value_len,"%u",(unsigned)(value*127.0f+0.5f));
+    }
+    else if ((model == AUDIO_FX_MODEL_XFADE)
+            && (out_value != NULL) && (out_value_len > 0U))
+    {
+        if (id == PARAM_AUDIO_FX_P1)
             (void)snprintf(out_value,out_value_len,"%u",(unsigned)(value*127.0f+0.5f));
+        else if (id == PARAM_AUDIO_FX_P2)
+        {
+            static const char *const targets[] = {"MASTER","REC","TRACK 1","TRACK 2","TRACK 3","TRACK 4","TRACK 5","TRACK 6","TRACK 7","TRACK 8","LINE","USB"};
+            uint8_t target=(uint8_t)(value*(float)(FX_AUDIO_XFADE_TARGET_COUNT-1U)+0.5f);
+            if(target>=FX_AUDIO_XFADE_TARGET_COUNT)target=0U;
+            (void)snprintf(out_value,out_value_len,"%s",targets[target]);
+        }
+        else
+        {
+            static const char *const curves[]={"POWER","LINEAR","DIP","CUT","TRANS"};
+            uint8_t curve=(uint8_t)(value+0.5f);if(curve>=FX_AUDIO_XFADE_CURVE_COUNT)curve=0U;
+            (void)snprintf(out_value,out_value_len,"%s",curves[curve]);
+        }
+    }
+    else if ((model == AUDIO_FX_MODEL_DJ_EQ)
+            && (out_value != NULL) && (out_value_len > 0U))
+    {
+        const float normalized=(id==PARAM_AUDIO_FX_P3)?(value/127.0f):value;
+        const float db=(normalized<=0.5f)?(-160.0f*(0.5f-normalized)):(24.0f*(normalized-0.5f));
+        (void)snprintf(out_value,out_value_len,"%+.1f dB",(double)db);
     }
     (void)snprintf(out_name, out_name_len, "%s", label);
     return 1U;

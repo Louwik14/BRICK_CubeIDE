@@ -6,12 +6,11 @@
 extern "C" {
 #endif
 
-#define BRICK6_AUDIO_BOOT_FX_SLOT_COUNT 2U
+#define BRICK6_AUDIO_BOOT_FX_SLOT_COUNT 1U
 
 typedef enum
 {
-    BRICK6_AUDIO_BOOT_FX_EQ3 = 0U,
-    BRICK6_AUDIO_BOOT_FX_COMP_LAB
+    BRICK6_AUDIO_BOOT_FX_COMP_LAB = 0U
 } brick6_audio_boot_fx_type_t;
 
 typedef struct
@@ -29,7 +28,7 @@ typedef struct
     brick6_audio_boot_fx_slot_t fx_slots[BRICK6_AUDIO_BOOT_FX_SLOT_COUNT];
 } brick6_audio_boot_intent_t;
 
-_Static_assert(sizeof(brick6_audio_boot_intent_t) == 20U,
+_Static_assert(sizeof(brick6_audio_boot_intent_t) == 16U,
                "Audio boot intent ABI changed");
 
 uint8_t brick6_audio_boot_apply_early(const brick6_audio_boot_intent_t *intent);

@@ -199,9 +199,6 @@ void mixer_reset_runtime_state(void)
     mixer_apply_delay_spectral_window();
     g_delay_type = (uint8_t)MIXER_DELAY_TYPE_CLASSIC;
     fx_delay_stereo_global_clear();
-    g_looper_xfade_smoothed = 0.0f;
-    g_looper_xfade_prev = 0.0f;
-
     for(uint32_t t = 0; t < MIXER_MAX_TRACKS; t++)
     {
         g_tracks[t].gain = 1.0f;

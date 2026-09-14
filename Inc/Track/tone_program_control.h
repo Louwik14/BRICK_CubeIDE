@@ -25,7 +25,7 @@ typedef struct {
 typedef struct { float wave,tune,cut,res,env_mod,decay,accent,slide,vcf_rate; } tb303_program_control_t;
 
 typedef struct { float gain, start, length, mode, tune, loop_start, slice_count; } ram_program_control_t;
-typedef struct { float gain, source_bpm, play_mode, loop, stretch_mode, pitch, sync_length, grain, source, xfade; } stream_program_control_t;
+typedef struct { float gain, source_bpm, play_mode, loop, stretch_mode, pitch, sync_length, grain, source; } stream_program_control_t;
 typedef struct { float xfade, stretch, pitch, grain; } looper_program_control_t;
 typedef struct { float gain, loop; } multi_program_control_t;
 typedef struct { float program; float cc[3][4]; } midi_program_control_t;

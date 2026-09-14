@@ -31,7 +31,7 @@ static const ui_mod_label_form_t g_ui_mod_label_forms[] = {
     {"Rate","Rate",0},{"RATE","Rate",0},{"Shape","Shap",0},{"SHAPE","Shap",0},{"Trig","Trig",0},{"TRIG","Trig",0},
     {"Phase","Phas",0},{"PHASE","Phas",0},{"Attack","Atk",0},{"ATTACK","Atk",0},{"Decay","Dcy",0},{"DECAY","Dcy",0},
     {"Sustain","Sus",0},{"SUSTAIN","Sus",0},{"Release","Rel",0},{"RELEASE","Rel",0},{"Start","Strt",0},{"START","Strt",0},
-    {"Src BPM","SBpm",0},{"Sync Len","SLen",0},{"PlayMode","Play",0},{"XFade","Xfad",0},{"Pitch","Ptch",0},{"PITCH","Ptch",0},
+    {"Src BPM","SBpm",0},{"Sync Len","SLen",0},{"PlayMode","Play",0},{"Pitch","Ptch",0},{"PITCH","Ptch",0},
     {"Ratio","Rati",0},{"RATIO","Rati",0},{"Bright","Brit",0},{"BRIGHT","Brit",0},{"ENV MOD","EMod",0},{"VCF RATE","Rate",0},
     {"Noise","Nois",0},{"NOISE","Nois",0},{"Density","Dens",0},{"NWidth","NWid",0},{"NDepth","NDep",0},
     {"ToneDrv","TDrv",0},{"SinTri","STri",0},{"Sub Mix","SubM",0},{"Balance","Bal",0},{"FShift","FShf",0},
@@ -59,7 +59,6 @@ static const char *ui_page_template_mod_context(param_id_t id)
     if ((id >= PARAM_AUDIO_FX_P1) && (id <= PARAM_AUDIO_FX_P3)) return "FX1";
     if ((id >= PARAM_AUDIO_FX_B_P1) && (id <= PARAM_AUDIO_FX_B_P3)) return "FX2";
     if ((id >= PARAM_SAMPLER_CLIP_SOURCE_BPM) && (id <= PARAM_SAMPLER_CLIP_GRAIN)) return "Strm";
-    if (id == PARAM_STREAM_XFADE) return "Strm";
     if ((id >= PARAM_LOOPER_STRETCH) && (id <= PARAM_LOOPER_GRAIN)) return "Loop";
     if ((id >= PARAM_SAMPLER_GAIN) && (id <= PARAM_SAMPLER_SLICE_COUNT)) return "Samp";
     if ((id == PARAM_SAMPLER_MULTI_LOOP) || (id == PARAM_SAMPLER_LOOP_START)) return "Mult";

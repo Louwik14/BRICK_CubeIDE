@@ -42,7 +42,7 @@ Drum reste monophonique mais son backend couvre les 16 slots physiques du pool
 synth; toute admission valide possede ainsi une instance representable, y
 compris lorsqu'elle recoit un slot 8..15.
 
-Le mixer applique filtre, VCA, niveau, pan, inserts, sends puis traitements globaux. Reverb, delay, compresseur et gain Master sont globaux. Send3 ne conserve que Daisy Stereo et Junologue; VIBE et DRIFT sont des inserts par entite. VIBE utilise le kernel Deluge Float avec politique `dry + wet` 1:1. DRIFT expose DELAY et FEEDBACK, sans LFO interne.
+Le mixer applique filtre, VCA, niveau, pan, inserts, sends puis traitements globaux. Reverb, delay, compresseur et gain Master sont globaux. Send3 ne conserve que Daisy Stereo et Junologue; VIBE, DRIFT, XFADE et DJ EQ sont des inserts par entite. VIBE utilise le kernel Deluge Float avec politique `dry + wet` 1:1. DRIFT expose DELAY et FEEDBACK, sans LFO interne.
 
 La track EXT possede son entree physique via l'ownership CONTROL, puis AUDIO la publie dans la lane du programme. Son parametre TONE `GATE` est CONTROL-owned et publie vers AUDIO: `ON` desactive le VCA de gate et laisse passer l'entree en continu, tandis que `TRIG` active le VCA et reconstruit son compteur depuis le mapping AUDIO des `output_id` vivants. Les NOTE OFF inconnus et les NOTE ON deja presents ne modifient pas ce compteur; le dernier output ferme seul le gate. Le mute reste applique plus loin dans le mixer et conserve donc son autorite dans les deux modes.
 
@@ -55,6 +55,10 @@ Le GROUP master 7 possede le bus AUDIO, les deux kernels Audio FX A/B, MOD et le
 ## Sampler mono et stereo
 
 Le format est immutable pendant la voix. Une page physique de 16 KiB contient 4096 frames mono FLOAT32 ou 2048 frames stereo entrelacees. Mono reste mono jusqu'au pan final; Multi applique filtre et VCA par voix avant spread/pan. Les inserts recoivent le signal stereo apres cette projection. Reverse et ping-pong appartiennent au Sampler RAM, pas au streamer.
+
+XFADE est un Insert FX exclusif dans sa chaine de track. Sa porteuse est la sortie de la chaine de la track. Les cibles TRACK et REC lisent un tap immutable de debut de bloc, avant chaine de track; LINE et USB lisent les lanes physiques du bloc. Ces taps rendent les references reciproques non recursives et independantes de l'ordre de parcours. La cible MASTER utilise le bus master complet sans la contribution de la track porteuse: celle-ci est isolee, puis le DSP XFADE remplace le bus avant la dynamique master. Plusieurs XFADE non-MASTER sont permis; une seule route MASTER est admise par l'autorite CONTROL.
+
+DJ EQ reutilise l'unique DSP trois bandes CMSIS dans chaque slot Insert FX. Les coefficients sont prepares par la LUT existante; le hot-path ne fait ni allocation, ni lock, ni recherche de routage.
 
 ## Wave
 

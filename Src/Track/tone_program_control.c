@@ -50,7 +50,7 @@ static float *tone_field(tone_program_control_t *p, param_id_t id)
     case TRACK_RUNTIME_TYPE_STREAM:
         switch(id){F(PARAM_SAMPLER_GAIN,p->state.stream.gain);F(PARAM_SAMPLER_CLIP_SOURCE_BPM,p->state.stream.source_bpm);F(PARAM_SAMPLER_CLIP_PLAY_MODE,p->state.stream.play_mode);
         F(PARAM_SAMPLER_CLIP_LOOP,p->state.stream.loop);F(PARAM_SAMPLER_CLIP_STRETCH_MODE,p->state.stream.stretch_mode);F(PARAM_SAMPLER_CLIP_PITCH,p->state.stream.pitch);
-        F(PARAM_SAMPLER_CLIP_SYNC_LENGTH,p->state.stream.sync_length);F(PARAM_SAMPLER_CLIP_GRAIN,p->state.stream.grain);F(PARAM_SAMPLER_CLIP_SOURCE,p->state.stream.source);F(PARAM_STREAM_XFADE,p->state.stream.xfade);default:return NULL;}
+        F(PARAM_SAMPLER_CLIP_SYNC_LENGTH,p->state.stream.sync_length);F(PARAM_SAMPLER_CLIP_GRAIN,p->state.stream.grain);F(PARAM_SAMPLER_CLIP_SOURCE,p->state.stream.source);default:return NULL;}
     case TRACK_RUNTIME_TYPE_LOOPER:
         switch(id){F(PARAM_LOOPER_STRETCH,p->state.looper.stretch);F(PARAM_LOOPER_PITCH,p->state.looper.pitch);F(PARAM_LOOPER_GRAIN,p->state.looper.grain);default:return NULL;}
     case TRACK_RUNTIME_TYPE_MULTI:

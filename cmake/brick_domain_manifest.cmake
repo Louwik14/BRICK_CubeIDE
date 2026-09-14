@@ -279,6 +279,7 @@ set(DOMAIN_AUDIO
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_delay_stereo.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_deluge_filter.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_dj_eq3_cmsis.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_audio_xfade.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_modfx_global.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_onepole.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/fx_peaks_svf_lut.c"

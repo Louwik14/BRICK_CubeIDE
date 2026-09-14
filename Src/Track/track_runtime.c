@@ -430,8 +430,7 @@ static uint8_t track_runtime_param_is_clip_only(param_id_t param)
                      || (param == PARAM_SAMPLER_CLIP_LOOP)
                      || (param == PARAM_SAMPLER_CLIP_STRETCH_MODE)
                      || (param == PARAM_SAMPLER_CLIP_GRAIN)
-                     || (param == PARAM_SAMPLER_CLIP_SOURCE)
-                     || (param == PARAM_STREAM_XFADE));
+                     || (param == PARAM_SAMPLER_CLIP_SOURCE));
 }
 
 static uint8_t track_runtime_param_is_looper_only(param_id_t param)
@@ -1226,7 +1225,6 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_SAMPLER_CLIP_GRAIN:
         case PARAM_SAMPLER_CLIP_SOURCE:
         case PARAM_SAMPLER_MULTI_LOOP:
-        case PARAM_STREAM_XFADE:
         case PARAM_LOOPER_STRETCH:
         case PARAM_LOOPER_PITCH:
         case PARAM_LOOPER_GRAIN:
@@ -1352,9 +1350,6 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_MASTER_GAIN:
         case PARAM_POST_GAIN:
         case PARAM_OUTPUT_COMP:
-        case PARAM_EQ_LOW_DB:
-        case PARAM_EQ_MID_DB:
-        case PARAM_EQ_HIGH_DB:
         case PARAM_SAT_TONE:
         case PARAM_SAT_BIAS:
         case PARAM_SAT_DRIVE:

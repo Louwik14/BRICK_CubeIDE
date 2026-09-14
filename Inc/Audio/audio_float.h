@@ -169,11 +169,6 @@ void audio_float_set_postgain(float gain);
  */
 void audio_float_set_output_compensation(float comp);
 
-void audio_float_set_dj_eq_low_db(float db);
-void audio_float_set_dj_eq_mid_db(float db);
-void audio_float_set_dj_eq_high_db(float db);
-void audio_float_set_dj_eq_ui_params(uint8_t low, uint8_t mid, uint8_t high);
-uint8_t audio_float_is_dj_eq_ui_neutral(void);
 void audio_float_set_saturation_tone(float tone);
 void audio_float_set_saturation_bias(float bias);
 void audio_float_set_saturation_drive(float drive);

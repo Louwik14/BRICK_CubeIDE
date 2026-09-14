@@ -35,7 +35,6 @@ uint8_t brick6_audio_boot_apply_early(const brick6_audio_boot_intent_t *intent)
         fx_type_t type;
         switch ((brick6_audio_boot_fx_type_t)intent->fx_slots[i].type)
         {
-            case BRICK6_AUDIO_BOOT_FX_EQ3: type = FX_EQ3; break;
             case BRICK6_AUDIO_BOOT_FX_COMP_LAB: type = FX_COMP_LAB; break;
             default: return 0U;
         }

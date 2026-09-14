@@ -92,16 +92,15 @@ l'ancienne action AUDIO sans modifier l'ordre relatif des entrées SEQ.
 Cette préparation fournit le reloop immédiat par le reader normal du Streamer,
 sans preroll global ni relais RAM -> SD spécifique.
 
-## Streamer et XFADE
+## Streamer
 
 `SOURCE=POOL` résout un asset du pool. `SOURCE=REC` résout uniquement le
 snapshot immutable READY de `REC_SOURCE.current`; sans current valide, il rend
 du silence.
 
-Le XFADE appartient au chemin Streamer/mixer : 0 donne le live seul, 127 la
-source REC seule et les valeurs intermédiaires un crossfade. Il ne dépend ni
-d'un état PLAYING historique ni de l'existence d'une boucle. À 127, une source
-REC vide donne donc du silence.
+Le Streamer ne porte aucun crossfade produit. Le crossfade entre une track et
+REC, MASTER, LINE, USB ou une autre track est le modèle XFADE du domaine
+Insert Audio FX.
 
 ## OVERDUB
 
@@ -178,6 +177,6 @@ budget CPU, ainsi que pour Preview. EXTEND, RELEASE, allocation et sync restent
 
 Le backend `brick6_looper_runtime`, son preroll, ses masques PLAYING/start, son
 reader, ses leases, son bus d'enregistrement et `looper_storage` ont été
-supprimés. Playback/loop/trigs/pitch/stretch/XFADE appartiennent au Streamer,
+supprimés. Playback/loop/trigs/pitch/stretch appartiennent au Streamer,
 OVERDUB et routing universel à Audio REC, générations et durée de vie à
 `REC_SOURCE`.

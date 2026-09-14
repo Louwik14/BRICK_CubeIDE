@@ -110,7 +110,7 @@ static const char *const g_midi_fx_model_labels[] = {
     "HARMONIZER", "CHORD", NULL
 };
 /* ID 4 is intentionally a retired hole: persisted COMP values resolve OFF. */
-static const char *const g_audio_fx_model_labels[] = {"OFF", "LOFI", "FOLD", "DRIVE", "-", "POINT", "-", "-", "SUB", "-", "RING", "SUB LIGHT", "VIBE", "DRIFT", NULL};
+static const char *const g_audio_fx_model_labels[] = {"OFF", "LOFI", "FOLD", "DRIVE", "-", "POINT", "-", "-", "SUB", "-", "RING", "SUB LIGHT", "VIBE", "DRIFT", "XFADE", "DJ EQ", NULL};
 static const char *const g_filter_mode_labels[] = {"OFF", "LOW", "HIGH", NULL};
 static const char *const g_fm_operator_mode_labels[] = {"RATIO", "FIXED", NULL};
 static const char *const g_ext_gate_labels[] = {"ON", "TRIG", NULL};

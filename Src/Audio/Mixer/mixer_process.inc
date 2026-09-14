@@ -12,8 +12,10 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
     AUDIO_HOT ALIGN32 static float send_r[MIXER_NUM_SENDS][AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float delay_reverb_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float delay_reverb_r[AUDIO_BLOCK_SIZE];
-    AUDIO_HOT ALIGN32 static float rec_stream_bus_main_l[AUDIO_BLOCK_SIZE];
-    AUDIO_HOT ALIGN32 static float rec_stream_bus_main_r[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float xfade_carrier_l[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float xfade_carrier_r[AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float xfade_track_tap_l[MIXER_MAX_TRACKS][AUDIO_BLOCK_SIZE];
+    AUDIO_HOT ALIGN32 static float xfade_track_tap_r[MIXER_MAX_TRACKS][AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float audio_rec_bus_l[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static float audio_rec_bus_r[AUDIO_BLOCK_SIZE];
     AUDIO_HOT ALIGN32 static int32_t audio_rec_bus_i32[AUDIO_BLOCK_SIZE * AUDIO_RECORDER_CHANNELS];
@@ -66,55 +68,57 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         memset(bus_group_r, 0, sizeof(bus_group_r));
     }
     const uint32_t ntracks = (track_count < MIXER_MAX_TRACKS) ? track_count : MIXER_MAX_TRACKS;
-    float looper_xfade_start = g_looper_xfade_prev;
-    float looper_xfade_end = g_looper_xfade_prev;
-    uint8_t looper_xfade_apply_active = 0U;
-    uint8_t looper_xfade_authority_active = 0U;
-    uint8_t looper_xfade_authority_track = 0U;
-    uint8_t looper_playback_mix_active = 0U;
+    uint8_t xfade_master_active = 0U;
+    uint8_t xfade_track_taps_active = 0U;
+    brick_entity_id_t xfade_master_entity = BRICK_ENTITY_INVALID_ID;
+    uint8_t rec_target_lane = MIXER_MAX_TRACKS;
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
     {
         track_audio_runtime_ctx_t ctx;
         if ((audio_note_engine_adapter_current_ctx(entity, &ctx) != 0U)
                 && (ctx.program_route.active != 0U)
-                && (ctx.family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-                && (ctx.type == (uint8_t)TRACK_RUNTIME_TYPE_STREAM)
-                && (brick6_sampler_runtime_clip_source_is_rec(entity) != 0U)
                 && (ctx.program_route.mix_track_id < MIXER_MAX_TRACKS))
         {
-            const uint8_t flags =
-                g_mixer_static_lane_flags[ctx.program_route.mix_track_id];
-            if (((flags & MIXER_STATIC_ROUTE_MAIN) != 0U)
-                    && (looper_xfade_authority_active == 0U))
+            if ((rec_target_lane >= MIXER_MAX_TRACKS)
+                    && (ctx.family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
+                    && (ctx.type == (uint8_t)TRACK_RUNTIME_TYPE_STREAM)
+                    && (brick6_sampler_runtime_clip_source_is_rec(entity) != 0U))
+                rec_target_lane=ctx.program_route.mix_track_id;
+            fx_audio_xfade_target_t target;
+            if ((xfade_master_active == 0U)
+                    && (audio_fx_runtime_xfade_target(entity,&target) != 0U)
+                    && (target == FX_AUDIO_XFADE_TARGET_MASTER)
+                    && ((g_mixer_static_lane_flags[ctx.program_route.mix_track_id]
+                         & MIXER_STATIC_ROUTE_MAIN) != 0U))
             {
-                looper_xfade_authority_active = 1U;
-                looper_xfade_authority_track = entity;
+                xfade_master_active = 1U;
+                xfade_master_entity = entity;
             }
+            if((audio_fx_runtime_xfade_target(entity,&target)!=0U)
+                    &&((target==FX_AUDIO_XFADE_TARGET_REC)
+                       ||((target>=FX_AUDIO_XFADE_TARGET_TRACK_1)
+                          &&(target<=FX_AUDIO_XFADE_TARGET_TRACK_8))))
+                xfade_track_taps_active=1U;
         }
     }
-    if (looper_xfade_authority_active != 0U)
+    memset(xfade_carrier_l, 0, sizeof(xfade_carrier_l));
+    memset(xfade_carrier_r, 0, sizeof(xfade_carrier_r));
+    for(uint32_t lane=0U;(xfade_track_taps_active!=0U)&&(lane<MIXER_MAX_TRACKS);++lane)
     {
-        const float looper_xfade_target =
-            brick6_sampler_runtime_get_clip_xfade(looper_xfade_authority_track);
-        looper_xfade_end = mixer_get_looper_xfade(looper_xfade_target);
-        looper_xfade_start = g_looper_xfade_prev;
-        g_looper_xfade_prev = looper_xfade_end;
-        looper_xfade_apply_active = (uint8_t)(
-            (mixer_looper_xfade_value_is_zero(looper_xfade_start) == 0U)
-            || (mixer_looper_xfade_value_is_zero(looper_xfade_end) == 0U));
+        for(uint32_t i=0U;i<frames;++i)
+        {
+            float l=(lane<ntracks&&tracks[lane].enabled!=0U)?tracks[lane].L[i]:0.0f;
+            float r=(lane<ntracks&&tracks[lane].enabled!=0U)?tracks[lane].R[i]:0.0f;
+            if(g_external_track_enabled[lane]!=0U)
+            {
+                if((g_external_track_format[lane]==MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
+                        ||(g_external_track_format[lane]==MIXER_EXTERNAL_FORMAT_MULTI_MONO))
+                    l+=g_external_track_mono[lane][i],r+=g_external_track_mono[lane][i];
+                else l+=g_external_track_l[lane][i],r+=g_external_track_r[lane][i];
+            }
+            xfade_track_tap_l[lane][i]=l;xfade_track_tap_r[lane][i]=r;
+        }
     }
-    else
-    {
-        g_looper_xfade_prev = 0.0f;
-        g_looper_xfade_smoothed = 0.0f;
-        looper_xfade_start = 0.0f;
-        looper_xfade_end = 0.0f;
-    }
-    /* Keep Looper playback on its own bus for the complete live/loop
-     * crossfade range.  In particular, XFADE=0 must not fall back to the
-     * ordinary lane fan-out, otherwise the loop can bypass the crossfade
-     * while the live bus remains authoritative. */
-    looper_playback_mix_active = looper_xfade_authority_active;
     uint8_t audio_rec_capture_active = (uint8_t)(
         (audio_rec_projection.source_flags & AUDIO_REC_BUS_CAPTURE_ENABLED) != 0U);
     const uint8_t audio_rec_track_routes_active = (uint8_t)(
@@ -126,11 +130,6 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                 & (AUDIO_REC_BUS_SOURCE_LINE_DIRECT
                     | AUDIO_REC_BUS_SOURCE_MIC_LOGICAL
                     | AUDIO_REC_BUS_SOURCE_USB_DIRECT)) != 0U));
-    if(looper_xfade_authority_active != 0U)
-    {
-        memset(rec_stream_bus_main_l, 0, sizeof(rec_stream_bus_main_l));
-        memset(rec_stream_bus_main_r, 0, sizeof(rec_stream_bus_main_r));
-    }
     if(audio_rec_bus_active != 0U)
     {
         memset(audio_rec_bus_l, 0, sizeof(audio_rec_bus_l));
@@ -248,7 +247,7 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         if ((is_mono_native_lane != 0U)
                 && (lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_MONO_NATIVE)
                 && (audio_rec_track_routes_active == 0U)
-                && (looper_playback_mix_active == 0U))
+                && (xfade_master_active == 0U))
         {
             direct_mono_fanout = (requires_stereo == 0U) ? 1U : 0U;
         }
@@ -419,7 +418,7 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         uint8_t poly_stereo_fanout = 0U;
         if ((lane_plan.ext_format == MIXER_EXTERNAL_FORMAT_POLY_STEREO)
                 && (audio_rec_track_routes_active == 0U)
-                && (looper_playback_mix_active == 0U)
+                && (xfade_master_active == 0U)
                 && (route_main != 0U)
                 && (modfx_active == 0U)
                 && ((input_send_mask & MIXER_SEND_MASK_BIT(MIXER_MODFX_SEND_INDEX)) == 0U)
@@ -864,6 +863,22 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                 mixer_lane_run_stereo_path(t,mt,&g_track_filters[t],L,R,frames);
             audio_fx_runtime_process_after_filter(audio_fx_entity,L,R,frames);
         }
+        fx_audio_xfade_target_t xfade_target;
+        if ((audio_fx_runtime_xfade_target(audio_fx_entity,&xfade_target)!=0U)
+                && (xfade_target!=FX_AUDIO_XFADE_TARGET_MASTER))
+        {
+            const float *target_l=NULL,*target_r=NULL;
+            const audio_physical_inputs_t *physical=audio_io_get_current_physical_inputs();
+            if(xfade_target==FX_AUDIO_XFADE_TARGET_LINE){target_l=physical->line.left;target_r=physical->line.right;}
+            else if(xfade_target==FX_AUDIO_XFADE_TARGET_USB){target_l=physical->usb.left;target_r=physical->usb.right;}
+            else
+            {
+                uint8_t lane=(xfade_target==FX_AUDIO_XFADE_TARGET_REC)?rec_target_lane:
+                    (uint8_t)(xfade_target-FX_AUDIO_XFADE_TARGET_TRACK_1);
+                if(lane<MIXER_MAX_TRACKS){target_l=xfade_track_tap_l[lane];target_r=xfade_track_tap_r[lane];}
+            }
+            (void)audio_fx_runtime_process_xfade(audio_fx_entity,L,R,target_l,target_r,frames);
+        }
         if (waveform_capture_samples != 0U)
         {
             audio_waveform_capture_tap_stereo_block(L, R, frames);
@@ -879,37 +894,6 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
         {
             const uint8_t source_track = (source_entity < BRICK_ENTITY_CAPACITY)
                 ? source_entity : (uint8_t)t;
-            const uint8_t stream_rec = (uint8_t)(
-                (source_track < BRICK_ENTITY_CAPACITY)
-                && (brick6_sampler_runtime_clip_source_is_rec(source_track) != 0U));
-            if((source_track < MIXER_MAX_TRACKS) && (stream_rec != 0U))
-            {
-                if((audio_rec_bus_active != 0U)
-                        && (source_track < BRICK_ENTITY_CAPACITY)
-                        && ((audio_rec_projection.source_entity_mask
-                            & (uint16_t)(1U << source_track)) != 0U))
-                {
-                    for(uint32_t i = 0U; i < frames; ++i)
-                    {
-                        audio_rec_bus_l[i] += L[i];
-                        audio_rec_bus_r[i] += R[i];
-                    }
-                }
-
-                if((stream_rec != 0U) && (looper_playback_mix_active != 0U))
-                {
-                    if(route_main != 0U)
-                    {
-                        for(uint32_t i = 0U; i < frames; ++i)
-                        {
-                            rec_stream_bus_main_l[i] += L[i] * MIXER_TRACK_NOMINAL_TRIM;
-                            rec_stream_bus_main_r[i] += R[i] * MIXER_TRACK_NOMINAL_TRIM;
-                        }
-                    }
-                }
-                continue;
-            }
-
             if((audio_rec_bus_active != 0U)
                     && (source_track < BRICK_ENTITY_CAPACITY)
                     && ((audio_rec_projection.source_entity_mask
@@ -921,6 +905,12 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                     audio_rec_bus_r[i] += R[i];
                 }
             }
+        }
+
+        if((xfade_master_active!=0U)&&(source_entity==xfade_master_entity))
+        {
+            if(route_main!=0U)for(uint32_t i=0U;i<frames;++i){xfade_carrier_l[i]+=L[i]*MIXER_TRACK_NOMINAL_TRIM;xfade_carrier_r[i]+=R[i]*MIXER_TRACK_NOMINAL_TRIM;}
+            continue;
         }
 
         if(send_bus_active != 0U)
@@ -1171,95 +1161,26 @@ ITCM_TEXT void mixer_process(StereoTrack *tracks, uint32_t track_count, uint32_t
                 bus_main_r[i] += send_r[MIXER_REVERB_SEND_INDEX][i];
             }
         }
+
     }
 
-    /* Preview is another live contribution.  It must join the authoritative
-     * live bus before the Looper crossfade; adding it to tracks[0] after
-     * mixer_process() would bypass live_gain at XFADE=1. */
     (void)sd_preview_render_main(bus_main_l, bus_main_r, frames);
 
-    g_brick6_rec_output_probe.block_count++;
-    g_brick6_rec_output_probe.xfade_apply_active =
-        looper_xfade_apply_active;
-    g_brick6_rec_output_probe.xfade_track =
-        looper_xfade_authority_track;
-    g_brick6_rec_output_probe.xfade_value = looper_xfade_end;
-    g_brick6_rec_output_probe.rec_bus_pre_xfade_peak =
-        mixer_probe_stereo_peak(rec_stream_bus_main_l, rec_stream_bus_main_r, frames);
-    g_brick6_rec_output_probe.main_pre_xfade_peak =
-        mixer_probe_stereo_peak(bus_main_l, bus_main_r, frames);
-
-    if(looper_xfade_apply_active != 0U)
+    if(xfade_master_active != 0U)
     {
-        if((mixer_looper_xfade_value_is_full(looper_xfade_start) != 0U)
-                && (mixer_looper_xfade_value_is_full(looper_xfade_end) != 0U))
-        {
-            memcpy(bus_main_l, rec_stream_bus_main_l, sizeof(float) * frames);
-            memcpy(bus_main_r, rec_stream_bus_main_r, sizeof(float) * frames);
-        }
-        else if(mixer_looper_xfade_values_are_stable(looper_xfade_start, looper_xfade_end) != 0U)
-        {
-            float xfade = looper_xfade_end;
-            if(xfade < 0.0f)
-            {
-                xfade = 0.0f;
-            }
-            else if(xfade > 1.0f)
-            {
-                xfade = 1.0f;
-            }
-
-            const float live_gain = 1.0f - xfade;
-            const float loop_gain = xfade;
-            for(uint32_t i = 0U; i < frames; ++i)
-            {
-                const float loop_main_l = rec_stream_bus_main_l[i];
-                const float loop_main_r = rec_stream_bus_main_r[i];
-                bus_main_l[i] = (bus_main_l[i] * live_gain) + (loop_main_l * loop_gain);
-                bus_main_r[i] = (bus_main_r[i] * live_gain) + (loop_main_r * loop_gain);
-            }
-
-        }
-        else
-        {
-            const float xfade_step = (frames > 1U)
-                ? ((looper_xfade_end - looper_xfade_start) / (float)(frames - 1U))
-                : 0.0f;
-            float xfade = (frames > 1U) ? looper_xfade_start : looper_xfade_end;
-            for(uint32_t i = 0U; i < frames; ++i)
-            {
-                if(xfade < 0.0f)
-                {
-                    xfade = 0.0f;
-                }
-                else if(xfade > 1.0f)
-                {
-                    xfade = 1.0f;
-                }
-
-                const float live_gain = 1.0f - xfade;
-                const float loop_main_l = rec_stream_bus_main_l[i];
-                const float loop_main_r = rec_stream_bus_main_r[i];
-                bus_main_l[i] = (bus_main_l[i] * live_gain) + (loop_main_l * xfade);
-                bus_main_r[i] = (bus_main_r[i] * live_gain) + (loop_main_r * xfade);
-                xfade += xfade_step;
-            }
-        }
+        (void)audio_fx_runtime_process_xfade(xfade_master_entity,
+            xfade_carrier_l,xfade_carrier_r,bus_main_l,bus_main_r,frames);
+        memcpy(bus_main_l,xfade_carrier_l,sizeof(float)*frames);
+        memcpy(bus_main_r,xfade_carrier_r,sizeof(float)*frames);
     }
 
-    g_brick6_rec_output_probe.main_post_xfade_peak =
-        mixer_probe_stereo_peak(bus_main_l, bus_main_r, frames);
-
-    /* One authoritative master dynamics slot, post returns/Looper crossfade. */
+    /* One authoritative master dynamics slot, post returns/insert crossfade. */
     fx_slot_t *const master_slot = fx_pool_get_slot(2U);
     if ((master_slot != NULL) && (master_slot->active != 0U)
             && (master_slot->state != NULL))
     {
         fx_chain_process_global_slot(2U, bus_main_l, bus_main_r, frames);
     }
-    g_brick6_rec_output_probe.master_post_peak =
-        mixer_probe_stereo_peak(bus_main_l, bus_main_r, frames);
-
     if((audio_rec_bus_active != 0U)
             && ((audio_rec_projection.source_flags
                 & AUDIO_REC_BUS_SOURCE_LINE_DIRECT) != 0U))

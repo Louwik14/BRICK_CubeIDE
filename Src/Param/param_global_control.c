@@ -18,9 +18,6 @@ typedef enum
     GLOBAL_BUS_COMP_AUTO_MAKEUP,
     GLOBAL_BUS_COMP_DRYWET,
     GLOBAL_BUS_COMP_HPF,
-    GLOBAL_EQ_LOW,
-    GLOBAL_EQ_MID,
-    GLOBAL_EQ_HIGH,
     GLOBAL_SAT_TONE,
     GLOBAL_SAT_BIAS,
     GLOBAL_SAT_DRIVE,
@@ -78,9 +75,6 @@ static const param_id_t g_global_param_ids[GLOBAL_CONTROL_VALUE_COUNT] = {
     [GLOBAL_BUS_COMP_AUTO_MAKEUP] = PARAM_BUS_COMP_AUTO_MAKEUP,
     [GLOBAL_BUS_COMP_DRYWET] = PARAM_BUS_COMP_DRYWET,
     [GLOBAL_BUS_COMP_HPF] = PARAM_BUS_COMP_HPF_HZ,
-    [GLOBAL_EQ_LOW] = PARAM_EQ_LOW_DB,
-    [GLOBAL_EQ_MID] = PARAM_EQ_MID_DB,
-    [GLOBAL_EQ_HIGH] = PARAM_EQ_HIGH_DB,
     [GLOBAL_SAT_TONE] = PARAM_SAT_TONE,
     [GLOBAL_SAT_BIAS] = PARAM_SAT_BIAS,
     [GLOBAL_SAT_DRIVE] = PARAM_SAT_DRIVE,
@@ -139,9 +133,6 @@ static uint8_t global_slot(param_id_t id, param_global_slot_t *out)
         case PARAM_BUS_COMP_AUTO_MAKEUP: slot = GLOBAL_BUS_COMP_AUTO_MAKEUP; break;
         case PARAM_BUS_COMP_DRYWET: slot = GLOBAL_BUS_COMP_DRYWET; break;
         case PARAM_BUS_COMP_HPF_HZ: slot = GLOBAL_BUS_COMP_HPF; break;
-        case PARAM_EQ_LOW_DB: slot = GLOBAL_EQ_LOW; break;
-        case PARAM_EQ_MID_DB: slot = GLOBAL_EQ_MID; break;
-        case PARAM_EQ_HIGH_DB: slot = GLOBAL_EQ_HIGH; break;
         case PARAM_SAT_TONE: slot = GLOBAL_SAT_TONE; break;
         case PARAM_SAT_BIAS: slot = GLOBAL_SAT_BIAS; break;
         case PARAM_SAT_DRIVE: slot = GLOBAL_SAT_DRIVE; break;

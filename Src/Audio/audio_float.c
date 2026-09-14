@@ -29,7 +29,6 @@
 #include <stdint.h>
 #include <string.h>
 #include <arm_acle.h>
-#include "fx_dj_eq3_cmsis.h"
 #include "arm_math.h"
 #include "fx_saturation.h"
 #include "Platform/memory_layout.h"
@@ -55,15 +54,12 @@ static AUDIO_HOT float master_gain;
 static float postgain = 1.0f;
 static float output_comp = 1.0f;
 
-static volatile uint8_t track0_eq_ui_low = 64U;
-static volatile uint8_t track0_eq_ui_mid = 64U;
-static volatile uint8_t track0_eq_ui_high = 64U;
 
 /**
- * @brief Point d'entrée eq_is_neutral.
+ * @brief Convertit l'index d'attaque du compresseur de bus.
  *
  * Rôle:
- * - Exécuter le traitement associé à eq_is_neutral.
+ * - Retourner le temps d'attaque borné associé à l'index.
  *
  *
  * @return Valeur de retour définie par le contrat de l'API.
@@ -77,18 +73,6 @@ static float bus_comp_attack_index_to_seconds(uint8_t attack_index)
     if(attack_index > 5U) attack_index = 5U;
     return attack_s[attack_index];
 }
-static inline uint8_t eq_is_neutral(void)
-{
-    return (track0_eq_ui_low == 64U) && (track0_eq_ui_mid == 64U) && (track0_eq_ui_high == 64U);
-}
-
-
-static inline fx_dj_eq3_t *fx_pool_eq_state(void)
-{
-    fx_slot_t *s = fx_pool_get_slot(0U);
-    return (s != 0) ? (fx_dj_eq3_t *)s->state : 0;
-}
-
 static inline fx_saturation_t *fx_pool_sat_state(void)
 {
     fx_slot_t *s = fx_pool_get_slot(1U);
@@ -177,12 +161,12 @@ void audio_float_init_gain_staging(float boot_postgain,
 }
 
 /**
- * @brief Point d'entrée audio_float_set_dj_eq_low_db.
+ * @brief Règle le ratio du compresseur de bus.
  *
  * Rôle:
- * - Exécuter le traitement associé à audio_float_set_dj_eq_low_db.
+ * - Transmettre le ratio à l'instance DSP canonique.
  *
- * @param db Paramètre d'entrée de l'API.
+ * @param ratio Ratio demandé.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -192,19 +176,14 @@ void audio_float_set_bus_comp_ratio(float ratio)
     fx_comp_lab_t *comp = fx_pool_comp_lab_state();
     if(comp) fx_comp_lab_set_ratio(comp, ratio);
 }
-void audio_float_set_dj_eq_low_db(float db)
-{
-    fx_dj_eq3_t *eq = fx_pool_eq_state();
-    if(eq) fx_dj_eq3_set_low_db(eq, db);
-}
 
 /**
- * @brief Point d'entrée audio_float_set_dj_eq_mid_db.
+ * @brief Règle l'attaque du compresseur de bus.
  *
  * Rôle:
- * - Exécuter le traitement associé à audio_float_set_dj_eq_mid_db.
+ * - Convertir puis transmettre l'index d'attaque.
  *
- * @param db Paramètre d'entrée de l'API.
+ * @param attack_index Index d'attaque.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -214,19 +193,14 @@ void audio_float_set_bus_comp_attack_index(uint8_t attack_index)
     fx_comp_lab_t *comp = fx_pool_comp_lab_state();
     if(comp) fx_comp_lab_set_attack_s(comp, bus_comp_attack_index_to_seconds(attack_index));
 }
-void audio_float_set_dj_eq_mid_db(float db)
-{
-    fx_dj_eq3_t *eq = fx_pool_eq_state();
-    if(eq) fx_dj_eq3_set_mid_db(eq, db);
-}
 
 /**
- * @brief Point d'entrée audio_float_set_dj_eq_high_db.
+ * @brief Règle le relâchement du compresseur de bus.
  *
  * Rôle:
- * - Exécuter le traitement associé à audio_float_set_dj_eq_high_db.
+ * - Convertir puis transmettre l'index de relâchement.
  *
- * @param db Paramètre d'entrée de l'API.
+ * @param release_index Index de relâchement.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -236,21 +210,14 @@ void audio_float_set_bus_comp_release_index(uint8_t release_index)
     fx_comp_lab_t *comp = fx_pool_comp_lab_state();
     if(comp) fx_comp_lab_set_release_s(comp, bus_comp_release_index_to_seconds(release_index));
 }
-void audio_float_set_dj_eq_high_db(float db)
-{
-    fx_dj_eq3_t *eq = fx_pool_eq_state();
-    if(eq) fx_dj_eq3_set_high_db(eq, db);
-}
 
 /**
- * @brief Point d'entrée audio_float_set_dj_eq_ui_params.
+ * @brief Règle le gain de compensation du compresseur de bus.
  *
  * Rôle:
- * - Exécuter le traitement associé à audio_float_set_dj_eq_ui_params.
+ * - Transmettre le gain à l'instance DSP canonique.
  *
- * @param low Paramètre d'entrée de l'API.
- * @param mid Paramètre d'entrée de l'API.
- * @param high Paramètre d'entrée de l'API.
+ * @param makeup_db Gain en dB.
  *
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
@@ -260,18 +227,12 @@ void audio_float_set_bus_comp_makeup_db(float makeup_db)
     fx_comp_lab_t *comp = fx_pool_comp_lab_state();
     if(comp) fx_comp_lab_set_makeup_db(comp, makeup_db);
 }
-void audio_float_set_dj_eq_ui_params(uint8_t low, uint8_t mid, uint8_t high)
-{
-    track0_eq_ui_low = low;
-    track0_eq_ui_mid = mid;
-    track0_eq_ui_high = high;
-}
 
 /**
- * @brief Point d'entrée audio_float_is_dj_eq_ui_neutral.
+ * @brief Configure l'option auto-makeup du compresseur de bus.
  *
  * Rôle:
- * - Exécuter le traitement associé à audio_float_is_dj_eq_ui_neutral.
+ * - Conserver le contrat API; l'implémentation actuelle est neutre.
  *
  *
  * @return Valeur de retour définie par le contrat de l'API.
@@ -282,10 +243,6 @@ void audio_float_set_dj_eq_ui_params(uint8_t low, uint8_t mid, uint8_t high)
 void audio_float_set_bus_comp_auto_makeup(uint8_t enabled)
 {
     (void)enabled;
-}
-uint8_t audio_float_is_dj_eq_ui_neutral(void)
-{
-    return eq_is_neutral() ? 1U : 0U;
 }
 
 /**
@@ -463,10 +420,7 @@ void audio_tracks_init(void)
         memset(tracks[t].R, 0, sizeof(tracks[t].R));
     }
 
-    fx_dj_eq3_t *eq = fx_pool_eq_state();
     fx_saturation_t *sat = fx_pool_sat_state();
-
-    if(eq) fx_dj_eq3_init(eq, 48000.0f, 200.0f, 1000.0f, 1.0f, 6000.0f);
 
     if(sat) fx_saturation_init(sat);
 
@@ -490,11 +444,7 @@ void track_enable(uint32_t track_id, uint8_t enabled)
     else
         g_audio_tracks_enabled_mask &= ~bit;
 
-    if((prev == 0U) && (next != 0U) && (track_id == 0U))
-    {
-        fx_dj_eq3_t *eq = fx_pool_eq_state();
-        if(eq) fx_dj_eq3_reset(eq);
-    }
+    (void)prev;
 }
 
 /** Voir audio_float.h */

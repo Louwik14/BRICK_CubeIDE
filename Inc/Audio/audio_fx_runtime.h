@@ -6,6 +6,7 @@
 #include "Track/entity_types.h"
 #include "Param/param_ids.h"
 #include "Param/engine_model_catalog.h"
+#include "Audio/fx_audio_xfade.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -21,6 +22,8 @@ uint8_t audio_fx_runtime_get_model(brick_entity_id_t entity_id,
                                    audio_fx_slot_t slot);
 uint8_t audio_fx_runtime_is_active(brick_entity_id_t entity_id);
 uint8_t audio_fx_runtime_is_comp(brick_entity_id_t entity_id);
+uint8_t audio_fx_runtime_xfade_target(brick_entity_id_t entity_id,
+                                      fx_audio_xfade_target_t *out_target);
 uint8_t audio_fx_runtime_requires_stereo(brick_entity_id_t entity_id);
 uint8_t audio_fx_runtime_pre_filter_supported(brick_entity_id_t entity_id);
 audio_fx_filter_pos_t audio_fx_runtime_get_filter_pos(brick_entity_id_t entity_id);
@@ -73,6 +76,12 @@ void audio_fx_runtime_process(brick_entity_id_t entity_id,
                                float *left,
                                float *right,
                                uint32_t frames);
+uint8_t audio_fx_runtime_process_xfade(brick_entity_id_t entity_id,
+                                       float *left,
+                                       float *right,
+                                       const float *target_left,
+                                       const float *target_right,
+                                       uint32_t frames);
 
 #ifdef __cplusplus
 }

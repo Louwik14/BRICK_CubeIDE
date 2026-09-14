@@ -21,7 +21,6 @@
 
 #include "fx_pool.h"
 
-#include "fx_dj_eq3_cmsis.h"
 #include "fx_saturation.h"
 #include "fx_comp_lab.h"
 #include "mixer.h"
@@ -33,7 +32,6 @@
 
 static fx_slot_t g_slots[FX_POOL_SIZE];
 
-AUDIO_HOT static fx_dj_eq3_t g_eq;
 static fx_saturation_t g_sat;
 AUDIO_HOT static fx_saturation_t g_track_sat[FX_POOL_TRACK_SAT_COUNT];
 
@@ -88,10 +86,6 @@ int fx_pool_activate_slot(uint32_t index, fx_type_t type)
 
     switch (type)
     {
-        case FX_EQ3:
-            slot->state = &g_eq;
-            break;
-
         case FX_SAT:
             slot->state = &g_sat;
             fx_saturation_init(&g_sat);

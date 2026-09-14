@@ -137,8 +137,6 @@ void brick6_sampler_runtime_set_slice_count(uint8_t track_id, uint8_t slice_coun
 void brick6_sampler_runtime_set_clip_source_bpm(uint8_t track_id, float source_bpm);
 void brick6_sampler_runtime_set_clip_source(uint8_t track_id, uint8_t source);
 uint8_t brick6_sampler_runtime_clip_source_is_rec(uint8_t track_id);
-void brick6_sampler_runtime_set_clip_xfade(uint8_t track_id, float xfade);
-float brick6_sampler_runtime_get_clip_xfade(uint8_t track_id);
 void brick6_sampler_runtime_set_clip_sync_length(uint8_t track_id, uint8_t sync_length);
 void brick6_sampler_runtime_set_clip_pitch(uint8_t track_id, float semitones);
 void brick6_sampler_runtime_set_clip_play_mode(uint8_t track_id, uint8_t play_mode);

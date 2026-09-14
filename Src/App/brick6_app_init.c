@@ -86,7 +86,6 @@ void brick6_app_init(void)
         .output_compensation = 1.0f,
         .fx_slot_count = BRICK6_AUDIO_BOOT_FX_SLOT_COUNT,
         .fx_slots = {
-            { .slot = 0U, .type = (uint8_t)BRICK6_AUDIO_BOOT_FX_EQ3 },
             { .slot = 2U, .type = (uint8_t)BRICK6_AUDIO_BOOT_FX_COMP_LAB },
         },
     };

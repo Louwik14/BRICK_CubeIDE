@@ -11,7 +11,6 @@ typedef struct
 {
     float send_fx[2U];
     float bus_comp[8U];
-    float eq[3U];
     float saturation[4U];
     float reverb[7U];
     float delay[14U];

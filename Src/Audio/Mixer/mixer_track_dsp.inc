@@ -206,7 +206,6 @@ static ITCM_TEXT void mixer_poly_filter_sync_config(mixer_track_filter_t *dst,
 #define MIXER_DELAY_SEND_INDEX 1U
 #define MIXER_LOOPER_RECORD_PCM24_MAX 8388607.0f
 #define MIXER_LOOPER_RECORD_PCM24_MIN (-8388608.0f)
-#define MIXER_LOOPER_XFADE_EPS 0.0001f
 
 typedef enum
 {
@@ -248,43 +247,6 @@ static int32_t mixer_rec_float_to_pcm24(float sample)
     }
 
     return (int32_t)scaled;
-}
-
-static float mixer_get_looper_xfade(float target)
-{
-    if (target <= MIXER_LOOPER_XFADE_EPS)
-    {
-        g_looper_xfade_smoothed = 0.0f;
-        return 0.0f;
-    }
-    if (target >= (1.0f - MIXER_LOOPER_XFADE_EPS))
-    {
-        g_looper_xfade_smoothed = 1.0f;
-        return 1.0f;
-    }
-
-    float value = g_looper_xfade_smoothed;
-    value += (target - value) * 0.25f;
-    if (value < 0.0f) value = 0.0f;
-    else if (value > 1.0f) value = 1.0f;
-    g_looper_xfade_smoothed = value;
-    return value;
-}
-
-static uint8_t mixer_looper_xfade_value_is_zero(float value)
-{
-    return (value <= MIXER_LOOPER_XFADE_EPS) ? 1U : 0U;
-}
-
-static uint8_t mixer_looper_xfade_value_is_full(float value)
-{
-    return (value >= (1.0f - MIXER_LOOPER_XFADE_EPS)) ? 1U : 0U;
-}
-
-static uint8_t mixer_looper_xfade_values_are_stable(float a, float b)
-{
-    const float delta = a - b;
-    return ((delta <= MIXER_LOOPER_XFADE_EPS) && (delta >= -MIXER_LOOPER_XFADE_EPS)) ? 1U : 0U;
 }
 
 static float clampf_local(float v, float lo, float hi)

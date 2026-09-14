@@ -8,6 +8,7 @@
 #include "IPC/live_parameter_event.h"
 #include "Track/track_runtime.h"
 #include "Track/polyphony_control.h"
+#include "Audio/fx_audio_xfade.h"
 #include "main.h"
 
 typedef struct
@@ -34,7 +35,8 @@ static uint8_t audio_fx_control_model_is_valid(uint8_t model)
         || (model == AUDIO_FX_MODEL_DRIVE) || (model == AUDIO_FX_MODEL_POINT)
         || (model == AUDIO_FX_MODEL_SUB) || (model == AUDIO_FX_MODEL_SUB_LIGHT)
         || (model == AUDIO_FX_MODEL_RING) || (model == AUDIO_FX_MODEL_VIBE)
-        || (model == AUDIO_FX_MODEL_DRIFT));
+        || (model == AUDIO_FX_MODEL_DRIFT) || (model == AUDIO_FX_MODEL_XFADE)
+        || (model == AUDIO_FX_MODEL_DJ_EQ));
 }
 
 static uint8_t audio_fx_control_prepare_filter_position_for_voices(
@@ -76,7 +78,11 @@ uint8_t audio_fx_control_state_validate(const audio_fx_control_state_t *state)
             || (audio_fx_control_model_is_valid(state->model[0]) == 0U)
             || (audio_fx_control_model_is_valid(state->model[1]) == 0U)
             || ((state->model[0] != AUDIO_FX_MODEL_OFF)
-                && (state->model[0] == state->model[1])))
+                && (state->model[0] == state->model[1]))
+            || (((state->model[0] == AUDIO_FX_MODEL_XFADE)
+                    || (state->model[1] == AUDIO_FX_MODEL_XFADE))
+                && (state->model[0] != AUDIO_FX_MODEL_OFF)
+                && (state->model[1] != AUDIO_FX_MODEL_OFF)))
         return 0U;
     for (uint8_t slot = 0U; slot < 2U; ++slot)
         if (!isfinite(state->p1[slot]) || !isfinite(state->p2[slot])
@@ -113,6 +119,12 @@ uint8_t audio_fx_control_prepare_project_model(
         return 0U;
     const uint8_t model = (uint8_t)(value + 0.5f);
     if (audio_fx_control_model_is_valid(model) == 0U) return 0U;
+    if (model == AUDIO_FX_MODEL_XFADE)
+    {
+        track_runtime_descriptor_t descriptor;
+        if ((track_runtime_get_descriptor(entity,&descriptor)==0U)
+                || (descriptor.type==TRACK_RUNTIME_TYPE_GROUP)) return 0U;
+    }
     context->model[(id == PARAM_AUDIO_FX_MODEL) ? 0U : 1U] = model;
     context->finalized = 0U;
     return 1U;
@@ -127,6 +139,10 @@ uint8_t audio_fx_control_prepare_finalize(
         return 0U;
     if ((context->model[0] != AUDIO_FX_MODEL_OFF)
             && (context->model[0] == context->model[1])) return 0U;
+    if (((context->model[0] == AUDIO_FX_MODEL_XFADE)
+            || (context->model[1] == AUDIO_FX_MODEL_XFADE))
+            && (context->model[0] != AUDIO_FX_MODEL_OFF)
+            && (context->model[1] != AUDIO_FX_MODEL_OFF)) return 0U;
     context->finalized = 1U;
     return 1U;
 }
@@ -159,10 +175,42 @@ uint8_t audio_fx_control_prepare_param(
     {
         case PARAM_AUDIO_FX_P1: case PARAM_AUDIO_FX_P2:
         case PARAM_AUDIO_FX_B_P1: case PARAM_AUDIO_FX_B_P2:
+        {
+            const uint8_t slot=(id==PARAM_AUDIO_FX_B_P1||id==PARAM_AUDIO_FX_B_P2)?1U:0U;
+            if((id==PARAM_AUDIO_FX_P2||id==PARAM_AUDIO_FX_B_P2)
+                    &&(context->model[slot]==AUDIO_FX_MODEL_XFADE))
+            {
+                uint8_t target=(uint8_t)(value*(float)(FX_AUDIO_XFADE_TARGET_COUNT-1U)+0.5f);
+                if(target>=FX_AUDIO_XFADE_TARGET_COUNT)target=FX_AUDIO_XFADE_TARGET_MASTER;
+                value=(float)target/(float)(FX_AUDIO_XFADE_TARGET_COUNT-1U);
+            }
+            if((id==PARAM_AUDIO_FX_P2||id==PARAM_AUDIO_FX_B_P2)
+                    &&(context->model[slot]==AUDIO_FX_MODEL_XFADE)
+                    &&((uint8_t)(value*(float)(FX_AUDIO_XFADE_TARGET_COUNT-1U)+0.5f)
+                       ==FX_AUDIO_XFADE_TARGET_MASTER))
+            {
+                for(brick_entity_id_t other=0U;other<BRICK_ENTITY_CAPACITY;++other)
+                {
+                    if(other==entity)continue;
+                    const audio_fx_control_values_t*o=&g_audio_fx_control[other];
+                    if(((o->model_a==AUDIO_FX_MODEL_XFADE)
+                            &&((uint8_t)(o->p2_a*(float)(FX_AUDIO_XFADE_TARGET_COUNT-1U)+0.5f)==FX_AUDIO_XFADE_TARGET_MASTER))
+                            ||((o->model_b==AUDIO_FX_MODEL_XFADE)
+                            &&((uint8_t)(o->p2_b*(float)(FX_AUDIO_XFADE_TARGET_COUNT-1U)+0.5f)==FX_AUDIO_XFADE_TARGET_MASTER)))return 0U;
+                }
+            }
             *out_value = value; return 1U;
+        }
         case PARAM_AUDIO_FX_P3: case PARAM_AUDIO_FX_B_P3:
-            *out_value = (value < 0.0f) ? 0.0f : ((value > 127.0f) ? 127.0f : value);
+        {
+            const uint8_t slot=(id==PARAM_AUDIO_FX_B_P3)?1U:0U;
+            const float max_value=(context->model[slot]==AUDIO_FX_MODEL_XFADE)
+                ? (float)(FX_AUDIO_XFADE_CURVE_COUNT-1U) : 127.0f;
+            value=(value<0.0f)?0.0f:((value>max_value)?max_value:value);
+            *out_value=(context->model[slot]==AUDIO_FX_MODEL_XFADE)
+                ? (float)((uint8_t)(value+0.5f)) : value;
             return 1U;
+        }
         case PARAM_GROUP_FX_A_LEVEL: case PARAM_GROUP_FX_B_LEVEL:
             *out_value = (value < 0.0f) ? 0.0f : ((value > 1.0f) ? 1.0f : value);
             return 1U;
@@ -177,11 +225,19 @@ uint8_t audio_fx_control_install_prepared_param(
     audio_fx_control_values_t *const state = &g_audio_fx_control[entity];
     switch (id)
     {
-        case PARAM_AUDIO_FX_MODEL: state->model_a=(uint8_t)value; return 1U;
+        case PARAM_AUDIO_FX_MODEL:
+            state->model_a=(uint8_t)value;
+            if(state->model_a==AUDIO_FX_MODEL_XFADE){state->p1_a=0.0f;state->p2_a=(float)FX_AUDIO_XFADE_TARGET_REC/(float)(FX_AUDIO_XFADE_TARGET_COUNT-1U);state->p3_a=0.0f;}
+            else if(state->model_a==AUDIO_FX_MODEL_DJ_EQ){state->p1_a=0.5f;state->p2_a=0.5f;state->p3_a=63.5f;}
+            return 1U;
         case PARAM_AUDIO_FX_P1: state->p1_a=value; return 1U;
         case PARAM_AUDIO_FX_P2: state->p2_a=value; return 1U;
         case PARAM_AUDIO_FX_P3: state->p3_a=value; return 1U;
-        case PARAM_AUDIO_FX_B_MODEL: state->model_b=(uint8_t)value; return 1U;
+        case PARAM_AUDIO_FX_B_MODEL:
+            state->model_b=(uint8_t)value;
+            if(state->model_b==AUDIO_FX_MODEL_XFADE){state->p1_b=0.0f;state->p2_b=(float)FX_AUDIO_XFADE_TARGET_REC/(float)(FX_AUDIO_XFADE_TARGET_COUNT-1U);state->p3_b=0.0f;}
+            else if(state->model_b==AUDIO_FX_MODEL_DJ_EQ){state->p1_b=0.5f;state->p2_b=0.5f;state->p3_b=63.5f;}
+            return 1U;
         case PARAM_AUDIO_FX_B_P1: state->p1_b=value; return 1U;
         case PARAM_AUDIO_FX_B_P2: state->p2_b=value; return 1U;
         case PARAM_AUDIO_FX_B_P3: state->p3_b=value; return 1U;

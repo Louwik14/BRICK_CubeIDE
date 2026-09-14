@@ -97,7 +97,7 @@ Les selections Sample et Wavetable appartiennent a `project_control` sous forme
 de references asset typees stables; leur resolution en slot runtime n'a lieu
 qu'a la publication AUDIO. Elles ne sont ni Param, ni destinations de p-lock,
 modulation ou MIDI. Arm, trigger, longueur et OVERDUB appartiennent à Audio REC;
-lecture, pitch, stretch et XFADE appartiennent au Streamer. La selection d'operateur
+lecture, pitch et stretch appartiennent au Streamer. XFADE appartient au domaine Audio FX. La selection d'operateur
 FM est un contexte local de l'editeur. L'etat interne FM est possede par
 `fm_control_state` cote CONTROL et publie comme un DTO coherent unique vers
 AUDIO; aucun pack FM interne ne traverse Param.
@@ -145,7 +145,7 @@ le lock du moteur courant peut alors etre applique normalement.
 Les runtimes moteur et voix ne conservent que leurs projections natives ou
 leurs etats DSP.
 
-Les slots Audio FX A/B possedent MODEL/P1/P2/P3. MODEL reste un endpoint musical stable de slot; un changement conserve P1/P2/P3 et ne publie que MODEL. Filter position, ordre et modes spatiaux appartiennent a `audio_fx_control_state` et utilisent des commandes typees. Les restores preparent, publient, puis installent directement l'etat final, sans passer par les defaults du modele. Seuls P1/P2/P3 sont p-lockables. En GROUP, les models appartiennent au master et les children n'exposent que LEVEL A/B.
+Les slots Audio FX A/B possedent MODEL/P1/P2/P3. MODEL reste un endpoint musical stable de slot. XFADE initialise `XFADE/TARGET/CURVE` a `0/REC/POWER`; DJ EQ initialise `LOW/MID/HIGH` a 0 dB. Filter position, ordre et modes spatiaux appartiennent a `audio_fx_control_state` et utilisent des commandes typees. Les restores preparent, publient, puis installent directement l'etat final. Seuls P1/P2/P3 sont p-lockables. En GROUP, les models appartiennent au master et les children n'exposent que LEVEL A/B; XFADE est reserve aux tracks ordinaires.
 
 La liste MOD parcourt le catalogue PARAM canonique puis conserve les parametres
 a la fois declares destinations par le registre, affiches et applicables au

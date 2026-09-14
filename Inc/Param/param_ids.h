@@ -62,10 +62,9 @@ enum {
     PARAM_BUS_COMP_AUTO_MAKEUP,
     PARAM_BUS_COMP_DRYWET,
     PARAM_BUS_COMP_HPF_HZ,
-
-    PARAM_EQ_LOW_DB,
-    PARAM_EQ_MID_DB,
-    PARAM_EQ_HIGH_DB,
+    PARAM_RESERVED_052,
+    PARAM_RESERVED_053,
+    PARAM_RESERVED_054,
 
     PARAM_SAT_TONE,
     PARAM_SAT_BIAS,
@@ -244,7 +243,7 @@ enum {
     PARAM_SAMPLER_CLIP_SOURCE,
     PARAM_RESERVED_264,
     PARAM_RESERVED_265,
-    PARAM_STREAM_XFADE,
+    PARAM_RESERVED_266,
     PARAM_LOOPER_STRETCH,
     PARAM_LOOPER_PITCH,
     PARAM_LOOPER_GRAIN,
@@ -487,6 +486,9 @@ static inline uint8_t param_id_is_reserved(param_id_t id)
         case PARAM_RESERVED_035:
         case PARAM_RESERVED_036:
         case PARAM_RESERVED_037:
+        case PARAM_RESERVED_052:
+        case PARAM_RESERVED_053:
+        case PARAM_RESERVED_054:
         case PARAM_RESERVED_FILTER_SLOT_1:
         case PARAM_RESERVED_FILTER_SLOT_2:
         case PARAM_RESERVED_FILTER_SLOT_3:
@@ -505,6 +507,7 @@ static inline uint8_t param_id_is_reserved(param_id_t id)
         case PARAM_RESERVED_ENV_RETRIG_MOD_126:
         case PARAM_RESERVED_264:
         case PARAM_RESERVED_265:
+        case PARAM_RESERVED_266:
         case PARAM_RESERVED_WAVE_QUALITY_0:
         case PARAM_RESERVED_WAVE_QUALITY_1:
         case PARAM_RESERVED_WAVE_QUALITY_2:

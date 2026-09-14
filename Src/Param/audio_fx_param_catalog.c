@@ -20,7 +20,9 @@ static const audio_fx_model_param_catalog_t g_audio_fx_model_params[] = {
     [AUDIO_FX_MODEL_RING]      = {3U, {"FREQ", "WAVE", "MODEL"}},
     [AUDIO_FX_MODEL_SUB_LIGHT] = {3U, {"SUB", "TONE", "MIX"}},
     [AUDIO_FX_MODEL_VIBE]      = {3U, {"RATE", "DEPTH", "DELAY"}},
-    [AUDIO_FX_MODEL_DRIFT]     = {2U, {"DELAY", "FEEDBACK", NULL}}
+    [AUDIO_FX_MODEL_DRIFT]     = {2U, {"DELAY", "FEEDBACK", NULL}},
+    [AUDIO_FX_MODEL_XFADE]     = {3U, {"XFADE", "TARGET", "CURVE"}},
+    [AUDIO_FX_MODEL_DJ_EQ]     = {3U, {"LOW", "MID", "HIGH"}}
 };
 
 uint8_t audio_fx_param_catalog_param_info(param_id_t id,
