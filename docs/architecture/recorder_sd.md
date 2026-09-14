@@ -103,8 +103,9 @@ SAVE n'est pas nécessaire au playback. Il exporte `REC_SOURCE.current` vers un
 fichier utilisateur `0:/REC/RECxxxx.WAV`. Un crop sélectionne une plage de
 frames et recopie uniquement son PCM dans cet export.
 
-L'export est un job de superloop. Chaque appel réalise au plus une opération
-de métadonnées ou un transfert de 4 KiB, après admission comme client
+L'export est un job de superloop. Les `FIL` source et destination restent
+ouverts et avancent séquentiellement. Chaque appel réalise au plus une opération
+de métadonnées ou un transfert de 32 KiB, après admission comme client
 BACKGROUND du scheduler, puis rend la main. La recherche du prochain nom fait
 un seul `f_stat` par appel. Lecture et écriture sont des phases séparées.
 
@@ -117,9 +118,11 @@ job ferme ses handles, supprime le `.TMP` et ne publie aucun WAV partiel.
 
 Recorder WRITE et Streamer READ restent les clients temps réel prioritaires.
 Preview, Browser, caches, Pattern/Project et SAVE/CROP utilisent les contrats
-du scheduler. SAVE/CROP s'annoncent comme BACKGROUND avec un quantum maximal
-de 4 KiB; ils ne gardent pas le gate entre deux appels et ne contiennent pas de
-boucle sur le fichier entier.
+du scheduler. La copie séquentielle SAVE/CROP s'annonce comme BACKGROUND avec
+un quantum maximal de 32 KiB; elle ne garde pas le gate entre deux appels et ne
+contient pas de boucle sur le fichier entier. Ce quantum de données ne
+s'applique ni à EXTEND ni à RELEASE: leurs transactions de métadonnées FAT/exFAT
+restent sectorielles afin de conserver les points d'arbitrage.
 
 La récupération, la préparation, le drain et la finalisation du Recorder sont
 des machines d'état progressées par `audio_recorder_service()` et
