@@ -311,10 +311,29 @@ static void spatial_block_side(audio_fx_runtime_slot_t*r,void*h,float*l,float*rr
 static void drift_block_mono(audio_fx_runtime_slot_t*r,void*h,float*l,float*rr,uint32_t n){const float inc=(r->dsp.drift.delay_target-r->dsp.drift.delay)/(float)n;for(uint32_t i=0U;i<n;++i){const float y=fx_audio_drift_process_mono_sample(&r->dsp.drift,(fx_audio_drift_history_t*)h,(l[i]+rr[i])*.5f,inc)*.5f;l[i]=y;rr[i]=y;}r->dsp.drift.delay=r->dsp.drift.delay_target;}
 static void drift_block_mid(audio_fx_runtime_slot_t*r,void*h,float*l,float*rr,uint32_t n){const float inc=(r->dsp.drift.delay_target-r->dsp.drift.delay)/(float)n;for(uint32_t i=0U;i<n;++i){const float m=(l[i]+rr[i])*.5f,s=(l[i]-rr[i])*.5f,y=fx_audio_drift_process_mono_sample(&r->dsp.drift,(fx_audio_drift_history_t*)h,m,inc)*.5f;l[i]=y+s;rr[i]=y-s;}r->dsp.drift.delay=r->dsp.drift.delay_target;}
 static void drift_block_side(audio_fx_runtime_slot_t*r,void*h,float*l,float*rr,uint32_t n){const float inc=(r->dsp.drift.delay_target-r->dsp.drift.delay)/(float)n;for(uint32_t i=0U;i<n;++i){const float m=(l[i]+rr[i])*.5f,s=(l[i]-rr[i])*.5f,y=fx_audio_drift_process_mono_sample(&r->dsp.drift,(fx_audio_drift_history_t*)h,s,inc)*.5f;l[i]=m+y;rr[i]=m-y;}r->dsp.drift.delay=r->dsp.drift.delay_target;}
+static float dj_eq_process_mono_sample(audio_fx_runtime_slot_t*r,float x){float sink=0.0f;fx_dj_eq3_process_block(&r->dsp.dj_eq,&x,&sink,1U);return x;}
+static void dj_eq_sample_mono(audio_fx_runtime_slot_t*r,void*h,float*l,float*rr){(void)h;const float y=dj_eq_process_mono_sample(r,(*l+*rr)*.5f);*l=y;*rr=y;}
+static void dj_eq_sample_mid(audio_fx_runtime_slot_t*r,void*h,float*l,float*rr){(void)h;const float m=(*l+*rr)*.5f,s=(*l-*rr)*.5f,y=dj_eq_process_mono_sample(r,m);*l=y+s;*rr=y-s;}
+static void dj_eq_sample_side(audio_fx_runtime_slot_t*r,void*h,float*l,float*rr){(void)h;const float m=(*l+*rr)*.5f,s=(*l-*rr)*.5f,y=dj_eq_process_mono_sample(r,s);*l=m+y;*rr=m-y;}
+static void dj_eq_sample_stereo(audio_fx_runtime_slot_t*r,void*h,float*l,float*rr){(void)h;fx_dj_eq3_process_block(&r->dsp.dj_eq,l,rr,1U);}
+static void dj_eq_block_mono(audio_fx_runtime_slot_t*r,void*h,float*l,float*rr,uint32_t n){(void)h;for(uint32_t i=0U;i<n;++i){const float y=dj_eq_process_mono_sample(r,(l[i]+rr[i])*.5f);l[i]=y;rr[i]=y;}}
+static void dj_eq_block_mid(audio_fx_runtime_slot_t*r,void*h,float*l,float*rr,uint32_t n){(void)h;for(uint32_t i=0U;i<n;++i){const float m=(l[i]+rr[i])*.5f,s=(l[i]-rr[i])*.5f,y=dj_eq_process_mono_sample(r,m);l[i]=y+s;rr[i]=y-s;}}
+static void dj_eq_block_side(audio_fx_runtime_slot_t*r,void*h,float*l,float*rr,uint32_t n){(void)h;for(uint32_t i=0U;i<n;++i){const float m=(l[i]+rr[i])*.5f,s=(l[i]-rr[i])*.5f,y=dj_eq_process_mono_sample(r,s);l[i]=m+y;rr[i]=m-y;}}
 
 static audio_fx_stereo_sample_fn spatial_sample_kernel(uint8_t model,uint8_t mode)
 {
     if(model==AUDIO_FX_MODEL_OFF)return NULL;
+    if(model==AUDIO_FX_MODEL_DJ_EQ)
+    {
+        switch(mode)
+        {
+            case AUDIO_FX_SPATIAL_MONO:return dj_eq_sample_mono;
+            case AUDIO_FX_SPATIAL_MID:return dj_eq_sample_mid;
+            case AUDIO_FX_SPATIAL_SIDE:return dj_eq_sample_side;
+            case AUDIO_FX_SPATIAL_STEREO:return dj_eq_sample_stereo;
+            default:return NULL;
+        }
+    }
     switch(mode)
     {
         case AUDIO_FX_SPATIAL_MONO:return spatial_sample_mono;
@@ -328,7 +347,17 @@ static audio_fx_stereo_sample_fn spatial_sample_kernel(uint8_t model,uint8_t mod
 static audio_fx_stereo_block_fn spatial_block_kernel(uint8_t model,uint8_t mode)
 {
     if(model==AUDIO_FX_MODEL_OFF)return NULL;
-    if(model==AUDIO_FX_MODEL_DJ_EQ)return stereo_block_dj_eq;
+    if(model==AUDIO_FX_MODEL_DJ_EQ)
+    {
+        switch(mode)
+        {
+            case AUDIO_FX_SPATIAL_MONO:return dj_eq_block_mono;
+            case AUDIO_FX_SPATIAL_MID:return dj_eq_block_mid;
+            case AUDIO_FX_SPATIAL_SIDE:return dj_eq_block_side;
+            case AUDIO_FX_SPATIAL_STEREO:return stereo_block_dj_eq;
+            default:return NULL;
+        }
+    }
     switch(mode)
     {
         case AUDIO_FX_SPATIAL_MONO:return(model==AUDIO_FX_MODEL_DRIFT)?drift_block_mono:spatial_block_mono;

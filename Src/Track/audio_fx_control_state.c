@@ -39,6 +39,23 @@ static uint8_t audio_fx_control_model_is_valid(uint8_t model)
         || (model == AUDIO_FX_MODEL_DJ_EQ));
 }
 
+uint8_t audio_fx_control_model_capabilities(uint8_t model)
+{
+    if (audio_fx_control_model_is_valid(model) == 0U) return 0U;
+    if (model == AUDIO_FX_MODEL_XFADE) return AUDIO_FX_CAP_SPATIAL_STEREO;
+    return (uint8_t)(AUDIO_FX_CAP_FILTER_POSITION | AUDIO_FX_CAP_ORDER
+        | AUDIO_FX_CAP_SPATIAL_MONO | AUDIO_FX_CAP_SPATIAL_STEREO
+        | AUDIO_FX_CAP_SPATIAL_MID | AUDIO_FX_CAP_SPATIAL_SIDE);
+}
+
+uint8_t audio_fx_control_entity_capabilities(brick_entity_id_t entity)
+{
+    if (entity >= BRICK_ENTITY_CAPACITY) return 0U;
+    const audio_fx_control_values_t *const state=&g_audio_fx_control[entity];
+    return (uint8_t)(audio_fx_control_model_capabilities(state->model_a)
+        & audio_fx_control_model_capabilities(state->model_b));
+}
+
 static uint8_t audio_fx_control_prepare_filter_position_for_voices(
     brick_entity_id_t entity, audio_fx_filter_pos_t requested,
     uint8_t candidate_voice_count,
@@ -286,9 +303,9 @@ uint8_t audio_fx_control_state_reset(brick_entity_id_t entity)
 }
 
 uint8_t audio_fx_control_state_get(brick_entity_id_t entity,audio_fx_control_config_t*out){if(entity>=BRICK_ENTITY_TOP_LEVEL_COUNT||out==0)return 0U;*out=g_audio_fx_control[entity].config;return 1U;}
-uint8_t audio_fx_control_set_filter_position(brick_entity_id_t entity,audio_fx_filter_pos_t position){audio_fx_filter_pos_t canonical;if(!audio_fx_control_prepare_filter_position(entity,position,&canonical))return 0U;if(!audio_fx_control_publish(entity,CONTROL_AUDIO_FX_FILTER_POSITION,0U,(float)canonical))return 0U;g_audio_fx_control[entity].config.filter_position=canonical;return 1U;}
-uint8_t audio_fx_control_set_order(brick_entity_id_t entity,audio_fx_order_t order){if(entity>=BRICK_ENTITY_TOP_LEVEL_COUNT||order>=AUDIO_FX_ORDER_COUNT)return 0U;if(!audio_fx_control_publish(entity,CONTROL_AUDIO_FX_ORDER,0U,(float)order))return 0U;g_audio_fx_control[entity].config.order=order;return 1U;}
-uint8_t audio_fx_control_set_spatial_mode(brick_entity_id_t entity,audio_fx_slot_t slot,uint8_t mode){if(entity>=BRICK_ENTITY_TOP_LEVEL_COUNT||slot>=AUDIO_FX_SLOT_COUNT||mode>=4U)return 0U;if(!audio_fx_control_publish(entity,CONTROL_AUDIO_FX_SPATIAL_MODE,(uint8_t)slot,(float)mode))return 0U;g_audio_fx_control[entity].config.spatial_mode[slot]=mode;return 1U;}
+uint8_t audio_fx_control_set_filter_position(brick_entity_id_t entity,audio_fx_filter_pos_t position){audio_fx_filter_pos_t canonical;if((audio_fx_control_entity_capabilities(entity)&AUDIO_FX_CAP_FILTER_POSITION)==0U)return 0U;if(!audio_fx_control_prepare_filter_position(entity,position,&canonical))return 0U;if(!audio_fx_control_publish(entity,CONTROL_AUDIO_FX_FILTER_POSITION,0U,(float)canonical))return 0U;g_audio_fx_control[entity].config.filter_position=canonical;return 1U;}
+uint8_t audio_fx_control_set_order(brick_entity_id_t entity,audio_fx_order_t order){if(entity>=BRICK_ENTITY_TOP_LEVEL_COUNT||order>=AUDIO_FX_ORDER_COUNT||(audio_fx_control_entity_capabilities(entity)&AUDIO_FX_CAP_ORDER)==0U)return 0U;if(!audio_fx_control_publish(entity,CONTROL_AUDIO_FX_ORDER,0U,(float)order))return 0U;g_audio_fx_control[entity].config.order=order;return 1U;}
+uint8_t audio_fx_control_set_spatial_mode(brick_entity_id_t entity,audio_fx_slot_t slot,uint8_t mode){if(entity>=BRICK_ENTITY_TOP_LEVEL_COUNT||slot>=AUDIO_FX_SLOT_COUNT||mode>=AUDIO_FX_SPATIAL_COUNT)return 0U;const uint8_t model=(slot==AUDIO_FX_SLOT_B)?g_audio_fx_control[entity].model_b:g_audio_fx_control[entity].model_a;const uint8_t required=(uint8_t)(AUDIO_FX_CAP_SPATIAL_MONO<<mode);if((audio_fx_control_model_capabilities(model)&required)==0U)return 0U;if(!audio_fx_control_publish(entity,CONTROL_AUDIO_FX_SPATIAL_MODE,(uint8_t)slot,(float)mode))return 0U;g_audio_fx_control[entity].config.spatial_mode[slot]=mode;return 1U;}
 
 uint8_t audio_fx_control_state_get_param(brick_entity_id_t entity,
                                          param_id_t id, float *out_value)
@@ -351,6 +368,9 @@ uint8_t audio_fx_control_state_prepare_for_polyphony(
             ||(audio_fx_control_prepare_project_model(entity,ids[0],values[0],&context)==0U)
             ||(audio_fx_control_prepare_project_model(entity,ids[4],values[4],&context)==0U)
             ||(audio_fx_control_prepare_finalize(entity,&context)==0U))return 0U;
+    for(uint8_t slot=0U;slot<AUDIO_FX_SLOT_COUNT;++slot)
+        if(context.model[slot]==AUDIO_FX_MODEL_XFADE)
+            out_prepared->config.spatial_mode[slot]=AUDIO_FX_SPATIAL_STEREO;
     for(uint8_t i=0U;i<10U;++i)
     {
         float canonical=0.0f;

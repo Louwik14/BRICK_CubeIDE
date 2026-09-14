@@ -29,6 +29,16 @@ typedef struct
     uint8_t model[2U];
 } audio_fx_control_prepare_context_t;
 
+enum
+{
+    AUDIO_FX_CAP_FILTER_POSITION = 1U << 0,
+    AUDIO_FX_CAP_ORDER = 1U << 1,
+    AUDIO_FX_CAP_SPATIAL_MONO = 1U << 2,
+    AUDIO_FX_CAP_SPATIAL_STEREO = 1U << 3,
+    AUDIO_FX_CAP_SPATIAL_MID = 1U << 4,
+    AUDIO_FX_CAP_SPATIAL_SIDE = 1U << 5
+};
+
 void audio_fx_control_state_init(void);
 void audio_fx_control_state_make_default(audio_fx_control_state_t *out);
 uint8_t audio_fx_control_state_reset(brick_entity_id_t entity);
@@ -58,6 +68,8 @@ uint8_t audio_fx_control_state_bulk_add_delta(
 uint8_t audio_fx_control_state_install_prepared(
     brick_entity_id_t entity, const audio_fx_control_state_t *prepared);
 uint8_t audio_fx_control_state_validate(const audio_fx_control_state_t *state);
+uint8_t audio_fx_control_model_capabilities(uint8_t model);
+uint8_t audio_fx_control_entity_capabilities(brick_entity_id_t entity);
 uint8_t audio_fx_control_prepare_context_init(
     brick_entity_id_t entity, audio_fx_control_prepare_context_t *context);
 uint8_t audio_fx_control_prepare_param(
