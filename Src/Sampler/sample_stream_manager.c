@@ -10,6 +10,7 @@
 #include "Sampler/sample_stream_scheduler.h"
 #include "Sampler/sample_stream_transport.h"
 #include "Platform/memory_layout.h"
+#include "Storage/rec_latency_probe.h"
 #include "stm32h7xx_hal.h"
 
 #define SAMPLE_STREAM_CANCEL_REASON_RELEASE_KEY (3U)
@@ -346,12 +347,19 @@ static uint8_t sample_stream_manager_submit_prefill(
     if (sample_stream_transport_submit(
             &pending->command, &pending->transport_sequence) == 0U)
     {
+        if(domain == SAMPLE_AUDIO_DOMAIN_REC)
+            g_rec_latency_probe.preload_not_now_count++;
         (void)sample_page_cache_finish_loading(
             &token, SAMPLE_PAGE_FINISH_ERROR);
         return 0U;
     }
     pending->active = 1U;
     ++g_sample_stream_manager_pending_count;
+    if(domain == SAMPLE_AUDIO_DOMAIN_REC) {
+        g_rec_latency_probe.preload_sd_read_count++;
+        if(g_rec_latency_probe.t_preload_first_io == 0U)
+            g_rec_latency_probe.t_preload_first_io = rec_latency_probe_now();
+    }
     return 1U;
 }
 
@@ -363,6 +371,9 @@ void sample_stream_manager_service(uint32_t byte_budget)
     }
 
     uint32_t pages_this_call = 0U;
+    if((g_rec_latency_probe.t_preload_first_request != 0U)
+            && (g_rec_latency_probe.t_preload_all_ready == 0U))
+        g_rec_latency_probe.preload_service_count++;
 
     if (g_sample_stream_manager_pending_count != 0U)
     {
@@ -373,6 +384,10 @@ void sample_stream_manager_service(uint32_t byte_budget)
         {
             const uint8_t finished = sample_stream_manager_finish_io(
                 &g_sample_stream_manager_pending_io[0], &pending_result);
+            if(g_sample_stream_manager_pending_io[0].target.key.domain == SAMPLE_AUDIO_DOMAIN_REC) {
+                g_rec_latency_probe.t_preload_last_io_done = rec_latency_probe_now();
+                if(finished != 0U) g_rec_latency_probe.preload_pages_ready++;
+            }
             if (g_sample_stream_manager_pending_count > 1U)
             {
                 g_sample_stream_manager_pending_io[0] =
@@ -385,6 +400,7 @@ void sample_stream_manager_service(uint32_t byte_budget)
             pages_this_call = (finished != 0U) ? 1U : 0U;
             return;
         }
+        g_rec_latency_probe.preload_not_now_count++;
         if (g_sample_stream_manager_pending_count >= 2U)
         {
             return;
@@ -454,11 +470,18 @@ void sample_stream_manager_service(uint32_t byte_budget)
         if (sample_stream_transport_submit(
                 &pending->command, &pending->transport_sequence) == 0U)
         {
+            if(target.key.domain == SAMPLE_AUDIO_DOMAIN_REC)
+                g_rec_latency_probe.preload_not_now_count++;
             (void)sample_stream_manager_finish_io(pending, &io_result);
             return;
         }
         pending->active = 1U;
         ++g_sample_stream_manager_pending_count;
+        if(target.key.domain == SAMPLE_AUDIO_DOMAIN_REC) {
+            g_rec_latency_probe.preload_sd_read_count++;
+            if(g_rec_latency_probe.t_preload_first_io == 0U)
+                g_rec_latency_probe.t_preload_first_io = rec_latency_probe_now();
+        }
         if (sample_stream_transport_take_result(
                 g_sample_stream_manager_pending_io[0].transport_sequence,
                 &io_result) == 0U)
@@ -484,6 +507,10 @@ void sample_stream_manager_service(uint32_t byte_budget)
         if (sample_stream_manager_finish_io(pending, &io_result) == 0U)
         {
             return;
+        }
+        if(pending->target.key.domain == SAMPLE_AUDIO_DOMAIN_REC) {
+            g_rec_latency_probe.t_preload_last_io_done = rec_latency_probe_now();
+            g_rec_latency_probe.preload_pages_ready++;
         }
         ++pages_this_call;
 

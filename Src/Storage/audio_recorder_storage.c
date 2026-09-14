@@ -681,6 +681,8 @@ void audio_recorder_storage_service(uint32_t session_id,
             runtime->phase = AUDIO_RECORDER_STORAGE_DRAINING;
             if(g_rec_latency_probe.t_closed_session == 0U)
                 g_rec_latency_probe.t_closed_session = rec_latency_probe_now();
+            g_rec_latency_probe.rec_frames_total = accepted_frames;
+            g_rec_latency_probe.rec_pcm_bytes_total = (uint32_t)accepted_tail;
         }
     }
 

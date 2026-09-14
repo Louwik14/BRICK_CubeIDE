@@ -260,6 +260,7 @@ recorder_file_reservation_result_t recorder_file_reservation_extend_begin(
     g_rec_latency_probe.extend_count++;
     g_rec_latency_probe.extend_last_start_t = rec_latency_probe_now();
     g_rec_latency_probe.extend_requested_bytes = (uint32_t)additional_bytes;
+    g_rec_latency_probe.extend_total_requested_bytes += (uint32_t)additional_bytes;
     g_rec_latency_probe.extend_granted_bytes = 0U;
     g_rec_latency_probe.filesystem_last_job_type = RECORDER_FILE_JOB_EXTEND;
     (void)before_reserved;
@@ -641,11 +642,15 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
                 g_rec_latency_probe.extend_total_time += d;
                 if(d > g_rec_latency_probe.extend_max_duration)
                     g_rec_latency_probe.extend_max_duration = d;
+                if((g_rec_latency_probe.extend_min_duration == 0U)
+                        || (d < g_rec_latency_probe.extend_min_duration))
+                    g_rec_latency_probe.extend_min_duration = d;
             }
             g_rec_latency_probe.extend_granted_bytes =
                 (uint32_t)(session->fs_state.reserved_bytes
                     - (session->job_target_file_bytes
                         - g_rec_latency_probe.extend_requested_bytes));
+            g_rec_latency_probe.extend_total_granted_bytes += g_rec_latency_probe.extend_granted_bytes;
         }
         else if(active_phase == RECORDER_FILE_JOB_COMMIT)
         {

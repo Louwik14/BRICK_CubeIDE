@@ -90,6 +90,15 @@ static void register_build_stream(void)
     g_build_stream_registered = 1U;
     g_build_stream_key = key;
     g_build_stream_readable_frames = readable_frames;
+    g_rec_latency_probe.preload_request_count++;
+    g_rec_latency_probe.preload_pages_requested = SAMPLE_PAGE_MIN_READY_PAGES;
+    if(g_rec_latency_probe.t_preload_first_request == 0U)
+        g_rec_latency_probe.t_preload_first_request = rec_latency_probe_now();
+    for(uint32_t page = 0U; page < SAMPLE_PAGE_MIN_READY_PAGES; ++page) {
+        if(sample_page_cache_get_page_state_key(key, page) == SAMPLE_PAGE_READY)
+            g_rec_latency_probe.preload_cache_hit_count++;
+        else g_rec_latency_probe.preload_cache_miss_count++;
+    }
     (void)sample_page_cache_reserve_start_pages_key(
         key, 0U, SAMPLE_PAGE_MIN_READY_PAGES);
     if(g_rec_latency_probe.t_preload_requested == 0U)
@@ -125,6 +134,8 @@ static uint8_t publish_stop(audio_recorder_client_t client, uint64_t sample_time
     if(g_audio_recorder.client != client) return 0U;
     if(g_rec_latency_probe.t_stop_requested == 0U)
         g_rec_latency_probe.t_stop_requested = rec_latency_probe_now();
+    g_rec_latency_probe.rec_duration_ticks =
+        g_rec_latency_probe.t_stop_requested - g_rec_latency_probe.t_rec_start;
     return control_rt_publish_record(CONTROL_AUDIO_RECORD_STOP, 0U,
         g_audio_recorder_control_session, (uint8_t)client, sample_time);
 }
@@ -309,6 +320,10 @@ void audio_recorder_service(void)
                         != SAMPLE_PAGE_READY) pages_ready = 0U;
             if((pages_ready != 0U) && (g_rec_latency_probe.t_pages_ready == 0U))
                 g_rec_latency_probe.t_pages_ready = rec_latency_probe_now();
+            if((pages_ready != 0U) && (g_rec_latency_probe.t_preload_all_ready == 0U)) {
+                g_rec_latency_probe.t_preload_all_ready = rec_latency_probe_now();
+                g_rec_latency_probe.preload_pages_ready = ready_pages;
+            }
             if((sample_page_cache_get_registration_epoch_key(key, &epoch) != 0U)
                     && (pages_ready != 0U)
                     && (rec_source_publish_building(frames, epoch) != 0U))
