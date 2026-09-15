@@ -201,6 +201,16 @@ static int16_t brick6_braids_runtime_pitch_to_q7(const brick6_braids_runtime_voi
     return (int16_t)(note * 128.0f + 0.5f);
 }
 
+static int16_t brick6_braids_runtime_pitch_for_rate(int16_t pitch_q7, uint8_t rate_96k)
+{
+    /* Braids increments are calibrated for 96 kHz: 48 kHz needs one octave. */
+    if (rate_96k != 0U) return pitch_q7;
+    const int32_t compensated = (int32_t)pitch_q7 + (12L * 128L);
+    /* All Braids model increment lookups are safe below the 128-note boundary. */
+    return (int16_t)((compensated >= (128L * 128L))
+        ? ((128L * 128L) - 1L) : compensated);
+}
+
 static braids::MacroOscillatorShape brick6_braids_runtime_shape_from_edit(float edit)
 {
     const int index = (int)(brick6_braids_runtime_clamp(edit, 0.0f, kBraidsEditMax) + 0.5f);
@@ -289,7 +299,8 @@ static void brick6_braids_runtime_init_instance(brick6_braids_runtime_instance_t
         osc->oscillator.Init();
         osc->oscillator.set_shape(brick6_braids_runtime_shape_from_edit(osc->voice.edit));
         osc->pitch_current_q7 = (float)brick6_braids_runtime_pitch_to_q7(&osc->voice, 0.0f);
-        osc->oscillator.set_pitch((int16_t)osc->pitch_current_q7);
+        osc->oscillator.set_pitch(brick6_braids_runtime_pitch_for_rate(
+            (int16_t)osc->pitch_current_q7, 0U));
         osc->oscillator.set_parameters(
             brick6_braids_runtime_float_to_u15(osc->voice.timbre),
             brick6_braids_runtime_float_to_u15(osc->voice.color));
@@ -901,7 +912,8 @@ static uint8_t brick6_braids_runtime_render_core(uint8_t instance_id, float *out
                 osc->pitch_current_q7 = pitch_target_q7[osc_index];
                 osc->parameter_timbre_current = parameter_timbre_target[osc_index];
                 osc->parameter_color_current = parameter_color_target[osc_index];
-                osc->oscillator.set_pitch((int16_t)(osc->pitch_current_q7 + 0.5f));
+                osc->oscillator.set_pitch(brick6_braids_runtime_pitch_for_rate(
+                    (int16_t)(osc->pitch_current_q7 + 0.5f), instance->running_rate_96k));
                 osc->oscillator.set_parameters(
                     brick6_braids_runtime_float_to_u15(osc->parameter_timbre_current),
                     brick6_braids_runtime_float_to_u15(osc->parameter_color_current));
@@ -1055,7 +1067,8 @@ static void brick6_braids_runtime_restart_rate(brick6_braids_runtime_instance_t 
         brick6_braids_runtime_osc_t *const osc = &instance->osc[i];
         osc->oscillator.Init();
         osc->oscillator.set_shape(brick6_braids_runtime_shape_from_edit(osc->voice.edit));
-        osc->oscillator.set_pitch((int16_t)osc->pitch_current_q7);
+        osc->oscillator.set_pitch(brick6_braids_runtime_pitch_for_rate(
+            (int16_t)osc->pitch_current_q7, instance->running_rate_96k));
         osc->oscillator.set_parameters(
             brick6_braids_runtime_float_to_u15(osc->parameter_timbre_current),
             brick6_braids_runtime_float_to_u15(osc->parameter_color_current));
