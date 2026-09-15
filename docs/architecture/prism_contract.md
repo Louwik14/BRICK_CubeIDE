@@ -14,17 +14,30 @@ semitones). `DRIFT` adds an independent random pitch offset to each oscillator a
 The offsets are held for the voice lifetime, are not mean-centred, and range up
 to approximately +/-12 cents per oscillator.
 
+For the temporary Braids A/B test, the `MOD / PHASE` UI exposes a local `RATE`
+switch (`48K`/`96K`) in the former `DRIFT` slot. `DRIFT` retains its parameter ID,
+backend, modulation route and project persistence; stored values still apply at
+NOTE ON. `RATE` defaults to `48K` after runtime initialization and is not stored
+in projects.
+
 ## Braids block clock
 
 The BRICK callback remains 64 samples. Every Prism `MacroOscillator` generates
 an atomic 24-sample Braids block and retains its unconsumed output in a local
 24-sample cache. BRICK consumes that cache across callback boundaries; it never
 splits a Braids render. Model preparation, block-rate decisions and parameter
-interpolators therefore run only at the original 2 kHz cadence. In particular,
+interpolators therefore run at 2 kHz in `48K` and at the native 4 kHz in `96K`.
+In particular,
 the VOWEL consonant counter, WAVE_LINE smoothing/crossfade, GRANULAR_CLOUD grain
 renewal, and WAVETABLES/CLOCKED_NOISE hysteresis do not treat a BRICK boundary
 as a new Braids block. Model scratch storage is shared because oscillators are
-rendered sequentially; cached audio remains private to each oscillator.
+rendered sequentially; cached audio remains private to each oscillator. In `96K`,
+each 64-frame BRICK callback consumes 128 internal Braids samples. The same cache
+bridges the 128/24 boundary, and a 15-tap unity-DC half-band FIR decimates the
+internal stream 2:1 before the BRICK output. Changing RATE restarts oscillator,
+render-cache, waveform-phase and decimator state for the affected voice while
+keeping its note, gate and control values. The output envelope rises from zero
+after a switch.
 
 ## Live waveform pages
 

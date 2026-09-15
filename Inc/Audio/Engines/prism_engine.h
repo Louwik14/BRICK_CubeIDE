@@ -50,6 +50,8 @@ void brick6_braids_runtime_set_balance(uint8_t instance_id, float balance);
 void brick6_braids_runtime_set_tune(uint8_t instance_id, float semitones);
 void brick6_braids_runtime_set_detune(uint8_t instance_id, float semitones);
 void brick6_braids_runtime_set_drift(uint8_t instance_id, float amount);
+void brick6_braids_runtime_set_rate_96k(uint8_t instance_id, uint8_t enabled);
+uint8_t brick6_braids_runtime_get_rate_96k(uint8_t instance_id);
 void brick6_braids_runtime_set_vca_release_seconds(uint8_t instance_id, float release_s);
 
 void brick6_braids_runtime_note_on(uint8_t instance_id, float note, float velocity);
