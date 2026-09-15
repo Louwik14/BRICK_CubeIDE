@@ -3,6 +3,7 @@
 
 #include "Storage/audio_recorder.h"
 #include "Storage/waveform_cache.h"
+#include "Storage/waveform_service.h"
 #include "Track/entity_topology.h"
 
 #include <stdint.h>
@@ -207,6 +208,7 @@ uint8_t sample_capture_model_global_overview_minmax(uint32_t start_frame,
                                                     int16_t *out_min,
                                                     int16_t *out_max);
 uint8_t sample_capture_model_waveform_cache_ready(void);
+uint8_t sample_capture_model_rec_waveform_source(waveform_source_t *out_source);
 uint8_t sample_capture_model_waveform_cache_get_handle(waveform_cache_handle_t *out_handle);
 void sample_capture_model_note_rec_edit_first_render(void);
 void sample_capture_model_request_detail_waveform(uint32_t start_frame,

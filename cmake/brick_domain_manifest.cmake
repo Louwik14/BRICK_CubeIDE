@@ -118,6 +118,7 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/wav_loader.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/wav_parser.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/waveform_cache.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/waveform_service.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/control_music_output.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/control_routing.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/track_catalog.c"

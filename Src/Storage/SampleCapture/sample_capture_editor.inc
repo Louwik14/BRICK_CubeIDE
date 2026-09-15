@@ -830,6 +830,19 @@ uint8_t sample_capture_model_waveform_cache_ready(void)
     return g_sample_capture.wave_cache_ready;
 }
 
+uint8_t sample_capture_model_rec_waveform_source(waveform_source_t *out_source)
+{
+    if((out_source == 0) || (g_sample_capture.state.take_valid == 0U)
+            || (g_sample_capture.visible_rec_generation == 0U)
+            || (waveform_rec_current_source(out_source) == 0U)
+            || (out_source->key.generation != g_sample_capture.visible_rec_generation)
+            || (out_source->frame_count != g_sample_capture.state.recorded_frames))
+    {
+        return 0U;
+    }
+    return 1U;
+}
+
 uint8_t sample_capture_model_waveform_cache_get_handle(waveform_cache_handle_t *out_handle)
 {
     if((out_handle == 0) || (g_sample_capture.wave_cache_ready == 0U))

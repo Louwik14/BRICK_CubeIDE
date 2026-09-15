@@ -139,6 +139,43 @@ static uint8_t ui_page_audio_rec_clip_line_y(int *x0,
     return 1U;
 }
 
+static uint8_t ui_page_audio_rec_draw_rec_service_overview(int x,
+                                                          int y,
+                                                          int w,
+                                                          int h,
+                                                          uint32_t view_start_frame,
+                                                          uint32_t view_frames,
+                                                          uint16_t vertical_ref,
+                                                          uint16_t vzoom_q8)
+{
+    const int inner_w = w - 2;
+    const int inner_h = h - 2;
+    if((inner_w <= 0) || (inner_w > 126) || (inner_h <= 2)
+            || (vertical_ref == 0U))
+    {
+        return 0U;
+    }
+    waveform_source_t source;
+    if(sample_capture_model_rec_waveform_source(&source) == 0U)
+    {
+        return 0U;
+    }
+    waveform_column_t columns[126];
+    if(waveform_request(&source, view_start_frame, view_frames,
+                        (uint8_t)inner_w, columns) != WAVEFORM_RESULT_READY)
+    {
+        return 0U;
+    }
+    const int cy = y + (h / 2);
+    for(int col = 0; col < inner_w; ++col)
+    {
+        ui_page_audio_rec_draw_minmax_column(x + 1 + col, y + 1,
+            inner_h, cy, columns[col].min, columns[col].max,
+            vertical_ref, vzoom_q8);
+    }
+    return 1U;
+}
+
 static void ui_page_audio_rec_draw_line_waveform(const sample_capture_state_t *state,
                                                  int x,
                                                  int y,
@@ -225,6 +262,18 @@ static uint8_t ui_page_audio_rec_draw_global_overview(int x,
     const int inner_h = h - 2;
     const int cy = y + (h / 2);
 
+    if(ui_page_audio_rec_draw_rec_service_overview(x, y, w, h,
+            view_start_frame, view_frames, vertical_ref, vzoom_q8) != 0U)
+    {
+        return 1U;
+    }
+    waveform_source_t current_rec;
+    if(waveform_rec_current_source(&current_rec) != 0U)
+    {
+        /* A stale editor state must never fall through to old REC bins. */
+        return 0U;
+    }
+    /* Legacy non-REC overview remains until the later migration passes. */
     if((inner_w <= 0) || (inner_h <= 2) || (vertical_ref == 0U)
             || (sample_capture_model_global_overview_ready() == 0U))
     {
@@ -558,8 +607,17 @@ static void ui_page_audio_rec_draw_edit_overview(const sample_capture_state_t *s
     drv_display_draw_rect(x, y, w, h);
 
     const uint16_t overview_peak = sample_capture_model_global_overview_peak();
-    if((overview_peak != 0U) && (sample_capture_model_global_overview_ready() != 0U))
+    if(overview_peak != 0U)
     {
+        waveform_source_t current_rec;
+        if(ui_page_audio_rec_draw_rec_service_overview(x, y, w, h,
+                0U, state->recorded_frames, overview_peak, 256U) != 0U)
+        {
+            /* REC summary is already READY; no legacy bin lookup is needed. */
+        }
+        else if((waveform_rec_current_source(&current_rec) == 0U)
+                && (sample_capture_model_global_overview_ready() != 0U))
+        {
         const int cy = y + (h / 2);
         for(int col = 0; col < inner_w; ++col)
         {
@@ -590,6 +648,7 @@ static void ui_page_audio_rec_draw_edit_overview(const sample_capture_state_t *s
                                                      overview_peak,
                                                      256U);
             }
+        }
         }
     }
 

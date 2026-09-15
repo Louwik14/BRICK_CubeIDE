@@ -189,6 +189,7 @@ uint8_t rec_source_waveform_finish(rec_source_waveform_summary_t *out_summary)
     if (g_rec_source_waveform.fixed_length != 0U)
     {
         out_summary->frames_per_bin = 0U;
+        out_summary->bin_domain_frames = g_rec_source_waveform.frame_limit;
         out_summary->bin_count = (g_rec_source_waveform.frame_limit
                 < REC_SOURCE_WAVEFORM_BINS)
             ? (uint16_t)g_rec_source_waveform.frame_limit
@@ -196,6 +197,7 @@ uint8_t rec_source_waveform_finish(rec_source_waveform_summary_t *out_summary)
     }
     else
     {
+        out_summary->bin_domain_frames = out_summary->frame_count;
         uint32_t bins = (out_summary->frame_count + out_summary->frames_per_bin - 1U)
             / out_summary->frames_per_bin;
         if (bins > REC_SOURCE_WAVEFORM_BINS) bins = REC_SOURCE_WAVEFORM_BINS;

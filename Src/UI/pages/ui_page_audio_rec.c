@@ -4,6 +4,7 @@
 #include "drv_display.h"
 #include "font.h"
 #include "Storage/sample_capture.h"
+#include "Storage/waveform_service.h"
 #include "ui_event.h"
 #include "ui_page_manager.h"
 
