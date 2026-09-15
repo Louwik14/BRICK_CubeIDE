@@ -28,6 +28,7 @@
 #include "Storage/audio_recorder.h"
 #include "Storage/undo_v2.h"
 #include "Storage/waveform_cache.h"
+#include "Storage/waveform_service.h"
 #include "Platform/brick6_sd_config.h"
 #include "Platform/idle_latency_diag.h"
 #include "Platform/crash_library.h"
@@ -165,6 +166,7 @@ static void brick6_app_service_storage(void)
         pattern_load_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES / 2U);
         idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_PATTERN, started);
         started = idle_latency_diag_begin();
+        waveform_service_storage_service();
         waveform_cache_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
         idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_WAVEFORM_CACHE,
                                       started);
