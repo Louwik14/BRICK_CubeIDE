@@ -1,6 +1,7 @@
 #include "Storage/waveform_service.h"
 
 #include "Storage/rec_source.h"
+#include "Sampler/sample_page_cache.h"
 #include "Storage/sample_capture.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/waveform_cache.h"
@@ -415,6 +416,102 @@ static uint8_t waveform_render_level(const waveform_source_t *source,
     return 1U;
 }
 
+static int16_t waveform_pcm_to_i16(float value)
+{
+    if(value >= 1.0f) { return 32767; }
+    if(value <= -1.0f) { return -32768; }
+    return (int16_t)(value * 32768.0f);
+}
+
+static uint8_t waveform_pcm_render(const waveform_source_t *source,
+                                   uint32_t start, uint32_t count,
+                                   uint8_t width, waveform_column_t *columns)
+{
+    sample_page_span_t span;
+    uint32_t loaded_page = UINT32_MAX;
+    uint64_t cursor = start;
+    uint32_t remainder = 0U;
+    const uint32_t frame_step = count / width;
+    const uint32_t frame_remainder = count % width;
+    for(uint8_t col = 0U; col < width; ++col)
+    {
+        const uint32_t frame0 = (uint32_t)cursor;
+        cursor += frame_step;
+        remainder += frame_remainder;
+        if(remainder >= width) { remainder -= width; cursor++; }
+        uint32_t frame1 = (uint32_t)cursor;
+        if(frame1 <= frame0) { frame1 = frame0 + 1U; }
+        if(frame1 > source->frame_count) { frame1 = source->frame_count; }
+        int16_t min = 32767;
+        int16_t max = -32768;
+        for(uint32_t frame = frame0; frame < frame1; ++frame)
+        {
+            const uint32_t page = frame / SAMPLE_PAGE_FRAMES;
+            if(page != loaded_page)
+            {
+                if(sample_page_cache_control_resolve_page_key(source->key,
+                    source->registration_epoch, page, &span) == 0U)
+                {
+                    return 0U;
+                }
+                loaded_page = page;
+            }
+            if(frame < span.start_frame
+                    || frame - span.start_frame >= span.frame_count
+                    || span.stride_floats != 2U)
+            {
+                return 0U;
+            }
+            const uint32_t offset = (frame - span.start_frame) * 2U;
+            const int16_t left = waveform_pcm_to_i16(
+                span.frames_interleaved[offset]);
+            const int16_t right = waveform_pcm_to_i16(
+                span.frames_interleaved[offset + 1U]);
+            if(left < min) { min = left; }
+            if(right < min) { min = right; }
+            if(left > max) { max = left; }
+            if(right > max) { max = right; }
+        }
+        columns[col].min = min;
+        columns[col].max = max;
+    }
+    return 1U;
+}
+
+static uint8_t waveform_pcm_request(const waveform_source_t *source,
+                                    uint32_t start, uint32_t count,
+                                    uint8_t width, waveform_column_t *columns)
+{
+    sample_page_stream_info_t info;
+    if(sample_page_cache_get_stream_info_key(source->key, &info) == 0U
+            || info.registration_epoch != source->registration_epoch
+            || info.total_frames < source->frame_count
+            || info.format != SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED
+            || info.frames_per_page != SAMPLE_PAGE_FRAMES
+            || info.stride_floats != 2U)
+    {
+        return 0U;
+    }
+    const uint32_t first = start / SAMPLE_PAGE_FRAMES;
+    const uint32_t last = (start + count - 1U) / SAMPLE_PAGE_FRAMES;
+    for(uint32_t page = first; page <= last; ++page)
+    {
+        (void)sample_page_cache_reserve_page_key(source->key, page);
+    }
+    const uint8_t ready = waveform_pcm_render(source, start,
+                                               count, width, columns);
+    if(first > 0U)
+    {
+        (void)sample_page_cache_reserve_page_key(source->key, first - 1U);
+    }
+    if((uint64_t)(last + 1U) * SAMPLE_PAGE_FRAMES
+            < source->frame_count)
+    {
+        (void)sample_page_cache_reserve_page_key(source->key, last + 1U);
+    }
+    return ready;
+}
+
 uint8_t waveform_rec_current_source(waveform_source_t *out_source)
 {
     rec_source_snapshot_t current;
@@ -449,6 +546,15 @@ waveform_result_t waveform_request(const waveform_source_t *source,
     {
         return WAVEFORM_RESULT_PENDING;
     }
+    /* A visible window no larger than one PCM page can straddle two pages;
+       the shared loader owns misses and the existing audio contracts. */
+    const uint8_t pcm_scale = (uint8_t)(frame_count <= SAMPLE_PAGE_FRAMES);
+    if(pcm_scale != 0U
+            && waveform_pcm_request(source, start_frame, frame_count,
+                pixel_width, columns) != 0U)
+    {
+        return WAVEFORM_RESULT_READY;
+    }
 
     const uint32_t frames_per_pixel = (uint32_t)(((uint64_t)frame_count
         + pixel_width - 1U) / pixel_width);
@@ -471,7 +577,7 @@ waveform_result_t waveform_request(const waveform_source_t *source,
     {
         return WAVEFORM_RESULT_READY;
     }
-    if(have_sidecar != 0U
+    if(pcm_scale == 0U && have_sidecar != 0U
             && waveform_sidecar_range(&sidecar, ideal, start_frame,
                 frame_count, 1U) != 0U
             && waveform_render_level(source, &sidecar, 1U, ideal,
@@ -485,7 +591,7 @@ waveform_result_t waveform_request(const waveform_source_t *source,
     const uint32_t first_bin = start_frame / step;
     const uint32_t last_bin = (uint32_t)(((uint64_t)start_frame
         + frame_count + step - 1U) / step);
-    for(uint32_t bin = first_bin; bin < last_bin; )
+    for(uint32_t bin = first_bin; pcm_scale == 0U && bin < last_bin; )
     {
         const uint32_t tile_index = bin / WAVEFORM_TILE_BINS;
         waveform_tile_t *const tile = waveform_find_tile(source, ideal, tile_index);

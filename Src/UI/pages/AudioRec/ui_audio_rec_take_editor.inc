@@ -5,10 +5,6 @@ static uint16_t ui_page_audio_rec_take_peak(const sample_capture_state_t *state)
     {
         return 0U;
     }
-    if(state->line_peak > peak)
-    {
-        peak = state->line_peak;
-    }
     const uint16_t global_peak = sample_capture_model_global_overview_peak();
     if(global_peak > peak)
     {
@@ -83,62 +79,6 @@ static void ui_page_audio_rec_draw_zero_line(int x, int y, int w, int h)
     drv_display_draw_line(x + 1, cy, x + w - 2, cy);
 }
 
-static int ui_page_audio_rec_sample_to_y(int16_t sample,
-                                         int inner_y,
-                                         int inner_h,
-                                         int cy,
-                                         uint16_t vertical_ref,
-                                         uint16_t vzoom_q8)
-{
-    const int max_amp = (inner_h / 2) - 3;
-    if((max_amp <= 0) || (vertical_ref == 0U))
-    {
-        return cy;
-    }
-
-    (void)inner_y;
-    return cy - (int)(((int64_t)sample * (int64_t)max_amp * (int64_t)vzoom_q8)
-        / ((int64_t)vertical_ref * 256LL));
-}
-
-static uint8_t ui_page_audio_rec_clip_line_y(int *x0,
-                                             int *y0,
-                                             int *x1,
-                                             int *y1,
-                                             int top,
-                                             int bottom)
-{
-    if((*y0 < top && *y1 < top) || (*y0 > bottom && *y1 > bottom))
-    {
-        return 0U;
-    }
-
-    if(*y0 < top || *y0 > bottom)
-    {
-        const int bound = (*y0 < top) ? top : bottom;
-        const int dy = *y1 - *y0;
-        if(dy == 0)
-        {
-            return 0U;
-        }
-        *x0 = *x0 + (int)(((int64_t)(*x1 - *x0) * (int64_t)(bound - *y0)) / (int64_t)dy);
-        *y0 = bound;
-    }
-
-    if(*y1 < top || *y1 > bottom)
-    {
-        const int bound = (*y1 < top) ? top : bottom;
-        const int dy = *y1 - *y0;
-        if(dy == 0)
-        {
-            return 0U;
-        }
-        *x1 = *x0 + (int)(((int64_t)(*x1 - *x0) * (int64_t)(bound - *y0)) / (int64_t)dy);
-        *y1 = bound;
-    }
-    return 1U;
-}
-
 static uint8_t ui_page_audio_rec_draw_rec_service_overview(int x,
                                                           int y,
                                                           int w,
@@ -174,77 +114,6 @@ static uint8_t ui_page_audio_rec_draw_rec_service_overview(int x,
             vertical_ref, vzoom_q8);
     }
     return 1U;
-}
-
-static void ui_page_audio_rec_draw_line_waveform(const sample_capture_state_t *state,
-                                                 int x,
-                                                 int y,
-                                                 int w,
-                                                 int h,
-                                                 uint16_t vertical_ref,
-                                                 uint16_t vzoom_q8,
-                                                 uint16_t *out_segments)
-{
-    const int inner_x = x + 1;
-    const int inner_y = y + 1;
-    const int inner_w = w - 2;
-    const int inner_h = h - 2;
-    const int cy = y + (h / 2);
-
-    if((inner_w <= 1) || (inner_h <= 2) || (state->line_valid == 0U)
-            || (state->line_count < 2U) || (vertical_ref == 0U))
-    {
-        if(out_segments != 0)
-        {
-            *out_segments = 0U;
-        }
-        return;
-    }
-
-    uint16_t segments = 0U;
-    int prev_x = inner_x;
-    int prev_y = ui_page_audio_rec_sample_to_y(state->line[0],
-                                               inner_y,
-                                               inner_h,
-                                               cy,
-                                               vertical_ref,
-                                               vzoom_q8);
-
-    for(uint16_t point = 1U; point < state->line_count; ++point)
-    {
-        const int draw_x = inner_x
-            + (int)(((uint32_t)point * (uint32_t)(inner_w - 1))
-                / (uint32_t)(state->line_count - 1U));
-        const int draw_y = ui_page_audio_rec_sample_to_y(state->line[point],
-                                                         inner_y,
-                                                         inner_h,
-                                                         cy,
-                                                         vertical_ref,
-                                                         vzoom_q8);
-        if(draw_x != prev_x || draw_y != prev_y)
-        {
-            int x0 = prev_x;
-            int y0 = prev_y;
-            int x1 = draw_x;
-            int y1 = draw_y;
-            if(ui_page_audio_rec_clip_line_y(&x0,
-                                             &y0,
-                                             &x1,
-                                             &y1,
-                                             inner_y,
-                                             inner_y + inner_h - 1) != 0U)
-            {
-                drv_display_draw_line(x0, y0, x1, y1);
-                segments++;
-            }
-        }
-        prev_x = draw_x;
-        prev_y = draw_y;
-    }
-    if(out_segments != 0)
-    {
-        *out_segments = segments;
-    }
 }
 
 static void ui_page_audio_rec_invert_active_range(const sample_capture_state_t *state,
@@ -569,77 +438,20 @@ static void ui_page_audio_rec_draw_marker_bar(const sample_capture_state_t *stat
 
     uint8_t waveform_drawn = 0U;
     sample_capture_renderer_debug_t renderer = SAMPLE_CAPTURE_RENDERER_EMPTY;
-    uint16_t draw_line_segments = 0U;
     uint8_t fallback_reason = 0U;
     if((state->view == SAMPLE_CAPTURE_VIEW_REC_EDIT)
             && (state->take_valid != 0U)
             && (state->recorded_frames != 0U))
     {
-        const uint16_t line_columns = (uint16_t)((w > 2) ? (w - 2) : 0);
-        uint32_t samples_per_pixel = view_frames;
-        if(line_columns != 0U)
-        {
-            samples_per_pixel = (view_frames + (uint32_t)line_columns - 1U)
-                / (uint32_t)line_columns;
-        }
-        const uint8_t prefer_old_audio_tile =
-            (uint8_t)((samples_per_pixel < 128U)
-                && (sample_capture_model_view_uses_tile_cache(view_frames) != 0U));
-
-        sample_capture_state_t draw_state = *state;
-        if(prefer_old_audio_tile != 0U)
-        {
-            sample_capture_model_request_line_waveform(view_start_frame,
-                                                       view_frames,
-                                                       line_columns);
-            sample_capture_model_get_state(&draw_state);
-        }
-
-        if((prefer_old_audio_tile != 0U)
-                && (draw_state.line_valid != 0U)
-                && (draw_state.line_start_frame == view_start_frame)
-                && (draw_state.line_frames == view_frames))
-        {
-            ui_page_audio_rec_draw_line_waveform(&draw_state, x, y, w, h,
-                                                 ui_page_audio_rec_edit_vertical_ref(&draw_state),
-                                                 ui_page_audio_rec_vzoom_scale_q8(draw_state.edit_vzoom),
-                                                 &draw_line_segments);
-            waveform_drawn = 1U;
-            renderer = SAMPLE_CAPTURE_RENDERER_OLD_AUDIO_TILE;
-        }
-
-        if((waveform_drawn == 0U)
-                && ui_page_audio_rec_draw_rec_service_overview(x, y, w, h,
-                    view_start_frame, view_frames,
-                    ui_page_audio_rec_edit_vertical_ref(state),
-                    ui_page_audio_rec_vzoom_scale_q8(state->edit_vzoom)) != 0U)
+        if(ui_page_audio_rec_draw_rec_service_overview(x, y, w, h,
+            view_start_frame, view_frames,
+            ui_page_audio_rec_edit_vertical_ref(state),
+            ui_page_audio_rec_vzoom_scale_q8(state->edit_vzoom)) != 0U)
         {
             waveform_drawn = 1U;
             renderer = SAMPLE_CAPTURE_RENDERER_GLOBAL_OVERVIEW;
         }
-
-        if((waveform_drawn == 0U)
-                && (prefer_old_audio_tile != 0U)
-                && (draw_state.line_valid != 0U)
-                && (((draw_state.line_start_frame <= view_start_frame)
-                     && ((draw_state.line_start_frame + draw_state.line_frames)
-                         >= (view_start_frame + view_frames)))
-                    || ((draw_state.line_frames == view_frames)
-                        && (((draw_state.line_start_frame > view_start_frame)
-                                ? (draw_state.line_start_frame - view_start_frame)
-                                : (view_start_frame - draw_state.line_start_frame))
-                            <= (view_frames / 4U)))))
-        {
-            ui_page_audio_rec_draw_line_waveform(&draw_state, x, y, w, h,
-                                                 ui_page_audio_rec_edit_vertical_ref(&draw_state),
-                                                 ui_page_audio_rec_vzoom_scale_q8(draw_state.edit_vzoom),
-                                                 &draw_line_segments);
-            waveform_drawn = 1U;
-            renderer = SAMPLE_CAPTURE_RENDERER_OLD_LINE;
-            fallback_reason = 2U;
-        }
-
-        }
+    }
 
     if(waveform_drawn == 0U)
     {
@@ -676,9 +488,9 @@ static void ui_page_audio_rec_draw_marker_bar(const sample_capture_state_t *stat
                                                  inner_w_dbg,
                                                  samples_per_pixel,
                                                  0U,
-                                                 state->line_valid,
-                                                 state->line_count,
-                                                 draw_line_segments,
+                                                 0U,
+                                                 0U,
+                                                 0U,
                                                  fallback_reason);
 #endif
         (void)waveform_ms;

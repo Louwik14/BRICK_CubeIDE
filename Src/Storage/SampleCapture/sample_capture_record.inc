@@ -150,6 +150,12 @@ static uint8_t sample_capture_sign_crosses(int16_t a, int16_t b)
     return (uint8_t)(((a <= 0) && (b >= 0)) || ((a >= 0) && (b <= 0)));
 }
 
+static uint8_t sample_capture_ready_mono_at(const rec_source_snapshot_t *source,
+                                            uint32_t frame,
+                                            uint32_t *loaded_page,
+                                            sample_page_span_t *span,
+                                            int16_t *out_sample);
+
 static uint32_t sample_capture_add_saturate_u32(uint32_t a, uint32_t b)
 {
     return (b > (0xFFFFFFFFUL - a)) ? 0xFFFFFFFFUL : (a + b);
@@ -204,81 +210,65 @@ static uint32_t sample_capture_snap_to_zcross(uint32_t current,
         return candidate;
     }
 
+    rec_source_snapshot_t source;
+    if(rec_source_current_snapshot(&source) == 0U
+            || source.key.domain != SAMPLE_AUDIO_DOMAIN_REC
+            || source.key.generation != g_sample_capture.visible_rec_generation
+            || source.frame_count != g_sample_capture.state.recorded_frames)
+    {
+        return candidate;
+    }
     uint32_t cover_start = search_start;
-    if(cover_start > min_frame)
+    if(cover_start > min_frame) { cover_start--; }
+    (void)sample_page_cache_reserve_page_key(source.key,
+        cover_start / SAMPLE_PAGE_FRAMES);
+    (void)sample_page_cache_reserve_page_key(source.key,
+        search_end / SAMPLE_PAGE_FRAMES);
+    sample_page_span_t span;
+    uint32_t loaded_page = UINT32_MAX;
+    if(right != 0U)
     {
-        cover_start--;
-    }
-    if(sample_capture_editor_cache_covers(cover_start, (search_end - cover_start) + 1U) != 0U)
-    {
-        if(right != 0U)
+        int16_t prev;
+        if(sample_capture_ready_mono_at(&source, cover_start,
+            &loaded_page, &span, &prev) == 0U)
         {
-            int16_t prev = sample_capture_editor_sample_at(cover_start);
-            for(uint32_t frame = cover_start + 1U; frame <= search_end; ++frame)
-            {
-                const int16_t cur = sample_capture_editor_sample_at(frame);
-                if((frame >= search_start) && (sample_capture_sign_crosses(prev, cur) != 0U))
-                {
-                    return sample_capture_clamp_u32(frame, min_frame, max_frame);
-                }
-                prev = cur;
-                if(frame == 0xFFFFFFFFUL)
-                {
-                    break;
-                }
-            }
+            return candidate;
         }
-        else
+        for(uint32_t frame = cover_start + 1U; frame <= search_end; ++frame)
         {
-            for(uint32_t frame = search_end; frame > cover_start; --frame)
+            int16_t cur;
+            if(sample_capture_ready_mono_at(&source, frame,
+                &loaded_page, &span, &cur) == 0U)
             {
-                if(frame < search_start)
-                {
-                    continue;
-                }
-                const int16_t prev = sample_capture_editor_sample_at(frame - 1U);
-                const int16_t cur = sample_capture_editor_sample_at(frame);
-                if(sample_capture_sign_crosses(prev, cur) != 0U)
-                {
-                    return sample_capture_clamp_u32(frame, min_frame, max_frame);
-                }
+                return candidate;
             }
+            if(frame >= search_start && sample_capture_sign_crosses(prev, cur) != 0U)
+            {
+                return sample_capture_clamp_u32(frame, min_frame, max_frame);
+            }
+            prev = cur;
+            if(frame == UINT32_MAX) { break; }
         }
     }
-
-    if((g_sample_capture_line_hot.valid != 0U)
-            && (g_sample_capture_line_hot.count > 1U)
-            && (g_sample_capture_line_hot.frames != 0U)
-            && (search_start >= g_sample_capture_line_hot.start_frame)
-            && (search_end <= (g_sample_capture_line_hot.start_frame + g_sample_capture_line_hot.frames)))
+    else
     {
-        uint32_t best_frame = candidate;
-        uint32_t best_dist = 0xFFFFFFFFUL;
-        uint16_t best_abs = 0xFFFFU;
-        for(uint16_t point = 0U; point < g_sample_capture_line_hot.count; ++point)
+        for(uint32_t frame = search_end; frame > cover_start; --frame)
         {
-            const uint32_t frame = g_sample_capture_line_hot.start_frame
-                + (uint32_t)(((uint64_t)point * (uint64_t)g_sample_capture_line_hot.frames)
-                    / (uint64_t)(g_sample_capture_line_hot.count - 1U));
-            if((frame < search_start) || (frame > search_end))
+            int16_t prev;
+            int16_t cur;
+            if(sample_capture_ready_mono_at(&source, frame - 1U,
+                    &loaded_page, &span, &prev) == 0U
+                    || sample_capture_ready_mono_at(&source, frame,
+                    &loaded_page, &span, &cur) == 0U)
             {
-                continue;
+                return candidate;
             }
-            const uint16_t abs_v = sample_capture_abs_i16(g_sample_capture_line_hot.points[point]);
-            const uint32_t dist = (frame > current) ? (frame - current) : (current - frame);
-            if((abs_v < best_abs) || ((abs_v == best_abs) && (dist < best_dist)))
+            if(frame >= search_start && sample_capture_sign_crosses(prev, cur) != 0U)
             {
-                best_frame = frame;
-                best_dist = dist;
-                best_abs = abs_v;
+                return sample_capture_clamp_u32(frame, min_frame, max_frame);
             }
-        }
-        if(best_dist != 0xFFFFFFFFUL)
-        {
-            return sample_capture_clamp_u32(best_frame, min_frame, max_frame);
         }
     }
-
     return candidate;
 }
 
@@ -350,6 +340,37 @@ static audio_recorder_lifecycle_result_t sample_capture_prepare_session(void)
 
     g_sample_capture.state.planned_frames = frame_limit;
     return AUDIO_RECORDER_LIFECYCLE_OK;
+}
+
+static uint8_t sample_capture_ready_mono_at(const rec_source_snapshot_t *source,
+                                            uint32_t frame,
+                                            uint32_t *loaded_page,
+                                            sample_page_span_t *span,
+                                            int16_t *out_sample)
+{
+    const uint32_t page = frame / SAMPLE_PAGE_FRAMES;
+    if(page != *loaded_page)
+    {
+        if(sample_page_cache_control_resolve_page_key(source->key,
+            source->registration_epoch, page, span) == 0U)
+        {
+            return 0U;
+        }
+        *loaded_page = page;
+    }
+    if(frame < span->start_frame
+            || frame - span->start_frame >= span->frame_count
+            || span->stride_floats != 2U)
+    {
+        return 0U;
+    }
+    const uint32_t offset = (frame - span->start_frame) * 2U;
+    float mono = (span->frames_interleaved[offset]
+        + span->frames_interleaved[offset + 1U]) * 0.5f;
+    if(mono >= 1.0f) { mono = 0.999969f; }
+    if(mono < -1.0f) { mono = -1.0f; }
+    *out_sample = (int16_t)(mono * 32768.0f);
+    return 1U;
 }
 static uint8_t sample_capture_start_prepared_at(uint64_t sample_time)
 {

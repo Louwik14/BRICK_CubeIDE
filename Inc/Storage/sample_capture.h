@@ -15,9 +15,7 @@ extern "C" {
 #define SAMPLE_CAPTURE_TRACK_COUNT BRICK_ENTITY_TOP_LEVEL_COUNT
 #define SAMPLE_CAPTURE_PATH_MAX AUDIO_RECORDER_PATH_MAX
 #define SAMPLE_CAPTURE_WAVEFORM_FULL_SCALE 32767
-#define SAMPLE_CAPTURE_DETAIL_POINTS 384U
 #define SAMPLE_CAPTURE_DETAIL_VISIBLE_POINTS 126U
-#define SAMPLE_CAPTURE_LINE_POINTS 128U
 #define SAMPLE_CAPTURE_GLOBAL_OVERVIEW_POINTS 4096U
 
 #ifndef SAMPLE_CAPTURE_DEBUG_UART
@@ -105,21 +103,8 @@ typedef enum
 {
     SAMPLE_CAPTURE_RENDERER_EMPTY = 0,
     SAMPLE_CAPTURE_RENDERER_GLOBAL_OVERVIEW,
-    SAMPLE_CAPTURE_RENDERER_OLD_LINE,
-    SAMPLE_CAPTURE_RENDERER_OLD_AUDIO_TILE,
-    SAMPLE_CAPTURE_RENDERER_BRKWAVE_TILE,
-    SAMPLE_CAPTURE_RENDERER_SD_LINE_FALLBACK,
-    SAMPLE_CAPTURE_RENDERER_BUILDING,
     SAMPLE_CAPTURE_RENDERER_ERROR
 } sample_capture_renderer_debug_t;
-
-typedef struct
-{
-    int16_t min;
-    int16_t max;
-    int16_t first;
-    int16_t last;
-} sample_capture_waveform_bucket_t;
 
 typedef struct
 {
@@ -152,17 +137,6 @@ typedef struct
     uint8_t edit_vzoom;
     uint8_t edit_zcross_enabled;
     uint32_t edit_scroll_frame;
-    uint8_t detail_valid;
-    uint32_t detail_start_frame;
-    uint32_t detail_frames;
-    uint16_t detail_count;
-    sample_capture_waveform_bucket_t detail[SAMPLE_CAPTURE_DETAIL_POINTS];
-    uint8_t line_valid;
-    uint32_t line_start_frame;
-    uint32_t line_frames;
-    uint16_t line_count;
-    uint16_t line_peak;
-    int16_t line[SAMPLE_CAPTURE_LINE_POINTS];
     sample_capture_error_t error;
     char temp_path[SAMPLE_CAPTURE_PATH_MAX];
     char final_path[SAMPLE_CAPTURE_PATH_MAX];
@@ -199,8 +173,6 @@ uint8_t sample_capture_model_toggle_usb(void);
 uint8_t sample_capture_model_toggle_overdub(void);
 uint8_t sample_capture_model_step_edit(uint8_t encoder, int16_t delta, uint8_t alt_held);
 uint32_t sample_capture_model_visible_frames_for_zoom(uint32_t recorded_frames, uint8_t zoom);
-uint32_t sample_capture_model_tile_cache_capacity_frames(void);
-uint8_t sample_capture_model_view_uses_tile_cache(uint32_t frame_count);
 uint8_t sample_capture_model_global_overview_ready(void);
 uint16_t sample_capture_model_global_overview_peak(void);
 uint8_t sample_capture_model_global_overview_minmax(uint32_t start_frame,
@@ -211,12 +183,6 @@ uint8_t sample_capture_model_waveform_cache_ready(void);
 uint8_t sample_capture_model_rec_waveform_source(waveform_source_t *out_source);
 uint8_t sample_capture_model_waveform_cache_get_handle(waveform_cache_handle_t *out_handle);
 void sample_capture_model_note_rec_edit_first_render(void);
-void sample_capture_model_request_detail_waveform(uint32_t start_frame,
-                                                  uint32_t frame_count,
-                                                  uint16_t columns);
-void sample_capture_model_request_line_waveform(uint32_t start_frame,
-                                                uint32_t frame_count,
-                                                uint16_t columns);
 void sample_capture_model_debug_note_renderer(sample_capture_renderer_debug_t renderer,
                                               uint8_t zoom,
                                               uint32_t view_start_frame,

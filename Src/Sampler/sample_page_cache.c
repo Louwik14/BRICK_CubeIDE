@@ -121,3 +121,63 @@ uint8_t sample_page_cache_control_resolve_page(uint16_t sample_id,
     out_span->slot_index = (uint32_t)(page - g_sample_page_desc);
     return 1U;
 }
+
+uint8_t sample_page_cache_control_resolve_page_key(sample_audio_key_t key,
+    uint32_t registration_epoch, uint32_t page_index,
+    sample_page_span_t *out_span)
+{
+    if (out_span == NULL) return 0U;
+    memset(out_span, 0, sizeof(*out_span));
+    const uint16_t key_slot = sample_page_cache_key_slot(key);
+    if(registration_epoch == 0U || key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES)
+    {
+        return 0U;
+    }
+    const sample_page_sample_desc_t *const sample =
+        &g_sample_page_sample_desc[key_slot];
+    if(sample->valid == 0U
+            || sample_audio_key_equal(&sample->key, &key) == 0U
+            || sample->registration_epoch != registration_epoch)
+    {
+        return 0U;
+    }
+    const sample_page_desc_t *const page =
+        sample_page_cache_find_page_key(key, page_index);
+    if(page == NULL || page->state != SAMPLE_PAGE_READY
+            || page->generation == 0U
+            || sample_audio_key_equal(&page->key, &key) == 0U
+            || page->registration_epoch != registration_epoch
+            || page->page_index != page_index
+            || page->format != sample->format
+            || page->stride_floats != sample->stride_floats
+            || page->frames_per_page != sample->frames_per_page
+            || page->start_frame != (uint64_t)page_index
+                * sample->frames_per_page
+            || page->frame_count == 0U
+            || page->frame_count > sample->frames_per_page
+            || (uint64_t)page->start_frame + page->frame_count
+                > sample->total_frames)
+    {
+        return 0U;
+    }
+    const uint32_t generation = page->generation;
+    float *const payload = sample_page_cache_data_resolve(page);
+    if (payload == NULL) return 0U;
+    if(page->state != SAMPLE_PAGE_READY || page->generation != generation
+            || page->registration_epoch != registration_epoch)
+    {
+        return 0U;
+    }
+    out_span->frames_interleaved = payload;
+    out_span->frame_count = page->frame_count;
+    out_span->start_frame = page->start_frame;
+    out_span->page_index = page->page_index;
+    out_span->page_generation = generation;
+    out_span->key = page->key;
+    out_span->format = page->format;
+    out_span->stride_floats = page->stride_floats;
+    out_span->frames_per_page = page->frames_per_page;
+    out_span->registration_epoch = page->registration_epoch;
+    out_span->slot_index = (uint32_t)(page - g_sample_page_desc);
+    return 1U;
+}

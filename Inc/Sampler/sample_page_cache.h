@@ -114,6 +114,10 @@ sample_page_state_t sample_page_cache_get_page_state(uint16_t sample_id, uint32_
 uint8_t sample_page_cache_control_resolve_page(uint16_t sample_id,
                                                uint32_t page_index,
                                                sample_page_span_t *out_span);
+/* CONTROL/BG RAM-only READY lookup; the returned payload is request-local. */
+uint8_t sample_page_cache_control_resolve_page_key(sample_audio_key_t key,
+    uint32_t registration_epoch, uint32_t page_index,
+    sample_page_span_t *out_span);
 uint8_t sample_page_cache_alloc_slot_pool_bytes(uint32_t bytes,
                                                 sample_page_raw_allocation_t *out_allocation);
 void sample_page_cache_release_slot_pool_allocation(uint16_t first_slot,
@@ -214,6 +218,9 @@ uint8_t sample_page_cache_register_live_pcm24_stereo_sample_key(
     uint32_t media_epoch);
 uint8_t sample_page_cache_update_readable_frames_key(sample_audio_key_t key,
                                                       uint32_t readable_frames);
+/* STOP seals the REC stream geometry so its final partial page is loadable. */
+uint8_t sample_page_cache_finalize_live_frames_key(sample_audio_key_t key,
+                                                   uint32_t final_frames);
 uint8_t sample_page_cache_update_stream_path_key(sample_audio_key_t key,
                                                   const char *path);
 

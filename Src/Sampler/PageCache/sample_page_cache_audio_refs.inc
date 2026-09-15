@@ -107,6 +107,34 @@ uint8_t sample_page_cache_update_readable_frames_key(sample_audio_key_t key,
     return 1U;
 }
 
+uint8_t sample_page_cache_finalize_live_frames_key(sample_audio_key_t key,
+                                                   uint32_t final_frames)
+{
+    const uint16_t key_slot = sample_page_cache_key_slot(key);
+    if(key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES || final_frames == 0U)
+    {
+        return 0U;
+    }
+    sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
+    if(sample->valid == 0U || sample->live_committed == 0U
+            || sample_audio_key_equal(&sample->key, &key) == 0U
+            || final_frames > sample->total_frames
+            || (uint64_t)final_frames * AUDIO_RECORDER_BYTES_PER_FRAME
+                > UINT32_MAX)
+    {
+        return 0U;
+    }
+    const uint32_t data_bytes = final_frames * AUDIO_RECORDER_BYTES_PER_FRAME;
+    const uint32_t primask = sample_page_cache_lock();
+    sample->total_frames = final_frames;
+    sample->readable_frames = final_frames;
+    sample->info.data_size = data_bytes;
+    sample->stream_safe.total_frames = final_frames;
+    sample->stream_safe.data_size = data_bytes;
+    sample_page_cache_unlock(primask);
+    return 1U;
+}
+
 uint8_t sample_page_cache_update_stream_path_key(sample_audio_key_t key,
                                                   const char *path)
 {

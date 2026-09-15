@@ -1,4 +1,3 @@
-static void sample_capture_editor_cache_reset(void);
 static void sample_capture_global_overview_reset(void);
 static void sample_capture_set_capture_enabled(uint8_t enabled);
 static void sample_capture_reset_take_transients(uint8_t preserve_final_path);
@@ -150,11 +149,6 @@ static const char *sample_capture_debug_renderer_label(sample_capture_renderer_d
     {
         case SAMPLE_CAPTURE_RENDERER_EMPTY: return "EMPTY";
         case SAMPLE_CAPTURE_RENDERER_GLOBAL_OVERVIEW: return "GLOBAL_OVERVIEW";
-        case SAMPLE_CAPTURE_RENDERER_OLD_LINE: return "OLD_LINE";
-        case SAMPLE_CAPTURE_RENDERER_OLD_AUDIO_TILE: return "OLD_AUDIO_TILE";
-        case SAMPLE_CAPTURE_RENDERER_BRKWAVE_TILE: return "BRKWAVE_TILE";
-        case SAMPLE_CAPTURE_RENDERER_SD_LINE_FALLBACK: return "SD_LINE";
-        case SAMPLE_CAPTURE_RENDERER_BUILDING: return "BUILDING";
         case SAMPLE_CAPTURE_RENDERER_ERROR: return "ERROR";
         default: return "?";
     }

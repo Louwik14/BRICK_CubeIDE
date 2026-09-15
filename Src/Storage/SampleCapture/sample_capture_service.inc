@@ -116,7 +116,6 @@ static void sample_capture_sync_current_generation(void)
             g_sample_capture.visible_rec_generation = 0U;
             g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_IDLE;
             sample_capture_global_overview_reset();
-            sample_capture_editor_cache_reset();
         }
         return;
     }
@@ -131,7 +130,6 @@ static void sample_capture_sync_current_generation(void)
     sample_capture_copy_path(g_sample_capture.state.temp_path, path);
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_TAKE_READY;
     sample_capture_global_overview_reset();
-    sample_capture_editor_cache_reset();
     sample_capture_global_overview_request();
 }
 
@@ -232,9 +230,6 @@ void sample_capture_model_service(void)
 
     sample_capture_global_overview_service();
     sample_capture_waveform_cache_service_handle();
-    sample_capture_editor_cache_service();
-    sample_capture_detail_service();
-    sample_capture_line_service();
 }
 void sample_capture_control_on_global_rec_arm(uint8_t armed)
 {

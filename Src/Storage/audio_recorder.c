@@ -308,6 +308,10 @@ void audio_recorder_service(void)
             const uint32_t frames = (uint32_t)(
                 audio_recorder_storage_committed_tail()
                     / AUDIO_RECORDER_BYTES_PER_FRAME);
+            if(sample_page_cache_finalize_live_frames_key(key, frames) == 0U)
+            {
+                return;
+            }
             uint32_t ready_pages = (frames + SAMPLE_PAGE_FRAMES - 1U)
                 / SAMPLE_PAGE_FRAMES;
             if(ready_pages > SAMPLE_PAGE_MIN_READY_PAGES)
