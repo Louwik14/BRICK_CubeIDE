@@ -46,6 +46,7 @@
 #include "Seq/metronome_control.h"
 #include "main.h"
 #include "Platform/brick_fatal.h"
+#include "Platform/idle_latency_diag.h"
 
 #define SEQ_RUNTIME_DEFAULT_TEMPO_BPM_MILLI 120000U
 #define SEQ_RUNTIME_AUDIO_SAMPLE_RATE 48000U
@@ -84,6 +85,27 @@ static volatile uint8_t g_seq_runtime_live_rec_tail;
 static volatile uint8_t g_seq_runtime_live_rec_count;
 static uint64_t g_seq_runtime_control_sample_cursor;
 static uint8_t g_seq_runtime_trigger_start_bypass;
+/* GDB snapshot: sample lateness is captured before the existing cursor rebase.
+ * It measures a missed publication window, not a proven lost note. */
+typedef struct
+{
+    volatile uint32_t passes;
+    volatile uint32_t max_service_gap_cycles;
+    volatile uint32_t max_publication_late_samples;
+    volatile uint32_t late_over_64;
+    volatile uint32_t late_over_256;
+    volatile uint32_t late_over_1024;
+    volatile uint32_t cursor_rebases;
+    volatile uint32_t backpressure;
+    volatile uint32_t previous_service;
+    volatile uint32_t previous_service_cycles;
+    volatile uint32_t storage_worst_service;
+    volatile uint32_t storage_worst_cycles;
+    volatile uint32_t last_late_samples;
+    volatile uint32_t last_late_cycle;
+} seq_latency_diag_t;
+SEQ_STATE_D2 volatile seq_latency_diag_t g_seq_latency_diag;
+static uint32_t g_seq_last_service_cycle;
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic);
 static void seq_runtime_process_core(void);
 static uint32_t seq_runtime_get_now_tick_for_source(seq_clock_src_t source);
@@ -456,6 +478,16 @@ uint8_t seq_runtime_is_start_pending(void)
 
 static void seq_runtime_process_core(void)
 {
+    const uint32_t service_cycle = DWT->CYCCNT;
+    volatile seq_latency_diag_t *const latency = &g_seq_latency_diag;
+    if (g_seq_last_service_cycle != 0U)
+    {
+        const uint32_t gap = service_cycle - g_seq_last_service_cycle;
+        if (gap > latency->max_service_gap_cycles)
+            latency->max_service_gap_cycles = gap;
+    }
+    g_seq_last_service_cycle = service_cycle;
+    ++latency->passes;
     const uint32_t now_tick = seq_runtime_get_now_tick();
     const uint32_t previous_effective_tempo =
         seq_runtime_get_effective_tempo_bpm_milli();
@@ -470,6 +502,35 @@ static void seq_runtime_process_core(void)
 
     const uint64_t media_sample = seq_runtime_get_now_sample();
     const uint64_t publish_limit = media_sample + 64U;
+    if (g_seq_runtime.running != 0U
+        && g_seq_runtime_control_sample_cursor != 0U
+        && g_seq_runtime_control_sample_cursor < media_sample)
+    {
+        const uint64_t raw_late = media_sample
+            - g_seq_runtime_control_sample_cursor;
+        const uint32_t late = raw_late > UINT32_MAX
+            ? UINT32_MAX : (uint32_t)raw_late;
+        latency->last_late_samples = late;
+        latency->last_late_cycle = service_cycle;
+        if (late > latency->max_publication_late_samples)
+            latency->max_publication_late_samples = late;
+        if (late > 64U) ++latency->late_over_64;
+        if (late > 256U) ++latency->late_over_256;
+        if (late > 1024U) ++latency->late_over_1024;
+        ++latency->cursor_rebases;
+        latency->previous_service = g_idle_latency_diag.last_slow_service;
+        latency->previous_service_cycles = g_idle_latency_diag.last_slow_cycles;
+        for (uint32_t i = 0U; i < IDLE_LATENCY_STORAGE_COUNT; ++i)
+        {
+            if (g_idle_latency_diag.storage_last_cycles[i]
+                > latency->storage_worst_cycles)
+            {
+                latency->storage_worst_cycles =
+                    g_idle_latency_diag.storage_last_cycles[i];
+                latency->storage_worst_service = i;
+            }
+        }
+    }
     if ((g_seq_runtime_control_sample_cursor < media_sample)
             || (g_seq_runtime_control_sample_cursor > publish_limit))
         g_seq_runtime_control_sample_cursor = media_sample;
@@ -512,6 +573,7 @@ static void seq_runtime_process_core(void)
             window_first, frames);
         if (begin_result == CONTROL_RT_PUBLICATION_BEGIN_BACKPRESSURE)
         {
+            ++latency->backpressure;
             /* AUDIO owns the only progress that can release FIFO capacity.
              * Keep the cursor and all musical ledgers unchanged; the next
              * ordinary CONTROL pass will retry admission cooperatively. */
