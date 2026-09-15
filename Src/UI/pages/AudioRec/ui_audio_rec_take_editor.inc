@@ -5,7 +5,10 @@ static uint16_t ui_page_audio_rec_take_peak(const sample_capture_state_t *state)
     {
         return 0U;
     }
-    const uint16_t global_peak = sample_capture_model_global_overview_peak();
+    waveform_source_t source;
+    const uint16_t global_peak =
+        (sample_capture_model_rec_waveform_source(&source) != 0U)
+            ? waveform_rec_peak(&source) : 0U;
     if(global_peak > peak)
     {
         peak = global_peak;
@@ -212,50 +215,12 @@ static void ui_page_audio_rec_draw_edit_overview(const sample_capture_state_t *s
     drv_display_clear_rect(x, y, w, h);
     drv_display_draw_rect(x, y, w, h);
 
-    const uint16_t overview_peak = sample_capture_model_global_overview_peak();
-    if(overview_peak != 0U)
+    waveform_source_t source;
+    if(sample_capture_model_rec_waveform_source(&source) != 0U)
     {
-        waveform_source_t current_rec;
-        if(ui_page_audio_rec_draw_rec_service_overview(x, y, w, h,
-                0U, state->recorded_frames, overview_peak, 256U) != 0U)
-        {
-            /* REC summary is already READY; no legacy bin lookup is needed. */
-        }
-        else if((waveform_rec_current_source(&current_rec) == 0U)
-                && (sample_capture_model_global_overview_ready() != 0U))
-        {
-        const int cy = y + (h / 2);
-        for(int col = 0; col < inner_w; ++col)
-        {
-            const uint32_t frame0 =
-                (uint32_t)(((uint64_t)col * (uint64_t)state->recorded_frames)
-                    / (uint64_t)inner_w);
-            uint32_t frame1 =
-                (uint32_t)(((uint64_t)(col + 1) * (uint64_t)state->recorded_frames)
-                    / (uint64_t)inner_w);
-            if(frame1 <= frame0)
-            {
-                frame1 = frame0 + 1U;
-            }
-
-            int16_t min_v = 0;
-            int16_t max_v = 0;
-            if(sample_capture_model_global_overview_minmax(frame0,
-                                                           frame1 - frame0,
-                                                           &min_v,
-                                                           &max_v) != 0U)
-            {
-                ui_page_audio_rec_draw_minmax_column(inner_x + col,
-                                                     inner_y,
-                                                     inner_h,
-                                                     cy,
-                                                     min_v,
-                                                     max_v,
-                                                     overview_peak,
-                                                     256U);
-            }
-        }
-        }
+        const uint16_t vertical_ref = waveform_rec_peak(&source);
+        (void)ui_page_audio_rec_draw_rec_service_overview(x, y, w, h,
+            0U, state->recorded_frames, vertical_ref, 256U);
     }
 
     if(state->edit_end_frame > state->edit_start_frame)
@@ -449,7 +414,7 @@ static void ui_page_audio_rec_draw_marker_bar(const sample_capture_state_t *stat
             ui_page_audio_rec_vzoom_scale_q8(state->edit_vzoom)) != 0U)
         {
             waveform_drawn = 1U;
-            renderer = SAMPLE_CAPTURE_RENDERER_GLOBAL_OVERVIEW;
+            renderer = SAMPLE_CAPTURE_RENDERER_SERVICE;
         }
     }
 

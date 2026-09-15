@@ -58,9 +58,6 @@
 #define SAMPLE_CAPTURE_ZCROSS_SAME_GUARD_FRAMES 8U
 #define SAMPLE_CAPTURE_EDIT_VZOOM_DEFAULT 2U
 #define SAMPLE_CAPTURE_EDIT_VZOOM_MAX 8U
-#define SAMPLE_CAPTURE_GLOBAL_OVERVIEW_CHUNK_BYTES (32U * 1024U)
-#define SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILD_CHUNK_FRAMES \
-    (SAMPLE_CAPTURE_GLOBAL_OVERVIEW_CHUNK_BYTES / AUDIO_RECORDER_BYTES_PER_FRAME)
 #define SAMPLE_CAPTURE_SAVE_CHUNK_BYTES SD_SCHEDULER_BULK_COPY_MAX_DATA_BYTES
 
 typedef enum
@@ -126,34 +123,6 @@ typedef struct
     sample_capture_save_job_t save_job;
 } sample_capture_model_t;
 
-typedef struct
-{
-    int16_t min;
-    int16_t max;
-} sample_capture_global_overview_point_t;
-
-typedef enum
-{
-    SAMPLE_CAPTURE_GLOBAL_OVERVIEW_EMPTY = 0,
-    SAMPLE_CAPTURE_GLOBAL_OVERVIEW_BUILDING,
-    SAMPLE_CAPTURE_GLOBAL_OVERVIEW_READY,
-    SAMPLE_CAPTURE_GLOBAL_OVERVIEW_ERROR
-} sample_capture_global_overview_state_t;
-
-typedef struct
-{
-    sample_capture_global_overview_state_t state;
-    char path[SAMPLE_CAPTURE_PATH_MAX];
-    uint32_t frame_count;
-    uint32_t build_next_frame;
-    uint16_t point_count;
-    uint16_t peak;
-    uint32_t generation;
-    FIL file;
-    uint8_t file_open;
-    uint8_t reset_pending;
-} sample_capture_global_overview_t;
-
 #if SAMPLE_CAPTURE_DEBUG_UART
 typedef struct
 {
@@ -209,13 +178,8 @@ typedef struct
 #endif
 
 static sample_capture_model_t g_sample_capture;
-STORAGE_STATE_SDRAM static sample_capture_global_overview_t g_sample_capture_global_overview;
-EDITOR_AUDIO_CACHE_SDRAM static sample_capture_global_overview_point_t
-    g_sample_capture_global_overview_points[SAMPLE_CAPTURE_GLOBAL_OVERVIEW_POINTS];
 RECORDER_SCRATCH_SDRAM static uint8_t
     g_sample_capture_copy_buf[SAMPLE_CAPTURE_SAVE_CHUNK_BYTES];
-RECORDER_SCRATCH_SDRAM static uint8_t
-    g_sample_capture_detail_buf[SAMPLE_CAPTURE_GLOBAL_OVERVIEW_CHUNK_BYTES];
 #if SAMPLE_CAPTURE_DEBUG_UART
 STORAGE_STATE_SDRAM static sample_capture_debug_t g_sample_capture_debug;
 #endif

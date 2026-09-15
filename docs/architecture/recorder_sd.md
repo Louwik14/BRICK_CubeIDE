@@ -124,8 +124,33 @@ couples min/max int16. Une longueur fixe utilise le mapping direct
 frames-vers-bins. Une longueur libre utilise des niveaux bornés et compacte
 progressivement, entièrement hors IRQ. Le résumé READY
 (environ 16 KiB) est copié dans le descripteur `BUILDING` et publié avec lui.
-L'éditeur l'utilise directement pour une prise fraîche; le scan SD reste le
-fallback des fichiers externes, anciens, récupérés ou sans résumé valide.
+L'éditeur l'utilise directement pour toute génération REC publiée. Aucun
+second overview n'est scanné après STOP.
+
+## Navigation waveform REC EDIT
+
+Le zoom horizontal va désormais de l'overview à 126 frames visibles sur les
+126 colonnes internes de la waveform OLED : au maximum, une colonne correspond
+à une frame PCM. Le modèle mémorise la conversion zoom-vers-fenêtre afin de ne
+pas répéter `powf` à chaque rendu. Les bornes de colonne sont avancées par
+quotient/reste; seules les divisions initiales dépendent de la largeur.
+
+Le chemin unique `waveform_request()` vérifie la génération puis compose les
+colonnes min/max. Jusqu'à une fenêtre de 4096 frames, il résout immédiatement
+les pages PCM READY du cache audio commun et demande la fenêtre plus une page
+voisine de chaque côté. Il ne conserve aucun pointeur ni lease de page. Aux
+zooms plus larges, il choisit les niveaux 16384, 4096, 1024, 256 et 64
+frames/bin. Ses 16 tuiles RAM reconstructibles de 512 bins sont construites
+coopérativement dans STORAGE, avec publication par bins complets. Le résumé
+REC de 4096 bins, produit pendant la prise, est le repli READY. Le sidecar
+`.brkwave` version 2 des WAV longs reste une optimisation de cold-open cachée
+derrière le service; aucun format supplémentaire n'est introduit.
+
+Le rendu UI ne lit ni SD, ni cache, ni sidecar : il transmet source, fenêtre
+et largeur au service, puis met verticalement à l'échelle les colonnes
+retournées. Le producteur min/max utilise l'admission BG existante, sans
+priorité waveform dédiée. La composition OLED et son flush restent des
+opérations sur toute la page, sans scroll matériel incrémental.
 
 ## SAVE / CROP
 

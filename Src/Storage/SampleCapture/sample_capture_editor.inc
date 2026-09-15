@@ -15,8 +15,6 @@ void sample_capture_model_init(void)
         g_sample_capture.trigger_threshold_peak_abs_pcm24);
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_IDLE;
     g_sample_capture.state.edit_vzoom = SAMPLE_CAPTURE_EDIT_VZOOM_DEFAULT;
-    memset(&g_sample_capture_global_overview, 0,
-           sizeof(g_sample_capture_global_overview));
     sample_capture_detail_reset();
     control_audio_rec_bus_init();
     sample_capture_publish_rec_bus();
@@ -65,7 +63,6 @@ uint8_t sample_capture_model_open_crop(void)
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_REC_EDIT;
     g_sample_capture.rec_edit_enter_deferred_services = 2U;
     g_sample_capture.rec_edit_first_render_pending = 1U;
-    sample_capture_global_overview_request();
     return 1U;
 }
 
@@ -652,100 +649,6 @@ uint8_t sample_capture_model_step_edit(uint8_t encoder, int16_t delta, uint8_t a
         }
     }
     return 1U;
-}
-
-uint8_t sample_capture_model_global_overview_ready(void)
-{
-    return (uint8_t)((g_sample_capture_global_overview.state == SAMPLE_CAPTURE_GLOBAL_OVERVIEW_READY)
-            && (sample_capture_global_overview_path_matches() != 0U)
-            && (g_sample_capture_global_overview.frame_count == g_sample_capture.state.recorded_frames)
-            && (g_sample_capture_global_overview.point_count != 0U));
-}
-
-uint16_t sample_capture_model_global_overview_peak(void)
-{
-    return sample_capture_model_global_overview_ready()
-        ? g_sample_capture_global_overview.peak
-        : 0U;
-}
-
-uint8_t sample_capture_model_global_overview_minmax(uint32_t start_frame,
-                                                    uint32_t frame_count,
-                                                    int16_t *out_min,
-                                                    int16_t *out_max)
-{
-    if(out_min != 0)
-    {
-        *out_min = 0;
-    }
-    if(out_max != 0)
-    {
-        *out_max = 0;
-    }
-    if((sample_capture_model_global_overview_ready() == 0U)
-            || (frame_count == 0U)
-            || (start_frame >= g_sample_capture_global_overview.frame_count))
-    {
-        return 0U;
-    }
-
-    uint32_t end_frame = start_frame + frame_count;
-    if((end_frame < start_frame) || (end_frame > g_sample_capture_global_overview.frame_count))
-    {
-        end_frame = g_sample_capture_global_overview.frame_count;
-    }
-    if(end_frame <= start_frame)
-    {
-        return 0U;
-    }
-
-    uint32_t idx0 = (uint32_t)(((uint64_t)start_frame
-            * (uint64_t)g_sample_capture_global_overview.point_count)
-        / (uint64_t)g_sample_capture_global_overview.frame_count);
-    uint32_t idx1 = (uint32_t)(((uint64_t)end_frame
-            * (uint64_t)g_sample_capture_global_overview.point_count
-            + (uint64_t)g_sample_capture_global_overview.frame_count - 1ULL)
-        / (uint64_t)g_sample_capture_global_overview.frame_count);
-    if(idx0 >= g_sample_capture_global_overview.point_count)
-    {
-        idx0 = g_sample_capture_global_overview.point_count - 1U;
-    }
-    if(idx1 <= idx0)
-    {
-        idx1 = idx0 + 1U;
-    }
-    if(idx1 > g_sample_capture_global_overview.point_count)
-    {
-        idx1 = g_sample_capture_global_overview.point_count;
-    }
-
-    int16_t min_v = g_sample_capture_global_overview_points[idx0].min;
-    int16_t max_v = g_sample_capture_global_overview_points[idx0].max;
-    for(uint32_t idx = idx0 + 1U; idx < idx1; ++idx)
-    {
-        if(g_sample_capture_global_overview_points[idx].min < min_v)
-        {
-            min_v = g_sample_capture_global_overview_points[idx].min;
-        }
-        if(g_sample_capture_global_overview_points[idx].max > max_v)
-        {
-            max_v = g_sample_capture_global_overview_points[idx].max;
-        }
-    }
-    if(out_min != 0)
-    {
-        *out_min = min_v;
-    }
-    if(out_max != 0)
-    {
-        *out_max = max_v;
-    }
-    return 1U;
-}
-
-uint8_t sample_capture_model_waveform_cache_ready(void)
-{
-    return g_sample_capture.wave_cache_ready;
 }
 
 uint8_t sample_capture_model_rec_waveform_source(waveform_source_t *out_source)

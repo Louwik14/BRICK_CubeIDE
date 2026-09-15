@@ -1406,43 +1406,6 @@ void waveform_cache_get_diag(waveform_cache_diag_t *out_diag)
     }
 }
 
-uint8_t waveform_cache_level_frames_per_column(waveform_cache_level_id_t level_id,
-                                               uint32_t *out_frames_per_column)
-{
-    if((level_id >= WAVEFORM_CACHE_LEVEL_COUNT) || (out_frames_per_column == 0))
-    {
-        return 0U;
-    }
-    *out_frames_per_column = g_waveform_cache_level_frames[level_id];
-    return 1U;
-}
-
-uint8_t waveform_cache_choose_level(uint32_t frames_per_pixel,
-                                    waveform_cache_level_id_t *out_level_id)
-{
-    if(out_level_id == 0)
-    {
-        return 0U;
-    }
-    if(frames_per_pixel >= 8192U)
-    {
-        *out_level_id = WAVEFORM_CACHE_LEVEL_L0_COARSE;
-    }
-    else if(frames_per_pixel >= 2048U)
-    {
-        *out_level_id = WAVEFORM_CACHE_LEVEL_L1_GLOBAL;
-    }
-    else if(frames_per_pixel >= 512U)
-    {
-        *out_level_id = WAVEFORM_CACHE_LEVEL_L2_MID;
-    }
-    else
-    {
-        *out_level_id = WAVEFORM_CACHE_LEVEL_L3_FINE;
-    }
-    return 1U;
-}
-
 uint8_t waveform_cache_open_for_wav(const char *path, waveform_cache_handle_t *out_handle)
 {
     if((path == 0) || (out_handle == 0) || (waveform_cache_path_is_temporary(path) != 0U))

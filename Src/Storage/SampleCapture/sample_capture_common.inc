@@ -1,4 +1,3 @@
-static void sample_capture_global_overview_reset(void);
 static void sample_capture_set_capture_enabled(uint8_t enabled);
 static void sample_capture_reset_take_transients(uint8_t preserve_final_path);
 static void sample_capture_save_service(void);
@@ -148,7 +147,7 @@ static const char *sample_capture_debug_renderer_label(sample_capture_renderer_d
     switch(renderer)
     {
         case SAMPLE_CAPTURE_RENDERER_EMPTY: return "EMPTY";
-        case SAMPLE_CAPTURE_RENDERER_GLOBAL_OVERVIEW: return "GLOBAL_OVERVIEW";
+        case SAMPLE_CAPTURE_RENDERER_SERVICE: return "SERVICE";
         case SAMPLE_CAPTURE_RENDERER_ERROR: return "ERROR";
         default: return "?";
     }

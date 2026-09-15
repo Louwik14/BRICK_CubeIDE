@@ -48,6 +48,9 @@ STORAGE_STATE_SDRAM static waveform_tile_t g_waveform_tiles[WAVEFORM_TILE_COUNT]
 STORAGE_STATE_SDRAM static waveform_build_t g_waveform_build;
 RECORDER_SCRATCH_SDRAM static uint8_t g_waveform_read[WAVEFORM_READ_BYTES];
 static uint32_t g_waveform_lru;
+static waveform_source_t g_waveform_peak_source;
+static uint16_t g_waveform_peak;
+static uint8_t g_waveform_peak_valid;
 
 static const uint32_t g_waveform_frames_per_bin[WAVEFORM_CACHE_LEVEL_COUNT] =
     { 16384U, 4096U, 1024U, 256U, 64U };
@@ -527,6 +530,33 @@ uint8_t waveform_rec_current_source(waveform_source_t *out_source)
     out_source->registration_epoch = current.registration_epoch;
     out_source->frame_count = current.frame_count;
     return (waveform_rec_summary(out_source) != 0) ? 1U : 0U;
+}
+
+uint16_t waveform_rec_peak(const waveform_source_t *source)
+{
+    const rec_source_waveform_summary_t *const summary = waveform_rec_summary(source);
+    if(summary == 0) { return 0U; }
+    if(g_waveform_peak_valid != 0U
+            && waveform_source_equal(&g_waveform_peak_source, source) != 0U)
+    {
+        return g_waveform_peak;
+    }
+    uint16_t peak = 0U;
+    for(uint16_t bin = 0U; bin < summary->bin_count; ++bin)
+    {
+        const int16_t min = summary->min[bin];
+        const int16_t max = summary->max[bin];
+        const uint16_t amin = (min == -32768) ? 32768U
+            : (uint16_t)((min < 0) ? -min : min);
+        const uint16_t amax = (max == -32768) ? 32768U
+            : (uint16_t)((max < 0) ? -max : max);
+        if(amin > peak) { peak = amin; }
+        if(amax > peak) { peak = amax; }
+    }
+    g_waveform_peak_source = *source;
+    g_waveform_peak = peak;
+    g_waveform_peak_valid = 1U;
+    return peak;
 }
 
 waveform_result_t waveform_request(const waveform_source_t *source,

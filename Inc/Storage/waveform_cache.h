@@ -80,10 +80,6 @@ uint8_t waveform_cache_request_for_wav_known_duration(const char *path,
 void waveform_cache_service(uint32_t byte_budget);
 void waveform_cache_get_diag(waveform_cache_diag_t *out_diag);
 
-uint8_t waveform_cache_level_frames_per_column(waveform_cache_level_id_t level_id,
-                                               uint32_t *out_frames_per_column);
-uint8_t waveform_cache_choose_level(uint32_t frames_per_pixel,
-                                    waveform_cache_level_id_t *out_level_id);
 uint8_t waveform_cache_open_for_wav(const char *path, waveform_cache_handle_t *out_handle);
 uint8_t waveform_cache_request_tiles(const waveform_cache_handle_t *handle,
                                      waveform_cache_level_id_t level_id,

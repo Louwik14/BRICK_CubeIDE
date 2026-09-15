@@ -16,7 +16,6 @@ extern "C" {
 #define SAMPLE_CAPTURE_PATH_MAX AUDIO_RECORDER_PATH_MAX
 #define SAMPLE_CAPTURE_WAVEFORM_FULL_SCALE 32767
 #define SAMPLE_CAPTURE_DETAIL_VISIBLE_POINTS 126U
-#define SAMPLE_CAPTURE_GLOBAL_OVERVIEW_POINTS 4096U
 
 #ifndef SAMPLE_CAPTURE_DEBUG_UART
 #define SAMPLE_CAPTURE_DEBUG_UART 0U
@@ -102,7 +101,7 @@ typedef enum
 typedef enum
 {
     SAMPLE_CAPTURE_RENDERER_EMPTY = 0,
-    SAMPLE_CAPTURE_RENDERER_GLOBAL_OVERVIEW,
+    SAMPLE_CAPTURE_RENDERER_SERVICE,
     SAMPLE_CAPTURE_RENDERER_ERROR
 } sample_capture_renderer_debug_t;
 
@@ -173,13 +172,6 @@ uint8_t sample_capture_model_toggle_usb(void);
 uint8_t sample_capture_model_toggle_overdub(void);
 uint8_t sample_capture_model_step_edit(uint8_t encoder, int16_t delta, uint8_t alt_held);
 uint32_t sample_capture_model_visible_frames_for_zoom(uint32_t recorded_frames, uint8_t zoom);
-uint8_t sample_capture_model_global_overview_ready(void);
-uint16_t sample_capture_model_global_overview_peak(void);
-uint8_t sample_capture_model_global_overview_minmax(uint32_t start_frame,
-                                                    uint32_t frame_count,
-                                                    int16_t *out_min,
-                                                    int16_t *out_max);
-uint8_t sample_capture_model_waveform_cache_ready(void);
 uint8_t sample_capture_model_rec_waveform_source(waveform_source_t *out_source);
 uint8_t sample_capture_model_waveform_cache_get_handle(waveform_cache_handle_t *out_handle);
 void sample_capture_model_note_rec_edit_first_render(void);
