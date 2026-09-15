@@ -28,6 +28,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "bsp_driver_sd.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/rec_active_step_diag.h"
 
 /* Extern variables ---------------------------------------------------------*/
 
@@ -321,7 +322,13 @@ __weak uint8_t BSP_SD_Erase(uint32_t StartAddr, uint32_t EndAddr)
  */
 __weak uint8_t BSP_SD_GetCardState(void)
 {
-  return ((HAL_SD_GetCardState(&hsd1) == HAL_SD_CARD_TRANSFER ) ? SD_TRANSFER_OK : SD_TRANSFER_BUSY);
+  const uint32_t started = DWT->CYCCNT;
+  const uint8_t result = (HAL_SD_GetCardState(&hsd1) == HAL_SD_CARD_TRANSFER)
+      ? SD_TRANSFER_OK : SD_TRANSFER_BUSY;
+  if (g_rec_active_step_diag_scope_active != 0U)
+      rec_active_step_diag_max(&g_rec_active_step_diag.card_state_max_cycles,
+          started);
+  return result;
 }
 
 /**

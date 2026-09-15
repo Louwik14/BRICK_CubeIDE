@@ -225,7 +225,16 @@ void sample_capture_model_service(void)
         }
     }
 
+}
+
+uint8_t sample_capture_model_storage_service(void)
+{
+    if(g_sample_capture.rec_edit_enter_deferred_services != 0U)
+    {
+        return 0U;
+    }
     sample_capture_waveform_cache_service_handle();
+    return 0U;
 }
 void sample_capture_control_on_global_rec_arm(uint8_t armed)
 {

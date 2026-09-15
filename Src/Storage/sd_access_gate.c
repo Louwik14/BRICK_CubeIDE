@@ -15,6 +15,18 @@ static uint8_t g_sd_media_present_known;
 static uint8_t g_sd_media_present;
 static volatile sd_storage_status_t g_sd_storage_status;
 
+static uint32_t sd_access_gate_enter_critical(void)
+{
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    return primask;
+}
+
+static void sd_access_gate_exit_critical(uint32_t primask)
+{
+    __set_PRIMASK(primask);
+}
+
 void sd_access_gate_init(void)
 {
     g_sd_access_owner = (uint8_t)SD_ACCESS_CLIENT_NONE;
@@ -102,21 +114,21 @@ void sd_access_storage_report_init_failure(uint8_t no_media)
 uint32_t sd_access_media_epoch(void)
 {
     uint32_t epoch;
-    __disable_irq();
+    const uint32_t primask = sd_access_gate_enter_critical();
     epoch = g_sd_media_epoch;
-    __enable_irq();
+    sd_access_gate_exit_critical(primask);
     return epoch;
 }
 
 void sd_access_media_epoch_advance(void)
 {
-    __disable_irq();
+    const uint32_t primask = sd_access_gate_enter_critical();
     g_sd_media_epoch++;
     if (g_sd_media_epoch == 0U)
     {
         g_sd_media_epoch = 1U;
     }
-    __enable_irq();
+    sd_access_gate_exit_critical(primask);
 }
 
 void sd_access_media_set_present(uint8_t present)
@@ -150,12 +162,12 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
         return 0U;
     }
 
-    __disable_irq();
+    const uint32_t primask = sd_access_gate_enter_critical();
     if ((g_sd_access_recorder_fs_logical_active != 0U)
         && (client != SD_ACCESS_CLIENT_SAMPLE_STREAM)
         && (client != SD_ACCESS_CLIENT_SCHEDULED_RECORDER))
     {
-        __enable_irq();
+        sd_access_gate_exit_critical(primask);
         return 0U;
     }
     if ((g_sd_access_streaming_critical != 0U)
@@ -163,7 +175,7 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
         && (client != SD_ACCESS_CLIENT_SAMPLE_STREAM)
         && (client != SD_ACCESS_CLIENT_SCHEDULED_RECORDER))
     {
-        __enable_irq();
+        sd_access_gate_exit_critical(primask);
         return 0U;
     }
 
@@ -186,7 +198,7 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
             || (client == SD_ACCESS_CLIENT_SAMPLE_STREAM)
             || (g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_SAMPLE_STREAM))
         {
-            __enable_irq();
+            sd_access_gate_exit_critical(primask);
             return 0U;
         }
 
@@ -205,21 +217,21 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
 
         if ((owner_is_project_pattern == 0U) || (requester_is_project_pattern == 0U))
         {
-            __enable_irq();
+            sd_access_gate_exit_critical(primask);
             return 0U;
         }
     }
 
     g_sd_access_total_count++;
     g_sd_access_client_count[(uint8_t)client]++;
-    __enable_irq();
+    sd_access_gate_exit_critical(primask);
     return 1U;
 }
 
 
 void sd_access_gate_release(sd_access_client_t client)
 {
-    __disable_irq();
+    const uint32_t primask = sd_access_gate_enter_critical();
     if (((uint8_t)client <= (uint8_t)SD_ACCESS_CLIENT_MAX)
         && (g_sd_access_client_count[(uint8_t)client] != 0U)
         && (g_sd_access_total_count != 0U))
@@ -232,47 +244,47 @@ void sd_access_gate_release(sd_access_client_t client)
     {
         g_sd_access_owner = (uint8_t)SD_ACCESS_CLIENT_NONE;
     }
-    __enable_irq();
+    sd_access_gate_exit_critical(primask);
 }
 
 void sd_access_gate_set_streaming_critical(uint8_t active)
 {
-    __disable_irq();
+    const uint32_t primask = sd_access_gate_enter_critical();
     g_sd_access_streaming_critical = (active != 0U) ? 1U : 0U;
-    __enable_irq();
+    sd_access_gate_exit_critical(primask);
 }
 
 uint8_t sd_access_gate_streaming_critical_active(void)
 {
     uint8_t active;
-    __disable_irq();
+    const uint32_t primask = sd_access_gate_enter_critical();
     active = g_sd_access_streaming_critical;
-    __enable_irq();
+    sd_access_gate_exit_critical(primask);
     return active;
 }
 
 void sd_access_gate_set_recorder_fs_logical_active(uint8_t active)
 {
-    __disable_irq();
+    const uint32_t primask = sd_access_gate_enter_critical();
     g_sd_access_recorder_fs_logical_active = (active != 0U) ? 1U : 0U;
-    __enable_irq();
+    sd_access_gate_exit_critical(primask);
 }
 
 uint8_t sd_access_gate_recorder_fs_logical_active(void)
 {
     uint8_t active;
-    __disable_irq();
+    const uint32_t primask = sd_access_gate_enter_critical();
     active = g_sd_access_recorder_fs_logical_active;
-    __enable_irq();
+    sd_access_gate_exit_critical(primask);
     return active;
 }
 
 sd_access_client_t sd_access_gate_current_owner(void)
 {
     uint8_t owner;
-    __disable_irq();
+    const uint32_t primask = sd_access_gate_enter_critical();
     owner = g_sd_access_owner;
-    __enable_irq();
+    sd_access_gate_exit_critical(primask);
     return (sd_access_client_t)owner;
 }
 

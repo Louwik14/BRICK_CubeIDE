@@ -131,8 +131,7 @@ second overview n'est scanné après STOP.
 
 Le zoom horizontal va désormais de l'overview à 126 frames visibles sur les
 126 colonnes internes de la waveform OLED : au maximum, une colonne correspond
-à une frame PCM. Le modèle mémorise la conversion zoom-vers-fenêtre afin de ne
-pas répéter `powf` à chaque rendu. Les bornes de colonne sont avancées par
+à une frame PCM. Les bornes de colonne sont avancées par
 quotient/reste; seules les divisions initiales dépendent de la largeur.
 
 Le chemin unique `waveform_request()` vérifie la génération puis compose les

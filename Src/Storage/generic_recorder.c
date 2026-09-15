@@ -181,30 +181,43 @@ static void generic_recorder_pack(generic_recorder_t *recorder,
             frame++;
         }
     }
+    uint32_t ring_frame =
+        (uint32_t)(frame % recorder->config.ring_capacity_frames);
     while ((valid_bytes - output) >= bytes_per_frame)
     {
-        const uint32_t ring_frame =
-            (uint32_t)(frame % recorder->config.ring_capacity_frames);
-        for (uint32_t channel = 0U;
-             channel < recorder->config.channels;
-             ++channel)
+        uint32_t contiguous_frames =
+            recorder->config.ring_capacity_frames - ring_frame;
+        const uint32_t remaining_frames =
+            (valid_bytes - output) / bytes_per_frame;
+        if (contiguous_frames > remaining_frames)
         {
-            const uint32_t value = (uint32_t)
-                recorder->config.ring_interleaved[
-                    ring_frame * recorder->config.channels + channel];
-            destination[output++] = (uint8_t)value;
-            destination[output++] = (uint8_t)(value >> 8);
-            destination[output++] = (uint8_t)(value >> 16);
+            contiguous_frames = remaining_frames;
         }
-        frame++;
+        const int32_t *source = &recorder->config.ring_interleaved[
+            ring_frame * recorder->config.channels];
+        for (uint32_t i = 0U; i < contiguous_frames; ++i)
+        {
+            for (uint32_t channel = 0U;
+                 channel < recorder->config.channels;
+                 ++channel)
+            {
+                const uint32_t value = (uint32_t)*source++;
+                destination[output++] = (uint8_t)value;
+                destination[output++] = (uint8_t)(value >> 8);
+                destination[output++] = (uint8_t)(value >> 16);
+            }
+        }
+        ring_frame += contiguous_frames;
+        if (ring_frame == recorder->config.ring_capacity_frames)
+        {
+            ring_frame = 0U;
+        }
     }
     byte_in_frame = 0U;
     while (output < valid_bytes)
     {
         const uint32_t channel = byte_in_frame / 3U;
         const uint32_t byte_in_sample = byte_in_frame % 3U;
-        const uint32_t ring_frame =
-            (uint32_t)(frame % recorder->config.ring_capacity_frames);
         const uint32_t value = (uint32_t)
             recorder->config.ring_interleaved[
                 ring_frame * recorder->config.channels + channel];

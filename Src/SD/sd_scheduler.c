@@ -1,5 +1,6 @@
 #include "SD/sd_scheduler.h"
 #include "Storage/rec_latency_probe.h"
+#include "Storage/rec_active_step_diag.h"
 
 #include <assert.h>
 #include <string.h>
@@ -402,7 +403,11 @@ static void sd_scheduler_poll_active(sd_scheduler_t *scheduler)
     sd_scheduler_provider_t *const provider =
         &scheduler->providers[scheduler->active_class];
     assert(provider->poll != 0);
+    const uint32_t poll_started = DWT->CYCCNT;
     const sd_scheduler_poll_result_t result = provider->poll(provider->context);
+    if (g_rec_active_step_diag_scope_active != 0U)
+        rec_active_step_diag_max(&g_rec_active_step_diag.sd_poll_max_cycles,
+            poll_started);
     if (result == SD_SCHEDULER_POLL_ACTIVE)
     {
         return;
@@ -456,8 +461,12 @@ void sd_scheduler_service(sd_scheduler_t *scheduler,
     sd_scheduler_claim(scheduler, picked);
     if(picked == SD_SCHEDULER_CLASS_FILESYSTEM)
         g_rec_latency_probe.filesystem_owner_start_t = rec_latency_probe_now();
+    const uint32_t start_started = DWT->CYCCNT;
     const sd_scheduler_start_result_t result = provider->start(
         provider->context, &snapshot.candidate[picked], sectors);
+    if (g_rec_active_step_diag_scope_active != 0U)
+        rec_active_step_diag_max(&g_rec_active_step_diag.sd_start_max_cycles,
+            start_started);
     if (result == SD_SCHEDULER_START_STARTED)
     {
         assert(provider->poll != 0);

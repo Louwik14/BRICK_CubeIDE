@@ -338,6 +338,7 @@ uint8_t sample_page_cache_finish_loading(const sample_page_load_token_t *token,
         && (page->registration_epoch == token->registration_epoch)
         && (sample_audio_key_equal(&page->key, &token->key) != 0U));
     uint8_t completed = valid;
+    uint8_t became_ready = 0U;
     if (valid != 0U)
     {
         const uint8_t cancelled = page->load_cancel_requested;
@@ -359,8 +360,12 @@ uint8_t sample_page_cache_finish_loading(const sample_page_load_token_t *token,
         {
             completed = 0U;
         }
+        became_ready = (uint8_t)(final_state == SAMPLE_PAGE_READY);
     }
     sample_page_cache_unlock(primask);
+    if (became_ready != 0U)
+        waveform_diag_page_ready(token->key,
+            token->registration_epoch, token->page_index);
     return completed;
 }
 

@@ -8,10 +8,14 @@
 #include "Storage/audio_recorder_storage.h"
 #include "Storage/project_load_quiesce.h"
 #include "Storage/rec_latency_probe.h"
+#include "Storage/rec_active_step_diag.h"
 #include "Storage/rec_source.h"
 #include "stm32h7xx.h"
 
 volatile rec_latency_probe_t g_rec_latency_probe __attribute__((used));
+volatile rec_active_step_diag_t g_rec_active_step_diag __attribute__((used));
+volatile uint32_t g_rec_active_step_diag_reset_requested __attribute__((used));
+volatile uint32_t g_rec_active_step_diag_scope_active;
 uint32_t rec_latency_probe_now(void) { return TIM5->CNT; }
 void rec_latency_probe_reset(void) {
     volatile uint32_t *p = (volatile uint32_t *)&g_rec_latency_probe;
@@ -270,8 +274,13 @@ uint8_t audio_recorder_request_stop_client_at(audio_recorder_client_t client,
 
 void audio_recorder_service(void)
 {
+    const uint32_t diag_started = DWT->CYCCNT;
+    g_rec_active_step_diag_scope_active = 1U;
     rec_latency_probe_service_reset();
+    const uint32_t source_started = DWT->CYCCNT;
     rec_source_service();
+    rec_active_step_diag_max(&g_rec_active_step_diag.rec_source_max_cycles,
+        source_started);
     audio_recorder_storage_service(g_audio_recorder_control_session,
         (uint8_t)((g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING)
             || (g_audio_recorder.state == AUDIO_RECORDER_STATE_DRAINING)));
@@ -310,6 +319,10 @@ void audio_recorder_service(void)
                     / AUDIO_RECORDER_BYTES_PER_FRAME);
             if(sample_page_cache_finalize_live_frames_key(key, frames) == 0U)
             {
+                rec_active_step_diag_max(
+                    &g_rec_active_step_diag.audio_recorder_total_max_cycles,
+                    diag_started);
+                g_rec_active_step_diag_scope_active = 0U;
                 return;
             }
             uint32_t ready_pages = (frames + SAMPLE_PAGE_FRAMES - 1U)
@@ -342,6 +355,10 @@ void audio_recorder_service(void)
             g_audio_recorder.state = AUDIO_RECORDER_STATE_TAKE_READY;
     }
     update_build_stream();
+    rec_active_step_diag_max(
+        &g_rec_active_step_diag.audio_recorder_total_max_cycles,
+        diag_started);
+    g_rec_active_step_diag_scope_active = 0U;
 }
 
 uint8_t audio_recorder_get_status_client(audio_recorder_client_t client,

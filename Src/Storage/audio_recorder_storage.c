@@ -9,6 +9,7 @@
 #include "Storage/sd_access_gate.h"
 #include "IPC/audio_recorder_capture_contract.h"
 #include "Storage/rec_latency_probe.h"
+#include "Storage/rec_active_step_diag.h"
 #include "Storage/rec_source_waveform.h"
 #include "ff.h"
 #include "stm32h7xx_hal.h"
@@ -755,8 +756,12 @@ void audio_recorder_storage_service(uint32_t session_id,
     {
         const uint32_t published_frames = g_audio_recorder_capture.head_cursor;
         __DMB();
+        const uint32_t capture_started = DWT->CYCCNT;
         rec_source_waveform_capture_service(g_audio_recorder_capture_ring,
             AUDIO_RECORDER_CAPTURE_RING_FRAMES, published_frames);
+        rec_active_step_diag_max(
+            &g_rec_active_step_diag.waveform_capture_max_cycles,
+            capture_started);
     }
     if ((runtime->phase == AUDIO_RECORDER_STORAGE_IDLE)
             || (runtime->phase == AUDIO_RECORDER_STORAGE_TAKE_READY)
@@ -814,7 +819,10 @@ void audio_recorder_storage_service(uint32_t session_id,
         }
     }
 
+    const uint32_t first_started = DWT->CYCCNT;
     generic_recorder_service(&runtime->recorder);
+    rec_active_step_diag_max(
+        &g_rec_active_step_diag.generic_first_max_cycles, first_started);
     if ((runtime->recorder.state == GENERIC_RECORDER_ERROR)
             || (runtime->recorder.state == GENERIC_RECORDER_ABORTED))
     {
@@ -841,7 +849,10 @@ void audio_recorder_storage_service(uint32_t session_id,
         sd_access_gate_set_recorder_fs_logical_active(1U);
     }
     sd_scheduler_runtime_service();
+    const uint32_t second_started = DWT->CYCCNT;
     generic_recorder_service(&runtime->recorder);
+    rec_active_step_diag_max(
+        &g_rec_active_step_diag.generic_second_max_cycles, second_started);
 }
 
 audio_recorder_storage_phase_t audio_recorder_storage_phase(void)

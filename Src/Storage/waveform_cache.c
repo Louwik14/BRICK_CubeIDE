@@ -16,15 +16,16 @@
 
 #define WAVEFORM_CACHE_DIR_ROOT "0:/BRICK"
 #define WAVEFORM_CACHE_DIR_PATH "0:/BRICK/.wavecache"
-#define WAVEFORM_CACHE_VERSION 1U
+#define WAVEFORM_CACHE_VERSION 2U
 #define WAVEFORM_CACHE_ENDIAN_LE 0x1234U
 #define WAVEFORM_CACHE_HASH_BYTES 65536U
 #define WAVEFORM_CACHE_QUEUE_CAPACITY 4U
 #define WAVEFORM_CACHE_TILE_QUEUE_CAPACITY 8U
 #define WAVEFORM_CACHE_RAM_TILE_COUNT 64U
 #define WAVEFORM_CACHE_IO_FRAMES 1024U
+#define WAVEFORM_CACHE_PENDING_COLUMNS 32U
 #define WAVEFORM_CACHE_MAX_BLOCK_ALIGN 8U
-#define WAVEFORM_CACHE_ACTIVE_LEVEL_COUNT 4U
+#define WAVEFORM_CACHE_ACTIVE_LEVEL_COUNT 5U
 #define WAVEFORM_CACHE_FORMAT_LEVEL_COUNT ((uint8_t)WAVEFORM_CACHE_LEVEL_COUNT)
 
 #if defined(__GNUC__)
@@ -92,9 +93,12 @@ typedef struct
     uint32_t column_count;
     uint32_t data_offset;
     uint32_t columns_done;
+    uint32_t columns_written;
+    uint16_t pending_count;
     uint32_t frames_in_column;
     int16_t min;
     int16_t max;
+    waveform_cache_column_t pending[WAVEFORM_CACHE_PENDING_COLUMNS];
 } waveform_cache_build_level_t;
 
 typedef struct
@@ -568,6 +572,8 @@ static void waveform_cache_fill_table(waveform_cache_job_t *job)
             job->levels[i].column_count = level->column_count;
             job->levels[i].data_offset = level->data_offset;
             job->levels[i].columns_done = 0U;
+            job->levels[i].columns_written = 0U;
+            job->levels[i].pending_count = 0U;
             job->levels[i].frames_in_column = 0U;
             job->levels[i].min = 32767;
             job->levels[i].max = (int16_t)-32768;
@@ -818,9 +824,11 @@ static int16_t waveform_cache_float_to_i16(float v)
     return (int16_t)(v * 32767.0f);
 }
 
-static int16_t waveform_cache_frame_to_i16(const uint8_t *frame,
+static void waveform_cache_frame_to_minmax(const uint8_t *frame,
                                            uint16_t channels,
-                                           uint16_t bits_per_sample)
+                                           uint16_t bits_per_sample,
+                                           int16_t *out_min,
+                                           int16_t *out_max)
 {
     float l = 0.0f;
     float r = 0.0f;
@@ -829,7 +837,8 @@ static int16_t waveform_cache_frame_to_i16(const uint8_t *frame,
     const int16_t ri = waveform_cache_float_to_i16(r);
     const int16_t amin = (li < ri) ? li : ri;
     const int16_t amax = (li > ri) ? li : ri;
-    return ((int32_t)amax > -(int32_t)amin) ? amax : amin;
+    *out_min = amin;
+    *out_max = amax;
 }
 
 static uint8_t waveform_cache_write_header(FIL *fp, waveform_cache_job_t *job, uint8_t state)
@@ -853,27 +862,33 @@ static uint8_t waveform_cache_write_header(FIL *fp, waveform_cache_job_t *job, u
     return 1U;
 }
 
-static uint8_t waveform_cache_write_column(FIL *fp,
-                                            const waveform_cache_build_level_t *level,
-                                            int16_t min_v,
-                                            int16_t max_v)
+static uint8_t waveform_cache_flush_columns(FIL *fp,
+                                            waveform_cache_build_level_t *level)
 {
-    waveform_cache_column_t col;
+    if(level->pending_count == 0U)
+    {
+        return 1U;
+    }
     UINT bw = 0U;
-    col.min = min_v;
-    col.max = max_v;
     const uint32_t offset =
-        level->data_offset + (level->columns_done * sizeof(waveform_cache_column_t));
+        level->data_offset + (level->columns_written * sizeof(waveform_cache_column_t));
     if(f_lseek(fp, offset) != FR_OK)
     {
         return 0U;
     }
-    return (uint8_t)(((f_write(fp, &col, sizeof(col), &bw) == FR_OK) && (bw == sizeof(col))) ? 1U : 0U);
+    const uint32_t bytes = level->pending_count * sizeof(waveform_cache_column_t);
+    if((f_write(fp, level->pending, bytes, &bw) != FR_OK) || (bw != bytes))
+    {
+        return 0U;
+    }
+    level->columns_written += level->pending_count;
+    level->pending_count = 0U;
+    return 1U;
 }
 
-static uint8_t waveform_cache_accumulate_frame(FIL *cache_fp,
-                                                waveform_cache_job_t *job,
-                                                int16_t sample,
+static uint8_t waveform_cache_accumulate_frame(waveform_cache_job_t *job,
+                                                int16_t sample_min,
+                                                int16_t sample_max,
                                                 uint8_t flush_last)
 {
     for(uint8_t i = 0U; i < WAVEFORM_CACHE_ACTIVE_LEVEL_COUNT; ++i)
@@ -885,22 +900,25 @@ static uint8_t waveform_cache_accumulate_frame(FIL *cache_fp,
         }
         if(level->frames_in_column == 0U)
         {
-            level->min = sample;
-            level->max = sample;
+            level->min = sample_min;
+            level->max = sample_max;
         }
         else
         {
-            if(sample < level->min) { level->min = sample; }
-            if(sample > level->max) { level->max = sample; }
+            if(sample_min < level->min) { level->min = sample_min; }
+            if(sample_max > level->max) { level->max = sample_max; }
         }
         level->frames_in_column++;
         if((level->frames_in_column >= level->frames_per_column)
                 || ((flush_last != 0U) && (job->next_frame >= job->header.frame_count)))
         {
-            if(waveform_cache_write_column(cache_fp, level, level->min, level->max) == 0U)
+            if(level->pending_count >= WAVEFORM_CACHE_PENDING_COLUMNS)
             {
                 return 0U;
             }
+            level->pending[level->pending_count].min = level->min;
+            level->pending[level->pending_count].max = level->max;
+            level->pending_count++;
             level->columns_done++;
             level->frames_in_column = 0U;
             level->min = 32767;
@@ -1194,10 +1212,24 @@ static void waveform_cache_service_build(uint32_t byte_budget)
                 &g_waveform_cache_io[i * (uint32_t)job->header.block_align];
             job->next_frame++;
             const uint8_t last = (job->next_frame >= job->header.frame_count) ? 1U : 0U;
-            const int16_t sample = waveform_cache_frame_to_i16(frame,
-                                                               job->header.channels,
-                                                               job->header.bits_per_sample);
-            if(waveform_cache_accumulate_frame(&cache_fp, job, sample, last) == 0U)
+            int16_t sample_min = 0;
+            int16_t sample_max = 0;
+            waveform_cache_frame_to_minmax(frame, job->header.channels,
+                                           job->header.bits_per_sample,
+                                           &sample_min, &sample_max);
+            if(waveform_cache_accumulate_frame(job, sample_min, sample_max, last) == 0U)
+            {
+                accum_ok = 0U;
+                break;
+            }
+        }
+        if(accum_ok == 0U)
+        {
+            break;
+        }
+        for(uint8_t i = 0U; i < WAVEFORM_CACHE_ACTIVE_LEVEL_COUNT; ++i)
+        {
+            if(waveform_cache_flush_columns(&cache_fp, &job->levels[i]) == 0U)
             {
                 accum_ok = 0U;
                 break;

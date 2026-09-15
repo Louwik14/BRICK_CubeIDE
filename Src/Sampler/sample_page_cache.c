@@ -11,6 +11,7 @@
 #include "Sampler/sample_page_lease_control.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Sampler/sample_stream_transport.h"
+#include "Storage/waveform_service.h"
 #include "stm32h7xx.h"
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)

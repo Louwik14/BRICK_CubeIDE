@@ -38,8 +38,19 @@ typedef enum
     IDLE_LATENCY_STORAGE_PATTERN,
     IDLE_LATENCY_STORAGE_WAVEFORM_CACHE,
     IDLE_LATENCY_STORAGE_PREVIEW,
+    IDLE_LATENCY_STORAGE_CAPTURE_WAVEFORM,
+    IDLE_LATENCY_STORAGE_WAVEFORM_SERVICE,
     IDLE_LATENCY_STORAGE_COUNT
 } idle_latency_storage_service_t;
+
+typedef enum
+{
+    IDLE_LATENCY_JOB_RECORDER = 0,
+    IDLE_LATENCY_JOB_STREAM_PAGE_CACHE,
+    IDLE_LATENCY_JOB_WAVEFORM_MINMAX,
+    IDLE_LATENCY_JOB_OTHER_BG_FS,
+    IDLE_LATENCY_JOB_COUNT
+} idle_latency_job_t;
 
 typedef struct
 {
@@ -69,6 +80,21 @@ typedef struct
     volatile uint32_t storage_last_cycles[IDLE_LATENCY_STORAGE_COUNT];
     volatile uint32_t storage_max_cycles[IDLE_LATENCY_STORAGE_COUNT];
     volatile uint32_t storage_slow_count[IDLE_LATENCY_STORAGE_COUNT];
+    volatile uint32_t storage_last_bytes[IDLE_LATENCY_STORAGE_COUNT];
+    volatile uint32_t last_completed_service;
+    volatile uint32_t last_completed_cycles;
+    volatile uint32_t last_completed_end_cycle;
+    volatile uint32_t gap_worst_service;
+    volatile uint32_t gap_worst_cycles;
+    volatile uint32_t gap_worst_storage_job;
+    volatile uint32_t gap_worst_storage_cycles;
+    volatile uint32_t active_storage_job;
+    volatile uint32_t last_storage_job;
+    volatile uint32_t last_storage_category;
+    volatile uint32_t last_storage_cycles;
+    volatile uint32_t storage_category_max_cycles[IDLE_LATENCY_JOB_COUNT];
+    volatile uint32_t storage_category_last_job[IDLE_LATENCY_JOB_COUNT];
+    volatile uint32_t storage_category_last_bytes[IDLE_LATENCY_JOB_COUNT];
 } idle_latency_diag_t;
 
 extern volatile idle_latency_diag_t g_idle_latency_diag;
@@ -76,6 +102,36 @@ extern volatile idle_latency_diag_t g_idle_latency_diag;
 static inline uint32_t idle_latency_diag_begin(void)
 {
     return DWT->CYCCNT;
+}
+
+static inline idle_latency_job_t idle_latency_storage_category(
+    idle_latency_storage_service_t service)
+{
+    if (service == IDLE_LATENCY_STORAGE_RECORDER)
+        return IDLE_LATENCY_JOB_RECORDER;
+    if (service == IDLE_LATENCY_STORAGE_RAM_WAVEFORM
+        || service == IDLE_LATENCY_STORAGE_WAVEFORM_CACHE
+        || service == IDLE_LATENCY_STORAGE_CAPTURE_WAVEFORM
+        || service == IDLE_LATENCY_STORAGE_WAVEFORM_SERVICE)
+        return IDLE_LATENCY_JOB_WAVEFORM_MINMAX;
+    if (service == IDLE_LATENCY_STORAGE_RAM_LOADER
+        || service == IDLE_LATENCY_STORAGE_MULTI)
+        return IDLE_LATENCY_JOB_STREAM_PAGE_CACHE;
+    return IDLE_LATENCY_JOB_OTHER_BG_FS;
+}
+
+static inline uint32_t idle_latency_storage_diag_begin(
+    idle_latency_storage_service_t service)
+{
+    g_idle_latency_diag.active_storage_job = (uint32_t)service;
+    g_idle_latency_diag.storage_last_bytes[service] = 0U;
+    return DWT->CYCCNT;
+}
+
+static inline void idle_latency_storage_diag_note_bytes(
+    idle_latency_storage_service_t service, uint32_t bytes)
+{
+    g_idle_latency_diag.storage_last_bytes[service] += bytes;
 }
 
 static inline void idle_latency_storage_diag_end(
@@ -90,6 +146,21 @@ static inline void idle_latency_storage_diag_end(
         diag->storage_max_cycles[service] = elapsed;
     if (elapsed >= diag->threshold_cycles)
         diag->storage_slow_count[service]++;
+    const idle_latency_job_t category = idle_latency_storage_category(service);
+    diag->last_storage_job = (uint32_t)service;
+    diag->last_storage_category = (uint32_t)category;
+    diag->last_storage_cycles = elapsed;
+    diag->storage_category_last_job[category] = (uint32_t)service;
+    diag->storage_category_last_bytes[category] =
+        diag->storage_last_bytes[service];
+    if (elapsed > diag->storage_category_max_cycles[category])
+        diag->storage_category_max_cycles[category] = elapsed;
+    if (elapsed > diag->gap_worst_storage_cycles)
+    {
+        diag->gap_worst_storage_cycles = elapsed;
+        diag->gap_worst_storage_job = (uint32_t)service;
+    }
+    diag->active_storage_job = IDLE_LATENCY_STORAGE_COUNT;
 }
 
 static inline void idle_latency_diag_end(idle_latency_service_t service,
@@ -105,6 +176,25 @@ static inline void idle_latency_diag_end(idle_latency_service_t service,
     {
         diag->worst_cycles = elapsed;
         diag->worst_service = (uint32_t)service;
+    }
+    diag->last_completed_service = (uint32_t)service;
+    diag->last_completed_cycles = elapsed;
+    diag->last_completed_end_cycle = DWT->CYCCNT;
+    if (service == IDLE_LATENCY_SERVICE_STREAM
+        || service == IDLE_LATENCY_SERVICE_AUDIO_BG_LOCAL)
+    {
+        diag->storage_category_last_job[IDLE_LATENCY_JOB_STREAM_PAGE_CACHE]
+            = IDLE_LATENCY_STORAGE_COUNT + (uint32_t)service;
+        if (elapsed > diag->storage_category_max_cycles[
+                IDLE_LATENCY_JOB_STREAM_PAGE_CACHE])
+            diag->storage_category_max_cycles[
+                IDLE_LATENCY_JOB_STREAM_PAGE_CACHE] = elapsed;
+    }
+    if (service != IDLE_LATENCY_SERVICE_SEQ
+        && elapsed > diag->gap_worst_cycles)
+    {
+        diag->gap_worst_cycles = elapsed;
+        diag->gap_worst_service = (uint32_t)service;
     }
     if (elapsed >= diag->threshold_cycles)
     {

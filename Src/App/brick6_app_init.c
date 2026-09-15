@@ -26,6 +26,7 @@
 #include "Storage/project_control.h"
 #include "Storage/sd_preview.h"
 #include "Storage/audio_recorder.h"
+#include "Storage/sample_capture.h"
 #include "Storage/undo_v2.h"
 #include "Storage/waveform_cache.h"
 #include "Storage/waveform_service.h"
@@ -165,11 +166,27 @@ static void brick6_app_service_storage(void)
         started = idle_latency_diag_begin();
         pattern_load_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES / 2U);
         idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_PATTERN, started);
-        started = idle_latency_diag_begin();
-        waveform_service_storage_service();
-        waveform_cache_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
-        idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_WAVEFORM_CACHE,
-                                      started);
+        started = idle_latency_storage_diag_begin(
+            IDLE_LATENCY_STORAGE_CAPTURE_WAVEFORM);
+        const uint8_t editor_storage_busy =
+            sample_capture_model_storage_service();
+        idle_latency_storage_diag_end(
+            IDLE_LATENCY_STORAGE_CAPTURE_WAVEFORM, started);
+        if(editor_storage_busy == 0U)
+        {
+            started = idle_latency_storage_diag_begin(
+                IDLE_LATENCY_STORAGE_WAVEFORM_SERVICE);
+            waveform_service_storage_service();
+            idle_latency_storage_diag_end(
+                IDLE_LATENCY_STORAGE_WAVEFORM_SERVICE, started);
+        }
+        if(editor_storage_busy == 0U)
+        {
+            started = idle_latency_diag_begin();
+            waveform_cache_service(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
+            idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_WAVEFORM_CACHE,
+                                          started);
+        }
         started = idle_latency_diag_begin();
         sd_preview_process();
         idle_latency_storage_diag_end(IDLE_LATENCY_STORAGE_PREVIEW, started);
