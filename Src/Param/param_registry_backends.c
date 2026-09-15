@@ -11,6 +11,7 @@
 #include "Audio/Engines/stack_engine.h"
 #include "Audio/Engines/wavetable_engine.h"
 #include "Audio/Engines/tb303_engine.h"
+#include "Audio/Engines/acid_engine.h"
 #include "Param/md_model_catalog.h"
 #include "Audio/vca_env.h"
 #include "Param/param_filter_audio.h"
@@ -47,6 +48,26 @@ uint8_t param_backend_apply_tone_tb303(uint8_t track,param_id_t id,float value)
     case PARAM_TB303_ACCENT:brick6_tb303_runtime_set_accent(instance,param_backend_clamp_value(value,0,1));return 1U;
     case PARAM_TB303_SLIDE:brick6_tb303_runtime_set_slide(instance,value>=0.5f);return 1U;
     case PARAM_TB303_VCF_RATE:brick6_tb303_runtime_set_vcf_rate(instance,value>=0.5f);return 1U;
+    default:return 0U;}
+}
+
+uint8_t param_backend_apply_tone_acid(uint8_t track,param_id_t id,float value)
+{
+    track_audio_runtime_ctx_t ctx;
+    if((audio_note_engine_adapter_current_ctx(track,&ctx)==0U)
+        ||(ctx.program_route.engine!=(uint8_t)TRACK_RUNTIME_ENGINE_ACID)
+        ||(ctx.program_route.instance_id>=BRICK6_ACID_INSTANCE_COUNT))return 0U;
+    const uint8_t instance=ctx.program_route.instance_id;
+    switch(id){
+    case PARAM_ACID_WAVE:brick6_acid_runtime_set_wave(instance,value>=0.5f);return 1U;
+    case PARAM_ACID_TUNE:brick6_acid_runtime_set_tune(instance,param_backend_clamp_value(value,-12,12));return 1U;
+    case PARAM_ACID_CUT:brick6_acid_runtime_set_cut(instance,param_backend_clamp_value(value,0,1));return 1U;
+    case PARAM_ACID_RES:brick6_acid_runtime_set_res(instance,param_backend_clamp_value(value,0,1));return 1U;
+    case PARAM_ACID_ENV_MOD:brick6_acid_runtime_set_env_mod(instance,param_backend_clamp_value(value,0,1));return 1U;
+    case PARAM_ACID_DECAY:brick6_acid_runtime_set_decay(instance,param_backend_clamp_value(value,0,1));return 1U;
+    case PARAM_ACID_ACCENT:brick6_acid_runtime_set_accent(instance,param_backend_clamp_value(value,0,1));return 1U;
+    case PARAM_ACID_SLIDE:brick6_acid_runtime_set_slide(instance,value>=0.5f);return 1U;
+    case PARAM_ACID_VCF_RATE:brick6_acid_runtime_set_vcf_rate(instance,value>=0.5f);return 1U;
     default:return 0U;}
 }
 

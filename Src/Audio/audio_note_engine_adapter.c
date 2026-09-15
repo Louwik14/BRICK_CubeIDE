@@ -13,6 +13,7 @@
 #include "Audio/Engines/stack_engine.h"
 #include "Audio/Engines/wavetable_engine.h"
 #include "Audio/Engines/tb303_engine.h"
+#include "Audio/Engines/acid_engine.h"
 #include "Platform/brick_build_config.h"
 #include "IPC/control_audio_command.h"
 #include "Track/synth_polyphony.h"
@@ -270,6 +271,9 @@ static void audio_note_engine_adapter_project_voice_configuration(
         case TRACK_RUNTIME_ENGINE_TB303:
             brick6_tb303_runtime_sync_voice(source, instance);
             break;
+        case TRACK_RUNTIME_ENGINE_ACID:
+            brick6_acid_runtime_sync_voice(source, instance);
+            break;
         default:
             break;
     }
@@ -287,7 +291,8 @@ uint8_t audio_note_engine_adapter_project_track_configuration(
             && (engine != TRACK_RUNTIME_ENGINE_STACK)
             && (engine != TRACK_RUNTIME_ENGINE_WAVE)
             && (engine != TRACK_RUNTIME_ENGINE_FM)
-            && (engine != TRACK_RUNTIME_ENGINE_TB303))
+            && (engine != TRACK_RUNTIME_ENGINE_TB303)
+            && (engine != TRACK_RUNTIME_ENGINE_ACID))
         return 1U;
     const uint8_t voice_count = synth_polyphony_get_voice_count(entity_id);
     for (uint8_t voice = 0U; voice < voice_count; ++voice)
@@ -360,6 +365,13 @@ static uint8_t audio_note_engine_adapter_initialize_held_renderer(
         brick6_tb303_runtime_restart_voice(instance);
         brick6_tb303_runtime_initialize_held_note(instance, note, velocity);
     }
+    else if (engine == TRACK_RUNTIME_ENGINE_ACID)
+    {
+        audio_note_engine_adapter_project_voice_configuration(
+            program, instance);
+        brick6_acid_runtime_restart_voice(instance);
+        brick6_acid_runtime_initialize_held_note(instance, note, velocity);
+    }
     else if (engine == TRACK_RUNTIME_ENGINE_SAMPLER)
     {
         const uint8_t multi = (uint8_t)(program->type
@@ -396,7 +408,8 @@ static uint8_t audio_note_engine_adapter_apply_physical(
         || (engine == TRACK_RUNTIME_ENGINE_STACK)
         || (engine == TRACK_RUNTIME_ENGINE_WAVE)
         || (engine == TRACK_RUNTIME_ENGINE_FM)
-        || (engine == TRACK_RUNTIME_ENGINE_TB303));
+        || (engine == TRACK_RUNTIME_ENGINE_TB303)
+        || (engine == TRACK_RUNTIME_ENGINE_ACID));
     const uint8_t is_multi_sampler = (uint8_t)((engine
             == TRACK_RUNTIME_ENGINE_SAMPLER)
         && (program->type == TRACK_RUNTIME_TYPE_MULTI));
@@ -546,6 +559,19 @@ static uint8_t audio_note_engine_adapter_apply_physical(
             brick6_tb303_runtime_note_off(instance, note);
         }
     }
+    else if (engine == TRACK_RUNTIME_ENGINE_ACID)
+    {
+        if (is_note_on != 0U)
+        {
+            audio_note_engine_adapter_project_voice_configuration(
+                program, instance);
+            brick6_acid_runtime_note_on(instance, note, velocity);
+        }
+        else
+        {
+            brick6_acid_runtime_note_off(instance, note);
+        }
+    }
     else if (engine == TRACK_RUNTIME_ENGINE_SAMPLER)
     {
         if (is_multi_sampler != 0U)
@@ -661,7 +687,7 @@ uint8_t audio_note_engine_adapter_install_prepared(
     track_audio_runtime_ctx_t *const ctx = &g_audio_track_ctx[entity_id];
     uint8_t requested_voices = (family == TRACK_RUNTIME_FAMILY_SYNTH)
         ? CONTROL_AUDIO_PROGRAM_DECODE_VOICES(spec->flags) : 1U;
-    if (requested_engine == TRACK_RUNTIME_ENGINE_TB303)
+    if ((requested_engine == TRACK_RUNTIME_ENGINE_TB303) || (requested_engine == TRACK_RUNTIME_ENGINE_ACID))
         requested_voices = 1U;
     const uint8_t preserve_synth_slots = (uint8_t)(
         (ctx->program_route.active != 0U)
@@ -722,7 +748,8 @@ uint8_t audio_note_engine_adapter_install_prepared(
             || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
             || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
             || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM)
-            || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB303)));
+            || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB303)
+            || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_ACID)));
     if ((synth_renderer != 0U)
             && (synth_polyphony_can_activate(entity_id,
                 (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
@@ -745,7 +772,8 @@ uint8_t audio_note_engine_adapter_install_prepared(
                 || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
                 || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
                 || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_FM)
-                || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB303)))
+                || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB303)
+                || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_ACID)))
     {
         const uint8_t renderer_ready = (preserve_synth_slots != 0U)
             ? synth_polyphony_replace_renderer(entity_id, installed.engine)
@@ -756,7 +784,8 @@ uint8_t audio_note_engine_adapter_install_prepared(
             uint8_t voices = requested_voices;
             if ((installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
                     || (installed.engine
-                        == (uint8_t)TRACK_RUNTIME_ENGINE_TB303))
+                        == (uint8_t)TRACK_RUNTIME_ENGINE_TB303)
+                    || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_ACID))
                 voices = 1U;
             if ((preserve_synth_slots == 0U)
                     && (synth_polyphony_set_voice_count(entity_id, voices)
@@ -868,7 +897,8 @@ uint8_t audio_note_engine_adapter_initialize_held_outputs(
         || (engine == TRACK_RUNTIME_ENGINE_STACK)
         || (engine == TRACK_RUNTIME_ENGINE_WAVE)
         || (engine == TRACK_RUNTIME_ENGINE_FM)
-        || (engine == TRACK_RUNTIME_ENGINE_TB303));
+        || (engine == TRACK_RUNTIME_ENGINE_TB303)
+        || (engine == TRACK_RUNTIME_ENGINE_ACID));
     const uint8_t uses_voice_vca =
         audio_note_engine_adapter_engine_uses_voice_vca(engine);
     uint8_t held_count = 0U;
@@ -964,10 +994,12 @@ uint8_t audio_note_engine_adapter_apply_polyphony(
             && (program->engine != (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
             && (program->engine != (uint8_t)TRACK_RUNTIME_ENGINE_FM)
             && (program->engine != (uint8_t)TRACK_RUNTIME_ENGINE_TB303)
+            && (program->engine != (uint8_t)TRACK_RUNTIME_ENGINE_ACID)
             && (program->engine != (uint8_t)TRACK_RUNTIME_ENGINE_DRUM))
         return 0U;
     if ((program->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
-            || (program->engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB303))
+            || (program->engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB303)
+            || (program->engine == (uint8_t)TRACK_RUNTIME_ENGINE_ACID))
         return 0U;
     uint8_t held_count = 0U;
     for (uint8_t i = 0U; i < AUDIO_PHYSICAL_OUTPUT_CAPACITY; ++i)

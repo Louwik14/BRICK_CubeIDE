@@ -53,6 +53,10 @@ uint8_t param_backend_apply_prepared_track_value_audio(
     {
         applied = param_backend_apply_tone_tb303(track, id, effective_value);
     }
+    else if (ctx->program_route.engine == (uint8_t)TRACK_RUNTIME_ENGINE_ACID)
+    {
+        applied = param_backend_apply_tone_acid(track, id, effective_value);
+    }
     else if (ctx->program_route.engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
     {
         applied = param_backend_apply_tone_drum(track, ctx, id, effective_value);

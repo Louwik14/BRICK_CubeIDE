@@ -75,7 +75,9 @@ _Static_assert(sizeof(brick6_stack_runtime_instance_t) <= 768U, "brick6_stack_ru
 
 AUDIO_HOT static brick6_stack_runtime_instance_t g_stack_runtime[BRICK6_STACK_MAX_INSTANCES];
 enum { STACK_POLY_D2_COUNT = BRICK6_STACK_VOICE_INSTANCE_COUNT - BRICK6_STACK_MAX_INSTANCES };
-AUDIO_HOT static brick6_stack_runtime_instance_t g_stack_poly_runtime_d2[STACK_POLY_D2_COUNT];
+/* Poly overflow instances are not the primary mono hot path; keep DTCM
+ * available for bounded active render state when ACID is linked. */
+static brick6_stack_runtime_instance_t g_stack_poly_runtime_d2[STACK_POLY_D2_COUNT];
 static uint32_t g_stack_continuous_version;
 AUDIO_HOT static int32_t g_stack_native_scratch[AUDIO_BLOCK_SIZE];
 AUDIO_HOT static int32_t g_stack_acc_scratch[AUDIO_BLOCK_SIZE];

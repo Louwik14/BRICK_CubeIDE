@@ -91,7 +91,8 @@ typedef enum
     PERSIST_TYPE_LOOPER         = 0x4C4F4F50UL, /* LOOP */
     PERSIST_TYPE_EXTERNAL       = 0x45585420UL, /* EXT  */
     PERSIST_TYPE_GROUP          = 0x47525020UL, /* GRP  */
-    PERSIST_TYPE_TB303          = 0x33303320UL  /* 303  */
+    PERSIST_TYPE_TB303          = 0x33303320UL, /* 303 */
+    PERSIST_TYPE_ACID           = 0x41434944UL  /* ACID */
 } persist_control_type_key_value_t;
 
 typedef enum

@@ -300,6 +300,18 @@ static const ui_template_family_t g_ui_template_tone_family_tb303 = {
     .default_subpage = 0U,
 };
 
+static const ui_template_family_t g_ui_template_tone_family_acid = {
+    .family_title = "TONE",
+    .nav_labels = { "VCO", "VCF/VCA", "QUALITY", "-" },
+    .subpages = {
+        { .title = "VCO", .param_bank = { .params = { PARAM_ACID_WAVE, PARAM_ACID_TUNE, PARAM_ACID_SLIDE, PARAM_ACID_ACCENT } } },
+        { .title = "VCF / VCA", .param_bank = { .params = { PARAM_ACID_CUT, PARAM_ACID_RES, PARAM_ACID_ENV_MOD, PARAM_ACID_DECAY } } },
+        { .title = "QUALITY", .param_bank = { .params = { PARAM_ACID_VCF_RATE, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+    },
+    .default_subpage = 0U,
+};
+
 static ui_template_family_t g_ui_template_tone_family_fm = {
     .family_title = "TONE 1/2",
     .nav_labels = { "GLOBAL", "OP QUICK", "PITCH R", "PITCH L" },

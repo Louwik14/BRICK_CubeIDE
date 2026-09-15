@@ -4,7 +4,7 @@
 
 static const track_type_t k_synth_types[] = {
     TRACK_TYPE_PRISM, TRACK_TYPE_WAVE, TRACK_TYPE_STACK, TRACK_TYPE_FM,
-    TRACK_TYPE_TB303
+    TRACK_TYPE_TB303, TRACK_TYPE_ACID
 };
 static const track_type_t k_sampler_types[] = {
     TRACK_TYPE_RAM, TRACK_TYPE_STREAM, TRACK_TYPE_MULTI, TRACK_TYPE_GROUP

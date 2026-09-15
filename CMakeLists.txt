@@ -511,6 +511,7 @@ set(AUDIO_LTO_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/prism_engine.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/stack_engine.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/tb303_engine.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/acid_engine.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/wavetable_engine.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/Sampler/brick6_sampler_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/synth_polyphony.c
@@ -537,6 +538,7 @@ set(AUDIO_O3_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/prism_engine.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/stack_engine.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/tb303_engine.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/acid_engine.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/wavetable_engine.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/Sampler/brick6_sampler_runtime.c
     ${MUTABLE_INSTRUMENTS_SRC}

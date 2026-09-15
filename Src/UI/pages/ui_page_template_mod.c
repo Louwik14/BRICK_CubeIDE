@@ -63,6 +63,7 @@ static const char *ui_page_template_mod_context(param_id_t id)
     if ((id >= PARAM_SAMPLER_GAIN) && (id <= PARAM_SAMPLER_SLICE_COUNT)) return "Samp";
     if ((id == PARAM_SAMPLER_MULTI_LOOP) || (id == PARAM_SAMPLER_LOOP_START)) return "Mult";
     if ((id >= PARAM_TB303_WAVE) && (id <= PARAM_TB303_VCF_RATE)) return "303";
+    if ((id >= PARAM_ACID_WAVE) && (id <= PARAM_ACID_VCF_RATE)) return "ACID";
     if ((id >= PARAM_DRUM_MD_MODEL) && (id <= PARAM_DRUM_MD_P8)) return "Drum";
     if ((id >= PARAM_WAVE_OSC1_POS) && (id <= PARAM_WAVE_OSC1_LEN)) return "Osc1";
     if ((id >= PARAM_WAVE_OSC2_POS) && (id <= PARAM_WAVE_OSC2_LEN)) return "Osc2";

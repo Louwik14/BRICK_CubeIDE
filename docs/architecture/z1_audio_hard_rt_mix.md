@@ -14,8 +14,10 @@ pour les notes rendables; aucun NOTE OFF/ON n'est fabrique. Un moteur incompatib
 peut donc rester silencieux sans fermer le ledger; son retour compatible
 reprojette les notes encore vivantes. Un NOTE OFF recu pendant cette phase
 silencieuse retire normalement l'output et interdit toute resurrection au retour
-d'un moteur compatible. Les etats chauds des voix restent en DTCM
-et aucun chemin audio n'alloue dynamiquement.
+d'un moteur compatible. Les etats chauds des voix sont places selon le budget
+de la map: ACID et les instances poly overflow de Stack restent en D1 pour
+ne pas saturer la DTCM.
+Aucun chemin audio n'alloue dynamiquement.
 
 La croissance polyphonique planifie tous ses slots avant la premiere mutation.
 Le rebind des outputs tenus ne masque aucun echec: l'absence volontaire de
@@ -35,8 +37,18 @@ La configuration moteur reste canonique sur l'instance primaire de la track.
 L'adapter AUDIO porte le geste commun de projection vers tous les slots physiques:
 une application PARAM live, une croissance de polyphonie et l'initialisation
 d'une voix passent par cette meme projection propre a Prism, Stack, Wave, FM ou
-TB303. Phase, gate, enveloppes, position et historique DSP restent possedes par
-chaque voix; Drum et TB303 conservent leur polyphonie effective de un.
+TB303 ou ACID. Phase, gate, enveloppes, position et historique DSP restent possedes par
+chaque voix; Drum, TB303 et ACID conservent leur polyphonie effective de un.
+
+ACID est un moteur distinct de TB303. Il porte les formes d'onde mesurees,
+la saturation, le filtre, les deux enveloppes, l'accent VCF/VCA et le slide
+de Digix0x (`connortreacy/digix0x`, commit `bec716c7`). Le rendu principal
+reste a 48 kHz. Un accumulateur entier par instance execute 25 pas filtre
+de 5 us pour 6 frames; chaque frame en execute 4 ou 5 et lit seulement le
+dernier etat causal. La phase traverse les blocs. Les grosses LUT sont `const`
+en Flash; `VCF RATE` est provisoirement neutre et ne modifie jamais les 200 kHz.
+Le port borne les notes aux 64 tables square et n'interprete pas une entree
+impaire de la table de pitch entrelacee comme un increment d'oscillateur.
 
 Drum reste monophonique mais son backend couvre les 16 slots physiques du pool
 synth; toute admission valide possede ainsi une instance representable, y

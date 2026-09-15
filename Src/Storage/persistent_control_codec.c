@@ -144,7 +144,7 @@ static uint8_t codec_type_valid(uint32_t key)
     case PERSIST_TYPE_STACK:case PERSIST_TYPE_FM:case PERSIST_TYPE_DRUM_MD:
     case PERSIST_TYPE_RESERVED_LEGACY_DRUM_ANALOG_BD:case PERSIST_TYPE_MIDI:case PERSIST_TYPE_RAM_SAMPLE:
     case PERSIST_TYPE_STREAM_SAMPLE:case PERSIST_TYPE_MULTI_SAMPLE:case PERSIST_TYPE_LOOPER:
-    case PERSIST_TYPE_EXTERNAL:case PERSIST_TYPE_GROUP:case PERSIST_TYPE_TB303:return 1U;default:return 0U;}
+    case PERSIST_TYPE_EXTERNAL:case PERSIST_TYPE_GROUP:case PERSIST_TYPE_TB303:case PERSIST_TYPE_ACID:return 1U;default:return 0U;}
 }
 
 static uint8_t codec_asset_kind_valid(uint32_t key)
@@ -315,6 +315,7 @@ static void codec_tone(codec_io_t *io,tone_program_control_t*t)
     case TRACK_RUNTIME_TYPE_STACK:codec_float_block(io,&t->state.stack.osc[0].level,18U);break;
     case TRACK_RUNTIME_TYPE_WAVE:codec_float_block(io,&t->state.wave.osc[0].position,10U);break;
     case TRACK_RUNTIME_TYPE_TB303:codec_float_block(io,&t->state.tb303.wave,9U);break;
+    case TRACK_RUNTIME_TYPE_ACID:codec_float_block(io,&t->state.acid.wave,9U);break;
     case TRACK_RUNTIME_TYPE_RAM:codec_float_block(io,&t->state.ram.gain,7U);break;
     case TRACK_RUNTIME_TYPE_STREAM:codec_float_block(io,&t->state.stream.gain,9U);break;
     case TRACK_RUNTIME_TYPE_LOOPER:codec_float_block(io,&t->state.looper.xfade,4U);break;
