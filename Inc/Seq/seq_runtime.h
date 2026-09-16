@@ -73,6 +73,16 @@ typedef struct
     uint32_t group_id;
 } seq_runtime_control_event_t;
 
+typedef struct
+{
+    uint8_t running;
+    uint8_t play_step[SEQ_LANE_CAPACITY];
+    uint8_t track_div_phase[SEQ_LANE_CAPACITY];
+    uint8_t track_swing_phase[SEQ_LANE_CAPACITY];
+    uint64_t step_sample_q16;
+    uint32_t samples_per_step_q16;
+} seq_runtime_shadow_seed_t;
+
 /*
  * Contract surface:
  * - orchestration / policy / event routing: lifecycle, transport, live-rec, clock policy.
@@ -87,6 +97,7 @@ void seq_runtime_time_adapter_process(void);
 /* Halt target first; GDB-only diagnostic reset for one hardware scenario. */
 void brick6_latency_diag_reset(void);
 uint32_t seq_runtime_get_samples_per_step_q16(void);
+void seq_runtime_capture_shadow_seed(seq_runtime_shadow_seed_t *out_seed);
 
 /* Orchestration / policy surface. */
 void seq_runtime_start(void);

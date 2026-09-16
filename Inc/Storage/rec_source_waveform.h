@@ -8,7 +8,7 @@ typedef struct
 {
     uint32_t frame_count;
     uint32_t frames_per_bin;
-    /* Planned frame domain for fixed-length bins; actual duration may be shorter. */
+    /* Frame domain of the bins; new REC overviews use the captured duration. */
     uint32_t bin_domain_frames;
     uint32_t generation;
     uint16_t bin_count;

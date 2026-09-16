@@ -463,8 +463,10 @@ static uint8_t mod_destination_apply_sampler_rt(uint8_t track,
         case PARAM_SAMPLER_CLIP_GRAIN:
         {
             if (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM) { return 0U; }
-            static const uint16_t grain_frames[] = {384U, 512U, 768U, 1024U, 1536U, 2048U};
-            const uint8_t idx = (uint8_t)(mod_destination_clampf(value, 0.0f, 5.0f) + 0.5f);
+            static const uint16_t grain_frames[] = {0U, 192U, 256U, 320U, 384U, 512U,
+                                                     576U, 640U, 704U, 768U, 1024U, 1536U,
+                                                     2048U, 2560U, 3072U, 4096U, 6144U, 8192U};
+            const uint8_t idx = (uint8_t)(mod_destination_clampf(value, 0.0f, 17.0f) + 0.5f);
             brick6_sampler_runtime_set_clip_grain_size(track, grain_frames[idx]);
             return 1U;
         }

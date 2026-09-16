@@ -37,8 +37,9 @@ ENTRY(Reset_Handler)
 /* Highest address of the user mode stack */
 _estack = ORIGIN(RAM_D1) + LENGTH(RAM_D1);    /* end of RAM */
 /* Generate a link error if heap and stack don't fit into RAM */
-_Min_Heap_Size = 0x200;      /* required amount of heap  */
-_Min_Stack_Size = 0x400; /* required amount of stack */
+_Min_Heap_Size = 0x1000;      /* bounded newlib heap */
+_Min_Stack_Size = 0x1000;     /* reserved MSP stack */
+_Min_Heap_Stack_Guard = 0x1000;
 
 /* Specify the memory areas */
 MEMORY
@@ -58,7 +59,8 @@ MEMORY
   SRAM3_D2 (xrw) : ORIGIN = 0x30040000, LENGTH = 32K
   RAM_D3 (xrw)   : ORIGIN = 0x38000000, LENGTH = 64K
   BKPSRAM (xrw)  : ORIGIN = 0x38800000, LENGTH = 4K
-  SDRAM (xrw)          : ORIGIN = 0xC0000000, LENGTH = 32512K
+  SDRAM (xrw)          : ORIGIN = 0xC0000000, LENGTH = 32384K
+  SDRAM_RECORDER_RING (xrw) : ORIGIN = 0xC1FA0000, LENGTH = 128K
   SDRAM_RECORDER (xrw) : ORIGIN = 0xC1FC0000, LENGTH = 256K
   ITCMRAM (xrw)  : ORIGIN = 0x00000000, LENGTH = 64K
 }
@@ -71,7 +73,8 @@ __crash_library_end__ = ORIGIN(CRASH_FLASH_B) + LENGTH(CRASH_FLASH_B);
 __sdram_global_start__ = ORIGIN(SDRAM);
 __sdram_global_end__ = ORIGIN(SDRAM_RECORDER) + LENGTH(SDRAM_RECORDER);
 __sdram_cacheable_start__ = ORIGIN(SDRAM);
-__sdram_cacheable_end__ = ORIGIN(SDRAM) + LENGTH(SDRAM);
+__sdram_cacheable_end__ = ORIGIN(SDRAM_RECORDER_RING) + LENGTH(SDRAM_RECORDER_RING);
+__sdram_general_end__ = ORIGIN(SDRAM) + LENGTH(SDRAM);
 __sdram_recorder_region_start__ = ORIGIN(SDRAM_RECORDER);
 __sdram_recorder_region_end__ = ORIGIN(SDRAM_RECORDER) + LENGTH(SDRAM_RECORDER);
 __sram1_d2_start__ = ORIGIN(SRAM1_D2_DMA_NC);
@@ -583,6 +586,16 @@ SECTIONS
     . = ALIGN(32);
   } >SDRAM
 
+  .sdram_recorder_ring (NOLOAD) :
+  {
+    . = ALIGN(32);
+    __sdram_recorder_ring_start__ = .;
+    KEEP(*(.sdram_recorder_ring))
+    KEEP(*(.sdram_recorder_ring*))
+    . = ALIGN(32);
+    __sdram_recorder_ring_end__ = .;
+  } >SDRAM_RECORDER_RING
+
   .sdram_recorder (NOLOAD) :
   {
     . = ALIGN(32);
@@ -604,6 +617,16 @@ SECTIONS
          "Sample page pool starts outside cacheable SDRAM")
   ASSERT(__sdram_page_pool_end__ <= __sdram_cacheable_end__,
          "Sample page pool exceeds cacheable SDRAM")
+  ASSERT(ADDR(.sdram_audio_cold) + SIZEOF(.sdram_audio_cold) <= __sdram_general_end__,
+         "General SDRAM sections exceed reserved Recorder ring")
+  ASSERT(ADDR(.sdram_ui) + SIZEOF(.sdram_ui) <= __sdram_general_end__,
+         "UI/Undo exceeds general SDRAM")
+  ASSERT(__sdram_recorder_ring_start__ == ORIGIN(SDRAM_RECORDER_RING),
+         "Recorder ring is not at its cacheable MPU window")
+  ASSERT(__sdram_recorder_ring_end__ <= ORIGIN(SDRAM_RECORDER_RING) + LENGTH(SDRAM_RECORDER_RING),
+         "Recorder ring exceeds cacheable MPU window")
+  ASSERT(__sdram_recorder_ring_end__ <= __sdram_cacheable_end__,
+         "Recorder ring exceeds cacheable SDRAM")
   ASSERT(__sdram_recorder_start__ >= __sdram_recorder_region_start__,
          "Recorder starts outside dedicated SDRAM region")
   ASSERT(__sdram_recorder_end__ <= __sdram_recorder_region_end__,
@@ -620,10 +643,15 @@ SECTIONS
     . = ALIGN(8);
     PROVIDE ( end = . );
     PROVIDE ( _end = . );
+    PROVIDE ( __heap_start__ = . );
     . = . + _Min_Heap_Size;
-    . = . + _Min_Stack_Size;
+    PROVIDE ( __heap_limit__ = . );
     . = ALIGN(8);
   } >RAM_D1
+
+  PROVIDE ( __stack_limit__ = _estack - _Min_Stack_Size );
+  ASSERT(__heap_limit__ + _Min_Heap_Stack_Guard <= __stack_limit__,
+         "RAM_D1 heap/guard/stack contract overflow")
 
   /* Remove information from the standard libraries */
   /DISCARD/ :

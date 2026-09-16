@@ -29,17 +29,13 @@ uint8_t sample_capture_model_return_to_audio_rec(void)
             || (g_sample_capture.state.armed_pending != 0U))
         return 0U;
 
-    /* Leaving an unsaved take is the product's explicit REC_SOURCE CLEAR. */
-    if ((g_sample_capture.state.take_valid != 0U)
-            && (g_sample_capture.state.final_path[0] == '\0')
-            && (rec_source_clear_current() == 0U))
-        return 0U;
-
     g_sample_capture.state.view = SAMPLE_CAPTURE_VIEW_AUDIO_REC;
+    waveform_service_local_suspend();
     g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
     g_sample_capture.state.trigger_latched = 0U;
     sample_capture_set_capture_enabled(0U);
-    sample_capture_reset_take_transients(0U);
+    g_sample_capture.rec_edit_enter_deferred_services = 0U;
+    g_sample_capture.rec_edit_first_render_pending = 0U;
     sample_capture_publish_trigger_config();
     sample_capture_publish_rec_bus();
 

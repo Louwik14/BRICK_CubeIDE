@@ -162,13 +162,6 @@ audio_recorder_lifecycle_result_t audio_recorder_prepare_client_cooperative(
     if((client != AUDIO_RECORDER_CLIENT_AUDIO_REC)
             || (temporary_rec_path == NULL) || (final_wav_path == NULL))
         return AUDIO_RECORDER_LIFECYCLE_ERROR;
-    if((g_audio_recorder.state == AUDIO_RECORDER_STATE_TAKE_READY)
-            || (g_audio_recorder.state == AUDIO_RECORDER_STATE_FAILED))
-    {
-        const audio_recorder_lifecycle_result_t discarded =
-            audio_recorder_discard_client(g_audio_recorder.client);
-        if(discarded != AUDIO_RECORDER_LIFECYCLE_OK) return discarded;
-    }
     if(g_audio_recorder.state != AUDIO_RECORDER_STATE_IDLE)
         return AUDIO_RECORDER_LIFECYCLE_NOT_NOW;
     char temporary_copy[AUDIO_RECORDER_PATH_MAX];
@@ -236,8 +229,7 @@ audio_recorder_lifecycle_result_t audio_recorder_discard_client(
             || (g_audio_recorder.state == AUDIO_RECORDER_STATE_DRAINING)
             || (g_audio_recorder.state == AUDIO_RECORDER_STATE_FINALIZING))
         return AUDIO_RECORDER_LIFECYCLE_NOT_NOW;
-    if((rec_source_building_active() == 0U)
-            && (g_audio_recorder.state == AUDIO_RECORDER_STATE_TAKE_READY))
+    if(g_audio_recorder.state == AUDIO_RECORDER_STATE_TAKE_READY)
     {
         audio_recorder_storage_release();
         reset_session();

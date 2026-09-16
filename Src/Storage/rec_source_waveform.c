@@ -5,19 +5,16 @@
 #include "Platform/memory_layout.h"
 
 #define REC_SOURCE_WAVEFORM_SERVICE_FRAMES 4096U
-#define REC_SOURCE_FREE_FRAME_LIMIT ((UINT32_MAX - 44U) / 6U)
 
 typedef struct
 {
     rec_source_waveform_summary_t levels[2];
-    uint32_t frame_limit;
     uint32_t captured_frames;
     uint32_t compact_cursor;
     uint32_t compact_start_frame;
     uint32_t clear_cursor;
     uint8_t active_level;
     uint8_t compacting;
-    uint8_t fixed_length;
     uint8_t active;
 } rec_source_waveform_capture_t;
 
@@ -63,19 +60,6 @@ static void capture_frame(const int32_t *lr, uint32_t frame)
     const int16_t r = (int16_t)(lr[1] >> 8U);
     const int16_t sample_min = (l < r) ? l : r;
     const int16_t sample_max = (l > r) ? l : r;
-    if (g_rec_source_waveform.fixed_length != 0U)
-    {
-        const uint32_t bins = (g_rec_source_waveform.frame_limit
-                < REC_SOURCE_WAVEFORM_BINS)
-            ? g_rec_source_waveform.frame_limit : REC_SOURCE_WAVEFORM_BINS;
-        uint32_t bin = (uint32_t)(((uint64_t)frame * bins)
-                                  / g_rec_source_waveform.frame_limit);
-        if (bin >= bins) bin = bins - 1U;
-        accumulate(&g_rec_source_waveform.levels[0], bin,
-                   sample_min, sample_max);
-        return;
-    }
-
     rec_source_waveform_summary_t *active =
         &g_rec_source_waveform.levels[g_rec_source_waveform.active_level];
     const uint32_t frames_per_bin = active->frames_per_bin;
@@ -123,14 +107,14 @@ static void capture_frame(const int32_t *lr, uint32_t frame)
 
 void rec_source_waveform_begin(uint32_t frame_limit)
 {
+    /* Use the captured timeline, not the planned REC limit: an early STOP
+       must not leave most of the 4096-bin overview unused. */
+    (void)frame_limit;
     memset(&g_rec_source_waveform, 0, sizeof(g_rec_source_waveform));
     clear_level(&g_rec_source_waveform.levels[0]);
     clear_level(&g_rec_source_waveform.levels[1]);
     g_rec_source_waveform.levels[0].frames_per_bin = 1U;
     g_rec_source_waveform.levels[1].frames_per_bin = 2U;
-    g_rec_source_waveform.frame_limit = frame_limit;
-    g_rec_source_waveform.fixed_length =
-        (frame_limit < REC_SOURCE_FREE_FRAME_LIMIT) ? 1U : 0U;
     g_rec_source_waveform.active = 1U;
 }
 
@@ -182,27 +166,14 @@ uint8_t rec_source_waveform_finish(rec_source_waveform_summary_t *out_summary)
             g_rec_source_waveform.compacting = 0U;
         }
     }
-    const uint8_t level = (g_rec_source_waveform.fixed_length != 0U)
-        ? 0U : g_rec_source_waveform.active_level;
+    const uint8_t level = g_rec_source_waveform.active_level;
     *out_summary = g_rec_source_waveform.levels[level];
     out_summary->frame_count = g_rec_source_waveform.captured_frames;
-    if (g_rec_source_waveform.fixed_length != 0U)
-    {
-        out_summary->frames_per_bin = 0U;
-        out_summary->bin_domain_frames = g_rec_source_waveform.frame_limit;
-        out_summary->bin_count = (g_rec_source_waveform.frame_limit
-                < REC_SOURCE_WAVEFORM_BINS)
-            ? (uint16_t)g_rec_source_waveform.frame_limit
-            : REC_SOURCE_WAVEFORM_BINS;
-    }
-    else
-    {
-        out_summary->bin_domain_frames = out_summary->frame_count;
-        uint32_t bins = (out_summary->frame_count + out_summary->frames_per_bin - 1U)
-            / out_summary->frames_per_bin;
-        if (bins > REC_SOURCE_WAVEFORM_BINS) bins = REC_SOURCE_WAVEFORM_BINS;
-        out_summary->bin_count = (uint16_t)bins;
-    }
+    out_summary->bin_domain_frames = out_summary->frame_count;
+    uint32_t bins = (out_summary->frame_count + out_summary->frames_per_bin - 1U)
+        / out_summary->frames_per_bin;
+    if (bins > REC_SOURCE_WAVEFORM_BINS) bins = REC_SOURCE_WAVEFORM_BINS;
+    out_summary->bin_count = (uint16_t)bins;
     for (uint16_t i = 0U; i < out_summary->bin_count; ++i)
         if ((out_summary->min[i] == 32767) && (out_summary->max[i] == -32768))
         {

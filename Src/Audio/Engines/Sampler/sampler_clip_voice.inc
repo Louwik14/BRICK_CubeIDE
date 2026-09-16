@@ -41,12 +41,24 @@ static uint16_t brick6_sampler_runtime_clip_sanitize_grain_size(uint16_t grain_s
 {
     switch (grain_size)
     {
+        case BRICK6_SAMPLER_CLIP_GRAIN_LAW:
+        case 192U:
+        case 256U:
+        case 320U:
         case 384U:
         case 512U:
+        case 576U:
+        case 640U:
+        case 704U:
         case 768U:
         case 1024U:
         case 1536U:
         case 2048U:
+        case 2560U:
+        case 3072U:
+        case 4096U:
+        case 6144U:
+        case 8192U:
             return grain_size;
         default:
             return BRICK6_SAMPLER_CLIP_DEFAULT_GRAIN_FRAMES;
@@ -57,12 +69,23 @@ static uint16_t brick6_sampler_runtime_clip_shifter_window_frames(uint16_t grain
 {
     switch (brick6_sampler_runtime_clip_sanitize_grain_size(grain_size))
     {
+        case 192U:
+        case 256U:
+        case 320U:
         case 384U:
         case 512U:
+        case 576U:
+        case 640U:
+        case 704U:
         case 768U:
         case 1024U:
         case 1536U:
         case 2048U:
+        case 2560U:
+        case 3072U:
+        case 4096U:
+        case 6144U:
+        case 8192U:
             return brick6_sampler_runtime_clip_sanitize_grain_size(grain_size);
         default:
             break;
@@ -116,7 +139,15 @@ static brick6_sampler_clip_slot_t *brick6_sampler_runtime_clip_ensure_slot(uint8
         memset(&g_sampler_clip_slots[i], 0, sizeof(g_sampler_clip_slots[i]));
         g_sampler_clip_slots[i].owner_track_id = track_id;
         g_sampler_clip_runtime[track_id].clip_slot_index = i;
-        brick6_clip_shifter_init(&g_sampler_clip_slots[i].shifter);
+        float *const delay_l = (i == 0U) ? g_sampler_clip_shifter_delay_d1[0]
+                               : (i == 1U) ? g_sampler_clip_shifter_delay_general[0]
+                               : (i == 2U) ? g_sampler_clip_shifter_delay_recorder[0]
+                                           : g_sampler_clip_shifter_delay_recorder[2];
+        float *const delay_r = (i == 0U) ? g_sampler_clip_shifter_delay_d1[1]
+                               : (i == 1U) ? g_sampler_clip_shifter_delay_general[1]
+                               : (i == 2U) ? g_sampler_clip_shifter_delay_recorder[1]
+                                           : g_sampler_clip_shifter_delay_recorder_ring;
+        brick6_clip_shifter_init(&g_sampler_clip_slots[i].shifter, delay_l, delay_r);
         return &g_sampler_clip_slots[i];
     }
 
@@ -150,9 +181,16 @@ static void brick6_sampler_runtime_clip_configure_shifter(const brick6_sampler_c
         return;
     }
 
+    const uint16_t grain_size = (clip->grain_size == BRICK6_SAMPLER_CLIP_GRAIN_LAW)
+                                    ? clip->law_grain_size
+                                    : brick6_sampler_runtime_clip_shifter_window_frames(clip->grain_size);
     brick6_clip_shifter_set_window_frames(&slot->shifter,
-                                          brick6_sampler_runtime_clip_shifter_window_frames(clip->grain_size));
+                                          grain_size);
     brick6_clip_shifter_set_pitch_correction(&slot->shifter, clip->shifter_correction);
+    brick6_clip_shifter_set_experiment(&slot->shifter,
+                                       clip->shifter_heads,
+                                       clip->shifter_window,
+                                       clip->shifter_dispersion);
 }
 
 static void brick6_sampler_runtime_clip_reset_shifter(const brick6_sampler_clip_runtime_t *clip,
@@ -180,6 +218,10 @@ static void brick6_sampler_runtime_clip_reset(uint8_t track_id)
     g_sampler_clip_runtime[track_id].gain = 1.0f;
     g_sampler_clip_runtime[track_id].source_bpm = 120.0f;
     g_sampler_clip_runtime[track_id].grain_size = BRICK6_SAMPLER_CLIP_DEFAULT_GRAIN_FRAMES;
+    g_sampler_clip_runtime[track_id].law_grain_size = BRICK6_SAMPLER_CLIP_DEFAULT_GRAIN_FRAMES;
+    g_sampler_clip_runtime[track_id].shifter_heads = 2U;
+    g_sampler_clip_runtime[track_id].shifter_window = (uint8_t)BRICK6_CLIP_SHIFTER_WINDOW_TRI;
+    g_sampler_clip_runtime[track_id].shifter_dispersion = 0U;
     g_sampler_clip_runtime[track_id].sync_length = 0U;
     g_sampler_clip_runtime[track_id].pitch_semitones = 0.0f;
     g_sampler_clip_runtime[track_id].play_mode = 0U;
@@ -317,6 +359,27 @@ static uint32_t brick6_sampler_runtime_clip_resolve_timing_ratio_q16(uint8_t tra
     return ratio_q16;
 }
 
+static uint16_t brick6_sampler_runtime_clip_law_grain_size(uint32_t timing_ratio_q16)
+{
+    if (timing_ratio_q16 == 0U)
+    {
+        return BRICK6_SAMPLER_CLIP_DEFAULT_GRAIN_FRAMES;
+    }
+
+    const float s = (float)timing_ratio_q16 / (float)BRICK6_SAMPLER_Q16_ONE;
+    float raw_grain = BRICK6_SAMPLER_CLIP_GRAIN_LAW_K_FRAMES / s;
+    if (raw_grain < (float)BRICK6_CLIP_SHIFTER_MIN_WINDOW_FRAMES)
+    {
+        raw_grain = (float)BRICK6_CLIP_SHIFTER_MIN_WINDOW_FRAMES;
+    }
+    else if (raw_grain > (float)BRICK6_CLIP_SHIFTER_MAX_WINDOW_FRAMES)
+    {
+        raw_grain = (float)BRICK6_CLIP_SHIFTER_MAX_WINDOW_FRAMES;
+    }
+
+    return (uint16_t)(raw_grain + 0.5f);
+}
+
 static brick6_sampler_stream_pitch_plan_t brick6_sampler_runtime_stream_build_pitch_plan(
     uint8_t track_id,
     uint8_t played_note,
@@ -422,6 +485,7 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
                                                                 &region_begin,
                                                                 &region_end);
     clip->timing_ratio_q16 = pitch_plan.timing_ratio_q16;
+    clip->law_grain_size = brick6_sampler_runtime_clip_law_grain_size(pitch_plan.timing_ratio_q16);
     clip->pitch_ratio_q16 = pitch_plan.pitch_ratio_q16;
     clip->shifter_correction = pitch_plan.shifter_correction;
 

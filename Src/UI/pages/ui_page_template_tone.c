@@ -199,18 +199,18 @@ static const ui_template_family_t g_ui_template_tone_family_clip = {
         { .title = "PLAY", .param_bank = { .params = { UI_PARAM_LOCAL_ASSET, PARAM_SAMPLER_GAIN, PARAM_SAMPLER_CLIP_SOURCE_BPM, PARAM_SAMPLER_CLIP_SOURCE } } },
         { .title = "STRM", .param_bank = { .params = { PARAM_SAMPLER_CLIP_PLAY_MODE, PARAM_SAMPLER_CLIP_LOOP, PARAM_SAMPLER_CLIP_STRETCH_MODE, PARAM_SAMPLER_CLIP_PITCH } } },
         { .title = "SYNC", .param_bank = { .params = { PARAM_SAMPLER_CLIP_SYNC_LENGTH, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
-        { .title = "STR", .param_bank = { .params = { PARAM_SAMPLER_CLIP_GRAIN, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "STR", .param_bank = { .params = { PARAM_SAMPLER_CLIP_GRAIN, PARAM_SHIFTER_HEADS, PARAM_SHIFTER_WINDOW, PARAM_SHIFTER_DISP } } },
     },
     .default_subpage = 0U,
 };
 
 static const ui_template_family_t g_ui_template_tone_family_looper = {
     .family_title = "TONE",
-    .nav_labels = { "LOOP", "STR", "-", "-" },
+    .nav_labels = { "LOOP", "STR", "SHFT", "-" },
     .subpages = {
         { .title = "LOOP", .param_bank = { .params = { UI_PARAM_LOCAL_LOOPER_ARM, UI_PARAM_LOCAL_LOOPER_LENGTH, UI_PARAM_LOCAL_LOOPER_PLAY, PARAM_COUNT } } },
         { .title = "STR", .param_bank = { .params = { PARAM_LOOPER_STRETCH, PARAM_LOOPER_PITCH, PARAM_LOOPER_GRAIN, PARAM_COUNT } } },
-        { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
+        { .title = "SHFT", .param_bank = { .params = { PARAM_SHIFTER_HEADS, PARAM_SHIFTER_WINDOW, PARAM_SHIFTER_DISP, PARAM_COUNT } } },
         { .title = "-", .param_bank = { .params = { PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_COUNT } } },
     },
     .default_subpage = 0U,

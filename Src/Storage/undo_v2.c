@@ -144,11 +144,19 @@ static undo_v2_status_t exchange_sequence(undo_v2_entry_t *entry)
     return UNDO_V2_STATUS_OK;
 }
 
-void undo_v2_init(void) { undo_v2_clear_all(); }
+void undo_v2_init(void)
+{
+    /* SDRAM history is NOLOAD: no entries exist yet at boot.  Do not use an
+       uninitialised count to release entries before clearing the arena. */
+    memset(&g_undo_v2_runtime, 0, sizeof(g_undo_v2_runtime));
+    undo_v2_clear_all();
+}
 
 void undo_v2_clear_all(void)
 {
-    for (uint8_t i = 0U; i < g_undo_v2_runtime.count; ++i)
+    for (uint8_t i = 0U;
+         (i < g_undo_v2_runtime.count) && (i < UNDO_V2_MAX_TRANSACTIONS);
+         ++i)
         release_entry(&g_undo_v2_entries[i]);
     memset(&g_undo_v2_runtime, 0, sizeof(g_undo_v2_runtime));
     memset(g_undo_v2_entries, 0, sizeof(g_undo_v2_entries));

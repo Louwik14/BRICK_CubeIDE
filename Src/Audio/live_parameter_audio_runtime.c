@@ -65,6 +65,12 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
                                                  uint32_t value_bits,
                                                  uint8_t scope)
 {
+    if (scope == CONTROL_AUDIO_PARAM_KIND_SEQ_TEMP_TRACK)
+        scope = CONTROL_AUDIO_PARAM_KIND_TEMP_TRACK;
+    else if (scope == CONTROL_AUDIO_PARAM_KIND_SEQ_CLEAR_TEMP_TRACK)
+        scope = CONTROL_AUDIO_PARAM_KIND_CLEAR_TEMP_TRACK;
+    else if (scope == CONTROL_AUDIO_PARAM_KIND_SEQ_RESTORE_BASE_TRACK)
+        scope = CONTROL_AUDIO_PARAM_KIND_BASE_TRACK;
     if ((scope == CONTROL_AUDIO_PARAM_KIND_CLEAR_TEMP_TRACK)
             && (parameter_id < PARAM_COUNT)
             && (entity < BRICK_ENTITY_CAPACITY))

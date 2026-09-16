@@ -49,6 +49,8 @@
 #define BRICK6_SAMPLER_CACHE_VOICE_BASE (2U)
 #define BRICK6_SAMPLER_CLIP_SLOT_NONE 0xFFU
 #define BRICK6_SAMPLER_CLIP_DEFAULT_GRAIN_FRAMES 1536U
+#define BRICK6_SAMPLER_CLIP_GRAIN_LAW 0U
+#define BRICK6_SAMPLER_CLIP_GRAIN_LAW_K_FRAMES 352.0f
 #define BRICK6_SAMPLER_CACHE_VOICE_NONE UINT8_MAX
 #define BRICK6_SAMPLER_MULTI_LOOKAHEAD_PAGES SAMPLE_PAGE_MULTI_LOOKAHEAD_PAGES
 #define BRICK6_SAMPLER_MULTI_WINDOW_MASK_BITS (32U)
@@ -159,6 +161,10 @@ typedef struct
     float gain;
     float source_bpm;
     uint16_t grain_size;
+    uint16_t law_grain_size;
+    uint8_t shifter_heads;
+    uint8_t shifter_window;
+    uint8_t shifter_dispersion;
     uint8_t sync_length;
     float pitch_semitones;
     uint8_t play_mode;
@@ -259,6 +265,13 @@ _Static_assert(sizeof(g_sampler_multi_voice) == 3904U,
 static brick6_sampler_clip_runtime_t g_sampler_clip_runtime[SEQ_TRACK_COUNT];
 static brick6_sampler_multi_track_state_t g_sampler_multi_track_state[SEQ_TRACK_COUNT];
 static brick6_sampler_clip_slot_t g_sampler_clip_slots[BRICK6_MAX_CLIP_TRACKS];
+static float g_sampler_clip_shifter_delay_d1[2U][BRICK6_CLIP_SHIFTER_DELAY_FRAMES];
+static AUDIO_HISTORY_SDRAM float
+    g_sampler_clip_shifter_delay_general[2U][BRICK6_CLIP_SHIFTER_DELAY_FRAMES];
+static SDRAM_RECORDER float
+    g_sampler_clip_shifter_delay_recorder[3U][BRICK6_CLIP_SHIFTER_DELAY_FRAMES];
+static SEC_ATTR(".sdram_recorder_ring") ALIGN32 float
+    g_sampler_clip_shifter_delay_recorder_ring[BRICK6_CLIP_SHIFTER_DELAY_FRAMES];
 static AUDIO_HOT brick6_sampler_declick_tail_t
     g_sampler_declick_tail[STEAL_DECLICK_TAIL_SLOTS];
 static AUDIO_HOT uint32_t g_sampler_render_track_mask;

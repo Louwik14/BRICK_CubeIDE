@@ -112,14 +112,24 @@ static uint8_t param_backend_is_vca_param(param_id_t id)
 
 static uint8_t param_backend_clip_size_index(float value)
 {
-    const uint8_t index = (uint8_t)(param_backend_clamp_value(value, 0.0f, 5.0f) + 0.5f);
-    return (index <= 5U) ? index : 5U;
+    const uint8_t index = (uint8_t)(param_backend_clamp_value(value, 0.0f, 17.0f) + 0.5f);
+    return (index <= 17U) ? index : 17U;
 }
 
 static uint16_t param_backend_clip_grain_size_value(uint8_t index)
 {
-    static const uint16_t values[] = {384U, 512U, 768U, 1024U, 1536U, 2048U};
-    return values[(index <= 5U) ? index : 5U];
+    static const uint16_t values[] = {0U, /* LAW */
+                                      192U, 256U, 320U, 384U, 512U, 576U,
+                                      640U, 704U, 768U, 1024U, 1536U, 2048U,
+                                      2560U, 3072U, 4096U, 6144U, 8192U};
+    return values[(index <= 17U) ? index : 17U];
+}
+
+static uint8_t param_backend_shifter_heads_value(float value)
+{
+    static const uint8_t values[] = {2U, 3U, 4U, 6U, 8U};
+    const uint8_t index = (uint8_t)(param_backend_clamp_value(value, 0.0f, 4.0f) + 0.5f);
+    return values[index];
 }
 
 uint8_t param_backend_apply_tone_prism(uint8_t track, param_id_t id, float value)
@@ -636,6 +646,20 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
             brick6_sampler_runtime_set_clip_grain_size(track, param_backend_clip_grain_size_value(grain_index));
             return 1U;
         }
+        case PARAM_SHIFTER_HEADS:
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM)) return 0U;
+            brick6_sampler_runtime_set_clip_shifter_heads(track, param_backend_shifter_heads_value(value));
+            return 1U;
+        case PARAM_SHIFTER_WINDOW:
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM)) return 0U;
+            brick6_sampler_runtime_set_clip_shifter_window(
+                track, (uint8_t)(param_backend_clamp_value(value, 0.0f, 2.0f) + 0.5f));
+            return 1U;
+        case PARAM_SHIFTER_DISP:
+            if ((ctx == NULL) || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_STREAM)) return 0U;
+            brick6_sampler_runtime_set_clip_shifter_dispersion(
+                track, (uint8_t)(param_backend_clamp_value(value, 0.0f, 1.0f) * 100.0f + 0.5f));
+            return 1U;
         case PARAM_SAMPLER_MULTI_LOOP:
         {
             const uint8_t enabled =
@@ -679,7 +703,18 @@ uint8_t param_backend_apply_tone_looper(uint8_t track, param_id_t id, float valu
         case PARAM_LOOPER_GRAIN:
             brick6_sampler_runtime_set_clip_grain_size(
                 track, param_backend_clip_grain_size_value(
-                    (uint8_t)(param_backend_clamp_value(value, 0.0f, 5.0f) + 0.5f)));
+                    param_backend_clip_size_index(value)));
+            return 1U;
+        case PARAM_SHIFTER_HEADS:
+            brick6_sampler_runtime_set_clip_shifter_heads(track, param_backend_shifter_heads_value(value));
+            return 1U;
+        case PARAM_SHIFTER_WINDOW:
+            brick6_sampler_runtime_set_clip_shifter_window(
+                track, (uint8_t)(param_backend_clamp_value(value, 0.0f, 2.0f) + 0.5f));
+            return 1U;
+        case PARAM_SHIFTER_DISP:
+            brick6_sampler_runtime_set_clip_shifter_dispersion(
+                track, (uint8_t)(param_backend_clamp_value(value, 0.0f, 1.0f) * 100.0f + 0.5f));
             return 1U;
         default:
             return 0U;

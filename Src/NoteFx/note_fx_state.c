@@ -4,6 +4,7 @@
 
 #include "Track/entity_topology.h"
 #include "Seq/seq_division_catalog.h"
+#include "Seq/seq_rt_pass1.h"
 #include "NoteFx/note_fx_pipeline.h"
 
 static note_fx_track_state_t g_note_fx_state[NOTE_FX_TRACK_COUNT];
@@ -294,5 +295,7 @@ uint8_t note_fx_state_install_prepared_track(uint8_t track,
 {
     if ((track >= NOTE_FX_TRACK_COUNT) || (state == NULL)) return 0U;
     g_note_fx_state[track] = *state;
+    seq_rt_pass1_control_disarm_track(track);
+    seq_rt_pass1_control_mark_dirty();
     return 1U;
 }

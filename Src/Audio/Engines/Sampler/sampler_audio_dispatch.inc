@@ -503,6 +503,27 @@ void brick6_sampler_runtime_set_clip_grain_size(uint8_t track_id, uint16_t grain
     g_sampler_clip_runtime[track_id].grain_size = sanitized_grain_size;
 }
 
+void brick6_sampler_runtime_set_clip_shifter_heads(uint8_t track_id, uint8_t heads)
+{
+    if ((track_id >= SEQ_TRACK_COUNT) || (brick6_sampler_runtime_track_is_clip(track_id) == 0U)) return;
+    if ((heads != 2U) && (heads != 3U) && (heads != 4U) && (heads != 6U) && (heads != 8U)) heads = 2U;
+    g_sampler_clip_runtime[track_id].shifter_heads = heads;
+}
+
+void brick6_sampler_runtime_set_clip_shifter_window(uint8_t track_id, uint8_t window)
+{
+    if ((track_id >= SEQ_TRACK_COUNT) || (brick6_sampler_runtime_track_is_clip(track_id) == 0U)) return;
+    g_sampler_clip_runtime[track_id].shifter_window =
+        (window <= (uint8_t)BRICK6_CLIP_SHIFTER_WINDOW_SINE)
+            ? window : (uint8_t)BRICK6_CLIP_SHIFTER_WINDOW_TRI;
+}
+
+void brick6_sampler_runtime_set_clip_shifter_dispersion(uint8_t track_id, uint8_t percent)
+{
+    if ((track_id >= SEQ_TRACK_COUNT) || (brick6_sampler_runtime_track_is_clip(track_id) == 0U)) return;
+    g_sampler_clip_runtime[track_id].shifter_dispersion = (percent <= 100U) ? percent : 100U;
+}
+
 void brick6_sampler_runtime_trigger(uint8_t track_id)
 {
     if (track_id >= SEQ_TRACK_COUNT)

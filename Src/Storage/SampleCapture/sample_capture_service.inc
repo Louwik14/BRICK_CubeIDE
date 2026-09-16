@@ -83,7 +83,9 @@ static uint8_t sample_capture_service_pending_admission(void)
             sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
         return 0U;
     }
-    g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_ARMED;
+    g_sample_capture.state.phase = ((g_sample_capture.state.armed_pending != 0U)
+            && (g_sample_capture.state.trig == SAMPLE_CAPTURE_TRIG_PATTERN))
+        ? SAMPLE_CAPTURE_PHASE_WAIT_QUANT : SAMPLE_CAPTURE_PHASE_ARMED;
     g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
     sample_capture_publish_trigger_config();
     if ((g_sample_capture.state.armed_pending != 0U)
@@ -103,7 +105,8 @@ static uint8_t sample_capture_service_pending_admission(void)
 
 static void sample_capture_sync_current_generation(void)
 {
-    if ((g_sample_capture.state.recording != 0U)
+    if ((g_sample_capture.state.arm != SAMPLE_CAPTURE_ARM_OFF)
+            || (g_sample_capture.state.recording != 0U)
             || (g_sample_capture.state.armed_pending != 0U)
             || (g_sample_capture.state.save_pending != 0U)) return;
     rec_source_snapshot_t current;
@@ -118,8 +121,13 @@ static void sample_capture_sync_current_generation(void)
         }
         return;
     }
-    if (current.key.generation == g_sample_capture.visible_rec_generation) return;
-    sample_capture_reset_take_transients(0U);
+    if ((current.key.generation == g_sample_capture.visible_rec_generation)
+            && (g_sample_capture.state.take_valid != 0U)
+            && (g_sample_capture.state.recorded_frames == current.frame_count)
+            && (strcmp(g_sample_capture.state.temp_path, path) == 0)) return;
+    const uint8_t saved = ((current.key.generation == g_sample_capture.visible_rec_generation)
+        && (g_sample_capture.state.final_path[0] != '\0')) ? 1U : 0U;
+    sample_capture_reset_take_transients(saved);
     g_sample_capture.visible_rec_generation = current.key.generation;
     g_sample_capture.state.take_valid = 1U;
     g_sample_capture.state.recorded_frames = current.frame_count;
@@ -127,7 +135,8 @@ static void sample_capture_sync_current_generation(void)
     g_sample_capture.state.edit_loop_end_frame = current.frame_count;
     g_sample_capture.state.edit_vzoom = SAMPLE_CAPTURE_EDIT_VZOOM_DEFAULT;
     sample_capture_copy_path(g_sample_capture.state.temp_path, path);
-    g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_TAKE_READY;
+    g_sample_capture.state.phase = (saved != 0U)
+        ? SAMPLE_CAPTURE_PHASE_SAVED : SAMPLE_CAPTURE_PHASE_TAKE_READY;
 }
 
 void sample_capture_model_service(void)
@@ -276,8 +285,7 @@ void sample_capture_control_on_musical_boundary(uint8_t track,
 {
     if ((track != 0U) || (g_sample_capture.state.recording != 0U)
             || (g_sample_capture.state.armed_pending == 0U)
-            || (g_sample_capture.state.trig != SAMPLE_CAPTURE_TRIG_PATTERN)
-            || (g_sample_capture.state.quant == SAMPLE_CAPTURE_QUANT_NOW))
+            || (g_sample_capture.state.trig != SAMPLE_CAPTURE_TRIG_PATTERN))
         return;
     (void)sample_capture_start_prepared_at(sample_time);
 }

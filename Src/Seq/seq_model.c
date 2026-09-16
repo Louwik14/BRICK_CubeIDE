@@ -6,6 +6,7 @@
  * Integration: backend partagé par édition, runtime, persistence et modules Seq.
  */
 #include "Seq/seq_model.h"
+#include "Seq/seq_rt_pass1.h"
 
 #include <string.h>
 
@@ -556,6 +557,7 @@ void seq_model_init_defaults(void)
                 (i + 1U < pool_capacity) ? (uint16_t)(i + 1U) : SEQ_LOCK_NONE;
         }
     }
+    seq_rt_pass1_control_mark_dirty();
 }
 
 uint8_t seq_model_get_trig(seq_track_id_t track, seq_step_id_t step)
@@ -591,6 +593,7 @@ void seq_model_toggle_trig(seq_track_id_t track, seq_step_id_t step)
         s->roll = (uint8_t)SEQ_STEP_ROLL_OFF;
     }
     seq_model_exit_critical(primask);
+    seq_rt_pass1_control_mark_dirty();
 }
 
 void seq_model_set_trig(seq_track_id_t track, seq_step_id_t step, uint8_t trig)
@@ -612,6 +615,7 @@ void seq_model_set_trig(seq_track_id_t track, seq_step_id_t step, uint8_t trig)
         s->roll = (uint8_t)SEQ_STEP_ROLL_OFF;
     }
     seq_model_exit_critical(primask);
+    seq_rt_pass1_control_mark_dirty();
 }
 
 uint8_t seq_model_get_step_roll(seq_track_id_t track, seq_step_id_t step)
@@ -644,6 +648,7 @@ void seq_model_set_step_roll(seq_track_id_t track, seq_step_id_t step, uint8_t r
     const uint32_t primask = seq_model_enter_critical();
     s->roll = seq_model_normalize_roll(roll);
     seq_model_exit_critical(primask);
+    seq_rt_pass1_control_mark_dirty();
 }
 
 uint16_t seq_model_step_roll_divisor(uint8_t roll)
@@ -706,6 +711,7 @@ void seq_model_set_track_length(seq_track_id_t track, uint8_t length_steps)
     g_seq_project.tracks[track].ui_page =
         seq_model_clamp_ui_page_for_length(g_seq_project.tracks[track].ui_page,
                                            g_seq_project.tracks[track].length_steps);
+    seq_rt_pass1_control_mark_dirty();
 }
 
 uint8_t seq_model_get_track_length(seq_track_id_t track)
@@ -924,6 +930,7 @@ uint8_t seq_model_play_set(seq_track_id_t track,
         default: return 0U;
     }
     item->present_mask = (uint8_t)(item->present_mask | mask);
+    seq_rt_pass1_control_mark_dirty();
     return 1U;
 }
 
@@ -937,6 +944,7 @@ uint8_t seq_model_play_clear(seq_track_id_t track,
     if ((item == NULL) || (mask == 0U)) return 0U;
     const uint8_t present = ((item->present_mask & mask) != 0U) ? 1U : 0U;
     item->present_mask = (uint8_t)(item->present_mask & (uint8_t)~mask);
+    if (present != 0U) seq_rt_pass1_control_mark_dirty();
     return present;
 }
 
@@ -945,7 +953,7 @@ void seq_model_play_clear_item(seq_track_id_t track,
                                      uint8_t voice)
 {
     seq_play_item_t *const item = seq_model_play_item_mut(track, step, voice);
-    if (item != NULL) memset(item, 0, sizeof(*item));
+    if (item != NULL) { memset(item, 0, sizeof(*item)); seq_rt_pass1_control_mark_dirty(); }
 }
 
 void seq_model_play_clear_step(seq_track_id_t track, seq_step_id_t step)
@@ -1005,7 +1013,9 @@ uint8_t seq_model_play_base_set(seq_track_id_t track,
                                 int16_t value)
 {
     if ((track >= SEQ_LANE_CAPACITY) || (voice >= SEQ_PLAY_MAX_CAPACITY)) return 0U;
-    return seq_play_snapshot_set(&g_seq_project.play_base[track], voice, field, value);
+    const uint8_t changed = seq_play_snapshot_set(&g_seq_project.play_base[track], voice, field, value);
+    if (changed != 0U) seq_rt_pass1_control_mark_dirty();
+    return changed;
 }
 
 uint8_t seq_model_play_base_capture(seq_track_id_t track,
@@ -1030,6 +1040,7 @@ uint8_t seq_model_play_base_restore(seq_track_id_t track,
                 return 0U;
         }
     g_seq_project.play_base[track] = *snapshot;
+    seq_rt_pass1_control_mark_dirty();
     return 1U;
 }
 
@@ -1132,6 +1143,8 @@ seq_plock_op_status_t seq_model_step_plock_upsert(seq_track_id_t track,
         existing->value16 = value16;
         existing->flags = flags;
         seq_model_exit_critical(primask);
+        seq_rt_pass1_control_disarm_track(track);
+        seq_rt_pass1_control_mark_dirty();
         return SEQ_PLOCK_OP_UPDATED;
     }
 
@@ -1159,6 +1172,8 @@ seq_plock_op_status_t seq_model_step_plock_upsert(seq_track_id_t track,
     s->lock_set_mask |= seq_param_iface_set_to_mask(set_id);
 
     seq_model_exit_critical(primask);
+    seq_rt_pass1_control_disarm_track(track);
+    seq_rt_pass1_control_mark_dirty();
     return SEQ_PLOCK_OP_CREATED;
 }
 
@@ -1207,6 +1222,8 @@ seq_plock_op_status_t seq_model_step_plock_delete(seq_track_id_t track,
     seq_model_free_lock_node(track, idx);
 
     seq_model_exit_critical(primask);
+    seq_rt_pass1_control_disarm_track(track);
+    seq_rt_pass1_control_mark_dirty();
     return SEQ_PLOCK_OP_DELETED;
 }
 
@@ -1241,6 +1258,8 @@ void seq_model_step_param_plock_clear(seq_track_id_t track, seq_step_id_t step)
     s->lock_count = 0U;
     s->lock_set_mask = 0U;
     seq_model_exit_critical(primask);
+    seq_rt_pass1_control_disarm_track(track);
+    seq_rt_pass1_control_mark_dirty();
 }
 
 uint8_t seq_model_step_param_plock_count(seq_track_id_t track, seq_step_id_t step)

@@ -12,6 +12,9 @@
 #define CONTROL_MUSIC_ACTION_KIND_MASK 0x03U
 #define CONTROL_MUSIC_ACTION_CHANNEL_SHIFT 2U
 #define CONTROL_MUSIC_ACTION_CHANNEL_MASK  0x3CU
+#define CONTROL_MUSIC_OUTPUT_HANDLE_CLASS_MASK     UINT32_C(0xF0000000)
+#define CONTROL_MUSIC_OUTPUT_HANDLE_INTERNAL       UINT32_C(0x10000000)
+#define CONTROL_MUSIC_OUTPUT_HANDLE_EXTERNAL       UINT32_C(0x50000000)
 
 typedef enum
 {
@@ -71,6 +74,12 @@ static inline uint8_t control_music_intent_kind(
     const control_music_intent_t *intent)
 {
     return intent->kind & CONTROL_MUSIC_ACTION_KIND_MASK;
+}
+
+static inline uint8_t control_music_output_handle_is_internal(uint32_t handle)
+{
+    return (handle & CONTROL_MUSIC_OUTPUT_HANDLE_CLASS_MASK)
+        == CONTROL_MUSIC_OUTPUT_HANDLE_INTERNAL;
 }
 
 static inline uint8_t control_music_intent_channel(

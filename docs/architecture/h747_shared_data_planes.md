@@ -13,7 +13,7 @@ resolution locale d'un ID ne font jamais partie de l'ABI M4/M7.
 | Multi | M4 loader/projection -> M7 Sampler | projection non-cacheable `AUDIO_SHARED_MULTI_SDRAM` (47 104 octets) + instruments compacts `D2_IPC` | zones et sources numeriques, IDs sample/instrument, offsets fichier; aucun path/pointeur | samples/zones immutables, DMB, instrument `ready` publie en dernier | stop instrument + fin des credits page, withdraw, puis catalogue/pages recyclables |
 | STREAM pages | M4 Storage -> M7 readers | payload cacheable `.sdram_sample_page_pool`, 24 641 536 octets | descriptor M4 avec `data_offset`; token I/O pointer-free; resolution locale seulement | decode dans page, clean payload, clean descriptor, etat `READY` en dernier | un lease seqlocke par lecteur; `EVICTING` puis relecture de leur union avant recyclage |
 | Preview PCM | M4 Preview -> M7 MAIN | ring non-cacheable `AUDIO_STORAGE_SHARED_SDRAM`, 2048 x 2 floats (16 384) + deux curseurs `D3_IPC` | samples seulement, aucun pointeur | payload, DMB, `write_count` M4 | M7 publie uniquement `read_count`; active/gain sont AUDIO-locaux via PARAM, sans epoch ni reset croise |
-| Recorder PCM | M7 AUDIO -> M4 Storage/SD | ring non-cacheable `SDRAM_RECORDER`, 12 001 x 2 x 32 bits (96 008) + layout 16 octets `D3_IPC` | `head_cursor`, `tail_cursor`, `closed_session`, `capture_fault`; aucun config/etat fonctionnel partage | PCM, DMB, `head_cursor`; fermeture AUDIO publie session/fault | M4 ecrit seulement `tail_cursor` apres copie/commit |
+| Recorder PCM | M7 AUDIO -> M4 Storage/SD | ring cacheable `SDRAM_RECORDER_RING`, 12 001 x 2 x 32 bits (96 008) + layout 16 octets `D3_IPC` | `head_cursor`, `tail_cursor`, `closed_session`, `capture_fault`; aucun config/etat fonctionnel partage | H743: PCM, DMB, `head_cursor`; H747: clean PCM, DMB, `head_cursor` | M4 ecrit seulement `tail_cursor` apres copie/commit |
 | REC_SOURCE | M4 Recorder -> M7 Streamer | workspaces A/B et pages STREAM existantes | snapshot `{key, frame_count, registration_epoch}`; aucun pointeur | building prechauffe puis publication atomique current | ancienne generation retiree apres extinction des leases |
 | Snapshot AUDIO restore | M4 CONTROL -> M7 AUDIO | singleton `.sdram_audio_state_snapshot`, 73 920 octets cacheables | generation, count, checksum, valid magic et commandes finales pointer-free | contenu immutable, clean, magic, DMB, puis `AUDIO_STATE_COMMIT(generation)` | M4 attend que le tail FIFO franchisse le commit, apres application M7; aucun ACK |
 
@@ -29,6 +29,15 @@ traverse aucune commande ou mailbox.
 - `.ram_d3_ipc`, moitie haute de SRAM4: shareable non-cacheable, MPU region 5.
 - `.ram_d2_ipc`, SRAM3 complete: shareable non-cacheable, MPU region 6.
 - `.sdram_recorder`, derniers 256 KiB: shareable non-cacheable, MPU region 4.
+- `.sdram_recorder_ring`, 128 KiB a `0xC1FA0000`: cacheable, non-shareable,
+  MPU region 3. Sur H743 monocoeur, AUDIO et Recorder accedent tous deux par
+  CPU et aucune maintenance cache du ring n'est necessaire. Le buffer PCM24
+  distinct passe par le clean existant avant SDMMC DMA.
+- Sur H747 a caches prives, le producteur M7 doit clean les lignes de 32 octets
+  produites avant DMB et publication de `head_cursor`. Le lecteur M4 doit lire
+  `head_cursor`, invalidate les lignes concernees puis lire le ring. Les lignes
+  aux bornes du ring et au bouclage demandent une gestion explicite; ce
+  protocole n'est pas actif dans l'image H743.
 - registries RAM/Wavetable/Multi: `.sdram_recorder`, non-cacheable.
 - snapshot AUDIO singleton: `.sdram_audio_state_snapshot`, SDRAM partagee
   cacheable; clean M4 puis invalidate M7 autour de la publication generationnee.
@@ -99,7 +108,7 @@ ecritures identiques; aucun heartbeat periodique n'existe.
 Hors retours physiques necessaires au recyclage (tail FIFO, leases STREAM et
 PCM/framing Recorder), les projections M7->M4 finales sont exactement le niveau
 REC, les waveforms audio/synth et le diagnostic Audio.
-Aucun ACK de commande, READY musical, binding, programme installe ou PARAM
+Aucun ACK de commande, READY musical, programme installe ou PARAM
 applique n'est retourne. H743 et H747 partagent exactement cette semantique;
 seuls placement, cache, barrieres et visibilite different.
 

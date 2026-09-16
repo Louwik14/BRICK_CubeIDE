@@ -96,7 +96,11 @@ static const char *const g_sampler_slice_count_labels[] = {"Off", "2", "4", "8",
 static const char *const g_sampler_clip_sync_length_labels[] = {"Off", "1 bar", "2 bars", "4 bars", "Auto", NULL};
 static const char *const g_sampler_clip_play_mode_labels[] = {"Gate", "Launch", NULL};
 static const char *const g_sampler_clip_stretch_mode_labels[] = {"Off", "Speed", "Shifter", NULL};
-static const char *const g_sampler_clip_grain_labels[] = {"384", "512", "768", "1024", "1536", "2048", NULL};
+static const char *const g_sampler_clip_grain_labels[] = {"LAW", "192", "256", "320", "384", "512", "576",
+                                                          "640", "704", "768", "1024", "1536", "2048", "2560",
+                                                          "3072", "4096", "6144", "8192", NULL};
+static const char *const g_shifter_heads_labels[] = {"2", "3", "4", "6", "8", NULL};
+static const char *const g_shifter_window_labels[] = {"TRI", "HANN", "SINE", NULL};
 static const char *const g_stream_source_labels[] = {"POOL", "REC", NULL};
 
 

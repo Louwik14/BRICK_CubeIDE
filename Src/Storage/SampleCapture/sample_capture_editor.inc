@@ -45,6 +45,8 @@ sample_capture_rec_led_state_t sample_capture_model_rec_led_state(void)
 void sample_capture_model_set_view(sample_capture_view_t view)
 {
     g_sample_capture.state.view = view;
+    if(view != SAMPLE_CAPTURE_VIEW_REC_EDIT)
+        waveform_service_local_suspend();
 }
 
 uint8_t sample_capture_model_open_crop(void)
@@ -223,7 +225,8 @@ uint8_t sample_capture_model_toggle_record(void)
     else if(g_sample_capture.state.trig == SAMPLE_CAPTURE_TRIG_PATTERN)
     {
         g_sample_capture.state.armed_pending = 1U;
-        g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_WAIT_QUANT;
+        if (g_sample_capture.state.phase == SAMPLE_CAPTURE_PHASE_ARMED)
+            g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_WAIT_QUANT;
     }
     return 1U;
 }

@@ -304,7 +304,8 @@ typedef struct
     int16_t samples[UI_TEMPLATE_STACK_WAVE_CACHE_MAX_W];
 } ui_renderer_template_stack_wave_cache_t;
 
-static ui_renderer_template_stack_wave_cache_t g_ui_template_stack_wave_cache[BRICK6_STACK_SLOT_COUNT];
+static CTRL_STATE ui_renderer_template_stack_wave_cache_t
+    g_ui_template_stack_wave_cache[BRICK6_STACK_SLOT_COUNT];
 
 static void ui_renderer_template_rebuild_stack_wave_cache(ui_renderer_template_stack_wave_cache_t *cache,
                                                           uint16_t timbre_q15,

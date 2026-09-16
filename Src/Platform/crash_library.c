@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "IPC/control_audio_fifo_layout.h"
+#include "Platform/memory_layout.h"
 #include "stm32h7xx_hal.h"
 #include "tim.h"
 
@@ -80,7 +81,7 @@ _Static_assert(sizeof(crash_gdb_view_t) == 512U, "fixed GDB ABI");
 
 __attribute__((section(".crash_gdb_view"), used))
 static crash_gdb_view_t g_crash_gdb_view;
-static __attribute__((aligned(32))) crash_capsule_t g_crash_capsule;
+static CTRL_STATE ALIGN32 crash_capsule_t g_crash_capsule;
 static volatile uint32_t g_writer_active;
 
 __attribute__((weak)) uint32_t crash_library_capture_extra(uint32_t *words, uint32_t capacity)

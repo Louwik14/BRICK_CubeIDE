@@ -56,6 +56,15 @@ Après STOP, STORAGE continue à drainer le ring. La finalisation progresse par
 Le trigger `PATTERN` ne gouverne que le départ. Dès qu'une longueur fixe est
 configurée, le compteur de frames gouverne l'arrêt automatique, quel que soit
 le trigger qui a démarré la prise.
+L'armement reste en phase d'admission tant que PREPARE n'a pas publié une
+session Recorder prête ; `WAIT` commence ensuite. Si le transport est déjà
+actif, la prochaine frontière de pattern lance la prise, y compris avec
+`QUANT=NOW`. Au démarrage du transport, `QUANT=NOW` peut lancer à sa frontière
+initiale.
+
+Avant de réserver un nouveau BUILDING, la session Recorder terminale de la
+prise précédente est fermée. Le fichier de `REC_SOURCE CURRENT` reste détenu
+par sa génération et ne fait pas partie du discard de cette session.
 
 ## REC_SOURCE et générations
 
@@ -94,9 +103,12 @@ sans preroll global ni relais RAM -> SD spécifique.
 
 ## Streamer
 
-`SOURCE=POOL` résout un asset du pool. `SOURCE=REC` résout uniquement le
-snapshot immutable READY de `REC_SOURCE.current`; sans current valide, il rend
-du silence.
+`SOURCE=POOL` résout un asset du pool. `SOURCE=REC` résout le snapshot READY
+de `REC_SOURCE CURRENT`. Quitter REC EDIT ne modifie pas ce CURRENT : STOP,
+retrigger et wraps résolvent donc la même génération. Une publication REC,
+REPLACE, OVERDUB ou Undo/Redo bascule le CURRENT par la transition canonique.
+Les readers conservent leurs leases physiques jusqu'à leur arrêt ; STORAGE
+attend leur extinction et celle des I/O/cache avant de recycler RETIRED.
 
 Le Streamer ne porte aucun crossfade produit. Le crossfade entre une track et
 MASTER, LINE, USB ou une autre track est le modèle XFADE du domaine Insert
@@ -124,32 +136,45 @@ couples min/max int16. Une longueur fixe utilise le mapping direct
 frames-vers-bins. Une longueur libre utilise des niveaux bornés et compacte
 progressivement, entièrement hors IRQ. Le résumé READY
 (environ 16 KiB) est copié dans le descripteur `BUILDING` et publié avec lui.
-L'éditeur l'utilise directement pour toute génération REC publiée. Aucun
-second overview n'est scanné après STOP.
+L'éditeur l'utilise directement pour une prise fraîche; le scan SD reste le
+fallback des fichiers externes, anciens, récupérés ou sans résumé valide.
 
 ## Navigation waveform REC EDIT
 
 Le zoom horizontal va désormais de l'overview à 126 frames visibles sur les
 126 colonnes internes de la waveform OLED : au maximum, une colonne correspond
-à une frame PCM. Les bornes de colonne sont avancées par
+à une frame PCM. Le modèle mémorise la conversion zoom-vers-fenêtre afin de ne
+pas répéter `powf` à chaque rendu. Les bornes de colonne sont avancées par
 quotient/reste; seules les divisions initiales dépendent de la largeur.
 
-Le chemin unique `waveform_request()` vérifie la génération puis compose les
-colonnes min/max. Jusqu'à une fenêtre de 4096 frames, il résout immédiatement
-les pages PCM READY du cache audio commun et demande la fenêtre plus une page
-voisine de chaque côté. Il ne conserve aucun pointeur ni lease de page. Aux
-zooms plus larges, il choisit les niveaux 16384, 4096, 1024, 256 et 64
-frames/bin. Ses 16 tuiles RAM reconstructibles de 512 bins sont construites
-coopérativement dans STORAGE, avec publication par bins complets. Le résumé
-REC de 4096 bins, produit pendant la prise, est le repli READY. Le sidecar
-`.brkwave` version 2 des WAV longs reste une optimisation de cold-open cachée
-derrière le service; aucun format supplémentaire n'est introduit.
+Le chemin de données est gradué :
 
-Le rendu UI ne lit ni SD, ni cache, ni sidecar : il transmet source, fenêtre
-et largeur au service, puis met verticalement à l'échelle les colonnes
-retournées. Le producteur min/max utilise l'admission BG existante, sans
-priorité waveform dédiée. La composition OLED et son flush restent des
-opérations sur toute la page, sans scroll matériel incrémental.
+- le résumé REC 4096 bins min/max en SDRAM fournit l'overview immédiat pour
+  une génération READY cohérente, avec le pas réel des bins libres conservé ;
+  un scan séquentiel de 8 KiB par passage
+  STORAGE reste le fallback sans résumé ;
+- les WAV persistants d'au moins 60 s possèdent un index `.brkwave` version 2
+  avec cinq niveaux min/max (16384, 4096, 1024, 256 et 64 frames/bin), chargé
+  en tuiles RAM de 512 bins ; les colonnes du build sont écrites par lots.
+  Les anciens index version 1 sont invalidés et reconstruits depuis le WAV ;
+- le détail local réutilise le moteur de l'éditeur : 16 tuiles PCM mono de
+  24 000 frames et les niveaux dérivés 16/64/256 avec min/max/first/last
+  (environ 1 MiB). La vue et ses tuiles voisines sont demandées, les tuiles
+  proches du focus restent chaudes, et une inversion de pan réutilise leurs
+  préfixes chargés. Une lecture PCM24 stéréo d'au plus 4092 octets est admise
+  par passage STORAGE. Les colonnes précises déjà présentes en RAM se
+  dessinent sans attendre la fin de la tuile ; seules les colonnes absentes
+  utilisent l'overview REC.
+
+Les lectures FatFs de la waveform ne partent plus du rendu ou du tick UI :
+`waveform_service_storage_service()` est appelé dans la phase STORAGE de
+la superloop. Le moteur local utilise l'admission BG du scheduler SD et
+laisse la main aux besoins audio; les jobs min/max globaux restent utiles aux
+zooms larges. L'UI ne choisit ni tuile ni fallback : le service retourne les
+colonnes min/max et, quand le détail local est READY, les points de ligne
+first/last destinés au tracé continu. La composition OLED et
+son flush restent des opérations sur toute la page ; elles ne sont pas un
+scroll matériel incrémental.
 
 ## SAVE / CROP
 

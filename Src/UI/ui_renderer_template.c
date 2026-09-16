@@ -16,6 +16,7 @@
 #include "pages/ui_page_template_play.h"
 #include "pages/ui_page_template_mod.h"
 #include "Param/engine_model_catalog.h"
+#include "Platform/memory_layout.h"
 #include "Param/stack_waveform.h"
 #include "Storage/project_control.h"
 #include "UI/ui_sampler_playhead.h"
@@ -112,7 +113,8 @@ typedef struct
     int8_t pos_y[UI_TEMPLATE_WAVE_WT_TRACE_POINTS];
 } ui_renderer_template_wavetable_cache_t;
 
-static ui_renderer_template_wavetable_cache_t g_ui_renderer_template_wavetable_cache;
+static CTRL_STATE ui_renderer_template_wavetable_cache_t
+    g_ui_renderer_template_wavetable_cache;
 
 
 /* Template formatting, widget families and common chrome remain in their original sequence.

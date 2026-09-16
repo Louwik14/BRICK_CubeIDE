@@ -15,6 +15,7 @@
 #include "Platform/memory_layout.h"
 #include "IPC/control_audio_command.h"
 #include "IPC/control_audio_fifo_layout.h"
+#include "Seq/seq_rt_pass1.h"
 #include "IPC/control_music_publication.h"
 #include "ControlRT/control_rt_publication.h"
 #include "NoteFx/note_fx_pipeline.h"
@@ -446,6 +447,7 @@ void seq_runtime_start(void)
         seq_runtime_send_transport_start();
         seq_runtime_process_core();
     }
+    seq_rt_pass1_control_mark_dirty();
 }
 
 void seq_runtime_stop(void)
@@ -481,6 +483,7 @@ void seq_runtime_stop(void)
         seq_runtime_stop_lifecycle_apply(emit_transport_stop_and_panic);
     }
     control_audio_transport_publish_changes();
+    seq_rt_pass1_control_mark_dirty();
 }
 
 void seq_runtime_toggle_play_stop(void)
@@ -904,6 +907,7 @@ void seq_runtime_set_clock_source(seq_clock_src_t src)
         seq_runtime_exec_rebase_midi_clock(seq_runtime_get_now_sample());
     }
     seq_runtime_exit_critical(primask);
+    seq_rt_pass1_control_mark_dirty();
 }
 
 seq_clock_src_t seq_runtime_get_clock_source(void)
@@ -1051,6 +1055,22 @@ uint8_t seq_runtime_set_playhead_step(seq_track_id_t track, seq_step_id_t step)
 uint32_t seq_runtime_get_samples_per_step_q16(void)
 {
     return g_seq_runtime.samples_per_step_q16;
+}
+
+void seq_runtime_capture_shadow_seed(seq_runtime_shadow_seed_t *out_seed)
+{
+    if (out_seed == NULL) return;
+    const uint32_t primask = seq_runtime_enter_critical();
+    out_seed->running = g_seq_runtime.running;
+    out_seed->step_sample_q16 = g_seq_runtime.step_sample_q16;
+    out_seed->samples_per_step_q16 = g_seq_runtime.samples_per_step_q16;
+    for (seq_track_id_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
+    {
+        out_seed->play_step[track] = g_seq_runtime.play_step[track];
+        out_seed->track_div_phase[track] = g_seq_runtime.track_div_phase[track];
+        out_seed->track_swing_phase[track] = g_seq_runtime.track_swing_phase[track];
+    }
+    seq_runtime_exit_critical(primask);
 }
 
 uint8_t seq_runtime_get_playhead_step(seq_track_id_t track, seq_step_id_t *out_step)
@@ -1231,6 +1251,7 @@ void seq_runtime_set_track_div(seq_track_id_t track, uint8_t div)
 
     g_seq_runtime_control.track_div[track] = seq_runtime_clamp_track_div(div);
     g_seq_runtime.track_div_phase[track] = 0U;
+    seq_rt_pass1_control_mark_dirty();
 }
 
 void seq_runtime_restore_track_div(seq_track_id_t track, uint8_t div)
@@ -1241,6 +1262,7 @@ void seq_runtime_restore_track_div(seq_track_id_t track, uint8_t div)
     }
 
     g_seq_runtime_control.track_div[track] = seq_runtime_clamp_track_div(div);
+    seq_rt_pass1_control_mark_dirty();
 }
 
 uint8_t seq_runtime_get_track_div(seq_track_id_t track, uint8_t *out_div)
@@ -1262,6 +1284,7 @@ void seq_runtime_set_track_quant(seq_track_id_t track, uint8_t quant)
     }
 
     g_seq_runtime_control.track_quant[track] = seq_runtime_clamp_percent(quant);
+    seq_rt_pass1_control_mark_dirty();
 }
 
 uint8_t seq_runtime_get_track_quant(seq_track_id_t track, uint8_t *out_quant)
@@ -1283,6 +1306,7 @@ void seq_runtime_set_track_swing(seq_track_id_t track, uint8_t swing)
     }
 
     g_seq_runtime_control.track_swing[track] = seq_runtime_clamp_percent(swing);
+    seq_rt_pass1_control_mark_dirty();
 }
 
 uint8_t seq_runtime_get_track_swing(seq_track_id_t track, uint8_t *out_swing)
@@ -1381,6 +1405,7 @@ void seq_runtime_set_tempo_bpm_milli(uint32_t bpm_milli)
     {
         midi_clock_set_bpm_milli(seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge));
     }
+    seq_rt_pass1_control_mark_dirty();
 }
 
 uint8_t seq_runtime_is_external_tempo_valid(void)

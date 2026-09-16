@@ -733,18 +733,21 @@ static uint8_t control_music_output_handle_is_live(uint32_t handle)
     return 0U;
 }
 
-static uint32_t control_music_output_allocate_handle(void)
+static uint32_t control_music_output_allocate_handle(uint8_t external)
 {
     for (uint16_t attempt = 0U;
          attempt <= (BRICK_ENTITY_CAPACITY * CONTROL_MUSIC_OUTPUTS_PER_ENTITY);
          ++attempt)
     {
         ++g_control_music_next_output_handle;
+        g_control_music_next_output_handle &= UINT32_C(0x0FFFFFFF);
         if (g_control_music_next_output_handle == 0U)
             ++g_control_music_next_output_handle;
-        if (control_music_output_handle_is_live(
-                g_control_music_next_output_handle) == 0U)
-            return g_control_music_next_output_handle;
+        const uint32_t handle = g_control_music_next_output_handle
+            | ((external != 0U) ? CONTROL_MUSIC_OUTPUT_HANDLE_EXTERNAL
+                                : CONTROL_MUSIC_OUTPUT_HANDLE_INTERNAL);
+        if (control_music_output_handle_is_live(handle) == 0U)
+            return handle;
     }
     return 0U;
 }
@@ -830,7 +833,8 @@ uint8_t control_music_output_submit(const control_music_intent_t *intent,
      * FX legitimately mark their first ON as retrigger-style, but there is no
      * old lifetime to stop in that case.  Normalize at the CONTROL lifetime
      * authority so AUDIO never receives an invented OFF for an unknown id. */
-    const uint32_t output_handle = control_music_output_allocate_handle();
+    const uint32_t output_handle = control_music_output_allocate_handle(
+        (intent->kind & CONTROL_MUSIC_ACTION_EXTERNAL_FLAG) != 0U);
     if (output_handle == 0U) return 0U;
     control_music_transition_t admitted_start = {
         .due_sample = intent->due_sample,

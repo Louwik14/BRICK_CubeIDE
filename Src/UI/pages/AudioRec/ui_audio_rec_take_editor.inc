@@ -126,9 +126,14 @@ static uint8_t ui_page_audio_rec_draw_rec_service_overview(int x,
         return 0U;
     }
     waveform_column_t columns[126];
+    waveform_line_column_t line[126];
     const uint32_t request_started = DWT->CYCCNT;
-    const waveform_result_t result = waveform_request(&source,
-        view_start_frame, view_frames, (uint8_t)inner_w, columns);
+    const waveform_result_t result =
+        (diag_region == UI_REC_EDIT_RENDER_OVERVIEW)
+        ? waveform_request_overview(&source, view_start_frame, view_frames,
+            (uint8_t)inner_w, columns, line)
+        : waveform_request_detailed(&source, view_start_frame, view_frames,
+            (uint8_t)inner_w, columns, line);
     ui_rec_edit_render_diag_note_request(diag_region, request_started);
     if(result != WAVEFORM_RESULT_READY)
     {
@@ -136,8 +141,28 @@ static uint8_t ui_page_audio_rec_draw_rec_service_overview(int x,
     }
     const int cy = y + (h / 2);
     const uint32_t columns_started = DWT->CYCCNT;
+    const int max_amp = (inner_h / 2) - 2;
+    const int32_t scale_q16 = ui_page_audio_rec_vertical_scale_q16(
+        max_amp, vertical_ref, vzoom_q8);
+    int previous_y = cy;
     for(int col = 0; col < inner_w; ++col)
     {
+        if(line[col].ready != 0U)
+        {
+            int point_y = cy - (int)(((int64_t)line[col].point
+                * scale_q16) / 65536LL);
+            if(point_y < y + 1) { point_y = y + 1; }
+            if(point_y > y + inner_h) { point_y = y + inner_h; }
+            const int point_x = x + 1 + col;
+            if(col > 0 && line[col - 1].ready != 0U)
+                drv_display_draw_line(point_x - 1, previous_y,
+                    point_x, point_y);
+            else
+                drv_display_draw_line(point_x, point_y,
+                    point_x, point_y);
+            previous_y = point_y;
+            continue;
+        }
         ui_page_audio_rec_draw_minmax_column(x + 1 + col, y + 1,
             inner_h, cy, columns[col].min, columns[col].max,
             vertical_ref, vzoom_q8);

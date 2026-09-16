@@ -35,38 +35,36 @@ static uint8_t *__sbrk_heap_end = NULL;
  *
  * @verbatim
  * ############################################################################
- * #  .data  #  .bss  #       newlib heap       #          MSP stack          #
- * #         #        #                         # Reserved by _Min_Stack_Size #
+ * #  .data  #  .bss  # bounded heap # guard/free gap # reserved MSP stack   #
  * ############################################################################
  * ^-- RAM start      ^-- _end                             _estack, RAM end --^
  * @endverbatim
  *
  * This implementation starts allocating at the '_end' linker symbol
- * The '_Min_Stack_Size' linker symbol reserves a memory for the MSP stack
- * The implementation considers '_estack' linker symbol to be RAM end
- * NOTE: If the MSP stack, at any point during execution, grows larger than the
- * reserved size, please increase the '_Min_Stack_Size'.
+ * The '__heap_limit__' linker symbol is a hard upper bound. The linker also
+ * verifies a guard before the reserved MSP stack.
  *
  * @param incr Memory size
  * @return Pointer to allocated memory
  */
 void *_sbrk(ptrdiff_t incr)
 {
-  extern uint8_t _end; /* Symbol defined in the linker script */
-  extern uint8_t _estack; /* Symbol defined in the linker script */
-  extern uint32_t _Min_Stack_Size; /* Symbol defined in the linker script */
-  const uint32_t stack_limit = (uint32_t)&_estack - (uint32_t)&_Min_Stack_Size;
-  const uint8_t *max_heap = (uint8_t *)stack_limit;
+  extern uint8_t __heap_start__; /* Symbols defined in the linker script */
+  extern uint8_t __heap_limit__;
+  const uint8_t *const heap_start = &__heap_start__;
+  const uint8_t *const heap_limit = &__heap_limit__;
   uint8_t *prev_heap_end;
 
   /* Initialize heap end at first call */
   if (NULL == __sbrk_heap_end)
   {
-    __sbrk_heap_end = &_end;
+    __sbrk_heap_end = (uint8_t *)heap_start;
   }
 
-  /* Protect heap from growing into the reserved MSP stack */
-  if (__sbrk_heap_end + incr > max_heap)
+  /* Check both directions without pointer arithmetic wrapping. */
+  const size_t decrement = (incr < 0) ? (size_t)(-(incr + 1)) + 1U : 0U;
+  if ((incr > 0 && (size_t)incr > (size_t)(heap_limit - __sbrk_heap_end))
+      || (incr < 0 && decrement > (size_t)(__sbrk_heap_end - heap_start)))
   {
     errno = ENOMEM;
     return (void *)-1;

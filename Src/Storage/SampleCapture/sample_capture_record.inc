@@ -319,6 +319,17 @@ static audio_recorder_lifecycle_result_t sample_capture_prepare_session(void)
         sd_preview_stop();
     }
 
+    audio_recorder_status_t previous;
+    if ((audio_recorder_get_status_client(AUDIO_RECORDER_CLIENT_AUDIO_REC,
+                                          &previous) != 0U)
+            && ((previous.state == AUDIO_RECORDER_STATE_TAKE_READY)
+                || (previous.state == AUDIO_RECORDER_STATE_FAILED)))
+    {
+        const audio_recorder_lifecycle_result_t closed =
+            audio_recorder_discard_client(AUDIO_RECORDER_CLIENT_AUDIO_REC);
+        if (closed != AUDIO_RECORDER_LIFECYCLE_OK) return closed;
+    }
+
     const audio_recorder_lifecycle_result_t paths =
         sample_capture_prepare_paths();
     if(paths != AUDIO_RECORDER_LIFECYCLE_OK)
@@ -452,6 +463,7 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
     g_sample_capture.state.edit_zcross_enabled = 0U;
     g_sample_capture.state.edit_scroll_frame = 0U;
     g_sample_capture.state.view = SAMPLE_CAPTURE_VIEW_AUDIO_REC;
+    waveform_service_local_suspend();
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_TAKE_READY;
     sample_capture_copy_path(g_sample_capture.state.temp_path, path);
     rec_source_snapshot_t current;

@@ -115,6 +115,8 @@
 
 /* Dedicated SDRAM arena for recorder/master-buffer history. */
 #define SDRAM_RECORDER SEC_ATTR(".sdram_recorder") ALIGN32
+/* CPU-produced Recorder PCM. Separate from the non-cacheable shared arena. */
+#define SDRAM_RECORDER_RING SEC_ATTR(".sdram_recorder_ring") ALIGN32
   /* M7/M4 CPU bulk data in the same shareable, non-cacheable 256 KiB MPU region. */
 #define AUDIO_STORAGE_SHARED_SDRAM SEC_ATTR(".sdram_recorder") ALIGN32
 #define AUDIO_STATE_SHARED_SDRAM SEC_ATTR(".sdram_audio_state_snapshot") ALIGN32

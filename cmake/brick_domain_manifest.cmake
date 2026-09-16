@@ -89,6 +89,7 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_play_scheduler.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_runtime.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_runtime_exec.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_rt_projection_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_step_snapshot.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_transport_fsm.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/audio_recorder.c"
@@ -320,6 +321,7 @@ set(DOMAIN_AUDIO
 )
 
 set(DOMAIN_CONTRACT_UNITS
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_rt_core.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_lfo_segment.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/audio_fx_param_catalog.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/md_model_catalog.c"
@@ -345,6 +347,7 @@ set(SHARED_BACKING
 )
 
 set(PLATFORM_H743_COMMON
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_rt_irq_bridge_h743.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/crash_library.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Platform/brick_media_clock.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Drivers/tlv320aic3204.c"

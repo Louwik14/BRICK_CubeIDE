@@ -17,14 +17,14 @@
 #define WAVEFORM_TILE_BINS 512U
 #define WAVEFORM_TILE_COUNT 16U
 #define WAVEFORM_READ_BYTES 4092U
-#define WAVEFORM_HOT_BINS 64U
 
 typedef struct
 {
     waveform_source_t source;
     uint32_t tile_index;
     uint32_t last_used;
-    uint8_t ready[WAVEFORM_TILE_BINS / 8U];
+    uint16_t first_bin;
+    uint16_t ready_bins;
     uint8_t level;
     uint8_t valid;
     waveform_column_t bins[WAVEFORM_TILE_BINS];
@@ -35,7 +35,6 @@ typedef struct
     waveform_source_t source;
     uint32_t tile_index;
     uint32_t next_frame;
-    uint32_t end_frame;
     uint32_t data_offset;
     uint32_t media_epoch;
     uint16_t block_align;
@@ -51,12 +50,6 @@ STORAGE_STATE_SDRAM static waveform_tile_t g_waveform_tiles[WAVEFORM_TILE_COUNT]
 STORAGE_STATE_SDRAM static waveform_build_t g_waveform_build;
 RECORDER_SCRATCH_SDRAM static uint8_t g_waveform_read[WAVEFORM_READ_BYTES];
 static uint32_t g_waveform_lru;
-static waveform_source_t g_waveform_hot_source;
-static uint32_t g_waveform_hot_first_tile;
-static uint32_t g_waveform_hot_last_tile;
-static uint8_t g_waveform_hot_level;
-static uint8_t g_waveform_hot_valid;
-static uint8_t g_waveform_hot_right_first;
 static waveform_source_t g_waveform_peak_source;
 static uint16_t g_waveform_peak;
 static uint8_t g_waveform_peak_valid;
@@ -64,6 +57,17 @@ volatile waveform_latency_diag_t g_waveform_latency_diag;
 volatile waveform_page_diag_entry_t
     g_waveform_page_diag_ring[WAVEFORM_PAGE_DIAG_CAPACITY];
 volatile uint32_t g_waveform_page_diag_head;
+STORAGE_STATE_SDRAM volatile uint32_t
+    g_waveform_local_diag_words[WAVEFORM_LOCAL_DIAG_WORDS];
+
+__attribute__((used, noinline)) void waveform_local_diag_reset(void)
+{
+    for(uint32_t i = 0U; i < WAVEFORM_LOCAL_DIAG_WORDS; ++i)
+        g_waveform_local_diag_words[i] = 0U;
+    g_waveform_local_diag_words[0] = 0x574C4447U; /* WLDG */
+    g_waveform_local_diag_words[10] = UINT32_MAX;
+    g_waveform_local_diag_words[18] = UINT32_MAX;
+}
 
 static void waveform_diag_page_reserved(sample_audio_key_t key,
     uint32_t epoch, uint32_t page, uint8_t preexisting)
@@ -181,18 +185,6 @@ static waveform_tile_t *waveform_find_tile(const waveform_source_t *source,
     return 0;
 }
 
-static uint8_t waveform_bin_ready(const waveform_tile_t *tile, uint32_t bin)
-{
-    const uint32_t offset = bin % WAVEFORM_TILE_BINS;
-    return (uint8_t)((tile->ready[offset / 8U] >> (offset % 8U)) & 1U);
-}
-
-static void waveform_mark_bin_ready(waveform_tile_t *tile, uint32_t bin)
-{
-    const uint32_t offset = bin % WAVEFORM_TILE_BINS;
-    tile->ready[offset / 8U] |= (uint8_t)(1U << (offset % 8U));
-}
-
 static uint8_t waveform_tile_range_ready(const waveform_source_t *source,
                                          uint8_t level, uint32_t frame0,
                                          uint32_t frame1)
@@ -200,11 +192,13 @@ static uint8_t waveform_tile_range_ready(const waveform_source_t *source,
     const uint32_t step = g_waveform_frames_per_bin[level];
     const uint32_t bin0 = frame0 / step;
     const uint32_t bin1 = (uint32_t)(((uint64_t)frame1 + step - 1U) / step);
-    for(uint32_t bin = bin0; bin < bin1; ++bin)
+    for(uint32_t bin = bin0; bin < bin1; )
     {
         waveform_tile_t *const tile = waveform_find_tile(source, level,
             bin / WAVEFORM_TILE_BINS);
-        if(tile == 0 || waveform_bin_ready(tile, bin) == 0U)
+        if(tile == 0 || bin % WAVEFORM_TILE_BINS < tile->first_bin
+                || bin % WAVEFORM_TILE_BINS
+                    >= (uint32_t)tile->first_bin + tile->ready_bins)
         {
             if(level == g_waveform_latency_diag.last_ideal_level)
             {
@@ -217,6 +211,10 @@ static uint8_t waveform_tile_range_ready(const waveform_source_t *source,
             }
             return 0U;
         }
+        const uint32_t next = (bin / WAVEFORM_TILE_BINS) * WAVEFORM_TILE_BINS
+            + tile->first_bin + tile->ready_bins;
+        if(next <= bin) { return 0U; }
+        bin = next;
     }
     return 1U;
 }
@@ -248,15 +246,15 @@ static uint8_t waveform_tile_minmax(const waveform_source_t *source,
 
 static void waveform_start_tile(const waveform_source_t *source,
                                 uint8_t level, uint32_t index,
-                                uint32_t first_bin, uint32_t end_bin)
+                                uint32_t first_bin)
 {
     if(g_waveform_build.active != 0U
             && g_waveform_build.level == level
             && g_waveform_build.tile_index == index
-            && first_bin >= g_waveform_build.next_frame
+            && first_bin >= index * WAVEFORM_TILE_BINS
+                + g_waveform_tiles[g_waveform_build.slot].first_bin
+            && first_bin == g_waveform_build.next_frame
                 / g_waveform_frames_per_bin[level]
-            && (uint64_t)end_bin * g_waveform_frames_per_bin[level]
-                <= g_waveform_build.end_frame
             && waveform_source_equal(&g_waveform_build.source, source) != 0U)
     {
         return;
@@ -270,45 +268,31 @@ static void waveform_start_tile(const waveform_source_t *source,
     else
     {
     uint32_t oldest = 0xFFFFFFFFUL;
-    uint8_t found = 0U;
     for(uint8_t i = 0U; i < WAVEFORM_TILE_COUNT; ++i)
     {
-        if(g_waveform_tiles[i].valid == 0U) { slot = i; found = 1U; break; }
-        const waveform_tile_t *const candidate = &g_waveform_tiles[i];
-        if(g_waveform_hot_valid != 0U
-                && candidate->level == g_waveform_hot_level
-                && waveform_source_equal(&candidate->source,
-                    &g_waveform_hot_source) != 0U
-                && candidate->tile_index >= g_waveform_hot_first_tile
-                && candidate->tile_index <= g_waveform_hot_last_tile)
-            continue;
+        if(g_waveform_tiles[i].valid == 0U) { slot = i; break; }
         if(g_waveform_tiles[i].last_used < oldest)
         {
             oldest = g_waveform_tiles[i].last_used;
             slot = i;
-            found = 1U;
-        }
-    }
-    if(found == 0U)
-    {
-        oldest = 0xFFFFFFFFUL;
-        for(uint8_t i = 0U; i < WAVEFORM_TILE_COUNT; ++i)
-        {
-            if(g_waveform_tiles[i].last_used < oldest)
-            {
-                oldest = g_waveform_tiles[i].last_used;
-                slot = i;
-            }
         }
     }
     if(g_waveform_tiles[slot].valid != 0U) { ++g_waveform_latency_diag.tile_evictions; }
     }
     waveform_tile_t *const tile = &g_waveform_tiles[slot];
-    if(existing == 0) { memset(tile->ready, 0, sizeof(tile->ready)); }
+    const uint16_t first_offset = (uint16_t)(first_bin
+        - index * WAVEFORM_TILE_BINS);
+    const uint8_t resume = (uint8_t)(existing != 0
+        && first_offset == (uint16_t)(tile->first_bin + tile->ready_bins));
     tile->valid = 1U;
     tile->source = *source;
     tile->level = level;
     tile->tile_index = index;
+    if(resume == 0U)
+    {
+        tile->first_bin = first_offset;
+        tile->ready_bins = 0U;
+    }
     tile->last_used = ++g_waveform_lru;
     memset(&g_waveform_build, 0, sizeof(g_waveform_build));
     ++g_waveform_latency_diag.build_restarts;
@@ -317,12 +301,9 @@ static void waveform_start_tile(const waveform_source_t *source,
     g_waveform_build.tile_index = index;
     g_waveform_build.slot = slot;
     g_waveform_build.media_epoch = sd_access_media_epoch();
-    g_waveform_build.next_frame = (uint32_t)((uint64_t)first_bin
-        * g_waveform_frames_per_bin[level]);
-    const uint64_t requested_end = (uint64_t)end_bin
-        * g_waveform_frames_per_bin[level];
-    g_waveform_build.end_frame = (uint32_t)((requested_end < source->frame_count)
-        ? requested_end : source->frame_count);
+    g_waveform_build.next_frame = (uint32_t)((uint64_t)(resume != 0U
+        ? index * WAVEFORM_TILE_BINS + tile->first_bin + tile->ready_bins
+        : first_bin) * g_waveform_frames_per_bin[level]);
     g_waveform_build.active = 1U;
 }
 
@@ -333,8 +314,32 @@ static int16_t waveform_decode_sample(const uint8_t *p, uint16_t bits)
     return (int16_t)((uint16_t)p[2] | ((uint16_t)p[3] << 8));
 }
 
+#include "waveform_local_engine.inc"
+
+uint8_t waveform_service_local_pending(void)
+{
+    if(g_waveform_local.valid == 0U || g_waveform_local.desired == 0U)
+        return 0U;
+    for(uint8_t i = 0U; i < WAVEFORM_LOCAL_TILE_COUNT; ++i)
+    {
+        if(g_waveform_local.tiles[i].state == WAVEFORM_LOCAL_LOADING)
+            return 1U;
+    }
+    return 0U;
+}
+
+void waveform_service_local_suspend(void)
+{
+    g_waveform_local.desired = 0U;
+}
+
 void waveform_service_storage_service(void)
 {
+    if(waveform_service_local_pending() != 0U)
+    {
+        waveform_local_storage_service();
+        return;
+    }
     waveform_build_t *const job = &g_waveform_build;
     const char *path;
     if(job->active == 0U) { return; }
@@ -345,7 +350,10 @@ void waveform_service_storage_service(void)
         return;
     }
     const uint32_t step = g_waveform_frames_per_bin[job->level];
-    const uint32_t tile_end = job->end_frame;
+    const uint32_t tile_end = (uint32_t)((uint64_t)(job->tile_index + 1U)
+        * WAVEFORM_TILE_BINS * step < job->source.frame_count
+        ? (uint64_t)(job->tile_index + 1U) * WAVEFORM_TILE_BINS * step
+        : job->source.frame_count);
     if(job->next_frame >= tile_end) { job->active = 0U; return; }
     const sd_scheduler_background_request_t admission =
         { WAVEFORM_READ_BYTES, job->media_epoch, SD_SCHEDULER_BACKGROUND_DATA };
@@ -435,13 +443,15 @@ void waveform_service_storage_service(void)
                     if(right > value->max) { value->max = right; }
                 }
             }
-            const uint32_t old_bin = job->next_frame / step;
             job->next_frame += frames;
-            const uint32_t complete_bin = job->next_frame / step
-                + (uint32_t)(job->next_frame == job->source.frame_count
-                    && (job->next_frame % step) != 0U);
-            for(uint32_t bin = old_bin; bin < complete_bin; ++bin)
-                waveform_mark_bin_ready(tile, bin);
+            tile->ready_bins = (uint16_t)(job->next_frame / step
+                - job->tile_index * WAVEFORM_TILE_BINS
+                - tile->first_bin);
+            if(job->next_frame == job->source.frame_count
+                    && (job->next_frame % step) != 0U)
+            {
+                tile->ready_bins++;
+            }
             if(job->next_frame >= tile_end) { job->active = 0U; }
         }
     }
@@ -493,114 +503,52 @@ static uint8_t waveform_sidecar_range(const waveform_cache_handle_t *handle,
         (waveform_cache_level_id_t)level, first, last - first);
 }
 
-static uint8_t waveform_request_missing_bins(const waveform_source_t *source,
-    uint8_t level, uint32_t first_bin, uint32_t last_bin)
+static uint8_t waveform_local_range(const waveform_source_t *source,
+                                    uint8_t level, uint32_t start,
+                                    uint32_t count)
 {
-    for(uint32_t bin = first_bin; bin < last_bin; ++bin)
+    return waveform_tile_range_ready(source, level, start, start + count);
+}
+
+static uint8_t waveform_render_level(const waveform_source_t *source,
+                                     const waveform_cache_handle_t *sidecar,
+                                     uint8_t use_sidecar, uint8_t level,
+                                     uint32_t start, uint32_t count,
+                                     uint8_t width, waveform_column_t *columns)
+{
+    uint64_t cursor = start;
+    uint32_t remainder = 0U;
+    const uint32_t frame_step = count / width;
+    const uint32_t frame_remainder = count % width;
+    const uint32_t step = g_waveform_frames_per_bin[level];
+    for(uint8_t col = 0U; col < width; ++col)
     {
-        waveform_tile_t *const tile = waveform_find_tile(source, level,
-            bin / WAVEFORM_TILE_BINS);
-        if(tile != 0 && waveform_bin_ready(tile, bin) != 0U) { continue; }
-        uint32_t end_bin = (bin / WAVEFORM_TILE_BINS + 1U)
-            * WAVEFORM_TILE_BINS;
-        if(end_bin > last_bin) { end_bin = last_bin; }
-        if(tile != 0)
+        const uint32_t frame0 = (uint32_t)cursor;
+        cursor += frame_step;
+        remainder += frame_remainder;
+        if(remainder >= width) { remainder -= width; cursor++; }
+        uint32_t frame1 = (uint32_t)cursor;
+        if(frame1 <= frame0) { frame1 = frame0 + 1U; }
+        if(frame1 > source->frame_count) { frame1 = source->frame_count; }
+        if(use_sidecar != 0U)
         {
-            for(uint32_t next = bin + 1U; next < end_bin; ++next)
+            const uint32_t bin0 = frame0 / step;
+            const uint32_t bin1 = (uint32_t)(((uint64_t)frame1 + step - 1U)
+                / step);
+            if(waveform_cache_minmax_from_ram(sidecar,
+                (waveform_cache_level_id_t)level, bin0, bin1 - bin0,
+                &columns[col].min, &columns[col].max) == 0U)
             {
-                if(waveform_bin_ready(tile, next) != 0U)
-                {
-                    end_bin = next;
-                    break;
-                }
+                return 0U;
             }
         }
-        waveform_start_tile(source, level, bin / WAVEFORM_TILE_BINS,
-            bin, end_bin);
-        return 1U;
-    }
-    return 0U;
-}
-
-static void waveform_request_hot_bins(const waveform_source_t *source,
-    uint8_t level, uint32_t first_bin, uint32_t last_bin)
-{
-    const uint32_t step = g_waveform_frames_per_bin[level];
-    const uint32_t total_bins = (uint32_t)(((uint64_t)source->frame_count
-        + step - 1U) / step);
-    const uint32_t hot_first = (first_bin > WAVEFORM_HOT_BINS)
-        ? first_bin - WAVEFORM_HOT_BINS : 0U;
-    uint32_t hot_last = last_bin + WAVEFORM_HOT_BINS;
-    if(hot_last < last_bin || hot_last > total_bins) { hot_last = total_bins; }
-    g_waveform_hot_source = *source;
-    g_waveform_hot_level = level;
-    g_waveform_hot_first_tile = hot_first / WAVEFORM_TILE_BINS;
-    g_waveform_hot_last_tile = (hot_last - 1U) / WAVEFORM_TILE_BINS;
-    g_waveform_hot_valid = 1U;
-    if(waveform_request_missing_bins(source, level,
-            first_bin, last_bin) != 0U)
-        return;
-    if(g_waveform_build.active != 0U
-            && g_waveform_build.level == level
-            && waveform_source_equal(&g_waveform_build.source, source) != 0U
-            && g_waveform_build.tile_index >= g_waveform_hot_first_tile
-            && g_waveform_build.tile_index <= g_waveform_hot_last_tile)
-        return;
-    if(g_waveform_hot_right_first != 0U)
-    {
-        if(waveform_request_missing_bins(source, level,
-                last_bin, hot_last) != 0U)
+        else if(waveform_tile_minmax(source, level, frame0,
+                                    frame1, &columns[col]) == 0U)
         {
-            g_waveform_hot_right_first = 0U;
-            return;
+            return 0U;
         }
-        (void)waveform_request_missing_bins(source, level,
-            hot_first, first_bin);
     }
-    else
-    {
-        if(waveform_request_missing_bins(source, level,
-                hot_first, first_bin) != 0U)
-        {
-            g_waveform_hot_right_first = 1U;
-            return;
-        }
-        (void)waveform_request_missing_bins(source, level,
-            last_bin, hot_last);
-    }
-}
-
-static void waveform_overview_column(const rec_source_waveform_summary_t *summary,
-    uint32_t frame0, uint32_t frame1, waveform_column_t *column)
-{
-    uint32_t bin0;
-    uint32_t bin1;
-    if(summary->frames_per_bin != 0U)
-    {
-        bin0 = frame0 / summary->frames_per_bin;
-        bin1 = (uint32_t)(((uint64_t)frame1
-            + summary->frames_per_bin - 1ULL) / summary->frames_per_bin);
-    }
-    else
-    {
-        const uint32_t domain = (summary->bin_domain_frames != 0U)
-            ? summary->bin_domain_frames : summary->frame_count;
-        bin0 = (uint32_t)(((uint64_t)frame0 * summary->bin_count) / domain);
-        bin1 = (uint32_t)((((uint64_t)frame1 * summary->bin_count)
-            + domain - 1ULL) / domain);
-    }
-    if(bin0 >= summary->bin_count) { bin0 = summary->bin_count - 1U; }
-    if(bin1 <= bin0) { bin1 = bin0 + 1U; }
-    if(bin1 > summary->bin_count) { bin1 = summary->bin_count; }
-    column->min = summary->min[bin0];
-    column->max = summary->max[bin0];
-    for(uint32_t bin = bin0 + 1U; bin < bin1; ++bin)
-    {
-        if(summary->min[bin] < column->min)
-            column->min = summary->min[bin];
-        if(summary->max[bin] > column->max)
-            column->max = summary->max[bin];
-    }
+    return 1U;
 }
 
 static int16_t waveform_pcm_to_i16(float value)
@@ -799,6 +747,78 @@ uint16_t waveform_rec_peak(const waveform_source_t *source)
     return peak;
 }
 
+static void waveform_render_rec_overview(
+    const rec_source_waveform_summary_t *summary, uint32_t start_frame,
+    uint32_t frame_count, uint8_t pixel_width, waveform_column_t *columns)
+{
+    const uint32_t frame_step = frame_count / pixel_width;
+    const uint32_t frame_remainder = frame_count % pixel_width;
+    uint64_t cursor = start_frame;
+    uint32_t remainder = 0U;
+    for(uint8_t col = 0U; col < pixel_width; ++col)
+    {
+        const uint32_t frame0 = (uint32_t)cursor;
+        cursor += frame_step;
+        remainder += frame_remainder;
+        if(remainder >= pixel_width)
+        {
+            remainder -= pixel_width;
+            cursor++;
+        }
+        uint32_t frame1 = (uint32_t)cursor;
+        if(frame1 <= frame0) { frame1 = frame0 + 1U; }
+        if(frame1 > summary->frame_count) { frame1 = summary->frame_count; }
+
+        uint32_t bin0;
+        uint32_t bin1;
+        if(summary->frames_per_bin != 0U)
+        {
+            bin0 = frame0 / summary->frames_per_bin;
+            bin1 = (uint32_t)(((uint64_t)frame1
+                + summary->frames_per_bin - 1ULL) / summary->frames_per_bin);
+        }
+        else
+        {
+            const uint32_t domain = (summary->bin_domain_frames != 0U)
+                ? summary->bin_domain_frames : summary->frame_count;
+            bin0 = (uint32_t)(((uint64_t)frame0 * summary->bin_count) / domain);
+            bin1 = (uint32_t)((((uint64_t)frame1 * summary->bin_count)
+                + domain - 1ULL) / domain);
+        }
+        if(bin0 >= summary->bin_count) { bin0 = summary->bin_count - 1U; }
+        if(bin1 <= bin0) { bin1 = bin0 + 1U; }
+        if(bin1 > summary->bin_count) { bin1 = summary->bin_count; }
+
+        int16_t min = summary->min[bin0];
+        int16_t max = summary->max[bin0];
+        for(uint32_t bin = bin0 + 1U; bin < bin1; ++bin)
+        {
+            if(summary->min[bin] < min) { min = summary->min[bin]; }
+            if(summary->max[bin] > max) { max = summary->max[bin]; }
+        }
+        columns[col].min = min;
+        columns[col].max = max;
+    }
+}
+
+waveform_result_t waveform_request_overview(const waveform_source_t *source,
+    uint32_t start_frame, uint32_t frame_count, uint8_t pixel_width,
+    waveform_column_t *columns, waveform_line_column_t *line)
+{
+    if(source == 0 || columns == 0 || line == 0 || pixel_width == 0U
+            || frame_count == 0U || start_frame >= source->frame_count
+            || frame_count > source->frame_count - start_frame)
+        return WAVEFORM_RESULT_INVALID;
+    const rec_source_waveform_summary_t *const summary =
+        waveform_rec_summary(source);
+    if(summary == 0) { return WAVEFORM_RESULT_PENDING; }
+    for(uint8_t col = 0U; col < pixel_width; ++col)
+        line[col].ready = 0U;
+    waveform_render_rec_overview(summary, start_frame, frame_count,
+        pixel_width, columns);
+    return WAVEFORM_RESULT_READY;
+}
+
 waveform_result_t waveform_request(const waveform_source_t *source,
                                    uint32_t start_frame,
                                    uint32_t frame_count,
@@ -851,45 +871,154 @@ waveform_result_t waveform_request(const waveform_source_t *source,
     waveform_cache_handle_t sidecar;
     const uint8_t have_sidecar =
         sample_capture_model_waveform_cache_get_handle(&sidecar);
+    if(waveform_local_range(source, ideal, start_frame, frame_count) != 0U
+            && waveform_render_level(source, 0, 0U, ideal, start_frame,
+                frame_count, pixel_width, columns) != 0U)
+    {
+        ++g_waveform_latency_diag.ready_ideal_local;
+        g_waveform_latency_diag.last_display_level = ideal;
+        return WAVEFORM_RESULT_READY;
+    }
+    ++g_waveform_latency_diag.ideal_local_missing;
     const uint8_t ideal_sidecar_ready = (uint8_t)(pcm_scale == 0U
         && have_sidecar != 0U
         && waveform_sidecar_range(&sidecar, ideal, start_frame,
             frame_count, 1U) != 0U);
+    if(ideal_sidecar_ready != 0U
+            && waveform_render_level(source, &sidecar, 1U, ideal,
+                start_frame, frame_count, pixel_width, columns) != 0U)
+    {
+        ++g_waveform_latency_diag.ready_ideal_sidecar;
+        g_waveform_latency_diag.last_display_level = ideal;
+        return WAVEFORM_RESULT_READY;
+    }
+    if(pcm_scale == 0U)
+    {
+        ++g_waveform_latency_diag.ideal_sidecar_missing;
+        if(ideal_sidecar_ready == 0U)
+            ++g_waveform_latency_diag.ideal_sidecar_pending;
+    }
+    /* One active build uses the existing BG admission. Published bins are
+       reusable immediately; a new viewport abandons obsolete work. */
     const uint32_t step = g_waveform_frames_per_bin[ideal];
     const uint32_t first_bin = start_frame / step;
     const uint32_t last_bin = (uint32_t)(((uint64_t)start_frame
         + frame_count + step - 1U) / step);
-    if(pcm_scale == 0U && ideal_sidecar_ready == 0U)
-        waveform_request_hot_bins(source, ideal, first_bin, last_bin);
-    else if(pcm_scale == 0U && ideal_sidecar_ready != 0U)
+    for(uint32_t bin = first_bin; pcm_scale == 0U && bin < last_bin; )
     {
-        if(g_waveform_build.active != 0U
-                && g_waveform_build.level == ideal
-                && waveform_source_equal(&g_waveform_build.source, source) != 0U)
-            g_waveform_build.active = 0U;
-        const uint32_t first_tile = first_bin / WAVEFORM_TILE_BINS;
-        const uint32_t last_tile = (last_bin - 1U) / WAVEFORM_TILE_BINS;
-        const uint32_t total_bins = (uint32_t)(((uint64_t)source->frame_count
-            + step - 1U) / step);
-        if(first_tile > 0U)
-            (void)waveform_cache_request_tiles(&sidecar,
-                (waveform_cache_level_id_t)ideal, first_tile - 1U, 1U,
-                WAVEFORM_CACHE_REASON_EDITOR_VISIBLE);
-        if((uint64_t)(last_tile + 1U) * WAVEFORM_TILE_BINS < total_bins)
-            (void)waveform_cache_request_tiles(&sidecar,
-                (waveform_cache_level_id_t)ideal, last_tile + 1U, 1U,
-                WAVEFORM_CACHE_REASON_EDITOR_VISIBLE);
+        const uint32_t tile_index = bin / WAVEFORM_TILE_BINS;
+        waveform_tile_t *const tile = waveform_find_tile(source, ideal, tile_index);
+        if(tile == 0 || bin % WAVEFORM_TILE_BINS < tile->first_bin
+                || bin % WAVEFORM_TILE_BINS
+                    >= (uint32_t)tile->first_bin + tile->ready_bins)
+        {
+            waveform_start_tile(source, ideal, tile_index, bin);
+            break;
+        }
+        const uint32_t next = tile_index * WAVEFORM_TILE_BINS
+            + tile->first_bin + tile->ready_bins;
+        if(next <= bin) { break; }
+        bin = next;
+    }
+    for(int level = (int)ideal - 1; level >= 0; --level)
+    {
+        if(waveform_local_range(source, (uint8_t)level,
+                start_frame, frame_count) != 0U
+                && waveform_render_level(source, 0, 0U, (uint8_t)level,
+                    start_frame, frame_count, pixel_width, columns) != 0U)
+        {
+            ++g_waveform_latency_diag.ready_fallback_local;
+            g_waveform_latency_diag.last_display_level = (uint8_t)level;
+            return WAVEFORM_RESULT_READY;
+        }
+        if(have_sidecar != 0U
+                && waveform_sidecar_range(&sidecar, (uint8_t)level,
+                    start_frame, frame_count, 0U) != 0U
+                && waveform_render_level(source, &sidecar, 1U,
+                    (uint8_t)level, start_frame, frame_count,
+                    pixel_width, columns) != 0U)
+        {
+            ++g_waveform_latency_diag.ready_fallback_sidecar;
+            g_waveform_latency_diag.last_display_level = (uint8_t)level;
+            return WAVEFORM_RESULT_READY;
+        }
     }
 
+    waveform_render_rec_overview(summary, start_frame, frame_count,
+        pixel_width, columns);
+    ++g_waveform_latency_diag.ready_overview;
+    return WAVEFORM_RESULT_READY;
+}
+
+/* The local engine can compose a visible window across several PCM tiles.
+ * Windows larger than its bounded cache stay on the global min/max path. */
+waveform_result_t waveform_request_detailed(const waveform_source_t *source,
+                                   uint32_t start_frame,
+                                   uint32_t frame_count,
+                                   uint8_t pixel_width,
+                                   waveform_column_t *columns,
+                                   waveform_line_column_t *line)
+{
+    if(line == 0 || source == 0 || columns == 0 || pixel_width == 0U
+            || frame_count == 0U || start_frame >= source->frame_count
+            || frame_count > source->frame_count - start_frame)
+        return WAVEFORM_RESULT_INVALID;
+    for(uint8_t col = 0U; col < pixel_width; ++col)
+        line[col].ready = 0U;
+    const uint32_t frames_per_pixel = (uint32_t)(((uint64_t)frame_count
+        + pixel_width - 1U) / pixel_width);
+    const uint32_t first_tile = start_frame / WAVEFORM_LOCAL_TILE_FRAMES;
+    const uint32_t last_tile = (start_frame + frame_count - 1U)
+        / WAVEFORM_LOCAL_TILE_FRAMES;
+    if(last_tile - first_tile + 1U > WAVEFORM_LOCAL_MAX_VIEW_TILES)
+    {
+        waveform_local_diag_request(start_frame, frame_count,
+            pixel_width, frames_per_pixel, line);
+        g_waveform_local_diag_words[16] = 5U;
+        return waveform_request(source, start_frame, frame_count,
+            pixel_width, columns);
+    }
+    const rec_source_waveform_summary_t *const summary =
+        waveform_rec_summary(source);
+    if(summary == 0)
+    {
+        waveform_local_diag_request(start_frame, frame_count,
+            pixel_width, frames_per_pixel, line);
+        return WAVEFORM_RESULT_PENDING;
+    }
+    waveform_local_request(source, start_frame, frame_count);
+    int32_t reused_shift = INT32_MAX;
+    if(g_waveform_local_line_hot.valid != 0U
+            && waveform_source_equal(&g_waveform_local_line_hot.source,
+                source) != 0U
+            && g_waveform_local_line_hot.frame_count == frame_count
+            && g_waveform_local_line_hot.width == pixel_width)
+    {
+        if(g_waveform_local_line_hot.start_frame == start_frame)
+        {
+            memcpy(columns, g_waveform_local_line_hot.columns,
+                pixel_width * sizeof(columns[0]));
+            memcpy(line, g_waveform_local_line_hot.line,
+                pixel_width * sizeof(line[0]));
+            waveform_local_diag_request(start_frame, frame_count,
+                pixel_width, frames_per_pixel, line);
+            return WAVEFORM_RESULT_READY;
+        }
+        if(frame_count % pixel_width == 0U)
+        {
+            const int64_t delta = (int64_t)start_frame
+                - g_waveform_local_line_hot.start_frame;
+            const uint32_t frames_per_column = frame_count / pixel_width;
+            if(delta % frames_per_column == 0
+                    && delta / frames_per_column > -(int64_t)pixel_width
+                    && delta / frames_per_column < (int64_t)pixel_width)
+                reused_shift = (int32_t)(delta / frames_per_column);
+        }
+    }
     const uint32_t frame_step = frame_count / pixel_width;
     const uint32_t frame_remainder = frame_count % pixel_width;
     uint64_t cursor = start_frame;
     uint32_t remainder = 0U;
-    uint8_t used_ideal_local = 0U;
-    uint8_t used_ideal_sidecar = 0U;
-    uint8_t used_fallback_local = 0U;
-    uint8_t used_fallback_sidecar = 0U;
-    uint8_t used_overview = 0U;
     for(uint8_t col = 0U; col < pixel_width; ++col)
     {
         const uint32_t frame0 = (uint32_t)cursor;
@@ -899,79 +1028,75 @@ waveform_result_t waveform_request(const waveform_source_t *source,
         uint32_t frame1 = (uint32_t)cursor;
         if(frame1 <= frame0) { frame1 = frame0 + 1U; }
         if(frame1 > source->frame_count) { frame1 = source->frame_count; }
-        if(waveform_tile_minmax(source, ideal, frame0,
-                frame1, &columns[col]) != 0U)
+        if(reused_shift != INT32_MAX)
         {
-            used_ideal_local = 1U;
-            continue;
-        }
-        if(ideal_sidecar_ready != 0U)
-        {
-            const uint32_t bin0 = frame0 / step;
-            const uint32_t bin1 = (uint32_t)(((uint64_t)frame1
-                + step - 1U) / step);
-            if(waveform_cache_minmax_from_ram(&sidecar,
-                    (waveform_cache_level_id_t)ideal, bin0, bin1 - bin0,
-                    &columns[col].min, &columns[col].max) != 0U)
+            const int32_t old_col = (int32_t)col + reused_shift;
+            if(old_col >= 0 && old_col < pixel_width)
             {
-                used_ideal_sidecar = 1U;
+                columns[col] = g_waveform_local_line_hot.columns[old_col];
+                line[col] = g_waveform_local_line_hot.line[old_col];
                 continue;
             }
         }
-        uint8_t filled = 0U;
-        for(int level = (int)ideal - 1; level >= 0; --level)
+        waveform_local_point_t point;
+        if(waveform_local_accumulate_range(frame0, frame1, frames_per_pixel,
+                &point) != 0U)
         {
-            if(waveform_tile_minmax(source, (uint8_t)level,
-                    frame0, frame1, &columns[col]) != 0U)
-            {
-                used_fallback_local = 1U;
-                filled = 1U;
-                break;
-            }
-            if(have_sidecar != 0U)
-            {
-                const uint32_t coarse_step =
-                    g_waveform_frames_per_bin[level];
-                const uint32_t bin0 = frame0 / coarse_step;
-                const uint32_t bin1 = (uint32_t)(((uint64_t)frame1
-                    + coarse_step - 1U) / coarse_step);
-                if(waveform_cache_minmax_from_ram(&sidecar,
-                        (waveform_cache_level_id_t)level,
-                        bin0, bin1 - bin0, &columns[col].min,
-                        &columns[col].max) != 0U)
-                {
-                    used_fallback_sidecar = 1U;
-                    filled = 1U;
-                    break;
-                }
-            }
+            columns[col].min = point.min;
+            columns[col].max = point.max;
+            line[col].point = waveform_local_line_point(col,
+                pixel_width, &point);
+            line[col].ready = 1U;
+            continue;
         }
-        if(filled != 0U) { continue; }
-        waveform_overview_column(summary, frame0, frame1, &columns[col]);
-        used_overview = 1U;
+        uint32_t bin0, bin1;
+        if(summary->frames_per_bin != 0U)
+        {
+            bin0 = frame0 / summary->frames_per_bin;
+            bin1 = (uint32_t)(((uint64_t)frame1
+                + summary->frames_per_bin - 1ULL)
+                / summary->frames_per_bin);
+        }
+        else
+        {
+            const uint32_t domain = (summary->bin_domain_frames != 0U)
+                ? summary->bin_domain_frames : summary->frame_count;
+            bin0 = (uint32_t)(((uint64_t)frame0 * summary->bin_count)
+                / domain);
+            bin1 = (uint32_t)((((uint64_t)frame1 * summary->bin_count)
+                + domain - 1ULL) / domain);
+        }
+        if(bin0 >= summary->bin_count) { bin0 = summary->bin_count - 1U; }
+        if(bin1 <= bin0) { bin1 = bin0 + 1U; }
+        if(bin1 > summary->bin_count) { bin1 = summary->bin_count; }
+        columns[col].min = summary->min[bin0];
+        columns[col].max = summary->max[bin0];
+        for(uint32_t bin = bin0 + 1U; bin < bin1; ++bin)
+        {
+            if(summary->min[bin] < columns[col].min)
+                columns[col].min = summary->min[bin];
+            if(summary->max[bin] > columns[col].max)
+                columns[col].max = summary->max[bin];
+        }
     }
-    if(used_ideal_local != 0U)
+    uint8_t all_local_ready = 1U;
+    for(uint8_t col = 0U; col < pixel_width; ++col)
     {
-        ++g_waveform_latency_diag.ready_ideal_local;
-        g_waveform_latency_diag.last_display_level = ideal;
+        if(line[col].ready == 0U) { all_local_ready = 0U; break; }
     }
-    else { ++g_waveform_latency_diag.ideal_local_missing; }
-    if(used_ideal_sidecar != 0U)
+    g_waveform_local_line_hot.valid = all_local_ready;
+    if(all_local_ready != 0U)
     {
-        ++g_waveform_latency_diag.ready_ideal_sidecar;
-        g_waveform_latency_diag.last_display_level = ideal;
+        g_waveform_local_line_hot.source = *source;
+        g_waveform_local_line_hot.start_frame = start_frame;
+        g_waveform_local_line_hot.frame_count = frame_count;
+        g_waveform_local_line_hot.width = pixel_width;
+        memcpy(g_waveform_local_line_hot.columns, columns,
+            pixel_width * sizeof(columns[0]));
+        memcpy(g_waveform_local_line_hot.line, line,
+            pixel_width * sizeof(line[0]));
     }
-    else if(pcm_scale == 0U)
-    {
-        ++g_waveform_latency_diag.ideal_sidecar_missing;
-        if(ideal_sidecar_ready == 0U)
-            ++g_waveform_latency_diag.ideal_sidecar_pending;
-    }
-    if(used_fallback_local != 0U)
-        ++g_waveform_latency_diag.ready_fallback_local;
-    if(used_fallback_sidecar != 0U)
-        ++g_waveform_latency_diag.ready_fallback_sidecar;
-    if(used_overview != 0U)
-        ++g_waveform_latency_diag.ready_overview;
+    waveform_local_diag_request(start_frame, frame_count,
+        pixel_width, frames_per_pixel, line);
     return WAVEFORM_RESULT_READY;
 }

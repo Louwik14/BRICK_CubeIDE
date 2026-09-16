@@ -1,4 +1,5 @@
 #include "Track/track_mute.h"
+#include "Seq/seq_rt_pass1.h"
 
 #include "Track/track_runtime.h"
 #include "Keyboard/keyboard_engine.h"
@@ -83,6 +84,8 @@ uint8_t track_mute_install(uint8_t track, uint8_t muted)
 {
     if (track >= SEQ_LANE_CAPACITY) return 0U;
     g_track_mute[track] = (muted != 0U) ? 1U : 0U;
+    seq_rt_pass1_control_disarm_track(track);
+    seq_rt_pass1_control_mark_dirty();
     return 1U;
 }
 

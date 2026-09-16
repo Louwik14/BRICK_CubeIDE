@@ -187,7 +187,18 @@ bool live_parameter_audio_publication_submit_dated(
     control_audio_command_t command;
     if ((live_parameter_audio_build_param_command(
             &target, effective_sample_time, &command) == 0U)
-            || (control_rt_publish_batch_scheduled(&command, 1U) == 0U))
+            )
+    {
+        Error_Handler();
+        return false;
+    }
+    command.opcode_kind = CONTROL_AUDIO_COMMAND_TAG(CONTROL_AUDIO_COMMAND_PARAM,
+        (semantic == CONTROL_AUDIO_PARAM_TEMP)
+            ? CONTROL_AUDIO_PARAM_KIND_SEQ_TEMP_TRACK
+            : ((semantic == CONTROL_AUDIO_PARAM_CLEAR_TEMP)
+                ? CONTROL_AUDIO_PARAM_KIND_SEQ_CLEAR_TEMP_TRACK
+                : CONTROL_AUDIO_PARAM_KIND_SEQ_RESTORE_BASE_TRACK));
+    if (control_rt_publish_batch_scheduled(&command, 1U) == 0U)
     {
         Error_Handler();
         return false;
