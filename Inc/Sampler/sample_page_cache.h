@@ -124,11 +124,6 @@ void sample_page_cache_release_slot_pool_allocation(uint16_t first_slot,
                                                     uint16_t page_count);
 uint32_t sample_page_cache_slot_pool_total_bytes(void);
 uint32_t sample_page_cache_slot_pool_free_bytes(void);
-uint8_t sample_page_cache_has_reserved_range(uint16_t first_sample_id,
-                                           uint16_t sample_count);
-uint8_t sample_page_cache_has_reserved_domain_range(sample_audio_domain_t domain,
-                                                  uint16_t first_object_id,
-                                                  uint16_t object_count);
 uint8_t sample_page_cache_get_stream_info(uint16_t sample_id,
                                           sample_page_stream_info_t *out_info);
 uint8_t sample_page_cache_get_stream_info_key(sample_audio_key_t key,

@@ -18,6 +18,7 @@
 SDRAM_CLASSIC_POOL static sample_cache_desc_t g_sample_cache[SAMPLE_CLASSIC_CAPACITY];
 static CTRL_STATE FRESULT g_sample_cache_last_fresult[SAMPLE_CLASSIC_CAPACITY];
 static uint8_t g_sample_cache_stream_gate_held;
+static uint8_t g_sample_cache_projection_published[SAMPLE_CLASSIC_CAPACITY];
 
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(SAMPLE_CLASSIC_CAPACITY <= SAMPLE_PAGE_CACHE_ID_CAPACITY,
@@ -31,6 +32,24 @@ static uint8_t sample_cache_prepare_via_page_cache(uint16_t sample_id,
 static uint8_t sample_cache_reserve_static_page_span(uint16_t sample_id,
                                                   const sample_play_plan_page_span_t *span);
 static uint32_t sample_cache_stream_last_page_index(const sample_cache_desc_t *desc);
+
+static void sample_cache_sync_projections(void)
+{
+    for (uint16_t sample_id = 0U; sample_id < SAMPLE_CLASSIC_CAPACITY; ++sample_id)
+    {
+        const uint8_t ready = sample_cache_is_ready(sample_id);
+        if ((ready != 0U) && (g_sample_cache_projection_published[sample_id] == 0U))
+        {
+            if (sample_classic_audio_projection_publish(sample_id) != 0U)
+                g_sample_cache_projection_published[sample_id] = 1U;
+        }
+        else if ((ready == 0U) && (g_sample_cache_projection_published[sample_id] != 0U))
+        {
+            sample_classic_audio_projection_withdraw(sample_id);
+            g_sample_cache_projection_published[sample_id] = 0U;
+        }
+    }
+}
 
 uint32_t sample_cache_product_cost_bytes(uint32_t frames,
                                           sample_audio_format_t format)
@@ -315,6 +334,7 @@ void sample_cache_init(void)
     {
         sample_cache_clear_desc(&g_sample_cache[i]);
         g_sample_cache_last_fresult[i] = FR_OK;
+        g_sample_cache_projection_published[i] = 0U;
     }
 
 }
@@ -326,9 +346,11 @@ void sample_cache_clear(uint16_t sample_id)
         return;
     }
 
+    sample_classic_audio_projection_withdraw(sample_id);
     sample_cache_release_slot(sample_id);
     sample_cache_clear_desc(&g_sample_cache[sample_id]);
     g_sample_cache_last_fresult[sample_id] = FR_OK;
+    g_sample_cache_projection_published[sample_id] = 0U;
 }
 
 static uint8_t sample_cache_prepare_internal(uint16_t sample_id,
@@ -359,7 +381,7 @@ static uint8_t sample_cache_prepare_internal(uint16_t sample_id,
     }
 
     sample_classic_audio_projection_withdraw(sample_id);
-    sample_classic_audio_projection_withdraw(sample_id);
+    g_sample_cache_projection_published[sample_id] = 0U;
     sample_cache_release_slot(sample_id);
     sample_cache_clear_desc(&g_sample_cache[sample_id]);
     sample_global_pool_clear_slot(sample_id);
@@ -481,7 +503,8 @@ done:
     }
     else if (sample_cache_is_ready(sample_id) != 0U)
     {
-        (void)sample_classic_audio_projection_publish(sample_id);
+        if (sample_classic_audio_projection_publish(sample_id) != 0U)
+            g_sample_cache_projection_published[sample_id] = 1U;
     }
     sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_CACHE);
     return ok;
@@ -507,13 +530,7 @@ uint8_t sample_cache_prepare_prevalidated(uint16_t sample_id,
 
 void sample_cache_service(uint32_t byte_budget)
 {
-    for (uint16_t sample_id = 0U; sample_id < SAMPLE_CLASSIC_CAPACITY; ++sample_id)
-    {
-        if (sample_cache_is_ready(sample_id) != 0U)
-            (void)sample_classic_audio_projection_publish(sample_id);
-        else
-            sample_classic_audio_projection_withdraw(sample_id);
-    }
+    sample_cache_sync_projections();
     if (byte_budget == 0U)
     {
         return;
@@ -532,28 +549,12 @@ void sample_cache_service(uint32_t byte_budget)
     sample_stream_manager_service(byte_budget);
     sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_STREAM);
     g_sample_cache_stream_gate_held = 0U;
+    sample_cache_sync_projections();
 }
 
 uint8_t sample_cache_has_pending_sd_work(void)
 {
-    if (sample_stream_manager_has_pending_sd_work() != 0U)
-    {
-        return 1U;
-    }
-
-    if (sample_page_cache_has_reserved_range(0U, SAMPLE_CLASSIC_CAPACITY) != 0U)
-    {
-        return 1U;
-    }
-
-    if (sample_page_cache_has_reserved_domain_range(
-            SAMPLE_AUDIO_DOMAIN_REC, 0U,
-            SAMPLE_PAGE_CACHE_REC_ID_CAPACITY) != 0U)
-    {
-        return 1U;
-    }
-
-    return 0U;
+    return sample_stream_manager_has_pending_sd_work();
 }
 
 uint8_t sample_cache_is_ready(uint16_t sample_id)

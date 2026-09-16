@@ -539,8 +539,11 @@ uint8_t sample_stream_manager_has_pending_sd_work(void)
         candidates, SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES, 0, &loading_pages);
     if ((candidate_count != 0U) || (loading_pages != 0U)) return 1U;
     sample_page_load_target_t prefill_target;
-    return sample_page_cache_get_reserved_load_target_domain_range(
+    if (sample_page_cache_get_reserved_load_target_domain_range(
         SAMPLE_AUDIO_DOMAIN_REC, 0U, SAMPLE_PAGE_CACHE_REC_ID_CAPACITY,
+        &prefill_target) != 0U) return 1U;
+    return sample_page_cache_get_reserved_load_target_domain_range(
+        SAMPLE_AUDIO_DOMAIN_CLASSIC, 0U, SAMPLE_CLASSIC_CAPACITY,
         &prefill_target);
 }
 
