@@ -16,6 +16,7 @@
 #include "Seq/seq_model.h"
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_runtime_control.h"
+#include "Seq/seq_wcet_diag.h"
 
 typedef struct
 {
@@ -247,6 +248,7 @@ static void seq_boundary_engine_step_apply_restore(seq_runtime_state_t *state,
 
     if (has_prev != 0U)
     {
+        const uint32_t restore_started = seq_wcet_begin();
         for (uint8_t i = 0U; i < active_count; ++i)
         {
             if (active[i].active == 0U)
@@ -272,11 +274,17 @@ static void seq_boundary_engine_step_apply_restore(seq_runtime_state_t *state,
                 else if (seq_param_iface_restore_base(
                         track, active[i].set_id, active[i].param_slot,
                         effective_sample) == 0U)
+                {
+                    seq_wcet_end(&g_seq_wcet_diag.plock_restore,
+                                 restore_started);
                     return;
+                }
             }
         }
+        seq_wcet_end(&g_seq_wcet_diag.plock_restore, restore_started);
     }
 
+    const uint32_t apply_started = seq_wcet_begin();
     for (uint8_t i = 0U; i < next_count; ++i)
     {
         if (seq_param_iface_apply_lock(track,
@@ -284,8 +292,12 @@ static void seq_boundary_engine_step_apply_restore(seq_runtime_state_t *state,
                                       next_locks[i].target_slot,
                                       next_locks[i].value16,
                                       effective_sample) == 0U)
+        {
+            seq_wcet_end(&g_seq_wcet_diag.plock_apply, apply_started);
             return;
+        }
     }
+    seq_wcet_end(&g_seq_wcet_diag.plock_apply, apply_started);
 
     memset(active,
            0,

@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include "ControlRT/control_rt_publication.h"
 #include "Platform/memory_layout.h"
+#include "Seq/seq_wcet_diag.h"
 
 CONTROL_STATE_SDRAM static control_audio_command_t
     g_music_publish_scratch[2U * (CONTROL_MUSIC_INTERNAL_MAX_HORIZON_BURST
@@ -53,6 +54,7 @@ uint8_t control_music_publication_publish_merged_window(
     const uint32_t *external_order,
     uint16_t external_count, uint16_t bucket_count)
 {
+    const uint32_t publication_started = seq_wcet_begin();
     if ((internal_actions == NULL) || (internal_next == NULL)
             || (internal_heads == NULL) || (internal_order == NULL)
             || (external_actions == NULL) || (external_next == NULL)
@@ -93,5 +95,8 @@ uint8_t control_music_publication_publish_merged_window(
     }
     if ((internal_visited != internal_count)
             || (external_visited != external_count) || (emitted == 0U)) return 0U;
-    return control_rt_publish_batch_scheduled(g_music_publish_scratch, emitted);
+    const uint8_t published = control_rt_publish_batch_scheduled(
+        g_music_publish_scratch, emitted);
+    seq_wcet_end(&g_seq_wcet_diag.publication, publication_started);
+    return published;
 }

@@ -7,6 +7,7 @@
  * Integration: point d'int�gration central des modules Src/Seq avec MIDI et engine_tasklet.
  */
 #include "Seq/seq_runtime.h"
+#include "Seq/seq_wcet_diag.h"
 
 #include <string.h>
 
@@ -108,6 +109,8 @@ typedef struct
     volatile uint32_t last_late_cycle;
 } seq_latency_diag_t;
 SEQ_STATE_D2 volatile seq_latency_diag_t g_seq_latency_diag;
+/* Stable, non-static GDB symbol. Clear it from GDB between stress runs. */
+CTRL_STATE volatile seq_wcet_diag_t g_seq_wcet_diag;
 static uint32_t g_seq_last_service_cycle;
 static uint8_t g_seq_diag_superloop_entry;
 typedef struct
@@ -751,8 +754,13 @@ static void seq_runtime_process_core(void)
                             &grouped[grouped_count], next);
                         ++grouped_count;
                     }
-                    if (seq_play_scheduler_control_apply_events(
-                            grouped, grouped_count) == 0U)
+                    const uint32_t scheduler_started = seq_wcet_begin();
+                    const uint8_t scheduler_ok =
+                        seq_play_scheduler_control_apply_events(
+                            grouped, grouped_count);
+                    seq_wcet_end(&g_seq_wcet_diag.play_scheduler,
+                                 scheduler_started);
+                    if (scheduler_ok == 0U)
                     {
                         BRICK_FATAL_CONTEXT(
                             "SEQ_EVENT_APPLY_FAILED",
@@ -770,9 +778,11 @@ static void seq_runtime_process_core(void)
                 events, 128U, frames,
                 window_first);
         }
-        if (note_fx_pipeline_process(
-                window_first,
-                frames, g_seq_runtime.samples_per_step_q16) == 0U)
+        const uint32_t note_fx_started = seq_wcet_begin();
+        const uint8_t note_fx_ok = note_fx_pipeline_process(
+            window_first, frames, g_seq_runtime.samples_per_step_q16);
+        seq_wcet_end(&g_seq_wcet_diag.note_fx, note_fx_started);
+        if (note_fx_ok == 0U)
         {
             BRICK_FATAL_CONTEXT("NOTE_FX_PIPELINE_PROCESS_FAILED",
                               BRICK_FATAL_MUSIC_STAGING_CAPACITY,
@@ -843,7 +853,9 @@ void seq_runtime_time_adapter_process(void)
         brick6_latency_diag_reset();
     }
     g_seq_diag_superloop_entry = 1U;
+    const uint32_t pass_started = seq_wcet_begin();
     seq_runtime_process_core();
+    seq_wcet_end(&g_seq_wcet_diag.full_pass, pass_started);
     g_seq_diag_superloop_entry = 0U;
 }
 
@@ -852,6 +864,7 @@ void brick6_latency_diag_reset(void)
     const uint32_t core_hz = g_idle_latency_diag.core_clock_hz;
     const uint32_t threshold = g_idle_latency_diag.threshold_cycles;
     memset((void *)&g_seq_latency_diag, 0, sizeof(g_seq_latency_diag));
+    memset((void *)&g_seq_wcet_diag, 0, sizeof(g_seq_wcet_diag));
     memset((void *)g_seq_late_trace_ring, 0, sizeof(g_seq_late_trace_ring));
     g_seq_late_trace_head = 0U;
     g_seq_last_service_cycle = 0U;
