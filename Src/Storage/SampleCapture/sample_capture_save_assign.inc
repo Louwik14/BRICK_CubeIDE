@@ -176,7 +176,7 @@ static void sample_capture_save_service(void)
             if(job->path_attempts == 0U)
             {
                 if((sd_access_fs_mount_if_needed() == 0U)
-                        || ((fr = f_mkdir("0:/REC")) != FR_OK && fr != FR_EXIST))
+                        || (rec_source_ensure_directory() == 0U))
                 {
                     sample_capture_save_fail();
                     break;
@@ -190,7 +190,8 @@ static void sample_capture_save_service(void)
             const uint16_t candidate = g_sample_capture.final_counter;
             FILINFO info;
             (void)snprintf(job->final_path, sizeof(job->final_path),
-                           "0:/REC/REC%04u.WAV", (unsigned int)candidate);
+                           SAMPLE_CAPTURE_REC_DIR "/REC%04u.WAV",
+                           (unsigned int)candidate);
             fr = f_stat(job->final_path, &info);
             g_sample_capture.final_counter = (uint16_t)((candidate + 1U) % 10000U);
             job->path_attempts++;
@@ -201,7 +202,8 @@ static void sample_capture_save_service(void)
                 else
                 {
                     (void)snprintf(job->temporary_path, sizeof(job->temporary_path),
-                                   "0:/REC/REC%04u.TMP", (unsigned int)candidate);
+                                   SAMPLE_CAPTURE_REC_DIR "/REC%04u.TMP",
+                                   (unsigned int)candidate);
                     job->phase = SAMPLE_CAPTURE_SAVE_OPEN_SOURCE;
                 }
             }

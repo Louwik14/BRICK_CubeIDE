@@ -11,14 +11,14 @@ $assign = Get-Content -Raw (Join-Path $root 'Src/Storage/SampleCapture/sample_ca
 $control = Get-Content -Raw (Join-Path $root 'Src/Storage/project_control.c')
 $ui = Get-Content -Raw (Join-Path $root 'Src/UI/pages/AudioRec/ui_audio_rec_page.inc')
 
-Assert-Contract ($capture.Contains('#define SAMPLE_CAPTURE_REC_DIR "0:/REC"')) `
-    'Recorder canonical directory is not 0:/REC'
-Assert-Contract ($capture.Contains('SAMPLE_CAPTURE_REC_DIR "/AUDIOREC_TMP.REC"')) `
-    'Recorder temporary .REC must share the canonical directory'
-Assert-Contract ($capture.Contains('SAMPLE_CAPTURE_REC_DIR "/AUDIOREC_TMP.WAV"')) `
-    'Recorder finalized working WAV must share the canonical directory'
-Assert-Contract ($record.Contains('"%s/REC%04u.WAV"')) `
+Assert-Contract ($capture.Contains('#define SAMPLE_CAPTURE_REC_DIR REC_SOURCE_DIRECTORY')) `
+    'Recorder must use the shared canonical directory authority'
+Assert-Contract ($record.Contains('rec_source_ensure_directory()')) `
+    'Recorder preparation must create the canonical directory tree'
+Assert-Contract ($assign.Contains('SAMPLE_CAPTURE_REC_DIR "/REC%04u.WAV"')) `
     'Final take path must be built from the Recorder directory authority'
+Assert-Contract ($assign.Contains('SAMPLE_CAPTURE_REC_DIR "/REC%04u.TMP"')) `
+    'Temporary save path must share the Recorder directory authority'
 
 Assert-Contract ($control.Contains('project_control_resolve_sample_runtime_kind(')) `
     'Sample runtime resolution must carry asset kind'

@@ -282,8 +282,7 @@ static audio_recorder_lifecycle_result_t sample_capture_prepare_paths(void)
     uint8_t ok = 0U;
     if(sd_access_fs_mount_if_needed() != 0U)
     {
-        const FRESULT made = f_mkdir(SAMPLE_CAPTURE_REC_DIR);
-        if((made != FR_OK) && (made != FR_EXIST))
+        if(rec_source_ensure_directory() == 0U)
         {
             sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
             sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);

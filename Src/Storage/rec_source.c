@@ -28,8 +28,8 @@ static FRESULT rec_source_unlink_measured(const char *path)
 
 #define REC_SOURCE_INVALID_SLOT UINT8_MAX
 #define REC_SOURCE_PROMOTION_MAGIC 0x5250524AUL
-#define REC_SOURCE_PROMOTION_JOURNAL_0 "0:/REC/REC_PROMOTE.0"
-#define REC_SOURCE_PROMOTION_JOURNAL_1 "0:/REC/REC_PROMOTE.1"
+#define REC_SOURCE_PROMOTION_JOURNAL_0 REC_SOURCE_DIRECTORY "/REC_PROMOTE.0"
+#define REC_SOURCE_PROMOTION_JOURNAL_1 REC_SOURCE_DIRECTORY "/REC_PROMOTE.1"
 
 typedef enum
 {
@@ -87,6 +87,14 @@ static uint8_t copy_path(char *dst, const char *src)
     }
     dst[0] = '\0';
     return 0U;
+}
+
+uint8_t rec_source_ensure_directory(void)
+{
+    FRESULT result = f_mkdir(REC_SOURCE_PARENT_DIRECTORY);
+    if ((result != FR_OK) && (result != FR_EXIST)) return 0U;
+    result = f_mkdir(REC_SOURCE_DIRECTORY);
+    return (uint8_t)((result == FR_OK) || (result == FR_EXIST));
 }
 
 static int8_t find_generation(uint32_t generation)
@@ -345,9 +353,11 @@ void rec_source_init(void)
     for (uint8_t slot = 0U; slot < REC_SOURCE_SLOT_COUNT; ++slot)
     {
         (void)snprintf(g_rec_source_generations[slot].temporary_path,
-                       REC_SOURCE_PATH_MAX, "0:/REC/REC_GEN_%u.REC", slot);
+                       REC_SOURCE_PATH_MAX,
+                       REC_SOURCE_DIRECTORY "/REC_GEN_%u.REC", slot);
         (void)snprintf(g_rec_source_generations[slot].path,
-                       REC_SOURCE_PATH_MAX, "0:/REC/REC_GEN_%u.WAV", slot);
+                       REC_SOURCE_PATH_MAX,
+                       REC_SOURCE_DIRECTORY "/REC_GEN_%u.WAV", slot);
     }
     g_rec_source_current_slot = REC_SOURCE_INVALID_SLOT;
     g_rec_source_building_slot = REC_SOURCE_INVALID_SLOT;
@@ -394,9 +404,9 @@ void rec_source_service(void)
         candidate->ownership = REC_SOURCE_OWNERSHIP_TEMPORARY;
         candidate->key = sample_audio_key_rec(slot, 0U);
         (void)snprintf(candidate->temporary_path, REC_SOURCE_PATH_MAX,
-                       "0:/REC/REC_GEN_%u.REC", slot);
+                       REC_SOURCE_DIRECTORY "/REC_GEN_%u.REC", slot);
         (void)snprintf(candidate->path, REC_SOURCE_PATH_MAX,
-                       "0:/REC/REC_GEN_%u.WAV", slot);
+                       REC_SOURCE_DIRECTORY "/REC_GEN_%u.WAV", slot);
     }
 }
 

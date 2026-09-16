@@ -10,6 +10,8 @@
 /* RETIRED + UNDO + CURRENT + BUILDING is the bounded worst case. */
 #define REC_SOURCE_SLOT_COUNT 4U
 #define REC_SOURCE_PATH_MAX 96U
+#define REC_SOURCE_PARENT_DIRECTORY "0:/Samples"
+#define REC_SOURCE_DIRECTORY "0:/Samples/REC"
 
 typedef enum
 {
@@ -28,6 +30,7 @@ typedef enum
 
 void rec_source_init(void);
 /* Caller owns the Recorder SD gate and has mounted 0:. */
+uint8_t rec_source_ensure_directory(void);
 uint8_t rec_source_begin_build(const char **temporary_path,
                                const char **final_path,
                                sample_audio_key_t *key);
