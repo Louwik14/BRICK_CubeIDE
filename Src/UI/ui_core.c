@@ -599,6 +599,13 @@ static bool ui_core_apply_track_family_change(
         types[track] = (uint8_t)ui_track_catalog_first_available_type(
             family, track, ui_core_get_track_configs());
 
+    if ((family == TRACK_FAMILY_EXTERNAL)
+            && (track_input_ownership_can_claim(track, inputs[track]) == 0U)
+            && (track_input_ownership_first_available(track, &inputs[track]) == 0U))
+    {
+        return false;
+    }
+
     if (!track_structure_apply_entity_bulk_with_inputs(
             families, types, midi, sources, inputs))
         return false;
@@ -1105,24 +1112,6 @@ bool ui_set_track_family(uint8_t track, track_family_t family)
 
     const uint8_t creates_track_from_off =
         (uint8_t)((config.family == TRACK_FAMILY_OFF) && (family != TRACK_FAMILY_OFF));
-
-    if ((family == TRACK_FAMILY_EXTERNAL)
-            && (track_input_ownership_can_claim(
-                    track, track_input_ownership_get_external_input(track)) == 0U))
-    {
-        if (track == g_ui_track_state.active_track)
-        {
-            uint8_t owner = TRACK_INPUT_OWNER_NONE;
-            const uint8_t input = track_input_ownership_get_external_input(track);
-            if (track_input_ownership_get_external_owner(input, &owner) != 0U)
-            {
-                char feedback[16];
-                (void)snprintf(feedback, sizeof(feedback), "USED P%u", (unsigned int)(owner + 1U));
-                ui_core_set_feedback(feedback);
-            }
-        }
-        return false;
-    }
 
     if (config.family == family)
     {

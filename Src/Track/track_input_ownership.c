@@ -140,6 +140,31 @@ uint8_t track_input_ownership_can_claim(uint8_t track, uint8_t input)
             || (g_external_owner[input] == track));
 }
 
+uint8_t track_input_ownership_first_available(
+    uint8_t excluding_track, uint8_t *out_input)
+{
+    if ((excluding_track >= TRACK_COUNT) || (out_input == NULL))
+    {
+        return 0U;
+    }
+    for (uint8_t input = 0U;
+         input < ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT; ++input)
+    {
+        if (track_input_ownership_can_claim(excluding_track, input) != 0U)
+        {
+            *out_input = input;
+            return 1U;
+        }
+    }
+    return 0U;
+}
+
+uint8_t track_input_ownership_any_available(uint8_t excluding_track)
+{
+    uint8_t input = 0U;
+    return track_input_ownership_first_available(excluding_track, &input);
+}
+
 uint8_t track_input_ownership_set_external_input(
     uint8_t track,
     uint8_t input,

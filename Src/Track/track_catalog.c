@@ -1,6 +1,7 @@
 #include "Track/track_catalog.h"
 
 #include "Track/entity_topology.h"
+#include "Track/track_input_ownership.h"
 
 static const track_type_t k_synth_types[] = {
     TRACK_TYPE_PRISM, TRACK_TYPE_WAVE, TRACK_TYPE_STACK, TRACK_TYPE_FM,
@@ -154,6 +155,10 @@ bool track_catalog_type_is_available(
             return true;
         }
         return track_catalog_count_sampler_streams(track, track_configs) < BRICK6_MAX_CLIP_TRACKS;
+    }
+    if ((family == TRACK_FAMILY_EXTERNAL) && (type == TRACK_TYPE_EXTERNAL))
+    {
+        return track_input_ownership_any_available(track) != 0U;
     }
     return family != TRACK_FAMILY_OFF;
 }
