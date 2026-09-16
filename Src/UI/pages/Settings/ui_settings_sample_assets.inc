@@ -627,6 +627,8 @@ static void ui_page_settings_sample_copy_left(uint8_t shift_down)
         (void)snprintf(g_ui_settings.sample_dir, sizeof(g_ui_settings.sample_dir), "%s", entry->path);
         g_ui_settings.sample_parent_id = entry->catalog_index;
         g_ui_settings.sample_selected = 0U;
+        g_ui_settings.sample_entry_count = 0U;
+        g_ui_settings.sample_child_count = 0U;
         if ((ui_page_settings_sample_browser_refresh() == 0U)
             && (wav_loader_catalog_view_busy() == 0U))
         {
@@ -708,6 +710,8 @@ static void ui_page_settings_ram_copy_left(uint8_t shift_down)
         (void)snprintf(g_ui_settings.sample_dir, sizeof(g_ui_settings.sample_dir), "%s", entry->path);
         g_ui_settings.sample_parent_id = entry->catalog_index;
         g_ui_settings.sample_selected = 0U;
+        g_ui_settings.sample_entry_count = 0U;
+        g_ui_settings.sample_child_count = 0U;
         if ((ui_page_settings_sample_browser_refresh() == 0U)
             && (wav_loader_catalog_view_busy() == 0U))
         {
@@ -801,19 +805,9 @@ static void ui_page_settings_wavetable_copy_left(uint8_t shift_down)
 
     if (entry->type == UI_SETTINGS_SAMPLE_ENTRY_DIR)
     {
-        char restore_dir[WAV_LOADER_CATALOG_PATH_MAX];
-        (void)snprintf(restore_dir, sizeof(restore_dir), "%s", g_ui_settings.sample_dir);
-        (void)snprintf(g_ui_settings.sample_dir, sizeof(g_ui_settings.sample_dir), "%s", entry->path);
         g_ui_settings.sample_selected = 0U;
         g_ui_settings.sample_left_scroll = 0U;
-        if (ui_page_settings_wavetable_browser_refresh() == 0U)
-        {
-            (void)snprintf(g_ui_settings.sample_dir,
-                           sizeof(g_ui_settings.sample_dir),
-                           "%s",
-                           restore_dir);
-            (void)ui_page_settings_wavetable_browser_refresh();
-        }
+        (void)ui_page_settings_wavetable_browser_request(entry->path);
         return;
     }
 

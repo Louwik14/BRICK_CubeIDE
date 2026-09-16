@@ -220,6 +220,11 @@ typedef struct
     uint8_t return_page_id;
     uint8_t preview_was_active;
     uint8_t preview_stop_origin;
+    DIR wavetable_scan_dir;
+    char wavetable_scan_path[WAV_LOADER_CATALOG_PATH_MAX];
+    uint8_t wavetable_scan_active;
+    uint8_t wavetable_scan_pass;
+    uint8_t wavetable_scan_dir_open;
     uint8_t convert_slot_valid;
     uint16_t convert_slot;
     uint32_t status_until_ms;

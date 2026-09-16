@@ -969,7 +969,7 @@ static void ui_page_settings_tick(void)
         const ui_settings_menu_level_t *const level =
             (g_ui_settings.depth != 0U) ? &g_ui_settings.levels[g_ui_settings.depth - 1U] : 0;
         if ((level != 0)
-            && ((level->view == UI_SETTINGS_VIEW_SAMPLE)
+            && ((level->view == UI_SETTINGS_VIEW_SAMPLER)
                 || (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM)))
         {
             (void)ui_page_settings_sample_browser_refresh();
@@ -979,6 +979,7 @@ static void ui_page_settings_tick(void)
     {
         ui_page_settings_status("CAT FAIL");
     }
+    ui_page_settings_wavetable_browser_service();
 
     if ((wav_convert_is_active() != 0U) || (g_ui_settings.convert_slot_valid != 0U))
     {
