@@ -61,7 +61,6 @@ void sample_page_cache_clear_key(sample_audio_key_t key)
         &g_sample_page_sample_desc[key_slot].stream_safe.physical_map);
     memset(&g_sample_page_sample_desc[key_slot], 0, sizeof(g_sample_page_sample_desc[key_slot]));
     g_sample_page_sample_desc[key_slot].key = key;
-    g_sample_page_sample_desc[key_slot].first_slot = UINT16_MAX;
     g_sample_page_last_slot[key_slot] = UINT16_MAX;
 }
 
@@ -176,8 +175,8 @@ uint8_t sample_page_cache_alloc_slot_pool_bytes(uint32_t bytes,
                                                              SAMPLE_PAGE_SLOT_POOL_COUNT);
     if (start_slot < 0)
     {
-        sample_page_cache_reclaim_stream_pages_for_full_load_in_range(SAMPLE_PAGE_SLOT_POOL_START,
-                                                                      SAMPLE_PAGE_SLOT_POOL_COUNT);
+        sample_page_cache_reclaim_stream_pages_for_slot_allocation(SAMPLE_PAGE_SLOT_POOL_START,
+                                                                   SAMPLE_PAGE_SLOT_POOL_COUNT);
         start_slot = sample_page_cache_find_contiguous_empty_run_in_range(page_count,
                                                                          SAMPLE_PAGE_SLOT_POOL_START,
                                                                          SAMPLE_PAGE_SLOT_POOL_COUNT);

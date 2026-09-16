@@ -7,7 +7,7 @@ static uint32_t sample_page_cache_stream_page_frame_count_key(sample_audio_key_t
     if (key_slot < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
     {
         const sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
-        if ((sample->valid != 0U) && (sample->fully_loaded == 0U) && (sample->total_frames != 0U))
+        if ((sample->valid != 0U) && (sample->total_frames != 0U))
         {
             const sample_audio_format_t format = sample_audio_format_or_stereo(sample->format);
             const uint32_t frames_per_page = sample_audio_format_frames_per_page(format);
@@ -32,7 +32,6 @@ static uint32_t sample_page_cache_stream_page_frame_count_key(sample_audio_key_t
 
     return sample_audio_format_frames_per_page(SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED);
 }
-
 static uint8_t sample_page_cache_sample_is_stream_loadable_key(sample_audio_key_t key)
 {
     const uint16_t key_slot = sample_page_cache_key_slot(key);
@@ -42,8 +41,7 @@ static uint8_t sample_page_cache_sample_is_stream_loadable_key(sample_audio_key_
     }
 
     const sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
-    return ((sample->valid != 0U) && (sample->fully_loaded == 0U)
-            && (sample->path[0] != '\0')) ? 1U : 0U;
+    return ((sample->valid != 0U) && (sample->path[0] != '\0')) ? 1U : 0U;
 }
 
 static void sample_page_cache_alloc_range(sample_page_alloc_type_t alloc_type,
@@ -262,8 +260,8 @@ static int32_t sample_page_cache_find_contiguous_empty_run_in_range(uint32_t pag
     return -1;
 }
 
-static void sample_page_cache_reclaim_stream_pages_for_full_load_in_range(uint32_t range_start,
-                                                                          uint32_t range_count)
+static void sample_page_cache_reclaim_stream_pages_for_slot_allocation(uint32_t range_start,
+                                                                       uint32_t range_count)
 {
     if ((range_start + range_count) > SAMPLE_PAGE_MAX_COUNT)
     {
@@ -282,7 +280,7 @@ static void sample_page_cache_reclaim_stream_pages_for_full_load_in_range(uint32
 
         const sample_page_sample_desc_t *const sample =
             &g_sample_page_sample_desc[sample_page_cache_key_slot(page->key)];
-        if ((sample->valid != 0U) && (sample->fully_loaded == 0U))
+        if (sample->valid != 0U)
         {
             if (sample_page_cache_claim_for_recycle(page) != 0U)
             {
@@ -290,39 +288,4 @@ static void sample_page_cache_reclaim_stream_pages_for_full_load_in_range(uint32
             }
         }
     }
-}
-
-static sample_page_desc_t *sample_page_cache_assign_slot_key(uint32_t slot_index,
-                                                             sample_audio_key_t key,
-                                                             uint32_t page_index,
-                                                             uint32_t frame_count);
-
-static sample_page_desc_t *sample_page_cache_assign_slot_key(uint32_t slot_index,
-                                                             sample_audio_key_t key,
-                                                             uint32_t page_index,
-                                                             uint32_t frame_count)
-{
-    if (slot_index >= SAMPLE_PAGE_MAX_COUNT)
-    {
-        return 0;
-    }
-
-    sample_page_desc_t *const page = &g_sample_page_desc[slot_index];
-    sample_page_cache_clear_desc(page, slot_index);
-    page->key = key;
-    page->sample_id = sample_page_cache_key_slot(key);
-    page->page_index = page_index;
-    sample_page_cache_set_page_geometry(page, key);
-    page->start_frame = sample_audio_format_page_start_frame(page->format, page_index);
-    page->frame_count = frame_count;
-    page->generation = ++g_sample_page_cache_state.generation_counter;
-    page->last_touch = ++g_sample_page_cache_state.touch_counter;
-    sample_page_cache_set_state(page, SAMPLE_PAGE_RESERVED);
-    const uint16_t key_slot = sample_page_cache_key_slot(key);
-    if (key_slot < SAMPLE_PAGE_CACHE_MAX_SAMPLES)
-    {
-        sample_page_cache_index_put_key(key, page_index, (uint16_t)slot_index);
-        g_sample_page_last_slot[key_slot] = (uint16_t)slot_index;
-    }
-    return page;
 }

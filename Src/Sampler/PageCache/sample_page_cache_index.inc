@@ -81,23 +81,6 @@ static uint8_t sample_page_cache_can_evict_for_request(sample_audio_key_t reques
     return 1U;
 }
 
-static uint8_t sample_page_cache_page_is_full_contract(const sample_page_desc_t *page)
-{
-    if (page == 0)
-    {
-        return 0U;
-    }
-
-    const uint16_t key_slot = sample_page_cache_key_slot(page->key);
-    if (key_slot >= SAMPLE_PAGE_CACHE_MAX_SAMPLES)
-    {
-        return 0U;
-    }
-
-    const sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
-    return ((sample->valid != 0U) && (sample->fully_loaded != 0U)) ? 1U : 0U;
-}
-
 static uint8_t sample_page_cache_page_is_contractual(const sample_page_desc_t *page)
 {
     if (page == 0)
@@ -108,8 +91,7 @@ static uint8_t sample_page_cache_page_is_contractual(const sample_page_desc_t *p
     return ((page->static_resident != 0U)
             || (sample_page_lease_control_protects(page->key,
                                                    page->registration_epoch,
-                                                   page->page_index) != 0U)
-            || (sample_page_cache_page_is_full_contract(page) != 0U)) ? 1U : 0U;
+                                                   page->page_index) != 0U)) ? 1U : 0U;
 }
 
 static uint8_t sample_page_cache_index_find_slot_key(sample_audio_key_t key,
@@ -241,8 +223,7 @@ static uint8_t sample_page_cache_claim_for_recycle(sample_page_desc_t *page)
     if (page == 0) return 0U;
     uint32_t primask = sample_page_cache_lock();
     if ((page->state != SAMPLE_PAGE_READY)
-        || (page->static_resident != 0U)
-        || (sample_page_cache_page_is_full_contract(page) != 0U))
+        || (page->static_resident != 0U))
     {
         sample_page_cache_unlock(primask);
         return 0U;

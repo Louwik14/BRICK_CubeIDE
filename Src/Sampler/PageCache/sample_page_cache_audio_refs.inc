@@ -76,10 +76,8 @@ uint8_t sample_page_cache_register_live_pcm24_stereo_sample_key(
         return 0U;
     }
     sample->valid = 1U;
-    sample->fully_loaded = 0U;
     sample->live_committed = 1U;
     sample->physical_only = 1U;
-    sample->first_slot = UINT16_MAX;
     return 1U;
 }
 
@@ -174,7 +172,7 @@ uint8_t sample_page_cache_get_reserved_load_target_domain_range(
         }
 
         sample_page_sample_desc_t *const sample = &g_sample_page_sample_desc[key_slot];
-        if ((sample->valid == 0U) || (sample->fully_loaded != 0U))
+        if (sample->valid == 0U)
         {
             continue;
         }

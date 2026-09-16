@@ -36,8 +36,6 @@ typedef struct
     sample_audio_key_t key;
     char path[SAMPLE_PAGE_CACHE_PATH_MAX];
     wav_info_t info;
-    uint16_t first_slot;
-    uint16_t page_count;
     uint32_t total_frames;
     volatile uint32_t readable_frames;
     uint32_t data_offset;
@@ -47,7 +45,6 @@ typedef struct
     uint32_t registration_epoch;
     sample_stream_safe_metadata_t stream_safe;
     uint8_t valid;
-    uint8_t fully_loaded;
     uint8_t live_committed;
     uint8_t physical_only;
 } sample_page_sample_desc_t;

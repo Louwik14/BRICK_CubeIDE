@@ -124,9 +124,6 @@ void sample_page_cache_release_slot_pool_allocation(uint16_t first_slot,
                                                     uint16_t page_count);
 uint32_t sample_page_cache_slot_pool_total_bytes(void);
 uint32_t sample_page_cache_slot_pool_free_bytes(void);
-const float *sample_page_cache_get_full_sample_base_key(sample_audio_key_t key,
-                                                        uint32_t *out_frames);
-const float *sample_page_cache_get_full_sample_base(uint16_t sample_id, uint32_t *out_frames);
 uint8_t sample_page_cache_has_reserved_range(uint16_t first_sample_id,
                                            uint16_t sample_count);
 uint8_t sample_page_cache_has_reserved_domain_range(sample_audio_domain_t domain,
@@ -140,11 +137,6 @@ uint8_t sample_page_cache_get_registration_epoch_key(
     sample_audio_key_t key, uint32_t *out_registration_epoch);
 uint8_t sample_page_cache_register_prepared_stream(
     const sample_page_stream_info_t *registration);
-uint8_t sample_page_cache_begin_full_reservation(
-    const sample_page_stream_info_t *registration,
-    sample_page_alloc_type_t alloc_type,
-    uint32_t *out_page_count);
-uint8_t sample_page_cache_finish_full_reservation(sample_audio_key_t key);
 uint8_t sample_page_cache_get_load_target(uint16_t sample_id,
                                           uint32_t page_index,
                                           sample_page_load_target_t *out_target);

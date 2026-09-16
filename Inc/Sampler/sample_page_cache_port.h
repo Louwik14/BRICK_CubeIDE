@@ -51,11 +51,3 @@ uint8_t sample_page_cache_port_reserve(sample_audio_key_t key,
 uint8_t sample_page_cache_port_complete(const sample_stream_io_result_t *result);
 void sample_page_cache_port_abort(const sample_stream_io_command_t *command);
 void sample_page_cache_port_clear(sample_audio_key_t key);
-sample_page_load_result_t sample_page_cache_port_load_full(
-    sample_audio_key_t key,
-    const char *path,
-    FIL *map_file,
-    const wav_info_t *info,
-    uint32_t total_frames,
-    uint32_t data_offset,
-    sample_page_alloc_type_t alloc_type);

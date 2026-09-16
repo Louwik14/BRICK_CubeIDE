@@ -141,6 +141,8 @@ static project_control_asset_result_t classic_failure_result(uint16_t logical)
         : PROJECT_CONTROL_ASSET_FAILED;
 }
 
+static project_control_asset_result_t classic_asset_status(uint16_t logical);
+
 static uint8_t project_control_ram_runtime_valid(uint16_t logical)
 {
     uint16_t backend = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
@@ -685,12 +687,8 @@ project_control_asset_result_t project_control_track_asset_restore_status(
         return PROJECT_CONTROL_ASSET_FAILED;
     if (asset->kind == PERSIST_ASSET_SAMPLE_STREAM)
     {
-        if (sample_cache_get_state(logical) == SAMPLE_CACHE_READY_PARTIAL)
-            return PROJECT_CONTROL_ASSET_PENDING;
-        if (sample_cache_is_ready(logical) == 0U)
-            return (sample_cache_get_state(logical) == SAMPLE_CACHE_ERROR)
-                ? classic_failure_result(logical)
-                : PROJECT_CONTROL_ASSET_FAILED;
+        const project_control_asset_result_t status = classic_asset_status(logical);
+        if (status != PROJECT_CONTROL_ASSET_READY) return status;
     }
     if (asset->kind == PERSIST_ASSET_SAMPLE_RAM)
     {
@@ -783,8 +781,6 @@ project_control_asset_result_t project_control_put_asset(
 
 static project_control_asset_result_t classic_asset_status(uint16_t logical)
 {
-    if (sample_cache_get_state(logical) == SAMPLE_CACHE_READY_PARTIAL)
-        return PROJECT_CONTROL_ASSET_PENDING;
     const sample_cache_slot_readiness_t readiness =
         sample_cache_get_slot_readiness(logical);
     if (readiness == SAMPLE_CACHE_SLOT_PLAYABLE)
@@ -1058,10 +1054,10 @@ uint8_t project_control_asset_loads_pending(void)
         const sample_global_slot_t *const classic =
             sample_global_pool_get_slot(logical);
         if (classic != NULL && classic->kind == SAMPLE_GLOBAL_KIND_CLASSIC
-            && (sample_cache_get_state(logical) == SAMPLE_CACHE_PREPARING
-                || sample_cache_get_state(logical) == SAMPLE_CACHE_PREFILLING
-                || sample_cache_get_state(logical) == SAMPLE_CACHE_READY_PARTIAL))
-            return 1U;
+            && (sample_cache_get_slot_readiness(logical)
+                    == SAMPLE_CACHE_SLOT_PREPARING
+                || sample_cache_get_slot_readiness(logical)
+                    == SAMPLE_CACHE_SLOT_START_PENDING)) return 1U;
         if (g_sample_bank[logical].used != 0U
             && g_sample_bank[logical].pending_runtime != PROJECT_CONTROL_INVALID_RUNTIME)
             return 1U;
