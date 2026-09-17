@@ -34,7 +34,6 @@
 #include "IPC/live_parameter_event.h"
 #include "main.h"
 #include "NoteFx/note_fx_state.h"
-#include "NoteFx/note_fx_pipeline.h"
 #include "param_registry.h"
 #include "Track/track_runtime.h"
 #include "Track/entity_topology.h"
@@ -48,7 +47,6 @@
 #include "Seq/seq_clipboard.h"
 #include "Seq/seq_step_snapshot.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1
-#include "Seq/seq_play_scheduler.h"
 
 #define UI_PAGE_CLIPBOARD_CAPACITY 4U
 #define UI_ENSEMBLE_CLIPBOARD_CAPACITY 39U

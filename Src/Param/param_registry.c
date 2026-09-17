@@ -25,7 +25,6 @@
 #include "Sampler/audio_wave_table_projection_control.h"
 #include "Track/control_music_output.h"
 #include "NoteFx/note_fx_state.h"
-#include "NoteFx/note_fx_pipeline.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"

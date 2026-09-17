@@ -1,69 +1,121 @@
-#include "Seq/seq_rt_pass1.h"
+#include "Seq/seq_engine.h"
 #include "NoteFx/note_fx_engine.h"
 #include "Param/param_ids.h"
 #include "Platform/memory_layout.h"
+#include "stm32h7xx.h"
 #include <limits.h>
+#include <stddef.h>
 #include <string.h>
 
-static AUDIO_STATE_D3 note_event_t g_rt_fx_a[NOTE_FX_BATCH_CAPACITY];
-static AUDIO_STATE_D3 note_event_t g_rt_fx_b[NOTE_FX_BATCH_CAPACITY];
-static seq_rt_core_t *g_rt_fx_core;
-static seq_rt_event_block_t *g_rt_fx_block;
-static uint64_t g_rt_fx_start;
-static uint64_t g_rt_fx_end;
+static AUDIO_STATE_D3 note_event_t g_seq_fx_a[NOTE_FX_BATCH_CAPACITY];
+static AUDIO_STATE_D3 note_event_t g_seq_fx_b[NOTE_FX_BATCH_CAPACITY];
+static seq_engine_core_t *g_seq_fx_core;
+static seq_event_block_t *g_seq_fx_block;
+static uint64_t g_seq_fx_start;
+static uint64_t g_seq_fx_end;
 
-static void pending_event_add(seq_rt_core_t *core,uint64_t due,uint8_t kind,
+static seq_future_handle_t future_add(seq_engine_core_t *core,uint64_t due,uint8_t kind,
     uint8_t track,uint8_t note,uint8_t velocity,uint32_t occurrence)
 {
-    if(core->pending_count>=SEQ_RT_PENDING_CAPACITY){++core->dropped_events;return;}
-    core->pending[core->pending_count++]=(seq_rt_pending_event_t){
-        .due_sample=due,.occurrence_id=occurrence,.kind=kind,.track=track,
-        .note=note,.velocity=velocity};
+    seq_future_handle_t invalid={UINT16_MAX,0U};
+    if(core->future_free_head==UINT16_MAX){++core->dropped_events;return invalid;}
+    const uint16_t index=core->future_free_head;
+    seq_future_t *const slot=&core->futures[index];
+    core->future_free_head=slot->next_free;
+    uint32_t generation=slot->generation+1U;
+    if(generation==0U) generation=1U;
+    *slot=(seq_future_t){
+        .due_sample=due,.occurrence_id=occurrence,.kind=kind,.owner=track,
+        .note=note,.velocity=velocity,.generation=generation,.active=1U};
+    ++core->future_count;
+    return (seq_future_handle_t){index,generation};
+}
+
+static seq_future_t *future_resolve(seq_engine_core_t *core,seq_future_handle_t h)
+{
+    if((h.index>=SEQ_ENGINE_FUTURE_CAPACITY)||(core->futures[h.index].active==0U)
+            ||(core->futures[h.index].generation!=h.generation)){
+        ++g_seq_diag.stale_generation_count;return 0;}
+    return &core->futures[h.index];
+}
+
+static void future_release(seq_engine_core_t *core,seq_future_handle_t h)
+{
+    seq_future_t *const slot=future_resolve(core,h);if(slot==0)return;
+    slot->active=0U;slot->next_free=core->future_free_head;
+    core->future_free_head=h.index;if(core->future_count!=0U)--core->future_count;
+}
+
+static void future_clear(seq_engine_core_t *core)
+{
+    core->future_count=0U;core->future_free_head=0U;
+    for(uint16_t i=0U;i<SEQ_ENGINE_FUTURE_CAPACITY;++i){
+        core->futures[i].active=0U;
+        core->futures[i].next_free=(i+1U<SEQ_ENGINE_FUTURE_CAPACITY)?(uint16_t)(i+1U):UINT16_MAX;}
 }
 
 static void fx_terminal(const note_event_t *e)
 {
     uint64_t due=e->sample_abs;
-    if(due<g_rt_fx_start)due=g_rt_fx_start;
-    if(due<g_rt_fx_end&&g_rt_fx_block->event_count<SEQ_RT_EVENT_CAPACITY)
-        g_rt_fx_block->events[g_rt_fx_block->event_count++]=(seq_rt_event_t){
-            .offset=(uint16_t)(due-g_rt_fx_start),.kind=SEQ_RT_EVENT_NOTE_ON,
+    if(due<g_seq_fx_start)due=g_seq_fx_start;
+    if(due<g_seq_fx_end&&g_seq_fx_block->event_count<SEQ_ENGINE_EVENT_CAPACITY)
+        g_seq_fx_block->events[g_seq_fx_block->event_count++]=(seq_event_t){
+            .offset=(uint16_t)(due-g_seq_fx_start),
+            .kind=(e->kind==NOTE_EVENT_KIND_OFF)
+                ?SEQ_ENGINE_EVENT_NOTE_OFF:SEQ_ENGINE_EVENT_NOTE_ON,
             .track=e->track,.occurrence_id=e->occurrence_id,
             .note=e->note,.velocity=e->velocity};
-    else pending_event_add(g_rt_fx_core,due,SEQ_RT_EVENT_NOTE_ON,e->track,
+    else future_add(g_seq_fx_core,due,(e->kind==NOTE_EVENT_KIND_OFF)
+            ?SEQ_ENGINE_EVENT_NOTE_OFF:SEQ_ENGINE_EVENT_NOTE_ON,e->track,
         e->note,e->velocity,e->occurrence_id);
-    if(e->duration_samples!=NOTE_EVENT_DURATION_OPEN)
-        pending_event_add(g_rt_fx_core,due+(e->duration_samples?e->duration_samples:1U),
-            SEQ_RT_EVENT_NOTE_OFF,e->track,e->note,0U,e->occurrence_id);
+    if((e->kind==NOTE_EVENT_KIND_ON)
+            &&(e->duration_samples!=NOTE_EVENT_DURATION_OPEN))
+        future_add(g_seq_fx_core,due+(e->duration_samples?e->duration_samples:1U),
+            SEQ_ENGINE_EVENT_NOTE_OFF,e->track,e->note,0U,e->occurrence_id);
 }
 
 static note_event_result_t fx_run_from(const note_event_t *source,uint8_t stage)
 {
-    g_rt_fx_a[0]=*source;uint8_t count=1U;
-    note_event_t *in=g_rt_fx_a,*out=g_rt_fx_b;
+    const uint32_t started=DWT->CYCCNT;
+    g_seq_fx_a[0]=*source;uint8_t count=1U;
+    note_event_t *in=g_seq_fx_a,*out=g_seq_fx_b;
     for(uint8_t slot=stage;slot<NOTE_FX_SLOT_COUNT;++slot){
         uint8_t out_count=0U;
-        const note_event_result_t r=note_fx_engine_rt_transform(slot,in,count,
+        const note_event_result_t r=note_fx_engine_seq_transform(slot,in,count,
             out,NOTE_FX_BATCH_CAPACITY,&out_count);
         if(r!=NOTE_EVENT_RESULT_ACCEPTED)return r;
         count=out_count;note_event_t*swap=in;in=out;out=swap;
         if(count==0U)return NOTE_EVENT_RESULT_ACCEPTED;}
     for(uint8_t i=0U;i<count;++i)fx_terminal(&in[i]);
+    const uint32_t cycles=DWT->CYCCNT-started;
+    if(cycles>g_seq_diag.fx_admission_max_cycles)
+        g_seq_diag.fx_admission_max_cycles=cycles;
     return NOTE_EVENT_RESULT_ACCEPTED;
 }
 
 static note_event_result_t fx_generated(const note_event_t *event,void *ctx)
 {(void)ctx;return fx_run_from(event,event->stage);}
 
+uint8_t seq_engine_core_submit_live(seq_engine_core_t *core,
+    const note_event_t *event,uint64_t window_start,uint64_t window_end,
+    seq_event_block_t *out_block)
+{
+    if((core==0)||(event==0)||(out_block==0)||(window_end<=window_start))
+        return 0U;
+    g_seq_fx_core=core;g_seq_fx_block=out_block;
+    g_seq_fx_start=window_start;g_seq_fx_end=window_end;
+    return (fx_run_from(event,0U)==NOTE_EVENT_RESULT_ACCEPTED)?1U:0U;
+}
+
 static uint8_t priority(uint8_t kind)
 {
-    if (kind == SEQ_RT_EVENT_PANIC) return 0U;
-    if (kind == SEQ_RT_EVENT_NOTE_OFF) return 1U;
-    if (kind == SEQ_RT_EVENT_PARAM) return 2U;
+    if (kind == SEQ_ENGINE_EVENT_PANIC) return 0U;
+    if (kind == SEQ_ENGINE_EVENT_NOTE_OFF) return 1U;
+    if (kind == SEQ_ENGINE_EVENT_PARAM) return 2U;
     return 3U;
 }
 
-static const seq_play_item_t *step_item(const seq_rt_projection_t *p,
+static const seq_play_item_t *step_item(const seq_pattern_t *p,
     uint8_t track, uint8_t step, uint8_t voice)
 {
     if (track < BRICK_ENTITY_TOP_LEVEL_COUNT)
@@ -73,7 +125,7 @@ static const seq_play_item_t *step_item(const seq_rt_projection_t *p,
     return 0;
 }
 
-static int16_t play_value(const seq_rt_projection_t *p, uint8_t track,
+static int16_t play_value(const seq_pattern_t *p, uint8_t track,
     uint8_t step, uint8_t voice, seq_step_play_field_t field)
 {
     const seq_play_item_t *item = step_item(p, track, step, voice);
@@ -97,7 +149,7 @@ static uint16_t roll_divisor(uint8_t roll)
     return (roll < SEQ_STEP_ROLL_COUNT) ? values[roll] : 0U;
 }
 
-static uint64_t first_on(const seq_rt_projection_t *p, uint8_t track,
+static uint64_t first_on(const seq_pattern_t *p, uint8_t track,
     uint8_t swing_phase, uint64_t nominal, uint64_t span_q16, int16_t mictim)
 {
     uint64_t swing = 0U;
@@ -113,54 +165,70 @@ static uint64_t first_on(const seq_rt_projection_t *p, uint8_t track,
     return (swung > (uint64_t)(-micro)) ? swung - (uint64_t)(-micro) : 0U;
 }
 
-static void source_add(seq_rt_core_t *core, uint64_t first_on,
+static void source_add(seq_engine_core_t *core, uint64_t first_on,
     uint64_t span_q16, uint64_t interval_q16, uint32_t gate_samples,
     uint8_t track, uint8_t note, uint8_t velocity)
 {
-    for (uint16_t i = 0U; i < SEQ_RT_SOURCE_CAPACITY; ++i)
+    const uint8_t quota=(track<BRICK_ENTITY_TOP_LEVEL_COUNT)?8U:1U;
+    uint8_t owned=0U;
+    uint16_t target=SEQ_ENGINE_LIFETIME_CAPACITY;
+    uint16_t oldest=SEQ_ENGINE_LIFETIME_CAPACITY;
+    for (uint16_t i = 0U; i < SEQ_ENGINE_LIFETIME_CAPACITY; ++i)
     {
-        seq_rt_note_source_t *const source = &core->sources[i];
-        if (source->active != 0U) continue;
-        *source = (seq_rt_note_source_t){
+        seq_lifetime_t *const source = &core->lifetimes[i];
+        if (source->active == 0U) { if(target==SEQ_ENGINE_LIFETIME_CAPACITY)target=i;continue; }
+        if (source->track != track) continue;
+        ++owned;
+        if ((oldest==SEQ_ENGINE_LIFETIME_CAPACITY)
+                ||(source->first_on_sample<core->lifetimes[oldest].first_on_sample))
+            oldest=i;
+    }
+    if(owned>=quota)target=oldest;
+    if(target<SEQ_ENGINE_LIFETIME_CAPACITY)
+    {
+        seq_lifetime_t *const source=&core->lifetimes[target];
+        const uint16_t generation=(uint16_t)(source->generation+1U);
+        *source = (seq_lifetime_t){
             .first_on_sample=first_on,.span_q16=span_q16,
             .interval_q16=interval_q16,.gate_samples=gate_samples,
-            .track=track,.note=note,.velocity=velocity,.active=1U};
-        ++core->source_count;
+            .track=track,.note=note,.velocity=velocity,.active=1U,
+            .generation=generation?generation:1U};
+        if(owned<quota)++core->lifetime_count;
         return;
     }
     ++core->dropped_events;
 }
 
-static uint8_t next_step(const seq_rt_projection_t *p, uint8_t track,
+static uint8_t next_step(const seq_pattern_t *p, uint8_t track,
     uint8_t current)
 {
     const uint8_t length = p->track_length[track] ? p->track_length[track] : 1U;
     return ((uint8_t)(current + 1U) < length) ? (uint8_t)(current + 1U) : 0U;
 }
 
-static void configure_fx_step(const seq_rt_projection_t *p,uint8_t track,
+static void configure_fx_step(const seq_pattern_t *p,uint8_t track,
     uint8_t step)
 {
     note_fx_track_state_t state=p->note_fx[track];
     const uint16_t first=p->lock_first[track][step];
     const uint8_t count=p->steps[track][step].lock_count;
     for(uint8_t n=0U;n<count;++n){
-        const seq_rt_lock_projection_t *lock=&p->lock_pool[first+n];
-        if((lock->param_flags&SEQ_RT_PARAM_FLAG_NOTE_FX)==0U)continue;
+        const seq_lock_pattern_t *lock=&p->lock_pool[track][first+n];
+        if((lock->param_flags&SEQ_ENGINE_PARAM_FLAG_NOTE_FX)==0U)continue;
         uint8_t slot,param;
-        if(note_fx_state_param_map((param_id_t)(lock->param_flags&SEQ_RT_PARAM_ID_MASK),
+        if(note_fx_state_param_map((param_id_t)(lock->param_flags&SEQ_ENGINE_PARAM_ID_MASK),
                 &slot,&param)!=0U)
             state.value[slot][param]=(uint8_t)lock->value16;
     }
     (void)note_fx_state_normalize_track(&state);
     for(uint8_t slot=0U;slot<NOTE_FX_SLOT_COUNT;++slot)
-        if(note_fx_engine_rt_configure(track,slot,
+        if(note_fx_engine_seq_configure(track,slot,
             state.value[slot][NOTE_FX_PARAM_COUNT-1U],state.value[slot][0],
             state.value[slot][1],state.value[slot][2])!=NOTE_EVENT_RESULT_ACCEPTED)
             return;
 }
 
-static void schedule_step(seq_rt_core_t *core, const seq_rt_projection_t *p,
+static void schedule_step(seq_engine_core_t *core, const seq_pattern_t *p,
     uint8_t track, uint8_t step, uint8_t swing_phase, uint32_t serial,
     uint64_t nominal, uint8_t negative_only)
 {
@@ -193,63 +261,55 @@ static void schedule_step(seq_rt_core_t *core, const seq_rt_projection_t *p,
     }
 }
 
-static void schedule_boundary(seq_rt_core_t *core,
-    const seq_rt_projection_t *p, uint64_t sample, uint16_t hit_mask,
-    uint64_t block_start, seq_rt_param_block_t *params)
+static void schedule_boundary(seq_engine_core_t *core,
+    const seq_pattern_t *p, uint64_t sample, uint16_t hit_mask,
+    uint64_t block_start, seq_param_block_t *params)
 {
+    const uint32_t locks_started=DWT->CYCCNT;
     for (uint8_t track=0U; track<SEQ_LANE_CAPACITY; ++track) {
         if ((hit_mask & (uint16_t)(1U << track)) == 0U) continue;
-        core->comparable_tracks |= (uint16_t)(1U << track);
+        core->emitter_tracks |= (uint16_t)(1U << track);
         const uint8_t step=core->play_step[track];
-        if(p->track_rt_fx_direct[track]!=0U)configure_fx_step(p,track,step);
-        if ((p->track_rt_plock_direct[track] != 0U)
+        if(p->track_fx_enabled[track]!=0U)configure_fx_step(p,track,step);
+        if ((p->track_lock_enabled[track] != 0U)
                 && ((core->plock_fault_tracks & (uint16_t)(1U << track)) == 0U))
         {
             const uint16_t first=p->lock_first[track][step];
             const uint8_t count=p->steps[track][step].lock_count;
-            uint8_t restores=0U;
-            for(uint8_t a=0U;a<core->active_lock_count[track];++a){
-                if((core->active_locks[track][a].param_flags
-                        &SEQ_RT_PARAM_FLAG_NOTE_FX)!=0U)continue;
-                uint8_t found=0U;
-                for(uint8_t n=0U;n<count;++n)
-                    if((p->lock_pool[first+n].param_flags
-                            &SEQ_RT_PARAM_FLAG_NOTE_FX)==0U
-                        &&(p->lock_pool[first+n].param_flags&SEQ_RT_PARAM_ID_MASK)
-                        ==(core->active_locks[track][a].param_flags&SEQ_RT_PARAM_ID_MASK))
-                        {found=1U;break;}
-                if(found==0U)++restores;
-            }
-            if ((uint32_t)params->event_count+restores+count
-                    > SEQ_RT_PARAM_EVENT_CAPACITY)
+            const uint8_t old_count=core->active_lock_count[track];
+            if ((uint32_t)params->event_count+old_count+count
+                    > SEQ_ENGINE_PARAM_EVENT_CAPACITY)
                 core->plock_fault_tracks|=(uint16_t)(1U<<track);
             else {
-                for(uint8_t a=0U;a<core->active_lock_count[track];++a){
-                    const seq_rt_active_lock_t active=core->active_locks[track][a];
-                    if((active.param_flags&SEQ_RT_PARAM_FLAG_NOTE_FX)!=0U)continue;
-                    uint8_t found=0U;
-                    for(uint8_t n=0U;n<count;++n)
-                        if((p->lock_pool[first+n].param_flags
-                                &SEQ_RT_PARAM_FLAG_NOTE_FX)==0U
-                            &&(p->lock_pool[first+n].param_flags&SEQ_RT_PARAM_ID_MASK)
-                            ==(active.param_flags&SEQ_RT_PARAM_ID_MASK)){found=1U;break;}
-                    if(found==0U)params->events[params->event_count++]=(seq_rt_param_event_t){
+                uint8_t old_index=0U,new_index=0U,active_write=0U;
+                while ((old_index<old_count)||(new_index<count)) {
+                    while ((new_index<count)&&((p->lock_pool[track][first+new_index].param_flags
+                            &SEQ_ENGINE_PARAM_FLAG_NOTE_FX)!=0U)) ++new_index;
+                    const uint16_t old_key=(old_index<old_count)
+                        ?(uint16_t)(core->active_locks[track][old_index].param_flags
+                            &SEQ_ENGINE_PARAM_ID_MASK):UINT16_MAX;
+                    const uint16_t new_key=(new_index<count)
+                        ?(uint16_t)(p->lock_pool[track][first+new_index].param_flags
+                            &SEQ_ENGINE_PARAM_ID_MASK):UINT16_MAX;
+                    if ((old_key==UINT16_MAX)&&(new_key==UINT16_MAX)) break;
+                    if (old_key<new_key) {
+                        const seq_active_lock_t active=
+                            core->active_locks[track][old_index++];
+                        params->events[params->event_count++]=(seq_param_event_t){
+                            .offset=(uint16_t)(sample-block_start),.param_id=old_key,
+                            .value16=active.base_value16,.track=track,
+                            .semantic=((active.param_flags&SEQ_ENGINE_PARAM_FLAG_CLEARABLE)!=0U)
+                                ?SEQ_ENGINE_PARAM_CLEAR_TEMP:SEQ_ENGINE_PARAM_RESTORE_BASE};
+                        continue;
+                    }
+                    const seq_lock_pattern_t *lock=&p->lock_pool[track][first+new_index++];
+                    params->events[params->event_count++]=(seq_param_event_t){
                         .offset=(uint16_t)(sample-block_start),
-                        .param_id=(uint16_t)(active.param_flags&SEQ_RT_PARAM_ID_MASK),
-                        .value16=active.base_value16,.track=track,
-                        .semantic=((active.param_flags&SEQ_RT_PARAM_FLAG_CLEARABLE)!=0U)
-                            ?SEQ_RT_PARAM_CLEAR_TEMP:SEQ_RT_PARAM_RESTORE_BASE};
-                }
-                uint8_t active_write=0U;
-                for(uint8_t n=0U;n<count;++n){
-                    const seq_rt_lock_projection_t *lock=&p->lock_pool[first+n];
-                    if((lock->param_flags&SEQ_RT_PARAM_FLAG_NOTE_FX)!=0U)continue;
-                    params->events[params->event_count++]=(seq_rt_param_event_t){
-                        .offset=(uint16_t)(sample-block_start),
-                        .param_id=(uint16_t)(lock->param_flags&SEQ_RT_PARAM_ID_MASK),
-                        .value16=lock->value16,.track=track,.semantic=SEQ_RT_PARAM_TEMP};
-                    core->active_locks[track][active_write++]=(seq_rt_active_lock_t){
+                        .param_id=(uint16_t)(lock->param_flags&SEQ_ENGINE_PARAM_ID_MASK),
+                        .value16=lock->value16,.track=track,.semantic=SEQ_ENGINE_PARAM_TEMP};
+                    core->active_locks[track][active_write++]=(seq_active_lock_t){
                         .param_flags=lock->param_flags,.base_value16=lock->base_value16};
+                    if (old_key==new_key) ++old_index;
                 }
                 core->active_lock_count[track]=active_write;
             }
@@ -263,9 +323,12 @@ static void schedule_boundary(seq_rt_core_t *core,
             (uint8_t)(core->track_swing_phase[track]^1U),serial+1U,
             next_sample,1U);
     }
+    const uint32_t locks_cycles=DWT->CYCCNT-locks_started;
+    if(locks_cycles>g_seq_diag.boundary_locks_max_cycles)
+        g_seq_diag.boundary_locks_max_cycles=locks_cycles;
 }
 
-static uint16_t advance(seq_rt_core_t *core,const seq_rt_projection_t *p)
+static uint16_t advance(seq_engine_core_t *core,const seq_pattern_t *p)
 {
     uint16_t hits = 0U;
     for(uint8_t track=0U;track<SEQ_LANE_CAPACITY;++track){
@@ -282,11 +345,11 @@ static uint16_t advance(seq_rt_core_t *core,const seq_rt_projection_t *p)
     return hits;
 }
 
-static void collect(seq_rt_core_t *core,uint64_t start,uint16_t frames,
-    const seq_rt_projection_t *p,seq_rt_event_block_t *out)
+static void collect(seq_engine_core_t *core,uint64_t start,uint16_t frames,
+    const seq_pattern_t *p,seq_event_block_t *out)
 {
     const uint64_t end=start+frames;
-    g_rt_fx_core=core;g_rt_fx_block=out;g_rt_fx_start=start;g_rt_fx_end=end;
+    g_seq_fx_core=core;g_seq_fx_block=out;g_seq_fx_start=start;g_seq_fx_end=end;
     uint32_t pattern[NOTE_FX_TRACK_COUNT];
     for(uint8_t t=0U;t<NOTE_FX_TRACK_COUNT;++t)
         pattern[t]=(uint32_t)core->play_step[t]<<16U;
@@ -294,12 +357,12 @@ static void collect(seq_rt_core_t *core,uint64_t start,uint16_t frames,
     const uint64_t delta_q16=((start<<16U)>=core->step_sample_q16)
         ?(((start<<16U)-core->step_sample_q16)<<16U)/step_samples:0U;
     const uint64_t transport=((uint64_t)core->step_serial[0]<<16U)+delta_q16;
-    if(note_fx_engine_rt_process(start,0U,p->samples_per_step_q16,
+    if(note_fx_engine_seq_process(start,0U,p->samples_per_step_q16,
             transport,pattern,p->scale_index,p->root_index,
             fx_generated,0)!=NOTE_EVENT_RESULT_ACCEPTED)
         ++core->dropped_events;
-    for(uint16_t source_index=0U;source_index<SEQ_RT_SOURCE_CAPACITY;
-        ++source_index){seq_rt_note_source_t *const source=&core->sources[source_index];
+    for(uint16_t source_index=0U;source_index<SEQ_ENGINE_LIFETIME_CAPACITY;
+        ++source_index){seq_lifetime_t *const source=&core->lifetimes[source_index];
         if(source->active==0U)continue;
         while(source->next_offset_q16<source->span_q16){
             uint64_t on=source->first_on_sample
@@ -320,54 +383,62 @@ static void collect(seq_rt_core_t *core,uint64_t start,uint16_t frames,
             source->next_offset_q16+=source->interval_q16;
         }
         if(source->next_offset_q16>=source->span_q16){
-            source->active=0U;if(core->source_count!=0U)--core->source_count;}}
-    if(note_fx_engine_rt_process(start,frames,p->samples_per_step_q16,
+            source->active=0U;if(core->lifetime_count!=0U)--core->lifetime_count;}}
+    if(note_fx_engine_seq_process(start,frames,p->samples_per_step_q16,
             transport,pattern,p->scale_index,p->root_index,
             fx_generated,0)!=NOTE_EVENT_RESULT_ACCEPTED)
         ++core->dropped_events;
-    uint16_t i=0U;
-    while(i<core->pending_count){const seq_rt_pending_event_t e=core->pending[i];
-        if(e.due_sample>=end){++i;continue;}
-        core->pending[i]=core->pending[--core->pending_count];
-        if(out->event_count>=SEQ_RT_EVENT_CAPACITY)
+    const uint32_t future_started=DWT->CYCCNT;
+    for(uint16_t i=0U;i<SEQ_ENGINE_FUTURE_CAPACITY;++i){
+        if(core->futures[i].active==0U)continue;
+        const seq_future_handle_t handle={i,core->futures[i].generation};
+        const seq_future_t e=core->futures[i];
+        if(e.due_sample>=end)continue;
+        future_release(core,handle);
+        if(out->event_count>=SEQ_ENGINE_EVENT_CAPACITY)
         {
             ++core->dropped_events;
             continue;
         }
         const uint64_t due=(e.due_sample<start)?start:e.due_sample;
-        out->events[out->event_count++]=(seq_rt_event_t){
-            .offset=(uint16_t)(due-start),.kind=e.kind,.track=e.track,
+        out->events[out->event_count++]=(seq_event_t){
+            .offset=(uint16_t)(due-start),.kind=e.kind,.track=e.owner,
             .occurrence_id=e.occurrence_id,.note=e.note,.velocity=e.velocity};}
-    for(uint16_t a=1U;a<out->event_count;++a){const seq_rt_event_t key=out->events[a];
+    const uint32_t future_cycles=DWT->CYCCNT-future_started;
+    if(future_cycles>g_seq_diag.scan_future_max_cycles)
+        g_seq_diag.scan_future_max_cycles=future_cycles;
+    for(uint16_t a=1U;a<out->event_count;++a){const seq_event_t key=out->events[a];
         uint16_t b=a;while((b!=0U)&&((out->events[b-1U].offset>key.offset)
             ||((out->events[b-1U].offset==key.offset)
             &&(priority(out->events[b-1U].kind)>priority(key.kind))))){
             out->events[b]=out->events[b-1U];--b;}out->events[b]=key;}
 }
 
-void seq_rt_core_init(seq_rt_core_t *core)
+void seq_engine_core_init(seq_engine_core_t *core)
 {
     if(core==0)return;
-    memset(core,0,sizeof(*core));
-    note_fx_engine_rt_init();
+    /* Future tickets survive a core reset: clearing musical state must never
+     * make a handle from the previous epoch valid again. */
+    memset(core,0,offsetof(seq_engine_core_t,futures));
+    future_clear(core);
+    note_fx_engine_seq_init();
     for(uint8_t t=0U;t<SEQ_LANE_CAPACITY;++t)for(uint8_t v=0U;
         v<SEQ_PLAY_MAX_CAPACITY;++v)core->voice_scheduled_serial[t][v]=UINT32_MAX;
 }
 
-void seq_rt_core_process_block(seq_rt_core_t *core,uint64_t start,uint16_t frames,
-    const seq_rt_projection_t *p,seq_rt_event_block_t *out,
-    seq_rt_param_block_t *params)
+void seq_engine_core_process_block(seq_engine_core_t *core,uint64_t start,uint16_t frames,
+    const seq_pattern_t *p,seq_event_block_t *out,
+    seq_param_block_t *params)
 {
     if((core==0)||(out==0)||(params==0))return;
     out->start_sample=start;out->frames=frames;out->generation=p?p->generation:0U;
-    out->comparable_tracks=core->comparable_tracks;
-    out->rt_note_tracks=0U;
-    out->rt_plock_tracks=0U;
+    out->emitter_tracks=0U;
+    out->lock_tracks=0U;
     out->event_count=0U;if((p==0)||(frames==0U))return;
     params->start_sample=start;params->frames=frames;
     params->generation=p->generation;params->event_count=0U;
     if((core->initialized==0U)||(core->transport_epoch!=p->transport_epoch)){
-        seq_rt_core_init(core);core->initialized=1U;core->transport_epoch=p->transport_epoch;
+        seq_engine_core_init(core);core->initialized=1U;core->transport_epoch=p->transport_epoch;
         core->running=p->running;core->step_sample_q16=p->seed_step_sample_q16;
         core->samples_per_step_q16=p->samples_per_step_q16;
         memcpy(core->play_step,p->seed_play_step,sizeof(core->play_step));
@@ -376,26 +447,26 @@ void seq_rt_core_process_block(seq_rt_core_t *core,uint64_t start,uint16_t frame
         for(uint8_t t=0U;t<SEQ_LANE_CAPACITY;++t){
             const uint8_t s=core->play_step[t];const uint8_t count=p->steps[t][s].lock_count;
             const uint16_t first=p->lock_first[t][s];
-            if((p->track_rt_plock_direct[t]!=0U)&&(count<=SEQ_STEP_MAX_LOCKS)){
+            if((p->track_lock_enabled[t]!=0U)&&(count<=SEQ_STEP_MAX_LOCKS)){
                 uint8_t write=0U;
                 for(uint8_t n=0U;n<count;++n){
-                    if((p->lock_pool[first+n].param_flags
-                            &SEQ_RT_PARAM_FLAG_NOTE_FX)!=0U)continue;
-                    core->active_locks[t][write++]=(seq_rt_active_lock_t){
-                        .param_flags=p->lock_pool[first+n].param_flags,
-                        .base_value16=p->lock_pool[first+n].base_value16};}
+                    if((p->lock_pool[t][first+n].param_flags
+                            &SEQ_ENGINE_PARAM_FLAG_NOTE_FX)!=0U)continue;
+                    core->active_locks[t][write++]=(seq_active_lock_t){
+                        .param_flags=p->lock_pool[t][first+n].param_flags,
+                        .base_value16=p->lock_pool[t][first+n].base_value16};}
                 core->active_lock_count[t]=write;}
-            if(p->track_rt_fx_direct[t]!=0U)configure_fx_step(p,t,s);}
+            if(p->track_fx_enabled[t]!=0U)configure_fx_step(p,t,s);}
         }
     core->samples_per_step_q16=p->samples_per_step_q16;
-    if(core->projection_generation!=p->generation){
-        core->projection_generation=p->generation;
+    if(core->pattern_generation!=p->generation){
+        core->pattern_generation=p->generation;
         for(uint8_t t=0U;t<SEQ_LANE_CAPACITY;++t)
-            if(p->track_rt_fx_direct[t]!=0U)
+            if(p->track_fx_enabled[t]!=0U)
                 configure_fx_step(p,t,core->play_step[t]);}
     if((p->running==0U)||(core->samples_per_step_q16==0U)){
-        core->running=0U;core->pending_count=0U;core->source_count=0U;
-        memset(core->sources,0,sizeof(core->sources));return;}core->running=1U;
+        core->running=0U;future_clear(core);core->lifetime_count=0U;
+        memset(core->lifetimes,0,sizeof(core->lifetimes));return;}core->running=1U;
     const uint32_t dropped_before=core->dropped_events;
     const uint64_t begin_q16=start<<16,end_q16=(start+frames)<<16;
     uint64_t next=core->step_sample_q16+core->samples_per_step_q16;
@@ -403,20 +474,19 @@ void seq_rt_core_process_block(seq_rt_core_t *core,uint64_t start,uint16_t frame
         if(next>=begin_q16)schedule_boundary(core,p,(next+0x8000ULL)>>16,hits,
             start,params);
         next=core->step_sample_q16+core->samples_per_step_q16;}
-    out->comparable_tracks=core->comparable_tracks;
     collect(core,start,frames,p,out);
     if(core->dropped_events!=dropped_before){core->event_faulted=1U;return;}
     if(core->event_faulted!=0U)return;
     for(uint8_t track=0U;track<SEQ_LANE_CAPACITY;++track)
     {
         const uint16_t bit=(uint16_t)(1U<<track);
-        if((p->track_rt_plock_direct[track]!=0U)
+        if((p->track_lock_enabled[track]!=0U)
                 &&((core->plock_fault_tracks&bit)==0U)
-                &&((core->comparable_tracks&bit)!=0U))
-            out->rt_plock_tracks|=bit;
-        if((p->track_rt_note_direct[track]!=0U)
+                &&((core->emitter_tracks&bit)!=0U))
+            out->lock_tracks|=bit;
+        if((p->track_note_enabled[track]!=0U)
                 &&(p->track_muted[track]==0U)
-                &&((out->rt_plock_tracks&bit)!=0U))
-            out->rt_note_tracks|=bit;
+                &&((core->emitter_tracks&bit)!=0U))
+            out->emitter_tracks|=bit;
     }
 }

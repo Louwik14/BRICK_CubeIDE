@@ -21,7 +21,7 @@
 #include "App/brick6_master_control.h"
 #include "Storage/brick6_stream_service_task.h"
 #include "Storage/pattern_live_ram.h"
-#include "Seq/seq_rt_pass1.h"
+#include "Seq/seq_engine.h"
 #include "Storage/patch_product.h"
 #include "Storage/project_product.h"
 #include "Storage/project_control.h"
@@ -93,7 +93,7 @@ void brick6_app_init(void)
         },
     };
     control_domain_init();
-    seq_rt_pass1_control_init();
+    seq_engine_control_init();
     audio_domain_init(&audio_boot);
     brick6_boot_fx_policy_init();
     control_domain_start(audio_boot.postgain, audio_boot.output_compensation);
@@ -219,7 +219,7 @@ void brick6_app_process(void)
     idle_latency_diag_end(IDLE_LATENCY_SERVICE_STORAGE, diag_started);
     diag_started = idle_latency_diag_begin();
     pattern_live_service();
-    seq_rt_pass1_control_poll();
+    seq_engine_control_poll();
     if (g_boot_audio_state == BRICK6_BOOT_WAIT_MASTER)
     {
         if (brick6_master_control_boot_capture() != 0U)

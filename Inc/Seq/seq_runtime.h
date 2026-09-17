@@ -87,7 +87,7 @@ typedef struct
  * Contract surface:
  * - orchestration / policy / event routing: lifecycle, transport, live-rec, clock policy.
  * - queries: pure reads of runtime/control state and diagnostics.
- * - the shared execution state is owned by seq_runtime_exec; seq_runtime uses it as facade.
+ * - the shared execution state is owned by seq_transport_owner; seq_runtime uses it as facade.
  */
 void seq_runtime_init(void);
 /* Notification/maintenance seam: IRQ tick accounting only, no step authority. */

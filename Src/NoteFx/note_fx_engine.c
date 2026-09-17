@@ -31,9 +31,8 @@ typedef struct { note_fx_slot_runtime_t slot[NOTE_FX_TRACK_COUNT][NOTE_FX_SLOT_C
  uint64_t transport_position_q16,block_start;uint32_t pattern_position_q16[NOTE_FX_TRACK_COUNT];
  uint8_t scale_index,root_index;
 } note_fx_engine_context_t;
-CONTROL_STATE_SDRAM static note_fx_engine_context_t g_control_context;
-static CONTROL_M4_SRAM2 note_fx_engine_context_t g_rt_context;
-static note_fx_engine_context_t *g_context=&g_control_context;
+static CONTROL_M4_SRAM2 note_fx_engine_context_t g_seq_context;
+static note_fx_engine_context_t *const g_context=&g_seq_context;
 #define g_slot (g_context->slot)
 #define g_work_slot_mask (g_context->work_slot_mask)
 #define g_token (g_context->token)
@@ -90,7 +89,7 @@ static note_event_result_t chord_group(uint8_t slot,note_fx_slot_runtime_t*r,
  uint8_t write=0;for(uint8_t i=0;i<*count;++i){uint8_t duplicate=0;for(uint8_t j=0;j<write;++j)if(out[j].destination_id==out[i].destination_id&&out[j].note==out[i].note)duplicate=1;if(!duplicate)out[write++]=out[i];}
  *count=write;return write?NOTE_EVENT_RESULT_ACCEPTED:NOTE_EVENT_RESULT_DROPPED_POLICY;}
 
-void note_fx_engine_init(void){memset(&g_control_context,0,sizeof(g_control_context));g_control_context.samples_per_step_q16=UINT32_C(65536);g_context=&g_control_context;}
+void note_fx_engine_init(void){memset(&g_seq_context,0,sizeof(g_seq_context));g_seq_context.samples_per_step_q16=UINT32_C(65536);g_seq_context.rt_mode=1U;}
 void note_fx_engine_set_samples_per_step_q16(uint32_t v){g_samples_per_step_q16=v?v:1U;}
 note_event_result_t note_fx_engine_configure(uint8_t t,uint8_t s,uint8_t model,uint8_t p1,uint8_t p2,uint8_t p3,uint16_t dependency_versions){if(t>=NOTE_FX_TRACK_COUNT||s>=NOTE_FX_SLOT_COUNT)return NOTE_EVENT_RESULT_DROPPED_POLICY;note_fx_slot_runtime_t*r=&g_slot[t][s];if(model>=NOTE_FX_MODEL_COUNT)model=NOTE_FX_MODEL_OFF;if(r->model!=model)memset(r,0,sizeof(*r));r->model=model;r->p1=p1;r->p2=p2;r->p3=p3;r->dependency_versions=dependency_versions;refresh_work(t,s);return NOTE_EVENT_RESULT_ACCEPTED;}
 note_event_result_t note_fx_engine_transform(uint8_t s,const note_event_t*in,uint8_t n,note_event_t*out,uint8_t cap,uint8_t*count){if(!in||!out||!count||!n||s>=NOTE_FX_SLOT_COUNT)return NOTE_EVENT_RESULT_DROPPED_POLICY;for(uint8_t i=0;i<n;++i)if(!note_event_is_valid(&in[i])||in[i].track>=NOTE_FX_TRACK_COUNT||in[i].stage!=s||in[i].track!=in[0].track||in[i].group_id!=in[0].group_id||in[i].kind!=in[0].kind)return NOTE_EVENT_RESULT_DROPPED_POLICY;note_fx_slot_runtime_t*r=&g_slot[in[0].track][s];if(model_needs_held(r->model))for(uint8_t i=0;i<n;++i){const note_event_result_t held_result=held_ingest(r,&in[i]);if(held_result!=NOTE_EVENT_RESULT_ACCEPTED)return held_result;}refresh_work(in[0].track,s);if(r->model==NOTE_FX_MODEL_CHORD)return chord_group(s,r,in,n,out,cap,count);*count=0;for(uint8_t i=0;i<n;++i){const note_event_t*e=&in[i];if(!model_is_arp(r->model)&&r->model!=NOTE_FX_MODEL_EUCLID){const note_event_result_t result=direct(s,r,e,out,cap,count);if(result!=NOTE_EVENT_RESULT_ACCEPTED)return result;}}return NOTE_EVENT_RESULT_ACCEPTED;}
@@ -102,7 +101,7 @@ void note_fx_engine_forget_dependency(uint8_t t,uint8_t owner){if(t>=NOTE_FX_TRA
 void note_fx_engine_forget_causal_sources_from_slot(uint8_t t,uint8_t first,const uint32_t*ids,uint16_t count){if(t>=NOTE_FX_TRACK_COUNT||first>=NOTE_FX_SLOT_COUNT||!ids)return;for(uint8_t s=first;s<NOTE_FX_SLOT_COUNT;++s){note_fx_slot_runtime_t*r=&g_slot[t][s];uint8_t i=0;while(i<r->held_count){uint8_t remove=0;for(uint16_t j=0;j<count;++j)if(r->held[i].source_token==ids[j])remove=1;if(remove)held_remove(r,i);else++i;}refresh_work(t,s);}}
 note_event_result_t note_fx_engine_cleanup(uint8_t t){if(t>=NOTE_FX_TRACK_COUNT)return NOTE_EVENT_RESULT_DROPPED_POLICY;for(uint8_t s=0;s<NOTE_FX_SLOT_COUNT;++s){note_fx_slot_runtime_t*r=&g_slot[t][s];memset(r->held,0,sizeof(r->held));r->held_count=0;refresh_work(t,s);}return NOTE_EVENT_RESULT_ACCEPTED;}
 
-void note_fx_engine_rt_init(void){note_fx_engine_context_t*old=g_context;memset(&g_rt_context,0,sizeof(g_rt_context));g_rt_context.samples_per_step_q16=UINT32_C(65536);g_rt_context.rt_mode=1U;g_context=old;}
-note_event_result_t note_fx_engine_rt_configure(uint8_t t,uint8_t s,uint8_t m,uint8_t p1,uint8_t p2,uint8_t p3){note_fx_engine_context_t*old=g_context;g_context=&g_rt_context;const note_event_result_t r=note_fx_engine_configure(t,s,m,p1,p2,p3,0U);g_context=old;return r;}
-note_event_result_t note_fx_engine_rt_transform(uint8_t s,const note_event_t*in,uint8_t n,note_event_t*out,uint8_t cap,uint8_t*count){note_fx_engine_context_t*old=g_context;g_context=&g_rt_context;const note_event_result_t r=note_fx_engine_transform(s,in,n,out,cap,count);g_context=old;return r;}
-note_event_result_t note_fx_engine_rt_process(uint64_t start,uint16_t frames,uint32_t sps,uint64_t transport,const uint32_t pattern[NOTE_FX_TRACK_COUNT],uint8_t scale,uint8_t root,note_fx_emit_fn emit,void*ctx){note_fx_engine_context_t*old=g_context;g_context=&g_rt_context;g_rt_context.block_start=start;g_rt_context.transport_position_q16=transport;g_rt_context.scale_index=scale;g_rt_context.root_index=root;memcpy(g_rt_context.pattern_position_q16,pattern,sizeof(g_rt_context.pattern_position_q16));const note_event_result_t r=note_fx_engine_process(start,frames,sps,emit,ctx);g_context=old;return r;}
+void note_fx_engine_seq_init(void){note_fx_engine_init();}
+note_event_result_t note_fx_engine_seq_configure(uint8_t t,uint8_t s,uint8_t m,uint8_t p1,uint8_t p2,uint8_t p3){return note_fx_engine_configure(t,s,m,p1,p2,p3,0U);}
+note_event_result_t note_fx_engine_seq_transform(uint8_t s,const note_event_t*in,uint8_t n,note_event_t*out,uint8_t cap,uint8_t*count){return note_fx_engine_transform(s,in,n,out,cap,count);}
+note_event_result_t note_fx_engine_seq_process(uint64_t start,uint16_t frames,uint32_t sps,uint64_t transport,const uint32_t pattern[NOTE_FX_TRACK_COUNT],uint8_t scale,uint8_t root,note_fx_emit_fn emit,void*ctx){g_seq_context.block_start=start;g_seq_context.transport_position_q16=transport;g_seq_context.scale_index=scale;g_seq_context.root_index=root;memcpy(g_seq_context.pattern_position_q16,pattern,sizeof(g_seq_context.pattern_position_q16));return note_fx_engine_process(start,frames,sps,emit,ctx);}

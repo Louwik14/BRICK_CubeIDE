@@ -19,11 +19,10 @@
 #include "Keyboard/keyboard_params.h"
 #include "Keyboard/keyboard_input.h"
 #include "Seq/seq_edit.h"
-#include "NoteFx/note_fx_pipeline.h"
+#include "Seq/seq_engine.h"
 #include "Track/control_music_output.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1
 #include "Seq/seq_runtime.h"
-#include "Seq/seq_play_scheduler.h"
 
 #include <string.h>
 
@@ -150,7 +149,6 @@ void keyboard_runtime_init(void)
 {
     keyboard_input_init();
     keyboard_params_init();
-    note_fx_pipeline_init();
     keyboard_runtime_reset_midi_state();
     g_keyboard_runtime_timed_context_active = 0U;
     g_keyboard_runtime_capture_tick = 0U;
@@ -289,8 +287,7 @@ void keyboard_runtime_all_notes_off(void)
     ui_keyboard_app_all_notes_off();
     seq_edit_note_capture_reset();
     (void)control_music_output_panic_all(0U);
-    note_fx_pipeline_panic();
-    seq_play_scheduler_clear();
+    seq_ingress_panic();
     keyboard_engine_clear_source_occurrences_silent();
 }
 

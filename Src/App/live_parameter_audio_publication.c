@@ -11,7 +11,7 @@
 #include "Track/track_runtime.h"
 #include "Track/tone_param_codec.h"
 #include "Track/tone_program_control.h"
-#include "Seq/seq_runtime_exec.h"
+#include "Seq/seq_transport_owner.h"
 #include "main.h"
 
 static uint32_t g_live_parameter_audio_publish_failure_count;
@@ -121,7 +121,7 @@ bool live_parameter_audio_publication_submit_bulk(
     control_audio_command_t commands[LIVE_PARAMETER_AUDIO_BULK_MAX_ITEMS];
     uint64_t sample_time = 0U;
     if (control_rt_capture_tick_to_sample(bulk->capture_tick,
-            seq_runtime_exec_get_sample_timeline(), &sample_time) == 0U)
+            seq_transport_owner_get_sample_timeline(), &sample_time) == 0U)
         return live_parameter_audio_publish_failed();
     for (uint8_t i = 0U; i < bulk->count; ++i)
     {
@@ -156,7 +156,7 @@ bool live_parameter_audio_publication_submit(
     uint64_t sample_time = 0U;
     control_audio_command_t command;
     if ((target == NULL) || (control_rt_capture_tick_to_sample(capture_tick,
-            seq_runtime_exec_get_sample_timeline(), &sample_time) == 0U)
+            seq_transport_owner_get_sample_timeline(), &sample_time) == 0U)
             || (live_parameter_audio_build_param_command(
                 target, sample_time, &command) == 0U))
         return live_parameter_audio_publish_failed();

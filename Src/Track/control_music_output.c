@@ -16,7 +16,6 @@
 #include "midi.h"
 #include "main.h"
 #include "Platform/brick_fatal.h"
-#include "Seq/seq_wcet_diag.h"
 
 typedef struct
 {
@@ -757,16 +756,12 @@ uint8_t control_music_output_submit(const control_music_intent_t *intent,
                                     uint32_t causal_source_id,
                                     uint32_t generation)
 {
-    const uint32_t admission_started = seq_wcet_begin();
     if ((intent == NULL) || (intent->entity_id >= BRICK_ENTITY_CAPACITY)
             || (control_music_intent_kind(intent)
                 > (uint8_t)CONTROL_MUSIC_ACTION_RETRIGGER)
             || (intent->semantic_event_id == 0U)
             || (causal_source_id == 0U) || (generation == 0U))
-    {
-        seq_wcet_end(&g_seq_wcet_diag.note_admission, admission_started);
         return 0U;
-    }
 
     const brick_entity_id_t entity_id = intent->entity_id;
     const int8_t existing = control_music_output_find_semantic(entity_id,
@@ -818,11 +813,7 @@ uint8_t control_music_output_submit(const control_music_intent_t *intent,
             | (intent->kind & (CONTROL_MUSIC_ACTION_EXTERNAL_FLAG
                 | CONTROL_MUSIC_ACTION_CHANNEL_MASK)));
         if (control_music_output_publish(&retrigger) == 0U)
-        {
-            seq_wcet_end(&g_seq_wcet_diag.note_admission,
-                         admission_started);
             return 0U;
-        }
         control_music_output_send_midi_off(output);
         output->age = (g_control_music_window_active != 0U)
             ? ++g_control_music_output_age_staged
@@ -835,7 +826,6 @@ uint8_t control_music_output_submit(const control_music_intent_t *intent,
         output->midi_dest_mask = midi_note_on_admit(
             MIDI_DEST_BOTH, output->midi_channel, output->note,
             output->velocity);
-        seq_wcet_end(&g_seq_wcet_diag.note_admission, admission_started);
         return 1U;
     }
 
@@ -977,7 +967,6 @@ uint8_t control_music_output_submit(const control_music_intent_t *intent,
                 MIDI_DEST_BOTH, control_music_intent_channel(intent),
                 intent->note, intent->velocity),
         };
-    seq_wcet_end(&g_seq_wcet_diag.note_admission, admission_started);
     return 1U;
 }
 

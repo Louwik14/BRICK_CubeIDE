@@ -4,7 +4,7 @@
 
 #include "IPC/control_audio_command.h"
 #include "IPC/control_audio_fifo_audio.h"
-#include "Seq/seq_rt_pass1.h"
+#include "Seq/seq_engine.h"
 #include "IPC/audio_state_snapshot.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_mod_matrix.h"
@@ -63,14 +63,12 @@ typedef struct
     uint32_t age;
     uint8_t note;
     uint8_t active;
-} audio_seq_rt_output_t;
+} audio_seq_output_t;
 
-static AUDIO_STATE_D3 audio_seq_rt_output_t
-    g_audio_seq_rt_output[SEQ_LANE_CAPACITY][AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY];
-static AUDIO_STATE_D3 audio_seq_rt_output_t
-    g_audio_legacy_seq_output[SEQ_LANE_CAPACITY][AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY];
-static uint32_t g_audio_seq_rt_age;
-static uint16_t g_audio_seq_rt_track_mask;
+static AUDIO_STATE_D3 audio_seq_output_t
+    g_audio_seq_output[SEQ_LANE_CAPACITY][AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY];
+static uint32_t g_audio_seq_age;
+static uint16_t g_audio_seq_track_mask;
 
 static audio_command_apply_result_t audio_command_apply(
     const control_audio_command_t *command);
@@ -593,14 +591,13 @@ void audio_command_executor_init(void)
            sizeof(g_audio_wavetable_generation));
     g_audio_state_rebind_deferred = 0U;
     g_audio_state_rebind_mask = 0U;
-    memset(g_audio_seq_rt_output, 0, sizeof(g_audio_seq_rt_output));
-    memset(g_audio_legacy_seq_output, 0, sizeof(g_audio_legacy_seq_output));
-    g_audio_seq_rt_age = 0U;
-    g_audio_seq_rt_track_mask = 0U;
+    memset(g_audio_seq_output, 0, sizeof(g_audio_seq_output));
+    g_audio_seq_age = 0U;
+    g_audio_seq_track_mask = 0U;
 }
 
 static void audio_command_executor_close_outputs(
-    uint8_t track, audio_seq_rt_output_t *outputs)
+    uint8_t track, audio_seq_output_t *outputs)
 {
     for (uint8_t i = 0U; i < AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY; ++i)
     {
@@ -608,85 +605,45 @@ static void audio_command_executor_close_outputs(
         if (audio_note_engine_adapter_apply_output(track, outputs[i].note, 0U,
                 0U, outputs[i].id) == 0U)
             Error_Handler();
-        seq_rt_pass1_audio_retire_occurrence(outputs[i].occurrence_id);
-        outputs[i] = (audio_seq_rt_output_t){0};
+        seq_engine_audio_retire_occurrence(outputs[i].occurrence_id);
+        outputs[i] = (audio_seq_output_t){0};
     }
 }
 
-void audio_command_executor_seq_rt_begin_block(uint16_t track_mask)
+void audio_command_executor_seq_begin_block(uint16_t track_mask)
 {
-    const uint16_t changed = g_audio_seq_rt_track_mask ^ track_mask;
+    const uint16_t changed = g_audio_seq_track_mask ^ track_mask;
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         const uint16_t bit = (uint16_t)(1U << track);
         if ((changed & bit) == 0U) continue;
         if ((track_mask & bit) == 0U)
             audio_command_executor_close_outputs(
-                track, g_audio_seq_rt_output[track]);
+                track, g_audio_seq_output[track]);
     }
-    g_audio_seq_rt_track_mask = track_mask;
+    g_audio_seq_track_mask = track_mask;
 }
 
-static void audio_command_executor_track_legacy_note(
-    const control_audio_command_t *command)
-{
-    if ((command->entity >= SEQ_LANE_CAPACITY)
-            || (control_music_output_handle_is_internal(command->value) == 0U))
-        return;
-    audio_seq_rt_output_t *const outputs =
-        g_audio_legacy_seq_output[command->entity];
-    if (CONTROL_AUDIO_COMMAND_KIND(command) == CONTROL_AUDIO_NOTE_OFF)
-    {
-        for (uint8_t i = 0U; i < AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY; ++i)
-            if ((outputs[i].active != 0U)
-                    && (outputs[i].id == command->value))
-                outputs[i] = (audio_seq_rt_output_t){0};
-        return;
-    }
-    for (uint8_t i = 0U; i < AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY; ++i)
-    {
-        if ((outputs[i].active != 0U) && (outputs[i].id != command->value))
-            continue;
-        outputs[i] = (audio_seq_rt_output_t){
-            .id=command->value,.age=++g_audio_seq_rt_age,
-            .note=(uint8_t)command->id,.active=1U};
-        return;
-    }
-}
-
-static void audio_command_executor_close_legacy_index(uint8_t track,
-                                                       uint8_t index)
-{
-    audio_seq_rt_output_t *const output =
-        &g_audio_legacy_seq_output[track][index];
-    if (output->active == 0U) return;
-    if (audio_note_engine_adapter_apply_output(track, output->note, 0U, 0U,
-            output->id) == 0U)
-        Error_Handler();
-    seq_rt_pass1_audio_retire_legacy(output->id);
-    *output = (audio_seq_rt_output_t){0};
-}
-
-static uint8_t audio_command_executor_apply_seq_rt_event(
-    const seq_rt_event_t *event)
+static uint8_t audio_command_executor_apply_seq_event(
+    const seq_event_t *event)
 {
     if ((event == 0) || (event->track >= SEQ_LANE_CAPACITY)) return 0U;
-    if (event->kind == SEQ_RT_EVENT_PARAM)
+    if (event->kind == SEQ_ENGINE_EVENT_PARAM)
     {
         if (event->occurrence_id >= PARAM_COUNT) return 0U;
         const float value=param_value_policy_decode_u16(
             &param_registry[event->occurrence_id],(uint16_t)event->value);
-        const uint8_t kind=(event->velocity==SEQ_RT_PARAM_TEMP)
+        const uint8_t kind=(event->velocity==SEQ_ENGINE_PARAM_TEMP)
             ?CONTROL_AUDIO_PARAM_KIND_TEMP_TRACK
-            :((event->velocity==SEQ_RT_PARAM_CLEAR_TEMP)
+            :((event->velocity==SEQ_ENGINE_PARAM_CLEAR_TEMP)
                 ?CONTROL_AUDIO_PARAM_KIND_CLEAR_TEMP_TRACK
                 :CONTROL_AUDIO_PARAM_KIND_BASE_TRACK);
         return live_parameter_audio_runtime_apply_param(event->track,
             (uint16_t)event->occurrence_id,
             (uint32_t)live_parameter_event_encode_float(value),kind);
     }
-    audio_seq_rt_output_t *const outputs = g_audio_seq_rt_output[event->track];
-    if (event->kind == SEQ_RT_EVENT_NOTE_OFF)
+    audio_seq_output_t *const outputs = g_audio_seq_output[event->track];
+    if (event->kind == SEQ_ENGINE_EVENT_NOTE_OFF)
     {
         for (uint8_t i = 0U; i < AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY; ++i)
         {
@@ -695,17 +652,11 @@ static uint8_t audio_command_executor_apply_seq_rt_event(
                 continue;
             const uint8_t ok = audio_note_engine_adapter_apply_output(
                 event->track, outputs[i].note, 0U, 0U, outputs[i].id);
-            outputs[i] = (audio_seq_rt_output_t){0};
+            outputs[i] = (audio_seq_output_t){0};
             return ok;
         }
         return 1U;
     }
-
-    for (uint8_t i = 0U; i < AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY; ++i)
-        if ((g_audio_legacy_seq_output[event->track][i].active != 0U)
-                && (g_audio_legacy_seq_output[event->track][i].note
-                    == event->note))
-            audio_command_executor_close_legacy_index(event->track, i);
 
     uint8_t target = AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY;
     uint8_t oldest = 0U;
@@ -729,48 +680,28 @@ static uint8_t audio_command_executor_apply_seq_rt_event(
         if (audio_note_engine_adapter_apply_output(event->track,
                 outputs[target].note, 0U, 0U, outputs[target].id) == 0U)
             return 0U;
-        seq_rt_pass1_audio_retire_occurrence(outputs[target].occurrence_id);
+        seq_engine_audio_retire_occurrence(outputs[target].occurrence_id);
     }
-    outputs[target] = (audio_seq_rt_output_t){0};
+    outputs[target] = (audio_seq_output_t){0};
 
-    uint8_t active_count = 0U;
-    uint8_t oldest_legacy = AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY;
-    uint32_t oldest_legacy_age = UINT32_MAX;
-    for (uint8_t i = 0U; i < AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY; ++i)
-    {
-        if (outputs[i].active != 0U) ++active_count;
-        const audio_seq_rt_output_t *const legacy =
-            &g_audio_legacy_seq_output[event->track][i];
-        if (legacy->active == 0U) continue;
-        ++active_count;
-        if (legacy->age < oldest_legacy_age)
-        {
-            oldest_legacy_age = legacy->age;
-            oldest_legacy = i;
-        }
-    }
-    if ((active_count >= AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY)
-            && (oldest_legacy < AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY))
-        audio_command_executor_close_legacy_index(event->track,
-                                                   oldest_legacy);
     const uint32_t output_id = UINT32_C(0x20000000)
         | (event->occurrence_id & UINT32_C(0x1FFFFFFF));
     if (audio_note_engine_adapter_apply_output(event->track, event->note,
             event->velocity, 1U, output_id) == 0U)
         return 0U;
-    outputs[target] = (audio_seq_rt_output_t){
+    outputs[target] = (audio_seq_output_t){
         .id=output_id,.occurrence_id=event->occurrence_id,
-        .age=++g_audio_seq_rt_age,.note=event->note,.active=1U};
+        .age=++g_audio_seq_age,.note=event->note,.active=1U};
     return 1U;
 }
 
-uint16_t audio_command_executor_apply_seq_rt_due(uint64_t sample_time)
+uint16_t audio_command_executor_apply_seq_due(uint64_t sample_time)
 {
     uint16_t applied = 0U;
-    seq_rt_event_t event;
-    while (seq_rt_pass1_audio_pop_due(sample_time, &event) != 0U)
+    seq_event_t event;
+    while (seq_engine_audio_pop_due(sample_time, &event) != 0U)
     {
-        if (audio_command_executor_apply_seq_rt_event(&event) == 0U)
+        if (audio_command_executor_apply_seq_event(&event) == 0U)
             Error_Handler();
         ++applied;
     }
@@ -814,44 +745,17 @@ uint16_t __attribute__((noinline)) audio_command_executor_apply_due(
         }
         if (CONTROL_AUDIO_COMMAND_OPCODE(&command) != CONTROL_AUDIO_COMMAND_PARAM)
             brick6_fm_runtime_finalize_pending();
-        if ((opcode == CONTROL_AUDIO_COMMAND_PARAM)
-                && (seq_rt_pass1_audio_suppress_legacy_param(
-                    CONTROL_AUDIO_COMMAND_KIND(&command),command.entity)!=0U))
-        {
-            (void)control_audio_fifo_audio_pop();
-            ++applied;
-            continue;
-        }
-        if ((CONTROL_AUDIO_COMMAND_OPCODE(&command) == CONTROL_AUDIO_COMMAND_NOTE)
-                && ((command.value & CONTROL_AUDIO_NOTE_METRONOME_MASK)
-                    != CONTROL_AUDIO_NOTE_METRONOME_PREFIX))
-        {
-            seq_rt_pass1_audio_observe_note(command.effective_sample_time,
-                CONTROL_AUDIO_COMMAND_KIND(&command), command.entity,
-                (uint8_t)command.id, (uint8_t)(command.id >> 8),
-                command.value);
-            if (seq_rt_pass1_audio_suppress_legacy(
-                    CONTROL_AUDIO_COMMAND_KIND(&command), command.entity,
-                    command.value) != 0U)
-            {
-                (void)control_audio_fifo_audio_pop();
-                ++applied;
-                continue;
-            }
-        }
         if (((opcode == CONTROL_AUDIO_COMMAND_TRANSPORT)
                 && (CONTROL_AUDIO_COMMAND_KIND(&command)
                     == CONTROL_AUDIO_TRANSPORT_STOP))
                 || ((opcode == CONTROL_AUDIO_COMMAND_PANIC)
                     && (CONTROL_AUDIO_COMMAND_KIND(&command)
                         == CONTROL_AUDIO_PANIC_GLOBAL)))
-            seq_rt_pass1_audio_force_stop(command.effective_sample_time);
+            seq_engine_audio_force_stop(command.effective_sample_time);
         const audio_command_apply_result_t result =
             audio_command_apply(&command);
         if (result != AUDIO_COMMAND_APPLY_OK)
             AUDIO_COMMAND_FATAL(&command, result);
-        if (opcode == CONTROL_AUDIO_COMMAND_NOTE)
-            audio_command_executor_track_legacy_note(&command);
         if (((opcode == CONTROL_AUDIO_COMMAND_TRANSPORT)
                 && (CONTROL_AUDIO_COMMAND_KIND(&command)
                     == CONTROL_AUDIO_TRANSPORT_STOP))
@@ -859,18 +763,14 @@ uint16_t __attribute__((noinline)) audio_command_executor_apply_due(
                     && (CONTROL_AUDIO_COMMAND_KIND(&command)
                         == CONTROL_AUDIO_PANIC_GLOBAL)))
         {
-            memset(g_audio_seq_rt_output, 0, sizeof(g_audio_seq_rt_output));
-            memset(g_audio_legacy_seq_output, 0,
-                   sizeof(g_audio_legacy_seq_output));
-            g_audio_seq_rt_track_mask = 0U;
+            memset(g_audio_seq_output, 0, sizeof(g_audio_seq_output));
+            g_audio_seq_track_mask = 0U;
         }
         else if ((opcode == CONTROL_AUDIO_COMMAND_PANIC)
                 && (command.entity < SEQ_LANE_CAPACITY))
         {
-            memset(g_audio_seq_rt_output[command.entity], 0,
-                   sizeof(g_audio_seq_rt_output[command.entity]));
-            memset(g_audio_legacy_seq_output[command.entity], 0,
-                   sizeof(g_audio_legacy_seq_output[command.entity]));
+            memset(g_audio_seq_output[command.entity], 0,
+                   sizeof(g_audio_seq_output[command.entity]));
         }
         (void)control_audio_fifo_audio_pop();
         ++applied;

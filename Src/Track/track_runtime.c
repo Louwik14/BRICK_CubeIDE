@@ -18,7 +18,7 @@
 #include "Param/tone_param_catalog.h"
 #include "App/live_parameter_audio_publication.h"
 #include "Seq/seq_model.h"
-#include "Seq/seq_rt_pass1.h"
+#include "Seq/seq_engine.h"
 #include "stm32h7xx_hal.h"
 #include "main.h"
 
@@ -632,7 +632,7 @@ void track_runtime_init(void)
 void track_runtime_rebuild_all(void)
 {
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
-        seq_rt_pass1_control_disarm_track(track);
+        seq_engine_control_disarm_track(track);
     track_runtime_ctx_t previous[SEQ_LANE_CAPACITY];
     track_runtime_ctx_t prepared[SEQ_LANE_CAPACITY];
     memcpy(previous, g_track_runtime_ctx, sizeof(previous));
@@ -686,7 +686,7 @@ void track_runtime_rebuild_all(void)
     ++g_track_runtime_revision;
     for (uint8_t track = 0U; track < (uint8_t)SEQ_LANE_CAPACITY; ++track)
         g_track_runtime_track_revision[track] = g_track_runtime_revision;
-    seq_rt_pass1_control_mark_dirty();
+    seq_engine_control_mark_dirty();
 }
 
 uint8_t track_runtime_project_audio_state_all(void)
@@ -740,7 +740,7 @@ void track_runtime_rebuild_track(uint8_t track)
     {
         return;
     }
-    seq_rt_pass1_control_disarm_track(track);
+    seq_engine_control_disarm_track(track);
 
     entity_topology_descriptor_t topology;
     if ((entity_topology_get((brick_entity_id_t)track, &topology) != 0U)
@@ -782,7 +782,7 @@ void track_runtime_rebuild_track(uint8_t track)
         (void)track_runtime_publish_midi_config(track, &next_ctx);
     ++g_track_runtime_revision;
     g_track_runtime_track_revision[track] = g_track_runtime_revision;
-    seq_rt_pass1_control_mark_dirty();
+    seq_engine_control_mark_dirty();
 }
 
 uint32_t track_runtime_get_revision(void)

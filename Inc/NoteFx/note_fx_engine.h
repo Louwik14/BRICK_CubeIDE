@@ -35,14 +35,14 @@ note_event_result_t note_fx_engine_collect_held(
 note_event_result_t note_fx_engine_cleanup(uint8_t track);
 
 /* Dedicated bounded context owned by the SEQ RT domain. */
-void note_fx_engine_rt_init(void);
-note_event_result_t note_fx_engine_rt_configure(
+void note_fx_engine_seq_init(void);
+note_event_result_t note_fx_engine_seq_configure(
     uint8_t track, uint8_t slot, uint8_t model, uint8_t p1,
     uint8_t p2, uint8_t p3);
-note_event_result_t note_fx_engine_rt_transform(
+note_event_result_t note_fx_engine_seq_transform(
     uint8_t slot, const note_event_t *input, uint8_t input_count,
     note_event_t *output, uint8_t output_capacity, uint8_t *output_count);
-note_event_result_t note_fx_engine_rt_process(
+note_event_result_t note_fx_engine_seq_process(
     uint64_t block_start, uint16_t frames, uint32_t samples_per_step_q16,
     uint64_t transport_position_q16,
     const uint32_t pattern_position_q16[NOTE_FX_TRACK_COUNT],

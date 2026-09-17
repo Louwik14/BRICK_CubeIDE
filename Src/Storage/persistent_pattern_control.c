@@ -22,8 +22,8 @@
 #include "Track/audio_fx_control_state.h"
 #include "Track/fm_control_state.h"
 #include "Track/polyphony_control.h"
-#include "NoteFx/note_fx_pipeline.h"
 #include "NoteFx/note_fx_state.h"
+#include "Seq/seq_engine.h"
 #include "Param/param_filter.h"
 #include "Param/param_value_policy.h"
 #include "Param/param_global_control.h"
@@ -37,8 +37,6 @@
 #include "Seq/seq_runtime_control.h"
 #include "Seq/metronome_control.h"
 #include "Keyboard/keyboard_runtime.h"
-#define SEQ_RUNTIME_INTERNAL_USE 1
-#include "Seq/seq_play_scheduler.h"
 #include "Track/track_catalog.h"
 #include "Storage/undo_v2.h"
 #include "Storage/project_control.h"
@@ -329,7 +327,7 @@ static persist_codec_result_t persistent_pattern_control_install_internal(
                 || (target_topology.active == 0U)
                 || (persistent_sequence_changed(
                     entity, &pattern->entities[entity]) != 0U))
-            seq_play_scheduler_notify_track_pattern_change(entity);
+            seq_engine_control_mark_dirty();
     }
 
     if (track_structure_apply_entity_bulk_with_inputs(

@@ -42,7 +42,7 @@
 #include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
 #include "Audio/Engines/wavetable_engine.h"
 #include "Platform/brick_media_clock.h"
-#include "Seq/seq_rt_pass1.h"
+#include "Seq/seq_engine.h"
 
 #include <string.h>
 #include <stdint.h>
@@ -225,11 +225,11 @@ static ITCM_TEXT void audio_process_half_common_hot(int32_t *rx, int32_t *tx,
         (void)audio_command_executor_apply_due(
             g_audio_render_cursor, command_head_limit,
             (recovering != 0U) ? block_start_sample : 0U);
-        (void)audio_command_executor_apply_seq_rt_due(g_audio_render_cursor);
+        (void)audio_command_executor_apply_seq_due(g_audio_render_cursor);
         const uint16_t remaining = (uint16_t)(AUDIO_FRAMES_PER_HALF - half_cursor);
         uint16_t block_frames = control_audio_fifo_audio_frames_until_due(
             g_audio_render_cursor, remaining, command_head_limit);
-        const uint16_t seq_frames = seq_rt_pass1_audio_frames_until_due(
+        const uint16_t seq_frames = seq_engine_audio_frames_until_due(
             g_audio_render_cursor, remaining);
         if (seq_frames < block_frames) block_frames = seq_frames;
         if (block_frames == 0U) continue;
@@ -264,9 +264,9 @@ static void process_half(uint32_t half_index)
     }
 
     /* Select the exact SEQ event block for this AUDIO half-buffer. */
-    seq_rt_pass1_audio_boundary(block_start_sample, recovering);
-    audio_command_executor_seq_rt_begin_block(
-        seq_rt_pass1_audio_track_mask());
+    seq_engine_audio_boundary(block_start_sample, recovering);
+    audio_command_executor_seq_begin_block(
+        seq_engine_audio_track_mask());
 
     /* RX DMA -> CPU: la zone est non-cacheable par contrat MPU. */
 #if AUDIO_DMA_BUFFER_IS_CACHEABLE
@@ -333,7 +333,7 @@ void audio_boot_init_binding_io(void)
 
     /* Init mesure charge CPU audio (utilisée ensuite en IRQ). */
     cpu_load_init();
-    seq_rt_pass1_irq_init();
+    seq_engine_irq_init();
 }
 
 /**

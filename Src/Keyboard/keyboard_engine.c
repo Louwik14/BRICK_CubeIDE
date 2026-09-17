@@ -26,9 +26,7 @@
 #include "Mod/mod_lfo_v1.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
-#define SEQ_RUNTIME_INTERNAL_USE 1
-#include "Seq/seq_play_scheduler.h"
-#include "NoteFx/note_fx_pipeline.h"
+#include "Seq/seq_engine.h"
 #include <string.h>
 
 #define KBD_REC_NOTE_STACK_DEPTH 8U
@@ -39,8 +37,8 @@ static uint8_t g_kbd_rec_note_stack_count[128U];
 static uint8_t g_kbd_rec_track_note_channel[BRICK_ENTITY_TOP_LEVEL_COUNT][128U];
 static uint8_t g_kbd_rec_track_note_count[BRICK_ENTITY_TOP_LEVEL_COUNT][128U];
 
-/* Physical ingress correlation only.  Musical source admission/liveness is
- * owned by seq_play_scheduler; this table only pairs a later key/MIDI OFF
+/* Physical ingress correlation only. Musical source admission/liveness is
+ * owned by SEQ; this table only pairs a later key/MIDI OFF
  * with the source key allocated for its physical ON. */
 typedef struct
 {
@@ -218,25 +216,13 @@ static void keyboard_engine_send_note_for_owner_track_with_capture(
             g_keyboard_engine_source_occurrence[(uint8_t)index].occurrence_id;
     }
 
-    if ((is_note_on != 0U)
-            && (seq_play_scheduler_admit_live_source(
-                owner_track, note, occurrence_id, 1U) == 0U))
-        return;
-
-    const note_event_result_t result = (capture_tick_valid != 0U)
-        ? note_fx_pipeline_submit_source_capture_tick(
-            owner_track, note, velocity, is_note_on, capture_tick,
-            ingress_serial, provenance, occurrence_id)
-        : note_fx_pipeline_submit_source_occurrence(
-            owner_track, note, velocity, is_note_on,
-            NOTE_FX_SAMPLE_TIME_CONTROL_ANCHOR, provenance, occurrence_id);
-    if (result != NOTE_EVENT_RESULT_ACCEPTED)
-    {
-        if (is_note_on != 0U)
-            (void)seq_play_scheduler_admit_live_source(
-                owner_track, note, occurrence_id, 0U);
-        return;
-    }
+    (void)ingress_serial;
+    uint64_t capture_sample=0U;
+    if ((capture_tick_valid==0U)
+            || !brick_media_clock_tick_to_sample(capture_tick,&capture_sample))
+        (void)brick_media_clock_now_sample(&capture_sample);
+    if (seq_ingress_note(owner_track,note,velocity,is_note_on,
+            occurrence_id,(uint8_t)provenance,capture_sample)==0U) return;
 
     if (is_note_on != 0U)
     {
@@ -252,8 +238,6 @@ static void keyboard_engine_send_note_for_owner_track_with_capture(
     else
     {
         g_keyboard_engine_source_occurrence[(uint8_t)index].active = 0U;
-        (void)seq_play_scheduler_admit_live_source(
-            owner_track, note, occurrence_id, 0U);
     }
 }
 
@@ -666,8 +650,7 @@ static void keyboard_engine_midi_receive_internal(const uint8_t *msg, size_t len
     if (is_all_notes_off != 0U)
     {
         (void)control_music_output_panic_all(0U);
-        note_fx_pipeline_panic();
-        seq_play_scheduler_clear();
+        seq_ingress_panic();
         keyboard_engine_clear_source_occurrences_silent();
         return;
     }

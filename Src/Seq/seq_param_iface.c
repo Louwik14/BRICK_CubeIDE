@@ -16,7 +16,6 @@
 #include "Track/tone_param_codec.h"
 #include "App/live_parameter_audio_publication.h"
 #include "param_registry.h"
-#include "NoteFx/note_fx_pipeline.h"
 #include "NoteFx/note_fx_state.h"
 #include "Param/param_control_backends.h"
 #include "Seq/seq_runtime.h"
@@ -1011,11 +1010,9 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
         float decoded_value;
         if ((note_fx_state_param_map(param, &slot, &fx_param) == 0U)
                 || (seq_param_iface_decode_param_value(
-                    param, value16, &decoded_value) == 0U)
-                || (note_fx_pipeline_apply_control_override(
-                    track, slot, fx_param,
-                    (uint8_t)(decoded_value + 0.5f)) == 0U))
+                    param, value16, &decoded_value) == 0U))
             return 0U;
+        (void)slot;(void)fx_param;(void)decoded_value;
         state->runtime_value = value16;
         seq_param_set_runtime_locked(track, set_id, param_slot, 1U);
         return 1U;
@@ -1072,9 +1069,9 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
     if (set_id == (uint8_t)SEQ_PLOCK_SET_MIDI_FX)
     {
         uint8_t slot = 0U, fx_param = 0U;
-        if (note_fx_state_param_map(param, &slot, &fx_param) == 0U ||
-            note_fx_pipeline_release_control_override(track, slot, fx_param) == 0U)
+        if (note_fx_state_param_map(param, &slot, &fx_param) == 0U)
             return 0U;
+        (void)slot;(void)fx_param;
         state->base_value = base_value16;
         state->runtime_value = base_value16;
         seq_param_set_runtime_locked(track, set_id, param_slot, 0U);

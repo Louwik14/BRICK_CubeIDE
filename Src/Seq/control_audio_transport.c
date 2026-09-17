@@ -3,7 +3,7 @@
 #include "IPC/control_audio_command.h"
 #include "ControlRT/control_rt_publication.h"
 #include "Seq/seq_runtime.h"
-#include "Seq/seq_runtime_exec.h"
+#include "Seq/seq_transport_owner.h"
 #include "main.h"
 
 typedef struct
@@ -29,7 +29,7 @@ void control_audio_transport_publish_changes(void)
     };
     uint64_t sample = 0U;
     if (control_rt_resolve_asap_sample(
-            seq_runtime_exec_get_sample_timeline(), &sample) == 0U)
+            seq_transport_owner_get_sample_timeline(), &sample) == 0U)
     {
         Error_Handler();
         return;

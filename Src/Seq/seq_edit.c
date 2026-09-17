@@ -20,7 +20,6 @@
 #include "Storage/undo_v2.h"
 #include "Seq/seq_runtime_control.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1
-#include "Seq/seq_play_scheduler.h"
 
 #define SEQ_EDIT_ENGINE_TICKS_PER_SECOND 1500U
 

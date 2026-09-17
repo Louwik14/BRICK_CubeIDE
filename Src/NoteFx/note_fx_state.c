@@ -4,8 +4,7 @@
 
 #include "Track/entity_topology.h"
 #include "Seq/seq_division_catalog.h"
-#include "Seq/seq_rt_pass1.h"
-#include "NoteFx/note_fx_pipeline.h"
+#include "Seq/seq_engine.h"
 
 static note_fx_track_state_t g_note_fx_state[NOTE_FX_TRACK_COUNT];
 
@@ -266,7 +265,7 @@ uint8_t note_fx_state_set_param(uint8_t track, param_id_t id, float value)
         next.value[slot][param] = raw;
     }
     (void)note_fx_state_normalize_track(&next);
-    return note_fx_pipeline_commit_state(track, &next);
+    return note_fx_state_install_prepared_track(track, &next);
 }
 
 uint8_t note_fx_state_capture_track(uint8_t track, note_fx_track_state_t *out_state)
@@ -287,7 +286,7 @@ uint8_t note_fx_state_restore_track(uint8_t track, const note_fx_track_state_t *
     }
     note_fx_track_state_t normalized = *state;
     (void)note_fx_state_normalize_track(&normalized);
-    return note_fx_pipeline_commit_state(track, &normalized);
+    return note_fx_state_install_prepared_track(track, &normalized);
 }
 
 uint8_t note_fx_state_install_prepared_track(uint8_t track,
@@ -295,7 +294,7 @@ uint8_t note_fx_state_install_prepared_track(uint8_t track,
 {
     if ((track >= NOTE_FX_TRACK_COUNT) || (state == NULL)) return 0U;
     g_note_fx_state[track] = *state;
-    seq_rt_pass1_control_disarm_track(track);
-    seq_rt_pass1_control_mark_dirty();
+    seq_engine_control_disarm_track(track);
+    seq_engine_control_mark_dirty();
     return 1U;
 }

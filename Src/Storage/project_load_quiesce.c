@@ -3,10 +3,9 @@
 #include "IPC/live_event.h"
 #include "ControlRT/control_rt_publication.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1
-#include "Seq/seq_play_scheduler.h"
 #include "Seq/seq_runtime.h"
+#include "Seq/seq_engine.h"
 #include "Track/control_music_output.h"
-#include "NoteFx/note_fx_pipeline.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/sd_preview.h"
 #include "Storage/wav_convert.h"
@@ -72,8 +71,7 @@ void project_load_quiesce_request(void)
     midi_rx_discard_pending();
     midi_host_rx_discard_pending();
     sd_preview_stop();
-    note_fx_pipeline_panic();
-    seq_play_scheduler_clear();
+    seq_ingress_panic();
     g_project_load_requested = 1U;
     g_project_load_panic_committed = control_music_output_panic_all(0U);
     if (g_project_load_panic_committed != 0U)
@@ -134,8 +132,7 @@ void resource_mutation_ingress_close(void)
     live_event_discard_pending();
     midi_rx_discard_pending();
     midi_host_rx_discard_pending();
-    note_fx_pipeline_panic();
-    seq_play_scheduler_clear();
+    seq_ingress_panic();
 }
 
 void resource_mutation_ingress_open(void)
