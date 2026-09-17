@@ -148,9 +148,11 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
                     ?(uint16_t)(param_value_policy_decode_u16(
                         &param_registry[param],entry.value16)+0.5f)
                     :entry.value16;
-                const uint16_t projected_base=is_fx
-                    ?(uint16_t)(param_value_policy_decode_u16(
-                        &param_registry[param],base)+0.5f):base;
+                uint16_t projected_base=base;
+                if(is_fx!=0U){uint8_t fx_slot=0U,fx_param=0U;
+                    if(note_fx_state_param_map(param,&fx_slot,&fx_param)==0U){
+                        pattern->track_fx_enabled[track]=0U;break;}
+                    projected_base=(uint16_t)(((uint16_t)fx_slot<<8U)|fx_param);}
                 pattern->lock_pool[track][pattern->lock_pool_count[track]++] =
                     (seq_lock_pattern_t){
                         .param_flags=(uint16_t)param

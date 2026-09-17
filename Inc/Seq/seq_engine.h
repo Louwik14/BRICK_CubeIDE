@@ -111,6 +111,8 @@ typedef struct {
     uint8_t velocity;
     uint8_t active;
     uint16_t generation;
+    uint16_t next;
+    uint16_t prev;
 } seq_lifetime_t;
 
 typedef struct {
@@ -122,6 +124,10 @@ typedef struct {
     uint16_t lifetime_count;
     uint16_t future_count;
     uint16_t future_free_head;
+    uint16_t lifetime_free_head;
+    uint16_t lifetime_track_head[SEQ_LANE_CAPACITY];
+    uint16_t lifetime_track_tail[SEQ_LANE_CAPACITY];
+    uint8_t lifetime_track_count[SEQ_LANE_CAPACITY];
     uint32_t dropped_events;
     uint16_t emitter_tracks;
     uint16_t plock_fault_tracks;
@@ -222,6 +228,7 @@ uint8_t seq_engine_core_submit_live(seq_engine_core_t *core,
                                     uint64_t window_start,
                                     uint64_t window_end,
                                     seq_event_block_t *out_block);
+void seq_engine_event_order(seq_event_block_t *block);
 
 void seq_service(uint64_t now_sample, uint64_t publish_until_sample);
 uint64_t seq_next_deadline(void);

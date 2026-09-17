@@ -266,15 +266,7 @@ void seq_service(uint64_t now_sample, uint64_t publish_until_sample)
                     .track=event->track,.occurrence_id=event->param_id,
                     .value=event->value16,.velocity=event->semantic};
             }
-            for (uint16_t a = 1U; a < block->event_count; ++a) {
-                const seq_event_t key = block->events[a]; uint16_t b = a;
-                while ((b != 0U) && ((block->events[b - 1U].offset > key.offset)
-                        || ((block->events[b - 1U].offset == key.offset)
-                            && (block->events[b - 1U].kind > key.kind)))) {
-                    block->events[b] = block->events[b - 1U]; --b;
-                }
-                block->events[b] = key;
-            }
+            seq_engine_event_order(block);
         }
         diag_max(&g_seq_diag.terminal_publish_max_cycles,
                  DWT->CYCCNT-publish_started);
@@ -333,11 +325,7 @@ static void seq_service_urgent(uint64_t now_sample,uint64_t publish_until_sample
             if(seq_engine_core_submit_live(&g_core,&event,block->start_sample,end,block)==0U)
                 ++g_seq_diag.fifo_invariant_failures;
         }
-        for(uint16_t a=1U;a<block->event_count;++a){const seq_event_t key=block->events[a];
-            uint16_t b=a;while((b!=0U)&&((block->events[b-1U].offset>key.offset)
-                    ||((block->events[b-1U].offset==key.offset)
-                    &&(block->events[b-1U].kind>key.kind)))){
-                block->events[b]=block->events[b-1U];--b;}block->events[b]=key;}
+        seq_engine_event_order(block);
         __DMB();g_slot_state[slot]=SLOT_READY;return;
     }
 }

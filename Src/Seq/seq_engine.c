@@ -6,8 +6,9 @@
 #include <stddef.h>
 #include <string.h>
 
-static AUDIO_STATE_D3 note_event_t g_seq_fx_a[NOTE_FX_BATCH_CAPACITY];
-static AUDIO_STATE_D3 note_event_t g_seq_fx_b[NOTE_FX_BATCH_CAPACITY];
+static SEQ_STATE_D2 note_event_t g_seq_fx_a[NOTE_FX_BATCH_CAPACITY];
+static SEQ_STATE_D2 note_event_t g_seq_fx_b[NOTE_FX_BATCH_CAPACITY];
+static SEQ_STATE_D2 seq_event_t g_seq_order_scratch[SEQ_ENGINE_EVENT_CAPACITY];
 static seq_engine_core_t *g_seq_fx_core;
 static seq_event_block_t *g_seq_fx_block;
 static uint64_t g_seq_fx_start;
@@ -106,12 +107,59 @@ uint8_t seq_engine_core_submit_live(seq_engine_core_t *core,
     return (fx_run_from(event,0U)==NOTE_EVENT_RESULT_ACCEPTED)?1U:0U;
 }
 
-static uint8_t priority(uint8_t kind)
+static uint8_t event_after(const seq_event_t *left,const seq_event_t *right)
+{ return (uint8_t)((left->offset>right->offset)
+    ||((left->offset==right->offset)&&(left->kind>right->kind))); }
+
+ITCM_TEXT void seq_engine_event_order(seq_event_block_t *block)
 {
-    if (kind == SEQ_ENGINE_EVENT_PANIC) return 0U;
-    if (kind == SEQ_ENGINE_EVENT_NOTE_OFF) return 1U;
-    if (kind == SEQ_ENGINE_EVENT_PARAM) return 2U;
-    return 3U;
+    if((block==0)||(block->event_count<2U))return;
+    seq_event_t *src=block->events,*dst=g_seq_order_scratch;
+    const uint16_t count=block->event_count;
+    for(uint16_t width=1U;width<count;width=(uint16_t)(width<<1U)){
+        for(uint16_t base=0U;base<count;base=(uint16_t)(base+(width<<1U))){
+            uint16_t left=base,mid=(uint16_t)(base+width),right=(uint16_t)(mid+width);
+            if(mid>count)mid=count;
+            if(right>count)right=count;
+            uint16_t a=left,b=mid,w=left;
+            while((a<mid)&&(b<right))
+                dst[w++]=event_after(&src[a],&src[b])?src[b++]:src[a++];
+            while(a<mid)dst[w++]=src[a++];
+            while(b<right)dst[w++]=src[b++];
+        }
+        seq_event_t *swap=src;src=dst;dst=swap;
+    }
+    if(src!=block->events)memcpy(block->events,src,(size_t)count*sizeof(*src));
+}
+
+static void lifetime_unlink(seq_engine_core_t *core,uint16_t index)
+{
+    seq_lifetime_t *const item=&core->lifetimes[index];const uint8_t track=item->track;
+    if(item->prev!=UINT16_MAX)core->lifetimes[item->prev].next=item->next;
+    else core->lifetime_track_head[track]=item->next;
+    if(item->next!=UINT16_MAX)core->lifetimes[item->next].prev=item->prev;
+    else core->lifetime_track_tail[track]=item->prev;
+}
+
+static void lifetime_release(seq_engine_core_t *core,uint16_t index)
+{
+    lifetime_unlink(core,index);seq_lifetime_t *const item=&core->lifetimes[index];
+    item->active=0U;item->next=core->lifetime_free_head;item->prev=UINT16_MAX;
+    core->lifetime_free_head=index;if(core->lifetime_count!=0U)--core->lifetime_count;
+    if(core->lifetime_track_count[item->track]!=0U)--core->lifetime_track_count[item->track];
+}
+
+static void lifetime_clear(seq_engine_core_t *core)
+{
+    core->lifetime_count=0U;core->lifetime_free_head=0U;
+    for(uint16_t i=0U;i<SEQ_ENGINE_LIFETIME_CAPACITY;++i){
+        core->lifetimes[i].active=0U;core->lifetimes[i].prev=UINT16_MAX;
+        core->lifetimes[i].next=(i+1U<SEQ_ENGINE_LIFETIME_CAPACITY)
+            ?(uint16_t)(i+1U):UINT16_MAX;}
+    for(uint8_t t=0U;t<SEQ_LANE_CAPACITY;++t){
+        core->lifetime_track_head[t]=UINT16_MAX;
+        core->lifetime_track_tail[t]=UINT16_MAX;
+        core->lifetime_track_count[t]=0U;}
 }
 
 static const seq_play_item_t *step_item(const seq_pattern_t *p,
@@ -164,26 +212,25 @@ static uint64_t first_on(const seq_pattern_t *p, uint8_t track,
     return (swung > (uint64_t)(-micro)) ? swung - (uint64_t)(-micro) : 0U;
 }
 
-static void source_add(seq_engine_core_t *core, uint64_t first_on,
+static ITCM_TEXT void source_add(seq_engine_core_t *core, uint64_t first_on,
     uint64_t span_q16, uint64_t interval_q16, uint32_t gate_samples,
     uint8_t track, uint8_t note, uint8_t velocity)
 {
     const uint8_t quota=(track<BRICK_ENTITY_TOP_LEVEL_COUNT)?8U:1U;
-    uint8_t owned=0U;
-    uint16_t target=SEQ_ENGINE_LIFETIME_CAPACITY;
-    uint16_t oldest=SEQ_ENGINE_LIFETIME_CAPACITY;
-    for (uint16_t i = 0U; i < SEQ_ENGINE_LIFETIME_CAPACITY; ++i)
-    {
-        seq_lifetime_t *const source = &core->lifetimes[i];
-        if (source->active == 0U) { if(target==SEQ_ENGINE_LIFETIME_CAPACITY)target=i;continue; }
-        if (source->track != track) continue;
-        ++owned;
-        if ((oldest==SEQ_ENGINE_LIFETIME_CAPACITY)
-                ||(source->first_on_sample<core->lifetimes[oldest].first_on_sample))
-            oldest=i;
+    uint16_t target;
+    const uint8_t owned=core->lifetime_track_count[track];
+    if(owned>=quota){
+        target=core->lifetime_track_head[track];
+        for(uint16_t i=core->lifetimes[target].next;i!=UINT16_MAX;
+                i=core->lifetimes[i].next)
+            if((core->lifetimes[i].first_on_sample<core->lifetimes[target].first_on_sample)
+                    ||((core->lifetimes[i].first_on_sample==core->lifetimes[target].first_on_sample)
+                    &&(i<target)))target=i;
+        lifetime_unlink(core,target);
     }
-    if(owned>=quota)target=oldest;
-    if(target<SEQ_ENGINE_LIFETIME_CAPACITY)
+    else {target=core->lifetime_free_head;
+        if(target!=UINT16_MAX)core->lifetime_free_head=core->lifetimes[target].next;}
+    if(target!=UINT16_MAX)
     {
         seq_lifetime_t *const source=&core->lifetimes[target];
         const uint16_t generation=(uint16_t)(source->generation+1U);
@@ -191,8 +238,12 @@ static void source_add(seq_engine_core_t *core, uint64_t first_on,
             .first_on_sample=first_on,.span_q16=span_q16,
             .interval_q16=interval_q16,.gate_samples=gate_samples,
             .track=track,.note=note,.velocity=velocity,.active=1U,
-            .generation=generation?generation:1U};
-        if(owned<quota)++core->lifetime_count;
+            .generation=generation?generation:1U,.next=UINT16_MAX,
+            .prev=core->lifetime_track_tail[track]};
+        if(source->prev!=UINT16_MAX)core->lifetimes[source->prev].next=target;
+        else core->lifetime_track_head[track]=target;
+        core->lifetime_track_tail[track]=target;
+        if(owned<quota){++core->lifetime_count;++core->lifetime_track_count[track];}
         return;
     }
     ++core->dropped_events;
@@ -212,12 +263,11 @@ static void configure_fx_step(const seq_pattern_t *p,uint8_t track,
     const uint16_t first=p->lock_first[track][step];
     const uint8_t count=p->steps[track][step].lock_count;
     for(uint8_t n=0U;n<count;++n){
-        const seq_lock_pattern_t *lock=&p->lock_pool[track][first+n];
+        const seq_lock_pattern_t *const lock=&p->lock_pool[track][first+n];
         if((lock->param_flags&SEQ_ENGINE_PARAM_FLAG_NOTE_FX)==0U)continue;
-        uint8_t slot,param;
-        if(note_fx_state_param_map((param_id_t)(lock->param_flags&SEQ_ENGINE_PARAM_ID_MASK),
-                &slot,&param)!=0U)
-            state.value[slot][param]=(uint8_t)lock->value16;
+        const uint8_t slot=(uint8_t)(lock->base_value16>>8U);
+        const uint8_t param=(uint8_t)lock->base_value16;
+        state.value[slot][param]=(uint8_t)lock->value16;
     }
     (void)note_fx_state_normalize_track(&state);
     for(uint8_t slot=0U;slot<NOTE_FX_SLOT_COUNT;++slot)
@@ -344,7 +394,7 @@ static uint16_t advance(seq_engine_core_t *core,const seq_pattern_t *p)
     return hits;
 }
 
-static void collect(seq_engine_core_t *core,uint64_t start,uint16_t frames,
+static ITCM_TEXT void collect(seq_engine_core_t *core,uint64_t start,uint16_t frames,
     const seq_pattern_t *p,seq_event_block_t *out)
 {
     const uint64_t end=start+frames;
@@ -381,8 +431,7 @@ static void collect(seq_engine_core_t *core,uint64_t start,uint16_t frames,
                 ++core->dropped_events;
             source->next_offset_q16+=source->interval_q16;
         }
-        if(source->next_offset_q16>=source->span_q16){
-            source->active=0U;if(core->lifetime_count!=0U)--core->lifetime_count;}}
+        if(source->next_offset_q16>=source->span_q16)lifetime_release(core,source_index);}
     if(note_fx_engine_seq_process(start,frames,p->samples_per_step_q16,
             transport,pattern,p->scale_index,p->root_index,
             fx_generated,0)!=NOTE_EVENT_RESULT_ACCEPTED)
@@ -406,11 +455,6 @@ static void collect(seq_engine_core_t *core,uint64_t start,uint16_t frames,
     const uint32_t future_cycles=seq_engine_port_cycles()-future_started;
     if(future_cycles>g_seq_diag.scan_future_max_cycles)
         g_seq_diag.scan_future_max_cycles=future_cycles;
-    for(uint16_t a=1U;a<out->event_count;++a){const seq_event_t key=out->events[a];
-        uint16_t b=a;while((b!=0U)&&((out->events[b-1U].offset>key.offset)
-            ||((out->events[b-1U].offset==key.offset)
-            &&(priority(out->events[b-1U].kind)>priority(key.kind))))){
-            out->events[b]=out->events[b-1U];--b;}out->events[b]=key;}
 }
 
 void seq_engine_core_init(seq_engine_core_t *core)
@@ -419,6 +463,7 @@ void seq_engine_core_init(seq_engine_core_t *core)
     /* Future tickets survive a core reset: clearing musical state must never
      * make a handle from the previous epoch valid again. */
     memset(core,0,offsetof(seq_engine_core_t,futures));
+    lifetime_clear(core);
     future_clear(core);
     note_fx_engine_seq_init();
     for(uint8_t t=0U;t<SEQ_LANE_CAPACITY;++t)for(uint8_t v=0U;
@@ -464,8 +509,7 @@ void seq_engine_core_process_block(seq_engine_core_t *core,uint64_t start,uint16
             if(p->track_fx_enabled[t]!=0U)
                 configure_fx_step(p,t,core->play_step[t]);}
     if((p->running==0U)||(core->samples_per_step_q16==0U)){
-        core->running=0U;future_clear(core);core->lifetime_count=0U;
-        memset(core->lifetimes,0,sizeof(core->lifetimes));return;}core->running=1U;
+        core->running=0U;future_clear(core);lifetime_clear(core);return;}core->running=1U;
     const uint32_t dropped_before=core->dropped_events;
     const uint64_t begin_q16=start<<16,end_q16=(start+frames)<<16;
     uint64_t next=core->step_sample_q16+core->samples_per_step_q16;

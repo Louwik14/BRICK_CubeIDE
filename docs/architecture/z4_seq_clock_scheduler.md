@@ -56,6 +56,26 @@ ARP, ni Euclid : il applique PARAM/NOTE dans l'ordre `(sample, OFF, PARAM, ON)`
 et conserve uniquement l'allocation physique des voix. Les anciennes voies
 cooperative, shadow/compare et publication legacy/RT ne sont pas compilees.
 
+## Borne worst-case de publication
+
+Les 64 Lifetime sont gerees par une free-list globale et des listes actives par
+track. Une allocation sans stealing est O(1). Le quota existant reste 8 pour
+une top-level et 1 pour un enfant; lorsqu'il impose un stealing, la recherche
+de l'entree la plus ancienne est bornee au seul quota local (8 maximum), avec
+le meme departage par plus petit index physique. La liberation met a jour la
+liste de track et la free-list dans la meme operation SEQ.
+
+Les NOTE produites, les NOTE_OFF Future, l'ingress et les PARAM sont accumules
+sans tri intermediaire. Une unique passe finale de merge-sort stable, bornee
+par `SEQ_ENGINE_EVENT_CAPACITY`, publie en O(E log E), sans allocation. Le
+departage conserve est `(sample, NOTE_OFF, PARAM, NOTE_ON, PANIC, ordre
+d'ajout)`. Les PARAM rejoignent donc le flux avant cette unique mise en ordre.
+
+CONTROL decode aussi le mapping statique `(param NoteFX -> slot,parametre)`
+dans le Pattern. A la boundary, SEQ conserve les decisions musicales et la
+normalisation dependante du modele, puis configure les quatre slots; aucun
+catalog lookup ni mapping d'identifiant n'y subsiste.
+
 ## Diagnostics Release/LTO
 
 `g_seq_diag` est retenu au lien. Son ABI version 1 commence par

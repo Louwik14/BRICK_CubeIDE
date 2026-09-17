@@ -597,6 +597,14 @@ set_source_files_properties(${CONTROL_RUNTIME_O1_SOURCES} PROPERTIES
     COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O1>"
 )
 
+# Bounded SEQ IRQ core: optimize only the musical scheduling/publication path.
+set_source_files_properties(
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_engine.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_engine_port_h743.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/NoteFx/note_fx_engine.c"
+    PROPERTIES COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O2>"
+)
+
 # U8g2 en O0
 set_source_files_properties(${U8G2_SRC} PROPERTIES
     COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O0>"
