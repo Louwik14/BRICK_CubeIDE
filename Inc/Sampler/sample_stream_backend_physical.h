@@ -28,6 +28,17 @@ typedef struct
     uint32_t active_lba;
     uint32_t active_sector_count;
     uint8_t *active_buffer;
+    sample_stream_physical_span_t cached_span;
+    const sample_stream_physical_map_t *cached_map;
+    sample_stream_physical_cursor_t *cached_cursor;
+    uint8_t *cached_scratch;
+    uint64_t cached_file_byte_offset;
+    uint32_t cached_requested_bytes;
+    uint32_t cached_source_bytes;
+    uint32_t cached_scratch_sectors;
+    uint32_t cached_map_generation;
+    uint32_t cached_media_epoch;
+    uint8_t cached_span_valid;
 } sample_stream_backend_physical_async_t;
 
 uint8_t sample_stream_backend_physical_begin(

@@ -9,21 +9,62 @@
 
 static sample_stream_backend_physical_async_t *g_sample_stream_physical_pending;
 
+static void sample_stream_backend_physical_invalidate_span(
+    sample_stream_backend_physical_async_t *async)
+{
+    if (async != 0)
+    {
+        async->cached_span_valid = 0U;
+    }
+}
+
 static uint8_t sample_stream_backend_physical_next_span(
     sample_stream_backend_physical_async_t *async,
     sample_stream_physical_span_t *span)
 {
-    if ((async == 0) || (span == 0)
-            || (async->logical_queued >= async->source_bytes)
-            || (sample_stream_physical_map_resolve(
-                    async->map,
-                    async->file_byte_offset + async->logical_queued,
-                    async->source_bytes - async->logical_queued,
-                    async->cursor,
-                    span) == 0U))
+    if ((async == 0) || (span == 0))
     {
         return 0U;
     }
+
+    if ((async->logical_queued >= async->source_bytes)
+        || (sample_stream_physical_map_is_current(async->map) == 0U))
+    {
+        sample_stream_backend_physical_invalidate_span(async);
+        return 0U;
+    }
+
+    const uint64_t file_byte_offset =
+        async->file_byte_offset + async->logical_queued;
+    const uint32_t requested_bytes = async->source_bytes - async->logical_queued;
+    const uint32_t map_generation = async->map->generation;
+    const uint32_t media_epoch = async->map->media_epoch;
+    const uint8_t cache_matches = (uint8_t)(
+        (async->cached_span_valid != 0U)
+        && (async->cached_map == async->map)
+        && (async->cached_cursor == async->cursor)
+        && (async->cached_scratch == async->scratch)
+        && (async->cached_file_byte_offset == file_byte_offset)
+        && (async->cached_requested_bytes == requested_bytes)
+        && (async->cached_source_bytes == async->source_bytes)
+        && (async->cached_scratch_sectors == async->scratch_sectors)
+        && (async->cached_map_generation == map_generation)
+        && (async->cached_media_epoch == media_epoch));
+    if (cache_matches != 0U)
+    {
+        *span = async->cached_span;
+    }
+    else
+    {
+        sample_stream_backend_physical_invalidate_span(async);
+        if (sample_stream_physical_map_resolve(
+                async->map, file_byte_offset, requested_bytes,
+                async->cursor, span) == 0U)
+        {
+            return 0U;
+        }
+    }
+
     const uint64_t scratch_end =
         ((uint64_t)async->scratch_sectors + span->sector_count)
         * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE;
@@ -31,7 +72,23 @@ static uint8_t sample_stream_backend_physical_next_span(
             || ((async->logical_queued != 0U)
                 && (span->first_sector_skip != 0U)))
     {
+        sample_stream_backend_physical_invalidate_span(async);
         return 0U;
+    }
+
+    if (cache_matches == 0U)
+    {
+        async->cached_span = *span;
+        async->cached_map = async->map;
+        async->cached_cursor = async->cursor;
+        async->cached_scratch = async->scratch;
+        async->cached_file_byte_offset = file_byte_offset;
+        async->cached_requested_bytes = requested_bytes;
+        async->cached_source_bytes = async->source_bytes;
+        async->cached_scratch_sectors = async->scratch_sectors;
+        async->cached_map_generation = map_generation;
+        async->cached_media_epoch = media_epoch;
+        async->cached_span_valid = 1U;
     }
     return 1U;
 }
@@ -45,6 +102,10 @@ uint8_t sample_stream_backend_physical_begin(
     uint32_t scratch_capacity,
     uint32_t deadline_margin_us)
 {
+    if ((async != 0) && (async != g_sample_stream_physical_pending))
+    {
+        sample_stream_backend_physical_invalidate_span(async);
+    }
     if ((async == 0) || (info == 0) || (target == 0)
         || (target->frames_interleaved == 0) || (scratch == 0)
         || (info->info.block_align == 0U)
@@ -96,6 +157,7 @@ uint8_t sample_stream_backend_physical_poll(
     }
     if (sample_stream_physical_map_is_current(async->map) == 0U)
     {
+        sample_stream_backend_physical_invalidate_span(async);
         async->failed = 1U;
         async->completed = 1U;
     }
@@ -120,6 +182,7 @@ uint8_t sample_stream_backend_physical_poll(
     if (source_end_in_scratch > ((uint64_t)async->scratch_sectors
                                  * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE))
     {
+        sample_stream_backend_physical_invalidate_span(async);
         *out_result = SAMPLE_PAGE_LOAD_READ_FAILED;
         return 1U;
     }
@@ -132,7 +195,12 @@ uint8_t sample_stream_backend_physical_poll(
 void sample_stream_backend_physical_cancel(
     sample_stream_backend_physical_async_t *async)
 {
-    if ((async != 0) && (g_sample_stream_physical_pending == async))
+    if (async == 0)
+    {
+        return;
+    }
+    sample_stream_backend_physical_invalidate_span(async);
+    if (g_sample_stream_physical_pending == async)
     {
         async->cancel_requested = 1U;
         async->failed = 1U;
@@ -199,6 +267,7 @@ static sd_scheduler_start_result_t sample_stream_backend_physical_read_start(
             || (candidate->lba != span.lba)
             || (granted_sector_count != span.sector_count))
     {
+        sample_stream_backend_physical_invalidate_span(async);
         return SD_SCHEDULER_START_ERROR;
     }
     const sd_block_device_result_t result = sd_block_device_async_enqueue(
@@ -212,6 +281,7 @@ static sd_scheduler_start_result_t sample_stream_backend_physical_read_start(
     }
     if (result != SD_BLOCK_DEVICE_OK)
     {
+        sample_stream_backend_physical_invalidate_span(async);
         async->failed = 1U;
         async->completed = 1U;
         return SD_SCHEDULER_START_ERROR;
@@ -226,6 +296,7 @@ static sd_scheduler_start_result_t sample_stream_backend_physical_read_start(
     }
     async->scratch_sectors += span.sector_count;
     async->logical_queued += span.logical_bytes;
+    sample_stream_backend_physical_invalidate_span(async);
     return SD_SCHEDULER_START_STARTED;
 }
 
@@ -239,13 +310,16 @@ static sd_scheduler_poll_result_t sample_stream_backend_physical_read_poll(
     {
         return SD_SCHEDULER_POLL_ERROR;
     }
-    sd_block_device_async_poll();
     sd_block_device_async_completion_t completion;
     if (sd_block_device_async_take_completion(&completion) == 0U)
     {
-        return (sd_block_device_async_hardware_state()
+        if (sd_block_device_async_hardware_state()
                 == SD_BLOCK_DEVICE_HW_ABORTING)
-            ? SD_SCHEDULER_POLL_RECOVERY_ABORT : SD_SCHEDULER_POLL_ACTIVE;
+        {
+            sample_stream_backend_physical_invalidate_span(async);
+            return SD_SCHEDULER_POLL_RECOVERY_ABORT;
+        }
+        return SD_SCHEDULER_POLL_ACTIVE;
     }
     if ((completion.result != SD_BLOCK_DEVICE_OK)
             || (completion.operation != SD_BLOCK_DEVICE_OPERATION_READ)
@@ -254,6 +328,7 @@ static sd_scheduler_poll_result_t sample_stream_backend_physical_read_poll(
             || (completion.dst != async->active_buffer)
             || (completion.media_epoch != async->map->media_epoch))
     {
+        sample_stream_backend_physical_invalidate_span(async);
         async->failed = 1U;
         async->completed = 1U;
         return SD_SCHEDULER_POLL_ERROR;
@@ -267,6 +342,7 @@ static sd_scheduler_poll_result_t sample_stream_backend_physical_read_poll(
     }
     else
     {
+        sample_stream_backend_physical_invalidate_span(async);
         async->failed = 1U;
         async->completed = 1U;
         return SD_SCHEDULER_POLL_ERROR;
