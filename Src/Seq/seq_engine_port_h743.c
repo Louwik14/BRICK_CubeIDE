@@ -22,6 +22,7 @@ static volatile uint16_t g_disarmed_tracks;
 static uint32_t g_disarm_generation;
 static volatile uint8_t g_force_stopped;
 static volatile uint64_t g_force_stop_sample;
+static volatile uint32_t g_force_stop_epoch;
 typedef struct {
     uint64_t capture_sample;
     uint32_t occurrence_id;
@@ -65,7 +66,7 @@ void seq_engine_irq_init(void)
     g_seq_diag.min_publish_slack_samples = UINT32_MAX;
     g_audio_slot = -1; g_audio_cursor = 0U; g_pending = 0U; g_urgent_pending=0U;
     g_disarmed_tracks = 0U; g_disarm_generation = 0U;
-    g_force_stopped = 0U; g_next_deadline = UINT64_MAX;
+    g_force_stopped = 0U; g_force_stop_epoch=0U; g_next_deadline = UINT64_MAX;
     g_ingress_head=0U;g_ingress_tail=0U;g_ingress_count=0U;g_ingress_panic=0U;
     seq_engine_core_init(&g_core);
     NVIC_ClearPendingIRQ(TIM4_IRQn);
@@ -150,7 +151,17 @@ uint16_t seq_engine_audio_track_mask(void)
 }
 
 void seq_engine_audio_force_stop(uint64_t effective_sample)
-{ g_force_stop_sample = effective_sample; g_force_stopped = 1U; }
+{ g_force_stop_sample = effective_sample; g_force_stop_epoch=g_core.transport_epoch;
+  g_force_stopped = 1U; }
+
+uint8_t seq_engine_playhead_view(uint8_t track,uint8_t *out_running,
+    uint8_t *out_step)
+{
+    if((track>=SEQ_LANE_CAPACITY)||(out_running==0)||(out_step==0))return 0U;
+    const uint32_t primask=__get_PRIMASK();__disable_irq();
+    *out_running=g_core.running;*out_step=g_core.play_step[track];
+    __set_PRIMASK(primask);return 1U;
+}
 
 uint64_t seq_next_deadline(void) { return g_next_deadline; }
 
@@ -197,6 +208,9 @@ void seq_service(uint64_t now_sample, uint64_t publish_until_sample)
         g_disarmed_tracks = 0U; g_disarm_generation = pattern->generation;
     }
     diag_max(&g_seq_diag.cutover_max_cycles, DWT->CYCCNT-cutover_started);
+    if((g_force_stopped!=0U)&&(pattern!=0)&&(pattern->running!=0U)
+            &&(pattern->transport_epoch!=g_force_stop_epoch))
+        g_force_stopped=0U;
     const uint64_t start = publish_until_sample;
     const uint16_t frames = SEQ_ENGINE_H743_PERIOD_SAMPLES;
     if ((g_force_stopped != 0U) && (start >= g_force_stop_sample)) {

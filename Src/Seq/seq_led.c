@@ -10,6 +10,7 @@
 #include "Seq/seq_model.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_runtime_control.h"
+#include "Seq/seq_engine.h"
 #include "led_layer.h"
 #include "led_remap.h"
 
@@ -46,16 +47,13 @@ static uint8_t seq_led_page_count_for_track(uint8_t track)
 static void seq_led_render_page_indicators(uint8_t track, uint8_t active_page)
 {
     const uint8_t page_count = seq_led_page_count_for_track(track);
-    const uint8_t running = seq_runtime_is_running();
+    uint8_t running = 0U, engine_step = 0U;
+    (void)seq_engine_playhead_view(track, &running, &engine_step);
     uint8_t playhead_page = SEQ_PAGE_COUNT;
 
     if (running != 0U)
     {
-        seq_step_id_t playhead = 0U;
-        if (seq_runtime_get_playhead_step(track, &playhead) != 0U)
-        {
-            playhead_page = (uint8_t)(playhead / SEQ_STEPS_PER_PAGE);
-        }
+        playhead_page = (uint8_t)(engine_step / SEQ_STEPS_PER_PAGE);
     }
 
     for (uint8_t page = 0U; page < SEQ_PAGE_COUNT; ++page)
@@ -122,15 +120,9 @@ void seq_led_render_active_track_page(uint8_t track)
         }
     }
 
-    /* Projection read: LED cursor visibility follows runtime running/playhead mirrors. */
-    if (seq_runtime_is_running() == 0U)
-    {
-        return;
-    }
-
-    seq_step_id_t playhead = 0U;
-    /* Projection read: playhead is consumed as a runtime mirror for cursor rendering. */
-    if (seq_runtime_get_playhead_step(track, &playhead) == 0U)
+    uint8_t running = 0U, playhead = 0U;
+    if ((seq_engine_playhead_view(track, &running, &playhead) == 0U)
+            || (running == 0U))
     {
         return;
     }
