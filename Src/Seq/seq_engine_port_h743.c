@@ -38,6 +38,8 @@ CTRL_STATE __attribute__((used)) volatile seq_engine_diag_t g_seq_diag;
 static void diag_max(volatile uint32_t *maximum, uint32_t value)
 { if (value > *maximum) *maximum = value; }
 
+uint32_t seq_engine_port_cycles(void) { return DWT->CYCCNT; }
+
 void seq_engine_control_disarm_track(uint8_t track)
 {
     if (track < SEQ_LANE_CAPACITY) {
@@ -325,6 +327,8 @@ void TIM4_IRQHandler(void)
     uint64_t now = g_service_now;const uint64_t until = g_publish_until;
     const uint8_t urgent=g_urgent_pending,periodic=g_pending;
     if(urgent!=0U)(void)brick_media_clock_now_sample(&now);
+    if(now>g_service_now)diag_max(&g_seq_diag.max_wake_lateness_samples,
+        (now-g_service_now>UINT32_MAX)?UINT32_MAX:(uint32_t)(now-g_service_now));
     g_pending = 0U;
     if(periodic!=0U)seq_service(now,until);else seq_service_urgent(now,until);
     g_urgent_pending=0U;

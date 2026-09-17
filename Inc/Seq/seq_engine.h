@@ -225,6 +225,7 @@ uint8_t seq_engine_core_submit_live(seq_engine_core_t *core,
 
 void seq_service(uint64_t now_sample, uint64_t publish_until_sample);
 uint64_t seq_next_deadline(void);
+uint32_t seq_engine_port_cycles(void);
 uint8_t seq_ingress_note(uint8_t track, uint8_t note, uint8_t velocity,
                          uint8_t note_on, uint32_t occurrence_id,
                          uint8_t provenance, uint64_t capture_sample);
