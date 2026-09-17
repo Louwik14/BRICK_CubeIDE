@@ -428,6 +428,19 @@ static uint8_t audio_note_engine_adapter_apply_physical(
             && (output_was_active == 0U))
         return 1U;
 
+    uint32_t displaced_output[SYNTH_POLYPHONY_MAX_VOICES] = {0U};
+    if ((uses_voice_allocator != 0U) && (is_note_on != 0U))
+    {
+        const uint8_t voice_count = synth_polyphony_get_voice_count(entity_id);
+        for (uint8_t i = 0U; (i < voice_count)
+                && (i < SYNTH_POLYPHONY_MAX_VOICES); ++i)
+        {
+            synth_poly_voice_snapshot_t snapshot;
+            if (synth_polyphony_get_voice_snapshot(entity_id, i,
+                    &snapshot) != 0U)
+                displaced_output[i] = snapshot.output_id;
+        }
+    }
     const uint8_t voice = (uses_voice_allocator == 0U)
         ? SYNTH_POLYPHONY_NO_VOICE
         : ((is_note_on != 0U)
@@ -442,6 +455,16 @@ static uint8_t audio_note_engine_adapter_apply_physical(
         (void)audio_note_engine_commit_output(entity_id, output_id,
             note, velocity, is_note_on);
         return 0U;
+    }
+    if ((is_note_on != 0U) && (voice < SYNTH_POLYPHONY_MAX_VOICES)
+            && (displaced_output[voice] != 0U)
+            && (displaced_output[voice] != output_id))
+    {
+        /* The allocator has stolen this physical voice.  Keep the execution
+         * mirror synchronous; SEQ still owns the displaced occurrence and
+         * its later terminal OFF remains a legal idempotent no-op. */
+        (void)audio_note_engine_commit_output(entity_id,
+            displaced_output[voice], 0U, 0U, 0U);
     }
 
     if (is_note_on != 0U)
