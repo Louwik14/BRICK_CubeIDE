@@ -121,6 +121,9 @@ uint16_t seq_engine_audio_frames_until_due(uint64_t sample, uint16_t maximum)
         const seq_event_t *const event = &block->events[g_audio_cursor];
         if (event_is_audible(block, event) == 0U) { ++g_audio_cursor; continue; }
         const uint64_t due = block->start_sample + event->offset;
+        if ((g_force_stopped != 0U) && (due >= g_force_stop_sample)) {
+            ++g_audio_cursor; continue;
+        }
         if (due <= sample) return 0U;
         const uint64_t distance = due - sample;
         return (distance < maximum) ? (uint16_t)distance : maximum;
@@ -135,7 +138,11 @@ uint8_t seq_engine_audio_pop_due(uint64_t sample, seq_event_t *out_event)
     while (g_audio_cursor < block->event_count) {
         const seq_event_t event = block->events[g_audio_cursor];
         if (event_is_audible(block, &event) == 0U) { ++g_audio_cursor; continue; }
-        if (block->start_sample + event.offset > sample) return 0U;
+        const uint64_t due = block->start_sample + event.offset;
+        if ((g_force_stopped != 0U) && (due >= g_force_stop_sample)) {
+            ++g_audio_cursor; continue;
+        }
+        if (due > sample) return 0U;
         ++g_audio_cursor; *out_event = event; return 1U;
     }
     return 0U;

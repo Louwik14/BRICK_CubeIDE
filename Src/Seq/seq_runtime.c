@@ -268,10 +268,7 @@ static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_pan
         const uint8_t send_stop = (uint8_t)(
             seq_clock_bridge_is_external_source(
                 seq_runtime_get_clock_source_internal()) == 0U);
-        if (control_music_output_has_alive() != 0U)
-            (void)control_music_output_panic_all(send_stop);
-        else if (send_stop != 0U)
-            midi_stop(MIDI_DEST_BOTH);
+        (void)control_music_output_panic_all(send_stop);
         seq_ingress_panic();
     }
 }
