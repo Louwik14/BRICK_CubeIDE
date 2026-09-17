@@ -61,7 +61,6 @@ uint8_t sample_capture_model_open_crop(void)
     }
 
     g_sample_capture.state.view = SAMPLE_CAPTURE_VIEW_REC_EDIT;
-    g_rec_latency_probe.t_crop_enter = rec_latency_probe_now();
     g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_REC_EDIT;
     g_sample_capture.rec_edit_enter_deferred_services = 2U;
     g_sample_capture.rec_edit_first_render_pending = 1U;

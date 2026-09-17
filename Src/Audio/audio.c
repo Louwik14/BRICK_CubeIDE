@@ -93,9 +93,6 @@ static volatile audio_init_state_t g_audio_init_state = AUDIO_INIT_NOT_STARTED;
 static uint64_t g_audio_render_cursor;
 static uint64_t g_audio_dma_origin_sample;
 static uint64_t g_audio_last_block_start;
-static uint64_t g_audio_lost_frames;
-static uint32_t g_audio_xrun_count;
-static uint32_t g_audio_stale_callback_count;
 static uint8_t g_audio_phase_valid;
 static uint8_t g_audio_last_block_valid;
 
@@ -117,7 +114,6 @@ static uint8_t audio_resolve_block_start(uint8_t half_index,
      * is physically safe at this instant may be rendered. */
     if ((uint8_t)(active_half ^ 1U) != half_index)
     {
-        ++g_audio_stale_callback_count;
         return 0U;
     }
 
@@ -126,7 +122,6 @@ static uint8_t audio_resolve_block_start(uint8_t half_index,
         + (uint64_t)half_index * AUDIO_FRAMES_PER_HALF;
     if (media_now < first_block)
     {
-        ++g_audio_stale_callback_count;
         return 0U;
     }
     const uint64_t block_start = first_block
@@ -136,7 +131,6 @@ static uint8_t audio_resolve_block_start(uint8_t half_index,
     {
         /* HAL can expose both sticky DMA flags after a long halt.  Never
          * render an old half after a newer canonical boundary was recovered. */
-        ++g_audio_stale_callback_count;
         return 0U;
     }
 
@@ -146,8 +140,6 @@ static uint8_t audio_resolve_block_start(uint8_t half_index,
         : g_audio_dma_origin_sample;
     if (block_start > expected)
     {
-        ++g_audio_xrun_count;
-        g_audio_lost_frames += block_start - expected;
         *out_recovering = 1U;
     }
 
@@ -315,16 +307,12 @@ void audio_boot_init_binding_io(void)
     g_audio_render_cursor = 0U;
     g_audio_dma_origin_sample = 0U;
     g_audio_last_block_start = 0U;
-    g_audio_lost_frames = 0U;
-    g_audio_xrun_count = 0U;
-    g_audio_stale_callback_count = 0U;
     g_audio_phase_valid = 0U;
     g_audio_last_block_valid = 0U;
     audio_boot_diag_producer_publish_state(AUDIO_INIT_NOT_STARTED, BOARD_AUDIO_BOOT_OK);
 
     memset(rx_buffer, 0, sizeof(rx_buffer));
     memset(tx_buffer, 0, sizeof(tx_buffer));
-    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 
     /* Le TX peut être consommé par DMA avant le 1er callback: pousser les zéros en RAM. */
 #if AUDIO_DMA_BUFFER_IS_CACHEABLE
@@ -390,19 +378,6 @@ void audio_stop(void)
     g_audio_last_block_valid = 0U;
     g_audio_init_state = AUDIO_INIT_NOT_STARTED;
     audio_boot_diag_producer_publish_state(AUDIO_INIT_NOT_STARTED, BOARD_AUDIO_BOOT_OK);
-}
-
-void audio_timing_diag_snapshot(audio_timing_diag_t *out_diag)
-{
-    if (out_diag == NULL) return;
-    const uint32_t primask = __get_PRIMASK();
-    __disable_irq();
-    *out_diag = (audio_timing_diag_t){
-        .xrun_count = g_audio_xrun_count,
-        .stale_callback_count = g_audio_stale_callback_count,
-        .lost_frames = g_audio_lost_frames
-    };
-    __set_PRIMASK(primask);
 }
 
 /* ============================================================

@@ -3,7 +3,6 @@
 #include <limits.h>
 #include <stddef.h>
 #include <string.h>
-#include "Storage/rec_latency_probe.h"
 
 #define GENERIC_RECORDER_SECTOR_BYTES (512U)
 
@@ -742,18 +741,6 @@ static sd_scheduler_start_result_t generic_recorder_filesystem_start(
         || (candidate->media_epoch != recorder->media_epoch))
     {
         return SD_SCHEDULER_START_ERROR;
-    }
-    if(live_job == 0U) {
-        const uint32_t margin = (recorder->reserved_capacity > recorder->accepted_tail)
-            ? (uint32_t)(recorder->reserved_capacity - recorder->accepted_tail) : 0U;
-        g_rec_latency_probe.extend_last_reserved_before = (uint32_t)recorder->reserved_capacity;
-        g_rec_latency_probe.extend_last_committed_at_start = (uint32_t)recorder->committed_tail;
-        g_rec_latency_probe.extend_last_free_margin = margin;
-        if((g_rec_latency_probe.extend_min_free_margin == 0U)
-                || (margin < g_rec_latency_probe.extend_min_free_margin))
-            g_rec_latency_probe.extend_min_free_margin = margin;
-        if(margin > g_rec_latency_probe.extend_max_free_margin)
-            g_rec_latency_probe.extend_max_free_margin = margin;
     }
     const recorder_file_reservation_result_t result =
         recorder->config.reservation.extend(

@@ -32,7 +32,6 @@
 #include "ui_page_manager.h"
 #include "ui_roll_popup.h"
 #include "ui_template_page.h"
-#include "UI/ui_rec_edit_render_diag.h"
 
 #define UI_RENDER_PERIOD_MS 16U
 
@@ -40,8 +39,6 @@ static volatile uint8_t g_ui_rendering = 0U;
 static const ui_page_t *g_ui_render_page;
 static uint32_t g_ui_render_generation;
 static uint32_t g_ui_render_job_generation;
-volatile ui_rec_edit_render_diag_t g_ui_rec_edit_render_diag;
-volatile uint8_t g_ui_rec_edit_render_diag_reset_requested;
 
 static uint8_t ui_renderer_oled_page_pending(const ui_page_t *page)
 {
@@ -143,15 +140,7 @@ void ui_renderer_oled_draw(void)
     }
     else if ((page != 0) && (page->render != 0))
     {
-        const uint32_t render_started = DWT->CYCCNT;
-        const uint32_t page_id = ui_page_get_id();
         page->render();
-        const uint32_t render_cycles = DWT->CYCCNT - render_started;
-        if(render_cycles > g_ui_rec_edit_render_diag.page_render_max_cycles)
-        {
-            g_ui_rec_edit_render_diag.page_render_max_cycles = render_cycles;
-            g_ui_rec_edit_render_diag.page_render_max_page_id = page_id;
-        }
         if (ui_renderer_oled_page_pending(page) != 0U)
         {
             return;
@@ -169,12 +158,6 @@ void ui_renderer_oled_draw(void)
 void ui_renderer_oled_service_poll(void)
 {
     static uint32_t last_render = 0U;
-    if(g_ui_rec_edit_render_diag_reset_requested != 0U)
-    {
-        g_ui_rec_edit_render_diag_reset_requested = 0U;
-        memset((void *)&g_ui_rec_edit_render_diag, 0,
-            sizeof(g_ui_rec_edit_render_diag));
-    }
     const uint32_t now = HAL_GetTick();
 
     if (g_ui_rendering != 0U)

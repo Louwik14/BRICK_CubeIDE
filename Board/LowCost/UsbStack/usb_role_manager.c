@@ -5,7 +5,6 @@
 #include "main.h"
 #include "usb_device.h"
 #include "usb_host.h"
-#include "Platform/idle_latency_diag.h"
 
 #define USB_HOST_POWER_SETTLE_MS 200U
 #define USB_FUSB_RETRY_MS        100U
@@ -92,7 +91,6 @@ static void stop_active_role(void)
     }
     else if (g_usb_role.active == USB_ROLE_MANAGER_DEVICE)
     {
-        g_idle_latency_diag.usb_device_stop_count++;
         (void)usb_device_stop();
     }
     if (g_usb_role.host_power_waiting != 0U)
@@ -130,7 +128,6 @@ static uint8_t apply_role(usb_role_manager_role_t requested)
         if (usb_device_start() != 0U)
         {
             g_usb_role.active = USB_ROLE_MANAGER_DEVICE;
-            g_idle_latency_diag.usb_device_start_count++;
             return 1U;
         }
         return 0U;
@@ -194,14 +191,11 @@ void usb_role_manager_process(void)
         {
             return;
         }
-        g_idle_latency_diag.usb_retry_count++;
         if (fusb302_init(&hi2c1) != FUSB302_STATUS_OK)
         {
-            g_idle_latency_diag.usb_refresh_error_count++;
             schedule_fusb_retry(USB_FUSB_RETRY_INIT);
             return;
         }
-        g_idle_latency_diag.usb_refresh_ok_count++;
         g_usb_role.fusb_ready = 1U;
         g_usb_role.fusb_retry_waiting = 0U;
         g_usb_role.fusb_retry_kind = USB_FUSB_RETRY_NONE;
@@ -239,9 +233,7 @@ void usb_role_manager_process(void)
     const uint8_t fusb_int_low =
         (HAL_GPIO_ReadPin(FUSB302_INT_N_GPIO_Port,
                           FUSB302_INT_N_Pin) == GPIO_PIN_RESET) ? 1U : 0U;
-    if (fusb_int_low != 0U)
-        g_idle_latency_diag.usb_int_low_count++;
-    else
+    if (fusb_int_low == 0U)
         g_usb_role.fusb_int_low_serviced = 0U;
 
     /* EXTI is the normal path.  A level that remains low is retried at 100 ms;
@@ -269,12 +261,6 @@ void usb_role_manager_process(void)
     if (operation != USB_FUSB_RETRY_NONE)
     {
         uint32_t events = FUSB302_EVENT_NONE;
-        if (operation == USB_FUSB_RETRY_INTERRUPT)
-            g_idle_latency_diag.usb_attention_count++;
-        else if (operation == USB_FUSB_RETRY_WATCHDOG)
-            g_idle_latency_diag.usb_periodic_poll_count++;
-        if (fusb_retry_due != 0U)
-            g_idle_latency_diag.usb_retry_count++;
         fusb302_status_t status;
         if (operation == USB_FUSB_RETRY_INTERRUPT)
             status = fusb302_handle_interrupt(&events);
@@ -284,18 +270,15 @@ void usb_role_manager_process(void)
             status = fusb302_restart_drp();
         if (status != FUSB302_STATUS_OK)
         {
-            g_idle_latency_diag.usb_refresh_error_count++;
             schedule_fusb_retry(operation);
             return;
         }
-        g_idle_latency_diag.usb_refresh_ok_count++;
         g_usb_role.fusb_retry_waiting = 0U;
         g_usb_role.fusb_retry_kind = USB_FUSB_RETRY_NONE;
         g_usb_role.fusb_watchdog_deadline =
             HAL_GetTick() + USB_FUSB_WATCHDOG_MS;
         if (operation == USB_FUSB_RETRY_RESTART)
         {
-            g_idle_latency_diag.usb_drp_restart_count++;
             g_usb_role.fusb_int_low_serviced = 0U;
             return;
         }
@@ -308,21 +291,17 @@ void usb_role_manager_process(void)
         if ((events & (FUSB302_EVENT_DETACH | FUSB302_EVENT_RESET)) != 0U)
         {
             if ((events & FUSB302_EVENT_DETACH) != 0U)
-                g_idle_latency_diag.usb_detach_count++;
             if ((events & FUSB302_EVENT_RESET) != 0U)
-                g_idle_latency_diag.usb_watchdog_recovery_count++;
             stop_active_role();
             g_usb_role.requested = USB_ROLE_MANAGER_NONE;
             g_usb_role.role_retry_waiting = 0U;
             status = fusb302_restart_drp();
             if (status != FUSB302_STATUS_OK)
             {
-                g_idle_latency_diag.usb_refresh_error_count++;
                 schedule_fusb_retry(USB_FUSB_RETRY_RESTART);
             }
             else
             {
-                g_idle_latency_diag.usb_drp_restart_count++;
                 g_usb_role.fusb_retry_waiting = 0U;
                 g_usb_role.fusb_retry_kind = USB_FUSB_RETRY_NONE;
                 g_usb_role.fusb_int_low_serviced = 0U;
@@ -332,7 +311,6 @@ void usb_role_manager_process(void)
             return;
         }
         if ((events & FUSB302_EVENT_ATTACH) != 0U)
-            g_idle_latency_diag.usb_attach_count++;
         if ((events & FUSB302_EVENT_ERROR) != 0U)
             schedule_fusb_retry(USB_FUSB_RETRY_WATCHDOG);
     }

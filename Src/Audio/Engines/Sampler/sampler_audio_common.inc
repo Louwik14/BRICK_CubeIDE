@@ -813,7 +813,7 @@ static void brick6_sampler_runtime_multi_direct_stop(
             : (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_UNDERRUN;
     if (stop_reason == (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_UNDERRUN)
     {
-        BRICK6_NOTE_STREAMER_UNDERRUN(g_brick6_sampler_runtime_diag.multi_page_underrun);
+        g_brick6_sampler_runtime_diag.multi_page_underrun++;
     }
     brick6_sampler_runtime_multi_diag_note_stop(voice, stop_reason);
     brick6_sampler_runtime_multi_mark_voice_physical_release(voice);
@@ -930,7 +930,7 @@ static void brick6_sampler_render_multi_mono(brick6_sampler_voice_t *voice,
         sample_audio_segment_t segment;
         if (sample_voice_reader_begin_segment(&voice->reader, frames - produced, &segment) == 0U)
         {
-            BRICK6_NOTE_STREAMER_UNDERRUN(g_brick6_sampler_runtime_diag.multi_page_underrun);
+            g_brick6_sampler_runtime_diag.multi_page_underrun++;
             brick6_sampler_runtime_multi_diag_note_stop(
                 voice,
                 (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_UNDERRUN);
@@ -950,7 +950,7 @@ static void brick6_sampler_render_multi_mono(brick6_sampler_voice_t *voice,
                     : (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_UNDERRUN;
             if (stop_reason == (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_UNDERRUN)
             {
-                BRICK6_NOTE_STREAMER_UNDERRUN(g_brick6_sampler_runtime_diag.multi_page_underrun);
+                g_brick6_sampler_runtime_diag.multi_page_underrun++;
             }
             brick6_sampler_runtime_multi_diag_note_stop(voice, stop_reason);
             brick6_sampler_runtime_multi_mark_voice_physical_release(voice);
@@ -965,7 +965,7 @@ static void brick6_sampler_render_multi_mono(brick6_sampler_voice_t *voice,
         {
             if (segment.status == SAMPLE_AUDIO_SEGMENT_UNDERRUN)
             {
-                BRICK6_NOTE_STREAMER_UNDERRUN(g_brick6_sampler_runtime_diag.multi_page_underrun);
+                g_brick6_sampler_runtime_diag.multi_page_underrun++;
             }
             brick6_sampler_runtime_multi_diag_note_stop(
                 voice,
@@ -1015,7 +1015,7 @@ static void brick6_sampler_render_multi_mono(brick6_sampler_voice_t *voice,
                     : (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_UNDERRUN;
             if (stop_reason == (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_UNDERRUN)
             {
-                BRICK6_NOTE_STREAMER_UNDERRUN(g_brick6_sampler_runtime_diag.multi_page_underrun);
+                g_brick6_sampler_runtime_diag.multi_page_underrun++;
             }
             brick6_sampler_runtime_multi_diag_note_stop(voice, stop_reason);
             brick6_sampler_runtime_multi_mark_voice_physical_release(voice);

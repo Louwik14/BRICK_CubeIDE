@@ -12,17 +12,12 @@
 #include "Sampler/sample_stream_manager.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/undo_v2.h"
-#include "Storage/rec_active_step_diag.h"
 #include "Storage/wav_parser.h"
 #include "ff.h"
 
 static FRESULT rec_source_unlink_measured(const char *path)
 {
-    const uint32_t started = DWT->CYCCNT;
     const FRESULT result = f_unlink(path);
-    if (g_rec_active_step_diag_scope_active != 0U)
-        rec_active_step_diag_max(&g_rec_active_step_diag.unlink_max_cycles,
-            started);
     return result;
 }
 

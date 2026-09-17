@@ -11,7 +11,6 @@
 #include "Sampler/sample_stream_manager.h"
 #include "Sampler/sample_classic_audio_projection_control.h"
 #include "Storage/waveform_cache.h"
-#include "Storage/rec_latency_probe.h"
 #include "ff.h"
 
 #define SAMPLE_CACHE_MAX_VOICES (16U)
@@ -539,9 +538,6 @@ void sample_cache_service(uint32_t byte_budget)
     if ((g_sample_cache_stream_gate_held == 0U)
         && (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_SAMPLE_STREAM) == 0U))
     {
-        if(g_rec_latency_probe.t_preload_first_request != 0U
-                && g_rec_latency_probe.t_preload_all_ready == 0U)
-            g_rec_latency_probe.preload_admission_denied_count++;
         return;
     }
     g_sample_cache_stream_gate_held = 1U;

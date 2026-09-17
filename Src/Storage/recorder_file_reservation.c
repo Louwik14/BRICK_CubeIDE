@@ -5,7 +5,6 @@
 #include "SD/bsp_driver_sd.h"
 #include "SD/sd_block_device.h"
 #include "Storage/sd_access_gate.h"
-#include "Storage/rec_latency_probe.h"
 #include "main.h"
 #include "stm32h7xx_hal.h"
 
@@ -14,7 +13,10 @@
 #define RECORDER_FILE_PREPARE_RAM_STEP_LIMIT 64U
 
 static volatile uint8_t g_recorder_file_reservation_operation_active;
-static uint32_t g_recorder_extend_meta_active_phase;
+static inline uint32_t recorder_file_reservation_now(void)
+{
+    return TIM5->CNT;
+}
 static uint8_t recorder_file_copy_path(char *dst, const char *src)
 {
     if((dst == 0) || (src == 0) || (src[0] == '\0'))
@@ -276,12 +278,6 @@ recorder_file_reservation_result_t recorder_file_reservation_extend_begin(
     session->job_result = RECORDER_FILE_RESERVATION_SD_BUSY;
     session->job_phase = RECORDER_FILE_JOB_EXTEND;
     session->job_owner = owner;
-    g_rec_latency_probe.extend_count++;
-    g_rec_latency_probe.extend_last_start_t = rec_latency_probe_now();
-    g_rec_latency_probe.extend_requested_bytes = (uint32_t)additional_bytes;
-    g_rec_latency_probe.extend_total_requested_bytes += (uint32_t)additional_bytes;
-    g_rec_latency_probe.extend_granted_bytes = 0U;
-    g_rec_latency_probe.filesystem_last_job_type = RECORDER_FILE_JOB_EXTEND;
     (void)before_reserved;
     sd_access_gate_set_recorder_fs_logical_active(1U);
     return RECORDER_FILE_RESERVATION_OK;
@@ -503,7 +499,6 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
     recorder_file_reservation_t *session,
     recorder_file_job_owner_t owner)
 {
-    g_rec_latency_probe.filesystem_job_step_count++;
     if((recorder_file_job_owner_matches_phase(session, owner) == 0U)
             || (session->job_phase == RECORDER_FILE_JOB_NONE))
     {
@@ -522,25 +517,21 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
     }
     if(session->job_io_active != 0U)
     {
-        g_rec_latency_probe.filesystem_job_not_now_count++;
         return RECORDER_FILE_RESERVATION_IO_STARTED;
     }
     if(recorder_file_begin_storage_operation() == 0U)
     {
-        g_rec_latency_probe.filesystem_job_not_now_count++;
         return RECORDER_FILE_RESERVATION_SD_BUSY;
     }
 
     const recorder_file_job_phase_t active_phase = session->job_phase;
-    g_rec_latency_probe.filesystem_last_job_type = (uint32_t)active_phase;
-    g_rec_latency_probe.filesystem_last_phase = (uint32_t)active_phase;
     const FF_META_REQUEST *request = 0;
     FF_META_STEP_RESULT step;
     const uint8_t collapse_ram_yields =
         ((owner == RECORDER_FILE_JOB_OWNER_PREPARATION)
             && ((active_phase == RECORDER_FILE_JOB_PREPARE)
                 || (active_phase == RECORDER_FILE_JOB_EXTEND))) ? 1U : 0U;
-    const uint32_t ram_started = rec_latency_probe_now();
+    const uint32_t ram_started = recorder_file_reservation_now();
     uint32_t ram_steps = 0U;
     /* PREPARE continuations deliberately expose small state-machine steps.
      * Consume adjacent RAM-only steps under a short wall-time and transition
@@ -555,7 +546,7 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
         if((step != FF_META_STEP_YIELD) || (collapse_ram_yields == 0U)
                 || (fs == 0) || (fs->winsect != winsect_before)
                 || (ram_steps >= RECORDER_FILE_PREPARE_RAM_STEP_LIMIT)
-                || ((rec_latency_probe_now() - ram_started)
+                || ((recorder_file_reservation_now() - ram_started)
                     >= RECORDER_FILE_PREPARE_RAM_BUDGET_US))
         {
             break;
@@ -581,7 +572,6 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
         if((submit == SD_BLOCK_DEVICE_BUSY) || (submit == SD_BLOCK_DEVICE_QUEUE_FULL))
         {
             recorder_file_end_storage_operation();
-            g_rec_latency_probe.filesystem_job_not_now_count++;
             return RECORDER_FILE_RESERVATION_SD_BUSY;
         }
         if(submit != SD_BLOCK_DEVICE_OK)
@@ -592,20 +582,11 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
             session->job_phase = RECORDER_FILE_JOB_TERMINAL;
             return session->job_result;
         }
-        if(active_phase == RECORDER_FILE_JOB_EXTEND)
-        {
-            g_rec_latency_probe.extend_meta_io_count++;
-            g_rec_latency_probe.extend_meta_last_start_t = rec_latency_probe_now();
-            g_recorder_extend_meta_active_phase =
-                ((uint32_t)session->job_cont.reserve.phase << 16)
-                | (uint32_t)session->job_cont.reserve.create.phase;
-        }
         session->job_io_lba = request->sector;
         session->job_io_sequence = request->sequence;
         session->job_io_operation = (uint8_t)request->operation;
         session->job_io_buffer = request->buffer;
         session->job_io_active = 1U;
-        g_rec_latency_probe.filesystem_job_io_started_count++;
         const FRESULT started = (active_phase == RECORDER_FILE_JOB_PREPARE)
             ? f_brick_rec_prepare_io_started(&session->job_cont.prepare,
                 request->sequence)
@@ -631,7 +612,6 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
 
     if(step == FF_META_STEP_ERROR)
     {
-        g_rec_latency_probe.filesystem_job_error_count++;
         const FRESULT result = (active_phase == RECORDER_FILE_JOB_PREPARE)
             ? session->job_cont.prepare.result
             : (active_phase == RECORDER_FILE_JOB_EXTEND)
@@ -667,7 +647,6 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
         }
         else if(active_phase == RECORDER_FILE_JOB_EXTEND)
         {
-            const uint32_t mapping_start = rec_latency_probe_now();
             uint16_t added = (uint16_t)session->job_added_extent_count;
             const uint16_t old_count = session->job_old_extent_count;
             if((session->job_added_extent_count > UINT16_MAX)
@@ -680,29 +659,6 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
                 return session->job_result;
             }
             session->extent_count = (uint16_t)(old_count + added);
-            if(session->job_owner == RECORDER_FILE_JOB_OWNER_PREPARATION)
-            {
-                const uint32_t mapping_ticks = rec_latency_probe_now() - mapping_start;
-                g_rec_latency_probe.workspace_mapping_total_ticks += mapping_ticks;
-                if(mapping_ticks > g_rec_latency_probe.workspace_mapping_max_ticks)
-                    g_rec_latency_probe.workspace_mapping_max_ticks = mapping_ticks;
-            }
-            g_rec_latency_probe.extend_last_done_t = rec_latency_probe_now();
-            {
-                const uint32_t d = g_rec_latency_probe.extend_last_done_t
-                    - g_rec_latency_probe.extend_last_start_t;
-                g_rec_latency_probe.extend_total_time += d;
-                if(d > g_rec_latency_probe.extend_max_duration)
-                    g_rec_latency_probe.extend_max_duration = d;
-                if((g_rec_latency_probe.extend_min_duration == 0U)
-                        || (d < g_rec_latency_probe.extend_min_duration))
-                    g_rec_latency_probe.extend_min_duration = d;
-            }
-            g_rec_latency_probe.extend_granted_bytes =
-                (uint32_t)(session->fs_state.reserved_bytes
-                    - (session->job_target_file_bytes
-                        - g_rec_latency_probe.extend_requested_bytes));
-            g_rec_latency_probe.extend_total_granted_bytes += g_rec_latency_probe.extend_granted_bytes;
         }
         else if(active_phase == RECORDER_FILE_JOB_COMMIT)
         {
@@ -730,12 +686,9 @@ recorder_file_reservation_result_t recorder_file_reservation_job_step(
         recorder_file_update_public_sizes(session);
         recorder_file_publish(session);
         session->job_result = RECORDER_FILE_RESERVATION_OK;
-        g_rec_latency_probe.filesystem_last_result = RECORDER_FILE_RESERVATION_OK;
         session->job_phase = RECORDER_FILE_JOB_TERMINAL;
         return RECORDER_FILE_RESERVATION_OK;
     }
-    g_rec_latency_probe.filesystem_job_progress_count++;
-    g_rec_latency_probe.filesystem_last_result = RECORDER_FILE_RESERVATION_PROGRESS;
     return RECORDER_FILE_RESERVATION_PROGRESS;
 }
 
@@ -757,18 +710,6 @@ recorder_file_reservation_result_t recorder_file_reservation_job_poll(
         return (sd_block_device_async_hardware_state() == SD_BLOCK_DEVICE_HW_ABORTING)
             ? RECORDER_FILE_RESERVATION_RECOVERY_ABORT
             : RECORDER_FILE_RESERVATION_IO_STARTED;
-    }
-    if(session->job_phase == RECORDER_FILE_JOB_EXTEND)
-    {
-        const uint32_t done = rec_latency_probe_now();
-        const uint32_t elapsed = done - g_rec_latency_probe.extend_meta_last_start_t;
-        g_rec_latency_probe.extend_meta_last_done_t = done;
-        g_rec_latency_probe.extend_meta_io_total_ticks += elapsed;
-        if(elapsed > g_rec_latency_probe.extend_meta_io_max_ticks)
-        {
-            g_rec_latency_probe.extend_meta_io_max_ticks = elapsed;
-            g_rec_latency_probe.extend_meta_max_phase = g_recorder_extend_meta_active_phase;
-        }
     }
     session->job_io_active = 0U;
     const sd_block_device_operation_t expected_operation =

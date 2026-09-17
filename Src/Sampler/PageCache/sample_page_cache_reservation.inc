@@ -222,9 +222,7 @@ uint8_t sample_page_cache_finish_loading(const sample_page_load_token_t *token,
         became_ready = (uint8_t)(final_state == SAMPLE_PAGE_READY);
     }
     sample_page_cache_unlock(primask);
-    if (became_ready != 0U)
-        waveform_diag_page_ready(token->key,
-            token->registration_epoch, token->page_index);
+    (void)became_ready;
     return completed;
 }
 

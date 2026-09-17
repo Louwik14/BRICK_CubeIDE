@@ -44,8 +44,6 @@
 #include "Seq/metronome_control.h"
 #include "main.h"
 #include "Platform/brick_fatal.h"
-#include "Platform/idle_latency_diag.h"
-#include "Storage/rec_active_step_diag.h"
 #include "SD/sd_scheduler_runtime.h"
 
 #define SEQ_RUNTIME_DEFAULT_TEMPO_BPM_MILLI 120000U
@@ -84,53 +82,6 @@ static volatile uint8_t g_seq_runtime_live_rec_head;
 static volatile uint8_t g_seq_runtime_live_rec_tail;
 static volatile uint8_t g_seq_runtime_live_rec_count;
 static uint8_t g_seq_runtime_trigger_start_bypass;
-/* GDB snapshot: sample lateness is captured before the existing cursor rebase.
- * It measures a missed publication window, not a proven lost note. */
-typedef struct
-{
-    volatile uint32_t passes;
-    volatile uint32_t max_service_gap_cycles;
-    volatile uint32_t max_publication_late_samples;
-    volatile uint32_t late_over_64;
-    volatile uint32_t late_over_256;
-    volatile uint32_t late_over_1024;
-    volatile uint32_t cursor_rebases;
-    volatile uint32_t backpressure;
-    volatile uint32_t previous_service;
-    volatile uint32_t previous_service_cycles;
-    volatile uint32_t storage_worst_service;
-    volatile uint32_t storage_worst_cycles;
-    volatile uint32_t last_late_samples;
-    volatile uint32_t last_late_cycle;
-} seq_latency_diag_t;
-SEQ_STATE_D2 volatile seq_latency_diag_t g_seq_latency_diag;
-static uint32_t g_seq_last_service_cycle;
-typedef struct
-{
-    volatile uint32_t cycle;
-    volatile uint32_t lateness_samples;
-    volatile uint32_t previous_service;
-    volatile uint32_t previous_service_cycles;
-    volatile uint32_t gap_worst_service;
-    volatile uint32_t gap_worst_cycles;
-    volatile uint32_t gap_worst_storage_job;
-    volatile uint32_t gap_worst_storage_cycles;
-    volatile uint32_t storage_job;
-    volatile uint32_t storage_category;
-    volatile uint32_t storage_cycles;
-    volatile uint32_t sd_owner;
-    volatile uint8_t sd_background_active;
-    volatile uint8_t rec_active;
-    volatile uint8_t waveform_active;
-    volatile uint8_t waveform_ideal_level;
-    volatile uint8_t waveform_display_level;
-} seq_late_trace_entry_t;
-#define SEQ_LATE_TRACE_CAPACITY 32U
-SEQ_STATE_D2 volatile seq_late_trace_entry_t
-    g_seq_late_trace_ring[SEQ_LATE_TRACE_CAPACITY];
-volatile uint32_t g_seq_late_trace_head;
-volatile uint32_t g_seq_late_trace_threshold_samples = 64U;
-volatile uint8_t g_latency_diag_reset_requested;
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic);
 static uint32_t seq_runtime_get_now_tick_for_source(seq_clock_src_t source);
 static uint32_t seq_runtime_get_now_tick(void);
@@ -480,42 +431,7 @@ void seq_runtime_time_adapter_process(void)
 {
     /* CONTROL advances autonomously. TIM12 owns the internal musical tick;
      * TIM5 owns the common absolute sample projection. */
-    if (g_rec_active_step_diag_reset_requested != 0U)
-    {
-        g_rec_active_step_diag_reset_requested = 0U;
-        g_latency_diag_reset_requested = 0U;
-        brick6_latency_diag_reset();
-        volatile uint32_t *const words =
-            (volatile uint32_t *)&g_rec_active_step_diag;
-        for (uint32_t i = 0U;
-             i < sizeof(g_rec_active_step_diag) / sizeof(uint32_t); ++i)
-            words[i] = 0U;
-    }
-    else if (g_latency_diag_reset_requested != 0U)
-    {
-        g_latency_diag_reset_requested = 0U;
-        brick6_latency_diag_reset();
-    }
     /* Musical execution belongs exclusively to the periodic SEQ IRQ. */
-}
-
-void brick6_latency_diag_reset(void)
-{
-    const uint32_t core_hz = g_idle_latency_diag.core_clock_hz;
-    const uint32_t threshold = g_idle_latency_diag.threshold_cycles;
-    memset((void *)&g_seq_latency_diag, 0, sizeof(g_seq_latency_diag));
-    memset((void *)g_seq_late_trace_ring, 0, sizeof(g_seq_late_trace_ring));
-    g_seq_late_trace_head = 0U;
-    g_seq_last_service_cycle = 0U;
-    memset((void *)&g_waveform_latency_diag, 0,
-        sizeof(g_waveform_latency_diag));
-    memset((void *)g_waveform_page_diag_ring, 0,
-        sizeof(g_waveform_page_diag_ring));
-    g_waveform_page_diag_head = 0U;
-    memset((void *)&g_idle_latency_diag, 0, sizeof(g_idle_latency_diag));
-    g_idle_latency_diag.core_clock_hz = core_hz;
-    g_idle_latency_diag.threshold_cycles = threshold;
-    g_idle_latency_diag.active_storage_job = IDLE_LATENCY_STORAGE_COUNT;
 }
 
 void seq_runtime_time_adapter_process_internal_from_irq(void)

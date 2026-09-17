@@ -47,12 +47,3 @@ void audio_boot_init_binding_io(void);
  */
 uint8_t audio_start(void);
 void audio_stop(void);
-
-typedef struct
-{
-    uint32_t xrun_count;
-    uint32_t stale_callback_count;
-    uint64_t lost_frames;
-} audio_timing_diag_t;
-
-void audio_timing_diag_snapshot(audio_timing_diag_t *out_diag);

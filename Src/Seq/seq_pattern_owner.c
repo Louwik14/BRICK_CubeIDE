@@ -122,7 +122,6 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
                 if (pattern->lock_pool_count[track]
                         >= SEQ_ENGINE_LOCK_POOL_CAPACITY)
                 {
-                    ++g_seq_diag.lock_pool_reject_count;
                     break;
                 }
                 if ((seq_model_step_param_plock_get_at(track, step, i,
@@ -149,10 +148,12 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
                         &param_registry[param],entry.value16)+0.5f)
                     :entry.value16;
                 uint16_t projected_base=base;
-                if(is_fx!=0U){uint8_t fx_slot=0U,fx_param=0U;
+                if(is_fx!=0U){
+                    uint8_t fx_slot=0U,fx_param=0U;
                     if(note_fx_state_param_map(param,&fx_slot,&fx_param)==0U){
                         pattern->track_fx_enabled[track]=0U;break;}
-                    projected_base=(uint16_t)(((uint16_t)fx_slot<<8U)|fx_param);}
+                    projected_base=(uint16_t)(((uint16_t)fx_slot<<8U)|fx_param);
+                }
                 pattern->lock_pool[track][pattern->lock_pool_count[track]++] =
                     (seq_lock_pattern_t){
                         .param_flags=(uint16_t)param

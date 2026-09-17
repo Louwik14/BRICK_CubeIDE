@@ -36,7 +36,7 @@ typedef struct
     uint16_t prep_pages_required;
     multi_sample_load_result_t last_error;
     multi_sample_instrument_state_t state;
-} multi_sample_load_diag_t;
+} multi_sample_load_status_t;
 
 void multi_sample_loader_init(void);
 multi_sample_load_result_t multi_sample_load_instrument(uint16_t logical_id,
@@ -50,7 +50,7 @@ uint8_t multi_sample_load_has_pending(void);
 uint8_t multi_sample_load_is_active(void);
 uint8_t multi_sample_cancel_load(void);
 void multi_sample_cancel_all_loads(void);
-void multi_sample_get_load_diag(multi_sample_load_diag_t *out_diag);
+void multi_sample_get_load_status(multi_sample_load_status_t *out_status);
 
 #ifdef __cplusplus
 }

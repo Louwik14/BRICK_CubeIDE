@@ -51,12 +51,6 @@ typedef enum
 
 typedef struct
 {
-    waveform_cache_status_t status;
-    uint8_t dirs_ready;
-} waveform_cache_diag_t;
-
-typedef struct
-{
     int16_t min;
     int16_t max;
 } waveform_cache_minmax_t;
@@ -78,8 +72,6 @@ uint8_t waveform_cache_request_for_wav_known_duration(const char *path,
                                                       uint32_t frame_count,
                                                       uint32_t sample_rate);
 void waveform_cache_service(uint32_t byte_budget);
-void waveform_cache_get_diag(waveform_cache_diag_t *out_diag);
-
 uint8_t waveform_cache_open_for_wav(const char *path, waveform_cache_handle_t *out_handle);
 uint8_t waveform_cache_request_tiles(const waveform_cache_handle_t *handle,
                                      waveform_cache_level_id_t level_id,

@@ -36,10 +36,7 @@
 #include "Storage/project_load_quiesce.h"
 #include <string.h>
 
-midi_tx_stats_t midi_tx_stats = {0};
-midi_rx_stats_t midi_rx_stats = {0};
 
-volatile uint32_t midi_usb_rx_drops = 0;
 
 static bool midi_initialized = false;
 static midi_dest_t midi_rx_dest = MIDI_DEST_BOTH;
@@ -64,33 +61,6 @@ static volatile uint32_t midi_clock_period_den = 1U;
 static volatile uint32_t midi_clock_rem_accum = 0U;
 static volatile uint32_t midi_clock_next_ccr = 0U;
 static volatile bool midi_clock_timer_armed = false;
-
-#ifndef MIDI_CLOCK_TX_PROBE_ENABLE
-#define MIDI_CLOCK_TX_PROBE_ENABLE 1
-#endif
-
-midi_clock_tx_probe_t midi_clock_tx_probe = {0};
-
-#if MIDI_CLOCK_TX_PROBE_ENABLE
-static volatile uint32_t midi_clock_f8_inflight_pending = 0U;
-
-static inline uint32_t midi_clock_probe_count_f8_in_usb_packets(const uint8_t *buffer, uint16_t bytes_len) {
-  if ((buffer == NULL) || (bytes_len < 4U)) {
-    return 0U;
-  }
-
-  uint32_t count = 0U;
-  const uint16_t packets = (uint16_t)(bytes_len / 4U);
-  for (uint16_t i = 0U; i < packets; ++i) {
-    const uint8_t *p = &buffer[(uint16_t)(i * 4U)];
-    if (((p[0] & 0x0FU) == 0x0FU) && (p[1] == 0xF8U)) {
-      count++;
-    }
-  }
-
-  return count;
-}
-#endif
 
 static inline uint32_t midi_clock_compute_next_delta_ticks(void) {
   uint32_t delta = midi_clock_period_ticks;
@@ -296,19 +266,6 @@ static uint16_t midi_usb_device_write_packets(const uint8_t *buffer,
     return 0U;
   }
 
-#if MIDI_CLOCK_TX_PROBE_ENABLE
-  const uint32_t f8_count = midi_clock_probe_count_f8_in_usb_packets(buffer, bytes_len);
-  if (f8_count > 0U) {
-    midi_clock_tx_probe.clock_f8_usb_send_count += f8_count;
-    midi_clock_tx_probe.clock_f8_last_send_tick_ms = HAL_GetTick();
-    midi_clock_f8_inflight_pending = f8_count;
-    midi_clock_tx_probe.clock_f8_inflight_count = midi_clock_f8_inflight_pending;
-  } else {
-    midi_clock_f8_inflight_pending = 0U;
-    midi_clock_tx_probe.clock_f8_inflight_count = 0U;
-  }
-#endif
-
   return usb_device_send_packets(buffer, bytes_len);
 }
 
@@ -506,7 +463,6 @@ static uint32_t midi_usb_try_flush_internal(bool allow_in_isr) {
       midi_usb_tx_count = (uint16_t)(midi_usb_tx_count - written_packets);
     }
     midi_exit_critical(commit_primask);
-    midi_tx_stats.tx_sent_batched++;
   }
 
   return written_packets;
@@ -645,9 +601,7 @@ static uint32_t midi_process_usb_rx(void) {
       msg.tim5_tick = packet.tim5_tick;
       msg.ingress_serial = packet.ingress_serial;
       midi_dispatch_rx_message(&msg);
-      midi_rx_stats.usb_rx_decoded++;
     } else {
-      midi_rx_stats.usb_rx_ignored++;
     }
     processed++;
   }
@@ -671,7 +625,6 @@ static uint32_t midi_process_usb_rx(void) {
  */
 static void usb_device_enqueue_packet(const uint8_t packet[4]) {
   if (!usb_tx_queue_push(packet)) {
-    midi_tx_stats.tx_mb_drops++;
   }
 }
 
@@ -692,9 +645,6 @@ static void backend_usb_device_send(const uint8_t *msg, size_t len) {
   const uint8_t st = msg[0];
   const uint8_t cable = (uint8_t)(MIDI_USB_CABLE << 4);
   const bool is_rt_clock_transport = midi_is_realtime_clock_transport_status(st);
-#if MIDI_CLOCK_TX_PROBE_ENABLE
-  const bool is_f8 = (st == 0xF8U);
-#endif
 
   /* Channel Voice */
   if ((st & 0xF0U) == 0x80U && len >= 3U) {
@@ -766,12 +716,6 @@ static void backend_usb_device_send(const uint8_t *msg, size_t len) {
 
   if (!midi_in_isr() && usb_device_ready() && (is_rt_clock_transport || (midi_usb_tx_count == 0U))) {
     if (midi_usb_device_write_packets(packet, 4U) == 1U) {
-      midi_tx_stats.tx_sent_immediate++;
-#if MIDI_CLOCK_TX_PROBE_ENABLE
-      if (is_f8) {
-        midi_clock_tx_probe.clock_f8_enqueued_count++;
-      }
-#endif
       return;
     }
   }
@@ -779,27 +723,11 @@ static void backend_usb_device_send(const uint8_t *msg, size_t len) {
   if (is_rt_clock_transport) {
     midi_usb_packet_t rt_packet = { .bytes = { packet[0], packet[1], packet[2], packet[3] } };
     if (!usb_tx_queue_push_front_realtime(&rt_packet)) {
-      midi_tx_stats.tx_mb_drops++;
-#if MIDI_CLOCK_TX_PROBE_ENABLE
-      if (is_f8) {
-        midi_clock_tx_probe.clock_f8_queue_drop_count++;
-      }
-#endif
     } else {
-#if MIDI_CLOCK_TX_PROBE_ENABLE
-      if (is_f8) {
-        midi_clock_tx_probe.clock_f8_enqueued_count++;
-      }
-#endif
     }
   } else {
     usb_device_enqueue_packet(packet);
   }
-#if MIDI_CLOCK_TX_PROBE_ENABLE
-  if (is_f8) {
-    midi_clock_tx_probe.clock_f8_send_deferred_count++;
-  }
-#endif
   if (midi_in_isr()) {
     midi_usb_request_deferred_flush_from_isr();
     return;
@@ -907,13 +835,10 @@ void midi_init(void) {
   midi_usb_rx_high_water = 0U;
   midi_usb_rx_ingress_serial = 0U;
 
-  midi_usb_rx_drops = 0U;
   midi_usb_tx_deferred_pending = false;
   midi_clock_recompute_period(MIDI_CLOCK_DEFAULT_BPM_MILLI);
   midi_clock_hw_stop();
   HAL_NVIC_SetPriority(PendSV_IRQn, 15U, 0U);
-
-  midi_stats_reset();
 }
 
 void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim) {
@@ -1158,9 +1083,6 @@ void midi_clock_on_timer_tick(void) {
   }
 
   if (midi_clock_mode == MIDI_CLOCK_MODE_MASTER && midi_clock_running) {
-#if MIDI_CLOCK_TX_PROBE_ENABLE
-    midi_clock_tx_probe.clock_f8_generated_count++;
-#endif
     midi_clock(midi_clock_dest);
     const uint32_t now = __HAL_TIM_GET_COUNTER(&htim5);
     uint32_t delta = midi_clock_compute_next_delta_ticks();
@@ -1302,7 +1224,6 @@ uint8_t midi_note_on_admit(midi_dest_t dest, uint8_t ch, uint8_t note, uint8_t v
   uint8_t admission = 0U;
   if ((dest == MIDI_DEST_UART) || (dest == MIDI_DEST_BOTH))
   {
-    ++midi_tx_stats.note_on_admission_refused;
   }
   if ((dest == MIDI_DEST_USB) || (dest == MIDI_DEST_BOTH))
   {
@@ -1312,7 +1233,6 @@ uint8_t midi_note_on_admit(midi_dest_t dest, uint8_t ch, uint8_t note, uint8_t v
     }
     else
     {
-      ++midi_tx_stats.note_on_admission_refused;
     }
   }
   return admission;
@@ -1323,7 +1243,6 @@ uint8_t midi_note_off_admit(midi_dest_t dest, uint8_t ch, uint8_t note, uint8_t 
   uint8_t admission = 0U;
   if ((dest == MIDI_DEST_UART) || (dest == MIDI_DEST_BOTH))
   {
-    ++midi_tx_stats.note_off_admission_refused;
   }
   if ((dest == MIDI_DEST_USB) || (dest == MIDI_DEST_BOTH))
   {
@@ -1333,7 +1252,6 @@ uint8_t midi_note_off_admit(midi_dest_t dest, uint8_t ch, uint8_t note, uint8_t 
     }
     else
     {
-      ++midi_tx_stats.note_off_admission_refused;
     }
   }
   return admission;
@@ -1535,7 +1453,6 @@ void midi_start(midi_dest_t dest) {
   midi_send(dest, msg, 1U);
 
   if (midi_clock_mode == MIDI_CLOCK_MODE_MASTER) {
-    midi_clock_tx_probe_reset();
     midi_clock_set_running(true);
   }
 }
@@ -1797,40 +1714,6 @@ uint16_t midi_usb_rx_high_watermark(void) {
   return midi_usb_rx_high_water;
 }
 
-/**
- * @brief Point d'entrée midi_stats_reset.
- *
- * Rôle:
- * - Exécuter le traitement associé à midi_stats_reset.
- *
- *
- * Contexte d'appel:
- * - init / main loop / tasklet selon le module.
- */
-void midi_stats_reset(void) {
-  midi_tx_stats = (midi_tx_stats_t){0};
-  midi_rx_stats = (midi_rx_stats_t){0};
-  midi_usb_rx_drops = 0U;
-  midi_clock_tx_probe_reset();
-}
-
-void midi_clock_tx_probe_reset(void) {
-  midi_clock_tx_probe = (midi_clock_tx_probe_t){0};
-#if MIDI_CLOCK_TX_PROBE_ENABLE
-  midi_clock_f8_inflight_pending = 0U;
-#endif
-}
-
-void midi_clock_tx_probe_snapshot(midi_clock_tx_probe_t *out) {
-  if (out == NULL) {
-    return;
-  }
-
-  const uint32_t primask = midi_enter_critical();
-  *out = midi_clock_tx_probe;
-  midi_exit_critical(primask);
-}
-
 /* ====================================================================== */
 /*                       CALLBACKS USB MIDI (ISR)                         */
 /* ====================================================================== */
@@ -1865,10 +1748,7 @@ void midi_usb_rx_submit_from_isr(const uint8_t *packet, size_t len) {
     }
     midi_usb_rx_ingress_serial = ingress_serial;
     if (!usb_rx_queue_push(packet, tim5_tick, ingress_serial)) {
-      midi_usb_rx_drops++;
-      midi_rx_stats.usb_rx_drops++;
     } else {
-      midi_rx_stats.usb_rx_enqueued++;
     }
     packet += 4U;
   }

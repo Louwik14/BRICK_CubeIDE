@@ -125,7 +125,6 @@ static void sample_capture_save_fail(void)
 static void sample_capture_save_finish(void)
 {
     sample_capture_save_job_t *const job = &g_sample_capture.save_job;
-    g_rec_latency_probe.t_save_done = rec_latency_probe_now();
     sample_capture_copy_path(g_sample_capture.state.final_path, job->final_path);
     (void)audio_recorder_discard_client(AUDIO_RECORDER_CLIENT_AUDIO_REC);
     sample_capture_reset_take_transients(1U);
@@ -144,10 +143,6 @@ static void sample_capture_save_service(void)
 {
     sample_capture_save_job_t *const job = &g_sample_capture.save_job;
     if(job->phase == SAMPLE_CAPTURE_SAVE_IDLE) return;
-    g_rec_latency_probe.save_service_count++;
-    g_rec_latency_probe.save_phase = (uint32_t)job->phase;
-    g_rec_latency_probe.save_quantum_bytes = SAMPLE_CAPTURE_SAVE_CHUNK_BYTES;
-    g_rec_latency_probe.save_bytes_remaining = job->bytes_left;
     if((job->phase == SAMPLE_CAPTURE_SAVE_READ_DATA) && (job->chunk_bytes == 0U))
         job->chunk_bytes = (job->bytes_left > SAMPLE_CAPTURE_SAVE_CHUNK_BYTES)
             ? SAMPLE_CAPTURE_SAVE_CHUNK_BYTES : job->bytes_left;
@@ -162,8 +157,6 @@ static void sample_capture_save_service(void)
     if(sample_capture_save_admit(data_phase != 0U
             ? SD_SCHEDULER_BACKGROUND_DATA : SD_SCHEDULER_BACKGROUND_METADATA,
             quantum) == 0U) {
-        g_rec_latency_probe.save_admission_denied_count++;
-        g_rec_latency_probe.save_not_now_count++;
         return;
     }
 
@@ -215,38 +208,24 @@ static void sample_capture_save_service(void)
                 sample_capture_save_fail();
             else
             {
-                g_rec_latency_probe.t_save_rename_done = rec_latency_probe_now();
                 sample_capture_save_finish();
             }
             break;
         case SAMPLE_CAPTURE_SAVE_OPEN_SOURCE:
-            if(g_rec_latency_probe.t_save_open_source_start == 0U)
-                g_rec_latency_probe.t_save_open_source_start = rec_latency_probe_now();
             if(sd_access_fs_mount_if_needed() == 0U
                     || f_open(&job->source, job->source_path, FA_READ) != FR_OK)
                 sample_capture_save_fail();
-            else { g_rec_latency_probe.t_save_open_source_done = rec_latency_probe_now();
-                job->source_open = 1U; job->phase = SAMPLE_CAPTURE_SAVE_OPEN_DESTINATION; }
+            else { job->source_open = 1U; job->phase = SAMPLE_CAPTURE_SAVE_OPEN_DESTINATION; }
             break;
         case SAMPLE_CAPTURE_SAVE_OPEN_DESTINATION:
-            if(g_rec_latency_probe.t_save_open_dest_start == 0U)
-                g_rec_latency_probe.t_save_open_dest_start = rec_latency_probe_now();
             (void)f_unlink(job->temporary_path);
             if(f_open(&job->destination, job->temporary_path,
                       FA_CREATE_NEW | FA_WRITE) != FR_OK)
                 sample_capture_save_fail();
-            else { g_rec_latency_probe.t_save_open_dest_done = rec_latency_probe_now();
-                job->destination_open = 1U; job->phase = SAMPLE_CAPTURE_SAVE_READ_HEADER; }
+            else { job->destination_open = 1U; job->phase = SAMPLE_CAPTURE_SAVE_READ_HEADER; }
             break;
         case SAMPLE_CAPTURE_SAVE_READ_HEADER:
-        {
-            const uint32_t io_start = rec_latency_probe_now();
             fr = f_read(&job->source, job->header, sizeof(job->header), &transferred);
-            const uint32_t io_ticks = rec_latency_probe_now() - io_start;
-            g_rec_latency_probe.save_read_io_count++;
-            g_rec_latency_probe.save_read_total_ticks += io_ticks;
-            if(io_ticks > g_rec_latency_probe.save_read_max_ticks)
-                g_rec_latency_probe.save_read_max_ticks = io_ticks;
             if((fr != FR_OK) || (transferred != sizeof(job->header))) sample_capture_save_fail();
             else
             {
@@ -268,20 +247,11 @@ static void sample_capture_save_service(void)
                 job->phase = SAMPLE_CAPTURE_SAVE_WRITE_HEADER;
             }
             break;
-        }
         case SAMPLE_CAPTURE_SAVE_WRITE_HEADER:
-        {
-            const uint32_t io_start = rec_latency_probe_now();
             fr = f_write(&job->destination, job->header, sizeof(job->header), &transferred);
-            const uint32_t io_ticks = rec_latency_probe_now() - io_start;
-            g_rec_latency_probe.save_write_io_count++;
-            g_rec_latency_probe.save_write_total_ticks += io_ticks;
-            if(io_ticks > g_rec_latency_probe.save_write_max_ticks)
-                g_rec_latency_probe.save_write_max_ticks = io_ticks;
             if((fr != FR_OK) || (transferred != sizeof(job->header))) sample_capture_save_fail();
             else job->phase = SAMPLE_CAPTURE_SAVE_SEEK_DATA;
             break;
-        }
         case SAMPLE_CAPTURE_SAVE_SEEK_DATA:
             fr = f_lseek(&job->source, SAMPLE_CAPTURE_WAV_DATA_OFFSET
                 + (job->start_frame * AUDIO_RECORDER_BYTES_PER_FRAME));
@@ -289,75 +259,38 @@ static void sample_capture_save_service(void)
             else job->phase = SAMPLE_CAPTURE_SAVE_READ_DATA;
             break;
         case SAMPLE_CAPTURE_SAVE_READ_DATA:
-        {
-            if(g_rec_latency_probe.t_save_copy_start == 0U)
-                g_rec_latency_probe.t_save_copy_start = rec_latency_probe_now();
-            const uint32_t io_start = rec_latency_probe_now();
             fr = f_read(&job->source, g_sample_capture_copy_buf,
                         job->chunk_bytes, &transferred);
-            const uint32_t io_ticks = rec_latency_probe_now() - io_start;
-            g_rec_latency_probe.save_read_io_count++;
-            g_rec_latency_probe.save_read_total_ticks += io_ticks;
-            if(io_ticks > g_rec_latency_probe.save_read_max_ticks)
-                g_rec_latency_probe.save_read_max_ticks = io_ticks;
             if((fr != FR_OK) || (transferred != job->chunk_bytes)) sample_capture_save_fail();
             else {
-                g_rec_latency_probe.save_read_bytes += transferred;
-                g_rec_latency_probe.save_last_chunk_bytes = transferred;
-                if(transferred > g_rec_latency_probe.save_max_bytes_per_service)
-                    g_rec_latency_probe.save_max_bytes_per_service = transferred;
-                rec_latency_probe_progress();
                 job->phase = SAMPLE_CAPTURE_SAVE_WRITE_DATA;
             }
             break;
-        }
         case SAMPLE_CAPTURE_SAVE_WRITE_DATA:
-        {
-            const uint32_t io_start = rec_latency_probe_now();
             fr = f_write(&job->destination, g_sample_capture_copy_buf,
                          job->chunk_bytes, &transferred);
-            const uint32_t io_ticks = rec_latency_probe_now() - io_start;
-            g_rec_latency_probe.save_write_io_count++;
-            g_rec_latency_probe.save_write_total_ticks += io_ticks;
-            if(io_ticks > g_rec_latency_probe.save_write_max_ticks)
-                g_rec_latency_probe.save_write_max_ticks = io_ticks;
             if((fr != FR_OK) || (transferred != job->chunk_bytes)) sample_capture_save_fail();
-            else { g_rec_latency_probe.save_write_bytes += transferred;
-                g_rec_latency_probe.save_last_chunk_bytes = transferred;
-                if(transferred > g_rec_latency_probe.save_max_bytes_per_service)
-                    g_rec_latency_probe.save_max_bytes_per_service = transferred;
-                rec_latency_probe_progress();
+            else {
                 job->bytes_left -= job->chunk_bytes; job->chunk_bytes = 0U; job->phase =
                 (job->bytes_left != 0U) ? SAMPLE_CAPTURE_SAVE_READ_DATA
-                                        : SAMPLE_CAPTURE_SAVE_SYNC;
-                if(job->bytes_left == 0U) g_rec_latency_probe.t_save_copy_done = rec_latency_probe_now(); }
+                                        : SAMPLE_CAPTURE_SAVE_SYNC; }
             break;
-        }
         case SAMPLE_CAPTURE_SAVE_SYNC:
-            if(g_rec_latency_probe.t_save_sync_start == 0U)
-                g_rec_latency_probe.t_save_sync_start = rec_latency_probe_now();
             if(f_sync(&job->destination) != FR_OK) sample_capture_save_fail();
-            else { g_rec_latency_probe.t_save_sync_done = rec_latency_probe_now();
-                job->phase = SAMPLE_CAPTURE_SAVE_CLOSE_DESTINATION; }
+            else job->phase = SAMPLE_CAPTURE_SAVE_CLOSE_DESTINATION;
             break;
         case SAMPLE_CAPTURE_SAVE_CLOSE_DESTINATION:
-            if(g_rec_latency_probe.t_save_close_start == 0U)
-                g_rec_latency_probe.t_save_close_start = rec_latency_probe_now();
             if(f_close(&job->destination) != FR_OK) sample_capture_save_fail();
             else { job->destination_open = 0U; job->phase = SAMPLE_CAPTURE_SAVE_CLOSE_SOURCE; }
             break;
         case SAMPLE_CAPTURE_SAVE_CLOSE_SOURCE:
             if(f_close(&job->source) != FR_OK) sample_capture_save_fail();
-            else { g_rec_latency_probe.t_save_close_done = rec_latency_probe_now();
-                job->source_open = 0U; job->phase = SAMPLE_CAPTURE_SAVE_RENAME; }
+            else { job->source_open = 0U; job->phase = SAMPLE_CAPTURE_SAVE_RENAME; }
             break;
         case SAMPLE_CAPTURE_SAVE_RENAME:
-            if(g_rec_latency_probe.t_save_rename_start == 0U)
-                g_rec_latency_probe.t_save_rename_start = rec_latency_probe_now();
             if(f_rename(job->temporary_path, job->final_path) != FR_OK)
                 sample_capture_save_fail();
-            else { g_rec_latency_probe.t_save_rename_done = rec_latency_probe_now();
-                sample_capture_save_finish(); }
+            else sample_capture_save_finish();
             break;
         case SAMPLE_CAPTURE_SAVE_ROLLBACK_DESTINATION:
             (void)f_close(&job->destination); job->destination_open = 0U;
@@ -423,10 +356,7 @@ uint8_t sample_capture_model_save_trimmed(void)
                     && (save_end == current.frame_count));
     job->bytes_left = (job->no_copy != 0U) ? 0U
         : (job->saved_frames * AUDIO_RECORDER_BYTES_PER_FRAME);
-    g_rec_latency_probe.save_bytes_total = job->bytes_left;
-    g_rec_latency_probe.save_bytes_remaining = job->bytes_left;
     job->phase = SAMPLE_CAPTURE_SAVE_SELECT_PATH;
-    g_rec_latency_probe.t_save_start = rec_latency_probe_now();
     g_sample_capture.state.save_pending = 1U;
     g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
     return 1U;

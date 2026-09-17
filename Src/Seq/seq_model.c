@@ -1157,7 +1157,6 @@ seq_plock_op_status_t seq_model_step_plock_upsert(seq_track_id_t track,
     const uint16_t new_idx = seq_model_alloc_lock_node(track);
     if (new_idx == SEQ_LOCK_NONE)
     {
-        ++g_seq_diag.lock_pool_reject_count;
         seq_model_exit_critical(primask);
         return SEQ_PLOCK_OP_POOL_EMPTY;
     }

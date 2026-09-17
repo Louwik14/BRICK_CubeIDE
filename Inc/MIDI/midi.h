@@ -58,54 +58,6 @@ typedef enum {
   MIDI_CLOCK_MODE_MASTER
 } midi_clock_mode_t;
 
-/**
- * @struct midi_tx_stats_t
- * @brief Statistiques de transmission MIDI (pour diagnostic et debug).
- */
-typedef struct {
-  volatile uint32_t tx_sent_immediate;      /**< Messages envoyés immédiatement (USB idle) */
-  volatile uint32_t tx_sent_batched;        /**< Messages envoyés par lot depuis la file */
-  volatile uint32_t rt_f8_drops;            /**< Messages Clock (0xF8) perdus faute de place */
-  volatile uint32_t rt_f8_burst_sent;       /**< Rafales de Clock envoyées (réservé) */
-  volatile uint32_t rt_other_enq_fallback;  /**< Realtime mis en file (réservé) */
-  volatile uint32_t tx_mb_drops;            /**< Messages perdus (file pleine) */
-  volatile uint32_t usb_not_ready_drops;    /**< Messages perdus (USB non prêt) */
-  volatile uint32_t note_on_admission_refused;
-  volatile uint32_t note_off_admission_refused;
-} midi_tx_stats_t;
-
-extern midi_tx_stats_t midi_tx_stats;
-
-typedef struct {
-  volatile uint32_t clock_f8_generated_count;
-  volatile uint32_t clock_f8_enqueued_count;
-  volatile uint32_t clock_f8_usb_send_count;
-  volatile uint32_t clock_f8_usb_complete_count;
-  volatile uint32_t clock_f8_queue_drop_count;
-  volatile uint32_t clock_f8_send_deferred_count;
-  volatile uint32_t clock_f8_send_rollback_count;
-  volatile uint32_t clock_f8_inflight_count;
-  volatile uint32_t clock_f8_last_send_tick_ms;
-  volatile uint32_t clock_f8_last_complete_tick_ms;
-} midi_clock_tx_probe_t;
-
-extern midi_clock_tx_probe_t midi_clock_tx_probe;
-
-/**
- * @struct midi_rx_stats_t
- * @brief Statistiques de réception MIDI (USB → moteur interne / DIN).
- */
-typedef struct {
-  volatile uint32_t usb_rx_enqueued;   /**< Paquets USB-MIDI reçus et mis en file */
-  volatile uint32_t usb_rx_drops;      /**< Paquets USB-MIDI perdus (file pleine) */
-  volatile uint32_t usb_rx_decoded;    /**< Messages MIDI décodés et injectés */
-  volatile uint32_t usb_rx_ignored;    /**< Paquets/CIN ignorés */
-} midi_rx_stats_t;
-
-extern midi_rx_stats_t midi_rx_stats;
-
-extern volatile uint32_t midi_usb_rx_drops;
-
 typedef struct {
   uint8_t data[3];
   uint8_t len;
@@ -231,13 +183,10 @@ void midi_poly_mode_on(midi_dest_t dest, uint8_t ch);
 /*                              OUTILS                                    */
 /* ====================================================================== */
 
-void midi_stats_reset(void);
 
 uint16_t midi_usb_queue_high_watermark(void);
 uint16_t midi_usb_rx_high_watermark(void);
 
-void midi_clock_tx_probe_reset(void);
-void midi_clock_tx_probe_snapshot(midi_clock_tx_probe_t *out);
 
 /**
  * @brief Callback faible injectant un message MIDI dans le moteur interne.

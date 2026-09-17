@@ -94,8 +94,6 @@ void seq_runtime_init(void);
 void seq_runtime_time_adapter_process_internal_from_irq(void);
 /* Orchestration loop: supervises transport, clock source and external/internal progress. */
 void seq_runtime_time_adapter_process(void);
-/* Halt target first; GDB-only diagnostic reset for one hardware scenario. */
-void brick6_latency_diag_reset(void);
 uint32_t seq_runtime_get_samples_per_step_q16(void);
 void seq_runtime_capture_shadow_seed(seq_runtime_shadow_seed_t *out_seed);
 

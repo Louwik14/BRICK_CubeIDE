@@ -35,7 +35,7 @@ static seq_future_t *future_resolve(seq_engine_core_t *core,seq_future_handle_t 
 {
     if((h.index>=SEQ_ENGINE_FUTURE_CAPACITY)||(core->futures[h.index].active==0U)
             ||(core->futures[h.index].generation!=h.generation)){
-        ++g_seq_diag.stale_generation_count;return 0;}
+        return 0;}
     return &core->futures[h.index];
 }
 
@@ -76,7 +76,6 @@ static void fx_terminal(const note_event_t *e)
 
 static note_event_result_t fx_run_from(const note_event_t *source,uint8_t stage)
 {
-    const uint32_t started=seq_engine_port_cycles();
     g_seq_fx_a[0]=*source;uint8_t count=1U;
     note_event_t *in=g_seq_fx_a,*out=g_seq_fx_b;
     for(uint8_t slot=stage;slot<NOTE_FX_SLOT_COUNT;++slot){
@@ -87,9 +86,6 @@ static note_event_result_t fx_run_from(const note_event_t *source,uint8_t stage)
         count=out_count;note_event_t*swap=in;in=out;out=swap;
         if(count==0U)return NOTE_EVENT_RESULT_ACCEPTED;}
     for(uint8_t i=0U;i<count;++i)fx_terminal(&in[i]);
-    const uint32_t cycles=seq_engine_port_cycles()-started;
-    if(cycles>g_seq_diag.fx_admission_max_cycles)
-        g_seq_diag.fx_admission_max_cycles=cycles;
     return NOTE_EVENT_RESULT_ACCEPTED;
 }
 
@@ -314,7 +310,6 @@ static void schedule_boundary(seq_engine_core_t *core,
     const seq_pattern_t *p, uint64_t sample, uint16_t hit_mask,
     uint64_t block_start, seq_param_block_t *params)
 {
-    const uint32_t locks_started=seq_engine_port_cycles();
     for (uint8_t track=0U; track<SEQ_LANE_CAPACITY; ++track) {
         if ((hit_mask & (uint16_t)(1U << track)) == 0U) continue;
         core->emitter_tracks |= (uint16_t)(1U << track);
@@ -372,9 +367,6 @@ static void schedule_boundary(seq_engine_core_t *core,
             (uint8_t)(core->track_swing_phase[track]^1U),serial+1U,
             next_sample,1U);
     }
-    const uint32_t locks_cycles=seq_engine_port_cycles()-locks_started;
-    if(locks_cycles>g_seq_diag.boundary_locks_max_cycles)
-        g_seq_diag.boundary_locks_max_cycles=locks_cycles;
 }
 
 static uint16_t advance(seq_engine_core_t *core,const seq_pattern_t *p)
@@ -436,7 +428,6 @@ static ITCM_TEXT void collect(seq_engine_core_t *core,uint64_t start,uint16_t fr
             transport,pattern,p->scale_index,p->root_index,
             fx_generated,0)!=NOTE_EVENT_RESULT_ACCEPTED)
         ++core->dropped_events;
-    const uint32_t future_started=seq_engine_port_cycles();
     for(uint16_t i=0U;i<SEQ_ENGINE_FUTURE_CAPACITY;++i){
         if(core->futures[i].active==0U)continue;
         const seq_future_handle_t handle={i,core->futures[i].generation};
@@ -452,9 +443,6 @@ static ITCM_TEXT void collect(seq_engine_core_t *core,uint64_t start,uint16_t fr
         out->events[out->event_count++]=(seq_event_t){
             .offset=(uint16_t)(due-start),.kind=e.kind,.track=e.owner,
             .occurrence_id=e.occurrence_id,.note=e.note,.velocity=e.velocity};}
-    const uint32_t future_cycles=seq_engine_port_cycles()-future_started;
-    if(future_cycles>g_seq_diag.scan_future_max_cycles)
-        g_seq_diag.scan_future_max_cycles=future_cycles;
 }
 
 void seq_engine_core_init(seq_engine_core_t *core)

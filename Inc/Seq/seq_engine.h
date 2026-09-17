@@ -183,39 +183,6 @@ typedef struct {
     seq_play_item_t child_play[BRICK_ENTITY_GROUP_CHILD_COUNT][SEQ_MAX_STEPS];
 } seq_pattern_t;
 
-typedef struct {
-    uint32_t magic;
-    uint16_t version;
-    uint16_t size;
-    uint32_t service_count;
-    uint32_t last_service_cycles;
-    uint32_t max_service_cycles;
-    uint32_t last_response_cycles;
-    uint32_t max_response_cycles;
-    uint32_t max_wake_lateness_samples;
-    uint32_t min_publish_slack_samples;
-    uint32_t scan_future_max_cycles;
-    uint32_t boundary_locks_max_cycles;
-    uint32_t fx_admission_max_cycles;
-    uint32_t terminal_publish_max_cycles;
-    uint32_t cutover_max_cycles;
-    uint16_t future_peak;
-    uint16_t lifetime_peak;
-    uint16_t output_peak;
-    uint16_t ingress_peak;
-    uint32_t missed_window_count;
-    uint32_t stale_generation_count;
-    uint32_t lock_pool_reject_count;
-    uint32_t max_ingress_capture_to_seq_samples;
-    uint32_t max_ingress_capture_to_publish_samples;
-    uint32_t fifo_invariant_failures;
-    uint32_t max_service_future_count;
-    uint32_t max_service_lifetime_count;
-    uint32_t max_service_output_count;
-} seq_engine_diag_t;
-
-extern volatile seq_engine_diag_t g_seq_diag;
-
 /* CPU-agnostic absolute-sample core. */
 void seq_engine_core_init(seq_engine_core_t *core);
 void seq_engine_core_process_block(seq_engine_core_t *core,
@@ -228,11 +195,11 @@ uint8_t seq_engine_core_submit_live(seq_engine_core_t *core,
                                     uint64_t window_start,
                                     uint64_t window_end,
                                     seq_event_block_t *out_block);
+/* Stable final order: sample, NOTE_OFF, PARAM, NOTE_ON, PANIC, append order. */
 void seq_engine_event_order(seq_event_block_t *block);
 
 void seq_service(uint64_t now_sample, uint64_t publish_until_sample);
 uint64_t seq_next_deadline(void);
-uint32_t seq_engine_port_cycles(void);
 uint8_t seq_engine_playhead_view(uint8_t track, uint8_t *out_running,
                                  uint8_t *out_step);
 uint8_t seq_ingress_note(uint8_t track, uint8_t note, uint8_t velocity,
@@ -257,7 +224,6 @@ uint8_t seq_engine_audio_pop_due(uint64_t sample,
 void seq_engine_audio_retire_occurrence(uint32_t occurrence_id);
 uint16_t seq_engine_audio_track_mask(void);
 void seq_engine_audio_force_stop(uint64_t effective_sample);
-void seq_engine_get_diag(seq_engine_diag_t *out_diag);
 
 _Static_assert(SEQ_LANE_CAPACITY == 16U, "SEQ requires 16 lanes");
 _Static_assert(SEQ_PLAY_MAX_CAPACITY == 8U, "SEQ requires 8 PLAY per top lane");

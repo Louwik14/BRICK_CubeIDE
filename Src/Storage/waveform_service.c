@@ -6,7 +6,6 @@
 #include "Storage/sd_access_gate.h"
 #include "Storage/waveform_cache.h"
 #include "SD/sd_scheduler_runtime.h"
-#include "Platform/idle_latency_diag.h"
 #include "Platform/memory_layout.h"
 #include "wav_parser.h"
 #include "ff.h"
@@ -53,91 +52,6 @@ static uint32_t g_waveform_lru;
 static waveform_source_t g_waveform_peak_source;
 static uint16_t g_waveform_peak;
 static uint8_t g_waveform_peak_valid;
-volatile waveform_latency_diag_t g_waveform_latency_diag;
-volatile waveform_page_diag_entry_t
-    g_waveform_page_diag_ring[WAVEFORM_PAGE_DIAG_CAPACITY];
-volatile uint32_t g_waveform_page_diag_head;
-STORAGE_STATE_SDRAM volatile uint32_t
-    g_waveform_local_diag_words[WAVEFORM_LOCAL_DIAG_WORDS];
-
-__attribute__((used, noinline)) void waveform_local_diag_reset(void)
-{
-    for(uint32_t i = 0U; i < WAVEFORM_LOCAL_DIAG_WORDS; ++i)
-        g_waveform_local_diag_words[i] = 0U;
-    g_waveform_local_diag_words[0] = 0x574C4447U; /* WLDG */
-    g_waveform_local_diag_words[10] = UINT32_MAX;
-    g_waveform_local_diag_words[18] = UINT32_MAX;
-}
-
-static void waveform_diag_page_reserved(sample_audio_key_t key,
-    uint32_t epoch, uint32_t page, uint8_t preexisting)
-{
-    for(uint32_t i = 0U; i < WAVEFORM_PAGE_DIAG_CAPACITY; ++i)
-    {
-        const volatile waveform_page_diag_entry_t *const entry =
-            &g_waveform_page_diag_ring[i];
-        if(entry->state == 1U && entry->page_index == page
-            && entry->registration_epoch == epoch
-            && sample_audio_key_equal((const sample_audio_key_t *)&entry->key,
-                &key) != 0U)
-            return;
-    }
-    volatile waveform_page_diag_entry_t *const entry =
-        &g_waveform_page_diag_ring[g_waveform_page_diag_head++
-            % WAVEFORM_PAGE_DIAG_CAPACITY];
-    if(entry->state == 1U)
-        ++g_waveform_latency_diag.page_tracking_overwrites;
-    entry->state = 0U;
-    entry->key = key;
-    entry->registration_epoch = epoch;
-    entry->page_index = page;
-    entry->reserved_cycle = DWT->CYCCNT;
-    entry->ready_cycle = 0U;
-    entry->elapsed_cycles = 0U;
-    entry->preexisting = preexisting;
-    entry->state = 1U;
-    if(preexisting != 0U)
-        ++g_waveform_latency_diag.page_requests_preexisting;
-    else
-        ++g_waveform_latency_diag.page_reservations;
-}
-
-void waveform_diag_page_ready(sample_audio_key_t key,
-    uint32_t epoch, uint32_t page)
-{
-    for(uint32_t i = 0U; i < WAVEFORM_PAGE_DIAG_CAPACITY; ++i)
-    {
-        volatile waveform_page_diag_entry_t *const entry =
-            &g_waveform_page_diag_ring[i];
-        if(entry->state != 1U || entry->page_index != page
-            || entry->registration_epoch != epoch
-            || sample_audio_key_equal((const sample_audio_key_t *)&entry->key,
-                &key) == 0U)
-            continue;
-        const uint32_t now = DWT->CYCCNT;
-        const uint32_t elapsed = now - entry->reserved_cycle;
-        entry->ready_cycle = now;
-        entry->elapsed_cycles = elapsed;
-        entry->state = 2U;
-        ++g_waveform_latency_diag.page_ready;
-        if(entry->preexisting != 0U)
-        {
-            if(elapsed > g_waveform_latency_diag.page_preexisting_to_ready_max_cycles)
-                g_waveform_latency_diag.page_preexisting_to_ready_max_cycles
-                    = elapsed;
-        }
-        else
-        {
-            g_waveform_latency_diag.page_reservation_to_ready_last_cycles
-                = elapsed;
-            if(elapsed > g_waveform_latency_diag.page_reservation_to_ready_max_cycles)
-                g_waveform_latency_diag.page_reservation_to_ready_max_cycles
-                    = elapsed;
-        }
-        return;
-    }
-}
-
 static const uint32_t g_waveform_frames_per_bin[WAVEFORM_CACHE_LEVEL_COUNT] =
     { 16384U, 4096U, 1024U, 256U, 64U };
 
@@ -200,15 +114,6 @@ static uint8_t waveform_tile_range_ready(const waveform_source_t *source,
                 || bin % WAVEFORM_TILE_BINS
                     >= (uint32_t)tile->first_bin + tile->ready_bins)
         {
-            if(level == g_waveform_latency_diag.last_ideal_level)
-            {
-                if(g_waveform_build.active != 0U
-                    && g_waveform_build.level == level
-                    && g_waveform_build.tile_index == bin / WAVEFORM_TILE_BINS)
-                    ++g_waveform_latency_diag.ideal_tile_building;
-                else
-                    ++g_waveform_latency_diag.ideal_tile_absent;
-            }
             return 0U;
         }
         const uint32_t next = (bin / WAVEFORM_TILE_BINS) * WAVEFORM_TILE_BINS
@@ -277,7 +182,6 @@ static void waveform_start_tile(const waveform_source_t *source,
             slot = i;
         }
     }
-    if(g_waveform_tiles[slot].valid != 0U) { ++g_waveform_latency_diag.tile_evictions; }
     }
     waveform_tile_t *const tile = &g_waveform_tiles[slot];
     const uint16_t first_offset = (uint16_t)(first_bin
@@ -295,7 +199,6 @@ static void waveform_start_tile(const waveform_source_t *source,
     }
     tile->last_used = ++g_waveform_lru;
     memset(&g_waveform_build, 0, sizeof(g_waveform_build));
-    ++g_waveform_latency_diag.build_restarts;
     g_waveform_build.source = *source;
     g_waveform_build.level = level;
     g_waveform_build.tile_index = index;
@@ -360,14 +263,8 @@ void waveform_service_storage_service(void)
     if(sd_scheduler_runtime_background_try_begin(&admission)
             != SD_SCHEDULER_BACKGROUND_GO)
     {
-        ++g_waveform_latency_diag.minmax_gate_not_now;
-        g_waveform_latency_diag.minmax_last_sd_owner =
-            (uint32_t)sd_scheduler_runtime_owner();
         return;
     }
-    ++g_waveform_latency_diag.minmax_gate_go;
-    g_waveform_latency_diag.minmax_last_sd_owner =
-        (uint32_t)sd_scheduler_runtime_owner();
     FIL fp;
     if(sd_access_fs_mount_if_needed() == 0U
             || f_open(&fp, path, FA_READ) != FR_OK)
@@ -415,8 +312,6 @@ void waveform_service_storage_service(void)
         }
         else
         {
-            idle_latency_storage_diag_note_bytes(
-                IDLE_LATENCY_STORAGE_WAVEFORM_SERVICE, (uint32_t)read);
             waveform_tile_t *const tile = &g_waveform_tiles[job->slot];
             const uint16_t sample_bytes = job->bits_per_sample / 8U;
             for(uint32_t f = 0U; f < frames; ++f)
@@ -589,16 +484,7 @@ static uint8_t waveform_pcm_render(const waveform_source_t *source,
                 {
                     const sample_page_state_t state =
                         sample_page_cache_get_page_state_key(source->key, page);
-                    if(state == SAMPLE_PAGE_FREE)
-                        ++g_waveform_latency_diag.pcm_no_page;
-                    else if(state == SAMPLE_PAGE_RESERVED)
-                        ++g_waveform_latency_diag.pcm_reserved;
-                    else if(state == SAMPLE_PAGE_LOADING)
-                        ++g_waveform_latency_diag.pcm_loading;
-                    else if(state == SAMPLE_PAGE_READY)
-                        ++g_waveform_latency_diag.pcm_bad_key_epoch;
-                    else
-                        ++g_waveform_latency_diag.pcm_other;
+                    (void)state;
                     return 0U;
                 }
                 loaded_page = page;
@@ -607,7 +493,6 @@ static uint8_t waveform_pcm_render(const waveform_source_t *source,
                     || frame - span.start_frame >= span.frame_count
                     || span.stride_floats != 2U)
             {
-                ++g_waveform_latency_diag.pcm_other;
                 return 0U;
             }
             const uint32_t offset = (frame - span.start_frame) * 2U;
@@ -638,67 +523,26 @@ static uint8_t waveform_pcm_request(const waveform_source_t *source,
             || info.frames_per_page != SAMPLE_PAGE_FRAMES
             || info.stride_floats != 2U)
     {
-        ++g_waveform_latency_diag.pcm_bad_key_epoch;
         return 0U;
     }
     const uint32_t first = start / SAMPLE_PAGE_FRAMES;
     const uint32_t last = (start + count - 1U) / SAMPLE_PAGE_FRAMES;
     for(uint32_t page = first; page <= last; ++page)
     {
-        const sample_page_state_t before =
-            sample_page_cache_get_page_state_key(source->key, page);
-        if(before == SAMPLE_PAGE_READY)
-            ++g_waveform_latency_diag.page_requests_ready;
-        const uint8_t reserved =
-            sample_page_cache_reserve_page_key(source->key, page);
-        if((before == SAMPLE_PAGE_FREE || before == SAMPLE_PAGE_FAILED)
-            && reserved != 0U)
-        {
-            ++g_waveform_latency_diag.page_requests_new;
-            waveform_diag_page_reserved(source->key,
-                source->registration_epoch, page, 0U);
-        }
-        else if((before == SAMPLE_PAGE_RESERVED
-                || before == SAMPLE_PAGE_LOADING) && reserved != 0U)
-            waveform_diag_page_reserved(source->key,
-                source->registration_epoch, page, 1U);
+        (void)sample_page_cache_reserve_page_key(source->key, page);
     }
     const uint8_t ready = waveform_pcm_render(source, start,
                                                count, width, columns);
     if(first > 0U)
     {
         const uint32_t page = first - 1U;
-        const sample_page_state_t before =
-            sample_page_cache_get_page_state_key(source->key, page);
-        const uint8_t reserved =
-            sample_page_cache_reserve_page_key(source->key, page);
-        if(reserved != 0U
-            && (before == SAMPLE_PAGE_FREE || before == SAMPLE_PAGE_FAILED))
-            waveform_diag_page_reserved(source->key,
-                source->registration_epoch, page, 0U);
-        else if(reserved != 0U
-            && (before == SAMPLE_PAGE_RESERVED
-                || before == SAMPLE_PAGE_LOADING))
-            waveform_diag_page_reserved(source->key,
-                source->registration_epoch, page, 1U);
+        (void)sample_page_cache_reserve_page_key(source->key, page);
     }
     if((uint64_t)(last + 1U) * SAMPLE_PAGE_FRAMES
             < source->frame_count)
     {
         const uint32_t page = last + 1U;
-        const sample_page_state_t before =
-            sample_page_cache_get_page_state_key(source->key, page);
-        const uint8_t reserved =
-            sample_page_cache_reserve_page_key(source->key, page);
-        if(reserved != 0U
-            && (before == SAMPLE_PAGE_FREE || before == SAMPLE_PAGE_FAILED))
-            waveform_diag_page_reserved(source->key,
-                source->registration_epoch, page, 0U);
-        else if(reserved != 0U
-            && (before == SAMPLE_PAGE_RESERVED
-                || before == SAMPLE_PAGE_LOADING))
-            waveform_diag_page_reserved(source->key,
-                source->registration_epoch, page, 1U);
+        (void)sample_page_cache_reserve_page_key(source->key, page);
     }
     return ready;
 }
@@ -825,19 +669,15 @@ waveform_result_t waveform_request(const waveform_source_t *source,
                                    uint8_t pixel_width,
                                    waveform_column_t *columns)
 {
-    ++g_waveform_latency_diag.requests;
-    g_waveform_latency_diag.last_request_cycle = DWT->CYCCNT;
     if((source == 0) || (columns == 0) || (pixel_width == 0U)
             || (frame_count == 0U) || (start_frame >= source->frame_count)
             || (frame_count > (source->frame_count - start_frame)))
     {
-        ++g_waveform_latency_diag.invalid;
         return WAVEFORM_RESULT_INVALID;
     }
     const rec_source_waveform_summary_t *const summary = waveform_rec_summary(source);
     if(summary == 0)
     {
-        ++g_waveform_latency_diag.pending_summary;
         return WAVEFORM_RESULT_PENDING;
     }
     /* A visible window no larger than one PCM page can straddle two pages;
@@ -847,10 +687,8 @@ waveform_result_t waveform_request(const waveform_source_t *source,
             && waveform_pcm_request(source, start_frame, frame_count,
                 pixel_width, columns) != 0U)
     {
-        ++g_waveform_latency_diag.ready_pcm;
         return WAVEFORM_RESULT_READY;
     }
-    if(pcm_scale != 0U) { ++g_waveform_latency_diag.pcm_not_ready; }
 
     const uint32_t frames_per_pixel = (uint32_t)(((uint64_t)frame_count
         + pixel_width - 1U) / pixel_width);
@@ -864,10 +702,6 @@ waveform_result_t waveform_request(const waveform_source_t *source,
             break;
         }
     }
-    g_waveform_latency_diag.last_frames_per_pixel = frames_per_pixel;
-    g_waveform_latency_diag.last_start_frame = start_frame;
-    g_waveform_latency_diag.last_ideal_level = ideal;
-    g_waveform_latency_diag.last_display_level = 0xFFU;
     waveform_cache_handle_t sidecar;
     const uint8_t have_sidecar =
         sample_capture_model_waveform_cache_get_handle(&sidecar);
@@ -875,11 +709,8 @@ waveform_result_t waveform_request(const waveform_source_t *source,
             && waveform_render_level(source, 0, 0U, ideal, start_frame,
                 frame_count, pixel_width, columns) != 0U)
     {
-        ++g_waveform_latency_diag.ready_ideal_local;
-        g_waveform_latency_diag.last_display_level = ideal;
         return WAVEFORM_RESULT_READY;
     }
-    ++g_waveform_latency_diag.ideal_local_missing;
     const uint8_t ideal_sidecar_ready = (uint8_t)(pcm_scale == 0U
         && have_sidecar != 0U
         && waveform_sidecar_range(&sidecar, ideal, start_frame,
@@ -888,15 +719,7 @@ waveform_result_t waveform_request(const waveform_source_t *source,
             && waveform_render_level(source, &sidecar, 1U, ideal,
                 start_frame, frame_count, pixel_width, columns) != 0U)
     {
-        ++g_waveform_latency_diag.ready_ideal_sidecar;
-        g_waveform_latency_diag.last_display_level = ideal;
         return WAVEFORM_RESULT_READY;
-    }
-    if(pcm_scale == 0U)
-    {
-        ++g_waveform_latency_diag.ideal_sidecar_missing;
-        if(ideal_sidecar_ready == 0U)
-            ++g_waveform_latency_diag.ideal_sidecar_pending;
     }
     /* One active build uses the existing BG admission. Published bins are
        reusable immediately; a new viewport abandons obsolete work. */
@@ -927,8 +750,6 @@ waveform_result_t waveform_request(const waveform_source_t *source,
                 && waveform_render_level(source, 0, 0U, (uint8_t)level,
                     start_frame, frame_count, pixel_width, columns) != 0U)
         {
-            ++g_waveform_latency_diag.ready_fallback_local;
-            g_waveform_latency_diag.last_display_level = (uint8_t)level;
             return WAVEFORM_RESULT_READY;
         }
         if(have_sidecar != 0U
@@ -938,15 +759,12 @@ waveform_result_t waveform_request(const waveform_source_t *source,
                     (uint8_t)level, start_frame, frame_count,
                     pixel_width, columns) != 0U)
         {
-            ++g_waveform_latency_diag.ready_fallback_sidecar;
-            g_waveform_latency_diag.last_display_level = (uint8_t)level;
             return WAVEFORM_RESULT_READY;
         }
     }
 
     waveform_render_rec_overview(summary, start_frame, frame_count,
         pixel_width, columns);
-    ++g_waveform_latency_diag.ready_overview;
     return WAVEFORM_RESULT_READY;
 }
 
@@ -972,9 +790,6 @@ waveform_result_t waveform_request_detailed(const waveform_source_t *source,
         / WAVEFORM_LOCAL_TILE_FRAMES;
     if(last_tile - first_tile + 1U > WAVEFORM_LOCAL_MAX_VIEW_TILES)
     {
-        waveform_local_diag_request(start_frame, frame_count,
-            pixel_width, frames_per_pixel, line);
-        g_waveform_local_diag_words[16] = 5U;
         return waveform_request(source, start_frame, frame_count,
             pixel_width, columns);
     }
@@ -982,8 +797,6 @@ waveform_result_t waveform_request_detailed(const waveform_source_t *source,
         waveform_rec_summary(source);
     if(summary == 0)
     {
-        waveform_local_diag_request(start_frame, frame_count,
-            pixel_width, frames_per_pixel, line);
         return WAVEFORM_RESULT_PENDING;
     }
     waveform_local_request(source, start_frame, frame_count);
@@ -1000,8 +813,6 @@ waveform_result_t waveform_request_detailed(const waveform_source_t *source,
                 pixel_width * sizeof(columns[0]));
             memcpy(line, g_waveform_local_line_hot.line,
                 pixel_width * sizeof(line[0]));
-            waveform_local_diag_request(start_frame, frame_count,
-                pixel_width, frames_per_pixel, line);
             return WAVEFORM_RESULT_READY;
         }
         if(frame_count % pixel_width == 0U)
@@ -1096,7 +907,5 @@ waveform_result_t waveform_request_detailed(const waveform_source_t *source,
         memcpy(g_waveform_local_line_hot.line, line,
             pixel_width * sizeof(line[0]));
     }
-    waveform_local_diag_request(start_frame, frame_count,
-        pixel_width, frames_per_pixel, line);
     return WAVEFORM_RESULT_READY;
 }

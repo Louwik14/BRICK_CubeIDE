@@ -82,7 +82,6 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_model.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_mute_bridge.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/metronome_control.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_note_trace.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_param_iface.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_runtime.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_transport_owner.c"

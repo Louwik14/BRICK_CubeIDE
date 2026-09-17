@@ -7,32 +7,8 @@
 #include "Sampler/sample_page_cache.h"
 #include "Storage/audio_recorder_storage.h"
 #include "Storage/project_load_quiesce.h"
-#include "Storage/rec_latency_probe.h"
-#include "Storage/rec_active_step_diag.h"
 #include "Storage/rec_source.h"
 #include "stm32h7xx.h"
-
-volatile rec_latency_probe_t g_rec_latency_probe __attribute__((used));
-volatile rec_active_step_diag_t g_rec_active_step_diag __attribute__((used));
-volatile uint32_t g_rec_active_step_diag_reset_requested __attribute__((used));
-volatile uint32_t g_rec_active_step_diag_scope_active;
-uint32_t rec_latency_probe_now(void) { return TIM5->CNT; }
-void rec_latency_probe_reset(void) {
-    volatile uint32_t *p = (volatile uint32_t *)&g_rec_latency_probe;
-    for(uint32_t i = 0U; i < sizeof(g_rec_latency_probe) / sizeof(uint32_t); ++i) p[i] = 0U;
-}
-void rec_latency_probe_service_reset(void) {
-    if(g_rec_latency_probe.reset_request != 0U) rec_latency_probe_reset();
-}
-void rec_latency_probe_progress(void) {
-    const uint32_t now = rec_latency_probe_now();
-    if(g_rec_latency_probe.save_last_progress_t != 0U) {
-        const uint32_t gap = now - g_rec_latency_probe.save_last_progress_t;
-        if(gap > g_rec_latency_probe.save_max_progress_gap) g_rec_latency_probe.save_max_progress_gap = gap;
-    }
-    g_rec_latency_probe.save_last_progress_t = now;
-    g_rec_latency_probe.save_progress_count++;
-}
 
 typedef struct
 {
@@ -94,19 +70,8 @@ static void register_build_stream(void)
     g_build_stream_registered = 1U;
     g_build_stream_key = key;
     g_build_stream_readable_frames = readable_frames;
-    g_rec_latency_probe.preload_request_count++;
-    g_rec_latency_probe.preload_pages_requested = SAMPLE_PAGE_MIN_READY_PAGES;
-    if(g_rec_latency_probe.t_preload_first_request == 0U)
-        g_rec_latency_probe.t_preload_first_request = rec_latency_probe_now();
-    for(uint32_t page = 0U; page < SAMPLE_PAGE_MIN_READY_PAGES; ++page) {
-        if(sample_page_cache_get_page_state_key(key, page) == SAMPLE_PAGE_READY)
-            g_rec_latency_probe.preload_cache_hit_count++;
-        else g_rec_latency_probe.preload_cache_miss_count++;
-    }
     (void)sample_page_cache_reserve_start_pages_key(
         key, 0U, SAMPLE_PAGE_MIN_READY_PAGES);
-    if(g_rec_latency_probe.t_preload_requested == 0U)
-        g_rec_latency_probe.t_preload_requested = rec_latency_probe_now();
 }
 
 static void update_build_stream(void)
@@ -128,7 +93,6 @@ static uint8_t publish_start(audio_recorder_client_t client, uint64_t sample_tim
     if(control_rt_publish_record(CONTROL_AUDIO_RECORD_START,
             g_audio_recorder.frame_limit, g_audio_recorder_control_session,
             (uint8_t)client, sample_time) == 0U) return 0U;
-    g_rec_latency_probe.t_rec_start = rec_latency_probe_now();
     g_audio_recorder.state = AUDIO_RECORDER_STATE_RECORDING;
     return 1U;
 }
@@ -136,10 +100,6 @@ static uint8_t publish_start(audio_recorder_client_t client, uint64_t sample_tim
 static uint8_t publish_stop(audio_recorder_client_t client, uint64_t sample_time)
 {
     if(g_audio_recorder.client != client) return 0U;
-    if(g_rec_latency_probe.t_stop_requested == 0U)
-        g_rec_latency_probe.t_stop_requested = rec_latency_probe_now();
-    g_rec_latency_probe.rec_duration_ticks =
-        g_rec_latency_probe.t_stop_requested - g_rec_latency_probe.t_rec_start;
     return control_rt_publish_record(CONTROL_AUDIO_RECORD_STOP, 0U,
         g_audio_recorder_control_session, (uint8_t)client, sample_time);
 }
@@ -266,13 +226,7 @@ uint8_t audio_recorder_request_stop_client_at(audio_recorder_client_t client,
 
 void audio_recorder_service(void)
 {
-    const uint32_t diag_started = DWT->CYCCNT;
-    g_rec_active_step_diag_scope_active = 1U;
-    rec_latency_probe_service_reset();
-    const uint32_t source_started = DWT->CYCCNT;
     rec_source_service();
-    rec_active_step_diag_max(&g_rec_active_step_diag.rec_source_max_cycles,
-        source_started);
     audio_recorder_storage_service(g_audio_recorder_control_session,
         (uint8_t)((g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING)
             || (g_audio_recorder.state == AUDIO_RECORDER_STATE_DRAINING)));
@@ -311,10 +265,6 @@ void audio_recorder_service(void)
                     / AUDIO_RECORDER_BYTES_PER_FRAME);
             if(sample_page_cache_finalize_live_frames_key(key, frames) == 0U)
             {
-                rec_active_step_diag_max(
-                    &g_rec_active_step_diag.audio_recorder_total_max_cycles,
-                    diag_started);
-                g_rec_active_step_diag_scope_active = 0U;
                 return;
             }
             uint32_t ready_pages = (frames + SAMPLE_PAGE_FRAMES - 1U)
@@ -328,18 +278,11 @@ void audio_recorder_service(void)
             for(uint32_t page = 0U; page < ready_pages; ++page)
                 if(sample_page_cache_get_page_state_key(key, page)
                         != SAMPLE_PAGE_READY) pages_ready = 0U;
-            if((pages_ready != 0U) && (g_rec_latency_probe.t_pages_ready == 0U))
-                g_rec_latency_probe.t_pages_ready = rec_latency_probe_now();
-            if((pages_ready != 0U) && (g_rec_latency_probe.t_preload_all_ready == 0U)) {
-                g_rec_latency_probe.t_preload_all_ready = rec_latency_probe_now();
-                g_rec_latency_probe.preload_pages_ready = ready_pages;
-            }
             if((sample_page_cache_get_registration_epoch_key(key, &epoch) != 0U)
                     && (audio_recorder_storage_get_map_copy(&map) != 0U)
                     && (pages_ready != 0U)
                     && (rec_source_publish_building(frames, epoch, &map) != 0U))
             {
-                g_rec_latency_probe.t_rec_source_published = rec_latency_probe_now();
                 forget_build_stream();
             }
         }
@@ -347,10 +290,6 @@ void audio_recorder_service(void)
             g_audio_recorder.state = AUDIO_RECORDER_STATE_TAKE_READY;
     }
     update_build_stream();
-    rec_active_step_diag_max(
-        &g_rec_active_step_diag.audio_recorder_total_max_cycles,
-        diag_started);
-    g_rec_active_step_diag_scope_active = 0U;
 }
 
 uint8_t audio_recorder_get_status_client(audio_recorder_client_t client,

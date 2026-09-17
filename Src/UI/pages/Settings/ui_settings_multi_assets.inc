@@ -113,24 +113,25 @@ static void ui_page_settings_multi_prepare_poll(void)
         return;
     }
 
-    multi_sample_load_diag_t diag;
-    multi_sample_get_load_diag(&diag);
+    multi_sample_load_status_t load_status;
+    multi_sample_get_load_status(&load_status);
     const multi_sample_instrument_state_t state =
         multi_sample_pool_get_state(g_ui_settings.confirm_slot);
 
-    if (diag.state == MULTI_SAMPLE_INSTRUMENT_ERROR)
+    if (load_status.state == MULTI_SAMPLE_INSTRUMENT_ERROR)
     {
         ui_page_settings_multi_prepare_finish(
-            ui_page_settings_multi_load_error_label(diag.last_error));
+            ui_page_settings_multi_load_error_label(load_status.last_error));
         return;
     }
 
     if (state == MULTI_SAMPLE_INSTRUMENT_LOADING)
     {
         g_ui_settings.multi_prepare_phase = (uint8_t)UI_SETTINGS_MULTI_PREP_PHASE_PREPARE;
-        g_ui_settings.multi_prepare_progress_done = diag.pages_ready;
+        g_ui_settings.multi_prepare_progress_done = load_status.pages_ready;
         g_ui_settings.multi_prepare_progress_total =
-            (diag.pages_requested == 0U) ? 1U : diag.pages_requested;
+            (load_status.pages_requested == 0U)
+                ? 1U : load_status.pages_requested;
         return;
     }
 
@@ -150,7 +151,8 @@ static void ui_page_settings_multi_prepare_poll(void)
 
     if (state == MULTI_SAMPLE_INSTRUMENT_ERROR)
     {
-        ui_page_settings_multi_prepare_finish(ui_page_settings_multi_load_error_label(diag.last_error));
+        ui_page_settings_multi_prepare_finish(
+            ui_page_settings_multi_load_error_label(load_status.last_error));
     }
 }
 

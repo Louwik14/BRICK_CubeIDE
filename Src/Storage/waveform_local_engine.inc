@@ -90,25 +90,6 @@ static int8_t waveform_local_find(uint32_t start_frame)
     return -1;
 }
 
-static void waveform_local_diag_tiles(void)
-{
-    if(g_waveform_local_diag_words[0] != 0x574C4447U)
-        waveform_local_diag_reset();
-    g_waveform_local_diag_words[0] = 0x574C4447U;
-    g_waveform_local_diag_words[1] = g_waveform_local.format_ready;
-    g_waveform_local_diag_words[2] = g_waveform_local.valid;
-    g_waveform_local_diag_words[3] = g_waveform_local.desired;
-    g_waveform_local_diag_words[4] = g_waveform_local.media_epoch;
-    for(uint32_t i = 0U; i < WAVEFORM_LOCAL_TILE_COUNT; ++i)
-    {
-        const waveform_local_tile_t *const tile = &g_waveform_local.tiles[i];
-        const uint32_t word = 37U + 3U * i;
-        g_waveform_local_diag_words[word] = (uint32_t)tile->state;
-        g_waveform_local_diag_words[word + 1U] = tile->start_frame;
-        g_waveform_local_diag_words[word + 2U] = tile->loaded_frames;
-    }
-}
-
 static uint32_t waveform_local_distance(uint32_t start_frame, uint32_t focus)
 {
     if(focus < start_frame) { return start_frame - focus; }
@@ -213,7 +194,6 @@ static void waveform_local_request(const waveform_source_t *source,
     if(last_tile <= UINT32_MAX - WAVEFORM_LOCAL_TILE_FRAMES)
         (void)waveform_local_queue(last_tile + WAVEFORM_LOCAL_TILE_FRAMES,
             &queued);
-    waveform_local_diag_tiles();
 }
 
 static void waveform_local_accumulate_point(waveform_local_point_t *level,
@@ -266,22 +246,17 @@ static void waveform_local_storage_service(void)
     if(g_waveform_local.valid == 0U) { return; }
     const int8_t index = waveform_local_next_loading();
     if(index < 0) { return; }
-    g_waveform_local_diag_words[18] = (uint32_t)index;
-    g_waveform_local_diag_words[17] = 1U;
     const char *path;
     if(g_waveform_local.media_epoch != sd_access_media_epoch()
             || waveform_source_current(&g_waveform_local.source, &path) == 0U)
     {
-        g_waveform_local_diag_words[17] = 2U;
         g_waveform_local.valid = 0U;
-        waveform_local_diag_tiles();
         return;
     }
     waveform_local_tile_t *const tile = &g_waveform_local.tiles[(uint8_t)index];
     if(tile->loaded_frames >= tile->frame_count)
     {
         tile->state = WAVEFORM_LOCAL_READY;
-        waveform_local_diag_tiles();
         return;
     }
     const sd_scheduler_background_request_t admission =
@@ -290,7 +265,6 @@ static void waveform_local_storage_service(void)
     if(sd_scheduler_runtime_background_try_begin(&admission)
             != SD_SCHEDULER_BACKGROUND_GO)
     {
-        g_waveform_local_diag_words[17] = 3U;
         return;
     }
     FIL fp;
@@ -298,7 +272,6 @@ static void waveform_local_storage_service(void)
     if(sd_access_fs_mount_if_needed() == 0U
             || f_open(&fp, path, FA_READ) != FR_OK)
     {
-        g_waveform_local_diag_words[17] = 4U;
         goto end;
     }
     if(g_waveform_local.format_ready == 0U)
@@ -310,7 +283,6 @@ static void waveform_local_storage_service(void)
                 || info.bits_per_sample != 24U
                 || info.block_align != 6U)
         {
-            g_waveform_local_diag_words[17] = 5U;
             tile->state = WAVEFORM_LOCAL_EMPTY;
             (void)f_close(&fp);
             goto end;
@@ -339,20 +311,15 @@ static void waveform_local_storage_service(void)
             waveform_local_accumulate_levels((uint8_t)index, rel, mono);
         }
         tile->loaded_frames += frames;
-        g_waveform_local_diag_words[17] = 7U;
-        g_waveform_local_diag_words[19] = bytes;
         if(tile->loaded_frames >= tile->frame_count)
             tile->state = WAVEFORM_LOCAL_READY;
         ok = 1U;
     }
-    else
-        g_waveform_local_diag_words[17] = 6U;
     (void)f_close(&fp);
 end:
     sd_scheduler_runtime_background_end();
     if(ok == 0U && tile->state == WAVEFORM_LOCAL_LOADING)
         tile->state = WAVEFORM_LOCAL_EMPTY;
-    waveform_local_diag_tiles();
 }
 
 static int8_t waveform_local_find_frame(uint32_t frame)
@@ -364,77 +331,6 @@ static int8_t waveform_local_find_frame(uint32_t frame)
     if(frame < tile->start_frame + tile->loaded_frames)
         return index;
     return -1;
-}
-
-static void waveform_local_diag_request(uint32_t start_frame,
-    uint32_t frame_count, uint8_t width, uint32_t frames_per_pixel,
-    const waveform_line_column_t *line)
-{
-    waveform_local_diag_tiles();
-    g_waveform_local_diag_words[5] = start_frame;
-    g_waveform_local_diag_words[6] = frame_count;
-    g_waveform_local_diag_words[7] = width;
-    g_waveform_local_diag_words[8] = frames_per_pixel;
-    uint32_t lookup_frame = start_frame;
-    int8_t index = waveform_local_find(waveform_local_align(start_frame));
-    if((index < 0 || g_waveform_local.tiles[(uint8_t)index].loaded_frames == 0U)
-            && frame_count <= WAVEFORM_LOCAL_MAX_VIEW_TILES
-                * WAVEFORM_LOCAL_TILE_FRAMES)
-    {
-        const uint32_t last = waveform_local_align(
-            start_frame + frame_count - 1U);
-        for(uint32_t tile_start = waveform_local_align(start_frame);
-                tile_start <= last; )
-        {
-            const int8_t candidate = waveform_local_find(tile_start);
-            if(candidate >= 0
-                    && g_waveform_local.tiles[(uint8_t)candidate].loaded_frames != 0U)
-            {
-                index = candidate;
-                lookup_frame = tile_start > start_frame ? tile_start : start_frame;
-                break;
-            }
-            if(tile_start > UINT32_MAX - WAVEFORM_LOCAL_TILE_FRAMES) { break; }
-            tile_start += WAVEFORM_LOCAL_TILE_FRAMES;
-        }
-    }
-    g_waveform_local_diag_words[11] = lookup_frame;
-    g_waveform_local_diag_words[9] = index >= 0 ? 1U : 0U;
-    g_waveform_local_diag_words[10] = index >= 0 ? (uint32_t)index : UINT32_MAX;
-    uint32_t ready = 0U;
-    if(line != 0)
-    {
-        for(uint32_t i = 0U; i < width; ++i)
-            ready += line[i].ready != 0U ? 1U : 0U;
-    }
-    g_waveform_local_diag_words[12] = ready;
-    g_waveform_local_diag_words[13] = width - ready;
-    g_waveform_local_diag_words[14] = ready;
-    g_waveform_local_diag_words[15] = width - ready;
-    /* 0 overview; 1 raw PCM; 2/3/4 local 16/64/256; 5 coarse service. */
-    g_waveform_local_diag_words[16] = ready == 0U ? 0U
-        : frames_per_pixel >= 256U ? 4U
-        : frames_per_pixel >= 64U ? 3U
-        : frames_per_pixel >= 16U ? 2U : 1U;
-    g_waveform_local_diag_words[20] = UINT32_MAX;
-    for(uint32_t i = 0U; i < 16U; ++i)
-        g_waveform_local_diag_words[21U + i] = 0U;
-    if(index >= 0)
-    {
-        const waveform_local_tile_t *const tile =
-            &g_waveform_local.tiles[(uint8_t)index];
-        if(tile->loaded_frames != 0U)
-        {
-            uint32_t rel = lookup_frame - tile->start_frame;
-            if(rel >= tile->loaded_frames)
-                rel = tile->loaded_frames > 16U
-                    ? tile->loaded_frames - 16U : 0U;
-            g_waveform_local_diag_words[20] = tile->start_frame + rel;
-            for(uint32_t i = 0U; i < 16U && rel + i < tile->loaded_frames; ++i)
-                g_waveform_local_diag_words[21U + i] = (uint32_t)(int32_t)
-                    g_waveform_local_pcm[(uint8_t)index][rel + i];
-        }
-    }
 }
 
 static void waveform_local_merge(waveform_local_point_t *out,

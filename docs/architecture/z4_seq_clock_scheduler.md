@@ -76,36 +76,6 @@ dans le Pattern. A la boundary, SEQ conserve les decisions musicales et la
 normalisation dependante du modele, puis configure les quatre slots; aucun
 catalog lookup ni mapping d'identifiant n'y subsiste.
 
-## Diagnostics Release/LTO
-
-`g_seq_diag` est retenu au lien. Son ABI version 1 commence par
-`magic=0x53455131`, `version`, `size`, puis expose service/response, lateness,
-slack, maxima de sections, pics de capacite, refs Future perimees, refus de
-pool de locks et maxima capture-vers-SEQ/publication.
-
-```gdb
-info address g_seq_diag
-x/25wx ADDRESS
-```
-
-Les 25 mots couvrent exactement 100 octets. Layout (offsets en octets) :
-
-```text
-00 magic                 04 version|size
-08 service_count         12 last_service_cycles
-16 max_service_cycles    20 last_response_cycles
-24 max_response_cycles   28 max_wake_lateness_samples
-32 min_publish_slack     36 scan_future_max_cycles
-40 boundary_locks_max    44 fx_admission_max_cycles
-48 terminal_publish_max  52 cutover_max_cycles
-56 future|lifetime_peak  60 output|ingress_peak
-64 missed_window_count   68 stale_generation_count
-72 lock_pool_reject      76 max_capture_to_seq_samples
-80 max_capture_to_pub     84 fifo_invariant_failures
-88 max_service_future    92 max_service_lifetime
-96 max_service_output
-```
-
 ## Persistence et gros changements
 
 Storage et CONTROL chargent, valident et preparent hors IRQ. Pattern/Project

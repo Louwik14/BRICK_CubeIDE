@@ -854,13 +854,13 @@ void project_product_load_service(void)
         memcpy(path_value,asset->canonical_path,asset->path_length);
         path_value[asset->path_length]='\0';
         uint16_t logical=0U,runtime=0U;
-        multi_sample_load_diag_t diag;
-        multi_sample_get_load_diag(&diag);
+        multi_sample_load_status_t load_status;
+        multi_sample_get_load_status(&load_status);
         if (project_control_find_asset(PERSIST_ASSET_MULTI,path_value,&logical)==0U
                 || project_control_resolve_multi_runtime(logical,&runtime)==0U)
         {
-            if (project_multi_result_internal(diag.last_error)
-                || diag.last_error == MULTI_SAMPLE_LOAD_OK)
+            if (project_multi_result_internal(load_status.last_error)
+                || load_status.last_error == MULTI_SAMPLE_LOAD_OK)
             {
                 PROJECT_PRODUCT_FATAL(
                     "PROJECT_MULTI_ASSET_COMPLETION_FAILED",
