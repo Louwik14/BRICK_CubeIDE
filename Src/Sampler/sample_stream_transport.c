@@ -275,7 +275,7 @@ uint8_t sample_stream_transport_take_result(uint32_t expected_sequence,
         }
     }
     __DMB();
-    memset(mailbox, 0, sizeof(*mailbox));
+    memset(mailbox, 0, offsetof(sample_stream_transport_mailbox_t, decoded_page));
     mailbox->abi_version = SAMPLE_STREAM_TRANSPORT_ABI_VERSION;
     sample_stream_transport_clean(mailbox, (uint32_t)offsetof(
         sample_stream_transport_mailbox_t, decoded_page));
