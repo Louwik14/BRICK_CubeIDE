@@ -14,7 +14,6 @@
 #define SEQ_ENGINE_EVENT_CAPACITY 4096U
 #define SEQ_ENGINE_BLOCK_SLOTS 3U
 #define SEQ_ENGINE_SNAPSHOT_SLOTS 2U
-#define SEQ_ENGINE_SCHEDULER_CAPACITY 512U
 #define SEQ_ENGINE_LEDGER_CAPACITY 64U
 #define SEQ_ENGINE_SOURCE_CAPACITY SEQ_PRODUCT_MAX_ACTIVE_SOURCES
 #define SEQ_ENGINE_LOCK_POOL_CAPACITY 512U
@@ -43,9 +42,10 @@ typedef struct __attribute__((packed)) {
     uint8_t reserved : 2;
     uint8_t note;
     uint8_t velocity;
+    uint8_t logical_slot;
 } seq_event_t;
 
-_Static_assert(sizeof(seq_event_t) == 9U, "SEQ publication event budget");
+_Static_assert(sizeof(seq_event_t) == 10U, "SEQ publication event budget");
 
 static inline uint16_t seq_event_param_value(const seq_event_t *event)
 {
@@ -100,59 +100,30 @@ typedef struct {
     uint16_t base_value16;
 } seq_active_lock_t;
 
-typedef enum {
-    SEQ_TICKET_NOTE_OFF = 0,
-    SEQ_TICKET_ECHO_WAKE,
-    SEQ_TICKET_SOURCE_WAKE,
-    SEQ_TICKET_ARP_WAKE,
-    SEQ_TICKET_EUCLID_WAKE,
-    SEQ_TICKET_GROOVE_RESUME
-} seq_ticket_kind_t;
-
-/* One static scheduler for every sample-domain continuation.  Payload is an
- * index/generation pair into fixed external state, never an embedded event. */
-typedef struct {
-    uint64_t due_sample;
-    uint32_t occurrence_id;
-    uint32_t payload;
-    uint16_t generation;
-    uint16_t next_free;
-    uint8_t kind;
-    uint8_t track;
-    uint8_t note;
-    uint8_t flags;
-} seq_ticket_t;
-
-_Static_assert(sizeof(seq_ticket_t) == 24U, "SEQ ticket must stay compact");
-
 typedef struct {
     uint64_t first_on_sample;
-    uint64_t span_q16;
     uint64_t interval_q16;
-    uint64_t next_offset_q16;
     uint32_t gate_samples;
     uint32_t serial;
-    uint16_t ticket;
-    uint8_t track;
     uint8_t note;
     uint8_t velocity;
-    uint8_t logical_slot;
     uint8_t playback_stage;
+    uint8_t next_ordinal;
+    uint8_t ordinal_count;
     uint8_t active;
+    uint8_t reserved[2];
 } seq_source_cursor_t;
 
-_Static_assert(sizeof(seq_source_cursor_t) == 48U,
+_Static_assert(sizeof(seq_source_cursor_t) == 32U,
                "SEQ source cursor budget");
 
 typedef struct {
     uint64_t admitted_sample;
+    uint64_t due_off;
     uint32_t occurrence_id;
-    uint8_t track;
-    uint8_t logical_slot;
     uint8_t note;
     uint8_t original;
-    uint8_t active;
-    uint8_t reserved[3];
+    uint8_t reserved[2];
 } seq_ledger_entry_t;
 
 _Static_assert(sizeof(seq_ledger_entry_t) == 24U,
@@ -165,9 +136,6 @@ typedef struct {
     uint32_t pattern_generation;
     uint32_t occurrence_serial;
     uint32_t transport_step_serial;
-    uint16_t scheduler_count;
-    uint16_t scheduler_free_head;
-    uint16_t scheduler_overflow_count;
     uint16_t source_count;
     uint8_t ledger_count;
     uint8_t ledger_track_count[SEQ_LANE_CAPACITY];
@@ -183,11 +151,14 @@ typedef struct {
     uint8_t track_swing_phase[SEQ_LANE_CAPACITY];
     uint32_t step_serial[SEQ_LANE_CAPACITY];
     uint32_t voice_scheduled_serial[SEQ_LANE_CAPACITY][SEQ_PLAY_MAX_CAPACITY];
+    note_fx_slot_plan_word_t fx_effective[SEQ_LANE_CAPACITY][NOTE_FX_SLOT_COUNT];
     uint8_t active_lock_count[SEQ_LANE_CAPACITY];
     seq_active_lock_t active_locks[SEQ_LANE_CAPACITY][SEQ_STEP_MAX_LOCKS];
-    seq_source_cursor_t sources[SEQ_ENGINE_LEDGER_CAPACITY];
+    uint64_t source_active[SEQ_PRODUCT_MAX_SOURCE_GENERATIONS];
+    uint64_t ledger_active;
+    seq_source_cursor_t sources[SEQ_PRODUCT_MAX_SOURCE_GENERATIONS]
+                               [SEQ_PRODUCT_MAX_EMITTING_VOICES];
     seq_ledger_entry_t ledger[SEQ_ENGINE_LEDGER_CAPACITY];
-    seq_ticket_t scheduler[SEQ_ENGINE_SCHEDULER_CAPACITY];
 } seq_engine_core_t;
 
 typedef struct {
@@ -199,7 +170,6 @@ typedef struct {
     uint32_t blocks_over_75;
     uint32_t max_consecutive_over_50;
     uint32_t max_consecutive_over_75;
-    uint16_t scheduler_overflows;
 } seq_engine_perf_snapshot_t;
 
 typedef struct {
@@ -224,7 +194,6 @@ typedef struct {
     uint32_t max_consecutive_over_m4_75;
     uint32_t blocks_over_m7_50;
     uint32_t blocks_over_m7_75;
-    uint32_t scheduler_overflows;
     uint32_t technical_drops;
     uint32_t musical_rejections;
     uint32_t output_overflows;
@@ -235,8 +204,7 @@ typedef struct {
     uint32_t mean_cycles_boundary;
     uint32_t ordinary_blocks;
     uint32_t boundary_blocks;
-    uint32_t drop_scheduler_capacity;
-    uint32_t drop_groove_resume_capacity;
+    uint32_t drop_deferred_capacity;
     uint32_t drop_ledger_admission;
     uint32_t drop_terminal_output_capacity;
     uint32_t drop_source_capacity;
@@ -255,12 +223,9 @@ extern volatile seq_boot_bench_result_t g_seq_boot_bench;
 typedef struct __attribute__((packed)) {
     uint8_t trig_roll;
     uint8_t lock_count;
-    uint16_t fx_override_mask;
-    uint16_t fx_opcode_mask;
-    uint8_t fx_walker;
 } seq_step_pattern_t;
 
-_Static_assert(sizeof(seq_step_pattern_t) == 7U,
+_Static_assert(sizeof(seq_step_pattern_t) == 2U,
                "compact executable step layout changed");
 
 typedef struct {
@@ -302,7 +267,6 @@ typedef struct {
     uint8_t seed_div_phase[SEQ_LANE_CAPACITY];
     uint8_t seed_swing_phase[SEQ_LANE_CAPACITY];
     seq_play_snapshot_t play_base[SEQ_LANE_CAPACITY];
-    note_fx_track_state_t note_fx[SEQ_LANE_CAPACITY];
     seq_step_pattern_t steps[SEQ_LANE_CAPACITY][SEQ_MAX_STEPS];
     uint16_t lock_first[SEQ_LANE_CAPACITY][SEQ_MAX_STEPS];
     uint16_t lock_pool_count[SEQ_LANE_CAPACITY];
@@ -320,6 +284,7 @@ void seq_engine_core_process_block(seq_engine_core_t *core,
                                seq_param_block_t *out_params);
 uint8_t seq_engine_core_submit_live(seq_engine_core_t *core,
                                     const note_event_t *event,
+                                    const seq_pattern_t *pattern,
                                     uint64_t window_start,
                                     uint64_t window_end,
                                     seq_event_block_t *out_block);
@@ -373,8 +338,6 @@ _Static_assert(SEQ_ENGINE_LEDGER_CAPACITY == 64U, "SEQ logical ledger contract")
 _Static_assert(SEQ_ENGINE_SOURCE_CAPACITY == 192U, "SEQ source cursor contract");
 _Static_assert(SEQ_ENGINE_EVENT_CAPACITY >= SEQ_PRODUCT_TERMINAL_EVENTS_PER_HORIZON,
                "SEQ terminal publication below legal fanout");
-_Static_assert(SEQ_ENGINE_SCHEDULER_CAPACITY >= SEQ_PRODUCT_SCHEDULER_ITEMS_MAX,
-               "SEQ scheduler below legal continuation bound");
 _Static_assert(SEQ_ENGINE_FX_SCRATCH_CAPACITY == 32U, "SEQ scratch contract");
 
 #endif

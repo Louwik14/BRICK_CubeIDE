@@ -34,10 +34,12 @@ static uint32_t g_build_generation;
 static uint8_t g_last_running;
 static uint8_t g_seen_runtime_running;
 static uint32_t g_transport_epoch;
+static note_fx_track_state_t g_build_fx_state[SEQ_LANE_CAPACITY];
 static uint8_t seq_engine_compile_step_fx(seq_pattern_t *pattern,
                                           uint8_t track, uint8_t step)
 {
-    note_fx_track_state_t effective = pattern->note_fx[track];
+    note_fx_track_state_t effective = g_build_fx_state[track];
+    seq_step_pattern_t *const target = &pattern->steps[track][step];
     uint16_t override_mask = 0U;
     const uint16_t first = pattern->lock_first[track][step];
     const uint8_t count = pattern->steps[track][step].lock_count;
@@ -61,15 +63,8 @@ static uint8_t seq_engine_compile_step_fx(seq_pattern_t *pattern,
     note_fx_compiled_plan_t compiled;
     if (note_fx_plan_compile(&effective, override_mask, &compiled) == 0U)
         return UINT8_MAX;
-    seq_step_pattern_t *const target = &pattern->steps[track][step];
-    target->fx_override_mask = override_mask;
-    target->fx_opcode_mask = 0U;
-    target->fx_walker = (uint8_t)(compiled.active_mask
-        | (uint8_t)(compiled.first_active_slot << 4U));
     for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
     {
-        target->fx_opcode_mask |= (uint16_t)(
-            (uint16_t)note_fx_plan_model(compiled.slot[slot]) << (slot * 4U));
         if (note_fx_plan_model(compiled.slot[slot]) == NOTE_FX_MODEL_GROOVE)
             pattern->track_exec[track].max_negative_horizon_q16 =
                 (uint16_t)((UINT32_C(1) << 16U)
@@ -143,6 +138,7 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
 {
     if (step == 0U)
     {
+        memset(&g_build_fx_state[track], 0, sizeof(g_build_fx_state[track]));
         uint8_t div = 1U, swing = 0U, quant = 0U;
         (void)seq_runtime_get_track_div(track, &div);
         (void)seq_runtime_get_track_swing(track, &swing);
@@ -206,7 +202,7 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
                 ((capabilities & TRACK_CAPABILITY_MIDI_FX) != 0U) ? 1U : 0U;
             if (pattern->track_fx_enabled[track] == 0U)
                 memset(&fx_state, 0, sizeof(fx_state));
-            pattern->note_fx[track] = fx_state;
+            g_build_fx_state[track] = fx_state;
             if (note_fx_plan_compile(&fx_state, 0U,
                     &pattern->fx_base_plan[track]) == 0U)
             {
@@ -224,9 +220,6 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
         (void)seq_model_play_base_capture(track, &pattern->play_base[track]);
     }
         seq_step_pattern_t *const target = &pattern->steps[track][step];
-        target->fx_override_mask = 0U;
-        target->fx_opcode_mask = 0U;
-        target->fx_walker = (uint8_t)(NOTE_FX_PLAN_FIRST_SLOT_NONE << 4U);
         target->trig_roll = (uint8_t)((seq_model_get_trig(track, step) & 1U)
             | ((seq_model_get_step_roll(track, step) & 0x0FU) << 1U));
         target->lock_count = 0U;

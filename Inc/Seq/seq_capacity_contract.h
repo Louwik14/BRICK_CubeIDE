@@ -30,21 +30,21 @@
 #define SEQ_PRODUCT_HELD_STATE_CAPACITY \
     (SEQ_PRODUCT_MAX_EMITTING_VOICES * SEQ_PRODUCT_HARMONY_FANOUT_MAX)
 #define SEQ_PRODUCT_HELD_TOTAL_CAPACITY \
-    (NOTE_FX_SLOT_COUNT * SEQ_PRODUCT_HELD_STATE_CAPACITY)
+    (2U * SEQ_PRODUCT_HELD_STATE_CAPACITY)
 #define SEQ_PRODUCT_ECHO_STATE_CAPACITY \
     (SEQ_PRODUCT_MAX_EMITTING_VOICES * SEQ_PRODUCT_HARMONY_FANOUT_MAX)
 #define SEQ_PRODUCT_DIRECT_ONS_PER_HORIZON \
     (SEQ_PRODUCT_MAX_NOTE_ONS_PER_HORIZON \
         * SEQ_PRODUCT_HARMONY_FANOUT_MAX)
 
-/* Groove retains two adjacent due horizons per logical lane. Each resume is
- * one same-time batch containing every legal Harmony branch. */
-#define SEQ_PRODUCT_GROOVE_RESUME_BATCHES_PER_LANE 2U
-#define SEQ_PRODUCT_GROOVE_RESUME_BATCH_CAPACITY \
+/* Deferred terminal state retains two adjacent due horizons per logical lane.
+ * Each owner is one same-time batch containing every legal Harmony branch. */
+#define SEQ_PRODUCT_DEFERRED_BATCHES_PER_LANE 2U
+#define SEQ_PRODUCT_DEFERRED_BATCH_CAPACITY \
     (SEQ_PRODUCT_MAX_EMITTING_VOICES \
-        * SEQ_PRODUCT_GROOVE_RESUME_BATCHES_PER_LANE)
-#define SEQ_PRODUCT_GROOVE_RESUME_EVENT_CAPACITY \
-    (SEQ_PRODUCT_GROOVE_RESUME_BATCH_CAPACITY \
+        * SEQ_PRODUCT_DEFERRED_BATCHES_PER_LANE)
+#define SEQ_PRODUCT_DEFERRED_EVENT_CAPACITY \
+    (SEQ_PRODUCT_DEFERRED_BATCH_CAPACITY \
         * SEQ_PRODUCT_HARMONY_FANOUT_MAX)
 
 #define SEQ_PRODUCT_PARAM_EVENTS_PER_HORIZON \
@@ -52,7 +52,7 @@
 #define SEQ_PRODUCT_TERMINAL_ONS_PER_HORIZON \
     (SEQ_PRODUCT_DIRECT_ONS_PER_HORIZON \
         + SEQ_PRODUCT_ECHO_STATE_CAPACITY \
-        + SEQ_PRODUCT_GROOVE_RESUME_EVENT_CAPACITY)
+        + SEQ_PRODUCT_DEFERRED_EVENT_CAPACITY)
 #define SEQ_PRODUCT_TERMINAL_NOTE_EVENTS_PER_HORIZON \
     (2U * SEQ_PRODUCT_TERMINAL_ONS_PER_HORIZON \
         + SEQ_PRODUCT_MAX_EMITTING_VOICES)
@@ -60,10 +60,6 @@
     (SEQ_PRODUCT_TERMINAL_NOTE_EVENTS_PER_HORIZON \
         + SEQ_PRODUCT_PARAM_EVENTS_PER_HORIZON)
 
-#define SEQ_PRODUCT_SCHEDULER_ITEMS_MAX \
-    (SEQ_PRODUCT_MAX_ACTIVE_SOURCES \
-        + SEQ_PRODUCT_MAX_EMITTING_VOICES \
-        + SEQ_PRODUCT_GROOVE_RESUME_BATCH_CAPACITY)
 
 _Static_assert(SEQ_PRODUCT_MAX_EMITTING_VOICES == 64U,
                "top-level sequencer voice proof changed");
@@ -71,21 +67,21 @@ _Static_assert(SEQ_PRODUCT_GROUP_MAX_EMITTING_VOICES
                    == SEQ_PRODUCT_MAX_EMITTING_VOICES,
                "GROUP sequencer voice proof changed");
 _Static_assert(SEQ_PRODUCT_MAX_ACTIVE_SOURCES == 192U,
-               "active scheduler source proof changed");
+               "active source owner proof changed");
 _Static_assert(SEQ_PRODUCT_MAX_NOTE_ONS_PER_HORIZON == 128U,
-               "scheduler horizon On proof changed");
+               "source horizon On proof changed");
 _Static_assert(SEQ_PRODUCT_MAX_MUSIC_ACTIONS_PER_HORIZON == 256U,
-               "scheduler horizon action proof changed");
+               "source horizon action proof changed");
 _Static_assert(SEQ_PRODUCT_ECHO_STATE_CAPACITY == 256U,
                "Echo branch identity proof changed");
 _Static_assert(SEQ_PRODUCT_HELD_STATE_CAPACITY == 256U,
                "held slot branch identity proof changed");
-_Static_assert(SEQ_PRODUCT_HELD_TOTAL_CAPACITY == 1024U,
+_Static_assert(SEQ_PRODUCT_HELD_TOTAL_CAPACITY == 512U,
                "held global identity proof changed");
-_Static_assert(SEQ_PRODUCT_GROOVE_RESUME_BATCH_CAPACITY == 128U,
-               "Groove resume batch proof changed");
-_Static_assert(SEQ_PRODUCT_GROOVE_RESUME_EVENT_CAPACITY == 512U,
-               "Groove resume event proof changed");
+_Static_assert(SEQ_PRODUCT_DEFERRED_BATCH_CAPACITY == 128U,
+               "deferred batch proof changed");
+_Static_assert(SEQ_PRODUCT_DEFERRED_EVENT_CAPACITY == 512U,
+               "deferred event proof changed");
 _Static_assert(SEQ_PRODUCT_TERMINAL_ONS_PER_HORIZON == 1280U,
                "terminal On proof changed");
 _Static_assert(SEQ_PRODUCT_TERMINAL_NOTE_EVENTS_PER_HORIZON == 2624U,
@@ -94,7 +90,5 @@ _Static_assert(SEQ_PRODUCT_PARAM_EVENTS_PER_HORIZON == 1024U,
                "parameter transition proof changed");
 _Static_assert(SEQ_PRODUCT_TERMINAL_EVENTS_PER_HORIZON == 3648U,
                "terminal publication proof changed");
-_Static_assert(SEQ_PRODUCT_SCHEDULER_ITEMS_MAX == 384U,
-               "scheduler item proof changed");
 
 #endif

@@ -643,46 +643,17 @@ static uint8_t audio_command_executor_apply_seq_event(
             (uint32_t)live_parameter_event_encode_float(value),kind);
     }
     audio_seq_output_t *const outputs = g_audio_seq_output[event->track];
+    if(event->logical_slot>=AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY)return 0U;
+    const uint8_t target=event->logical_slot;
     if (event->kind == SEQ_ENGINE_EVENT_NOTE_OFF)
     {
-        for (uint8_t i = 0U; i < AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY; ++i)
-        {
-            if ((outputs[i].active == 0U)
-                    || (outputs[i].occurrence_id != event->occurrence_id))
-                continue;
-            const uint8_t ok = audio_note_engine_adapter_apply_output(
-                event->track, outputs[i].note, 0U, 0U, outputs[i].id);
-            outputs[i] = (audio_seq_output_t){0};
-            return ok;
-        }
-        return 1U;
+        if(outputs[target].active==0U)return 1U;
+        if(outputs[target].occurrence_id!=event->occurrence_id)return 0U;
+        const uint8_t ok=audio_note_engine_adapter_apply_output(event->track,
+            outputs[target].note,0U,0U,outputs[target].id);
+        outputs[target]=(audio_seq_output_t){0};return ok;
     }
-
-    uint8_t target = AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY;
-    uint8_t oldest = 0U;
-    for (uint8_t i = 0U; i < AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY; ++i)
-    {
-        if ((outputs[i].active != 0U) && (outputs[i].note == event->note))
-        {
-            target = i;
-            break;
-        }
-        if (outputs[i].active == 0U)
-        {
-            target = i;
-            break;
-        }
-        if (outputs[i].age < outputs[oldest].age) oldest = i;
-    }
-    if (target == AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY) target = oldest;
-    if (outputs[target].active != 0U)
-    {
-        if (audio_note_engine_adapter_apply_output(event->track,
-                outputs[target].note, 0U, 0U, outputs[target].id) == 0U)
-            return 0U;
-        seq_engine_audio_retire_occurrence(outputs[target].occurrence_id);
-    }
-    outputs[target] = (audio_seq_output_t){0};
+    if(outputs[target].active!=0U)return 0U;
 
     const uint32_t output_id = UINT32_C(0x20000000)
         | (event->occurrence_id & UINT32_C(0x1FFFFFFF));

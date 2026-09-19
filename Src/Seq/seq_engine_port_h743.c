@@ -83,7 +83,8 @@ static void seq_boot_bench_pattern_init(void)
   p->track_can_emit[track]=(uint8_t)(master==0U);p->track_note_enabled[track]=(uint8_t)(master==0U);
   p->track_fx_enabled[track]=(uint8_t)(master==0U);p->track_exec[track].logical_capacity=
       master?0U:(child?1U:8U);p->steps[track][0].trig_roll=3U;
-  seq_boot_bench_fx(&p->note_fx[track],child);
+  note_fx_track_state_t fx_state;seq_boot_bench_fx(&fx_state,child);
+  (void)note_fx_plan_compile(&fx_state,0U,&p->fx_base_plan[track]);
   if(master)continue;
   const uint8_t voices=child?1U:8U;
   for(uint8_t voice=0U;voice<voices;++voice){seq_play_item_t*item=child
@@ -154,8 +155,7 @@ void seq_engine_boot_bench_run(void)
  seq_engine_drop_diag_capture(drop_reason);
  note_fx_engine_echo_diag_capture(&echo_diag);
  output_overflows+=drop_reason[3]+drop_reason[7];
- const uint32_t valid=(g_seq_bench_core.scheduler_overflow_count==0U
-    &&g_seq_bench_core.dropped_events==0U&&output_overflows==0U)?1U:0U;
+ const uint32_t valid=(g_seq_bench_core.dropped_events==0U&&output_overflows==0U)?1U:0U;
  g_seq_boot_bench=(seq_boot_bench_result_t){.magic=SEQ_BOOT_BENCH_MAGIC,
   .version=SEQ_BOOT_BENCH_VERSION,
   .size=(uint16_t)sizeof(g_seq_boot_bench),.iterations=SEQ_BOOT_BENCH_ITERATIONS,
@@ -168,7 +168,6 @@ void seq_engine_boot_bench_run(void)
   .blocks_over_m4_50=over50,.blocks_over_m4_75=over75,
   .max_consecutive_over_m4_50=maxrun50,.max_consecutive_over_m4_75=maxrun75,
   .blocks_over_m7_50=overm750,.blocks_over_m7_75=overm775,
-  .scheduler_overflows=g_seq_bench_core.scheduler_overflow_count,
   .technical_drops=g_seq_bench_core.dropped_events,.musical_rejections=0U,
   .output_overflows=output_overflows,.output_peak=output_peak,
   .max_cycles_ordinary=ordinary_max,
@@ -176,8 +175,7 @@ void seq_engine_boot_bench_run(void)
   .max_cycles_boundary=boundary_max,
   .mean_cycles_boundary=boundary_count?(uint32_t)(boundary_total/boundary_count):0U,
   .ordinary_blocks=ordinary_count,.boundary_blocks=boundary_count,
-  .drop_scheduler_capacity=drop_reason[0],
-  .drop_groove_resume_capacity=drop_reason[1],
+  .drop_deferred_capacity=drop_reason[1],
   .drop_ledger_admission=drop_reason[2],
   .drop_terminal_output_capacity=drop_reason[3],
   .drop_source_capacity=drop_reason[4],.drop_fx_preprocess=drop_reason[5],
@@ -211,7 +209,7 @@ void seq_engine_perf_capture(seq_engine_perf_snapshot_t *out)
   .p99_cycles=seq_perf_percentile(99U,100U),.p999_cycles=seq_perf_percentile(999U,1000U),
   .blocks_over_50=g_seq_perf.over50,.blocks_over_75=g_seq_perf.over75,
   .max_consecutive_over_50=g_seq_perf.maxrun50,.max_consecutive_over_75=g_seq_perf.maxrun75,
-  .scheduler_overflows=g_core.scheduler_overflow_count};__set_PRIMASK(primask);}
+  };__set_PRIMASK(primask);}
 
 void seq_engine_control_disarm_track(uint8_t track)
 {
@@ -420,14 +418,14 @@ void seq_service(uint64_t now_sample, uint64_t publish_until_sample)
             uint64_t captured=in.capture_sample;
             const uint64_t due=(captured<start)?start:captured;
             const note_event_t event={.sample_abs=due,
-                .duration_samples=NOTE_EVENT_DURATION_OPEN,
-                .source_id=in.occurrence_id,.intent_id=in.occurrence_id,
+                .duration_samples=1U,
+                .source_id=in.occurrence_id,.occurrence_id=in.occurrence_id,
                 .source_generation=pattern?pattern->generation:1U,
                 .group_id=in.occurrence_id,.track=in.track,
-                .destination_id=NOTE_EVENT_DESTINATION_DEFAULT,.note=in.note,
+                .note=in.note,
                 .velocity=in.velocity,.kind=in.kind,
                 .provenance=in.provenance,.stage=NOTE_EVENT_STAGE_SOURCE};
-            (void)seq_engine_core_submit_live(&g_core,&event,start,start+frames,block);
+            (void)seq_engine_core_submit_live(&g_core,&event,pattern,start,start+frames,block);
         }
         seq_engine_event_order(block);
     }
@@ -450,14 +448,15 @@ static void seq_service_urgent(uint64_t now_sample,uint64_t publish_until_sample
             const uint64_t due=(in.capture_sample<block->start_sample)
                 ?block->start_sample:in.capture_sample;
             const note_event_t event={.sample_abs=due,
-                .duration_samples=NOTE_EVENT_DURATION_OPEN,
-                .source_id=in.occurrence_id,.intent_id=in.occurrence_id,
+                .duration_samples=1U,
+                .source_id=in.occurrence_id,.occurrence_id=in.occurrence_id,
                 .source_generation=block->generation?block->generation:1U,
                 .group_id=in.occurrence_id,.track=in.track,
-                .destination_id=NOTE_EVENT_DESTINATION_DEFAULT,.note=in.note,
+                .note=in.note,
                 .velocity=in.velocity,.kind=in.kind,
                 .provenance=in.provenance,.stage=NOTE_EVENT_STAGE_SOURCE};
-            (void)seq_engine_core_submit_live(&g_core,&event,
+            const seq_pattern_t *const pattern=seq_engine_pattern_capture();
+            (void)seq_engine_core_submit_live(&g_core,&event,pattern,
                 block->start_sample,end,block);
         }
         seq_engine_event_order(block);

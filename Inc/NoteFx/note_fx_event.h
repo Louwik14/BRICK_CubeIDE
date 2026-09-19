@@ -32,7 +32,6 @@ typedef enum
 #include "NoteFx/note_fx_contract.h"
 
 #define NOTE_EVENT_STAGE_TERMINAL (NOTE_FX_SLOT_COUNT + 1U)
-#define NOTE_EVENT_DESTINATION_DEFAULT 0xFFU
 #define NOTE_EVENT_OCCURRENCE_COUNTER_MASK 0x3FFFFFFFU
 #define NOTE_EVENT_OCCURRENCE_NAMESPACE_STEP 0x00000000U
 #define NOTE_EVENT_OCCURRENCE_NAMESPACE_KEY  0x40000000U
@@ -49,21 +48,17 @@ typedef enum
 #define NOTE_EVENT_DEPENDENCY_SLOT_MASK 0x0FU
 #define NOTE_EVENT_BRANCH_SHIFT 4U
 #define NOTE_EVENT_BRANCH_MASK 0x30U
-#define NOTE_EVENT_DURATION_OPEN UINT32_MAX
 
-/* Canonical inter-slot musical event.  Legacy member aliases remain during
- * PASS 1 so the temporal pipeline can migrate without a parallel event type. */
+/* Canonical inter-slot musical event. */
 typedef struct
 {
     uint64_t sample_abs;
     uint32_t duration_samples;
-    union { uint32_t source_id; uint32_t source_token; };
-    union { uint32_t intent_id; uint32_t occurrence_id; };
-    union { uint32_t source_generation; uint32_t generation; };
+    uint32_t source_id;
+    uint32_t occurrence_id;
+    uint32_t source_generation;
     uint32_t group_id;
-    uint16_t dependency_versions;
     uint8_t track;
-    uint8_t destination_id;
     uint8_t note;
     uint8_t velocity;
     uint8_t kind;
@@ -108,9 +103,11 @@ static inline uint8_t note_event_is_valid(const note_event_t *event)
         && (event->kind <= (uint8_t)NOTE_EVENT_KIND_ON)
         && (event->provenance < (uint8_t)NOTE_EVENT_SOURCE_COUNT)
         && (event->stage <= NOTE_EVENT_STAGE_TERMINAL)
-        && (event->source_token != 0U)
+        && (event->source_id != 0U)
         && (event->occurrence_id != 0U)
-        && (event->generation != 0U);
+        && (event->source_generation != 0U)
+        && ((event->kind == (uint8_t)NOTE_EVENT_KIND_OFF)
+            || (event->duration_samples != 0U));
 }
 
 #endif

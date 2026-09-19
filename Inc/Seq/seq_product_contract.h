@@ -27,7 +27,7 @@
 #define SEQ_GROOVE_NEGATIVE_HORIZON_NUMERATOR 1U
 #define SEQ_GROOVE_NEGATIVE_HORIZON_DENOMINATOR 12U
 
-/* Scheduler PASS 2 proof inputs.  No scheduler is instantiated in PASS 1. */
+/* Fixed owner proof inputs. */
 #define SEQ_ROLL_MIN_INTERVAL_STEP_NUMERATOR 1U
 #define SEQ_ROLL_MIN_INTERVAL_STEP_DENOMINATOR 5U
 #define SEQ_ECHO_MAX_DELAY_STEPS 4U
