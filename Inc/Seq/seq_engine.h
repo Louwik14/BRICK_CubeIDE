@@ -11,13 +11,14 @@
 #include "Seq/seq_capacity_contract.h"
 
 #define SEQ_ENGINE_H743_PERIOD_SAMPLES 64U
-#define SEQ_ENGINE_EVENT_CAPACITY 3072U
+#define SEQ_ENGINE_EVENT_CAPACITY 4096U
 #define SEQ_ENGINE_BLOCK_SLOTS 3U
 #define SEQ_ENGINE_SNAPSHOT_SLOTS 2U
 #define SEQ_ENGINE_SCHEDULER_CAPACITY 512U
 #define SEQ_ENGINE_LEDGER_CAPACITY 64U
+#define SEQ_ENGINE_SOURCE_CAPACITY SEQ_PRODUCT_MAX_ACTIVE_SOURCES
 #define SEQ_ENGINE_LOCK_POOL_CAPACITY 512U
-#define SEQ_ENGINE_PARAM_EVENT_CAPACITY 256U
+#define SEQ_ENGINE_PARAM_EVENT_CAPACITY 1024U
 #define SEQ_ENGINE_FX_SCRATCH_CAPACITY 32U
 #define SEQ_ENGINE_INGRESS_CAPACITY 64U
 #define SEQ_ENGINE_PARAM_FLAG_CLEARABLE UINT16_C(0x8000)
@@ -140,6 +141,9 @@ typedef struct {
     uint8_t active;
 } seq_source_cursor_t;
 
+_Static_assert(sizeof(seq_source_cursor_t) == 48U,
+               "SEQ source cursor budget");
+
 typedef struct {
     uint64_t admitted_sample;
     uint32_t occurrence_id;
@@ -151,12 +155,16 @@ typedef struct {
     uint8_t reserved[3];
 } seq_ledger_entry_t;
 
+_Static_assert(sizeof(seq_ledger_entry_t) == 24U,
+               "SEQ logical ledger budget");
+
 typedef struct {
     uint64_t step_sample_q16;
     uint32_t samples_per_step_q16;
     uint32_t transport_epoch;
     uint32_t pattern_generation;
     uint32_t occurrence_serial;
+    uint32_t transport_step_serial;
     uint16_t scheduler_count;
     uint16_t scheduler_free_head;
     uint16_t scheduler_overflow_count;
@@ -236,6 +244,7 @@ typedef struct {
     uint32_t drop_source_transform;
     uint32_t drop_scheduled_output_capacity;
     uint32_t drop_fx_postprocess;
+    uint32_t drop_plock_capacity;
     uint32_t echo_active_peak;
     uint32_t echo_alloc_failures;
 } seq_boot_bench_result_t;
@@ -361,6 +370,7 @@ _Static_assert(SEQ_ENGINE_INGRESS_CAPACITY
                    == SEQ_INGRESS_EVENTS_PER_WINDOW_MAX,
                "inbox and raw ingress rate contracts diverged");
 _Static_assert(SEQ_ENGINE_LEDGER_CAPACITY == 64U, "SEQ logical ledger contract");
+_Static_assert(SEQ_ENGINE_SOURCE_CAPACITY == 192U, "SEQ source cursor contract");
 _Static_assert(SEQ_ENGINE_EVENT_CAPACITY >= SEQ_PRODUCT_TERMINAL_EVENTS_PER_HORIZON,
                "SEQ terminal publication below legal fanout");
 _Static_assert(SEQ_ENGINE_SCHEDULER_CAPACITY >= SEQ_PRODUCT_SCHEDULER_ITEMS_MAX,

@@ -9,7 +9,7 @@
 
 typedef enum { SLOT_FREE = 0, SLOT_WRITING, SLOT_READY, SLOT_READING } slot_state_t;
 static SEQ_STATE_SDRAM seq_event_block_t g_output[SEQ_ENGINE_BLOCK_SLOTS];
-static AUDIO_STATE_D3 seq_param_block_t g_params[SEQ_ENGINE_BLOCK_SLOTS];
+static SEQ_STATE_SDRAM seq_param_block_t g_params[SEQ_ENGINE_BLOCK_SLOTS];
 static SEQ_STATE_D2 seq_engine_core_t g_core;
 static volatile uint8_t g_slot_state[SEQ_ENGINE_BLOCK_SLOTS];
 static volatile uint64_t g_service_now, g_publish_until;
@@ -32,14 +32,14 @@ static struct {uint64_t total;uint32_t count,max,over50,over75,run50,run75,maxru
     uint32_t histogram[32];} g_seq_perf;
 
 #define SEQ_BOOT_BENCH_MAGIC UINT32_C(0x53514232)
-#define SEQ_BOOT_BENCH_VERSION 5U
+#define SEQ_BOOT_BENCH_VERSION 6U
 #define SEQ_BOOT_BENCH_WARMUP_BLOCKS 2048U
 #define SEQ_BOOT_BENCH_ITERATIONS 8192U
 #define SEQ_BOOT_BENCH_BUCKET_SHIFT 10U
 #define SEQ_BOOT_BENCH_BUCKET_COUNT 1024U
 #define SEQ_BOOT_BENCH_STEP_SAMPLES 2400U
 #define SEQ_BOOT_BENCH_LOGICAL_SOURCES 64U
-#define SEQ_BOOT_BENCH_DROP_REASON_COUNT 9U
+#define SEQ_BOOT_BENCH_DROP_REASON_COUNT 10U
 
 void seq_engine_drop_diag_reset(void);
 void seq_engine_drop_diag_capture(uint32_t out[SEQ_BOOT_BENCH_DROP_REASON_COUNT]);
@@ -184,6 +184,7 @@ void seq_engine_boot_bench_run(void)
   .drop_source_transform=drop_reason[6],
   .drop_scheduled_output_capacity=drop_reason[7],
   .drop_fx_postprocess=drop_reason[8],
+  .drop_plock_capacity=drop_reason[9],
   .echo_active_peak=echo_diag.active_peak,
   .echo_alloc_failures=echo_diag.alloc_failures,.valid=valid};
  seq_engine_irq_init();__DMB();g_seq_boot_bench.ready=1U;}
@@ -344,6 +345,9 @@ uint8_t seq_ingress_submit(const seq_ingress_event_t *event)
             ||(event->velocity>=128U)||(event->kind>NOTE_EVENT_KIND_ON)
             ||(event->provenance>=NOTE_EVENT_SOURCE_COUNT)
             ||(event->occurrence_id==0U))return 0U;
+    const seq_pattern_t *const pattern=seq_engine_pattern_capture();
+    if(event->track==BRICK_ENTITY_GROUP_MASTER_ID
+            ||(pattern!=0&&pattern->track_exec[event->track].logical_capacity==0U))return 0U;
     const uint32_t primask=__get_PRIMASK();__disable_irq();
     const uint64_t rate_window=event->capture_sample/SEQ_INGRESS_WINDOW_SAMPLES;
     if(g_ingress_rate_window==UINT64_MAX){g_ingress_rate_window=rate_window;
@@ -400,6 +404,15 @@ void seq_service(uint64_t now_sample, uint64_t publish_until_sample)
         seq_perf_record(DWT->CYCCNT-cycle_start);
         if(g_ingress_panic!=0U){g_ingress_panic=0U;
             seq_engine_core_init(&g_core);}
+        seq_param_block_t *const params = &g_params[slot];
+        for (uint16_t i = 0U; i < params->event_count; ++i) {
+            const seq_param_event_t *const event = &params->events[i];
+            block->events[block->event_count++] = (seq_event_t){
+                .offset=event->offset,.kind=SEQ_ENGINE_EVENT_PARAM,
+                .track=event->track,.occurrence_id=event->param_id,
+                .note=(uint8_t)event->value16,
+                .velocity=(uint8_t)(event->value16>>8U),.reserved=event->semantic};
+        }
         while(g_ingress_count!=0U){
             const seq_ingress_event_t in=g_ingress[g_ingress_tail];
             g_ingress_tail=(uint8_t)((g_ingress_tail+1U)%SEQ_ENGINE_INGRESS_CAPACITY);
@@ -416,22 +429,7 @@ void seq_service(uint64_t now_sample, uint64_t publish_until_sample)
                 .provenance=in.provenance,.stage=NOTE_EVENT_STAGE_SOURCE};
             (void)seq_engine_core_submit_live(&g_core,&event,start,start+frames,block);
         }
-        seq_param_block_t *const params = &g_params[slot];
-        if ((uint32_t)block->event_count + params->event_count
-                > SEQ_ENGINE_EVENT_CAPACITY) {
-            block->event_count = 0U; block->emitter_tracks = 0U;
-            block->lock_tracks = 0U;
-        } else {
-            for (uint16_t i = 0U; i < params->event_count; ++i) {
-                const seq_param_event_t *const event = &params->events[i];
-                block->events[block->event_count++] = (seq_event_t){
-                    .offset=event->offset,.kind=SEQ_ENGINE_EVENT_PARAM,
-                    .track=event->track,.occurrence_id=event->param_id,
-                    .note=(uint8_t)event->value16,
-                    .velocity=(uint8_t)(event->value16>>8U),.reserved=event->semantic};
-            }
-            seq_engine_event_order(block);
-        }
+        seq_engine_event_order(block);
     }
     block->block_id = (uint32_t)(start / frames);
     g_next_deadline = start + frames; __DMB(); g_slot_state[slot] = SLOT_READY;

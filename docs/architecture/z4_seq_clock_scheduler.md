@@ -88,16 +88,17 @@ pipeline.
 
 ## Borne worst-case de publication
 
-Les 64 curseurs source sont parcourus avec une borne fixe. Le quota reste 8
-pour une top-level et 1 pour un enfant; lorsqu'il impose un remplacement, la
-source la plus ancienne est choisie deterministement.
+Les 192 curseurs source sont parcourus avec une borne fixe: trois generations
+par voix produit. Le quota reste 24 pour une top-level et 3 pour un enfant;
+la borne refuse explicitement une quatrieme generation sans remplacer une
+source encore active.
 
 Les NOTE produites, les NOTE_OFF, l'ingress et les PARAM sont accumules sans
 tri intermediaire. Une unique mise en ordre stable en place, bornee par
-`SEQ_ENGINE_EVENT_CAPACITY`, publie sans allocation. La borne PASS 2 est 2880
+`SEQ_ENGINE_EVENT_CAPACITY`, publie sans allocation. La borne PASS 2 est 3648
 entrees: 1280 NOTE_ON (fanout direct, Echo du et reprises Groove), au plus
-1344 NOTE_OFF remplacements inclus, puis 256 parameter-locks. La capacite
-retenue est 3072 (192 entrees, soit 6,7 % de marge). Echo possede 256 identites stables
+1344 NOTE_OFF remplacements inclus, puis 1024 transitions parameter-lock. La capacite
+retenue est 4096 (448 entrees, soit 12,3 % de marge). Echo possede 256 identites stables
 `[track, lane, branche HARM]`; Groove conserve 128 lots de quatre branches
 sans reduire le fanout. Le
 departage conserve est `(sample, NOTE_OFF, PARAM, NOTE_ON, PANIC, ordre
@@ -116,6 +117,22 @@ Groove conserve au plus deux resumes par lane (128 globaux); une
 troisieme occurrence remplace d'abord un resume genere, sinon le plus ancien.
 Une date Groove negative issue du clavier ou du MIDI est clampee au sample de
 capture et aucun tweak ne reecrit une occurrence deja decidee.
+
+| Pool | Borne legale | Capacite | Marge | Budget statique |
+|---|---:|---:|---:|---:|
+| sources | 192 | 192 | 0 | 9 216 octets |
+| held ARP/Euclid | 256 par slot | 1 024 | 0 | 20 480 octets |
+| Echo | 256 | 256 | 0 | 16 384 octets |
+| Groove resume | 128 lots / 512 events | 128 lots | 0 | 23 552 octets max |
+| scheduler | 384 | 512 | 128 | 12 288 octets |
+| ledger | 64 | 64 | 0 | 1 536 octets |
+| scratch NoteFX | 32 | 32 | 0 | 2 560 octets, double buffer |
+| terminal | 3 648 | 4 096 | 448 | 110 640 octets, trois blocs |
+| p-lock | 1 024 (991 utile documente) | 1 024 | 33 sur 991 | 24 624 octets, trois blocs |
+
+Ces pools sont tous statiques et n'utilisent pas le heap. Le held est separe
+par slot: deux generateurs places dans la meme chaine ne peuvent donc pas se
+voler une identite canonique.
 
 ## Persistence et gros changements
 

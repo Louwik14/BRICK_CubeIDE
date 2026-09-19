@@ -5,11 +5,13 @@
 #include "NoteFx/note_fx_event.h"
 #include "NoteFx/note_fx_arp.h"
 #include "NoteFx/note_fx_state.h"
+#include "Seq/seq_capacity_contract.h"
 
 #define NOTE_FX_BATCH_CAPACITY 32U
+#define NOTE_FX_HELD_STATE_CAPACITY SEQ_PRODUCT_HELD_STATE_CAPACITY
 
-_Static_assert(NOTE_FX_HELD_PITCH_CAPACITY == 8U,
-               "Note FX held-pitch contract changed");
+_Static_assert(NOTE_FX_HELD_STATE_CAPACITY == 256U,
+               "Note FX canonical held-state contract changed");
 
 typedef note_event_result_t (*note_fx_emit_fn)(const note_event_t *, void *);
 

@@ -16,9 +16,15 @@ l'allocation, le reuse, le release, le stealing et le DSP physiques.
 | polyphonie enfant GROUP | 1 |
 | polyphonie master GROUP | 0 |
 | Echo | 1 etat par lane et branche HARM, 256 globaux |
+| held ARP/Euclid | 256 identites lane/branche par slot, 1024 globaux |
 | Groove | 2 resumes par lane, 128 globaux |
 | ARP | 1 etat actif par slot et lane, 16 slots |
 | Euclid | 1 etat actif par slot et lane, 16 slots |
+
+Les held ARP/Euclid sont indexes par slot, lane produit et branche causale. Un
+retrigger remplace l'identite existante; il ne consomme pas une entree par
+occurrence ROLL. `temporal_index` conserve les huit lanes et `destination_id`
+conserve ses huit bits.
 
 Le scheduler ne contient aucun evenement musical developpe. Chaque ticket
 porte une echeance, un type et une reference vers un etat externe fixe. Il n'y

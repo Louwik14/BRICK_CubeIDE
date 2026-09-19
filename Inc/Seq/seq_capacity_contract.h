@@ -27,6 +27,10 @@
  * eight-lane range) and Harmony branch. Top track 7 and its eight children
  * are mutually exclusive representations of the same product lanes. */
 #define SEQ_PRODUCT_HARMONY_FANOUT_MAX 4U
+#define SEQ_PRODUCT_HELD_STATE_CAPACITY \
+    (SEQ_PRODUCT_MAX_EMITTING_VOICES * SEQ_PRODUCT_HARMONY_FANOUT_MAX)
+#define SEQ_PRODUCT_HELD_TOTAL_CAPACITY \
+    (NOTE_FX_SLOT_COUNT * SEQ_PRODUCT_HELD_STATE_CAPACITY)
 #define SEQ_PRODUCT_ECHO_STATE_CAPACITY \
     (SEQ_PRODUCT_MAX_EMITTING_VOICES * SEQ_PRODUCT_HARMONY_FANOUT_MAX)
 #define SEQ_PRODUCT_DIRECT_ONS_PER_HORIZON \
@@ -43,7 +47,8 @@
     (SEQ_PRODUCT_GROOVE_RESUME_BATCH_CAPACITY \
         * SEQ_PRODUCT_HARMONY_FANOUT_MAX)
 
-#define SEQ_PRODUCT_PARAM_EVENTS_PER_HORIZON 256U
+#define SEQ_PRODUCT_PARAM_EVENTS_PER_HORIZON \
+    (SEQ_LANE_CAPACITY * SEQ_STEP_MAX_LOCKS * 2U)
 #define SEQ_PRODUCT_TERMINAL_ONS_PER_HORIZON \
     (SEQ_PRODUCT_DIRECT_ONS_PER_HORIZON \
         + SEQ_PRODUCT_ECHO_STATE_CAPACITY \
@@ -56,7 +61,7 @@
         + SEQ_PRODUCT_PARAM_EVENTS_PER_HORIZON)
 
 #define SEQ_PRODUCT_SCHEDULER_ITEMS_MAX \
-    (SEQ_PRODUCT_MAX_EMITTING_VOICES \
+    (SEQ_PRODUCT_MAX_ACTIVE_SOURCES \
         + SEQ_PRODUCT_MAX_EMITTING_VOICES \
         + SEQ_PRODUCT_GROOVE_RESUME_BATCH_CAPACITY)
 
@@ -73,6 +78,10 @@ _Static_assert(SEQ_PRODUCT_MAX_MUSIC_ACTIONS_PER_HORIZON == 256U,
                "scheduler horizon action proof changed");
 _Static_assert(SEQ_PRODUCT_ECHO_STATE_CAPACITY == 256U,
                "Echo branch identity proof changed");
+_Static_assert(SEQ_PRODUCT_HELD_STATE_CAPACITY == 256U,
+               "held slot branch identity proof changed");
+_Static_assert(SEQ_PRODUCT_HELD_TOTAL_CAPACITY == 1024U,
+               "held global identity proof changed");
 _Static_assert(SEQ_PRODUCT_GROOVE_RESUME_BATCH_CAPACITY == 128U,
                "Groove resume batch proof changed");
 _Static_assert(SEQ_PRODUCT_GROOVE_RESUME_EVENT_CAPACITY == 512U,
@@ -81,9 +90,11 @@ _Static_assert(SEQ_PRODUCT_TERMINAL_ONS_PER_HORIZON == 1280U,
                "terminal On proof changed");
 _Static_assert(SEQ_PRODUCT_TERMINAL_NOTE_EVENTS_PER_HORIZON == 2624U,
                "terminal note-event proof changed");
-_Static_assert(SEQ_PRODUCT_TERMINAL_EVENTS_PER_HORIZON == 2880U,
+_Static_assert(SEQ_PRODUCT_PARAM_EVENTS_PER_HORIZON == 1024U,
+               "parameter transition proof changed");
+_Static_assert(SEQ_PRODUCT_TERMINAL_EVENTS_PER_HORIZON == 3648U,
                "terminal publication proof changed");
-_Static_assert(SEQ_PRODUCT_SCHEDULER_ITEMS_MAX == 256U,
+_Static_assert(SEQ_PRODUCT_SCHEDULER_ITEMS_MAX == 384U,
                "scheduler item proof changed");
 
 #endif
