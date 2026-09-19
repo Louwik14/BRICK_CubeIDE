@@ -22,9 +22,10 @@
 #define SEQ_PRODUCT_MAX_MUSIC_ACTIONS_PER_HORIZON \
     (SEQ_PRODUCT_MAX_NOTE_ONS_PER_HORIZON * 2U)
 
-/* Harmonizer is the only multiplicative direct stage. Echo is compacted by
- * the stable [track, logical lane, harmony branch] identity, and its shortest
- * legal period (800 samples at 300 BPM) exceeds one 64-frame horizon. */
+/* Harmonizer is the only multiplicative direct stage. Echo is addressed by
+ * the canonical product lane (top track/lane, or GROUP child in the master's
+ * eight-lane range) and Harmony branch. Top track 7 and its eight children
+ * are mutually exclusive representations of the same product lanes. */
 #define SEQ_PRODUCT_HARMONY_FANOUT_MAX 4U
 #define SEQ_PRODUCT_ECHO_STATE_CAPACITY \
     (SEQ_PRODUCT_MAX_EMITTING_VOICES * SEQ_PRODUCT_HARMONY_FANOUT_MAX)

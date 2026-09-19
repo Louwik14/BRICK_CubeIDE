@@ -32,7 +32,7 @@ static struct {uint64_t total;uint32_t count,max,over50,over75,run50,run75,maxru
     uint32_t histogram[32];} g_seq_perf;
 
 #define SEQ_BOOT_BENCH_MAGIC UINT32_C(0x53514232)
-#define SEQ_BOOT_BENCH_VERSION 4U
+#define SEQ_BOOT_BENCH_VERSION 5U
 #define SEQ_BOOT_BENCH_WARMUP_BLOCKS 2048U
 #define SEQ_BOOT_BENCH_ITERATIONS 8192U
 #define SEQ_BOOT_BENCH_BUCKET_SHIFT 10U
@@ -150,7 +150,9 @@ void seq_engine_boot_bench_run(void)
   if(cycles>320000U)++overm750;
   if(cycles>480000U)++overm775;}
  uint32_t drop_reason[SEQ_BOOT_BENCH_DROP_REASON_COUNT];
+ note_fx_echo_diag_t echo_diag;
  seq_engine_drop_diag_capture(drop_reason);
+ note_fx_engine_echo_diag_capture(&echo_diag);
  output_overflows+=drop_reason[3]+drop_reason[7];
  const uint32_t valid=(g_seq_bench_core.scheduler_overflow_count==0U
     &&g_seq_bench_core.dropped_events==0U&&output_overflows==0U)?1U:0U;
@@ -181,7 +183,9 @@ void seq_engine_boot_bench_run(void)
   .drop_source_capacity=drop_reason[4],.drop_fx_preprocess=drop_reason[5],
   .drop_source_transform=drop_reason[6],
   .drop_scheduled_output_capacity=drop_reason[7],
-  .drop_fx_postprocess=drop_reason[8],.valid=valid};
+  .drop_fx_postprocess=drop_reason[8],
+  .echo_active_peak=echo_diag.active_peak,
+  .echo_alloc_failures=echo_diag.alloc_failures,.valid=valid};
  seq_engine_irq_init();__DMB();g_seq_boot_bench.ready=1U;}
 
 static void seq_perf_record(uint32_t cycles)

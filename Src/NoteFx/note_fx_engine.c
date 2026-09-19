@@ -35,6 +35,7 @@ typedef struct { note_fx_slot_runtime_t slot[NOTE_FX_TRACK_COUNT][NOTE_FX_SLOT_C
 } note_fx_engine_context_t;
 static CONTROL_M4_SRAM2 note_fx_engine_context_t g_seq_context;
 static SEQ_HOT_D1 note_fx_echo_state_t g_echo[SEQ_PRODUCT_ECHO_STATE_CAPACITY];
+static SEQ_HOT_D1 note_fx_echo_diag_t g_echo_diag;
 static note_fx_engine_context_t *const g_context=&g_seq_context;
 #define g_slot (g_context->slot)
 #define g_work_slot_mask (g_context->work_slot_mask)
@@ -54,11 +55,26 @@ static void refresh_work(uint8_t t,uint8_t s){const uint64_t b=slot_bit(t,s);if(
 static uint32_t next_token(void){g_token=(g_token+1U)&NOTE_EVENT_OCCURRENCE_COUNTER_MASK;if(!g_token)g_token=1U;return NOTE_EVENT_OCCURRENCE_NAMESPACE_FX|g_token;}
 static uint32_t mix32(uint32_t x){x^=x>>16;x*=UINT32_C(0x7FEB352D);x^=x>>15;x*=UINT32_C(0x846CA68B);return x^(x>>16);}
 static uint32_t child_id(uint32_t p,uint8_t s,uint8_t v,uint8_t r){uint32_t x=mix32(p^((uint32_t)(s+1U)<<24)^((uint32_t)(v+1U)<<12)^((uint32_t)(r+1U)<<4))&NOTE_EVENT_OCCURRENCE_COUNTER_MASK;if(!x)x=1U;return NOTE_EVENT_OCCURRENCE_NAMESPACE_FX|x;}
-static note_fx_echo_state_t*echo_state(const note_event_t*e){note_fx_echo_state_t*free_state=NULL;
- for(uint16_t i=0U;i<SEQ_PRODUCT_ECHO_STATE_CAPACITY;++i){note_fx_echo_state_t*x=&g_echo[i];
-  if(x->active&&x->seed.track==e->track&&x->seed.temporal_index==e->temporal_index
-      &&note_event_branch(&x->seed)==note_event_branch(e))return x;
-  if(!x->active&&!free_state)free_state=x;}return free_state;}
+static uint16_t echo_lane(const note_event_t*e){
+ if(e->track<BRICK_ENTITY_TOP_LEVEL_COUNT&&e->temporal_index<SEQ_LOGICAL_CAPACITY_MAX)
+  return(uint16_t)((uint16_t)e->track*SEQ_LOGICAL_CAPACITY_MAX+e->temporal_index);
+ if(e->track>=BRICK_ENTITY_FIRST_GROUP_CHILD_ID&&e->track<NOTE_FX_TRACK_COUNT
+      &&e->temporal_index==0U)
+  return(uint16_t)(((BRICK_ENTITY_TOP_LEVEL_COUNT-1U)*SEQ_LOGICAL_CAPACITY_MAX)
+      +(e->track-BRICK_ENTITY_FIRST_GROUP_CHILD_ID));
+ return UINT16_MAX;}
+static note_fx_echo_state_t*echo_state(const note_event_t*e){
+ ++g_echo_diag.alloc_attempts;const uint16_t lane=echo_lane(e);
+ const uint8_t branch=note_event_branch(e);
+ if(lane>=SEQ_PRODUCT_MAX_EMITTING_VOICES||branch>=SEQ_PRODUCT_HARMONY_FANOUT_MAX){
+  ++g_echo_diag.alloc_failures;return NULL;}
+ note_fx_echo_state_t*x=&g_echo[lane*SEQ_PRODUCT_HARMONY_FANOUT_MAX+branch];
+ if(x->active){++g_echo_diag.reuse_hits;
+  if(x->seed.track!=e->track||x->seed.temporal_index!=e->temporal_index
+      ||note_event_branch(&x->seed)!=branch){++g_echo_diag.key_collision_count;
+   x->active=0U;if(g_echo_diag.active)--g_echo_diag.active;}}
+ else ++g_echo_diag.free_hits;
+ return x;}
 static int8_t held_find(const note_fx_slot_runtime_t*r,const note_event_t*e){for(uint8_t i=0;i<r->held_count;++i)if(r->held[i].occurrence_id==e->intent_id&&r->held[i].generation==e->source_generation&&r->held[i].source_token==e->source_id)return(int8_t)i;return-1;}
 static void held_remove(note_fx_slot_runtime_t*r,uint8_t i){if(i>=r->held_count)return;--r->held_count;r->held[i]=r->held[r->held_count];memset(&r->held[r->held_count],0,sizeof(r->held[0]));}
 static note_event_result_t held_ingest(note_fx_slot_runtime_t*r,const note_event_t*e){const int8_t f=held_find(r,e);if(e->kind==NOTE_EVENT_KIND_OFF){if(f>=0)held_remove(r,(uint8_t)f);return NOTE_EVENT_RESULT_ACCEPTED;}uint8_t i;if(f>=0)i=(uint8_t)f;else{if(r->held_count>=NOTE_FX_HELD_PITCH_CAPACITY)return NOTE_EVENT_RESULT_REJECTED_CAPACITY;i=r->held_count++;}const uint8_t has_deadline=(uint8_t)(e->duration_samples!=NOTE_EVENT_DURATION_OPEN);r->held[i]=(note_fx_held_pitch_t){e->source_id,e->intent_id,e->source_generation,e->group_id,has_deadline?(uint32_t)(e->sample_abs+e->duration_samples):0U,e->note,e->velocity,e->dependency_mask,(uint8_t)((e->destination_id&0x0FU)|((e->temporal_index&0x03U)<<4U)|(has_deadline?0x40U:0U))};return NOTE_EVENT_RESULT_ACCEPTED;}
@@ -78,10 +94,12 @@ static note_event_result_t direct(uint8_t slot,note_fx_slot_runtime_t*r,const no
  if(r->model==NOTE_FX_MODEL_ECHO){if(!append(out,cap,count,e,stage))return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
   if(e->kind==NOTE_EVENT_KIND_ON&&r->p2){note_fx_echo_state_t*x=echo_state(e);if(!x)return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
    const uint32_t delay=(uint32_t)seq_division_period_samples(r->p1,g_samples_per_step_q16);
-   const uint64_t promised=x->active?x->next_due:UINT64_MAX;note_event_t seed=*e;seed.stage=stage;
+   const uint8_t was_active=x->active;const uint64_t promised=was_active?x->next_due:UINT64_MAX;note_event_t seed=*e;seed.stage=stage;
    *x=(note_fx_echo_state_t){
     .seed=seed,.anchor=e->sample_abs,.next_due=e->sample_abs+(delay?delay:1U),
     .delay=delay?delay:1U,.repeats=r->p2,.index=0U,.decay=r->p3,.active=1U};
+   if(!was_active){++g_echo_diag.active;if(g_echo_diag.active>g_echo_diag.active_peak)
+    g_echo_diag.active_peak=g_echo_diag.active;}
    if(promised<x->next_due)x->next_due=promised;}return NOTE_EVENT_RESULT_ACCEPTED;}
  if(r->model==NOTE_FX_MODEL_GATE){if(e->kind==NOTE_EVENT_KIND_OFF)return NOTE_EVENT_RESULT_ACCEPTED;note_event_t on=*e;on.flags|=NOTE_EVENT_FLAG_GATE;if(r->p3==NOTE_FX_GATE_MODE_LEGATO)on.flags|=NOTE_EVENT_FLAG_LEGATO;else if(r->p3==NOTE_FX_GATE_MODE_RETRIG)on.flags|=NOTE_EVENT_FLAG_RETRIGGER;int32_t var=0;if(r->p2){const uint32_t h=mix32(e->group_id^((uint32_t)slot<<24));var=(int32_t)(h%(2U*r->p2+1U))-(int32_t)r->p2;}int32_t pct=(int32_t)r->p1+var;if(pct<1)pct=1;if(r->p3==NOTE_FX_GATE_MODE_CLIP&&pct>100)pct=100;on.duration_samples=(uint32_t)(((uint64_t)pct*step_samples()+50U)/100U);return append(out,cap,count,&on,stage)?NOTE_EVENT_RESULT_ACCEPTED:NOTE_EVENT_RESULT_REJECTED_CAPACITY;}
  if(r->model==NOTE_FX_MODEL_HARMONIZER){uint8_t emitted=0;for(uint8_t voice=0;voice<SEQ_PRODUCT_HARMONY_FANOUT_MAX;++voice){uint8_t interval=g_harmony[r->p1%NOTE_FX_HARMONIZER_TYPE_COUNT][voice];if(interval==255)continue;if(voice<r->p3)interval=(uint8_t)(interval+12U);if(r->p2&&voice)interval=(uint8_t)(interval+12U*(1U+(uint8_t)((voice-1U)%r->p2)));if((uint16_t)e->note+interval>=128)continue;note_event_t x=*e;x.note=(uint8_t)(e->note+interval);x.dependency_mask=(uint8_t)((x.dependency_mask&NOTE_EVENT_DEPENDENCY_SLOT_MASK)|(voice<<NOTE_EVENT_BRANCH_SHIFT));if(voice){x.occurrence_id=child_id(e->occurrence_id,slot,voice,0);x.provenance=NOTE_EVENT_SOURCE_FX;x.flags|=NOTE_EVENT_FLAG_GENERATED;}uint8_t dup=0;for(uint8_t i=0;i<*count;++i)if(out[i].destination_id==x.destination_id&&out[i].note==x.note)dup=1;if(!dup){if(!append(out,cap,count,&x,stage))return NOTE_EVENT_RESULT_REJECTED_CAPACITY;++emitted;}}return emitted?NOTE_EVENT_RESULT_ACCEPTED:NOTE_EVENT_RESULT_DROPPED_POLICY;}
@@ -114,13 +132,14 @@ static note_event_result_t echo_process(uint64_t start,uint64_t end,note_fx_emit
        velocity=(velocity*(100U-x->decay)+50U)/100U;
    e.velocity=(uint8_t)(velocity?velocity:1U);
    note_event_result_t result=NOTE_EVENT_RESULT_ACCEPTED;if(emit)result=emit(&e,ctx);
-   if(x->index>=x->repeats)x->active=0U;
+   if(x->index>=x->repeats){x->active=0U;if(g_echo_diag.active)--g_echo_diag.active;}
    else{x->next_due=x->anchor+(uint64_t)(x->index+1U)*x->delay;
     if(x->next_due<=due)x->next_due=due+x->delay;}
    if(result!=NOTE_EVENT_RESULT_ACCEPTED)return result;}
  }(void)start;return NOTE_EVENT_RESULT_ACCEPTED;}
 
-void note_fx_engine_init(void){memset(&g_seq_context,0,sizeof(g_seq_context));memset(g_echo,0,sizeof(g_echo));g_seq_context.samples_per_step_q16=UINT32_C(65536);}
+void note_fx_engine_init(void){memset(&g_seq_context,0,sizeof(g_seq_context));memset(g_echo,0,sizeof(g_echo));memset(&g_echo_diag,0,sizeof(g_echo_diag));g_seq_context.samples_per_step_q16=UINT32_C(65536);}
+void note_fx_engine_echo_diag_capture(note_fx_echo_diag_t*out){if(out)*out=g_echo_diag;}
 void note_fx_engine_set_samples_per_step_q16(uint32_t v){g_samples_per_step_q16=v?v:1U;}
 note_event_result_t note_fx_engine_configure(uint8_t t,uint8_t s,uint8_t model,uint8_t p1,uint8_t p2,uint8_t p3,uint16_t dependency_versions){if(t>=NOTE_FX_TRACK_COUNT||s>=NOTE_FX_SLOT_COUNT)return NOTE_EVENT_RESULT_DROPPED_POLICY;note_fx_slot_runtime_t*r=&g_slot[t][s];if(model>=NOTE_FX_MODEL_COUNT)model=NOTE_FX_MODEL_OFF;if(r->model!=model)memset(r,0,sizeof(*r));r->model=model;r->p1=p1;r->p2=p2;r->p3=p3;r->dependency_versions=dependency_versions;refresh_work(t,s);return NOTE_EVENT_RESULT_ACCEPTED;}
 note_event_result_t note_fx_engine_transform(uint8_t s,const note_event_t*in,uint8_t n,note_event_t*out,uint8_t cap,uint8_t*count){if(!in||!out||!count||!n||s>=NOTE_FX_SLOT_COUNT)return NOTE_EVENT_RESULT_DROPPED_POLICY;for(uint8_t i=0;i<n;++i)if(!note_event_is_valid(&in[i])||in[i].track>=NOTE_FX_TRACK_COUNT||in[i].stage!=s||in[i].track!=in[0].track||in[i].group_id!=in[0].group_id||in[i].kind!=in[0].kind)return NOTE_EVENT_RESULT_DROPPED_POLICY;note_fx_slot_runtime_t*r=&g_slot[in[0].track][s];if(model_needs_held(r->model))for(uint8_t i=0;i<n;++i){const note_event_result_t held_result=held_ingest(r,&in[i]);if(held_result!=NOTE_EVENT_RESULT_ACCEPTED)return held_result;}refresh_work(in[0].track,s);if(r->model==NOTE_FX_MODEL_CHORD)return chord_group(s,r,in,n,out,cap,count);*count=0;for(uint8_t i=0;i<n;++i){const note_event_t*e=&in[i];if(!model_is_arp(r->model)&&r->model!=NOTE_FX_MODEL_EUCLID){const note_event_result_t result=direct(s,r,e,out,cap,count);if(result!=NOTE_EVENT_RESULT_ACCEPTED)return result;}}return NOTE_EVENT_RESULT_ACCEPTED;}

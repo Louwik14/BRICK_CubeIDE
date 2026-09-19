@@ -15,7 +15,7 @@ l'allocation, le reuse, le release, le stealing et le DSP physiques.
 | polyphonie top-level | 8 maximum |
 | polyphonie enfant GROUP | 1 |
 | polyphonie master GROUP | 0 |
-| Echo | 1 etat par lane, 64 globaux |
+| Echo | 1 etat par lane et branche HARM, 256 globaux |
 | Groove | 2 resumes par lane, 128 globaux |
 | ARP | 1 etat actif par slot et lane, 16 slots |
 | Euclid | 1 etat actif par slot et lane, 16 slots |
@@ -44,7 +44,11 @@ etat borne et le runtime ne materialise que le repeat du. Un retrigger
 reechantillonne TIME, REPEATS et DECAY et conserve l'echeance deja promise par
 `min(old_next_due, new_anchor + new_delay)`. Chaque repeat consomme son index,
 meme si l'admission terminale le refuse. L'etat Echo survit au NOTE_OFF sans
-occuper le ledger.
+ occuper le ledger. L'adresse d'etat est directe: les pistes principales
+ utilisent `(track * 8 + lane)`; les huit enfants GROUP reutilisent les huit
+ indices du master non emetteur. La branche HARM selectionne ensuite l'un des
+ quatre etats de la lane. Il n'existe donc ni recherche lineaire, ni refus
+ d'allocation pour une identite produit legale.
 
 Groove suspend le walker lorsqu'il deplace une occurrence. Deux resumes au plus
 sont conserves par lane. Une troisieme occurrence remplace d'abord un resume

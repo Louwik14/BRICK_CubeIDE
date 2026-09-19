@@ -236,6 +236,8 @@ typedef struct {
     uint32_t drop_source_transform;
     uint32_t drop_scheduled_output_capacity;
     uint32_t drop_fx_postprocess;
+    uint32_t echo_active_peak;
+    uint32_t echo_alloc_failures;
 } seq_boot_bench_result_t;
 
 extern volatile seq_boot_bench_result_t g_seq_boot_bench;

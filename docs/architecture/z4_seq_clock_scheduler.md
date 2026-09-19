@@ -110,8 +110,9 @@ controle de famille ou normalisation dependante du modele n'y subsiste.
 
 Les constantes produit figees sont 4 slots MIDI FX, une plage de tempo
 40..300 BPM, 8 notes logiques par lane principale, un enfant GROUP mono et un
-master a zero note. Echo conserve au plus un etat due-only par lane logique
-(64 globaux). Groove conserve au plus deux resumes par lane (128 globaux); une
+master a zero note. Echo conserve au plus un etat due-only par lane logique et
+branche HARM (256 globaux), adresse directement dans les 64 lanes produit.
+Groove conserve au plus deux resumes par lane (128 globaux); une
 troisieme occurrence remplace d'abord un resume genere, sinon le plus ancien.
 Une date Groove negative issue du clavier ou du MIDI est clampee au sample de
 capture et aucun tweak ne reecrit une occurrence deja decidee.

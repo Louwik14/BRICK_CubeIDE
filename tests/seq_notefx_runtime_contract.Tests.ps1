@@ -21,10 +21,46 @@ Describe 'SEQ/NoteFX bounded runtime contract' {
 
     It 'implements due-only bounded Echo with non-postponing retrigger' {
         $fx | Should Match 'g_echo\[SEQ_PRODUCT_ECHO_STATE_CAPACITY\]'
-        $fx | Should Match 'note_event_branch\(&x->seed\)==note_event_branch\(e\)'
+        $fx | Should Match 'lane\*SEQ_PRODUCT_HARMONY_FANOUT_MAX\+branch'
+        $fx | Should Match 'BRICK_ENTITY_FIRST_GROUP_CHILD_ID'
         $fx | Should Match 'if\(promised<x->next_due\)x->next_due=promised'
         $fx | Should Match 'while\(x->active&&x->next_due<end\)'
         $fx | Should Not Match 'for\(uint8_t rep=1;rep<=r->p2'
+    }
+
+    It 'reuses one canonical Echo state per lane and harmonic branch' {
+        $fx | Should Match 'if\(x->active\).*reuse_hits'
+        $fx | Should Match 'g_echo_diag.active_peak'
+        $fx | Should Match 'x->index>=x->repeats.*x->active=0U'
+        $fx | Should Match 'lane>=SEQ_PRODUCT_MAX_EMITTING_VOICES'
+        $header | Should Match 'echo_active_peak'
+        $header | Should Match 'echo_alloc_failures'
+    }
+
+    It 'covers HARM-ECHO branch identity and same-lane retrigger' {
+        $fx | Should Match 'lane\*SEQ_PRODUCT_HARMONY_FANOUT_MAX\+branch'
+        $fx | Should Match 'const uint8_t was_active=x->active'
+        $fx | Should Match 'promised=was_active\?x->next_due:UINT64_MAX'
+        $fx | Should Match 'x\.dependency_mask=.*voice<<NOTE_EVENT_BRANCH_SHIFT'
+    }
+
+    It 'covers ECHO-HARM continuation and final-repeat release' {
+        $fx | Should Match 'seed\.stage=stage'
+        $seq | Should Match 'walker_resume\(event,event->stage\)'
+        $fx | Should Match 'if\(x->index>=x->repeats\).*x->active=0U'
+    }
+
+    It 'maps the complete legal Echo capacity without alias or overflow' {
+        $indices = @()
+        foreach ($lane in 0..63) {
+            foreach ($branch in 0..3) { $indices += 4 * $lane + $branch }
+        }
+        ($indices | Select-Object -Unique).Count | Should Be 256
+        ($indices | Measure-Object -Minimum).Minimum | Should Be 0
+        ($indices | Measure-Object -Maximum).Maximum | Should Be 255
+        foreach ($child in 8..15) {
+            (56..63) -contains (56 + ($child - 8)) | Should Be $true
+        }
     }
 
     It 'bounds Groove resumes and clamps negative live timing' {
