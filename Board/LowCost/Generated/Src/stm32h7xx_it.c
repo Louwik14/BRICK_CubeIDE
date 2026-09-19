@@ -29,6 +29,7 @@
 #include "Platform/brick_media_clock.h"
 #include "SD/sd_io_hooks.h"
 #include "SD/sdmmc_async_transport.h"
+#include "Seq/seq_bench_irq_probe.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -213,12 +214,14 @@ void DebugMon_Handler(void)
   */
 void PendSV_Handler(void)
 {
+  seq_bench_irq_enter();
   /* USER CODE BEGIN PendSV_IRQn 0 */
 
   /* USER CODE END PendSV_IRQn 0 */
   /* USER CODE BEGIN PendSV_IRQn 1 */
 
   /* USER CODE END PendSV_IRQn 1 */
+  seq_bench_irq_exit();
 }
 
 /**
@@ -226,6 +229,7 @@ void PendSV_Handler(void)
   */
 void SysTick_Handler(void)
 {
+  seq_bench_irq_enter();
   /* USER CODE BEGIN SysTick_IRQn 0 */
 
   /* USER CODE END SysTick_IRQn 0 */
@@ -233,6 +237,7 @@ void SysTick_Handler(void)
   /* USER CODE BEGIN SysTick_IRQn 1 */
 
   /* USER CODE END SysTick_IRQn 1 */
+  seq_bench_irq_exit();
 }
 
 /******************************************************************************/
@@ -247,6 +252,7 @@ void SysTick_Handler(void)
   */
 void EXTI4_IRQHandler(void)
 {
+  seq_bench_irq_enter();
   /* USER CODE BEGIN EXTI4_IRQn 0 */
 
   /* USER CODE END EXTI4_IRQn 0 */
@@ -254,6 +260,7 @@ void EXTI4_IRQHandler(void)
   /* USER CODE BEGIN EXTI4_IRQn 1 */
 
   /* USER CODE END EXTI4_IRQn 1 */
+  seq_bench_irq_exit();
 }
 
 /**
@@ -261,7 +268,9 @@ void EXTI4_IRQHandler(void)
   */
 void EXTI9_5_IRQHandler(void)
 {
+  seq_bench_irq_enter();
   HAL_GPIO_EXTI_IRQHandler(HOST_FLAG_Pin);
+  seq_bench_irq_exit();
 }
 
 /**
@@ -269,6 +278,7 @@ void EXTI9_5_IRQHandler(void)
   */
 void DMA1_Stream0_IRQHandler(void)
 {
+  seq_bench_irq_enter();
   /* USER CODE BEGIN DMA1_Stream0_IRQn 0 */
 
   /* USER CODE END DMA1_Stream0_IRQn 0 */
@@ -276,6 +286,7 @@ void DMA1_Stream0_IRQHandler(void)
   /* USER CODE BEGIN DMA1_Stream0_IRQn 1 */
 
   /* USER CODE END DMA1_Stream0_IRQn 1 */
+  seq_bench_irq_exit();
 }
 
 /**
@@ -283,6 +294,7 @@ void DMA1_Stream0_IRQHandler(void)
   */
 void DMA1_Stream1_IRQHandler(void)
 {
+  seq_bench_irq_enter();
   /* USER CODE BEGIN DMA1_Stream1_IRQn 0 */
 
   /* USER CODE END DMA1_Stream1_IRQn 0 */
@@ -290,6 +302,7 @@ void DMA1_Stream1_IRQHandler(void)
   /* USER CODE BEGIN DMA1_Stream1_IRQn 1 */
 
   /* USER CODE END DMA1_Stream1_IRQn 1 */
+  seq_bench_irq_exit();
 }
 
 /**
@@ -297,6 +310,7 @@ void DMA1_Stream1_IRQHandler(void)
   */
 void DMA1_Stream2_IRQHandler(void)
 {
+  seq_bench_irq_enter();
   /* USER CODE BEGIN DMA1_Stream2_IRQn 0 */
 
   /* USER CODE END DMA1_Stream2_IRQn 0 */
@@ -304,6 +318,7 @@ void DMA1_Stream2_IRQHandler(void)
   /* USER CODE BEGIN DMA1_Stream2_IRQn 1 */
 
   /* USER CODE END DMA1_Stream2_IRQn 1 */
+  seq_bench_irq_exit();
 }
 
 /**
@@ -311,6 +326,7 @@ void DMA1_Stream2_IRQHandler(void)
   */
 void DMA1_Stream3_IRQHandler(void)
 {
+  seq_bench_irq_enter();
   /* USER CODE BEGIN DMA1_Stream3_IRQn 0 */
   sdmmc_async_transport_preempt_enter();
   /* USER CODE END DMA1_Stream3_IRQn 0 */
@@ -318,6 +334,7 @@ void DMA1_Stream3_IRQHandler(void)
   /* USER CODE BEGIN DMA1_Stream3_IRQn 1 */
   sdmmc_async_transport_preempt_exit();
   /* USER CODE END DMA1_Stream3_IRQn 1 */
+  seq_bench_irq_exit();
 }
 
 /**
@@ -325,6 +342,7 @@ void DMA1_Stream3_IRQHandler(void)
   */
 void DMA1_Stream4_IRQHandler(void)
 {
+  seq_bench_irq_enter();
   /* USER CODE BEGIN DMA1_Stream4_IRQn 0 */
   sdmmc_async_transport_preempt_enter();
   /* USER CODE END DMA1_Stream4_IRQn 0 */
@@ -332,6 +350,7 @@ void DMA1_Stream4_IRQHandler(void)
   /* USER CODE BEGIN DMA1_Stream4_IRQn 1 */
   sdmmc_async_transport_preempt_exit();
   /* USER CODE END DMA1_Stream4_IRQn 1 */
+  seq_bench_irq_exit();
 }
 
 /**
@@ -339,6 +358,7 @@ void DMA1_Stream4_IRQHandler(void)
   */
 void DMA1_Stream5_IRQHandler(void)
 {
+  seq_bench_irq_enter();
   /* USER CODE BEGIN DMA1_Stream5_IRQn 0 */
 
   /* USER CODE END DMA1_Stream5_IRQn 0 */
@@ -346,6 +366,7 @@ void DMA1_Stream5_IRQHandler(void)
   /* USER CODE BEGIN DMA1_Stream5_IRQn 1 */
 
   /* USER CODE END DMA1_Stream5_IRQn 1 */
+  seq_bench_irq_exit();
 }
 
 /**
@@ -353,6 +374,7 @@ void DMA1_Stream5_IRQHandler(void)
   */
 void TIM8_BRK_TIM12_IRQHandler(void)
 {
+  seq_bench_irq_enter();
   /* USER CODE BEGIN TIM8_BRK_TIM12_IRQn 0 */
 
   /* USER CODE END TIM8_BRK_TIM12_IRQn 0 */
@@ -360,6 +382,7 @@ void TIM8_BRK_TIM12_IRQHandler(void)
   /* USER CODE BEGIN TIM8_BRK_TIM12_IRQn 1 */
 
   /* USER CODE END TIM8_BRK_TIM12_IRQn 1 */
+  seq_bench_irq_exit();
 }
 
 /**
@@ -367,6 +390,7 @@ void TIM8_BRK_TIM12_IRQHandler(void)
   */
 void SDMMC1_IRQHandler(void)
 {
+  seq_bench_irq_enter();
   /* USER CODE BEGIN SDMMC1_IRQn 0 */
 
   /* USER CODE END SDMMC1_IRQn 0 */
@@ -374,6 +398,7 @@ void SDMMC1_IRQHandler(void)
   /* USER CODE BEGIN SDMMC1_IRQn 1 */
 
   /* USER CODE END SDMMC1_IRQn 1 */
+  seq_bench_irq_exit();
 }
 
 /**
@@ -381,6 +406,7 @@ void SDMMC1_IRQHandler(void)
   */
 void TIM5_IRQHandler(void)
 {
+  seq_bench_irq_enter();
   /* USER CODE BEGIN TIM5_IRQn 0 */
   if ((__HAL_TIM_GET_FLAG(&htim5, TIM_FLAG_UPDATE) != RESET) &&
       (__HAL_TIM_GET_IT_SOURCE(&htim5, TIM_IT_UPDATE) != RESET))
@@ -392,6 +418,7 @@ void TIM5_IRQHandler(void)
   /* USER CODE BEGIN TIM5_IRQn 1 */
 
   /* USER CODE END TIM5_IRQn 1 */
+  seq_bench_irq_exit();
 }
 
 /**
@@ -399,15 +426,18 @@ void TIM5_IRQHandler(void)
   */
 void TIM7_IRQHandler(void)
 {
+  seq_bench_irq_enter();
   /* USER CODE BEGIN TIM7_IRQn 0 */
   if ((__HAL_TIM_GET_FLAG(&htim7, TIM_FLAG_UPDATE) != RESET) &&
       (__HAL_TIM_GET_IT_SOURCE(&htim7, TIM_IT_UPDATE) != RESET))
   {
     __HAL_TIM_CLEAR_IT(&htim7, TIM_IT_UPDATE);
     encoders_fast_poll_irq();
+    seq_bench_irq_exit();
     return;
   }
 
+  seq_bench_irq_exit();
   return;
   /* USER CODE END TIM7_IRQn 0 */
   HAL_TIM_IRQHandler(&htim7);
@@ -421,6 +451,7 @@ void TIM7_IRQHandler(void)
   */
 void SPI5_IRQHandler(void)
 {
+  seq_bench_irq_enter();
   /* USER CODE BEGIN SPI5_IRQn 0 */
 
   /* USER CODE END SPI5_IRQn 0 */
@@ -428,6 +459,7 @@ void SPI5_IRQHandler(void)
   /* USER CODE BEGIN SPI5_IRQn 1 */
 
   /* USER CODE END SPI5_IRQn 1 */
+  seq_bench_irq_exit();
 }
 
 /**
@@ -435,6 +467,7 @@ void SPI5_IRQHandler(void)
   */
 void SAI1_IRQHandler(void)
 {
+  seq_bench_irq_enter();
   /* USER CODE BEGIN SAI1_IRQn 0 */
   sdmmc_async_transport_preempt_enter();
   /* USER CODE END SAI1_IRQn 0 */
@@ -443,6 +476,7 @@ void SAI1_IRQHandler(void)
   /* USER CODE BEGIN SAI1_IRQn 1 */
   sdmmc_async_transport_preempt_exit();
   /* USER CODE END SAI1_IRQn 1 */
+  seq_bench_irq_exit();
 }
 
 /**
@@ -450,8 +484,10 @@ void SAI1_IRQHandler(void)
   */
 void OTG_FS_IRQHandler(void)
 {
+  seq_bench_irq_enter();
   /* USER CODE BEGIN OTG_FS_IRQn 0 */
   usb_role_irq_dispatch();
+  seq_bench_irq_exit();
   return;
   /* USER CODE END OTG_FS_IRQn 0 */
   /* USER CODE BEGIN OTG_FS_IRQn 1 */

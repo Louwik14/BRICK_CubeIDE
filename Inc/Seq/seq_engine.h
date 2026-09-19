@@ -211,6 +211,18 @@ typedef struct {
     uint32_t drop_plock_capacity;
     uint32_t echo_active_peak;
     uint32_t echo_alloc_failures;
+    uint32_t cpu_max_cycles;
+    uint32_t cpu_mean_cycles;
+    uint32_t cpu_p99_cycles;
+    uint32_t cpu_p999_cycles;
+    uint32_t cpu_max_cycles_ordinary;
+    uint32_t cpu_mean_cycles_ordinary;
+    uint32_t cpu_max_cycles_boundary;
+    uint32_t cpu_mean_cycles_boundary;
+    uint32_t irq_cycles_max_block;
+    uint32_t preempted_blocks;
+    uint32_t max_preemption_cycles;
+    uint64_t irq_cycles_total;
 } seq_boot_bench_result_t;
 
 extern volatile seq_boot_bench_result_t g_seq_boot_bench;

@@ -3,6 +3,8 @@
 #include "Platform/memory_layout.h"
 #include "Platform/brick_media_clock.h"
 #include "SD/sdmmc_async_transport.h"
+#include "Seq/seq_bench_irq_probe.h"
+#include "Seq/seq_boundary_probe.h"
 #include "stm32h7xx.h"
 #include <limits.h>
 #include <string.h>
@@ -33,11 +35,11 @@ static struct {uint64_t total;uint32_t count,max,over50,over75,run50,run75,maxru
     uint32_t histogram[32];} g_seq_perf;
 
 #define SEQ_BOOT_BENCH_MAGIC UINT32_C(0x53514232)
-#define SEQ_BOOT_BENCH_VERSION 6U
+#define SEQ_BOOT_BENCH_VERSION 7U
 #define SEQ_BOOT_BENCH_WARMUP_BLOCKS 2048U
 #define SEQ_BOOT_BENCH_ITERATIONS 8192U
-#define SEQ_BOOT_BENCH_BUCKET_SHIFT 10U
-#define SEQ_BOOT_BENCH_BUCKET_COUNT 1024U
+#define SEQ_BOOT_BENCH_BUCKET_SHIFT 13U
+#define SEQ_BOOT_BENCH_BUCKET_COUNT 512U
 #define SEQ_BOOT_BENCH_STEP_SAMPLES 2400U
 #define SEQ_BOOT_BENCH_LOGICAL_SOURCES 64U
 #define SEQ_BOOT_BENCH_DROP_REASON_COUNT 10U
@@ -54,6 +56,11 @@ CTRL_STATE __attribute__((used)) volatile seq_boot_bench_result_t g_seq_boot_ben
 #define g_seq_bench_core g_core
 #define g_seq_bench_output (g_terminal[0])
 SEQ_HOT_D1 static uint32_t g_seq_bench_histogram[SEQ_BOOT_BENCH_BUCKET_COUNT];
+SEQ_HOT_D1 static uint32_t g_seq_bench_cpu_histogram[SEQ_BOOT_BENCH_BUCKET_COUNT];
+volatile uint32_t g_seq_bench_irq_window_active;
+volatile uint32_t g_seq_bench_irq_depth;
+volatile uint32_t g_seq_bench_irq_started;
+volatile uint32_t g_seq_bench_irq_cycles;
 
 /* Fixed reference chains.  Parameters are deliberately ordinary musical
  * values: major triad; 1/16 Echo, two repeats, 32% decay; 75% Gate; Groove 3
@@ -96,10 +103,11 @@ static void seq_boot_bench_pattern_init(void)
       .length=64U,.microtiming=0,.present_mask=SEQ_STEP_PLAY_PRESENT_ALL};}}
 }
 
-static uint32_t seq_boot_bench_percentile(uint32_t numerator,uint32_t denominator)
+static uint32_t seq_boot_bench_percentile(const uint32_t *histogram,
+    uint32_t numerator,uint32_t denominator)
 {const uint32_t target=(SEQ_BOOT_BENCH_ITERATIONS*numerator+denominator-1U)/denominator;
  uint32_t cumulative=0U;for(uint32_t i=0U;i<SEQ_BOOT_BENCH_BUCKET_COUNT;++i){
- cumulative+=g_seq_bench_histogram[i];if(cumulative>=target)
+ cumulative+=histogram[i];if(cumulative>=target)
    return((i+1U)<<SEQ_BOOT_BENCH_BUCKET_SHIFT)-1U;}return UINT32_MAX;}
 
 static uint8_t seq_boot_bench_service(uint64_t sample)
@@ -114,7 +122,8 @@ static uint8_t seq_boot_bench_boundary(uint64_t sample)
 
 void seq_engine_boot_bench_run(void)
 {memset((void*)&g_seq_boot_bench,0,sizeof(g_seq_boot_bench));
- memset(g_seq_bench_histogram,0,sizeof(g_seq_bench_histogram));seq_boot_bench_pattern_init();
+ memset(g_seq_bench_histogram,0,sizeof(g_seq_bench_histogram));
+ memset(g_seq_bench_cpu_histogram,0,sizeof(g_seq_bench_cpu_histogram));seq_boot_bench_pattern_init();
  CoreDebug->DEMCR|=CoreDebug_DEMCR_TRCENA_Msk;DWT->CYCCNT=0U;DWT->CTRL|=DWT_CTRL_CYCCNTENA_Msk;
  seq_engine_drop_diag_reset();
  seq_engine_core_init(&g_seq_bench_core);uint64_t sample=SEQ_BOOT_BENCH_STEP_SAMPLES;
@@ -122,27 +131,47 @@ void seq_engine_boot_bench_run(void)
  for(uint32_t i=0U;i<SEQ_BOOT_BENCH_WARMUP_BLOCKS;++i,
        sample+=SEQ_ENGINE_H743_PERIOD_SAMPLES)
   output_overflows+=seq_boot_bench_service(sample);
+ seq_boundary_probe_reset();
  uint64_t total=0U,ordinary_total=0U,boundary_total=0U;
+ uint64_t cpu_total=0U,cpu_ordinary_total=0U,cpu_boundary_total=0U,irq_total=0U;
  uint32_t max=0U,ordinary_max=0U,boundary_max=0U,ordinary_count=0U,boundary_count=0U;
+ uint32_t cpu_max=0U,cpu_ordinary_max=0U,cpu_boundary_max=0U,irq_max=0U,preempted_blocks=0U;
  uint32_t source_peak=0U;
  uint32_t run50=0U,run75=0U,maxrun50=0U,maxrun75=0U;
  uint32_t over50=0U,over75=0U,overm750=0U,overm775=0U,output_peak=0U;
  for(uint32_t i=0U;i<SEQ_BOOT_BENCH_ITERATIONS;++i,sample+=SEQ_ENGINE_H743_PERIOD_SAMPLES){
   const uint8_t boundary=seq_boot_bench_boundary(sample);
-  const uint32_t started=DWT->CYCCNT;
+  seq_boundary_probe_block_begin(boundary);
+  g_seq_bench_irq_depth=0U;g_seq_bench_irq_cycles=0U;
+  const uint32_t started=DWT->CYCCNT;g_seq_bench_irq_window_active=1U;
   output_overflows+=seq_boot_bench_service(sample);
-  const uint32_t cycles=DWT->CYCCNT-started;total+=cycles;if(cycles>max)max=cycles;
+  seq_boundary_probe_block_end();
+  const uint32_t finished=DWT->CYCCNT;g_seq_bench_irq_window_active=0U;
+  const uint32_t cycles=finished-started,irq_cycles=g_seq_bench_irq_cycles;
+  const uint32_t cpu_cycles=(irq_cycles<=cycles)?cycles-irq_cycles:0U;
+  total+=cycles;cpu_total+=cpu_cycles;irq_total+=irq_cycles;
+  if(cycles>max)max=cycles;
+  if(cpu_cycles>cpu_max)cpu_max=cpu_cycles;
+  if(irq_cycles!=0U)++preempted_blocks;
+  if(irq_cycles>irq_max)irq_max=irq_cycles;
   if(g_seq_bench_core.source_count>source_peak)source_peak=g_seq_bench_core.source_count;
-  if(boundary!=0U){boundary_total+=cycles;++boundary_count;
-   if(cycles>boundary_max)boundary_max=cycles;}
-  else{ordinary_total+=cycles;++ordinary_count;if(cycles>ordinary_max)ordinary_max=cycles;}
+  if(boundary!=0U){boundary_total+=cycles;cpu_boundary_total+=cpu_cycles;++boundary_count;
+   if(cycles>boundary_max)boundary_max=cycles;
+   if(cpu_cycles>cpu_boundary_max)cpu_boundary_max=cpu_cycles;}
+  else{ordinary_total+=cycles;cpu_ordinary_total+=cpu_cycles;++ordinary_count;
+   if(cycles>ordinary_max)ordinary_max=cycles;
+   if(cpu_cycles>cpu_ordinary_max)cpu_ordinary_max=cpu_cycles;}
   uint32_t bucket=cycles>>SEQ_BOOT_BENCH_BUCKET_SHIFT;
   if(bucket>=SEQ_BOOT_BENCH_BUCKET_COUNT)bucket=SEQ_BOOT_BENCH_BUCKET_COUNT-1U;
   ++g_seq_bench_histogram[bucket];if(g_seq_bench_output.event_count>output_peak)output_peak=g_seq_bench_output.event_count;
+  bucket=cpu_cycles>>SEQ_BOOT_BENCH_BUCKET_SHIFT;
+  if(bucket>=SEQ_BOOT_BENCH_BUCKET_COUNT)bucket=SEQ_BOOT_BENCH_BUCKET_COUNT-1U;
+  ++g_seq_bench_cpu_histogram[bucket];
   if(cycles>160000U){++over50;++run50;if(run50>maxrun50)maxrun50=run50;}else run50=0U;
   if(cycles>240000U){++over75;++run75;if(run75>maxrun75)maxrun75=run75;}else run75=0U;
   if(cycles>320000U)++overm750;
   if(cycles>480000U)++overm775;}
+ seq_boundary_probe_publish();
  uint32_t drop_reason[SEQ_BOOT_BENCH_DROP_REASON_COUNT];
  note_fx_echo_diag_t echo_diag;
  seq_engine_drop_diag_capture(drop_reason);
@@ -156,8 +185,8 @@ void seq_engine_boot_bench_run(void)
   .frames=SEQ_ENGINE_H743_PERIOD_SAMPLES,.logical_sources=SEQ_BOOT_BENCH_LOGICAL_SOURCES,
   .active_sources_peak=source_peak,
   .max_cycles=max,.mean_cycles=(uint32_t)(total/SEQ_BOOT_BENCH_ITERATIONS),
-  .p99_cycles=seq_boot_bench_percentile(99U,100U),
-  .p999_cycles=seq_boot_bench_percentile(999U,1000U),
+  .p99_cycles=seq_boot_bench_percentile(g_seq_bench_histogram,99U,100U),
+  .p999_cycles=seq_boot_bench_percentile(g_seq_bench_histogram,999U,1000U),
   .blocks_over_m4_50=over50,.blocks_over_m4_75=over75,
   .max_consecutive_over_m4_50=maxrun50,.max_consecutive_over_m4_75=maxrun75,
   .blocks_over_m7_50=overm750,.blocks_over_m7_75=overm775,
@@ -177,7 +206,16 @@ void seq_engine_boot_bench_run(void)
   .drop_fx_postprocess=drop_reason[8],
   .drop_plock_capacity=drop_reason[9],
   .echo_active_peak=echo_diag.active_peak,
-  .echo_alloc_failures=echo_diag.alloc_failures,.valid=valid};
+  .echo_alloc_failures=echo_diag.alloc_failures,
+  .cpu_max_cycles=cpu_max,.cpu_mean_cycles=(uint32_t)(cpu_total/SEQ_BOOT_BENCH_ITERATIONS),
+  .cpu_p99_cycles=seq_boot_bench_percentile(g_seq_bench_cpu_histogram,99U,100U),
+  .cpu_p999_cycles=seq_boot_bench_percentile(g_seq_bench_cpu_histogram,999U,1000U),
+  .cpu_max_cycles_ordinary=cpu_ordinary_max,
+  .cpu_mean_cycles_ordinary=ordinary_count?(uint32_t)(cpu_ordinary_total/ordinary_count):0U,
+  .cpu_max_cycles_boundary=cpu_boundary_max,
+  .cpu_mean_cycles_boundary=boundary_count?(uint32_t)(cpu_boundary_total/boundary_count):0U,
+  .irq_cycles_max_block=irq_max,.preempted_blocks=preempted_blocks,
+  .max_preemption_cycles=irq_max,.irq_cycles_total=irq_total,.valid=valid};
  seq_engine_irq_init();__DMB();g_seq_boot_bench.ready=1U;}
 
 static void seq_perf_record(uint32_t cycles)
@@ -470,9 +508,10 @@ static void seq_service_urgent(uint64_t now_sample,uint64_t publish_until_sample
 
 void TIM4_IRQHandler(void)
 {
+    seq_bench_irq_enter();
     sdmmc_async_transport_preempt_enter();
     if ((g_pending == 0U)&&(g_urgent_pending==0U)) {
-        sdmmc_async_transport_preempt_exit(); return;
+        sdmmc_async_transport_preempt_exit(); seq_bench_irq_exit(); return;
     }
     uint64_t now = g_service_now;const uint64_t until = g_publish_until;
     const uint8_t urgent=g_urgent_pending,periodic=g_pending;
@@ -481,4 +520,5 @@ void TIM4_IRQHandler(void)
     if(periodic!=0U)seq_service(now,until);else seq_service_urgent(now,until);
     if(g_urgent_pending!=0U)NVIC_SetPendingIRQ(TIM4_IRQn);
     sdmmc_async_transport_preempt_exit();
+    seq_bench_irq_exit();
 }
