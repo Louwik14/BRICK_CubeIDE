@@ -24,10 +24,10 @@
 
 /* USER CODE BEGIN FirstSection */
 /* can be used to modify / undefine following code or add new definitions */
+#include "Platform/memory_layout.h"
 /* USER CODE END FirstSection */
 /* Includes ------------------------------------------------------------------*/
 #include "bsp_driver_sd.h"
-#include "Platform/memory_layout.h"
 #include "Storage/sd_access_gate.h"
 
 /* Extern variables ---------------------------------------------------------*/
@@ -35,8 +35,10 @@
 extern SD_HandleTypeDef hsd1;
 static uint8_t g_bsp_sd_initialized;
 
-#define BSP_SD_SAFE_CLOCK_DIVIDER       (5U)
-#define BSP_SD_HIGH_SPEED_CLOCK_DIVIDER (3U)
+/* USER CODE BEGIN BeforeInitSection */
+/* can be used to modify / undefine following code or add code */
+#define BSP_SD_SAFE_CLOCK_DIVIDER       (4U)
+#define BSP_SD_HIGH_SPEED_CLOCK_DIVIDER (2U)
 
 UI_HOT_DTCM volatile bsp_sd_high_speed_diag_t g_bsp_sd_high_speed_diag
   __attribute__((used, aligned(32)));
@@ -48,11 +50,13 @@ static uint32_t BSP_SD_ClockHz(uint32_t kernel_hz, uint32_t divider)
 
 static void BSP_SD_RecordRuntimeConfig(uint8_t high_speed_succeeded)
 {
+  PLL2_ClocksTypeDef pll2 = {0};
   const uint32_t kernel_hz =
     HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_SDMMC);
   const uint32_t clkcr = hsd1.Instance->CLKCR;
   const uint32_t divider = clkcr & SDMMC_CLKCR_CLKDIV;
   const uint32_t width = clkcr & SDMMC_CLKCR_WIDBUS;
+  HAL_RCCEx_GetPLL2ClockFreq(&pll2);
 
   g_bsp_sd_high_speed_diag.card_supports_high_speed =
     (high_speed_succeeded != 0U) ? 1U : 0U;
@@ -63,11 +67,26 @@ static void BSP_SD_RecordRuntimeConfig(uint8_t high_speed_succeeded)
     BSP_SD_ClockHz(kernel_hz, divider);
   g_bsp_sd_high_speed_diag.final_bus_width_bits =
     (width == SDMMC_BUS_WIDE_4B) ? 4U : 1U;
+  g_bsp_sd_high_speed_diag.pll2r_hz = pll2.PLL2_R_Frequency;
+  g_bsp_sd_high_speed_diag.fmc_kernel_hz = HAL_RCC_GetHCLKFreq();
+  g_bsp_sd_high_speed_diag.sdram_clock_hz = HAL_RCC_GetHCLKFreq() / 2U;
+  g_bsp_sd_high_speed_diag.adc_clock_hz =
+    HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_ADC) / 2U;
 }
 
-static void BSP_SD_TryHighSpeed(void)
+void BSP_SD_ConfigureHighSpeed(void)
 {
   uint8_t high_speed_succeeded = 0U;
+
+  g_bsp_sd_high_speed_diag.card_supports_high_speed = 0U;
+  g_bsp_sd_high_speed_diag.high_speed_switch_succeeded = 0U;
+  g_bsp_sd_high_speed_diag.final_clock_divider = 0U;
+  g_bsp_sd_high_speed_diag.final_sdclk_hz = 0U;
+  g_bsp_sd_high_speed_diag.final_bus_width_bits = 0U;
+  g_bsp_sd_high_speed_diag.pll2r_hz = 0U;
+  g_bsp_sd_high_speed_diag.fmc_kernel_hz = 0U;
+  g_bsp_sd_high_speed_diag.sdram_clock_hz = 0U;
+  g_bsp_sd_high_speed_diag.adc_clock_hz = 0U;
 
   if (HAL_SD_ConfigSpeedBusOperation(
         &hsd1, SDMMC_SPEED_MODE_HIGH) == HAL_OK)
@@ -79,7 +98,7 @@ static void BSP_SD_TryHighSpeed(void)
   else
   {
     /* CMD6 mode-switch failure leaves a non-HS card in Default Speed.  Keep
-       the previous known-safe clock and do not turn lack of HS into a boot
+       the known-safe 25 MHz clock and do not turn lack of HS into a boot
        failure. */
     hsd1.ErrorCode = HAL_SD_ERROR_NONE;
     hsd1.State = HAL_SD_STATE_READY;
@@ -89,9 +108,6 @@ static void BSP_SD_TryHighSpeed(void)
 
   BSP_SD_RecordRuntimeConfig(high_speed_succeeded);
 }
-
-/* USER CODE BEGIN BeforeInitSection */
-/* can be used to modify / undefine following code or add code */
 /* USER CODE END BeforeInitSection */
 /**
   * @brief  Initializes the SD card device.
@@ -113,11 +129,6 @@ __weak uint8_t BSP_SD_Init(void)
 {
   uint8_t sd_state = MSD_OK;
   g_bsp_sd_initialized = 0U;
-  g_bsp_sd_high_speed_diag.card_supports_high_speed = 0U;
-  g_bsp_sd_high_speed_diag.high_speed_switch_succeeded = 0U;
-  g_bsp_sd_high_speed_diag.final_clock_divider = 0U;
-  g_bsp_sd_high_speed_diag.final_sdclk_hz = 0U;
-  g_bsp_sd_high_speed_diag.final_bus_width_bits = 0U;
   /* HAL SD initialization */
   sd_state = HAL_SD_Init(&hsd1);
   /* Configure SD Bus width (4 bits mode selected) */
@@ -132,7 +143,6 @@ __weak uint8_t BSP_SD_Init(void)
 
   if (sd_state == MSD_OK)
   {
-    BSP_SD_TryHighSpeed();
     g_bsp_sd_initialized = 1U;
   }
 

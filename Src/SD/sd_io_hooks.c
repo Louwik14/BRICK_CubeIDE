@@ -10,6 +10,16 @@ uint8_t brick_sd_is_detected(void)
     return BSP_SD_IsDetected();
 }
 
+uint8_t brick_sd_init_high_speed(void)
+{
+    const uint8_t status = BSP_SD_Init();
+    if(status == MSD_OK)
+    {
+        BSP_SD_ConfigureHighSpeed();
+    }
+    return status;
+}
+
 uint8_t brick_sd_init_failure_is_no_media(uint8_t bsp_status)
 {
     if ((bsp_status == MSD_ERROR_SD_NOT_PRESENT)

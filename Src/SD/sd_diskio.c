@@ -23,6 +23,7 @@
 /* USER CODE BEGIN firstSection */
 /* can be used to modify / undefine following code or add new definitions */
 #include "SD/sd_io_hooks.h"
+#define BSP_SD_Init brick_sd_init_high_speed
 #define BSP_SD_IsDetected brick_sd_is_detected
 #define BSP_SD_ReadBlocks_DMA brick_sd_read_blocks_dma
 #define BSP_SD_ReadCpltCallback BSP_SD_ReadCpltCallback_CubeMX

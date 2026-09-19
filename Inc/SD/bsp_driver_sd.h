@@ -53,6 +53,7 @@
 #define SD_NOT_PRESENT           ((uint8_t)0x00)
 #define SD_DATATIMEOUT           ((uint32_t)100000000)
 
+/* USER CODE BEGIN BSP_H_CODE */
 typedef struct
 {
   uint32_t card_supports_high_speed;
@@ -60,11 +61,15 @@ typedef struct
   uint32_t final_clock_divider;
   uint32_t final_sdclk_hz;
   uint32_t final_bus_width_bits;
+  uint32_t pll2r_hz;
+  uint32_t fmc_kernel_hz;
+  uint32_t sdram_clock_hz;
+  uint32_t adc_clock_hz;
 } bsp_sd_high_speed_diag_t;
 
 extern volatile bsp_sd_high_speed_diag_t g_bsp_sd_high_speed_diag;
+void BSP_SD_ConfigureHighSpeed(void);
 
-/* USER CODE BEGIN BSP_H_CODE */
 #define SD_DetectIRQHandler()             HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_8)
 
 /* Exported functions --------------------------------------------------------*/

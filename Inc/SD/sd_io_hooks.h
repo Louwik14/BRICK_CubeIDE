@@ -6,6 +6,7 @@
 #include "SD/bsp_driver_sd.h"
 
 uint8_t brick_sd_is_detected(void);
+uint8_t brick_sd_init_high_speed(void);
 uint8_t brick_sd_init_failure_is_no_media(uint8_t bsp_status);
 void brick_sd_generated_sdmmc_error_handler(void);
 void brick_sd_media_fault(void);
