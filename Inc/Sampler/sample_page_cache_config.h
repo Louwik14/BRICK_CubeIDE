@@ -15,7 +15,7 @@
  */
 
 #define SAMPLE_PAGE_CACHE_TARGET_BUDGET_BYTES \
-    (1496U * 16U * 1024U)
+    (1504U * 16U * 1024U)
 #define SAMPLE_PAGE_CACHE_TARGET_PAGE_COUNT \
     (SAMPLE_PAGE_CACHE_TARGET_BUDGET_BYTES / SAMPLE_AUDIO_FORMAT_PAGE_BYTES)
 #define SAMPLE_PAGE_BYTES                     SAMPLE_AUDIO_FORMAT_PAGE_BYTES
@@ -208,8 +208,8 @@ static inline uint8_t sample_page_slot_is_margin_pool(uint32_t slot)
 #if (SAMPLE_PAGE_FRAMES != 8192U)
 #error "Streamer product contract requires 8192 stereo frames per page"
 #endif
-#if (SAMPLE_PAGE_MAX_COUNT != 374U)
-#error "Streamer product cache budget must expose 374 physical pages"
+#if (SAMPLE_PAGE_MAX_COUNT != 376U)
+#error "Streamer product cache budget must expose 376 physical pages"
 #endif
 #if (SAMPLE_PAGE_MULTI_WINDOW_PAGES != 3U)
 #error "Stereo Multi mobile window must cover 24576 frames"
@@ -220,11 +220,11 @@ static inline uint8_t sample_page_slot_is_margin_pool(uint32_t slot)
 #if (SAMPLE_PAGE_PRODUCT_VOICE_RESERVE_PAGES != 40U)
 #error "Multi runtime reserve must cover 8 x (3 mobile + 2 loop) pages"
 #endif
-#if (SAMPLE_PREP_MULTI_BUDGET_PAGES != 302U)
-#error "Multi START budget must expose 302 physical pages"
+#if (SAMPLE_PREP_MULTI_BUDGET_PAGES != 304U)
+#error "Multi START budget must expose 304 physical pages"
 #endif
-#if (SAMPLE_PREP_MULTI_START_SLOT_BUDGET != 302U)
-#error "Multi START budget must expose 302 mono-equivalent slots"
+#if (SAMPLE_PREP_MULTI_START_SLOT_BUDGET != 304U)
+#error "Multi START budget must expose 304 mono-equivalent slots"
 #endif
 #endif
 

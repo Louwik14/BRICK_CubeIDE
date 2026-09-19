@@ -8,8 +8,7 @@
 #include <string.h>
 
 typedef enum { SLOT_FREE = 0, SLOT_WRITING, SLOT_READY, SLOT_READING } slot_state_t;
-static SEQ_STATE_SDRAM seq_event_block_t g_output[SEQ_ENGINE_BLOCK_SLOTS];
-static SEQ_STATE_SDRAM seq_param_block_t g_params[SEQ_ENGINE_BLOCK_SLOTS];
+static SEQ_STATE_SDRAM seq_terminal_block_t g_terminal[SEQ_ENGINE_BLOCK_SLOTS];
 static SEQ_STATE_D2 seq_engine_core_t g_core;
 static volatile uint8_t g_slot_state[SEQ_ENGINE_BLOCK_SLOTS];
 static volatile uint64_t g_service_now, g_publish_until;
@@ -18,9 +17,11 @@ static volatile uint8_t g_pending;
 static volatile uint8_t g_urgent_pending;
 static int8_t g_audio_slot = -1;
 static uint16_t g_audio_cursor;
+static uint8_t g_audio_offset,g_audio_class;
 static volatile uint16_t g_disarmed_tracks;
 static uint32_t g_disarm_generation;
 static volatile uint8_t g_force_stopped;
+static volatile uint32_t g_missed_horizons;
 static volatile uint64_t g_force_stop_sample;
 static volatile uint32_t g_force_stop_epoch;
 static seq_ingress_event_t g_ingress[SEQ_ENGINE_INGRESS_CAPACITY];
@@ -50,10 +51,8 @@ _Static_assert(((BRICK_ENTITY_TOP_LEVEL_COUNT-1U)*SEQ_PLAY_MAX_CAPACITY
     "SEQ reference bench topology changed");
 
 CTRL_STATE __attribute__((used)) volatile seq_boot_bench_result_t g_seq_boot_bench;
-CONTROL_STATE_SDRAM static seq_pattern_t g_seq_bench_pattern;
 #define g_seq_bench_core g_core
-#define g_seq_bench_output (g_output[0])
-#define g_seq_bench_params (g_params[0])
+#define g_seq_bench_output (g_terminal[0])
 SEQ_HOT_D1 static uint32_t g_seq_bench_histogram[SEQ_BOOT_BENCH_BUCKET_COUNT];
 
 /* Fixed reference chains.  Parameters are deliberately ordinary musical
@@ -73,7 +72,10 @@ static void seq_boot_bench_fx(note_fx_track_state_t *state,uint8_t child)
  state->value[3][2]=100U;state->value[3][3]=NOTE_FX_MODEL_GROOVE;}
 
 static void seq_boot_bench_pattern_init(void)
-{seq_pattern_t*p=&g_seq_bench_pattern;memset(p,0,sizeof(*p));
+{seq_pattern_t*p=seq_engine_control_bench_workspace();
+ seq_lock_pattern_t*lock_pool[SEQ_LANE_CAPACITY];
+ memcpy(lock_pool,p->lock_pool,sizeof(lock_pool));memset(p,0,sizeof(*p));
+ memcpy(p->lock_pool,lock_pool,sizeof(lock_pool));
  p->generation=1U;p->running=1U;p->transport_epoch=1U;
  p->samples_per_step_q16=(uint32_t)SEQ_BOOT_BENCH_STEP_SAMPLES<<16U;
  for(uint8_t track=0U;track<SEQ_LANE_CAPACITY;++track){
@@ -102,17 +104,8 @@ static uint32_t seq_boot_bench_percentile(uint32_t numerator,uint32_t denominato
 
 static uint8_t seq_boot_bench_service(uint64_t sample)
 {seq_engine_core_process_block(&g_seq_bench_core,sample,SEQ_ENGINE_H743_PERIOD_SAMPLES,
-   &g_seq_bench_pattern,&g_seq_bench_output,&g_seq_bench_params);
- if((uint32_t)g_seq_bench_output.event_count+g_seq_bench_params.event_count
-      >SEQ_ENGINE_EVENT_CAPACITY){g_seq_bench_output.event_count=0U;
-  g_seq_bench_output.emitter_tracks=0U;g_seq_bench_output.lock_tracks=0U;return 1U;}
- for(uint16_t i=0U;i<g_seq_bench_params.event_count;++i){
-  const seq_param_event_t*event=&g_seq_bench_params.events[i];
-  g_seq_bench_output.events[g_seq_bench_output.event_count++]=(seq_event_t){
-   .offset=event->offset,.kind=SEQ_ENGINE_EVENT_PARAM,.track=event->track,
-   .occurrence_id=event->param_id,.note=(uint8_t)event->value16,
-   .velocity=(uint8_t)(event->value16>>8U),.reserved=event->semantic};}
- seq_engine_event_order(&g_seq_bench_output);return 0U;}
+   seq_engine_control_bench_workspace(),&g_seq_bench_output);
+ return(uint8_t)(g_seq_bench_output.event_count>SEQ_ENGINE_TERMINAL_CAPACITY);}
 
 static uint8_t seq_boot_bench_boundary(uint64_t sample)
 {const uint32_t phase=(uint32_t)(sample%SEQ_BOOT_BENCH_STEP_SAMPLES);
@@ -209,6 +202,7 @@ void seq_engine_perf_capture(seq_engine_perf_snapshot_t *out)
   .p99_cycles=seq_perf_percentile(99U,100U),.p999_cycles=seq_perf_percentile(999U,1000U),
   .blocks_over_50=g_seq_perf.over50,.blocks_over_75=g_seq_perf.over75,
   .max_consecutive_over_50=g_seq_perf.maxrun50,.max_consecutive_over_75=g_seq_perf.maxrun75,
+  .missed_horizons=g_missed_horizons,
   };__set_PRIMASK(primask);}
 
 void seq_engine_control_disarm_track(uint8_t track)
@@ -218,7 +212,7 @@ void seq_engine_control_disarm_track(uint8_t track)
     }
 }
 
-static uint16_t active_track_mask(const seq_event_block_t *block)
+static uint16_t active_track_mask(const seq_terminal_block_t *block)
 {
     return block ? (uint16_t)(block->emitter_tracks
         & (uint16_t)~g_disarmed_tracks) : 0U;
@@ -226,12 +220,13 @@ static uint16_t active_track_mask(const seq_event_block_t *block)
 
 void seq_engine_irq_init(void)
 {
-    memset(g_output, 0, sizeof(g_output));
-    memset(g_params, 0, sizeof(g_params));
+    memset(g_terminal, 0, sizeof(g_terminal));
     memset((void *)g_slot_state, 0, sizeof(g_slot_state));
-    g_audio_slot = -1; g_audio_cursor = 0U; g_pending = 0U; g_urgent_pending=0U;
+    g_audio_slot = -1; g_audio_cursor = SEQ_ENGINE_TERMINAL_INDEX_NONE;
+    g_audio_offset=0U;g_audio_class=0U;g_pending = 0U; g_urgent_pending=0U;
     g_disarmed_tracks = 0U; g_disarm_generation = 0U;
     g_force_stopped = 0U; g_force_stop_epoch=0U; g_next_deadline = UINT64_MAX;
+    g_missed_horizons=0U;
     g_ingress_head=0U;g_ingress_tail=0U;g_ingress_count=0U;g_ingress_panic=0U;
     g_ingress_rate_window=UINT64_MAX;g_ingress_rate_count=0U;
     memset(&g_seq_perf,0,sizeof(g_seq_perf));
@@ -244,6 +239,7 @@ void seq_engine_irq_init(void)
 
 void seq_engine_audio_boundary(uint64_t block_start_sample, uint8_t recovering)
 {
+    uint8_t acquired=0U;
     if (g_audio_slot >= 0) {
         g_slot_state[(uint8_t)g_audio_slot] = SLOT_FREE; g_audio_slot = -1;
     }
@@ -252,42 +248,59 @@ void seq_engine_audio_boundary(uint64_t block_start_sample, uint8_t recovering)
             if (g_slot_state[i] == SLOT_READY) g_slot_state[i] = SLOT_FREE;
     for (uint8_t i = 0U; i < SEQ_ENGINE_BLOCK_SLOTS; ++i) {
         if ((g_slot_state[i] == SLOT_READY)
-                && (g_output[i].start_sample == block_start_sample)) {
+                && (g_terminal[i].start_sample == block_start_sample)) {
             g_slot_state[i] = SLOT_READING; g_audio_slot = (int8_t)i;
-            g_audio_cursor = 0U; break;
+            g_audio_cursor=SEQ_ENGINE_TERMINAL_INDEX_NONE;
+            g_audio_offset=0U;g_audio_class=0U;acquired=1U;break;
         }
         if ((g_slot_state[i] == SLOT_READY)
-                && (g_output[i].start_sample < block_start_sample)) {
+                && (g_terminal[i].start_sample < block_start_sample)) {
             g_slot_state[i] = SLOT_FREE;
         }
     }
+    if(recovering==0U&&acquired==0U)++g_missed_horizons;
     g_service_now = block_start_sample;
     g_publish_until = block_start_sample + SEQ_ENGINE_H743_PERIOD_SAMPLES;
     __DMB();
     g_pending = 1U; NVIC_SetPendingIRQ(TIM4_IRQn);
 }
 
-static uint8_t event_is_audible(const seq_event_block_t *block,
-                                const seq_event_t *event)
+static uint8_t event_is_audible(const seq_terminal_block_t *block,uint8_t kind,
+                                const seq_terminal_event_t *event)
 {
-    if ((event == 0) || (event->track >= SEQ_LANE_CAPACITY)) return 0U;
-    if (event->kind == SEQ_ENGINE_EVENT_PARAM)
+    if(event==0)return 0U;
+    const uint8_t track=(kind==SEQ_ENGINE_EVENT_PARAM)
+        ?event->param.track:event->note.track;
+    if(track>=SEQ_LANE_CAPACITY)return 0U;
+    if (kind == SEQ_ENGINE_EVENT_PARAM)
         return (uint8_t)((block->lock_tracks
-            & (uint16_t)(1U << event->track)) != 0U);
+            & (uint16_t)(1U << track)) != 0U);
     return (uint8_t)((active_track_mask(block)
-        & (uint16_t)(1U << event->track)) != 0U);
+        & (uint16_t)(1U << track)) != 0U);
 }
+
+static uint8_t audio_cursor_seek(seq_terminal_block_t *block)
+{for(;;){if(g_audio_cursor!=SEQ_ENGINE_TERMINAL_INDEX_NONE)return 1U;
+  while(g_audio_offset<block->frames){while(g_audio_class<SEQ_ENGINE_TERMINAL_CLASS_COUNT){
+    const uint16_t head=block->head[g_audio_offset][g_audio_class];
+    if(head!=SEQ_ENGINE_TERMINAL_INDEX_NONE){g_audio_cursor=head;return 1U;}
+    ++g_audio_class;}++g_audio_offset;g_audio_class=0U;}return 0U;}}
+
+static void audio_cursor_advance(const seq_terminal_block_t *block)
+{if(g_audio_cursor!=SEQ_ENGINE_TERMINAL_INDEX_NONE)
+    g_audio_cursor=block->next[g_audio_cursor];
+ if(g_audio_cursor==SEQ_ENGINE_TERMINAL_INDEX_NONE)++g_audio_class;}
 
 uint16_t seq_engine_audio_frames_until_due(uint64_t sample, uint16_t maximum)
 {
     if ((g_audio_slot < 0) || (maximum == 0U)) return maximum;
-    const seq_event_block_t *const block = &g_output[(uint8_t)g_audio_slot];
-    while (g_audio_cursor < block->event_count) {
-        const seq_event_t *const event = &block->events[g_audio_cursor];
-        if (event_is_audible(block, event) == 0U) { ++g_audio_cursor; continue; }
-        const uint64_t due = block->start_sample + event->offset;
+    seq_terminal_block_t *const block = &g_terminal[(uint8_t)g_audio_slot];
+    while(audio_cursor_seek(block)!=0U){
+        const seq_terminal_event_t *const event=&block->events[g_audio_cursor];
+        if(event_is_audible(block,g_audio_class,event)==0U){audio_cursor_advance(block);continue;}
+        const uint64_t due = block->start_sample + g_audio_offset;
         if ((g_force_stopped != 0U) && (due >= g_force_stop_sample)) {
-            ++g_audio_cursor; continue;
+            audio_cursor_advance(block);continue;
         }
         if (due <= sample) return 0U;
         const uint64_t distance = due - sample;
@@ -296,19 +309,20 @@ uint16_t seq_engine_audio_frames_until_due(uint64_t sample, uint16_t maximum)
     return maximum;
 }
 
-uint8_t seq_engine_audio_pop_due(uint64_t sample, seq_event_t *out_event)
+uint8_t seq_engine_audio_pop_due(uint64_t sample,uint8_t *out_kind,
+    seq_terminal_event_t *out_event)
 {
-    if ((out_event == 0) || (g_audio_slot < 0)) return 0U;
-    seq_event_block_t *const block = &g_output[(uint8_t)g_audio_slot];
-    while (g_audio_cursor < block->event_count) {
-        const seq_event_t event = block->events[g_audio_cursor];
-        if (event_is_audible(block, &event) == 0U) { ++g_audio_cursor; continue; }
-        const uint64_t due = block->start_sample + event.offset;
+    if ((out_event == 0)||(out_kind==0)||(g_audio_slot < 0)) return 0U;
+    seq_terminal_block_t *const block = &g_terminal[(uint8_t)g_audio_slot];
+    while(audio_cursor_seek(block)!=0U){
+        const seq_terminal_event_t event=block->events[g_audio_cursor];
+        if(event_is_audible(block,g_audio_class,&event)==0U){audio_cursor_advance(block);continue;}
+        const uint64_t due = block->start_sample + g_audio_offset;
         if ((g_force_stopped != 0U) && (due >= g_force_stop_sample)) {
-            ++g_audio_cursor; continue;
+            audio_cursor_advance(block);continue;
         }
         if (due > sample) return 0U;
-        ++g_audio_cursor; *out_event = event; return 1U;
+        *out_kind=g_audio_class;*out_event=event;audio_cursor_advance(block);return 1U;
     }
     return 0U;
 }
@@ -319,7 +333,7 @@ void seq_engine_audio_retire_occurrence(uint32_t occurrence_id)
 uint16_t seq_engine_audio_track_mask(void)
 {
     return (g_audio_slot >= 0)
-        ? active_track_mask(&g_output[(uint8_t)g_audio_slot]) : 0U;
+        ? active_track_mask(&g_terminal[(uint8_t)g_audio_slot]) : 0U;
 }
 
 void seq_engine_audio_force_stop(uint64_t effective_sample)
@@ -381,7 +395,7 @@ void seq_service(uint64_t now_sample, uint64_t publish_until_sample)
         return;
     }
     g_slot_state[slot] = SLOT_WRITING;
-    seq_event_block_t *const block = &g_output[slot];
+    seq_terminal_block_t *const block = &g_terminal[slot];
     const seq_pattern_t *const pattern = seq_engine_pattern_capture();
     if ((pattern != 0) && (pattern->generation != g_disarm_generation)) {
         g_disarmed_tracks = 0U; g_disarm_generation = pattern->generation;
@@ -392,25 +406,14 @@ void seq_service(uint64_t now_sample, uint64_t publish_until_sample)
     const uint64_t start = publish_until_sample;
     const uint16_t frames = SEQ_ENGINE_H743_PERIOD_SAMPLES;
     if ((g_force_stopped != 0U) && (start >= g_force_stop_sample)) {
-        memset(block, 0, sizeof(*block)); block->start_sample = start;
-        block->frames = frames;
+        seq_engine_core_process_block(&g_core,start,frames,0,block);
     } else {
         g_force_stopped = 0U;
         const uint32_t cycle_start=DWT->CYCCNT;
-        seq_engine_core_process_block(&g_core, start, frames, pattern,
-                                      block, &g_params[slot]);
+        seq_engine_core_process_block(&g_core,start,frames,pattern,block);
         seq_perf_record(DWT->CYCCNT-cycle_start);
         if(g_ingress_panic!=0U){g_ingress_panic=0U;
             seq_engine_core_init(&g_core);}
-        seq_param_block_t *const params = &g_params[slot];
-        for (uint16_t i = 0U; i < params->event_count; ++i) {
-            const seq_param_event_t *const event = &params->events[i];
-            block->events[block->event_count++] = (seq_event_t){
-                .offset=event->offset,.kind=SEQ_ENGINE_EVENT_PARAM,
-                .track=event->track,.occurrence_id=event->param_id,
-                .note=(uint8_t)event->value16,
-                .velocity=(uint8_t)(event->value16>>8U),.reserved=event->semantic};
-        }
         while(g_ingress_count!=0U){
             const seq_ingress_event_t in=g_ingress[g_ingress_tail];
             g_ingress_tail=(uint8_t)((g_ingress_tail+1U)%SEQ_ENGINE_INGRESS_CAPACITY);
@@ -427,7 +430,6 @@ void seq_service(uint64_t now_sample, uint64_t publish_until_sample)
                 .provenance=in.provenance,.stage=NOTE_EVENT_STAGE_SOURCE};
             (void)seq_engine_core_submit_live(&g_core,&event,pattern,start,start+frames,block);
         }
-        seq_engine_event_order(block);
     }
     block->block_id = (uint32_t)(start / frames);
     g_next_deadline = start + frames; __DMB(); g_slot_state[slot] = SLOT_READY;
@@ -435,11 +437,14 @@ void seq_service(uint64_t now_sample, uint64_t publish_until_sample)
 
 static void seq_service_urgent(uint64_t now_sample,uint64_t publish_until_sample)
 {
+    (void)now_sample;
     for(uint8_t slot=0U;slot<SEQ_ENGINE_BLOCK_SLOTS;++slot){
+        const uint32_t primask=__get_PRIMASK();__disable_irq();
         if((g_slot_state[slot]!=SLOT_READY)
-                ||(g_output[slot].start_sample!=publish_until_sample))continue;
-        g_slot_state[slot]=SLOT_WRITING;
-        seq_event_block_t *const block=&g_output[slot];
+                ||(g_terminal[slot].start_sample!=publish_until_sample)){
+            __set_PRIMASK(primask);continue;}
+        g_slot_state[slot]=SLOT_WRITING;__DMB();__set_PRIMASK(primask);
+        seq_terminal_block_t *const block=&g_terminal[slot];
         const uint64_t end=block->start_sample+block->frames;
         while(g_ingress_count!=0U){
             const seq_ingress_event_t in=g_ingress[g_ingress_tail];
@@ -459,7 +464,6 @@ static void seq_service_urgent(uint64_t now_sample,uint64_t publish_until_sample
             (void)seq_engine_core_submit_live(&g_core,&event,pattern,
                 block->start_sample,end,block);
         }
-        seq_engine_event_order(block);
         __DMB();g_slot_state[slot]=SLOT_READY;return;
     }
 }
@@ -473,8 +477,8 @@ void TIM4_IRQHandler(void)
     uint64_t now = g_service_now;const uint64_t until = g_publish_until;
     const uint8_t urgent=g_urgent_pending,periodic=g_pending;
     if(urgent!=0U)(void)brick_media_clock_now_sample(&now);
-    g_pending = 0U;
+    g_pending=0U;g_urgent_pending=0U;
     if(periodic!=0U)seq_service(now,until);else seq_service_urgent(now,until);
-    g_urgent_pending=0U;
+    if(g_urgent_pending!=0U)NVIC_SetPendingIRQ(TIM4_IRQn);
     sdmmc_async_transport_preempt_exit();
 }

@@ -24,9 +24,6 @@
 #include "Audio/live_parameter_audio_runtime.h"
 #include "Audio/audio_waveform_capture_audio.h"
 #include "Audio/synth_waveform_audio.h"
-#include "IPC/live_parameter_event.h"
-#include "Param/param_registry.h"
-#include "Param/param_value_policy.h"
 #include "IPC/sampler_ram_audio_projection.h"
 #include "Track/synth_polyphony.h"
 #include "Track/control_music_output.h"
@@ -625,54 +622,55 @@ void audio_command_executor_seq_begin_block(uint16_t track_mask)
 }
 
 static uint8_t audio_command_executor_apply_seq_event(
-    const seq_event_t *event)
+    uint8_t terminal_kind,const seq_terminal_event_t *event)
 {
-    if ((event == 0) || (event->track >= SEQ_LANE_CAPACITY)) return 0U;
-    if (event->kind == SEQ_ENGINE_EVENT_PARAM)
+    if(event==0)return 0U;
+    if (terminal_kind == SEQ_ENGINE_EVENT_PARAM)
     {
-        if (event->occurrence_id >= PARAM_COUNT) return 0U;
-        const float value=param_value_policy_decode_u16(
-            &param_registry[event->occurrence_id],seq_event_param_value(event));
-        const uint8_t kind=(event->reserved==SEQ_ENGINE_PARAM_TEMP)
+        if((event->param.track>=SEQ_LANE_CAPACITY)
+                ||(event->param.param_id>=PARAM_COUNT))return 0U;
+        const uint8_t kind=(event->param.semantic==SEQ_ENGINE_PARAM_TEMP)
             ?CONTROL_AUDIO_PARAM_KIND_TEMP_TRACK
-            :((event->reserved==SEQ_ENGINE_PARAM_CLEAR_TEMP)
+            :((event->param.semantic==SEQ_ENGINE_PARAM_CLEAR_TEMP)
                 ?CONTROL_AUDIO_PARAM_KIND_CLEAR_TEMP_TRACK
                 :CONTROL_AUDIO_PARAM_KIND_BASE_TRACK);
-        return live_parameter_audio_runtime_apply_param(event->track,
-            (uint16_t)event->occurrence_id,
-            (uint32_t)live_parameter_event_encode_float(value),kind);
+        return live_parameter_audio_runtime_apply_param(event->param.track,
+            event->param.param_id,event->param.value32,kind);
     }
-    audio_seq_output_t *const outputs = g_audio_seq_output[event->track];
-    if(event->logical_slot>=AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY)return 0U;
-    const uint8_t target=event->logical_slot;
-    if (event->kind == SEQ_ENGINE_EVENT_NOTE_OFF)
+    if(event->note.track>=SEQ_LANE_CAPACITY)return 0U;
+    audio_seq_output_t *const outputs = g_audio_seq_output[event->note.track];
+    if(event->note.logical_slot>=AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY)return 0U;
+    const uint8_t target=event->note.logical_slot;
+    if (terminal_kind == SEQ_ENGINE_EVENT_NOTE_OFF)
     {
         if(outputs[target].active==0U)return 1U;
-        if(outputs[target].occurrence_id!=event->occurrence_id)return 0U;
-        const uint8_t ok=audio_note_engine_adapter_apply_output(event->track,
+        if(outputs[target].occurrence_id!=event->note.occurrence_id)return 0U;
+        const uint8_t ok=audio_note_engine_adapter_apply_output(event->note.track,
             outputs[target].note,0U,0U,outputs[target].id);
         outputs[target]=(audio_seq_output_t){0};return ok;
     }
+    if(terminal_kind!=SEQ_ENGINE_EVENT_NOTE_ON)return 1U;
     if(outputs[target].active!=0U)return 0U;
 
     const uint32_t output_id = UINT32_C(0x20000000)
-        | (event->occurrence_id & UINT32_C(0x1FFFFFFF));
-    if (audio_note_engine_adapter_apply_output(event->track, event->note,
-            event->velocity, 1U, output_id) == 0U)
+        | (event->note.occurrence_id & UINT32_C(0x1FFFFFFF));
+    if (audio_note_engine_adapter_apply_output(event->note.track,event->note.note,
+            event->note.velocity, 1U, output_id) == 0U)
         return 0U;
     outputs[target] = (audio_seq_output_t){
-        .id=output_id,.occurrence_id=event->occurrence_id,
-        .age=++g_audio_seq_age,.note=event->note,.active=1U};
+        .id=output_id,.occurrence_id=event->note.occurrence_id,
+        .age=++g_audio_seq_age,.note=event->note.note,.active=1U};
     return 1U;
 }
 
 uint16_t audio_command_executor_apply_seq_due(uint64_t sample_time)
 {
     uint16_t applied = 0U;
-    seq_event_t event;
-    while (seq_engine_audio_pop_due(sample_time, &event) != 0U)
+    uint8_t terminal_kind;
+    seq_terminal_event_t event;
+    while (seq_engine_audio_pop_due(sample_time,&terminal_kind,&event) != 0U)
     {
-        if (audio_command_executor_apply_seq_event(&event) == 0U)
+        if (audio_command_executor_apply_seq_event(terminal_kind,&event) == 0U)
             Error_Handler();
         ++applied;
     }

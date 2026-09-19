@@ -11,13 +11,12 @@
 #include "Seq/seq_capacity_contract.h"
 
 #define SEQ_ENGINE_H743_PERIOD_SAMPLES 64U
-#define SEQ_ENGINE_EVENT_CAPACITY 4096U
-#define SEQ_ENGINE_BLOCK_SLOTS 3U
+#define SEQ_ENGINE_TERMINAL_CAPACITY 3648U
+#define SEQ_ENGINE_BLOCK_SLOTS 2U
 #define SEQ_ENGINE_SNAPSHOT_SLOTS 2U
 #define SEQ_ENGINE_LEDGER_CAPACITY 64U
 #define SEQ_ENGINE_SOURCE_CAPACITY SEQ_PRODUCT_MAX_ACTIVE_SOURCES
 #define SEQ_ENGINE_LOCK_POOL_CAPACITY 512U
-#define SEQ_ENGINE_PARAM_EVENT_CAPACITY 1024U
 #define SEQ_ENGINE_FX_SCRATCH_CAPACITY 32U
 #define SEQ_ENGINE_INGRESS_CAPACITY 64U
 #define SEQ_ENGINE_PARAM_FLAG_CLEARABLE UINT16_C(0x8000)
@@ -34,57 +33,52 @@ typedef enum {
     SEQ_ENGINE_EVENT_PANIC
 } seq_event_kind_t;
 
-typedef struct __attribute__((packed)) {
-    uint32_t occurrence_id;
-    uint16_t offset;
-    uint8_t kind : 2;
-    uint8_t track : 4;
-    uint8_t reserved : 2;
-    uint8_t note;
-    uint8_t velocity;
-    uint8_t logical_slot;
-} seq_event_t;
-
-_Static_assert(sizeof(seq_event_t) == 10U, "SEQ publication event budget");
-
-static inline uint16_t seq_event_param_value(const seq_event_t *event)
-{
-    return (uint16_t)((uint16_t)event->note
-        | ((uint16_t)event->velocity << 8U));
-}
-
-typedef struct {
-    uint64_t start_sample;
-    uint32_t block_id;
-    uint32_t generation;
-    uint16_t emitter_tracks;
-    uint16_t lock_tracks;
-    uint16_t event_count;
-    uint16_t frames;
-    seq_event_t events[SEQ_ENGINE_EVENT_CAPACITY];
-} seq_event_block_t;
-
 typedef enum {
     SEQ_ENGINE_PARAM_TEMP = 0,
     SEQ_ENGINE_PARAM_CLEAR_TEMP,
     SEQ_ENGINE_PARAM_RESTORE_BASE
 } seq_param_semantic_t;
 
-typedef struct {
-    uint16_t offset;
-    uint16_t param_id;
-    uint16_t value16;
-    uint8_t track;
-    uint8_t semantic;
-} seq_param_event_t;
+typedef union __attribute__((packed)) {
+    struct __attribute__((packed)) {
+        uint32_t occurrence_id;
+        uint16_t reserved;
+        uint8_t track;
+        uint8_t note;
+        uint8_t velocity;
+        uint8_t logical_slot;
+    } note;
+    struct __attribute__((packed)) {
+        uint32_t value32;
+        uint16_t param_id;
+        uint8_t track;
+        uint8_t semantic;
+        uint8_t reserved[2];
+    } param;
+} seq_terminal_event_t;
+
+_Static_assert(sizeof(seq_terminal_event_t) == 10U,
+               "SEQ terminal payload budget");
+
+#define SEQ_ENGINE_TERMINAL_INDEX_NONE UINT16_MAX
+#define SEQ_ENGINE_TERMINAL_CLASS_COUNT 4U
 
 typedef struct {
     uint64_t start_sample;
+    uint64_t active_offsets;
+    uint32_t block_id;
     uint32_t generation;
+    uint16_t emitter_tracks;
+    uint16_t lock_tracks;
     uint16_t event_count;
     uint16_t frames;
-    seq_param_event_t events[SEQ_ENGINE_PARAM_EVENT_CAPACITY];
-} seq_param_block_t;
+    uint16_t head[SEQ_ENGINE_H743_PERIOD_SAMPLES]
+                 [SEQ_ENGINE_TERMINAL_CLASS_COUNT];
+    uint16_t tail[SEQ_ENGINE_H743_PERIOD_SAMPLES]
+                 [SEQ_ENGINE_TERMINAL_CLASS_COUNT];
+    uint16_t next[SEQ_ENGINE_TERMINAL_CAPACITY];
+    seq_terminal_event_t events[SEQ_ENGINE_TERMINAL_CAPACITY];
+} seq_terminal_block_t;
 
 typedef struct __attribute__((packed)) {
     uint16_t param_flags;
@@ -97,6 +91,7 @@ _Static_assert(sizeof(seq_lock_pattern_t) == 6U,
 
 typedef struct {
     uint16_t param_flags;
+    uint16_t value16;
     uint16_t base_value16;
 } seq_active_lock_t;
 
@@ -170,6 +165,7 @@ typedef struct {
     uint32_t blocks_over_75;
     uint32_t max_consecutive_over_50;
     uint32_t max_consecutive_over_75;
+    uint32_t missed_horizons;
 } seq_engine_perf_snapshot_t;
 
 typedef struct {
@@ -280,16 +276,13 @@ void seq_engine_core_init(seq_engine_core_t *core);
 void seq_engine_core_process_block(seq_engine_core_t *core,
                                uint64_t start_sample, uint16_t frames,
                                const seq_pattern_t *pattern,
-                               seq_event_block_t *out_block,
-                               seq_param_block_t *out_params);
+                               seq_terminal_block_t *out_block);
 uint8_t seq_engine_core_submit_live(seq_engine_core_t *core,
                                     const note_event_t *event,
                                     const seq_pattern_t *pattern,
                                     uint64_t window_start,
                                     uint64_t window_end,
-                                    seq_event_block_t *out_block);
-/* Stable final order: sample, NOTE_OFF, PARAM, NOTE_ON, PANIC, append order. */
-void seq_engine_event_order(seq_event_block_t *block);
+                                    seq_terminal_block_t *out_block);
 
 void seq_service(uint64_t now_sample, uint64_t publish_until_sample);
 uint64_t seq_next_deadline(void);
@@ -315,6 +308,7 @@ void seq_engine_control_mark_dirty(void);
 void seq_engine_control_disarm_track(uint8_t track);
 void seq_engine_control_poll(void);
 const seq_pattern_t *seq_engine_pattern_capture(void);
+seq_pattern_t *seq_engine_control_bench_workspace(void);
 
 /* H743 adapter: AUDIO only checks the previous READY block and wakes SEQ. */
 void seq_engine_irq_init(void);
@@ -322,7 +316,8 @@ void seq_engine_audio_boundary(uint64_t block_start_sample, uint8_t recovering);
 uint16_t seq_engine_audio_frames_until_due(uint64_t sample,
                                              uint16_t maximum);
 uint8_t seq_engine_audio_pop_due(uint64_t sample,
-                                   seq_event_t *out_event);
+                                   uint8_t *out_kind,
+                                   seq_terminal_event_t *out_event);
 void seq_engine_audio_retire_occurrence(uint32_t occurrence_id);
 uint16_t seq_engine_audio_track_mask(void);
 void seq_engine_audio_force_stop(uint64_t effective_sample);
@@ -336,7 +331,7 @@ _Static_assert(SEQ_ENGINE_INGRESS_CAPACITY
                "inbox and raw ingress rate contracts diverged");
 _Static_assert(SEQ_ENGINE_LEDGER_CAPACITY == 64U, "SEQ logical ledger contract");
 _Static_assert(SEQ_ENGINE_SOURCE_CAPACITY == 192U, "SEQ source cursor contract");
-_Static_assert(SEQ_ENGINE_EVENT_CAPACITY >= SEQ_PRODUCT_TERMINAL_EVENTS_PER_HORIZON,
+_Static_assert(SEQ_ENGINE_TERMINAL_CAPACITY >= SEQ_PRODUCT_TERMINAL_EVENTS_PER_HORIZON,
                "SEQ terminal publication below legal fanout");
 _Static_assert(SEQ_ENGINE_FX_SCRATCH_CAPACITY == 32U, "SEQ scratch contract");
 

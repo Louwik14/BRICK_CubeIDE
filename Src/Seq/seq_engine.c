@@ -2,6 +2,9 @@
 #include "Seq/seq_runtime.h"
 #include "NoteFx/note_fx_engine.h"
 #include "Param/param_ids.h"
+#include "Param/param_registry.h"
+#include "Param/param_value_policy.h"
+#include "IPC/live_parameter_event.h"
 #include "Platform/memory_layout.h"
 #include <limits.h>
 #include <stddef.h>
@@ -10,10 +13,9 @@
 static SEQ_STATE_D2 note_event_t g_seq_fx_a[NOTE_FX_BATCH_CAPACITY];
 static SEQ_HOT_D1 note_event_t g_seq_fx_b[NOTE_FX_BATCH_CAPACITY];
 static seq_engine_core_t *g_seq_fx_core;
-static seq_event_block_t *g_seq_fx_block;
+static seq_terminal_block_t *g_seq_fx_block;
 static uint64_t g_seq_fx_start;
 static uint64_t g_seq_fx_end;
-static uint16_t g_seq_fx_event_limit=SEQ_ENGINE_EVENT_CAPACITY;
 typedef struct {uint32_t source_id;uint8_t track,lane,active;} seq_live_lane_t;
 static SEQ_STATE_D2 seq_live_lane_t g_seq_live_lane[SEQ_ENGINE_LEDGER_CAPACITY];
 typedef enum {SEQ_DROP_OWNER_CAPACITY=0,SEQ_DROP_DEFERRED_CAPACITY,
@@ -28,6 +30,32 @@ static void seq_drop(seq_engine_core_t*core,seq_drop_reason_t reason)
 void seq_engine_drop_diag_reset(void){memset(g_seq_drop_reason,0,sizeof(g_seq_drop_reason));}
 void seq_engine_drop_diag_capture(uint32_t out[SEQ_DROP_REASON_COUNT])
 {if(out!=0)memcpy(out,g_seq_drop_reason,sizeof(g_seq_drop_reason));}
+
+static void terminal_reset(seq_terminal_block_t *block,uint64_t start,
+    uint16_t frames,uint32_t generation)
+{block->start_sample=start;block->active_offsets=0U;block->block_id=0U;
+ block->generation=generation;block->emitter_tracks=0U;block->lock_tracks=0U;
+ block->event_count=0U;block->frames=frames;
+ memset(block->head,0xFF,sizeof(block->head));
+ memset(block->tail,0xFF,sizeof(block->tail));}
+
+static uint8_t terminal_push(seq_terminal_block_t *block,uint16_t offset,
+    uint8_t kind,const seq_terminal_event_t *event)
+{if(block==0||event==0||offset>=block->frames
+      ||offset>=SEQ_ENGINE_H743_PERIOD_SAMPLES
+      ||kind>=SEQ_ENGINE_TERMINAL_CLASS_COUNT
+      ||block->event_count>=SEQ_ENGINE_TERMINAL_CAPACITY)return 0U;
+ const uint16_t index=block->event_count++;
+ block->events[index]=*event;block->next[index]=SEQ_ENGINE_TERMINAL_INDEX_NONE;
+ const uint16_t tail=block->tail[offset][kind];
+ if(tail==SEQ_ENGINE_TERMINAL_INDEX_NONE)block->head[offset][kind]=index;
+ else block->next[tail]=index;
+ block->tail[offset][kind]=index;block->active_offsets|=UINT64_C(1)<<offset;
+ return 1U;}
+
+static uint32_t terminal_param_value32(uint16_t param_id,uint16_t value16)
+{const float value=param_value_policy_decode_u16(&param_registry[param_id],value16);
+ return(uint32_t)live_parameter_event_encode_float(value);}
 typedef struct {uint32_t occurrence_id,duration_samples,source_id;
  uint8_t note,velocity,flags,provenance;} seq_deferred_event_t;
 typedef struct {uint64_t due_sample;seq_deferred_event_t event[SEQ_PRODUCT_HARMONY_FANOUT_MAX];
@@ -137,12 +165,12 @@ static void fx_terminal(const note_event_t *e)
         return;}
     if(e->kind==NOTE_EVENT_KIND_OFF){const int16_t found=ledger_find(g_seq_fx_core,e->occurrence_id);
         if(found<0)return;
-        if(g_seq_fx_block->event_count>=g_seq_fx_event_limit){
+        const seq_terminal_event_t terminal={.note={
+            .occurrence_id=e->occurrence_id,.track=e->track,.note=e->note,
+            .logical_slot=product_slot_from_lane((uint16_t)found)}};
+        if(!terminal_push(g_seq_fx_block,(uint16_t)(due-g_seq_fx_start),
+                SEQ_ENGINE_EVENT_NOTE_OFF,&terminal)){
             seq_drop(g_seq_fx_core,SEQ_DROP_TERMINAL_OUTPUT_CAPACITY);return;}
-        g_seq_fx_block->events[g_seq_fx_block->event_count++]=(seq_event_t){
-            .offset=(uint16_t)(due-g_seq_fx_start),.kind=SEQ_ENGINE_EVENT_NOTE_OFF,
-            .track=e->track,.occurrence_id=e->occurrence_id,.note=e->note,
-            .logical_slot=product_slot_from_lane((uint16_t)found)};
         ledger_release(g_seq_fx_core,(uint8_t)found);
         const uint32_t ns=e->source_id&~NOTE_EVENT_OCCURRENCE_COUNTER_MASK;
         if(ns==NOTE_EVENT_OCCURRENCE_NAMESPACE_KEY||ns==NOTE_EVENT_OCCURRENCE_NAMESPACE_MIDI)
@@ -155,22 +183,21 @@ static void fx_terminal(const note_event_t *e)
     if(admission==0U){
         seq_drop(g_seq_fx_core,SEQ_DROP_LEDGER_ADMISSION);return;}
     const uint16_t required=(uint16_t)(1U+(plan.victim>=0?1U:0U));
-    if((uint32_t)g_seq_fx_block->event_count+required>g_seq_fx_event_limit){
+    if((uint32_t)g_seq_fx_block->event_count+required>SEQ_ENGINE_TERMINAL_CAPACITY){
         seq_drop(g_seq_fx_core,SEQ_DROP_TERMINAL_OUTPUT_CAPACITY);return;}
     if(e->duration_samples==0U){seq_drop(g_seq_fx_core,SEQ_DROP_LEDGER_ADMISSION);return;}
     if(plan.victim>=0){const seq_ledger_entry_t old=g_seq_fx_core->ledger[(uint8_t)plan.victim];
-        g_seq_fx_block->events[g_seq_fx_block->event_count++]=(seq_event_t){
-            .offset=(uint16_t)(due-g_seq_fx_start),.kind=SEQ_ENGINE_EVENT_NOTE_OFF,
-            .track=product_track_from_lane((uint16_t)plan.victim),
-            .occurrence_id=old.occurrence_id,.note=old.note,
-            .logical_slot=product_slot_from_lane((uint16_t)plan.victim)};}
+        const seq_terminal_event_t terminal={.note={.occurrence_id=old.occurrence_id,
+            .track=product_track_from_lane((uint16_t)plan.victim),.note=old.note,
+            .logical_slot=product_slot_from_lane((uint16_t)plan.victim)}};
+        (void)terminal_push(g_seq_fx_block,(uint16_t)(due-g_seq_fx_start),
+            SEQ_ENGINE_EVENT_NOTE_OFF,&terminal);}
     ledger_commit(g_seq_fx_core,e,&plan);
-    g_seq_fx_block->events[g_seq_fx_block->event_count++]=(seq_event_t){
-            .offset=(uint16_t)(due-g_seq_fx_start),
-            .kind=SEQ_ENGINE_EVENT_NOTE_ON,
-            .track=e->track,.occurrence_id=e->occurrence_id,
-            .note=e->note,.velocity=e->velocity,
-            .logical_slot=plan.logical_slot};
+    const seq_terminal_event_t terminal={.note={.occurrence_id=e->occurrence_id,
+        .track=e->track,.note=e->note,.velocity=e->velocity,
+        .logical_slot=plan.logical_slot}};
+    (void)terminal_push(g_seq_fx_block,(uint16_t)(due-g_seq_fx_start),
+        SEQ_ENGINE_EVENT_NOTE_ON,&terminal);
     const uint32_t source_namespace=e->source_id&~NOTE_EVENT_OCCURRENCE_COUNTER_MASK;
     if(source_namespace==NOTE_EVENT_OCCURRENCE_NAMESPACE_KEY
             ||source_namespace==NOTE_EVENT_OCCURRENCE_NAMESPACE_MIDI)
@@ -227,7 +254,7 @@ static uint8_t live_lane_bind(const seq_engine_core_t *core,note_event_t *event,
 uint8_t seq_engine_core_submit_live(seq_engine_core_t *core,
     const note_event_t *event,const seq_pattern_t *pattern,
     uint64_t window_start,uint64_t window_end,
-    seq_event_block_t *out_block)
+    seq_terminal_block_t *out_block)
 {
     if((core==0)||(event==0)||(pattern==0)||(out_block==0)||(window_end<=window_start))
         return 0U;
@@ -249,7 +276,6 @@ uint8_t seq_engine_core_submit_live(seq_engine_core_t *core,
         admitted.duration_samples=(uint32_t)duration;}
     g_seq_fx_core=core;g_seq_fx_block=out_block;
     g_seq_fx_start=window_start;g_seq_fx_end=window_end;
-    g_seq_fx_event_limit=SEQ_ENGINE_EVENT_CAPACITY;
     const uint8_t accepted=(uint8_t)(walker_resume(&admitted,0U)
         ==NOTE_EVENT_RESULT_ACCEPTED);
     if(admitted.kind==NOTE_EVENT_KIND_OFF&&binding>=0)
@@ -257,19 +283,6 @@ uint8_t seq_engine_core_submit_live(seq_engine_core_t *core,
     else if(!accepted&&created&&binding>=0)
         g_seq_live_lane[(uint8_t)binding].active=0U;
     return accepted;
-}
-
-static uint8_t event_after(const seq_event_t *left,const seq_event_t *right)
-{ return (uint8_t)((left->offset>right->offset)
-    ||((left->offset==right->offset)&&((left->kind>right->kind)
-    ||((left->kind==right->kind)&&(left->reserved>right->reserved))))); }
-
-ITCM_TEXT void seq_engine_event_order(seq_event_block_t *block)
-{
-    if((block==0)||(block->event_count<2U))return;
-    for(uint16_t i=1U;i<block->event_count;++i){const seq_event_t item=block->events[i];
-        uint16_t j=i;while(j&&event_after(&block->events[j-1U],&item)){
-            block->events[j]=block->events[j-1U];--j;}block->events[j]=item;}
 }
 
 static void sources_clear(seq_engine_core_t *core)
@@ -421,7 +434,7 @@ static void schedule_step(seq_engine_core_t *core, const seq_pattern_t *p,
 
 static void schedule_boundary(seq_engine_core_t *core,
     const seq_pattern_t *p, uint64_t sample, uint16_t hit_mask,
-    uint64_t block_start, seq_param_block_t *params)
+    uint64_t block_start, seq_terminal_block_t *terminal)
 {
     for (uint8_t track=0U; track<SEQ_LANE_CAPACITY; ++track) {
         if ((hit_mask & (uint16_t)(1U << track)) == 0U) continue;
@@ -434,8 +447,8 @@ static void schedule_boundary(seq_engine_core_t *core,
             const uint16_t first=p->lock_first[track][step];
             const uint8_t count=p->steps[track][step].lock_count;
             const uint8_t old_count=core->active_lock_count[track];
-            if ((uint32_t)params->event_count+old_count+count
-                    > SEQ_ENGINE_PARAM_EVENT_CAPACITY){
+            if ((uint32_t)terminal->event_count+old_count+count
+                    > SEQ_ENGINE_TERMINAL_CAPACITY){
                 core->plock_fault_tracks|=(uint16_t)(1U<<track);
                 seq_drop(core,SEQ_DROP_PLOCK_CAPACITY);}
             else {
@@ -453,20 +466,30 @@ static void schedule_boundary(seq_engine_core_t *core,
                     if (old_key<new_key) {
                         const seq_active_lock_t active=
                             core->active_locks[track][old_index++];
-                        params->events[params->event_count++]=(seq_param_event_t){
-                            .offset=(uint16_t)(sample-block_start),.param_id=old_key,
-                            .value16=active.base_value16,.track=track,
-                            .semantic=((active.param_flags&SEQ_ENGINE_PARAM_FLAG_CLEARABLE)!=0U)
-                                ?SEQ_ENGINE_PARAM_CLEAR_TEMP:SEQ_ENGINE_PARAM_RESTORE_BASE};
+                        const uint8_t semantic=
+                            ((active.param_flags&SEQ_ENGINE_PARAM_FLAG_CLEARABLE)!=0U)
+                                ?SEQ_ENGINE_PARAM_CLEAR_TEMP:SEQ_ENGINE_PARAM_RESTORE_BASE;
+                        const seq_terminal_event_t event={.param={
+                            .value32=terminal_param_value32(old_key,active.base_value16),
+                            .param_id=old_key,.track=track,.semantic=semantic}};
+                        (void)terminal_push(terminal,(uint16_t)(sample-block_start),
+                            SEQ_ENGINE_EVENT_PARAM,&event);
                         continue;
                     }
                     const seq_lock_pattern_t *lock=&p->lock_pool[track][first+new_index++];
-                    params->events[params->event_count++]=(seq_param_event_t){
-                        .offset=(uint16_t)(sample-block_start),
-                        .param_id=(uint16_t)(lock->param_flags&SEQ_ENGINE_PARAM_ID_MASK),
-                        .value16=lock->value16,.track=track,.semantic=SEQ_ENGINE_PARAM_TEMP};
+                    if(old_key!=new_key
+                            ||core->active_locks[track][old_index].value16!=lock->value16){
+                        const uint16_t param_id=(uint16_t)(lock->param_flags
+                            &SEQ_ENGINE_PARAM_ID_MASK);
+                        const seq_terminal_event_t event={.param={
+                            .value32=terminal_param_value32(param_id,lock->value16),
+                            .param_id=param_id,.track=track,
+                            .semantic=SEQ_ENGINE_PARAM_TEMP}};
+                        (void)terminal_push(terminal,(uint16_t)(sample-block_start),
+                            SEQ_ENGINE_EVENT_PARAM,&event);}
                     core->active_locks[track][active_write++]=(seq_active_lock_t){
-                        .param_flags=lock->param_flags,.base_value16=lock->base_value16};
+                        .param_flags=lock->param_flags,.value16=lock->value16,
+                        .base_value16=lock->base_value16};
                     if (old_key==new_key) ++old_index;
                 }
                 core->active_lock_count[track]=active_write;
@@ -501,7 +524,7 @@ static uint16_t advance(seq_engine_core_t *core,const seq_pattern_t *p)
 }
 
 static ITCM_TEXT void collect(seq_engine_core_t *core,uint64_t start,uint16_t frames,
-    const seq_pattern_t *p,seq_event_block_t *out)
+    const seq_pattern_t *p,seq_terminal_block_t *out)
 {
     const uint64_t end=start+frames;
     g_seq_fx_core=core;g_seq_fx_block=out;g_seq_fx_start=start;g_seq_fx_end=end;
@@ -563,12 +586,12 @@ static ITCM_TEXT void collect(seq_engine_core_t *core,uint64_t start,uint16_t fr
             core->source_active[bank]&=~(UINT64_C(1)<<selected_lane);
             if(core->source_count)--core->source_count;}continue;}
         if(kind==DUE_LEDGER){seq_ledger_entry_t l=core->ledger[selected_lane];
-          if(out->event_count>=g_seq_fx_event_limit){seq_drop(core,SEQ_DROP_SCHEDULED_OUTPUT_CAPACITY);
+          const seq_terminal_event_t terminal={.note={.occurrence_id=l.occurrence_id,
+           .track=track,.note=l.note,
+           .logical_slot=product_slot_from_lane(selected_lane)}};
+          if(!terminal_push(out,(uint16_t)((selected_due<start)?0U:selected_due-start),
+                 SEQ_ENGINE_EVENT_NOTE_OFF,&terminal)){seq_drop(core,SEQ_DROP_SCHEDULED_OUTPUT_CAPACITY);
             core->ledger[selected_lane].due_off=end;break;}
-          out->events[out->event_count++]=(seq_event_t){
-           .offset=(uint16_t)((selected_due<start)?0U:selected_due-start),
-           .kind=SEQ_ENGINE_EVENT_NOTE_OFF,.track=track,.occurrence_id=l.occurrence_id,
-           .note=l.note,.logical_slot=product_slot_from_lane(selected_lane)};
           ledger_release(core,(uint8_t)selected_lane);continue;}
         seq_terminal_deferred_t x=g_terminal_deferred[selected_lane][slot];
         g_deferred_active[slot]&=~(UINT64_C(1)<<selected_lane);
@@ -600,17 +623,14 @@ void seq_engine_core_init(seq_engine_core_t *core)
 }
 
 void seq_engine_core_process_block(seq_engine_core_t *core,uint64_t start,uint16_t frames,
-    const seq_pattern_t *p,seq_event_block_t *out,
-    seq_param_block_t *params)
+    const seq_pattern_t *p,seq_terminal_block_t *out)
 {
-    if((core==0)||(out==0)||(params==0))return;
+    if((core==0)||(out==0))return;
     g_seq_fx_core=core;
-    out->start_sample=start;out->frames=frames;out->generation=p?p->generation:0U;
+    terminal_reset(out,start,frames,p?p->generation:0U);
     out->emitter_tracks=0U;
     out->lock_tracks=0U;
-    out->event_count=0U;if((p==0)||(frames==0U))return;
-    params->start_sample=start;params->frames=frames;
-    params->generation=p->generation;params->event_count=0U;
+    if((p==0)||(frames==0U))return;
     core->event_faulted=0U;core->plock_fault_tracks=0U;
     if((core->initialized==0U)||(core->transport_epoch!=p->transport_epoch)){
         seq_engine_core_init(core);core->initialized=1U;core->transport_epoch=p->transport_epoch;
@@ -629,6 +649,7 @@ void seq_engine_core_process_block(seq_engine_core_t *core,uint64_t start,uint16
                             &SEQ_ENGINE_PARAM_FLAG_NOTE_FX)!=0U)continue;
                     core->active_locks[t][write++]=(seq_active_lock_t){
                         .param_flags=p->lock_pool[t][first+n].param_flags,
+                        .value16=p->lock_pool[t][first+n].value16,
                         .base_value16=p->lock_pool[t][first+n].base_value16};}
                 core->active_lock_count[t]=write;}
             configure_fx_step(p,t,s);}
@@ -650,10 +671,8 @@ void seq_engine_core_process_block(seq_engine_core_t *core,uint64_t start,uint16
     while(next<end_q16){const uint16_t hits=advance(core,p);++core->transport_step_serial;
         core->step_sample_q16=next;
         if(next>=begin_q16)schedule_boundary(core,p,(next+0x8000ULL)>>16,hits,
-            start,params);
+            start,out);
         next=core->step_sample_q16+core->samples_per_step_q16;}
-    g_seq_fx_event_limit=(params->event_count<SEQ_ENGINE_EVENT_CAPACITY)
-        ?(uint16_t)(SEQ_ENGINE_EVENT_CAPACITY-params->event_count):0U;
     collect(core,start,frames,p,out);
     if(core->dropped_events!=dropped_before)core->event_faulted=1U;
     for(uint8_t track=0U;track<SEQ_LANE_CAPACITY;++track)
