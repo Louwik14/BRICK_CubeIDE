@@ -2,6 +2,7 @@
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_boundary_probe.h"
 #include "NoteFx/note_fx_engine.h"
+#include "NoteFx/note_fx_walker_probe.h"
 #include "Param/param_ids.h"
 #include "Param/param_registry.h"
 #include "Param/param_value_policy.h"
@@ -251,9 +252,13 @@ static void fx_terminal(const note_event_t *e)
 
 static note_event_result_t walker_resume(const note_event_t *source,uint8_t stage)
 {
+    const uint32_t walker_started=note_fx_walker_probe_begin();
+    const uint64_t classified_before=note_fx_walker_probe_cycles_total();
     const uint32_t probe=seq_probe_begin(SEQ_PROBE_WALKER);
     seq_probe_activity(SEQ_PROBE_WALKER_INVOCATIONS,1U);
+    uint32_t copy_probe=note_fx_walker_probe_begin();
     g_seq_fx_a[0]=*source;uint8_t count=1U;
+    note_fx_walker_probe_record(NOTE_FX_WALKER_COPY,copy_probe,1U,1U,0U,0U,0U,0U);
     note_event_t *in=g_seq_fx_a,*out=g_seq_fx_b;
     for(uint8_t slot=stage;slot<NOTE_FX_SLOT_COUNT;++slot){
         uint8_t out_count=0U;
@@ -262,10 +267,19 @@ static note_event_result_t walker_resume(const note_event_t *source,uint8_t stag
         seq_probe_activity(SEQ_PROBE_WALKER_EVENTS_TRAVERSED,count);
         seq_probe_activity(SEQ_PROBE_WALKER_EVENTS_PRODUCED,out_count);
         if(r!=NOTE_EVENT_RESULT_ACCEPTED){seq_probe_end(SEQ_PROBE_WALKER,probe);return r;}
+        copy_probe=note_fx_walker_probe_begin();
         count=out_count;note_event_t*swap=in;in=out;out=swap;
+        note_fx_walker_probe_record(NOTE_FX_WALKER_COPY,copy_probe,out_count,out_count,0U,0U,0U,0U);
         if(count==0U){seq_probe_end(SEQ_PROBE_WALKER,probe);return NOTE_EVENT_RESULT_ACCEPTED;}}
-    for(uint8_t i=0U;i<count;++i)fx_terminal(&in[i]);
-    seq_probe_end(SEQ_PROBE_WALKER,probe);return NOTE_EVENT_RESULT_ACCEPTED;
+    for(uint8_t i=0U;i<count;++i){const uint32_t terminal_probe=note_fx_walker_probe_begin();
+        fx_terminal(&in[i]);note_fx_walker_probe_record(NOTE_FX_WALKER_TERMINAL,
+            terminal_probe,1U,1U,0U,0U,0U,0U);}
+    seq_probe_end(SEQ_PROBE_WALKER,probe);
+    if(g_seq_boundary_probe_state.active!=0U){const uint32_t elapsed=DWT->CYCCNT-walker_started;
+        const uint64_t classified=note_fx_walker_probe_cycles_total()-classified_before;
+        note_fx_walker_probe_record_elapsed(NOTE_FX_WALKER_OTHER,
+            elapsed>(uint32_t)classified?elapsed-(uint32_t)classified:0U);}
+    return NOTE_EVENT_RESULT_ACCEPTED;
 }
 
 static note_event_result_t fx_generated(const note_event_t *event,void *ctx)

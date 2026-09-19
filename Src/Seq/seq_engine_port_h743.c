@@ -5,6 +5,7 @@
 #include "SD/sdmmc_async_transport.h"
 #include "Seq/seq_bench_irq_probe.h"
 #include "Seq/seq_boundary_probe.h"
+#include "NoteFx/note_fx_walker_probe.h"
 #include "stm32h7xx.h"
 #include <limits.h>
 #include <string.h>
@@ -132,6 +133,7 @@ void seq_engine_boot_bench_run(void)
        sample+=SEQ_ENGINE_H743_PERIOD_SAMPLES)
   output_overflows+=seq_boot_bench_service(sample);
  seq_boundary_probe_reset();
+ note_fx_walker_probe_reset();
  uint64_t total=0U,ordinary_total=0U,boundary_total=0U;
  uint64_t cpu_total=0U,cpu_ordinary_total=0U,cpu_boundary_total=0U,irq_total=0U;
  uint32_t max=0U,ordinary_max=0U,boundary_max=0U,ordinary_count=0U,boundary_count=0U;
@@ -172,6 +174,7 @@ void seq_engine_boot_bench_run(void)
   if(cycles>320000U)++overm750;
   if(cycles>480000U)++overm775;}
  seq_boundary_probe_publish();
+ note_fx_walker_probe_publish();
  uint32_t drop_reason[SEQ_BOOT_BENCH_DROP_REASON_COUNT];
  note_fx_echo_diag_t echo_diag;
  seq_engine_drop_diag_capture(drop_reason);
