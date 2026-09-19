@@ -320,7 +320,7 @@ static multi_loader_boundary_pages_t multi_loader_sample_boundary_pages(
     result.start_last = start_pages - 1U;
     uint32_t pages = result.start_last + 1U;
 
-#if BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES == 0U
+#if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES == 0U
     if ((has_loop != 0U) && (loop_end > loop_begin) && (loop_end <= total_frames))
     {
         uint32_t loop_ready_end = loop_begin + SAMPLE_PREP_MIN_READY_FRAMES;

@@ -19,7 +19,7 @@ typedef enum
 } sample_audio_format_t;
 
 #ifndef BRICK6_STREAM_PRODUCT_PAGE_KIB
-#define BRICK6_STREAM_PRODUCT_PAGE_KIB (32U)
+#define BRICK6_STREAM_PRODUCT_PAGE_KIB (64U)
 #endif
 #define SAMPLE_AUDIO_FORMAT_PAGE_BYTES \
     (BRICK6_STREAM_PRODUCT_PAGE_KIB * 1024U)
@@ -41,21 +41,17 @@ typedef enum
 #define SAMPLE_AUDIO_FORMAT_STEREO_WINDOW_PAGES     SAMPLE_AUDIO_FORMAT_STEREO_PRESOCLE_PAGES
 #define SAMPLE_AUDIO_FORMAT_STREAM_HORIZON_FRAMES   SAMPLE_AUDIO_FORMAT_MIN_READY_FRAMES
 
-#ifndef BRICK6_STREAM_PRODUCT_MULTI_PRESOCLE_PAGES
-#define BRICK6_STREAM_PRODUCT_MULTI_PRESOCLE_PAGES (2U)
-#endif
-#ifndef BRICK6_STREAM_PRODUCT_MULTI_MOBILE_PAGES
-#define BRICK6_STREAM_PRODUCT_MULTI_MOBILE_PAGES (3U)
-#endif
-#ifndef BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES
-#define BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES (2U)
-#endif
-
 #ifndef BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
 #define BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST (1U)
 #endif
 
-#define SAMPLE_AUDIO_FORMAT_MULTI_START_SLOT_PAGES (2U)
+#define SAMPLE_AUDIO_FORMAT_MULTI_START_FRAMES       (16384U)
+#define SAMPLE_AUDIO_FORMAT_MULTI_MOBILE_FRAMES      (24576U)
+#define SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES  (16384U)
+#define SAMPLE_AUDIO_FORMAT_MULTI_START_SLOT_PAGES \
+    ((SAMPLE_AUDIO_FORMAT_MULTI_START_FRAMES \
+      + SAMPLE_AUDIO_FORMAT_MONO_FRAMES_PER_PAGE - 1U) \
+     / SAMPLE_AUDIO_FORMAT_MONO_FRAMES_PER_PAGE)
 
 static inline uint8_t sample_audio_format_is_valid(sample_audio_format_t format)
 {
@@ -131,15 +127,8 @@ static inline uint32_t sample_audio_format_presocle_pages(sample_audio_format_t 
 
 static inline uint32_t sample_audio_format_multi_presocle_pages(sample_audio_format_t format)
 {
-#if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
-    return (format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
-               ? (2U * BRICK6_STREAM_PRODUCT_MULTI_PRESOCLE_PAGES)
-               : BRICK6_STREAM_PRODUCT_MULTI_PRESOCLE_PAGES;
-#else
-    return (format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
-               ? BRICK6_STREAM_PRODUCT_MULTI_PRESOCLE_PAGES
-               : sample_audio_format_presocle_pages(format);
-#endif
+    return sample_audio_format_required_page_count(
+        format, SAMPLE_AUDIO_FORMAT_MULTI_START_FRAMES);
 }
 
 static inline uint32_t sample_audio_format_multi_start_slot_cost(
@@ -151,27 +140,15 @@ static inline uint32_t sample_audio_format_multi_start_slot_cost(
 static inline uint32_t sample_audio_format_multi_mobile_pages(
     sample_audio_format_t format)
 {
-#if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
-    return (format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
-               ? (2U * BRICK6_STREAM_PRODUCT_MULTI_MOBILE_PAGES)
-               : BRICK6_STREAM_PRODUCT_MULTI_MOBILE_PAGES;
-#else
-    (void)format;
-    return BRICK6_STREAM_PRODUCT_MULTI_MOBILE_PAGES;
-#endif
+    return sample_audio_format_required_page_count(
+        format, SAMPLE_AUDIO_FORMAT_MULTI_MOBILE_FRAMES);
 }
 
 static inline uint32_t sample_audio_format_voice_loop_cache_pages(
     sample_audio_format_t format)
 {
-#if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
-    return (format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
-               ? (2U * BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES)
-               : BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES;
-#else
-    (void)format;
-    return BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES;
-#endif
+    return sample_audio_format_required_page_count(
+        format, SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES);
 }
 
 static inline uint32_t sample_audio_format_window_pages(sample_audio_format_t format)

@@ -26,11 +26,11 @@ le lookahead produit a partir des ranges proteges; AUDIO ne publie ni liste de
 besoins ni wake Storage. Une page par lecteur et par passe; aucune horloge
 STREAM, low-water dynamique ou prediction temporelle ne conditionne le service.
 
-Le contrat produit garantit le pre-socle `2 x 32 KiB` et les limites Stream/Multi publiees avant jeu. Il n'existe ni READY par note, ni ACK START, ni retry, rollback ou fallback musical. Un underrun dans ce workload est une rupture de contrat, pas une admission tardive.
+Le contrat produit garantit un pre-socle de 16384 frames par sample et derive le nombre de pages du format mono/stereo. Les limites Stream/Multi sont publiees avant jeu. Il n'existe ni READY par note, ni ACK START, ni retry, rollback ou fallback musical. Un underrun dans ce workload est une rupture de contrat, pas une admission tardive.
 
 ## I/O et cadence
 
-Le service Storage traite une commande bornee hors IRQ. Produit: tranche 32 KiB; page temporaire 16 KiB. Le backend physique resout des extents vers une FIFO DMA bornee; FatFs reste le fallback. Read-ahead ne change ni ordre, besoins ni lifecycle.
+Le service Storage traite une commande bornee hors IRQ. Le quantum de lecture reste 32 KiB et le payload/scratch d'une page est dimensionne pour 64 KiB. Le backend physique resout des extents vers une FIFO DMA bornee; FatFs reste le fallback. Read-ahead ne change ni ordre, besoins ni lifecycle.
 
 Le transport contient geometrie source, format et token. STORAGE decode dans
 un payload partage et publie READY; AUDIO invalide avant lecture. H743
@@ -59,6 +59,6 @@ Le registre compact de leases Stream est fixe, pointer-free, seqlocke et place e
 
 ## Format audio
 
-Une page produit de 32 KiB porte 8192 frames mono FLOAT32 ou 4096 frames stereo. Format, stride et frames/page sont derives par `sample_audio_format.h` et restent immutables pendant la voix. Mono reste mono jusqu'au pan/spread final; aucune duplication droite de rejet n'est conservee.
+Une page produit de 64 KiB porte 16384 frames mono FLOAT32 ou 8192 frames stereo. Format, stride et frames/page sont derives par `sample_audio_format.h` et restent immutables pendant la voix. Mono reste mono jusqu'au pan/spread final; aucune duplication droite de rejet n'est conservee.
 
 Preview est un ring PCM SPSC distinct. Le building REC utilise la carte append-only du Recorder; il n'est publie qu'apres finalisation et prechauffage des pages initiales. Le detail appartient a [recorder_sd.md](recorder_sd.md).

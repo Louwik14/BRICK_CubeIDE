@@ -32,7 +32,7 @@ typedef struct
     uint32_t loop_cache_generation;
 } sample_voice_reader_state_t;
 
-#if BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES > 0U
+#if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES > 0U
 typedef struct
 {
     sample_voice_reader_state_t *reader;

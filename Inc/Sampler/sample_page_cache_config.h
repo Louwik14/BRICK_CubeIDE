@@ -41,11 +41,23 @@ typedef enum
 #define SAMPLE_PAGE_CLASSIC_FORWARD_WINDOW_PAGES SAMPLE_PAGE_MIN_READY_PAGES
 #define SAMPLE_PAGE_CLASSIC_REVERSE_WINDOW_PAGES SAMPLE_PAGE_MIN_READY_PAGES
 #if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
-#define SAMPLE_PAGE_MULTI_WINDOW_PAGES           (2U * BRICK6_STREAM_PRODUCT_MULTI_MOBILE_PAGES)
-#define SAMPLE_PAGE_VOICE_LOOP_CACHE_MAX_PAGES   (2U * BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES)
+#define SAMPLE_PAGE_MULTI_WINDOW_PAGES \
+    ((SAMPLE_AUDIO_FORMAT_MULTI_MOBILE_FRAMES \
+      + SAMPLE_AUDIO_FORMAT_STEREO_FRAMES_PER_PAGE - 1U) \
+     / SAMPLE_AUDIO_FORMAT_STEREO_FRAMES_PER_PAGE)
+#define SAMPLE_PAGE_VOICE_LOOP_CACHE_MAX_PAGES \
+    ((SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES \
+      + SAMPLE_AUDIO_FORMAT_STEREO_FRAMES_PER_PAGE - 1U) \
+     / SAMPLE_AUDIO_FORMAT_STEREO_FRAMES_PER_PAGE)
 #else
-#define SAMPLE_PAGE_MULTI_WINDOW_PAGES           BRICK6_STREAM_PRODUCT_MULTI_MOBILE_PAGES
-#define SAMPLE_PAGE_VOICE_LOOP_CACHE_MAX_PAGES   BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES
+#define SAMPLE_PAGE_MULTI_WINDOW_PAGES \
+    ((SAMPLE_AUDIO_FORMAT_MULTI_MOBILE_FRAMES \
+      + SAMPLE_AUDIO_FORMAT_MONO_FRAMES_PER_PAGE - 1U) \
+     / SAMPLE_AUDIO_FORMAT_MONO_FRAMES_PER_PAGE)
+#define SAMPLE_PAGE_VOICE_LOOP_CACHE_MAX_PAGES \
+    ((SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES \
+      + SAMPLE_AUDIO_FORMAT_MONO_FRAMES_PER_PAGE - 1U) \
+     / SAMPLE_AUDIO_FORMAT_MONO_FRAMES_PER_PAGE)
 #endif
 #define SAMPLE_PAGE_CLASSIC_FORWARD_LOOKAHEAD_PAGES \
     (SAMPLE_PAGE_CLASSIC_FORWARD_WINDOW_PAGES - 1U)
@@ -75,15 +87,11 @@ typedef enum
 #define SAMPLE_PAGE_CACHE_MAX_SAMPLES         (SAMPLE_PAGE_CACHE_ID_CAPACITY)
 /* Multi page-window reserve; Stream admits at most 8 active voices. */
 #define SAMPLE_PAGE_CACHE_MAX_VOICES          BRICK6_SAMPLER_MULTI_MAX_VOICES
-#ifndef BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES
-#define BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES (2U)
-#endif
-
 /* Product page-cache budget: keep this margin outside Multi slot presocle pages. */
 #define SAMPLE_PAGE_PRODUCT_MARGIN_BUDGET_BYTES (128U * 16U * 1024U)
 #define SAMPLE_PAGE_PRODUCT_MARGIN_PAGES \
     (SAMPLE_PAGE_PRODUCT_MARGIN_BUDGET_BYTES / SAMPLE_PAGE_BYTES)
-#if BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES > 0U
+#if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES > 0U
 #define SAMPLE_PAGE_PRODUCT_VOICE_RESERVE_PAGES \
     (SAMPLE_PAGE_CACHE_MAX_VOICES \
      * (SAMPLE_PAGE_MULTI_WINDOW_PAGES \
@@ -194,23 +202,29 @@ static inline uint8_t sample_page_slot_is_margin_pool(uint32_t slot)
 #endif
 
 #if BRICK6_STREAM_PRODUCT_MULTI_CHANNEL_COST
-#if (SAMPLE_PAGE_BYTES != (32U * 1024U))
-#error "Low-Cost differentiated Multi contract requires 32 KiB pages"
+#if (SAMPLE_PAGE_BYTES != (64U * 1024U))
+#error "Streamer product contract requires 64 KiB pages"
 #endif
-#if (SAMPLE_PAGE_MULTI_WINDOW_PAGES != 6U)
-#error "Low-Cost stereo Multi mobile window must reserve six pages"
+#if (SAMPLE_PAGE_FRAMES != 8192U)
+#error "Streamer product contract requires 8192 stereo frames per page"
 #endif
-#if (SAMPLE_PAGE_VOICE_LOOP_CACHE_MAX_PAGES != 4U)
-#error "Low-Cost stereo Multi loop cache must reserve four pages"
+#if (SAMPLE_PAGE_MAX_COUNT != 376U)
+#error "Streamer product cache budget must expose 376 physical pages"
 #endif
-#if (SAMPLE_PAGE_PRODUCT_VOICE_RESERVE_PAGES != 80U)
-#error "Low-Cost Multi runtime reserve must cover 8 x (6 mobile + 4 loop) pages"
+#if (SAMPLE_PAGE_MULTI_WINDOW_PAGES != 3U)
+#error "Stereo Multi mobile window must cover 24576 frames"
 #endif
-#if (SAMPLE_PREP_MULTI_BUDGET_PAGES != 608U)
-#error "Low-Cost Multi START budget must be 608 physical pages"
+#if (SAMPLE_PAGE_VOICE_LOOP_CACHE_MAX_PAGES != 2U)
+#error "Stereo Multi loop cache must cover 16384 frames"
+#endif
+#if (SAMPLE_PAGE_PRODUCT_VOICE_RESERVE_PAGES != 40U)
+#error "Multi runtime reserve must cover 8 x (3 mobile + 2 loop) pages"
+#endif
+#if (SAMPLE_PREP_MULTI_BUDGET_PAGES != 304U)
+#error "Multi START budget must expose 304 physical pages"
 #endif
 #if (SAMPLE_PREP_MULTI_START_SLOT_BUDGET != 304U)
-#error "Low-Cost Multi START budget must expose 304 mono-equivalent slots"
+#error "Multi START budget must expose 304 mono-equivalent slots"
 #endif
 #endif
 

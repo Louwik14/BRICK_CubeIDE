@@ -59,7 +59,7 @@ static void sample_voice_reader_publish_lease(sample_voice_reader_state_t *state
     }
 }
 
-#if BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES > 0U
+#if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES > 0U
 static void sample_voice_reader_release_loop_cache(sample_voice_reader_state_t *state)
 {
     if (state == 0)
@@ -150,7 +150,7 @@ static void sample_voice_reader_release_audio_cursor(sample_voice_reader_state_t
     memset(&state->audio_cursor, 0, sizeof(state->audio_cursor));
 }
 
-#if BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES > 0U
+#if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES > 0U
 static uint8_t sample_voice_reader_resolve_loop_page(
     sample_voice_reader_state_t *state,
     uint32_t page_index,
@@ -204,7 +204,7 @@ static uint8_t sample_voice_reader_acquire_audio_page(sample_voice_reader_state_
     const uint32_t page_index =
         sample_audio_format_page_index_from_frame(expected_format, frame_pos);
     uint8_t acquired = 0U;
-#if BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES > 0U
+#if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES > 0U
     acquired = sample_voice_reader_resolve_loop_page(state, page_index, &span);
 #endif
     if (acquired == 0U)
@@ -241,7 +241,7 @@ static uint8_t sample_voice_reader_acquire_audio_page(sample_voice_reader_state_
     state->audio_cursor.registration_epoch = span.registration_epoch;
     state->audio_cursor.current_acquired = 1U;
     state->audio_cursor.active = 1U;
-#if BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES > 0U
+#if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES > 0U
     sample_voice_reader_capture_loop_page(state, &span);
 #endif
     return 1U;
@@ -292,7 +292,7 @@ static uint8_t sample_voice_reader_acquire_neighbor_page(sample_voice_reader_sta
     state->audio_cursor.neighbor_base = span.frames_interleaved;
     state->audio_cursor.neighbor_start_frame = span.start_frame;
     state->audio_cursor.neighbor_frame_count = span.frame_count;
-#if BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES > 0U
+#if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES > 0U
     sample_voice_reader_capture_loop_page(state, &span);
 #endif
     state->audio_cursor.neighbor_acquired = 1U;
@@ -690,7 +690,7 @@ void sample_voice_reader_reset(sample_voice_reader_t *reader)
     }
 
     sample_voice_reader_state_t *const state = sample_voice_reader_state(reader);
-#if BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES > 0U
+#if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES > 0U
     sample_voice_reader_release_loop_cache(state);
 #endif
     sample_voice_reader_release_audio_cursor(state);
@@ -767,7 +767,7 @@ void sample_voice_reader_bind_loop_cache_incarnation(sample_voice_reader_t *read
                                                      uint8_t voice_id,
                                                      uint32_t generation)
 {
-#if BRICK6_STREAM_PRODUCT_VOICE_LOOP_CACHE_PAGES > 0U
+#if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES > 0U
     if ((reader == 0) || (voice_id >= SAMPLE_STREAM_TARGET_MAX_VOICES)
         || (generation == 0U))
     {
