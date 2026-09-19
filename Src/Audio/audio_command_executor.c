@@ -632,10 +632,10 @@ static uint8_t audio_command_executor_apply_seq_event(
     {
         if (event->occurrence_id >= PARAM_COUNT) return 0U;
         const float value=param_value_policy_decode_u16(
-            &param_registry[event->occurrence_id],(uint16_t)event->value);
-        const uint8_t kind=(event->velocity==SEQ_ENGINE_PARAM_TEMP)
+            &param_registry[event->occurrence_id],seq_event_param_value(event));
+        const uint8_t kind=(event->reserved==SEQ_ENGINE_PARAM_TEMP)
             ?CONTROL_AUDIO_PARAM_KIND_TEMP_TRACK
-            :((event->velocity==SEQ_ENGINE_PARAM_CLEAR_TEMP)
+            :((event->reserved==SEQ_ENGINE_PARAM_CLEAR_TEMP)
                 ?CONTROL_AUDIO_PARAM_KIND_CLEAR_TEMP_TRACK
                 :CONTROL_AUDIO_PARAM_KIND_BASE_TRACK);
         return live_parameter_audio_runtime_apply_param(event->track,

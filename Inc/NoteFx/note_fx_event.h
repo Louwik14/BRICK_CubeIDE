@@ -46,6 +46,9 @@ typedef enum
 #define NOTE_EVENT_FLAG_RETRIGGER 0x20U
 #define NOTE_EVENT_FLAG_FUTURE    0x40U
 #define NOTE_EVENT_FLAG_GATE      0x80U
+#define NOTE_EVENT_DEPENDENCY_SLOT_MASK 0x0FU
+#define NOTE_EVENT_BRANCH_SHIFT 4U
+#define NOTE_EVENT_BRANCH_MASK 0x30U
 #define NOTE_EVENT_DURATION_OPEN UINT32_MAX
 
 /* Canonical inter-slot musical event.  Legacy member aliases remain during
@@ -70,6 +73,12 @@ typedef struct
     uint8_t temporal_index;
     uint8_t dependency_mask;
 } musical_event_t;
+
+static inline uint8_t note_event_branch(const musical_event_t *event)
+{
+    return (uint8_t)((event->dependency_mask & NOTE_EVENT_BRANCH_MASK)
+        >> NOTE_EVENT_BRANCH_SHIFT);
+}
 
 #define NOTE_EVENT_DEPENDENCY_NONE 0U
 

@@ -343,6 +343,14 @@ SECTIONS
     . = ALIGN(32);
   } >SDRAM
 
+  .seq_state_sdram (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.seq_state_sdram)
+    *(.seq_state_sdram*)
+    . = ALIGN(32);
+  } >SDRAM
+
   .sdram_ui (NOLOAD) :
   {
     . = ALIGN(32);

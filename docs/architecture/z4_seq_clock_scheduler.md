@@ -94,7 +94,12 @@ source la plus ancienne est choisie deterministement.
 
 Les NOTE produites, les NOTE_OFF, l'ingress et les PARAM sont accumules sans
 tri intermediaire. Une unique mise en ordre stable en place, bornee par
-`SEQ_ENGINE_EVENT_CAPACITY`, publie sans allocation. Le
+`SEQ_ENGINE_EVENT_CAPACITY`, publie sans allocation. La borne PASS 2 est 2880
+entrees: 1280 NOTE_ON (fanout direct, Echo du et reprises Groove), au plus
+1344 NOTE_OFF remplacements inclus, puis 256 parameter-locks. La capacite
+retenue est 3072 (192 entrees, soit 6,7 % de marge). Echo possede 256 identites stables
+`[track, lane, branche HARM]`; Groove conserve 128 lots de quatre branches
+sans reduire le fanout. Le
 departage conserve est `(sample, NOTE_OFF, PARAM, NOTE_ON, PANIC, ordre
 d'ajout)`. Les PARAM rejoignent donc le flux avant cette unique mise en ordre.
 

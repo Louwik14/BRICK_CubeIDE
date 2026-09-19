@@ -8,9 +8,10 @@
 #include "NoteFx/note_fx_event.h"
 #include "NoteFx/note_fx_plan.h"
 #include "Seq/seq_product_contract.h"
+#include "Seq/seq_capacity_contract.h"
 
 #define SEQ_ENGINE_H743_PERIOD_SAMPLES 64U
-#define SEQ_ENGINE_EVENT_CAPACITY 384U
+#define SEQ_ENGINE_EVENT_CAPACITY 3072U
 #define SEQ_ENGINE_BLOCK_SLOTS 3U
 #define SEQ_ENGINE_SNAPSHOT_SLOTS 2U
 #define SEQ_ENGINE_SCHEDULER_CAPACITY 512U
@@ -33,16 +34,23 @@ typedef enum {
     SEQ_ENGINE_EVENT_PANIC
 } seq_event_kind_t;
 
-typedef struct {
-    uint16_t offset;
-    uint8_t kind;
-    uint8_t track;
+typedef struct __attribute__((packed)) {
     uint32_t occurrence_id;
-    int32_t value;
+    uint16_t offset;
+    uint8_t kind : 2;
+    uint8_t track : 4;
+    uint8_t reserved : 2;
     uint8_t note;
     uint8_t velocity;
-    uint16_t reserved;
 } seq_event_t;
+
+_Static_assert(sizeof(seq_event_t) == 9U, "SEQ publication event budget");
+
+static inline uint16_t seq_event_param_value(const seq_event_t *event)
+{
+    return (uint16_t)((uint16_t)event->note
+        | ((uint16_t)event->velocity << 8U));
+}
 
 typedef struct {
     uint64_t start_sample;
@@ -186,6 +194,52 @@ typedef struct {
     uint16_t scheduler_overflows;
 } seq_engine_perf_snapshot_t;
 
+typedef struct {
+    uint32_t magic;
+    uint16_t version;
+    uint16_t size;
+    uint32_t ready;
+    uint32_t valid;
+    uint32_t iterations;
+    uint32_t warmup_blocks;
+    uint32_t core_hz;
+    uint32_t frames;
+    uint32_t logical_sources;
+    uint32_t active_sources_peak;
+    uint32_t max_cycles;
+    uint32_t mean_cycles;
+    uint32_t p99_cycles;
+    uint32_t p999_cycles;
+    uint32_t blocks_over_m4_50;
+    uint32_t blocks_over_m4_75;
+    uint32_t max_consecutive_over_m4_50;
+    uint32_t max_consecutive_over_m4_75;
+    uint32_t blocks_over_m7_50;
+    uint32_t blocks_over_m7_75;
+    uint32_t scheduler_overflows;
+    uint32_t technical_drops;
+    uint32_t musical_rejections;
+    uint32_t output_overflows;
+    uint32_t output_peak;
+    uint32_t max_cycles_ordinary;
+    uint32_t mean_cycles_ordinary;
+    uint32_t max_cycles_boundary;
+    uint32_t mean_cycles_boundary;
+    uint32_t ordinary_blocks;
+    uint32_t boundary_blocks;
+    uint32_t drop_scheduler_capacity;
+    uint32_t drop_groove_resume_capacity;
+    uint32_t drop_ledger_admission;
+    uint32_t drop_terminal_output_capacity;
+    uint32_t drop_source_capacity;
+    uint32_t drop_fx_preprocess;
+    uint32_t drop_source_transform;
+    uint32_t drop_scheduled_output_capacity;
+    uint32_t drop_fx_postprocess;
+} seq_boot_bench_result_t;
+
+extern volatile seq_boot_bench_result_t g_seq_boot_bench;
+
 /* Immutable canonical Pattern armed by CONTROL and owned by SEQ after commit. */
 typedef struct __attribute__((packed)) {
     uint8_t trig_roll;
@@ -277,6 +331,7 @@ typedef struct {
 uint8_t seq_ingress_submit(const seq_ingress_event_t *event);
 void seq_ingress_panic(void);
 void seq_engine_perf_capture(seq_engine_perf_snapshot_t *out);
+void seq_engine_boot_bench_run(void);
 
 /* CONTROL prepares; SEQ atomically takes ownership of the armed Pattern. */
 void seq_engine_control_init(void);
@@ -304,7 +359,10 @@ _Static_assert(SEQ_ENGINE_INGRESS_CAPACITY
                    == SEQ_INGRESS_EVENTS_PER_WINDOW_MAX,
                "inbox and raw ingress rate contracts diverged");
 _Static_assert(SEQ_ENGINE_LEDGER_CAPACITY == 64U, "SEQ logical ledger contract");
-_Static_assert(SEQ_ENGINE_SCHEDULER_CAPACITY == 512U, "SEQ scheduler contract");
+_Static_assert(SEQ_ENGINE_EVENT_CAPACITY >= SEQ_PRODUCT_TERMINAL_EVENTS_PER_HORIZON,
+               "SEQ terminal publication below legal fanout");
+_Static_assert(SEQ_ENGINE_SCHEDULER_CAPACITY >= SEQ_PRODUCT_SCHEDULER_ITEMS_MAX,
+               "SEQ scheduler below legal continuation bound");
 _Static_assert(SEQ_ENGINE_FX_SCRATCH_CAPACITY == 32U, "SEQ scratch contract");
 
 #endif

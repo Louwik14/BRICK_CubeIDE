@@ -8,7 +8,7 @@
 #include <string.h>
 
 typedef enum { SLOT_FREE = 0, SLOT_WRITING, SLOT_READY, SLOT_READING } slot_state_t;
-static seq_event_block_t g_output[SEQ_ENGINE_BLOCK_SLOTS];
+static SEQ_STATE_SDRAM seq_event_block_t g_output[SEQ_ENGINE_BLOCK_SLOTS];
 static AUDIO_STATE_D3 seq_param_block_t g_params[SEQ_ENGINE_BLOCK_SLOTS];
 static SEQ_STATE_D2 seq_engine_core_t g_core;
 static volatile uint8_t g_slot_state[SEQ_ENGINE_BLOCK_SLOTS];
@@ -30,6 +30,159 @@ static uint64_t g_ingress_rate_window;
 static uint8_t g_ingress_rate_count;
 static struct {uint64_t total;uint32_t count,max,over50,over75,run50,run75,maxrun50,maxrun75;
     uint32_t histogram[32];} g_seq_perf;
+
+#define SEQ_BOOT_BENCH_MAGIC UINT32_C(0x53514232)
+#define SEQ_BOOT_BENCH_VERSION 4U
+#define SEQ_BOOT_BENCH_WARMUP_BLOCKS 2048U
+#define SEQ_BOOT_BENCH_ITERATIONS 8192U
+#define SEQ_BOOT_BENCH_BUCKET_SHIFT 10U
+#define SEQ_BOOT_BENCH_BUCKET_COUNT 1024U
+#define SEQ_BOOT_BENCH_STEP_SAMPLES 2400U
+#define SEQ_BOOT_BENCH_LOGICAL_SOURCES 64U
+#define SEQ_BOOT_BENCH_DROP_REASON_COUNT 9U
+
+void seq_engine_drop_diag_reset(void);
+void seq_engine_drop_diag_capture(uint32_t out[SEQ_BOOT_BENCH_DROP_REASON_COUNT]);
+
+_Static_assert(NOTE_FX_SLOT_COUNT==4U,"SEQ reference bench requires four FX slots");
+_Static_assert(((BRICK_ENTITY_TOP_LEVEL_COUNT-1U)*SEQ_PLAY_MAX_CAPACITY
+    +BRICK_ENTITY_GROUP_CHILD_COUNT)==SEQ_BOOT_BENCH_LOGICAL_SOURCES,
+    "SEQ reference bench topology changed");
+
+CTRL_STATE __attribute__((used)) volatile seq_boot_bench_result_t g_seq_boot_bench;
+CONTROL_STATE_SDRAM static seq_pattern_t g_seq_bench_pattern;
+#define g_seq_bench_core g_core
+#define g_seq_bench_output (g_output[0])
+#define g_seq_bench_params (g_params[0])
+SEQ_HOT_D1 static uint32_t g_seq_bench_histogram[SEQ_BOOT_BENCH_BUCKET_COUNT];
+
+/* Fixed reference chains.  Parameters are deliberately ordinary musical
+ * values: major triad; 1/16 Echo, two repeats, 32% decay; 75% Gate; Groove 3
+ * at 25% timing and 100% velocity; Euclid 16/4 at 1/32. */
+static void seq_boot_bench_fx(note_fx_track_state_t *state,uint8_t child)
+{memset(state,0,sizeof(*state));
+ if(child==0U){state->value[0][0]=0U;state->value[0][1]=0U;
+  state->value[0][2]=0U;state->value[0][3]=NOTE_FX_MODEL_HARMONIZER;}
+ else{state->value[0][0]=16U;state->value[0][1]=4U;
+  state->value[0][2]=3U;state->value[0][3]=NOTE_FX_MODEL_EUCLID;}
+ state->value[1][0]=2U;state->value[1][1]=2U;
+ state->value[1][2]=32U;state->value[1][3]=NOTE_FX_MODEL_ECHO;
+ state->value[2][0]=75U;state->value[2][1]=0U;
+ state->value[2][2]=NOTE_FX_GATE_MODE_CLIP;state->value[2][3]=NOTE_FX_MODEL_GATE;
+ state->value[3][0]=3U;state->value[3][1]=25U;
+ state->value[3][2]=100U;state->value[3][3]=NOTE_FX_MODEL_GROOVE;}
+
+static void seq_boot_bench_pattern_init(void)
+{seq_pattern_t*p=&g_seq_bench_pattern;memset(p,0,sizeof(*p));
+ p->generation=1U;p->running=1U;p->transport_epoch=1U;
+ p->samples_per_step_q16=(uint32_t)SEQ_BOOT_BENCH_STEP_SAMPLES<<16U;
+ for(uint8_t track=0U;track<SEQ_LANE_CAPACITY;++track){
+  const uint8_t master=(uint8_t)(track==BRICK_ENTITY_GROUP_MASTER_ID);
+  const uint8_t child=(uint8_t)(track>=BRICK_ENTITY_FIRST_GROUP_CHILD_ID);
+  p->track_length[track]=1U;p->track_div[track]=1U;
+  p->track_can_emit[track]=(uint8_t)(master==0U);p->track_note_enabled[track]=(uint8_t)(master==0U);
+  p->track_fx_enabled[track]=(uint8_t)(master==0U);p->track_exec[track].logical_capacity=
+      master?0U:(child?1U:8U);p->steps[track][0].trig_roll=3U;
+  seq_boot_bench_fx(&p->note_fx[track],child);
+  if(master)continue;
+  const uint8_t voices=child?1U:8U;
+  for(uint8_t voice=0U;voice<voices;++voice){seq_play_item_t*item=child
+      ?&p->child_play[track-BRICK_ENTITY_FIRST_GROUP_CHILD_ID][0]
+      :&p->top_play[track][0].items[voice];
+   *item=(seq_play_item_t){.note=(uint8_t)(child?(40U+track):(36U+voice)),.velocity=112U,
+      .length=64U,.microtiming=0,.present_mask=SEQ_STEP_PLAY_PRESENT_ALL};}}
+}
+
+static uint32_t seq_boot_bench_percentile(uint32_t numerator,uint32_t denominator)
+{const uint32_t target=(SEQ_BOOT_BENCH_ITERATIONS*numerator+denominator-1U)/denominator;
+ uint32_t cumulative=0U;for(uint32_t i=0U;i<SEQ_BOOT_BENCH_BUCKET_COUNT;++i){
+ cumulative+=g_seq_bench_histogram[i];if(cumulative>=target)
+   return((i+1U)<<SEQ_BOOT_BENCH_BUCKET_SHIFT)-1U;}return UINT32_MAX;}
+
+static uint8_t seq_boot_bench_service(uint64_t sample)
+{seq_engine_core_process_block(&g_seq_bench_core,sample,SEQ_ENGINE_H743_PERIOD_SAMPLES,
+   &g_seq_bench_pattern,&g_seq_bench_output,&g_seq_bench_params);
+ if((uint32_t)g_seq_bench_output.event_count+g_seq_bench_params.event_count
+      >SEQ_ENGINE_EVENT_CAPACITY){g_seq_bench_output.event_count=0U;
+  g_seq_bench_output.emitter_tracks=0U;g_seq_bench_output.lock_tracks=0U;return 1U;}
+ for(uint16_t i=0U;i<g_seq_bench_params.event_count;++i){
+  const seq_param_event_t*event=&g_seq_bench_params.events[i];
+  g_seq_bench_output.events[g_seq_bench_output.event_count++]=(seq_event_t){
+   .offset=event->offset,.kind=SEQ_ENGINE_EVENT_PARAM,.track=event->track,
+   .occurrence_id=event->param_id,.note=(uint8_t)event->value16,
+   .velocity=(uint8_t)(event->value16>>8U),.reserved=event->semantic};}
+ seq_engine_event_order(&g_seq_bench_output);return 0U;}
+
+static uint8_t seq_boot_bench_boundary(uint64_t sample)
+{const uint32_t phase=(uint32_t)(sample%SEQ_BOOT_BENCH_STEP_SAMPLES);
+ return(uint8_t)(phase==0U||phase+SEQ_ENGINE_H743_PERIOD_SAMPLES
+     >SEQ_BOOT_BENCH_STEP_SAMPLES);}
+
+void seq_engine_boot_bench_run(void)
+{memset((void*)&g_seq_boot_bench,0,sizeof(g_seq_boot_bench));
+ memset(g_seq_bench_histogram,0,sizeof(g_seq_bench_histogram));seq_boot_bench_pattern_init();
+ CoreDebug->DEMCR|=CoreDebug_DEMCR_TRCENA_Msk;DWT->CYCCNT=0U;DWT->CTRL|=DWT_CTRL_CYCCNTENA_Msk;
+ seq_engine_drop_diag_reset();
+ seq_engine_core_init(&g_seq_bench_core);uint64_t sample=SEQ_BOOT_BENCH_STEP_SAMPLES;
+ uint32_t output_overflows=0U;
+ for(uint32_t i=0U;i<SEQ_BOOT_BENCH_WARMUP_BLOCKS;++i,
+       sample+=SEQ_ENGINE_H743_PERIOD_SAMPLES)
+  output_overflows+=seq_boot_bench_service(sample);
+ uint64_t total=0U,ordinary_total=0U,boundary_total=0U;
+ uint32_t max=0U,ordinary_max=0U,boundary_max=0U,ordinary_count=0U,boundary_count=0U;
+ uint32_t source_peak=0U;
+ uint32_t run50=0U,run75=0U,maxrun50=0U,maxrun75=0U;
+ uint32_t over50=0U,over75=0U,overm750=0U,overm775=0U,output_peak=0U;
+ for(uint32_t i=0U;i<SEQ_BOOT_BENCH_ITERATIONS;++i,sample+=SEQ_ENGINE_H743_PERIOD_SAMPLES){
+  const uint8_t boundary=seq_boot_bench_boundary(sample);
+  const uint32_t started=DWT->CYCCNT;
+  output_overflows+=seq_boot_bench_service(sample);
+  const uint32_t cycles=DWT->CYCCNT-started;total+=cycles;if(cycles>max)max=cycles;
+  if(g_seq_bench_core.source_count>source_peak)source_peak=g_seq_bench_core.source_count;
+  if(boundary!=0U){boundary_total+=cycles;++boundary_count;
+   if(cycles>boundary_max)boundary_max=cycles;}
+  else{ordinary_total+=cycles;++ordinary_count;if(cycles>ordinary_max)ordinary_max=cycles;}
+  uint32_t bucket=cycles>>SEQ_BOOT_BENCH_BUCKET_SHIFT;
+  if(bucket>=SEQ_BOOT_BENCH_BUCKET_COUNT)bucket=SEQ_BOOT_BENCH_BUCKET_COUNT-1U;
+  ++g_seq_bench_histogram[bucket];if(g_seq_bench_output.event_count>output_peak)output_peak=g_seq_bench_output.event_count;
+  if(cycles>160000U){++over50;++run50;if(run50>maxrun50)maxrun50=run50;}else run50=0U;
+  if(cycles>240000U){++over75;++run75;if(run75>maxrun75)maxrun75=run75;}else run75=0U;
+  if(cycles>320000U)++overm750;
+  if(cycles>480000U)++overm775;}
+ uint32_t drop_reason[SEQ_BOOT_BENCH_DROP_REASON_COUNT];
+ seq_engine_drop_diag_capture(drop_reason);
+ output_overflows+=drop_reason[3]+drop_reason[7];
+ const uint32_t valid=(g_seq_bench_core.scheduler_overflow_count==0U
+    &&g_seq_bench_core.dropped_events==0U&&output_overflows==0U)?1U:0U;
+ g_seq_boot_bench=(seq_boot_bench_result_t){.magic=SEQ_BOOT_BENCH_MAGIC,
+  .version=SEQ_BOOT_BENCH_VERSION,
+  .size=(uint16_t)sizeof(g_seq_boot_bench),.iterations=SEQ_BOOT_BENCH_ITERATIONS,
+  .warmup_blocks=SEQ_BOOT_BENCH_WARMUP_BLOCKS,.core_hz=SystemCoreClock,
+  .frames=SEQ_ENGINE_H743_PERIOD_SAMPLES,.logical_sources=SEQ_BOOT_BENCH_LOGICAL_SOURCES,
+  .active_sources_peak=source_peak,
+  .max_cycles=max,.mean_cycles=(uint32_t)(total/SEQ_BOOT_BENCH_ITERATIONS),
+  .p99_cycles=seq_boot_bench_percentile(99U,100U),
+  .p999_cycles=seq_boot_bench_percentile(999U,1000U),
+  .blocks_over_m4_50=over50,.blocks_over_m4_75=over75,
+  .max_consecutive_over_m4_50=maxrun50,.max_consecutive_over_m4_75=maxrun75,
+  .blocks_over_m7_50=overm750,.blocks_over_m7_75=overm775,
+  .scheduler_overflows=g_seq_bench_core.scheduler_overflow_count,
+  .technical_drops=g_seq_bench_core.dropped_events,.musical_rejections=0U,
+  .output_overflows=output_overflows,.output_peak=output_peak,
+  .max_cycles_ordinary=ordinary_max,
+  .mean_cycles_ordinary=ordinary_count?(uint32_t)(ordinary_total/ordinary_count):0U,
+  .max_cycles_boundary=boundary_max,
+  .mean_cycles_boundary=boundary_count?(uint32_t)(boundary_total/boundary_count):0U,
+  .ordinary_blocks=ordinary_count,.boundary_blocks=boundary_count,
+  .drop_scheduler_capacity=drop_reason[0],
+  .drop_groove_resume_capacity=drop_reason[1],
+  .drop_ledger_admission=drop_reason[2],
+  .drop_terminal_output_capacity=drop_reason[3],
+  .drop_source_capacity=drop_reason[4],.drop_fx_preprocess=drop_reason[5],
+  .drop_source_transform=drop_reason[6],
+  .drop_scheduled_output_capacity=drop_reason[7],
+  .drop_fx_postprocess=drop_reason[8],.valid=valid};
+ seq_engine_irq_init();__DMB();g_seq_boot_bench.ready=1U;}
 
 static void seq_perf_record(uint32_t cycles)
 {const uint32_t budget=SystemCoreClock*SEQ_ENGINE_H743_PERIOD_SAMPLES/48000U;
@@ -270,7 +423,8 @@ void seq_service(uint64_t now_sample, uint64_t publish_until_sample)
                 block->events[block->event_count++] = (seq_event_t){
                     .offset=event->offset,.kind=SEQ_ENGINE_EVENT_PARAM,
                     .track=event->track,.occurrence_id=event->param_id,
-                    .value=event->value16,.velocity=event->semantic};
+                    .note=(uint8_t)event->value16,
+                    .velocity=(uint8_t)(event->value16>>8U),.reserved=event->semantic};
             }
             seq_engine_event_order(block);
         }

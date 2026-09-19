@@ -3,6 +3,7 @@
 #include "NoteFx/note_fx_euclid.h"
 #include "NoteFx/note_fx_context.h"
 #include "Seq/seq_division_catalog.h"
+#include "Seq/seq_capacity_contract.h"
 #include "Platform/memory_layout.h"
 
 typedef struct { uint32_t source_token,occurrence_id,generation,group_id,lifetime_end;uint8_t note,velocity,dependency_mask,routing; } note_fx_held_pitch_t;
@@ -33,7 +34,7 @@ typedef struct { note_fx_slot_runtime_t slot[NOTE_FX_TRACK_COUNT][NOTE_FX_SLOT_C
  uint8_t scale_index,root_index;
 } note_fx_engine_context_t;
 static CONTROL_M4_SRAM2 note_fx_engine_context_t g_seq_context;
-static __attribute__((section(".ram_note_fx_echo"))) note_fx_echo_state_t g_echo[64U];
+static SEQ_HOT_D1 note_fx_echo_state_t g_echo[SEQ_PRODUCT_ECHO_STATE_CAPACITY];
 static note_fx_engine_context_t *const g_context=&g_seq_context;
 #define g_slot (g_context->slot)
 #define g_work_slot_mask (g_context->work_slot_mask)
@@ -54,8 +55,9 @@ static uint32_t next_token(void){g_token=(g_token+1U)&NOTE_EVENT_OCCURRENCE_COUN
 static uint32_t mix32(uint32_t x){x^=x>>16;x*=UINT32_C(0x7FEB352D);x^=x>>15;x*=UINT32_C(0x846CA68B);return x^(x>>16);}
 static uint32_t child_id(uint32_t p,uint8_t s,uint8_t v,uint8_t r){uint32_t x=mix32(p^((uint32_t)(s+1U)<<24)^((uint32_t)(v+1U)<<12)^((uint32_t)(r+1U)<<4))&NOTE_EVENT_OCCURRENCE_COUNTER_MASK;if(!x)x=1U;return NOTE_EVENT_OCCURRENCE_NAMESPACE_FX|x;}
 static note_fx_echo_state_t*echo_state(const note_event_t*e){note_fx_echo_state_t*free_state=NULL;
- for(uint8_t i=0U;i<64U;++i){note_fx_echo_state_t*x=&g_echo[i];
-  if(x->active&&x->seed.track==e->track&&x->seed.temporal_index==e->temporal_index)return x;
+ for(uint16_t i=0U;i<SEQ_PRODUCT_ECHO_STATE_CAPACITY;++i){note_fx_echo_state_t*x=&g_echo[i];
+  if(x->active&&x->seed.track==e->track&&x->seed.temporal_index==e->temporal_index
+      &&note_event_branch(&x->seed)==note_event_branch(e))return x;
   if(!x->active&&!free_state)free_state=x;}return free_state;}
 static int8_t held_find(const note_fx_slot_runtime_t*r,const note_event_t*e){for(uint8_t i=0;i<r->held_count;++i)if(r->held[i].occurrence_id==e->intent_id&&r->held[i].generation==e->source_generation&&r->held[i].source_token==e->source_id)return(int8_t)i;return-1;}
 static void held_remove(note_fx_slot_runtime_t*r,uint8_t i){if(i>=r->held_count)return;--r->held_count;r->held[i]=r->held[r->held_count];memset(&r->held[r->held_count],0,sizeof(r->held[0]));}
@@ -82,7 +84,7 @@ static note_event_result_t direct(uint8_t slot,note_fx_slot_runtime_t*r,const no
     .delay=delay?delay:1U,.repeats=r->p2,.index=0U,.decay=r->p3,.active=1U};
    if(promised<x->next_due)x->next_due=promised;}return NOTE_EVENT_RESULT_ACCEPTED;}
  if(r->model==NOTE_FX_MODEL_GATE){if(e->kind==NOTE_EVENT_KIND_OFF)return NOTE_EVENT_RESULT_ACCEPTED;note_event_t on=*e;on.flags|=NOTE_EVENT_FLAG_GATE;if(r->p3==NOTE_FX_GATE_MODE_LEGATO)on.flags|=NOTE_EVENT_FLAG_LEGATO;else if(r->p3==NOTE_FX_GATE_MODE_RETRIG)on.flags|=NOTE_EVENT_FLAG_RETRIGGER;int32_t var=0;if(r->p2){const uint32_t h=mix32(e->group_id^((uint32_t)slot<<24));var=(int32_t)(h%(2U*r->p2+1U))-(int32_t)r->p2;}int32_t pct=(int32_t)r->p1+var;if(pct<1)pct=1;if(r->p3==NOTE_FX_GATE_MODE_CLIP&&pct>100)pct=100;on.duration_samples=(uint32_t)(((uint64_t)pct*step_samples()+50U)/100U);return append(out,cap,count,&on,stage)?NOTE_EVENT_RESULT_ACCEPTED:NOTE_EVENT_RESULT_REJECTED_CAPACITY;}
- if(r->model==NOTE_FX_MODEL_HARMONIZER){uint8_t emitted=0;for(uint8_t voice=0;voice<4;++voice){uint8_t interval=g_harmony[r->p1%NOTE_FX_HARMONIZER_TYPE_COUNT][voice];if(interval==255)continue;if(voice<r->p3)interval=(uint8_t)(interval+12U);if(r->p2&&voice)interval=(uint8_t)(interval+12U*(1U+(uint8_t)((voice-1U)%r->p2)));if((uint16_t)e->note+interval>=128)continue;note_event_t x=*e;x.note=(uint8_t)(e->note+interval);if(voice){x.occurrence_id=child_id(e->occurrence_id,slot,voice,0);x.provenance=NOTE_EVENT_SOURCE_FX;x.flags|=NOTE_EVENT_FLAG_GENERATED;}uint8_t dup=0;for(uint8_t i=0;i<*count;++i)if(out[i].destination_id==x.destination_id&&out[i].note==x.note)dup=1;if(!dup){if(!append(out,cap,count,&x,stage))return NOTE_EVENT_RESULT_REJECTED_CAPACITY;++emitted;}}return emitted?NOTE_EVENT_RESULT_ACCEPTED:NOTE_EVENT_RESULT_DROPPED_POLICY;}
+ if(r->model==NOTE_FX_MODEL_HARMONIZER){uint8_t emitted=0;for(uint8_t voice=0;voice<SEQ_PRODUCT_HARMONY_FANOUT_MAX;++voice){uint8_t interval=g_harmony[r->p1%NOTE_FX_HARMONIZER_TYPE_COUNT][voice];if(interval==255)continue;if(voice<r->p3)interval=(uint8_t)(interval+12U);if(r->p2&&voice)interval=(uint8_t)(interval+12U*(1U+(uint8_t)((voice-1U)%r->p2)));if((uint16_t)e->note+interval>=128)continue;note_event_t x=*e;x.note=(uint8_t)(e->note+interval);x.dependency_mask=(uint8_t)((x.dependency_mask&NOTE_EVENT_DEPENDENCY_SLOT_MASK)|(voice<<NOTE_EVENT_BRANCH_SHIFT));if(voice){x.occurrence_id=child_id(e->occurrence_id,slot,voice,0);x.provenance=NOTE_EVENT_SOURCE_FX;x.flags|=NOTE_EVENT_FLAG_GENERATED;}uint8_t dup=0;for(uint8_t i=0;i<*count;++i)if(out[i].destination_id==x.destination_id&&out[i].note==x.note)dup=1;if(!dup){if(!append(out,cap,count,&x,stage))return NOTE_EVENT_RESULT_REJECTED_CAPACITY;++emitted;}}return emitted?NOTE_EVENT_RESULT_ACCEPTED:NOTE_EVENT_RESULT_DROPPED_POLICY;}
  return append(out,cap,count,e,stage)?NOTE_EVENT_RESULT_ACCEPTED:NOTE_EVENT_RESULT_REJECTED_CAPACITY;}
 
 static note_event_result_t chord_group(uint8_t slot,note_fx_slot_runtime_t*r,
@@ -102,7 +104,7 @@ static note_event_result_t chord_group(uint8_t slot,note_fx_slot_runtime_t*r,
  *count=write;return write?NOTE_EVENT_RESULT_ACCEPTED:NOTE_EVENT_RESULT_DROPPED_POLICY;}
 
 static note_event_result_t echo_process(uint64_t start,uint64_t end,note_fx_emit_fn emit,void*ctx)
-{for(uint8_t i=0U;i<64U;++i){note_fx_echo_state_t*x=&g_echo[i];
+{for(uint16_t i=0U;i<SEQ_PRODUCT_ECHO_STATE_CAPACITY;++i){note_fx_echo_state_t*x=&g_echo[i];
   while(x->active&&x->next_due<end){const uint64_t due=x->next_due;note_event_t e=x->seed;
    ++x->index;e.sample_abs=due;e.occurrence_id=child_id(e.occurrence_id,
        (uint8_t)(e.stage?e.stage-1U:0U),0U,x->index);

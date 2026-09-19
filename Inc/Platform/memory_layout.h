@@ -42,6 +42,8 @@
 
 /* Sequencer runtime/model state placed in internal D2 (non-SDRAM). */
 #define SEQ_STATE_D2 SEC_ATTR(".ram_d2_m4")
+#define SEQ_HOT_D1 SEC_ATTR(".ram_d1_audio")
+#define SEQ_STATE_SDRAM SEC_ATTR(".seq_state_sdram") ALIGN32
 
 /* CONTROL state local to SRAM2/D2, reserved for the future M4 owner. */
 #define CONTROL_M4_SRAM2 SEC_ATTR(".ram_control_m4_sram2")

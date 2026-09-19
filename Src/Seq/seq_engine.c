@@ -8,22 +8,44 @@
 #include <string.h>
 
 static SEQ_STATE_D2 note_event_t g_seq_fx_a[NOTE_FX_BATCH_CAPACITY];
-static SEQ_STATE_D2 note_event_t g_seq_fx_b[NOTE_FX_BATCH_CAPACITY];
+static SEQ_HOT_D1 note_event_t g_seq_fx_b[NOTE_FX_BATCH_CAPACITY];
 static seq_engine_core_t *g_seq_fx_core;
 static seq_event_block_t *g_seq_fx_block;
 static uint64_t g_seq_fx_start;
 static uint64_t g_seq_fx_end;
-typedef struct __attribute__((packed)){note_event_t event;uint16_t ticket;
- uint16_t generation;uint8_t active;uint8_t reserved;} seq_groove_resume_t;
-static __attribute__((section(".ram_seq_groove"))) seq_groove_resume_t g_groove_resume[128U];
-_Static_assert(sizeof(seq_groove_resume_t)==46U,"Groove resume budget");
+typedef enum {SEQ_DROP_SCHEDULER_CAPACITY=0,SEQ_DROP_GROOVE_RESUME_CAPACITY,
+ SEQ_DROP_LEDGER_ADMISSION,SEQ_DROP_TERMINAL_OUTPUT_CAPACITY,
+ SEQ_DROP_SOURCE_CAPACITY,SEQ_DROP_FX_PREPROCESS,SEQ_DROP_SOURCE_TRANSFORM,
+ SEQ_DROP_SCHEDULED_OUTPUT_CAPACITY,SEQ_DROP_FX_POSTPROCESS,
+ SEQ_DROP_REASON_COUNT} seq_drop_reason_t;
+static uint32_t g_seq_drop_reason[SEQ_DROP_REASON_COUNT];
+static void seq_drop(seq_engine_core_t*core,seq_drop_reason_t reason)
+{++core->dropped_events;++g_seq_drop_reason[reason];}
+void seq_engine_drop_diag_reset(void){memset(g_seq_drop_reason,0,sizeof(g_seq_drop_reason));}
+void seq_engine_drop_diag_capture(uint32_t out[SEQ_DROP_REASON_COUNT])
+{if(out!=0)memcpy(out,g_seq_drop_reason,sizeof(g_seq_drop_reason));}
+typedef struct {uint32_t duration_samples,source_id,occurrence_id;
+ uint8_t note,velocity,kind,flags;} seq_groove_resume_event_t;
+typedef struct {uint64_t sample_abs;seq_groove_resume_event_t event[SEQ_PRODUCT_HARMONY_FANOUT_MAX];
+ uint16_t ticket,generation;uint8_t track,temporal_index,count,active;} seq_groove_resume_t;
+static SEQ_STATE_D2 seq_groove_resume_t
+    g_groove_resume[SEQ_PRODUCT_GROOVE_RESUME_BATCH_CAPACITY];
+_Static_assert(sizeof(seq_groove_resume_t)==80U,"Groove resume batch budget");
+
+static void groove_resume_event_store(seq_groove_resume_event_t *out,
+    const note_event_t *event)
+{*out=(seq_groove_resume_event_t){.duration_samples=event->duration_samples,
+ .source_id=event->source_id,.occurrence_id=event->occurrence_id,
+ .note=event->note,.velocity=event->velocity,.kind=event->kind,
+ .flags=(uint8_t)(((event->flags&NOTE_EVENT_FLAG_GENERATED)!=0U)
+    |(note_event_branch(event)<<1U))};}
 
 static void scheduler_release(seq_engine_core_t *core,uint16_t index);
 static uint16_t scheduler_add(seq_engine_core_t *core,uint64_t due,uint8_t kind,
     uint8_t track,uint8_t note,uint8_t flags,uint32_t occurrence,uint32_t payload)
 {
     if(core->scheduler_free_head==UINT16_MAX){
-        ++core->scheduler_overflow_count;++core->dropped_events;return UINT16_MAX;}
+        ++core->scheduler_overflow_count;seq_drop(core,SEQ_DROP_SCHEDULER_CAPACITY);return UINT16_MAX;}
     const uint16_t index=core->scheduler_free_head;
     seq_ticket_t *const ticket=&core->scheduler[index];
     core->scheduler_free_head=ticket->next_free;
@@ -71,18 +93,23 @@ static void cancel_note_off(seq_engine_core_t *core,uint32_t occurrence)
 
 static uint8_t groove_resume_store(seq_engine_core_t *core,const note_event_t *event)
 {uint8_t count=0U;int16_t free_index=-1,victim=-1;
- for(uint8_t i=0U;i<128U;++i){const seq_groove_resume_t*x=&g_groove_resume[i];
+ for(uint8_t i=0U;i<SEQ_PRODUCT_GROOVE_RESUME_BATCH_CAPACITY;++i){seq_groove_resume_t*x=&g_groove_resume[i];
   if(!x->active){if(free_index<0)free_index=(int16_t)i;continue;}
-  if(x->event.track!=event->track||x->event.temporal_index!=event->temporal_index)continue;
-  ++count;if((victim<0)||(((g_groove_resume[(uint8_t)victim].event.flags&NOTE_EVENT_FLAG_GENERATED)==0U)
-      &&((x->event.flags&NOTE_EVENT_FLAG_GENERATED)!=0U))
-      ||((((x->event.flags^g_groove_resume[(uint8_t)victim].event.flags)&NOTE_EVENT_FLAG_GENERATED)==0U)
-      &&x->event.sample_abs<g_groove_resume[(uint8_t)victim].event.sample_abs))victim=(int16_t)i;}
+  if(x->track!=event->track||x->temporal_index!=event->temporal_index)continue;
+  if(x->sample_abs==event->sample_abs){
+   for(uint8_t n=0U;n<x->count;++n)if(x->event[n].occurrence_id==event->occurrence_id){
+    groove_resume_event_store(&x->event[n],event);return 1U;}
+   if(x->count<SEQ_PRODUCT_HARMONY_FANOUT_MAX){
+    groove_resume_event_store(&x->event[x->count++],event);return 1U;}}
+  ++count;if((victim<0)||x->sample_abs
+      <g_groove_resume[(uint8_t)victim].sample_abs)victim=(int16_t)i;}
  if(count>=2U){scheduler_release(core,g_groove_resume[(uint8_t)victim].ticket);free_index=victim;}
  if(free_index<0)return 0U;
  seq_groove_resume_t*x=&g_groove_resume[(uint8_t)free_index];
  uint16_t generation=(uint16_t)(x->generation+1U);if(!generation)generation=1U;
- *x=(seq_groove_resume_t){.event=*event,.generation=generation,.active=1U};
+ *x=(seq_groove_resume_t){.sample_abs=event->sample_abs,.generation=generation,
+    .track=event->track,.temporal_index=event->temporal_index,.count=1U,.active=1U};
+ groove_resume_event_store(&x->event[0],event);
  x->ticket=scheduler_add(core,event->sample_abs,SEQ_TICKET_GROOVE_RESUME,event->track,
      event->note,event->velocity,event->occurrence_id,(uint32_t)(uint8_t)free_index
      |((uint32_t)generation<<8U));
@@ -131,12 +158,14 @@ static void fx_terminal(const note_event_t *e)
     uint64_t due=e->sample_abs;
     if(due<g_seq_fx_start)due=g_seq_fx_start;
     if(due>=g_seq_fx_end){note_event_t resume=*e;resume.sample_abs=due;
-        if(!groove_resume_store(g_seq_fx_core,&resume))++g_seq_fx_core->dropped_events;
+        if(!groove_resume_store(g_seq_fx_core,&resume))
+            seq_drop(g_seq_fx_core,SEQ_DROP_GROOVE_RESUME_CAPACITY);
         return;}
     if(e->kind==NOTE_EVENT_KIND_OFF){const int16_t found=ledger_find(g_seq_fx_core,e->occurrence_id);
         if(found<0)return;
         ledger_release(g_seq_fx_core,(uint8_t)found);}
-    else if(ledger_admit(g_seq_fx_core,e)<0){++g_seq_fx_core->dropped_events;return;}
+    else if(ledger_admit(g_seq_fx_core,e)<0){
+        seq_drop(g_seq_fx_core,SEQ_DROP_LEDGER_ADMISSION);return;}
     if(g_seq_fx_block->event_count<SEQ_ENGINE_EVENT_CAPACITY)
         g_seq_fx_block->events[g_seq_fx_block->event_count++]=(seq_event_t){
             .offset=(uint16_t)(due-g_seq_fx_start),
@@ -145,7 +174,7 @@ static void fx_terminal(const note_event_t *e)
             .track=e->track,.occurrence_id=e->occurrence_id,
             .note=e->note,.velocity=e->velocity,
             .reserved=(uint16_t)(((e->flags&NOTE_EVENT_FLAG_GENERATED)!=0U)?1U:0U)};
-    else {++g_seq_fx_core->dropped_events;return;}
+    else {seq_drop(g_seq_fx_core,SEQ_DROP_TERMINAL_OUTPUT_CAPACITY);return;}
     const uint32_t source_namespace=e->source_id&~NOTE_EVENT_OCCURRENCE_COUNTER_MASK;
     if(source_namespace==NOTE_EVENT_OCCURRENCE_NAMESPACE_KEY
             ||source_namespace==NOTE_EVENT_OCCURRENCE_NAMESPACE_MIDI)
@@ -273,7 +302,7 @@ static ITCM_TEXT void source_add(seq_engine_core_t *core, uint64_t first_on,
         if((oldest==UINT16_MAX)||(source->first_on_sample<core->sources[oldest].first_on_sample)
                 ||((source->first_on_sample==core->sources[oldest].first_on_sample)&&(i<oldest)))oldest=i;}
     if(owned>=quota)target=oldest;
-    if(target==UINT16_MAX){++core->dropped_events;return;}
+    if(target==UINT16_MAX){seq_drop(core,SEQ_DROP_SOURCE_CAPACITY);return;}
     seq_source_cursor_t *const source=&core->sources[target];
     if(source->active!=0U)scheduler_release(core,source->ticket);else ++core->source_count;
     const uint32_t serial=++core->occurrence_serial;
@@ -448,7 +477,7 @@ static ITCM_TEXT void collect(seq_engine_core_t *core,uint64_t start,uint16_t fr
     if(note_fx_engine_process(start,0U,p->samples_per_step_q16,
             transport,pattern,p->scale_index,p->root_index,
             fx_generated,0)!=NOTE_EVENT_RESULT_ACCEPTED)
-        ++core->dropped_events;
+        seq_drop(core,SEQ_DROP_FX_PREPROCESS);
     for(;;){
         uint16_t selected=UINT16_MAX;uint64_t selected_due=end;
         for(uint16_t i=0U;i<SEQ_ENGINE_SCHEDULER_CAPACITY;++i){
@@ -477,7 +506,8 @@ static ITCM_TEXT void collect(seq_engine_core_t *core,uint64_t start,uint16_t fr
                 .flags=(uint8_t)((source->playback_stage==NOTE_EVENT_STAGE_TERMINAL)
                     ?NOTE_EVENT_FLAG_TERMINAL:0U)};
             if(source->playback_stage==NOTE_EVENT_STAGE_TERMINAL)fx_terminal(&event);
-            else if(walker_resume(&event,0U)!=NOTE_EVENT_RESULT_ACCEPTED)++core->dropped_events;
+            else if(walker_resume(&event,0U)!=NOTE_EVENT_RESULT_ACCEPTED)
+                seq_drop(core,SEQ_DROP_SOURCE_TRANSFORM);
             source->next_offset_q16+=source->interval_q16;
             if(source->next_offset_q16<source->span_q16){
                 const uint64_t next_due=source->first_on_sample
@@ -489,15 +519,22 @@ static ITCM_TEXT void collect(seq_engine_core_t *core,uint64_t start,uint16_t fr
             continue;}
         if(ticket.kind==SEQ_TICKET_GROOVE_RESUME){const uint8_t index=(uint8_t)ticket.payload;
             const uint16_t generation=(uint16_t)(ticket.payload>>8U);
-            if(index<128U&&g_groove_resume[index].active
+            if(index<SEQ_PRODUCT_GROOVE_RESUME_BATCH_CAPACITY&&g_groove_resume[index].active
                     &&g_groove_resume[index].generation==generation){
-                const note_event_t event=g_groove_resume[index].event;
-                g_groove_resume[index].active=0U;fx_terminal(&event);}continue;}
+                const seq_groove_resume_t resume=g_groove_resume[index];
+                g_groove_resume[index].active=0U;
+                for(uint8_t n=0U;n<resume.count;++n){const seq_groove_resume_event_t*x=&resume.event[n];
+                    const note_event_t event={.sample_abs=resume.sample_abs,
+                        .duration_samples=x->duration_samples,.source_id=x->source_id,
+                        .occurrence_id=x->occurrence_id,.track=resume.track,.note=x->note,
+                        .velocity=x->velocity,.kind=x->kind,
+                        .flags=(uint8_t)(x->flags&NOTE_EVENT_FLAG_GENERATED)};fx_terminal(&event);}}continue;}
         if(ticket.kind==SEQ_TICKET_NOTE_OFF){
             const int16_t found=ledger_find(core,ticket.occurrence_id);
             if(found<0)continue;
             ledger_release(core,(uint8_t)found);}
-        if(out->event_count>=SEQ_ENGINE_EVENT_CAPACITY){++core->dropped_events;continue;}
+        if(out->event_count>=SEQ_ENGINE_EVENT_CAPACITY){
+            seq_drop(core,SEQ_DROP_SCHEDULED_OUTPUT_CAPACITY);continue;}
         out->events[out->event_count++]=(seq_event_t){
             .offset=(uint16_t)((ticket.due_sample<start)?0U:ticket.due_sample-start),
             .kind=(ticket.kind==SEQ_TICKET_NOTE_OFF)?SEQ_ENGINE_EVENT_NOTE_OFF:
@@ -508,7 +545,7 @@ static ITCM_TEXT void collect(seq_engine_core_t *core,uint64_t start,uint16_t fr
     if(note_fx_engine_process(start,frames,p->samples_per_step_q16,
             transport,pattern,p->scale_index,p->root_index,
             fx_generated,0)!=NOTE_EVENT_RESULT_ACCEPTED)
-        ++core->dropped_events;
+        seq_drop(core,SEQ_DROP_FX_POSTPROCESS);
 }
 
 void seq_engine_core_init(seq_engine_core_t *core)
