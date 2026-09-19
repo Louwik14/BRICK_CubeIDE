@@ -22,6 +22,20 @@ Le modele compact conserve 16 lanes, 64 steps, 512 noeuds p-lock par lane,
 512 locks independants par lane dans les SRAM internes; le chemin chaud
 conserve uniquement les listes actives bornees a 32.
 
+Le Pattern publie aussi la projection executable de chaque lane: role
+topologique, capabilities, destination, mute/timing et capacite logique. Cette
+capacite reprend la polyphonie produit configuree lorsqu'elle existe, bornee a
+8 pour une lane principale; elle vaut 1 pour un enfant GROUP et 0 pour le GROUP
+master. Le master ne publie aucun walker MIDI FX.
+
+Les quatre slots MIDI FX sont normalises par CONTROL. Le plan de base compact
+et, pour chaque step, les quatre opcodes effectifs, le premier slot actif, le
+masque actif et le masque de p-lock sont publies dans le Pattern. Les p-locks
+MIDI FX d'un meme slot sont compactes en un seul mot de plan effectif. SEQ ne
+refait donc ni mapping PARAM, ni validation de modele/plage/famille, ni
+normalisation lors de la configuration du runtime courant. Une famille MIDI FX
+ne peut apparaitre qu'une fois dans une chaine de quatre slots.
+
 ## Runtime borne
 
 Le runtime fixe contient 64 lifetimes, 256 futures, 32 locks actifs par lane,
@@ -44,10 +58,19 @@ resolution verifie le couple index/ticket et ignore une reference perimee.
 ## Ingress et terminal AUDIO
 
 Hall, clavier et MIDI ne prennent aucune decision musicale terminale. Ils
-capturent/correlent l'identite physique puis appellent l'inbox bornee
-`seq_ingress_note`; l'inbox conserve le sample de capture et demande un reveil
+capturent/correlent l'identite physique puis soumettent un
+`seq_ingress_event_t` canonique a `seq_ingress_submit`; l'inbox conserve le
+sample de capture et demande un reveil
 urgent. SEQ applique Note FX, admission et datation, puis clampe une date deja
 engagee sur le premier bloc AUDIO encore publiable.
+
+La frontiere accepte au maximum 64 evenements bruts, toutes sources confondues,
+par fenetre fixe de 1024 samples, avec au maximum 64 evenements simultanement en
+attente. Elle preserve donc un burst complet de l'inbox et borne le debit
+soutenu a 3000 evenements/s a 48 kHz. Un evenement invalide,
+hors ordre temporel, au-dela de cette borne ou arrivant lorsque l'inbox est
+pleine est refuse sans mutation. Cette limite borne le debit brut; elle ne
+remplace pas la capacite logique musicale de la lane.
 STOP/PANIC
 invalide l'inbox, les futures et les lifetimes au point de service suivant.
 
@@ -73,8 +96,17 @@ d'ajout)`. Les PARAM rejoignent donc le flux avant cette unique mise en ordre.
 
 CONTROL decode aussi le mapping statique `(param NoteFX -> slot,parametre)`
 dans le Pattern. A la boundary, SEQ conserve les decisions musicales et la
-normalisation dependante du modele, puis configure les quatre slots; aucun
-catalog lookup ni mapping d'identifiant n'y subsiste.
+configuration du runtime courant; aucun catalog lookup, mapping d'identifiant,
+controle de famille ou normalisation dependante du modele n'y subsiste.
+
+Les constantes produit figees sont 4 slots MIDI FX, une plage de tempo
+40..300 BPM, 8 notes
+logiques par lane principale, un enfant GROUP mono, un master a zero note et
+deux repeats Echo. Elles exposent aussi la preuve preparatoire PASS 2: avec le
+ROLL minimal actuel a 1/5 step et un Echo maximal de deux fois quatre steps,
+les seules sources sequencees peuvent porter 2560 continuations Echo. Cette
+valeur est une entree de dimensionnement; aucun nouveau scheduler n'est cree
+dans cette passe.
 
 ## Persistence et gros changements
 

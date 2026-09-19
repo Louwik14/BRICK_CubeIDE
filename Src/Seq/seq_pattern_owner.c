@@ -7,6 +7,7 @@
 #include "Platform/brick_media_clock.h"
 #include "Platform/memory_layout.h"
 #include "Track/entity_topology.h"
+#include "Track/polyphony_control.h"
 #include "Track/track_mute.h"
 #include "Track/track_runtime.h"
 #include "Keyboard/keyboard_params.h"
@@ -33,6 +34,76 @@ static uint32_t g_build_generation;
 static uint8_t g_last_running;
 static uint8_t g_seen_runtime_running;
 static uint32_t g_transport_epoch;
+static uint8_t seq_engine_compile_step_fx(seq_pattern_t *pattern,
+                                          uint8_t track, uint8_t step)
+{
+    note_fx_track_state_t effective = pattern->note_fx[track];
+    uint16_t override_mask = 0U;
+    const uint16_t first = pattern->lock_first[track][step];
+    const uint8_t count = pattern->steps[track][step].lock_count;
+    for (uint8_t i = 0U; i < count; ++i)
+    {
+        const seq_lock_pattern_t *const lock =
+            &pattern->lock_pool[track][first + i];
+        if ((lock->param_flags & SEQ_ENGINE_PARAM_FLAG_NOTE_FX) == 0U)
+            continue;
+        const uint8_t slot = (uint8_t)(lock->base_value16 >> 8U);
+        const uint8_t param = (uint8_t)lock->base_value16;
+        if ((slot >= NOTE_FX_SLOT_COUNT) || (param >= NOTE_FX_PARAM_COUNT))
+            return UINT8_MAX;
+        effective.value[slot][param] = (uint8_t)lock->value16;
+        override_mask |= (uint16_t)(1U <<
+            ((uint16_t)slot * NOTE_FX_PARAM_COUNT + param));
+    }
+    if ((note_fx_state_normalize_track(&effective) == 0U)
+            || (note_fx_state_validate_unique_families(&effective) == 0U))
+        return UINT8_MAX;
+    note_fx_compiled_plan_t compiled;
+    if (note_fx_plan_compile(&effective, override_mask, &compiled) == 0U)
+        return UINT8_MAX;
+    seq_step_pattern_t *const target = &pattern->steps[track][step];
+    target->fx_override_mask = override_mask;
+    target->fx_opcode_mask = 0U;
+    target->fx_walker = (uint8_t)(compiled.active_mask
+        | (uint8_t)(compiled.first_active_slot << 4U));
+    for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
+    {
+        target->fx_opcode_mask |= (uint16_t)(
+            (uint16_t)note_fx_plan_model(compiled.slot[slot]) << (slot * 4U));
+        if (note_fx_plan_model(compiled.slot[slot]) == NOTE_FX_MODEL_GROOVE)
+            pattern->track_exec[track].max_negative_horizon_q16 =
+                (uint16_t)((UINT32_C(1) << 16U)
+                    / SEQ_GROOVE_NEGATIVE_HORIZON_DENOMINATOR + 1U);
+    }
+
+    seq_lock_pattern_t compact[SEQ_STEP_MAX_LOCKS];
+    uint8_t compact_count = 0U;
+    for (uint8_t i = 0U; i < count; ++i)
+    {
+        const seq_lock_pattern_t lock = pattern->lock_pool[track][first + i];
+        if ((lock.param_flags & SEQ_ENGINE_PARAM_FLAG_NOTE_FX) == 0U)
+            compact[compact_count++] = lock;
+    }
+    for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
+    {
+        const uint8_t slot_override = (uint8_t)(
+            (override_mask >> (slot * NOTE_FX_PARAM_COUNT)) & 0x0FU);
+        if (slot_override == 0U) continue;
+        const uint32_t word = compiled.slot[slot];
+        compact[compact_count++] = (seq_lock_pattern_t){
+            .param_flags = (uint16_t)(SEQ_ENGINE_PARAM_FLAG_NOTE_FX | slot
+                | ((uint16_t)slot_override
+                    << SEQ_ENGINE_FX_PLAN_OVERRIDE_SHIFT)),
+            .value16 = (uint16_t)word,
+            .base_value16 = (uint16_t)(word >> 16U)
+        };
+    }
+    memcpy(&pattern->lock_pool[track][first], compact,
+           (size_t)compact_count * sizeof(compact[0]));
+    pattern->lock_pool_count[track] = (uint16_t)(first + compact_count);
+    target->lock_count = compact_count;
+    return 0U;
+}
 
 const seq_pattern_t *seq_engine_pattern_capture(void)
 {
@@ -82,8 +153,44 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
         pattern->track_muted[track] =
             (track_mute_should_suppress_note_on(track) > 0) ? 1U : 0U;
         entity_topology_descriptor_t entity;
+        const uint8_t topology_valid = entity_topology_get(track, &entity);
+        const uint16_t capabilities = topology_valid
+            ? entity_topology_get_capabilities(&entity) : 0U;
+        track_runtime_descriptor_t runtime_descriptor;
+        const uint8_t runtime_valid = track_runtime_get_descriptor(track,
+            &runtime_descriptor);
+        uint8_t logical_capacity = 0U;
+        if ((capabilities & TRACK_CAPABILITY_NOTES) != 0U)
+        {
+            if (entity.role == ENTITY_ROLE_GROUP_CHILD)
+                logical_capacity = SEQ_LOGICAL_CAPACITY_GROUP_CHILD;
+            else if (entity.role != ENTITY_ROLE_GROUP_MASTER)
+                logical_capacity = seq_model_play_capacity(track);
+            if ((entity.role != ENTITY_ROLE_GROUP_CHILD)
+                    && (entity.role != ENTITY_ROLE_GROUP_MASTER)
+                    && (runtime_valid != 0U)
+                    && (track_runtime_has_configurable_polyphony(
+                        runtime_descriptor.family, runtime_descriptor.type) != 0U))
+                logical_capacity = track_runtime_effective_voice_count(
+                    runtime_descriptor.family, runtime_descriptor.type,
+                    polyphony_control_get_voice_count(track));
+            if (logical_capacity > SEQ_LOGICAL_CAPACITY_MAX)
+                logical_capacity = SEQ_LOGICAL_CAPACITY_MAX;
+        }
+        pattern->track_exec[track] = (seq_track_exec_t){
+            .capabilities = capabilities,
+            .logical_capacity = logical_capacity,
+            .role = topology_valid ? (uint8_t)entity.role : 0U,
+            .type = runtime_valid ? (uint8_t)runtime_descriptor.type : 0U,
+            .destination = track,
+            .div = div,
+            .swing = swing,
+            .quant = quant,
+            .muted = pattern->track_muted[track],
+            .active = topology_valid ? entity.active : 0U
+        };
         pattern->track_can_emit[track] =
-            ((entity_topology_get(track, &entity) != 0U)
+            ((topology_valid != 0U)
                 && (entity_topology_can_emit_notes(&entity) != 0U)
                 && (track_runtime_has_capability(track,
                     TRACK_CAPABILITY_NOTES) != 0U)) ? 1U : 0U;
@@ -93,12 +200,22 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
         pattern->track_fx_enabled[track] = 0U;
         if (note_fx_state_capture_track(track, &fx_state) != 0U)
         {
-            pattern->track_note_enabled[track] = 1U;
-            pattern->track_fx_enabled[track] = 1U;
+            pattern->track_note_enabled[track] =
+                ((capabilities & TRACK_CAPABILITY_NOTES) != 0U) ? 1U : 0U;
+            pattern->track_fx_enabled[track] =
+                ((capabilities & TRACK_CAPABILITY_MIDI_FX) != 0U) ? 1U : 0U;
+            if (pattern->track_fx_enabled[track] == 0U)
+                memset(&fx_state, 0, sizeof(fx_state));
             pattern->note_fx[track] = fx_state;
+            if (note_fx_plan_compile(&fx_state, 0U,
+                    &pattern->fx_base_plan[track]) == 0U)
+            {
+                memset(&pattern->fx_base_plan[track], 0,
+                       sizeof(pattern->fx_base_plan[track]));
+                pattern->track_fx_enabled[track] = 0U;
+            }
         }
-        track_runtime_descriptor_t runtime_descriptor;
-        if ((track_runtime_get_descriptor(track, &runtime_descriptor) == 0U)
+        if ((runtime_valid == 0U)
                 || (runtime_descriptor.family == TRACK_RUNTIME_FAMILY_MIDI)
                 || (runtime_descriptor.family == TRACK_RUNTIME_FAMILY_EXTERNAL)
                 || (seq_runtime_get_clock_source() != SEQ_CLOCK_SRC_INTERNAL))
@@ -107,6 +224,9 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
         (void)seq_model_play_base_capture(track, &pattern->play_base[track]);
     }
         seq_step_pattern_t *const target = &pattern->steps[track][step];
+        target->fx_override_mask = 0U;
+        target->fx_opcode_mask = 0U;
+        target->fx_walker = (uint8_t)(NOTE_FX_PLAN_FIRST_SLOT_NONE << 4U);
         target->trig_roll = (uint8_t)((seq_model_get_trig(track, step) & 1U)
             | ((seq_model_get_step_roll(track, step) & 0x0FU) << 1U));
         target->lock_count = 0U;
@@ -212,6 +332,11 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
                     }
                 }
             }
+        }
+        if (seq_engine_compile_step_fx(pattern,
+                (uint8_t)track, (uint8_t)step) == UINT8_MAX)
+        {
+            pattern->track_fx_enabled[track] = 0U;
         }
 }
 

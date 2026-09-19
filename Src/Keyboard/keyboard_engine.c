@@ -221,8 +221,16 @@ static void keyboard_engine_send_note_for_owner_track_with_capture(
     if ((capture_tick_valid==0U)
             || !brick_media_clock_tick_to_sample(capture_tick,&capture_sample))
         (void)brick_media_clock_now_sample(&capture_sample);
-    if (seq_ingress_note(owner_track,note,velocity,is_note_on,
-            occurrence_id,(uint8_t)provenance,capture_sample)==0U) return;
+    const seq_ingress_event_t ingress = {
+        .capture_sample = capture_sample,
+        .occurrence_id = occurrence_id,
+        .track = owner_track,
+        .note = note,
+        .velocity = velocity,
+        .kind = is_note_on ? NOTE_EVENT_KIND_ON : NOTE_EVENT_KIND_OFF,
+        .provenance = (uint8_t)provenance
+    };
+    if (seq_ingress_submit(&ingress) == 0U) return;
 
     if (is_note_on != 0U)
     {

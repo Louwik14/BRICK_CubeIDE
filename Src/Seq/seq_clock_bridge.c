@@ -6,6 +6,7 @@
  * Integration: utilisé par seq_runtime; ne déclenche pas directement les notes.
  */
 #include "Seq/seq_clock_bridge.h"
+#include "Seq/seq_product_contract.h"
 
 #define SEQ_CLOCK_BRIDGE_MIDI_CLOCKS_PER_STEP 6U
 #define SEQ_CLOCK_BRIDGE_STEPS_PER_QUARTER_NOTE 4U
@@ -14,14 +15,14 @@
 
 static uint32_t seq_clock_bridge_clamp_tempo(uint32_t bpm_milli)
 {
-    if (bpm_milli < 40000U)
+    if (bpm_milli < (SEQ_PRODUCT_TEMPO_MIN_BPM * 1000U))
     {
-        return 40000U;
+        return SEQ_PRODUCT_TEMPO_MIN_BPM * 1000U;
     }
 
-    if (bpm_milli > 300000U)
+    if (bpm_milli > (SEQ_PRODUCT_TEMPO_MAX_BPM * 1000U))
     {
-        return 300000U;
+        return SEQ_PRODUCT_TEMPO_MAX_BPM * 1000U;
     }
 
     return bpm_milli;

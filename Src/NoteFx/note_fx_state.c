@@ -293,7 +293,11 @@ uint8_t note_fx_state_install_prepared_track(uint8_t track,
                                              const note_fx_track_state_t *state)
 {
     if ((track >= NOTE_FX_TRACK_COUNT) || (state == NULL)) return 0U;
-    g_note_fx_state[track] = *state;
+    note_fx_track_state_t normalized = *state;
+    if ((note_fx_state_normalize_track(&normalized) == 0U)
+            || (note_fx_state_validate_unique_families(&normalized) == 0U))
+        return 0U;
+    g_note_fx_state[track] = normalized;
     seq_engine_control_disarm_track(track);
     seq_engine_control_mark_dirty();
     return 1U;

@@ -6,6 +6,8 @@
 #include "Seq/seq_model.h"
 #include "NoteFx/note_fx_state.h"
 #include "NoteFx/note_fx_event.h"
+#include "NoteFx/note_fx_plan.h"
+#include "Seq/seq_product_contract.h"
 
 #define SEQ_ENGINE_H743_PERIOD_SAMPLES 64U
 #define SEQ_ENGINE_EVENT_CAPACITY 384U
@@ -19,6 +21,9 @@
 #define SEQ_ENGINE_INGRESS_CAPACITY 64U
 #define SEQ_ENGINE_PARAM_FLAG_CLEARABLE UINT16_C(0x8000)
 #define SEQ_ENGINE_PARAM_FLAG_NOTE_FX UINT16_C(0x4000)
+#define SEQ_ENGINE_FX_PLAN_SLOT_MASK UINT16_C(0x0003)
+#define SEQ_ENGINE_FX_PLAN_OVERRIDE_SHIFT 2U
+#define SEQ_ENGINE_FX_PLAN_OVERRIDE_MASK UINT16_C(0x003C)
 #define SEQ_ENGINE_PARAM_ID_MASK UINT16_C(0x01FF)
 
 typedef enum {
@@ -146,10 +151,30 @@ typedef struct {
 } seq_engine_core_t;
 
 /* Immutable canonical Pattern armed by CONTROL and owned by SEQ after commit. */
-typedef struct {
+typedef struct __attribute__((packed)) {
     uint8_t trig_roll;
     uint8_t lock_count;
+    uint16_t fx_override_mask;
+    uint16_t fx_opcode_mask;
+    uint8_t fx_walker;
 } seq_step_pattern_t;
+
+_Static_assert(sizeof(seq_step_pattern_t) == 7U,
+               "compact executable step layout changed");
+
+typedef struct {
+    uint16_t capabilities;
+    uint16_t max_negative_horizon_q16;
+    uint8_t logical_capacity;
+    uint8_t role;
+    uint8_t type;
+    uint8_t destination;
+    uint8_t div;
+    uint8_t swing;
+    uint8_t quant;
+    uint8_t muted;
+    uint8_t active;
+} seq_track_exec_t;
 
 typedef struct {
     uint32_t generation;
@@ -170,6 +195,8 @@ typedef struct {
     uint32_t transport_epoch;
     uint64_t seed_step_sample_q16;
     uint32_t samples_per_step_q16;
+    seq_track_exec_t track_exec[SEQ_LANE_CAPACITY];
+    note_fx_compiled_plan_t fx_base_plan[SEQ_LANE_CAPACITY];
     uint8_t seed_play_step[SEQ_LANE_CAPACITY];
     uint8_t seed_div_phase[SEQ_LANE_CAPACITY];
     uint8_t seed_swing_phase[SEQ_LANE_CAPACITY];
@@ -202,9 +229,16 @@ void seq_service(uint64_t now_sample, uint64_t publish_until_sample);
 uint64_t seq_next_deadline(void);
 uint8_t seq_engine_playhead_view(uint8_t track, uint8_t *out_running,
                                  uint8_t *out_step);
-uint8_t seq_ingress_note(uint8_t track, uint8_t note, uint8_t velocity,
-                         uint8_t note_on, uint32_t occurrence_id,
-                         uint8_t provenance, uint64_t capture_sample);
+typedef struct {
+    uint64_t capture_sample;
+    uint32_t occurrence_id;
+    uint8_t track;
+    uint8_t note;
+    uint8_t velocity;
+    uint8_t kind;
+    uint8_t provenance;
+} seq_ingress_event_t;
+uint8_t seq_ingress_submit(const seq_ingress_event_t *event);
 void seq_ingress_panic(void);
 
 /* CONTROL prepares; SEQ atomically takes ownership of the armed Pattern. */
@@ -229,6 +263,9 @@ _Static_assert(SEQ_LANE_CAPACITY == 16U, "SEQ requires 16 lanes");
 _Static_assert(SEQ_PLAY_MAX_CAPACITY == 8U, "SEQ requires 8 PLAY per top lane");
 _Static_assert(SEQ_STEP_MAX_LOCKS == 32U, "SEQ requires 32 locks per step");
 _Static_assert(NOTE_FX_SLOT_COUNT == 4U, "SEQ requires four MIDI FX slots");
+_Static_assert(SEQ_ENGINE_INGRESS_CAPACITY
+                   == SEQ_INGRESS_EVENTS_PER_WINDOW_MAX,
+               "inbox and raw ingress rate contracts diverged");
 _Static_assert(SEQ_ENGINE_LIFETIME_CAPACITY == 64U, "SEQ lifetime contract");
 _Static_assert(SEQ_ENGINE_FUTURE_CAPACITY == 256U, "SEQ future contract");
 _Static_assert(SEQ_ENGINE_FX_SCRATCH_CAPACITY == 32U, "SEQ scratch contract");

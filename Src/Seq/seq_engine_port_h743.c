@@ -22,14 +22,11 @@ static uint32_t g_disarm_generation;
 static volatile uint8_t g_force_stopped;
 static volatile uint64_t g_force_stop_sample;
 static volatile uint32_t g_force_stop_epoch;
-typedef struct {
-    uint64_t capture_sample;
-    uint32_t occurrence_id;
-    uint8_t track,note,velocity,note_on,provenance;
-} seq_ingress_entry_t;
-static seq_ingress_entry_t g_ingress[SEQ_ENGINE_INGRESS_CAPACITY];
+static seq_ingress_event_t g_ingress[SEQ_ENGINE_INGRESS_CAPACITY];
 static volatile uint8_t g_ingress_head,g_ingress_tail,g_ingress_count;
 static volatile uint8_t g_ingress_panic;
+static uint64_t g_ingress_rate_window;
+static uint8_t g_ingress_rate_count;
 
 void seq_engine_control_disarm_track(uint8_t track)
 {
@@ -53,6 +50,7 @@ void seq_engine_irq_init(void)
     g_disarmed_tracks = 0U; g_disarm_generation = 0U;
     g_force_stopped = 0U; g_force_stop_epoch=0U; g_next_deadline = UINT64_MAX;
     g_ingress_head=0U;g_ingress_tail=0U;g_ingress_count=0U;g_ingress_panic=0U;
+    g_ingress_rate_window=UINT64_MAX;g_ingress_rate_count=0U;
     seq_engine_core_init(&g_core);
     NVIC_ClearPendingIRQ(TIM4_IRQn);
     NVIC_SetPriority(TIM4_IRQn, 2U);
@@ -154,16 +152,26 @@ uint8_t seq_engine_playhead_view(uint8_t track,uint8_t *out_running,
 
 uint64_t seq_next_deadline(void) { return g_next_deadline; }
 
-uint8_t seq_ingress_note(uint8_t track,uint8_t note,uint8_t velocity,
-    uint8_t note_on,uint32_t occurrence_id,uint8_t provenance,uint64_t capture_sample)
+uint8_t seq_ingress_submit(const seq_ingress_event_t *event)
 {
-    if((track>=SEQ_LANE_CAPACITY)||(note>=128U)||(occurrence_id==0U))return 0U;
+    if((event==0)||(event->track>=SEQ_LANE_CAPACITY)||(event->note>=128U)
+            ||(event->velocity>=128U)||(event->kind>NOTE_EVENT_KIND_ON)
+            ||(event->provenance>=NOTE_EVENT_SOURCE_COUNT)
+            ||(event->occurrence_id==0U))return 0U;
     const uint32_t primask=__get_PRIMASK();__disable_irq();
-    if(g_ingress_count>=SEQ_ENGINE_INGRESS_CAPACITY){__set_PRIMASK(primask);return 0U;}
-    g_ingress[g_ingress_head]=(seq_ingress_entry_t){capture_sample,occurrence_id,track,note,
-        velocity,note_on,provenance};
+    const uint64_t rate_window=event->capture_sample/SEQ_INGRESS_WINDOW_SAMPLES;
+    if(g_ingress_rate_window==UINT64_MAX){g_ingress_rate_window=rate_window;
+        g_ingress_rate_count=0U;}
+    else if(rate_window>g_ingress_rate_window){g_ingress_rate_window=rate_window;
+        g_ingress_rate_count=0U;}
+    else if(rate_window<g_ingress_rate_window){__set_PRIMASK(primask);return 0U;}
+    if((g_ingress_rate_count>=SEQ_INGRESS_EVENTS_PER_WINDOW_MAX)
+            ||(g_ingress_count>=SEQ_ENGINE_INGRESS_CAPACITY)){
+        __set_PRIMASK(primask);return 0U;}
+    g_ingress[g_ingress_head]=*event;
     g_ingress_head=(uint8_t)((g_ingress_head+1U)%SEQ_ENGINE_INGRESS_CAPACITY);
     ++g_ingress_count;
+    ++g_ingress_rate_count;
     g_urgent_pending=1U;
     __set_PRIMASK(primask);NVIC_SetPendingIRQ(TIM4_IRQn);return 1U;
 }
@@ -205,7 +213,7 @@ void seq_service(uint64_t now_sample, uint64_t publish_until_sample)
         if(g_ingress_panic!=0U){g_ingress_panic=0U;
             seq_engine_core_init(&g_core);}
         while(g_ingress_count!=0U){
-            const seq_ingress_entry_t in=g_ingress[g_ingress_tail];
+            const seq_ingress_event_t in=g_ingress[g_ingress_tail];
             g_ingress_tail=(uint8_t)((g_ingress_tail+1U)%SEQ_ENGINE_INGRESS_CAPACITY);
             --g_ingress_count;
             uint64_t captured=in.capture_sample;
@@ -216,7 +224,7 @@ void seq_service(uint64_t now_sample, uint64_t publish_until_sample)
                 .source_generation=pattern?pattern->generation:1U,
                 .group_id=in.occurrence_id,.track=in.track,
                 .destination_id=NOTE_EVENT_DESTINATION_DEFAULT,.note=in.note,
-                .velocity=in.velocity,.kind=in.note_on?NOTE_EVENT_KIND_ON:NOTE_EVENT_KIND_OFF,
+                .velocity=in.velocity,.kind=in.kind,
                 .provenance=in.provenance,.stage=NOTE_EVENT_STAGE_SOURCE};
             (void)seq_engine_core_submit_live(&g_core,&event,start,start+frames,block);
         }
@@ -249,7 +257,7 @@ static void seq_service_urgent(uint64_t now_sample,uint64_t publish_until_sample
         seq_event_block_t *const block=&g_output[slot];
         const uint64_t end=block->start_sample+block->frames;
         while(g_ingress_count!=0U){
-            const seq_ingress_entry_t in=g_ingress[g_ingress_tail];
+            const seq_ingress_event_t in=g_ingress[g_ingress_tail];
             g_ingress_tail=(uint8_t)((g_ingress_tail+1U)%SEQ_ENGINE_INGRESS_CAPACITY);
             --g_ingress_count;
             const uint64_t due=(in.capture_sample<block->start_sample)
@@ -260,7 +268,7 @@ static void seq_service_urgent(uint64_t now_sample,uint64_t publish_until_sample
                 .source_generation=block->generation?block->generation:1U,
                 .group_id=in.occurrence_id,.track=in.track,
                 .destination_id=NOTE_EVENT_DESTINATION_DEFAULT,.note=in.note,
-                .velocity=in.velocity,.kind=in.note_on?NOTE_EVENT_KIND_ON:NOTE_EVENT_KIND_OFF,
+                .velocity=in.velocity,.kind=in.kind,
                 .provenance=in.provenance,.stage=NOTE_EVENT_STAGE_SOURCE};
             (void)seq_engine_core_submit_live(&g_core,&event,
                 block->start_sample,end,block);

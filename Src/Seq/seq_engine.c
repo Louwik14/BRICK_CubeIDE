@@ -261,11 +261,14 @@ static void configure_fx_step(const seq_pattern_t *p,uint8_t track,
     for(uint8_t n=0U;n<count;++n){
         const seq_lock_pattern_t *const lock=&p->lock_pool[track][first+n];
         if((lock->param_flags&SEQ_ENGINE_PARAM_FLAG_NOTE_FX)==0U)continue;
-        const uint8_t slot=(uint8_t)(lock->base_value16>>8U);
-        const uint8_t param=(uint8_t)lock->base_value16;
-        state.value[slot][param]=(uint8_t)lock->value16;
+        const uint8_t slot=(uint8_t)(lock->param_flags
+            &SEQ_ENGINE_FX_PLAN_SLOT_MASK);
+        const uint32_t word=(uint32_t)lock->value16
+            |((uint32_t)lock->base_value16<<16U);
+        state.value[slot][NOTE_FX_PARAM_COUNT-1U]=note_fx_plan_model(word);
+        for(uint8_t param=0U;param<NOTE_FX_PARAM_COUNT-1U;++param)
+            state.value[slot][param]=note_fx_plan_param(word,param);
     }
-    (void)note_fx_state_normalize_track(&state);
     for(uint8_t slot=0U;slot<NOTE_FX_SLOT_COUNT;++slot)
         if(note_fx_engine_seq_configure(track,slot,
             state.value[slot][NOTE_FX_PARAM_COUNT-1U],state.value[slot][0],
