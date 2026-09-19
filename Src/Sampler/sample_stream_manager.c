@@ -6,6 +6,7 @@
 
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_stream_io.h"
+#include "Sampler/sample_stream_metrics.h"
 #include "Sampler/sample_stream_publish.h"
 #include "Sampler/sample_stream_scheduler.h"
 #include "Sampler/sample_stream_transport.h"
@@ -33,11 +34,14 @@ typedef struct
 SDRAM_STREAM_SERVICE static sample_stream_manager_pending_io_t
     g_sample_stream_manager_pending_io[2];
 static uint8_t g_sample_stream_manager_pending_count;
-static uint32_t sample_stream_manager_collect_candidates(
-    sample_stream_scheduler_candidate_t *out_candidates,
-    uint32_t capacity,
-    uint32_t *out_loadable_pages,
-    uint32_t *out_loading_pages);
+static uint8_t sample_stream_manager_candidate_for_slot(
+    uint8_t slot,
+    sample_stream_scheduler_candidate_t *out_candidate,
+    uint8_t *out_pending);
+static uint8_t sample_stream_manager_probe_candidate(
+    void *context,
+    uint8_t slot,
+    sample_stream_scheduler_candidate_t *out_candidate);
 static uint8_t sample_stream_manager_finish_io(
     sample_stream_manager_pending_io_t *pending,
     sample_stream_io_result_t *io_result);
@@ -119,116 +123,83 @@ static uint8_t sample_stream_manager_finish_io(
     return 1U;
 }
 
-static uint32_t sample_stream_manager_collect_candidates(
-    sample_stream_scheduler_candidate_t *out_candidates,
-    uint32_t capacity,
-    uint32_t *out_loadable_pages,
-    uint32_t *out_loading_pages)
+static uint8_t sample_stream_manager_candidate_for_slot(
+    uint8_t slot,
+    sample_stream_scheduler_candidate_t *out_candidate,
+    uint8_t *out_pending)
 {
-    if ((out_candidates == 0) || (capacity == 0U))
+    if (out_pending != 0)
+    {
+        *out_pending = 0U;
+    }
+    if (slot >= SAMPLE_PAGE_LEASE_SLOT_COUNT)
     {
         return 0U;
     }
 
-    if (out_loadable_pages != 0)
+    sample_page_lease_t lease;
+    if (sample_page_lease_control_read(slot, &lease) == 0U) return 0U;
+    sample_page_lease_range_t derived = {0};
+    const sample_page_lease_range_t *const tail =
+        (lease.ranges[1].page_count != 0U)
+            ? &lease.ranges[1] : &lease.ranges[0];
+    const uint32_t published_pages = (uint32_t)lease.ranges[0].page_count
+                                   + lease.ranges[1].page_count;
+    sample_page_stream_info_t info;
+    if ((published_pages <= 2U)
+            && (sample_page_cache_get_stream_info_key(lease.key, &info) != 0U)
+            && (info.frames_per_page != 0U))
     {
-        *out_loadable_pages = 0U;
-    }
-    if (out_loading_pages != 0)
-    {
-        *out_loading_pages = 0U;
-    }
-    uint32_t count = 0U;
-    for (uint8_t slot = 0U; slot < SAMPLE_PAGE_LEASE_SLOT_COUNT; ++slot)
-    {
-        if (count >= capacity) return count;
-        sample_page_lease_t lease;
-        if (sample_page_lease_control_read(slot, &lease) == 0U) continue;
-        sample_page_lease_range_t derived = {0};
-        const sample_page_lease_range_t *const tail =
-            (lease.ranges[1].page_count != 0U)
-                ? &lease.ranges[1] : &lease.ranges[0];
-        const uint32_t published_pages = (uint32_t)lease.ranges[0].page_count
-                                       + lease.ranges[1].page_count;
-        sample_page_stream_info_t info;
-        if ((published_pages <= 2U)
-                && (sample_page_cache_get_stream_info_key(
-                        lease.key, &info) != 0U)
-                && (info.frames_per_page != 0U))
+        const uint32_t total_pages =
+            (info.total_frames + info.frames_per_page - 1U)
+            / info.frames_per_page;
+        derived.first_page = tail->first_page + tail->page_count;
+        if (derived.first_page < total_pages)
         {
-            const uint32_t total_pages =
-                (info.total_frames + info.frames_per_page - 1U)
-                / info.frames_per_page;
-            derived.first_page = tail->first_page + tail->page_count;
-            if (derived.first_page < total_pages)
-                derived.page_count =
-                    (lease.key.domain == SAMPLE_AUDIO_DOMAIN_MULTI)
-                        ? SAMPLE_PAGE_MULTI_LOOKAHEAD_PAGES
-                        : SAMPLE_PAGE_CLASSIC_FORWARD_LOOKAHEAD_PAGES;
+            derived.page_count =
+                (lease.key.domain == SAMPLE_AUDIO_DOMAIN_MULTI)
+                    ? SAMPLE_PAGE_MULTI_LOOKAHEAD_PAGES
+                    : SAMPLE_PAGE_CLASSIC_FORWARD_LOOKAHEAD_PAGES;
         }
-        uint8_t page_rank = 0U;
-        uint8_t first_missing_seen = 0U;
-        for (uint8_t range_index = 0U; range_index < 3U; ++range_index)
-        {
-            const sample_page_lease_range_t *range;
-            if (range_index < 2U)
-            {
-                range = &lease.ranges[range_index];
-            }
-            else
-            {
-                range = &derived;
-            }
-            for (uint8_t offset = 0U; offset < range->page_count; ++offset, ++page_rank)
-            {
-                const uint32_t page_index = range->first_page + offset;
-                const sample_page_state_t state = sample_page_cache_get_page_state_key(
-                    lease.key, page_index);
-                if (state == SAMPLE_PAGE_READY)
-                {
-                    continue;
-                }
-                if (first_missing_seen == 0U)
-                {
-                    first_missing_seen = 1U;
-                    if (state == SAMPLE_PAGE_LOADING)
-                    {
-                        if (out_loading_pages != 0)
-                        {
-                            (*out_loading_pages)++;
-                        }
-                    }
-                    else if (out_loadable_pages != 0)
-                    {
-                        (*out_loadable_pages)++;
-                    }
-                }
-                if (state == SAMPLE_PAGE_LOADING)
-                {
-                    break;
-                }
+    }
 
-                sample_stream_scheduler_candidate_t *const candidate =
-                    &out_candidates[count++];
-                memset(candidate, 0, sizeof(*candidate));
-                candidate->key = lease.key;
-                candidate->page_index = page_index;
-                candidate->registration_epoch = lease.registration_epoch;
-                candidate->voice_id = slot;
-                candidate->page_rank = page_rank;
-                candidate->round_robin_slot = slot;
-                candidate->active = 1U;
-                break;
-            }
-            if (first_missing_seen != 0U) break;
+    uint8_t page_rank = 0U;
+    for (uint8_t range_index = 0U; range_index < 3U; ++range_index)
+    {
+        const sample_page_lease_range_t *range =
+            (range_index < 2U) ? &lease.ranges[range_index] : &derived;
+        for (uint8_t offset = 0U; offset < range->page_count; ++offset, ++page_rank)
+        {
+            const uint32_t page_index = range->first_page + offset;
+            const sample_page_state_t state =
+                sample_page_cache_get_page_state_key(lease.key, page_index);
+            if (state == SAMPLE_PAGE_READY) continue;
+
+            if (out_pending != 0) *out_pending = 1U;
+            if (state == SAMPLE_PAGE_LOADING) return 0U;
+            if (out_candidate == 0) return 0U;
+
+            memset(out_candidate, 0, sizeof(*out_candidate));
+            out_candidate->key = lease.key;
+            out_candidate->page_index = page_index;
+            out_candidate->registration_epoch = lease.registration_epoch;
+            out_candidate->voice_id = slot;
+            out_candidate->page_rank = page_rank;
+            out_candidate->round_robin_slot = slot;
+            out_candidate->active = 1U;
+            return 1U;
         }
     }
-    if ((count == 0U) && (out_loading_pages != 0) && (*out_loading_pages != 0U)
-        && (out_loadable_pages != 0) && (*out_loadable_pages == 0U))
-    {
-        /* The caller records the exact no-selection reason. */
-    }
-    return count;
+    return 0U;
+}
+
+static uint8_t sample_stream_manager_probe_candidate(
+    void *context,
+    uint8_t slot,
+    sample_stream_scheduler_candidate_t *out_candidate)
+{
+    (void)context;
+    return sample_stream_manager_candidate_for_slot(slot, out_candidate, 0);
 }
 
 static uint8_t sample_stream_manager_pick_next(
@@ -240,32 +211,20 @@ static uint8_t sample_stream_manager_pick_next(
         return 0U;
     }
 
-    sample_stream_scheduler_candidate_t candidates[SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES];
-    const uint32_t candidate_count = sample_stream_manager_collect_candidates(
-        candidates,
-        SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES,
-        0,
-        0);
-    if (candidate_count == 0U)
+    sample_stream_scheduler_candidate_t candidate;
+    if (sample_stream_scheduler_pick(
+            sample_stream_manager_probe_candidate, 0, &candidate) == 0U)
     {
         return 0U;
     }
-
-    sample_stream_scheduler_decision_t decision;
-    if (sample_stream_scheduler_pick(candidates, candidate_count, &decision) == 0U)
-    {
-        return 0U;
-    }
-    sample_stream_scheduler_candidate_t *const candidate =
-        &candidates[decision.candidate_index];
     const sample_page_state_t state = sample_page_cache_get_page_state_key(
-        candidate->key, candidate->page_index);
+        candidate.key, candidate.page_index);
     uint8_t reserved_here = 0U;
     if ((state == SAMPLE_PAGE_FREE) || (state == SAMPLE_PAGE_FAILED))
     {
         if (sample_page_cache_reserve_page_key_alloc(
-                candidate->key,
-                candidate->page_index,
+                candidate.key,
+                candidate.page_index,
                 SAMPLE_PAGE_ALLOC_VOICE_WINDOW) == 0U)
         {
             return 0U;
@@ -274,29 +233,29 @@ static uint8_t sample_stream_manager_pick_next(
     }
 
     sample_page_load_target_t target;
-    if (sample_page_cache_get_load_target_key(candidate->key,
-                                              candidate->page_index,
+    if (sample_page_cache_get_load_target_key(candidate.key,
+                                              candidate.page_index,
                                               &target) == 0U)
     {
         if (reserved_here != 0U)
         {
             (void)sample_page_cache_cancel_reserved_page_key(
-                candidate->key,
-                candidate->page_index,
+                candidate.key,
+                candidate.page_index,
                 SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED);
         }
         return 0U;
     }
-    if ((candidate->registration_epoch != 0U)
-        && (target.registration_epoch != candidate->registration_epoch))
+    if ((candidate.registration_epoch != 0U)
+        && (target.registration_epoch != candidate.registration_epoch))
     {
         (void)sample_page_cache_cancel_reserved_page_key(
-            candidate->key,
-            candidate->page_index,
+            candidate.key,
+            candidate.page_index,
             SAMPLE_STREAM_CANCEL_REASON_SUPERSEDED);
         return 0U;
     }
-    *out_candidate = *candidate;
+    *out_candidate = candidate;
     *out_target = target;
     return 1U;
 }
@@ -355,7 +314,7 @@ static uint8_t sample_stream_manager_submit_prefill(
     return 1U;
 }
 
-void sample_stream_manager_service(uint32_t byte_budget)
+static void sample_stream_manager_service_impl(uint32_t byte_budget)
 {
     if (byte_budget == 0U)
     {
@@ -500,17 +459,25 @@ void sample_stream_manager_service(uint32_t byte_budget)
             SAMPLE_AUDIO_DOMAIN_CLASSIC, SAMPLE_CLASSIC_CAPACITY);
 }
 
+void sample_stream_manager_service(uint32_t byte_budget)
+{
+    const uint32_t metric_start = sample_stream_metrics_begin();
+    sample_stream_manager_service_impl(byte_budget);
+    sample_stream_metrics_end(SAMPLE_STREAM_METRIC_MANAGER, metric_start);
+}
+
 uint8_t sample_stream_manager_has_pending_sd_work(void)
 {
     if (g_sample_stream_manager_pending_count != 0U)
     {
         return 1U;
     }
-    sample_stream_scheduler_candidate_t candidates[SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES];
-    uint32_t loading_pages = 0U;
-    const uint32_t candidate_count = sample_stream_manager_collect_candidates(
-        candidates, SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES, 0, &loading_pages);
-    if ((candidate_count != 0U) || (loading_pages != 0U)) return 1U;
+    for (uint8_t slot = 0U; slot < SAMPLE_PAGE_LEASE_SLOT_COUNT; ++slot)
+    {
+        uint8_t pending = 0U;
+        (void)sample_stream_manager_candidate_for_slot(slot, 0, &pending);
+        if (pending != 0U) return 1U;
+    }
     sample_page_load_target_t prefill_target;
     if (sample_page_cache_get_reserved_load_target_domain_range(
         SAMPLE_AUDIO_DOMAIN_REC, 0U, SAMPLE_PAGE_CACHE_REC_ID_CAPACITY,

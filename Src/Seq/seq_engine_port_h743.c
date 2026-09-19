@@ -2,6 +2,7 @@
 #include "NoteFx/note_fx_engine.h"
 #include "Platform/memory_layout.h"
 #include "Platform/brick_media_clock.h"
+#include "SD/sdmmc_async_transport.h"
 #include "stm32h7xx.h"
 #include <limits.h>
 #include <string.h>
@@ -280,11 +281,15 @@ static void seq_service_urgent(uint64_t now_sample,uint64_t publish_until_sample
 
 void TIM4_IRQHandler(void)
 {
-    if ((g_pending == 0U)&&(g_urgent_pending==0U)) return;
+    sdmmc_async_transport_preempt_enter();
+    if ((g_pending == 0U)&&(g_urgent_pending==0U)) {
+        sdmmc_async_transport_preempt_exit(); return;
+    }
     uint64_t now = g_service_now;const uint64_t until = g_publish_until;
     const uint8_t urgent=g_urgent_pending,periodic=g_pending;
     if(urgent!=0U)(void)brick_media_clock_now_sample(&now);
     g_pending = 0U;
     if(periodic!=0U)seq_service(now,until);else seq_service_urgent(now,until);
     g_urgent_pending=0U;
+    sdmmc_async_transport_preempt_exit();
 }

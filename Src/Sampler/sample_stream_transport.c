@@ -1,4 +1,5 @@
 #include "Sampler/sample_stream_transport.h"
+#include "Sampler/sample_stream_metrics.h"
 
 #include <string.h>
 #include <stddef.h>
@@ -22,7 +23,6 @@ typedef struct
     uint32_t sequence;
     sample_stream_io_command_t command;
     sample_stream_io_result_t result;
-    ALIGN32 uint8_t decoded_page[SAMPLE_PAGE_BYTES];
 } ALIGN32 sample_stream_transport_mailbox_t;
 
 #define SAMPLE_STREAM_TRANSPORT_MAILBOX_COUNT (2U)
@@ -116,8 +116,7 @@ uint8_t sample_stream_transport_submit(const sample_stream_io_command_t *command
     mailbox->abi_version = SAMPLE_STREAM_TRANSPORT_ABI_VERSION;
     mailbox->sequence = sequence;
     mailbox->command = *command;
-    sample_stream_transport_clean(mailbox, (uint32_t)offsetof(
-        sample_stream_transport_mailbox_t, decoded_page));
+    sample_stream_transport_clean(mailbox, sizeof(*mailbox));
     __DMB();
     mailbox->state = SAMPLE_STREAM_TRANSPORT_COMMAND_READY;
     sample_stream_transport_clean(&mailbox->state, sizeof(mailbox->state));
@@ -144,6 +143,7 @@ uint8_t sample_stream_transport_can_submit(void)
 
 void sample_stream_transport_worker_poll(void)
 {
+    const uint32_t metric_start = sample_stream_metrics_begin();
     sample_stream_transport_invalidate((const void *)&g_sample_stream_transport_release_queue.head,
                                        sizeof(g_sample_stream_transport_release_queue.head));
     while (g_sample_stream_transport_release_queue.tail
@@ -181,8 +181,7 @@ void sample_stream_transport_worker_poll(void)
     }
 
     if (ready != 0)
-        sample_stream_transport_invalidate(ready, (uint32_t)offsetof(
-            sample_stream_transport_mailbox_t, decoded_page));
+        sample_stream_transport_invalidate(ready, sizeof(*ready));
     if ((ready != 0) && (ready->abi_version != SAMPLE_STREAM_TRANSPORT_ABI_VERSION))
     {
         ready->result.token = ready->command.token;
@@ -192,12 +191,10 @@ void sample_stream_transport_worker_poll(void)
         sample_stream_transport_clean(&ready->state, sizeof(ready->state));
         ready = 0;
     }
-    if ((ready != 0) && (active == 0))
+    if (ready != 0)
     {
         memset(&ready->result, 0, sizeof(ready->result));
-        if (sample_stream_io_begin_to(&ready->command,
-                                      (float *)ready->decoded_page,
-                                      sizeof(ready->decoded_page)) != 0U)
+        if (sample_stream_io_begin_to(&ready->command) != 0U)
         {
             ready->state = SAMPLE_STREAM_TRANSPORT_IO_ACTIVE;
             sample_stream_transport_clean(&ready->state, sizeof(ready->state));
@@ -214,14 +211,13 @@ void sample_stream_transport_worker_poll(void)
         if (sample_stream_io_poll(&result) != 0U)
         {
             active->result = result;
-            sample_stream_transport_clean(active->decoded_page,
-                                          sizeof(active->decoded_page));
             sample_stream_transport_clean(&active->result, sizeof(active->result));
             active->state = SAMPLE_STREAM_TRANSPORT_RESULT_READY;
             sample_stream_transport_clean(&active->state, sizeof(active->state));
             __DMB();
         }
     }
+    sample_stream_metrics_end(SAMPLE_STREAM_METRIC_WORKER, metric_start);
 }
 
 uint8_t sample_stream_transport_take_result(uint32_t expected_sequence,
@@ -251,34 +247,10 @@ uint8_t sample_stream_transport_take_result(uint32_t expected_sequence,
     }
     sample_stream_transport_invalidate(&mailbox->result, sizeof(mailbox->result));
     *out_result = mailbox->result;
-    if (out_result->load_result == SAMPLE_PAGE_LOAD_OK)
-    {
-        sample_page_load_target_t target;
-        const uint32_t decoded_bytes = mailbox->command.target.frame_count
-            * mailbox->command.target.stride_floats * sizeof(float);
-        sample_stream_transport_invalidate(mailbox->decoded_page,
-                                           sizeof(mailbox->decoded_page));
-        if ((decoded_bytes > sizeof(mailbox->decoded_page))
-            || (sample_page_cache_resolve_loading_target(
-                    &out_result->token, &target) == 0U)
-            || (target.slot_index != mailbox->command.target.slot_index)
-            || (target.page_generation != mailbox->command.target.page_generation)
-            || (target.registration_epoch != mailbox->command.target.registration_epoch)
-            || (target.frame_count != mailbox->command.target.frame_count)
-            || (target.stride_floats != mailbox->command.target.stride_floats))
-        {
-            out_result->load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
-        }
-        else
-        {
-            memcpy(target.frames_interleaved, mailbox->decoded_page, decoded_bytes);
-        }
-    }
     __DMB();
-    memset(mailbox, 0, offsetof(sample_stream_transport_mailbox_t, decoded_page));
+    memset(mailbox, 0, sizeof(*mailbox));
     mailbox->abi_version = SAMPLE_STREAM_TRANSPORT_ABI_VERSION;
-    sample_stream_transport_clean(mailbox, (uint32_t)offsetof(
-        sample_stream_transport_mailbox_t, decoded_page));
+    sample_stream_transport_clean(mailbox, sizeof(*mailbox));
     __DMB();
     return 1U;
 }

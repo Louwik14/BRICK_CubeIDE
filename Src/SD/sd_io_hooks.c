@@ -1,6 +1,7 @@
 #include "SD/sd_io_hooks.h"
 
 #include "SD/sd_block_device.h"
+#include "SD/sdmmc_async_transport.h"
 #include "Storage/sd_access_gate.h"
 #include "sdmmc.h"
 
@@ -83,4 +84,30 @@ void brick_sd_async_abort_complete_isr(void)
 void brick_sd_async_error_isr(void)
 {
     sd_block_device_async_error_isr();
+}
+
+void brick_sd_sdmmc_irq_handler(void)
+{
+    if(sdmmc_async_transport_irq_owned() == 0U)
+    {
+        HAL_SD_IRQHandler(&hsd1);
+        return;
+    }
+
+    const uint32_t cycle_start = sdmmc_async_transport_irq_measure_begin();
+    switch(sdmmc_async_transport_irq_handler())
+    {
+        case SDMMC_ASYNC_EVENT_READ_COMPLETE:
+            brick_sd_async_read_complete_isr();
+            break;
+        case SDMMC_ASYNC_EVENT_WRITE_COMPLETE:
+            brick_sd_async_write_complete_isr();
+            break;
+        case SDMMC_ASYNC_EVENT_ERROR:
+            brick_sd_async_error_isr();
+            break;
+        default:
+            break;
+    }
+    sdmmc_async_transport_irq_measure_end(cycle_start);
 }

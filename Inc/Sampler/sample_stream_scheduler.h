@@ -10,7 +10,6 @@ extern "C" {
 #endif
 
 #define SAMPLE_STREAM_SCHEDULER_SLOT_COUNT SAMPLE_PAGE_LEASE_SLOT_COUNT
-#define SAMPLE_STREAM_SCHEDULER_MAX_CANDIDATES SAMPLE_STREAM_SCHEDULER_SLOT_COUNT
 
 /* One candidate is the first non-ready page derived for one lease. */
 typedef struct
@@ -24,20 +23,18 @@ typedef struct
     uint8_t active;
 } sample_stream_scheduler_candidate_t;
 
-typedef struct
-{
-    uint8_t candidate_index;
-    uint8_t round_robin_slot;
-    uint8_t reserved[2];
-} sample_stream_scheduler_decision_t;
+typedef uint8_t (*sample_stream_scheduler_probe_fn)(
+    void *context,
+    uint8_t round_robin_slot,
+    sample_stream_scheduler_candidate_t *out_candidate);
 
 void sample_stream_scheduler_init(void);
 void sample_stream_scheduler_begin_round(void);
 uint8_t sample_stream_scheduler_round_active(void);
 uint8_t sample_stream_scheduler_pick(
-    const sample_stream_scheduler_candidate_t *candidates,
-    uint32_t candidate_count,
-    sample_stream_scheduler_decision_t *out_decision);
+    sample_stream_scheduler_probe_fn probe,
+    void *context,
+    sample_stream_scheduler_candidate_t *out_candidate);
 
 #ifdef __cplusplus
 }

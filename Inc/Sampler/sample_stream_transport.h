@@ -8,7 +8,7 @@
 extern "C" {
 #endif
 
-#define SAMPLE_STREAM_TRANSPORT_ABI_VERSION (2U)
+#define SAMPLE_STREAM_TRANSPORT_ABI_VERSION (3U)
 
 void sample_stream_transport_init(void);
 uint8_t sample_stream_transport_submit(const sample_stream_io_command_t *command,

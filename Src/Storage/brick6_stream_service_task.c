@@ -3,17 +3,18 @@
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_stream_manager.h"
+#include "Sampler/sample_stream_metrics.h"
 #include "Sampler/sample_stream_transport.h"
 #include "Storage/sd_access_gate.h"
 #include "Platform/memory_layout.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "stm32h7xx.h"
 
-static void brick6_stream_service_task_update_gate(void)
+static uint8_t brick6_stream_service_task_update_gate(void)
 {
-    const uint32_t streaming =
-        (sample_stream_manager_has_pending_sd_work() != 0U) ? 1U : 0U;
-    sd_access_gate_set_streaming_critical((uint8_t)streaming);
+    const uint8_t pending = sample_stream_manager_has_pending_sd_work();
+    sd_access_gate_set_streaming_critical(pending);
+    return pending;
 }
 
 void brick6_stream_service_task_init(void)
@@ -23,19 +24,21 @@ void brick6_stream_service_task_init(void)
 
 void brick6_stream_service_task_poll(void)
 {
+    const uint32_t metric_start = sample_stream_metrics_begin();
     /* H743 local worker adapter. On H747 this whole service belongs to M4. */
     sd_scheduler_runtime_service();
     sample_stream_transport_worker_poll();
-    brick6_stream_service_task_update_gate();
-    const uint8_t pending = sample_cache_has_pending_sd_work();
+    const uint8_t pending = brick6_stream_service_task_update_gate();
     if (pending == 0U)
     {
+        sample_stream_metrics_end(SAMPLE_STREAM_METRIC_SERVICE, metric_start);
         return;
     }
 
     if ((sample_stream_manager_io_in_flight() == 0U)
         && (multi_sample_load_is_active() != 0U))
     {
+        sample_stream_metrics_end(SAMPLE_STREAM_METRIC_SERVICE, metric_start);
         return;
     }
 
@@ -43,4 +46,5 @@ void brick6_stream_service_task_poll(void)
     sd_scheduler_runtime_service();
     sample_stream_transport_worker_poll();
     brick6_stream_service_task_update_gate();
+    sample_stream_metrics_end(SAMPLE_STREAM_METRIC_SERVICE, metric_start);
 }

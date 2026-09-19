@@ -1,4 +1,5 @@
 #include "SD/sd_scheduler_runtime.h"
+#include "Sampler/sample_stream_metrics.h"
 
 #include <string.h>
 
@@ -35,10 +36,20 @@ static sd_scheduler_start_result_t sd_scheduler_runtime_start(
     uint32_t granted_sector_count)
 {
     sd_scheduler_runtime_provider_t *const wrapper = context;
-    if ((wrapper == 0) || (wrapper->provider.start == 0)
-            || (wrapper->gate_held != 0U))
+    if ((wrapper == 0) || (wrapper->provider.start == 0))
     {
         return SD_SCHEDULER_START_ERROR;
+    }
+    if(wrapper->gate_held != 0U)
+    {
+        if((wrapper->gate_client != SD_ACCESS_CLIENT_SAMPLE_STREAM)
+                || (candidate == 0)
+                || (candidate->type != SD_SCHEDULER_CLASS_READ))
+        {
+            return SD_SCHEDULER_START_ERROR;
+        }
+        return wrapper->provider.start(
+            wrapper->provider.context, candidate, granted_sector_count);
     }
     if (sd_access_gate_try_acquire(wrapper->gate_client) == 0U)
     {
@@ -124,17 +135,28 @@ uint8_t sd_scheduler_runtime_bind_recorder(
 
 void sd_scheduler_runtime_service(void)
 {
+    const uint32_t metric_start = sample_stream_metrics_begin();
     if ((g_sd_scheduler_background_active != 0U)
         || (g_sd_scheduler_exclusive_active != 0U)
         || ((g_sd_scheduler_exclusive_requested != 0U)
             && (sd_scheduler_owner(&g_sd_scheduler_runtime)
                 == SD_SCHEDULER_OWNER_IDLE)))
     {
+        sample_stream_metrics_end(
+            SAMPLE_STREAM_METRIC_SD_SCHEDULER, metric_start);
         return;
     }
-    sd_scheduler_service(&g_sd_scheduler_runtime,
-                         HAL_GetTick() * 1000U,
-                         sd_access_media_epoch());
+    const uint32_t now_us = HAL_GetTick() * 1000U;
+    const uint32_t media_epoch = sd_access_media_epoch();
+    if((g_sd_scheduler_exclusive_requested == 0U)
+            && (sd_scheduler_owner(&g_sd_scheduler_runtime)
+                == SD_SCHEDULER_OWNER_READ_DMA))
+    {
+        (void)sd_scheduler_prepare_read_chain(
+            &g_sd_scheduler_runtime, now_us, media_epoch);
+    }
+    sd_scheduler_service(&g_sd_scheduler_runtime, now_us, media_epoch);
+    sample_stream_metrics_end(SAMPLE_STREAM_METRIC_SD_SCHEDULER, metric_start);
 }
 
 sd_scheduler_background_admission_t sd_scheduler_runtime_background_try_begin(

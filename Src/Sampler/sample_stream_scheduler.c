@@ -1,6 +1,5 @@
 #include "Sampler/sample_stream_scheduler.h"
-
-#include <string.h>
+#include "Sampler/sample_stream_metrics.h"
 
 static uint8_t g_sample_stream_scheduler_round_robin_cursor;
 static uint8_t g_sample_stream_scheduler_round_active;
@@ -32,53 +31,40 @@ uint8_t sample_stream_scheduler_round_active(void)
 }
 
 uint8_t sample_stream_scheduler_pick(
-    const sample_stream_scheduler_candidate_t *candidates,
-    uint32_t candidate_count,
-    sample_stream_scheduler_decision_t *out_decision)
+    sample_stream_scheduler_probe_fn probe,
+    void *context,
+    sample_stream_scheduler_candidate_t *out_candidate)
 {
-    if ((g_sample_stream_scheduler_round_active == 0U) || (out_decision == 0))
+    const uint32_t metric_start = sample_stream_metrics_begin();
+    if ((g_sample_stream_scheduler_round_active == 0U)
+        || (probe == 0) || (out_candidate == 0))
     {
+        sample_stream_metrics_end(SAMPLE_STREAM_METRIC_ROUND_ROBIN,
+                                  metric_start);
         return 0U;
     }
     for (;;)
     {
-        uint8_t found = 0U;
-        uint32_t best_index = 0U;
-        uint32_t best_distance = UINT32_MAX;
-        if (candidates != 0)
+        for (uint8_t distance = 0U;
+             distance < g_sample_stream_scheduler_slots_left;
+             ++distance)
         {
-            for (uint32_t i = 0U; i < candidate_count; ++i)
+            const uint8_t slot = (uint8_t)(
+                (g_sample_stream_scheduler_round_robin_cursor + distance)
+                % SAMPLE_STREAM_SCHEDULER_SLOT_COUNT);
+            sample_stream_scheduler_candidate_t candidate;
+            if ((probe(context, slot, &candidate) != 0U)
+                && (candidate.active != 0U)
+                && (candidate.round_robin_slot == slot))
             {
-                const sample_stream_scheduler_candidate_t *const candidate = &candidates[i];
-                if ((candidate->active == 0U)
-                    || (candidate->round_robin_slot >= SAMPLE_STREAM_SCHEDULER_SLOT_COUNT))
-                {
-                    continue;
-                }
-                const uint32_t distance =
-                    (candidate->round_robin_slot + SAMPLE_STREAM_SCHEDULER_SLOT_COUNT
-                     - g_sample_stream_scheduler_round_robin_cursor)
-                    % SAMPLE_STREAM_SCHEDULER_SLOT_COUNT;
-                if ((distance >= g_sample_stream_scheduler_slots_left)
-                    || ((found != 0U) && (distance >= best_distance)))
-                {
-                    continue;
-                }
-                found = 1U;
-                best_index = i;
-                best_distance = distance;
+                *out_candidate = candidate;
+                g_sample_stream_scheduler_slots_left -= (uint8_t)(distance + 1U);
+                g_sample_stream_scheduler_round_robin_cursor = (uint8_t)(
+                    (slot + 1U) % SAMPLE_STREAM_SCHEDULER_SLOT_COUNT);
+                sample_stream_metrics_end(SAMPLE_STREAM_METRIC_ROUND_ROBIN,
+                                          metric_start);
+                return 1U;
             }
-        }
-        if (found != 0U)
-        {
-            memset(out_decision, 0, sizeof(*out_decision));
-            out_decision->candidate_index = (uint8_t)best_index;
-            out_decision->round_robin_slot = candidates[best_index].round_robin_slot;
-            g_sample_stream_scheduler_slots_left -= (uint8_t)(best_distance + 1U);
-            g_sample_stream_scheduler_round_robin_cursor =
-                (uint8_t)((candidates[best_index].round_robin_slot + 1U)
-                          % SAMPLE_STREAM_SCHEDULER_SLOT_COUNT);
-            return 1U;
         }
         g_sample_stream_scheduler_round_robin_cursor =
             (uint8_t)((g_sample_stream_scheduler_round_robin_cursor
@@ -90,6 +76,8 @@ uint8_t sample_stream_scheduler_pick(
         {
             g_sample_stream_scheduler_round_active = 0U;
             g_sample_stream_scheduler_slots_left = 0U;
+            sample_stream_metrics_end(SAMPLE_STREAM_METRIC_ROUND_ROBIN,
+                                      metric_start);
             return 0U;
         }
     }

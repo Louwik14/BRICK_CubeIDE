@@ -1,5 +1,23 @@
 #include "Storage/wav_audio_codec.h"
 
+#if defined(__GNUC__)
+#define WAV_AUDIO_CODEC_PCM24_HOT __attribute__((optimize("O3"), hot))
+#define WAV_AUDIO_CODEC_ALWAYS_INLINE __attribute__((always_inline)) inline
+#else
+#define WAV_AUDIO_CODEC_PCM24_HOT
+#define WAV_AUDIO_CODEC_ALWAYS_INLINE inline
+#endif
+
+static WAV_AUDIO_CODEC_ALWAYS_INLINE float
+wav_audio_codec_pcm24_to_float_impl(const uint8_t *p)
+{
+    const uint32_t packed = (uint32_t)p[0]
+                          | ((uint32_t)p[1] << 8)
+                          | ((uint32_t)p[2] << 16);
+    const int32_t sample = ((int32_t)(packed << 8)) >> 8;
+    return (float)sample * (1.0f / 8388608.0f);
+}
+
 static float wav_audio_codec_pcm16_to_float_impl(const uint8_t *p)
 {
     int16_t v = (int16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
@@ -13,12 +31,7 @@ float wav_audio_codec_pcm16_to_float(const uint8_t *p)
 
 float wav_audio_codec_pcm24_to_float(const uint8_t *p)
 {
-    int32_t v = (int32_t)((uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16));
-    if ((v & 0x00800000L) != 0)
-    {
-        v |= (int32_t)0xFF000000L;
-    }
-    return (float)v * (1.0f / 8388608.0f);
+    return wav_audio_codec_pcm24_to_float_impl(p);
 }
 
 float wav_audio_codec_pcm32_to_float(const uint8_t *p)
@@ -55,28 +68,48 @@ static void wav_audio_codec_decode_pcm16_stereo_block(const uint8_t *src,
     }
 }
 
-static void wav_audio_codec_decode_pcm24_mono_block(const uint8_t *src,
-                                                     float *dst,
-                                                     uint32_t frame_count)
+static WAV_AUDIO_CODEC_PCM24_HOT void
+wav_audio_codec_decode_pcm24_mono_block(const uint8_t *src,
+                                        float *dst,
+                                        uint32_t frame_count)
 {
-    for (uint32_t frame = 0U; frame < frame_count; ++frame)
+    while (frame_count >= 4U)
     {
-        dst[0] = wav_audio_codec_pcm24_to_float(src);
+        dst[0] = wav_audio_codec_pcm24_to_float_impl(src);
+        dst[1] = wav_audio_codec_pcm24_to_float_impl(src + 3U);
+        dst[2] = wav_audio_codec_pcm24_to_float_impl(src + 6U);
+        dst[3] = wav_audio_codec_pcm24_to_float_impl(src + 9U);
+        src += 12U;
+        dst += 4U;
+        frame_count -= 4U;
+    }
+    while (frame_count != 0U)
+    {
+        *dst++ = wav_audio_codec_pcm24_to_float_impl(src);
         src += 3U;
-        dst += 1U;
+        --frame_count;
     }
 }
 
-static void wav_audio_codec_decode_pcm24_stereo_block(const uint8_t *src,
-                                                       float *dst,
-                                                       uint32_t frame_count)
+static WAV_AUDIO_CODEC_PCM24_HOT void
+wav_audio_codec_decode_pcm24_stereo_block(const uint8_t *src,
+                                          float *dst,
+                                          uint32_t frame_count)
 {
-    for (uint32_t frame = 0U; frame < frame_count; ++frame)
+    while (frame_count >= 2U)
     {
-        dst[0] = wav_audio_codec_pcm24_to_float(src);
-        dst[1] = wav_audio_codec_pcm24_to_float(src + 3U);
-        src += 6U;
-        dst += 2U;
+        dst[0] = wav_audio_codec_pcm24_to_float_impl(src);
+        dst[1] = wav_audio_codec_pcm24_to_float_impl(src + 3U);
+        dst[2] = wav_audio_codec_pcm24_to_float_impl(src + 6U);
+        dst[3] = wav_audio_codec_pcm24_to_float_impl(src + 9U);
+        src += 12U;
+        dst += 4U;
+        frame_count -= 2U;
+    }
+    if (frame_count != 0U)
+    {
+        dst[0] = wav_audio_codec_pcm24_to_float_impl(src);
+        dst[1] = wav_audio_codec_pcm24_to_float_impl(src + 3U);
     }
 }
 

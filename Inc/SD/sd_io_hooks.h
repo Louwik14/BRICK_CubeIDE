@@ -20,5 +20,6 @@ void brick_sd_async_read_complete_isr(void);
 void brick_sd_async_write_complete_isr(void);
 void brick_sd_async_abort_complete_isr(void);
 void brick_sd_async_error_isr(void);
+void brick_sd_sdmmc_irq_handler(void);
 
 #endif

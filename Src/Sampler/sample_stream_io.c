@@ -1,4 +1,5 @@
 #include "Sampler/sample_stream_io.h"
+#include "Sampler/sample_stream_metrics.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -59,6 +60,40 @@ SDRAM_STREAM_SERVICE static sample_stream_io_async_t
 static uint32_t g_sample_stream_io_next_order;
 static sample_stream_read_chunk_kib_t g_sample_stream_io_chunk_kib =
     (sample_stream_read_chunk_kib_t)BRICK6_STREAM_READ_CHUNK_KIB;
+static uint32_t g_sample_stream_multi_diag_previous_state;
+
+volatile sample_stream_multi_diag_t g_sample_stream_multi_diag
+    __attribute__((used, aligned(32)));
+
+static void sample_stream_multi_diag_update(void)
+{
+    if ((g_sample_stream_multi_diag.state == 1U)
+        && (g_sample_stream_multi_diag_previous_state != 1U))
+    {
+        memset((void *)&g_sample_stream_multi_diag, 0,
+               sizeof(g_sample_stream_multi_diag));
+        g_sample_stream_multi_diag.magic = 0x4D554C54U;
+        g_sample_stream_multi_diag.start_tick = HAL_GetTick();
+        g_sample_stream_multi_diag.state = 1U;
+    }
+    if (g_sample_stream_multi_diag.state == 1U)
+    {
+        g_sample_stream_multi_diag.duration_ms =
+            HAL_GetTick() - g_sample_stream_multi_diag.start_tick;
+        if (g_sample_stream_multi_diag.duration_ms != 0U)
+            g_sample_stream_multi_diag.average_kib_per_second =
+                (uint32_t)((g_sample_stream_multi_diag.bytes_read * 1000ULL)
+                    / (1024ULL * g_sample_stream_multi_diag.duration_ms));
+    }
+    g_sample_stream_multi_diag_previous_state = g_sample_stream_multi_diag.state;
+}
+
+void sample_stream_multi_diag_physical_bytes(uint32_t bytes)
+{
+    sample_stream_multi_diag_update();
+    if (g_sample_stream_multi_diag.state == 1U)
+        g_sample_stream_multi_diag.bytes_read += bytes;
+}
 
 uint8_t sample_stream_io_command_init(sample_stream_io_command_t *out_command,
                                       const sample_page_load_token_t *token,
@@ -141,7 +176,7 @@ sample_stream_read_chunk_kib_t sample_stream_io_get_read_chunk_kib(void)
     return g_sample_stream_io_chunk_kib;
 }
 
-static void sample_stream_io_decode_async(void)
+static void sample_stream_io_decode_async_impl(void)
 {
     sample_stream_io_async_t *async = 0;
     for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_SCRATCH_COUNT; ++i)
@@ -157,17 +192,32 @@ static void sample_stream_io_decode_async(void)
     {
         return;
     }
+    sample_page_load_target_t target;
     if ((async->media_epoch != sd_access_media_epoch())
-        || (async->target.frames_interleaved == NULL)
-        || (async->target.page_generation != async->command.target.page_generation)
-        || (async->target.registration_epoch != async->command.target.registration_epoch))
+        || (sample_page_cache_resolve_loading_target(
+                &async->result.token, &target) == 0U)
+        || (target.slot_index != async->command.target.slot_index)
+        || (target.page_index != async->command.target.page_index)
+        || (target.page_generation != async->command.target.page_generation)
+        || (target.registration_epoch != async->command.target.registration_epoch)
+        || (target.frame_count != async->command.target.frame_count)
+        || (target.format != async->command.target.format)
+        || (target.stride_floats != async->command.target.stride_floats)
+        || (target.frames_interleaved == NULL))
     {
         async->result.load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
         return;
     }
     async->result.load_result = sample_stream_decoder_decode_page(
-        &async->command.stream_info, &async->target, async->source,
+        &async->command.stream_info, &target, async->source,
         async->result.source_bytes);
+}
+
+static void sample_stream_io_decode_async(void)
+{
+    const uint32_t metric_start = sample_stream_metrics_begin();
+    sample_stream_io_decode_async_impl();
+    sample_stream_metrics_end(SAMPLE_STREAM_METRIC_DECODE, metric_start);
 }
 
 uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
@@ -177,13 +227,11 @@ uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
     return 0U;
 }
 
-uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command,
-                                  float *decoded_frames,
-                                  uint32_t decoded_capacity_bytes)
+uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command)
 {
+    sample_stream_multi_diag_update();
     sample_stream_io_async_t *async = 0;
-    if ((command == 0) || (decoded_frames == NULL)
-        || (decoded_capacity_bytes < SAMPLE_PAGE_BYTES))
+    if (command == 0)
     {
         return 0U;
     }
@@ -196,14 +244,6 @@ uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command,
         {
             memset(&g_sample_stream_io_async[i], 0,
                    sizeof(g_sample_stream_io_async[i]));
-        }
-    }
-    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_SCRATCH_COUNT; ++i)
-    {
-        if ((g_sample_stream_io_async[i].active != 0U)
-            && (g_sample_stream_io_async[i].state == SAMPLE_STREAM_IO_SCRATCH_DMA))
-        {
-            return 0U;
         }
     }
     for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_SCRATCH_COUNT; ++i)
@@ -238,7 +278,7 @@ uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command,
         .slot_index = command->target.slot_index,
         .format = command->target.format,
         .stride_floats = command->target.stride_floats,
-        .frames_interleaved = decoded_frames,
+        .frames_interleaved = NULL,
     };
     if ((sample_audio_format_is_valid(async->target.format) == 0U)
         || (async->target.frame_count == 0U)
@@ -261,12 +301,6 @@ uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command,
     const uint8_t physical_expected = (uint8_t)(
         sample_stream_safe_metadata_backend(&command->stream_info.stream_safe)
             == SAMPLE_STREAM_BACKEND_PHYSICAL);
-    if ((physical_expected != 0U)
-        && (sample_stream_backend_physical_busy() != 0U))
-    {
-        memset(async, 0, sizeof(*async));
-        return 0U;
-    }
     if(physical_expected != 0U)
     {
         if(sample_stream_backend_physical_begin(
@@ -320,8 +354,9 @@ uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command,
     return 1U;
 }
 
-uint8_t sample_stream_io_poll(sample_stream_io_result_t *out_result)
+static uint8_t sample_stream_io_poll_impl(sample_stream_io_result_t *out_result)
 {
+    sample_stream_multi_diag_update();
     sample_stream_io_async_t *async = 0;
     if (out_result == 0)
     {
@@ -342,6 +377,14 @@ uint8_t sample_stream_io_poll(sample_stream_io_result_t *out_result)
         async->state = SAMPLE_STREAM_IO_SCRATCH_DECODING;
         sample_stream_io_decode_async();
         *out_result = async->result;
+        if (async->command.target.key.domain == SAMPLE_AUDIO_DOMAIN_MULTI
+            && g_sample_stream_multi_diag.state == 1U)
+        {
+            if (async->result.load_result == SAMPLE_PAGE_LOAD_OK)
+                ++g_sample_stream_multi_diag.pages_ready;
+            else
+                ++g_sample_stream_multi_diag.io_errors;
+        }
         memset(async, 0, sizeof(*async));
         return 1U;
     }
@@ -377,6 +420,15 @@ uint8_t sample_stream_io_poll(sample_stream_io_result_t *out_result)
         return 0U;
     }
     return 0U;
+}
+
+uint8_t sample_stream_io_poll(sample_stream_io_result_t *out_result)
+{
+    const uint32_t metric_start = sample_stream_metrics_begin();
+    const uint8_t result = sample_stream_io_poll_impl(out_result);
+    sample_stream_metrics_end(SAMPLE_STREAM_METRIC_POLL_COMPLETION,
+                              metric_start);
+    return result;
 }
 
 void sample_stream_io_cancel(void)

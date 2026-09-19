@@ -27,6 +27,8 @@
 #include "encoders_hw.h"
 #include "usb_role_manager.h"
 #include "Platform/brick_media_clock.h"
+#include "SD/sd_io_hooks.h"
+#include "SD/sdmmc_async_transport.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -310,11 +312,11 @@ void DMA1_Stream2_IRQHandler(void)
 void DMA1_Stream3_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Stream3_IRQn 0 */
-
+  sdmmc_async_transport_preempt_enter();
   /* USER CODE END DMA1_Stream3_IRQn 0 */
   HAL_DMA_IRQHandler(&hdma_sai1_a);
   /* USER CODE BEGIN DMA1_Stream3_IRQn 1 */
-
+  sdmmc_async_transport_preempt_exit();
   /* USER CODE END DMA1_Stream3_IRQn 1 */
 }
 
@@ -324,11 +326,11 @@ void DMA1_Stream3_IRQHandler(void)
 void DMA1_Stream4_IRQHandler(void)
 {
   /* USER CODE BEGIN DMA1_Stream4_IRQn 0 */
-
+  sdmmc_async_transport_preempt_enter();
   /* USER CODE END DMA1_Stream4_IRQn 0 */
   HAL_DMA_IRQHandler(&hdma_sai1_b);
   /* USER CODE BEGIN DMA1_Stream4_IRQn 1 */
-
+  sdmmc_async_transport_preempt_exit();
   /* USER CODE END DMA1_Stream4_IRQn 1 */
 }
 
@@ -368,7 +370,7 @@ void SDMMC1_IRQHandler(void)
   /* USER CODE BEGIN SDMMC1_IRQn 0 */
 
   /* USER CODE END SDMMC1_IRQn 0 */
-  HAL_SD_IRQHandler(&hsd1);
+  brick_sd_sdmmc_irq_handler();
   /* USER CODE BEGIN SDMMC1_IRQn 1 */
 
   /* USER CODE END SDMMC1_IRQn 1 */
@@ -434,12 +436,12 @@ void SPI5_IRQHandler(void)
 void SAI1_IRQHandler(void)
 {
   /* USER CODE BEGIN SAI1_IRQn 0 */
-
+  sdmmc_async_transport_preempt_enter();
   /* USER CODE END SAI1_IRQn 0 */
   HAL_SAI_IRQHandler(&hsai_BlockA1);
   HAL_SAI_IRQHandler(&hsai_BlockB1);
   /* USER CODE BEGIN SAI1_IRQn 1 */
-
+  sdmmc_async_transport_preempt_exit();
   /* USER CODE END SAI1_IRQn 1 */
 }
 

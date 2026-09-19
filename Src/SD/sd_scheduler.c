@@ -449,6 +449,33 @@ void sd_scheduler_service(sd_scheduler_t *scheduler,
     scheduler->active_class = SD_SCHEDULER_CLASS_NONE;
 }
 
+uint8_t sd_scheduler_prepare_read_chain(sd_scheduler_t *scheduler,
+                                        uint32_t now_us,
+                                        uint32_t media_epoch)
+{
+    if((scheduler == 0)
+            || (scheduler->owner != SD_SCHEDULER_OWNER_READ_DMA)
+            || (scheduler->active_class != SD_SCHEDULER_CLASS_READ))
+    {
+        return 0U;
+    }
+    sd_scheduler_snapshot_t snapshot;
+    sd_scheduler_collect(scheduler, now_us, media_epoch, &snapshot);
+    if((snapshot.available[SD_SCHEDULER_CLASS_READ] == 0U)
+            || (snapshot.urgent[SD_SCHEDULER_CLASS_WRITE] != 0U)
+            || (snapshot.urgent[SD_SCHEDULER_CLASS_FILESYSTEM] != 0U))
+    {
+        return 0U;
+    }
+    sd_scheduler_provider_t *const provider =
+        &scheduler->providers[SD_SCHEDULER_CLASS_READ];
+    const sd_scheduler_candidate_t *const candidate =
+        &snapshot.candidate[SD_SCHEDULER_CLASS_READ];
+    return (provider->start(provider->context, candidate,
+                            candidate->sector_count)
+            == SD_SCHEDULER_START_STARTED) ? 1U : 0U;
+}
+
 uint8_t sd_scheduler_background_can_start(sd_scheduler_t *scheduler,
                                           uint32_t media_epoch)
 {

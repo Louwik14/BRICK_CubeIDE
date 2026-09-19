@@ -4,6 +4,24 @@
 
 #include "Sampler/sample_page_cache.h"
 
+typedef struct
+{
+    volatile uint32_t magic;
+    volatile uint32_t state; /* write 1 to reset/start, 2 to stop */
+    volatile uint32_t duration_ms;
+    volatile uint64_t bytes_read;
+    volatile uint32_t pages_ready;
+    volatile uint32_t page_misses;
+    volatile uint32_t io_errors;
+    volatile uint32_t voices_active;
+    volatile uint32_t voices_max;
+    volatile uint32_t average_kib_per_second;
+    volatile uint32_t start_tick;
+} sample_stream_multi_diag_t;
+
+extern volatile sample_stream_multi_diag_t g_sample_stream_multi_diag;
+void sample_stream_multi_diag_physical_bytes(uint32_t bytes);
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -53,9 +71,7 @@ uint32_t sample_stream_io_active_reader_count(void);
 uint8_t sample_stream_io_set_read_chunk_kib(sample_stream_read_chunk_kib_t chunk_kib);
 sample_stream_read_chunk_kib_t sample_stream_io_get_read_chunk_kib(void);
 uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command);
-uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command,
-                                  float *decoded_frames,
-                                  uint32_t decoded_capacity_bytes);
+uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command);
 uint8_t sample_stream_io_poll(sample_stream_io_result_t *out_result);
 void sample_stream_io_cancel(void);
 uint8_t sample_stream_io_command_init(sample_stream_io_command_t *out_command,

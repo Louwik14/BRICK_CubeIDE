@@ -1,6 +1,7 @@
 #include "Storage/sd_access_gate.h"
 
 #include "Platform/memory_layout.h"
+#include "SD/sd_block_device.h"
 #include "stm32h7xx_hal.h"
 
 static volatile uint8_t g_sd_access_owner;
@@ -122,6 +123,7 @@ uint32_t sd_access_media_epoch(void)
 
 void sd_access_media_epoch_advance(void)
 {
+    sd_block_device_async_invalidate_prepared();
     const uint32_t primask = sd_access_gate_enter_critical();
     g_sd_media_epoch++;
     if (g_sd_media_epoch == 0U)

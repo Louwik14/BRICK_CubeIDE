@@ -4,10 +4,37 @@
 
 #include "SD/sd_block_device.h"
 #include "stm32h7xx_hal.h"
+#include "Sampler/sample_stream_io.h"
+#include "Sampler/sample_stream_metrics.h"
 
 #define SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE (512U)
+#define SAMPLE_STREAM_PHYSICAL_PENDING_COUNT (2U)
 
-static sample_stream_backend_physical_async_t *g_sample_stream_physical_pending;
+static sample_stream_backend_physical_async_t
+    *g_sample_stream_physical_pending[SAMPLE_STREAM_PHYSICAL_PENDING_COUNT];
+static uint32_t g_sample_stream_physical_next_generation = 1U;
+
+static int32_t sample_stream_backend_physical_find(
+    const sample_stream_backend_physical_async_t *async)
+{
+    for(uint32_t i = 0U; i < SAMPLE_STREAM_PHYSICAL_PENDING_COUNT; ++i)
+    {
+        if(g_sample_stream_physical_pending[i] == async) return (int32_t)i;
+    }
+    return -1;
+}
+
+static sample_stream_backend_physical_async_t *
+sample_stream_backend_physical_find_generation(uint32_t generation)
+{
+    for(uint32_t i = 0U; i < SAMPLE_STREAM_PHYSICAL_PENDING_COUNT; ++i)
+    {
+        sample_stream_backend_physical_async_t *const async =
+            g_sample_stream_physical_pending[i];
+        if((async != 0) && (async->owner_generation == generation)) return async;
+    }
+    return 0;
+}
 
 static void sample_stream_backend_physical_invalidate_span(
     sample_stream_backend_physical_async_t *async)
@@ -18,7 +45,7 @@ static void sample_stream_backend_physical_invalidate_span(
     }
 }
 
-static uint8_t sample_stream_backend_physical_next_span(
+static uint8_t sample_stream_backend_physical_next_span_impl(
     sample_stream_backend_physical_async_t *async,
     sample_stream_physical_span_t *span)
 {
@@ -93,6 +120,17 @@ static uint8_t sample_stream_backend_physical_next_span(
     return 1U;
 }
 
+static uint8_t sample_stream_backend_physical_next_span(
+    sample_stream_backend_physical_async_t *async,
+    sample_stream_physical_span_t *span)
+{
+    const uint32_t metric_start = sample_stream_metrics_begin();
+    const uint8_t result =
+        sample_stream_backend_physical_next_span_impl(async, span);
+    sample_stream_metrics_end(SAMPLE_STREAM_METRIC_SPAN_LBA, metric_start);
+    return result;
+}
+
 uint8_t sample_stream_backend_physical_begin(
     sample_stream_backend_physical_async_t *async,
     const sample_page_stream_info_t *info,
@@ -102,14 +140,13 @@ uint8_t sample_stream_backend_physical_begin(
     uint32_t scratch_capacity,
     uint32_t deadline_margin_us)
 {
-    if ((async != 0) && (async != g_sample_stream_physical_pending))
+    if ((async != 0) && (sample_stream_backend_physical_find(async) < 0))
     {
         sample_stream_backend_physical_invalidate_span(async);
     }
     if ((async == 0) || (info == 0) || (target == 0)
-        || (target->frames_interleaved == 0) || (scratch == 0)
+        || (scratch == 0)
         || (info->info.block_align == 0U)
-        || (g_sample_stream_physical_pending != 0)
         || (sample_stream_physical_map_is_current(
                 &info->stream_safe.physical_map) == 0U))
     {
@@ -128,6 +165,17 @@ uint8_t sample_stream_backend_physical_begin(
         return 0U;
     }
 
+    int32_t pending_slot = -1;
+    for(uint32_t i = 0U; i < SAMPLE_STREAM_PHYSICAL_PENDING_COUNT; ++i)
+    {
+        if(g_sample_stream_physical_pending[i] == 0)
+        {
+            pending_slot = (int32_t)i;
+            break;
+        }
+    }
+    if(pending_slot < 0) return 0U;
+
     memset(async, 0, sizeof(*async));
     async->map = &info->stream_safe.physical_map;
     async->cursor = cursor;
@@ -135,10 +183,16 @@ uint8_t sample_stream_backend_physical_begin(
     async->file_byte_offset = file_byte_offset;
     async->scratch_capacity = scratch_capacity;
     async->source_bytes = source_bytes;
+    async->count_multi_diag = (target->key.domain == SAMPLE_AUDIO_DOMAIN_MULTI);
     async->deadline_margin_us = deadline_margin_us;
     async->deadline_started_ms = HAL_GetTick();
+    async->owner_generation = g_sample_stream_physical_next_generation++;
+    if(async->owner_generation == 0U)
+    {
+        async->owner_generation = g_sample_stream_physical_next_generation++;
+    }
     async->active = 1U;
-    g_sample_stream_physical_pending = async;
+    g_sample_stream_physical_pending[(uint32_t)pending_slot] = async;
     return 1U;
 }
 
@@ -165,9 +219,10 @@ uint8_t sample_stream_backend_physical_poll(
     {
         return 0U;
     }
-    if (g_sample_stream_physical_pending == async)
+    const int32_t pending_slot = sample_stream_backend_physical_find(async);
+    if(pending_slot >= 0)
     {
-        g_sample_stream_physical_pending = 0;
+        g_sample_stream_physical_pending[(uint32_t)pending_slot] = 0;
     }
     async->active = 0U;
     *out_physical_reads = async->physical_reads;
@@ -200,7 +255,7 @@ void sample_stream_backend_physical_cancel(
         return;
     }
     sample_stream_backend_physical_invalidate_span(async);
-    if (g_sample_stream_physical_pending == async)
+    if(sample_stream_backend_physical_find(async) >= 0)
     {
         async->cancel_requested = 1U;
         async->failed = 1U;
@@ -210,7 +265,8 @@ void sample_stream_backend_physical_cancel(
         }
         else
         {
-            (void)sd_block_device_async_abort_active();
+            (void)sd_block_device_async_abort_generation(
+                async->owner_generation);
         }
     }
 }
@@ -220,8 +276,22 @@ static uint8_t sample_stream_backend_physical_read_peek(
     sd_scheduler_candidate_t *candidate)
 {
     (void)context;
-    sample_stream_backend_physical_async_t *const async =
-        g_sample_stream_physical_pending;
+    sample_stream_backend_physical_async_t *async = 0;
+    for(uint32_t i = 0U; i < SAMPLE_STREAM_PHYSICAL_PENDING_COUNT; ++i)
+    {
+        sample_stream_backend_physical_async_t *const candidate_async =
+            g_sample_stream_physical_pending[i];
+        if((candidate_async != 0) && (candidate_async->active != 0U)
+                && (candidate_async->cancel_requested == 0U)
+                && (candidate_async->completed == 0U)
+                && (candidate_async->active_sector_count == 0U)
+                && ((async == 0)
+                    || (candidate_async->owner_generation
+                        < async->owner_generation)))
+        {
+            async = candidate_async;
+        }
+    }
     sample_stream_physical_span_t span;
     if ((candidate == 0) || (async == 0) || (async->active == 0U)
             || (async->cancel_requested != 0U)
@@ -250,6 +320,7 @@ static uint8_t sample_stream_backend_physical_read_peek(
     candidate->read_buffer = &async->scratch[
         async->scratch_sectors * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE];
     candidate->media_epoch = async->map->media_epoch;
+    candidate->owner_generation = async->owner_generation;
     return 1U;
 }
 
@@ -260,7 +331,9 @@ static sd_scheduler_start_result_t sample_stream_backend_physical_read_start(
 {
     (void)context;
     sample_stream_backend_physical_async_t *const async =
-        g_sample_stream_physical_pending;
+        (candidate != 0)
+            ? sample_stream_backend_physical_find_generation(
+                candidate->owner_generation) : 0;
     sample_stream_physical_span_t span;
     if ((candidate == 0) || (async == 0)
             || (sample_stream_backend_physical_next_span(async, &span) == 0U)
@@ -270,10 +343,11 @@ static sd_scheduler_start_result_t sample_stream_backend_physical_read_start(
         sample_stream_backend_physical_invalidate_span(async);
         return SD_SCHEDULER_START_ERROR;
     }
-    const sd_block_device_result_t result = sd_block_device_async_enqueue(
+    const sd_block_device_result_t result = sd_block_device_async_read_submit(
         span.lba, span.sector_count,
         &async->scratch[async->scratch_sectors
-                        * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE]);
+                        * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE],
+        async->owner_generation);
     if ((result == SD_BLOCK_DEVICE_BUSY)
             || (result == SD_BLOCK_DEVICE_QUEUE_FULL))
     {
@@ -296,6 +370,8 @@ static sd_scheduler_start_result_t sample_stream_backend_physical_read_start(
     }
     async->scratch_sectors += span.sector_count;
     async->logical_queued += span.logical_bytes;
+    sd_stream_latency_dma_followup(
+        (uint8_t)(async->logical_queued < async->source_bytes));
     sample_stream_backend_physical_invalidate_span(async);
     return SD_SCHEDULER_START_STARTED;
 }
@@ -304,22 +380,28 @@ static sd_scheduler_poll_result_t sample_stream_backend_physical_read_poll(
     void *context)
 {
     (void)context;
-    sample_stream_backend_physical_async_t *const async =
-        g_sample_stream_physical_pending;
-    if (async == 0)
-    {
-        return SD_SCHEDULER_POLL_ERROR;
-    }
     sd_block_device_async_completion_t completion;
     if (sd_block_device_async_take_completion(&completion) == 0U)
     {
         if (sd_block_device_async_hardware_state()
                 == SD_BLOCK_DEVICE_HW_ABORTING)
         {
-            sample_stream_backend_physical_invalidate_span(async);
+            for(uint32_t i = 0U; i < SAMPLE_STREAM_PHYSICAL_PENDING_COUNT; ++i)
+            {
+                sample_stream_backend_physical_invalidate_span(
+                    g_sample_stream_physical_pending[i]);
+            }
             return SD_SCHEDULER_POLL_RECOVERY_ABORT;
         }
         return SD_SCHEDULER_POLL_ACTIVE;
+    }
+    sample_stream_backend_physical_async_t *const async =
+        sample_stream_backend_physical_find_generation(
+            completion.owner_generation);
+    if(async == 0)
+    {
+        return (sd_block_device_async_pending_count() != 0U)
+            ? SD_SCHEDULER_POLL_ACTIVE : SD_SCHEDULER_POLL_ERROR;
     }
     if ((completion.result != SD_BLOCK_DEVICE_OK)
             || (completion.operation != SD_BLOCK_DEVICE_OPERATION_READ)
@@ -331,7 +413,8 @@ static sd_scheduler_poll_result_t sample_stream_backend_physical_read_poll(
         sample_stream_backend_physical_invalidate_span(async);
         async->failed = 1U;
         async->completed = 1U;
-        return SD_SCHEDULER_POLL_ERROR;
+        return (sd_block_device_async_pending_count() != 0U)
+            ? SD_SCHEDULER_POLL_ACTIVE : SD_SCHEDULER_POLL_ERROR;
     }
     async->active_lba = 0U;
     async->active_sector_count = 0U;
@@ -345,14 +428,22 @@ static sd_scheduler_poll_result_t sample_stream_backend_physical_read_poll(
         sample_stream_backend_physical_invalidate_span(async);
         async->failed = 1U;
         async->completed = 1U;
-        return SD_SCHEDULER_POLL_ERROR;
+        return (sd_block_device_async_pending_count() != 0U)
+            ? SD_SCHEDULER_POLL_ACTIVE : SD_SCHEDULER_POLL_ERROR;
+    }
+    if (async->count_multi_diag != 0U)
+    {
+        sample_stream_multi_diag_physical_bytes(
+            (uint32_t)completion.sector_count * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE);
     }
     if (async->logical_queued < async->source_bytes)
     {
-        return SD_SCHEDULER_POLL_COMPLETED;
+        return (sd_block_device_async_pending_count() != 0U)
+            ? SD_SCHEDULER_POLL_ACTIVE : SD_SCHEDULER_POLL_COMPLETED;
     }
     async->completed = 1U;
-    return SD_SCHEDULER_POLL_COMPLETED;
+    return (sd_block_device_async_pending_count() != 0U)
+        ? SD_SCHEDULER_POLL_ACTIVE : SD_SCHEDULER_POLL_COMPLETED;
 }
 
 sd_scheduler_provider_t sample_stream_backend_physical_read_provider(void)
@@ -368,12 +459,21 @@ sd_scheduler_provider_t sample_stream_backend_physical_read_provider(void)
 
 uint8_t sample_stream_backend_physical_busy(void)
 {
-    if ((g_sample_stream_physical_pending != 0)
-            && (g_sample_stream_physical_pending->cancel_requested != 0U)
-            && (g_sample_stream_physical_pending->completed != 0U))
+    uint8_t busy = 0U;
+    for(uint32_t i = 0U; i < SAMPLE_STREAM_PHYSICAL_PENDING_COUNT; ++i)
     {
-        g_sample_stream_physical_pending->active = 0U;
-        g_sample_stream_physical_pending = 0;
+        sample_stream_backend_physical_async_t *const async =
+            g_sample_stream_physical_pending[i];
+        if((async != 0) && (async->cancel_requested != 0U)
+                && (async->completed != 0U))
+        {
+            async->active = 0U;
+            g_sample_stream_physical_pending[i] = 0;
+        }
+        else if(async != 0)
+        {
+            busy = 1U;
+        }
     }
-    return (g_sample_stream_physical_pending != 0) ? 1U : 0U;
+    return busy;
 }

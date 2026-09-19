@@ -1,10 +1,12 @@
 #include "SD/sd_block_device.h"
 
+#include <stddef.h>
 #include <string.h>
 
 #include "Platform/brick6_sd_config.h"
 #include "SD/bsp_driver_sd.h"
 #include "SD/sd_io_hooks.h"
+#include "SD/sdmmc_async_transport.h"
 #include "Platform/cache_maintenance.h"
 #include "Platform/memory_layout.h"
 #include "Storage/sd_access_gate.h"
@@ -13,6 +15,160 @@
 #include "stm32h7xx_hal.h"
 
 #define SD_BLOCK_DEVICE_SECTOR_BYTES (512U)
+#define SD_STREAM_LATENCY_REFILL_TRACKERS (8U)
+
+UI_HOT_DTCM volatile sd_stream_latency_diag_t g_sd_stream_latency_diag
+    __attribute__((used, aligned(32)));
+SEC_ATTR(".dtcm_audio.nplus1") ALIGN32 volatile sd_block_device_nplus1_diag_t
+    g_sd_block_device_nplus1_diag __attribute__((used));
+
+_Static_assert(sizeof(sd_stream_latency_metric_t) == 0x10U,
+               "stream latency metric layout");
+_Static_assert(sizeof(sd_stream_latency_diag_t) == 0x70U,
+               "stream latency diagnostic layout");
+_Static_assert(offsetof(sd_stream_latency_diag_t, state) == 0x00U,
+               "stream latency state offset");
+_Static_assert(offsetof(sd_stream_latency_diag_t, dma_physical) == 0x08U,
+               "stream latency DMA offset");
+_Static_assert(offsetof(sd_stream_latency_diag_t, complete_to_worker) == 0x18U,
+               "stream latency resume offset");
+_Static_assert(offsetof(sd_stream_latency_diag_t, worker_to_next_dma) == 0x28U,
+               "stream latency relaunch offset");
+_Static_assert(offsetof(sd_stream_latency_diag_t, refill_total) == 0x38U,
+               "stream latency refill offset");
+_Static_assert(offsetof(sd_stream_latency_diag_t, sectors_total_lo) == 0x48U,
+               "stream latency sectors low offset");
+_Static_assert(offsetof(sd_stream_latency_diag_t, sectors_total_hi) == 0x4CU,
+               "stream latency sectors high offset");
+_Static_assert(offsetof(sd_stream_latency_diag_t, bytes_total_lo) == 0x50U,
+               "stream latency bytes low offset");
+_Static_assert(offsetof(sd_stream_latency_diag_t, bytes_total_hi) == 0x54U,
+               "stream latency bytes high offset");
+_Static_assert(offsetof(sd_stream_latency_diag_t,
+                        pending_ready_to_next_dma) == 0x58U,
+               "stream latency pending relaunch offset");
+_Static_assert(offsetof(sd_stream_latency_diag_t,
+                        dma_complete_with_other_refill_pending) == 0x68U,
+               "stream latency pending completion offset");
+_Static_assert(offsetof(sd_stream_latency_diag_t,
+                        dma_complete_without_other_refill_pending) == 0x6CU,
+               "stream latency idle completion offset");
+static uint32_t g_sd_stream_dma_start_cycles;
+static uint32_t g_sd_stream_dma_complete_cycles;
+static uint32_t g_sd_stream_worker_resume_cycles;
+static uint8_t g_sd_stream_dma_timing_active;
+static uint8_t g_sd_stream_completion_pending;
+static uint8_t g_sd_stream_worker_timing_active;
+static uint8_t g_sd_stream_dma_followup_pending;
+static uint8_t g_sd_stream_pending_timing_active;
+static uint32_t g_sd_stream_pending_ready_cycles;
+typedef struct
+{
+    uint32_t start_cycles;
+    uint16_t slot_index;
+    uint8_t active;
+} sd_stream_latency_refill_tracker_t;
+static sd_stream_latency_refill_tracker_t
+    g_sd_stream_refill[SD_STREAM_LATENCY_REFILL_TRACKERS];
+
+static void sd_stream_latency_prepare(void)
+{
+    if(g_sd_stream_latency_diag.state != 1U) return;
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if(g_sd_stream_latency_diag.state == 1U)
+    {
+        volatile uint32_t *const words =
+            (volatile uint32_t *)&g_sd_stream_latency_diag;
+        for(uint32_t i = 0U;
+            i < (sizeof(g_sd_stream_latency_diag) / sizeof(words[0])); ++i)
+        {
+            words[i] = 0U;
+        }
+        memset(g_sd_stream_refill, 0, sizeof(g_sd_stream_refill));
+        g_sd_stream_dma_timing_active = 0U;
+        g_sd_stream_completion_pending = 0U;
+        g_sd_stream_worker_timing_active = 0U;
+        g_sd_stream_dma_followup_pending = 0U;
+        g_sd_stream_pending_timing_active = 0U;
+        CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+        DWT->CYCCNT = 0U;
+        DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+        g_sd_stream_latency_diag.state = 2U;
+    }
+    if(primask == 0U) __enable_irq();
+}
+
+void sd_stream_latency_dma_followup(uint8_t pending)
+{
+    g_sd_stream_dma_followup_pending = (pending != 0U) ? 1U : 0U;
+}
+
+static uint32_t sd_stream_latency_refill_active_count(void)
+{
+    uint32_t count = 0U;
+    for(uint32_t i = 0U; i < SD_STREAM_LATENCY_REFILL_TRACKERS; ++i)
+    {
+        if(g_sd_stream_refill[i].active != 0U) ++count;
+    }
+    return count;
+}
+
+static void sd_stream_latency_add(volatile sd_stream_latency_metric_t *metric,
+                                  uint32_t cycles)
+{
+    metric->calls++;
+    const uint32_t previous = metric->total_cycles_lo;
+    metric->total_cycles_lo = previous + cycles;
+    if(metric->total_cycles_lo < previous) metric->total_cycles_hi++;
+    if(cycles > metric->max_cycles) metric->max_cycles = cycles;
+}
+
+static void sd_stream_latency_add_u64(volatile uint32_t *lo,
+                                      volatile uint32_t *hi,
+                                      uint32_t value)
+{
+    const uint32_t previous = *lo;
+    *lo = previous + value;
+    if(*lo < previous) (*hi)++;
+}
+
+void sd_stream_latency_refill_begin(uint16_t slot_index)
+{
+    sd_stream_latency_prepare();
+    if(g_sd_stream_latency_diag.state == 2U)
+    {
+        for(uint32_t i = 0U; i < SD_STREAM_LATENCY_REFILL_TRACKERS; ++i)
+        {
+            if((g_sd_stream_refill[i].active == 0U)
+                    || (g_sd_stream_refill[i].slot_index == slot_index))
+            {
+                g_sd_stream_refill[i].start_cycles = DWT->CYCCNT;
+                g_sd_stream_refill[i].slot_index = slot_index;
+                g_sd_stream_refill[i].active = 1U;
+                break;
+            }
+        }
+    }
+}
+
+void sd_stream_latency_refill_ready(uint16_t slot_index)
+{
+    if(g_sd_stream_latency_diag.state == 2U)
+    {
+        for(uint32_t i = 0U; i < SD_STREAM_LATENCY_REFILL_TRACKERS; ++i)
+        {
+            if((g_sd_stream_refill[i].active != 0U)
+                    && (g_sd_stream_refill[i].slot_index == slot_index))
+            {
+                sd_stream_latency_add(&g_sd_stream_latency_diag.refill_total,
+                    DWT->CYCCNT - g_sd_stream_refill[i].start_cycles);
+                g_sd_stream_refill[i].active = 0U;
+                break;
+            }
+        }
+    }
+}
 
 typedef struct
 {
@@ -23,6 +179,8 @@ typedef struct
     uint32_t media_epoch;
     uint32_t queued_tick;
     uint32_t start_tick;
+    uint32_t token;
+    uint32_t irq_complete_cycles;
     sd_block_device_operation_t operation;
     sd_block_device_result_t result;
     sd_block_device_result_t abort_result;
@@ -30,6 +188,10 @@ typedef struct
     uint8_t started;
     uint8_t callback_seen;
     uint8_t completed;
+    volatile uint8_t irq_complete;
+    volatile uint8_t irq_error;
+    uint8_t prepared;
+    uint8_t chained_next;
 } sd_block_device_async_entry_t;
 
 SDRAM_STREAM_SERVICE static sd_block_device_async_entry_t
@@ -44,9 +206,18 @@ static volatile uint8_t g_sd_block_device_async_rx_complete;
 static volatile uint8_t g_sd_block_device_async_tx_complete;
 static volatile uint8_t g_sd_block_device_async_abort_complete;
 static volatile uint8_t g_sd_block_device_async_error;
+static uint8_t g_sd_block_device_active_index;
+static uint8_t g_sd_block_device_active_valid;
+static uint8_t g_sd_block_device_prepared_index;
+static uint8_t g_sd_block_device_prepared_valid;
+static uint32_t g_sd_block_device_next_token;
+
+static void sd_block_device_invalidate_prepared_with_result(
+    sd_block_device_result_t result);
 
 static void sd_block_device_queue_reset(void)
 {
+    (void)sdmmc_async_transport_invalidate_next();
     memset(g_sd_block_device_async_fifo, 0, sizeof(g_sd_block_device_async_fifo));
     g_sd_block_device_async_head = 0U;
     g_sd_block_device_async_tail = 0U;
@@ -58,11 +229,19 @@ static void sd_block_device_queue_reset(void)
     g_sd_block_device_async_tx_complete = 0U;
     g_sd_block_device_async_abort_complete = 0U;
     g_sd_block_device_async_error = 0U;
+    g_sd_block_device_active_index = 0U;
+    g_sd_block_device_active_valid = 0U;
+    g_sd_block_device_prepared_index = 0U;
+    g_sd_block_device_prepared_valid = 0U;
 }
 
 void sd_block_device_async_init(void)
 {
     g_sd_block_device_fault_latched = 0U;
+    sdmmc_async_transport_init();
+    memset((void *)&g_sd_block_device_nplus1_diag, 0,
+           sizeof(g_sd_block_device_nplus1_diag));
+    g_sd_block_device_next_token = 1U;
     sd_block_device_queue_reset();
 }
 
@@ -71,8 +250,11 @@ static void sd_block_device_complete(sd_block_device_async_entry_t *entry,
 {
     entry->result = result;
     entry->completed = 1U;
-    g_sd_block_device_hw_state = (g_sd_block_device_fault_latched != 0U)
-        ? SD_BLOCK_DEVICE_HW_ERROR_LATCHED : SD_BLOCK_DEVICE_HW_IDLE;
+    if(g_sd_block_device_active_valid == 0U)
+    {
+        g_sd_block_device_hw_state = (g_sd_block_device_fault_latched != 0U)
+            ? SD_BLOCK_DEVICE_HW_ERROR_LATCHED : SD_BLOCK_DEVICE_HW_IDLE;
+    }
 }
 
 static void sd_block_device_force_quiescence(void)
@@ -85,6 +267,7 @@ static void sd_block_device_force_quiescence(void)
     g_sd_block_device_async_tx_complete = 0U;
     g_sd_block_device_async_abort_complete = 0U;
     g_sd_block_device_async_error = 0U;
+    g_sd_block_device_active_valid = 0U;
     g_sd_block_device_fault_latched = 1U;
 }
 
@@ -122,31 +305,41 @@ static void sd_block_device_request_abort(sd_block_device_async_entry_t *entry,
                                           sd_block_device_result_t result,
                                           uint8_t discard)
 {
-    if(g_sd_block_device_hw_state == SD_BLOCK_DEVICE_HW_ABORTING)
+    if((g_sd_block_device_hw_state == SD_BLOCK_DEVICE_HW_ABORTING)
+            && (entry->irq_complete == 0U))
     {
         return;
     }
+    sd_block_device_invalidate_prepared_with_result(result);
     entry->abort_result = result;
     g_sd_block_device_abort_discard = discard;
     g_sd_block_device_async_abort_complete = 0U;
     entry->start_tick = HAL_GetTick();
     g_sd_block_device_hw_state = SD_BLOCK_DEVICE_HW_ABORTING;
-    if(HAL_SD_Abort_IT(&hsd1) != HAL_OK)
+    if(sdmmc_async_transport_abort() == 0U)
     {
-        if(g_sd_block_device_async_abort_complete != 0U)
-        {
-            sd_block_device_finish_abort(entry, result);
-            return;
-        }
         sd_block_device_force_quiescence();
         sd_block_device_finish_abort(entry, SD_BLOCK_DEVICE_ABORT_FAILED);
+        return;
     }
+    g_sd_block_device_active_valid = 0U;
+    sd_block_device_finish_abort(entry, result);
 }
 
 static void sd_block_device_fail_or_abort(sd_block_device_async_entry_t *entry,
                                           sd_block_device_result_t result)
 {
     brick_sd_media_fault();
+    if((g_sd_block_device_active_valid != 0U)
+            && (&g_sd_block_device_async_fifo[
+                    g_sd_block_device_active_index] != entry))
+    {
+        sd_block_device_request_abort(
+            &g_sd_block_device_async_fifo[g_sd_block_device_active_index],
+            result, 0U);
+        sd_block_device_complete(entry, result);
+        return;
+    }
     if(entry->started != 0U)
     {
         sd_block_device_request_abort(entry, result, 0U);
@@ -155,6 +348,96 @@ static void sd_block_device_fail_or_abort(sd_block_device_async_entry_t *entry,
     {
         sd_block_device_complete(entry, result);
     }
+}
+
+static uint32_t sd_block_device_allocate_token(void)
+{
+    uint32_t token = g_sd_block_device_next_token++;
+    if(token == 0U)
+    {
+        token = g_sd_block_device_next_token++;
+    }
+    return token;
+}
+
+static void sd_block_device_invalidate_prepared_with_result(
+    sd_block_device_result_t result)
+{
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if(g_sd_block_device_prepared_valid == 0U)
+    {
+        __set_PRIMASK(primask);
+        return;
+    }
+    sd_block_device_async_entry_t *const prepared =
+        &g_sd_block_device_async_fifo[g_sd_block_device_prepared_index];
+    (void)sdmmc_async_transport_invalidate_next();
+    prepared->prepared = 0U;
+    prepared->result = result;
+    prepared->completed = 1U;
+    g_sd_block_device_prepared_valid = 0U;
+    g_sd_block_device_nplus1_diag.invalidated++;
+    __set_PRIMASK(primask);
+}
+
+void sd_block_device_async_invalidate_prepared(void)
+{
+    sd_block_device_invalidate_prepared_with_result(
+        SD_BLOCK_DEVICE_MEDIA_CHANGED);
+}
+
+static uint8_t sd_block_device_prepare_next(uint8_t index)
+{
+    if((g_sd_block_device_active_valid == 0U)
+            || (g_sd_block_device_prepared_valid != 0U)
+            || (g_sd_block_device_hw_state != SD_BLOCK_DEVICE_HW_READ_DMA))
+    {
+        return 0U;
+    }
+    sd_block_device_async_entry_t *const active =
+        &g_sd_block_device_async_fifo[g_sd_block_device_active_index];
+    sd_block_device_async_entry_t *const next =
+        &g_sd_block_device_async_fifo[index];
+    if((active->operation != SD_BLOCK_DEVICE_OPERATION_READ)
+            || (next->operation != SD_BLOCK_DEVICE_OPERATION_READ)
+            || (active->owner_client != next->owner_client)
+            || (active->media_epoch != next->media_epoch)
+            || (sd_access_media_epoch() != next->media_epoch)
+            || (sd_access_gate_current_owner()
+                != (sd_access_client_t)next->owner_client))
+    {
+        return 0U;
+    }
+
+    dcache_invalidate_by_addr_aligned(
+        next->buffer,
+        (size_t)next->sector_count * SD_BLOCK_DEVICE_SECTOR_BYTES);
+    const sdmmc_async_prepared_transfer_t transfer = {
+        .lba = next->lba,
+        .sector_count = next->sector_count,
+        .buffer = next->buffer,
+        .token = next->token,
+        .owner_generation = next->owner_generation,
+        .media_epoch = next->media_epoch,
+        .owner = next->owner_client,
+        .operation = 0U,
+        .flags = 0U,
+    };
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    if(sdmmc_async_transport_arm_next(&transfer) == 0U)
+    {
+        __set_PRIMASK(primask);
+        return 0U;
+    }
+    next->prepared = 1U;
+    next->start_tick = HAL_GetTick();
+    g_sd_block_device_prepared_index = index;
+    g_sd_block_device_prepared_valid = 1U;
+    g_sd_block_device_nplus1_diag.armed++;
+    __set_PRIMASK(primask);
+    return 1U;
 }
 
 static void sd_block_device_async_start_head(void)
@@ -176,17 +459,14 @@ static void sd_block_device_async_start_head(void)
         sd_block_device_fail_or_abort(entry, media_failure);
         return;
     }
-    if(BSP_SD_GetCardState() != SD_TRANSFER_OK)
-    {
-        return;
-    }
-
     g_sd_block_device_async_rx_complete = 0U;
     g_sd_block_device_async_tx_complete = 0U;
     g_sd_block_device_async_abort_complete = 0U;
     g_sd_block_device_async_error = 0U;
     entry->started = 1U;
     entry->start_tick = HAL_GetTick();
+    g_sd_block_device_active_index = g_sd_block_device_async_head;
+    g_sd_block_device_active_valid = 1U;
 
     uint8_t start_result;
     if(entry->operation == SD_BLOCK_DEVICE_OPERATION_READ)
@@ -195,9 +475,33 @@ static void sd_block_device_async_start_head(void)
             entry->buffer,
             (size_t)entry->sector_count * SD_BLOCK_DEVICE_SECTOR_BYTES);
         g_sd_block_device_hw_state = SD_BLOCK_DEVICE_HW_READ_DMA;
-        start_result = brick_sd_read_blocks_dma((uint32_t *)entry->buffer,
-                                                entry->lba,
-                                                entry->sector_count);
+        sd_stream_latency_prepare();
+        const uint8_t instrument_stream = (uint8_t)(
+            (g_sd_stream_latency_diag.state == 2U)
+            && (entry->owner_client == SD_ACCESS_CLIENT_SAMPLE_STREAM));
+        if(instrument_stream != 0U)
+        {
+            const uint32_t now = DWT->CYCCNT;
+            if(g_sd_stream_worker_timing_active != 0U)
+            {
+                sd_stream_latency_add(
+                    &g_sd_stream_latency_diag.worker_to_next_dma,
+                    now - g_sd_stream_worker_resume_cycles);
+                g_sd_stream_worker_timing_active = 0U;
+            }
+            if(g_sd_stream_pending_timing_active != 0U)
+            {
+                sd_stream_latency_add(
+                    &g_sd_stream_latency_diag.pending_ready_to_next_dma,
+                    now - g_sd_stream_pending_ready_cycles);
+                g_sd_stream_pending_timing_active = 0U;
+            }
+            g_sd_stream_dma_start_cycles = now;
+            g_sd_stream_dma_timing_active = 1U;
+        }
+        start_result = (sdmmc_async_transport_start_read(
+            entry->buffer, entry->lba, entry->sector_count) != 0U)
+                ? MSD_OK : MSD_ERROR;
     }
     else
     {
@@ -205,18 +509,33 @@ static void sd_block_device_async_start_head(void)
             entry->buffer,
             (size_t)entry->sector_count * SD_BLOCK_DEVICE_SECTOR_BYTES);
         g_sd_block_device_hw_state = SD_BLOCK_DEVICE_HW_WRITE_DMA;
-        start_result = brick_sd_write_blocks_dma((const uint32_t *)entry->buffer,
-                                                 entry->lba,
-                                                 entry->sector_count);
+        start_result = (sdmmc_async_transport_start_write(
+            entry->buffer, entry->lba, entry->sector_count) != 0U)
+                ? MSD_OK : MSD_ERROR;
     }
     if(start_result != MSD_OK)
     {
+        g_sd_stream_dma_timing_active = 0U;
         entry->started = 0U;
+        g_sd_block_device_active_valid = 0U;
         brick_sd_media_fault();
         sd_block_device_complete(entry, SD_BLOCK_DEVICE_DMA_START_FAIL);
     }
     else
     {
+        if((entry->operation == SD_BLOCK_DEVICE_OPERATION_READ)
+                && (entry->owner_client == SD_ACCESS_CLIENT_SAMPLE_STREAM)
+                && (g_sd_stream_latency_diag.state == 2U))
+        {
+            sd_stream_latency_add_u64(
+                &g_sd_stream_latency_diag.sectors_total_lo,
+                &g_sd_stream_latency_diag.sectors_total_hi,
+                entry->sector_count);
+            sd_stream_latency_add_u64(
+                &g_sd_stream_latency_diag.bytes_total_lo,
+                &g_sd_stream_latency_diag.bytes_total_hi,
+                entry->sector_count * SD_BLOCK_DEVICE_SECTOR_BYTES);
+        }
     }
 }
 
@@ -257,7 +576,7 @@ static sd_block_device_result_t sd_block_device_async_read_submit_internal(
     {
         return valid;
     }
-    if(g_sd_block_device_async_count >= SD_BLOCK_DEVICE_ASYNC_FIFO_DEPTH)
+    if(g_sd_block_device_async_count >= 2U)
     {
         return SD_BLOCK_DEVICE_QUEUE_FULL;
     }
@@ -271,13 +590,26 @@ static sd_block_device_result_t sd_block_device_async_read_submit_internal(
     entry->operation = SD_BLOCK_DEVICE_OPERATION_READ;
     entry->result = SD_BLOCK_DEVICE_BUSY;
     entry->owner_generation = owner_generation;
+    entry->token = sd_block_device_allocate_token();
     entry->queued_tick = HAL_GetTick();
     entry->media_epoch = sd_access_media_epoch();
     entry->owner_client = (uint8_t)sd_access_gate_current_owner();
+    const uint8_t entry_index = g_sd_block_device_async_tail;
+    const uint8_t queued_before = g_sd_block_device_async_count;
     g_sd_block_device_async_tail = (uint8_t)(
         (g_sd_block_device_async_tail + 1U) % SD_BLOCK_DEVICE_ASYNC_FIFO_DEPTH);
     g_sd_block_device_async_count++;
-    sd_block_device_async_start_head();
+    if(queued_before == 0U)
+    {
+        sd_block_device_async_start_head();
+    }
+    else if(sd_block_device_prepare_next(entry_index) == 0U)
+    {
+        g_sd_block_device_async_tail = entry_index;
+        g_sd_block_device_async_count--;
+        memset(entry, 0, sizeof(*entry));
+        return SD_BLOCK_DEVICE_BUSY;
+    }
     return SD_BLOCK_DEVICE_OK;
 }
 
@@ -324,6 +656,7 @@ sd_block_device_result_t sd_block_device_async_write_submit(
     entry->operation = SD_BLOCK_DEVICE_OPERATION_WRITE;
     entry->result = SD_BLOCK_DEVICE_BUSY;
     entry->owner_generation = owner_generation;
+    entry->token = sd_block_device_allocate_token();
     entry->queued_tick = HAL_GetTick();
     entry->media_epoch = sd_access_media_epoch();
     entry->owner_client = (uint8_t)sd_access_gate_current_owner();
@@ -380,7 +713,11 @@ void sd_block_device_async_poll(void)
         sd_block_device_async_start_head();
         return;
     }
-    if(g_sd_block_device_async_error != 0U)
+    if((entry->irq_error != 0U)
+            || ((g_sd_block_device_async_error != 0U)
+                && (g_sd_block_device_active_valid != 0U)
+                && (g_sd_block_device_active_index
+                    == g_sd_block_device_async_head)))
     {
         const sd_block_device_result_t failure =
             (entry->operation == SD_BLOCK_DEVICE_OPERATION_WRITE)
@@ -388,31 +725,87 @@ void sd_block_device_async_poll(void)
         sd_block_device_fail_or_abort(entry, failure);
         return;
     }
-    const uint8_t dma_complete =
-        (entry->operation == SD_BLOCK_DEVICE_OPERATION_WRITE)
-            ? g_sd_block_device_async_tx_complete
-            : g_sd_block_device_async_rx_complete;
+    const uint8_t dma_complete = entry->irq_complete;
     if(dma_complete != 0U)
     {
+        if((entry->operation == SD_BLOCK_DEVICE_OPERATION_READ)
+                && (entry->owner_client == SD_ACCESS_CLIENT_SAMPLE_STREAM)
+                && (g_sd_stream_latency_diag.state == 2U)
+                && (entry->irq_complete_cycles != 0U))
+        {
+            const uint32_t now = DWT->CYCCNT;
+            sd_stream_latency_add(
+                &g_sd_stream_latency_diag.complete_to_worker,
+                now - entry->irq_complete_cycles);
+            g_sd_stream_completion_pending = 0U;
+            if(entry->chained_next == 0U)
+            {
+                g_sd_stream_worker_resume_cycles = now;
+                g_sd_stream_worker_timing_active = 1U;
+            }
+            const uint8_t other_refill_pending = (uint8_t)(
+                sd_stream_latency_refill_active_count() > 1U);
+            if(other_refill_pending != 0U)
+            {
+                g_sd_stream_latency_diag
+                    .dma_complete_with_other_refill_pending++;
+            }
+            else
+            {
+                g_sd_stream_latency_diag
+                    .dma_complete_without_other_refill_pending++;
+            }
+            if((entry->chained_next == 0U)
+                    && ((other_refill_pending != 0U)
+                    || (g_sd_stream_dma_followup_pending != 0U)))
+            {
+                g_sd_stream_pending_ready_cycles =
+                    entry->irq_complete_cycles;
+                g_sd_stream_pending_timing_active = 1U;
+            }
+            g_sd_stream_dma_followup_pending = 0U;
+        }
         if(entry->callback_seen == 0U)
         {
-            entry->callback_seen = 1U;
-            g_sd_block_device_hw_state =
-                (entry->operation == SD_BLOCK_DEVICE_OPERATION_WRITE)
-                    ? SD_BLOCK_DEVICE_HW_WRITE_WAIT_CARD_READY
-                    : SD_BLOCK_DEVICE_HW_READ_WAIT_CARD_READY;
-        }
-        if(BSP_SD_GetCardState() == SD_TRANSFER_OK)
-        {
-            if(entry->operation == SD_BLOCK_DEVICE_OPERATION_READ)
+            if((entry->chained_next == 0U)
+                    && (sdmmc_async_transport_release_complete() == 0U))
             {
-                dcache_invalidate_by_addr_aligned(
-                    entry->buffer,
-                    (size_t)entry->sector_count * SD_BLOCK_DEVICE_SECTOR_BYTES);
+                const sd_block_device_result_t failure =
+                    (entry->operation == SD_BLOCK_DEVICE_OPERATION_WRITE)
+                        ? SD_BLOCK_DEVICE_WRITE_FAIL
+                        : SD_BLOCK_DEVICE_READ_FAIL;
+                sd_block_device_fail_or_abort(entry, failure);
+                return;
             }
-            sd_block_device_complete(entry, SD_BLOCK_DEVICE_OK);
+            entry->callback_seen = 1U;
+            if(g_sd_block_device_active_valid == 0U)
+            {
+                g_sd_block_device_hw_state =
+                    (entry->operation == SD_BLOCK_DEVICE_OPERATION_WRITE)
+                        ? SD_BLOCK_DEVICE_HW_WRITE_WAIT_CARD_READY
+                        : SD_BLOCK_DEVICE_HW_READ_WAIT_CARD_READY;
+            }
+        }
+        /* A successful read plus CMD12 already leaves the card transferable.
+         * Writes may still program internally, so keep their CMD13 readiness
+         * check in the worker rather than in the SDMMC interrupt. */
+        if((entry->operation == SD_BLOCK_DEVICE_OPERATION_WRITE)
+                && (BSP_SD_GetCardState() != SD_TRANSFER_OK))
+        {
+            if((HAL_GetTick() - entry->start_tick) >= BRICK6_SD_TIMEOUT_MS)
+            {
+                sd_block_device_fail_or_abort(entry, SD_BLOCK_DEVICE_TIMEOUT);
+            }
             return;
         }
+        if(entry->operation == SD_BLOCK_DEVICE_OPERATION_READ)
+        {
+            dcache_invalidate_by_addr_aligned(
+                entry->buffer,
+                (size_t)entry->sector_count * SD_BLOCK_DEVICE_SECTOR_BYTES);
+        }
+        sd_block_device_complete(entry, SD_BLOCK_DEVICE_OK);
+        return;
     }
     if((HAL_GetTick() - entry->start_tick) >= BRICK6_SD_TIMEOUT_MS)
     {
@@ -450,14 +843,20 @@ uint8_t sd_block_device_async_take_completion(
     g_sd_block_device_async_head = (uint8_t)(
         (g_sd_block_device_async_head + 1U) % SD_BLOCK_DEVICE_ASYNC_FIFO_DEPTH);
     g_sd_block_device_async_count--;
-    g_sd_block_device_hw_state = (g_sd_block_device_fault_latched != 0U)
-        ? SD_BLOCK_DEVICE_HW_ERROR_LATCHED : SD_BLOCK_DEVICE_HW_IDLE;
+    if(g_sd_block_device_active_valid == 0U)
+    {
+        g_sd_block_device_hw_state = (g_sd_block_device_fault_latched != 0U)
+            ? SD_BLOCK_DEVICE_HW_ERROR_LATCHED : SD_BLOCK_DEVICE_HW_IDLE;
+    }
     if(g_sd_block_device_async_count != 0U)
     {
         g_sd_block_device_async_fifo[g_sd_block_device_async_head].queued_tick =
             HAL_GetTick();
     }
-    sd_block_device_async_start_head();
+    if(g_sd_block_device_active_valid == 0U)
+    {
+        sd_block_device_async_start_head();
+    }
     return 1U;
 }
 
@@ -506,6 +905,7 @@ sd_block_device_result_t sd_block_device_async_abort_active(void)
     {
         return SD_BLOCK_DEVICE_INVALID_ARG;
     }
+    sd_block_device_invalidate_prepared_with_result(SD_BLOCK_DEVICE_ABORTED);
     sd_block_device_async_entry_t *const entry =
         &g_sd_block_device_async_fifo[g_sd_block_device_async_head];
     if((entry->completed != 0U)
@@ -524,12 +924,69 @@ sd_block_device_result_t sd_block_device_async_abort_active(void)
     return SD_BLOCK_DEVICE_OK;
 }
 
+sd_block_device_result_t sd_block_device_async_abort_generation(
+    uint32_t owner_generation)
+{
+    if((__get_IPSR() != 0U) || (owner_generation == 0U))
+    {
+        return SD_BLOCK_DEVICE_INVALID_ARG;
+    }
+    if(g_sd_block_device_prepared_valid != 0U)
+    {
+        sd_block_device_async_entry_t *const prepared =
+            &g_sd_block_device_async_fifo[g_sd_block_device_prepared_index];
+        if(prepared->owner_generation == owner_generation)
+        {
+            sd_block_device_invalidate_prepared_with_result(
+                SD_BLOCK_DEVICE_ABORTED);
+            if((g_sd_block_device_active_valid != 0U)
+                    && (g_sd_block_device_async_fifo[
+                            g_sd_block_device_active_index].owner_generation
+                        == owner_generation))
+            {
+                sd_block_device_request_abort(
+                    &g_sd_block_device_async_fifo[
+                        g_sd_block_device_active_index],
+                    SD_BLOCK_DEVICE_ABORTED, 0U);
+            }
+            return SD_BLOCK_DEVICE_OK;
+        }
+    }
+    if(g_sd_block_device_active_valid != 0U)
+    {
+        sd_block_device_async_entry_t *const active =
+            &g_sd_block_device_async_fifo[g_sd_block_device_active_index];
+        if(active->owner_generation == owner_generation)
+        {
+            sd_block_device_request_abort(
+                active, SD_BLOCK_DEVICE_ABORTED, 0U);
+            return SD_BLOCK_DEVICE_OK;
+        }
+    }
+    for(uint8_t offset = 0U; offset < g_sd_block_device_async_count; ++offset)
+    {
+        const uint8_t index = (uint8_t)(
+            (g_sd_block_device_async_head + offset)
+            % SD_BLOCK_DEVICE_ASYNC_FIFO_DEPTH);
+        sd_block_device_async_entry_t *const entry =
+            &g_sd_block_device_async_fifo[index];
+        if(entry->owner_generation == owner_generation)
+        {
+            entry->result = SD_BLOCK_DEVICE_ABORTED;
+            entry->completed = 1U;
+            return SD_BLOCK_DEVICE_OK;
+        }
+    }
+    return SD_BLOCK_DEVICE_INVALID_ARG;
+}
+
 void sd_block_device_async_cancel(void)
 {
     if(g_sd_block_device_async_count == 0U)
     {
         return;
     }
+    sd_block_device_invalidate_prepared_with_result(SD_BLOCK_DEVICE_ABORTED);
     sd_block_device_async_entry_t *const entry =
         &g_sd_block_device_async_fifo[g_sd_block_device_async_head];
     if((entry->started != 0U) && (entry->completed == 0U))
@@ -542,16 +999,84 @@ void sd_block_device_async_cancel(void)
 
 void sd_block_device_async_read_complete_isr(void)
 {
-    if(g_sd_block_device_hw_state == SD_BLOCK_DEVICE_HW_READ_DMA)
+    if((g_sd_block_device_hw_state == SD_BLOCK_DEVICE_HW_READ_DMA)
+            && (g_sd_block_device_active_valid != 0U))
     {
+        sd_block_device_async_entry_t *const entry =
+            &g_sd_block_device_async_fifo[g_sd_block_device_active_index];
+        const uint32_t complete_cycles = DWT->CYCCNT;
+        entry->irq_complete_cycles = complete_cycles;
+        entry->irq_complete = 1U;
+        if((entry->owner_client == SD_ACCESS_CLIENT_SAMPLE_STREAM)
+                && (g_sd_stream_latency_diag.state == 2U)
+                && (g_sd_stream_dma_timing_active != 0U))
+        {
+            sd_stream_latency_add(&g_sd_stream_latency_diag.dma_physical,
+                                  complete_cycles - g_sd_stream_dma_start_cycles);
+            g_sd_stream_dma_complete_cycles = complete_cycles;
+            g_sd_stream_dma_timing_active = 0U;
+            g_sd_stream_completion_pending = 1U;
+        }
+        if(g_sd_block_device_prepared_valid != 0U)
+        {
+            uint32_t token = 0U;
+            const sdmmc_async_chain_result_t chain =
+                sdmmc_async_transport_chain_next(&token);
+            sd_block_device_async_entry_t *const next =
+                &g_sd_block_device_async_fifo[g_sd_block_device_prepared_index];
+            if((chain == SDMMC_ASYNC_CHAIN_STARTED) && (token == next->token))
+            {
+                entry->chained_next = 1U;
+                next->prepared = 0U;
+                next->started = 1U;
+                g_sd_block_device_active_index = g_sd_block_device_prepared_index;
+                g_sd_block_device_active_valid = 1U;
+                g_sd_block_device_prepared_valid = 0U;
+                g_sd_block_device_async_rx_complete = 0U;
+                g_sd_block_device_async_error = 0U;
+                g_sd_block_device_hw_state = SD_BLOCK_DEVICE_HW_READ_DMA;
+                g_sd_block_device_nplus1_diag.chained++;
+                if((next->owner_client == SD_ACCESS_CLIENT_SAMPLE_STREAM)
+                        && (g_sd_stream_latency_diag.state == 2U))
+                {
+                    const uint32_t start_cycles = DWT->CYCCNT;
+                    sd_stream_latency_add(
+                        &g_sd_stream_latency_diag.pending_ready_to_next_dma,
+                        start_cycles - complete_cycles);
+                    g_sd_stream_dma_start_cycles = start_cycles;
+                    g_sd_stream_dma_timing_active = 1U;
+                    sd_stream_latency_add_u64(
+                        &g_sd_stream_latency_diag.sectors_total_lo,
+                        &g_sd_stream_latency_diag.sectors_total_hi,
+                        next->sector_count);
+                    sd_stream_latency_add_u64(
+                        &g_sd_stream_latency_diag.bytes_total_lo,
+                        &g_sd_stream_latency_diag.bytes_total_hi,
+                        next->sector_count * SD_BLOCK_DEVICE_SECTOR_BYTES);
+                }
+                return;
+            }
+            next->prepared = 0U;
+            next->result = SD_BLOCK_DEVICE_DMA_START_FAIL;
+            next->completed = 1U;
+            g_sd_block_device_prepared_valid = 0U;
+            g_sd_block_device_nplus1_diag.invalidated++;
+        }
+        g_sd_block_device_active_valid = 0U;
         g_sd_block_device_async_rx_complete = 1U;
     }
 }
 
 void sd_block_device_async_write_complete_isr(void)
 {
-    if(g_sd_block_device_hw_state == SD_BLOCK_DEVICE_HW_WRITE_DMA)
+    if((g_sd_block_device_hw_state == SD_BLOCK_DEVICE_HW_WRITE_DMA)
+            && (g_sd_block_device_active_valid != 0U))
     {
+        sd_block_device_async_entry_t *const entry =
+            &g_sd_block_device_async_fifo[g_sd_block_device_active_index];
+        entry->irq_complete_cycles = DWT->CYCCNT;
+        entry->irq_complete = 1U;
+        g_sd_block_device_active_valid = 0U;
         g_sd_block_device_async_tx_complete = 1U;
     }
 }
@@ -571,6 +1096,13 @@ void sd_block_device_async_error_isr(void)
             || (g_sd_block_device_hw_state == SD_BLOCK_DEVICE_HW_WRITE_DMA)
             || (g_sd_block_device_hw_state == SD_BLOCK_DEVICE_HW_WRITE_WAIT_CARD_READY))
     {
+        if(g_sd_block_device_active_valid != 0U)
+        {
+            g_sd_block_device_async_fifo[g_sd_block_device_active_index]
+                .irq_error = 1U;
+        }
+        sd_block_device_invalidate_prepared_with_result(
+            SD_BLOCK_DEVICE_READ_FAIL);
         g_sd_block_device_async_error = 1U;
     }
 }

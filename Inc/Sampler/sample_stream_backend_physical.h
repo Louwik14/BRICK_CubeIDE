@@ -19,12 +19,14 @@ typedef struct
     uint32_t scratch_sectors;
     uint16_t first_sector_skip;
     uint8_t physical_reads;
+    uint8_t count_multi_diag;
     uint8_t active;
     uint8_t failed;
     uint8_t completed;
     uint8_t cancel_requested;
     uint32_t deadline_margin_us;
     uint32_t deadline_started_ms;
+    uint32_t owner_generation;
     uint32_t active_lba;
     uint32_t active_sector_count;
     uint8_t *active_buffer;
