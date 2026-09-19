@@ -27,12 +27,68 @@
 /* USER CODE END FirstSection */
 /* Includes ------------------------------------------------------------------*/
 #include "bsp_driver_sd.h"
+#include "Platform/memory_layout.h"
 #include "Storage/sd_access_gate.h"
 
 /* Extern variables ---------------------------------------------------------*/
 
 extern SD_HandleTypeDef hsd1;
 static uint8_t g_bsp_sd_initialized;
+
+#define BSP_SD_SAFE_CLOCK_DIVIDER       (5U)
+#define BSP_SD_HIGH_SPEED_CLOCK_DIVIDER (3U)
+
+UI_HOT_DTCM volatile bsp_sd_high_speed_diag_t g_bsp_sd_high_speed_diag
+  __attribute__((used, aligned(32)));
+
+static uint32_t BSP_SD_ClockHz(uint32_t kernel_hz, uint32_t divider)
+{
+  return (divider != 0U) ? kernel_hz / (2U * divider) : kernel_hz;
+}
+
+static void BSP_SD_RecordRuntimeConfig(uint8_t high_speed_succeeded)
+{
+  const uint32_t kernel_hz =
+    HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_SDMMC);
+  const uint32_t clkcr = hsd1.Instance->CLKCR;
+  const uint32_t divider = clkcr & SDMMC_CLKCR_CLKDIV;
+  const uint32_t width = clkcr & SDMMC_CLKCR_WIDBUS;
+
+  g_bsp_sd_high_speed_diag.card_supports_high_speed =
+    (high_speed_succeeded != 0U) ? 1U : 0U;
+  g_bsp_sd_high_speed_diag.high_speed_switch_succeeded =
+    (high_speed_succeeded != 0U) ? 1U : 0U;
+  g_bsp_sd_high_speed_diag.final_clock_divider = divider;
+  g_bsp_sd_high_speed_diag.final_sdclk_hz =
+    BSP_SD_ClockHz(kernel_hz, divider);
+  g_bsp_sd_high_speed_diag.final_bus_width_bits =
+    (width == SDMMC_BUS_WIDE_4B) ? 4U : 1U;
+}
+
+static void BSP_SD_TryHighSpeed(void)
+{
+  uint8_t high_speed_succeeded = 0U;
+
+  if (HAL_SD_ConfigSpeedBusOperation(
+        &hsd1, SDMMC_SPEED_MODE_HIGH) == HAL_OK)
+  {
+    hsd1.Init.ClockDiv = BSP_SD_HIGH_SPEED_CLOCK_DIVIDER;
+    (void)SDMMC_Init(hsd1.Instance, hsd1.Init);
+    high_speed_succeeded = 1U;
+  }
+  else
+  {
+    /* CMD6 mode-switch failure leaves a non-HS card in Default Speed.  Keep
+       the previous known-safe clock and do not turn lack of HS into a boot
+       failure. */
+    hsd1.ErrorCode = HAL_SD_ERROR_NONE;
+    hsd1.State = HAL_SD_STATE_READY;
+    hsd1.Init.ClockDiv = BSP_SD_SAFE_CLOCK_DIVIDER;
+    (void)SDMMC_Init(hsd1.Instance, hsd1.Init);
+  }
+
+  BSP_SD_RecordRuntimeConfig(high_speed_succeeded);
+}
 
 /* USER CODE BEGIN BeforeInitSection */
 /* can be used to modify / undefine following code or add code */
@@ -57,6 +113,11 @@ __weak uint8_t BSP_SD_Init(void)
 {
   uint8_t sd_state = MSD_OK;
   g_bsp_sd_initialized = 0U;
+  g_bsp_sd_high_speed_diag.card_supports_high_speed = 0U;
+  g_bsp_sd_high_speed_diag.high_speed_switch_succeeded = 0U;
+  g_bsp_sd_high_speed_diag.final_clock_divider = 0U;
+  g_bsp_sd_high_speed_diag.final_sdclk_hz = 0U;
+  g_bsp_sd_high_speed_diag.final_bus_width_bits = 0U;
   /* HAL SD initialization */
   sd_state = HAL_SD_Init(&hsd1);
   /* Configure SD Bus width (4 bits mode selected) */
@@ -71,6 +132,7 @@ __weak uint8_t BSP_SD_Init(void)
 
   if (sd_state == MSD_OK)
   {
+    BSP_SD_TryHighSpeed();
     g_bsp_sd_initialized = 1U;
   }
 
