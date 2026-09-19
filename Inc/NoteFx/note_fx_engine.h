@@ -21,33 +21,16 @@ note_event_result_t note_fx_engine_configure(
 note_event_result_t note_fx_engine_transform(
     uint8_t slot, const note_event_t *input, uint8_t input_count,
     note_event_t *output, uint8_t output_capacity, uint8_t *output_count);
-note_event_result_t note_fx_engine_process(uint64_t block_start, uint16_t frames,
-                                        uint32_t samples_per_step_q16,
-                                        note_fx_emit_fn emit, void *context);
-/* Snapshot the musical inputs still held at a slot boundary.  The caller may
- * feed them back after a live type/revoicing change without manufacturing a
- * new source NOTE_ON or replaying already processed upstream effects. */
-note_event_result_t note_fx_engine_collect_held(
-    uint8_t track, uint8_t slot, uint64_t sample_time,
-    note_event_t *output, uint8_t output_capacity, uint8_t *output_count);
-/* Cleanup is transactional with respect to logical ownership: a refused STOP
- * is returned immediately and the corresponding owner remains live. */
-note_event_result_t note_fx_engine_cleanup(uint8_t track);
-
-/* Dedicated bounded context owned by the SEQ RT domain. */
-void note_fx_engine_seq_init(void);
-note_event_result_t note_fx_engine_seq_configure(
-    uint8_t track, uint8_t slot, uint8_t model, uint8_t p1,
-    uint8_t p2, uint8_t p3);
-note_event_result_t note_fx_engine_seq_transform(
-    uint8_t slot, const note_event_t *input, uint8_t input_count,
-    note_event_t *output, uint8_t output_capacity, uint8_t *output_count);
-note_event_result_t note_fx_engine_seq_process(
+note_event_result_t note_fx_engine_process(
     uint64_t block_start, uint16_t frames, uint32_t samples_per_step_q16,
     uint64_t transport_position_q16,
     const uint32_t pattern_position_q16[NOTE_FX_TRACK_COUNT],
     uint8_t scale_index, uint8_t root_index,
     note_fx_emit_fn emit, void *context);
+/* Cleanup is transactional with respect to logical ownership: a refused STOP
+ * is returned immediately and the corresponding owner remains live. */
+note_event_result_t note_fx_engine_cleanup(uint8_t track);
+
 void note_fx_engine_forget_causal_source(uint8_t track,
                                          uint32_t causal_source_id);
 void note_fx_engine_release_terminal(const note_event_t *event);

@@ -1,4 +1,5 @@
 #include "Seq/seq_engine.h"
+#include "Seq/seq_runtime.h"
 #include "NoteFx/note_fx_engine.h"
 #include "Param/param_ids.h"
 #include "Platform/memory_layout.h"
@@ -8,79 +9,164 @@
 
 static SEQ_STATE_D2 note_event_t g_seq_fx_a[NOTE_FX_BATCH_CAPACITY];
 static SEQ_STATE_D2 note_event_t g_seq_fx_b[NOTE_FX_BATCH_CAPACITY];
-static SEQ_STATE_D2 seq_event_t g_seq_order_scratch[SEQ_ENGINE_EVENT_CAPACITY];
 static seq_engine_core_t *g_seq_fx_core;
 static seq_event_block_t *g_seq_fx_block;
 static uint64_t g_seq_fx_start;
 static uint64_t g_seq_fx_end;
+typedef struct __attribute__((packed)){note_event_t event;uint16_t ticket;
+ uint16_t generation;uint8_t active;uint8_t reserved;} seq_groove_resume_t;
+static __attribute__((section(".ram_seq_groove"))) seq_groove_resume_t g_groove_resume[128U];
+_Static_assert(sizeof(seq_groove_resume_t)==46U,"Groove resume budget");
 
-static seq_future_handle_t future_add(seq_engine_core_t *core,uint64_t due,uint8_t kind,
-    uint8_t track,uint8_t note,uint8_t velocity,uint32_t occurrence)
+static void scheduler_release(seq_engine_core_t *core,uint16_t index);
+static uint16_t scheduler_add(seq_engine_core_t *core,uint64_t due,uint8_t kind,
+    uint8_t track,uint8_t note,uint8_t flags,uint32_t occurrence,uint32_t payload)
 {
-    seq_future_handle_t invalid={UINT16_MAX,0U};
-    if(core->future_free_head==UINT16_MAX){++core->dropped_events;return invalid;}
-    const uint16_t index=core->future_free_head;
-    seq_future_t *const slot=&core->futures[index];
-    core->future_free_head=slot->next_free;
-    uint32_t generation=slot->generation+1U;
-    if(generation==0U) generation=1U;
-    *slot=(seq_future_t){
-        .due_sample=due,.occurrence_id=occurrence,.kind=kind,.owner=track,
-        .note=note,.velocity=velocity,.generation=generation,.active=1U};
-    ++core->future_count;
-    return (seq_future_handle_t){index,generation};
+    if(core->scheduler_free_head==UINT16_MAX){
+        ++core->scheduler_overflow_count;++core->dropped_events;return UINT16_MAX;}
+    const uint16_t index=core->scheduler_free_head;
+    seq_ticket_t *const ticket=&core->scheduler[index];
+    core->scheduler_free_head=ticket->next_free;
+    uint16_t generation=(uint16_t)(ticket->generation+1U);
+    if(generation==0U)generation=1U;
+    *ticket=(seq_ticket_t){.due_sample=due,.occurrence_id=occurrence,
+        .payload=payload,.generation=generation,.next_free=UINT16_MAX,
+        .kind=kind,.track=track,.note=note,.flags=(uint8_t)(flags|0x80U)};
+    ++core->scheduler_count;return index;
 }
 
-static seq_future_t *future_resolve(seq_engine_core_t *core,seq_future_handle_t h)
+static void scheduler_release(seq_engine_core_t *core,uint16_t index)
 {
-    if((h.index>=SEQ_ENGINE_FUTURE_CAPACITY)||(core->futures[h.index].active==0U)
-            ||(core->futures[h.index].generation!=h.generation)){
-        return 0;}
-    return &core->futures[h.index];
+    if(index>=SEQ_ENGINE_SCHEDULER_CAPACITY)return;
+    seq_ticket_t *const ticket=&core->scheduler[index];
+    if((ticket->flags&0x80U)==0U)return;
+    ticket->flags=0U;ticket->next_free=core->scheduler_free_head;
+    core->scheduler_free_head=index;
+    if(core->scheduler_count!=0U)--core->scheduler_count;
 }
 
-static void future_release(seq_engine_core_t *core,seq_future_handle_t h)
+static void scheduler_clear(seq_engine_core_t *core)
 {
-    seq_future_t *const slot=future_resolve(core,h);if(slot==0)return;
-    slot->active=0U;slot->next_free=core->future_free_head;
-    core->future_free_head=h.index;if(core->future_count!=0U)--core->future_count;
+    core->scheduler_count=0U;core->scheduler_free_head=0U;
+    for(uint16_t i=0U;i<SEQ_ENGINE_SCHEDULER_CAPACITY;++i){
+        core->scheduler[i].flags=0U;
+        core->scheduler[i].next_free=(i+1U<SEQ_ENGINE_SCHEDULER_CAPACITY)
+            ?(uint16_t)(i+1U):UINT16_MAX;}
 }
 
-static void future_clear(seq_engine_core_t *core)
+static int16_t ledger_find(const seq_engine_core_t *core,uint32_t occurrence)
+{for(uint8_t i=0U;i<SEQ_ENGINE_LEDGER_CAPACITY;++i)
+    if(core->ledger[i].active&&core->ledger[i].occurrence_id==occurrence)return(int16_t)i;
+ return -1;}
+
+static void ledger_release(seq_engine_core_t *core,uint8_t index)
+{seq_ledger_entry_t *const entry=&core->ledger[index];if(!entry->active)return;
+ entry->active=0U;if(core->ledger_count)--core->ledger_count;
+ if(core->ledger_track_count[entry->track])--core->ledger_track_count[entry->track];}
+
+static void cancel_note_off(seq_engine_core_t *core,uint32_t occurrence)
+{for(uint16_t i=0U;i<SEQ_ENGINE_SCHEDULER_CAPACITY;++i)
+    if((core->scheduler[i].flags&0x80U)&&core->scheduler[i].kind==SEQ_TICKET_NOTE_OFF
+            &&core->scheduler[i].occurrence_id==occurrence)scheduler_release(core,i);}
+
+static uint8_t groove_resume_store(seq_engine_core_t *core,const note_event_t *event)
+{uint8_t count=0U;int16_t free_index=-1,victim=-1;
+ for(uint8_t i=0U;i<128U;++i){const seq_groove_resume_t*x=&g_groove_resume[i];
+  if(!x->active){if(free_index<0)free_index=(int16_t)i;continue;}
+  if(x->event.track!=event->track||x->event.temporal_index!=event->temporal_index)continue;
+  ++count;if((victim<0)||(((g_groove_resume[(uint8_t)victim].event.flags&NOTE_EVENT_FLAG_GENERATED)==0U)
+      &&((x->event.flags&NOTE_EVENT_FLAG_GENERATED)!=0U))
+      ||((((x->event.flags^g_groove_resume[(uint8_t)victim].event.flags)&NOTE_EVENT_FLAG_GENERATED)==0U)
+      &&x->event.sample_abs<g_groove_resume[(uint8_t)victim].event.sample_abs))victim=(int16_t)i;}
+ if(count>=2U){scheduler_release(core,g_groove_resume[(uint8_t)victim].ticket);free_index=victim;}
+ if(free_index<0)return 0U;
+ seq_groove_resume_t*x=&g_groove_resume[(uint8_t)free_index];
+ uint16_t generation=(uint16_t)(x->generation+1U);if(!generation)generation=1U;
+ *x=(seq_groove_resume_t){.event=*event,.generation=generation,.active=1U};
+ x->ticket=scheduler_add(core,event->sample_abs,SEQ_TICKET_GROOVE_RESUME,event->track,
+     event->note,event->velocity,event->occurrence_id,(uint32_t)(uint8_t)free_index
+     |((uint32_t)generation<<8U));
+ if(x->ticket==UINT16_MAX){x->active=0U;return 0U;}return 1U;}
+
+static int16_t ledger_admit(seq_engine_core_t *core,const note_event_t *event)
 {
-    core->future_count=0U;core->future_free_head=0U;
-    for(uint16_t i=0U;i<SEQ_ENGINE_FUTURE_CAPACITY;++i){
-        core->futures[i].active=0U;
-        core->futures[i].next_free=(i+1U<SEQ_ENGINE_FUTURE_CAPACITY)?(uint16_t)(i+1U):UINT16_MAX;}
+    const uint8_t quota=core->logical_capacity[event->track];
+    if(quota==0U)return -1;
+    uint8_t used_slots=0U;int16_t free_index=-1,victim=-1,global_victim=-1;
+    for(uint8_t i=0U;i<SEQ_ENGINE_LEDGER_CAPACITY;++i){
+        const seq_ledger_entry_t *const entry=&core->ledger[i];
+        if(!entry->active){if(free_index<0)free_index=(int16_t)i;continue;}
+        if((global_victim<0)||((core->ledger[(uint8_t)global_victim].original!=0U)&&(entry->original==0U))
+                ||((entry->original==core->ledger[(uint8_t)global_victim].original)
+                &&(entry->admitted_sample<core->ledger[(uint8_t)global_victim].admitted_sample)))global_victim=(int16_t)i;
+        if(entry->track!=event->track)continue;
+        used_slots|=(uint8_t)(1U<<entry->logical_slot);
+        if((victim<0)||((core->ledger[(uint8_t)victim].original!=0U)&&(entry->original==0U))
+                ||((entry->original==core->ledger[(uint8_t)victim].original)
+                &&(entry->admitted_sample<core->ledger[(uint8_t)victim].admitted_sample)))victim=(int16_t)i;}
+    uint8_t logical_slot=0U;
+    while((logical_slot<quota)&&((used_slots&(uint8_t)(1U<<logical_slot))!=0U))++logical_slot;
+    if(logical_slot>=quota){if(victim<0)return -1;}
+    else if(free_index<0)victim=global_victim;
+    if((logical_slot>=quota)||(free_index<0)){
+        if(victim<0)return -1;
+        const seq_ledger_entry_t old=core->ledger[(uint8_t)victim];
+        cancel_note_off(core,old.occurrence_id);
+        if(g_seq_fx_block->event_count<SEQ_ENGINE_EVENT_CAPACITY)
+            g_seq_fx_block->events[g_seq_fx_block->event_count++]=(seq_event_t){
+                .offset=(uint16_t)((event->sample_abs<=g_seq_fx_start)?0U:
+                    event->sample_abs-g_seq_fx_start),.kind=SEQ_ENGINE_EVENT_NOTE_OFF,
+                .track=old.track,.occurrence_id=old.occurrence_id,.note=old.note};
+        if(old.track==event->track)logical_slot=old.logical_slot;
+        ledger_release(core,(uint8_t)victim);free_index=victim;}
+    core->ledger[(uint8_t)free_index]=(seq_ledger_entry_t){
+        .admitted_sample=event->sample_abs,.occurrence_id=event->occurrence_id,
+        .track=event->track,.logical_slot=logical_slot,.note=event->note,
+        .original=(uint8_t)(((event->flags&NOTE_EVENT_FLAG_GENERATED)==0U)?1U:0U),.active=1U};
+    ++core->ledger_count;++core->ledger_track_count[event->track];return free_index;
 }
 
 static void fx_terminal(const note_event_t *e)
 {
     uint64_t due=e->sample_abs;
     if(due<g_seq_fx_start)due=g_seq_fx_start;
-    if(due<g_seq_fx_end&&g_seq_fx_block->event_count<SEQ_ENGINE_EVENT_CAPACITY)
+    if(due>=g_seq_fx_end){note_event_t resume=*e;resume.sample_abs=due;
+        if(!groove_resume_store(g_seq_fx_core,&resume))++g_seq_fx_core->dropped_events;
+        return;}
+    if(e->kind==NOTE_EVENT_KIND_OFF){const int16_t found=ledger_find(g_seq_fx_core,e->occurrence_id);
+        if(found<0)return;
+        ledger_release(g_seq_fx_core,(uint8_t)found);}
+    else if(ledger_admit(g_seq_fx_core,e)<0){++g_seq_fx_core->dropped_events;return;}
+    if(g_seq_fx_block->event_count<SEQ_ENGINE_EVENT_CAPACITY)
         g_seq_fx_block->events[g_seq_fx_block->event_count++]=(seq_event_t){
             .offset=(uint16_t)(due-g_seq_fx_start),
             .kind=(e->kind==NOTE_EVENT_KIND_OFF)
                 ?SEQ_ENGINE_EVENT_NOTE_OFF:SEQ_ENGINE_EVENT_NOTE_ON,
             .track=e->track,.occurrence_id=e->occurrence_id,
-            .note=e->note,.velocity=e->velocity};
-    else future_add(g_seq_fx_core,due,(e->kind==NOTE_EVENT_KIND_OFF)
-            ?SEQ_ENGINE_EVENT_NOTE_OFF:SEQ_ENGINE_EVENT_NOTE_ON,e->track,
-        e->note,e->velocity,e->occurrence_id);
+            .note=e->note,.velocity=e->velocity,
+            .reserved=(uint16_t)(((e->flags&NOTE_EVENT_FLAG_GENERATED)!=0U)?1U:0U)};
+    else {++g_seq_fx_core->dropped_events;return;}
+    const uint32_t source_namespace=e->source_id&~NOTE_EVENT_OCCURRENCE_COUNTER_MASK;
+    if(source_namespace==NOTE_EVENT_OCCURRENCE_NAMESPACE_KEY
+            ||source_namespace==NOTE_EVENT_OCCURRENCE_NAMESPACE_MIDI)
+        (void)seq_runtime_live_rec_submit_effective(
+            (source_namespace==NOTE_EVENT_OCCURRENCE_NAMESPACE_KEY)
+                ?SEQ_LIVE_REC_SRC_INTERNAL:SEQ_LIVE_REC_SRC_EXTERNAL,
+            (uint8_t)(e->kind==NOTE_EVENT_KIND_ON),0U,e->note,e->velocity,due,
+            e->occurrence_id,e->occurrence_id);
     if((e->kind==NOTE_EVENT_KIND_ON)
             &&(e->duration_samples!=NOTE_EVENT_DURATION_OPEN))
-        future_add(g_seq_fx_core,due+(e->duration_samples?e->duration_samples:1U),
-            SEQ_ENGINE_EVENT_NOTE_OFF,e->track,e->note,0U,e->occurrence_id);
+        scheduler_add(g_seq_fx_core,due+(e->duration_samples?e->duration_samples:1U),
+            SEQ_TICKET_NOTE_OFF,e->track,e->note,0U,e->occurrence_id,0U);
 }
 
-static note_event_result_t fx_run_from(const note_event_t *source,uint8_t stage)
+static note_event_result_t walker_resume(const note_event_t *source,uint8_t stage)
 {
     g_seq_fx_a[0]=*source;uint8_t count=1U;
     note_event_t *in=g_seq_fx_a,*out=g_seq_fx_b;
     for(uint8_t slot=stage;slot<NOTE_FX_SLOT_COUNT;++slot){
         uint8_t out_count=0U;
-        const note_event_result_t r=note_fx_engine_seq_transform(slot,in,count,
+        const note_event_result_t r=note_fx_engine_transform(slot,in,count,
             out,NOTE_FX_BATCH_CAPACITY,&out_count);
         if(r!=NOTE_EVENT_RESULT_ACCEPTED)return r;
         count=out_count;note_event_t*swap=in;in=out;out=swap;
@@ -90,7 +176,7 @@ static note_event_result_t fx_run_from(const note_event_t *source,uint8_t stage)
 }
 
 static note_event_result_t fx_generated(const note_event_t *event,void *ctx)
-{(void)ctx;return fx_run_from(event,event->stage);}
+{(void)ctx;return walker_resume(event,event->stage);}
 
 uint8_t seq_engine_core_submit_live(seq_engine_core_t *core,
     const note_event_t *event,uint64_t window_start,uint64_t window_end,
@@ -100,63 +186,27 @@ uint8_t seq_engine_core_submit_live(seq_engine_core_t *core,
         return 0U;
     g_seq_fx_core=core;g_seq_fx_block=out_block;
     g_seq_fx_start=window_start;g_seq_fx_end=window_end;
-    return (fx_run_from(event,0U)==NOTE_EVENT_RESULT_ACCEPTED)?1U:0U;
+    return (walker_resume(event,0U)==NOTE_EVENT_RESULT_ACCEPTED)?1U:0U;
 }
 
 static uint8_t event_after(const seq_event_t *left,const seq_event_t *right)
 { return (uint8_t)((left->offset>right->offset)
-    ||((left->offset==right->offset)&&(left->kind>right->kind))); }
+    ||((left->offset==right->offset)&&((left->kind>right->kind)
+    ||((left->kind==right->kind)&&(left->reserved>right->reserved))))); }
 
 ITCM_TEXT void seq_engine_event_order(seq_event_block_t *block)
 {
     if((block==0)||(block->event_count<2U))return;
-    seq_event_t *src=block->events,*dst=g_seq_order_scratch;
-    const uint16_t count=block->event_count;
-    for(uint16_t width=1U;width<count;width=(uint16_t)(width<<1U)){
-        for(uint16_t base=0U;base<count;base=(uint16_t)(base+(width<<1U))){
-            uint16_t left=base,mid=(uint16_t)(base+width),right=(uint16_t)(mid+width);
-            if(mid>count)mid=count;
-            if(right>count)right=count;
-            uint16_t a=left,b=mid,w=left;
-            while((a<mid)&&(b<right))
-                dst[w++]=event_after(&src[a],&src[b])?src[b++]:src[a++];
-            while(a<mid)dst[w++]=src[a++];
-            while(b<right)dst[w++]=src[b++];
-        }
-        seq_event_t *swap=src;src=dst;dst=swap;
-    }
-    if(src!=block->events)memcpy(block->events,src,(size_t)count*sizeof(*src));
+    for(uint16_t i=1U;i<block->event_count;++i){const seq_event_t item=block->events[i];
+        uint16_t j=i;while(j&&event_after(&block->events[j-1U],&item)){
+            block->events[j]=block->events[j-1U];--j;}block->events[j]=item;}
 }
 
-static void lifetime_unlink(seq_engine_core_t *core,uint16_t index)
-{
-    seq_lifetime_t *const item=&core->lifetimes[index];const uint8_t track=item->track;
-    if(item->prev!=UINT16_MAX)core->lifetimes[item->prev].next=item->next;
-    else core->lifetime_track_head[track]=item->next;
-    if(item->next!=UINT16_MAX)core->lifetimes[item->next].prev=item->prev;
-    else core->lifetime_track_tail[track]=item->prev;
-}
-
-static void lifetime_release(seq_engine_core_t *core,uint16_t index)
-{
-    lifetime_unlink(core,index);seq_lifetime_t *const item=&core->lifetimes[index];
-    item->active=0U;item->next=core->lifetime_free_head;item->prev=UINT16_MAX;
-    core->lifetime_free_head=index;if(core->lifetime_count!=0U)--core->lifetime_count;
-    if(core->lifetime_track_count[item->track]!=0U)--core->lifetime_track_count[item->track];
-}
-
-static void lifetime_clear(seq_engine_core_t *core)
-{
-    core->lifetime_count=0U;core->lifetime_free_head=0U;
-    for(uint16_t i=0U;i<SEQ_ENGINE_LIFETIME_CAPACITY;++i){
-        core->lifetimes[i].active=0U;core->lifetimes[i].prev=UINT16_MAX;
-        core->lifetimes[i].next=(i+1U<SEQ_ENGINE_LIFETIME_CAPACITY)
-            ?(uint16_t)(i+1U):UINT16_MAX;}
-    for(uint8_t t=0U;t<SEQ_LANE_CAPACITY;++t){
-        core->lifetime_track_head[t]=UINT16_MAX;
-        core->lifetime_track_tail[t]=UINT16_MAX;
-        core->lifetime_track_count[t]=0U;}
-}
+static void sources_clear(seq_engine_core_t *core)
+{core->source_count=0U;core->ledger_count=0U;
+ memset(core->sources,0,sizeof(core->sources));
+ memset(core->ledger,0,sizeof(core->ledger));
+ memset(core->ledger_track_count,0,sizeof(core->ledger_track_count));}
 
 static const seq_play_item_t *step_item(const seq_pattern_t *p,
     uint8_t track, uint8_t step, uint8_t voice)
@@ -210,39 +260,30 @@ static uint64_t first_on(const seq_pattern_t *p, uint8_t track,
 
 static ITCM_TEXT void source_add(seq_engine_core_t *core, uint64_t first_on,
     uint64_t span_q16, uint64_t interval_q16, uint32_t gate_samples,
-    uint8_t track, uint8_t note, uint8_t velocity)
+    uint8_t track, uint8_t logical_slot, uint8_t note, uint8_t velocity,
+    uint8_t playback_stage)
 {
     const uint8_t quota=(track<BRICK_ENTITY_TOP_LEVEL_COUNT)?8U:1U;
-    uint16_t target;
-    const uint8_t owned=core->lifetime_track_count[track];
-    if(owned>=quota){
-        target=core->lifetime_track_head[track];
-        for(uint16_t i=core->lifetimes[target].next;i!=UINT16_MAX;
-                i=core->lifetimes[i].next)
-            if((core->lifetimes[i].first_on_sample<core->lifetimes[target].first_on_sample)
-                    ||((core->lifetimes[i].first_on_sample==core->lifetimes[target].first_on_sample)
-                    &&(i<target)))target=i;
-        lifetime_unlink(core,target);
-    }
-    else {target=core->lifetime_free_head;
-        if(target!=UINT16_MAX)core->lifetime_free_head=core->lifetimes[target].next;}
-    if(target!=UINT16_MAX)
-    {
-        seq_lifetime_t *const source=&core->lifetimes[target];
-        const uint16_t generation=(uint16_t)(source->generation+1U);
-        *source = (seq_lifetime_t){
-            .first_on_sample=first_on,.span_q16=span_q16,
-            .interval_q16=interval_q16,.gate_samples=gate_samples,
-            .track=track,.note=note,.velocity=velocity,.active=1U,
-            .generation=generation?generation:1U,.next=UINT16_MAX,
-            .prev=core->lifetime_track_tail[track]};
-        if(source->prev!=UINT16_MAX)core->lifetimes[source->prev].next=target;
-        else core->lifetime_track_head[track]=target;
-        core->lifetime_track_tail[track]=target;
-        if(owned<quota){++core->lifetime_count;++core->lifetime_track_count[track];}
-        return;
-    }
-    ++core->dropped_events;
+    uint8_t owned=0U;uint16_t target=UINT16_MAX,oldest=UINT16_MAX;
+    for(uint16_t i=0U;i<SEQ_ENGINE_LEDGER_CAPACITY;++i){
+        const seq_source_cursor_t *const source=&core->sources[i];
+        if(source->active==0U){if(target==UINT16_MAX)target=i;continue;}
+        if(source->track!=track)continue;
+        ++owned;
+        if((oldest==UINT16_MAX)||(source->first_on_sample<core->sources[oldest].first_on_sample)
+                ||((source->first_on_sample==core->sources[oldest].first_on_sample)&&(i<oldest)))oldest=i;}
+    if(owned>=quota)target=oldest;
+    if(target==UINT16_MAX){++core->dropped_events;return;}
+    seq_source_cursor_t *const source=&core->sources[target];
+    if(source->active!=0U)scheduler_release(core,source->ticket);else ++core->source_count;
+    const uint32_t serial=++core->occurrence_serial;
+    const uint16_t ticket=scheduler_add(core,first_on,SEQ_TICKET_SOURCE_WAKE,
+        track,note,velocity,serial,target);
+    if(ticket==UINT16_MAX){source->active=0U;if(core->source_count)--core->source_count;return;}
+    *source=(seq_source_cursor_t){.first_on_sample=first_on,.span_q16=span_q16,
+        .interval_q16=interval_q16,.gate_samples=gate_samples,.serial=serial,
+        .ticket=ticket,.track=track,.note=note,.velocity=velocity,
+        .logical_slot=logical_slot,.playback_stage=playback_stage,.active=1U};
 }
 
 static uint8_t next_step(const seq_pattern_t *p, uint8_t track,
@@ -270,9 +311,9 @@ static void configure_fx_step(const seq_pattern_t *p,uint8_t track,
             state.value[slot][param]=note_fx_plan_param(word,param);
     }
     for(uint8_t slot=0U;slot<NOTE_FX_SLOT_COUNT;++slot)
-        if(note_fx_engine_seq_configure(track,slot,
+        if(note_fx_engine_configure(track,slot,
             state.value[slot][NOTE_FX_PARAM_COUNT-1U],state.value[slot][0],
-            state.value[slot][1],state.value[slot][2])!=NOTE_EVENT_RESULT_ACCEPTED)
+            state.value[slot][1],state.value[slot][2],0U)!=NOTE_EVENT_RESULT_ACCEPTED)
             return;
 }
 
@@ -305,7 +346,10 @@ static void schedule_step(seq_engine_core_t *core, const seq_pattern_t *p,
         const uint64_t gate = ((uint64_t)(uint16_t)length
             * p->samples_per_step_q16 + 0x8000ULL) >> 16;
         source_add(core,first,span_q16,interval_q16,
-            (uint32_t)(gate ? gate : 1U),track,(uint8_t)note,(uint8_t)vel);
+            (uint32_t)(gate ? gate : 1U),track,voice,(uint8_t)note,(uint8_t)vel,
+            (uint8_t)((step_item(p,track,step,voice)!=0
+                &&(step_item(p,track,step,voice)->present_mask&SEQ_STEP_PLAY_TERMINAL))
+                ?NOTE_EVENT_STAGE_TERMINAL:NOTE_EVENT_STAGE_SOURCE));
     }
 }
 
@@ -401,18 +445,26 @@ static ITCM_TEXT void collect(seq_engine_core_t *core,uint64_t start,uint16_t fr
     const uint64_t delta_q16=((start<<16U)>=core->step_sample_q16)
         ?(((start<<16U)-core->step_sample_q16)<<16U)/step_samples:0U;
     const uint64_t transport=((uint64_t)core->step_serial[0]<<16U)+delta_q16;
-    if(note_fx_engine_seq_process(start,0U,p->samples_per_step_q16,
+    if(note_fx_engine_process(start,0U,p->samples_per_step_q16,
             transport,pattern,p->scale_index,p->root_index,
             fx_generated,0)!=NOTE_EVENT_RESULT_ACCEPTED)
         ++core->dropped_events;
-    for(uint16_t source_index=0U;source_index<SEQ_ENGINE_LIFETIME_CAPACITY;
-        ++source_index){seq_lifetime_t *const source=&core->lifetimes[source_index];
-        if(source->active==0U)continue;
-        while(source->next_offset_q16<source->span_q16){
-            uint64_t on=source->first_on_sample
-                +((source->next_offset_q16+0x8000ULL)>>16);
-            if(on>=end)break;
-            if(on<start)on=start;
+    for(;;){
+        uint16_t selected=UINT16_MAX;uint64_t selected_due=end;
+        for(uint16_t i=0U;i<SEQ_ENGINE_SCHEDULER_CAPACITY;++i){
+            const seq_ticket_t *const ticket=&core->scheduler[i];
+            if((ticket->flags&0x80U)==0U||ticket->due_sample>=end||ticket->due_sample>selected_due
+                    ||(ticket->due_sample==selected_due&&selected!=UINT16_MAX
+                    &&ticket->kind>=core->scheduler[selected].kind))continue;
+            selected=i;selected_due=ticket->due_sample;}
+        if(selected==UINT16_MAX)break;
+        const seq_ticket_t ticket=core->scheduler[selected];
+        scheduler_release(core,selected);
+        if(ticket.kind==SEQ_TICKET_SOURCE_WAKE){
+            if(ticket.payload>=SEQ_ENGINE_LEDGER_CAPACITY)continue;
+            seq_source_cursor_t *const source=&core->sources[ticket.payload];
+            if((source->active==0U)||(source->serial!=ticket.occurrence_id))continue;
+            uint64_t on=ticket.due_sample;if(on<start)on=start;
             const uint32_t occurrence=++core->occurrence_serial;
             const note_event_t event={.sample_abs=on,
                 .duration_samples=source->gate_samples,
@@ -421,42 +473,52 @@ static ITCM_TEXT void collect(seq_engine_core_t *core,uint64_t start,uint16_t fr
                 .track=source->track,.destination_id=NOTE_EVENT_DESTINATION_DEFAULT,
                 .note=source->note,.velocity=source->velocity,
                 .kind=NOTE_EVENT_KIND_ON,.provenance=NOTE_EVENT_SOURCE_STEP,
-                .stage=NOTE_EVENT_STAGE_SOURCE};
-            if(fx_run_from(&event,0U)!=NOTE_EVENT_RESULT_ACCEPTED)
-                ++core->dropped_events;
+                .stage=source->playback_stage,.temporal_index=source->logical_slot,
+                .flags=(uint8_t)((source->playback_stage==NOTE_EVENT_STAGE_TERMINAL)
+                    ?NOTE_EVENT_FLAG_TERMINAL:0U)};
+            if(source->playback_stage==NOTE_EVENT_STAGE_TERMINAL)fx_terminal(&event);
+            else if(walker_resume(&event,0U)!=NOTE_EVENT_RESULT_ACCEPTED)++core->dropped_events;
             source->next_offset_q16+=source->interval_q16;
-        }
-        if(source->next_offset_q16>=source->span_q16)lifetime_release(core,source_index);}
-    if(note_fx_engine_seq_process(start,frames,p->samples_per_step_q16,
+            if(source->next_offset_q16<source->span_q16){
+                const uint64_t next_due=source->first_on_sample
+                    +((source->next_offset_q16+0x8000ULL)>>16);
+                source->ticket=scheduler_add(core,next_due,SEQ_TICKET_SOURCE_WAKE,
+                    source->track,source->note,source->velocity,source->serial,ticket.payload);
+                if(source->ticket!=UINT16_MAX)continue;}
+            source->active=0U;if(core->source_count)--core->source_count;
+            continue;}
+        if(ticket.kind==SEQ_TICKET_GROOVE_RESUME){const uint8_t index=(uint8_t)ticket.payload;
+            const uint16_t generation=(uint16_t)(ticket.payload>>8U);
+            if(index<128U&&g_groove_resume[index].active
+                    &&g_groove_resume[index].generation==generation){
+                const note_event_t event=g_groove_resume[index].event;
+                g_groove_resume[index].active=0U;fx_terminal(&event);}continue;}
+        if(ticket.kind==SEQ_TICKET_NOTE_OFF){
+            const int16_t found=ledger_find(core,ticket.occurrence_id);
+            if(found<0)continue;
+            ledger_release(core,(uint8_t)found);}
+        if(out->event_count>=SEQ_ENGINE_EVENT_CAPACITY){++core->dropped_events;continue;}
+        out->events[out->event_count++]=(seq_event_t){
+            .offset=(uint16_t)((ticket.due_sample<start)?0U:ticket.due_sample-start),
+            .kind=(ticket.kind==SEQ_TICKET_NOTE_OFF)?SEQ_ENGINE_EVENT_NOTE_OFF:
+                SEQ_ENGINE_EVENT_NOTE_ON,.track=ticket.track,
+            .occurrence_id=ticket.occurrence_id,.note=ticket.note,
+            .velocity=(ticket.kind==SEQ_TICKET_NOTE_OFF)?0U:(uint8_t)(ticket.flags&0x7FU),
+            .reserved=(uint16_t)(((ticket.payload&0x100U)!=0U)?1U:0U)};}
+    if(note_fx_engine_process(start,frames,p->samples_per_step_q16,
             transport,pattern,p->scale_index,p->root_index,
             fx_generated,0)!=NOTE_EVENT_RESULT_ACCEPTED)
         ++core->dropped_events;
-    for(uint16_t i=0U;i<SEQ_ENGINE_FUTURE_CAPACITY;++i){
-        if(core->futures[i].active==0U)continue;
-        const seq_future_handle_t handle={i,core->futures[i].generation};
-        const seq_future_t e=core->futures[i];
-        if(e.due_sample>=end)continue;
-        future_release(core,handle);
-        if(out->event_count>=SEQ_ENGINE_EVENT_CAPACITY)
-        {
-            ++core->dropped_events;
-            continue;
-        }
-        const uint64_t due=(e.due_sample<start)?start:e.due_sample;
-        out->events[out->event_count++]=(seq_event_t){
-            .offset=(uint16_t)(due-start),.kind=e.kind,.track=e.owner,
-            .occurrence_id=e.occurrence_id,.note=e.note,.velocity=e.velocity};}
 }
 
 void seq_engine_core_init(seq_engine_core_t *core)
 {
     if(core==0)return;
-    /* Future tickets survive a core reset: clearing musical state must never
-     * make a handle from the previous epoch valid again. */
-    memset(core,0,offsetof(seq_engine_core_t,futures));
-    lifetime_clear(core);
-    future_clear(core);
-    note_fx_engine_seq_init();
+    memset(core,0,sizeof(*core));
+    memset(g_groove_resume,0,sizeof(g_groove_resume));
+    sources_clear(core);
+    scheduler_clear(core);
+    note_fx_engine_init();
     for(uint8_t t=0U;t<SEQ_LANE_CAPACITY;++t)for(uint8_t v=0U;
         v<SEQ_PLAY_MAX_CAPACITY;++v)core->voice_scheduled_serial[t][v]=UINT32_MAX;
 }
@@ -494,13 +556,16 @@ void seq_engine_core_process_block(seq_engine_core_t *core,uint64_t start,uint16
             if(p->track_fx_enabled[t]!=0U)configure_fx_step(p,t,s);}
         }
     core->samples_per_step_q16=p->samples_per_step_q16;
+    for(uint8_t t=0U;t<SEQ_LANE_CAPACITY;++t){uint8_t capacity=p->track_exec[t].logical_capacity;
+        core->logical_capacity[t]=(capacity<=8U)?capacity:8U;}
     if(core->pattern_generation!=p->generation){
         core->pattern_generation=p->generation;
         for(uint8_t t=0U;t<SEQ_LANE_CAPACITY;++t)
             if(p->track_fx_enabled[t]!=0U)
                 configure_fx_step(p,t,core->play_step[t]);}
     if((p->running==0U)||(core->samples_per_step_q16==0U)){
-        core->running=0U;future_clear(core);lifetime_clear(core);return;}core->running=1U;
+        core->running=0U;scheduler_clear(core);sources_clear(core);
+        memset(g_groove_resume,0,sizeof(g_groove_resume));return;}core->running=1U;
     const uint32_t dropped_before=core->dropped_events;
     const uint64_t begin_q16=start<<16,end_q16=(start+frames)<<16;
     uint64_t next=core->step_sample_q16+core->samples_per_step_q16;

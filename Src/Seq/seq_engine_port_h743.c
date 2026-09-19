@@ -28,6 +28,32 @@ static volatile uint8_t g_ingress_head,g_ingress_tail,g_ingress_count;
 static volatile uint8_t g_ingress_panic;
 static uint64_t g_ingress_rate_window;
 static uint8_t g_ingress_rate_count;
+static struct {uint64_t total;uint32_t count,max,over50,over75,run50,run75,maxrun50,maxrun75;
+    uint32_t histogram[32];} g_seq_perf;
+
+static void seq_perf_record(uint32_t cycles)
+{const uint32_t budget=SystemCoreClock*SEQ_ENGINE_H743_PERIOD_SAMPLES/48000U;
+ ++g_seq_perf.count;g_seq_perf.total+=cycles;if(cycles>g_seq_perf.max)g_seq_perf.max=cycles;
+ uint8_t bucket=0U;uint32_t value=cycles;while(value>1U&&bucket<31U){value>>=1U;++bucket;}
+ ++g_seq_perf.histogram[bucket];
+ if(cycles>budget/2U){++g_seq_perf.over50;++g_seq_perf.run50;
+  if(g_seq_perf.run50>g_seq_perf.maxrun50)g_seq_perf.maxrun50=g_seq_perf.run50;}else g_seq_perf.run50=0U;
+ if(cycles>(budget*3U)/4U){++g_seq_perf.over75;++g_seq_perf.run75;
+  if(g_seq_perf.run75>g_seq_perf.maxrun75)g_seq_perf.maxrun75=g_seq_perf.run75;}else g_seq_perf.run75=0U;}
+
+static uint32_t seq_perf_percentile(uint32_t numerator,uint32_t denominator)
+{if(!g_seq_perf.count)return 0U;const uint32_t target=(g_seq_perf.count*numerator+denominator-1U)/denominator;
+ uint32_t cumulative=0U;for(uint8_t i=0U;i<32U;++i){cumulative+=g_seq_perf.histogram[i];
+  if(cumulative>=target)return UINT32_C(1)<<i;}return UINT32_MAX;}
+
+void seq_engine_perf_capture(seq_engine_perf_snapshot_t *out)
+{if(!out)return;const uint32_t primask=__get_PRIMASK();__disable_irq();
+ *out=(seq_engine_perf_snapshot_t){.max_cycles=g_seq_perf.max,
+  .mean_cycles=g_seq_perf.count?(uint32_t)(g_seq_perf.total/g_seq_perf.count):0U,
+  .p99_cycles=seq_perf_percentile(99U,100U),.p999_cycles=seq_perf_percentile(999U,1000U),
+  .blocks_over_50=g_seq_perf.over50,.blocks_over_75=g_seq_perf.over75,
+  .max_consecutive_over_50=g_seq_perf.maxrun50,.max_consecutive_over_75=g_seq_perf.maxrun75,
+  .scheduler_overflows=g_core.scheduler_overflow_count};__set_PRIMASK(primask);}
 
 void seq_engine_control_disarm_track(uint8_t track)
 {
@@ -52,6 +78,8 @@ void seq_engine_irq_init(void)
     g_force_stopped = 0U; g_force_stop_epoch=0U; g_next_deadline = UINT64_MAX;
     g_ingress_head=0U;g_ingress_tail=0U;g_ingress_count=0U;g_ingress_panic=0U;
     g_ingress_rate_window=UINT64_MAX;g_ingress_rate_count=0U;
+    memset(&g_seq_perf,0,sizeof(g_seq_perf));
+    CoreDebug->DEMCR|=CoreDebug_DEMCR_TRCENA_Msk;DWT->CYCCNT=0U;DWT->CTRL|=DWT_CTRL_CYCCNTENA_Msk;
     seq_engine_core_init(&g_core);
     NVIC_ClearPendingIRQ(TIM4_IRQn);
     NVIC_SetPriority(TIM4_IRQn, 2U);
@@ -209,8 +237,10 @@ void seq_service(uint64_t now_sample, uint64_t publish_until_sample)
         block->frames = frames;
     } else {
         g_force_stopped = 0U;
+        const uint32_t cycle_start=DWT->CYCCNT;
         seq_engine_core_process_block(&g_core, start, frames, pattern,
                                       block, &g_params[slot]);
+        seq_perf_record(DWT->CYCCNT-cycle_start);
         if(g_ingress_panic!=0U){g_ingress_panic=0U;
             seq_engine_core_init(&g_core);}
         while(g_ingress_count!=0U){

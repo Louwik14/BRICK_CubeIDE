@@ -400,7 +400,6 @@ static void keyboard_engine_note_on_internal(seq_live_rec_source_t source,
                                              uint8_t velocity)
 {
     keyboard_engine_live_rec_push_internal_channel(note, channel_zero_based);
-    seq_runtime_live_rec_note_on(source, channel_zero_based, note, velocity);
 
     if (source == SEQ_LIVE_REC_SRC_INTERNAL)
     {
@@ -446,7 +445,6 @@ static void keyboard_engine_note_off_internal(seq_live_rec_source_t source,
                                               uint8_t note)
 {
     const uint8_t note_on_channel = keyboard_engine_live_rec_pop_internal_channel(note, channel_zero_based);
-    seq_runtime_live_rec_note_off(source, note_on_channel, note);
 
     if (source == SEQ_LIVE_REC_SRC_INTERNAL)
     {
@@ -539,10 +537,6 @@ static void keyboard_engine_note_on_for_track_internal(uint8_t track,
 
     const uint8_t channel = keyboard_engine_get_track_midi_channel_zero_based(owner_track);
     keyboard_engine_live_rec_push_track_channel(owner_track, note, channel);
-    if (capture_tick_valid == 0U)
-    {
-        seq_runtime_live_rec_note_on(SEQ_LIVE_REC_SRC_INTERNAL, channel, note, velocity);
-    }
 
     if ((keyboard_engine_track_has_midi_note_path(owner_track) == false)
             || (keyboard_engine_track_accepts_internal_source(owner_track) == false))
@@ -583,13 +577,7 @@ static void keyboard_engine_note_off_for_track_internal(uint8_t track,
     const uint8_t owner_track = track;
 
     const uint8_t channel = keyboard_engine_get_track_midi_channel_zero_based(owner_track);
-    const uint8_t note_on_channel =
-        keyboard_engine_live_rec_pop_track_channel(owner_track, note, channel);
-    if (capture_tick_valid == 0U)
-    {
-        seq_runtime_live_rec_note_off(SEQ_LIVE_REC_SRC_INTERNAL,
-                                      note_on_channel, note);
-    }
+    (void)keyboard_engine_live_rec_pop_track_channel(owner_track, note, channel);
 
     if ((keyboard_engine_track_has_midi_note_path(owner_track) == false)
             || (keyboard_engine_track_accepts_internal_source(owner_track) == false))
@@ -661,23 +649,6 @@ static void keyboard_engine_midi_receive_internal(const uint8_t *msg, size_t len
         seq_ingress_panic();
         keyboard_engine_clear_source_occurrences_silent();
         return;
-    }
-
-    if (is_note_on != 0U)
-    {
-        if (g_keyboard_engine_timed_context_active == 0U)
-        {
-            seq_runtime_live_rec_note_on(SEQ_LIVE_REC_SRC_EXTERNAL,
-                                         channel, note, velocity);
-        }
-    }
-    else if (is_note_off != 0U)
-    {
-        if (g_keyboard_engine_timed_context_active == 0U)
-        {
-            seq_runtime_live_rec_note_off(SEQ_LIVE_REC_SRC_EXTERNAL,
-                                          channel, note);
-        }
     }
 
     for (uint8_t track = 0U; track < TRACK_COUNT; ++track)

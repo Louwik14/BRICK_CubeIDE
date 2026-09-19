@@ -248,8 +248,8 @@ SECTIONS
   .ram_d2_m4_sram1 (NOLOAD) :
   {
     . = ALIGN(32);
-    * (EXCLUDE_FILE (*seq_model.c.obj *note_fx_pipeline.c.obj *control_music_output.c.obj) .ram_d2_m4)
-    * (EXCLUDE_FILE (*seq_model.c.obj *note_fx_pipeline.c.obj *control_music_output.c.obj) .ram_d2_m4.*)
+    * (EXCLUDE_FILE (*seq_model.c.obj *seq_engine.c.obj *note_fx_pipeline.c.obj *control_music_output.c.obj) .ram_d2_m4)
+    * (EXCLUDE_FILE (*seq_model.c.obj *seq_engine.c.obj *note_fx_pipeline.c.obj *control_music_output.c.obj) .ram_d2_m4.*)
     . = ALIGN(32);
   } >SRAM1_D2_CACHEABLE
 
@@ -278,6 +278,10 @@ SECTIONS
     *note_fx_pipeline.c.obj(.ram_d2_m4.*)
     *control_music_output.c.obj(.ram_d2_m4)
     *control_music_output.c.obj(.ram_d2_m4.*)
+    *seq_engine.c.obj(.ram_d2_m4)
+    *seq_engine.c.obj(.ram_d2_m4.*)
+    *(.ram_note_fx_echo)
+    *(.ram_seq_groove)
     . = ALIGN(32);
   } >SRAM3_D2
   ASSERT(SIZEOF(.ram_d2_m4_sram3) <= LENGTH(SRAM3_D2),

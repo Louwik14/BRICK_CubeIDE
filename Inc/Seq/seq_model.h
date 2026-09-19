@@ -23,6 +23,7 @@ typedef enum
     SEQ_STEP_PLAY_PRESENT_VELOCITY = (1U << SEQ_STEP_PLAY_FIELD_VELOCITY),
     SEQ_STEP_PLAY_PRESENT_LENGTH = (1U << SEQ_STEP_PLAY_FIELD_LENGTH),
     SEQ_STEP_PLAY_PRESENT_MICROTIMING = (1U << SEQ_STEP_PLAY_FIELD_MICROTIMING),
+    SEQ_STEP_PLAY_TERMINAL = (1U << 7U),
     SEQ_STEP_PLAY_PRESENT_ALL = (SEQ_STEP_PLAY_PRESENT_NOTE
                                  | SEQ_STEP_PLAY_PRESENT_VELOCITY
                                  | SEQ_STEP_PLAY_PRESENT_LENGTH
@@ -199,6 +200,10 @@ uint8_t seq_model_play_set(seq_track_id_t track,
                                 uint8_t voice,
                                 seq_step_play_field_t field,
                                 int16_t value);
+uint8_t seq_model_play_set_terminal(seq_track_id_t track,seq_step_id_t step,
+                                    uint8_t voice,uint8_t terminal);
+uint8_t seq_model_play_is_terminal(seq_track_id_t track,seq_step_id_t step,
+                                   uint8_t voice);
 uint8_t seq_model_play_clear(seq_track_id_t track,
                                    seq_step_id_t step,
                                    uint8_t voice,

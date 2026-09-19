@@ -966,6 +966,8 @@ void seq_live_rec_session_live_rec_note_on(seq_live_rec_source_t source,
             continue;
         }
 
+        (void)seq_model_play_set_terminal(track,write_step,(uint8_t)voice,1U);
+
         seq_model_set_trig(track, write_step, 1U);
 
         g_seq_live_rec_pending[pending_slot].active = 1U;

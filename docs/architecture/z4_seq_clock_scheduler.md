@@ -38,10 +38,12 @@ ne peut apparaitre qu'une fois dans une chaine de quatre slots.
 
 ## Runtime borne
 
-Le runtime fixe contient 64 lifetimes, 256 futures, 32 locks actifs par lane,
-deux scratch MIDI FX de 32 candidats et une inbox live de 64 entrees. Il n'y a
-ni allocation dynamique, ni heap de deadlines, ni attente de la superloop.
-Les 4 slots MIDI FX partagent un seul contexte possede par SEQ.
+Le runtime fixe contient un ledger de 64 notes logiques et un scheduler commun
+de 512 tickets de 24 octets. Ses types couvrent NOTE_OFF, Echo, source/ROLL,
+ARP, Euclid et les resumes Groove. Les etats musicaux restent dans des pools
+externes fixes; un ticket ne transporte qu'une echeance et une reference
+compacte. Il n'y a ni allocation dynamique, ni heap de deadlines, ni attente
+de la superloop. Les 4 slots MIDI FX partagent un seul contexte possede par SEQ.
 
 Les p-locks d'un step sont tries pendant la preparation CONTROL. A la boundary,
 l'ancienne liste active et la nouvelle sont fusionnees lineairement. Une cle
@@ -50,10 +52,11 @@ la base. Le stockage canonique autorise 32 locks par step et 512 noeuds par
 lane; la borne globale d'une boundary reste 511 locks actifs et 991 transitions
 ordinaires.
 
-Les lanes top-level admettent au plus 8 lifetimes persistantes et les enfants
-GROUP au plus une. Les obligations datees utilisent `Future[256]`. Chaque slot
-possede un ticket 32 bits incremente au reuse (zero est saute au wrap); toute
-resolution verifie le couple index/ticket et ignore une reference perimee.
+Les lanes top-level admettent au plus 8 notes logiques et les enfants GROUP au
+plus une. Le master GROUP reste non emetteur. En cas de saturation, les notes
+generees les plus anciennes cedent avant les originales les plus anciennes.
+La saturation exceptionnelle du scheduler incremente un compteur diagnostic
+et refuse deterministement la nouvelle obligation.
 
 ## Ingress et terminal AUDIO
 
@@ -71,26 +74,27 @@ soutenu a 3000 evenements/s a 48 kHz. Un evenement invalide,
 hors ordre temporel, au-dela de cette borne ou arrivant lorsque l'inbox est
 pleine est refuse sans mutation. Cette limite borne le debit brut; elle ne
 remplace pas la capacite logique musicale de la lane.
-STOP/PANIC
-invalide l'inbox, les futures et les lifetimes au point de service suivant.
+STOP/PANIC invalide l'inbox, le scheduler, les curseurs source et le ledger au
+point de service suivant.
 
 SEQ publie un seul bloc terminal date. AUDIO ne connait ni step, ni ROLL, ni
 ARP, ni Euclid : il applique PARAM/NOTE dans l'ordre `(sample, OFF, PARAM, ON)`
 et conserve uniquement l'allocation physique des voix. Les anciennes voies
 cooperative, shadow/compare et publication legacy/RT ne sont pas compilees.
+Live Rec est alimente apres cette admission terminale; un candidat refuse n'est
+donc jamais enregistre. Les PLAY issus de Live Rec portent le marqueur
+`TERMINAL` et leur relecture contourne le walker MIDI FX sans creer de second
+pipeline.
 
 ## Borne worst-case de publication
 
-Les 64 Lifetime sont gerees par une free-list globale et des listes actives par
-track. Une allocation sans stealing est O(1). Le quota existant reste 8 pour
-une top-level et 1 pour un enfant; lorsqu'il impose un stealing, la recherche
-de l'entree la plus ancienne est bornee au seul quota local (8 maximum), avec
-le meme departage par plus petit index physique. La liberation met a jour la
-liste de track et la free-list dans la meme operation SEQ.
+Les 64 curseurs source sont parcourus avec une borne fixe. Le quota reste 8
+pour une top-level et 1 pour un enfant; lorsqu'il impose un remplacement, la
+source la plus ancienne est choisie deterministement.
 
-Les NOTE produites, les NOTE_OFF Future, l'ingress et les PARAM sont accumules
-sans tri intermediaire. Une unique passe finale de merge-sort stable, bornee
-par `SEQ_ENGINE_EVENT_CAPACITY`, publie en O(E log E), sans allocation. Le
+Les NOTE produites, les NOTE_OFF, l'ingress et les PARAM sont accumules sans
+tri intermediaire. Une unique mise en ordre stable en place, bornee par
+`SEQ_ENGINE_EVENT_CAPACITY`, publie sans allocation. Le
 departage conserve est `(sample, NOTE_OFF, PARAM, NOTE_ON, PANIC, ordre
 d'ajout)`. Les PARAM rejoignent donc le flux avant cette unique mise en ordre.
 
@@ -100,13 +104,12 @@ configuration du runtime courant; aucun catalog lookup, mapping d'identifiant,
 controle de famille ou normalisation dependante du modele n'y subsiste.
 
 Les constantes produit figees sont 4 slots MIDI FX, une plage de tempo
-40..300 BPM, 8 notes
-logiques par lane principale, un enfant GROUP mono, un master a zero note et
-deux repeats Echo. Elles exposent aussi la preuve preparatoire PASS 2: avec le
-ROLL minimal actuel a 1/5 step et un Echo maximal de deux fois quatre steps,
-les seules sources sequencees peuvent porter 2560 continuations Echo. Cette
-valeur est une entree de dimensionnement; aucun nouveau scheduler n'est cree
-dans cette passe.
+40..300 BPM, 8 notes logiques par lane principale, un enfant GROUP mono et un
+master a zero note. Echo conserve au plus un etat due-only par lane logique
+(64 globaux). Groove conserve au plus deux resumes par lane (128 globaux); une
+troisieme occurrence remplace d'abord un resume genere, sinon le plus ancien.
+Une date Groove negative issue du clavier ou du MIDI est clampee au sample de
+capture et aucun tweak ne reecrit une occurrence deja decidee.
 
 ## Persistence et gros changements
 

@@ -13,8 +13,8 @@
 #define SEQ_ENGINE_EVENT_CAPACITY 384U
 #define SEQ_ENGINE_BLOCK_SLOTS 3U
 #define SEQ_ENGINE_SNAPSHOT_SLOTS 2U
-#define SEQ_ENGINE_LIFETIME_CAPACITY 64U
-#define SEQ_ENGINE_FUTURE_CAPACITY 256U
+#define SEQ_ENGINE_SCHEDULER_CAPACITY 512U
+#define SEQ_ENGINE_LEDGER_CAPACITY 64U
 #define SEQ_ENGINE_LOCK_POOL_CAPACITY 512U
 #define SEQ_ENGINE_PARAM_EVENT_CAPACITY 256U
 #define SEQ_ENGINE_FX_SCRATCH_CAPACITY 32U
@@ -91,19 +91,30 @@ typedef struct {
     uint16_t base_value16;
 } seq_active_lock_t;
 
+typedef enum {
+    SEQ_TICKET_NOTE_OFF = 0,
+    SEQ_TICKET_ECHO_WAKE,
+    SEQ_TICKET_SOURCE_WAKE,
+    SEQ_TICKET_ARP_WAKE,
+    SEQ_TICKET_EUCLID_WAKE,
+    SEQ_TICKET_GROOVE_RESUME
+} seq_ticket_kind_t;
+
+/* One static scheduler for every sample-domain continuation.  Payload is an
+ * index/generation pair into fixed external state, never an embedded event. */
 typedef struct {
     uint64_t due_sample;
     uint32_t occurrence_id;
-    uint32_t generation;
+    uint32_t payload;
+    uint16_t generation;
     uint16_t next_free;
     uint8_t kind;
-    uint8_t owner;
+    uint8_t track;
     uint8_t note;
-    uint8_t velocity;
-    uint8_t active;
-} seq_future_t;
+    uint8_t flags;
+} seq_ticket_t;
 
-typedef struct { uint16_t index; uint32_t generation; } seq_future_handle_t;
+_Static_assert(sizeof(seq_ticket_t) == 24U, "SEQ ticket must stay compact");
 
 typedef struct {
     uint64_t first_on_sample;
@@ -111,14 +122,26 @@ typedef struct {
     uint64_t interval_q16;
     uint64_t next_offset_q16;
     uint32_t gate_samples;
+    uint32_t serial;
+    uint16_t ticket;
     uint8_t track;
     uint8_t note;
     uint8_t velocity;
+    uint8_t logical_slot;
+    uint8_t playback_stage;
     uint8_t active;
-    uint16_t generation;
-    uint16_t next;
-    uint16_t prev;
-} seq_lifetime_t;
+} seq_source_cursor_t;
+
+typedef struct {
+    uint64_t admitted_sample;
+    uint32_t occurrence_id;
+    uint8_t track;
+    uint8_t logical_slot;
+    uint8_t note;
+    uint8_t original;
+    uint8_t active;
+    uint8_t reserved[3];
+} seq_ledger_entry_t;
 
 typedef struct {
     uint64_t step_sample_q16;
@@ -126,13 +149,13 @@ typedef struct {
     uint32_t transport_epoch;
     uint32_t pattern_generation;
     uint32_t occurrence_serial;
-    uint16_t lifetime_count;
-    uint16_t future_count;
-    uint16_t future_free_head;
-    uint16_t lifetime_free_head;
-    uint16_t lifetime_track_head[SEQ_LANE_CAPACITY];
-    uint16_t lifetime_track_tail[SEQ_LANE_CAPACITY];
-    uint8_t lifetime_track_count[SEQ_LANE_CAPACITY];
+    uint16_t scheduler_count;
+    uint16_t scheduler_free_head;
+    uint16_t scheduler_overflow_count;
+    uint16_t source_count;
+    uint8_t ledger_count;
+    uint8_t ledger_track_count[SEQ_LANE_CAPACITY];
+    uint8_t logical_capacity[SEQ_LANE_CAPACITY];
     uint32_t dropped_events;
     uint16_t emitter_tracks;
     uint16_t plock_fault_tracks;
@@ -146,9 +169,22 @@ typedef struct {
     uint32_t voice_scheduled_serial[SEQ_LANE_CAPACITY][SEQ_PLAY_MAX_CAPACITY];
     uint8_t active_lock_count[SEQ_LANE_CAPACITY];
     seq_active_lock_t active_locks[SEQ_LANE_CAPACITY][SEQ_STEP_MAX_LOCKS];
-    seq_lifetime_t lifetimes[SEQ_ENGINE_LIFETIME_CAPACITY];
-    seq_future_t futures[SEQ_ENGINE_FUTURE_CAPACITY];
+    seq_source_cursor_t sources[SEQ_ENGINE_LEDGER_CAPACITY];
+    seq_ledger_entry_t ledger[SEQ_ENGINE_LEDGER_CAPACITY];
+    seq_ticket_t scheduler[SEQ_ENGINE_SCHEDULER_CAPACITY];
 } seq_engine_core_t;
+
+typedef struct {
+    uint32_t max_cycles;
+    uint32_t mean_cycles;
+    uint32_t p99_cycles;
+    uint32_t p999_cycles;
+    uint32_t blocks_over_50;
+    uint32_t blocks_over_75;
+    uint32_t max_consecutive_over_50;
+    uint32_t max_consecutive_over_75;
+    uint16_t scheduler_overflows;
+} seq_engine_perf_snapshot_t;
 
 /* Immutable canonical Pattern armed by CONTROL and owned by SEQ after commit. */
 typedef struct __attribute__((packed)) {
@@ -240,6 +276,7 @@ typedef struct {
 } seq_ingress_event_t;
 uint8_t seq_ingress_submit(const seq_ingress_event_t *event);
 void seq_ingress_panic(void);
+void seq_engine_perf_capture(seq_engine_perf_snapshot_t *out);
 
 /* CONTROL prepares; SEQ atomically takes ownership of the armed Pattern. */
 void seq_engine_control_init(void);
@@ -266,8 +303,8 @@ _Static_assert(NOTE_FX_SLOT_COUNT == 4U, "SEQ requires four MIDI FX slots");
 _Static_assert(SEQ_ENGINE_INGRESS_CAPACITY
                    == SEQ_INGRESS_EVENTS_PER_WINDOW_MAX,
                "inbox and raw ingress rate contracts diverged");
-_Static_assert(SEQ_ENGINE_LIFETIME_CAPACITY == 64U, "SEQ lifetime contract");
-_Static_assert(SEQ_ENGINE_FUTURE_CAPACITY == 256U, "SEQ future contract");
+_Static_assert(SEQ_ENGINE_LEDGER_CAPACITY == 64U, "SEQ logical ledger contract");
+_Static_assert(SEQ_ENGINE_SCHEDULER_CAPACITY == 512U, "SEQ scheduler contract");
 _Static_assert(SEQ_ENGINE_FX_SCRATCH_CAPACITY == 32U, "SEQ scratch contract");
 
 #endif

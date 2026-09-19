@@ -36,7 +36,8 @@ static uint8_t play_state_is_valid(const seq_play_snapshot_t *play)
     if (play == NULL) return 0U;
     for (uint8_t voice = 0U; voice < SEQ_PLAY_MAX_CAPACITY; ++voice)
     {
-        if ((play->items[voice].present_mask & (uint8_t)~SEQ_STEP_PLAY_PRESENT_ALL) != 0U) return 0U;
+        if ((play->items[voice].present_mask
+                & (uint8_t)~(SEQ_STEP_PLAY_PRESENT_ALL|SEQ_STEP_PLAY_TERMINAL)) != 0U) return 0U;
         for (uint8_t field = 0U; field < SEQ_STEP_PLAY_FIELD_COUNT; ++field)
         {
             const uint8_t mask = (uint8_t)(1U << field);

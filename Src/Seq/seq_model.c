@@ -929,10 +929,23 @@ uint8_t seq_model_play_set(seq_track_id_t track,
         case SEQ_STEP_PLAY_FIELD_MICROTIMING: item->microtiming = (int8_t)value; break;
         default: return 0U;
     }
+    if(field==SEQ_STEP_PLAY_FIELD_NOTE)
+        item->present_mask=(uint8_t)(item->present_mask&~SEQ_STEP_PLAY_TERMINAL);
     item->present_mask = (uint8_t)(item->present_mask | mask);
     seq_engine_control_mark_dirty();
     return 1U;
 }
+
+uint8_t seq_model_play_set_terminal(seq_track_id_t track,seq_step_id_t step,
+    uint8_t voice,uint8_t terminal)
+{seq_play_item_t*const item=seq_model_play_item_mut(track,step,voice);if(!item)return 0U;
+ if(terminal)item->present_mask|=SEQ_STEP_PLAY_TERMINAL;
+ else item->present_mask=(uint8_t)(item->present_mask&~SEQ_STEP_PLAY_TERMINAL);
+ seq_engine_control_mark_dirty();return 1U;}
+
+uint8_t seq_model_play_is_terminal(seq_track_id_t track,seq_step_id_t step,uint8_t voice)
+{const seq_play_item_t*const item=seq_model_play_item_const(track,step,voice);
+ return(item&&(item->present_mask&SEQ_STEP_PLAY_TERMINAL))?1U:0U;}
 
 uint8_t seq_model_play_clear(seq_track_id_t track,
                                    seq_step_id_t step,
