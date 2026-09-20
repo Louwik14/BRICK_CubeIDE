@@ -304,8 +304,7 @@ uint8_t track_runtime_has_configurable_polyphony(
         && ((type == TRACK_RUNTIME_TYPE_PRISM)
             || (type == TRACK_RUNTIME_TYPE_STACK)
             || (type == TRACK_RUNTIME_TYPE_WAVE)
-            || (type == TRACK_RUNTIME_TYPE_FM)
-            || (type == TRACK_RUNTIME_TYPE_ACID)));
+            || (type == TRACK_RUNTIME_TYPE_FM)));
 }
 
 uint8_t track_runtime_effective_voice_count(track_runtime_family_t family,

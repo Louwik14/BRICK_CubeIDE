@@ -17,6 +17,7 @@
 #include "Platform/brick_build_config.h"
 #include "IPC/control_audio_command.h"
 #include "Track/synth_polyphony.h"
+#include "Track/track_runtime.h"
 #include "Mod/mod_lfo_v1_audio.h"
 
 static track_audio_runtime_ctx_t g_audio_track_ctx[BRICK_ENTITY_CAPACITY];
@@ -708,10 +709,8 @@ uint8_t audio_note_engine_adapter_install_prepared(
     const track_runtime_engine_t requested_engine =
         (track_runtime_engine_t)spec->engine;
     track_audio_runtime_ctx_t *const ctx = &g_audio_track_ctx[entity_id];
-    uint8_t requested_voices = (family == TRACK_RUNTIME_FAMILY_SYNTH)
-        ? CONTROL_AUDIO_PROGRAM_DECODE_VOICES(spec->flags) : 1U;
-    if (requested_engine == TRACK_RUNTIME_ENGINE_TB303)
-        requested_voices = 1U;
+    const uint8_t requested_voices = track_runtime_effective_voice_count(
+        family, type, CONTROL_AUDIO_PROGRAM_DECODE_VOICES(spec->flags));
     const uint8_t preserve_synth_slots = (uint8_t)(
         (ctx->program_route.active != 0U)
         && (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
@@ -804,14 +803,9 @@ uint8_t audio_note_engine_adapter_install_prepared(
                                                 installed.engine);
         if (renderer_ready == 0U) return 0U;
         {
-            uint8_t voices = requested_voices;
-            if ((installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
-                    || (installed.engine
-                        == (uint8_t)TRACK_RUNTIME_ENGINE_TB303))
-                voices = 1U;
             if ((preserve_synth_slots == 0U)
-                    && (synth_polyphony_set_voice_count(entity_id, voices)
-                        != voices))
+                    && (synth_polyphony_set_voice_count(entity_id,
+                            requested_voices) != requested_voices))
                 return 0U;
             installed.instance_id = synth_polyphony_get_slot(entity_id, 0U);
         }
@@ -1011,16 +1005,9 @@ uint8_t audio_note_engine_adapter_apply_polyphony(
         }
         return 1U;
     }
-    if ((program->engine != (uint8_t)TRACK_RUNTIME_ENGINE_PRISM)
-            && (program->engine != (uint8_t)TRACK_RUNTIME_ENGINE_STACK)
-            && (program->engine != (uint8_t)TRACK_RUNTIME_ENGINE_WAVE)
-            && (program->engine != (uint8_t)TRACK_RUNTIME_ENGINE_FM)
-            && (program->engine != (uint8_t)TRACK_RUNTIME_ENGINE_TB303)
-            && (program->engine != (uint8_t)TRACK_RUNTIME_ENGINE_ACID)
-            && (program->engine != (uint8_t)TRACK_RUNTIME_ENGINE_DRUM))
-        return 0U;
-    if ((program->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
-            || (program->engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB303))
+    if (track_runtime_has_configurable_polyphony(
+            (track_runtime_family_t)ctx.family,
+            (track_runtime_type_t)ctx.type) == 0U)
         return 0U;
     uint8_t held_count = 0U;
     for (uint8_t i = 0U; i < AUDIO_PHYSICAL_OUTPUT_CAPACITY; ++i)
