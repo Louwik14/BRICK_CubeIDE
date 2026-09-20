@@ -262,6 +262,22 @@ static uint8_t walker_suffix_is_temporal(uint8_t track,uint8_t slot)
       &NOTE_FX_PLAN_FLAG_TEMPORAL)!=0U)return 1U;
  return 0U;}
 
+static uint8_t walker_stage_suffix_is_temporal(uint8_t track,uint8_t stage)
+{for(uint8_t s=stage;s<NOTE_FX_SLOT_COUNT;++s)
+ if((note_fx_plan_flags(g_seq_fx_core->fx_effective[track][s])
+      &NOTE_FX_PLAN_FLAG_TEMPORAL)!=0U)return 1U;
+ return 0U;}
+
+static uint8_t ledger_generated_admission_possible(const seq_engine_core_t *core,
+    uint8_t track)
+{const uint8_t quota=core->logical_capacity[track];
+ for(uint8_t logical=0U;logical<quota;++logical){const uint16_t lane=
+   product_lane_from_track_slot(track,logical);
+  if(lane>=SEQ_ENGINE_LEDGER_CAPACITY)continue;
+  if(((core->ledger_active>>lane)&UINT64_C(1))==0U
+       ||core->ledger[lane].original==0U)return 1U;}
+ return 0U;}
+
 static uint8_t walker_harm_capacity(const note_event_t *events,uint8_t count,
     uint8_t slot,uint8_t frontier_exact)
 {const uint8_t track=events[0].track;const uint8_t quota=g_seq_fx_core->logical_capacity[track];
@@ -381,7 +397,13 @@ static note_event_result_t walker_harm_cohort(const note_event_t *source,
  return NOTE_EVENT_RESULT_ACCEPTED;}
 
 static note_event_result_t fx_generated(const note_event_t *event,void *ctx)
-{(void)ctx;return walker_resume(event,event->stage,0U);}
+{(void)ctx;
+ if((event->flags&NOTE_EVENT_FLAG_GENERATED)!=0U
+      &&(event->flags&NOTE_EVENT_FLAG_ECHO)==0U
+      &&walker_stage_suffix_is_temporal(event->track,event->stage)==0U
+      &&ledger_generated_admission_possible(g_seq_fx_core,event->track)==0U)
+  return NOTE_EVENT_RESULT_ACCEPTED;
+ return walker_resume(event,event->stage,0U);}
 
 static uint8_t live_lane_bind(const seq_engine_core_t *core,note_event_t *event,
     int16_t *binding,uint8_t *created)
