@@ -16,6 +16,7 @@
 
 #include "Track/control_music_output.h"
 #include "Keyboard/keyboard_params.h"
+#include "Keyboard/keyboard_note_lifecycle.h"
 #include "MIDI/midi.h"
 #include "Track/track_state.h"
 #include "Track/track_catalog.h"
@@ -55,6 +56,7 @@ static uint32_t g_keyboard_engine_next_occurrence_id;
 static uint8_t g_keyboard_engine_timed_context_active;
 static uint32_t g_keyboard_engine_capture_tick;
 static uint32_t g_keyboard_engine_ingress_serial;
+static keyboard_note_time_order_t g_keyboard_engine_time_order;
 
 typedef struct
 {
@@ -216,11 +218,14 @@ static void keyboard_engine_send_note_for_owner_track_with_capture(
             g_keyboard_engine_source_occurrence[(uint8_t)index].occurrence_id;
     }
 
-    (void)ingress_serial;
     uint64_t capture_sample=0U;
     if ((capture_tick_valid==0U)
             || !brick_media_clock_tick_to_sample(capture_tick,&capture_sample))
         (void)brick_media_clock_now_sample(&capture_sample);
+    if (capture_tick_valid != 0U)
+        capture_sample = keyboard_note_time_order_apply(
+            &g_keyboard_engine_time_order, capture_tick, ingress_serial,
+            capture_sample);
     const seq_ingress_event_t ingress = {
         .capture_sample = capture_sample,
         .occurrence_id = occurrence_id,
@@ -607,6 +612,20 @@ void keyboard_engine_clear_source_occurrences_silent(void)
 {
     memset(g_keyboard_engine_source_occurrence, 0,
            sizeof(g_keyboard_engine_source_occurrence));
+    keyboard_note_time_order_reset(&g_keyboard_engine_time_order);
+}
+
+uint8_t keyboard_engine_debug_active_occurrences(void)
+{
+    uint8_t count = 0U;
+    for (uint8_t i = 0U; i < KEYBOARD_ENGINE_SOURCE_OCCURRENCE_CAPACITY; ++i)
+        count += (uint8_t)(g_keyboard_engine_source_occurrence[i].active != 0U);
+    return count;
+}
+
+uint32_t keyboard_engine_debug_time_tie_adjustments(void)
+{
+    return g_keyboard_engine_time_order.tie_adjustments;
 }
 
 void keyboard_engine_clear_state_silent(void)

@@ -34,6 +34,7 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/IPC/control_audio_visual.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/kbd_chords_dict.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/keyboard_engine.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/keyboard_note_lifecycle.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/keyboard_input.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/keyboard_params.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/keyboard_runtime.c"

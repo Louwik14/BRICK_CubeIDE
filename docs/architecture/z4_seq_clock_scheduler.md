@@ -103,6 +103,10 @@ retenue est 4096 (448 entrees, soit 12,3 % de marge). Echo possede 256 identites
 sans reduire le fanout. Le
 departage conserve est `(sample, NOTE_OFF, PARAM, NOTE_ON, PANIC, ordre
 d'ajout)`. Les PARAM rejoignent donc le flux avant cette unique mise en ordre.
+Les ingress clavier/MIDI captures dans le meme tick grossier sont etales sur
+des samples consecutifs selon leur `ingress_serial`. Cet ordre physique doit
+etre conserve avant le departage terminal: un cycle `ON/OFF/ON` ne doit jamais
+devenir `OFF/ON/ON`, ce qui dissocierait l'etat des touches et les occurrences.
 
 CONTROL decode aussi le mapping statique `(param NoteFX -> slot,parametre)`
 dans le Pattern. A la boundary, SEQ conserve les decisions musicales et la
