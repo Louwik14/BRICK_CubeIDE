@@ -74,7 +74,7 @@ typedef struct {
  uint32_t block_index,anchor,period,total_cpu,total_wall,burst_count;
  uint32_t first_start,last_end,max_cpu,max_wall,max_gap,free_before,free_after;
  uint32_t preempt_cycles,previous_end,burst_started,segment_started,preempt_started;
- uint32_t burst_preempt,preempt_depth,saved_count,active,burst_overflow;
+ uint32_t burst_preempt,preempt_depth,preempt_sequence,saved_count,active,burst_overflow;
  seq_occupancy_burst_t burst[SEQ_OCCUPANCY_BURSTS_SAVED];
 } seq_occupancy_state_t;
 static SEQ_HOT_D1 seq_occupancy_state_t g_seq_occupancy_state;
@@ -151,7 +151,10 @@ void seq_occupancy_reset(void)
  g_seq_occupancy_end_overhead=0U;g_seq_occupancy_block_overhead=0U;
  g_seq_occupancy_trace_overflow=0U;seq_occupancy_publish();}
 void seq_occupancy_block_start(uint32_t block_index,uint32_t anchor_cycle)
-{const uint32_t measure=DWT->CYCCNT;if(g_seq_occupancy_state.active)seq_occupancy_block_end();
+{const uint32_t measure=DWT->CYCCNT;
+ if(g_seq_occupancy_state.active){const uint32_t actual_period=
+   anchor_cycle-g_seq_occupancy_state.anchor;
+  g_seq_occupancy_state.period=actual_period;seq_occupancy_block_end();}
  memset(&g_seq_occupancy_state,0,sizeof(g_seq_occupancy_state));
  g_seq_occupancy_state.block_index=block_index;g_seq_occupancy_state.anchor=anchor_cycle;
  g_seq_occupancy_state.period=seq_occupancy_period_cycles();g_seq_occupancy_state.active=1U;
@@ -164,7 +167,8 @@ void seq_occupancy_burst_start(void)
  const uint32_t offset=seq_occupancy_offset(measure);
  const uint32_t gap=(offset>s->previous_end)?offset-s->previous_end:0U;seq_occupancy_gap_add(gap);
  if(s->burst_count==0U){s->first_start=offset;s->free_before=gap;}
- s->burst_started=measure;s->segment_started=measure;s->burst_preempt=0U;s->preempt_depth=0U;
+ s->segment_started=measure;s->burst_preempt=0U;s->preempt_depth=0U;
+ s->preempt_sequence=0U;s->burst_started=measure;
  seq_occupancy_trace_add(SEQ_OCC_TRACE_SEQ_START,offset,s->burst_count);
  const uint32_t overhead=DWT->CYCCNT-measure;if(overhead>g_seq_occupancy_start_overhead)
  g_seq_occupancy_start_overhead=overhead;}
@@ -172,19 +176,28 @@ void seq_occupancy_preempt_enter(void)
 {seq_occupancy_state_t*s=&g_seq_occupancy_state;if(!s->active||!s->burst_started)return;
  if(s->preempt_depth++==0U){const uint32_t now=DWT->CYCCNT;
   const uint32_t run=now-s->segment_started;if(run>s->max_cpu)s->max_cpu=run;
-  s->preempt_started=now;}}
+  ++s->preempt_sequence;s->preempt_started=now;}}
 void seq_occupancy_preempt_exit(void)
 {seq_occupancy_state_t*s=&g_seq_occupancy_state;if(!s->active||!s->burst_started||!s->preempt_depth)return;
  if(--s->preempt_depth==0U){const uint32_t now=DWT->CYCCNT;
   const uint32_t elapsed=now-s->preempt_started;s->burst_preempt+=elapsed;
-  s->preempt_cycles+=elapsed;s->segment_started=now;}}
+  s->preempt_cycles+=elapsed;s->segment_started=now;++s->preempt_sequence;}}
 void seq_occupancy_burst_end(void)
-{const uint32_t measure=DWT->CYCCNT;seq_occupancy_state_t*s=&g_seq_occupancy_state;
+{const uint32_t overhead_started=DWT->CYCCNT;uint32_t measure;
+ seq_occupancy_state_t*s=&g_seq_occupancy_state;
  if(!s->active||!s->burst_started)return;
- const uint32_t run=measure-s->segment_started;
+ uint32_t segment,preempt;
+ if(s->preempt_depth!=0U){measure=s->preempt_started;segment=measure;
+  preempt=s->burst_preempt;}
+ else{uint32_t sequence;
+  do{sequence=s->preempt_sequence;segment=s->segment_started;
+   preempt=s->burst_preempt;measure=DWT->CYCCNT;
+  }while(sequence!=s->preempt_sequence||(sequence&1U)!=0U);}
+ const int32_t signed_run=(int32_t)(measure-segment);
+ const uint32_t run=(signed_run>0)?(uint32_t)signed_run:0U;
  if(run>s->max_cpu)s->max_cpu=run;
  const uint32_t wall=measure-s->burst_started;
- const uint32_t cpu=(s->burst_preempt<wall)?wall-s->burst_preempt:0U;
+ const uint32_t cpu=(preempt<wall)?wall-preempt:0U;
  const uint32_t start=seq_occupancy_offset(s->burst_started),end=seq_occupancy_offset(measure);
  s->total_cpu+=cpu;s->total_wall+=wall;if(wall>s->max_wall)s->max_wall=wall;
  s->last_end=end;s->previous_end=end;++s->burst_count;++g_seq_occupancy_total_bursts;
@@ -192,7 +205,7 @@ void seq_occupancy_burst_end(void)
   s->burst[s->saved_count++]=(seq_occupancy_burst_t){start,end,cpu,wall};
  else s->burst_overflow=1U;
  seq_occupancy_trace_add(SEQ_OCC_TRACE_SEQ_END,end,cpu);s->burst_started=0U;
- const uint32_t overhead=DWT->CYCCNT-measure;if(overhead>g_seq_occupancy_end_overhead)
+ const uint32_t overhead=DWT->CYCCNT-overhead_started;if(overhead>g_seq_occupancy_end_overhead)
  g_seq_occupancy_end_overhead=overhead;}
 void seq_occupancy_block_end(void)
 {const uint32_t measure=DWT->CYCCNT;seq_occupancy_state_t*s=&g_seq_occupancy_state;
@@ -298,15 +311,12 @@ void seq_engine_boot_bench_run(void)
   seq_boundary_probe_block_begin(boundary);
 #endif
  g_seq_bench_irq_depth=0U;g_seq_bench_irq_cycles=0U;
-  const uint32_t anchor=DWT->CYCCNT;
-  seq_occupancy_block_start(i,anchor);seq_occupancy_burst_start();
   const uint32_t started=DWT->CYCCNT;g_seq_bench_irq_window_active=1U;
   output_overflows+=seq_boot_bench_service(sample);
 #if SEQ_FINE_DIAGNOSTICS
   seq_boundary_probe_block_end();
 #endif
   const uint32_t finished=DWT->CYCCNT;g_seq_bench_irq_window_active=0U;
-  seq_occupancy_burst_end();seq_occupancy_block_end();
   const uint32_t cycles=finished-started,irq_cycles=g_seq_bench_irq_cycles;
   const uint32_t cpu_cycles=(irq_cycles<=cycles)?cycles-irq_cycles:0U;
   total+=cycles;cpu_total+=cpu_cycles;irq_total+=irq_cycles;
