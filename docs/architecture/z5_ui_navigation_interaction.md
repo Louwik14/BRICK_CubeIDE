@@ -58,6 +58,8 @@ parametres catalogues. Les pages virtuelles non p-lockables publient zero.
 
 Les clipboards transportent uniquement des etats logiques. Un collage MIDI FX applique MODEL avant ses parametres; un collage External conserve l'entree demandee et echoue sur conflit.
 
+La selection MODEL d'une chaine MIDI FX est une vue filtree du catalogue canonique: OFF reste toujours present, le modele courant reste valide pour son slot et les familles deja occupees par les autres slots sont seules retirees. Les positions de cette vue ne sont jamais utilisees comme valeurs MODEL; chaque detent est remappe vers l'enum canonique avant le commit CONTROL.
+
 Project Save est modal et reutilise le Name Editor generique. L'entree SAVE AS
 ou SAVE TO est refusee tant que le transport est RUNNING ou START_PENDING; elle
 ne demande jamais de STOP. Apres confirmation du nom, les inputs Settings restent
