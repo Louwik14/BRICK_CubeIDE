@@ -357,6 +357,10 @@ uint8_t seq_engine_core_submit_live(seq_engine_core_t *core,
 {
     if((core==0)||(event==0)||(pattern==0)||(out_block==0)||(window_end<=window_start))
         return 0U;
+    for(uint8_t track=0U;track<SEQ_LANE_CAPACITY;++track){
+        const uint8_t capacity=pattern->track_exec[track].logical_capacity;
+        core->logical_capacity[track]=(capacity<=SEQ_LOGICAL_CAPACITY_MAX)
+            ?capacity:SEQ_LOGICAL_CAPACITY_MAX;}
     note_event_t admitted=*event;int16_t binding=-1;uint8_t created=0U;
     if(!live_lane_bind(core,&admitted,&binding,&created)){
         seq_drop(core);return 0U;}
@@ -377,6 +381,8 @@ uint8_t seq_engine_core_submit_live(seq_engine_core_t *core,
     g_seq_fx_start=window_start;g_seq_fx_end=window_end;
     const uint8_t accepted=(uint8_t)(walker_resume(&admitted,0U,0U)
         ==NOTE_EVENT_RESULT_ACCEPTED);
+    if(accepted!=0U){const uint16_t bit=(uint16_t)(1U<<admitted.track);
+        core->emitter_tracks|=bit;out_block->emitter_tracks|=bit;}
     if(admitted.kind==NOTE_EVENT_KIND_OFF&&binding>=0)
         g_seq_live_lane[(uint8_t)binding].active=0U;
     else if(!accepted&&created&&binding>=0)
@@ -817,27 +823,17 @@ void seq_engine_core_process_block(seq_engine_core_t *core,uint64_t start,uint16
     out->lock_tracks=0U;
     if((p==0)||(frames==0U))return;
     core->event_faulted=0U;core->plock_fault_tracks=0U;
-    if((core->initialized==0U)||(core->transport_epoch!=p->transport_epoch)){
+    const uint8_t seed_frontier=(uint8_t)((core->initialized==0U)
+        ||(core->transport_epoch!=p->transport_epoch));
+    if(seed_frontier!=0U){
         seq_engine_core_init(core);core->initialized=1U;core->transport_epoch=p->transport_epoch;
         core->running=p->running;core->step_sample_q16=p->seed_step_sample_q16;
         core->samples_per_step_q16=p->samples_per_step_q16;
         memcpy(core->play_step,p->seed_play_step,sizeof(core->play_step));
         memcpy(core->track_div_phase,p->seed_div_phase,sizeof(core->track_div_phase));
         memcpy(core->track_swing_phase,p->seed_swing_phase,sizeof(core->track_swing_phase));
-        for(uint8_t t=0U;t<SEQ_LANE_CAPACITY;++t){
-            const uint8_t s=core->play_step[t];const uint8_t count=p->steps[t][s].lock_count;
-            const uint16_t first=p->lock_first[t][s];
-            if((p->track_lock_enabled[t]!=0U)&&(count<=SEQ_STEP_MAX_LOCKS)){
-                uint8_t write=0U;
-                for(uint8_t n=0U;n<count;++n){
-                    if((p->lock_pool[t][first+n].param_flags
-                            &SEQ_ENGINE_PARAM_FLAG_NOTE_FX)!=0U)continue;
-                    core->active_locks[t][write++]=(seq_active_lock_t){
-                        .param_flags=p->lock_pool[t][first+n].param_flags,
-                        .value16=p->lock_pool[t][first+n].value16,
-                        .base_value16=p->lock_pool[t][first+n].base_value16};}
-                core->active_lock_count[t]=write;}
-            configure_fx_step(p,t,s);}
+        for(uint8_t t=0U;t<SEQ_LANE_CAPACITY;++t)
+            configure_fx_step(p,t,core->play_step[t]);
         }
     core->samples_per_step_q16=p->samples_per_step_q16;
     for(uint8_t t=0U;t<SEQ_LANE_CAPACITY;++t){uint8_t capacity=p->track_exec[t].logical_capacity;
@@ -852,6 +848,8 @@ void seq_engine_core_process_block(seq_engine_core_t *core,uint64_t start,uint16
         memset(g_deferred_active,0,sizeof(g_deferred_active));return;}core->running=1U;
     const uint32_t dropped_before=core->dropped_events;
     const uint64_t begin_q16=start<<16,end_q16=(start+frames)<<16;
+    if(seed_frontier!=0U){
+        schedule_boundary(core,p,start,UINT16_MAX,start,out);}
     uint64_t next=core->step_sample_q16+core->samples_per_step_q16;
     while(next<end_q16){const uint16_t hits=advance(core,p);++core->transport_step_serial;
         core->step_sample_q16=next;

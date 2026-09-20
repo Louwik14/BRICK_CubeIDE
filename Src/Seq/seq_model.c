@@ -1156,7 +1156,6 @@ seq_plock_op_status_t seq_model_step_plock_upsert(seq_track_id_t track,
         existing->value16 = value16;
         existing->flags = flags;
         seq_model_exit_critical(primask);
-        seq_engine_control_disarm_track(track);
         seq_engine_control_mark_dirty();
         return SEQ_PLOCK_OP_UPDATED;
     }
@@ -1185,7 +1184,6 @@ seq_plock_op_status_t seq_model_step_plock_upsert(seq_track_id_t track,
     s->lock_set_mask |= seq_param_iface_set_to_mask(set_id);
 
     seq_model_exit_critical(primask);
-    seq_engine_control_disarm_track(track);
     seq_engine_control_mark_dirty();
     return SEQ_PLOCK_OP_CREATED;
 }
@@ -1235,7 +1233,6 @@ seq_plock_op_status_t seq_model_step_plock_delete(seq_track_id_t track,
     seq_model_free_lock_node(track, idx);
 
     seq_model_exit_critical(primask);
-    seq_engine_control_disarm_track(track);
     seq_engine_control_mark_dirty();
     return SEQ_PLOCK_OP_DELETED;
 }
@@ -1271,7 +1268,6 @@ void seq_model_step_param_plock_clear(seq_track_id_t track, seq_step_id_t step)
     s->lock_count = 0U;
     s->lock_set_mask = 0U;
     seq_model_exit_critical(primask);
-    seq_engine_control_disarm_track(track);
     seq_engine_control_mark_dirty();
 }
 

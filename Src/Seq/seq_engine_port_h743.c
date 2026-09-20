@@ -100,6 +100,17 @@ static uint8_t event_is_audible(const seq_terminal_block_t *block,uint8_t kind,
         & (uint16_t)(1U << track)) != 0U);
 }
 
+static uint8_t event_is_live_note(uint8_t kind,
+                                  const seq_terminal_event_t *event)
+{
+    if((event==0)||((kind!=SEQ_ENGINE_EVENT_NOTE_ON)
+            &&(kind!=SEQ_ENGINE_EVENT_NOTE_OFF)))return 0U;
+    const uint32_t source=event->note.occurrence_id
+        &~NOTE_EVENT_OCCURRENCE_COUNTER_MASK;
+    return(uint8_t)((source==NOTE_EVENT_OCCURRENCE_NAMESPACE_KEY)
+        ||(source==NOTE_EVENT_OCCURRENCE_NAMESPACE_MIDI));
+}
+
 static uint8_t audio_cursor_seek(seq_terminal_block_t *block)
 {for(;;){if(g_audio_cursor!=SEQ_ENGINE_TERMINAL_INDEX_NONE)return 1U;
   while(g_audio_offset<block->frames){while(g_audio_class<SEQ_ENGINE_TERMINAL_CLASS_COUNT){
@@ -120,7 +131,8 @@ uint16_t seq_engine_audio_frames_until_due(uint64_t sample, uint16_t maximum)
         const seq_terminal_event_t *const event=&block->events[g_audio_cursor];
         if(event_is_audible(block,g_audio_class,event)==0U){audio_cursor_advance(block);continue;}
         const uint64_t due = block->start_sample + g_audio_offset;
-        if ((g_force_stopped != 0U) && (due >= g_force_stop_sample)) {
+        if ((g_force_stopped != 0U) && (due >= g_force_stop_sample)
+                &&(event_is_live_note(g_audio_class,event)==0U)) {
             audio_cursor_advance(block);continue;
         }
         if (due <= sample) return 0U;
@@ -139,7 +151,8 @@ uint8_t seq_engine_audio_pop_due(uint64_t sample,uint8_t *out_kind,
         const seq_terminal_event_t event=block->events[g_audio_cursor];
         if(event_is_audible(block,g_audio_class,&event)==0U){audio_cursor_advance(block);continue;}
         const uint64_t due = block->start_sample + g_audio_offset;
-        if ((g_force_stopped != 0U) && (due >= g_force_stop_sample)) {
+        if ((g_force_stopped != 0U) && (due >= g_force_stop_sample)
+                &&(event_is_live_note(g_audio_class,&event)==0U)) {
             audio_cursor_advance(block);continue;
         }
         if (due > sample) return 0U;
@@ -226,14 +239,16 @@ void seq_service(uint64_t now_sample, uint64_t publish_until_sample)
         g_force_stopped=0U;
     const uint64_t start = publish_until_sample;
     const uint16_t frames = SEQ_ENGINE_H743_PERIOD_SAMPLES;
+    if(g_ingress_panic!=0U){g_ingress_panic=0U;
+        seq_engine_core_init(&g_core);}
     if ((g_force_stopped != 0U) && (start >= g_force_stop_sample)) {
         seq_engine_core_process_block(&g_core,start,frames,0,block);
+        block->emitter_tracks=g_core.emitter_tracks;
     } else {
         g_force_stopped = 0U;
         seq_engine_core_process_block(&g_core,start,frames,pattern,block);
-        if(g_ingress_panic!=0U){g_ingress_panic=0U;
-            seq_engine_core_init(&g_core);}
-        while(g_ingress_count!=0U){
+    }
+    while(g_ingress_count!=0U){
             const seq_ingress_event_t in=g_ingress[g_ingress_tail];
             g_ingress_tail=(uint8_t)((g_ingress_tail+1U)%SEQ_ENGINE_INGRESS_CAPACITY);
             --g_ingress_count;
@@ -248,7 +263,6 @@ void seq_service(uint64_t now_sample, uint64_t publish_until_sample)
                 .velocity=in.velocity,.kind=in.kind,
                 .provenance=in.provenance,.stage=NOTE_EVENT_STAGE_SOURCE};
             (void)seq_engine_core_submit_live(&g_core,&event,pattern,start,start+frames,block);
-        }
     }
     block->block_id = (uint32_t)(start / frames);
     g_next_deadline = start + frames; __DMB(); g_slot_state[slot] = SLOT_READY;
@@ -265,6 +279,8 @@ static void seq_service_urgent(uint64_t now_sample,uint64_t publish_until_sample
         g_slot_state[slot]=SLOT_WRITING;__DMB();__set_PRIMASK(primask);
         seq_terminal_block_t *const block=&g_terminal[slot];
         const uint64_t end=block->start_sample+block->frames;
+        if(g_ingress_panic!=0U){g_ingress_panic=0U;
+            seq_engine_core_init(&g_core);}
         while(g_ingress_count!=0U){
             const seq_ingress_event_t in=g_ingress[g_ingress_tail];
             g_ingress_tail=(uint8_t)((g_ingress_tail+1U)%SEQ_ENGINE_INGRESS_CAPACITY);
