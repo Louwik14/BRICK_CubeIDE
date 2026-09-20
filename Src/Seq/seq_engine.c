@@ -143,7 +143,9 @@ static void ledger_commit(seq_engine_core_t *core,const note_event_t *event,
     if(plan->victim>=0)ledger_release(core,(uint8_t)plan->victim);
     core->ledger[(uint8_t)plan->target]=(seq_ledger_entry_t){
         .admitted_sample=event->sample_abs,
-        .due_off=event->sample_abs+(event->duration_samples?event->duration_samples:1U),
+        .due_off=((event->flags&NOTE_EVENT_FLAG_HELD)!=0U)
+            ?UINT64_MAX:event->sample_abs
+                +(event->duration_samples?event->duration_samples:1U),
         .occurrence_id=event->occurrence_id,.note=event->note,
         .original=(uint8_t)(((event->flags&NOTE_EVENT_FLAG_GENERATED)==0U)?1U:0U)};
     core->ledger_active|=UINT64_C(1)<<(uint8_t)plan->target;
@@ -368,15 +370,8 @@ uint8_t seq_engine_core_submit_live(seq_engine_core_t *core,
         if(admitted.track>=SEQ_LANE_CAPACITY||admitted.temporal_index>=SEQ_PLAY_MAX_CAPACITY){
             if(created&&binding>=0)g_seq_live_lane[(uint8_t)binding].active=0U;
             return 0U;}
-        const uint8_t length=pattern->play_base[admitted.track]
-            .items[admitted.temporal_index].length;
-        if(length==0U||pattern->samples_per_step_q16==0U){
-            if(created&&binding>=0)g_seq_live_lane[(uint8_t)binding].active=0U;
-            return 0U;}
-        uint64_t duration=((uint64_t)length*pattern->samples_per_step_q16+0x8000ULL)>>16U;
-        if(duration==0U)duration=1U;
-        if(duration>UINT32_MAX)duration=UINT32_MAX;
-        admitted.duration_samples=(uint32_t)duration;}
+        admitted.duration_samples=UINT32_MAX;
+        admitted.flags|=NOTE_EVENT_FLAG_HELD;}
     g_seq_fx_core=core;g_seq_fx_block=out_block;
     g_seq_fx_start=window_start;g_seq_fx_end=window_end;
     const uint8_t accepted=(uint8_t)(walker_resume(&admitted,0U,0U)
@@ -843,9 +838,15 @@ void seq_engine_core_process_block(seq_engine_core_t *core,uint64_t start,uint16
         for(uint8_t t=0U;t<SEQ_LANE_CAPACITY;++t)
             configure_fx_step(p,t,core->play_step[t]);}
     if((p->running==0U)||(core->samples_per_step_q16==0U)){
-        core->running=0U;sources_clear(core);
-        memset(g_terminal_deferred,0,sizeof(g_terminal_deferred));
-        memset(g_deferred_active,0,sizeof(g_deferred_active));return;}core->running=1U;
+        core->running=0U;
+        collect(core,start,frames,p,out);
+        for(uint8_t track=0U;track<SEQ_LANE_CAPACITY;++track){
+            const uint16_t bit=(uint16_t)(1U<<track);
+            if((p->track_note_enabled[track]!=0U)
+                    &&(p->track_muted[track]==0U)
+                    &&((core->emitter_tracks&bit)!=0U))
+                out->emitter_tracks|=bit;}
+        return;}core->running=1U;
     const uint32_t dropped_before=core->dropped_events;
     const uint64_t begin_q16=start<<16,end_q16=(start+frames)<<16;
     if(seed_frontier!=0U){

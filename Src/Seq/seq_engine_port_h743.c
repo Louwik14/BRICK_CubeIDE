@@ -234,8 +234,9 @@ void seq_service(uint64_t now_sample, uint64_t publish_until_sample)
     if ((pattern != 0) && (pattern->generation != g_disarm_generation)) {
         g_disarmed_tracks = 0U; g_disarm_generation = pattern->generation;
     }
-    if((g_force_stopped!=0U)&&(pattern!=0)&&(pattern->running!=0U)
-            &&(pattern->transport_epoch!=g_force_stop_epoch))
+    if((g_force_stopped!=0U)&&(pattern!=0)
+            &&((pattern->running==0U)
+                ||(pattern->transport_epoch!=g_force_stop_epoch)))
         g_force_stopped=0U;
     const uint64_t start = publish_until_sample;
     const uint16_t frames = SEQ_ENGINE_H743_PERIOD_SAMPLES;
