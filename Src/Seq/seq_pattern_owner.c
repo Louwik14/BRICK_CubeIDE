@@ -34,6 +34,7 @@ static uint32_t g_build_generation;
 static uint8_t g_last_running;
 static uint8_t g_seen_runtime_running;
 static uint32_t g_transport_epoch;
+static seq_runtime_shadow_seed_t g_build_seed;
 static note_fx_track_state_t g_build_fx_state[SEQ_LANE_CAPACITY];
 static uint8_t seq_engine_compile_step_fx(seq_pattern_t *pattern,
                                           uint8_t track, uint8_t step)
@@ -125,6 +126,7 @@ void seq_engine_control_init(void)
     g_last_running = 0U;
     g_seen_runtime_running = seq_runtime_is_running();
     g_transport_epoch = 1U;
+    memset(&g_build_seed, 0, sizeof(g_build_seed));
 }
 
 void seq_engine_control_mark_dirty(void)
@@ -336,29 +338,42 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
 void seq_engine_control_poll(void)
 {
     const uint8_t running = seq_runtime_is_running();
+    uint8_t transport_changed = 0U;
     if (running != g_seen_runtime_running)
     {
         g_seen_runtime_running = running;
+        transport_changed = 1U;
         seq_engine_control_mark_dirty();
     }
     const uint32_t current = g_edit_generation;
+    if (((g_build_track != 0U) || (g_build_step != 0U))
+            && (g_build_generation != current))
+    {
+        g_build_track = 0U;
+        g_build_step = 0U;
+        if (transport_changed == 0U) return;
+    }
     if ((g_build_track == 0U) && (g_build_step == 0U))
     {
         if ((g_published_generation != 0U)
                 && (current == g_published_generation)) return;
         g_build_generation = current;
         g_build_slot = (uint8_t)(g_published_slot ^ 1U);
+        seq_runtime_capture_shadow_seed(&g_build_seed);
+        if (g_build_seed.running != g_last_running)
+        {
+            ++g_transport_epoch;
+            if (g_transport_epoch == 0U) g_transport_epoch = 1U;
+            g_last_running = g_build_seed.running;
+        }
         memset(g_pattern[g_build_slot]->lock_pool_count, 0,
                sizeof(g_pattern[g_build_slot]->lock_pool_count));
     }
-    if (g_build_generation != current)
-    {
-        g_build_track = 0U;
-        g_build_step = 0U;
-        return;
-    }
-    /* Four steps per CONTROL pass keeps capture cooperative. */
-    for (uint8_t work = 0U; work < 4U; ++work)
+    /* A transport edge must publish its immutable frontier before the first
+     * step elapses. Ordinary edits remain cooperative. */
+    const uint16_t work_limit = (transport_changed != 0U)
+        ? (uint16_t)(SEQ_LANE_CAPACITY * SEQ_MAX_STEPS) : 4U;
+    for (uint16_t work = 0U; work < work_limit; ++work)
     {
         seq_engine_capture_step(g_pattern[g_build_slot],
                                   g_build_track, g_build_step++);
@@ -371,25 +386,17 @@ void seq_engine_control_poll(void)
     g_build_step = 0U;
     if (g_edit_generation != g_build_generation) return;
     seq_pattern_t *const pattern = g_pattern[g_build_slot];
-    seq_runtime_shadow_seed_t seed;
-    seq_runtime_capture_shadow_seed(&seed);
-    if (seed.running != g_last_running)
-    {
-        ++g_transport_epoch;
-        if (g_transport_epoch == 0U) g_transport_epoch = 1U;
-        g_last_running = seed.running;
-    }
-    pattern->running = seed.running;
+    pattern->running = g_build_seed.running;
     pattern->scale_index = keyboard_params_get_scale_index();
     pattern->root_index = keyboard_params_get_root_index();
     pattern->transport_epoch = g_transport_epoch;
-    pattern->seed_step_sample_q16 = seed.step_sample_q16;
-    pattern->samples_per_step_q16 = seed.samples_per_step_q16;
-    memcpy(pattern->seed_play_step, seed.play_step,
+    pattern->seed_step_sample_q16 = g_build_seed.step_sample_q16;
+    pattern->samples_per_step_q16 = g_build_seed.samples_per_step_q16;
+    memcpy(pattern->seed_play_step, g_build_seed.play_step,
            sizeof(pattern->seed_play_step));
-    memcpy(pattern->seed_div_phase, seed.track_div_phase,
+    memcpy(pattern->seed_div_phase, g_build_seed.track_div_phase,
            sizeof(pattern->seed_div_phase));
-    memcpy(pattern->seed_swing_phase, seed.track_swing_phase,
+    memcpy(pattern->seed_swing_phase, g_build_seed.track_swing_phase,
            sizeof(pattern->seed_swing_phase));
     pattern->generation = g_build_generation;
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)

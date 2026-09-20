@@ -5,6 +5,7 @@
 #include "App/live_parameter_audio_publication.h"
 #include "Track/entity_types.h"
 #include "Track/synth_polyphony.h"
+#include "Seq/seq_engine.h"
 #include "Track/control_music_output.h"
 #include "Track/track_runtime.h"
 #include "Param/param_registry.h"
@@ -112,11 +113,14 @@ uint8_t polyphony_control_install_prepared(uint8_t track,
 {
     if(track>=BRICK_ENTITY_CAPACITY||prepared==NULL)return 0U;
     const track_runtime_ctx_t *const ctx=track_runtime_get_ctx(track);
+    const uint8_t previous=g_polyphony_voice_count[track];
     g_polyphony_voice_count[track]=(ctx==NULL)?1U:
         track_runtime_effective_voice_count(
             (track_runtime_family_t)ctx->family,
             (track_runtime_type_t)ctx->type,prepared->voice_count);
     g_polyphony_spread[track]=prepared->spread;
+    if(g_polyphony_voice_count[track]!=previous)
+        seq_engine_control_mark_dirty();
     return 1U;
 }
 uint8_t polyphony_control_restore(uint8_t track,const polyphony_control_state_t*state)
