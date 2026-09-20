@@ -35,6 +35,11 @@ note_event_result_t note_fx_engine_configure(
 note_event_result_t note_fx_engine_transform(
     uint8_t slot, const note_event_t *input, uint8_t input_count,
     note_event_t *output, uint8_t output_capacity, uint8_t *output_count);
+note_event_result_t note_fx_engine_transform_prepared(
+    uint8_t slot, const note_event_t *input, uint8_t input_count,
+    note_event_t *output, uint8_t output_capacity, uint8_t *output_count);
+uint8_t note_fx_engine_next_active_slot(uint8_t track, uint8_t stage);
+uint8_t note_fx_engine_suffix_is_temporal(uint8_t track, uint8_t stage);
 note_event_result_t note_fx_engine_process(
     uint64_t block_start, uint16_t frames, uint32_t samples_per_step_q16,
     uint64_t transport_position_q16,
