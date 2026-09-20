@@ -298,7 +298,6 @@ uint8_t note_fx_state_install_prepared_track(uint8_t track,
             || (note_fx_state_validate_unique_families(&normalized) == 0U))
         return 0U;
     g_note_fx_state[track] = normalized;
-    seq_engine_control_disarm_track(track);
     seq_engine_control_mark_dirty();
     return 1U;
 }

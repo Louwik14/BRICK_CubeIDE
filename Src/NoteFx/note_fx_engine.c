@@ -177,6 +177,16 @@ static note_event_result_t harmonizer_group(uint8_t slot,
  note_fx_slot_runtime_t*r,const note_event_t*in,uint8_t n,note_event_t*out,
  uint8_t cap,uint8_t*count)
 {const uint8_t stage=(uint8_t)(slot+1U);*count=0U;
+ if(in[0].kind==NOTE_EVENT_KIND_OFF){
+  for(uint8_t i=0U;i<n;++i)for(uint8_t voice=0U;
+       voice<SEQ_PRODUCT_HARMONY_FANOUT_MAX;++voice){
+   note_event_t x=in[i];
+   x.dependency_mask=(uint8_t)((x.dependency_mask&NOTE_EVENT_DEPENDENCY_SLOT_MASK)
+       |(voice<<NOTE_EVENT_BRANCH_SHIFT));
+   if(voice){x.occurrence_id=child_id(in[i].occurrence_id,slot,voice,0U);
+    x.provenance=NOTE_EVENT_SOURCE_FX;x.flags|=NOTE_EVENT_FLAG_GENERATED;}
+   if(!append(out,cap,count,&x,stage))return NOTE_EVENT_RESULT_REJECTED_CAPACITY;}
+  return NOTE_EVENT_RESULT_ACCEPTED;}
  for(uint8_t voice=0U;voice<SEQ_PRODUCT_HARMONY_FANOUT_MAX;++voice)
   for(uint8_t root_class=0U;root_class<(uint8_t)(voice?1U:2U);++root_class)
   for(uint8_t i=0U;i<n;++i){
