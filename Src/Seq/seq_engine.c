@@ -490,6 +490,13 @@ static uint8_t next_step(const seq_pattern_t *p, uint8_t track,
     return ((uint8_t)(current + 1U) < length) ? (uint8_t)(current + 1U) : 0U;
 }
 
+static uint8_t live_track_active(uint8_t track)
+{
+    for(uint8_t i=0U;i<SEQ_ENGINE_LEDGER_CAPACITY;++i)
+        if(g_seq_live_lane[i].active&&g_seq_live_lane[i].track==track)return 1U;
+    return 0U;
+}
+
 static void configure_fx_step(const seq_pattern_t *p,uint8_t track,
     uint8_t step)
 {
@@ -505,6 +512,9 @@ static void configure_fx_step(const seq_pattern_t *p,uint8_t track,
         if(slot<NOTE_FX_SLOT_COUNT)effective[slot]=(uint32_t)lock->value16
             |((uint32_t)lock->base_value16<<16U);
     }
+    if(g_seq_fx_core!=0&&live_track_active(track)!=0U){
+        for(uint8_t slot=0U;slot<NOTE_FX_SLOT_COUNT;++slot)
+            if(g_seq_fx_core->fx_effective[track][slot]!=effective[slot])return;}
     for(uint8_t slot=0U;slot<NOTE_FX_SLOT_COUNT;++slot)
         if(g_seq_fx_core==0||g_seq_fx_core->fx_effective[track][slot]!=effective[slot]){
          if(note_fx_engine_configure(track,slot,note_fx_plan_model(effective[slot]),

@@ -134,7 +134,10 @@ static note_event_result_t direct(uint8_t slot,note_fx_slot_runtime_t*r,const no
  if(r->model==NOTE_FX_MODEL_ECHO){if(!append(out,cap,count,e,stage))return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
   if(e->kind==NOTE_EVENT_KIND_ON&&r->p2){note_fx_echo_state_t*x=echo_state(e);if(!x)return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
    const uint32_t delay=(uint32_t)seq_division_period_samples(r->p1,g_samples_per_step_q16);
-   const uint8_t was_active=x->active;const uint64_t promised=was_active?x->next_due:UINT64_MAX;
+   const uint8_t same_lifetime=(uint8_t)(x->active
+       &&x->source_id==e->source_id&&x->occurrence_id==e->occurrence_id
+       &&x->generation==e->source_generation);
+   const uint64_t promised=same_lifetime?x->next_due:UINT64_MAX;
    *x=(note_fx_echo_state_t){
     .next_due=e->sample_abs+(delay?delay:1U),.delay=delay?delay:1U,
     .duration=((e->flags&NOTE_EVENT_FLAG_HELD)!=0U)?(delay?delay:1U):e->duration_samples,.source_id=e->source_id,
