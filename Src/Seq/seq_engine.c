@@ -250,7 +250,42 @@ static void fx_terminal(const note_event_t *e)
     seq_probe_end(SEQ_PROBE_ADMISSION,probe);
 }
 
-static note_event_result_t walker_resume(const note_event_t *source,uint8_t stage)
+static uint8_t walker_suffix_is_temporal(uint8_t track,uint8_t slot)
+{for(uint8_t s=(uint8_t)(slot+1U);s<NOTE_FX_SLOT_COUNT;++s)
+ if((note_fx_plan_flags(g_seq_fx_core->fx_effective[track][s])
+      &NOTE_FX_PLAN_FLAG_TEMPORAL)!=0U)return 1U;
+ return 0U;}
+
+static uint8_t walker_harm_capacity(const note_event_t *events,uint8_t count,
+    uint8_t slot,uint8_t frontier_exact)
+{const uint8_t track=events[0].track;const uint8_t quota=g_seq_fx_core->logical_capacity[track];
+ if(quota==0U)return 0U;
+ if(frontier_exact==0U||walker_suffix_is_temporal(track,slot)!=0U)return quota;
+ uint8_t generated_live=0U;
+ for(uint8_t logical=0U;logical<quota;++logical){const uint16_t lane=
+   product_lane_from_track_slot(track,logical);
+  if(lane<SEQ_ENGINE_LEDGER_CAPACITY&&((g_seq_fx_core->ledger_active>>lane)&1U)!=0U
+       &&g_seq_fx_core->ledger[lane].original==0U)++generated_live;}
+ const uint8_t free_slots=(g_seq_fx_core->ledger_track_count[track]<quota)
+   ?(uint8_t)(quota-g_seq_fx_core->ledger_track_count[track]):0U;
+ uint8_t original_roots=0U,generated_roots=0U;
+ for(uint8_t i=0U;i<count;++i){uint8_t duplicate=0U;
+  for(uint8_t j=0U;j<i;++j)if(events[j].note==events[i].note)duplicate=1U;
+  if(duplicate)continue;
+  if((events[i].flags&NOTE_EVENT_FLAG_GENERATED)!=0U)++generated_roots;
+  else ++original_roots;}
+ const uint8_t generated_room=(uint8_t)(free_slots+generated_live);
+ const uint8_t after_original=(generated_room>original_roots)
+   ?(uint8_t)(generated_room-original_roots):0U;
+ const uint8_t admitted_generated_roots=(generated_roots<after_original)
+   ?generated_roots:after_original;
+ const uint8_t remaining_generated=(uint8_t)(after_original-admitted_generated_roots);
+ uint16_t limit=(uint16_t)original_roots+admitted_generated_roots+remaining_generated;
+ if(limit>quota)limit=quota;
+ return(uint8_t)limit;}
+
+static note_event_result_t walker_resume(const note_event_t *source,uint8_t stage,
+    uint8_t frontier_exact)
 {
     const uint32_t walker_started=note_fx_walker_probe_begin();
     const uint64_t classified_before=note_fx_walker_probe_cycles_total();
@@ -262,8 +297,12 @@ static note_event_result_t walker_resume(const note_event_t *source,uint8_t stag
     note_event_t *in=g_seq_fx_a,*out=g_seq_fx_b;
     for(uint8_t slot=stage;slot<NOTE_FX_SLOT_COUNT;++slot){
         uint8_t out_count=0U;
+        uint8_t transform_capacity=NOTE_FX_BATCH_CAPACITY;
+        if(note_fx_plan_model(g_seq_fx_core->fx_effective[in[0].track][slot])
+              ==NOTE_FX_MODEL_HARMONIZER)
+            transform_capacity=walker_harm_capacity(in,count,slot,frontier_exact);
         const note_event_result_t r=note_fx_engine_transform(slot,in,count,
-            out,NOTE_FX_BATCH_CAPACITY,&out_count);
+            out,transform_capacity,&out_count);
         seq_probe_activity(SEQ_PROBE_WALKER_EVENTS_TRAVERSED,count);
         seq_probe_activity(SEQ_PROBE_WALKER_EVENTS_PRODUCED,out_count);
         if(r!=NOTE_EVENT_RESULT_ACCEPTED){seq_probe_end(SEQ_PROBE_WALKER,probe);return r;}
@@ -283,7 +322,7 @@ static note_event_result_t walker_resume(const note_event_t *source,uint8_t stag
 }
 
 static note_event_result_t fx_generated(const note_event_t *event,void *ctx)
-{(void)ctx;return walker_resume(event,event->stage);}
+{(void)ctx;return walker_resume(event,event->stage,0U);}
 
 static uint8_t live_lane_bind(const seq_engine_core_t *core,note_event_t *event,
     int16_t *binding,uint8_t *created)
@@ -335,7 +374,7 @@ uint8_t seq_engine_core_submit_live(seq_engine_core_t *core,
         admitted.duration_samples=(uint32_t)duration;}
     g_seq_fx_core=core;g_seq_fx_block=out_block;
     g_seq_fx_start=window_start;g_seq_fx_end=window_end;
-    const uint8_t accepted=(uint8_t)(walker_resume(&admitted,0U)
+    const uint8_t accepted=(uint8_t)(walker_resume(&admitted,0U,0U)
         ==NOTE_EVENT_RESULT_ACCEPTED);
     if(admitted.kind==NOTE_EVENT_KIND_OFF&&binding>=0)
         g_seq_live_lane[(uint8_t)binding].active=0U;
@@ -460,6 +499,7 @@ static void schedule_step(seq_engine_core_t *core, const seq_pattern_t *p,
     uint64_t nominal, uint8_t negative_only)
 {
     if ((p->track_can_emit[track] == 0U) || (p->track_muted[track] != 0U)
+            || (core->logical_capacity[track] == 0U)
             || ((p->steps[track][step].trig_roll & 1U) == 0U)) return;
     const uint8_t voices = (track < BRICK_ENTITY_TOP_LEVEL_COUNT)
         ? SEQ_PLAY_MAX_CAPACITY : 1U;
@@ -651,7 +691,7 @@ static ITCM_TEXT void collect(seq_engine_core_t *core,uint64_t start,uint16_t fr
            .flags=(uint8_t)((s->playback_stage==NOTE_EVENT_STAGE_TERMINAL)
              ?NOTE_EVENT_FLAG_TERMINAL:0U)};
           if(s->playback_stage==NOTE_EVENT_STAGE_TERMINAL)fx_terminal(&event);
-          else if(walker_resume(&event,0U)!=NOTE_EVENT_RESULT_ACCEPTED)
+          else if(walker_resume(&event,0U,1U)!=NOTE_EVENT_RESULT_ACCEPTED)
             seq_drop(core,SEQ_DROP_SOURCE_TRANSFORM);
           if(++s->next_ordinal>=s->ordinal_count){s->active=0U;
             core->source_active[bank]&=~(UINT64_C(1)<<selected_lane);

@@ -168,7 +168,6 @@ static note_event_result_t direct(uint8_t slot,note_fx_slot_runtime_t*r,const no
     g_echo_diag.active_peak=g_echo_diag.active;}
    if(promised<x->next_due)x->next_due=promised;}return NOTE_EVENT_RESULT_ACCEPTED;}
  if(r->model==NOTE_FX_MODEL_GATE){if(e->kind==NOTE_EVENT_KIND_OFF)return NOTE_EVENT_RESULT_ACCEPTED;note_event_t on=*e;on.flags|=NOTE_EVENT_FLAG_GATE;if(r->p3==NOTE_FX_GATE_MODE_LEGATO)on.flags|=NOTE_EVENT_FLAG_LEGATO;else if(r->p3==NOTE_FX_GATE_MODE_RETRIG)on.flags|=NOTE_EVENT_FLAG_RETRIGGER;int32_t var=0;if(r->p2){const uint32_t h=mix32(e->group_id^((uint32_t)slot<<24));var=(int32_t)(h%(2U*r->p2+1U))-(int32_t)r->p2;}int32_t pct=(int32_t)r->p1+var;if(pct<1)pct=1;if(r->p3==NOTE_FX_GATE_MODE_CLIP&&pct>100)pct=100;on.duration_samples=(uint32_t)(((uint64_t)pct*step_samples()+50U)/100U);return append(out,cap,count,&on,stage)?NOTE_EVENT_RESULT_ACCEPTED:NOTE_EVENT_RESULT_REJECTED_CAPACITY;}
- if(r->model==NOTE_FX_MODEL_HARMONIZER){uint8_t emitted=0;for(uint8_t voice=0;voice<SEQ_PRODUCT_HARMONY_FANOUT_MAX;++voice){uint8_t interval=g_harmony[r->p1%NOTE_FX_HARMONIZER_TYPE_COUNT][voice];if(interval==255)continue;if(voice<r->p3)interval=(uint8_t)(interval+12U);if(r->p2&&voice)interval=(uint8_t)(interval+12U*(1U+(uint8_t)((voice-1U)%r->p2)));if((uint16_t)e->note+interval>=128)continue;note_event_t x=*e;x.note=(uint8_t)(e->note+interval);x.dependency_mask=(uint8_t)((x.dependency_mask&NOTE_EVENT_DEPENDENCY_SLOT_MASK)|(voice<<NOTE_EVENT_BRANCH_SHIFT));if(voice){x.occurrence_id=child_id(e->occurrence_id,slot,voice,0);x.provenance=NOTE_EVENT_SOURCE_FX;x.flags|=NOTE_EVENT_FLAG_GENERATED;}uint8_t dup=0;for(uint8_t i=0;i<*count;++i)if(out[i].note==x.note)dup=1;if(!dup){if(!append(out,cap,count,&x,stage))return NOTE_EVENT_RESULT_REJECTED_CAPACITY;++emitted;}}return emitted?NOTE_EVENT_RESULT_ACCEPTED:NOTE_EVENT_RESULT_DROPPED_POLICY;}
  return append(out,cap,count,e,stage)?NOTE_EVENT_RESULT_ACCEPTED:NOTE_EVENT_RESULT_REJECTED_CAPACITY;}
 
 static note_event_result_t chord_group(uint8_t slot,note_fx_slot_runtime_t*r,
@@ -186,6 +185,34 @@ static note_event_result_t chord_group(uint8_t slot,note_fx_slot_runtime_t*r,
   out[i].note=(uint8_t)note;}
  uint8_t write=0;for(uint8_t i=0;i<*count;++i){uint8_t duplicate=0;for(uint8_t j=0;j<write;++j)if(out[j].note==out[i].note)duplicate=1;if(!duplicate)out[write++]=out[i];}
  *count=write;return write?NOTE_EVENT_RESULT_ACCEPTED:NOTE_EVENT_RESULT_DROPPED_POLICY;}
+
+static note_event_result_t harmonizer_group(uint8_t slot,
+ note_fx_slot_runtime_t*r,const note_event_t*in,uint8_t n,note_event_t*out,
+ uint8_t cap,uint8_t*count)
+{const uint8_t stage=(uint8_t)(slot+1U);*count=0U;
+ for(uint8_t voice=0U;voice<SEQ_PRODUCT_HARMONY_FANOUT_MAX;++voice)
+  for(uint8_t root_class=0U;root_class<(uint8_t)(voice?1U:2U);++root_class)
+  for(uint8_t i=0U;i<n;++i){
+   if(voice==0U){const uint8_t generated=(uint8_t)
+     ((in[i].flags&NOTE_EVENT_FLAG_GENERATED)!=0U);
+    if(generated!=root_class)continue;}
+   uint8_t interval=
+    g_harmony[r->p1%NOTE_FX_HARMONIZER_TYPE_COUNT][voice];
+   if(interval==255U)continue;
+   if(voice<r->p3)interval=(uint8_t)(interval+12U);
+   if(r->p2&&voice)interval=(uint8_t)(interval+12U*(1U+(uint8_t)((voice-1U)%r->p2)));
+   if((uint16_t)in[i].note+interval>=128U)continue;
+   note_event_t x=in[i];x.note=(uint8_t)(in[i].note+interval);
+   x.dependency_mask=(uint8_t)((x.dependency_mask&NOTE_EVENT_DEPENDENCY_SLOT_MASK)
+       |(voice<<NOTE_EVENT_BRANCH_SHIFT));
+   if(voice){x.occurrence_id=child_id(in[i].occurrence_id,slot,voice,0U);
+    x.provenance=NOTE_EVENT_SOURCE_FX;x.flags|=NOTE_EVENT_FLAG_GENERATED;}
+   uint8_t duplicate=0U;for(uint8_t j=0U;j<*count;++j)
+    if(out[j].note==x.note)duplicate=1U;
+   if(duplicate)continue;
+   if(*count>=cap)return NOTE_EVENT_RESULT_ACCEPTED;
+   if(!append(out,cap,count,&x,stage))return NOTE_EVENT_RESULT_REJECTED_CAPACITY;}
+ return *count?NOTE_EVENT_RESULT_ACCEPTED:NOTE_EVENT_RESULT_DROPPED_POLICY;}
 
 static note_event_result_t echo_process(uint64_t start,uint64_t end,note_fx_emit_fn emit,void*ctx)
 {const uint32_t probe=seq_probe_begin(SEQ_PROBE_ECHO);
@@ -248,6 +275,9 @@ note_event_result_t note_fx_engine_transform(uint8_t s,const note_event_t*in,uin
  note_fx_walker_probe_record(NOTE_FX_WALKER_LOOKUP,lookup_probe,n,0U,0U,0U,held_count,0U);
  const note_fx_walker_category_t category=walker_category(r->model);
  uint32_t fx_probe=note_fx_walker_probe_begin();
+ if(r->model==NOTE_FX_MODEL_HARMONIZER){
+  const note_event_result_t result=harmonizer_group(s,r,in,n,out,cap,count);
+  note_fx_walker_probe_record(category,fx_probe,n,*count,*count,0U,0U,0U);return result;}
  if(r->model==NOTE_FX_MODEL_CHORD){
   const note_event_result_t result=chord_group(s,r,in,n,out,cap,count);
   note_fx_walker_probe_record(category,fx_probe,n,*count,*count,0U,0U,0U);return result;}
