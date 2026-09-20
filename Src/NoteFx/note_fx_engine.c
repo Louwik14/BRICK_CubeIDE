@@ -208,7 +208,7 @@ static note_event_result_t harmonizer_group(uint8_t slot,
    if(voice){x.occurrence_id=child_id(in[i].occurrence_id,slot,voice,0U);
     x.provenance=NOTE_EVENT_SOURCE_FX;x.flags|=NOTE_EVENT_FLAG_GENERATED;}
    uint8_t duplicate=0U;for(uint8_t j=0U;j<*count;++j)
-    if(out[j].note==x.note)duplicate=1U;
+    if(out[j].group_id==x.group_id&&out[j].note==x.note)duplicate=1U;
    if(duplicate)continue;
    if(*count>=cap)return NOTE_EVENT_RESULT_ACCEPTED;
    if(!append(out,cap,count,&x,stage))return NOTE_EVENT_RESULT_REJECTED_CAPACITY;}
@@ -261,10 +261,15 @@ note_event_result_t note_fx_engine_transform(uint8_t s,const note_event_t*in,uin
  if(!in||!out||!count||!n||s>=NOTE_FX_SLOT_COUNT){
   note_fx_walker_probe_record(NOTE_FX_WALKER_LOOKUP,lookup_probe,n,0U,0U,0U,0U,0U);
   return NOTE_EVENT_RESULT_DROPPED_POLICY;}
- for(uint8_t i=0;i<n;++i)if(!note_event_is_valid(&in[i])||in[i].track>=NOTE_FX_TRACK_COUNT||in[i].stage!=s||in[i].track!=in[0].track||in[i].group_id!=in[0].group_id||in[i].kind!=in[0].kind){
+ if(!note_event_is_valid(&in[0])||in[0].track>=NOTE_FX_TRACK_COUNT||in[0].stage!=s){
   note_fx_walker_probe_record(NOTE_FX_WALKER_LOOKUP,lookup_probe,n,0U,0U,0U,0U,0U);
   return NOTE_EVENT_RESULT_DROPPED_POLICY;}
  note_fx_slot_runtime_t*r=&g_slot[in[0].track][s];
+ for(uint8_t i=1U;i<n;++i)if(!note_event_is_valid(&in[i])
+      ||in[i].track!=in[0].track||in[i].stage!=s||in[i].kind!=in[0].kind
+      ||(r->model!=NOTE_FX_MODEL_HARMONIZER&&in[i].group_id!=in[0].group_id)){
+  note_fx_walker_probe_record(NOTE_FX_WALKER_LOOKUP,lookup_probe,n,0U,0U,0U,0U,0U);
+  return NOTE_EVENT_RESULT_DROPPED_POLICY;}
  uint32_t held_count=0U;
  if(model_needs_held(r->model))for(uint8_t i=0;i<n;++i){
   const note_event_result_t held_result=held_ingest(s,r,&in[i]);++held_count;
