@@ -710,7 +710,7 @@ uint8_t audio_note_engine_adapter_install_prepared(
     track_audio_runtime_ctx_t *const ctx = &g_audio_track_ctx[entity_id];
     uint8_t requested_voices = (family == TRACK_RUNTIME_FAMILY_SYNTH)
         ? CONTROL_AUDIO_PROGRAM_DECODE_VOICES(spec->flags) : 1U;
-    if ((requested_engine == TRACK_RUNTIME_ENGINE_TB303) || (requested_engine == TRACK_RUNTIME_ENGINE_ACID))
+    if (requested_engine == TRACK_RUNTIME_ENGINE_TB303)
         requested_voices = 1U;
     const uint8_t preserve_synth_slots = (uint8_t)(
         (ctx->program_route.active != 0U)
@@ -807,8 +807,7 @@ uint8_t audio_note_engine_adapter_install_prepared(
             uint8_t voices = requested_voices;
             if ((installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
                     || (installed.engine
-                        == (uint8_t)TRACK_RUNTIME_ENGINE_TB303)
-                    || (installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_ACID))
+                        == (uint8_t)TRACK_RUNTIME_ENGINE_TB303))
                 voices = 1U;
             if ((preserve_synth_slots == 0U)
                     && (synth_polyphony_set_voice_count(entity_id, voices)
@@ -1021,8 +1020,7 @@ uint8_t audio_note_engine_adapter_apply_polyphony(
             && (program->engine != (uint8_t)TRACK_RUNTIME_ENGINE_DRUM))
         return 0U;
     if ((program->engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
-            || (program->engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB303)
-            || (program->engine == (uint8_t)TRACK_RUNTIME_ENGINE_ACID))
+            || (program->engine == (uint8_t)TRACK_RUNTIME_ENGINE_TB303))
         return 0U;
     uint8_t held_count = 0U;
     for (uint8_t i = 0U; i < AUDIO_PHYSICAL_OUTPUT_CAPACITY; ++i)
