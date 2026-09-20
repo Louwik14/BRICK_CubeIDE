@@ -6,6 +6,7 @@
 #include "IPC/control_audio_fifo_audio.h"
 #include "Seq/seq_engine.h"
 #include "IPC/audio_state_snapshot.h"
+#include "IPC/live_parameter_event.h"
 #include "Audio/audio_note_engine_adapter.h"
 #include "Audio/audio_mod_matrix.h"
 #include "Audio/metronome_runtime.h"
@@ -69,6 +70,8 @@ static uint16_t g_audio_seq_track_mask;
 
 static audio_command_apply_result_t audio_command_apply(
     const control_audio_command_t *command);
+static void audio_command_executor_close_outputs_from(uint8_t track,
+                                                       uint8_t first);
 
 static void audio_command_close_entity(uint8_t entity)
 {
@@ -302,6 +305,19 @@ static uint8_t audio_command_apply_param(const control_audio_command_t *command)
         if (command->entity >= WAVETABLE_POOL_MAX_SLOTS) return 0U;
         brick6_wave_runtime_stop_wavetable_slot(command->entity, command->value);
         return 1U;
+    }
+    if ((command->id == CONTROL_AUDIO_CONFIG_POLY_VOICES)
+            && (command->entity < SEQ_LANE_CAPACITY))
+    {
+        const float decoded = live_parameter_event_decode_float(
+            (int32_t)command->value);
+        const uint8_t voices = (uint8_t)decoded;
+        if ((decoded == (float)voices) && (voices >= 1U)
+                && (voices < synth_polyphony_get_voice_count(command->entity)))
+        {
+            seq_engine_control_disarm_track(command->entity);
+            audio_command_executor_close_outputs_from(command->entity, voices);
+        }
     }
     return live_parameter_audio_runtime_apply_param(command->entity,
         command->id, command->value, CONTROL_AUDIO_COMMAND_KIND(command));
@@ -593,10 +609,16 @@ void audio_command_executor_init(void)
     g_audio_seq_track_mask = 0U;
 }
 
-static void audio_command_executor_close_outputs(
-    uint8_t track, audio_seq_output_t *outputs)
+static void audio_command_executor_close_outputs(uint8_t track)
 {
-    for (uint8_t i = 0U; i < AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY; ++i)
+    audio_command_executor_close_outputs_from(track, 0U);
+}
+
+static void audio_command_executor_close_outputs_from(uint8_t track,
+                                                       uint8_t first)
+{
+    audio_seq_output_t *const outputs = g_audio_seq_output[track];
+    for (uint8_t i = first; i < AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY; ++i)
     {
         if (outputs[i].active == 0U) continue;
         if (audio_note_engine_adapter_apply_output(track, outputs[i].note, 0U,
@@ -615,8 +637,7 @@ void audio_command_executor_seq_begin_block(uint16_t track_mask)
         const uint16_t bit = (uint16_t)(1U << track);
         if ((changed & bit) == 0U) continue;
         if ((track_mask & bit) == 0U)
-            audio_command_executor_close_outputs(
-                track, g_audio_seq_output[track]);
+            audio_command_executor_close_outputs(track);
     }
     g_audio_seq_track_mask = track_mask;
 }
