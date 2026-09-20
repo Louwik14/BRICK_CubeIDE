@@ -714,13 +714,14 @@ uint16_t __attribute__((noinline)) audio_command_executor_apply_due(
         }
         if (CONTROL_AUDIO_COMMAND_OPCODE(&command) != CONTROL_AUDIO_COMMAND_PARAM)
             brick6_fm_runtime_finalize_pending();
-        if (((opcode == CONTROL_AUDIO_COMMAND_TRANSPORT)
+        if ((opcode == CONTROL_AUDIO_COMMAND_TRANSPORT)
                 && (CONTROL_AUDIO_COMMAND_KIND(&command)
                     == CONTROL_AUDIO_TRANSPORT_STOP))
-                || ((opcode == CONTROL_AUDIO_COMMAND_PANIC)
-                    && (CONTROL_AUDIO_COMMAND_KIND(&command)
-                        == CONTROL_AUDIO_PANIC_GLOBAL)))
-            seq_engine_audio_force_stop(command.effective_sample_time);
+            seq_engine_audio_force_stop(command.effective_sample_time,1U);
+        else if ((opcode == CONTROL_AUDIO_COMMAND_PANIC)
+                && (CONTROL_AUDIO_COMMAND_KIND(&command)
+                    == CONTROL_AUDIO_PANIC_GLOBAL))
+            seq_engine_audio_force_stop(command.effective_sample_time,0U);
         const audio_command_apply_result_t result =
             audio_command_apply(&command);
         if (result != AUDIO_COMMAND_APPLY_OK)

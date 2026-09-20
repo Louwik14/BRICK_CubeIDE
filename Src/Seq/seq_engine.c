@@ -152,6 +152,23 @@ static void ledger_commit(seq_engine_core_t *core,const note_event_t *event,
     ++core->ledger_count;++core->ledger_track_count[event->track];
 }
 
+static void ledger_retire_outside_capacity(seq_engine_core_t *core,
+    seq_terminal_block_t *out)
+{
+    for(uint8_t lane=0U;lane<SEQ_ENGINE_LEDGER_CAPACITY;++lane){
+        if(((core->ledger_active>>lane)&UINT64_C(1))==0U)continue;
+        const uint8_t track=product_track_from_lane(lane);
+        if(product_slot_from_lane(lane)<core->logical_capacity[track])continue;
+        const seq_terminal_event_t terminal={.note={
+            .occurrence_id=core->ledger[lane].occurrence_id,
+            .track=track,.note=core->ledger[lane].note,
+            .logical_slot=product_slot_from_lane(lane)}};
+        if(terminal_push(out,0U,SEQ_ENGINE_EVENT_NOTE_OFF,&terminal)!=0U)
+            out->emitter_tracks|=(uint16_t)(1U<<track);
+        ledger_release(core,lane);
+    }
+}
+
 static void fx_terminal(const note_event_t *e)
 {
     uint64_t due=e->sample_abs;
@@ -843,6 +860,7 @@ void seq_engine_core_process_block(seq_engine_core_t *core,uint64_t start,uint16
     core->samples_per_step_q16=p->samples_per_step_q16;
     for(uint8_t t=0U;t<SEQ_LANE_CAPACITY;++t){uint8_t capacity=p->track_exec[t].logical_capacity;
         core->logical_capacity[t]=(capacity<=8U)?capacity:8U;}
+    ledger_retire_outside_capacity(core,out);
     if(core->pattern_generation!=p->generation){
         core->pattern_generation=p->generation;
         for(uint8_t t=0U;t<SEQ_LANE_CAPACITY;++t)

@@ -239,6 +239,7 @@ typedef struct {
     uint8_t provenance;
 } seq_ingress_event_t;
 uint8_t seq_ingress_submit(const seq_ingress_event_t *event);
+void seq_ingress_discard(void);
 void seq_ingress_panic(void);
 
 /* CONTROL prepares; SEQ atomically takes ownership of the armed Pattern. */
@@ -258,7 +259,8 @@ uint8_t seq_engine_audio_pop_due(uint64_t sample,
                                    seq_terminal_event_t *out_event);
 void seq_engine_audio_retire_occurrence(uint32_t occurrence_id);
 uint16_t seq_engine_audio_track_mask(void);
-void seq_engine_audio_force_stop(uint64_t effective_sample);
+void seq_engine_audio_force_stop(uint64_t effective_sample,
+                                 uint8_t preserve_live_notes);
 
 _Static_assert(SEQ_LANE_CAPACITY == 16U, "SEQ requires 16 lanes");
 _Static_assert(SEQ_PLAY_MAX_CAPACITY == 8U, "SEQ requires 8 PLAY per top lane");

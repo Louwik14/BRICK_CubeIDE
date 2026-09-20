@@ -132,7 +132,7 @@ void resource_mutation_ingress_close(void)
     live_event_discard_pending();
     midi_rx_discard_pending();
     midi_host_rx_discard_pending();
-    seq_ingress_panic();
+    seq_ingress_discard();
 }
 
 void resource_mutation_ingress_open(void)

@@ -20,6 +20,7 @@ static uint8_t g_audio_offset,g_audio_class;
 static volatile uint16_t g_disarmed_tracks;
 static uint32_t g_disarm_generation;
 static volatile uint8_t g_force_stopped;
+static volatile uint8_t g_force_stop_preserve_live;
 static volatile uint32_t g_missed_horizons;
 static volatile uint64_t g_force_stop_sample;
 static volatile uint32_t g_force_stop_epoch;
@@ -48,7 +49,8 @@ void seq_engine_irq_init(void)
     g_audio_slot = -1; g_audio_cursor = SEQ_ENGINE_TERMINAL_INDEX_NONE;
     g_audio_offset=0U;g_audio_class=0U;g_pending = 0U; g_urgent_pending=0U;
     g_disarmed_tracks = 0U; g_disarm_generation = 0U;
-    g_force_stopped = 0U; g_force_stop_epoch=0U; g_next_deadline = UINT64_MAX;
+    g_force_stopped = 0U; g_force_stop_preserve_live=0U;
+    g_force_stop_epoch=0U; g_next_deadline = UINT64_MAX;
     g_missed_horizons=0U;
     g_ingress_head=0U;g_ingress_tail=0U;g_ingress_count=0U;g_ingress_panic=0U;
     g_ingress_rate_window=UINT64_MAX;g_ingress_rate_count=0U;
@@ -132,7 +134,8 @@ uint16_t seq_engine_audio_frames_until_due(uint64_t sample, uint16_t maximum)
         if(event_is_audible(block,g_audio_class,event)==0U){audio_cursor_advance(block);continue;}
         const uint64_t due = block->start_sample + g_audio_offset;
         if ((g_force_stopped != 0U) && (due >= g_force_stop_sample)
-                &&(event_is_live_note(g_audio_class,event)==0U)) {
+                &&((g_force_stop_preserve_live==0U)
+                    ||(event_is_live_note(g_audio_class,event)==0U))) {
             audio_cursor_advance(block);continue;
         }
         if (due <= sample) return 0U;
@@ -152,7 +155,8 @@ uint8_t seq_engine_audio_pop_due(uint64_t sample,uint8_t *out_kind,
         if(event_is_audible(block,g_audio_class,&event)==0U){audio_cursor_advance(block);continue;}
         const uint64_t due = block->start_sample + g_audio_offset;
         if ((g_force_stopped != 0U) && (due >= g_force_stop_sample)
-                &&(event_is_live_note(g_audio_class,&event)==0U)) {
+                &&((g_force_stop_preserve_live==0U)
+                    ||(event_is_live_note(g_audio_class,&event)==0U))) {
             audio_cursor_advance(block);continue;
         }
         if (due > sample) return 0U;
@@ -170,8 +174,10 @@ uint16_t seq_engine_audio_track_mask(void)
         ? active_track_mask(&g_terminal[(uint8_t)g_audio_slot]) : 0U;
 }
 
-void seq_engine_audio_force_stop(uint64_t effective_sample)
+void seq_engine_audio_force_stop(uint64_t effective_sample,
+    uint8_t preserve_live_notes)
 { g_force_stop_sample = effective_sample; g_force_stop_epoch=g_core.transport_epoch;
+  g_force_stop_preserve_live=(preserve_live_notes!=0U)?1U:0U;
   g_force_stopped = 1U; }
 
 uint8_t seq_engine_playhead_view(uint8_t track,uint8_t *out_running,
@@ -217,6 +223,13 @@ void seq_ingress_panic(void)
     const uint32_t primask=__get_PRIMASK();__disable_irq();
     g_ingress_count=0U;g_ingress_head=0U;g_ingress_tail=0U;g_ingress_panic=1U;
     __set_PRIMASK(primask);NVIC_SetPendingIRQ(TIM4_IRQn);
+}
+
+void seq_ingress_discard(void)
+{
+    const uint32_t primask=__get_PRIMASK();__disable_irq();
+    g_ingress_count=0U;g_ingress_head=0U;g_ingress_tail=0U;
+    __set_PRIMASK(primask);
 }
 
 void seq_service(uint64_t now_sample, uint64_t publish_until_sample)

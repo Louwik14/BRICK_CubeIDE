@@ -1246,7 +1246,7 @@ void seq_runtime_on_midi_program_live_change(uint8_t track, float program_value)
 
 void seq_runtime_clear_tracks(const seq_track_id_t *tracks, uint8_t track_count)
 {
-    (void)tracks;(void)track_count;seq_ingress_panic();
+    (void)tracks;(void)track_count;seq_ingress_discard();
 }
 
 void seq_runtime_begin_track_restore(const seq_track_id_t *tracks, uint8_t track_count)
@@ -1254,7 +1254,7 @@ void seq_runtime_begin_track_restore(const seq_track_id_t *tracks, uint8_t track
     const uint64_t effective_sample =
         control_music_output_first_unpublished_sample(
             seq_runtime_get_now_sample());
-    (void)effective_sample;seq_ingress_panic();
+    (void)effective_sample;seq_ingress_discard();
     for (uint8_t i = 0U; i < track_count; ++i)
     {
         if (tracks[i] >= SEQ_TRACK_COUNT)
