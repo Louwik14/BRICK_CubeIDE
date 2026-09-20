@@ -58,47 +58,6 @@ typedef struct
     uint8_t owner_client;
 } sd_block_device_async_completion_t;
 
-/* Temporary streamer latency instrumentation.  Write state=1 from GDB to
- * reset/start, state=0 to stop.  The implementation changes state to 2 while
- * collecting. */
-typedef struct
-{
-    uint32_t calls;
-    uint32_t total_cycles_lo;
-    uint32_t total_cycles_hi;
-    uint32_t max_cycles;
-} sd_stream_latency_metric_t;
-
-typedef struct
-{
-    volatile uint32_t state;
-    uint32_t reserved;
-    sd_stream_latency_metric_t dma_physical;
-    sd_stream_latency_metric_t complete_to_worker;
-    sd_stream_latency_metric_t worker_to_next_dma;
-    sd_stream_latency_metric_t refill_total;
-    uint32_t sectors_total_lo;
-    uint32_t sectors_total_hi;
-    uint32_t bytes_total_lo;
-    uint32_t bytes_total_hi;
-    sd_stream_latency_metric_t pending_ready_to_next_dma;
-    uint32_t dma_complete_with_other_refill_pending;
-    uint32_t dma_complete_without_other_refill_pending;
-} sd_stream_latency_diag_t;
-
-typedef struct
-{
-    volatile uint32_t armed;
-    volatile uint32_t chained;
-    volatile uint32_t invalidated;
-} sd_block_device_nplus1_diag_t;
-
-extern volatile sd_stream_latency_diag_t g_sd_stream_latency_diag;
-extern volatile sd_block_device_nplus1_diag_t g_sd_block_device_nplus1_diag;
-void sd_stream_latency_refill_begin(uint16_t slot_index);
-void sd_stream_latency_refill_ready(uint16_t slot_index);
-void sd_stream_latency_dma_followup(uint8_t pending);
-
 void sd_block_device_async_init(void);
 sd_block_device_result_t sd_block_device_async_enqueue(uint32_t lba,
                                                        uint32_t sector_count,

@@ -41,7 +41,7 @@ typedef struct {
     uint16_t freq_offset,threshold,freq_inv;
     uint16_t vcf_timer;
     uint8_t phase,sq_note,note,wave,slide,gate,active,pending_release;
-    uint8_t vcf_state,vca_state,vca_timer1,vca_timer2,slide_timer,cut_timer,cut_divisor;
+    uint8_t vcf_state,vca_state,vca_timer1,vca_timer2,slide_timer,cut_timer;
 } acid_voice_t;
 static acid_voice_t g_acid[BRICK6_ACID_INSTANCE_COUNT];
 
@@ -193,7 +193,7 @@ void brick6_acid_runtime_reset_instance(uint8_t id)
 {
     if(id>=BRICK6_ACID_INSTANCE_COUNT)return;
     acid_voice_t *v=&g_acid[id];memset(v,0,sizeof(*v));
-    v->note=255U;v->slide_timer=255U;v->cut_divisor=3U;v->slide_alpha=acid_alpha(0.00909f);
+    v->note=255U;v->slide_timer=255U;v->slide_alpha=acid_alpha(0.00909f);
     v->vcf_attack_alpha=acid_alpha(0.15f);
     v->vca_attack_mul=powf(1.076f,ACID_RATIO);
     v->vca_release_alpha=acid_alpha(0.004f);
@@ -223,7 +223,7 @@ void brick6_acid_runtime_sync_voice(uint8_t source,uint8_t destination)
     if(source>=BRICK6_ACID_INSTANCE_COUNT||destination>=BRICK6_ACID_INSTANCE_COUNT)return;
     acid_voice_t *s=&g_acid[source],*d=&g_acid[destination];
     d->wave=s->wave;d->tune=s->tune;d->cut=s->cut;d->res=s->res;d->env_mod=s->env_mod;
-    d->decay=s->decay;d->accent_knob=s->accent_knob;d->slide=s->slide;d->cut_divisor=s->cut_divisor;
+    d->decay=s->decay;d->accent_knob=s->accent_knob;d->slide=s->slide;
     acid_update_res(d);
 }
 void brick6_acid_runtime_note_on(uint8_t id,uint8_t note,uint8_t velocity)
@@ -268,7 +268,7 @@ __attribute__((noinline)) uint8_t brick6_acid_runtime_render_instance(uint8_t id
         const float delta=average-v->last_average;v->last_average=average;
         v->cap_vca1+=delta-0.00785f*ACID_RATIO*v->cap_vca1;
         v->cap_vca2+=delta-0.0204f*ACID_RATIO*v->cap_vca2;
-        if(++v->cut_timer>=v->cut_divisor){v->cut_timer=0U;acid_update_cut(v);}
+        if(++v->cut_timer==3U){v->cut_timer=0U;acid_update_cut(v);}
         acid_env_step(v);
         const float result=(v->vca_env+2.855f*v->accent_vca)
             *(v->cap_vca1+0.42f*v->res*5.195f*v->cap_vca2)*0.04f;
@@ -285,8 +285,4 @@ void brick6_acid_runtime_set_env_mod(uint8_t id,float x){if(id<BRICK6_ACID_INSTA
 void brick6_acid_runtime_set_decay(uint8_t id,float x){if(id<BRICK6_ACID_INSTANCE_COUNT){acid_voice_t*v=&g_acid[id];v->decay=acid_clamp(x,0.0f,1.0f);v->vcf_decay_coeff=acid_decay_coeff(v->accent>0.0f?0.9972f:acid_decay[(unsigned)(v->decay*1023.0f)]);}}
 void brick6_acid_runtime_set_accent(uint8_t id,float x){if(id<BRICK6_ACID_INSTANCE_COUNT)g_acid[id].accent_knob=acid_clamp(x,0.0f,1.0f);}
 void brick6_acid_runtime_set_slide(uint8_t id,uint8_t x){if(id<BRICK6_ACID_INSTANCE_COUNT)g_acid[id].slide=x!=0U;}
-void brick6_acid_runtime_set_cutoff_rate(uint8_t id,uint8_t x)
-{
-    static const uint8_t divisors[4]={3U,6U,8U,12U};
-    if(id<BRICK6_ACID_INSTANCE_COUNT)g_acid[id].cut_divisor=divisors[x<4U?x:0U];
-}
+void brick6_acid_runtime_set_vcf_rate(uint8_t id,uint8_t x){(void)id;(void)x;}

@@ -17,14 +17,6 @@ extern "C" {
 #define SAMPLE_CAPTURE_WAVEFORM_FULL_SCALE 32767
 #define SAMPLE_CAPTURE_DETAIL_VISIBLE_POINTS 126U
 
-#ifndef SAMPLE_CAPTURE_DEBUG_UART
-#define SAMPLE_CAPTURE_DEBUG_UART 0U
-#endif
-
-#ifndef SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
-#define SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS 0U
-#endif
-
 typedef enum
 {
     SAMPLE_CAPTURE_ARM_OFF = 0,
@@ -98,13 +90,6 @@ typedef enum
     SAMPLE_CAPTURE_ERROR_OVERDUB
 } sample_capture_error_t;
 
-typedef enum
-{
-    SAMPLE_CAPTURE_RENDERER_EMPTY = 0,
-    SAMPLE_CAPTURE_RENDERER_SERVICE,
-    SAMPLE_CAPTURE_RENDERER_ERROR
-} sample_capture_renderer_debug_t;
-
 typedef struct
 {
     sample_capture_view_t view;
@@ -176,19 +161,6 @@ uint32_t sample_capture_model_visible_frames_for_zoom(uint32_t recorded_frames, 
 uint8_t sample_capture_model_rec_waveform_source(waveform_source_t *out_source);
 uint8_t sample_capture_model_waveform_cache_get_handle(waveform_cache_handle_t *out_handle);
 void sample_capture_model_note_rec_edit_first_render(void);
-void sample_capture_model_debug_note_renderer(sample_capture_renderer_debug_t renderer,
-                                              uint8_t zoom,
-                                              uint32_t view_start_frame,
-                                              uint32_t view_frames,
-                                              uint16_t inner_w,
-                                              uint32_t samples_per_pixel,
-                                              uint32_t wavecache_frames_per_column,
-                                              uint8_t line_valid,
-                                              uint16_t line_points,
-                                              uint16_t draw_line_segments,
-                                              uint8_t fallback_reason);
-void sample_capture_model_debug_note_draw_cost(uint32_t page_ms, uint32_t waveform_ms);
-void sample_capture_model_debug_note_flush_cost(uint32_t flush_ms, uint8_t continued_flush);
 uint8_t sample_capture_model_return_to_audio_rec(void);
 uint8_t sample_capture_model_audition_trimmed(void);
 uint8_t sample_capture_model_save_trimmed(void);

@@ -156,77 +156,6 @@ typedef struct {
     seq_ledger_entry_t ledger[SEQ_ENGINE_LEDGER_CAPACITY];
 } seq_engine_core_t;
 
-typedef struct {
-    uint32_t max_cycles;
-    uint32_t mean_cycles;
-    uint32_t p99_cycles;
-    uint32_t p999_cycles;
-    uint32_t blocks_over_50;
-    uint32_t blocks_over_75;
-    uint32_t max_consecutive_over_50;
-    uint32_t max_consecutive_over_75;
-    uint32_t missed_horizons;
-} seq_engine_perf_snapshot_t;
-
-typedef struct {
-    uint32_t magic;
-    uint16_t version;
-    uint16_t size;
-    uint32_t ready;
-    uint32_t valid;
-    uint32_t iterations;
-    uint32_t warmup_blocks;
-    uint32_t core_hz;
-    uint32_t frames;
-    uint32_t logical_sources;
-    uint32_t active_sources_peak;
-    uint32_t max_cycles;
-    uint32_t mean_cycles;
-    uint32_t p99_cycles;
-    uint32_t p999_cycles;
-    uint32_t blocks_over_m4_50;
-    uint32_t blocks_over_m4_75;
-    uint32_t max_consecutive_over_m4_50;
-    uint32_t max_consecutive_over_m4_75;
-    uint32_t blocks_over_m7_50;
-    uint32_t blocks_over_m7_75;
-    uint32_t technical_drops;
-    uint32_t musical_rejections;
-    uint32_t output_overflows;
-    uint32_t output_peak;
-    uint32_t max_cycles_ordinary;
-    uint32_t mean_cycles_ordinary;
-    uint32_t max_cycles_boundary;
-    uint32_t mean_cycles_boundary;
-    uint32_t ordinary_blocks;
-    uint32_t boundary_blocks;
-    uint32_t drop_deferred_capacity;
-    uint32_t drop_ledger_admission;
-    uint32_t drop_terminal_output_capacity;
-    uint32_t drop_source_capacity;
-    uint32_t drop_fx_preprocess;
-    uint32_t drop_source_transform;
-    uint32_t drop_scheduled_output_capacity;
-    uint32_t drop_fx_postprocess;
-    uint32_t drop_plock_capacity;
-    uint32_t echo_active_peak;
-    uint32_t echo_alloc_failures;
-    uint32_t cpu_max_cycles;
-    uint32_t cpu_mean_cycles;
-    uint32_t cpu_p99_cycles;
-    uint32_t cpu_p999_cycles;
-    uint32_t cpu_max_cycles_ordinary;
-    uint32_t cpu_mean_cycles_ordinary;
-    uint32_t cpu_max_cycles_boundary;
-    uint32_t cpu_mean_cycles_boundary;
-    uint32_t irq_cycles_max_block;
-    uint32_t preempted_blocks;
-    uint32_t max_preemption_cycles;
-    uint64_t irq_cycles_total;
-} seq_boot_bench_result_t;
-
-extern volatile seq_boot_bench_result_t g_seq_boot_bench;
-
 /* Immutable canonical Pattern armed by CONTROL and owned by SEQ after commit. */
 typedef struct __attribute__((packed)) {
     uint8_t trig_roll;
@@ -311,8 +240,6 @@ typedef struct {
 } seq_ingress_event_t;
 uint8_t seq_ingress_submit(const seq_ingress_event_t *event);
 void seq_ingress_panic(void);
-void seq_engine_perf_capture(seq_engine_perf_snapshot_t *out);
-void seq_engine_boot_bench_run(void);
 
 /* CONTROL prepares; SEQ atomically takes ownership of the armed Pattern. */
 void seq_engine_control_init(void);
@@ -320,7 +247,6 @@ void seq_engine_control_mark_dirty(void);
 void seq_engine_control_disarm_track(uint8_t track);
 void seq_engine_control_poll(void);
 const seq_pattern_t *seq_engine_pattern_capture(void);
-seq_pattern_t *seq_engine_control_bench_workspace(void);
 
 /* H743 adapter: AUDIO only checks the previous READY block and wakes SEQ. */
 void seq_engine_irq_init(void);

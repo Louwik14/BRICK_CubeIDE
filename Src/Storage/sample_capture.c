@@ -28,20 +28,9 @@
 #include "ff.h"
 #include "main.h"
 
-#if SAMPLE_CAPTURE_DEBUG_UART
-#include "stm32h7xx_hal.h"
-#include "usart.h"
-#include <stdarg.h>
-#endif
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
-
-#if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
-#define SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART 1U
-#else
-#define SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART 0U
-#endif
 
 #define SAMPLE_CAPTURE_REC_DIR REC_SOURCE_DIRECTORY
 #define SAMPLE_CAPTURE_FINAL_TRIES 10000U
@@ -122,66 +111,9 @@ typedef struct
     sample_capture_save_job_t save_job;
 } sample_capture_model_t;
 
-#if SAMPLE_CAPTURE_DEBUG_UART
-typedef struct
-{
-    sample_capture_renderer_debug_t last_renderer;
-    uint8_t last_renderer_valid;
-    uint32_t last_summary_ms;
-    uint32_t draw_count;
-    uint32_t renderer_count[8U];
-    uint16_t last_draw_segments;
-    uint16_t max_draw_segments;
-    uint32_t cache_hit_count;
-    uint32_t cache_miss_count;
-    uint32_t last_miss_start;
-    uint32_t last_miss_frames;
-    uint32_t last_miss_ms;
-    uint8_t last_miss_valid;
-    uint32_t cache_request_count;
-    uint32_t cache_chunks;
-    uint32_t cache_gate_busy_count;
-    uint32_t cache_block_sample_count;
-    uint32_t cache_block_pattern_count;
-    uint32_t cache_block_preview_count;
-    uint32_t cache_block_writer_count;
-    uint32_t cache_block_export_count;
-    uint32_t fill_passes;
-    uint32_t fill_chunks;
-    uint32_t fill_start_ms;
-    uint32_t fill_last_ms;
-    uint32_t fill_max_ms;
-    uint32_t eline_count;
-    uint32_t eline_last_ms;
-    uint32_t eline_max_ms;
-    uint32_t draw_last_ms;
-    uint32_t draw_max_ms;
-    uint32_t waveform_last_ms;
-    uint32_t waveform_max_ms;
-    uint32_t flush_count;
-    uint32_t flush_cont_count;
-    uint32_t flush_last_ms;
-    uint32_t flush_max_ms;
-    uint32_t last_summary_draw_count;
-    uint32_t last_summary_eline_count;
-    uint32_t last_summary_flush_count;
-    uint8_t last_zoom;
-    uint8_t last_source_change_valid;
-    uint32_t last_view_start_frame;
-    uint32_t last_view_frames;
-    uint32_t last_samples_per_pixel;
-    uint32_t last_wavecache_frames_per_column;
-    uint8_t last_fallback_reason;
-    uint8_t fill_started_logged;
-} sample_capture_debug_t;
-#endif
-
 static sample_capture_model_t g_sample_capture;
 RECORDER_SCRATCH_SDRAM static uint8_t
     g_sample_capture_copy_buf[SAMPLE_CAPTURE_SAVE_CHUNK_BYTES];
-#if SAMPLE_CAPTURE_DEBUG_UART
-STORAGE_STATE_SDRAM static sample_capture_debug_t g_sample_capture_debug;
-#endif
 
 
 /* Capture, waveform caches, editor model, service and save/assign remain in their original sequence.

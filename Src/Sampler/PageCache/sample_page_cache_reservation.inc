@@ -138,8 +138,6 @@ uint8_t sample_page_cache_begin_loading(const sample_page_load_target_t *target,
         out_token->slot_index = target->slot_index;
         page->load_cancel_requested = 0U;
         sample_page_cache_set_state(page, SAMPLE_PAGE_LOADING);
-        sd_stream_latency_refill_begin(target->slot_index);
-        sample_stream_metrics_refill_begin(target->slot_index);
     }
     sample_page_cache_unlock(primask);
     return valid;
@@ -224,8 +222,6 @@ uint8_t sample_page_cache_finish_loading(const sample_page_load_token_t *token,
         became_ready = (uint8_t)(final_state == SAMPLE_PAGE_READY);
         if (became_ready != 0U)
         {
-            sd_stream_latency_refill_ready(token->slot_index);
-            sample_stream_metrics_refill_ready(token->slot_index);
         }
     }
     sample_page_cache_unlock(primask);

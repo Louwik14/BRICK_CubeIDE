@@ -51,23 +51,6 @@ typedef struct
     uint8_t flags;
 } sdmmc_async_prepared_transfer_t;
 
-typedef struct
-{
-    volatile uint32_t calls;
-    volatile uint32_t total_cpu_cycles_lo;
-    volatile uint32_t total_cpu_cycles_hi;
-    volatile uint32_t max_cpu_cycles;
-    volatile uint32_t total_wall_cycles_lo;
-    volatile uint32_t total_wall_cycles_hi;
-    volatile uint32_t max_wall_cycles;
-    volatile uint32_t total_preempt_cycles_lo;
-    volatile uint32_t total_preempt_cycles_hi;
-    volatile uint32_t max_preempt_cycles;
-    volatile uint32_t preempt_count;
-} sdmmc_async_irq_diag_t;
-
-extern volatile sdmmc_async_irq_diag_t g_sdmmc_async_irq_diag;
-
 void sdmmc_async_transport_init(void);
 uint8_t sdmmc_async_transport_start_read(void *dst,
                                          uint32_t lba,
@@ -83,10 +66,6 @@ uint8_t sdmmc_async_transport_invalidate_next(void);
 sdmmc_async_prepared_state_t sdmmc_async_transport_prepared_state(void);
 uint8_t sdmmc_async_transport_irq_owned(void);
 sdmmc_async_event_t sdmmc_async_transport_irq_handler(void);
-uint32_t sdmmc_async_transport_irq_measure_begin(void);
-void sdmmc_async_transport_irq_measure_end(uint32_t cycle_start);
-void sdmmc_async_transport_preempt_enter(void);
-void sdmmc_async_transport_preempt_exit(void);
 uint8_t sdmmc_async_transport_release_complete(void);
 uint8_t sdmmc_async_transport_abort(void);
 sdmmc_async_state_t sdmmc_async_transport_state(void);

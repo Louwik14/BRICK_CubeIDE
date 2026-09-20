@@ -1,8 +1,5 @@
 static void ui_page_audio_rec_render(void)
 {
-#if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
-    const uint32_t page_draw_start_ms = HAL_GetTick();
-#endif
     sample_capture_state_t state;
     char line[32];
     sample_capture_model_get_state(&state);
@@ -45,20 +42,10 @@ static void ui_page_audio_rec_render(void)
     {
         drv_display_draw_text(46U, 34U, ui_page_audio_rec_error_label(state.error));
     }
-#if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
-    if(state.view == SAMPLE_CAPTURE_VIEW_REC_EDIT)
-    {
-        sample_capture_model_debug_note_draw_cost(HAL_GetTick() - page_draw_start_ms,
-                                                  g_ui_page_audio_rec_last_waveform_ms);
-    }
-#endif
 }
 
 static void ui_page_rec_edit_render(void)
 {
-#if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
-    const uint32_t page_draw_start_ms = HAL_GetTick();
-#endif
     sample_capture_state_t state;
     sample_capture_model_get_state(&state);
     sample_capture_model_note_rec_edit_first_render();
@@ -116,10 +103,6 @@ static void ui_page_rec_edit_render(void)
         ui_page_audio_rec_draw_label(62U, page_label_y, "ZCROSS", state.edit_zcross_enabled);
         ui_page_audio_rec_draw_label(108U, page_label_y, "SHFT", alt_held);
     }
-#if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
-    sample_capture_model_debug_note_draw_cost(HAL_GetTick() - page_draw_start_ms,
-                                              g_ui_page_audio_rec_last_waveform_ms);
-#endif
 }
 
 uint8_t ui_page_audio_rec_handle_encoder(uint8_t encoder, int16_t delta)

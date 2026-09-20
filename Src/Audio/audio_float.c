@@ -564,23 +564,3 @@ uint32_t audio_get_frame_counter(void)
 {
     return g_audio_dsp_frames_counter;
 }
-
-/**
- * @brief Point d'entrée audio_debug_get_stats.
- *
- * Rôle:
- * - Exécuter le traitement associé à audio_debug_get_stats.
- *
- * @param out_stats Paramètre d'entrée de l'API.
- *
- * Contexte d'appel:
- * - init / main loop / tasklet selon le module.
- */
-void audio_debug_get_stats(audio_debug_stats_t *out_stats)
-{
-    if(out_stats == NULL)
-        return;
-
-    out_stats->audio_block_counter = g_audio_block_counter;
-    out_stats->dsp_frames_counter = g_audio_dsp_frames_counter;
-}

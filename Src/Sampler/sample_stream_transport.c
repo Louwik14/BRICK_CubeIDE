@@ -1,5 +1,4 @@
 #include "Sampler/sample_stream_transport.h"
-#include "Sampler/sample_stream_metrics.h"
 
 #include <string.h>
 #include <stddef.h>
@@ -143,7 +142,6 @@ uint8_t sample_stream_transport_can_submit(void)
 
 void sample_stream_transport_worker_poll(void)
 {
-    const uint32_t metric_start = sample_stream_metrics_begin();
     sample_stream_transport_invalidate((const void *)&g_sample_stream_transport_release_queue.head,
                                        sizeof(g_sample_stream_transport_release_queue.head));
     while (g_sample_stream_transport_release_queue.tail
@@ -217,7 +215,6 @@ void sample_stream_transport_worker_poll(void)
             __DMB();
         }
     }
-    sample_stream_metrics_end(SAMPLE_STREAM_METRIC_WORKER, metric_start);
 }
 
 uint8_t sample_stream_transport_take_result(uint32_t expected_sequence,

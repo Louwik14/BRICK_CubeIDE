@@ -10,7 +10,6 @@
 #include "Sampler/sample_stream_fatfs_map.h"
 #include "Sampler/sample_page_lease_control.h"
 #include "Sampler/sample_stream_manager.h"
-#include "Sampler/sample_stream_metrics.h"
 #include "Sampler/sample_stream_transport.h"
 #include "Storage/waveform_service.h"
 #include "SD/sd_block_device.h"

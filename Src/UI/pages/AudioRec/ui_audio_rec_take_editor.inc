@@ -400,9 +400,6 @@ static void ui_page_audio_rec_draw_edit_overview(const sample_capture_state_t *s
 
 static void ui_page_audio_rec_draw_marker_bar(const sample_capture_state_t *state)
 {
-#if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
-    const uint32_t waveform_draw_start_ms = HAL_GetTick();
-#endif
     const int x = UI_AUDIO_REC_WAVE_X;
     const int y = UI_AUDIO_REC_WAVE_Y;
     const int w = UI_AUDIO_REC_WAVE_W;
@@ -450,69 +447,15 @@ static void ui_page_audio_rec_draw_marker_bar(const sample_capture_state_t *stat
         view_frames = 1U;
     }
 
-    uint8_t waveform_drawn = 0U;
-    sample_capture_renderer_debug_t renderer = SAMPLE_CAPTURE_RENDERER_EMPTY;
-    uint8_t fallback_reason = 0U;
     if((state->view == SAMPLE_CAPTURE_VIEW_REC_EDIT)
             && (state->take_valid != 0U)
             && (state->recorded_frames != 0U))
     {
-        if(ui_page_audio_rec_draw_rec_service_overview(x, y, w, h,
+        (void)ui_page_audio_rec_draw_rec_service_overview(x, y, w, h,
             view_start_frame, view_frames,
             ui_page_audio_rec_edit_vertical_ref(state),
             ui_page_audio_rec_vzoom_scale_q8(state->edit_vzoom),
-            1U) != 0U)
-        {
-            waveform_drawn = 1U;
-            renderer = SAMPLE_CAPTURE_RENDERER_SERVICE;
-        }
-    }
-
-    if(waveform_drawn == 0U)
-    {
-        if(state->view == SAMPLE_CAPTURE_VIEW_REC_EDIT)
-        {
-            renderer = SAMPLE_CAPTURE_RENDERER_EMPTY;
-            fallback_reason = 4U;
-        }
-    }
-
-    if(state->view == SAMPLE_CAPTURE_VIEW_REC_EDIT)
-    {
-#if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
-        const uint32_t waveform_ms = HAL_GetTick() - waveform_draw_start_ms;
-        g_ui_page_audio_rec_last_waveform_ms = waveform_ms;
-#else
-        const uint32_t waveform_ms = 0U;
-#endif
-        if(state->error != SAMPLE_CAPTURE_ERROR_NONE)
-        {
-            renderer = SAMPLE_CAPTURE_RENDERER_ERROR;
-        }
-#if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
-        const uint16_t inner_w_dbg = (uint16_t)((w > 2) ? (w - 2) : 0);
-        uint32_t samples_per_pixel = view_frames;
-        if(inner_w_dbg != 0U)
-        {
-            samples_per_pixel = (view_frames + (uint32_t)inner_w_dbg - 1U) / (uint32_t)inner_w_dbg;
-        }
-        sample_capture_model_debug_note_renderer(renderer,
-                                                 state->edit_zoom,
-                                                 view_start_frame,
-                                                 view_frames,
-                                                 inner_w_dbg,
-                                                 samples_per_pixel,
-                                                 0U,
-                                                 0U,
-                                                 0U,
-                                                 0U,
-                                                 fallback_reason);
-#endif
-        (void)waveform_ms;
-#if !(SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS)
-        (void)renderer;
-        (void)fallback_reason;
-#endif
+            1U);
     }
 
     ui_page_audio_rec_invert_active_range(state, x, y, w, h, view_start_frame, view_frames);

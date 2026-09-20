@@ -1,6 +1,5 @@
 #include "SD/sd_block_device.h"
 
-#include <stddef.h>
 #include <string.h>
 
 #include "Platform/brick6_sd_config.h"
@@ -15,161 +14,6 @@
 #include "stm32h7xx_hal.h"
 
 #define SD_BLOCK_DEVICE_SECTOR_BYTES (512U)
-#define SD_STREAM_LATENCY_REFILL_TRACKERS (8U)
-
-UI_HOT_DTCM volatile sd_stream_latency_diag_t g_sd_stream_latency_diag
-    __attribute__((used, aligned(32)));
-SEC_ATTR(".dtcm_audio.nplus1") ALIGN32 volatile sd_block_device_nplus1_diag_t
-    g_sd_block_device_nplus1_diag __attribute__((used));
-
-_Static_assert(sizeof(sd_stream_latency_metric_t) == 0x10U,
-               "stream latency metric layout");
-_Static_assert(sizeof(sd_stream_latency_diag_t) == 0x70U,
-               "stream latency diagnostic layout");
-_Static_assert(offsetof(sd_stream_latency_diag_t, state) == 0x00U,
-               "stream latency state offset");
-_Static_assert(offsetof(sd_stream_latency_diag_t, dma_physical) == 0x08U,
-               "stream latency DMA offset");
-_Static_assert(offsetof(sd_stream_latency_diag_t, complete_to_worker) == 0x18U,
-               "stream latency resume offset");
-_Static_assert(offsetof(sd_stream_latency_diag_t, worker_to_next_dma) == 0x28U,
-               "stream latency relaunch offset");
-_Static_assert(offsetof(sd_stream_latency_diag_t, refill_total) == 0x38U,
-               "stream latency refill offset");
-_Static_assert(offsetof(sd_stream_latency_diag_t, sectors_total_lo) == 0x48U,
-               "stream latency sectors low offset");
-_Static_assert(offsetof(sd_stream_latency_diag_t, sectors_total_hi) == 0x4CU,
-               "stream latency sectors high offset");
-_Static_assert(offsetof(sd_stream_latency_diag_t, bytes_total_lo) == 0x50U,
-               "stream latency bytes low offset");
-_Static_assert(offsetof(sd_stream_latency_diag_t, bytes_total_hi) == 0x54U,
-               "stream latency bytes high offset");
-_Static_assert(offsetof(sd_stream_latency_diag_t,
-                        pending_ready_to_next_dma) == 0x58U,
-               "stream latency pending relaunch offset");
-_Static_assert(offsetof(sd_stream_latency_diag_t,
-                        dma_complete_with_other_refill_pending) == 0x68U,
-               "stream latency pending completion offset");
-_Static_assert(offsetof(sd_stream_latency_diag_t,
-                        dma_complete_without_other_refill_pending) == 0x6CU,
-               "stream latency idle completion offset");
-static uint32_t g_sd_stream_dma_start_cycles;
-static uint32_t g_sd_stream_dma_complete_cycles;
-static uint32_t g_sd_stream_worker_resume_cycles;
-static uint8_t g_sd_stream_dma_timing_active;
-static uint8_t g_sd_stream_completion_pending;
-static uint8_t g_sd_stream_worker_timing_active;
-static uint8_t g_sd_stream_dma_followup_pending;
-static uint8_t g_sd_stream_pending_timing_active;
-static uint32_t g_sd_stream_pending_ready_cycles;
-typedef struct
-{
-    uint32_t start_cycles;
-    uint16_t slot_index;
-    uint8_t active;
-} sd_stream_latency_refill_tracker_t;
-static sd_stream_latency_refill_tracker_t
-    g_sd_stream_refill[SD_STREAM_LATENCY_REFILL_TRACKERS];
-
-static void sd_stream_latency_prepare(void)
-{
-    if(g_sd_stream_latency_diag.state != 1U) return;
-    const uint32_t primask = __get_PRIMASK();
-    __disable_irq();
-    if(g_sd_stream_latency_diag.state == 1U)
-    {
-        volatile uint32_t *const words =
-            (volatile uint32_t *)&g_sd_stream_latency_diag;
-        for(uint32_t i = 0U;
-            i < (sizeof(g_sd_stream_latency_diag) / sizeof(words[0])); ++i)
-        {
-            words[i] = 0U;
-        }
-        memset(g_sd_stream_refill, 0, sizeof(g_sd_stream_refill));
-        g_sd_stream_dma_timing_active = 0U;
-        g_sd_stream_completion_pending = 0U;
-        g_sd_stream_worker_timing_active = 0U;
-        g_sd_stream_dma_followup_pending = 0U;
-        g_sd_stream_pending_timing_active = 0U;
-        CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-        DWT->CYCCNT = 0U;
-        DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
-        g_sd_stream_latency_diag.state = 2U;
-    }
-    if(primask == 0U) __enable_irq();
-}
-
-void sd_stream_latency_dma_followup(uint8_t pending)
-{
-    g_sd_stream_dma_followup_pending = (pending != 0U) ? 1U : 0U;
-}
-
-static uint32_t sd_stream_latency_refill_active_count(void)
-{
-    uint32_t count = 0U;
-    for(uint32_t i = 0U; i < SD_STREAM_LATENCY_REFILL_TRACKERS; ++i)
-    {
-        if(g_sd_stream_refill[i].active != 0U) ++count;
-    }
-    return count;
-}
-
-static void sd_stream_latency_add(volatile sd_stream_latency_metric_t *metric,
-                                  uint32_t cycles)
-{
-    metric->calls++;
-    const uint32_t previous = metric->total_cycles_lo;
-    metric->total_cycles_lo = previous + cycles;
-    if(metric->total_cycles_lo < previous) metric->total_cycles_hi++;
-    if(cycles > metric->max_cycles) metric->max_cycles = cycles;
-}
-
-static void sd_stream_latency_add_u64(volatile uint32_t *lo,
-                                      volatile uint32_t *hi,
-                                      uint32_t value)
-{
-    const uint32_t previous = *lo;
-    *lo = previous + value;
-    if(*lo < previous) (*hi)++;
-}
-
-void sd_stream_latency_refill_begin(uint16_t slot_index)
-{
-    sd_stream_latency_prepare();
-    if(g_sd_stream_latency_diag.state == 2U)
-    {
-        for(uint32_t i = 0U; i < SD_STREAM_LATENCY_REFILL_TRACKERS; ++i)
-        {
-            if((g_sd_stream_refill[i].active == 0U)
-                    || (g_sd_stream_refill[i].slot_index == slot_index))
-            {
-                g_sd_stream_refill[i].start_cycles = DWT->CYCCNT;
-                g_sd_stream_refill[i].slot_index = slot_index;
-                g_sd_stream_refill[i].active = 1U;
-                break;
-            }
-        }
-    }
-}
-
-void sd_stream_latency_refill_ready(uint16_t slot_index)
-{
-    if(g_sd_stream_latency_diag.state == 2U)
-    {
-        for(uint32_t i = 0U; i < SD_STREAM_LATENCY_REFILL_TRACKERS; ++i)
-        {
-            if((g_sd_stream_refill[i].active != 0U)
-                    && (g_sd_stream_refill[i].slot_index == slot_index))
-            {
-                sd_stream_latency_add(&g_sd_stream_latency_diag.refill_total,
-                    DWT->CYCCNT - g_sd_stream_refill[i].start_cycles);
-                g_sd_stream_refill[i].active = 0U;
-                break;
-            }
-        }
-    }
-}
-
 typedef struct
 {
     uint32_t lba;
@@ -180,7 +24,6 @@ typedef struct
     uint32_t queued_tick;
     uint32_t start_tick;
     uint32_t token;
-    uint32_t irq_complete_cycles;
     sd_block_device_operation_t operation;
     sd_block_device_result_t result;
     sd_block_device_result_t abort_result;
@@ -239,8 +82,6 @@ void sd_block_device_async_init(void)
 {
     g_sd_block_device_fault_latched = 0U;
     sdmmc_async_transport_init();
-    memset((void *)&g_sd_block_device_nplus1_diag, 0,
-           sizeof(g_sd_block_device_nplus1_diag));
     g_sd_block_device_next_token = 1U;
     sd_block_device_queue_reset();
 }
@@ -377,7 +218,6 @@ static void sd_block_device_invalidate_prepared_with_result(
     prepared->result = result;
     prepared->completed = 1U;
     g_sd_block_device_prepared_valid = 0U;
-    g_sd_block_device_nplus1_diag.invalidated++;
     __set_PRIMASK(primask);
 }
 
@@ -435,7 +275,6 @@ static uint8_t sd_block_device_prepare_next(uint8_t index)
     next->start_tick = HAL_GetTick();
     g_sd_block_device_prepared_index = index;
     g_sd_block_device_prepared_valid = 1U;
-    g_sd_block_device_nplus1_diag.armed++;
     __set_PRIMASK(primask);
     return 1U;
 }
@@ -475,30 +314,6 @@ static void sd_block_device_async_start_head(void)
             entry->buffer,
             (size_t)entry->sector_count * SD_BLOCK_DEVICE_SECTOR_BYTES);
         g_sd_block_device_hw_state = SD_BLOCK_DEVICE_HW_READ_DMA;
-        sd_stream_latency_prepare();
-        const uint8_t instrument_stream = (uint8_t)(
-            (g_sd_stream_latency_diag.state == 2U)
-            && (entry->owner_client == SD_ACCESS_CLIENT_SAMPLE_STREAM));
-        if(instrument_stream != 0U)
-        {
-            const uint32_t now = DWT->CYCCNT;
-            if(g_sd_stream_worker_timing_active != 0U)
-            {
-                sd_stream_latency_add(
-                    &g_sd_stream_latency_diag.worker_to_next_dma,
-                    now - g_sd_stream_worker_resume_cycles);
-                g_sd_stream_worker_timing_active = 0U;
-            }
-            if(g_sd_stream_pending_timing_active != 0U)
-            {
-                sd_stream_latency_add(
-                    &g_sd_stream_latency_diag.pending_ready_to_next_dma,
-                    now - g_sd_stream_pending_ready_cycles);
-                g_sd_stream_pending_timing_active = 0U;
-            }
-            g_sd_stream_dma_start_cycles = now;
-            g_sd_stream_dma_timing_active = 1U;
-        }
         start_result = (sdmmc_async_transport_start_read(
             entry->buffer, entry->lba, entry->sector_count) != 0U)
                 ? MSD_OK : MSD_ERROR;
@@ -515,27 +330,10 @@ static void sd_block_device_async_start_head(void)
     }
     if(start_result != MSD_OK)
     {
-        g_sd_stream_dma_timing_active = 0U;
         entry->started = 0U;
         g_sd_block_device_active_valid = 0U;
         brick_sd_media_fault();
         sd_block_device_complete(entry, SD_BLOCK_DEVICE_DMA_START_FAIL);
-    }
-    else
-    {
-        if((entry->operation == SD_BLOCK_DEVICE_OPERATION_READ)
-                && (entry->owner_client == SD_ACCESS_CLIENT_SAMPLE_STREAM)
-                && (g_sd_stream_latency_diag.state == 2U))
-        {
-            sd_stream_latency_add_u64(
-                &g_sd_stream_latency_diag.sectors_total_lo,
-                &g_sd_stream_latency_diag.sectors_total_hi,
-                entry->sector_count);
-            sd_stream_latency_add_u64(
-                &g_sd_stream_latency_diag.bytes_total_lo,
-                &g_sd_stream_latency_diag.bytes_total_hi,
-                entry->sector_count * SD_BLOCK_DEVICE_SECTOR_BYTES);
-        }
     }
 }
 
@@ -728,43 +526,6 @@ void sd_block_device_async_poll(void)
     const uint8_t dma_complete = entry->irq_complete;
     if(dma_complete != 0U)
     {
-        if((entry->operation == SD_BLOCK_DEVICE_OPERATION_READ)
-                && (entry->owner_client == SD_ACCESS_CLIENT_SAMPLE_STREAM)
-                && (g_sd_stream_latency_diag.state == 2U)
-                && (entry->irq_complete_cycles != 0U))
-        {
-            const uint32_t now = DWT->CYCCNT;
-            sd_stream_latency_add(
-                &g_sd_stream_latency_diag.complete_to_worker,
-                now - entry->irq_complete_cycles);
-            g_sd_stream_completion_pending = 0U;
-            if(entry->chained_next == 0U)
-            {
-                g_sd_stream_worker_resume_cycles = now;
-                g_sd_stream_worker_timing_active = 1U;
-            }
-            const uint8_t other_refill_pending = (uint8_t)(
-                sd_stream_latency_refill_active_count() > 1U);
-            if(other_refill_pending != 0U)
-            {
-                g_sd_stream_latency_diag
-                    .dma_complete_with_other_refill_pending++;
-            }
-            else
-            {
-                g_sd_stream_latency_diag
-                    .dma_complete_without_other_refill_pending++;
-            }
-            if((entry->chained_next == 0U)
-                    && ((other_refill_pending != 0U)
-                    || (g_sd_stream_dma_followup_pending != 0U)))
-            {
-                g_sd_stream_pending_ready_cycles =
-                    entry->irq_complete_cycles;
-                g_sd_stream_pending_timing_active = 1U;
-            }
-            g_sd_stream_dma_followup_pending = 0U;
-        }
         if(entry->callback_seen == 0U)
         {
             if((entry->chained_next == 0U)
@@ -1004,19 +765,7 @@ void sd_block_device_async_read_complete_isr(void)
     {
         sd_block_device_async_entry_t *const entry =
             &g_sd_block_device_async_fifo[g_sd_block_device_active_index];
-        const uint32_t complete_cycles = DWT->CYCCNT;
-        entry->irq_complete_cycles = complete_cycles;
         entry->irq_complete = 1U;
-        if((entry->owner_client == SD_ACCESS_CLIENT_SAMPLE_STREAM)
-                && (g_sd_stream_latency_diag.state == 2U)
-                && (g_sd_stream_dma_timing_active != 0U))
-        {
-            sd_stream_latency_add(&g_sd_stream_latency_diag.dma_physical,
-                                  complete_cycles - g_sd_stream_dma_start_cycles);
-            g_sd_stream_dma_complete_cycles = complete_cycles;
-            g_sd_stream_dma_timing_active = 0U;
-            g_sd_stream_completion_pending = 1U;
-        }
         if(g_sd_block_device_prepared_valid != 0U)
         {
             uint32_t token = 0U;
@@ -1035,32 +784,12 @@ void sd_block_device_async_read_complete_isr(void)
                 g_sd_block_device_async_rx_complete = 0U;
                 g_sd_block_device_async_error = 0U;
                 g_sd_block_device_hw_state = SD_BLOCK_DEVICE_HW_READ_DMA;
-                g_sd_block_device_nplus1_diag.chained++;
-                if((next->owner_client == SD_ACCESS_CLIENT_SAMPLE_STREAM)
-                        && (g_sd_stream_latency_diag.state == 2U))
-                {
-                    const uint32_t start_cycles = DWT->CYCCNT;
-                    sd_stream_latency_add(
-                        &g_sd_stream_latency_diag.pending_ready_to_next_dma,
-                        start_cycles - complete_cycles);
-                    g_sd_stream_dma_start_cycles = start_cycles;
-                    g_sd_stream_dma_timing_active = 1U;
-                    sd_stream_latency_add_u64(
-                        &g_sd_stream_latency_diag.sectors_total_lo,
-                        &g_sd_stream_latency_diag.sectors_total_hi,
-                        next->sector_count);
-                    sd_stream_latency_add_u64(
-                        &g_sd_stream_latency_diag.bytes_total_lo,
-                        &g_sd_stream_latency_diag.bytes_total_hi,
-                        next->sector_count * SD_BLOCK_DEVICE_SECTOR_BYTES);
-                }
                 return;
             }
             next->prepared = 0U;
             next->result = SD_BLOCK_DEVICE_DMA_START_FAIL;
             next->completed = 1U;
             g_sd_block_device_prepared_valid = 0U;
-            g_sd_block_device_nplus1_diag.invalidated++;
         }
         g_sd_block_device_active_valid = 0U;
         g_sd_block_device_async_rx_complete = 1U;
@@ -1074,7 +803,6 @@ void sd_block_device_async_write_complete_isr(void)
     {
         sd_block_device_async_entry_t *const entry =
             &g_sd_block_device_async_fifo[g_sd_block_device_active_index];
-        entry->irq_complete_cycles = DWT->CYCCNT;
         entry->irq_complete = 1U;
         g_sd_block_device_active_valid = 0U;
         g_sd_block_device_async_tx_complete = 1U;

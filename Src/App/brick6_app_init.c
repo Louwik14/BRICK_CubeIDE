@@ -96,7 +96,6 @@ void brick6_app_init(void)
     audio_domain_init(&audio_boot);
     brick6_boot_fx_policy_init();
     control_domain_start(audio_boot.postgain, audio_boot.output_compensation);
-    seq_engine_boot_bench_run();
     g_boot_audio_state = BRICK6_BOOT_WAIT_MASTER;
 }
 

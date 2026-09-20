@@ -6,7 +6,6 @@
 
 #include "Sampler/sample_page_cache.h"
 #include "Sampler/sample_stream_io.h"
-#include "Sampler/sample_stream_metrics.h"
 #include "Sampler/sample_stream_publish.h"
 #include "Sampler/sample_stream_scheduler.h"
 #include "Sampler/sample_stream_transport.h"
@@ -461,9 +460,7 @@ static void sample_stream_manager_service_impl(uint32_t byte_budget)
 
 void sample_stream_manager_service(uint32_t byte_budget)
 {
-    const uint32_t metric_start = sample_stream_metrics_begin();
     sample_stream_manager_service_impl(byte_budget);
-    sample_stream_metrics_end(SAMPLE_STREAM_METRIC_MANAGER, metric_start);
 }
 
 uint8_t sample_stream_manager_has_pending_sd_work(void)

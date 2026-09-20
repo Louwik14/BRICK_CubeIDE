@@ -445,12 +445,6 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
     g_sample_capture.state.trigger_latched = 0U;
     sample_capture_publish_trigger_config();
         sample_capture_publish_rec_bus();
-#if SAMPLE_CAPTURE_DEBUG_UART
-    sample_capture_debug_log("REC_LIVE_DONE frames=%lu\r\n", (unsigned long)frames);
-    sample_capture_debug_log("WRITER_FINAL_READY path=%s frames=%lu\r\n",
-                             path,
-                             (unsigned long)frames);
-#endif
     g_sample_capture.state.take_valid = 1U;
     g_sample_capture.state.recorded_frames = frames;
     g_sample_capture.state.edit_start_frame = 0U;
@@ -492,13 +486,7 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
     }
     g_sample_capture.rec_edit_enter_deferred_services = 0U;
     g_sample_capture.rec_edit_first_render_pending = 0U;
-#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
-    sample_capture_debug_log("WAVEFORM_CACHE_%s path=%s\r\n",
-                             (cache_queued != 0U) ? "JOB_QUEUED" : "DEFERRED",
-                             path);
-#else
     (void)cache_queued;
-#endif
     g_sample_capture.last_take_notified = 1U;
     (void)status;
 }

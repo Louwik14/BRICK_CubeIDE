@@ -114,46 +114,6 @@ static uint8_t sample_capture_publish_rec_bus_at(uint64_t sample_time)
     return 1U;
 }
 
-#if SAMPLE_CAPTURE_DEBUG_UART
-static void sample_capture_debug_log(const char *fmt, ...)
-{
-    char line[256];
-    va_list args;
-    va_start(args, fmt);
-    int n = vsnprintf(line, sizeof(line), fmt, args);
-    va_end(args);
-    if(n <= 0)
-    {
-        return;
-    }
-    if((uint32_t)n >= sizeof(line))
-    {
-        n = (int)sizeof(line) - 1;
-    }
-    (void)HAL_UART_Transmit(&huart1, (uint8_t *)line, (uint16_t)n, 20U);
-}
-
-static void sample_capture_debug_reset(void)
-{
-    memset(&g_sample_capture_debug, 0, sizeof(g_sample_capture_debug));
-}
-#else
-#define sample_capture_debug_reset() ((void)0)
-#endif
-
-#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
-static const char *sample_capture_debug_renderer_label(sample_capture_renderer_debug_t renderer)
-{
-    switch(renderer)
-    {
-        case SAMPLE_CAPTURE_RENDERER_EMPTY: return "EMPTY";
-        case SAMPLE_CAPTURE_RENDERER_SERVICE: return "SERVICE";
-        case SAMPLE_CAPTURE_RENDERER_ERROR: return "ERROR";
-        default: return "?";
-    }
-}
-#endif
-
 static void sample_capture_copy_path(char *dst, const char *src)
 {
     if(dst == 0)

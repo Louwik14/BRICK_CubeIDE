@@ -24,7 +24,6 @@
 
 /* USER CODE BEGIN FirstSection */
 /* can be used to modify / undefine following code or add new definitions */
-#include "Platform/memory_layout.h"
 /* USER CODE END FirstSection */
 /* Includes ------------------------------------------------------------------*/
 #include "bsp_driver_sd.h"
@@ -40,60 +39,14 @@ static uint8_t g_bsp_sd_initialized;
 #define BSP_SD_SAFE_CLOCK_DIVIDER       (4U)
 #define BSP_SD_HIGH_SPEED_CLOCK_DIVIDER (2U)
 
-UI_HOT_DTCM volatile bsp_sd_high_speed_diag_t g_bsp_sd_high_speed_diag
-  __attribute__((used, aligned(32)));
-
-static uint32_t BSP_SD_ClockHz(uint32_t kernel_hz, uint32_t divider)
-{
-  return (divider != 0U) ? kernel_hz / (2U * divider) : kernel_hz;
-}
-
-static void BSP_SD_RecordRuntimeConfig(uint8_t high_speed_succeeded)
-{
-  PLL2_ClocksTypeDef pll2 = {0};
-  const uint32_t kernel_hz =
-    HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_SDMMC);
-  const uint32_t clkcr = hsd1.Instance->CLKCR;
-  const uint32_t divider = clkcr & SDMMC_CLKCR_CLKDIV;
-  const uint32_t width = clkcr & SDMMC_CLKCR_WIDBUS;
-  HAL_RCCEx_GetPLL2ClockFreq(&pll2);
-
-  g_bsp_sd_high_speed_diag.card_supports_high_speed =
-    (high_speed_succeeded != 0U) ? 1U : 0U;
-  g_bsp_sd_high_speed_diag.high_speed_switch_succeeded =
-    (high_speed_succeeded != 0U) ? 1U : 0U;
-  g_bsp_sd_high_speed_diag.final_clock_divider = divider;
-  g_bsp_sd_high_speed_diag.final_sdclk_hz =
-    BSP_SD_ClockHz(kernel_hz, divider);
-  g_bsp_sd_high_speed_diag.final_bus_width_bits =
-    (width == SDMMC_BUS_WIDE_4B) ? 4U : 1U;
-  g_bsp_sd_high_speed_diag.pll2r_hz = pll2.PLL2_R_Frequency;
-  g_bsp_sd_high_speed_diag.fmc_kernel_hz = HAL_RCC_GetHCLKFreq();
-  g_bsp_sd_high_speed_diag.sdram_clock_hz = HAL_RCC_GetHCLKFreq() / 2U;
-  g_bsp_sd_high_speed_diag.adc_clock_hz =
-    HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_ADC) / 2U;
-}
-
 void BSP_SD_ConfigureHighSpeed(void)
 {
-  uint8_t high_speed_succeeded = 0U;
-
-  g_bsp_sd_high_speed_diag.card_supports_high_speed = 0U;
-  g_bsp_sd_high_speed_diag.high_speed_switch_succeeded = 0U;
-  g_bsp_sd_high_speed_diag.final_clock_divider = 0U;
-  g_bsp_sd_high_speed_diag.final_sdclk_hz = 0U;
-  g_bsp_sd_high_speed_diag.final_bus_width_bits = 0U;
-  g_bsp_sd_high_speed_diag.pll2r_hz = 0U;
-  g_bsp_sd_high_speed_diag.fmc_kernel_hz = 0U;
-  g_bsp_sd_high_speed_diag.sdram_clock_hz = 0U;
-  g_bsp_sd_high_speed_diag.adc_clock_hz = 0U;
 
   if (HAL_SD_ConfigSpeedBusOperation(
         &hsd1, SDMMC_SPEED_MODE_HIGH) == HAL_OK)
   {
     hsd1.Init.ClockDiv = BSP_SD_HIGH_SPEED_CLOCK_DIVIDER;
     (void)SDMMC_Init(hsd1.Instance, hsd1.Init);
-    high_speed_succeeded = 1U;
   }
   else
   {
@@ -106,7 +59,6 @@ void BSP_SD_ConfigureHighSpeed(void)
     (void)SDMMC_Init(hsd1.Instance, hsd1.Init);
   }
 
-  BSP_SD_RecordRuntimeConfig(high_speed_succeeded);
 }
 /* USER CODE END BeforeInitSection */
 /**

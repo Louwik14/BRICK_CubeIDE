@@ -11,16 +11,6 @@
 #include "fm_dexed/msfa/freqlut.h"
 #include "fm_dexed/msfa/pitchenv.h"
 #include "fm_dexed/msfa/sin.h"
-#include "fm_dx7_log_kernel.h"
-
-#ifndef FM_KERNEL_BENCH
-#define FM_KERNEL_BENCH 0
-#endif
-
-#if (FM_KERNEL_BENCH != 0) && (FM_KERNEL_BENCH != 1)
-#error "FM_KERNEL_BENCH must be 0 or 1"
-#endif
-
 namespace
 {
 constexpr uint32_t kSampleRate = 48000U;
@@ -87,9 +77,6 @@ struct fm_voice_t
     uint8_t dirty_envelope;
     uint8_t dirty_output_level;
     uint8_t dirty_pitch_envelope;
-#if FM_KERNEL_BENCH
-    dx7_log_kernel_voice_t log_kernel;
-#endif
 };
 
 AUDIO_HOT static fm_voice_t g_fm_voice[BRICK6_FM_VOICE_COUNT];
@@ -437,14 +424,6 @@ static void refresh_voice_patch(fm_voice_t *voice)
         if (voice->active != 0U)
         {
             voice->base_log_frequency[op] = operator_log_frequency(voice, voice->note, op);
-#if FM_KERNEL_BENCH
-            /* Keep the active log-domain phase increment in step with the
-             * live patch.  This changes no phase state and needs no retrigger. */
-            voice->operators[op].freq = Freqlut::lookup(voice->base_log_frequency[op]);
-            dx7_log_kernel_set_phase_increment(&voice->log_kernel,
-                                               (uint32_t)op,
-                                               (uint32_t)voice->operators[op].freq << 8U);
-#endif
         }
     }
 }
@@ -455,12 +434,6 @@ static void refresh_operator_frequency(fm_voice_t *voice, int op)
             || (voice->active == 0U))
         return;
     voice->base_log_frequency[op] = operator_log_frequency(voice, voice->note, op);
-#if FM_KERNEL_BENCH
-    voice->operators[op].freq = Freqlut::lookup(voice->base_log_frequency[op]);
-    dx7_log_kernel_set_phase_increment(&voice->log_kernel,
-                                       (uint32_t)op,
-                                       (uint32_t)voice->operators[op].freq << 8U);
-#endif
 }
 
 static void refresh_operator_envelope(fm_voice_t *voice, int op);
@@ -570,19 +543,6 @@ constexpr uint8_t feedback_shift(uint8_t feedback)
     return (uint8_t)(8U - ((feedback > 7U) ? 7U : feedback));
 }
 
-#if FM_KERNEL_BENCH
-constexpr uint8_t log_feedback_shift(uint8_t feedback)
-{
-    if (feedback == 0U)
-        return 17U;
-    return (uint8_t)(9U - ((feedback > 7U) ? 7U : feedback));
-}
-static_assert(log_feedback_shift(0U) > 16U, "Zero feedback must be silent");
-static_assert(log_feedback_shift(1U) == feedback_shift(1U) + 1U,
-              "Q14 feedback must match the MSFA Q24 phase scale");
-static_assert(log_feedback_shift(7U) == feedback_shift(7U) + 1U,
-              "Q14 feedback must match the MSFA Q24 phase scale");
-#endif
 
 static void reset_voice(fm_voice_t *voice)
 {
@@ -642,9 +602,6 @@ static void reset_voice(fm_voice_t *voice)
     voice->dirty_envelope = 0U;
     voice->dirty_output_level = 0U;
     voice->dirty_pitch_envelope = 0U;
-#if FM_KERNEL_BENCH
-    dx7_log_kernel_reset(&voice->log_kernel);
-#endif
     for (uint8_t brick_op = 0U; brick_op < kOperatorCount; ++brick_op)
     {
         const uint8_t op = brick_operator_to_msfa_index(brick_op);
@@ -745,16 +702,6 @@ static void prepare_note(fm_voice_t *voice, uint8_t note, uint8_t velocity,
         voice->operators[op].gain_out = 0;
         voice->env[op].keydown(true);
     }
-#if FM_KERNEL_BENCH
-    if (held)
-        dx7_log_kernel_initialize_held(&voice->log_kernel);
-    else
-        dx7_log_kernel_note_on(&voice->log_kernel, voice->sync != 0U);
-    for (uint32_t op = 0U; op < (uint32_t)kOperatorCount; ++op)
-        dx7_log_kernel_set_phase_increment(&voice->log_kernel,
-                                           op,
-                                           (uint32_t)voice->operators[op].freq << 8U);
-#endif
     int pitch_rates[4];
     int pitch_levels[4];
     pitch_envelope_values(voice, pitch_rates, pitch_levels);
@@ -776,9 +723,6 @@ void brick6_fm_runtime_init(void)
     Freqlut::init((double)kSampleRate);
     Env::init_sr((double)kSampleRate);
     PitchEnv::init((double)kSampleRate);
-#if FM_KERNEL_BENCH
-    dx7_log_kernel_init();
-#endif
     for (uint8_t instance = 0U; instance < BRICK6_FM_VOICE_COUNT; ++instance)
         reset_voice(&g_fm_voice[instance]);
 }
@@ -1373,22 +1317,6 @@ ITCM_TEXT uint8_t brick6_fm_runtime_render_instance(uint8_t instance_id,
         voice->operators[op].freq = Freqlut::lookup(voice->base_log_frequency[op]
                                                      + pitch_log_frequency);
     }
-#if FM_KERNEL_BENCH
-    if (voice->algorithm == 0U)
-    {
-        for (uint32_t op = 0U; op < (uint32_t)kOperatorCount; ++op)
-            dx7_log_kernel_prepare_operator(&voice->log_kernel,
-                                             op,
-                                             voice->operators[op].level_in,
-                                             (uint32_t)voice->operators[op].freq << 8U,
-                                             frames);
-        dx7_log_kernel_render_algorithm_1(&voice->log_kernel,
-                                          log_feedback_shift(voice->feedback_amount),
-                                          out_mono,
-                                          frames);
-    }
-    else
-#endif
     {
         int32_t block[BRICK6_FM_RENDER_BLOCK] = { 0 };
         g_fm_modern.render(block,

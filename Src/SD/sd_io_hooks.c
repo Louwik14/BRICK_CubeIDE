@@ -94,7 +94,6 @@ void brick_sd_sdmmc_irq_handler(void)
         return;
     }
 
-    const uint32_t cycle_start = sdmmc_async_transport_irq_measure_begin();
     switch(sdmmc_async_transport_irq_handler())
     {
         case SDMMC_ASYNC_EVENT_READ_COMPLETE:
@@ -109,5 +108,4 @@ void brick_sd_sdmmc_irq_handler(void)
         default:
             break;
     }
-    sdmmc_async_transport_irq_measure_end(cycle_start);
 }

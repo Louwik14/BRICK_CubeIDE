@@ -20,7 +20,6 @@
  */
 
 #include "ui_param.h"
-#include "Audio/Engines/prism_engine.h"
 
 #include <string.h>
 #include <math.h>
@@ -94,14 +93,11 @@ static uint8_t g_ui_param_fm_operator;
 uint8_t ui_param_is_local_control(param_id_t id)
 {
     return (uint8_t)((id >= UI_PARAM_LOCAL_ASSET)
-        && (id <= UI_PARAM_LOCAL_PRISM_RATE));
+        && (id <= UI_PARAM_LOCAL_FM_OPERATOR));
 }
 
 static const char *const g_ui_local_bool_labels[] = {
     "Off", "On", NULL
-};
-static const char *const g_ui_local_prism_rate_labels[] = {
-    "48K", "96K", NULL
 };
 static const char *const g_ui_local_looper_arm_labels[] = {
     "Off", "REC", "OVERDUB", NULL
@@ -140,11 +136,6 @@ static const param_desc_t g_ui_local_fm_operator_desc = {
     .min = 0.0f, .max = (float)(PARAM_FM_OPERATOR_COUNT - 1U), .step = 1.0f,
     .default_value = 0.0f, .display_type = PARAM_DISPLAY_INT, .unit = "", .labels = NULL,
 };
-static const param_desc_t g_ui_local_prism_rate_desc = {
-    .id = UI_PARAM_LOCAL_PRISM_RATE, .name = "RATE", .type = PARAM_TYPE_ENUM,
-    .min = 0.0f, .max = 1.0f, .step = 1.0f, .default_value = 0.0f,
-    .display_type = PARAM_DISPLAY_ENUM, .unit = "", .labels = g_ui_local_prism_rate_labels,
-};
 
 const param_desc_t *ui_param_get_local_desc(param_id_t id)
 {
@@ -157,7 +148,6 @@ const param_desc_t *ui_param_get_local_desc(param_id_t id)
         case UI_PARAM_LOCAL_LOOPER_LENGTH: return &g_ui_local_looper_length_desc;
         case UI_PARAM_LOCAL_LOOPER_PLAY: return &g_ui_local_looper_play_desc;
         case UI_PARAM_LOCAL_FM_OPERATOR: return &g_ui_local_fm_operator_desc;
-        case UI_PARAM_LOCAL_PRISM_RATE: return &g_ui_local_prism_rate_desc;
         default: return NULL;
     }
 }
@@ -183,11 +173,6 @@ static uint8_t ui_param_local_control_get(param_id_t id, uint8_t track,
     if (id == UI_PARAM_LOCAL_FM_OPERATOR)
     {
         *out_value = (float)g_ui_param_fm_operator;
-        return 1U;
-    }
-    if (id == UI_PARAM_LOCAL_PRISM_RATE)
-    {
-        *out_value = (float)brick6_braids_runtime_get_rate_96k(track);
         return 1U;
     }
     return 0U;
@@ -239,13 +224,6 @@ static uint8_t ui_param_local_control_apply(param_id_t id, uint8_t track,
         if (next >= (int32_t)PARAM_FM_OPERATOR_COUNT)
             next = (int32_t)PARAM_FM_OPERATOR_COUNT - 1;
         g_ui_param_fm_operator = (uint8_t)next;
-        return 1U;
-    }
-    if (id == UI_PARAM_LOCAL_PRISM_RATE)
-    {
-        if (next < 0) next = 0;
-        if (next > 1) next = 1;
-        brick6_braids_runtime_set_rate_96k(track, (uint8_t)next);
         return 1U;
     }
     return 0U;

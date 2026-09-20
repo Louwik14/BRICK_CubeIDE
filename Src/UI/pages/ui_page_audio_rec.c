@@ -8,9 +8,6 @@
 #include "ui_event.h"
 #include "ui_page_manager.h"
 
-#if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
-#include "stm32h7xx_hal.h"
-#endif
 #include <math.h>
 #include <stdio.h>
 
@@ -30,9 +27,6 @@
 #define UI_REC_EDIT_TITLE_Y      0U
 #define UI_REC_EDIT_TITLE_GAP    2U
 
-#if SAMPLE_CAPTURE_DEBUG_UART && SAMPLE_CAPTURE_WAVEFORM_DEBUG_LOGS
-static uint32_t g_ui_page_audio_rec_last_waveform_ms;
-#endif
 static uint8_t g_ui_rec_edit_assign_popup;
 static uint8_t g_ui_rec_edit_save_requested;
 static uint32_t g_ui_audio_rec_smoothed_peak;

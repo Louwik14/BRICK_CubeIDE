@@ -107,13 +107,6 @@ const seq_pattern_t *seq_engine_pattern_capture(void)
     return (g_published_generation != 0U) ? g_pattern[slot] : 0;
 }
 
-seq_pattern_t *seq_engine_control_bench_workspace(void)
-{
-    const uint8_t published=g_published_slot;
-    __DMB();
-    return g_pattern[(g_published_generation!=0U)?(uint8_t)(published^1U):g_build_slot];
-}
-
 void seq_engine_control_init(void)
 {
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track) {

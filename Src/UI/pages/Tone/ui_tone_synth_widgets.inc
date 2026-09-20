@@ -695,11 +695,6 @@ static uiw_widget_type_t ui_page_template_tone_pick_widget(uint8_t slot,
         return UIW_WIDGET_ENUM_TEXT;
     }
 
-    if (id == UI_PARAM_LOCAL_PRISM_RATE)
-    {
-        return UIW_WIDGET_ENUM_TEXT;
-    }
-
     if (ui_page_template_tone_prism_kind_for_param(id, labels, NULL, &kind) == 0U)
     {
         if ((id == PARAM_PRISM_OSC1_MODEL) || (id == PARAM_PRISM_OSC2_MODEL))
@@ -909,14 +904,6 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
             && ((ui_get_track_type(active_track) == TRACK_TYPE_WAVE)
                 || (ui_get_track_type(active_track) == TRACK_TYPE_PRISM)))
     {
-        if (id == UI_PARAM_LOCAL_PRISM_RATE)
-        {
-            if ((out_name != NULL) && (out_name_len > 0U))
-                (void)snprintf(out_name, out_name_len, "RATE");
-            if ((out_value != NULL) && (out_value_len > 0U))
-                (void)snprintf(out_value, out_value_len, "%s", (value >= 0.5f) ? "96K" : "48K");
-            return 1U;
-        }
         const char *name = NULL;
         switch (id)
         {
@@ -1191,4 +1178,3 @@ static uint8_t ui_page_template_tone_param_text(uint8_t slot,
 
     return 0U;
 }
-

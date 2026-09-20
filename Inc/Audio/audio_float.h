@@ -67,12 +67,6 @@ typedef void (*audio_dsp_cb)(StereoTrack *AUDIO_RESTRICT tracks,
                              uint32_t track_count,
                              uint32_t frames);
 
-typedef struct
-{
-    uint32_t audio_block_counter;
-    uint32_t dsp_frames_counter;
-} audio_debug_stats_t;
-
 
 /**
  * @brief Enregistre le callback DSP principal.
@@ -200,8 +194,6 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
 
 extern volatile uint32_t g_audio_block_counter;
 extern volatile uint32_t g_audio_dsp_frames_counter;
-
-void audio_debug_get_stats(audio_debug_stats_t *out_stats);
 
 uint32_t audio_get_frame_counter(void);
 

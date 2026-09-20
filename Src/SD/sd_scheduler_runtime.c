@@ -1,5 +1,4 @@
 #include "SD/sd_scheduler_runtime.h"
-#include "Sampler/sample_stream_metrics.h"
 
 #include <string.h>
 
@@ -135,15 +134,12 @@ uint8_t sd_scheduler_runtime_bind_recorder(
 
 void sd_scheduler_runtime_service(void)
 {
-    const uint32_t metric_start = sample_stream_metrics_begin();
     if ((g_sd_scheduler_background_active != 0U)
         || (g_sd_scheduler_exclusive_active != 0U)
         || ((g_sd_scheduler_exclusive_requested != 0U)
             && (sd_scheduler_owner(&g_sd_scheduler_runtime)
                 == SD_SCHEDULER_OWNER_IDLE)))
     {
-        sample_stream_metrics_end(
-            SAMPLE_STREAM_METRIC_SD_SCHEDULER, metric_start);
         return;
     }
     const uint32_t now_us = HAL_GetTick() * 1000U;
@@ -156,7 +152,6 @@ void sd_scheduler_runtime_service(void)
             &g_sd_scheduler_runtime, now_us, media_epoch);
     }
     sd_scheduler_service(&g_sd_scheduler_runtime, now_us, media_epoch);
-    sample_stream_metrics_end(SAMPLE_STREAM_METRIC_SD_SCHEDULER, metric_start);
 }
 
 sd_scheduler_background_admission_t sd_scheduler_runtime_background_try_begin(

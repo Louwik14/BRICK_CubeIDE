@@ -9,14 +9,6 @@ project(${CMAKE_PROJECT_NAME} LANGUAGES C CXX ASM)
 
 message("Build type: ${CMAKE_BUILD_TYPE}")
 
-set(FM_KERNEL_BENCH "0" CACHE STRING
-    "Experimental DX7 algorithm-1 renderer: 0=MSFA, 1=sample-centric log kernel")
-set_property(CACHE FM_KERNEL_BENCH PROPERTY STRINGS 0 1)
-if(NOT FM_KERNEL_BENCH MATCHES "^[01]$")
-    message(FATAL_ERROR "FM_KERNEL_BENCH must be 0 or 1")
-endif()
-message("FM kernel bench: ${FM_KERNEL_BENCH}")
-
 set(BRICK6_STREAM_READ_CHUNK_KIB "32" CACHE STRING
     "Streamer application read quantum in KiB")
 if(NOT BRICK6_STREAM_READ_CHUNK_KIB MATCHES "^(4|8|16|32)$")
@@ -427,10 +419,6 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
     "-Wl,--undefined=g_fx_audio_lofi_engine_build_id")
 
-target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
-    FM_KERNEL_BENCH=${FM_KERNEL_BENCH}
-)
-
 # --------------------------------------------------------------------------
 # Compile options aligned with CubeIDE
 # --------------------------------------------------------------------------
@@ -499,7 +487,6 @@ list(REMOVE_ITEM AUDIO_DSP_O3_LTO_SOURCES ${CONTROL_RUNTIME_O1_SOURCES})
 
 set(AUDIO_LTO_SOURCES
     ${AUDIO_DSP_O3_LTO_SOURCES} ${CMSIS_DSP_SRC} ${MUTABLE_INSTRUMENTS_SRC}
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/fm_dx7_log_kernel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/fm_engine.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/audio_engine_dispatch.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/prism_engine.cpp
@@ -526,7 +513,6 @@ set_source_files_properties(${MOD_LFO_O3_SOURCES} PROPERTIES
 
 set(AUDIO_O3_SOURCES
     ${AUDIO_DSP_O3_LTO_SOURCES}
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/fm_dx7_log_kernel.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/fm_engine.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/audio_engine_dispatch.c
     ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/prism_engine.cpp

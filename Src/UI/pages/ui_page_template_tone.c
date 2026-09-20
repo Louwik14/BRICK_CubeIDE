@@ -235,7 +235,7 @@ static const ui_template_family_t g_ui_template_tone_family_prism = {
         { .title = "OSC1", .param_bank = { .params = { PARAM_PRISM_OSC1_MODEL, PARAM_PRISM_OSC1_PARAM1, PARAM_PRISM_OSC1_PARAM2, PARAM_PRISM_OSC1_AMOD } } },
         { .title = "OSC2", .param_bank = { .params = { PARAM_PRISM_OSC2_MODEL, PARAM_PRISM_OSC2_PARAM1, PARAM_PRISM_OSC2_PARAM2, PARAM_PRISM_OSC2_AMOD } } },
         { .title = "COMMON", .param_bank = { .params = { PARAM_PRISM_VOLUME, PARAM_PRISM_BALANCE, PARAM_PRISM_TUNE, PARAM_PRISM_DETUNE } } },
-        { .title = "MOD / PHASE", .param_bank = { .params = { PARAM_PRISM_PITCH_MOD1, PARAM_PRISM_PHASE1_RESET, PARAM_PRISM_PITCH_MOD2, UI_PARAM_LOCAL_PRISM_RATE } } },
+        { .title = "MOD / PHASE", .param_bank = { .params = { PARAM_PRISM_PITCH_MOD1, PARAM_PRISM_PHASE1_RESET, PARAM_PRISM_PITCH_MOD2, PARAM_PRISM_DRIFT } } },
     },
     .default_subpage = 0U,
 };
@@ -247,7 +247,7 @@ static const ui_template_family_t g_ui_template_tone_family_prism_live = {
         { .title = "OSC1", .param_bank = { .params = { PARAM_PRISM_OSC1_MODEL, PARAM_PRISM_OSC1_PARAM1, PARAM_PRISM_OSC1_PARAM2, PARAM_PRISM_OSC1_AMOD } } },
         { .title = "OSC2", .param_bank = { .params = { PARAM_PRISM_OSC2_MODEL, PARAM_PRISM_OSC2_PARAM1, PARAM_PRISM_OSC2_PARAM2, PARAM_PRISM_OSC2_AMOD } } },
         { .title = "COMMON", .param_bank = { .params = { PARAM_PRISM_VOLUME, PARAM_PRISM_BALANCE, PARAM_PRISM_TUNE, PARAM_PRISM_DETUNE } } },
-        { .title = "MOD / PHASE", .param_bank = { .params = { PARAM_PRISM_PITCH_MOD1, PARAM_PRISM_PHASE1_RESET, PARAM_PRISM_PITCH_MOD2, UI_PARAM_LOCAL_PRISM_RATE } } },
+        { .title = "MOD / PHASE", .param_bank = { .params = { PARAM_PRISM_PITCH_MOD1, PARAM_PRISM_PHASE1_RESET, PARAM_PRISM_PITCH_MOD2, PARAM_PRISM_DRIFT } } },
     },
     .default_subpage = 0U,
 };

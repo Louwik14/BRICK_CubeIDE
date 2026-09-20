@@ -15,19 +15,7 @@ _Static_assert(NOTE_FX_HELD_STATE_CAPACITY == 256U,
 
 typedef note_event_result_t (*note_fx_emit_fn)(const note_event_t *, void *);
 
-typedef struct
-{
-    uint32_t alloc_attempts;
-    uint32_t alloc_failures;
-    uint32_t reuse_hits;
-    uint32_t free_hits;
-    uint32_t key_collision_count;
-    uint16_t active;
-    uint16_t active_peak;
-} note_fx_echo_diag_t;
-
 void note_fx_engine_init(void);
-void note_fx_engine_echo_diag_capture(note_fx_echo_diag_t *out);
 void note_fx_engine_set_samples_per_step_q16(uint32_t samples_per_step_q16);
 note_event_result_t note_fx_engine_configure(
     uint8_t track, uint8_t slot, uint8_t model, uint8_t rate,

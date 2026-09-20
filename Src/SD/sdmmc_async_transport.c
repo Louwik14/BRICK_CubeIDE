@@ -49,13 +49,6 @@ typedef struct
 
 static sdmmc_async_context_t g_sdmmc_async;
 static sdmmc_async_prepared_descriptor_t g_sdmmc_async_prepared;
-DMA_BUFFER volatile sdmmc_async_irq_diag_t g_sdmmc_async_irq_diag
-    __attribute__((used));
-static volatile uint8_t g_sdmmc_async_irq_measure_active;
-static volatile uint8_t g_sdmmc_async_preempt_depth;
-static uint32_t g_sdmmc_async_preempt_start;
-static uint32_t g_sdmmc_async_preempt_cycles;
-
 static void sdmmc_async_disable_transport_interrupts(void)
 {
     __HAL_SD_DISABLE_IT(&hsd1, SDMMC_ASYNC_ALL_INTERRUPTS);
@@ -259,13 +252,6 @@ void sdmmc_async_transport_init(void)
     g_sdmmc_async = (sdmmc_async_context_t){0};
     g_sdmmc_async.state = SDMMC_ASYNC_STATE_IDLE;
     g_sdmmc_async_prepared = (sdmmc_async_prepared_descriptor_t){0};
-    g_sdmmc_async_irq_diag = (sdmmc_async_irq_diag_t){0};
-    g_sdmmc_async_irq_measure_active = 0U;
-    g_sdmmc_async_preempt_depth = 0U;
-    g_sdmmc_async_preempt_start = 0U;
-    g_sdmmc_async_preempt_cycles = 0U;
-    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 }
 
 uint8_t sdmmc_async_transport_start_read(void *dst,
@@ -436,111 +422,6 @@ sdmmc_async_event_t sdmmc_async_transport_irq_handler(void)
     }
 
     return event;
-}
-
-static void sdmmc_async_add_cycles(volatile uint32_t *total_lo,
-                                   volatile uint32_t *total_hi,
-                                   uint32_t cycles)
-{
-    const uint32_t previous = *total_lo;
-    *total_lo = previous + cycles;
-    if(*total_lo < previous)
-    {
-        (*total_hi)++;
-    }
-}
-
-uint32_t sdmmc_async_transport_irq_measure_begin(void)
-{
-    const uint32_t primask = __get_PRIMASK();
-    __disable_irq();
-    const uint32_t cycle_start = DWT->CYCCNT;
-    g_sdmmc_async_preempt_cycles = 0U;
-    g_sdmmc_async_preempt_depth = 0U;
-    g_sdmmc_async_irq_measure_active = 1U;
-    __DMB();
-    __set_PRIMASK(primask);
-    return cycle_start;
-}
-
-void sdmmc_async_transport_irq_measure_end(uint32_t cycle_start)
-{
-    const uint32_t primask = __get_PRIMASK();
-    __disable_irq();
-    const uint32_t cycle_end = DWT->CYCCNT;
-    g_sdmmc_async_irq_measure_active = 0U;
-    __DMB();
-    const uint32_t preempt_cycles = g_sdmmc_async_preempt_cycles;
-    g_sdmmc_async_preempt_depth = 0U;
-    __set_PRIMASK(primask);
-
-    const uint32_t wall_cycles = cycle_end - cycle_start;
-    const uint32_t cpu_cycles = (preempt_cycles < wall_cycles)
-        ? wall_cycles - preempt_cycles : 0U;
-    g_sdmmc_async_irq_diag.calls++;
-    sdmmc_async_add_cycles(&g_sdmmc_async_irq_diag.total_cpu_cycles_lo,
-                           &g_sdmmc_async_irq_diag.total_cpu_cycles_hi,
-                           cpu_cycles);
-    sdmmc_async_add_cycles(&g_sdmmc_async_irq_diag.total_wall_cycles_lo,
-                           &g_sdmmc_async_irq_diag.total_wall_cycles_hi,
-                           wall_cycles);
-    sdmmc_async_add_cycles(&g_sdmmc_async_irq_diag.total_preempt_cycles_lo,
-                           &g_sdmmc_async_irq_diag.total_preempt_cycles_hi,
-                           preempt_cycles);
-    if(cpu_cycles > g_sdmmc_async_irq_diag.max_cpu_cycles)
-    {
-        g_sdmmc_async_irq_diag.max_cpu_cycles = cpu_cycles;
-    }
-    if(wall_cycles > g_sdmmc_async_irq_diag.max_wall_cycles)
-    {
-        g_sdmmc_async_irq_diag.max_wall_cycles = wall_cycles;
-    }
-    if(preempt_cycles > g_sdmmc_async_irq_diag.max_preempt_cycles)
-    {
-        g_sdmmc_async_irq_diag.max_preempt_cycles = preempt_cycles;
-    }
-}
-
-void sdmmc_async_transport_preempt_enter(void)
-{
-    if(g_sdmmc_async_irq_measure_active == 0U)
-    {
-        return;
-    }
-    const uint32_t primask = __get_PRIMASK();
-    __disable_irq();
-    if(g_sdmmc_async_irq_measure_active != 0U)
-    {
-        g_sdmmc_async_irq_diag.preempt_count++;
-        if(g_sdmmc_async_preempt_depth == 0U)
-        {
-            g_sdmmc_async_preempt_start = DWT->CYCCNT;
-        }
-        g_sdmmc_async_preempt_depth++;
-    }
-    __set_PRIMASK(primask);
-}
-
-void sdmmc_async_transport_preempt_exit(void)
-{
-    if((g_sdmmc_async_irq_measure_active == 0U)
-            || (g_sdmmc_async_preempt_depth == 0U))
-    {
-        return;
-    }
-    const uint32_t primask = __get_PRIMASK();
-    __disable_irq();
-    if((g_sdmmc_async_irq_measure_active != 0U)
-            && (g_sdmmc_async_preempt_depth != 0U))
-    {
-        g_sdmmc_async_preempt_depth--;
-        if(g_sdmmc_async_preempt_depth == 0U)
-        {
-            g_sdmmc_async_preempt_cycles +=
-                DWT->CYCCNT - g_sdmmc_async_preempt_start;
-        }
-    }
-    __set_PRIMASK(primask);
 }
 
 uint8_t sdmmc_async_transport_release_complete(void)

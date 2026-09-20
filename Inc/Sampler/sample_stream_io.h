@@ -4,24 +4,6 @@
 
 #include "Sampler/sample_page_cache.h"
 
-typedef struct
-{
-    volatile uint32_t magic;
-    volatile uint32_t state; /* write 1 to reset/start, 2 to stop */
-    volatile uint32_t duration_ms;
-    volatile uint64_t bytes_read;
-    volatile uint32_t pages_ready;
-    volatile uint32_t page_misses;
-    volatile uint32_t io_errors;
-    volatile uint32_t voices_active;
-    volatile uint32_t voices_max;
-    volatile uint32_t average_kib_per_second;
-    volatile uint32_t start_tick;
-} sample_stream_multi_diag_t;
-
-extern volatile sample_stream_multi_diag_t g_sample_stream_multi_diag;
-void sample_stream_multi_diag_physical_bytes(uint32_t bytes);
-
 #ifdef __cplusplus
 extern "C" {
 #endif

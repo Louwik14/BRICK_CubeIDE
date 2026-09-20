@@ -1,5 +1,4 @@
 #include "Sampler/sample_stream_io.h"
-#include "Sampler/sample_stream_metrics.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -56,41 +55,6 @@ SDRAM_STREAM_SERVICE static sample_stream_io_async_t
 static uint32_t g_sample_stream_io_next_order;
 static sample_stream_read_chunk_kib_t g_sample_stream_io_chunk_kib =
     (sample_stream_read_chunk_kib_t)BRICK6_STREAM_READ_CHUNK_KIB;
-static uint32_t g_sample_stream_multi_diag_previous_state;
-
-volatile sample_stream_multi_diag_t g_sample_stream_multi_diag
-    __attribute__((used, aligned(32)));
-
-static void sample_stream_multi_diag_update(void)
-{
-    if ((g_sample_stream_multi_diag.state == 1U)
-        && (g_sample_stream_multi_diag_previous_state != 1U))
-    {
-        memset((void *)&g_sample_stream_multi_diag, 0,
-               sizeof(g_sample_stream_multi_diag));
-        g_sample_stream_multi_diag.magic = 0x4D554C54U;
-        g_sample_stream_multi_diag.start_tick = HAL_GetTick();
-        g_sample_stream_multi_diag.state = 1U;
-    }
-    if (g_sample_stream_multi_diag.state == 1U)
-    {
-        g_sample_stream_multi_diag.duration_ms =
-            HAL_GetTick() - g_sample_stream_multi_diag.start_tick;
-        if (g_sample_stream_multi_diag.duration_ms != 0U)
-            g_sample_stream_multi_diag.average_kib_per_second =
-                (uint32_t)((g_sample_stream_multi_diag.bytes_read * 1000ULL)
-                    / (1024ULL * g_sample_stream_multi_diag.duration_ms));
-    }
-    g_sample_stream_multi_diag_previous_state = g_sample_stream_multi_diag.state;
-}
-
-void sample_stream_multi_diag_physical_bytes(uint32_t bytes)
-{
-    sample_stream_multi_diag_update();
-    if (g_sample_stream_multi_diag.state == 1U)
-        g_sample_stream_multi_diag.bytes_read += bytes;
-}
-
 uint8_t sample_stream_io_command_init(sample_stream_io_command_t *out_command,
                                       const sample_page_load_token_t *token,
                                       const sample_page_load_target_t *target,
@@ -211,9 +175,7 @@ static void sample_stream_io_decode_async_impl(void)
 
 static void sample_stream_io_decode_async(void)
 {
-    const uint32_t metric_start = sample_stream_metrics_begin();
     sample_stream_io_decode_async_impl();
-    sample_stream_metrics_end(SAMPLE_STREAM_METRIC_DECODE, metric_start);
 }
 
 uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
@@ -225,7 +187,6 @@ uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
 
 uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command)
 {
-    sample_stream_multi_diag_update();
     sample_stream_io_async_t *async = 0;
     if (command == 0)
     {
@@ -352,7 +313,6 @@ uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command)
 
 static uint8_t sample_stream_io_poll_impl(sample_stream_io_result_t *out_result)
 {
-    sample_stream_multi_diag_update();
     sample_stream_io_async_t *async = 0;
     if (out_result == 0)
     {
@@ -373,14 +333,6 @@ static uint8_t sample_stream_io_poll_impl(sample_stream_io_result_t *out_result)
         async->state = SAMPLE_STREAM_IO_SCRATCH_DECODING;
         sample_stream_io_decode_async();
         *out_result = async->result;
-        if (async->command.target.key.domain == SAMPLE_AUDIO_DOMAIN_MULTI
-            && g_sample_stream_multi_diag.state == 1U)
-        {
-            if (async->result.load_result == SAMPLE_PAGE_LOAD_OK)
-                ++g_sample_stream_multi_diag.pages_ready;
-            else
-                ++g_sample_stream_multi_diag.io_errors;
-        }
         memset(async, 0, sizeof(*async));
         return 1U;
     }
@@ -420,10 +372,7 @@ static uint8_t sample_stream_io_poll_impl(sample_stream_io_result_t *out_result)
 
 uint8_t sample_stream_io_poll(sample_stream_io_result_t *out_result)
 {
-    const uint32_t metric_start = sample_stream_metrics_begin();
     const uint8_t result = sample_stream_io_poll_impl(out_result);
-    sample_stream_metrics_end(SAMPLE_STREAM_METRIC_POLL_COMPLETION,
-                              metric_start);
     return result;
 }
 

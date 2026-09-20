@@ -19,5 +19,5 @@ void brick6_acid_runtime_set_env_mod(uint8_t id, float normalized);
 void brick6_acid_runtime_set_decay(uint8_t id, float normalized);
 void brick6_acid_runtime_set_accent(uint8_t id, float normalized);
 void brick6_acid_runtime_set_slide(uint8_t id, uint8_t enabled);
-void brick6_acid_runtime_set_cutoff_rate(uint8_t id, uint8_t selection);
+void brick6_acid_runtime_set_vcf_rate(uint8_t id, uint8_t unused);
 #endif

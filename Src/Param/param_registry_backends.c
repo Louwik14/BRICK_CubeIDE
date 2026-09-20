@@ -67,7 +67,7 @@ uint8_t param_backend_apply_tone_acid(uint8_t track,param_id_t id,float value)
     case PARAM_ACID_DECAY:brick6_acid_runtime_set_decay(instance,param_backend_clamp_value(value,0,1));return 1U;
     case PARAM_ACID_ACCENT:brick6_acid_runtime_set_accent(instance,param_backend_clamp_value(value,0,1));return 1U;
     case PARAM_ACID_SLIDE:brick6_acid_runtime_set_slide(instance,value>=0.5f);return 1U;
-    case PARAM_ACID_VCF_RATE:brick6_acid_runtime_set_cutoff_rate(instance,(uint8_t)param_backend_clamp_value(value,0,3));return 1U;
+    case PARAM_ACID_VCF_RATE:brick6_acid_runtime_set_vcf_rate(instance,value>=0.5f);return 1U;
     default:return 0U;}
 }
 

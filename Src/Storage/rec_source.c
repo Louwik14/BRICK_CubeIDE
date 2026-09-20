@@ -15,12 +15,6 @@
 #include "Storage/wav_parser.h"
 #include "ff.h"
 
-static FRESULT rec_source_unlink_measured(const char *path)
-{
-    const FRESULT result = f_unlink(path);
-    return result;
-}
-
 #define REC_SOURCE_INVALID_SLOT UINT8_MAX
 #define REC_SOURCE_PROMOTION_MAGIC 0x5250524AUL
 #define REC_SOURCE_PROMOTION_JOURNAL_0 REC_SOURCE_DIRECTORY "/REC_PROMOTE.0"
@@ -229,8 +223,8 @@ static uint8_t load_promotion_journal(rec_source_promotion_journal_t *journal)
 
 static void clear_promotion_journals(void)
 {
-    (void)rec_source_unlink_measured(REC_SOURCE_PROMOTION_JOURNAL_0);
-    (void)rec_source_unlink_measured(REC_SOURCE_PROMOTION_JOURNAL_1);
+    (void)f_unlink(REC_SOURCE_PROMOTION_JOURNAL_0);
+    (void)f_unlink(REC_SOURCE_PROMOTION_JOURNAL_1);
 }
 
 static uint8_t promotion_journal_files_exist(void)
@@ -385,8 +379,8 @@ void rec_source_service(void)
         FRESULT temp_result = FR_NO_FILE, path_result = FR_NO_FILE;
         if (candidate->ownership == REC_SOURCE_OWNERSHIP_TEMPORARY)
         {
-            temp_result = rec_source_unlink_measured(candidate->temporary_path);
-            path_result = rec_source_unlink_measured(candidate->path);
+            temp_result = f_unlink(candidate->temporary_path);
+            path_result = f_unlink(candidate->path);
             sd_access_gate_release(SD_ACCESS_CLIENT_RECORDER);
         }
         if (((temp_result != FR_OK) && (temp_result != FR_NO_FILE))

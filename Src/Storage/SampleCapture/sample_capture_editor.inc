@@ -1,7 +1,6 @@
 void sample_capture_model_init(void)
 {
     memset(&g_sample_capture, 0, sizeof(g_sample_capture));
-    sample_capture_debug_reset();
     g_sample_capture.state.view = SAMPLE_CAPTURE_VIEW_AUDIO_REC;
     g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
     g_sample_capture.state.trig = SAMPLE_CAPTURE_TRIG_NOW;
@@ -684,87 +683,5 @@ void sample_capture_model_note_rec_edit_first_render(void)
     }
     g_sample_capture.rec_edit_first_render_pending = 0U;
 
-}
-
-void sample_capture_model_debug_note_renderer(sample_capture_renderer_debug_t renderer,
-                                              uint8_t zoom,
-                                              uint32_t view_start_frame,
-                                              uint32_t view_frames,
-                                              uint16_t inner_w,
-                                              uint32_t samples_per_pixel,
-                                              uint32_t wavecache_frames_per_column,
-                                              uint8_t line_valid,
-                                              uint16_t line_points,
-                                              uint16_t draw_line_segments,
-                                              uint8_t fallback_reason)
-{
-#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
-    g_sample_capture_debug.draw_count++;
-    if((uint8_t)renderer < 8U)
-    {
-        g_sample_capture_debug.renderer_count[(uint8_t)renderer]++;
-    }
-    const uint32_t now = HAL_GetTick();
-    if(now - g_sample_capture_debug.last_summary_ms >= 1000U
-            || g_sample_capture_debug.last_renderer != renderer)
-    {
-        sample_capture_debug_log("RECEDIT R=%s z=%u vs=%lu vf=%lu w=%u spp=%lu fb=%u\r\n",
-            sample_capture_debug_renderer_label(renderer), (unsigned)zoom,
-            (unsigned long)view_start_frame, (unsigned long)view_frames,
-            (unsigned)inner_w, (unsigned long)samples_per_pixel,
-            (unsigned)fallback_reason);
-        g_sample_capture_debug.last_summary_ms = now;
-        g_sample_capture_debug.last_renderer = renderer;
-    }
-#else
-    (void)renderer;
-    (void)zoom;
-    (void)view_start_frame;
-    (void)view_frames;
-    (void)inner_w;
-    (void)samples_per_pixel;
-    (void)fallback_reason;
-#endif
-    (void)wavecache_frames_per_column;
-    (void)line_valid;
-    (void)line_points;
-    (void)draw_line_segments;
-}
-void sample_capture_model_debug_note_draw_cost(uint32_t page_ms, uint32_t waveform_ms)
-{
-#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
-    g_sample_capture_debug.draw_last_ms = page_ms;
-    if(page_ms > g_sample_capture_debug.draw_max_ms)
-    {
-        g_sample_capture_debug.draw_max_ms = page_ms;
-    }
-    g_sample_capture_debug.waveform_last_ms = waveform_ms;
-    if(waveform_ms > g_sample_capture_debug.waveform_max_ms)
-    {
-        g_sample_capture_debug.waveform_max_ms = waveform_ms;
-    }
-#else
-    (void)page_ms;
-    (void)waveform_ms;
-#endif
-}
-
-void sample_capture_model_debug_note_flush_cost(uint32_t flush_ms, uint8_t continued_flush)
-{
-#if SAMPLE_CAPTURE_WAVEFORM_DEBUG_UART
-    g_sample_capture_debug.flush_count++;
-    if(continued_flush != 0U)
-    {
-        g_sample_capture_debug.flush_cont_count++;
-    }
-    g_sample_capture_debug.flush_last_ms = flush_ms;
-    if(flush_ms > g_sample_capture_debug.flush_max_ms)
-    {
-        g_sample_capture_debug.flush_max_ms = flush_ms;
-    }
-#else
-    (void)flush_ms;
-    (void)continued_flush;
-#endif
 }
 

@@ -1,5 +1,4 @@
 #include "Sampler/sample_stream_scheduler.h"
-#include "Sampler/sample_stream_metrics.h"
 
 static uint8_t g_sample_stream_scheduler_round_robin_cursor;
 static uint8_t g_sample_stream_scheduler_round_active;
@@ -35,12 +34,9 @@ uint8_t sample_stream_scheduler_pick(
     void *context,
     sample_stream_scheduler_candidate_t *out_candidate)
 {
-    const uint32_t metric_start = sample_stream_metrics_begin();
     if ((g_sample_stream_scheduler_round_active == 0U)
         || (probe == 0) || (out_candidate == 0))
     {
-        sample_stream_metrics_end(SAMPLE_STREAM_METRIC_ROUND_ROBIN,
-                                  metric_start);
         return 0U;
     }
     for (;;)
@@ -61,8 +57,6 @@ uint8_t sample_stream_scheduler_pick(
                 g_sample_stream_scheduler_slots_left -= (uint8_t)(distance + 1U);
                 g_sample_stream_scheduler_round_robin_cursor = (uint8_t)(
                     (slot + 1U) % SAMPLE_STREAM_SCHEDULER_SLOT_COUNT);
-                sample_stream_metrics_end(SAMPLE_STREAM_METRIC_ROUND_ROBIN,
-                                          metric_start);
                 return 1U;
             }
         }
@@ -76,8 +70,6 @@ uint8_t sample_stream_scheduler_pick(
         {
             g_sample_stream_scheduler_round_active = 0U;
             g_sample_stream_scheduler_slots_left = 0U;
-            sample_stream_metrics_end(SAMPLE_STREAM_METRIC_ROUND_ROBIN,
-                                      metric_start);
             return 0U;
         }
     }

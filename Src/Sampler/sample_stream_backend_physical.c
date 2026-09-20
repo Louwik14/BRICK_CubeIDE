@@ -5,7 +5,6 @@
 #include "SD/sd_block_device.h"
 #include "stm32h7xx_hal.h"
 #include "Sampler/sample_stream_io.h"
-#include "Sampler/sample_stream_metrics.h"
 
 #define SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE (512U)
 #define SAMPLE_STREAM_PHYSICAL_PENDING_COUNT (2U)
@@ -124,10 +123,8 @@ static uint8_t sample_stream_backend_physical_next_span(
     sample_stream_backend_physical_async_t *async,
     sample_stream_physical_span_t *span)
 {
-    const uint32_t metric_start = sample_stream_metrics_begin();
     const uint8_t result =
         sample_stream_backend_physical_next_span_impl(async, span);
-    sample_stream_metrics_end(SAMPLE_STREAM_METRIC_SPAN_LBA, metric_start);
     return result;
 }
 
@@ -370,8 +367,6 @@ static sd_scheduler_start_result_t sample_stream_backend_physical_read_start(
     }
     async->scratch_sectors += span.sector_count;
     async->logical_queued += span.logical_bytes;
-    sd_stream_latency_dma_followup(
-        (uint8_t)(async->logical_queued < async->source_bytes));
     sample_stream_backend_physical_invalidate_span(async);
     return SD_SCHEDULER_START_STARTED;
 }
@@ -433,8 +428,6 @@ static sd_scheduler_poll_result_t sample_stream_backend_physical_read_poll(
     }
     if (async->count_multi_diag != 0U)
     {
-        sample_stream_multi_diag_physical_bytes(
-            (uint32_t)completion.sector_count * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE);
     }
     if (async->logical_queued < async->source_bytes)
     {
