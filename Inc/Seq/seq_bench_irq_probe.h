@@ -3,6 +3,7 @@
 
 #include "stm32h7xx.h"
 #include <stdint.h>
+#include "Seq/seq_occupancy_diag.h"
 
 extern volatile uint32_t g_seq_bench_irq_window_active;
 extern volatile uint32_t g_seq_bench_irq_depth;
@@ -11,6 +12,7 @@ extern volatile uint32_t g_seq_bench_irq_cycles;
 
 static inline void seq_bench_irq_enter(void)
 {
+    seq_occupancy_preempt_enter();
     if (g_seq_bench_irq_window_active != 0U) {
         if (g_seq_bench_irq_depth++ == 0U)
             g_seq_bench_irq_started = DWT->CYCCNT;
@@ -24,6 +26,7 @@ static inline void seq_bench_irq_exit(void)
         if (--g_seq_bench_irq_depth == 0U)
             g_seq_bench_irq_cycles += DWT->CYCCNT - g_seq_bench_irq_started;
     }
+    seq_occupancy_preempt_exit();
 }
 
 #endif

@@ -4,6 +4,7 @@
 #include "Platform/brick_media_clock.h"
 #include "SD/sdmmc_async_transport.h"
 #include "Seq/seq_bench_irq_probe.h"
+#include "Seq/seq_occupancy_diag.h"
 #include "Seq/seq_boundary_probe.h"
 #include "NoteFx/note_fx_walker_probe.h"
 #include "stm32h7xx.h"
@@ -62,6 +63,153 @@ volatile uint32_t g_seq_bench_irq_window_active;
 volatile uint32_t g_seq_bench_irq_depth;
 volatile uint32_t g_seq_bench_irq_started;
 volatile uint32_t g_seq_bench_irq_cycles;
+
+#define SEQ_OCCUPANCY_MAGIC UINT32_C(0x534F4331)
+#define SEQ_OCCUPANCY_VERSION 1U
+#define SEQ_OCCUPANCY_BURSTS_SAVED 8U
+enum {SEQ_OCC_TRACE_BLOCK_START=1U,SEQ_OCC_TRACE_SEQ_START,
+      SEQ_OCC_TRACE_SEQ_END,SEQ_OCC_TRACE_BLOCK_END};
+typedef struct {uint32_t start,end,cpu,wall;} seq_occupancy_burst_t;
+typedef struct {
+ uint32_t block_index,anchor,period,total_cpu,total_wall,burst_count;
+ uint32_t first_start,last_end,max_cpu,max_wall,max_gap,free_before,free_after;
+ uint32_t preempt_cycles,previous_end,burst_started,segment_started,preempt_started;
+ uint32_t burst_preempt,preempt_depth,saved_count,active,burst_overflow;
+ seq_occupancy_burst_t burst[SEQ_OCCUPANCY_BURSTS_SAVED];
+} seq_occupancy_state_t;
+static SEQ_HOT_D1 seq_occupancy_state_t g_seq_occupancy_state;
+SEQ_HOT_D1 __attribute__((used)) volatile uint32_t
+ g_seq_occupancy_diag[SEQ_OCCUPANCY_DIAG_WORDS];
+SEQ_STATE_SDRAM __attribute__((used)) volatile uint32_t
+ g_seq_occupancy_trace[SEQ_OCCUPANCY_TRACE_WORDS];
+static uint32_t g_seq_occupancy_trace_count,g_seq_occupancy_blocks;
+static uint32_t g_seq_occupancy_gap_histogram[5];
+static uint32_t g_seq_occupancy_total_bursts,g_seq_occupancy_total_preempt;
+static uint32_t g_seq_occupancy_global_max_cpu,g_seq_occupancy_global_max_cpu_block;
+static uint32_t g_seq_occupancy_global_max_contiguous,g_seq_occupancy_global_max_contiguous_block;
+static uint32_t g_seq_occupancy_global_max_wall,g_seq_occupancy_global_max_gap;
+static uint32_t g_seq_occupancy_min_slack;
+static uint32_t g_seq_occupancy_start_overhead,g_seq_occupancy_end_overhead;
+static uint32_t g_seq_occupancy_block_overhead;
+static uint32_t g_seq_occupancy_trace_overflow;
+
+static uint32_t seq_occupancy_period_cycles(void)
+{return SystemCoreClock*SEQ_ENGINE_H743_PERIOD_SAMPLES/48000U;}
+static uint32_t seq_occupancy_offset(uint32_t now)
+{return now-g_seq_occupancy_state.anchor;}
+static void seq_occupancy_trace_add(uint32_t type,uint32_t offset,uint32_t value)
+{if(g_seq_occupancy_trace_count>=SEQ_OCCUPANCY_TRACE_ENTRIES){g_seq_occupancy_trace_overflow=1U;return;}
+ const uint32_t base=g_seq_occupancy_trace_count++*4U;
+ g_seq_occupancy_trace[base]=g_seq_occupancy_state.block_index;
+ g_seq_occupancy_trace[base+1U]=type;g_seq_occupancy_trace[base+2U]=offset;
+ g_seq_occupancy_trace[base+3U]=value;}
+static void seq_occupancy_gap_add(uint32_t gap)
+{uint8_t bin;if(gap<24000U)bin=0U;else if(gap<48000U)bin=1U;
+ else if(gap<120000U)bin=2U;else if(gap<240000U)bin=3U;else bin=4U;
+ ++g_seq_occupancy_gap_histogram[bin];
+ if(gap>g_seq_occupancy_state.max_gap)g_seq_occupancy_state.max_gap=gap;
+ if(gap>g_seq_occupancy_global_max_gap)g_seq_occupancy_global_max_gap=gap;}
+static void seq_occupancy_save_block(uint32_t base)
+{seq_occupancy_state_t*s=&g_seq_occupancy_state;
+ g_seq_occupancy_diag[base]=s->block_index;g_seq_occupancy_diag[base+1U]=s->total_cpu;
+ g_seq_occupancy_diag[base+2U]=s->total_wall;g_seq_occupancy_diag[base+3U]=s->burst_count;
+ g_seq_occupancy_diag[base+4U]=s->first_start;g_seq_occupancy_diag[base+5U]=s->last_end;
+ g_seq_occupancy_diag[base+6U]=s->max_cpu;g_seq_occupancy_diag[base+7U]=s->max_wall;
+ g_seq_occupancy_diag[base+8U]=s->max_gap;g_seq_occupancy_diag[base+9U]=s->free_before;
+ g_seq_occupancy_diag[base+10U]=s->free_after;g_seq_occupancy_diag[base+11U]=s->preempt_cycles;
+ for(uint8_t i=0U;i<SEQ_OCCUPANCY_BURSTS_SAVED;++i){const uint32_t o=base+12U+4U*i;
+  g_seq_occupancy_diag[o]=s->burst[i].start;g_seq_occupancy_diag[o+1U]=s->burst[i].end;
+  g_seq_occupancy_diag[o+2U]=s->burst[i].cpu;g_seq_occupancy_diag[o+3U]=s->burst[i].wall;}}
+static void seq_occupancy_publish(void)
+{seq_occupancy_state_t*s=&g_seq_occupancy_state;volatile uint32_t*d=g_seq_occupancy_diag;
+ d[0]=SEQ_OCCUPANCY_MAGIC;d[1]=SEQ_OCCUPANCY_VERSION;d[2]=sizeof(g_seq_occupancy_diag);
+ d[3]=SystemCoreClock;d[4]=s->period;d[5]=g_seq_occupancy_blocks;
+ d[6]=g_seq_occupancy_trace_count;d[7]=SEQ_OCCUPANCY_TRACE_ENTRIES;
+ d[8]=g_seq_occupancy_trace_overflow;d[9]=s->block_index;
+ d[10]=s->block_index;d[11]=s->total_cpu;d[12]=s->total_wall;d[13]=s->burst_count;
+ d[14]=s->first_start;d[15]=s->last_end;d[16]=s->max_cpu;d[17]=s->max_wall;
+ d[18]=s->max_gap;d[19]=s->free_before;d[20]=s->free_after;d[21]=s->preempt_cycles;
+ d[22]=(uint32_t)(s->last_end>s->period);d[23]=s->burst_overflow;
+ for(uint8_t i=0U;i<5U;++i)d[24U+i]=g_seq_occupancy_gap_histogram[i];
+ d[29]=g_seq_occupancy_global_max_cpu;d[30]=g_seq_occupancy_global_max_cpu_block;
+ d[31]=g_seq_occupancy_global_max_contiguous;d[32]=g_seq_occupancy_global_max_contiguous_block;
+ d[33]=g_seq_occupancy_global_max_wall;d[34]=g_seq_occupancy_global_max_gap;
+ d[35]=g_seq_occupancy_min_slack;d[36]=g_seq_occupancy_total_bursts;
+ d[37]=g_seq_occupancy_total_preempt;d[38]=g_seq_occupancy_start_overhead;
+ d[39]=g_seq_occupancy_end_overhead;d[40]=g_seq_occupancy_block_overhead;}
+void seq_occupancy_reset(void)
+{memset(&g_seq_occupancy_state,0,sizeof(g_seq_occupancy_state));
+ memset((void*)g_seq_occupancy_diag,0,sizeof(g_seq_occupancy_diag));
+ memset((void*)g_seq_occupancy_trace,0,sizeof(g_seq_occupancy_trace));
+ memset(g_seq_occupancy_gap_histogram,0,sizeof(g_seq_occupancy_gap_histogram));
+ g_seq_occupancy_trace_count=0U;g_seq_occupancy_blocks=0U;
+ g_seq_occupancy_total_bursts=0U;g_seq_occupancy_total_preempt=0U;
+ g_seq_occupancy_global_max_cpu=0U;g_seq_occupancy_global_max_contiguous=0U;
+ g_seq_occupancy_global_max_wall=0U;g_seq_occupancy_global_max_gap=0U;
+ g_seq_occupancy_global_max_cpu_block=0U;g_seq_occupancy_global_max_contiguous_block=0U;
+ g_seq_occupancy_min_slack=UINT32_MAX;g_seq_occupancy_start_overhead=0U;
+ g_seq_occupancy_end_overhead=0U;g_seq_occupancy_block_overhead=0U;
+ g_seq_occupancy_trace_overflow=0U;seq_occupancy_publish();}
+void seq_occupancy_block_start(uint32_t block_index,uint32_t anchor_cycle)
+{const uint32_t measure=DWT->CYCCNT;if(g_seq_occupancy_state.active)seq_occupancy_block_end();
+ memset(&g_seq_occupancy_state,0,sizeof(g_seq_occupancy_state));
+ g_seq_occupancy_state.block_index=block_index;g_seq_occupancy_state.anchor=anchor_cycle;
+ g_seq_occupancy_state.period=seq_occupancy_period_cycles();g_seq_occupancy_state.active=1U;
+ seq_occupancy_trace_add(SEQ_OCC_TRACE_BLOCK_START,0U,g_seq_occupancy_state.period);
+ const uint32_t overhead=DWT->CYCCNT-measure;if(overhead>g_seq_occupancy_block_overhead)
+ g_seq_occupancy_block_overhead=overhead;}
+void seq_occupancy_burst_start(void)
+{const uint32_t measure=DWT->CYCCNT;seq_occupancy_state_t*s=&g_seq_occupancy_state;
+ if(!s->active||s->burst_started)return;
+ const uint32_t offset=seq_occupancy_offset(measure);
+ const uint32_t gap=(offset>s->previous_end)?offset-s->previous_end:0U;seq_occupancy_gap_add(gap);
+ if(s->burst_count==0U){s->first_start=offset;s->free_before=gap;}
+ s->burst_started=measure;s->segment_started=measure;s->burst_preempt=0U;s->preempt_depth=0U;
+ seq_occupancy_trace_add(SEQ_OCC_TRACE_SEQ_START,offset,s->burst_count);
+ const uint32_t overhead=DWT->CYCCNT-measure;if(overhead>g_seq_occupancy_start_overhead)
+ g_seq_occupancy_start_overhead=overhead;}
+void seq_occupancy_preempt_enter(void)
+{seq_occupancy_state_t*s=&g_seq_occupancy_state;if(!s->active||!s->burst_started)return;
+ if(s->preempt_depth++==0U){const uint32_t now=DWT->CYCCNT;
+  const uint32_t run=now-s->segment_started;if(run>s->max_cpu)s->max_cpu=run;
+  s->preempt_started=now;}}
+void seq_occupancy_preempt_exit(void)
+{seq_occupancy_state_t*s=&g_seq_occupancy_state;if(!s->active||!s->burst_started||!s->preempt_depth)return;
+ if(--s->preempt_depth==0U){const uint32_t now=DWT->CYCCNT;
+  const uint32_t elapsed=now-s->preempt_started;s->burst_preempt+=elapsed;
+  s->preempt_cycles+=elapsed;s->segment_started=now;}}
+void seq_occupancy_burst_end(void)
+{const uint32_t measure=DWT->CYCCNT;seq_occupancy_state_t*s=&g_seq_occupancy_state;
+ if(!s->active||!s->burst_started)return;
+ const uint32_t run=measure-s->segment_started;
+ if(run>s->max_cpu)s->max_cpu=run;
+ const uint32_t wall=measure-s->burst_started;
+ const uint32_t cpu=(s->burst_preempt<wall)?wall-s->burst_preempt:0U;
+ const uint32_t start=seq_occupancy_offset(s->burst_started),end=seq_occupancy_offset(measure);
+ s->total_cpu+=cpu;s->total_wall+=wall;if(wall>s->max_wall)s->max_wall=wall;
+ s->last_end=end;s->previous_end=end;++s->burst_count;++g_seq_occupancy_total_bursts;
+ if(s->saved_count<SEQ_OCCUPANCY_BURSTS_SAVED)
+  s->burst[s->saved_count++]=(seq_occupancy_burst_t){start,end,cpu,wall};
+ else s->burst_overflow=1U;
+ seq_occupancy_trace_add(SEQ_OCC_TRACE_SEQ_END,end,cpu);s->burst_started=0U;
+ const uint32_t overhead=DWT->CYCCNT-measure;if(overhead>g_seq_occupancy_end_overhead)
+ g_seq_occupancy_end_overhead=overhead;}
+void seq_occupancy_block_end(void)
+{const uint32_t measure=DWT->CYCCNT;seq_occupancy_state_t*s=&g_seq_occupancy_state;
+ if(!s->active)return;
+ if(s->burst_started)seq_occupancy_burst_end();
+ s->free_after=(s->last_end<s->period)?s->period-s->last_end:0U;
+ seq_occupancy_gap_add(s->free_after);++g_seq_occupancy_blocks;
+ g_seq_occupancy_total_preempt+=s->preempt_cycles;
+ if(s->free_after<g_seq_occupancy_min_slack)g_seq_occupancy_min_slack=s->free_after;
+ if(s->total_cpu>g_seq_occupancy_global_max_cpu){g_seq_occupancy_global_max_cpu=s->total_cpu;
+  g_seq_occupancy_global_max_cpu_block=s->block_index;seq_occupancy_save_block(48U);}
+ if(s->max_cpu>g_seq_occupancy_global_max_contiguous){g_seq_occupancy_global_max_contiguous=s->max_cpu;
+  g_seq_occupancy_global_max_contiguous_block=s->block_index;seq_occupancy_save_block(96U);}
+ if(s->max_wall>g_seq_occupancy_global_max_wall)g_seq_occupancy_global_max_wall=s->max_wall;
+ seq_occupancy_trace_add(SEQ_OCC_TRACE_BLOCK_END,s->period,s->total_cpu);
+ s->active=0U;seq_occupancy_publish();const uint32_t overhead=DWT->CYCCNT-measure;
+ if(overhead>g_seq_occupancy_block_overhead)g_seq_occupancy_block_overhead=overhead;}
 
 /* Fixed reference chains.  Parameters are deliberately ordinary musical
  * values: major triad; 1/16 Echo, two repeats, 32% decay; 75% Gate; Groove 3
@@ -132,6 +280,7 @@ void seq_engine_boot_bench_run(void)
  for(uint32_t i=0U;i<SEQ_BOOT_BENCH_WARMUP_BLOCKS;++i,
        sample+=SEQ_ENGINE_H743_PERIOD_SAMPLES)
   output_overflows+=seq_boot_bench_service(sample);
+ seq_occupancy_reset();
 #if SEQ_FINE_DIAGNOSTICS
  seq_boundary_probe_reset();
  note_fx_walker_probe_reset();
@@ -148,13 +297,16 @@ void seq_engine_boot_bench_run(void)
 #if SEQ_FINE_DIAGNOSTICS
   seq_boundary_probe_block_begin(boundary);
 #endif
-  g_seq_bench_irq_depth=0U;g_seq_bench_irq_cycles=0U;
+ g_seq_bench_irq_depth=0U;g_seq_bench_irq_cycles=0U;
+  const uint32_t anchor=DWT->CYCCNT;
+  seq_occupancy_block_start(i,anchor);seq_occupancy_burst_start();
   const uint32_t started=DWT->CYCCNT;g_seq_bench_irq_window_active=1U;
   output_overflows+=seq_boot_bench_service(sample);
 #if SEQ_FINE_DIAGNOSTICS
   seq_boundary_probe_block_end();
 #endif
   const uint32_t finished=DWT->CYCCNT;g_seq_bench_irq_window_active=0U;
+  seq_occupancy_burst_end();seq_occupancy_block_end();
   const uint32_t cycles=finished-started,irq_cycles=g_seq_bench_irq_cycles;
   const uint32_t cpu_cycles=(irq_cycles<=cycles)?cycles-irq_cycles:0U;
   total+=cycles;cpu_total+=cpu_cycles;irq_total+=irq_cycles;
@@ -288,6 +440,8 @@ void seq_engine_irq_init(void)
 
 void seq_engine_audio_boundary(uint64_t block_start_sample, uint8_t recovering)
 {
+    seq_occupancy_block_start((uint32_t)(block_start_sample/SEQ_ENGINE_H743_PERIOD_SAMPLES),
+        DWT->CYCCNT);
     uint8_t acquired=0U;
     if (g_audio_slot >= 0) {
         g_slot_state[(uint8_t)g_audio_slot] = SLOT_FREE; g_audio_slot = -1;
@@ -519,6 +673,7 @@ static void seq_service_urgent(uint64_t now_sample,uint64_t publish_until_sample
 
 void TIM4_IRQHandler(void)
 {
+    const uint8_t occupancy_preempting_bench=(uint8_t)(g_seq_bench_irq_window_active!=0U);
     seq_bench_irq_enter();
     sdmmc_async_transport_preempt_enter();
     if ((g_pending == 0U)&&(g_urgent_pending==0U)) {
@@ -528,7 +683,9 @@ void TIM4_IRQHandler(void)
     const uint8_t urgent=g_urgent_pending,periodic=g_pending;
     if(urgent!=0U)(void)brick_media_clock_now_sample(&now);
     g_pending=0U;g_urgent_pending=0U;
+    if(occupancy_preempting_bench==0U)seq_occupancy_burst_start();
     if(periodic!=0U)seq_service(now,until);else seq_service_urgent(now,until);
+    if(occupancy_preempting_bench==0U)seq_occupancy_burst_end();
     if(g_urgent_pending!=0U)NVIC_SetPendingIRQ(TIM4_IRQn);
     sdmmc_async_transport_preempt_exit();
     seq_bench_irq_exit();
