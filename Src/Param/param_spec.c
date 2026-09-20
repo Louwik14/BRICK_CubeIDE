@@ -31,3 +31,25 @@ uint8_t param_spec_value_is_valid(param_id_t id, float value)
     return ((value >= param_spec[id].min) && (value <= param_spec[id].max))
         ? 1U : 0U;
 }
+
+uint8_t param_spec_audio_command_value_is_valid(param_id_t id, float value)
+{
+    if (!isfinite(value)) return 0U;
+    switch (id)
+    {
+        case PARAM_MODFX_RATE:
+        case PARAM_MODFX_RATE_B:
+            return (uint8_t)((value >= 0.01f) && (value <= 12.0f));
+        case PARAM_MODFX_DEPTH:
+        case PARAM_MODFX_DEPTH_B:
+            return (uint8_t)((value >= 0.0f) && (value <= 0.93f));
+        case PARAM_MODFX_FEEDBACK:
+            return (uint8_t)((value >= -1.0f) && (value <= 1.0f));
+        case PARAM_MODFX_OFFSET:
+        case PARAM_MODFX_DELAY_B:
+        case PARAM_MODFX_WIDTH:
+            return (uint8_t)((value >= 0.0f) && (value <= 1.0f));
+        default:
+            return param_spec_value_is_valid(id, value);
+    }
+}

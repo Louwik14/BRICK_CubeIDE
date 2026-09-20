@@ -43,10 +43,14 @@ static float param_registry_global_modfx_command(param_id_t id,
     }
     switch (id)
     {
-        case PARAM_MODFX_RATE: return 0.01f + 11.99f * unit;
+        case PARAM_MODFX_RATE:
+        case PARAM_MODFX_RATE_B: return 0.01f + 11.99f * unit;
         case PARAM_MODFX_DEPTH:
+        case PARAM_MODFX_DEPTH_B:
         case PARAM_MODFX_FEEDBACK:
-        case PARAM_MODFX_OFFSET: return unit;
+        case PARAM_MODFX_OFFSET:
+        case PARAM_MODFX_DELAY_B:
+        case PARAM_MODFX_WIDTH: return unit;
         default: return value;
     }
 }
@@ -78,7 +82,7 @@ uint8_t param_registry_prepare_global_audio_command(param_id_t id,
         default:
             break;
     }
-    return 1U;
+    return param_spec_audio_command_value_is_valid(id, *out_command_value);
 }
 
 static const param_id_t g_audio_fx_param_order[] = {

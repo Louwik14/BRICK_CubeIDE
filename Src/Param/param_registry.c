@@ -21,6 +21,7 @@
 
 #include "param_registry.h"
 #include "Param/param_global_control.h"
+#include "Param/param_spec.h"
 #include "Param/engine_model_catalog.h"
 #include "Sampler/audio_wave_table_projection_control.h"
 #include "Track/control_music_output.h"

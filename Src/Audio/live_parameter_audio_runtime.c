@@ -158,7 +158,8 @@ uint8_t live_parameter_audio_runtime_apply_param(uint8_t entity,
     if ((scope >= CONTROL_AUDIO_PARAM_KIND_BASE_MATRIX_FIRST)
             && (scope <= CONTROL_AUDIO_PARAM_KIND_BASE_MATRIX_LAST))
         return 0U;
-    if (param_spec_value_is_valid((param_id_t)parameter_id, decoded) == 0U)
+    if (param_spec_audio_command_value_is_valid(
+            (param_id_t)parameter_id, decoded) == 0U)
         return 0U;
     if (scope == CONTROL_AUDIO_PARAM_KIND_BASE_GLOBAL)
     {

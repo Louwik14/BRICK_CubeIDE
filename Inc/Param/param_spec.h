@@ -24,3 +24,7 @@ typedef struct
 extern const param_spec_t param_spec[PARAM_COUNT];
 
 uint8_t param_spec_value_is_valid(param_id_t id, float value);
+/* Validates the payload representation consumed by AUDIO.  Most parameters
+ * use their public canonical domain; projected global parameters use their
+ * explicit engine-domain command contract instead. */
+uint8_t param_spec_audio_command_value_is_valid(param_id_t id, float value);
