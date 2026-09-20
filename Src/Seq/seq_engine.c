@@ -821,6 +821,16 @@ void seq_engine_core_process_block(seq_engine_core_t *core,uint64_t start,uint16
     const uint8_t seed_frontier=(uint8_t)((core->initialized==0U)
         ||(core->transport_epoch!=p->transport_epoch));
     if(seed_frontier!=0U){
+        for(uint8_t lane=0U;lane<SEQ_ENGINE_LEDGER_CAPACITY;++lane){
+            if(((core->ledger_active>>lane)&UINT64_C(1))==0U)continue;
+            const uint8_t track=product_track_from_lane(lane);
+            const seq_terminal_event_t terminal={.note={
+                .occurrence_id=core->ledger[lane].occurrence_id,
+                .track=track,.note=core->ledger[lane].note,
+                .logical_slot=product_slot_from_lane(lane)}};
+            if(terminal_push(out,0U,SEQ_ENGINE_EVENT_NOTE_OFF,&terminal)!=0U)
+                out->emitter_tracks|=(uint16_t)(1U<<track);
+        }
         seq_engine_core_init(core);core->initialized=1U;core->transport_epoch=p->transport_epoch;
         core->running=p->running;core->step_sample_q16=p->seed_step_sample_q16;
         core->samples_per_step_q16=p->samples_per_step_q16;
