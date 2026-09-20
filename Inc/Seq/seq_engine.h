@@ -257,7 +257,6 @@ uint16_t seq_engine_audio_frames_until_due(uint64_t sample,
 uint8_t seq_engine_audio_pop_due(uint64_t sample,
                                    uint8_t *out_kind,
                                    seq_terminal_event_t *out_event);
-void seq_engine_audio_retire_occurrence(uint32_t occurrence_id);
 uint16_t seq_engine_audio_track_mask(void);
 void seq_engine_audio_force_stop(uint64_t effective_sample,
                                  uint8_t preserve_live_notes);

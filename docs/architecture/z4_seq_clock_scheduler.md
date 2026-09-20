@@ -79,7 +79,12 @@ point de service suivant.
 
 SEQ publie un seul bloc terminal date. AUDIO ne connait ni step, ni ROLL, ni
 ARP, ni Euclid : il applique PARAM/NOTE dans l'ordre `(sample, OFF, PARAM, ON)`
-et conserve uniquement l'allocation physique des voix. Les anciennes voies
+et conserve uniquement l'allocation physique des voix. Un OFF est qualifie par
+l'identite d'occurrence et devient idempotent si cette occurrence a deja ete
+supplantee. Un ON installe l'owner demande dans le slot logique; si un ancien
+owner physique y subsiste, AUDIO le ferme et effectue le handoff avant d'ouvrir
+le nouveau. Le ledger SEQ est donc une reservation musicale, jamais une preuve
+de liberation physique, et AUDIO reste l'autorite unique du slot moteur. Les anciennes voies
 cooperative, shadow/compare et publication legacy/RT ne sont pas compilees.
 Live Rec est alimente apres cette admission terminale; un candidat refuse n'est
 donc jamais enregistre. Les PLAY issus de Live Rec portent le marqueur

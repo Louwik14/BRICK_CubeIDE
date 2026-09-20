@@ -171,9 +171,6 @@ uint8_t seq_engine_audio_pop_due(uint64_t sample,uint8_t *out_kind,
     return 0U;
 }
 
-void seq_engine_audio_retire_occurrence(uint32_t occurrence_id)
-{ (void)occurrence_id; }
-
 uint16_t seq_engine_audio_track_mask(void)
 {
     const uint16_t mask = (g_audio_slot >= 0)

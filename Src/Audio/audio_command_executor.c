@@ -624,7 +624,6 @@ static void audio_command_executor_close_outputs_from(uint8_t track,
         if (audio_note_engine_adapter_apply_output(track, outputs[i].note, 0U,
                 0U, outputs[i].id) == 0U)
             Error_Handler();
-        seq_engine_audio_retire_occurrence(outputs[i].occurrence_id);
         outputs[i] = (audio_seq_output_t){0};
     }
 }
@@ -665,13 +664,29 @@ static uint8_t audio_command_executor_apply_seq_event(
     if (terminal_kind == SEQ_ENGINE_EVENT_NOTE_OFF)
     {
         if(outputs[target].active==0U)return 1U;
-        if(outputs[target].occurrence_id!=event->note.occurrence_id)return 0U;
+        /* Release is identity-qualified.  A later owner may already have
+         * replaced this occurrence when several logical transitions collapse
+         * onto one AUDIO boundary; an old OFF must never close that owner. */
+        if(outputs[target].occurrence_id!=event->note.occurrence_id)return 1U;
         const uint8_t ok=audio_note_engine_adapter_apply_output(event->note.track,
             outputs[target].note,0U,0U,outputs[target].id);
         outputs[target]=(audio_seq_output_t){0};return ok;
     }
     if(terminal_kind!=SEQ_ENGINE_EVENT_NOTE_ON)return 1U;
-    if(outputs[target].active!=0U)return 0U;
+
+    /* The AUDIO output table is the single authority for physical ownership.
+     * NOTE_ON means "install this occurrence in this logical output slot".
+     * Replacement is committed here as one ordered AUDIO transition, so a
+     * skipped/filtered earlier OFF can never leave an old physical owner in
+     * conflict with the new SEQ reservation. */
+    if(outputs[target].active!=0U)
+    {
+        if(outputs[target].occurrence_id==event->note.occurrence_id)return 1U;
+        if(audio_note_engine_adapter_apply_output(event->note.track,
+                outputs[target].note,0U,0U,outputs[target].id)==0U)
+            return 0U;
+        outputs[target]=(audio_seq_output_t){0};
+    }
 
     const uint32_t output_id = UINT32_C(0x20000000)
         | (event->note.occurrence_id & UINT32_C(0x1FFFFFFF));

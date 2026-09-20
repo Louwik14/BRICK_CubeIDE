@@ -1,9 +1,42 @@
 # NoteFX : capacites et continuations temporelles
 
 Le runtime musical appartient exclusivement a SEQ. Les quatre slots S1 a S4
-partagent le meme walker, le meme ledger logique et le scheduler statique du
-sequenceur. AUDIO ne recoit que des NOTE terminales sample-datees et conserve
-l'allocation, le reuse, le release, le stealing et le DSP physiques.
+partagent le meme walker et le meme ledger logique du sequenceur. AUDIO ne
+recoit que des NOTE terminales sample-datees et conserve l'allocation, le
+reuse, le release, le stealing et le DSP physiques.
+
+## Contrat d'ownership terminal
+
+Une occurrence traverse trois domaines distincts. La source STEP, KEY ou MIDI
+cree son identite; les MIDI FX conservent cette cause ou creent une identite du
+namespace FX pour une branche derivee. SEQ est l'autorite sur la vie musicale:
+il choisit `(track, logical_slot)`, reserve le ledger, date ON/OFF et decide le
+stealing logique. La publication terminale est une demande de transition, pas
+une preuve que la voix physique a deja change. AUDIO est l'unique autorite sur
+la possession physique du slot et de la voix moteur.
+
+Pour chaque `(track, logical_slot)`, AUDIO applique les transitions suivantes:
+
+| Transition | Regle AUDIO |
+|---|---|
+| `ON(identity)` sur slot vide | installe l'owner puis ouvre la voix |
+| `ON(new)` sur slot occupe | ferme l'owner courant puis installe `new`, dans la meme acquisition AUDIO |
+| `OFF(identity)` owner courant | ferme la voix puis vide le slot |
+| `OFF(identity)` deja supplantee | no-op idempotent; ne ferme jamais le nouvel owner |
+
+Ainsi SEQ peut oublier une reservation apres avoir publie son OFF, sans declarer
+pour autant une ressource physique libre. Une reutilisation ulterieure est
+toujours un `ON(new)` atomiquement interprete par l'autorite AUDIO comme un
+handoff. Aucun ACK AUDIO->SEQ n'est necessaire: SEQ ne reutilise pas une voix
+physique, il demande le nouvel owner logique; AUDIO ferme l'ancien owner avant
+d'ouvrir le nouveau. Le token d'occurrence qualifie les OFF et interdit qu'une
+release retardee ferme un owner plus recent.
+
+Ce contrat est commun a STEP, live KEY/MIDI et toutes les sorties FX. Il couvre
+donc ARP/Euclid (generateurs held), Echo (continuations), Chord/Harmonizer
+(fanout), Groove (resume temporel), Gate (duree derivee) et Probability
+(filtrage): leurs differences s'arretent avant le terminal et aucun ne possede
+un mecanisme de release AUDIO particulier.
 
 ## Capacites figees
 
