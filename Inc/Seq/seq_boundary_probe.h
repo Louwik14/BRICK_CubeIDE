@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include "stm32h7xx.h"
 
+#define SEQ_FINE_DIAGNOSTICS 0
+
 typedef enum {
     SEQ_PROBE_PREPARATION = 0,
     SEQ_PROBE_PLOCK,
@@ -46,36 +48,52 @@ typedef struct {
     uint32_t active;
 } seq_boundary_probe_state_t;
 
+#if SEQ_FINE_DIAGNOSTICS
 extern seq_boundary_probe_state_t g_seq_boundary_probe_state;
 extern volatile uint32_t g_seq_boundary_diag[80];
+#endif
 
 static inline uint32_t seq_probe_begin(seq_probe_phase_t phase)
 {
+#if SEQ_FINE_DIAGNOSTICS
     (void)phase;
     return g_seq_boundary_probe_state.active ? DWT->CYCCNT : 0U;
+#else
+    (void)phase;return 0U;
+#endif
 }
 
 static inline void seq_probe_end(seq_probe_phase_t phase, uint32_t started)
 {
+#if SEQ_FINE_DIAGNOSTICS
     if (g_seq_boundary_probe_state.active != 0U) {
         const uint32_t elapsed = DWT->CYCCNT - started;
         g_seq_boundary_probe_state.phase_total[phase] += elapsed;
         g_seq_boundary_probe_state.phase_current[phase] += elapsed;
         ++g_seq_boundary_probe_state.phase_calls[phase];
     }
+#else
+    (void)phase;(void)started;
+#endif
 }
 
 static inline void seq_probe_activity(seq_probe_activity_t activity, uint32_t count)
 {
+#if SEQ_FINE_DIAGNOSTICS
     if (g_seq_boundary_probe_state.active != 0U) {
         g_seq_boundary_probe_state.activity_total[activity] += count;
         g_seq_boundary_probe_state.activity_current[activity] += count;
     }
+#else
+    (void)activity;(void)count;
+#endif
 }
 
+#if SEQ_FINE_DIAGNOSTICS
 void seq_boundary_probe_reset(void);
 void seq_boundary_probe_block_begin(uint8_t boundary);
 void seq_boundary_probe_block_end(void);
 void seq_boundary_probe_publish(void);
+#endif
 
 #endif

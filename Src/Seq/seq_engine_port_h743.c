@@ -132,8 +132,10 @@ void seq_engine_boot_bench_run(void)
  for(uint32_t i=0U;i<SEQ_BOOT_BENCH_WARMUP_BLOCKS;++i,
        sample+=SEQ_ENGINE_H743_PERIOD_SAMPLES)
   output_overflows+=seq_boot_bench_service(sample);
+#if SEQ_FINE_DIAGNOSTICS
  seq_boundary_probe_reset();
  note_fx_walker_probe_reset();
+#endif
  uint64_t total=0U,ordinary_total=0U,boundary_total=0U;
  uint64_t cpu_total=0U,cpu_ordinary_total=0U,cpu_boundary_total=0U,irq_total=0U;
  uint32_t max=0U,ordinary_max=0U,boundary_max=0U,ordinary_count=0U,boundary_count=0U;
@@ -143,11 +145,15 @@ void seq_engine_boot_bench_run(void)
  uint32_t over50=0U,over75=0U,overm750=0U,overm775=0U,output_peak=0U;
  for(uint32_t i=0U;i<SEQ_BOOT_BENCH_ITERATIONS;++i,sample+=SEQ_ENGINE_H743_PERIOD_SAMPLES){
   const uint8_t boundary=seq_boot_bench_boundary(sample);
+#if SEQ_FINE_DIAGNOSTICS
   seq_boundary_probe_block_begin(boundary);
+#endif
   g_seq_bench_irq_depth=0U;g_seq_bench_irq_cycles=0U;
   const uint32_t started=DWT->CYCCNT;g_seq_bench_irq_window_active=1U;
   output_overflows+=seq_boot_bench_service(sample);
+#if SEQ_FINE_DIAGNOSTICS
   seq_boundary_probe_block_end();
+#endif
   const uint32_t finished=DWT->CYCCNT;g_seq_bench_irq_window_active=0U;
   const uint32_t cycles=finished-started,irq_cycles=g_seq_bench_irq_cycles;
   const uint32_t cpu_cycles=(irq_cycles<=cycles)?cycles-irq_cycles:0U;
@@ -173,8 +179,10 @@ void seq_engine_boot_bench_run(void)
   if(cycles>240000U){++over75;++run75;if(run75>maxrun75)maxrun75=run75;}else run75=0U;
   if(cycles>320000U)++overm750;
   if(cycles>480000U)++overm775;}
+#if SEQ_FINE_DIAGNOSTICS
  seq_boundary_probe_publish();
  note_fx_walker_probe_publish();
+#endif
  uint32_t drop_reason[SEQ_BOOT_BENCH_DROP_REASON_COUNT];
  note_fx_echo_diag_t echo_diag;
  seq_engine_drop_diag_capture(drop_reason);

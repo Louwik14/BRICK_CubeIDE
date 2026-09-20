@@ -12,6 +12,7 @@
 #include <stddef.h>
 #include <string.h>
 
+#if SEQ_FINE_DIAGNOSTICS
 #define SEQ_BOUNDARY_DIAG_MAGIC UINT32_C(0x53425032)
 #define SEQ_BOUNDARY_DIAG_VERSION 1U
 seq_boundary_probe_state_t g_seq_boundary_probe_state;
@@ -45,6 +46,7 @@ void seq_boundary_probe_publish(void)
  for(uint8_t i=0U;i<SEQ_PROBE_ACTIVITY_COUNT;++i){const uint32_t o=44U+3U*i;
   w[o]=g_seq_boundary_probe_state.activity_total[i];w[o+1U]=g_seq_boundary_probe_state.activity_max[i];
   w[o+2U]=g_seq_boundary_probe_state.boundaries?g_seq_boundary_probe_state.activity_total[i]/g_seq_boundary_probe_state.boundaries:0U;}}
+#endif
 
 static SEQ_STATE_D2 note_event_t g_seq_fx_a[NOTE_FX_BATCH_CAPACITY];
 static SEQ_HOT_D1 note_event_t g_seq_fx_b[NOTE_FX_BATCH_CAPACITY];
@@ -319,10 +321,14 @@ static note_event_result_t walker_resume_batch(const note_event_t *source,
         fx_terminal(&in[i]);note_fx_walker_probe_record(NOTE_FX_WALKER_TERMINAL,
             terminal_probe,1U,1U,0U,0U,0U,0U);}
     seq_probe_end(SEQ_PROBE_WALKER,probe);
+#if SEQ_FINE_DIAGNOSTICS
     if(g_seq_boundary_probe_state.active!=0U){const uint32_t elapsed=DWT->CYCCNT-walker_started;
         const uint64_t classified=note_fx_walker_probe_cycles_total()-classified_before;
         note_fx_walker_probe_record_elapsed(NOTE_FX_WALKER_OTHER,
             elapsed>(uint32_t)classified?elapsed-(uint32_t)classified:0U);}
+#else
+    (void)walker_started;(void)classified_before;
+#endif
     return NOTE_EVENT_RESULT_ACCEPTED;
 }
 
