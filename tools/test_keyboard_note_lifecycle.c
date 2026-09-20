@@ -50,6 +50,11 @@ int main(void)
     apply(events, n, active);
     for (uint8_t i = 0U; i < 128U; ++i) assert(active[i] == 0U);
     assert(order.tie_adjustments != 0U);
+
+    keyboard_note_time_order_reset(&order);
+    assert(keyboard_note_time_order_apply(&order, 30U, 100U, 2000U) == 2000U);
+    /* Serial spaces are producer-local (Hall, USB device, USB host). */
+    assert(keyboard_note_time_order_apply(&order, 30U, 1U, 2000U) == 2001U);
     puts("keyboard note lifecycle: PASS");
     return 0;
 }

@@ -20,7 +20,6 @@ uint64_t keyboard_note_time_order_apply(keyboard_note_time_order_t *state,
      * the ISR ingress order inside one capture tick so that ON/OFF/ON cannot
      * be reclassified as OFF/OFF/ON by the terminal same-sample ordering. */
     if ((state->valid != 0U) && (state->capture_tick == capture_tick)
-            && ((int32_t)(ingress_serial - state->ingress_serial) > 0)
             && (capture_sample <= state->ordered_sample))
     {
         capture_sample = state->ordered_sample + 1U;
