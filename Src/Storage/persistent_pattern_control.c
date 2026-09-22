@@ -50,6 +50,22 @@
 
 _Static_assert(PERSIST_CONTROL_ENTITY_COUNT == 16U,
                "AUDIO full-projection entity proof changed");
+_Static_assert(PERSIST_CONTROL_ENTITY_COUNT == SEQ_LANE_CAPACITY,
+               "persistence and SEQ lane capacities diverged");
+_Static_assert(PERSIST_CONTROL_STEP_COUNT == SEQ_MAX_STEPS,
+               "persistence and SEQ step capacities diverged");
+_Static_assert(PERSIST_CONTROL_PLAY_ITEM_COUNT == SEQ_PLAY_MAX_CAPACITY,
+               "persistence and SEQ PLAY capacities diverged");
+_Static_assert(PERSIST_CONTROL_STEP_LOCK_COUNT == SEQ_STEP_MAX_LOCKS,
+               "persistence and SEQ p-lock capacities diverged");
+_Static_assert(PERSIST_CONTROL_NOTE_FX_COUNT == NOTE_FX_SLOT_COUNT,
+               "persistence and Note FX slot counts diverged");
+_Static_assert(PERSIST_CONTROL_NOTE_FX_VALUE_COUNT == NOTE_FX_PARAM_COUNT,
+               "persistent Note FX payload excludes exactly the model slot");
+_Static_assert(PERSIST_CONTROL_MOD_LFO_COUNT == MOD_LFO_COUNT_PER_TRACK,
+               "persistence and CONTROL LFO counts diverged");
+_Static_assert(PERSIST_CONTROL_MOD_ROUTE_COUNT == MOD_MATRIX_SLOT_COUNT,
+               "persistence and CONTROL modulation route counts diverged");
 
 static uint8_t capture_play(uint8_t entity,uint8_t step,persist_control_step_t*out){uint8_t cap=seq_model_play_capacity(entity);out->play_count=0U;for(uint8_t v=0U;v<cap;++v){persist_control_play_item_t*p=&out->play[v];int16_t x;if(seq_model_play_get(entity,step,v,SEQ_STEP_PLAY_FIELD_NOTE,&x)!=0U){p->note=(uint8_t)x;p->present_mask|=SEQ_STEP_PLAY_PRESENT_NOTE;}if(seq_model_play_get(entity,step,v,SEQ_STEP_PLAY_FIELD_VELOCITY,&x)!=0U){p->velocity=(uint8_t)x;p->present_mask|=SEQ_STEP_PLAY_PRESENT_VELOCITY;}if(seq_model_play_get(entity,step,v,SEQ_STEP_PLAY_FIELD_LENGTH,&x)!=0U){p->length=(uint8_t)x;p->present_mask|=SEQ_STEP_PLAY_PRESENT_LENGTH;}if(seq_model_play_get(entity,step,v,SEQ_STEP_PLAY_FIELD_MICROTIMING,&x)!=0U){p->microtiming=(int8_t)x;p->present_mask|=SEQ_STEP_PLAY_PRESENT_MICROTIMING;}if(p->present_mask!=0U)out->play_count=(uint8_t)(v+1U);}return 1U;}
 static uint8_t capture_plock_value(param_id_t id, seq_value16_t raw,

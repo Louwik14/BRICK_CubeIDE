@@ -351,14 +351,49 @@ static void codec_mixer(codec_io_t*io,mixer_control_state_t*s)
 {codec_f32(io,&s->level);codec_f32(io,&s->pan);codec_f32(io,&s->send1);codec_f32(io,&s->send2);codec_f32(io,&s->send3);}
 static void codec_polyphony(codec_io_t*io,polyphony_control_state_t*s){codec_u8(io,&s->voice_count);codec_f32(io,&s->spread);}
 static void codec_audio_fx(codec_io_t*io,audio_fx_control_state_t*s){uint8_t pos=(uint8_t)s->config.filter_position,order=(uint8_t)s->config.order;codec_u8(io,&pos);codec_u8(io,&order);if(io->mode==CODEC_READ){s->config.filter_position=(audio_fx_filter_pos_t)pos;s->config.order=(audio_fx_order_t)order;}for(uint8_t i=0U;i<2U;++i){codec_u8(io,&s->config.spatial_mode[i]);codec_u8(io,&s->model[i]);codec_f32(io,&s->p1[i]);codec_f32(io,&s->p2[i]);codec_f32(io,&s->p3[i]);codec_f32(io,&s->group_level[i]);}}
+
+#define FLOAT_FIELD_COUNT(_type, _field) \
+    (sizeof(((_type *)0)->_field) / sizeof(float))
+enum
+{
+    PERSIST_GLOBAL_AUDIO_RUNTIME_FLOAT_COUNT = 51U,
+    PERSIST_GLOBAL_AUDIO_LEGACY_EQ_FLOAT_COUNT = 3U,
+    PERSIST_GLOBAL_AUDIO_WIRE_FLOAT_COUNT = 54U
+};
+_Static_assert(FLOAT_FIELD_COUNT(param_global_control_state_t, send_fx) == 2U,
+               "global audio send layout changed");
+_Static_assert(FLOAT_FIELD_COUNT(param_global_control_state_t, bus_comp) == 8U,
+               "global audio bus compressor layout changed");
+_Static_assert(FLOAT_FIELD_COUNT(param_global_control_state_t, saturation) == 4U,
+               "global audio saturation layout changed");
+_Static_assert(FLOAT_FIELD_COUNT(param_global_control_state_t, reverb) == 7U,
+               "global audio reverb layout changed");
+_Static_assert(FLOAT_FIELD_COUNT(param_global_control_state_t, delay) == 14U,
+               "global audio delay layout changed");
+_Static_assert(FLOAT_FIELD_COUNT(param_global_control_state_t, mod_fx) == 9U,
+               "global audio modulation FX layout changed");
+_Static_assert(FLOAT_FIELD_COUNT(param_global_control_state_t, compressor) == 4U,
+               "global audio compressor layout changed");
+_Static_assert(FLOAT_FIELD_COUNT(param_global_control_state_t, output) == 3U,
+               "global audio output layout changed");
+_Static_assert((sizeof(param_global_control_state_t) / sizeof(float))
+                   == PERSIST_GLOBAL_AUDIO_RUNTIME_FLOAT_COUNT,
+               "global audio runtime float count changed");
+_Static_assert(PERSIST_GLOBAL_AUDIO_RUNTIME_FLOAT_COUNT
+                   + PERSIST_GLOBAL_AUDIO_LEGACY_EQ_FLOAT_COUNT
+                   == PERSIST_GLOBAL_AUDIO_WIRE_FLOAT_COUNT,
+               "global audio v4 wire count changed");
+#undef FLOAT_FIELD_COUNT
+
 static void codec_global_audio(codec_io_t*io,param_global_control_state_t*s)
 {
     /* The v4 wire layout retains the three former global DJ EQ floats between
      * bus_comp and saturation.  They are reserved now that EQ is per-track. */
     codec_float_block(io,s->send_fx,2U);
     codec_float_block(io,s->bus_comp,8U);
-    float reserved_legacy_eq[3U]={0.0f,0.0f,0.0f};
-    codec_float_block(io,reserved_legacy_eq,3U);
+    float reserved_legacy_eq[PERSIST_GLOBAL_AUDIO_LEGACY_EQ_FLOAT_COUNT]={0.0f};
+    codec_float_block(io,reserved_legacy_eq,
+                      PERSIST_GLOBAL_AUDIO_LEGACY_EQ_FLOAT_COUNT);
     codec_float_block(io,s->saturation,4U);
     codec_float_block(io,s->reverb,7U);
     codec_float_block(io,s->delay,14U);

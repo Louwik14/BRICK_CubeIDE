@@ -712,8 +712,7 @@ uint8_t track_runtime_audio_projection_param_is_current(
         (parameter_id >= CONTROL_AUDIO_FM_BASE_WORD_FIRST)
         && (parameter_id < CONTROL_AUDIO_FM_BASE_WORD_FIRST + fm_words));
     if ((is_fm_word == 0U)
-            && (parameter_id != CONTROL_AUDIO_SAMPLER_ASSET)
-            && (parameter_id != CONTROL_AUDIO_LOOPER_PLAY_AUTO))
+            && (parameter_id != CONTROL_AUDIO_SAMPLER_ASSET))
         return 1U;
     track_runtime_descriptor_t descriptor;
     if (track_runtime_get_descriptor(entity, &descriptor) == 0U)
@@ -724,8 +723,6 @@ uint8_t track_runtime_audio_projection_param_is_current(
         return (uint8_t)((descriptor.type == TRACK_RUNTIME_TYPE_STREAM)
             || (descriptor.type == TRACK_RUNTIME_TYPE_RAM)
             || (descriptor.type == TRACK_RUNTIME_TYPE_MULTI));
-    if (parameter_id == CONTROL_AUDIO_LOOPER_PLAY_AUTO)
-        return descriptor.type == TRACK_RUNTIME_TYPE_LOOPER;
     return 1U;
 }
 

@@ -78,10 +78,6 @@ static uint8_t control_rt_param_is_structural(
             && (command->entity < ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT)
             && (((uint8_t)command->value < BRICK_ENTITY_CAPACITY)
                 || ((uint8_t)command->value == BRICK_ENTITY_INVALID_ID)));
-    if (command->id == CONTROL_AUDIO_PARAM_LOOPER_ROUTE)
-        return (uint8_t)((scope == 0U)
-            && (command->entity < BRICK_ENTITY_CAPACITY)
-            && ((command->value & ~0xFFFFUL) == 0U));
     if ((command->id == CONTROL_AUDIO_PARAM_WAVETABLE_GEN)
             || (command->id == CONTROL_AUDIO_PARAM_WAVETABLE_SET))
         return (uint8_t)((scope == 0U)
@@ -107,10 +103,6 @@ static uint8_t control_rt_param_is_structural(
     if (command->id == CONTROL_AUDIO_SAMPLER_ASSET)
         return (uint8_t)((scope == 0U)
             && (command->entity < BRICK_ENTITY_CAPACITY));
-    if (command->id == CONTROL_AUDIO_LOOPER_PLAY_AUTO)
-        return (uint8_t)((scope == 0U)
-            && (command->entity < BRICK_ENTITY_CAPACITY)
-            && (command->value <= 1U));
     if ((command->id >= CONTROL_AUDIO_MOD_ROUTE_SOURCE)
             && (command->id <= CONTROL_AUDIO_FX_SPATIAL_MODE))
     {
