@@ -397,6 +397,7 @@ void seq_runtime_stop(void)
 
     if (apply_stop_lifecycle != 0U)
     {
+        pattern_live_on_transport_stopped();
         seq_runtime_stop_lifecycle_apply(emit_transport_stop_and_panic);
     }
     control_audio_transport_publish_changes();

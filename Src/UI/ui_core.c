@@ -245,6 +245,36 @@ void ui_restore_active_track(uint8_t track)
     ui_core_set_active_track(track);
 }
 
+void ui_normalize_active_track_after_global_restore(void)
+{
+    entity_topology_descriptor_t topology;
+    uint8_t candidate = g_ui_track_state.active_lane;
+    if ((entity_topology_get(candidate, &topology) != 0U)
+            && (entity_topology_can_sequence(&topology) != 0U))
+    {
+        ui_core_set_active_track(candidate);
+        return;
+    }
+
+    candidate = g_ui_track_state.active_track;
+    if ((entity_topology_get(candidate, &topology) != 0U)
+            && (entity_topology_can_sequence(&topology) != 0U))
+    {
+        ui_core_set_active_track(candidate);
+        return;
+    }
+
+    for (candidate = 0U; candidate < BRICK_ENTITY_CAPACITY; ++candidate)
+    {
+        if ((entity_topology_get(candidate, &topology) != 0U)
+                && (entity_topology_can_sequence(&topology) != 0U))
+        {
+            ui_core_set_active_track(candidate);
+            return;
+        }
+    }
+}
+
 uint8_t ui_get_track_midi_channel(uint8_t track)
 {
     if (track >= BRICK_ENTITY_CAPACITY)

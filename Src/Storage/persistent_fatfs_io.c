@@ -4,11 +4,11 @@ static uint8_t io_write(void *ctx,const uint8_t *data,uint32_t length){persisten
 static uint8_t io_read(void *ctx,uint8_t *data,uint32_t length){persistent_fatfs_file_t*f=ctx;UINT done=0U;if(f==NULL||data==NULL)return 0U;f->requested=length;f->last_result=f_read(&f->file,data,length,&done);f->transferred=done;return(f->last_result==FR_OK&&done==length)?1U:0U;}
 static uint8_t io_reset(void *ctx){persistent_fatfs_file_t*f=ctx;return(f!=NULL&&f_lseek(&f->file,0U)==FR_OK)?1U:0U;}
 static uint8_t io_size(void *ctx,uint32_t*out){persistent_fatfs_file_t*f=ctx;if(f==NULL||out==NULL)return 0U;*out=(uint32_t)f_size(&f->file);return 1U;}
-uint8_t persistent_fatfs_open_read(persistent_fatfs_file_t*f,const char*path){if(f==NULL||path==NULL)return 0U;memset(f,0,sizeof(*f));if(f_open(&f->file,path,FA_READ)!=FR_OK)return 0U;f->size=(uint32_t)f_size(&f->file);return 1U;}
+uint8_t persistent_fatfs_open_read(persistent_fatfs_file_t*f,const char*path){if(f==NULL||path==NULL)return 0U;memset(f,0,sizeof(*f));f->last_result=f_open(&f->file,path,FA_READ);if(f->last_result!=FR_OK)return 0U;f->size=(uint32_t)f_size(&f->file);return 1U;}
 FRESULT persistent_fatfs_open_write_result(persistent_fatfs_file_t*f,const char*path){if(f==NULL||path==NULL)return FR_INVALID_PARAMETER;memset(f,0,sizeof(*f));f->last_result=f_open(&f->file,path,FA_CREATE_ALWAYS|FA_WRITE);return f->last_result;}
 uint8_t persistent_fatfs_open_write(persistent_fatfs_file_t*f,const char*path){return(persistent_fatfs_open_write_result(f,path)==FR_OK)?1U:0U;}
 void persistent_fatfs_close(persistent_fatfs_file_t*f){if(f!=NULL)(void)f_close(&f->file);}
-FRESULT persistent_fatfs_close_result(persistent_fatfs_file_t*f){return(f!=NULL)?f_close(&f->file):FR_INVALID_OBJECT;}
+FRESULT persistent_fatfs_close_result(persistent_fatfs_file_t*f){if(f==NULL)return FR_INVALID_OBJECT;f->last_result=f_close(&f->file);return f->last_result;}
 
 static uint8_t io_exists(const char *path)
 {

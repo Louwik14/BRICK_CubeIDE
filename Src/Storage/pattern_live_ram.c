@@ -10,6 +10,7 @@
 #include "Seq/seq_runtime_control.h"
 #include "Track/control_music_output.h"
 #include "ControlRT/control_rt_publication.h"
+#include "ControlRT/audio_state_snapshot_control.h"
 #include "Storage/pattern_control_bank.h"
 #include "Storage/persistence_workspace.h"
 #include "Storage/persistent_pattern_control.h"
@@ -32,10 +33,25 @@ typedef enum
     PATTERN_LOAD_ERROR
 } pattern_load_state_t;
 
-UI_SDRAM static persist_control_pattern_record_t g_next_record;
+typedef union
+{
+    persist_control_pattern_record_t pattern_record;
+    persist_codec_project_workspace_t codec_workspace;
+} pattern_record_lease_storage_t;
+
+_Static_assert(sizeof(pattern_record_lease_storage_t)
+                   == sizeof(persist_control_pattern_record_t),
+               "Pattern record lease backing size changed");
+
+UI_SDRAM static pattern_record_lease_storage_t g_next_record_storage;
+#define g_next_record (g_next_record_storage.pattern_record)
 #define g_next_pattern (g_next_record.content)
-UI_SDRAM static persist_control_pattern_t g_boot_control_pattern;
+static pattern_record_lease_owner_t g_next_record_owner =
+    PATTERN_RECORD_LEASE_FREE;
 STORAGE_STATE_SDRAM static pattern_slot_meta_t g_pattern_slot_meta[PATTERN_BANK_COUNT][PATTERN_PER_BANK];
+
+static persistent_pattern_default_context_t g_pattern_default_context;
+static uint8_t g_pattern_default_context_valid;
 
 static uint8_t g_active_bank;
 static uint8_t g_active_pattern;
@@ -59,10 +75,75 @@ static pattern_control_bank_async_operation_t g_pattern_io_operation;
 #define PATTERN_LOAD_ERR_INVALID_SLOT 1U
 #define PATTERN_LOAD_ERR_SD_LOAD 2U
 #define PATTERN_LOAD_ERR_RECORD_ACTIVE 3U
+#define PATTERN_LOAD_ERR_DEFAULT_BUILD 4U
+
+static uint8_t pattern_record_lease_owner_valid(
+    pattern_record_lease_owner_t owner)
+{
+    return (uint8_t)(owner > PATTERN_RECORD_LEASE_FREE
+        && owner <= PATTERN_RECORD_LEASE_PROJECT_SAVE);
+}
+
+persist_control_pattern_record_t *pattern_record_lease_acquire(
+    pattern_record_lease_owner_t owner)
+{
+    if (pattern_record_lease_owner_valid(owner) == 0U
+        || g_next_record_owner != PATTERN_RECORD_LEASE_FREE)
+        return NULL;
+    g_next_record_owner = owner;
+    return &g_next_record;
+}
+
+uint8_t pattern_record_lease_transfer(pattern_record_lease_owner_t current_owner,
+                                      pattern_record_lease_owner_t next_owner)
+{
+    if (pattern_record_lease_owner_valid(current_owner) == 0U
+        || pattern_record_lease_owner_valid(next_owner) == 0U
+        || current_owner == next_owner
+        || g_next_record_owner != current_owner)
+        return 0U;
+    g_next_record_owner = next_owner;
+    return 1U;
+}
+
+uint8_t pattern_record_lease_release(pattern_record_lease_owner_t owner)
+{
+    if (pattern_record_lease_owner_valid(owner) == 0U
+        || g_next_record_owner != owner)
+        return 0U;
+    g_next_record_owner = PATTERN_RECORD_LEASE_FREE;
+    return 1U;
+}
+
+pattern_record_lease_owner_t pattern_record_lease_owner(void)
+{
+    return g_next_record_owner;
+}
+
+persist_codec_project_workspace_t *pattern_record_lease_codec_workspace(
+    pattern_record_lease_owner_t owner)
+{
+    if (owner != PATTERN_RECORD_LEASE_PROJECT_RESTORE
+        || g_next_record_owner != owner) return NULL;
+    return &g_next_record_storage.codec_workspace;
+}
 
 static uint8_t pattern_live_slot_is_valid(uint8_t bank, uint8_t pattern)
 {
     return (bank < PATTERN_BANK_COUNT) && (pattern < PATTERN_PER_BANK);
+}
+
+static uint32_t pattern_live_default_groove_seed(uint8_t bank, uint8_t pattern)
+{
+    uint32_t value = UINT32_C(0x42524943)
+        ^ ((uint32_t)(bank + 1U) * UINT32_C(0x9E3779B9))
+        ^ ((uint32_t)(pattern + 1U) * UINT32_C(0x85EBCA6B));
+    value ^= value >> 16U;
+    value *= UINT32_C(0x7FEB352D);
+    value ^= value >> 15U;
+    value *= UINT32_C(0x846CA68B);
+    value ^= value >> 16U;
+    return (value != 0U) ? value : UINT32_C(1);
 }
 
 static uint8_t pattern_live_arm_ready_queue(uint8_t bank,
@@ -81,8 +162,17 @@ static uint8_t pattern_live_arm_ready_queue(uint8_t bank,
         boundary_track = 0U;
     }
 
-    if (snapshot != &g_next_pattern)
+    if (snapshot == &g_next_pattern)
     {
+        if (pattern_record_lease_transfer(PATTERN_RECORD_LEASE_PATTERN_LOAD,
+                PATTERN_RECORD_LEASE_PATTERN_QUEUE_READY) == 0U)
+            return 0U;
+    }
+    else
+    {
+        if (pattern_record_lease_acquire(
+                PATTERN_RECORD_LEASE_PATTERN_QUEUE_READY) == NULL)
+            return 0U;
         memcpy(&g_next_pattern, snapshot, sizeof(g_next_pattern));
     }
     g_queued_valid = 1U;
@@ -90,7 +180,6 @@ static uint8_t pattern_live_arm_ready_queue(uint8_t bank,
     g_queued_pattern = pattern;
     g_queued_boundary_track = boundary_track;
     g_queued_boundary_generation = boundary_generation;
-
     if ((g_pending_queue_valid != 0U)
         && (g_pending_queue_bank == bank)
         && (g_pending_queue_pattern == pattern))
@@ -102,28 +191,14 @@ static uint8_t pattern_live_arm_ready_queue(uint8_t bank,
 }
 
 
-uint8_t pattern_live_apply_boot_snapshot(uint8_t resume_transport)
+uint8_t pattern_live_build_default(persist_control_pattern_t *out,
+                                   uint32_t groove_seed)
 {
-    if (persistent_pattern_control_apply(&g_boot_control_pattern, resume_transport) != PERSIST_CODEC_OK)
-    {
-        return 0U;
-    }
-
-    if(persistent_pattern_control_capture(&g_next_pattern)!=PERSIST_CODEC_OK)return 0U;
-    g_active_bank = 0U;
-    g_active_pattern = 0U;
-    g_queued_valid = 0U;
-    g_queued_bank = 0U;
-    g_queued_pattern = 0U;
-    g_queued_boundary_track = 0U;
-    g_queued_boundary_generation = 0U;
-    g_pending_queue_valid = 0U;
-    g_pending_queue_bank = 0U;
-    g_pending_queue_pattern = 0U;
-    g_pending_boundary_track = 0U;
-    g_pending_boundary_generation = 0U;
-    pattern_load_cancel();
-    return 1U;
+    if ((out == NULL) || (g_pattern_default_context_valid == 0U)) return 0U;
+    persistent_pattern_default_context_t context = g_pattern_default_context;
+    context.groove_seed = groove_seed;
+    return (persistent_pattern_control_build_defaults(out, &context)
+            == PERSIST_CODEC_OK) ? 1U : 0U;
 }
 
 uint8_t pattern_load_request(uint8_t bank, uint8_t pattern)
@@ -136,6 +211,10 @@ uint8_t pattern_load_request(uint8_t bank, uint8_t pattern)
 
     if (pattern_live_slot_is_valid(bank, pattern) == 0U)
     {
+        if (g_next_record_owner == PATTERN_RECORD_LEASE_PATTERN_LOAD
+            && g_pattern_io_operation != PATTERN_CONTROL_BANK_ASYNC_LOAD)
+            (void)pattern_record_lease_release(
+                PATTERN_RECORD_LEASE_PATTERN_LOAD);
         g_pattern_load_state = PATTERN_LOAD_ERROR;
         g_pattern_load_last_error = PATTERN_LOAD_ERR_INVALID_SLOT;
         return 0U;
@@ -149,6 +228,9 @@ uint8_t pattern_load_request(uint8_t bank, uint8_t pattern)
 
     if (audio_recorder_is_active() != 0U)
     {
+        if (g_next_record_owner == PATTERN_RECORD_LEASE_PATTERN_LOAD)
+            (void)pattern_record_lease_release(
+                PATTERN_RECORD_LEASE_PATTERN_LOAD);
         g_pattern_load_state = PATTERN_LOAD_ERROR;
         g_pattern_load_last_error = PATTERN_LOAD_ERR_RECORD_ACTIVE;
         return 0U;
@@ -158,8 +240,17 @@ uint8_t pattern_load_request(uint8_t bank, uint8_t pattern)
         && (g_pattern_load_bank == bank)
         && (g_pattern_load_pattern == pattern))
     {
-        return 1U;
+        return (g_next_record_owner == PATTERN_RECORD_LEASE_PATTERN_LOAD)
+            ? 1U : 0U;
     }
+
+    if (g_next_record_owner == PATTERN_RECORD_LEASE_FREE)
+    {
+        if (pattern_record_lease_acquire(
+                PATTERN_RECORD_LEASE_PATTERN_LOAD) == NULL) return 0U;
+    }
+    else if (g_next_record_owner != PATTERN_RECORD_LEASE_PATTERN_LOAD)
+        return 0U;
 
     g_pattern_load_bank = bank;
     g_pattern_load_pattern = pattern;
@@ -170,7 +261,15 @@ uint8_t pattern_load_request(uint8_t bank, uint8_t pattern)
     g_pattern_slot_meta[bank][pattern].has_snapshot = has_snapshot;
     if (has_snapshot == 0U)
     {
-        g_next_pattern=g_boot_control_pattern;
+        if (pattern_live_build_default(&g_next_pattern,
+                pattern_live_default_groove_seed(bank, pattern)) == 0U)
+        {
+            (void)pattern_record_lease_release(
+                PATTERN_RECORD_LEASE_PATTERN_LOAD);
+            g_pattern_load_state = PATTERN_LOAD_ERROR;
+            g_pattern_load_last_error = PATTERN_LOAD_ERR_DEFAULT_BUILD;
+            return 0U;
+        }
         g_pattern_load_state = PATTERN_LOAD_READY;
         return 1U;
     }
@@ -205,7 +304,9 @@ void pattern_load_service(uint32_t byte_budget)
                 g_pattern_slot_meta[completed_bank][completed_pattern].has_snapshot = 1U;
                 if ((completed_bank == g_queued_bank)
                     && (completed_pattern == g_queued_pattern)
-                    && (g_queued_valid != 0U))
+                    && (g_queued_valid != 0U)
+                    && (g_next_record_owner
+                        == PATTERN_RECORD_LEASE_PATTERN_QUEUE_READY))
                 {
                     g_next_pattern = g_pattern_io_workspace->pattern;
                 }
@@ -235,6 +336,11 @@ void pattern_load_service(uint32_t byte_budget)
             g_pattern_io_workspace = 0;
             g_pattern_io_operation = PATTERN_CONTROL_BANK_ASYNC_NONE;
         }
+        if (completed_operation == PATTERN_CONTROL_BANK_ASYNC_LOAD
+            && g_pattern_load_state != PATTERN_LOAD_READY
+            && g_next_record_owner == PATTERN_RECORD_LEASE_PATTERN_LOAD)
+            (void)pattern_record_lease_release(
+                PATTERN_RECORD_LEASE_PATTERN_LOAD);
         return;
     }
 
@@ -248,6 +354,9 @@ void pattern_load_service(uint32_t byte_budget)
     {
         g_pattern_load_state = PATTERN_LOAD_ERROR;
         g_pattern_load_last_error = PATTERN_LOAD_ERR_RECORD_ACTIVE;
+        if (g_pattern_io_operation != PATTERN_CONTROL_BANK_ASYNC_LOAD)
+            (void)pattern_record_lease_release(
+                PATTERN_RECORD_LEASE_PATTERN_LOAD);
         return;
     }
 
@@ -280,7 +389,16 @@ void pattern_load_service(uint32_t byte_budget)
             return;
         }
 
-        g_next_pattern=g_boot_control_pattern;
+        if (pattern_live_build_default(&g_next_pattern,
+                pattern_live_default_groove_seed(g_pattern_load_bank,
+                                                 g_pattern_load_pattern)) == 0U)
+        {
+            (void)pattern_record_lease_release(
+                PATTERN_RECORD_LEASE_PATTERN_LOAD);
+            g_pattern_load_state = PATTERN_LOAD_ERROR;
+            g_pattern_load_last_error = PATTERN_LOAD_ERR_DEFAULT_BUILD;
+            return;
+        }
         g_pattern_load_state = PATTERN_LOAD_READY;
         g_pattern_load_last_error = 0U;
         return;
@@ -297,7 +415,8 @@ uint8_t pattern_load_is_pending(void)
 
 uint8_t pattern_load_is_ready(uint8_t *out_bank, uint8_t *out_pattern)
 {
-    if (g_pattern_load_state != PATTERN_LOAD_READY)
+    if (g_pattern_load_state != PATTERN_LOAD_READY
+        || g_next_record_owner != PATTERN_RECORD_LEASE_PATTERN_LOAD)
     {
         return 0U;
     }
@@ -315,7 +434,8 @@ uint8_t pattern_load_is_ready(uint8_t *out_bank, uint8_t *out_pattern)
 
 uint8_t pattern_load_take_ready(uint8_t *out_bank, uint8_t *out_pattern, persist_control_pattern_t *out_snapshot)
 {
-    if ((out_snapshot == 0) || (g_pattern_load_state != PATTERN_LOAD_READY))
+    if ((out_snapshot == 0) || (g_pattern_load_state != PATTERN_LOAD_READY)
+        || (g_next_record_owner != PATTERN_RECORD_LEASE_PATTERN_LOAD))
     {
         return 0U;
     }
@@ -328,7 +448,12 @@ uint8_t pattern_load_take_ready(uint8_t *out_bank, uint8_t *out_pattern, persist
     {
         *out_pattern = g_pattern_load_pattern;
     }
-    if(out_snapshot!=&g_next_pattern)memcpy(out_snapshot, &g_next_pattern, sizeof(*out_snapshot));
+    if(out_snapshot!=&g_next_pattern)
+    {
+        memcpy(out_snapshot, &g_next_pattern, sizeof(*out_snapshot));
+        (void)pattern_record_lease_release(
+            PATTERN_RECORD_LEASE_PATTERN_LOAD);
+    }
     g_pattern_load_state = PATTERN_LOAD_IDLE;
     g_pattern_load_last_error = 0U;
     return 1U;
@@ -340,7 +465,41 @@ void pattern_load_cancel(void)
     g_pattern_load_bank = 0U;
     g_pattern_load_pattern = 0U;
     g_pattern_load_last_error = 0U;
-    memset(&g_next_pattern, 0, sizeof(g_next_pattern));
+    if (g_next_record_owner == PATTERN_RECORD_LEASE_PATTERN_LOAD
+        && g_pattern_io_operation != PATTERN_CONTROL_BANK_ASYNC_LOAD)
+    {
+        memset(&g_next_pattern, 0, sizeof(g_next_pattern));
+        (void)pattern_record_lease_release(
+            PATTERN_RECORD_LEASE_PATTERN_LOAD);
+    }
+}
+
+static void pattern_live_discard_ready_queue(void)
+{
+    if (g_next_record_owner == PATTERN_RECORD_LEASE_PATTERN_QUEUE_READY)
+        (void)pattern_record_lease_release(
+            PATTERN_RECORD_LEASE_PATTERN_QUEUE_READY);
+    g_queued_valid = 0U;
+    g_queued_bank = 0U;
+    g_queued_pattern = 0U;
+    g_queued_boundary_track = 0U;
+    g_queued_boundary_generation = 0U;
+}
+
+void pattern_live_on_transport_stopped(void)
+{
+    pattern_live_cancel_recall();
+}
+
+void pattern_live_cancel_recall(void)
+{
+    pattern_load_cancel();
+    pattern_live_discard_ready_queue();
+    g_pending_queue_valid = 0U;
+    g_pending_queue_bank = 0U;
+    g_pending_queue_pattern = 0U;
+    g_pending_boundary_track = 0U;
+    g_pending_boundary_generation = 0U;
 }
 
 uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
@@ -397,11 +556,6 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern, uint8_t boundary_
         return 0U;
     }
 
-    if (pattern_load_request(bank, pattern) == 0U)
-    {
-        return 0U;
-    }
-
     if (boundary_track >= SEQ_LANE_CAPACITY)
     {
         boundary_track = 0U;
@@ -409,10 +563,41 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern, uint8_t boundary_
     uint32_t boundary_generation = 0U;
     (void)seq_runtime_get_track_loop_generation(boundary_track, &boundary_generation);
 
+    /* A later recall supersedes both an armed snapshot and an in-flight read.
+     * The physical read may finish, but its cancelled result only releases its
+     * storage; the pending coordinates below start the latest request next. */
+    pattern_live_discard_ready_queue();
+    if ((g_pattern_io_workspace != 0)
+            && (g_pattern_io_operation == PATTERN_CONTROL_BANK_ASYNC_LOAD))
+    {
+        pattern_load_cancel();
+        g_pending_queue_valid = 1U;
+        g_pending_queue_bank = bank;
+        g_pending_queue_pattern = pattern;
+        g_pending_boundary_track = boundary_track;
+        g_pending_boundary_generation = boundary_generation;
+        return 1U;
+    }
+    if (pattern_load_request(bank, pattern) == 0U)
+    {
+        return 0U;
+    }
+
     if (seq_runtime_is_running() == 0U)
     {
         uint8_t ready_bank = 0U;
         uint8_t ready_pattern = 0U;
+        if ((pattern_load_is_ready(&ready_bank, &ready_pattern) != 0U)
+                && (ready_bank == bank) && (ready_pattern == pattern)
+                && (audio_state_snapshot_control_preflight() == 0U))
+        {
+            g_pending_queue_valid = 1U;
+            g_pending_queue_bank = bank;
+            g_pending_queue_pattern = pattern;
+            g_pending_boundary_track = boundary_track;
+            g_pending_boundary_generation = boundary_generation;
+            return 1U;
+        }
         if ((pattern_load_is_ready(&ready_bank, &ready_pattern) == 0U)
             || (ready_bank != bank)
             || (ready_pattern != pattern)
@@ -428,8 +613,12 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern, uint8_t boundary_
 
         if (persistent_pattern_control_apply(&g_next_pattern, 0U) != PERSIST_CODEC_OK)
         {
+            (void)pattern_record_lease_release(
+                PATTERN_RECORD_LEASE_PATTERN_LOAD);
+            g_pending_queue_valid = 0U;
             return 0U;
         }
+        (void)pattern_record_lease_release(PATTERN_RECORD_LEASE_PATTERN_LOAD);
         g_active_bank = bank;
         g_active_pattern = pattern;
         g_queued_valid = 0U;
@@ -453,16 +642,14 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern, uint8_t boundary_
         && (ready_pattern == pattern)
         && (pattern_load_take_ready(&ready_bank, &ready_pattern, &g_next_pattern) != 0U))
     {
-        (void)pattern_live_arm_ready_queue(bank,
-                                           pattern,
-                                           &g_next_pattern,
-                                           boundary_track,
-                                           boundary_generation);
+        if (pattern_live_arm_ready_queue(bank,
+                pattern,&g_next_pattern,boundary_track,
+                boundary_generation) == 0U)
+            (void)pattern_record_lease_release(
+                PATTERN_RECORD_LEASE_PATTERN_LOAD);
     }
     return 1U;
 }
-
-uint8_t pattern_live_get_control_boot(persist_control_pattern_t*out){if(out==NULL)return 0U;*out=g_boot_control_pattern;return 1U;}
 
 static uint8_t pattern_live_try_take_pending_ready(void)
 {
@@ -473,6 +660,14 @@ static uint8_t pattern_live_try_take_pending_ready(void)
 
     uint8_t ready_bank = 0U;
     uint8_t ready_pattern = 0U;
+    if ((g_pattern_load_state != PATTERN_LOAD_REQUESTED)
+            && (g_pattern_load_state != PATTERN_LOAD_LOADING)
+            && (g_pattern_load_state != PATTERN_LOAD_READY))
+    {
+        if (pattern_load_request(g_pending_queue_bank,
+                                 g_pending_queue_pattern) == 0U)
+            return 0U;
+    }
     if (pattern_load_is_ready(&ready_bank, &ready_pattern) == 0U)
     {
         return 0U;
@@ -480,8 +675,13 @@ static uint8_t pattern_live_try_take_pending_ready(void)
 
     if ((ready_bank != g_pending_queue_bank) || (ready_pattern != g_pending_queue_pattern))
     {
+        pattern_load_cancel();
         return 0U;
     }
+
+    if ((seq_runtime_is_running() == 0U)
+            && (audio_state_snapshot_control_preflight() == 0U))
+        return 0U;
 
     if (pattern_load_take_ready(&ready_bank, &ready_pattern, &g_next_pattern) == 0U)
     {
@@ -492,8 +692,13 @@ static uint8_t pattern_live_try_take_pending_ready(void)
     {
         if (persistent_pattern_control_apply(&g_next_pattern, 0U) != PERSIST_CODEC_OK)
         {
+            (void)pattern_record_lease_release(
+                PATTERN_RECORD_LEASE_PATTERN_LOAD);
+            g_pending_queue_valid = 0U;
             return 0U;
         }
+
+        (void)pattern_record_lease_release(PATTERN_RECORD_LEASE_PATTERN_LOAD);
 
         g_active_bank = ready_bank;
         g_active_pattern = ready_pattern;
@@ -507,18 +712,23 @@ static uint8_t pattern_live_try_take_pending_ready(void)
 
     uint32_t current_generation = 0U;
     (void)seq_runtime_get_track_loop_generation(g_pending_boundary_track, &current_generation);
-    return pattern_live_arm_ready_queue(ready_bank,
-                                        ready_pattern,
-                                        &g_next_pattern,
-                                        g_pending_boundary_track,
-                                        current_generation);
+    const uint8_t armed = pattern_live_arm_ready_queue(ready_bank,
+        ready_pattern,&g_next_pattern,g_pending_boundary_track,
+        current_generation);
+    if (armed == 0U)
+        (void)pattern_record_lease_release(
+            PATTERN_RECORD_LEASE_PATTERN_LOAD);
+    return armed;
 }
 
 void pattern_live_service(void)
 {
     (void)pattern_live_try_take_pending_ready();
 
-    if ((g_queued_valid == 0U) || (seq_runtime_is_running() == 0U))
+    if ((g_queued_valid == 0U)
+        || (g_next_record_owner
+            != PATTERN_RECORD_LEASE_PATTERN_QUEUE_READY)
+        || (seq_runtime_is_running() == 0U))
     {
         return;
     }
@@ -560,14 +770,22 @@ void pattern_live_service(void)
             g_pending_queue_valid = 0U;
         }
         undo_v2_clear_all();
+        (void)pattern_record_lease_release(
+            PATTERN_RECORD_LEASE_PATTERN_QUEUE_READY);
     }
 }
 
 void pattern_live_init(void)
 {
+    g_next_record_owner = PATTERN_RECORD_LEASE_FREE;
     memset(&g_next_record, 0, sizeof(g_next_record));
-    memset(&g_boot_control_pattern,0,sizeof(g_boot_control_pattern));
     memset(&g_pattern_slot_meta, 0, sizeof(g_pattern_slot_meta));
+    memset(&g_pattern_default_context, 0,
+           sizeof(g_pattern_default_context));
+    g_pattern_default_context.groove_seed =
+        SEQ_RUNTIME_DEFAULT_GROOVE_SEED;
+    g_pattern_default_context_valid = param_global_control_capture(
+        &g_pattern_default_context.global_audio);
     g_active_bank = 0U;
     g_active_pattern = 0U;
     g_queued_valid = 0U;
@@ -587,16 +805,7 @@ void pattern_live_init(void)
     g_pattern_io_workspace = 0;
     g_pattern_io_operation = PATTERN_CONTROL_BANK_ASYNC_NONE;
 
-    if (persistent_pattern_control_capture(&g_boot_control_pattern) == PERSIST_CODEC_OK)
-    {
-        g_next_pattern=g_boot_control_pattern;
-        pattern_control_bank_init();
-    }
-    else
-    {
-        (void)persistent_pattern_control_capture(&g_boot_control_pattern);
-        pattern_control_bank_init();
-    }
+    pattern_control_bank_init();
 
     for (uint8_t bank = 0U; bank < PATTERN_BANK_COUNT; ++bank)
     {
@@ -663,9 +872,7 @@ void pattern_live_set_active_state(uint8_t active_bank,
         {
             boundary_track = 0U;
         }
-        g_queued_valid = 0U;
-        g_queued_boundary_track = 0U;
-        g_queued_boundary_generation = 0U;
+        pattern_live_cancel_recall();
         if (pattern_load_request(queued_bank, queued_pattern) != 0U)
         {
             g_pending_queue_valid = 1U;
@@ -677,9 +884,6 @@ void pattern_live_set_active_state(uint8_t active_bank,
     }
     else
     {
-        g_queued_valid = 0U;
-        g_queued_boundary_track = 0U;
-        g_queued_boundary_generation = 0U;
-        g_pending_queue_valid = 0U;
+        pattern_live_cancel_recall();
     }
 }

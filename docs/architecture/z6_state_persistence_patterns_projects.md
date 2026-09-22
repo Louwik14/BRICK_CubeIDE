@@ -2,18 +2,30 @@
 
 ## Modele et format
 
-Pattern, Project et Patch utilisent exclusivement `persistent_control_model` et le codec explicite `B6CP` version 5. Les DTO ne sont ni des snapshots runtime ni une ABI disque; chaque champ est encode explicitement. Header, kind, sections, longueurs et CRC sont stricts. Aucune ancienne version ni dump de structure n'est lu.
+Pattern, Project et Patch utilisent exclusivement `persistent_control_model` et le codec explicite `B6CP` version 11. Les DTO ne sont ni des snapshots runtime ni une ABI disque; chaque champ est encode explicitement. Header, kind, sections, longueurs et CRC sont stricts. Aucune ancienne version ni dump de structure n'est lu.
 
 Les cles persistantes de famille, type, parametre, MIDI, clock, Note FX, modulation et asset sont explicites et independantes des ordinaux C. Les FLOAT32 conservent leurs bits. Les indices runtime, contextes AUDIO installes, pointeurs, caches, voix, phases, playheads et UI sont exclus.
 
-Pattern contient les seize identites. La configuration des children inactifs est conservee, mais pas leurs parametres, assets, routes, modulation, Note FX ou sequence dynamique. En GROUP, le master possede MOD et Audio FX; les children ont leur lane a un PLAY et leurs niveaux A/B.
+Pattern contient les seize identites. La configuration des children inactifs est conservee, mais pas leurs parametres, assets, routes, modulation, Note FX ou sequence dynamique. En GROUP, chaque child actif est obligatoirement `SAMPLER/RAM`; le master seul persiste MOD, LFO, ENV3 et operateurs, tandis que les children gardent leur lane a un PLAY et leurs niveaux A/B.
 
 Patch contient une entite, ses parametres logiques, zero a deux references
 d'assets typees et, pour FM, le DTO de l'owner. Project contient metadata,
 Pattern de travail, manifeste d'assets, macros/scenes et jusqu'a 256 records
 Pattern diffuses progressivement.
-ENV3 n'existe qu'une fois dans le Patch, dans l'enveloppe de modulation; capture,
-Init, codec et application utilisent cette representation unique.
+Quand `modulation_present` est actif, ENV3 n'existe qu'une fois dans le Patch,
+dans l'enveloppe de modulation; capture, Init, codec et application utilisent
+cette representation unique.
+Le format Patch courant porte explicitement `modulation_present`: un Patch de
+child GROUP ne capture ni ne restaure l'etat MOD partage du master.
+
+La sequence persiste directement `Length`, `Division`, `Direction`, `Rotate`
+et le bloc canonique `seq_track_timing_config_t`: `Base`, `Quantize`, identite
+`Groove`, `Global`, `Timing`, `Random` et `Velocity`. Capture, comparaison et
+restore passent par les owners runtime; aucun champ Quant/Swing historique ni
+adaptateur intermediaire ne subsiste. Le Pattern porte aussi un seed Groove
+32 bits copie avec lui. Un slot vide le derive une fois de son identite
+bank/pattern; il alimente la direction `RANDOM` et le Random Groove futur sans
+table persistante.
 
 ## Codec et application
 
@@ -96,8 +108,8 @@ Pattern Save/Load, Project Save, browser SD, Sample RAM, Wavetable et Clear Mult
 
 Le nom Project canonique (32 caracteres maximum, contrat `name_contract`) fait
 partie du CORE Project version 2 et est donc engage dans la meme transaction
-temporaire/backup que le snapshot. Le decoder conserve la lecture des CORE
-version 1, affiches avec un nom de slot de repli. Project Save revalide que le
+temporaire/backup que le snapshot. Cette version CORE est la seule acceptee.
+Project Save revalide que le
 transport est arrete avant le snapshot; un refus ou une erreur ne publie ni STOP
 ni PANIC et ne modifie pas le son.
 Le resultat terminal de Project Save reste dans sa mailbox jusqu'a
@@ -140,8 +152,8 @@ scan `PARAM_COUNT`. Les valeurs PLAY de base appartiennent au snapshot Seq type
 et sont copiees/restaurees avec le snapshot Track.
 
 Le routing d'une capture Audio REC est un etat de session Recorder et n'est pas
-un backend de playback persistant par track. Les anciennes routes Looper du
-codec v4 ne sont pas appliquees au data-plane AUDIO.
+un backend de playback persistant par track. Les routes CONTROL persistantes ne
+sont pas appliquees au data-plane AUDIO.
 # Asset identity and FM ownership
 
 Persistent asset selections are typed canonical references `{kind, path}`.
@@ -168,6 +180,37 @@ application pass. Semantic validation and CRC now share the first pass; the
 former separate CRC pre-read has been removed. The two remaining passes are
 still synchronous and bounded by the on-disk format.
 
-Boot-context Flash distinguishes valid, known-clear and unknown/corrupt state.
-Clearing an already persisted clear context is a no-op; unknown state is still
-erased and rewritten.
+Le dernier projet actif est conserve dans `0:/BRICK/BOOT.B6C`. Un fichier
+absent, invalide, corrompu ou designant un projet absent restaure les valeurs
+par defaut. La calibration Hall globale est chargee en RAM au boot depuis
+`0:/BRICK/HALL.B6C`; son absence ou son invalidite conserve le workflow de
+calibration. Aucun de ces stores ne possede de fallback Flash interne.
+
+## Invariants de recall et de restauration globale
+
+Le record partage suit exclusivement `FREE -> owner -> FREE`; le seul transfert
+autorise sur le chemin Pattern est `PATTERN_LOAD -> PATTERN_QUEUE_READY`. Un STOP
+annule a la fois un load encore demande/en cours et une queue armee: sa completion
+asynchrone peut terminer le nettoyage, mais ne peut plus publier le snapshot. Un
+nouveau recall remplace de meme toute queue ou lecture en vol precedente; une
+lecture physique deja admise ne peut plus publier et libere seulement ses owners.
+Project Load et Project Blank annulent un recall READY/queue avant leur staging.
+
+Apres chaque application Pattern reussie, le hook UI de restauration globale
+ferme les gestes/Undo d'edition encore ouverts, normalise la lane active vers une
+entite sequencable dans la nouvelle topologie, invalide les caches derives et
+resynchronise la page courante. Project Load et Project Blank empruntent ce meme
+point d'application; aucune page ne porte une seconde logique de resynchronisation.
+
+Project Save materialise toujours le Pattern de travail capture comme record du
+slot actif dans la section bank. Il remplace le record bank plus ancien, ou
+l'ajoute si le slot etait jusque-la absent. Le CORE et le bank ne peuvent donc
+pas diverger sur le Pattern actif et tout Project produit contient le record que
+Project Load exige. Le nombre d'assets admis au Save est borne par la capacite
+Restore effective afin qu'un fichier nouvellement cree reste rechargeable.
+
+Le workspace Persistence est une union a ownership exclusif. Pattern IO le garde
+jusqu'au resultat asynchrone; Project Save garde simultanement son membre et la
+lease record jusqu'au commit/cleanup; Project Restore ne libere la lease codec
+qu'apres les deux passes synchrones et conserve ensuite ses DTO finaux dans le
+membre Restore. Aucun pointeur codec ne survit au changement d'owner de l'union.

@@ -1064,6 +1064,13 @@ void seq_edit_note_capture_reset(void)
            sizeof(g_seq_hold_state.note_capture_velocities));
 }
 
+void seq_edit_reset_after_global_restore(void)
+{
+    seq_edit_finish_snapshot_undo(g_seq_hold_state.note_capture_undo_open);
+    memset(&g_seq_hold_state, 0, sizeof(g_seq_hold_state));
+    memset(&g_seq_length_flash, 0, sizeof(g_seq_length_flash));
+}
+
 uint8_t seq_edit_step_is_pressed(seq_track_id_t track, seq_step_id_t step)
 {
     for (uint8_t hall = 0U; hall < SEQ_STEPS_PER_PAGE; ++hall)
