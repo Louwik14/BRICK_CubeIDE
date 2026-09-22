@@ -37,6 +37,13 @@ bool track_structure_apply_entity_bulk_with_inputs(
     const uint8_t midi_channel[BRICK_ENTITY_CAPACITY],
     const uint8_t midi_source[BRICK_ENTITY_CAPACITY],
     const uint8_t external_input[TRACK_COUNT]);
+bool track_structure_apply_entity_bulk_with_inputs_and_polyphony(
+    const uint8_t family[BRICK_ENTITY_CAPACITY],
+    const uint8_t type[BRICK_ENTITY_CAPACITY],
+    const uint8_t midi_channel[BRICK_ENTITY_CAPACITY],
+    const uint8_t midi_source[BRICK_ENTITY_CAPACITY],
+    const uint8_t external_input[TRACK_COUNT],
+    const uint8_t voice_count[BRICK_ENTITY_CAPACITY]);
 bool track_structure_validate_entity_bulk_with_polyphony(
     const uint8_t family[BRICK_ENTITY_CAPACITY],
     const uint8_t type[BRICK_ENTITY_CAPACITY],

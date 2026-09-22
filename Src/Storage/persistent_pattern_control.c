@@ -535,6 +535,7 @@ static persist_codec_result_t persistent_pattern_control_install_internal(
     uint8_t midi_channels[BRICK_ENTITY_CAPACITY];
     uint8_t midi_sources[BRICK_ENTITY_CAPACITY];
     uint8_t inputs[TRACK_COUNT];
+    uint8_t voice_counts[BRICK_ENTITY_CAPACITY];
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
     {
         track_family_t family;
@@ -550,6 +551,7 @@ static persist_codec_result_t persistent_pattern_control_install_internal(
         types[entity] = (uint8_t)type;
         midi_channels[entity] = pattern->entities[entity].midi_channel;
         midi_sources[entity] = (uint8_t)midi_source;
+        voice_counts[entity] = pattern->entities[entity].polyphony.voice_count;
         if (entity < TRACK_COUNT)
             (void)persist_key_input_from_disk(
                 pattern->entities[entity].input_key, &inputs[entity]);
@@ -574,8 +576,9 @@ static persist_codec_result_t persistent_pattern_control_install_internal(
             seq_engine_control_mark_dirty();
     }
 
-    if (track_structure_apply_entity_bulk_with_inputs(
-            families, types, midi_channels, midi_sources, inputs) == 0U)
+    if (track_structure_apply_entity_bulk_with_inputs_and_polyphony(
+            families, types, midi_channels, midi_sources, inputs,
+            voice_counts) == 0U)
         return PERSIST_CODEC_INVALID_ENTITY;
 
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
