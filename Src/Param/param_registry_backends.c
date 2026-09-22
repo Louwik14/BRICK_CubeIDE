@@ -801,8 +801,9 @@ uint8_t param_backend_apply_mix_track(const track_audio_runtime_ctx_t *ctx,
 
         case PARAM_ENV_RETRIG_VCA:
         {
-            const uint8_t hard = (value >= 0.5f) ? 1U : 0U;
-            mixer_set_track_vca_retrigger_hard(ctx->program_route.mix_track_id, hard);
+            const uint8_t enabled = (value >= 0.5f) ? 1U : 0U;
+            mixer_set_track_vca_note_enabled(ctx->program_route.mix_track_id,
+                                             enabled);
             return 1U;
         }
 

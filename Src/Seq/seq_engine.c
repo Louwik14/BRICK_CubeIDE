@@ -618,8 +618,11 @@ static void schedule_boundary(seq_engine_core_t *core,
                         const seq_terminal_event_t event={.param={
                             .value32=terminal_param_value32(old_key,active.base_value16),
                             .param_id=old_key,.track=track,.semantic=semantic}};
+                        const uint8_t kind=(uint8_t)(((old_key==(uint16_t)PARAM_TB303_SLIDE)
+                            ||(old_key==(uint16_t)PARAM_ACID_SLIDE))
+                            ?SEQ_ENGINE_EVENT_TRANSITION_PARAM:SEQ_ENGINE_EVENT_PARAM);
                         (void)terminal_push(terminal,(uint16_t)(sample-block_start),
-                            SEQ_ENGINE_EVENT_PARAM,&event);
+                            kind,&event);
                         continue;
                     }
                     const seq_lock_pattern_t *lock=&p->lock_pool[track][first+new_index++];
@@ -631,8 +634,11 @@ static void schedule_boundary(seq_engine_core_t *core,
                             .value32=terminal_param_value32(param_id,lock->value16),
                             .param_id=param_id,.track=track,
                             .semantic=SEQ_ENGINE_PARAM_TEMP}};
+                        const uint8_t kind=(uint8_t)(((param_id==(uint16_t)PARAM_TB303_SLIDE)
+                            ||(param_id==(uint16_t)PARAM_ACID_SLIDE))
+                            ?SEQ_ENGINE_EVENT_TRANSITION_PARAM:SEQ_ENGINE_EVENT_PARAM);
                         (void)terminal_push(terminal,(uint16_t)(sample-block_start),
-                            SEQ_ENGINE_EVENT_PARAM,&event);}
+                            kind,&event);}
                     core->active_locks[track][active_write++]=(seq_active_lock_t){
                         .param_flags=lock->param_flags,.value16=lock->value16,
                         .base_value16=lock->base_value16};

@@ -645,7 +645,8 @@ static uint8_t audio_command_executor_apply_seq_event(
     uint8_t terminal_kind,const seq_terminal_event_t *event)
 {
     if(event==0)return 0U;
-    if (terminal_kind == SEQ_ENGINE_EVENT_PARAM)
+    if ((terminal_kind == SEQ_ENGINE_EVENT_PARAM)
+            || (terminal_kind == SEQ_ENGINE_EVENT_TRANSITION_PARAM))
     {
         if((event->param.track>=SEQ_LANE_CAPACITY)
                 ||(event->param.param_id>=PARAM_COUNT))return 0U;

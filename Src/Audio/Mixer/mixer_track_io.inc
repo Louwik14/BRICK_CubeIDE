@@ -275,15 +275,27 @@ void mixer_set_track_vca_enabled(uint32_t track_id, uint8_t enabled)
     }
 }
 
-void mixer_set_track_vca_retrigger_hard(uint32_t track_id, uint8_t hard)
+void mixer_set_track_vca_note_enabled(uint32_t track_id, uint8_t enabled)
 {
     if(track_id >= MIXER_MAX_TRACKS)
         return;
 
     mixer_track_filter_t *const filter = &g_track_filters[track_id];
-    const uint8_t next = (hard != 0U) ? 1U : 0U;
-    if (filter->vca_retrigger_hard == next) return;
-    filter->vca_retrigger_hard = next;
+    const uint8_t next = (enabled != 0U) ? 1U : 0U;
+    if (filter->vca_note_enabled == next) return;
+    filter->vca_note_enabled = next;
+    if (next == 0U)
+    {
+        /* ENV VCA OFF is a true bypass of the BRICK note envelope.  Keep the
+         * engine's own amplitude envelope untouched and make subsequent note
+         * events unable to restart this track envelope. */
+        filter->vca_enabled = 0U;
+        filter->vca_note_active = 0U;
+        filter->vca_note_count = 0U;
+        filter->vca_gate = 0U;
+        filter->vca_env_value = 1.0f;
+        env_adsr_reset(&filter->vca_env);
+    }
     mixer_track_filter_touch_config(filter);
 }
 
@@ -295,6 +307,8 @@ void mixer_track_vca_note_on(uint32_t track_id, uint8_t midi_note, uint8_t veloc
         return;
 
     mixer_track_filter_t *filter = &g_track_filters[track_id];
+    if (filter->vca_note_enabled == 0U)
+        return;
     filter->vca_enabled = 1U;
     filter->vca_current_note = midi_note;
     if (filter->vca_note_count < 0xFFU)
@@ -317,7 +331,8 @@ void mixer_track_vca_note_off(uint32_t track_id, uint8_t midi_note)
         return;
 
     mixer_track_filter_t *filter = &g_track_filters[track_id];
-    if((filter->vca_enabled == 0U) || (filter->vca_note_active == 0U))
+    if((filter->vca_note_enabled == 0U) || (filter->vca_enabled == 0U)
+            || (filter->vca_note_active == 0U))
         return;
 
     if (filter->vca_note_count > 0U)

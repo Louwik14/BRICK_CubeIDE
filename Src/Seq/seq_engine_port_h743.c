@@ -98,10 +98,12 @@ static uint8_t event_is_audible(const seq_terminal_block_t *block,uint8_t kind,
                                 const seq_terminal_event_t *event)
 {
     if(event==0)return 0U;
-    const uint8_t track=(kind==SEQ_ENGINE_EVENT_PARAM)
+    const uint8_t track=((kind==SEQ_ENGINE_EVENT_PARAM)
+            ||(kind==SEQ_ENGINE_EVENT_TRANSITION_PARAM))
         ?event->param.track:event->note.track;
     if(track>=SEQ_LANE_CAPACITY)return 0U;
-    if (kind == SEQ_ENGINE_EVENT_PARAM)
+    if ((kind == SEQ_ENGINE_EVENT_PARAM)
+            || (kind == SEQ_ENGINE_EVENT_TRANSITION_PARAM))
         return (uint8_t)((block->lock_tracks
             & (uint16_t)(1U << track)) != 0U);
     return (uint8_t)((active_track_mask(block)

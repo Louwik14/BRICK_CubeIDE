@@ -97,6 +97,7 @@ static ITCM_TEXT void mixer_poly_filter_sync_config(mixer_track_filter_t *dst,
         }
         dst->filter_retrigger_hard = src->filter_retrigger_hard;
         dst->vca_retrigger_hard = src->vca_retrigger_hard;
+        dst->vca_note_enabled = src->vca_note_enabled;
         if(dst->filter_mode != src->filter_mode)
         {
             dst->filter_mode = src->filter_mode;
@@ -590,6 +591,7 @@ static void mixer_track_filter_init(mixer_track_filter_t *filter, float sample_r
     filter->vca_gate = 0U;
     filter->filter_retrigger_hard = 1U;
     filter->vca_retrigger_hard = 1U;
+    filter->vca_note_enabled = 1U;
     filter->vca_env_value = 0.0f;
     filter->filter_env_value = 0.0f;
     filter->filter_env_prepared_frames = 0U;

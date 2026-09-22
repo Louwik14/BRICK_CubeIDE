@@ -139,6 +139,7 @@ typedef struct __attribute__((aligned(32))) {
     uint8_t vca_gate;
     uint8_t filter_retrigger_hard;
     uint8_t vca_retrigger_hard;
+    uint8_t vca_note_enabled;
     uint8_t filter_mode;
     uint8_t morph_ramp_remaining;
     uint8_t filter_env_prepared_count;

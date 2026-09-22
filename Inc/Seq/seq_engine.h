@@ -27,7 +27,10 @@
 #define SEQ_ENGINE_PARAM_ID_MASK UINT16_C(0x01FF)
 
 typedef enum {
-    SEQ_ENGINE_EVENT_NOTE_OFF = 0,
+    /* Transition-scoped parameters (currently ACID/TB303 SLIDE) must be
+     * visible to the renderer before the previous note is released. */
+    SEQ_ENGINE_EVENT_TRANSITION_PARAM = 0,
+    SEQ_ENGINE_EVENT_NOTE_OFF,
     SEQ_ENGINE_EVENT_PARAM,
     SEQ_ENGINE_EVENT_NOTE_ON,
     SEQ_ENGINE_EVENT_PANIC
@@ -61,7 +64,7 @@ _Static_assert(sizeof(seq_terminal_event_t) == 10U,
                "SEQ terminal payload budget");
 
 #define SEQ_ENGINE_TERMINAL_INDEX_NONE UINT16_MAX
-#define SEQ_ENGINE_TERMINAL_CLASS_COUNT 4U
+#define SEQ_ENGINE_TERMINAL_CLASS_COUNT 5U
 
 typedef struct {
     uint64_t start_sample;
