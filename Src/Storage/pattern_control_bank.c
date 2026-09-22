@@ -18,8 +18,10 @@ static uint8_t g_present[BANKS][SLOTS];
 static uint8_t g_active_set;
 static uint8_t g_staging_set = INVALID_SET;
 static uint32_t g_generation;
+static uint32_t g_content_generation;
 static uint8_t g_staging_bitmap[32];
 static uint8_t g_staging_commit_prepared;
+static uint8_t g_project_snapshot_active;
 
 typedef enum
 {
@@ -67,6 +69,12 @@ typedef struct
 } pattern_memory_io_t;
 
 static pattern_async_context_t g_pattern_async;
+
+static void pattern_content_changed(void)
+{
+    ++g_content_generation;
+    if(g_content_generation==0U)++g_content_generation;
+}
 
 static uint8_t valid(uint8_t b,uint8_t p){return(b<BANKS&&p<SLOTS)?1U:0U;}
 static uint8_t path_for_set(char*out,uint32_t size,uint8_t set,uint8_t b,uint8_t p){int n=snprintf(out,size,"0:/PATTERN/S%u/B%02u_P%02u.B6C",set,b,p);return(n>0&&(uint32_t)n<size)?1U:0U;}
@@ -185,7 +193,7 @@ static uint8_t write_commit(uint8_t set,uint32_t generation,const uint8_t*bitmap
 static uint8_t read_commit(uint8_t set,uint32_t*out_generation){uint8_t r[COMMIT_BYTES];char x[48];FIL f;UINT n=0U;if(!commit_path(x,sizeof(x),set,0U)||f_open(&f,x,FA_READ)!=FR_OK)return 0U;uint8_t ok=((uint32_t)f_size(&f)==sizeof(r)&&f_read(&f,r,sizeof(r),&n)==FR_OK&&n==sizeof(r));if(f_close(&f)!=FR_OK)ok=0U;ok=(ok&&r[0]=='B'&&r[1]=='6'&&r[2]=='P'&&r[3]=='B'&&r[4]==1U&&r[5]==set&&r[6]==0U&&r[7]==0U&&le32(&r[40])==~crc32(0xFFFFFFFFUL,r,40U));if(ok)*out_generation=le32(&r[8]);return ok;}
 static uint8_t store_to_set(uint8_t set,uint8_t b,uint8_t p,const persist_control_pattern_t*in){char x[48],tmp[52];persistent_fatfs_file_t f;uint8_t ok=path_for_set(x,sizeof(x),set,b,p);if(ok){snprintf(tmp,sizeof(tmp),"%s.TMP",x);ok=persistent_fatfs_open_write(&f,tmp);if(ok){persist_codec_sink_t s=persistent_fatfs_sink(&f);ok=(persist_codec_encode_pattern(in,&s,NULL)==PERSIST_CODEC_OK)&&(f_sync(&f.file)==FR_OK);if(persistent_fatfs_close_result(&f)!=FR_OK)ok=0U;}if(ok){(void)f_unlink(x);ok=(f_rename(tmp,x)==FR_OK);}else(void)f_unlink(tmp);}return ok;}
 
-static uint8_t begin_staging(void){if(g_active_set>=SET_COUNT||g_staging_set!=INVALID_SET)return 0U;g_staging_set=(uint8_t)(g_active_set^1U);if(clear_set(g_staging_set)==0U){g_staging_set=INVALID_SET;return 0U;}memset(g_staging_bitmap,0,sizeof(g_staging_bitmap));g_staging_commit_prepared=0U;return 1U;}
+static uint8_t begin_staging(void){if(g_project_snapshot_active!=0U||g_active_set>=SET_COUNT||g_staging_set!=INVALID_SET)return 0U;g_staging_set=(uint8_t)(g_active_set^1U);if(clear_set(g_staging_set)==0U){g_staging_set=INVALID_SET;return 0U;}memset(g_staging_bitmap,0,sizeof(g_staging_bitmap));g_staging_commit_prepared=0U;return 1U;}
 uint8_t pattern_control_bank_staging_present(uint8_t bank,uint8_t pattern)
 {
     if ((g_staging_set == INVALID_SET) || (bank >= BANKS) || (pattern >= SLOTS))
@@ -308,7 +316,8 @@ uint8_t pattern_control_bank_store_async_begin(
     uint8_t *encoded,
     uint32_t encoded_capacity)
 {
-    if (project_replacement_is_active() != 0U) return 0U;
+    if (project_replacement_is_active() != 0U
+        || g_project_snapshot_active != 0U) return 0U;
     if (!valid(bank, pattern) || (in == NULL) || (encoded == NULL)
         || (encoded_capacity == 0U)
         || (g_active_set >= SET_COUNT)
@@ -588,6 +597,7 @@ void pattern_control_bank_async_service(void)
             if (fr == FR_OK)
             {
                 g_present[g_pattern_async.bank][g_pattern_async.pattern] = 1U;
+                pattern_content_changed();
                 pattern_async_finish(1U);
                 persist_debug_stage(PERSIST_DBG_STAGE_SUCCESS,0);
             }
@@ -644,14 +654,17 @@ uint8_t pattern_control_bank_async_take_result(
     return 1U;
 }
 
-void pattern_control_bank_init(void){memset(g_present,0,sizeof(g_present));memset(&g_pattern_async,0,sizeof(g_pattern_async));g_active_set=INVALID_SET;g_staging_set=INVALID_SET;g_staging_commit_prepared=0U;g_generation=0U;if(!acquire())return;(void)f_mkdir("0:/PATTERN");(void)f_mkdir("0:/PATTERN/S0");(void)f_mkdir("0:/PATTERN/S1");uint32_t g0=0U,g1=0U;uint8_t v0=read_commit(0U,&g0),v1=read_commit(1U,&g1);if(v0&&v1&&g0!=g1){g_active_set=((int32_t)(g1-g0)>0)?1U:0U;g_generation=(g_active_set==1U)?g1:g0;}else if(v0&&!v1){g_active_set=0U;g_generation=g0;}else if(v1&&!v0){g_active_set=1U;g_generation=g1;}if(g_active_set==INVALID_SET){clear_set(0U);clear_set(1U);uint8_t blank[32]={0};if(write_commit(0U,1U,blank)){g_active_set=0U;g_generation=1U;}}if(g_active_set<SET_COUNT)scan_active();else memset(g_present,0,sizeof(g_present));sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);}
+void pattern_control_bank_init(void){memset(g_present,0,sizeof(g_present));memset(&g_pattern_async,0,sizeof(g_pattern_async));g_active_set=INVALID_SET;g_staging_set=INVALID_SET;g_staging_commit_prepared=0U;g_project_snapshot_active=0U;g_generation=0U;g_content_generation=1U;if(!acquire())return;(void)f_mkdir("0:/PATTERN");(void)f_mkdir("0:/PATTERN/S0");(void)f_mkdir("0:/PATTERN/S1");uint32_t g0=0U,g1=0U;uint8_t v0=read_commit(0U,&g0),v1=read_commit(1U,&g1);if(v0&&v1&&g0!=g1){g_active_set=((int32_t)(g1-g0)>0)?1U:0U;g_generation=(g_active_set==1U)?g1:g0;}else if(v0&&!v1){g_active_set=0U;g_generation=g0;}else if(v1&&!v0){g_active_set=1U;g_generation=g1;}if(g_active_set==INVALID_SET){clear_set(0U);clear_set(1U);uint8_t blank[32]={0};if(write_commit(0U,1U,blank)){g_active_set=0U;g_generation=1U;}}if(g_active_set<SET_COUNT)scan_active();else memset(g_present,0,sizeof(g_present));g_content_generation=(g_generation!=0U)?g_generation:1U;sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);}
 uint8_t pattern_control_bank_present(uint8_t b,uint8_t p){return valid(b,p)?g_present[b][p]:0U;}
-uint8_t pattern_control_bank_delete(uint8_t b,uint8_t p){if(!valid(b,p)||!acquire())return 0U;char x[48],tmp[52],bak[52];uint8_t ok=path_for_set(x,sizeof(x),g_active_set,b,p)&&side_path(tmp,sizeof(tmp),x,"TMP")&&side_path(bak,sizeof(bak),x,"BAK");if(ok){FRESULT r=f_unlink(x);ok=(r==FR_OK||r==FR_NO_FILE);(void)f_unlink(tmp);(void)f_unlink(bak);}if(ok)g_present[b][p]=0U;sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);return ok;}
+uint8_t pattern_control_bank_delete(uint8_t b,uint8_t p){if(g_project_snapshot_active!=0U||!valid(b,p)||!acquire())return 0U;char x[48],tmp[52],bak[52];uint8_t ok=path_for_set(x,sizeof(x),g_active_set,b,p)&&side_path(tmp,sizeof(tmp),x,"TMP")&&side_path(bak,sizeof(bak),x,"BAK");if(ok){FRESULT r=f_unlink(x);ok=(r==FR_OK||r==FR_NO_FILE);(void)f_unlink(tmp);(void)f_unlink(bak);}if(ok){g_present[b][p]=0U;pattern_content_changed();}sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);return ok;}
 uint16_t pattern_control_bank_count(void){uint16_t n=0U;for(uint8_t b=0;b<BANKS;++b)for(uint8_t p=0;p<SLOTS;++p)n+=g_present[b][p]?1U:0U;return n;}
+uint8_t pattern_control_bank_project_snapshot_begin(uint32_t*out_generation,uint16_t*out_count){if(out_generation==NULL||out_count==NULL||g_project_snapshot_active!=0U||g_active_set>=SET_COUNT||g_staging_set!=INVALID_SET||(g_pattern_async.state!=PATTERN_ASYNC_IDLE&&g_pattern_async.state!=PATTERN_ASYNC_DONE))return 0U;g_project_snapshot_active=1U;*out_generation=g_content_generation;*out_count=pattern_control_bank_count();return 1U;}
+uint8_t pattern_control_bank_project_snapshot_is_current(uint32_t generation){return(g_project_snapshot_active!=0U&&generation==g_content_generation)?1U:0U;}
+void pattern_control_bank_project_snapshot_end(uint32_t generation){(void)generation;g_project_snapshot_active=0U;}
 uint8_t pattern_control_bank_get_ordinal_project(uint16_t ordinal,persist_control_pattern_record_t*out){if(out==NULL)return 0U;for(uint8_t b=0;b<BANKS;++b)for(uint8_t p=0;p<SLOTS;++p)if(g_present[b][p]&&ordinal--==0U){char x[48];persistent_fatfs_file_t f;memset(out,0,sizeof(*out));out->bank=b;out->pattern=p;out->present=1U;uint8_t ok=path_for_set(x,sizeof(x),g_active_set,b,p)&&persistent_fatfs_open_read(&f,x);if(ok){persist_codec_source_t s=persistent_fatfs_source(&f);ok=(persist_codec_decode_pattern(&s,(persist_codec_pattern_staging_t*)&out->content)==PERSIST_CODEC_OK);if(persistent_fatfs_close_result(&f)!=FR_OK)ok=0U;}return ok;}return 0U;}
 uint8_t pattern_control_bank_get_ordinal_project_path(uint16_t ordinal,char*out_path,uint32_t path_capacity,uint8_t*out_bank,uint8_t*out_pattern){if(out_path==NULL||path_capacity==0U||out_bank==NULL||out_pattern==NULL||g_active_set>=SET_COUNT)return 0U;for(uint8_t b=0U;b<BANKS;++b)for(uint8_t p=0U;p<SLOTS;++p)if(g_present[b][p]&&ordinal--==0U){if(!path_for_set(out_path,path_capacity,g_active_set,b,p))return 0U;*out_bank=b;*out_pattern=p;return 1U;}return 0U;}
 uint8_t pattern_control_bank_begin_project(void){return begin_staging();}
 uint8_t pattern_control_bank_put_record_project(const persist_control_pattern_record_t*r){if(r==NULL||r->present!=1U||!valid(r->bank,r->pattern)||g_staging_set>=SET_COUNT||!store_to_set(g_staging_set,r->bank,r->pattern,&r->content))return 0U;uint8_t slot=(uint8_t)(r->bank*SLOTS+r->pattern);g_staging_bitmap[slot>>3U]|=(uint8_t)(1U<<(slot&7U));return 1U;}
 uint8_t pattern_control_bank_prepare_commit(void){if(g_staging_set>=SET_COUNT)return 0U;const uint32_t next=g_generation+1U;uint8_t record[COMMIT_BYTES]={0};char temporary[48];FIL file;UINT written=0U;record[0]='B';record[1]='6';record[2]='P';record[3]='B';record[4]=1U;record[5]=g_staging_set;put32(&record[8],next);memcpy(&record[12],g_staging_bitmap,32U);put32(&record[40],~crc32(0xFFFFFFFFUL,record,40U));if(!commit_path(temporary,sizeof(temporary),g_staging_set,1U)||f_open(&file,temporary,FA_CREATE_ALWAYS|FA_WRITE)!=FR_OK)return 0U;uint8_t ok=(f_write(&file,record,sizeof(record),&written)==FR_OK&&written==sizeof(record)&&f_sync(&file)==FR_OK)?1U:0U;if(f_close(&file)!=FR_OK)ok=0U;if(ok==0U){(void)f_unlink(temporary);return 0U;}g_staging_commit_prepared=1U;return 1U;}
-uint8_t pattern_control_bank_commit(void*context){(void)context;if(g_staging_set>=SET_COUNT||g_staging_commit_prepared==0U)return 0U;const uint8_t old=g_active_set;const uint32_t next=g_generation+1U;char final_path[48],temporary[48];if(!commit_path(final_path,sizeof(final_path),g_staging_set,0U)||!commit_path(temporary,sizeof(temporary),g_staging_set,1U))return 0U;(void)f_unlink(final_path);if(f_rename(temporary,final_path)!=FR_OK)return 0U;g_active_set=g_staging_set;g_generation=next;g_staging_set=INVALID_SET;g_staging_commit_prepared=0U;memset(g_present,0,sizeof(g_present));for(uint8_t b=0U;b<BANKS;++b)for(uint8_t p=0U;p<SLOTS;++p)g_present[b][p]=pattern_bitmap_has(g_staging_bitmap,b,p);clear_set(old);return 1U;}
+uint8_t pattern_control_bank_commit(void*context){(void)context;if(g_project_snapshot_active!=0U||g_staging_set>=SET_COUNT||g_staging_commit_prepared==0U)return 0U;const uint8_t old=g_active_set;const uint32_t next=g_generation+1U;char final_path[48],temporary[48];if(!commit_path(final_path,sizeof(final_path),g_staging_set,0U)||!commit_path(temporary,sizeof(temporary),g_staging_set,1U))return 0U;(void)f_unlink(final_path);if(f_rename(temporary,final_path)!=FR_OK)return 0U;g_active_set=g_staging_set;g_generation=next;g_staging_set=INVALID_SET;g_staging_commit_prepared=0U;memset(g_present,0,sizeof(g_present));for(uint8_t b=0U;b<BANKS;++b)for(uint8_t p=0U;p<SLOTS;++p)g_present[b][p]=pattern_bitmap_has(g_staging_bitmap,b,p);pattern_content_changed();clear_set(old);return 1U;}
 void pattern_control_bank_abort(void*context){(void)context;if(g_staging_set<SET_COUNT){if(acquire()!=0U){clear_set(g_staging_set);sd_access_gate_release(SD_ACCESS_CLIENT_PATTERN);}g_staging_set=INVALID_SET;g_staging_commit_prepared=0U;}}

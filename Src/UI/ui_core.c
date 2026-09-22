@@ -1320,13 +1320,13 @@ void ui_get_pattern_stub_state(ui_pattern_stub_state_t *out_state)
 
     out_state->active_bank = 0U;
     out_state->active_pattern = 0U;
-    out_state->queued_valid = 0U;
-    out_state->queued_bank = 0U;
-    out_state->queued_pattern = 0U;
+    out_state->pending_valid = 0U;
+    out_state->pending_bank = 0U;
+    out_state->pending_pattern = 0U;
     (void)pattern_live_get_active(&out_state->active_bank, &out_state->active_pattern);
-    (void)pattern_live_get_queued(&out_state->queued_valid,
-                                  &out_state->queued_bank,
-                                  &out_state->queued_pattern);
+    (void)pattern_live_get_pending(&out_state->pending_valid,
+                                  &out_state->pending_bank,
+                                  &out_state->pending_pattern);
     out_state->substate = ui_core_pattern_get_substate();
     out_state->selected_bank = ui_core_pattern_get_selected_bank();
     out_state->mode = ui_core_pattern_get_mode();

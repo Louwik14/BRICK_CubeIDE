@@ -74,9 +74,9 @@ typedef struct
 {
     uint8_t active_bank;
     uint8_t active_pattern;
-    uint8_t queued_valid;
-    uint8_t queued_bank;
-    uint8_t queued_pattern;
+    uint8_t pending_valid;
+    uint8_t pending_bank;
+    uint8_t pending_pattern;
     ui_pattern_substate_t substate;
     uint8_t selected_bank;
     ui_pattern_mode_t mode;

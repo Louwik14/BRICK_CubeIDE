@@ -8,7 +8,6 @@ typedef enum {
     PERSIST_DBG_OP_PATTERN_SAVE,
     PERSIST_DBG_OP_PATTERN_LOAD,
     PERSIST_DBG_OP_PATTERN_APPLY,
-    PERSIST_DBG_OP_PATTERN_QUEUE,
     PERSIST_DBG_OP_PROJECT_SAVE,
     PERSIST_DBG_OP_PROJECT_LOAD,
     PERSIST_DBG_OP_PROJECT_BLANK
@@ -18,7 +17,6 @@ typedef enum {
     PERSIST_DBG_STAGE_NONE = 0,
     PERSIST_DBG_STAGE_ENTER,
     PERSIST_DBG_STAGE_POLICY,
-    PERSIST_DBG_STAGE_LEASE,
     PERSIST_DBG_STAGE_WORKSPACE,
     PERSIST_DBG_STAGE_PATH,
     PERSIST_DBG_STAGE_MOUNT,
@@ -29,8 +27,8 @@ typedef enum {
     PERSIST_DBG_STAGE_ENCODE,
     PERSIST_DBG_STAGE_DECODE,
     PERSIST_DBG_STAGE_VALIDATE,
-    PERSIST_DBG_STAGE_READY,
-    PERSIST_DBG_STAGE_QUEUE,
+    PERSIST_DBG_STAGE_CANDIDATE,
+    PERSIST_DBG_STAGE_ASYNC,
     PERSIST_DBG_STAGE_APPLY,
     PERSIST_DBG_STAGE_BANK_STAGE,
     PERSIST_DBG_STAGE_BANK_COMMIT,
@@ -45,32 +43,24 @@ typedef enum {
 typedef enum {
     PERSIST_DBG_ERROR_NONE = 0,
     PERSIST_DBG_ERROR_POLICY = 1,
-    PERSIST_DBG_ERROR_LEASE = 2,
-    PERSIST_DBG_ERROR_WORKSPACE = 3,
-    PERSIST_DBG_ERROR_PATH = 4,
-    PERSIST_DBG_ERROR_MOUNT = 5,
-    PERSIST_DBG_ERROR_FILESYSTEM = 6,
-    PERSIST_DBG_ERROR_CODEC = 7,
-    PERSIST_DBG_ERROR_VALIDATE = 8,
-    PERSIST_DBG_ERROR_BANK = 9,
-    PERSIST_DBG_ERROR_APPLY = 10,
-    PERSIST_DBG_ERROR_MEDIA = 11,
-    PERSIST_DBG_ERROR_INTERNAL = 12
+    PERSIST_DBG_ERROR_WORKSPACE = 2,
+    PERSIST_DBG_ERROR_PATH = 3,
+    PERSIST_DBG_ERROR_MOUNT = 4,
+    PERSIST_DBG_ERROR_FILESYSTEM = 5,
+    PERSIST_DBG_ERROR_CODEC = 6,
+    PERSIST_DBG_ERROR_VALIDATE = 7,
+    PERSIST_DBG_ERROR_BANK = 8,
+    PERSIST_DBG_ERROR_APPLY = 9,
+    PERSIST_DBG_ERROR_MEDIA = 10,
+    PERSIST_DBG_ERROR_INTERNAL = 11
 } persist_dbg_error_t;
 
 typedef enum {
     PERSIST_DBG_DECISION_NONE = 0,
-    PERSIST_DBG_DECISION_NO_PENDING,
-    PERSIST_DBG_DECISION_LOAD_REQUEST_REFUSED,
-    PERSIST_DBG_DECISION_NO_READY,
-    PERSIST_DBG_DECISION_STALE_READY,
     PERSIST_DBG_DECISION_PREFLIGHT_BLOCKED,
-    PERSIST_DBG_DECISION_TAKE_READY_REFUSED,
     PERSIST_DBG_DECISION_TRANSPORT_STOPPED_APPLY,
     PERSIST_DBG_DECISION_APPLY_FAILED,
-    PERSIST_DBG_DECISION_TRANSPORT_RUNNING_QUEUE,
-    PERSIST_DBG_DECISION_QUEUE_FAILED,
-    PERSIST_DBG_DECISION_QUEUE_ARMED,
+    PERSIST_DBG_DECISION_TRANSPORT_RUNNING_PENDING,
     PERSIST_DBG_DECISION_APPLY_SUCCEEDED,
     PERSIST_DBG_DECISION_WAIT_BOUNDARY
 } persist_dbg_decision_reason_t;
@@ -86,14 +76,13 @@ typedef struct {
     volatile int32_t first_error_code;
     volatile uint32_t bank;
     volatile uint32_t slot;
-    volatile uint32_t lease_owner;
     volatile uint32_t workspace_owner;
-    volatile uint32_t ready;
-    volatile uint32_t queue;
+    volatile uint32_t candidate_phase;
     volatile uint32_t publish;
     volatile uint32_t current_pattern;
-    volatile uint32_t prepared_pattern;
-    volatile uint32_t pattern_revision;
+    volatile uint32_t pending_pattern;
+    volatile uint32_t request_generation;
+    volatile uint32_t boundary_generation;
     volatile uint32_t active_track;
     volatile uint32_t selected_track;
     volatile uint32_t ui_revision;
@@ -103,14 +92,9 @@ typedef struct {
     volatile uint32_t detail1;
     volatile uint32_t detail2;
     volatile uint32_t detail3;
-    volatile uint32_t ready_consumer_calls;
-    volatile uint32_t take_ready_called;
-    volatile uint32_t take_ready_result;
     volatile uint32_t transport_running;
     volatile uint32_t apply_attempted;
     volatile uint32_t apply_result;
-    volatile uint32_t queue_attempted;
-    volatile uint32_t queue_result;
     volatile uint32_t decision_reason;
 } persist_debug_block_t;
 
@@ -119,11 +103,12 @@ extern volatile persist_debug_block_t g_persist_dbg;
 void persist_debug_begin(persist_dbg_op_t op, uint32_t bank, uint32_t slot);
 void persist_debug_stage(persist_dbg_stage_t stage, int32_t status);
 void persist_debug_error(persist_dbg_stage_t stage, int32_t code);
-void persist_debug_owners(uint32_t lease_owner, uint32_t workspace_owner);
+void persist_debug_workspace_owner(uint32_t workspace_owner);
 void persist_debug_details(uint32_t d0, uint32_t d1, uint32_t d2, uint32_t d3);
-void persist_debug_pattern_state(uint32_t ready, uint32_t queue, uint32_t publish,
-                                 uint32_t current, uint32_t prepared,
-                                 uint32_t revision);
+void persist_debug_pattern_state(uint32_t candidate_phase, uint32_t publish,
+                                 uint32_t current, uint32_t pending,
+                                 uint32_t request_generation,
+                                 uint32_t boundary_generation);
 void persist_debug_ui_sync(uint32_t active_track, uint32_t selected_track,
                            uint32_t revision);
 

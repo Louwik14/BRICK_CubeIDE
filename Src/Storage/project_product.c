@@ -115,7 +115,7 @@ typedef struct
     project_save_state_t state;
     project_save_state_t after_write;
     persistence_project_save_workspace_t *workspace;
-    persist_control_pattern_record_t *record_lease;
+    persist_control_pattern_record_t *record_scratch;
     persistent_fatfs_file_t project_file;
     persistent_fatfs_file_t pattern_file;
     persist_codec_project_metadata_t metadata;
@@ -131,6 +131,7 @@ typedef struct
     uint32_t crc;
     uint32_t crc_remaining;
     uint32_t media_epoch;
+    uint32_t pattern_bank_generation;
     uint16_t source_pattern_count;
     uint16_t pattern_ordinal;
     uint8_t slot;
@@ -141,6 +142,7 @@ typedef struct
     uint8_t active_record_emitted;
     uint8_t result_ready;
     uint8_t success;
+    uint8_t pattern_bank_snapshot_active;
     uint8_t header[32];
     char final_path[48];
     char temporary_path[48];
@@ -246,13 +248,22 @@ static sd_scheduler_background_admission_t project_save_admit(
     return sd_scheduler_runtime_background_try_begin(&request);
 }
 
+static void project_save_release_snapshot(void)
+{
+    if(g_project_save.pattern_bank_snapshot_active!=0U)
+    {
+        pattern_control_bank_project_snapshot_end(
+            g_project_save.pattern_bank_generation);
+        g_project_save.pattern_bank_snapshot_active=0U;
+    }
+}
+
 static void project_save_finish(uint8_t success)
 {
+    project_save_release_snapshot();
     if(g_project_save.workspace!=NULL)
         persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);
-    if(g_project_save.record_lease!=NULL)
-        (void)pattern_record_lease_release(PATTERN_RECORD_LEASE_PROJECT_SAVE);
-    g_project_save.workspace=NULL;g_project_save.record_lease=NULL;g_project_save.project_open=0U;g_project_save.pattern_open=0U;
+    g_project_save.workspace=NULL;g_project_save.record_scratch=NULL;g_project_save.project_open=0U;g_project_save.pattern_open=0U;
     g_project_save.success=(success!=0U)?1U:0U;g_project_save.result_ready=1U;
     g_project_save.state=PROJECT_SAVE_DONE;g_progress.active=0U;g_progress.complete=1U;g_progress.result=(success!=0U)?PROJECT_PRODUCT_RESULT_SUCCESS:PROJECT_PRODUCT_RESULT_FAILED;
     if(success!=0U)persist_debug_stage(PERSIST_DBG_STAGE_SUCCESS,0);
@@ -306,45 +317,45 @@ static void project_save_queue_write(const uint8_t *data,uint32_t size,project_s
 static uint8_t project_save_encode_core(void)
 {
     persist_debug_stage(PERSIST_DBG_STAGE_ENCODE,0);
-    if(g_project_save.record_lease==NULL){project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_WORKSPACE_BUSY,0);return 0U;}
-    project_memory_io_t memory={(uint8_t*)g_project_save.record_lease,
-        sizeof(*g_project_save.record_lease),0U};
+    if(g_project_save.record_scratch==NULL){project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_WORKSPACE_BUSY,0);return 0U;}
+    project_memory_io_t memory={(uint8_t*)g_project_save.record_scratch,
+        sizeof(*g_project_save.record_scratch),0U};
     const persist_codec_sink_t sink={project_memory_write,&memory};uint32_t bytes=0U;
     const persist_codec_result_t result=persist_codec_encode_project_core_payload(
         &g_project_save.metadata,&g_project_save.workspace->working_pattern,&sink,&bytes);
     if(result!=PERSIST_CODEC_OK){project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_CODEC,(int32_t)result);return 0U;}
     if(!persist_codec_build_project_section_header(PERSIST_CODEC_PROJECT_SECTION_CORE,bytes,g_project_save.header)){project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_CODEC,0);return 0U;}
-    g_project_save.encoded_data=(const uint8_t*)g_project_save.record_lease;
+    g_project_save.encoded_data=(const uint8_t*)g_project_save.record_scratch;
     g_project_save.encoded_size=bytes;return 1U;
 }
 
 static uint8_t project_save_encode_assets(void)
 {
     persist_debug_stage(PERSIST_DBG_STAGE_ENCODE,0);
-    if(g_project_save.record_lease==NULL){project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_WORKSPACE_BUSY,0);return 0U;}
-    project_memory_io_t memory={(uint8_t*)g_project_save.record_lease,
-        sizeof(*g_project_save.record_lease),0U};
+    if(g_project_save.record_scratch==NULL){project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_WORKSPACE_BUSY,0);return 0U;}
+    project_memory_io_t memory={(uint8_t*)g_project_save.record_scratch,
+        sizeof(*g_project_save.record_scratch),0U};
     const persist_codec_sink_t sink={project_memory_write,&memory};uint32_t bytes=0U;
     const persist_codec_result_t result=persist_codec_encode_project_assets_payload(
         g_project_save.workspace->assets,g_project_save.metadata.asset_count,&sink,&bytes);
     if(result!=PERSIST_CODEC_OK){project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_CODEC,(int32_t)result);return 0U;}
     if(!persist_codec_build_project_section_header(PERSIST_CODEC_PROJECT_SECTION_ASSETS,bytes,g_project_save.header)){project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_CODEC,0);return 0U;}
-    g_project_save.encoded_data=(const uint8_t*)g_project_save.record_lease;
+    g_project_save.encoded_data=(const uint8_t*)g_project_save.record_scratch;
     g_project_save.encoded_size=bytes;return 1U;
 }
 
 static uint8_t project_save_encode_macros(void)
 {
     persist_debug_stage(PERSIST_DBG_STAGE_ENCODE,0);
-    if(g_project_save.record_lease==NULL){project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_WORKSPACE_BUSY,0);return 0U;}
-    project_memory_io_t memory={(uint8_t*)g_project_save.record_lease,
-        sizeof(*g_project_save.record_lease),0U};
+    if(g_project_save.record_scratch==NULL){project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_WORKSPACE_BUSY,0);return 0U;}
+    project_memory_io_t memory={(uint8_t*)g_project_save.record_scratch,
+        sizeof(*g_project_save.record_scratch),0U};
     const persist_codec_sink_t sink={project_memory_write,&memory};uint32_t bytes=0U;
     const persist_codec_result_t result=persist_codec_encode_project_macros_payload(
         &g_project_save.workspace->macros,&sink,&bytes);
     if(result!=PERSIST_CODEC_OK){project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_CODEC,(int32_t)result);return 0U;}
     if(!persist_codec_build_project_section_header(PERSIST_CODEC_PROJECT_SECTION_MACROS,bytes,g_project_save.header)){project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_CODEC,0);return 0U;}
-    g_project_save.encoded_data=(const uint8_t*)g_project_save.record_lease;
+    g_project_save.encoded_data=(const uint8_t*)g_project_save.record_scratch;
     g_project_save.encoded_size=bytes;return 1U;
 }
 
@@ -361,16 +372,22 @@ uint8_t project_product_save_named(uint8_t slot,const char *name)
     {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SD_BUSY;return 0U;}
     persistence_project_save_workspace_t *const workspace = persistence_workspace_acquire_project_save();
     if(workspace==NULL){g_save_error=PROJECT_PRODUCT_SAVE_ERROR_WORKSPACE_BUSY;return 0U;}
-    persist_control_pattern_record_t *const record_lease =
-        pattern_record_lease_acquire(PATTERN_RECORD_LEASE_PROJECT_SAVE);
-    if(record_lease==NULL){g_save_error=PROJECT_PRODUCT_SAVE_ERROR_WORKSPACE_BUSY;persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);return 0U;}
     persist_codec_result_t codec_result=persistent_pattern_control_capture(&workspace->working_pattern);
     persist_debug_stage(PERSIST_DBG_STAGE_VALIDATE,(int32_t)codec_result);
-    if(codec_result!=PERSIST_CODEC_OK){g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SNAPSHOT;g_save_detail=(int32_t)codec_result;(void)pattern_record_lease_release(PATTERN_RECORD_LEASE_PROJECT_SAVE);persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);return 0U;}
-    memset(&g_project_save,0,sizeof(g_project_save));g_project_save.workspace=workspace;g_project_save.record_lease=record_lease;g_project_save.slot=slot;
+    if(codec_result!=PERSIST_CODEC_OK){g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SNAPSHOT;g_save_detail=(int32_t)codec_result;persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);return 0U;}
+    memset(&g_project_save,0,sizeof(g_project_save));g_project_save.workspace=workspace;g_project_save.record_scratch=&workspace->record_scratch;g_project_save.slot=slot;
     project_capture_metadata(&g_project_save.metadata);
     g_project_save.metadata.name_length=(uint16_t)strlen(normalized);memcpy(g_project_save.metadata.name,normalized,g_project_save.metadata.name_length);
-    g_project_save.source_pattern_count=pattern_control_bank_count();
+    if(pattern_control_bank_project_snapshot_begin(
+            &g_project_save.pattern_bank_generation,
+            &g_project_save.source_pattern_count)==0U)
+    {
+        g_save_error=PROJECT_PRODUCT_SAVE_ERROR_PATTERN;
+        persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);
+        memset(&g_project_save,0,sizeof(g_project_save));
+        return 0U;
+    }
+    g_project_save.pattern_bank_snapshot_active=1U;
     g_project_save.metadata.pattern_count=g_project_save.source_pattern_count;
     if(pattern_control_bank_present(g_project_save.metadata.active_pattern_bank,
                                     g_project_save.metadata.active_pattern)==0U)
@@ -378,16 +395,15 @@ uint8_t project_product_save_named(uint8_t slot,const char *name)
     g_project_save.metadata.asset_count=project_control_asset_count();
     if(g_project_save.metadata.asset_count>PERSISTENCE_PROJECT_RESTORE_ASSET_CAPACITY
             || !project_control_capture_macros(&workspace->macros))
-    {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SNAPSHOT;(void)pattern_record_lease_release(PATTERN_RECORD_LEASE_PROJECT_SAVE);persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);memset(&g_project_save,0,sizeof(g_project_save));return 0U;}
+    {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SNAPSHOT;project_save_release_snapshot();persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);memset(&g_project_save,0,sizeof(g_project_save));return 0U;}
     for(uint16_t i=0U;i<g_project_save.metadata.asset_count;++i)
         if(!project_control_get_asset_ordinal(i,&workspace->assets[i]))
-        {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SNAPSHOT;(void)pattern_record_lease_release(PATTERN_RECORD_LEASE_PROJECT_SAVE);persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);memset(&g_project_save,0,sizeof(g_project_save));return 0U;}
+        {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SNAPSHOT;project_save_release_snapshot();persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);memset(&g_project_save,0,sizeof(g_project_save));return 0U;}
     if(!path(g_project_save.final_path,sizeof(g_project_save.final_path),slot)
             || !side_path(g_project_save.temporary_path,sizeof(g_project_save.temporary_path),slot,"TMP")
             || !side_path(g_project_save.backup_path,sizeof(g_project_save.backup_path),slot,"BAK"))
-    {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_ARGUMENT;(void)pattern_record_lease_release(PATTERN_RECORD_LEASE_PROJECT_SAVE);persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);memset(&g_project_save,0,sizeof(g_project_save));return 0U;}
+    {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_ARGUMENT;project_save_release_snapshot();persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_SAVE);memset(&g_project_save,0,sizeof(g_project_save));return 0U;}
     g_project_save.media_epoch=sd_access_media_epoch();g_project_save.state=PROJECT_SAVE_MOUNT;
-    persist_debug_owners(pattern_record_lease_owner(),persistence_workspace_owner());
     persist_debug_details(g_project_save.metadata.pattern_count,
         g_project_save.metadata.asset_count,g_project_save.media_epoch,0U);
     g_progress=(project_product_progress_t){1U,0U,0U,1U,PROJECT_PRODUCT_RESULT_IN_PROGRESS};return 1U;
@@ -454,14 +470,14 @@ void project_product_save_service(void)
         case PROJECT_SAVE_NEXT_PATTERN:
             if(g_project_save.active_record_emitted==0U)
             {
-                memset(g_project_save.record_lease,0,
-                       sizeof(*g_project_save.record_lease));
-                g_project_save.record_lease->bank=
+                memset(g_project_save.record_scratch,0,
+                       sizeof(*g_project_save.record_scratch));
+                g_project_save.record_scratch->bank=
                     g_project_save.metadata.active_pattern_bank;
-                g_project_save.record_lease->pattern=
+                g_project_save.record_scratch->pattern=
                     g_project_save.metadata.active_pattern;
-                g_project_save.record_lease->present=1U;
-                g_project_save.record_lease->content=
+                g_project_save.record_scratch->present=1U;
+                g_project_save.record_scratch->content=
                     g_project_save.workspace->working_pattern;
                 g_project_save.active_record_emitted=1U;
                 g_project_save.state=PROJECT_SAVE_ENCODE_PATTERN;
@@ -480,27 +496,27 @@ void project_product_save_service(void)
             g_project_save.state=PROJECT_SAVE_OPEN_PATTERN;return;
         case PROJECT_SAVE_DECODE_PATTERN:
         {
-            if(g_project_save.record_lease==NULL){project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_WORKSPACE_BUSY,0);return;}
+            if(g_project_save.record_scratch==NULL){project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_WORKSPACE_BUSY,0);return;}
             project_memory_io_t memory={(uint8_t*)&g_project_save.workspace->working_pattern,
                 g_project_save.pattern_encoded_size,0U};
             const persist_codec_source_t source={project_memory_read,project_memory_reset,project_memory_size,&memory};
-            memset(g_project_save.record_lease,0,sizeof(*g_project_save.record_lease));
+            memset(g_project_save.record_scratch,0,sizeof(*g_project_save.record_scratch));
             const persist_codec_result_t result=persist_codec_decode_pattern(&source,
-                (persist_codec_pattern_staging_t*)&g_project_save.record_lease->content);
+                (persist_codec_pattern_staging_t*)&g_project_save.record_scratch->content);
             if(result!=PERSIST_CODEC_OK){project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_PATTERN,(int32_t)result);return;}
-            g_project_save.record_lease->bank=g_project_save.expected_bank;
-            g_project_save.record_lease->pattern=g_project_save.expected_pattern;
-            g_project_save.record_lease->present=1U;
+            g_project_save.record_scratch->bank=g_project_save.expected_bank;
+            g_project_save.record_scratch->pattern=g_project_save.expected_pattern;
+            g_project_save.record_scratch->present=1U;
             g_project_save.state=PROJECT_SAVE_ENCODE_PATTERN;return;
         }
         case PROJECT_SAVE_ENCODE_PATTERN:
         {
-            if(g_project_save.record_lease==NULL){project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_WORKSPACE_BUSY,0);return;}
+            if(g_project_save.record_scratch==NULL){project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_WORKSPACE_BUSY,0);return;}
             project_memory_io_t memory={(uint8_t*)&g_project_save.workspace->working_pattern,
                 sizeof(g_project_save.workspace->working_pattern),0U};
             const persist_codec_sink_t sink={project_memory_write,&memory};uint32_t bytes=0U;
             const persist_codec_result_t result=persist_codec_encode_project_pattern_record_payload(
-                g_project_save.record_lease,&sink,&bytes);
+                g_project_save.record_scratch,&sink,&bytes);
             if(result!=PERSIST_CODEC_OK){project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_CODEC,(int32_t)result);return;}
             g_project_save.encoded_data=(const uint8_t*)&g_project_save.workspace->working_pattern;
             g_project_save.encoded_size=bytes;g_project_save.state=PROJECT_SAVE_QUEUE_PATTERN;return;
@@ -616,6 +632,9 @@ void project_product_save_service(void)
             break;
         case PROJECT_SAVE_COMMIT:
             persist_debug_stage(PERSIST_DBG_STAGE_BANK_COMMIT,0);
+            if(pattern_control_bank_project_snapshot_is_current(
+                    g_project_save.pattern_bank_generation)==0U)
+            {project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_PATTERN,-2);break;}
             fr=persistent_fatfs_commit_replace(g_project_save.final_path,g_project_save.temporary_path,g_project_save.backup_path);
             if(fr!=FR_OK)project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_REPLACE,(int32_t)fr);
             else{g_progress.total=g_project_save.file_offset;g_progress.done=g_project_save.file_offset;project_save_finish(1U);}
@@ -687,7 +706,7 @@ static uint8_t project_product_build_default_candidate(
     return 1U;
 }
 
-static void project_product_start_candidate(
+static void project_product_begin_commit(
     persistence_project_restore_workspace_t *restore,
     uint8_t slot,
     uint8_t quiesce_requested)
@@ -698,6 +717,8 @@ static void project_product_start_candidate(
     g_project_load.quiesce_requested=quiesce_requested;
     g_project_load.media_epoch=sd_access_media_epoch();
     g_project_load.state=PROJECT_LOAD_WAIT_SAFE;
+    /* T_commit: P1 is complete.  Quiescing may retire live payloads, so every
+     * transition after this point is forward-only to the validated candidate. */
     if (quiesce_requested != 0U)
         project_load_quiesce_request();
 }
@@ -1100,11 +1121,21 @@ void project_product_load_service(void)
         if(audio_state_snapshot_control_preflight()==0U)return;
         uint8_t ok=audio_state_snapshot_control_begin(
             CONTROL_AUDIO_STATE_PROJECT);
-        if(ok)ok=(persistent_pattern_control_apply(&restore->working_pattern,0U)==PERSIST_CODEC_OK)?1U:0U;
+        if(ok)ok=(persistent_pattern_control_install_into_active_snapshot(
+            &restore->working_pattern,0U)==PERSIST_CODEC_OK)?1U:0U;
         if(ok)ok=project_control_apply_macros(&restore->macros);
-        if(ok)ok=audio_state_snapshot_control_commit();
+        if(ok)
+        {
+            ok=audio_state_snapshot_control_commit();
+            if(ok==0U)audio_state_snapshot_control_abort();
+        }
         else audio_state_snapshot_control_abort();
-        if(ok)pattern_live_set_active_state(restore->metadata.active_pattern_bank,restore->metadata.active_pattern,0U,0U,0U,0U);
+        if(ok)
+        {
+            pattern_live_publish_active(restore->metadata.active_pattern_bank,
+                restore->metadata.active_pattern);
+            persistent_pattern_control_sync_ui_after_commit();
+        }
         if (ok == 0U)
             PROJECT_PRODUCT_FATAL("PROJECT_PATTERN_APPLY_FAILED",
                                   PROJECT_FATAL_PATTERN_APPLY);
@@ -1122,25 +1153,15 @@ uint8_t project_product_load(uint8_t slot)
 
     pattern_live_cancel_recall();
 
-    persist_control_pattern_record_t *const record_lease =
-        pattern_record_lease_acquire(PATTERN_RECORD_LEASE_PROJECT_RESTORE);
-    if (record_lease == NULL)return 0U;
     persistence_project_restore_workspace_t *const restore =
         persistence_workspace_acquire_project_restore();
-    persist_codec_project_workspace_t *const workspace =
-        pattern_record_lease_codec_workspace(
-            PATTERN_RECORD_LEASE_PROJECT_RESTORE);
-    if (restore == NULL || workspace == NULL)
+    if (restore == NULL)
     {
-        if (restore != NULL)
-            persistence_workspace_release(
-                PERSISTENCE_WORKSPACE_PROJECT_RESTORE);
-        (void)pattern_record_lease_release(
-            PATTERN_RECORD_LEASE_PROJECT_RESTORE);
         return 0U;
     }
+    persist_codec_project_workspace_t *const workspace =
+        &restore->codec_scratch;
     memset(restore, 0, sizeof(*restore));
-    memset(workspace, 0, sizeof(*workspace));
     g_progress = (project_product_progress_t){1U, 0U, 0U, 1U,
         PROJECT_PRODUCT_RESULT_IN_PROGRESS};
 
@@ -1184,8 +1205,6 @@ uint8_t project_product_load(uint8_t slot)
             && persistent_fatfs_close_result(&file)!=FR_OK)ok=0U;
     if (gate_acquired != 0U)
         sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
-    (void)pattern_record_lease_release(PATTERN_RECORD_LEASE_PROJECT_RESTORE);
-
     ok = (ok != 0U) && (result == PERSIST_CODEC_OK)
         && (restore->working_valid != 0U) && (restore->macros_valid != 0U)
         && (restore->pattern_bank_staged != 0U)
@@ -1208,7 +1227,7 @@ uint8_t project_product_load(uint8_t slot)
 
     /* P1 ends here: the bounded Project DTO and inactive Pattern bank staging
      * are complete while the live Project remains untouched. */
-    project_product_start_candidate(restore,slot,1U);
+    project_product_begin_commit(restore,slot,1U);
     persist_debug_stage(PERSIST_DBG_STAGE_BANK_STAGE,0);
     return 1U;
 }
@@ -1221,25 +1240,17 @@ uint8_t project_product_blank(void)
     if(project_replacement_is_active()!=0U||project_product_save_busy()!=0U
        ||project_product_load_busy()!=0U||project_load_allowed()==0U)return 0U;
     pattern_live_cancel_recall();
-    persist_control_pattern_record_t *const record_lease =
-        pattern_record_lease_acquire(PATTERN_RECORD_LEASE_PROJECT_RESTORE);
-    if (record_lease == NULL) return 0U;
     persistence_project_restore_workspace_t *const restore=
         persistence_workspace_acquire_project_restore();
-    if(restore==NULL)
-    {
-        (void)pattern_record_lease_release(
-            PATTERN_RECORD_LEASE_PROJECT_RESTORE);
-        return 0U;
-    }
+    if(restore==NULL)return 0U;
+    persist_control_pattern_record_t *const record_scratch=
+        &restore->codec_scratch.unit.pattern_record;
     uint8_t built=0U;
     if(acquire()!=0U)
     {
-        built=project_product_build_default_candidate(restore,record_lease);
+        built=project_product_build_default_candidate(restore,record_scratch);
         sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
     }
-    (void)pattern_record_lease_release(
-        PATTERN_RECORD_LEASE_PROJECT_RESTORE);
     if(built==0U)
     {
         persistence_workspace_release(PERSISTENCE_WORKSPACE_PROJECT_RESTORE);
@@ -1253,7 +1264,7 @@ uint8_t project_product_blank(void)
     }
     g_progress=(project_product_progress_t){1U,0U,0U,1U,
         PROJECT_PRODUCT_RESULT_IN_PROGRESS};
-    project_product_start_candidate(restore,PROJECT_PRODUCT_NO_SLOT,1U);
+    project_product_begin_commit(restore,PROJECT_PRODUCT_NO_SLOT,1U);
     return 1U;
 }
 

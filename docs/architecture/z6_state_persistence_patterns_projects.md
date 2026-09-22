@@ -83,6 +83,15 @@ Les Save utilisent des tranches DATA de 4096 octets et des etapes METADATA
 separees; `.TMP` n'est publie qu'apres header final, sync et close, avec `.BAK`
 recuperable.
 
+La fin de P1 et l'appel de quiescence definissent explicitement `T_commit` pour
+Project Load. Avant `T_commit`, workspace et bank inactif peuvent etre jetes
+sans mutation live. Apres `T_commit`, le remplacement est forward-only: les
+payloads retires ne declenchent pas un rollback tardif. La publication CONTROL
+finale installe Pattern et macros dans un unique snapshot AUDIO de type Project;
+l'identite Pattern courante et le hook UI unique ne sont publies qu'apres le
+commit AUDIO reussi. Le chemin interne d'installation Pattern ne cree donc pas
+de transaction imbriquee et ne publie aucun etat UI intermediaire.
+
 Patch Save et Rename utilisent une seule machine Storage cooperative. Le Save
 capture un DTO immutable avant soumission. Les tweaks UI ordinaires installent
 d'abord leur valeur dans l'owner CONTROL canonique: Tone, FM, Filter, VCA, FX,
@@ -188,19 +197,24 @@ calibration. Aucun de ces stores ne possede de fallback Flash interne.
 
 ## Invariants de recall et de restauration globale
 
-Le record partage suit exclusivement `FREE -> owner -> FREE`; le seul transfert
-autorise sur le chemin Pattern est `PATTERN_LOAD -> PATTERN_QUEUE_READY`. Un STOP
-annule a la fois un load encore demande/en cours et une queue armee: sa completion
-asynchrone peut terminer le nettoyage, mais ne peut plus publier le snapshot. Un
-nouveau recall remplace de meme toute queue ou lecture en vol precedente; une
-lecture physique deja admise ne peut plus publier et libere seulement ses owners.
-Project Load et Project Blank annulent un recall READY/queue avant leur staging.
+Le recall Pattern possede un seul candidat et une seule identite
+`{generation, bank, pattern, boundary}`. Ses phases sont `EMPTY`, `REQUESTED`,
+`LOADING` et `PENDING`; READY et queue ne sont plus deux autorites. Apres decode,
+la validation structurelle utilise les familles, types, inputs et polyphonies du
+candidat complet; un budget de voix invalide est donc refuse avant APPLY. Le
+candidat `PENDING` est ensuite soit applique immediatement, soit arme sur la boundary.
+Son payload reste dans le workspace `PATTERN_IO`, owner unique et scope jusqu'au
+commit ou a l'annulation. Un STOP vide le candidat et libere ce workspace; une
+completion asynchrone d'une generation remplacee termine seulement son cleanup
+et ne peut plus publier. Project Load et Project Blank annulent le candidat
+avant leur staging.
 
 Apres chaque application Pattern reussie, le hook UI de restauration globale
 ferme les gestes/Undo d'edition encore ouverts, normalise la lane active vers une
 entite sequencable dans la nouvelle topologie, invalide les caches derives et
 resynchronise la page courante. Project Load et Project Blank empruntent ce meme
-point d'application; aucune page ne porte une seconde logique de resynchronisation.
+point d'application; l'identite current est publiee avant ce hook et aucune page
+ne porte une seconde logique de resynchronisation.
 
 Project Save materialise toujours le Pattern de travail capture comme record du
 slot actif dans la section bank. Il remplace le record bank plus ancien, ou
@@ -208,9 +222,16 @@ l'ajoute si le slot etait jusque-la absent. Le CORE et le bank ne peuvent donc
 pas diverger sur le Pattern actif et tout Project produit contient le record que
 Project Load exige. Le nombre d'assets admis au Save est borne par la capacite
 Restore effective afin qu'un fichier nouvellement cree reste rechargeable.
+Au debut du Save, un token de generation fige le namespace Pattern bank et son
+nombre de records jusqu'au replace final ou au cleanup. Store, delete et
+staging Project sont refuses pendant cette lecture; le token est reverifie juste
+avant la publication du `.TMP`. Le Save conserve ainsi une vue logique stable
+sans copier les 256 Patterns ni ajouter un second bank RAM.
 
 Le workspace Persistence est une union a ownership exclusif. Pattern IO le garde
-jusqu'au resultat asynchrone; Project Save garde simultanement son membre et la
-lease record jusqu'au commit/cleanup; Project Restore ne libere la lease codec
-qu'apres les deux passes synchrones et conserve ensuite ses DTO finaux dans le
-membre Restore. Aucun pointeur codec ne survit au changement d'owner de l'union.
+jusqu'au commit/annulation du candidat. Project Save porte son record scratch
+dans son propre membre jusqu'au commit/cleanup; Project Restore porte de meme
+son scratch codec et ses DTO finaux dans son membre Restore. L'ancienne zone
+record partagee et sa lease multi-owner n'existent plus. Aucun pointeur scratch
+ne survit au changement d'owner de l'union; cette fusion reduit aussi le pic
+SDRAM de 25 216 octets.

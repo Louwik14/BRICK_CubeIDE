@@ -1,13 +1,13 @@
 # Persistence debug block (temporary)
 
-`g_persist_dbg` is a retained, contiguous 144-byte block (36 little-endian
+`g_persist_dbg` is a retained, contiguous 120-byte block (30 little-endian
 32-bit words) in `.data.persist_debug`. `volatile`, `used`, live instrumentation
 references, and the initialized magic keep it visible in Release/LTO builds.
 
 | Offset | Word | Meaning |
 |---:|---|---|
 | 0x00 | magic | `0x50444247` (`PDBG`) |
-| 0x04 | version | layout version, currently 2 |
+| 0x04 | version | layout version, currently 3 |
 | 0x08 | sequence | incremented for each top-level operation |
 | 0x0c | op | operation enum |
 | 0x10 | stage | most recent stage enum |
@@ -15,40 +15,34 @@ references, and the initialized magic keep it visible in Release/LTO builds.
 | 0x18 | first_error_stage | first failing stage, latched |
 | 0x1c | first_error_code | first error, latched |
 | 0x20..0x24 | bank, slot | Pattern bank/slot or Project slot |
-| 0x28..0x2c | lease_owner, workspace_owner | current owners |
-| 0x30..0x38 | ready, queue, publish | Boolean publication pipeline state |
-| 0x3c | current_pattern | packed `bank << 16 | slot` |
-| 0x40 | prepared_pattern | packed `bank << 16 | slot` |
-| 0x44 | pattern_revision | boundary/generation identity |
-| 0x48..0x50 | active_track, selected_track, ui_revision | UI view |
-| 0x54 | ui_sync | central global-restore UI-sync counter |
-| 0x58 | commit_done | Project Pattern-bank commit boundary crossed |
-| 0x5c..0x68 | detail0..detail3 | stage-specific details |
-| 0x6c | ready_consumer_calls | READY-consumer poll count for this operation |
-| 0x70..0x74 | take_ready_called, take_ready_result | take call count and last Boolean result |
-| 0x78 | transport_running | transport state read by the consumer |
-| 0x7c..0x80 | apply_attempted, apply_result | apply call count and codec result |
-| 0x84..0x88 | queue_attempted, queue_result | queue-arm call count and last Boolean result |
-| 0x8c | decision_reason | last relevant READY-consumer decision |
+| 0x28 | workspace_owner | current exclusive workspace owner |
+| 0x2c..0x30 | candidate_phase, publish | Pattern candidate phase and publication flag |
+| 0x34..0x38 | current_pattern, pending_pattern | packed `bank << 16 | slot` identities |
+| 0x3c..0x40 | request_generation, boundary_generation | candidate identities |
+| 0x44..0x4c | active_track, selected_track, ui_revision | UI view |
+| 0x50 | ui_sync | central global-restore UI-sync counter |
+| 0x54 | commit_done | Project Pattern-bank commit boundary crossed |
+| 0x58..0x64 | detail0..detail3 | stage-specific details |
+| 0x68 | transport_running | transport state read by the consumer |
+| 0x6c..0x70 | apply_attempted, apply_result | apply call count and codec result |
+| 0x74 | decision_reason | last relevant candidate decision |
 
 Operations: 0 NONE, 1 PATTERN_SAVE, 2 PATTERN_LOAD, 3 PATTERN_APPLY,
-4 PATTERN_QUEUE, 5 PROJECT_SAVE, 6 PROJECT_LOAD, 7 PROJECT_BLANK.
+4 PROJECT_SAVE, 5 PROJECT_LOAD, 6 PROJECT_BLANK.
 
-Stages: 0 NONE, 1 ENTER, 2 POLICY, 3 LEASE, 4 WORKSPACE, 5 PATH,
-6 MOUNT, 7 OPEN, 8 SIZE, 9 READ, 10 WRITE, 11 ENCODE, 12 DECODE,
-13 VALIDATE, 14 READY, 15 QUEUE, 16 APPLY, 17 BANK_STAGE,
-18 BANK_COMMIT, 19 PUBLISH, 20 SEQ_SYNC, 21 UI_SYNC, 22 CLOSE,
-23 SUCCESS, 24 FAIL.
+Stages: 0 NONE, 1 ENTER, 2 POLICY, 3 WORKSPACE, 4 PATH, 5 MOUNT,
+6 OPEN, 7 SIZE, 8 READ, 9 WRITE, 10 ENCODE, 11 DECODE, 12 VALIDATE,
+13 CANDIDATE, 14 ASYNC, 15 APPLY, 16 BANK_STAGE, 17 BANK_COMMIT,
+18 PUBLISH, 19 SEQ_SYNC, 20 UI_SYNC, 21 CLOSE, 22 SUCCESS, 23 FAIL.
 
-Errors: 0 NONE, 1 POLICY, 2 LEASE, 3 WORKSPACE, 4 PATH, 5 MOUNT,
-6 FILESYSTEM, 7 CODEC, 8 VALIDATE, 9 BANK, 10 APPLY, 11 MEDIA,
-12 INTERNAL. Codec and product-specific results can also appear directly as a
+Errors: 0 NONE, 1 POLICY, 2 WORKSPACE, 3 PATH, 4 MOUNT, 5 FILESYSTEM,
+6 CODEC, 7 VALIDATE, 8 BANK, 9 APPLY, 10 MEDIA, 11 INTERNAL.
+Codec and product-specific results can also appear directly as a
 signed error code.
 
-READY decisions: 0 NONE, 1 NO_PENDING, 2 LOAD_REQUEST_REFUSED,
-3 NO_READY, 4 STALE_READY, 5 PREFLIGHT_BLOCKED, 6 TAKE_READY_REFUSED,
-7 TRANSPORT_STOPPED_APPLY, 8 APPLY_FAILED, 9 TRANSPORT_RUNNING_QUEUE,
-10 QUEUE_FAILED, 11 QUEUE_ARMED, 12 APPLY_SUCCEEDED, 13 WAIT_BOUNDARY.
+Candidate decisions: 0 NONE, 1 PREFLIGHT_BLOCKED,
+2 TRANSPORT_STOPPED_APPLY, 3 APPLY_FAILED, 4 TRANSPORT_RUNNING_PENDING,
+5 APPLY_SUCCEEDED, 6 WAIT_BOUNDARY.
 
 For Pattern I/O, details are normally `{FatFs result, requested bytes,
 transferred bytes, buffer capacity}`. For Project decode they are `{codec
@@ -62,29 +56,20 @@ The single raw read is:
 ```gdb
 shell cls
 info address g_persist_dbg
-x/36wx &g_persist_dbg
+x/30wx &g_persist_dbg
 ```
 
-## Pattern READY consumer audit
+## Pattern candidate audit
 
-`pattern_load_service()` changes the load state to READY. The only consumers of
-`pattern_load_take_ready()` are `pattern_live_queue_slot()` (immediate recall)
-and `pattern_live_try_take_pending_ready()`, called by `pattern_live_service()`
-once per normal `brick6_app_process()` superloop pass, after the storage
-service. Storage loading itself is skipped while a Multi load is pending, but
-the READY consumer is not.
+Le recall possede un seul candidat avec quatre phases exclusives: `EMPTY`,
+`REQUESTED`, `LOADING` et `PENDING`. La completion Storage ne publie plus un
+etat READY intermediaire: elle verifie la generation de requete, puis applique
+immediatement si le transport est arrete ou arme le meme candidat pour la
+boundary si le transport tourne.
 
-For a stopped transport, the consumer requires
-`audio_state_snapshot_control_preflight()` before taking READY and applying the
-snapshot immediately. A failed preflight intentionally leaves the load READY
-and the pending request alive for a later poll. For a running transport it
-takes READY, transfers the lease to `PATTERN_QUEUE_READY`, and waits for the
-selected track loop boundary before applying. Coordinate mismatch cancels a
-stale READY. A STOP transition cancels both in-flight READY and armed queue.
-
-Consequently, saved and empty slots converge on the same consumer after the
-backend reaches READY. The leading hypothesis for both observed stopped-
-transport cases is repeated `PREFLIGHT_BLOCKED` (snapshot already active or no
-free CONTROL-to-AUDIO publication slot). The alternative signatures are now
-explicit: `NO_PENDING`, `STALE_READY`, `TAKE_READY_REFUSED`, `APPLY_FAILED`, or
-`QUEUE_FAILED`. No APPLY/QUEUE behavior is changed by this instrumentation.
+Un refus de `audio_state_snapshot_control_preflight()` conserve le candidat
+`PENDING` pour un poll ulterieur. Un nouveau recall incremente la generation et
+remplace logiquement le precedent; une ancienne lecture physique peut terminer
+son cleanup mais sa generation ne peut plus publier. STOP vide le candidat en
+une operation. `PREFLIGHT_BLOCKED`, `WAIT_BOUNDARY`, `APPLY_FAILED` et
+`APPLY_SUCCEEDED` restent les signatures de decision utiles.

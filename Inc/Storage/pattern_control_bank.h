@@ -14,6 +14,10 @@ void pattern_control_bank_init(void);
 uint8_t pattern_control_bank_delete(uint8_t bank,uint8_t pattern);
 uint8_t pattern_control_bank_present(uint8_t bank,uint8_t pattern);
 uint16_t pattern_control_bank_count(void);
+uint8_t pattern_control_bank_project_snapshot_begin(uint32_t *out_generation,
+                                                    uint16_t *out_count);
+uint8_t pattern_control_bank_project_snapshot_is_current(uint32_t generation);
+void pattern_control_bank_project_snapshot_end(uint32_t generation);
 uint8_t pattern_control_bank_get_ordinal_project(uint16_t ordinal,persist_control_pattern_record_t*out);
 uint8_t pattern_control_bank_get_ordinal_project_path(uint16_t ordinal,
                                                       char *out_path,
