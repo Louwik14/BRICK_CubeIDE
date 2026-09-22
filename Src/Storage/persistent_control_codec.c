@@ -335,7 +335,15 @@ static void codec_vca(codec_io_t*io,vca_control_state_t*s){codec_float_block(io,
 static void codec_mixer(codec_io_t*io,mixer_control_state_t*s){codec_float_block(io,&s->level,5U);}
 static void codec_polyphony(codec_io_t*io,polyphony_control_state_t*s){codec_u8(io,&s->voice_count);codec_f32(io,&s->spread);}
 static void codec_audio_fx(codec_io_t*io,audio_fx_control_state_t*s){uint8_t pos=(uint8_t)s->config.filter_position,order=(uint8_t)s->config.order;codec_u8(io,&pos);codec_u8(io,&order);if(io->mode==CODEC_READ){s->config.filter_position=(audio_fx_filter_pos_t)pos;s->config.order=(audio_fx_order_t)order;}for(uint8_t i=0U;i<2U;++i){codec_u8(io,&s->config.spatial_mode[i]);codec_u8(io,&s->model[i]);codec_f32(io,&s->p1[i]);codec_f32(io,&s->p2[i]);codec_f32(io,&s->p3[i]);codec_f32(io,&s->group_level[i]);}}
-static void codec_global_audio(codec_io_t*io,param_global_control_state_t*s){codec_float_block(io,&s->send_fx[0],54U);}
+static void codec_global_audio(codec_io_t*io,param_global_control_state_t*s)
+{
+    /* The v4 wire layout retains the three former global DJ EQ floats between
+     * bus_comp and saturation.  They are reserved now that EQ is per-track. */
+    codec_float_block(io,&s->send_fx[0],10U);
+    float reserved_legacy_eq[3U]={0.0f,0.0f,0.0f};
+    codec_float_block(io,reserved_legacy_eq,3U);
+    codec_float_block(io,&s->saturation[0],41U);
+}
 
 static void codec_entity(codec_io_t *io, persist_control_entity_t *e,uint8_t group_active)
 {
