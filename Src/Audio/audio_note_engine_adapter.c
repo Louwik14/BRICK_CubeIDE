@@ -206,6 +206,13 @@ static uint8_t audio_note_engine_adapter_engine_uses_voice_vca(
         || (engine == TRACK_RUNTIME_ENGINE_FM));
 }
 
+static uint8_t audio_note_engine_adapter_engine_reassigns_mono_voice(
+    track_runtime_engine_t engine)
+{
+    return (uint8_t)((engine == TRACK_RUNTIME_ENGINE_TB303)
+        || (engine == TRACK_RUNTIME_ENGINE_ACID));
+}
+
 uint8_t audio_note_engine_adapter_ctx_filter_target(
     const track_audio_runtime_ctx_t *ctx,
     uint8_t *out_track)
@@ -430,6 +437,7 @@ static uint8_t audio_note_engine_adapter_apply_physical(
         return 1U;
 
     uint32_t displaced_output[SYNTH_POLYPHONY_MAX_VOICES] = {0U};
+    uint8_t displaced_was_held[SYNTH_POLYPHONY_MAX_VOICES] = {0U};
     if ((uses_voice_allocator != 0U) && (is_note_on != 0U))
     {
         const uint8_t voice_count = synth_polyphony_get_voice_count(entity_id);
@@ -439,15 +447,24 @@ static uint8_t audio_note_engine_adapter_apply_physical(
             synth_poly_voice_snapshot_t snapshot;
             if (synth_polyphony_get_voice_snapshot(entity_id, i,
                     &snapshot) != 0U)
+            {
                 displaced_output[i] = snapshot.output_id;
+                displaced_was_held[i] = (uint8_t)(
+                    snapshot.state == SYNTH_POLY_VOICE_HELD);
+            }
         }
     }
     const uint8_t voice = (uses_voice_allocator == 0U)
         ? SYNTH_POLYPHONY_NO_VOICE
         : ((is_note_on != 0U)
-            ? synth_polyphony_note_on_output_from(
-                entity_id, note, SYNTH_POLY_SOURCE_MUSICAL_OUTPUT,
-                output_id)
+            ? ((audio_note_engine_adapter_engine_reassigns_mono_voice(engine)
+                    != 0U)
+                ? synth_polyphony_note_on_reassign_mono_output_from(
+                    entity_id, note, SYNTH_POLY_SOURCE_MUSICAL_OUTPUT,
+                    output_id)
+                : synth_polyphony_note_on_output_from(
+                    entity_id, note, SYNTH_POLY_SOURCE_MUSICAL_OUTPUT,
+                    output_id))
             : synth_polyphony_note_off_output_from(
                 entity_id, SYNTH_POLY_SOURCE_MUSICAL_OUTPUT,
                 output_id));
@@ -468,8 +485,20 @@ static uint8_t audio_note_engine_adapter_apply_physical(
             displaced_output[voice], 0U, 0U, 0U);
     }
 
+    const uint8_t mono_reassignment = (uint8_t)((is_note_on != 0U)
+        && (voice < SYNTH_POLYPHONY_MAX_VOICES)
+        && (displaced_was_held[voice] != 0U)
+        && (audio_note_engine_adapter_engine_reassigns_mono_voice(engine)
+            != 0U));
+
     if (is_note_on != 0U)
+    {
+        /* Transfer the track-level note lifetime before retriggering it.  The
+         * renderer gate itself remains high so ACID/TB303 retain slide/legato. */
+        if (mono_reassignment != 0U)
+            mod_lfo_v1_note_release(entity_id);
         mod_lfo_v1_note_trigger(entity_id);
+    }
     else
         mod_lfo_v1_note_release(entity_id);
 
@@ -507,6 +536,8 @@ static uint8_t audio_note_engine_adapter_apply_physical(
             || (g_audio_external_gate_triggered[entity_id] != 0U));
         if (drive_vca != 0U)
         {
+            if (mono_reassignment != 0U)
+                mixer_track_vca_note_off(program->mix_track_id, note);
             if ((is_note_on != 0U) && ((is_external == 0U)
                     || (output_was_active == 0U)))
                 mixer_track_vca_note_on(program->mix_track_id, note, velocity);

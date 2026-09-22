@@ -37,6 +37,11 @@ void synth_polyphony_init(void);
 uint8_t synth_polyphony_note_on_output_from(uint8_t track, uint8_t note,
                                             synth_poly_source_t source,
                                             uint32_t output_id);
+/* Strict-mono ownership transfer.  Unlike the polyphonic allocator, this may
+ * replace the one HELD voice; the previous output identity stops owning it. */
+uint8_t synth_polyphony_note_on_reassign_mono_output_from(
+    uint8_t track, uint8_t note, synth_poly_source_t source,
+    uint32_t output_id);
 uint8_t synth_polyphony_note_off_output_from(uint8_t track,
                                              synth_poly_source_t source,
                                              uint32_t output_id);

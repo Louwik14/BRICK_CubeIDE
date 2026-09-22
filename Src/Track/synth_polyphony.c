@@ -611,6 +611,32 @@ uint8_t synth_polyphony_note_on_output_from(uint8_t track, uint8_t note,
     return selected;
 }
 
+uint8_t synth_polyphony_note_on_reassign_mono_output_from(
+    uint8_t track, uint8_t note, synth_poly_source_t source,
+    uint32_t output_id)
+{
+    if ((synth_poly_valid_track(track) == 0U) || (output_id == 0U))
+        return SYNTH_POLYPHONY_NO_VOICE;
+    synth_poly_track_t *const poly = &g_synth_poly[track];
+    if ((poly->active == 0U) || (poly->voice_count != 1U))
+        return SYNTH_POLYPHONY_NO_VOICE;
+    const uint8_t slot = synth_polyphony_find_slot(track, 0U);
+    if ((slot >= SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
+            || (g_synth_slot_owner[slot] != track))
+        return SYNTH_POLYPHONY_NO_VOICE;
+
+    synth_poly_voice_t *const target = &g_synth_voice[slot];
+    target->note = note;
+    target->state = SYNTH_POLY_VOICE_HELD;
+    target->source = (uint8_t)source;
+    target->output_id = output_id;
+    target->age = ++poly->age_counter;
+    poly->most_recent_voice = 0U;
+    __DMB();
+    poly->renderable_voice_mask |= 1U;
+    return 0U;
+}
+
 uint8_t synth_polyphony_get_most_recent_renderable_voice(uint8_t track)
 {
     if (synth_poly_valid_track(track) == 0U) return SYNTH_POLYPHONY_NO_VOICE;
