@@ -311,38 +311,60 @@ static void codec_tone(codec_io_t *io,tone_program_control_t*t)
 {
     uint8_t tag=(uint8_t)t->tag;codec_u8(io,&tag);if(io->mode==CODEC_READ)t->tag=(track_runtime_type_t)tag;
     switch(t->tag){
-    case TRACK_RUNTIME_TYPE_PRISM:codec_float_block(io,&t->state.prism.osc[0].param1,16U);break;
-    case TRACK_RUNTIME_TYPE_STACK:codec_float_block(io,&t->state.stack.osc[0].level,18U);break;
-    case TRACK_RUNTIME_TYPE_WAVE:codec_float_block(io,&t->state.wave.osc[0].position,10U);break;
-    case TRACK_RUNTIME_TYPE_TB303:codec_float_block(io,&t->state.tb303.wave,9U);break;
-    case TRACK_RUNTIME_TYPE_ACID:codec_float_block(io,&t->state.acid.wave,9U);break;
-    case TRACK_RUNTIME_TYPE_RAM:codec_float_block(io,&t->state.ram.gain,7U);break;
-    case TRACK_RUNTIME_TYPE_STREAM:codec_float_block(io,&t->state.stream.gain,9U);break;
-    case TRACK_RUNTIME_TYPE_LOOPER:codec_float_block(io,&t->state.looper.xfade,4U);break;
-    case TRACK_RUNTIME_TYPE_MULTI:codec_float_block(io,&t->state.multi.gain,2U);break;
-    case TRACK_RUNTIME_TYPE_MIDI:codec_float_block(io,&t->state.midi.program,13U);break;
-    case TRACK_RUNTIME_TYPE_EXTERNAL:codec_float_block(io,&t->state.external.midi.program,14U);break;
+    case TRACK_RUNTIME_TYPE_PRISM:
+        for(uint8_t i=0U;i<2U;++i){codec_f32(io,&t->state.prism.osc[i].param1);codec_f32(io,&t->state.prism.osc[i].param2);codec_f32(io,&t->state.prism.osc[i].amod);codec_f32(io,&t->state.prism.osc[i].model);}
+        codec_f32(io,&t->state.prism.volume);codec_f32(io,&t->state.prism.balance);codec_f32(io,&t->state.prism.tune);codec_f32(io,&t->state.prism.detune);codec_f32(io,&t->state.prism.drift);codec_float_block(io,t->state.prism.pitch_mod,2U);codec_f32(io,&t->state.prism.phase1_reset);break;
+    case TRACK_RUNTIME_TYPE_STACK:
+        for(uint8_t i=0U;i<3U;++i){codec_f32(io,&t->state.stack.osc[i].level);codec_f32(io,&t->state.stack.osc[i].model);codec_f32(io,&t->state.stack.osc[i].tune);codec_f32(io,&t->state.stack.osc[i].timbre);codec_f32(io,&t->state.stack.osc[i].color);}
+        codec_f32(io,&t->state.stack.noise_level);codec_f32(io,&t->state.stack.osc_detune);codec_f32(io,&t->state.stack.phase_reset);break;
+    case TRACK_RUNTIME_TYPE_WAVE:
+        for(uint8_t i=0U;i<2U;++i){codec_f32(io,&t->state.wave.osc[i].position);codec_f32(io,&t->state.wave.osc[i].start);codec_f32(io,&t->state.wave.osc[i].length);}
+        codec_f32(io,&t->state.wave.volume);codec_f32(io,&t->state.wave.balance);codec_f32(io,&t->state.wave.tune);codec_f32(io,&t->state.wave.detune);break;
+    case TRACK_RUNTIME_TYPE_TB303:
+        codec_f32(io,&t->state.tb303.wave);codec_f32(io,&t->state.tb303.tune);codec_f32(io,&t->state.tb303.cut);codec_f32(io,&t->state.tb303.res);codec_f32(io,&t->state.tb303.env_mod);codec_f32(io,&t->state.tb303.decay);codec_f32(io,&t->state.tb303.accent);codec_f32(io,&t->state.tb303.slide);codec_f32(io,&t->state.tb303.vcf_rate);break;
+    case TRACK_RUNTIME_TYPE_ACID:
+        codec_f32(io,&t->state.acid.wave);codec_f32(io,&t->state.acid.tune);codec_f32(io,&t->state.acid.cut);codec_f32(io,&t->state.acid.res);codec_f32(io,&t->state.acid.env_mod);codec_f32(io,&t->state.acid.decay);codec_f32(io,&t->state.acid.accent);codec_f32(io,&t->state.acid.slide);codec_f32(io,&t->state.acid.vcf_rate);break;
+    case TRACK_RUNTIME_TYPE_RAM:
+        codec_f32(io,&t->state.ram.gain);codec_f32(io,&t->state.ram.start);codec_f32(io,&t->state.ram.length);codec_f32(io,&t->state.ram.mode);codec_f32(io,&t->state.ram.tune);codec_f32(io,&t->state.ram.loop_start);codec_f32(io,&t->state.ram.slice_count);break;
+    case TRACK_RUNTIME_TYPE_STREAM:
+        codec_f32(io,&t->state.stream.gain);codec_f32(io,&t->state.stream.source_bpm);codec_f32(io,&t->state.stream.play_mode);codec_f32(io,&t->state.stream.loop);codec_f32(io,&t->state.stream.stretch_mode);codec_f32(io,&t->state.stream.pitch);codec_f32(io,&t->state.stream.sync_length);codec_f32(io,&t->state.stream.grain);codec_f32(io,&t->state.stream.source);codec_f32(io,&t->state.stream.heads);codec_f32(io,&t->state.stream.window);codec_f32(io,&t->state.stream.dispersion);break;
+    case TRACK_RUNTIME_TYPE_LOOPER:
+        codec_f32(io,&t->state.looper.xfade);codec_f32(io,&t->state.looper.stretch);codec_f32(io,&t->state.looper.pitch);codec_f32(io,&t->state.looper.grain);codec_f32(io,&t->state.looper.heads);codec_f32(io,&t->state.looper.window);codec_f32(io,&t->state.looper.dispersion);break;
+    case TRACK_RUNTIME_TYPE_MULTI:codec_f32(io,&t->state.multi.gain);codec_f32(io,&t->state.multi.loop);break;
+    case TRACK_RUNTIME_TYPE_MIDI:
+        codec_f32(io,&t->state.midi.program);for(uint8_t bank=0U;bank<3U;++bank)codec_float_block(io,t->state.midi.cc[bank],4U);break;
+    case TRACK_RUNTIME_TYPE_EXTERNAL:
+        codec_f32(io,&t->state.external.midi.program);for(uint8_t bank=0U;bank<3U;++bank)codec_float_block(io,t->state.external.midi.cc[bank],4U);codec_f32(io,&t->state.external.gate);break;
     case TRACK_RUNTIME_TYPE_RESERVED_LEGACY_DRUM_BD_ANALOG:
         codec_float_block(io,&t->state.reserved_legacy_drum_analog[0],8U);
         if(io->mode==CODEC_READ){memset(&t->state,0,sizeof(t->state));t->tag=TRACK_RUNTIME_TYPE_DRUM_MD;}
         break;
-    case TRACK_RUNTIME_TYPE_DRUM_MD:codec_float_block(io,&t->state.drum_md.model,9U);break;
+    case TRACK_RUNTIME_TYPE_DRUM_MD:codec_f32(io,&t->state.drum_md.model);codec_float_block(io,t->state.drum_md.p,8U);break;
     case TRACK_RUNTIME_TYPE_NONE:case TRACK_RUNTIME_TYPE_FM:case TRACK_RUNTIME_TYPE_GROUP:break;
     default:io->result=PERSIST_CODEC_INVALID_ENTITY;break;}
 }
-static void codec_filter(codec_io_t*io,param_filter_control_state_t*s){codec_float_block(io,&s->morph,16U);}
-static void codec_vca(codec_io_t*io,vca_control_state_t*s){codec_float_block(io,&s->attack,6U);}
-static void codec_mixer(codec_io_t*io,mixer_control_state_t*s){codec_float_block(io,&s->level,5U);}
+static void codec_filter(codec_io_t*io,param_filter_control_state_t*s)
+{codec_f32(io,&s->morph);codec_f32(io,&s->cutoff);codec_f32(io,&s->resonance);codec_f32(io,&s->eg_amount);codec_f32(io,&s->attack);codec_f32(io,&s->decay);codec_f32(io,&s->sustain);codec_f32(io,&s->release);codec_f32(io,&s->keytrack);codec_f32(io,&s->env_reset);codec_f32(io,&s->env_delay);codec_f32(io,&s->reserved_legacy_drive);codec_f32(io,&s->reserved_legacy_decimator_bits);codec_f32(io,&s->reserved_legacy_decimator_rate);codec_f32(io,&s->reserved_legacy_decimator_rate2);codec_f32(io,&s->retrigger);}
+static void codec_vca(codec_io_t*io,vca_control_state_t*s)
+{codec_f32(io,&s->attack);codec_f32(io,&s->decay);codec_f32(io,&s->sustain);codec_f32(io,&s->release);codec_f32(io,&s->filter_mode);codec_f32(io,&s->retrigger);}
+static void codec_mixer(codec_io_t*io,mixer_control_state_t*s)
+{codec_f32(io,&s->level);codec_f32(io,&s->pan);codec_f32(io,&s->send1);codec_f32(io,&s->send2);codec_f32(io,&s->send3);}
 static void codec_polyphony(codec_io_t*io,polyphony_control_state_t*s){codec_u8(io,&s->voice_count);codec_f32(io,&s->spread);}
 static void codec_audio_fx(codec_io_t*io,audio_fx_control_state_t*s){uint8_t pos=(uint8_t)s->config.filter_position,order=(uint8_t)s->config.order;codec_u8(io,&pos);codec_u8(io,&order);if(io->mode==CODEC_READ){s->config.filter_position=(audio_fx_filter_pos_t)pos;s->config.order=(audio_fx_order_t)order;}for(uint8_t i=0U;i<2U;++i){codec_u8(io,&s->config.spatial_mode[i]);codec_u8(io,&s->model[i]);codec_f32(io,&s->p1[i]);codec_f32(io,&s->p2[i]);codec_f32(io,&s->p3[i]);codec_f32(io,&s->group_level[i]);}}
 static void codec_global_audio(codec_io_t*io,param_global_control_state_t*s)
 {
     /* The v4 wire layout retains the three former global DJ EQ floats between
      * bus_comp and saturation.  They are reserved now that EQ is per-track. */
-    codec_float_block(io,&s->send_fx[0],10U);
+    codec_float_block(io,s->send_fx,2U);
+    codec_float_block(io,s->bus_comp,8U);
     float reserved_legacy_eq[3U]={0.0f,0.0f,0.0f};
     codec_float_block(io,reserved_legacy_eq,3U);
-    codec_float_block(io,&s->saturation[0],41U);
+    codec_float_block(io,s->saturation,4U);
+    codec_float_block(io,s->reverb,7U);
+    codec_float_block(io,s->delay,14U);
+    codec_float_block(io,s->mod_fx,9U);
+    codec_float_block(io,s->compressor,4U);
+    codec_float_block(io,s->output,3U);
 }
 
 static void codec_entity(codec_io_t *io, persist_control_entity_t *e,uint8_t group_active)
