@@ -410,6 +410,8 @@ void pattern_control_bank_async_service(void)
 
     if (g_pattern_async.state == PATTERN_ASYNC_DECODE)
     {
+        persist_debug_object(PERSIST_DBG_OBJECT_PATTERN,
+            ((uint32_t)g_pattern_async.bank<<16U)|g_pattern_async.pattern,0U);
         pattern_memory_io_t memory = {
             .data = g_pattern_async.encoded,
             .capacity = g_pattern_async.encoded_size,
@@ -423,6 +425,7 @@ void pattern_control_bank_async_service(void)
         };
         const persist_codec_result_t result = persist_codec_decode_pattern(
             &source, (persist_codec_pattern_staging_t *)g_pattern_async.load_out);
+        persist_debug_filesystem((int32_t)FR_OK,memory.position);
         pattern_async_finish((result == PERSIST_CODEC_OK) ? 1U : 0U);
         return;
     }
@@ -491,6 +494,10 @@ void pattern_control_bank_async_service(void)
             }
             if (fr != FR_OK)
             {
+                persist_debug_object(PERSIST_DBG_OBJECT_FILESYSTEM,
+                    ((uint32_t)g_pattern_async.bank<<16U)|g_pattern_async.pattern,
+                    (uint32_t)g_pattern_async.operation);
+                persist_debug_filesystem((int32_t)fr,g_pattern_async.offset);
                 persist_debug_details((uint32_t)fr,0U,0U,g_pattern_async.encoded_capacity);
                 persist_debug_error(PERSIST_DBG_STAGE_OPEN,PERSIST_DBG_ERROR_FILESYSTEM);
                 pattern_async_fail();
@@ -548,6 +555,10 @@ void pattern_control_bank_async_service(void)
             }
             if ((fr != FR_OK) || (transferred != chunk))
             {
+                persist_debug_object(PERSIST_DBG_OBJECT_FILESYSTEM,
+                    ((uint32_t)g_pattern_async.bank<<16U)|g_pattern_async.pattern,
+                    (uint32_t)g_pattern_async.operation);
+                persist_debug_filesystem((int32_t)fr,g_pattern_async.offset);
                 persist_debug_details((uint32_t)fr,chunk,transferred,g_pattern_async.encoded_capacity);
                 persist_debug_error((g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)
                     ?PERSIST_DBG_STAGE_WRITE:PERSIST_DBG_STAGE_READ,PERSIST_DBG_ERROR_FILESYSTEM);

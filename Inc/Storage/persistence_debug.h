@@ -91,6 +91,56 @@ typedef enum {
     PERSIST_DBG_PROJECT_PHASE_DONE
 } persist_dbg_project_phase_t;
 
+typedef enum {
+    PERSIST_DBG_VALIDATION_NONE = 0,
+    PERSIST_DBG_VALIDATION_ARGUMENT,
+    PERSIST_DBG_VALIDATION_ENTITY_KEY,
+    PERSIST_DBG_VALIDATION_ENTITY_TOPOLOGY,
+    PERSIST_DBG_VALIDATION_ENTITY_TYPE,
+    PERSIST_DBG_VALIDATION_RUNTIME_ENGINE,
+    PERSIST_DBG_VALIDATION_VOICE_BUDGET,
+    PERSIST_DBG_VALIDATION_INPUT_OWNERSHIP,
+    PERSIST_DBG_VALIDATION_TRACK_STRUCTURE,
+    PERSIST_DBG_VALIDATION_PRODUCT_STATE,
+    PERSIST_DBG_VALIDATION_SEQUENCE,
+    PERSIST_DBG_VALIDATION_NOTE_FX,
+    PERSIST_DBG_VALIDATION_MODULATION,
+    PERSIST_DBG_VALIDATION_AUDIO_GLOBAL,
+    PERSIST_DBG_VALIDATION_ASSET_REFERENCE,
+    PERSIST_DBG_VALIDATION_OTHER
+} persist_dbg_validation_step_t;
+
+typedef enum {
+    PERSIST_DBG_OBJECT_NONE = 0,
+    PERSIST_DBG_OBJECT_PATTERN,
+    PERSIST_DBG_OBJECT_ENTITY,
+    PERSIST_DBG_OBJECT_ASSET,
+    PERSIST_DBG_OBJECT_MACROS,
+    PERSIST_DBG_OBJECT_PROJECT,
+    PERSIST_DBG_OBJECT_PATTERN_BANK,
+    PERSIST_DBG_OBJECT_FILESYSTEM,
+    PERSIST_DBG_OBJECT_AUDIO_SNAPSHOT,
+    PERSIST_DBG_OBJECT_UI
+} persist_dbg_object_kind_t;
+
+typedef enum {
+    PERSIST_DBG_CANCEL_NONE = 0,
+    PERSIST_DBG_CANCEL_SUPERSEDED,
+    PERSIST_DBG_CANCEL_TRANSPORT_STOPPED,
+    PERSIST_DBG_CANCEL_EXPLICIT,
+    PERSIST_DBG_CANCEL_IO_FAILED,
+    PERSIST_DBG_CANCEL_VALIDATION_FAILED,
+    PERSIST_DBG_CANCEL_APPLY_FAILED,
+    PERSIST_DBG_CANCEL_PROJECT_REPLACEMENT
+} persist_dbg_cancel_reason_t;
+
+typedef enum {
+    PERSIST_DBG_UI_SYNC_NONE = 0,
+    PERSIST_DBG_UI_SYNC_PATTERN_COMMIT,
+    PERSIST_DBG_UI_SYNC_PROJECT_COMMIT,
+    PERSIST_DBG_UI_SYNC_PROJECT_BLANK
+} persist_dbg_ui_sync_reason_t;
+
 typedef struct {
     volatile uint32_t magic;
     volatile uint32_t version;
@@ -131,10 +181,32 @@ typedef struct {
     volatile uint32_t detail1;
     volatile uint32_t detail2;
     volatile uint32_t detail3;
+    volatile uint32_t validation_step;
+    volatile int32_t validation_result;
+    volatile uint32_t entity_id;
+    volatile uint32_t entity_type;
+    volatile uint32_t current_runtime_type;
+    volatile uint32_t target_runtime_type;
+    volatile uint32_t current_engine;
+    volatile uint32_t target_engine;
+    volatile uint32_t current_voice_count;
+    volatile uint32_t target_voice_count;
+    volatile uint32_t candidate_generation;
+    volatile uint32_t current_generation;
+    volatile uint32_t cancel_reason;
+    volatile uint32_t object_kind;
+    volatile uint32_t object_index;
+    volatile uint32_t object_type;
+    volatile int32_t last_fresult;
+    volatile uint32_t codec_offset;
+    volatile uint32_t audio_publish_result;
+    volatile uint32_t seq_publish_result;
+    volatile uint32_t ui_sync_reason;
+    volatile uint32_t active_track_before;
 } persist_debug_block_t;
 
-_Static_assert(sizeof(persist_debug_block_t) == 156U,
-               "Persistence debug v3 layout changed");
+_Static_assert(sizeof(persist_debug_block_t) == 244U,
+               "Persistence debug v4 layout changed");
 
 extern volatile persist_debug_block_t g_persist_dbg;
 
@@ -153,6 +225,14 @@ void persist_debug_pattern_state(uint32_t candidate_phase,
 void persist_debug_publication(uint8_t audio, uint8_t seq);
 void persist_debug_project(persist_dbg_project_phase_t phase,
                            uint32_t progress, uint32_t detail);
+void persist_debug_validation_fail(persist_dbg_validation_step_t step,
+    int32_t result, uint32_t entity, uint32_t entity_type,
+    uint32_t current_runtime_type, uint32_t target_runtime_type,
+    uint32_t current_engine, uint32_t target_engine,
+    uint32_t current_voice_count, uint32_t target_voice_count);
+void persist_debug_object(persist_dbg_object_kind_t kind, uint32_t index,
+                          uint32_t type);
+void persist_debug_filesystem(int32_t fresult, uint32_t codec_offset);
 void persist_debug_ui_sync(uint32_t active_track, uint32_t selected_track,
                            uint32_t revision);
 

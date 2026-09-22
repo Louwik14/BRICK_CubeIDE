@@ -63,6 +63,8 @@ static void pattern_debug_state(void)
         g_pattern_candidate.boundary_track,
         g_pattern_candidate.boundary_armed,
         g_pattern_candidate.boundary_generation);
+    g_persist_dbg.candidate_generation =
+        g_pattern_candidate.request_generation;
 }
 
 static uint8_t pattern_live_slot_is_valid(uint8_t bank, uint8_t pattern)
@@ -132,6 +134,7 @@ static uint8_t pattern_candidate_apply(uint8_t resume_transport)
     if (result != PERSIST_CODEC_OK)
     {
         g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_APPLY_FAILED;
+        g_persist_dbg.cancel_reason = PERSIST_DBG_CANCEL_APPLY_FAILED;
         persist_debug_error(PERSIST_DBG_STAGE_APPLY,(int32_t)result);
         pattern_candidate_clear();
         pattern_candidate_release_payload();
@@ -152,6 +155,7 @@ static uint8_t pattern_candidate_apply(uint8_t resume_transport)
     pattern_debug_state();
     g_persist_dbg.request_generation = request_generation;
     g_persist_dbg.boundary_generation = boundary_generation;
+    g_persist_dbg.current_generation = request_generation;
     persist_debug_stage(PERSIST_DBG_STAGE_SUCCESS, 0);
     g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_APPLY_SUCCEEDED;
     return 1U;
@@ -166,6 +170,7 @@ static void pattern_candidate_decoded(void)
         persistent_pattern_control_validate(&g_pattern_io_workspace->pattern);
     if (validation != PERSIST_CODEC_OK)
     {
+        g_persist_dbg.cancel_reason = PERSIST_DBG_CANCEL_VALIDATION_FAILED;
         persist_debug_error(PERSIST_DBG_STAGE_VALIDATE,(int32_t)validation);
         pattern_candidate_clear();
         pattern_candidate_release_payload();
@@ -215,6 +220,8 @@ static uint8_t pattern_candidate_request(uint8_t bank, uint8_t pattern,
         && (g_pattern_io_operation == PATTERN_CONTROL_BANK_ASYNC_LOAD));
     if (load_in_flight == 0U) pattern_candidate_release_payload();
 
+    if (g_pattern_candidate.phase != PATTERN_CANDIDATE_EMPTY)
+        g_persist_dbg.cancel_reason = PERSIST_DBG_CANCEL_SUPERSEDED;
     pattern_candidate_clear();
     g_pattern_candidate.phase = PATTERN_CANDIDATE_REQUESTED;
     g_pattern_candidate.request_generation = pattern_candidate_next_generation();
@@ -285,6 +292,7 @@ void pattern_load_service(uint32_t byte_budget)
         }
         if (completed_candidate_failed != 0U)
         {
+            g_persist_dbg.cancel_reason = PERSIST_DBG_CANCEL_IO_FAILED;
             pattern_candidate_clear();
             persist_debug_error(PERSIST_DBG_STAGE_READ,
                                 PERSIST_DBG_ERROR_FILESYSTEM);
@@ -354,12 +362,16 @@ uint8_t pattern_load_is_pending(void)
 
 void pattern_live_on_transport_stopped(void)
 {
-    pattern_live_cancel_recall();
+    (void)pattern_candidate_next_generation();
+    g_persist_dbg.cancel_reason = PERSIST_DBG_CANCEL_TRANSPORT_STOPPED;
+    pattern_candidate_clear();
+    pattern_candidate_release_payload();
 }
 
 void pattern_live_cancel_recall(void)
 {
     (void)pattern_candidate_next_generation();
+    g_persist_dbg.cancel_reason = PERSIST_DBG_CANCEL_EXPLICIT;
     pattern_candidate_clear();
     pattern_candidate_release_payload();
 }

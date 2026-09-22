@@ -676,14 +676,14 @@ int32_t project_product_save_last_detail(void){return g_save_detail;}
 
 static uint8_t begin_assets(void*ctx){persistence_project_restore_workspace_t*w=ctx;if(w==NULL)return 0U;w->asset_count=0U;memset(w->assets,0,sizeof(w->assets));return 1U;}
 static persist_control_asset_ref_t *asset_target(void*ctx,uint16_t ordinal){persistence_project_restore_workspace_t*w=ctx;if(w==NULL||ordinal>=PERSISTENCE_PROJECT_RESTORE_ASSET_CAPACITY)return NULL;return &w->assets[ordinal];}
-static uint8_t validate_asset(void*ctx,const persist_control_asset_ref_t*a){(void)ctx;return project_control_validate_asset(a);}
+static uint8_t validate_asset(void*ctx,const persist_control_asset_ref_t*a){persistence_project_restore_workspace_t*w=ctx;uint32_t index=(w!=NULL&&a>=w->assets&&a<&w->assets[PERSISTENCE_PROJECT_RESTORE_ASSET_CAPACITY])?(uint32_t)(a-w->assets):UINT32_MAX;persist_debug_object(PERSIST_DBG_OBJECT_ASSET,index,(a!=NULL)?a->kind:0U);const uint8_t ok=project_control_validate_asset(a);if(ok==0U)persist_debug_validation_fail(PERSIST_DBG_VALIDATION_ASSET_REFERENCE,PERSIST_DBG_ERROR_VALIDATE,UINT32_MAX,0U,0U,0U,0U,0U,0U,0U);return ok;}
 static uint8_t apply_working(void*ctx,const persist_codec_project_metadata_t*m,const persist_control_pattern_t*p){persistence_project_restore_workspace_t*w=ctx;if(w==NULL||m==NULL||p==NULL||m->asset_count>PERSISTENCE_PROJECT_RESTORE_ASSET_CAPACITY)return 0U;if(m->name_length!=0U){char source[NAME_CONTRACT_BUFFER_BYTES]={0},normalized[NAME_CONTRACT_BUFFER_BYTES];if(m->name_length>PERSIST_CODEC_PROJECT_NAME_BYTES)return 0U;memcpy(source,m->name,m->name_length);if(!project_name_normalize(source,normalized)||strlen(normalized)!=m->name_length||memcmp(source,normalized,m->name_length)!=0)return 0U;}w->metadata=*m;w->asset_count=m->asset_count;w->working_pattern=*p;w->working_valid=1U;return 1U;}
-static uint8_t apply_macros(void*ctx,const persist_control_macros_t*m){persistence_project_restore_workspace_t*w=ctx;if(w==NULL||m==NULL)return 0U;w->macros=*m;w->macros_valid=1U;return 1U;}
+static uint8_t apply_macros(void*ctx,const persist_control_macros_t*m){persist_debug_object(PERSIST_DBG_OBJECT_MACROS,0U,0U);persistence_project_restore_workspace_t*w=ctx;if(w==NULL||m==NULL)return 0U;w->macros=*m;w->macros_valid=1U;return 1U;}
 static uint8_t begin_patterns(void*ctx){persistence_project_restore_workspace_t*w=ctx;if(w==NULL)return 0U;w->pattern_bank_started=0U;w->pattern_bank_staged=0U;if(pattern_control_bank_begin_project()==0U)return 0U;w->pattern_bank_started=1U;return 1U;}
 static uint8_t project_product_pattern_assets_resolved(
     const persistence_project_restore_workspace_t *restore,
     const persist_control_pattern_t *pattern);
-static uint8_t put_pattern(void*ctx,const persist_control_pattern_record_t*r){persistence_project_restore_workspace_t*w=ctx;if(w==NULL||r==NULL||pattern_control_bank_staging_present(r->bank,r->pattern)!=0U||persistent_pattern_control_validate(&r->content)!=PERSIST_CODEC_OK||project_product_pattern_assets_resolved(w,&r->content)==0U)return 0U;if((r->bank==w->metadata.active_pattern_bank)&&(r->pattern==w->metadata.active_pattern))w->active_pattern_seen=1U;return (pattern_control_bank_put_record_project(r)!=0U)?1U:0U;}
+static uint8_t put_pattern(void*ctx,const persist_control_pattern_record_t*r){persistence_project_restore_workspace_t*w=ctx;persist_debug_object(PERSIST_DBG_OBJECT_PATTERN_BANK,(r!=NULL)?(((uint32_t)r->bank<<16U)|r->pattern):UINT32_MAX,0U);if(w==NULL||r==NULL||pattern_control_bank_staging_present(r->bank,r->pattern)!=0U||persistent_pattern_control_validate(&r->content)!=PERSIST_CODEC_OK||project_product_pattern_assets_resolved(w,&r->content)==0U)return 0U;if((r->bank==w->metadata.active_pattern_bank)&&(r->pattern==w->metadata.active_pattern))w->active_pattern_seen=1U;return (pattern_control_bank_put_record_project(r)!=0U)?1U:0U;}
 static uint8_t stage_patterns(void*ctx){persistence_project_restore_workspace_t*w=ctx;if(w==NULL)return 0U;w->pattern_bank_staged=1U;return 1U;}
 
 static uint8_t project_product_build_default_candidate(
@@ -1106,6 +1106,9 @@ void project_product_load_service(void)
                               g_progress.asset_warning_count,g_persist_dbg.commit_done);
         if(g_project_load.asset_index<restore->asset_count)
         {
+            persist_debug_object(PERSIST_DBG_OBJECT_ASSET,
+                g_project_load.asset_index,
+                restore->assets[g_project_load.asset_index].kind);
             const project_control_asset_result_t result = project_control_put_asset(
                 &restore->assets[g_project_load.asset_index]);
             if(result==PROJECT_CONTROL_ASSET_PENDING)
@@ -1141,6 +1144,8 @@ void project_product_load_service(void)
             PROJECT_PRODUCT_FATAL("PROJECT_ASSET_PENDING_AT_COMMIT",
                                   PROJECT_FATAL_PENDING_AT_COMMIT);
         }
+        g_persist_dbg.audio_publish_result=1U;
+        g_persist_dbg.seq_publish_result=1U;
         if(audio_state_snapshot_control_preflight()==0U)return;
         uint8_t ok=audio_state_snapshot_control_begin(
             CONTROL_AUDIO_STATE_PROJECT);
@@ -1155,6 +1160,8 @@ void project_product_load_service(void)
         else audio_state_snapshot_control_abort();
         if(ok)
         {
+            g_persist_dbg.audio_publish_result=2U;
+            g_persist_dbg.seq_publish_result=2U;
             persist_debug_publication(1U,1U);
             pattern_live_publish_active(restore->metadata.active_pattern_bank,
                 restore->metadata.active_pattern);
@@ -1178,6 +1185,7 @@ uint8_t project_product_load(uint8_t slot)
     {persist_debug_error(PERSIST_DBG_STAGE_POLICY,PERSIST_DBG_ERROR_POLICY);return 0U;}
 
     pattern_live_cancel_recall();
+    g_persist_dbg.cancel_reason=PERSIST_DBG_CANCEL_PROJECT_REPLACEMENT;
 
     persistence_project_restore_workspace_t *const restore =
         persistence_workspace_acquire_project_restore();
@@ -1213,6 +1221,7 @@ uint8_t project_product_load(uint8_t slot)
     persist_codec_result_t result = PERSIST_CODEC_IO_ERROR;
     if (ok != 0U)
     {
+        persist_debug_object(PERSIST_DBG_OBJECT_PROJECT,slot,0U);
         persist_debug_stage(PERSIST_DBG_STAGE_DECODE,0);
         persist_codec_project_consumer_t project = {
             .begin_assets=begin_assets,
@@ -1226,6 +1235,8 @@ uint8_t project_product_load(uint8_t slot)
             begin_patterns, put_pattern, stage_patterns, pattern_control_bank_abort, restore};
         result = persist_codec_decode_project_progressive(&source, workspace,
                                                           &project, &patterns);
+        persist_debug_filesystem((int32_t)file.last_result,
+                                 (uint32_t)f_tell(&file.file));
     }
     persist_debug_details((uint32_t)result,(ok!=0U)?file.size:0U,
                           restore->asset_count,restore->metadata.pattern_count);
@@ -1271,6 +1282,7 @@ uint8_t project_product_blank(void)
        ||project_product_load_busy()!=0U||project_load_allowed()==0U)
     {persist_debug_error(PERSIST_DBG_STAGE_POLICY,PERSIST_DBG_ERROR_POLICY);return 0U;}
     pattern_live_cancel_recall();
+    g_persist_dbg.cancel_reason=PERSIST_DBG_CANCEL_PROJECT_REPLACEMENT;
     persistence_project_restore_workspace_t *const restore=
         persistence_workspace_acquire_project_restore();
     if(restore==NULL){persist_debug_error(PERSIST_DBG_STAGE_WORKSPACE,PERSIST_DBG_ERROR_WORKSPACE);return 0U;}

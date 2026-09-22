@@ -32,6 +32,13 @@ void ui_active_track_sync_after_track_creation_from_off(uint8_t sync_active_trac
 
 void ui_active_track_sync_full_after_global_restore(void)
 {
+    g_persist_dbg.active_track_before = ui_get_active_track();
+    g_persist_dbg.ui_sync_reason =
+        (g_persist_dbg.op == PERSIST_DBG_OP_PATTERN_LOAD)
+            ? PERSIST_DBG_UI_SYNC_PATTERN_COMMIT
+            : ((g_persist_dbg.op == PERSIST_DBG_OP_PROJECT_BLANK)
+                ? PERSIST_DBG_UI_SYNC_PROJECT_BLANK
+                : PERSIST_DBG_UI_SYNC_PROJECT_COMMIT);
     seq_edit_reset_after_global_restore();
     ui_normalize_active_track_after_global_restore();
     ui_active_track_sync_after_track_structure_change(1U);

@@ -22,6 +22,7 @@
 #include "Track/audio_fx_control_state.h"
 #include "Track/fm_control_state.h"
 #include "Track/polyphony_control.h"
+#include "Track/synth_polyphony.h"
 #include "NoteFx/note_fx_state.h"
 #include "Seq/seq_engine.h"
 #include "Param/param_filter.h"
@@ -41,6 +42,8 @@
 #include "Track/track_catalog.h"
 #include "Storage/undo_v2.h"
 #include "Storage/project_control.h"
+#include "Storage/persistence_debug.h"
+#include "Platform/brick_build_config.h"
 #include "UI/ui_active_track_sync.h"
 #include <math.h>
 #include <string.h>
@@ -359,12 +362,123 @@ persist_codec_result_t persistent_pattern_control_capture(persist_control_patter
 
 persist_codec_result_t persistent_pattern_control_validate(const persist_control_pattern_t*p)
 {
-    persist_codec_result_t r=persist_codec_validate_pattern(p);if(r!=PERSIST_CODEC_OK)return r;
+    persist_debug_object(PERSIST_DBG_OBJECT_PATTERN,0U,0U);
+    persist_codec_result_t r=persist_codec_validate_pattern(p);
+    if(r!=PERSIST_CODEC_OK)
+    {
+        persist_debug_validation_fail(PERSIST_DBG_VALIDATION_OTHER,(int32_t)r,
+            UINT32_MAX,0U,0U,0U,0U,0U,0U,0U);
+        return r;
+    }
     const uint8_t active=(p->entities[PERSIST_CONTROL_GROUP_MASTER_ID].type==PERSIST_TYPE_GROUP)?1U:0U;
     track_config_t cfg[BRICK_ENTITY_CAPACITY];uint8_t inputs[TRACK_COUNT];uint8_t families[BRICK_ENTITY_CAPACITY];uint8_t types[BRICK_ENTITY_CAPACITY];uint8_t voice_counts[BRICK_ENTITY_CAPACITY];
-    for(uint8_t e=0U;e<PERSIST_CONTROL_ENTITY_COUNT;++e){if(persist_key_family_from_disk(p->entities[e].family,&cfg[e].family)==0U||persist_key_type_from_disk(p->entities[e].type,&cfg[e].type)==0U)return PERSIST_CODEC_INVALID_ENTITY;families[e]=(uint8_t)cfg[e].family;types[e]=(uint8_t)cfg[e].type;voice_counts[e]=p->entities[e].polyphony.voice_count;if(e<TRACK_COUNT&&persist_key_input_from_disk(p->entities[e].input_key,&inputs[e])==0U)return PERSIST_CODEC_INVALID_ENTITY;}
-    for(uint8_t e=0U;e<PERSIST_CONTROL_ENTITY_COUNT;++e){persist_entity_caps_t caps;if(persist_entity_caps_resolve(active,e,&caps)==0U)return PERSIST_CODEC_INVALID_ENTITY;if((caps.role==PERSIST_ENTITY_ROLE_GROUP_CHILD)&&((cfg[e].family!=TRACK_FAMILY_SAMPLER)||(cfg[e].type!=TRACK_TYPE_RAM)))return PERSIST_CODEC_INVALID_ENTITY;if(cfg[e].family==TRACK_FAMILY_OFF){if(cfg[e].type!=TRACK_TYPE_NONE)return PERSIST_CODEC_INVALID_ENTITY;}else if(track_catalog_type_is_valid_for_family(cfg[e].family,cfg[e].type)==false)return PERSIST_CODEC_INVALID_ENTITY;if(caps.active==0U&&cfg[e].family!=TRACK_FAMILY_OFF&&track_catalog_family_is_engine(cfg[e].family)==false)return PERSIST_CODEC_INVALID_ENTITY;if(caps.active!=0U&&cfg[e].family!=TRACK_FAMILY_OFF&&track_catalog_type_is_available(e,cfg[e].family,cfg[e].type,cfg)==false)return PERSIST_CODEC_INVALID_ENTITY;}
-    return(track_structure_validate_entity_bulk_with_polyphony(families,types,inputs,voice_counts))?PERSIST_CODEC_OK:PERSIST_CODEC_INVALID_ENTITY;
+    for(uint8_t e=0U;e<PERSIST_CONTROL_ENTITY_COUNT;++e)
+    {
+        if(persist_key_family_from_disk(p->entities[e].family,&cfg[e].family)==0U
+                ||persist_key_type_from_disk(p->entities[e].type,&cfg[e].type)==0U)
+        {
+            persist_debug_validation_fail(PERSIST_DBG_VALIDATION_ENTITY_KEY,
+                PERSIST_CODEC_INVALID_ENTITY,e,p->entities[e].type,0U,0U,0U,0U,
+                polyphony_control_get_voice_count(e),p->entities[e].polyphony.voice_count);
+            return PERSIST_CODEC_INVALID_ENTITY;
+        }
+        families[e]=(uint8_t)cfg[e].family;types[e]=(uint8_t)cfg[e].type;
+        voice_counts[e]=p->entities[e].polyphony.voice_count;
+        if(e<TRACK_COUNT&&persist_key_input_from_disk(p->entities[e].input_key,&inputs[e])==0U)
+        {
+            persist_debug_validation_fail(PERSIST_DBG_VALIDATION_INPUT_OWNERSHIP,
+                PERSIST_CODEC_INVALID_ENTITY,e,(uint32_t)cfg[e].type,0U,0U,0U,0U,
+                polyphony_control_get_voice_count(e),voice_counts[e]);
+            return PERSIST_CODEC_INVALID_ENTITY;
+        }
+    }
+    for(uint8_t e=0U;e<PERSIST_CONTROL_ENTITY_COUNT;++e)
+    {
+        persist_entity_caps_t caps;
+        const uint8_t topology_ok=persist_entity_caps_resolve(active,e,&caps);
+        const uint8_t type_ok=(uint8_t)(
+            (topology_ok!=0U)
+            && !((caps.role==PERSIST_ENTITY_ROLE_GROUP_CHILD)
+                &&((cfg[e].family!=TRACK_FAMILY_SAMPLER)||(cfg[e].type!=TRACK_TYPE_RAM)))
+            && !((cfg[e].family==TRACK_FAMILY_OFF)&&(cfg[e].type!=TRACK_TYPE_NONE))
+            && !((cfg[e].family!=TRACK_FAMILY_OFF)
+                &&(track_catalog_type_is_valid_for_family(cfg[e].family,cfg[e].type)==false))
+            && !((caps.active==0U)&&(cfg[e].family!=TRACK_FAMILY_OFF)
+                &&(track_catalog_family_is_engine(cfg[e].family)==false))
+            && !((caps.active!=0U)&&(cfg[e].family!=TRACK_FAMILY_OFF)
+                &&(track_catalog_type_is_available(e,cfg[e].family,cfg[e].type,cfg)==false)));
+        if(type_ok==0U)
+        {
+            persist_debug_validation_fail((topology_ok==0U)
+                    ?PERSIST_DBG_VALIDATION_ENTITY_TOPOLOGY
+                    :PERSIST_DBG_VALIDATION_ENTITY_TYPE,
+                PERSIST_CODEC_INVALID_ENTITY,e,(uint32_t)cfg[e].type,0U,0U,0U,0U,
+                polyphony_control_get_voice_count(e),voice_counts[e]);
+            return PERSIST_CODEC_INVALID_ENTITY;
+        }
+    }
+    if(track_structure_validate_entity_bulk_with_polyphony(
+            families,types,inputs,voice_counts)==0U)
+    {
+        uint16_t synth_voices=0U;
+        uint8_t loopers=0U;
+        uint8_t diagnosed=0U;
+        for(uint8_t e=0U;e<PERSIST_CONTROL_ENTITY_COUNT;++e)
+        {
+            entity_topology_descriptor_t topology;
+            if(entity_topology_resolve(active,e,&topology)==0U
+                    ||topology.active==0U)continue;
+            const track_runtime_family_t target_family=
+                track_runtime_family_from_ui(cfg[e].family);
+            const track_runtime_type_t target_runtime=
+                track_runtime_type_from_ui(cfg[e].type);
+            const track_runtime_engine_t target_engine=
+                track_runtime_choose_engine(target_family,target_runtime);
+            const track_runtime_type_t current_runtime=
+                track_runtime_type_from_ui(track_state_get_type(e));
+            const track_runtime_engine_t current_engine=
+                track_runtime_choose_engine(
+                    track_runtime_family_from_ui(track_state_get_family(e)),
+                    current_runtime);
+            if(target_engine==TRACK_RUNTIME_ENGINE_LOOPER)++loopers;
+            if(target_family==TRACK_RUNTIME_FAMILY_SYNTH
+                    ||target_engine==TRACK_RUNTIME_ENGINE_DRUM)
+                synth_voices=(uint16_t)(synth_voices
+                    +track_runtime_effective_voice_count(target_family,
+                        target_runtime,voice_counts[e]));
+            if((target_family!=TRACK_RUNTIME_FAMILY_OFF)
+                    &&(target_family!=TRACK_RUNTIME_FAMILY_MIDI)
+                    &&(target_runtime!=TRACK_RUNTIME_TYPE_GROUP)
+                    &&(target_engine==TRACK_RUNTIME_ENGINE_NONE))
+            {
+                persist_debug_validation_fail(
+                    PERSIST_DBG_VALIDATION_RUNTIME_ENGINE,
+                    PERSIST_CODEC_INVALID_ENTITY,e,(uint32_t)cfg[e].type,
+                    (uint32_t)current_runtime,(uint32_t)target_runtime,
+                    (uint32_t)current_engine,(uint32_t)target_engine,
+                    polyphony_control_get_voice_count(e),voice_counts[e]);
+                diagnosed=1U;break;
+            }
+            if(loopers>BRICK6_LOOPER_GLOBAL_CAP
+                    ||synth_voices>SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
+            {
+                persist_debug_validation_fail(PERSIST_DBG_VALIDATION_VOICE_BUDGET,
+                    PERSIST_CODEC_INVALID_ENTITY,e,(uint32_t)cfg[e].type,
+                    (uint32_t)current_runtime,(uint32_t)target_runtime,
+                    (uint32_t)current_engine,(uint32_t)target_engine,
+                    polyphony_control_get_voice_count(e),voice_counts[e]);
+                diagnosed=1U;break;
+            }
+        }
+        if(diagnosed==0U&&track_input_ownership_validate_bulk(cfg,inputs)==0U)
+            persist_debug_validation_fail(PERSIST_DBG_VALIDATION_INPUT_OWNERSHIP,
+                PERSIST_CODEC_INVALID_ENTITY,UINT32_MAX,0U,0U,0U,0U,0U,0U,0U);
+        else if(diagnosed==0U)
+            persist_debug_validation_fail(PERSIST_DBG_VALIDATION_TRACK_STRUCTURE,
+                PERSIST_CODEC_INVALID_ENTITY,UINT32_MAX,0U,0U,0U,0U,0U,0U,0U);
+        return PERSIST_CODEC_INVALID_ENTITY;
+    }
+    return PERSIST_CODEC_OK;
 }
 
 static uint8_t apply_plock_value(param_id_t id,
@@ -523,6 +637,29 @@ static uint8_t apply_product_state(uint8_t entity,const persist_control_entity_t
 }
 static uint8_t apply_mod(uint8_t owner,uint8_t active,const persist_control_modulation_t*m){mod_lfo_control_bank_t lfos;for(uint8_t i=0U;i<3U;++i){mod_lfo_shape_t shape;mod_lfo_trig_mode_t trig;if(persist_key_lfo_shape_from_disk(m->lfos[i].shape_key,&shape)==0U||persist_key_lfo_trigger_from_disk(m->lfos[i].trigger_key,&trig)==0U)return 0U;lfos.lfo[i]=(mod_lfo_control_value_t){m->lfos[i].rate,(float)shape,(float)trig,m->lfos[i].phase_offset};}if(mod_lfo_v1_restore_track(owner,&lfos)==0U)return 0U;for(uint8_t i=0U;i<2U;++i){uint8_t a,b,s;if(persist_key_mod_source_from_disk(m->multi[i].source_a_key,&a)==0U||persist_key_mod_source_from_disk(m->multi[i].source_b_key,&b)==0U||persist_key_mod_source_from_disk(m->slew[i].source_key,&s)==0U||mod_matrix_set_multi_source(owner,i,0U,(float)a)==0U||mod_matrix_set_multi_source(owner,i,1U,(float)b)==0U||mod_matrix_set_slew_source(owner,i,(float)s)==0U||mod_matrix_set_slew_amount(owner,i,m->slew[i].amount)==0U)return 0U;}const mod_env3_control_state_t env={m->envelope.attack,m->envelope.decay,m->envelope.sustain,m->envelope.release,(float)m->envelope.retrigger_hard};if(mod_env3_control_restore(owner,&env)==0U)return 0U;for(uint8_t i=0U;i<8U;++i){const persist_control_mod_route_t*r=&m->routes[i];mod_destination_address_t address=MOD_DESTINATION_NONE;uint8_t source;if(persist_key_mod_source_from_disk(r->source_key,&source)==0U)return 0U;if(r->destination_parameter!=PERSIST_CONTROL_KEY_NONE){uint8_t entity;param_id_t param;if(persist_key_mod_destination_from_disk(r->destination_entity,r->destination_parameter,active,&entity,&param)==0U)return 0U;address=mod_destination_address_make(entity,param);}if(mod_matrix_set_slot_state(owner,i,source,address,r->depth,r->enabled)==0U)return 0U;}return 1U;}
 
+static void persist_debug_entity_failure(persist_dbg_validation_step_t step,
+    persist_codec_result_t result, uint8_t entity,
+    const persist_control_entity_t *saved)
+{
+    track_family_t target_family=TRACK_FAMILY_OFF;
+    track_type_t target_type=TRACK_TYPE_NONE;
+    (void)persist_key_family_from_disk(saved->family,&target_family);
+    (void)persist_key_type_from_disk(saved->type,&target_type);
+    const track_runtime_type_t current_runtime=
+        track_runtime_type_from_ui(track_state_get_type(entity));
+    const track_runtime_type_t target_runtime=
+        track_runtime_type_from_ui(target_type);
+    persist_debug_object(PERSIST_DBG_OBJECT_ENTITY,entity,(uint32_t)target_type);
+    persist_debug_validation_fail(step,(int32_t)result,entity,
+        (uint32_t)target_type,(uint32_t)current_runtime,(uint32_t)target_runtime,
+        (uint32_t)track_runtime_choose_engine(
+            track_runtime_family_from_ui(track_state_get_family(entity)),
+            current_runtime),
+        (uint32_t)track_runtime_choose_engine(
+            track_runtime_family_from_ui(target_family),target_runtime),
+        polyphony_control_get_voice_count(entity),saved->polyphony.voice_count);
+}
+
 static persist_codec_result_t persistent_pattern_control_install_internal(
     const persist_control_pattern_t *pattern,
     uint8_t resume_transport)
@@ -592,23 +729,43 @@ static persist_codec_result_t persistent_pattern_control_install_internal(
         persist_entity_caps_t caps;
         if (persist_entity_caps_resolve(group_active, entity, &caps) == 0U)
         {
+            persist_debug_entity_failure(PERSIST_DBG_VALIDATION_ENTITY_TOPOLOGY,
+                PERSIST_CODEC_INVALID_ENTITY,entity,saved);
             return PERSIST_CODEC_INVALID_ENTITY;
         }
         if ((apply_product_state(entity, saved) == 0U)
                 || (apply_entity_owners(entity, saved) == 0U))
         {
+            persist_debug_entity_failure(PERSIST_DBG_VALIDATION_PRODUCT_STATE,
+                PERSIST_CODEC_UNKNOWN_KEY,entity,saved);
             return PERSIST_CODEC_UNKNOWN_KEY;
         }
         if ((caps.sequence_owner != 0U)
                 && (apply_sequence(entity, saved) == 0U))
+        {
+            persist_debug_entity_failure(PERSIST_DBG_VALIDATION_SEQUENCE,
+                PERSIST_CODEC_INVALID_ENTITY,entity,saved);
             return PERSIST_CODEC_INVALID_ENTITY;
+        }
         if (apply_note_fx(entity, group_active, saved) == 0U)
+        {
+            persist_debug_entity_failure(PERSIST_DBG_VALIDATION_NOTE_FX,
+                PERSIST_CODEC_INVALID_ENTITY,entity,saved);
             return PERSIST_CODEC_INVALID_ENTITY;
+        }
         if (track_mute_set(entity, saved->muted) == 0U)
+        {
+            persist_debug_entity_failure(PERSIST_DBG_VALIDATION_OTHER,
+                PERSIST_CODEC_INVALID_ENTITY,entity,saved);
             return PERSIST_CODEC_INVALID_ENTITY;
+        }
     }
     if (param_global_control_restore(&pattern->globals.audio) == 0U)
+    {
+        persist_debug_validation_fail(PERSIST_DBG_VALIDATION_AUDIO_GLOBAL,
+            PERSIST_CODEC_INVALID_ENTITY,UINT32_MAX,0U,0U,0U,0U,0U,0U,0U);
         return PERSIST_CODEC_INVALID_ENTITY;
+    }
 
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
     {
@@ -619,7 +776,12 @@ static persist_codec_result_t persistent_pattern_control_install_internal(
         if ((pattern->entities[entity].modulation_present != 0U)
                 && (apply_mod(entity, group_active,
                               &pattern->entities[entity].modulation) == 0U))
+        {
+            persist_debug_entity_failure(PERSIST_DBG_VALIDATION_MODULATION,
+                PERSIST_CODEC_INVALID_MODULATION,entity,
+                &pattern->entities[entity]);
             return PERSIST_CODEC_INVALID_MODULATION;
+        }
     }
 
     uint8_t routes[BRICK_ENTITY_CAPACITY][BRICK_ENTITY_CAPACITY] = {0};
@@ -666,6 +828,8 @@ static persist_codec_result_t persistent_pattern_control_install_internal(
 persist_codec_result_t persistent_pattern_control_apply(
     const persist_control_pattern_t *pattern, uint8_t resume_transport)
 {
+    g_persist_dbg.audio_publish_result = 1U;
+    g_persist_dbg.seq_publish_result = 1U;
     if ((audio_state_snapshot_control_active() == 0U)
             && (audio_state_snapshot_control_preflight() == 0U))
         return PERSIST_CODEC_IO_ERROR;
@@ -684,6 +848,8 @@ persist_codec_result_t persistent_pattern_control_apply(
         audio_state_snapshot_control_abort();
         return PERSIST_CODEC_IO_ERROR;
     }
+    g_persist_dbg.audio_publish_result = 2U;
+    g_persist_dbg.seq_publish_result = 2U;
     return PERSIST_CODEC_OK;
 }
 
