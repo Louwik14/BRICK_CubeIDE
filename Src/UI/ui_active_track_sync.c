@@ -3,6 +3,7 @@
 #include "ui_core.h"
 #include "ui_edit_context_sync.h"
 #include "Seq/seq_edit.h"
+#include "Storage/persistence_debug.h"
 
 void ui_active_track_sync_full_after_reconfigure(void)
 {
@@ -34,4 +35,6 @@ void ui_active_track_sync_full_after_global_restore(void)
     seq_edit_reset_after_global_restore();
     ui_normalize_active_track_after_global_restore();
     ui_active_track_sync_after_track_structure_change(1U);
+    persist_debug_ui_sync(ui_get_active_track(),ui_get_active_track(),
+                          g_persist_dbg.sequence);
 }

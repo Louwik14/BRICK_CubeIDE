@@ -3,6 +3,7 @@
 #include "SD/sd_scheduler_runtime.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/project_load_quiesce.h"
+#include "Storage/persistence_debug.h"
 #include "ff.h"
 #include <stdio.h>
 #include <string.h>
@@ -446,6 +447,7 @@ void pattern_control_bank_async_service(void)
     switch (g_pattern_async.state)
     {
         case PATTERN_ASYNC_MOUNT:
+            persist_debug_stage(PERSIST_DBG_STAGE_MOUNT, 0);
             if (sd_access_fs_mount_if_needed() == 0U)
             {
                 pattern_async_fail();
@@ -467,6 +469,7 @@ void pattern_control_bank_async_service(void)
             break;
 
         case PATTERN_ASYNC_OPEN:
+            persist_debug_stage(PERSIST_DBG_STAGE_OPEN, 0);
             if (g_pattern_async.operation == PATTERN_CONTROL_BANK_ASYNC_SAVE)
             {
                 fr = persistent_fatfs_open_write_result(
@@ -479,6 +482,8 @@ void pattern_control_bank_async_service(void)
             }
             if (fr != FR_OK)
             {
+                persist_debug_details((uint32_t)fr,0U,0U,g_pattern_async.encoded_capacity);
+                persist_debug_error(PERSIST_DBG_STAGE_OPEN,PERSIST_DBG_ERROR_FILESYSTEM);
                 pattern_async_fail();
                 break;
             }
@@ -518,6 +523,8 @@ void pattern_control_bank_async_service(void)
             break;
 
         case PATTERN_ASYNC_TRANSFER:
+            persist_debug_stage((g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)
+                ?PERSIST_DBG_STAGE_WRITE:PERSIST_DBG_STAGE_READ,0);
             if (g_pattern_async.operation == PATTERN_CONTROL_BANK_ASYNC_SAVE)
             {
                 fr = f_write(&g_pattern_async.file.file,
@@ -532,6 +539,9 @@ void pattern_control_bank_async_service(void)
             }
             if ((fr != FR_OK) || (transferred != chunk))
             {
+                persist_debug_details((uint32_t)fr,chunk,transferred,g_pattern_async.encoded_capacity);
+                persist_debug_error((g_pattern_async.operation==PATTERN_CONTROL_BANK_ASYNC_SAVE)
+                    ?PERSIST_DBG_STAGE_WRITE:PERSIST_DBG_STAGE_READ,PERSIST_DBG_ERROR_FILESYSTEM);
                 pattern_async_fail();
                 break;
             }
@@ -545,6 +555,7 @@ void pattern_control_bank_async_service(void)
             break;
 
         case PATTERN_ASYNC_SYNC:
+            persist_debug_stage(PERSIST_DBG_STAGE_WRITE,0);
             fr=f_sync(&g_pattern_async.file.file);
             if (fr == FR_OK)
                 g_pattern_async.state = PATTERN_ASYNC_CLOSE;
@@ -552,6 +563,7 @@ void pattern_control_bank_async_service(void)
             break;
 
         case PATTERN_ASYNC_CLOSE:
+            persist_debug_stage(PERSIST_DBG_STAGE_CLOSE,0);
             fr = persistent_fatfs_close_result(&g_pattern_async.file);
             g_pattern_async.file_open = 0U;
             if (fr != FR_OK)
@@ -569,6 +581,7 @@ void pattern_control_bank_async_service(void)
             break;
 
         case PATTERN_ASYNC_COMMIT:
+            persist_debug_stage(PERSIST_DBG_STAGE_BANK_COMMIT,0);
             fr = persistent_fatfs_commit_replace(g_pattern_async.final_path,
                                                   g_pattern_async.temporary_path,
                                                   g_pattern_async.backup_path);
@@ -576,6 +589,7 @@ void pattern_control_bank_async_service(void)
             {
                 g_present[g_pattern_async.bank][g_pattern_async.pattern] = 1U;
                 pattern_async_finish(1U);
+                persist_debug_stage(PERSIST_DBG_STAGE_SUCCESS,0);
             }
             else
             {

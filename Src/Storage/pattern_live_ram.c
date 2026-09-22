@@ -15,6 +15,7 @@
 #include "Storage/persistence_workspace.h"
 #include "Storage/persistent_pattern_control.h"
 #include "Storage/project_load_quiesce.h"
+#include "Storage/persistence_debug.h"
 
 #define PATTERN_BANK_COUNT 16U
 #define PATTERN_PER_BANK   16U
@@ -91,6 +92,7 @@ persist_control_pattern_record_t *pattern_record_lease_acquire(
         || g_next_record_owner != PATTERN_RECORD_LEASE_FREE)
         return NULL;
     g_next_record_owner = owner;
+    persist_debug_owners(owner, persistence_workspace_owner());
     return &g_next_record;
 }
 
@@ -103,6 +105,7 @@ uint8_t pattern_record_lease_transfer(pattern_record_lease_owner_t current_owner
         || g_next_record_owner != current_owner)
         return 0U;
     g_next_record_owner = next_owner;
+    persist_debug_owners(next_owner, persistence_workspace_owner());
     return 1U;
 }
 
@@ -112,6 +115,7 @@ uint8_t pattern_record_lease_release(pattern_record_lease_owner_t owner)
         || g_next_record_owner != owner)
         return 0U;
     g_next_record_owner = PATTERN_RECORD_LEASE_FREE;
+    persist_debug_owners(PATTERN_RECORD_LEASE_FREE, persistence_workspace_owner());
     return 1U;
 }
 
@@ -203,6 +207,8 @@ uint8_t pattern_live_build_default(persist_control_pattern_t *out,
 
 uint8_t pattern_load_request(uint8_t bank, uint8_t pattern)
 {
+    persist_debug_begin(PERSIST_DBG_OP_PATTERN_LOAD, bank, pattern);
+    persist_debug_stage(PERSIST_DBG_STAGE_POLICY, 0);
     if (project_replacement_is_active() != 0U) return 0U;
     if(sd_preview_is_active() != 0U)
     {
@@ -217,6 +223,7 @@ uint8_t pattern_load_request(uint8_t bank, uint8_t pattern)
                 PATTERN_RECORD_LEASE_PATTERN_LOAD);
         g_pattern_load_state = PATTERN_LOAD_ERROR;
         g_pattern_load_last_error = PATTERN_LOAD_ERR_INVALID_SLOT;
+        persist_debug_error(PERSIST_DBG_STAGE_POLICY, PERSIST_DBG_ERROR_POLICY);
         return 0U;
     }
 
@@ -271,6 +278,10 @@ uint8_t pattern_load_request(uint8_t bank, uint8_t pattern)
             return 0U;
         }
         g_pattern_load_state = PATTERN_LOAD_READY;
+        persist_debug_pattern_state(1U, g_queued_valid, 0U,
+            ((uint32_t)g_active_bank<<16U)|g_active_pattern,
+            ((uint32_t)bank<<16U)|pattern, g_queued_boundary_generation);
+        persist_debug_stage(PERSIST_DBG_STAGE_READY, 0);
         return 1U;
     }
 
@@ -301,6 +312,7 @@ void pattern_load_service(uint32_t byte_budget)
         {
             if (completed_success != 0U)
             {
+                persist_debug_stage(PERSIST_DBG_STAGE_SUCCESS,0);
                 g_pattern_slot_meta[completed_bank][completed_pattern].has_snapshot = 1U;
                 if ((completed_bank == g_queued_bank)
                     && (completed_pattern == g_queued_pattern)
@@ -311,6 +323,8 @@ void pattern_load_service(uint32_t byte_budget)
                     g_next_pattern = g_pattern_io_workspace->pattern;
                 }
             }
+            else persist_debug_error(PERSIST_DBG_STAGE_WRITE,
+                                     PERSIST_DBG_ERROR_FILESYSTEM);
         }
         else if ((completed_operation == PATTERN_CONTROL_BANK_ASYNC_LOAD)
                  && (g_pattern_io_workspace != 0)
@@ -323,11 +337,13 @@ void pattern_load_service(uint32_t byte_budget)
             {
                 g_pattern_load_state = PATTERN_LOAD_READY;
                 g_pattern_load_last_error = 0U;
+                persist_debug_stage(PERSIST_DBG_STAGE_READY, 0);
             }
             else if (g_pattern_load_state == PATTERN_LOAD_LOADING)
             {
                 g_pattern_load_state = PATTERN_LOAD_ERROR;
                 g_pattern_load_last_error = PATTERN_LOAD_ERR_SD_LOAD;
+                persist_debug_error(PERSIST_DBG_STAGE_READ, PERSIST_DBG_ERROR_FILESYSTEM);
             }
         }
         if (g_pattern_io_workspace != 0)
@@ -504,6 +520,7 @@ void pattern_live_cancel_recall(void)
 
 uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
 {
+    persist_debug_begin(PERSIST_DBG_OP_PATTERN_SAVE, bank, pattern);
     if (pattern_live_slot_is_valid(bank, pattern) == 0U)
     {
         return 0U;
@@ -546,11 +563,14 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
         return 0U;
     }
     g_pattern_io_operation = PATTERN_CONTROL_BANK_ASYNC_SAVE;
+    persist_debug_stage(PERSIST_DBG_STAGE_QUEUE, 0); /* async job accepted */
     return 1U;
 }
 
 uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern, uint8_t boundary_track)
 {
+    persist_debug_begin(PERSIST_DBG_OP_PATTERN_QUEUE, bank, pattern);
+    g_persist_dbg.active_track = boundary_track;
     if (pattern_live_slot_is_valid(bank, pattern) == 0U)
     {
         return 0U;
@@ -626,6 +646,9 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern, uint8_t boundary_
         g_queued_boundary_track = 0U;
         g_queued_boundary_generation = 0U;
         undo_v2_clear_all();
+        persist_debug_pattern_state(0U,0U,1U,
+            ((uint32_t)bank<<16U)|pattern,0U,boundary_generation);
+        persist_debug_stage(PERSIST_DBG_STAGE_SUCCESS,0);
         return 1U;
     }
 
@@ -758,6 +781,8 @@ void pattern_live_service(void)
 
     if (persistent_pattern_control_apply(&g_next_pattern, 1U) == PERSIST_CODEC_OK)
     {
+        persist_debug_begin(PERSIST_DBG_OP_PATTERN_APPLY,g_queued_bank,g_queued_pattern);
+        persist_debug_stage(PERSIST_DBG_STAGE_APPLY,0);
         g_active_bank = g_queued_bank;
         g_active_pattern = g_queued_pattern;
         g_queued_valid = 0U;
@@ -772,6 +797,9 @@ void pattern_live_service(void)
         undo_v2_clear_all();
         (void)pattern_record_lease_release(
             PATTERN_RECORD_LEASE_PATTERN_QUEUE_READY);
+        persist_debug_pattern_state(0U,0U,1U,
+            ((uint32_t)g_active_bank<<16U)|g_active_pattern,0U,current_generation);
+        persist_debug_stage(PERSIST_DBG_STAGE_SUCCESS,0);
     }
 }
 
