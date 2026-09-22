@@ -231,7 +231,10 @@ void brick6_acid_runtime_note_on(uint8_t id,uint8_t note,uint8_t velocity)
     (void)velocity;if(id>=BRICK6_ACID_INSTANCE_COUNT)return;
     acid_voice_t *v=&g_acid[id];
     const uint8_t legato=(uint8_t)(v->slide&&(v->gate||v->pending_release));
-    if(!legato){v->vcf_state=1U;v->vca_state=1U;v->slide_timer=255U;v->vcf_env=0.0f;v->vca_env=0.0f;v->slide_cap=(float)((int)note-12)*64.0f;}
+    /* Digix0x retriggers by changing the envelope states; the capacitor
+     * values themselves are continuous.  In particular, the first plain
+     * note after a slide chain attacks from the values reached by the chain. */
+    if(!legato){v->vcf_state=1U;v->vca_state=1U;v->slide_timer=255U;v->slide_cap=(float)((int)note-12)*64.0f;}
     else v->slide_timer=0U;
     v->current_note_value=(float)((int)note-12)*64.0f;
     v->note=note;v->accent=v->accent_knob;v->gate=1U;v->active=1U;v->pending_release=0U;
