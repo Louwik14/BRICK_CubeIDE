@@ -49,6 +49,22 @@ static uint32_t g_pattern_io_request_generation;
 static persistence_pattern_io_workspace_t *g_pattern_io_workspace;
 static pattern_control_bank_async_operation_t g_pattern_io_operation;
 
+static void pattern_debug_state(void)
+{
+    const uint32_t candidate =
+        (g_pattern_candidate.phase == PATTERN_CANDIDATE_EMPTY) ? 0U
+        : ((uint32_t)g_pattern_candidate.bank << 16U)
+            | g_pattern_candidate.pattern;
+    persist_debug_pattern_state((uint32_t)g_pattern_candidate.phase,
+        ((uint32_t)g_active_bank << 16U) | g_active_pattern,
+        candidate, g_pattern_candidate.request_generation,
+        (g_pattern_io_operation == PATTERN_CONTROL_BANK_ASYNC_LOAD)
+            ? g_pattern_io_request_generation : 0U,
+        g_pattern_candidate.boundary_track,
+        g_pattern_candidate.boundary_armed,
+        g_pattern_candidate.boundary_generation);
+}
+
 static uint8_t pattern_live_slot_is_valid(uint8_t bank, uint8_t pattern)
 {
     return (bank < PATTERN_BANK_COUNT) && (pattern < PATTERN_PER_BANK);
@@ -87,9 +103,7 @@ static uint32_t pattern_candidate_next_generation(void)
 static void pattern_candidate_clear(void)
 {
     memset(&g_pattern_candidate, 0, sizeof(g_pattern_candidate));
-    g_persist_dbg.candidate_phase = PATTERN_CANDIDATE_EMPTY;
-    g_persist_dbg.pending_pattern = 0U;
-    g_persist_dbg.boundary_generation = 0U;
+    pattern_debug_state();
 }
 
 static void pattern_candidate_release_payload(void)
@@ -118,6 +132,7 @@ static uint8_t pattern_candidate_apply(uint8_t resume_transport)
     if (result != PERSIST_CODEC_OK)
     {
         g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_APPLY_FAILED;
+        persist_debug_error(PERSIST_DBG_STAGE_APPLY,(int32_t)result);
         pattern_candidate_clear();
         pattern_candidate_release_payload();
         return 0U;
@@ -132,10 +147,11 @@ static uint8_t pattern_candidate_apply(uint8_t resume_transport)
     pattern_candidate_clear();
     undo_v2_clear_all();
     pattern_candidate_release_payload();
+    persist_debug_publication(1U, 1U);
     persistent_pattern_control_sync_ui_after_commit();
-    persist_debug_pattern_state(PATTERN_CANDIDATE_EMPTY, 1U,
-        ((uint32_t)g_active_bank << 16U) | g_active_pattern,
-        0U, request_generation, boundary_generation);
+    pattern_debug_state();
+    g_persist_dbg.request_generation = request_generation;
+    g_persist_dbg.boundary_generation = boundary_generation;
     persist_debug_stage(PERSIST_DBG_STAGE_SUCCESS, 0);
     g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_APPLY_SUCCEEDED;
     return 1U;
@@ -167,21 +183,12 @@ static void pattern_candidate_decoded(void)
         persist_debug_stage(PERSIST_DBG_STAGE_CANDIDATE, 0);
         g_persist_dbg.decision_reason =
             PERSIST_DBG_DECISION_TRANSPORT_RUNNING_PENDING;
-        persist_debug_pattern_state(PATTERN_CANDIDATE_PENDING,0U,
-            ((uint32_t)g_active_bank<<16U)|g_active_pattern,
-            ((uint32_t)g_pattern_candidate.bank<<16U)
-                |g_pattern_candidate.pattern,
-            g_pattern_candidate.request_generation,
-            g_pattern_candidate.boundary_generation);
+        pattern_debug_state();
         return;
     }
 
     persist_debug_stage(PERSIST_DBG_STAGE_CANDIDATE, 0);
-    persist_debug_pattern_state(PATTERN_CANDIDATE_PENDING,0U,
-        ((uint32_t)g_active_bank<<16U)|g_active_pattern,
-        ((uint32_t)g_pattern_candidate.bank<<16U)
-            |g_pattern_candidate.pattern,
-        g_pattern_candidate.request_generation,0U);
+    pattern_debug_state();
     g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_TRANSPORT_STOPPED_APPLY;
     if (audio_state_snapshot_control_preflight() != 0U)
         (void)pattern_candidate_apply(0U);
@@ -214,10 +221,7 @@ static uint8_t pattern_candidate_request(uint8_t bank, uint8_t pattern,
     g_pattern_candidate.bank = bank;
     g_pattern_candidate.pattern = pattern;
     g_pattern_candidate.boundary_track = boundary_track;
-    persist_debug_pattern_state(PATTERN_CANDIDATE_REQUESTED,0U,
-        ((uint32_t)g_active_bank<<16U)|g_active_pattern,
-        ((uint32_t)bank<<16U)|pattern,
-        g_pattern_candidate.request_generation,0U);
+    pattern_debug_state();
     return 1U;
 }
 
@@ -338,6 +342,7 @@ void pattern_load_service(uint32_t byte_budget)
     g_pattern_io_operation = PATTERN_CONTROL_BANK_ASYNC_LOAD;
     g_pattern_io_request_generation = g_pattern_candidate.request_generation;
     g_pattern_candidate.phase = PATTERN_CANDIDATE_LOADING;
+    pattern_debug_state();
 }
 
 uint8_t pattern_load_is_pending(void)
@@ -410,7 +415,6 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
 
 uint8_t pattern_live_request_slot(uint8_t bank, uint8_t pattern, uint8_t boundary_track)
 {
-    g_persist_dbg.active_track = boundary_track;
     const uint8_t accepted = pattern_candidate_request(
         bank, pattern, boundary_track);
     if (accepted != 0U) pattern_load_service(1U);
@@ -432,6 +436,7 @@ void pattern_live_service(void)
             (void)seq_runtime_get_track_loop_generation(
                 g_pattern_candidate.boundary_track,
                 &g_pattern_candidate.boundary_generation);
+            pattern_debug_state();
             return;
         }
         if (audio_state_snapshot_control_preflight() == 0U)
@@ -451,6 +456,7 @@ void pattern_live_service(void)
     uint32_t current_generation = 0U;
     if (seq_runtime_get_track_loop_generation(
             g_pattern_candidate.boundary_track, &current_generation) == 0U) return;
+    g_persist_dbg.boundary_observed_generation = current_generation;
 
     uint8_t boundary_due = 0U;
     uint64_t boundary_sample = 0U;
@@ -463,6 +469,7 @@ void pattern_live_service(void)
         boundary_due = (uint8_t)(boundary_sample
             <= control_music_output_first_unpublished_sample(now_sample));
     }
+    g_persist_dbg.boundary_due = boundary_due;
     if ((current_generation == g_pattern_candidate.boundary_generation)
             && (boundary_due == 0U))
     {
@@ -490,6 +497,7 @@ void pattern_live_init(void)
     g_pattern_io_operation = PATTERN_CONTROL_BANK_ASYNC_NONE;
 
     pattern_control_bank_init();
+    pattern_debug_state();
 }
 
 uint8_t pattern_live_get_active(uint8_t *out_bank, uint8_t *out_pattern)
@@ -528,4 +536,5 @@ void pattern_live_publish_active(uint8_t active_bank, uint8_t active_pattern)
     }
 
     pattern_live_cancel_recall();
+    pattern_debug_state();
 }
