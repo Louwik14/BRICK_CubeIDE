@@ -286,6 +286,19 @@ void brick6_acid_runtime_set_cut(uint8_t id,float x){if(id<BRICK6_ACID_INSTANCE_
 void brick6_acid_runtime_set_res(uint8_t id,float x){if(id<BRICK6_ACID_INSTANCE_COUNT){g_acid[id].res=acid_clamp(x,0.0f,1.0f);acid_update_res(&g_acid[id]);}}
 void brick6_acid_runtime_set_env_mod(uint8_t id,float x){if(id<BRICK6_ACID_INSTANCE_COUNT)g_acid[id].env_mod=acid_clamp(x,0.0f,1.0f);}
 void brick6_acid_runtime_set_decay(uint8_t id,float x){if(id<BRICK6_ACID_INSTANCE_COUNT){acid_voice_t*v=&g_acid[id];v->decay=acid_clamp(x,0.0f,1.0f);v->vcf_decay_coeff=acid_decay_coeff(v->accent>0.0f?0.9972f:acid_decay[(unsigned)(v->decay*1023.0f)]);}}
-void brick6_acid_runtime_set_accent(uint8_t id,float x){if(id<BRICK6_ACID_INSTANCE_COUNT)g_acid[id].accent_knob=acid_clamp(x,0.0f,1.0f);}
+void brick6_acid_runtime_set_accent(uint8_t id,float x)
+{
+    if(id<BRICK6_ACID_INSTANCE_COUNT){
+        acid_voice_t*v=&g_acid[id];
+        const float accent=acid_clamp(x,0.0f,1.0f);
+        /* accent_knob is the next-note control, while accent is the DSP latch
+         * consumed by the running envelopes.  A p-lock restore must update
+         * both; otherwise CONTROL is back at base while AUDIO keeps the
+         * preceding step's latched accent until another note/control action. */
+        v->accent_knob=accent;v->accent=accent;
+        v->vcf_decay_coeff=acid_decay_coeff(accent>0.0f?0.9972f
+            :acid_decay[(unsigned)(v->decay*1023.0f)]);
+    }
+}
 void brick6_acid_runtime_set_slide(uint8_t id,uint8_t x){if(id<BRICK6_ACID_INSTANCE_COUNT)g_acid[id].slide=x!=0U;}
 void brick6_acid_runtime_set_vcf_rate(uint8_t id,uint8_t x){(void)id;(void)x;}
