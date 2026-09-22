@@ -58,6 +58,23 @@ typedef enum {
     PERSIST_DBG_ERROR_INTERNAL = 12
 } persist_dbg_error_t;
 
+typedef enum {
+    PERSIST_DBG_DECISION_NONE = 0,
+    PERSIST_DBG_DECISION_NO_PENDING,
+    PERSIST_DBG_DECISION_LOAD_REQUEST_REFUSED,
+    PERSIST_DBG_DECISION_NO_READY,
+    PERSIST_DBG_DECISION_STALE_READY,
+    PERSIST_DBG_DECISION_PREFLIGHT_BLOCKED,
+    PERSIST_DBG_DECISION_TAKE_READY_REFUSED,
+    PERSIST_DBG_DECISION_TRANSPORT_STOPPED_APPLY,
+    PERSIST_DBG_DECISION_APPLY_FAILED,
+    PERSIST_DBG_DECISION_TRANSPORT_RUNNING_QUEUE,
+    PERSIST_DBG_DECISION_QUEUE_FAILED,
+    PERSIST_DBG_DECISION_QUEUE_ARMED,
+    PERSIST_DBG_DECISION_APPLY_SUCCEEDED,
+    PERSIST_DBG_DECISION_WAIT_BOUNDARY
+} persist_dbg_decision_reason_t;
+
 typedef struct {
     volatile uint32_t magic;
     volatile uint32_t version;
@@ -86,6 +103,15 @@ typedef struct {
     volatile uint32_t detail1;
     volatile uint32_t detail2;
     volatile uint32_t detail3;
+    volatile uint32_t ready_consumer_calls;
+    volatile uint32_t take_ready_called;
+    volatile uint32_t take_ready_result;
+    volatile uint32_t transport_running;
+    volatile uint32_t apply_attempted;
+    volatile uint32_t apply_result;
+    volatile uint32_t queue_attempted;
+    volatile uint32_t queue_result;
+    volatile uint32_t decision_reason;
 } persist_debug_block_t;
 
 extern volatile persist_debug_block_t g_persist_dbg;

@@ -10,7 +10,7 @@
 
 PERSIST_DEBUG_ATTR volatile persist_debug_block_t g_persist_dbg = {
     .magic = PERSIST_DEBUG_MAGIC,
-    .version = 1U
+    .version = 2U
 };
 
 void persist_debug_begin(persist_dbg_op_t op, uint32_t bank, uint32_t slot)
@@ -31,6 +31,15 @@ void persist_debug_begin(persist_dbg_op_t op, uint32_t bank, uint32_t slot)
     g_persist_dbg.detail1 = 0U;
     g_persist_dbg.detail2 = 0U;
     g_persist_dbg.detail3 = 0U;
+    g_persist_dbg.ready_consumer_calls = 0U;
+    g_persist_dbg.take_ready_called = 0U;
+    g_persist_dbg.take_ready_result = 0U;
+    g_persist_dbg.transport_running = 0U;
+    g_persist_dbg.apply_attempted = 0U;
+    g_persist_dbg.apply_result = 0U;
+    g_persist_dbg.queue_attempted = 0U;
+    g_persist_dbg.queue_result = 0U;
+    g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_NONE;
     g_persist_dbg.sequence = next;
 }
 

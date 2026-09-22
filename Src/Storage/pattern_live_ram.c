@@ -450,9 +450,12 @@ uint8_t pattern_load_is_ready(uint8_t *out_bank, uint8_t *out_pattern)
 
 uint8_t pattern_load_take_ready(uint8_t *out_bank, uint8_t *out_pattern, persist_control_pattern_t *out_snapshot)
 {
+    ++g_persist_dbg.take_ready_called;
     if ((out_snapshot == 0) || (g_pattern_load_state != PATTERN_LOAD_READY)
         || (g_next_record_owner != PATTERN_RECORD_LEASE_PATTERN_LOAD))
     {
+        g_persist_dbg.take_ready_result = 0U;
+        g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_TAKE_READY_REFUSED;
         return 0U;
     }
 
@@ -472,6 +475,7 @@ uint8_t pattern_load_take_ready(uint8_t *out_bank, uint8_t *out_pattern, persist
     }
     g_pattern_load_state = PATTERN_LOAD_IDLE;
     g_pattern_load_last_error = 0U;
+    g_persist_dbg.take_ready_result = 1U;
     return 1U;
 }
 
@@ -603,7 +607,8 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern, uint8_t boundary_
         return 0U;
     }
 
-    if (seq_runtime_is_running() == 0U)
+    g_persist_dbg.transport_running = seq_runtime_is_running();
+    if (g_persist_dbg.transport_running == 0U)
     {
         uint8_t ready_bank = 0U;
         uint8_t ready_pattern = 0U;
@@ -611,6 +616,7 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern, uint8_t boundary_
                 && (ready_bank == bank) && (ready_pattern == pattern)
                 && (audio_state_snapshot_control_preflight() == 0U))
         {
+            g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_PREFLIGHT_BLOCKED;
             g_pending_queue_valid = 1U;
             g_pending_queue_bank = bank;
             g_pending_queue_pattern = pattern;
@@ -623,6 +629,8 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern, uint8_t boundary_
             || (ready_pattern != pattern)
             || (pattern_load_take_ready(&ready_bank, &ready_pattern, &g_next_pattern) == 0U))
         {
+            if (g_persist_dbg.take_ready_called == 0U)
+                g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_NO_READY;
             g_pending_queue_valid = 1U;
             g_pending_queue_bank = bank;
             g_pending_queue_pattern = pattern;
@@ -631,8 +639,15 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern, uint8_t boundary_
             return 1U;
         }
 
-        if (persistent_pattern_control_apply(&g_next_pattern, 0U) != PERSIST_CODEC_OK)
+        g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_TRANSPORT_STOPPED_APPLY;
+        persist_debug_stage(PERSIST_DBG_STAGE_APPLY,0);
+        ++g_persist_dbg.apply_attempted;
+        const persist_codec_result_t apply_result =
+            persistent_pattern_control_apply(&g_next_pattern, 0U);
+        g_persist_dbg.apply_result = (uint32_t)apply_result;
+        if (apply_result != PERSIST_CODEC_OK)
         {
+            g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_APPLY_FAILED;
             (void)pattern_record_lease_release(
                 PATTERN_RECORD_LEASE_PATTERN_LOAD);
             g_pending_queue_valid = 0U;
@@ -649,6 +664,7 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern, uint8_t boundary_
         persist_debug_pattern_state(0U,0U,1U,
             ((uint32_t)bank<<16U)|pattern,0U,boundary_generation);
         persist_debug_stage(PERSIST_DBG_STAGE_SUCCESS,0);
+        g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_APPLY_SUCCEEDED;
         return 1U;
     }
 
@@ -657,6 +673,7 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern, uint8_t boundary_
     g_pending_queue_pattern = pattern;
     g_pending_boundary_track = boundary_track;
     g_pending_boundary_generation = boundary_generation;
+    g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_TRANSPORT_RUNNING_QUEUE;
 
     uint8_t ready_bank = 0U;
     uint8_t ready_pattern = 0U;
@@ -665,19 +682,33 @@ uint8_t pattern_live_queue_slot(uint8_t bank, uint8_t pattern, uint8_t boundary_
         && (ready_pattern == pattern)
         && (pattern_load_take_ready(&ready_bank, &ready_pattern, &g_next_pattern) != 0U))
     {
+        persist_debug_stage(PERSIST_DBG_STAGE_QUEUE,0);
+        ++g_persist_dbg.queue_attempted;
         if (pattern_live_arm_ready_queue(bank,
                 pattern,&g_next_pattern,boundary_track,
                 boundary_generation) == 0U)
+        {
+            g_persist_dbg.queue_result = 0U;
+            g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_QUEUE_FAILED;
             (void)pattern_record_lease_release(
                 PATTERN_RECORD_LEASE_PATTERN_LOAD);
+        }
+        else
+        {
+            g_persist_dbg.queue_result = 1U;
+            g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_QUEUE_ARMED;
+        }
     }
     return 1U;
 }
 
 static uint8_t pattern_live_try_take_pending_ready(void)
 {
+    ++g_persist_dbg.ready_consumer_calls;
     if (g_pending_queue_valid == 0U)
     {
+        if (g_pattern_load_state == PATTERN_LOAD_READY)
+            g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_NO_PENDING;
         return 0U;
     }
 
@@ -689,32 +720,49 @@ static uint8_t pattern_live_try_take_pending_ready(void)
     {
         if (pattern_load_request(g_pending_queue_bank,
                                  g_pending_queue_pattern) == 0U)
+        {
+            g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_LOAD_REQUEST_REFUSED;
             return 0U;
+        }
     }
     if (pattern_load_is_ready(&ready_bank, &ready_pattern) == 0U)
     {
+        g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_NO_READY;
         return 0U;
     }
 
     if ((ready_bank != g_pending_queue_bank) || (ready_pattern != g_pending_queue_pattern))
     {
+        g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_STALE_READY;
         pattern_load_cancel();
         return 0U;
     }
 
-    if ((seq_runtime_is_running() == 0U)
+    g_persist_dbg.transport_running = seq_runtime_is_running();
+    if ((g_persist_dbg.transport_running == 0U)
             && (audio_state_snapshot_control_preflight() == 0U))
-        return 0U;
-
-    if (pattern_load_take_ready(&ready_bank, &ready_pattern, &g_next_pattern) == 0U)
     {
+        g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_PREFLIGHT_BLOCKED;
         return 0U;
     }
 
-    if (seq_runtime_is_running() == 0U)
+    if (pattern_load_take_ready(&ready_bank, &ready_pattern, &g_next_pattern) == 0U)
     {
-        if (persistent_pattern_control_apply(&g_next_pattern, 0U) != PERSIST_CODEC_OK)
+        g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_TAKE_READY_REFUSED;
+        return 0U;
+    }
+
+    if (g_persist_dbg.transport_running == 0U)
+    {
+        g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_TRANSPORT_STOPPED_APPLY;
+        persist_debug_stage(PERSIST_DBG_STAGE_APPLY,0);
+        ++g_persist_dbg.apply_attempted;
+        const persist_codec_result_t apply_result =
+            persistent_pattern_control_apply(&g_next_pattern, 0U);
+        g_persist_dbg.apply_result = (uint32_t)apply_result;
+        if (apply_result != PERSIST_CODEC_OK)
         {
+            g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_APPLY_FAILED;
             (void)pattern_record_lease_release(
                 PATTERN_RECORD_LEASE_PATTERN_LOAD);
             g_pending_queue_valid = 0U;
@@ -730,17 +778,30 @@ static uint8_t pattern_live_try_take_pending_ready(void)
         g_queued_boundary_track = 0U;
         g_queued_boundary_generation = 0U;
         undo_v2_clear_all();
+        g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_APPLY_SUCCEEDED;
         return 1U;
     }
 
     uint32_t current_generation = 0U;
     (void)seq_runtime_get_track_loop_generation(g_pending_boundary_track, &current_generation);
+    g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_TRANSPORT_RUNNING_QUEUE;
+    persist_debug_stage(PERSIST_DBG_STAGE_QUEUE,0);
+    ++g_persist_dbg.queue_attempted;
     const uint8_t armed = pattern_live_arm_ready_queue(ready_bank,
         ready_pattern,&g_next_pattern,g_pending_boundary_track,
         current_generation);
     if (armed == 0U)
+    {
+        g_persist_dbg.queue_result = 0U;
+        g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_QUEUE_FAILED;
         (void)pattern_record_lease_release(
             PATTERN_RECORD_LEASE_PATTERN_LOAD);
+    }
+    else
+    {
+        g_persist_dbg.queue_result = 1U;
+        g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_QUEUE_ARMED;
+    }
     return armed;
 }
 
@@ -776,13 +837,17 @@ void pattern_live_service(void)
     if ((current_generation == g_queued_boundary_generation)
             && (boundary_due == 0U))
     {
+        g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_WAIT_BOUNDARY;
         return;
     }
 
-    if (persistent_pattern_control_apply(&g_next_pattern, 1U) == PERSIST_CODEC_OK)
+    persist_debug_stage(PERSIST_DBG_STAGE_APPLY,0);
+    ++g_persist_dbg.apply_attempted;
+    const persist_codec_result_t apply_result =
+        persistent_pattern_control_apply(&g_next_pattern, 1U);
+    g_persist_dbg.apply_result = (uint32_t)apply_result;
+    if (apply_result == PERSIST_CODEC_OK)
     {
-        persist_debug_begin(PERSIST_DBG_OP_PATTERN_APPLY,g_queued_bank,g_queued_pattern);
-        persist_debug_stage(PERSIST_DBG_STAGE_APPLY,0);
         g_active_bank = g_queued_bank;
         g_active_pattern = g_queued_pattern;
         g_queued_valid = 0U;
@@ -800,7 +865,9 @@ void pattern_live_service(void)
         persist_debug_pattern_state(0U,0U,1U,
             ((uint32_t)g_active_bank<<16U)|g_active_pattern,0U,current_generation);
         persist_debug_stage(PERSIST_DBG_STAGE_SUCCESS,0);
+        g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_APPLY_SUCCEEDED;
     }
+    else g_persist_dbg.decision_reason = PERSIST_DBG_DECISION_APPLY_FAILED;
 }
 
 void pattern_live_init(void)
