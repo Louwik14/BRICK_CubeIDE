@@ -253,8 +253,9 @@ sans remplacer les extrema reels des plans de piste par un forfait.
 
 La portee temporelle de la roue est ainsi prouvee, mais sa capacite de 512
 occurrences ne couvre pas encore le backlog Groove maximal. Avec 64 lanes,
-ROLL 1/5 de step et le retard limite `2717/1400` noire, jusqu'a 39 occurrences
-par lane, soit 2 496 occurrences, peuvent attendre simultanement. Porter ce pool
+ROLL 1/5 de step (soit 1/80 de noire en DIV 1) et le retard limite
+`2717/1400` noire, jusqu'a 156 occurrences par lane, soit 9 984 occurrences,
+peuvent attendre simultanement. Porter ce pool
 sans gonfler en meme temps la borne terminale demande de dissocier capacite de
 retention et fanout exigible dans un bloc; cette correction reste un chantier
 scheduler distinct. Un refus actuel du pool est un drop borne, jamais une fuite
