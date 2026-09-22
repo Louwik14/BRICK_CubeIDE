@@ -142,7 +142,7 @@ static uint8_t codec_type_valid(uint32_t key)
 {
     switch(key){case PERSIST_TYPE_NONE:case PERSIST_TYPE_PRISM:case PERSIST_TYPE_WAVE:
     case PERSIST_TYPE_STACK:case PERSIST_TYPE_FM:case PERSIST_TYPE_DRUM_MD:
-    case PERSIST_TYPE_RESERVED_LEGACY_DRUM_ANALOG_BD:case PERSIST_TYPE_MIDI:case PERSIST_TYPE_RAM_SAMPLE:
+    case PERSIST_TYPE_MIDI:case PERSIST_TYPE_RAM_SAMPLE:
     case PERSIST_TYPE_STREAM_SAMPLE:case PERSIST_TYPE_MULTI_SAMPLE:case PERSIST_TYPE_LOOPER:
     case PERSIST_TYPE_EXTERNAL:case PERSIST_TYPE_GROUP:case PERSIST_TYPE_TB303:case PERSIST_TYPE_ACID:return 1U;default:return 0U;}
 }
@@ -335,16 +335,12 @@ static void codec_tone(codec_io_t *io,tone_program_control_t*t)
         codec_f32(io,&t->state.midi.program);for(uint8_t bank=0U;bank<3U;++bank)codec_float_block(io,t->state.midi.cc[bank],4U);break;
     case TRACK_RUNTIME_TYPE_EXTERNAL:
         codec_f32(io,&t->state.external.midi.program);for(uint8_t bank=0U;bank<3U;++bank)codec_float_block(io,t->state.external.midi.cc[bank],4U);codec_f32(io,&t->state.external.gate);break;
-    case TRACK_RUNTIME_TYPE_RESERVED_LEGACY_DRUM_BD_ANALOG:
-        codec_float_block(io,&t->state.reserved_legacy_drum_analog[0],8U);
-        if(io->mode==CODEC_READ){memset(&t->state,0,sizeof(t->state));t->tag=TRACK_RUNTIME_TYPE_DRUM_MD;}
-        break;
     case TRACK_RUNTIME_TYPE_DRUM_MD:codec_f32(io,&t->state.drum_md.model);codec_float_block(io,t->state.drum_md.p,8U);break;
     case TRACK_RUNTIME_TYPE_NONE:case TRACK_RUNTIME_TYPE_FM:case TRACK_RUNTIME_TYPE_GROUP:break;
     default:io->result=PERSIST_CODEC_INVALID_ENTITY;break;}
 }
 static void codec_filter(codec_io_t*io,param_filter_control_state_t*s)
-{codec_f32(io,&s->morph);codec_f32(io,&s->cutoff);codec_f32(io,&s->resonance);codec_f32(io,&s->eg_amount);codec_f32(io,&s->attack);codec_f32(io,&s->decay);codec_f32(io,&s->sustain);codec_f32(io,&s->release);codec_f32(io,&s->keytrack);codec_f32(io,&s->env_reset);codec_f32(io,&s->env_delay);codec_f32(io,&s->reserved_legacy_drive);codec_f32(io,&s->reserved_legacy_decimator_bits);codec_f32(io,&s->reserved_legacy_decimator_rate);codec_f32(io,&s->reserved_legacy_decimator_rate2);codec_f32(io,&s->retrigger);}
+{codec_f32(io,&s->morph);codec_f32(io,&s->cutoff);codec_f32(io,&s->resonance);codec_f32(io,&s->eg_amount);codec_f32(io,&s->attack);codec_f32(io,&s->decay);codec_f32(io,&s->sustain);codec_f32(io,&s->release);codec_f32(io,&s->keytrack);codec_f32(io,&s->env_reset);codec_f32(io,&s->env_delay);codec_f32(io,&s->retrigger);}
 static void codec_vca(codec_io_t*io,vca_control_state_t*s)
 {codec_f32(io,&s->attack);codec_f32(io,&s->decay);codec_f32(io,&s->sustain);codec_f32(io,&s->release);codec_f32(io,&s->filter_mode);codec_f32(io,&s->retrigger);}
 static void codec_mixer(codec_io_t*io,mixer_control_state_t*s)
@@ -356,9 +352,7 @@ static void codec_audio_fx(codec_io_t*io,audio_fx_control_state_t*s){uint8_t pos
     (sizeof(((_type *)0)->_field) / sizeof(float))
 enum
 {
-    PERSIST_GLOBAL_AUDIO_RUNTIME_FLOAT_COUNT = 51U,
-    PERSIST_GLOBAL_AUDIO_LEGACY_EQ_FLOAT_COUNT = 3U,
-    PERSIST_GLOBAL_AUDIO_WIRE_FLOAT_COUNT = 54U
+    PERSIST_GLOBAL_AUDIO_FLOAT_COUNT = 51U
 };
 _Static_assert(FLOAT_FIELD_COUNT(param_global_control_state_t, send_fx) == 2U,
                "global audio send layout changed");
@@ -377,23 +371,14 @@ _Static_assert(FLOAT_FIELD_COUNT(param_global_control_state_t, compressor) == 4U
 _Static_assert(FLOAT_FIELD_COUNT(param_global_control_state_t, output) == 3U,
                "global audio output layout changed");
 _Static_assert((sizeof(param_global_control_state_t) / sizeof(float))
-                   == PERSIST_GLOBAL_AUDIO_RUNTIME_FLOAT_COUNT,
-               "global audio runtime float count changed");
-_Static_assert(PERSIST_GLOBAL_AUDIO_RUNTIME_FLOAT_COUNT
-                   + PERSIST_GLOBAL_AUDIO_LEGACY_EQ_FLOAT_COUNT
-                   == PERSIST_GLOBAL_AUDIO_WIRE_FLOAT_COUNT,
-               "global audio v4 wire count changed");
+                   == PERSIST_GLOBAL_AUDIO_FLOAT_COUNT,
+               "global audio CONTROL/wire float count changed");
 #undef FLOAT_FIELD_COUNT
 
 static void codec_global_audio(codec_io_t*io,param_global_control_state_t*s)
 {
-    /* The v4 wire layout retains the three former global DJ EQ floats between
-     * bus_comp and saturation.  They are reserved now that EQ is per-track. */
     codec_float_block(io,s->send_fx,2U);
     codec_float_block(io,s->bus_comp,8U);
-    float reserved_legacy_eq[PERSIST_GLOBAL_AUDIO_LEGACY_EQ_FLOAT_COUNT]={0.0f};
-    codec_float_block(io,reserved_legacy_eq,
-                      PERSIST_GLOBAL_AUDIO_LEGACY_EQ_FLOAT_COUNT);
     codec_float_block(io,s->saturation,4U);
     codec_float_block(io,s->reverb,7U);
     codec_float_block(io,s->delay,14U);
@@ -552,11 +537,21 @@ static void codec_section(codec_io_t *io,uint16_t type,codec_body_fn fn,void *ob
 static uint8_t codec_discard(void *ctx,const uint8_t *data,uint32_t len)
 { (void)ctx;(void)data;(void)len;return 1U; }
 
+static uint32_t codec_document_max_bytes(uint8_t kind)
+{
+    if (kind == PERSIST_CODEC_DOCUMENT_PATTERN)
+        return PERSIST_CODEC_PATTERN_DOCUMENT_MAX_BYTES;
+    if (kind == PERSIST_CODEC_DOCUMENT_PROJECT)
+        return PERSIST_CODEC_PROJECT_DOCUMENT_MAX_BYTES;
+    return PERSIST_CODEC_MAX_DOCUMENT_BYTES;
+}
+
 static persist_codec_result_t codec_write_document(uint8_t kind,uint16_t sections,codec_body_fn payload,void *object,const persist_codec_sink_t *sink,uint32_t *out_bytes)
 {
     codec_io_t pass={.mode=CODEC_COUNT,.count=0U,.limit=PERSIST_CODEC_MAX_DOCUMENT_BYTES,.result=PERSIST_CODEC_OK};payload(&pass,object);if(pass.result!=PERSIST_CODEC_OK)return pass.result;
     uint8_t header[PERSIST_CODEC_HEADER_BYTES]={CODEC_MAGIC_0,CODEC_MAGIC_1,CODEC_MAGIC_2,CODEC_MAGIC_3};
     header[4]=(uint8_t)PERSIST_CODEC_VERSION;header[6]=kind;header[8]=(uint8_t)sections;uint32_t total=PERSIST_CODEC_HEADER_BYTES+pass.count;
+    if (total > codec_document_max_bytes(kind)) return PERSIST_CODEC_BAD_LENGTH;
     for(uint8_t i=0U;i<4U;++i)header[12U+i]=(uint8_t)(total>>(8U*i));
     /* Payload CRC is filled by a deterministic prepass into a bounded 1-byte-discard sink below. */
     codec_io_t hash={.mode=CODEC_WRITE,.limit=PERSIST_CODEC_MAX_DOCUMENT_BYTES,.crc=0xFFFFFFFFUL,.crc_enabled=1U,.result=PERSIST_CODEC_OK};
@@ -726,7 +721,7 @@ uint8_t persist_codec_build_project_document_header(
     uint8_t out_header[PERSIST_CODEC_HEADER_BYTES])
 {
     if ((out_header == NULL) || (total_bytes < PERSIST_CODEC_HEADER_BYTES)
-            || (total_bytes > PERSIST_CODEC_MAX_DOCUMENT_BYTES))
+            || (total_bytes > PERSIST_CODEC_PROJECT_DOCUMENT_MAX_BYTES))
         return 0U;
     memset(out_header, 0, PERSIST_CODEC_HEADER_BYTES);
     out_header[0]=CODEC_MAGIC_0;out_header[1]=CODEC_MAGIC_1;
@@ -747,7 +742,7 @@ uint8_t persist_codec_build_project_document_header(
 }
 
 static persist_codec_result_t codec_decode_begin(const persist_codec_source_t *s,uint8_t kind,uint16_t sections,codec_io_t *io,uint32_t *expected_crc)
-{uint8_t h[PERSIST_CODEC_HEADER_BYTES];if((s==NULL)||(s->read==NULL)||(s->read(s->context,h,sizeof(h))==0U))return PERSIST_CODEC_IO_ERROR;if((h[0]!=CODEC_MAGIC_0)||(h[1]!=CODEC_MAGIC_1)||(h[2]!=CODEC_MAGIC_2)||(h[3]!=CODEC_MAGIC_3))return PERSIST_CODEC_BAD_MAGIC;if((h[4]!=PERSIST_CODEC_VERSION)||(h[5]!=0U))return PERSIST_CODEC_BAD_VERSION;if((h[6]!=kind)||(h[7]!=0U))return PERSIST_CODEC_BAD_DOCUMENT_KIND;if((((uint16_t)h[8]|((uint16_t)h[9]<<8U))!=sections)||(h[10]!=0U)||(h[11]!=0U))return PERSIST_CODEC_BAD_SECTION;uint32_t total=(uint32_t)h[12]|((uint32_t)h[13]<<8U)|((uint32_t)h[14]<<16U)|((uint32_t)h[15]<<24U);if((total<PERSIST_CODEC_HEADER_BYTES)||(total>PERSIST_CODEC_MAX_DOCUMENT_BYTES))return PERSIST_CODEC_BAD_LENGTH;uint32_t hc=(uint32_t)h[20]|((uint32_t)h[21]<<8U)|((uint32_t)h[22]<<16U)|((uint32_t)h[23]<<24U);if(hc!=~codec_crc32_update(0xFFFFFFFFUL,h,20U))return PERSIST_CODEC_BAD_CRC;*expected_crc=(uint32_t)h[16]|((uint32_t)h[17]<<8U)|((uint32_t)h[18]<<16U)|((uint32_t)h[19]<<24U);*io=(codec_io_t){.mode=CODEC_READ,.source=s,.limit=total-PERSIST_CODEC_HEADER_BYTES,.crc=0xFFFFFFFFUL,.crc_enabled=1U,.result=PERSIST_CODEC_OK};return PERSIST_CODEC_OK;}
+{uint8_t h[PERSIST_CODEC_HEADER_BYTES];if((s==NULL)||(s->read==NULL)||(s->read(s->context,h,sizeof(h))==0U))return PERSIST_CODEC_IO_ERROR;if((h[0]!=CODEC_MAGIC_0)||(h[1]!=CODEC_MAGIC_1)||(h[2]!=CODEC_MAGIC_2)||(h[3]!=CODEC_MAGIC_3))return PERSIST_CODEC_BAD_MAGIC;if((h[4]!=PERSIST_CODEC_VERSION)||(h[5]!=0U))return PERSIST_CODEC_BAD_VERSION;if((h[6]!=kind)||(h[7]!=0U))return PERSIST_CODEC_BAD_DOCUMENT_KIND;if((((uint16_t)h[8]|((uint16_t)h[9]<<8U))!=sections)||(h[10]!=0U)||(h[11]!=0U))return PERSIST_CODEC_BAD_SECTION;uint32_t total=(uint32_t)h[12]|((uint32_t)h[13]<<8U)|((uint32_t)h[14]<<16U)|((uint32_t)h[15]<<24U);if((total<PERSIST_CODEC_HEADER_BYTES)||(total>codec_document_max_bytes(kind)))return PERSIST_CODEC_BAD_LENGTH;uint32_t hc=(uint32_t)h[20]|((uint32_t)h[21]<<8U)|((uint32_t)h[22]<<16U)|((uint32_t)h[23]<<24U);if(hc!=~codec_crc32_update(0xFFFFFFFFUL,h,20U))return PERSIST_CODEC_BAD_CRC;*expected_crc=(uint32_t)h[16]|((uint32_t)h[17]<<8U)|((uint32_t)h[18]<<16U)|((uint32_t)h[19]<<24U);*io=(codec_io_t){.mode=CODEC_READ,.source=s,.limit=total-PERSIST_CODEC_HEADER_BYTES,.crc=0xFFFFFFFFUL,.crc_enabled=1U,.result=PERSIST_CODEC_OK};return PERSIST_CODEC_OK;}
 static persist_codec_result_t codec_decode_end(codec_io_t *io,uint32_t expected){if(io->result!=PERSIST_CODEC_OK)return io->result;if(io->count!=io->limit)return PERSIST_CODEC_BAD_LENGTH;return(~io->crc==expected)?PERSIST_CODEC_OK:PERSIST_CODEC_BAD_CRC;}
 
 persist_codec_result_t persist_codec_decode_pattern(const persist_codec_source_t *s,persist_codec_pattern_staging_t *st){if(st==NULL)return PERSIST_CODEC_INVALID_ARGUMENT;memset(st,0,sizeof(*st));codec_io_t io;uint32_t crc;persist_codec_result_t r=codec_decode_begin(s,PERSIST_CODEC_DOCUMENT_PATTERN,1U,&io,&crc);if(r!=PERSIST_CODEC_OK)return r;codec_expect_section(&io,SECTION_PATTERN_BODY,codec_pattern_adapter,&st->pattern);r=codec_decode_end(&io,crc);return(r==PERSIST_CODEC_OK)?persist_codec_validate_pattern(&st->pattern):r;}

@@ -9,11 +9,48 @@
 extern "C" {
 #endif
 
-#define PERSIST_CODEC_VERSION 5U
+#define PERSIST_CODEC_VERSION 12U
 #define PERSIST_CODEC_HEADER_BYTES 24U
 #define PERSIST_CODEC_SECTION_HEADER_BYTES 8U
 #define PERSIST_CODEC_MAX_DOCUMENT_BYTES 0x3FFFFFFFUL
 #define PERSIST_CODEC_PROJECT_NAME_BYTES 32U
+
+/* Exact worst-case encoded Pattern envelope for the current product contract:
+ * entity count + fixed entities + p-locks + top-level PLAY + child PLAY
+ * + Note FX + modulation + non-master optionals + GROUP-master FM
+ * + route count + directed routes + globals. */
+#define PERSIST_CODEC_PATTERN_BODY_MAX_BYTES \
+    (1U + (16U * 490U) + (15U * 512U * 10U) \
+        + (7U * 64U * 8U * 5U) + (8U * 64U * 1U * 5U) \
+        + (15U * 3U * (4U + 5U)) + (8U * 209U) \
+        + (15U * ((2U * 166U) + 190U)) + 190U \
+        + 2U + (16U * 15U * 7U) + 231U)
+#define PERSIST_CODEC_PATTERN_DOCUMENT_MAX_BYTES \
+    (PERSIST_CODEC_HEADER_BYTES + PERSIST_CODEC_SECTION_HEADER_BYTES \
+        + PERSIST_CODEC_PATTERN_BODY_MAX_BYTES)
+
+/* Project envelope: four section headers, working Pattern, maximum asset
+ * catalog, all Macro locks and the complete 16 x 16 Pattern bank. */
+#define PERSIST_CODEC_PROJECT_DOCUMENT_MAX_BYTES \
+    (PERSIST_CODEC_HEADER_BYTES + (4U * PERSIST_CODEC_SECTION_HEADER_BYTES) \
+        + (2U + PERSIST_CODEC_PROJECT_NAME_BYTES + 1U + 1U + 2U \
+            + PERSIST_CODEC_PATTERN_BODY_MAX_BYTES) \
+        + (2U + (PERSIST_CONTROL_ASSET_COUNT \
+            * (4U + 2U + PERSIST_CONTROL_ASSET_PATH_BYTES))) \
+        + (4U + PERSIST_CONTROL_MACRO_COUNT \
+            + (PERSIST_CONTROL_MACRO_SCENE_COUNT \
+                * (1U + (PERSIST_CONTROL_MACRO_LOCK_COUNT \
+                    * (1U + 4U + 4U))))) \
+        + (2U + ((PERSIST_CONTROL_PATTERN_BANK_COUNT \
+            * PERSIST_CONTROL_PATTERN_PER_BANK) \
+                * (3U + PERSIST_CODEC_PATTERN_BODY_MAX_BYTES))))
+
+_Static_assert(PERSIST_CODEC_PATTERN_BODY_MAX_BYTES == 117131U,
+               "Pattern codec body envelope changed");
+_Static_assert(PERSIST_CODEC_PATTERN_DOCUMENT_MAX_BYTES == 117163U,
+               "Pattern codec worst-case envelope changed");
+_Static_assert(PERSIST_CODEC_PROJECT_DOCUMENT_MAX_BYTES == 30278149U,
+               "Project codec worst-case envelope changed");
 
 typedef enum
 {

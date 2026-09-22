@@ -24,30 +24,30 @@ Audit realise sur le HEAD `fcc1d5cd9` et le worktree courant du 22 septembre
    possedent plus que sept modeles (`0..6`). La borne est maintenant derivee de
    `NOTE_FX_MODEL_COUNT`; la cardinalite des labels et la disposition contigue
    des IDs sont verrouillees par assertions compile-time.
-2. Deux IDs internes Looper etaient admis par le validateur CONTROL alors
+2. Deux IDs internes obsoletes etaient admis par le validateur CONTROL alors
    qu'aucun producteur et aucun consumer AUDIO ne les implementaient. Ces
-   anciennes entrees de grammaire (`LOOPER_ROUTE`, `LOOPER_PLAY_AUTO`) et leur
+   anciennes entrees de grammaire et leur
    logique de snapshot ont ete retirees. CONTROL ne peut donc plus accepter une
    commande que AUDIO rejetterait.
-3. Le mapping AUDIO_GLOBAL v4 reste volontairement asymetrique: 54 floats sur
-   le wire, 51 floats CONTROL et trois slots DJ EQ legacy consommes/ignores.
-   Les cardinalites de chaque sous-bloc, le total runtime et le total wire sont
-   maintenant proteges a la compilation; aucun padding mort n'a ete ajoute au
-   runtime.
+3. AUDIO_GLOBAL encode exactement les 51 floats CONTROL. Les trois anciens
+   slots DJ EQ globaux ont ete retires; les cardinalites de chaque sous-bloc et
+   le total CONTROL/wire sont proteges a la compilation.
+4. FILTER encode ses douze parametres actuels, sans les quatre anciens slots
+   Drive/Decimator. L'etat CONTROL et sa validation ont ete compactes de meme.
+5. L'ancien type Drum Analog, son payload Tone et sa conversion vers Drum MD
+   ont ete retires du modele, du catalogue de cles et du codec.
 
 Aucune autre divergence semantique prouvee n'a ete trouvee dans les frontieres
-auditees. Les asymetries volontaires conservees sont les slots AUDIO_GLOBAL
-legacy, les cles stables independantes des enums C, les tombstones Param/Track,
-et les handles d'assets reconstruits au runtime.
+auditees. Les ordinaux Param reserves restent uniquement dans l'ABI interne
+CONTROL/AUDIO/SEQ: ils ne possedent plus ni descriptor ni cle persistante. Leur
+suppression imposerait une renumerotation transversale sans gain sur le format
+disque. Les cles persistantes courantes restent independantes des enums C et les
+handles d'assets sont reconstruits au runtime.
 
 ## Protections et cout
 
 Les assertions ajoutent des contrats pour les capacites STORAGE/SEQ
 (16 lanes, 64 steps, 8 PLAY, 32 p-locks), Note FX (slots, payload sans le model,
-stride des IDs), modulation (3 LFO, 8 routes) et AUDIO_GLOBAL. Elles n'ajoutent
-aucun cout RAM/CPU/Flash. Le retrait des branches mortes reduit le build mesure
-de 96 octets de Flash; les regions RAM sont inchangees.
-
-Le build CMake preset `Release` avec LTO et section GC passe. Mesure finale:
-Flash 1 564 788 octets (85,27 %), DTCMRAM 128 640, RAM_D1 490 400,
-SRAM2_D2 130 496, SDRAM 32 383 712 octets.
+stride des IDs), modulation (3 LFO, 8 routes) et AUDIO_GLOBAL. Le format B6CP
+v12 accepte un Pattern de 117 163 octets maximum et un Project de 30 278 149
+octets maximum; encode et decode appliquent les memes enveloppes.

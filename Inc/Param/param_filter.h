@@ -11,8 +11,6 @@ typedef struct
     float morph, cutoff, resonance, eg_amount;
     float attack, decay, sustain, release;
     float keytrack, env_reset, env_delay;
-    float reserved_legacy_drive, reserved_legacy_decimator_bits;
-    float reserved_legacy_decimator_rate, reserved_legacy_decimator_rate2;
     float retrigger;
 } param_filter_control_state_t;
 

@@ -2,7 +2,7 @@
 
 ## Modele et format
 
-Pattern, Project et Patch utilisent exclusivement `persistent_control_model` et le codec explicite `B6CP` version 11. Les DTO ne sont ni des snapshots runtime ni une ABI disque; chaque champ est encode explicitement. Header, kind, sections, longueurs et CRC sont stricts. Aucune ancienne version ni dump de structure n'est lu.
+Pattern, Project et Patch utilisent exclusivement `persistent_control_model` et le codec explicite `B6CP` version 12. Les DTO ne sont ni des snapshots runtime ni une ABI disque; chaque champ est encode explicitement. Header, kind, sections, longueurs et CRC sont stricts. Aucune ancienne version ni dump de structure n'est lu. AUDIO_GLOBAL contient exactement 51 floats, FILTER douze floats, et aucun type Drum Analog historique n'est accepte. Les enveloppes courantes sont 117 163 octets pour un Pattern et 30 278 149 octets pour un Project.
 
 Les cles persistantes de famille, type, parametre, MIDI, clock, Note FX, modulation et asset sont explicites et independantes des ordinaux C. Les FLOAT32 conservent leurs bits. Les indices runtime, contextes AUDIO installes, pointeurs, caches, voix, phases, playheads et UI sont exclus.
 

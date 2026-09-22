@@ -13,6 +13,11 @@
 CONTROL_STATE_SDRAM static param_filter_control_state_t
     g_param_filter_control[SEQ_LANE_CAPACITY];
 
+enum { PARAM_FILTER_CONTROL_FLOAT_COUNT = 12U };
+_Static_assert(sizeof(param_filter_control_state_t)
+                   == PARAM_FILTER_CONTROL_FLOAT_COUNT * sizeof(float),
+               "FILTER CONTROL layout must match its wire cardinality");
+
 static float filter_ui127_clamp(float value)
 {
     if (value < 0.0f) return 0.0f;
@@ -112,7 +117,7 @@ uint8_t param_filter_control_validate(const param_filter_control_state_t *state)
 {
     if (state == NULL) return 0U;
     const float *const values = (const float *)state;
-    for (uint8_t i = 0U; i < 16U; ++i)
+    for (uint8_t i = 0U; i < PARAM_FILTER_CONTROL_FLOAT_COUNT; ++i)
         if (!isfinite(values[i]) || (values[i] < 0.0f) || (values[i] > 127.0f))
             return 0U;
     return 1U;
@@ -127,9 +132,11 @@ uint8_t param_filter_control_restore(uint8_t track,
         PARAM_FILTER_MORPH, PARAM_FILTER_CUTOFF, PARAM_FILTER_RESONANCE,
         PARAM_FILTER_EG_AMT, PARAM_FILTER_ATTACK, PARAM_FILTER_DECAY,
         PARAM_FILTER_SUSTAIN, PARAM_FILTER_RELEASE, PARAM_FILTER_KEYTRK,
-        PARAM_FILTER_ENVRST, PARAM_FILTER_ENVDLY, PARAM_COUNT,
-        PARAM_COUNT, PARAM_COUNT, PARAM_COUNT, PARAM_ENV_RETRIG_FILTER
+        PARAM_FILTER_ENVRST, PARAM_FILTER_ENVDLY, PARAM_ENV_RETRIG_FILTER
     };
+    _Static_assert((sizeof(ids) / sizeof(ids[0]))
+                       == PARAM_FILTER_CONTROL_FLOAT_COUNT,
+                   "FILTER parameter table must match CONTROL layout");
     param_filter_control_state_t canonical_state = *state;
     float *const values = (float *)&canonical_state;
     for (uint8_t i = 0U; i < (uint8_t)(sizeof(ids) / sizeof(ids[0])); ++i)
