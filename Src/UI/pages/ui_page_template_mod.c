@@ -60,7 +60,6 @@ static const char *ui_page_template_mod_context(param_id_t id)
     if ((id >= PARAM_AUDIO_FX_B_P1) && (id <= PARAM_AUDIO_FX_B_P3)) return "FX2";
     if ((id >= PARAM_SAMPLER_CLIP_SOURCE_BPM) && (id <= PARAM_SAMPLER_CLIP_GRAIN)) return "Strm";
     if ((id >= PARAM_SHIFTER_HEADS) && (id <= PARAM_SHIFTER_DISP)) return "Shft";
-    if ((id >= PARAM_LOOPER_STRETCH) && (id <= PARAM_LOOPER_GRAIN)) return "Loop";
     if ((id >= PARAM_SAMPLER_GAIN) && (id <= PARAM_SAMPLER_SLICE_COUNT)) return "Samp";
     if ((id == PARAM_SAMPLER_MULTI_LOOP) || (id == PARAM_SAMPLER_LOOP_START)) return "Mult";
     if ((id >= PARAM_TB303_WAVE) && (id <= PARAM_TB303_VCF_RATE)) return "303";

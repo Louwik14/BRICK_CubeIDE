@@ -52,11 +52,6 @@ track_mute_kind_t track_mute_get_kind(uint8_t track)
     {
         return TRACK_MUTE_KIND_EXTERNAL;
     }
-    if ((descriptor.family == TRACK_RUNTIME_FAMILY_SAMPLER)
-            && (descriptor.type == TRACK_RUNTIME_TYPE_LOOPER))
-    {
-        return TRACK_MUTE_KIND_LOOPER;
-    }
     return TRACK_MUTE_KIND_AUDIO;
 }
 

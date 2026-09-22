@@ -62,7 +62,6 @@
 #include "App/encoder_control_dispatcher.h"
 #include "Track/track_runtime.h"
 #include "Track/track_state.h"
-#include "Track/control_routing.h"
 #include "App/Hall/hall_surface.h"
 #include "Track/entity_topology.h"
 #include "Keyboard/keyboard_runtime.h"
@@ -1219,10 +1218,6 @@ bool ui_set_track_type(uint8_t track, track_type_t type)
 
     if (!ui_track_type_is_available(track, config.family, type))
     {
-        if (type == TRACK_TYPE_LOOPER)
-        {
-            ui_core_set_feedback("LOOPER LIMIT");
-        }
         if (track == g_ui_track_state.active_track)
         {
             ui_edit_context_sync_active_track(0U);

@@ -5,9 +5,9 @@ BRICK6 est une machine audio embarquée à huit pistes sonores homogènes. Le co
 ## Topologie
 
 - BRICK expose exactement huit slots logiques, indexés `0..7`.
-- L'index est l'unique identité d'une piste. Il n'existe aucun rôle Play/Special ni piste fixe Master, FX, Input ou Looper.
+- L'index est l'unique identité d'une piste. Il n'existe aucun rôle Play/Special ni piste fixe Master, FX ou Input.
 - Chaque slot choisit `Off`, `Synth`, `Sampler`, `Drum`, `MIDI` ou `External`.
-- `Sampler / Looper` est un moteur assignable avec son runtime propre, indexé par le slot.
+- `Sampler` est un moteur assignable avec son runtime propre, indexé par le slot.
 - `External` combine MIDI et une entrée physique. `track_input_ownership` garantit un propriétaire au plus par entrée et l'activation matérielle suit cette propriété réelle.
 - Le Master est global, hors topologie. `SHIFT + STEP 16` ouvre ses traitements sans changer la piste active.
 - STEP 1 à 8 sélectionnent les pistes; STEP 9 à 16 n'ont aucune identité de piste.

@@ -18,13 +18,12 @@ extern "C" {
 /* Exact worst-case encoded Pattern envelope for the current product contract:
  * entity count + fixed entities + p-locks + top-level PLAY + child PLAY
  * + Note FX + modulation + non-master optionals + GROUP-master FM
- * + route count + directed routes + globals. */
+ * + globals. */
 #define PERSIST_CODEC_PATTERN_BODY_MAX_BYTES \
     (1U + (16U * 490U) + (15U * 512U * 10U) \
         + (7U * 64U * 8U * 5U) + (8U * 64U * 1U * 5U) \
         + (15U * 3U * (4U + 5U)) + (8U * 209U) \
-        + (15U * ((2U * 166U) + 190U)) + 190U \
-        + 2U + (16U * 15U * 7U) + 231U)
+        + (15U * ((2U * 166U) + 190U)) + 190U + 231U)
 #define PERSIST_CODEC_PATTERN_DOCUMENT_MAX_BYTES \
     (PERSIST_CODEC_HEADER_BYTES + PERSIST_CODEC_SECTION_HEADER_BYTES \
         + PERSIST_CODEC_PATTERN_BODY_MAX_BYTES)
@@ -45,11 +44,11 @@ extern "C" {
             * PERSIST_CONTROL_PATTERN_PER_BANK) \
                 * (3U + PERSIST_CODEC_PATTERN_BODY_MAX_BYTES))))
 
-_Static_assert(PERSIST_CODEC_PATTERN_BODY_MAX_BYTES == 117131U,
+_Static_assert(PERSIST_CODEC_PATTERN_BODY_MAX_BYTES == 115449U,
                "Pattern codec body envelope changed");
-_Static_assert(PERSIST_CODEC_PATTERN_DOCUMENT_MAX_BYTES == 117163U,
+_Static_assert(PERSIST_CODEC_PATTERN_DOCUMENT_MAX_BYTES == 115481U,
                "Pattern codec worst-case envelope changed");
-_Static_assert(PERSIST_CODEC_PROJECT_DOCUMENT_MAX_BYTES == 30278149U,
+_Static_assert(PERSIST_CODEC_PROJECT_DOCUMENT_MAX_BYTES == 29845875U,
                "Project codec worst-case envelope changed");
 
 typedef enum
@@ -155,25 +154,33 @@ typedef struct
 } persist_codec_project_source_t;
 
 typedef uint8_t (*persist_codec_project_begin_assets_fn)(void *context);
-typedef uint8_t (*persist_codec_project_put_asset_fn)(void *context,const persist_control_asset_ref_t *asset);
+typedef persist_control_asset_ref_t *(*persist_codec_project_asset_target_fn)(
+    void *context, uint16_t ordinal);
 typedef uint8_t (*persist_codec_project_validate_asset_fn)(void *context,const persist_control_asset_ref_t *asset);
 typedef uint8_t (*persist_codec_project_apply_working_fn)(void *context,const persist_codec_project_metadata_t *metadata,const persist_control_pattern_t *pattern);
 typedef uint8_t (*persist_codec_project_apply_macros_fn)(void *context,const persist_control_macros_t *macros);
 typedef struct
 {
+    /* Asset targets belong to the caller's isolated candidate. They may be
+     * populated twice by the validating and mutating decode passes, and may
+     * be partially populated when decode returns an error. */
     persist_codec_project_begin_assets_fn begin_assets;
+    persist_codec_project_asset_target_fn asset_target;
     persist_codec_project_validate_asset_fn validate_asset;
-    persist_codec_project_put_asset_fn put_asset;
     persist_codec_project_apply_working_fn apply_working;
     persist_codec_project_apply_macros_fn apply_macros;
     void *context;
+    uint16_t asset_capacity;
 } persist_codec_project_consumer_t;
 
 typedef struct
 {
     union { persist_control_pattern_record_t pattern_record; persist_control_macros_t macros; } unit;
-    persist_control_asset_ref_t assets[PERSIST_CONTROL_ASSET_COUNT];
 } persist_codec_project_workspace_t;
+
+_Static_assert(sizeof(persist_codec_project_workspace_t)
+                   == sizeof(persist_control_pattern_record_t),
+               "Project codec workspace must contain only phase scratch");
 
 typedef struct
 {

@@ -61,11 +61,7 @@ void ui_page_template_tone_register_families(void)
             }
 
             const ui_template_family_t *family_template = NULL;
-            if (track_type == TRACK_TYPE_GROUP)
-            {
-                family_template = &g_ui_template_tone_family_group;
-            }
-            else if ((ui_track_family_is_engine(track_family) != 0) && (track_type == TRACK_TYPE_PRISM))
+            if ((ui_track_family_is_engine(track_family) != 0) && (track_type == TRACK_TYPE_PRISM))
             {
                 family_template = &g_ui_template_tone_family_prism;
             }
@@ -97,10 +93,6 @@ void ui_page_template_tone_register_families(void)
             else if ((track_family == TRACK_FAMILY_SAMPLER) && (track_type == TRACK_TYPE_STREAM))
             {
                 family_template = &g_ui_template_tone_family_clip;
-            }
-            else if ((track_family == TRACK_FAMILY_SAMPLER) && (track_type == TRACK_TYPE_LOOPER))
-            {
-                family_template = &g_ui_template_tone_family_looper;
             }
             else if ((track_family == TRACK_FAMILY_SAMPLER) && (track_type == TRACK_TYPE_MULTI))
             {
@@ -180,4 +172,3 @@ void ui_page_template_tone_toggle_subset(void)
 
     ui_page_template_tone_open_primary();
 }
-

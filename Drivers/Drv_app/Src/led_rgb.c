@@ -37,7 +37,6 @@
 #include "Storage/sample_capture.h"
 #include "UI/ui_core.h"
 #include "UI/ui_core_mute.h"
-#include "Track/control_routing.h"
 #include "UI/ui_hall_mode_projection.h"
 #include "UI/ui_navigation.h"
 #include "UI/ui_macro_interaction.h"
@@ -430,35 +429,6 @@ static void led_apply_keyboard_hall_scene(uint8_t hall)
     led_layer_set(LED_LAYER_UI, led, color.r, color.g, color.b);
 }
 
-static void led_apply_route_destination_hall_scene(led_id_t led)
-{
-    led_layer_set(LED_LAYER_UI, led, 0U, (uint8_t)(LED_FIXED_GREEN_G / 2U), 0U);
-}
-
-static void led_apply_sampler_looper_routing_hall_scene(uint8_t hall, uint8_t destination_track)
-{
-    const led_id_t led = led_remap_led_for_hall(hall);
-    if (hall >= TRACK_ACTIVE_COUNT)
-    {
-        led_layer_set(LED_LAYER_UI, led, 0U, 0U, 0U);
-        return;
-    }
-
-    if (hall == destination_track)
-    {
-        led_apply_route_destination_hall_scene(led);
-        return;
-    }
-
-    if (control_routing_get_looper_source(destination_track, hall) == 0U)
-    {
-        led_layer_set(LED_LAYER_UI, led, LED_FIXED_DIM_WHITE, LED_FIXED_DIM_WHITE, LED_FIXED_DIM_WHITE);
-        return;
-    }
-
-    led_layer_set(LED_LAYER_UI, led, LED_FIXED_RED_R, LED_FIXED_ORANGE_G, 0U);
-}
-
 static void led_apply_audio_rec_hall_scene(uint8_t hall)
 {
     const led_id_t led = led_remap_led_for_hall(hall);
@@ -728,10 +698,7 @@ static void led_apply_fixed_scene(void)
     button_id_t macro_button = BTN_COUNT;
     param_id_t macro_param = PARAM_COUNT;
     const ui_hall_mode_t hall_mode = ui_get_hall_mode();
-    const uint8_t active_track = ui_get_active_track();
     const uint8_t active_page_id = ui_page_get_id();
-    const ui_hall_rout_context_t rout_context =
-        ui_hall_mode_resolve_rout_context(active_track, hall_mode);
     const uint8_t track_overlay_active =
         ui_hall_mode_track_overlay_active(
             button_down(BTN_SHIFT),
@@ -777,16 +744,16 @@ static void led_apply_fixed_scene(void)
             led_apply_track_select_hall_scene(hall);
         }
     }
-    else if (ui_step_led_ownership_page_needs_step_leds(active_page_id) != 0U)
-    {
-        seq_led_render_active_track_page(ui_get_active_lane());
-    }
     else if (hall_mode == UI_HALL_MODE_MUTE)
     {
         for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
         {
             (void)led_apply_mute_hall_scene(hall);
         }
+    }
+    else if (ui_step_led_ownership_page_needs_step_leds(active_page_id) != 0U)
+    {
+        seq_led_render_active_track_page(ui_get_active_lane());
     }
     else if (led_hall_mode_uses_seq_scene(hall_mode))
     {
@@ -807,10 +774,6 @@ static void led_apply_fixed_scene(void)
             else if (hall_mode == UI_HALL_MODE_AUDIO_REC)
             {
                 led_apply_audio_rec_hall_scene(hall);
-            }
-            else if (rout_context == UI_HALL_ROUT_CONTEXT_SAMPLER_LOOPER)
-            {
-                led_apply_sampler_looper_routing_hall_scene(hall, active_track);
             }
             else if (led_hall_mode_uses_keyboard_scene(hall_mode))
             {

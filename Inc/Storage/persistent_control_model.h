@@ -12,6 +12,8 @@
 #include "Track/polyphony_control.h"
 #include "Param/param_global_control.h"
 #include "NoteFx/note_fx_contract.h"
+#include "Seq/seq_timing.h"
+#include "Seq/seq_traversal.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -87,7 +89,6 @@ typedef enum
     PERSIST_TYPE_RAM_SAMPLE     = 0x52414D20UL, /* RAM  */
     PERSIST_TYPE_STREAM_SAMPLE  = 0x5354524DUL, /* STRM */
     PERSIST_TYPE_MULTI_SAMPLE   = 0x4D554C54UL, /* MULT */
-    PERSIST_TYPE_LOOPER         = 0x4C4F4F50UL, /* LOOP */
     PERSIST_TYPE_EXTERNAL       = 0x45585420UL, /* EXT  */
     PERSIST_TYPE_GROUP          = 0x47525020UL, /* GRP  */
     PERSIST_TYPE_TB303          = 0x33303320UL, /* 303 */
@@ -126,14 +127,11 @@ typedef enum
 {
     PERSIST_NOTE_FX_OFF    = 0x4F464620UL, /* OFF  */
     PERSIST_NOTE_FX_ARP    = 0x41525020UL, /* ARP  */
-    PERSIST_NOTE_FX_ARP_SYNC = 0x41525359UL, /* ARSY */
     PERSIST_NOTE_FX_EUCLID = 0x4555434CUL, /* EUCL */
     PERSIST_NOTE_FX_PROBABILITY = 0x50524F42UL, /* PROB */
     PERSIST_NOTE_FX_GATE = 0x47415445UL, /* GATE */
-    PERSIST_NOTE_FX_GROOVE = 0x47524F56UL, /* GROV */
-    PERSIST_NOTE_FX_ECHO = 0x4543484FUL, /* ECHO */
-    PERSIST_NOTE_FX_HARMONIZER = 0x4841524DUL, /* HARM */
-    PERSIST_NOTE_FX_CHORD = 0x43484F52UL /* CHOR */
+    PERSIST_NOTE_FX_VOICER = 0x564F4943UL, /* VOIC */
+    PERSIST_NOTE_FX_SCALER = 0x5343414CUL /* SCAL */
 } persist_control_note_fx_model_key_value_t;
 
 typedef enum
@@ -244,8 +242,9 @@ typedef struct
 {
     uint8_t length;
     uint8_t division;
-    uint8_t quantization;
-    uint8_t swing;
+    uint8_t direction;
+    int8_t rotate;
+    seq_track_timing_config_t timing;
     persist_control_step_t steps[PERSIST_CONTROL_STEP_COUNT];
 } persist_control_sequence_t;
 
@@ -323,24 +322,12 @@ typedef struct
     mixer_control_state_t mixer;
     audio_fx_control_state_t audio_fx;
     uint8_t note_fx_count;
+    uint8_t note_fx_order;
     persist_control_note_fx_t note_fx[PERSIST_CONTROL_NOTE_FX_COUNT];
     uint8_t modulation_present;
     persist_control_modulation_t modulation;
     persist_control_sequence_t sequence;
 } persist_control_entity_t;
-
-typedef enum
-{
-    PERSIST_ROUTE_LOOPER_SOURCE = 0x4C4F4F50UL /* LOOP */
-} persist_control_route_kind_t;
-
-typedef struct
-{
-    uint32_t kind;
-    persist_control_entity_id_t source;
-    persist_control_entity_id_t destination;
-    uint8_t enabled;
-} persist_control_route_t;
 
 typedef struct
 {
@@ -360,6 +347,7 @@ typedef struct
     uint32_t record_length_key;
     param_global_control_state_t audio;
     persist_control_keyboard_t keyboard;
+    uint32_t groove_seed;
     uint8_t metronome_level;
 } persist_control_globals_t;
 
@@ -386,8 +374,6 @@ typedef struct
 typedef struct
 {
     persist_control_entity_t entities[PERSIST_CONTROL_ENTITY_COUNT];
-    uint16_t route_count;
-    persist_control_route_t routes[PERSIST_CONTROL_ENTITY_COUNT * PERSIST_CONTROL_ENTITY_COUNT];
     persist_control_globals_t globals;
 } persist_control_pattern_t;
 
@@ -415,6 +401,7 @@ typedef struct
     vca_control_state_t vca;
     audio_fx_control_state_t audio_fx;
     polyphony_control_state_t polyphony;
+    uint8_t modulation_present;
     persist_control_modulation_t modulation;
 } persist_control_patch_t;
 

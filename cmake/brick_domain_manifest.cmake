@@ -92,13 +92,15 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_transport_fsm.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/audio_recorder.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/asset_ref.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/boot_context_flash.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/boot_context_sd.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/control_audio_rec_bus.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/groove_bank.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/groove_flash_backend.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/patch_product.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/pattern_control_bank.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/pattern_live_ram.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/persistence_debug.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/persistence_workspace.c"
+     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/pattern_live_ram.c"
+     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/persistence_debug.c"
+     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/persistence_workspace.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/persistent_control_codec.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/persistent_entity_topology.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/persistent_fatfs_io.c"
@@ -120,7 +122,6 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/waveform_cache.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/waveform_service.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/control_music_output.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/control_routing.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/track_catalog.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/entity_topology.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/track_input_ownership.c"
@@ -189,7 +190,7 @@ set(DOMAIN_CONTROL
 
 set(DOMAIN_STORAGE
     # Recorder/SD storage owner.  audio_recorder.c remains CONTROL because
-    # its public facade still contains arm/Looper policy and publication.
+    # its public facade still contains recorder arm policy and publication.
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/SD/bsp_driver_sd.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/SD/fatfs.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/SD/sd_block_device.c"
@@ -321,6 +322,7 @@ set(DOMAIN_AUDIO
 
 set(DOMAIN_CONTRACT_UNITS
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_engine.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_timing.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_lfo_segment.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/audio_fx_param_catalog.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Param/md_model_catalog.c"

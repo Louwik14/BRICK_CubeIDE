@@ -27,7 +27,7 @@ typedef enum
     AUDIO_RECORDER_STORAGE_FAILED
 } audio_recorder_storage_phase_t;
 
-/* Bounded value copy for the local Looper page-cache registration. */
+/* Bounded value copy for the local Recorder page-cache registration. */
 typedef struct
 {
     sample_stream_physical_extent_t extents[

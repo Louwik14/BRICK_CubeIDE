@@ -33,7 +33,7 @@ Le descriptor PROGRAM est construit une seule fois par `track_runtime` depuis
 l'etat CONTROL final. Son assertion partagee est pure (bornes du catalogue et
 combinaison de bits structurellement representable). AUDIO ne recalcule plus
 l'engine attendu, les flags de capacite, le role GROUP ou la polyphonie produit;
-il conserve allocation de slots, renderer, ressources, quota Looper, teardown,
+il conserve allocation de slots, renderer, ressources et teardown,
 held notes et rebind. Une impossibilite physique reste fatale.
 
 Pour PARAM, CONTROL publie la valeur canonique. AUDIO verifie une fois le
@@ -80,7 +80,7 @@ global; il laisse les PROGRAM identiques en place et rebind les outputs vivants
 des seuls PROGRAM/resources modifies. Le commit Project, execute transport
 arrete, panique les sorties puis teardown toutes les installations avant le
 rebuild. Les releases precedent ainsi toute acquisition incompatible, y compris
-les deplacements Looper et les swaps Looper/Synth. Les setters locaux et Patch
+les déplacements de ressources et les swaps Sampler/Synth. Les setters locaux et Patch
 restent inchanges pour les petites mutations.
 
 Le rebuild porte un `PROGRAM` pour chacun des 16 slots, y compris `OFF`, car le

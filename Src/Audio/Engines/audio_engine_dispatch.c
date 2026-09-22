@@ -3,7 +3,7 @@
  * @brief Callback DSP runtime extrait de brick6_app_init.
  *
  * RÃ´le du module:
- * - Regrouper le traitement audio bloc (synth, sampler, looper, mixer, master FX).
+ * - Regrouper le traitement audio bloc (synth, sampler, mixer, master FX).
  *
  * FrontiÃ¨re:
  * - Ne fait pas l'init applicative globale.

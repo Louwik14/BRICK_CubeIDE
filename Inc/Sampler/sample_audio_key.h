@@ -10,7 +10,6 @@ extern "C" {
 typedef enum
 {
     SAMPLE_AUDIO_DOMAIN_CLASSIC = 0,
-    SAMPLE_AUDIO_DOMAIN_LOOPER,
     SAMPLE_AUDIO_DOMAIN_MULTI,
     SAMPLE_AUDIO_DOMAIN_REC
 } sample_audio_domain_t;
@@ -26,12 +25,6 @@ typedef struct
 static inline sample_audio_key_t sample_audio_key_classic(uint16_t object_id)
 {
     const sample_audio_key_t key = { (uint8_t)SAMPLE_AUDIO_DOMAIN_CLASSIC, 0U, object_id, 0U };
-    return key;
-}
-
-static inline sample_audio_key_t sample_audio_key_looper(uint16_t object_id)
-{
-    const sample_audio_key_t key = { (uint8_t)SAMPLE_AUDIO_DOMAIN_LOOPER, 0U, object_id, 0U };
     return key;
 }
 

@@ -676,51 +676,6 @@ uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float val
     }
 }
 
-uint8_t param_backend_apply_tone_looper(uint8_t track, param_id_t id, float value)
-{
-    track_audio_runtime_ctx_t ctx_value;
-    const track_audio_runtime_ctx_t *const ctx =
-        (audio_note_engine_adapter_current_ctx(track, &ctx_value) != 0U)
-            ? &ctx_value : NULL;
-
-    if ((ctx == NULL)
-            || (ctx->family != (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-            || (ctx->type != (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))
-    {
-        return 0U;
-    }
-
-    switch (id)
-    {
-        case PARAM_LOOPER_STRETCH:
-            brick6_sampler_runtime_set_clip_stretch_mode(
-                track, (uint8_t)(param_backend_clamp_value(value, 0.0f, 2.0f) + 0.5f));
-            return 1U;
-        case PARAM_LOOPER_PITCH:
-            brick6_sampler_runtime_set_clip_pitch(
-                track, param_backend_clamp_value(value, -12.0f, 12.0f));
-            return 1U;
-        case PARAM_LOOPER_GRAIN:
-            brick6_sampler_runtime_set_clip_grain_size(
-                track, param_backend_clip_grain_size_value(
-                    param_backend_clip_size_index(value)));
-            return 1U;
-        case PARAM_SHIFTER_HEADS:
-            brick6_sampler_runtime_set_clip_shifter_heads(track, param_backend_shifter_heads_value(value));
-            return 1U;
-        case PARAM_SHIFTER_WINDOW:
-            brick6_sampler_runtime_set_clip_shifter_window(
-                track, (uint8_t)(param_backend_clamp_value(value, 0.0f, 2.0f) + 0.5f));
-            return 1U;
-        case PARAM_SHIFTER_DISP:
-            brick6_sampler_runtime_set_clip_shifter_dispersion(
-                track, (uint8_t)(param_backend_clamp_value(value, 0.0f, 1.0f) * 100.0f + 0.5f));
-            return 1U;
-        default:
-            return 0U;
-    }
-}
-
 uint8_t param_backend_apply_tone_drum(uint8_t track,
                                       const track_audio_runtime_ctx_t *ctx,
                                       param_id_t id,

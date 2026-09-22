@@ -6,7 +6,6 @@
 typedef enum
 {
     UI_HALL_ROUT_CONTEXT_NONE = 0,
-    UI_HALL_ROUT_CONTEXT_SAMPLER_LOOPER
 } ui_hall_rout_context_t;
 
 ui_hall_rout_context_t ui_hall_mode_resolve_rout_context(uint8_t track, ui_hall_mode_t raw_mode);

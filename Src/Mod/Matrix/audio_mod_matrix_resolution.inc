@@ -88,8 +88,6 @@ static track_type_t mod_matrix_ui_type_from_ctx(const track_audio_runtime_ctx_t 
             return TRACK_TYPE_EXTERNAL;
         case TRACK_RUNTIME_TYPE_STREAM:
             return TRACK_TYPE_STREAM;
-        case TRACK_RUNTIME_TYPE_LOOPER:
-            return TRACK_TYPE_LOOPER;
         case TRACK_RUNTIME_TYPE_MULTI:
             return TRACK_TYPE_MULTI;
         case TRACK_RUNTIME_TYPE_NONE:

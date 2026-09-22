@@ -739,6 +739,11 @@ uint8_t audio_note_engine_adapter_install_prepared(
     const track_runtime_type_t type = (track_runtime_type_t)spec->type;
     const track_runtime_engine_t requested_engine =
         (track_runtime_engine_t)spec->engine;
+    if (((spec->flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD) != 0U)
+            && ((family != TRACK_RUNTIME_FAMILY_SAMPLER)
+                || (type != TRACK_RUNTIME_TYPE_RAM)
+                || (requested_engine != TRACK_RUNTIME_ENGINE_SAMPLER)))
+        return 0U;
     track_audio_runtime_ctx_t *const ctx = &g_audio_track_ctx[entity_id];
     const uint8_t requested_voices = track_runtime_effective_voice_count(
         family, type, CONTROL_AUDIO_PROGRAM_DECODE_VOICES(spec->flags));
@@ -775,25 +780,6 @@ uint8_t audio_note_engine_adapter_install_prepared(
     }
     else
         return 0U;
-
-    if ((requested_engine == TRACK_RUNTIME_ENGINE_LOOPER)
-            && (installed.active != 0U))
-    {
-        uint8_t looper_count = 0U;
-        for (brick_entity_id_t other = 0U;
-             other < BRICK_ENTITY_CAPACITY; ++other)
-            if ((other != entity_id)
-                    && (g_audio_track_ctx[other].program_route.active != 0U)
-                    && (g_audio_track_ctx[other].program_route.engine
-                        == (uint8_t)TRACK_RUNTIME_ENGINE_LOOPER))
-                ++looper_count;
-        if (looper_count >= BRICK6_LOOPER_GLOBAL_CAP)
-        {
-            return 0U;
-        }
-        else
-            installed.instance_id = 0U;
-    }
 
     const uint8_t synth_renderer = (uint8_t)((installed.active != 0U)
         && ((installed.engine == (uint8_t)TRACK_RUNTIME_ENGINE_DRUM)
@@ -891,8 +877,6 @@ uint8_t audio_note_engine_adapter_install_prepared(
         && (installed.mix_track_id < MIXER_MAX_TRACKS));
     ctx->filter_track_id = installed.mix_track_id;
     ctx->supports_vca_gate = (uint8_t)((installed.active != 0U)
-        && !((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))
         && ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SYNTH)
             || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
             || (ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_DRUM)

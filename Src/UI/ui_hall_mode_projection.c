@@ -39,14 +39,6 @@ ui_hall_rout_context_t ui_hall_mode_resolve_rout_context(uint8_t track, ui_hall_
         return UI_HALL_ROUT_CONTEXT_NONE;
     }
 
-    const track_family_t family = ui_get_track_family(track);
-    const track_type_t type = ui_get_track_type(track);
-
-    if ((family == TRACK_FAMILY_SAMPLER) && (type == TRACK_TYPE_LOOPER))
-    {
-        return UI_HALL_ROUT_CONTEXT_SAMPLER_LOOPER;
-    }
-
     return UI_HALL_ROUT_CONTEXT_NONE;
 }
 

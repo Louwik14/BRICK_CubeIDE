@@ -337,8 +337,6 @@ function Set-ToneDefaults([byte[]]$Tone) {
     $clip = @(120,0,0,0,1,1,4,3,4)
     for ($i = 0; $i -lt $clip.Count; $i++) { Set-F32 $Tone (32 + 4*$i) $clip[$i] }
     Set-F32 $Tone 68 0
-    $looper = @(0,0,0,0,0,0,4)
-    for ($i = 0; $i -lt $looper.Count; $i++) { Set-F32 $Tone (72 + 4*$i) $looper[$i] }
     for ($i = 0; $i -lt 16; $i++) { Set-F32 $Tone (100 + 4*$i) 0 }
     for ($osc = 0; $osc -lt 2; $osc++) {
         Set-F32 $Tone (164 + 4*$osc) 0

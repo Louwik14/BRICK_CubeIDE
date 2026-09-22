@@ -11,19 +11,13 @@ extern "C" {
 
 #define SAMPLE_PAGE_LEASE_CLASSIC_COUNT (16U)
 #define SAMPLE_PAGE_LEASE_MULTI_COUNT   SAMPLE_STREAM_TARGET_MAX_VOICES
-#define SAMPLE_PAGE_LEASE_LOOPER_COUNT  (16U)
-#define SAMPLE_PAGE_LEASE_LOOPER_AUX_COUNT SAMPLE_PAGE_LEASE_LOOPER_COUNT
 #define SAMPLE_PAGE_LEASE_REC_COUNT     (SAMPLE_PAGE_LEASE_CLASSIC_COUNT + 1U)
 #define SAMPLE_PAGE_LEASE_REC_OVERDUB_READER SAMPLE_PAGE_LEASE_CLASSIC_COUNT
 #define SAMPLE_PAGE_LEASE_CLASSIC_BASE (0U)
 #define SAMPLE_PAGE_LEASE_MULTI_BASE \
     (SAMPLE_PAGE_LEASE_CLASSIC_BASE + SAMPLE_PAGE_LEASE_CLASSIC_COUNT)
-#define SAMPLE_PAGE_LEASE_LOOPER_BASE \
-    (SAMPLE_PAGE_LEASE_MULTI_BASE + SAMPLE_PAGE_LEASE_MULTI_COUNT)
-#define SAMPLE_PAGE_LEASE_LOOPER_AUX_BASE \
-    (SAMPLE_PAGE_LEASE_LOOPER_BASE + SAMPLE_PAGE_LEASE_LOOPER_COUNT)
 #define SAMPLE_PAGE_LEASE_REC_BASE \
-    (SAMPLE_PAGE_LEASE_LOOPER_AUX_BASE + SAMPLE_PAGE_LEASE_LOOPER_AUX_COUNT)
+    (SAMPLE_PAGE_LEASE_MULTI_BASE + SAMPLE_PAGE_LEASE_MULTI_COUNT)
 #define SAMPLE_PAGE_LEASE_SLOT_COUNT \
     (SAMPLE_PAGE_LEASE_REC_BASE + SAMPLE_PAGE_LEASE_REC_COUNT)
 
@@ -51,16 +45,6 @@ static inline uint8_t sample_page_lease_classic_slot(uint8_t reader)
 static inline uint8_t sample_page_lease_multi_slot(uint8_t reader)
 {
     return (uint8_t)(SAMPLE_PAGE_LEASE_MULTI_BASE + reader);
-}
-
-static inline uint8_t sample_page_lease_looper_slot(uint8_t reader)
-{
-    return (uint8_t)(SAMPLE_PAGE_LEASE_LOOPER_BASE + reader);
-}
-
-static inline uint8_t sample_page_lease_looper_aux_slot(uint8_t reader)
-{
-    return (uint8_t)(SAMPLE_PAGE_LEASE_LOOPER_AUX_BASE + reader);
 }
 
 static inline uint8_t sample_page_lease_rec_slot(uint8_t reader)

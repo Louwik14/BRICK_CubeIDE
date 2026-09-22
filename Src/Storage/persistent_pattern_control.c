@@ -1,7 +1,6 @@
 #include "Storage/persistent_pattern_control.h"
 #include "Storage/persistent_entity_topology.h"
 #include "Storage/persistent_key_catalog.h"
-#include "Track/control_routing.h"
 #include "App/live_parameter_audio_publication.h"
 #include "Platform/brick_media_clock.h"
 #include "IPC/live_parameter_event.h"
@@ -356,14 +355,6 @@ persist_codec_result_t persistent_pattern_control_capture(persist_control_patter
             if(!capture_mod(e,&d->modulation))return PERSIST_CODEC_INVALID_MODULATION;
         }
     }
-    for(uint8_t dst=0U;dst<PERSIST_CONTROL_ENTITY_COUNT;++dst)
-        for(uint8_t src=0U;src<PERSIST_CONTROL_ENTITY_COUNT;++src)
-            if(control_routing_get_looper_source(dst,src))
-            {
-                persist_control_route_t*r=&out->routes[out->route_count++];
-                r->kind=PERSIST_ROUTE_LOOPER_SOURCE;
-                r->source=src;r->destination=dst;r->enabled=1U;
-            }
     out->globals.tempo_milli_bpm=seq_runtime_get_tempo_bpm_milli();
     out->globals.keyboard=(persist_control_keyboard_t){keyboard_runtime_get_root_index(),keyboard_runtime_get_scale_index(),keyboard_runtime_get_omnichord()?1U:0U,(uint8_t)keyboard_runtime_get_note_order(),keyboard_runtime_get_chord_override()?1U:0U,keyboard_runtime_get_mono_last()?1U:0U};
     out->globals.metronome_level=metronome_control_get_level();
@@ -437,7 +428,6 @@ persist_codec_result_t persistent_pattern_control_validate(const persist_control
             families,types,inputs,voice_counts)==0U)
     {
         uint16_t synth_voices=0U;
-        uint8_t loopers=0U;
         uint8_t diagnosed=0U;
         for(uint8_t e=0U;e<PERSIST_CONTROL_ENTITY_COUNT;++e)
         {
@@ -456,7 +446,6 @@ persist_codec_result_t persistent_pattern_control_validate(const persist_control
                 track_runtime_choose_engine(
                     track_runtime_family_from_ui(track_state_get_family(e)),
                     current_runtime);
-            if(target_engine==TRACK_RUNTIME_ENGINE_LOOPER)++loopers;
             if(target_family==TRACK_RUNTIME_FAMILY_SYNTH
                     ||target_engine==TRACK_RUNTIME_ENGINE_DRUM)
                 synth_voices=(uint16_t)(synth_voices
@@ -475,8 +464,7 @@ persist_codec_result_t persistent_pattern_control_validate(const persist_control
                     polyphony_control_get_voice_count(e),voice_counts[e]);
                 diagnosed=1U;break;
             }
-            if(loopers>BRICK6_LOOPER_GLOBAL_CAP
-                    ||synth_voices>SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
+            if(synth_voices>SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
             {
                 persist_debug_validation_fail(PERSIST_DBG_VALIDATION_VOICE_BUDGET,
                     PERSIST_CODEC_INVALID_ENTITY,e,(uint32_t)cfg[e].type,
@@ -799,20 +787,6 @@ static persist_codec_result_t persistent_pattern_control_install_internal(
             return PERSIST_CODEC_INVALID_MODULATION;
         }
     }
-
-    uint8_t routes[BRICK_ENTITY_CAPACITY][BRICK_ENTITY_CAPACITY] = {0};
-    for (uint16_t index = 0U; index < pattern->route_count; ++index)
-    {
-        const persist_control_route_t *const route = &pattern->routes[index];
-        if ((route->destination >= BRICK_ENTITY_CAPACITY)
-                || (route->source >= BRICK_ENTITY_CAPACITY)
-                || (route->destination == route->source))
-            return PERSIST_CODEC_INVALID_ENTITY;
-        routes[route->destination][route->source] =
-            (route->enabled != 0U) ? 1U : 0U;
-    }
-    if (control_routing_apply_bulk(routes) == 0U)
-        return PERSIST_CODEC_INVALID_ENTITY;
 
     seq_runtime_set_tempo_bpm_milli(pattern->globals.tempo_milli_bpm);
     seq_clock_src_t clock;

@@ -17,7 +17,6 @@
 #include "Track/track_state.h"
 #include "Track/track_input_ownership.h"
 #include "Track/track_mute.h"
-#include "Track/control_routing.h"
 #include "Track/tone_program_control.h"
 #include "Track/fm_control_state.h"
 #include "Track/audio_fx_control_state.h"
@@ -83,10 +82,12 @@ typedef struct
 
 typedef struct
 {
+    uint8_t present;
     uint8_t length;
     uint8_t division;
-    uint8_t quantization;
-    uint8_t swing;
+    uint8_t direction;
+    int8_t rotate;
+    seq_track_timing_config_t timing;
     seq_play_snapshot_t play_base;
     seq_step_snapshot_t step[SEQ_MAX_STEPS];
 } ui_track_clipboard_sequence_t;
@@ -176,7 +177,7 @@ static uint8_t ui_core_clipboard_param_phase(param_id_t id)
 
     uint8_t note_fx_param = 0U;
     if ((ui_core_clipboard_note_fx_param_kind(id, &note_fx_param) != 0U)
-            && (note_fx_param == 3U))
+            && (note_fx_param == NOTE_FX_MODEL_INDEX))
     {
         return 5U;
     }
@@ -620,12 +621,17 @@ static uint8_t ui_core_clipboard_clear_param_list_to_min(uint8_t track,
 static uint8_t ui_track_clipboard_capture_sequence(
     uint8_t track, ui_track_clipboard_sequence_t *out)
 {
-    if ((track >= SEQ_LANE_CAPACITY) || (out == NULL)) return 0U;
+    entity_topology_descriptor_t topology;
+    if ((track >= SEQ_LANE_CAPACITY) || (out == NULL)
+            || (entity_topology_get(track, &topology) == 0U)) return 0U;
     memset(out, 0, sizeof(*out));
+    if (entity_topology_can_sequence(&topology) == 0U) return 1U;
+    out->present = 1U;
     out->length = seq_model_get_track_length(track);
     if ((seq_runtime_get_track_div(track, &out->division) == 0U)
-            || (seq_runtime_get_track_quant(track, &out->quantization) == 0U)
-            || (seq_runtime_get_track_swing(track, &out->swing) == 0U)
+            || (seq_runtime_get_track_traversal(track, &out->direction,
+                                                &out->rotate) == 0U)
+            || (seq_runtime_get_track_timing(track, &out->timing) == 0U)
             || (seq_model_play_base_capture(track, &out->play_base) == 0U))
         return 0U;
     for (seq_step_id_t step = 0U; step < SEQ_MAX_STEPS; ++step)
@@ -762,10 +768,23 @@ static uint8_t ui_core_clipboard_copy_track(uint8_t track)
 static uint8_t ui_track_clipboard_validate_sequence(
     uint8_t target, track_type_t type, const ui_track_clipboard_sequence_t *seq)
 {
-    if ((seq == NULL) || (seq->length == 0U) || (seq->length > SEQ_MAX_STEPS)
+    entity_topology_descriptor_t topology;
+    if ((seq == NULL) || (entity_topology_get(target, &topology) == 0U)) return 0U;
+    const uint8_t can_sequence = entity_topology_can_sequence(&topology);
+    if (seq->present == 0U) return (can_sequence == 0U) ? 1U : 0U;
+    if ((can_sequence == 0U) || (seq->length == 0U) || (seq->length > SEQ_MAX_STEPS)
             || ((seq->division != 1U) && (seq->division != 2U)
                 && (seq->division != 4U) && (seq->division != 8U))
-            || (seq->quantization > 100U) || (seq->swing > 100U)
+            || (seq->direction >= (uint8_t)SEQ_DIRECTION_COUNT)
+            || (seq->rotate < -(int8_t)(SEQ_MAX_STEPS - 1U))
+            || (seq->rotate > (int8_t)(SEQ_MAX_STEPS - 1U))
+            || (seq->timing.base >= SEQ_TIMING_BASE_COUNT)
+            || (seq->timing.quantize > 100U)
+            || (seq->timing.groove >= SEQ_GROOVE_COUNT)
+            || (memchr(seq->timing.groove_name,'\0',SEQ_GROOVE_NAME_BYTES)==NULL)
+            || (seq->timing.timing > 100U) || (seq->timing.random > 100U)
+            || (seq->timing.velocity < -100) || (seq->timing.velocity > 100)
+            || (seq->timing.global > 130U)
             || (seq_edit_track_sequence_is_locked(target) != 0U))
         return 0U;
     uint16_t lock_count = 0U;
@@ -952,6 +971,10 @@ static uint8_t ui_track_clipboard_prevalidate(
     {
         entity_topology_descriptor_t topology;
         if (entity_topology_resolve(group_active, entity, &topology) == 0U) return 0U;
+        if ((topology.role == ENTITY_ROLE_GROUP_CHILD)
+                && ((configs[entity].family != TRACK_FAMILY_SAMPLER)
+                    || (configs[entity].type != TRACK_TYPE_RAM)))
+            return 0U;
         if ((topology.active != 0U) && (configs[entity].family != TRACK_FAMILY_OFF)
                 && (ui_track_catalog_type_is_available(entity,
                         configs[entity].family, configs[entity].type, configs) == false))
@@ -1029,6 +1052,7 @@ static uint8_t ui_track_clipboard_restore_modulation(
 static uint8_t ui_track_clipboard_restore_sequence(
     uint8_t target, const ui_track_clipboard_sequence_t *seq)
 {
+    if ((seq == NULL) || (seq->present == 0U)) return 1U;
     seq_runtime_begin_track_restore(&target, 1U);
     seq_runtime_on_track_pattern_change(target);
     for (uint8_t step = 0U; step < SEQ_MAX_STEPS; ++step)
@@ -1044,8 +1068,8 @@ static uint8_t ui_track_clipboard_restore_sequence(
     {
         seq_model_set_track_length(target, seq->length);
         seq_runtime_restore_track_div(target, seq->division);
-        seq_runtime_set_track_quant(target, seq->quantization);
-        seq_runtime_set_track_swing(target, seq->swing);
+        seq_runtime_set_track_traversal(target, seq->direction, seq->rotate);
+        seq_runtime_set_track_timing(target, &seq->timing);
         ok = seq_model_play_base_restore(target, &seq->play_base);
     }
     seq_runtime_end_track_restore(&target, 1U);
@@ -1119,6 +1143,10 @@ static uint8_t ui_core_clipboard_paste_track(uint8_t track)
 
 static uint8_t ui_track_clipboard_clear_sequence(uint8_t track)
 {
+    entity_topology_descriptor_t topology;
+    if (entity_topology_get(track, &topology) == 0U) return 0U;
+    if (entity_topology_can_sequence(&topology) == 0U)
+        return (topology.active != 0U) ? 1U : 0U;
     seq_runtime_begin_track_restore(&track, 1U);
     seq_runtime_on_track_pattern_change(track);
     for (uint8_t step = 0U; step < SEQ_MAX_STEPS; ++step)
@@ -1130,8 +1158,12 @@ static uint8_t ui_track_clipboard_clear_sequence(uint8_t track)
     }
     seq_model_set_track_length(track, SEQ_DEFAULT_LENGTH_STEPS);
     seq_runtime_restore_track_div(track, 1U);
-    seq_runtime_set_track_quant(track, 0U);
-    seq_runtime_set_track_swing(track, 0U);
+    seq_runtime_set_track_traversal(track, (uint8_t)SEQ_DIRECTION_FWD, 0);
+    const seq_track_timing_config_t timing = {
+        .base = SEQ_TIMING_BASE_1_16,
+        .global = 100U
+    };
+    seq_runtime_set_track_timing(track, &timing);
     seq_play_snapshot_t base;
     seq_play_snapshot_init(&base);
     for (uint8_t voice = 0U; voice < SEQ_PLAY_MAX_CAPACITY; ++voice)
@@ -1162,13 +1194,12 @@ static uint8_t ui_track_clipboard_clear_active_entity(uint8_t track)
     {
         note_fx.value[slot][0] = 2U;
         note_fx.value[slot][2] = 1U;
-        note_fx.value[slot][3] = NOTE_FX_MODEL_OFF;
+        note_fx.value[slot][NOTE_FX_MODEL_INDEX] = NOTE_FX_MODEL_OFF;
     }
     const uint8_t owns_modulation = (uint8_t)((entity_topology_mod_owner(track, &mod_owner) != 0U)
         && (mod_owner == track));
     if ((track_runtime_resolve_track(track, &resolved) == 0U)
             || (project_control_track_assets_clear(track) == 0U)
-            || (control_routing_clear_entity(track) == 0U)
             || (track_mute_set(track, 0U) == 0U)
             || (tone_program_control_activate(track, TRACK_RUNTIME_TYPE_NONE) == 0U)
             || ((config.family == TRACK_FAMILY_SYNTH) && (config.type == TRACK_TYPE_FM)
@@ -1450,7 +1481,8 @@ static uint8_t ui_core_clipboard_collect_track_sequence_steps(seq_track_id_t tra
                                                               uint8_t max_steps,
                                                               uint8_t *out_count)
 {
-    if ((out_steps == 0) || (out_count == 0) || (track >= (seq_track_id_t)SEQ_TRACK_COUNT))
+    if ((out_steps == 0) || (out_count == 0)
+            || (seq_edit_track_sequence_is_locked(track) != 0U))
     {
         return 0U;
     }
@@ -1478,7 +1510,7 @@ static uint8_t ui_core_clipboard_collect_held_seq_steps(seq_track_id_t *out_trac
                                                         seq_step_id_t *out_steps,
                                                         uint8_t max_steps)
 {
-    return seq_edit_collect_held_steps(out_track, out_steps, max_steps, 0U);
+    return seq_edit_collect_held_steps(out_track, out_steps, max_steps, 1U);
 }
 
 static uint8_t ui_core_clipboard_resolve_seq_steps(seq_track_id_t *io_track,
@@ -1720,8 +1752,7 @@ uint8_t ui_core_clipboard_handle_page_event(const ui_event_t *ev,
         return 0U;
     }
 
-    if ((ui_page_get_id() != UI_PAGE_MIDI_FX)
-            && (ui_core_clipboard_is_active_page_button_held() == 0U))
+    if (ui_core_clipboard_is_active_page_button_held() == 0U)
     {
         return 0U;
     }

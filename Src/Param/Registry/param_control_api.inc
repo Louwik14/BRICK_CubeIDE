@@ -5,6 +5,13 @@ uint8_t param_registry_is_lfo_param(param_id_t id)
     return param_lfo_map(id, &lfo_index, &lfo_param);
 }
 
+uint8_t param_registry_is_modulation_source_param(param_id_t id)
+{
+    return ((param_registry_is_lfo_param(id) != 0U)
+            || ((id >= PARAM_ENV3_ATTACK) && (id <= PARAM_ENV3_RELEASE)))
+        ? 1U : 0U;
+}
+
 uint8_t param_registry_is_plockable(param_id_t id)
 {
     if (id >= PARAM_COUNT) return 0U;
@@ -16,9 +23,6 @@ uint8_t param_registry_is_plockable(param_id_t id)
         case PARAM_SAMPLER_SLICE_COUNT:
         case PARAM_AUDIO_FX_MODEL:
         case PARAM_AUDIO_FX_B_MODEL:
-        case PARAM_LOOPER_STRETCH:
-        case PARAM_LOOPER_PITCH:
-        case PARAM_LOOPER_GRAIN:
         case PARAM_FM_TRANSPOSE:
         case PARAM_FM_PITCH_R1:
         case PARAM_FM_PITCH_R2:
@@ -194,7 +198,7 @@ uint8_t param_registry_projected_track_param_is_applicable(
     if (is_group_master != 0U)
         return (uint8_t)((id == PARAM_FILTER_MORPH)
             || (id == PARAM_FILTER_CUTOFF) || (id == PARAM_FILTER_RESONANCE)
-            || (id == PARAM_FILTER_KEYTRK) || (id == PARAM_ENV3_ATTACK)
+            || (id == PARAM_ENV3_ATTACK)
             || (id == PARAM_ENV3_DECAY) || (id == PARAM_ENV3_SUSTAIN)
             || (id == PARAM_ENV3_RELEASE));
     if (rule.resource == TRACK_RUNTIME_RESOURCE_FILTER)
@@ -341,7 +345,8 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
 
     uint8_t note_fx_slot = 0U;
     uint8_t note_fx_param = 0U;
-    if (note_fx_state_param_map(id, &note_fx_slot, &note_fx_param) != 0U)
+    if ((note_fx_state_param_map(id, &note_fx_slot, &note_fx_param) != 0U)
+            || (note_fx_state_order_map(id) != 0U))
     {
         if (track_runtime_is_ui_ensemble_available(track, TRACK_RUNTIME_UI_ENSEMBLE_MIDI_FX) == 0U)
         {
@@ -562,7 +567,12 @@ uint8_t param_registry_prepare_track_control_target(
                 || (id == PARAM_FILTER_MODE) || (id == PARAM_ENV_RETRIG_VCA))
             owner_kind = PARAM_CONTROL_OWNER_VCA;
         else if ((id >= PARAM_ENV3_ATTACK) && (id <= PARAM_ENV3_RELEASE))
+        {
+            brick_entity_id_t owner = track;
+            if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;
+            track = owner;
             owner_kind = PARAM_CONTROL_OWNER_ENV3;
+        }
         else if ((id == PARAM_MIX_LEVEL) || (id == PARAM_MIX_PAN)
                 || (id == PARAM_MIX_SEND1) || (id == PARAM_MIX_SEND2)
                 || (id == PARAM_MIX_SEND3))

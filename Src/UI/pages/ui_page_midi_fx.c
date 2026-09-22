@@ -10,7 +10,6 @@
 #include "Seq/seq_division_catalog.h"
 #include "drv_display.h"
 #include "font.h"
-#include "Track/control_routing.h"
 #include "Audio/fx_audio_xfade.h"
 #include "ui_page_manager.h"
 #include "ui_param.h"
@@ -20,24 +19,24 @@
 #include <stdio.h>
 
 static const ui_template_family_t g_ui_template_midi_fx_family = {
-    .family_title = "FX 1/2",
-    .nav_labels = { "MIDI FX 1", "MIDI FX 2", "MIDI FX 3", "MIDI FX 4" },
+    .family_title = "MIDI FX",
+    .nav_labels = { "MIDI FX 1", "MIDI FX 2", "MIDI FX 3", "ORDER" },
     .subpages = {
         {
             .title = "MIDI FX 1",
-            .param_bank = { .params = { PARAM_MIDI_FX_S1_PARAM1, PARAM_MIDI_FX_S1_PARAM2, PARAM_MIDI_FX_S1_PARAM3, PARAM_MIDI_FX_S1_MODEL } },
+            .param_bank = { .params = { PARAM_MIDI_FX_S1_PARAM1, PARAM_MIDI_FX_S1_PARAM2, PARAM_MIDI_FX_S1_PARAM3, PARAM_MIDI_FX_S1_PARAM4 } },
         },
         {
             .title = "MIDI FX 2",
-            .param_bank = { .params = { PARAM_MIDI_FX_S2_PARAM1, PARAM_MIDI_FX_S2_PARAM2, PARAM_MIDI_FX_S2_PARAM3, PARAM_MIDI_FX_S2_MODEL } },
+            .param_bank = { .params = { PARAM_MIDI_FX_S2_PARAM1, PARAM_MIDI_FX_S2_PARAM2, PARAM_MIDI_FX_S2_PARAM3, PARAM_MIDI_FX_S2_PARAM4 } },
         },
         {
             .title = "MIDI FX 3",
-            .param_bank = { .params = { PARAM_MIDI_FX_S3_PARAM1, PARAM_MIDI_FX_S3_PARAM2, PARAM_MIDI_FX_S3_PARAM3, PARAM_MIDI_FX_S3_MODEL } },
+            .param_bank = { .params = { PARAM_MIDI_FX_S3_PARAM1, PARAM_MIDI_FX_S3_PARAM2, PARAM_MIDI_FX_S3_PARAM3, PARAM_MIDI_FX_S3_PARAM4 } },
         },
         {
-            .title = "MIDI FX 4",
-            .param_bank = { .params = { PARAM_MIDI_FX_S4_PARAM1, PARAM_MIDI_FX_S4_PARAM2, PARAM_MIDI_FX_S4_PARAM3, PARAM_MIDI_FX_S4_MODEL } },
+            .title = "ORDER",
+            .param_bank = { .params = { PARAM_MIDI_FX_S1_MODEL, PARAM_MIDI_FX_S2_MODEL, PARAM_MIDI_FX_S3_MODEL, PARAM_MIDI_FX_ORDER } },
         },
     },
     .default_subpage = 0U,
@@ -139,11 +138,6 @@ static const ui_template_family_t *ui_page_midi_fx_resolve_family(void)
     const ui_hall_rout_context_t rout_context =
         ui_hall_mode_resolve_rout_context(active_track, ui_get_hall_mode());
 
-    if (rout_context == UI_HALL_ROUT_CONTEXT_SAMPLER_LOOPER)
-    {
-        return &g_ui_template_midi_fx_family_rout;
-    }
-
     if (rout_context != UI_HALL_ROUT_CONTEXT_NONE)
     {
         return &g_ui_template_midi_fx_family_rout;
@@ -157,17 +151,12 @@ static uint8_t ui_page_midi_fx_subpage_enabled(uint8_t subpage_index)
     const ui_hall_rout_context_t rout_context =
         ui_hall_mode_resolve_rout_context(ui_get_active_lane(), ui_get_hall_mode());
 
-    if (rout_context == UI_HALL_ROUT_CONTEXT_SAMPLER_LOOPER)
-    {
-        return (subpage_index == 0U) ? 1U : 0U;
-    }
-
     if (rout_context != UI_HALL_ROUT_CONTEXT_NONE)
     {
         return (subpage_index == 0U) ? 1U : 0U;
     }
 
-    return (subpage_index < NOTE_FX_SLOT_COUNT) ? 1U : 0U;
+    return (subpage_index < (NOTE_FX_SLOT_COUNT + 1U)) ? 1U : 0U;
 }
 
 static uint8_t ui_page_midi_fx_virtual_slot_text(uint8_t slot,
@@ -275,10 +264,62 @@ static uint8_t ui_page_midi_fx_param_text(uint8_t slot,
                                           char *out_value,
                                           uint32_t out_value_len)
 {
-    (void)slot;
     if ((out_name == NULL) || (out_name_len == 0U))
     {
         return 0U;
+    }
+
+    if ((id >= PARAM_MIDI_FX_S1_PARAM1) && (id <= PARAM_MIDI_FX_ORDER))
+    {
+        /* MIDI-FX cards must stay on the normal parameter rendering path: its
+         * value and lock bit are resolved centrally from the held step.  The
+         * legacy virtual-card formatter reads the track base and therefore
+         * must not be authoritative for these catalogued parameters. */
+        static const char *const names[NOTE_FX_MODEL_COUNT][NOTE_FX_PARAM_COUNT] = {
+            [NOTE_FX_MODEL_OFF] = { "PARAM1", "PARAM2", "PARAM3", "PARAM4" },
+            [NOTE_FX_MODEL_ARP] = { "TYPE", "DIV", "RANGE", "HOLD" },
+            [NOTE_FX_MODEL_EUCLID] = { "LENGTH", "PULSES", "DIV", "ROTATE" },
+            [NOTE_FX_MODEL_PROBABILITY] = { "CHANCE", "CONDITION", "LOT", "KEEP" },
+            [NOTE_FX_MODEL_GATE] = { "LENGTH", "VARIATION", "MODE", "SEED" },
+            [NOTE_FX_MODEL_VOICER] = { "TYPE", "SPREAD", "INVERT", "VOICES" },
+            [NOTE_FX_MODEL_SCALER] = { "SCALE", "KEY", "STICK", "TRSP" }
+        };
+        static const char *const models[NOTE_FX_MODEL_COUNT] = {
+            "OFF","ARP","EUCLID","PROBABILITY","GATE","VOICER","SCALER" };
+        static const char *const styles[] = { "ORDER", "UP", "DOWN", "UP/DOWN", "RANDOM" };
+        static const char *const orders[NOTE_FX_ORDER_COUNT] = {"123","132","213","231","312","321"};
+        if(id==PARAM_MIDI_FX_ORDER){const uint8_t v=((uint8_t)value<NOTE_FX_ORDER_COUNT)?(uint8_t)value:0U;(void)snprintf(out_name,out_name_len,"ORDER");if(out_value&&out_value_len)(void)snprintf(out_value,out_value_len,"%s",orders[v]);return 1U;}
+        const uint8_t fx_slot = (uint8_t)((id - PARAM_MIDI_FX_S1_PARAM1) / NOTE_FX_VALUE_COUNT);
+        const uint8_t fx_param = (uint8_t)((id - PARAM_MIDI_FX_S1_PARAM1) % NOTE_FX_VALUE_COUNT);
+        const param_id_t model_id = (param_id_t)(PARAM_MIDI_FX_S1_MODEL + fx_slot * NOTE_FX_VALUE_COUNT);
+        float model_value = 0.0f;
+        (void)note_fx_state_get_param(ui_get_active_lane(), model_id, &model_value);
+        (void)ui_param_try_get_seq_plock_feedback(model_id, &model_value, NULL);
+        const uint8_t model = ((uint8_t)model_value < NOTE_FX_MODEL_COUNT) ? (uint8_t)model_value : NOTE_FX_MODEL_OFF;
+        (void)snprintf(out_name, out_name_len, "%s",(fx_param==NOTE_FX_MODEL_INDEX)?"MODEL":names[model][fx_param]);
+        if ((out_value == NULL) || (out_value_len == 0U)) return 1U;
+        if ((fx_param < NOTE_FX_PARAM_COUNT) && (model == NOTE_FX_MODEL_OFF)) (void)snprintf(out_value, out_value_len, "-");
+        else if (fx_param == NOTE_FX_MODEL_INDEX) { const uint8_t v=((uint8_t)value<NOTE_FX_MODEL_COUNT)?(uint8_t)value:0U; (void)snprintf(out_value,out_value_len,"%s",models[v]); }
+        else if ((model == NOTE_FX_MODEL_PROBABILITY) && (fx_param == 0U)) (void)snprintf(out_value,out_value_len,"%u %%",(unsigned)(uint8_t)value);
+        else if ((model == NOTE_FX_MODEL_PROBABILITY) && (fx_param == 1U)) { static const char *const c[]={"ALWAYS","1:2","2:2","1:3","2:3","3:3","1:4","2:4","3:4","4:4"}; const uint8_t v=((uint8_t)value<NOTE_FX_PROBABILITY_CONDITION_COUNT)?(uint8_t)value:0U; (void)snprintf(out_value,out_value_len,"%s",c[v]); }
+        else if ((model == NOTE_FX_MODEL_PROBABILITY) && (fx_param == 2U)) (void)snprintf(out_value,out_value_len,"%s",((uint8_t)value==0U)?"GROUP":seq_division_arp_label((uint8_t)value-1U));
+        else if ((model == NOTE_FX_MODEL_PROBABILITY) && (fx_param == 3U)) (void)snprintf(out_value,out_value_len,"%s",((uint8_t)value==0U)?"OFF":seq_division_arp_label((uint8_t)value-1U));
+        else if ((model == NOTE_FX_MODEL_GATE) && (fx_param < 2U)) (void)snprintf(out_value,out_value_len,"%u %%",(unsigned)(uint8_t)value);
+        else if ((model == NOTE_FX_MODEL_GATE) && (fx_param == 2U)) { static const char *const m[]={"CLIP","EXTEND"}; const uint8_t v=((uint8_t)value<2U)?(uint8_t)value:0U; (void)snprintf(out_value,out_value_len,"%s",m[v]); }
+        else if ((model == NOTE_FX_MODEL_VOICER) && (fx_param == 0U)) { static const char *const h[]={"MAJOR","MINOR","SUS4","SUS2","7TH","MAJ7","DIM7","AUG"}; const uint8_t v=((uint8_t)value<8U)?(uint8_t)value:0U; (void)snprintf(out_value,out_value_len,"%s",h[v]); }
+        else if ((model == NOTE_FX_MODEL_SCALER) && (fx_param == 0U)) { static const char *const s[]={"MAJOR","MINOR","DORIAN","MIXOLYD","PENTA MAJ","PENTA MIN","CHROM"}; const uint8_t v=((uint8_t)value<7U)?(uint8_t)value:0U; (void)snprintf(out_value,out_value_len,"%s",s[v]); }
+        else if ((model == NOTE_FX_MODEL_SCALER) && (fx_param == 1U)) { static const char *const k[]={"C","C#","D","D#","E","F","F#","G","G#","A","A#","B"}; (void)snprintf(out_value,out_value_len,"%s",k[(uint8_t)value%12U]); }
+        else if ((model == NOTE_FX_MODEL_SCALER) && (fx_param == 2U)) { static const char *const s[]={"DOWN","UP","DROP"}; const uint8_t v=((uint8_t)value<3U)?(uint8_t)value:0U; (void)snprintf(out_value,out_value_len,"%s",s[v]); }
+        else if ((model == NOTE_FX_MODEL_SCALER) && (fx_param == 3U)) (void)snprintf(out_value,out_value_len,"%+d",(int)(uint8_t)value-12);
+        else if ((model == NOTE_FX_MODEL_ARP) && (fx_param == 0U)) { const uint8_t v=((uint8_t)value<5U)?(uint8_t)value:0U; (void)snprintf(out_value,out_value_len,"%s",styles[v]); }
+        else if ((model == NOTE_FX_MODEL_ARP) && (fx_param == 1U)) (void)snprintf(out_value,out_value_len,"%s",seq_division_arp_label((uint8_t)value));
+        else if ((model == NOTE_FX_MODEL_ARP) && (fx_param == 3U)) (void)snprintf(out_value,out_value_len,"%s",((uint8_t)value)?"ON":"OFF");
+        else if ((model == NOTE_FX_MODEL_VOICER) && (fx_param == 1U)) (void)snprintf(out_value,out_value_len,"%u",(unsigned)(uint8_t)value);
+        else if ((model == NOTE_FX_MODEL_EUCLID) && (fx_param < 2U)) (void)snprintf(out_value,out_value_len,"%u",(unsigned)(uint8_t)value);
+        else if (((model == NOTE_FX_MODEL_EUCLID)&&(fx_param == 2U)) || (fx_param == 0U)) (void)snprintf(out_value,out_value_len,"%s",seq_division_arp_label((uint8_t)value));
+        else if (fx_param == 1U) { const uint8_t v=((uint8_t)value<5U)?(uint8_t)value:0U; (void)snprintf(out_value,out_value_len,"%s",styles[v]); }
+        else (void)snprintf(out_value,out_value_len,"%u",(unsigned)(uint8_t)value);
+        return 1U;
     }
 
     if ((id == PARAM_GROUP_FX_A_LEVEL) || (id == PARAM_GROUP_FX_B_LEVEL))
@@ -434,22 +475,10 @@ static uint8_t ui_page_midi_fx_virtual_slot_text(uint8_t slot,
                                                        char *out_value,
                                                        uint32_t out_value_len)
 {
-    static const char *const style_labels[] = { "ORDER", "UP", "DOWN", "UP/DOWN", "RANDOM" };
-    static const char *const names[NOTE_FX_MODEL_COUNT][NOTE_FX_PARAM_COUNT] = {
-        [NOTE_FX_MODEL_OFF] = { "PARAM1", "PARAM2", "PARAM3", "TYPE" },
-        [NOTE_FX_MODEL_ARP_FREE] = { "RATE", "STYLE", "RANGE", "TYPE" },
-        [NOTE_FX_MODEL_ARP_SYNC] = { "RATE", "STYLE", "RANGE", "TYPE" },
-        [NOTE_FX_MODEL_EUCLID] = { "LENGTH", "PULSE", "DIV", "TYPE" },
-        [NOTE_FX_MODEL_PROBABILITY] = { "CHANCE", "CONDITION", "LOT", "TYPE" },
-        [NOTE_FX_MODEL_GATE] = { "LENGTH", "VARIATION", "MODE", "TYPE" },
-        [NOTE_FX_MODEL_GROOVE] = { "TYPE", "TIMING", "VELOCITY", "MODEL" },
-        [NOTE_FX_MODEL_ECHO] = { "TIME", "REPEATS", "DECAY", "TYPE" },
-        [NOTE_FX_MODEL_HARMONIZER] = { "TYPE", "SPREAD", "INVERT", "MODEL" },
-        [NOTE_FX_MODEL_CHORD] = { "SHIFT", "SPREAD", "INVERT", "TYPE" }
-    };
-    static const char *const model_labels[NOTE_FX_MODEL_COUNT] = {
-        "OFF","ARP FREE","ARP SYNC","EUCLID","PROBABILITY","GATE","GROOVE","ECHO",
-        "HARMONIZER","CHORD" };
+    if (ui_page_get_id() == UI_PAGE_MIDI_FX)
+    {
+        return 0U;
+    }
     if (ui_page_get_id() == UI_PAGE_AUDIO_FX)
     {
         if (g_ui_template_audio_fx_state.active_subpage != 2U) return 0U;
@@ -465,91 +494,7 @@ static uint8_t ui_page_midi_fx_virtual_slot_text(uint8_t slot,
         if(slot<4U){const uint8_t fx_slot=(uint8_t)(slot-2U);float model_value=0.0f;(void)audio_fx_control_state_get_param(entity,fx_slot?PARAM_AUDIO_FX_B_MODEL:PARAM_AUDIO_FX_MODEL,&model_value);const uint8_t model_caps=audio_fx_control_model_capabilities((uint8_t)(model_value+0.5f));(void)snprintf(out_name,out_name_len,"MODE %c",fx_slot?'B':'A');(void)snprintf(out_value,out_value_len,"%s",model_caps==AUDIO_FX_CAP_SPATIAL_STEREO?"STEREO":mode_labels[config.spatial_mode[fx_slot]]);return 1U;}
         return 0U;
     }
-    const uint8_t page_slot = g_ui_template_midi_fx_state.active_subpage;
-    if ((slot >= NOTE_FX_PARAM_COUNT) || (page_slot >= NOTE_FX_SLOT_COUNT))
-    {
-        return 0U;
-    }
-
-    const param_id_t first = (param_id_t)(PARAM_MIDI_FX_S1_PARAM1 + (page_slot * NOTE_FX_PARAM_COUNT));
-    float model = 0.0f;
-    float value = 0.0f;
-    if ((note_fx_state_get_param(ui_get_active_lane(), (param_id_t)(first + 3U), &model) == 0U)
-            || (note_fx_state_get_param(ui_get_active_lane(), (param_id_t)(first + slot), &value) == 0U))
-    {
-        return 0U;
-    }
-
-    const uint8_t model_index = ((uint8_t)model < NOTE_FX_MODEL_COUNT)
-        ? (uint8_t)model : NOTE_FX_MODEL_OFF;
-    const uint8_t is_euclid = (model_index == NOTE_FX_MODEL_EUCLID) ? 1U : 0U;
-    (void)snprintf(out_name, out_name_len, "%s", names[model_index][slot]);
-    if ((slot < 3U) && ((uint8_t)model == NOTE_FX_MODEL_OFF))
-    {
-        (void)snprintf(out_value, out_value_len, "-");
-        return 1U;
-    }
-    if (slot == 3U)
-    {
-        const uint8_t index = ((uint8_t)value < NOTE_FX_MODEL_COUNT)
-            ? (uint8_t)value : NOTE_FX_MODEL_OFF;
-        (void)snprintf(out_value, out_value_len, "%s", model_labels[index]);
-    }
-    else if (model_index == NOTE_FX_MODEL_PROBABILITY && slot == 0U)
-        (void)snprintf(out_value, out_value_len, "%u %%", (unsigned)(uint8_t)value);
-    else if (model_index == NOTE_FX_MODEL_PROBABILITY && slot == 1U)
-    {
-        static const char *const condition[] = {"ALWAYS","1:2","2:2","1:3","2:3","3:3","1:4","2:4","3:4","4:4"};
-        const uint8_t index = ((uint8_t)value < NOTE_FX_PROBABILITY_CONDITION_COUNT) ? (uint8_t)value : 0U;
-        (void)snprintf(out_value,out_value_len,"%s",condition[index]);
-    }
-    else if (model_index == NOTE_FX_MODEL_PROBABILITY && slot == 2U)
-        (void)snprintf(out_value,out_value_len,"%s",((uint8_t)value==0U)?"GROUP":seq_division_arp_label((uint8_t)value-1U));
-    else if (model_index == NOTE_FX_MODEL_GATE && slot < 2U)
-        (void)snprintf(out_value,out_value_len,"%u %%",(unsigned)(uint8_t)value);
-    else if (model_index == NOTE_FX_MODEL_GATE && slot == 2U)
-    { static const char *const mode[]={"CLIP","LEGATO","RETRIG"};const uint8_t index=((uint8_t)value<3U)?(uint8_t)value:0U;(void)snprintf(out_value,out_value_len,"%s",mode[index]); }
-    else if (model_index == NOTE_FX_MODEL_GROOVE && slot == 0U)
-    { static const char *const groove[]={"SWING","SHUFFLE","MPC","FUNK"};const uint8_t index=((uint8_t)value<4U)?(uint8_t)value:0U;(void)snprintf(out_value,out_value_len,"%s",groove[index]); }
-    else if (model_index == NOTE_FX_MODEL_GROOVE && slot < 3U)
-        (void)snprintf(out_value,out_value_len,"%u %%",(unsigned)(uint8_t)value);
-    else if (model_index == NOTE_FX_MODEL_ECHO && slot == 0U)
-        (void)snprintf(out_value,out_value_len,"%s",seq_division_arp_label((uint8_t)value));
-    else if (model_index == NOTE_FX_MODEL_ECHO && slot == 1U)
-        (void)snprintf(out_value,out_value_len,"%u",(unsigned)(uint8_t)value);
-    else if (model_index == NOTE_FX_MODEL_ECHO && slot == 2U)
-        (void)snprintf(out_value,out_value_len,"%u %%",(unsigned)(uint8_t)value);
-    else if (model_index == NOTE_FX_MODEL_HARMONIZER && slot == 0U)
-    { static const char *const harmony[]={"MAJOR","MINOR","SUS4","SUS2","7TH","MAJ7","DIM7","AUG"};const uint8_t index=((uint8_t)value<8U)?(uint8_t)value:0U;(void)snprintf(out_value,out_value_len,"%s",harmony[index]); }
-    else if ((model_index == NOTE_FX_MODEL_HARMONIZER
-            || model_index == NOTE_FX_MODEL_CHORD) && slot == 1U)
-        (void)snprintf(out_value,out_value_len,"%u",(unsigned)(uint8_t)value);
-    else if (model_index == NOTE_FX_MODEL_CHORD && slot == 0U)
-        (void)snprintf(out_value,out_value_len,"%+d",(int)(uint8_t)value-7);
-    else if (is_euclid != 0U && slot < 2U)
-    {
-        (void)snprintf(out_value, out_value_len, "%u", (unsigned int)(uint8_t)value);
-    }
-    else if (is_euclid != 0U && slot == 2U)
-    {
-        (void)snprintf(out_value, out_value_len, "%s",
-                       seq_division_arp_label((uint8_t)value));
-    }
-    else if (slot == 0U)
-    {
-        (void)snprintf(out_value, out_value_len, "%s", seq_division_arp_label((uint8_t)value));
-    }
-    else if (slot == 1U)
-    {
-        const uint8_t index = ((uint8_t)value < 5U) ? (uint8_t)value : 0U;
-        (void)snprintf(out_value, out_value_len, "%s", style_labels[index]);
-    }
-    else if (slot == 2U)
-    {
-        (void)snprintf(out_value, out_value_len, "%u", (unsigned int)(uint8_t)value);
-    }
-    else (void)snprintf(out_value,out_value_len,"%u",(unsigned)(uint8_t)value);
-    return 1U;
+    return 0U;
 }
 
 static void ui_page_midi_fx_enter(void)
@@ -591,11 +536,11 @@ static uint8_t ui_page_midi_fx_handle_encoder(uint8_t encoder, int16_t delta)
         {const uint8_t slot=(uint8_t)(encoder-2U);float model_value=0.0f;(void)audio_fx_control_state_get_param(entity,slot?PARAM_AUDIO_FX_B_MODEL:PARAM_AUDIO_FX_MODEL,&model_value);if(audio_fx_control_model_capabilities((uint8_t)(model_value+0.5f))==AUDIO_FX_CAP_SPATIAL_STEREO)return 1U;int32_t v=(int32_t)config.spatial_mode[slot]+((delta>0)?1:-1);if(v<0)v=0;if(v>3)v=3;(void)audio_fx_control_set_spatial_mode(entity,(audio_fx_slot_t)slot,(uint8_t)v);return 1U;}
     }
     if ((ui_page_get_id() == UI_PAGE_MIDI_FX)
-            && (encoder < 3U)
+            && (encoder < 4U)
             && (g_ui_template_midi_fx_state.active_subpage < NOTE_FX_SLOT_COUNT))
     {
         const param_id_t model = (param_id_t)(PARAM_MIDI_FX_S1_MODEL
-            + (g_ui_template_midi_fx_state.active_subpage * NOTE_FX_PARAM_COUNT));
+            + (g_ui_template_midi_fx_state.active_subpage * NOTE_FX_VALUE_COUNT));
         float value = 0.0f;
         if ((note_fx_state_get_param(ui_get_active_lane(), model, &value) != 0U)
                 && ((uint8_t)value == NOTE_FX_MODEL_OFF))
@@ -656,7 +601,7 @@ static void ui_page_midi_fx_render(void)
     const uint8_t row = (uint8_t)(track >> 2U);
     const uint8_t x = (uint8_t)(2U + (column * 32U));
     const uint8_t y = (uint8_t)(19U + (row * 22U));
-    const uint8_t routed = control_routing_get_looper_source(active_track, track);
+    const uint8_t routed = 0U;
     char label[6];
     (void)snprintf(label, sizeof(label), "T%u", (unsigned int)(track + 1U));
 
@@ -691,9 +636,7 @@ void ui_page_template_midi_fx_register_families(void)
         for (uint8_t type = 0U; type < (uint8_t)TRACK_TYPE_COUNT; ++type)
         {
             const track_type_t track_type = (track_type_t)type;
-            if (!ui_track_type_is_valid_for_family(track_family, track_type)
-                    || (track_family == TRACK_FAMILY_OFF)
-                    || ((track_family == TRACK_FAMILY_SAMPLER) && (track_type == TRACK_TYPE_LOOPER)))
+            if (!ui_track_type_is_valid_for_family(track_family, track_type))
             {
                 continue;
             }

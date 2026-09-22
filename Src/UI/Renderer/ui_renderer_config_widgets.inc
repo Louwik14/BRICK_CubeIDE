@@ -20,45 +20,6 @@ static uint8_t ui_renderer_template_draw_play_note_text(param_id_t id, int x, in
     return ui_renderer_template_draw_filter_text(x, y, w, h, label, font, 4);
 }
 
-static void ui_renderer_template_draw_point(int x, int y)
-{
-    drv_display_draw_line(x, y, x, y);
-}
-
-static void ui_renderer_template_draw_circle_points(int cx, int cy, int x, int y)
-{
-    ui_renderer_template_draw_point(cx + x, cy + y);
-    ui_renderer_template_draw_point(cx - x, cy + y);
-    ui_renderer_template_draw_point(cx + x, cy - y);
-    ui_renderer_template_draw_point(cx - x, cy - y);
-    ui_renderer_template_draw_point(cx + y, cy + x);
-    ui_renderer_template_draw_point(cx - y, cy + x);
-    ui_renderer_template_draw_point(cx + y, cy - x);
-    ui_renderer_template_draw_point(cx - y, cy - x);
-}
-
-static void ui_renderer_template_draw_circle_outline(int cx, int cy, int radius)
-{
-    int px = 0;
-    int py = radius;
-    int d = 1 - radius;
-
-    while (px <= py)
-    {
-        ui_renderer_template_draw_circle_points(cx, cy, px, py);
-        px++;
-        if (d < 0)
-        {
-            d += (2 * px) + 1;
-        }
-        else
-        {
-            py--;
-            d += (2 * (px - py)) + 1;
-        }
-    }
-}
-
 static void ui_renderer_template_draw_cfg_piano_icon(int x, int y, int w, int h)
 {
     const int key_w = 26;
@@ -476,25 +437,6 @@ static void ui_renderer_template_draw_cfg_ram_icon(int x, int y, int w, int h)
     }
 }
 
-static void ui_renderer_template_draw_cfg_loop_icon(int x, int y, int w, int h)
-{
-    const int bx = x + 4;
-    const int by = y + 6;
-    const int bw = w - 8;
-    const int bh = h - 10;
-    const int r1x = bx + 7;
-    const int r2x = bx + bw - 8;
-    const int ry = by + 9;
-
-    drv_display_draw_rect(bx, by, bw, bh);
-    drv_display_draw_line(bx + 3, by + 3, bx + bw - 4, by + 3);
-    ui_renderer_template_draw_circle_outline(r1x, ry, 3);
-    ui_renderer_template_draw_circle_outline(r2x, ry, 3);
-    drv_display_draw_line(r1x + 3, ry, r2x - 3, ry);
-    drv_display_draw_line(bx + 5, by + bh - 4, bx + bw - 6, by + bh - 4);
-    drv_display_draw_line(bx + 8, by + bh - 7, bx + bw - 9, by + bh - 7);
-}
-
 static uint8_t ui_renderer_template_draw_cfg_stacked_text(int x,
                                                           int y,
                                                           int w,
@@ -640,10 +582,6 @@ static uint8_t ui_renderer_template_draw_custom_track_cfg(const ui_param_seq_plo
 
             case TRACK_TYPE_STREAM:
                 ui_renderer_template_draw_cfg_stream_icon(x, y, w, h);
-                return 1U;
-
-            case TRACK_TYPE_LOOPER:
-                ui_renderer_template_draw_cfg_loop_icon(x, y, w, h);
                 return 1U;
 
             case TRACK_TYPE_DRUM_MD:

@@ -21,7 +21,6 @@ static uint8_t track_state_audio_resources_are_valid(
     const track_config_t configs[TRACK_CONFIG_CAPACITY], uint8_t group_active)
 {
     uint16_t synth_voices = 0U;
-    uint8_t loopers = 0U;
     for (brick_entity_id_t entity_id = 0U;
          entity_id < BRICK_ENTITY_CAPACITY; ++entity_id)
     {
@@ -35,7 +34,6 @@ static uint8_t track_state_audio_resources_are_valid(
             configs[entity_id].type);
         const track_runtime_engine_t engine =
             track_runtime_choose_engine(family, type);
-        if (engine == TRACK_RUNTIME_ENGINE_LOOPER) ++loopers;
         if ((family == TRACK_RUNTIME_FAMILY_SYNTH)
                 || (engine == TRACK_RUNTIME_ENGINE_DRUM))
             synth_voices = (uint16_t)(synth_voices
@@ -47,8 +45,7 @@ static uint8_t track_state_audio_resources_are_valid(
                 && (engine == TRACK_RUNTIME_ENGINE_NONE))
             return 0U;
     }
-    return (uint8_t)((loopers <= BRICK6_LOOPER_GLOBAL_CAP)
-        && (synth_voices <= SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET));
+    return (uint8_t)(synth_voices <= SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET);
 }
 
 bool track_structure_validate_entity_bulk_with_polyphony(
@@ -61,7 +58,6 @@ bool track_structure_validate_entity_bulk_with_polyphony(
             || (voice_count == NULL)) return false;
     track_config_t configs[BRICK_ENTITY_CAPACITY];
     uint16_t synth_voices = 0U;
-    uint8_t loopers = 0U;
     const uint8_t group_active = (uint8_t)(
         type[BRICK_ENTITY_GROUP_MASTER_ID] == TRACK_TYPE_GROUP);
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
@@ -78,6 +74,10 @@ bool track_structure_validate_entity_bulk_with_polyphony(
                 || (topology.active == 0U)) continue;
         const track_family_t ui_family = configs[entity].family;
         const track_type_t ui_type = configs[entity].type;
+        if ((topology.role == ENTITY_ROLE_GROUP_CHILD)
+                && ((ui_family != TRACK_FAMILY_SAMPLER)
+                    || (ui_type != TRACK_TYPE_RAM)))
+            return false;
         if (((uint8_t)ui_family >= TRACK_FAMILY_COUNT)
                 || ((uint8_t)ui_type >= TRACK_TYPE_COUNT)
                 || ((ui_family != TRACK_FAMILY_OFF)
@@ -89,7 +89,6 @@ bool track_structure_validate_entity_bulk_with_polyphony(
         const track_runtime_type_t runtime_type = track_runtime_type_from_ui(ui_type);
         const track_runtime_engine_t engine =
             track_runtime_choose_engine(runtime_family, runtime_type);
-        if (engine == TRACK_RUNTIME_ENGINE_LOOPER) ++loopers;
         if ((runtime_family == TRACK_RUNTIME_FAMILY_SYNTH)
                 || (engine == TRACK_RUNTIME_ENGINE_DRUM))
             synth_voices = (uint16_t)(synth_voices
@@ -100,8 +99,7 @@ bool track_structure_validate_entity_bulk_with_polyphony(
                 && (runtime_type != TRACK_RUNTIME_TYPE_GROUP)
                 && (engine == TRACK_RUNTIME_ENGINE_NONE)) return false;
     }
-    return (loopers <= BRICK6_LOOPER_GLOBAL_CAP)
-        && (synth_voices <= SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
+    return (synth_voices <= SYNTH_POLYPHONY_GLOBAL_VOICE_BUDGET)
         && (track_input_ownership_validate_bulk(configs, external_input) != 0U);
 }
 
@@ -115,18 +113,29 @@ static track_config_t track_state_default_config(void)
     return config;
 }
 
-static track_config_t track_state_initial_config(uint8_t track)
+void track_state_make_initial_config(uint8_t track, track_config_t *out_config)
 {
+    if (out_config == NULL) return;
     entity_topology_descriptor_t entity;
     if ((entity_topology_resolve(1U, (brick_entity_id_t)track, &entity) != 0U)
             && (entity.role == ENTITY_ROLE_GROUP_CHILD))
     {
-        return (track_config_t){
+        *out_config = (track_config_t){
             .family = TRACK_FAMILY_SAMPLER,
             .type = TRACK_TYPE_RAM,
         };
+        return;
     }
-    return track_state_default_config();
+    *out_config = track_state_default_config();
+}
+
+void track_state_make_initial_midi(uint8_t entity,
+                                   uint8_t *out_channel,
+                                   track_midi_source_t *out_source)
+{
+    if (out_channel != NULL)
+        *out_channel = (uint8_t)((entity < 16U) ? (entity + 1U) : 16U);
+    if (out_source != NULL) *out_source = TRACK_MIDI_SOURCE_ALL;
 }
 
 static void track_state_bump_revision(uint8_t track)
@@ -166,9 +175,9 @@ void track_state_init(void)
 {
     for (uint8_t track = 0U; track < TRACK_CONFIG_CAPACITY; ++track)
     {
-        g_track_configs[track] = track_state_initial_config(track);
-        g_track_midi_channel[track] = (uint8_t)((track < 16U) ? (track + 1U) : 16U);
-        g_track_midi_source[track] = TRACK_MIDI_SOURCE_ALL;
+        track_state_make_initial_config(track, &g_track_configs[track]);
+        track_state_make_initial_midi(track, &g_track_midi_channel[track],
+                                      &g_track_midi_source[track]);
         g_track_revision[track] = 0U;
     }
 
@@ -383,6 +392,18 @@ static bool track_state_apply_entity_bulk_with_inputs(
 
     const uint8_t group_active = (uint8_t)(
         next_configs[BRICK_ENTITY_GROUP_MASTER_ID].type == TRACK_TYPE_GROUP);
+    if ((group_active != 0U) && (entity_topology_group_is_active() == 0U))
+    {
+        for (uint8_t child = BRICK_ENTITY_FIRST_GROUP_CHILD_ID;
+             child < BRICK_ENTITY_CAPACITY; ++child)
+        {
+            if (next_configs[child].family == TRACK_FAMILY_OFF)
+            {
+                next_configs[child].family = TRACK_FAMILY_SAMPLER;
+                next_configs[child].type = TRACK_TYPE_RAM;
+            }
+        }
+    }
     for (uint8_t track = 0U; track < TRACK_CONFIG_CAPACITY; ++track)
     {
         entity_topology_descriptor_t entity;
@@ -393,6 +414,11 @@ static bool track_state_apply_entity_bulk_with_inputs(
         }
         const track_family_t fam = next_configs[track].family;
         const track_type_t typ = next_configs[track].type;
+
+        if ((entity.role == ENTITY_ROLE_GROUP_CHILD)
+                && ((fam != TRACK_FAMILY_SAMPLER)
+                    || (typ != TRACK_TYPE_RAM)))
+            return false;
 
         if ((fam != TRACK_FAMILY_OFF)
                 && !track_catalog_family_is_available(track, fam, next_configs))

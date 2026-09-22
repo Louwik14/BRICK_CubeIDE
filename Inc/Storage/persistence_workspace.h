@@ -30,7 +30,7 @@ typedef struct
     persist_control_pattern_record_t record_scratch;
 } persistence_project_save_workspace_t;
 
-_Static_assert(sizeof(persistence_project_save_workspace_t) == 1015980U,
+_Static_assert(sizeof(persistence_project_save_workspace_t) == 1011364U,
                "Project Save workspace size changed");
 
 typedef struct
@@ -48,7 +48,7 @@ typedef struct
     persist_codec_project_workspace_t codec_scratch;
 } persistence_project_restore_workspace_t;
 
-_Static_assert(sizeof(persistence_project_restore_workspace_t) == 955548U,
+_Static_assert(sizeof(persistence_project_restore_workspace_t) == 950932U,
                "Project Restore workspace size changed");
 
 _Static_assert(sizeof(persist_control_pattern_t)
@@ -61,7 +61,7 @@ typedef struct
     uint8_t encoded[PERSISTENCE_PATTERN_ENCODED_MAX_BYTES];
 } persistence_pattern_io_workspace_t;
 
-_Static_assert(sizeof(persistence_pattern_io_workspace_t) == 579304U,
+_Static_assert(sizeof(persistence_pattern_io_workspace_t) == 575048U,
                "Pattern IO workspace size changed");
 
 typedef struct

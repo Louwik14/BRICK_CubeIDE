@@ -79,8 +79,6 @@ void project_load_quiesce_request(void)
         (void)sample_page_cache_cancel_reserved_domain(
             SAMPLE_AUDIO_DOMAIN_CLASSIC, 0U);
         (void)sample_page_cache_cancel_reserved_domain(
-            SAMPLE_AUDIO_DOMAIN_LOOPER, 0U);
-        (void)sample_page_cache_cancel_reserved_domain(
             SAMPLE_AUDIO_DOMAIN_MULTI, 0U);
         sampler_ram_pool_retire_all();
         wavetable_pool_retire_all();

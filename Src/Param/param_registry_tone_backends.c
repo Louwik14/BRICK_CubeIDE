@@ -24,12 +24,7 @@ uint8_t param_backend_apply_prepared_track_value_audio(
     if (applied != 0U) return applied;
     if (tone_param_catalog_contains((track_runtime_type_t)ctx->type, id) == 0U)
         return 0U;
-    if ((ctx->family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
-            && (ctx->type == (uint8_t)TRACK_RUNTIME_TYPE_LOOPER))
-    {
-        applied = param_backend_apply_tone_looper(track, id, effective_value);
-    }
-    else if (ctx->program_route.engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
+    if (ctx->program_route.engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER)
     {
         applied = param_backend_apply_tone_sampler(track, id, effective_value);
     }

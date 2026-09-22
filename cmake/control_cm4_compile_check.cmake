@@ -46,7 +46,7 @@ set(control_forbidden_dependencies
 
 set(storage_forbidden_dependencies
     # STORAGE may consume the shared Recorder data plane, but never AUDIO
-    # implementation details, Looper/DSP/track business state or callbacks.
+    # implementation details, DSP/track business state or callbacks.
     "/Inc/Audio/"
     "/Src/Audio/"
     "/Inc/Sampler/sample_voice_reader.h"

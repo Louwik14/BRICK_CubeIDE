@@ -17,7 +17,6 @@ uint8_t param_backend_apply_prepared_track_value_audio(
     float value);
 
 uint8_t param_backend_apply_tone_sampler(uint8_t track, param_id_t id, float value);
-uint8_t param_backend_apply_tone_looper(uint8_t track, param_id_t id, float value);
 uint8_t param_backend_apply_tone_stack(uint8_t track, param_id_t id, float value);
 uint8_t param_backend_apply_tone_wave(uint8_t track, param_id_t id, float value);
 uint8_t param_backend_apply_tone_tb303(uint8_t track, param_id_t id, float value);

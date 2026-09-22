@@ -75,18 +75,6 @@ static void ui_hall_mode_flow_cycle_fx(void)
     }
 }
 
-static uint8_t ui_hall_mode_flow_open_looper_rout(void)
-{
-    if (ui_hall_mode_resolve_rout_context(ui_get_active_track(), ui_get_hall_mode())
-            == UI_HALL_ROUT_CONTEXT_NONE)
-    {
-        return 0U;
-    }
-
-    ui_hall_mode_flow_open_midi_fx();
-    return 1U;
-}
-
 static void ui_hall_mode_flow_close_lowcost_rec(void)
 {
     if ((ui_page_audio_rec_is_open() == 0U) || (g_lowcost_rec_closing != 0U))
@@ -253,10 +241,6 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
             ui_hall_mode_flow_handle_lowcost_nav_button(BTN_PARAM_4);
             return 1U;
 
-        case 14U:
-            (void)ui_hall_mode_flow_open_looper_rout();
-            return 1U;
-
         default:
             return 0U;
     }
@@ -369,13 +353,6 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
         {
             ui_hall_mode_flow_cycle_fx();
         }
-        return;
-    }
-
-    if (hall == 14U)
-    {
-        hall_note_suppressed[hall] = 1U;
-        (void)ui_hall_mode_flow_open_looper_rout();
         return;
     }
 
