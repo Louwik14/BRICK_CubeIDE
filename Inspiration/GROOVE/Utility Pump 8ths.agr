@@ -1,0 +1,153 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<Ableton MajorVersion="5" MinorVersion="11.0_432" SchemaChangeCount="2" Creator="Ableton Live 11.0b22" Revision="1e43a97809d6c57cc1ee45abb8e7305a26020f1f">
+	<Groove>
+		<LomId Value="0" />
+		<Name Value="Pump 8ths" />
+		<Clip>
+			<Value>
+				<MidiClip Id="0" Time="0">
+					<LomId Value="0" />
+					<LomIdView Value="0" />
+					<CurrentStart Value="0" />
+					<CurrentEnd Value="4" />
+					<Loop>
+						<LoopStart Value="0" />
+						<LoopEnd Value="4" />
+						<StartRelative Value="0" />
+						<LoopOn Value="true" />
+						<OutMarker Value="3.5" />
+						<HiddenLoopStart Value="-0.5" />
+						<HiddenLoopEnd Value="3.5" />
+					</Loop>
+					<Name Value="Pump 8ths" />
+					<Annotation Value="" />
+					<Color Value="22" />
+					<LaunchMode Value="0" />
+					<LaunchQuantisation Value="0" />
+					<TimeSignature>
+						<TimeSignatures>
+							<RemoteableTimeSignature Id="0">
+								<Numerator Value="4" />
+								<Denominator Value="4" />
+								<Time Value="0" />
+							</RemoteableTimeSignature>
+						</TimeSignatures>
+					</TimeSignature>
+					<Envelopes>
+						<Envelopes />
+					</Envelopes>
+					<ScrollerTimePreserver>
+						<LeftTime Value="0" />
+						<RightTime Value="4" />
+					</ScrollerTimePreserver>
+					<TimeSelection>
+						<AnchorTime Value="0" />
+						<OtherTime Value="3.5625" />
+					</TimeSelection>
+					<Legato Value="false" />
+					<Ram Value="false" />
+					<GrooveSettings>
+						<GrooveId Value="-1" />
+					</GrooveSettings>
+					<Disabled Value="false" />
+					<VelocityAmount Value="0" />
+					<FollowAction>
+						<FollowTime Value="4" />
+						<IsLinked Value="true" />
+						<LoopIterations Value="1" />
+						<FollowActionA Value="4" />
+						<FollowActionB Value="0" />
+						<FollowChanceA Value="100" />
+						<FollowChanceB Value="0" />
+						<JumpIndexA Value="0" />
+						<JumpIndexB Value="0" />
+						<FollowActionEnabled Value="false" />
+					</FollowAction>
+					<Grid>
+						<FixedNumerator Value="1" />
+						<FixedDenominator Value="8" />
+						<GridIntervalPixel Value="20" />
+						<Ntoles Value="2" />
+						<SnapToGrid Value="true" />
+						<Fixed Value="true" />
+					</Grid>
+					<FreezeStart Value="0" />
+					<FreezeEnd Value="0" />
+					<IsWarped Value="true" />
+					<TakeId Value="0" />
+					<Notes>
+						<KeyTracks>
+							<KeyTrack Id="0">
+								<Notes>
+									<MidiNoteEvent Time="0" Duration="0.0625" Velocity="52.5935593" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="2" />
+									<MidiNoteEvent Time="0.5" Duration="0.0625" Velocity="122.964256" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="4" />
+									<MidiNoteEvent Time="1" Duration="0.0625" Velocity="46.7553368" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="5" />
+									<MidiNoteEvent Time="1.5" Duration="0.0625" Velocity="121.894653" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="7" />
+									<MidiNoteEvent Time="2" Duration="0.0625" Velocity="47.2455673" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="9" />
+									<MidiNoteEvent Time="2.5" Duration="0.0625" Velocity="127" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="11" />
+									<MidiNoteEvent Time="3" Duration="0.0625" Velocity="51.9337425" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="12" />
+									<MidiNoteEvent Time="3.5" Duration="0.0625" Velocity="125.469887" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="14" />
+								</Notes>
+								<MidiKey Value="36" />
+							</KeyTrack>
+						</KeyTracks>
+						<PerNoteEventStore>
+							<EventLists />
+						</PerNoteEventStore>
+						<NoteIdGenerator>
+							<NextId Value="53" />
+						</NoteIdGenerator>
+					</Notes>
+					<BankSelectCoarse Value="-1" />
+					<BankSelectFine Value="-1" />
+					<ProgramChange Value="-1" />
+					<NoteEditorFoldInZoom Value="-1" />
+					<NoteEditorFoldInScroll Value="-1" />
+					<NoteEditorFoldOutZoom Value="3072" />
+					<NoteEditorFoldOutScroll Value="-2162" />
+					<NoteEditorFoldScaleZoom Value="-1" />
+					<NoteEditorFoldScaleScroll Value="0" />
+					<ScaleInformation>
+						<RootNote Value="0" />
+						<Name Value="Major" />
+					</ScaleInformation>
+					<IsInKey Value="false" />
+					<NoteSpellingPreference Value="3" />
+					<PreferFlatRootNote Value="false" />
+					<ExpressionGrid>
+						<FixedNumerator Value="1" />
+						<FixedDenominator Value="16" />
+						<GridIntervalPixel Value="20" />
+						<Ntoles Value="2" />
+						<SnapToGrid Value="false" />
+						<Fixed Value="false" />
+					</ExpressionGrid>
+				</MidiClip>
+			</Value>
+		</Clip>
+		<Grid Value="1" />
+		<QuantizationAmount Value="0" />
+		<TimingAmount Value="100" />
+		<RandomAmount Value="0" />
+		<VelocityAmount Value="70" />
+		<Annotation Value="" />
+		<Selection Value="true" />
+		<SourceContext>
+			<SourceContext Id="0">
+				<OriginalFileRef>
+					<FileRef Id="0">
+						<RelativePathType Value="0" />
+						<RelativePath Value="" />
+						<Path Value="/Users/pma/Desktop/_Projekte/Core Library/Grooves/Groove Selection/Pump 8ths.agr" />
+						<Type Value="2" />
+						<LivePackName Value="" />
+						<LivePackId Value="" />
+						<OriginalFileSize Value="0" />
+						<OriginalCrc Value="0" />
+					</FileRef>
+				</OriginalFileRef>
+				<BrowserContentPath Value="userfolder:/Users/pma/Desktop/_Projekte/Core%20Library/Grooves/Groove%20Selection#Pump%208ths.agr" />
+			</SourceContext>
+		</SourceContext>
+	</Groove>
+</Ableton>

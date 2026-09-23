@@ -1,0 +1,231 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<Ableton Creator="Ableton Live 10.1.6" MajorVersion="5" MinorVersion="10.0_377" Revision="04cf0aced295425d457145961b4fde60a4334f97" SchemaChangeCount="3">
+	<Groove>
+		<Name Value="Crescendo 4 bars" />
+		<Clip>
+			<Value>
+				<MidiClip Id="0" Time="0">
+					<LomId Value="0" />
+					<LomIdView Value="0" />
+					<CurrentStart Value="0" />
+					<CurrentEnd Value="16" />
+					<Loop>
+						<LoopStart Value="0" />
+						<LoopEnd Value="16" />
+						<StartRelative Value="0" />
+						<LoopOn Value="true" />
+						<OutMarker Value="16" />
+						<HiddenLoopStart Value="0" />
+						<HiddenLoopEnd Value="4" />
+					</Loop>
+					<Name Value="Crescendo 4 bars" />
+					<Annotation Value="" />
+					<ColorIndex Value="15" />
+					<LaunchMode Value="0" />
+					<LaunchQuantisation Value="0" />
+					<TimeSignature>
+						<TimeSignatures>
+							<RemoteableTimeSignature Id="0">
+								<Numerator Value="4" />
+								<Denominator Value="4" />
+								<Time Value="0" />
+							</RemoteableTimeSignature>
+						</TimeSignatures>
+					</TimeSignature>
+					<Envelopes>
+						<Envelopes />
+					</Envelopes>
+					<ScrollerTimePreserver>
+						<LeftTime Value="8.3756051175656978" />
+						<RightTime Value="16.0032561088059" />
+					</ScrollerTimePreserver>
+					<TimeSelection>
+						<AnchorTime Value="16" />
+						<OtherTime Value="16" />
+					</TimeSelection>
+					<Legato Value="false" />
+					<Ram Value="false" />
+					<GrooveSettings>
+						<GrooveId Value="-1" />
+					</GrooveSettings>
+					<Disabled Value="false" />
+					<VelocityAmount Value="0" />
+					<FollowTime Value="4" />
+					<FollowActionA Value="0" />
+					<FollowActionB Value="0" />
+					<FollowChanceA Value="1" />
+					<FollowChanceB Value="0" />
+					<Grid>
+						<FixedNumerator Value="1" />
+						<FixedDenominator Value="32" />
+						<GridIntervalPixel Value="20" />
+						<Ntoles Value="2" />
+						<SnapToGrid Value="true" />
+						<Fixed Value="true" />
+					</Grid>
+					<FreezeStart Value="0" />
+					<FreezeEnd Value="0" />
+					<IsWarped Value="true" />
+					<Notes>
+						<KeyTracks>
+							<KeyTrack Id="2">
+								<Notes>
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="1" OffVelocity="64" Time="0" Velocity="3.63615704" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="2" OffVelocity="64" Time="0.125" Velocity="4.37442684" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="3" OffVelocity="64" Time="0.25" Velocity="5.11269808" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="4" OffVelocity="64" Time="0.375" Velocity="5.85097027" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="5" OffVelocity="64" Time="0.5" Velocity="6.58924341" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="6" OffVelocity="64" Time="0.625" Velocity="7.32751751" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="7" OffVelocity="64" Time="0.75" Velocity="8.0657835" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="8" OffVelocity="64" Time="0.875" Velocity="8.80406284" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="9" OffVelocity="64" Time="1" Velocity="9.54232597" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="10" OffVelocity="64" Time="1.125" Velocity="10.2806034" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="11" OffVelocity="64" Time="1.25" Velocity="11.0188723" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="12" OffVelocity="64" Time="1.375" Velocity="11.7571459" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="13" OffVelocity="64" Time="1.5" Velocity="12.4954233" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="14" OffVelocity="64" Time="1.625" Velocity="13.2336864" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="15" OffVelocity="64" Time="1.75" Velocity="13.9719572" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="16" OffVelocity="64" Time="1.875" Velocity="14.7102413" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="17" OffVelocity="64" Time="2" Velocity="15.4485092" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="18" OffVelocity="64" Time="2.125" Velocity="16.1867771" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="19" OffVelocity="64" Time="2.25" Velocity="16.9250374" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="20" OffVelocity="64" Time="2.375" Velocity="17.6633167" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="21" OffVelocity="64" Time="2.5" Velocity="18.4015999" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="22" OffVelocity="64" Time="2.625" Velocity="19.1398735" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="23" OffVelocity="64" Time="2.75" Velocity="19.8781319" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="24" OffVelocity="64" Time="2.875" Velocity="20.6163998" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="25" OffVelocity="64" Time="3" Velocity="21.3546791" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="26" OffVelocity="64" Time="3.125" Velocity="22.0929546" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="27" OffVelocity="64" Time="3.25" Velocity="22.8312302" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="28" OffVelocity="64" Time="3.375" Velocity="23.5694904" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="29" OffVelocity="64" Time="3.5" Velocity="24.3077602" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="30" OffVelocity="64" Time="3.625" Velocity="25.0460453" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="31" OffVelocity="64" Time="3.75" Velocity="25.7843094" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="32" OffVelocity="64" Time="3.875" Velocity="26.5225849" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="33" OffVelocity="64" Time="4" Velocity="27.2608585" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="34" OffVelocity="64" Time="4.125" Velocity="27.9991188" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="35" OffVelocity="64" Time="4.25" Velocity="28.7374077" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="36" OffVelocity="64" Time="4.375" Velocity="29.475668" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="37" OffVelocity="64" Time="4.5" Velocity="30.2139378" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="38" OffVelocity="64" Time="4.625" Velocity="30.9522247" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="39" OffVelocity="64" Time="4.75" Velocity="31.6904659" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="40" OffVelocity="64" Time="4.875" Velocity="32.4287758" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="41" OffVelocity="64" Time="5" Velocity="33.1670227" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="42" OffVelocity="64" Time="5.125" Velocity="33.9052963" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="43" OffVelocity="64" Time="5.25" Velocity="34.6435814" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="44" OffVelocity="64" Time="5.375" Velocity="35.3818321" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="45" OffVelocity="64" Time="5.5" Velocity="36.1201324" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="46" OffVelocity="64" Time="5.625" Velocity="36.8583908" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="47" OffVelocity="64" Time="5.75" Velocity="37.596653" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="48" OffVelocity="64" Time="5.875" Velocity="38.3349419" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="49" OffVelocity="64" Time="6" Velocity="39.0731926" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="50" OffVelocity="64" Time="6.125" Velocity="39.8114891" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="51" OffVelocity="64" Time="6.25" Velocity="40.5497475" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="52" OffVelocity="64" Time="6.375" Velocity="41.2880058" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="53" OffVelocity="64" Time="6.5" Velocity="42.0262985" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="54" OffVelocity="64" Time="6.625" Velocity="42.7645493" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="55" OffVelocity="64" Time="6.75" Velocity="43.5028496" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="56" OffVelocity="64" Time="6.875" Velocity="44.2411118" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="57" OffVelocity="64" Time="7" Velocity="44.9793701" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="58" OffVelocity="64" Time="7.125" Velocity="45.7176628" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="59" OffVelocity="64" Time="7.25" Velocity="46.4559135" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="60" OffVelocity="64" Time="7.375" Velocity="47.1942024" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="61" OffVelocity="64" Time="7.5" Velocity="47.9324722" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="62" OffVelocity="64" Time="7.625" Velocity="48.670723" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="63" OffVelocity="64" Time="7.75" Velocity="49.4090195" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="64" OffVelocity="64" Time="7.875" Velocity="50.1472778" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="65" OffVelocity="64" Time="8" Velocity="50.8855629" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="66" OffVelocity="64" Time="8.125" Velocity="51.6238403" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="67" OffVelocity="64" Time="8.25" Velocity="52.3621063" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="68" OffVelocity="64" Time="8.375" Velocity="53.1003685" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="69" OffVelocity="64" Time="8.5" Velocity="53.8386269" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="70" OffVelocity="64" Time="8.625" Velocity="54.5769119" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="71" OffVelocity="64" Time="8.75" Velocity="55.3152008" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="72" OffVelocity="64" Time="8.875" Velocity="56.053463" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="73" OffVelocity="64" Time="9" Velocity="56.7917175" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="74" OffVelocity="64" Time="9.125" Velocity="57.5299759" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="75" OffVelocity="64" Time="9.25" Velocity="58.2682686" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="76" OffVelocity="64" Time="9.375" Velocity="59.0065575" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="77" OffVelocity="64" Time="9.5" Velocity="59.7448387" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="78" OffVelocity="64" Time="9.625" Velocity="60.4830856" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="79" OffVelocity="64" Time="9.75" Velocity="61.2213287" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="80" OffVelocity="64" Time="9.875" Velocity="61.9596291" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="81" OffVelocity="64" Time="10" Velocity="62.6979256" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="82" OffVelocity="64" Time="10.125" Velocity="63.4361954" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="83" OffVelocity="64" Time="10.25" Velocity="64.1744385" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="84" OffVelocity="64" Time="10.375" Velocity="64.9126816" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="85" OffVelocity="64" Time="10.5" Velocity="65.6509857" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="86" OffVelocity="64" Time="10.625" Velocity="66.3892899" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="87" OffVelocity="64" Time="10.75" Velocity="67.1275558" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="88" OffVelocity="64" Time="10.875" Velocity="67.8657913" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="89" OffVelocity="64" Time="11" Velocity="68.6040497" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="90" OffVelocity="64" Time="11.125" Velocity="67.866394" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="91" OffVelocity="64" Time="11.25" Velocity="69.4225464" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="92" OffVelocity="64" Time="11.375" Velocity="70.9786987" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="93" OffVelocity="64" Time="11.5" Velocity="72.5348358" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="94" OffVelocity="64" Time="11.625" Velocity="74.0909882" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="95" OffVelocity="64" Time="11.75" Velocity="75.6471329" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="96" OffVelocity="64" Time="11.875" Velocity="77.2032776" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="97" OffVelocity="64" Time="12" Velocity="78.7594299" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="98" OffVelocity="64" Time="12.125" Velocity="80.3155746" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="99" OffVelocity="64" Time="12.25" Velocity="81.8717194" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="100" OffVelocity="64" Time="12.375" Velocity="83.4278717" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="101" OffVelocity="64" Time="12.5" Velocity="84.9840164" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="102" OffVelocity="64" Time="12.625" Velocity="86.5401611" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="103" OffVelocity="64" Time="12.75" Velocity="88.0963135" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="104" OffVelocity="64" Time="12.875" Velocity="89.6524582" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="105" OffVelocity="64" Time="13" Velocity="91.2086105" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="106" OffVelocity="64" Time="13.125" Velocity="92.7647552" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="107" OffVelocity="64" Time="13.25" Velocity="94.3209076" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="108" OffVelocity="64" Time="13.375" Velocity="95.8770523" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="109" OffVelocity="64" Time="13.5" Velocity="97.4332047" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="110" OffVelocity="64" Time="13.625" Velocity="98.9893494" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="111" OffVelocity="64" Time="13.75" Velocity="100.545494" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="112" OffVelocity="64" Time="13.875" Velocity="102.101646" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="113" OffVelocity="64" Time="14" Velocity="103.657791" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="114" OffVelocity="64" Time="14.125" Velocity="105.213936" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="115" OffVelocity="64" Time="14.25" Velocity="106.770088" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="116" OffVelocity="64" Time="14.375" Velocity="108.326233" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="117" OffVelocity="64" Time="14.5" Velocity="109.88237" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="118" OffVelocity="64" Time="14.625" Velocity="111.43853" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="119" OffVelocity="64" Time="14.75" Velocity="112.994667" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="120" OffVelocity="64" Time="14.875" Velocity="114.550819" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="121" OffVelocity="64" Time="15" Velocity="116.106964" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="122" OffVelocity="64" Time="15.125" Velocity="117.663116" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="123" OffVelocity="64" Time="15.25" Velocity="119.219254" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="124" OffVelocity="64" Time="15.375" Velocity="120.775414" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="125" OffVelocity="64" Time="15.5" Velocity="122.331558" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="126" OffVelocity="64" Time="15.625" Velocity="123.887703" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="127" OffVelocity="64" Time="15.75" Velocity="125.443855" />
+									<MidiNoteEvent Duration="0.0625" IsEnabled="true" NoteId="128" OffVelocity="64" Time="15.875" Velocity="127" />
+								</Notes>
+								<MidiKey Value="36" />
+							</KeyTrack>
+						</KeyTracks>
+						<PerNoteEventStore>
+							<EventLists />
+						</PerNoteEventStore>
+						<NoteIdGenerator>
+							<NextId Value="130" />
+						</NoteIdGenerator>
+					</Notes>
+					<BankSelectCoarse Value="-1" />
+					<BankSelectFine Value="-1" />
+					<ProgramChange Value="-1" />
+					<NoteEditorFoldInZoom Value="38" />
+					<NoteEditorFoldInScroll Value="0" />
+					<NoteEditorFoldOutZoom Value="3072" />
+					<NoteEditorFoldOutScroll Value="-1320" />
+				</MidiClip>
+			</Value>
+		</Clip>
+		<Grid Value="5" />
+		<QuantizationAmount Value="0" />
+		<TimingAmount Value="0" />
+		<RandomAmount Value="0" />
+		<VelocityAmount Value="100" />
+		<Annotation Value="" />
+		<Selection Value="true" />
+		<SourceContext />
+	</Groove>
+</Ableton>
