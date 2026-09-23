@@ -1253,6 +1253,10 @@ void sampler_ram_pool_service_retire(void)
         if (g_sampler_ram_retire_stop_committed[i] == 0U)
         {
             if (control_rt_publication_horizon_active() != 0U) continue;
+            /* FIFO pressure is not an invariant failure.  Project quiesce runs
+             * cooperatively and the AUDIO consumer will make room; only a
+             * rejected publication despite advertised capacity is fatal. */
+            if (control_rt_publication_free() == 0U) continue;
             if (control_rt_publish_param_now((uint8_t)i,
                     CONTROL_AUDIO_PARAM_RAM_RESOURCE_STOP,
                     slot->generation, 0U) == 0U)

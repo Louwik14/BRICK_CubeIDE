@@ -448,6 +448,7 @@ void multi_sample_pool_service_retire(void)
             if (control_rt_publication_horizon_active() != 0U) continue;
             uint64_t due_sample = 0U;
             if (!control_rt_now_sample(&due_sample)) continue;
+            if (control_rt_publication_free() == 0U) continue;
             if (control_rt_publish_param_now((uint8_t)i,
                     CONTROL_AUDIO_PARAM_MULTI_RESOURCE_STOP, 0U, 0U) == 0U)
             {

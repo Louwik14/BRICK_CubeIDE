@@ -140,6 +140,12 @@ Project Load ne double-bufferise pas les gros payloads RAM, Wavetable ou Multi:
 le quiesce reste ferme, l'ancien payload est retire, puis le loader cooperatif
 canonique reutilise ses pages. Seuls le DTO Project, le Pattern bank inactif et
 un catalogue borne de references indisponibles coexistent temporairement. Le
+retrait publie d'abord un STOP de ressource vers AUDIO. Une FIFO fonctionnelle
+momentanement pleine est une contre-pression: le service attend un passage
+suivant sans liberer le payload. `retire_failed` n'est arme que si la
+publication est refusee alors qu'une place etait annoncee. Le quiesce ne devient
+sur qu'apres extinction des leases, fin du travail SD du cache et retrait de
+tous les pools. Le
 restore reconstruit ensuite une projection PROGRAM/PARAM fraiche depuis les
 autorites CONTROL finales. Le commit Project libere toutes les installations
 AUDIO avant leur reconstruction; le commit Pattern ne libere que les PROGRAM
