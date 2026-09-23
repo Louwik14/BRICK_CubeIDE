@@ -38,6 +38,11 @@ static CONTROL_M4_SRAM2 note_fx_family_runtime_t
     g_family[NOTE_FX_TRACK_COUNT][2];
 static SEQ_STATE_D2 uint64_t
     g_generated_until[NOTE_FX_TRACK_COUNT][NOTE_FX_SLOT_COUNT];
+typedef struct {uint8_t phase,climb_octave,walk_phase;} note_fx_chain_runtime_t;
+static SEQ_STATE_SDRAM note_fx_chain_state_t
+    g_chain[NOTE_FX_TRACK_COUNT];
+static SEQ_STATE_D2 note_fx_chain_runtime_t
+    g_chain_runtime[NOTE_FX_TRACK_COUNT];
 static note_fx_engine_context_t *const g_context=&g_seq_context;
 #define g_slot (g_context->slot)
 #define g_work_slot_mask (g_context->work_slot_mask)
@@ -176,7 +181,7 @@ static note_event_result_t voicer_group(uint8_t slot,uint8_t position,
    if(!append(out,cap,count,&x,stage))return NOTE_EVENT_RESULT_REJECTED_CAPACITY;}
  return *count?NOTE_EVENT_RESULT_ACCEPTED:NOTE_EVENT_RESULT_DROPPED_POLICY;}
 
-void note_fx_engine_init(void){memset(&g_seq_context,0,sizeof(g_seq_context));memset(g_held,0,sizeof(g_held));memset(g_held_active_mask,0,sizeof(g_held_active_mask));memset(g_family,0,sizeof(g_family));memset(g_generated_until,0,sizeof(g_generated_until));for(uint8_t t=0;t<NOTE_FX_TRACK_COUNT;++t)for(uint8_t f=0;f<2U;++f)g_family[t][f].owner_slot=UINT8_MAX;g_seq_context.samples_per_step_q16=UINT32_C(65536);}
+void note_fx_engine_init(void){memset(&g_seq_context,0,sizeof(g_seq_context));memset(g_held,0,sizeof(g_held));memset(g_held_active_mask,0,sizeof(g_held_active_mask));memset(g_family,0,sizeof(g_family));memset(g_generated_until,0,sizeof(g_generated_until));memset(g_chain,0,sizeof(g_chain));memset(g_chain_runtime,0,sizeof(g_chain_runtime));for(uint8_t t=0;t<NOTE_FX_TRACK_COUNT;++t)for(uint8_t f=0;f<2U;++f)g_family[t][f].owner_slot=UINT8_MAX;g_seq_context.samples_per_step_q16=UINT32_C(65536);}
 void note_fx_engine_set_samples_per_step_q16(uint32_t v){g_samples_per_step_q16=v?v:1U;}
 void note_fx_engine_set_time_reference(uint64_t sample,uint64_t transport,uint32_t sps){g_context->block_start=sample;g_context->transport_position_q16=transport;note_fx_engine_set_samples_per_step_q16(sps);}
 static void held_clear_family(uint8_t t,uint8_t family){const uint64_t lanes=track_lane_mask(t);for(uint8_t branch=0;branch<SEQ_PRODUCT_HARMONY_FANOUT_MAX;++branch){uint64_t active=g_held_active_mask[family][branch]&lanes;while(active){const uint16_t lane=(uint16_t)__builtin_ctzll(active);active&=active-1U;memset(&g_held[family][lane*SEQ_PRODUCT_HARMONY_FANOUT_MAX+branch],0,sizeof(note_fx_held_pitch_t));}g_held_active_mask[family][branch]&=~lanes;}g_family[t][family].held_count=0U;}
@@ -308,3 +313,215 @@ void note_fx_engine_release_terminal(const note_event_t*e){if(!e||e->track>=NOTE
 note_event_result_t note_fx_engine_cleanup(uint8_t t){if(t>=NOTE_FX_TRACK_COUNT)return NOTE_EVENT_RESULT_DROPPED_POLICY;for(uint8_t family=0;family<2U;++family)held_clear_family(t,family);for(uint8_t s=0;s<NOTE_FX_SLOT_COUNT;++s)refresh_work(t,s);return NOTE_EVENT_RESULT_ACCEPTED;}
 
 note_event_result_t note_fx_engine_process(uint8_t track,uint64_t start,uint32_t horizon_samples,uint32_t sps,uint64_t transport,const uint32_t pattern[NOTE_FX_TRACK_COUNT],const uint8_t pattern_length[NOTE_FX_TRACK_COUNT],uint8_t scale,uint8_t root,note_fx_emit_fn emit,void*ctx){note_fx_engine_set_time_reference(start,transport,sps);g_seq_context.scale_index=scale;g_seq_context.root_index=root;memcpy(g_seq_context.pattern_position_q16,pattern,sizeof(g_seq_context.pattern_position_q16));memcpy(g_seq_context.pattern_length,pattern_length,sizeof(g_seq_context.pattern_length));return note_fx_engine_process_due(track,start,horizon_samples,sps,emit,ctx);}
+
+static uint8_t chain_voice_count(uint8_t mode)
+{
+ if(mode>=NOTE_FX_VOICER_MODE_1&&mode<=NOTE_FX_VOICER_MODE_4)
+  return mode;
+ if(mode>=NOTE_FX_VOICER_MODE_SEQ2&&mode<=NOTE_FX_VOICER_MODE_SEQ4)
+  return(uint8_t)(mode-NOTE_FX_VOICER_MODE_SEQ2+2U);
+ if(mode>=NOTE_FX_VOICER_MODE_UPDN2&&mode<=NOTE_FX_VOICER_MODE_UPDN4)
+  return(uint8_t)(mode-NOTE_FX_VOICER_MODE_UPDN2+2U);
+ if(mode>=NOTE_FX_VOICER_MODE_CLIMB2&&mode<=NOTE_FX_VOICER_MODE_CLIMB4)
+  return(uint8_t)(mode-NOTE_FX_VOICER_MODE_CLIMB2+2U);
+ return 0U;
+}
+
+static uint8_t chain_mode_is_poly(uint8_t mode)
+{return(uint8_t)(mode>=NOTE_FX_VOICER_MODE_1&&mode<=NOTE_FX_VOICER_MODE_4);}
+static uint8_t chain_mode_is_updn(uint8_t mode)
+{return(uint8_t)(mode>=NOTE_FX_VOICER_MODE_UPDN2&&mode<=NOTE_FX_VOICER_MODE_UPDN4);}
+static uint8_t chain_mode_is_climb(uint8_t mode)
+{return(uint8_t)(mode>=NOTE_FX_VOICER_MODE_CLIMB2&&mode<=NOTE_FX_VOICER_MODE_CLIMB4);}
+
+static uint8_t chain_selected_voice(uint8_t mode,uint8_t voices,uint8_t phase)
+{
+ if(chain_mode_is_updn(mode)!=0U){const uint8_t period=(uint8_t)(2U*voices-2U);
+  const uint8_t p=(uint8_t)(phase%period);return(p<voices)?p:(uint8_t)(period-p);}
+ return(uint8_t)(phase%voices);
+}
+
+static uint8_t chain_scale_id(uint8_t scale)
+{
+ static const uint8_t ids[NOTE_FX_SCALER_SCALE_COUNT]={
+  KBD_SCALE_ID_CHROMATIC,KBD_SCALE_ID_CHROMATIC,KBD_SCALE_ID_MAJOR,
+  KBD_SCALE_ID_NAT_MINOR,KBD_SCALE_ID_DORIAN,KBD_SCALE_ID_MIXOLYDIAN,
+  KBD_SCALE_ID_PENT_MAJOR,KBD_SCALE_ID_PENT_MINOR};
+ return ids[(scale<NOTE_FX_SCALER_SCALE_COUNT)?scale:NOTE_FX_SCALER_SCALE_OFF];
+}
+
+static uint8_t chain_scale_contains(const note_fx_scaler_state_t*s,int16_t note)
+{
+ if(note<0||note>127)return 0U;
+ const uint8_t root=(uint8_t)(s->key%12U);
+ const uint8_t relative=(uint8_t)(((uint8_t)note+12U-root)%12U);
+ return kbd_scale_contains_pitch_class(chain_scale_id(s->scale),relative)?1U:0U;
+}
+
+static uint8_t chain_scaler_apply(uint8_t track,const note_fx_scaler_state_t*s,
+ uint8_t input,uint8_t*out)
+{
+ int16_t note=(int16_t)input+(int16_t)s->transpose-12;
+ if(note<0)note=0;
+ if(note>127)note=127;
+ if(s->scale==NOTE_FX_SCALER_SCALE_OFF){*out=input;return 1U;}
+ if(chain_scale_contains(s,note)!=0U){*out=(uint8_t)note;return 1U;}
+ if(s->stick==NOTE_FX_SCALER_STICK_FIXED_DROP)return 0U;
+ if(s->stick==NOTE_FX_SCALER_STICK_NEAREST){for(uint8_t d=1U;d<12U;++d){
+   const int16_t down=note-d,up=note+d;
+   if(chain_scale_contains(s,down)!=0U){*out=(uint8_t)down;return 1U;}
+   if(chain_scale_contains(s,up)!=0U){*out=(uint8_t)up;return 1U;}}return 0U;}
+ int8_t direction=(s->stick==NOTE_FX_SCALER_STICK_FIXED_UP)?1:-1;
+ if(s->stick==NOTE_FX_SCALER_STICK_WALK)
+  direction=(g_chain_runtime[track].walk_phase!=0U)?1:-1;
+ for(uint8_t pass=0U;pass<2U;++pass){for(uint8_t d=1U;d<12U;++d){
+   const int16_t candidate=note+(int16_t)direction*d;
+   if(chain_scale_contains(s,candidate)!=0U){*out=(uint8_t)candidate;
+    if(s->stick==NOTE_FX_SCALER_STICK_WALK)
+     g_chain_runtime[track].walk_phase^=1U;
+    return 1U;}}
+  if(s->stick!=NOTE_FX_SCALER_STICK_WALK)break;
+  direction=(int8_t)-direction;}
+ return 0U;
+}
+
+static uint8_t chain_probability_pass(const note_fx_trig_state_t*t,
+ const note_event_t*e)
+{
+ if(e->kind==NOTE_EVENT_KIND_OFF)return 1U;
+ const uint8_t chance=(t->chance==NOTE_FX_TRIG_CHANCE_OFF)?100U:
+  (uint8_t)(101U-t->chance);
+ const uint64_t transport=event_transport_position_q16(e);
+ uint64_t identity=e->group_id;
+ uint64_t cycle=transport/(UINT64_C(16)<<16U);
+ if(t->keep==NOTE_FX_TRIG_KEEP_LOOP){const uint8_t track=e->track;
+  const uint64_t loop=(uint64_t)(g_context->pattern_length[track]
+   ?g_context->pattern_length[track]:1U)<<16U;
+  const uint64_t relative=event_pattern_position_q16(e)%loop;
+  identity=(t->lot>=NOTE_FX_TRIG_LOT_DIVISION_BASE)
+   ?probability_lot_index(relative,
+      (uint8_t)(t->lot-NOTE_FX_TRIG_LOT_DIVISION_BASE))
+   :relative^((uint64_t)e->temporal_index<<48U);cycle=0U;}
+ else if(t->lot>=NOTE_FX_TRIG_LOT_DIVISION_BASE)
+  identity=probability_lot_index(transport,
+   (uint8_t)(t->lot-NOTE_FX_TRIG_LOT_DIVISION_BASE));
+ if(t->lot==NOTE_FX_TRIG_LOT_POLY)
+  identity^=(uint64_t)(e->branch+1U)*UINT64_C(0x9E3779B97F4A7C15);
+ const uint32_t draw=mix32((uint32_t)identity^(uint32_t)(identity>>32)
+  ^((uint32_t)e->track<<24)^(uint32_t)cycle)%100U;
+ uint8_t pass=(uint8_t)(chance>=100U||(chance!=0U&&draw<chance));
+ if(t->keep>=NOTE_FX_TRIG_KEEP_DIVISION_BASE
+      &&probability_keep_match(transport,
+       (uint8_t)(t->keep-NOTE_FX_TRIG_KEEP_DIVISION_BASE))!=0U)pass=1U;
+ return pass;
+}
+
+static note_event_result_t chain_suffix(const note_event_t*input,uint8_t input_count,
+ note_event_t*output,uint8_t cap,uint8_t*out_count)
+{
+ if(!input||!input_count||!output||!out_count||input[0].track>=NOTE_FX_TRACK_COUNT)
+  return NOTE_EVENT_RESULT_DROPPED_POLICY;
+ const uint8_t track=input[0].track;const note_fx_chain_state_t*c=&g_chain[track];
+ note_fx_chain_runtime_t*rt=&g_chain_runtime[track];uint8_t count=0U;
+ for(uint8_t i=0U;i<input_count;++i){const note_event_t*source=&input[i];
+  if(source->track!=track||!note_event_is_valid(source))
+   return NOTE_EVENT_RESULT_DROPPED_POLICY;
+  const uint8_t voices=chain_voice_count(c->voicer.mode);
+  const uint8_t phase=rt->phase;uint8_t first=0U,last=0U;
+  if(c->voicer.mode==NOTE_FX_VOICER_MODE_OFF){first=0U;last=0U;}
+  else if(chain_mode_is_poly(c->voicer.mode)!=0U){first=0U;last=(uint8_t)(voices-1U);}
+  else if(source->kind==NOTE_EVENT_KIND_OFF){first=(uint8_t)(source->branch%voices);last=first;}
+  else{first=chain_selected_voice(c->voicer.mode,voices,phase);last=first;}
+  const uint8_t invert=(c->voicer.invert==NOTE_FX_VOICER_INVERT_AUTO)
+   ?(uint8_t)(phase%4U):c->voicer.invert;
+  const uint8_t spread=(c->voicer.spread==NOTE_FX_VOICER_SPREAD_ALT)
+   ?(uint8_t)(phase&1U):c->voicer.spread;
+  for(uint8_t voice=first;voice<=last;++voice){uint8_t interval=0U;
+   if(c->voicer.mode!=NOTE_FX_VOICER_MODE_OFF){interval=
+    g_harmony[c->voicer.type%NOTE_FX_VOICER_TYPE_COUNT][voice];
+    if(interval==255U)continue;
+    if(voice<invert)interval=(uint8_t)(interval+12U);
+    if(voice!=0U)interval=(uint8_t)(interval+12U*spread*voice);}
+   uint16_t raised=(uint16_t)source->note+interval;
+   if(chain_mode_is_climb(c->voicer.mode)!=0U){if(first==0U){uint8_t top=0U;
+     for(uint8_t v=0U;v<voices;++v){uint8_t x=
+      g_harmony[c->voicer.type%NOTE_FX_VOICER_TYPE_COUNT][v];
+      if(x==255U)continue;
+      if(v<invert)x=(uint8_t)(x+12U);
+      if(v!=0U)x=(uint8_t)(x+12U*spread*v);
+      if(x>top)top=x;}if((uint16_t)source->note+top
+       +(uint16_t)(12U*rt->climb_octave)>127U)rt->climb_octave=0U;}
+    raised=(uint16_t)(raised+12U*rt->climb_octave);while(raised>127U&&raised>=12U)raised-=12U;}
+   if(raised>=128U)continue;
+   note_event_t x=*source;x.note=(uint8_t)raised;x.branch=voice;
+   if(voice!=0U){x.occurrence_id=child_id(source->occurrence_id,1U,voice,0U);
+    x.provenance=NOTE_EVENT_SOURCE_FX;x.flags|=NOTE_EVENT_FLAG_GENERATED;}
+   if(c->scaler.scale!=NOTE_FX_SCALER_SCALE_OFF
+        &&chain_scaler_apply(track,&c->scaler,x.note,&x.note)==0U)continue;
+   if(c->trig.chance!=NOTE_FX_TRIG_CHANCE_OFF){if(!chain_probability_pass(&c->trig,&x))continue;
+    if(x.kind!=NOTE_EVENT_KIND_OFF){x.flags=(uint8_t)(x.flags&~NOTE_EVENT_FLAG_HELD);
+     x.duration_samples=(uint32_t)(((uint64_t)c->trig.gate*step_samples()+50U)/100U);
+     if(x.duration_samples==0U)x.duration_samples=1U;}}
+   if(c->voicer.mode==NOTE_FX_VOICER_MODE_OFF)x.branch=source->branch;
+   if(count>=cap)return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
+   output[count++]=x;}
+  if(source->kind==NOTE_EVENT_KIND_ON&&c->voicer.mode!=NOTE_FX_VOICER_MODE_OFF){if(chain_mode_is_climb(c->voicer.mode)!=0U
+       &&voices!=0U&&first==(uint8_t)(voices-1U))++rt->climb_octave;
+   rt->phase=(uint8_t)((rt->phase+1U)%12U);}}
+ *out_count=count;return NOTE_EVENT_RESULT_ACCEPTED;
+}
+
+note_event_result_t note_fx_chain_engine_configure(uint8_t track,
+ const note_fx_chain_state_t*effective)
+{
+ if(track>=NOTE_FX_TRACK_COUNT||effective==NULL)return NOTE_EVENT_RESULT_DROPPED_POLICY;
+ g_chain[track]=*effective;uint8_t model=NOTE_FX_MODEL_OFF,p4=0U;
+ if(effective->generator.mode==NOTE_FX_GENERATOR_ARP
+      ||effective->generator.mode==NOTE_FX_GENERATOR_HOLD){model=NOTE_FX_MODEL_ARP;
+  p4=(effective->generator.mode==NOTE_FX_GENERATOR_HOLD)?1U:0U;}
+ else if(effective->generator.mode==NOTE_FX_GENERATOR_EUCLID)model=NOTE_FX_MODEL_EUCLID;
+ note_event_result_t r=note_fx_engine_configure(track,0U,model,
+  effective->generator.p1,effective->generator.p2,effective->generator.p3,p4);
+ if(r!=NOTE_EVENT_RESULT_ACCEPTED)return r;
+ (void)note_fx_engine_configure(track,1U,NOTE_FX_MODEL_OFF,0U,0U,0U,0U);
+ return note_fx_engine_configure(track,2U,NOTE_FX_MODEL_OFF,0U,0U,0U,0U);
+}
+
+note_event_result_t note_fx_chain_engine_transform(const note_event_t*input,
+ uint8_t input_count,note_event_t*output,uint8_t output_capacity,uint8_t*output_count)
+{
+ if(!input||!input_count||input[0].track>=NOTE_FX_TRACK_COUNT||!output_count)
+  return NOTE_EVENT_RESULT_DROPPED_POLICY;
+ const uint8_t track=input[0].track;if(g_chain[track].generator.mode==NOTE_FX_GENERATOR_OFF)
+  return chain_suffix(input,input_count,output,output_capacity,output_count);
+ if(input_count>NOTE_FX_BATCH_CAPACITY)return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
+ *output_count=0U;
+ for(uint8_t i=0U;i<input_count;++i){note_event_t prepared=input[i];
+  prepared.stage=0U;note_event_set_order(&prepared,0U);uint8_t ignored=0U;
+  const note_event_result_t result=note_fx_engine_transform_prepared(0U,0U,
+   &prepared,1U,output,output_capacity,&ignored);
+  if(result!=NOTE_EVENT_RESULT_ACCEPTED)return result;}
+ return NOTE_EVENT_RESULT_ACCEPTED;
+}
+
+typedef struct {note_fx_emit_fn emit;void*context;note_event_t scratch[SEQ_PRODUCT_HARMONY_FANOUT_MAX];}
+ chain_emit_context_t;
+static note_event_result_t chain_generated(const note_event_t*event,void*context)
+{chain_emit_context_t*c=context;uint8_t count=0U;const note_event_result_t r=
+ chain_suffix(event,1U,c->scratch,SEQ_PRODUCT_HARMONY_FANOUT_MAX,&count);
+ if(r!=NOTE_EVENT_RESULT_ACCEPTED)return r;
+ for(uint8_t i=0U;i<count;++i){const
+ note_event_result_t e=c->emit(&c->scratch[i],c->context);if(e!=NOTE_EVENT_RESULT_ACCEPTED)return e;}
+ return NOTE_EVENT_RESULT_ACCEPTED;}
+
+note_event_result_t note_fx_chain_engine_process(uint8_t track,uint64_t start,
+ uint32_t horizon,uint32_t sps,uint64_t transport,const uint32_t pattern[NOTE_FX_TRACK_COUNT],
+ const uint8_t pattern_length[NOTE_FX_TRACK_COUNT],uint8_t scale,uint8_t root,
+ note_fx_emit_fn emit,void*context)
+{if(emit==NULL)return NOTE_EVENT_RESULT_DROPPED_POLICY;chain_emit_context_t c={.emit=emit,
+ .context=context};return note_fx_engine_process(track,start,horizon,sps,transport,
+ pattern,pattern_length,scale,root,chain_generated,&c);}
+
+void note_fx_chain_engine_reset_track(uint8_t track)
+{if(track>=NOTE_FX_TRACK_COUNT)return;memset(&g_chain_runtime[track],0,
+ sizeof(g_chain_runtime[track]));(void)note_fx_engine_cleanup(track);}

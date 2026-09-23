@@ -48,4 +48,20 @@ void note_fx_engine_forget_causal_source(uint8_t track,
                                          uint32_t causal_source_id);
 void note_fx_engine_release_terminal(const note_event_t *event);
 
+/* Fixed GENERATOR -> VOICER -> SCALER -> TRIG runtime.  The SEQ cut-over is a
+ * separate pass; these entry points deliberately carry no slot/order identity. */
+note_event_result_t note_fx_chain_engine_configure(
+    uint8_t track, const note_fx_chain_state_t *effective);
+note_event_result_t note_fx_chain_engine_transform(
+    const note_event_t *input, uint8_t input_count,
+    note_event_t *output, uint8_t output_capacity, uint8_t *output_count);
+note_event_result_t note_fx_chain_engine_process(
+    uint8_t track, uint64_t block_start, uint32_t horizon_samples,
+    uint32_t samples_per_step_q16, uint64_t transport_position_q16,
+    const uint32_t pattern_position_q16[NOTE_FX_TRACK_COUNT],
+    const uint8_t pattern_length[NOTE_FX_TRACK_COUNT],
+    uint8_t scale_index, uint8_t root_index,
+    note_fx_emit_fn emit, void *context);
+void note_fx_chain_engine_reset_track(uint8_t track);
+
 #endif
