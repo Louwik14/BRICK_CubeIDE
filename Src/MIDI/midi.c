@@ -28,7 +28,6 @@
 
 #include "midi.h"
 #include "main.h"
-#include "tim.h"
 #include "usb_device.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "Seq/seq_runtime.h"
@@ -49,68 +48,22 @@ static midi_clock_mode_t midi_clock_mode = MIDI_CLOCK_MODE_MASTER;
 static volatile bool midi_clock_running = false;
 static midi_dest_t midi_clock_dest = MIDI_DEST_BOTH;
 
-#define MIDI_CLOCK_TIMER_HZ_DEFAULT   1000000UL
-#define MIDI_CLOCK_PPQN               24ULL
 #define MIDI_CLOCK_DEFAULT_BPM_MILLI  120000UL
 
 static volatile uint32_t midi_clock_bpm_milli = MIDI_CLOCK_DEFAULT_BPM_MILLI;
-static volatile uint32_t midi_clock_timer_hz = MIDI_CLOCK_TIMER_HZ_DEFAULT;
-static volatile uint32_t midi_clock_period_ticks = 0U;
-static volatile uint32_t midi_clock_period_rem = 0U;
-static volatile uint32_t midi_clock_period_den = 1U;
-static volatile uint32_t midi_clock_rem_accum = 0U;
-static volatile uint32_t midi_clock_next_ccr = 0U;
-static volatile bool midi_clock_timer_armed = false;
-
-static inline uint32_t midi_clock_compute_next_delta_ticks(void) {
-  uint32_t delta = midi_clock_period_ticks;
-  uint32_t rem_accum = midi_clock_rem_accum + midi_clock_period_rem;
-  if (rem_accum >= midi_clock_period_den) {
-    rem_accum -= midi_clock_period_den;
-    delta += 1U;
-  }
-  midi_clock_rem_accum = rem_accum;
-  return delta;
-}
-
 static void midi_clock_recompute_period(uint32_t bpm_milli) {
   if (bpm_milli == 0U) {
     bpm_milli = MIDI_CLOCK_DEFAULT_BPM_MILLI;
   }
 
-  midi_clock_timer_hz = brick_media_clock_tick_hz();
-  if (midi_clock_timer_hz == 0U) {
-    midi_clock_timer_hz = MIDI_CLOCK_TIMER_HZ_DEFAULT;
-  }
-
-  const uint32_t den = (uint32_t)(MIDI_CLOCK_PPQN * (uint64_t)bpm_milli);
-  const uint64_t num = ((uint64_t)midi_clock_timer_hz * 60ULL * 1000ULL);
-
   midi_clock_bpm_milli = bpm_milli;
-  midi_clock_period_ticks = (uint32_t)(num / den);
-  midi_clock_period_rem = (uint32_t)(num % den);
-  midi_clock_period_den = den;
-  midi_clock_rem_accum = 0U;
 }
 
 static void midi_clock_hw_start(void) {
-  if (midi_clock_timer_armed) {
-    return;
-  }
-
-  const uint32_t now = __HAL_TIM_GET_COUNTER(&htim5);
-  const uint32_t warmup = 200U;
-  const uint32_t first_delta = midi_clock_compute_next_delta_ticks();
-  midi_clock_next_ccr = now + warmup + first_delta;
-  __HAL_TIM_SET_COMPARE(&htim5, TIM_CHANNEL_1, midi_clock_next_ccr);
-  __HAL_TIM_ENABLE_IT(&htim5, TIM_IT_CC1);
-  midi_clock_timer_armed = true;
+  /* 24-PPQN pulses are owned by the sequencer sample timeline. */
 }
 
 static void midi_clock_hw_stop(void) {
-  __HAL_TIM_DISABLE_IT(&htim5, TIM_IT_CC1);
-  midi_clock_timer_armed = false;
-  midi_clock_rem_accum = 0U;
 }
 
 /* ====================================================================== */
@@ -134,6 +87,7 @@ static volatile uint16_t midi_usb_tx_head = 0U;
 static volatile uint16_t midi_usb_tx_tail = 0U;
 static volatile uint16_t midi_usb_tx_count = 0U;
 static volatile uint16_t midi_usb_tx_high_water = 0U;
+static volatile uint32_t midi_usb_tx_drops = 0U;
 static volatile uint32_t midi_usb_generation = 1U;
 static volatile bool midi_usb_connected = false;
 
@@ -285,6 +239,7 @@ static uint16_t midi_usb_device_write_packets(const uint8_t *buffer,
 static bool usb_tx_queue_push(const uint8_t packet[4]) {
   uint32_t primask = midi_enter_critical();
   if (midi_usb_tx_count >= MIDI_USB_TX_QUEUE_LEN) {
+    ++midi_usb_tx_drops;
     midi_exit_critical(primask);
     return false;
   }
@@ -826,6 +781,7 @@ void midi_init(void) {
   midi_usb_tx_tail = 0U;
   midi_usb_tx_count = 0U;
   midi_usb_tx_high_water = 0U;
+  midi_usb_tx_drops = 0U;
   midi_usb_generation = 1U;
   midi_usb_connected = false;
 
@@ -839,12 +795,6 @@ void midi_init(void) {
   midi_clock_recompute_period(MIDI_CLOCK_DEFAULT_BPM_MILLI);
   midi_clock_hw_stop();
   HAL_NVIC_SetPriority(PendSV_IRQn, 15U, 0U);
-}
-
-void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim) {
-  if ((htim != NULL) && (htim->Instance == TIM5) && (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)) {
-    midi_clock_on_timer_tick();
-  }
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
@@ -1078,29 +1028,7 @@ midi_dest_t midi_clock_get_destination(void) {
  * - init / main loop / tasklet selon le module.
  */
 void midi_clock_on_timer_tick(void) {
-  if (!midi_clock_timer_armed) {
-    return;
-  }
-
-  if (midi_clock_mode == MIDI_CLOCK_MODE_MASTER && midi_clock_running) {
-    midi_clock(midi_clock_dest);
-    const uint32_t now = __HAL_TIM_GET_COUNTER(&htim5);
-    uint32_t delta = midi_clock_compute_next_delta_ticks();
-    midi_clock_next_ccr += delta;
-    /* A halted CPU can service one stale CC1 flag after TIM5 has advanced far
-     * beyond CCR1.  Skip missed pulses and always arm a future comparison;
-     * otherwise the next match would wait for the 32-bit counter wrap. */
-    if ((int32_t)(now - midi_clock_next_ccr) >= 0)
-    {
-      midi_clock_rem_accum = 0U;
-      delta = midi_clock_compute_next_delta_ticks();
-      midi_clock_next_ccr = now + delta;
-    }
-    __HAL_TIM_SET_COMPARE(&htim5, TIM_CHANNEL_1, midi_clock_next_ccr);
-    return;
-  }
-
-  midi_clock_hw_stop();
+  /* Legacy compatibility hook; generation is serviced at audio boundaries. */
 }
 
 /* ====================================================================== */
@@ -1696,6 +1624,10 @@ void midi_poly_mode_on(midi_dest_t dest, uint8_t ch) {
  */
 uint16_t midi_usb_queue_high_watermark(void) {
   return midi_usb_tx_high_water;
+}
+
+uint32_t midi_usb_tx_drop_count(void) {
+  return midi_usb_tx_drops;
 }
 
 /**

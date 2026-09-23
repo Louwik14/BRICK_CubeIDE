@@ -161,6 +161,7 @@ void seq_runtime_midi_clock_from_source(seq_clock_src_t source);
 void seq_runtime_midi_start_from_source(seq_clock_src_t source);
 void seq_runtime_midi_continue_from_source(seq_clock_src_t source);
 void seq_runtime_midi_stop_from_source(seq_clock_src_t source);
+void seq_runtime_midi_clock_audio_boundary(uint64_t block_start_sample);
 void seq_runtime_on_midi_program_live_change(uint8_t track, float program_value);
 void seq_runtime_on_track_pattern_change(uint8_t track);
 

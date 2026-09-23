@@ -150,20 +150,12 @@ static void seq_runtime_send_transport_start(void)
         return;
     }
 
-    /*
-     * MIDI clock TX must follow the requested BPM domain directly.
-     * The previous conversion from internal scheduler ticks_per_step introduced
-     * a fixed absolute scaling error on clock TX (e.g. 120 BPM request was not
-     * forwarded as 120000 milli-BPM).
-     *
-     * Keep transport start aligned on the explicit 120 BPM baseline until
-     * sequencer tempo is sourced from a dedicated BPM parameter.
-     */
+    /* Transport and clock share the sequencer's effective tempo authority. */
     midi_clock_set_bpm_milli(seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge));
-    midi_clock_set_running(false);
     seq_runtime_send_transport_realtime(0xFAU);
+    midi_clock_set_running(true);
     seq_transport_owner_set_midi_clock_enabled(1U);
-    seq_transport_owner_rebase_midi_clock(seq_runtime_get_now_sample());
+    seq_transport_owner_rebase_midi_clock(g_seq_runtime.step_sample_q16 >> 16U);
 }
 
 static uint32_t seq_runtime_get_now_tick_for_source(seq_clock_src_t source)
@@ -608,10 +600,10 @@ void seq_runtime_midi_continue_from_source(seq_clock_src_t source)
         return;
     }
 
-    midi_clock_set_running(false);
     seq_runtime_send_transport_realtime(0xFBU);
+    midi_clock_set_running(true);
     seq_transport_owner_set_midi_clock_enabled(1U);
-    seq_transport_owner_rebase_midi_clock(seq_runtime_get_now_sample());
+    seq_transport_owner_rebase_midi_clock(transition_sample);
 }
 
 void seq_runtime_midi_stop_from_source(seq_clock_src_t source)
@@ -622,6 +614,19 @@ void seq_runtime_midi_stop_from_source(seq_clock_src_t source)
     }
 
     seq_runtime_stop();
+}
+
+void seq_runtime_midi_clock_audio_boundary(uint64_t block_start_sample)
+{
+    if ((g_seq_runtime.running == 0U)
+            || (seq_clock_bridge_is_external_source(
+                    seq_runtime_get_clock_source_internal()) != 0U))
+        return;
+
+    const uint32_t due = seq_transport_owner_take_midi_clocks_until(
+        block_start_sample);
+    for (uint32_t i = 0U; i < due; ++i)
+        midi_clock(midi_clock_get_destination());
 }
 
 uint8_t seq_runtime_set_playhead_step(seq_track_id_t track, seq_step_id_t step)

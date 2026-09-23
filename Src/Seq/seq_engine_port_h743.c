@@ -1,5 +1,6 @@
 #include "Seq/seq_engine.h"
 #include "Seq/seq_traversal.h"
+#include "Seq/seq_runtime.h"
 #include "NoteFx/note_fx_engine.h"
 #include "Track/control_music_output.h"
 #include "Track/track_types.h"
@@ -114,6 +115,8 @@ void seq_engine_irq_init(void)
 
 void seq_engine_audio_boundary(uint64_t block_start_sample, uint8_t recovering)
 {
+    /* Sample timeline owns 24-PPQN cadence; USB is only queued from IRQ. */
+    seq_runtime_midi_clock_audio_boundary(block_start_sample);
     uint8_t acquired=0U;
     if (g_audio_slot >= 0) {
         g_slot_state[(uint8_t)g_audio_slot] = SLOT_FREE; g_audio_slot = -1;

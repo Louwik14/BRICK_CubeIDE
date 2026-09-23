@@ -185,6 +185,7 @@ void midi_poly_mode_on(midi_dest_t dest, uint8_t ch);
 
 
 uint16_t midi_usb_queue_high_watermark(void);
+uint32_t midi_usb_tx_drop_count(void);
 uint16_t midi_usb_rx_high_watermark(void);
 
 
