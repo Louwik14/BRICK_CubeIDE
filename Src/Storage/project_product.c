@@ -513,7 +513,19 @@ void project_product_save_service(void)
             memset(g_project_save.record_scratch,0,sizeof(*g_project_save.record_scratch));
             const persist_codec_result_t result=persist_codec_decode_pattern(&source,
                 (persist_codec_pattern_staging_t*)&g_project_save.record_scratch->content);
-            if(result!=PERSIST_CODEC_OK){project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_PATTERN,(int32_t)result);return;}
+            if(result!=PERSIST_CODEC_OK)
+            {
+                persist_debug_object(PERSIST_DBG_OBJECT_PATTERN,
+                    ((uint32_t)g_project_save.expected_bank<<16U)
+                        |g_project_save.expected_pattern,
+                    (g_project_save.pattern_encoded_size>4U)
+                        ?((const uint8_t*)&g_project_save.workspace->working_pattern)[4]
+                        :UINT32_MAX);
+                persist_debug_filesystem((int32_t)FR_OK,memory.position);
+                persist_debug_error(PERSIST_DBG_STAGE_DECODE,(int32_t)result);
+                project_save_fail(PROJECT_PRODUCT_SAVE_ERROR_PATTERN,(int32_t)result);
+                return;
+            }
             g_project_save.record_scratch->bank=g_project_save.expected_bank;
             g_project_save.record_scratch->pattern=g_project_save.expected_pattern;
             g_project_save.record_scratch->present=1U;

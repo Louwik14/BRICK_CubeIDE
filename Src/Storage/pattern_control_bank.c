@@ -426,6 +426,15 @@ void pattern_control_bank_async_service(void)
         const persist_codec_result_t result = persist_codec_decode_pattern(
             &source, (persist_codec_pattern_staging_t *)g_pattern_async.load_out);
         persist_debug_filesystem((int32_t)FR_OK,memory.position);
+        persist_debug_object(PERSIST_DBG_OBJECT_PATTERN,
+            ((uint32_t)g_pattern_async.bank<<16U)|g_pattern_async.pattern,
+            (g_pattern_async.encoded_size>4U)?g_pattern_async.encoded[4]:UINT32_MAX);
+        if(result!=PERSIST_CODEC_OK)
+        {
+            persist_debug_details((uint32_t)result,g_pattern_async.encoded_size,
+                                  memory.position,g_pattern_async.encoded_capacity);
+            persist_debug_error(PERSIST_DBG_STAGE_DECODE,(int32_t)result);
+        }
         pattern_async_finish((result == PERSIST_CODEC_OK) ? 1U : 0U);
         return;
     }

@@ -294,8 +294,13 @@ void pattern_load_service(uint32_t byte_budget)
         {
             g_persist_dbg.cancel_reason = PERSIST_DBG_CANCEL_IO_FAILED;
             pattern_candidate_clear();
-            persist_debug_error(PERSIST_DBG_STAGE_READ,
-                                PERSIST_DBG_ERROR_FILESYSTEM);
+            if(g_persist_dbg.first_error_stage==PERSIST_DBG_STAGE_NONE)
+                persist_debug_error(PERSIST_DBG_STAGE_READ,
+                                    PERSIST_DBG_ERROR_FILESYSTEM);
+            else
+                persist_debug_error(
+                    (persist_dbg_stage_t)g_persist_dbg.first_error_stage,
+                    g_persist_dbg.first_error_code);
         }
         else if (completed_candidate_ready != 0U)
         {

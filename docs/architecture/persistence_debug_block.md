@@ -126,6 +126,18 @@ restauration des assets : `{asset index, asset count, warning count,
 commit_done}`. En erreur Project Save : `{save error, detail bas niveau,
 offset fichier, taille encodee}`.
 
+Un Pattern lu integralement puis rejete par le codec utilise
+`{codec result, taille fichier, offset codec, capacite}`. Dans ce cas
+`first_error_stage=DECODE`, `first_error_code` est le resultat codec brut,
+`last_fresult=FR_OK`, `codec_offset` est l'offset atteint et `object_type`
+contient l'octet de version du document. Le code codec `4` signifie
+`PERSIST_CODEC_BAD_VERSION`; il ne doit pas etre confondu avec un short read.
+
+Les offsets du layout v4 partent de l'adresse reelle de `g_persist_dbg` :
+`project_phase=+0x7c`, `commit_done=+0x80`, `project_progress=+0x84`,
+`detail=+0x88`, puis `detail0..3=+0x8c..+0x98`. Un decodeur qui decale ces
+champs d'un word attribue a tort `detail` a `detail0`.
+
 Au build Release/LTO courant, ELF et map donnent le symbole a `0x24000034`,
 taille `0xf4`. Cette adresse n'est pas une ABI et peut changer au prochain
 link; `info address` reste la source d'autorite.
