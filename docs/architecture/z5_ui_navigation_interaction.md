@@ -60,13 +60,19 @@ parametres catalogues. Cette projection est strictement en lecture: elle ne
 promeut jamais un appui STEP `pending` en geste `held`; seule l'interaction
 encodeur peut effectuer cette promotion avant de creer ou modifier le champ
 Voice/Step. Les pages virtuelles non p-lockables publient zero.
-Les cartes MIDI FX cataloguées suivent le rendu Param commun: la valeur et le
+Les cartes MIDI FX cataloguees suivent le rendu Param commun: la valeur et le
 bit d'inversion proviennent ensemble du p-lock du step tenu, puis le formatter
 MIDI FX ne fait que nommer et mettre en forme cette valeur effective.
 
-Les clipboards transportent uniquement des etats logiques. Un collage MIDI FX applique MODEL avant ses parametres; un collage External conserve l'entree demandee et echoue sur conflit.
+La page MIDI FX expose directement quatre sous-pages fixes: GENERATOR, VOICER,
+SCALER et TRIG. Chaque sous-page adresse quatre parametres connus; P4 porte le
+bypass et le mode principal. GENERATOR adapte les labels P1/P2/P3 au mode ARP,
+HOLD ou EUCLID sans effacer leurs valeurs. Son P4 n'est pas p-lockable. Il
+n'existe plus de selection de type par slot ni de page ORDER.
 
-La selection MODEL d'une chaine MIDI FX est une vue filtree du catalogue canonique explicite: OFF reste toujours present, le modele courant reste valide pour son slot et les modeles deja occupes par les autres slots sont seuls retires. Les trous et ordinaux d'enum ne definissent jamais ce catalogue. Les positions de cette vue ne sont jamais utilisees comme valeurs MODEL; chaque detent est remappe vers l'enum canonique avant le commit CONTROL.
+Les clipboards transportent uniquement des etats logiques. Le bloc MIDI FX
+copie les seize octets de la chaine fixe sans tri MODEL ni conversion de mode;
+un collage External conserve l'entree demandee et echoue sur conflit.
 
 Project Save est modal et reutilise le Name Editor generique. L'entree SAVE AS
 ou SAVE TO est refusee tant que le transport est RUNNING ou START_PENDING; elle

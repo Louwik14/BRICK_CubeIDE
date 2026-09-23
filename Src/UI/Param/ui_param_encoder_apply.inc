@@ -85,31 +85,6 @@ static uint8_t ui_param_apply_delta_value(param_id_t param,
                                           float *out_value)
 {
     if (out_value == 0) return 0U;
-    uint8_t note_fx_slot = 0U;
-    uint8_t note_fx_param = 0U;
-    if ((note_fx_state_param_map(param, &note_fx_slot, &note_fx_param) != 0U)
-            && (note_fx_param == NOTE_FX_MODEL_INDEX))
-    {
-        note_fx_track_state_t state;
-        if (note_fx_state_capture_track(track, &state) == 0U) return 0U;
-
-        const uint8_t current = (uint8_t)(current_value + 0.5f);
-        uint8_t available[NOTE_FX_MODEL_COUNT];
-        const uint8_t available_count = note_fx_state_available_models(
-            &state, note_fx_slot, available, NOTE_FX_MODEL_COUNT);
-        if (available_count == 0U) return 0U;
-
-        uint8_t position = 0U;
-        while ((position < available_count) && (available[position] != current))
-            ++position;
-        int32_t next = (position < available_count)
-            ? (int32_t)position + (int32_t)delta
-            : ((delta > 0) ? 0 : (int32_t)available_count - 1);
-        while (next < 0) next += available_count;
-        next %= available_count;
-        *out_value = (float)available[next];
-        return 1U;
-    }
     if ((param == PARAM_STACK_OSC1_MODEL)
             || (param == PARAM_STACK_OSC2_MODEL)
             || (param == PARAM_STACK_OSC3_MODEL))

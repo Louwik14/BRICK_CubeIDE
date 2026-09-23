@@ -119,7 +119,7 @@ typedef struct
     audio_fx_control_state_t audio_fx;
     polyphony_control_state_t polyphony;
     mixer_control_state_t mixer;
-    note_fx_track_state_t note_fx;
+    note_fx_chain_state_t note_fx;
     ui_track_clipboard_sequence_t sequence;
     uint8_t asset_count;
     persist_control_asset_ref_t assets[UI_TRACK_CLIPBOARD_ASSET_CAPACITY];
@@ -149,19 +149,6 @@ typedef struct
 
 UI_SDRAM static ui_clipboard_state_t g_ui_clipboard;
 
-static uint8_t ui_core_clipboard_note_fx_param_kind(param_id_t id, uint8_t *out_param)
-{
-    uint8_t slot = 0U;
-    uint8_t param = 0U;
-    if ((out_param == 0) || (note_fx_state_param_map(id, &slot, &param) == 0U))
-    {
-        return 0U;
-    }
-
-    *out_param = param;
-    return 1U;
-}
-
 static uint8_t ui_core_clipboard_param_phase(param_id_t id)
 {
     for (uint8_t order = 0U; ; ++order)
@@ -175,12 +162,6 @@ static uint8_t ui_core_clipboard_param_phase(param_id_t id)
         }
     }
 
-    uint8_t note_fx_param = 0U;
-    if ((ui_core_clipboard_note_fx_param_kind(id, &note_fx_param) != 0U)
-            && (note_fx_param == NOTE_FX_MODEL_INDEX))
-    {
-        return 5U;
-    }
     return 4U;
 }
 static void ui_core_clipboard_feedback(ui_core_clipboard_feedback_fn feedback, const char *message)
@@ -709,7 +690,7 @@ static uint8_t ui_track_clipboard_capture_payload(
             || (audio_fx_control_state_capture(track, &out->audio_fx) == 0U)
             || (polyphony_control_capture(track, &out->polyphony) == 0U)
             || (mixer_control_state_capture(track, &out->mixer) == 0U)
-            || (note_fx_state_capture_track(track, &out->note_fx) == 0U)
+            || (note_fx_chain_state_capture_track(track, &out->note_fx) == 0U)
             || (ui_track_clipboard_capture_sequence(track, &out->sequence) == 0U)
             || (ui_track_clipboard_capture_assets(track, out) == 0U))
         return 0U;
@@ -928,7 +909,6 @@ static uint8_t ui_track_clipboard_prevalidate(
     {
         uint8_t target;
         const ui_track_clipboard_payload_t *const payload = &cb->payload[index];
-        note_fx_track_state_t note_fx = payload->note_fx;
         if ((ui_track_clipboard_target_at(root, index, cb->payload_count, &target) == 0U)
                 || (payload->valid == 0U)
                 || (payload->config.family >= TRACK_FAMILY_COUNT)
@@ -947,8 +927,6 @@ static uint8_t ui_track_clipboard_prevalidate(
                 || (payload->audio_fx.config.order >= AUDIO_FX_ORDER_COUNT)
                 || (payload->audio_fx.config.spatial_mode[0] >= 4U)
                 || (payload->audio_fx.config.spatial_mode[1] >= 4U)
-                || (note_fx_state_normalize_track(&note_fx) == 0U)
-                || (memcmp(&note_fx, &payload->note_fx, sizeof(note_fx)) != 0)
                 || (ui_track_clipboard_validate_assets(payload) == 0U)
                 || (ui_track_clipboard_validate_sequence(
                         target, payload->config.type, &payload->sequence) == 0U))
@@ -1108,7 +1086,7 @@ static uint8_t ui_track_clipboard_restore_payload(
         return 0U;
     }
     if ((mixer_control_state_restore(target, &payload->mixer) == 0U)
-            || (note_fx_state_restore_track(target, &payload->note_fx) == 0U)
+            || (note_fx_chain_state_install_track(target, &payload->note_fx) == 0U)
             || (ui_track_clipboard_restore_modulation(source, target, payload) == 0U)
             || (ui_track_clipboard_restore_sequence(target, &payload->sequence) == 0U))
         return 0U;
@@ -1188,14 +1166,8 @@ static uint8_t ui_track_clipboard_clear_active_entity(uint8_t track)
     const track_config_t config = track_state_get_config(track);
     track_runtime_resolved_track_t resolved;
     brick_entity_id_t mod_owner = track;
-    note_fx_track_state_t note_fx;
-    memset(&note_fx, 0, sizeof(note_fx));
-    for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
-    {
-        note_fx.value[slot][0] = 2U;
-        note_fx.value[slot][2] = 1U;
-        note_fx.value[slot][NOTE_FX_MODEL_INDEX] = NOTE_FX_MODEL_OFF;
-    }
+    note_fx_chain_state_t note_fx;
+    note_fx_chain_state_make_default(&note_fx);
     const uint8_t owns_modulation = (uint8_t)((entity_topology_mod_owner(track, &mod_owner) != 0U)
         && (mod_owner == track));
     if ((track_runtime_resolve_track(track, &resolved) == 0U)
@@ -1212,7 +1184,7 @@ static uint8_t ui_track_clipboard_clear_active_entity(uint8_t track)
             || (audio_fx_control_state_reset(track) == 0U)
             || (polyphony_control_reset(track) == 0U)
             || (mixer_control_state_reset(track) == 0U)
-            || (note_fx_state_restore_track(track, &note_fx) == 0U)
+            || (note_fx_chain_state_install_track(track, &note_fx) == 0U)
             || (ui_track_clipboard_clear_sequence(track) == 0U))
         return 0U;
     if (owns_modulation != 0U)

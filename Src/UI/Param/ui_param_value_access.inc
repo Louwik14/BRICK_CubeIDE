@@ -56,29 +56,41 @@ static uint8_t ui_param_resolve_edit_bounds(param_id_t param, uint8_t track, flo
         *out_max = 127.0f;
         return 1U;
     }
-    uint8_t note_fx_slot = 0U;
+    note_fx_chain_stage_t note_fx_stage;
     uint8_t note_fx_param = 0U;
-    if (note_fx_state_param_map(param, &note_fx_slot, &note_fx_param) != 0U)
+    if (note_fx_chain_param_map(param, &note_fx_stage, &note_fx_param) != 0U)
     {
-        (void)note_fx_slot;
-        float model_value = 0.0f;
-        note_fx_param_schema_t schema;
-        const param_id_t model_id = (param_id_t)(param
-            + (NOTE_FX_MODEL_INDEX - note_fx_param));
-        if ((note_fx_state_get_param(track, model_id, &model_value) != 0U)
-                && (note_fx_state_get_param_schema((uint8_t)model_value,
-                                                    note_fx_param,
-                                                    &schema) != 0U))
+        if ((note_fx_stage == NOTE_FX_CHAIN_STAGE_GENERATOR)
+                && (note_fx_param < 3U))
         {
-            *out_min = (float)schema.min;
-            *out_max = (float)schema.max;
-            if (((uint8_t)model_value == NOTE_FX_MODEL_EUCLID)
-                    && (note_fx_param == 1U))
+            float mode_value = 0.0f;
+            if (note_fx_chain_state_get_param(track,
+                    PARAM_MIDI_FX_GENERATOR_P4, &mode_value) != 0U)
             {
-                float length = 0.0f;
-                const param_id_t length_id = (param_id_t)(param - 1U);
-                if (note_fx_state_get_param(track, length_id, &length) != 0U)
-                    *out_max = length;
+                const uint8_t mode = (uint8_t)mode_value;
+                if (mode == NOTE_FX_GENERATOR_EUCLID)
+                {
+                    static const uint8_t minimum[] = {1U, 0U, 0U};
+                    *out_min = (float)minimum[note_fx_param];
+                    *out_max = (note_fx_param == 2U)
+                        ? (float)(SEQ_DIVISION_ARP_COUNT - 1U) : 64.0f;
+                    if (note_fx_param == 1U)
+                    {
+                        float length = 0.0f;
+                        if (note_fx_chain_state_get_param(track,
+                                PARAM_MIDI_FX_GENERATOR_P1, &length) != 0U)
+                            *out_max = (length < 1.0f) ? 1.0f : length;
+                    }
+                }
+                else if ((mode == NOTE_FX_GENERATOR_ARP)
+                        || (mode == NOTE_FX_GENERATOR_HOLD))
+                {
+                    static const uint8_t minimum[] = {0U, 0U, 1U};
+                    static const uint8_t maximum[] = {
+                        4U, SEQ_DIVISION_ARP_COUNT - 1U, 4U};
+                    *out_min = (float)minimum[note_fx_param];
+                    *out_max = (float)maximum[note_fx_param];
+                }
             }
         }
         return 1U;
