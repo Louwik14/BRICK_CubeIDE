@@ -107,7 +107,7 @@ static const param_id_t g_seq_param_mod_slot_to_id[SEQ_PARAM_MOD_SLOT_COUNT] = {
     PARAM_LFO3_PHASE
 };
 
-static const param_id_t g_seq_param_midi_fx_slot_to_id[SEQ_PARAM_MIDI_FX_SLOT_COUNT] = {
+static const param_id_t g_seq_param_midi_fx_param_to_id[SEQ_PARAM_MIDI_FX_PARAM_COUNT] = {
     PARAM_MIDI_FX_GENERATOR_P1,
     PARAM_MIDI_FX_GENERATOR_P2,
     PARAM_MIDI_FX_GENERATOR_P3,
@@ -216,7 +216,7 @@ static const seq_param_inverse_table_t g_seq_param_inverse_tables[SEQ_PLOCK_SET_
     [SEQ_PLOCK_SET_ENV] = { g_seq_param_env_slot_to_id, SEQ_PARAM_ENV_SLOT_COUNT },
     [SEQ_PLOCK_SET_TONE] = { NULL, 0U },
     [SEQ_PLOCK_SET_MOD] = { g_seq_param_mod_slot_to_id, SEQ_PARAM_MOD_SLOT_COUNT },
-    [SEQ_PLOCK_SET_MIDI_FX] = { g_seq_param_midi_fx_slot_to_id, SEQ_PARAM_MIDI_FX_SLOT_COUNT },
+    [SEQ_PLOCK_SET_MIDI_FX] = { g_seq_param_midi_fx_param_to_id, SEQ_PARAM_MIDI_FX_PARAM_COUNT },
     [SEQ_PLOCK_SET_MIX] = { g_seq_param_mix_slot_to_id, SEQ_PARAM_MIX_SLOT_COUNT },
     [SEQ_PLOCK_SET_AUDIO_FX] = { g_seq_param_audio_fx_slot_to_id, SEQ_PARAM_AUDIO_FX_SLOT_COUNT }
 };
@@ -227,7 +227,7 @@ _Static_assert((sizeof(g_seq_param_env_slot_to_id) / sizeof(g_seq_param_env_slot
                "ENV inverse p-lock mapping size changed");
 _Static_assert((sizeof(g_seq_param_mod_slot_to_id) / sizeof(g_seq_param_mod_slot_to_id[0])) == SEQ_PARAM_MOD_SLOT_COUNT,
                "MOD inverse p-lock mapping size changed");
-_Static_assert((sizeof(g_seq_param_midi_fx_slot_to_id) / sizeof(g_seq_param_midi_fx_slot_to_id[0])) == SEQ_PARAM_MIDI_FX_SLOT_COUNT,
+_Static_assert((sizeof(g_seq_param_midi_fx_param_to_id) / sizeof(g_seq_param_midi_fx_param_to_id[0])) == SEQ_PARAM_MIDI_FX_PARAM_COUNT,
                "MIDI FX inverse p-lock mapping size changed");
 _Static_assert((sizeof(g_seq_param_mix_slot_to_id) / sizeof(g_seq_param_mix_slot_to_id[0])) == SEQ_PARAM_MIX_SLOT_COUNT,
                "MIX inverse p-lock mapping size changed");
@@ -238,7 +238,7 @@ static const uint8_t g_seq_param_set_offsets[SEQ_PLOCK_SET_COUNT] = {
     SEQ_PARAM_ENV_SLOT_OFFSET,
     SEQ_PARAM_TONE_SLOT_OFFSET,
     SEQ_PARAM_MOD_SLOT_OFFSET,
-    SEQ_PARAM_MIDI_FX_SLOT_OFFSET,
+    SEQ_PARAM_MIDI_FX_PARAM_OFFSET,
     SEQ_PARAM_MIX_SLOT_OFFSET,
     SEQ_PARAM_FM_OPERATOR_SLOT_OFFSET,
     SEQ_PARAM_AUDIO_FX_SLOT_OFFSET
@@ -248,7 +248,7 @@ static const uint8_t g_seq_param_set_capacities[SEQ_PLOCK_SET_COUNT] = {
     SEQ_PARAM_ENV_SLOT_COUNT,
     SEQ_PARAM_TONE_SLOT_COUNT,
     SEQ_PARAM_MOD_SLOT_COUNT,
-    SEQ_PARAM_MIDI_FX_SLOT_COUNT,
+    SEQ_PARAM_MIDI_FX_PARAM_COUNT,
     SEQ_PARAM_MIX_SLOT_COUNT,
     SEQ_PARAM_FM_OPERATOR_SLOT_COUNT,
     SEQ_PARAM_AUDIO_FX_SLOT_COUNT

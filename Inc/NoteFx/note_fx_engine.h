@@ -19,10 +19,6 @@ void note_fx_engine_set_samples_per_step_q16(uint32_t samples_per_step_q16);
 void note_fx_engine_set_time_reference(uint64_t sample_time,
                                        uint64_t transport_position_q16,
                                        uint32_t samples_per_step_q16);
-void note_fx_engine_forget_causal_source(uint8_t track,
-                                         uint32_t causal_source_id);
-void note_fx_engine_release_terminal(const note_event_t *event);
-
 /* Fixed GENERATOR -> VOICER -> SCALER -> TRIG runtime. */
 note_event_result_t note_fx_chain_engine_configure(
     uint8_t track, const note_fx_chain_state_t *effective);
@@ -34,8 +30,5 @@ note_event_result_t note_fx_chain_engine_process(
     uint32_t samples_per_step_q16, uint64_t transport_position_q16,
     const uint32_t pattern_position_q16[NOTE_FX_TRACK_COUNT],
     const uint8_t pattern_length[NOTE_FX_TRACK_COUNT],
-    uint8_t scale_index, uint8_t root_index,
     note_fx_emit_fn emit, void *context);
-void note_fx_chain_engine_reset_track(uint8_t track);
-
 #endif

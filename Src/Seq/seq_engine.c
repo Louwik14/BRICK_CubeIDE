@@ -494,7 +494,6 @@ static note_event_result_t walker_resume_batch(const note_event_t *source,
           ||source[0].stage!=stage)return NOTE_EVENT_RESULT_DROPPED_POLICY;
     for(uint8_t i=1U;i<source_count;++i)if(!note_event_is_valid(&source[i])
           ||source[i].track!=source[0].track||source[i].stage!=stage
-          ||note_event_order(&source[i])!=note_event_order(&source[0])
           ||source[i].kind!=source[0].kind)return NOTE_EVENT_RESULT_DROPPED_POLICY;
     if(stage==NOTE_EVENT_STAGE_TERMINAL){
         for(uint8_t i=0U;i<source_count;++i)fx_terminal(&source[i]);
@@ -539,7 +538,7 @@ static uint8_t live_lane_bind(const seq_engine_core_t *core,note_event_t *event,
       if(lane>=SEQ_ENGINE_LEDGER_CAPACITY)continue;
       seq_live_lane_t *const live=&g_seq_live_lane[lane];
       if(live->active!=0U&&live->source_id==event->source_id){
-        event->temporal_index=logical;note_event_set_order(event,live->order);
+        event->temporal_index=logical;
         *binding=(int16_t)lane;return 1U;}
       if(logical<quota&&live->active==0U&&free_index<0)free_index=(int16_t)lane;}
     if(event->kind==NOTE_EVENT_KIND_OFF)return 1U;
@@ -548,7 +547,6 @@ static uint8_t live_lane_bind(const seq_engine_core_t *core,note_event_t *event,
     g_seq_live_lane[(uint8_t)free_index]=(seq_live_lane_t){
         .source_id=event->source_id,.track=event->track,.lane=logical,.active=1U,
         .order=0U};
-    note_event_set_order(event,0U);
     event->temporal_index=logical;*binding=free_index;*created=1U;return 1U;
 }
 
@@ -616,8 +614,7 @@ uint8_t seq_engine_core_submit_live(seq_engine_core_t *core,
             +pattern->timing_plan[track].finalizer_max_advance_samples;
         if(note_fx_chain_engine_process(track,window_start,horizon,
                 pattern->samples_per_step_q16,transport,pattern_position,
-                pattern->track_length,
-                pattern->scale_index,pattern->root_index,fx_generated,0)
+                pattern->track_length,fx_generated,0)
                 !=NOTE_EVENT_RESULT_ACCEPTED)
             seq_drop(core);
         drain_final_calendar_track(core,track,window_start,window_end);
@@ -703,7 +700,7 @@ static ITCM_TEXT void source_add(seq_engine_core_t *core, uint64_t first_on,
         .finalizer_advance_samples=finalizer_advance_samples,
         .note=note,.velocity=velocity,.playback_stage=playback_stage,
         .ordinal_count=ordinal_count,.active=1U,
-        .fx_order=0U};
+        .reserved=0U};
 }
 
 static uint8_t next_phase(const seq_pattern_t *p, uint8_t track,
@@ -733,7 +730,7 @@ static void configure_fx_step(const seq_pattern_t *p,uint8_t track,
         const seq_lock_pattern_t *const lock=&p->lock_pool[track][first+n];
         if((lock->param_flags&SEQ_ENGINE_PARAM_FLAG_NOTE_FX)==0U)continue;
         const uint8_t stage=(uint8_t)(lock->param_flags
-            &SEQ_ENGINE_FX_PLAN_SLOT_MASK);
+            &SEQ_ENGINE_FX_PLAN_STAGE_MASK);
         if(stage>=NOTE_FX_CHAIN_STAGE_COUNT)continue;
         const uint8_t override=(uint8_t)((lock->param_flags
             &SEQ_ENGINE_FX_PLAN_OVERRIDE_MASK)
@@ -917,14 +914,13 @@ static uint64_t source_cursor_decision_due(const seq_source_cursor_t *source)
 
 static note_event_result_t process_source_cohort(seq_engine_core_t *core,
     const seq_pattern_t *p,uint8_t track,uint64_t due,uint32_t first_serial,
-    uint8_t fx_order,
     uint64_t start,
     uint64_t transport,const uint32_t pattern_position[NOTE_FX_TRACK_COUNT])
 {uint8_t source_count=0U;const uint64_t cohort_sample=due;
  if(due>start){const uint64_t span=due-start;
   if(span>UINT32_MAX||note_fx_chain_engine_process(track,start,(uint32_t)span,
       p->samples_per_step_q16,transport,pattern_position,p->track_length,
-      p->scale_index,p->root_index,fx_generated,0)!=NOTE_EVENT_RESULT_ACCEPTED)
+      fx_generated,0)!=NOTE_EVENT_RESULT_ACCEPTED)
    return NOTE_EVENT_RESULT_REJECTED_CAPACITY;}
  const uint8_t quota=core->logical_capacity[track];
  uint32_t serial_limit=UINT32_MAX;
@@ -935,7 +931,7 @@ static note_event_result_t process_source_cohort(seq_engine_core_t *core,
    if(((core->source_active[bank]>>lane)&1U)==0U)continue;
    const seq_source_cursor_t*source=&core->sources[bank][lane];
    if(source_cursor_due(source)==cohort_sample&&source->serial>first_serial
-       &&source->fx_order!=fx_order&&source->serial<serial_limit)
+       &&source->serial<serial_limit)
     serial_limit=source->serial;}}
  for(uint8_t logical=0U;logical<quota;++logical){const uint16_t lane=
    product_lane_from_track_slot(track,logical);
@@ -944,7 +940,7 @@ static note_event_result_t process_source_cohort(seq_engine_core_t *core,
    if(((core->source_active[bank]>>lane)&1U)==0U)continue;
    seq_source_cursor_t*source=&core->sources[bank][lane];
    const uint64_t source_due=source_cursor_due(source);
-   if(source_due!=cohort_sample||source->fx_order!=fx_order
+   if(source_due!=cohort_sample
         ||source->serial>=serial_limit
         ||source_count>=NOTE_FX_BATCH_CAPACITY)continue;
    g_seq_source_due_ref[source_count++]=(seq_source_due_ref_t){
@@ -964,7 +960,7 @@ static note_event_result_t process_source_cohort(seq_engine_core_t *core,
    .provenance=NOTE_EVENT_SOURCE_STEP,.stage=s->playback_stage,
    .temporal_index=product_slot_from_lane(ref.lane),
    .timing_class=NOTE_EVENT_TIMING_SCHEDULED,
-   .reserved={s->fx_order,0U},
+   .reserved={0U,0U},
    .flags=(uint8_t)((s->playback_stage==NOTE_EVENT_STAGE_TERMINAL)
       ?NOTE_EVENT_FLAG_TERMINAL:0U)};
   if(++s->next_ordinal>=s->ordinal_count){s->active=0U;
@@ -974,7 +970,7 @@ static note_event_result_t process_source_cohort(seq_engine_core_t *core,
       g_seq_source_cohort[0].stage,0U);}
 
 typedef struct {uint64_t due,event_due;uint32_t order;uint16_t lane,slot;
- uint8_t rank,valid,fx_order;}
+ uint8_t rank,valid;}
     seq_collect_head_t;
 
 static uint8_t collect_head_before(uint64_t due,uint32_t order,uint8_t rank,
@@ -997,7 +993,7 @@ static void collect_source_head(const seq_engine_core_t *core,uint8_t track,
    if(decision_due<end&&collect_head_before(event_due,source->serial,rank,head))
     *head=(seq_collect_head_t){.due=event_due,.event_due=event_due,
       .order=source->serial,.lane=lane,
-      .slot=bank,.rank=rank,.valid=1U,.fx_order=source->fx_order};}}}
+      .slot=bank,.rank=rank,.valid=1U};}}}
 
 static void collect_ledger_head(const seq_engine_core_t *core,uint8_t track,
     uint64_t end,seq_collect_head_t *head)
@@ -1081,7 +1077,7 @@ static ITCM_TEXT void collect(seq_engine_core_t *core,uint64_t start,uint16_t fr
         const uint16_t slot=head[kind].slot;const uint64_t selected_due=head[kind].due;
         if(kind==DUE_SOURCE){
           if(process_source_cohort(core,p,track,head[kind].event_due,
-                head[kind].order,head[kind].fx_order,start,
+                head[kind].order,start,
                 transport,pattern)
                 !=NOTE_EVENT_RESULT_ACCEPTED)
             seq_drop(core);
@@ -1111,8 +1107,8 @@ static ITCM_TEXT void collect(seq_engine_core_t *core,uint64_t start,uint16_t fr
         const uint32_t horizon=frames
             +p->timing_plan[track].finalizer_max_advance_samples;
         if(note_fx_chain_engine_process(track,start,horizon,
-                p->samples_per_step_q16,transport,pattern,p->track_length,p->scale_index,
-                p->root_index,fx_generated,0)!=NOTE_EVENT_RESULT_ACCEPTED)
+                p->samples_per_step_q16,transport,pattern,p->track_length,
+                fx_generated,0)!=NOTE_EVENT_RESULT_ACCEPTED)
             seq_drop(core);}
     /* Temporal FX may have materialized scheduled occurrences after their
      * held inputs were consumed above.  They are already fully finalized;

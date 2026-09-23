@@ -27,9 +27,9 @@
     SEQ_ENGINE_FINAL_CALENDAR_BUCKETS
 #define SEQ_ENGINE_PARAM_FLAG_CLEARABLE UINT16_C(0x8000)
 #define SEQ_ENGINE_PARAM_FLAG_NOTE_FX UINT16_C(0x4000)
-/* A compiled Note FX lock reuses the 15 available bits plus value16/base_value16:
- * logical slot (2), override mask (5), PARAM4 (8), and four value bytes. */
-#define SEQ_ENGINE_FX_PLAN_SLOT_MASK UINT16_C(0x0003)
+/* A compiled Note FX lock reuses the available bits plus value16/base_value16:
+ * fixed-chain stage (2), override mask (4), and four value bytes. */
+#define SEQ_ENGINE_FX_PLAN_STAGE_MASK UINT16_C(0x0003)
 #define SEQ_ENGINE_FX_PLAN_OVERRIDE_SHIFT 2U
 #define SEQ_ENGINE_FX_PLAN_OVERRIDE_MASK UINT16_C(0x003C)
 #define SEQ_ENGINE_PARAM_ID_MASK UINT16_C(0x01FF)
@@ -119,7 +119,6 @@ typedef struct {
     uint8_t next_ordinal;
     uint8_t ordinal_count;
     uint8_t active;
-    uint8_t fx_order;
     uint8_t reserved;
 } seq_source_cursor_t;
 

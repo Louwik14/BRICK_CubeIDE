@@ -47,7 +47,7 @@ typedef enum
 #define NOTE_EVENT_FLAG_TERMINAL  0x04U
 #define NOTE_EVENT_FLAG_STALE     0x08U
 #define NOTE_EVENT_FLAG_HELD      0x40U
-/* Canonical inter-slot musical event. */
+/* Canonical fixed-chain musical event. */
 typedef struct
 {
     uint64_t sample_abs;
@@ -72,16 +72,6 @@ typedef struct
 static inline uint8_t note_event_branch(const musical_event_t *event)
 {
     return event->branch;
-}
-
-static inline uint8_t note_event_order(const musical_event_t *event)
-{
-    return event->reserved[0];
-}
-
-static inline void note_event_set_order(musical_event_t *event, uint8_t order)
-{
-    event->reserved[0] = order;
 }
 
 typedef musical_event_t note_event_t;
