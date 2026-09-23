@@ -833,13 +833,19 @@ persist_codec_result_t persistent_pattern_control_apply(
         audio_state_snapshot_control_abort();
         return result;
     }
+    if ((resume_transport != 0U) && (seq_engine_control_flush() == 0U))
+    {
+        g_persist_dbg.seq_publish_result = 0U;
+        audio_state_snapshot_control_abort();
+        return PERSIST_CODEC_IO_ERROR;
+    }
+    g_persist_dbg.seq_publish_result = 2U;
     if (audio_state_snapshot_control_commit() == 0U)
     {
         audio_state_snapshot_control_abort();
         return PERSIST_CODEC_IO_ERROR;
     }
     g_persist_dbg.audio_publish_result = 2U;
-    g_persist_dbg.seq_publish_result = 2U;
     return PERSIST_CODEC_OK;
 }
 

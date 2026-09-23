@@ -408,3 +408,17 @@ void seq_engine_control_poll(void)
     __DMB();
     g_published_generation = g_build_generation;
 }
+
+uint8_t seq_engine_control_flush(void)
+{
+    const uint32_t target_generation = g_edit_generation;
+    const uint16_t pass_limit = (uint16_t)(
+        (SEQ_LANE_CAPACITY * SEQ_MAX_STEPS + 3U) / 4U + 1U);
+    for (uint16_t pass = 0U; pass < pass_limit; ++pass)
+    {
+        seq_engine_control_poll();
+        if (g_published_generation == target_generation) return 1U;
+        if (g_edit_generation != target_generation) return 0U;
+    }
+    return 0U;
+}

@@ -250,6 +250,7 @@ void seq_engine_control_init(void);
 void seq_engine_control_mark_dirty(void);
 void seq_engine_control_disarm_track(uint8_t track);
 void seq_engine_control_poll(void);
+uint8_t seq_engine_control_flush(void);
 const seq_pattern_t *seq_engine_pattern_capture(void);
 
 /* H743 adapter: AUDIO only checks the previous READY block and wakes SEQ. */
