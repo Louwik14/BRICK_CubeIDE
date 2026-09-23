@@ -600,10 +600,35 @@ static float sampler_ram_pcm24_to_float(const uint8_t *p)
     return (float)v * (1.0f / 8388608.0f);
 }
 
+static void sampler_ram_pool_initialize_empty(uint32_t generation_seed)
+{
+    sampler_ram_audio_projection_init();
+    memset(g_sampler_ram_retire_not_before_sample, 0,
+           sizeof(g_sampler_ram_retire_not_before_sample));
+    memset(g_sampler_ram_retire_stop_committed, 0,
+           sizeof(g_sampler_ram_retire_stop_committed));
+    g_sampler_ram_retire_invariant_failed = 0U;
+    memset(&g_sampler_ram_pool, 0, sizeof(g_sampler_ram_pool));
+    g_sampler_ram_pool.generation_counter =
+        (generation_seed == 0U) ? 1U : generation_seed;
+    for (uint16_t i = 0U; i < SAMPLER_RAM_POOL_MAX_SLOTS; ++i)
+    {
+        g_sampler_ram_pool.slots[i].state = SAMPLER_RAM_SLOT_EMPTY;
+        g_sampler_ram_pool.slots[i].global_slot =
+            SAMPLE_GLOBAL_POOL_INVALID_INDEX;
+        g_sampler_ram_pool.slots[i].error = SAMPLER_RAM_RESULT_OK;
+        g_sampler_ram_pool.slots[i].generation = sampler_ram_next_generation();
+        sampler_ram_waveform_set_empty(&g_sampler_ram_pool.slots[i]);
+    }
+    sampler_ram_set_last(SAMPLER_RAM_RESULT_OK);
+}
+
 void sampler_ram_pool_init(void)
 {
+    /* STORAGE_STATE_SDRAM and CTRL_STATE are NOLOAD.  Boot must not inspect
+     * their retained bytes through the runtime quiescence guard. */
     sampler_ram_load_job_boot_init();
-    (void)sampler_ram_pool_reset_quiesced();
+    sampler_ram_pool_initialize_empty(1U);
 }
 
 uint8_t sampler_ram_pool_reset_quiesced(void)
@@ -617,12 +642,6 @@ uint8_t sampler_ram_pool_reset_quiesced(void)
         }
     }
     sampler_ram_pool_load_async_cancel();
-    sampler_ram_audio_projection_init();
-    memset(g_sampler_ram_retire_not_before_sample, 0,
-           sizeof(g_sampler_ram_retire_not_before_sample));
-    memset(g_sampler_ram_retire_stop_committed, 0,
-           sizeof(g_sampler_ram_retire_stop_committed));
-    g_sampler_ram_retire_invariant_failed = 0U;
     uint32_t generation_seed = g_sampler_ram_pool.generation_counter;
     for (uint16_t i = 0U; i < SAMPLER_RAM_POOL_MAX_SLOTS; ++i)
     {
@@ -636,17 +655,7 @@ uint8_t sampler_ram_pool_reset_quiesced(void)
         sample_global_pool_clear_backend(SAMPLE_GLOBAL_KIND_RAM, i);
     }
     generation_seed = g_sampler_ram_pool.generation_counter;
-    memset(&g_sampler_ram_pool, 0, sizeof(g_sampler_ram_pool));
-    g_sampler_ram_pool.generation_counter = (generation_seed == 0U) ? 1U : generation_seed;
-    for (uint16_t i = 0U; i < SAMPLER_RAM_POOL_MAX_SLOTS; ++i)
-    {
-        g_sampler_ram_pool.slots[i].state = SAMPLER_RAM_SLOT_EMPTY;
-        g_sampler_ram_pool.slots[i].global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-        g_sampler_ram_pool.slots[i].error = SAMPLER_RAM_RESULT_OK;
-        g_sampler_ram_pool.slots[i].generation = sampler_ram_next_generation();
-        sampler_ram_waveform_set_empty(&g_sampler_ram_pool.slots[i]);
-    }
-    sampler_ram_set_last(SAMPLER_RAM_RESULT_OK);
+    sampler_ram_pool_initialize_empty(generation_seed);
     return 1U;
 }
 

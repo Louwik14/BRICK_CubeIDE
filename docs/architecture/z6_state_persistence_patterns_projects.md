@@ -99,6 +99,13 @@ depuis l'ancien Pattern ne peut etre applique aux moteurs du nouveau Project.
 Les recalls Pattern a l'arret suivent le meme ordre; un recall en lecture garde
 son epoch musical et publie sa generation a la frontiere de cycle choisie.
 
+Au boot, les pools reconstruisent directement leur etat vide. En particulier,
+Sampler RAM ne passe pas par le reset runtime quiesce: ses structures SDRAM et
+ses flags D3 sont en sections `NOLOAD`, donc leurs octets retenus ne constituent
+pas un etat de slot valide avant l'initialisation explicite. Le restore du
+dernier Project peut ensuite employer le quiesce normal; retirer un pool vide
+est alors une operation idempotente et prouvee.
+
 Patch Save et Rename utilisent une seule machine Storage cooperative. Le Save
 capture un DTO immutable avant soumission. Les tweaks UI ordinaires installent
 d'abord leur valeur dans l'owner CONTROL canonique: Tone, FM, Filter, VCA, FX,

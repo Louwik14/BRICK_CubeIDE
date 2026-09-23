@@ -48,5 +48,11 @@ if ($ram -notmatch 'CONTROL_AUDIO_PARAM_RAM_RESOURCE_STOP' -or
     $ram -notmatch 'sampler_ram_pool_finalize_clear\(i\)') {
     throw 'Sampler RAM retire ordering contract changed'
 }
+if ($ram -notmatch 'void sampler_ram_pool_init\(void\)[\s\S]*?' +
+        'sampler_ram_pool_initialize_empty\(1U\);' -or
+    $ram -match 'void sampler_ram_pool_init\(void\)[\s\S]*?' +
+        'sampler_ram_pool_reset_quiesced\(\)') {
+    throw 'Sampler RAM boot init must not inspect retained NOLOAD slot state'
+}
 
 Write-Output 'Project Load retire contract: PASS'
