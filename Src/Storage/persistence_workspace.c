@@ -16,10 +16,10 @@ typedef union
     (((_bytes) + PERSISTENCE_WORKSPACE_ALIGN_BYTES - 1U) \
         & ~(PERSISTENCE_WORKSPACE_ALIGN_BYTES - 1U))
 
-_Static_assert(sizeof(persistence_workspace_storage_t) == 1011368U,
+_Static_assert(sizeof(persistence_workspace_storage_t) == 1010984U,
                "Persistence workspace union size changed");
 _Static_assert(PERSISTENCE_WORKSPACE_ALIGN_UP(
-                   sizeof(persistence_workspace_storage_t)) == 1011392U,
+                   sizeof(persistence_workspace_storage_t)) == 1011008U,
                "Persistence workspace aligned allocation changed");
 
 STORAGE_STATE_SDRAM static persistence_workspace_storage_t g_persistence_workspace;

@@ -153,8 +153,6 @@ static uint8_t codec_midi_source_valid(uint32_t key)
 { return (uint8_t)((key==PERSIST_MIDI_SOURCE_INTERNAL)||(key==PERSIST_MIDI_SOURCE_EXTERNAL)||(key==PERSIST_MIDI_SOURCE_ALL)); }
 static uint8_t codec_clock_valid(uint32_t key)
 { return (uint8_t)((key==PERSIST_CLOCK_INTERNAL)||(key==PERSIST_CLOCK_MIDI)||(key==PERSIST_CLOCK_USB)); }
-static uint8_t codec_note_fx_valid(uint32_t key)
-{ note_fx_model_t model; return persist_key_note_fx_from_disk(key,&model); }
 static uint8_t codec_mod_source_valid(uint32_t key)
 { return (uint8_t)((key==PERSIST_MOD_SOURCE_NONE)||(key==PERSIST_MOD_SOURCE_LFO1)||(key==PERSIST_MOD_SOURCE_LFO2)||(key==PERSIST_MOD_SOURCE_LFO3)||(key==PERSIST_MOD_SOURCE_ENV_FLT)||(key==PERSIST_MOD_SOURCE_ENV_VCA)||(key==PERSIST_MOD_SOURCE_ENV_MOD)||(key==PERSIST_MOD_SOURCE_MULTI1)||(key==PERSIST_MOD_SOURCE_MULTI2)||(key==PERSIST_MOD_SOURCE_SLEW1)||(key==PERSIST_MOD_SOURCE_SLEW2)); }
 
@@ -412,13 +410,7 @@ static void codec_entity(codec_io_t *io, persist_control_entity_t *e,uint8_t gro
     if(e->fm_present!=0U)codec_fm_state(io,&e->fm);
     codec_u8(io,&e->tone_present);if(e->tone_present>1U){io->result=PERSIST_CODEC_INVALID_ENTITY;return;}if(e->tone_present!=0U)codec_tone(io,&e->tone);
     codec_filter(io,&e->filter);codec_vca(io,&e->vca);codec_mixer(io,&e->mixer);codec_audio_fx(io,&e->audio_fx);
-    codec_u8(io,&e->note_fx_count);
-    codec_u8(io,&e->note_fx_order);
-    if((e->note_fx_count>PERSIST_CONTROL_NOTE_FX_COUNT)
-            ||((io->mode!=CODEC_READ)&&(caps.note_fx_owner==0U)&&(e->note_fx_count!=0U)))
-    {io->result=PERSIST_CODEC_INVALID_ENTITY;return;}
-    for(uint8_t i=0U;i<e->note_fx_count;++i)
-    { codec_u32(io,&e->note_fx[i].model_key);codec_bytes(io,e->note_fx[i].values,PERSIST_CONTROL_NOTE_FX_VALUE_COUNT); }
+    codec_bytes(io,(uint8_t *)&e->note_fx,PERSIST_CONTROL_NOTE_FX_BYTES);
     codec_u8(io,&e->modulation_present);
     if(e->modulation_present!=0U)codec_modulation(io,&e->modulation);
     codec_sequence(io,e,group_active);
@@ -480,17 +472,34 @@ static uint8_t codec_parameter_value_valid(param_id_t id,
 static uint8_t codec_plock_value_valid(param_id_t id,
                                        const persist_control_step_lock_t *lock)
 {
+    if (id == PARAM_MIDI_FX_GENERATOR_P4) return 0U;
     if ((id == PARAM_LFO1_SHAPE) || (id == PARAM_LFO2_SHAPE) || (id == PARAM_LFO3_SHAPE))
     { mod_lfo_shape_t ignored;return (uint8_t)((lock->kind == PERSIST_VALUE_U32)
                 && persist_key_lfo_shape_from_disk(lock->value.u32,&ignored)); }
     if ((id == PARAM_LFO1_TRIG) || (id == PARAM_LFO2_TRIG) || (id == PARAM_LFO3_TRIG))
     { mod_lfo_trig_mode_t ignored;return (uint8_t)((lock->kind == PERSIST_VALUE_U32)
                 && persist_key_lfo_trigger_from_disk(lock->value.u32,&ignored)); }
-    if ((id == PARAM_MIDI_FX_S1_MODEL) || (id == PARAM_MIDI_FX_S2_MODEL)
-            || (id == PARAM_MIDI_FX_S3_MODEL))
-    { note_fx_model_t ignored;return (uint8_t)((lock->kind == PERSIST_VALUE_U32)
-                && persist_key_note_fx_from_disk(lock->value.u32,&ignored)); }
     return codec_parameter_value_valid(id,lock->kind,&lock->value);
+}
+
+static uint8_t codec_note_fx_state_valid(const note_fx_chain_state_t *state,
+                                         uint8_t owner)
+{
+    if (state == NULL) return 0U;
+    const uint8_t *const values = (const uint8_t *)state;
+    if (owner == 0U)
+    {
+        for (uint8_t i = 0U; i < PERSIST_CONTROL_NOTE_FX_BYTES; ++i)
+            if (values[i] != 0U) return 0U;
+        return 1U;
+    }
+    for (uint8_t i = 0U; i < PERSIST_CONTROL_NOTE_FX_BYTES; ++i)
+    {
+        const param_id_t id = (param_id_t)(PARAM_MIDI_FX_GENERATOR_P1 + i);
+        if (((float)values[i] < param_registry[id].min)
+                || ((float)values[i] > param_registry[id].max)) return 0U;
+    }
+    return 1U;
 }
 
 persist_codec_result_t persist_codec_validate_pattern(const persist_control_pattern_t *p)
@@ -499,13 +508,11 @@ persist_codec_result_t persist_codec_validate_pattern(const persist_control_patt
     const uint8_t group_active=(p->entities[PERSIST_CONTROL_GROUP_MASTER_ID].type==PERSIST_TYPE_GROUP)?1U:0U;
     for(uint8_t e=0U;e<PERSIST_CONTROL_ENTITY_COUNT;++e)
     { const persist_control_entity_t *x=&p->entities[e];persist_entity_caps_t caps;uint8_t input=0U;if((x->entity_id!=e)||(persist_entity_caps_resolve(group_active,e,&caps)==0U)||(caps.persistable==0U)||(codec_family_valid(x->family)==0U)||(codec_type_valid(x->type)==0U)||(codec_entity_assets_valid(x)==0U)||(x->midi_channel<1U)||(x->midi_channel>16U)||(codec_midi_source_valid(x->midi_source_key)==0U)||(persist_key_input_from_disk(x->input_key,&input)==0U)||(x->polyphony.voice_count<1U)||(x->polyphony.voice_count>8U)||(x->audio_fx.config.filter_position>=3U)||(x->audio_fx.config.order>=2U)||(x->audio_fx.config.spatial_mode[0]>=4U)||(x->audio_fx.config.spatial_mode[1]>=4U)||(x->muted>1U)||(x->fm_present>1U)||(x->tone_present>1U)||(x->fm_present&&x->tone_present)||((caps.input_owner==0U)&&(input!=0U))||((x->family==PERSIST_FAMILY_OFF)&&(x->muted!=0U)))return PERSIST_CODEC_INVALID_ENTITY;
-      if((caps.active==0U)&&((x->asset_count!=0U)||(x->fm_present!=0U)||(x->tone_present!=0U)||(x->muted!=0U)||(x->note_fx_count!=0U)||(x->modulation_present!=0U)))return PERSIST_CODEC_INVALID_ENTITY;
-      if(x->note_fx_count>PERSIST_CONTROL_NOTE_FX_COUNT||x->note_fx_order>=NOTE_FX_ORDER_COUNT)return PERSIST_CODEC_CAPACITY_EXCEEDED;
-      if((caps.note_fx_owner==0U)&&(x->note_fx_count!=0U))return PERSIST_CODEC_INVALID_ENTITY;
+      if((caps.active==0U)&&((x->asset_count!=0U)||(x->fm_present!=0U)||(x->tone_present!=0U)||(x->muted!=0U)||(codec_note_fx_state_valid(&x->note_fx,0U)==0U)||(x->modulation_present!=0U)))return PERSIST_CODEC_INVALID_ENTITY;
+      if(codec_note_fx_state_valid(&x->note_fx,caps.note_fx_owner)==0U)return PERSIST_CODEC_INVALID_ENTITY;
       const seq_track_timing_config_t *const timing=&x->sequence.timing;
       if((x->sequence.length<1U)||(x->sequence.length>PERSIST_CONTROL_STEP_COUNT)||((x->sequence.division!=1U)&&(x->sequence.division!=2U)&&(x->sequence.division!=4U)&&(x->sequence.division!=8U))||(x->sequence.direction>=SEQ_DIRECTION_COUNT)||(x->sequence.rotate<-(int8_t)(SEQ_MAX_STEPS-1U))||(x->sequence.rotate>(int8_t)(SEQ_MAX_STEPS-1U))||(timing->base>=SEQ_TIMING_BASE_COUNT)||(timing->quantize>100U)||(memchr(timing->groove_name,'\0',SEQ_GROOVE_NAME_BYTES)==NULL)||(timing->timing>100U)||(timing->random>100U)||(timing->velocity < -100)||(timing->velocity > 100)||(timing->global>130U))return PERSIST_CODEC_INVALID_ENTITY;
       if(x->modulation_present>1U||x->modulation_present!=caps.modulation_owner)return PERSIST_CODEC_INVALID_MODULATION;
-      for(uint8_t n=0U;n<x->note_fx_count;++n)if(codec_note_fx_valid(x->note_fx[n].model_key)==0U)return PERSIST_CODEC_UNKNOWN_KEY;
       uint16_t locks=0U;for(uint8_t s=0U;s<PERSIST_CONTROL_STEP_COUNT;++s){const persist_control_step_t *st=&x->sequence.steps[s];if(st->trigger>1U||st->roll>=SEQ_STEP_ROLL_COUNT||(st->trigger==0U&&st->roll!=SEQ_STEP_ROLL_OFF)||(caps.sequence_owner==0U&&st->trigger!=0U)||st->play_count>caps.play_limit)return PERSIST_CODEC_INVALID_PLAY;for(uint8_t v=0U;v<st->play_count;++v)if(codec_play_value_valid(&st->play[v])==0U)return PERSIST_CODEC_INVALID_PLAY;if(st->lock_count>PERSIST_CONTROL_STEP_LOCK_COUNT||(caps.sequence_owner==0U&&st->lock_count!=0U))return PERSIST_CODEC_INVALID_PLOCK;locks=(uint16_t)(locks+st->lock_count);for(uint8_t i=0U;i<st->lock_count;++i){uint8_t tone_slot=0U;param_id_t id=0U;persist_param_descriptor_t d;if(persist_key_tone_slot_from_disk(st->locks[i].parameter,&tone_slot)!=0U){if((st->locks[i].kind!=PERSIST_VALUE_FLOAT32)||!isfinite(st->locks[i].value.f32)||(st->locks[i].value.f32<0.0f)||(st->locks[i].value.f32>1.0f))return PERSIST_CODEC_INVALID_PLOCK;}else if((persist_key_param_from_disk(st->locks[i].parameter,&id)==0U)||(persist_key_param_descriptor(id,&d)==0U)||(d.plockable==0U)||(codec_plock_value_valid(id,&st->locks[i])==0U))return PERSIST_CODEC_INVALID_PLOCK;for(uint8_t j=0U;j<i;++j)if(st->locks[j].parameter==st->locks[i].parameter)return PERSIST_CODEC_DUPLICATE;}}if(locks>SEQ_PLOCK_POOL_CAP_PER_TRACK)return PERSIST_CODEC_INVALID_PLOCK; }
     uint8_t record_mode=0U;if((codec_clock_valid(p->globals.clock_source_key)==0U)||(persist_key_record_start_from_disk(p->globals.record_start_key,&record_mode)==0U)||(persist_key_record_length_from_disk(p->globals.record_length_key,&record_mode)==0U))return PERSIST_CODEC_CAPACITY_EXCEEDED;
     for(uint8_t e=0U;e<PERSIST_CONTROL_ENTITY_COUNT;++e){if(p->entities[e].modulation_present==0U)continue;const persist_control_modulation_t*m=&p->entities[e].modulation;

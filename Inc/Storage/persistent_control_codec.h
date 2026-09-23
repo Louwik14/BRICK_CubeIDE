@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-#define PERSIST_CODEC_VERSION 12U
+#define PERSIST_CODEC_VERSION 13U
 #define PERSIST_CODEC_HEADER_BYTES 24U
 #define PERSIST_CODEC_SECTION_HEADER_BYTES 8U
 #define PERSIST_CODEC_MAX_DOCUMENT_BYTES 0x3FFFFFFFUL
@@ -20,9 +20,9 @@ extern "C" {
  * + Note FX + modulation + non-master optionals + GROUP-master FM
  * + globals. */
 #define PERSIST_CODEC_PATTERN_BODY_MAX_BYTES \
-    (1U + (16U * 490U) + (15U * 512U * 10U) \
+    (1U + (16U * 488U) + (15U * 512U * 10U) \
         + (7U * 64U * 8U * 5U) + (8U * 64U * 1U * 5U) \
-        + (15U * 3U * (4U + 5U)) + (8U * 209U) \
+        + (16U * PERSIST_CONTROL_NOTE_FX_BYTES) + (8U * 209U) \
         + (15U * ((2U * 166U) + 190U)) + 190U + 231U)
 #define PERSIST_CODEC_PATTERN_DOCUMENT_MAX_BYTES \
     (PERSIST_CODEC_HEADER_BYTES + PERSIST_CODEC_SECTION_HEADER_BYTES \
@@ -44,11 +44,11 @@ extern "C" {
             * PERSIST_CONTROL_PATTERN_PER_BANK) \
                 * (3U + PERSIST_CODEC_PATTERN_BODY_MAX_BYTES))))
 
-_Static_assert(PERSIST_CODEC_PATTERN_BODY_MAX_BYTES == 115449U,
+_Static_assert(PERSIST_CODEC_PATTERN_BODY_MAX_BYTES == 115268U,
                "Pattern codec body envelope changed");
-_Static_assert(PERSIST_CODEC_PATTERN_DOCUMENT_MAX_BYTES == 115481U,
+_Static_assert(PERSIST_CODEC_PATTERN_DOCUMENT_MAX_BYTES == 115300U,
                "Pattern codec worst-case envelope changed");
-_Static_assert(PERSIST_CODEC_PROJECT_DOCUMENT_MAX_BYTES == 29845875U,
+_Static_assert(PERSIST_CODEC_PROJECT_DOCUMENT_MAX_BYTES == 29799358U,
                "Project codec worst-case envelope changed");
 
 typedef enum

@@ -36,8 +36,7 @@ extern "C" {
 #define PERSIST_CONTROL_PLAY_ITEM_COUNT            8U
 #define PERSIST_CONTROL_CHILD_PLAY_ITEM_COUNT      1U
 #define PERSIST_CONTROL_STEP_LOCK_COUNT            32U
-#define PERSIST_CONTROL_NOTE_FX_COUNT               NOTE_FX_SLOT_COUNT
-#define PERSIST_CONTROL_NOTE_FX_VALUE_COUNT         NOTE_FX_PARAM_COUNT
+#define PERSIST_CONTROL_NOTE_FX_BYTES               NOTE_FX_CHAIN_CANONICAL_PARAM_COUNT
 #define PERSIST_CONTROL_MOD_LFO_COUNT               3U
 #define PERSIST_CONTROL_MOD_ROUTE_COUNT             8U
 #define PERSIST_CONTROL_PATTERN_BANK_COUNT         16U
@@ -122,17 +121,6 @@ typedef enum
     PERSIST_CLOCK_MIDI     = 0x4D494449UL, /* MIDI */
     PERSIST_CLOCK_USB      = 0x55534220UL  /* USB  */
 } persist_control_clock_key_value_t;
-
-typedef enum
-{
-    PERSIST_NOTE_FX_OFF    = 0x4F464620UL, /* OFF  */
-    PERSIST_NOTE_FX_ARP    = 0x41525020UL, /* ARP  */
-    PERSIST_NOTE_FX_EUCLID = 0x4555434CUL, /* EUCL */
-    PERSIST_NOTE_FX_PROBABILITY = 0x50524F42UL, /* PROB */
-    PERSIST_NOTE_FX_GATE = 0x47415445UL, /* GATE */
-    PERSIST_NOTE_FX_VOICER = 0x564F4943UL, /* VOIC */
-    PERSIST_NOTE_FX_SCALER = 0x5343414CUL /* SCAL */
-} persist_control_note_fx_model_key_value_t;
 
 typedef enum
 {
@@ -250,12 +238,6 @@ typedef struct
 
 typedef struct
 {
-    uint32_t model_key;
-    uint8_t values[PERSIST_CONTROL_NOTE_FX_VALUE_COUNT];
-} persist_control_note_fx_t;
-
-typedef struct
-{
     float rate;
     uint32_t shape_key;
     uint32_t trigger_key;
@@ -321,9 +303,7 @@ typedef struct
     vca_control_state_t vca;
     mixer_control_state_t mixer;
     audio_fx_control_state_t audio_fx;
-    uint8_t note_fx_count;
-    uint8_t note_fx_order;
-    persist_control_note_fx_t note_fx[PERSIST_CONTROL_NOTE_FX_COUNT];
+    note_fx_chain_state_t note_fx;
     uint8_t modulation_present;
     persist_control_modulation_t modulation;
     persist_control_sequence_t sequence;
