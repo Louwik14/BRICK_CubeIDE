@@ -17,6 +17,10 @@ uint8_t param_registry_is_plockable(param_id_t id)
     if (id >= PARAM_COUNT) return 0U;
     if ((id >= PARAM_FM_OPERATOR_FIRST) && (id <= PARAM_FM_OPERATOR_LAST))
         return 1U;
+    note_fx_chain_stage_t note_fx_stage;
+    uint8_t note_fx_param = 0U;
+    if (note_fx_chain_param_map(id, &note_fx_stage, &note_fx_param) != 0U)
+        return note_fx_chain_param_is_plockable(note_fx_stage, note_fx_param);
 
     switch (id)
     {
@@ -94,11 +98,20 @@ uint8_t param_registry_resolve_track_param(
         set_id = (uint8_t)SEQ_PLOCK_SET_MIX;
     else if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX)
         set_id = (uint8_t)SEQ_PLOCK_SET_AUDIO_FX;
+    else if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIDI_FX)
+        set_id = (uint8_t)SEQ_PLOCK_SET_MIDI_FX;
     if ((set_id >= (uint8_t)SEQ_PLOCK_SET_COUNT)
             || (seq_param_iface_param_is_supported(track, set_id, id) == 0U))
         return 1U;
 
-    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX)
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIDI_FX)
+    {
+        note_fx_chain_stage_t stage;
+        uint8_t param = 0U;
+        if ((note_fx_chain_param_map(id, &stage, &param) == 0U)
+                || (note_fx_chain_stage_is_active(track, stage) == 0U)) return 1U;
+    }
+    else if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_AUDIO_FX)
     {
         uint8_t fx_slot = 0U;
         uint8_t fx_param = 0U;
@@ -165,6 +178,8 @@ uint8_t param_registry_projected_track_param_is_applicable(
             || (param_registry_is_plockable(id) == 0U)) return 0U;
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
     if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD) return 1U;
+    if (rule.domain == TRACK_RUNTIME_PARAM_DOMAIN_MIDI_FX)
+        return (uint8_t)((is_group_master == 0U) && (is_group_child == 0U));
     if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_ENV)
             && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_TONE)
             && (rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_MIX)
@@ -352,7 +367,11 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         }
         /* Store raw values. The current mode is applied only when the
          * sequencer builds the effective fixed chain. */
-        return note_fx_chain_state_set_param(track, id, value);
+        const uint8_t installed = note_fx_chain_state_set_param(track, id, value);
+        if ((installed != 0U)
+                && (param_registry_param_changes_destination_catalog(id) != 0U))
+            mod_destination_catalog_invalidate_track(track);
+        return installed;
     }
 
     {

@@ -9,6 +9,17 @@
 static const seq_division_desc_t division={"1",1U,1U,UINT32_C(65536)};
 const seq_division_desc_t*seq_division_get(uint8_t index){(void)index;return &division;}
 bool kbd_scale_contains_pitch_class(uint8_t scale,uint8_t pitch){(void)scale;return pitch==0U||pitch==2U||pitch==4U||pitch==5U||pitch==7U||pitch==9U||pitch==11U;}
+uint8_t note_fx_chain_param_map(param_id_t id,note_fx_chain_stage_t*out_stage,uint8_t*out_param){
+ if(id<PARAM_MIDI_FX_GENERATOR_P1||id>PARAM_MIDI_FX_TRIG_P4||!out_stage||!out_param)return 0U;
+ const uint16_t offset=(uint16_t)(id-PARAM_MIDI_FX_GENERATOR_P1);
+ *out_stage=(note_fx_chain_stage_t)(offset/NOTE_FX_CHAIN_PARAM_COUNT);
+ *out_param=(uint8_t)(offset%NOTE_FX_CHAIN_PARAM_COUNT);return 1U;}
+uint8_t note_fx_chain_param_is_plockable(note_fx_chain_stage_t stage,uint8_t param){
+ return(uint8_t)(stage<NOTE_FX_CHAIN_STAGE_COUNT&&param<NOTE_FX_CHAIN_PARAM_COUNT
+  &&!(stage==NOTE_FX_CHAIN_STAGE_GENERATOR&&param==3U));}
+uint8_t note_fx_chain_state_make_effective(const note_fx_chain_state_t*raw,note_fx_chain_state_t*out){
+ if(!raw||!out)return 0U;
+ *out=*raw;return 1U;}
 
 static note_event_t source(uint64_t sample,uint8_t note){return(note_event_t){
  .sample_abs=sample,.duration_samples=37U,.source_id=(uint32_t)(sample+1U),

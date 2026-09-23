@@ -22,7 +22,8 @@ static uint8_t mod_destination_control_supported(uint8_t track, param_id_t id)
 #define MOD_DESTINATION_LOCAL_CAPACITY \
     (SEQ_PARAM_ENV_SLOT_COUNT + SEQ_PARAM_TONE_SLOT_COUNT \
      + SEQ_PARAM_MOD_SLOT_COUNT + SEQ_PARAM_MIX_SLOT_COUNT \
-     + SEQ_PARAM_FM_OPERATOR_SLOT_COUNT + SEQ_PARAM_AUDIO_FX_SLOT_COUNT)
+     + SEQ_PARAM_MIDI_FX_PARAM_COUNT + SEQ_PARAM_FM_OPERATOR_SLOT_COUNT \
+     + SEQ_PARAM_AUDIO_FX_SLOT_COUNT)
 
 typedef struct
 {
@@ -42,6 +43,7 @@ static uint8_t mod_destination_control_set_capacity(uint8_t set_id)
         case SEQ_PLOCK_SET_ENV: return SEQ_PARAM_ENV_SLOT_COUNT;
         case SEQ_PLOCK_SET_TONE: return SEQ_PARAM_TONE_SLOT_COUNT;
         case SEQ_PLOCK_SET_MOD: return SEQ_PARAM_MOD_SLOT_COUNT;
+        case SEQ_PLOCK_SET_MIDI_FX: return SEQ_PARAM_MIDI_FX_PARAM_COUNT;
         case SEQ_PLOCK_SET_FM_OPERATOR: return SEQ_PARAM_FM_OPERATOR_SLOT_COUNT;
         case SEQ_PLOCK_SET_AUDIO_FX: return SEQ_PARAM_AUDIO_FX_SLOT_COUNT;
         default: return 0U;
@@ -71,6 +73,7 @@ mod_destination_control_local_catalog(uint8_t track)
         (uint8_t)SEQ_PLOCK_SET_ENV,
         (uint8_t)SEQ_PLOCK_SET_TONE,
         (uint8_t)SEQ_PLOCK_SET_MOD,
+        (uint8_t)SEQ_PLOCK_SET_MIDI_FX,
         (uint8_t)SEQ_PLOCK_SET_FM_OPERATOR,
         (uint8_t)SEQ_PLOCK_SET_AUDIO_FX
     };

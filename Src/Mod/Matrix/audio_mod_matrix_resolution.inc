@@ -352,6 +352,9 @@ static void mod_matrix_rebuild_track_plan(uint8_t track,
             {
                 candidates[candidate_count].min_value = param_spec[destination].min;
                 candidates[candidate_count].max_value = param_spec[destination].max;
+                (void)note_fx_chain_param_range(target, destination,
+                    &candidates[candidate_count].min_value,
+                    &candidates[candidate_count].max_value);
                 if ((destination == PARAM_AUDIO_FX_P1)
                         || (destination == PARAM_AUDIO_FX_B_P1))
                 {
@@ -404,6 +407,7 @@ static void mod_matrix_rebuild_track_plan(uint8_t track,
 
         float minimum = param_spec[destination].min;
         float maximum = param_spec[destination].max;
+        (void)note_fx_chain_param_range(target, destination, &minimum, &maximum);
         if ((destination == PARAM_AUDIO_FX_P1)
                 || (destination == PARAM_AUDIO_FX_B_P1))
         {

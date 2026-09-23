@@ -69,6 +69,10 @@ static uint8_t param_registry_param_changes_destination_catalog(param_id_t id)
         case PARAM_STACK_OSC3_MODEL:
         case PARAM_AUDIO_FX_MODEL:
         case PARAM_AUDIO_FX_B_MODEL:
+        case PARAM_MIDI_FX_GENERATOR_P4:
+        case PARAM_MIDI_FX_VOICER_P4:
+        case PARAM_MIDI_FX_SCALER_P4:
+        case PARAM_MIDI_FX_TRIG_P4:
             return 1U;
         default:
             return 0U;

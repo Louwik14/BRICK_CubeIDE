@@ -22,6 +22,8 @@ void note_fx_engine_set_time_reference(uint64_t sample_time,
 /* Fixed GENERATOR -> VOICER -> SCALER -> TRIG runtime. */
 note_event_result_t note_fx_chain_engine_configure(
     uint8_t track, const note_fx_chain_state_t *effective);
+uint8_t note_fx_chain_engine_apply_modulated_param(
+    uint8_t track, param_id_t id, float value);
 note_event_result_t note_fx_chain_engine_transform(
     const note_event_t *input, uint8_t input_count,
     note_event_t *output, uint8_t output_capacity, uint8_t *output_count);

@@ -23,6 +23,7 @@
 #include "Param/param_stack_labels.h"
 #include "Mod/mod_lfo_v1_audio.h"
 #include "Mod/mod_env3.h"
+#include "NoteFx/note_fx_engine.h"
 #include "Track/entity_types.h"
 #include "mixer.h"
 
@@ -793,7 +794,10 @@ static uint8_t mod_destination_prepared_opcode(param_id_t dest,
         case PARAM_WAVE_TUNE: opcode = MOD_DEST_APPLY_WAVE_TUNE; break;
         case PARAM_WAVE_DETUNE: opcode = MOD_DEST_APPLY_WAVE_DETUNE; break;
         default:
-            if (mod_destination_is_direct_drum(dest) != 0U)
+            if ((dest >= PARAM_MIDI_FX_GENERATOR_P1)
+                    && (dest <= PARAM_MIDI_FX_TRIG_P4))
+                opcode = MOD_DEST_APPLY_MIDI_FX;
+            else if (mod_destination_is_direct_drum(dest) != 0U)
                 opcode = MOD_DEST_APPLY_DRUM_PARAM;
             else if (mod_destination_is_direct_stack(dest) != 0U)
             {
@@ -958,6 +962,9 @@ uint8_t mod_destination_catalog_apply_prepared(
                 (brick_entity_id_t)p->target,
                 (p->subindex != 0U) ? PARAM_AUDIO_FX_B_P1 : PARAM_AUDIO_FX_P1,
                 mod_destination_clampf(value,0.0f,FX_AUDIO_DRIFT_DELAY_MOD_MAX_CONTROL));
+        case MOD_DEST_APPLY_MIDI_FX:
+            return note_fx_chain_engine_apply_modulated_param(
+                p->target, (param_id_t)p->param, value);
         case MOD_DEST_APPLY_GENERIC: return param_audio_apply_track_rt((param_id_t)p->param, p->target, value);
         default: return 0U;
     }
@@ -1374,6 +1381,12 @@ uint8_t mod_destination_catalog_supported_audio(uint8_t track,
         if ((models == NULL) || (fx_param >= audio_fx_param_catalog_count(
                 models->audio_fx_model[fx_slot]))) return 0U;
     }
+    note_fx_chain_stage_t note_fx_stage;
+    uint8_t note_fx_param = 0U;
+    if ((note_fx_chain_param_map(dest, &note_fx_stage, &note_fx_param) != 0U)
+            && ((note_fx_chain_param_is_plockable(note_fx_stage, note_fx_param) == 0U)
+                || (note_fx_chain_stage_is_active(track, note_fx_stage) == 0U)))
+        return 0U;
     /* CONTROL owns destination policy.  AUDIO checks only the command ABI and
      * resolves the already-authorized destination to a terminal DSP opcode. */
     return ((track < SEQ_TRACK_COUNT) && (dest < PARAM_COUNT)

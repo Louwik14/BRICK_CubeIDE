@@ -425,6 +425,21 @@ note_event_result_t note_fx_chain_engine_configure(uint8_t track,
  return generator_configure(track,&effective->generator);
 }
 
+uint8_t note_fx_chain_engine_apply_modulated_param(uint8_t track,
+ param_id_t id,float value)
+{
+ note_fx_chain_stage_t stage;uint8_t param;
+ if(track>=NOTE_FX_TRACK_COUNT||note_fx_chain_param_map(id,&stage,&param)==0U
+      ||note_fx_chain_param_is_plockable(stage,param)==0U)return 0U;
+ note_fx_chain_state_t next=g_chain[track];
+ if(value<=0.0f)value=0.0f;else if(value>=255.0f)value=255.0f;
+ ((uint8_t*)&next)[(uint8_t)stage*NOTE_FX_CHAIN_PARAM_COUNT+param]
+     =(uint8_t)(value+0.5f);
+ note_fx_chain_state_t effective;
+ if(note_fx_chain_state_make_effective(&next,&effective)==0U)return 0U;
+ return(note_fx_chain_engine_configure(track,&effective)==NOTE_EVENT_RESULT_ACCEPTED)?1U:0U;
+}
+
 note_event_result_t note_fx_chain_engine_transform(const note_event_t*input,
  uint8_t input_count,note_event_t*output,uint8_t output_capacity,uint8_t*output_count)
 {

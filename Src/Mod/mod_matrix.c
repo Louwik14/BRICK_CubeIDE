@@ -15,6 +15,7 @@
 #include "Mod/mod_destination_audio.h"
 #include "Mod/mod_lfo_v1_audio.h"
 #include "Param/param_spec.h"
+#include "NoteFx/note_fx_state.h"
 #include "Track/entity_types.h"
 
 /* Runtime remains entity-scoped; GROUP control state is owned by the master. */

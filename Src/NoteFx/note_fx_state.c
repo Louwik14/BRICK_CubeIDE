@@ -5,6 +5,7 @@
 #include "Track/entity_topology.h"
 #include "Seq/seq_division_catalog.h"
 #include "Seq/seq_engine.h"
+#include "Param/param_registry.h"
 
 static note_fx_chain_state_t g_note_fx_chain_state[NOTE_FX_TRACK_COUNT];
 
@@ -108,6 +109,43 @@ uint8_t note_fx_chain_param_is_plockable(note_fx_chain_stage_t stage,
     if (((uint8_t)stage >= NOTE_FX_CHAIN_STAGE_COUNT)
             || (param >= NOTE_FX_CHAIN_PARAM_COUNT)) return 0U;
     return ((stage == NOTE_FX_CHAIN_STAGE_GENERATOR) && (param == 3U)) ? 0U : 1U;
+}
+
+uint8_t note_fx_chain_stage_is_active(uint8_t track,
+                                      note_fx_chain_stage_t stage)
+{
+    if ((track >= NOTE_FX_TRACK_COUNT)
+            || ((uint8_t)stage >= NOTE_FX_CHAIN_STAGE_COUNT)) return 0U;
+    const uint8_t *const value = ((const uint8_t *)&g_note_fx_chain_state[track])
+        + (uint8_t)stage * NOTE_FX_CHAIN_PARAM_COUNT;
+    return (value[3] != 0U) ? 1U : 0U;
+}
+
+uint8_t note_fx_chain_param_range(uint8_t track, param_id_t id,
+                                  float *out_min, float *out_max)
+{
+    note_fx_chain_stage_t stage;
+    uint8_t param = 0U;
+    if ((track >= NOTE_FX_TRACK_COUNT) || (out_min == NULL) || (out_max == NULL)
+            || (note_fx_chain_param_map(id, &stage, &param) == 0U)) return 0U;
+    *out_min = param_registry[id].min;
+    *out_max = param_registry[id].max;
+    if ((stage != NOTE_FX_CHAIN_STAGE_GENERATOR) || (param >= 3U)) return 1U;
+    const uint8_t mode = g_note_fx_chain_state[track].generator.mode;
+    if ((mode == NOTE_FX_GENERATOR_ARP) || (mode == NOTE_FX_GENERATOR_HOLD))
+    {
+        static const uint8_t maximum[3] = {4U, SEQ_DIVISION_ARP_COUNT - 1U, 4U};
+        *out_min = (param == 2U) ? 1.0f : 0.0f;
+        *out_max = (float)maximum[param];
+    }
+    else if (mode == NOTE_FX_GENERATOR_EUCLID)
+    {
+        *out_min = (param == 0U) ? (float)NOTE_FX_EUCLID_LENGTH_MIN : 0.0f;
+        *out_max = (param == 0U) ? (float)NOTE_FX_EUCLID_LENGTH_MAX
+            : (param == 1U) ? (float)g_note_fx_chain_state[track].generator.p1
+                            : (float)(SEQ_DIVISION_ARP_COUNT - 1U);
+    }
+    return 1U;
 }
 
 uint8_t note_fx_chain_param_map(param_id_t id, note_fx_chain_stage_t *out_stage,
