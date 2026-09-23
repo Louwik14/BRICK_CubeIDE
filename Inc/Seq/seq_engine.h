@@ -6,7 +6,6 @@
 #include "Seq/seq_model.h"
 #include "NoteFx/note_fx_state.h"
 #include "NoteFx/note_fx_event.h"
-#include "NoteFx/note_fx_plan.h"
 #include "Seq/seq_product_contract.h"
 #include "Seq/seq_capacity_contract.h"
 #include "Seq/seq_timing.h"
@@ -286,7 +285,8 @@ void seq_engine_audio_force_stop(uint64_t effective_sample,
 _Static_assert(SEQ_LANE_CAPACITY == 16U, "SEQ requires 16 lanes");
 _Static_assert(SEQ_PLAY_MAX_CAPACITY == 8U, "SEQ requires 8 PLAY per top lane");
 _Static_assert(SEQ_STEP_MAX_LOCKS == 32U, "SEQ requires 32 locks per step");
-_Static_assert(NOTE_FX_SLOT_COUNT == 3U, "SEQ requires three MIDI FX slots");
+_Static_assert(NOTE_FX_CHAIN_STAGE_COUNT == 4U,
+               "SEQ requires four fixed MIDI FX stages");
 _Static_assert(SEQ_ENGINE_INGRESS_CAPACITY
                    == SEQ_INGRESS_EVENTS_PER_WINDOW_MAX,
                "inbox and raw ingress rate contracts diverged");

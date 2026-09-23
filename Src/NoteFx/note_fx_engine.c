@@ -1,13 +1,30 @@
 #include "NoteFx/note_fx_engine.h"
 #include <string.h>
+#include "NoteFx/note_fx_arp.h"
 #include "NoteFx/note_fx_euclid.h"
 #include "NoteFx/note_fx_context.h"
-#include "NoteFx/note_fx_plan.h"
 #include "Seq/seq_division_catalog.h"
 #include "Seq/seq_capacity_contract.h"
 #include "Platform/memory_layout.h"
 #include "Keyboard/kbd_chords_dict.h"
 
+#define NOTE_FX_SLOT_COUNT 1U
+#define NOTE_FX_ORDER_COUNT 1U
+#define NOTE_FX_MODEL_INDEX 4U
+enum
+{
+ NOTE_FX_MODEL_OFF = 0U,
+ NOTE_FX_MODEL_ARP,
+ NOTE_FX_MODEL_EUCLID,
+ NOTE_FX_MODEL_PROBABILITY,
+ NOTE_FX_MODEL_GATE,
+ NOTE_FX_MODEL_VOICER,
+ NOTE_FX_MODEL_SCALER,
+ NOTE_FX_MODEL_COUNT
+};
+#define NOTE_FX_GATE_MODE_CLIP 0U
+#define NOTE_FX_SCALER_STICK_UP 1U
+#define NOTE_FX_SCALER_STICK_DROP 2U
 
 typedef struct {uint32_t source_token,generation,group_id,lifetime_start,lifetime_end;
  uint8_t note,velocity,order,released;} note_fx_held_pitch_t;
@@ -96,7 +113,7 @@ static uint8_t arp_select(note_fx_slot_runtime_t*r,uint32_t step,uint8_t track,u
 static note_event_result_t emit_generated(uint8_t t,uint8_t s,const note_fx_held_pitch_t*h,uint8_t n,uint64_t sample,uint64_t duration,note_fx_emit_fn emit,void*ctx)
 {
  if(!emit)return NOTE_EVENT_RESULT_ACCEPTED;
- const uint32_t token=next_token();const uint32_t fallback=duration>UINT32_MAX?UINT32_MAX:(uint32_t)duration;const uint32_t bounded_duration=(g_slot[t][s].model==NOTE_FX_MODEL_ARP&&g_slot[t][s].p4!=0U)?fallback:held_remaining(h,sample,fallback);const note_fx_held_pitch_t*base=&g_held[held_family(g_slot[t][s].model)][0];const uint16_t held_index=(uint16_t)(h-base);const uint16_t lane=(uint16_t)(held_index/SEQ_PRODUCT_HARMONY_FANOUT_MAX);const uint8_t branch=(uint8_t)(held_index%SEQ_PRODUCT_HARMONY_FANOUT_MAX);uint32_t group=mix32(h->group_id^(uint32_t)sample^(uint32_t)(sample>>32U)^((uint32_t)(s+1U)<<24U));if(!group)group=1U;note_event_t e={.sample_abs=sample,.duration_samples=bounded_duration?bounded_duration:1U,.source_id=h->source_token,.occurrence_id=token,.source_generation=h->generation,.group_id=group,.track=t,.note=n,.velocity=h->velocity,.kind=NOTE_EVENT_KIND_ON,.provenance=NOTE_EVENT_SOURCE_FX,.stage=(uint8_t)(note_fx_plan_position_of(h->order,s)+1U),.flags=NOTE_EVENT_FLAG_GENERATED,.temporal_index=lane_temporal(t,lane),.branch=branch,.timing_class=NOTE_EVENT_TIMING_SCHEDULED};note_event_set_order(&e,h->order);
+ const uint32_t token=next_token();const uint32_t fallback=duration>UINT32_MAX?UINT32_MAX:(uint32_t)duration;const uint32_t bounded_duration=(g_slot[t][s].model==NOTE_FX_MODEL_ARP&&g_slot[t][s].p4!=0U)?fallback:held_remaining(h,sample,fallback);const note_fx_held_pitch_t*base=&g_held[held_family(g_slot[t][s].model)][0];const uint16_t held_index=(uint16_t)(h-base);const uint16_t lane=(uint16_t)(held_index/SEQ_PRODUCT_HARMONY_FANOUT_MAX);const uint8_t branch=(uint8_t)(held_index%SEQ_PRODUCT_HARMONY_FANOUT_MAX);uint32_t group=mix32(h->group_id^(uint32_t)sample^(uint32_t)(sample>>32U));if(!group)group=1U;note_event_t e={.sample_abs=sample,.duration_samples=bounded_duration?bounded_duration:1U,.source_id=h->source_token,.occurrence_id=token,.source_generation=h->generation,.group_id=group,.track=t,.note=n,.velocity=h->velocity,.kind=NOTE_EVENT_KIND_ON,.provenance=NOTE_EVENT_SOURCE_FX,.stage=1U,.flags=NOTE_EVENT_FLAG_GENERATED,.temporal_index=lane_temporal(t,lane),.branch=branch,.timing_class=NOTE_EVENT_TIMING_SCHEDULED};
  return emit(&e,ctx);
 }
 static uint8_t append(note_event_t*out,uint8_t cap,uint8_t*count,const note_event_t*e,uint8_t stage){if(*count>=cap)return 0;out[*count]=*e;out[*count].stage=stage;++*count;return 1;}
@@ -187,16 +204,14 @@ void note_fx_engine_set_time_reference(uint64_t sample,uint64_t transport,uint32
 static void held_clear_family(uint8_t t,uint8_t family){const uint64_t lanes=track_lane_mask(t);for(uint8_t branch=0;branch<SEQ_PRODUCT_HARMONY_FANOUT_MAX;++branch){uint64_t active=g_held_active_mask[family][branch]&lanes;while(active){const uint16_t lane=(uint16_t)__builtin_ctzll(active);active&=active-1U;memset(&g_held[family][lane*SEQ_PRODUCT_HARMONY_FANOUT_MAX+branch],0,sizeof(note_fx_held_pitch_t));}g_held_active_mask[family][branch]&=~lanes;}g_family[t][family].held_count=0U;}
 static void held_release_latched(uint8_t t,uint8_t family,uint64_t sample){const uint64_t lanes=track_lane_mask(t);for(uint8_t branch=0;branch<SEQ_PRODUCT_HARMONY_FANOUT_MAX;++branch){uint64_t active=g_held_active_mask[family][branch]&lanes;while(active){const uint16_t lane=(uint16_t)__builtin_ctzll(active);active&=active-1U;note_fx_held_pitch_t*h=&g_held[family][lane*SEQ_PRODUCT_HARMONY_FANOUT_MAX+branch];if(h->released||held_deadline_reached(h,sample))held_remove(family,&g_family[t][family],lane,branch);}}}
 static void family_reselect(uint8_t t,uint8_t family){note_fx_family_runtime_t*f=&g_family[t][family];uint8_t owner=UINT8_MAX;for(uint8_t s=0;s<NOTE_FX_SLOT_COUNT;++s)if(model_is_generator(g_slot[t][s].model)&&held_family(g_slot[t][s].model)==family){owner=s;break;}if(owner!=f->owner_slot){held_clear_family(t,family);f->owner_slot=owner;}for(uint8_t s=0;s<NOTE_FX_SLOT_COUNT;++s)refresh_work(t,s);}
-note_event_result_t note_fx_engine_configure(uint8_t t,uint8_t s,uint8_t model,uint8_t p1,uint8_t p2,uint8_t p3,uint8_t p4){if(t>=NOTE_FX_TRACK_COUNT||s>=NOTE_FX_SLOT_COUNT)return NOTE_EVENT_RESULT_DROPPED_POLICY;note_fx_slot_runtime_t*r=&g_slot[t][s];if(model>=NOTE_FX_MODEL_COUNT)model=NOTE_FX_MODEL_OFF;const uint8_t old_model=r->model,old_hold=(uint8_t)(old_model==NOTE_FX_MODEL_ARP&&r->p4!=0U);if(old_model!=model)memset(r,0,sizeof(*r));r->model=model;r->p1=p1;r->p2=p2;r->p3=p3;r->p4=p4;const uint8_t bit=(uint8_t)(1U<<s);if(model==NOTE_FX_MODEL_OFF)g_context->active_slot_mask[t]&=(uint8_t)~bit;else g_context->active_slot_mask[t]|=bit;if(model_is_generator(model))g_context->temporal_slot_mask[t]|=bit;else g_context->temporal_slot_mask[t]&=(uint8_t)~bit;if(model_is_generator(old_model))family_reselect(t,held_family(old_model));if(model_is_generator(model))family_reselect(t,held_family(model));if(old_hold&&model==NOTE_FX_MODEL_ARP&&p4==0U)held_release_latched(t,held_family(model),g_context->block_start);refresh_work(t,s);return NOTE_EVENT_RESULT_ACCEPTED;}
-uint8_t note_fx_engine_slot_at(uint8_t t,uint8_t order,uint8_t position){if(t>=NOTE_FX_TRACK_COUNT)return NOTE_FX_SLOT_COUNT;const uint8_t s=note_fx_plan_slot_at(order,position);return(s<NOTE_FX_SLOT_COUNT&&((g_context->active_slot_mask[t]&(uint8_t)(1U<<s))!=0U))?s:NOTE_FX_SLOT_COUNT;}
-uint8_t note_fx_engine_suffix_is_temporal(uint8_t t,uint8_t order,uint8_t stage){if(t>=NOTE_FX_TRACK_COUNT||stage>=NOTE_FX_SLOT_COUNT)return 0U;for(uint8_t p=stage;p<NOTE_FX_SLOT_COUNT;++p){const uint8_t s=note_fx_plan_slot_at(order,p);if(s<NOTE_FX_SLOT_COUNT&&(g_context->temporal_slot_mask[t]&(uint8_t)(1U<<s))!=0U)return 1U;}return 0U;}
+static note_event_result_t note_fx_engine_configure(uint8_t t,uint8_t s,uint8_t model,uint8_t p1,uint8_t p2,uint8_t p3,uint8_t p4){if(t>=NOTE_FX_TRACK_COUNT||s>=NOTE_FX_SLOT_COUNT)return NOTE_EVENT_RESULT_DROPPED_POLICY;note_fx_slot_runtime_t*r=&g_slot[t][s];if(model>=NOTE_FX_MODEL_COUNT)model=NOTE_FX_MODEL_OFF;const uint8_t old_model=r->model,old_hold=(uint8_t)(old_model==NOTE_FX_MODEL_ARP&&r->p4!=0U);if(old_model!=model)memset(r,0,sizeof(*r));r->model=model;r->p1=p1;r->p2=p2;r->p3=p3;r->p4=p4;const uint8_t bit=(uint8_t)(1U<<s);if(model==NOTE_FX_MODEL_OFF)g_context->active_slot_mask[t]&=(uint8_t)~bit;else g_context->active_slot_mask[t]|=bit;if(model_is_generator(model))g_context->temporal_slot_mask[t]|=bit;else g_context->temporal_slot_mask[t]&=(uint8_t)~bit;if(model_is_generator(old_model))family_reselect(t,held_family(old_model));if(model_is_generator(model))family_reselect(t,held_family(model));if(old_hold&&model==NOTE_FX_MODEL_ARP&&p4==0U)held_release_latched(t,held_family(model),g_context->block_start);refresh_work(t,s);return NOTE_EVENT_RESULT_ACCEPTED;}
 static note_event_result_t transform_core(uint8_t s,uint8_t position,const note_event_t*in,uint8_t n,note_event_t*out,uint8_t cap,uint8_t*count,uint8_t validate)
 {
  if(!in||!out||!count||!n||s>=NOTE_FX_SLOT_COUNT){
   return NOTE_EVENT_RESULT_DROPPED_POLICY;}
  if(in[0].track>=NOTE_FX_TRACK_COUNT
       ||note_event_order(&in[0])>=NOTE_FX_ORDER_COUNT
-      ||note_fx_plan_slot_at(note_event_order(&in[0]),position)!=s
+      ||position!=0U||s!=0U
       ||(validate!=0U?(in[0].stage!=position):(in[0].stage>position))
       ||(validate!=0U&&!note_event_is_valid(&in[0]))){
   return NOTE_EVENT_RESULT_DROPPED_POLICY;}
@@ -219,8 +234,7 @@ static note_event_result_t transform_core(uint8_t s,uint8_t position,const note_
    if(result!=NOTE_EVENT_RESULT_ACCEPTED)return result;}}
  return NOTE_EVENT_RESULT_ACCEPTED;
 }
-note_event_result_t note_fx_engine_transform(uint8_t s,uint8_t p,const note_event_t*in,uint8_t n,note_event_t*out,uint8_t cap,uint8_t*count){return transform_core(s,p,in,n,out,cap,count,1U);}
-note_event_result_t note_fx_engine_transform_prepared(uint8_t s,uint8_t p,const note_event_t*in,uint8_t n,note_event_t*out,uint8_t cap,uint8_t*count){return transform_core(s,p,in,n,out,cap,count,0U);}
+static note_event_result_t note_fx_engine_transform_prepared(uint8_t s,uint8_t p,const note_event_t*in,uint8_t n,note_event_t*out,uint8_t cap,uint8_t*count){return transform_core(s,p,in,n,out,cap,count,0U);}
 void note_fx_engine_forget_causal_source(uint8_t t,uint32_t source){if(t>=NOTE_FX_TRACK_COUNT||!source)return;const uint64_t lanes=track_lane_mask(t);for(uint8_t family=0;family<2U;++family)for(uint8_t branch=0;branch<SEQ_PRODUCT_HARMONY_FANOUT_MAX;++branch){uint64_t active=g_held_active_mask[family][branch]&lanes;while(active){const uint16_t lane=(uint16_t)__builtin_ctzll(active);active&=active-1U;note_fx_held_pitch_t*h=&g_held[family][lane*SEQ_PRODUCT_HARMONY_FANOUT_MAX+branch];if(h->source_token==source)held_remove(family,&g_family[t][family],lane,branch);}}for(uint8_t s=0;s<NOTE_FX_SLOT_COUNT;++s)refresh_work(t,s);}
 static note_event_result_t note_fx_engine_process_due(uint8_t track,uint64_t start,
     uint32_t horizon_samples,uint32_t sps,note_fx_emit_fn emit,void*ctx)
@@ -310,9 +324,9 @@ static note_event_result_t note_fx_engine_process_due(uint8_t track,uint64_t sta
  return NOTE_EVENT_RESULT_ACCEPTED;
 }
 void note_fx_engine_release_terminal(const note_event_t*e){if(!e||e->track>=NOTE_FX_TRACK_COUNT||e->kind!=NOTE_EVENT_KIND_OFF)return;const uint64_t lanes=track_lane_mask(e->track);for(uint8_t family=0U;family<2U;++family)for(uint8_t branch=0U;branch<SEQ_PRODUCT_HARMONY_FANOUT_MAX;++branch){uint64_t active=g_held_active_mask[family][branch]&lanes;while(active){const uint16_t lane=(uint16_t)__builtin_ctzll(active);active&=active-1U;note_fx_held_pitch_t*h=&g_held[family][lane*SEQ_PRODUCT_HARMONY_FANOUT_MAX+branch];if(h->source_token!=e->source_id)continue;const uint8_t owner=g_family[e->track][family].owner_slot;if(family==0U&&owner<NOTE_FX_SLOT_COUNT&&g_slot[e->track][owner].model==NOTE_FX_MODEL_ARP&&g_slot[e->track][owner].p4!=0U)h->released=1U;else held_remove(family,&g_family[e->track][family],lane,branch);}}for(uint8_t s=0U;s<NOTE_FX_SLOT_COUNT;++s)refresh_work(e->track,s);}
-note_event_result_t note_fx_engine_cleanup(uint8_t t){if(t>=NOTE_FX_TRACK_COUNT)return NOTE_EVENT_RESULT_DROPPED_POLICY;for(uint8_t family=0;family<2U;++family)held_clear_family(t,family);for(uint8_t s=0;s<NOTE_FX_SLOT_COUNT;++s)refresh_work(t,s);return NOTE_EVENT_RESULT_ACCEPTED;}
+static note_event_result_t note_fx_engine_cleanup(uint8_t t){if(t>=NOTE_FX_TRACK_COUNT)return NOTE_EVENT_RESULT_DROPPED_POLICY;for(uint8_t family=0;family<2U;++family)held_clear_family(t,family);for(uint8_t s=0;s<NOTE_FX_SLOT_COUNT;++s)refresh_work(t,s);return NOTE_EVENT_RESULT_ACCEPTED;}
 
-note_event_result_t note_fx_engine_process(uint8_t track,uint64_t start,uint32_t horizon_samples,uint32_t sps,uint64_t transport,const uint32_t pattern[NOTE_FX_TRACK_COUNT],const uint8_t pattern_length[NOTE_FX_TRACK_COUNT],uint8_t scale,uint8_t root,note_fx_emit_fn emit,void*ctx){note_fx_engine_set_time_reference(start,transport,sps);g_seq_context.scale_index=scale;g_seq_context.root_index=root;memcpy(g_seq_context.pattern_position_q16,pattern,sizeof(g_seq_context.pattern_position_q16));memcpy(g_seq_context.pattern_length,pattern_length,sizeof(g_seq_context.pattern_length));return note_fx_engine_process_due(track,start,horizon_samples,sps,emit,ctx);}
+static note_event_result_t note_fx_engine_process(uint8_t track,uint64_t start,uint32_t horizon_samples,uint32_t sps,uint64_t transport,const uint32_t pattern[NOTE_FX_TRACK_COUNT],const uint8_t pattern_length[NOTE_FX_TRACK_COUNT],uint8_t scale,uint8_t root,note_fx_emit_fn emit,void*ctx){note_fx_engine_set_time_reference(start,transport,sps);g_seq_context.scale_index=scale;g_seq_context.root_index=root;memcpy(g_seq_context.pattern_position_q16,pattern,sizeof(g_seq_context.pattern_position_q16));memcpy(g_seq_context.pattern_length,pattern_length,sizeof(g_seq_context.pattern_length));return note_fx_engine_process_due(track,start,horizon_samples,sps,emit,ctx);}
 
 static uint8_t chain_voice_count(uint8_t mode)
 {
@@ -480,11 +494,8 @@ note_event_result_t note_fx_chain_engine_configure(uint8_t track,
       ||effective->generator.mode==NOTE_FX_GENERATOR_HOLD){model=NOTE_FX_MODEL_ARP;
   p4=(effective->generator.mode==NOTE_FX_GENERATOR_HOLD)?1U:0U;}
  else if(effective->generator.mode==NOTE_FX_GENERATOR_EUCLID)model=NOTE_FX_MODEL_EUCLID;
- note_event_result_t r=note_fx_engine_configure(track,0U,model,
+ return note_fx_engine_configure(track,0U,model,
   effective->generator.p1,effective->generator.p2,effective->generator.p3,p4);
- if(r!=NOTE_EVENT_RESULT_ACCEPTED)return r;
- (void)note_fx_engine_configure(track,1U,NOTE_FX_MODEL_OFF,0U,0U,0U,0U);
- return note_fx_engine_configure(track,2U,NOTE_FX_MODEL_OFF,0U,0U,0U,0U);
 }
 
 note_event_result_t note_fx_chain_engine_transform(const note_event_t*input,

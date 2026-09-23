@@ -1,17 +1,7 @@
 #ifndef NOTE_FX_CONTRACT_H
 #define NOTE_FX_CONTRACT_H
 
-#define NOTE_FX_SLOT_COUNT 3U
-#define NOTE_FX_PARAM_COUNT 4U
-#define NOTE_FX_VALUE_COUNT (NOTE_FX_PARAM_COUNT + 1U)
-#define NOTE_FX_MODEL_INDEX NOTE_FX_PARAM_COUNT
-#define NOTE_FX_ORDER_COUNT 6U
-#define NOTE_FX_CANONICAL_PARAM_COUNT \
-    (NOTE_FX_SLOT_COUNT * NOTE_FX_VALUE_COUNT + 1U)
-
-/* Fixed-chain contract.  The legacy slot constants above remain private to the
- * current executor until the runtime cut-over; new CONTROL state must use this
- * four-stage address space. */
+/* Fixed GENERATOR -> VOICER -> SCALER -> TRIG address space. */
 #define NOTE_FX_CHAIN_STAGE_COUNT 4U
 #define NOTE_FX_CHAIN_PARAM_COUNT 4U
 #define NOTE_FX_CHAIN_CANONICAL_PARAM_COUNT \

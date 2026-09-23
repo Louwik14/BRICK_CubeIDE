@@ -35,7 +35,8 @@
 /* Fixed owner proof inputs. */
 #define SEQ_ROLL_MIN_INTERVAL_STEP_NUMERATOR 1U
 #define SEQ_ROLL_MIN_INTERVAL_STEP_DENOMINATOR 4U
-_Static_assert(NOTE_FX_SLOT_COUNT == 3U, "product requires three MIDI FX slots");
+_Static_assert(NOTE_FX_CHAIN_STAGE_COUNT == 4U,
+               "product requires four fixed MIDI FX stages");
 _Static_assert(SEQ_PLAY_MAX_CAPACITY == SEQ_LOGICAL_CAPACITY_MAX,
                "PLAY and logical polyphony contracts diverged");
 _Static_assert(SEQ_LOGICAL_CAPACITY_GROUP_CHILD == 1U,

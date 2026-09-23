@@ -168,7 +168,7 @@ des samples consecutifs selon leur `ingress_serial`. Cet ordre physique doit
 etre conserve avant le departage terminal: un cycle `ON/OFF/ON` ne doit jamais
 devenir `OFF/ON/ON`, ce qui dissocierait l'etat des touches et les occurrences.
 
-CONTROL decode aussi le mapping statique `(param NoteFX -> slot,parametre)`
+CONTROL decode aussi le mapping statique `(param NoteFX -> etage,parametre)`
 dans le Pattern. A la boundary, SEQ conserve les decisions musicales et la
 configuration du runtime courant; aucun catalog lookup, mapping d'identifiant,
 controle de famille ou normalisation dependante du modele n'y subsiste.
@@ -275,26 +275,19 @@ Tout depassement de cette borne ou de la fenetre imminente est fatal explicite.
 | p-lock | 1 024 (991 utile documente) | 1 024 | 33 sur 991 | 24 624 octets, trois blocs |
 
 Ces pools sont tous statiques et n'utilisent pas le heap. Le held est separe
-par famille ARP/Euclid; l'owner reste un slot logique et deux generateurs de
-meme famille ne peuvent donc pas se voler une identite canonique.
+par moteur ARP/Euclid et appartient a l'unique etage GENERATOR de la piste.
 Les 768 curseurs source forment un pool SDRAM cacheable contigu reference par
 le coeur SEQ; les masques actifs, le ledger, les compteurs et les phases restent
 dans le coeur D2. Les scans consultent d'abord les masques et ne lisent que les
 curseurs actifs; cette scission absorbe la profondeur de lookahead sans charger
 les SRAM internes avec les generations inactives.
 
-La convergence a trois slots retire 44 octets de plan compile par piste
-(`timing 88 -> 48`, `NoteFX 20 -> 16`), soit 1 408 octets sur les deux snapshots
-de seize pistes et 128 octets de watermarks runtime (`16 x 4 -> 16 x 3`). Le
-contexte NoteFX reste a 392 octets: les 16 octets retires des etats de slot
-(`16 x 4 x 4 -> 16 x 3 x 5`) portent maintenant les 16 longueurs de pattern
-requises par les generateurs; aucune seconde copie mutable d'ORDER n'y subsiste.
-Le DTO persistant retire 8 octets par entite, soit 128 octets par image Pattern;
-les trois images statiques effectivement reservees (boot et deux dans le plus
-grand membre du workspace) ajoutent 384 octets. La contraction statique totale
-attribuable au contrat trois slots est donc de 1 920 octets.
-L'evenement transporte directement la branche VOICER; l'ancien bitmap de
-dependance de slots disparait. Les capacites
+Le bloc canonique NoteFX vaut 16 octets par piste et ne porte ni type de slot,
+ni ORDER, ni plan compile. Le runtime conserve uniquement la configuration des
+quatre etages et les petits compteurs prives des modes stateful. L'evenement
+transporte directement la branche VOICER; les tables de permutation, masques
+de slots actifs et validations de familles de l'ancien contrat disparaissent
+des interfaces publiques. Les capacites
 scratch 32, fanout VOICER 4, held 512, calendrier 512 et sources 768 restent
 identiques: elles sont imposees par la polyphonie, le fanout ou l'horizon
 temporel. La borne terminale diminue de 3 648 a 3 136 entrees.

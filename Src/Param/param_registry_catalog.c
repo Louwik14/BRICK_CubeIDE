@@ -110,13 +110,6 @@ _Static_assert((sizeof(g_prism_edit_labels) / sizeof(g_prism_edit_labels[0])) - 
                "Prism labels and active model count must stay aligned");
 static const char *const g_stack_model_labels[] = {"SINE", "TRI", "SQUARE", "SAW", "SHAPE", "TRIPLE SAW", NULL};
 static const char *const g_md_model_labels[] = {"TRX-BD", "TRX-SD", "TRX-CH", "EFM-BD", "EFM-SD", "EFM-CB", NULL};
-static const char *const g_midi_fx_model_labels[] = {
-    "OFF", "ARP", "EUCLID", "PROBABILITY", "GATE", "VOICER", "SCALER", NULL
-};
-_Static_assert((sizeof(g_midi_fx_model_labels)
-                    / sizeof(g_midi_fx_model_labels[0])) - 1U
-                   == NOTE_FX_MODEL_COUNT,
-               "MIDI FX labels and model enum must stay aligned");
 /* ID 4 is intentionally a retired hole: persisted COMP values resolve OFF. */
 static const char *const g_audio_fx_model_labels[] = {"OFF", "LOFI", "FOLD", "DRIVE", "-", "POINT", "-", "-", "SUB", "-", "RING", "SUB LIGHT", "VIBE", "DRIFT", "XFADE", "DJ EQ", NULL};
 static const char *const g_filter_mode_labels[] = {"OFF", "LOW", "HIGH", NULL};

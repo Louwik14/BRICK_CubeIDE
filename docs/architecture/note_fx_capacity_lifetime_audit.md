@@ -1,5 +1,9 @@
 # NoteFX : capacites et continuations temporelles
 
+> Audit historique du runtime a slots. Le contrat courant et son autorite sont
+> decrits dans `z4_seq_clock_scheduler.md`: chaine fixe
+> `GENERATOR -> VOICER -> SCALER -> TRIG`, sans ordre ni type de slot.
+
 Le runtime musical appartient exclusivement a SEQ. Les trois slots logiques
 S1 a S3, executes selon l'une des six permutations ORDER, partagent le meme
 walker et le meme ledger logique du sequenceur. AUDIO ne
