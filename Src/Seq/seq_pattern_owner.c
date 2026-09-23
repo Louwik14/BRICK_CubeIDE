@@ -35,6 +35,7 @@ static uint8_t g_last_running;
 static uint8_t g_seen_runtime_running;
 static uint32_t g_transport_epoch;
 static seq_runtime_shadow_seed_t g_build_seed;
+static seq_track_timing_config_t g_build_timing[SEQ_LANE_CAPACITY];
 static note_fx_track_state_t g_build_fx_state[SEQ_LANE_CAPACITY];
 static uint8_t seq_engine_compile_step_fx(seq_pattern_t *pattern,
                                           uint8_t track, uint8_t step)
@@ -52,26 +53,26 @@ static uint8_t seq_engine_compile_step_fx(seq_pattern_t *pattern,
             continue;
         const uint8_t slot = (uint8_t)(lock->base_value16 >> 8U);
         const uint8_t param = (uint8_t)lock->base_value16;
-        if ((slot >= NOTE_FX_SLOT_COUNT) || (param >= NOTE_FX_PARAM_COUNT))
-            return UINT8_MAX;
-        effective.value[slot][param] = (uint8_t)lock->value16;
-        override_mask |= (uint16_t)(1U <<
-            ((uint16_t)slot * NOTE_FX_PARAM_COUNT + param));
+        if (slot == NOTE_FX_SLOT_COUNT)
+        {
+            effective.order = (uint8_t)lock->value16;
+            override_mask |= UINT16_C(0x8000);
+        }
+        else
+        {
+            if ((slot >= NOTE_FX_SLOT_COUNT) || (param >= NOTE_FX_VALUE_COUNT))
+                return UINT8_MAX;
+            effective.value[slot][param] = (uint8_t)lock->value16;
+            override_mask |= (uint16_t)(1U <<
+                ((uint16_t)slot * NOTE_FX_VALUE_COUNT + param));
+        }
     }
     if ((note_fx_state_normalize_track(&effective) == 0U)
             || (note_fx_state_validate_unique_families(&effective) == 0U))
         return UINT8_MAX;
     note_fx_compiled_plan_t compiled;
-    if (note_fx_plan_compile(&effective, override_mask, &compiled) == 0U)
+    if (note_fx_plan_compile(&effective, &compiled) == 0U)
         return UINT8_MAX;
-    for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
-    {
-        if (note_fx_plan_model(compiled.slot[slot]) == NOTE_FX_MODEL_GROOVE)
-            pattern->track_exec[track].max_negative_horizon_q16 =
-                (uint16_t)((UINT32_C(1) << 16U)
-                    / SEQ_GROOVE_NEGATIVE_HORIZON_DENOMINATOR + 1U);
-    }
-
     seq_lock_pattern_t compact[SEQ_STEP_MAX_LOCKS];
     uint8_t compact_count = 0U;
     for (uint8_t i = 0U; i < count; ++i)
@@ -82,16 +83,32 @@ static uint8_t seq_engine_compile_step_fx(seq_pattern_t *pattern,
     }
     for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
     {
-        const uint8_t slot_override = (uint8_t)(
-            (override_mask >> (slot * NOTE_FX_PARAM_COUNT)) & 0x0FU);
+        const uint8_t slot_override = (uint8_t)((override_mask
+            >> (slot * NOTE_FX_VALUE_COUNT)) & 0x1FU);
         if (slot_override == 0U) continue;
-        const uint32_t word = compiled.slot[slot];
+        const note_fx_slot_plan_word_t word = compiled.slot[slot];
+        const uint8_t p4 = note_fx_plan_param(word, 3U);
         compact[compact_count++] = (seq_lock_pattern_t){
             .param_flags = (uint16_t)(SEQ_ENGINE_PARAM_FLAG_NOTE_FX | slot
                 | ((uint16_t)slot_override
-                    << SEQ_ENGINE_FX_PLAN_OVERRIDE_SHIFT)),
-            .value16 = (uint16_t)word,
-            .base_value16 = (uint16_t)(word >> 16U)
+                    << SEQ_ENGINE_FX_PLAN_OVERRIDE_SHIFT)
+                | ((uint16_t)(p4 & 0x7FU)
+                    << SEQ_ENGINE_FX_PLAN_PARAM4_LOW_SHIFT)
+                | ((p4 & 0x80U) != 0U
+                    ? SEQ_ENGINE_FX_PLAN_PARAM4_HIGH_MASK : 0U)),
+            .value16 = (uint16_t)(note_fx_plan_param(word, 0U)
+                | ((uint16_t)note_fx_plan_param(word, 1U) << 8U)),
+            .base_value16 = (uint16_t)(note_fx_plan_param(word, 2U)
+                | ((uint16_t)note_fx_plan_model(word) << 8U))
+        };
+    }
+    if ((override_mask & UINT16_C(0x8000)) != 0U)
+    {
+        compact[compact_count++] = (seq_lock_pattern_t){
+            .param_flags = (uint16_t)(SEQ_ENGINE_PARAM_FLAG_NOTE_FX
+                | NOTE_FX_SLOT_COUNT),
+            .value16 = compiled.order,
+            .base_value16 = 0U
         };
     }
     memcpy(&pattern->lock_pool[track][first], compact,
@@ -110,6 +127,7 @@ const seq_pattern_t *seq_engine_pattern_capture(void)
 
 void seq_engine_control_init(void)
 {
+    seq_timing_geometry_init();
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track) {
         g_pattern_slot_b.lock_pool[track] = g_locks_b[track];
         if (track < 4U) g_pattern_slot_a.lock_pool[track] = g_locks_a_d1[track];
@@ -141,13 +159,20 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
     if (step == 0U)
     {
         memset(&g_build_fx_state[track], 0, sizeof(g_build_fx_state[track]));
-        uint8_t div = 1U, swing = 0U, quant = 0U;
+        uint8_t div = 1U;
+        uint8_t direction = (uint8_t)SEQ_DIRECTION_FWD;
+        int8_t rotate = 0;
         (void)seq_runtime_get_track_div(track, &div);
-        (void)seq_runtime_get_track_swing(track, &swing);
-        (void)seq_runtime_get_track_quant(track, &quant);
+        (void)seq_runtime_get_track_traversal(track, &direction, &rotate);
         pattern->track_div[track] = div;
-        pattern->track_swing[track] = swing;
-        pattern->track_quant[track] = quant;
+        pattern->track_direction[track] = direction;
+        pattern->track_rotate[track] = rotate;
+        pattern->track_length[track] = seq_model_get_track_playback_length(track);
+        seq_timing_compile(&g_build_timing[track],
+            g_build_seed.samples_per_step_q16, track,
+            seq_runtime_get_groove_seed(),
+            (uint32_t)pattern->track_length[track] * div << 16U,
+            &pattern->timing_plan[track]);
         pattern->track_muted[track] =
             (track_mute_should_suppress_note_on(track) > 0) ? 1U : 0U;
         entity_topology_descriptor_t entity;
@@ -182,8 +207,6 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
             .type = runtime_valid ? (uint8_t)runtime_descriptor.type : 0U,
             .destination = track,
             .div = div,
-            .swing = swing,
-            .quant = quant,
             .muted = pattern->track_muted[track],
             .active = topology_valid ? entity.active : 0U
         };
@@ -205,7 +228,7 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
             if (pattern->track_fx_enabled[track] == 0U)
                 memset(&fx_state, 0, sizeof(fx_state));
             g_build_fx_state[track] = fx_state;
-            if (note_fx_plan_compile(&fx_state, 0U,
+            if (note_fx_plan_compile(&fx_state,
                     &pattern->fx_base_plan[track]) == 0U)
             {
                 memset(&pattern->fx_base_plan[track], 0,
@@ -218,7 +241,6 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
                 || (runtime_descriptor.family == TRACK_RUNTIME_FAMILY_EXTERNAL)
                 || (seq_runtime_get_clock_source() != SEQ_CLOCK_SRC_INTERNAL))
             pattern->track_note_enabled[track] = 0U;
-        pattern->track_length[track] = seq_model_get_track_playback_length(track);
         (void)seq_model_play_base_capture(track, &pattern->play_base[track]);
     }
         seq_step_pattern_t *const target = &pattern->steps[track][step];
@@ -265,9 +287,11 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
                 uint16_t projected_base=base;
                 if(is_fx!=0U){
                     uint8_t fx_slot=0U,fx_param=0U;
-                    if(note_fx_state_param_map(param,&fx_slot,&fx_param)==0U){
-                        pattern->track_fx_enabled[track]=0U;break;}
-                    projected_base=(uint16_t)(((uint16_t)fx_slot<<8U)|fx_param);
+                    if(note_fx_state_order_map(param)!=0U)
+                        projected_base=(uint16_t)(NOTE_FX_SLOT_COUNT<<8U);
+                    else if(note_fx_state_param_map(param,&fx_slot,&fx_param)!=0U)
+                        projected_base=(uint16_t)(((uint16_t)fx_slot<<8U)|fx_param);
+                    else {pattern->track_fx_enabled[track]=0U;break;}
                 }
                 pattern->lock_pool[track][pattern->lock_pool_count[track]++] =
                     (seq_lock_pattern_t){
@@ -349,6 +373,7 @@ void seq_engine_control_poll(void)
     if (((g_build_track != 0U) || (g_build_step != 0U))
             && (g_build_generation != current))
     {
+        seq_timing_geometry_build_abort();
         g_build_track = 0U;
         g_build_step = 0U;
         if (transport_changed == 0U) return;
@@ -359,6 +384,13 @@ void seq_engine_control_poll(void)
                 && (current == g_published_generation)) return;
         g_build_generation = current;
         g_build_slot = (uint8_t)(g_published_slot ^ 1U);
+        for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
+        {
+            g_build_timing[track] = (seq_track_timing_config_t){
+                .base = SEQ_TIMING_BASE_1_16, .global = 100U};
+            (void)seq_runtime_get_track_timing(track, &g_build_timing[track]);
+        }
+        if (seq_timing_geometry_build_begin(g_build_timing) == 0U) return;
         seq_runtime_capture_shadow_seed(&g_build_seed);
         if (g_build_seed.running != g_last_running)
         {
@@ -384,20 +416,25 @@ void seq_engine_control_poll(void)
     if (g_build_track < SEQ_LANE_CAPACITY) return;
     g_build_track = 0U;
     g_build_step = 0U;
-    if (g_edit_generation != g_build_generation) return;
+    if (g_edit_generation != g_build_generation)
+    {
+        seq_timing_geometry_build_abort();
+        return;
+    }
     seq_pattern_t *const pattern = g_pattern[g_build_slot];
     pattern->running = g_build_seed.running;
     pattern->scale_index = keyboard_params_get_scale_index();
     pattern->root_index = keyboard_params_get_root_index();
     pattern->transport_epoch = g_transport_epoch;
+    pattern->groove_seed = seq_runtime_get_groove_seed();
     pattern->seed_step_sample_q16 = g_build_seed.step_sample_q16;
     pattern->samples_per_step_q16 = g_build_seed.samples_per_step_q16;
     memcpy(pattern->seed_play_step, g_build_seed.play_step,
            sizeof(pattern->seed_play_step));
+    memcpy(pattern->seed_traversal_phase, g_build_seed.traversal_phase,
+           sizeof(pattern->seed_traversal_phase));
     memcpy(pattern->seed_div_phase, g_build_seed.track_div_phase,
            sizeof(pattern->seed_div_phase));
-    memcpy(pattern->seed_swing_phase, g_build_seed.track_swing_phase,
-           sizeof(pattern->seed_swing_phase));
     pattern->generation = g_build_generation;
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
         pattern->track_note_enabled[track] &=
@@ -407,6 +444,7 @@ void seq_engine_control_poll(void)
     g_published_slot = g_build_slot;
     __DMB();
     g_published_generation = g_build_generation;
+    seq_timing_geometry_build_commit(pattern->timing_plan);
 }
 
 uint8_t seq_engine_control_flush(void)

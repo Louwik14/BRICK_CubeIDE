@@ -63,6 +63,8 @@ mod_destination_control_local_catalog(uint8_t track)
     mod_destination_local_catalog_t *const catalog =
         &g_mod_destination_local_catalog[track];
     if (catalog->valid != 0U) return catalog;
+    const track_runtime_ctx_t *const runtime = track_runtime_get_ctx(track);
+    if (runtime == NULL) return NULL;
 
     static const uint8_t set_order[] = {
         (uint8_t)SEQ_PLOCK_SET_MIX,
@@ -81,9 +83,15 @@ mod_destination_control_local_catalog(uint8_t track)
         for (uint8_t slot = 0U; slot < capacity; ++slot)
         {
             param_id_t id = PARAM_COUNT;
-            if ((seq_param_iface_slot_to_param(track, set_id, slot, &id) == 0U)
+            if ((seq_param_iface_slot_to_param_for_type(runtime->type, set_id,
+                    slot, &id) == 0U)
                     || (mod_destination_control_supported(track, id) == 0U)
                     || (mod_destination_control_catalog_contains(catalog, id) != 0U))
+                continue;
+            brick_entity_id_t param_owner = track;
+            if ((param_registry_is_modulation_source_param(id) != 0U)
+                    && (entity_topology_mod_owner(track, &param_owner) != 0U)
+                    && (param_owner != track))
                 continue;
             if (catalog->count >= MOD_DESTINATION_LOCAL_CAPACITY) return NULL;
             catalog->param[catalog->count++] = id;
@@ -114,6 +122,9 @@ uint8_t mod_destination_catalog_address_is_supported_projected(
                 || (target_topology.parent_entity_id == owner))
             : (target != owner))
         return 0U;
+    if ((target_topology.role == ENTITY_ROLE_GROUP_CHILD)
+            && (param_registry_is_modulation_source_param(id) != 0U))
+        return 0U;
     const track_config_t config = configs[target];
     return param_registry_projected_track_param_is_applicable(id,
         config.family, track_runtime_type_from_ui(config.type),
@@ -137,20 +148,34 @@ static param_id_t mod_destination_control_param_local(uint8_t track,
         ? catalog->param[index - 1U] : MOD_DESTINATION_NONE;
 }
 
-uint16_t mod_destination_catalog_count(uint8_t track)
+static uint8_t mod_destination_control_view_targets(
+    uint8_t track, uint8_t out_targets[2U])
 {
     entity_topology_descriptor_t topology;
-    if ((entity_topology_get(track, &topology) != 0U)
-            && (topology.role == ENTITY_ROLE_GROUP_MASTER))
+    if ((out_targets == NULL)
+            || (entity_topology_get(track, &topology) == 0U)
+            || (topology.active == 0U))
+        return 0U;
+    if (topology.role == ENTITY_ROLE_GROUP_CHILD)
     {
-        uint16_t count = 1U;
-        for (uint8_t target = BRICK_ENTITY_GROUP_MASTER_ID;
-             target < BRICK_ENTITY_CAPACITY; ++target)
-            count = (uint16_t)(count
-                + mod_destination_control_count_local(target) - 1U);
-        return count;
+        out_targets[0] = topology.parent_entity_id;
+        out_targets[1] = topology.entity_id;
+        return 2U;
     }
-    return mod_destination_control_count_local(track);
+    out_targets[0] = topology.entity_id;
+    return 1U;
+}
+
+uint16_t mod_destination_catalog_count(uint8_t track)
+{
+    uint8_t targets[2U];
+    const uint8_t target_count =
+        mod_destination_control_view_targets(track, targets);
+    uint16_t count = 1U;
+    for (uint8_t i = 0U; i < target_count; ++i)
+        count = (uint16_t)(count
+            + mod_destination_control_count_local(targets[i]) - 1U);
+    return count;
 }
 
 mod_destination_address_t mod_destination_catalog_address_from_index(
@@ -158,26 +183,22 @@ mod_destination_address_t mod_destination_catalog_address_from_index(
 {
     if ((owner >= BRICK_ENTITY_CAPACITY) || (index == 0U))
         return MOD_DESTINATION_NONE;
-    entity_topology_descriptor_t topology;
-    if ((entity_topology_get(owner, &topology) != 0U)
-            && (topology.role == ENTITY_ROLE_GROUP_MASTER))
+    uint8_t targets[2U];
+    const uint8_t target_count =
+        mod_destination_control_view_targets(owner, targets);
+    uint16_t cursor = 1U;
+    for (uint8_t i = 0U; i < target_count; ++i)
     {
-        uint16_t cursor = 1U;
-        for (uint8_t target = BRICK_ENTITY_GROUP_MASTER_ID;
-             target < BRICK_ENTITY_CAPACITY; ++target)
-        {
-            const uint16_t local_count =
-                (uint16_t)(mod_destination_control_count_local(target) - 1U);
-            if (index < (uint16_t)(cursor + local_count))
-                return mod_destination_address_make(target,
-                    mod_destination_control_param_local(
-                        target, (uint16_t)(index - cursor + 1U)));
-            cursor = (uint16_t)(cursor + local_count);
-        }
-        return MOD_DESTINATION_NONE;
+        const uint8_t target = targets[i];
+        const uint16_t local_count =
+            (uint16_t)(mod_destination_control_count_local(target) - 1U);
+        if (index < (uint16_t)(cursor + local_count))
+            return mod_destination_address_make(target,
+                mod_destination_control_param_local(
+                    target, (uint16_t)(index - cursor + 1U)));
+        cursor = (uint16_t)(cursor + local_count);
     }
-    return mod_destination_address_make(
-        owner, mod_destination_control_param_local(owner, index));
+    return MOD_DESTINATION_NONE;
 }
 
 param_id_t mod_destination_catalog_param_from_index(uint8_t track,
@@ -199,18 +220,22 @@ uint16_t mod_destination_catalog_index_from_address(
     param_id_t param = PARAM_COUNT;
     if (mod_destination_address_resolve(address, &target, &param) == 0U)
         return 0U;
-    entity_topology_descriptor_t topology;
+    uint8_t targets[2U];
+    const uint8_t target_count =
+        mod_destination_control_view_targets(owner, targets);
     uint16_t offset = 1U;
-    if ((entity_topology_get(owner, &topology) != 0U)
-            && (topology.role == ENTITY_ROLE_GROUP_MASTER))
+    for (uint8_t i = 0U; i < target_count; ++i)
     {
-        if (target < BRICK_ENTITY_GROUP_MASTER_ID) return 0U;
-        for (uint8_t candidate = BRICK_ENTITY_GROUP_MASTER_ID;
-             candidate < target; ++candidate)
-            offset = (uint16_t)(offset
-                + mod_destination_control_count_local(candidate) - 1U);
+        const uint8_t candidate = targets[i];
+        if (candidate == target) break;
+        offset = (uint16_t)(offset
+            + mod_destination_control_count_local(candidate) - 1U);
+        if (i == (uint8_t)(target_count - 1U)) return 0U;
     }
-    else if (target != owner)
+    uint8_t target_visible = 0U;
+    for (uint8_t i = 0U; i < target_count; ++i)
+        if (targets[i] == target) target_visible = 1U;
+    if (target_visible == 0U)
         return 0U;
     const mod_destination_local_catalog_t *const catalog =
         mod_destination_control_local_catalog(target);
@@ -259,18 +284,13 @@ uint8_t mod_destination_catalog_label(uint8_t track, uint16_t index,
     const char *name = NULL;
     if (mod_destination_control_resolve_label(
             track, index, &target, &name) == 0U) return 0U;
-    entity_topology_descriptor_t owner;
-    if ((entity_topology_get(track, &owner) != 0U)
-            && (owner.role == ENTITY_ROLE_GROUP_MASTER)
+    entity_topology_descriptor_t view;
+    if ((entity_topology_get(track, &view) != 0U)
+            && (view.role == ENTITY_ROLE_GROUP_CHILD)
+            && (target == view.parent_entity_id)
             && (index != 0U))
     {
-        entity_topology_descriptor_t target_topology;
-        if (entity_topology_get(target, &target_topology) == 0U) return 0U;
-        if (target_topology.role == ENTITY_ROLE_GROUP_MASTER)
-            (void)snprintf(out, out_len, "MASTER %s", name);
-        else
-            (void)snprintf(out, out_len, "SUB%u %s",
-                (unsigned int)target_topology.member_index + 1U, name);
+        (void)snprintf(out, out_len, "GROUP %s", name);
     }
     else
         (void)snprintf(out, out_len, "%s", name);

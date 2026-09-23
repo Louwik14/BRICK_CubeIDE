@@ -17,6 +17,7 @@
 #include "Sampler/wavetable_pool.h"
 #include "Seq/seq_runtime.h"
 #include "Storage/audio_recorder.h"
+#include "Storage/groove_bank.h"
 #include "Storage/brick6_stream_service_task.h"
 #include "Storage/patch_product.h"
 #include "Storage/pattern_live_ram.h"
@@ -34,9 +35,17 @@
 #include "UI/ui_active_track_sync.h"
 #include "ControlRT/control_rt_publication.h"
 #include "Platform/brick_media_clock.h"
+#include "Platform/crash_library.h"
 #include "ui_boot_loading.h"
 #include "ui_core.h"
 #include "ui_page_manager.h"
+#include "pages/ui_page_calibration.h"
+
+void control_domain_resume_after_hall_calibration(void)
+{
+    ui_page_set(UI_PAGE_TEMPLATE_CFG);
+    ui_active_track_sync_full_after_global_restore();
+}
 
 void control_domain_init(void)
 {
@@ -46,9 +55,11 @@ void control_domain_init(void)
     project_load_quiesce_init();
 
     sd_access_gate_init();
+    groove_bank_init();
     wav_convert_init();
     waveform_cache_init();
     (void)waveform_cache_ensure_dirs();
+    crash_library_init();
     wav_loader_catalog_init_load();
     sd_preview_init();
     sample_page_cache_init();
@@ -81,13 +92,12 @@ void control_domain_start(float postgain, float output_compensation)
     hall_keyboard_bridge_init();
     if (hall_calibration_load() != 0U)
     {
-        ui_page_set(UI_PAGE_TEMPLATE_CFG);
+        control_domain_resume_after_hall_calibration();
     }
     else
     {
-        ui_page_set(UI_PAGE_CALIBRATION);
+        ui_page_calibration_open_from_boot();
     }
-    ui_active_track_sync_full_after_global_restore();
     brick6_stream_service_task_init();
     midi_init();
     board_usb_device_init();

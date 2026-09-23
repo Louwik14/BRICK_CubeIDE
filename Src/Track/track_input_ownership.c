@@ -46,11 +46,16 @@ static uint8_t track_input_ownership_build(
     return 1U;
 }
 
+uint8_t track_input_ownership_initial_input(uint8_t track)
+{
+    return (uint8_t)(track % ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT);
+}
+
 void track_input_ownership_init(const track_config_t configs[TRACK_COUNT])
 {
     for (uint8_t track = 0U; track < TRACK_COUNT; ++track)
     {
-        g_external_input[track] = (uint8_t)(track % ENTITY_TOPOLOGY_PHYSICAL_INPUT_COUNT);
+        g_external_input[track] = track_input_ownership_initial_input(track);
     }
     memset(g_external_owner, TRACK_INPUT_OWNER_NONE, sizeof(g_external_owner));
     (void)track_input_ownership_apply_configs(configs);

@@ -9,6 +9,7 @@
 #include "Param/param_registry.h"
 #include "Track/entity_topology.h"
 #include "Track/track_sound_state.h"
+#include "Track/track_state.h"
 
 /* CONTROL owns the editable matrix state and publishes immutable updates. */
 #undef SEQ_TRACK_COUNT

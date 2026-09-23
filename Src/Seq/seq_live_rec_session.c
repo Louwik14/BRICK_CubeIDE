@@ -499,7 +499,8 @@ static uint8_t seq_live_rec_session_voice_has_any_lock(seq_track_id_t track,
 
 static void seq_live_rec_session_bind_pattern_track_to_target(void)
 {
-    if (g_seq_live_rec_pattern_target_track >= SEQ_TRACK_COUNT)
+    if (seq_edit_track_sequence_is_locked(
+            g_seq_live_rec_pattern_target_track) != 0U)
     {
         g_seq_live_rec_pattern_track = 0U;
         return;
@@ -519,7 +520,7 @@ static uint32_t seq_live_rec_session_get_track_pattern_duration_steps(seq_track_
 static void seq_live_rec_session_pattern_rec_start_now(void)
 {
     uint8_t track = g_seq_live_rec_pattern_track;
-    if (track >= SEQ_TRACK_COUNT)
+    if (seq_edit_track_sequence_is_locked(track) != 0U)
     {
         track = 0U;
     }
@@ -768,7 +769,7 @@ uint8_t seq_live_rec_session_rec_is_pattern_pending_start(void)
 
 void seq_live_rec_session_set_pattern_rec_target_track(seq_track_id_t track)
 {
-    if (track >= SEQ_TRACK_COUNT)
+    if (seq_edit_track_sequence_is_locked(track) != 0U)
     {
         return;
     }
@@ -786,10 +787,9 @@ uint8_t seq_live_rec_session_live_rec_param_can_write(seq_track_id_t track,
                                                       uint8_t set_id,
                                                       seq_param_slot_t param_slot)
 {
-    if ((track >= SEQ_TRACK_COUNT)
+    if ((seq_edit_track_sequence_is_locked(track) != 0U)
         || (seq_param_iface_is_set_plockable(set_id) == 0U)
-        || (seq_live_rec_session_is_live_rec_active() == 0U)
-        || (seq_edit_track_sequence_is_locked(track) != 0U))
+        || (seq_live_rec_session_is_live_rec_active() == 0U))
     {
         return 0U;
     }
@@ -860,7 +860,7 @@ void seq_live_rec_session_live_rec_note_on(seq_live_rec_source_t source,
         return;
     }
 
-    for (seq_track_id_t track = 0U; track < SEQ_TRACK_COUNT; ++track)
+    for (seq_track_id_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         const uint8_t track_ch = track_runtime_get_midi_channel_zero_based(track);
         if (track_ch != channel_zero_based)
@@ -1015,7 +1015,7 @@ void seq_live_rec_session_live_rec_note_off(seq_live_rec_source_t source,
         }
 
         const seq_track_id_t track = pending->track;
-        if (track >= SEQ_TRACK_COUNT)
+        if (seq_edit_track_sequence_is_locked(track) != 0U)
         {
             continue;
         }

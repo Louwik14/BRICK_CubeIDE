@@ -17,20 +17,19 @@ CONTROL_STATE_SDRAM static mixer_control_state_t
 void mixer_control_state_init(void)
 {
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
-    {
-        g_mixer_control[entity] = (mixer_control_state_t){
-            .level = 1.0f,
-            .pan = 0.0f,
-            .send1 = 0.0f,
-            .send2 = 0.0f,
-            .send3 = 0.0f
-        };
-    }
+        mixer_control_state_make_default(&g_mixer_control[entity]);
+}
+
+void mixer_control_state_make_default(mixer_control_state_t *out)
+{
+    if (out == NULL) return;
+    *out = (mixer_control_state_t){ .level = 1.0f };
 }
 
 uint8_t mixer_control_state_reset(uint8_t entity)
 {
-    const mixer_control_state_t state = { .level = 1.0f };
+    mixer_control_state_t state;
+    mixer_control_state_make_default(&state);
     return mixer_control_state_restore(entity, &state);
 }
 

@@ -81,14 +81,7 @@ int main(void)
     assert(held_count(0U) == 0U);
 
     note_fx_engine_init();
-    assert(note_fx_engine_configure(0U, 0U, NOTE_FX_MODEL_ECHO,
-        0U, 2U, 20U, 1U) == NOTE_EVENT_RESULT_ACCEPTED);
-    assert(note_fx_engine_transform(0U, &input, 1U, output,
-        NOTE_FX_BATCH_CAPACITY, &count) == NOTE_EVENT_RESULT_ACCEPTED);
-    assert(held_count(0U) == 0U);
-
-    note_fx_engine_init();
-    assert(note_fx_engine_configure(0U, 0U, NOTE_FX_MODEL_CHORD,
+    assert(note_fx_engine_configure(0U, 0U, NOTE_FX_MODEL_SCALER,
         7U, 0U, 0U, 1U) == NOTE_EVENT_RESULT_ACCEPTED);
     assert(note_fx_engine_transform(0U, &input, 1U, output,
         NOTE_FX_BATCH_CAPACITY, &count) == NOTE_EVENT_RESULT_ACCEPTED);
@@ -101,7 +94,7 @@ int main(void)
     assert(held_count(0U) == 0U);
 
     note_fx_engine_init();
-    assert(note_fx_engine_configure(0U, 0U, NOTE_FX_MODEL_ARP_FREE,
+    assert(note_fx_engine_configure(0U, 0U, NOTE_FX_MODEL_ARP,
         0U, NOTE_FX_ARP_ORDER, 1U, 1U) == NOTE_EVENT_RESULT_ACCEPTED);
     assert(note_fx_engine_transform(0U, &input, 1U, output,
         NOTE_FX_BATCH_CAPACITY, &count) == NOTE_EVENT_RESULT_ACCEPTED);
@@ -118,7 +111,7 @@ int main(void)
     assert(held_count(0U) == 1U);
 
     note_fx_engine_init();
-    assert(note_fx_engine_configure(0U, 1U, NOTE_FX_MODEL_ARP_FREE,
+    assert(note_fx_engine_configure(0U, 1U, NOTE_FX_MODEL_ARP,
         0U, NOTE_FX_ARP_ORDER, 1U, 0x21U) == NOTE_EVENT_RESULT_ACCEPTED);
     input.stage = 1U;
     input.duration_samples = 1U;
@@ -144,7 +137,7 @@ int main(void)
 
     note_fx_engine_init();
     input = source_on(0U);
-    assert(note_fx_engine_configure(0U, 0U, NOTE_FX_MODEL_CHORD,
+    assert(note_fx_engine_configure(0U, 0U, NOTE_FX_MODEL_SCALER,
         7U, 0U, 0U, 1U) == NOTE_EVENT_RESULT_ACCEPTED);
     assert(note_fx_engine_transform(0U, &input, 1U, output,
         NOTE_FX_BATCH_CAPACITY, &count) == NOTE_EVENT_RESULT_ACCEPTED);
@@ -152,7 +145,7 @@ int main(void)
     output[0].stage = 2U;
     output[0].dependency_mask = 3U;
     output[0].dependency_versions = 0x21U;
-    assert(note_fx_engine_configure(0U, 2U, NOTE_FX_MODEL_ARP_FREE,
+    assert(note_fx_engine_configure(0U, 2U, NOTE_FX_MODEL_ARP,
         0U, NOTE_FX_ARP_ORDER, 1U, 0x300U) == NOTE_EVENT_RESULT_ACCEPTED);
     assert(note_fx_engine_transform(2U, output, 1U, &output[1],
         NOTE_FX_BATCH_CAPACITY - 1U, &count) == NOTE_EVENT_RESULT_ACCEPTED);

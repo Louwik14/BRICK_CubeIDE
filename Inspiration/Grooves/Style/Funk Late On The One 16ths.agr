@@ -1,0 +1,161 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<Ableton MajorVersion="5" MinorVersion="11.0_432" SchemaChangeCount="2" Creator="Ableton Live 11.0b20" Revision="0b8a4e4c57d92beb7d950cd94e03f4c4f284ad10">
+	<Groove>
+		<LomId Value="0" />
+		<Name Value="Funk - Late On The One" />
+		<Clip>
+			<Value>
+				<MidiClip Id="0" Time="16">
+					<LomId Value="0" />
+					<LomIdView Value="0" />
+					<CurrentStart Value="16" />
+					<CurrentEnd Value="20" />
+					<Loop>
+						<LoopStart Value="0" />
+						<LoopEnd Value="4" />
+						<StartRelative Value="0" />
+						<LoopOn Value="false" />
+						<OutMarker Value="4" />
+						<HiddenLoopStart Value="0" />
+						<HiddenLoopEnd Value="4" />
+					</Loop>
+					<Name Value="Funk - Late On The One" />
+					<Annotation Value="" />
+					<Color Value="24" />
+					<LaunchMode Value="0" />
+					<LaunchQuantisation Value="0" />
+					<TimeSignature>
+						<TimeSignatures>
+							<RemoteableTimeSignature Id="0">
+								<Numerator Value="4" />
+								<Denominator Value="4" />
+								<Time Value="0" />
+							</RemoteableTimeSignature>
+						</TimeSignatures>
+					</TimeSignature>
+					<Envelopes>
+						<Envelopes />
+					</Envelopes>
+					<ScrollerTimePreserver>
+						<LeftTime Value="0" />
+						<RightTime Value="4" />
+					</ScrollerTimePreserver>
+					<TimeSelection>
+						<AnchorTime Value="0" />
+						<OtherTime Value="0" />
+					</TimeSelection>
+					<Legato Value="false" />
+					<Ram Value="false" />
+					<GrooveSettings>
+						<GrooveId Value="-1" />
+					</GrooveSettings>
+					<Disabled Value="false" />
+					<VelocityAmount Value="0" />
+					<FollowAction>
+						<FollowTime Value="4" />
+						<IsLinked Value="true" />
+						<LoopIterations Value="1" />
+						<FollowActionA Value="4" />
+						<FollowActionB Value="0" />
+						<FollowChanceA Value="100" />
+						<FollowChanceB Value="0" />
+						<JumpIndexA Value="0" />
+						<JumpIndexB Value="0" />
+						<FollowActionEnabled Value="false" />
+					</FollowAction>
+					<Grid>
+						<FixedNumerator Value="1" />
+						<FixedDenominator Value="16" />
+						<GridIntervalPixel Value="20" />
+						<Ntoles Value="2" />
+						<SnapToGrid Value="true" />
+						<Fixed Value="true" />
+					</Grid>
+					<FreezeStart Value="0" />
+					<FreezeEnd Value="0" />
+					<IsWarped Value="true" />
+					<TakeId Value="7" />
+					<Notes>
+						<KeyTracks>
+							<KeyTrack Id="0">
+								<Notes>
+									<MidiNoteEvent Time="0.0194513819513819526" Duration="0.0625" Velocity="127" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="1" />
+									<MidiNoteEvent Time="0.334289408508158525" Duration="0.0625" Velocity="32.5887833" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="2" />
+									<MidiNoteEvent Time="0.525935002497502468" Duration="0.0625" Velocity="116.182266" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="3" />
+									<MidiNoteEvent Time="0.821321647102897123" Duration="0.0625" Velocity="29.7363892" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="4" />
+									<MidiNoteEvent Time="1" Duration="0.0625" Velocity="127" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="5" />
+									<MidiNoteEvent Time="1.3342894085081585" Duration="0.0625" Velocity="32.5887833" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="6" />
+									<MidiNoteEvent Time="1.5259350024975025" Duration="0.0625" Velocity="116.182266" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="7" />
+									<MidiNoteEvent Time="1.821321647102897" Duration="0.0625" Velocity="29.7363892" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="8" />
+									<MidiNoteEvent Time="2.0194513819513817" Duration="0.0625" Velocity="126.133636" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="9" />
+									<MidiNoteEvent Time="2.3342894085081585" Duration="0.0625" Velocity="32.5887833" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="10" />
+									<MidiNoteEvent Time="2.5259350024975027" Duration="0.0625" Velocity="116.182266" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="11" />
+									<MidiNoteEvent Time="2.8213216471028972" Duration="0.0625" Velocity="29.7363892" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="12" />
+									<MidiNoteEvent Time="3.0194513819513817" Duration="0.0625" Velocity="127" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="13" />
+									<MidiNoteEvent Time="3.3342894085081585" Duration="0.0625" Velocity="32.5887833" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="14" />
+									<MidiNoteEvent Time="3.5259350024975027" Duration="0.0625" Velocity="116.182266" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="15" />
+									<MidiNoteEvent Time="3.8213216471028972" Duration="0.0625" Velocity="29.7363892" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="16" />
+								</Notes>
+								<MidiKey Value="36" />
+							</KeyTrack>
+						</KeyTracks>
+						<PerNoteEventStore>
+							<EventLists />
+						</PerNoteEventStore>
+						<NoteIdGenerator>
+							<NextId Value="17" />
+						</NoteIdGenerator>
+					</Notes>
+					<BankSelectCoarse Value="-1" />
+					<BankSelectFine Value="-1" />
+					<ProgramChange Value="-1" />
+					<NoteEditorFoldInZoom Value="-1" />
+					<NoteEditorFoldInScroll Value="0" />
+					<NoteEditorFoldOutZoom Value="3072" />
+					<NoteEditorFoldOutScroll Value="-2127" />
+					<NoteEditorFoldScaleZoom Value="-1" />
+					<NoteEditorFoldScaleScroll Value="0" />
+					<ScaleInformation>
+						<RootNote Value="0" />
+						<Name Value="Major" />
+					</ScaleInformation>
+					<IsInKey Value="false" />
+					<NoteSpellingPreference Value="0" />
+					<PreferFlatRootNote Value="false" />
+					<ExpressionGrid>
+						<FixedNumerator Value="1" />
+						<FixedDenominator Value="16" />
+						<GridIntervalPixel Value="20" />
+						<Ntoles Value="2" />
+						<SnapToGrid Value="false" />
+						<Fixed Value="false" />
+					</ExpressionGrid>
+				</MidiClip>
+			</Value>
+		</Clip>
+		<Grid Value="3" />
+		<QuantizationAmount Value="0" />
+		<TimingAmount Value="100" />
+		<RandomAmount Value="0" />
+		<VelocityAmount Value="94" />
+		<Annotation Value="" />
+		<Selection Value="true" />
+		<SourceContext>
+			<SourceContext Id="2">
+				<OriginalFileRef>
+					<FileRef Id="0">
+						<RelativePathType Value="1" />
+						<RelativePath Value="Funk - Late On The One.agr" />
+						<Path Value="/Volumes/Backup 2.0/Dropbox/Ableton-Jeremy Toy/Grooves/Funk/Funk - Late On The One.agr" />
+						<Type Value="2" />
+						<LivePackName Value="" />
+						<LivePackId Value="" />
+						<OriginalFileSize Value="0" />
+						<OriginalCrc Value="0" />
+					</FileRef>
+				</OriginalFileRef>
+				<BrowserContentPath Value="userfolder:/Volumes/Backup%202.0/Dropbox/Ableton-Jeremy%20Toy/Grooves#Funk:Funk%20-%20Late%20On%20The%20One.agr" />
+			</SourceContext>
+		</SourceContext>
+	</Groove>
+</Ableton>

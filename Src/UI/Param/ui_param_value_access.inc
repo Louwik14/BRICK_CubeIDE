@@ -64,7 +64,7 @@ static uint8_t ui_param_resolve_edit_bounds(param_id_t param, uint8_t track, flo
         float model_value = 0.0f;
         note_fx_param_schema_t schema;
         const param_id_t model_id = (param_id_t)(param
-            + (NOTE_FX_PARAM_COUNT - 1U - note_fx_param));
+            + (NOTE_FX_MODEL_INDEX - note_fx_param));
         if ((note_fx_state_get_param(track, model_id, &model_value) != 0U)
                 && (note_fx_state_get_param_schema((uint8_t)model_value,
                                                     note_fx_param,
@@ -88,7 +88,7 @@ static uint8_t ui_param_resolve_edit_bounds(param_id_t param, uint8_t track, flo
 
 static uint8_t ui_param_resolve_effective_edit_track(param_id_t param, uint8_t active_track)
 {
-    if (track_runtime_get_param_rule(param).domain == TRACK_RUNTIME_PARAM_DOMAIN_MOD)
+    if (param_registry_is_modulation_source_param(param) != 0U)
     {
         brick_entity_id_t owner = active_track;
         if (entity_topology_mod_owner(active_track, &owner) != 0U)

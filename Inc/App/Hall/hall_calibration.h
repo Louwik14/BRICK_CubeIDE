@@ -33,7 +33,7 @@ uint16_t hall_calibration_get_min(uint8_t key);
 uint16_t hall_calibration_get_max(uint8_t key);
 
 uint8_t hall_calibration_load(void);
-void hall_calibration_save(void);
+uint8_t hall_calibration_save(void);
 
 void hall_user_calibration_start(void);
 void hall_user_calibration_process(void);

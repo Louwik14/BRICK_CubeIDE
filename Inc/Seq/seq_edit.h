@@ -6,6 +6,8 @@
 #include "Seq/seq_types.h"
 #include "Seq/seq_model.h"
 #include "Seq/seq_clipboard.h"
+#include "Seq/seq_timing.h"
+#include "Seq/seq_traversal.h"
 
 void seq_edit_init(void);
 uint8_t seq_edit_track_sequence_is_locked(seq_track_id_t track);
@@ -80,8 +82,13 @@ seq_plock_op_status_t seq_edit_step_play_delete(seq_track_id_t track,
                                                  seq_step_play_field_t field);
 uint8_t seq_edit_set_track_length(seq_track_id_t track, uint8_t length);
 uint8_t seq_edit_set_track_division(seq_track_id_t track, uint8_t division);
-uint8_t seq_edit_set_track_quantization(seq_track_id_t track, uint8_t quantization);
-uint8_t seq_edit_set_track_swing(seq_track_id_t track, uint8_t swing);
+uint8_t seq_edit_set_track_traversal(seq_track_id_t track,
+                                     uint8_t direction,
+                                     int8_t rotate);
+uint8_t seq_edit_set_track_timing(seq_track_id_t track,
+                                  const seq_track_timing_config_t *timing);
+uint8_t seq_edit_select_track_groove(seq_track_id_t track,
+                                     uint8_t runtime_index);
 void seq_edit_step_play_clear_voice(seq_track_id_t track,
                                     seq_step_id_t step,
                                     uint8_t voice);

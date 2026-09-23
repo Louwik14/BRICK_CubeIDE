@@ -130,7 +130,7 @@ de chaine ferme les sorties de l'ancienne generation, purge ses futurs Note FX,
 reset ses etats temporels puis admet les nouveaux ON sur la generation suivante.
 L'admission musicale refuse avant les FX toute neuvieme pitch logique d'une
 track (ou toute pitch au-dela de la limite inferieure imposee par le fanout
-admis). La meme admission compose les quatre slots contre 32 evenements
+admis). La meme admission compose les trois slots contre 32 evenements
 intermediaires, 512 futurs et 256 actions internes. Mute, STOP, PANIC et
 remplacement Pattern/Project ferment la track, purgent ses futurs et reset ses
 etats ARP/EUCLID; un unmute ne rejoue aucun derive anterieur.

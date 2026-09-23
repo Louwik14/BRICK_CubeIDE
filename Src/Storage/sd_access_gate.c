@@ -320,6 +320,8 @@ const char *sd_access_gate_client_label(sd_access_client_t client)
             return "SREC";
         case SD_ACCESS_CLIENT_BACKGROUND:
             return "BG";
+        case SD_ACCESS_CLIENT_CRASH:
+            return "CRASH";
         default:
             return "NONE";
     }

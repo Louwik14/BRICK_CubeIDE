@@ -129,8 +129,8 @@ static void ui_page_template_keyboard_leave(void)
 {
     if (g_ui_keyboard_velocity_settings_dirty != 0U)
     {
-        hall_calibration_save();
-        g_ui_keyboard_velocity_settings_dirty = 0U;
+        if (hall_calibration_save() != 0U)
+            g_ui_keyboard_velocity_settings_dirty = 0U;
     }
     ui_template_page_leave();
 }
@@ -141,8 +141,8 @@ static void ui_page_template_keyboard_tick(void)
     if ((g_ui_keyboard_velocity_settings_dirty != 0U)
         && ((HAL_GetTick() - g_ui_keyboard_velocity_settings_dirty_since) >= 500U))
     {
-        hall_calibration_save();
-        g_ui_keyboard_velocity_settings_dirty = 0U;
+        if (hall_calibration_save() != 0U)
+            g_ui_keyboard_velocity_settings_dirty = 0U;
     }
 }
 

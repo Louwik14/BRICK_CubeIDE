@@ -24,6 +24,8 @@ typedef struct
     mod_lfo_control_value_t lfo[MOD_LFO_COUNT_PER_TRACK];
 } mod_lfo_control_bank_t;
 
+void mod_lfo_v1_make_default(mod_lfo_control_bank_t *out_state);
+
 uint8_t mod_lfo_v1_prepare_track_param(uint8_t track, uint8_t lfo_index,
                                        mod_lfo_param_t param, float value,
                                        uint8_t *out_owner,

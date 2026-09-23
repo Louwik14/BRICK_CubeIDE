@@ -326,3 +326,18 @@ int8_t kbd_scale_slot_semitone_offset(uint8_t scale_id, uint8_t slot)
     const uint8_t safe_slot = (uint8_t)(slot % KBD_SCALE_SLOT_COUNT);
     return g_kbd_scale_offsets[safe_scale][safe_slot];
 }
+
+bool kbd_scale_contains_pitch_class(uint8_t scale_id, uint8_t pitch_class)
+{
+    const uint8_t safe_scale = (scale_id < KBD_SCALE_COUNT)
+        ? scale_id : KBD_SCALE_ID_MAJOR;
+    pitch_class %= 12U;
+    if (safe_scale == KBD_SCALE_ID_CHROMATIC) return true;
+    for (uint8_t slot = 0U; slot < KBD_SCALE_SLOT_COUNT; ++slot)
+    {
+        if ((uint8_t)(g_kbd_scale_offsets[safe_scale][slot] % 12)
+                == pitch_class)
+            return true;
+    }
+    return false;
+}

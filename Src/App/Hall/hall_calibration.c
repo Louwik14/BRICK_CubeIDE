@@ -1,11 +1,13 @@
 #include "App/Hall/hall_calibration.h"
 #include "stm32h7xx_hal.h"
-
+#include <stddef.h>
 #include <string.h>
 
 #include "App/Hall/hall_engine.h"
 #include "App/Hall/hall_adc.h"
 #include "Platform/memory_layout.h"
+#include "Storage/persistent_fatfs_io.h"
+#include "Storage/sd_access_gate.h"
 
 #define CALIBRATION_PRESS_ADC                 50000U
 #define CALIBRATION_RELEASE_ADC               48000U
@@ -20,13 +22,11 @@
 #define LOWCOST_CALIBRATION_RELEASE_DELTA     500U
 #define LOWCOST_CALIBRATION_REST_PRIME          8U
 
-#define HALL_CAL_FLASH_ADDRESS                0x081E0000U
-#define HALL_CAL_FLASH_BANK                   FLASH_BANK_2
-#define HALL_CAL_FLASH_SECTOR                 FLASH_SECTOR_7
-
 #define HALL_CAL_STORAGE_MAGIC                0x48435550UL
-#define HALL_CAL_STORAGE_VERSION              2U
-#define HALL_CAL_FLASH_CHUNKS                 ((sizeof(hall_calibration_storage_blob_t) + 31U) / 32U)
+#define HALL_CAL_STORAGE_VERSION              3U
+#define HALL_CAL_PATH                         "0:/BRICK/HALL.B6C"
+#define HALL_CAL_TMP_PATH                     "0:/BRICK/HALL.TMP"
+#define HALL_CAL_BAK_PATH                     "0:/BRICK/HALL.BAK"
 
 #define HALL_USER_STAGE_COUNT                 3U
 #define HALL_USER_STAGE_SAMPLES               10U
@@ -56,23 +56,12 @@ typedef struct
     uint16_t size;
     hall_calibration_blob_t hall;
     hall_user_velocity_profile_t user;
-} hall_calibration_storage_v1_blob_t;
-
-_Static_assert(sizeof(hall_calibration_storage_v1_blob_t) == 128U,
-               "Hall calibration v1 storage layout changed");
-
-typedef struct
-{
-    uint32_t magic;
-    uint16_t version;
-    uint16_t size;
-    hall_calibration_blob_t hall;
-    hall_user_velocity_profile_t user;
     uint8_t velocity_profile;
     uint8_t velocity_mode;
     uint8_t velocity_curve;
     uint8_t reserved0;
-    uint8_t reserved1[28];
+    uint8_t reserved1[24];
+    uint32_t crc32;
 } hall_calibration_storage_blob_t;
 
 _Static_assert(sizeof(hall_calibration_storage_blob_t) == 160U,
@@ -269,24 +258,15 @@ static uint8_t hall_storage_blob_is_valid(const hall_calibration_storage_blob_t 
         return 0U;
     }
 
-    return hall_calibration_blob_is_valid(&blob->hall);
-}
-
-static uint8_t hall_storage_v1_blob_is_valid(const hall_calibration_storage_v1_blob_t *blob)
-{
-    if (blob == 0)
+    const uint8_t *p = (const uint8_t *)blob;
+    uint32_t crc = 0xFFFFFFFFUL;
+    for (uint32_t i = 0U; i < offsetof(hall_calibration_storage_blob_t, crc32); ++i)
     {
-        return 0U;
+        crc ^= p[i];
+        for (uint32_t bit = 0U; bit < 8U; ++bit)
+            crc = (crc >> 1) ^ ((0U - (crc & 1U)) & 0xEDB88320UL);
     }
-
-    if ((blob->magic != HALL_CAL_STORAGE_MAGIC) ||
-        (blob->version != 1U) ||
-        (blob->size != sizeof(hall_calibration_storage_v1_blob_t)))
-    {
-        return 0U;
-    }
-
-    return hall_calibration_blob_is_valid(&blob->hall);
+    return (blob->crc32 == ~crc && hall_calibration_blob_is_valid(&blob->hall)) ? 1U : 0U;
 }
 
 static void hall_velocity_settings_apply(uint8_t profile, uint8_t mode, uint8_t curve)
@@ -725,58 +705,37 @@ uint16_t hall_calibration_get_max(uint8_t key)
 
 uint8_t hall_calibration_load(void)
 {
-    const hall_calibration_storage_blob_t *stored = (const hall_calibration_storage_blob_t *)HALL_CAL_FLASH_ADDRESS;
-    const hall_calibration_storage_v1_blob_t *stored_v1 =
-        (const hall_calibration_storage_v1_blob_t *)HALL_CAL_FLASH_ADDRESS;
-    const hall_calibration_blob_t *previous_format =
-        (const hall_calibration_blob_t *)HALL_CAL_FLASH_ADDRESS;
-
     memset(&g_user_profile, 0, sizeof(g_user_profile));
     hall_engine_set_user_velocity_profile(0);
-
-    if (hall_storage_blob_is_valid(stored) != 0U)
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_BACKGROUND) == 0U) return 0U;
+    hall_calibration_storage_blob_t stored;
+    persistent_fatfs_file_t file;
+    uint8_t loaded = 0U;
+    if (sd_access_fs_mount_if_needed() != 0U)
     {
-        g_cal_blob = stored->hall;
-        if (hall_user_profile_is_valid_local(&stored->user) != 0U)
+        (void)persistent_fatfs_recover_replace(HALL_CAL_PATH, HALL_CAL_TMP_PATH, HALL_CAL_BAK_PATH);
+        if (persistent_fatfs_open_read(&file, HALL_CAL_PATH) != 0U
+            && file.size == sizeof(stored))
         {
-            hall_user_profile_apply(&stored->user);
+            UINT read = 0U;
+            loaded = (f_read(&file.file, &stored, sizeof(stored), &read) == FR_OK
+                      && read == sizeof(stored)) ? 1U : 0U;
+            persistent_fatfs_close(&file);
         }
-
-        hall_velocity_settings_apply(stored->velocity_profile,
-                                     stored->velocity_mode,
-                                     stored->velocity_curve);
-        hall_engine_set_calibration(g_cal_blob.min, g_cal_blob.max);
-        return 1U;
     }
-
-    if (hall_storage_v1_blob_is_valid(stored_v1) != 0U)
+    sd_access_gate_release(SD_ACCESS_CLIENT_BACKGROUND);
+    if (loaded == 0U || hall_storage_blob_is_valid(&stored) == 0U) return 0U;
+    g_cal_blob = stored.hall;
+    if (hall_user_profile_is_valid_local(&stored.user) != 0U)
     {
-        g_cal_blob = stored_v1->hall;
-        if (hall_user_profile_is_valid_local(&stored_v1->user) != 0U)
-        {
-            hall_user_profile_apply(&stored_v1->user);
-        }
-        hall_velocity_settings_apply((hall_user_profile_is_valid_local(&stored_v1->user) != 0U)
-                                         ? (uint8_t)HALL_VEL_PROFILE_USER
-                                         : (uint8_t)HALL_VEL_PROFILE_DEFAULT,
-                                     (uint8_t)HALL_VEL_MODE_DV_PEAK,
-                                     (uint8_t)HALL_VEL_CURVE_LOG);
-        hall_engine_set_calibration(g_cal_blob.min, g_cal_blob.max);
-        return 1U;
+        hall_user_profile_apply(&stored.user);
     }
-
-    if (hall_calibration_blob_is_valid(previous_format) == 0U)
-    {
-        return 0U;
-    }
-
-    g_cal_blob = *previous_format;
+    hall_velocity_settings_apply(stored.velocity_profile, stored.velocity_mode, stored.velocity_curve);
     hall_engine_set_calibration(g_cal_blob.min, g_cal_blob.max);
-
     return 1U;
 }
 
-void hall_calibration_save(void)
+uint8_t hall_calibration_save(void)
 {
     hall_calibration_storage_blob_t blob = {
         .magic = HALL_CAL_STORAGE_MAGIC,
@@ -788,7 +747,7 @@ void hall_calibration_save(void)
 
     if (hall_calibration_blob_is_valid(&g_cal_blob) == 0U)
     {
-        return;
+        return 0U;
     }
 
     blob.hall = g_cal_blob;
@@ -797,36 +756,31 @@ void hall_calibration_save(void)
     blob.velocity_mode = hall_get_velocity_mode();
     blob.velocity_curve = hall_get_velocity_curve();
 
-    HAL_FLASH_Unlock();
-
-    FLASH_EraseInitTypeDef erase = {0};
-    uint32_t sector_error = 0U;
-
-    erase.TypeErase = FLASH_TYPEERASE_SECTORS;
-    erase.VoltageRange = FLASH_VOLTAGE_RANGE_3;
-    erase.Banks = HALL_CAL_FLASH_BANK;
-    erase.Sector = HALL_CAL_FLASH_SECTOR;
-    erase.NbSectors = 1U;
-
-    if (HAL_FLASHEx_Erase(&erase, &sector_error) != HAL_OK)
+    const uint8_t *p = (const uint8_t *)&blob;
+    uint32_t crc = 0xFFFFFFFFUL;
+    for (uint32_t i = 0U; i < offsetof(hall_calibration_storage_blob_t, crc32); ++i)
+    { crc ^= p[i]; for (uint32_t bit=0U; bit<8U; ++bit) crc=(crc>>1)^((0U-(crc&1U))&0xEDB88320UL); }
+    blob.crc32 = ~crc;
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_BACKGROUND) == 0U) return 0U;
+    persistent_fatfs_file_t file;
+    uint8_t ok = 0U;
+    if (sd_access_fs_mount_if_needed() != 0U)
     {
-        HAL_FLASH_Lock();
-        return;
-    }
-
-    for (uint32_t i = 0U; i < HALL_CAL_FLASH_CHUNKS; i++)
-    {
-        const uint32_t src_address = (uint32_t)(uintptr_t)&((const uint8_t *)&blob)[i * 32U];
-        const uint32_t dst_address = HALL_CAL_FLASH_ADDRESS + (i * 32U);
-
-        if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_FLASHWORD, dst_address, src_address) != HAL_OK)
+        (void)f_mkdir("0:/BRICK");
+        (void)f_unlink(HALL_CAL_TMP_PATH);
+        if (persistent_fatfs_open_write(&file, HALL_CAL_TMP_PATH) != 0U)
         {
-            HAL_FLASH_Lock();
-            return;
+            UINT written = 0U;
+            ok = (f_write(&file.file, &blob, sizeof(blob), &written) == FR_OK
+                  && written == sizeof(blob) && f_sync(&file.file) == FR_OK
+                  && persistent_fatfs_close_result(&file) == FR_OK) ? 1U : 0U;
+            if (ok != 0U)
+                ok = (persistent_fatfs_commit_replace(HALL_CAL_PATH,HALL_CAL_TMP_PATH,HALL_CAL_BAK_PATH)==FR_OK)?1U:0U;
         }
+        if (ok == 0U) (void)f_unlink(HALL_CAL_TMP_PATH);
     }
-
-    HAL_FLASH_Lock();
+    sd_access_gate_release(SD_ACCESS_CLIENT_BACKGROUND);
+    return ok;
 }
 
 void hall_user_calibration_start(void)

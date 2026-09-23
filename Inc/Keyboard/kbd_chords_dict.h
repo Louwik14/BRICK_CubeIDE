@@ -40,6 +40,7 @@ enum {
 bool kbd_chords_dict_build(uint8_t chord_mask, uint8_t *intervals, uint8_t *count);
 const char *kbd_chords_dict_suffix(uint8_t chord_mask);
 int8_t kbd_scale_slot_semitone_offset(uint8_t scale_id, uint8_t slot);
+bool kbd_scale_contains_pitch_class(uint8_t scale_id, uint8_t pitch_class);
 
 #ifdef __cplusplus
 }

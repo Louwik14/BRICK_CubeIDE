@@ -35,6 +35,7 @@
 #include "Storage/sd_access_gate.h"
 #include "stm32h7xx_hal.h"
 #include "ui_boot_loading.h"
+#include "Storage/groove_bank.h"
 #include "ui_core.h"
 #include "ui_event.h"
 
@@ -105,7 +106,7 @@ static const char *const k_ui_boot_loading_phrases[] = {
     "BEEP CACHE WARM",
     "BOOP BUFFER HUMS",
     "BEAT BUGS FRIENDLY",
-    "ECHOES FIND ROOM",
+    "TRAILS FIND ROOM",
     "DRUM BUS SMILES",
     "KICK BYTE READY",
     "HAT BYTE READY",
@@ -542,6 +543,10 @@ void ui_boot_loading_begin(void)
 
 void ui_boot_loading_service(void)
 {
+    if (groove_bank_boot_complete() == 0U)
+    {
+        return;
+    }
     const sd_storage_status_t storage_status = sd_access_storage_status();
     if ((storage_status == SD_STORAGE_STATUS_NO_MEDIA)
         || (storage_status == SD_STORAGE_STATUS_FAULT))

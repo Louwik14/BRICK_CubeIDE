@@ -251,21 +251,22 @@ preparee jusqu'a la limite `3B/2`; la borne conservative vaut donc
 couvre 4 096 blocs de 64 samples (262 144 samples), au-dessus de cette borne
 sans remplacer les extrema reels des plans de piste par un forfait.
 
-La portee temporelle de la roue est ainsi prouvee, mais sa capacite de 512
-occurrences ne couvre pas encore le backlog Groove maximal. Avec 64 lanes,
-ROLL 1/5 de step (soit 1/80 de noire en DIV 1) et le retard limite
-`2717/1400` noire, jusqu'a 156 occurrences par lane, soit 9 984 occurrences,
-peuvent attendre simultanement. Porter ce pool
-sans gonfler en meme temps la borne terminale demande de dissocier capacite de
-retention et fanout exigible dans un bloc; cette correction reste un chantier
-scheduler distinct. Un refus actuel du pool est un drop borne, jamais une fuite
-ou une croissance memoire.
+La portee temporelle et la capacite sont prouvees avec le ROLL produit maximal
+1/64. Le retard limite `2717/1400` noire retient au plus 32 hits par lane;
+VOICER x4 porte la borne a 128 occurrences par lane, soit 8 192 occurrences.
+Le calendrier est hierarchique: 512 occurrences completes couvrent la fenetre
+precise du bloc, tandis que 7 680 descripteurs finalises de 32 octets conservent
+les echeances lointaines. La promotion ne recalcule aucun resultat musical et
+le ring differe partage la portee de 4 096 blocs. Les 512 nœuds proches servent
+aussi de derniere tranche lorsque les 7 680 descripteurs sont tous occupes.
+Tout depassement de cette borne ou de la fenetre imminente est fatal explicite.
 
 | Pool | Borne legale | Capacite | Marge | Budget statique |
 |---|---:|---:|---:|---:|
 | sources | 768 | 768 | 0 | 30 720 octets |
 | held ARP/Euclid | 512 total | 512 | 0 | 12 288 octets |
-| calendrier final | 512 occurrences | 512 | 0 | 28 672 octets + 16 384 octets de buckets |
+| calendrier final proche | 512 occurrences | 512 | 0 | 28 672 octets + 16 384 octets de buckets |
+| calendrier final differe | 7 680 occurrences | 7 680 | 0 | 245 760 octets + 16 384 octets de buckets |
 | ledger | 64 | 64 | 0 | 1 536 octets |
 | scratch NoteFX | 32 | 32 | 0 | 5 376 octets, quatre buffers et references source |
 | terminal | 3 136 | 3 136 | 0 | 77 376 octets, deux blocs |

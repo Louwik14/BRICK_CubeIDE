@@ -64,7 +64,9 @@ uint8_t entity_topology_is_active(brick_entity_id_t entity_id)
 
 uint8_t entity_topology_can_sequence(const entity_topology_descriptor_t *descriptor)
 {
-    return (uint8_t)((descriptor != NULL) && (descriptor->active != 0U));
+    return (uint8_t)((descriptor != NULL)
+            && (descriptor->active != 0U)
+            && (descriptor->role != ENTITY_ROLE_GROUP_MASTER));
 }
 
 uint8_t entity_topology_can_emit_notes(const entity_topology_descriptor_t *descriptor)

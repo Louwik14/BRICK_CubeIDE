@@ -280,8 +280,6 @@ SECTIONS
     *control_music_output.c.obj(.ram_d2_m4.*)
     *seq_engine.c.obj(.ram_d2_m4)
     *seq_engine.c.obj(.ram_d2_m4.*)
-    *(.ram_note_fx_echo)
-    *(.ram_seq_groove)
     . = ALIGN(32);
   } >SRAM3_D2
   ASSERT(SIZEOF(.ram_d2_m4_sram3) <= LENGTH(SRAM3_D2),

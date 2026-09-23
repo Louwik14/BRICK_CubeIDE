@@ -28,6 +28,12 @@ typedef enum
     NOTE_EVENT_RESULT_DROPPED_POLICY
 } note_event_result_t;
 
+typedef enum
+{
+    NOTE_EVENT_TIMING_LIVE_IMMEDIATE = 0,
+    NOTE_EVENT_TIMING_SCHEDULED = 1
+} note_event_timing_class_t;
+
 #define NOTE_EVENT_STAGE_SOURCE   0U
 #include "NoteFx/note_fx_contract.h"
 
@@ -38,17 +44,9 @@ typedef enum
 #define NOTE_EVENT_OCCURRENCE_NAMESPACE_MIDI 0x80000000U
 #define NOTE_EVENT_OCCURRENCE_NAMESPACE_FX   0xC0000000U
 #define NOTE_EVENT_FLAG_GENERATED 0x01U
-#define NOTE_EVENT_FLAG_ECHO      0x02U
 #define NOTE_EVENT_FLAG_TERMINAL  0x04U
 #define NOTE_EVENT_FLAG_STALE     0x08U
-#define NOTE_EVENT_FLAG_LEGATO    0x10U
-#define NOTE_EVENT_FLAG_RETRIGGER 0x20U
 #define NOTE_EVENT_FLAG_HELD      0x40U
-#define NOTE_EVENT_FLAG_GATE      0x80U
-#define NOTE_EVENT_DEPENDENCY_SLOT_MASK 0x0FU
-#define NOTE_EVENT_BRANCH_SHIFT 4U
-#define NOTE_EVENT_BRANCH_MASK 0x30U
-
 /* Canonical inter-slot musical event. */
 typedef struct
 {
@@ -66,16 +64,25 @@ typedef struct
     uint8_t stage;
     uint8_t flags;
     uint8_t temporal_index;
-    uint8_t dependency_mask;
+    uint8_t branch;
+    uint8_t timing_class;
+    uint8_t reserved[2];
 } musical_event_t;
 
 static inline uint8_t note_event_branch(const musical_event_t *event)
 {
-    return (uint8_t)((event->dependency_mask & NOTE_EVENT_BRANCH_MASK)
-        >> NOTE_EVENT_BRANCH_SHIFT);
+    return event->branch;
 }
 
-#define NOTE_EVENT_DEPENDENCY_NONE 0U
+static inline uint8_t note_event_order(const musical_event_t *event)
+{
+    return event->reserved[0];
+}
+
+static inline void note_event_set_order(musical_event_t *event, uint8_t order)
+{
+    event->reserved[0] = order;
+}
 
 typedef musical_event_t note_event_t;
 
@@ -103,6 +110,7 @@ static inline uint8_t note_event_is_valid(const note_event_t *event)
         && (event->kind <= (uint8_t)NOTE_EVENT_KIND_ON)
         && (event->provenance < (uint8_t)NOTE_EVENT_SOURCE_COUNT)
         && (event->stage <= NOTE_EVENT_STAGE_TERMINAL)
+        && (event->timing_class <= NOTE_EVENT_TIMING_SCHEDULED)
         && (event->source_id != 0U)
         && (event->occurrence_id != 0U)
         && (event->source_generation != 0U)

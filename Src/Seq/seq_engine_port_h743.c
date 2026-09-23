@@ -345,8 +345,10 @@ void seq_service(uint64_t now_sample, uint64_t publish_until_sample)
                 .group_id=in.occurrence_id,.track=in.track,
                 .note=in.note,
                 .velocity=in.velocity,.kind=in.kind,
-                .provenance=in.provenance,.stage=NOTE_EVENT_STAGE_SOURCE};
-            (void)seq_engine_core_submit_live(&g_core,&event,pattern,start,start+frames,block);
+                .provenance=in.provenance,.stage=NOTE_EVENT_STAGE_SOURCE,
+                .timing_class=NOTE_EVENT_TIMING_LIVE_IMMEDIATE};
+            (void)seq_engine_core_submit_live(&g_core,&event,pattern,start,
+                    start+frames,block);
     }
     block->block_id = (uint32_t)(start / frames);
     g_next_deadline = start + frames; __DMB(); g_slot_state[slot] = SLOT_READY;
@@ -365,6 +367,7 @@ static void seq_service_urgent(uint64_t now_sample,uint64_t publish_until_sample
         const uint64_t end=block->start_sample+block->frames;
         if(g_ingress_panic!=0U){g_ingress_panic=0U;
             seq_engine_core_init(&g_core);}
+        const seq_pattern_t *const pattern=seq_engine_pattern_capture();
         while(g_ingress_count!=0U){
             const seq_ingress_event_t in=g_ingress[g_ingress_tail];
             g_ingress_tail=(uint8_t)((g_ingress_tail+1U)%SEQ_ENGINE_INGRESS_CAPACITY);
@@ -378,10 +381,10 @@ static void seq_service_urgent(uint64_t now_sample,uint64_t publish_until_sample
                 .group_id=in.occurrence_id,.track=in.track,
                 .note=in.note,
                 .velocity=in.velocity,.kind=in.kind,
-                .provenance=in.provenance,.stage=NOTE_EVENT_STAGE_SOURCE};
-            const seq_pattern_t *const pattern=seq_engine_pattern_capture();
+                .provenance=in.provenance,.stage=NOTE_EVENT_STAGE_SOURCE,
+                .timing_class=NOTE_EVENT_TIMING_LIVE_IMMEDIATE};
             (void)seq_engine_core_submit_live(&g_core,&event,pattern,
-                block->start_sample,end,block);
+                    block->start_sample,end,block);
         }
         __DMB();g_slot_state[slot]=SLOT_READY;return;
     }

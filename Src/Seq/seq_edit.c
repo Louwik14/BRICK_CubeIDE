@@ -182,12 +182,9 @@ void seq_edit_step_play_clear(seq_track_id_t track, seq_step_id_t step)
 
 uint8_t seq_edit_track_sequence_is_locked(seq_track_id_t track)
 {
-    if (entity_topology_is_active((brick_entity_id_t)track) == 0U)
-    {
-        return 1U;
-    }
-
-    return 0U;
+    entity_topology_descriptor_t entity;
+    return (uint8_t)((entity_topology_get((brick_entity_id_t)track, &entity) == 0U)
+            || (entity_topology_can_sequence(&entity) == 0U));
 }
 
 uint8_t seq_edit_set_track_length(seq_track_id_t track, uint8_t length)
@@ -209,18 +206,38 @@ uint8_t seq_edit_set_track_division(seq_track_id_t track, uint8_t division)
     return 1U;
 }
 
-uint8_t seq_edit_set_track_quantization(seq_track_id_t track, uint8_t quantization)
+uint8_t seq_edit_set_track_traversal(seq_track_id_t track,
+                                     uint8_t direction,
+                                     int8_t rotate)
 {
-    if ((seq_edit_track_sequence_is_locked(track) != 0U) || (quantization > 100U)) return 0U;
-    seq_runtime_set_track_quant(track, quantization);
+    if ((seq_edit_track_sequence_is_locked(track) != 0U)
+            || (direction >= (uint8_t)SEQ_DIRECTION_COUNT)
+            || (rotate < -(int8_t)(SEQ_MAX_STEPS - 1U))
+            || (rotate > (int8_t)(SEQ_MAX_STEPS - 1U))) return 0U;
+    seq_runtime_set_track_traversal(track, direction, rotate);
     return 1U;
 }
 
-uint8_t seq_edit_set_track_swing(seq_track_id_t track, uint8_t swing)
+uint8_t seq_edit_set_track_timing(seq_track_id_t track,
+                                  const seq_track_timing_config_t *timing)
 {
-    if ((seq_edit_track_sequence_is_locked(track) != 0U) || (swing > 100U)) return 0U;
-    seq_runtime_set_track_swing(track, swing);
+    if ((timing == NULL) || (seq_edit_track_sequence_is_locked(track) != 0U)
+            || (timing->base >= SEQ_TIMING_BASE_COUNT)
+            || (timing->quantize > 100U)
+            || (timing->groove >= SEQ_GROOVE_COUNT)
+            || (timing->timing > 100U) || (timing->random > 100U)
+            || (timing->velocity < -100) || (timing->velocity > 100)
+            || (timing->global > 130U))
+        return 0U;
+    seq_runtime_set_track_timing(track, timing);
     return 1U;
+}
+
+uint8_t seq_edit_select_track_groove(seq_track_id_t track,
+                                     uint8_t runtime_index)
+{
+    if(seq_edit_track_sequence_is_locked(track)!=0U)return 0U;
+    return seq_runtime_select_track_groove(track,runtime_index);
 }
 
 static uint8_t seq_edit_begin_snapshot_undo(seq_track_id_t track,

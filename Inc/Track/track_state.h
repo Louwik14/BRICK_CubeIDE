@@ -13,6 +13,10 @@ extern "C" {
 #define TRACK_CONFIG_CAPACITY BRICK_ENTITY_CAPACITY
 
 void track_state_init(void);
+void track_state_make_initial_config(uint8_t entity, track_config_t *out_config);
+void track_state_make_initial_midi(uint8_t entity,
+                                   uint8_t *out_channel,
+                                   track_midi_source_t *out_source);
 
 const track_config_t *track_state_get_configs(void);
 track_config_t track_state_get_config(uint8_t track);

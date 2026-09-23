@@ -15,16 +15,6 @@
 
 #include "Keyboard/keyboard_params.h"
 
-typedef struct
-{
-    uint8_t root_index;
-    uint8_t scale_index;
-    bool omnichord;
-    note_order_t note_order;
-    bool chord_override;
-    bool mono_last;
-} keyboard_params_state_t;
-
 static keyboard_params_state_t g_keyboard_params = {
     .root_index = 0U,
     .scale_index = (uint8_t)KBD_SCALE_MAJOR,
@@ -45,7 +35,21 @@ static void keyboard_params_apply(void)
 
 void keyboard_params_init(void)
 {
+    keyboard_params_make_default(&g_keyboard_params);
     keyboard_params_apply();
+}
+
+void keyboard_params_make_default(keyboard_params_state_t *out_state)
+{
+    if (out_state == 0) return;
+    *out_state = (keyboard_params_state_t){
+        .root_index = 0U,
+        .scale_index = (uint8_t)KBD_SCALE_MAJOR,
+        .omnichord = false,
+        .note_order = NOTE_ORDER_NATURAL,
+        .chord_override = false,
+        .mono_last = false,
+    };
 }
 
 void keyboard_params_set_root(uint8_t root_index)

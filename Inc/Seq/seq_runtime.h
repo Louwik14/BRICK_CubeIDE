@@ -3,11 +3,22 @@
 
 #include <stdint.h>
 
+#include "Seq/seq_timing.h"
 #include "Seq/seq_types.h"
 
 #define SEQ_RUNTIME_AUDIO_EVENT_BOUNDARY_EDGE 0xF0U
 #define SEQ_RUNTIME_AUDIO_EVENT_TRANSPORT_START 0xF2U
 #define SEQ_RUNTIME_AUDIO_EVENT_METRO_CLICK   0xF1U
+#define SEQ_RUNTIME_DEFAULT_TEMPO_BPM_MILLI   120000U
+#define SEQ_RUNTIME_DEFAULT_GROOVE_SEED        UINT32_C(0x42524943)
+
+typedef struct
+{
+    uint8_t division;
+    uint8_t direction;
+    int8_t rotate;
+    seq_track_timing_config_t timing;
+} seq_runtime_track_defaults_t;
 
 typedef struct
 {
@@ -22,11 +33,11 @@ typedef struct
 {
     uint8_t running;
     uint8_t play_step[SEQ_LANE_CAPACITY];
+    uint8_t traversal_phase[SEQ_LANE_CAPACITY];
     uint8_t prev_step[SEQ_LANE_CAPACITY];
     uint8_t prev_step_valid[SEQ_LANE_CAPACITY];
     uint8_t active_lock_count[SEQ_LANE_CAPACITY];
     uint8_t track_div_phase[SEQ_LANE_CAPACITY];
-    uint8_t track_swing_phase[SEQ_LANE_CAPACITY];
     uint32_t last_tick_count;
     uint32_t tick_accum;
     uint16_t ticks_per_step;
@@ -77,8 +88,8 @@ typedef struct
 {
     uint8_t running;
     uint8_t play_step[SEQ_LANE_CAPACITY];
+    uint8_t traversal_phase[SEQ_LANE_CAPACITY];
     uint8_t track_div_phase[SEQ_LANE_CAPACITY];
-    uint8_t track_swing_phase[SEQ_LANE_CAPACITY];
     uint64_t step_sample_q16;
     uint32_t samples_per_step_q16;
 } seq_runtime_shadow_seed_t;
@@ -90,6 +101,8 @@ typedef struct
  * - the shared execution state is owned by seq_transport_owner; seq_runtime uses it as facade.
  */
 void seq_runtime_init(void);
+void seq_runtime_make_default_track_control(
+    seq_runtime_track_defaults_t *out_defaults);
 /* Notification/maintenance seam: IRQ tick accounting only, no step authority. */
 void seq_runtime_time_adapter_process_internal_from_irq(void);
 /* Orchestration loop: supervises transport, clock source and external/internal progress. */

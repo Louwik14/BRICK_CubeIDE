@@ -7,7 +7,9 @@
 
 static uint8_t seq_step_snapshot_track_is_valid(seq_track_id_t track)
 {
-    return entity_topology_is_active((brick_entity_id_t)track);
+    entity_topology_descriptor_t entity;
+    return (uint8_t)((entity_topology_get((brick_entity_id_t)track, &entity) != 0U)
+            && (entity_topology_can_sequence(&entity) != 0U));
 }
 
 static uint8_t lock_before(const seq_step_snapshot_plock_t *a, const seq_step_snapshot_plock_t *b)

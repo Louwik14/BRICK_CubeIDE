@@ -196,10 +196,10 @@ uint8_t mod_matrix_set_slot_destination_index(uint8_t track, uint8_t slot, float
         return 0U;
     }
 
-    const uint16_t max_index = (uint16_t)(mod_destination_catalog_count(owner) - 1U);
+    const uint16_t max_index = (uint16_t)(mod_destination_catalog_count(track) - 1U);
     const uint16_t index = (uint16_t)mod_matrix_clampf(value, 0.0f, (float)max_index);
     const mod_destination_address_t new_destination =
-        mod_destination_catalog_address_from_index(owner, index);
+        mod_destination_catalog_address_from_index(track, index);
     const uint8_t enabled = ((new_destination != MOD_DESTINATION_NONE)
                   && (s->source != (uint8_t)MOD_MATRIX_SOURCE_NONE)) ? 1U : 0U;
     if ((s->destination == new_destination) && (s->enabled == enabled))
@@ -285,7 +285,8 @@ uint8_t mod_matrix_set_slot_state(uint8_t track,
     if ((source >= MOD_MATRIX_SOURCE_COUNT)
             || (entity_topology_mod_owner(track, &owner) == 0U)
             || ((destination != MOD_DESTINATION_NONE)
-                && (mod_destination_catalog_index_from_address(owner, destination) == 0U)))
+                && (mod_destination_catalog_address_is_supported_projected(
+                    owner, destination, track_state_get_configs()) == 0U)))
     {
         return 0U;
     }
@@ -326,7 +327,7 @@ uint8_t mod_matrix_get_slot_destination_index(uint8_t track, uint8_t slot, float
         return 0U;
     }
 
-    *out_value = (float)mod_destination_catalog_index_from_address(owner, s->destination);
+    *out_value = (float)mod_destination_catalog_index_from_address(track, s->destination);
     return 1U;
 }
 

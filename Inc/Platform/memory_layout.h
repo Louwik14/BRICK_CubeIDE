@@ -44,9 +44,6 @@
 #define SEQ_STATE_D2 SEC_ATTR(".ram_d2_m4")
 #define SEQ_HOT_D1 SEC_ATTR(".ram_d1_audio")
 #define SEQ_STATE_SDRAM SEC_ATTR(".seq_state_sdram") ALIGN32
-/* CONTROL-owned NoteFX timing ledgers.  These are CPU-only D2 data; keep
- * them in SRAM3 rather than consuming the SRAM2 future-M4 owner arena. */
-#define SEQ_GROOVE_STATE_D2 SEC_ATTR(".ram_seq_groove")
 
 /* CONTROL state local to SRAM2/D2, reserved for the future M4 owner. */
 #define CONTROL_M4_SRAM2 SEC_ATTR(".ram_control_m4_sram2")

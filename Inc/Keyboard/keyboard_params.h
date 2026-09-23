@@ -10,7 +10,18 @@
 extern "C" {
 #endif
 
+typedef struct
+{
+    uint8_t root_index;
+    uint8_t scale_index;
+    bool omnichord;
+    note_order_t note_order;
+    bool chord_override;
+    bool mono_last;
+} keyboard_params_state_t;
+
 void keyboard_params_init(void);
+void keyboard_params_make_default(keyboard_params_state_t *out_state);
 
 void keyboard_params_set_root(uint8_t root_index);
 void keyboard_params_set_scale(uint8_t scale_index);

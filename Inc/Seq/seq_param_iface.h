@@ -42,7 +42,7 @@ _Static_assert(SEQ_PARAM_MIX_SLOT_COUNT <= 255U, "MIX p-lock capacity exceeds sl
 _Static_assert(SEQ_PARAM_FM_OPERATOR_SLOT_COUNT <= 255U, "FM operator p-lock capacity exceeds slot type");
 _Static_assert(SEQ_PARAM_AUDIO_FX_SLOT_COUNT <= 255U, "Audio FX p-lock capacity exceeds slot type");
 _Static_assert(SEQ_PARAM_RUNTIME_FLAG_BYTE_COUNT == 316U, "runtime p-lock bitmap size changed");
-_Static_assert((PARAM_MIDI_FX_S4_MODEL - PARAM_MIDI_FX_S1_PARAM1 + 1U) == SEQ_PARAM_MIDI_FX_SLOT_COUNT,
+_Static_assert((PARAM_MIDI_FX_ORDER - PARAM_MIDI_FX_S1_PARAM1 + 1U) == SEQ_PARAM_MIDI_FX_SLOT_COUNT,
                "MIDI FX inverse table capacity changed");
 
 typedef enum
@@ -75,6 +75,9 @@ uint8_t seq_param_iface_slot_to_param(seq_track_id_t track,
                                       uint8_t set_id,
                                       seq_param_slot_t param_slot,
                                       param_id_t *out_param_id);
+uint8_t seq_param_iface_slot_to_param_for_type(
+    uint8_t runtime_type, uint8_t set_id, seq_param_slot_t param_slot,
+    param_id_t *out_param_id);
 uint8_t seq_param_iface_param_to_slot(seq_track_id_t track,
                                       uint8_t set_id,
                                       param_id_t param_id,

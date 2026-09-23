@@ -59,7 +59,6 @@ cosf
 lrintf
 sinf
 __aeabi_f2ulz
-__boot_context_flash_start__
 strncmp
 strstr
 __aeabi_d2f

@@ -19,7 +19,7 @@ Le code courant est l'autorite finale. Ce document est l'unique porte d'entree d
   CONTROL finales. Project libere puis reconstruit toutes les installations;
   Pattern ne remplace que les PROGRAM modifies et conserve les outputs vivants.
 - `STOP(output_handle)` rend l'output musicalement mort dans CONTROL. L'identite semantique NoteFx/SEQ ne traverse pas l'ABI AUDIO. AUDIO peut conserver une tail RELEASE et libere ou reutilise physiquement le slot sans ACK musical.
-- Pattern, Project et Patch utilisent exclusivement le codec CONTROL explicite version 4.
+- Pattern, Project et Patch utilisent exclusivement le codec CONTROL explicite version 7.
 
 ## Flux principaux
 
@@ -75,6 +75,9 @@ implementation dans `Src`. Aucun domaine generique `Core` ne subsiste.
 - [z5_ui_navigation_interaction.md](z5_ui_navigation_interaction.md): navigation, modes, selection, Master et ordre des handlers.
 - [ui_render_cooperative.md](ui_render_cooperative.md): rendu OLED fractionne, annulation, coalescence et atomicite de frame.
 - [z6_state_persistence_patterns_projects.md](z6_state_persistence_patterns_projects.md): modele, codec, cles, Pattern, Patch, Project et transactions Storage.
+- [internal_flash_map.md](internal_flash_map.md): partage Flash firmware et reservation de la future banque Groove.
+- [crash_library.md](crash_library.md): capsules diagnostiques best-effort sur SD.
+- [hall_calibration_persistence.md](hall_calibration_persistence.md): calibration globale SD chargee en RAM au boot.
 - [stream_need_contract.md](stream_need_contract.md): Sampler RAM, Wavetable, Multi, streaming, page-cache et transport I/O.
 - [recorder_sd.md](recorder_sd.md): bus AUDIO REC unique, Recorder, REC_SOURCE A/B, export cooperatif et lecture Streamer.
 - [m4_m7_functional_command_contract.md](m4_m7_functional_command_contract.md): FIFO fonctionnelle unique et consumer AUDIO.

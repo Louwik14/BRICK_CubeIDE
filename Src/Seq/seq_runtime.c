@@ -26,6 +26,7 @@
 #include "Storage/sample_capture.h"
 #include "Storage/pattern_live_ram.h"
 #include "Storage/project_load_quiesce.h"
+#include "Storage/groove_bank.h"
 #include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
 #include "Sampler/multi_sample_loader.h"
@@ -38,6 +39,7 @@
 #include "Seq/seq_param_iface.h"
 #include "Seq/seq_transport_owner.h"
 #include "Seq/seq_musical_time.h"
+#include "Seq/seq_traversal.h"
 #include "Seq/seq_live_rec_session.h"
 #include "Seq/seq_transport_fsm.h"
 #include "Seq/seq_clock_bridge.h"
@@ -46,7 +48,6 @@
 #include "Platform/brick_fatal.h"
 #include "SD/sd_scheduler_runtime.h"
 
-#define SEQ_RUNTIME_DEFAULT_TEMPO_BPM_MILLI 120000U
 #define SEQ_RUNTIME_AUDIO_SAMPLE_RATE 48000U
 #define SEQ_RUNTIME_STEPS_PER_QUARTER 4U
 #define SEQ_RUNTIME_MIDI_CLOCKS_PER_STEP 6U
@@ -58,8 +59,10 @@ SEQ_STATE_D2 static struct
 {
     seq_clock_src_t clock_src;
     uint8_t track_div[SEQ_LANE_CAPACITY];
-    uint8_t track_quant[SEQ_LANE_CAPACITY];
-    uint8_t track_swing[SEQ_LANE_CAPACITY];
+    uint8_t track_direction[SEQ_LANE_CAPACITY];
+    int8_t track_rotate[SEQ_LANE_CAPACITY];
+    seq_track_timing_config_t track_timing[SEQ_LANE_CAPACITY];
+    uint32_t groove_seed;
 } g_seq_runtime_control;
 static volatile uint32_t g_seq_internal_time_tick;
 SEQ_STATE_D2 static uint32_t g_seq_track_loop_generation[SEQ_LANE_CAPACITY];
@@ -203,7 +206,9 @@ static void seq_runtime_exit_critical(uint32_t primask)
 
 static uint8_t seq_runtime_track_is_valid(seq_track_id_t track)
 {
-    return entity_topology_is_active((brick_entity_id_t)track);
+    entity_topology_descriptor_t entity;
+    return (uint8_t)((entity_topology_get((brick_entity_id_t)track, &entity) != 0U)
+            && (entity_topology_can_sequence(&entity) != 0U));
 }
 
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic)
@@ -269,6 +274,7 @@ void seq_runtime_init(void)
     memset(g_seq_track_loop_generation, 0, sizeof(g_seq_track_loop_generation));
     /* Default to internal clock at boot; runtime policy may retarget later. */
     g_seq_runtime_control.clock_src = SEQ_CLOCK_SRC_INTERNAL;
+    g_seq_runtime_control.groove_seed = SEQ_RUNTIME_DEFAULT_GROOVE_SEED;
     g_seq_internal_time_tick = 0U;
     seq_transport_owner_set_external_step_pulses_pending(0U);
     g_seq_runtime_live_rec_head = 0U;
@@ -302,10 +308,28 @@ void seq_runtime_init(void)
 
     for (seq_track_id_t track = 0U; track < (seq_track_id_t)SEQ_LANE_CAPACITY; ++track)
     {
-        g_seq_runtime_control.track_div[track] = 1U;
-        g_seq_runtime_control.track_quant[track] = 0U;
-        g_seq_runtime_control.track_swing[track] = 0U;
+        seq_runtime_track_defaults_t defaults;
+        seq_runtime_make_default_track_control(&defaults);
+        g_seq_runtime_control.track_div[track] = defaults.division;
+        g_seq_runtime_control.track_direction[track] = defaults.direction;
+        g_seq_runtime_control.track_rotate[track] = defaults.rotate;
+        g_seq_runtime_control.track_timing[track] = defaults.timing;
     }
+}
+
+void seq_runtime_make_default_track_control(
+    seq_runtime_track_defaults_t *out_defaults)
+{
+    if (out_defaults == NULL) return;
+    *out_defaults = (seq_runtime_track_defaults_t){
+        .division = 1U,
+        .direction = (uint8_t)SEQ_DIRECTION_FWD,
+        .rotate = 0,
+        .timing = {
+            .base = SEQ_TIMING_BASE_1_16,
+            .global = 100U,
+        },
+    };
 }
 
 void seq_runtime_start(void)
@@ -613,7 +637,11 @@ uint8_t seq_runtime_set_playhead_step(seq_track_id_t track, seq_step_id_t step)
         step = 0U;
     }
 
-    g_seq_runtime.play_step[track] = step;
+    g_seq_runtime.traversal_phase[track] = step;
+    g_seq_runtime.play_step[track] = seq_traversal_resolve(
+        step, length, g_seq_runtime_control.track_direction[track],
+        g_seq_runtime_control.track_rotate[track],
+        g_seq_runtime_control.groove_seed, track);
     if ((g_seq_runtime.running != 0U) && (step == 0U))
     {
         seq_engine_control_mark_dirty();
@@ -636,8 +664,8 @@ void seq_runtime_capture_shadow_seed(seq_runtime_shadow_seed_t *out_seed)
     for (seq_track_id_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         out_seed->play_step[track] = g_seq_runtime.play_step[track];
+        out_seed->traversal_phase[track] = g_seq_runtime.traversal_phase[track];
         out_seed->track_div_phase[track] = g_seq_runtime.track_div_phase[track];
-        out_seed->track_swing_phase[track] = g_seq_runtime.track_swing_phase[track];
     }
     seq_runtime_exit_critical(primask);
 }
@@ -702,7 +730,7 @@ uint8_t seq_runtime_get_musical_time(seq_track_id_t track,
         g_seq_runtime_control.track_div[track]);
     const int64_t track_delta = (int64_t)(transport_delta / track_div);
     int64_t pattern_unwrapped = (int64_t)(
-        (uint64_t)g_seq_runtime.play_step[track] << 16U);
+        (uint64_t)g_seq_runtime.traversal_phase[track] << 16U);
     pattern_unwrapped += (forward != 0U) ? track_delta : -track_delta;
     const uint8_t length = seq_model_get_track_playback_length(track);
     const int64_t modulus = (int64_t)((uint64_t)length << 16U);
@@ -742,9 +770,11 @@ uint8_t seq_runtime_get_track_next_loop_sample(seq_track_id_t track,
         g_seq_runtime_control.track_div[track]);
     uint8_t length = seq_model_get_track_playback_length(track);
     if (length == 0U) length = 1U;
-    const uint8_t step = (g_seq_runtime.play_step[track] < length)
-        ? g_seq_runtime.play_step[track] : 0U;
-    const uint32_t advances = (uint32_t)length - step;
+    const uint8_t direction = g_seq_runtime_control.track_direction[track];
+    const uint8_t cycle = seq_traversal_cycle_length(length, direction);
+    const uint8_t phase = (g_seq_runtime.traversal_phase[track] < cycle)
+        ? g_seq_runtime.traversal_phase[track] : 0U;
+    const uint32_t advances = (uint32_t)cycle - phase;
     const uint32_t first_pulses = (uint32_t)div
         - g_seq_runtime.track_div_phase[track];
     const uint32_t pulses = first_pulses
@@ -782,10 +812,15 @@ void seq_runtime_on_track_length_changed(seq_track_id_t track)
         return;
     }
 
-    if (g_seq_runtime.play_step[track] >= length)
-    {
-        g_seq_runtime.play_step[track] = 0U;
-    }
+    const uint8_t cycle = seq_traversal_cycle_length(
+        length, g_seq_runtime_control.track_direction[track]);
+    if (g_seq_runtime.traversal_phase[track] >= cycle)
+        g_seq_runtime.traversal_phase[track] = 0U;
+    g_seq_runtime.play_step[track] = seq_traversal_resolve(
+        g_seq_runtime.traversal_phase[track], length,
+        g_seq_runtime_control.track_direction[track],
+        g_seq_runtime_control.track_rotate[track],
+        g_seq_runtime_control.groove_seed, track);
     g_seq_runtime.prev_step[track] = g_seq_runtime.play_step[track];
     g_seq_runtime.prev_step_valid[track] = 0U;
 }
@@ -848,56 +883,133 @@ uint8_t seq_runtime_get_track_div(seq_track_id_t track, uint8_t *out_div)
     return 1U;
 }
 
-void seq_runtime_set_track_quant(seq_track_id_t track, uint8_t quant)
+void seq_runtime_set_track_traversal(seq_track_id_t track,
+                                     uint8_t direction,
+                                     int8_t rotate)
 {
-    if (seq_runtime_track_is_valid(track) == 0U)
-    {
-        return;
-    }
-
-    g_seq_runtime_control.track_quant[track] = seq_runtime_clamp_percent(quant);
+    if (seq_runtime_track_is_valid(track) == 0U) return;
+    if (direction >= (uint8_t)SEQ_DIRECTION_COUNT)
+        direction = (uint8_t)SEQ_DIRECTION_FWD;
+    if (rotate < -(int8_t)(SEQ_MAX_STEPS - 1U))
+        rotate = -(int8_t)(SEQ_MAX_STEPS - 1U);
+    if (rotate > (int8_t)(SEQ_MAX_STEPS - 1U))
+        rotate = (int8_t)(SEQ_MAX_STEPS - 1U);
+    g_seq_runtime_control.track_direction[track] = direction;
+    g_seq_runtime_control.track_rotate[track] = rotate;
+    const uint8_t length = seq_model_get_track_playback_length(track);
+    const uint8_t cycle = seq_traversal_cycle_length(length, direction);
+    g_seq_runtime.traversal_phase[track] %= cycle;
+    g_seq_runtime.play_step[track] = seq_traversal_resolve(
+        g_seq_runtime.traversal_phase[track], length, direction, rotate,
+        g_seq_runtime_control.groove_seed, track);
     seq_engine_control_mark_dirty();
 }
 
-uint8_t seq_runtime_get_track_quant(seq_track_id_t track, uint8_t *out_quant)
+uint8_t seq_runtime_get_track_traversal(seq_track_id_t track,
+                                        uint8_t *out_direction,
+                                        int8_t *out_rotate)
 {
-    if ((out_quant == NULL) || (seq_runtime_track_is_valid(track) == 0U))
-    {
-        return 0U;
-    }
-
-    *out_quant = g_seq_runtime_control.track_quant[track];
+    if ((out_direction == NULL) || (out_rotate == NULL)
+            || (seq_runtime_track_is_valid(track) == 0U)) return 0U;
+    *out_direction = g_seq_runtime_control.track_direction[track];
+    *out_rotate = g_seq_runtime_control.track_rotate[track];
     return 1U;
 }
 
-void seq_runtime_set_track_swing(seq_track_id_t track, uint8_t swing)
+void seq_runtime_set_groove_seed(uint32_t seed)
 {
-    if (seq_runtime_track_is_valid(track) == 0U)
-    {
-        return;
-    }
-
-    g_seq_runtime_control.track_swing[track] = seq_runtime_clamp_percent(swing);
+    g_seq_runtime_control.groove_seed = (seed != 0U)
+        ? seed : SEQ_RUNTIME_DEFAULT_GROOVE_SEED;
     seq_engine_control_mark_dirty();
 }
 
-uint8_t seq_runtime_get_track_swing(seq_track_id_t track, uint8_t *out_swing)
+uint32_t seq_runtime_get_groove_seed(void)
 {
-    if ((out_swing == NULL) || (seq_runtime_track_is_valid(track) == 0U))
-    {
-        return 0U;
-    }
+    return g_seq_runtime_control.groove_seed;
+}
 
-    *out_swing = g_seq_runtime_control.track_swing[track];
+void seq_runtime_set_track_timing(seq_track_id_t track,
+                                  const seq_track_timing_config_t *config)
+{
+    if ((seq_runtime_track_is_valid(track) == 0U) || (config == NULL)) return;
+    seq_track_timing_config_t normalized=*config;
+    if(normalized.base>=SEQ_TIMING_BASE_COUNT)normalized.base=SEQ_TIMING_BASE_1_16;
+    normalized.quantize=seq_runtime_clamp_percent(normalized.quantize);
+    normalized.groove=SEQ_GROOVE_NONE;
+    normalized.timing=seq_runtime_clamp_percent(normalized.timing);
+    normalized.random=seq_runtime_clamp_percent(normalized.random);
+    if(normalized.velocity < -100)normalized.velocity=-100;
+    if(normalized.velocity > 100)normalized.velocity=100;
+    normalized.groove_flags=0U;
+    if(normalized.global>130U)normalized.global=130U;
+    normalized.groove_name[SEQ_GROOVE_NAME_BYTES-1U]='\0';
+    const size_t groove_name_length=strlen(normalized.groove_name);
+    memset(&normalized.groove_name[groove_name_length],0,
+        SEQ_GROOVE_NAME_BYTES-groove_name_length);
+    if(normalized.groove_name[0]!='\0')
+    {
+        uint8_t runtime_index=0U;
+        if(groove_bank_find_name(normalized.groove_name,&runtime_index)
+                &&groove_bank_validate_record(runtime_index))
+            normalized.groove=runtime_index;
+        else
+            normalized.groove_flags=SEQ_GROOVE_FLAG_MISSING;
+    }
+    g_seq_runtime_control.track_timing[track]=normalized;
+    seq_engine_control_mark_dirty();
+}
+
+uint8_t seq_runtime_select_track_groove(seq_track_id_t track,
+                                        uint8_t runtime_index)
+{
+    if(seq_runtime_track_is_valid(track)==0U)return 0U;
+    seq_track_timing_config_t next=g_seq_runtime_control.track_timing[track];
+    if(runtime_index==SEQ_GROOVE_NONE)
+    {
+        next.groove=SEQ_GROOVE_NONE;
+        next.groove_flags=0U;
+        memset(next.groove_name,0,sizeof(next.groove_name));
+        g_seq_runtime_control.track_timing[track]=next;
+        seq_engine_control_mark_dirty();
+        return 1U;
+    }
+    groove_bank_entry_view_t entry;
+    groove_bank_record_view_t record;
+    if(!groove_bank_get(runtime_index,&entry)
+            ||!groove_bank_resolve(runtime_index,&record))return 0U;
+    next.groove=runtime_index;
+    next.groove_flags=0U;
+    next.base=(record.base<SEQ_TIMING_BASE_COUNT)?record.base:SEQ_TIMING_BASE_1_16;
+    next.quantize=(record.quantize<=100U)?record.quantize:100U;
+    next.timing=(record.timing<=100U)?record.timing:100U;
+    next.random=(record.random<=100U)?record.random:100U;
+    next.velocity=(record.velocity < -100)?-100:
+        ((record.velocity > 100)?100:record.velocity);
+    (void)strncpy(next.groove_name,entry.name,SEQ_GROOVE_NAME_BYTES-1U);
+    next.groove_name[SEQ_GROOVE_NAME_BYTES-1U]='\0';
+    g_seq_runtime_control.track_timing[track]=next;
+    seq_engine_control_mark_dirty();
+    return 1U;
+}
+
+uint8_t seq_runtime_get_track_timing(seq_track_id_t track,
+                                     seq_track_timing_config_t *out_config)
+{
+    if ((out_config == NULL) || (seq_runtime_track_is_valid(track) == 0U))
+        return 0U;
+    *out_config=g_seq_runtime_control.track_timing[track];
     return 1U;
 }
 
 uint8_t seq_runtime_rec_toggle_arm(seq_track_id_t target_track)
 {
+    if (seq_runtime_track_is_valid(target_track) == 0U)
+    {
+        return 0U;
+    }
     const uint8_t pending_before = seq_live_rec_session_rec_is_pattern_pending_start();
     const uint8_t armed_before = seq_live_rec_session_rec_is_armed();
     seq_live_rec_session_toggle_arm(seq_runtime_get_now_sample(), g_seq_runtime.samples_per_step_q16);
-    (void)target_track;
     sample_capture_control_on_global_rec_arm(
         seq_live_rec_session_rec_is_armed());
 
@@ -1258,7 +1370,7 @@ void seq_runtime_begin_track_restore(const seq_track_id_t *tracks, uint8_t track
     (void)effective_sample;seq_ingress_discard();
     for (uint8_t i = 0U; i < track_count; ++i)
     {
-        if (tracks[i] >= SEQ_TRACK_COUNT)
+        if (seq_runtime_track_is_valid(tracks[i]) == 0U)
         {
             continue;
         }
@@ -1270,7 +1382,7 @@ void seq_runtime_end_track_restore(const seq_track_id_t *tracks, uint8_t track_c
 {
     for (uint8_t i = 0U; i < track_count; ++i)
     {
-        if (tracks[i] >= SEQ_TRACK_COUNT)
+        if (seq_runtime_track_is_valid(tracks[i]) == 0U)
         {
             continue;
         }
@@ -1282,7 +1394,7 @@ void seq_runtime_end_track_restore(const seq_track_id_t *tracks, uint8_t track_c
 void seq_runtime_on_track_pattern_change(uint8_t track)
 {
     seq_edit_note_capture_reset();
-    if (track >= SEQ_TRACK_COUNT)
+    if (seq_runtime_track_is_valid(track) == 0U)
     {
         return;
     }

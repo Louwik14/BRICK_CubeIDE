@@ -12,6 +12,14 @@
 #define SEQ_PRODUCT_TEMPO_MIN_BPM 40U
 #define SEQ_PRODUCT_TEMPO_MAX_BPM 300U
 #define SEQ_PRODUCT_STEPS_PER_QUARTER 4U
+/* Worst-case track Groove displacement at BASE 1/4 and GLOBAL 130%.
+ * Timing contributes 13/20 of a cell. Random contributes at most
+ * (8/21) * (13/10)^2. A Q32 period non-integral in BASE can make the
+ * prepared uniform cell approach 3/2 BASE. */
+#define SEQ_PRODUCT_QUARTER_MAX_SAMPLES \
+    ((SEQ_PRODUCT_SAMPLE_RATE_HZ * 60U) / SEQ_PRODUCT_TEMPO_MIN_BPM)
+#define SEQ_PRODUCT_TIMING_MAX_DELAY_SAMPLES \
+    ((SEQ_PRODUCT_QUARTER_MAX_SAMPLES * 2717U + 1399U) / 1400U)
 
 #define SEQ_LOGICAL_CAPACITY_MAX 8U
 #define SEQ_LOGICAL_CAPACITY_GROUP_CHILD 1U
@@ -24,25 +32,10 @@
 #define SEQ_INGRESS_WINDOW_SAMPLES 1024U
 #define SEQ_INGRESS_EVENTS_PER_WINDOW_MAX 64U
 
-#define SEQ_GROOVE_NEGATIVE_HORIZON_NUMERATOR 1U
-#define SEQ_GROOVE_NEGATIVE_HORIZON_DENOMINATOR 12U
-
 /* Fixed owner proof inputs. */
 #define SEQ_ROLL_MIN_INTERVAL_STEP_NUMERATOR 1U
-#define SEQ_ROLL_MIN_INTERVAL_STEP_DENOMINATOR 5U
-#define SEQ_ECHO_MAX_DELAY_STEPS 4U
-#define SEQ_ECHO_CHAIN_HORIZON_STEPS \
-    (NOTE_FX_ECHO_REPEAT_MAX * SEQ_ECHO_MAX_DELAY_STEPS)
-#define SEQ_ECHO_CHAINS_PER_LOGICAL_VOICE_MAX \
-    ((SEQ_ECHO_CHAIN_HORIZON_STEPS \
-        * SEQ_ROLL_MIN_INTERVAL_STEP_DENOMINATOR) \
-        / SEQ_ROLL_MIN_INTERVAL_STEP_NUMERATOR)
-#define SEQ_SEQUENCED_ECHO_CONTINUATIONS_MAX \
-    (BRICK_ENTITY_TOP_LEVEL_COUNT * SEQ_LOGICAL_CAPACITY_MAX \
-        * SEQ_ECHO_CHAINS_PER_LOGICAL_VOICE_MAX)
-
-_Static_assert(NOTE_FX_SLOT_COUNT == 4U, "product requires four MIDI FX slots");
-_Static_assert(NOTE_FX_ECHO_REPEAT_MAX == 2U, "Echo repeat proof changed");
+#define SEQ_ROLL_MIN_INTERVAL_STEP_DENOMINATOR 4U
+_Static_assert(NOTE_FX_SLOT_COUNT == 3U, "product requires three MIDI FX slots");
 _Static_assert(SEQ_PLAY_MAX_CAPACITY == SEQ_LOGICAL_CAPACITY_MAX,
                "PLAY and logical polyphony contracts diverged");
 _Static_assert(SEQ_LOGICAL_CAPACITY_GROUP_CHILD == 1U,
@@ -53,7 +46,5 @@ _Static_assert(SEQ_INGRESS_WINDOW_SAMPLES == 1024U,
                "raw ingress window contract changed");
 _Static_assert(SEQ_INGRESS_EVENTS_PER_WINDOW_MAX == 64U,
                "raw ingress rate contract changed");
-_Static_assert(SEQ_SEQUENCED_ECHO_CONTINUATIONS_MAX == 2560U,
-               "sequenced Echo lower-bound proof changed");
 
 #endif

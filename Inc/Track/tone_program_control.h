@@ -27,7 +27,6 @@ typedef tb303_program_control_t acid_program_control_t;
 
 typedef struct { float gain, start, length, mode, tune, loop_start, slice_count; } ram_program_control_t;
 typedef struct { float gain, source_bpm, play_mode, loop, stretch_mode, pitch, sync_length, grain, source, heads, window, dispersion; } stream_program_control_t;
-typedef struct { float xfade, stretch, pitch, grain, heads, window, dispersion; } looper_program_control_t;
 typedef struct { float gain, loop; } multi_program_control_t;
 typedef struct { float program; float cc[3][4]; } midi_program_control_t;
 typedef struct { midi_program_control_t midi; float gate; } external_program_control_t;
@@ -43,11 +42,9 @@ typedef struct {
         acid_program_control_t acid;
         ram_program_control_t ram;
         stream_program_control_t stream;
-        looper_program_control_t looper;
         multi_program_control_t multi;
         midi_program_control_t midi;
         external_program_control_t external;
-        float reserved_legacy_drum_analog[8];
         drum_md_program_control_t drum_md;
     } state;
 } tone_program_control_t;

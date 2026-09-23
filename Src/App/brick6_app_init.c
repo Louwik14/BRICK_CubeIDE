@@ -27,12 +27,12 @@
 #include "Storage/project_control.h"
 #include "Storage/sd_preview.h"
 #include "Storage/audio_recorder.h"
+#include "Storage/groove_bank.h"
 #include "Storage/sample_capture.h"
 #include "Storage/undo_v2.h"
 #include "Storage/waveform_cache.h"
 #include "Storage/waveform_service.h"
 #include "Platform/brick6_sd_config.h"
-#include "Platform/crash_library.h"
 
 #include "App/Hall/hall_keyboard_bridge.h"
 #include "App/Hall/hall_calibration.h"
@@ -78,8 +78,6 @@ static void brick6_process_hall_ui_keyboard_chain(void)
  */
 void brick6_app_init(void)
 {
-    /* Keep Flash maintenance outside the fragile pre-peripheral boot path. */
-    crash_library_init();
     SDRAM_Init();
 
     static const brick6_audio_boot_intent_t audio_boot = {
@@ -152,6 +150,14 @@ void brick6_app_process(void)
 {
     engine_tasklet_poll();
     brick6_stream_service_task_poll();
+    if (groove_bank_boot_complete() == 0U)
+    {
+        groove_bank_service();
+        ui_boot_loading_service();
+        hall_loop_process();
+        midi_poll();
+        return;
+    }
     audio_domain_background_poll(BRICK6_STREAM_OTHER_SD_QUANTUM_BYTES);
     /*
      * Seq runtime core is serviced from superloop for both clock domains.
@@ -163,7 +169,8 @@ void brick6_app_process(void)
     seq_engine_control_poll();
     if (g_boot_audio_state == BRICK6_BOOT_WAIT_MASTER)
     {
-        if (brick6_master_control_boot_capture() != 0U)
+        if ((groove_bank_boot_complete() != 0U)
+            && (brick6_master_control_boot_capture() != 0U))
         {
             if (audio_domain_start() != 0U)
             {

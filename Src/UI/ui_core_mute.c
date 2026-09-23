@@ -282,18 +282,20 @@ uint8_t ui_core_mute_get_hall_led(uint8_t hall, ui_mute_hall_led_t *out_led)
     if (g_ui_core_mute.submode == UI_MUTE_SUBMODE_PREPARE)
     {
         out_led->muted = g_ui_core_mute.prepared_state[hall];
+        entity_topology_descriptor_t entity = { 0 };
+        if ((entity_topology_get((brick_entity_id_t)hall, &entity) != 0U)
+                && (entity.role == ENTITY_ROLE_GROUP_CHILD)
+                && (entity.parent_entity_id < SEQ_LANE_CAPACITY)
+                && (g_ui_core_mute.prepared_state[entity.parent_entity_id] != 0U))
+        {
+            out_led->muted = 1U;
+        }
     }
     else
     {
-        uint8_t muted = 0U;
-        uint8_t runtime_available = 0U;
-        if (ui_core_get_track_runtime_mute(
-                hall, &muted, &runtime_available) == 0U)
-            return 0U;
-        if (runtime_available != 0U)
-        {
-            out_led->muted = muted;
-        }
+        const int8_t muted = track_mute_is_effectively_muted(hall);
+        if (muted < 0) return 0U;
+        out_led->muted = (uint8_t)muted;
     }
     out_led->visible = 1U;
     if ((g_ui_core_mute.submode == UI_MUTE_SUBMODE_PREPARE)

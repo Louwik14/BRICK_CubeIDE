@@ -1,6 +1,6 @@
 # Z5 - Navigation et interaction UI
 
-STEP 1..8 selectionnent les top-level. En GROUP, STEP 9..16 selectionnent les children 8..15. CFG, ENV, TONE, MIX et PLAY utilisent l'entite selectionnee; MOD derive son owner par `entity_topology`.
+STEP 1..8 selectionnent les top-level. En GROUP, STEP 9..16 selectionnent les children 8..15. La disponibilite des ensembles vient du masque `track_runtime`: le master GROUP expose CFG, ENV, MOD, MIX et FX audio, mais ni SEQ, MIDI FX, TONE ni PLAY puisqu'il ne possede ni lane ni moteur de notes; son ENV edite le filtre post-somme (Cutoff, Resonance, Morph) et l'ENV3 commun. Un child expose la voix RAM mono, sa sequence/PLAY, ses MIDI FX, son ENV/TONE/MIX/FX et la vue filtree de la MOD partagee. MOD derive toujours son owner par `entity_topology`.
 
 `SHIFT + STEP 16` ouvre le Master global sans changer la selection. Master expose reverb, delay et compresseur et ne possede ni sequence, mute, clipboard Track, Undo ni slot persistant.
 
@@ -55,10 +55,13 @@ feedback de `ui_param`, et les slots virtuels publient avec leur valeur un flag
 `inverted`. PLAY derive ce flag de la presence effective du champ Voice/Step;
 le renderer applique ensuite la meme convention de label inverse que pour les
 parametres catalogues. Les pages virtuelles non p-lockables publient zero.
+Les cartes MIDI FX cataloguées suivent le rendu Param commun: la valeur et le
+bit d'inversion proviennent ensemble du p-lock du step tenu, puis le formatter
+MIDI FX ne fait que nommer et mettre en forme cette valeur effective.
 
 Les clipboards transportent uniquement des etats logiques. Un collage MIDI FX applique MODEL avant ses parametres; un collage External conserve l'entree demandee et echoue sur conflit.
 
-La selection MODEL d'une chaine MIDI FX est une vue filtree du catalogue canonique: OFF reste toujours present, le modele courant reste valide pour son slot et les familles deja occupees par les autres slots sont seules retirees. Les positions de cette vue ne sont jamais utilisees comme valeurs MODEL; chaque detent est remappe vers l'enum canonique avant le commit CONTROL.
+La selection MODEL d'une chaine MIDI FX est une vue filtree du catalogue canonique explicite: OFF reste toujours present, le modele courant reste valide pour son slot et les modeles deja occupes par les autres slots sont seuls retires. Les trous et ordinaux d'enum ne definissent jamais ce catalogue. Les positions de cette vue ne sont jamais utilisees comme valeurs MODEL; chaque detent est remappe vers l'enum canonique avant le commit CONTROL.
 
 Project Save est modal et reutilise le Name Editor generique. L'entree SAVE AS
 ou SAVE TO est refusee tant que le transport est RUNNING ou START_PENDING; elle

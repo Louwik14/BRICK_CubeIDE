@@ -132,6 +132,7 @@ uint8_t param_registry_publish_track_base_audio(param_id_t id,
                                                  uint8_t track,
                                                  float value);
 uint8_t param_registry_is_lfo_param(param_id_t id);
+uint8_t param_registry_is_modulation_source_param(param_id_t id);
 /* Control-side projection: converts a canonical global value into the
  * complete command payload consumed by AUDIO. */
 uint8_t param_registry_prepare_global_audio_command(param_id_t id,

@@ -37,14 +37,14 @@ uint8_t persist_entity_caps_resolve(uint8_t group_active,
         .exists = 1U,
         .active = topology.active,
         .persistable = 1U,
-        .sequence_owner = topology.active,
+        .sequence_owner = entity_topology_can_sequence(&topology),
         .modulation_owner = (uint8_t)(topology.active && top_level),
         .audio_fx_owner = (uint8_t)(topology.active && top_level),
         .note_fx_owner = (uint8_t)(topology.active
             && (topology.role != ENTITY_ROLE_GROUP_MASTER)),
         .input_owner = (uint8_t)(topology.active
             && (topology.role != ENTITY_ROLE_GROUP_CHILD)),
-        .play_limit = (topology.active == 0U) ? 0U
+        .play_limit = (entity_topology_can_sequence(&topology) == 0U) ? 0U
             : ((topology.role == ENTITY_ROLE_GROUP_CHILD)
                 ? PERSIST_CONTROL_CHILD_PLAY_ITEM_COUNT
                 : PERSIST_CONTROL_PLAY_ITEM_COUNT)

@@ -142,8 +142,7 @@ bool track_catalog_type_is_available(
         return false;
     }
     if ((entity.role == ENTITY_ROLE_GROUP_CHILD)
-            && (family != TRACK_FAMILY_OFF)
-            && !track_catalog_family_is_engine(family))
+            && ((family != TRACK_FAMILY_SAMPLER) || (type != TRACK_TYPE_RAM)))
     {
         return false;
     }
@@ -172,6 +171,14 @@ bool track_catalog_family_is_available(
     {
         return false;
     }
+    const uint8_t group_active = (uint8_t)(
+        track_configs[BRICK_ENTITY_GROUP_MASTER_ID].type == TRACK_TYPE_GROUP);
+    entity_topology_descriptor_t entity;
+    if ((entity_topology_resolve(group_active, track, &entity) == 0U)
+            || (entity.active == 0U))
+        return false;
+    if (entity.role == ENTITY_ROLE_GROUP_CHILD)
+        return (family == TRACK_FAMILY_SAMPLER);
     if (family == TRACK_FAMILY_OFF)
     {
         return true;

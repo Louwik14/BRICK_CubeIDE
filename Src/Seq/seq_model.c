@@ -214,7 +214,9 @@ static void seq_model_exit_critical(uint32_t primask)
 
 static uint8_t seq_model_track_is_valid(seq_track_id_t track)
 {
-    return entity_topology_is_active((brick_entity_id_t)track);
+    entity_topology_descriptor_t entity;
+    return (uint8_t)((entity_topology_get((brick_entity_id_t)track, &entity) != 0U)
+            && (entity_topology_can_sequence(&entity) != 0U));
 }
 
 static uint8_t seq_model_track_is_play(seq_track_id_t track)
@@ -654,7 +656,7 @@ void seq_model_set_step_roll(seq_track_id_t track, seq_step_id_t step, uint8_t r
 uint16_t seq_model_step_roll_divisor(uint8_t roll)
 {
     static const uint16_t k_divisors[SEQ_STEP_ROLL_COUNT] = {
-        0U, 20U, 24U, 32U, 40U, 48U, 64U, 80U
+        0U, 20U, 24U, 32U, 40U, 48U, 64U
     };
 
     roll = seq_model_normalize_roll(roll);
@@ -664,7 +666,7 @@ uint16_t seq_model_step_roll_divisor(uint8_t roll)
 const char *seq_model_step_roll_label(uint8_t roll)
 {
     static const char *const k_labels[SEQ_STEP_ROLL_COUNT] = {
-        "OFF", "1/20", "1/24", "1/32", "1/40", "1/48", "1/64", "1/80"
+        "OFF", "1/20", "1/24", "1/32", "1/40", "1/48", "1/64"
     };
 
     roll = seq_model_normalize_roll(roll);

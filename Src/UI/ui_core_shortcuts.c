@@ -47,17 +47,17 @@ uint8_t ui_core_shortcuts_handle_global_event(const ui_event_t *ev,
         return 1U;
     }
 
-    if (ui_core_clipboard_handle_page_event(ev,
-                                            shift_down,
-                                            feedback) != 0U)
-    {
-        return 1U;
-    }
-
     if (ui_core_clipboard_handle_seq_track_event(ev,
                                                  track_select_armed,
                                                  shift_down,
                                                  feedback) != 0U)
+    {
+        return 1U;
+    }
+
+    if (ui_core_clipboard_handle_page_event(ev,
+                                            shift_down,
+                                            feedback) != 0U)
     {
         return 1U;
     }

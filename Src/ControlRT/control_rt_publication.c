@@ -27,10 +27,16 @@ static uint8_t control_rt_program_is_structural(uint8_t entity, uint32_t value)
     if (entity >= BRICK_ENTITY_CAPACITY) return 0U;
     const control_audio_program_descriptor_t d =
         control_audio_program_unpack(value);
-    return control_audio_program_descriptor_is_structural(&d,
+    if (control_audio_program_descriptor_is_structural(&d,
         (uint8_t)TRACK_RUNTIME_ENGINE_COUNT,
         (uint8_t)TRACK_RUNTIME_FAMILY_OTHER,
-        (uint8_t)TRACK_RUNTIME_TYPE_COUNT);
+        (uint8_t)TRACK_RUNTIME_TYPE_COUNT) == 0U)
+        return 0U;
+    if ((d.flags & CONTROL_AUDIO_PROGRAM_FLAG_GROUP_CHILD) != 0U)
+        return (uint8_t)((d.family == (uint8_t)TRACK_RUNTIME_FAMILY_SAMPLER)
+            && (d.type == (uint8_t)TRACK_RUNTIME_TYPE_RAM)
+            && (d.engine == (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER));
+    return 1U;
 }
 
 static uint8_t control_rt_param_is_structural(

@@ -26,8 +26,12 @@ reconstruit son etat et publie PROGRAM/PARAM/TRANSPORT. AUDIO ne reconstruit ni
 Project, ni Pattern, ni projection de piste.
 
 Le GROUP master utilise le bus post-somme sans moteur de notes. Les children
-conservent leur configuration meme inactifs. Le mute CONTROL de chaque entite
-est local; le mute effectif child derive du local ou du parent.
+actifs sont exclusivement des voix mono `SAMPLER/RAM`: le catalogue, le commit
+structurel, la preparation PROGRAM CONTROL et l'installation AUDIO refusent
+STREAM, MULTI et toute autre famille. Les children conservent leur configuration
+quand le GROUP est inactif; l'activation initialise a RAM les slots encore OFF.
+Le mute CONTROL de chaque entite est local; le mute effectif child derive du
+local ou du parent.
 
 Les boucles utilisent une track Stream avec `SOURCE=REC`. Le Streamer porte les
 parametres de lecture; Recorder et REC_SOURCE portent la prise sans etat

@@ -120,33 +120,34 @@ void mod_lfo_v1_init(void)
            sizeof(g_mod_lfo_control_midi_active));
     for (uint8_t track = 0U; track < BRICK_ENTITY_CAPACITY; ++track)
     {
-        for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
-        {
-            for (uint8_t param = 0U; param < (uint8_t)MOD_LFO_PARAM_COUNT; ++param)
-            {
-                const param_id_t id = (param_id_t)(PARAM_LFO1_RATE
-                    + lfo * 4U + param);
-                g_mod_lfo_control_state[track][lfo].value[param] =
-                    param_registry[id].default_value;
-            }
-        }
+        mod_lfo_control_bank_t defaults;
+        mod_lfo_v1_make_default(&defaults);
+        memcpy(g_mod_lfo_control_state[track], defaults.lfo,
+               sizeof(defaults.lfo));
     }
     mod_destination_catalog_init();
     mod_lfo_v1_invalidate_dest_cache_all();
 }
 
+void mod_lfo_v1_make_default(mod_lfo_control_bank_t *out_state)
+{
+    if (out_state == NULL) return;
+    for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
+    {
+        float *const value = &out_state->lfo[lfo].rate;
+        for (uint8_t param = 0U; param < (uint8_t)MOD_LFO_PARAM_COUNT; ++param)
+        {
+            const param_id_t id = (param_id_t)(PARAM_LFO1_RATE
+                + lfo * 4U + param);
+            value[param] = param_registry[id].default_value;
+        }
+    }
+}
+
 uint8_t mod_lfo_v1_reset_track(uint8_t track)
 {
     mod_lfo_control_bank_t state;
-    for (uint8_t lfo = 0U; lfo < MOD_LFO_COUNT_PER_TRACK; ++lfo)
-    {
-        state.lfo[lfo] = (mod_lfo_control_value_t){
-            .rate = param_registry[PARAM_LFO1_RATE + lfo * 4U].default_value,
-            .shape = param_registry[PARAM_LFO1_SHAPE + lfo * 4U].default_value,
-            .trigger = param_registry[PARAM_LFO1_TRIG + lfo * 4U].default_value,
-            .phase = param_registry[PARAM_LFO1_PHASE + lfo * 4U].default_value
-        };
-    }
+    mod_lfo_v1_make_default(&state);
     return mod_lfo_v1_restore_track(track, &state);
 }
 

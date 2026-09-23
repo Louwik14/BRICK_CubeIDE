@@ -44,13 +44,10 @@ _Min_Heap_Stack_Guard = 0x1000;
 /* Specify the memory areas */
 MEMORY
 {
-  /* Application firmware area (bank1 + bank2 sectors 0..3). */
-  FLASH (rx)          : ORIGIN = 0x08000000, LENGTH = 1536K
-  /* Crash generations: bank2 sectors 4 and 5, never linked as firmware. */
-  CRASH_FLASH_A (rx)  : ORIGIN = 0x08180000, LENGTH = 128K
-  CRASH_FLASH_B (rx)  : ORIGIN = 0x081A0000, LENGTH = 128K
-  /* Dedicated bank2 sector6 for minimal boot context persistence */
-  BOOT_CTX_FLASH (rx) : ORIGIN = 0x081C0000, LENGTH = 128K
+  /* Application firmware area (bank1 + bank2 sectors 0..5). */
+  FLASH (rx)          : ORIGIN = 0x08000000, LENGTH = 1792K
+  /* Reserved future Groove bank: bank2 sectors 6 and 7. */
+  GROOVE_FLASH (rx)   : ORIGIN = 0x081C0000, LENGTH = 256K
   DTCMRAM (xrw)  : ORIGIN = 0x20000000, LENGTH = 128K
   RAM_D1 (xrw)   : ORIGIN = 0x24000000, LENGTH = 512K
   SRAM1_D2_DMA_NC (xrw) : ORIGIN = 0x30000000, LENGTH = 12K
@@ -65,11 +62,9 @@ MEMORY
   ITCMRAM (xrw)  : ORIGIN = 0x00000000, LENGTH = 64K
 }
 
-/* Exported symbols for boot context backend */
-__boot_context_flash_start__ = ORIGIN(BOOT_CTX_FLASH);
-__boot_context_flash_end__ = ORIGIN(BOOT_CTX_FLASH) + LENGTH(BOOT_CTX_FLASH);
-__crash_library_start__ = ORIGIN(CRASH_FLASH_A);
-__crash_library_end__ = ORIGIN(CRASH_FLASH_B) + LENGTH(CRASH_FLASH_B);
+__groove_flash_start__ = ORIGIN(GROOVE_FLASH);
+__groove_flash_end__ = ORIGIN(GROOVE_FLASH) + LENGTH(GROOVE_FLASH);
+ASSERT(LENGTH(GROOVE_FLASH) == 256K, "Groove Flash bank must span two sectors");
 __sdram_global_start__ = ORIGIN(SDRAM);
 __sdram_global_end__ = ORIGIN(SDRAM_RECORDER) + LENGTH(SDRAM_RECORDER);
 __sdram_cacheable_start__ = ORIGIN(SDRAM);
@@ -165,13 +160,6 @@ SECTIONS
     KEEP (*(.fini_array*))
     PROVIDE_HIDDEN (__fini_array_end = .);
   } >FLASH
-
-  /* Reserved persistent flash area for minimal boot context only (no C data linked here) */
-  .boot_context_flash (NOLOAD) :
-  {
-    . = ALIGN(32);
-    . = ALIGN(32);
-  } >BOOT_CTX_FLASH
 
   /* used by the startup to initialize data */
   _sidata = LOADADDR(.data);
@@ -336,8 +324,6 @@ SECTIONS
     *control_music_output.c.obj(.ram_d2_m4.*)
     *seq_engine.c.obj(.ram_d2_m4)
     *seq_engine.c.obj(.ram_d2_m4.*)
-    *(.ram_note_fx_echo)
-    *(.ram_seq_groove)
     . = ALIGN(32);
   } >SRAM3_D2
   ASSERT(SIZEOF(.ram_d2_m4_sram3) <= LENGTH(SRAM3_D2),
@@ -383,17 +369,7 @@ SECTIONS
   ASSERT(SIZEOF(.ram_d3_restore_ipc) + SIZEOF(.ram_d3_ipc) <= 32K,
          "SRAM4 non-cacheable IPC half overflow")
 
-  /* Fixed crash-library runtime/GDB ABI. Keep this first and exact. */
-  .crash_gdb_view ORIGIN(BKPSRAM) (NOLOAD) :
-  {
-    . = ALIGN(32);
-    KEEP(*(.crash_gdb_view))
-    . = ALIGN(32);
-  } >BKPSRAM
-  ASSERT(SIZEOF(.crash_gdb_view) == 512,
-         "Crash GDB view ABI must remain 512 bytes")
-
-  .backup_sram ORIGIN(BKPSRAM) + 512 (NOLOAD) :
+  .backup_sram ORIGIN(BKPSRAM) (NOLOAD) :
   {
     . = ALIGN(32);
     __backup_sram_start__ = .;

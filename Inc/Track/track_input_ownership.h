@@ -11,6 +11,7 @@ extern "C" {
 
 #define TRACK_INPUT_OWNER_NONE 0xFFU
 
+uint8_t track_input_ownership_initial_input(uint8_t track);
 void track_input_ownership_init(const track_config_t configs[TRACK_COUNT]);
 uint8_t track_input_ownership_apply_configs(
     const track_config_t configs[TRACK_COUNT]);

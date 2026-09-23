@@ -5,6 +5,8 @@
 
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_model.h"
+#include "Seq/seq_timing.h"
+#include "Seq/seq_traversal.h"
 
 void seq_runtime_set_clock_source(seq_clock_src_t src);
 seq_clock_src_t seq_runtime_get_clock_source(void);
@@ -28,10 +30,20 @@ void seq_runtime_end_track_restore(const seq_track_id_t *tracks, uint8_t track_c
 void seq_runtime_set_track_div(seq_track_id_t track, uint8_t div);
 void seq_runtime_restore_track_div(seq_track_id_t track, uint8_t div);
 uint8_t seq_runtime_get_track_div(seq_track_id_t track, uint8_t *out_div);
-void seq_runtime_set_track_quant(seq_track_id_t track, uint8_t quant);
-uint8_t seq_runtime_get_track_quant(seq_track_id_t track, uint8_t *out_quant);
-void seq_runtime_set_track_swing(seq_track_id_t track, uint8_t swing);
-uint8_t seq_runtime_get_track_swing(seq_track_id_t track, uint8_t *out_swing);
+void seq_runtime_set_track_traversal(seq_track_id_t track,
+                                     uint8_t direction,
+                                     int8_t rotate);
+uint8_t seq_runtime_get_track_traversal(seq_track_id_t track,
+                                        uint8_t *out_direction,
+                                        int8_t *out_rotate);
+void seq_runtime_set_groove_seed(uint32_t seed);
+uint32_t seq_runtime_get_groove_seed(void);
+void seq_runtime_set_track_timing(seq_track_id_t track,
+                                  const seq_track_timing_config_t *config);
+uint8_t seq_runtime_get_track_timing(seq_track_id_t track,
+                                     seq_track_timing_config_t *out_config);
+uint8_t seq_runtime_select_track_groove(seq_track_id_t track,
+                                        uint8_t runtime_index);
 
 uint8_t seq_runtime_rec_toggle_arm(seq_track_id_t target_track);
 void seq_runtime_set_pattern_rec_target_track(seq_track_id_t track);

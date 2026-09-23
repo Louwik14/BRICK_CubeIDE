@@ -8,10 +8,22 @@
 #include "IPC/live_parameter_event.h"
 #include "Platform/memory_layout.h"
 #include "Track/entity_types.h"
+#include "Track/entity_topology.h"
 #include "Track/track_runtime.h"
 
 CONTROL_STATE_SDRAM static mod_env3_control_state_t
     g_mod_env3_control[BRICK_ENTITY_CAPACITY];
+
+static uint8_t mod_env3_control_resolve_owner(uint8_t entity,
+                                               uint8_t *out_owner)
+{
+    brick_entity_id_t owner = entity;
+    if ((out_owner == NULL)
+            || (entity_topology_mod_owner(entity, &owner) == 0U))
+        return 0U;
+    *out_owner = owner;
+    return 1U;
+}
 
 void mod_env3_control_init(void)
 {
@@ -40,7 +52,9 @@ uint8_t mod_env3_control_reset(uint8_t entity)
 uint8_t mod_env3_control_get_param(uint8_t entity, param_id_t id,
                                    float *out_value)
 {
-    if ((entity >= BRICK_ENTITY_CAPACITY) || (out_value == NULL)) return 0U;
+    if ((out_value == NULL)
+            || (mod_env3_control_resolve_owner(entity, &entity) == 0U))
+        return 0U;
     const mod_env3_control_state_t *const state = &g_mod_env3_control[entity];
     switch (id)
     {
@@ -55,7 +69,7 @@ uint8_t mod_env3_control_get_param(uint8_t entity, param_id_t id,
 
 uint8_t mod_env3_control_set_param(uint8_t entity, param_id_t id, float value)
 {
-    if (entity >= BRICK_ENTITY_CAPACITY) return 0U;
+    if (mod_env3_control_resolve_owner(entity, &entity) == 0U) return 0U;
     mod_env3_control_state_t *const state = &g_mod_env3_control[entity];
     switch (id)
     {
@@ -71,7 +85,7 @@ uint8_t mod_env3_control_set_param(uint8_t entity, param_id_t id, float value)
 }
 
 uint8_t mod_env3_control_capture(uint8_t entity,mod_env3_control_state_t*out_state)
-{if(entity>=BRICK_ENTITY_CAPACITY||out_state==NULL)return 0U;*out_state=g_mod_env3_control[entity];return 1U;}
+{if(out_state==NULL||!mod_env3_control_resolve_owner(entity,&entity))return 0U;*out_state=g_mod_env3_control[entity];return 1U;}
 uint8_t mod_env3_control_prepare(const mod_env3_control_state_t*state,
                                  mod_env3_control_state_t*out)
 {
@@ -86,7 +100,7 @@ uint8_t mod_env3_control_prepare(const mod_env3_control_state_t*state,
 }
 uint8_t mod_env3_control_restore(uint8_t entity,const mod_env3_control_state_t*state)
 {
-    if(entity>=BRICK_ENTITY_CAPACITY||state==NULL)return 0U;
+    if(state==NULL||!mod_env3_control_resolve_owner(entity,&entity))return 0U;
     static const param_id_t ids[5U]={PARAM_ENV3_ATTACK,PARAM_ENV3_DECAY,
         PARAM_ENV3_SUSTAIN,PARAM_ENV3_RELEASE,PARAM_ENV_RETRIG_MOD};
     _Static_assert((sizeof(ids)/sizeof(ids[0]))

@@ -61,7 +61,7 @@ static const char *const g_name_edit_spatial[] = {
     "Lunar", "Orbit", "Nova", "Astro", "Comet", "Zenith", "Quasar"
 };
 static const char *const g_name_edit_abstract[] = {
-    "Haze", "Static", "Shadow", "Void", "Bloom", "Drift", "Echo"
+    "Haze", "Static", "Shadow", "Void", "Bloom", "Drift", "Trail"
 };
 static const char *const g_name_edit_urban[] = {
     "Sector", "Metro", "Grid", "Concrete", "Avenue", "Tower", "District"

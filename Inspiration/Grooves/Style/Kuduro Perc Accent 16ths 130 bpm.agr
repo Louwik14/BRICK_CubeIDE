@@ -1,0 +1,193 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<Ableton MajorVersion="5" MinorVersion="11.0_432" Creator="Ableton Live 11.0b19" Revision="3067eed792f6c9a0aa26208e92d4fcf9daf56a5d">
+	<Groove>
+		<LomId Value="0" />
+		<Name Value="Lisboa House Perc Rhythm 130BPM" />
+		<Clip>
+			<Value>
+				<MidiClip Id="0" Time="80">
+					<LomId Value="0" />
+					<LomIdView Value="0" />
+					<CurrentStart Value="80" />
+					<CurrentEnd Value="96" />
+					<Loop>
+						<LoopStart Value="0" />
+						<LoopEnd Value="16" />
+						<StartRelative Value="0" />
+						<LoopOn Value="false" />
+						<OutMarker Value="16" />
+						<HiddenLoopStart Value="0" />
+						<HiddenLoopEnd Value="16" />
+					</Loop>
+					<Name Value="Lisboa House Perc Rhythm 130BPM" />
+					<Annotation Value="" />
+					<Color Value="24" />
+					<LaunchMode Value="0" />
+					<LaunchQuantisation Value="0" />
+					<TimeSignature>
+						<TimeSignatures>
+							<RemoteableTimeSignature Id="0">
+								<Numerator Value="4" />
+								<Denominator Value="4" />
+								<Time Value="0" />
+							</RemoteableTimeSignature>
+						</TimeSignatures>
+					</TimeSignature>
+					<Envelopes>
+						<Envelopes />
+					</Envelopes>
+					<ScrollerTimePreserver>
+						<LeftTime Value="0" />
+						<RightTime Value="16" />
+					</ScrollerTimePreserver>
+					<TimeSelection>
+						<AnchorTime Value="4.4895919184981681" />
+						<OtherTime Value="4.5520919184981681" />
+					</TimeSelection>
+					<Legato Value="false" />
+					<Ram Value="false" />
+					<GrooveSettings>
+						<GrooveId Value="-1" />
+					</GrooveSettings>
+					<Disabled Value="false" />
+					<VelocityAmount Value="0" />
+					<FollowAction>
+						<FollowTime Value="4" />
+						<IsLinked Value="true" />
+						<LoopIterations Value="1" />
+						<FollowActionA Value="4" />
+						<FollowActionB Value="0" />
+						<FollowChanceA Value="100" />
+						<FollowChanceB Value="0" />
+						<JumpIndexA Value="0" />
+						<JumpIndexB Value="0" />
+						<FollowActionEnabled Value="false" />
+					</FollowAction>
+					<Grid>
+						<FixedNumerator Value="1" />
+						<FixedDenominator Value="16" />
+						<GridIntervalPixel Value="20" />
+						<Ntoles Value="2" />
+						<SnapToGrid Value="true" />
+						<Fixed Value="true" />
+					</Grid>
+					<FreezeStart Value="0" />
+					<FreezeEnd Value="0" />
+					<IsWarped Value="true" />
+					<TakeId Value="5" />
+					<Notes>
+						<KeyTracks>
+							<KeyTrack Id="6">
+								<Notes>
+									<MidiNoteEvent Time="0" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="50" />
+									<MidiNoteEvent Time="0.25" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="66" />
+									<MidiNoteEvent Time="0.431965950715950731" Duration="0.0625" Velocity="127" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="2" />
+									<MidiNoteEvent Time="0.75" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="67" />
+									<MidiNoteEvent Time="1" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="51" />
+									<MidiNoteEvent Time="1.25" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="68" />
+									<MidiNoteEvent Time="1.5" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="65" />
+									<MidiNoteEvent Time="1.75" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="69" />
+									<MidiNoteEvent Time="2" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="52" />
+									<MidiNoteEvent Time="2.25" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="70" />
+									<MidiNoteEvent Time="2.443139672827173" Duration="0.0625" Velocity="127" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="8" />
+									<MidiNoteEvent Time="2.7702326319513819" Duration="0.0625" Velocity="127" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="46" />
+									<MidiNoteEvent Time="3" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="71" />
+									<MidiNoteEvent Time="3.25" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="72" />
+									<MidiNoteEvent Time="3.5199729957542458" Duration="0.0625" Velocity="127" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="11" />
+									<MidiNoteEvent Time="3.75" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="73" />
+									<MidiNoteEvent Time="4" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="53" />
+									<MidiNoteEvent Time="4.25" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="95" />
+									<MidiNoteEvent Time="4.4895919184981681" Duration="0.0625" Velocity="127" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="14" />
+									<MidiNoteEvent Time="4.75" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="96" />
+									<MidiNoteEvent Time="5" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="54" />
+									<MidiNoteEvent Time="5.25" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="74" />
+									<MidiNoteEvent Time="5.5" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="75" />
+									<MidiNoteEvent Time="5.75" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="76" />
+									<MidiNoteEvent Time="6" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="64" />
+									<MidiNoteEvent Time="6.25" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="77" />
+									<MidiNoteEvent Time="6.4420667873792876" Duration="0.0625" Velocity="127" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="19" />
+									<MidiNoteEvent Time="6.7702326319513819" Duration="0.0625" Velocity="127" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="47" />
+									<MidiNoteEvent Time="7" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="57" />
+									<MidiNoteEvent Time="7.25" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="78" />
+									<MidiNoteEvent Time="7.5281299429736928" Duration="0.0625" Velocity="127" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="22" />
+									<MidiNoteEvent Time="7.75" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="79" />
+									<MidiNoteEvent Time="8" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="56" />
+									<MidiNoteEvent Time="8.25" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="80" />
+									<MidiNoteEvent Time="8.4411205981518478" Duration="0.0625" Velocity="127" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="25" />
+									<MidiNoteEvent Time="8.75" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="81" />
+									<MidiNoteEvent Time="9" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="58" />
+									<MidiNoteEvent Time="9.25" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="82" />
+									<MidiNoteEvent Time="9.5" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="83" />
+									<MidiNoteEvent Time="9.75" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="84" />
+									<MidiNoteEvent Time="10" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="59" />
+									<MidiNoteEvent Time="10.25" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="85" />
+									<MidiNoteEvent Time="10.442078494422244" Duration="0.0625" Velocity="127" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="31" />
+									<MidiNoteEvent Time="10.770232631951382" Duration="0.0625" Velocity="127" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="48" />
+									<MidiNoteEvent Time="11" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="60" />
+									<MidiNoteEvent Time="11.25" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="86" />
+									<MidiNoteEvent Time="11.518467990342991" Duration="0.0625" Velocity="126.726067" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="34" />
+									<MidiNoteEvent Time="11.75" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="87" />
+									<MidiNoteEvent Time="12" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="61" />
+									<MidiNoteEvent Time="12.25" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="88" />
+									<MidiNoteEvent Time="12.434713203463204" Duration="0.0625" Velocity="127" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="37" />
+									<MidiNoteEvent Time="12.75" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="89" />
+									<MidiNoteEvent Time="13" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="62" />
+									<MidiNoteEvent Time="13.25" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="90" />
+									<MidiNoteEvent Time="13.5" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="91" />
+									<MidiNoteEvent Time="13.75" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="92" />
+									<MidiNoteEvent Time="14" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="63" />
+									<MidiNoteEvent Time="14.25" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="93" />
+									<MidiNoteEvent Time="14.446688988095238" Duration="0.0625" Velocity="127" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="41" />
+									<MidiNoteEvent Time="14.770232631951382" Duration="0.0625" Velocity="127" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="9" />
+									<MidiNoteEvent Time="15" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="49" />
+									<MidiNoteEvent Time="15.25" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="94" />
+									<MidiNoteEvent Time="15.516211913086913" Duration="0.0625" Velocity="127" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="44" />
+									<MidiNoteEvent Time="15.75" Duration="0.0625" Velocity="5.49997854" VelocityDeviation="0" OffVelocity="64" Probability="1" IsEnabled="true" NoteId="55" />
+								</Notes>
+								<MidiKey Value="36" />
+							</KeyTrack>
+						</KeyTracks>
+						<PerNoteEventStore>
+							<EventLists />
+						</PerNoteEventStore>
+						<NoteIdGenerator>
+							<NextId Value="97" />
+						</NoteIdGenerator>
+					</Notes>
+					<BankSelectCoarse Value="-1" />
+					<BankSelectFine Value="-1" />
+					<ProgramChange Value="-1" />
+					<NoteEditorFoldInZoom Value="24" />
+					<NoteEditorFoldInScroll Value="0" />
+					<NoteEditorFoldOutZoom Value="384" />
+					<NoteEditorFoldOutScroll Value="-182" />
+					<NoteEditorFoldScaleZoom Value="-1" />
+					<NoteEditorFoldScaleScroll Value="0" />
+					<ScaleInformation>
+						<RootNote Value="0" />
+						<Name Value="Major" />
+					</ScaleInformation>
+					<IsInKey Value="false" />
+					<NoteSpellingPreference Value="3" />
+					<PreferFlatRootNote Value="false" />
+					<ExpressionGrid>
+						<FixedNumerator Value="1" />
+						<FixedDenominator Value="16" />
+						<GridIntervalPixel Value="20" />
+						<Ntoles Value="2" />
+						<SnapToGrid Value="false" />
+						<Fixed Value="false" />
+					</ExpressionGrid>
+				</MidiClip>
+			</Value>
+		</Clip>
+		<Grid Value="3" />
+		<QuantizationAmount Value="0" />
+		<TimingAmount Value="100" />
+		<RandomAmount Value="0" />
+		<VelocityAmount Value="95" />
+		<Annotation Value="" />
+		<Selection Value="true" />
+		<SourceContext />
+	</Groove>
+</Ableton>

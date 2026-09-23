@@ -3,49 +3,13 @@
 #include <stddef.h>
 #include <string.h>
 
-static uint8_t note_fx_plan_flags_for_model(uint8_t model)
+static const uint8_t g_note_fx_order[NOTE_FX_ORDER_COUNT][NOTE_FX_SLOT_COUNT] =
 {
-    switch ((note_fx_model_t)model)
-    {
-        case NOTE_FX_MODEL_ARP_FREE:
-        case NOTE_FX_MODEL_ARP_SYNC:
-        case NOTE_FX_MODEL_EUCLID:
-            return (uint8_t)(NOTE_FX_PLAN_FLAG_TEMPORAL
-                | NOTE_FX_PLAN_FLAG_HELD);
-        case NOTE_FX_MODEL_ECHO:
-            return NOTE_FX_PLAN_FLAG_TEMPORAL;
-        case NOTE_FX_MODEL_HARMONIZER:
-            return (uint8_t)(NOTE_FX_PLAN_FLAG_MODIFIER
-                | NOTE_FX_PLAN_FLAG_FAN_OUT);
-        case NOTE_FX_MODEL_PROBABILITY:
-        case NOTE_FX_MODEL_GATE:
-        case NOTE_FX_MODEL_CHORD:
-            return NOTE_FX_PLAN_FLAG_MODIFIER;
-        case NOTE_FX_MODEL_GROOVE:
-            return (uint8_t)(NOTE_FX_PLAN_FLAG_MODIFIER
-                | NOTE_FX_PLAN_FLAG_TEMPORAL);
-        case NOTE_FX_MODEL_OFF:
-        case NOTE_FX_MODEL_COUNT:
-        default:
-            return 0U;
-    }
-}
-
-static note_fx_slot_plan_word_t note_fx_plan_pack(uint8_t model,
-                                                   uint8_t flags,
-                                                   uint8_t p1,
-                                                   uint8_t p2,
-                                                   uint8_t p3)
-{
-    return (note_fx_slot_plan_word_t)(model & 0x0FU)
-        | ((note_fx_slot_plan_word_t)(flags & 0x0FU) << 4U)
-        | ((note_fx_slot_plan_word_t)p1 << 8U)
-        | ((note_fx_slot_plan_word_t)p2 << 16U)
-        | ((note_fx_slot_plan_word_t)p3 << 24U);
-}
+    { 0U, 1U, 2U }, { 0U, 2U, 1U }, { 1U, 0U, 2U },
+    { 1U, 2U, 0U }, { 2U, 0U, 1U }, { 2U, 1U, 0U }
+};
 
 uint8_t note_fx_plan_compile(const note_fx_track_state_t *effective,
-                             uint16_t override_mask,
                              note_fx_compiled_plan_t *out_plan)
 {
     if ((effective == NULL) || (out_plan == NULL)
@@ -53,39 +17,41 @@ uint8_t note_fx_plan_compile(const note_fx_track_state_t *effective,
         return 0U;
 
     memset(out_plan, 0, sizeof(*out_plan));
-    out_plan->override_mask = override_mask;
-    out_plan->first_active_slot = NOTE_FX_PLAN_FIRST_SLOT_NONE;
+    out_plan->order = (effective->order < NOTE_FX_ORDER_COUNT)
+        ? effective->order : 0U;
     for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
     {
         const uint8_t model =
-            effective->value[slot][NOTE_FX_PARAM_COUNT - 1U];
+            effective->value[slot][NOTE_FX_MODEL_INDEX];
         if (model >= NOTE_FX_MODEL_COUNT) return 0U;
-        const uint8_t flags = note_fx_plan_flags_for_model(model);
-        out_plan->slot[slot] = note_fx_plan_pack(model, flags,
-            effective->value[slot][0U], effective->value[slot][1U],
-            effective->value[slot][2U]);
-        if (model != NOTE_FX_MODEL_OFF)
-        {
-            out_plan->active_mask |= (uint8_t)(1U << slot);
-            if (out_plan->first_active_slot == NOTE_FX_PLAN_FIRST_SLOT_NONE)
-                out_plan->first_active_slot = slot;
-        }
+        out_plan->slot[slot].model = model;
+        memcpy(out_plan->slot[slot].param, effective->value[slot],
+               NOTE_FX_PARAM_COUNT);
     }
     return 1U;
 }
 
 uint8_t note_fx_plan_model(note_fx_slot_plan_word_t word)
 {
-    return (uint8_t)(word & 0x0FU);
-}
-
-uint8_t note_fx_plan_flags(note_fx_slot_plan_word_t word)
-{
-    return (uint8_t)((word >> 4U) & 0x0FU);
+    return word.model;
 }
 
 uint8_t note_fx_plan_param(note_fx_slot_plan_word_t word, uint8_t param)
 {
-    return (param < (NOTE_FX_PARAM_COUNT - 1U))
-        ? (uint8_t)(word >> (8U * (uint32_t)(param + 1U))) : 0U;
+    return (param < NOTE_FX_PARAM_COUNT) ? word.param[param] : 0U;
+}
+
+uint8_t note_fx_plan_slot_at(uint8_t order, uint8_t position)
+{
+    return ((order < NOTE_FX_ORDER_COUNT) && (position < NOTE_FX_SLOT_COUNT))
+        ? g_note_fx_order[order][position] : NOTE_FX_SLOT_COUNT;
+}
+
+uint8_t note_fx_plan_position_of(uint8_t order, uint8_t slot)
+{
+    if ((order >= NOTE_FX_ORDER_COUNT) || (slot >= NOTE_FX_SLOT_COUNT))
+        return NOTE_FX_SLOT_COUNT;
+    for (uint8_t position = 0U; position < NOTE_FX_SLOT_COUNT; ++position)
+        if (g_note_fx_order[order][position] == slot) return position;
+    return NOTE_FX_SLOT_COUNT;
 }

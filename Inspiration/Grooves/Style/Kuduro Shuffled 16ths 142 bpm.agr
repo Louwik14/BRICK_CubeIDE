@@ -1,0 +1,165 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<Ableton MajorVersion="5" MinorVersion="11.0_432" SchemaChangeCount="2" Creator="Ableton Live 11.0b22" Revision="1e43a97809d6c57cc1ee45abb8e7305a26020f1f">
+	<Groove>
+		<LomId Value="0" />
+		<Name Value="Kuduro 16ths 142 bpm" />
+		<Clip>
+			<Value>
+				<MidiClip Id="0" Time="0">
+					<LomId Value="0" />
+					<LomIdView Value="0" />
+					<CurrentStart Value="0" />
+					<CurrentEnd Value="8" />
+					<Loop>
+						<LoopStart Value="0" />
+						<LoopEnd Value="8" />
+						<StartRelative Value="0" />
+						<LoopOn Value="true" />
+						<OutMarker Value="8" />
+						<HiddenLoopStart Value="0" />
+						<HiddenLoopEnd Value="4" />
+					</Loop>
+					<Name Value="Kuduro 16ths 142 bpm" />
+					<Annotation Value="" />
+					<Color Value="2" />
+					<LaunchMode Value="0" />
+					<LaunchQuantisation Value="0" />
+					<TimeSignature>
+						<TimeSignatures>
+							<RemoteableTimeSignature Id="0">
+								<Numerator Value="4" />
+								<Denominator Value="4" />
+								<Time Value="0" />
+							</RemoteableTimeSignature>
+						</TimeSignatures>
+					</TimeSignature>
+					<Envelopes>
+						<Envelopes />
+					</Envelopes>
+					<ScrollerTimePreserver>
+						<LeftTime Value="0" />
+						<RightTime Value="8" />
+					</ScrollerTimePreserver>
+					<TimeSelection>
+						<AnchorTime Value="2.75" />
+						<OtherTime Value="2.75" />
+					</TimeSelection>
+					<Legato Value="false" />
+					<Ram Value="false" />
+					<GrooveSettings>
+						<GrooveId Value="-1" />
+					</GrooveSettings>
+					<Disabled Value="false" />
+					<VelocityAmount Value="0" />
+					<FollowAction>
+						<FollowTime Value="4" />
+						<IsLinked Value="true" />
+						<LoopIterations Value="1" />
+						<FollowActionA Value="4" />
+						<FollowActionB Value="0" />
+						<FollowChanceA Value="100" />
+						<FollowChanceB Value="0" />
+						<JumpIndexA Value="0" />
+						<JumpIndexB Value="0" />
+						<FollowActionEnabled Value="false" />
+					</FollowAction>
+					<Grid>
+						<FixedNumerator Value="1" />
+						<FixedDenominator Value="16" />
+						<GridIntervalPixel Value="20" />
+						<Ntoles Value="2" />
+						<SnapToGrid Value="true" />
+						<Fixed Value="true" />
+					</Grid>
+					<FreezeStart Value="0" />
+					<FreezeEnd Value="0" />
+					<IsWarped Value="true" />
+					<TakeId Value="0" />
+					<Notes>
+						<KeyTracks>
+							<KeyTrack Id="0">
+								<Notes>
+									<MidiNoteEvent Time="0" Duration="0.0625" Velocity="119.863197" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="1" />
+									<MidiNoteEvent Time="0.353773830336330364" Duration="0.0625" Velocity="97.5187149" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="2" />
+									<MidiNoteEvent Time="0.731373054029304082" Duration="0.0625" Velocity="122.205017" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="3" />
+									<MidiNoteEvent Time="1" Duration="0.0625" Velocity="119.042992" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="4" />
+									<MidiNoteEvent Time="1.495508397852148" Duration="0.0625" Velocity="122.881508" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="5" />
+									<MidiNoteEvent Time="2.0005637591575089" Duration="0.0625" Velocity="117.766808" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="6" />
+									<MidiNoteEvent Time="2.3650469322344323" Duration="0.0625" Velocity="99.3017044" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="7" />
+									<MidiNoteEvent Time="2.7533554986679984" Duration="0.0625" Velocity="117.736954" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="8" />
+									<MidiNoteEvent Time="3" Duration="0.0625" Velocity="117.587746" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="9" />
+									<MidiNoteEvent Time="3.5019904574592076" Duration="0.0625" Velocity="106.852859" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="10" />
+									<MidiNoteEvent Time="4" Duration="0.0625" Velocity="119.602913" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="11" />
+									<MidiNoteEvent Time="4.3552533404095906" Duration="0.0625" Velocity="104.860939" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="12" />
+									<MidiNoteEvent Time="4.7401096299533796" Duration="0.0625" Velocity="121.560112" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="13" />
+									<MidiNoteEvent Time="5" Duration="0.0625" Velocity="118.75341" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="14" />
+									<MidiNoteEvent Time="5.5048789751914748" Duration="0.0625" Velocity="127" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="15" />
+									<MidiNoteEvent Time="6.0017615197302696" Duration="0.0625" Velocity="122.386627" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="16" />
+									<MidiNoteEvent Time="6.3665264423076922" Duration="0.0625" Velocity="102.096428" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="17" />
+									<MidiNoteEvent Time="6.755046255827506" Duration="0.0625" Velocity="126.458183" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="18" />
+									<MidiNoteEvent Time="7" Duration="0.0625" Velocity="119.202866" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="19" />
+									<MidiNoteEvent Time="7.5116430444555444" Duration="0.0625" Velocity="117.97583" VelocityDeviation="0" OffVelocity="127" Probability="1" IsEnabled="true" NoteId="20" />
+								</Notes>
+								<MidiKey Value="36" />
+							</KeyTrack>
+						</KeyTracks>
+						<PerNoteEventStore>
+							<EventLists />
+						</PerNoteEventStore>
+						<NoteIdGenerator>
+							<NextId Value="41" />
+						</NoteIdGenerator>
+					</Notes>
+					<BankSelectCoarse Value="-1" />
+					<BankSelectFine Value="-1" />
+					<ProgramChange Value="-1" />
+					<NoteEditorFoldInZoom Value="-1" />
+					<NoteEditorFoldInScroll Value="-1" />
+					<NoteEditorFoldOutZoom Value="3072" />
+					<NoteEditorFoldOutScroll Value="-2124" />
+					<NoteEditorFoldScaleZoom Value="-1" />
+					<NoteEditorFoldScaleScroll Value="-1" />
+					<ScaleInformation>
+						<RootNote Value="0" />
+						<Name Value="Major" />
+					</ScaleInformation>
+					<IsInKey Value="false" />
+					<NoteSpellingPreference Value="0" />
+					<PreferFlatRootNote Value="false" />
+					<ExpressionGrid>
+						<FixedNumerator Value="1" />
+						<FixedDenominator Value="16" />
+						<GridIntervalPixel Value="20" />
+						<Ntoles Value="2" />
+						<SnapToGrid Value="false" />
+						<Fixed Value="false" />
+					</ExpressionGrid>
+				</MidiClip>
+			</Value>
+		</Clip>
+		<Grid Value="3" />
+		<QuantizationAmount Value="50" />
+		<TimingAmount Value="100" />
+		<RandomAmount Value="0" />
+		<VelocityAmount Value="100" />
+		<Annotation Value="" />
+		<Selection Value="true" />
+		<SourceContext>
+			<SourceContext Id="0">
+				<OriginalFileRef>
+					<FileRef Id="0">
+						<RelativePathType Value="0" />
+						<RelativePath Value="" />
+						<Path Value="/Users/pma/Desktop/_Projekte/Core Library/Grooves/Groove Selection/Kuduro 16ths 142 bpm.agr" />
+						<Type Value="2" />
+						<LivePackName Value="" />
+						<LivePackId Value="" />
+						<OriginalFileSize Value="0" />
+						<OriginalCrc Value="0" />
+					</FileRef>
+				</OriginalFileRef>
+				<BrowserContentPath Value="userfolder:/Users/pma/Desktop/_Projekte/Core%20Library/Grooves/Groove%20Selection#Kuduro%2016ths%20142%20bpm.agr" />
+			</SourceContext>
+		</SourceContext>
+	</Groove>
+</Ableton>

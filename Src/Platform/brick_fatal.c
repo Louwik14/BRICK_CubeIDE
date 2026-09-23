@@ -16,7 +16,6 @@ _Noreturn void brick_fatal_raise_at(const char *message,
                                     uint32_t requested,
                                     uint32_t capacity)
 {
-    __disable_irq();
     g_brick_fatal_record.message = message;
     g_brick_fatal_record.file = file;
     g_brick_fatal_record.line = line;
@@ -31,6 +30,7 @@ _Noreturn void brick_fatal_raise_at(const char *message,
     __asm volatile("mov %0, sp" : "=r"(g_brick_fatal_record.caller_sp));
     __DMB();
     crash_library_capture_and_persist(&g_brick_fatal_record);
+    __disable_irq();
     Error_Handler();
     for (;;)
     {

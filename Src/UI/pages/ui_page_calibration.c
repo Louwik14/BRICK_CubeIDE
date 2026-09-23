@@ -4,6 +4,7 @@
 #include "stm32h7xx_hal.h"
 
 #include "App/Hall/hall_calibration.h"
+#include "App/control_domain.h"
 #include "drv_display.h"
 #include "ui_navigation.h"
 #include "ui_page_manager.h"
@@ -33,6 +34,7 @@ static uint32_t g_cal_done_tick = 0U;
 static uint8_t g_user_save_done = 0U;
 static uint32_t g_user_message_tick = 0U;
 static uint8_t g_calibration_return_page = UI_PAGE_TEMPLATE_CFG;
+static uint8_t g_calibration_from_boot = 0U;
 static uint8_t g_user_calibration_return_page = UI_PAGE_TEMPLATE_ENV;
 static uint8_t g_lowcost_cal_prev_done[HALL_KEY_COUNT];
 static uint8_t g_lowcost_cal_flash_key = LOWCOST_CAL_NO_FLASH_KEY;
@@ -110,15 +112,25 @@ static void ui_page_calibration_tick(void)
 
     if (g_save_done == 0U)
     {
-        hall_calibration_save();
-        g_cal_done_tick = HAL_GetTick();
-        g_save_done = 1U;
+        if (hall_calibration_save() != 0U)
+        {
+            g_cal_done_tick = HAL_GetTick();
+            g_save_done = 1U;
+        }
         return;
     }
 
     if ((HAL_GetTick() - g_cal_done_tick) >= CAL_OK_DISPLAY_TIME_MS)
     {
-        ui_page_set(g_calibration_return_page);
+        if (g_calibration_from_boot != 0U)
+        {
+            g_calibration_from_boot = 0U;
+            control_domain_resume_after_hall_calibration();
+        }
+        else
+        {
+            ui_page_set(g_calibration_return_page);
+        }
     }
 }
 
@@ -321,8 +333,7 @@ static void ui_page_user_calibration_tick(void)
         if (hall_user_calibration_was_successful() != 0U)
         {
             hall_set_velocity_profile((uint8_t)HALL_VEL_PROFILE_USER);
-            hall_calibration_save();
-            g_user_save_done = 1U;
+            g_user_save_done = hall_calibration_save();
         }
     }
 
@@ -415,9 +426,16 @@ const ui_page_t g_ui_page_user_calibration = {
 
 void ui_page_calibration_open(uint8_t return_page_id)
 {
+    g_calibration_from_boot = 0U;
     g_calibration_return_page = (return_page_id < UI_PAGE_COUNT)
         ? return_page_id
         : UI_PAGE_TEMPLATE_CFG;
+    ui_page_set(UI_PAGE_CALIBRATION);
+}
+
+void ui_page_calibration_open_from_boot(void)
+{
+    g_calibration_from_boot = 1U;
     ui_page_set(UI_PAGE_CALIBRATION);
 }
 

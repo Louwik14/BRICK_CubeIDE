@@ -24,7 +24,9 @@ UI_SDRAM static seq_clipboard_state_t g_seq_clipboard;
 
 static uint8_t seq_clipboard_track_is_valid(seq_track_id_t track)
 {
-    return entity_topology_is_active((brick_entity_id_t)track);
+    entity_topology_descriptor_t entity;
+    return (uint8_t)((entity_topology_get((brick_entity_id_t)track, &entity) != 0U)
+            && (entity_topology_can_sequence(&entity) != 0U));
 }
 
 static uint8_t seq_clipboard_find_min_step(const seq_step_id_t *steps, uint8_t step_count, seq_step_id_t *out_min)

@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $held = 8
 $batch = 32
 $futureCapacity = 320
-$models = @('OFF','ARP_FREE','ARP_SYNC','EUCLID','PROBABILITY','GATE','GROOVE','ECHO','HARMONIZER','CHORD')
+$models = @('OFF','ARP','EUCLID','PROBABILITY','GATE','VOICER','SCALER')
 
 function Assert-Contract([bool]$condition, [string]$message) {
     if (-not $condition) { throw $message }
@@ -13,7 +13,7 @@ function Test-ProductChain([string[]]$chain) {
     $families = @{}
     foreach ($name in $chain) {
         if ($name -eq 'OFF') { continue }
-        $family = if (($name -eq 'ARP_FREE') -or ($name -eq 'ARP_SYNC')) { 'ARP' } else { $name }
+        $family = $name
         if ($families.ContainsKey($family)) { return $false }
         $families[$family] = $true
     }
@@ -25,9 +25,9 @@ function Get-ChainBound([string[]]$chain) {
     $admitted = $held
     $maximumCandidates = $held
     foreach ($name in $chain) {
-        $candidates = if ($name -eq 'HARMONIZER') { 4 * $admitted } else { $admitted }
+        $candidates = if ($name -eq 'VOICER') { 4 * $admitted } else { $admitted }
         $maximumCandidates = [Math]::Max($maximumCandidates, $candidates)
-        if ($name -ne 'ECHO') { $admitted = [Math]::Min($held, $candidates) }
+        $admitted = [Math]::Min($held, $candidates)
     }
     $futurePerTrack = 5 * $held
     return @(($maximumCandidates -le $batch) -and ($admitted -le $held),
@@ -35,35 +35,29 @@ function Get-ChainBound([string[]]$chain) {
 }
 
 foreach ($a in $models) { foreach ($b in $models) {
-    foreach ($c in $models) { foreach ($d in $models) {
-        $bound = Get-ChainBound @($a,$b,$c,$d)
+    foreach ($c in $models) {
+        $bound = Get-ChainBound @($a,$b,$c)
         if ($bound[0]) {
-            Assert-Contract ($bound[1] -le $held) "admission: $a $b $c $d"
-            Assert-Contract ($bound[3] -le $batch) "batch: $a $b $c $d"
-            Assert-Contract (8 * $bound[4] -le $futureCapacity) "future: $a $b $c $d"
+            Assert-Contract ($bound[1] -le $held) "admission: $a $b $c"
+            Assert-Contract ($bound[3] -le $batch) "batch: $a $b $c"
+            Assert-Contract (8 * $bound[4] -le $futureCapacity) "future: $a $b $c"
         }
-    }}
+    }
 }}
 
 foreach ($scenario in @(
-    @('ARP_FREE','ECHO','OFF','OFF'),
-    @('ECHO','ARP_SYNC','OFF','OFF'),
-    @('HARMONIZER','ARP_FREE','OFF','OFF'),
-    @('ARP_SYNC','HARMONIZER','OFF','OFF'),
-    @('GROOVE','ARP_FREE','OFF','OFF'),
-    @('ARP_SYNC','GROOVE','OFF','OFF'),
-    @('GATE','ECHO','OFF','OFF'),
-    @('EUCLID','HARMONIZER','ECHO','GATE'),
-    @('HARMONIZER','EUCLID','ECHO','GATE'),
-    @('ECHO','HARMONIZER','GATE','GROOVE'),
-    @('GATE','ECHO','HARMONIZER','CHORD')
+    @('VOICER','ARP','OFF'),
+    @('ARP','VOICER','OFF'),
+    @('GATE','ARP','OFF'),
+    @('EUCLID','VOICER','GATE'),
+    @('VOICER','EUCLID','GATE'),
+    @('GATE','VOICER','SCALER')
 )) {
     $bound = Get-ChainBound $scenario
     Assert-Contract $bound[0] "required chain rejected: $($scenario -join ' -> ')"
 }
-Assert-Contract (-not (Test-ProductChain @('ARP_FREE','ARP_SYNC','OFF','OFF'))) 'ARP family duplicated'
-Assert-Contract (-not (Test-ProductChain @('ECHO','ECHO','OFF','OFF'))) 'FX family duplicated'
-Assert-Contract (Test-ProductChain @('HARMONIZER','ECHO','GATE','GROOVE')) 'four distinct FX rejected by product rule'
+Assert-Contract (-not (Test-ProductChain @('ARP','ARP','OFF'))) 'ARP family duplicated'
+Assert-Contract (Test-ProductChain @('VOICER','GATE','SCALER')) 'three distinct FX rejected by product rule'
 
 function New-Ledger([int]$polyphony) {
     return @{ Polyphony=$polyphony; NextHandle=0; Live=@(); Transitions=[System.Collections.ArrayList]::new() }
@@ -131,12 +125,9 @@ $future = @{}
 foreach ($tick in 0..999) {
     foreach ($track in 0..7) { foreach ($note in 60..67) {
         $future["G:$track`:1:$note`:OFF:0"] = $tick + 300
-        foreach ($kind in @('ON','OFF')) { foreach ($repeat in 1..2) {
-            $future["E:$track`:2:$note`:$kind`:$repeat"] = $tick + (400 * $repeat)
-        }}
     }}
 }
-Assert-Contract ($future.Count -eq (8 * 8 * 5)) 'causal future compaction'
+Assert-Contract ($future.Count -eq (8 * 8)) 'causal future compaction'
 Assert-Contract ($future.Count -le $futureCapacity) 'multi-track future capacity'
 
 function Groove-Phase([long]$sample, [long]$step) {

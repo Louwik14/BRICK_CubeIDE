@@ -16,15 +16,12 @@
 typedef enum
 {
     NOTE_FX_MODEL_OFF = 0,
-    NOTE_FX_MODEL_ARP_FREE,
-    NOTE_FX_MODEL_ARP_SYNC,
+    NOTE_FX_MODEL_ARP,
     NOTE_FX_MODEL_EUCLID,
     NOTE_FX_MODEL_PROBABILITY,
     NOTE_FX_MODEL_GATE,
-    NOTE_FX_MODEL_GROOVE,
-    NOTE_FX_MODEL_ECHO,
-    NOTE_FX_MODEL_HARMONIZER,
-    NOTE_FX_MODEL_CHORD,
+    NOTE_FX_MODEL_VOICER,
+    NOTE_FX_MODEL_SCALER,
     NOTE_FX_MODEL_COUNT
 } note_fx_model_t;
 
@@ -35,20 +32,18 @@ typedef enum
     NOTE_FX_FAMILY_EUCLID,
     NOTE_FX_FAMILY_PROBABILITY,
     NOTE_FX_FAMILY_GATE,
-    NOTE_FX_FAMILY_GROOVE,
-    NOTE_FX_FAMILY_ECHO,
-    NOTE_FX_FAMILY_HARMONIZER,
-    NOTE_FX_FAMILY_CHORD,
+    NOTE_FX_FAMILY_VOICER,
+    NOTE_FX_FAMILY_SCALER,
     NOTE_FX_FAMILY_COUNT
 } note_fx_family_t;
 
 #define NOTE_FX_PROBABILITY_CONDITION_COUNT 10U
 #define NOTE_FX_GATE_MODE_CLIP 0U
-#define NOTE_FX_GATE_MODE_LEGATO 1U
-#define NOTE_FX_GATE_MODE_RETRIG 2U
-#define NOTE_FX_GROOVE_TYPE_COUNT 4U
-#define NOTE_FX_ECHO_REPEAT_MAX 2U
-#define NOTE_FX_HARMONIZER_TYPE_COUNT 8U
+#define NOTE_FX_GATE_MODE_EXTEND 1U
+#define NOTE_FX_VOICER_TYPE_COUNT 8U
+#define NOTE_FX_SCALER_STICK_DOWN 0U
+#define NOTE_FX_SCALER_STICK_UP 1U
+#define NOTE_FX_SCALER_STICK_DROP 2U
 
 typedef struct
 {
@@ -59,11 +54,17 @@ typedef struct
 
 typedef struct
 {
-    uint8_t value[NOTE_FX_SLOT_COUNT][NOTE_FX_PARAM_COUNT];
+    uint8_t value[NOTE_FX_SLOT_COUNT][NOTE_FX_VALUE_COUNT];
+    uint8_t order;
 } note_fx_track_state_t;
 
+_Static_assert(sizeof(note_fx_track_state_t) == 16U,
+               "three-slot Note FX state budget");
+
 void note_fx_state_init(void);
+void note_fx_state_make_default(note_fx_track_state_t *out_state);
 uint8_t note_fx_state_param_map(param_id_t id, uint8_t *out_slot, uint8_t *out_param);
+uint8_t note_fx_state_order_map(param_id_t id);
 uint8_t note_fx_state_get_param(uint8_t track, param_id_t id, float *out_value);
 uint8_t note_fx_state_get_param_schema(uint8_t model,
                                        uint8_t param,
@@ -75,6 +76,10 @@ uint8_t note_fx_state_install_prepared_track(uint8_t track,
                                              const note_fx_track_state_t *state);
 uint8_t note_fx_state_normalize_track(note_fx_track_state_t *state);
 note_fx_family_t note_fx_state_model_family(uint8_t model);
+uint8_t note_fx_state_available_models(const note_fx_track_state_t *state,
+                                       uint8_t edited_slot,
+                                       uint8_t *out_models,
+                                       uint8_t capacity);
 uint8_t note_fx_state_validate_unique_families(
     const note_fx_track_state_t *state);
 

@@ -33,8 +33,8 @@ void seq_transport_owner_begin_running_at_sample_q16(seq_runtime_state_t *state,
     state->ticks_per_step=(uint16_t)(clock_bridge->internal_next_step_ticks
         ?clock_bridge->internal_next_step_ticks:1U);g_transport_step=0U;
     memset(state->play_step,0,sizeof(state->play_step));
+    memset(state->traversal_phase,0,sizeof(state->traversal_phase));
     memset(state->track_div_phase,0,sizeof(state->track_div_phase));
-    memset(state->track_swing_phase,0,sizeof(state->track_swing_phase));
     seq_live_rec_session_on_transport_start();}
 void seq_transport_owner_stop_lifecycle_apply(seq_runtime_state_t *state,
     uint64_t effective_sample){(void)effective_sample;if(!state)return;
