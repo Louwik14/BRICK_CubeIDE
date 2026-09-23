@@ -140,27 +140,17 @@ Assert-Contract ((Groove-Phase 800 2400) -ne (Groove-Phase 1600 2400)) 'temporal
 
 $root = Split-Path -Parent $PSScriptRoot
 $control = Get-Content -Raw (Join-Path $root 'Src/Track/control_music_output.c')
-$pipeline = Get-Content -Raw (Join-Path $root 'Src/NoteFx/note_fx_pipeline.c')
-$state = Get-Content -Raw (Join-Path $root 'Src/NoteFx/note_fx_state.c')
+$sequencer = Get-Content -Raw (Join-Path $root 'Src/Seq/seq_engine.c')
 Assert-Contract $control.Contains('control_music_output_allocate_handle') 'single handle allocator'
 Assert-Contract $control.Contains('g_control_music_window_order++') 'chronological transition order'
 Assert-Contract (-not $control.Contains('CONTROL_MUSIC_WINDOW_KIND_COUNT')) 'no kind buckets'
-Assert-Contract $pipeline.Contains('note_fx_pipeline_purge_future_sources') 'causal revoice purge'
-Assert-Contract $pipeline.Contains('note_fx_pipeline_purge_future_dependency') 'causal dependency compaction'
-Assert-Contract $pipeline.Contains('note_fx_engine_forget_causal_sources_from_slot') 'local causal revoice'
-Assert-Contract (-not $pipeline.Contains('note_fx_engine_reset_from_slot')) 'global slot reset removed'
-Assert-Contract $pipeline.Contains('note_fx_pipeline_purge_future_track(track)') 'explicit track reset purge'
-Assert-Contract (-not $pipeline.Contains('composed_fanout')) 'legacy composed fanout removed'
-Assert-Contract (-not $pipeline.Contains('g_note_fx_admitted_fanout')) 'legacy admission mirror removed'
-Assert-Contract $pipeline.Contains('note_fx_engine_cleanup(track)') 'panic/transport cleanup'
-Assert-Contract $state.Contains('note_fx_pipeline_commit_state(track, &next)') 'state/enqueue transaction'
-Assert-Contract $state.Contains('note_fx_state_validate_unique_families') 'product family uniqueness'
+Assert-Contract $sequencer.Contains('note_fx_chain_engine_transform') 'fixed chain transform wired'
+Assert-Contract $sequencer.Contains('note_fx_chain_engine_process') 'generator process wired'
 $engine = Get-Content -Raw (Join-Path $root 'Src/NoteFx/note_fx_engine.c')
-Assert-Contract (-not $engine.Contains('r->phase++')) 'generator phase authority removed'
 Assert-Contract (-not $engine.Contains('random_state')) 'mutable ARP random removed'
-Assert-Contract $engine.Contains('seq_runtime_get_musical_time') 'canonical musical time used'
-Assert-Contract $pipeline.Contains('deadline.duration_samples') 'terminal duration deadline'
-Assert-Contract (-not $pipeline.Contains('uint8_t resume_slot;')) 'duplicate future resume slot removed'
+Assert-Contract $engine.Contains('chain_selectable_voice_count') 'sparse recipe sequencing guard'
+Assert-Contract $engine.Contains('while(raised>=128U') 'voicer pitch folding guard'
+Assert-Contract (-not $engine.Contains('x.sample_abs=')) 'fixed suffix must not move events'
 
 $gccCandidates = @(
     'C:\msys64\ucrt64\bin\gcc.exe',

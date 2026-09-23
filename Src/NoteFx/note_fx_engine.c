@@ -249,6 +249,15 @@ static uint8_t chain_mode_is_updn(uint8_t mode)
 static uint8_t chain_mode_is_climb(uint8_t mode)
 {return(uint8_t)(mode>=NOTE_FX_VOICER_MODE_CLIMB2&&mode<=NOTE_FX_VOICER_MODE_CLIMB4);}
 
+static uint8_t chain_selectable_voice_count(const note_fx_voicer_state_t*v,
+ uint8_t requested)
+{
+ uint8_t count=0U;
+ for(uint8_t voice=0U;voice<requested;++voice)
+  if(g_harmony[v->type%NOTE_FX_VOICER_TYPE_COUNT][voice]!=255U)++count;
+ return count;
+}
+
 static uint8_t chain_selected_voice(uint8_t mode,uint8_t voices,uint8_t phase)
 {
  if(chain_mode_is_updn(mode)!=0U){const uint8_t period=(uint8_t)(2U*voices-2U);
@@ -342,14 +351,22 @@ static note_event_result_t chain_suffix(const note_event_t*input,uint8_t input_c
   if(source->track!=track||!note_event_is_valid(source))
    return NOTE_EVENT_RESULT_DROPPED_POLICY;
   if(source->kind==NOTE_EVENT_KIND_OFF){
-   for(uint8_t voice=0U;voice<SEQ_PRODUCT_HARMONY_FANOUT_MAX;++voice){
+   const uint8_t off_voices=chain_mode_is_poly(c->voicer.mode)
+    ?chain_voice_count(c->voicer.mode):1U;
+   for(uint8_t voice=0U;voice<off_voices;++voice){
+    if(chain_mode_is_poly(c->voicer.mode)
+         &&g_harmony[c->voicer.type%NOTE_FX_VOICER_TYPE_COUNT][voice]==255U)
+     continue;
     if(count>=cap)return NOTE_EVENT_RESULT_REJECTED_CAPACITY;
-    note_event_t x=*source;x.branch=voice;
+    note_event_t x=*source;
+    if(chain_mode_is_poly(c->voicer.mode))x.branch=voice;
     if(voice!=0U){x.occurrence_id=child_id(source->occurrence_id,1U,voice,0U);
      x.provenance=NOTE_EVENT_SOURCE_FX;x.flags|=NOTE_EVENT_FLAG_GENERATED;}
     output[count++]=x;}
    continue;}
-  const uint8_t voices=chain_voice_count(c->voicer.mode);
+  const uint8_t requested_voices=chain_voice_count(c->voicer.mode);
+  const uint8_t voices=(chain_mode_is_poly(c->voicer.mode)!=0U)
+   ?requested_voices:chain_selectable_voice_count(&c->voicer,requested_voices);
   const uint8_t phase=rt->phase;uint8_t first=0U,last=0U;
   if(c->voicer.mode==NOTE_FX_VOICER_MODE_OFF){first=0U;last=0U;}
   else if(chain_mode_is_poly(c->voicer.mode)!=0U){first=0U;last=(uint8_t)(voices-1U);}
@@ -371,10 +388,10 @@ static note_event_result_t chain_suffix(const note_event_t*input,uint8_t input_c
       if(x==255U)continue;
       if(v<invert)x=(uint8_t)(x+12U);
       if(v!=0U)x=(uint8_t)(x+12U*spread*v);
-      if(x>top)top=x;}if((uint16_t)source->note+top
-       +(uint16_t)(12U*rt->climb_octave)>127U)rt->climb_octave=0U;}
+       if(x>top)top=x;}if((uint16_t)((uint16_t)source->note+(uint16_t)top
+        +(uint16_t)(12U*rt->climb_octave))>UINT16_C(127))rt->climb_octave=0U;}
     raised=(uint16_t)(raised+12U*rt->climb_octave);while(raised>127U&&raised>=12U)raised-=12U;}
-   if(raised>=128U)continue;
+   while(raised>=128U&&raised>=12U)raised-=12U;
    note_event_t x=*source;x.note=(uint8_t)raised;x.branch=voice;
    if(voice!=0U&&chain_mode_is_poly(c->voicer.mode)!=0U){x.occurrence_id=child_id(source->occurrence_id,1U,voice,0U);
     x.provenance=NOTE_EVENT_SOURCE_FX;x.flags|=NOTE_EVENT_FLAG_GENERATED;}

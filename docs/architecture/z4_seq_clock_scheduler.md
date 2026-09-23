@@ -287,7 +287,13 @@ ni ORDER, ni plan compile. Le runtime conserve uniquement la configuration des
 quatre etages et les petits compteurs prives des modes stateful. L'evenement
 transporte directement la branche VOICER; les tables de permutation, masques
 de slots actifs et validations de familles de l'ancien contrat disparaissent
-des interfaces publiques. Les capacites
+des interfaces publiques. Les modes sequentiels de VOICER avancent leur phase
+sur chaque NOTE_ON mais conservent strictement `sample_abs`, duree, source et
+groupe; une recette plus courte que le nombre demande reboucle sur ses voix
+valides au lieu de supprimer un evenement. Seul le mode polyphonique produit
+un fanout, avec un NOTE_OFF correspondant par branche. SCALER ne change que la
+hauteur ou rejette selon STICK, TRIG ne change que admission/duree, et seul
+GENERATOR cree une grille temporelle. Les capacites
 scratch 32, fanout VOICER 4, held 512, calendrier 512 et sources 768 restent
 identiques: elles sont imposees par la polyphonie, le fanout ou l'horizon
 temporel. La borne terminale diminue de 3 648 a 3 136 entrees.
