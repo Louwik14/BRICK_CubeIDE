@@ -1393,7 +1393,7 @@ void seq_runtime_end_track_restore(const seq_track_id_t *tracks, uint8_t track_c
 
 void seq_runtime_on_track_pattern_change(uint8_t track)
 {
-    seq_edit_note_capture_reset();
+    seq_edit_reset_after_track_pattern_change(track);
     if (seq_runtime_track_is_valid(track) == 0U)
     {
         return;

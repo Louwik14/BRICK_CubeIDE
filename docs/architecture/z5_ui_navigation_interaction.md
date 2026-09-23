@@ -47,14 +47,19 @@ Les deltas encodeur utilisent un snapshot du contexte pris au debut du tick. Les
 
 Les mutations structurelles de sequence (clear, paste et restore Track) passent
 par `seq_runtime_on_track_pattern_change`: ce point invalide le scheduler si le
-transport tourne et ferme toujours la capture NOTE/Undo qui projetait l'ancien
-pattern. Une selection de track ne sert donc plus d'invalidation implicite.
+transport tourne et ferme toujours la capture NOTE/Undo et le geste STEP
+(pending/held, cible et flash de longueur) qui projetaient l'ancien pattern.
+Une sequence vide conserve son owner Track et redevient donc editable des le
+premier appui; une selection de track ne sert pas d'invalidation implicite.
 
 Le rendu p-lock possede deux adresses canoniques: les `param_id_t` utilisent le
 feedback de `ui_param`, et les slots virtuels publient avec leur valeur un flag
 `inverted`. PLAY derive ce flag de la presence effective du champ Voice/Step;
 le renderer applique ensuite la meme convention de label inverse que pour les
-parametres catalogues. Les pages virtuelles non p-lockables publient zero.
+parametres catalogues. Cette projection est strictement en lecture: elle ne
+promeut jamais un appui STEP `pending` en geste `held`; seule l'interaction
+encodeur peut effectuer cette promotion avant de creer ou modifier le champ
+Voice/Step. Les pages virtuelles non p-lockables publient zero.
 Les cartes MIDI FX cataloguées suivent le rendu Param commun: la valeur et le
 bit d'inversion proviennent ensemble du p-lock du step tenu, puis le formatter
 MIDI FX ne fait que nommer et mettre en forme cette valeur effective.

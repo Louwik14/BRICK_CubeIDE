@@ -1081,6 +1081,33 @@ void seq_edit_note_capture_reset(void)
            sizeof(g_seq_hold_state.note_capture_velocities));
 }
 
+void seq_edit_reset_after_track_pattern_change(seq_track_id_t track)
+{
+    seq_edit_note_capture_reset();
+
+    for (uint8_t hall = 0U; hall < SEQ_STEPS_PER_PAGE; ++hall)
+    {
+        if (g_seq_hold_state.track_id[hall] != track)
+        {
+            continue;
+        }
+
+        g_seq_hold_state.pending[hall] = 0U;
+        g_seq_hold_state.held[hall] = 0U;
+        g_seq_hold_state.auto_note_pending[hall] = 0U;
+        g_seq_hold_state.edited[hall] = 0U;
+        g_seq_hold_state.pressed_active[hall] = 0U;
+        g_seq_hold_state.pressed_content[hall] = SEQ_STEP_CONTENT_EMPTY;
+    }
+
+    if ((g_seq_length_flash.active != 0U)
+            && (g_seq_length_flash.track == track))
+    {
+        memset(&g_seq_length_flash, 0, sizeof(g_seq_length_flash));
+    }
+    seq_edit_reset_gesture_if_idle();
+}
+
 void seq_edit_reset_after_global_restore(void)
 {
     seq_edit_finish_snapshot_undo(g_seq_hold_state.note_capture_undo_open);
@@ -1436,7 +1463,8 @@ void seq_edit_clear_steps(seq_track_id_t track,
     const uint8_t undo_started = seq_edit_begin_snapshot_undo(track,
                                                               steps,
                                                               step_count);
-    if (seq_edit_clear_steps_impl(track, steps, step_count) != 0U)
-        seq_runtime_on_track_pattern_change(track);
+    const uint8_t changed = seq_edit_clear_steps_impl(track, steps, step_count);
     seq_edit_finish_snapshot_undo(undo_started);
+    if (changed != 0U)
+        seq_runtime_on_track_pattern_change(track);
 }
