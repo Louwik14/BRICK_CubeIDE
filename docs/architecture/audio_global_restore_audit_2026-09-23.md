@@ -27,6 +27,6 @@ decode, valide et installe dans CONTROL, mais absent du bulk AUDIO. Le parametre
 explicite `PARAM_ENV_RETRIG_MOD` ferme maintenant le chemin DTO -> CONTROL ->
 AUDIO; sa table de restore est liee a la taille de l'etat par assertion.
 
-Le build CMake `Release` passe avec LTO et section GC. Mesure : Flash 1 552 300
+Le build CMake `Release` passe avec LTO et section GC. Mesure : Flash 1 552 292
 octets (84,59 %), DTCMRAM 128 640, RAM_D1 490 112, SRAM2_D2 130 496 et SDRAM
 32 358 816 octets.
