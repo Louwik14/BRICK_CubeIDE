@@ -18,6 +18,9 @@ persist_codec_result_t persistent_pattern_control_build_defaults(
 persist_codec_result_t persistent_pattern_control_capture(persist_control_pattern_t *out_pattern);
 persist_codec_result_t persistent_pattern_control_validate(const persist_control_pattern_t *pattern);
 persist_codec_result_t persistent_pattern_control_apply(const persist_control_pattern_t *pattern,uint8_t resume_transport);
+persist_codec_result_t persistent_pattern_control_apply_with_seq_workspace(
+    const persist_control_pattern_t *pattern, uint8_t resume_transport,
+    seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT]);
 /* Project restore already owns the outer AUDIO_STATE transaction. */
 persist_codec_result_t persistent_pattern_control_install_into_active_snapshot(
     const persist_control_pattern_t *pattern,

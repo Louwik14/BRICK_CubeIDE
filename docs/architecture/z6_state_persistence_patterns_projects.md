@@ -98,6 +98,10 @@ transport est arrete: au PLAY suivant, aucun terminal NOTE ou PARAM compile
 depuis l'ancien Pattern ne peut etre applique aux moteurs du nouveau Project.
 Les recalls Pattern a l'arret suivent le meme ordre; un recall en lecture garde
 son epoch musical et publie sa generation a la frontiere de cycle choisie.
+La compilation atomique de plusieurs geometries Groove reutilise alors le
+scratch de decode du Project ou du Pattern, devenu mort apres validation. Elle
+ne tente pas de reacquerir le workspace persistence encore possede par la
+transaction; la publication SEQ peut donc terminer avant le commit AUDIO.
 
 Au boot, les pools reconstruisent directement leur etat vide. En particulier,
 Sampler RAM ne passe pas par le reset runtime quiesce: ses structures SDRAM et

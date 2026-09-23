@@ -12,6 +12,11 @@ typedef enum
     PERSISTENCE_WORKSPACE_GROOVE_BUILD
 } persistence_workspace_owner_t;
 
+typedef struct
+{
+    seq_groove_compiled_t track[SEQ_TIMING_TRACK_COUNT];
+} persistence_groove_build_workspace_t;
+
 #define PERSISTENCE_PATTERN_ENCODED_MAX_BYTES \
     PERSIST_CODEC_PATTERN_DOCUMENT_MAX_BYTES
 #define PERSISTENCE_PROJECT_SAVE_ASSET_CAPACITY (512U)
@@ -45,10 +50,14 @@ typedef struct
     uint8_t pattern_bank_started;
     uint8_t pattern_bank_staged;
     uint8_t active_pattern_seen;
-    persist_codec_project_workspace_t codec_scratch;
+    union
+    {
+        persist_codec_project_workspace_t codec_scratch;
+        persistence_groove_build_workspace_t groove_build;
+    } scratch;
 } persistence_project_restore_workspace_t;
 
-_Static_assert(sizeof(persistence_project_restore_workspace_t) == 950548U,
+_Static_assert(sizeof(persistence_project_restore_workspace_t) == 950552U,
                "Project Restore workspace size changed");
 
 _Static_assert(sizeof(persist_control_pattern_t)
@@ -58,16 +67,15 @@ _Static_assert(sizeof(persist_control_pattern_t)
 typedef struct
 {
     persist_control_pattern_t pattern;
-    uint8_t encoded[PERSISTENCE_PATTERN_ENCODED_MAX_BYTES];
+    union
+    {
+        uint8_t encoded[PERSISTENCE_PATTERN_ENCODED_MAX_BYTES];
+        persistence_groove_build_workspace_t groove_build;
+    } scratch;
 } persistence_pattern_io_workspace_t;
 
-_Static_assert(sizeof(persistence_pattern_io_workspace_t) == 574672U,
+_Static_assert(sizeof(persistence_pattern_io_workspace_t) == 574680U,
                "Pattern IO workspace size changed");
-
-typedef struct
-{
-    seq_groove_compiled_t track[SEQ_TIMING_TRACK_COUNT];
-} persistence_groove_build_workspace_t;
 
 persistence_project_save_workspace_t *persistence_workspace_acquire_project_save(void);
 persistence_project_restore_workspace_t *persistence_workspace_acquire_project_restore(void);

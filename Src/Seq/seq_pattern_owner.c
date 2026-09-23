@@ -334,7 +334,8 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
         }
 }
 
-void seq_engine_control_poll(void)
+static void seq_engine_control_poll_with_workspace(
+    seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT])
 {
     const uint8_t running = seq_runtime_is_running();
     uint8_t transport_changed = 0U;
@@ -365,7 +366,11 @@ void seq_engine_control_poll(void)
                 .base = SEQ_TIMING_BASE_1_16, .global = 100U};
             (void)seq_runtime_get_track_timing(track, &g_build_timing[track]);
         }
-        if (seq_timing_geometry_build_begin(g_build_timing) == 0U) return;
+        const uint8_t timing_ready = (workspace != NULL)
+            ? seq_timing_geometry_build_begin_with_workspace(
+                g_build_timing, workspace)
+            : seq_timing_geometry_build_begin(g_build_timing);
+        if (timing_ready == 0U) return;
         seq_runtime_capture_shadow_seed(&g_build_seed);
         if (g_build_seed.running != g_last_running)
         {
@@ -422,16 +427,27 @@ void seq_engine_control_poll(void)
     seq_timing_geometry_build_commit(pattern->timing_plan);
 }
 
-uint8_t seq_engine_control_flush(void)
+void seq_engine_control_poll(void)
+{
+    seq_engine_control_poll_with_workspace(NULL);
+}
+
+uint8_t seq_engine_control_flush_with_workspace(
+    seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT])
 {
     const uint32_t target_generation = g_edit_generation;
     const uint16_t pass_limit = (uint16_t)(
         (SEQ_LANE_CAPACITY * SEQ_MAX_STEPS + 3U) / 4U + 1U);
     for (uint16_t pass = 0U; pass < pass_limit; ++pass)
     {
-        seq_engine_control_poll();
+        seq_engine_control_poll_with_workspace(workspace);
         if (g_published_generation == target_generation) return 1U;
         if (g_edit_generation != target_generation) return 0U;
     }
     return 0U;
+}
+
+uint8_t seq_engine_control_flush(void)
+{
+    return seq_engine_control_flush_with_workspace(NULL);
 }

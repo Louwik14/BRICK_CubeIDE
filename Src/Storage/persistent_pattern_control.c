@@ -787,8 +787,9 @@ static persist_codec_result_t persistent_pattern_control_install_internal(
     return PERSIST_CODEC_OK;
 }
 
-persist_codec_result_t persistent_pattern_control_apply(
-    const persist_control_pattern_t *pattern, uint8_t resume_transport)
+persist_codec_result_t persistent_pattern_control_apply_with_seq_workspace(
+    const persist_control_pattern_t *pattern, uint8_t resume_transport,
+    seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT])
 {
     g_persist_dbg.audio_publish_result = 1U;
     g_persist_dbg.seq_publish_result = 1U;
@@ -812,7 +813,7 @@ persist_codec_result_t persistent_pattern_control_apply(
      * stopped replacement.  Running cycle recalls preserve their epoch. */
     if (resume_transport == 0U)
         seq_engine_control_reset_note_fx_context();
-    if (seq_engine_control_flush() == 0U)
+    if (seq_engine_control_flush_with_workspace(workspace) == 0U)
     {
         g_persist_dbg.seq_publish_result = 0U;
         audio_state_snapshot_control_abort();
@@ -826,6 +827,13 @@ persist_codec_result_t persistent_pattern_control_apply(
     }
     g_persist_dbg.audio_publish_result = 2U;
     return PERSIST_CODEC_OK;
+}
+
+persist_codec_result_t persistent_pattern_control_apply(
+    const persist_control_pattern_t *pattern, uint8_t resume_transport)
+{
+    return persistent_pattern_control_apply_with_seq_workspace(
+        pattern, resume_transport, NULL);
 }
 
 persist_codec_result_t persistent_pattern_control_install_into_active_snapshot(

@@ -86,6 +86,9 @@ _Static_assert(sizeof(seq_track_timing_plan_t) == 64U,
                "compiled track timing plan budget");
 
 void seq_timing_geometry_init(void);
+uint8_t seq_timing_geometry_build_begin_with_workspace(
+    const seq_track_timing_config_t config[SEQ_TIMING_TRACK_COUNT],
+    seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT]);
 uint8_t seq_timing_geometry_build_begin(
     const seq_track_timing_config_t config[SEQ_TIMING_TRACK_COUNT]);
 void seq_timing_geometry_build_abort(void);

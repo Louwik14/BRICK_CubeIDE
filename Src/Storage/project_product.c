@@ -1171,7 +1171,8 @@ void project_product_load_service(void)
              * replacement programs.  No terminal event from the previous
              * Project may be interpreted against the new engine map. */
             seq_engine_control_reset_note_fx_context();
-            ok=seq_engine_control_flush();
+            ok=seq_engine_control_flush_with_workspace(
+                restore->scratch.groove_build.track);
             if(ok==0U)g_persist_dbg.seq_publish_result=0U;
         }
         if(ok)
@@ -1218,7 +1219,7 @@ uint8_t project_product_load(uint8_t slot)
         return 0U;
     }
     persist_codec_project_workspace_t *const workspace =
-        &restore->codec_scratch;
+        &restore->scratch.codec_scratch;
     memset(restore, 0, sizeof(*restore));
     g_progress = (project_product_progress_t){1U, 0U, 0U, 1U,
         PROJECT_PRODUCT_RESULT_IN_PROGRESS};
@@ -1309,7 +1310,7 @@ uint8_t project_product_blank(void)
         persistence_workspace_acquire_project_restore();
     if(restore==NULL){persist_debug_error(PERSIST_DBG_STAGE_WORKSPACE,PERSIST_DBG_ERROR_WORKSPACE);return 0U;}
     persist_control_pattern_record_t *const record_scratch=
-        &restore->codec_scratch.unit.pattern_record;
+        &restore->scratch.codec_scratch.unit.pattern_record;
     uint8_t built=0U;
     if(acquire()!=0U)
     {

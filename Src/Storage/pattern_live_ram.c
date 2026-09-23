@@ -130,8 +130,9 @@ static uint8_t pattern_candidate_apply(uint8_t resume_transport)
     persist_debug_stage(PERSIST_DBG_STAGE_APPLY, 0);
     ++g_persist_dbg.apply_attempted;
     const persist_codec_result_t result =
-        persistent_pattern_control_apply(&g_pattern_io_workspace->pattern,
-                                         resume_transport);
+        persistent_pattern_control_apply_with_seq_workspace(
+            &g_pattern_io_workspace->pattern, resume_transport,
+            g_pattern_io_workspace->scratch.groove_build.track);
     g_persist_dbg.apply_result = (uint32_t)result;
     if (result != PERSIST_CODEC_OK)
     {
@@ -359,8 +360,8 @@ void pattern_load_service(uint32_t byte_budget)
     if (pattern_control_bank_load_async_begin(
             g_pattern_candidate.bank,
             g_pattern_candidate.pattern,
-            g_pattern_io_workspace->encoded,
-            sizeof(g_pattern_io_workspace->encoded),
+            g_pattern_io_workspace->scratch.encoded,
+            sizeof(g_pattern_io_workspace->scratch.encoded),
             &g_pattern_io_workspace->pattern) == 0U)
     {
         persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_IO);
@@ -433,8 +434,8 @@ uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern)
             bank,
             pattern,
             captured,
-            g_pattern_io_workspace->encoded,
-            sizeof(g_pattern_io_workspace->encoded)) == 0U)
+            g_pattern_io_workspace->scratch.encoded,
+            sizeof(g_pattern_io_workspace->scratch.encoded)) == 0U)
     {
         persistence_workspace_release(PERSISTENCE_WORKSPACE_PATTERN_IO);
         g_pattern_io_workspace = 0;
