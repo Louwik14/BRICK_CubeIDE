@@ -77,6 +77,7 @@ enum {
     PARAM_ENV3_RELEASE,
     PARAM_ENV_RETRIG_FILTER,
     PARAM_ENV_RETRIG_VCA,
+    PARAM_ENV_RETRIG_MOD,
     PARAM_MIX_REVERB_WET,
     PARAM_MIX_REVERB_ROOM_SIZE,
     PARAM_MIX_REVERB_DAMPING,
@@ -399,7 +400,7 @@ PARAM_ID_STATIC_ASSERT(PARAM_AUDIO_FX_P3 == (PARAM_AUDIO_FX_P1 + 2),
         "Audio FX slot A parameter block must stay contiguous");
 PARAM_ID_STATIC_ASSERT(PARAM_AUDIO_FX_B_P3 == (PARAM_AUDIO_FX_B_P1 + 2),
         "Audio FX slot B parameter block must stay contiguous");
-PARAM_ID_STATIC_ASSERT(PARAM_COUNT == 313, "Unexpected parameter catalog size");
+PARAM_ID_STATIC_ASSERT(PARAM_COUNT == 314, "Unexpected parameter catalog size");
 #undef PARAM_ID_STATIC_ASSERT
 
 #ifdef __cplusplus

@@ -1,5 +1,7 @@
 static float clamp_value(float v, float lo, float hi);
 
+#include "Param/param_audio_command_contract.h"
+
 static float param_registry_global_modfx_unit(float value)
 {
     return clamp_value(value, 0.0f, 127.0f) * (1.0f / 127.0f);
@@ -23,7 +25,8 @@ static float param_registry_global_modfx_command(param_id_t id,
             case PARAM_MODFX_DEPTH_B:
                 return (value <= 123.0f)
                     ? (0.9f * value / 123.0f)
-                    : (0.9f + 0.03f * (value - 123.0f) / 4.0f);
+                    : (0.9f + (PARAM_AUDIO_MODFX_DEPTH_MAX - 0.9f)
+                        * (value - 123.0f) / 4.0f);
             case PARAM_MODFX_OFFSET:
             case PARAM_MODFX_DELAY_B:
                 return (value <= 95.0f)
@@ -44,9 +47,12 @@ static float param_registry_global_modfx_command(param_id_t id,
     switch (id)
     {
         case PARAM_MODFX_RATE:
-        case PARAM_MODFX_RATE_B: return 0.01f + 11.99f * unit;
+        case PARAM_MODFX_RATE_B:
+            return PARAM_AUDIO_MODFX_RATE_MIN_HZ
+                + (PARAM_AUDIO_MODFX_RATE_MAX_HZ
+                    - PARAM_AUDIO_MODFX_RATE_MIN_HZ) * unit;
         case PARAM_MODFX_DEPTH:
-        case PARAM_MODFX_DEPTH_B:
+        case PARAM_MODFX_DEPTH_B: return PARAM_AUDIO_MODFX_DEPTH_MAX * unit;
         case PARAM_MODFX_FEEDBACK:
         case PARAM_MODFX_OFFSET:
         case PARAM_MODFX_DELAY_B:

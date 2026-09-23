@@ -59,7 +59,7 @@ typedef enum
     GLOBAL_MASTER_GAIN,
     GLOBAL_POST_GAIN,
     GLOBAL_OUTPUT_COMP,
-    GLOBAL_CONTROL_VALUE_COUNT
+    GLOBAL_CONTROL_VALUE_COUNT = PARAM_GLOBAL_CONTROL_VALUE_COUNT
 } param_global_slot_t;
 
 static float g_global_values[GLOBAL_CONTROL_VALUE_COUNT];
@@ -261,5 +261,8 @@ uint8_t param_global_control_restore(const param_global_control_state_t *state)
 }
 
 _Static_assert(sizeof(param_global_control_state_t)
-               == sizeof(float) * GLOBAL_CONTROL_VALUE_COUNT,
+               == sizeof(float) * PARAM_GLOBAL_CONTROL_VALUE_COUNT,
                "global control persistence layout mismatch");
+_Static_assert((int)GLOBAL_CONTROL_VALUE_COUNT
+                   == (int)PARAM_GLOBAL_CONTROL_VALUE_COUNT,
+               "global CONTROL parameter table cardinality changed");

@@ -19,6 +19,15 @@ typedef struct
     float output[3U];
 } param_global_control_state_t;
 
+enum
+{
+    PARAM_GLOBAL_CONTROL_VALUE_COUNT = 51U
+};
+
+_Static_assert(sizeof(param_global_control_state_t)
+                   == sizeof(float) * PARAM_GLOBAL_CONTROL_VALUE_COUNT,
+               "global CONTROL layout cardinality changed");
+
 /* Sparse CONTROL authority: only genuinely global product parameters are
  * accepted.  Entity, sequencer, keyboard and metronome values have their own
  * owners and are deliberately absent. */

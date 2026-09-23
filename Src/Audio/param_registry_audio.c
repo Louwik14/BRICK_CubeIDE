@@ -83,6 +83,11 @@ uint8_t param_audio_apply_track_rt(param_id_t id,
     if (param_spec_value_is_valid(id, value) == 0U) return 0U;
     if (param_filter_audio_is_param(id) != 0U)
         return param_filter_apply_value_audio(id, track, value);
+    if (id == PARAM_ENV_RETRIG_MOD)
+    {
+        mod_env3_audio_apply_retrigger(track, value);
+        return 1U;
+    }
     return param_audio_apply_non_filter(id, track, value);
 }
 
@@ -99,6 +104,11 @@ uint8_t param_audio_apply_track(
     if (id == PARAM_CFG_POLY_SPREAD) return 0U;
     if (param_filter_audio_is_param(id) != 0U)
         return param_filter_apply_value_audio(id, track, value);
+    if (id == PARAM_ENV_RETRIG_MOD)
+    {
+        mod_env3_audio_apply_retrigger(track, value);
+        return 1U;
+    }
     mod_env3_param_t env_param;
     if (param_audio_env_map(id, &env_param) != 0U)
         return mod_env3_audio_apply_track_param(track, env_param, value);
@@ -115,6 +125,11 @@ uint8_t param_audio_apply_track_temp(
     mod_env3_param_t env_param;
     if (param_audio_env_map(id, &env_param) != 0U)
         return mod_env3_apply_track_param_temp(track, env_param, value);
+    if (id == PARAM_ENV_RETRIG_MOD)
+    {
+        mod_env3_audio_apply_retrigger(track, value);
+        return 1U;
+    }
     if (param_filter_audio_is_param(id) != 0U)
         return param_filter_apply_value_audio(id, track, value);
     return param_audio_apply_non_filter(id, track, value);

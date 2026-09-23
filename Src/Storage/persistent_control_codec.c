@@ -358,7 +358,7 @@ static void codec_audio_fx(codec_io_t*io,audio_fx_control_state_t*s){uint8_t pos
     (sizeof(((_type *)0)->_field) / sizeof(float))
 enum
 {
-    PERSIST_GLOBAL_AUDIO_FLOAT_COUNT = 51U
+    PERSIST_GLOBAL_AUDIO_FLOAT_COUNT = PARAM_GLOBAL_CONTROL_VALUE_COUNT
 };
 _Static_assert(FLOAT_FIELD_COUNT(param_global_control_state_t, send_fx) == 2U,
                "global audio send layout changed");

@@ -7,6 +7,7 @@
 #include "Seq/seq_types.h"
 #include "Track/track_types.h"
 #include "Param/engine_model_catalog.h"
+#include "Param/param_audio_command_contract.h"
 #include "Sampler/sample_page_cache_config.h"
 #define SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS SAMPLE_PAGE_PRODUCT_MAX_LONG_SAMPLE_SLOTS
 
@@ -39,16 +40,20 @@ uint8_t param_spec_audio_command_value_is_valid(param_id_t id, float value)
     {
         case PARAM_MODFX_RATE:
         case PARAM_MODFX_RATE_B:
-            return (uint8_t)((value >= 0.01f) && (value <= 12.0f));
+            return (uint8_t)((value >= PARAM_AUDIO_MODFX_RATE_MIN_HZ)
+                && (value <= PARAM_AUDIO_MODFX_RATE_MAX_HZ));
         case PARAM_MODFX_DEPTH:
         case PARAM_MODFX_DEPTH_B:
-            return (uint8_t)((value >= 0.0f) && (value <= 0.93f));
+            return (uint8_t)((value >= PARAM_AUDIO_MODFX_DEPTH_MIN)
+                && (value <= PARAM_AUDIO_MODFX_DEPTH_MAX));
         case PARAM_MODFX_FEEDBACK:
-            return (uint8_t)((value >= -1.0f) && (value <= 1.0f));
+            return (uint8_t)((value >= PARAM_AUDIO_MODFX_FEEDBACK_MIN)
+                && (value <= PARAM_AUDIO_MODFX_FEEDBACK_MAX));
         case PARAM_MODFX_OFFSET:
         case PARAM_MODFX_DELAY_B:
         case PARAM_MODFX_WIDTH:
-            return (uint8_t)((value >= 0.0f) && (value <= 1.0f));
+            return (uint8_t)((value >= PARAM_AUDIO_MODFX_UNIT_MIN)
+                && (value <= PARAM_AUDIO_MODFX_UNIT_MAX));
         default:
             return param_spec_value_is_valid(id, value);
     }

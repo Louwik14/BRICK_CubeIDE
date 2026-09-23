@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "Platform/memory_layout.h"
+#include "Param/param_audio_command_contract.h"
 
 #define DAISY_RING_SIZE 1024U
 #define DAISY_RING_MASK (DAISY_RING_SIZE - 1U)
@@ -236,29 +237,37 @@ void fx_modfx_global_set_model(uint8_t model)
 
 void fx_modfx_global_set_rate(float value)
 {
-    if (value < 0.01f) value = 0.01f;
-    if (value > 12.0f) value = 12.0f;
+    if (value < PARAM_AUDIO_MODFX_RATE_MIN_HZ)
+        value = PARAM_AUDIO_MODFX_RATE_MIN_HZ;
+    if (value > PARAM_AUDIO_MODFX_RATE_MAX_HZ)
+        value = PARAM_AUDIO_MODFX_RATE_MAX_HZ;
     state.daisy_stereo_target[0].rate_hz = value;
 }
 
 void fx_modfx_global_set_rate_b(float value)
 {
-    if (value < 0.01f) value = 0.01f;
-    if (value > 12.0f) value = 12.0f;
+    if (value < PARAM_AUDIO_MODFX_RATE_MIN_HZ)
+        value = PARAM_AUDIO_MODFX_RATE_MIN_HZ;
+    if (value > PARAM_AUDIO_MODFX_RATE_MAX_HZ)
+        value = PARAM_AUDIO_MODFX_RATE_MAX_HZ;
     state.daisy_stereo_target[1].rate_hz = value;
 }
 
 void fx_modfx_global_set_depth(float value)
 {
-    if (value < 0.0f) value = 0.0f;
-    if (value > 0.93f) value = 0.93f;
+    if (value < PARAM_AUDIO_MODFX_DEPTH_MIN)
+        value = PARAM_AUDIO_MODFX_DEPTH_MIN;
+    if (value > PARAM_AUDIO_MODFX_DEPTH_MAX)
+        value = PARAM_AUDIO_MODFX_DEPTH_MAX;
     state.daisy_stereo_target[0].depth = value;
 }
 
 void fx_modfx_global_set_depth_b(float value)
 {
-    if (value < 0.0f) value = 0.0f;
-    if (value > 0.93f) value = 0.93f;
+    if (value < PARAM_AUDIO_MODFX_DEPTH_MIN)
+        value = PARAM_AUDIO_MODFX_DEPTH_MIN;
+    if (value > PARAM_AUDIO_MODFX_DEPTH_MAX)
+        value = PARAM_AUDIO_MODFX_DEPTH_MAX;
     state.daisy_stereo_target[1].depth = value;
 }
 
