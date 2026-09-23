@@ -246,6 +246,10 @@ uint8_t param_registry_track_value_is_audio_command(param_id_t id,
 uint8_t param_registry_track_temp_is_applicable(param_id_t id, uint8_t track)
 {
     if ((id >= PARAM_COUNT) || (track >= SEQ_LANE_CAPACITY)) return 0U;
+    const track_runtime_param_status_t status =
+        track_runtime_get_effective_param_status(track, id);
+    if ((status != TRACK_RUNTIME_PARAM_ALLOWED)
+            && (status != TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)) return 0U;
     if (param_registry_is_lfo_param(id) != 0U) return 1U;
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
     if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_ENV)

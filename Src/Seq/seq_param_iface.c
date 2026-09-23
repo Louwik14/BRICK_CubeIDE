@@ -790,6 +790,24 @@ uint8_t seq_param_iface_slot_is_supported(seq_track_id_t track, uint8_t set_id, 
                                                        param_slot, 0U);
 }
 
+uint8_t seq_param_iface_slot_is_audio_terminal_supported(
+    seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot)
+{
+    param_id_t param = PARAM_COUNT;
+    if ((seq_param_iface_slot_is_supported(track, set_id, param_slot) == 0U)
+            || (set_id == (uint8_t)SEQ_PLOCK_SET_MIDI_FX)
+            || (seq_param_iface_slot_to_param(
+                track, set_id, param_slot, &param) == 0U)
+            || (param_registry_track_temp_is_applicable(param, track) == 0U))
+        return 0U;
+
+    /* Terminal PARAMs are consumed only by AUDIO.  A control/MIDI track can
+     * own a storable lock, but it has no AUDIO program route on which that
+     * lock can be materialized.  The broad parameter-domain predicate alone
+     * is therefore not an execution admission contract. */
+    return track_runtime_is_audio_routable(track);
+}
+
 uint8_t seq_param_iface_slot_is_storable(seq_track_id_t track,
                                          uint8_t set_id,
                                          seq_param_slot_t param_slot)
@@ -1134,6 +1152,22 @@ void seq_param_iface_discard_runtime_lock(seq_track_id_t track,
         + g_seq_param_set_offsets[set_id] + param_slot;
     g_seq_param_runtime_locked_bits[index >> 3U] &=
         (uint8_t)~(1U << (index & 7U));
+}
+
+void seq_param_iface_execution_replace(void)
+{
+    /* These structures are projections/ownership of the executing Pattern,
+     * not durable parameter state.  Keeping them across a replacement makes
+     * later edits/restores observe locks owned by the retired generation. */
+    memset(g_seq_param_runtime_state, 0, sizeof(g_seq_param_runtime_state));
+    memset(g_seq_param_runtime_locked_bits, 0,
+           sizeof(g_seq_param_runtime_locked_bits));
+    memset(g_seq_param_patch_transaction_state, 0,
+           sizeof(g_seq_param_patch_transaction_state));
+    memset(g_seq_param_patch_transaction_locked_bits, 0,
+           sizeof(g_seq_param_patch_transaction_locked_bits));
+    g_seq_param_patch_transaction_mask = 0U;
+    g_seq_param_patch_transaction_active = 0U;
 }
 
 uint8_t seq_param_iface_clear_patch_runtime(seq_track_id_t track)

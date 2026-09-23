@@ -8,6 +8,7 @@ $audio = Get-Content -Raw (Join-Path $root 'Src/Audio/audio_command_executor.c')
 $owner = Get-Content -Raw (Join-Path $root 'Src/Seq/seq_pattern_owner.c')
 $port = Get-Content -Raw (Join-Path $root 'Src/Seq/seq_engine_port_h743.c')
 $runtime = Get-Content -Raw (Join-Path $root 'Src/Seq/seq_runtime.c')
+$paramIface = Get-Content -Raw (Join-Path $root 'Src/Seq/seq_param_iface.c')
 
 $projectOrder = [regex]::Match($project,
     'persistent_pattern_control_install_into_active_snapshot[\s\S]*?' +
@@ -43,6 +44,19 @@ foreach ($required in @('g_slot_state', 'g_audio_slot', 'g_ingress_count',
 if ($owner -notmatch 'seq_runtime_live_rec_discard_effective\(\)' -or
     $runtime -notmatch 'void seq_runtime_live_rec_discard_effective') {
     throw 'SEQ replacement must discard pending CONTROL live-rec events'
+}
+if ($owner -notmatch 'seq_engine_control_replace_with_workspace[\s\S]*?' +
+        'seq_param_iface_execution_replace\(\)[\s\S]*?' +
+        'seq_engine_control_reset_note_fx_context\(\)') {
+    throw 'Global replacement must retire derived parameter-lock ownership before rebuilding SEQ'
+}
+if ($paramIface -notmatch 'void seq_param_iface_execution_replace[\s\S]*?' +
+        'g_seq_param_runtime_locked_bits[\s\S]*?' +
+        'g_seq_param_patch_transaction_active = 0U') {
+    throw 'Parameter replacement must retire lock bits, caches and patch transaction state'
+}
+if ($owner -notmatch 'seq_param_iface_slot_is_audio_terminal_supported') {
+    throw 'Compiled PARAM terminals must use the AUDIO execution admission contract'
 }
 if ($port -notmatch 'g_terminal\[i\]\.generation != g_execution_generation[\s\S]*?' +
         'g_terminal\[i\]\.generation != generation') {

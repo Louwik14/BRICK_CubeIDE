@@ -253,8 +253,9 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
                 }
                 const uint8_t is_fx=(entry.set_id
                     ==(uint8_t)SEQ_PLOCK_SET_MIDI_FX)?1U:0U;
-                if ((is_fx==0U)&&(param_registry_track_temp_is_applicable(
-                        param,track)==0U))
+                if ((is_fx==0U)
+                        &&(seq_param_iface_slot_is_audio_terminal_supported(
+                            track,entry.set_id,entry.param_slot)==0U))
                 {
                     pattern->track_lock_enabled[track]=0U;
                     break;
@@ -472,6 +473,10 @@ uint8_t seq_engine_control_flush(void)
 uint8_t seq_engine_control_replace_with_workspace(
     seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT])
 {
+    /* Replacement owns every SEQ-derived parameter projection as well as the
+     * terminal engine.  Reset it before compiling the replacement so base
+     * values are captured exclusively from the newly installed owners. */
+    seq_param_iface_execution_replace();
     seq_engine_control_reset_note_fx_context();
     return seq_engine_control_flush_with_workspace(workspace);
 }

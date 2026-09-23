@@ -73,3 +73,25 @@ L'ordre global est desormais: gel ingress; PANIC/acquittement; retrait assets;
 restore CONTROL/assets; compilation immutable; publication generation et
 retrait mutable atomiques; commit AUDIO acquitte; publication UI/metadata;
 reouverture ingress; PLAY et production exclusive sous la nouvelle generation.
+
+## Complement: admissibilite PARAM et ownership derive
+
+La generation protege l'identite temporelle d'un bloc, pas la validite de son
+contenu pour le renderer courant. Le compilateur acceptait encore un p-lock via
+le predicat large de domaine `param_registry_track_temp_is_applicable()`, puis
+le materialisait en terminal PARAM meme si la piste n'avait aucune route AUDIO.
+Le bloc etait bien de generation N+1, mais le consumer AUDIO refusait la cible;
+son retour faux declenchait donc le fatal de `audio_command_executor_apply_seq_due()`.
+
+L'admission d'un terminal PARAM est maintenant explicite et commune:
+slot supporte dans la projection courante, parametre temporaire applicable et
+piste AUDIO-routable. Les locks CONTROL/MIDI restent stockables mais ne sont
+jamais presentes comme des commandes AUDIO. Le predicat d'applicabilite verifie
+aussi le statut effectif de la cible avant publication.
+
+Le remplacement global retire en outre `g_seq_param_runtime_state`, les bits
+d'ownership des locks et tout contexte de transaction Patch avant de compiler
+le nouveau Pattern. Ce reset fait partie de
+`seq_engine_control_replace_with_workspace()` et couvre donc Project Load,
+Pattern Load arrete et restore Project au boot. Une recall Pattern en lecture
+conserve, comme auparavant, son ownership musical jusqu'a la frontiere de cycle.

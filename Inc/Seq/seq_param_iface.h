@@ -83,6 +83,10 @@ uint8_t seq_param_iface_param_to_slot(seq_track_id_t track,
                                       param_id_t param_id,
                                       seq_param_slot_t *out_param_slot);
 uint8_t seq_param_iface_slot_is_supported(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot);
+/* True only when the compiled lock may be materialized as an AUDIO terminal
+ * event for the current track/runtime projection. */
+uint8_t seq_param_iface_slot_is_audio_terminal_supported(
+    seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot);
 uint8_t seq_param_iface_slot_is_storable(seq_track_id_t track, uint8_t set_id, seq_param_slot_t param_slot);
 uint8_t seq_param_iface_slot_is_storable_for_type(uint8_t runtime_type,
                                                    uint8_t set_id,
@@ -119,6 +123,9 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
 void seq_param_iface_discard_runtime_lock(seq_track_id_t track,
                                           uint8_t set_id,
                                           seq_param_slot_t param_slot);
+/* Replacement boundary: discard every derived lock owner/cache from the
+ * preceding Pattern/Project.  Durable parameter owners are untouched. */
+void seq_param_iface_execution_replace(void);
 uint8_t seq_param_iface_clear_patch_runtime(seq_track_id_t track);
 uint8_t seq_param_iface_patch_runtime_transaction_begin(uint16_t track_mask);
 uint8_t seq_param_iface_patch_runtime_transaction_rollback(void);
