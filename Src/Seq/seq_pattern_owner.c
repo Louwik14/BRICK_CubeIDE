@@ -33,6 +33,7 @@ static uint32_t g_build_generation;
 static uint8_t g_last_running;
 static uint8_t g_seen_runtime_running;
 static uint32_t g_transport_epoch;
+static uint8_t g_execution_replace_pending;
 static seq_runtime_shadow_seed_t g_build_seed;
 static seq_track_timing_config_t g_build_timing[SEQ_LANE_CAPACITY];
 static note_fx_chain_state_t g_build_fx_state[SEQ_LANE_CAPACITY];
@@ -119,6 +120,7 @@ void seq_engine_control_init(void)
     g_last_running = 0U;
     g_seen_runtime_running = seq_runtime_is_running();
     g_transport_epoch = 1U;
+    g_execution_replace_pending = 0U;
     memset(&g_build_seed, 0, sizeof(g_build_seed));
 }
 
@@ -130,8 +132,10 @@ void seq_engine_control_mark_dirty(void)
 
 void seq_engine_control_reset_note_fx_context(void)
 {
+    seq_runtime_live_rec_discard_effective();
     ++g_transport_epoch;
     if (g_transport_epoch == 0U) g_transport_epoch = 1U;
+    g_execution_replace_pending = 1U;
     seq_engine_control_mark_dirty();
 }
 
@@ -420,11 +424,24 @@ static void seq_engine_control_poll_with_workspace(
         pattern->track_note_enabled[track] &=
             pattern->track_lock_enabled[track];
     (void)brick_media_clock_now_sample(&pattern->effective_sample);
+    seq_timing_geometry_build_commit(pattern->timing_plan);
+    /* Replacement publication and retirement are one IRQ-atomic ownership
+     * transition.  Publishing only the immutable Pattern is insufficient:
+     * READY/READING terminal blocks, calendars, ledgers and NoteFX held state
+     * still belong to the preceding generation. */
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
     __DMB();
     g_published_slot = g_build_slot;
     __DMB();
     g_published_generation = g_build_generation;
-    seq_timing_geometry_build_commit(pattern->timing_plan);
+    if (g_execution_replace_pending != 0U)
+    {
+        seq_engine_execution_replace(g_build_generation);
+        g_execution_replace_pending = 0U;
+    }
+    __DMB();
+    __set_PRIMASK(primask);
 }
 
 void seq_engine_control_poll(void)
@@ -450,4 +467,11 @@ uint8_t seq_engine_control_flush_with_workspace(
 uint8_t seq_engine_control_flush(void)
 {
     return seq_engine_control_flush_with_workspace(NULL);
+}
+
+uint8_t seq_engine_control_replace_with_workspace(
+    seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT])
+{
+    seq_engine_control_reset_note_fx_context();
+    return seq_engine_control_flush_with_workspace(workspace);
 }

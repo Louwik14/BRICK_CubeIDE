@@ -261,6 +261,12 @@ uint8_t seq_ingress_submit(const seq_ingress_event_t *event);
 void seq_ingress_discard(void);
 void seq_ingress_panic(void);
 
+/* Commit-side replacement barrier.  CONTROL calls this with IRQs masked after
+ * publishing the replacement Pattern generation.  It retires every mutable
+ * SEQ object derived from the previous generation before AUDIO can observe
+ * the new immutable Pattern. */
+void seq_engine_execution_replace(uint32_t generation);
+
 /* CONTROL prepares; SEQ atomically takes ownership of the armed Pattern. */
 void seq_engine_control_init(void);
 void seq_engine_control_mark_dirty(void);
@@ -268,6 +274,8 @@ void seq_engine_control_disarm_track(uint8_t track);
 void seq_engine_control_poll(void);
 uint8_t seq_engine_control_flush(void);
 uint8_t seq_engine_control_flush_with_workspace(
+    seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT]);
+uint8_t seq_engine_control_replace_with_workspace(
     seq_groove_compiled_t workspace[SEQ_TIMING_TRACK_COUNT]);
 const seq_pattern_t *seq_engine_pattern_capture(void);
 

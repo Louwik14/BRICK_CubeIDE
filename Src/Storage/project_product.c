@@ -1170,8 +1170,7 @@ void project_product_load_service(void)
             /* Publish a fresh stopped SEQ epoch before AUDIO installs the
              * replacement programs.  No terminal event from the previous
              * Project may be interpreted against the new engine map. */
-            seq_engine_control_reset_note_fx_context();
-            ok=seq_engine_control_flush_with_workspace(
+            ok=seq_engine_control_replace_with_workspace(
                 restore->scratch.groove_build.track);
             if(ok==0U)g_persist_dbg.seq_publish_result=0U;
         }

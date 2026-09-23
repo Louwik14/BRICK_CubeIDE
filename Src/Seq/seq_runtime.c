@@ -1351,6 +1351,17 @@ void seq_runtime_live_rec_drain_effective(void)
         }
     }
 }
+
+void seq_runtime_live_rec_discard_effective(void)
+{
+    const uint32_t primask = seq_runtime_enter_critical();
+    g_seq_runtime_live_rec_head = 0U;
+    g_seq_runtime_live_rec_tail = 0U;
+    g_seq_runtime_live_rec_count = 0U;
+    memset(g_seq_runtime_live_rec_queue, 0,
+           sizeof(g_seq_runtime_live_rec_queue));
+    seq_runtime_exit_critical(primask);
+}
 void seq_runtime_on_midi_program_live_change(uint8_t track, float program_value)
 {
     if (track >= SEQ_TRACK_COUNT)

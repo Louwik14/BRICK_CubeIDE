@@ -93,9 +93,15 @@ commit AUDIO reussi. Le chemin interne d'installation Pattern ne cree donc pas
 de transaction imbriquee et ne publie aucun etat UI intermediaire.
 
 Le remplacement publie aussi, avant ce commit AUDIO, une generation Sequence
-complete avec un nouvel epoch d'execution. Cette barriere vaut meme lorsque le
-transport est arrete: au PLAY suivant, aucun terminal NOTE ou PARAM compile
-depuis l'ancien Pattern ne peut etre applique aux moteurs du nouveau Project.
+complete avec un nouvel epoch d'execution. Publication immutable et retrait du
+graphe mutable SEQ forment une seule section critique: slots terminaux
+READY/READING, curseur AUDIO, core/ledgers/calendriers, held NoteFX, ingress,
+pending IRQ, force-stop et disarm/rearm sont retires ensemble. Les evenements
+live-rec encore en attente dans CONTROL sont jetes avant la compilation. AUDIO
+n'acquiert ensuite qu'un bloc de la generation d'execution courante ou de la
+generation publiee suivante. Cette barriere vaut meme lorsque le transport est
+arrete: au PLAY suivant, aucun terminal NOTE ou PARAM compile depuis l'ancien
+Pattern ne peut etre applique aux moteurs du nouveau Project.
 Les recalls Pattern a l'arret suivent le meme ordre; un recall en lecture garde
 son epoch musical et publie sa generation a la frontiere de cycle choisie.
 La compilation atomique de plusieurs geometries Groove reutilise alors le

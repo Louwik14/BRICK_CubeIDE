@@ -34,6 +34,7 @@ static volatile uint8_t g_ingress_head,g_ingress_tail,g_ingress_count;
 static volatile uint8_t g_ingress_panic;
 static uint64_t g_ingress_rate_window;
 static uint8_t g_ingress_rate_count;
+static uint32_t g_execution_generation;
 
 /* MIDI tracks deliberately have no AUDIO renderer, so their terminal events
  * are not present in emitter_tracks.  They still cross the canonical musical
@@ -107,10 +108,43 @@ void seq_engine_irq_init(void)
     g_missed_horizons=0U;
     g_ingress_head=0U;g_ingress_tail=0U;g_ingress_count=0U;g_ingress_panic=0U;
     g_ingress_rate_window=UINT64_MAX;g_ingress_rate_count=0U;
+    g_execution_generation=0U;
     seq_engine_core_init(&g_core);
     NVIC_ClearPendingIRQ(TIM4_IRQn);
     NVIC_SetPriority(TIM4_IRQn, 2U);
     NVIC_EnableIRQ(TIM4_IRQn);
+}
+
+void seq_engine_execution_replace(uint32_t generation)
+{
+    /* Caller publishes the replacement Pattern with IRQs masked.  Reset the
+     * complete mutable execution graph here, rather than relying on a later
+     * ingress panic to be consumed opportunistically by TIM4. */
+    for (uint8_t i = 0U; i < SEQ_ENGINE_BLOCK_SLOTS; ++i)
+        g_slot_state[i] = SLOT_FREE;
+    g_audio_slot = -1;
+    g_audio_cursor = SEQ_ENGINE_TERMINAL_INDEX_NONE;
+    g_audio_offset = 0U;
+    g_audio_class = 0U;
+    g_disarmed_tracks = 0U;
+    g_audio_rearm_tracks = 0U;
+    g_disarm_generation = generation;
+    g_force_stopped = 0U;
+    g_force_stop_preserve_live = 0U;
+    g_force_stop_sample = 0U;
+    g_force_stop_epoch = 0U;
+    g_ingress_head = 0U;
+    g_ingress_tail = 0U;
+    g_ingress_count = 0U;
+    g_ingress_panic = 0U;
+    g_ingress_rate_window = UINT64_MAX;
+    g_ingress_rate_count = 0U;
+    g_pending = 0U;
+    g_urgent_pending = 0U;
+    g_next_deadline = UINT64_MAX;
+    g_execution_generation = generation;
+    seq_engine_core_init(&g_core);
+    NVIC_ClearPendingIRQ(TIM4_IRQn);
 }
 
 void seq_engine_audio_boundary(uint64_t block_start_sample, uint8_t recovering)
@@ -124,12 +158,21 @@ void seq_engine_audio_boundary(uint64_t block_start_sample, uint8_t recovering)
     if (recovering != 0U)
         for (uint8_t i = 0U; i < SEQ_ENGINE_BLOCK_SLOTS; ++i)
             if (g_slot_state[i] == SLOT_READY) g_slot_state[i] = SLOT_FREE;
+    const seq_pattern_t *const pattern = seq_engine_pattern_capture();
+    const uint32_t generation = pattern ? pattern->generation : 0U;
     for (uint8_t i = 0U; i < SEQ_ENGINE_BLOCK_SLOTS; ++i) {
+        if ((g_slot_state[i] == SLOT_READY)
+                && (g_terminal[i].generation != g_execution_generation)
+                && (g_terminal[i].generation != generation)) {
+            g_slot_state[i] = SLOT_FREE;
+            continue;
+        }
         if ((g_slot_state[i] == SLOT_READY)
                 && (g_terminal[i].start_sample == block_start_sample)) {
             g_slot_state[i] = SLOT_READING; g_audio_slot = (int8_t)i;
             g_audio_cursor=SEQ_ENGINE_TERMINAL_INDEX_NONE;
             g_audio_offset=0U;g_audio_class=0U;acquired=1U;
+            g_execution_generation=g_terminal[i].generation;
             if(g_terminal[i].generation!=g_disarm_generation){
                 g_audio_rearm_tracks=g_disarmed_tracks;
                 g_disarm_generation=g_terminal[i].generation;}
@@ -190,6 +233,7 @@ uint16_t seq_engine_audio_frames_until_due(uint64_t sample, uint16_t maximum)
 {
     if ((g_audio_slot < 0) || (maximum == 0U)) return maximum;
     seq_terminal_block_t *const block = &g_terminal[(uint8_t)g_audio_slot];
+    if (block->generation != g_execution_generation) return maximum;
     while(audio_cursor_seek(block)!=0U){
         const seq_terminal_event_t *const event=&block->events[g_audio_cursor];
         if(event_is_audible(block,g_audio_class,event)==0U){audio_cursor_advance(block);continue;}
@@ -211,6 +255,7 @@ uint8_t seq_engine_audio_pop_due(uint64_t sample,uint8_t *out_kind,
 {
     if ((out_event == 0)||(out_kind==0)||(g_audio_slot < 0)) return 0U;
     seq_terminal_block_t *const block = &g_terminal[(uint8_t)g_audio_slot];
+    if (block->generation != g_execution_generation) return 0U;
     while(audio_cursor_seek(block)!=0U){
         const seq_terminal_event_t event=block->events[g_audio_cursor];
         if(event_is_audible(block,g_audio_class,&event)==0U){audio_cursor_advance(block);continue;}

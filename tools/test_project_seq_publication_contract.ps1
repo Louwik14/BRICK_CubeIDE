@@ -5,20 +5,48 @@ $project = Get-Content -Raw (Join-Path $root 'Src/Storage/project_product.c')
 $pattern = Get-Content -Raw (Join-Path $root 'Src/Storage/persistent_pattern_control.c')
 $live = Get-Content -Raw (Join-Path $root 'Src/Storage/pattern_live_ram.c')
 $audio = Get-Content -Raw (Join-Path $root 'Src/Audio/audio_command_executor.c')
+$owner = Get-Content -Raw (Join-Path $root 'Src/Seq/seq_pattern_owner.c')
+$port = Get-Content -Raw (Join-Path $root 'Src/Seq/seq_engine_port_h743.c')
+$runtime = Get-Content -Raw (Join-Path $root 'Src/Seq/seq_runtime.c')
 
 $projectOrder = [regex]::Match($project,
     'persistent_pattern_control_install_into_active_snapshot[\s\S]*?' +
-    'seq_engine_control_reset_note_fx_context\(\)[\s\S]*?' +
-    'seq_engine_control_flush_with_workspace\([\s\S]*?' +
+    'seq_engine_control_replace_with_workspace\([\s\S]*?' +
     'audio_state_snapshot_control_commit\(\)')
 if (-not $projectOrder.Success) {
     throw 'Project replacement must publish a reset SEQ generation before AUDIO commit'
 }
 
-if ($pattern -notmatch 'if \(resume_transport == 0U\)[\s\S]*?' +
-        'seq_engine_control_reset_note_fx_context\(\);[\s\S]*?' +
-        'if \(seq_engine_control_flush_with_workspace\(workspace\) == 0U\)') {
+if ($pattern -notmatch '\(resume_transport == 0U\)[\s\S]*?' +
+        'seq_engine_control_replace_with_workspace\(workspace\)[\s\S]*?' +
+        'seq_engine_control_flush_with_workspace\(workspace\)') {
     throw 'Stopped Pattern replacement must reset and publish SEQ before AUDIO commit'
+}
+
+$atomicReplace = [regex]::Match($owner,
+    'g_published_generation = g_build_generation;[\s\S]*?' +
+    'seq_engine_execution_replace\(g_build_generation\)[\s\S]*?' +
+    '__set_PRIMASK\(primask\)')
+if (-not $atomicReplace.Success) {
+    throw 'SEQ generation publication and mutable execution retirement must be IRQ-atomic'
+}
+
+$executionReplace = [regex]::Match($port,
+    'void seq_engine_execution_replace[\s\S]*?^\}',
+    [System.Text.RegularExpressions.RegexOptions]::Multiline)
+foreach ($required in @('g_slot_state', 'g_audio_slot', 'g_ingress_count',
+        'g_pending', 'g_force_stopped', 'seq_engine_core_init')) {
+    if (-not $executionReplace.Success -or $executionReplace.Value -notmatch $required) {
+        throw "SEQ replacement barrier does not retire $required"
+    }
+}
+if ($owner -notmatch 'seq_runtime_live_rec_discard_effective\(\)' -or
+    $runtime -notmatch 'void seq_runtime_live_rec_discard_effective') {
+    throw 'SEQ replacement must discard pending CONTROL live-rec events'
+}
+if ($port -notmatch 'g_terminal\[i\]\.generation != g_execution_generation[\s\S]*?' +
+        'g_terminal\[i\]\.generation != generation') {
+    throw 'AUDIO boundary must reject terminal blocks outside the active/published generations'
 }
 
 $workspace = Get-Content -Raw (Join-Path $root 'Inc/Storage/persistence_workspace.h')

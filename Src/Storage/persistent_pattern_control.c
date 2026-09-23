@@ -811,9 +811,10 @@ persist_codec_result_t persistent_pattern_control_apply_with_seq_workspace(
      * Pattern while the new track programs are already active.  Resetting the
      * execution epoch also prevents old lock/note ownership from crossing the
      * stopped replacement.  Running cycle recalls preserve their epoch. */
-    if (resume_transport == 0U)
-        seq_engine_control_reset_note_fx_context();
-    if (seq_engine_control_flush_with_workspace(workspace) == 0U)
+    const uint8_t seq_published = (resume_transport == 0U)
+        ? seq_engine_control_replace_with_workspace(workspace)
+        : seq_engine_control_flush_with_workspace(workspace);
+    if (seq_published == 0U)
     {
         g_persist_dbg.seq_publish_result = 0U;
         audio_state_snapshot_control_abort();

@@ -156,6 +156,7 @@ uint8_t seq_runtime_live_rec_submit_effective(seq_live_rec_source_t source,
                                               uint32_t ingress_serial,
                                               uint32_t occurrence_id);
 void seq_runtime_live_rec_drain_effective(void);
+void seq_runtime_live_rec_discard_effective(void);
 /* Notification surface from MIDI input / transport source. */
 void seq_runtime_midi_clock_from_source(seq_clock_src_t source);
 void seq_runtime_midi_start_from_source(seq_clock_src_t source);
