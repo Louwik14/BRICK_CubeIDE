@@ -8,45 +8,17 @@ extern "C" {
 typedef uint16_t param_id_t;
 
 enum {
-    PARAM_RESERVED_000 = 0,
-    PARAM_RESERVED_001 = 1,
-    PARAM_RESERVED_002 = 2,
-    PARAM_RESERVED_003 = 3,
-    PARAM_RESERVED_004 = 4,
-    PARAM_RESERVED_005 = 5,
-
-    PARAM_RESERVED_006 = 6,
-    PARAM_RESERVED_007 = 7,
-    PARAM_RESERVED_008 = 8,
-    PARAM_RESERVED_009 = 9,
-    PARAM_RESERVED_010 = 10,
-    PARAM_RESERVED_011 = 11,
-    PARAM_RESERVED_012 = 12,
-    PARAM_RESERVED_013 = 13,
-    PARAM_MIX_MUTE = 14,
-    PARAM_RESERVED_015 = 15,
-    PARAM_RESERVED_016 = 16,
-    PARAM_CFG_POLY_SPREAD = 17,
-    PARAM_RESERVED_018 = 18,
-    PARAM_RESERVED_019 = 19,
-    PARAM_RESERVED_020 = 20,
-    PARAM_DRUM_MD_MODEL = 21,
-    PARAM_DRUM_MD_P1 = 22,
-    PARAM_DRUM_MD_P2 = 23,
-    PARAM_DRUM_MD_P3 = 24,
-    PARAM_DRUM_MD_P4 = 25,
-    PARAM_DRUM_MD_P5 = 26,
-    PARAM_DRUM_MD_P6 = 27,
-    PARAM_DRUM_MD_P7 = 28,
-    PARAM_DRUM_MD_P8 = 29,
-    PARAM_RESERVED_030 = 30,
-    PARAM_RESERVED_031 = 31,
-    PARAM_RESERVED_032 = 32,
-    PARAM_RESERVED_033 = 33,
-    PARAM_RESERVED_034 = 34,
-    PARAM_RESERVED_035 = 35,
-    PARAM_RESERVED_036 = 36,
-    PARAM_RESERVED_037 = 37,
+    PARAM_MIX_MUTE = 0,
+    PARAM_CFG_POLY_SPREAD,
+    PARAM_DRUM_MD_MODEL,
+    PARAM_DRUM_MD_P1,
+    PARAM_DRUM_MD_P2,
+    PARAM_DRUM_MD_P3,
+    PARAM_DRUM_MD_P4,
+    PARAM_DRUM_MD_P5,
+    PARAM_DRUM_MD_P6,
+    PARAM_DRUM_MD_P7,
+    PARAM_DRUM_MD_P8,
     PARAM_MIX_SEND0_FX,
     PARAM_MIX_SEND1_FX,
     PARAM_MIX_LEVEL,
@@ -62,10 +34,6 @@ enum {
     PARAM_BUS_COMP_AUTO_MAKEUP,
     PARAM_BUS_COMP_DRYWET,
     PARAM_BUS_COMP_HPF_HZ,
-    PARAM_RESERVED_052,
-    PARAM_RESERVED_053,
-    PARAM_RESERVED_054,
-
     PARAM_SAT_TONE,
     PARAM_SAT_BIAS,
     PARAM_SAT_DRIVE,
@@ -82,35 +50,14 @@ enum {
     PARAM_FILTER_KEYTRK,
     PARAM_FILTER_ENVRST,
     PARAM_FILTER_ENVDLY,
-    PARAM_RESERVED_FILTER_SLOT_1,
-    PARAM_RESERVED_FILTER_SLOT_2,
-    PARAM_RESERVED_FILTER_SLOT_3,
-    PARAM_RESERVED_FILTER_DRIVE_73,
-    PARAM_RESERVED_FILTER_DECIMATOR_BITS_74,
-    PARAM_RESERVED_FILTER_DECIMATOR_RATE_75,
-    PARAM_RESERVED_FILTER_DECIMATOR_RATE2_76,
     PARAM_VCA_ATTACK,
     PARAM_VCA_DECAY,
     PARAM_VCA_SUSTAIN,
     PARAM_VCA_RELEASE,
 
-    PARAM_RESERVED_TRACK_FAMILY,
-    PARAM_RESERVED_TRACK_TYPE,
-    PARAM_RESERVED_MIDI_CHANNEL,
-    PARAM_RESERVED_MIDI_SOURCE,
-
     PARAM_MASTER_GAIN,
     PARAM_POST_GAIN,
     PARAM_OUTPUT_COMP,
-
-    PARAM_RESERVED_DRUM_ANALOG_93,
-    PARAM_RESERVED_DRUM_ANALOG_94,
-    PARAM_RESERVED_DRUM_ANALOG_95,
-    PARAM_RESERVED_DRUM_ANALOG_96,
-    PARAM_RESERVED_DRUM_ANALOG_97,
-    PARAM_RESERVED_DRUM_ANALOG_98,
-    PARAM_RESERVED_DRUM_ANALOG_99,
-    PARAM_RESERVED_DRUM_ANALOG_100,
 
     PARAM_LFO1_RATE,
     PARAM_LFO1_SHAPE,
@@ -124,26 +71,12 @@ enum {
     PARAM_LFO3_SHAPE,
     PARAM_LFO3_TRIG,
     PARAM_LFO3_PHASE,
-    PARAM_RESERVED_MOD_MATRIX_SLOT,
-    PARAM_RESERVED_MOD_MATRIX_SOURCE,
-    PARAM_RESERVED_MOD_MATRIX_DEST,
-    PARAM_RESERVED_MOD_MATRIX_DEPTH,
-    PARAM_RESERVED_MOD_MULTI_1_A,
-    PARAM_RESERVED_MOD_MULTI_1_B,
-    PARAM_RESERVED_MOD_MULTI_2_A,
-    PARAM_RESERVED_MOD_MULTI_2_B,
-    PARAM_RESERVED_MOD_SLEW_1_SOURCE,
-    PARAM_RESERVED_MOD_SLEW_1_AMOUNT,
-    PARAM_RESERVED_MOD_SLEW_2_SOURCE,
-    PARAM_RESERVED_MOD_SLEW_2_AMOUNT,
     PARAM_ENV3_ATTACK,
     PARAM_ENV3_DECAY,
     PARAM_ENV3_SUSTAIN,
     PARAM_ENV3_RELEASE,
     PARAM_ENV_RETRIG_FILTER,
     PARAM_ENV_RETRIG_VCA,
-    PARAM_RESERVED_ENV_RETRIG_MOD_126,
-
     PARAM_MIX_REVERB_WET,
     PARAM_MIX_REVERB_ROOM_SIZE,
     PARAM_MIX_REVERB_DAMPING,
@@ -161,7 +94,6 @@ enum {
     PARAM_MIX_DELAY_SPECTRAL_WIDTH,
     PARAM_MIX_DELAY_FBW,
     PARAM_MIX_REVERB_DELAYS,
-    PARAM_RESERVED_175,
     PARAM_MIX_DELAY_MOD,
     PARAM_MIX_DELAY_MOD_RATE,
     PARAM_MIX_DELAY_REV,
@@ -256,16 +188,11 @@ enum {
     PARAM_WAVE_BALANCE,
     PARAM_WAVE_TUNE,
     PARAM_WAVE_DETUNE,
-    PARAM_RESERVED_WAVE_QUALITY_0,
-    PARAM_RESERVED_WAVE_QUALITY_1,
-    PARAM_RESERVED_WAVE_QUALITY_2,
-    PARAM_RESERVED_WAVE_QUALITY_3,
     PARAM_COMP_MODEL,
     PARAM_COMP_DETECT,
     PARAM_COMP_KNEE_DB,
     PARAM_COMP_DELUGE_SAT,
-    /* EXT TONE gate policy. Reuses the retired external-input slot so every
-     * following persisted parameter ordinal remains stable. */
+    /* EXT TONE gate policy. */
     PARAM_EXT_GATE,
 
     PARAM_MIDI_FX_S1_PARAM1,
@@ -367,8 +294,7 @@ enum {
     PARAM_FM_PITCH_L3,
     PARAM_FM_PITCH_L4,
 
-    /* Per-entity Audio FX control.  Keep these IDs appended: existing
-     * parameter ordinals are part of the control/persistence contract. */
+    /* Per-entity Audio FX control. */
     PARAM_AUDIO_FX_P1,
     PARAM_AUDIO_FX_P2,
     PARAM_AUDIO_FX_P3,
@@ -385,25 +311,18 @@ enum {
     PARAM_MODFX_DEPTH_B,
     PARAM_MODFX_WIDTH,
 
-    /* Slot B is appended so every pre-existing parameter ordinal, including
-     * the slot-A Audio FX IDs above, remains stable. */
+    /* Per-entity Audio FX slot B control. */
     PARAM_AUDIO_FX_B_P1,
     PARAM_AUDIO_FX_B_P2,
     PARAM_AUDIO_FX_B_P3,
     PARAM_AUDIO_FX_B_MODEL,
 
-    /* Structural Audio FX routing controls.  Appended for ordinal stability. */
-    PARAM_RESERVED_AUDIO_FX_FILTER_POS,
-    PARAM_RESERVED_AUDIO_FX_ORDER,
-    PARAM_RESERVED_AUDIO_FX_MODE_A,
-    PARAM_RESERVED_AUDIO_FX_MODE_B,
-
     /* GROUP children own only these local sends into the GROUP master's
-     * parallel Audio FX slots.  Appended for persistence ordinal stability. */
+     * parallel Audio FX slots. */
     PARAM_GROUP_FX_A_LEVEL,
     PARAM_GROUP_FX_B_LEVEL,
 
-    /* TB-303 TONE controls. Appended for persistence ordinal stability. */
+    /* TB-303 TONE controls. */
     PARAM_TB303_WAVE,
     PARAM_TB303_TUNE,
     PARAM_TB303_CUT,
@@ -441,85 +360,9 @@ static inline uint8_t param_id_is_fm_public(param_id_t id)
             || ((id >= PARAM_FM_PLAY_VEL) && (id <= PARAM_FM_UI_LAST)));
 }
 
-static inline uint8_t param_id_is_reserved(param_id_t id)
+static inline uint8_t param_id_is_valid(param_id_t id)
 {
-    switch (id)
-    {
-        case PARAM_RESERVED_000:
-        case PARAM_RESERVED_001:
-        case PARAM_RESERVED_002:
-        case PARAM_RESERVED_003:
-        case PARAM_RESERVED_004:
-        case PARAM_RESERVED_005:
-        case PARAM_RESERVED_006:
-        case PARAM_RESERVED_007:
-        case PARAM_RESERVED_008:
-        case PARAM_RESERVED_009:
-        case PARAM_RESERVED_010:
-        case PARAM_RESERVED_011:
-        case PARAM_RESERVED_012:
-        case PARAM_RESERVED_013:
-        case PARAM_RESERVED_015:
-        case PARAM_RESERVED_016:
-        case PARAM_RESERVED_175:
-        case PARAM_RESERVED_018:
-        case PARAM_RESERVED_019:
-        case PARAM_RESERVED_020:
-        case PARAM_RESERVED_TRACK_FAMILY:
-        case PARAM_RESERVED_TRACK_TYPE:
-        case PARAM_RESERVED_MIDI_CHANNEL:
-        case PARAM_RESERVED_MIDI_SOURCE:
-        case PARAM_RESERVED_MOD_MATRIX_SLOT:
-        case PARAM_RESERVED_MOD_MATRIX_SOURCE:
-        case PARAM_RESERVED_MOD_MATRIX_DEST:
-        case PARAM_RESERVED_MOD_MATRIX_DEPTH:
-        case PARAM_RESERVED_MOD_MULTI_1_A:
-        case PARAM_RESERVED_MOD_MULTI_1_B:
-        case PARAM_RESERVED_MOD_MULTI_2_A:
-        case PARAM_RESERVED_MOD_MULTI_2_B:
-        case PARAM_RESERVED_MOD_SLEW_1_SOURCE:
-        case PARAM_RESERVED_MOD_SLEW_1_AMOUNT:
-        case PARAM_RESERVED_MOD_SLEW_2_SOURCE:
-        case PARAM_RESERVED_MOD_SLEW_2_AMOUNT:
-        case PARAM_RESERVED_AUDIO_FX_FILTER_POS:
-        case PARAM_RESERVED_AUDIO_FX_ORDER:
-        case PARAM_RESERVED_AUDIO_FX_MODE_A:
-        case PARAM_RESERVED_AUDIO_FX_MODE_B:
-        case PARAM_RESERVED_030:
-        case PARAM_RESERVED_031:
-        case PARAM_RESERVED_032:
-        case PARAM_RESERVED_033:
-        case PARAM_RESERVED_034:
-        case PARAM_RESERVED_035:
-        case PARAM_RESERVED_036:
-        case PARAM_RESERVED_037:
-        case PARAM_RESERVED_052:
-        case PARAM_RESERVED_053:
-        case PARAM_RESERVED_054:
-        case PARAM_RESERVED_FILTER_SLOT_1:
-        case PARAM_RESERVED_FILTER_SLOT_2:
-        case PARAM_RESERVED_FILTER_SLOT_3:
-        case PARAM_RESERVED_FILTER_DRIVE_73:
-        case PARAM_RESERVED_FILTER_DECIMATOR_BITS_74:
-        case PARAM_RESERVED_FILTER_DECIMATOR_RATE_75:
-        case PARAM_RESERVED_FILTER_DECIMATOR_RATE2_76:
-        case PARAM_RESERVED_DRUM_ANALOG_93:
-        case PARAM_RESERVED_DRUM_ANALOG_94:
-        case PARAM_RESERVED_DRUM_ANALOG_95:
-        case PARAM_RESERVED_DRUM_ANALOG_96:
-        case PARAM_RESERVED_DRUM_ANALOG_97:
-        case PARAM_RESERVED_DRUM_ANALOG_98:
-        case PARAM_RESERVED_DRUM_ANALOG_99:
-        case PARAM_RESERVED_DRUM_ANALOG_100:
-        case PARAM_RESERVED_ENV_RETRIG_MOD_126:
-        case PARAM_RESERVED_WAVE_QUALITY_0:
-        case PARAM_RESERVED_WAVE_QUALITY_1:
-        case PARAM_RESERVED_WAVE_QUALITY_2:
-        case PARAM_RESERVED_WAVE_QUALITY_3:
-            return 1U;
-        default:
-            return 0U;
-    }
+    return (uint8_t)(id < PARAM_COUNT);
 }
 
 #ifdef __cplusplus
@@ -527,27 +370,36 @@ static inline uint8_t param_id_is_reserved(param_id_t id)
 #else
 #define PARAM_ID_STATIC_ASSERT _Static_assert
 #endif
-PARAM_ID_STATIC_ASSERT(PARAM_RESERVED_007 == 7, "Reserved parameter ID changed");
-PARAM_ID_STATIC_ASSERT(PARAM_RESERVED_008 == 8, "Reserved parameter ID changed");
-PARAM_ID_STATIC_ASSERT(PARAM_RESERVED_009 == 9, "Reserved parameter ID changed");
-PARAM_ID_STATIC_ASSERT(PARAM_RESERVED_010 == 10, "Reserved parameter ID changed");
-PARAM_ID_STATIC_ASSERT(PARAM_MIX_MUTE == 14, "Mute parameter ID changed");
-PARAM_ID_STATIC_ASSERT(PARAM_RESERVED_015 == 15, "Reserved parameter ID changed");
-PARAM_ID_STATIC_ASSERT(PARAM_RESERVED_016 == 16, "Reserved parameter ID changed");
-PARAM_ID_STATIC_ASSERT(PARAM_CFG_POLY_SPREAD == 17, "Polyphony parameter IDs changed");
-PARAM_ID_STATIC_ASSERT(PARAM_DRUM_MD_MODEL == 21, "Drum MD parameter IDs changed");
-PARAM_ID_STATIC_ASSERT(PARAM_DRUM_MD_P1 == 22, "Drum MD parameter IDs changed");
-PARAM_ID_STATIC_ASSERT(PARAM_DRUM_MD_P8 == 29, "Drum MD parameter IDs changed");
-PARAM_ID_STATIC_ASSERT(PARAM_RESERVED_FILTER_DRIVE_73 == 73, "Filter tombstone ID changed");
-PARAM_ID_STATIC_ASSERT(PARAM_RESERVED_FILTER_DECIMATOR_BITS_74 == 74, "Filter tombstone ID changed");
-PARAM_ID_STATIC_ASSERT(PARAM_RESERVED_FILTER_DECIMATOR_RATE_75 == 75, "Filter tombstone ID changed");
-PARAM_ID_STATIC_ASSERT(PARAM_RESERVED_FILTER_DECIMATOR_RATE2_76 == 76, "Filter tombstone ID changed");
-PARAM_ID_STATIC_ASSERT(PARAM_RESERVED_ENV_RETRIG_MOD_126 == 126, "ENV tombstone ID changed");
-PARAM_ID_STATIC_ASSERT(PARAM_MIX_REVERB_DELAYS == 143, "Reverb parameter ID changed");
-PARAM_ID_STATIC_ASSERT(PARAM_RESERVED_175 == 144, "Reserved parameter ID changed");
-PARAM_ID_STATIC_ASSERT(PARAM_COUNT == 384, "Parameter count changed");
-PARAM_ID_STATIC_ASSERT(PARAM_MIDI_FX_S1_PARAM1 == 247, "MIDI FX parameter boundary changed");
-PARAM_ID_STATIC_ASSERT(PARAM_EXT_GATE == 246, "EXT gate parameter ID changed");
+PARAM_ID_STATIC_ASSERT(PARAM_MIX_MUTE == 0, "Parameter IDs must stay dense");
+PARAM_ID_STATIC_ASSERT(PARAM_DRUM_MD_P1 == (PARAM_DRUM_MD_MODEL + 1), "Drum MD block must stay contiguous");
+PARAM_ID_STATIC_ASSERT(PARAM_DRUM_MD_P8 == (PARAM_DRUM_MD_P1 + 7), "Drum MD block must stay contiguous");
+PARAM_ID_STATIC_ASSERT(PARAM_LFO2_RATE == (PARAM_LFO1_RATE + 4), "LFO blocks must stay contiguous");
+PARAM_ID_STATIC_ASSERT(PARAM_LFO3_RATE == (PARAM_LFO2_RATE + 4), "LFO blocks must stay contiguous");
+PARAM_ID_STATIC_ASSERT(PARAM_MIDI_CC3_4 == (PARAM_MIDI_CC1_1 + 11), "MIDI CC block must stay contiguous");
+PARAM_ID_STATIC_ASSERT(PARAM_STACK_OSC3_LEVEL == (PARAM_STACK_OSC1_LEVEL + 2),
+        "Stack level block must stay contiguous");
+PARAM_ID_STATIC_ASSERT(PARAM_STACK_OSC3_COLOR == (PARAM_STACK_OSC1_MODEL + 11),
+        "Stack oscillator blocks must stay contiguous");
+PARAM_ID_STATIC_ASSERT(PARAM_WAVE_OSC1_LEN == (PARAM_WAVE_OSC1_POS + 2),
+        "Wave oscillator 1 block must stay contiguous");
+PARAM_ID_STATIC_ASSERT(PARAM_WAVE_OSC2_POS == (PARAM_WAVE_OSC1_POS + 3),
+        "Wave oscillator blocks must stay contiguous");
+PARAM_ID_STATIC_ASSERT(PARAM_WAVE_OSC2_LEN == (PARAM_WAVE_OSC2_POS + 2),
+        "Wave oscillator 2 block must stay contiguous");
+PARAM_ID_STATIC_ASSERT(PARAM_FM_OPERATOR_LAST == (PARAM_FM_OPERATOR_FIRST
+        + (PARAM_FM_OPERATOR_COUNT * PARAM_FM_OPERATOR_PARAM_COUNT) - 1U),
+        "FM operator blocks must stay contiguous");
+PARAM_ID_STATIC_ASSERT(PARAM_FM_PITCH_R4 == (PARAM_FM_PITCH_R1 + 3),
+        "FM pitch rate block must stay contiguous");
+PARAM_ID_STATIC_ASSERT(PARAM_FM_PITCH_L1 == (PARAM_FM_PITCH_R4 + 1),
+        "FM pitch envelope blocks must stay adjacent");
+PARAM_ID_STATIC_ASSERT(PARAM_FM_PITCH_L4 == (PARAM_FM_PITCH_L1 + 3),
+        "FM pitch level block must stay contiguous");
+PARAM_ID_STATIC_ASSERT(PARAM_AUDIO_FX_P3 == (PARAM_AUDIO_FX_P1 + 2),
+        "Audio FX slot A parameter block must stay contiguous");
+PARAM_ID_STATIC_ASSERT(PARAM_AUDIO_FX_B_P3 == (PARAM_AUDIO_FX_B_P1 + 2),
+        "Audio FX slot B parameter block must stay contiguous");
+PARAM_ID_STATIC_ASSERT(PARAM_COUNT == 313, "Unexpected parameter catalog size");
 #undef PARAM_ID_STATIC_ASSERT
 
 #ifdef __cplusplus

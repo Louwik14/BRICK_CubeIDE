@@ -4,7 +4,8 @@
 
 #include "Param/param_ids.h"
 
-/* Fifth float is retained only to preserve the serialized legacy layout. */
+/* Retrigger is the current CONTROL state projected to the persistent
+ * retrigger_hard field and to AUDIO. */
 typedef struct { float attack, decay, sustain, release, retrigger; } mod_env3_control_state_t;
 
 void mod_env3_control_init(void);

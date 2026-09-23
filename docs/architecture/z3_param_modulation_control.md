@@ -5,6 +5,14 @@ Le registre CONTROL ajoute affichage, persistance, p-lockabilite, politique de
 valeur et callbacks. AUDIO consomme `param_audio.h`, rejette une valeur hors
 contrat et applique une valeur deja canonique sans rejouer la politique CONTROL.
 
+`param_ids.h` est l'autorite unique des IDs internes partages par CONTROL,
+AUDIO et SEQ. Le catalogue est dense, sans tombstone historique. Les tables
+paralleles utilisent des initialisateurs designes par symbole; les assertions
+ne figent que les blocs dont les offsets sont fonctionnels (Drum MD, LFO, MIDI
+CC et operateurs FM), jamais un ordinal historique. La validite d'un ID passe
+par `param_id_is_valid`. Les donnees persistantes utilisent leurs cles stables
+et ne serialisent pas ces ordinaux internes.
+
 Autorites d'ecriture:
 
 - global: `param_registry_commit_global`, vers l'autorite CONTROL explicite;
@@ -49,7 +57,7 @@ champs temporaires restent intacts.
 
 ## Modulation
 
-LFO, Matrix, ENV3, filtre et VCA ont une autorite unique. Une destination Matrix est `{entity_id, param_id}`. En GROUP, le master possede Matrix, trois LFO, ENV3 et operateurs; un child peut etre destination mais ne devient pas owner. AUDIO compile les plans et masques de sources a la publication, sans relire la configuration CONTROL.
+LFO, Matrix, ENV3, filtre et VCA ont une autorite unique. Une destination Matrix est `{entity_id, param_id}`. En GROUP, le master possede l'unique Matrix, les trois LFO, ENV3 et les operateurs; un child peut etre destination mais ne devient jamais owner. La vue MOD du master enumere uniquement ses destinations communes. La vue d'un child enumere ces destinations communes puis les destinations locales de ce child, sans union des autres children. Les Param IDs LFO et ENV3 restent communs, sont resolus vers le master et ne sont donc ni recopies dans les catalogues locaux child ni p-lockes par une lane child. AUDIO compile les plans et masques de sources a la publication, sans relire la configuration CONTROL.
 
 Les implementations sont separees par ownership: `mod_lfo_control` et
 `mod_matrix_control` modifient uniquement l'etat canonique et publient des

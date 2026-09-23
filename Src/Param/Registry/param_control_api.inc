@@ -57,8 +57,7 @@ uint8_t param_registry_resolve_track_param(
     *out_param = (param_registry_resolved_track_param_t){
         .id = id, .applicable = 0U, .plockable = 0U, .label = NULL
     };
-    if ((track >= BRICK_ENTITY_CAPACITY) || (id >= PARAM_COUNT)
-            || (param_id_is_reserved(id) != 0U)) return 0U;
+    if ((track >= BRICK_ENTITY_CAPACITY) || (param_id_is_valid(id) == 0U)) return 0U;
 
     out_param->plockable = param_registry_is_plockable(id);
     out_param->label = param_registry[id].name;
@@ -432,8 +431,7 @@ void param_registry_init(void)
 /* Query surface: explicit owner dispatch, with no generic fallback storage. */
 uint8_t param_registry_query_global(param_id_t id, float *out_value)
 {
-    if ((out_value == NULL) || (id >= PARAM_COUNT)
-            || (param_id_is_reserved(id) != 0U)) return 0U;
+    if ((out_value == NULL) || (param_id_is_valid(id) == 0U)) return 0U;
     const track_runtime_param_rule_t rule = track_runtime_get_param_rule(id);
     if ((rule.domain != TRACK_RUNTIME_PARAM_DOMAIN_GLOBAL)
             || (rule.status != TRACK_RUNTIME_PARAM_GLOBAL_ALLOWED)) return 0U;
@@ -462,7 +460,7 @@ uint8_t param_registry_install_prepared_global_control_target(
  * install the exact prepared value in its CONTROL owner. */
 uint8_t param_registry_commit_global(param_id_t id, float value)
 {
-    if ((id >= PARAM_COUNT) || (param_id_is_reserved(id) != 0U))
+    if (param_id_is_valid(id) == 0U)
         return 0U;
 
     param_registry_prepared_value_t prepared;
@@ -507,8 +505,8 @@ uint8_t param_registry_prepare_track_control_target(
     audio_fx_control_prepare_context_t *audio_fx_context,
     param_registry_prepared_track_target_t *out_target)
 {
-    if ((out_target == NULL) || (id >= PARAM_COUNT)
-            || (track >= SEQ_LANE_CAPACITY) || (param_id_is_reserved(id) != 0U)
+    if ((out_target == NULL) || (param_id_is_valid(id) == 0U)
+            || (track >= SEQ_LANE_CAPACITY)
             || !isfinite(value)
             || (param_registry_track_value_is_audio_command(id, track) == 0U)
             || (track_runtime_get_effective_param_status(track, id)
@@ -600,7 +598,7 @@ uint8_t param_registry_prepare_track_control_target(
 /* Command surface: reset global canonical value to default. */
 uint8_t param_registry_reset_global(param_id_t id)
 {
-    if ((id >= PARAM_COUNT) || (param_id_is_reserved(id) != 0U))
+    if (param_id_is_valid(id) == 0U)
         return 0U;
 
     return param_registry_commit_global(id, param_registry[id].default_value);

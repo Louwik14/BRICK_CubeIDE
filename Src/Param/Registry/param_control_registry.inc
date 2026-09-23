@@ -294,15 +294,15 @@ static uint8_t param_apply_filter_track_value(param_id_t id, uint8_t track, floa
 /* Query surface: pure value read, no mutation, no resync, no transition. */
 uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_value)
 {
-    if ((id >= PARAM_COUNT) || (out_value == NULL)
-            || (param_id_is_reserved(id) != 0U))
+    if ((param_id_is_valid(id) == 0U) || (out_value == NULL))
     {
         return 0U;
     }
 
     uint8_t note_fx_slot = 0U;
     uint8_t note_fx_param = 0U;
-    if (note_fx_state_param_map(id, &note_fx_slot, &note_fx_param) != 0U)
+    if ((note_fx_state_param_map(id, &note_fx_slot, &note_fx_param) != 0U)
+            || (note_fx_state_order_map(id) != 0U))
     {
         return note_fx_state_get_param(track, id, out_value);
     }

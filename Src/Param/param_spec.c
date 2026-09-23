@@ -27,8 +27,7 @@ const param_spec_t param_spec[PARAM_COUNT] = {
 
 uint8_t param_spec_value_is_valid(param_id_t id, float value)
 {
-    if ((id >= PARAM_COUNT) || (param_id_is_reserved(id) != 0U)
-            || !isfinite(value)) return 0U;
+    if ((param_id_is_valid(id) == 0U) || !isfinite(value)) return 0U;
     return ((value >= param_spec[id].min) && (value <= param_spec[id].max))
         ? 1U : 0U;
 }

@@ -8,8 +8,7 @@ uint8_t param_registry_prepare_value(param_id_t id,
                                      param_registry_prepared_value_t *out_value)
 {
     if ((out_value == NULL)
-            || (id >= PARAM_COUNT)
-            || (param_id_is_reserved(id) != 0U)
+            || (param_id_is_valid(id) == 0U)
             || !isfinite(value))
     {
         return 0U;

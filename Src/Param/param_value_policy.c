@@ -222,8 +222,7 @@ uint8_t param_value_policy_resolve(param_id_t id,
                                    uint8_t track,
                                    param_value_policy_t *out_policy)
 {
-    if ((out_policy == NULL) || (id >= PARAM_COUNT)
-            || (param_id_is_reserved(id) != 0U))
+    if ((out_policy == NULL) || (param_id_is_valid(id) == 0U))
         return 0U;
 
     param_value_policy_t policy = param_registry[id].value_policy;
@@ -322,8 +321,7 @@ uint8_t param_value_policy_display_unit(param_id_t id,
                                         const char **out_unit)
 {
     (void)track;
-    if ((out_unit == NULL) || (id >= PARAM_COUNT)
-            || (param_id_is_reserved(id) != 0U))
+    if ((out_unit == NULL) || (param_id_is_valid(id) == 0U))
         return 0U;
     if ((id >= PARAM_MODFX_RATE) && (id <= PARAM_MODFX_WIDTH))
     {
