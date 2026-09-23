@@ -1,6 +1,8 @@
 #include "Seq/seq_engine.h"
 #include "Seq/seq_traversal.h"
 #include "NoteFx/note_fx_engine.h"
+#include "Track/control_music_output.h"
+#include "Track/track_types.h"
 #include "Platform/memory_layout.h"
 #include "Platform/brick_media_clock.h"
 #include "stm32h7xx.h"
@@ -31,6 +33,53 @@ static volatile uint8_t g_ingress_head,g_ingress_tail,g_ingress_count;
 static volatile uint8_t g_ingress_panic;
 static uint64_t g_ingress_rate_window;
 static uint8_t g_ingress_rate_count;
+
+/* MIDI tracks deliberately have no AUDIO renderer, so their terminal events
+ * are not present in emitter_tracks.  They still cross the canonical musical
+ * output owner here, after Note FX and Groove have finalized their timing.
+ * This is CONTROL/TIM4, never the audio IRQ. */
+static void seq_engine_route_midi_terminal(const seq_terminal_block_t *block,
+    const seq_pattern_t *pattern, uint16_t first_event)
+{
+    if ((block == NULL) || (pattern == NULL)) return;
+    for (uint16_t offset = 0U; offset < block->frames; ++offset)
+    {
+        for (uint8_t kind = (uint8_t)SEQ_ENGINE_EVENT_NOTE_OFF;
+             kind <= (uint8_t)SEQ_ENGINE_EVENT_NOTE_ON; ++kind)
+        {
+            uint16_t index = block->head[offset][kind];
+            while (index != SEQ_ENGINE_TERMINAL_INDEX_NONE)
+            {
+                const seq_terminal_event_t *const event = &block->events[index];
+                if ((index >= first_event)
+                        && (event->note.track < SEQ_LANE_CAPACITY)
+                        && (pattern->track_exec[event->note.track].type
+                            == (uint8_t)TRACK_RUNTIME_TYPE_MIDI))
+                {
+                    const uint8_t channel = pattern->track_exec[
+                        event->note.track].midi_channel_zero_based;
+                    const control_music_intent_t intent = {
+                        .due_sample = block->start_sample + offset,
+                        .semantic_event_id = event->note.occurrence_id,
+                        .entity_id = event->note.track,
+                        .kind = (uint8_t)(((kind == SEQ_ENGINE_EVENT_NOTE_ON)
+                            ? CONTROL_MUSIC_ACTION_START
+                            : CONTROL_MUSIC_ACTION_STOP)
+                            | (uint8_t)(channel
+                                << CONTROL_MUSIC_ACTION_CHANNEL_SHIFT)),
+                        .note = event->note.note,
+                        .velocity = event->note.velocity
+                    };
+                    if (control_music_output_submit(&intent,
+                            event->note.occurrence_id,
+                            block->generation ? block->generation : 1U) == 0U)
+                        ++g_core.dropped_events;
+                }
+                index = block->next[index];
+            }
+        }
+    }
+}
 void seq_engine_control_disarm_track(uint8_t track)
 {
     if (track < SEQ_LANE_CAPACITY) {
@@ -350,6 +399,7 @@ void seq_service(uint64_t now_sample, uint64_t publish_until_sample)
             (void)seq_engine_core_submit_live(&g_core,&event,pattern,start,
                     start+frames,block);
     }
+    seq_engine_route_midi_terminal(block, pattern, 0U);
     block->block_id = (uint32_t)(start / frames);
     g_next_deadline = start + frames; __DMB(); g_slot_state[slot] = SLOT_READY;
 }
@@ -364,6 +414,7 @@ static void seq_service_urgent(uint64_t now_sample,uint64_t publish_until_sample
             __set_PRIMASK(primask);continue;}
         g_slot_state[slot]=SLOT_WRITING;__DMB();__set_PRIMASK(primask);
         seq_terminal_block_t *const block=&g_terminal[slot];
+        const uint16_t first_event=block->event_count;
         const uint64_t end=block->start_sample+block->frames;
         if(g_ingress_panic!=0U){g_ingress_panic=0U;
             seq_engine_core_init(&g_core);}
@@ -386,6 +437,7 @@ static void seq_service_urgent(uint64_t now_sample,uint64_t publish_until_sample
             (void)seq_engine_core_submit_live(&g_core,&event,pattern,
                     block->start_sample,end,block);
         }
+        seq_engine_route_midi_terminal(block,pattern,first_event);
         __DMB();g_slot_state[slot]=SLOT_READY;return;
     }
 }

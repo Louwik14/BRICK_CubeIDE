@@ -179,7 +179,8 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
             .logical_capacity = logical_capacity,
             .role = topology_valid ? (uint8_t)entity.role : 0U,
             .type = runtime_valid ? (uint8_t)runtime_descriptor.type : 0U,
-            .destination = track,
+            .midi_channel_zero_based = runtime_valid
+                ? (uint8_t)(runtime_descriptor.midi_channel_1_16 - 1U) : 0U,
             .div = div,
             .muted = pattern->track_muted[track],
             .active = topology_valid ? entity.active : 0U

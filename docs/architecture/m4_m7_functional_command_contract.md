@@ -135,6 +135,14 @@ intermediaires, 512 futurs et 256 actions internes. Mute, STOP, PANIC et
 remplacement Pattern/Project ferment la track, purgent ses futurs et reset ses
 etats ARP/EUCLID; un unmute ne rejoue aucun derive anterieur.
 
+Le moteur sequenceur finalise aussi les pistes MIDI dans son bloc terminal,
+apres Note FX et Groove. L'adaptateur H743 route uniquement ces evenements vers
+`control_music_output`, avec le canal capture dans le Pattern immutable. Les
+pistes audio restent consommees par AUDIO; une piste MIDI n'est donc jamais
+rendue par l'IRQ audio et ne possede pas de second owner de notes. Le backend
+USB MIDI encode ensuite Note On/Off et son service cooperatif reprend les
+transmissions lorsque l'endpoint est occupe.
+
 ## Publication atomique et metronome
 
 Chaque horizon sequenceur prepare PARAM, NOTE, metronome et sorties Note FX sans

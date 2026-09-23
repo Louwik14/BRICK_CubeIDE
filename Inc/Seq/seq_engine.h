@@ -181,7 +181,7 @@ typedef struct {
     uint8_t logical_capacity;
     uint8_t role;
     uint8_t type;
-    uint8_t destination;
+    uint8_t midi_channel_zero_based;
     uint8_t div;
     uint8_t muted;
     uint8_t active;
