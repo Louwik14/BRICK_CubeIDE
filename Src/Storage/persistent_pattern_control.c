@@ -805,7 +805,14 @@ persist_codec_result_t persistent_pattern_control_apply(
         audio_state_snapshot_control_abort();
         return result;
     }
-    if ((resume_transport != 0U) && (seq_engine_control_flush() == 0U))
+    /* A stopped replacement still has to publish before AUDIO is rebound.
+     * Otherwise the first PLAY boundary can be rendered from the previous
+     * Pattern while the new track programs are already active.  Resetting the
+     * execution epoch also prevents old lock/note ownership from crossing the
+     * stopped replacement.  Running cycle recalls preserve their epoch. */
+    if (resume_transport == 0U)
+        seq_engine_control_reset_note_fx_context();
+    if (seq_engine_control_flush() == 0U)
     {
         g_persist_dbg.seq_publish_result = 0U;
         audio_state_snapshot_control_abort();

@@ -92,6 +92,13 @@ l'identite Pattern courante et le hook UI unique ne sont publies qu'apres le
 commit AUDIO reussi. Le chemin interne d'installation Pattern ne cree donc pas
 de transaction imbriquee et ne publie aucun etat UI intermediaire.
 
+Le remplacement publie aussi, avant ce commit AUDIO, une generation Sequence
+complete avec un nouvel epoch d'execution. Cette barriere vaut meme lorsque le
+transport est arrete: au PLAY suivant, aucun terminal NOTE ou PARAM compile
+depuis l'ancien Pattern ne peut etre applique aux moteurs du nouveau Project.
+Les recalls Pattern a l'arret suivent le meme ordre; un recall en lecture garde
+son epoch musical et publie sa generation a la frontiere de cycle choisie.
+
 Patch Save et Rename utilisent une seule machine Storage cooperative. Le Save
 capture un DTO immutable avant soumission. Les tweaks UI ordinaires installent
 d'abord leur valeur dans l'owner CONTROL canonique: Tone, FM, Filter, VCA, FX,

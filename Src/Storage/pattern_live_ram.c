@@ -549,7 +549,6 @@ void pattern_live_publish_active(uint8_t active_bank, uint8_t active_pattern)
     {
         g_active_bank = active_bank;
         g_active_pattern = active_pattern;
-        seq_engine_control_reset_note_fx_context();
     }
 
     pattern_live_cancel_recall();

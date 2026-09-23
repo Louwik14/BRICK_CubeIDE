@@ -17,6 +17,7 @@
 #include "Storage/persistence_debug.h"
 #include "Storage/asset_ref.h"
 #include "App/name_contract.h"
+#include "Seq/seq_engine.h"
 #include "Seq/seq_runtime.h"
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/multi_sample_index.h"
@@ -1164,6 +1165,15 @@ void project_product_load_service(void)
         if(ok)ok=(persistent_pattern_control_install_into_active_snapshot(
             &restore->working_pattern,0U)==PERSIST_CODEC_OK)?1U:0U;
         if(ok)ok=project_control_apply_macros(&restore->macros);
+        if(ok)
+        {
+            /* Publish a fresh stopped SEQ epoch before AUDIO installs the
+             * replacement programs.  No terminal event from the previous
+             * Project may be interpreted against the new engine map. */
+            seq_engine_control_reset_note_fx_context();
+            ok=seq_engine_control_flush();
+            if(ok==0U)g_persist_dbg.seq_publish_result=0U;
+        }
         if(ok)
         {
             ok=audio_state_snapshot_control_commit();
