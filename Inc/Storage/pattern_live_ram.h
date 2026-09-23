@@ -13,7 +13,7 @@ void pattern_live_cancel_recall(void);
 void pattern_live_on_transport_stopped(void);
 void pattern_live_service(void);
 uint8_t pattern_live_capture_to_slot(uint8_t bank, uint8_t pattern);
-uint8_t pattern_live_request_slot(uint8_t bank, uint8_t pattern, uint8_t boundary_track);
+uint8_t pattern_live_request_slot(uint8_t bank, uint8_t pattern);
 uint8_t pattern_live_get_active(uint8_t *out_bank, uint8_t *out_pattern);
 uint8_t pattern_live_get_pending(uint8_t *out_valid, uint8_t *out_bank, uint8_t *out_pattern);
 void pattern_live_publish_active(uint8_t active_bank, uint8_t active_pattern);

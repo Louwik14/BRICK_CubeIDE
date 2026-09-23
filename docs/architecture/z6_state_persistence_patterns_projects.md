@@ -203,6 +203,17 @@ Le recall Pattern possede un seul candidat et une seule identite
 la validation structurelle utilise les familles, types, inputs et polyphonies du
 candidat complet; un budget de voix invalide est donc refuse avant APPLY. Le
 candidat `PENDING` est ensuite soit applique immediatement, soit arme sur la boundary.
+Cette boundary est globale au Pattern sortant et ne depend jamais de la lane
+selectionnee dans l'UI. Comme le modele ne porte pas de longueur globale
+separee, son cycle est celui de la lane sequencable dont la traversee complete
+est la plus longue sur la grille transport: `cycle_traversee * division`.
+`cycle_traversee` inclut le retour PINGPONG; longueur, division et direction
+proviennent exclusivement du Pattern courant. En cas d'egalite, la lane de plus
+petit identifiant est le representant deterministe de cette meme boundary.
+La date est capturee une seule fois lors de l'armement depuis le curseur et la
+phase de division possedes par SEQ, jamais reconstruite depuis l'UI ni depuis
+un compteur CONTROL historique. Le candidat attend ensuite que cette date
+entre dans le premier horizon non publie avant le swap atomique.
 Son payload reste dans le workspace `PATTERN_IO`, owner unique et scope jusqu'au
 commit ou a l'annulation. Un STOP vide le candidat et libere ce workspace; une
 completion asynchrone d'une generation remplacee termine seulement son cleanup

@@ -1,4 +1,5 @@
 #include "Seq/seq_engine.h"
+#include "Seq/seq_traversal.h"
 #include "NoteFx/note_fx_engine.h"
 #include "Platform/memory_layout.h"
 #include "Platform/brick_media_clock.h"
@@ -196,6 +197,69 @@ uint8_t seq_engine_playhead_view(uint8_t track,uint8_t *out_running,
     const uint32_t primask=__get_PRIMASK();__disable_irq();
     *out_running=g_core.running;*out_step=g_core.play_step[track];
     __set_PRIMASK(primask);return 1U;
+}
+
+uint8_t seq_engine_pattern_cycle_boundary(uint8_t *out_track,
+                                          uint64_t *out_sample)
+{
+    if ((out_track == 0) || (out_sample == 0)) return 0U;
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    const seq_pattern_t *const pattern = seq_engine_pattern_capture();
+    if ((pattern == 0) || (g_core.running == 0U)
+            || (g_core.samples_per_step_q16 == 0U))
+    {
+        __set_PRIMASK(primask);
+        return 0U;
+    }
+
+    uint16_t longest_cycle = 0U;
+    uint8_t boundary_track = 0U;
+    for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
+    {
+        if ((pattern->track_exec[track].active == 0U)
+                || (pattern->track_exec[track].role
+                    == (uint8_t)ENTITY_ROLE_GROUP_MASTER))
+            continue;
+        uint8_t div = pattern->track_div[track];
+        if ((div != 1U) && (div != 2U) && (div != 4U) && (div != 8U))
+            div = 1U;
+        const uint8_t traversal_cycle = seq_traversal_cycle_length(
+            pattern->track_length[track], pattern->track_direction[track]);
+        const uint16_t transport_cycle =
+            (uint16_t)traversal_cycle * div;
+        if (transport_cycle > longest_cycle)
+        {
+            longest_cycle = transport_cycle;
+            boundary_track = track;
+        }
+    }
+    if (longest_cycle == 0U)
+    {
+        __set_PRIMASK(primask);
+        return 0U;
+    }
+
+    uint8_t div = pattern->track_div[boundary_track];
+    if ((div != 1U) && (div != 2U) && (div != 4U) && (div != 8U))
+        div = 1U;
+    const uint8_t traversal_cycle = seq_traversal_cycle_length(
+        pattern->track_length[boundary_track],
+        pattern->track_direction[boundary_track]);
+    const uint8_t phase = (uint8_t)(
+        g_core.traversal_phase[boundary_track] % traversal_cycle);
+    const uint32_t advances = (uint32_t)traversal_cycle - phase;
+    const uint8_t div_phase = g_core.track_div_phase[boundary_track];
+    const uint32_t first_pulses = (div_phase < div)
+        ? (uint32_t)div - div_phase : 1U;
+    const uint32_t pulses = first_pulses
+        + ((advances - 1U) * (uint32_t)div);
+    const uint64_t boundary_q16 = g_core.step_sample_q16
+        + ((uint64_t)pulses * g_core.samples_per_step_q16);
+    *out_track = boundary_track;
+    *out_sample = (boundary_q16 + UINT64_C(0x8000)) >> 16U;
+    __set_PRIMASK(primask);
+    return 1U;
 }
 
 uint64_t seq_next_deadline(void) { return g_next_deadline; }

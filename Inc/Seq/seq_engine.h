@@ -215,6 +215,12 @@ typedef struct {
     seq_play_item_t child_play[BRICK_ENTITY_GROUP_CHILD_COUNT][SEQ_MAX_STEPS];
 } seq_pattern_t;
 
+/* Snapshot the next global cycle boundary from SEQ's authoritative cursor.
+ * The representative lane is the longest complete active traversal on the
+ * transport grid; ties resolve to the lowest lane id. */
+uint8_t seq_engine_pattern_cycle_boundary(uint8_t *out_track,
+                                          uint64_t *out_sample);
+
 /* CPU-agnostic absolute-sample core. */
 void seq_engine_core_init(seq_engine_core_t *core);
 void seq_engine_core_process_block(seq_engine_core_t *core,
