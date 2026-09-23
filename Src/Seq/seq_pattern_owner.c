@@ -7,7 +7,6 @@
 #include "Platform/brick_media_clock.h"
 #include "Platform/memory_layout.h"
 #include "Track/entity_topology.h"
-#include "Track/polyphony_control.h"
 #include "Track/track_mute.h"
 #include "Track/track_runtime.h"
 #include "Keyboard/keyboard_params.h"
@@ -172,14 +171,6 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
                 logical_capacity = SEQ_LOGICAL_CAPACITY_GROUP_CHILD;
             else if (entity.role != ENTITY_ROLE_GROUP_MASTER)
                 logical_capacity = seq_model_play_capacity(track);
-            if ((entity.role != ENTITY_ROLE_GROUP_CHILD)
-                    && (entity.role != ENTITY_ROLE_GROUP_MASTER)
-                    && (runtime_valid != 0U)
-                    && (track_runtime_has_configurable_polyphony(
-                        runtime_descriptor.family, runtime_descriptor.type) != 0U))
-                logical_capacity = track_runtime_effective_voice_count(
-                    runtime_descriptor.family, runtime_descriptor.type,
-                    polyphony_control_get_voice_count(track));
             if (logical_capacity > SEQ_LOGICAL_CAPACITY_MAX)
                 logical_capacity = SEQ_LOGICAL_CAPACITY_MAX;
         }

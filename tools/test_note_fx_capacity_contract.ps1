@@ -9,6 +9,36 @@ function Assert-Contract([bool]$condition, [string]$message) {
     if (-not $condition) { throw $message }
 }
 
+function Capture-Step([int]$instrumentVoices, [bool]$intrinsicallyMono,
+        [int[]]$notes) {
+    # STEP storage is a musical-model capacity.  The arguments deliberately
+    # do not participate in admission; they belong to the terminal renderer.
+    Assert-Contract ($instrumentVoices -ge 1) 'invalid instrument polyphony'
+    $null = $intrinsicallyMono
+    return @($notes | Select-Object -First $held)
+}
+
+function Arp-Step([int[]]$storedNotes, [int]$cycles) {
+    return @(0..($cycles - 1) | ForEach-Object {
+        $storedNotes[$_ % $storedNotes.Count]
+    })
+}
+
+$chord = @(60,64,67,71)
+$monoStep = Capture-Step 1 $false $chord
+$polyStep = Capture-Step 8 $false $chord
+$acidStep = Capture-Step 1 $true $chord
+Assert-Contract (($monoStep -join ',') -eq ($chord -join ',')) 'VOICES=1 + capture 4 notes'
+Assert-Contract (($polyStep -join ',') -eq ($chord -join ',')) 'VOICES>1 + capture 4 notes'
+Assert-Contract (($acidStep -join ',') -eq ($chord -join ',')) 'intrinsically mono + capture 4 notes'
+Assert-Contract (((Arp-Step $acidStep 8) -join ',') -eq
+    '60,64,67,71,60,64,67,71') 'ARP must see every note stored by a mono track'
+
+$serializedStep = [System.Text.Encoding]::ASCII.GetBytes(($monoStep -join ','))
+$reloadedStep = @([System.Text.Encoding]::ASCII.GetString($serializedStep).Split(',') |
+    ForEach-Object { [int]$_ })
+Assert-Contract (($reloadedStep -join ',') -eq ($chord -join ',')) 'step save/reload'
+
 function Test-ProductChain([string[]]$chain) {
     $families = @{}
     foreach ($name in $chain) {
@@ -141,11 +171,28 @@ Assert-Contract ((Groove-Phase 800 2400) -ne (Groove-Phase 1600 2400)) 'temporal
 $root = Split-Path -Parent $PSScriptRoot
 $control = Get-Content -Raw (Join-Path $root 'Src/Track/control_music_output.c')
 $sequencer = Get-Content -Raw (Join-Path $root 'Src/Seq/seq_engine.c')
+$patternOwner = Get-Content -Raw (Join-Path $root 'Src/Seq/seq_pattern_owner.c')
+$model = Get-Content -Raw (Join-Path $root 'Src/Seq/seq_model.c')
+$edit = Get-Content -Raw (Join-Path $root 'Src/Seq/seq_edit.c')
+$liveRec = Get-Content -Raw (Join-Path $root 'Src/Seq/seq_live_rec_session.c')
+$persistence = Get-Content -Raw (Join-Path $root 'Src/Storage/persistent_pattern_control.c')
 Assert-Contract $control.Contains('control_music_output_allocate_handle') 'single handle allocator'
 Assert-Contract $control.Contains('g_control_music_window_order++') 'chronological transition order'
 Assert-Contract (-not $control.Contains('CONTROL_MUSIC_WINDOW_KIND_COUNT')) 'no kind buckets'
 Assert-Contract $sequencer.Contains('note_fx_chain_engine_transform') 'fixed chain transform wired'
 Assert-Contract $sequencer.Contains('note_fx_chain_engine_process') 'generator process wired'
+Assert-Contract (-not $patternOwner.Contains('logical_capacity = track_runtime_effective_voice_count')) `
+    'Note FX source capacity must not depend on track polyphony'
+Assert-Contract $model.Contains('return (entity.role == ENTITY_ROLE_GROUP_CHILD) ? 1U : SEQ_PLAY_MAX_CAPACITY;') `
+    'STEP storage capacity must be topology/model-owned'
+Assert-Contract (-not $edit.Contains('polyphony_control_get_voice_count')) `
+    'held STEP capture/copy/paste must not depend on audio polyphony'
+Assert-Contract (-not $liveRec.Contains('polyphony_control_get_voice_count')) `
+    'live REC must not depend on audio polyphony'
+Assert-Contract $persistence.Contains('uint8_t cap=seq_model_play_capacity(entity)') `
+    'pattern save must serialize the complete STEP capacity'
+Assert-Contract $persistence.Contains('for(uint8_t v=0U;v<st->play_count;++v)') `
+    'pattern reload must restore every serialized STEP note'
 $engine = Get-Content -Raw (Join-Path $root 'Src/NoteFx/note_fx_engine.c')
 Assert-Contract (-not $engine.Contains('random_state')) 'mutable ARP random removed'
 Assert-Contract $engine.Contains('chain_selectable_voice_count') 'sparse recipe sequencing guard'

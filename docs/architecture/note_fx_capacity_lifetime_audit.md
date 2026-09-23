@@ -57,6 +57,11 @@ finalizer track-level.
 | polyphonie top-level | 8 maximum |
 | polyphonie enfant GROUP | 1 |
 | polyphonie master GROUP | 0 |
+
+La capacite logique des sources Note FX reste celle des PLAY du modele. La
+polyphonie physique de la piste ne participe ni a la capture held, ni au rang
+ARP, ni au fanout Euclid; sa limite est appliquee seulement a la projection
+AUDIO terminale.
 | held ARP/Euclid | 256 identites lane/branche par famille, 512 globaux |
 | ARP | 1 owner logique par piste, 256 identites lane/branche |
 | Euclid | 1 owner logique par piste, 256 identites lane/branche |

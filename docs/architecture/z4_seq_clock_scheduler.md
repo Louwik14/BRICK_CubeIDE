@@ -24,9 +24,11 @@ conserve uniquement les listes actives bornees a 32.
 
 Le Pattern publie aussi la projection executable de chaque lane: role
 topologique, capabilities, destination, mute/timing et capacite logique. Cette
-capacite reprend la polyphonie produit configuree lorsqu'elle existe, bornee a
-8 pour une lane principale; elle vaut 1 pour un enfant GROUP et 0 pour le GROUP
-master. Le master ne publie aucun walker MIDI FX.
+capacite appartient au modele musical: elle reprend les PLAY presents, bornee a
+8 pour une lane principale, independamment de la polyphonie AUDIO configuree;
+elle vaut 1 pour un enfant GROUP et 0 pour le GROUP master. La polyphonie peut
+voler ou limiter les sorties terminales, jamais retirer une source du pool
+ARP/Euclid ni changer son rang. Le master ne publie aucun walker MIDI FX.
 
 Chaque piste publie la meme chaine MIDI FX fixe de 16 octets:
 `GENERATOR -> VOICER -> SCALER -> TRIG`. Les p-locks d'un meme etage sont

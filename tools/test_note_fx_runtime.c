@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "Keyboard/kbd_chords_dict.h"
+#include "NoteFx/note_fx_arp.h"
 #include "NoteFx/note_fx_engine.h"
 #include "Seq/seq_division_catalog.h"
 
@@ -78,5 +79,42 @@ static void test_note_off_fanout_contract(void){note_fx_engine_init();
  assert(note_fx_chain_engine_transform(&in,1U,out,4U,&count)==NOTE_EVENT_RESULT_ACCEPTED);
  assert(count==3U);for(uint8_t i=0U;i<count;++i)assert(out[i].sample_abs==in.sample_abs);}
 
+typedef struct {note_event_t event[32];uint8_t count;} capture_t;
+static note_event_result_t capture_emit(const note_event_t*e,void*context){capture_t*c=context;
+ assert(c->count<32U);c->event[c->count++]=*e;return NOTE_EVENT_RESULT_ACCEPTED;}
+static void test_generator_held_identity_and_first_horizon(void){note_fx_engine_init();
+ note_fx_chain_state_t s=state(NOTE_FX_VOICER_MODE_OFF,0U);
+ s.generator.mode=NOTE_FX_GENERATOR_HOLD;s.generator.p1=NOTE_FX_ARP_UP;
+ s.generator.p2=0U;s.generator.p3=2U;
+ assert(note_fx_chain_engine_configure(0U,&s)==NOTE_EVENT_RESULT_ACCEPTED);
+ note_event_t chord[3]={source(0U,67U),source(0U,60U),source(0U,64U)};
+ for(uint8_t i=0U;i<3U;++i){chord[i].temporal_index=i;
+  chord[i].source_id=(uint32_t)(10U+i);chord[i].group_id=1U;
+  chord[i].duration_samples=1U;}
+ note_event_t scratch[4];uint8_t transformed=0U;
+ assert(note_fx_chain_engine_transform(chord,3U,scratch,4U,&transformed)==NOTE_EVENT_RESULT_ACCEPTED);
+ assert(transformed==0U);
+ uint32_t position[NOTE_FX_TRACK_COUNT]={0};const uint8_t length[NOTE_FX_TRACK_COUNT]={16U};
+ capture_t capture={0};
+ assert(note_fx_chain_engine_process(0U,0U,1U,UINT32_C(65536),0U,position,length,
+  capture_emit,&capture)==NOTE_EVENT_RESULT_ACCEPTED);
+ assert(capture.count==1U&&capture.event[0].note==60U);
+ capture=(capture_t){0};
+ position[0]=UINT32_C(1)<<16U;
+ assert(note_fx_chain_engine_process(0U,1U,5U,UINT32_C(65536),UINT64_C(65536),
+  position,length,capture_emit,&capture)==NOTE_EVENT_RESULT_ACCEPTED);
+ assert(capture.count==5U);
+ static const uint8_t expected[]={64U,67U,72U,76U,79U};
+ for(uint8_t i=0U;i<5U;++i)assert(capture.event[i].note==expected[i]);
+ note_event_t replacement=source(6U,55U);replacement.temporal_index=0U;
+ replacement.source_id=99U;replacement.group_id=2U;
+ assert(note_fx_chain_engine_transform(&replacement,1U,scratch,4U,&transformed)==NOTE_EVENT_RESULT_ACCEPTED);
+ capture=(capture_t){0};
+ position[0]=UINT32_C(6)<<16U;
+ assert(note_fx_chain_engine_process(0U,6U,1U,UINT32_C(65536),UINT64_C(6)<<16U,
+  position,length,capture_emit,&capture)==NOTE_EVENT_RESULT_ACCEPTED);
+ assert(capture.count==1U&&capture.event[0].note==55U);}
+
 int main(void){test_non_poly_modes_preserve_rhythm();test_seq4_positions_and_pitches();
- test_fixed_stage_field_contracts();test_note_off_fanout_contract();return 0;}
+ test_fixed_stage_field_contracts();test_note_off_fanout_contract();
+ test_generator_held_identity_and_first_horizon();return 0;}
