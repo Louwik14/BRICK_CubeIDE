@@ -129,7 +129,7 @@ static uint8_t ui_page_template_play_virtual_slot_value(
     const uint8_t held_count = seq_edit_collect_held_steps(&held_track,
                                                             held_steps,
                                                             SEQ_STEPS_PER_PAGE,
-                                                            1U);
+                                                            0U);
     if ((held_count != 0U) && (held_track == track))
     {
         seq_step_id_t ref_step = held_steps[0];
