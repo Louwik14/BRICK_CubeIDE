@@ -28,17 +28,20 @@ capacite reprend la polyphonie produit configuree lorsqu'elle existe, bornee a
 8 pour une lane principale; elle vaut 1 pour un enfant GROUP et 0 pour le GROUP
 master. Le master ne publie aucun walker MIDI FX.
 
-Les trois slots MIDI FX et leur permutation ORDER sont normalises par CONTROL.
-Le plan de base publie exactement trois mots de cinq octets et l'octet ORDER,
-sans masque ni cache de premier slot. Les p-locks MIDI FX d'un meme slot sont
-compactes en une entree de 48 bits; ORDER utilise au plus une entree
-supplementaire. SEQ ne
-refait donc ni mapping PARAM, ni validation de modele/plage/famille, ni
-normalisation lors de la configuration du runtime courant. Une famille MIDI FX
-ne peut apparaitre qu'une fois dans une chaine de trois slots. La permutation
-change uniquement l'ordre d'execution: l'identite et l'etat restent attaches
-aux slots logiques S1, S2 et S3. ORDER est conserve une seule fois dans le
-coeur SEQ; le runtime NoteFX n'en garde aucune copie mutable.
+Chaque piste publie la meme chaine MIDI FX fixe de 16 octets:
+`GENERATOR -> VOICER -> SCALER -> TRIG`. Les p-locks d'un meme etage sont
+compactes en une entree de 48 bits (masque de quatre parametres et quatre
+octets effectifs). CONTROL superpose les valeurs brutes du step puis applique
+le clamp du mode courant sans reecrire les p-locks stockes. `GENERATOR.P4`
+n'est pas stockable: les changements ARP/HOLD/EUCLID restent des reglages de
+piste, tandis que P1/P2/P3 sont reinterpretes et clamps sans migration.
+
+A la boundary, SEQ superpose directement au bloc fixe puis appelle les quatre
+etages dans l'ordre connu. Il n'effectue plus de permutation, recherche de
+slot, dispatch de modele ni validation de famille. Une edition ordinaire
+reconfigure les valeurs sans remettre a zero les phases privees; transport et
+remplacement explicite de Pattern/projet avancent l'epoch de contexte et les
+reinitialisent.
 
 ## Runtime borne
 
@@ -46,7 +49,7 @@ Le runtime fixe contient un ledger de 64 notes logiques, 768 curseurs
 source/ROLL et un calendrier final de 512 occurrences. Le calendrier est une
 roue de 4 096 buckets de 64 samples, chainee par indices dans un pool fixe:
 insertion O(1), aucune allocation, aucun heap generaliste. Il ne contient que
-des occurrences ayant deja traverse Quantize, les trois MIDI FX et le
+des occurrences ayant deja traverse Quantize, la chaine MIDI FX fixe et le
 finalizer Groove. ARP et Euclid conservent leurs etats held dans leurs
 pools fixes et exposent leur prochain horizon au planificateur; il n'existe pas
 de second calendrier source.
@@ -170,8 +173,7 @@ dans le Pattern. A la boundary, SEQ conserve les decisions musicales et la
 configuration du runtime courant; aucun catalog lookup, mapping d'identifiant,
 controle de famille ou normalisation dependante du modele n'y subsiste.
 
-Les constantes produit figees sont 3 slots MIDI FX, 4 parametres musicaux par
-slot et 6 permutations ORDER, une plage de tempo
+Les constantes produit figees sont 4 etages MIDI FX de 4 parametres, une plage de tempo
 40..300 BPM, 8 notes logiques par lane principale, un enfant GROUP mono et un
 master a zero note.
 Le Groove historique des slots MIDI FX est retire du catalogue. Le finalizer

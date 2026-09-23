@@ -36,11 +36,11 @@ static uint8_t g_seen_runtime_running;
 static uint32_t g_transport_epoch;
 static seq_runtime_shadow_seed_t g_build_seed;
 static seq_track_timing_config_t g_build_timing[SEQ_LANE_CAPACITY];
-static note_fx_track_state_t g_build_fx_state[SEQ_LANE_CAPACITY];
+static note_fx_chain_state_t g_build_fx_state[SEQ_LANE_CAPACITY];
 static uint8_t seq_engine_compile_step_fx(seq_pattern_t *pattern,
                                           uint8_t track, uint8_t step)
 {
-    note_fx_track_state_t effective = g_build_fx_state[track];
+    note_fx_chain_state_t raw = g_build_fx_state[track];
     seq_step_pattern_t *const target = &pattern->steps[track][step];
     uint16_t override_mask = 0U;
     const uint16_t first = pattern->lock_first[track][step];
@@ -51,27 +51,19 @@ static uint8_t seq_engine_compile_step_fx(seq_pattern_t *pattern,
             &pattern->lock_pool[track][first + i];
         if ((lock->param_flags & SEQ_ENGINE_PARAM_FLAG_NOTE_FX) == 0U)
             continue;
-        const uint8_t slot = (uint8_t)(lock->base_value16 >> 8U);
+        const uint8_t stage = (uint8_t)(lock->base_value16 >> 8U);
         const uint8_t param = (uint8_t)lock->base_value16;
-        if (slot == NOTE_FX_SLOT_COUNT)
-        {
-            effective.order = (uint8_t)lock->value16;
-            override_mask |= UINT16_C(0x8000);
-        }
-        else
-        {
-            if ((slot >= NOTE_FX_SLOT_COUNT) || (param >= NOTE_FX_VALUE_COUNT))
-                return UINT8_MAX;
-            effective.value[slot][param] = (uint8_t)lock->value16;
-            override_mask |= (uint16_t)(1U <<
-                ((uint16_t)slot * NOTE_FX_VALUE_COUNT + param));
-        }
+        if ((stage >= NOTE_FX_CHAIN_STAGE_COUNT)
+                || (param >= NOTE_FX_CHAIN_PARAM_COUNT)
+                || (note_fx_chain_param_is_plockable(
+                    (note_fx_chain_stage_t)stage, param) == 0U)) return UINT8_MAX;
+        ((uint8_t *)&raw)[stage * NOTE_FX_CHAIN_PARAM_COUNT + param] =
+            (uint8_t)lock->value16;
+        override_mask |= (uint16_t)(1U <<
+            ((uint16_t)stage * NOTE_FX_CHAIN_PARAM_COUNT + param));
     }
-    if ((note_fx_state_normalize_track(&effective) == 0U)
-            || (note_fx_state_validate_unique_families(&effective) == 0U))
-        return UINT8_MAX;
-    note_fx_compiled_plan_t compiled;
-    if (note_fx_plan_compile(&effective, &compiled) == 0U)
+    note_fx_chain_state_t effective;
+    if (note_fx_chain_state_make_effective(&raw, &effective) == 0U)
         return UINT8_MAX;
     seq_lock_pattern_t compact[SEQ_STEP_MAX_LOCKS];
     uint8_t compact_count = 0U;
@@ -81,34 +73,18 @@ static uint8_t seq_engine_compile_step_fx(seq_pattern_t *pattern,
         if ((lock.param_flags & SEQ_ENGINE_PARAM_FLAG_NOTE_FX) == 0U)
             compact[compact_count++] = lock;
     }
-    for (uint8_t slot = 0U; slot < NOTE_FX_SLOT_COUNT; ++slot)
+    for (uint8_t stage = 0U; stage < NOTE_FX_CHAIN_STAGE_COUNT; ++stage)
     {
-        const uint8_t slot_override = (uint8_t)((override_mask
-            >> (slot * NOTE_FX_VALUE_COUNT)) & 0x1FU);
-        if (slot_override == 0U) continue;
-        const note_fx_slot_plan_word_t word = compiled.slot[slot];
-        const uint8_t p4 = note_fx_plan_param(word, 3U);
+        const uint8_t stage_override = (uint8_t)((override_mask
+            >> (stage * NOTE_FX_CHAIN_PARAM_COUNT)) & 0x0FU);
+        if (stage_override == 0U) continue;
+        const uint8_t *const value = ((const uint8_t *)&effective)
+            + stage * NOTE_FX_CHAIN_PARAM_COUNT;
         compact[compact_count++] = (seq_lock_pattern_t){
-            .param_flags = (uint16_t)(SEQ_ENGINE_PARAM_FLAG_NOTE_FX | slot
-                | ((uint16_t)slot_override
-                    << SEQ_ENGINE_FX_PLAN_OVERRIDE_SHIFT)
-                | ((uint16_t)(p4 & 0x7FU)
-                    << SEQ_ENGINE_FX_PLAN_PARAM4_LOW_SHIFT)
-                | ((p4 & 0x80U) != 0U
-                    ? SEQ_ENGINE_FX_PLAN_PARAM4_HIGH_MASK : 0U)),
-            .value16 = (uint16_t)(note_fx_plan_param(word, 0U)
-                | ((uint16_t)note_fx_plan_param(word, 1U) << 8U)),
-            .base_value16 = (uint16_t)(note_fx_plan_param(word, 2U)
-                | ((uint16_t)note_fx_plan_model(word) << 8U))
-        };
-    }
-    if ((override_mask & UINT16_C(0x8000)) != 0U)
-    {
-        compact[compact_count++] = (seq_lock_pattern_t){
-            .param_flags = (uint16_t)(SEQ_ENGINE_PARAM_FLAG_NOTE_FX
-                | NOTE_FX_SLOT_COUNT),
-            .value16 = compiled.order,
-            .base_value16 = 0U
+            .param_flags = (uint16_t)(SEQ_ENGINE_PARAM_FLAG_NOTE_FX | stage
+                | ((uint16_t)stage_override << SEQ_ENGINE_FX_PLAN_OVERRIDE_SHIFT)),
+            .value16 = (uint16_t)(value[0] | ((uint16_t)value[1] << 8U)),
+            .base_value16 = (uint16_t)(value[2] | ((uint16_t)value[3] << 8U))
         };
     }
     memcpy(&pattern->lock_pool[track][first], compact,
@@ -151,6 +127,13 @@ void seq_engine_control_mark_dirty(void)
 {
     ++g_edit_generation;
     if (g_edit_generation == 0U) g_edit_generation = 1U;
+}
+
+void seq_engine_control_reset_note_fx_context(void)
+{
+    ++g_transport_epoch;
+    if (g_transport_epoch == 0U) g_transport_epoch = 1U;
+    seq_engine_control_mark_dirty();
 }
 
 static void seq_engine_capture_step(seq_pattern_t *pattern,
@@ -215,11 +198,11 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
                 && (entity_topology_can_emit_notes(&entity) != 0U)
                 && (track_runtime_has_capability(track,
                     TRACK_CAPABILITY_NOTES) != 0U)) ? 1U : 0U;
-        note_fx_track_state_t fx_state;
+        note_fx_chain_state_t fx_state;
         pattern->track_note_enabled[track] = 0U;
         pattern->track_lock_enabled[track] = 1U;
         pattern->track_fx_enabled[track] = 0U;
-        if (note_fx_state_capture_track(track, &fx_state) != 0U)
+        if (note_fx_chain_state_capture_track(track, &fx_state) != 0U)
         {
             pattern->track_note_enabled[track] =
                 ((capabilities & TRACK_CAPABILITY_NOTES) != 0U) ? 1U : 0U;
@@ -228,7 +211,7 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
             if (pattern->track_fx_enabled[track] == 0U)
                 memset(&fx_state, 0, sizeof(fx_state));
             g_build_fx_state[track] = fx_state;
-            if (note_fx_plan_compile(&fx_state,
+            if (note_fx_chain_state_make_effective(&fx_state,
                     &pattern->fx_base_plan[track]) == 0U)
             {
                 memset(&pattern->fx_base_plan[track], 0,
@@ -286,11 +269,11 @@ static void seq_engine_capture_step(seq_pattern_t *pattern,
                     :entry.value16;
                 uint16_t projected_base=base;
                 if(is_fx!=0U){
-                    uint8_t fx_slot=0U,fx_param=0U;
-                    if(note_fx_state_order_map(param)!=0U)
-                        projected_base=(uint16_t)(NOTE_FX_SLOT_COUNT<<8U);
-                    else if(note_fx_state_param_map(param,&fx_slot,&fx_param)!=0U)
-                        projected_base=(uint16_t)(((uint16_t)fx_slot<<8U)|fx_param);
+                    note_fx_chain_stage_t fx_stage;
+                    uint8_t fx_param=0U;
+                    if(note_fx_chain_param_map(param,&fx_stage,&fx_param)!=0U
+                            && note_fx_chain_param_is_plockable(fx_stage,fx_param)!=0U)
+                        projected_base=(uint16_t)(((uint16_t)fx_stage<<8U)|fx_param);
                     else {pattern->track_fx_enabled[track]=0U;break;}
                 }
                 pattern->lock_pool[track][pattern->lock_pool_count[track]++] =

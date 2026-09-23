@@ -7,6 +7,7 @@
 #include "Seq/seq_engine.h"
 
 static note_fx_track_state_t g_note_fx_state[NOTE_FX_TRACK_COUNT];
+static note_fx_chain_state_t g_note_fx_chain_state[NOTE_FX_TRACK_COUNT];
 
 _Static_assert((PARAM_MIDI_FX_S1_MODEL - PARAM_MIDI_FX_S1_PARAM1)
                    == NOTE_FX_MODEL_INDEX,
@@ -239,7 +240,10 @@ uint8_t note_fx_state_validate_unique_families(
 void note_fx_state_init(void)
 {
     for (uint8_t track = 0U; track < NOTE_FX_TRACK_COUNT; ++track)
+    {
         note_fx_state_make_default(&g_note_fx_state[track]);
+        note_fx_chain_state_make_default(&g_note_fx_chain_state[track]);
+    }
 }
 
 void note_fx_state_make_default(note_fx_track_state_t *out_state)
@@ -475,4 +479,62 @@ uint8_t note_fx_chain_param_is_plockable(note_fx_chain_stage_t stage,
             || (param >= NOTE_FX_CHAIN_PARAM_COUNT)) return 0U;
     return ((stage == NOTE_FX_CHAIN_STAGE_GENERATOR) && (param == 3U))
         ? 0U : 1U;
+}
+
+uint8_t note_fx_chain_param_map(param_id_t id, note_fx_chain_stage_t *out_stage,
+                                uint8_t *out_param)
+{
+    if ((id < PARAM_MIDI_FX_GENERATOR_P1) || (id > PARAM_MIDI_FX_TRIG_P4)
+            || (out_stage == NULL) || (out_param == NULL)) return 0U;
+    const uint16_t offset = (uint16_t)(id - PARAM_MIDI_FX_GENERATOR_P1);
+    *out_stage = (note_fx_chain_stage_t)(offset / NOTE_FX_CHAIN_PARAM_COUNT);
+    *out_param = (uint8_t)(offset % NOTE_FX_CHAIN_PARAM_COUNT);
+    return 1U;
+}
+
+static uint8_t *note_fx_chain_value(note_fx_chain_state_t *state,
+                                    note_fx_chain_stage_t stage)
+{
+    return ((uint8_t *)state) + ((uint8_t)stage * NOTE_FX_CHAIN_PARAM_COUNT);
+}
+
+uint8_t note_fx_chain_state_get_param(uint8_t track, param_id_t id,
+                                      float *out_value)
+{
+    note_fx_chain_stage_t stage;
+    uint8_t param;
+    if ((track >= NOTE_FX_TRACK_COUNT) || (out_value == NULL)
+            || (note_fx_chain_param_map(id, &stage, &param) == 0U)) return 0U;
+    *out_value = (float)note_fx_chain_value(&g_note_fx_chain_state[track], stage)[param];
+    return 1U;
+}
+
+uint8_t note_fx_chain_state_set_param(uint8_t track, param_id_t id, float value)
+{
+    note_fx_chain_stage_t stage;
+    uint8_t param;
+    if ((track >= NOTE_FX_TRACK_COUNT)
+            || (entity_topology_is_active((brick_entity_id_t)track) == 0U)
+            || (note_fx_chain_param_map(id, &stage, &param) == 0U)) return 0U;
+    note_fx_chain_value(&g_note_fx_chain_state[track], stage)[param] =
+        note_fx_state_round_value(value);
+    seq_engine_control_mark_dirty();
+    return 1U;
+}
+
+uint8_t note_fx_chain_state_capture_track(uint8_t track,
+                                          note_fx_chain_state_t *out_state)
+{
+    if ((track >= NOTE_FX_TRACK_COUNT) || (out_state == NULL)) return 0U;
+    *out_state = g_note_fx_chain_state[track];
+    return 1U;
+}
+
+uint8_t note_fx_chain_state_install_track(uint8_t track,
+                                          const note_fx_chain_state_t *state)
+{
+    if ((track >= NOTE_FX_TRACK_COUNT) || (state == NULL)) return 0U;
+    g_note_fx_chain_state[track] = *state;
+    seq_engine_control_mark_dirty();
+    return 1U;
 }

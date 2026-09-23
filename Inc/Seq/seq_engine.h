@@ -32,10 +32,7 @@
  * logical slot (2), override mask (5), PARAM4 (8), and four value bytes. */
 #define SEQ_ENGINE_FX_PLAN_SLOT_MASK UINT16_C(0x0003)
 #define SEQ_ENGINE_FX_PLAN_OVERRIDE_SHIFT 2U
-#define SEQ_ENGINE_FX_PLAN_OVERRIDE_MASK UINT16_C(0x007C)
-#define SEQ_ENGINE_FX_PLAN_PARAM4_LOW_SHIFT 7U
-#define SEQ_ENGINE_FX_PLAN_PARAM4_LOW_MASK UINT16_C(0x3F80)
-#define SEQ_ENGINE_FX_PLAN_PARAM4_HIGH_MASK UINT16_C(0x8000)
+#define SEQ_ENGINE_FX_PLAN_OVERRIDE_MASK UINT16_C(0x003C)
 #define SEQ_ENGINE_PARAM_ID_MASK UINT16_C(0x01FF)
 
 typedef enum {
@@ -163,8 +160,7 @@ typedef struct {
     uint8_t traversal_phase[SEQ_LANE_CAPACITY];
     uint8_t track_div_phase[SEQ_LANE_CAPACITY];
     uint32_t step_serial[SEQ_LANE_CAPACITY];
-    note_fx_slot_plan_word_t fx_effective[SEQ_LANE_CAPACITY][NOTE_FX_SLOT_COUNT];
-    uint8_t fx_effective_order[SEQ_LANE_CAPACITY];
+    note_fx_chain_state_t fx_effective[SEQ_LANE_CAPACITY];
     uint8_t active_lock_count[SEQ_LANE_CAPACITY];
     seq_active_lock_t active_locks[SEQ_LANE_CAPACITY][SEQ_STEP_MAX_LOCKS];
     uint64_t source_active[SEQ_PRODUCT_MAX_SOURCE_GENERATIONS];
@@ -214,7 +210,7 @@ typedef struct {
     uint64_t seed_step_sample_q16;
     uint32_t samples_per_step_q16;
     seq_track_exec_t track_exec[SEQ_LANE_CAPACITY];
-    note_fx_compiled_plan_t fx_base_plan[SEQ_LANE_CAPACITY];
+    note_fx_chain_state_t fx_base_plan[SEQ_LANE_CAPACITY];
     seq_track_timing_plan_t timing_plan[SEQ_LANE_CAPACITY];
     uint8_t seed_play_step[SEQ_LANE_CAPACITY];
     uint8_t seed_traversal_phase[SEQ_LANE_CAPACITY];
@@ -236,6 +232,9 @@ uint8_t seq_engine_pattern_cycle_boundary(uint8_t *out_track,
 
 /* CPU-agnostic absolute-sample core. */
 void seq_engine_core_init(seq_engine_core_t *core);
+/* Explicit discontinuity for pattern/project replacement. Ordinary parameter
+ * edits only reconfigure the chain and preserve its musical phases. */
+void seq_engine_control_reset_note_fx_context(void);
 void seq_engine_core_process_block(seq_engine_core_t *core,
                                uint64_t start_sample, uint16_t frames,
                                const seq_pattern_t *pattern,

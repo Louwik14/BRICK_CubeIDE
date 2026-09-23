@@ -92,5 +92,14 @@ uint8_t note_fx_chain_state_make_effective(
     note_fx_chain_state_t *out_effective);
 uint8_t note_fx_chain_param_is_plockable(note_fx_chain_stage_t stage,
                                          uint8_t param);
+uint8_t note_fx_chain_param_map(param_id_t id, note_fx_chain_stage_t *out_stage,
+                                uint8_t *out_param);
+uint8_t note_fx_chain_state_get_param(uint8_t track, param_id_t id,
+                                      float *out_value);
+uint8_t note_fx_chain_state_set_param(uint8_t track, param_id_t id, float value);
+uint8_t note_fx_chain_state_capture_track(uint8_t track,
+                                          note_fx_chain_state_t *out_state);
+uint8_t note_fx_chain_state_install_track(uint8_t track,
+                                          const note_fx_chain_state_t *state);
 
 #endif

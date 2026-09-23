@@ -517,13 +517,11 @@ static uint8_t seq_param_iface_slot_is_storable_internal(seq_track_id_t track,
     {
         return 0U;
     }
+    param_id_t param = PARAM_COUNT;
+    if ((seq_param_iface_slot_to_param(track, set_id, param_slot, &param) == 0U)
+            || (param == PARAM_MIDI_FX_GENERATOR_P4)) return 0U;
     if (seq_param_iface_is_group_master(track) != 0U)
     {
-        param_id_t param = PARAM_COUNT;
-        if (seq_param_iface_slot_to_param(track, set_id, param_slot, &param) == 0U)
-        {
-            return 0U;
-        }
         const track_runtime_param_status_t status =
             track_runtime_get_effective_param_status(track, param);
         return (uint8_t)((status == TRACK_RUNTIME_PARAM_ALLOWED)
@@ -1024,14 +1022,14 @@ uint8_t seq_param_iface_apply_lock(seq_track_id_t track,
 
     if (set_id == (uint8_t)SEQ_PLOCK_SET_MIDI_FX)
     {
-        uint8_t slot = 0U, fx_param = 0U;
+        note_fx_chain_stage_t stage;
+        uint8_t fx_param = 0U;
         float decoded_value;
-        if (((note_fx_state_param_map(param, &slot, &fx_param) == 0U)
-                && (note_fx_state_order_map(param) == 0U))
+        if ((note_fx_chain_param_map(param, &stage, &fx_param) == 0U)
                 || (seq_param_iface_decode_param_value(
                     param, value16, &decoded_value) == 0U))
             return 0U;
-        (void)slot;(void)fx_param;(void)decoded_value;
+        (void)stage;(void)fx_param;(void)decoded_value;
         state->runtime_value = value16;
         seq_param_set_runtime_locked(track, set_id, param_slot, 1U);
         return 1U;
@@ -1087,11 +1085,11 @@ uint8_t seq_param_iface_restore_base(seq_track_id_t track,
 
     if (set_id == (uint8_t)SEQ_PLOCK_SET_MIDI_FX)
     {
-        uint8_t slot = 0U, fx_param = 0U;
-        if ((note_fx_state_param_map(param, &slot, &fx_param) == 0U)
-                && (note_fx_state_order_map(param) == 0U))
+        note_fx_chain_stage_t stage;
+        uint8_t fx_param = 0U;
+        if (note_fx_chain_param_map(param, &stage, &fx_param) == 0U)
             return 0U;
-        (void)slot;(void)fx_param;
+        (void)stage;(void)fx_param;
         state->base_value = base_value16;
         state->runtime_value = base_value16;
         seq_param_set_runtime_locked(track, set_id, param_slot, 0U);

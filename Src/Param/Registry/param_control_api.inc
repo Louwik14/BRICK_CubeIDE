@@ -342,18 +342,17 @@ uint8_t param_registry_apply_track_value(param_id_t id, uint8_t track, float val
         return 0U;
     const float clamped = prepared.value;
 
-    uint8_t note_fx_slot = 0U;
+    note_fx_chain_stage_t note_fx_stage;
     uint8_t note_fx_param = 0U;
-    if ((note_fx_state_param_map(id, &note_fx_slot, &note_fx_param) != 0U)
-            || (note_fx_state_order_map(id) != 0U))
+    if (note_fx_chain_param_map(id, &note_fx_stage, &note_fx_param) != 0U)
     {
         if (track_runtime_is_ui_ensemble_available(track, TRACK_RUNTIME_UI_ENSEMBLE_MIDI_FX) == 0U)
         {
             return 0U;
         }
-        /* NoteFx owns the model-aware schema.  The static catalog only carries
-         * the generic ARP/p-lock bounds and cannot clamp EUCLID LENGTH/PULSE. */
-        return note_fx_state_set_param(track, id, value);
+        /* Store raw values. The current mode is applied only when the
+         * sequencer builds the effective fixed chain. */
+        return note_fx_chain_state_set_param(track, id, value);
     }
 
     {

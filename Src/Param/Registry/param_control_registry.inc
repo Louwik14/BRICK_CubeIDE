@@ -299,12 +299,11 @@ uint8_t param_registry_get_track_value(param_id_t id, uint8_t track, float *out_
         return 0U;
     }
 
-    uint8_t note_fx_slot = 0U;
+    note_fx_chain_stage_t note_fx_stage;
     uint8_t note_fx_param = 0U;
-    if ((note_fx_state_param_map(id, &note_fx_slot, &note_fx_param) != 0U)
-            || (note_fx_state_order_map(id) != 0U))
+    if (note_fx_chain_param_map(id, &note_fx_stage, &note_fx_param) != 0U)
     {
-        return note_fx_state_get_param(track, id, out_value);
+        return note_fx_chain_state_get_param(track, id, out_value);
     }
 
     {
