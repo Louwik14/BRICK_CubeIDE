@@ -48,6 +48,7 @@ uint8_t mod_env3_control_get_param(uint8_t entity, param_id_t id,
         case PARAM_ENV3_DECAY: *out_value = state->decay; return 1U;
         case PARAM_ENV3_SUSTAIN: *out_value = state->sustain; return 1U;
         case PARAM_ENV3_RELEASE: *out_value = state->release; return 1U;
+        case PARAM_ENV_RETRIG_MOD: *out_value = state->retrigger; return 1U;
         default: return 0U;
     }
 }
@@ -62,6 +63,9 @@ uint8_t mod_env3_control_set_param(uint8_t entity, param_id_t id, float value)
         case PARAM_ENV3_DECAY: state->decay = value; return 1U;
         case PARAM_ENV3_SUSTAIN: state->sustain = value; return 1U;
         case PARAM_ENV3_RELEASE: state->release = value; return 1U;
+        case PARAM_ENV_RETRIG_MOD:
+            state->retrigger = (value >= 0.5f) ? 1.0f : 0.0f;
+            return 1U;
         default: return 0U;
     }
 }
@@ -83,15 +87,19 @@ uint8_t mod_env3_control_prepare(const mod_env3_control_state_t*state,
 uint8_t mod_env3_control_restore(uint8_t entity,const mod_env3_control_state_t*state)
 {
     if(entity>=BRICK_ENTITY_CAPACITY||state==NULL)return 0U;
-    const param_id_t ids[4U]={PARAM_ENV3_ATTACK,PARAM_ENV3_DECAY,
-        PARAM_ENV3_SUSTAIN,PARAM_ENV3_RELEASE};
+    static const param_id_t ids[5U]={PARAM_ENV3_ATTACK,PARAM_ENV3_DECAY,
+        PARAM_ENV3_SUSTAIN,PARAM_ENV3_RELEASE,PARAM_ENV_RETRIG_MOD};
+    _Static_assert((sizeof(ids)/sizeof(ids[0]))
+            == (sizeof(mod_env3_control_state_t)/sizeof(float)),
+            "ENV3 parameter table must match CONTROL layout");
     mod_env3_control_state_t canonical;
     if(!mod_env3_control_prepare(state,&canonical))return 0U;
     float *const values=&canonical.attack;
     live_parameter_audio_bulk_t bulk={.capture_tick=brick_media_clock_now_tick(),
         .count=0U};
-    for(uint8_t i=0U;i<4U;++i){
-        if(track_runtime_get_effective_param_status(entity,ids[i])
+    for(uint8_t i=0U;i<5U;++i){
+        if((ids[i]!=PARAM_ENV_RETRIG_MOD)
+                && track_runtime_get_effective_param_status(entity,ids[i])
                 !=TRACK_RUNTIME_PARAM_ALLOWED)continue;
         bulk.item[bulk.count++]=
         (live_parameter_audio_target_t){.parameter_id=(uint16_t)ids[i],
