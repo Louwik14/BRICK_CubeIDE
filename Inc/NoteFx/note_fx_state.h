@@ -83,4 +83,14 @@ uint8_t note_fx_state_available_models(const note_fx_track_state_t *state,
 uint8_t note_fx_state_validate_unique_families(
     const note_fx_track_state_t *state);
 
+/* PASS 1 fixed-chain contract.  Raw base values and p-locks are never rewritten
+ * when GENERATOR mode changes.  This projection is the sole mode-dependent
+ * clamp boundary used to prepare a safe executable state. */
+void note_fx_chain_state_make_default(note_fx_chain_state_t *out_state);
+uint8_t note_fx_chain_state_make_effective(
+    const note_fx_chain_state_t *raw_state,
+    note_fx_chain_state_t *out_effective);
+uint8_t note_fx_chain_param_is_plockable(note_fx_chain_stage_t stage,
+                                         uint8_t param);
+
 #endif
