@@ -564,7 +564,8 @@ uint8_t param_registry_prepare_track_control_target(
         else if (((id >= PARAM_VCA_ATTACK) && (id <= PARAM_VCA_RELEASE))
                 || (id == PARAM_FILTER_MODE) || (id == PARAM_ENV_RETRIG_VCA))
             owner_kind = PARAM_CONTROL_OWNER_VCA;
-        else if ((id >= PARAM_ENV3_ATTACK) && (id <= PARAM_ENV3_RELEASE))
+        else if (((id >= PARAM_ENV3_ATTACK) && (id <= PARAM_ENV3_RELEASE))
+                || (id == PARAM_ENV_RETRIG_MOD))
         {
             brick_entity_id_t owner = track;
             if (entity_topology_mod_owner(track, &owner) == 0U) return 0U;

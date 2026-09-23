@@ -1088,6 +1088,7 @@ track_runtime_param_rule_t track_runtime_get_param_rule(param_id_t param)
         case PARAM_ENV3_DECAY:
         case PARAM_ENV3_SUSTAIN:
         case PARAM_ENV3_RELEASE:
+        case PARAM_ENV_RETRIG_MOD:
             rule.domain = TRACK_RUNTIME_PARAM_DOMAIN_ENV;
             rule.resource = TRACK_RUNTIME_RESOURCE_PLAY;
             rule.status = TRACK_RUNTIME_PARAM_ALLOWED;
@@ -1412,6 +1413,7 @@ track_runtime_param_status_t track_runtime_get_effective_param_status(uint8_t tr
             case PARAM_ENV3_DECAY:
             case PARAM_ENV3_SUSTAIN:
             case PARAM_ENV3_RELEASE:
+            case PARAM_ENV_RETRIG_MOD:
                 return TRACK_RUNTIME_PARAM_ALLOWED;
             default:
                 return TRACK_RUNTIME_PARAM_UNAVAILABLE;
