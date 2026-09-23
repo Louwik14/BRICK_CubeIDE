@@ -102,6 +102,10 @@ La compilation atomique de plusieurs geometries Groove reutilise alors le
 scratch de decode du Project ou du Pattern, devenu mort apres validation. Elle
 ne tente pas de reacquerir le workspace persistence encore possede par la
 transaction; la publication SEQ peut donc terminer avant le commit AUDIO.
+Le PANIC inclus dans un commit Project invalide dans la meme primitive les
+renderers physiques et le miroir d'ownership terminal SEQ cote AUDIO. Cette
+regle vaut aussi lorsque PANIC est invoque depuis un snapshot atomique, sans
+passer par le post-traitement d'une commande FIFO autonome.
 
 Au boot, les pools reconstruisent directement leur etat vide. En particulier,
 Sampler RAM ne passe pas par le reset runtime quiesce: ses structures SDRAM et

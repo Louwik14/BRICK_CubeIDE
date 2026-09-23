@@ -385,6 +385,13 @@ static uint8_t audio_command_apply_panic(const control_audio_command_t *command)
     {
         audio_command_close_entity(command->entity);
         audio_note_engine_adapter_forget_outputs(command->entity);
+        if (command->entity < SEQ_LANE_CAPACITY)
+        {
+            memset(g_audio_seq_output[command->entity], 0,
+                   sizeof(g_audio_seq_output[command->entity]));
+            g_audio_seq_track_mask &=
+                (uint16_t)~(uint16_t)(1U << command->entity);
+        }
     }
     else
     {
@@ -403,6 +410,12 @@ static uint8_t audio_command_apply_panic(const control_audio_command_t *command)
                 brick6_acid_runtime_all_notes_off(current.program_route.instance_id);
             audio_note_engine_adapter_forget_outputs(entity);
         }
+        /* PANIC owns the complete AUDIO note lifetime, including the SEQ
+         * execution mirror.  Keep this inside the primitive: Project commit
+         * invokes PANIC directly while applying its atomic state snapshot and
+         * therefore does not pass through the FIFO post-processing below. */
+        memset(g_audio_seq_output, 0, sizeof(g_audio_seq_output));
+        g_audio_seq_track_mask = 0U;
     }
     return 1U;
 }
@@ -763,21 +776,12 @@ uint16_t __attribute__((noinline)) audio_command_executor_apply_due(
             audio_command_apply(&command);
         if (result != AUDIO_COMMAND_APPLY_OK)
             AUDIO_COMMAND_FATAL(&command, result);
-        if (((opcode == CONTROL_AUDIO_COMMAND_TRANSPORT)
+        if ((opcode == CONTROL_AUDIO_COMMAND_TRANSPORT)
                 && (CONTROL_AUDIO_COMMAND_KIND(&command)
                     == CONTROL_AUDIO_TRANSPORT_STOP))
-                || ((opcode == CONTROL_AUDIO_COMMAND_PANIC)
-                    && (CONTROL_AUDIO_COMMAND_KIND(&command)
-                        == CONTROL_AUDIO_PANIC_GLOBAL)))
         {
             memset(g_audio_seq_output, 0, sizeof(g_audio_seq_output));
             g_audio_seq_track_mask = 0U;
-        }
-        else if ((opcode == CONTROL_AUDIO_COMMAND_PANIC)
-                && (command.entity < SEQ_LANE_CAPACITY))
-        {
-            memset(g_audio_seq_output[command.entity], 0,
-                   sizeof(g_audio_seq_output[command.entity]));
         }
         (void)control_audio_fifo_audio_pop();
         ++applied;

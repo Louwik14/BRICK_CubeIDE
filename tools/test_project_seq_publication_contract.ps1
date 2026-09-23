@@ -4,6 +4,7 @@ $root = Split-Path -Parent $PSScriptRoot
 $project = Get-Content -Raw (Join-Path $root 'Src/Storage/project_product.c')
 $pattern = Get-Content -Raw (Join-Path $root 'Src/Storage/persistent_pattern_control.c')
 $live = Get-Content -Raw (Join-Path $root 'Src/Storage/pattern_live_ram.c')
+$audio = Get-Content -Raw (Join-Path $root 'Src/Audio/audio_command_executor.c')
 
 $projectOrder = [regex]::Match($project,
     'persistent_pattern_control_install_into_active_snapshot[\s\S]*?' +
@@ -31,6 +32,15 @@ if ($workspace -notmatch 'persist_codec_project_workspace_t codec_scratch;[\s\S]
 if ($live -match 'pattern_live_publish_active[\s\S]*?' +
         'seq_engine_control_reset_note_fx_context\(\)') {
     throw 'Project metadata publication must not dirty SEQ after the transaction'
+}
+
+$panic = [regex]::Match($audio,
+    'static uint8_t audio_command_apply_panic[\s\S]*?^\}',
+    [System.Text.RegularExpressions.RegexOptions]::Multiline)
+if (-not $panic.Success -or
+    $panic.Value -notmatch 'memset\(g_audio_seq_output, 0, sizeof\(g_audio_seq_output\)\)' -or
+    $panic.Value -notmatch 'g_audio_seq_track_mask = 0U') {
+    throw 'Nested Project PANIC must invalidate the AUDIO SEQ ownership mirror'
 }
 
 Write-Output 'Project/Pattern SEQ publication contract: PASS'
