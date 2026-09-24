@@ -225,12 +225,104 @@ static void ui_renderer_template_draw_bar_value_text(int widget_x,
     }
 
     char fitted_value[20];
-    (void)snprintf(fitted_value, (uint32_t)sizeof(fitted_value), "%s", value_txt);
+    ui_renderer_template_copy_text(fitted_value, (uint32_t)sizeof(fitted_value), value_txt);
     drv_display_set_font(&FONT_4X6);
     ui_renderer_template_fit_text(fitted_value, UI_TEMPLATE_CARD_LABEL_MAX_PX);
     drv_display_draw_text((uint8_t)ui_renderer_template_center_x(widget_x, widget_w, fitted_value),
                           (uint8_t)(widget_y + 6),
                           fitted_value);
+}
+
+static volatile ui_render_prof_cycles_t *ui_renderer_template_widget_prof_stats(
+    uiw_widget_type_t widget)
+{
+    switch (widget)
+    {
+        case UIW_WIDGET_EMPTY: return &g_ui_render_prof.renderer.widget.empty;
+        case UIW_WIDGET_SWITCH: return &g_ui_render_prof.renderer.widget.switch_widget;
+        case UIW_WIDGET_ENUM_TEXT: return &g_ui_render_prof.renderer.widget.enum_text;
+        case UIW_WIDGET_JACK: return &g_ui_render_prof.renderer.widget.jack_icon;
+        case UIW_WIDGET_KEYBOARD: return &g_ui_render_prof.renderer.widget.keyboard_icon;
+        case UIW_WIDGET_WAVE_ICON: return &g_ui_render_prof.renderer.widget.wave_icon;
+        case UIW_WIDGET_FILTER_ICON: return &g_ui_render_prof.renderer.widget.filter_icon;
+        case UIW_WIDGET_ALGO_ICON: return &g_ui_render_prof.renderer.widget.algorithm_bitmap;
+        case UIW_WIDGET_BIPOLAR_BAR: return &g_ui_render_prof.renderer.widget.bipolar_bargraph;
+        default: return &g_ui_render_prof.renderer.widget.bargraph;
+    }
+}
+
+static volatile ui_render_prof_cycles_t *ui_renderer_template_custom_widget_prof_stats(
+    ui_template_custom_widget_kind_t widget)
+{
+    switch (widget)
+    {
+        case UI_TEMPLATE_CUSTOM_WIDGET_LFO_RATE:
+        case UI_TEMPLATE_CUSTOM_WIDGET_LFO_DEPTH:
+        case UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE:
+        case UI_TEMPLATE_CUSTOM_WIDGET_LFO_PHASE:
+            return &g_ui_render_prof.renderer.widget.custom_lfo;
+        case UI_TEMPLATE_CUSTOM_WIDGET_STACK_WAVEFORM:
+        case UI_TEMPLATE_CUSTOM_WIDGET_WAVE_WAVETABLE:
+            return &g_ui_render_prof.renderer.widget.custom_waveform;
+        case UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TRACK:
+        case UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_TYPE:
+        case UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_INACTIVE:
+        case UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_MIDI_CHANNEL:
+        case UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_MIDI_SOURCE:
+            return &g_ui_render_prof.renderer.widget.custom_track_cfg;
+        case UI_TEMPLATE_CUSTOM_WIDGET_FILTER_TYPE:
+        case UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CUTOFF:
+        case UI_TEMPLATE_CUSTOM_WIDGET_FILTER_RESONANCE:
+        case UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP:
+            return &g_ui_render_prof.renderer.widget.custom_filter;
+        case UI_TEMPLATE_CUSTOM_WIDGET_ADSR_FILTER:
+        case UI_TEMPLATE_CUSTOM_WIDGET_ADSR_VCA:
+        case UI_TEMPLATE_CUSTOM_WIDGET_ADSR_ENV3:
+            return &g_ui_render_prof.renderer.widget.custom_adsr;
+        default: return &g_ui_render_prof.renderer.widget.custom_text;
+    }
+}
+
+static uint8_t ui_renderer_template_draw_virtual_custom_widget_profiled(
+    const ui_param_seq_plock_feedback_frame_t *plock_frame_ctx,
+    ui_template_custom_widget_kind_t kind,
+    int x,
+    int y,
+    int w,
+    int h,
+    float value,
+    uint8_t bipolar)
+{
+    const uint32_t prof_start = DWT->CYCCNT;
+    const uint8_t drawn = ui_renderer_template_draw_virtual_custom_widget(
+        plock_frame_ctx, kind, x, y, w, h, value, bipolar);
+    if (drawn != 0U)
+    {
+        ui_render_prof_add_cycles(ui_renderer_template_custom_widget_prof_stats(kind),
+                                  DWT->CYCCNT - prof_start);
+    }
+    return drawn;
+}
+
+static void ui_renderer_template_draw_virtual_enum_fallback(int x,
+                                                            int y,
+                                                            int w,
+                                                            int h,
+                                                            const char *text)
+{
+    const uint32_t prof_start = DWT->CYCCNT;
+    uiw_draw_enum_text(x, y, w, h, text);
+    ui_render_prof_add_cycles(&g_ui_render_prof.renderer.widget.enum_fallback,
+                              DWT->CYCCNT - prof_start);
+}
+
+static void ui_renderer_template_prof_widget(
+    volatile ui_render_prof_cycles_t *widget_stats, uint32_t start_cycles)
+{
+    const uint32_t elapsed = DWT->CYCCNT - start_cycles;
+    ui_render_prof_add_cycles(&g_ui_render_prof.renderer.slot_detail.widget_graphic,
+                              elapsed);
+    ui_render_prof_add_cycles(widget_stats, elapsed);
 }
 
 static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t *state,
@@ -241,6 +333,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
                                                  uint8_t slot,
                                                  param_id_t id)
 {
+    uint32_t prof_start;
     const int x = g_ui_template_frame_x[slot];
     const int y = UI_TEMPLATE_FRAME_Y;
     const int widget_x = x + UI_TEMPLATE_CARD_WIDGET_X_PAD;
@@ -250,6 +343,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
         && (slot < 3U));
     const uint8_t slot_locked = ui_macro_interaction_param_is_locked(id);
 
+    prof_start = DWT->CYCCNT;
     if ((slot_locked != 0U) && (audio_fx_shared_slot == 0U))
     {
         drv_display_fill_rect(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H);
@@ -260,17 +354,22 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
     {
         ui_renderer_template_draw_param_frame(x, y, UI_TEMPLATE_FRAME_W, UI_TEMPLATE_FRAME_H);
     }
+    ui_render_prof_add_cycles(&g_ui_render_prof.renderer.slot_detail.background_frame,
+                              DWT->CYCCNT - prof_start);
 
     if ((state != NULL) && (state->virtual_slot_text != NULL))
     {
         char virt_name[24];
         char virt_value[20];
-        if (state->virtual_slot_text(slot,
-                                     virt_name,
-                                     (uint32_t)sizeof(virt_name),
-                                     virt_value,
-                                     (uint32_t)sizeof(virt_value)) != 0U)
+        prof_start = DWT->CYCCNT;
+        const uint8_t has_virtual = state->virtual_slot_text(slot,
+            virt_name, (uint32_t)sizeof(virt_name), virt_value,
+            (uint32_t)sizeof(virt_value));
+        ui_render_prof_add_cycles(&g_ui_render_prof.renderer.slot_detail.page_callback,
+                                  DWT->CYCCNT - prof_start);
+        if (has_virtual != 0U)
         {
+            const uint32_t virtual_prof_start = DWT->CYCCNT;
             ui_template_custom_widget_kind_t virtual_widget = UI_TEMPLATE_CUSTOM_WIDGET_NONE;
             float virtual_value = 0.0f;
             uint8_t virtual_bipolar = 0U;
@@ -284,7 +383,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
                                                       &virtual_value,
                                                       &virtual_bipolar,
                                                       &virtual_inverted) != 0U)
-                        && (ui_renderer_template_draw_virtual_custom_widget(
+                        && (ui_renderer_template_draw_virtual_custom_widget_profiled(
                                 plock_frame_ctx, virtual_widget, widget_x, widget_y,
                                 UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H,
                                 virtual_value, virtual_bipolar) != 0U))
@@ -316,13 +415,18 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
                         drv_display_draw_text(label_x,
                             (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y), virt_name);
                     }
+                    ui_renderer_template_prof_widget(
+                        &g_ui_render_prof.renderer.widget.virtual_slot,
+                        virtual_prof_start);
                     return;
                 }
             }
             drv_display_set_font(&FONT_4X6);
             ui_renderer_template_fit_text(virt_name, UI_TEMPLATE_CARD_LABEL_MAX_PX);
             ui_renderer_template_fit_text(virt_value, UI_TEMPLATE_CARD_LABEL_MAX_PX);
-            uiw_draw_enum_text(widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H, virt_value);
+            ui_renderer_template_draw_virtual_enum_fallback(
+                widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W,
+                UI_TEMPLATE_CARD_WIDGET_H, virt_value);
             drv_display_set_font(&FONT_4X6);
             virtual_inverted = 0U;
             if ((state->virtual_slot_value != NULL)
@@ -345,6 +449,9 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
                                       (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y),
                                       virt_name);
             }
+            ui_renderer_template_prof_widget(
+                &g_ui_render_prof.renderer.widget.virtual_slot,
+                virtual_prof_start);
             return;
         }
     }
@@ -360,21 +467,30 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
         {
             char virt_name[24];
             char virt_value[20];
+            prof_start = DWT->CYCCNT;
             const uint8_t has_virtual = state->virtual_slot_text(slot,
                                                                  virt_name,
                                                                  (uint32_t)sizeof(virt_name),
                                                                  virt_value,
                                                                  (uint32_t)sizeof(virt_value));
+            ui_render_prof_add_cycles(&g_ui_render_prof.renderer.slot_detail.page_callback,
+                                      DWT->CYCCNT - prof_start);
             if (has_virtual != 0U)
             {
+                const uint32_t virtual_prof_start = DWT->CYCCNT;
                 drv_display_set_font(&FONT_4X6);
                 ui_renderer_template_fit_text(virt_name, UI_TEMPLATE_CARD_LABEL_MAX_PX);
                 ui_renderer_template_fit_text(virt_value, UI_TEMPLATE_CARD_LABEL_MAX_PX);
-                uiw_draw_enum_text(widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W, UI_TEMPLATE_CARD_WIDGET_H, virt_value);
+                ui_renderer_template_draw_virtual_enum_fallback(
+                    widget_x, widget_y, UI_TEMPLATE_CARD_WIDGET_W,
+                    UI_TEMPLATE_CARD_WIDGET_H, virt_value);
                 drv_display_set_font(&FONT_4X6);
                 drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, virt_name),
                                       (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y),
                                       virt_name);
+                ui_renderer_template_prof_widget(
+                    &g_ui_render_prof.renderer.widget.virtual_slot,
+                    virtual_prof_start);
                 return;
             }
         }
@@ -432,7 +548,10 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
     }
 
     drv_display_set_font(&FONT_4X6);
+    prof_start = DWT->CYCCNT;
     ui_renderer_template_fit_text(value_txt, UI_TEMPLATE_CARD_LABEL_MAX_PX);
+    ui_render_prof_add_cycles(&g_ui_render_prof.renderer.slot_detail.text_measure,
+                              DWT->CYCCNT - prof_start);
     const ui_template_custom_widget_kind_t custom_widget =
         ui_renderer_template_resolve_custom_widget(state, subpage, slot, id);
     if ((flash_active == 0U) && (custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP))
@@ -450,12 +569,18 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
     }
     if (ui_renderer_template_custom_widget_is_bar(custom_widget) != 0U)
     {
-        (void)snprintf(bottom_txt, (uint32_t)sizeof(bottom_txt), "%s", name_txt);
+        ui_renderer_template_copy_text(bottom_txt, (uint32_t)sizeof(bottom_txt), name_txt);
     }
+    prof_start = DWT->CYCCNT;
     ui_renderer_template_fit_text(bottom_txt, UI_TEMPLATE_CARD_LABEL_MAX_PX);
+    ui_render_prof_add_cycles(&g_ui_render_prof.renderer.slot_detail.text_measure,
+                              DWT->CYCCNT - prof_start);
 
     if (custom_widget != UI_TEMPLATE_CUSTOM_WIDGET_NONE)
     {
+        const uint32_t custom_prof_start = DWT->CYCCNT;
+        volatile ui_render_prof_cycles_t *const custom_prof_stats =
+            ui_renderer_template_custom_widget_prof_stats(custom_widget);
         if (custom_widget == grouped_widget)
         {
             if (grouped_widget_drawn != 0U)
@@ -489,6 +614,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             {
                 drv_display_set_draw_color(0U);
             }
+            ui_renderer_template_prof_widget(custom_prof_stats, custom_prof_start);
             goto draw_bottom_label;
         }
         if ((custom_widget == UI_TEMPLATE_CUSTOM_WIDGET_PLAY_NOTE)
@@ -566,6 +692,7 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             {
                 drv_display_set_draw_color(0U);
             }
+            ui_renderer_template_prof_widget(custom_prof_stats, custom_prof_start);
             goto draw_bottom_label;
         }
         if (slot_locked != 0U)
@@ -579,10 +706,11 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
     const uint8_t widget_is_bar = ui_renderer_template_widget_type_is_bar(widget_type);
     if (widget_is_bar != 0U)
     {
-        (void)snprintf(bottom_txt, (uint32_t)sizeof(bottom_txt), "%s", name_txt);
+        ui_renderer_template_copy_text(bottom_txt, (uint32_t)sizeof(bottom_txt), name_txt);
         ui_renderer_template_fit_text(bottom_txt, UI_TEMPLATE_CARD_LABEL_MAX_PX);
     }
 
+    prof_start = DWT->CYCCNT;
     switch (widget_type)
     {
         case UIW_WIDGET_EMPTY:
@@ -734,6 +862,8 @@ static void ui_renderer_template_draw_param_slot(const ui_template_page_state_t 
             break;
         }
     }
+    ui_renderer_template_prof_widget(
+        ui_renderer_template_widget_prof_stats(widget_type), prof_start);
 
 draw_bottom_label:
     if (slot_locked != 0U)
@@ -741,14 +871,25 @@ draw_bottom_label:
         drv_display_set_draw_color(0U);
     }
 
-    drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, bottom_txt),
+    prof_start = DWT->CYCCNT;
+    const uint8_t bottom_x = (uint8_t)ui_renderer_template_center_x(
+        x, UI_TEMPLATE_FRAME_W, bottom_txt);
+    ui_render_prof_add_cycles(&g_ui_render_prof.renderer.slot_detail.text_measure,
+                              DWT->CYCCNT - prof_start);
+    prof_start = DWT->CYCCNT;
+    drv_display_draw_text(bottom_x,
                           (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y),
                           bottom_txt);
+    ui_render_prof_add_cycles(&g_ui_render_prof.renderer.slot_detail.text_draw,
+                              DWT->CYCCNT - prof_start);
     if ((draw_name_inverted != 0U)
             || ((audio_fx_shared_slot != 0U) && (slot_locked != 0U)))
     {
+        prof_start = DWT->CYCCNT;
         const uint8_t text_x = (uint8_t)ui_renderer_template_center_x(x, UI_TEMPLATE_FRAME_W, bottom_txt);
         const uint8_t text_w = drv_display_text_width(bottom_txt);
+        ui_render_prof_add_cycles(&g_ui_render_prof.renderer.slot_detail.text_measure,
+                                  DWT->CYCCNT - prof_start);
         if (text_w == 0U)
         {
             if (slot_locked != 0U)
@@ -757,6 +898,7 @@ draw_bottom_label:
             }
             return;
         }
+        prof_start = DWT->CYCCNT;
         ui_renderer_template_fill_lock_label_frame(text_x,
                                                    (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y - 1),
                                                    text_w,
@@ -764,6 +906,9 @@ draw_bottom_label:
         drv_display_draw_text_inverted(text_x,
                                        (uint8_t)(y + UI_TEMPLATE_CARD_LABEL_Y),
                                        bottom_txt);
+        ui_render_prof_add_cycles(
+            &g_ui_render_prof.renderer.slot_detail.inversion_flash_feedback,
+            DWT->CYCCNT - prof_start);
     }
 
     if (slot_locked != 0U)

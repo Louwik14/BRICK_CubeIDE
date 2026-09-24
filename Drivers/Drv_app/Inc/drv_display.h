@@ -46,6 +46,7 @@ uint8_t drv_display_text_width(const char *txt);
 uint8_t drv_display_font_height(void);
 
 void drv_display_draw_pixel(int x, int y, bool on);
+void drv_display_draw_bitmap_1bpp(int x, int y, int w, int h, const uint8_t *bitmap);
 void drv_display_draw_rect(int x, int y, int w, int h);
 void drv_display_draw_line(int x1, int y1, int x2, int y2);
 void drv_display_fill_rect(int x, int y, int w, int h);

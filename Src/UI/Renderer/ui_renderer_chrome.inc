@@ -54,8 +54,8 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     drv_display_set_font(&FONT_4X6);
     char runtime_fit[12];
     char hall_fit[12];
-    (void)snprintf(runtime_fit, sizeof(runtime_fit), "%s", runtime_label);
-    (void)snprintf(hall_fit, sizeof(hall_fit), "%s", hall_mode_label);
+    ui_renderer_template_copy_text(runtime_fit, sizeof(runtime_fit), runtime_label);
+    ui_renderer_template_copy_text(hall_fit, sizeof(hall_fit), hall_mode_label);
     ui_renderer_template_fit_text(runtime_fit, 25U);
     ui_renderer_template_fit_text(hall_fit, 20U);
     drv_display_draw_text(17U, 1U, runtime_fit);
@@ -63,13 +63,13 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     if ((hall_mode_suffix != NULL) && (hall_mode_suffix[0] != '\0'))
     {
         char suffix_fit[8];
-        (void)snprintf(suffix_fit, sizeof(suffix_fit), "%s", hall_mode_suffix);
+        ui_renderer_template_copy_text(suffix_fit, sizeof(suffix_fit), hall_mode_suffix);
         ui_renderer_template_fit_text(suffix_fit, 9U);
         drv_display_draw_text(33U, 9U, suffix_fit);
     }
 
     char title_fit[16];
-    (void)snprintf(title_fit, sizeof(title_fit), "%s", family_title);
+    ui_renderer_template_copy_text(title_fit, sizeof(title_fit), family_title);
     drv_display_set_font(&FONT_5X7);
     if (drv_display_text_width(title_fit) > 38U)
     {
@@ -84,10 +84,11 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
 
     drv_display_set_font(&FONT_4X6);
     ui_renderer_template_fit_text(cpu_avg_label, 30U);
+    const uint8_t bpm_text_w = (draw_bpm != 0U)
+        ? drv_display_text_width(bpm_label) : 0U;
     if (draw_bpm != 0U)
     {
         drv_display_set_font(&FONT_4X6);
-        const uint8_t bpm_text_w = drv_display_text_width(bpm_label);
         if (bpm_inverted != 0U)
         {
             const uint8_t bpm_box_w = (uint8_t)(bpm_text_w + 2U);
@@ -105,7 +106,7 @@ static void ui_renderer_template_draw_header(const ui_template_page_state_t *sta
     ui_renderer_template_format_active_pattern_label(pattern_label, sizeof(pattern_label));
     drv_display_set_font(&FONT_4X6);
     const uint8_t cpu_text_w = drv_display_text_width(cpu_avg_label);
-    const uint8_t bpm_w = (draw_bpm != 0U) ? drv_display_text_width(bpm_label) : 0U;
+    const uint8_t bpm_w = bpm_text_w;
     const uint8_t bpm_x = (draw_bpm != 0U) ? ui_renderer_template_right_x(0U, bpm_w) : OLED_WIDTH;
     uint8_t cpu_x = (uint8_t)(108U - cpu_text_w);
     if ((draw_bpm != 0U) && ((uint8_t)(cpu_x + cpu_text_w + 1U) > bpm_x))
@@ -146,7 +147,7 @@ static void ui_renderer_template_draw_footer(const ui_template_page_state_t *sta
 
 
         char label_fit[12];
-        (void)snprintf(label_fit, sizeof(label_fit), "%s", label);
+        ui_renderer_template_copy_text(label_fit, sizeof(label_fit), label);
         ui_renderer_template_fit_text(label_fit, 28U);
 
         const int x_label = ui_renderer_template_center_x(bx, bw, label_fit);
@@ -179,6 +180,144 @@ static void ui_renderer_template_draw_footer(const ui_template_page_state_t *sta
             drv_display_draw_text((uint8_t)x_label, UI_TEMPLATE_FOOTER_TEXT_Y, label_fit);
         }
     }
+}
+
+#define UI_TEMPLATE_HEADER_CACHE_BYTES (OLED_WIDTH * 2U)
+
+static uint8_t g_ui_template_header_cache[UI_TEMPLATE_HEADER_CACHE_BYTES];
+static uint8_t g_ui_template_footer_page6_cache[OLED_WIDTH];
+static uint8_t g_ui_template_footer_page7_cache[OLED_WIDTH];
+static uint32_t g_ui_template_header_cache_signature;
+static uint32_t g_ui_template_footer_cache_signature;
+static uint8_t g_ui_template_header_cache_valid;
+static uint8_t g_ui_template_footer_cache_valid;
+
+static uint32_t ui_renderer_template_signature_byte(uint32_t signature, uint8_t value)
+{
+    return (signature ^ value) * 16777619UL;
+}
+
+static uint32_t ui_renderer_template_signature_u32(uint32_t signature, uint32_t value)
+{
+    signature = ui_renderer_template_signature_byte(signature, (uint8_t)value);
+    signature = ui_renderer_template_signature_byte(signature, (uint8_t)(value >> 8));
+    signature = ui_renderer_template_signature_byte(signature, (uint8_t)(value >> 16));
+    return ui_renderer_template_signature_byte(signature, (uint8_t)(value >> 24));
+}
+
+static uint32_t ui_renderer_template_signature_text(uint32_t signature, const char *text)
+{
+    if (text != NULL)
+    {
+        while (*text != '\0')
+        {
+            signature = ui_renderer_template_signature_byte(signature, (uint8_t)*text);
+            text++;
+        }
+    }
+    return ui_renderer_template_signature_byte(signature, 0xffU);
+}
+
+static uint32_t ui_renderer_template_header_signature(const ui_template_page_state_t *state)
+{
+    const ui_template_family_t *family = ui_template_page_get_active_family(state);
+    const uint8_t active_track = ui_renderer_template_get_selected_entity();
+    char runtime_label[12];
+    char cpu_avg_label[40];
+    char pattern_label[6];
+    uint32_t signature = 2166136261UL;
+    uint32_t bpm_milli = 0U;
+    uint8_t bpm_state = 0U;
+
+    ui_get_track_runtime_header_label(active_track, runtime_label,
+                                      (uint32_t)sizeof(runtime_label));
+    ui_renderer_template_format_cpu_avg(cpu_avg_label,
+                                        (uint32_t)sizeof(cpu_avg_label));
+    ui_renderer_template_format_active_pattern_label(pattern_label,
+                                                     sizeof(pattern_label));
+    if (seq_runtime_get_clock_source() == SEQ_CLOCK_SRC_INTERNAL)
+    {
+        bpm_state = 1U;
+        bpm_milli = seq_runtime_get_tempo_bpm_milli();
+    }
+    else if (seq_runtime_is_external_tempo_valid() != 0U)
+    {
+        bpm_state = 2U;
+        bpm_milli = seq_runtime_get_external_tempo_bpm_milli();
+    }
+
+    const ui_hall_mode_t hall_mode = ui_get_hall_mode();
+    const char *hall_label = ui_get_hall_mode_short_label();
+    if (ui_hall_mode_resolve_effective_view(active_track, hall_mode)
+            == UI_HALL_MODE_VIEW_KEYBOARD)
+    {
+        hall_label = keyboard_runtime_get_omnichord() ? "CHORD" : "KBD";
+    }
+
+    signature = ui_renderer_template_signature_u32(signature, active_track);
+    signature = ui_renderer_template_signature_text(signature,
+        ((family != NULL) && (family->family_title != NULL))
+            ? family->family_title : "TEMPLATE");
+    signature = ui_renderer_template_signature_text(signature, runtime_label);
+    signature = ui_renderer_template_signature_text(signature, hall_label);
+    signature = ui_renderer_template_signature_text(signature,
+        ui_get_hall_mode_suffix_label());
+    signature = ui_renderer_template_signature_text(signature, cpu_avg_label);
+    signature = ui_renderer_template_signature_text(signature, pattern_label);
+    signature = ui_renderer_template_signature_u32(signature, bpm_state);
+    return ui_renderer_template_signature_u32(signature, bpm_milli);
+}
+
+static uint32_t ui_renderer_template_footer_signature(const ui_template_page_state_t *state)
+{
+    const ui_template_family_t *family = ui_template_page_get_active_family(state);
+    uint32_t signature = 2166136261UL;
+    signature = ui_renderer_template_signature_u32(signature,
+        (state != NULL) ? state->active_subpage : 0xffU);
+    if (family == NULL) return signature;
+    for (uint8_t i = 0U; i < 4U; ++i)
+    {
+        signature = ui_renderer_template_signature_u32(signature,
+            ui_template_page_is_subpage_selectable(state, i));
+        signature = ui_renderer_template_signature_text(signature,
+            family->nav_labels[i]);
+    }
+    return signature;
+}
+
+static void ui_renderer_template_header_cache_capture(uint32_t signature)
+{
+    memcpy(g_ui_template_header_cache, drv_display_get_buffer(),
+           sizeof(g_ui_template_header_cache));
+    g_ui_template_header_cache_signature = signature;
+    g_ui_template_header_cache_valid = 1U;
+}
+
+static void ui_renderer_template_header_cache_restore(void)
+{
+    memcpy(drv_display_get_buffer(), g_ui_template_header_cache,
+           sizeof(g_ui_template_header_cache));
+}
+
+static void ui_renderer_template_footer_cache_capture(uint32_t signature)
+{
+    uint8_t *const display = drv_display_get_buffer();
+    memcpy(g_ui_template_footer_page6_cache, &display[6U * OLED_WIDTH], OLED_WIDTH);
+    memcpy(g_ui_template_footer_page7_cache, &display[7U * OLED_WIDTH], OLED_WIDTH);
+    g_ui_template_footer_cache_signature = signature;
+    g_ui_template_footer_cache_valid = 1U;
+}
+
+static void ui_renderer_template_footer_cache_restore(void)
+{
+    uint8_t *const display = drv_display_get_buffer();
+    for (uint32_t x = 0U; x < OLED_WIDTH; ++x)
+    {
+        display[6U * OLED_WIDTH + x] = (uint8_t)(
+            (display[6U * OLED_WIDTH + x] & 0x7fU)
+            | (g_ui_template_footer_page6_cache[x] & 0x80U));
+    }
+    memcpy(&display[7U * OLED_WIDTH], g_ui_template_footer_page7_cache, OLED_WIDTH);
 }
 
 static void ui_renderer_template_draw_mod_link_arrows(const ui_template_subpage_t *subpage)
@@ -389,6 +528,8 @@ typedef struct
     param_id_t grouped_lfo_shape_id;
     param_id_t grouped_lfo_phase_id;
     synth_waveform_engine_t synth_engine;
+    uint32_t header_signature;
+    uint32_t footer_signature;
 } ui_renderer_template_job_t;
 
 static ui_renderer_template_job_t g_ui_renderer_template_job;
@@ -439,7 +580,14 @@ static uint8_t ui_renderer_template_job_begin(const ui_template_page_state_t *st
     g_ui_renderer_template_job.state.family_resolver = NULL;
     g_ui_renderer_template_job.state.family = &g_ui_renderer_template_job.family;
     g_ui_renderer_template_job.state.resolved_family = &g_ui_renderer_template_job.family;
+    g_ui_renderer_template_job.header_signature =
+        ui_renderer_template_header_signature(&g_ui_renderer_template_job.state);
+    g_ui_renderer_template_job.footer_signature =
+        ui_renderer_template_footer_signature(&g_ui_renderer_template_job.state);
     g_ui_renderer_template_job.phase = UI_TEMPLATE_RENDER_HEADER;
+    g_ui_render_prof_frame_cpu_cycles = 0U;
+    g_ui_render_prof_frame_wall_start = brick_media_clock_now_tick();
+    g_ui_render_prof_frame_active = 1U;
     return 1U;
 }
 
@@ -575,36 +723,52 @@ static void ui_renderer_template_job_draw_special(ui_renderer_template_job_t *jo
 static void ui_renderer_template_job_draw_group(ui_renderer_template_job_t *job)
 {
     if (job->grouped_widget_drawn == 0U) return;
+    const uint32_t prof_start = DWT->CYCCNT;
+    volatile ui_render_prof_cycles_t *prof_stats = NULL;
     switch (job->grouped_widget)
     {
         case UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP:
+            prof_stats = &g_ui_render_prof.renderer.widget.grouped_filter;
             (void)ui_renderer_template_draw_filter_curve_group(&job->plock_frame);
             break;
         case UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE_PHASE_GROUP:
+            prof_stats = &g_ui_render_prof.renderer.widget.grouped_lfo;
             (void)ui_renderer_template_draw_lfo_shape_phase_group(&job->plock_frame,
                 job->grouped_lfo_shape_id, job->grouped_lfo_phase_id);
             break;
         case UI_TEMPLATE_CUSTOM_WIDGET_SPECTRAL_WINDOW_GROUP:
+            prof_stats = &g_ui_render_prof.renderer.widget.grouped_spectral;
             ui_renderer_template_draw_spectral_window_group(&job->plock_frame,
                 job->grouped_filter_first_slot, job->grouped_filter_position,
                 job->grouped_filter_width);
             break;
         case UI_TEMPLATE_CUSTOM_WIDGET_FM_PITCH_EG_GROUP:
+            prof_stats = &g_ui_render_prof.renderer.widget.grouped_fm_pitch;
             (void)ui_renderer_template_draw_fm_pitch_eg_group(&job->plock_frame);
             break;
         case UI_TEMPLATE_CUSTOM_WIDGET_AUDIO_FX_GROUP:
             break;
         default:
+            prof_stats = &g_ui_render_prof.renderer.widget.grouped_adsr;
             (void)ui_renderer_template_draw_custom_adsr_shape(&job->grouped_adsr_shape,
                 UI_TEMPLATE_GROUP_WIDGET_X, UI_TEMPLATE_GROUP_WIDGET_Y,
                 UI_TEMPLATE_GROUP_WIDGET_W, UI_TEMPLATE_GROUP_WIDGET_H, 1U);
             break;
     }
+    if (prof_stats != NULL)
+        ui_render_prof_add_cycles(prof_stats, DWT->CYCCNT - prof_start);
 }
 
 uint8_t ui_renderer_template_draw_step(const ui_template_page_state_t *state)
 {
     ui_renderer_template_job_t *job = &g_ui_renderer_template_job;
+    ui_renderer_template_phase_t measured_phase;
+    ui_renderer_template_body_t measured_body;
+    uint8_t audio_fx_used;
+    uint8_t completed = 0U;
+    uint32_t start_cycles;
+    uint32_t elapsed;
+    volatile ui_render_prof_cycles_t *phase_stats = NULL;
     if ((job->phase == UI_TEMPLATE_RENDER_IDLE)
             && (ui_renderer_template_job_begin(state) == 0U))
     {
@@ -617,10 +781,26 @@ uint8_t ui_renderer_template_draw_step(const ui_template_page_state_t *state)
     }
 
     const ui_template_subpage_t *subpage = ui_template_page_get_active_subpage(&job->state);
+    measured_phase = job->phase;
+    measured_body = job->body;
+    audio_fx_used = (uint8_t)((measured_phase == UI_TEMPLATE_RENDER_AUDIO_FX)
+        && (job->grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_AUDIO_FX_GROUP));
+    start_cycles = DWT->CYCCNT;
     switch (job->phase)
     {
         case UI_TEMPLATE_RENDER_HEADER:
-            ui_renderer_template_draw_header(&job->state);
+            if ((g_ui_template_header_cache_valid != 0U)
+                    && (g_ui_template_header_cache_signature == job->header_signature))
+            {
+                g_ui_render_prof.renderer.header_cache_hit_count++;
+                ui_renderer_template_header_cache_restore();
+            }
+            else
+            {
+                g_ui_render_prof.renderer.header_cache_miss_count++;
+                ui_renderer_template_draw_header(&job->state);
+                ui_renderer_template_header_cache_capture(job->header_signature);
+            }
             job->phase = UI_TEMPLATE_RENDER_PREPARE;
             break;
         case UI_TEMPLATE_RENDER_PREPARE:
@@ -634,7 +814,12 @@ uint8_t ui_renderer_template_draw_step(const ui_template_page_state_t *state)
             break;
         case UI_TEMPLATE_RENDER_AUDIO_FX:
             if (job->grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_AUDIO_FX_GROUP)
+            {
+                const uint32_t audio_fx_prof_start = DWT->CYCCNT;
                 (void)ui_renderer_template_draw_audio_fx_group(&job->plock_frame);
+                ui_render_prof_add_cycles(&g_ui_render_prof.renderer.widget.audio_fx,
+                    DWT->CYCCNT - audio_fx_prof_start);
+            }
             job->phase = UI_TEMPLATE_RENDER_SLOT_0;
             break;
         case UI_TEMPLATE_RENDER_SLOT_0:
@@ -656,18 +841,72 @@ uint8_t ui_renderer_template_draw_step(const ui_template_page_state_t *state)
             job->phase = UI_TEMPLATE_RENDER_FOOTER;
             break;
         case UI_TEMPLATE_RENDER_FOOTER:
-            ui_renderer_template_draw_footer(&job->state);
+            if ((g_ui_template_footer_cache_valid != 0U)
+                    && (g_ui_template_footer_cache_signature == job->footer_signature))
+            {
+                g_ui_render_prof.renderer.footer_cache_hit_count++;
+                ui_renderer_template_footer_cache_restore();
+            }
+            else
+            {
+                g_ui_render_prof.renderer.footer_cache_miss_count++;
+                ui_renderer_template_draw_footer(&job->state);
+                ui_renderer_template_footer_cache_capture(job->footer_signature);
+            }
             job->phase = UI_TEMPLATE_RENDER_FINALIZE;
             break;
         case UI_TEMPLATE_RENDER_FINALIZE:
             drv_display_set_font(&FONT_5X7);
             job->phase = UI_TEMPLATE_RENDER_IDLE;
-            return 1U;
+            completed = 1U;
+            break;
         default:
             job->phase = UI_TEMPLATE_RENDER_IDLE;
             return 1U;
     }
-    return 0U;
+    elapsed = DWT->CYCCNT - start_cycles;
+    switch (measured_phase)
+    {
+        case UI_TEMPLATE_RENDER_HEADER: phase_stats = &g_ui_render_prof.renderer.header; break;
+        case UI_TEMPLATE_RENDER_PREPARE: phase_stats = &g_ui_render_prof.renderer.prepare; break;
+        case UI_TEMPLATE_RENDER_SPECIAL: phase_stats = &g_ui_render_prof.renderer.special; break;
+        case UI_TEMPLATE_RENDER_AUDIO_FX: phase_stats = &g_ui_render_prof.renderer.audio_fx_phase; break;
+        case UI_TEMPLATE_RENDER_SLOT_0: phase_stats = &g_ui_render_prof.renderer.slot_0; break;
+        case UI_TEMPLATE_RENDER_SLOT_1: phase_stats = &g_ui_render_prof.renderer.slot_1; break;
+        case UI_TEMPLATE_RENDER_SLOT_2: phase_stats = &g_ui_render_prof.renderer.slot_2; break;
+        case UI_TEMPLATE_RENDER_SLOT_3: phase_stats = &g_ui_render_prof.renderer.slot_3; break;
+        case UI_TEMPLATE_RENDER_GROUP: phase_stats = &g_ui_render_prof.renderer.group; break;
+        case UI_TEMPLATE_RENDER_FOOTER: phase_stats = &g_ui_render_prof.renderer.footer; break;
+        case UI_TEMPLATE_RENDER_FINALIZE: phase_stats = &g_ui_render_prof.renderer.finalize; break;
+        default: break;
+    }
+    if (phase_stats != NULL) ui_render_prof_add_cycles(phase_stats, elapsed);
+    if (measured_phase == UI_TEMPLATE_RENDER_SPECIAL)
+    {
+        volatile ui_render_prof_cycles_t *special_stats = NULL;
+        switch (measured_body)
+        {
+            case UI_TEMPLATE_BODY_SAMPLER_RAM: special_stats = &g_ui_render_prof.renderer.special_sampler_ram; break;
+            case UI_TEMPLATE_BODY_SYNTH_LIVE: special_stats = &g_ui_render_prof.renderer.special_synth_live; break;
+            case UI_TEMPLATE_BODY_WAVE_WAVETABLE: special_stats = &g_ui_render_prof.renderer.special_wave_wavetable; break;
+            case UI_TEMPLATE_BODY_WAVE_CLASSIC: special_stats = &g_ui_render_prof.renderer.special_wave_classic; break;
+            default: break;
+        }
+        if (special_stats != NULL) ui_render_prof_add_cycles(special_stats, elapsed);
+    }
+    if (audio_fx_used != 0U)
+        ui_render_prof_add_cycles(&g_ui_render_prof.renderer.audio_fx_used, elapsed);
+    if (g_ui_render_prof_frame_active != 0U)
+        g_ui_render_prof_frame_cpu_cycles += elapsed;
+    if ((completed != 0U) && (g_ui_render_prof_frame_active != 0U))
+    {
+        ui_render_prof_add_value(&g_ui_render_prof.renderer.frame_cpu_cycles,
+                                 g_ui_render_prof_frame_cpu_cycles);
+        ui_render_prof_add_value(&g_ui_render_prof.renderer.frame_wall_ticks,
+            brick_media_clock_now_tick() - g_ui_render_prof_frame_wall_start);
+        g_ui_render_prof_frame_active = 0U;
+    }
+    return completed;
 }
 
 uint8_t ui_renderer_template_draw_pending(void)
@@ -677,5 +916,8 @@ uint8_t ui_renderer_template_draw_pending(void)
 
 void ui_renderer_template_draw_cancel(void)
 {
+    if (g_ui_render_prof_frame_active != 0U)
+        g_ui_render_prof.renderer.frame_cancel_count++;
+    g_ui_render_prof_frame_active = 0U;
     g_ui_renderer_template_job.phase = UI_TEMPLATE_RENDER_IDLE;
 }

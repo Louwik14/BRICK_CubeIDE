@@ -4,6 +4,7 @@
 #include "drv_display.h"
 #include "Storage/sample_capture.h"
 #include "ui_renderer_oled.h"
+#include "UI/ui_render_prof.h"
 
 #define DISPLAY_FLUSH_PERIOD_MS 16U
 
@@ -14,6 +15,7 @@ void display_flush_service_poll(void)
 
     if (drv_display_flush_in_progress() != 0U)
     {
+        ui_render_prof_note_flush_service_poll();
         drv_display_update();
         return;
     }
@@ -29,6 +31,7 @@ void display_flush_service_poll(void)
     }
 
     {
+        ui_render_prof_note_flush_service_poll();
         drv_display_update();
     }
     last_flush = now;

@@ -4,6 +4,7 @@
 #include <string.h>
 #include <math.h>
 
+#include "main.h"
 #include "IPC/audio_boot_diagnostic_reader.h"
 #include "drv_display.h"
 #include "font.h"
@@ -17,9 +18,11 @@
 #include "pages/ui_page_template_mod.h"
 #include "Param/engine_model_catalog.h"
 #include "Platform/memory_layout.h"
+#include "Platform/brick_media_clock.h"
 #include "Param/stack_waveform.h"
 #include "Storage/project_control.h"
 #include "UI/ui_sampler_playhead.h"
+#include "UI/ui_render_prof.h"
 #include "Track/track_runtime.h"
 #include "Track/track_state.h"
 #include "Seq/seq_runtime.h"
@@ -34,6 +37,93 @@
 #include "Param/spectral_window.h"
 #include "IPC/audio_waveform_reader.h"
 #include "IPC/synth_waveform_reader.h"
+
+volatile ui_render_prof_t g_ui_render_prof;
+static uint32_t g_ui_render_prof_frame_cpu_cycles;
+static uint32_t g_ui_render_prof_frame_wall_start;
+static uint8_t g_ui_render_prof_frame_active;
+
+static void ui_render_prof_add_cycles(volatile ui_render_prof_cycles_t *stats,
+                                      uint32_t elapsed)
+{
+    stats->count++;
+    stats->total_cycles += elapsed;
+    if (elapsed < stats->min_cycles) stats->min_cycles = elapsed;
+    if (elapsed > stats->max_cycles) stats->max_cycles = elapsed;
+}
+
+static void ui_render_prof_add_value(volatile ui_render_prof_value_t *stats,
+                                     uint32_t value)
+{
+    stats->count++;
+    stats->total_value += value;
+    if (value < stats->min_value) stats->min_value = value;
+    if (value > stats->max_value) stats->max_value = value;
+}
+
+static void ui_render_prof_reset_cycles(volatile ui_render_prof_cycles_t *stats)
+{
+    stats->min_cycles = UINT32_MAX;
+}
+
+static void ui_render_prof_reset_cycles_block(
+    volatile ui_render_prof_cycles_t *stats, uint32_t count)
+{
+    for (uint32_t i = 0U; i < count; ++i)
+        ui_render_prof_reset_cycles(&stats[i]);
+}
+
+static void ui_render_prof_reset_value(volatile ui_render_prof_value_t *stats)
+{
+    stats->min_value = UINT32_MAX;
+}
+
+__attribute__((used, noinline, externally_visible))
+void ui_render_prof_reset(void)
+{
+    memset((void *)&g_ui_render_prof, 0, sizeof(g_ui_render_prof));
+    g_ui_render_prof_frame_cpu_cycles = 0U;
+    g_ui_render_prof_frame_wall_start = 0U;
+    g_ui_render_prof_frame_active = 0U;
+    ui_render_prof_flush_reset_tracking();
+    ui_render_prof_reset_cycles(&g_ui_render_prof.renderer.header);
+    ui_render_prof_reset_cycles(&g_ui_render_prof.renderer.prepare);
+    ui_render_prof_reset_cycles(&g_ui_render_prof.renderer.special);
+    ui_render_prof_reset_cycles(&g_ui_render_prof.renderer.special_sampler_ram);
+    ui_render_prof_reset_cycles(&g_ui_render_prof.renderer.special_synth_live);
+    ui_render_prof_reset_cycles(&g_ui_render_prof.renderer.special_wave_wavetable);
+    ui_render_prof_reset_cycles(&g_ui_render_prof.renderer.special_wave_classic);
+    ui_render_prof_reset_cycles(&g_ui_render_prof.renderer.audio_fx_phase);
+    ui_render_prof_reset_cycles(&g_ui_render_prof.renderer.audio_fx_used);
+    ui_render_prof_reset_cycles(&g_ui_render_prof.renderer.slot_0);
+    ui_render_prof_reset_cycles(&g_ui_render_prof.renderer.slot_1);
+    ui_render_prof_reset_cycles(&g_ui_render_prof.renderer.slot_2);
+    ui_render_prof_reset_cycles(&g_ui_render_prof.renderer.slot_3);
+    ui_render_prof_reset_cycles(&g_ui_render_prof.renderer.group);
+    ui_render_prof_reset_cycles(&g_ui_render_prof.renderer.footer);
+    ui_render_prof_reset_cycles(&g_ui_render_prof.renderer.finalize);
+    ui_render_prof_reset_cycles_block(
+        &g_ui_render_prof.renderer.slot_detail.value_context,
+        (uint32_t)(sizeof(g_ui_render_prof.renderer.slot_detail)
+            / sizeof(ui_render_prof_cycles_t)));
+    ui_render_prof_reset_cycles_block(
+        &g_ui_render_prof.renderer.widget.virtual_slot,
+        (uint32_t)(sizeof(g_ui_render_prof.renderer.widget)
+            / sizeof(ui_render_prof_cycles_t)));
+    ui_render_prof_reset_value(&g_ui_render_prof.renderer.frame_cpu_cycles);
+    ui_render_prof_reset_value(&g_ui_render_prof.renderer.frame_wall_ticks);
+    ui_render_prof_reset_cycles(&g_ui_render_prof.flush.snapshot_memcpy);
+    ui_render_prof_reset_cycles(&g_ui_render_prof.flush.dirty_scan);
+    ui_render_prof_reset_cycles(&g_ui_render_prof.flush.dirty_pack);
+    ui_render_prof_reset_cycles(&g_ui_render_prof.flush.page_prepare_launch);
+    ui_render_prof_reset_cycles(&g_ui_render_prof.flush.full_prepare_launch);
+    ui_render_prof_reset_value(&g_ui_render_prof.flush.bytes_per_flush);
+    ui_render_prof_reset_value(&g_ui_render_prof.flush.update_calls_per_flush);
+    ui_render_prof_reset_value(&g_ui_render_prof.flush.service_polls_per_flush);
+    ui_render_prof_reset_value(&g_ui_render_prof.flush.wall_ticks);
+    g_ui_render_prof.renderer.frame_wall_tick_hz = brick_media_clock_tick_hz();
+    g_ui_render_prof.flush.wall_tick_hz = brick_media_clock_tick_hz();
+}
 
 #define UI_TEMPLATE_FRAME_W          32
 #define UI_TEMPLATE_FRAME_H          38

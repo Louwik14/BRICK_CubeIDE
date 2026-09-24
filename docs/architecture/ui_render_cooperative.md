@@ -20,12 +20,18 @@ Le flush DISPLAY est lui aussi cadence a 16 ms.
 
 - `buffer` en SDRAM est l'unique cible U8g2 et le back-buffer logique de l'UI ;
 - `flush_snapshot` en RAM DMA est copie seulement au debut d'un flush complet,
-  puis ses huit pages de 128 octets sont emises par DMA SPI.
+  puis compare au framebuffer suivant. Le rectangle englobant les octets
+  modifies est compacte dans `flush_transfer` et emis par un DMA SPI unique.
+  Le SSD1309 est place en adressage horizontal avec une fenetre de colonnes et
+  pages ajustee au rectangle; une image entierement modifiee reste un transfert
+  continu de 1024 octets et une image identique ne lance aucun DMA.
 
 Il n'existe pas de front-buffer logiciel supplementaire. L'OLED est le front
 buffer physique. La copie `buffer -> flush_snapshot` fournit l'atomicite
 necessaire vis-a-vis du DMA : le rendu suivant peut modifier `buffer` sans
-melanger les pages du flush en cours.
+modifier l'image continue deja capturee par le flush en cours. La fin du DMA
+est constatee au passage de superloop suivant ; un flush normal demande donc
+un appel de lancement et un appel de finalisation.
 
 ## Contrat cooperatif retenu
 
@@ -86,3 +92,15 @@ structurels; une invalidation de valeur ne jette jamais une frame active.
 L'ancien point d'entree synchrone `ui_renderer_template_draw()` n'est pas
 conserve. Le rendu ne porte aucune politique USB; apres chaque quantum, il rend
 naturellement la main a la superloop pour les services USB differes.
+
+## Convention de profilage des widgets
+
+Les compteurs `g_ui_render_prof.renderer.widget` sont hierarchiques. Le compteur
+`virtual_slot` mesure le wrapper virtuel complet (selection, valeur, widget et
+label). Le type concret rendu dans ce wrapper est aussi mesure dans sa categorie
+propre; ces temps se recouvrent donc volontairement et ne doivent pas etre
+additionnes. `enum_fallback` couvre le dessin enum utilise faute de widget
+virtuel concret. Pour les pages CFG, `custom_track_cfg` mesure le widget CFG
+complet, tandis que `track_cfg_text` et `track_cfg_bitmap` mesurent exclusivement
+le sous-chemin concret texte ou icone. `algorithm_bitmap` reste reserve a
+`uiw_draw_algo_icon()` et ne designe pas les icones CFG.
