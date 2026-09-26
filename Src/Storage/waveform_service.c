@@ -8,6 +8,7 @@
 #include "SD/sd_scheduler_runtime.h"
 #include "Platform/memory_layout.h"
 #include "wav_parser.h"
+#include "Storage/wav_audio_codec.h"
 #include "ff.h"
 #include "stm32h7xx.h"
 
@@ -39,6 +40,7 @@ typedef struct
     uint16_t block_align;
     uint16_t bits_per_sample;
     uint16_t channels;
+    wav_sample_encoding_t encoding;
     uint8_t level;
     uint8_t slot;
     uint8_t active;
@@ -217,6 +219,15 @@ static int16_t waveform_decode_sample(const uint8_t *p, uint16_t bits)
     return (int16_t)((uint16_t)p[2] | ((uint16_t)p[3] << 8));
 }
 
+static int16_t waveform_decode_float_sample(const uint8_t *p)
+{
+    float value = wav_audio_codec_float32_to_float(p);
+    if (value != value) value = 0.0f;
+    if (value > 0.999969f) value = 0.999969f;
+    else if (value < -1.0f) value = -1.0f;
+    return (int16_t)(value * 32767.0f);
+}
+
 #include "waveform_local_engine.inc"
 
 uint8_t waveform_service_local_pending(void)
@@ -277,12 +288,7 @@ void waveform_service_storage_service(void)
     {
         wav_info_t info;
         if(wav_parser_parse_info(&fp, &info) == 0
-                || info.audio_format != 1U
-                || (info.bits_per_sample != 16U
-                    && info.bits_per_sample != 24U
-                    && info.bits_per_sample != 32U)
-                || (info.channels != 1U && info.channels != 2U)
-                || info.block_align == 0U
+                || wav_parser_format_supported(&info) == 0U
                 || info.block_align > 8U)
         {
             ok = 0U;
@@ -293,6 +299,7 @@ void waveform_service_storage_service(void)
             job->block_align = info.block_align;
             job->bits_per_sample = info.bits_per_sample;
             job->channels = info.channels;
+            job->encoding = info.encoding;
             job->format_ready = 1U;
         }
     }
@@ -320,9 +327,13 @@ void waveform_service_storage_service(void)
                 const uint32_t bin = absolute / step
                     - job->tile_index * WAVEFORM_TILE_BINS;
                 const uint8_t *const pcm = &g_waveform_read[f * job->block_align];
-                const int16_t left = waveform_decode_sample(pcm, job->bits_per_sample);
+                const int16_t left = (job->encoding == WAV_SAMPLE_ENCODING_IEEE_FLOAT)
+                    ? waveform_decode_float_sample(pcm)
+                    : waveform_decode_sample(pcm, job->bits_per_sample);
                 const int16_t right = (job->channels == 2U)
-                    ? waveform_decode_sample(pcm + sample_bytes, job->bits_per_sample)
+                    ? ((job->encoding == WAV_SAMPLE_ENCODING_IEEE_FLOAT)
+                        ? waveform_decode_float_sample(pcm + sample_bytes)
+                        : waveform_decode_sample(pcm + sample_bytes, job->bits_per_sample))
                     : left;
                 waveform_column_t *const value = &tile->bins[bin];
                 if(absolute % step == 0U)

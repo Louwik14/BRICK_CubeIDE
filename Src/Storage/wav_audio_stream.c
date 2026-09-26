@@ -128,6 +128,7 @@ static uint8_t wav_audio_stream_decode_next_source_frame(wav_audio_stream_t *str
     }
 
     wav_audio_codec_decode_stereo_frame(&stream->io_buf[stream->io_pos],
+                                        stream->info.encoding,
                                         stream->info.channels,
                                         stream->info.bits_per_sample,
                                         out_l,
@@ -245,6 +246,19 @@ uint8_t wav_audio_stream_next_frame(wav_audio_stream_t *stream, float *out_left,
     if ((stream == 0) || (out_left == 0) || (out_right == 0))
     {
         return 0U;
+    }
+
+    if ((stream->info.sample_rate == stream->target_rate)
+        && (stream->stream_initialized == 0U))
+    {
+        stream->stream_initialized = 1U;
+        stream->data_remaining = stream->info.data_size
+            - (stream->info.data_size % stream->info.block_align);
+    }
+    if ((stream->info.sample_rate == stream->target_rate)
+        && (stream->stream_initialized != 0U))
+    {
+        return wav_audio_stream_decode_next_source_frame(stream, out_left, out_right);
     }
 
     const uint32_t target_index = (uint32_t)stream->phase;

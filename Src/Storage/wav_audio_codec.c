@@ -1,5 +1,7 @@
 #include "Storage/wav_audio_codec.h"
 
+#include <string.h>
+
 #if defined(__GNUC__)
 #define WAV_AUDIO_CODEC_PCM24_HOT __attribute__((optimize("O3"), hot))
 #define WAV_AUDIO_CODEC_ALWAYS_INLINE __attribute__((always_inline)) inline
@@ -41,6 +43,15 @@ float wav_audio_codec_pcm32_to_float(const uint8_t *p)
                           ((uint32_t)p[2] << 16) |
                           ((uint32_t)p[3] << 24));
     return (float)v * (1.0f / 2147483648.0f);
+}
+
+float wav_audio_codec_float32_to_float(const uint8_t *p)
+{
+    const uint32_t bits = (uint32_t)p[0] | ((uint32_t)p[1] << 8)
+                        | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+    float value;
+    memcpy(&value, &bits, sizeof(value));
+    return value;
 }
 
 static void wav_audio_codec_decode_pcm16_mono_block(const uint8_t *src,
@@ -138,6 +149,33 @@ static void wav_audio_codec_decode_pcm32_stereo_block(const uint8_t *src,
     }
 }
 
+static void wav_audio_codec_decode_float32_mono_block(const uint8_t *src,
+                                                       float *dst,
+                                                       uint32_t frame_count)
+{
+    memcpy(dst, src, frame_count * sizeof(float));
+}
+
+static void wav_audio_codec_decode_float32_stereo_block(const uint8_t *src,
+                                                         float *dst,
+                                                         uint32_t frame_count)
+{
+    memcpy(dst, src, frame_count * 2U * sizeof(float));
+}
+
+wav_audio_codec_decode_block_fn wav_audio_codec_select_decode_block(
+    wav_sample_encoding_t encoding, uint16_t channels, uint16_t bits_per_sample)
+{
+    if ((encoding == WAV_SAMPLE_ENCODING_IEEE_FLOAT) && (bits_per_sample == 32U))
+    {
+        if (channels == 1U) return wav_audio_codec_decode_float32_mono_block;
+        if (channels == 2U) return wav_audio_codec_decode_float32_stereo_block;
+        return 0;
+    }
+    if (encoding != WAV_SAMPLE_ENCODING_PCM_INTEGER) return 0;
+    return wav_audio_codec_select_pcm_decode_block(channels, bits_per_sample);
+}
+
 wav_audio_codec_decode_block_fn wav_audio_codec_select_pcm_decode_block(uint16_t channels,
                                                                         uint16_t bits_per_sample)
 {
@@ -194,6 +232,7 @@ wav_audio_codec_decode_mono_block_fn wav_audio_codec_select_pcm_decode_mono_bloc
 }
 
 void wav_audio_codec_decode_stereo_frame(const uint8_t *frame,
+                                         wav_sample_encoding_t encoding,
                                          uint16_t channels,
                                          uint16_t bits_per_sample,
                                          float *out_left,
@@ -209,7 +248,11 @@ void wav_audio_codec_decode_stereo_frame(const uint8_t *frame,
 
     if (channels == 1U)
     {
-        if (bits_per_sample == 16U)
+        if (encoding == WAV_SAMPLE_ENCODING_IEEE_FLOAT)
+        {
+            left = right = wav_audio_codec_float32_to_float(frame);
+        }
+        else if (bits_per_sample == 16U)
         {
             left = right = wav_audio_codec_pcm16_to_float(frame);
         }
@@ -224,7 +267,12 @@ void wav_audio_codec_decode_stereo_frame(const uint8_t *frame,
     }
     else
     {
-        if (bits_per_sample == 16U)
+        if (encoding == WAV_SAMPLE_ENCODING_IEEE_FLOAT)
+        {
+            left = wav_audio_codec_float32_to_float(frame);
+            right = wav_audio_codec_float32_to_float(&frame[4]);
+        }
+        else if (bits_per_sample == 16U)
         {
             left = wav_audio_codec_pcm16_to_float(frame);
             right = wav_audio_codec_pcm16_to_float(&frame[2]);

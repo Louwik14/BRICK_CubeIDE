@@ -61,4 +61,14 @@ Le registre compact de leases Stream est fixe, pointer-free, seqlocke et place e
 
 Une page produit de 64 KiB porte 16384 frames mono FLOAT32 ou 8192 frames stereo. Format, stride et frames/page sont derives par `sample_audio_format.h` et restent immutables pendant la voix. Mono reste mono jusqu'au pan/spread final; aucune duplication droite de rejet n'est conservee.
 
+Le format WAV canonique des samples BRICK est IEEE FLOAT32 stereo, 48 kHz,
+32 bits par sample, 8 octets par frame, little-endian. Son chunk `data`
+commence a l'offset 512 afin de conserver l'alignement secteur/page. Une
+canonicalisation remplace transactionnellement le fichier au meme chemin via
+les suffixes temporaires `.B6T` et `.B6B`; elle ne cree ni asset store, ni
+nouvelle reference projet. Le parser, la preview et les chemins de compatibilite
+runtime continuent a accepter PCM16/24/32 et FLOAT32 mono/stereo. Le decodeur
+runtime et les scratch buffers restent presents jusqu'au passage du streamer au
+DMA direct dans les pages FLOAT32.
+
 Preview est un ring PCM SPSC distinct. Le building REC utilise la carte append-only du Recorder; il n'est publie qu'apres finalisation et prechauffage des pages initiales. Le detail appartient a [recorder_sd.md](recorder_sd.md).

@@ -4,13 +4,14 @@
 
 #include "Sampler/sample_audio_format.h"
 #include "Sampler/multi_sample_pool.h"
+#include "Storage/wav_parser.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #define MULTI_SAMPLE_INDEX_MAGIC_SIZE       (8U)
-#define MULTI_SAMPLE_INDEX_VERSION          (2U)
+#define MULTI_SAMPLE_INDEX_VERSION          (3U)
 #define MULTI_SAMPLE_INDEX_HEADER_SIZE      (96U)
 #define MULTI_SAMPLE_INDEX_STRING_MAX_BYTES (65536U)
 
@@ -46,6 +47,7 @@ typedef struct
     uint32_t sample_rate;
     uint16_t channels;
     uint16_t bits_per_sample;
+    uint8_t encoding;
     sample_audio_format_t format;
     uint16_t stride_floats;
     uint32_t frames_per_page;
@@ -92,6 +94,7 @@ typedef struct
     uint32_t sample_rate;
     uint16_t channels;
     uint16_t bits_per_sample;
+    uint8_t encoding;
     sample_audio_format_t format;
     uint16_t stride_floats;
     uint32_t frames_per_page;

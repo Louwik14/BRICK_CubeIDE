@@ -16,7 +16,7 @@
 
 #define WAVEFORM_CACHE_DIR_ROOT "0:/BRICK"
 #define WAVEFORM_CACHE_DIR_PATH "0:/BRICK/.wavecache"
-#define WAVEFORM_CACHE_VERSION 2U
+#define WAVEFORM_CACHE_VERSION 3U
 #define WAVEFORM_CACHE_ENDIAN_LE 0x1234U
 #define WAVEFORM_CACHE_HASH_BYTES 65536U
 #define WAVEFORM_CACHE_QUEUE_CAPACITY 4U
@@ -464,10 +464,7 @@ static uint8_t waveform_cache_build_identity(const char *path,
             break;
         }
         const uint32_t wav_size = (uint32_t)f_size(&fp);
-        if((info.channels == 0U) || (info.channels > 2U)
-                || ((info.bits_per_sample != 16U)
-                    && (info.bits_per_sample != 24U)
-                    && (info.bits_per_sample != 32U))
+        if((wav_parser_format_supported(&info) == 0U)
                 || (info.block_align == 0U)
                 || (info.block_align > WAVEFORM_CACHE_MAX_BLOCK_ALIGN)
                 || (info.data_size < info.block_align)
@@ -491,6 +488,7 @@ static uint8_t waveform_cache_build_identity(const char *path,
             (uint16_t)(sizeof(waveform_cache_file_header_t)
                 + (sizeof(waveform_cache_file_level_t) * WAVEFORM_CACHE_FORMAT_LEVEL_COUNT));
         header.state = (uint8_t)WAVEFORM_CACHE_STATE_BUILDING;
+        header.flags = (uint8_t)info.encoding;
         header.path_hash = waveform_cache_hash_path(path);
         header.wav_size = wav_size;
         header.data_offset = info.data_offset;
@@ -589,6 +587,7 @@ static uint8_t waveform_cache_header_matches(const waveform_cache_file_header_t 
             && (a->version == WAVEFORM_CACHE_VERSION)
             && (a->endian == WAVEFORM_CACHE_ENDIAN_LE)
             && (a->state == (uint8_t)WAVEFORM_CACHE_STATE_READY)
+            && (a->flags == b->flags)
             && (memcmp(a->sample_id, b->sample_id, WAVEFORM_CACHE_SAMPLE_ID_BYTES) == 0)
             && (a->path_hash == b->path_hash)
             && (a->wav_size == b->wav_size)
@@ -814,6 +813,7 @@ static int16_t waveform_cache_pick_tile_slot(void)
 
 static int16_t waveform_cache_float_to_i16(float v)
 {
+    if(v != v) v = 0.0f;
     if(v > 0.999969f)
     {
         v = 0.999969f;
@@ -826,6 +826,7 @@ static int16_t waveform_cache_float_to_i16(float v)
 }
 
 static void waveform_cache_frame_to_minmax(const uint8_t *frame,
+                                           wav_sample_encoding_t encoding,
                                            uint16_t channels,
                                            uint16_t bits_per_sample,
                                            int16_t *out_min,
@@ -833,7 +834,8 @@ static void waveform_cache_frame_to_minmax(const uint8_t *frame,
 {
     float l = 0.0f;
     float r = 0.0f;
-    wav_audio_codec_decode_stereo_frame(frame, channels, bits_per_sample, &l, &r);
+    wav_audio_codec_decode_stereo_frame(frame, encoding, channels,
+                                        bits_per_sample, &l, &r);
     const int16_t li = waveform_cache_float_to_i16(l);
     const int16_t ri = waveform_cache_float_to_i16(r);
     const int16_t amin = (li < ri) ? li : ri;
@@ -1215,7 +1217,9 @@ static void waveform_cache_service_build(uint32_t byte_budget)
             const uint8_t last = (job->next_frame >= job->header.frame_count) ? 1U : 0U;
             int16_t sample_min = 0;
             int16_t sample_max = 0;
-            waveform_cache_frame_to_minmax(frame, job->header.channels,
+            waveform_cache_frame_to_minmax(frame,
+                                           (wav_sample_encoding_t)job->header.flags,
+                                           job->header.channels,
                                            job->header.bits_per_sample,
                                            &sample_min, &sample_max);
             if(waveform_cache_accumulate_frame(job, sample_min, sample_max, last) == 0U)

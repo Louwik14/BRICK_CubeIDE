@@ -705,6 +705,7 @@ static wavetable_result_t wavetable_pool_candidate_decode_wav(
             float left = 0.0f;
             float right = 0.0f;
             wav_audio_codec_decode_stereo_frame(src,
+                                                wav_info->encoding,
                                                 wav_info->channels,
                                                 wav_info->bits_per_sample,
                                                 &left,

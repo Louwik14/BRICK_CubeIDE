@@ -246,10 +246,16 @@ static wav_info_t multi_loader_wav_info_from_index_sample(
     memset(&info, 0, sizeof(info));
     if (sample != 0)
     {
-        info.audio_format = 1U;
+        info.audio_format = (sample->encoding == WAV_SAMPLE_ENCODING_IEEE_FLOAT)
+            ? 3U : 1U;
+        info.encoding = sample->encoding;
         info.sample_rate = sample->sample_rate;
         info.channels = sample->channels;
         info.bits_per_sample = sample->bits_per_sample;
+        info.valid_bits_per_sample = sample->bits_per_sample;
+        info.fmt_chunk_size = 16U;
+        info.has_fact = (sample->encoding == WAV_SAMPLE_ENCODING_IEEE_FLOAT) ? 1U : 0U;
+        info.fact_sample_length = sample->total_frames;
         info.block_align = (uint16_t)((sample->channels * sample->bits_per_sample) / 8U);
         info.byte_rate = sample->sample_rate * info.block_align;
         info.data_offset = sample->data_offset;

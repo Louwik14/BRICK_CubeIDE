@@ -243,6 +243,7 @@ static uint8_t sd_preview_decode_next_source_frame(float *out_l, float *out_r)
     }
 
     wav_audio_codec_decode_stereo_frame(&g_sd_preview_io[g_sd_preview.io_pos],
+                                        g_sd_preview.info.encoding,
                                         g_sd_preview.info.channels,
                                         g_sd_preview.info.bits_per_sample,
                                         out_l,
@@ -549,20 +550,7 @@ uint8_t sd_preview_begin_range(const char *path, uint32_t start_frame, uint32_t 
         return 0U;
     }
 
-    if (!((g_sd_preview.info.audio_format == 1U)
-          || (g_sd_preview.info.audio_format == 65534U)))
-    {
-        sd_preview_set_error(SD_PREVIEW_ERROR_UNSUPPORTED_FORMAT);
-        sd_preview_clear_session(0U, 0U);
-        return 0U;
-    }
-
-    if (!((g_sd_preview.info.channels == 1U) || (g_sd_preview.info.channels == 2U))
-        || !((g_sd_preview.info.bits_per_sample == 16U)
-             || (g_sd_preview.info.bits_per_sample == 24U)
-             || (g_sd_preview.info.bits_per_sample == 32U))
-        || (g_sd_preview.info.block_align == 0U)
-        || (g_sd_preview.info.sample_rate == 0U))
+    if (wav_parser_format_supported(&g_sd_preview.info) == 0U)
     {
         sd_preview_set_error(SD_PREVIEW_ERROR_UNSUPPORTED_FORMAT);
         sd_preview_clear_session(0U, 0U);

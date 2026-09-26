@@ -47,6 +47,8 @@ uint8_t sample_page_cache_register_live_pcm24_stereo_sample_key(
         return 0U;
     }
     sample->key = key;
+    sample->info.audio_format = 1U;
+    sample->info.encoding = WAV_SAMPLE_ENCODING_PCM_INTEGER;
     sample->info.sample_rate = AUDIO_RECORDER_SAMPLE_RATE_HZ;
     sample->info.channels = AUDIO_RECORDER_CHANNELS;
     sample->info.bits_per_sample = 24U;

@@ -9,6 +9,7 @@
 #include "Storage/audio_recorder.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/wav_audio_codec.h"
+#include "Storage/wav_convert.h"
 #include "Storage/wav_parser.h"
 #include "Storage/project_load_quiesce.h"
 
@@ -32,6 +33,7 @@
 typedef struct
 {
     multi_sample_index_source_sample_t sample;
+    uint32_t source_sample_rate;
     uint8_t root_fallback_alpha;
     uint8_t velocity_center_valid;
     uint8_t velocity_center;
@@ -624,6 +626,7 @@ static uint8_t multi_import_auto_loop_read_window(FIL *fp,
             float left = 0.0f;
             float right = 0.0f;
             wav_audio_codec_decode_stereo_frame(&g_auto_loop_io[pos],
+                                                info->encoding,
                                                 info->channels,
                                                 info->bits_per_sample,
                                                 &left,
@@ -1132,18 +1135,7 @@ static multi_sample_import_result_t multi_import_expand_velocity_centers(void)
 
 static uint8_t multi_import_validate_wav_info(const wav_info_t *info)
 {
-    if ((info == 0)
-        || (info->sample_rate != 48000U)
-        || !((info->channels == 1U) || (info->channels == 2U))
-        || !((info->bits_per_sample == 16U) || (info->bits_per_sample == 24U)
-             || (info->bits_per_sample == 32U))
-        || (info->block_align == 0U)
-        || (info->data_size < info->block_align))
-    {
-        return 0U;
-    }
-
-    return 1U;
+    return wav_parser_format_supported(info);
 }
 
 static multi_sample_import_result_t multi_import_add_wav(const char *scan_dir,
@@ -1227,6 +1219,7 @@ static multi_sample_import_result_t multi_import_add_wav(const char *scan_dir,
 
     multi_sample_import_sample_t *const item = &g_import_samples[g_import_sample_count];
     memset(item, 0, sizeof(*item));
+    item->source_sample_rate = info.sample_rate;
     memcpy(&g_import_paths[*path_cursor], relative_path, path_len + 1U);
     item->sample.relative_path = &g_import_paths[*path_cursor];
     *path_cursor += path_len + 1U;
@@ -1235,6 +1228,7 @@ static multi_sample_import_result_t multi_import_add_wav(const char *scan_dir,
     item->sample.sample_rate = info.sample_rate;
     item->sample.channels = info.channels;
     item->sample.bits_per_sample = info.bits_per_sample;
+    item->sample.encoding = info.encoding;
     item->sample.format = sample_audio_format_from_channels(info.channels);
     item->sample.stride_floats =
         (uint16_t)sample_audio_format_stride_floats(item->sample.format);
@@ -1325,6 +1319,62 @@ static multi_sample_import_result_t multi_import_add_wav(const char *scan_dir,
         item->sample.metadata_flags |= MULTI_SAMPLE_INDEX_META_VEL_ALPHA;
     }
     g_import_sample_count++;
+    return MULTI_SAMPLE_IMPORT_OK;
+}
+
+static multi_sample_import_result_t multi_import_canonicalize_samples_locked(void)
+{
+    for (uint16_t i = 0U; i < g_import_sample_count; ++i)
+    {
+        multi_sample_import_sample_t *const item = &g_import_samples[i];
+        if (multi_import_join_path(g_import_work_path,
+                                   sizeof(g_import_work_path),
+                                   g_import_scan_dir,
+                                   item->sample.relative_path) == 0U)
+            return MULTI_SAMPLE_IMPORT_PATH_TOO_LONG;
+        if (wav_convert_path_to_canonical_locked(g_import_work_path) == 0U)
+            return MULTI_SAMPLE_IMPORT_WAV_UNSUPPORTED;
+
+        FILINFO fno;
+        FIL fp;
+        wav_info_t info;
+        memset(&fno, 0, sizeof(fno));
+        memset(&info, 0, sizeof(info));
+        if ((f_stat(g_import_work_path, &fno) != FR_OK)
+            || (f_open(&fp, g_import_work_path, FA_READ) != FR_OK))
+            return MULTI_SAMPLE_IMPORT_WAV_OPEN_FAIL;
+        const uint8_t canonical_ok = (wav_parser_parse_info(&fp, &info) != 0)
+            && (wav_parser_is_canonical_brick_float(&info) != 0U);
+        (void)f_close(&fp);
+        if (canonical_ok == 0U) return MULTI_SAMPLE_IMPORT_WAV_UNSUPPORTED;
+
+        const uint32_t source_rate = item->source_sample_rate;
+        if ((source_rate != 0U) && (source_rate != info.sample_rate))
+        {
+            item->sample.loop_begin = (uint32_t)(((uint64_t)item->sample.loop_begin
+                * info.sample_rate + source_rate / 2U) / source_rate);
+            item->sample.loop_end = (uint32_t)(((uint64_t)item->sample.loop_end
+                * info.sample_rate + source_rate / 2U) / source_rate);
+        }
+        item->sample.total_frames = info.data_size / info.block_align;
+        item->sample.sample_rate = info.sample_rate;
+        item->sample.channels = info.channels;
+        item->sample.bits_per_sample = info.bits_per_sample;
+        item->sample.encoding = info.encoding;
+        item->sample.format = sample_audio_format_from_channels(info.channels);
+        item->sample.stride_floats =
+            (uint16_t)sample_audio_format_stride_floats(item->sample.format);
+        item->sample.frames_per_page =
+            sample_audio_format_frames_per_page(item->sample.format);
+        item->sample.data_offset = info.data_offset;
+        item->sample.data_size = info.data_size;
+        item->sample.wav_size = (uint32_t)fno.fsize;
+        item->sample.wav_mtime = ((uint32_t)fno.fdate << 16) | (uint32_t)fno.ftime;
+        if ((item->sample.has_loop != 0U)
+            && ((item->sample.loop_end <= item->sample.loop_begin)
+                || (item->sample.loop_end > item->sample.total_frames)))
+            item->sample.has_loop = 0U;
+    }
     return MULTI_SAMPLE_IMPORT_OK;
 }
 
@@ -1613,6 +1663,8 @@ multi_sample_import_result_t multi_sample_import_folder_with_progress(
     }
 
     (void)f_closedir(&dir);
+    if (result == MULTI_SAMPLE_IMPORT_OK)
+        result = multi_import_canonicalize_samples_locked();
     sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
 
     if (result == MULTI_SAMPLE_IMPORT_OK)

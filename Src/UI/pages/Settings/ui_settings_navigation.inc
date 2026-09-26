@@ -677,6 +677,7 @@ static void ui_page_settings_enter(void)
     g_ui_settings.preview_was_active = 0U;
     g_ui_settings.preview_stop_origin = UI_SETTINGS_PREVIEW_STOP_ORIGIN_NONE;
     g_ui_settings.convert_slot_valid = 0U;
+    g_ui_settings.convert_load_kind = (uint8_t)UI_SETTINGS_CONVERT_LOAD_CLASSIC;
     g_ui_settings.convert_slot = 0U;
     g_ui_settings.convert_path[0] = '\0';
     g_ui_settings.header_slot_flash_until_ms = 0U;
@@ -1003,7 +1004,10 @@ static void ui_page_settings_tick(void)
             g_ui_settings.convert_path[0] = '\0';
             wav_convert_clear_finished();
             wav_loader_catalog_mark_stale();
-            ui_page_settings_sample_load_to_slot(slot, path);
+            if (g_ui_settings.convert_load_kind == (uint8_t)UI_SETTINGS_CONVERT_LOAD_RAM)
+                ui_page_settings_ram_load_to_slot(slot, path);
+            else
+                ui_page_settings_sample_load_to_slot(slot, path);
             return;
         }
         if (convert_state == WAV_CONVERT_STATE_FAILED)

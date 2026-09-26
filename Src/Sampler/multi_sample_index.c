@@ -161,6 +161,11 @@ static uint8_t multi_index_path_bytes_valid(const char *path, uint16_t len)
 static uint8_t multi_index_sample_format_valid(const multi_sample_index_sample_t *sample)
 {
     if ((sample == 0) || (sample_audio_format_is_valid(sample->format) == 0U)
+        || (sample->encoding != WAV_SAMPLE_ENCODING_IEEE_FLOAT)
+        || (sample->sample_rate != 48000U) || (sample->channels != 2U)
+        || (sample->bits_per_sample != 32U) || (sample->data_offset != 512U)
+        || ((uint64_t)sample->total_frames * 8ULL != sample->data_size)
+        || ((uint64_t)sample->data_offset + sample->data_size > sample->wav_size)
         || (sample_audio_format_matches_channels(sample->format, sample->channels) == 0U)
         || (sample->stride_floats != sample_audio_format_stride_floats(sample->format))
         || (sample->frames_per_page != sample_audio_format_frames_per_page(sample->format)))
@@ -263,6 +268,7 @@ static uint8_t multi_index_source_to_static(const multi_sample_index_source_t *s
         g_index_samples[i].sample_rate = src->samples[i].sample_rate;
         g_index_samples[i].channels = src->samples[i].channels;
         g_index_samples[i].bits_per_sample = src->samples[i].bits_per_sample;
+        g_index_samples[i].encoding = src->samples[i].encoding;
         g_index_samples[i].format = sample_audio_format_from_channels(g_index_samples[i].channels);
         if (sample_audio_format_is_valid(g_index_samples[i].format) == 0U)
         {
@@ -368,7 +374,7 @@ static void multi_index_encode_sample(const multi_sample_index_sample_t *sample,
     memset(out, 0, MULTI_SAMPLE_INDEX_SAMPLE_RECORD_SIZE);
     multi_index_put_le32(&out[0], sample->path_offset);
     multi_index_put_le16(&out[4], sample->path_len);
-    multi_index_put_le16(&out[6], 0U);
+    multi_index_put_le16(&out[6], (uint16_t)sample->encoding);
     multi_index_put_le32(&out[8], sample->total_frames);
     multi_index_put_le32(&out[12], sample->sample_rate);
     multi_index_put_le16(&out[16], sample->channels);
@@ -395,6 +401,7 @@ static void multi_index_decode_sample(const uint8_t *in,
     memset(sample, 0, sizeof(*sample));
     sample->path_offset = multi_index_get_le32(&in[0]);
     sample->path_len = multi_index_get_le16(&in[4]);
+    sample->encoding = (uint8_t)multi_index_get_le16(&in[6]);
     sample->total_frames = multi_index_get_le32(&in[8]);
     sample->sample_rate = multi_index_get_le32(&in[12]);
     sample->channels = multi_index_get_le16(&in[16]);
@@ -846,9 +853,10 @@ uint8_t multi_sample_index_validate(const multi_sample_index_t *idx)
                                              sample->path_len) == 0U)
             || (sample->total_frames == 0U)
             || (sample->sample_rate != 48000U)
-            || !((sample->channels == 1U) || (sample->channels == 2U))
-            || !((sample->bits_per_sample == 16U) || (sample->bits_per_sample == 24U)
-                 || (sample->bits_per_sample == 32U))
+            || (sample->encoding != WAV_SAMPLE_ENCODING_IEEE_FLOAT)
+            || (sample->bits_per_sample != 32U)
+            || (sample->channels != 2U)
+            || (sample->data_offset != 512U)
             || ((sample->has_loop != 0U)
                 && ((sample->loop_end <= sample->loop_begin)
                     || (sample->loop_end > sample->total_frames)))

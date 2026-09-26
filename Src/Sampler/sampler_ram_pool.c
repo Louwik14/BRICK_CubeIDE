@@ -532,18 +532,12 @@ static uint8_t sampler_ram_wav_supported(const wav_info_t *info)
     {
         return 0U;
     }
-    if (!((info->audio_format == 1U) || (info->audio_format == 65534U)))
-    {
+    if (wav_parser_format_supported(info) == 0U) return 0U;
+    if ((info->encoding == WAV_SAMPLE_ENCODING_PCM_INTEGER)
+        && !((info->bits_per_sample == 16U) || (info->bits_per_sample == 24U)))
         return 0U;
-    }
-    if (!((info->channels == 1U) || (info->channels == 2U)))
-    {
-        return 0U;
-    }
-    if (!((info->bits_per_sample == 16U) || (info->bits_per_sample == 24U)))
-    {
-        return 0U;
-    }
+    if ((info->encoding == WAV_SAMPLE_ENCODING_IEEE_FLOAT)
+        && (info->bits_per_sample != 32U)) return 0U;
     const uint16_t expected_align =
         (uint16_t)((info->channels * info->bits_per_sample) / 8U);
     return (info->block_align == expected_align) ? 1U : 0U;
@@ -887,6 +881,20 @@ static void sampler_ram_pool_load_async_step(void)
                 job->converted_frames * job->info.block_align];
             float *dst = &candidate->data[
                 (job->frames_done + job->converted_frames) * candidate->channels];
+            if (job->info.encoding == WAV_SAMPLE_ENCODING_IEEE_FLOAT)
+            {
+                memcpy(dst, src, count * job->info.block_align);
+                job->converted_frames += count;
+                if (job->converted_frames >= job->buffered_frames)
+                {
+                    job->frames_done += job->buffered_frames;
+                    job->buffered_frames = 0U;
+                    job->converted_frames = 0U;
+                    job->state = (job->frames_done >= candidate->frames)
+                        ? SAMPLER_RAM_LOAD_CLOSE : SAMPLER_RAM_LOAD_READ;
+                }
+                return;
+            }
             for (uint32_t i = 0U; i < count; ++i)
             {
                 dst[i * candidate->channels] = (job->info.bits_per_sample == 16U)

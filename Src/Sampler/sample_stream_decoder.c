@@ -20,10 +20,9 @@ sample_page_load_result_t sample_stream_decoder_decode_page(
     const sample_audio_format_t expected_format =
         sample_audio_format_from_channels(info->info.channels);
     const wav_audio_codec_decode_block_fn decode_block =
-        (info->info.channels == 1U)
-            ? wav_audio_codec_select_pcm_decode_mono_block(info->info.bits_per_sample)
-            : wav_audio_codec_select_pcm_decode_block(info->info.channels,
-                                                      info->info.bits_per_sample);
+        wav_audio_codec_select_decode_block(info->info.encoding,
+                                            info->info.channels,
+                                            info->info.bits_per_sample);
     if ((expected_bytes == 0U) || (source_bytes != expected_bytes)
         || (decode_block == 0) || (info->info.block_align != expected_block_align)
         || (target->format != expected_format)

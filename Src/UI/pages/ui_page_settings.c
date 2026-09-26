@@ -115,6 +115,12 @@ typedef enum
 
 typedef enum
 {
+    UI_SETTINGS_CONVERT_LOAD_CLASSIC = 0,
+    UI_SETTINGS_CONVERT_LOAD_RAM
+} ui_settings_convert_load_t;
+
+typedef enum
+{
     UI_SETTINGS_PREVIEW_STOP_ORIGIN_NONE = 0,
     UI_SETTINGS_PREVIEW_STOP_ORIGIN_USER,
     UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT
@@ -226,6 +232,7 @@ typedef struct
     uint8_t wavetable_scan_pass;
     uint8_t wavetable_scan_dir_open;
     uint8_t convert_slot_valid;
+    uint8_t convert_load_kind;
     uint16_t convert_slot;
     uint32_t status_until_ms;
     uint32_t header_slot_flash_until_ms;

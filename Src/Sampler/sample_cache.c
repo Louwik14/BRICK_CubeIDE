@@ -250,13 +250,11 @@ uint8_t sample_cache_wav_format_supported(const wav_info_t *info)
         return 0U;
     }
 
-    return (((info->audio_format == 1U) || (info->audio_format == 65534U))
-            && ((info->channels == 1U) || (info->channels == 2U))
-            && ((info->bits_per_sample == 16U)
-                || (info->bits_per_sample == 24U)
-                || (info->bits_per_sample == 32U))
-            && (info->sample_rate == 48000U)
-            && (info->block_align != 0U)) ? 1U : 0U;
+    if ((wav_parser_format_supported(info) == 0U)
+        || (info->sample_rate != 48000U)) return 0U;
+    if (info->encoding == WAV_SAMPLE_ENCODING_IEEE_FLOAT)
+        return wav_parser_is_canonical_brick_float(info);
+    return (info->encoding == WAV_SAMPLE_ENCODING_PCM_INTEGER) ? 1U : 0U;
 }
 
 static uint32_t sample_cache_stream_last_page_index(const sample_cache_desc_t *desc)

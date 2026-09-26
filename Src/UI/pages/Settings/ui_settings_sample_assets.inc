@@ -81,12 +81,15 @@ static const ui_settings_sample_entry_t *ui_page_settings_sample_selected_entry(
     return &g_ui_settings.sample_entries[g_ui_settings.sample_selected - g_ui_settings.sample_page_start];
 }
 
-static void ui_page_settings_sample_confirm_convert(uint16_t slot, const char *path)
+static void ui_page_settings_sample_confirm_convert(uint16_t slot,
+                                                    const char *path,
+                                                    ui_settings_convert_load_t load_kind)
 {
     g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_CONVERT;
     g_ui_settings.confirm_slot = slot;
+    g_ui_settings.convert_load_kind = (uint8_t)load_kind;
     (void)snprintf(g_ui_settings.confirm_path, sizeof(g_ui_settings.confirm_path), "%s", path);
-    ui_page_settings_status("CONVERT TO 48K ?");
+    ui_page_settings_status("CONVERT FORMAT ?");
 }
 
 static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path)
@@ -103,6 +106,12 @@ static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path
         return;
     }
     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+    if (wav_convert_path_needs_canonical(path, 0) != 0U)
+    {
+        ui_page_settings_sample_confirm_convert(slot, path,
+                                                UI_SETTINGS_CONVERT_LOAD_CLASSIC);
+        return;
+    }
     if (sample_global_pool_load_classic(slot, path) != 0U)
     {
         const uint16_t global_slot = slot;
@@ -142,9 +151,10 @@ static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path
         }
         if (((sample_global_pool_get_last_classic_load_error() == SAMPLE_CLASSIC_LOAD_WAV_UNSUPPORTED_FORMAT)
              || (sample_global_pool_get_last_classic_load_error() == SAMPLE_CLASSIC_LOAD_WAV_48K_REQUIRED))
-            && (wav_convert_path_needs_48k(path, 0) != 0U))
+            && (wav_convert_path_needs_canonical(path, 0) != 0U))
         {
-            ui_page_settings_sample_confirm_convert(slot, path);
+            ui_page_settings_sample_confirm_convert(slot, path,
+                                                    UI_SETTINGS_CONVERT_LOAD_CLASSIC);
             return;
         }
         ui_page_settings_status(ui_page_settings_sampler_load_error_label());
@@ -165,6 +175,12 @@ static void ui_page_settings_ram_load_to_slot(uint16_t slot, const char *path)
         return;
     }
     ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+    if (wav_convert_path_needs_canonical(path, 0) != 0U)
+    {
+        ui_page_settings_sample_confirm_convert(slot, path,
+                                                UI_SETTINGS_CONVERT_LOAD_RAM);
+        return;
+    }
     if (project_control_ram_load_begin(slot, path) != 0U)
     {
         ui_page_settings_status("LOADING");
@@ -363,7 +379,7 @@ static void ui_page_settings_sample_confirm_accept(void)
         }
 
         ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
-        if (wav_convert_start_destructive_48k(path) == 0U)
+        if (wav_convert_start_destructive_canonical(path) == 0U)
         {
             ui_page_settings_status("CONVERT FAIL");
             return;

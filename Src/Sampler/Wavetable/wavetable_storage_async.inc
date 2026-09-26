@@ -212,7 +212,8 @@ static void wavetable_pool_load_async_step(void)
             for (uint32_t i = 0U; i < count; ++i)
             {
                 float left = 0.0f, right = 0.0f;
-                wav_audio_codec_decode_stereo_frame(src, job->wav_info.channels,
+                wav_audio_codec_decode_stereo_frame(src, job->wav_info.encoding,
+                                                    job->wav_info.channels,
                                                     job->wav_info.bits_per_sample,
                                                     &left, &right);
                 const float mono = (job->wav_info.channels == 1U)
