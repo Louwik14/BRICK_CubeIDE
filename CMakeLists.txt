@@ -570,6 +570,18 @@ set_source_files_properties(${STORAGE_IO_O0_SOURCES} PROPERTIES
     COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O0>"
 )
 
+# WAV canonicalization is a modal bulk transform. Keep the surrounding storage
+# code conservative while allowing its decode, SRC and packing loops to be
+# optimized on Cortex-M7.
+set(WAV_CANONICALIZATION_O2_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/wav_convert.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/wav_audio_stream.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/wav_audio_codec.c"
+)
+set_source_files_properties(${WAV_CANONICALIZATION_O2_SOURCES} PROPERTIES
+    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O2>"
+)
+
 set_source_files_properties(
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/generic_recorder.c"
     PROPERTIES COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O2>"

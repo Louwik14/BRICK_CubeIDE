@@ -76,6 +76,63 @@ wav_audio_codec_decode_pcm24_stereo_block(const uint8_t *src,
     }
 }
 
+void wav_audio_codec_decode_stereo_block(const uint8_t *src,
+                                         wav_sample_encoding_t encoding,
+                                         uint16_t channels,
+                                         uint16_t bits_per_sample,
+                                         float *dst,
+                                         uint32_t frame_count)
+{
+    if ((src == 0) || (dst == 0) || (channels == 0U))
+    {
+        return;
+    }
+
+    if ((encoding == WAV_SAMPLE_ENCODING_IEEE_FLOAT) && (channels == 2U))
+    {
+        memcpy(dst, src, (size_t)frame_count * 2U * sizeof(float));
+        return;
+    }
+    if ((encoding == WAV_SAMPLE_ENCODING_PCM_INTEGER)
+        && (bits_per_sample == 24U) && (channels == 2U))
+    {
+        wav_audio_codec_decode_pcm24_stereo_block(src, dst, frame_count);
+        return;
+    }
+
+    const uint32_t sample_bytes = (uint32_t)bits_per_sample / 8U;
+    for (uint32_t i = 0U; i < frame_count; ++i)
+    {
+        float left;
+        if (encoding == WAV_SAMPLE_ENCODING_IEEE_FLOAT)
+            left = wav_audio_codec_float32_to_float(src);
+        else if (bits_per_sample == 16U)
+            left = wav_audio_codec_pcm16_to_float_impl(src);
+        else if (bits_per_sample == 24U)
+            left = wav_audio_codec_pcm24_to_float_impl(src);
+        else
+            left = wav_audio_codec_pcm32_to_float(src);
+
+        float right = left;
+        if (channels == 2U)
+        {
+            const uint8_t *const right_src = src + sample_bytes;
+            if (encoding == WAV_SAMPLE_ENCODING_IEEE_FLOAT)
+                right = wav_audio_codec_float32_to_float(right_src);
+            else if (bits_per_sample == 16U)
+                right = wav_audio_codec_pcm16_to_float_impl(right_src);
+            else if (bits_per_sample == 24U)
+                right = wav_audio_codec_pcm24_to_float_impl(right_src);
+            else
+                right = wav_audio_codec_pcm32_to_float(right_src);
+        }
+        dst[0] = left;
+        dst[1] = right;
+        src += sample_bytes * channels;
+        dst += 2;
+    }
+}
+
 void wav_audio_codec_decode_stereo_frame(const uint8_t *frame,
                                          wav_sample_encoding_t encoding,
                                          uint16_t channels,

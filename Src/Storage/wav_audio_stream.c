@@ -295,3 +295,28 @@ uint8_t wav_audio_stream_next_frame(wav_audio_stream_t *stream, float *out_left,
     stream->phase += stream->phase_step;
     return 1U;
 }
+
+uint32_t wav_audio_stream_read_frames(wav_audio_stream_t *stream,
+                                      float *dst,
+                                      uint32_t frame_capacity)
+{
+    if ((stream == 0) || (dst == 0) || (frame_capacity == 0U))
+    {
+        return 0U;
+    }
+
+    uint32_t produced = 0U;
+    while (produced < frame_capacity)
+    {
+        float left;
+        float right;
+        if (wav_audio_stream_next_frame(stream, &left, &right) == 0U)
+        {
+            break;
+        }
+        dst[produced * 2U] = left;
+        dst[produced * 2U + 1U] = right;
+        produced++;
+    }
+    return produced;
+}
