@@ -91,6 +91,7 @@ typedef struct
 typedef enum
 {
     MULTI_IMPORT_WORK_IDLE = 0,
+    MULTI_IMPORT_WORK_ACQUIRE,
     MULTI_IMPORT_WORK_COUNT_OPEN,
     MULTI_IMPORT_WORK_COUNT,
     MULTI_IMPORT_WORK_SCAN_OPEN,
@@ -1559,8 +1560,7 @@ uint8_t multi_sample_import_start(const char *instrument_dir)
         && (g_import_async.work_state != MULTI_IMPORT_WORK_FINISHED)) return 0U;
     if ((instrument_dir == 0) || (instrument_dir[0] == '\0')
         || (project_replacement_is_active() != 0U)
-        || (audio_recorder_is_active() != 0U)
-        || (sample_cache_has_pending_sd_work() != 0U)) return 0U;
+        || (audio_recorder_is_active() != 0U)) return 0U;
 
     memset(&g_import_async, 0, sizeof(g_import_async));
     g_import_last_result = MULTI_SAMPLE_IMPORT_OK;
@@ -1580,17 +1580,29 @@ uint8_t multi_sample_import_start(const char *instrument_dir)
                                  "%s/%s.brickmulti", instrument_dir,
                                  g_import_async.instrument_name);
     if ((written < 0) || ((uint32_t)written >= sizeof(g_import_index_path))) return 0U;
-    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U) return 0U;
+    g_import_async.status.phase = MULTI_SAMPLE_IMPORT_PHASE_SCAN;
+    g_import_async.status.result = MULTI_SAMPLE_IMPORT_OK;
+    g_import_async.work_state = MULTI_IMPORT_WORK_ACQUIRE;
+    return 1U;
+}
+
+static void multi_import_service_acquire(void)
+{
+    if ((project_replacement_is_active() != 0U)
+        || (audio_recorder_is_active() != 0U))
+    {
+        multi_import_fail(MULTI_SAMPLE_IMPORT_SD_BUSY);
+        return;
+    }
+    if (sample_cache_has_pending_sd_work() != 0U) return;
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U) return;
     g_import_async.gate_held = 1U;
     if (sd_access_fs_mount_if_needed() == 0U)
     {
         multi_import_fail(MULTI_SAMPLE_IMPORT_SD_MOUNT_FAIL);
-        return 0U;
+        return;
     }
-    g_import_async.status.phase = MULTI_SAMPLE_IMPORT_PHASE_SCAN;
-    g_import_async.status.result = MULTI_SAMPLE_IMPORT_OK;
     g_import_async.work_state = MULTI_IMPORT_WORK_COUNT_OPEN;
-    return 1U;
 }
 
 static void multi_import_service_count(void)
@@ -1727,6 +1739,7 @@ void multi_sample_import_service(uint32_t byte_budget)
 {
     switch (g_import_async.work_state)
     {
+        case MULTI_IMPORT_WORK_ACQUIRE: multi_import_service_acquire(); break;
         case MULTI_IMPORT_WORK_COUNT_OPEN:
             if (f_opendir(&g_import_async.dir, g_import_scan_dir) != FR_OK)
                 multi_import_fail(MULTI_SAMPLE_IMPORT_OPEN_DIR_FAIL);
@@ -1763,6 +1776,11 @@ uint8_t multi_sample_import_is_active(void)
 {
     return ((g_import_async.work_state != MULTI_IMPORT_WORK_IDLE)
             && (g_import_async.work_state != MULTI_IMPORT_WORK_FINISHED)) ? 1U : 0U;
+}
+
+uint8_t multi_sample_import_is_waiting_for_storage(void)
+{
+    return (g_import_async.work_state == MULTI_IMPORT_WORK_ACQUIRE) ? 1U : 0U;
 }
 
 uint8_t multi_sample_import_cancel(void)

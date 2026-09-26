@@ -986,6 +986,20 @@ static void ui_page_settings_tick(void)
 
     if (g_ui_settings.convert_slot_valid != 0U)
     {
+        if (g_ui_settings.convert_load_pending != 0U)
+        {
+            const uint16_t slot = g_ui_settings.convert_slot;
+            char path[SAMPLE_CLASSIC_PATH_MAX];
+            (void)snprintf(path, sizeof(path), "%s", g_ui_settings.convert_path);
+            g_ui_settings.convert_slot_valid = 0U;
+            g_ui_settings.convert_load_pending = 0U;
+            g_ui_settings.convert_path[0] = '\0';
+            if (g_ui_settings.convert_load_kind == (uint8_t)UI_SETTINGS_CONVERT_LOAD_RAM)
+                ui_page_settings_ram_load_to_slot(slot, path);
+            else
+                ui_page_settings_sample_load_to_slot(slot, path);
+            return;
+        }
         wav_convert_service(65536U);
         const wav_convert_state_t convert_state = wav_convert_get_state();
         if (convert_state == WAV_CONVERT_STATE_ACTIVE)
@@ -999,17 +1013,10 @@ static void ui_page_settings_tick(void)
         }
         if (convert_state == WAV_CONVERT_STATE_DONE)
         {
-            const uint16_t slot = g_ui_settings.convert_slot;
-            char path[SAMPLE_CLASSIC_PATH_MAX];
-            (void)snprintf(path, sizeof(path), "%s", g_ui_settings.convert_path);
-            g_ui_settings.convert_slot_valid = 0U;
-            g_ui_settings.convert_path[0] = '\0';
             wav_convert_clear_finished();
             wav_loader_catalog_mark_stale();
-            if (g_ui_settings.convert_load_kind == (uint8_t)UI_SETTINGS_CONVERT_LOAD_RAM)
-                ui_page_settings_ram_load_to_slot(slot, path);
-            else
-                ui_page_settings_sample_load_to_slot(slot, path);
+            g_ui_settings.convert_load_pending = 1U;
+            ui_page_settings_status("LOAD WAIT");
             return;
         }
         if (convert_state == WAV_CONVERT_STATE_FAILED)
@@ -1017,6 +1024,7 @@ static void ui_page_settings_tick(void)
             const char *const label =
                 ui_page_settings_convert_error_label(wav_convert_get_last_error());
             g_ui_settings.convert_slot_valid = 0U;
+            g_ui_settings.convert_load_pending = 0U;
             g_ui_settings.convert_path[0] = '\0';
             wav_convert_clear_finished();
             ui_page_settings_status(label);

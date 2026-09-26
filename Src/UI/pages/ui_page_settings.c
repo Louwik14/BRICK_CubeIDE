@@ -234,6 +234,7 @@ typedef struct
     uint8_t wavetable_scan_pass;
     uint8_t wavetable_scan_dir_open;
     uint8_t convert_slot_valid;
+    uint8_t convert_load_pending;
     uint8_t convert_load_kind;
     uint16_t convert_slot;
     uint32_t status_until_ms;

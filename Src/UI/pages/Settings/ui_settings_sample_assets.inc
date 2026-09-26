@@ -386,6 +386,7 @@ static void ui_page_settings_sample_confirm_accept(void)
         }
 
         g_ui_settings.convert_slot_valid = 1U;
+        g_ui_settings.convert_load_pending = 0U;
         g_ui_settings.convert_slot = slot;
         (void)snprintf(g_ui_settings.convert_path, sizeof(g_ui_settings.convert_path), "%s", path);
         ui_page_settings_status("CONVERT 0%");

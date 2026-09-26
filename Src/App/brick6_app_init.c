@@ -114,7 +114,7 @@ static void brick6_app_service_storage(void)
     if (multi_sample_import_is_active() != 0U)
     {
         multi_sample_import_service(65536U);
-        return;
+        if (multi_sample_import_is_waiting_for_storage() == 0U) return;
     }
     undo_v2_service();
     audio_recorder_service();

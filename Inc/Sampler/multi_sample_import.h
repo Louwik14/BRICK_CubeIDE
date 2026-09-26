@@ -48,6 +48,7 @@ typedef struct
 uint8_t multi_sample_import_start(const char *instrument_dir);
 void multi_sample_import_service(uint32_t byte_budget);
 uint8_t multi_sample_import_is_active(void);
+uint8_t multi_sample_import_is_waiting_for_storage(void);
 uint8_t multi_sample_import_cancel(void);
 void multi_sample_import_get_status(multi_sample_import_status_t *out_status);
 void multi_sample_import_clear_finished(void);
