@@ -42,10 +42,14 @@ Assert-Contract ($quarter90.PeriodQ16 -gt $quarter120.PeriodQ16) `
 Assert-Contract ($runtime.Contains('seq_runtime_send_transport_realtime(0xFAU)')) `
     'START must be emitted before clock scheduling is enabled'
 Assert-Contract ($runtime.IndexOf('seq_runtime_send_transport_realtime(0xFAU)') -lt `
-    $runtime.IndexOf('seq_transport_owner_set_midi_clock_enabled(1U)')) `
+    $runtime.IndexOf('seq_transport_owner_arm_midi_clock(')) `
     'FA must precede the first possible F8'
 Assert-Contract ($runtime -match 'seq_runtime_send_transport_realtime\(0xFBU\);\s+midi_clock_set_running\(true\);') `
     'internal CONTINUE must resume clock production'
+Assert-Contract (($runtime | Select-String -Pattern 'seq_transport_owner_arm_midi_clock\(' -AllMatches).Matches.Count -eq 2) `
+    'START and CONTINUE must atomically anchor before enabling clock production'
+Assert-Contract ($owner -match 'g_midi_clock_enabled=0U;__DMB\(\);\s+g_midi_clock_next_q16=.*;__DMB\(\);\s+g_midi_clock_enabled=1U;') `
+    'clock arming must publish the complete deadline before AUDIO can consume it'
 Assert-Contract ($owner.Contains('g_midi_clock_enabled=0U;')) `
     'STOP must disable clock production'
 Assert-Contract ($port.Contains('seq_runtime_midi_clock_audio_boundary(block_start_sample)')) `

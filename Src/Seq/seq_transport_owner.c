@@ -1,6 +1,7 @@
 #include "Seq/seq_transport_owner.h"
 #include "Seq/seq_live_rec_session.h"
 #include "Platform/memory_layout.h"
+#include "stm32h7xx.h"
 #include <string.h>
 
 static CONTROL_M4_SRAM2 seq_runtime_state_t g_state;
@@ -44,6 +45,13 @@ void seq_transport_owner_stop_lifecycle_apply(seq_runtime_state_t *state,
 void seq_transport_owner_set_midi_clock_enabled(uint8_t enabled){g_midi_clock_enabled=enabled;}
 void seq_transport_owner_set_midi_clock_period_q16(uint32_t period){g_midi_clock_period_q16=period?period:1U;}
 void seq_transport_owner_rebase_midi_clock(uint64_t sample){g_midi_clock_next_q16=(sample<<16)+g_midi_clock_period_q16;(void)g_midi_clock_enabled;}
+void seq_transport_owner_arm_midi_clock(uint64_t sample){
+    /* AUDIO consumes the deadline from its IRQ.  Keep production disabled
+     * until the complete 64-bit deadline is installed: enabling first lets
+     * an intervening boundary catch up from the stale deadline in IRQ. */
+    g_midi_clock_enabled=0U;__DMB();
+    g_midi_clock_next_q16=(sample<<16)+g_midi_clock_period_q16;__DMB();
+    g_midi_clock_enabled=1U;}
 uint32_t seq_transport_owner_take_midi_clocks_until(uint64_t sample){
     uint32_t count=0U;const uint64_t limit=sample<<16;
     if(g_midi_clock_enabled==0U)return 0U;

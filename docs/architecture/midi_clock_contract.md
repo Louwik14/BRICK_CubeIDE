@@ -5,9 +5,11 @@ Clock output. The sequencer step period is expressed in Q16 samples; dividing
 that period by six yields 24 clocks per quarter note because one sequencer step
 is a sixteenth note. No independent timer computes a second tempo.
 
-On an internal-clock transport start, BRICK queues `FA` first, enables clock
-production, and anchors the first `F8` one clock period after the current sample
-position. Each audio boundary advances the Q16 deadline and queues every due
+On an internal-clock transport start, BRICK queues `FA` first, anchors the first
+`F8` one clock period after the current sample position, then enables clock
+production. Deadline publication and enable form one owner operation: an audio
+IRQ can therefore never observe an enabled clock with the stale deadline from
+boot or a preceding run. Each audio boundary advances the Q16 deadline and queues every due
 `F8`. USB I/O is not performed in the audio interrupt: the MIDI queue is drained
 by the cooperative TinyUSB service. At 48 kHz with 64-frame audio blocks, the
 scheduling quantization is bounded to less than 1.34 ms; USB framing can add its

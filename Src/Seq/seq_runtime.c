@@ -154,8 +154,7 @@ static void seq_runtime_send_transport_start(void)
     midi_clock_set_bpm_milli(seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge));
     seq_runtime_send_transport_realtime(0xFAU);
     midi_clock_set_running(true);
-    seq_transport_owner_set_midi_clock_enabled(1U);
-    seq_transport_owner_rebase_midi_clock(g_seq_runtime.step_sample_q16 >> 16U);
+    seq_transport_owner_arm_midi_clock(g_seq_runtime.step_sample_q16 >> 16U);
 }
 
 static uint32_t seq_runtime_get_now_tick_for_source(seq_clock_src_t source)
@@ -602,8 +601,7 @@ void seq_runtime_midi_continue_from_source(seq_clock_src_t source)
 
     seq_runtime_send_transport_realtime(0xFBU);
     midi_clock_set_running(true);
-    seq_transport_owner_set_midi_clock_enabled(1U);
-    seq_transport_owner_rebase_midi_clock(transition_sample);
+    seq_transport_owner_arm_midi_clock(transition_sample);
 }
 
 void seq_runtime_midi_stop_from_source(seq_clock_src_t source)
