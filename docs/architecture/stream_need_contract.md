@@ -66,7 +66,10 @@ Le format WAV canonique des samples BRICK est IEEE FLOAT32 stereo, 48 kHz,
 commence a l'offset 512 afin de conserver l'alignement secteur/page. Une
 canonicalisation remplace transactionnellement le fichier au meme chemin via
 les suffixes temporaires `.B6T` et `.B6B`; elle ne cree ni asset store, ni
-nouvelle reference projet. Le parser, la preview et l'import continuent a
+nouvelle reference projet. Le chargement d'un ancien Project canonicalise ses
+references Classic et RAM apres le quiesce et avant le commit; une reprise nettoie
+`.B6T` ou restaure/nettoie `.B6B` avant toute nouvelle conversion. Le parser,
+la preview et l'import continuent a
 accepter PCM16/24/32 et FLOAT32 mono/stereo. Le runtime Classic/Multi exige ce
 format canonique: le backend SD lit directement dans la page FLOAT32 finale,
 sans decodeur ni scratch de page intermediaire. Le loader RAM lit de meme

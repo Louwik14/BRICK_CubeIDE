@@ -982,7 +982,7 @@ static void ui_page_settings_tick(void)
     }
     ui_page_settings_wavetable_browser_service();
 
-    if ((wav_convert_is_active() != 0U) || (g_ui_settings.convert_slot_valid != 0U))
+    if (g_ui_settings.convert_slot_valid != 0U)
     {
         wav_convert_service(65536U);
         const wav_convert_state_t convert_state = wav_convert_get_state();

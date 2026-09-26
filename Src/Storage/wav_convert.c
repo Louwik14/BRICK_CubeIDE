@@ -5,6 +5,7 @@
 #include "Sampler/sample_cache.h"
 #include "Platform/memory_layout.h"
 #include "Storage/audio_recorder.h"
+#include "Storage/persistent_fatfs_io.h"
 #include "Storage/sd_access_gate.h"
 #include "Storage/storage_shared_io.h"
 #include "Storage/project_load_quiesce.h"
@@ -19,7 +20,7 @@
 #define WAV_CONVERT_WAV_JUNK_BYTES 448U
 #define WAV_CONVERT_PACK_FRAMES (STORAGE_SHARED_IO_BYTES / WAV_CONVERT_TARGET_BYTES_PER_FRAME)
 #define WAV_CONVERT_SERVICE_PACK_FRAMES 1024U
-#define WAV_CONVERT_PATH_MAX 64U
+#define WAV_CONVERT_PATH_MAX 160U
 
 _Static_assert((WAV_CONVERT_PACK_FRAMES * WAV_CONVERT_TARGET_BYTES_PER_FRAME) == STORAGE_SHARED_IO_BYTES,
                "WAV convert pack chunk must be frame-aligned");
@@ -197,39 +198,51 @@ static uint8_t wav_convert_parse_path_locked(const char *path, wav_info_t *out_i
     return ok;
 }
 
-uint8_t wav_convert_path_needs_canonical(const char *path, wav_info_t *out_info)
+wav_convert_path_status_t wav_convert_path_canonical_status(
+    const char *path, wav_info_t *out_info)
 {
     wav_info_t info;
+    char temp_path[WAV_CONVERT_PATH_MAX];
+    char bak_path[WAV_CONVERT_PATH_MAX];
     if ((path == 0) || (path[0] == '\0'))
     {
-        return 0U;
+        return WAV_CONVERT_PATH_INVALID;
     }
 
     if (audio_recorder_is_active() != 0U)
     {
-        return 0U;
+        return WAV_CONVERT_PATH_BUSY;
     }
 
     if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_WAV_CONVERT) == 0U)
     {
-        return 0U;
+        return WAV_CONVERT_PATH_BUSY;
     }
 
-    uint8_t ok = 0U;
+    wav_convert_path_status_t status = WAV_CONVERT_PATH_INVALID;
     if ((sd_access_fs_mount_if_needed() != 0U)
+        && (wav_convert_make_side_paths(path, temp_path, bak_path) != 0U)
+        && (persistent_fatfs_recover_replace(path, temp_path, bak_path) == FR_OK)
         && (wav_convert_parse_path_locked(path, &info) != 0U)
-        && (wav_convert_format_convertible(&info) != 0U)
-        && (wav_convert_format_already_target(&info) == 0U))
+        && (wav_convert_format_convertible(&info) != 0U))
     {
         if (out_info != 0)
         {
             *out_info = info;
         }
-        ok = 1U;
+        status = (wav_convert_format_already_target(&info) != 0U)
+                     ? WAV_CONVERT_PATH_CANONICAL
+                     : WAV_CONVERT_PATH_NEEDS_CANONICAL;
     }
 
     sd_access_gate_release(SD_ACCESS_CLIENT_WAV_CONVERT);
-    return ok;
+    return status;
+}
+
+uint8_t wav_convert_path_needs_canonical(const char *path, wav_info_t *out_info)
+{
+    return (wav_convert_path_canonical_status(path, out_info)
+            == WAV_CONVERT_PATH_NEEDS_CANONICAL) ? 1U : 0U;
 }
 
 static void wav_convert_pack_float32_le(uint8_t *dst, float value)
@@ -281,9 +294,11 @@ static void wav_convert_fail(wav_convert_error_t error)
     g_wav_convert.state = WAV_CONVERT_STATE_FAILED;
 }
 
-static uint8_t wav_convert_start_internal(const char *path, uint8_t acquire_gate)
+static uint8_t wav_convert_start_internal(const char *path, uint8_t acquire_gate,
+                                          uint8_t allow_project_replacement)
 {
-    if (project_replacement_is_active() != 0U) return 0U;
+    if ((allow_project_replacement == 0U)
+        && (project_replacement_is_active() != 0U)) return 0U;
     if ((path == 0) || (path[0] == '\0'))
     {
         return 0U;
@@ -321,6 +336,14 @@ static uint8_t wav_convert_start_internal(const char *path, uint8_t acquire_gate
         return 0U;
     }
 
+    if (persistent_fatfs_recover_replace(g_wav_convert.source_path,
+                                         g_wav_convert.temp_path,
+                                         g_wav_convert.bak_path) != FR_OK)
+    {
+        wav_convert_fail(WAV_CONVERT_ERROR_REPLACE_FAIL);
+        return 0U;
+    }
+
     g_wav_convert.state = WAV_CONVERT_STATE_ACTIVE;
     g_wav_convert.error = WAV_CONVERT_ERROR_NONE;
     g_wav_convert.phase = WAV_CONVERT_PHASE_OPEN;
@@ -329,18 +352,27 @@ static uint8_t wav_convert_start_internal(const char *path, uint8_t acquire_gate
 
 uint8_t wav_convert_start_destructive_canonical(const char *path)
 {
-    return wav_convert_start_internal(path, 1U);
+    return wav_convert_start_internal(path, 1U, 0U);
+}
+
+uint8_t wav_convert_start_destructive_canonical_project(const char *path)
+{
+    return wav_convert_start_internal(path, 1U, 1U);
 }
 
 uint8_t wav_convert_path_to_canonical_locked(const char *path)
 {
     wav_info_t info;
+    char temp_path[WAV_CONVERT_PATH_MAX];
+    char bak_path[WAV_CONVERT_PATH_MAX];
     if ((path == 0) || (path[0] == '\0')
         || (sd_access_gate_current_owner() == SD_ACCESS_CLIENT_NONE)
+        || (wav_convert_make_side_paths(path, temp_path, bak_path) == 0U)
+        || (persistent_fatfs_recover_replace(path, temp_path, bak_path) != FR_OK)
         || (wav_convert_parse_path_locked(path, &info) == 0U)
         || (wav_convert_format_convertible(&info) == 0U)) return 0U;
     if (wav_convert_format_already_target(&info) != 0U) return 1U;
-    if (wav_convert_start_internal(path, 0U) == 0U) return 0U;
+    if (wav_convert_start_internal(path, 0U, 0U) == 0U) return 0U;
     while (g_wav_convert.state == WAV_CONVERT_STATE_ACTIVE)
         wav_convert_service(UINT32_MAX);
     const uint8_t ok = (g_wav_convert.state == WAV_CONVERT_STATE_DONE) ? 1U : 0U;
@@ -612,13 +644,13 @@ static uint8_t wav_convert_replace_phase(void)
         return 0U;
     }
     g_wav_convert.temp_created = 0U;
+    sd_access_media_epoch_advance();
 
     if (f_unlink(g_wav_convert.bak_path) != FR_OK)
     {
         wav_convert_fail(WAV_CONVERT_ERROR_REPLACE_FAIL);
         return 0U;
     }
-    sd_access_media_epoch_advance();
     g_wav_convert.bak_created = 0U;
     wav_convert_release_gate();
     g_wav_convert.phase = WAV_CONVERT_PHASE_IDLE;

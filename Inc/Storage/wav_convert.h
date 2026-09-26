@@ -33,9 +33,21 @@ typedef enum
     WAV_CONVERT_ERROR_NO_SPACE
 } wav_convert_error_t;
 
+typedef enum
+{
+    WAV_CONVERT_PATH_INVALID = 0,
+    WAV_CONVERT_PATH_CANONICAL,
+    WAV_CONVERT_PATH_NEEDS_CANONICAL,
+    WAV_CONVERT_PATH_BUSY
+} wav_convert_path_status_t;
+
 void wav_convert_init(void);
+wav_convert_path_status_t wav_convert_path_canonical_status(
+    const char *path, wav_info_t *out_info);
 uint8_t wav_convert_path_needs_canonical(const char *path, wav_info_t *out_info);
 uint8_t wav_convert_start_destructive_canonical(const char *path);
+/* Project restore owns the closed mutation ingress while canonicalizing refs. */
+uint8_t wav_convert_start_destructive_canonical_project(const char *path);
 /* Caller owns the SD gate. Used by synchronous import domains such as Multi. */
 uint8_t wav_convert_path_to_canonical_locked(const char *path);
 void wav_convert_service(uint32_t byte_budget);

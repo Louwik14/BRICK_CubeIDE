@@ -1,5 +1,6 @@
 #include "Storage/project_product.h"
 #include "Storage/project_load_quiesce.h"
+#include "Storage/wav_convert.h"
 #include "ControlRT/audio_state_snapshot_control.h"
 #include "Storage/audio_recorder.h"
 #include "Sampler/sample_stream_transport.h"
@@ -164,6 +165,8 @@ typedef enum
 {
     PROJECT_LOAD_IDLE = 0,
     PROJECT_LOAD_WAIT_SAFE,
+    PROJECT_LOAD_CANONICALIZE,
+    PROJECT_LOAD_INSTALL,
     PROJECT_LOAD_WAIT_MULTI,
     PROJECT_LOAD_ASSETS,
     PROJECT_LOAD_WAIT_STREAM,
@@ -747,8 +750,6 @@ static void project_product_begin_commit(
     g_project_load.state=PROJECT_LOAD_WAIT_SAFE;
     persist_debug_project(PERSIST_DBG_PROJECT_PHASE_LOAD_WAIT_QUIESCE,0U,
                           (uint32_t)g_project_load.state);
-    /* T_commit: P1 is complete.  Quiescing may retire live payloads, so every
-     * transition after this point is forward-only to the validated candidate. */
     if (quiesce_requested != 0U)
         project_load_quiesce_request();
 }
@@ -963,12 +964,92 @@ enum
         (g_project_load.restore != NULL) \
             ? g_project_load.restore->asset_count : 0U)
 
+static uint8_t project_product_asset_needs_sample_canonicalization(
+    const persist_control_asset_ref_t *asset)
+{
+    return (uint8_t)((asset != NULL)
+        && ((asset->kind == PERSIST_ASSET_SAMPLE_STREAM)
+            || (asset->kind == PERSIST_ASSET_SAMPLE_RAM)));
+}
+
+static void project_product_load_service_canonicalize(
+    persistence_project_restore_workspace_t *restore)
+{
+    if (restore == NULL)
+    {
+        project_product_load_finish(0U);
+        return;
+    }
+
+    if (wav_convert_is_active() != 0U)
+    {
+        wav_convert_service(65536U);
+        if (wav_convert_is_active() != 0U) return;
+
+        if (wav_convert_get_state() != WAV_CONVERT_STATE_DONE)
+        {
+            wav_convert_clear_finished();
+            project_product_load_finish(0U);
+            return;
+        }
+        g_project_load.media_epoch = sd_access_media_epoch();
+        wav_convert_clear_finished();
+        ++g_project_load.asset_index;
+    }
+
+    if (sd_access_storage_status() != SD_STORAGE_STATUS_READY
+        || sd_access_media_epoch() != g_project_load.media_epoch)
+    {
+        project_product_load_finish(0U);
+        return;
+    }
+
+    while (g_project_load.asset_index < restore->asset_count)
+    {
+        const persist_control_asset_ref_t *const asset =
+            &restore->assets[g_project_load.asset_index];
+        if (project_product_asset_needs_sample_canonicalization(asset) != 0U)
+        {
+            char path_value[PERSIST_CONTROL_ASSET_PATH_BYTES];
+            memcpy(path_value, asset->canonical_path, asset->path_length);
+            path_value[asset->path_length] = '\0';
+            const wav_convert_path_status_t path_status =
+                wav_convert_path_canonical_status(path_value, NULL);
+            if (path_status == WAV_CONVERT_PATH_BUSY) return;
+            if (path_status == WAV_CONVERT_PATH_NEEDS_CANONICAL)
+            {
+                if (wav_convert_start_destructive_canonical_project(path_value) == 0U)
+                {
+                    const wav_convert_error_t error = wav_convert_get_last_error();
+                    wav_convert_clear_finished();
+                    if (error != WAV_CONVERT_ERROR_BUSY)
+                        project_product_load_finish(0U);
+                    return;
+                }
+                return;
+            }
+        }
+        ++g_project_load.asset_index;
+    }
+
+    g_project_load.asset_index = 0U;
+    g_project_load.media_epoch = sd_access_media_epoch();
+    g_project_load.state = PROJECT_LOAD_INSTALL;
+    persist_debug_project(PERSIST_DBG_PROJECT_PHASE_LOAD_ASSETS,0U,
+                          (uint32_t)g_project_load.state);
+}
+
 void project_product_load_service(void)
 {
     persistence_project_restore_workspace_t *const restore=g_project_load.restore;
     if(g_project_load.state==PROJECT_LOAD_IDLE)return;
     g_persist_dbg.project_progress=g_progress.done;
     g_persist_dbg.detail=(uint32_t)g_project_load.state;
+    if (g_project_load.state == PROJECT_LOAD_CANONICALIZE)
+    {
+        project_product_load_service_canonicalize(restore);
+        return;
+    }
     if (sd_access_storage_status() != SD_STORAGE_STATUS_READY
         || sd_access_media_epoch() != g_project_load.media_epoch)
     {
@@ -1039,6 +1120,12 @@ void project_product_load_service(void)
     {
         if (g_project_load.quiesce_requested != 0U
             && project_load_quiesce_safe() == 0U) return;
+        g_project_load.asset_index = 0U;
+        g_project_load.state = PROJECT_LOAD_CANONICALIZE;
+        return;
+    }
+    if (g_project_load.state == PROJECT_LOAD_INSTALL)
+    {
         sd_scheduler_runtime_exclusive_request();
         if (sd_scheduler_runtime_exclusive_try_begin() == 0U) return;
         if (pattern_control_bank_commit(restore) == 0U)
