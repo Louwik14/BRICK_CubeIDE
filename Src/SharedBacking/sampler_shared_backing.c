@@ -48,15 +48,15 @@ _Static_assert(sizeof(sample_page_shared_descriptor_t) == 60U,
                "Page descriptor ABI changed");
 _Static_assert(sizeof(sample_page_shared_index_entry_t) == 20U,
                "Page index ABI changed");
-_Static_assert(sizeof(sample_classic_audio_snapshot_t) == 48U,
+_Static_assert(sizeof(sample_classic_audio_snapshot_t) == 28U,
                "Classic snapshot ABI changed");
-_Static_assert(sizeof(sample_classic_audio_source_t) == 100U,
+_Static_assert(sizeof(sample_classic_audio_source_t) == 60U,
                "Classic source ABI changed");
 _Static_assert(sizeof(multi_audio_instrument_t) == 16U,
                "Multi instrument ABI changed");
 _Static_assert(sizeof(multi_audio_zone_t) == 8U,
                "Multi zone ABI changed");
-_Static_assert(sizeof(multi_sample_audio_source_t) == 60U,
+_Static_assert(sizeof(multi_sample_audio_source_t) == 40U,
                "Multi source ABI changed");
 _Static_assert(sizeof(sampler_ram_audio_slot_t) == 48U,
                "RAM projection slot ABI changed");

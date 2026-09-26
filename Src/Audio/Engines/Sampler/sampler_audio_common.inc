@@ -583,12 +583,6 @@ static brick6_sample_common_plan_result_t brick6_sampler_runtime_build_common_pl
         }
         out_source->key = sample_audio_key_multi(projected->multi_sample_id);
         out_source->total_frames = projected->total_frames;
-        out_source->data_offset = projected->data_offset;
-        out_source->data_size = projected->data_size;
-        out_source->sample_rate = projected->sample_rate;
-        out_source->channels = projected->channels;
-        out_source->bits_per_sample = projected->bits_per_sample;
-        out_source->block_align = projected->block_align;
         out_source->format = projected->format;
         out_source->stride_floats = projected->stride_floats;
         out_source->frames_per_page = projected->frames_per_page;

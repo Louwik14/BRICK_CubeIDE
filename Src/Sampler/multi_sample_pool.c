@@ -826,12 +826,6 @@ uint8_t multi_sample_pool_resolve_source_from_result(
     out_source->key.object_id = resolved->multi_sample_id;
     out_source->path = sample->path;
     out_source->total_frames = sample->total_frames;
-    out_source->data_offset = sample->data_offset;
-    out_source->data_size = sample->data_size;
-    out_source->sample_rate = sample->sample_rate;
-    out_source->channels = sample->channels;
-    out_source->bits_per_sample = sample->bits_per_sample;
-    out_source->block_align = sample->block_align;
     out_source->format = sample->format;
     out_source->stride_floats = sample->stride_floats;
     out_source->frames_per_page = sample->frames_per_page;

@@ -25,7 +25,6 @@
 #define SAMPLER_RAM_IO_BYTES (SD_SCHEDULER_HEAVY_MAX_DATA_BYTES)
 #define SAMPLER_RAM_SERVICE_BUDGET_MS (2U)
 #define SAMPLER_RAM_SERVICE_MAX_STEPS (32U)
-#define SAMPLER_RAM_CONVERT_QUANTUM_FRAMES (1024U)
 #define SAMPLER_RAM_WAVEFORM_DEFAULT_SERVICE_FRAMES (4096U)
 
 typedef struct
@@ -36,8 +35,6 @@ typedef struct
 } sampler_ram_pool_state_t;
 
 STORAGE_STATE_SDRAM static sampler_ram_pool_state_t g_sampler_ram_pool;
-AUDIO_WARM ALIGN32 static uint8_t g_sampler_ram_io[SAMPLER_RAM_IO_BYTES];
-
 typedef enum
 {
     SAMPLER_RAM_LOAD_IDLE = 0,
@@ -47,7 +44,6 @@ typedef enum
     SAMPLER_RAM_LOAD_ALLOCATE,
     SAMPLER_RAM_LOAD_SEEK,
     SAMPLER_RAM_LOAD_READ,
-    SAMPLER_RAM_LOAD_CONVERT,
     SAMPLER_RAM_LOAD_CLOSE,
     SAMPLER_RAM_LOAD_WAIT_SAFE,
     SAMPLER_RAM_LOAD_PUBLISH,
@@ -64,8 +60,6 @@ typedef struct
     char path[SAMPLER_RAM_POOL_PATH_MAX];
     uint32_t media_epoch;
     uint32_t frames_done;
-    uint32_t buffered_frames;
-    uint32_t converted_frames;
     uint16_t ram_slot;
     uint16_t global_slot;
     sampler_ram_result_t result;
@@ -528,19 +522,7 @@ static uint8_t sampler_ram_copy_path(char *dst, uint32_t dst_size, const char *s
 
 static uint8_t sampler_ram_wav_supported(const wav_info_t *info)
 {
-    if (info == 0)
-    {
-        return 0U;
-    }
-    if (wav_parser_format_supported(info) == 0U) return 0U;
-    if ((info->encoding == WAV_SAMPLE_ENCODING_PCM_INTEGER)
-        && !((info->bits_per_sample == 16U) || (info->bits_per_sample == 24U)))
-        return 0U;
-    if ((info->encoding == WAV_SAMPLE_ENCODING_IEEE_FLOAT)
-        && (info->bits_per_sample != 32U)) return 0U;
-    const uint16_t expected_align =
-        (uint16_t)((info->channels * info->bits_per_sample) / 8U);
-    return (info->block_align == expected_align) ? 1U : 0U;
+    return wav_parser_is_canonical_brick_float(info);
 }
 
 uint8_t sampler_ram_pool_inspect_wav(const wav_info_t *info,
@@ -560,9 +542,7 @@ uint8_t sampler_ram_pool_inspect_wav(const wav_info_t *info,
     uint32_t logical_bytes = 0U;
     uint32_t page_count = 0U;
     uint32_t cost_bytes = 0U;
-    const sampler_ram_format_t format = (info->channels == 1U)
-        ? SAMPLER_RAM_FORMAT_FLOAT32_MONO
-        : SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED;
+    const sampler_ram_format_t format = SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED;
     if ((sampler_ram_format_cost_bytes(format, frames, &logical_bytes,
                                        &page_count, &cost_bytes) == 0U)
         || (cost_bytes > SAMPLER_RAM_POOL_BYTES))
@@ -574,24 +554,6 @@ uint8_t sampler_ram_pool_inspect_wav(const wav_info_t *info,
     if (out_page_count != 0) *out_page_count = page_count;
     if (out_cost_bytes != 0) *out_cost_bytes = cost_bytes;
     return 1U;
-}
-
-static float sampler_ram_pcm16_to_float(const uint8_t *p)
-{
-    const int16_t v = (int16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8));
-    return (float)v * (1.0f / 32768.0f);
-}
-
-static float sampler_ram_pcm24_to_float(const uint8_t *p)
-{
-    int32_t v = (int32_t)((uint32_t)p[0]
-                          | ((uint32_t)p[1] << 8)
-                          | ((uint32_t)p[2] << 16));
-    if ((v & 0x00800000L) != 0)
-    {
-        v |= (int32_t)0xFF000000L;
-    }
-    return (float)v * (1.0f / 8388608.0f);
 }
 
 static void sampler_ram_pool_initialize_empty(uint32_t generation_seed)
@@ -799,16 +761,13 @@ static void sampler_ram_pool_load_async_step(void)
     }
 
     if ((job->state == SAMPLER_RAM_LOAD_ALLOCATE)
-        || (job->state == SAMPLER_RAM_LOAD_CONVERT)
         || (job->state == SAMPLER_RAM_LOAD_WAIT_SAFE)
         || (job->state == SAMPLER_RAM_LOAD_PUBLISH))
     {
         if (job->state == SAMPLER_RAM_LOAD_ALLOCATE)
         {
             const uint32_t frames = job->info.data_size / job->info.block_align;
-            const sampler_ram_format_t format = (job->info.channels == 1U)
-                ? SAMPLER_RAM_FORMAT_FLOAT32_MONO
-                : SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED;
+            const sampler_ram_format_t format = SAMPLER_RAM_FORMAT_FLOAT32_STEREO_INTERLEAVED;
             uint32_t data_bytes = 0U;
             uint32_t page_count = 0U;
             uint32_t cost = 0U;
@@ -866,59 +825,6 @@ static void sampler_ram_pool_load_async_step(void)
                 &job->allocation);
             candidate->error = SAMPLER_RAM_RESULT_OK;
             job->state = SAMPLER_RAM_LOAD_SEEK;
-            return;
-        }
-
-        if (job->state == SAMPLER_RAM_LOAD_CONVERT)
-        {
-            sampler_ram_slot_t *const candidate = &job->candidate;
-            uint32_t count = job->buffered_frames - job->converted_frames;
-            if (count > SAMPLER_RAM_CONVERT_QUANTUM_FRAMES)
-            {
-                count = SAMPLER_RAM_CONVERT_QUANTUM_FRAMES;
-            }
-            const uint8_t *src = &g_sampler_ram_io[
-                job->converted_frames * job->info.block_align];
-            float *dst = &candidate->data[
-                (job->frames_done + job->converted_frames) * candidate->channels];
-            if (job->info.encoding == WAV_SAMPLE_ENCODING_IEEE_FLOAT)
-            {
-                memcpy(dst, src, count * job->info.block_align);
-                job->converted_frames += count;
-                if (job->converted_frames >= job->buffered_frames)
-                {
-                    job->frames_done += job->buffered_frames;
-                    job->buffered_frames = 0U;
-                    job->converted_frames = 0U;
-                    job->state = (job->frames_done >= candidate->frames)
-                        ? SAMPLER_RAM_LOAD_CLOSE : SAMPLER_RAM_LOAD_READ;
-                }
-                return;
-            }
-            for (uint32_t i = 0U; i < count; ++i)
-            {
-                dst[i * candidate->channels] = (job->info.bits_per_sample == 16U)
-                    ? sampler_ram_pcm16_to_float(src)
-                    : sampler_ram_pcm24_to_float(src);
-                src += (job->info.bits_per_sample == 16U) ? 2U : 3U;
-                if (candidate->channels == 2U)
-                {
-                    dst[(i * candidate->channels) + 1U] =
-                        (job->info.bits_per_sample == 16U)
-                            ? sampler_ram_pcm16_to_float(src)
-                            : sampler_ram_pcm24_to_float(src);
-                    src += (job->info.bits_per_sample == 16U) ? 2U : 3U;
-                }
-            }
-            job->converted_frames += count;
-            if (job->converted_frames >= job->buffered_frames)
-            {
-                job->frames_done += job->buffered_frames;
-                job->buffered_frames = 0U;
-                job->converted_frames = 0U;
-                job->state = (job->frames_done >= candidate->frames)
-                    ? SAMPLER_RAM_LOAD_CLOSE : SAMPLER_RAM_LOAD_READ;
-            }
             return;
         }
 
@@ -1125,12 +1031,14 @@ static void sampler_ram_pool_load_async_step(void)
             }
             const UINT wanted = (UINT)(frames * job->info.block_align);
             UINT read = 0U;
-            if ((f_read(&job->file, g_sampler_ram_io, wanted, &read) == FR_OK)
+            float *const destination = &job->candidate.data[
+                job->frames_done * job->candidate.channels];
+            if ((f_read(&job->file, destination, wanted, &read) == FR_OK)
                 && (read == wanted))
             {
-                job->buffered_frames = frames;
-                job->converted_frames = 0U;
-                job->state = SAMPLER_RAM_LOAD_CONVERT;
+                job->frames_done += frames;
+                job->state = (job->frames_done >= job->candidate.frames)
+                    ? SAMPLER_RAM_LOAD_CLOSE : SAMPLER_RAM_LOAD_READ;
             }
             else
             {
@@ -1166,16 +1074,12 @@ void sampler_ram_pool_load_async_service(void)
         sampler_ram_load_job_t *const job = &g_sampler_ram_load_job;
         const sampler_ram_load_state_t old_state = job->state;
         const uint32_t old_frames_done = job->frames_done;
-        const uint32_t old_buffered_frames = job->buffered_frames;
-        const uint32_t old_converted_frames = job->converted_frames;
         sampler_ram_pool_load_async_step();
         if ((job->state == SAMPLER_RAM_LOAD_IDLE)
             || (job->state == SAMPLER_RAM_LOAD_DONE))
             break;
         if ((job->state == old_state)
-            && (job->frames_done == old_frames_done)
-            && (job->buffered_frames == old_buffered_frames)
-            && (job->converted_frames == old_converted_frames))
+            && (job->frames_done == old_frames_done))
             break;
         if ((uint32_t)(HAL_GetTick() - started_at)
             >= SAMPLER_RAM_SERVICE_BUDGET_MS)

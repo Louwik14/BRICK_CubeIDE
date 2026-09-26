@@ -18,14 +18,8 @@ uint8_t rec_source_audio_resolve(sample_resolved_source_t *out_source)
     if ((snapshot.ready == 0U) || (snapshot.frame_count == 0U)) return 0U;
     out_source->key = snapshot.key;
     out_source->total_frames = snapshot.frame_count;
-    out_source->data_size = snapshot.frame_count * 6U;
-    out_source->data_offset = 512U;
-    out_source->sample_rate = snapshot.sample_rate;
     out_source->registration_epoch = snapshot.registration_epoch;
     out_source->format = SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED;
-    out_source->channels = 2U;
-    out_source->bits_per_sample = 24U;
-    out_source->block_align = 6U;
     out_source->stride_floats = 2U;
     out_source->frames_per_page = SAMPLE_AUDIO_FORMAT_STEREO_FRAMES_PER_PAGE;
     out_source->root_note = 60U;

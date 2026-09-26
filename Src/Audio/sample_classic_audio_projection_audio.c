@@ -31,14 +31,8 @@ uint8_t sample_classic_audio_projection_resolve(uint16_t sample_id,
     if (snap.ready == 0U) return 0U;
     out->key = snap.key;
     out->total_frames = snap.total_frames;
-    out->data_offset = snap.data_offset;
-    out->data_size = snap.data_size;
-    out->sample_rate = snap.sample_rate;
     out->registration_epoch = snap.registration_epoch;
     out->format = snap.format;
-    out->channels = snap.channels;
-    out->bits_per_sample = snap.bits_per_sample;
-    out->block_align = snap.block_align;
     out->stride_floats = snap.stride_floats;
     out->frames_per_page = snap.frames_per_page;
     out->root_note = 60U;

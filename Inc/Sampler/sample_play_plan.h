@@ -46,12 +46,6 @@ typedef struct
     sample_audio_key_t key;
     const char *path;
     uint32_t total_frames;
-    uint32_t data_offset;
-    uint32_t data_size;
-    uint32_t sample_rate;
-    uint16_t channels;
-    uint16_t bits_per_sample;
-    uint16_t block_align;
     sample_audio_format_t format;
     uint16_t stride_floats;
     uint32_t frames_per_page;

@@ -209,7 +209,6 @@ set(DOMAIN_STORAGE
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_page_cache_port.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_page_lease_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_backend_physical.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_decoder.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_fatfs_map.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_io.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_stream_manager.c"

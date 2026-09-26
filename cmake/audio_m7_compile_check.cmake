@@ -63,7 +63,6 @@ set(audio_forbidden_dependencies
     "/Inc/Sampler/sample_page_cache_port.h"
     "/Inc/Sampler/sample_page_lease_control.h"
     "/Inc/Sampler/sample_stream_backend_physical.h"
-    "/Inc/Sampler/sample_stream_decoder.h"
     "/Inc/Sampler/sample_stream_fatfs_map.h"
     "/Inc/Sampler/sample_stream_io.h"
     "/Inc/Sampler/sample_stream_manager.h"

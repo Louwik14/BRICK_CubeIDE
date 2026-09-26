@@ -45,11 +45,9 @@ uint8_t multi_sample_audio_projection_publish(uint16_t instrument_id)
         g_multi_audio_samples[i] = (multi_sample_audio_source_t){
             .multi_sample_id = (uint16_t)i, .instrument_id = instrument_id,
             .root_note = s->root_note, .vel_low = s->vel_low, .vel_high = s->vel_high,
-            .total_frames = s->total_frames, .data_offset = s->data_offset,
-            .data_size = s->data_size, .sample_rate = s->sample_rate,
+            .total_frames = s->total_frames,
             .registration_epoch = s->registration_epoch, .loop_begin = s->loop_begin,
-            .loop_end = s->loop_end, .format = s->format, .channels = s->channels,
-            .bits_per_sample = s->bits_per_sample, .block_align = s->block_align,
+            .loop_end = s->loop_end, .format = s->format,
             .stride_floats = s->stride_floats, .frames_per_page = s->frames_per_page,
             .has_loop = s->has_loop
         };

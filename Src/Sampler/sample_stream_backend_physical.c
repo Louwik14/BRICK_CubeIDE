@@ -69,11 +69,11 @@ static uint8_t sample_stream_backend_physical_next_span_impl(
         (async->cached_span_valid != 0U)
         && (async->cached_map == async->map)
         && (async->cached_cursor == async->cursor)
-        && (async->cached_scratch == async->scratch)
+        && (async->cached_buffer == async->buffer)
         && (async->cached_file_byte_offset == file_byte_offset)
         && (async->cached_requested_bytes == requested_bytes)
         && (async->cached_source_bytes == async->source_bytes)
-        && (async->cached_scratch_sectors == async->scratch_sectors)
+        && (async->cached_buffer_sectors == async->buffer_sectors)
         && (async->cached_map_generation == map_generation)
         && (async->cached_media_epoch == media_epoch));
     if (cache_matches != 0U)
@@ -91,10 +91,10 @@ static uint8_t sample_stream_backend_physical_next_span_impl(
         }
     }
 
-    const uint64_t scratch_end =
-        ((uint64_t)async->scratch_sectors + span->sector_count)
+    const uint64_t buffer_end =
+        ((uint64_t)async->buffer_sectors + span->sector_count)
         * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE;
-    if ((scratch_end > async->scratch_capacity)
+    if ((buffer_end > async->buffer_capacity)
             || ((async->logical_queued != 0U)
                 && (span->first_sector_skip != 0U)))
     {
@@ -107,11 +107,11 @@ static uint8_t sample_stream_backend_physical_next_span_impl(
         async->cached_span = *span;
         async->cached_map = async->map;
         async->cached_cursor = async->cursor;
-        async->cached_scratch = async->scratch;
+        async->cached_buffer = async->buffer;
         async->cached_file_byte_offset = file_byte_offset;
         async->cached_requested_bytes = requested_bytes;
         async->cached_source_bytes = async->source_bytes;
-        async->cached_scratch_sectors = async->scratch_sectors;
+        async->cached_buffer_sectors = async->buffer_sectors;
         async->cached_map_generation = map_generation;
         async->cached_media_epoch = media_epoch;
         async->cached_span_valid = 1U;
@@ -133,8 +133,8 @@ uint8_t sample_stream_backend_physical_begin(
     const sample_page_stream_info_t *info,
     const sample_page_load_target_t *target,
     sample_stream_physical_cursor_t *cursor,
-    uint8_t *scratch,
-    uint32_t scratch_capacity,
+    uint8_t *buffer,
+    uint32_t buffer_capacity,
     uint32_t deadline_margin_us)
 {
     if ((async != 0) && (sample_stream_backend_physical_find(async) < 0))
@@ -142,7 +142,7 @@ uint8_t sample_stream_backend_physical_begin(
         sample_stream_backend_physical_invalidate_span(async);
     }
     if ((async == 0) || (info == 0) || (target == 0)
-        || (scratch == 0)
+        || (buffer == 0)
         || (info->info.block_align == 0U)
         || (sample_stream_physical_map_is_current(
                 &info->stream_safe.physical_map) == 0U))
@@ -176,9 +176,9 @@ uint8_t sample_stream_backend_physical_begin(
     memset(async, 0, sizeof(*async));
     async->map = &info->stream_safe.physical_map;
     async->cursor = cursor;
-    async->scratch = scratch;
+    async->buffer = buffer;
     async->file_byte_offset = file_byte_offset;
-    async->scratch_capacity = scratch_capacity;
+    async->buffer_capacity = buffer_capacity;
     async->source_bytes = source_bytes;
     async->count_multi_diag = (target->key.domain == SAMPLE_AUDIO_DOMAIN_MULTI);
     async->deadline_margin_us = deadline_margin_us;
@@ -229,16 +229,16 @@ uint8_t sample_stream_backend_physical_poll(
         return 1U;
     }
 
-    const uint64_t source_end_in_scratch =
+    const uint64_t source_end_in_buffer =
         (uint64_t)async->first_sector_skip + (uint64_t)async->source_bytes;
-    if (source_end_in_scratch > ((uint64_t)async->scratch_sectors
+    if (source_end_in_buffer > ((uint64_t)async->buffer_sectors
                                  * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE))
     {
         sample_stream_backend_physical_invalidate_span(async);
         *out_result = SAMPLE_PAGE_LOAD_READ_FAILED;
         return 1U;
     }
-    *out_source = &async->scratch[async->first_sector_skip];
+    *out_source = &async->buffer[async->first_sector_skip];
     *out_source_bytes = async->source_bytes;
     *out_result = SAMPLE_PAGE_LOAD_OK;
     return 1U;
@@ -314,8 +314,8 @@ static uint8_t sample_stream_backend_physical_read_peek(
     candidate->estimated_cost_us = span.sector_count * 250U;
     candidate->lba = span.lba;
     candidate->sector_count = span.sector_count;
-    candidate->read_buffer = &async->scratch[
-        async->scratch_sectors * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE];
+    candidate->read_buffer = &async->buffer[
+        async->buffer_sectors * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE];
     candidate->media_epoch = async->map->media_epoch;
     candidate->owner_generation = async->owner_generation;
     return 1U;
@@ -342,7 +342,7 @@ static sd_scheduler_start_result_t sample_stream_backend_physical_read_start(
     }
     const sd_block_device_result_t result = sd_block_device_async_read_submit(
         span.lba, span.sector_count,
-        &async->scratch[async->scratch_sectors
+        &async->buffer[async->buffer_sectors
                         * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE],
         async->owner_generation);
     if ((result == SD_BLOCK_DEVICE_BUSY)
@@ -359,13 +359,13 @@ static sd_scheduler_start_result_t sample_stream_backend_physical_read_start(
     }
     async->active_lba = span.lba;
     async->active_sector_count = span.sector_count;
-    async->active_buffer = &async->scratch[
-        async->scratch_sectors * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE];
+    async->active_buffer = &async->buffer[
+        async->buffer_sectors * SAMPLE_STREAM_PHYSICAL_SECTOR_SIZE];
     if (async->logical_queued == 0U)
     {
         async->first_sector_skip = span.first_sector_skip;
     }
-    async->scratch_sectors += span.sector_count;
+    async->buffer_sectors += span.sector_count;
     async->logical_queued += span.logical_bytes;
     sample_stream_backend_physical_invalidate_span(async);
     return SD_SCHEDULER_START_STARTED;

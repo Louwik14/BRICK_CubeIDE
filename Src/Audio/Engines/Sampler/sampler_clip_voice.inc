@@ -321,8 +321,8 @@ static uint32_t brick6_sampler_runtime_clip_resolve_timing_ratio_q16(uint8_t tra
         float target_seconds = 0.0f;
         const float project_bpm = (float)audio_transport_runtime_get()
             ->tempo_effective_bpm_milli * 0.001f;
-        const uint32_t sample_rate = (desc->sample_rate != 0U) ? desc->sample_rate : 48000U;
-        const float source_seconds = (float)(region_end - region_begin) / (float)sample_rate;
+        const float source_seconds = (float)(region_end - region_begin)
+            / (float)BOARD_AUDIO_SAMPLE_RATE_HZ;
 
         if (clip->sync_length == 1U)
         {
@@ -396,14 +396,10 @@ static brick6_sampler_stream_pitch_plan_t brick6_sampler_runtime_stream_build_pi
         .step_q16 = BRICK6_SAMPLER_Q16_ONE,
         .shifter_correction = 1.0f,
     };
-    const uint32_t source_sample_rate = ((desc != NULL) && (desc->sample_rate != 0U))
-                                            ? desc->sample_rate
-                                            : BOARD_AUDIO_SAMPLE_RATE_HZ;
     const float semitones = (float)plan.note_delta
                             + ((clip != NULL) ? clip->pitch_semitones : 0.0f);
     const float musical_ratio = brick6_sampler_runtime_pitch_ratio(semitones);
-    const float sample_rate_ratio = (float)source_sample_rate
-                                    / (float)BOARD_AUDIO_SAMPLE_RATE_HZ;
+    const float sample_rate_ratio = 1.0f;
     const float desired_pitch_ratio = sample_rate_ratio * musical_ratio;
 
     plan.timing_ratio_q16 = brick6_sampler_runtime_clip_resolve_timing_ratio_q16(

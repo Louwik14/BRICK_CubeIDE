@@ -250,11 +250,7 @@ uint8_t sample_cache_wav_format_supported(const wav_info_t *info)
         return 0U;
     }
 
-    if ((wav_parser_format_supported(info) == 0U)
-        || (info->sample_rate != 48000U)) return 0U;
-    if (info->encoding == WAV_SAMPLE_ENCODING_IEEE_FLOAT)
-        return wav_parser_is_canonical_brick_float(info);
-    return (info->encoding == WAV_SAMPLE_ENCODING_PCM_INTEGER) ? 1U : 0U;
+    return wav_parser_is_canonical_brick_float(info);
 }
 
 static uint32_t sample_cache_stream_last_page_index(const sample_cache_desc_t *desc)
@@ -643,16 +639,10 @@ uint8_t sample_cache_resolve_classic_source(uint16_t sample_id,
     out_source->key = sample_audio_key_classic(sample_id);
     out_source->path = sample_cache_path(sample_id);
     out_source->total_frames = desc->total_frames;
-    out_source->data_offset = desc->info.data_offset;
-    out_source->data_size = desc->info.data_size;
-    out_source->sample_rate = desc->info.sample_rate;
-    out_source->channels = desc->info.channels;
     out_source->format = desc->format;
     out_source->stride_floats = desc->stride_floats;
     out_source->frames_per_page = desc->frames_per_page;
     out_source->registration_epoch = desc->registration_epoch;
-    out_source->bits_per_sample = desc->info.bits_per_sample;
-    out_source->block_align = desc->info.block_align;
     out_source->root_note = 60U;
     out_source->fine_tune_cents = 0;
     out_source->region_begin = 0U;

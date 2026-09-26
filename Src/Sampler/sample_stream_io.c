@@ -4,8 +4,8 @@
 #include <string.h>
 
 #include "Sampler/sample_stream_backend_physical.h"
-#include "Sampler/sample_stream_decoder.h"
 #include "Sampler/sample_stream_limits.h"
+#include "Storage/wav_audio_codec.h"
 #include "SD/sd_block_device.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "Platform/memory_layout.h"
@@ -17,23 +17,25 @@
 #define BRICK6_STREAM_READ_CHUNK_KIB (32U)
 #endif
 #define SAMPLE_STREAM_IO_SECTOR_BYTES (512U)
-#define SAMPLE_STREAM_IO_READ_SCRATCH_BYTES \
-    (((SAMPLE_PAGE_BYTES + SAMPLE_STREAM_IO_SECTOR_BYTES + 31U) / 32U) * 32U)
-#define SAMPLE_STREAM_IO_SCRATCH_COUNT (2U)
+#define SAMPLE_STREAM_IO_REC_BYTES_PER_FRAME (6U)
+#define SAMPLE_STREAM_IO_REC_DECODE_FRAMES (512U)
+#define SAMPLE_STREAM_IO_JOB_COUNT (2U)
 
-_Static_assert(SAMPLE_STREAM_IO_READ_SCRATCH_BYTES >= (SAMPLE_PAGE_BYTES + 511U),
-               "Physical reads require one page plus sector alignment headroom");
+_Static_assert((SAMPLE_PAGE_FRAMES * SAMPLE_STREAM_IO_REC_BYTES_PER_FRAME
+                + (2U * (SAMPLE_STREAM_IO_SECTOR_BYTES - 1U)))
+                   <= SAMPLE_PAGE_BYTES,
+               "A recorder sector span must fit directly in one float page");
 typedef enum
 {
-    SAMPLE_STREAM_IO_SCRATCH_FREE = 0,
-    SAMPLE_STREAM_IO_SCRATCH_DMA,
-    SAMPLE_STREAM_IO_SCRATCH_RAW_READY,
-    SAMPLE_STREAM_IO_SCRATCH_DECODING
-} sample_stream_io_scratch_state_t;
+    SAMPLE_STREAM_IO_JOB_FREE = 0,
+    SAMPLE_STREAM_IO_JOB_DMA,
+    SAMPLE_STREAM_IO_JOB_DATA_READY,
+    SAMPLE_STREAM_IO_JOB_FINALIZING
+} sample_stream_io_job_state_t;
 
-SDRAM_STREAM_SCRATCH __attribute__((aligned(32))) static uint8_t
-    g_sample_stream_io_read_scratch[SAMPLE_STREAM_IO_SCRATCH_COUNT]
-                                   [SAMPLE_STREAM_IO_READ_SCRATCH_BYTES];
+SDRAM_STREAM_SERVICE __attribute__((aligned(32))) static uint8_t
+    g_sample_stream_io_rec_decode[
+        SAMPLE_STREAM_IO_REC_DECODE_FRAMES * SAMPLE_STREAM_IO_REC_BYTES_PER_FRAME];
 typedef struct
 {
     sample_stream_io_command_t command;
@@ -44,14 +46,14 @@ typedef struct
     const uint8_t *source;
     uint32_t media_epoch;
     uint32_t order;
-    uint8_t *scratch;
-    uint8_t scratch_index;
     uint8_t state;
     uint8_t active;
     uint8_t physical_active;
+    uint8_t direct_float;
+    uint8_t recorder_pcm24;
 } sample_stream_io_async_t;
 SDRAM_STREAM_SERVICE static sample_stream_io_async_t
-    g_sample_stream_io_async[SAMPLE_STREAM_IO_SCRATCH_COUNT];
+    g_sample_stream_io_async[SAMPLE_STREAM_IO_JOB_COUNT];
 static uint32_t g_sample_stream_io_next_order;
 static sample_stream_read_chunk_kib_t g_sample_stream_io_chunk_kib =
     (sample_stream_read_chunk_kib_t)BRICK6_STREAM_READ_CHUNK_KIB;
@@ -136,46 +138,73 @@ sample_stream_read_chunk_kib_t sample_stream_io_get_read_chunk_kib(void)
     return g_sample_stream_io_chunk_kib;
 }
 
-static void sample_stream_io_decode_async_impl(void)
+static uint8_t sample_stream_io_target_matches(
+    const sample_stream_io_async_t *async,
+    const sample_page_load_target_t *target)
 {
-    sample_stream_io_async_t *async = 0;
-    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_SCRATCH_COUNT; ++i)
-    {
-        if ((g_sample_stream_io_async[i].active != 0U)
-            && (g_sample_stream_io_async[i].state == SAMPLE_STREAM_IO_SCRATCH_DECODING))
-        {
-            async = &g_sample_stream_io_async[i];
-            break;
-        }
-    }
-    if ((async == 0) || (async->result.load_result != SAMPLE_PAGE_LOAD_OK))
-    {
-        return;
-    }
+    return (uint8_t)((async != NULL) && (target != NULL)
+        && (target->slot_index == async->command.target.slot_index)
+        && (target->page_index == async->command.target.page_index)
+        && (target->page_generation == async->command.target.page_generation)
+        && (target->registration_epoch == async->command.target.registration_epoch)
+        && (target->frame_count == async->command.target.frame_count)
+        && (target->format == async->command.target.format)
+        && (target->stride_floats == async->command.target.stride_floats)
+        && (target->frames_interleaved == async->target.frames_interleaved));
+}
+
+static void sample_stream_io_finalize(sample_stream_io_async_t *async)
+{
+    if ((async == NULL) || (async->result.load_result != SAMPLE_PAGE_LOAD_OK)) return;
     sample_page_load_target_t target;
     if ((async->media_epoch != sd_access_media_epoch())
         || (sample_page_cache_resolve_loading_target(
                 &async->result.token, &target) == 0U)
-        || (target.slot_index != async->command.target.slot_index)
-        || (target.page_index != async->command.target.page_index)
-        || (target.page_generation != async->command.target.page_generation)
-        || (target.registration_epoch != async->command.target.registration_epoch)
-        || (target.frame_count != async->command.target.frame_count)
-        || (target.format != async->command.target.format)
-        || (target.stride_floats != async->command.target.stride_floats)
-        || (target.frames_interleaved == NULL))
+        || (sample_stream_io_target_matches(async, &target) == 0U))
     {
         async->result.load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
         return;
     }
-    async->result.load_result = sample_stream_decoder_decode_page(
-        &async->command.stream_info, &target, async->source,
-        async->result.source_bytes);
-}
-
-static void sample_stream_io_decode_async(void)
-{
-    sample_stream_io_decode_async_impl();
+    const uint32_t expected_bytes = target.frame_count
+        * async->command.stream_info.info.block_align;
+    if ((expected_bytes == 0U) || (async->result.source_bytes != expected_bytes))
+    {
+        async->result.load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
+        return;
+    }
+    if (async->direct_float != 0U)
+    {
+        if ((async->source != (const uint8_t *)target.frames_interleaved)
+            || (expected_bytes != target.frame_count * 2U * sizeof(float)))
+            async->result.load_result = SAMPLE_PAGE_LOAD_INVALID_ARG;
+        return;
+    }
+    if (async->recorder_pcm24 != 0U)
+    {
+        if (async->source == NULL)
+        {
+            async->result.load_result = SAMPLE_PAGE_LOAD_DECODE_FAILED;
+            return;
+        }
+        uint32_t remaining = target.frame_count;
+        /* Decode from the end so expanding 6-byte PCM frames to 8-byte float
+         * frames cannot overwrite source bytes that have not been copied. */
+        while (remaining != 0U)
+        {
+            const uint32_t count = (remaining > SAMPLE_STREAM_IO_REC_DECODE_FRAMES)
+                ? SAMPLE_STREAM_IO_REC_DECODE_FRAMES : remaining;
+            const uint32_t first = remaining - count;
+            memcpy(g_sample_stream_io_rec_decode,
+                   &async->source[first * SAMPLE_STREAM_IO_REC_BYTES_PER_FRAME],
+                   count * SAMPLE_STREAM_IO_REC_BYTES_PER_FRAME);
+            wav_audio_codec_decode_pcm24_stereo_block(
+                g_sample_stream_io_rec_decode,
+                &target.frames_interleaved[first * 2U], count);
+            remaining = first;
+        }
+        return;
+    }
+    async->result.load_result = SAMPLE_PAGE_LOAD_UNSUPPORTED_SAMPLE;
 }
 
 uint8_t sample_stream_io_begin(const sample_stream_io_command_t *command)
@@ -193,7 +222,7 @@ uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command)
         return 0U;
     }
     (void)sample_stream_backend_physical_busy();
-    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_SCRATCH_COUNT; ++i)
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_JOB_COUNT; ++i)
     {
         if ((g_sample_stream_io_async[i].physical_active != 0U)
                 && (g_sample_stream_io_async[i].physical.cancel_requested != 0U)
@@ -203,14 +232,12 @@ uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command)
                    sizeof(g_sample_stream_io_async[i]));
         }
     }
-    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_SCRATCH_COUNT; ++i)
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_JOB_COUNT; ++i)
     {
         if (g_sample_stream_io_async[i].active == 0U)
         {
             async = &g_sample_stream_io_async[i];
             memset(async, 0, sizeof(*async));
-            async->scratch = g_sample_stream_io_read_scratch[i];
-            async->scratch_index = (uint8_t)i;
             break;
         }
     }
@@ -242,16 +269,52 @@ uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command)
         || (async->target.frames_per_page == 0U)
         || (async->target.frame_count > async->target.frames_per_page))
     {
-        async->state = SAMPLE_STREAM_IO_SCRATCH_RAW_READY;
+        async->state = SAMPLE_STREAM_IO_JOB_DATA_READY;
+        return 1U;
+    }
+
+    if ((sample_page_cache_resolve_loading_target(
+            &async->result.token, &async->target) == 0U)
+        || (sample_stream_io_target_matches(async, &async->target) == 0U)
+        || (async->target.frames_interleaved == NULL))
+    {
+        async->state = SAMPLE_STREAM_IO_JOB_DATA_READY;
+        return 1U;
+    }
+
+    const wav_info_t *const wav = &command->stream_info.info;
+    async->direct_float = (uint8_t)(
+        (command->target.key.domain != SAMPLE_AUDIO_DOMAIN_REC)
+        && (wav_parser_is_canonical_brick_float(wav) != 0U)
+        && (command->target.format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED)
+        && (command->target.stride_floats == 2U)
+        && ((((uint64_t)command->stream_info.data_offset
+              + (uint64_t)command->target.start_frame * 8U)
+             % SAMPLE_STREAM_IO_SECTOR_BYTES) == 0U));
+    async->recorder_pcm24 = (uint8_t)(
+        (command->target.key.domain == SAMPLE_AUDIO_DOMAIN_REC)
+        && (wav->encoding == WAV_SAMPLE_ENCODING_PCM_INTEGER)
+        && (wav->sample_rate == 48000U) && (wav->channels == 2U)
+        && (wav->bits_per_sample == 24U) && (wav->block_align == 6U)
+        && (command->target.format == SAMPLE_AUDIO_FORMAT_FLOAT32_STEREO_INTERLEAVED));
+    if ((async->direct_float == 0U) && (async->recorder_pcm24 == 0U))
+    {
+        async->result.load_result = SAMPLE_PAGE_LOAD_UNSUPPORTED_SAMPLE;
+        async->state = SAMPLE_STREAM_IO_JOB_DATA_READY;
         return 1U;
     }
 
     async->result.source_bytes = async->target.frame_count
                                  * command->stream_info.info.block_align;
     if ((async->result.source_bytes == 0U)
-        || (async->result.source_bytes > SAMPLE_PAGE_BYTES))
+        || ((async->direct_float != 0U)
+            && (async->result.source_bytes > SAMPLE_PAGE_BYTES))
+        || ((async->recorder_pcm24 != 0U)
+            && ((uint64_t)async->result.source_bytes
+                + (2U * (SAMPLE_STREAM_IO_SECTOR_BYTES - 1U))
+                > SAMPLE_PAGE_BYTES)))
     {
-        async->state = SAMPLE_STREAM_IO_SCRATCH_RAW_READY;
+        async->state = SAMPLE_STREAM_IO_JOB_DATA_READY;
         return 1U;
     }
     sample_stream_physical_cursor_t *const cursor = &async->local_physical_cursor;
@@ -265,16 +328,16 @@ uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command)
                     &async->command.stream_info,
                     &async->target,
                     cursor,
-                    async->scratch,
-                    SAMPLE_STREAM_IO_READ_SCRATCH_BYTES,
+                    (uint8_t *)async->target.frames_interleaved,
+                    SAMPLE_PAGE_BYTES,
                     command->deadline_margin_us) != 0U)
         {
             async->physical_active = 1U;
-            async->state = SAMPLE_STREAM_IO_SCRATCH_DMA;
+            async->state = SAMPLE_STREAM_IO_JOB_DMA;
             return 1U;
         }
         async->result.load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
-        async->state = SAMPLE_STREAM_IO_SCRATCH_RAW_READY;
+        async->state = SAMPLE_STREAM_IO_JOB_DATA_READY;
         return 1U;
     }
     if ((command->stream_info.physical_only == 0U)
@@ -291,23 +354,23 @@ uint8_t sample_stream_io_begin_to(const sample_stream_io_command_t *command)
             && (f_open(&file, command->stream_info.path, FA_READ) == FR_OK))
         {
             if ((f_lseek(&file, (FSIZE_t)source_offset) == FR_OK)
-                && (f_read(&file, async->scratch,
+                && (f_read(&file, async->target.frames_interleaved,
                            async->result.source_bytes, &read) == FR_OK)
                 && (read == async->result.source_bytes))
             {
                 async->result.read_bytes = read;
                 async->result.load_result = SAMPLE_PAGE_LOAD_OK;
-                async->source = async->scratch;
+                async->source = (const uint8_t *)async->target.frames_interleaved;
             }
             (void)f_close(&file);
         }
-        async->state = SAMPLE_STREAM_IO_SCRATCH_RAW_READY;
+        async->state = SAMPLE_STREAM_IO_JOB_DATA_READY;
         return 1U;
     }
     /* Deadline streaming stays physical-only; synchronous full imports may
      * use the bounded Storage-side FatFs fallback above. */
     async->result.load_result = SAMPLE_PAGE_LOAD_READ_FAILED;
-    async->state = SAMPLE_STREAM_IO_SCRATCH_RAW_READY;
+    async->state = SAMPLE_STREAM_IO_JOB_DATA_READY;
     return 1U;
 }
 
@@ -318,11 +381,11 @@ static uint8_t sample_stream_io_poll_impl(sample_stream_io_result_t *out_result)
     {
         return 0U;
     }
-    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_SCRATCH_COUNT; ++i)
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_JOB_COUNT; ++i)
     {
         sample_stream_io_async_t *const candidate = &g_sample_stream_io_async[i];
         if ((candidate->active != 0U)
-            && (candidate->state == SAMPLE_STREAM_IO_SCRATCH_RAW_READY)
+            && (candidate->state == SAMPLE_STREAM_IO_JOB_DATA_READY)
             && ((async == 0) || (candidate->order < async->order)))
         {
             async = candidate;
@@ -330,16 +393,16 @@ static uint8_t sample_stream_io_poll_impl(sample_stream_io_result_t *out_result)
     }
     if (async != 0)
     {
-        async->state = SAMPLE_STREAM_IO_SCRATCH_DECODING;
-        sample_stream_io_decode_async();
+        async->state = SAMPLE_STREAM_IO_JOB_FINALIZING;
+        sample_stream_io_finalize(async);
         *out_result = async->result;
         memset(async, 0, sizeof(*async));
         return 1U;
     }
-    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_SCRATCH_COUNT; ++i)
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_JOB_COUNT; ++i)
     {
         if ((g_sample_stream_io_async[i].active != 0U)
-            && (g_sample_stream_io_async[i].state == SAMPLE_STREAM_IO_SCRATCH_DMA))
+            && (g_sample_stream_io_async[i].state == SAMPLE_STREAM_IO_JOB_DMA))
         {
             async = &g_sample_stream_io_async[i];
             break;
@@ -364,7 +427,7 @@ static uint8_t sample_stream_io_poll_impl(sample_stream_io_result_t *out_result)
         {
             async->result.read_bytes = async->result.source_bytes;
         }
-        async->state = SAMPLE_STREAM_IO_SCRATCH_RAW_READY;
+        async->state = SAMPLE_STREAM_IO_JOB_DATA_READY;
         return 0U;
     }
     return 0U;
@@ -378,7 +441,7 @@ uint8_t sample_stream_io_poll(sample_stream_io_result_t *out_result)
 
 void sample_stream_io_cancel(void)
 {
-    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_SCRATCH_COUNT; ++i)
+    for (uint32_t i = 0U; i < SAMPLE_STREAM_IO_JOB_COUNT; ++i)
     {
         if (g_sample_stream_io_async[i].physical_active != 0U)
         {

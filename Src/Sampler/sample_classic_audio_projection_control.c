@@ -39,14 +39,8 @@ uint8_t sample_classic_audio_projection_publish(uint16_t sample_id)
     next->ready = 0U;
     next->key = source.key;
     next->total_frames = source.total_frames;
-    next->data_offset = source.data_offset;
-    next->data_size = source.data_size;
-    next->sample_rate = source.sample_rate;
     next->registration_epoch = source.registration_epoch;
     next->format = source.format;
-    next->channels = source.channels;
-    next->bits_per_sample = source.bits_per_sample;
-    next->block_align = source.block_align;
     next->stride_floats = source.stride_floats;
     next->frames_per_page = source.frames_per_page;
     next->ready = 1U;

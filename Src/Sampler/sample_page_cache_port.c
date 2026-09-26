@@ -60,6 +60,9 @@ static uint8_t sample_page_cache_port_prepare_registration(
 {
     if ((path == NULL) || (info == NULL) || (out == NULL)
         || (total_frames == 0U)) return 0U;
+    if (((key.domain == SAMPLE_AUDIO_DOMAIN_CLASSIC)
+         || (key.domain == SAMPLE_AUDIO_DOMAIN_MULTI))
+        && (wav_parser_is_canonical_brick_float(info) == 0U)) return 0U;
     memset(out, 0, sizeof(*out));
     out->key = key;
     out->info = *info;
