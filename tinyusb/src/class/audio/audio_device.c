@@ -1230,8 +1230,6 @@ static bool audiod_set_interface(uint8_t rhport, tusb_control_request_t const *p
           if (is_feedback_ep) {
             audio->ep_fb = ep_addr;
             audio->feedback.frame_shift = desc_ep->bInterval - 1;
-            // Schedule first feedback transmit
-            audiod_fb_send(func_id, false);
           }
   #else
           (void) is_feedback_ep;
@@ -1253,6 +1251,11 @@ static bool audiod_set_interface(uint8_t rhport, tusb_control_request_t const *p
 #if CFG_TUD_AUDIO_ENABLE_FEEDBACK_EP
       // Prepare feedback computation parameters
       TU_VERIFY(audiod_fb_params_prepare(func_id, alt));
+      // The application callback above may provide the initial feedback value.
+      // Do not queue the first packet before that value has been installed.
+      if (audio->ep_fb != 0) {
+        TU_VERIFY(audiod_fb_send(func_id, false));
+      }
 #endif// CFG_TUD_AUDIO_ENABLE_FEEDBACK_EP
 
       // We are done - abort loop

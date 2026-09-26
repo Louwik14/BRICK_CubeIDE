@@ -20,6 +20,10 @@ UAC2, Audio IN BRICK vers PC, USB MIDI Device et le role Host MIDI. Elle appelle
 le service USB normal avant et apres la passe applicative. La cadence de cette
 superloop n'est plus dans le chemin d'ingress Audio OUT PC vers BRICK.
 
+Le premier paquet de feedback est arme apres le callback d'activation de
+l'interface : il contient donc la valeur nominale 48.0 en 16.16, jamais la
+valeur d'initialisation nulle de TinyUSB.
+
 Les flux UAC2 PCM32 sont convertis uniquement a la frontiere TinyUSB et
 traversent ensuite deux rings SPSC FLOAT32 interleaved de 288 frames
 places dans la moitie D3 non cachee. Pour PC vers BRICK, le writer unique est
