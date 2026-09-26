@@ -73,7 +73,16 @@ static uint8_t bank_reserve_runtime(project_control_bank_slot_t*bank,uint16_t ca
 static uint16_t bank_find_runtime(const project_control_bank_slot_t*bank,uint16_t capacity,uint32_t kind,uint16_t runtime){if(bank==NULL||runtime==PROJECT_CONTROL_INVALID_RUNTIME)return PROJECT_CONTROL_INVALID_RUNTIME;for(uint16_t i=0U;i<capacity;++i)if(bank[i].used!=0U&&bank[i].kind==kind&&bank[i].runtime==runtime)return i;return PROJECT_CONTROL_INVALID_RUNTIME;}
 static uint8_t bank_remove(project_control_bank_slot_t*bank,uint16_t capacity,uint16_t logical){if(bank==NULL||logical>=capacity||bank[logical].used==0U)return 0U;memset(&bank[logical],0,sizeof(bank[logical]));return 1U;}
 static uint8_t bank_has(const project_control_bank_slot_t*bank,uint16_t capacity,uint16_t logical,uint32_t*out_kind){if(bank==NULL||logical>=capacity||bank[logical].used==0U)return 0U;if(out_kind!=NULL)*out_kind=bank[logical].kind;return 1U;}
-static uint16_t bank_list(const project_control_bank_slot_t*bank,uint16_t bank_capacity,uint32_t kind,uint16_t*out,uint16_t capacity){uint16_t n=0U;if(out==NULL)return 0U;for(uint16_t i=0U;i<bank_capacity&&n<capacity;++i)if(bank[i].used!=0U&&(kind==0U||bank[i].kind==kind))out[n++]=i;return n;}
+static uint16_t bank_list(const project_control_bank_slot_t*bank,uint16_t bank_capacity,uint32_t kind,uint16_t*out,uint16_t capacity)
+{
+    uint16_t n=0U;
+    if(out==NULL)return 0U;
+    for(uint16_t i=0U;i<bank_capacity&&n<capacity;++i)
+        if(bank[i].used!=0U
+            &&bank[i].runtime!=PROJECT_CONTROL_INVALID_RUNTIME
+            &&(kind==0U||bank[i].kind==kind))out[n++]=i;
+    return n;
+}
 static uint8_t bank_resolve(const project_control_bank_slot_t*bank,uint16_t capacity,uint16_t logical,uint16_t*out_runtime){if(bank==NULL||out_runtime==NULL||logical>=capacity||bank[logical].used==0U||bank[logical].runtime==PROJECT_CONTROL_INVALID_RUNTIME)return 0U;*out_runtime=bank[logical].runtime;return 1U;}
 static uint8_t classic_find(const char*path,uint16_t*out_logical){persist_control_asset_ref_t wanted;if(out_logical==NULL||asset_ref_make_canonical(PERSIST_ASSET_SAMPLE_STREAM,path,&wanted)==0U)return 0U;for(uint16_t i=0U;i<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS;++i){const sample_global_slot_t*s=sample_global_pool_get_slot(i);if(s!=NULL&&s->kind==SAMPLE_GLOBAL_KIND_CLASSIC&&strlen(s->path)==wanted.path_length&&memcmp(s->path,wanted.canonical_path,wanted.path_length)==0){*out_logical=i;return 1U;}}return 0U;}
 static uint8_t classic_asset(uint16_t logical,persist_control_asset_ref_t*out){const sample_global_slot_t*s=sample_global_pool_get_slot(logical);return(out!=NULL&&s!=NULL&&s->kind==SAMPLE_GLOBAL_KIND_CLASSIC)?asset_ref_make_canonical(PERSIST_ASSET_SAMPLE_STREAM,s->path,out):0U;}
@@ -213,7 +222,7 @@ uint8_t project_control_find_asset(uint32_t kind,const char*path,uint16_t*out_lo
 
 uint8_t project_control_ram_load_begin(uint16_t backend_slot,const char*path)
 {
-    if(g_ram_load.pending!=0U||g_ram_load.valid!=0U)return 0U;
+    if(g_ram_load.pending!=0U)return 0U;
     const sampler_ram_slot_t*const old=sampler_ram_pool_get_slot(backend_slot);
     const uint16_t replaced=(old!=NULL&&old->state==SAMPLER_RAM_SLOT_READY)
         ?bank_find_runtime(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
@@ -227,6 +236,9 @@ uint8_t project_control_ram_load_begin(uint16_t backend_slot,const char*path)
         (void)bank_remove(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical);
         return 0U;
     }
+    /* A terminal result is a notification, not an active load.  A new
+     * accepted request supersedes an unconsumed notification. */
+    g_ram_load.valid=0U;
     g_ram_load.expected_backend=backend_slot;
     g_ram_load.expected_logical=logical;
     g_ram_load.replaced_logical=replaced;

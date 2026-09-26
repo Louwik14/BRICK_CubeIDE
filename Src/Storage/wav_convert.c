@@ -698,7 +698,9 @@ static uint8_t wav_convert_replace_phase(void)
         return 0U;
     }
     g_wav_convert.temp_created = 0U;
-    sd_access_media_epoch_advance();
+    /* The media epoch identifies card insertion/removal, not an in-place
+     * filesystem mutation.  The final path and catalogue identity survive
+     * this replacement. */
 
     if (f_unlink(g_wav_convert.bak_path) != FR_OK)
     {

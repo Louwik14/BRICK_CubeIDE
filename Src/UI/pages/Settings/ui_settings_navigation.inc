@@ -1014,7 +1014,6 @@ static void ui_page_settings_tick(void)
         if (convert_state == WAV_CONVERT_STATE_DONE)
         {
             wav_convert_clear_finished();
-            wav_loader_catalog_mark_stale();
             g_ui_settings.convert_load_pending = 1U;
             ui_page_settings_status("LOAD WAIT");
             return;
