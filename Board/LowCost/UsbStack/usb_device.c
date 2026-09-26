@@ -53,8 +53,8 @@ enum {
 
 _Static_assert(USB_DEVICE_AUDIO_EP_SIZE == 392U,
                "USB Audio FS endpoint maximum packet size changed");
-_Static_assert(sizeof(float) == USB_DEVICE_AUDIO_SUBSLOT_BYTES,
-               "USB Audio descriptor requires 32-bit float");
+_Static_assert(sizeof(int32_t) == USB_DEVICE_AUDIO_SUBSLOT_BYTES,
+               "USB Audio descriptor requires 32-bit PCM");
 _Static_assert(USB_DEVICE_DWC2_FS_RX_FIFO_WORDS
                    + USB_DEVICE_DWC2_FS_TX_FIFO_WORDS
                    < USB_DEVICE_DWC2_FS_FIFO_WORDS,
@@ -80,7 +80,7 @@ static const uint8_t g_usb_device_descriptor[] = {
     64U,
     (uint8_t)(USB_VID & 0xFFU), (uint8_t)(USB_VID >> 8),
     (uint8_t)(USB_PID & 0xFFU), (uint8_t)(USB_PID >> 8),
-    0x01U, 0x02U,
+    0x02U, 0x02U,
     USB_STR_MANUFACTURER, USB_STR_PRODUCT, USB_STR_SERIAL,
     0x01U
 };
@@ -150,7 +150,7 @@ static const uint8_t g_usb_configuration_descriptor[] = {
     TUD_AUDIO20_DESC_STD_AS_INT(USB_DEVICE_AUDIO_OUT_ITF, 1U, 2U, 0U),
     TUD_AUDIO20_DESC_CS_AS_INT(
         0x04U, AUDIO20_CTRL_NONE, AUDIO20_FORMAT_TYPE_I,
-        AUDIO20_DATA_FORMAT_TYPE_I_IEEE_FLOAT, USB_DEVICE_AUDIO_CHANNELS,
+        AUDIO20_DATA_FORMAT_TYPE_I_PCM, USB_DEVICE_AUDIO_CHANNELS,
         AUDIO20_CHANNEL_CONFIG_FRONT_LEFT | AUDIO20_CHANNEL_CONFIG_FRONT_RIGHT,
         0U),
     TUD_AUDIO20_DESC_TYPE_I_FORMAT(USB_DEVICE_AUDIO_SUBSLOT_BYTES,
@@ -173,7 +173,7 @@ static const uint8_t g_usb_configuration_descriptor[] = {
     TUD_AUDIO20_DESC_STD_AS_INT(USB_DEVICE_AUDIO_IN_ITF, 1U, 1U, 0U),
     TUD_AUDIO20_DESC_CS_AS_INT(
         0x03U, AUDIO20_CTRL_NONE, AUDIO20_FORMAT_TYPE_I,
-        AUDIO20_DATA_FORMAT_TYPE_I_IEEE_FLOAT, USB_DEVICE_AUDIO_CHANNELS,
+        AUDIO20_DATA_FORMAT_TYPE_I_PCM, USB_DEVICE_AUDIO_CHANNELS,
         AUDIO20_CHANNEL_CONFIG_FRONT_LEFT | AUDIO20_CHANNEL_CONFIG_FRONT_RIGHT,
         0U),
     TUD_AUDIO20_DESC_TYPE_I_FORMAT(USB_DEVICE_AUDIO_SUBSLOT_BYTES,

@@ -1,6 +1,7 @@
 #include "usb_audio.h"
 
 #include <float.h>
+#include <limits.h>
 #include <string.h>
 
 #include "IPC/usb_audio_float_ring.h"
@@ -30,23 +31,50 @@ static volatile uint8_t g_usb_audio_out_active;
 static volatile uint8_t g_usb_audio_in_active;
 static uint8_t g_usb_audio_out_ready;
 static uint8_t g_usb_audio_in_ready;
-static ALIGN32 float g_usb_audio_scratch[USB_AUDIO_SERVICE_MAX_FRAMES * USB_AUDIO_CHANNELS];
-static ALIGN32 float g_usb_audio_out_irq_scratch[USB_AUDIO_IRQ_PACKET_MAX_BYTES /
-                                                 sizeof(float)];
+typedef union {
+    float floating[USB_AUDIO_SERVICE_MAX_FRAMES * USB_AUDIO_CHANNELS];
+    int32_t pcm[USB_AUDIO_SERVICE_MAX_FRAMES * USB_AUDIO_CHANNELS];
+} usb_audio_service_scratch_t;
+
+typedef union {
+    float floating[USB_AUDIO_IRQ_PACKET_MAX_BYTES / sizeof(float)];
+    int32_t pcm[USB_AUDIO_IRQ_PACKET_MAX_BYTES / sizeof(int32_t)];
+} usb_audio_irq_scratch_t;
+
+static ALIGN32 usb_audio_service_scratch_t g_usb_audio_scratch;
+static ALIGN32 usb_audio_irq_scratch_t g_usb_audio_out_irq_scratch;
 
 _Static_assert(sizeof(float) == USB_AUDIO_BYTES_PER_SAMPLE,
                "USB Audio requires 32-bit float");
 _Static_assert(FLT_RADIX == 2 && FLT_MANT_DIG == 24 && FLT_MAX_EXP == 128,
                "USB Audio requires IEEE-754 binary32");
+_Static_assert(sizeof(int32_t) == USB_AUDIO_BYTES_PER_SAMPLE,
+               "USB Audio requires 32-bit PCM");
 _Static_assert(sizeof(g_usb_audio_out_irq_scratch) == USB_AUDIO_IRQ_PACKET_MAX_BYTES,
                "USB Audio OUT scratch size changed");
 _Static_assert(CFG_TUSB_OS == OPT_OS_NONE,
                "USB Audio IRQ drain requires TinyUSB bare-metal mode");
 _Static_assert((USB_AUDIO_IRQ_PACKET_MAX_BYTES % USB_AUDIO_BYTES_PER_FRAME) == 0U,
-               "USB Audio OUT packet must contain complete float frames");
+               "USB Audio OUT packet must contain complete PCM frames");
 #if !defined(__BYTE_ORDER__) || (__BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__)
-#error "USB Audio IEEE FLOAT requires a little-endian target"
+#error "USB Audio PCM32 requires a little-endian target"
 #endif
+
+static int32_t usb_audio_float_to_pcm32(float sample)
+{
+    if (!(sample > -1.0f)) {
+        return (sample < 0.0f) ? INT32_MIN : 0;
+    }
+    if (sample >= 1.0f) {
+        return INT32_MAX;
+    }
+    return (int32_t)(sample * 2147483648.0f);
+}
+
+static float usb_audio_pcm32_to_float(int32_t sample)
+{
+    return (float)sample * (1.0f / 2147483648.0f);
+}
 
 static void usb_audio_feedback_update(void)
 {
@@ -191,9 +219,15 @@ void usb_audio_transport_process(void)
             if (frames == 0U) {
                 return;
             }
-            frames = usb_audio_float_peek_brick_to_pc(g_usb_audio_scratch, frames);
+            frames = usb_audio_float_peek_brick_to_pc(g_usb_audio_scratch.floating,
+                                                       frames);
+            for (uint32_t sample = 0U;
+                 sample < frames * USB_AUDIO_CHANNELS; ++sample) {
+                g_usb_audio_scratch.pcm[sample] =
+                    usb_audio_float_to_pcm32(g_usb_audio_scratch.floating[sample]);
+            }
             written_bytes = tud_audio_n_write(0U,
-                                               g_usb_audio_scratch,
+                                               g_usb_audio_scratch.pcm,
                                                (uint16_t)(frames * USB_AUDIO_BYTES_PER_FRAME));
             if ((written_bytes % USB_AUDIO_BYTES_PER_FRAME) == 0U) {
                 usb_audio_float_discard_brick_to_pc(written_bytes /
@@ -236,12 +270,18 @@ bool tud_audio_rx_done_isr(uint8_t rhport, uint16_t n_bytes_received,
         if (bytes_to_read > (uint16_t)sizeof(g_usb_audio_out_irq_scratch)) {
             bytes_to_read = (uint16_t)sizeof(g_usb_audio_out_irq_scratch);
         }
-        read_bytes = tud_audio_n_read(0U, g_usb_audio_out_irq_scratch,
+        read_bytes = tud_audio_n_read(0U, g_usb_audio_out_irq_scratch.pcm,
                                       bytes_to_read);
         read_frames = read_bytes / USB_AUDIO_BYTES_PER_FRAME;
         if (read_frames != 0U) {
+            for (uint32_t sample = 0U;
+                 sample < read_frames * USB_AUDIO_CHANNELS; ++sample) {
+                g_usb_audio_out_irq_scratch.floating[sample] =
+                    usb_audio_pcm32_to_float(
+                        g_usb_audio_out_irq_scratch.pcm[sample]);
+            }
             (void)usb_audio_float_write_pc_to_brick(
-                g_usb_audio_out_irq_scratch, read_frames);
+                g_usb_audio_out_irq_scratch.floating, read_frames);
         }
     }
     return true;
