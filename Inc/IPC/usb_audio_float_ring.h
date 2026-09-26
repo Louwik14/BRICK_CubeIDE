@@ -31,6 +31,8 @@ void usb_audio_float_discard_brick_to_pc(uint32_t frames);
 
 uint32_t usb_audio_float_pc_to_brick_available(void);
 uint32_t usb_audio_float_brick_to_pc_available(void);
+void usb_audio_float_pc_to_brick_counters(uint32_t *write_count,
+                                          uint32_t *read_count);
 
 void usb_audio_float_reset(void);
 

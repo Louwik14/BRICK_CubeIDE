@@ -42,6 +42,7 @@
 #include "Audio/Engines/Sampler/brick6_sampler_runtime.h"
 #include "Audio/Engines/wavetable_engine.h"
 #include "Platform/brick_media_clock.h"
+#include "Debug/usb_audio_diag.h"
 #include "Seq/seq_engine.h"
 
 #include <string.h>
@@ -252,8 +253,12 @@ static void process_half(uint32_t half_index)
     if (audio_resolve_block_start((uint8_t)half_index,
                                   &block_start_sample, &recovering) == 0U)
     {
+        usb_audio_diag_audio_callback(brick_media_clock_now_tick(),
+                                      (uint8_t)half_index, 0U, 0U);
         return;
     }
+    usb_audio_diag_audio_callback(brick_media_clock_now_tick(),
+                                  (uint8_t)half_index, 1U, recovering);
 
     /* Select the exact SEQ event block for this AUDIO half-buffer. */
     seq_engine_audio_boundary(block_start_sample, recovering);

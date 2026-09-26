@@ -5,6 +5,8 @@
 #include <string.h>
 
 #include "IPC/usb_audio_float_ring.h"
+#include "Debug/usb_audio_diag.h"
+#include "Platform/brick_media_clock.h"
 #include "Platform/memory_layout.h"
 #include "stm32h7xx.h"
 #include "tusb.h"
@@ -88,6 +90,7 @@ static void usb_audio_feedback_update(void)
     if (feedback > (int64_t)USB_AUDIO_FEEDBACK_MAX) {
         feedback = (int64_t)USB_AUDIO_FEEDBACK_MAX;
     }
+    usb_audio_diag_feedback(fill, error, (uint32_t)feedback);
     (void)tud_audio_n_fb_set(0U, (uint32_t)feedback);
 }
 
@@ -99,6 +102,7 @@ static void usb_audio_reset_cursors(void)
     g_usb_audio_out_ready = 0U;
     g_usb_audio_in_ready = 0U;
     usb_audio_float_reset();
+    usb_audio_diag_ring_reset(brick_media_clock_now_tick());
     __DMB();
     __set_PRIMASK(primask);
 }
@@ -118,6 +122,9 @@ void usb_audio_transport_set_interface(uint8_t interface_number,
         && (interface_number != USB_AUDIO_AS_IN_INTERFACE)) {
         return;
     }
+
+    usb_audio_diag_set_interface(brick_media_clock_now_tick(),
+                                 interface_number, alternate_setting);
 
     if ((g_usb_audio_out_active == 0U) && (g_usb_audio_in_active == 0U)) {
         usb_audio_reset_cursors();
@@ -153,6 +160,11 @@ uint32_t usb_audio_audio_read(float *left, float *right, uint32_t frames)
 {
     uint32_t available;
     uint32_t read_frames;
+    uint32_t available_after;
+    uint32_t write_count;
+    uint32_t read_count;
+    uint8_t ready_before;
+    uint8_t zero_block = 0U;
 
     if ((left == NULL) || (right == NULL) || (frames == 0U)
         || (g_usb_audio_out_active == 0U)) {
@@ -160,8 +172,14 @@ uint32_t usb_audio_audio_read(float *left, float *right, uint32_t frames)
     }
 
     available = usb_audio_float_pc_to_brick_available();
+    ready_before = g_usb_audio_out_ready;
     if (g_usb_audio_out_ready == 0U) {
         if (available < USB_AUDIO_FLOAT_RING_START_FRAMES) {
+            usb_audio_float_pc_to_brick_counters(&write_count, &read_count);
+            usb_audio_diag_audio_read(brick_media_clock_now_tick(), frames,
+                                      available, 0U, available,
+                                      ready_before, 0U, 1U,
+                                      write_count, read_count);
             return 0U;
         }
         g_usb_audio_out_ready = 1U;
@@ -172,7 +190,14 @@ uint32_t usb_audio_audio_read(float *left, float *right, uint32_t frames)
         g_usb_audio_out_ready = 0U;
         memset(left, 0, frames * sizeof(float));
         memset(right, 0, frames * sizeof(float));
+        zero_block = 1U;
     }
+    available_after = usb_audio_float_pc_to_brick_available();
+    usb_audio_float_pc_to_brick_counters(&write_count, &read_count);
+    usb_audio_diag_audio_read(brick_media_clock_now_tick(), frames, available,
+                              read_frames, available_after, ready_before,
+                              g_usb_audio_out_ready, zero_block,
+                              write_count, read_count);
     return frames;
 }
 
@@ -254,6 +279,12 @@ bool tud_audio_rx_done_isr(uint8_t rhport, uint16_t n_bytes_received,
     uint16_t bytes_to_read;
     uint16_t read_bytes;
     uint32_t read_frames;
+    uint32_t written_frames = 0U;
+    uint32_t fill;
+    uint32_t write_count;
+    uint32_t read_count;
+    uint8_t short_read = 0U;
+    uint8_t unaligned = 0U;
 
     (void)rhport;
     (void)func_id;
@@ -270,8 +301,20 @@ bool tud_audio_rx_done_isr(uint8_t rhport, uint16_t n_bytes_received,
         }
         read_bytes = tud_audio_n_read(0U, g_usb_audio_out_pcm_scratch,
                                       bytes_to_read);
+        short_read = ((read_bytes != bytes_to_read)
+                      || (bytes_to_read != n_bytes_received)) ? 1U : 0U;
+        unaligned = (((read_bytes % USB_AUDIO_BYTES_PER_FRAME) != 0U)
+                     || ((n_bytes_received % USB_AUDIO_BYTES_PER_FRAME) != 0U))
+                    ? 1U : 0U;
         if ((read_bytes != bytes_to_read)
             || ((read_bytes % USB_AUDIO_BYTES_PER_FRAME) != 0U)) {
+            fill = usb_audio_float_pc_to_brick_available();
+            usb_audio_float_pc_to_brick_counters(&write_count, &read_count);
+            usb_audio_diag_usb_rx(brick_media_clock_now_tick(),
+                                  n_bytes_received,
+                                  n_bytes_received / USB_AUDIO_BYTES_PER_FRAME,
+                                  0U, fill, write_count, read_count,
+                                  short_read, unaligned);
             return true;
         }
         read_frames = read_bytes / USB_AUDIO_BYTES_PER_FRAME;
@@ -282,9 +325,14 @@ bool tud_audio_rx_done_isr(uint8_t rhport, uint16_t n_bytes_received,
                     usb_audio_pcm32_to_float(
                         g_usb_audio_out_pcm_scratch[sample]);
             }
-            (void)usb_audio_float_write_pc_to_brick(
+            written_frames = usb_audio_float_write_pc_to_brick(
                 g_usb_audio_out_float_scratch, read_frames);
         }
+        fill = usb_audio_float_pc_to_brick_available();
+        usb_audio_float_pc_to_brick_counters(&write_count, &read_count);
+        usb_audio_diag_usb_rx(brick_media_clock_now_tick(), n_bytes_received,
+                              read_frames, written_frames, fill,
+                              write_count, read_count, short_read, unaligned);
     }
     return true;
 }
