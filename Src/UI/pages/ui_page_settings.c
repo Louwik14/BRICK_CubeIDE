@@ -130,6 +130,8 @@ typedef enum
 {
     UI_SETTINGS_MULTI_PREP_PHASE_NONE = 0,
     UI_SETTINGS_MULTI_PREP_PHASE_SCAN,
+    UI_SETTINGS_MULTI_PREP_PHASE_CONVERT,
+    UI_SETTINGS_MULTI_PREP_PHASE_INDEX,
     UI_SETTINGS_MULTI_PREP_PHASE_COMMIT,
     UI_SETTINGS_MULTI_PREP_PHASE_PREPARE,
     UI_SETTINGS_MULTI_PREP_PHASE_REFRESH
@@ -282,13 +284,14 @@ static int16_t ui_page_settings_multi_find_loaded_path(const char *index_path);
 static uint8_t ui_page_settings_multi_prepare_entry(const ui_settings_multi_entry_t *entry);
 static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_settings_multi_entry_t *entry);
 static void ui_page_settings_multi_confirm_clear_indexes(void);
-static void ui_page_settings_multi_prepare_progress_cb(uint16_t done, uint16_t total, void *user);
 static void ui_page_settings_multi_prepare_begin(uint8_t slot,
                                                  const char *path,
                                                  ui_settings_multi_prepare_phase_t phase);
 static void ui_page_settings_multi_prepare_finish(const char *status);
 static void ui_page_settings_multi_prepare_poll(void);
 static void ui_page_settings_multi_prepare_flush_progress(void);
+static const char *ui_page_settings_multi_import_error_label(
+    multi_sample_import_result_t result);
 static void ui_page_settings_multi_clear_service(void);
 static const char *ui_page_settings_multi_load_error_label(multi_sample_load_result_t result);
 static void ui_page_settings_flash_sample_header_slots(void);

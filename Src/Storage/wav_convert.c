@@ -368,24 +368,13 @@ uint8_t wav_convert_start_destructive_canonical_project(const char *path)
     return wav_convert_start_internal(path, 1U, 1U);
 }
 
-uint8_t wav_convert_path_to_canonical_locked(const char *path)
+uint8_t wav_convert_start_destructive_canonical_locked(const char *path)
 {
-    wav_info_t info;
-    char temp_path[WAV_CONVERT_PATH_MAX];
-    char bak_path[WAV_CONVERT_PATH_MAX];
-    if ((path == 0) || (path[0] == '\0')
-        || (sd_access_gate_current_owner() == SD_ACCESS_CLIENT_NONE)
-        || (wav_convert_make_side_paths(path, temp_path, bak_path) == 0U)
-        || (persistent_fatfs_recover_replace(path, temp_path, bak_path) != FR_OK)
-        || (wav_convert_parse_path_locked(path, &info) == 0U)
-        || (wav_convert_format_convertible(&info) == 0U)) return 0U;
-    if (wav_convert_format_already_target(&info) != 0U) return 1U;
-    if (wav_convert_start_internal(path, 0U, 0U) == 0U) return 0U;
-    while (g_wav_convert.state == WAV_CONVERT_STATE_ACTIVE)
-        wav_convert_service(UINT32_MAX);
-    const uint8_t ok = (g_wav_convert.state == WAV_CONVERT_STATE_DONE) ? 1U : 0U;
-    wav_convert_clear_finished();
-    return ok;
+    if (sd_access_gate_current_owner() == SD_ACCESS_CLIENT_NONE)
+    {
+        return 0U;
+    }
+    return wav_convert_start_internal(path, 0U, 0U);
 }
 
 static uint8_t wav_convert_open_phase(void)
@@ -758,6 +747,16 @@ void wav_convert_service(uint32_t byte_budget)
             wav_convert_fail(WAV_CONVERT_ERROR_INVALID_ARG);
             break;
     }
+}
+
+uint8_t wav_convert_cancel(void)
+{
+    if (g_wav_convert.state != WAV_CONVERT_STATE_ACTIVE)
+    {
+        return 0U;
+    }
+    wav_convert_fail(WAV_CONVERT_ERROR_NONE);
+    return 1U;
 }
 
 uint8_t wav_convert_is_active(void)

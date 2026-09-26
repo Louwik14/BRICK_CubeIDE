@@ -573,6 +573,10 @@ static const char *ui_page_settings_multi_prepare_phase_label(void)
     {
         case UI_SETTINGS_MULTI_PREP_PHASE_SCAN:
             return "Scan multi";
+        case UI_SETTINGS_MULTI_PREP_PHASE_CONVERT:
+            return "Convert samples";
+        case UI_SETTINGS_MULTI_PREP_PHASE_INDEX:
+            return "Index multi";
         case UI_SETTINGS_MULTI_PREP_PHASE_COMMIT:
             return "Commit multi";
         case UI_SETTINGS_MULTI_PREP_PHASE_PREPARE:

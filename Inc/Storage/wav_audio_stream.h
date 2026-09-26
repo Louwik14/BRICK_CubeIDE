@@ -44,7 +44,6 @@ void wav_audio_stream_init(wav_audio_stream_t *stream,
                            const wav_info_t *info,
                            uint32_t target_rate);
 uint8_t wav_audio_stream_start(wav_audio_stream_t *stream, uint32_t data_offset);
-uint8_t wav_audio_stream_next_frame(wav_audio_stream_t *stream, float *out_left, float *out_right);
 uint32_t wav_audio_stream_read_frames(wav_audio_stream_t *stream,
                                       float *dst_interleaved,
                                       uint32_t frame_capacity);

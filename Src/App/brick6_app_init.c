@@ -15,6 +15,7 @@
 #include "ui_boot_loading.h"
 
 #include "Sampler/multi_sample_loader.h"
+#include "Sampler/multi_sample_import.h"
 #include "Sampler/multi_sample_pool.h"
 #include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
@@ -110,6 +111,11 @@ void brick6_app_init(void)
  */
 static void brick6_app_service_storage(void)
 {
+    if (multi_sample_import_is_active() != 0U)
+    {
+        multi_sample_import_service(65536U);
+        return;
+    }
     undo_v2_service();
     audio_recorder_service();
     project_product_save_service();

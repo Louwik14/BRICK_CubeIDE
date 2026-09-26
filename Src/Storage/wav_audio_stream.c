@@ -241,61 +241,6 @@ static uint8_t wav_audio_stream_ensure_source_window(wav_audio_stream_t *stream,
     return 1U;
 }
 
-uint8_t wav_audio_stream_next_frame(wav_audio_stream_t *stream, float *out_left, float *out_right)
-{
-    if ((stream == 0) || (out_left == 0) || (out_right == 0))
-    {
-        return 0U;
-    }
-
-    if ((stream->info.sample_rate == stream->target_rate)
-        && (stream->stream_initialized == 0U))
-    {
-        stream->stream_initialized = 1U;
-        stream->data_remaining = stream->info.data_size
-            - (stream->info.data_size % stream->info.block_align);
-    }
-    if ((stream->info.sample_rate == stream->target_rate)
-        && (stream->stream_initialized != 0U))
-    {
-        return wav_audio_stream_decode_next_source_frame(stream, out_left, out_right);
-    }
-
-    const uint32_t target_index = (uint32_t)stream->phase;
-
-    if (stream->stream_initialized == 0U)
-    {
-        if (wav_audio_stream_prepare(stream) == 0U)
-        {
-            return 0U;
-        }
-    }
-
-    if (wav_audio_stream_ensure_source_window(stream, target_index) == 0U)
-    {
-        return 0U;
-    }
-
-    if ((stream->source_curr_valid == 0U) && (target_index > stream->curr_index))
-    {
-        return 0U;
-    }
-
-    {
-        const float frac = (float)(stream->phase - (double)target_index);
-        wav_audio_codec_resample_linear(stream->prev_l,
-                                        stream->prev_r,
-                                        stream->curr_l,
-                                        stream->curr_r,
-                                        frac,
-                                        out_left,
-                                        out_right);
-    }
-
-    stream->phase += stream->phase_step;
-    return 1U;
-}
-
 uint32_t wav_audio_stream_read_frames(wav_audio_stream_t *stream,
                                       float *dst,
                                       uint32_t frame_capacity)
@@ -305,17 +250,53 @@ uint32_t wav_audio_stream_read_frames(wav_audio_stream_t *stream,
         return 0U;
     }
 
+    if (stream->info.sample_rate == stream->target_rate)
+    {
+        if (stream->stream_initialized == 0U)
+        {
+            stream->stream_initialized = 1U;
+            stream->data_remaining = stream->info.data_size
+                - (stream->info.data_size % stream->info.block_align);
+        }
+        uint32_t produced = 0U;
+        while (produced < frame_capacity)
+        {
+            if ((stream->io_pos + stream->info.block_align) > stream->io_len)
+            {
+                if (wav_audio_stream_refill_io_buffer(stream) == 0U) break;
+            }
+            uint32_t available = (stream->io_len - stream->io_pos)
+                / stream->info.block_align;
+            if (available > (frame_capacity - produced))
+                available = frame_capacity - produced;
+            wav_audio_codec_decode_stereo_block(&stream->io_buf[stream->io_pos],
+                                                stream->info.encoding,
+                                                stream->info.channels,
+                                                stream->info.bits_per_sample,
+                                                &dst[produced * 2U],
+                                                available);
+            stream->io_pos += available * stream->info.block_align;
+            produced += available;
+        }
+        return produced;
+    }
+
+    if ((stream->stream_initialized == 0U)
+        && (wav_audio_stream_prepare(stream) == 0U)) return 0U;
+
     uint32_t produced = 0U;
     while (produced < frame_capacity)
     {
-        float left;
-        float right;
-        if (wav_audio_stream_next_frame(stream, &left, &right) == 0U)
-        {
-            break;
-        }
-        dst[produced * 2U] = left;
-        dst[produced * 2U + 1U] = right;
+        const uint32_t target_index = (uint32_t)stream->phase;
+        if ((wav_audio_stream_ensure_source_window(stream, target_index) == 0U)
+            || ((stream->source_curr_valid == 0U)
+                && (target_index > stream->curr_index))) break;
+        const float frac = (float)(stream->phase - (double)target_index);
+        wav_audio_codec_resample_linear(stream->prev_l, stream->prev_r,
+                                        stream->curr_l, stream->curr_r, frac,
+                                        &dst[produced * 2U],
+                                        &dst[produced * 2U + 1U]);
+        stream->phase += stream->phase_step;
         produced++;
     }
     return produced;

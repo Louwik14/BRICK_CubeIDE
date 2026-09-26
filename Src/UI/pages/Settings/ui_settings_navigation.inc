@@ -732,8 +732,10 @@ static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
             {
                 if (ev->id == (uint8_t)BTN_PAGE_1)
                 {
-                    (void)multi_sample_cancel_load();
-                    ui_page_settings_multi_prepare_finish("CANCEL");
+                    if (multi_sample_import_is_active() != 0U)
+                        (void)multi_sample_import_cancel();
+                    else
+                        (void)multi_sample_cancel_load();
                 }
                 return;
             }

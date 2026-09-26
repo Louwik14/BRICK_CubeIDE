@@ -58,14 +58,6 @@ static void ui_page_settings_flash_sample_header_memory(void)
         HAL_GetTick() + UI_SETTINGS_HEADER_FLASH_DURATION_MS;
 }
 
-static void ui_page_settings_multi_prepare_progress_cb(uint16_t done, uint16_t total, void *user)
-{
-    (void)user;
-    g_ui_settings.multi_prepare_progress_done = done;
-    g_ui_settings.multi_prepare_progress_total = (total == 0U) ? 1U : total;
-    ui_page_settings_multi_prepare_flush_progress();
-}
-
 static void ui_page_settings_multi_prepare_begin(uint8_t slot,
                                                  const char *path,
                                                  ui_settings_multi_prepare_phase_t phase)
@@ -107,10 +99,71 @@ static void ui_page_settings_multi_prepare_poll(void)
 
     const ui_settings_multi_prepare_phase_t phase =
         (ui_settings_multi_prepare_phase_t)g_ui_settings.multi_prepare_phase;
-    if ((phase == UI_SETTINGS_MULTI_PREP_PHASE_SCAN)
-        || (phase == UI_SETTINGS_MULTI_PREP_PHASE_COMMIT))
+    if (phase == UI_SETTINGS_MULTI_PREP_PHASE_COMMIT)
     {
         return;
+    }
+
+    if ((phase == UI_SETTINGS_MULTI_PREP_PHASE_SCAN)
+        || (phase == UI_SETTINGS_MULTI_PREP_PHASE_CONVERT)
+        || (phase == UI_SETTINGS_MULTI_PREP_PHASE_INDEX))
+    {
+        multi_sample_import_status_t import_status;
+        multi_sample_import_get_status(&import_status);
+        if (import_status.phase == MULTI_SAMPLE_IMPORT_PHASE_SCAN)
+        {
+            g_ui_settings.multi_prepare_phase = (uint8_t)UI_SETTINGS_MULTI_PREP_PHASE_SCAN;
+            g_ui_settings.multi_prepare_progress_done = import_status.current_item;
+            g_ui_settings.multi_prepare_progress_total =
+                (import_status.total_items == 0U) ? 1U : import_status.total_items;
+            return;
+        }
+        if (import_status.phase == MULTI_SAMPLE_IMPORT_PHASE_CONVERT)
+        {
+            g_ui_settings.multi_prepare_phase = (uint8_t)UI_SETTINGS_MULTI_PREP_PHASE_CONVERT;
+            g_ui_settings.multi_prepare_progress_total = 1000U;
+            g_ui_settings.multi_prepare_progress_done =
+                (import_status.work_total_bytes == 0ULL) ? 0U
+                : (uint16_t)((import_status.work_done_bytes * 1000ULL)
+                             / import_status.work_total_bytes);
+            if (g_ui_settings.multi_prepare_progress_done > 1000U)
+                g_ui_settings.multi_prepare_progress_done = 1000U;
+            return;
+        }
+        if (import_status.phase == MULTI_SAMPLE_IMPORT_PHASE_INDEX)
+        {
+            g_ui_settings.multi_prepare_phase = (uint8_t)UI_SETTINGS_MULTI_PREP_PHASE_INDEX;
+            g_ui_settings.multi_prepare_progress_done = 0U;
+            g_ui_settings.multi_prepare_progress_total = 1U;
+            return;
+        }
+        if (import_status.phase == MULTI_SAMPLE_IMPORT_PHASE_READY)
+        {
+            const uint8_t slot = (uint8_t)g_ui_settings.confirm_slot;
+            char path[MULTI_SAMPLE_POOL_PATH_MAX];
+            ui_page_settings_copy_bounded(path, sizeof(path), g_ui_settings.confirm_path);
+            multi_sample_import_clear_finished();
+            (void)ui_page_settings_multi_browser_refresh();
+            const ui_settings_multi_entry_t *const entry =
+                ui_page_settings_multi_find_entry_by_path(path);
+            if (entry == 0) ui_page_settings_multi_prepare_finish("NO MULTI");
+            else ui_page_settings_multi_load_entry_to_slot(slot, entry);
+            return;
+        }
+        if (import_status.phase == MULTI_SAMPLE_IMPORT_PHASE_CANCELLED)
+        {
+            multi_sample_import_clear_finished();
+            ui_page_settings_multi_prepare_finish("CANCEL");
+            return;
+        }
+        if (import_status.phase == MULTI_SAMPLE_IMPORT_PHASE_FAILED)
+        {
+            const char *const label =
+                ui_page_settings_multi_import_error_label(import_status.result);
+            multi_sample_import_clear_finished();
+            ui_page_settings_multi_prepare_finish(label);
+            return;
+        }
     }
 
     multi_sample_load_status_t load_status;
@@ -453,18 +506,11 @@ static uint8_t ui_page_settings_multi_prepare_entry(const ui_settings_multi_entr
         return 1U;
     }
 
-    const multi_sample_import_result_t result =
-        multi_sample_import_folder_with_progress(entry->path,
-                                                 ui_page_settings_multi_prepare_progress_cb,
-                                                 0);
-    if (result != MULTI_SAMPLE_IMPORT_OK)
+    if (multi_sample_import_start(entry->path) == 0U)
     {
-        ui_page_settings_status(ui_page_settings_multi_import_error_label(result));
+        ui_page_settings_status("PREP BUSY");
         return 0U;
     }
-
-    (void)ui_page_settings_multi_browser_refresh();
-    ui_page_settings_status("PREP OK");
     return 1U;
 }
 

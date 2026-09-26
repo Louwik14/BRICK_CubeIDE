@@ -48,9 +48,10 @@ uint8_t wav_convert_path_needs_canonical(const char *path, wav_info_t *out_info)
 uint8_t wav_convert_start_destructive_canonical(const char *path);
 /* Project restore owns the closed mutation ingress while canonicalizing refs. */
 uint8_t wav_convert_start_destructive_canonical_project(const char *path);
-/* Caller owns the SD gate. Used by synchronous import domains such as Multi. */
-uint8_t wav_convert_path_to_canonical_locked(const char *path);
+/* Caller owns the SD gate; conversion itself remains cooperative. */
+uint8_t wav_convert_start_destructive_canonical_locked(const char *path);
 void wav_convert_service(uint32_t byte_budget);
+uint8_t wav_convert_cancel(void);
 uint8_t wav_convert_is_active(void);
 wav_convert_state_t wav_convert_get_state(void);
 wav_convert_error_t wav_convert_get_last_error(void);

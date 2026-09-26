@@ -437,8 +437,6 @@ static void ui_page_settings_sample_confirm_accept(void)
             ui_page_settings_multi_prepare_finish(0);
             return;
         }
-        entry = ui_page_settings_multi_find_entry_by_path(path);
-        ui_page_settings_multi_load_entry_to_slot(slot, entry);
         return;
     }
 
@@ -466,6 +464,7 @@ static void ui_page_settings_sample_confirm_accept(void)
                 ui_page_settings_multi_prepare_finish(0);
                 return;
             }
+            return;
         }
         entry = ui_page_settings_multi_find_entry_by_path(path);
         ui_page_settings_multi_load_entry_to_slot(slot, entry);
