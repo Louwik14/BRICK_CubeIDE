@@ -371,7 +371,7 @@ set(PLATFORM_H743_LOWCOST
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/Src/board_usb_lowcost.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/fusb302.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/usb_audio.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/usb_audio_pcm_ring.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/usb_audio_float_ring.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/usb_device.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/usb_host.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/usb_role_manager.c"

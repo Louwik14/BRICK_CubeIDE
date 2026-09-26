@@ -6,10 +6,11 @@
 
 /**
  * @file audio_io.h
- * @brief API de conversion audio TDM int24 <-> tracks float.
+ * @brief API codec TDM int24 <-> float et transport USB FLOAT32 natif.
  *
  * Rôle du module:
  * - Dépaqueter les slots TDM RX dans les tracks float.
+ * - Publier MAIN float vers USB avant la conversion codec.
  * - Repaqueter MAIN float vers TX stereo.
  *
  * Architecture:

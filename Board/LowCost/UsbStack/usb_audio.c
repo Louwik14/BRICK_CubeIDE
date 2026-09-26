@@ -1,8 +1,9 @@
 #include "usb_audio.h"
 
+#include <float.h>
 #include <string.h>
 
-#include "IPC/usb_audio_pcm_ring.h"
+#include "IPC/usb_audio_float_ring.h"
 #include "Platform/memory_layout.h"
 #include "stm32h7xx.h"
 #include "tusb.h"
@@ -29,18 +30,28 @@ static volatile uint8_t g_usb_audio_out_active;
 static volatile uint8_t g_usb_audio_in_active;
 static uint8_t g_usb_audio_out_ready;
 static uint8_t g_usb_audio_in_ready;
-static ALIGN32 int32_t g_usb_audio_scratch[USB_AUDIO_SERVICE_MAX_FRAMES * USB_AUDIO_CHANNELS];
-static ALIGN32 uint8_t g_usb_audio_out_irq_scratch[USB_AUDIO_IRQ_PACKET_MAX_BYTES];
+static ALIGN32 float g_usb_audio_scratch[USB_AUDIO_SERVICE_MAX_FRAMES * USB_AUDIO_CHANNELS];
+static ALIGN32 float g_usb_audio_out_irq_scratch[USB_AUDIO_IRQ_PACKET_MAX_BYTES /
+                                                 sizeof(float)];
 
+_Static_assert(sizeof(float) == USB_AUDIO_BYTES_PER_SAMPLE,
+               "USB Audio requires 32-bit float");
+_Static_assert(FLT_RADIX == 2 && FLT_MANT_DIG == 24 && FLT_MAX_EXP == 128,
+               "USB Audio requires IEEE-754 binary32");
+_Static_assert(sizeof(g_usb_audio_out_irq_scratch) == USB_AUDIO_IRQ_PACKET_MAX_BYTES,
+               "USB Audio OUT scratch size changed");
 _Static_assert(CFG_TUSB_OS == OPT_OS_NONE,
                "USB Audio IRQ drain requires TinyUSB bare-metal mode");
 _Static_assert((USB_AUDIO_IRQ_PACKET_MAX_BYTES % USB_AUDIO_BYTES_PER_FRAME) == 0U,
-               "USB Audio OUT packet must contain complete PCM frames");
+               "USB Audio OUT packet must contain complete float frames");
+#if !defined(__BYTE_ORDER__) || (__BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__)
+#error "USB Audio IEEE FLOAT requires a little-endian target"
+#endif
 
 static void usb_audio_feedback_update(void)
 {
-    const uint32_t fill = usb_audio_pcm_pc_to_brick_available();
-    int32_t error = (int32_t)USB_AUDIO_PCM_RING_TARGET_FRAMES - (int32_t)fill;
+    const uint32_t fill = usb_audio_float_pc_to_brick_available();
+    int32_t error = (int32_t)USB_AUDIO_FLOAT_RING_TARGET_FRAMES - (int32_t)fill;
     int64_t feedback = (int64_t)USB_AUDIO_FEEDBACK_NOMINAL;
 
     feedback += ((int64_t)error * 65536LL) /
@@ -61,7 +72,7 @@ static void usb_audio_reset_cursors(void)
     __disable_irq();
     g_usb_audio_out_ready = 0U;
     g_usb_audio_in_ready = 0U;
-    usb_audio_pcm_reset();
+    usb_audio_float_reset();
     __DMB();
     __set_PRIMASK(primask);
 }
@@ -112,49 +123,42 @@ void usb_audio_transport_close_interface(uint8_t interface_number)
     usb_audio_reset_cursors();
 }
 
-uint8_t usb_audio_audio_input_active(void)
-{
-    return g_usb_audio_out_active;
-}
-
-uint8_t usb_audio_audio_output_active(void)
-{
-    return g_usb_audio_in_active;
-}
-
-uint32_t usb_audio_audio_read(int32_t *interleaved, uint32_t frames)
+uint32_t usb_audio_audio_read(float *left, float *right, uint32_t frames)
 {
     uint32_t available;
     uint32_t read_frames;
 
-    if ((interleaved == NULL) || (frames == 0U)
+    if ((left == NULL) || (right == NULL) || (frames == 0U)
         || (g_usb_audio_out_active == 0U)) {
         return 0U;
     }
 
-    available = usb_audio_pcm_pc_to_brick_available();
+    available = usb_audio_float_pc_to_brick_available();
     if (g_usb_audio_out_ready == 0U) {
-        if (available < USB_AUDIO_PCM_RING_START_FRAMES) {
+        if (available < USB_AUDIO_FLOAT_RING_START_FRAMES) {
             return 0U;
         }
         g_usb_audio_out_ready = 1U;
     }
 
-    read_frames = usb_audio_pcm_read_pc_to_brick(interleaved, frames);
+    read_frames = usb_audio_float_read_pc_to_brick(left, right, frames);
     if (read_frames < frames) {
         g_usb_audio_out_ready = 0U;
-        memset(interleaved, 0, frames * USB_AUDIO_BYTES_PER_FRAME);
+        memset(left, 0, frames * sizeof(float));
+        memset(right, 0, frames * sizeof(float));
     }
     return frames;
 }
 
-uint32_t usb_audio_audio_write(const int32_t *interleaved, uint32_t frames)
+uint32_t usb_audio_audio_write(const float *left,
+                               const float *right,
+                               uint32_t frames)
 {
-    if ((interleaved == NULL) || (frames == 0U)
+    if ((left == NULL) || (right == NULL) || (frames == 0U)
         || (g_usb_audio_in_active == 0U)) {
         return 0U;
     }
-    return usb_audio_pcm_write_brick_to_pc(interleaved, frames);
+    return usb_audio_float_write_brick_to_pc(left, right, frames);
 }
 
 void usb_audio_transport_process(void)
@@ -164,10 +168,10 @@ void usb_audio_transport_process(void)
     }
 
     if (g_usb_audio_in_active != 0U) {
-        const uint32_t available = usb_audio_pcm_brick_to_pc_available();
+        const uint32_t available = usb_audio_float_brick_to_pc_available();
 
         if (g_usb_audio_in_ready == 0U) {
-            if (available >= USB_AUDIO_PCM_RING_START_FRAMES) {
+            if (available >= USB_AUDIO_FLOAT_RING_START_FRAMES) {
                 g_usb_audio_in_ready = 1U;
             }
         }
@@ -187,13 +191,13 @@ void usb_audio_transport_process(void)
             if (frames == 0U) {
                 return;
             }
-            frames = usb_audio_pcm_peek_brick_to_pc(g_usb_audio_scratch, frames);
+            frames = usb_audio_float_peek_brick_to_pc(g_usb_audio_scratch, frames);
             written_bytes = tud_audio_n_write(0U,
                                                g_usb_audio_scratch,
                                                (uint16_t)(frames * USB_AUDIO_BYTES_PER_FRAME));
             if ((written_bytes % USB_AUDIO_BYTES_PER_FRAME) == 0U) {
-                usb_audio_pcm_discard_brick_to_pc(written_bytes /
-                                                  USB_AUDIO_BYTES_PER_FRAME);
+                usb_audio_float_discard_brick_to_pc(written_bytes /
+                                                    USB_AUDIO_BYTES_PER_FRAME);
             }
         }
     }
@@ -236,9 +240,8 @@ bool tud_audio_rx_done_isr(uint8_t rhport, uint16_t n_bytes_received,
                                       bytes_to_read);
         read_frames = read_bytes / USB_AUDIO_BYTES_PER_FRAME;
         if (read_frames != 0U) {
-            (void)usb_audio_pcm_write_pc_to_brick(
-                (const int32_t *)(const void *)g_usb_audio_out_irq_scratch,
-                read_frames);
+            (void)usb_audio_float_write_pc_to_brick(
+                g_usb_audio_out_irq_scratch, read_frames);
         }
     }
     return true;

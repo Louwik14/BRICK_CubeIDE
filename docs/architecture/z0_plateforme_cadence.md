@@ -20,10 +20,11 @@ UAC2, Audio IN BRICK vers PC, USB MIDI Device et le role Host MIDI. Elle appelle
 le service USB normal avant et apres la passe applicative. La cadence de cette
 superloop n'est plus dans le chemin d'ingress Audio OUT PC vers BRICK.
 
-Les flux UAC2 traversent deux rings SPSC de 288 frames places dans la moitie D3
-non cachee. Pour PC vers BRICK, le writer unique est le callback IRQ Audio OUT
-USB et le reader unique est AUDIO. Pour BRICK vers PC, AUDIO reste writer et le
-service USB differe reste reader. L'IRQ AUDIO ne touche jamais TinyUSB.
+Les flux UAC2 IEEE FLOAT32 traversent deux rings SPSC interleaved de 288 frames
+places dans la moitie D3 non cachee. Pour PC vers BRICK, le writer unique est
+le callback IRQ Audio OUT USB et le reader unique est AUDIO. Pour BRICK vers
+PC, AUDIO reste writer et le service USB differe reste reader. L'IRQ AUDIO ne
+touche jamais TinyUSB.
 Le role Host applique une attente VBUS de 200 ms par deadline, et les erreurs
 I2C FUSB utilisent un retry cadence. Le latch/level `INT_N` reste le chemin
 normal. Les registres read-to-clear distinguent attach, detach, changement CC
