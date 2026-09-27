@@ -682,6 +682,34 @@ static void ui_page_settings_render_multi_browser(void)
 
     ui_page_settings_draw_multi_sample_header();
     drv_display_draw_line(0, UI_SETTINGS_SAMPLE_BROWSER_HEADER_LINE_Y, 127, UI_SETTINGS_SAMPLE_BROWSER_HEADER_LINE_Y);
+
+    if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_PREPARING)
+    {
+        enum
+        {
+            UI_SETTINGS_MULTI_PROGRESS_X = 8,
+            UI_SETTINGS_MULTI_PROGRESS_LABEL_Y = 24,
+            UI_SETTINGS_MULTI_PROGRESS_BAR_Y = 36,
+            UI_SETTINGS_MULTI_PROGRESS_W = 112,
+            UI_SETTINGS_MULTI_PROGRESS_H = 6
+        };
+
+        drv_display_set_font(&FONT_5X7);
+        ui_page_settings_draw_centered_label(0U,
+                                             OLED_WIDTH,
+                                             UI_SETTINGS_MULTI_PROGRESS_LABEL_Y,
+                                             ui_page_settings_multi_prepare_phase_label());
+        ui_page_settings_draw_progress_bar(UI_SETTINGS_MULTI_PROGRESS_X,
+                                           UI_SETTINGS_MULTI_PROGRESS_BAR_Y,
+                                           UI_SETTINGS_MULTI_PROGRESS_W,
+                                           UI_SETTINGS_MULTI_PROGRESS_H,
+                                           g_ui_settings.multi_prepare_progress_done,
+                                           g_ui_settings.multi_prepare_progress_total);
+        ui_page_settings_draw_page_footer("CANCEL");
+        drv_display_set_font(&FONT_5X7);
+        return;
+    }
+
     ui_page_settings_draw_multi_name_label();
 
     if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_PREPARE)
@@ -699,24 +727,6 @@ static void ui_page_settings_render_multi_browser(void)
         drv_display_set_font(&FONT_4X6);
         ui_page_settings_draw_centered_label(0U, 128U, 42U, "WAV files stay");
         ui_page_settings_draw_page_footer("-");
-        return;
-    }
-
-    if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_PREPARING)
-    {
-        drv_display_set_font(&FONT_5X7);
-        ui_page_settings_draw_centered_label(0U,
-                                             128U,
-                                             30U,
-                                             ui_page_settings_multi_prepare_phase_label());
-        ui_page_settings_draw_progress_bar(8U,
-                                           56U,
-                                           112U,
-                                           6U,
-                                           g_ui_settings.multi_prepare_progress_done,
-                                           g_ui_settings.multi_prepare_progress_total);
-        ui_page_settings_draw_page_footer("CANCEL");
-        drv_display_set_font(&FONT_5X7);
         return;
     }
 
