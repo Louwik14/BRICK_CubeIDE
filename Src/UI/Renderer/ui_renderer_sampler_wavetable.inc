@@ -70,7 +70,6 @@ static void ui_renderer_template_sampler_ram_sample_label(char *out, uint32_t ou
         i++;
     }
     out[i] = '\0';
-    ui_renderer_template_fit_text(out, 96U);
 }
 
 static uint8_t ui_renderer_template_is_wave_wavetable_subpage(const ui_template_subpage_t *subpage)
@@ -1012,6 +1011,7 @@ static void ui_renderer_template_draw_sampler_ram_wave_placeholder(const ui_temp
     ui_renderer_template_sampler_ram_sample_label(sample_label, (uint32_t)sizeof(sample_label));
 
     drv_display_set_font(&FONT_4X6);
+    ui_renderer_template_fit_text(sample_label, UI_TEMPLATE_SAMPLER_NAME_MAX_PX);
     drv_display_draw_text((uint8_t)ui_renderer_template_center_x(0, OLED_WIDTH, sample_label),
                           UI_TEMPLATE_SAMPLER_NAME_Y,
                           sample_label);
