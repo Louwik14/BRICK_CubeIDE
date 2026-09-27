@@ -43,6 +43,19 @@ slots sans recopier ni retrigger leur etat DSP. L'instance devenue voice 0 est
 publiee comme nouvelle source de projection moteur et les plans AUDIO qui
 adressent cette instance sont reconstruits.
 
+Chaque NOTE ON SEQ recoit un `output_id` AUDIO distinct tant qu'il est vivant.
+L'identite complete d'occurrence reste dans le slot logique SEQ; ses bits de
+namespace ne sont jamais tronques pour construire un identifiant physique.
+Le NOTE OFF verifie l'occurrence avant de fermer son `output_id`. Une collision
+entre KEY, MIDI, STEP et FX ne peut donc pas reassocier une autre voix.
+
+Le VCA par voix de Prism, Stack, Wave et FM relance son attaque sur chaque
+nouvelle allocation ou reutilisation physique. Le mode hard repart de zero;
+le mode soft repart du niveau courant. `ENV VCA` commande le VCA de note de
+track, pas cette enveloppe par voix. Le VCA de track garde son gate ouvert
+tant qu'une note reste tenue et ne relance son attaque qu'au passage de zero
+a une note tenue.
+
 La configuration moteur reste canonique sur l'instance primaire de la track.
 L'adapter AUDIO porte le geste commun de projection vers tous les slots physiques:
 une application PARAM live, une croissance de polyphonie et l'initialisation

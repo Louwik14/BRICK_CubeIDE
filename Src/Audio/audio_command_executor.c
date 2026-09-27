@@ -65,6 +65,31 @@ typedef struct
 
 static AUDIO_STATE_D3 audio_seq_output_t
     g_audio_seq_output[SEQ_LANE_CAPACITY][AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY];
+static uint32_t g_audio_seq_next_output_handle;
+
+static uint32_t audio_seq_allocate_output_handle(void)
+{
+    for (uint16_t attempt = 0U;
+         attempt <= SEQ_LANE_CAPACITY * AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY;
+         ++attempt)
+    {
+        g_audio_seq_next_output_handle =
+            (g_audio_seq_next_output_handle + 1U) & UINT32_C(0x0FFFFFFF);
+        if (g_audio_seq_next_output_handle == 0U)
+            g_audio_seq_next_output_handle = 1U;
+        const uint32_t handle = UINT32_C(0x20000000)
+            | g_audio_seq_next_output_handle;
+        uint8_t collision = 0U;
+        for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
+            for (uint8_t i = 0U; i < AUDIO_NOTE_ENGINE_OUTPUT_CAPACITY; ++i)
+                collision |= (uint8_t)(
+                    (g_audio_seq_output[track][i].active != 0U)
+                    && (g_audio_seq_output[track][i].id == handle));
+        if (collision == 0U)
+            return handle;
+    }
+    return 0U;
+}
 static uint32_t g_audio_seq_age;
 static uint16_t g_audio_seq_track_mask;
 
@@ -618,6 +643,7 @@ void audio_command_executor_init(void)
     g_audio_state_rebind_deferred = 0U;
     g_audio_state_rebind_mask = 0U;
     memset(g_audio_seq_output, 0, sizeof(g_audio_seq_output));
+    g_audio_seq_next_output_handle = 0U;
     g_audio_seq_age = 0U;
     g_audio_seq_track_mask = 0U;
 }
@@ -702,8 +728,11 @@ static uint8_t audio_command_executor_apply_seq_event(
         outputs[target]=(audio_seq_output_t){0};
     }
 
-    const uint32_t output_id = UINT32_C(0x20000000)
-        | (event->note.occurrence_id & UINT32_C(0x1FFFFFFF));
+    /* The occurrence namespace uses the high bits.  Truncating it aliases
+     * KEY, MIDI, STEP and FX lifetimes with equal counters. */
+    const uint32_t output_id = audio_seq_allocate_output_handle();
+    if (output_id == 0U)
+        return 0U;
     if (audio_note_engine_adapter_apply_output(event->note.track,event->note.note,
             event->note.velocity, 1U, output_id) == 0U)
         return 0U;
