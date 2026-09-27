@@ -1,6 +1,16 @@
 # Z1 - Audio hard-RT, moteurs et mix
 
-CONTROL est l'unique autorite musicale: il cree les outputs, applique les quotas Multi per-track/global, choisit les victimes et publie atomiquement NOTE OFF puis NOTE ON. Une commande legale est garantie par construction; AUDIO ne fait aucune admission ni stealing musical et traite une ressource indisponible comme une rupture d'invariant. Il mappe `output_id` vers un slot DSP, rend les moteurs et possede FREE/RELEASE physique. Aucun scheduler CONTROL n'appelle directement un moteur ou le mixer.
+SEQ est l'unique autorite des lifetimes musicales: il cree les occurrences,
+applique la capacite logique et publie les NOTE terminales datees. AUDIO ne
+change jamais cette admission musicale; il projette les outputs admis sur la
+polyphonie physique configuree, choisit la plus vieille voix physique lorsque
+les slots FREE/RELEASE sont epuises, puis retire l'ancien `output_id` de son
+miroir. Le futur OFF de cette occurrence volee est un no-op idempotent. Une
+commande legale est garantie par construction; AUDIO traite une ressource
+physique promise mais inexistante comme une rupture d'invariant. Aucun
+scheduler CONTROL ou SEQ n'appelle directement un moteur ou le mixer.
+Cette politique vaut aussi pour Sampler Multi: sa limite per-track est appliquee
+avant le pool global et la plus vieille voix de la piste est volee a saturation.
 
 `STOP(output_id)` retire HELD cote AUDIO mais une tail RELEASE peut continuer. Sa fin ne produit aucun ACK musical. Si le slot doit etre reutilise, AUDIO le reinitialise physiquement avant le nouveau START.
 

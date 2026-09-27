@@ -6,23 +6,20 @@ function Assert-Contract([bool]$condition, [string]$message) {
 
 $polyphony = Get-Content 'Src/Track/synth_polyphony.c' -Raw
 $adapter = Get-Content 'Src/Audio/audio_note_engine_adapter.c' -Raw
+$multi = Get-Content 'Src/Audio/Engines/Sampler/sampler_multi_voice.inc' -Raw
 
 Assert-Contract ($polyphony -match
-    'synth_polyphony_note_on_reassign_mono_output_from') `
-    'strict-mono ownership transfer is missing'
-Assert-Contract ($polyphony -match
-    'poly->active == 0U\) \|\| \(poly->voice_count != 1U') `
-    'strict-mono transfer is not limited to one active physical voice'
-Assert-Contract ($adapter -match
-    'engine == TRACK_RUNTIME_ENGINE_TB303') `
-    'TB303 is not covered by the strict-mono policy'
-Assert-Contract ($adapter -match
-    'engine == TRACK_RUNTIME_ENGINE_ACID') `
-    'ACID is not covered by the strict-mono policy'
+    'g_synth_voice\[slot\]\.state == SYNTH_POLY_VOICE_HELD[\s\S]*?g_synth_voice\[slot\]\.age - oldest') `
+    'the allocator cannot steal the oldest HELD physical voice'
 Assert-Contract ($adapter -match 'displaced_output\[voice\] != 0U') `
     'displaced output identity is not retired'
-Assert-Contract ($adapter -match 'mono_reassignment') `
-    'strict-mono track-level note lifetime is not transferred'
+Assert-Contract ($adapter -match 'held_reassignment') `
+    'stolen track-level note lifetime is not transferred'
+Assert-Contract ($adapter -notmatch 'note_on_reassign_mono') `
+    'an engine-specific mono bypass still exists'
+Assert-Contract ($multi -match
+    'track_voice_count >= voice_limit[\s\S]*?BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_STEAL') `
+    'Sampler Multi does not steal at its configured per-track voice limit'
 
 function New-MonoState {
     return [pscustomobject]@{
@@ -55,7 +52,7 @@ function Note-Off($state, [uint32]$output) {
     }
 }
 
-foreach ($engine in 'ACID','TB303') {
+foreach ($engine in 'PRISM','STACK','WAVE','FM','ACID','TB303','MULTI') {
     $state = New-MonoState
     Note-On $state 0x20000006 60
     Note-On $state 0x20000007 64
@@ -72,6 +69,15 @@ foreach ($engine in 'ACID','TB303') {
     Note-Off $state 0x20000007
     Assert-Contract (-not $state.Gate -and $state.Mirror.Count -eq 0) `
         "${engine}: current NOTE_OFF did not release the voice"
+
+    Note-On $state 0x2000000A 60
+    Note-On $state 0x2000000B 64
+    Note-Off $state 0x2000000B
+    Assert-Contract (-not $state.Gate -and $state.Mirror.Count -eq 0) `
+        "${engine}: newest-first release left the stolen owner active"
+    Note-Off $state 0x2000000A
+    Assert-Contract (-not $state.Gate -and $state.Mirror.Count -eq 0) `
+        "${engine}: delayed stolen NOTE_OFF resurrected or changed the voice"
 
     foreach ($index in 8..71) {
         Note-On $state ([uint32](0x20000000 + $index)) ([byte](48 + ($index % 24)))

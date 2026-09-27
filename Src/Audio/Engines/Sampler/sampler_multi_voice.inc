@@ -423,6 +423,43 @@ static brick6_sampler_voice_t *brick6_sampler_runtime_multi_alloc_voice(uint8_t 
         return NULL;
     }
 
+    const uint8_t voice_limit =
+        brick6_sampler_runtime_multi_spread_voice_count(track_id);
+    uint8_t track_voice_count = 0U;
+    brick6_sampler_voice_t *oldest_release = NULL;
+    brick6_sampler_voice_t *oldest_held = NULL;
+    for (uint8_t i = 0U; i < SAMPLER_MULTI_MAX_GLOBAL_VOICES; ++i)
+    {
+        brick6_sampler_voice_t *const candidate = &g_sampler_multi_voice[i];
+        if ((brick6_sampler_runtime_multi_voice_occupied(candidate) == 0U)
+                || (candidate->owner_track_id != track_id))
+        {
+            continue;
+        }
+        ++track_voice_count;
+        brick6_sampler_voice_t **const oldest =
+            (candidate->release_pending != 0U)
+                ? &oldest_release : &oldest_held;
+        if ((*oldest == NULL)
+                || ((int32_t)(candidate->trigger_order
+                    - (*oldest)->trigger_order) < 0))
+        {
+            *oldest = candidate;
+        }
+    }
+    if (track_voice_count >= voice_limit)
+    {
+        brick6_sampler_voice_t *const victim = (oldest_release != NULL)
+            ? oldest_release : oldest_held;
+        if (victim == NULL)
+            return NULL;
+        brick6_sampler_runtime_multi_stop_voice(
+            victim, (uint8_t)((oldest_release != NULL)
+                ? BRICK6_SAMPLER_MULTI_DIAG_REASON_NONE
+                : BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_STEAL));
+        return victim;
+    }
+
     for (uint8_t i = 0U; i < SAMPLER_MULTI_MAX_GLOBAL_VOICES; ++i)
     {
         brick6_sampler_voice_t *const voice = &g_sampler_multi_voice[i];
@@ -448,8 +485,8 @@ static brick6_sampler_voice_t *brick6_sampler_runtime_multi_alloc_voice(uint8_t 
         }
     }
 
-    /* CONTROL's published START contract makes this unreachable in a legal
-     * workload. A non-free physical slot is an invariant violation. */
+    /* The configured per-track budgets fit the global pool by construction.
+     * Reaching this point therefore means that physical ownership diverged. */
     return NULL;
 }
 
