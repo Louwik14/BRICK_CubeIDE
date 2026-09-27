@@ -64,6 +64,7 @@ typedef struct
     float curr_l;
     float curr_r;
     float gain;
+    float pitch_ratio;
     double phase;
     double phase_step;
 #if SD_PREVIEW_HAS_FATFS
@@ -291,8 +292,10 @@ static uint8_t sd_preview_prepare_stream(void)
     }
     g_sd_preview.data_remaining = range_frames * g_sd_preview.info.block_align;
     g_sd_preview.phase_step = (g_sd_preview.info.sample_rate == 0U)
-                                  ? 1.0
-                                  : ((double)g_sd_preview.info.sample_rate / (double)SD_PREVIEW_TARGET_RATE);
+                                  ? (double)g_sd_preview.pitch_ratio
+                                  : (((double)g_sd_preview.info.sample_rate
+                                      / (double)SD_PREVIEW_TARGET_RATE)
+                                     * (double)g_sd_preview.pitch_ratio);
 
     if (sd_preview_decode_next_source_frame(&g_sd_preview.prev_l, &g_sd_preview.prev_r) == 0U)
     {
@@ -430,6 +433,7 @@ void sd_preview_init(void)
     g_sd_preview.state = SD_PREVIEW_STATE_IDLE;
     g_sd_preview.last_error = SD_PREVIEW_ERROR_NONE;
     g_sd_preview.gain = 1.0f;
+    g_sd_preview.pitch_ratio = 1.0f;
     g_sd_preview_ring_layout.write_count = 0U;
     sd_preview_reset_source_state();
 }
@@ -508,6 +512,7 @@ uint8_t sd_preview_begin_range(const char *path, uint32_t start_frame, uint32_t 
     g_sd_preview.last_error = SD_PREVIEW_ERROR_NONE;
     g_sd_preview.range_start_frame = start_frame;
     g_sd_preview.range_frame_count = (end_frame > start_frame) ? (end_frame - start_frame) : 0U;
+    g_sd_preview.pitch_ratio = 1.0f;
 
     {
         const size_t path_len = strlen(path);
@@ -599,6 +604,21 @@ uint8_t sd_preview_begin_range(const char *path, uint32_t start_frame, uint32_t 
 uint8_t sd_preview_begin(const char *path)
 {
     return sd_preview_begin_range(path, 0U, 0U);
+}
+
+uint8_t sd_preview_begin_with_pitch(const char *path, float pitch_ratio)
+{
+    if (!(pitch_ratio > 0.0f) || (pitch_ratio > 128.0f))
+    {
+        sd_preview_set_error(SD_PREVIEW_ERROR_INVALID_PATH);
+        return 0U;
+    }
+    if (sd_preview_begin_range(path, 0U, 0U) == 0U)
+    {
+        return 0U;
+    }
+    g_sd_preview.pitch_ratio = pitch_ratio;
+    return 1U;
 }
 
 void sd_preview_stop(void)

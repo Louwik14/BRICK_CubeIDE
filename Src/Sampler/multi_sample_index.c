@@ -757,6 +757,67 @@ multi_sample_index_result_t multi_sample_index_load(const char *path,
     return multi_sample_index_load_internal(path, out);
 }
 
+uint8_t multi_sample_index_resolve(const multi_sample_index_t *index,
+                                   uint8_t note,
+                                   uint8_t velocity,
+                                   uint16_t *out_sample_index,
+                                   uint8_t *out_root_note)
+{
+    if ((index == NULL) || (out_sample_index == NULL)
+        || (out_root_note == NULL) || (note > 127U) || (velocity > 127U)
+        || (multi_sample_index_validate(index) == 0U))
+    {
+        return 0U;
+    }
+
+    const multi_sample_index_zone_t *best = NULL;
+    const multi_sample_index_zone_t *fallback = NULL;
+    uint8_t best_delta = UINT8_MAX;
+    uint8_t fallback_delta = UINT8_MAX;
+    for (uint16_t i = 0U; i < index->zone_count; ++i)
+    {
+        const multi_sample_index_zone_t *const zone = &index->zones[i];
+        if ((note < zone->note_low) || (note > zone->note_high)) continue;
+        const uint8_t delta = (zone->root_note > note)
+            ? (uint8_t)(zone->root_note - note)
+            : (uint8_t)(note - zone->root_note);
+        if ((fallback == NULL) || (delta < fallback_delta))
+        {
+            fallback = zone;
+            fallback_delta = delta;
+        }
+        if ((velocity >= zone->vel_low) && (velocity <= zone->vel_high)
+            && ((best == NULL) || (delta < best_delta)))
+        {
+            best = zone;
+            best_delta = delta;
+        }
+    }
+
+    if (best == NULL)
+    {
+        best = fallback;
+        if (best == NULL) return 0U;
+        uint8_t layer_count = 0U;
+        for (uint16_t i = 0U; i < index->zone_count; ++i)
+        {
+            const multi_sample_index_zone_t *const zone = &index->zones[i];
+            if ((note >= zone->note_low) && (note <= zone->note_high)
+                && (zone->root_note == best->root_note)
+                && (layer_count != UINT8_MAX))
+            {
+                layer_count++;
+            }
+        }
+        if (layer_count != 1U) return 0U;
+    }
+
+    if (best->multi_sample_id >= index->sample_count) return 0U;
+    *out_sample_index = best->multi_sample_id;
+    *out_root_note = best->root_note;
+    return 1U;
+}
+
 multi_sample_index_result_t multi_sample_index_peek_counts(const char *path,
                                                            uint16_t *out_sample_count,
                                                            uint16_t *out_zone_count)

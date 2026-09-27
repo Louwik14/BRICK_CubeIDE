@@ -41,6 +41,7 @@ typedef enum
  */
 void sd_preview_init(void);
 uint8_t sd_preview_begin(const char *path);
+uint8_t sd_preview_begin_with_pitch(const char *path, float pitch_ratio);
 uint8_t sd_preview_begin_range(const char *path, uint32_t start_frame, uint32_t end_frame);
 void sd_preview_stop(void);
 void sd_preview_process(void);

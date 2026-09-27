@@ -239,6 +239,26 @@ static uint8_t multi_loader_join_path(char *out,
     return 1U;
 }
 
+uint8_t multi_sample_resolve_index_sample_path(
+    const char *index_path,
+    const multi_sample_index_t *index,
+    uint16_t sample_index,
+    char *out,
+    uint32_t out_size)
+{
+    char base_dir[MULTI_SAMPLE_LOADER_PATH_MAX];
+    if ((index == NULL) || (sample_index >= index->sample_count)
+        || (multi_loader_parent_dir(index_path, base_dir, sizeof(base_dir)) == 0U))
+    {
+        return 0U;
+    }
+    const multi_sample_index_sample_t *const sample =
+        &index->samples[sample_index];
+    return multi_loader_join_path(out, out_size, base_dir,
+                                  &index->strings[sample->path_offset],
+                                  sample->path_len);
+}
+
 static wav_info_t multi_loader_wav_info_from_index_sample(
     const multi_sample_index_sample_t *sample)
 {

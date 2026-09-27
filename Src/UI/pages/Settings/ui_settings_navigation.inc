@@ -248,6 +248,9 @@ static void ui_page_settings_status(const char *status)
 
 static void ui_page_settings_preview_stop(ui_settings_preview_stop_origin_t origin)
 {
+    g_ui_settings_keyboard_preview_epoch++;
+    if (g_ui_settings_keyboard_preview_epoch == 0U)
+        g_ui_settings_keyboard_preview_epoch = 1U;
     if (sd_preview_is_active() == 0U)
     {
         return;

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stddef.h>
 #include <string.h>
+#include <math.h>
 
 #include "stm32h7xx_hal.h"
 #include "buttons.h"
@@ -261,6 +262,7 @@ UI_STATE_SDRAM static ui_settings_state_t g_ui_settings;
 typedef enum { UI_PROJECT_SAVE_IDLE=0,UI_PROJECT_SAVE_EDIT,UI_PROJECT_SAVE_WRITING } ui_project_save_phase_t;
 static ui_project_save_phase_t g_ui_project_save_phase;
 static uint8_t g_ui_project_save_slot;
+static uint32_t g_ui_settings_keyboard_preview_epoch = 1U;
 
 static void ui_page_settings_status(const char *status);
 static void ui_page_settings_sd_busy_status(void);
