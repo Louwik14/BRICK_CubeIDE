@@ -147,6 +147,16 @@ static void multi_import_clear_diag(void)
     g_import_last_diag[0] = '\0';
 }
 
+void multi_sample_import_init(void)
+{
+    /* CTRL_STATE and SDRAM_MULTI_IMPORT are NOLOAD sections. */
+    memset(&g_import_async, 0, sizeof(g_import_async));
+    g_import_last_result = MULTI_SAMPLE_IMPORT_OK;
+    g_import_sample_count = 0U;
+    g_import_zone_count = 0U;
+    multi_import_clear_diag();
+}
+
 static void multi_import_set_duplicate_diag(const multi_sample_index_source_sample_t *sample)
 {
     if (sample == 0)

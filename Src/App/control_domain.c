@@ -8,6 +8,7 @@
 #include "Board/board_usb.h"
 #include "midi.h"
 #include "Param/param_registry.h"
+#include "Sampler/multi_sample_import.h"
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/multi_sample_pool.h"
 #include "Sampler/sample_cache.h"
@@ -57,6 +58,7 @@ void control_domain_init(void)
     sd_access_gate_init();
     groove_bank_init();
     wav_convert_init();
+    multi_sample_import_init();
     waveform_cache_init();
     (void)waveform_cache_ensure_dirs();
     crash_library_init();

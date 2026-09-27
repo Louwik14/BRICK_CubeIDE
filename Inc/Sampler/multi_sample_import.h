@@ -45,6 +45,7 @@ typedef struct
     uint64_t work_total_bytes;
 } multi_sample_import_status_t;
 
+void multi_sample_import_init(void);
 uint8_t multi_sample_import_start(const char *instrument_dir);
 void multi_sample_import_service(uint32_t byte_budget);
 uint8_t multi_sample_import_is_active(void);
