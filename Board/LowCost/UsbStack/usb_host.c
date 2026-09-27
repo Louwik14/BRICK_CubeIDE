@@ -33,7 +33,7 @@ static uint8_t usb_host_hw_init(void)
     HAL_GPIO_Init(GPIOA, &gpio);
 
     __HAL_RCC_USB_OTG_FS_CLK_ENABLE();
-    HAL_NVIC_SetPriority(OTG_FS_IRQn, 6U, 0U);
+    HAL_NVIC_SetPriority(OTG_FS_IRQn, 1U, 0U);
     HAL_NVIC_EnableIRQ(OTG_FS_IRQn);
     return 1U;
 }

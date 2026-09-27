@@ -111,7 +111,7 @@ void seq_engine_irq_init(void)
     g_execution_generation=0U;
     seq_engine_core_init(&g_core);
     NVIC_ClearPendingIRQ(TIM4_IRQn);
-    NVIC_SetPriority(TIM4_IRQn, 2U);
+    NVIC_SetPriority(TIM4_IRQn, 3U);
     NVIC_EnableIRQ(TIM4_IRQn);
 }
 
