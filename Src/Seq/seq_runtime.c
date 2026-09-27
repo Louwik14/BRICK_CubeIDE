@@ -32,6 +32,7 @@
 #include "Sampler/multi_sample_loader.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "midi.h"
+#include "MIDI/midi_clock_timer.h"
 
 #include "Seq/seq_model.h"
 #include "Seq/seq_edit.h"
@@ -51,6 +52,7 @@
 #define SEQ_RUNTIME_AUDIO_SAMPLE_RATE 48000U
 #define SEQ_RUNTIME_STEPS_PER_QUARTER 4U
 #define SEQ_RUNTIME_MIDI_CLOCKS_PER_STEP 6U
+static uint32_t g_midi_clock_period_sample_q16;
 #define SEQ_RUNTIME_LIVE_REC_QUEUE_CAPACITY 128U
 
 /* Shared execution state lives in seq_transport_owner. */
@@ -154,7 +156,8 @@ static void seq_runtime_send_transport_start(void)
     midi_clock_set_bpm_milli(seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge));
     seq_runtime_send_transport_realtime(0xFAU);
     midi_clock_set_running(true);
-    seq_transport_owner_arm_midi_clock(g_seq_runtime.step_sample_q16 >> 16U);
+    midi_clock_timer_arm(g_seq_runtime.step_sample_q16 >> 16U,
+                         g_midi_clock_period_sample_q16);
 }
 
 static uint32_t seq_runtime_get_now_tick_for_source(seq_clock_src_t source)
@@ -204,6 +207,7 @@ static uint8_t seq_runtime_track_is_valid(seq_track_id_t track)
 
 static void seq_runtime_stop_lifecycle_apply(uint8_t emit_transport_stop_and_panic)
 {
+    midi_clock_timer_stop();
     const uint64_t stop_sample =
         control_music_output_first_unpublished_sample(
             seq_runtime_get_now_sample());
@@ -251,11 +255,13 @@ static void seq_runtime_update_midi_clock_period_from_step_period(void)
     {
         period_q16 = 1U;
     }
-    seq_transport_owner_set_midi_clock_period_q16(period_q16);
+    g_midi_clock_period_sample_q16 = period_q16;
+    midi_clock_timer_set_period(period_q16);
 }
 
 void seq_runtime_init(void)
 {
+    midi_clock_timer_init();
     seq_model_init_defaults();
     metronome_control_init();
     seq_param_iface_init();
@@ -289,8 +295,6 @@ void seq_runtime_init(void)
     }
     seq_transport_owner_reset_sample_timeline(boot_sample);
     g_seq_runtime.step_sample_q16 = 0U;
-    seq_transport_owner_set_midi_clock_enabled(0U);
-    seq_transport_owner_set_midi_clock_period_q16(1U);
     seq_runtime_update_samples_per_step_from_tempo();
     control_audio_transport_init();
     control_audio_transport_publish_changes();
@@ -478,7 +482,7 @@ void seq_runtime_set_clock_source(seq_clock_src_t src)
     if (seq_clock_bridge_is_external_source(src) != 0U)
     {
         /* Execution seam: external clock disables audio clock TX and pending step pulses. */
-        seq_transport_owner_set_midi_clock_enabled(0U);
+        midi_clock_timer_stop();
         midi_clock_set_running(false);
         midi_clock_set_mode(MIDI_CLOCK_MODE_SLAVE);
     }
@@ -487,8 +491,6 @@ void seq_runtime_set_clock_source(seq_clock_src_t src)
         midi_clock_set_running(false);
         midi_clock_set_mode(MIDI_CLOCK_MODE_MASTER);
         midi_clock_set_bpm_milli(seq_clock_bridge_get_internal_tempo_bpm_milli(&g_seq_clock_bridge));
-        /* Execution seam: rebase audio clock timeline after clock-source policy changes. */
-        seq_transport_owner_rebase_midi_clock(seq_runtime_get_now_sample());
     }
     seq_runtime_exit_critical(primask);
     seq_engine_control_mark_dirty();
@@ -594,14 +596,14 @@ void seq_runtime_midi_continue_from_source(seq_clock_src_t source)
 
     if (seq_clock_bridge_is_external_source(source) != 0U)
     {
-        seq_transport_owner_set_midi_clock_enabled(0U);
+        midi_clock_timer_stop();
         midi_clock_set_running(false);
         return;
     }
 
     seq_runtime_send_transport_realtime(0xFBU);
     midi_clock_set_running(true);
-    seq_transport_owner_arm_midi_clock(transition_sample);
+    midi_clock_timer_arm(transition_sample, g_midi_clock_period_sample_q16);
 }
 
 void seq_runtime_midi_stop_from_source(seq_clock_src_t source)
@@ -612,19 +614,6 @@ void seq_runtime_midi_stop_from_source(seq_clock_src_t source)
     }
 
     seq_runtime_stop();
-}
-
-void seq_runtime_midi_clock_audio_boundary(uint64_t block_start_sample)
-{
-    if ((g_seq_runtime.running == 0U)
-            || (seq_clock_bridge_is_external_source(
-                    seq_runtime_get_clock_source_internal()) != 0U))
-        return;
-
-    const uint32_t due = seq_transport_owner_take_midi_clocks_until(
-        block_start_sample);
-    for (uint32_t i = 0U; i < due; ++i)
-        midi_clock(midi_clock_get_destination());
 }
 
 uint8_t seq_runtime_set_playhead_step(seq_track_id_t track, seq_step_id_t step)

@@ -5,6 +5,7 @@ $owner = Get-Content -Raw (Join-Path $root 'Src/Seq/seq_transport_owner.c')
 $runtime = Get-Content -Raw (Join-Path $root 'Src/Seq/seq_runtime.c')
 $port = Get-Content -Raw (Join-Path $root 'Src/Seq/seq_engine_port_h743.c')
 $midi = Get-Content -Raw (Join-Path $root 'Src/MIDI/midi.c')
+$timer = Get-Content -Raw (Join-Path $root 'Src/MIDI/midi_clock_timer.c')
 $noteTest = Join-Path $root 'tools/test_seq_midi_output_contract.ps1'
 
 function Assert-Contract([bool]$condition, [string]$message) {
@@ -39,21 +40,39 @@ Assert-Contract ($quarter90.Count -eq 24) '90 BPM quarter must contain exactly 2
 Assert-Contract ($quarter90.PeriodQ16 -gt $quarter120.PeriodQ16) `
     'clock spacing must increase when tempo decreases'
 
-Assert-Contract ($runtime.Contains('seq_runtime_send_transport_realtime(0xFAU)')) `
-    'START must be emitted before clock scheduling is enabled'
-Assert-Contract ($runtime.IndexOf('seq_runtime_send_transport_realtime(0xFAU)') -lt `
-    $runtime.IndexOf('seq_transport_owner_arm_midi_clock(')) `
-    'FA must precede the first possible F8'
-Assert-Contract ($runtime -match 'seq_runtime_send_transport_realtime\(0xFBU\);\s+midi_clock_set_running\(true\);') `
-    'internal CONTINUE must resume clock production'
-Assert-Contract (($runtime | Select-String -Pattern 'seq_transport_owner_arm_midi_clock\(' -AllMatches).Matches.Count -eq 2) `
-    'START and CONTINUE must atomically anchor before enabling clock production'
-Assert-Contract ($owner -match 'g_midi_clock_enabled=0U;__DMB\(\);\s+g_midi_clock_next_q16=.*;__DMB\(\);\s+g_midi_clock_enabled=1U;') `
-    'clock arming must publish the complete deadline before AUDIO can consume it'
-Assert-Contract ($owner.Contains('g_midi_clock_enabled=0U;')) `
-    'STOP must disable clock production'
-Assert-Contract ($port.Contains('seq_runtime_midi_clock_audio_boundary(block_start_sample)')) `
-    'clock production must be driven by the audio sample timeline'
+Assert-Contract ($runtime -match 'seq_runtime_send_transport_realtime\(0xFAU\);\s+midi_clock_set_running\(true\);\s+midi_clock_timer_arm\(') `
+    'START must queue FA before arming TIM3'
+Assert-Contract ($runtime -match 'seq_runtime_send_transport_realtime\(0xFBU\);\s+midi_clock_set_running\(true\);\s+midi_clock_timer_arm\(') `
+    'CONTINUE must queue FB before arming TIM3'
+Assert-Contract ($runtime.Contains('midi_clock_timer_stop();')) `
+    'STOP and source changes must disarm TIM3'
+Assert-Contract (-not $port.Contains('seq_runtime_midi_clock_audio_boundary')) `
+    'audio boundary must not generate clocks'
+Assert-Contract (-not $owner.Contains('g_midi_clock_next_q16')) `
+    'old audio deadline producer must be removed'
+Assert-Contract ($timer.Contains('NVIC_SetPriority(TIM3_IRQn, 0U)')) `
+    'TIM3 must preempt priority-1 audio'
+Assert-Contract ($timer.Contains('g_due_q16 +=') -and $timer.Contains('TIM3->CCR1 = compare')) `
+    'absolute fractional deadline must drive the hardware compare'
+Assert-Contract (-not $timer.Contains('tud_')) `
+    'TIM3 path must not call TinyUSB'
+Assert-Contract ($midi.Contains('midi_clock_timer_poll();')) `
+    'the MIDI main loop must consume timer events'
+
+$numerator = [uint64]($quarter120.PeriodQ16 * 125)
+$whole = [uint64][math]::Floor($numerator / 6)
+$remainder = [uint64]($numerator % 6)
+$phase = [uint64]0
+$deadline = [uint64]0
+$ticks = @()
+for ($i = 0; $i -lt 3; ++$i) {
+    $phase += $remainder
+    $deadline += $whole + [uint64][math]::Floor($phase / 6)
+    $phase %= 6
+    $ticks += [uint64][math]::Floor($deadline / 65536)
+}
+Assert-Contract (($ticks[0] -eq 20833) -and ($ticks[1] -eq 41666) -and ($ticks[2] -eq 62500)) `
+    '120 BPM must use 20833, 20833, 20834 us rather than a fixed rounded period'
 Assert-Contract ($midi.Contains('cable | 0x0FU')) `
     'USB System Realtime packets must use CIN 0xF'
 Assert-Contract ($midi.Contains('midi_usb_tx_drop_count')) `

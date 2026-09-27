@@ -8,14 +8,10 @@ static CONTROL_M4_SRAM2 seq_runtime_state_t g_state;
 static volatile uint64_t g_sample_timeline;
 static volatile uint32_t g_external_pulses;
 static uint32_t g_transport_step;
-static uint32_t g_midi_clock_period_q16;
-static uint64_t g_midi_clock_next_q16;
-static uint8_t g_midi_clock_enabled;
 
 seq_runtime_state_t *seq_transport_owner_state(void){return &g_state;}
 void seq_transport_owner_init(void){memset(&g_state,0,sizeof(g_state));
-    g_sample_timeline=0U;g_external_pulses=0U;g_transport_step=0U;
-    g_midi_clock_period_q16=1U;g_midi_clock_next_q16=0U;g_midi_clock_enabled=0U;}
+    g_sample_timeline=0U;g_external_pulses=0U;g_transport_step=0U;}
 void seq_transport_owner_reset_sample_timeline(uint64_t sample){g_sample_timeline=sample;}
 uint64_t seq_transport_owner_get_sample_timeline(void){return g_sample_timeline;}
 uint32_t seq_transport_owner_get_transport_step(void){return g_transport_step;}
@@ -40,26 +36,7 @@ void seq_transport_owner_begin_running_at_sample_q16(seq_runtime_state_t *state,
 void seq_transport_owner_stop_lifecycle_apply(seq_runtime_state_t *state,
     uint64_t effective_sample){(void)effective_sample;if(!state)return;
     seq_live_rec_session_on_transport_stop(g_sample_timeline,state->samples_per_step_q16);
-    state->running=0U;state->step_sample_q16=0U;g_external_pulses=0U;
-    g_midi_clock_enabled=0U;}
-void seq_transport_owner_set_midi_clock_enabled(uint8_t enabled){g_midi_clock_enabled=enabled;}
-void seq_transport_owner_set_midi_clock_period_q16(uint32_t period){g_midi_clock_period_q16=period?period:1U;}
-void seq_transport_owner_rebase_midi_clock(uint64_t sample){g_midi_clock_next_q16=(sample<<16)+g_midi_clock_period_q16;(void)g_midi_clock_enabled;}
-void seq_transport_owner_arm_midi_clock(uint64_t sample){
-    /* AUDIO consumes the deadline from its IRQ.  Keep production disabled
-     * until the complete 64-bit deadline is installed: enabling first lets
-     * an intervening boundary catch up from the stale deadline in IRQ. */
-    g_midi_clock_enabled=0U;__DMB();
-    g_midi_clock_next_q16=(sample<<16)+g_midi_clock_period_q16;__DMB();
-    g_midi_clock_enabled=1U;}
-uint32_t seq_transport_owner_take_midi_clocks_until(uint64_t sample){
-    uint32_t count=0U;const uint64_t limit=sample<<16;
-    if(g_midi_clock_enabled==0U)return 0U;
-    while(g_midi_clock_next_q16<=limit){
-        ++count;g_midi_clock_next_q16+=g_midi_clock_period_q16;
-    }
-    return count;
-}
+    state->running=0U;state->step_sample_q16=0U;g_external_pulses=0U;}
 void seq_transport_owner_set_external_step_pulses_pending(uint32_t pending){g_external_pulses=pending;}
 void seq_transport_owner_increment_external_step_pulses_pending(void){if(g_external_pulses!=UINT32_MAX)++g_external_pulses;}
 uint32_t seq_transport_owner_external_step_pulses_pending(void){return g_external_pulses;}

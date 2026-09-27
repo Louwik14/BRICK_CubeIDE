@@ -196,6 +196,25 @@ bool brick_media_clock_now_sample(uint64_t *out_sample_time)
     return true;
 }
 
+bool brick_media_clock_now_sample_q16(uint64_t *out_sample_time_q16,
+                                      uint32_t *out_capture_tick)
+{
+    if ((out_sample_time_q16 == NULL) || (out_capture_tick == NULL)
+            || (BRICK_MEDIA_CLOCK_STATE.tick_hz == 0U))
+        return false;
+    uint32_t tick;
+    uint64_t extended;
+    if (brick_media_clock_snapshot(&tick, &extended) == 0U)
+        return false;
+    *out_capture_tick = tick;
+    const uint32_t hz = BRICK_MEDIA_CLOCK_STATE.tick_hz;
+    const uint64_t whole = extended / hz;
+    const uint64_t remainder = extended % hz;
+    *out_sample_time_q16 = (whole * BOARD_AUDIO_SAMPLE_RATE_HZ << 16)
+        + ((remainder * BOARD_AUDIO_SAMPLE_RATE_HZ << 16) / hz);
+    return true;
+}
+
 uint32_t brick_media_clock_tick_hz(void)
 {
     return BRICK_MEDIA_CLOCK_STATE.tick_hz;

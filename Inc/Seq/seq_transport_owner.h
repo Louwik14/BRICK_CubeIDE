@@ -17,11 +17,6 @@ void seq_transport_owner_begin_running_at_sample_q16(seq_runtime_state_t *state,
     uint32_t now_tick,uint64_t start_q16);
 void seq_transport_owner_stop_lifecycle_apply(seq_runtime_state_t *state,
     uint64_t effective_sample);
-void seq_transport_owner_set_midi_clock_enabled(uint8_t enabled);
-void seq_transport_owner_set_midi_clock_period_q16(uint32_t period_q16);
-void seq_transport_owner_rebase_midi_clock(uint64_t sample);
-void seq_transport_owner_arm_midi_clock(uint64_t sample);
-uint32_t seq_transport_owner_take_midi_clocks_until(uint64_t sample);
 void seq_transport_owner_set_external_step_pulses_pending(uint32_t pending);
 void seq_transport_owner_increment_external_step_pulses_pending(void);
 uint32_t seq_transport_owner_external_step_pulses_pending(void);

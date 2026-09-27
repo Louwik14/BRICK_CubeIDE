@@ -40,6 +40,7 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/keyboard_runtime.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Keyboard/ui_keyboard_app.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/MIDI/midi.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/MIDI/midi_clock_timer.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/MIDI/midi_host.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_destination_catalog_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_env3_control.c"

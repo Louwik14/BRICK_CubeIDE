@@ -27,6 +27,7 @@
  */
 
 #include "midi.h"
+#include "MIDI/midi_clock_timer.h"
 #include "main.h"
 #include "usb_device.h"
 #include "Keyboard/keyboard_runtime.h"
@@ -669,7 +670,8 @@ static void backend_usb_device_send(const uint8_t *msg, size_t len) {
     packet[3] = len > 2U ? msg[2] : 0U;
   }
 
-  if (!midi_in_isr() && usb_device_ready() && (is_rt_clock_transport || (midi_usb_tx_count == 0U))) {
+  /* Preserve FA/FB/F8/FC order relative to packets already queued. */
+  if (!midi_in_isr() && usb_device_ready() && (midi_usb_tx_count == 0U)) {
     if (midi_usb_device_write_packets(packet, 4U) == 1U) {
       return;
     }
@@ -678,6 +680,7 @@ static void backend_usb_device_send(const uint8_t *msg, size_t len) {
   if (is_rt_clock_transport) {
     midi_usb_packet_t rt_packet = { .bytes = { packet[0], packet[1], packet[2], packet[3] } };
     if (!usb_tx_queue_push_front_realtime(&rt_packet)) {
+      if (st == 0xF8U) midi_clock_timer_note_usb_drop();
     } else {
     }
   } else {
@@ -876,6 +879,7 @@ void midi_poll(void) {
   }
 
   (void)midi_usb_refresh_connection();
+  midi_clock_timer_poll();
   (void)midi_process_usb_rx();
   midi_usb_tx_deferred_pending = false;
   (void)midi_usb_try_flush();

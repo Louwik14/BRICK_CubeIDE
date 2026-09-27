@@ -29,4 +29,6 @@ bool brick_media_clock_tick_to_sample(uint32_t capture_tick,
 bool brick_media_clock_tick_to_guarded_sample(uint32_t capture_tick,
                                               uint64_t *out_sample_time);
 bool brick_media_clock_now_sample(uint64_t *out_sample_time);
+bool brick_media_clock_now_sample_q16(uint64_t *out_sample_time_q16,
+                                      uint32_t *out_capture_tick);
 uint32_t brick_media_clock_tick_hz(void);
