@@ -65,8 +65,11 @@ void ui_core_pattern_enter(ui_pattern_mode_t mode,
         return;
     }
 
-    g_ui_core_pattern.prev_mode = current_hall_mode;
-    g_ui_core_pattern.prev_mode_valid = (current_hall_mode != UI_HALL_MODE_PATTERN) ? 1U : 0U;
+    if (current_hall_mode != UI_HALL_MODE_PATTERN)
+    {
+        g_ui_core_pattern.prev_mode = current_hall_mode;
+        g_ui_core_pattern.prev_mode_valid = 1U;
+    }
     g_ui_core_pattern.mode = mode;
     ui_core_pattern_reset_selection_only();
     set_hall_mode(UI_HALL_MODE_PATTERN);
@@ -85,10 +88,19 @@ uint8_t ui_core_pattern_handle_mode_event(const ui_event_t *ev,
     }
 
     if ((ev->type == UI_EVENT_BUTTON_PRESS) && (ev->id == (uint8_t)BTN_TRANSPOSE_DOWN)
-        && (((shift_down != 0U) && (g_ui_core_pattern.mode == UI_PATTERN_MODE_RECALL))
-            || ((track_select_armed != 0U) && (g_ui_core_pattern.mode == UI_PATTERN_MODE_STORE))))
+        && ((shift_down != 0U) || (track_select_armed != 0U)))
     {
-        ui_core_pattern_exit_to_previous_mode(set_hall_mode);
+        const ui_pattern_mode_t requested = (shift_down != 0U)
+                ? UI_PATTERN_MODE_RECALL : UI_PATTERN_MODE_STORE;
+        if (requested == g_ui_core_pattern.mode)
+        {
+            ui_core_pattern_exit_to_previous_mode(set_hall_mode);
+        }
+        else
+        {
+            g_ui_core_pattern.mode = requested;
+            ui_core_pattern_reset_selection_only();
+        }
         return 1U;
     }
 
