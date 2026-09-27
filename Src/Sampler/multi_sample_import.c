@@ -38,7 +38,6 @@ typedef struct
     uint32_t target_frames;
     uint32_t target_data_bytes;
     uint8_t needs_conversion;
-    uint8_t root_fallback_alpha;
     uint8_t velocity_center_valid;
     uint8_t velocity_center;
     multi_sample_zone_observation_t zone_observation;
@@ -1250,6 +1249,34 @@ static multi_sample_import_result_t multi_import_refresh_converted_sample(uint16
     return MULTI_SAMPLE_IMPORT_OK;
 }
 
+static multi_sample_import_result_t multi_import_persist_converted_mapping(uint16_t i)
+{
+    if (i >= g_import_sample_count) return MULTI_SAMPLE_IMPORT_INVALID_ARG;
+    const multi_sample_index_source_sample_t *const sample =
+        &g_import_samples[i].sample;
+    uint8_t chunks[24] = {
+        'i', 'n', 's', 't', 7U, 0U, 0U, 0U,
+        sample->root_note, 0U, 0U, 0U, 127U,
+        sample->vel_low, sample->vel_high, 0U,
+        'J', 'U', 'N', 'K', 0xB0U, 0x01U, 0U, 0U
+    };
+    FIL fp;
+    UINT written = 0U;
+    if (f_open(&fp, g_import_work_path, FA_WRITE) != FR_OK)
+        return MULTI_SAMPLE_IMPORT_WAV_OPEN_FAIL;
+    const FRESULT seek = f_lseek(&fp, 48U);
+    const FRESULT write = (seek == FR_OK)
+        ? f_write(&fp, chunks, sizeof(chunks), &written)
+        : seek;
+    const FRESULT sync = ((write == FR_OK) && (written == sizeof(chunks)))
+        ? f_sync(&fp)
+        : write;
+    (void)f_close(&fp);
+    return ((write == FR_OK) && (written == sizeof(chunks)) && (sync == FR_OK))
+        ? MULTI_SAMPLE_IMPORT_OK
+        : MULTI_SAMPLE_IMPORT_WAV_UNSUPPORTED;
+}
+
 static multi_sample_import_result_t multi_import_analyze_folder(void)
 {
     for (uint16_t i = 0U; i < g_import_sample_count; ++i)
@@ -1280,7 +1307,6 @@ static multi_sample_import_result_t multi_import_analyze_folder(void)
         item->sample.metadata_flags = resolved->metadata_flags | loop_flag;
         item->velocity_center_valid = resolved->velocity_center_valid;
         item->velocity_center = resolved->velocity_center;
-        item->root_fallback_alpha = 0U;
     }
     g_import_sample_count = write;
     if (g_import_sample_count == 0U) return MULTI_SAMPLE_IMPORT_NO_WAV;
@@ -1300,28 +1326,6 @@ static multi_sample_import_result_t multi_import_generate_zones(void)
     }
 
     multi_import_sort_samples_by_path();
-    uint8_t fallback_root = 36U;
-    uint8_t fallback_root_available = 1U;
-    for (uint16_t i = 0U; i < g_import_sample_count; ++i)
-    {
-        if (g_import_samples[i].root_fallback_alpha != 0U)
-        {
-            if (fallback_root_available == 0U)
-            {
-                return MULTI_SAMPLE_IMPORT_ZONE_LIMIT;
-            }
-            g_import_samples[i].sample.root_note = fallback_root;
-            if (fallback_root < 127U)
-            {
-                fallback_root++;
-            }
-            else
-            {
-                fallback_root_available = 0U;
-            }
-        }
-    }
-
     multi_sample_import_result_t result = multi_import_expand_velocity_centers();
     if (result != MULTI_SAMPLE_IMPORT_OK)
     {
@@ -1607,6 +1611,13 @@ static void multi_import_service_convert(uint32_t byte_budget)
     if (refresh != MULTI_SAMPLE_IMPORT_OK)
     {
         multi_import_fail(refresh);
+        return;
+    }
+    const multi_sample_import_result_t persist =
+        multi_import_persist_converted_mapping(g_import_async.convert_index);
+    if (persist != MULTI_SAMPLE_IMPORT_OK)
+    {
+        multi_import_fail(persist);
         return;
     }
     g_import_async.convert_index++;

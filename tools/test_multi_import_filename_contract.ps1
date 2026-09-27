@@ -9,11 +9,25 @@ foreach ($required in @(
     'f.range_valid',
     'f.prefix_valid',
     'f.note_valid',
+    'decimal_token',
     'skip_variant',
     'MULTI_SAMPLE_ZONE_DETECT_OVERFLOW')) {
     if (-not $source.Contains($required)) {
         throw "Multi filename/zone contract missing: $required"
     }
+}
+
+if ($source -match 'pair_count\s*==\s*count') {
+    throw 'one unrelated WAV must not disable a coherent root/velocity convention'
+}
+if ($source -match 'prefix_count\s*==\s*count') {
+    throw 'one unrelated WAV must not disable a corroborated MIDI-prefix convention'
+}
+if ($source -notmatch 'prefix_convention != 0U\) && \(f\.prefix_valid != 0U\)\)') {
+    throw 'a corroborated MIDI-prefix convention must outrank a contradictory text note'
+}
+if ($source -match 'parse_u8\(token_first\[0\].*ignored') {
+    throw 'take counters must not be restricted to the MIDI 0..127 range'
 }
 
 function Parse-LeadingRoot([string]$name) {
@@ -51,6 +65,13 @@ if (($a.Root -ne $b.Root) -or ($a.VelLow -ne $b.VelLow) -or
 $index = Get-Content -Raw 'Inc/Sampler/multi_sample_index.h'
 if ($index -notmatch 'MULTI_SAMPLE_INDEX_VERSION\s+\(4U\)') {
     throw 'folder-analysis indexes must invalidate pre-v4 mappings'
+}
+
+$import = Get-Content -Raw 'Src/Sampler/multi_sample_import.c'
+if (($import -notmatch 'multi_import_persist_converted_mapping') -or
+    ($import -notmatch "'i', 'n', 's', 't'") -or
+    ($import -match 'root_fallback_alpha')) {
+    throw 'converted WAV mapping persistence or single-authority cleanup is missing'
 }
 
 Write-Output 'Multi import filename contract: PASS'

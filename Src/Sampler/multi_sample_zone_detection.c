@@ -34,6 +34,14 @@ static uint8_t parse_u8(const char *first, const char *last, uint8_t *out)
     return 1U;
 }
 
+static uint8_t decimal_token(const char *first, const char *last)
+{
+    if ((first == 0) || (last == 0) || (first >= last)) return 0U;
+    for (const char *p = first; p < last; ++p)
+        if ((*p < '0') || (*p > '9')) return 0U;
+    return 1U;
+}
+
 static const char *filename_end(const char *name)
 {
     const char *dot = (name != 0) ? strrchr(name, '.') : 0;
@@ -126,9 +134,8 @@ static multi_zone_filename_fact_t analyze_filename(const char *name)
     if (token_count != 0U)
     {
         const uint32_t width = (uint32_t)(token_last[0] - token_first[0]);
-        uint8_t ignored = 0U;
         fact.take_valid = ((width >= 4U)
-            && (parse_u8(token_first[0], token_last[0], &ignored) != 0U)) ? 1U : 0U;
+            && (decimal_token(token_first[0], token_last[0]) != 0U)) ? 1U : 0U;
         const uint8_t tail = (fact.take_valid != 0U) ? 1U : 0U;
         if (token_count >= (uint8_t)(tail + 2U))
         {
@@ -207,13 +214,12 @@ multi_sample_zone_detect_result_t multi_sample_zone_detect_folder(
             prefix_count++;
         }
     }
-    const uint8_t pair_convention = ((pair_count == count) && (pair_count > 1U)
+    const uint8_t pair_convention = ((pair_count > 1U)
                                      && ((pair_roots_vary != 0U)
                                          || (pair_velocities_vary != 0U))) ? 1U : 0U;
     const uint8_t prefix_convention =
-        ((prefix_count == count)
-         && ((prefix_note_corroborated != 0U)
-             || ((prefix_count > 1U) && (prefix_roots_vary != 0U)))) ? 1U : 0U;
+        ((prefix_note_corroborated != 0U)
+         || ((prefix_count > 1U) && (prefix_roots_vary != 0U))) ? 1U : 0U;
 
     for (uint16_t i = 0U; i < count; ++i)
     {
@@ -227,8 +233,7 @@ multi_sample_zone_detect_result_t multi_sample_zone_detect_folder(
         { out[i].root_note = f.range_root; out[i].metadata_flags = MULTI_SAMPLE_INDEX_META_ROOT_FILENAME; }
         else if ((pair_convention != 0U) && (f.pair_valid != 0U))
         { out[i].root_note = f.pair_root; out[i].metadata_flags = MULTI_SAMPLE_INDEX_META_ROOT_FILENAME; }
-        else if ((prefix_convention != 0U) && (f.prefix_valid != 0U)
-                 && ((f.note_valid == 0U) || ((f.prefix_root % 12U) == (f.note_root % 12U))))
+        else if ((prefix_convention != 0U) && (f.prefix_valid != 0U))
         { out[i].root_note = f.prefix_root; out[i].metadata_flags = MULTI_SAMPLE_INDEX_META_ROOT_FILENAME; }
         else if (f.note_valid != 0U)
         { out[i].root_note = f.note_root; out[i].metadata_flags = MULTI_SAMPLE_INDEX_META_ROOT_FILENAME; }
@@ -247,9 +252,7 @@ multi_sample_zone_detect_result_t multi_sample_zone_detect_folder(
                         || (obs[j].inst_root_valid != 0U)
                         || (other.range_valid != 0U)
                         || ((pair_convention != 0U) && (other.pair_valid != 0U))
-                        || ((prefix_convention != 0U) && (other.prefix_valid != 0U)
-                            && ((other.note_valid == 0U)
-                                || ((other.prefix_root % 12U) == (other.note_root % 12U))))
+                        || ((prefix_convention != 0U) && (other.prefix_valid != 0U))
                         || (other.note_valid != 0U)
                         || (other.pair_valid != 0U)
                         || (other.prefix_valid != 0U));
