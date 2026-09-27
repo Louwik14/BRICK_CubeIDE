@@ -16,6 +16,7 @@
 #include "pages/ui_page_name_edit.h"
 #include "pages/ui_page_settings.h"
 #include "ui_page_manager.h"
+#include "ui_renderer_template.h"
 #include "ui_template_page.h"
 
 /* Placeholder for intentionally unavailable page slots. */
@@ -23,6 +24,7 @@ static const ui_page_t g_ui_page_reserved_slot = { 0 };
 
 void ui_bootstrap_init(void)
 {
+    ui_renderer_template_init();
     ui_template_family_registry_init();
     ui_page_template_env_register_families();
     ui_page_template_cfg_register_families();

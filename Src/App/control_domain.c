@@ -31,6 +31,7 @@
 #include "Storage/wav_convert.h"
 #include "Storage/wav_loader.h"
 #include "Storage/waveform_cache.h"
+#include "Storage/waveform_service.h"
 #include "Track/track_state.h"
 #include "Track/control_music_output.h"
 #include "UI/ui_active_track_sync.h"
@@ -60,6 +61,7 @@ void control_domain_init(void)
     wav_convert_init();
     multi_sample_import_init();
     waveform_cache_init();
+    waveform_service_init();
     (void)waveform_cache_ensure_dirs();
     crash_library_init();
     wav_loader_catalog_init_load();
@@ -101,6 +103,4 @@ void control_domain_start(float postgain, float output_compensation)
         ui_page_calibration_open_from_boot();
     }
     brick6_stream_service_task_init();
-    midi_init();
-    board_usb_device_init();
-}
+    midi_i

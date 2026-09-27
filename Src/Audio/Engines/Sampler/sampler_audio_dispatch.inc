@@ -1,5 +1,6 @@
 void brick6_sampler_runtime_init(void)
 {
+    sample_voice_reader_init();
     multi_voice_dsp_init();
     brick6_sampler_runtime_diag_reset();
     memset(g_sampler_voice, 0, sizeof(g_sampler_voice));

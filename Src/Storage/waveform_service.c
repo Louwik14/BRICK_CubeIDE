@@ -230,6 +230,14 @@ static int16_t waveform_decode_float_sample(const uint8_t *p)
 
 #include "waveform_local_engine.inc"
 
+void waveform_service_init(void)
+{
+    memset(g_waveform_tiles, 0, sizeof(g_waveform_tiles));
+    memset(&g_waveform_build, 0, sizeof(g_waveform_build));
+    memset(&g_waveform_local, 0, sizeof(g_waveform_local));
+    memset(&g_waveform_local_line_hot, 0, sizeof(g_waveform_local_line_hot));
+}
+
 uint8_t waveform_service_local_pending(void)
 {
     if(g_waveform_local.valid == 0U || g_waveform_local.desired == 0U)

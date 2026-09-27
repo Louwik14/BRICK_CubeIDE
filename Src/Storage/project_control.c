@@ -1,4 +1,5 @@
 #include "Storage/project_control.h"
+#include "Storage/ram_load_trace.h"
 
 #include "Track/track_state.h"
 #include "Track/track_runtime.h"
@@ -15,6 +16,8 @@
 #include "Sampler/sample_cache.h"
 #include "Sampler/sampler_ram_pool.h"
 #include "Sampler/wavetable_pool.h"
+#include "Seq/seq_runtime.h"
+#include "Storage/audio_recorder.h"
 #include "Platform/brick_fatal.h"
 #include "Platform/memory_layout.h"
 #include "Storage/persistent_key_catalog.h"
@@ -49,8 +52,10 @@ typedef struct {
     uint16_t expected_backend;
     uint16_t expected_logical;
     uint16_t replaced_logical;
+    uint32_t sequence;
     uint8_t pending;
     uint8_t valid;
+    uint8_t service_traced;
 } project_control_ram_load_t;
 
 typedef struct {
@@ -65,6 +70,38 @@ typedef struct {
 
 CONTROL_STATE_SDRAM static project_control_ram_load_t g_ram_load;
 CONTROL_STATE_SDRAM static project_control_wavetable_load_t g_wavetable_load;
+
+static uint32_t project_ram_trace_state(void)
+{
+    return (uint32_t)g_ram_load.pending
+        | ((uint32_t)g_ram_load.valid << 1U)
+        | (((uint32_t)g_ram_load.expected_backend & 0xFFU) << 8U)
+        | (((uint32_t)g_ram_load.expected_logical & 0xFFU) << 16U)
+        | (((uint32_t)g_ram_load.replaced_logical & 0xFFU) << 24U);
+}
+
+static uint32_t project_ram_trace_flags(void)
+{
+    uint32_t flags = 0U;
+    if (g_ram_load.pending != 0U) flags |= RAM_LOAD_TRACE_FLAG_PC_PENDING;
+    if (g_ram_load.valid != 0U) flags |= RAM_LOAD_TRACE_FLAG_PC_RESULT_VALID;
+    if (sampler_ram_pool_load_async_busy() != 0U) flags |= RAM_LOAD_TRACE_FLAG_POOL_BUSY;
+    if (sampler_ram_pool_trace_state() == 10U) flags |= RAM_LOAD_TRACE_FLAG_POOL_DONE;
+    if (wavetable_pool_load_async_busy() != 0U) flags |= RAM_LOAD_TRACE_FLAG_WAVETABLE_BUSY;
+    if (multi_sample_load_has_pending() != 0U) flags |= RAM_LOAD_TRACE_FLAG_MULTI_PENDING;
+    if (seq_runtime_is_running() != 0U) flags |= RAM_LOAD_TRACE_FLAG_TRANSPORT;
+    if (seq_runtime_is_start_pending() != 0U) flags |= RAM_LOAD_TRACE_FLAG_START_PENDING;
+    if (audio_recorder_is_active() != 0U) flags |= RAM_LOAD_TRACE_FLAG_RECORDER;
+    return flags;
+}
+
+static void project_ram_trace(uint32_t event, uint32_t sequence,
+                              uint32_t flags, uint32_t arg0, uint32_t arg1)
+{
+    ram_load_trace_write(event, sequence, project_ram_trace_state(),
+                         sampler_ram_pool_trace_state(),
+                         project_ram_trace_flags() | flags, arg0, arg1);
+}
 
 static uint8_t bank_set(project_control_bank_slot_t*bank,uint16_t capacity,uint16_t logical,uint32_t kind,const char*path,uint16_t runtime){persist_control_asset_ref_t ref;if(bank==NULL||logical>=capacity||asset_ref_make_canonical(kind,path,&ref)==0U)return 0U;project_control_bank_slot_t next={.used=1U,.kind=kind,.runtime=runtime,.pending_runtime=PROJECT_CONTROL_INVALID_RUNTIME};memcpy(next.canonical_path,ref.canonical_path,ref.path_length);next.canonical_path[ref.path_length]='\0';bank[logical]=next;return 1U;}
 static uint8_t bank_find(const project_control_bank_slot_t*bank,uint16_t capacity,uint32_t kind,const char*path,uint16_t*out_logical){persist_control_asset_ref_t ref;if(bank==NULL||out_logical==NULL||asset_ref_make_canonical(kind,path,&ref)==0U)return 0U;for(uint16_t i=0U;i<capacity;++i)if(bank[i].used!=0U&&bank[i].kind==kind&&strcmp(bank[i].canonical_path,ref.canonical_path)==0){*out_logical=i;return 1U;}return 0U;}
@@ -222,7 +259,17 @@ uint8_t project_control_find_asset(uint32_t kind,const char*path,uint16_t*out_lo
 
 uint8_t project_control_ram_load_begin(uint16_t backend_slot,const char*path)
 {
-    if(g_ram_load.pending!=0U)return 0U;
+    const uint32_t sequence=ram_load_trace_next_sequence();
+    const uint32_t previous_sequence=ram_load_trace_active_sequence();
+    project_ram_trace(RAM_LOAD_TRACE_PC_BEGIN_ENTER,sequence,
+        ((path!=NULL)&&(path[0]!='\0'))?RAM_LOAD_TRACE_FLAG_PATH_VALID:0U,
+        backend_slot,ram_load_trace_path_hash(path));
+    if(g_ram_load.pending!=0U)
+    {
+        project_ram_trace(RAM_LOAD_TRACE_PC_REJECT_PENDING,sequence,0U,
+            g_ram_load.sequence,g_ram_load.expected_backend);
+        return 0U;
+    }
     const sampler_ram_slot_t*const old=sampler_ram_pool_get_slot(backend_slot);
     const uint16_t replaced=(old!=NULL&&old->state==SAMPLER_RAM_SLOT_READY)
         ?bank_find_runtime(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
@@ -230,21 +277,66 @@ uint8_t project_control_ram_load_begin(uint16_t backend_slot,const char*path)
         :PROJECT_CONTROL_INVALID_RUNTIME;
     uint16_t logical=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     if(bank_reserve_runtime(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
-            PERSIST_ASSET_SAMPLE_RAM,path,backend_slot,&logical)==0U)return 0U;
+            PERSIST_ASSET_SAMPLE_RAM,path,backend_slot,&logical)==0U)
+    {
+        uint32_t flags=0U;
+        uint32_t reason=RAM_LOAD_TRACE_BANK_REJECT_UNKNOWN;
+        uint16_t existing=PROJECT_CONTROL_INVALID_RUNTIME;
+        if(backend_slot==PROJECT_CONTROL_INVALID_RUNTIME)
+            reason=RAM_LOAD_TRACE_BANK_REJECT_INVALID_BACKEND;
+        else if(path==NULL||path[0]=='\0')
+            reason=RAM_LOAD_TRACE_BANK_REJECT_INVALID_PATH;
+        else if(bank_find(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
+                PERSIST_ASSET_SAMPLE_RAM,path,&existing)!=0U)
+        {
+            if(g_sample_bank[existing].runtime!=PROJECT_CONTROL_INVALID_RUNTIME)
+            {
+                flags|=RAM_LOAD_TRACE_FLAG_BANK_RUNTIME;
+                reason=RAM_LOAD_TRACE_BANK_REJECT_EXISTING_RUNTIME;
+            }
+            if(g_sample_bank[existing].pending_runtime!=PROJECT_CONTROL_INVALID_RUNTIME)
+            {
+                flags|=RAM_LOAD_TRACE_FLAG_BANK_PENDING;
+                reason=RAM_LOAD_TRACE_BANK_REJECT_EXISTING_PENDING;
+            }
+        }
+        else
+        {
+            uint8_t free_found=0U;
+            for(uint16_t i=0U;i<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS;++i)
+                if(g_sample_bank[i].used==0U)free_found=1U;
+            reason=(free_found!=0U)?RAM_LOAD_TRACE_BANK_REJECT_INVALID_PATH
+                                  :RAM_LOAD_TRACE_BANK_REJECT_FULL;
+        }
+        project_ram_trace(RAM_LOAD_TRACE_PC_REJECT_BANK,sequence,flags,
+            reason,((uint32_t)backend_slot<<16U)|existing);
+        return 0U;
+    }
+    ram_load_trace_set_active_sequence(sequence);
     if(sampler_ram_pool_load_async_begin(backend_slot,path)==0U)
     {
         (void)bank_remove(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical);
+        project_ram_trace(RAM_LOAD_TRACE_PC_REJECT_POOL,sequence,0U,
+            sampler_ram_pool_get_last_result(),sampler_ram_pool_trace_state());
+        ram_load_trace_set_active_sequence(previous_sequence);
         return 0U;
     }
     /* A terminal result is a notification, not an active load.  A new
      * accepted request supersedes an unconsumed notification. */
+    if(g_ram_load.valid!=0U)
+        project_ram_trace(RAM_LOAD_TRACE_RESULT_CLEARED,g_ram_load.sequence,0U,
+            g_ram_load.result.result,g_ram_load.result.logical_slot);
     g_ram_load.valid=0U;
+    g_ram_load.sequence=sequence;
+    g_ram_load.service_traced=0U;
     g_ram_load.expected_backend=backend_slot;
     g_ram_load.expected_logical=logical;
     g_ram_load.replaced_logical=replaced;
     (void)snprintf(g_ram_load.expected_path,sizeof(g_ram_load.expected_path),
                    "%s",path);
     g_ram_load.pending=1U;
+    project_ram_trace(RAM_LOAD_TRACE_REQUEST_ACCEPTED,sequence,0U,
+        backend_slot,logical);
     return 1U;
 }
 
@@ -310,6 +402,12 @@ void project_control_asset_load_service(void)
 {
     if(g_ram_load.pending!=0U&&g_ram_load.valid==0U)
     {
+        if(g_ram_load.service_traced==0U)
+        {
+            g_ram_load.service_traced=1U;
+            project_ram_trace(RAM_LOAD_TRACE_PC_SERVICE,g_ram_load.sequence,0U,
+                g_ram_load.expected_backend,g_ram_load.expected_logical);
+        }
         sampler_ram_result_t result=SAMPLER_RAM_RESULT_INVALID_ARG;
         uint16_t backend=SAMPLER_RAM_POOL_INVALID_SLOT;
         uint16_t global=SAMPLE_GLOBAL_POOL_INVALID_INDEX;
@@ -364,9 +462,19 @@ void project_control_asset_load_service(void)
             else if(g_ram_load.expected_logical<SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
                 (void)bank_remove(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,
                                   g_ram_load.expected_logical);
+            project_ram_trace((terminal.success!=0U)
+                    ?RAM_LOAD_TRACE_PC_COMPLETED_SUCCESS
+                    :RAM_LOAD_TRACE_PC_COMPLETED_ERROR,
+                g_ram_load.sequence,
+                (terminal.success!=0U)?RAM_LOAD_TRACE_FLAG_RESULT_SUCCESS:0U,
+                terminal.result,
+                ((uint32_t)terminal.backend_slot<<16U)|terminal.global_slot);
             g_ram_load.result=terminal;
             g_ram_load.pending=0U;
             g_ram_load.valid=1U;
+            project_ram_trace(RAM_LOAD_TRACE_RESULT_PENDING,g_ram_load.sequence,
+                (terminal.success!=0U)?RAM_LOAD_TRACE_FLAG_RESULT_SUCCESS:0U,
+                terminal.result,terminal.logical_slot);
         }
     }
 
@@ -438,7 +546,12 @@ uint8_t project_control_ram_load_take_result(project_control_ram_load_result_t*o
 {
     if(out==NULL||g_ram_load.valid==0U)return 0U;
     *out=g_ram_load.result;
+    project_ram_trace(RAM_LOAD_TRACE_RESULT_CONSUMED,g_ram_load.sequence,
+        (g_ram_load.result.success!=0U)?RAM_LOAD_TRACE_FLAG_RESULT_SUCCESS:0U,
+        g_ram_load.result.result,g_ram_load.result.logical_slot);
     g_ram_load.valid=0U;
+    project_ram_trace(RAM_LOAD_TRACE_RESULT_CLEARED,g_ram_load.sequence,0U,
+        g_ram_load.result.result,g_ram_load.result.logical_slot);
     return 1U;
 }
 

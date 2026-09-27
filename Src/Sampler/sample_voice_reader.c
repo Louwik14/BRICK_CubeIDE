@@ -47,6 +47,13 @@ SDRAM_STREAM_SERVICE static sample_voice_loop_cache_t
     g_sample_voice_loop_cache[SAMPLE_STREAM_TARGET_MAX_VOICES];
 #endif
 
+void sample_voice_reader_init(void)
+{
+#if SAMPLE_AUDIO_FORMAT_VOICE_LOOP_CACHE_FRAMES > 0U
+    memset(g_sample_voice_loop_cache, 0, sizeof(g_sample_voice_loop_cache));
+#endif
+}
+
 
 /* Cursor/page/loop handling and render kernels remain in their original sequence.
  * Private fragments share this translation unit to preserve static state and call order. */

@@ -223,3 +223,11 @@ static CTRL_STATE ui_renderer_template_wavetable_cache_t
 #include "Renderer/ui_renderer_synth_widgets.inc"
 
 #include "Renderer/ui_renderer_chrome.inc"
+
+void ui_renderer_template_init(void)
+{
+    memset(&g_ui_renderer_template_wavetable_cache, 0,
+           sizeof(g_ui_renderer_template_wavetable_cache));
+    memset(g_ui_template_stack_wave_cache, 0,
+           sizeof(g_ui_template_stack_wave_cache));
+}

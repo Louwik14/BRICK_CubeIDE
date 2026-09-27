@@ -88,6 +88,7 @@ typedef struct
     uint32_t loop_cache_generation;
 } sample_voice_reader_t;
 
+void sample_voice_reader_init(void);
 void sample_voice_reader_reset(sample_voice_reader_t *reader);
 void sample_voice_reader_bind(sample_voice_reader_t *reader,
                               uint16_t sample_id,
