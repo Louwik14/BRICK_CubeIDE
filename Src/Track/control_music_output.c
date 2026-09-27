@@ -855,19 +855,9 @@ uint8_t control_music_output_submit(const control_music_intent_t *intent,
     uint16_t count = 0U;
     uint8_t victim_count = 0U;
     uint8_t excluded_mask = 0U;
-    for (uint8_t i = 0U; i < CONTROL_MUSIC_OUTPUTS_PER_ENTITY; ++i)
-    {
-        const control_music_output_t *const output =
-            &control_music_output_ledger()[entity_id][i];
-        if ((output->alive != 0U) && (output->note == intent->note)
-                && (output->midi_channel == control_music_intent_channel(intent)))
-        {
-            victim_entities[victim_count] = entity_id;
-            victim_indices[victim_count++] = i;
-            excluded_mask |= (uint8_t)(1U << i);
-            break;
-        }
-    }
+    /* Independent occurrences may have the same pitch.  The semantic id
+     * above is the lifetime identity; pitch alone cannot select a victim.
+     * Capacity pressure below remains the only reason to steal a voice. */
     if (control_music_output_is_multi(entity_id) != 0U)
     {
         const uint8_t survivors = (uint8_t)(live_count - victim_count);

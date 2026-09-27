@@ -30,6 +30,12 @@ elle vaut 1 pour un enfant GROUP et 0 pour le GROUP master. La polyphonie peut
 voler ou limiter les sorties terminales, jamais retirer une source du pool
 ARP/Euclid ni changer son rang. Le master ne publie aucun walker MIDI FX.
 
+Chaque sortie terminale est possedee par son identite semantique et sa cause.
+Deux occurrences de meme hauteur et de meme canal restent independantes en
+polyphonie: une nouvelle occurrence ne retire une sortie existante que si la
+capacite effective impose un vol de voix. Le NOTE_OFF ferme uniquement sa
+propre identite, meme si une autre sortie joue la meme hauteur.
+
 Chaque piste publie la meme chaine MIDI FX fixe de 16 octets:
 `GENERATOR -> VOICER -> SCALER -> TRIG`. Les p-locks d'un meme etage sont
 compactes en une entree de 48 bits (masque de quatre parametres et quatre
