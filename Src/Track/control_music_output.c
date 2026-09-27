@@ -54,7 +54,7 @@ typedef struct
     brick_entity_id_t entity_id;
 } control_music_output_death_t;
 
-SEQ_STATE_D2 static control_music_output_death_t
+SEC_ATTR(".ram_d2_m4_sram3") static control_music_output_death_t
     g_control_music_output_staged_death[CONTROL_MUSIC_ACTION_CAPACITY];
 static uint16_t g_control_music_output_staged_death_count;
 
@@ -83,9 +83,9 @@ typedef struct
     uint16_t count;
 } control_music_window_external_t;
 
-SEQ_STATE_D2 static control_music_window_internal_t
+SEC_ATTR(".ram_d2_m4_sram3") static control_music_window_internal_t
     g_control_music_window_internal;
-SEQ_STATE_D2 static control_music_window_external_t
+SEC_ATTR(".ram_d2_m4_sram3") static control_music_window_external_t
     g_control_music_window_external;
 static uint64_t g_control_music_window_first;
 static uint16_t g_control_music_window_frames;

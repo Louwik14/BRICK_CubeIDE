@@ -434,7 +434,6 @@ target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
     -Wall
     --specs=nano.specs
 
-    $<${BRICK6_RELEASE_LIKE_CONFIG}:-O1>
 
     $<$<AND:${BRICK6_RELEASE_LIKE_CONFIG},$<COMPILE_LANGUAGE:C>>:-fno-math-errno>
     $<$<AND:${BRICK6_RELEASE_LIKE_CONFIG},$<COMPILE_LANGUAGE:C>>:-ffast-math>
@@ -451,160 +450,37 @@ target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-fstack-usage>
 )
 
-# Tous les fichiers C++ en O2 en Release
-get_target_property(ALL_TARGET_SOURCES ${CMAKE_PROJECT_NAME} SOURCES)
+# Release optimization is assigned once per source.
+set(BRICK_OWNED_SOURCES ${BRICK_DOMAIN_UNIQUE})
+list(FILTER BRICK_OWNED_SOURCES INCLUDE REGEX ".*\.(c|cc|cpp|cxx)$")
+set_source_files_properties(${BRICK_OWNED_SOURCES} PROPERTIES
+    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O2>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>")
 
-set(ALL_CPP_SOURCES ${ALL_TARGET_SOURCES})
-list(FILTER ALL_CPP_SOURCES INCLUDE REGEX ".*\\.(cpp|cc|cxx)$")
-
-set_source_files_properties(${ALL_CPP_SOURCES} PROPERTIES
-    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O2>"
-)
-
-# Braids only: favor IRQ throughput and enable cross-TU optimization in Release.
-set(BRAIDS_O3_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/braids/analog_oscillator.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/braids/digital_oscillator.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/braids/macro_oscillator.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/mutable_instruments/braids/resources.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/prism_engine.cpp"
-)
-set_source_files_properties(${BRAIDS_O3_SOURCES} PROPERTIES
-    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
-)
-
-# Explicit optimization exceptions do not affect execution-domain ownership.
-set(CONTROL_RUNTIME_O1_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/brick6_clip_shifter.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/live_parameter_audio_runtime.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/brick6_stream_service_task.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/project_control.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/project_load_quiesce.c"
-)
-
-# Common audio engine: keep LTO scoped to AUDIO-owned DSP and synth runtime.
-set(AUDIO_DSP_O3_LTO_SOURCES ${DOMAIN_AUDIO})
-list(FILTER AUDIO_DSP_O3_LTO_SOURCES INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
-list(REMOVE_ITEM AUDIO_DSP_O3_LTO_SOURCES ${CONTROL_RUNTIME_O1_SOURCES})
-
-set(AUDIO_LTO_SOURCES
-    ${AUDIO_DSP_O3_LTO_SOURCES} ${CMSIS_DSP_SRC} ${MUTABLE_INSTRUMENTS_SRC}
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/fm_engine.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/audio_engine_dispatch.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/prism_engine.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/stack_engine.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/tb303_engine.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/acid_engine.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/wavetable_engine.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/Sampler/brick6_sampler_runtime.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Track/synth_polyphony.c
-)
-set_source_files_properties(${AUDIO_LTO_SOURCES} PROPERTIES
-    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
-)
-
-# LFO control/polyphonic preparation: keep the optimization scope limited to
-# the two translation units reached from the hard real-time audio path.
-set(MOD_LFO_O3_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_lfo_v1.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Mod/mod_lfo_segment.c"
-)
-set_source_files_properties(${MOD_LFO_O3_SOURCES} PROPERTIES
-    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O1>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
-)
-
-set(AUDIO_O3_SOURCES
-    ${AUDIO_DSP_O3_LTO_SOURCES}
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/fm_engine.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/audio_engine_dispatch.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/prism_engine.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/stack_engine.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/tb303_engine.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/acid_engine.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/wavetable_engine.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/Sampler/brick6_sampler_runtime.c
-    ${MUTABLE_INSTRUMENTS_SRC}
-)
-set_source_files_properties(${AUDIO_O3_SOURCES} PROPERTIES
-    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
-)
-
-set_source_files_properties(
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/mixer.c"
-    PROPERTIES COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
-)
-
-set_source_files_properties(
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/audio_engine_dispatch.c"
-    PROPERTIES COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
-)
-
-# GCC 13.3 LTO can emit a corrupted .init_array relocation for the sole
-# non-trivial global C++ initializer in the diagnostic image. Keep this TU at
-# Release optimization while making its constructor relocation ordinary.
-set_source_files_properties(${CMSIS_DSP_SRC} PROPERTIES
-    COMPILE_DEFINITIONS "ARM_MATH_CM7;ARM_MATH_LOOPUNROLL"
-)
-
-# Hot sampler render code reached from the common audio block.
-# Keep sample_cache/sample_stream_manager and the other Sampler sources out:
-# they also own SD/FatFs, refill, page scheduling or asynchronous state.
-set(SAMPLE_RENDER_HOT_SOURCES
+# Audio kernels and sampler render loops retain their intentional O3 policy.
+set(BRICK_AUDIO_O3_SOURCES ${DOMAIN_AUDIO})
+list(FILTER BRICK_AUDIO_O3_SOURCES INCLUDE REGEX ".*\.(c|cc|cpp|cxx)$")
+list(APPEND BRICK_AUDIO_O3_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_voice_reader.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_play_plan.c"
-)
-set_source_files_properties(${SAMPLE_RENDER_HOT_SOURCES} PROPERTIES
-    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>"
-)
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_play_plan.c")
+set_source_files_properties(${BRICK_AUDIO_O3_SOURCES} PROPERTIES
+    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>")
 
-# Storage I/O/persistence implementation in O0, excluding CONTROL/runtime
-# orchestration hosted physically by Storage.
-set(STORAGE_IO_O0_SOURCES ${DOMAIN_CONTROL} ${DOMAIN_STORAGE})
-list(FILTER STORAGE_IO_O0_SOURCES INCLUDE REGEX "/Src/Storage/")
-list(FILTER STORAGE_IO_O0_SOURCES INCLUDE REGEX ".*\\.(c|cc|cpp|cxx)$")
-list(REMOVE_ITEM STORAGE_IO_O0_SOURCES ${CONTROL_RUNTIME_O1_SOURCES})
-list(REMOVE_ITEM STORAGE_IO_O0_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/generic_recorder.c")
+set(BRICK_VENDOR_O3_SOURCES ${MUTABLE_INSTRUMENTS_SRC} ${CMSIS_DSP_SRC})
+set_source_files_properties(${BRICK_VENDOR_O3_SOURCES} PROPERTIES
+    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>")
+set_source_files_properties(${CMSIS_DSP_SRC} PROPERTIES
+    COMPILE_DEFINITIONS "ARM_MATH_CM7;ARM_MATH_LOOPUNROLL")
 
-set_source_files_properties(${STORAGE_IO_O0_SOURCES} PROPERTIES
-    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O0>"
-)
-
-# WAV canonicalization is a modal bulk transform. Keep the surrounding storage
-# code conservative while allowing its decode, SRC and packing loops to be
-# optimized on Cortex-M7.
-set(WAV_CANONICALIZATION_O2_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/wav_convert.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/wav_audio_stream.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/wav_audio_codec.c"
-)
-set_source_files_properties(${WAV_CANONICALIZATION_O2_SOURCES} PROPERTIES
-    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O2>"
-)
-
-set_source_files_properties(
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/generic_recorder.c"
-    PROPERTIES COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O2>"
-)
-
-set_source_files_properties(${CONTROL_RUNTIME_O1_SOURCES} PROPERTIES
-    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O1>"
-)
-
-# Bounded SEQ IRQ core: optimize only the musical scheduling/publication path.
-set_source_files_properties(
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_engine.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_timing.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_engine_port_h743.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/NoteFx/note_fx_engine.c"
-    PROPERTIES COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O2>"
-)
-
-# U8g2 rasterization is on the hot OLED render path in Release.
+# Generated and third-party sources retain size optimization without LTO.
+get_target_property(BRICK_ALL_TARGET_SOURCES ${CMAKE_PROJECT_NAME} SOURCES)
+set(BRICK_VENDOR_SOURCES ${BRICK_ALL_TARGET_SOURCES})
+list(REMOVE_ITEM BRICK_VENDOR_SOURCES ${BRICK_OWNED_SOURCES} ${BRICK_VENDOR_O3_SOURCES})
+list(FILTER BRICK_VENDOR_SOURCES INCLUDE REGEX ".*\.(c|cc|cpp|cxx)$")
+set_source_files_properties(${BRICK_VENDOR_SOURCES} PROPERTIES
+    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-Os>")
 set_source_files_properties(${U8G2_SRC} PROPERTIES
-    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O2>"
-)
-
+    COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O2>")
+target_compile_options(STM32_Drivers PRIVATE "$<${BRICK6_RELEASE_LIKE_CONFIG}:-Os>")
 # --------------------------------------------------------------------------
 # Link options aligned with CubeIDE
 # --------------------------------------------------------------------------

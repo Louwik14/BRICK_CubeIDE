@@ -82,3 +82,11 @@ implementation dans `Src`. Aucun domaine generique `Core` ne subsiste.
 - [recorder_sd.md](recorder_sd.md): bus AUDIO REC unique, Recorder, REC_SOURCE A/B, export cooperatif et lecture Streamer.
 - [m4_m7_functional_command_contract.md](m4_m7_functional_command_contract.md): FIFO fonctionnelle unique et consumer AUDIO.
 - [m7_m4_physical_return_contract.md](m7_m4_physical_return_contract.md): retours physiques minimaux, diagnostic et ownership des data planes.
+# Optimisation Release
+
+Les unités BRICK des manifestes de domaine sont compilées en `-O2` avec LTO.
+Les noyaux AUDIO et les boucles de rendu Sampler explicitement identifiés restent
+en `-O3` avec LTO. Les sources HAL, générées et tierces gardent leur politique
+distincte. Les données D2 réparties entre SRAM1, SRAM2 et SRAM3 utilisent des
+sections nommées : leur placement ne dépend plus du nom du fichier objet, qui
+disparaît lors de la compilation LTO.

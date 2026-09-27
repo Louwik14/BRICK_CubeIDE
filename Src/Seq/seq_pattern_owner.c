@@ -142,6 +142,7 @@ void seq_engine_control_reset_note_fx_context(void)
 static void seq_engine_capture_step(seq_pattern_t *pattern,
                                       seq_track_id_t track, seq_step_id_t step)
 {
+    if (track >= SEQ_LANE_CAPACITY || step >= SEQ_MAX_STEPS) return;
     if (step == 0U)
     {
         memset(&g_build_fx_state[track], 0, sizeof(g_build_fx_state[track]));
