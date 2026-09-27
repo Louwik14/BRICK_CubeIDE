@@ -50,6 +50,17 @@ void wav_audio_stream_init(wav_audio_stream_t *stream,
     wav_audio_stream_reset_source_state(stream);
 }
 
+void wav_audio_stream_set_read_hook(
+    wav_audio_stream_t *stream,
+    FRESULT (*read_fn)(void *context, FIL *fp, void *buffer,
+                       UINT bytes_to_read, UINT *bytes_read),
+    void *context)
+{
+    if (stream == 0) return;
+    stream->read_fn = read_fn;
+    stream->read_context = context;
+}
+
 static uint8_t wav_audio_stream_refill_io_buffer(wav_audio_stream_t *stream)
 {
     if ((stream == 0) || (stream->fp == 0))
@@ -77,7 +88,10 @@ static uint8_t wav_audio_stream_refill_io_buffer(wav_audio_stream_t *stream)
     }
 
     UINT br = 0U;
-    const FRESULT fr = f_read(stream->fp, stream->io_buf, request, &br);
+    const FRESULT fr = (stream->read_fn != 0)
+        ? stream->read_fn(stream->read_context, stream->fp,
+                          stream->io_buf, request, &br)
+        : f_read(stream->fp, stream->io_buf, request, &br);
     if ((fr != FR_OK) || (br < stream->info.block_align))
     {
         stream->data_remaining = 0U;

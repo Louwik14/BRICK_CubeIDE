@@ -33,8 +33,18 @@ typedef struct
     uint8_t has_fact;
 } wav_info_t;
 
+typedef struct
+{
+    FRESULT (*read_fn)(void *context, FIL *fp, void *buffer,
+                       UINT bytes_to_read, UINT *bytes_read);
+    FRESULT (*seek_fn)(void *context, FIL *fp, FSIZE_t offset);
+    void *context;
+} wav_parser_io_hooks_t;
+
 uint8_t wav_parser_format_supported(const wav_info_t *info);
 uint8_t wav_parser_is_canonical_brick_float(const wav_info_t *info);
 
 bool wav_parser_parse_info(FIL *fp, wav_info_t *info);
+bool wav_parser_parse_info_with_io(FIL *fp, wav_info_t *info,
+                                   const wav_parser_io_hooks_t *hooks);
 uint8_t wav_parser_crc32_file(FIL *fp, uint32_t *out_crc32);

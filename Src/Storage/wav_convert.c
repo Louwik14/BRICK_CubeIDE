@@ -1,5 +1,6 @@
 #include "Storage/wav_convert.h"
 
+#include <stddef.h>
 #include <string.h>
 
 #include "Sampler/sample_cache.h"
@@ -12,6 +13,7 @@
 #include "Storage/wav_audio_codec.h"
 #include "Storage/wav_audio_stream.h"
 #include "ff.h"
+#include "stm32h7xx_hal.h"
 
 #define WAV_CONVERT_TARGET_RATE 48000U
 #define WAV_CONVERT_TARGET_CHANNELS 2U
@@ -29,6 +31,11 @@ _Static_assert((WAV_CONVERT_SOURCE_IO_BYTES % 512U) == 0U,
                "WAV convert source reads must be sector-aligned");
 _Static_assert(sizeof(((wav_audio_stream_t *)0)->io_buf) == WAV_CONVERT_SOURCE_IO_BYTES,
                "WAV stream source buffer contract changed");
+_Static_assert(sizeof(wav_convert_bench_t) == 256U, "WAV bench ABI size changed");
+_Static_assert(offsetof(wav_convert_bench_t, active_cycles) == 0xA0U,
+               "WAV bench ABI cycle offset changed");
+_Static_assert(offsetof(wav_convert_bench_t, source_path_hash) == 0xF8U,
+               "WAV bench ABI tail offset changed");
 
 typedef enum
 {
@@ -75,12 +82,167 @@ typedef struct
 } wav_convert_ctx_t;
 
 STORAGE_SCRATCH_SDRAM static wav_convert_ctx_t g_wav_convert;
+__attribute__((used, externally_visible, aligned(8)))
+volatile wav_convert_bench_t g_wav_convert_bench;
+
+static uint32_t g_wav_convert_bench_last_service_end_ms;
+static uint8_t g_wav_convert_bench_have_service_end;
+
+static uint32_t wav_convert_bench_cycles(void)
+{
+    return DWT->CYCCNT;
+}
+
+static uint32_t wav_convert_bench_path_hash(const char *path)
+{
+    uint32_t hash = 2166136261UL;
+    while ((path != 0) && (*path != '\0'))
+    {
+        hash ^= (uint8_t)*path++;
+        hash *= 16777619UL;
+    }
+    return hash;
+}
+
+static uint32_t wav_convert_bench_cycles_to_ms(uint64_t cycles)
+{
+    const uint32_t hz = g_wav_convert_bench.core_clock_hz;
+    return (hz != 0U) ? (uint32_t)((cycles * 1000ULL) / hz) : 0U;
+}
+
+static void wav_convert_bench_publish_times(void)
+{
+    g_wav_convert_bench.active_ms =
+        wav_convert_bench_cycles_to_ms(g_wav_convert_bench.active_cycles);
+    g_wav_convert_bench.open_parse_ms =
+        wav_convert_bench_cycles_to_ms(g_wav_convert_bench.open_parse_cycles);
+    g_wav_convert_bench.read_ms =
+        wav_convert_bench_cycles_to_ms(g_wav_convert_bench.read_cycles);
+    g_wav_convert_bench.decode_ms =
+        wav_convert_bench_cycles_to_ms(g_wav_convert_bench.decode_cycles);
+    g_wav_convert_bench.src_ms =
+        wav_convert_bench_cycles_to_ms(g_wav_convert_bench.src_cycles);
+    g_wav_convert_bench.write_ms =
+        wav_convert_bench_cycles_to_ms(g_wav_convert_bench.write_cycles);
+    g_wav_convert_bench.sync_close_ms =
+        wav_convert_bench_cycles_to_ms(g_wav_convert_bench.sync_close_cycles);
+    g_wav_convert_bench.verify_ms =
+        wav_convert_bench_cycles_to_ms(g_wav_convert_bench.verify_cycles);
+    g_wav_convert_bench.replace_ms =
+        wav_convert_bench_cycles_to_ms(g_wav_convert_bench.replace_cycles);
+    const uint64_t named = g_wav_convert_bench.open_parse_cycles
+        + g_wav_convert_bench.read_cycles + g_wav_convert_bench.decode_cycles
+        + g_wav_convert_bench.src_cycles + g_wav_convert_bench.write_cycles
+        + g_wav_convert_bench.sync_close_cycles
+        + g_wav_convert_bench.verify_cycles
+        + g_wav_convert_bench.replace_cycles;
+    g_wav_convert_bench.other_active_ms = wav_convert_bench_cycles_to_ms(
+        (g_wav_convert_bench.active_cycles > named)
+            ? (g_wav_convert_bench.active_cycles - named) : 0ULL);
+}
+
+static void wav_convert_bench_reset(const char *path)
+{
+    memset((void *)&g_wav_convert_bench, 0, sizeof(g_wav_convert_bench));
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+    g_wav_convert_bench.magic = WAV_CONVERT_BENCH_MAGIC;
+    g_wav_convert_bench.version = WAV_CONVERT_BENCH_VERSION;
+    g_wav_convert_bench.struct_size = sizeof(g_wav_convert_bench);
+    g_wav_convert_bench.status = 1U;
+    g_wav_convert_bench.core_clock_hz = SystemCoreClock;
+    g_wav_convert_bench.min_read_size = UINT32_MAX;
+    g_wav_convert_bench.min_write_size = UINT32_MAX;
+    g_wav_convert_bench.wall_start_ms = HAL_GetTick();
+    g_wav_convert_bench.source_path_hash = wav_convert_bench_path_hash(path);
+    g_wav_convert_bench_have_service_end = 0U;
+    g_wav_convert_bench_last_service_end_ms = 0U;
+}
+
+static void wav_convert_bench_finish(uint32_t status, wav_convert_error_t error)
+{
+    g_wav_convert_bench.wall_end_ms = HAL_GetTick();
+    g_wav_convert_bench.total_ms =
+        g_wav_convert_bench.wall_end_ms - g_wav_convert_bench.wall_start_ms;
+    g_wav_convert_bench.result_error = (uint32_t)error;
+    wav_convert_bench_publish_times();
+    g_wav_convert_bench.wall_minus_active_ms =
+        (g_wav_convert_bench.total_ms > g_wav_convert_bench.active_ms)
+            ? (g_wav_convert_bench.total_ms - g_wav_convert_bench.active_ms) : 0U;
+    if (g_wav_convert_bench.read_calls == 0U)
+        g_wav_convert_bench.min_read_size = 0U;
+    if (g_wav_convert_bench.write_calls == 0U)
+        g_wav_convert_bench.min_write_size = 0U;
+    g_wav_convert_bench.status = status;
+}
+
+static FRESULT wav_convert_bench_read(void *context, FIL *fp, void *buffer,
+                                      UINT requested, UINT *actual)
+{
+    (void)context;
+    const uint32_t started = wav_convert_bench_cycles();
+    const FRESULT result = f_read(fp, buffer, requested, actual);
+    g_wav_convert_bench.read_cycles +=
+        (uint32_t)(wav_convert_bench_cycles() - started);
+    g_wav_convert_bench.read_calls++;
+    g_wav_convert_bench.bytes_read += (actual != 0) ? *actual : 0U;
+    if (requested < g_wav_convert_bench.min_read_size)
+        g_wav_convert_bench.min_read_size = requested;
+    if (requested > g_wav_convert_bench.max_read_size)
+        g_wav_convert_bench.max_read_size = requested;
+    return result;
+}
+
+static FRESULT wav_convert_bench_write(FIL *fp, const void *buffer,
+                                       UINT requested, UINT *actual)
+{
+    const uint32_t started = wav_convert_bench_cycles();
+    const FRESULT result = f_write(fp, buffer, requested, actual);
+    g_wav_convert_bench.write_cycles +=
+        (uint32_t)(wav_convert_bench_cycles() - started);
+    g_wav_convert_bench.write_calls++;
+    g_wav_convert_bench.bytes_written += (actual != 0) ? *actual : 0U;
+    if (requested < g_wav_convert_bench.min_write_size)
+        g_wav_convert_bench.min_write_size = requested;
+    if (requested > g_wav_convert_bench.max_write_size)
+        g_wav_convert_bench.max_write_size = requested;
+    return result;
+}
+
+static FRESULT wav_convert_bench_seek(void *context, FIL *fp, FSIZE_t offset)
+{
+    (void)context;
+    g_wav_convert_bench.seek_calls++;
+    return f_lseek(fp, offset);
+}
+
+static FRESULT wav_convert_bench_open(FIL *fp, const char *path, BYTE mode)
+{
+    g_wav_convert_bench.open_calls++;
+    return f_open(fp, path, mode);
+}
+
+static FRESULT wav_convert_bench_close(FIL *fp)
+{
+    g_wav_convert_bench.close_calls++;
+    return f_close(fp);
+}
+
+static FRESULT wav_convert_bench_sync(FIL *fp)
+{
+    g_wav_convert_bench.sync_calls++;
+    return f_sync(fp);
+}
 
 void wav_convert_init(void)
 {
     memset(&g_wav_convert, 0, sizeof(g_wav_convert));
     g_wav_convert.state = WAV_CONVERT_STATE_IDLE;
     g_wav_convert.phase = WAV_CONVERT_PHASE_IDLE;
+    memset((void *)&g_wav_convert_bench, 0, sizeof(g_wav_convert_bench));
+    g_wav_convert_bench.magic = WAV_CONVERT_BENCH_MAGIC;
+    g_wav_convert_bench.version = WAV_CONVERT_BENCH_VERSION;
+    g_wav_convert_bench.struct_size = sizeof(g_wav_convert_bench);
 }
 
 static void wav_convert_write_le16(uint8_t *dst, uint16_t value)
@@ -270,12 +432,12 @@ static void wav_convert_close_files(void)
 {
     if (g_wav_convert.src_open != 0U)
     {
-        (void)f_close(&g_wav_convert.src);
+        (void)wav_convert_bench_close(&g_wav_convert.src);
         g_wav_convert.src_open = 0U;
     }
     if (g_wav_convert.dst_open != 0U)
     {
-        (void)f_close(&g_wav_convert.dst);
+        (void)wav_convert_bench_close(&g_wav_convert.dst);
         g_wav_convert.dst_open = 0U;
     }
 }
@@ -300,6 +462,8 @@ static void wav_convert_fail(wav_convert_error_t error)
     wav_convert_release_gate();
     g_wav_convert.error = error;
     g_wav_convert.state = WAV_CONVERT_STATE_FAILED;
+    if (g_wav_convert_bench.status == 1U)
+        wav_convert_bench_finish(3U, error);
 }
 
 static uint8_t wav_convert_start_internal(const char *path, uint8_t acquire_gate,
@@ -352,6 +516,7 @@ static uint8_t wav_convert_start_internal(const char *path, uint8_t acquire_gate
         return 0U;
     }
 
+    wav_convert_bench_reset(g_wav_convert.source_path);
     g_wav_convert.state = WAV_CONVERT_STATE_ACTIVE;
     g_wav_convert.error = WAV_CONVERT_ERROR_NONE;
     g_wav_convert.phase = WAV_CONVERT_PHASE_OPEN;
@@ -379,7 +544,8 @@ uint8_t wav_convert_start_destructive_canonical_locked(const char *path)
 
 static uint8_t wav_convert_open_phase(void)
 {
-    FRESULT fr = f_open(&g_wav_convert.src, g_wav_convert.source_path, FA_READ);
+    FRESULT fr = wav_convert_bench_open(&g_wav_convert.src,
+                                        g_wav_convert.source_path, FA_READ);
     if (fr != FR_OK)
     {
         wav_convert_fail(WAV_CONVERT_ERROR_OPEN_FAIL);
@@ -387,7 +553,14 @@ static uint8_t wav_convert_open_phase(void)
     }
     g_wav_convert.src_open = 1U;
 
-    if ((wav_parser_parse_info(&g_wav_convert.src, &g_wav_convert.source_info) == 0)
+    const wav_parser_io_hooks_t parser_hooks = {
+        .read_fn = wav_convert_bench_read,
+        .seek_fn = wav_convert_bench_seek,
+        .context = 0,
+    };
+    if ((wav_parser_parse_info_with_io(&g_wav_convert.src,
+                                       &g_wav_convert.source_info,
+                                       &parser_hooks) == 0)
         || (wav_convert_format_convertible(&g_wav_convert.source_info) == 0U)
         || (wav_convert_format_already_target(&g_wav_convert.source_info) != 0U))
     {
@@ -420,9 +593,9 @@ static uint8_t wav_convert_open_phase(void)
         return 0U;
     }
 
-    fr = f_open(&g_wav_convert.dst,
-                g_wav_convert.temp_path,
-                FA_CREATE_ALWAYS | FA_WRITE | FA_READ);
+    fr = wav_convert_bench_open(&g_wav_convert.dst,
+                                g_wav_convert.temp_path,
+                                FA_CREATE_ALWAYS | FA_WRITE | FA_READ);
     if (fr != FR_OK)
     {
         wav_convert_fail((fr == FR_DENIED) ? WAV_CONVERT_ERROR_NO_SPACE : WAV_CONVERT_ERROR_OPEN_FAIL);
@@ -453,12 +626,14 @@ static uint8_t wav_convert_open_phase(void)
                               &g_wav_convert.src,
                               &g_wav_convert.source_info,
                               WAV_CONVERT_TARGET_RATE);
+        wav_audio_stream_set_read_hook(&g_wav_convert.stream,
+                                       wav_convert_bench_read, 0);
     }
     if (((g_wav_convert.copy_mode == WAV_CONVERT_COPY_RESAMPLE)
          && (wav_audio_stream_start(&g_wav_convert.stream,
                                     g_wav_convert.source_info.data_offset) == 0U))
         || ((g_wav_convert.copy_mode != WAV_CONVERT_COPY_RESAMPLE)
-            && (f_lseek(&g_wav_convert.src,
+            && (wav_convert_bench_seek(0, &g_wav_convert.src,
                         g_wav_convert.source_info.data_offset) != FR_OK)))
     {
         wav_convert_fail(WAV_CONVERT_ERROR_READ_FAIL);
@@ -466,6 +641,18 @@ static uint8_t wav_convert_open_phase(void)
     }
 
     g_wav_convert.phase = WAV_CONVERT_PHASE_WRITE_HEADER;
+    g_wav_convert_bench.source_encoding =
+        (uint32_t)g_wav_convert.source_info.encoding;
+    g_wav_convert_bench.source_bits_per_sample =
+        g_wav_convert.source_info.bits_per_sample;
+    g_wav_convert_bench.source_channels = g_wav_convert.source_info.channels;
+    g_wav_convert_bench.source_sample_rate =
+        g_wav_convert.source_info.sample_rate;
+    g_wav_convert_bench.source_frames = g_wav_convert.source_frames;
+    g_wav_convert_bench.copy_mode = (uint32_t)g_wav_convert.copy_mode;
+    g_wav_convert_bench.has_src =
+        (g_wav_convert.copy_mode == WAV_CONVERT_COPY_RESAMPLE) ? 1U : 0U;
+    g_wav_convert_bench.target_frames = g_wav_convert.target_frames;
     return 1U;
 }
 
@@ -475,7 +662,8 @@ static uint8_t wav_convert_write_header_phase(void)
     UINT bw = 0U;
     wav_convert_build_wav_header(header, g_wav_convert.target_data_bytes,
                                  g_wav_convert.target_frames);
-    const FRESULT fr = f_write(&g_wav_convert.dst, header, sizeof(header), &bw);
+    const FRESULT fr = wav_convert_bench_write(&g_wav_convert.dst, header,
+                                               sizeof(header), &bw);
     if ((fr != FR_OK) || (bw != sizeof(header)))
     {
         wav_convert_fail((fr == FR_DENIED) ? WAV_CONVERT_ERROR_NO_SPACE : WAV_CONVERT_ERROR_WRITE_FAIL);
@@ -490,7 +678,8 @@ static uint8_t wav_convert_write_output(uint32_t frame_count)
 {
     const uint32_t bytes = frame_count * WAV_CONVERT_TARGET_BYTES_PER_FRAME;
     UINT bw = 0U;
-    const FRESULT fr = f_write(&g_wav_convert.dst, g_storage_shared_io, bytes, &bw);
+    const FRESULT fr = wav_convert_bench_write(&g_wav_convert.dst,
+                                               g_storage_shared_io, bytes, &bw);
     if ((fr != FR_OK) || (bw != bytes))
     {
         wav_convert_fail((fr == FR_DENIED) ? WAV_CONVERT_ERROR_NO_SPACE : WAV_CONVERT_ERROR_WRITE_FAIL);
@@ -510,7 +699,8 @@ static uint8_t wav_convert_copy_raw_float(uint32_t frames)
 {
     const uint32_t bytes = frames * WAV_CONVERT_TARGET_BYTES_PER_FRAME;
     UINT br = 0U;
-    const FRESULT fr = f_read(&g_wav_convert.src, g_storage_shared_io, bytes, &br);
+    const FRESULT fr = wav_convert_bench_read(0, &g_wav_convert.src,
+                                              g_storage_shared_io, bytes, &br);
     if ((fr != FR_OK) || (br != bytes))
     {
         wav_convert_fail(WAV_CONVERT_ERROR_READ_FAIL);
@@ -534,18 +724,23 @@ static uint8_t wav_convert_copy_decode_48k(uint32_t frames)
         }
         const uint32_t bytes = read_frames * g_wav_convert.source_info.block_align;
         UINT br = 0U;
-        const FRESULT fr = f_read(&g_wav_convert.src, g_wav_convert.stream.io_buf, bytes, &br);
+        const FRESULT fr = wav_convert_bench_read(0, &g_wav_convert.src,
+                                                  g_wav_convert.stream.io_buf,
+                                                  bytes, &br);
         if ((fr != FR_OK) || (br != bytes))
         {
             wav_convert_fail(WAV_CONVERT_ERROR_READ_FAIL);
             return 0U;
         }
+        const uint32_t decode_started = wav_convert_bench_cycles();
         wav_audio_codec_decode_stereo_block(g_wav_convert.stream.io_buf,
                                             g_wav_convert.source_info.encoding,
                                             g_wav_convert.source_info.channels,
                                             g_wav_convert.source_info.bits_per_sample,
                                             &dst[decoded * 2U],
                                             read_frames);
+        g_wav_convert_bench.decode_cycles +=
+            (uint32_t)(wav_convert_bench_cycles() - decode_started);
         decoded += read_frames;
     }
     return wav_convert_write_output(frames);
@@ -553,6 +748,8 @@ static uint8_t wav_convert_copy_decode_48k(uint32_t frames)
 
 static uint8_t wav_convert_copy_resample(uint32_t frames)
 {
+    const uint64_t read_before = g_wav_convert_bench.read_cycles;
+    const uint32_t started = wav_convert_bench_cycles();
     const uint32_t produced = wav_audio_stream_read_frames(
         &g_wav_convert.stream,
         (float *)(void *)g_storage_shared_io,
@@ -564,6 +761,10 @@ static uint8_t wav_convert_copy_resample(uint32_t frames)
                              : WAV_CONVERT_ERROR_UNSUPPORTED);
         return 0U;
     }
+    const uint32_t elapsed = wav_convert_bench_cycles() - started;
+    const uint64_t read_delta = g_wav_convert_bench.read_cycles - read_before;
+    g_wav_convert_bench.src_cycles +=
+        (elapsed > read_delta) ? (elapsed - read_delta) : 0ULL;
     return wav_convert_write_output(produced);
 }
 
@@ -598,7 +799,7 @@ static uint8_t wav_convert_copy_phase(uint32_t byte_budget)
 
 static uint8_t wav_convert_sync_phase(void)
 {
-    FRESULT fr = f_sync(&g_wav_convert.dst);
+    FRESULT fr = wav_convert_bench_sync(&g_wav_convert.dst);
     if (fr != FR_OK)
     {
         wav_convert_fail(WAV_CONVERT_ERROR_SYNC_FAIL);
@@ -611,7 +812,7 @@ static uint8_t wav_convert_sync_phase(void)
 
 static uint8_t wav_convert_close_phase(void)
 {
-    FRESULT fr = f_close(&g_wav_convert.dst);
+    FRESULT fr = wav_convert_bench_close(&g_wav_convert.dst);
     g_wav_convert.dst_open = 0U;
     if (fr != FR_OK)
     {
@@ -619,7 +820,7 @@ static uint8_t wav_convert_close_phase(void)
         return 0U;
     }
 
-    fr = f_close(&g_wav_convert.src);
+    fr = wav_convert_bench_close(&g_wav_convert.src);
     g_wav_convert.src_open = 0U;
     if (fr != FR_OK)
     {
@@ -634,16 +835,17 @@ static uint8_t wav_convert_close_phase(void)
 static uint8_t wav_convert_verify_phase(void)
 {
     FIL fp;
-    if (f_open(&fp, g_wav_convert.temp_path, FA_READ) != FR_OK)
+    if (wav_convert_bench_open(&fp, g_wav_convert.temp_path, FA_READ) != FR_OK)
     {
         wav_convert_fail(WAV_CONVERT_ERROR_VERIFY_FAIL);
         return 0U;
     }
     UINT br = 0U;
-    const FRESULT fr = f_read(&fp, g_wav_convert.stream.io_buf,
+    const FRESULT fr = wav_convert_bench_read(0, &fp,
+                              g_wav_convert.stream.io_buf,
                               WAV_CONVERT_WAV_DATA_OFFSET_BYTES, &br);
     const FSIZE_t file_size = f_size(&fp);
-    const FRESULT close_fr = f_close(&fp);
+    const FRESULT close_fr = wav_convert_bench_close(&fp);
     const uint8_t *const h = g_wav_convert.stream.io_buf;
     const uint8_t valid = ((fr == FR_OK)
         && (br == WAV_CONVERT_WAV_DATA_OFFSET_BYTES)
@@ -712,6 +914,7 @@ static uint8_t wav_convert_replace_phase(void)
     g_wav_convert.phase = WAV_CONVERT_PHASE_IDLE;
     g_wav_convert.state = WAV_CONVERT_STATE_DONE;
     g_wav_convert.error = WAV_CONVERT_ERROR_NONE;
+    wav_convert_bench_finish(2U, WAV_CONVERT_ERROR_NONE);
     return 1U;
 }
 
@@ -722,7 +925,20 @@ void wav_convert_service(uint32_t byte_budget)
         return;
     }
 
-    switch (g_wav_convert.phase)
+    const uint32_t now_ms = HAL_GetTick();
+    if (g_wav_convert_bench_have_service_end != 0U)
+    {
+        const uint32_t gap = now_ms - g_wav_convert_bench_last_service_end_ms;
+        g_wav_convert_bench.total_service_gap_ms += gap;
+        if (gap > g_wav_convert_bench.max_service_gap_ms)
+            g_wav_convert_bench.max_service_gap_ms = gap;
+    }
+    g_wav_convert_bench.service_calls++;
+    const wav_convert_phase_t measured_phase = g_wav_convert.phase;
+    const uint64_t read_before = g_wav_convert_bench.read_cycles;
+    const uint32_t service_started = wav_convert_bench_cycles();
+
+    switch (measured_phase)
     {
         case WAV_CONVERT_PHASE_OPEN:
             (void)wav_convert_open_phase();
@@ -748,6 +964,40 @@ void wav_convert_service(uint32_t byte_budget)
         default:
             wav_convert_fail(WAV_CONVERT_ERROR_INVALID_ARG);
             break;
+    }
+
+    const uint32_t service_elapsed =
+        wav_convert_bench_cycles() - service_started;
+    const uint64_t read_delta = g_wav_convert_bench.read_cycles - read_before;
+    g_wav_convert_bench.active_cycles += service_elapsed;
+    if (measured_phase == WAV_CONVERT_PHASE_OPEN)
+    {
+        g_wav_convert_bench.open_parse_cycles +=
+            (service_elapsed > read_delta) ? (service_elapsed - read_delta) : 0ULL;
+    }
+    else if ((measured_phase == WAV_CONVERT_PHASE_SYNC)
+             || (measured_phase == WAV_CONVERT_PHASE_CLOSE))
+    {
+        g_wav_convert_bench.sync_close_cycles += service_elapsed;
+    }
+    else if (measured_phase == WAV_CONVERT_PHASE_VERIFY)
+    {
+        g_wav_convert_bench.verify_cycles +=
+            (service_elapsed > read_delta) ? (service_elapsed - read_delta) : 0ULL;
+    }
+    else if (measured_phase == WAV_CONVERT_PHASE_REPLACE)
+    {
+        g_wav_convert_bench.replace_cycles += service_elapsed;
+    }
+    g_wav_convert_bench_last_service_end_ms = HAL_GetTick();
+    g_wav_convert_bench_have_service_end = 1U;
+    wav_convert_bench_publish_times();
+    if (g_wav_convert_bench.status != 1U)
+    {
+        g_wav_convert_bench.wall_minus_active_ms =
+            (g_wav_convert_bench.total_ms > g_wav_convert_bench.active_ms)
+                ? (g_wav_convert_bench.total_ms - g_wav_convert_bench.active_ms)
+                : 0U;
     }
 }
 
