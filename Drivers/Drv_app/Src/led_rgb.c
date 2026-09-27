@@ -712,14 +712,7 @@ static void led_apply_fixed_scene(void)
         macro_button = led_macro_param_to_button(macro_param);
     }
 
-    if (ui_page_patch_assign_is_open() != 0U)
-    {
-        for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
-        {
-            (void)led_apply_patch_assign_hall_scene(hall);
-        }
-    }
-    else if (ui_macro_overlay_is_active() != 0U)
+    if (ui_macro_overlay_is_active() != 0U)
     {
         ui_macro_overlay_submode_t overlay_submode = UI_MACRO_OVERLAY_SUBMODE_CTRL;
         (void)ui_macro_overlay_get_submode(&overlay_submode);
@@ -742,6 +735,13 @@ static void led_apply_fixed_scene(void)
         for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
         {
             led_apply_track_select_hall_scene(hall);
+        }
+    }
+    else if (ui_page_patch_assign_is_open() != 0U)
+    {
+        for (uint8_t hall = 0U; hall < HALL_KEY_COUNT; hall++)
+        {
+            (void)led_apply_patch_assign_hall_scene(hall);
         }
     }
     else if (hall_mode == UI_HALL_MODE_MUTE)
