@@ -59,6 +59,8 @@ typedef struct
     uint8_t inst_vel_high;
     uint8_t filename_valid;
     uint8_t filename_numeric_valid;
+    uint8_t filename_root_authoritative;
+    uint8_t filename_velocity_valid;
     uint8_t filename_root;
     uint8_t filename_vel_low;
     uint8_t filename_vel_high;
@@ -970,26 +972,26 @@ static uint8_t multi_import_filename_metadata(const char *filename,
     const uint8_t has_underscore = (strchr(stem, '_') != 0) ? 1U : 0U;
     if ((has_dash == has_underscore) || ((has_dash != 0U) && (has_underscore != 0U)))
     {
-        return 0U;
+        goto leading_root;
     }
 
     const char delim = (has_dash != 0U) ? '-' : '_';
     char *third = strrchr(stem, delim);
     if (third == 0)
     {
-        return 0U;
+        goto leading_root;
     }
     *third = '\0';
     char *second = strrchr(stem, delim);
     if (second == 0)
     {
-        return 0U;
+        goto leading_root;
     }
     *second = '\0';
     char *first = strrchr(stem, delim);
     if (first == 0)
     {
-        return 0U;
+        goto leading_root;
     }
     *first = '\0';
 
@@ -1001,13 +1003,32 @@ static uint8_t multi_import_filename_metadata(const char *filename,
         || (multi_import_parse_u8_token(third + 1, &stem[len - 4U], &vel_high) == 0U)
         || (vel_low > vel_high))
     {
-        return 0U;
+        goto leading_root;
     }
 
     *out_root = root;
     *out_vel_low = vel_low;
     *out_vel_high = vel_high;
     return 1U;
+
+leading_root:
+    {
+        const char *p = stem;
+        while ((*p >= '0') && (*p <= '9'))
+        {
+            p++;
+        }
+        uint8_t leading_root = 0U;
+        if ((p > stem) && (*p == ' ')
+            && (multi_import_parse_u8_token(stem, p, &leading_root) != 0U))
+        {
+            *out_root = leading_root;
+            *out_vel_low = 1U;
+            *out_vel_high = 127U;
+            return 3U;
+        }
+    }
+    return 0U;
 }
 
 static int multi_import_path_compare(const char *a, const char *b)
@@ -1318,9 +1339,11 @@ static multi_sample_import_result_t multi_import_add_wav(const char *scan_dir,
     {
         metadata.filename_valid = 1U;
         metadata.filename_numeric_valid = (filename_metadata == 2U) ? 1U : 0U;
+        metadata.filename_root_authoritative = (filename_metadata >= 2U) ? 1U : 0U;
+        metadata.filename_velocity_valid = (filename_metadata <= 2U) ? 1U : 0U;
     }
 
-    if (metadata.filename_numeric_valid != 0U)
+    if (metadata.filename_root_authoritative != 0U)
     {
         item->sample.root_note = metadata.filename_root;
         item->sample.metadata_flags |= MULTI_SAMPLE_INDEX_META_ROOT_FILENAME;
@@ -1361,7 +1384,7 @@ static multi_sample_import_result_t multi_import_add_wav(const char *scan_dir,
         item->sample.vel_high = metadata.inst_vel_high;
         item->sample.metadata_flags |= MULTI_SAMPLE_INDEX_META_VEL_INST;
     }
-    else if (metadata.filename_valid != 0U)
+    else if (metadata.filename_velocity_valid != 0U)
     {
         item->sample.vel_low = metadata.filename_vel_low;
         item->sample.vel_high = metadata.filename_vel_high;
@@ -1423,14 +1446,23 @@ static multi_sample_import_result_t multi_import_generate_zones(void)
 
     multi_import_sort_samples_by_path();
     uint8_t fallback_root = 36U;
+    uint8_t fallback_root_available = 1U;
     for (uint16_t i = 0U; i < g_import_sample_count; ++i)
     {
         if (g_import_samples[i].root_fallback_alpha != 0U)
         {
+            if (fallback_root_available == 0U)
+            {
+                return MULTI_SAMPLE_IMPORT_ZONE_LIMIT;
+            }
             g_import_samples[i].sample.root_note = fallback_root;
             if (fallback_root < 127U)
             {
                 fallback_root++;
+            }
+            else
+            {
+                fallback_root_available = 0U;
             }
         }
     }
