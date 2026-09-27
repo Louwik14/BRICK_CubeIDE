@@ -1,14 +1,16 @@
 $ErrorActionPreference = 'Stop'
 
-$source = Get-Content -Raw 'Src/Sampler/multi_sample_import.c'
+$source = Get-Content -Raw 'Src/Sampler/multi_sample_zone_detection.c'
 
 foreach ($required in @(
-    "*p == ' '",
-    'return 3U;',
-    'filename_root_authoritative = (filename_metadata >= 2U)',
-    'filename_velocity_valid = (filename_metadata <= 2U)',
-    'fallback_root_available == 0U',
-    'return MULTI_SAMPLE_IMPORT_ZONE_LIMIT;')) {
+    'pair_convention',
+    'obs[i].smpl_root_valid',
+    'obs[i].inst_root_valid',
+    'f.range_valid',
+    'f.prefix_valid',
+    'f.note_valid',
+    'skip_variant',
+    'MULTI_SAMPLE_ZONE_DETECT_OVERFLOW')) {
     if (-not $source.Contains($required)) {
         throw "Multi filename/zone contract missing: $required"
     }
@@ -38,12 +40,17 @@ if ($null -ne (Parse-LeadingRoot 'Trill 60.wav')) {
 }
 
 # Two files with the same explicit root and full velocity range remain a true
-# duplicate; the importer duplicate-zone validation must not be bypassed.
+# duplicate unless one is a structurally identified take.
 $a = Parse-LeadingRoot '60 Trill A.wav'
 $b = Parse-LeadingRoot '60 Trill B.wav'
 if (($a.Root -ne $b.Root) -or ($a.VelLow -ne $b.VelLow) -or
-    ($source -notmatch 'MULTI_SAMPLE_IMPORT_DUPLICATE_ZONE')) {
+    ($source -notmatch 'same_variant_base')) {
     throw 'true duplicate-zone rejection was lost'
+}
+
+$index = Get-Content -Raw 'Inc/Sampler/multi_sample_index.h'
+if ($index -notmatch 'MULTI_SAMPLE_INDEX_VERSION\s+\(4U\)') {
+    throw 'folder-analysis indexes must invalidate pre-v4 mappings'
 }
 
 Write-Output 'Multi import filename contract: PASS'

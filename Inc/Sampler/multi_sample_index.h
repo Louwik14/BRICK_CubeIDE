@@ -11,7 +11,7 @@ extern "C" {
 #endif
 
 #define MULTI_SAMPLE_INDEX_MAGIC_SIZE       (8U)
-#define MULTI_SAMPLE_INDEX_VERSION          (3U)
+#define MULTI_SAMPLE_INDEX_VERSION          (4U)
 #define MULTI_SAMPLE_INDEX_HEADER_SIZE      (96U)
 #define MULTI_SAMPLE_INDEX_STRING_MAX_BYTES (65536U)
 

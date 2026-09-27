@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "Sampler/multi_sample_index.h"
+#include "Sampler/multi_sample_zone_detection.h"
 #include "Sampler/sample_cache.h"
 #include "Platform/memory_layout.h"
 #include "Storage/audio_recorder.h"
@@ -40,6 +41,7 @@ typedef struct
     uint8_t root_fallback_alpha;
     uint8_t velocity_center_valid;
     uint8_t velocity_center;
+    multi_sample_zone_observation_t zone_observation;
 } multi_sample_import_sample_t;
 
 typedef struct
@@ -57,13 +59,6 @@ typedef struct
     uint8_t inst_velocity_valid;
     uint8_t inst_vel_low;
     uint8_t inst_vel_high;
-    uint8_t filename_valid;
-    uint8_t filename_numeric_valid;
-    uint8_t filename_root_authoritative;
-    uint8_t filename_velocity_valid;
-    uint8_t filename_root;
-    uint8_t filename_vel_low;
-    uint8_t filename_vel_high;
 } multi_sample_import_metadata_t;
 
 typedef struct
@@ -98,9 +93,9 @@ typedef enum
     MULTI_IMPORT_WORK_COUNT,
     MULTI_IMPORT_WORK_SCAN_OPEN,
     MULTI_IMPORT_WORK_SCAN,
+    MULTI_IMPORT_WORK_ANALYZE,
     MULTI_IMPORT_WORK_CONVERT_START,
     MULTI_IMPORT_WORK_CONVERT,
-    MULTI_IMPORT_WORK_ZONES,
     MULTI_IMPORT_WORK_INDEX,
     MULTI_IMPORT_WORK_FINISHED
 } multi_import_work_state_t;
@@ -123,6 +118,10 @@ SDRAM_MULTI_IMPORT static multi_sample_import_sample_t
 SDRAM_MULTI_IMPORT static multi_sample_index_source_sample_t
     g_import_source_samples[MULTI_SAMPLE_POOL_MAX_SAMPLES];
 SDRAM_MULTI_IMPORT static multi_sample_index_zone_t g_import_zones[MULTI_SAMPLE_POOL_MAX_ZONES];
+SDRAM_MULTI_IMPORT static multi_sample_zone_resolution_t
+    g_import_zone_resolutions[MULTI_SAMPLE_POOL_MAX_SAMPLES];
+SDRAM_MULTI_IMPORT static multi_sample_zone_observation_t
+    g_import_zone_observations[MULTI_SAMPLE_POOL_MAX_SAMPLES];
 SDRAM_MULTI_IMPORT static char g_import_paths[MULTI_SAMPLE_INDEX_STRING_MAX_BYTES];
 SDRAM_MULTI_IMPORT static char g_import_work_path[MULTI_SAMPLE_IMPORT_PATH_MAX];
 SDRAM_MULTI_IMPORT static char g_import_scan_dir[MULTI_SAMPLE_IMPORT_PATH_MAX];
@@ -143,6 +142,7 @@ static CTRL_STATE uint16_t g_import_zone_count;
 static CTRL_STATE multi_import_async_t g_import_async;
 
 static uint8_t multi_import_validate_wav_info(const wav_info_t *info);
+static multi_sample_import_result_t multi_import_generate_zones(void);
 
 static void multi_import_clear_diag(void)
 {
@@ -270,33 +270,6 @@ static uint8_t multi_import_extract_instrument_name(const char *instrument_dir,
 
     memcpy(out, &instrument_dir[start], name_len);
     out[name_len] = '\0';
-    return 1U;
-}
-
-static uint8_t multi_import_parse_u8_token(const char *begin,
-                                           const char *end,
-                                           uint8_t *out_value)
-{
-    if ((begin == 0) || (end == 0) || (out_value == 0) || (begin >= end))
-    {
-        return 0U;
-    }
-
-    uint32_t value = 0U;
-    for (const char *p = begin; p < end; ++p)
-    {
-        if ((*p < '0') || (*p > '9'))
-        {
-            return 0U;
-        }
-        value = (value * 10U) + (uint32_t)(*p - '0');
-        if (value > 127U)
-        {
-            return 0U;
-        }
-    }
-
-    *out_value = (uint8_t)value;
     return 1U;
 }
 
@@ -916,121 +889,6 @@ static uint8_t multi_import_try_auto_loop(FIL *fp,
     return 1U;
 }
 
-static uint8_t multi_import_filename_metadata(const char *filename,
-                                              uint8_t *out_root,
-                                              uint8_t *out_vel_low,
-                                              uint8_t *out_vel_high)
-{
-    if ((filename == 0) || (out_root == 0) || (out_vel_low == 0) || (out_vel_high == 0))
-    {
-        return 0U;
-    }
-
-    char stem[MULTI_SAMPLE_POOL_PATH_MAX];
-    const uint32_t len = (uint32_t)strlen(filename);
-    if ((len < 5U) || (len >= sizeof(stem)))
-    {
-        return 0U;
-    }
-    memcpy(stem, filename, len - 4U);
-    stem[len - 4U] = '\0';
-
-    char *velocity = strrchr(stem, '_');
-    if (velocity != 0)
-    {
-        char *note = velocity;
-        *velocity = '\0';
-        velocity++;
-        note = strrchr(stem, '_');
-        if (note != 0)
-        {
-            *note = '\0';
-            note++;
-
-            const char *prev = strrchr(stem, '_');
-            const char *prev_token = (prev != 0) ? (prev + 1) : stem;
-            uint8_t ignored = 0U;
-            uint8_t root = 0U;
-            uint8_t vel = 0U;
-            if ((multi_import_parse_u8_token(prev_token, note - 1, &ignored) == 0U)
-                && (multi_import_parse_u8_token(note, velocity - 1, &root) != 0U)
-                && (multi_import_parse_u8_token(velocity, &stem[len - 4U], &vel) != 0U)
-                && (vel >= 1U))
-            {
-                *out_root = root;
-                *out_vel_low = vel;
-                *out_vel_high = vel;
-                return 2U;
-            }
-
-            *(note - 1) = '_';
-        }
-        *(velocity - 1) = '_';
-    }
-
-    const uint8_t has_dash = (strchr(stem, '-') != 0) ? 1U : 0U;
-    const uint8_t has_underscore = (strchr(stem, '_') != 0) ? 1U : 0U;
-    if ((has_dash == has_underscore) || ((has_dash != 0U) && (has_underscore != 0U)))
-    {
-        goto leading_root;
-    }
-
-    const char delim = (has_dash != 0U) ? '-' : '_';
-    char *third = strrchr(stem, delim);
-    if (third == 0)
-    {
-        goto leading_root;
-    }
-    *third = '\0';
-    char *second = strrchr(stem, delim);
-    if (second == 0)
-    {
-        goto leading_root;
-    }
-    *second = '\0';
-    char *first = strrchr(stem, delim);
-    if (first == 0)
-    {
-        goto leading_root;
-    }
-    *first = '\0';
-
-    uint8_t root = 0U;
-    uint8_t vel_low = 0U;
-    uint8_t vel_high = 0U;
-    if ((multi_import_parse_u8_token(first + 1, second, &root) == 0U)
-        || (multi_import_parse_u8_token(second + 1, third, &vel_low) == 0U)
-        || (multi_import_parse_u8_token(third + 1, &stem[len - 4U], &vel_high) == 0U)
-        || (vel_low > vel_high))
-    {
-        goto leading_root;
-    }
-
-    *out_root = root;
-    *out_vel_low = vel_low;
-    *out_vel_high = vel_high;
-    return 1U;
-
-leading_root:
-    {
-        const char *p = stem;
-        while ((*p >= '0') && (*p <= '9'))
-        {
-            p++;
-        }
-        uint8_t leading_root = 0U;
-        if ((p > stem) && (*p == ' ')
-            && (multi_import_parse_u8_token(stem, p, &leading_root) != 0U))
-        {
-            *out_root = leading_root;
-            *out_vel_low = 1U;
-            *out_vel_high = 127U;
-            return 3U;
-        }
-    }
-    return 0U;
-}
-
 static int multi_import_path_compare(const char *a, const char *b)
 {
     return strcmp((a != 0) ? a : "", (b != 0) ? b : "");
@@ -1149,7 +1007,19 @@ static multi_sample_import_result_t multi_import_expand_velocity_centers(void)
             }
         }
 
-        if (center_count > 1U)
+        if (center_count == 1U)
+        {
+            for (uint16_t i = root_start; i < root_end; ++i)
+            {
+                if (g_import_samples[i].velocity_center_valid != 0U)
+                {
+                    g_import_samples[i].sample.vel_low = 1U;
+                    g_import_samples[i].sample.vel_high = 127U;
+                    break;
+                }
+            }
+        }
+        else if (center_count > 1U)
         {
             for (uint16_t i = root_start; i < root_end; ++i)
             {
@@ -1331,71 +1201,14 @@ static multi_sample_import_result_t multi_import_add_wav(const char *scan_dir,
         item->sample.metadata_flags |= MULTI_SAMPLE_INDEX_META_LOOP_AUTO;
     }
 
-    const uint8_t filename_metadata = multi_import_filename_metadata(fno->fname,
-                                                                     &metadata.filename_root,
-                                                                     &metadata.filename_vel_low,
-                                                                     &metadata.filename_vel_high);
-    if (filename_metadata != 0U)
-    {
-        metadata.filename_valid = 1U;
-        metadata.filename_numeric_valid = (filename_metadata == 2U) ? 1U : 0U;
-        metadata.filename_root_authoritative = (filename_metadata >= 2U) ? 1U : 0U;
-        metadata.filename_velocity_valid = (filename_metadata <= 2U) ? 1U : 0U;
-    }
-
-    if (metadata.filename_root_authoritative != 0U)
-    {
-        item->sample.root_note = metadata.filename_root;
-        item->sample.metadata_flags |= MULTI_SAMPLE_INDEX_META_ROOT_FILENAME;
-    }
-    else if (metadata.smpl_root_valid != 0U)
-    {
-        item->sample.root_note = metadata.smpl_root;
-        item->sample.metadata_flags |= MULTI_SAMPLE_INDEX_META_ROOT_SMPL;
-    }
-    else if (metadata.inst_root_valid != 0U)
-    {
-        item->sample.root_note = metadata.inst_root;
-        item->sample.metadata_flags |= MULTI_SAMPLE_INDEX_META_ROOT_INST;
-    }
-    else if (metadata.filename_valid != 0U)
-    {
-        item->sample.root_note = metadata.filename_root;
-        item->sample.metadata_flags |= MULTI_SAMPLE_INDEX_META_ROOT_FILENAME;
-    }
-    else
-    {
-        item->sample.root_note = 36U;
-        item->root_fallback_alpha = 1U;
-        item->sample.metadata_flags |= MULTI_SAMPLE_INDEX_META_ROOT_ALPHA;
-    }
-
-    if (metadata.filename_numeric_valid != 0U)
-    {
-        item->sample.vel_low = metadata.filename_vel_low;
-        item->sample.vel_high = metadata.filename_vel_high;
-        item->velocity_center_valid = 1U;
-        item->velocity_center = metadata.filename_vel_low;
-        item->sample.metadata_flags |= MULTI_SAMPLE_INDEX_META_VEL_FILENAME;
-    }
-    else if (metadata.inst_velocity_valid != 0U)
-    {
-        item->sample.vel_low = metadata.inst_vel_low;
-        item->sample.vel_high = metadata.inst_vel_high;
-        item->sample.metadata_flags |= MULTI_SAMPLE_INDEX_META_VEL_INST;
-    }
-    else if (metadata.filename_velocity_valid != 0U)
-    {
-        item->sample.vel_low = metadata.filename_vel_low;
-        item->sample.vel_high = metadata.filename_vel_high;
-        item->sample.metadata_flags |= MULTI_SAMPLE_INDEX_META_VEL_FILENAME;
-    }
-    else
-    {
-        item->sample.vel_low = 1U;
-        item->sample.vel_high = 127U;
-        item->sample.metadata_flags |= MULTI_SAMPLE_INDEX_META_VEL_ALPHA;
-    }
+    item->zone_observation.filename = item->sample.relative_path;
+    item->zone_observation.smpl_root_valid = metadata.smpl_root_valid;
+    item->zone_observation.smpl_root = metadata.smpl_root;
+    item->zone_observation.inst_root_valid = metadata.inst_root_valid;
+    item->zone_observation.inst_root = metadata.inst_root;
+    item->zone_observation.inst_velocity_valid = metadata.inst_velocity_valid;
+    item->zone_observation.inst_vel_low = metadata.inst_vel_low;
+    item->zone_observation.inst_vel_high = metadata.inst_vel_high;
     g_import_sample_count++;
     return MULTI_SAMPLE_IMPORT_OK;
 }
@@ -1435,6 +1248,48 @@ static multi_sample_import_result_t multi_import_refresh_converted_sample(uint16
             || (item->sample.loop_end > item->sample.total_frames)))
         item->sample.has_loop = 0U;
     return MULTI_SAMPLE_IMPORT_OK;
+}
+
+static multi_sample_import_result_t multi_import_analyze_folder(void)
+{
+    for (uint16_t i = 0U; i < g_import_sample_count; ++i)
+        g_import_zone_observations[i] = g_import_samples[i].zone_observation;
+
+    const multi_sample_zone_detect_result_t detected =
+        multi_sample_zone_detect_folder(g_import_zone_observations,
+                                        g_import_sample_count,
+                                        g_import_zone_resolutions);
+    if (detected == MULTI_SAMPLE_ZONE_DETECT_OVERFLOW)
+        return MULTI_SAMPLE_IMPORT_ZONE_LIMIT;
+    if (detected != MULTI_SAMPLE_ZONE_DETECT_OK)
+        return MULTI_SAMPLE_IMPORT_WAV_PARSE_FAIL;
+
+    uint16_t write = 0U;
+    for (uint16_t read = 0U; read < g_import_sample_count; ++read)
+    {
+        const multi_sample_zone_resolution_t *const resolved =
+            &g_import_zone_resolutions[read];
+        if (resolved->skip_variant != 0U) continue;
+        if (write != read) g_import_samples[write] = g_import_samples[read];
+        multi_sample_import_sample_t *const item = &g_import_samples[write++];
+        const uint8_t loop_flag = item->sample.metadata_flags
+                                  & MULTI_SAMPLE_INDEX_META_LOOP_AUTO;
+        item->sample.root_note = resolved->root_note;
+        item->sample.vel_low = resolved->vel_low;
+        item->sample.vel_high = resolved->vel_high;
+        item->sample.metadata_flags = resolved->metadata_flags | loop_flag;
+        item->velocity_center_valid = resolved->velocity_center_valid;
+        item->velocity_center = resolved->velocity_center;
+        item->root_fallback_alpha = 0U;
+    }
+    g_import_sample_count = write;
+    if (g_import_sample_count == 0U) return MULTI_SAMPLE_IMPORT_NO_WAV;
+
+    g_import_async.status.work_total_bytes = 0ULL;
+    for (uint16_t i = 0U; i < g_import_sample_count; ++i)
+        if (g_import_samples[i].needs_conversion != 0U)
+            g_import_async.status.work_total_bytes += g_import_samples[i].target_data_bytes;
+    return multi_import_generate_zones();
 }
 
 static multi_sample_import_result_t multi_import_generate_zones(void)
@@ -1690,12 +1545,7 @@ static void multi_import_service_scan(void)
         g_import_async.dir_open = 0U;
         g_import_async.convert_index = 0U;
         g_import_async.status.current_item = 0U;
-        g_import_async.status.phase = (g_import_async.status.work_total_bytes != 0ULL)
-            ? MULTI_SAMPLE_IMPORT_PHASE_CONVERT : MULTI_SAMPLE_IMPORT_PHASE_INDEX;
-        g_import_async.work_state = (g_import_async.status.work_total_bytes != 0ULL)
-            ? MULTI_IMPORT_WORK_CONVERT_START : MULTI_IMPORT_WORK_ZONES;
-        if (g_import_async.work_state == MULTI_IMPORT_WORK_ZONES)
-            multi_import_release_resources();
+        g_import_async.work_state = MULTI_IMPORT_WORK_ANALYZE;
         return;
     }
     if (((fno.fattrib & AM_DIR) != 0U) || (multi_import_is_wav(fno.fname) == 0U)) return;
@@ -1721,7 +1571,7 @@ static void multi_import_service_convert_start(void)
     {
         g_import_async.status.work_done_bytes = g_import_async.status.work_total_bytes;
         g_import_async.status.phase = MULTI_SAMPLE_IMPORT_PHASE_INDEX;
-        g_import_async.work_state = MULTI_IMPORT_WORK_ZONES;
+        g_import_async.work_state = MULTI_IMPORT_WORK_INDEX;
         multi_import_release_resources();
         return;
     }
@@ -1794,15 +1644,25 @@ void multi_sample_import_service(uint32_t byte_budget)
             else { g_import_async.dir_open = 1U; g_import_async.work_state = MULTI_IMPORT_WORK_SCAN; }
             break;
         case MULTI_IMPORT_WORK_SCAN: multi_import_service_scan(); break;
-        case MULTI_IMPORT_WORK_CONVERT_START: multi_import_service_convert_start(); break;
-        case MULTI_IMPORT_WORK_CONVERT: multi_import_service_convert(byte_budget); break;
-        case MULTI_IMPORT_WORK_ZONES:
+        case MULTI_IMPORT_WORK_ANALYZE:
         {
-            const multi_sample_import_result_t result = multi_import_generate_zones();
+            const multi_sample_import_result_t result = multi_import_analyze_folder();
             if (result != MULTI_SAMPLE_IMPORT_OK) multi_import_fail(result);
-            else g_import_async.work_state = MULTI_IMPORT_WORK_INDEX;
+            else if (g_import_async.status.work_total_bytes != 0ULL)
+            {
+                g_import_async.status.phase = MULTI_SAMPLE_IMPORT_PHASE_CONVERT;
+                g_import_async.work_state = MULTI_IMPORT_WORK_CONVERT_START;
+            }
+            else
+            {
+                g_import_async.status.phase = MULTI_SAMPLE_IMPORT_PHASE_INDEX;
+                g_import_async.work_state = MULTI_IMPORT_WORK_INDEX;
+                multi_import_release_resources();
+            }
             break;
         }
+        case MULTI_IMPORT_WORK_CONVERT_START: multi_import_service_convert_start(); break;
+        case MULTI_IMPORT_WORK_CONVERT: multi_import_service_convert(byte_budget); break;
         case MULTI_IMPORT_WORK_INDEX:
         {
             const multi_sample_import_result_t result = multi_import_write_index();

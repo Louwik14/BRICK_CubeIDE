@@ -62,6 +62,7 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/multi_sample_audio_projection_control.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/multi_sample_import.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/multi_sample_index.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/multi_sample_zone_detection.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/multi_sample_loader.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/multi_sample_pool.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_classic_audio_projection_control.c"
