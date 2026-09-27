@@ -23,6 +23,7 @@ typedef enum
 {
     PATCH_PRODUCT_OPERATION_NONE = 0,
     PATCH_PRODUCT_OPERATION_SAVE,
+    PATCH_PRODUCT_OPERATION_OVERWRITE,
     PATCH_PRODUCT_OPERATION_RENAME,
     PATCH_PRODUCT_OPERATION_LOAD
 } patch_product_operation_t;
@@ -36,6 +37,7 @@ patch_product_result_t patch_product_save_prepare(uint8_t entity,
 patch_product_result_t patch_product_save_begin(uint16_t slot,
                                                 const persist_control_patch_t *snapshot);
 patch_product_result_t patch_product_save_submit(uint16_t slot, const char *name);
+patch_product_result_t patch_product_overwrite(uint8_t entity, uint16_t slot);
 void patch_product_save_cancel_prepare(void);
 patch_product_result_t patch_product_load_begin(uint16_t slot,uint16_t target_mask);
 patch_product_result_t patch_product_apply(uint16_t slot,uint8_t entity);

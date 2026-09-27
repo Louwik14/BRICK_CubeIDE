@@ -336,6 +336,9 @@ void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
         index = (int32_t)count - 1;
     }
 
+    if(level->view==UI_SETTINGS_VIEW_PROJECT
+        &&level->selected_index!=(uint8_t)index)
+        g_ui_settings.project_confirm_action=0U;
     level->selected_index = (uint8_t)index;
 }
 

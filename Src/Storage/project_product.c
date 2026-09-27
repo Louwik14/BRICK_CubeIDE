@@ -45,6 +45,17 @@ _Static_assert(PROJECT_PRODUCT_NAME_BYTES == PERSIST_CODEC_PROJECT_NAME_BYTES,
 static uint8_t g_present[PROJECT_PRODUCT_SLOT_COUNT],g_active_valid,g_active;
 static project_product_metadata_t g_project_metadata[PROJECT_PRODUCT_SLOT_COUNT];
 static project_product_metadata_t g_current_metadata;
+typedef struct {
+    uint8_t state,slot,source_open,target_open,success;
+    uint32_t epoch,remaining,old_crc,new_crc,new_total,old_expected;
+    uint16_t old_name_length,new_name_length;
+    char name[NAME_CONTRACT_BUFFER_BYTES];
+    char final_path[48],temporary_path[48],backup_path[48];
+    FIL source,target;
+    uint8_t buffer[4096];
+} project_rename_runtime_t;
+STORAGE_STATE_SDRAM static project_rename_runtime_t g_project_rename;
+static void project_product_rename_service(void);
 static project_product_progress_t g_progress;
 static project_product_save_error_t g_save_error;
 static int32_t g_save_detail;
@@ -61,11 +72,6 @@ static void project_capture_metadata(persist_codec_project_metadata_t *out)
 static uint8_t project_name_normalize(const char *name,char out[NAME_CONTRACT_BUFFER_BYTES])
 {
     return(name_contract_normalize(name,out)==NAME_CONTRACT_RESULT_OK)?1U:0U;
-}
-
-static void project_name_fallback(uint8_t slot,char out[NAME_CONTRACT_BUFFER_BYTES])
-{
-    (void)snprintf(out,NAME_CONTRACT_BUFFER_BYTES,"PROJECT %02u",(unsigned)slot);
 }
 
 static uint32_t project_le32(const uint8_t *bytes)
@@ -197,7 +203,7 @@ static uint8_t ensure_directory(void){FRESULT r=f_mkdir("0:/BRICK");if(r!=FR_OK&
 
 static void project_product_scan_name(uint8_t slot,const char *file_path)
 {
-    project_name_fallback(slot,g_project_metadata[slot].name);
+    g_project_metadata[slot].name[0]='\0';
     FIL file;UINT read=0U;uint8_t prefix[PERSIST_CODEC_HEADER_BYTES+10U+PERSIST_CODEC_PROJECT_NAME_BYTES];
     if(f_open(&file,file_path,FA_READ)!=FR_OK)return;
     const uint8_t ok=(uint8_t)((f_read(&file,prefix,sizeof(prefix),&read)==FR_OK)
@@ -219,10 +225,9 @@ static void project_product_scan_name(uint8_t slot,const char *file_path)
     memcpy(g_project_metadata[slot].name,normalized,sizeof(g_project_metadata[slot].name));
 }
 
-void project_product_refresh_slots(void){if(project_replacement_is_active()!=0U||project_product_save_busy()!=0U||project_product_load_busy()!=0U)return;memset(g_present,0,sizeof(g_present));memset(g_project_metadata,0,sizeof(g_project_metadata));if(!acquire())return;if(!ensure_directory()){sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);return;}for(uint8_t s=0U;s<PROJECT_PRODUCT_SLOT_COUNT;++s){char x[48],tmp[48],bak[48];FILINFO i;if(path(x,sizeof(x),s)&&side_path(tmp,sizeof(tmp),s,"TMP")&&side_path(bak,sizeof(bak),s,"BAK")){(void)persistent_fatfs_recover_replace(x,tmp,bak);if(f_stat(x,&i)==FR_OK){g_present[s]=1U;project_product_scan_name(s,x);}}}sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);}
-void project_product_init(void){memset(&g_progress,0,sizeof(g_progress));memset(&g_project_save,0,sizeof(g_project_save));memset(&g_project_load,0,sizeof(g_project_load));memset(g_project_metadata,0,sizeof(g_project_metadata));memset(&g_current_metadata,0,sizeof(g_current_metadata));g_active_valid=0U;g_active=0U;project_product_refresh_slots();}
-uint8_t project_product_list_slots(uint8_t*out,uint8_t cap){uint8_t n=0U;if(out==NULL)return 0U;for(uint8_t s=0;s<PROJECT_PRODUCT_SLOT_COUNT&&n<cap;++s)if(g_present[s])out[n++]=s;return n;}
-uint8_t project_product_slot_present(uint8_t s){return(s<PROJECT_PRODUCT_SLOT_COUNT)?g_present[s]:0U;}
+void project_product_refresh_slots(void){if(project_replacement_is_active()!=0U||project_product_save_busy()!=0U||project_product_load_busy()!=0U||project_product_rename_busy()!=0U)return;memset(g_present,0,sizeof(g_present));memset(g_project_metadata,0,sizeof(g_project_metadata));if(!acquire())return;if(!ensure_directory()){sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);return;}for(uint8_t s=0U;s<PROJECT_PRODUCT_SLOT_COUNT;++s){char x[48],tmp[48],bak[48];FILINFO i;if(path(x,sizeof(x),s)&&side_path(tmp,sizeof(tmp),s,"TMP")&&side_path(bak,sizeof(bak),s,"BAK")){(void)persistent_fatfs_recover_replace(x,tmp,bak);if(f_stat(x,&i)==FR_OK){g_present[s]=1U;project_product_scan_name(s,x);}}}sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);}
+void project_product_init(void){memset(&g_progress,0,sizeof(g_progress));memset(&g_project_save,0,sizeof(g_project_save));memset(&g_project_load,0,sizeof(g_project_load));memset(&g_project_rename,0,sizeof(g_project_rename));memset(g_project_metadata,0,sizeof(g_project_metadata));memset(&g_current_metadata,0,sizeof(g_current_metadata));g_active_valid=0U;g_active=0U;project_product_refresh_slots();}
+uint8_t project_product_list_slots(uint8_t*out,uint8_t cap){uint8_t n=0U;if(out==NULL)return 0U;for(uint8_t s=0;s<PROJECT_PRODUCT_SLOT_COUNT&&n<cap;++s)if(g_present[s]&&g_project_metadata[s].name[0]!='\0')out[n++]=s;return n;}
 uint8_t project_product_metadata(uint8_t s,project_product_metadata_t*out){if(out==NULL||s>=PROJECT_PRODUCT_SLOT_COUNT||!g_present[s])return 0U;*out=g_project_metadata[s];return 1U;}
 uint8_t project_product_current_metadata(project_product_metadata_t*out){if(out==NULL||g_active_valid==0U)return 0U;*out=g_current_metadata;return 1U;}
 
@@ -378,7 +383,7 @@ uint8_t project_product_save_named(uint8_t slot,const char *name)
     if(slot>=PROJECT_PRODUCT_SLOT_COUNT){g_save_error=PROJECT_PRODUCT_SAVE_ERROR_ARGUMENT;persist_debug_error(PERSIST_DBG_STAGE_POLICY,PERSIST_DBG_ERROR_POLICY);return 0U;}
     if(seq_runtime_is_running()!=0U||seq_runtime_is_start_pending()!=0U){g_save_error=PROJECT_PRODUCT_SAVE_ERROR_TRANSPORT_ACTIVE;persist_debug_error(PERSIST_DBG_STAGE_POLICY,PERSIST_DBG_ERROR_POLICY);return 0U;}
     char normalized[NAME_CONTRACT_BUFFER_BYTES];if(!project_name_normalize(name,normalized)){g_save_error=PROJECT_PRODUCT_SAVE_ERROR_INVALID_NAME;persist_debug_error(PERSIST_DBG_STAGE_POLICY,PERSIST_DBG_ERROR_POLICY);return 0U;}
-    if(project_replacement_is_active()!=0U
+    if(project_product_rename_busy()!=0U || project_replacement_is_active()!=0U
         || project_product_save_busy()!=0U||project_product_load_busy()!=0U)
     {g_save_error=PROJECT_PRODUCT_SAVE_ERROR_SD_BUSY;persist_debug_error(PERSIST_DBG_STAGE_POLICY,PERSIST_DBG_ERROR_POLICY);return 0U;}
     persistence_project_save_workspace_t *const workspace = persistence_workspace_acquire_project_save();
@@ -420,14 +425,24 @@ uint8_t project_product_save_named(uint8_t slot,const char *name)
     g_progress=(project_product_progress_t){1U,0U,0U,1U,PROJECT_PRODUCT_RESULT_IN_PROGRESS};return 1U;
 }
 
-uint8_t project_product_save(uint8_t slot)
+uint8_t project_product_new_named(const char *name,uint8_t *out_slot)
 {
-    char name[NAME_CONTRACT_BUFFER_BYTES];
-    if((slot<PROJECT_PRODUCT_SLOT_COUNT)&&(g_present[slot]!=0U)
-            &&(g_project_metadata[slot].name[0]!='\0'))
-        memcpy(name,g_project_metadata[slot].name,sizeof(name));
-    else project_name_fallback(slot,name);
-    return project_product_save_named(slot,name);
+    if(out_slot==NULL)return 0U;
+    for(uint8_t slot=0U;slot<PROJECT_PRODUCT_SLOT_COUNT;++slot)
+        if(g_present[slot]==0U)
+        {
+            if(project_product_save_named(slot,name)==0U)return 0U;
+            *out_slot=slot;
+            return 1U;
+        }
+    return 0U;
+}
+
+uint8_t project_product_save_existing(uint8_t slot)
+{
+    if(slot>=PROJECT_PRODUCT_SLOT_COUNT||g_present[slot]==0U
+        ||g_project_metadata[slot].name[0]=='\0')return 0U;
+    return project_product_save_named(slot,g_project_metadata[slot].name);
 }
 
 uint8_t project_product_save_busy(void){return(g_project_save.state!=PROJECT_SAVE_IDLE)?1U:0U;}
@@ -440,8 +455,202 @@ uint8_t project_product_save_take_result(uint8_t *slot,uint8_t *success)
     memset(&g_project_save,0,sizeof(g_project_save));return 1U;
 }
 
+uint8_t project_product_rename_busy(void)
+{
+    return (g_project_rename.state != 0U && g_project_rename.state != 4U) ? 1U : 0U;
+}
+
+uint8_t project_product_rename(uint8_t slot,const char *name)
+{
+    char normalized[NAME_CONTRACT_BUFFER_BYTES];
+    if(slot>=PROJECT_PRODUCT_SLOT_COUNT || g_present[slot]==0U
+        || g_project_metadata[slot].name[0]=='\0'
+        || project_product_rename_busy()!=0U || project_product_save_busy()!=0U
+        || project_product_load_busy()!=0U || project_replacement_is_active()!=0U
+        || project_name_normalize(name,normalized)==0U) return 0U;
+    memset(&g_project_rename,0,sizeof(g_project_rename));
+    g_project_rename.slot=slot;
+    g_project_rename.epoch=sd_access_media_epoch();
+    memcpy(g_project_rename.name,normalized,sizeof(g_project_rename.name));
+    g_project_rename.new_name_length=(uint16_t)strlen(normalized);
+    if(!path(g_project_rename.final_path,sizeof(g_project_rename.final_path),slot)
+        || !side_path(g_project_rename.temporary_path,sizeof(g_project_rename.temporary_path),slot,"TMP")
+        || !side_path(g_project_rename.backup_path,sizeof(g_project_rename.backup_path),slot,"BAK"))return 0U;
+    g_project_rename.state=1U;
+    return 1U;
+}
+
+uint8_t project_product_rename_take_result(uint8_t *slot,uint8_t *success)
+{
+    if(g_project_rename.state!=4U)return 0U;
+    if(slot!=NULL)*slot=g_project_rename.slot;
+    if(success!=NULL)*success=g_project_rename.success;
+    memset(&g_project_rename,0,sizeof(g_project_rename));
+    return 1U;
+}
+
+static uint8_t project_rename_write(FIL *file,const uint8_t *data,UINT size)
+{
+    UINT written=0U;
+    return (f_write(file,data,size,&written)==FR_OK && written==size)?1U:0U;
+}
+
+static void project_rename_finish(uint8_t success)
+{
+    if(g_project_rename.source_open!=0U)
+    { (void)f_close(&g_project_rename.source);g_project_rename.source_open=0U; }
+    if(g_project_rename.target_open!=0U)
+    { (void)f_close(&g_project_rename.target);g_project_rename.target_open=0U; }
+    if(success==0U) (void)f_unlink(g_project_rename.temporary_path);
+    else {
+        memset(&g_project_metadata[g_project_rename.slot],0,
+               sizeof(g_project_metadata[g_project_rename.slot]));
+        memcpy(g_project_metadata[g_project_rename.slot].name,
+               g_project_rename.name,g_project_rename.new_name_length);
+        if(g_active_valid!=0U && g_active==g_project_rename.slot)
+            g_current_metadata=g_project_metadata[g_project_rename.slot];
+    }
+    g_project_rename.success=success;
+    g_project_rename.state=4U;
+}
+
+static void project_product_rename_service(void)
+{
+    if(project_product_rename_busy()==0U)return;
+    const sd_scheduler_background_request_t request={
+        (g_project_rename.state==2U)?sizeof(g_project_rename.buffer):0U,
+        g_project_rename.epoch,
+        (g_project_rename.state==2U)?SD_SCHEDULER_BACKGROUND_DATA:SD_SCHEDULER_BACKGROUND_METADATA};
+    const sd_scheduler_background_admission_t admission=
+        sd_scheduler_runtime_background_try_begin(&request);
+    if(admission==SD_SCHEDULER_BACKGROUND_NOT_NOW)return;
+    if(admission!=SD_SCHEDULER_BACKGROUND_GO)
+    {project_rename_finish(0U);return;}
+    uint8_t ok=1U;
+    UINT read=0U;
+    if(g_project_rename.state==1U)
+    {
+        uint8_t prefix[34U],old_name[PROJECT_PRODUCT_NAME_BYTES];
+        uint32_t source_size=0U,core_length=0U;
+        if(persistent_fatfs_recover_replace(g_project_rename.final_path,
+                g_project_rename.temporary_path,g_project_rename.backup_path)!=FR_OK
+            || f_open(&g_project_rename.source,g_project_rename.final_path,FA_READ)!=FR_OK)
+            ok=0U;
+        else g_project_rename.source_open=1U;
+        if(ok!=0U)
+        {
+            source_size=(uint32_t)f_size(&g_project_rename.source);
+            if(f_read(&g_project_rename.source,prefix,sizeof(prefix),&read)!=FR_OK
+                ||read!=sizeof(prefix))ok=0U;
+        }
+        if(ok!=0U)
+        {
+            core_length=project_le32(&prefix[28]);
+            g_project_rename.old_name_length=(uint16_t)prefix[32]
+                |((uint16_t)prefix[33]<<8U);
+            g_project_rename.old_expected=project_le32(&prefix[16]);
+            if(memcmp(prefix,"B6PC",4U)!=0
+                ||prefix[4]!=PERSIST_CODEC_VERSION
+                ||prefix[6]!=PERSIST_CODEC_DOCUMENT_PROJECT
+                ||prefix[8]!=4U ||prefix[24]!=1U ||prefix[25]!=0x20U
+                ||prefix[26]!=2U ||prefix[27]!=0U
+                ||project_le32(&prefix[20])!=
+                    ~persist_codec_crc32_update(0xFFFFFFFFUL,prefix,20U)
+                ||project_le32(&prefix[12])!=source_size
+                ||g_project_rename.old_name_length==0U
+                ||g_project_rename.old_name_length>PROJECT_PRODUCT_NAME_BYTES
+                ||core_length<2U+g_project_rename.old_name_length
+                ||source_size<34U+g_project_rename.old_name_length)ok=0U;
+        }
+        if(ok!=0U && (f_read(&g_project_rename.source,old_name,
+                g_project_rename.old_name_length,&read)!=FR_OK
+                ||read!=g_project_rename.old_name_length))ok=0U;
+        if(ok!=0U)
+        {
+            const int32_t delta=(int32_t)g_project_rename.new_name_length
+                -(int32_t)g_project_rename.old_name_length;
+            g_project_rename.new_total=(uint32_t)((int32_t)source_size+delta);
+            if(g_project_rename.new_total>PERSIST_CODEC_PROJECT_DOCUMENT_MAX_BYTES
+                ||f_open(&g_project_rename.target,g_project_rename.temporary_path,
+                    FA_CREATE_ALWAYS|FA_WRITE|FA_READ)!=FR_OK)ok=0U;
+            else g_project_rename.target_open=1U;
+        }
+        if(ok!=0U)
+        {
+            uint8_t new_prefix[10U];
+            memcpy(new_prefix,&prefix[24],sizeof(new_prefix));
+            core_length=(uint32_t)((int32_t)core_length
+                +(int32_t)g_project_rename.new_name_length
+                -(int32_t)g_project_rename.old_name_length);
+            for(uint8_t i=0U;i<4U;++i)new_prefix[4U+i]=(uint8_t)(core_length>>(8U*i));
+            new_prefix[8]=(uint8_t)g_project_rename.new_name_length;
+            new_prefix[9]=0U;
+            g_project_rename.old_crc=persist_codec_crc32_update(0xFFFFFFFFUL,
+                &prefix[24],10U);
+            g_project_rename.old_crc=persist_codec_crc32_update(
+                g_project_rename.old_crc,old_name,g_project_rename.old_name_length);
+            g_project_rename.new_crc=persist_codec_crc32_update(0xFFFFFFFFUL,
+                new_prefix,sizeof(new_prefix));
+            g_project_rename.new_crc=persist_codec_crc32_update(
+                g_project_rename.new_crc,(const uint8_t*)g_project_rename.name,
+                g_project_rename.new_name_length);
+            memset(prefix,0,PERSIST_CODEC_HEADER_BYTES);
+            if(project_rename_write(&g_project_rename.target,prefix,PERSIST_CODEC_HEADER_BYTES)==0U
+                ||project_rename_write(&g_project_rename.target,new_prefix,sizeof(new_prefix))==0U
+                ||project_rename_write(&g_project_rename.target,
+                    (const uint8_t*)g_project_rename.name,g_project_rename.new_name_length)==0U)
+                ok=0U;
+            g_project_rename.remaining=source_size-34U-g_project_rename.old_name_length;
+            if(ok!=0U)g_project_rename.state=2U;
+        }
+    }
+    else if(g_project_rename.state==2U)
+    {
+        UINT chunk=(g_project_rename.remaining>sizeof(g_project_rename.buffer))
+            ?sizeof(g_project_rename.buffer):(UINT)g_project_rename.remaining;
+        if(chunk!=0U)
+        {
+            if(f_read(&g_project_rename.source,g_project_rename.buffer,chunk,&read)!=FR_OK
+                ||read!=chunk ||project_rename_write(&g_project_rename.target,
+                    g_project_rename.buffer,chunk)==0U)ok=0U;
+            if(ok!=0U)
+            {
+                g_project_rename.old_crc=persist_codec_crc32_update(
+                    g_project_rename.old_crc,g_project_rename.buffer,chunk);
+                g_project_rename.new_crc=persist_codec_crc32_update(
+                    g_project_rename.new_crc,g_project_rename.buffer,chunk);
+                g_project_rename.remaining-=chunk;
+            }
+        }
+        if(ok!=0U && g_project_rename.remaining==0U)g_project_rename.state=3U;
+    }
+    else if(g_project_rename.state==3U)
+    {
+        uint8_t header[PERSIST_CODEC_HEADER_BYTES];
+        if(~g_project_rename.old_crc!=g_project_rename.old_expected
+            ||persist_codec_build_project_document_header(g_project_rename.new_total,
+                ~g_project_rename.new_crc,header)==0U
+            ||f_lseek(&g_project_rename.target,0U)!=FR_OK
+            ||project_rename_write(&g_project_rename.target,header,sizeof(header))==0U
+            ||f_sync(&g_project_rename.target)!=FR_OK)ok=0U;
+        if(ok!=0U)
+        {
+            if(f_close(&g_project_rename.target)!=FR_OK)ok=0U;
+            g_project_rename.target_open=0U;
+            if(f_close(&g_project_rename.source)!=FR_OK)ok=0U;
+            g_project_rename.source_open=0U;
+            if(ok!=0U && persistent_fatfs_commit_replace(g_project_rename.final_path,
+                g_project_rename.temporary_path,g_project_rename.backup_path)!=FR_OK)ok=0U;
+            if(ok!=0U)project_rename_finish(1U);
+        }
+    }
+    if(ok==0U)project_rename_finish(0U);
+    sd_scheduler_runtime_background_end();
+}
+
 void project_product_save_service(void)
 {
+    project_product_rename_service();
     if(g_project_save.state==PROJECT_SAVE_IDLE||g_project_save.state==PROJECT_SAVE_DONE)return;
 
     g_persist_dbg.project_progress=g_progress.done;
@@ -1289,6 +1498,7 @@ uint8_t project_product_load(uint8_t slot)
     persist_debug_stage(PERSIST_DBG_STAGE_POLICY,0);
     persist_debug_project(PERSIST_DBG_PROJECT_PHASE_LOAD_DECODE,0U,0U);
     if (project_product_save_busy()!=0U || project_product_load_busy()!=0U
+        || project_product_rename_busy()!=0U
         || project_replacement_is_active()!=0U || project_load_allowed()==0U
         || slot>=PROJECT_PRODUCT_SLOT_COUNT || !g_present[slot])
     {persist_debug_error(PERSIST_DBG_STAGE_POLICY,PERSIST_DBG_ERROR_POLICY);return 0U;}
@@ -1381,13 +1591,38 @@ uint8_t project_product_load(uint8_t slot)
     return 1U;
 }
 
-uint8_t project_product_delete(uint8_t slot){if(project_replacement_is_active()!=0U||project_product_save_busy()!=0U||project_product_load_busy()!=0U||slot>=PROJECT_PRODUCT_SLOT_COUNT||!acquire())return 0U;char x[48];FRESULT r=FR_INVALID_NAME;if(path(x,sizeof(x),slot))r=f_unlink(x);sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);uint8_t ok=(r==FR_OK||r==FR_NO_FILE);if(ok){g_present[slot]=0U;memset(&g_project_metadata[slot],0,sizeof(g_project_metadata[slot]));if(g_active_valid&&g_active==slot){g_active_valid=0U;memset(&g_current_metadata,0,sizeof(g_current_metadata));boot_context_sd_clear();}}return ok;}
+uint8_t project_product_delete(uint8_t slot)
+{
+    if(project_replacement_is_active()!=0U||project_product_save_busy()!=0U
+        ||project_product_load_busy()!=0U||project_product_rename_busy()!=0U
+        ||slot>=PROJECT_PRODUCT_SLOT_COUNT||!acquire())return 0U;
+    char x[48],tmp[48],bak[48];
+    FRESULT result=FR_INVALID_NAME;
+    if(path(x,sizeof(x),slot)&&side_path(tmp,sizeof(tmp),slot,"TMP")
+        &&side_path(bak,sizeof(bak),slot,"BAK"))
+    {
+        result=persistent_fatfs_recover_replace(x,tmp,bak);
+        if(result==FR_OK)result=f_unlink(x);
+    }
+    sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+    if(result!=FR_OK && result!=FR_NO_FILE)return 0U;
+    g_present[slot]=0U;
+    memset(&g_project_metadata[slot],0,sizeof(g_project_metadata[slot]));
+    if(g_active_valid!=0U && g_active==slot)
+    {
+        g_active_valid=0U;
+        memset(&g_current_metadata,0,sizeof(g_current_metadata));
+        boot_context_sd_clear();
+    }
+    return 1U;
+}
 
 uint8_t project_product_blank(void)
 {
     persist_debug_begin(PERSIST_DBG_OP_PROJECT_BLANK,0U,0U);
     persist_debug_project(PERSIST_DBG_PROJECT_PHASE_BLANK_BUILD,0U,0U);
     if(project_replacement_is_active()!=0U||project_product_save_busy()!=0U
+       ||project_product_rename_busy()!=0U
        ||project_product_load_busy()!=0U||project_load_allowed()==0U)
     {persist_debug_error(PERSIST_DBG_STAGE_POLICY,PERSIST_DBG_ERROR_POLICY);return 0U;}
     pattern_live_cancel_recall();
@@ -1440,7 +1675,8 @@ project_product_boot_restore_result_t project_product_restore_boot(void)
     if (!boot_context_sd_load(&context))
         return project_product_restore_boot_defaults();
     if (context.active_project_slot >= PROJECT_PRODUCT_SLOT_COUNT
-        || g_present[context.active_project_slot] == 0U)
+        || g_present[context.active_project_slot] == 0U
+        || g_project_metadata[context.active_project_slot].name[0]=='\0')
         return project_product_restore_boot_defaults();
     return (project_product_load(context.active_project_slot) != 0U)
         ? PROJECT_PRODUCT_BOOT_RESTORE_PROJECT_READY

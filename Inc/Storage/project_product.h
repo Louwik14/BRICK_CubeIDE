@@ -42,9 +42,12 @@ typedef enum {
 void project_product_init(void);
 void project_product_refresh_slots(void);
 uint8_t project_product_list_slots(uint8_t*out,uint8_t capacity);
-uint8_t project_product_slot_present(uint8_t slot);
-uint8_t project_product_save(uint8_t slot);
 uint8_t project_product_save_named(uint8_t slot,const char *name);
+uint8_t project_product_new_named(const char *name,uint8_t *slot);
+uint8_t project_product_save_existing(uint8_t slot);
+uint8_t project_product_rename(uint8_t slot,const char *name);
+uint8_t project_product_rename_busy(void);
+uint8_t project_product_rename_take_result(uint8_t *slot,uint8_t *success);
 uint8_t project_product_metadata(uint8_t slot,project_product_metadata_t *out);
 uint8_t project_product_current_metadata(project_product_metadata_t *out);
 void project_product_save_service(void);

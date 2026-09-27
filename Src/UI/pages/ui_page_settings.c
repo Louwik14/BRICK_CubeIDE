@@ -36,6 +36,7 @@
 #include "font.h"
 #include "ui_core.h"
 #include "ui_page_manager.h"
+#include "UI/ui_browser_actions.h"
 
 #include "pages/ui_page_calibration.h"
 #include "pages/ui_page_name_edit.h"
@@ -51,22 +52,9 @@ typedef enum
     UI_SETTINGS_VIEW_MULTI_SAMPLE,
     UI_SETTINGS_VIEW_SAMPLER_SLOT,
     UI_SETTINGS_VIEW_SAMPLER_CATALOG,
-    UI_SETTINGS_VIEW_PROJECT_LOAD,
-    UI_SETTINGS_VIEW_PROJECT_SAVE_AS,
-    UI_SETTINGS_VIEW_PROJECT_MANAGE,
-    UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT,
     UI_SETTINGS_VIEW_CALIBRATION,
     UI_SETTINGS_VIEW_COUNT
 } ui_settings_view_t;
-
-typedef enum
-{
-    UI_SETTINGS_MANAGE_ACTION_LOAD_FROM = 0,
-    UI_SETTINGS_MANAGE_ACTION_SAVE_TO,
-    UI_SETTINGS_MANAGE_ACTION_DELETE,
-
-    UI_SETTINGS_MANAGE_ACTION_COUNT
-} ui_settings_manage_action_t;
 
 typedef enum
 {
@@ -227,6 +215,8 @@ typedef struct
     uint16_t sampler_slot_count;
     uint8_t project_slots[PROJECT_PRODUCT_SLOT_COUNT];
     uint8_t project_slot_count;
+    uint8_t project_confirm_action;
+    uint8_t project_confirm_slot;
     uint8_t return_page_id;
     uint8_t preview_was_active;
     uint8_t preview_stop_origin;
@@ -262,6 +252,7 @@ UI_STATE_SDRAM static ui_settings_state_t g_ui_settings;
 typedef enum { UI_PROJECT_SAVE_IDLE=0,UI_PROJECT_SAVE_EDIT,UI_PROJECT_SAVE_WRITING } ui_project_save_phase_t;
 static ui_project_save_phase_t g_ui_project_save_phase;
 static uint8_t g_ui_project_save_slot;
+static uint8_t g_ui_project_name_mode;
 static uint32_t g_ui_settings_keyboard_preview_epoch = 1U;
 
 static void ui_page_settings_status(const char *status);
@@ -269,7 +260,7 @@ static void ui_page_settings_sd_busy_status(void);
 static void ui_page_settings_preview_stop(ui_settings_preview_stop_origin_t origin);
 static const char *ui_page_settings_preview_error_label(sd_preview_error_t error);
 static void ui_page_settings_back(void);
-static void ui_page_settings_project_save_begin(uint8_t slot);
+static void ui_page_settings_project_name_begin(uint8_t mode,uint8_t slot);
 static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path);
 static void ui_page_settings_ram_load_to_slot(uint16_t slot, const char *path);
 static void ui_page_settings_wavetable_load_to_slot(uint16_t slot, const char *path);

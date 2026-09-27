@@ -20,14 +20,6 @@ static const char *ui_page_settings_view_title(ui_settings_view_t view)
             return "STREAM > SLOT";
         case UI_SETTINGS_VIEW_SAMPLER_CATALOG:
             return "STREAM > SD";
-        case UI_SETTINGS_VIEW_PROJECT_LOAD:
-            return "PROJECT > LOAD";
-        case UI_SETTINGS_VIEW_PROJECT_SAVE_AS:
-            return "PROJECT > SAVE AS";
-        case UI_SETTINGS_VIEW_PROJECT_MANAGE:
-            return "PROJECT > MANAGE";
-        case UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT:
-            return "MANAGE > SLOT";
         case UI_SETTINGS_VIEW_CALIBRATION:
             return "CALIBRATION";
         default:
@@ -42,7 +34,7 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
         case UI_SETTINGS_VIEW_ROOT:
             return 3U;
         case UI_SETTINGS_VIEW_PROJECT:
-            return 3U;
+            return g_ui_settings.project_slot_count;
         case UI_SETTINGS_VIEW_SAMPLE:
             return 4U;
         case UI_SETTINGS_VIEW_SAMPLE_RAM:
@@ -55,15 +47,6 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
             return (uint8_t)UI_SETTINGS_SAMPLER_ACTION_COUNT;
         case UI_SETTINGS_VIEW_SAMPLER_CATALOG:
             return (wav_loader_catalog_count() > 255U) ? 255U : (uint8_t)wav_loader_catalog_count();
-        case UI_SETTINGS_VIEW_PROJECT_LOAD:
-            return (uint8_t)(g_ui_settings.project_slot_count + 1U);
-        case UI_SETTINGS_VIEW_PROJECT_MANAGE:
-            return g_ui_settings.project_slot_count;
-        case UI_SETTINGS_VIEW_PROJECT_SAVE_AS:
-            return (uint8_t)(g_ui_settings.project_slot_count
-                + (g_ui_settings.project_slot_count < PROJECT_PRODUCT_SLOT_COUNT ? 1U : 0U));
-        case UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT:
-            return (uint8_t)UI_SETTINGS_MANAGE_ACTION_COUNT;
         case UI_SETTINGS_VIEW_CALIBRATION:
             return 2U;
         default:
@@ -105,50 +88,11 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
             }
             return "STREAM";
         case UI_SETTINGS_VIEW_PROJECT:
-            if (index == 0U)
-            {
-                return "LOAD";
-            }
-            if (index == 1U)
-            {
-                return "SAVE AS";
-            }
-            return "MANAGE";
-        case UI_SETTINGS_VIEW_PROJECT_LOAD:
-            if (index == 0U)
-            {
-                return "BLANK PROJECT";
-            }
-            if ((index - 1U) >= g_ui_settings.project_slot_count)
-            {
-                return "-";
-            }
-            {project_product_metadata_t meta;const uint8_t slot=g_ui_settings.project_slots[index-1U];
-            if(project_product_metadata(slot,&meta)!=0U)(void)snprintf(out,out_size,"%.*s",(int)(out_size-1U),meta.name);
-            else (void)snprintf(out,out_size,"PROJECT %02u",(unsigned)slot);}
-            return out;
-        case UI_SETTINGS_VIEW_PROJECT_MANAGE:
-            if (index >= g_ui_settings.project_slot_count)
-            {
-                return "-";
-            }
-            {project_product_metadata_t meta;const uint8_t slot=g_ui_settings.project_slots[index];
-            if(project_product_metadata(slot,&meta)!=0U)(void)snprintf(out,out_size,"%.*s",(int)(out_size-1U),meta.name);
-            else (void)snprintf(out,out_size,"PROJECT %02u",(unsigned)slot);}
-            return out;
-        case UI_SETTINGS_VIEW_PROJECT_SAVE_AS:
-            if (index < g_ui_settings.project_slot_count)
-            {
-                project_product_metadata_t meta;
-                const uint8_t slot = g_ui_settings.project_slots[index];
-                if(project_product_metadata(slot,&meta)!=0U)
-                    (void)snprintf(out,out_size,"%.*s *",(int)(out_size>3U?out_size-3U:0U),meta.name);
-                else (void)snprintf(out, out_size, "PROJECT *");
-            }
-            else
-            {
-                (void)snprintf(out, out_size, "NEW PROJECT");
-            }
+            if (index >= g_ui_settings.project_slot_count) return "-";
+            {project_product_metadata_t meta;
+            if(project_product_metadata(g_ui_settings.project_slots[index],&meta)==0U)
+                return "INVALID PROJECT";
+            (void)snprintf(out,out_size,"%.*s",(int)(out_size-1U),meta.name);}
             return out;
         case UI_SETTINGS_VIEW_SAMPLER:
             if (index >= g_ui_settings.sampler_slot_count)
@@ -205,16 +149,6 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
                 }
                 return entry->name;
             }
-        case UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT:
-            if (index == (uint8_t)UI_SETTINGS_MANAGE_ACTION_LOAD_FROM)
-            {
-                return "LOAD FROM";
-            }
-            if (index == (uint8_t)UI_SETTINGS_MANAGE_ACTION_SAVE_TO)
-            {
-                return "SAVE TO";
-            }
-            return "DELETE";
         case UI_SETTINGS_VIEW_CALIBRATION:
             return (index == 0U) ? "HALL KBD" : "HALL VEL";
         default:
@@ -320,7 +254,14 @@ static void ui_page_settings_project_save_done(ui_page_name_edit_result_t result
         ui_page_settings_status(0);
         return;
     }
-    if(project_product_save_named(g_ui_project_save_slot,name)!=0U)
+    if(g_ui_project_name_mode==2U)
+    {
+        const uint8_t started=project_product_rename(g_ui_project_save_slot,name);
+        g_ui_project_save_phase=UI_PROJECT_SAVE_IDLE;
+        ui_page_settings_status(started!=0U?"RENAMING":"RENAME FAIL");
+        return;
+    }
+    if(project_product_new_named(name,&g_ui_project_save_slot)!=0U)
     {
         g_ui_project_save_phase=UI_PROJECT_SAVE_WRITING;
         ui_page_settings_status("SAVING");
@@ -331,28 +272,108 @@ static void ui_page_settings_project_save_done(ui_page_name_edit_result_t result
         ==PROJECT_PRODUCT_SAVE_ERROR_TRANSPORT_ACTIVE)?"STOP TRANSPORT":"SAVE FAIL");
 }
 
-static void ui_page_settings_project_save_begin(uint8_t slot)
+static void ui_page_settings_project_name_begin(uint8_t mode,uint8_t slot)
 {
-    if((seq_runtime_is_running()!=0U)||(seq_runtime_is_start_pending()!=0U))
+    if(mode==1U && ((seq_runtime_is_running()!=0U)||(seq_runtime_is_start_pending()!=0U)))
     {
         ui_page_settings_status("STOP TRANSPORT");
         return;
     }
-    if(project_product_save_busy()!=0U||project_product_load_busy()!=0U)
+    if(project_product_save_busy()!=0U||project_product_load_busy()!=0U
+        ||project_product_rename_busy()!=0U)
     {
         ui_page_settings_status("BUSY");
         return;
     }
     project_product_metadata_t metadata;char initial[PROJECT_PRODUCT_NAME_BYTES+1U]={0};
-    if(project_product_metadata(slot,&metadata)!=0U)
+    if(mode==2U && project_product_metadata(slot,&metadata)!=0U)
         memcpy(initial,metadata.name,sizeof(initial));
     else (void)snprintf(initial,sizeof(initial),"UNTITLED");
-    g_ui_project_save_slot=slot;g_ui_project_save_phase=UI_PROJECT_SAVE_EDIT;
-    if(ui_page_name_edit_open(UI_PAGE_SETTINGS,"PROJECT","SAVE",initial,
+    g_ui_project_save_slot=slot;g_ui_project_name_mode=mode;
+    g_ui_project_save_phase=UI_PROJECT_SAVE_EDIT;
+    if(ui_page_name_edit_open(UI_PAGE_SETTINGS,"PROJECT",
+            mode==2U?"RENAME":"NEW",initial,
             sizeof(initial),ui_page_settings_project_save_done,NULL)==0U)
     {
         g_ui_project_save_phase=UI_PROJECT_SAVE_IDLE;
         ui_page_settings_status("NAME ERROR");
+    }
+}
+
+static void ui_page_settings_project_action(ui_browser_action_t action)
+{
+    ui_settings_menu_level_t *const level=ui_page_settings_current_level();
+    const uint8_t has_focus=(level!=NULL
+        &&level->selected_index<g_ui_settings.project_slot_count)?1U:0U;
+    const uint8_t slot=has_focus?g_ui_settings.project_slots[level->selected_index]:0U;
+    if(action==UI_BROWSER_ACTION_NONE)return;
+    if(action==UI_BROWSER_ACTION_NEW)
+    {
+        g_ui_settings.project_confirm_action=0U;
+        ui_page_settings_project_name_begin(1U,0U);
+        return;
+    }
+    if(action==UI_BROWSER_ACTION_BLANK)
+    {
+        if(g_ui_settings.project_confirm_action!=2U)
+        {
+            g_ui_settings.project_confirm_action=2U;
+            ui_page_settings_status("BLANK?");
+            return;
+        }
+        g_ui_settings.project_confirm_action=0U;
+        if(project_product_blank()!=0U)
+        {
+            g_ui_settings.return_page_id=UI_PAGE_TEMPLATE_CFG;
+            ui_page_set(UI_PAGE_TEMPLATE_CFG);
+        }
+        else ui_page_settings_status("BLANK FAIL");
+        return;
+    }
+    if(has_focus==0U)
+    {
+        ui_page_settings_status("NO PROJECT");
+        return;
+    }
+    if(action==UI_BROWSER_ACTION_CLEAR)
+    {
+        if(g_ui_settings.project_confirm_action!=1U
+            ||g_ui_settings.project_confirm_slot!=slot)
+        {
+            g_ui_settings.project_confirm_action=1U;
+            g_ui_settings.project_confirm_slot=slot;
+            ui_page_settings_status("ERASE?");
+            return;
+        }
+        g_ui_settings.project_confirm_action=0U;
+        if(project_product_delete(slot)!=0U)
+        {
+            ui_page_settings_refresh_project_slots();
+            if(level->selected_index>=g_ui_settings.project_slot_count
+                &&g_ui_settings.project_slot_count!=0U)
+                level->selected_index=(uint8_t)(g_ui_settings.project_slot_count-1U);
+            ui_page_settings_status("ERASED");
+        }
+        else ui_page_settings_status("ERASE FAIL");
+        return;
+    }
+    g_ui_settings.project_confirm_action=0U;
+    switch(action)
+    {
+        case UI_BROWSER_ACTION_SAVE:
+            if(seq_runtime_is_running()!=0U||seq_runtime_is_start_pending()!=0U)
+                ui_page_settings_status("STOP TRANSPORT");
+            else ui_page_settings_status(project_product_save_existing(slot)!=0U
+                ?"SAVING":"SAVE FAIL");
+            break;
+        case UI_BROWSER_ACTION_LOAD:
+            ui_page_settings_status(project_product_load(slot)!=0U
+                ?"LOADING":"LOAD FAIL");
+            break;
+        case UI_BROWSER_ACTION_RENAME:
+            ui_page_settings_project_name_begin(2U,slot);
+            break;
+        default: break;
     }
 }
 
@@ -391,6 +412,7 @@ static void ui_page_settings_apply_action(void)
             }
             else if (level->selected_index == 1U)
             {
+                ui_page_settings_refresh_project_slots();
                 ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT);
             }
             else if (level->selected_index == 2U)
@@ -434,105 +456,6 @@ static void ui_page_settings_apply_action(void)
                 ui_page_settings_refresh_sampler_slots();
                 ui_page_settings_sample_browser_enter_root();
                 ui_page_settings_push(UI_SETTINGS_VIEW_SAMPLER);
-            }
-            break;
-
-        case UI_SETTINGS_VIEW_PROJECT:
-            if (level->selected_index == 0U)
-            {
-                ui_page_settings_refresh_project_slots();
-                ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT_LOAD);
-            }
-            else if (level->selected_index == 1U)
-            {
-                if((seq_runtime_is_running()!=0U)||(seq_runtime_is_start_pending()!=0U))
-                    ui_page_settings_status("STOP TRANSPORT");
-                else
-                {
-                    ui_page_settings_refresh_project_slots();
-                    ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT_SAVE_AS);
-                }
-            }
-            else
-            {
-                ui_page_settings_refresh_project_slots();
-                if (g_ui_settings.project_slot_count == 0U)
-                {
-                    ui_page_settings_status("NO PROJECT");
-                    break;
-                }
-                ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT_MANAGE);
-            }
-            break;
-
-        case UI_SETTINGS_VIEW_PROJECT_LOAD:
-            if (level->selected_index == 0U)
-            {
-                if (project_product_blank() != 0U)
-                {
-                    g_ui_settings.return_page_id = UI_PAGE_TEMPLATE_CFG;
-                    ui_page_set(UI_PAGE_TEMPLATE_CFG);
-                }
-                else
-                {
-                    ui_page_settings_status("BLANK FAIL");
-                }
-            }
-            else if (((level->selected_index - 1U) < g_ui_settings.project_slot_count)
-                     && (project_product_load(g_ui_settings.project_slots[level->selected_index - 1U]) != 0U))
-            {
-                    ui_page_settings_status("LOADING");
-            }
-            else
-            {
-                ui_page_settings_status("LOAD FAIL");
-            }
-            break;
-
-        case UI_SETTINGS_VIEW_PROJECT_SAVE_AS:
-            if (level->selected_index < g_ui_settings.project_slot_count)
-                ui_page_settings_project_save_begin(
-                    g_ui_settings.project_slots[level->selected_index]);
-            else
-            {
-                uint8_t slot = 0U;
-                while (slot < PROJECT_PRODUCT_SLOT_COUNT
-                    && project_product_slot_present(slot) != 0U) ++slot;
-                if (slot < PROJECT_PRODUCT_SLOT_COUNT)
-                    ui_page_settings_project_save_begin(slot);
-                else ui_page_settings_status("PROJECT FULL");
-            }
-            break;
-
-        case UI_SETTINGS_VIEW_PROJECT_MANAGE:
-            if (level->selected_index < g_ui_settings.project_slot_count)
-            {
-                g_ui_settings.selected_slot = g_ui_settings.project_slots[level->selected_index];
-                ui_page_settings_push(UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT);
-            }
-            break;
-
-        case UI_SETTINGS_VIEW_PROJECT_MANAGE_SLOT:
-            if (level->selected_index == (uint8_t)UI_SETTINGS_MANAGE_ACTION_LOAD_FROM)
-            {
-                if (project_product_load(g_ui_settings.selected_slot) != 0U)
-                {                    ui_page_settings_status("LOADING");
-                }
-                else
-                {                    ui_page_settings_status("LOAD FROM FAIL");
-                }
-            }
-            else if (level->selected_index == (uint8_t)UI_SETTINGS_MANAGE_ACTION_SAVE_TO)
-            {
-                ui_page_settings_project_save_begin(g_ui_settings.selected_slot);
-            }
-            else if (project_product_delete(g_ui_settings.selected_slot) != 0U)
-            {                ui_page_settings_refresh_project_slots();
-                ui_page_settings_back();
-                ui_page_settings_status("DELETE OK");
-            }
-            else
-            {                ui_page_settings_status("DELETE FAIL");
             }
             break;
 
@@ -887,6 +810,14 @@ static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
         return;
     }
 
+    if(level!=NULL && level->view==UI_SETTINGS_VIEW_PROJECT)
+    {
+        if(ev->id==(uint8_t)BTN_SETTINGS)ui_page_settings_back();
+        else ui_page_settings_project_action(ui_browser_action_resolve(
+            (button_id_t)ev->id,button_down(BTN_SHIFT),1U));
+        return;
+    }
+
     if (ev->id == (uint8_t)BTN_PAGE_1)
     {
         ui_page_settings_back();
@@ -925,16 +856,25 @@ static void ui_page_settings_tick(void)
     if (project_product_save_take_result(&project_slot, &project_success) != 0U)
     {
         g_ui_project_save_phase=UI_PROJECT_SAVE_IDLE;
-        (void)project_slot;
         if (project_success != 0U)
         {
             ui_page_settings_refresh_project_slots();
+            ui_settings_menu_level_t *const level=ui_page_settings_current_level();
+            if(level!=NULL && level->view==UI_SETTINGS_VIEW_PROJECT)
+                for(uint8_t i=0U;i<g_ui_settings.project_slot_count;++i)
+                    if(g_ui_settings.project_slots[i]==project_slot)
+                    {level->selected_index=i;break;}
             ui_page_settings_status("SAVE OK");
         }
         else
         {
             ui_page_settings_status("SAVE FAIL");
         }
+    }
+    if(project_product_rename_take_result(&project_slot,&project_success)!=0U)
+    {
+        if(project_success!=0U)ui_page_settings_refresh_project_slots();
+        ui_page_settings_status(project_success!=0U?"RENAME OK":"RENAME FAIL");
     }
 
     project_control_ram_load_result_t ram_completion;

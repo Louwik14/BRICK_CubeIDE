@@ -251,7 +251,8 @@ static void patch_io_finish(patch_product_result_t result)
     g_present[g_patch_io.slot] = 1U;
     g_invalid[g_patch_io.slot] = 0U;
     meta_from_patch(g_patch_io.slot, &g_patch_io.patch);
-    if (g_patch_io.operation == PATCH_PRODUCT_OPERATION_SAVE)
+    if (g_patch_io.operation == PATCH_PRODUCT_OPERATION_SAVE
+        || g_patch_io.operation == PATCH_PRODUCT_OPERATION_OVERWRITE)
     {
         g_current = g_patch_io.slot;
     }
@@ -486,6 +487,23 @@ patch_product_result_t patch_product_save_submit(uint16_t slot, const char *name
            sizeof(g_patch_io.prepared_patch.name));
     g_patch_io.prepared_patch.name_length = (uint16_t)strlen(normalized);
     return patch_product_save_begin(slot, 0);
+}
+
+patch_product_result_t patch_product_overwrite(uint8_t entity, uint16_t slot)
+{
+    if (slot >= PATCH_PRODUCT_SLOT_COUNT || g_present[slot] == 0U
+        || g_invalid[slot] != 0U) return PATCH_PRODUCT_EMPTY;
+    if (patch_io_common_available() == 0U) return PATCH_PRODUCT_IO_BUSY;
+    patch_product_metadata_t meta;
+    if (patch_product_metadata(slot, &meta) == 0U || meta.name[0] == '\0')
+        return PATCH_PRODUCT_INVALID;
+    if (persistent_patch_control_capture(entity, meta.name, &g_patch_io.prepared_patch)
+        != PERSIST_CODEC_OK) return PATCH_PRODUCT_INVALID;
+    if (persist_codec_validate_patch(&g_patch_io.prepared_patch) != PERSIST_CODEC_OK
+        || patch_io_prepare_paths(slot) == 0U) return PATCH_PRODUCT_INVALID;
+    memcpy(&g_patch_io.patch, &g_patch_io.prepared_patch, sizeof(g_patch_io.patch));
+    patch_io_start(PATCH_PRODUCT_OPERATION_OVERWRITE, slot);
+    return PATCH_PRODUCT_PENDING;
 }
 
 void patch_product_save_cancel_prepare(void)

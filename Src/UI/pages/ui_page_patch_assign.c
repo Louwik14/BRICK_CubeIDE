@@ -11,6 +11,7 @@
 #include "Track/entity_topology.h"
 #include "pages/ui_page_name_edit.h"
 #include "ui_core.h"
+#include "UI/ui_browser_actions.h"
 #include "ui_event.h"
 #include "ui_page_manager.h"
 #include "stm32h7xx_hal.h"
@@ -486,6 +487,7 @@ static void ui_page_patch_assign_ensure_visible_selection(void)
         g_patch_assign.selected_slot = first_slot;
         patch_product_set_current(g_patch_assign.selected_slot);
     }
+    else g_patch_assign.selected_slot = PATCH_PRODUCT_INVALID_SLOT;
 }
 
 static void ui_page_patch_assign_step_selection(int16_t delta)
@@ -735,7 +737,7 @@ static void ui_page_patch_assign_begin_save(void)
     g_patch_assign.name_edit_slot = slot;
     if (ui_page_name_edit_open(UI_PAGE_PATCH_ASSIGN,
                                "PATCH",
-                               "SAVE",
+                               "NEW",
                                name,
                                33U,
                                ui_page_patch_assign_name_done,
@@ -918,22 +920,41 @@ static void ui_page_patch_assign_handle_event(const ui_event_t *ev)
         return;
     }
 
-    switch ((button_id_t)ev->id)
+    switch (ui_browser_action_resolve((button_id_t)ev->id,
+                                      button_down(BTN_SHIFT), 0U))
     {
-        case BTN_PAGE_1:
+        case UI_BROWSER_ACTION_NEW:
             ui_page_patch_assign_begin_save();
             break;
-
-        case BTN_PAGE_2:
+        case UI_BROWSER_ACTION_SAVE:
+        {
+            g_patch_assign.clear_confirm = 0U;
+            const uint16_t slot = g_patch_assign.selected_slot;
+            if (ui_page_patch_assign_selection_is_visible() == 0U
+                || patch_product_slot_state(slot) != PATCH_PRODUCT_SLOT_VALID)
+            {
+                ui_page_patch_assign_set_temporary_status("NO PATCH");
+                break;
+            }
+            const patch_product_result_t result = patch_product_overwrite(
+                g_patch_assign.target_track, slot);
+            if (result == PATCH_PRODUCT_PENDING)
+            {
+                g_patch_assign.name_edit_operation = PATCH_PRODUCT_OPERATION_OVERWRITE;
+                g_patch_assign.name_edit_slot = slot;
+                ui_page_patch_assign_set_status("SAVING");
+            }
+            else ui_page_patch_assign_set_temporary_status(patch_product_result_label(result));
+            break;
+        }
+        case UI_BROWSER_ACTION_LOAD:
             g_patch_assign.clear_confirm = 0U;
             ui_page_patch_assign_apply_selected();
             break;
-
-        case BTN_PAGE_3:
+        case UI_BROWSER_ACTION_RENAME:
             ui_page_patch_assign_begin_rename();
             break;
-
-        case BTN_PAGE_4:
+        case UI_BROWSER_ACTION_CLEAR:
             ui_page_patch_assign_clear_action();
             break;
 
@@ -1154,10 +1175,11 @@ static void ui_page_patch_assign_draw_position(uint16_t selected_view, uint16_t 
 
 static void ui_page_patch_assign_draw_footer(void)
 {
-    ui_page_patch_assign_draw_centered_label(0U, 32U, PATCH_ASSIGN_FOOTER_LABEL_Y, "SAVE");
-    ui_page_patch_assign_draw_centered_label(32U, 32U, PATCH_ASSIGN_FOOTER_LABEL_Y, "LOAD");
-    ui_page_patch_assign_draw_centered_label(64U, 32U, PATCH_ASSIGN_FOOTER_LABEL_Y, "RENAME");
-    ui_page_patch_assign_draw_centered_label(96U, 32U, PATCH_ASSIGN_FOOTER_LABEL_Y, "CLEAR");
+    for (uint8_t page = 0U; page < 4U; ++page)
+        ui_page_patch_assign_draw_centered_label((uint8_t)(page * 32U), 32U,
+            PATCH_ASSIGN_FOOTER_LABEL_Y,
+            ui_browser_action_label(ui_browser_action_resolve(
+                (button_id_t)((uint8_t)BTN_PAGE_1 + page), button_down(BTN_SHIFT), 0U), 0U));
 }
 
 static void ui_page_patch_assign_render(void)
@@ -1246,15 +1268,22 @@ static void ui_page_patch_assign_tick(void)
     g_patch_assign.name_edit_operation = PATCH_PRODUCT_OPERATION_NONE;
     g_patch_assign.name_edit_slot = PATCH_PRODUCT_INVALID_SLOT;
     if ((operation == PATCH_PRODUCT_OPERATION_SAVE)
+            || (operation == PATCH_PRODUCT_OPERATION_OVERWRITE)
             || ((operation == PATCH_PRODUCT_OPERATION_LOAD)
                 && (result == PATCH_PRODUCT_OK)))
     {
         g_patch_assign.selected_slot = slot;
         patch_product_set_current(slot);
     }
+    if(result==PATCH_PRODUCT_OK && operation==PATCH_PRODUCT_OPERATION_OVERWRITE)
+        ui_page_patch_assign_ensure_visible_selection();
     ui_page_patch_assign_set_temporary_status(
         (result == PATCH_PRODUCT_OK)
-            ? ((operation == PATCH_PRODUCT_OPERATION_SAVE)
+            ? ((operation == PATCH_PRODUCT_OPERATION_OVERWRITE
+                 &&g_patch_assign.selected_slot!=slot)
+                 ?"SAVED / FILTER"
+                 :((operation == PATCH_PRODUCT_OPERATION_SAVE)
+                 || (operation == PATCH_PRODUCT_OPERATION_OVERWRITE))
                ? "PATCH SAVED"
                : ((operation == PATCH_PRODUCT_OPERATION_LOAD)
                   ? "PATCH LOADED" : "PATCH RENAMED"))
