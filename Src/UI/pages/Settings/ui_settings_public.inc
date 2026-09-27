@@ -17,6 +17,66 @@ uint8_t ui_page_settings_is_open(void)
     return (ui_page_get_id() == UI_PAGE_SETTINGS) ? 1U : 0U;
 }
 
+uint8_t ui_page_settings_sampler_ram_keyboard_context_active(void)
+{
+    const ui_settings_menu_level_t *const level =
+        ui_page_settings_current_level();
+    return (uint8_t)((ui_page_settings_is_open() != 0U)
+        && (level != 0)
+        && (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM)
+        && (g_ui_settings.sample_confirm
+            == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE));
+}
+
+void ui_page_settings_sampler_ram_keyboard_note_on(uint8_t note,
+                                                   uint8_t velocity)
+{
+    (void)note;
+    (void)velocity;
+    if (ui_page_settings_sampler_ram_keyboard_context_active() == 0U)
+    {
+        return;
+    }
+
+    const char *path = 0;
+    if (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY)
+    {
+        const ui_settings_sample_entry_t *const entry =
+            ui_page_settings_sample_selected_entry();
+        if ((entry != 0) && (entry->type == UI_SETTINGS_SAMPLE_ENTRY_FILE))
+        {
+            path = entry->path;
+        }
+    }
+    else
+    {
+        uint16_t backend_slot = SAMPLER_RAM_POOL_INVALID_SLOT;
+        if (ui_page_settings_ram_backend_from_global(
+                g_ui_settings.sample_slot_selected, &backend_slot) != 0U)
+        {
+            const sampler_ram_slot_t *const slot =
+                sampler_ram_pool_get_slot(backend_slot);
+            if ((slot != 0) && (slot->state == SAMPLER_RAM_SLOT_READY)
+                && (slot->path[0] != '\0'))
+            {
+                path = slot->path;
+            }
+        }
+    }
+
+    ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+    if ((path != 0) && (sd_preview_begin(path) != 0U))
+    {
+        g_ui_settings.preview_stop_origin = UI_SETTINGS_PREVIEW_STOP_ORIGIN_NONE;
+        g_ui_settings.preview_was_active = sd_preview_is_active();
+    }
+}
+
+void ui_page_settings_sampler_ram_keyboard_preview_stop(void)
+{
+    ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+}
+
 uint8_t ui_page_settings_multi_clear_is_active(void)
 {
     return multi_sample_pool_clear_is_active();
