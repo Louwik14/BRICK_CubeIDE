@@ -18,6 +18,7 @@
 #define USB_DEVICE_AUDIO_CHANNELS 2U
 #define USB_DEVICE_AUDIO_SUBSLOT_BYTES 4U
 #define USB_DEVICE_AUDIO_BIT_RESOLUTION 32U
+#define USB_DEVICE_PRODUCT_NAME "Brick"
 #define USB_DEVICE_AUDIO_EP_SIZE \
     TUD_AUDIO_EP_SIZE(false, 48000U, USB_DEVICE_AUDIO_SUBSLOT_BYTES, \
                       USB_DEVICE_AUDIO_CHANNELS)
@@ -67,7 +68,28 @@ _Static_assert(USB_DEVICE_DWC2_FS_RX_FIFO_WORDS
 #define USB_STR_MANUFACTURER    1U
 #define USB_STR_PRODUCT         2U
 #define USB_STR_SERIAL          3U
-#define USB_STR_MIDI            4U
+
+#define USB_DEVICE_MIDI_DESC_HEAD(_itfnum, _stridx, _numcables) \
+    9U, TUSB_DESC_INTERFACE, _itfnum, 0U, 0U, TUSB_CLASS_AUDIO, \
+        AUDIO_SUBCLASS_CONTROL, AUDIO_FUNC_PROTOCOL_CODE_UNDEF, _stridx, \
+    9U, TUSB_DESC_CS_INTERFACE, AUDIO10_CS_AC_INTERFACE_HEADER, \
+        U16_TO_U8S_LE(0x0100U), U16_TO_U8S_LE(0x0009U), 1U, \
+        (uint8_t)((_itfnum) + 1U), \
+    9U, TUSB_DESC_INTERFACE, (uint8_t)((_itfnum) + 1U), 0U, 2U, \
+        TUSB_CLASS_AUDIO, AUDIO_SUBCLASS_MIDI_STREAMING, \
+        AUDIO_FUNC_PROTOCOL_CODE_UNDEF, _stridx, \
+    7U, TUSB_DESC_CS_INTERFACE, MIDI_CS_INTERFACE_HEADER, \
+        U16_TO_U8S_LE(0x0100U), \
+        U16_TO_U8S_LE(7U + (_numcables) * TUD_MIDI_DESC_JACK_LEN \
+                      + 2U * TUD_MIDI_DESC_EP_LEN(_numcables))
+
+#define USB_DEVICE_MIDI_DESCRIPTOR(_itfnum, _stridx, _epout, _epin, _epsize) \
+    USB_DEVICE_MIDI_DESC_HEAD(_itfnum, _stridx, 1U), \
+    TUD_MIDI_DESC_JACK_DESC(1U, _stridx), \
+    TUD_MIDI_DESC_EP(_epout, _epsize, 1U), \
+    TUD_MIDI_JACKID_IN_EMB(1U), \
+    TUD_MIDI_DESC_EP(_epin, _epsize, 1U), \
+    TUD_MIDI_JACKID_OUT_EMB(1U)
 
 static uint8_t g_usb_device_started;
 static volatile uint8_t g_usb_device_mounted;
@@ -86,14 +108,14 @@ static const uint8_t g_usb_device_descriptor[] = {
 };
 
 static const uint8_t g_usb_configuration_descriptor[] = {
-    TUD_CONFIG_DESCRIPTOR(1U, USB_DEVICE_ITF_COUNT, 0U,
+    TUD_CONFIG_DESCRIPTOR(1U, USB_DEVICE_ITF_COUNT, USB_STR_PRODUCT,
                           TUD_CONFIG_DESC_LEN + USB_DEVICE_AUDIO_DESC_LEN
                           + TUD_MIDI_DESC_LEN,
                           TUSB_DESC_CONFIG_ATT_SELF_POWERED, 100U),
     /* UAC2 Audio Control + OUT/IN streaming interfaces. */
     TUD_AUDIO20_DESC_IAD(USB_DEVICE_AUDIO_AC_ITF,
-                         USB_DEVICE_AUDIO_ITF_COUNT, 0U),
-    TUD_AUDIO20_DESC_STD_AC(USB_DEVICE_AUDIO_AC_ITF, 0U, 0U),
+                         USB_DEVICE_AUDIO_ITF_COUNT, USB_STR_PRODUCT),
+    TUD_AUDIO20_DESC_STD_AC(USB_DEVICE_AUDIO_AC_ITF, 0U, USB_STR_PRODUCT),
     TUD_AUDIO20_DESC_CS_AC(
         0x0200U,
         AUDIO20_FUNC_PRO_AUDIO,
@@ -107,7 +129,7 @@ static const uint8_t g_usb_configuration_descriptor[] = {
         (AUDIO20_CTRL_R << AUDIO20_CLOCK_SOURCE_CTRL_CLK_FRQ_POS)
             | (AUDIO20_CTRL_R << AUDIO20_CLOCK_SOURCE_CTRL_CLK_VAL_POS),
         0U,
-        0U),
+        USB_STR_PRODUCT),
     TUD_AUDIO20_DESC_INPUT_TERM(
         0x01U,
         AUDIO_TERM_TYPE_IN_GENERIC_MIC,
@@ -117,7 +139,7 @@ static const uint8_t g_usb_configuration_descriptor[] = {
         AUDIO20_CHANNEL_CONFIG_FRONT_LEFT | AUDIO20_CHANNEL_CONFIG_FRONT_RIGHT,
         0U,
         AUDIO20_CTRL_NONE,
-        0U),
+        USB_STR_PRODUCT),
     TUD_AUDIO20_DESC_OUTPUT_TERM(
         0x03U,
         AUDIO_TERM_TYPE_USB_STREAMING,
@@ -125,7 +147,7 @@ static const uint8_t g_usb_configuration_descriptor[] = {
         0x01U,
         0x10U,
         AUDIO20_CTRL_NONE,
-        0U),
+        USB_STR_PRODUCT),
     TUD_AUDIO20_DESC_INPUT_TERM(
         0x04U,
         AUDIO_TERM_TYPE_USB_STREAMING,
@@ -135,7 +157,7 @@ static const uint8_t g_usb_configuration_descriptor[] = {
         AUDIO20_CHANNEL_CONFIG_FRONT_LEFT | AUDIO20_CHANNEL_CONFIG_FRONT_RIGHT,
         0U,
         AUDIO20_CTRL_NONE,
-        0U),
+        USB_STR_PRODUCT),
     TUD_AUDIO20_DESC_OUTPUT_TERM(
         0x06U,
         AUDIO_TERM_TYPE_OUT_GENERIC_SPEAKER,
@@ -143,11 +165,13 @@ static const uint8_t g_usb_configuration_descriptor[] = {
         0x04U,
         0x10U,
         AUDIO20_CTRL_NONE,
-        0U),
+        USB_STR_PRODUCT),
 
     /* Host to BRICK: asynchronous OUT data plus explicit feedback. */
-    TUD_AUDIO20_DESC_STD_AS_INT(USB_DEVICE_AUDIO_OUT_ITF, 0U, 0U, 0U),
-    TUD_AUDIO20_DESC_STD_AS_INT(USB_DEVICE_AUDIO_OUT_ITF, 1U, 2U, 0U),
+    TUD_AUDIO20_DESC_STD_AS_INT(USB_DEVICE_AUDIO_OUT_ITF, 0U, 0U,
+                                USB_STR_PRODUCT),
+    TUD_AUDIO20_DESC_STD_AS_INT(USB_DEVICE_AUDIO_OUT_ITF, 1U, 2U,
+                                USB_STR_PRODUCT),
     TUD_AUDIO20_DESC_CS_AS_INT(
         0x04U, AUDIO20_CTRL_NONE, AUDIO20_FORMAT_TYPE_I,
         AUDIO20_DATA_FORMAT_TYPE_I_PCM, USB_DEVICE_AUDIO_CHANNELS,
@@ -169,8 +193,10 @@ static const uint8_t g_usb_configuration_descriptor[] = {
     TUD_AUDIO20_DESC_STD_AS_ISO_FB_EP(USB_DEVICE_AUDIO_EP_FB, 4U, 1U),
 
     /* BRICK to host: asynchronous IN data. */
-    TUD_AUDIO20_DESC_STD_AS_INT(USB_DEVICE_AUDIO_IN_ITF, 0U, 0U, 0U),
-    TUD_AUDIO20_DESC_STD_AS_INT(USB_DEVICE_AUDIO_IN_ITF, 1U, 1U, 0U),
+    TUD_AUDIO20_DESC_STD_AS_INT(USB_DEVICE_AUDIO_IN_ITF, 0U, 0U,
+                                USB_STR_PRODUCT),
+    TUD_AUDIO20_DESC_STD_AS_INT(USB_DEVICE_AUDIO_IN_ITF, 1U, 1U,
+                                USB_STR_PRODUCT),
     TUD_AUDIO20_DESC_CS_AS_INT(
         0x03U, AUDIO20_CTRL_NONE, AUDIO20_FORMAT_TYPE_I,
         AUDIO20_DATA_FORMAT_TYPE_I_PCM, USB_DEVICE_AUDIO_CHANNELS,
@@ -190,9 +216,10 @@ static const uint8_t g_usb_configuration_descriptor[] = {
         AUDIO20_CS_AS_ISO_DATA_EP_LOCK_DELAY_UNIT_UNDEFINED,
         0U),
 
-    TUD_MIDI_DESCRIPTOR(USB_DEVICE_MIDI_AC_ITF, USB_STR_MIDI,
-                        USB_DEVICE_MIDI_EP_OUT, USB_DEVICE_MIDI_EP_IN,
-                        USB_DEVICE_MIDI_EP_SIZE)
+    USB_DEVICE_MIDI_DESCRIPTOR(USB_DEVICE_MIDI_AC_ITF, USB_STR_PRODUCT,
+                               USB_DEVICE_MIDI_EP_OUT,
+                               USB_DEVICE_MIDI_EP_IN,
+                               USB_DEVICE_MIDI_EP_SIZE)
 };
 
 _Static_assert(sizeof(g_usb_configuration_descriptor) == 310U,
@@ -373,10 +400,7 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid)
         usb_device_string_from_ascii("STMicroelectronics");
         break;
     case USB_STR_PRODUCT:
-        usb_device_string_from_ascii("Brick");
-        break;
-    case USB_STR_MIDI:
-        usb_device_string_from_ascii("MIDI Interface");
+        usb_device_string_from_ascii(USB_DEVICE_PRODUCT_NAME);
         break;
     default:
         return NULL;
