@@ -21,7 +21,7 @@
  *
  * Règles:
  * - Pas de malloc.
- * - Pas d'émission USB en IRQ.
+ * - TX MIDI USB servi dans l'IRQ USB ; TIM3 publie uniquement le F8.
  *
  * @note L’API publique est déclarée dans midi.h.
  */
@@ -99,6 +99,10 @@ static volatile uint16_t midi_usb_rx_high_water = 0U;
 static volatile uint32_t midi_usb_rx_ingress_serial = 0U;
 
 static volatile bool midi_usb_tx_deferred_pending = false;
+
+static void midi_usb_pend_irq(void) {
+  NVIC_SetPendingIRQ(OTG_FS_IRQn);
+}
 
 /**
  * @brief Point d'entrée midi_enter_critical.
@@ -192,6 +196,7 @@ static bool midi_usb_refresh_connection(void) {
     midi_usb_tx_head = 0U;
     midi_usb_tx_tail = 0U;
     midi_usb_tx_count = 0U;
+    g_midi_clock_prof.backlog = 0U;
     midi_usb_tx_deferred_pending = false;
     ++midi_usb_generation;
     if (midi_usb_generation == 0U)
@@ -237,7 +242,7 @@ static uint16_t midi_usb_device_write_packets(const uint8_t *buffer,
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-static bool usb_tx_queue_push(const uint8_t packet[4]) {
+static bool usb_tx_queue_push_timed(const uint8_t packet[4], uint32_t tick) {
   uint32_t primask = midi_enter_critical();
   if (midi_usb_tx_count >= MIDI_USB_TX_QUEUE_LEN) {
     ++midi_usb_tx_drops;
@@ -249,6 +254,7 @@ static bool usb_tx_queue_push(const uint8_t packet[4]) {
   midi_usb_tx_queue[midi_usb_tx_head].bytes[1] = packet[1];
   midi_usb_tx_queue[midi_usb_tx_head].bytes[2] = packet[2];
   midi_usb_tx_queue[midi_usb_tx_head].bytes[3] = packet[3];
+  midi_usb_tx_queue[midi_usb_tx_head].tim5_tick = tick;
 
   midi_usb_tx_head = (uint16_t)((midi_usb_tx_head + 1U) % MIDI_USB_TX_QUEUE_LEN);
   midi_usb_tx_count++;
@@ -256,7 +262,20 @@ static bool usb_tx_queue_push(const uint8_t packet[4]) {
     midi_usb_tx_high_water = midi_usb_tx_count;
   }
   midi_exit_critical(primask);
+  midi_usb_pend_irq();
   return true;
+}
+
+static bool usb_tx_queue_push(const uint8_t packet[4]) {
+  return usb_tx_queue_push_timed(packet, 0U);
+}
+
+uint8_t midi_clock_irq_publish(uint32_t publish_tick, midi_dest_t dest) {
+  if (dest == MIDI_DEST_UART) return 2U;
+  if ((dest != MIDI_DEST_USB) && (dest != MIDI_DEST_BOTH)) return 0U;
+  if (!usb_device_is_ready()) return 0U;
+  const uint8_t packet[4] = { (uint8_t)((MIDI_USB_CABLE << 4) | 0x0FU), 0xF8U, 0U, 0U };
+  return usb_tx_queue_push_timed(packet, publish_tick) ? 1U : 0U;
 }
 
 /**
@@ -276,9 +295,7 @@ static bool usb_tx_queue_push_front_realtime(const midi_usb_packet_t *packet) {
   if (packet == NULL) {
     return false;
   }
-  /* Producers only publish at head; tail belongs exclusively to the
-   * cooperative TinyUSB consumer.  This makes batch reservation/commit
-   * atomic even when a timer IRQ enqueues a realtime packet. */
+  /* All MIDI TX packets share one ordered queue; the USB IRQ owns its tail. */
   return usb_tx_queue_push(packet->bytes);
 }
 
@@ -412,20 +429,31 @@ static uint32_t midi_usb_try_flush_internal(bool allow_in_isr) {
     written_packets = packets;
   }
   if (written_packets != 0U) {
-    const uint32_t commit_primask = midi_enter_critical();
     if (midi_usb_generation == generation) {
+      for (uint16_t i = 0U; i < written_packets; ++i) {
+        const midi_usb_packet_t *const packet = &midi_usb_tx_queue[
+            (midi_usb_tx_tail + i) % MIDI_USB_TX_QUEUE_LEN];
+        if ((packet->bytes[1] == 0xF8U) && (packet->tim5_tick != 0U))
+          midi_clock_timer_note_usb_ready(packet->tim5_tick);
+      }
+      const uint32_t commit_primask = midi_enter_critical();
       midi_usb_tx_tail = (uint16_t)(
           (midi_usb_tx_tail + written_packets) % MIDI_USB_TX_QUEUE_LEN);
       midi_usb_tx_count = (uint16_t)(midi_usb_tx_count - written_packets);
+      midi_exit_critical(commit_primask);
     }
-    midi_exit_critical(commit_primask);
   }
 
   return written_packets;
 }
 
 static uint32_t midi_usb_try_flush(void) {
-  return midi_usb_try_flush_internal(false);
+  if (midi_usb_tx_count != 0U) midi_usb_pend_irq();
+  return 0U;
+}
+
+void midi_usb_service_from_irq(void) {
+  (void)midi_usb_try_flush_internal(true);
 }
 
 static inline void midi_usb_request_deferred_flush_from_isr(void) {
@@ -671,12 +699,6 @@ static void backend_usb_device_send(const uint8_t *msg, size_t len) {
   }
 
   /* Preserve FA/FB/F8/FC order relative to packets already queued. */
-  if (!midi_in_isr() && usb_device_ready() && (midi_usb_tx_count == 0U)) {
-    if (midi_usb_device_write_packets(packet, 4U) == 1U) {
-      return;
-    }
-  }
-
   if (is_rt_clock_transport) {
     midi_usb_packet_t rt_packet = { .bytes = { packet[0], packet[1], packet[2], packet[3] } };
     if (!usb_tx_queue_push_front_realtime(&rt_packet)) {
@@ -879,10 +901,8 @@ void midi_poll(void) {
   }
 
   (void)midi_usb_refresh_connection();
-  midi_clock_timer_poll();
   (void)midi_process_usb_rx();
   midi_usb_tx_deferred_pending = false;
-  (void)midi_usb_try_flush();
 }
 
 /**
@@ -1421,12 +1441,12 @@ void midi_continue(midi_dest_t dest) {
  * - init / main loop / tasklet selon le module.
  */
 void midi_stop(midi_dest_t dest) {
-  uint8_t msg[1] = { 0xFCU };
-  midi_send(dest, msg, 1U);
-
   if (midi_clock_mode == MIDI_CLOCK_MODE_MASTER) {
+    midi_clock_timer_stop();
     midi_clock_set_running(false);
   }
+  uint8_t msg[1] = { 0xFCU };
+  midi_send(dest, msg, 1U);
 }
 
 /**

@@ -2,6 +2,7 @@
 #define MIDI_CLOCK_TIMER_H
 
 #include <stdint.h>
+#include "midi.h"
 
 /* All times are TIM3/TIM5 ticks (1 us nominal), except IRQ durations in CPU cycles. */
 typedef struct {
@@ -29,11 +30,20 @@ typedef struct {
     uint32_t last_missed;
     uint32_t backlog;
     uint32_t backlog_max;
-    uint32_t consume_delay_max;
+    uint32_t consume_delay_max; /* deadline to TinyUSB accept, microseconds */
     uint32_t last_publish_tick;
     uint32_t last_consume_tick;
     uint32_t period_remainder_sixth;
     uint32_t phase_remainder_sixth;
+    uint32_t usb_ready_delay_last;
+    uint32_t usb_ready_delay_min;
+    uint32_t usb_ready_delay_max;
+    uint32_t f8_irq_cycles_last;
+    uint32_t f8_irq_cycles_min;
+    uint32_t f8_irq_cycles_max;
+    uint32_t publish_delay_last;
+    uint32_t publish_delay_min;
+    uint32_t publish_delay_max;
 } midi_clock_prof_t;
 
 extern volatile midi_clock_prof_t g_midi_clock_prof;
@@ -42,7 +52,8 @@ void midi_clock_timer_init(void);
 void midi_clock_timer_set_period(uint32_t sample_period_q16);
 void midi_clock_timer_arm(uint64_t start_sample, uint32_t sample_period_q16);
 void midi_clock_timer_stop(void);
-void midi_clock_timer_poll(void);
 void midi_clock_timer_note_usb_drop(void);
+void midi_clock_timer_note_usb_ready(uint32_t publish_tick);
+uint8_t midi_clock_irq_publish(uint32_t publish_tick, midi_dest_t dest);
 
 #endif

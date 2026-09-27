@@ -84,6 +84,9 @@ void midi_clock_timer_init(void)
         words[i] = 0U;
     g_midi_clock_prof.irq_late_min = UINT32_MAX;
     g_midi_clock_prof.irq_cycles_min = UINT32_MAX;
+    g_midi_clock_prof.usb_ready_delay_min = UINT32_MAX;
+    g_midi_clock_prof.f8_irq_cycles_min = UINT32_MAX;
+    g_midi_clock_prof.publish_delay_min = UINT32_MAX;
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
     NVIC_SetPriority(TIM3_IRQn, 0U);
@@ -130,7 +133,6 @@ void midi_clock_timer_arm(uint64_t start_sample, uint32_t sample_period_q16)
     TIM3->DIER &= ~TIM_DIER_CC1IE;
     g_armed = 0U;
     g_tail = g_head;
-    g_midi_clock_prof.backlog = 0U;
     g_period_q16 = period;
     g_period_remainder = (uint32_t)(numerator % 6U);
     g_phase_remainder = 0U;
@@ -158,7 +160,6 @@ void midi_clock_timer_stop(void)
     g_armed = 0U;
     g_midi_clock_prof.armed = 0U;
     g_tail = g_head;
-    g_midi_clock_prof.backlog = 0U;
     __set_PRIMASK(primask);
 }
 
@@ -186,13 +187,11 @@ void TIM3_IRQHandler(void)
         const uint32_t head = g_head;
         if (head - g_tail < MIDI_CLOCK_EVENTS)
         {
-            g_events[head & (MIDI_CLOCK_EVENTS - 1U)].tim5_tick = now5;
+            g_events[head & (MIDI_CLOCK_EVENTS - 1U)].tim5_tick = g_due_tim5;
             __DMB();
             g_head = head + 1U;
             ++prof->f8_published;
             prof->last_publish_tick = now5;
-            prof->backlog = g_head - g_tail;
-            if (prof->backlog > prof->backlog_max) prof->backlog_max = prof->backlog;
         }
         else ++prof->event_drops;
 
@@ -234,34 +233,49 @@ void TIM3_IRQHandler(void)
     prof->fraction_accum_q16 = (uint32_t)g_due_q16 & 0xFFFFU;
     prof->period_remainder_sixth = g_period_remainder;
     prof->phase_remainder_sixth = g_phase_remainder;
+    if (g_tail != g_head)
+    {
+        const uint32_t tick = g_events[g_tail & (MIDI_CLOCK_EVENTS - 1U)].tim5_tick;
+        g_tail++;
+        prof->last_consume_tick = TIM5->CNT;
+        const uint8_t publish_result = midi_clock_irq_publish(tick, midi_clock_get_destination());
+        if (publish_result != 0U)
+        {
+            ++prof->f8_consumed;
+            if (publish_result == 1U)
+            {
+                ++prof->backlog;
+                if (prof->backlog > prof->backlog_max) prof->backlog_max = prof->backlog;
+            }
+        }
+        else
+            ++prof->usb_fifo_drops;
+        const uint32_t publish_delay = TIM5->CNT - tick;
+        prof->publish_delay_last = publish_delay;
+        if (publish_delay < prof->publish_delay_min) prof->publish_delay_min = publish_delay;
+        if (publish_delay > prof->publish_delay_max) prof->publish_delay_max = publish_delay;
+        const uint32_t f8_cycles = DWT->CYCCNT - cycle_start;
+        prof->f8_irq_cycles_last = f8_cycles;
+        if (f8_cycles < prof->f8_irq_cycles_min) prof->f8_irq_cycles_min = f8_cycles;
+        if (f8_cycles > prof->f8_irq_cycles_max) prof->f8_irq_cycles_max = f8_cycles;
+    }
     const uint32_t elapsed = DWT->CYCCNT - cycle_start;
     prof->irq_cycles_last = elapsed;
     if (elapsed < prof->irq_cycles_min) prof->irq_cycles_min = elapsed;
     if (elapsed > prof->irq_cycles_max) prof->irq_cycles_max = elapsed;
 }
 
-void midi_clock_timer_poll(void)
+void midi_clock_timer_note_usb_ready(uint32_t publish_tick)
 {
-    if (g_tail == g_head) return;
-    const uint32_t head = g_head;
-    const uint32_t tail = head - 1U;
-    const uint32_t discarded = tail - g_tail;
-    g_midi_clock_prof.stale_drops += discarded;
-    const uint32_t tick = g_events[tail & (MIDI_CLOCK_EVENTS - 1U)].tim5_tick;
-    g_tail = head;
-    g_midi_clock_prof.backlog = g_head - g_tail;
-    const uint32_t now = TIM5->CNT;
-    const uint32_t delay = now - tick;
-    g_midi_clock_prof.last_consume_tick = now;
+    const uint32_t delay = TIM5->CNT - publish_tick;
+    if (g_midi_clock_prof.backlog != 0U) --g_midi_clock_prof.backlog;
+    g_midi_clock_prof.usb_ready_delay_last = delay;
+    if (delay < g_midi_clock_prof.usb_ready_delay_min)
+        g_midi_clock_prof.usb_ready_delay_min = delay;
+    if (delay > g_midi_clock_prof.usb_ready_delay_max)
+        g_midi_clock_prof.usb_ready_delay_max = delay;
     if (delay > g_midi_clock_prof.consume_delay_max)
         g_midi_clock_prof.consume_delay_max = delay;
-    if ((g_armed == 0U) || (delay > ((g_period_q16 >> 16) / 2U)))
-    {
-        ++g_midi_clock_prof.stale_drops;
-        return;
-    }
-    midi_clock(midi_clock_get_destination());
-    ++g_midi_clock_prof.f8_consumed;
 }
 
 void midi_clock_timer_note_usb_drop(void)

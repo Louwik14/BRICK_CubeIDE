@@ -145,9 +145,11 @@ uint32_t tu_edpt_stream_write(tu_edpt_stream_t *s, const void *buffer, uint32_t 
 
 // Start an usb transfer if endpoint is not busy. Return number of queued bytes
 uint32_t tu_edpt_stream_write_xfer(tu_edpt_stream_t *s);
+uint32_t tu_edpt_stream_write_xfer_isr(tu_edpt_stream_t *s);
 
 // Start an zero-length packet if needed
 bool tu_edpt_stream_write_zlp_if_needed(tu_edpt_stream_t *s, uint32_t last_xferred_bytes);
+bool tu_edpt_stream_write_zlp_if_needed_isr(tu_edpt_stream_t *s, uint32_t last_xferred_bytes);
 
 // Get the number of bytes available for writing to FIFO
 // Note: if no fifo, return endpoint size if not busy, 0 otherwise

@@ -91,9 +91,10 @@ midi_dest_t midi_get_rx_destination(void);
  * @brief Traitement périodique (à appeler dans la boucle principale).
  *
  * - Vide la file RX USB (décodage + injection moteur)
- * - Tente d'émettre les messages USB en attente
+ * - La transmission MIDI USB est servie par l'IRQ USB
  */
 void midi_poll(void);
+void midi_usb_service_from_irq(void);
 
 /**
  * @brief Envoie un message MIDI brut vers une destination.

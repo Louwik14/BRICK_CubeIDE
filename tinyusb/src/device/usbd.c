@@ -249,7 +249,7 @@ static const usbd_class_driver_t _usbd_driver[] = {
         .reset            = midid_reset,
         .control_xfer_cb  = midid_control_xfer_cb,
         .xfer_cb          = midid_xfer_cb,
-        .xfer_isr         = NULL,
+        .xfer_isr         = midid_xfer_isr,
         .sof              = NULL
     },
     #endif
@@ -1388,10 +1388,17 @@ static bool process_get_descriptor(uint8_t rhport, tusb_control_request_t const 
 //--------------------------------------------------------------------+
 // DCD Event Handler
 //--------------------------------------------------------------------+
+TU_ATTR_WEAK void tud_midi_bus_lost_isr_cb(void) {}
+
 TU_ATTR_FAST_FUNC void dcd_event_handler(dcd_event_t const* event, bool in_isr) {
   bool send = false;
   switch (event->event_id) {
+    case DCD_EVENT_BUS_RESET:
+      tud_midi_bus_lost_isr_cb();
+      send = true;
+      break;
     case DCD_EVENT_UNPLUGGED:
+      tud_midi_bus_lost_isr_cb();
       _usbd_dev.connected = 0;
       _usbd_dev.addressed = 0;
       _usbd_dev.cfg_num = 0;

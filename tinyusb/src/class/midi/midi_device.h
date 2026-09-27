@@ -145,6 +145,9 @@ void     midid_reset(uint8_t rhport);
 uint16_t midid_open(uint8_t rhport, const tusb_desc_interface_t *itf_desc, uint16_t max_len);
 bool     midid_control_xfer_cb(uint8_t rhport, uint8_t stage, const tusb_control_request_t *request);
 bool     midid_xfer_cb(uint8_t rhport, uint8_t edpt_addr, xfer_result_t result, uint32_t xferred_bytes);
+bool     midid_xfer_isr(uint8_t rhport, uint8_t edpt_addr, xfer_result_t result, uint32_t xferred_bytes);
+uint32_t tud_midi_n_packet_write_n_isr(uint8_t itf, const uint8_t packets[], uint32_t n_packets);
+bool tud_midi_tx_ready_isr_cb(uint8_t itf);
 
 #ifdef __cplusplus
 }

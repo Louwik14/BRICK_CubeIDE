@@ -357,7 +357,7 @@ static bool stream_claim(tu_edpt_stream_t *s) {
   return false;
 }
 
-static bool stream_xfer(tu_edpt_stream_t *s, uint16_t count) {
+static bool stream_xfer(tu_edpt_stream_t *s, uint16_t count, bool in_isr) {
   if (s->is_host) {
     #if CFG_TUH_ENABLED
     return usbh_edpt_xfer(s->hwid, s->ep_addr, count ? s->ep_buf : NULL, count);
@@ -365,9 +365,9 @@ static bool stream_xfer(tu_edpt_stream_t *s, uint16_t count) {
   } else {
     #if CFG_TUD_ENABLED
     if (s->ep_buf == NULL) {
-      return usbd_edpt_xfer_fifo(s->hwid, s->ep_addr, &s->ff, count, false);
+      return usbd_edpt_xfer_fifo(s->hwid, s->ep_addr, &s->ff, count, in_isr);
     } else {
-      return usbd_edpt_xfer(s->hwid, s->ep_addr, count ? s->ep_buf : NULL, count, false);
+      return usbd_edpt_xfer(s->hwid, s->ep_addr, count ? s->ep_buf : NULL, count, in_isr);
     }
   #endif
   }
@@ -390,15 +390,23 @@ static bool stream_release(tu_edpt_stream_t *s) {
 //--------------------------------------------------------------------+
 // Stream Write
 //--------------------------------------------------------------------+
-bool tu_edpt_stream_write_zlp_if_needed(tu_edpt_stream_t *s, uint32_t last_xferred_bytes) {
+static bool stream_write_zlp(tu_edpt_stream_t *s, uint32_t last_xferred_bytes, bool in_isr) {
   // ZLP condition: no pending data, last transferred bytes is multiple of packet size
   TU_VERIFY(tu_fifo_empty(&s->ff) && last_xferred_bytes > 0 && (0 == (last_xferred_bytes & (s->mps - 1))));
   TU_VERIFY(stream_claim(s));
-  TU_ASSERT(stream_xfer(s, 0));
+  TU_ASSERT(stream_xfer(s, 0, in_isr));
   return true;
 }
 
-uint32_t tu_edpt_stream_write_xfer(tu_edpt_stream_t *s) {
+bool tu_edpt_stream_write_zlp_if_needed(tu_edpt_stream_t *s, uint32_t last_xferred_bytes) {
+  return stream_write_zlp(s, last_xferred_bytes, false);
+}
+
+bool tu_edpt_stream_write_zlp_if_needed_isr(tu_edpt_stream_t *s, uint32_t last_xferred_bytes) {
+  return stream_write_zlp(s, last_xferred_bytes, true);
+}
+
+static uint32_t stream_write_xfer(tu_edpt_stream_t *s, bool in_isr) {
   const uint16_t ff_count = tu_fifo_count(&s->ff);
   TU_VERIFY(ff_count > 0, 0); // skip if no data
   TU_VERIFY(stream_claim(s), 0);
@@ -412,7 +420,7 @@ uint32_t tu_edpt_stream_write_xfer(tu_edpt_stream_t *s) {
   }
 
   if (count > 0) {
-    TU_ASSERT(stream_xfer(s, count), 0);
+    TU_ASSERT(stream_xfer(s, count, in_isr), 0);
     return count;
   } else {
     // Release endpoint since we don't make any transfer
@@ -420,6 +428,14 @@ uint32_t tu_edpt_stream_write_xfer(tu_edpt_stream_t *s) {
     stream_release(s);
     return 0;
   }
+}
+
+uint32_t tu_edpt_stream_write_xfer(tu_edpt_stream_t *s) {
+  return stream_write_xfer(s, false);
+}
+
+uint32_t tu_edpt_stream_write_xfer_isr(tu_edpt_stream_t *s) {
+  return stream_write_xfer(s, true);
 }
 
 uint32_t tu_edpt_stream_write(tu_edpt_stream_t *s, const void *buffer, uint32_t bufsize) {
@@ -456,7 +472,7 @@ uint32_t tu_edpt_stream_read_xfer(tu_edpt_stream_t *s) {
     // multiple of packet size limit by ep bufsize
     uint16_t count = (uint16_t) (available & ~(s->mps - 1));
     count = tu_min16(count, s->xfer_len);
-    TU_ASSERT(stream_xfer(s, count), 0);
+    TU_ASSERT(stream_xfer(s, count, false), 0);
     return count;
   } else {
     // Release endpoint since we don't make any transfer

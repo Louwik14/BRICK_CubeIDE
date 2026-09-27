@@ -408,6 +408,16 @@ uint32_t tud_midi_n_packet_write_n(uint8_t itf, const uint8_t packets[], uint32_
   return n_write >> 2u;
 }
 
+uint32_t tud_midi_n_packet_write_n_isr(uint8_t itf, const uint8_t packets[], uint32_t n_packets) {
+  midid_interface_t *p_midi = &_midid_itf[itf];
+  tu_edpt_stream_t *ep_str = &p_midi->ep_stream.tx;
+  TU_VERIFY(tu_edpt_stream_is_opened(ep_str), 0);
+  uint32_t n_bytes = tu_min32(tu_align4(tu_edpt_stream_write_available(ep_str)), n_packets << 2u);
+  uint32_t n_write = tu_fifo_write_n(&ep_str->ff, packets, (uint16_t)n_bytes);
+  (void)tu_edpt_stream_write_xfer_isr(ep_str);
+  return n_write >> 2u;
+}
+
 //--------------------------------------------------------------------+
 // USBD Driver API
 //--------------------------------------------------------------------+
@@ -434,16 +444,19 @@ void midid_init(void) {
 }
 
 bool midid_deinit(void) {
+  usbd_spin_lock(false);
   for (uint8_t i = 0; i < CFG_TUD_MIDI; i++) {
     midid_interface_t *p_midi = &_midid_itf[i];
     tu_edpt_stream_deinit(&p_midi->ep_stream.rx);
     tu_edpt_stream_deinit(&p_midi->ep_stream.tx);
   }
+  usbd_spin_unlock(false);
   return true;
 }
 
 void midid_reset(uint8_t rhport) {
   (void)rhport;
+  usbd_spin_lock(false);
   for (uint8_t i = 0; i < CFG_TUD_MIDI; i++) {
     midid_interface_t *p_midi = &_midid_itf[i];
     tu_memclr(p_midi, ITF_MEM_RESET_SIZE);
@@ -454,6 +467,7 @@ void midid_reset(uint8_t rhport) {
     tu_edpt_stream_clear(&p_midi->ep_stream.tx);
     tu_edpt_stream_close(&p_midi->ep_stream.tx);
   }
+  usbd_spin_unlock(false);
 }
 
 TU_ATTR_ALWAYS_INLINE static inline uint8_t find_midi_itf(uint8_t ep_addr) {
@@ -509,9 +523,11 @@ uint16_t midid_open(uint8_t rhport, const tusb_desc_interface_t *desc_itf, uint1
       const uint8_t ep_addr = ((const tusb_desc_endpoint_t *)p_desc)->bEndpointAddress;
 
       if (tu_edpt_dir(ep_addr) == TUSB_DIR_IN) {
+        usbd_spin_lock(false);
         tu_edpt_stream_t *stream_tx = &p_midi->ep_stream.tx;
         tu_edpt_stream_open(stream_tx, rhport, desc_ep, CFG_TUD_MIDI_TX_EPSIZE);
         tu_edpt_stream_clear(stream_tx);
+        usbd_spin_unlock(false);
       } else {
         tu_edpt_stream_t *stream_rx = &p_midi->ep_stream.rx;
         tu_edpt_stream_open(stream_rx, rhport, desc_ep, tu_edpt_packet_size(desc_ep));
@@ -565,6 +581,21 @@ bool midid_xfer_cb(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint32
     return false;
   }
 
+  return true;
+}
+
+bool midid_xfer_isr(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint32_t xferred_bytes) {
+  (void)rhport;
+  uint8_t const idx = find_midi_itf(ep_addr);
+  if (idx >= CFG_TUD_MIDI) return false;
+  tu_edpt_stream_t *ep_st_tx = &_midid_itf[idx].ep_stream.tx;
+  if (ep_addr != ep_st_tx->ep_addr) return false;
+  if (result == XFER_RESULT_SUCCESS) {
+    if (!tud_midi_tx_ready_isr_cb(idx)) return true;
+    if (0 == tu_edpt_stream_write_xfer_isr(ep_st_tx)) {
+      (void)tu_edpt_stream_write_zlp_if_needed_isr(ep_st_tx, xferred_bytes);
+    }
+  }
   return true;
 }
 

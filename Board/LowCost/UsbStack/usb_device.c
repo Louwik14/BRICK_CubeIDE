@@ -355,7 +355,21 @@ void usb_device_irq(void)
 {
     if (g_usb_device_started != 0U) {
         tud_int_handler(USB_DEVICE_RHPORT);
+        midi_usb_service_from_irq();
     }
+}
+
+bool tud_midi_tx_ready_isr_cb(uint8_t itf)
+{
+    (void)itf;
+    if (usb_device_is_ready() == 0U) return false;
+    midi_usb_service_from_irq();
+    return true;
+}
+
+void tud_midi_bus_lost_isr_cb(void)
+{
+    g_usb_device_mounted = 0U;
 }
 
 uint16_t usb_device_send_packets(const uint8_t *packets, uint16_t bytes_len)
@@ -367,7 +381,7 @@ uint16_t usb_device_send_packets(const uint8_t *packets, uint16_t bytes_len)
         return 0U;
     }
 
-    return (uint16_t)tud_midi_n_packet_write_n(0U, packets, packet_count);
+    return (uint16_t)tud_midi_n_packet_write_n_isr(0U, packets, packet_count);
 }
 
 const uint8_t *tud_descriptor_device_cb(void)
