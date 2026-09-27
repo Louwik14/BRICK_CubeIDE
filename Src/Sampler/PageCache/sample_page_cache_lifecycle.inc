@@ -40,6 +40,10 @@ void sample_page_cache_clear_key(sample_audio_key_t key)
     {
         if (sample_audio_key_equal(&g_sample_page_desc[i].key, &key) != 0U)
         {
+            /* Clearing a key withdraws its permanent slot-pool ownership.
+             * Keeping static_resident set here turns an unloaded Multi's
+             * presocle into an unreclaimable FAILED page. */
+            g_sample_page_desc[i].static_resident = 0U;
             if (g_sample_page_desc[i].state == SAMPLE_PAGE_LOADING)
             {
                 g_sample_page_desc[i].load_cancel_requested = 1U;

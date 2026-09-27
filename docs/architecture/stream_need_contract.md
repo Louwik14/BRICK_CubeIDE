@@ -55,6 +55,14 @@ Sample RAM charge le payload FLOAT32 stereo directement dans son allocation, par
 
 Les payloads Sampler RAM/Wavetable sont des references `{region, offset, length}`. CONTROL clean avant publication, AUDIO invalidate avant installation. Un unload/remplacement suit `STOP -> invalidation voix synchrone -> avancee du tail FIFO -> FREE CONTROL`. Les ACK Multi/RAM/Wavetable et leur ring IPC ont ete supprimes; seul le fence du consumer physique est lu.
 
+Pour Multi, `sample_page_cache_clear_key` retire aussi l'ownership
+`static_resident` des pages de pre-socle. Une page sans lease est liberee
+immediatement; une page encore leasee passe par `FAILED` jusqu'a la fin de son
+lease, et un chargement en cours est annule sans conserver l'ownership. Les
+compteurs UI du catalogue global ne sont pas une mesure des descripteurs
+physiques du page-cache: le teardown doit donc maintenir ces deux plans
+coherents, et non corriger seulement les compteurs publies.
+
 Le registre compact de leases Stream est fixe, pointer-free, seqlocke et place explicitement dans la fenetre IPC partagee SRAM3/D2. Les snapshots de besoins, pins, use-counts et refcounts de pages ont ete supprimes. REC_SOURCE publie seulement une generation immutable READY; AUDIO conserve ses playheads et ses leases.
 
 ## Format audio
