@@ -22,6 +22,8 @@
 #include "Sampler/wavetable_pool.h"
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/sample_stream_manager.h"
+#include "Sampler/sample_stream_backend_physical.h"
+#include "Sampler/sample_stream_fatfs_map.h"
 
 #define SAMPLER_RAM_IO_BYTES (SD_SCHEDULER_HEAVY_MAX_DATA_BYTES)
 #define SAMPLER_RAM_SERVICE_BUDGET_MS (2U)
@@ -79,6 +81,11 @@ typedef struct
     uint8_t retain_old_for_commit;
     uint8_t quiesce_committed;
     uint8_t ingress_closed;
+    sample_page_stream_info_t stream_info;
+    sample_stream_physical_cursor_t stream_cursor;
+    sample_stream_backend_physical_async_t physical_read;
+    uint8_t stream_map_valid;
+    uint8_t cancel_pending;
 } sampler_ram_load_job_t;
 
 STORAGE_STATE_SDRAM static sampler_ram_load_job_t g_sampler_ram_load_job;
@@ -120,6 +127,12 @@ void sampler_ram_pool_load_async_cancel(void)
     if (job->state != SAMPLER_RAM_LOAD_IDLE)
         sampler_ram_trace(RAM_LOAD_TRACE_POOL_CANCELLED, job->ram_slot, 0U,
                           (uint32_t)job->state, (uint32_t)job->result);
+    if (job->physical_read.active != 0U)
+    {
+        sample_stream_backend_physical_cancel(&job->physical_read);
+        job->cancel_pending = 1U;
+        return;
+    }
     sampler_ram_restore_retained_old();
     if (job->file_open != 0U)
     {
@@ -134,6 +147,11 @@ void sampler_ram_pool_load_async_cancel(void)
     if (job->global_reserved != 0U)
     {
         sample_global_pool_clear_slot(job->global_slot);
+    }
+    if (job->stream_map_valid != 0U)
+    {
+        sample_stream_physical_map_release(
+            &job->stream_info.stream_safe.physical_map);
     }
     memset(job, 0, sizeof(*job));
     job->state = SAMPLER_RAM_LOAD_IDLE;
@@ -626,6 +644,8 @@ uint8_t sampler_ram_pool_reset_quiesced(void)
         }
     }
     sampler_ram_pool_load_async_cancel();
+    if (g_sampler_ram_load_job.state != SAMPLER_RAM_LOAD_IDLE)
+        return 0U;
     uint32_t generation_seed = g_sampler_ram_pool.generation_counter;
     for (uint16_t i = 0U; i < SAMPLER_RAM_POOL_MAX_SLOTS; ++i)
     {
@@ -676,6 +696,13 @@ static uint32_t sampler_ram_load_io_quantum(void)
 static void sampler_ram_load_fail(sampler_ram_result_t result)
 {
     sampler_ram_load_job_t *const job = &g_sampler_ram_load_job;
+    if (job->physical_read.active != 0U)
+    {
+        job->result = result;
+        job->failed = 1U;
+        sample_stream_backend_physical_cancel(&job->physical_read);
+        return;
+    }
     sampler_ram_restore_retained_old();
     if (job->allocation.page_count != 0U)
     {
@@ -694,6 +721,25 @@ static void sampler_ram_load_fail(sampler_ram_result_t result)
     sampler_ram_set_last(result);
     sampler_ram_trace(RAM_LOAD_TRACE_POOL_COMPLETED_ERROR, job->ram_slot, 0U,
                       (uint32_t)result, job->global_slot);
+}
+
+static uint8_t sampler_ram_build_physical_map(sampler_ram_load_job_t *job)
+{
+    if (job->stream_map_valid != 0U) return 1U;
+    memset(&job->stream_info, 0, sizeof(job->stream_info));
+    job->stream_info.info = job->info;
+    job->stream_info.total_frames =
+        job->info.data_size / job->info.block_align;
+    job->stream_info.data_offset = job->info.data_offset;
+    sample_stream_safe_metadata_init_fatfs(
+        (sample_audio_key_t){0}, &job->info, job->stream_info.total_frames,
+        job->info.data_offset, &job->stream_info.stream_safe);
+    if (sample_stream_fatfs_map_build_from_file(
+            &job->file, &job->stream_info.stream_safe) == 0U)
+        return 0U;
+    memset(&job->stream_cursor, 0, sizeof(job->stream_cursor));
+    job->stream_map_valid = 1U;
+    return 1U;
 }
 
 static uint8_t sampler_ram_pool_load_async_begin_internal(
@@ -1103,7 +1149,7 @@ static void sampler_ram_pool_load_async_step(void)
             }
             break;
         case SAMPLER_RAM_LOAD_SEEK:
-            if (f_lseek(&job->file, job->info.data_offset) == FR_OK)
+            if (sampler_ram_build_physical_map(job) != 0U)
             {
                 job->state = SAMPLER_RAM_LOAD_READ;
             }
@@ -1114,24 +1160,63 @@ static void sampler_ram_pool_load_async_step(void)
             break;
         case SAMPLER_RAM_LOAD_READ:
         {
+            if (job->physical_read.active != 0U)
+            {
+                sample_page_load_result_t load_result;
+                const uint8_t *source = 0;
+                uint32_t source_bytes = 0U;
+                uint8_t physical_reads = 0U;
+                if (sample_stream_backend_physical_poll(
+                        &job->physical_read, &load_result, &source,
+                        &source_bytes, &physical_reads) == 0U)
+                    break;
+                (void)physical_reads;
+                if (job->cancel_pending != 0U)
+                {
+                    job->cancel_pending = 0U;
+                    sampler_ram_pool_load_async_cancel();
+                    break;
+                }
+                if (job->failed != 0U)
+                {
+                    const sampler_ram_result_t result = job->result;
+                    job->failed = 0U;
+                    sampler_ram_load_fail(result);
+                    break;
+                }
+                float *const expected = &job->candidate.data[
+                    job->frames_done * job->candidate.channels];
+                if ((load_result != SAMPLE_PAGE_LOAD_OK)
+                    || (source != (const uint8_t *)(const void *)expected)
+                    || (source_bytes == 0U)
+                    || ((source_bytes % job->info.block_align) != 0U))
+                {
+                    sampler_ram_load_fail(SAMPLER_RAM_RESULT_READ_FAIL);
+                    break;
+                }
+                job->frames_done += source_bytes / job->info.block_align;
+                if (job->frames_done >= job->candidate.frames)
+                    job->state = SAMPLER_RAM_LOAD_CLOSE;
+                break;
+            }
             const uint32_t frames_left = job->candidate.frames - job->frames_done;
             uint32_t frames = sampler_ram_load_io_quantum() / job->info.block_align;
             if (frames > frames_left)
             {
                 frames = frames_left;
             }
-            const UINT wanted = (UINT)(frames * job->info.block_align);
-            UINT read = 0U;
             float *const destination = &job->candidate.data[
                 job->frames_done * job->candidate.channels];
-            if ((f_read(&job->file, destination, wanted, &read) == FR_OK)
-                && (read == wanted))
-            {
-                job->frames_done += frames;
-                job->state = (job->frames_done >= job->candidate.frames)
-                    ? SAMPLER_RAM_LOAD_CLOSE : SAMPLER_RAM_LOAD_READ;
-            }
-            else
+            sample_page_load_target_t target;
+            memset(&target, 0, sizeof(target));
+            target.start_frame = job->frames_done;
+            target.frame_count = frames;
+            if (sample_stream_backend_physical_begin(
+                    &job->physical_read, &job->stream_info, &target,
+                    &job->stream_cursor, (uint8_t *)(void *)destination,
+                    job->allocation.capacity_bytes
+                        - job->frames_done * job->candidate.bytes_per_frame,
+                    UINT32_MAX) == 0U)
             {
                 sampler_ram_load_fail(SAMPLER_RAM_RESULT_READ_FAIL);
             }
@@ -1147,6 +1232,12 @@ static void sampler_ram_pool_load_async_step(void)
                     break;
                 }
                 job->file_open = 0U;
+            }
+            if (job->stream_map_valid != 0U)
+            {
+                sample_stream_physical_map_release(
+                    &job->stream_info.stream_safe.physical_map);
+                job->stream_map_valid = 0U;
             }
             job->state = (job->failed != 0U)
                 ? SAMPLER_RAM_LOAD_DONE : SAMPLER_RAM_LOAD_PUBLISH;
