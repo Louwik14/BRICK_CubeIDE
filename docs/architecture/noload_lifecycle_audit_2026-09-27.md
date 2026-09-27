@@ -33,7 +33,6 @@ section, énumérés exhaustivement dans l'inventaire en fin de document.
 | reste (7) | `.sdram_stream_service` | service Stream/SD | `sample_stream_io_init`, transport init/reset, pool reset; buffers écrits avant lecture | SAFE | Aucun état de queue résiduel consommé. |
 | `g_waveform_tiles`, `g_waveform_build`, `g_waveform_local`, `g_waveform_local_line_hot` | `.storage_state_sdram` | service/rendu waveform | `waveform_service_init` depuis `control_domain_init` | BUG corrigé | `active`/`valid` résiduels pouvaient lancer un faux job ou réutiliser un cache invalide. |
 | reste (31) | `.storage_state_sdram` | services storage/pools/project | init propriétaire avant superloop, ou scratch entièrement écrit | SAFE | Jobs save/load, recorder, preview, catalogues et pools sont remis à zéro/état explicite. |
-| `g_usb_audio_diag`, `g_usb_audio_diag_usb_trace`, `g_usb_audio_diag_audio_trace` | `.sdram_recorder` | premier reset/événement USB | `usb_audio_diag_reset` dans la première `usb_role_manager_init` | BUG corrigé | Compteurs/index et traces résiduels étaient utilisés sans magic/version validé. |
 | reste (6) | `.sdram_recorder` | publications IPC/audio ou allocation clip | init projection/FIFO/preview, ou effacement par `brick6_clip_shifter_init` | SAFE | Publication après construction; historiques clip effacés avant rendu. |
 | 19 objets contrôle | `.control_state_sdram` | CONTROL, paramètres, projet, Hall | `control_rt_publication_init`, `param_registry_init`, `project_control_init`, init Hall | SAFE | État complet réinitialisé; scratch publication rempli avant publication. |
 | 63 objets AUDIO hot | `.dtcm_audio` | init/rendu AUDIO | init engine/fx/mixer/synth avant `audio_start`; scratch écrit avant lecture | SAFE | Aucun IRQ AUDIO avant fin de l'init AUDIO. |
@@ -95,7 +94,7 @@ suffixés `.lto_priv.0` sont ceux émis par LTO.
 - `.sdram_multi_pool` (2): `g_multi_samples`, `g_multi_zones`.
 - `.sdram_page_index` (1): `g_sample_page_shared_index`.
 - `.sdram_page_meta` (2): `g_sample_page_sample_desc`, `g_sample_page_shared_descriptor`.
-- `.sdram_recorder` (9): `g_control_audio_fifo_commands`, `g_multi_audio_samples`, `g_multi_audio_zones`, `g_sampler_clip_shifter_delay_recorder`, `g_sampler_ram_audio_slots`, `g_sd_preview_ring`, `g_usb_audio_diag`, `g_usb_audio_diag_audio_trace`, `g_usb_audio_diag_usb_trace`.
+- `.sdram_recorder` (6): `g_control_audio_fifo_commands`, `g_multi_audio_samples`, `g_multi_audio_zones`, `g_sampler_clip_shifter_delay_recorder`, `g_sampler_ram_audio_slots`, `g_sd_preview_ring`.
 - `.sdram_recorder_ring` (2): `g_audio_recorder_capture_ring`, `g_sampler_clip_shifter_delay_recorder_ring`.
 - `.sdram_sample_page_pool` (1): `g_sample_page_shared_data`.
 - `.sdram_stream_scratch` (1): `g_sample_stream_clmt_scratch`.

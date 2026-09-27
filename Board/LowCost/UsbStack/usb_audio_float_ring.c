@@ -217,16 +217,6 @@ uint32_t usb_audio_float_brick_to_pc_available(void)
     return usb_audio_float_available(&g_usb_audio_float_rings.brick_to_pc);
 }
 
-void usb_audio_float_pc_to_brick_counters(uint32_t *write_count,
-                                          uint32_t *read_count)
-{
-    if (write_count != NULL) *write_count =
-        g_usb_audio_float_rings.pc_to_brick.write_count;
-    if (read_count != NULL) *read_count =
-        g_usb_audio_float_rings.pc_to_brick.read_count;
-    __DMB();
-}
-
 void usb_audio_float_reset(void)
 {
     g_usb_audio_float_rings.pc_to_brick.write_count = 0U;

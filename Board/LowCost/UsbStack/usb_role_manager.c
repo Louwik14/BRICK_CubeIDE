@@ -1,6 +1,5 @@
 #include "usb_role_manager.h"
 
-#include "Debug/usb_audio_diag.h"
 #include "fusb302.h"
 #include "i2c.h"
 #include "main.h"
@@ -159,7 +158,6 @@ void usb_role_manager_init(void)
     }
 
     g_usb_role = (usb_role_manager_ctx_t){0};
-    usb_audio_diag_reset();
     g_usb_role.initialized = 1U;
     usb_host_power_off();
     if (fusb302_init(&hi2c1) == FUSB302_STATUS_OK)

@@ -6,8 +6,6 @@
 #include "midi.h"
 #include "tusb.h"
 #include "usb_audio.h"
-#include "Debug/usb_audio_diag.h"
-#include "Platform/brick_media_clock.h"
 
 #define USB_DEVICE_RHPORT       0U
 #define USB_DEVICE_MIDI_EP_OUT  0x01U
@@ -320,7 +318,6 @@ uint8_t usb_device_is_ready(void)
 void usb_device_process(void)
 {
     if (g_usb_device_started != 0U) {
-        usb_audio_diag_usb_service(brick_media_clock_now_tick());
         tud_task_ext(0U, false);
         usb_device_midi_rx_process(0U);
         usb_audio_transport_process();
@@ -376,7 +373,7 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid)
         usb_device_string_from_ascii("STMicroelectronics");
         break;
     case USB_STR_PRODUCT:
-        usb_device_string_from_ascii("STM32 USB MIDI");
+        usb_device_string_from_ascii("Brick");
         break;
     case USB_STR_MIDI:
         usb_device_string_from_ascii("MIDI Interface");
