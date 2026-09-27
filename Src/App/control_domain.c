@@ -103,4 +103,6 @@ void control_domain_start(float postgain, float output_compensation)
         ui_page_calibration_open_from_boot();
     }
     brick6_stream_service_task_init();
-    midi_i
+    midi_init();
+    board_usb_device_init();
+}
