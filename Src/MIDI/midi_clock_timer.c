@@ -102,7 +102,9 @@ void midi_clock_timer_init(void)
     g_midi_clock_prof.usb_submit_to_complete_min = UINT32_MAX;
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
-    NVIC_SetPriority(TIM3_IRQn, 0U);
+    /* MIDI clock scheduling must not preempt USB SOF/isochronous transfers
+     * (priority 1) or the SAI DMA audio producer (priority 2). */
+    NVIC_SetPriority(TIM3_IRQn, 3U);
     NVIC_ClearPendingIRQ(TIM3_IRQn);
     NVIC_EnableIRQ(TIM3_IRQn);
     __set_PRIMASK(primask);
