@@ -83,7 +83,6 @@ void audio_io_pack_ramped(int32_t *AUDIO_RESTRICT tx,
     }
 
     metronome_runtime_render_main_monitor(monitor_main_l, monitor_main_r, frames);
-    (void)usb_audio_audio_write(monitor_main_l, monitor_main_r, frames);
     const float *codec_l;
     const float *codec_r;
     audio_probe_select_output(bus_main_l, bus_main_r,
