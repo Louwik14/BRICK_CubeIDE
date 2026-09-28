@@ -359,7 +359,10 @@ void usb_device_irq(void)
             & USB_OTG_GINTSTS_SOF;
         const uint32_t sof_tick = (sof_pending != 0U) ? TIM5->CNT : 0U;
         tud_int_handler(USB_DEVICE_RHPORT);
-        if (sof_pending != 0U) midi_clock_timer_on_sof(sof_tick);
+        if (sof_pending != 0U) {
+            midi_clock_timer_on_sof(sof_tick);
+            usb_audio_feedback_sof();
+        }
         midi_usb_service_from_irq();
     }
 }
