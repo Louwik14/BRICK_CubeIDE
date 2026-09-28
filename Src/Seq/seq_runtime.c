@@ -381,6 +381,9 @@ void seq_runtime_start(void)
 
     if (begin_running_now != 0U)
     {
+        sample_capture_control_on_transport_start(
+            control_music_output_first_unpublished_sample(
+                seq_runtime_get_now_sample()));
         seq_runtime_send_transport_start();
     }
     seq_engine_control_mark_dirty();

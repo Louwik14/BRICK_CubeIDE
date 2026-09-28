@@ -254,6 +254,14 @@ void audio_recorder_service(void)
         g_audio_recorder.state = AUDIO_RECORDER_STATE_FINALIZING;
     else if(phase == AUDIO_RECORDER_STORAGE_TAKE_READY)
     {
+        /* No sample can be published as a source for an empty take.  Release
+         * its building slot so the recorder can reach its terminal state. */
+        if ((rec_source_building_active() != 0U)
+                && (audio_recorder_storage_committed_tail() == 0U))
+            rec_source_abort_building();
+        if ((g_build_stream_registered == 0U)
+                && (rec_source_building_active() != 0U))
+            register_build_stream();
         if((g_build_stream_registered != 0U)
                 && (rec_source_building_active() != 0U))
         {
@@ -322,7 +330,9 @@ uint8_t audio_recorder_get_last_take_client(audio_recorder_client_t client,
     *path = g_audio_recorder.final_path;
     *frames = (uint32_t)(audio_recorder_storage_committed_tail()
         / AUDIO_RECORDER_BYTES_PER_FRAME);
-    return (*frames != 0U) ? 1U : 0U;
+    /* A finalized empty take is still terminal.  The capture model must see it
+     * so it can release its recording/arm state and report the empty take. */
+    return 1U;
 }
 
 uint8_t audio_recorder_is_active(void)

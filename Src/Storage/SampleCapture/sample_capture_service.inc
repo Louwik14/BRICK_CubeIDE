@@ -103,6 +103,39 @@ static uint8_t sample_capture_service_pending_admission(void)
     return 1U;
 }
 
+static void sample_capture_service_pattern_trigger(void)
+{
+    if ((g_sample_capture.state.arm != SAMPLE_CAPTURE_ARM_REC)
+            || (g_sample_capture.state.trig != SAMPLE_CAPTURE_TRIG_PATTERN)
+            || (g_sample_capture.state.armed_pending == 0U)
+            || (g_sample_capture.state.recording != 0U)
+            || (seq_runtime_is_running() == 0U))
+        return;
+
+    uint64_t sample_time = 0U;
+    if (g_sample_capture.state.quant == SAMPLE_CAPTURE_QUANT_BAR)
+    {
+        uint64_t now = 0U;
+        seq_musical_time_t musical;
+        if ((control_rt_now_sample(&now) == 0U)
+                || (seq_runtime_get_musical_time(0U, now, &musical) == 0U))
+            return;
+        const uint64_t bar = (musical.transport_position_q16 >> 20U) + 1U;
+        const uint64_t remaining_q16 = (bar << 20U)
+            - musical.transport_position_q16;
+        sample_time = now + ((remaining_q16
+            * musical.samples_per_step_q16) >> 32U);
+    }
+    else
+    {
+        uint8_t boundary_track = 0U;
+        if (seq_engine_pattern_cycle_boundary(&boundary_track,
+                                               &sample_time) == 0U)
+            return;
+    }
+    (void)sample_capture_start_prepared_at(sample_time);
+}
+
 static void sample_capture_sync_current_generation(void)
 {
     if ((g_sample_capture.state.arm != SAMPLE_CAPTURE_ARM_OFF)
@@ -145,6 +178,7 @@ void sample_capture_model_service(void)
     sample_capture_sync_current_generation();
     sample_capture_terminal_cleanup_service();
     if (sample_capture_service_pending_admission() == 0U) return;
+    sample_capture_service_pattern_trigger();
 
     audio_recorder_status_t status;
     if(audio_recorder_get_status_client(AUDIO_RECORDER_CLIENT_AUDIO_REC,
@@ -249,25 +283,24 @@ void sample_capture_control_on_global_rec_arm(uint8_t armed)
 {
     if (g_sample_capture.state.arm != SAMPLE_CAPTURE_ARM_REC)
         return;
-    g_sample_capture.state.armed_pending = (armed != 0U) ? 1U : 0U;
     if (armed == 0U)
     {
-        if (g_sample_capture.state.recording != 0U)
-        {
-        sample_capture_set_capture_enabled(0U);
-            uint64_t now_sample = 0U;
-            if (control_rt_now_sample(&now_sample) == 0U)
-            {
-                Error_Handler();
-                return;
-            }
-            (void)audio_recorder_request_stop_client_at(
-                AUDIO_RECORDER_CLIENT_AUDIO_REC,
+        (void)sample_capture_model_set_arm(SAMPLE_CAPTURE_ARM_OFF);
+        return;
+    }
+    g_sample_capture.state.armed_pending = 1U;
+    if (g_sample_capture.state.trig == SAMPLE_CAPTURE_TRIG_PATTERN)
+    {
+        if (g_sample_capture.state.phase == SAMPLE_CAPTURE_PHASE_ARMED)
+            g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_WAIT_QUANT;
+    }
+    else if ((g_sample_capture.state.trig == SAMPLE_CAPTURE_TRIG_NOW)
+            && (g_sample_capture.state.phase == SAMPLE_CAPTURE_PHASE_ARMED))
+    {
+        uint64_t now_sample = 0U;
+        if (control_rt_now_sample(&now_sample) != 0U)
+            (void)sample_capture_start_prepared_at(
                 control_music_output_first_unpublished_sample(now_sample));
-            g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_STOPPING;
-        }
-        else
-            g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_ARMED;
     }
 }
 
@@ -278,16 +311,6 @@ void sample_capture_control_on_transport_start(uint64_t sample_time)
             && (g_sample_capture.state.trig == SAMPLE_CAPTURE_TRIG_PATTERN)
             && (g_sample_capture.state.quant == SAMPLE_CAPTURE_QUANT_NOW))
         (void)sample_capture_start_prepared_at(sample_time);
-}
-
-void sample_capture_control_on_musical_boundary(uint8_t track,
-                                                uint64_t sample_time)
-{
-    if ((track != 0U) || (g_sample_capture.state.recording != 0U)
-            || (g_sample_capture.state.armed_pending == 0U)
-            || (g_sample_capture.state.trig != SAMPLE_CAPTURE_TRIG_PATTERN))
-        return;
-    (void)sample_capture_start_prepared_at(sample_time);
 }
 
 void sample_capture_control_on_transport_stop(uint64_t sample_time)

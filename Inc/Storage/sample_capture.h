@@ -130,8 +130,6 @@ void sample_capture_model_init(void);
 void sample_capture_model_service(void);
 uint8_t sample_capture_model_storage_service(void);
 void sample_capture_control_on_transport_start(uint64_t sample_time);
-void sample_capture_control_on_musical_boundary(uint8_t track,
-                                                uint64_t sample_time);
 void sample_capture_control_on_transport_stop(uint64_t sample_time);
 void sample_capture_control_on_global_rec_arm(uint8_t armed);
 void sample_capture_model_get_state(sample_capture_state_t *out_state);

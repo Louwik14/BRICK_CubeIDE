@@ -556,6 +556,7 @@ static void ui_core_handle_track_selection_event(const ui_event_t *ev)
         g_ui_track_state.track_select_armed = 0U;
         ui_param_publish_encoder_binding(ui_get_active_lane(),
                                          g_ui_track_state.shift_down);
+        ui_hall_mode_flow_release_audio_rec_chord();
         return;
     }
 }
@@ -730,7 +731,7 @@ static uint8_t ui_core_handle_transport_event(const ui_event_t *ev)
             if (seq_runtime_rec_is_armed() != 0U)
                 (void)seq_runtime_rec_toggle_arm(ui_get_active_lane());
             (void)sample_capture_model_toggle_record();
-            ui_hall_mode_flow_enter_audio_rec();
+            ui_hall_mode_flow_enter_audio_rec_chord();
             return 1U;
         }
         if (sample_capture_model_cancel_for_note_rec() == 0U)
@@ -873,6 +874,8 @@ void ui_core_service_track_selection_inputs(void)
     const uint8_t mute_active = (ui_core_mute_is_active() != 0U) ? 1U : 0U;
     const uint8_t shift_down = button_down(BTN_SHIFT);
     const uint8_t track_modifier_down = (mute_active == 0U) ? button_down(UI_TRACK_MOD_BUTTON) : 0U;
+    if (track_modifier_down == 0U)
+        ui_hall_mode_flow_release_audio_rec_chord();
     ui_core_update_shift_state(shift_down);
     if (mute_active == 0U)
     {

@@ -26,6 +26,7 @@ static uint8_t g_lowcost_rec_return_page = UI_PAGE_TEMPLATE_CFG;
 static ui_hall_mode_t g_lowcost_rec_return_mode = UI_HALL_MODE_SEQ;
 static uint8_t g_lowcost_rec_return_valid;
 static uint8_t g_lowcost_rec_closing;
+static uint8_t g_lowcost_rec_chord_active;
 
 static void ui_hall_mode_flow_open_patch_page(uint8_t target_track,
                                               ui_hall_mode_t previous_mode)
@@ -89,7 +90,10 @@ static void ui_hall_mode_flow_close_lowcost_rec(void)
         ? g_lowcost_rec_return_mode
         : UI_HALL_MODE_SEQ;
     g_lowcost_rec_return_valid = 0U;
-    (void)sample_capture_model_return_to_audio_rec();
+    const uint8_t chord_active = g_lowcost_rec_chord_active;
+    g_lowcost_rec_chord_active = 0U;
+    if (chord_active == 0U)
+        (void)sample_capture_model_return_to_audio_rec();
     ui_set_hall_mode(return_mode);
     g_lowcost_rec_closing = 1U;
     ui_navigation_request_page_with_availability(return_page);
@@ -109,6 +113,21 @@ void ui_hall_mode_flow_enter_audio_rec(void)
     ui_hall_mode_flow_activate_mode(UI_HALL_MODE_AUDIO_REC,
                                     UI_PAGE_AUDIO_REC,
                                     0U);
+}
+
+void ui_hall_mode_flow_enter_audio_rec_chord(void)
+{
+    if (ui_page_audio_rec_is_open() == 0U)
+    {
+        ui_hall_mode_flow_enter_audio_rec();
+        g_lowcost_rec_chord_active = 1U;
+    }
+}
+
+void ui_hall_mode_flow_release_audio_rec_chord(void)
+{
+    if (g_lowcost_rec_chord_active != 0U)
+        ui_hall_mode_flow_close_lowcost_rec();
 }
 
 void ui_hall_mode_flow_leave_lowcost_modal_page(void)

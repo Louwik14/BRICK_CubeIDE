@@ -202,7 +202,22 @@ le contenu est synchronisé et les deux fichiers sont fermés avant le rename
 final. Le workspace source reste intact jusqu'au commit. En cas d'erreur, le
 job ferme ses handles, supprime le `.TMP` et ne publie aucun WAV partiel.
 
+## Cycle REC ARM et déclenchement
+
+TRACK+REC ouvre temporairement AUDIO REC et arme le modèle de capture. Le
+relâchement de TRACK restaure la page et le mode Hall précédents, quel que soit
+l'ordre de relâchement de REC ; la capture armée continue en arrière-plan.
+L'annulation du REC global libère aussi l'armement AUDIO REC.
+
+En mode PATTERN, un transport démarrant avec une quantification NOW déclenche
+la prise au départ. Si le transport tourne déjà, le service CONTROL programme
+le prochain cycle musical fourni par le moteur SEQ. La quantification BAR
+programme la prochaine barre du transport ; PATTERN utilise le cycle du
+pattern. Une prise finale de zéro frame libère son slot REC_SOURCE et remonte
+au modèle comme fin de cycle, ce qui rend possible un nouvel armement.
+
 ## Arbitrage SD et coopération
+
 
 Recorder WRITE et Streamer READ restent les clients temps réel prioritaires.
 Preview, Browser, caches, Pattern/Project et SAVE/CROP utilisent les contrats

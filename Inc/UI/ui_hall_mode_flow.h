@@ -39,6 +39,8 @@ void ui_hall_mode_flow_handle_track_hall_action(uint8_t hall,
 /* Leave modal Low-Cost pages before standard ensemble navigation. */
 void ui_hall_mode_flow_leave_lowcost_modal_page(void);
 void ui_hall_mode_flow_enter_audio_rec(void);
+void ui_hall_mode_flow_enter_audio_rec_chord(void);
+void ui_hall_mode_flow_release_audio_rec_chord(void);
 void ui_hall_mode_flow_service_pending(uint32_t now_ms);
 
 #endif /* UI_HALL_MODE_FLOW_H */

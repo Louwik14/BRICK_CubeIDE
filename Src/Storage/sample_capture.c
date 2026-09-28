@@ -12,6 +12,8 @@
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/sampler_ram_pool.h"
 #include "Seq/seq_runtime.h"
+#include "Seq/seq_engine.h"
+#include "Seq/seq_musical_time.h"
 #include "Seq/seq_runtime_control.h"
 #include "ControlRT/control_rt_publication.h"
 #include "Storage/audio_recorder_wav.h"
