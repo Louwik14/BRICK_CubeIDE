@@ -314,10 +314,6 @@ void usb_device_irq(void)
         tud_int_handler(USB_DEVICE_RHPORT);
         if (sof_pending != 0U) {
             midi_clock_timer_on_sof(sof_tick);
-            const USB_OTG_DeviceTypeDef *const usb_regs =
-                (const USB_OTG_DeviceTypeDef *)((uintptr_t)USB_OTG_FS + USB_OTG_DEVICE_BASE);
-            usb_audio_sof_observed((uint16_t)((usb_regs->DSTS & USB_OTG_DSTS_FNSOF_Msk)
-                                   >> USB_OTG_DSTS_FNSOF_Pos));
         }
         midi_usb_service_from_irq();
     }
