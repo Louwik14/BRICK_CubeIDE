@@ -103,7 +103,7 @@ static uint8_t sample_capture_service_pending_admission(void)
     return 1U;
 }
 
-static void sample_capture_service_pattern_trigger(void)
+void sample_capture_control_service_quantized_trigger(void)
 {
     if (seq_runtime_is_running() == 0U)
     {
@@ -113,6 +113,7 @@ static void sample_capture_service_pattern_trigger(void)
     if ((g_sample_capture.state.arm != SAMPLE_CAPTURE_ARM_REC)
             || (g_sample_capture.state.trig != SAMPLE_CAPTURE_TRIG_PATTERN)
             || (g_sample_capture.state.armed_pending == 0U)
+            || (g_sample_capture.state.phase != SAMPLE_CAPTURE_PHASE_WAIT_QUANT)
             || (g_sample_capture.state.recording != 0U))
         return;
 
@@ -201,7 +202,6 @@ void sample_capture_model_service(void)
     sample_capture_sync_current_generation();
     sample_capture_terminal_cleanup_service();
     if (sample_capture_service_pending_admission() == 0U) return;
-    sample_capture_service_pattern_trigger();
 
     audio_recorder_status_t status;
     if(audio_recorder_get_status_client(AUDIO_RECORDER_CLIENT_AUDIO_REC,

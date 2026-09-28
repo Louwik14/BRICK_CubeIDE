@@ -64,6 +64,9 @@ session Recorder prête ; `WAIT` commence ensuite. Si le transport est déjà
 actif, la prochaine frontière de pattern lance la prise, y compris avec
 `QUANT=NOW`. Au démarrage du transport, `QUANT=NOW` peut lancer à sa frontière
 initiale.
+Le service de frontière quantifiée s'exécute dans la superloop CONTROL avant
+les services Storage. Sa cadence ne dépend pas du tick UI, plus lent que la
+fenêtre de publication AUDIO d'un demi-bloc.
 
 Avant de réserver un nouveau BUILDING, la session Recorder terminale de la
 prise précédente est fermée. Le fichier de `REC_SOURCE CURRENT` reste détenu
