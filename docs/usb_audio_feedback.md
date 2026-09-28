@@ -43,7 +43,20 @@ callback, so the SOF count may see a completed 64-frame block one SOF late;
 the window and filter suppress this boundary effect. The 32-bit DMA count
 and ring cursor loads are atomic on Cortex-M7. The aligned 32-bit TinyUSB
 feedback value is published and read in the same USB IRQ. No endpoint arm,
-allocation, or lock is added. Each ordinary SOF reads ring fill and adds
+allocation, or lock is added. Each SOF in RUN reads ring fill and adds
 integers; division and publication run once per 256 SOFs. A feedback
 completion callback would tie estimation to host IN scheduling; a SAI DMA
 callback lacks the USB timebase.
+
+## OUT prefill and audio boundary
+
+An opened OUT interface starts in PREFILL. USB writes packets to the
+288-frame ring while AUDIO renders silence for the USB input. At the start
+of an accepted SAI RX DMA half (64 frames), AUDIO checks whether the ring
+contains at least 144 frames. Only that boundary changes PREFILL to RUN.
+Later segments and halves consume normally, independent of music transport
+STOP/PLAY. Underflow returns to PREFILL; closing the USB interface resets
+the ring as before. A 144-frame target leaves equal headroom on either side.
+The feedback fill correction is disabled in PREFILL and averages only SOF
+samples observed in RUN, including a partial first 256-SOF window. The
+physical-rate estimator continues across both states.

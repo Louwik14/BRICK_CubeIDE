@@ -47,6 +47,7 @@
 #include <string.h>
 #include <stdint.h>
 #include "stm32h7xx_hal.h"
+#include "usb_audio.h"
 
 /* ============================================================
    CONFIG AUDIO : contrat codec/SAI stereo commun aux variantes
@@ -256,6 +257,7 @@ static void process_half(uint32_t half_index)
     }
 
     /* Select the exact SEQ event block for this AUDIO half-buffer. */
+    usb_audio_audio_boundary();
     seq_engine_audio_boundary(block_start_sample, recovering);
     audio_command_executor_seq_begin_block(
         seq_engine_audio_track_mask());
@@ -415,6 +417,7 @@ void HAL_SAI_RxHalfCpltCallback(SAI_HandleTypeDef *hsai)
         cpu_load_irq_begin();
 
         process_half(0);
+        usb_audio_feedback_dma_half();
 
         cpu_load_irq_end();
         audio_boot_diag_producer_publish_cpu((uint8_t)cpu_load_is_valid(),
@@ -453,6 +456,7 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
         cpu_load_irq_begin();
 
         process_half(1);
+        usb_audio_feedback_dma_half();
 
         cpu_load_irq_end();
         audio_boot_diag_producer_publish_cpu((uint8_t)cpu_load_is_valid(),

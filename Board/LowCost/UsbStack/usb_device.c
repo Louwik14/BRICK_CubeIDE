@@ -361,6 +361,7 @@ void usb_device_irq(void)
         tud_int_handler(USB_DEVICE_RHPORT);
         if (sof_pending != 0U) {
             midi_clock_timer_on_sof(sof_tick);
+            usb_audio_feedback_sof();
         }
         midi_usb_service_from_irq();
     }
