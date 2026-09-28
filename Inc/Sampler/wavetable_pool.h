@@ -151,6 +151,8 @@ uint8_t wavetable_pool_load_async_take_result(wavetable_result_t *out_result,
                                               uint16_t *out_global_slot,
                                               const char **out_path);
 void wavetable_pool_clear(uint16_t wavetable_slot);
+/* Removes the prepared cache for an unloaded source before SD rename/delete. */
+uint8_t wavetable_pool_purge_source_cache(const char *source_path);
 void wavetable_pool_retire_all(void);
 void wavetable_pool_service_retire(void);
 uint8_t wavetable_pool_retire_idle(void);

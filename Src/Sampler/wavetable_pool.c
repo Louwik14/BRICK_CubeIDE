@@ -238,6 +238,43 @@ static void wavetable_load_job_boot_init(void);
 
 #include "Wavetable/wavetable_storage_async.inc"
 
+uint8_t wavetable_pool_purge_source_cache(const char *source_path)
+{
+    if (source_path == NULL || wavetable_pool_load_async_busy() != 0U
+        || sd_access_gate_try_acquire(SD_ACCESS_CLIENT_SAMPLE_CACHE) == 0U)
+        return 0U;
+    uint8_t ok = sd_access_fs_mount_if_needed();
+    char prefix[12];
+    (void)snprintf(prefix, sizeof(prefix), "H%08lX_",
+                   (unsigned long)wavetable_pool_path_hash(source_path));
+    for (uint16_t removed = 0U; ok != 0U && removed < 1024U; ++removed)
+    {
+        DIR directory;
+        FILINFO info;
+        const FRESULT opened = f_opendir(&directory, WAVETABLE_POOL_CACHE_DIR);
+        if (opened == FR_NO_PATH || opened == FR_NO_FILE) break;
+        if (opened != FR_OK) { ok = 0U; break; }
+        char candidate[WAVETABLE_POOL_PATH_MAX] = {0};
+        for (;;)
+        {
+            const FRESULT read = f_readdir(&directory, &info);
+            if (read != FR_OK) { ok = 0U; break; }
+            if (info.fname[0] == '\0') break;
+            if (strncmp(info.fname, prefix, strlen(prefix)) != 0) continue;
+            const int n = snprintf(candidate, sizeof(candidate), "%s/%s",
+                                   WAVETABLE_POOL_CACHE_DIR, info.fname);
+            if (n <= 0 || (size_t)n >= sizeof(candidate)) ok = 0U;
+            break;
+        }
+        (void)f_closedir(&directory);
+        if (ok == 0U || candidate[0] == '\0') break;
+        if (f_unlink(candidate) != FR_OK) { ok = 0U; break; }
+        if (removed == 1023U) ok = 0U;
+    }
+    sd_access_gate_release(SD_ACCESS_CLIENT_SAMPLE_CACHE);
+    return ok;
+}
+
 #include "Wavetable/wavetable_publication.inc"
 
 uint8_t wavetable_pool_inspect_source(const wav_info_t *info,

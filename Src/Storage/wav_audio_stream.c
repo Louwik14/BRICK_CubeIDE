@@ -50,15 +50,58 @@ void wav_audio_stream_init(wav_audio_stream_t *stream,
     wav_audio_stream_reset_source_state(stream);
 }
 
-void wav_audio_stream_set_read_hook(
-    wav_audio_stream_t *stream,
-    FRESULT (*read_fn)(void *context, FIL *fp, void *buffer,
-                       UINT bytes_to_read, UINT *bytes_read),
-    void *context)
+void wav_audio_stream_enable_external_input(wav_audio_stream_t *stream)
 {
     if (stream == 0) return;
-    stream->read_fn = read_fn;
-    stream->read_context = context;
+    stream->external_input = 1U;
+}
+
+static uint8_t wav_audio_stream_external_input_needed(
+    const wav_audio_stream_t *stream)
+{
+    return ((stream != 0) && (stream->external_input != 0U)
+        && (stream->data_remaining != 0U)
+        && ((stream->io_pos + stream->info.block_align) > stream->io_len))
+        ? 1U : 0U;
+}
+
+uint8_t wav_audio_stream_external_input_request(
+    const wav_audio_stream_t *stream,
+    uint32_t maximum_bytes,
+    uint32_t *out_bytes)
+{
+    if ((stream == 0) || (out_bytes == 0) || (maximum_bytes == 0U)
+        || (stream->external_input == 0U)
+        || (stream->info.block_align == 0U)
+        || (wav_audio_stream_external_input_needed(stream) == 0U))
+    {
+        return 0U;
+    }
+    uint32_t request = stream->data_remaining;
+    if (request > maximum_bytes) request = maximum_bytes;
+    request -= request % stream->info.block_align;
+    if (request == 0U) return 0U;
+    *out_bytes = request;
+    return 1U;
+}
+
+uint8_t wav_audio_stream_external_input_commit(
+    wav_audio_stream_t *stream,
+    uint16_t first_byte_offset,
+    uint32_t logical_bytes)
+{
+    if ((stream == 0) || (stream->external_input == 0U)
+        || (stream->info.block_align == 0U) || (logical_bytes == 0U)
+        || ((logical_bytes % stream->info.block_align) != 0U)
+        || (logical_bytes > stream->data_remaining)
+        || (((uint32_t)first_byte_offset + logical_bytes) > sizeof(stream->io_buf)))
+    {
+        return 0U;
+    }
+    stream->io_pos = first_byte_offset;
+    stream->io_len = (uint32_t)first_byte_offset + logical_bytes;
+    stream->data_remaining -= logical_bytes;
+    return 1U;
 }
 
 static uint8_t wav_audio_stream_refill_io_buffer(wav_audio_stream_t *stream)
@@ -71,6 +114,10 @@ static uint8_t wav_audio_stream_refill_io_buffer(wav_audio_stream_t *stream)
     if (stream->data_remaining == 0U)
     {
         stream->source_exhausted = 1U;
+        return 0U;
+    }
+    if (stream->external_input != 0U)
+    {
         return 0U;
     }
 
@@ -88,10 +135,7 @@ static uint8_t wav_audio_stream_refill_io_buffer(wav_audio_stream_t *stream)
     }
 
     UINT br = 0U;
-    const FRESULT fr = (stream->read_fn != 0)
-        ? stream->read_fn(stream->read_context, stream->fp,
-                          stream->io_buf, request, &br)
-        : f_read(stream->fp, stream->io_buf, request, &br);
+    const FRESULT fr = f_read(stream->fp, stream->io_buf, request, &br);
     if ((fr != FR_OK) || (br < stream->info.block_align))
     {
         stream->data_remaining = 0U;
@@ -168,19 +212,23 @@ static uint8_t wav_audio_stream_prepare(wav_audio_stream_t *stream)
         return 0U;
     }
 
-    wav_audio_stream_reset_source_state(stream);
-    stream->data_remaining = stream->info.data_size - (stream->info.data_size % stream->info.block_align);
     stream->phase_step = (stream->info.sample_rate == 0U)
                               ? 1.0
                               : ((double)stream->info.sample_rate / (double)stream->target_rate);
 
-    if (wav_audio_stream_decode_next_source_frame(stream, &stream->prev_l, &stream->prev_r) == 0U)
+    if ((stream->source_prev_valid == 0U)
+        && (wav_audio_stream_decode_next_source_frame(
+                stream, &stream->prev_l, &stream->prev_r) == 0U))
     {
         return 0U;
     }
     stream->source_prev_valid = 1U;
     stream->prev_index = 0U;
 
+    if (wav_audio_stream_external_input_needed(stream) != 0U)
+    {
+        return 0U;
+    }
     if (wav_audio_stream_decode_next_source_frame(stream, &stream->curr_l, &stream->curr_r) != 0U)
     {
         stream->source_curr_valid = 1U;
@@ -212,7 +260,8 @@ uint8_t wav_audio_stream_start(wav_audio_stream_t *stream, uint32_t data_offset)
         return 0U;
     }
 
-    if (f_lseek(stream->fp, data_offset) != FR_OK)
+    if ((stream->external_input == 0U)
+        && (f_lseek(stream->fp, data_offset) != FR_OK))
     {
         return 0U;
     }
@@ -226,6 +275,10 @@ static uint8_t wav_audio_stream_ensure_source_window(wav_audio_stream_t *stream,
 {
     while ((stream->source_curr_valid != 0U) && (stream->curr_index < (target_index + 1U)))
     {
+        if (wav_audio_stream_external_input_needed(stream) != 0U)
+        {
+            return 0U;
+        }
         float next_l = 0.0f;
         float next_r = 0.0f;
 

@@ -17,26 +17,7 @@ uint8_t ui_page_settings_is_open(void)
     return (ui_page_get_id() == UI_PAGE_SETTINGS) ? 1U : 0U;
 }
 
-uint8_t ui_page_settings_keyboard_preview_context(void)
-{
-    const ui_settings_menu_level_t *const level =
-        ui_page_settings_current_level();
-    if ((ui_page_settings_is_open() == 0U) || (level == 0)
-        || (g_ui_settings.sample_confirm
-            != (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_NONE))
-    {
-        return UI_SETTINGS_KEYBOARD_PREVIEW_NONE;
-    }
-    if (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM)
-        return UI_SETTINGS_KEYBOARD_PREVIEW_RAM;
-    if (level->view == UI_SETTINGS_VIEW_SAMPLER)
-        return UI_SETTINGS_KEYBOARD_PREVIEW_STREAM;
-    if (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
-        return UI_SETTINGS_KEYBOARD_PREVIEW_MULTI;
-    return UI_SETTINGS_KEYBOARD_PREVIEW_NONE;
-}
-
-static const char *ui_page_settings_keyboard_sample_path(uint8_t context)
+static const char *ui_page_settings_preview_sample_path(ui_settings_view_t view)
 {
     if (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY)
     {
@@ -47,7 +28,7 @@ static const char *ui_page_settings_keyboard_sample_path(uint8_t context)
     }
 
     uint16_t backend_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
-    if (context == UI_SETTINGS_KEYBOARD_PREVIEW_RAM)
+    if (view == UI_SETTINGS_VIEW_SAMPLE_RAM)
     {
         if (ui_page_settings_ram_backend_from_global(
                 g_ui_settings.sample_slot_selected, &backend_slot) == 0U)
@@ -65,7 +46,7 @@ static const char *ui_page_settings_keyboard_sample_path(uint8_t context)
     return ((slot != 0) && (slot->path[0] != '\0')) ? slot->path : 0;
 }
 
-static const char *ui_page_settings_keyboard_multi_index_path(void)
+static const char *ui_page_settings_preview_multi_index_path(void)
 {
     if (g_ui_settings.sample_focus == (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY)
     {
@@ -85,10 +66,10 @@ static const char *ui_page_settings_keyboard_multi_index_path(void)
         ? instrument->index_path : 0;
 }
 
-static uint8_t ui_page_settings_keyboard_multi_begin(void)
+static uint8_t ui_page_settings_preview_multi_begin(void)
 {
     const char *const index_path =
-        ui_page_settings_keyboard_multi_index_path();
+        ui_page_settings_preview_multi_index_path();
     if (index_path == 0) return 0U;
     multi_sample_index_t index;
     if (multi_sample_index_load(index_path, &index) != MULTI_SAMPLE_INDEX_OK)
@@ -107,28 +88,20 @@ static uint8_t ui_page_settings_keyboard_multi_begin(void)
     return sd_preview_begin_with_pitch(path, pitch_ratio);
 }
 
-uint32_t ui_page_settings_keyboard_preview_note_on(uint8_t context,
-                                                   uint8_t note,
-                                                   uint8_t velocity)
+static void ui_page_settings_preview_current(void)
 {
-    (void)note;
-    (void)velocity;
-    if ((context == UI_SETTINGS_KEYBOARD_PREVIEW_NONE)
-        || (context != ui_page_settings_keyboard_preview_context()))
-        return g_ui_settings_keyboard_preview_epoch;
-
-    if (sd_preview_is_active() != 0U)
-    {
-        sd_preview_stop();
-        g_ui_settings.preview_stop_origin = UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT;
-    }
+    const ui_settings_menu_level_t *const level = ui_page_settings_current_level();
+    if (level == 0 || g_ui_settings.sample_confirm != UI_SETTINGS_SAMPLE_CONFIRM_NONE)
+        return;
+    ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
 
     uint8_t started = 0U;
-    if (context == UI_SETTINGS_KEYBOARD_PREVIEW_MULTI)
-        started = ui_page_settings_keyboard_multi_begin();
-    else
+    if (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
+        started = ui_page_settings_preview_multi_begin();
+    else if (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM
+             || level->view == UI_SETTINGS_VIEW_SAMPLER)
     {
-        const char *const path = ui_page_settings_keyboard_sample_path(context);
+        const char *const path = ui_page_settings_preview_sample_path(level->view);
         if (path != 0) started = sd_preview_begin(path);
     }
     if (started != 0U)
@@ -136,31 +109,17 @@ uint32_t ui_page_settings_keyboard_preview_note_on(uint8_t context,
         g_ui_settings.preview_stop_origin = UI_SETTINGS_PREVIEW_STOP_ORIGIN_NONE;
         g_ui_settings.preview_was_active = sd_preview_is_active();
     }
-    return g_ui_settings_keyboard_preview_epoch;
-}
-
-void ui_page_settings_keyboard_preview_note_off(uint8_t context,
-                                                uint32_t epoch)
-{
-    if ((context != UI_SETTINGS_KEYBOARD_PREVIEW_NONE)
-        && (epoch == g_ui_settings_keyboard_preview_epoch))
-        ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
-}
-
-void ui_page_settings_keyboard_preview_all_notes_off(void)
-{
-    ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
-}
-
-uint8_t ui_page_settings_multi_clear_is_active(void)
-{
-    return multi_sample_pool_clear_is_active();
+    else
+    {
+        const sd_preview_error_t error = sd_preview_get_last_error();
+        ui_page_settings_status(error == SD_PREVIEW_ERROR_NONE
+            ? "PREVIEW N/A" : ui_page_settings_preview_error_label(error));
+    }
 }
 
 void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
 {
-    if ((multi_sample_pool_clear_is_active() != 0U)
-        || (wav_convert_is_active() != 0U)
+    if ((wav_convert_is_active() != 0U)
         || (g_ui_settings.convert_slot_valid != 0U))
     {
         return;
@@ -171,6 +130,8 @@ void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
     {
         return;
     }
+    if (g_ui_settings.sample_confirm != UI_SETTINGS_SAMPLE_CONFIRM_NONE)
+        return;
 
     if ((level->view == UI_SETTINGS_VIEW_SAMPLER)
         || (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM)
@@ -193,6 +154,8 @@ void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
 
         if (encoder == 0U)
         {
+            if (g_ui_settings.sample_focus != UI_SETTINGS_SAMPLE_FOCUS_LIBRARY)
+                ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
             g_ui_settings.sample_focus = (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_LIBRARY;
             const uint16_t entry_count = (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
                 ? g_ui_settings.multi_entry_count
@@ -242,6 +205,8 @@ void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
 
         if (encoder == 1U)
         {
+            if (g_ui_settings.sample_focus != UI_SETTINGS_SAMPLE_FOCUS_SLOTS)
+                ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
             g_ui_settings.sample_focus = (uint8_t)UI_SETTINGS_SAMPLE_FOCUS_SLOTS;
             if (g_ui_settings.sampler_slot_count == 0U)
             {
@@ -350,25 +315,12 @@ uint8_t ui_page_settings_handle_event(const ui_event_t *ev)
     {
         return 0U;
     }
-    if (multi_sample_pool_clear_is_active() != 0U)
+
+    if (ev->type == UI_EVENT_BUTTON_RELEASE && ev->id == (uint8_t)BTN_PAGE_1)
     {
-        ui_page_settings_status("CLEAR...");
+        ui_page_settings_handle_event_internal(ev);
         return 1U;
     }
-
-    if (ev->type == UI_EVENT_HALL_PRESS)
-    {
-        const ui_settings_menu_level_t *const level = ui_page_settings_current_level();
-        if ((level != 0)
-            && ((level->view == UI_SETTINGS_VIEW_SAMPLER)
-                || (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM)
-                || (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE)))
-        {
-            return 1U;
-        }
-        return 0U;
-    }
-
     if (ev->type != UI_EVENT_BUTTON_PRESS)
     {
         return 0U;

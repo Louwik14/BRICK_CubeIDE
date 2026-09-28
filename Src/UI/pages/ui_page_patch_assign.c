@@ -957,6 +957,14 @@ static void ui_page_patch_assign_handle_event(const ui_event_t *ev)
         case UI_BROWSER_ACTION_CLEAR:
             ui_page_patch_assign_clear_action();
             break;
+        case UI_BROWSER_ACTION_INIT:
+            g_patch_assign.clear_confirm = 0U;
+            ui_page_patch_assign_set_temporary_status(
+                patch_product_result_label(patch_product_clear(g_patch_assign.target_track)));
+            break;
+        case UI_BROWSER_ACTION_RETURN:
+            ui_page_patch_assign_close();
+            break;
 
         default:
             if (g_patch_assign.clear_confirm != 0U)

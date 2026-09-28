@@ -36,9 +36,7 @@ typedef struct
     float curr_r;
     double phase;
     double phase_step;
-    FRESULT (*read_fn)(void *context, FIL *fp, void *buffer,
-                       UINT bytes_to_read, UINT *bytes_read);
-    void *read_context;
+    uint8_t external_input;
     uint8_t io_buf[32768U] __attribute__((aligned(32)));
 } wav_audio_stream_t;
 
@@ -47,11 +45,15 @@ void wav_audio_stream_init(wav_audio_stream_t *stream,
                            const wav_info_t *info,
                            uint32_t target_rate);
 uint8_t wav_audio_stream_start(wav_audio_stream_t *stream, uint32_t data_offset);
-void wav_audio_stream_set_read_hook(
+void wav_audio_stream_enable_external_input(wav_audio_stream_t *stream);
+uint8_t wav_audio_stream_external_input_request(
+    const wav_audio_stream_t *stream,
+    uint32_t maximum_bytes,
+    uint32_t *out_bytes);
+uint8_t wav_audio_stream_external_input_commit(
     wav_audio_stream_t *stream,
-    FRESULT (*read_fn)(void *context, FIL *fp, void *buffer,
-                       UINT bytes_to_read, UINT *bytes_read),
-    void *context);
+    uint16_t first_byte_offset,
+    uint32_t logical_bytes);
 uint32_t wav_audio_stream_read_frames(wav_audio_stream_t *stream,
                                       float *dst_interleaved,
                                       uint32_t frame_capacity);

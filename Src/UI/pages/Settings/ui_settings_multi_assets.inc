@@ -560,44 +560,16 @@ static void ui_page_settings_multi_confirm_unload(uint8_t slot)
         ui_page_settings_status("SLOT EMPTY");
         return;
     }
+    if (ui_page_settings_asset_used_by_track(PERSIST_ASSET_MULTI,
+            g_ui_settings.sample_slot_selected) != 0U)
+    {
+        ui_page_settings_status("USED BY TRACK");
+        return;
+    }
     g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_UNLOAD;
     g_ui_settings.confirm_slot = slot;
+    g_ui_settings.confirm_logical = g_ui_settings.sample_slot_selected;
     g_ui_settings.confirm_path[0] = '\0';
-    ui_page_settings_status("OK=YES RETURN=NO");
-}
-
-static void ui_page_settings_multi_confirm_clear_indexes(void)
-{
-    if (project_replacement_is_active() != 0U) return;
-    if (g_ui_settings.multi_entry_count == 0U)
-    {
-        ui_page_settings_status("NO MULTI");
-        return;
-    }
-
-    uint8_t has_index_target = 0U;
-    for (uint16_t i = 0U; i < g_ui_settings.multi_entry_count; ++i)
-    {
-        const ui_settings_multi_entry_t *const entry = &g_ui_settings.multi_entries[i];
-        if ((entry->type == UI_SETTINGS_MULTI_ENTRY_MULTI_ITEM)
-            && (entry->index_path[0] != '\0'))
-        {
-            has_index_target = 1U;
-            break;
-        }
-    }
-
-    if (has_index_target == 0U)
-    {
-        ui_page_settings_status("NO MULTI");
-        return;
-    }
-
-    g_ui_settings.sample_confirm = (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_CLEAR_INDEX;
-    g_ui_settings.confirm_slot = 0U;
-    ui_page_settings_copy_bounded(g_ui_settings.confirm_path,
-                                  sizeof(g_ui_settings.confirm_path),
-                                  g_ui_settings.sample_dir);
     ui_page_settings_status("OK=YES RETURN=NO");
 }
 
@@ -777,6 +749,11 @@ static void ui_page_settings_multi_copy_left(uint8_t shift_down)
     if (entry == 0)
     {
         ui_page_settings_status("NO MULTI");
+        return;
+    }
+    if (entry->type == UI_SETTINGS_MULTI_ENTRY_PARENT)
+    {
+        ui_page_settings_multi_browser_parent_or_exit();
         return;
     }
 

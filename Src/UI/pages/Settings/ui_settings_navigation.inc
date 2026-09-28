@@ -203,9 +203,6 @@ static void ui_page_settings_status(const char *status)
 
 static void ui_page_settings_preview_stop(ui_settings_preview_stop_origin_t origin)
 {
-    g_ui_settings_keyboard_preview_epoch++;
-    if (g_ui_settings_keyboard_preview_epoch == 0U)
-        g_ui_settings_keyboard_preview_epoch = 1U;
     if (sd_preview_is_active() == 0U)
     {
         return;
@@ -326,6 +323,11 @@ static void ui_page_settings_project_action(ui_browser_action_t action)
         &&level->selected_index<g_ui_settings.project_slot_count)?1U:0U;
     const uint8_t slot=has_focus?g_ui_settings.project_slots[level->selected_index]:0U;
     if(action==UI_BROWSER_ACTION_NONE)return;
+    if(action==UI_BROWSER_ACTION_RETURN)
+    {
+        ui_page_settings_back();
+        return;
+    }
     if(action==UI_BROWSER_ACTION_NEW)
     {
         g_ui_settings.project_confirm_action=0U;
@@ -670,8 +672,188 @@ static void ui_page_settings_leave(void)
     if(g_ui_project_save_phase==UI_PROJECT_SAVE_IDLE)g_ui_settings.depth = 0U;
 }
 
+static ui_browser_context_t ui_page_settings_asset_context(void)
+{
+    return g_ui_settings.sample_focus == UI_SETTINGS_SAMPLE_FOCUS_LIBRARY
+        ? UI_BROWSER_ASSET_SD : UI_BROWSER_ASSET_POOL;
+}
+
+static uint32_t ui_page_settings_asset_kind(ui_settings_view_t view)
+{
+    switch (view) {
+        case UI_SETTINGS_VIEW_SAMPLE_RAM: return PERSIST_ASSET_SAMPLE_RAM;
+        case UI_SETTINGS_VIEW_SAMPLER: return PERSIST_ASSET_SAMPLE_STREAM;
+        case UI_SETTINGS_VIEW_MULTI_SAMPLE: return PERSIST_ASSET_MULTI;
+        default: return PERSIST_ASSET_WAVETABLE;
+    }
+}
+
+static const char *ui_page_settings_asset_focused_path(ui_settings_view_t view)
+{
+    if (g_ui_settings.sample_focus == UI_SETTINGS_SAMPLE_FOCUS_LIBRARY) {
+        if (view == UI_SETTINGS_VIEW_MULTI_SAMPLE) {
+            const ui_settings_multi_entry_t *entry = ui_page_settings_multi_selected_entry();
+            return entry != 0 && entry->type == UI_SETTINGS_MULTI_ENTRY_MULTI_ITEM
+                && entry->index_path[0] != '\0' ? entry->index_path : NULL;
+        }
+        const ui_settings_sample_entry_t *entry = ui_page_settings_sample_selected_entry();
+        return entry != 0 && entry->type == UI_SETTINGS_SAMPLE_ENTRY_FILE
+            ? entry->path : NULL;
+    }
+    persist_control_asset_ref_t asset;
+    if (project_control_get_logical_asset(ui_page_settings_asset_kind(view),
+            g_ui_settings.sample_slot_selected, &asset) == 0U) return NULL;
+    /* The returned path must survive this stack frame. */
+    static char path[PERSIST_CONTROL_ASSET_PATH_BYTES + 1U];
+    memcpy(path, asset.canonical_path, asset.path_length);
+    path[asset.path_length] = '\0';
+    return path;
+}
+
+static uint8_t ui_page_settings_asset_action_enabled(ui_settings_view_t view,
+                                                      ui_browser_action_t action)
+{
+    if (action == UI_BROWSER_ACTION_NONE) return 0U;
+    if (action == UI_BROWSER_ACTION_RETURN || action == UI_BROWSER_ACTION_REFRESH)
+        return 1U;
+    if (action != UI_BROWSER_ACTION_PREVIEW
+        && (project_replacement_is_active() != 0U
+            || project_control_asset_loads_pending() != 0U
+            || multi_sample_import_is_active() != 0U
+            || multi_sample_load_has_pending() != 0U
+            || sampler_ram_pool_load_async_busy() != 0U
+            || wavetable_pool_load_async_busy() != 0U))
+        return 0U;
+    if (action == UI_BROWSER_ACTION_PREVIEW)
+    {
+        if (view == UI_SETTINGS_VIEW_WAVETABLE
+            || ui_page_settings_asset_focused_path(view) == NULL) return 0U;
+        if (view == UI_SETTINGS_VIEW_MULTI_SAMPLE
+            && g_ui_settings.sample_focus == UI_SETTINGS_SAMPLE_FOCUS_LIBRARY)
+        {
+            const ui_settings_multi_entry_t *entry = ui_page_settings_multi_selected_entry();
+            return entry != NULL && entry->prepared != 0U;
+        }
+        return 1U;
+    }
+    if (action == UI_BROWSER_ACTION_LOAD
+        && g_ui_settings.sample_focus == UI_SETTINGS_SAMPLE_FOCUS_LIBRARY)
+    {
+        if (view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
+        {
+            const ui_settings_multi_entry_t *entry = ui_page_settings_multi_selected_entry();
+            if (entry != NULL && entry->type != UI_SETTINGS_MULTI_ENTRY_MULTI_ITEM)
+                return 1U;
+        }
+        else
+        {
+            const ui_settings_sample_entry_t *entry = ui_page_settings_sample_selected_entry();
+            if (entry != NULL && entry->type != UI_SETTINGS_SAMPLE_ENTRY_FILE)
+                return 1U;
+        }
+    }
+    const char *path = ui_page_settings_asset_focused_path(view);
+    if (path == NULL) return 0U;
+    const uint32_t kind = ui_page_settings_asset_kind(view);
+    uint16_t logical = 0U;
+    if (action == UI_BROWSER_ACTION_LOAD)
+    {
+        uint16_t runtime = 0U;
+        if (project_control_find_asset(kind, path, &logical) == 0U)
+            return view != UI_SETTINGS_VIEW_MULTI_SAMPLE
+                || ui_page_settings_multi_find_loaded_path(path) < 0;
+        if (kind == PERSIST_ASSET_MULTI)
+            return project_control_resolve_multi_runtime(logical, &runtime) == 0U
+                && ui_page_settings_multi_find_loaded_path(path) < 0;
+        if (kind == PERSIST_ASSET_WAVETABLE)
+            return project_control_resolve_wavetable_runtime(logical, &runtime) == 0U;
+        return project_control_resolve_sample_runtime_kind(kind, logical, &runtime) == 0U;
+    }
+    if (action == UI_BROWSER_ACTION_UNLOAD)
+        return ui_page_settings_asset_used_by_track(kind,
+            g_ui_settings.sample_slot_selected) == 0U;
+    if (action == UI_BROWSER_ACTION_RENAME || action == UI_BROWSER_ACTION_DELETE)
+        return project_control_find_asset(kind, path, &logical) == 0U;
+    return 1U;
+}
+
+static void ui_page_settings_asset_refresh(ui_settings_view_t view)
+{
+    ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+    if (view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
+    {
+        char selected[MULTI_SAMPLE_POOL_PATH_MAX] = {0};
+        const ui_settings_multi_entry_t *entry = ui_page_settings_multi_selected_entry();
+        if (entry != 0) ui_page_settings_copy_bounded(selected, sizeof(selected), entry->path);
+        if (ui_page_settings_sd_reprobe_for_refresh() == 0U
+            || ui_page_settings_multi_browser_refresh() == 0U)
+        {
+            ui_page_settings_status("REFRESH FAIL");
+            return;
+        }
+        for (uint16_t i = 0U; i < g_ui_settings.multi_entry_count; ++i)
+            if (strcmp(g_ui_settings.multi_entries[i].path, selected) == 0)
+            { g_ui_settings.sample_selected = i; break; }
+    }
+    else if (view == UI_SETTINGS_VIEW_WAVETABLE)
+    {
+        const ui_settings_sample_entry_t *entry = ui_page_settings_sample_selected_entry();
+        g_ui_settings.wavetable_restore_path[0] = '\0';
+        if (entry != NULL)
+            ui_page_settings_copy_bounded(g_ui_settings.wavetable_restore_path,
+                sizeof(g_ui_settings.wavetable_restore_path), entry->path);
+        g_ui_settings.wavetable_restore_neighbor = g_ui_settings.sample_selected;
+        g_ui_settings.wavetable_restore_pending = 1U;
+        if (ui_page_settings_sd_reprobe_for_refresh() == 0U
+            || ui_page_settings_wavetable_browser_refresh() == 0U)
+        {
+            g_ui_settings.wavetable_restore_pending = 0U;
+            ui_page_settings_status("REFRESH FAIL");
+        }
+    }
+    else ui_page_settings_sample_catalog_refresh_action(0U);
+}
+
+static void ui_page_settings_asset_action(ui_settings_view_t view,
+                                          ui_browser_action_t action)
+{
+    if (ui_page_settings_asset_action_enabled(view, action) == 0U) return;
+    switch (action)
+    {
+        case UI_BROWSER_ACTION_PREVIEW:
+            if (view == UI_SETTINGS_VIEW_WAVETABLE)
+                ui_page_settings_status("PREVIEW N/A");
+            else ui_page_settings_preview_current();
+            break;
+        case UI_BROWSER_ACTION_LOAD:
+        case UI_BROWSER_ACTION_UNLOAD:
+            ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+            ui_page_settings_apply_action();
+            break;
+        case UI_BROWSER_ACTION_REFRESH:
+            ui_page_settings_asset_refresh(view);
+            break;
+        case UI_BROWSER_ACTION_RENAME:
+            ui_page_settings_asset_rename_begin();
+            break;
+        case UI_BROWSER_ACTION_DELETE:
+            ui_page_settings_asset_delete_request();
+            break;
+        case UI_BROWSER_ACTION_RETURN:
+            ui_page_settings_back();
+            break;
+        default: break;
+    }
+}
+
 static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
 {
+    if (ev != 0 && ev->type == UI_EVENT_BUTTON_RELEASE
+        && ev->id == (uint8_t)BTN_PAGE_1)
+    {
+        ui_page_settings_preview_stop(UI_SETTINGS_PREVIEW_STOP_ORIGIN_SILENT);
+        return;
+    }
     if((g_ui_project_save_phase==UI_PROJECT_SAVE_WRITING)
             ||(project_product_save_busy()!=0U))return;
     if ((wav_convert_is_active() != 0U) || (g_ui_settings.convert_slot_valid != 0U))
@@ -681,13 +863,6 @@ static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
 
     if ((ev == 0) || (ev->type != UI_EVENT_BUTTON_PRESS))
     {
-        if ((ev != 0)
-            && (ev->type == UI_EVENT_HALL_PRESS)
-            && (ui_page_settings_current_level() != 0)
-            && (ui_page_settings_current_level()->view == UI_SETTINGS_VIEW_SAMPLER))
-        {
-            ui_page_settings_sample_preview_current();
-        }
         return;
     }
 
@@ -732,110 +907,9 @@ static void ui_page_settings_handle_event_internal(const ui_event_t *ev)
             return;
         }
 
-        if ((level->view == UI_SETTINGS_VIEW_SAMPLER)
-            || (level->view == UI_SETTINGS_VIEW_SAMPLE_RAM)
-            || (level->view == UI_SETTINGS_VIEW_WAVETABLE))
-        {
-            if (ev->id == (uint8_t)BTN_PAGE_1)
-            {
-                if (level->view == UI_SETTINGS_VIEW_WAVETABLE)
-                {
-                    ui_page_settings_wavetable_browser_parent_or_exit();
-                }
-                else
-                {
-                    ui_page_settings_sample_browser_parent_or_exit();
-                }
-                return;
-            }
-            if ((ev->id == (uint8_t)BTN_PAGE_2)
-                && (button_down(BTN_SHIFT) == 0U))
-            {
-                ui_page_settings_apply_action();
-                return;
-            }
-            if (ev->id == (uint8_t)BTN_PAGE_3)
-            {
-                return;
-            }
-            if (ev->id == (uint8_t)BTN_PAGE_4)
-            {
-                if (level->view == UI_SETTINGS_VIEW_WAVETABLE)
-                {
-                    if (ui_page_settings_sd_reprobe_for_refresh() != 0U)
-                        (void)ui_page_settings_wavetable_browser_refresh();
-                    else
-                        ui_page_settings_status("SD UNAVAILABLE");
-                }
-                else
-                {
-                    ui_page_settings_sample_catalog_refresh_action((uint8_t)(button_down(BTN_SHIFT) != 0U));
-                }
-                return;
-            }
-        }
-
-        if ((level->view == UI_SETTINGS_VIEW_SAMPLER)
-            && (ev->id == (uint8_t)BTN_PAGE_1))
-        {
-            ui_page_settings_sample_browser_parent_or_exit();
-            return;
-        }
-
-        if ((level->view == UI_SETTINGS_VIEW_SAMPLER)
-            && (ev->id == (uint8_t)BTN_PAGE_2)
-            && (button_down(BTN_SHIFT) == 0U))
-        {
-            ui_page_settings_sample_ok_action();
-            return;
-        }
-
-        if ((level->view == UI_SETTINGS_VIEW_SAMPLER)
-            && (ev->id == (uint8_t)BTN_PAGE_3))
-        {
-            return;
-        }
-
-        if ((level->view == UI_SETTINGS_VIEW_SAMPLER)
-            && (ev->id == (uint8_t)BTN_PAGE_4))
-        {
-            ui_page_settings_sample_catalog_refresh_action((uint8_t)(button_down(BTN_SHIFT) != 0U));
-            return;
-        }
-
-        if (level->view == UI_SETTINGS_VIEW_MULTI_SAMPLE)
-        {
-            if (ev->id == (uint8_t)BTN_PAGE_1)
-            {
-                ui_page_settings_multi_browser_parent_or_exit();
-                return;
-            }
-            if ((ev->id == (uint8_t)BTN_PAGE_2) && (button_down(BTN_SHIFT) == 0U))
-            {
-                ui_page_settings_apply_action();
-                return;
-            }
-            if (ev->id == (uint8_t)BTN_PAGE_3)
-            {
-                ui_page_settings_multi_confirm_clear_indexes();
-                return;
-            }
-            if (ev->id == (uint8_t)BTN_PAGE_4)
-            {
-                if (ui_page_settings_sd_reprobe_for_refresh() != 0U)
-                    (void)ui_page_settings_multi_browser_refresh();
-                else
-                    ui_page_settings_status("SD UNAVAILABLE");
-                return;
-            }
-        }
-
-        if (ev->id == (uint8_t)BTN_SETTINGS)
-        {
-            ui_page_settings_back();
-            return;
-        }
-
+        ui_page_settings_asset_action(level->view,
+            ui_browser_action_resolve_context((button_id_t)ev->id,
+                button_down(BTN_SHIFT), ui_page_settings_asset_context()));
         return;
     }
 
@@ -879,7 +953,6 @@ static void ui_page_settings_handle_event_page(const ui_event_t *ev)
 
 static void ui_page_settings_tick(void)
 {
-    ui_page_settings_multi_clear_service();
     uint8_t project_slot = 0U;
     uint8_t project_success = 0U;
     if (project_product_save_take_result(&project_slot, &project_success) != 0U)

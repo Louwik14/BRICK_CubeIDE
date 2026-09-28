@@ -177,7 +177,8 @@ static void ui_page_settings_multi_left_label(const ui_settings_multi_entry_t *e
         return;
     }
 
-    if (entry->type == UI_SETTINGS_MULTI_ENTRY_NAV_FOLDER)
+    if (entry->type == UI_SETTINGS_MULTI_ENTRY_NAV_FOLDER
+        || entry->type == UI_SETTINGS_MULTI_ENTRY_PARENT)
     {
         (void)snprintf(raw, sizeof(raw), "%s", entry->label);
     }
@@ -474,7 +475,37 @@ static void ui_page_settings_draw_page_footer(const char *page4_label)
 
 static void ui_page_settings_draw_sample_footer(void)
 {
-    ui_page_settings_draw_page_footer((button_down(BTN_SHIFT) != 0U) ? "REBUILD" : "REFRESH");
+    const ui_settings_menu_level_t *level = ui_page_settings_current_level();
+    if (level == NULL) return;
+    drv_display_set_font(&FONT_4X6);
+    if (g_ui_settings.sample_confirm == UI_SETTINGS_SAMPLE_CONFIRM_ASSET_DELETE)
+    {
+        drv_display_clear_rect(0, 36, 128, 15);
+        ui_page_settings_draw_centered_label(0U, 128U, 38U, "DELETE ASSET?");
+        ui_page_settings_draw_centered_label(0U, 128U, 45U,
+            ui_page_settings_basename(g_ui_asset_edit_source));
+        ui_page_settings_draw_centered_label(0U, 32U, UI_SETTINGS_FOOTER_LABEL_Y, "CANCEL");
+        ui_page_settings_draw_centered_label(32U, 32U, UI_SETTINGS_FOOTER_LABEL_Y, "DELETE");
+        ui_page_settings_draw_centered_label(64U, 32U, UI_SETTINGS_FOOTER_LABEL_Y, "-");
+        ui_page_settings_draw_centered_label(96U, 32U, UI_SETTINGS_FOOTER_LABEL_Y, "-");
+        return;
+    }
+    for (uint8_t page = 0U; page < 4U; ++page)
+    {
+        const ui_browser_action_t action = ui_browser_action_resolve_context(
+            (button_id_t)((uint8_t)BTN_PAGE_1 + page), button_down(BTN_SHIFT),
+            ui_page_settings_asset_context());
+        const uint8_t x = (uint8_t)(page * 32U);
+        ui_page_settings_draw_centered_label(x, 32U, UI_SETTINGS_FOOTER_LABEL_Y,
+            ui_browser_action_label(action, 0U));
+        if (action != UI_BROWSER_ACTION_NONE
+            && ui_page_settings_asset_action_enabled(level->view, action) == 0U)
+            for (uint8_t y = UI_SETTINGS_FOOTER_LABEL_Y;
+                 y < UI_SETTINGS_FOOTER_LABEL_Y + 6U; ++y)
+                for (uint8_t px = x; px < x + 32U; ++px)
+                    if (((px + y) & 1U) == 0U)
+                        drv_display_draw_pixel(px, y, false);
+    }
 }
 
 static const char *ui_page_settings_basename(const char *path)
@@ -561,7 +592,8 @@ static void ui_page_settings_draw_multi_name_label(void)
     {
         label = entry->label;
         tag = (entry->type == UI_SETTINGS_MULTI_ENTRY_MULTI_ITEM) ? "INS"
-            : (entry->type == UI_SETTINGS_MULTI_ENTRY_NAV_FOLDER) ? "DIR"
+            : (entry->type == UI_SETTINGS_MULTI_ENTRY_NAV_FOLDER
+                || entry->type == UI_SETTINGS_MULTI_ENTRY_PARENT) ? "DIR"
             : "EMPTY";
     }
     ui_page_settings_draw_browser_context_label(tag, label);
@@ -720,16 +752,6 @@ static void ui_page_settings_render_multi_browser(void)
         return;
     }
 
-    if (g_ui_settings.sample_confirm == (uint8_t)UI_SETTINGS_SAMPLE_CONFIRM_MULTI_CLEAR_INDEX)
-    {
-        drv_display_set_font(&FONT_5X7);
-        ui_page_settings_draw_centered_label(0U, 128U, 30U, "Clear indexes ?");
-        drv_display_set_font(&FONT_4X6);
-        ui_page_settings_draw_centered_label(0U, 128U, 42U, "WAV files stay");
-        ui_page_settings_draw_page_footer("-");
-        return;
-    }
-
     ui_page_settings_draw_sample_split_position(g_ui_settings.multi_entry_count,
                                                 g_ui_settings.sampler_slot_count);
     drv_display_set_font(&FONT_4X6);
@@ -798,7 +820,7 @@ static void ui_page_settings_render_multi_browser(void)
         drv_display_draw_text(0U, UI_SETTINGS_STATUS_Y, g_ui_settings.status_line);
     }
 
-    ui_page_settings_draw_page_footer_ex("CLEAR", "-");
+    ui_page_settings_draw_sample_footer();
     drv_display_set_font(&FONT_5X7);
 }
 

@@ -133,6 +133,8 @@ typedef struct
 multi_sample_index_result_t multi_sample_index_write(
     const char *path,
     const multi_sample_index_source_t *src);
+multi_sample_index_result_t multi_sample_index_retitle(
+    const char *path, const char *instrument_name);
 multi_sample_index_result_t multi_sample_index_load(const char *path,
                                                     multi_sample_index_t *out);
 uint8_t multi_sample_index_resolve(const multi_sample_index_t *index,

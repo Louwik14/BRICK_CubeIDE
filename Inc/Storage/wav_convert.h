@@ -54,10 +54,10 @@ typedef struct
     uint32_t total_ms;                 /* 0x014: wall clock */
     uint32_t active_ms;                /* 0x018: inside wav_convert_service */
     uint32_t open_parse_ms;            /* 0x01C: phase less profiled reads */
-    uint32_t read_ms;                  /* 0x020: all profiled f_read calls */
+    uint32_t read_ms;                  /* 0x020: FatFs metadata + physical payload reads */
     uint32_t decode_ms;                /* 0x024: non-SRC decode CPU */
     uint32_t src_ms;                   /* 0x028: SRC CPU including its decode, less reads */
-    uint32_t write_ms;                 /* 0x02C: all profiled f_write calls */
+    uint32_t write_ms;                 /* 0x02C: physical payload write transactions */
     uint32_t sync_close_ms;            /* 0x030 */
     uint32_t verify_ms;                /* 0x034: phase less profiled read */
     uint32_t replace_ms;               /* 0x038 */
@@ -65,7 +65,7 @@ typedef struct
     uint32_t service_calls;             /* 0x040 */
     uint32_t bytes_read;                /* 0x044: actual bytes returned */
     uint32_t bytes_written;             /* 0x048: actual bytes written */
-    uint32_t read_calls;                /* 0x04C */
+    uint32_t read_calls;                /* 0x04C: FatFs calls + physical transactions */
     uint32_t write_calls;               /* 0x050 */
     uint32_t min_read_size;             /* 0x054: requested bytes */
     uint32_t max_read_size;             /* 0x058 */
@@ -112,8 +112,6 @@ uint8_t wav_convert_path_needs_canonical(const char *path, wav_info_t *out_info)
 uint8_t wav_convert_start_destructive_canonical(const char *path);
 /* Project restore owns the closed mutation ingress while canonicalizing refs. */
 uint8_t wav_convert_start_destructive_canonical_project(const char *path);
-/* Caller owns the SD gate; conversion itself remains cooperative. */
-uint8_t wav_convert_start_destructive_canonical_locked(const char *path);
 void wav_convert_service(uint32_t byte_budget);
 uint8_t wav_convert_cancel(void);
 uint8_t wav_convert_is_active(void);

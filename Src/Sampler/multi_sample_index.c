@@ -1,6 +1,8 @@
 #include "Sampler/multi_sample_index.h"
+#include "Storage/persistent_fatfs_io.h"
 
 #include <string.h>
+#include <stdio.h>
 
 #include "Platform/memory_layout.h"
 #include "Storage/sd_access_gate.h"
@@ -755,6 +757,64 @@ multi_sample_index_result_t multi_sample_index_load(const char *path,
                                                     multi_sample_index_t *out)
 {
     return multi_sample_index_load_internal(path, out);
+}
+
+multi_sample_index_result_t multi_sample_index_retitle(
+    const char *path, const char *instrument_name)
+{
+    if (path == NULL || instrument_name == NULL || instrument_name[0] == '\0'
+        || strlen(instrument_name) >= MULTI_SAMPLE_POOL_NAME_MAX)
+        return MULTI_SAMPLE_INDEX_INVALID_ARG;
+    multi_sample_index_t index;
+    multi_sample_index_result_t result = multi_sample_index_load(path, &index);
+    if (result != MULTI_SAMPLE_INDEX_OK) return result;
+    memset(index.instrument_name, 0, sizeof(index.instrument_name));
+    memcpy(index.instrument_name, instrument_name, strlen(instrument_name));
+    multi_sample_index_header_t header;
+    if (multi_index_make_header(&index, &header) == 0U)
+        return MULTI_SAMPLE_INDEX_BAD_FORMAT;
+    char temporary[MULTI_SAMPLE_POOL_PATH_MAX + 5U];
+    char backup[MULTI_SAMPLE_POOL_PATH_MAX + 5U];
+    if (snprintf(temporary, sizeof(temporary), "%s.TMP", path) >= (int)sizeof(temporary)
+        || snprintf(backup, sizeof(backup), "%s.BAK", path) >= (int)sizeof(backup))
+        return MULTI_SAMPLE_INDEX_LIMIT;
+    if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U)
+        return MULTI_SAMPLE_INDEX_SD_BUSY;
+    FIL source, target;
+    uint8_t source_open = 0U, target_open = 0U;
+    result = MULTI_SAMPLE_INDEX_WRITE_FAIL;
+    if (persistent_fatfs_recover_replace(path, temporary, backup) != FR_OK
+        || f_open(&source, path, FA_READ) != FR_OK) goto finish;
+    source_open = 1U;
+    if (f_open(&target, temporary, FA_CREATE_ALWAYS | FA_WRITE) != FR_OK)
+        goto finish;
+    target_open = 1U;
+    uint8_t encoded[MULTI_SAMPLE_INDEX_HEADER_SIZE];
+    multi_index_encode_header(&header, encoded);
+    if (multi_index_write_exact(&target, encoded, sizeof(encoded)) == 0U
+        || f_lseek(&source, MULTI_SAMPLE_INDEX_HEADER_SIZE) != FR_OK)
+        goto finish;
+    uint8_t chunk[512U];
+    for (;;)
+    {
+        UINT read = 0U;
+        if (f_read(&source, chunk, sizeof(chunk), &read) != FR_OK) goto finish;
+        if (read == 0U) break;
+        if (multi_index_write_exact(&target, chunk, read) == 0U) goto finish;
+    }
+    if (f_sync(&target) != FR_OK || f_close(&target) != FR_OK)
+    { target_open = 0U; goto finish; }
+    target_open = 0U;
+    if (f_close(&source) != FR_OK) { source_open = 0U; goto finish; }
+    source_open = 0U;
+    if (persistent_fatfs_commit_replace(path, temporary, backup) == FR_OK)
+        result = MULTI_SAMPLE_INDEX_OK;
+finish:
+    if (target_open != 0U) (void)f_close(&target);
+    if (source_open != 0U) (void)f_close(&source);
+    if (result != MULTI_SAMPLE_INDEX_OK) (void)f_unlink(temporary);
+    sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+    return result;
 }
 
 uint8_t multi_sample_index_resolve(const multi_sample_index_t *index,

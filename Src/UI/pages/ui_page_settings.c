@@ -15,6 +15,7 @@
 #include "Storage/wav_convert.h"
 #include "Storage/audio_recorder.h"
 #include "Storage/project_product.h"
+#include "Storage/patch_product.h"
 #include "Storage/project_load_quiesce.h"
 #include "SD/sd_scheduler_runtime.h"
 #include "Platform/brick_build_config.h"
@@ -89,7 +90,8 @@ typedef enum
 {
     UI_SETTINGS_MULTI_ENTRY_MULTI_ITEM = 0,
     UI_SETTINGS_MULTI_ENTRY_NAV_FOLDER,
-    UI_SETTINGS_MULTI_ENTRY_EMPTY_FOLDER
+    UI_SETTINGS_MULTI_ENTRY_EMPTY_FOLDER,
+    UI_SETTINGS_MULTI_ENTRY_PARENT
 } ui_settings_multi_entry_type_t;
 
 typedef enum
@@ -102,7 +104,7 @@ typedef enum
     UI_SETTINGS_SAMPLE_CONFIRM_MULTI_PREPARING,
     UI_SETTINGS_SAMPLE_CONFIRM_MULTI_REPLACE,
     UI_SETTINGS_SAMPLE_CONFIRM_MULTI_UNLOAD,
-    UI_SETTINGS_SAMPLE_CONFIRM_MULTI_CLEAR_INDEX
+    UI_SETTINGS_SAMPLE_CONFIRM_ASSET_DELETE
 } ui_settings_sample_confirm_t;
 
 typedef enum
@@ -204,14 +206,11 @@ typedef struct
     uint8_t sample_focus;
     uint8_t sample_confirm;
     uint16_t confirm_slot;
+    uint16_t confirm_logical;
     uint8_t sample_preview_volume;
     uint16_t multi_prepare_progress_done;
     uint16_t multi_prepare_progress_total;
     uint8_t multi_prepare_phase;
-    uint8_t multi_clear_failed;
-    uint8_t multi_clear_mounted;
-    uint16_t multi_clear_index;
-    uint16_t multi_clear_deleted;
     uint16_t sample_parent_id;
     uint16_t sampler_slots[SAMPLE_GLOBAL_POOL_FINAL_SLOTS];
     uint16_t sampler_slot_count;
@@ -224,6 +223,9 @@ typedef struct
     uint8_t preview_stop_origin;
     DIR wavetable_scan_dir;
     char wavetable_scan_path[WAV_LOADER_CATALOG_PATH_MAX];
+    char wavetable_restore_path[WAV_LOADER_CATALOG_PATH_MAX];
+    uint16_t wavetable_restore_neighbor;
+    uint8_t wavetable_restore_pending;
     uint8_t wavetable_scan_active;
     uint8_t wavetable_scan_pass;
     uint8_t wavetable_scan_dir_open;
@@ -255,11 +257,17 @@ typedef enum { UI_PROJECT_SAVE_IDLE=0,UI_PROJECT_SAVE_EDIT,UI_PROJECT_SAVE_WRITI
 static ui_project_save_phase_t g_ui_project_save_phase;
 static uint8_t g_ui_project_save_slot;
 static uint8_t g_ui_project_name_mode;
-static uint32_t g_ui_settings_keyboard_preview_epoch = 1U;
 
 static void ui_page_settings_status(const char *status);
+static ui_settings_menu_level_t *ui_page_settings_current_level(void);
 static void ui_page_settings_sd_busy_status(void);
 static void ui_page_settings_preview_stop(ui_settings_preview_stop_origin_t origin);
+static void ui_page_settings_preview_current(void);
+static void ui_page_settings_asset_rename_begin(void);
+static void ui_page_settings_asset_delete_request(void);
+static void ui_page_settings_asset_delete_confirm(void);
+static void ui_page_settings_asset_refresh(ui_settings_view_t view);
+static uint32_t ui_page_settings_asset_kind(ui_settings_view_t view);
 static const char *ui_page_settings_preview_error_label(sd_preview_error_t error);
 static void ui_page_settings_back(void);
 static void ui_page_settings_project_name_begin(uint8_t mode,uint8_t slot);
@@ -280,7 +288,6 @@ static const ui_settings_multi_entry_t *ui_page_settings_multi_find_entry_by_pat
 static int16_t ui_page_settings_multi_find_loaded_path(const char *index_path);
 static uint8_t ui_page_settings_multi_prepare_entry(const ui_settings_multi_entry_t *entry);
 static void ui_page_settings_multi_load_entry_to_slot(uint8_t slot, const ui_settings_multi_entry_t *entry);
-static void ui_page_settings_multi_confirm_clear_indexes(void);
 static void ui_page_settings_multi_prepare_begin(uint8_t slot,
                                                  const char *path,
                                                  ui_settings_multi_prepare_phase_t phase);
@@ -289,7 +296,6 @@ static void ui_page_settings_multi_prepare_poll(void);
 static void ui_page_settings_multi_prepare_flush_progress(void);
 static const char *ui_page_settings_multi_import_error_label(
     multi_sample_import_result_t result);
-static void ui_page_settings_multi_clear_service(void);
 static const char *ui_page_settings_multi_load_error_label(multi_sample_load_result_t result);
 static void ui_page_settings_flash_sample_header_slots(void);
 static void ui_page_settings_flash_sample_header_memory(void);
@@ -318,6 +324,8 @@ static void ui_page_settings_draw_sample_header(const char *title,
 #include "Settings/ui_settings_sample_assets.inc"
 
 #include "Settings/ui_settings_multi_assets.inc"
+
+#include "Settings/ui_settings_asset_ops.inc"
 
 #include "Settings/ui_settings_navigation.inc"
 

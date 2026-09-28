@@ -1580,9 +1580,18 @@ static void multi_import_service_convert_start(void)
         return;
     }
     multi_sample_import_sample_t *const item = &g_import_samples[g_import_async.convert_index];
-    if ((multi_import_join_path(g_import_work_path, sizeof(g_import_work_path),
-                                g_import_scan_dir, item->sample.relative_path) == 0U)
-        || (wav_convert_start_destructive_canonical_locked(g_import_work_path) == 0U))
+    if (multi_import_join_path(g_import_work_path, sizeof(g_import_work_path),
+                               g_import_scan_dir, item->sample.relative_path) == 0U)
+    {
+        multi_import_fail(MULTI_SAMPLE_IMPORT_WAV_UNSUPPORTED);
+        return;
+    }
+    if (g_import_async.gate_held != 0U)
+    {
+        sd_access_gate_release(SD_ACCESS_CLIENT_PROJECT);
+        g_import_async.gate_held = 0U;
+    }
+    if (wav_convert_start_destructive_canonical(g_import_work_path) == 0U)
     {
         multi_import_fail(MULTI_SAMPLE_IMPORT_WAV_UNSUPPORTED);
         return;
@@ -1602,6 +1611,11 @@ static void multi_import_service_convert(uint32_t byte_budget)
     {
         multi_import_fail(MULTI_SAMPLE_IMPORT_WAV_UNSUPPORTED);
         return;
+    }
+    if (g_import_async.gate_held == 0U)
+    {
+        if (sd_access_gate_try_acquire(SD_ACCESS_CLIENT_PROJECT) == 0U) return;
+        g_import_async.gate_held = 1U;
     }
     g_import_async.completed_work_bytes += wav_convert_get_output_bytes_total();
     g_import_async.status.work_done_bytes = g_import_async.completed_work_bytes;

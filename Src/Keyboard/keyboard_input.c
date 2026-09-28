@@ -38,14 +38,7 @@
 typedef struct
 {
     uint8_t track;
-    uint8_t destination;
-    uint32_t preview_epoch;
 } keyboard_input_note_owner_t;
-
-enum
-{
-    KEYBOARD_INPUT_DESTINATION_TRACK = 0U
-};
 
 static uint8_t g_lowcost_key_note[LOWCOST_KEY_COUNT];
 static uint8_t g_lowcost_key_down[LOWCOST_KEY_COUNT];
@@ -60,9 +53,7 @@ static uint32_t g_keyboard_input_ingress_serial;
 static void keyboard_input_note_on_sink(uint8_t note, uint8_t velocity);
 static void keyboard_input_note_off_sink(uint8_t note);
 
-static void keyboard_input_note_owner_push(uint8_t note, uint8_t track,
-                                           uint8_t destination,
-                                           uint32_t preview_epoch)
+static void keyboard_input_note_owner_push(uint8_t note, uint8_t track)
 {
     if (note >= 128U)
     {
@@ -81,26 +72,7 @@ static void keyboard_input_note_owner_push(uint8_t note, uint8_t track,
     }
 
     g_keyboard_input_note_owner[note][count].track = track;
-    g_keyboard_input_note_owner[note][count].destination = destination;
-    g_keyboard_input_note_owner[note][count].preview_epoch = preview_epoch;
     g_keyboard_input_note_owner_count[note] = (uint8_t)(count + 1U);
-}
-
-static uint8_t keyboard_input_preview_owner_remains(uint8_t destination,
-                                                    uint32_t preview_epoch)
-{
-    for (uint8_t note = 0U; note < 128U; ++note)
-    {
-        for (uint8_t i = 0U; i < g_keyboard_input_note_owner_count[note]; ++i)
-        {
-            const keyboard_input_note_owner_t *const owner =
-                &g_keyboard_input_note_owner[note][i];
-            if ((owner->destination == destination)
-                && (owner->preview_epoch == preview_epoch))
-                return 1U;
-        }
-    }
-    return 0U;
 }
 
 static uint8_t keyboard_input_note_owner_pop(uint8_t note,
@@ -378,18 +350,6 @@ static void keyboard_input_process_lowcost_key(uint8_t key, bool pressed, uint8_
 
 static void keyboard_input_note_on_sink(uint8_t note, uint8_t velocity)
 {
-    const uint8_t preview_context =
-        ui_page_settings_keyboard_preview_context();
-    if (preview_context != UI_SETTINGS_KEYBOARD_PREVIEW_NONE)
-    {
-        const uint32_t preview_epoch =
-            ui_page_settings_keyboard_preview_note_on(
-                preview_context, note, velocity);
-        keyboard_input_note_owner_push(
-            note, 0U, preview_context, preview_epoch);
-        return;
-    }
-
     const uint8_t active_track = ui_get_active_lane();
     const ui_hall_mode_t hall_mode = keyboard_input_effective_input_mode();
     const ui_hall_mode_effective_view_t effective_view =
@@ -400,8 +360,7 @@ static void keyboard_input_note_on_sink(uint8_t note, uint8_t velocity)
         return;
     }
 
-    keyboard_input_note_owner_push(note, active_track,
-                                   KEYBOARD_INPUT_DESTINATION_TRACK, 0U);
+    keyboard_input_note_owner_push(note, active_track);
     if (g_keyboard_input_timed_context_active != 0U)
     {
         keyboard_engine_note_on_for_track_timed(active_track, note, velocity,
@@ -419,17 +378,6 @@ static void keyboard_input_note_off_sink(uint8_t note)
     keyboard_input_note_owner_t owner;
     if (keyboard_input_note_owner_pop(note, &owner) == 0U)
     {
-        return;
-    }
-
-    if (owner.destination != KEYBOARD_INPUT_DESTINATION_TRACK)
-    {
-        if (keyboard_input_preview_owner_remains(
-                owner.destination, owner.preview_epoch) == 0U)
-        {
-            ui_page_settings_keyboard_preview_note_off(
-                owner.destination, owner.preview_epoch);
-        }
         return;
     }
 
@@ -452,13 +400,9 @@ static void keyboard_input_all_notes_off_sink(void)
         keyboard_input_note_owner_t owner;
         while (keyboard_input_note_owner_pop(note, &owner) != 0U)
         {
-            if (owner.destination == KEYBOARD_INPUT_DESTINATION_TRACK)
-            {
-                keyboard_engine_note_off_for_track(owner.track, note);
-            }
+            keyboard_engine_note_off_for_track(owner.track, note);
         }
     }
-    ui_page_settings_keyboard_preview_all_notes_off();
 }
 
 void keyboard_input_init(void)
