@@ -25,3 +25,25 @@ one-block boundary error of at most 64/256 = 0.25 frames/ms; its 1/16 filter
 limits a single such update to 0.015625 frames/ms. The 256-SOF fill average
 removes the dependence on the instant of a single DMA read. Long-term physical
 rate comes from SAI DMA, while fill only compensates slow clock drift.
+
+## IRQ context audit
+
+Calculation and `tud_audio_n_fb_set()` publication already run in the USB OTG
+FS IRQ. `usb_device_irq()` detects an enabled SOF, calls TinyUSB's interrupt
+handler, then calls `usb_audio_feedback_sof()`. The superloop's
+`usb_audio_transport_process()` services audio IN data only; it does not
+calculate or publish OUT feedback. Interface activation installs the nominal
+first value from TinyUSB's SET_INTERFACE callback in USB context. TinyUSB
+queues that first packet after the callback and later packets on feedback
+endpoint transfer completion. The descriptor has bInterval=1 (1 ms), though
+the host controls actual IN transactions. The estimate changes every 256 SOFs.
+
+USB has NVIC priority 1 and SAI RX DMA priority 2. USB may preempt a DMA
+callback, so the SOF count may see a completed 64-frame block one SOF late;
+the window and filter suppress this boundary effect. The 32-bit DMA count
+and ring cursor loads are atomic on Cortex-M7. The aligned 32-bit TinyUSB
+feedback value is published and read in the same USB IRQ. No endpoint arm,
+allocation, or lock is added. Each ordinary SOF reads ring fill and adds
+integers; division and publication run once per 256 SOFs. A feedback
+completion callback would tie estimation to host IN scheduling; a SAI DMA
+callback lacks the USB timebase.
