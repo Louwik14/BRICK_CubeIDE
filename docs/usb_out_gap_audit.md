@@ -55,12 +55,11 @@ halt once and dump `g_usb_audio_trace_head`, `g_usb_audio_out_sequence`, and
 `g_usb_audio_trace`; a GDB halt itself creates an invalid last timing gap.
 
 Static NVIC audit of the current working tree: OTG_FS priority 1; SAI RX/TX
-DMA1 streams 3/4 priority 2; SAI1 peripheral priority 2. TIM3 is **priority
-0** in `midi_clock_timer_init()` in the current uncommitted working tree: the
-previous priority-3 change has been reverted locally. No later code changes
-TIM3 priority. TIM3 is the only normally enabled external IRQ at priority 0;
-OTG_FS is the only one at priority 1. TIM3 schedules MIDI clock comparisons
-and can preempt USB while armed; it has no blocking wait in its handler.
+DMA1 streams 3/4 priority 2; SAI1 peripheral priority 2. TIM3 is priority 3
+in `midi_clock_timer_init()`; no later code changes its priority. There is no
+normally enabled external IRQ at priority 0; OTG_FS is the only one at priority
+1. TIM3 schedules MIDI clock comparisons and cannot preempt USB while armed;
+it has no blocking wait in its handler.
 SysTick is priority 15. Other configured IRQs are priority 2 or lower urgency.
 
 Global PRIMASK masking can still block USB. The significant unbounded case is
