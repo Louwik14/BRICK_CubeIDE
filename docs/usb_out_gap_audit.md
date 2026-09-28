@@ -36,3 +36,37 @@ event. DHCSR does not expose a reliable post-resume halt indication to this
 running Cortex-M7 code. Because the hardware frame number wraps every 16384
 frames, a debugger pause whose duration aliases to 3–32 frames modulo 16384
 cannot be distinguished by this frame-only diagnostic.
+
+## Rolling IRQ trace
+
+`g_usb_audio_trace` contains 1024 circular entries of 28 bytes (28,672 bytes
+in RAM_D1). `g_usb_audio_trace_head` is the monotonically increasing next-write
+index; the latest complete entry is `(head - 1) & 1023`. Entries have, in
+order, `cycles` (DWT CYCCNT), `out_sequence`, `pcm[3]` (first three raw PCM32
+words, zero for SOF), `frame` (DWC2 FNSOF), `bytes` (received OUT packet size,
+zero for SOF), and `event` (1=SOF, 2=OUT). `g_usb_audio_out_sequence` advances
+for each active OUT callback. The trace writes in the existing USB IRQ only;
+there is no main-loop reader. SOF is recorded after TinyUSB IRQ dispatch and
+OUT is timestamped at entry to `tud_audio_rx_done_isr`, before the PCM FIFO
+read. Both use the existing DWT cycle counter enabled by `cpu_load_init()`;
+TIM3 initialization also enables it. Its 32-bit count wraps, so compare
+adjacent timestamps with unsigned subtraction. To inspect after a glitch,
+halt once and dump `g_usb_audio_trace_head`, `g_usb_audio_out_sequence`, and
+`g_usb_audio_trace`; a GDB halt itself creates an invalid last timing gap.
+
+Static NVIC audit of the current working tree: OTG_FS priority 1; SAI RX/TX
+DMA1 streams 3/4 priority 2; SAI1 peripheral priority 2. TIM3 is **priority
+0** in `midi_clock_timer_init()` in the current uncommitted working tree: the
+previous priority-3 change has been reverted locally. No later code changes
+TIM3 priority. TIM3 is the only normally enabled external IRQ at priority 0;
+OTG_FS is the only one at priority 1. TIM3 schedules MIDI clock comparisons
+and can preempt USB while armed; it has no blocking wait in its handler.
+SysTick is priority 15. Other configured IRQs are priority 2 or lower urgency.
+
+Global PRIMASK masking can still block USB. The significant unbounded case is
+bank-2 FLASH erase/program in `groove_flash_backend.c`, which polls FLASH busy
+with interrupts disabled during boot import. `seq_engine_pattern_cycle_boundary`
+scans bounded sequencer lanes under PRIMASK. Wavetable and sampler publication
+copy bounded descriptors under PRIMASK. Other inspected critical sections copy
+small state or perform bounded bookkeeping; fatal paths can leave interrupts
+disabled permanently but do not represent a recoverable 4 ms stall.

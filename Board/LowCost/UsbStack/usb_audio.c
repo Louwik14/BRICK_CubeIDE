@@ -23,6 +23,9 @@
 #define USB_AUDIO_LOW_WATER_FRAMES       (USB_AUDIO_FLOAT_RING_CAPACITY_FRAMES / 4U)
 #define USB_AUDIO_HIGH_WATER_FRAMES      (USB_AUDIO_FLOAT_RING_CAPACITY_FRAMES * 3U / 4U)
 #define USB_AUDIO_DIAG_MAX_VALID_GAP_FRAMES 32U
+#define USB_AUDIO_TRACE_CAPACITY 1024U
+#define USB_AUDIO_TRACE_SOF 1U
+#define USB_AUDIO_TRACE_OUT 2U
 
 static volatile uint8_t g_usb_audio_out_active;
 static uint8_t g_usb_audio_out_ready;
@@ -34,6 +37,40 @@ typedef struct {
 } usb_audio_bus_gap_diag_t;
 
 volatile usb_audio_bus_gap_diag_t g_usb_audio_bus_gap_diag __attribute__((used));
+typedef struct {
+    uint32_t cycles;
+    uint32_t out_sequence;
+    uint32_t pcm[3];
+    uint16_t frame;
+    uint16_t bytes;
+    uint32_t event;
+} usb_audio_trace_entry_t;
+
+volatile usb_audio_trace_entry_t g_usb_audio_trace[USB_AUDIO_TRACE_CAPACITY]
+    __attribute__((used));
+volatile uint32_t g_usb_audio_trace_head __attribute__((used));
+volatile uint32_t g_usb_audio_out_sequence __attribute__((used));
+_Static_assert(sizeof(usb_audio_trace_entry_t) == 28U,
+               "USB trace entry layout changed");
+
+static void usb_audio_trace_write(uint32_t cycles, uint16_t frame,
+                                  uint16_t bytes, uint32_t event,
+                                  const int32_t *pcm)
+{
+    const uint32_t head = g_usb_audio_trace_head;
+    volatile usb_audio_trace_entry_t *const entry =
+        &g_usb_audio_trace[head & (USB_AUDIO_TRACE_CAPACITY - 1U)];
+    entry->cycles = cycles;
+    entry->out_sequence = g_usb_audio_out_sequence;
+    entry->pcm[0] = (pcm != NULL && bytes >= 4U) ? (uint32_t)pcm[0] : 0U;
+    entry->pcm[1] = (pcm != NULL && bytes >= 8U) ? (uint32_t)pcm[1] : 0U;
+    entry->pcm[2] = (pcm != NULL && bytes >= 12U) ? (uint32_t)pcm[2] : 0U;
+    entry->frame = frame;
+    entry->bytes = bytes;
+    entry->event = event;
+    __DMB();
+    g_usb_audio_trace_head = head + 1U;
+}
 static uint16_t g_usb_audio_last_sof_frame;
 static uint16_t g_usb_audio_last_out_frame;
 static uint8_t g_usb_audio_sof_seen;
@@ -85,6 +122,8 @@ static uint16_t usb_audio_usb_frame_now(void)
 void usb_audio_sof_observed(uint16_t usb_frame)
 {
     if (g_usb_audio_out_active == 0U) return;
+    usb_audio_trace_write(DWT->CYCCNT, usb_frame, 0U,
+                          USB_AUDIO_TRACE_SOF, NULL);
     if (g_usb_audio_sof_seen != 0U) {
         const uint16_t gap = (uint16_t)((usb_frame - g_usb_audio_last_sof_frame) & 0x3FFFU);
         if (gap <= USB_AUDIO_DIAG_MAX_VALID_GAP_FRAMES) {
@@ -234,6 +273,7 @@ bool tud_audio_rx_done_isr(uint8_t rhport, uint16_t n_bytes_received,
     uint16_t bytes_to_read;
     uint16_t read_bytes;
     uint32_t read_frames;
+    const uint32_t completion_cycles = DWT->CYCCNT;
 
     (void)rhport;
     (void)func_id;
@@ -241,6 +281,7 @@ bool tud_audio_rx_done_isr(uint8_t rhport, uint16_t n_bytes_received,
     (void)cur_alt_setting;
     if (g_usb_audio_out_active != 0U) {
         usb_audio_out_observed();
+        const uint16_t completion_frame = usb_audio_usb_frame_now();
         /* TinyUSB has already copied this isochronous OUT packet into its
          * software FIFO and rearmed the endpoint.  Move only this packet to
          * the SPSC AUDIO ring here. */
@@ -250,6 +291,11 @@ bool tud_audio_rx_done_isr(uint8_t rhport, uint16_t n_bytes_received,
         }
         read_bytes = tud_audio_n_read(0U, g_usb_audio_out_pcm_scratch,
                                       bytes_to_read);
+        ++g_usb_audio_out_sequence;
+        usb_audio_trace_write(completion_cycles, completion_frame,
+                              n_bytes_received, USB_AUDIO_TRACE_OUT,
+                              (read_bytes == bytes_to_read)
+                                  ? g_usb_audio_out_pcm_scratch : NULL);
         if ((read_bytes != bytes_to_read)
             || ((read_bytes % USB_AUDIO_BYTES_PER_FRAME) != 0U)) {
             return true;
