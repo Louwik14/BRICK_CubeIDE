@@ -45,8 +45,6 @@ uint8_t board_audio_start_stream(int32_t *rx_buffer,
 void board_audio_stop_stream(void);
 uint8_t board_audio_is_rx_callback_handle(void *handle);
 uint8_t board_audio_rx_dma_active_half(uint8_t *out_half);
-uint8_t board_audio_tx_dma_remaining(uint32_t *out_words);
-uint8_t board_audio_is_tx_callback_handle(void *handle);
 void board_audio_get_boot_diag(board_audio_boot_diag_t *out_diag);
 
 void board_audio_unpack_input(const int32_t *AUDIO_RESTRICT rx,

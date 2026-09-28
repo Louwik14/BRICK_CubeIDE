@@ -340,6 +340,8 @@ void ui_page_settings_handle_encoder(uint8_t encoder, int16_t delta)
         &&level->selected_index!=(uint8_t)index)
         g_ui_settings.project_confirm_action=0U;
     level->selected_index = (uint8_t)index;
+    if (level->view == UI_SETTINGS_VIEW_AUDIO_PROBE)
+        audio_probe_set_mode((audio_probe_mode_t)level->selected_index);
 }
 
 uint8_t ui_page_settings_handle_event(const ui_event_t *ev)

@@ -4,7 +4,7 @@
  */
 
 #include "audio_io.h"
-#include "Audio/audio_chain_diag.h"
+#include "Audio/audio_probe.h"
 
 #include <string.h>
 
@@ -29,6 +29,9 @@ void audio_io_unpack(const int32_t *AUDIO_RESTRICT rx,
     (void)usb_audio_audio_read(g_audio_physical_inputs.usb.left,
                                g_audio_physical_inputs.usb.right,
                                frames);
+    audio_probe_capture(AUDIO_PROBE_RING_OUT,
+                        g_audio_physical_inputs.usb.left,
+                        g_audio_physical_inputs.usb.right, frames);
 }
 
 const audio_physical_inputs_t *audio_io_get_current_physical_inputs(void)
@@ -80,15 +83,11 @@ void audio_io_pack_ramped(int32_t *AUDIO_RESTRICT tx,
     }
 
     metronome_runtime_render_main_monitor(monitor_main_l, monitor_main_r, frames);
-    audio_chain_diag_float(AUDIO_CHAIN_MAIN_FLOAT,
-                           monitor_main_l, monitor_main_r, frames);
     (void)usb_audio_audio_write(monitor_main_l, monitor_main_r, frames);
-    board_audio_pack_output(tx,
-                            monitor_main_l,
-                            monitor_main_r,
-                            frames);
-    audio_chain_diag_i32(AUDIO_CHAIN_INT24, tx, frames,
-                         BOARD_AUDIO_TDM_SLOTS, 0U);
-    audio_chain_diag_compare_float_int24(monitor_main_l, monitor_main_r,
-                                         tx, frames, BOARD_AUDIO_TDM_SLOTS);
+    const float *codec_l;
+    const float *codec_r;
+    audio_probe_select_output(bus_main_l, bus_main_r,
+                              monitor_main_l, monitor_main_r, frames,
+                              &codec_l, &codec_r);
+    board_audio_pack_output(tx, codec_l, codec_r, frames);
 }

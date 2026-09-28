@@ -37,6 +37,7 @@
 #include "ui_core.h"
 #include "ui_page_manager.h"
 #include "UI/ui_browser_actions.h"
+#include "Audio/audio_probe.h"
 
 #include "pages/ui_page_calibration.h"
 #include "pages/ui_page_name_edit.h"
@@ -53,6 +54,7 @@ typedef enum
     UI_SETTINGS_VIEW_SAMPLER_SLOT,
     UI_SETTINGS_VIEW_SAMPLER_CATALOG,
     UI_SETTINGS_VIEW_CALIBRATION,
+    UI_SETTINGS_VIEW_AUDIO_PROBE,
     UI_SETTINGS_VIEW_COUNT
 } ui_settings_view_t;
 

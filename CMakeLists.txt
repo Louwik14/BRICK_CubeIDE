@@ -456,12 +456,6 @@ list(FILTER BRICK_OWNED_SOURCES INCLUDE REGEX ".*\.(c|cc|cpp|cxx)$")
 set_source_files_properties(${BRICK_OWNED_SOURCES} PROPERTIES
     COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O2>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>")
 
-# Keep the temporary audio-chain RAM diagnostic type visible in the Release ELF.
-set_source_files_properties(
-    "${CMAKE_CURRENT_SOURCE_DIR}/Board/LowCost/UsbStack/usb_audio.c"
-    PROPERTIES COMPILE_OPTIONS
-    "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O2>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-g3>")
-
 # Audio kernels and sampler render loops retain their intentional O3 policy.
 set(BRICK_AUDIO_O3_SOURCES ${DOMAIN_AUDIO})
 list(FILTER BRICK_AUDIO_O3_SOURCES INCLUDE REGEX ".*\.(c|cc|cpp|cxx)$")
@@ -470,10 +464,6 @@ list(APPEND BRICK_AUDIO_O3_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Sampler/sample_play_plan.c")
 set_source_files_properties(${BRICK_AUDIO_O3_SOURCES} PROPERTIES
     COMPILE_OPTIONS "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>")
-set_source_files_properties(
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_chain_diag.c"
-    PROPERTIES COMPILE_OPTIONS
-    "$<${BRICK6_RELEASE_LIKE_CONFIG}:-O3>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>;$<${BRICK6_RELEASE_LIKE_CONFIG}:-g3>")
 
 set(BRICK_VENDOR_O3_SOURCES ${MUTABLE_INSTRUMENTS_SRC} ${CMSIS_DSP_SRC})
 set_source_files_properties(${BRICK_VENDOR_O3_SOURCES} PROPERTIES
@@ -518,7 +508,6 @@ target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
 target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
     $<${BRICK6_RELEASE_LIKE_CONFIG}:-flto>
     $<${BRICK6_RELEASE_LIKE_CONFIG}:-g3>
-    $<${BRICK6_RELEASE_LIKE_CONFIG}:-Wl,-u,usb_audio_diag_reset>
 )
 
 # C++ linker because project contains cpp files

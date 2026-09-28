@@ -22,6 +22,8 @@ static const char *ui_page_settings_view_title(ui_settings_view_t view)
             return "STREAM > SD";
         case UI_SETTINGS_VIEW_CALIBRATION:
             return "CALIBRATION";
+        case UI_SETTINGS_VIEW_AUDIO_PROBE:
+            return "AUDIO PROBE";
         default:
             return "SETTINGS";
     }
@@ -32,7 +34,7 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
     switch (view)
     {
         case UI_SETTINGS_VIEW_ROOT:
-            return 3U;
+            return 4U;
         case UI_SETTINGS_VIEW_PROJECT:
             return g_ui_settings.project_slot_count;
         case UI_SETTINGS_VIEW_SAMPLE:
@@ -49,6 +51,8 @@ static uint8_t ui_page_settings_view_item_count(ui_settings_view_t view)
             return (wav_loader_catalog_count() > 255U) ? 255U : (uint8_t)wav_loader_catalog_count();
         case UI_SETTINGS_VIEW_CALIBRATION:
             return 2U;
+        case UI_SETTINGS_VIEW_AUDIO_PROBE:
+            return (uint8_t)AUDIO_PROBE_MODE_COUNT;
         default:
             return 0U;
     }
@@ -71,6 +75,10 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
             if (index == 2U)
             {
                 return "CALIBRATION";
+            }
+            if (index == 3U)
+            {
+                return "AUDIO PROBE";
             }
             return "-";
         case UI_SETTINGS_VIEW_SAMPLE:
@@ -151,6 +159,17 @@ static const char *ui_page_settings_item_label(ui_settings_view_t view, uint8_t 
             }
         case UI_SETTINGS_VIEW_CALIBRATION:
             return (index == 0U) ? "HALL KBD" : "HALL VEL";
+        case UI_SETTINGS_VIEW_AUDIO_PROBE:
+        {
+            static const char *const labels[AUDIO_PROBE_MODE_COUNT] = {
+                "OFF", "USB RX", "RING OUT", "MIX INPUT", "MAIN", "MASTER"
+            };
+            if (index >= AUDIO_PROBE_MODE_COUNT) return "-";
+            (void)snprintf(out, out_size, "%c %s",
+                           (audio_probe_get_mode() == (audio_probe_mode_t)index) ? '*' : ' ',
+                           labels[index]);
+            return out;
+        }
         default:
             return "-";
     }
@@ -419,6 +438,16 @@ static void ui_page_settings_apply_action(void)
             {
                 ui_page_settings_push(UI_SETTINGS_VIEW_CALIBRATION);
             }
+            else if (level->selected_index == 3U)
+            {
+                ui_page_settings_push(UI_SETTINGS_VIEW_AUDIO_PROBE);
+                ui_page_settings_current_level()->selected_index =
+                    (uint8_t)audio_probe_get_mode();
+            }
+            break;
+
+        case UI_SETTINGS_VIEW_AUDIO_PROBE:
+            audio_probe_set_mode((audio_probe_mode_t)level->selected_index);
             break;
 
         case UI_SETTINGS_VIEW_CALIBRATION:

@@ -5,7 +5,7 @@
 #include <string.h>
 
 #include "IPC/usb_audio_float_ring.h"
-#include "Audio/audio_chain_diag.h"
+#include "Audio/audio_probe.h"
 #include "Platform/memory_layout.h"
 #include "stm32h7xx.h"
 #include "stm32h7xx_hal.h"
@@ -33,8 +33,6 @@ static volatile uint8_t g_usb_audio_out_active;
 static volatile uint8_t g_usb_audio_in_active;
 static uint8_t g_usb_audio_out_ready;
 static uint8_t g_usb_audio_in_ready;
-volatile usb_audio_diag_t g_usb_audio_diag
-    __attribute__((used, externally_visible));
 static ALIGN32 float g_usb_audio_in_float_scratch[
     USB_AUDIO_SERVICE_MAX_FRAMES * USB_AUDIO_CHANNELS];
 static ALIGN32 int32_t g_usb_audio_in_pcm_scratch[
@@ -58,66 +56,9 @@ _Static_assert(CFG_TUSB_OS == OPT_OS_NONE,
                "USB Audio IRQ drain requires TinyUSB bare-metal mode");
 _Static_assert((USB_AUDIO_IRQ_PACKET_MAX_BYTES % USB_AUDIO_BYTES_PER_FRAME) == 0U,
                "USB Audio OUT packet must contain complete PCM frames");
-_Static_assert(sizeof(usb_audio_diag_event_t) == 16U,
-               "USB Audio diagnostic trace record size changed");
 #if !defined(__BYTE_ORDER__) || (__BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__)
 #error "USB Audio PCM32 requires a little-endian target"
 #endif
-
-void __attribute__((used, noinline, externally_visible))
-usb_audio_diag_reset(void)
-{
-    const uint32_t primask = __get_PRIMASK();
-    volatile uint8_t *const bytes = (volatile uint8_t *)&g_usb_audio_diag;
-
-    __disable_irq();
-    for (uint32_t i = 0U; i < sizeof(g_usb_audio_diag); ++i) {
-        bytes[i] = 0U;
-    }
-    __DMB();
-    __set_PRIMASK(primask);
-}
-
-static void usb_audio_diag_trace(uint32_t event, uint32_t fill,
-                                 uint32_t value, uint32_t tick_ms)
-{
-    const uint32_t primask = __get_PRIMASK();
-    uint32_t slot;
-
-    __disable_irq();
-    slot = g_usb_audio_diag.trace_head % USB_AUDIO_DIAG_TRACE_CAPACITY;
-    g_usb_audio_diag.trace[slot].tick_ms = tick_ms;
-    g_usb_audio_diag.trace[slot].event = event;
-    g_usb_audio_diag.trace[slot].fill_frames = fill;
-    g_usb_audio_diag.trace[slot].value = value;
-    g_usb_audio_diag.trace_head++;
-    if (g_usb_audio_diag.trace_count < USB_AUDIO_DIAG_TRACE_CAPACITY) {
-        g_usb_audio_diag.trace_count++;
-    }
-    __DMB();
-    __set_PRIMASK(primask);
-}
-
-static void usb_audio_diag_fill(uint32_t fill)
-{
-    const uint32_t primask = __get_PRIMASK();
-
-    __disable_irq();
-    g_usb_audio_diag.ring_fill_current = fill;
-    if (g_usb_audio_diag.ring_fill_seen == 0U) {
-        g_usb_audio_diag.ring_fill_min = fill;
-        g_usb_audio_diag.ring_fill_max = fill;
-        g_usb_audio_diag.ring_fill_seen = 1U;
-    } else {
-        if (fill < g_usb_audio_diag.ring_fill_min) {
-            g_usb_audio_diag.ring_fill_min = fill;
-        }
-        if (fill > g_usb_audio_diag.ring_fill_max) {
-            g_usb_audio_diag.ring_fill_max = fill;
-        }
-    }
-    __set_PRIMASK(primask);
-}
 
 static int32_t usb_audio_float_to_pcm32(float sample)
 {
@@ -140,10 +81,6 @@ static void usb_audio_feedback_update(void)
     const uint32_t fill = usb_audio_float_pc_to_brick_available();
     int32_t error = (int32_t)USB_AUDIO_FLOAT_RING_TARGET_FRAMES - (int32_t)fill;
     int64_t feedback = (int64_t)USB_AUDIO_FEEDBACK_NOMINAL;
-    uint32_t last_traced;
-    uint32_t tick_ms;
-
-    usb_audio_diag_fill(fill);
 
     feedback += ((int64_t)error * 65536LL) /
                 (int64_t)USB_AUDIO_FEEDBACK_GAIN_DENOM;
@@ -152,31 +89,6 @@ static void usb_audio_feedback_update(void)
     }
     if (feedback > (int64_t)USB_AUDIO_FEEDBACK_MAX) {
         feedback = (int64_t)USB_AUDIO_FEEDBACK_MAX;
-    }
-    last_traced = g_usb_audio_diag.feedback_last_traced;
-    g_usb_audio_diag.feedback_current = (uint32_t)feedback;
-    if (g_usb_audio_diag.feedback_seen == 0U) {
-        g_usb_audio_diag.feedback_min = (uint32_t)feedback;
-        g_usb_audio_diag.feedback_max = (uint32_t)feedback;
-        g_usb_audio_diag.feedback_seen = 1U;
-    } else {
-        if ((uint32_t)feedback < g_usb_audio_diag.feedback_min) {
-            g_usb_audio_diag.feedback_min = (uint32_t)feedback;
-        }
-        if ((uint32_t)feedback > g_usb_audio_diag.feedback_max) {
-            g_usb_audio_diag.feedback_max = (uint32_t)feedback;
-        }
-    }
-    g_usb_audio_diag.feedback_update_count++;
-    tick_ms = HAL_GetTick();
-    if ((last_traced == 0U)
-        || ((uint32_t)feedback >= last_traced + 32768U)
-        || (last_traced >= (uint32_t)feedback + 32768U)
-        || ((tick_ms - g_usb_audio_diag.feedback_last_trace_tick_ms) >= 1000U)) {
-        g_usb_audio_diag.feedback_last_traced = (uint32_t)feedback;
-        g_usb_audio_diag.feedback_last_trace_tick_ms = tick_ms;
-        usb_audio_diag_trace(USB_AUDIO_DIAG_FEEDBACK, fill,
-                             (uint32_t)feedback, tick_ms);
     }
     (void)tud_audio_n_fb_set(0U, (uint32_t)feedback);
 }
@@ -189,10 +101,7 @@ static void usb_audio_reset_cursors(void)
     g_usb_audio_out_ready = 0U;
     g_usb_audio_in_ready = 0U;
     usb_audio_float_reset();
-    usb_audio_diag_fill(0U);
-    g_usb_audio_diag.ring_reset_count++;
-    usb_audio_diag_trace(USB_AUDIO_DIAG_RING_RESET, 0U,
-                         g_usb_audio_diag.ring_reset_count, HAL_GetTick());
+    audio_probe_usb_reset();
     __DMB();
     __set_PRIMASK(primask);
 }
@@ -256,10 +165,6 @@ uint32_t usb_audio_audio_read(float *left, float *right, uint32_t frames)
     available = usb_audio_float_pc_to_brick_available();
     if (g_usb_audio_out_ready == 0U) {
         if (available < USB_AUDIO_FLOAT_RING_START_FRAMES) {
-            if (g_audio_chain_diag.stage[AUDIO_CHAIN_RING_READ].armed != 0U)
-                g_audio_chain_diag.ring_underflow_count++;
-            g_usb_audio_diag.audio_zero_block_count++;
-            usb_audio_diag_fill(available);
             return 0U;
         }
         g_usb_audio_out_ready = 1U;
@@ -267,18 +172,10 @@ uint32_t usb_audio_audio_read(float *left, float *right, uint32_t frames)
 
     read_frames = usb_audio_float_read_pc_to_brick(left, right, frames);
     if (read_frames < frames) {
-        g_audio_chain_diag.ring_underflow_count++;
         g_usb_audio_out_ready = 0U;
-        g_usb_audio_diag.audio_read_underflow_count++;
-        g_usb_audio_diag.audio_zero_block_count++;
-        usb_audio_diag_trace(USB_AUDIO_DIAG_UNDERFLOW, available,
-                             g_usb_audio_diag.feedback_current,
-                             HAL_GetTick());
         memset(left, 0, frames * sizeof(float));
         memset(right, 0, frames * sizeof(float));
     }
-    audio_chain_diag_float(AUDIO_CHAIN_RING_READ, left, right, frames);
-    usb_audio_diag_fill(usb_audio_float_pc_to_brick_available());
     return frames;
 }
 
@@ -295,16 +192,6 @@ uint32_t usb_audio_audio_write(const float *left,
 
 void usb_audio_transport_process(void)
 {
-    const uint32_t tick_ms = HAL_GetTick();
-    if (g_usb_audio_diag.usb_service_seen != 0U) {
-        const uint32_t gap = tick_ms - g_usb_audio_diag.usb_service_last_tick_ms;
-        if (gap > g_usb_audio_diag.usb_service_gap_max) {
-            g_usb_audio_diag.usb_service_gap_max = gap;
-        }
-    }
-    g_usb_audio_diag.usb_service_last_tick_ms = tick_ms;
-    g_usb_audio_diag.usb_service_seen = 1U;
-
     if (g_usb_audio_out_active != 0U) {
         usb_audio_feedback_update();
     }
@@ -370,34 +257,12 @@ bool tud_audio_rx_done_isr(uint8_t rhport, uint16_t n_bytes_received,
     uint16_t bytes_to_read;
     uint16_t read_bytes;
     uint32_t read_frames;
-    uint32_t written_frames;
-    uint32_t tick_ms;
-    uint32_t gap_ms = 0U;
 
     (void)rhport;
     (void)func_id;
     (void)ep_out;
     (void)cur_alt_setting;
     if (g_usb_audio_out_active != 0U) {
-        tick_ms = HAL_GetTick();
-        if (g_usb_audio_diag.usb_rx_seen != 0U) {
-            gap_ms = tick_ms - g_usb_audio_diag.usb_rx_last_tick_ms;
-            if (gap_ms > g_usb_audio_diag.usb_rx_gap_max) {
-                g_usb_audio_diag.usb_rx_gap_max = gap_ms;
-            }
-        }
-        g_usb_audio_diag.usb_rx_last_tick_ms = tick_ms;
-        g_usb_audio_diag.usb_rx_seen = 1U;
-        g_usb_audio_diag.usb_rx_packets++;
-        g_usb_audio_diag.usb_rx_frames +=
-            n_bytes_received / USB_AUDIO_BYTES_PER_FRAME;
-        if ((gap_ms >= 2U)
-            || ((g_usb_audio_diag.usb_rx_packets & 255U) == 1U)) {
-            usb_audio_diag_trace(USB_AUDIO_DIAG_RX,
-                                 usb_audio_float_pc_to_brick_available(),
-                                 n_bytes_received / USB_AUDIO_BYTES_PER_FRAME,
-                                 tick_ms);
-        }
         /* TinyUSB has already copied this isochronous OUT packet into its
          * software FIFO and rearmed the endpoint.  Move only this packet to
          * the SPSC AUDIO ring here; feedback and all other class work remain
@@ -410,42 +275,19 @@ bool tud_audio_rx_done_isr(uint8_t rhport, uint16_t n_bytes_received,
                                       bytes_to_read);
         if ((read_bytes != bytes_to_read)
             || ((read_bytes % USB_AUDIO_BYTES_PER_FRAME) != 0U)) {
-            g_audio_chain_diag.usb_fifo_error_count++;
-            g_usb_audio_diag.usb_rx_fifo_failed_packets++;
-            g_usb_audio_diag.usb_rx_fifo_failed_frames +=
-                n_bytes_received / USB_AUDIO_BYTES_PER_FRAME;
-            usb_audio_diag_trace(USB_AUDIO_DIAG_RX,
-                                 usb_audio_float_pc_to_brick_available(),
-                                 0x80000000UL | read_bytes, tick_ms);
             return true;
         }
         read_frames = read_bytes / USB_AUDIO_BYTES_PER_FRAME;
         if (read_frames != 0U) {
-            audio_chain_diag_i32(AUDIO_CHAIN_PCM32,
-                                 g_usb_audio_out_pcm_scratch, read_frames, 2U, 8U);
             for (uint32_t sample = 0U;
                  sample < read_frames * USB_AUDIO_CHANNELS; ++sample) {
                 g_usb_audio_out_float_scratch[sample] =
                     usb_audio_pcm32_to_float(
                         g_usb_audio_out_pcm_scratch[sample]);
             }
-            audio_chain_diag_float_interleaved(AUDIO_CHAIN_USB_FLOAT,
-                                                g_usb_audio_out_float_scratch,
-                                                read_frames);
-            audio_chain_diag_compare_pcm_float(g_usb_audio_out_pcm_scratch,
-                                                g_usb_audio_out_float_scratch,
-                                                read_frames);
-            written_frames = usb_audio_float_write_pc_to_brick(
+            audio_probe_usb_receive(g_usb_audio_out_float_scratch, read_frames);
+            (void)usb_audio_float_write_pc_to_brick(
                 g_usb_audio_out_float_scratch, read_frames);
-            if (written_frames < read_frames) {
-                const uint32_t dropped = read_frames - written_frames;
-                g_audio_chain_diag.ring_drop_frames += dropped;
-                g_usb_audio_diag.ring_write_dropped_frames += dropped;
-                usb_audio_diag_trace(USB_AUDIO_DIAG_DROP,
-                                     usb_audio_float_pc_to_brick_available(),
-                                     dropped, tick_ms);
-            }
-            usb_audio_diag_fill(usb_audio_float_pc_to_brick_available());
         }
     }
     return true;

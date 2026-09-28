@@ -232,20 +232,6 @@ uint8_t board_audio_rx_dma_active_half(uint8_t *out_half)
     return 1U;
 }
 
-uint8_t board_audio_tx_dma_remaining(uint32_t *out_words)
-{
-    if ((out_words == NULL) || (hsai_BlockA1.hdmatx == NULL)
-            || (hsai_BlockA1.hdmatx->Instance == NULL)
-            || (hsai_BlockA1.hdmatx->Init.Mode != DMA_CIRCULAR)) return 0U;
-    *out_words = __HAL_DMA_GET_COUNTER(hsai_BlockA1.hdmatx);
-    return 1U;
-}
-
-uint8_t board_audio_is_tx_callback_handle(void *handle)
-{
-    return (handle == (void *)&hsai_BlockA1) ? 1U : 0U;
-}
-
 void board_audio_stop_stream(void)
 {
     (void)HAL_SAI_DMAStop(&hsai_BlockB1);
