@@ -12,6 +12,11 @@
 #define SEQ_PRODUCT_TEMPO_MIN_BPM 40U
 #define SEQ_PRODUCT_TEMPO_MAX_BPM 300U
 #define SEQ_PRODUCT_STEPS_PER_QUARTER 4U
+#define SEQ_PRODUCT_QUARTERS_PER_BAR 4U
+#define SEQ_PRODUCT_STEPS_PER_BAR \
+    (SEQ_PRODUCT_STEPS_PER_QUARTER * SEQ_PRODUCT_QUARTERS_PER_BAR)
+#define SEQ_PRODUCT_BAR_STEPS_Q16 \
+    ((uint64_t)SEQ_PRODUCT_STEPS_PER_BAR << 16U)
 /* Worst-case track Groove displacement at BASE 1/4 and GLOBAL 130%.
  * Timing contributes 13/20 of a cell. Random contributes at most
  * (8/21) * (13/10)^2. A Q32 period non-integral in BASE can make the

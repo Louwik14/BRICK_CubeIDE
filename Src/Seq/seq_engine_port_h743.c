@@ -368,18 +368,6 @@ uint8_t seq_engine_pattern_cycle_boundary(uint8_t *out_track,
     return 1U;
 }
 
-uint8_t seq_engine_pattern_cycle_steps(uint16_t *out_steps)
-{
-    if (out_steps == 0) return 0U;
-    const uint32_t primask = __get_PRIMASK();
-    __disable_irq();
-    const uint16_t longest = seq_engine_pattern_longest_cycle(
-        seq_engine_pattern_capture(), 0);
-    __set_PRIMASK(primask);
-    *out_steps = longest;
-    return (uint8_t)(longest != 0U);
-}
-
 uint64_t seq_next_deadline(void) { return g_next_deadline; }
 
 uint8_t seq_ingress_submit(const seq_ingress_event_t *event)

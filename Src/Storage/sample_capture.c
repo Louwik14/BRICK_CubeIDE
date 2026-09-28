@@ -14,6 +14,7 @@
 #include "Sampler/sampler_ram_pool.h"
 #include "Seq/seq_runtime.h"
 #include "Seq/seq_engine.h"
+#include "Seq/seq_product_contract.h"
 #include "Seq/seq_musical_time.h"
 #include "Seq/seq_runtime_control.h"
 #include "ControlRT/control_rt_publication.h"
@@ -42,7 +43,6 @@
 #define SAMPLE_CAPTURE_WAV_DATA_OFFSET AUDIO_RECORDER_WAV_HEADER_BYTES
 #define SAMPLE_CAPTURE_EDIT_ZOOM_MAX 255U
 #define SAMPLE_CAPTURE_EDIT_MIN_VISIBLE_FRAMES SAMPLE_CAPTURE_DETAIL_VISIBLE_POINTS
-#define SAMPLE_CAPTURE_STEPS_PER_BAR 16U
 #define SAMPLE_CAPTURE_THRESHOLD_DBFS_MIN (-60)
 #define SAMPLE_CAPTURE_THRESHOLD_DBFS_MAX (-6)
 #define SAMPLE_CAPTURE_THRESHOLD_DBFS_DEFAULT (-36)

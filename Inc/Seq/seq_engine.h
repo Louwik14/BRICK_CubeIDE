@@ -227,7 +227,6 @@ typedef struct {
  * transport grid; ties resolve to the lowest lane id. */
 uint8_t seq_engine_pattern_cycle_boundary(uint8_t *out_track,
                                           uint64_t *out_sample);
-uint8_t seq_engine_pattern_cycle_steps(uint16_t *out_steps);
 
 /* CPU-agnostic absolute-sample core. */
 void seq_engine_core_init(seq_engine_core_t *core);

@@ -53,10 +53,12 @@ Après STOP, STORAGE continue à drainer le ring. La finalisation progresse par
 écriture du header WAV, synchronisation, fermeture puis rename `.REC` vers
 `.WAV`. Aucun `f_write` FatFs ne se trouve dans le data-plane live.
 
-Une longueur fixe gouverne l'arrêt automatique par compteur de frames. Avec le
-trigger `PATTERN`, l'unité de longueur est le cycle complet de la plus longue
-track active (traversée et division comprises), commun au calcul de la frontière
-de départ ; pour les autres triggers, l'unité reste la barre de 16 steps.
+Une longueur fixe gouverne l'arrêt automatique par compteur de frames. Son
+unité est la barre du transport (quatre noires, soit seize steps au pas courant)
+pour tous les triggers. `LEN 4B` correspond donc à quatre barres indépendamment
+de `LEN` et `DIV` des tracks. Le cycle de la plus longue track active
+(traversée et division comprises) sert uniquement à choisir la frontière de
+départ du trigger `PATTERN` ; il ne multiplie pas la durée de la prise.
 L'armement reste en phase d'admission tant que PREPARE n'a pas publié une
 session Recorder prête ; `WAIT` commence ensuite. Si le transport est déjà
 actif, la prochaine frontière de pattern lance la prise, y compris avec

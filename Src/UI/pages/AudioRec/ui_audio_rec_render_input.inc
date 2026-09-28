@@ -19,9 +19,7 @@ static void ui_page_audio_rec_render(void)
     }
     else
     {
-        (void)snprintf(line, sizeof(line),
-                       (state.trig == SAMPLE_CAPTURE_TRIG_PATTERN)
-                           ? "LEN %uC" : "LEN %uB",
+        (void)snprintf(line, sizeof(line), "LEN %uB",
                        (unsigned)state.len_bars);
     }
     drv_display_draw_text(34U, live_label_y, line);

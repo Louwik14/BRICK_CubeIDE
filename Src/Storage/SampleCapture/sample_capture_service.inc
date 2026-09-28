@@ -125,8 +125,9 @@ static void sample_capture_service_pattern_trigger(void)
             seq_musical_time_t musical;
             if (seq_runtime_get_musical_time(0U, now, &musical) == 0U)
                 return;
-            const uint64_t bar = (musical.transport_position_q16 >> 20U) + 1U;
-            const uint64_t remaining_q16 = (bar << 20U)
+            const uint64_t bar = (musical.transport_position_q16
+                / SEQ_PRODUCT_BAR_STEPS_Q16) + 1U;
+            const uint64_t remaining_q16 = (bar * SEQ_PRODUCT_BAR_STEPS_Q16)
                 - musical.transport_position_q16;
             g_sample_capture.pending_quant_sample = now + ((remaining_q16
                 * musical.samples_per_step_q16) >> 32U);
