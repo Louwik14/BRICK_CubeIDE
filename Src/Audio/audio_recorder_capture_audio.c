@@ -35,6 +35,7 @@ void audio_recorder_capture_audio_init(void)
 {
     memset(&g_audio_capture, 0, sizeof(g_audio_capture));
     g_audio_recorder_capture.head_cursor = 0U;
+    g_audio_recorder_capture.started_session = 0U;
     g_audio_recorder_capture.closed_session = 0U;
     g_audio_recorder_capture.capture_fault = AUDIO_RECORDER_ERROR_NONE;
     __DMB();
@@ -65,6 +66,7 @@ uint8_t audio_recorder_capture_audio_start(uint8_t client,
     g_audio_recorder_capture.capture_fault = AUDIO_RECORDER_ERROR_NONE;
     g_audio_recorder_capture.closed_session = 0U;
     __DMB();
+    g_audio_recorder_capture.started_session = session_id;
     rec_sd_trace_log(REC_SD_TRACE_AUDIO_START,
         REC_SD_TRACE_STATES(0xFFU, 0xFFU, 0xFFU, 0xFFU),
         REC_SD_TRACE_CONTEXT(0xFFU, 0xFFU, 0xFFU, 0xFFU),

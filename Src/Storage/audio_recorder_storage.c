@@ -657,8 +657,11 @@ void audio_recorder_storage_service(uint32_t session_id,
 {
     audio_recorder_storage_runtime_t *const runtime =
         &g_audio_recorder_storage;
+    const uint8_t capture_started = (uint8_t)((session_id != 0U)
+        && (g_audio_recorder_capture.started_session == session_id));
+    if (capture_started != 0U) __DMB();
     trace_storage_change();
-    if ((capture_is_active != 0U)
+    if (((capture_is_active != 0U) && (capture_started != 0U))
             || (runtime->phase == AUDIO_RECORDER_STORAGE_FINALIZING)
             || (runtime->phase == AUDIO_RECORDER_STORAGE_TAKE_READY))
     {
@@ -685,7 +688,7 @@ void audio_recorder_storage_service(uint32_t session_id,
         trace_storage_change();
         return;
     }
-    if (capture_is_active != 0U)
+    if ((capture_is_active != 0U) && (capture_started != 0U))
     {
         const uint32_t accepted_frames = g_audio_recorder_capture.head_cursor;
         __DMB();

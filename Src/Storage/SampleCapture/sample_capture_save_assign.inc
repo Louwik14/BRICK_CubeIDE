@@ -2,6 +2,7 @@ static void sample_capture_reset_take_transients(uint8_t preserve_final_path)
 {
     sample_capture_detail_reset();
     g_sample_capture.state.take_valid = 0U;
+    g_sample_capture.state.planned_frames = 0U;
     g_sample_capture.state.recorded_frames = 0U;
     g_sample_capture.state.edit_start_frame = 0U;
     g_sample_capture.state.edit_end_frame = 0U;

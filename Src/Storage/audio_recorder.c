@@ -410,12 +410,18 @@ uint8_t audio_recorder_get_status_client(audio_recorder_client_t client,
     audio_recorder_storage_get_status(&generic_status);
     status->state = g_audio_recorder.state;
     status->error = g_audio_recorder.error;
-    status->frames_received = g_audio_recorder_capture.head_cursor;
+    if (g_audio_recorder_capture.started_session
+            == g_audio_recorder_control_session)
+    {
+        __DMB();
+        status->frames_received = g_audio_recorder_capture.head_cursor;
+    }
     status->frames_assigned = (uint32_t)(
         generic_status.assigned_tail / AUDIO_RECORDER_BYTES_PER_FRAME);
     status->frames_committed = (uint32_t)(
         generic_status.committed_tail / AUDIO_RECORDER_BYTES_PER_FRAME);
-    status->frames_pending = status->frames_received - status->frames_committed;
+    status->frames_pending = (status->frames_received >= status->frames_committed)
+        ? status->frames_received - status->frames_committed : 0U;
     return 1U;
 }
 
@@ -452,6 +458,8 @@ uint8_t audio_recorder_client_is_recording(audio_recorder_client_t client)
 {
     return (uint8_t)((g_audio_recorder.client == client)
         && (g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING)
+        && (g_audio_recorder_capture.started_session
+            == g_audio_recorder_control_session)
         && (g_audio_recorder_capture.closed_session
             != g_audio_recorder_control_session));
 }

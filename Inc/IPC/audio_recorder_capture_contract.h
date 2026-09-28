@@ -7,9 +7,10 @@
  *
  * AUDIO is the sole producer: it writes the PCM24 samples in the ring and
  * publishes head_cursor only after the payload is visible.  AUDIO also owns
- * closed_session and capture_fault; closed_session means that no further
- * frame will be produced for that session, while capture_fault is terminal
- * for that capture.
+ * started_session, closed_session and capture_fault; started_session publishes
+ * the reset of the frame cursor for a new take. closed_session means that no
+ * further frame will be produced for that session, while capture_fault is
+ * terminal for that capture.
  *
  * STORAGE is the sole consumer: it reads only the published payload, and
  * advances tail_cursor only after the corresponding bytes have been
@@ -20,8 +21,9 @@
  * object, scheduler state or private buffer.  It is the complete shared
  * Recorder contract for the future CM7 AUDIO -> CM4 STORAGE split.
  *
- * Publication order is AUDIO payload -> DMB -> head_cursor and STORAGE
- * commit -> DMB -> tail_cursor.  AUDIO may inspect tail_cursor only to apply
+ * Publication order is AUDIO reset -> DMB -> started_session, AUDIO payload
+ * -> DMB -> head_cursor and STORAGE commit -> DMB -> tail_cursor. AUDIO may
+ * inspect tail_cursor only to apply
  * the existing bounded-ring overflow policy; it must never wait for it or
  * call Storage, SD, DMA or FatFs from the audio path.
  */
@@ -29,6 +31,8 @@ typedef struct
 {
     /* Written by AUDIO, read by STORAGE and AUDIO overflow accounting. */
     volatile uint32_t head_cursor;
+    /* Written by AUDIO after resetting head_cursor for the new session. */
+    volatile uint32_t started_session;
     /* Written only by STORAGE after physical commit. */
     volatile uint32_t tail_cursor;
     /* Written only by AUDIO when production ends for the active session. */
@@ -39,7 +43,7 @@ typedef struct
 
 _Static_assert(sizeof(int32_t) == 4U,
                "Recorder ring element ABI changed");
-_Static_assert(sizeof(audio_recorder_capture_transport_t) == 16U,
+_Static_assert(sizeof(audio_recorder_capture_transport_t) == 20U,
                "Recorder capture transport ABI changed");
 
 extern int32_t g_audio_recorder_capture_ring

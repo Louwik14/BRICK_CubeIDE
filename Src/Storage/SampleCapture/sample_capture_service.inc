@@ -264,13 +264,14 @@ void sample_capture_model_service(void)
     }
 
     if((g_sample_capture.state.recording != 0U)
+            && (g_sample_capture.state.phase == SAMPLE_CAPTURE_PHASE_RECORDING)
             && (g_sample_capture.state.planned_frames != 0U)
             && (status.frames_received >= g_sample_capture.state.planned_frames))
     {
         sample_capture_set_capture_enabled(0U);
-        (void)audio_recorder_request_stop_client(
-            AUDIO_RECORDER_CLIENT_AUDIO_REC);
-        g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_STOPPING;
+        if (audio_recorder_request_stop_client(
+                AUDIO_RECORDER_CLIENT_AUDIO_REC) != 0U)
+            g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_STOPPING;
     }
 
     if(status.state == AUDIO_RECORDER_STATE_TAKE_READY)
