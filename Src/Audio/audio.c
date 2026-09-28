@@ -43,6 +43,7 @@
 #include "Audio/Engines/wavetable_engine.h"
 #include "Platform/brick_media_clock.h"
 #include "Seq/seq_engine.h"
+#include "Audio/audio_chain_diag.h"
 
 #include <string.h>
 #include <stdint.h>
@@ -252,7 +253,21 @@ static void process_half(uint32_t half_index)
     if (audio_resolve_block_start((uint8_t)half_index,
                                   &block_start_sample, &recovering) == 0U)
     {
+        g_audio_chain_diag.rx_callback_skipped_count++;
         return;
+    }
+    if (recovering != 0U) g_audio_chain_diag.rx_callback_recovered_count++;
+
+    uint32_t tx_begin = 0U;
+    uint32_t tx_end = 0U;
+    const uint32_t half_words = AUDIO_FRAMES_PER_HALF * AUDIO_WORDS_PER_FRAME;
+    const uint32_t total_words = 2U * half_words;
+    const uint8_t tx_begin_valid = board_audio_tx_dma_remaining(&tx_begin);
+    g_audio_chain_diag.tx_last_half = half_index;
+    g_audio_chain_diag.tx_ndtr_begin = tx_begin;
+    if (tx_begin_valid != 0U) {
+        const uint32_t active = (tx_begin > half_words) ? 0U : 1U;
+        if (active == half_index) g_audio_chain_diag.tx_wrong_half_count++;
     }
 
     /* Select the exact SEQ event block for this AUDIO half-buffer. */
@@ -265,6 +280,21 @@ static void process_half(uint32_t half_index)
     dcache_invalidate_by_addr_aligned(rx, half_bytes);
 #endif
     audio_process_half_common_hot(rx, tx, block_start_sample, recovering);
+
+    if (board_audio_tx_dma_remaining(&tx_end) != 0U) {
+        const uint32_t active = (tx_end > half_words) ? 0U : 1U;
+        const uint32_t margin = (half_index == 0U) ? tx_end
+            : ((tx_end > half_words) ? tx_end - half_words : 0U);
+        g_audio_chain_diag.tx_ndtr_end = tx_end;
+        g_audio_chain_diag.tx_last_margin = margin;
+        if ((active == half_index) || (tx_end > total_words)
+                || (tx_end == 0U)) g_audio_chain_diag.tx_deadline_miss_count++;
+        if ((margin != 0U) && (margin <= 8U))
+            g_audio_chain_diag.tx_near_deadline_count++;
+        if ((margin != 0U) && ((g_audio_chain_diag.tx_min_margin == 0U)
+                || (margin < g_audio_chain_diag.tx_min_margin)))
+            g_audio_chain_diag.tx_min_margin = margin;
+    }
 
 #if AUDIO_DMA_BUFFER_IS_CACHEABLE
     dcache_clean_by_addr_aligned(tx, half_bytes);
@@ -292,6 +322,7 @@ static void process_half(uint32_t half_index)
  */
 void audio_boot_init_binding_io(void)
 {
+    audio_chain_diag_reset();
     audio_command_executor_init();
     audio_note_engine_adapter_init();
     audio_mod_matrix_init();
@@ -457,5 +488,35 @@ void HAL_SAI_RxCpltCallback(SAI_HandleTypeDef *hsai)
         cpu_load_irq_end();
         audio_boot_diag_producer_publish_cpu((uint8_t)cpu_load_is_valid(),
                                              cpu_load_get_avg_permille());
+    }
+}
+
+/* TX IRQ marks the instant the DMA starts consuming the opposite half. */
+void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef *hsai)
+{
+    if ((g_audio_init_state == AUDIO_INIT_READY)
+            && (board_audio_is_tx_callback_handle(hsai) != 0U)) {
+        const uint32_t offset = AUDIO_FRAMES_PER_HALF * AUDIO_WORDS_PER_FRAME;
+        if ((g_audio_chain_diag.tx_dma_callback_count != 0U)
+                && (g_audio_chain_diag.tx_dma_last_half != 0U))
+            g_audio_chain_diag.tx_dma_half_sequence_error_count++;
+        g_audio_chain_diag.tx_dma_last_half = 1U;
+        g_audio_chain_diag.tx_dma_callback_count++;
+        audio_chain_diag_i32(AUDIO_CHAIN_TX_DMA, &tx_buffer[offset],
+                             AUDIO_FRAMES_PER_HALF, AUDIO_WORDS_PER_FRAME, 0U);
+    }
+}
+
+void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef *hsai)
+{
+    if ((g_audio_init_state == AUDIO_INIT_READY)
+            && (board_audio_is_tx_callback_handle(hsai) != 0U)) {
+        if ((g_audio_chain_diag.tx_dma_callback_count != 0U)
+                && (g_audio_chain_diag.tx_dma_last_half != 1U))
+            g_audio_chain_diag.tx_dma_half_sequence_error_count++;
+        g_audio_chain_diag.tx_dma_last_half = 0U;
+        g_audio_chain_diag.tx_dma_callback_count++;
+        audio_chain_diag_i32(AUDIO_CHAIN_TX_DMA, tx_buffer,
+                             AUDIO_FRAMES_PER_HALF, AUDIO_WORDS_PER_FRAME, 0U);
     }
 }

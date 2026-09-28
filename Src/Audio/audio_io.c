@@ -4,6 +4,7 @@
  */
 
 #include "audio_io.h"
+#include "Audio/audio_chain_diag.h"
 
 #include <string.h>
 
@@ -79,9 +80,15 @@ void audio_io_pack_ramped(int32_t *AUDIO_RESTRICT tx,
     }
 
     metronome_runtime_render_main_monitor(monitor_main_l, monitor_main_r, frames);
+    audio_chain_diag_float(AUDIO_CHAIN_MAIN_FLOAT,
+                           monitor_main_l, monitor_main_r, frames);
     (void)usb_audio_audio_write(monitor_main_l, monitor_main_r, frames);
     board_audio_pack_output(tx,
                             monitor_main_l,
                             monitor_main_r,
                             frames);
+    audio_chain_diag_i32(AUDIO_CHAIN_INT24, tx, frames,
+                         BOARD_AUDIO_TDM_SLOTS, 0U);
+    audio_chain_diag_compare_float_int24(monitor_main_l, monitor_main_r,
+                                         tx, frames, BOARD_AUDIO_TDM_SLOTS);
 }
