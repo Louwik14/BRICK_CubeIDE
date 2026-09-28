@@ -43,6 +43,7 @@
 typedef enum {
   SOF_CONSUMER_USER = 0,
   SOF_CONSUMER_AUDIO,
+  SOF_CONSUMER_MIDI_CLOCK,
 } sof_consumer_t;
 
 //--------------------------------------------------------------------+

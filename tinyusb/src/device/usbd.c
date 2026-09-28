@@ -527,6 +527,10 @@ void tud_sof_cb_enable(bool en) {
   usbd_sof_enable(_usbd_rhport, SOF_CONSUMER_USER, en);
 }
 
+void tud_sof_midi_clock_enable(bool en) {
+  usbd_sof_enable(_usbd_rhport, SOF_CONSUMER_MIDI_CLOCK, en);
+}
+
 bool tud_inited(void) {
   return _usbd_rhport != RHPORT_INVALID;
 }

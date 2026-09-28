@@ -355,7 +355,11 @@ void usb_device_process(void)
 void usb_device_irq(void)
 {
     if (g_usb_device_started != 0U) {
+        const uint32_t sof_pending = USB_OTG_FS->GINTSTS & USB_OTG_FS->GINTMSK
+            & USB_OTG_GINTSTS_SOF;
+        const uint32_t sof_tick = (sof_pending != 0U) ? TIM5->CNT : 0U;
         tud_int_handler(USB_DEVICE_RHPORT);
+        if (sof_pending != 0U) midi_clock_timer_on_sof(sof_tick);
         midi_usb_service_from_irq();
     }
 }
@@ -453,6 +457,7 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid)
 
 void tud_mount_cb(void)
 {
+    tud_sof_midi_clock_enable(true);
     g_usb_device_mounted = 1U;
 }
 
