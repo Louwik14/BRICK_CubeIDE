@@ -37,6 +37,21 @@
 #include "Platform/brick6_sd_config.h"
 #include "Platform/cache_maintenance.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/rec_sd_trace.h"
+
+static void sd_diskio_trace_failure(uint8_t operation, uint8_t stage,
+                                    DRESULT result, DWORD sector, UINT count)
+{
+  rec_sd_trace_log_sd(REC_SD_TRACE_SD_IO,
+      REC_SD_TRACE_STATES(0xFFU, 0xFFU, 0xFFU, 0xFFU),
+      REC_SD_TRACE_CONTEXT(0xFFU, 0xFFU, 0xFFU, 0xFFU),
+      (uint32_t)result | ((uint32_t)stage << 8U), (uint32_t)sector,
+      (uint32_t)count, 0U,
+      (rec_sd_trace_sd_meta_t){
+          .requester = (uint8_t)sd_access_gate_current_owner(),
+          .operation = operation, .admission = REC_SD_ADMISSION_ERROR,
+          .block_result = 0xFFU, .fatfs_result = 0xFFU });
+}
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
@@ -288,6 +303,7 @@ DSTATUS SD_status(BYTE lun)
 DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 {
   DRESULT res = RES_ERROR;
+  uint8_t trace_stage = 1U;
   uint32_t timeout;
 #if defined(ENABLE_SCRATCH_BUFFER)
   uint8_t ret = MSD_ERROR;
@@ -300,6 +316,7 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 
   if (SD_CheckStatusWithTimeout(SD_TIMEOUT) < 0)
   {
+    sd_diskio_trace_failure(REC_SD_OP_DISK_READ, trace_stage, res, sector, count);
     return res;
   }
 
@@ -321,10 +338,12 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
      */
     dcache_invalidate_by_addr_aligned(buff, (size_t)count * BLOCKSIZE);
 #endif
+    trace_stage = 2U;
     if(BSP_SD_ReadBlocks_DMA((uint32_t*)buff,
                              (uint32_t) (sector),
                              count) == MSD_OK)
     {
+      trace_stage = 3U;
       /* Wait that the reading process is completed or a timeout occurs */
       timeout = HAL_GetTick();
       while((ReadStatus == 0) && ((HAL_GetTick() - timeout) < SD_TIMEOUT))
@@ -337,6 +356,7 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
       }
       else
       {
+        trace_stage = 4U;
         ReadStatus = 0;
         timeout = HAL_GetTick();
 
@@ -383,10 +403,12 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
          */
         dcache_invalidate_by_addr_aligned(scratch, bounce_bytes);
 #endif
+        trace_stage = 2U;
         ret = BSP_SD_ReadBlocks_DMA((uint32_t*)scratch,
                                    (uint32_t)(sector + blocks_done),
                                    bounce_count);
         if (ret == MSD_OK) {
+          trace_stage = 3U;
           /* wait until the read is successful or a timeout occurs */
 
           timeout = HAL_GetTick();
@@ -399,6 +421,8 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
             break;
           }
           ReadStatus = 0;
+
+          trace_stage = 4U;
 
           timeout = HAL_GetTick();
           while((HAL_GetTick() - timeout) < SD_TIMEOUT)
@@ -435,6 +459,8 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
     }
 #endif
 
+  if (res != RES_OK)
+    sd_diskio_trace_failure(REC_SD_OP_DISK_READ, trace_stage, res, sector, count);
   return res;
 }
 
@@ -470,6 +496,7 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 {
   DRESULT res = RES_ERROR;
+  uint8_t trace_stage = 1U;
   uint32_t timeout;
 #if defined(ENABLE_SCRATCH_BUFFER)
   uint8_t ret = MSD_ERROR;
@@ -481,6 +508,7 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 
   if (SD_CheckStatusWithTimeout(SD_TIMEOUT) < 0)
   {
+    sd_diskio_trace_failure(REC_SD_OP_DISK_WRITE, trace_stage, res, sector, count);
     return res;
   }
 
@@ -497,10 +525,12 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
     dcache_clean_by_addr_aligned(buff, (size_t)count * BLOCKSIZE);
 #endif
 
+    trace_stage = 2U;
     if(BSP_SD_WriteBlocks_DMA((uint32_t*)buff,
                               (uint32_t)(sector),
                               count) == MSD_OK)
     {
+      trace_stage = 3U;
       /* Wait that writing process is completed or a timeout occurs */
 
       timeout = HAL_GetTick();
@@ -514,6 +544,7 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
       }
       else
       {
+        trace_stage = 4U;
         WriteStatus = 0;
         timeout = HAL_GetTick();
 
@@ -549,8 +580,10 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
         dcache_clean_by_addr_aligned(scratch, BLOCKSIZE);
 #endif
 
+        trace_stage = 2U;
         ret = BSP_SD_WriteBlocks_DMA((uint32_t*)scratch, (uint32_t)sector++, 1);
         if (ret == MSD_OK) {
+          trace_stage = 3U;
           /* wait for a message from the queue or a timeout */
           timeout = HAL_GetTick();
           while((WriteStatus == 0) && ((HAL_GetTick() - timeout) < SD_TIMEOUT))
@@ -562,6 +595,7 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
           }
 
           WriteStatus = 0;
+          trace_stage = 4U;
           timeout = HAL_GetTick();
           while((HAL_GetTick() - timeout) < SD_TIMEOUT)
           {
@@ -585,6 +619,8 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
         res = RES_OK;
     }
 #endif
+  if (res != RES_OK)
+    sd_diskio_trace_failure(REC_SD_OP_DISK_WRITE, trace_stage, res, sector, count);
   return res;
 }
 #endif /* _USE_WRITE == 1 */

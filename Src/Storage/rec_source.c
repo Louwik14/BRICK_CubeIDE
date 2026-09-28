@@ -11,6 +11,7 @@
 #include "Sampler/sample_page_lease_control.h"
 #include "Sampler/sample_stream_manager.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/rec_sd_trace.h"
 #include "Storage/undo_v2.h"
 #include "Storage/wav_parser.h"
 #include "ff.h"
@@ -81,8 +82,24 @@ static uint8_t copy_path(char *dst, const char *src)
 uint8_t rec_source_ensure_directory(void)
 {
     FRESULT result = f_mkdir(REC_SOURCE_PARENT_DIRECTORY);
-    if ((result != FR_OK) && (result != FR_EXIST)) return 0U;
+    if ((result != FR_OK) && (result != FR_EXIST))
+    {
+        rec_sd_trace_note_sd(REC_SD_TRACE_SD_FS, 1U,
+            (rec_sd_trace_sd_meta_t){
+                .requester = SD_ACCESS_CLIENT_RECORDER,
+                .operation = REC_SD_OP_PATH_MKDIR,
+                .admission = REC_SD_ADMISSION_ERROR,
+                .block_result = 0xFFU, .fatfs_result = (uint8_t)result });
+        return 0U;
+    }
     result = f_mkdir(REC_SOURCE_DIRECTORY);
+    if ((result != FR_OK) && (result != FR_EXIST))
+        rec_sd_trace_note_sd(REC_SD_TRACE_SD_FS, 2U,
+            (rec_sd_trace_sd_meta_t){
+                .requester = SD_ACCESS_CLIENT_RECORDER,
+                .operation = REC_SD_OP_PATH_MKDIR,
+                .admission = REC_SD_ADMISSION_ERROR,
+                .block_result = 0xFFU, .fatfs_result = (uint8_t)result });
     return (uint8_t)((result == FR_OK) || (result == FR_EXIST));
 }
 
@@ -403,13 +420,32 @@ uint8_t rec_source_begin_build(const char **temporary_path, const char **final_p
                                sample_audio_key_t *key)
 {
     if ((temporary_path == NULL) || (final_path == NULL) || (key == NULL)
-            || (g_rec_source_building_slot != REC_SOURCE_INVALID_SLOT)) return 0U;
+            || (g_rec_source_building_slot != REC_SOURCE_INVALID_SLOT))
+    {
+        rec_sd_trace_note_sd(REC_SD_TRACE_SD_FS, 3U,
+            (rec_sd_trace_sd_meta_t){ .requester = SD_ACCESS_CLIENT_RECORDER,
+                .operation = REC_SD_OP_PATH_SLOT,
+                .admission = REC_SD_ADMISSION_ERROR,
+                .block_result = 0xFFU, .fatfs_result = 0xFFU });
+        return 0U;
+    }
     for (uint8_t slot = 0U; slot < REC_SOURCE_SLOT_COUNT; ++slot)
     {
         rec_source_generation_t *const candidate = &g_rec_source_generations[slot];
         if (candidate->state != REC_SOURCE_STATE_FREE_PREPARED) continue;
         const FRESULT old_final = f_unlink(candidate->path);
-        if ((old_final != FR_OK) && (old_final != FR_NO_FILE)) return 0U;
+        if ((old_final != FR_OK) && (old_final != FR_NO_FILE))
+        {
+            rec_sd_trace_note_sd(REC_SD_TRACE_SD_FS,
+                0x100U | (uint32_t)slot,
+                (rec_sd_trace_sd_meta_t){
+                    .requester = SD_ACCESS_CLIENT_RECORDER,
+                    .operation = REC_SD_OP_PATH_SLOT,
+                    .admission = REC_SD_ADMISSION_ERROR,
+                    .block_result = 0xFFU,
+                    .fatfs_result = (uint8_t)old_final });
+            return 0U;
+        }
         const uint32_t generation = allocate_generation();
         candidate->key = sample_audio_key_rec(slot, generation);
         candidate->frame_count = 0U;
@@ -423,6 +459,11 @@ uint8_t rec_source_begin_build(const char **temporary_path, const char **final_p
         *key = candidate->key;
         return 1U;
     }
+    rec_sd_trace_note_sd(REC_SD_TRACE_SD_FS, 4U,
+        (rec_sd_trace_sd_meta_t){ .requester = SD_ACCESS_CLIENT_RECORDER,
+            .operation = REC_SD_OP_PATH_SLOT,
+            .admission = REC_SD_ADMISSION_ERROR,
+            .block_result = 0xFFU, .fatfs_result = 0xFFU });
     return 0U;
 }
 

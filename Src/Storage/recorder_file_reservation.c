@@ -5,6 +5,7 @@
 #include "SD/bsp_driver_sd.h"
 #include "SD/sd_block_device.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/rec_sd_trace.h"
 #include "main.h"
 #include "stm32h7xx_hal.h"
 
@@ -13,6 +14,23 @@
 #define RECORDER_FILE_PREPARE_RAM_STEP_LIMIT 64U
 
 static volatile uint8_t g_recorder_file_reservation_operation_active;
+static uint32_t g_trace_recorder_file_wait;
+
+static void recorder_file_trace_wait(uint8_t reason, uint8_t card_state)
+{
+    const uint32_t signature = (uint32_t)reason
+        | ((uint32_t)card_state << 8U)
+        | ((uint32_t)sd_access_gate_current_owner() << 16U);
+    if (signature == g_trace_recorder_file_wait) return;
+    g_trace_recorder_file_wait = signature;
+    rec_sd_trace_note_sd(REC_SD_TRACE_SD_SCHED,
+        (uint32_t)reason | ((uint32_t)card_state << 8U),
+        (rec_sd_trace_sd_meta_t){
+            .requester = SD_ACCESS_CLIENT_SCHEDULED_RECORDER,
+            .operation = REC_SD_OP_PREPARE,
+            .admission = REC_SD_ADMISSION_DEFERRED,
+            .block_result = 0xFFU, .fatfs_result = 0xFFU });
+}
 static inline uint32_t recorder_file_reservation_now(void)
 {
     return TIM5->CNT;
@@ -62,6 +80,13 @@ static const char *recorder_file_same_directory_leaf(const char *source,
 
 static recorder_file_reservation_result_t recorder_file_fs_result(FRESULT fr)
 {
+    if (fr != FR_OK)
+        rec_sd_trace_note_sd(REC_SD_TRACE_SD_FS, (uint32_t)fr,
+            (rec_sd_trace_sd_meta_t){
+                .requester = SD_ACCESS_CLIENT_SCHEDULED_RECORDER,
+                .operation = REC_SD_OP_NONE,
+                .admission = REC_SD_ADMISSION_ERROR,
+                .block_result = 0xFFU, .fatfs_result = (uint8_t)fr });
     if(fr == FR_OK)
     {
         return RECORDER_FILE_RESERVATION_OK;
@@ -85,19 +110,24 @@ static uint8_t recorder_file_begin_storage_operation(void)
 {
     if((__get_IPSR() != 0U) || (g_recorder_file_reservation_operation_active != 0U))
     {
+        recorder_file_trace_wait(1U, 0U);
         return 0U;
     }
     if(sd_block_device_async_pending_count() != 0U)
     {
+        recorder_file_trace_wait(2U, 0U);
         return 0U;
     }
     if(sd_access_gate_try_acquire(SD_ACCESS_CLIENT_SCHEDULED_RECORDER) == 0U)
     {
         return 0U;
     }
-    if((sd_block_device_async_pending_count() != 0U)
-            || (BSP_SD_GetCardState() != SD_TRANSFER_OK))
+    const uint32_t pending = sd_block_device_async_pending_count();
+    const uint8_t card_state = (pending == 0U)
+        ? (uint8_t)BSP_SD_GetCardState() : 0xFFU;
+    if((pending != 0U) || (card_state != SD_TRANSFER_OK))
     {
+        recorder_file_trace_wait(3U, card_state);
         sd_access_gate_release(SD_ACCESS_CLIENT_SCHEDULED_RECORDER);
         return 0U;
     }
@@ -174,6 +204,7 @@ void recorder_file_reservation_init(recorder_file_reservation_t *session)
     if(session != 0)
     {
         memset(session, 0, sizeof(*session));
+        g_trace_recorder_file_wait = UINT32_MAX;
     }
 }
 

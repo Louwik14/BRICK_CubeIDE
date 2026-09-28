@@ -2,6 +2,7 @@
 
 #include "Platform/memory_layout.h"
 #include "SD/sd_block_device.h"
+#include "Storage/rec_sd_trace.h"
 #include "stm32h7xx_hal.h"
 
 static volatile uint8_t g_sd_access_owner;
@@ -15,6 +16,28 @@ static volatile uint32_t g_sd_media_epoch;
 static uint8_t g_sd_media_present_known;
 static uint8_t g_sd_media_present;
 static volatile sd_storage_status_t g_sd_storage_status;
+static uint32_t g_trace_last_recorder_gate_reject;
+
+static void sd_access_trace_recorder_gate(sd_access_client_t client,
+                                          uint8_t admission, uint8_t reason)
+{
+    if ((client != SD_ACCESS_CLIENT_RECORDER)
+            && (client != SD_ACCESS_CLIENT_SCHEDULED_RECORDER)) return;
+    if (admission != REC_SD_ADMISSION_DEFERRED)
+    {
+        g_trace_last_recorder_gate_reject = UINT32_MAX;
+        return;
+    }
+    const uint32_t signature = (uint32_t)client
+        | ((uint32_t)reason << 8U)
+        | ((uint32_t)sd_access_gate_current_owner() << 16U);
+    if (signature == g_trace_last_recorder_gate_reject) return;
+    g_trace_last_recorder_gate_reject = signature;
+    rec_sd_trace_note_sd(REC_SD_TRACE_SD_GATE, reason,
+        (rec_sd_trace_sd_meta_t){ .requester = (uint8_t)client,
+            .operation = REC_SD_OP_PREPARE, .admission = admission,
+            .block_result = 0xFFU, .fatfs_result = 0xFFU });
+}
 
 static uint32_t sd_access_gate_enter_critical(void)
 {
@@ -42,6 +65,7 @@ void sd_access_gate_init(void)
     g_sd_media_present_known = 0U;
     g_sd_media_present = 0U;
     g_sd_storage_status = SD_STORAGE_STATUS_UNKNOWN;
+    g_trace_last_recorder_gate_reject = UINT32_MAX;
     g_sd_media_epoch++;
     if (g_sd_media_epoch == 0U)
     {
@@ -54,6 +78,13 @@ uint8_t sd_access_fs_mount_if_needed(void)
     if ((g_sd_storage_status == SD_STORAGE_STATUS_NO_MEDIA)
         || (g_sd_storage_status == SD_STORAGE_STATUS_FAULT))
     {
+        rec_sd_trace_note_sd(REC_SD_TRACE_SD_FS,
+            0x100U | (uint32_t)g_sd_storage_status,
+            (rec_sd_trace_sd_meta_t){
+                .requester = (uint8_t)sd_access_gate_current_owner(),
+                .operation = REC_SD_OP_PATH_MOUNT,
+                .admission = REC_SD_ADMISSION_ERROR,
+                .block_result = 0xFFU, .fatfs_result = 0xFFU });
         return 0U;
     }
     if (g_sd_fs_mounted != 0U)
@@ -64,6 +95,12 @@ uint8_t sd_access_fs_mount_if_needed(void)
     const FRESULT fr = f_mount(&g_sd_fs, "0:", 1U);
     if (fr != FR_OK)
     {
+        rec_sd_trace_note_sd(REC_SD_TRACE_SD_FS, (uint32_t)fr,
+            (rec_sd_trace_sd_meta_t){
+                .requester = (uint8_t)sd_access_gate_current_owner(),
+                .operation = REC_SD_OP_PATH_MOUNT,
+                .admission = REC_SD_ADMISSION_ERROR,
+                .block_result = 0xFFU, .fatfs_result = (uint8_t)fr });
         if (g_sd_storage_status == SD_STORAGE_STATUS_UNKNOWN)
         {
             g_sd_storage_status = SD_STORAGE_STATUS_FAULT;
@@ -170,6 +207,7 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
         && (client != SD_ACCESS_CLIENT_SCHEDULED_RECORDER))
     {
         sd_access_gate_exit_critical(primask);
+        sd_access_trace_recorder_gate(client, REC_SD_ADMISSION_DEFERRED, 1U);
         return 0U;
     }
     if ((g_sd_access_streaming_critical != 0U)
@@ -178,6 +216,7 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
         && (client != SD_ACCESS_CLIENT_SCHEDULED_RECORDER))
     {
         sd_access_gate_exit_critical(primask);
+        sd_access_trace_recorder_gate(client, REC_SD_ADMISSION_DEFERRED, 2U);
         return 0U;
     }
 
@@ -201,6 +240,7 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
             || (g_sd_access_owner == (uint8_t)SD_ACCESS_CLIENT_SAMPLE_STREAM))
         {
             sd_access_gate_exit_critical(primask);
+            sd_access_trace_recorder_gate(client, REC_SD_ADMISSION_DEFERRED, 3U);
             return 0U;
         }
 
@@ -220,6 +260,7 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
         if ((owner_is_project_pattern == 0U) || (requester_is_project_pattern == 0U))
         {
             sd_access_gate_exit_critical(primask);
+            sd_access_trace_recorder_gate(client, REC_SD_ADMISSION_DEFERRED, 3U);
             return 0U;
         }
     }
@@ -227,7 +268,13 @@ uint8_t sd_access_gate_try_acquire(sd_access_client_t client)
     g_sd_access_total_count++;
     g_sd_access_client_count[(uint8_t)client]++;
     sd_access_gate_exit_critical(primask);
+    sd_access_trace_recorder_gate(client, REC_SD_ADMISSION_ACCEPTED, 0U);
     return 1U;
+}
+
+uint8_t sd_access_gate_held_count(void)
+{
+    return g_sd_access_total_count;
 }
 
 

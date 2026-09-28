@@ -74,13 +74,21 @@ static void trace_storage_change(void)
     const uint8_t final_phase = (uint8_t)g_audio_recorder_storage.final_phase;
     if ((phase == g_trace_storage_phase) && (final_phase == g_trace_final_phase))
         return;
-    rec_sd_trace_log(REC_SD_TRACE_STORAGE,
+    rec_sd_trace_log_sd(REC_SD_TRACE_STORAGE,
         REC_SD_TRACE_STATES(0xFFU, 0xFFU, g_trace_storage_phase, phase),
         REC_SD_TRACE_CONTEXT(0xFFU, 0xFFU, 0xFFU, 0xFFU),
         (uint32_t)final_phase | ((uint32_t)g_audio_recorder_storage.error << 8U)
-            | ((uint32_t)g_audio_recorder_storage.recorder.state << 16U),
+            | ((uint32_t)g_audio_recorder_storage.recorder.state << 16U)
+            | ((uint32_t)g_audio_recorder_storage.recorder.error << 24U),
         g_audio_recorder_capture.head_cursor,
-        g_audio_recorder_storage.recorder.generation, 0U);
+        g_audio_recorder_storage.recorder.generation, 0U,
+        (rec_sd_trace_sd_meta_t){
+            .requester = SD_ACCESS_CLIENT_SCHEDULED_RECORDER,
+            .operation = (phase == AUDIO_RECORDER_STORAGE_PREPARING)
+                ? REC_SD_OP_PREPARE
+                : (phase == AUDIO_RECORDER_STORAGE_FINALIZING)
+                    ? REC_SD_OP_FINALIZE : REC_SD_OP_WRITE,
+            .block_result = 0xFFU, .fatfs_result = 0xFFU });
     g_trace_storage_phase = phase;
     g_trace_final_phase = final_phase;
 }
@@ -415,6 +423,15 @@ static sd_scheduler_poll_result_t audio_recorder_storage_filesystem_poll(
                 return SD_SCHEDULER_POLL_RECOVERY_ABORT;
             if (result == RECORDER_FILE_RESERVATION_PROGRESS)
                 return SD_SCHEDULER_POLL_COMPLETED;
+            rec_sd_trace_note_sd(REC_SD_TRACE_SD_FS,
+                (uint32_t)owner | ((uint32_t)result << 8U)
+                    | ((uint32_t)runtime->reservation.job_phase << 16U),
+                (rec_sd_trace_sd_meta_t){
+                    .requester = SD_ACCESS_CLIENT_SCHEDULED_RECORDER,
+                    .operation = (runtime->phase == AUDIO_RECORDER_STORAGE_PREPARING)
+                        ? REC_SD_OP_PREPARE : REC_SD_OP_FINALIZE,
+                    .admission = REC_SD_ADMISSION_ERROR,
+                    .block_result = 0xFFU, .fatfs_result = 0xFFU });
             (void)recorder_file_reservation_job_finish(
                 &runtime->reservation, owner);
             runtime->error = AUDIO_RECORDER_ERROR_SD_IO;
@@ -446,6 +463,14 @@ static sd_scheduler_poll_result_t audio_recorder_storage_filesystem_poll(
             || (completion.owner_generation != runtime->recorder.generation)
             || (completion.media_epoch != runtime->recorder.media_epoch))
     {
+        rec_sd_trace_note_sd(REC_SD_TRACE_SD_IO,
+            completion.lba,
+            (rec_sd_trace_sd_meta_t){
+                .requester = SD_ACCESS_CLIENT_SCHEDULED_RECORDER,
+                .operation = REC_SD_OP_FINALIZE,
+                .admission = REC_SD_ADMISSION_ERROR,
+                .block_result = (uint8_t)completion.result,
+                .fatfs_result = 0xFFU });
         runtime->error = (completion.result == SD_BLOCK_DEVICE_MEDIA_CHANGED)
             ? AUDIO_RECORDER_ERROR_MEDIA_CHANGED : AUDIO_RECORDER_ERROR_SD_IO;
         runtime->phase = AUDIO_RECORDER_STORAGE_FAILED;
@@ -472,6 +497,13 @@ static sd_scheduler_start_result_t audio_recorder_storage_filesystem_start(
             audio_recorder_storage_preparation_step(runtime);
         if (prep == SD_SCHEDULER_START_ERROR)
         {
+            rec_sd_trace_note_sd(REC_SD_TRACE_SD_FS,
+                (uint32_t)runtime->prepare_phase,
+                (rec_sd_trace_sd_meta_t){
+                    .requester = SD_ACCESS_CLIENT_SCHEDULED_RECORDER,
+                    .operation = REC_SD_OP_PREPARE,
+                    .admission = REC_SD_ADMISSION_ERROR,
+                    .block_result = 0xFFU, .fatfs_result = 0xFFU });
             (void)recorder_file_reservation_job_finish(
                 &runtime->reservation,
                 RECORDER_FILE_JOB_OWNER_PREPARATION);
@@ -492,6 +524,13 @@ static sd_scheduler_start_result_t audio_recorder_storage_filesystem_start(
         audio_recorder_storage_finalization_step(runtime);
     if (result == SD_SCHEDULER_START_ERROR)
     {
+        rec_sd_trace_note_sd(REC_SD_TRACE_SD_FS,
+            (uint32_t)runtime->final_phase,
+            (rec_sd_trace_sd_meta_t){
+                .requester = SD_ACCESS_CLIENT_SCHEDULED_RECORDER,
+                .operation = REC_SD_OP_FINALIZE,
+                .admission = REC_SD_ADMISSION_ERROR,
+                .block_result = 0xFFU, .fatfs_result = 0xFFU });
         runtime->error = AUDIO_RECORDER_ERROR_SD_IO;
         runtime->phase = AUDIO_RECORDER_STORAGE_FAILED;
     }

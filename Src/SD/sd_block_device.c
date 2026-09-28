@@ -9,6 +9,7 @@
 #include "Platform/cache_maintenance.h"
 #include "Platform/memory_layout.h"
 #include "Storage/sd_access_gate.h"
+#include "Storage/rec_sd_trace.h"
 
 #include "sdmmc.h"
 #include "stm32h7xx_hal.h"
@@ -54,6 +55,24 @@ static uint8_t g_sd_block_device_active_valid;
 static uint8_t g_sd_block_device_prepared_index;
 static uint8_t g_sd_block_device_prepared_valid;
 static uint32_t g_sd_block_device_next_token;
+static uint32_t g_trace_write_submit_reject;
+
+void sd_block_device_debug_snapshot(sd_block_device_debug_snapshot_t *out)
+{
+    if (out == 0) return;
+    out->pending = g_sd_block_device_async_count;
+    out->operation = 0U;
+    out->owner_client = 0U;
+    if (g_sd_block_device_async_count != 0U)
+    {
+        const sd_block_device_async_entry_t *const entry =
+            &g_sd_block_device_async_fifo[g_sd_block_device_async_head];
+        out->operation = (uint8_t)entry->operation;
+        out->owner_client = entry->owner_client;
+    }
+    out->fault_latched = g_sd_block_device_fault_latched;
+    out->irq_error = g_sd_block_device_async_error;
+}
 
 static void sd_block_device_invalidate_prepared_with_result(
     sd_block_device_result_t result);
@@ -81,6 +100,7 @@ static void sd_block_device_queue_reset(void)
 void sd_block_device_async_init(void)
 {
     g_sd_block_device_fault_latched = 0U;
+    g_trace_write_submit_reject = UINT32_MAX;
     sdmmc_async_transport_init();
     g_sd_block_device_next_token = 1U;
     sd_block_device_queue_reset();
@@ -89,6 +109,14 @@ void sd_block_device_async_init(void)
 static void sd_block_device_complete(sd_block_device_async_entry_t *entry,
                                      sd_block_device_result_t result)
 {
+    if (result != SD_BLOCK_DEVICE_OK)
+        rec_sd_trace_note_sd(REC_SD_TRACE_SD_IO, entry->lba,
+            (rec_sd_trace_sd_meta_t){
+                .requester = entry->owner_client,
+                .operation = REC_SD_OP_DMA,
+                .admission = REC_SD_ADMISSION_ERROR,
+                .block_result = (uint8_t)result,
+                .fatfs_result = 0xFFU });
     entry->result = result;
     entry->completed = 1U;
     if(g_sd_block_device_active_valid == 0U)
@@ -438,12 +466,35 @@ sd_block_device_result_t sd_block_device_async_write_submit(
         sd_block_device_validate_submit(sector_count, src);
     if(valid != SD_BLOCK_DEVICE_OK)
     {
+        if (valid != SD_BLOCK_DEVICE_BUSY)
+            rec_sd_trace_note_sd(REC_SD_TRACE_SD_IO, lba,
+                (rec_sd_trace_sd_meta_t){
+                    .requester = (uint8_t)sd_access_gate_current_owner(),
+                    .operation = REC_SD_OP_WRITE,
+                    .admission = REC_SD_ADMISSION_ERROR,
+                    .block_result = (uint8_t)valid,
+                    .fatfs_result = 0xFFU });
         return valid;
     }
     if(g_sd_block_device_async_count != 0U)
     {
+        const uint32_t signature = (uint32_t)sd_access_gate_current_owner()
+            | ((uint32_t)g_sd_block_device_hw_state << 8U)
+            | ((uint32_t)g_sd_block_device_async_count << 16U);
+        if (signature != g_trace_write_submit_reject)
+        {
+            g_trace_write_submit_reject = signature;
+            rec_sd_trace_note_sd(REC_SD_TRACE_SD_IO, lba,
+                (rec_sd_trace_sd_meta_t){
+                    .requester = (uint8_t)sd_access_gate_current_owner(),
+                    .operation = REC_SD_OP_WRITE,
+                    .admission = REC_SD_ADMISSION_DEFERRED,
+                    .block_result = SD_BLOCK_DEVICE_BUSY,
+                    .fatfs_result = 0xFFU });
+        }
         return SD_BLOCK_DEVICE_BUSY;
     }
+    g_trace_write_submit_reject = UINT32_MAX;
 
     sd_block_device_async_entry_t *const entry =
         &g_sd_block_device_async_fifo[g_sd_block_device_async_tail];

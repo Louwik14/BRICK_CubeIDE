@@ -222,8 +222,9 @@ au modèle comme fin de cycle, ce qui rend possible un nouvel armement.
 
 `g_rec_sd_trace_next` est le nombre total d'événements écrits. Les 64
 entrées de `g_rec_sd_trace` forment un anneau ; l'entrée de séquence `n`
-est à l'indice `(n - 1) % 64`. Chaque entrée occupe huit mots de 32 bits :
-`sequence, event, states, context, detail, frames, session, sample_lo`.
+est à l'indice `(n - 1) % 64`. Chaque entrée occupe treize mots de 32 bits :
+`sequence, event, states, context, detail, frames, session, sample_lo,
+sd_owner, sd_flags, sd_io, sd_result, sd_hal_error`.
 Une séquence nulle signale une entrée vide ou incomplète. La trace est en
 SRAM3 non cacheable pour rester visible après l'arrêt par GDB.
 
@@ -239,9 +240,12 @@ ou celle de la prise visible selon le producteur.
 Codes `event` : 1 armement, 2 trigger, 3 préparation, 4 demande START,
 5 demande STOP, 6 annulation, 7 transition Recorder, 8 transition Storage,
 9 START audio, 10 STOP audio, 11 fermeture audio, 12 liaison Overdub,
-13 arrêt Overdub, 14 faute Overdub, 15 prise prête. Pour Storage,
-`detail` contient la sous-phase finale (octet 0), l'erreur (octet 1) et
-l'état du writer générique (octet 2). Pour Overdub, une liaison refusée
+13 arrêt Overdub, 14 faute Overdub, 15 prise prête, 16 refus du gate SD,
+17 attente/refus du scheduler SD, 18 erreur bloc/disque SD,
+19 erreur FatFs/métadonnées. Pour Storage,
+`detail` contient la sous-phase finale (octet 0), l'erreur Recorder (octet 1),
+l'état du writer générique (octet 2) et son erreur (octet 3).
+Pour Overdub, une liaison refusée
 porte la raison 1 (source), 2 (plan) ou 3 (reader) ; la faute porte l'erreur
 dans l'octet 0, `underrun` dans l'octet 1 et le nombre de frames produites
 dans les deux octets hauts.
@@ -258,6 +262,64 @@ de capture, les refus START portent
 `0x100` (session non prête), `0x200` (bus non publié) ou `0x300`
 (commande Recorder refusée). Le trigger porte `1` à la réception du
 seuil et `2` lorsque la limite musicale est retenue.
+
+Les cinq mots SD sont remplis uniquement par les événements CONTROL/STORAGE
+qui prennent un instantané SD ; zéro ailleurs :
+
+| Mot | Octets, du faible au fort |
+| --- | --- |
+| `sd_owner` | owner du gate, client demandeur, owner scheduler, classe scheduler |
+| `sd_flags` | nombre de prises du gate, indicateurs, état matériel bloc, nombre d'opérations en file |
+| `sd_io` | opération bloc active, client bloc, bit 16 faute bloquée / bit 17 erreur IRQ, statut du support |
+| `sd_result` | admission, code bloc, FRESULT FatFs, opération Recorder |
+| `sd_hal_error` | masque `HAL_SD_GetError(&hsd1)` |
+
+Indicateurs `sd_flags` octet 1 : bit 0 streaming critique, bit 1 filesystem
+Recorder logique actif, bit 2 background actif, bit 3 exclusivité demandée,
+bit 4 exclusivité active. `0xFF` dans les codes bloc/FatFs signifie
+non disponible. Admissions : `0 sans décision, 1 accepté, 2 différé,
+3 erreur, 4 terminé`. Opérations : `0 aucune, 1 mount, 2 mkdir,
+3 slot/source, 4 prepare, 5 write, 6 finalize, 7 stop, 8 cancel,
+9 DMA, 10 disk read, 11 disk write`. Clients gate : `0 aucun,
+1 RECORDER, 2 SAMPLE_BOOT, 3 PATTERN, 4 PROJECT, 5 SAMPLE_CACHE,
+6 PREVIEW, 7 WAV_CONVERT, 8 EDITOR_CACHE, 9 WAVEFORM_CACHE,
+10 SAMPLE_STREAM, 11 PATCH, 12 SCHEDULED_RECORDER, 13 BACKGROUND,
+14 CRASH`. Owner scheduler : `0 idle, 1 read DMA,
+2 write DMA, 3 filesystem, 4 background, 5 recovery abort`. Classe :
+`0 aucune, 1 read, 2 write, 3 filesystem`. Etat bloc : `0 idle,
+1 read DMA, 2 read card ready, 3 write DMA, 4 write card ready,
+5 aborting, 6 error latched`. Statut support : `0 inconnu, 1 prêt,
+2 absent, 3 faute`.
+
+`event=16` porte en `detail` le motif gate : `1 filesystem Recorder actif,
+2 streaming critique, 3 conflit d'owner`. `event=17` avec `detail & 0x100`
+indique une attente de scheduler : raison basse `1 background, 2 exclusif
+actif, 3 exclusif demandé, 5 read DMA, 6 write DMA, 9 recovery abort` ;
+sinon `detail` décrit le résultat de provider ou le refus de métadonnées.
+`event=18` avec opération `10/11` donne un `DRESULT` en octet bas de
+`detail`, puis l'étape `1 attente carte, 2 départ DMA, 3 fin DMA,
+4 carte prête` en octet 1 ; `frames` contient le secteur et `session` le
+nombre de secteurs. Les autres `event=18` donnent le LBA en `detail` et
+le code `sd_block_device_result_t` en `sd_result` octet 1. `event=19`
+donne le code FatFs dans `sd_result` octet 2 lorsqu'il est connu ;
+les refus de slot utilisent `detail=3` (slot déjà en construction),
+`4` (aucun slot libre) ou `0x100 | slot` (unlink refusé).
+Pour le montage, `detail=0x100 | statut support` signifie que FatFs n'a pas
+été appelé : le support était déjà marqué absent ou fautif. Les codes
+FatFs principaux sont `0 OK, 1 DISK_ERR, 2 INT_ERR, 3 NOT_READY,
+4 NO_FILE, 5 NO_PATH, 7 DENIED, 8 EXIST, 13 NO_FILESYSTEM,
+15 TIMEOUT, 17 NOT_ENOUGH_CORE`. Les codes bloc sont ceux de
+`sd_block_device_result_t` : `0 OK, 1 INVALID_ARG, 2 ISR_CONTEXT,
+3 GATE_NOT_HELD, 4 READ_FAIL, 5 WRITE_FAIL, 6 QUEUE_FULL, 7 BUSY,
+8 TIMEOUT, 9 MEDIA_CHANGED, 10 CARD_REMOVED, 11 ABORTED,
+12 DMA_START_FAIL, 13 ABORT_FAILED`.
+
+Le message UI `SD I/O` regroupe plusieurs origines : FatFs au montage ou
+au choix du slot, échec de préparation ou de finalisation du fichier,
+erreur du writer/transport, et prise finalisée avec zéro frame. Un gate
+occupé renvoie normalement `NOT_NOW` et doit laisser la préparation en
+attente. Corréler la séquence des événements 3, 8, 15 à 19 pour distinguer
+le cas réel sur le matériel.
 
 ## Arbitrage SD et coopération
 

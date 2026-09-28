@@ -45,6 +45,9 @@ void sd_scheduler_runtime_exclusive_request(void);
 uint8_t sd_scheduler_runtime_exclusive_try_begin(void);
 void sd_scheduler_runtime_exclusive_end(void);
 sd_scheduler_owner_t sd_scheduler_runtime_owner(void);
+sd_scheduler_class_t sd_scheduler_runtime_active_class(void);
+uint8_t sd_scheduler_runtime_exclusive_requested(void);
+uint8_t sd_scheduler_runtime_exclusive_active(void);
 
 #ifdef __cplusplus
 }

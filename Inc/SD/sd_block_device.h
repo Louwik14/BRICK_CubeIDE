@@ -78,6 +78,15 @@ uint8_t sd_block_device_async_take_completion(
 uint32_t sd_block_device_async_pending_count(void);
 uint8_t sd_block_device_async_write_buffer_locked(const void *src);
 sd_block_device_hardware_state_t sd_block_device_async_hardware_state(void);
+typedef struct
+{
+    uint8_t pending;
+    uint8_t operation;
+    uint8_t owner_client;
+    uint8_t fault_latched;
+    uint8_t irq_error;
+} sd_block_device_debug_snapshot_t;
+void sd_block_device_debug_snapshot(sd_block_device_debug_snapshot_t *out);
 sd_block_device_result_t sd_block_device_async_abort_active(void);
 sd_block_device_result_t sd_block_device_async_abort_generation(
     uint32_t owner_generation);

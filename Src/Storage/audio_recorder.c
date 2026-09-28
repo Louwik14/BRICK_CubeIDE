@@ -37,11 +37,16 @@ static void trace_rec(rec_sd_trace_event_t event, audio_recorder_state_t before,
                       uint32_t detail, uint64_t sample)
 {
     const uint32_t storage = (uint32_t)audio_recorder_storage_phase();
-    rec_sd_trace_log(event,
+    rec_sd_trace_log_sd(event,
         REC_SD_TRACE_STATES(before, g_audio_recorder.state, storage, storage),
         REC_SD_TRACE_CONTEXT(0xFFU, 0xFFU, 0xFFU, 0xFFU), detail,
         g_audio_recorder_capture.head_cursor, g_audio_recorder_control_session,
-        sample);
+        sample, (rec_sd_trace_sd_meta_t){
+            .operation = (event == REC_SD_TRACE_PREPARE) ? REC_SD_OP_PREPARE
+                : (event == REC_SD_TRACE_STOP_REQUEST) ? REC_SD_OP_STOP
+                : (event == REC_SD_TRACE_CANCEL) ? REC_SD_OP_CANCEL
+                : REC_SD_OP_NONE,
+            .block_result = 0xFFU, .fatfs_result = 0xFFU });
 }
 
 static void trace_start_result(audio_recorder_state_t before,

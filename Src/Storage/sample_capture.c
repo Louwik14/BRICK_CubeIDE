@@ -132,12 +132,14 @@ static void sample_capture_trace(rec_sd_trace_event_t event, uint32_t detail,
     const uint32_t rec = (status_valid != 0U)
         ? (uint32_t)status.state : 0xFFU;
     const uint32_t storage = (uint32_t)audio_recorder_storage_phase();
-    rec_sd_trace_log(event,
+    rec_sd_trace_log_sd(event,
         REC_SD_TRACE_STATES(rec, rec, storage, storage),
         REC_SD_TRACE_CONTEXT(0xFFU, 0xFFU, g_sample_capture.state.arm,
             g_sample_capture.state.trig),
         detail, (status_valid != 0U) ? status.frames_received : 0U,
-        g_sample_capture.visible_rec_generation, sample);
+        g_sample_capture.visible_rec_generation, sample,
+        (rec_sd_trace_sd_meta_t){
+            .block_result = 0xFFU, .fatfs_result = 0xFFU });
 }
 
 static void sample_capture_trace_start_rejected(uint32_t reason,
