@@ -25,3 +25,14 @@ before and after a glitch. A SOF gap supports an IRQ blackout; an OUT-only gap
 supports missing bus packets or endpoint service; neither gap means the
 USBPcap URB completion delay is not a device IRQ gap. This diagnostic only
 reads the DWC2 frame register and updates counters in the existing USB IRQ.
+
+The 14-bit DWC2 frame counter continues while GDB halts the CPU. On resume,
+the first observed SOF/OUT can therefore be separated from the previous one
+by thousands of frames even though the firmware was stopped for inspection.
+Gaps above 32 frames are treated as an interrupted measurement: each previous
+frame reference is resynchronized, without changing its count or maximum.
+Gaps of 3 through 32 frames remain visible, including the suspected 4 ms
+event. DHCSR does not expose a reliable post-resume halt indication to this
+running Cortex-M7 code. Because the hardware frame number wraps every 16384
+frames, a debugger pause whose duration aliases to 3–32 frames modulo 16384
+cannot be distinguished by this frame-only diagnostic.

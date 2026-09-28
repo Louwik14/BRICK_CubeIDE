@@ -22,6 +22,7 @@
 #define USB_AUDIO_CORRECTION_INTERVAL_FRAMES 5000U
 #define USB_AUDIO_LOW_WATER_FRAMES       (USB_AUDIO_FLOAT_RING_CAPACITY_FRAMES / 4U)
 #define USB_AUDIO_HIGH_WATER_FRAMES      (USB_AUDIO_FLOAT_RING_CAPACITY_FRAMES * 3U / 4U)
+#define USB_AUDIO_DIAG_MAX_VALID_GAP_FRAMES 32U
 
 static volatile uint8_t g_usb_audio_out_active;
 static uint8_t g_usb_audio_out_ready;
@@ -86,9 +87,11 @@ void usb_audio_sof_observed(uint16_t usb_frame)
     if (g_usb_audio_out_active == 0U) return;
     if (g_usb_audio_sof_seen != 0U) {
         const uint16_t gap = (uint16_t)((usb_frame - g_usb_audio_last_sof_frame) & 0x3FFFU);
-        if (gap > g_usb_audio_bus_gap_diag.sof_gap_max)
-            g_usb_audio_bus_gap_diag.sof_gap_max = gap;
-        if (gap >= 3U) ++g_usb_audio_bus_gap_diag.sof_gap_ge_3;
+        if (gap <= USB_AUDIO_DIAG_MAX_VALID_GAP_FRAMES) {
+            if (gap > g_usb_audio_bus_gap_diag.sof_gap_max)
+                g_usb_audio_bus_gap_diag.sof_gap_max = gap;
+            if (gap >= 3U) ++g_usb_audio_bus_gap_diag.sof_gap_ge_3;
+        }
     }
     g_usb_audio_last_sof_frame = usb_frame;
     g_usb_audio_sof_seen = 1U;
@@ -99,9 +102,11 @@ static void usb_audio_out_observed(void)
     const uint16_t frame = usb_audio_usb_frame_now();
     if (g_usb_audio_out_seen != 0U) {
         const uint16_t gap = (uint16_t)((frame - g_usb_audio_last_out_frame) & 0x3FFFU);
-        if (gap > g_usb_audio_bus_gap_diag.out_gap_max)
-            g_usb_audio_bus_gap_diag.out_gap_max = gap;
-        if (gap >= 3U) ++g_usb_audio_bus_gap_diag.out_gap_ge_3;
+        if (gap <= USB_AUDIO_DIAG_MAX_VALID_GAP_FRAMES) {
+            if (gap > g_usb_audio_bus_gap_diag.out_gap_max)
+                g_usb_audio_bus_gap_diag.out_gap_max = gap;
+            if (gap >= 3U) ++g_usb_audio_bus_gap_diag.out_gap_ge_3;
+        }
     }
     g_usb_audio_last_out_frame = frame;
     g_usb_audio_out_seen = 1U;
