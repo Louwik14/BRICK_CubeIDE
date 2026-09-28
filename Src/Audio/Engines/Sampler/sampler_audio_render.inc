@@ -372,8 +372,6 @@ void brick6_sampler_runtime_render_track(const track_audio_runtime_ctx_t *ctx,
         return;
     }
 
-    BRICK6_SAMPLER_RUNTIME_DIAG_INC(render_track_calls);
-
     if ((ctx->program_route.entity_id >= SEQ_TRACK_COUNT)
             || (ctx->program_route.active == 0U)
             || (ctx->program_route.engine != (uint8_t)TRACK_RUNTIME_ENGINE_SAMPLER))

@@ -91,8 +91,6 @@ typedef struct
     sample_kernel_type_t kernel_type;
     uint32_t min_ready_frames;
     uint32_t target_window_frames;
-    uint32_t diagnostics_page;
-    uint8_t diagnostics_reason;
 } sample_play_plan_t;
 
 typedef struct
@@ -104,12 +102,10 @@ typedef struct
     float rate;
     uint32_t min_ready_frames;
     uint32_t target_window_frames;
-    uint32_t diagnostics_page;
     uint8_t flags;
     uint8_t reverse;
     uint8_t loop_mode;
     uint8_t stop_on_underrun;
-    uint8_t diagnostics_reason;
 } sample_play_plan_build_options_t;
 
 typedef struct
@@ -273,8 +269,6 @@ static inline sample_play_plan_build_result_t sample_play_plan_build_from_source
             : ((step_q16 == 65536U) ? SAMPLE_KERNEL_FWD_1X : SAMPLE_KERNEL_PITCH_FWD_LINEAR);
     out_plan->min_ready_frames = (options != 0) ? options->min_ready_frames : 0U;
     out_plan->target_window_frames = (options != 0) ? options->target_window_frames : 0U;
-    out_plan->diagnostics_page = (options != 0) ? options->diagnostics_page : UINT32_MAX;
-    out_plan->diagnostics_reason = (options != 0) ? options->diagnostics_reason : 0U;
     return sample_play_plan_is_valid(out_plan) != 0U
                ? SAMPLE_PLAY_PLAN_BUILD_OK
                : SAMPLE_PLAY_PLAN_BUILD_INVALID_REGION;

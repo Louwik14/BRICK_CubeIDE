@@ -58,60 +58,6 @@ typedef enum
     BRICK6_SAMPLER_NOTE_SILENT
 } brick6_sampler_note_result_t;
 
-typedef struct
-{
-    uint32_t fast_path_blocks;
-    uint32_t slow_path_blocks;
-    uint32_t mixed_segments;
-    uint32_t segment_cursor_blocks;
-    uint32_t render_track_calls;
-    uint32_t active_voices;
-    uint32_t max_active_voices;
-    uint32_t start_frame;
-    uint32_t region_begin;
-    uint32_t region_end;
-    uint32_t sample_length_frames;
-    uint32_t fade_in_frames;
-    uint32_t fade_out_frames;
-    uint16_t sample_id;
-    uint16_t multi_instrument_id;
-    uint16_t multi_sample_id;
-    uint32_t multi_resolve_fail;
-    uint32_t multi_page0_missing;
-    uint32_t multi_page_window_missing;
-    uint32_t multi_page_underrun;
-    uint32_t multi_voice_started;
-    uint32_t multi_no_instrument_assigned;
-    uint32_t multi_invalid_instrument_id;
-    uint32_t multi_need_update_count;
-    uint32_t multi_stop_done;
-    uint32_t multi_stop_underrun;
-    uint32_t multi_stop_steal;
-    uint32_t multi_stop_rel_done;
-    uint32_t multi_last_current_frame;
-    uint32_t multi_last_end_frame;
-    uint32_t common_plan_classic_build_fail;
-    uint32_t common_plan_multi_build_fail;
-    uint32_t common_plan_last_reason;
-    uint8_t multi_last_reject_reason;
-    uint8_t multi_last_stop_reason;
-    uint8_t multi_last_active_global;
-    uint8_t multi_last_active_track;
-    uint8_t multi_gain_applied;
-    uint8_t track_id;
-    uint8_t note;
-    uint8_t velocity;
-    uint8_t mode;
-    uint8_t use_segment_cursor;
-} brick6_sampler_runtime_diag_snapshot_t;
-
-typedef struct
-{
-    uint32_t multi_page_underrun;
-    uint32_t multi_stop_underrun;
-    uint32_t multi_invalid_instrument_id;
-} brick6_sampler_runtime_health_snapshot_t;
-
 void brick6_sampler_runtime_init(void);
 void brick6_sampler_runtime_reset_track(uint8_t track_id);
 void brick6_sampler_runtime_replace_track_renderer(uint8_t track_id);
@@ -219,9 +165,6 @@ void brick6_sampler_runtime_render_ram_track_mono(const track_audio_runtime_ctx_
                                                   float *out_mono,
                                                   uint32_t frames);
 void brick6_sampler_runtime_diag_reset(void);
-void brick6_sampler_runtime_diag_get_snapshot(brick6_sampler_runtime_diag_snapshot_t *out_snapshot);
-void brick6_sampler_runtime_get_health_snapshot(
-    brick6_sampler_runtime_health_snapshot_t *out_snapshot);
 uint8_t brick6_sampler_runtime_ram_slice_mode_active(uint8_t track_id);
 uint8_t brick6_sampler_runtime_audio_slice_count(uint8_t track_id);
 #ifdef __cplusplus

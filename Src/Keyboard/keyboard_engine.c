@@ -615,19 +615,6 @@ void keyboard_engine_clear_source_occurrences_silent(void)
     keyboard_note_time_order_reset(&g_keyboard_engine_time_order);
 }
 
-uint8_t keyboard_engine_debug_active_occurrences(void)
-{
-    uint8_t count = 0U;
-    for (uint8_t i = 0U; i < KEYBOARD_ENGINE_SOURCE_OCCURRENCE_CAPACITY; ++i)
-        count += (uint8_t)(g_keyboard_engine_source_occurrence[i].active != 0U);
-    return count;
-}
-
-uint32_t keyboard_engine_debug_time_tie_adjustments(void)
-{
-    return g_keyboard_engine_time_order.tie_adjustments;
-}
-
 void keyboard_engine_clear_state_silent(void)
 {
     keyboard_engine_mono_clear();

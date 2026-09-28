@@ -217,8 +217,6 @@ typedef enum
 static uint8_t g_delay_type = (uint8_t)MIXER_DELAY_TYPE_CLASSIC;
 static uint8_t g_delay_division_l = 7U;
 static uint8_t g_delay_division_r = 7U;
-static float g_delay_diag_volume;
-static float g_delay_diag_reverb_send;
 #define MIXER_ENV_ADSR_MAX_SEGMENT_SECONDS 30.0f
 typedef struct
 {
@@ -748,14 +746,6 @@ void mixer_rebind_track_state(uint8_t previous_mix_track, uint8_t next_mix_track
         mixer_track_vca_all_notes_off(next_mix_track);
     }
 
-    if (has_next != 0U)
-    {
-        g_mixer_lane_rebind_count[next_mix_track]++;
-    }
-    else if (has_previous != 0U)
-    {
-        g_mixer_lane_rebind_count[previous_mix_track]++;
-    }
     mixer_rebuild_static_plan();
 }
 

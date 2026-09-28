@@ -47,21 +47,6 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
-typedef struct {
-  uint32_t irq_count;
-  uint32_t cycles_last;
-  uint32_t cycles_min;
-  uint32_t cycles_max;
-  uint32_t cycles_total_lo;
-  uint32_t cycles_total_hi;
-  uint32_t over_5us;
-  uint32_t over_10us;
-  uint32_t over_20us;
-  uint32_t over_50us;
-  uint32_t over_100us;
-} usb_irq_prof_t;
-
-volatile usb_irq_prof_t g_usb_irq_prof __attribute__((used)) = { .cycles_min = UINT32_MAX };
 
 /* USER CODE END PV */
 
@@ -459,22 +444,7 @@ void SAI1_IRQHandler(void)
 void OTG_FS_IRQHandler(void)
 {
   /* USER CODE BEGIN OTG_FS_IRQn 0 */
-  const uint32_t start = DWT->CYCCNT;
   usb_role_irq_dispatch();
-  const uint32_t cycles = DWT->CYCCNT - start;
-  g_usb_irq_prof.irq_count++;
-  g_usb_irq_prof.cycles_last = cycles;
-  if (cycles < g_usb_irq_prof.cycles_min) g_usb_irq_prof.cycles_min = cycles;
-  if (cycles > g_usb_irq_prof.cycles_max) g_usb_irq_prof.cycles_max = cycles;
-  const uint32_t old_lo = g_usb_irq_prof.cycles_total_lo;
-  const uint32_t new_lo = old_lo + cycles;
-  g_usb_irq_prof.cycles_total_lo = new_lo;
-  if (new_lo < old_lo) g_usb_irq_prof.cycles_total_hi++;
-  if (cycles > 2400U) g_usb_irq_prof.over_5us++;
-  if (cycles > 4800U) g_usb_irq_prof.over_10us++;
-  if (cycles > 9600U) g_usb_irq_prof.over_20us++;
-  if (cycles > 24000U) g_usb_irq_prof.over_50us++;
-  if (cycles > 48000U) g_usb_irq_prof.over_100us++;
   return;
   /* USER CODE END OTG_FS_IRQn 0 */
   /* USER CODE BEGIN OTG_FS_IRQn 1 */

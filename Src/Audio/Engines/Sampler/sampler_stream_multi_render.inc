@@ -90,9 +90,6 @@ static void brick6_sampler_render_sample_segment_cursor(brick6_sampler_voice_t *
             break;
         }
 
-        BRICK6_SAMPLER_RUNTIME_DIAG_INC(segment_cursor_blocks);
-        BRICK6_SAMPLER_RUNTIME_DIAG_INC(mixed_segments);
-
         if ((voice->fade_in_frames == 0U) && (voice->fade_out_frames == 0U))
         {
             float last_l = 0.0f;
@@ -211,10 +208,6 @@ static void brick6_sampler_render_multi(brick6_sampler_voice_t *voice,
         sample_audio_segment_t segment;
         if (sample_voice_reader_begin_segment(&voice->reader, frames - produced, &segment) == 0U)
         {
-            g_brick6_sampler_runtime_diag.multi_page_underrun++;
-            brick6_sampler_runtime_multi_diag_note_stop(
-                voice,
-                (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_UNDERRUN);
             brick6_sampler_runtime_multi_mark_voice_physical_release(voice);
             brick6_sampler_runtime_multi_defer_stream_release(voice->multi_sample_id);
             voice->active = 0U;
@@ -225,15 +218,6 @@ static void brick6_sampler_render_multi(brick6_sampler_voice_t *voice,
 
         if (segment.status == SAMPLE_AUDIO_SEGMENT_DONE)
         {
-            const uint8_t stop_reason =
-                (voice->reader.position >= (float)voice->region_end)
-                    ? (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_DONE
-                    : (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_UNDERRUN;
-            if (stop_reason == (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_UNDERRUN)
-            {
-                g_brick6_sampler_runtime_diag.multi_page_underrun++;
-            }
-            brick6_sampler_runtime_multi_diag_note_stop(voice, stop_reason);
             brick6_sampler_runtime_multi_mark_voice_physical_release(voice);
             brick6_sampler_runtime_multi_defer_stream_release(voice->multi_sample_id);
             voice->active = 0U;
@@ -244,13 +228,6 @@ static void brick6_sampler_render_multi(brick6_sampler_voice_t *voice,
 
         if (segment.status != SAMPLE_AUDIO_SEGMENT_OK)
         {
-            if (segment.status == SAMPLE_AUDIO_SEGMENT_UNDERRUN)
-            {
-                g_brick6_sampler_runtime_diag.multi_page_underrun++;
-            }
-            brick6_sampler_runtime_multi_diag_note_stop(
-                voice,
-                (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_UNDERRUN);
             brick6_sampler_runtime_multi_mark_voice_physical_release(voice);
             brick6_sampler_runtime_multi_defer_stream_release(voice->multi_sample_id);
             voice->active = 0U;
@@ -261,10 +238,6 @@ static void brick6_sampler_render_multi(brick6_sampler_voice_t *voice,
 
         if (segment.frames == 0U)
         {
-            g_brick6_sampler_runtime_diag.multi_page_underrun++;
-            brick6_sampler_runtime_multi_diag_note_stop(
-                voice,
-                (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_UNDERRUN);
             brick6_sampler_runtime_multi_mark_voice_physical_release(voice);
             brick6_sampler_runtime_multi_defer_stream_release(voice->multi_sample_id);
             voice->active = 0U;
@@ -272,9 +245,6 @@ static void brick6_sampler_render_multi(brick6_sampler_voice_t *voice,
             sample_voice_reader_stop(&voice->reader);
             break;
         }
-
-        BRICK6_SAMPLER_RUNTIME_DIAG_INC(segment_cursor_blocks);
-        BRICK6_SAMPLER_RUNTIME_DIAG_INC(mixed_segments);
 
         float last_l = 0.0f;
         float last_r = 0.0f;
@@ -307,15 +277,6 @@ static void brick6_sampler_render_multi(brick6_sampler_voice_t *voice,
         voice->position = voice->reader.position;
         if (voice->reader.active == 0U)
         {
-            const uint8_t stop_reason =
-                (voice->reader.position >= (float)voice->region_end)
-                    ? (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_DONE
-                    : (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_UNDERRUN;
-            if (stop_reason == (uint8_t)BRICK6_SAMPLER_MULTI_DIAG_REASON_STOP_UNDERRUN)
-            {
-                g_brick6_sampler_runtime_diag.multi_page_underrun++;
-            }
-            brick6_sampler_runtime_multi_diag_note_stop(voice, stop_reason);
             brick6_sampler_runtime_multi_mark_voice_physical_release(voice);
             brick6_sampler_runtime_multi_defer_stream_release(voice->multi_sample_id);
             voice->active = 0U;
@@ -417,9 +378,6 @@ static uint8_t brick6_sampler_runtime_render_stream_fwd_1x_fast(
         {
             break;
         }
-
-        BRICK6_SAMPLER_RUNTIME_DIAG_INC(fast_path_blocks);
-        BRICK6_SAMPLER_RUNTIME_DIAG_INC(mixed_segments);
         brick6_sampler_runtime_voice_note_output(voice, last_l, last_r);
         produced += rendered;
         voice->position = voice->reader.position;
@@ -491,9 +449,6 @@ static uint8_t brick6_sampler_runtime_render_stream_fwd_1x_fast_mono(
         {
             break;
         }
-
-        BRICK6_SAMPLER_RUNTIME_DIAG_INC(fast_path_blocks);
-        BRICK6_SAMPLER_RUNTIME_DIAG_INC(mixed_segments);
         brick6_sampler_runtime_voice_note_output(voice, last, last);
         produced += rendered;
         voice->position = voice->reader.position;
@@ -602,8 +557,6 @@ static ITCM_TEXT void brick6_sampler_render_sample(brick6_sampler_voice_t *voice
     if ((voice->reverse != 0U) || (fabsf(voice->step_signed - 1.0f) > BRICK6_SAMPLER_STEP_EPSILON)
         || (voice->loop_mode == BRICK6_SAMPLER_LOOP_PINGPONG))
     {
-        BRICK6_SAMPLER_RUNTIME_DIAG_INC(slow_path_blocks);
-        BRICK6_SAMPLER_RUNTIME_DIAG_INC(mixed_segments);
         float fade_buf[AUDIO_BLOCK_SIZE];
         const float *fade_ptr = 0;
         uint32_t fade_count = 0U;
@@ -697,9 +650,6 @@ static ITCM_TEXT void brick6_sampler_render_sample(brick6_sampler_voice_t *voice
             sample_voice_reader_stop(&voice->reader);
             break;
         }
-
-        BRICK6_SAMPLER_RUNTIME_DIAG_INC(fast_path_blocks);
-        BRICK6_SAMPLER_RUNTIME_DIAG_INC(mixed_segments);
 
         const float *src_l = block.l;
         const float *src_r = (block.is_mono != 0U) ? block.l : block.r;

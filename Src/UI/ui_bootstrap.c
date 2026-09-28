@@ -20,7 +20,6 @@
 #include "ui_template_page.h"
 
 /* Placeholder for intentionally unavailable page slots. */
-static const ui_page_t g_ui_page_reserved_slot = { 0 };
 
 void ui_bootstrap_init(void)
 {
@@ -61,7 +60,6 @@ void ui_bootstrap_init(void)
     ui_page_manager_register(UI_PAGE_PATCH_ASSIGN, &g_ui_page_patch_assign);
     ui_page_manager_register(UI_PAGE_NAME_EDIT, &g_ui_page_name_edit);
     ui_page_manager_register(UI_PAGE_SETTINGS, &g_ui_page_settings);
-    ui_page_manager_register(UI_PAGE_RESERVED_DIAGNOSTIC, &g_ui_page_reserved_slot);
 
     ui_page_set(UI_PAGE_CALIBRATION);
 }

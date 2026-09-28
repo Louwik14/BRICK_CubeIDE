@@ -184,7 +184,6 @@ void brick6_sampler_runtime_set_multi_instrument(uint8_t track_id, uint16_t inst
     if ((instrument_id != MULTI_SAMPLE_POOL_INVALID_ID)
         && (instrument_id >= MULTI_SAMPLE_POOL_MAX_INSTRUMENTS))
     {
-        g_brick6_sampler_runtime_diag.multi_invalid_instrument_id++;
         return;
     }
 

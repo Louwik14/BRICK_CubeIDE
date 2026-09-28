@@ -601,29 +601,12 @@ void mixer_set_delay_mod_rate(float rate_hz)
 
 void mixer_set_delay_reverb_send(float reverb_send)
 {
-    g_delay_diag_reverb_send = clamp01(reverb_send);
     fx_delay_stereo_global_set_reverb_send(reverb_send);
     fx_delay_dual_global_set_reverb_send(reverb_send);
 }
 
 void mixer_set_delay_volume(float volume)
 {
-    g_delay_diag_volume = clamp01(volume);
     fx_delay_stereo_global_set_volume(volume);
     fx_delay_dual_global_set_volume(volume);
 }
-
-void mixer_get_global_diag_state(mixer_global_diag_state_t *out)
-{
-    if(out == NULL)
-        return;
-    out->reverb_active = fx_reverb_global_is_active();
-    out->delay_active = (g_delay_type == (uint8_t)MIXER_DELAY_TYPE_DUAL)
-        ? fx_delay_dual_global_is_active() : fx_delay_stereo_global_is_active();
-    out->delay_type = g_delay_type;
-    out->_pad = 0U;
-    out->reverb_wet = g_reverb.wet;
-    out->delay_volume = g_delay_diag_volume;
-    out->delay_reverb_send = g_delay_diag_reverb_send;
-}
-

@@ -393,8 +393,6 @@ void audio_float_set_saturation_mix(float mix)
 /* État persistant des tracks (buffers bloc + enabled). */
 AUDIO_HOT ALIGN32 static StereoTrack tracks[MAX_TRACKS];
 
-volatile uint32_t g_audio_block_counter = 0U;
-volatile uint32_t g_audio_dsp_frames_counter = 0U;
 
 /* Gain master global (après somme des tracks). */
 static AUDIO_HOT uint32_t g_audio_tracks_enabled_mask;
@@ -528,8 +526,6 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
                                int32_t *AUDIO_RESTRICT tx,
                                uint32_t frames)
 {
-    g_audio_block_counter++;
-    g_audio_dsp_frames_counter += frames;
 
     if(frames > AUDIO_BLOCK_SIZE)
         frames = AUDIO_BLOCK_SIZE;
@@ -546,21 +542,4 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
                          frames,
                          out_gain_start,
                          out_gain_end);
-}
-
-/**
- * @brief Point d'entrée audio_get_frame_counter.
- *
- * Rôle:
- * - Exécuter le traitement associé à audio_get_frame_counter.
- *
- *
- * @return Valeur de retour définie par le contrat de l'API.
- *
- * Contexte d'appel:
- * - init / main loop / tasklet selon le module.
- */
-uint32_t audio_get_frame_counter(void)
-{
-    return g_audio_dsp_frames_counter;
 }

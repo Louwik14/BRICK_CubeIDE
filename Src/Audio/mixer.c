@@ -201,7 +201,6 @@ static uint32_t g_external_lane_mask;
 static uint8_t g_external_poly_initialized[MIXER_MAX_TRACKS];
 static uint8_t g_external_track_format[MIXER_MAX_TRACKS];
 static uint16_t g_external_track_frames_valid[MIXER_MAX_TRACKS];
-volatile uint32_t g_mixer_lane_rebind_count[MIXER_MAX_TRACKS];
 
 enum
 {

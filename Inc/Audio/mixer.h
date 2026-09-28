@@ -34,17 +34,6 @@
 /* Nominal per-track trim for dry bus summing headroom. */
 #define MIXER_TRACK_NOMINAL_TRIM 0.125f
 
-typedef struct
-{
-    uint8_t reverb_active;
-    uint8_t delay_active;
-    uint8_t delay_type;
-    uint8_t _pad;
-    float reverb_wet;
-    float delay_volume;
-    float delay_reverb_send;
-} mixer_global_diag_state_t;
-
 struct multi_voice_dsp_slot_t;
 
 typedef enum
@@ -58,7 +47,6 @@ void mixer_reset_runtime_state(void);
 void mixer_rebuild_static_plan(void);
 void mixer_set_master(float gain);
 float mixer_get_master(void);
-void mixer_get_global_diag_state(mixer_global_diag_state_t *out);
 
 void mixer_set_track_gain(uint32_t track_id, float gain);
 float mixer_get_track_gain(uint32_t track_id);

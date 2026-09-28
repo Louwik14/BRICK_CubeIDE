@@ -61,38 +61,6 @@ typedef struct
     uint32_t tick_ms;
 } hall_velocity_capture_t;
 
-typedef struct
-{
-    uint16_t raw_current;
-    uint16_t min_current;
-    uint16_t max_current;
-    uint16_t range_current;
-    uint16_t position_percent;
-    uint16_t trig_lo;
-    uint16_t trig_hi;
-    uint16_t prev_raw;
-    uint16_t dv_peak;
-    uint16_t sum_dv;
-    uint16_t vel_start_th;
-    uint16_t vel_end_th;
-    uint16_t time_count;
-    uint16_t last_metric;
-    uint32_t sample_count;
-    uint32_t sample_period_us;
-    uint8_t  calibrated;
-    uint8_t  range_valid;
-    uint8_t  state;
-    uint8_t  velocity;
-    uint8_t  velocity_valid;
-    uint8_t  time_active;
-    uint8_t  velocity_mode;
-    uint8_t  velocity_curve;
-    uint8_t  user_profile_valid;
-    uint8_t  user_mode_fallback;
-    uint8_t  note_on_pending;
-    uint8_t  note_off_pending;
-} hall_velocity_debug_t;
-
 void hall_engine_init(void);
 
 void hall_engine_set_calibration(const uint16_t *min_values,
@@ -120,7 +88,6 @@ uint8_t hall_engine_consume_note_on(uint8_t key);
 uint8_t hall_engine_consume_note_off(uint8_t key);
 void hall_engine_acknowledge_edge(uint8_t key, uint8_t pressed);
 uint8_t hall_engine_pop_velocity_capture(hall_velocity_capture_t *capture);
-void hall_engine_get_velocity_debug(uint8_t key, hall_velocity_debug_t *debug);
 
 void hall_set_velocity_mode(uint8_t mode);
 void hall_set_velocity_profile(uint8_t profile);

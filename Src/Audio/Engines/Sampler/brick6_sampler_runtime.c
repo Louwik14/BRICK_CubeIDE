@@ -250,9 +250,9 @@ static AUDIO_HOT brick6_sampler_voice_t
 #if defined(__STDC_VERSION__) && (__STDC_VERSION__ >= 201112L)
 _Static_assert(SAMPLER_MULTI_MAX_GLOBAL_VOICES == 8U,
                "Multi runtime pool must remain globally capped at eight voices");
-_Static_assert(sizeof(brick6_sampler_voice_t) == 488U,
+_Static_assert(sizeof(brick6_sampler_voice_t) == 472U,
                "Sampler voice size changed; remeasure DTCM before accepting it");
-_Static_assert(sizeof(g_sampler_multi_voice) == 3904U,
+_Static_assert(sizeof(g_sampler_multi_voice) == 3776U,
                "Multi sampler voice pool size changed; remeasure DTCM before accepting it");
 #endif
 static brick6_sampler_clip_runtime_t g_sampler_clip_runtime[SEQ_TRACK_COUNT];
@@ -271,18 +271,12 @@ static AUDIO_HOT uint32_t g_sampler_render_track_mask;
 static uint32_t g_sampler_voice_trigger_counter;
 static CTRL_STATE uint8_t
     g_sampler_multi_stream_release_pending[MULTI_SAMPLE_POOL_MAX_SAMPLES];
-static CTRL_STATE uint8_t
-    g_sampler_multi_page0_reject_logged[MULTI_SAMPLE_POOL_MAX_SAMPLES];
 
-static brick6_sampler_runtime_diag_snapshot_t g_brick6_sampler_runtime_diag;
 
-#define BRICK6_SAMPLER_RUNTIME_DIAG_INC(field) ((void)0)
 
 #define BRICK6_SAMPLER_STEP_EPSILON (0.0001f)
 
 static uint8_t brick6_sampler_runtime_cache_voice_id(uint8_t track_id);
-static uint32_t brick6_sampler_runtime_multi_active_count(void);
-static uint32_t brick6_sampler_runtime_multi_active_count_for_track(uint8_t track_id);
 static uint8_t brick6_sampler_runtime_multi_spread_voice_count(uint8_t track_id);
 static uint8_t brick6_sampler_runtime_multi_voice_occupied(
     const brick6_sampler_voice_t *voice);
@@ -431,16 +425,6 @@ static void brick6_sampler_runtime_multi_stop_track_renderer(uint8_t track_id);
 static void brick6_sampler_runtime_multi_defer_stream_release(uint16_t multi_sample_id);
 static void brick6_sampler_runtime_multi_service_stream_releases(void);
 static sample_audio_key_t brick6_sampler_runtime_multi_key(uint16_t multi_sample_id);
-static void brick6_sampler_runtime_multi_diag_note_page0_reject(
-    uint8_t track_id,
-    uint8_t note,
-    uint8_t velocity,
-    uint16_t instrument_id,
-    const multi_sample_audio_source_t *resolved,
-    sample_page_state_t state0);
-static void brick6_sampler_runtime_multi_diag_note_stop(
-    const brick6_sampler_voice_t *voice,
-    uint8_t reason);
 static void brick6_sampler_runtime_voice_note_output(brick6_sampler_voice_t *voice,
                                                      float out_l,
                                                      float out_r);
@@ -471,11 +455,7 @@ static brick6_sample_common_plan_result_t brick6_sampler_runtime_build_common_pl
     const brick6_sample_common_trigger_t *trigger,
     sample_resolved_source_t *out_source,
     sample_play_plan_t *out_plan);
-static void brick6_sampler_runtime_note_common_play_plan_result(
-    brick6_sample_common_plan_result_t result,
-    uint8_t classic);
 void brick6_sampler_runtime_diag_reset(void);
-void brick6_sampler_runtime_diag_get_snapshot(brick6_sampler_runtime_diag_snapshot_t *out_snapshot);
 
 /* Private implementation fragments intentionally share this translation unit.
  * This preserves the existing static state, symbol visibility and call order. */
