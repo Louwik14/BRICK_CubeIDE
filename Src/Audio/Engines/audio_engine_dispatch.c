@@ -19,7 +19,6 @@
 
 #include "Audio/drum_synth.h"
 #include "Audio/audio_io.h"
-#include "Audio/audio_probe.h"
 #include "Audio/audio_rec_bus_runtime.h"
 #include "Audio/metronome_runtime.h"
 #include "Audio/synth_waveform_audio.h"
@@ -74,7 +73,6 @@ static void brick6_publish_owned_external_source(uint8_t source,
     }
 
     if (source == ENTITY_AUDIO_SOURCE_USB)
-        audio_probe_capture(AUDIO_PROBE_MIX_INPUT, left, right, frames);
     mixer_submit_external_stereo(ctx->program_route.mix_track_id,
                                  left,
                                  right,

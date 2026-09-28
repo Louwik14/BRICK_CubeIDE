@@ -6,7 +6,6 @@
 
 #include "IPC/usb_audio_float_ring.h"
 #include "Board/board_audio_format.h"
-#include "Audio/audio_probe.h"
 #include "Platform/brick_fatal.h"
 #include "Platform/memory_layout.h"
 #include "stm32h7xx.h"
@@ -79,7 +78,6 @@ static void usb_audio_reset_cursors(void)
     g_usb_audio_out_ready = 0U;
     g_usb_audio_frames_since_correction = 0U;
     usb_audio_float_reset();
-    audio_probe_usb_reset();
     __DMB();
     __set_PRIMASK(primask);
 }
@@ -221,7 +219,6 @@ bool tud_audio_rx_done_isr(uint8_t rhport, uint16_t n_bytes_received,
                     usb_audio_pcm24_in_32_to_float(
                         g_usb_audio_out_pcm_scratch[sample]);
             }
-            audio_probe_usb_receive(g_usb_audio_out_float_scratch, read_frames);
             const uint32_t written = usb_audio_float_write_pc_to_brick(
                 g_usb_audio_out_float_scratch, read_frames);
             if (written != read_frames) {

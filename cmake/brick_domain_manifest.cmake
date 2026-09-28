@@ -239,7 +239,6 @@ set(DOMAIN_AUDIO
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/Engines/wavetable_engine.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/adsr_daisy.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_probe.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_boot_diagnostic_producer.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_command_executor.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Audio/audio_domain.c"

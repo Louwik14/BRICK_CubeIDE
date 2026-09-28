@@ -33,7 +33,6 @@
 #include "fx_saturation.h"
 #include "Platform/memory_layout.h"
 #include "audio_io.h"
-#include "Audio/audio_probe.h"
 #include "dsp_engine.h"
 #include "fx_pool.h"
 #include "fx_comp_lab.h"
@@ -539,7 +538,6 @@ void audio_process_block_int32(int32_t *AUDIO_RESTRICT rx,
     master_gain_smoothed += (master_gain_target - master_gain_smoothed) * 0.25f;
     const float out_gain_end = output_adjust * master_gain_smoothed;
 
-    audio_probe_begin_segment();
     audio_io_unpack(rx, frames, postgain_recip * (1.0f / 8388608.0f));
     audio_dsp_process(tracks, frames);
     audio_io_pack_ramped(tx,
