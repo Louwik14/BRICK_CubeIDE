@@ -33,5 +33,7 @@ uint32_t usb_audio_float_pc_to_brick_available(void);
 uint32_t usb_audio_float_brick_to_pc_available(void);
 
 void usb_audio_float_reset(void);
+void usb_audio_float_reset_brick_to_pc(void);
+void usb_audio_float_reset_pc_to_brick(void);
 
 #endif /* USB_AUDIO_FLOAT_RING_H_ */

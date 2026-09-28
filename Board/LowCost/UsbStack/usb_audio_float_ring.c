@@ -224,3 +224,15 @@ void usb_audio_float_reset(void)
     g_usb_audio_float_rings.brick_to_pc.write_count = 0U;
     g_usb_audio_float_rings.brick_to_pc.read_count = 0U;
 }
+
+void usb_audio_float_reset_brick_to_pc(void)
+{
+    g_usb_audio_float_rings.brick_to_pc.write_count = 0U;
+    g_usb_audio_float_rings.brick_to_pc.read_count = 0U;
+}
+
+void usb_audio_float_reset_pc_to_brick(void)
+{
+    g_usb_audio_float_rings.pc_to_brick.write_count = 0U;
+    g_usb_audio_float_rings.pc_to_brick.read_count = 0U;
+}
