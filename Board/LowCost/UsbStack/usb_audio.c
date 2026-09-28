@@ -57,23 +57,29 @@ _Static_assert(CFG_TUSB_OS == OPT_OS_NONE,
 _Static_assert((USB_AUDIO_IRQ_PACKET_MAX_BYTES % USB_AUDIO_BYTES_PER_FRAME) == 0U,
                "USB Audio OUT packet must contain complete PCM frames");
 #if !defined(__BYTE_ORDER__) || (__BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__)
-#error "USB Audio PCM32 requires a little-endian target"
+#error "USB Audio PCM24-in-32 requires a little-endian target"
 #endif
 
-static int32_t usb_audio_float_to_pcm32(float sample)
+/* UAC2 PCM24 occupies the most significant 24 bits of each 32-bit subslot. */
+static int32_t usb_audio_float_to_pcm24_in_32(float sample)
 {
     if (!(sample > -1.0f)) {
         return (sample < 0.0f) ? INT32_MIN : 0;
     }
     if (sample >= 1.0f) {
-        return INT32_MAX;
+        return INT32_MAX & ~INT32_C(0xFF);
     }
-    return (int32_t)(sample * 2147483648.0f);
+    const int32_t pcm24 = (int32_t)(sample * 8388608.0f);
+    return pcm24 * 256;
 }
 
-static float usb_audio_pcm32_to_float(int32_t sample)
+static float usb_audio_pcm24_in_32_to_float(int32_t sample)
 {
-    return (float)sample * (1.0f / 2147483648.0f);
+    int32_t pcm24 = (int32_t)((uint32_t)sample >> 8);
+    if ((pcm24 & INT32_C(0x800000)) != 0) {
+        pcm24 -= INT32_C(0x1000000);
+    }
+    return (float)pcm24 * (1.0f / 8388608.0f);
 }
 
 static void usb_audio_feedback_update(void)
@@ -225,7 +231,8 @@ void usb_audio_transport_process(void)
             for (uint32_t sample = 0U;
                  sample < frames * USB_AUDIO_CHANNELS; ++sample) {
                 g_usb_audio_in_pcm_scratch[sample] =
-                    usb_audio_float_to_pcm32(g_usb_audio_in_float_scratch[sample]);
+                    usb_audio_float_to_pcm24_in_32(
+                        g_usb_audio_in_float_scratch[sample]);
             }
             written_bytes = tud_audio_n_write(0U,
                                                g_usb_audio_in_pcm_scratch,
@@ -282,7 +289,7 @@ bool tud_audio_rx_done_isr(uint8_t rhport, uint16_t n_bytes_received,
             for (uint32_t sample = 0U;
                  sample < read_frames * USB_AUDIO_CHANNELS; ++sample) {
                 g_usb_audio_out_float_scratch[sample] =
-                    usb_audio_pcm32_to_float(
+                    usb_audio_pcm24_in_32_to_float(
                         g_usb_audio_out_pcm_scratch[sample]);
             }
             audio_probe_usb_receive(g_usb_audio_out_float_scratch, read_frames);

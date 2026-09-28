@@ -18,7 +18,7 @@
 #define USB_DEVICE_MIDI_RX_BUDGET 16U
 #define USB_DEVICE_AUDIO_CHANNELS 2U
 #define USB_DEVICE_AUDIO_SUBSLOT_BYTES 4U
-#define USB_DEVICE_AUDIO_BIT_RESOLUTION 32U
+#define USB_DEVICE_AUDIO_BIT_RESOLUTION 24U
 #define USB_DEVICE_PRODUCT_NAME "Brick"
 #define USB_DEVICE_AUDIO_EP_SIZE \
     TUD_AUDIO_EP_SIZE(false, 48000U, USB_DEVICE_AUDIO_SUBSLOT_BYTES, \
@@ -56,7 +56,7 @@ enum {
 _Static_assert(USB_DEVICE_AUDIO_EP_SIZE == 392U,
                "USB Audio FS endpoint maximum packet size changed");
 _Static_assert(sizeof(int32_t) == USB_DEVICE_AUDIO_SUBSLOT_BYTES,
-               "USB Audio descriptor requires 32-bit PCM");
+               "USB Audio descriptor requires a 32-bit PCM subslot");
 _Static_assert(USB_DEVICE_DWC2_FS_RX_FIFO_WORDS
                    + USB_DEVICE_DWC2_FS_TX_FIFO_WORDS
                    < USB_DEVICE_DWC2_FS_FIFO_WORDS,
