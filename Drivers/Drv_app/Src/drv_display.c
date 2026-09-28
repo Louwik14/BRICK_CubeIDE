@@ -3,8 +3,6 @@
 #include "Board/board_display_transport.h"
 #include "sdram.h"
 #include "Platform/memory_layout.h"
-#include "Platform/brick_media_clock.h"
-#include "UI/ui_render_prof.h"
 #include "../../U8g2/u8g2.h"
 
 #include <string.h>
@@ -31,54 +29,6 @@ static volatile uint8_t g_dma_payload_busy;
 static volatile uint8_t g_dma_payload_done;
 static volatile uint8_t g_dma_payload_error;
 static uint8_t g_flush_active;
-static uint32_t g_prof_flush_wall_start;
-static uint8_t g_prof_flush_active;
-static uint8_t g_prof_service_poll_call;
-
-static void display_prof_add_cycles(volatile ui_render_prof_cycles_t *stats,
-                                    uint32_t elapsed)
-{
-    stats->count++;
-    stats->total_cycles += elapsed;
-    if (elapsed < stats->min_cycles) stats->min_cycles = elapsed;
-    if (elapsed > stats->max_cycles) stats->max_cycles = elapsed;
-}
-
-static void display_prof_add_value(volatile ui_render_prof_value_t *stats,
-                                   uint32_t value)
-{
-    stats->count++;
-    stats->total_value += value;
-    if (value < stats->min_value) stats->min_value = value;
-    if (value > stats->max_value) stats->max_value = value;
-}
-
-void ui_render_prof_note_flush_service_poll(void)
-{
-    g_prof_service_poll_call = 1U;
-}
-
-void ui_render_prof_flush_reset_tracking(void)
-{
-    g_prof_flush_wall_start = 0U;
-    g_prof_flush_active = 0U;
-    g_prof_service_poll_call = 0U;
-}
-
-static void display_prof_finish_flush(uint8_t success)
-{
-    if (g_prof_flush_active == 0U) return;
-    if (success != 0U) g_ui_render_prof.flush.complete_count++;
-    else g_ui_render_prof.flush.failed_count++;
-    display_prof_add_value(&g_ui_render_prof.flush.update_calls_per_flush,
-                           g_ui_render_prof.flush.current_update_calls);
-    display_prof_add_value(&g_ui_render_prof.flush.service_polls_per_flush,
-                           g_ui_render_prof.flush.current_service_polls);
-    display_prof_add_value(&g_ui_render_prof.flush.wall_ticks,
-                           brick_media_clock_now_tick() - g_prof_flush_wall_start);
-    g_prof_flush_active = 0U;
-}
-
 /* ====================================================================== */
 /*                             SPI / GPIO                                 */
 /* ====================================================================== */
@@ -267,11 +217,7 @@ void drv_display_clear(void)
 void drv_display_update(void)
 {
     uint8_t window_cmds[8];
-    uint32_t prof_start;
-    uint32_t full_prepare_cycles = 0U;
     uint16_t transfer_len = 0U;
-    const uint8_t called_from_service = g_prof_service_poll_call;
-    g_prof_service_poll_call = 0U;
     g_display_stats.flush_count++;
 
     if (g_display_state != DRV_DISPLAY_STATE_READY)
@@ -284,15 +230,9 @@ void drv_display_update(void)
     {
         g_dma_payload_error = 0U;
         g_display_stats.flush_fail++;
-        display_prof_finish_flush(0U);
         return;
     }
 
-    if (g_prof_flush_active != 0U)
-    {
-        g_ui_render_prof.flush.current_update_calls++;
-        g_ui_render_prof.flush.current_service_polls += called_from_service;
-    }
 
     if (g_dma_payload_busy != 0U)
     {
@@ -305,17 +245,12 @@ void drv_display_update(void)
         uint8_t max_x = 0U;
         uint8_t min_page = (uint8_t)(OLED_HEIGHT / 8U);
         uint8_t max_page = 0U;
-        g_prof_flush_active = 1U;
-        g_prof_flush_wall_start = brick_media_clock_now_tick();
-        g_ui_render_prof.flush.current_update_calls = 1U;
-        g_ui_render_prof.flush.current_service_polls = called_from_service;
         /*
          * Ownership contract:
          * - buffer: live render target written by U8g2/UI.
          * - flush_snapshot: frozen frame source consumed by DMA for one full
          *   8-page transfer, preventing inter-frame page mixing.
          */
-        prof_start = DWT->CYCCNT;
         for (uint8_t page = 0U; page < (uint8_t)(OLED_HEIGHT / 8U); ++page)
         {
             for (uint8_t x = 0U; x < OLED_WIDTH; ++x)
@@ -330,15 +265,9 @@ void drv_display_update(void)
                 }
             }
         }
-        display_prof_add_cycles(&g_ui_render_prof.flush.dirty_scan,
-                                DWT->CYCCNT - prof_start);
 
-        prof_start = DWT->CYCCNT;
         memcpy(flush_snapshot, buffer, sizeof(flush_snapshot));
-        display_prof_add_cycles(&g_ui_render_prof.flush.snapshot_memcpy,
-                                DWT->CYCCNT - prof_start);
 
-        prof_start = DWT->CYCCNT;
         if (min_x < OLED_WIDTH)
         {
             const uint8_t width = (uint8_t)(max_x - min_x + 1U);
@@ -350,22 +279,12 @@ void drv_display_update(void)
                 transfer_len = (uint16_t)(transfer_len + width);
             }
         }
-        display_prof_add_cycles(&g_ui_render_prof.flush.dirty_pack,
-                                DWT->CYCCNT - prof_start);
 
         if (transfer_len == 0U)
         {
-            g_ui_render_prof.flush.unchanged_count++;
-            display_prof_add_value(&g_ui_render_prof.flush.bytes_per_flush, 0U);
-            display_prof_finish_flush(1U);
             return;
         }
 
-        if (transfer_len == sizeof(flush_transfer))
-            g_ui_render_prof.flush.full_window_count++;
-        else
-            g_ui_render_prof.flush.partial_window_count++;
-        display_prof_add_value(&g_ui_render_prof.flush.bytes_per_flush, transfer_len);
 
         window_cmds[0] = 0x20U;
         window_cmds[1] = 0x00U;
@@ -376,32 +295,19 @@ void drv_display_update(void)
         window_cmds[6] = min_page;
         window_cmds[7] = max_page;
 
-        prof_start = DWT->CYCCNT;
         if (send_cmd_burst(window_cmds, sizeof(window_cmds)) == 0U)
         {
-            display_prof_add_cycles(&g_ui_render_prof.flush.full_prepare_launch,
-                                    DWT->CYCCNT - prof_start);
             g_display_stats.flush_fail++;
-            display_prof_finish_flush(0U);
             return;
         }
-        full_prepare_cycles = DWT->CYCCNT - prof_start;
         g_flush_active = 1U;
 
-        prof_start = DWT->CYCCNT;
         if (send_data_burst_dma(flush_transfer, transfer_len) == 0U)
         {
-            full_prepare_cycles += DWT->CYCCNT - prof_start;
-            display_prof_add_cycles(&g_ui_render_prof.flush.full_prepare_launch,
-                                    full_prepare_cycles);
             g_display_stats.flush_fail++;
             g_flush_active = 0U;
-            display_prof_finish_flush(0U);
             return;
         }
-        full_prepare_cycles += DWT->CYCCNT - prof_start;
-        display_prof_add_cycles(&g_ui_render_prof.flush.full_prepare_launch,
-                                full_prepare_cycles);
         return;
     }
 
@@ -409,7 +315,6 @@ void drv_display_update(void)
     {
         g_dma_payload_done = 0U;
         g_flush_active = 0U;
-        display_prof_finish_flush(1U);
     }
 }
 

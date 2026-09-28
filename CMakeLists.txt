@@ -418,8 +418,6 @@ target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
 # Keep the runtime-engine marker in the ELF even with LTO and section GC.
 target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
     "-Wl,--undefined=g_fx_audio_lofi_engine_build_id")
-target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
-    "-Wl,--undefined=ui_render_prof_reset")
 
 # --------------------------------------------------------------------------
 # Compile options aligned with CubeIDE

@@ -126,8 +126,6 @@ uint8_t sampler_ram_pool_load_async_begin_prepared(uint16_t ram_slot,
                                                    uint32_t cost_bytes);
 void sampler_ram_pool_load_async_service(void);
 uint8_t sampler_ram_pool_load_async_busy(void);
-uint32_t sampler_ram_pool_trace_state(void);
-uint32_t sampler_ram_pool_trace_slot(void);
 void sampler_ram_pool_load_async_cancel(void);
 uint8_t sampler_ram_pool_load_async_take_result(sampler_ram_result_t *out_result,
                                                 uint16_t *out_ram_slot,

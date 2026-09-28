@@ -75,7 +75,6 @@ static void ui_renderer_template_draw_cfg_bitmap(int x,
                                                  int y_offset,
                                                  const uint32_t bitmap[UI_CFG_ICON_H])
 {
-    const uint32_t prof_start = DWT->CYCCNT;
     const int icon_x = x + ((w - UI_CFG_ICON_W) / 2) + x_offset;
     const int icon_y = y + ((h - UI_CFG_ICON_H) / 2) + y_offset;
 
@@ -84,8 +83,6 @@ static void ui_renderer_template_draw_cfg_bitmap(int x,
                                 UI_CFG_ICON_W,
                                 UI_CFG_ICON_H,
                                 (const uint8_t *)bitmap);
-    ui_render_prof_add_cycles(&g_ui_render_prof.renderer.widget.track_cfg_bitmap,
-                              DWT->CYCCNT - prof_start);
 }
 
 static uint8_t ui_renderer_template_draw_play_note_text(param_id_t id, int x, int y, int w, int h, float value)
@@ -112,7 +109,6 @@ static uint8_t ui_renderer_template_draw_play_note_text(param_id_t id, int x, in
 
 static void ui_renderer_template_draw_cfg_piano_icon(int x, int y, int w, int h)
 {
-    const uint32_t prof_start = DWT->CYCCNT;
     const int key_w = 26;
     const int key_h = 15;
     const int key_x = x + ((w - key_w) / 2);
@@ -129,8 +125,6 @@ static void ui_renderer_template_draw_cfg_piano_icon(int x, int y, int w, int h)
     {
         drv_display_fill_rect(key_x + black_x[i], key_y + 1, 3, 7);
     }
-    ui_render_prof_add_cycles(&g_ui_render_prof.renderer.widget.track_cfg_bitmap,
-                              DWT->CYCCNT - prof_start);
 }
 
 static void ui_renderer_template_draw_cfg_external_icon(int x, int y, int w, int h)
@@ -140,7 +134,6 @@ static void ui_renderer_template_draw_cfg_external_icon(int x, int y, int w, int
 
 static uint8_t ui_renderer_template_draw_cfg_midi_text(int x, int y, int w, int h)
 {
-    const uint32_t prof_start = DWT->CYCCNT;
     static const char label[] = "Midi";
 
     drv_display_set_font(&FONT_OFF_COMPACT);
@@ -160,8 +153,6 @@ static uint8_t ui_renderer_template_draw_cfg_midi_text(int x, int y, int w, int 
 
     drv_display_draw_text((uint8_t)text_x, (uint8_t)text_y, label);
     drv_display_set_font(&FONT_4X6);
-    ui_render_prof_add_cycles(&g_ui_render_prof.renderer.widget.track_cfg_text,
-                              DWT->CYCCNT - prof_start);
     return 1U;
 }
 
@@ -182,7 +173,6 @@ static void ui_renderer_template_draw_cfg_wave_icon(int x, int y, int w, int h)
 
 static void ui_renderer_template_draw_cfg_drum_icon(int x, int y, int w, int h)
 {
-    const uint32_t prof_start = DWT->CYCCNT;
     const int cx = x + (w / 2);
     const int top = y + 12;
     const int left = cx - 10;
@@ -202,8 +192,6 @@ static void ui_renderer_template_draw_cfg_drum_icon(int x, int y, int w, int h)
     drv_display_draw_line(left, bottom - 3, left + 2, bottom);
     drv_display_draw_line(right - 2, bottom, right, bottom - 3);
     drv_display_draw_line(left + 1, top + 5, right - 1, top + 5);
-    ui_render_prof_add_cycles(&g_ui_render_prof.renderer.widget.track_cfg_bitmap,
-                              DWT->CYCCNT - prof_start);
 }
 
 static void ui_renderer_template_draw_cfg_sampler_icon(int x, int y, int w, int h)
@@ -228,7 +216,6 @@ static uint8_t ui_renderer_template_draw_cfg_stacked_text(int x,
                                                           const char *top,
                                                           const char *bottom)
 {
-    const uint32_t prof_start = DWT->CYCCNT;
     if ((top == 0) || (bottom == 0))
     {
         return 0U;
@@ -244,8 +231,6 @@ static uint8_t ui_renderer_template_draw_cfg_stacked_text(int x,
     }
     drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, w, top), (uint8_t)text_y, top);
     drv_display_draw_text((uint8_t)ui_renderer_template_center_x(x, w, bottom), (uint8_t)(text_y + font_h + gap), bottom);
-    ui_render_prof_add_cycles(&g_ui_render_prof.renderer.widget.track_cfg_text,
-                              DWT->CYCCNT - prof_start);
     return 1U;
 }
 
@@ -268,15 +253,7 @@ static uint8_t ui_renderer_template_draw_custom_track_cfg(const ui_param_seq_plo
         return 0U;
     }
 
-#define UI_CFG_RETURN_TEXT(...)                                                     \
-    do                                                                              \
-    {                                                                               \
-        const uint32_t cfg_text_prof_start = DWT->CYCCNT;                           \
-        const uint8_t cfg_text_result = (__VA_ARGS__);                              \
-        ui_render_prof_add_cycles(&g_ui_render_prof.renderer.widget.track_cfg_text, \
-                                  DWT->CYCCNT - cfg_text_prof_start);                \
-        return cfg_text_result;                                                      \
-    } while (0)
+#define UI_CFG_RETURN_TEXT(...) return (__VA_ARGS__)
 
     if (kind == UI_TEMPLATE_CUSTOM_WIDGET_TRACK_CFG_INACTIVE)
     {

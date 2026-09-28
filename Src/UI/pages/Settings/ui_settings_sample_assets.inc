@@ -163,12 +163,6 @@ static void ui_page_settings_sample_load_to_slot(uint16_t slot, const char *path
 
 static void ui_page_settings_ram_load_to_slot(uint16_t slot, const char *path)
 {
-    ram_load_trace_write(RAM_LOAD_TRACE_UI_REQUEST,
-                         ram_load_trace_active_sequence(), UINT32_MAX,
-                         sampler_ram_pool_trace_state(),
-                         sampler_ram_pool_load_async_busy()!=0U
-                             ?RAM_LOAD_TRACE_FLAG_POOL_BUSY:0U,
-                         slot,ram_load_trace_path_hash(path));
     if (project_replacement_is_active() != 0U) return;
     uint16_t global_slot = SAMPLE_GLOBAL_POOL_INVALID_INDEX;
     uint16_t existing_logical = 0U;
@@ -188,12 +182,6 @@ static void ui_page_settings_ram_load_to_slot(uint16_t slot, const char *path)
         return;
     }
     const uint8_t started=project_control_ram_load_begin(slot,path);
-    ram_load_trace_write(RAM_LOAD_TRACE_UI_BEGIN_RESULT,
-                         ram_load_trace_active_sequence(),UINT32_MAX,
-                         sampler_ram_pool_trace_state(),
-                         sampler_ram_pool_load_async_busy()!=0U
-                             ?RAM_LOAD_TRACE_FLAG_POOL_BUSY:0U,
-                         slot,started);
     if (started != 0U)
     {
         ui_page_settings_status("LOADING");
@@ -201,12 +189,6 @@ static void ui_page_settings_ram_load_to_slot(uint16_t slot, const char *path)
     else
     {
         const sampler_ram_result_t result = sampler_ram_pool_get_last_result();
-        ram_load_trace_write(RAM_LOAD_TRACE_UI_BUSY_REJECT,
-                             ram_load_trace_active_sequence(),UINT32_MAX,
-                             sampler_ram_pool_trace_state(),
-                             sampler_ram_pool_load_async_busy()!=0U
-                                 ?RAM_LOAD_TRACE_FLAG_POOL_BUSY:0U,
-                             slot,(uint32_t)result);
         ui_page_settings_status(
             ((result == SAMPLER_RAM_RESULT_TRANSPORT_ACTIVE)
              || (result == SAMPLER_RAM_RESULT_RECORDER_ACTIVE))

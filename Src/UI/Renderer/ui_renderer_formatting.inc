@@ -534,47 +534,33 @@ static void ui_renderer_template_build_param_text(const ui_template_page_state_t
                                                   char *value_txt,
                                                   uint32_t value_len)
 {
-    uint32_t prof_start;
     const param_desc_t *const desc = (id < PARAM_COUNT)
         ? &param_registry[id] : ui_param_get_local_desc(id);
     if (desc != NULL)
     {
         if ((name_txt != NULL) && (name_len > 0U))
         {
-            prof_start = DWT->CYCCNT;
             ui_renderer_template_copy_text(name_txt, name_len, desc->name);
-            ui_render_prof_add_cycles(&g_ui_render_prof.renderer.slot_detail.label_format,
-                                      DWT->CYCCNT - prof_start);
         }
         if ((value_txt != NULL) && (value_len > 0U))
         {
-            prof_start = DWT->CYCCNT;
             ui_renderer_template_format_value(id, value, value_txt, value_len);
-            ui_render_prof_add_cycles(&g_ui_render_prof.renderer.slot_detail.value_format,
-                                      DWT->CYCCNT - prof_start);
         }
     }
     else
     {
         if ((name_txt != NULL) && (name_len > 0U))
         {
-            prof_start = DWT->CYCCNT;
             (void)snprintf(name_txt, name_len, "-");
-            ui_render_prof_add_cycles(&g_ui_render_prof.renderer.slot_detail.label_format,
-                                      DWT->CYCCNT - prof_start);
         }
         if ((value_txt != NULL) && (value_len > 0U))
         {
-            prof_start = DWT->CYCCNT;
             (void)snprintf(value_txt, value_len, "-");
-            ui_render_prof_add_cycles(&g_ui_render_prof.renderer.slot_detail.value_format,
-                                      DWT->CYCCNT - prof_start);
         }
     }
 
     if ((state != NULL) && (state->param_text != NULL))
     {
-        prof_start = DWT->CYCCNT;
         (void)state->param_text(slot,
                                 id,
                                 value,
@@ -582,8 +568,6 @@ static void ui_renderer_template_build_param_text(const ui_template_page_state_t
                                 name_len,
                                 value_txt,
                                 value_len);
-        ui_render_prof_add_cycles(&g_ui_render_prof.renderer.slot_detail.page_callback,
-                                  DWT->CYCCNT - prof_start);
     }
 }
 
@@ -601,7 +585,6 @@ static uint8_t ui_renderer_template_prepare_param_slot_texts(const ui_template_p
                                                              uint32_t bottom_len,
                                                              uint8_t *out_flash_active)
 {
-    uint32_t prof_start;
     if (((id >= PARAM_COUNT) && (ui_param_is_local_control(id) == 0U))
             || (out_value == NULL) || (out_draw_name_inverted == NULL)
             || (name_txt == NULL) || (name_len == 0U)
@@ -612,10 +595,7 @@ static uint8_t ui_renderer_template_prepare_param_slot_texts(const ui_template_p
     }
 
     *out_draw_name_inverted = 0U;
-    prof_start = DWT->CYCCNT;
     (void)ui_renderer_template_get_visible_param_value(plock_frame_ctx, id, out_value, out_draw_name_inverted);
-    ui_render_prof_add_cycles(&g_ui_render_prof.renderer.slot_detail.value_context,
-                              DWT->CYCCNT - prof_start);
 
     ui_renderer_template_build_param_text(state,
                                           slot,
@@ -626,7 +606,6 @@ static uint8_t ui_renderer_template_prepare_param_slot_texts(const ui_template_p
                                           value_txt,
                                           value_len);
 
-    prof_start = DWT->CYCCNT;
     float flash_value = 0.0f;
     ui_param_value_flash_kind_t flash_kind = UI_PARAM_VALUE_FLASH_DIRECT;
     const uint8_t audio_owned_param = (ui_param_is_local_control(id) == 0U)
@@ -663,9 +642,6 @@ static uint8_t ui_renderer_template_prepare_param_slot_texts(const ui_template_p
         ui_renderer_template_copy_text(bottom_txt, bottom_len,
             (*out_draw_name_inverted != 0U) ? value_txt : name_txt);
     }
-    ui_render_prof_add_cycles(
-        &g_ui_render_prof.renderer.slot_detail.inversion_flash_feedback,
-        DWT->CYCCNT - prof_start);
 
     return 1U;
 }

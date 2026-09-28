@@ -18,7 +18,6 @@
 #include "Storage/audio_recorder.h"
 #include "Platform/brick_fatal.h"
 #include "Storage/project_load_quiesce.h"
-#include "Storage/ram_load_trace.h"
 #include "Sampler/wavetable_pool.h"
 #include "Sampler/multi_sample_loader.h"
 #include "Sampler/sample_stream_manager.h"
@@ -91,30 +90,6 @@ typedef struct
 STORAGE_STATE_SDRAM static sampler_ram_load_job_t g_sampler_ram_load_job;
 static void sampler_ram_restore_retained_old(void);
 
-static uint32_t sampler_ram_trace_flags(uint16_t ram_slot)
-{
-    uint32_t flags = 0U;
-    if (sampler_ram_pool_load_async_busy() != 0U) flags |= RAM_LOAD_TRACE_FLAG_POOL_BUSY;
-    if (g_sampler_ram_load_job.state == SAMPLER_RAM_LOAD_DONE) flags |= RAM_LOAD_TRACE_FLAG_POOL_DONE;
-    if (wavetable_pool_load_async_busy() != 0U) flags |= RAM_LOAD_TRACE_FLAG_WAVETABLE_BUSY;
-    if (multi_sample_load_has_pending() != 0U) flags |= RAM_LOAD_TRACE_FLAG_MULTI_PENDING;
-    if (seq_runtime_is_running() != 0U) flags |= RAM_LOAD_TRACE_FLAG_TRANSPORT;
-    if (seq_runtime_is_start_pending() != 0U) flags |= RAM_LOAD_TRACE_FLAG_START_PENDING;
-    if (audio_recorder_is_active() != 0U) flags |= RAM_LOAD_TRACE_FLAG_RECORDER;
-    if ((ram_slot < SAMPLER_RAM_POOL_MAX_SLOTS)
-        && (g_sampler_ram_pool.slots[ram_slot].state == SAMPLER_RAM_SLOT_RETIRING))
-        flags |= RAM_LOAD_TRACE_FLAG_SLOT_RETIRING;
-    return flags;
-}
-
-static void sampler_ram_trace(uint32_t event, uint16_t ram_slot,
-                              uint32_t flags, uint32_t arg0, uint32_t arg1)
-{
-    ram_load_trace_write(event, ram_load_trace_active_sequence(), UINT32_MAX,
-                         (uint32_t)g_sampler_ram_load_job.state,
-                         sampler_ram_trace_flags(ram_slot) | flags, arg0, arg1);
-}
-
 static void sampler_ram_load_job_boot_init(void)
 {
     memset(&g_sampler_ram_load_job, 0, sizeof(g_sampler_ram_load_job));
@@ -124,9 +99,6 @@ static void sampler_ram_load_job_boot_init(void)
 void sampler_ram_pool_load_async_cancel(void)
 {
     sampler_ram_load_job_t *const job = &g_sampler_ram_load_job;
-    if (job->state != SAMPLER_RAM_LOAD_IDLE)
-        sampler_ram_trace(RAM_LOAD_TRACE_POOL_CANCELLED, job->ram_slot, 0U,
-                          (uint32_t)job->state, (uint32_t)job->result);
     if (job->physical_read.active != 0U)
     {
         sample_stream_backend_physical_cancel(&job->physical_read);
@@ -719,8 +691,6 @@ static void sampler_ram_load_fail(sampler_ram_result_t result)
     job->failed = 1U;
     job->state = (job->file_open != 0U) ? SAMPLER_RAM_LOAD_CLOSE : SAMPLER_RAM_LOAD_DONE;
     sampler_ram_set_last(result);
-    sampler_ram_trace(RAM_LOAD_TRACE_POOL_COMPLETED_ERROR, job->ram_slot, 0U,
-                      (uint32_t)result, job->global_slot);
 }
 
 static uint8_t sampler_ram_build_physical_map(sampler_ram_load_job_t *job)
@@ -746,66 +716,40 @@ static uint8_t sampler_ram_pool_load_async_begin_internal(
     uint16_t ram_slot, const char *path, const wav_info_t *prepared_info)
 {
     sampler_ram_load_job_t *const job = &g_sampler_ram_load_job;
-    sampler_ram_trace(RAM_LOAD_TRACE_POOL_BEGIN_ENTER, ram_slot,
-                      ((path != 0) && (path[0] != '\0'))
-                          ? RAM_LOAD_TRACE_FLAG_PATH_VALID : 0U,
-                      ram_slot, ram_load_trace_path_hash(path));
     if ((seq_runtime_is_running() != 0U)
         || (seq_runtime_is_start_pending() != 0U))
     {
         sampler_ram_set_last(SAMPLER_RAM_RESULT_TRANSPORT_ACTIVE);
-        sampler_ram_trace(RAM_LOAD_TRACE_POOL_BEGIN_REJECT, ram_slot, 0U,
-                          RAM_LOAD_TRACE_POOL_REJECT_TRANSPORT,
-                          (uint32_t)job->state);
         return 0U;
     }
     if (audio_recorder_is_active() != 0U)
     {
         sampler_ram_set_last(SAMPLER_RAM_RESULT_RECORDER_ACTIVE);
-        sampler_ram_trace(RAM_LOAD_TRACE_POOL_BEGIN_REJECT, ram_slot, 0U,
-                          RAM_LOAD_TRACE_POOL_REJECT_RECORDER,
-                          (uint32_t)job->state);
         return 0U;
     }
     if (wavetable_pool_load_async_busy() != 0U)
     {
-        sampler_ram_trace(RAM_LOAD_TRACE_POOL_BEGIN_REJECT, ram_slot, 0U,
-                          RAM_LOAD_TRACE_POOL_REJECT_WAVETABLE,
-                          (uint32_t)job->state);
         return 0U;
     }
     if (multi_sample_load_has_pending() != 0U)
     {
-        sampler_ram_trace(RAM_LOAD_TRACE_POOL_BEGIN_REJECT, ram_slot, 0U,
-                          RAM_LOAD_TRACE_POOL_REJECT_MULTI,
-                          (uint32_t)job->state);
         return 0U;
     }
     if (job->state != SAMPLER_RAM_LOAD_IDLE)
     {
-        sampler_ram_trace(RAM_LOAD_TRACE_POOL_BEGIN_REJECT, ram_slot, 0U,
-                          RAM_LOAD_TRACE_POOL_REJECT_JOB_STATE,
-                          (uint32_t)job->state);
         return 0U;
     }
     if (ram_slot >= SAMPLER_RAM_POOL_MAX_SLOTS)
     {
-        sampler_ram_trace(RAM_LOAD_TRACE_POOL_BEGIN_REJECT, ram_slot, 0U,
-                          RAM_LOAD_TRACE_POOL_REJECT_SLOT, ram_slot);
         return 0U;
     }
     if ((path == 0) || (path[0] == '\0'))
     {
-        sampler_ram_trace(RAM_LOAD_TRACE_POOL_BEGIN_REJECT, ram_slot, 0U,
-                          RAM_LOAD_TRACE_POOL_REJECT_PATH, 0U);
         return 0U;
     }
     if (g_sampler_ram_pool.slots[ram_slot].state
         == SAMPLER_RAM_SLOT_RETIRING)
     {
-        sampler_ram_trace(RAM_LOAD_TRACE_POOL_BEGIN_REJECT, ram_slot, 0U,
-                          RAM_LOAD_TRACE_POOL_REJECT_RETIRING,
-                          g_sampler_ram_pool.slots[ram_slot].generation);
         return 0U;
     }
     memset(job, 0, sizeof(*job));
@@ -813,9 +757,6 @@ static uint8_t sampler_ram_pool_load_async_begin_internal(
     {
         job->state = SAMPLER_RAM_LOAD_DONE;
         job->result = SAMPLER_RAM_RESULT_PATH_TOO_LONG;
-        sampler_ram_trace(RAM_LOAD_TRACE_POOL_BEGIN_REJECT, ram_slot, 0U,
-                          RAM_LOAD_TRACE_POOL_REJECT_PATH_LONG,
-                          ram_load_trace_path_hash(path));
         return 0U;
     }
     job->ram_slot = ram_slot;
@@ -828,9 +769,6 @@ static uint8_t sampler_ram_pool_load_async_begin_internal(
     }
     job->result = SAMPLER_RAM_RESULT_OK;
     job->state = SAMPLER_RAM_LOAD_MOUNT;
-    sampler_ram_trace(RAM_LOAD_TRACE_POOL_LOAD_STARTED, ram_slot,
-                      RAM_LOAD_TRACE_FLAG_PATH_VALID, ram_slot,
-                      job->media_epoch);
     return 1U;
 }
 
@@ -863,16 +801,6 @@ uint8_t sampler_ram_pool_load_async_busy(void)
 {
     return ((g_sampler_ram_load_job.state != SAMPLER_RAM_LOAD_IDLE)
             && (g_sampler_ram_load_job.state != SAMPLER_RAM_LOAD_DONE)) ? 1U : 0U;
-}
-
-uint32_t sampler_ram_pool_trace_state(void)
-{
-    return (uint32_t)g_sampler_ram_load_job.state;
-}
-
-uint32_t sampler_ram_pool_trace_slot(void)
-{
-    return (uint32_t)g_sampler_ram_load_job.ram_slot;
 }
 
 static void sampler_ram_pool_load_async_step(void)
@@ -1048,8 +976,6 @@ static void sampler_ram_pool_load_async_step(void)
         }
         sampler_ram_audio_projection_install_prepared(
             &job->prepared_descriptor);
-        sampler_ram_trace(RAM_LOAD_TRACE_SLOT_INSTALLED, job->ram_slot, 0U,
-                          job->global_slot, job->candidate.generation);
         if (old_snapshot.page_count != 0U)
             sample_page_cache_port_release_shared(old_snapshot.first_page_slot,
                                                   old_snapshot.page_count);
@@ -1064,9 +990,6 @@ static void sampler_ram_pool_load_async_step(void)
         job->result = SAMPLER_RAM_RESULT_OK;
         job->state = SAMPLER_RAM_LOAD_DONE;
         sampler_ram_set_last(SAMPLER_RAM_RESULT_OK);
-        sampler_ram_trace(RAM_LOAD_TRACE_POOL_COMPLETED_SUCCESS,
-                          job->ram_slot, 0U, job->global_slot,
-                          job->candidate.generation);
         return;
     }
 
@@ -1257,9 +1180,6 @@ void sampler_ram_pool_load_async_service(void)
         const sampler_ram_load_state_t old_state = job->state;
         const uint32_t old_frames_done = job->frames_done;
         sampler_ram_pool_load_async_step();
-        if (job->state != old_state)
-            sampler_ram_trace(RAM_LOAD_TRACE_POOL_STATE, job->ram_slot, 0U,
-                              (uint32_t)old_state, (uint32_t)job->state);
         if ((job->state == SAMPLER_RAM_LOAD_IDLE)
             || (job->state == SAMPLER_RAM_LOAD_DONE))
             break;
@@ -1286,10 +1206,6 @@ uint8_t sampler_ram_pool_load_async_take_result(sampler_ram_result_t *out_result
     if (out_ram_slot != 0) *out_ram_slot = job->ram_slot;
     if (out_global_slot != 0) *out_global_slot = job->global_slot;
     if (out_path != 0) *out_path = job->path;
-    sampler_ram_trace(RAM_LOAD_TRACE_POOL_RESULT_TAKEN, job->ram_slot,
-                      (job->result == SAMPLER_RAM_RESULT_OK)
-                          ? RAM_LOAD_TRACE_FLAG_RESULT_SUCCESS : 0U,
-                      (uint32_t)job->result, job->global_slot);
     job->state = SAMPLER_RAM_LOAD_IDLE;
     return 1U;
 }

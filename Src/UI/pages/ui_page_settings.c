@@ -20,7 +20,6 @@
 #include "SD/sd_scheduler_runtime.h"
 #include "Platform/brick_build_config.h"
 #include "Storage/project_control.h"
-#include "Storage/ram_load_trace.h"
 #include "Sampler/sample_cache.h"
 #include "Sampler/sample_global_pool.h"
 #include "Sampler/sampler_ram_pool.h"

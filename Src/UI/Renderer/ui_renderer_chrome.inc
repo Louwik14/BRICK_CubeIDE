@@ -585,9 +585,6 @@ static uint8_t ui_renderer_template_job_begin(const ui_template_page_state_t *st
     g_ui_renderer_template_job.footer_signature =
         ui_renderer_template_footer_signature(&g_ui_renderer_template_job.state);
     g_ui_renderer_template_job.phase = UI_TEMPLATE_RENDER_HEADER;
-    g_ui_render_prof_frame_cpu_cycles = 0U;
-    g_ui_render_prof_frame_wall_start = brick_media_clock_now_tick();
-    g_ui_render_prof_frame_active = 1U;
     return 1U;
 }
 
@@ -723,52 +720,37 @@ static void ui_renderer_template_job_draw_special(ui_renderer_template_job_t *jo
 static void ui_renderer_template_job_draw_group(ui_renderer_template_job_t *job)
 {
     if (job->grouped_widget_drawn == 0U) return;
-    const uint32_t prof_start = DWT->CYCCNT;
-    volatile ui_render_prof_cycles_t *prof_stats = NULL;
     switch (job->grouped_widget)
     {
         case UI_TEMPLATE_CUSTOM_WIDGET_FILTER_CURVE_GROUP:
-            prof_stats = &g_ui_render_prof.renderer.widget.grouped_filter;
             (void)ui_renderer_template_draw_filter_curve_group(&job->plock_frame);
             break;
         case UI_TEMPLATE_CUSTOM_WIDGET_LFO_SHAPE_PHASE_GROUP:
-            prof_stats = &g_ui_render_prof.renderer.widget.grouped_lfo;
             (void)ui_renderer_template_draw_lfo_shape_phase_group(&job->plock_frame,
                 job->grouped_lfo_shape_id, job->grouped_lfo_phase_id);
             break;
         case UI_TEMPLATE_CUSTOM_WIDGET_SPECTRAL_WINDOW_GROUP:
-            prof_stats = &g_ui_render_prof.renderer.widget.grouped_spectral;
             ui_renderer_template_draw_spectral_window_group(&job->plock_frame,
                 job->grouped_filter_first_slot, job->grouped_filter_position,
                 job->grouped_filter_width);
             break;
         case UI_TEMPLATE_CUSTOM_WIDGET_FM_PITCH_EG_GROUP:
-            prof_stats = &g_ui_render_prof.renderer.widget.grouped_fm_pitch;
             (void)ui_renderer_template_draw_fm_pitch_eg_group(&job->plock_frame);
             break;
         case UI_TEMPLATE_CUSTOM_WIDGET_AUDIO_FX_GROUP:
             break;
         default:
-            prof_stats = &g_ui_render_prof.renderer.widget.grouped_adsr;
             (void)ui_renderer_template_draw_custom_adsr_shape(&job->grouped_adsr_shape,
                 UI_TEMPLATE_GROUP_WIDGET_X, UI_TEMPLATE_GROUP_WIDGET_Y,
                 UI_TEMPLATE_GROUP_WIDGET_W, UI_TEMPLATE_GROUP_WIDGET_H, 1U);
             break;
     }
-    if (prof_stats != NULL)
-        ui_render_prof_add_cycles(prof_stats, DWT->CYCCNT - prof_start);
 }
 
 uint8_t ui_renderer_template_draw_step(const ui_template_page_state_t *state)
 {
     ui_renderer_template_job_t *job = &g_ui_renderer_template_job;
-    ui_renderer_template_phase_t measured_phase;
-    ui_renderer_template_body_t measured_body;
-    uint8_t audio_fx_used;
     uint8_t completed = 0U;
-    uint32_t start_cycles;
-    uint32_t elapsed;
-    volatile ui_render_prof_cycles_t *phase_stats = NULL;
     if ((job->phase == UI_TEMPLATE_RENDER_IDLE)
             && (ui_renderer_template_job_begin(state) == 0U))
     {
@@ -781,23 +763,16 @@ uint8_t ui_renderer_template_draw_step(const ui_template_page_state_t *state)
     }
 
     const ui_template_subpage_t *subpage = ui_template_page_get_active_subpage(&job->state);
-    measured_phase = job->phase;
-    measured_body = job->body;
-    audio_fx_used = (uint8_t)((measured_phase == UI_TEMPLATE_RENDER_AUDIO_FX)
-        && (job->grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_AUDIO_FX_GROUP));
-    start_cycles = DWT->CYCCNT;
     switch (job->phase)
     {
         case UI_TEMPLATE_RENDER_HEADER:
             if ((g_ui_template_header_cache_valid != 0U)
                     && (g_ui_template_header_cache_signature == job->header_signature))
             {
-                g_ui_render_prof.renderer.header_cache_hit_count++;
                 ui_renderer_template_header_cache_restore();
             }
             else
             {
-                g_ui_render_prof.renderer.header_cache_miss_count++;
                 ui_renderer_template_draw_header(&job->state);
                 ui_renderer_template_header_cache_capture(job->header_signature);
             }
@@ -815,10 +790,7 @@ uint8_t ui_renderer_template_draw_step(const ui_template_page_state_t *state)
         case UI_TEMPLATE_RENDER_AUDIO_FX:
             if (job->grouped_widget == UI_TEMPLATE_CUSTOM_WIDGET_AUDIO_FX_GROUP)
             {
-                const uint32_t audio_fx_prof_start = DWT->CYCCNT;
                 (void)ui_renderer_template_draw_audio_fx_group(&job->plock_frame);
-                ui_render_prof_add_cycles(&g_ui_render_prof.renderer.widget.audio_fx,
-                    DWT->CYCCNT - audio_fx_prof_start);
             }
             job->phase = UI_TEMPLATE_RENDER_SLOT_0;
             break;
@@ -844,12 +816,10 @@ uint8_t ui_renderer_template_draw_step(const ui_template_page_state_t *state)
             if ((g_ui_template_footer_cache_valid != 0U)
                     && (g_ui_template_footer_cache_signature == job->footer_signature))
             {
-                g_ui_render_prof.renderer.footer_cache_hit_count++;
                 ui_renderer_template_footer_cache_restore();
             }
             else
             {
-                g_ui_render_prof.renderer.footer_cache_miss_count++;
                 ui_renderer_template_draw_footer(&job->state);
                 ui_renderer_template_footer_cache_capture(job->footer_signature);
             }
@@ -864,48 +834,6 @@ uint8_t ui_renderer_template_draw_step(const ui_template_page_state_t *state)
             job->phase = UI_TEMPLATE_RENDER_IDLE;
             return 1U;
     }
-    elapsed = DWT->CYCCNT - start_cycles;
-    switch (measured_phase)
-    {
-        case UI_TEMPLATE_RENDER_HEADER: phase_stats = &g_ui_render_prof.renderer.header; break;
-        case UI_TEMPLATE_RENDER_PREPARE: phase_stats = &g_ui_render_prof.renderer.prepare; break;
-        case UI_TEMPLATE_RENDER_SPECIAL: phase_stats = &g_ui_render_prof.renderer.special; break;
-        case UI_TEMPLATE_RENDER_AUDIO_FX: phase_stats = &g_ui_render_prof.renderer.audio_fx_phase; break;
-        case UI_TEMPLATE_RENDER_SLOT_0: phase_stats = &g_ui_render_prof.renderer.slot_0; break;
-        case UI_TEMPLATE_RENDER_SLOT_1: phase_stats = &g_ui_render_prof.renderer.slot_1; break;
-        case UI_TEMPLATE_RENDER_SLOT_2: phase_stats = &g_ui_render_prof.renderer.slot_2; break;
-        case UI_TEMPLATE_RENDER_SLOT_3: phase_stats = &g_ui_render_prof.renderer.slot_3; break;
-        case UI_TEMPLATE_RENDER_GROUP: phase_stats = &g_ui_render_prof.renderer.group; break;
-        case UI_TEMPLATE_RENDER_FOOTER: phase_stats = &g_ui_render_prof.renderer.footer; break;
-        case UI_TEMPLATE_RENDER_FINALIZE: phase_stats = &g_ui_render_prof.renderer.finalize; break;
-        default: break;
-    }
-    if (phase_stats != NULL) ui_render_prof_add_cycles(phase_stats, elapsed);
-    if (measured_phase == UI_TEMPLATE_RENDER_SPECIAL)
-    {
-        volatile ui_render_prof_cycles_t *special_stats = NULL;
-        switch (measured_body)
-        {
-            case UI_TEMPLATE_BODY_SAMPLER_RAM: special_stats = &g_ui_render_prof.renderer.special_sampler_ram; break;
-            case UI_TEMPLATE_BODY_SYNTH_LIVE: special_stats = &g_ui_render_prof.renderer.special_synth_live; break;
-            case UI_TEMPLATE_BODY_WAVE_WAVETABLE: special_stats = &g_ui_render_prof.renderer.special_wave_wavetable; break;
-            case UI_TEMPLATE_BODY_WAVE_CLASSIC: special_stats = &g_ui_render_prof.renderer.special_wave_classic; break;
-            default: break;
-        }
-        if (special_stats != NULL) ui_render_prof_add_cycles(special_stats, elapsed);
-    }
-    if (audio_fx_used != 0U)
-        ui_render_prof_add_cycles(&g_ui_render_prof.renderer.audio_fx_used, elapsed);
-    if (g_ui_render_prof_frame_active != 0U)
-        g_ui_render_prof_frame_cpu_cycles += elapsed;
-    if ((completed != 0U) && (g_ui_render_prof_frame_active != 0U))
-    {
-        ui_render_prof_add_value(&g_ui_render_prof.renderer.frame_cpu_cycles,
-                                 g_ui_render_prof_frame_cpu_cycles);
-        ui_render_prof_add_value(&g_ui_render_prof.renderer.frame_wall_ticks,
-            brick_media_clock_now_tick() - g_ui_render_prof_frame_wall_start);
-        g_ui_render_prof_frame_active = 0U;
-    }
     return completed;
 }
 
@@ -916,8 +844,5 @@ uint8_t ui_renderer_template_draw_pending(void)
 
 void ui_renderer_template_draw_cancel(void)
 {
-    if (g_ui_render_prof_frame_active != 0U)
-        g_ui_render_prof.renderer.frame_cancel_count++;
-    g_ui_render_prof_frame_active = 0U;
     g_ui_renderer_template_job.phase = UI_TEMPLATE_RENDER_IDLE;
 }
