@@ -63,6 +63,7 @@ STORAGE_STATE_SDRAM static rec_source_generation_t
     g_rec_source_generations[REC_SOURCE_SLOT_COUNT];
 static uint8_t g_rec_source_current_slot = REC_SOURCE_INVALID_SLOT;
 static uint8_t g_rec_source_building_slot = REC_SOURCE_INVALID_SLOT;
+static uint8_t g_rec_source_preview_slot = REC_SOURCE_INVALID_SLOT;
 static uint32_t g_rec_source_next_generation;
 static uint32_t g_rec_source_publication_serial;
 static uint8_t g_rec_source_recovery_pending;
@@ -164,6 +165,7 @@ uint8_t rec_source_switch_current(uint32_t generation)
     if ((target_index >= 0)
             && (target_pages_ready(&g_rec_source_generations[(uint8_t)target_index]) == 0U))
         return 0U;
+    g_rec_source_preview_slot = REC_SOURCE_INVALID_SLOT;
     if ((g_rec_source_current_slot < REC_SOURCE_SLOT_COUNT)
             && ((target_index < 0)
                 || (g_rec_source_current_slot != (uint8_t)target_index)))
@@ -367,6 +369,7 @@ void rec_source_init(void)
     }
     g_rec_source_current_slot = REC_SOURCE_INVALID_SLOT;
     g_rec_source_building_slot = REC_SOURCE_INVALID_SLOT;
+    g_rec_source_preview_slot = REC_SOURCE_INVALID_SLOT;
     g_rec_source_next_generation = 0U;
     g_rec_source_publication_serial = 0U;
     g_rec_source_recovery_pending = 1U;
@@ -480,6 +483,23 @@ const char *rec_source_building_final_path(void)
 uint8_t rec_source_building_active(void)
 { return (g_rec_source_building_slot < REC_SOURCE_SLOT_COUNT) ? 1U : 0U; }
 
+uint8_t rec_source_publish_building_preview(uint32_t frame_count,
+                                            uint32_t registration_epoch)
+{
+    if ((g_rec_source_building_slot >= REC_SOURCE_SLOT_COUNT)
+            || (frame_count == 0U) || (registration_epoch == 0U)) return 0U;
+    rec_source_generation_t *const building =
+        &g_rec_source_generations[g_rec_source_building_slot];
+    if (building->state != REC_SOURCE_STATE_BUILDING) return 0U;
+    building->frame_count = frame_count;
+    building->registration_epoch = registration_epoch;
+    if (g_rec_source_preview_slot == g_rec_source_building_slot) return 1U;
+    if (target_pages_ready(building) == 0U) return 0U;
+    publish_projection(building);
+    g_rec_source_preview_slot = g_rec_source_building_slot;
+    return 1U;
+}
+
 uint8_t rec_source_publish_building(uint32_t frame_count, uint32_t registration_epoch,
                                     const audio_recorder_storage_map_copy_t *map)
 {
@@ -522,7 +542,13 @@ void rec_source_abort_building(void)
     rec_source_waveform_abort();
     rec_source_generation_t *const building =
         &g_rec_source_generations[g_rec_source_building_slot];
-    sample_page_cache_clear_key(building->key);
+    if (g_rec_source_preview_slot == g_rec_source_building_slot)
+    {
+        publish_projection((g_rec_source_current_slot < REC_SOURCE_SLOT_COUNT)
+            ? &g_rec_source_generations[g_rec_source_current_slot] : NULL);
+        g_rec_source_preview_slot = REC_SOURCE_INVALID_SLOT;
+    }
+    else sample_page_cache_clear_key(building->key);
     building->state = REC_SOURCE_STATE_RETIRED;
     building->release_requested = 0U;
     g_rec_source_building_slot = REC_SOURCE_INVALID_SLOT;

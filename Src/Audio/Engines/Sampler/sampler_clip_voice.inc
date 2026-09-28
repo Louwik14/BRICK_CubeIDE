@@ -581,6 +581,8 @@ static uint8_t brick6_sampler_runtime_clip_start_playback(uint8_t track_id)
     return 1U;
 }
 
+static void brick6_sampler_runtime_clip_stop_playback(uint8_t track_id);
+
 static void brick6_sampler_runtime_clip_rebind_rec(uint8_t track_id)
 {
     if (track_id >= SEQ_TRACK_COUNT) return;
@@ -590,9 +592,13 @@ static void brick6_sampler_runtime_clip_rebind_rec(uint8_t track_id)
             || (clip->state != (uint8_t)BRICK6_SAMPLER_CLIP_STATE_PLAYING)
             || (voice->active == 0U)) return;
     sample_resolved_source_t current;
-    if ((rec_source_audio_resolve(&current) == 0U)
-            || (sample_audio_key_equal(
-                &current.key, &voice->play_plan.key) != 0U)) return;
+    if (rec_source_audio_resolve(&current) == 0U)
+    {
+        brick6_sampler_runtime_clip_stop_playback(track_id);
+        return;
+    }
+    if (sample_audio_key_equal(
+            &current.key, &voice->play_plan.key) != 0U) return;
     const uint32_t old_begin = voice->region_begin;
     const uint32_t old_frames = voice->loop_frames;
     const float old_position = voice->position;

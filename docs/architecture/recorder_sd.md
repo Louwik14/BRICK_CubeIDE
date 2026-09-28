@@ -52,6 +52,12 @@ Après STOP, STORAGE continue à drainer le ring. La finalisation progresse par
 étapes coopératives : commit des données, libération de la réservation,
 écriture du header WAV, synchronisation, fermeture puis rename `.REC` vers
 `.WAV`. Aucun `f_write` FatFs ne se trouve dans le data-plane live.
+En DRAINING, le Recorder enregistre le flux BUILDING dans le page-cache avec
+`readable_frames` limité aux frames effectivement commitées. Dès que les pages
+initiales sont READY, `REC_SOURCE` publie une projection AUDIO provisoire de
+BUILDING : le Streamer peut alors rebind et lire la prise avant `TAKE_READY`.
+La publication CURRENT et l'historique Undo restent liés à la finalisation ;
+en cas d'échec, la projection AUDIO revient à la génération CURRENT précédente.
 
 Une longueur fixe gouverne l'arrêt automatique par compteur de frames. Son
 unité est la barre du transport (quatre noires, soit seize steps au pas courant)

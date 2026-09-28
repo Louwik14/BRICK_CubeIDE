@@ -38,6 +38,8 @@ sample_audio_key_t rec_source_building_key(void);
 const char *rec_source_building_temporary_path(void);
 const char *rec_source_building_final_path(void);
 uint8_t rec_source_building_active(void);
+uint8_t rec_source_publish_building_preview(uint32_t frame_count,
+                                            uint32_t registration_epoch);
 uint8_t rec_source_publish_building(uint32_t frame_count,
                                     uint32_t registration_epoch,
                                     const audio_recorder_storage_map_copy_t *map);

@@ -131,6 +131,17 @@ static void update_build_stream(void)
         g_build_stream_readable_frames = readable_frames;
 }
 
+static void publish_build_stream_preview(void)
+{
+    if ((g_build_stream_registered == 0U)
+            || (rec_source_building_active() == 0U)) return;
+    uint32_t epoch = 0U;
+    if (sample_page_cache_get_registration_epoch_key(
+            g_build_stream_key, &epoch) == 0U) return;
+    (void)rec_source_publish_building_preview(
+        g_audio_recorder_capture.head_cursor, epoch);
+}
+
 static uint8_t publish_start(audio_recorder_client_t client, uint64_t sample_time)
 {
     if((g_audio_recorder.state != AUDIO_RECORDER_STATE_PREPARED)
@@ -394,6 +405,12 @@ void audio_recorder_service(void)
             g_audio_recorder.state = AUDIO_RECORDER_STATE_TAKE_READY;
     }
     update_build_stream();
+    if ((phase == AUDIO_RECORDER_STORAGE_DRAINING)
+            || (phase == AUDIO_RECORDER_STORAGE_FINALIZING))
+    {
+        if (g_build_stream_registered == 0U) register_build_stream();
+        publish_build_stream_preview();
+    }
     if (g_audio_recorder.state != before)
         trace_rec(REC_SD_TRACE_REC_STATE, before,
             (uint32_t)g_audio_recorder.error, 0U);
