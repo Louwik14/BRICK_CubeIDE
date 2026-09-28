@@ -10,6 +10,7 @@
 #include "Platform/memory_layout.h"
 #include "stm32h7xx.h"
 #include "stm32h7xx_hal.h"
+#include "sai.h"
 #include "tusb.h"
 
 #define USB_AUDIO_AS_OUT_INTERFACE       1U
@@ -26,8 +27,10 @@
 #define USB_AUDIO_FEEDBACK_LIMIT         (1U << 14)
 
 static volatile uint8_t g_usb_audio_out_active;
-static volatile uint32_t g_usb_audio_dma_frames;
-static uint32_t g_feedback_last_dma_frames;
+static uint16_t g_feedback_last_dma_position;
+static uint16_t g_feedback_last_usb_frame;
+static uint8_t g_feedback_dma_valid;
+static uint32_t g_feedback_dma_words;
 static uint16_t g_feedback_sof_count;
 static int32_t g_feedback_rate_q16 = USB_AUDIO_FEEDBACK_NOMINAL;
 static int32_t g_feedback_fill_sum;
@@ -66,30 +69,65 @@ static float usb_audio_pcm24_in_32_to_float(int32_t sample)
     return (float)pcm24 * (1.0f / 8388608.0f);
 }
 
-void usb_audio_feedback_dma_half(void)
-{
-    g_usb_audio_dma_frames += BOARD_AUDIO_CONTRACT_FRAMES_PER_HALF;
-}
-
-void usb_audio_feedback_sof(void)
+void usb_audio_feedback_sof(uint16_t usb_frame)
 {
     if (g_usb_audio_out_active == 0U) return;
+    const DMA_HandleTypeDef *const dma = hsai_BlockB1.hdmarx;
+    const uint32_t ndtr = (dma != NULL && dma->Instance != NULL)
+                        ? __HAL_DMA_GET_COUNTER(dma) : 0U;
+    if ((dma != NULL)
+        && ((((DMA_Stream_TypeDef *)dma->Instance)->CR & DMA_SxCR_EN) != 0U)
+        && (ndtr <= BOARD_AUDIO_CONTRACT_BUFFER_WORDS)) {
+        const uint16_t position = (uint16_t)
+            ((BOARD_AUDIO_CONTRACT_BUFFER_WORDS - ndtr)
+             % BOARD_AUDIO_CONTRACT_BUFFER_WORDS);
+        if (g_feedback_dma_valid != 0U) {
+            const uint16_t frame_delta =
+                (uint16_t)((usb_frame - g_feedback_last_usb_frame) & 0x3FFFU);
+            if (frame_delta == 1U) {
+                g_feedback_dma_words += (position + BOARD_AUDIO_CONTRACT_BUFFER_WORDS
+                                         - g_feedback_last_dma_position)
+                                        % BOARD_AUDIO_CONTRACT_BUFFER_WORDS;
+            } else {
+                g_feedback_sof_count = 0U;
+                g_feedback_dma_words = 0U;
+                g_feedback_fill_sum = 0;
+                g_feedback_fill_samples = 0U;
+                g_feedback_last_dma_position = position;
+                g_feedback_last_usb_frame = usb_frame;
+                return;
+            }
+        } else {
+            g_feedback_last_dma_position = position;
+            g_feedback_last_usb_frame = usb_frame;
+            g_feedback_dma_valid = 1U;
+            return;
+        }
+        g_feedback_last_dma_position = position;
+        g_feedback_last_usb_frame = usb_frame;
+        g_feedback_dma_valid = 1U;
+    } else {
+        g_feedback_dma_valid = 0U;
+        g_feedback_sof_count = 0U;
+        g_feedback_dma_words = 0U;
+        g_feedback_fill_sum = 0;
+        g_feedback_fill_samples = 0U;
+        return;
+    }
     if (g_usb_audio_out_ready != 0U) {
         g_feedback_fill_sum += (int32_t)usb_audio_float_pc_to_brick_available();
         ++g_feedback_fill_samples;
     }
     if (++g_feedback_sof_count < USB_AUDIO_FEEDBACK_WINDOW_SOF) return;
 
-    const uint32_t dma_frames = g_usb_audio_dma_frames;
-    const uint32_t delta = dma_frames - g_feedback_last_dma_frames;
-    g_feedback_last_dma_frames = dma_frames;
     g_feedback_sof_count = 0U;
-    if (delta >= BOARD_AUDIO_CONTRACT_FRAMES_PER_HALF
-        && delta <= BOARD_AUDIO_CONTRACT_FRAMES_PER_HALF * 256U) {
-        const int32_t measured = (int32_t)(((uint64_t)delta << 16) /
-                                           USB_AUDIO_FEEDBACK_WINDOW_SOF);
+    if ((g_feedback_dma_words >= 80U * USB_AUDIO_FEEDBACK_WINDOW_SOF)
+        && (g_feedback_dma_words <= 112U * USB_AUDIO_FEEDBACK_WINDOW_SOF)) {
+        const int32_t measured = (int32_t)(((uint64_t)g_feedback_dma_words << 16) /
+            (BOARD_AUDIO_CONTRACT_WORDS_PER_FRAME * USB_AUDIO_FEEDBACK_WINDOW_SOF));
         g_feedback_rate_q16 += (measured - g_feedback_rate_q16) / 16;
     }
+    g_feedback_dma_words = 0U;
 
     int32_t feedback = g_feedback_rate_q16;
     if (g_feedback_fill_samples != 0U) {
@@ -149,7 +187,8 @@ void usb_audio_transport_set_interface(uint8_t interface_number,
 
     g_usb_audio_out_active = (alternate_setting != 0U) ? 1U : 0U;
     g_usb_audio_out_ready = 0U;
-    g_feedback_last_dma_frames = g_usb_audio_dma_frames;
+    g_feedback_dma_valid = 0U;
+    g_feedback_dma_words = 0U;
     g_feedback_sof_count = 0U;
     g_feedback_fill_sum = 0;
     g_feedback_fill_samples = 0U;
@@ -208,8 +247,7 @@ bool tud_audio_rx_done_isr(uint8_t rhport, uint16_t n_bytes_received,
     if (g_usb_audio_out_active != 0U) {
         /* TinyUSB has already copied this isochronous OUT packet into its
          * software FIFO and rearmed the endpoint.  Move only this packet to
-         * the SPSC AUDIO ring here; feedback and all other class work remain
-         * deferred to the superloop. */
+         * the SPSC AUDIO ring here; feedback runs on USB SOF. */
         bytes_to_read = n_bytes_received;
         if (bytes_to_read > (uint16_t)sizeof(g_usb_audio_out_pcm_scratch)) {
             bytes_to_read = (uint16_t)sizeof(g_usb_audio_out_pcm_scratch);
