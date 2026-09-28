@@ -37,6 +37,7 @@
 #include "pages/ui_page_template_play.h"
 #include "UI/pages/ui_page_template_cfg.h"
 #include "Storage/sample_capture.h"
+#include "IPC/control_audio_visual.h"
 #include "Track/track_input_ownership.h"
 #define SEQ_RUNTIME_INTERNAL_USE 1
 #include "ui_bootstrap.h"
@@ -1060,6 +1061,7 @@ next_event:
     }
 
     sample_capture_model_service();
+    control_audio_visual_service();
     ui_hall_mode_flow_service_pending(HAL_GetTick());
 
     const ui_page_t *active_page = ui_page_get();

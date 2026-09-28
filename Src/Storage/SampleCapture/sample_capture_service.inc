@@ -186,6 +186,8 @@ static void sample_capture_sync_current_generation(void)
 
 void sample_capture_model_service(void)
 {
+    if (g_sample_capture.rec_bus_publish_pending != 0U)
+        sample_capture_publish_rec_bus();
     sample_capture_save_service();
     sample_capture_sync_current_generation();
     sample_capture_terminal_cleanup_service();

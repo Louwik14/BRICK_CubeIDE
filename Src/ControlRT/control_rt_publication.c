@@ -74,7 +74,8 @@ static uint8_t control_rt_param_is_structural(
             | ((uint32_t)(AUDIO_REC_BUS_SOURCE_LINE_DIRECT
                 | AUDIO_REC_BUS_SOURCE_MIC_LOGICAL
                 | AUDIO_REC_BUS_CAPTURE_ENABLED
-                | AUDIO_REC_BUS_SOURCE_USB_DIRECT) << 18);
+                | AUDIO_REC_BUS_SOURCE_USB_DIRECT
+                | AUDIO_REC_BUS_OVERDUB_CURRENT) << 18);
         return (uint8_t)((scope == 0U)
             && ((command->value & ~allowed) == 0U)
             && (((command->value >> 16) & 3U) <= AUDIO_REC_BUS_ARM_TRIG));

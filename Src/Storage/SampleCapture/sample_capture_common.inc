@@ -75,9 +75,9 @@ static void sample_capture_publish_rec_bus(void)
             && (rec_source_current_snapshot(&current_rec) != 0U))
         source_flags |= AUDIO_REC_BUS_OVERDUB_CURRENT;
 
-    if (control_audio_rec_bus_publish(source_entity_mask,
-            (audio_rec_bus_arm_t)g_sample_capture.state.arm, source_flags) == 0U)
-        Error_Handler();
+    g_sample_capture.rec_bus_publish_pending = (uint8_t)(
+        control_audio_rec_bus_publish(source_entity_mask,
+            (audio_rec_bus_arm_t)g_sample_capture.state.arm, source_flags) == 0U);
 }
 
 static uint8_t sample_capture_publish_rec_bus_at(uint64_t sample_time)
@@ -111,6 +111,7 @@ static uint8_t sample_capture_publish_rec_bus_at(uint64_t sample_time)
             (audio_rec_bus_arm_t)g_sample_capture.state.arm,
             source_flags, sample_time) == 0U)
         return 0U;
+    g_sample_capture.rec_bus_publish_pending = 0U;
     return 1U;
 }
 

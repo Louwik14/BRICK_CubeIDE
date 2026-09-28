@@ -6,8 +6,7 @@
 
 void control_audio_rec_bus_init(void)
 {
-    if (control_audio_rec_bus_publish(0U, AUDIO_REC_BUS_ARM_OFF, 0U) == 0U)
-        Error_Handler();
+    (void)control_audio_rec_bus_publish(0U, AUDIO_REC_BUS_ARM_OFF, 0U);
 }
 
 uint8_t control_audio_rec_bus_publish(uint16_t mask, audio_rec_bus_arm_t arm,

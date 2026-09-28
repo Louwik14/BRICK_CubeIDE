@@ -100,6 +100,7 @@ typedef struct
     uint8_t wave_cache_retry_countdown;
     uint8_t route_mask[SAMPLE_CAPTURE_TRACK_COUNT];
     uint8_t capture_enabled;
+    uint8_t rec_bus_publish_pending;
     uint8_t last_take_notified;
     uint8_t rec_edit_enter_deferred_services;
     uint8_t rec_edit_first_render_pending;

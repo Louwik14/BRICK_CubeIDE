@@ -263,6 +263,12 @@ de capture, les refus START portent
 (commande Recorder refusée). Le trigger porte `1` à la réception du
 seuil et `2` lorsque la limite musicale est retenue.
 
+Pour `event=12` émis par le modèle de capture, `detail=0x100 | enabled` indique
+le basculement du réglage Overdub (`0x101` = activé). Ce n'est pas un résultat
+de liaison AUDIO. La liaison effective n'est tentée que pendant une capture
+active ; ses événements AUDIO portent `detail=0` en cas de succès ou `1`, `2`,
+`3` pour un refus de source, de plan ou de reader.
+
 Les cinq mots SD sont remplis uniquement par les événements CONTROL/STORAGE
 qui prennent un instantané SD ; zéro ailleurs :
 
