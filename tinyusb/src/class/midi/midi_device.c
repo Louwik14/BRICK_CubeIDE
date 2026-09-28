@@ -71,6 +71,21 @@ typedef struct {
 
 static midid_interface_t _midid_itf[CFG_TUD_MIDI];
 
+#define MIDI_TX_META_LEN (CFG_TUD_MIDI_TX_BUFSIZE / 4U)
+#define MIDI_TX_INFLIGHT_LEN (CFG_TUD_MIDI_TX_BUFSIZE / 4U)
+typedef struct {
+  uint32_t deadline[MIDI_TX_META_LEN];
+  uint8_t timed[MIDI_TX_META_LEN];
+  uint32_t inflight_deadline[MIDI_TX_INFLIGHT_LEN];
+  uint8_t inflight_timed[MIDI_TX_INFLIGHT_LEN];
+  uint32_t write_seq;
+  uint32_t submit_seq;
+  uint32_t submit_tick;
+  uint16_t inflight_count;
+  uint16_t pending_f8;
+} midi_tx_timing_t;
+static midi_tx_timing_t _midi_tx_timing[CFG_TUD_MIDI];
+
   #if CFG_TUD_EDPT_DEDICATED_HWFIFO == 0
 // Endpoint Transfer buffer: not used if dedicated hw FIFO is available
 typedef struct {
@@ -408,13 +423,67 @@ uint32_t tud_midi_n_packet_write_n(uint8_t itf, const uint8_t packets[], uint32_
   return n_write >> 2u;
 }
 
-uint32_t tud_midi_n_packet_write_n_isr(uint8_t itf, const uint8_t packets[], uint32_t n_packets) {
+static uint32_t midi_tx_xfer_isr(uint8_t itf) {
+  midi_tx_timing_t *timing = &_midi_tx_timing[itf];
+  tu_edpt_stream_t *ep_str = &_midid_itf[itf].ep_stream.tx;
+  const uint16_t before = tu_fifo_count(&ep_str->ff);
+  const uint32_t bytes = tu_edpt_stream_write_xfer_isr(ep_str);
+  if (bytes != 0U) {
+    const uint32_t packets = bytes / 4U;
+    if (timing->pending_f8 == 0U) {
+      timing->submit_seq += packets;
+      timing->inflight_count = 0U;
+      return bytes;
+    }
+    const uint32_t submit_tick = tud_midi_tx_now_isr_cb();
+    timing->submit_tick = submit_tick;
+    timing->inflight_count = (uint16_t)packets;
+    for (uint32_t i = 0U; i < packets; ++i) {
+      const uint32_t slot = (timing->submit_seq + i) % MIDI_TX_META_LEN;
+      timing->inflight_deadline[i] = timing->deadline[slot];
+      timing->inflight_timed[i] = timing->timed[slot];
+      if (timing->timed[slot] != 0U) {
+        --timing->pending_f8;
+        tud_midi_tx_submit_isr_cb(timing->deadline[slot], submit_tick);
+      }
+    }
+    timing->submit_seq += packets;
+  } else if (before != 0U) {
+    const uint16_t after = tu_fifo_count(&ep_str->ff);
+    if (after == before) {
+      if (timing->pending_f8 != 0U) tud_midi_tx_busy_isr_cb();
+    } else {
+      const uint32_t lost = (before - after) / 4U;
+      for (uint32_t i = 0U; i < lost; ++i) {
+        const uint32_t slot = (timing->submit_seq + i) % MIDI_TX_META_LEN;
+        if (timing->timed[slot] != 0U) {
+          --timing->pending_f8;
+          tud_midi_tx_failed_isr_cb();
+        }
+      }
+      timing->submit_seq += lost;
+    }
+  }
+  return bytes;
+}
+
+uint32_t tud_midi_n_packet_write_n_isr(uint8_t itf, const uint8_t packets[],
+                                       const uint32_t deadlines[], const uint8_t timed[],
+                                       uint32_t n_packets) {
   midid_interface_t *p_midi = &_midid_itf[itf];
   tu_edpt_stream_t *ep_str = &p_midi->ep_stream.tx;
   TU_VERIFY(tu_edpt_stream_is_opened(ep_str), 0);
   uint32_t n_bytes = tu_min32(tu_align4(tu_edpt_stream_write_available(ep_str)), n_packets << 2u);
   uint32_t n_write = tu_fifo_write_n(&ep_str->ff, packets, (uint16_t)n_bytes);
-  (void)tu_edpt_stream_write_xfer_isr(ep_str);
+  midi_tx_timing_t *timing = &_midi_tx_timing[itf];
+  for (uint32_t i = 0U; i < (n_write >> 2u); ++i) {
+    const uint32_t slot = (timing->write_seq + i) % MIDI_TX_META_LEN;
+    timing->deadline[slot] = deadlines[i];
+    timing->timed[slot] = timed[i];
+    if (timed[i] != 0U) ++timing->pending_f8;
+  }
+  timing->write_seq += n_write >> 2u;
+  (void)midi_tx_xfer_isr(itf);
   return n_write >> 2u;
 }
 
@@ -423,6 +492,7 @@ uint32_t tud_midi_n_packet_write_n_isr(uint8_t itf, const uint8_t packets[], uin
 //--------------------------------------------------------------------+
 void midid_init(void) {
   tu_memclr(_midid_itf, sizeof(_midid_itf));
+  tu_memclr(_midi_tx_timing, sizeof(_midi_tx_timing));
   for (uint8_t i = 0; i < CFG_TUD_MIDI; i++) {
     midid_interface_t *p_midi  = &_midid_itf[i];
 
@@ -458,6 +528,7 @@ void midid_reset(uint8_t rhport) {
   (void)rhport;
   usbd_spin_lock(false);
   for (uint8_t i = 0; i < CFG_TUD_MIDI; i++) {
+    tu_memclr(&_midi_tx_timing[i], sizeof(_midi_tx_timing[i]));
     midid_interface_t *p_midi = &_midid_itf[i];
     tu_memclr(p_midi, ITF_MEM_RESET_SIZE);
 
@@ -524,6 +595,7 @@ uint16_t midid_open(uint8_t rhport, const tusb_desc_interface_t *desc_itf, uint1
 
       if (tu_edpt_dir(ep_addr) == TUSB_DIR_IN) {
         usbd_spin_lock(false);
+        tu_memclr(&_midi_tx_timing[idx], sizeof(_midi_tx_timing[idx]));
         tu_edpt_stream_t *stream_tx = &p_midi->ep_stream.tx;
         tu_edpt_stream_open(stream_tx, rhport, desc_ep, CFG_TUD_MIDI_TX_EPSIZE);
         tu_edpt_stream_clear(stream_tx);
@@ -590,11 +662,23 @@ bool midid_xfer_isr(uint8_t rhport, uint8_t ep_addr, xfer_result_t result, uint3
   if (idx >= CFG_TUD_MIDI) return false;
   tu_edpt_stream_t *ep_st_tx = &_midid_itf[idx].ep_stream.tx;
   if (ep_addr != ep_st_tx->ep_addr) return false;
+  midi_tx_timing_t *timing = &_midi_tx_timing[idx];
   if (result == XFER_RESULT_SUCCESS) {
+    const uint32_t complete_tick = tud_midi_tx_now_isr_cb();
+    for (uint32_t i = 0U; i < timing->inflight_count; ++i) {
+      if (timing->inflight_timed[i] != 0U)
+        tud_midi_tx_complete_isr_cb(timing->inflight_deadline[i], timing->submit_tick,
+                                    complete_tick);
+    }
+    timing->inflight_count = 0U;
     if (!tud_midi_tx_ready_isr_cb(idx)) return true;
-    if (0 == tu_edpt_stream_write_xfer_isr(ep_st_tx)) {
+    if (0 == midi_tx_xfer_isr(idx)) {
       (void)tu_edpt_stream_write_zlp_if_needed_isr(ep_st_tx, xferred_bytes);
     }
+  } else {
+    for (uint32_t i = 0U; i < timing->inflight_count; ++i)
+      if (timing->inflight_timed[i] != 0U) tud_midi_tx_failed_isr_cb();
+    timing->inflight_count = 0U;
   }
   return true;
 }

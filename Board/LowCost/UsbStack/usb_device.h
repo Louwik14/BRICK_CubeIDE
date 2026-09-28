@@ -85,7 +85,8 @@ uint8_t usb_device_is_started(void);
 uint8_t usb_device_is_ready(void);
 void usb_device_process(void);
 void usb_device_irq(void);
-uint16_t usb_device_send_packets(const uint8_t *packets, uint16_t bytes_len);
+uint16_t usb_device_send_packets(const uint8_t *packets, const uint32_t *deadlines,
+                                 const uint8_t *timed, uint16_t bytes_len);
 
 /* USER CODE END FD */
 /**

@@ -146,8 +146,16 @@ uint16_t midid_open(uint8_t rhport, const tusb_desc_interface_t *itf_desc, uint1
 bool     midid_control_xfer_cb(uint8_t rhport, uint8_t stage, const tusb_control_request_t *request);
 bool     midid_xfer_cb(uint8_t rhport, uint8_t edpt_addr, xfer_result_t result, uint32_t xferred_bytes);
 bool     midid_xfer_isr(uint8_t rhport, uint8_t edpt_addr, xfer_result_t result, uint32_t xferred_bytes);
-uint32_t tud_midi_n_packet_write_n_isr(uint8_t itf, const uint8_t packets[], uint32_t n_packets);
+uint32_t tud_midi_n_packet_write_n_isr(uint8_t itf, const uint8_t packets[],
+                                       const uint32_t deadlines[], const uint8_t timed[],
+                                       uint32_t n_packets);
 bool tud_midi_tx_ready_isr_cb(uint8_t itf);
+uint32_t tud_midi_tx_now_isr_cb(void);
+void tud_midi_tx_submit_isr_cb(uint32_t deadline_tick, uint32_t submit_tick);
+void tud_midi_tx_complete_isr_cb(uint32_t deadline_tick, uint32_t submit_tick,
+                                 uint32_t complete_tick);
+void tud_midi_tx_busy_isr_cb(void);
+void tud_midi_tx_failed_isr_cb(void);
 
 #ifdef __cplusplus
 }

@@ -221,12 +221,14 @@ static bool midi_usb_refresh_connection(void) {
  * - init / main loop / tasklet selon le module.
  */
 static uint16_t midi_usb_device_write_packets(const uint8_t *buffer,
+                                               const uint32_t *deadlines,
+                                               const uint8_t *timed,
                                                uint16_t bytes_len) {
   if (!usb_device_ready()) {
     return 0U;
   }
 
-  return usb_device_send_packets(buffer, bytes_len);
+  return usb_device_send_packets(buffer, deadlines, timed, bytes_len);
 }
 
 /**
@@ -242,7 +244,8 @@ static uint16_t midi_usb_device_write_packets(const uint8_t *buffer,
  * Contexte d'appel:
  * - init / main loop / tasklet selon le module.
  */
-static bool usb_tx_queue_push_timed(const uint8_t packet[4], uint32_t tick) {
+static bool usb_tx_queue_push_timed(const uint8_t packet[4], uint32_t tick,
+                                    uint8_t timed) {
   uint32_t primask = midi_enter_critical();
   if (midi_usb_tx_count >= MIDI_USB_TX_QUEUE_LEN) {
     ++midi_usb_tx_drops;
@@ -255,6 +258,7 @@ static bool usb_tx_queue_push_timed(const uint8_t packet[4], uint32_t tick) {
   midi_usb_tx_queue[midi_usb_tx_head].bytes[2] = packet[2];
   midi_usb_tx_queue[midi_usb_tx_head].bytes[3] = packet[3];
   midi_usb_tx_queue[midi_usb_tx_head].tim5_tick = tick;
+  midi_usb_tx_queue[midi_usb_tx_head].ingress_serial = timed;
 
   midi_usb_tx_head = (uint16_t)((midi_usb_tx_head + 1U) % MIDI_USB_TX_QUEUE_LEN);
   midi_usb_tx_count++;
@@ -267,7 +271,7 @@ static bool usb_tx_queue_push_timed(const uint8_t packet[4], uint32_t tick) {
 }
 
 static bool usb_tx_queue_push(const uint8_t packet[4]) {
-  return usb_tx_queue_push_timed(packet, 0U);
+  return usb_tx_queue_push_timed(packet, 0U, 0U);
 }
 
 uint8_t midi_clock_irq_publish(uint32_t publish_tick, midi_dest_t dest) {
@@ -275,7 +279,7 @@ uint8_t midi_clock_irq_publish(uint32_t publish_tick, midi_dest_t dest) {
   if ((dest != MIDI_DEST_USB) && (dest != MIDI_DEST_BOTH)) return 0U;
   if (!usb_device_is_ready()) return 0U;
   const uint8_t packet[4] = { (uint8_t)((MIDI_USB_CABLE << 4) | 0x0FU), 0xF8U, 0U, 0U };
-  return usb_tx_queue_push_timed(packet, publish_tick) ? 1U : 0U;
+  return usb_tx_queue_push_timed(packet, publish_tick, 1U) ? 1U : 0U;
 }
 
 /**
@@ -390,6 +394,8 @@ uint16_t midi_usb_rx_free_packets(void) {
  */
 static uint32_t midi_usb_try_flush_internal(bool allow_in_isr) {
   uint8_t buffer[4U * MIDI_USB_MAX_BURST];
+  uint32_t deadlines[MIDI_USB_MAX_BURST];
+  uint8_t timed[MIDI_USB_MAX_BURST];
   uint16_t packets = 0U;
   uint16_t written_packets = 0U;
   uint32_t generation;
@@ -419,12 +425,16 @@ static uint32_t midi_usb_try_flush_internal(bool allow_in_isr) {
       break;
     }
     memcpy(&buffer[packets * 4U], midi_usb_tx_queue[index].bytes, 4U);
+    deadlines[packets] = (midi_usb_tx_queue[index].bytes[1] == 0xF8U)
+        ? midi_usb_tx_queue[index].tim5_tick : 0U;
+    timed[packets] = (uint8_t)((midi_usb_tx_queue[index].bytes[1] == 0xF8U)
+        && (midi_usb_tx_queue[index].ingress_serial != 0U));
     ++packets;
   }
   midi_exit_critical(primask);
 
   written_packets = midi_usb_device_write_packets(
-      buffer, (uint16_t)(packets * 4U));
+      buffer, deadlines, timed, (uint16_t)(packets * 4U));
   if (written_packets > packets) {
     written_packets = packets;
   }
@@ -433,7 +443,7 @@ static uint32_t midi_usb_try_flush_internal(bool allow_in_isr) {
       for (uint16_t i = 0U; i < written_packets; ++i) {
         const midi_usb_packet_t *const packet = &midi_usb_tx_queue[
             (midi_usb_tx_tail + i) % MIDI_USB_TX_QUEUE_LEN];
-        if ((packet->bytes[1] == 0xF8U) && (packet->tim5_tick != 0U))
+        if ((packet->bytes[1] == 0xF8U) && (packet->ingress_serial != 0U))
           midi_clock_timer_note_usb_ready(packet->tim5_tick);
       }
       const uint32_t commit_primask = midi_enter_critical();

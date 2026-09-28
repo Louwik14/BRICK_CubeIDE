@@ -44,6 +44,20 @@ typedef struct {
     uint32_t publish_delay_last;
     uint32_t publish_delay_min;
     uint32_t publish_delay_max;
+    /* TIM5 us: DCD endpoint arm and DCD XFRC IRQ, modulo 2^32. */
+    uint32_t usb_submit_delay_last;
+    uint32_t usb_submit_delay_min;
+    uint32_t usb_submit_delay_max;
+    uint32_t usb_complete_delay_last;
+    uint32_t usb_complete_delay_min;
+    uint32_t usb_complete_delay_max;
+    uint32_t usb_submit_to_complete_last;
+    uint32_t usb_submit_to_complete_min;
+    uint32_t usb_submit_to_complete_max;
+    uint32_t f8_usb_submitted;
+    uint32_t f8_usb_completed;
+    uint32_t usb_submit_busy;
+    uint32_t f8_usb_failed;
 } midi_clock_prof_t;
 
 extern volatile midi_clock_prof_t g_midi_clock_prof;
@@ -54,6 +68,8 @@ void midi_clock_timer_arm(uint64_t start_sample, uint32_t sample_period_q16);
 void midi_clock_timer_stop(void);
 void midi_clock_timer_note_usb_drop(void);
 void midi_clock_timer_note_usb_ready(uint32_t publish_tick);
+void midi_clock_timer_note_usb_submit(uint32_t deadline_tick, uint32_t submit_tick);
+void midi_clock_timer_note_usb_complete(uint32_t deadline_tick, uint32_t submit_tick, uint32_t complete_tick);
 uint8_t midi_clock_irq_publish(uint32_t publish_tick, midi_dest_t dest);
 
 #endif

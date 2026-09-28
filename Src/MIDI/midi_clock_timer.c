@@ -87,6 +87,9 @@ void midi_clock_timer_init(void)
     g_midi_clock_prof.usb_ready_delay_min = UINT32_MAX;
     g_midi_clock_prof.f8_irq_cycles_min = UINT32_MAX;
     g_midi_clock_prof.publish_delay_min = UINT32_MAX;
+    g_midi_clock_prof.usb_submit_delay_min = UINT32_MAX;
+    g_midi_clock_prof.usb_complete_delay_min = UINT32_MAX;
+    g_midi_clock_prof.usb_submit_to_complete_min = UINT32_MAX;
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
     NVIC_SetPriority(TIM3_IRQn, 0U);
@@ -281,4 +284,33 @@ void midi_clock_timer_note_usb_ready(uint32_t publish_tick)
 void midi_clock_timer_note_usb_drop(void)
 {
     ++g_midi_clock_prof.usb_fifo_drops;
+}
+
+void midi_clock_timer_note_usb_submit(uint32_t deadline_tick, uint32_t submit_tick)
+{
+    const uint32_t delay = submit_tick - deadline_tick;
+    g_midi_clock_prof.usb_submit_delay_last = delay;
+    if (delay < g_midi_clock_prof.usb_submit_delay_min)
+        g_midi_clock_prof.usb_submit_delay_min = delay;
+    if (delay > g_midi_clock_prof.usb_submit_delay_max)
+        g_midi_clock_prof.usb_submit_delay_max = delay;
+    ++g_midi_clock_prof.f8_usb_submitted;
+}
+
+void midi_clock_timer_note_usb_complete(uint32_t deadline_tick, uint32_t submit_tick,
+                                        uint32_t complete_tick)
+{
+    const uint32_t delay = complete_tick - deadline_tick;
+    const uint32_t transfer = complete_tick - submit_tick;
+    g_midi_clock_prof.usb_complete_delay_last = delay;
+    if (delay < g_midi_clock_prof.usb_complete_delay_min)
+        g_midi_clock_prof.usb_complete_delay_min = delay;
+    if (delay > g_midi_clock_prof.usb_complete_delay_max)
+        g_midi_clock_prof.usb_complete_delay_max = delay;
+    g_midi_clock_prof.usb_submit_to_complete_last = transfer;
+    if (transfer < g_midi_clock_prof.usb_submit_to_complete_min)
+        g_midi_clock_prof.usb_submit_to_complete_min = transfer;
+    if (transfer > g_midi_clock_prof.usb_submit_to_complete_max)
+        g_midi_clock_prof.usb_submit_to_complete_max = transfer;
+    ++g_midi_clock_prof.f8_usb_completed;
 }

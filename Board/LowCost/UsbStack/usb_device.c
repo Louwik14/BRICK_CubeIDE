@@ -4,6 +4,7 @@
 
 #include "main.h"
 #include "midi.h"
+#include "MIDI/midi_clock_timer.h"
 #include "tusb.h"
 #include "usb_audio.h"
 
@@ -372,7 +373,34 @@ void tud_midi_bus_lost_isr_cb(void)
     g_usb_device_mounted = 0U;
 }
 
-uint16_t usb_device_send_packets(const uint8_t *packets, uint16_t bytes_len)
+uint32_t tud_midi_tx_now_isr_cb(void)
+{
+    return TIM5->CNT;
+}
+
+void tud_midi_tx_submit_isr_cb(uint32_t deadline_tick, uint32_t submit_tick)
+{
+    midi_clock_timer_note_usb_submit(deadline_tick, submit_tick);
+}
+
+void tud_midi_tx_complete_isr_cb(uint32_t deadline_tick, uint32_t submit_tick,
+                                 uint32_t complete_tick)
+{
+    midi_clock_timer_note_usb_complete(deadline_tick, submit_tick, complete_tick);
+}
+
+void tud_midi_tx_busy_isr_cb(void)
+{
+    ++g_midi_clock_prof.usb_submit_busy;
+}
+
+void tud_midi_tx_failed_isr_cb(void)
+{
+    ++g_midi_clock_prof.f8_usb_failed;
+}
+
+uint16_t usb_device_send_packets(const uint8_t *packets, const uint32_t *deadlines,
+                                 const uint8_t *timed, uint16_t bytes_len)
 {
     const uint32_t packet_count = bytes_len / 4U;
 
@@ -381,7 +409,8 @@ uint16_t usb_device_send_packets(const uint8_t *packets, uint16_t bytes_len)
         return 0U;
     }
 
-    return (uint16_t)tud_midi_n_packet_write_n_isr(0U, packets, packet_count);
+    return (uint16_t)tud_midi_n_packet_write_n_isr(0U, packets, deadlines,
+                                                  timed, packet_count);
 }
 
 const uint8_t *tud_descriptor_device_cb(void)
