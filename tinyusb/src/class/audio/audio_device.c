@@ -60,6 +60,7 @@
 #include "device/usbd_pvt.h"
 
 #include "audio_device.h"
+#include "Platform/brick_fatal.h"
 
 //--------------------------------------------------------------------+
 // MACRO CONSTANT TYPEDEF
@@ -474,7 +475,10 @@ static bool audiod_rx_xfer_isr(uint8_t rhport, audiod_function_t* audio, uint16_
   TU_VERIFY(usbd_edpt_xfer(rhport, audio->ep_out, audio->lin_buf_out, audio->ep_out_sz, true));
   #else
   // Data is already placed in EP FIFO, schedule for next receive
-  TU_VERIFY(usbd_edpt_xfer_fifo(rhport, audio->ep_out, &audio->ep_out_ff, audio->ep_out_sz, true));
+  if (!usbd_edpt_xfer_fifo(rhport, audio->ep_out, &audio->ep_out_ff, audio->ep_out_sz, true)) {
+    BRICK_FATAL_CONTEXT("USB_AUDIO_OUT_REARM_FAILED", BRICK_FATAL_USB_AUDIO_OUT_REARM,
+                        audio->ep_out, audio->ep_out_alt, audio->ep_out_sz, 0U);
+  }
   #endif
 
   #if CFG_TUD_AUDIO_ENABLE_FEEDBACK_EP

@@ -7,6 +7,7 @@
 #include "IPC/usb_audio_float_ring.h"
 #include "Board/board_audio_format.h"
 #include "Audio/audio_probe.h"
+#include "Platform/brick_fatal.h"
 #include "Platform/memory_layout.h"
 #include "stm32h7xx.h"
 #include "stm32h7xx_hal.h"
@@ -151,6 +152,10 @@ uint32_t usb_audio_audio_read(float *left, float *right, uint32_t frames)
             g_usb_audio_adapt_left, g_usb_audio_adapt_right, source_frames);
     }
     if (read_frames < source_frames) {
+        BRICK_FATAL_CONTEXT("USB_AUDIO_RING_UNDERFLOW",
+                            BRICK_FATAL_USB_AUDIO_RING_UNDERFLOW,
+                            UINT32_MAX, usb_audio_float_pc_to_brick_available(),
+                            source_frames, read_frames);
         g_usb_audio_out_ready = 0U;
         g_usb_audio_frames_since_correction = 0U;
         memset(left, 0, frames * sizeof(float));
@@ -191,13 +196,22 @@ bool tud_audio_rx_done_isr(uint8_t rhport, uint16_t n_bytes_received,
          * the SPSC AUDIO ring here. */
         bytes_to_read = n_bytes_received;
         if (bytes_to_read > (uint16_t)sizeof(g_usb_audio_out_pcm_scratch)) {
-            bytes_to_read = (uint16_t)sizeof(g_usb_audio_out_pcm_scratch);
+            BRICK_FATAL_CONTEXT("USB_AUDIO_PACKET_TOO_LARGE",
+                                BRICK_FATAL_USB_AUDIO_PACKET, UINT32_MAX,
+                                1U, bytes_to_read,
+                                sizeof(g_usb_audio_out_pcm_scratch));
+        }
+        if ((bytes_to_read % USB_AUDIO_BYTES_PER_FRAME) != 0U) {
+            BRICK_FATAL_CONTEXT("USB_AUDIO_PACKET_PARTIAL_FRAME",
+                                BRICK_FATAL_USB_AUDIO_PACKET, UINT32_MAX,
+                                2U, bytes_to_read, USB_AUDIO_BYTES_PER_FRAME);
         }
         read_bytes = tud_audio_n_read(0U, g_usb_audio_out_pcm_scratch,
                                       bytes_to_read);
-        if ((read_bytes != bytes_to_read)
-            || ((read_bytes % USB_AUDIO_BYTES_PER_FRAME) != 0U)) {
-            return true;
+        if (read_bytes != bytes_to_read) {
+            BRICK_FATAL_CONTEXT("USB_AUDIO_FIFO_SHORT_READ",
+                                BRICK_FATAL_USB_AUDIO_FIFO_READ, UINT32_MAX,
+                                0U, bytes_to_read, read_bytes);
         }
         read_frames = read_bytes / USB_AUDIO_BYTES_PER_FRAME;
         if (read_frames != 0U) {
@@ -208,8 +222,13 @@ bool tud_audio_rx_done_isr(uint8_t rhport, uint16_t n_bytes_received,
                         g_usb_audio_out_pcm_scratch[sample]);
             }
             audio_probe_usb_receive(g_usb_audio_out_float_scratch, read_frames);
-            (void)usb_audio_float_write_pc_to_brick(
+            const uint32_t written = usb_audio_float_write_pc_to_brick(
                 g_usb_audio_out_float_scratch, read_frames);
+            if (written != read_frames) {
+                BRICK_FATAL_CONTEXT("USB_AUDIO_RING_OVERFLOW",
+                                    BRICK_FATAL_USB_AUDIO_RING_OVERFLOW,
+                                    UINT32_MAX, 0U, read_frames, written);
+            }
         }
     }
     return true;
