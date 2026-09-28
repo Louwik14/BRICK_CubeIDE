@@ -388,13 +388,20 @@ static uint8_t sample_capture_start_prepared_at(uint64_t sample_time)
     if((audio_recorder_get_status_client(AUDIO_RECORDER_CLIENT_AUDIO_REC,
                                          &status) == 0U)
             || (status.state != AUDIO_RECORDER_STATE_PREPARED))
+    {
+        sample_capture_trace_start_rejected(0x100U, sample_time);
         return 0U;
+    }
     if(sample_capture_publish_rec_bus_at(sample_time) == 0U)
+    {
+        sample_capture_trace_start_rejected(0x200U, sample_time);
         return 0U;
+    }
     if(audio_recorder_start_client_at(AUDIO_RECORDER_CLIENT_AUDIO_REC,
                                       sample_time) == 0U)
     {
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SAMPLE_ACTIVE);
+        sample_capture_trace_start_rejected(0x300U, sample_time);
         return 0U;
     }
 
@@ -408,6 +415,8 @@ static uint8_t sample_capture_start_prepared_at(uint64_t sample_time)
     g_sample_capture.rec_edit_enter_deferred_services = 0U;
     sample_capture_detail_reset();
     g_sample_capture.capture_enabled = 1U;
+    g_trace_start_reject_reason = 0U;
+    sample_capture_trace(REC_SD_TRACE_START_REQUEST, 1U, sample_time);
     return 1U;
 }
 
@@ -436,6 +445,7 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
         sample_capture_publish_rec_bus();
         sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
         g_sample_capture.last_take_notified = 1U;
+        sample_capture_trace(REC_SD_TRACE_TAKE, 0U, 0U);
         return;
     }
 
@@ -447,6 +457,7 @@ static void sample_capture_on_take_ready(const audio_recorder_status_t *status)
         sample_capture_publish_rec_bus();
     g_sample_capture.state.take_valid = 1U;
     g_sample_capture.state.recorded_frames = frames;
+    sample_capture_trace(REC_SD_TRACE_TAKE, 1U, 0U);
     g_sample_capture.state.edit_start_frame = 0U;
     g_sample_capture.state.edit_end_frame = frames;
     g_sample_capture.state.edit_loop_start_frame = 0U;

@@ -218,6 +218,47 @@ les commandes audio sont publiées seulement quand cette limite entre dans
 l'horizon non publié. Une prise finale de zéro frame libère son slot REC_SOURCE et remonte
 au modèle comme fin de cycle, ce qui rend possible un nouvel armement.
 
+## Trace GDB du cycle REC
+
+`g_rec_sd_trace_next` est le nombre total d'événements écrits. Les 64
+entrées de `g_rec_sd_trace` forment un anneau ; l'entrée de séquence `n`
+est à l'indice `(n - 1) % 64`. Chaque entrée occupe huit mots de 32 bits :
+`sequence, event, states, context, detail, frames, session, sample_lo`.
+Une séquence nulle signale une entrée vide ou incomplète. La trace est en
+SRAM3 non cacheable pour rester visible après l'arrêt par GDB.
+
+`states` contient, de l'octet faible au fort, l'état Recorder avant/après
+puis la phase Storage avant/après. `context` contient l'état Overdub
+avant/après, l'armement puis le trigger. `0xFF` indique une valeur non
+pertinente. `detail` dépend de l'événement. `frames` est le curseur de
+capture, ou l'identifiant de source pour Overdub. `sample_lo` est le bas du
+sample cible lorsque disponible. `session`
+contient l'identifiant de session Recorder, la génération de source Overdub
+ou celle de la prise visible selon le producteur.
+
+Codes `event` : 1 armement, 2 trigger, 3 préparation, 4 demande START,
+5 demande STOP, 6 annulation, 7 transition Recorder, 8 transition Storage,
+9 START audio, 10 STOP audio, 11 fermeture audio, 12 liaison Overdub,
+13 arrêt Overdub, 14 faute Overdub, 15 prise prête. Pour Storage,
+`detail` contient la sous-phase finale (octet 0), l'erreur (octet 1) et
+l'état du writer générique (octet 2). Pour Overdub, une liaison refusée
+porte la raison 1 (source), 2 (plan) ou 3 (reader) ; la faute porte l'erreur
+dans l'octet 0, `underrun` dans l'octet 1 et le nombre de frames produites
+dans les deux octets hauts.
+
+Etats Recorder : `0 IDLE, 1 PREPARED, 2 RECORDING, 3 DRAINING,
+4 FINALIZING, 5 TAKE_READY, 6 FAILED`. Phases Storage : `0 IDLE,
+1 PREPARING, 2 PREPARED, 3 DRAINING, 4 FINALIZING, 5 TAKE_READY,
+6 FAILED`. Armement : `0 OFF, 1 REC, 2 TRIG`. Trigger : `0 NOW,
+1 THRESHOLD, 2 PATTERN, 3 THRESHOLD_PLAY`. Overdub : `0 inactif,
+1 actif`. Pour les demandes START/STOP, `detail=1` signifie accepté ;
+`0` signifie refusé. Côté Recorder, START utilise aussi `2` pour un
+remplacement projet actif et `3` pour un refus de publication. Dans le modèle
+de capture, les refus START portent
+`0x100` (session non prête), `0x200` (bus non publié) ou `0x300`
+(commande Recorder refusée). Le trigger porte `1` à la réception du
+seuil et `2` lorsque la limite musicale est retenue.
+
 ## Arbitrage SD et coopération
 
 

@@ -95,6 +95,7 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
     }
     if(arm == SAMPLE_CAPTURE_ARM_OFF)
     {
+        const sample_capture_arm_t before_arm = g_sample_capture.state.arm;
         g_sample_capture.pending_quant_valid = 0U;
         g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
         (void)sample_capture_next_trigger_arm_epoch();
@@ -116,6 +117,9 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
         }
         sample_capture_publish_trigger_config();
         sample_capture_publish_rec_bus();
+        sample_capture_trace(REC_SD_TRACE_ARM,
+            (uint32_t)before_arm | ((uint32_t)arm << 8U)
+                | ((uint32_t)g_sample_capture.state.phase << 16U), 0U);
         return 1U;
     }
     if((arm != SAMPLE_CAPTURE_ARM_OFF)
@@ -156,12 +160,18 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
             sample_capture_set_error(SAMPLE_CAPTURE_ERROR_SD_IO);
         sample_capture_publish_trigger_config();
         sample_capture_publish_rec_bus();
+        sample_capture_trace(REC_SD_TRACE_ARM,
+            (uint32_t)arm | ((uint32_t)prepared << 8U)
+                | ((uint32_t)g_sample_capture.state.error << 16U), 0U);
         return 0U;
     }
     if (prepared == AUDIO_RECORDER_LIFECYCLE_OK)
         g_sample_capture.state.phase = SAMPLE_CAPTURE_PHASE_ARMED;
     sample_capture_publish_trigger_config();
     sample_capture_publish_rec_bus();
+    sample_capture_trace(REC_SD_TRACE_ARM,
+        (uint32_t)arm | ((uint32_t)prepared << 8U)
+            | ((uint32_t)g_sample_capture.state.phase << 16U), 0U);
     return 1U;
 }
 
@@ -197,6 +207,8 @@ uint8_t sample_capture_model_step_trig(int16_t delta)
         next = (int16_t)SAMPLE_CAPTURE_TRIG_COUNT - 1;
     if(next == (int16_t)g_sample_capture.state.trig) return 0U;
     g_sample_capture.state.trig = (sample_capture_trig_t)next;
+    sample_capture_trace(REC_SD_TRACE_TRIGGER,
+        (uint32_t)(uint8_t)next, 0U);
     return 1U;
 }
 
@@ -244,6 +256,8 @@ uint8_t sample_capture_model_toggle_overdub(void)
             || (g_sample_capture.state.recording != 0U)) return 0U;
     g_sample_capture.state.overdub_enabled =
         (g_sample_capture.state.overdub_enabled == 0U) ? 1U : 0U;
+    sample_capture_trace(REC_SD_TRACE_OVERDUB_BIND,
+        (uint32_t)g_sample_capture.state.overdub_enabled | 0x100U, 0U);
     sample_capture_publish_rec_bus();
     return 1U;
 }

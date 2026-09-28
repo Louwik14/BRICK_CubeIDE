@@ -8,6 +8,7 @@
 #include "Storage/audio_recorder_storage.h"
 #include "Storage/project_load_quiesce.h"
 #include "Storage/rec_source.h"
+#include "Storage/rec_sd_trace.h"
 #include "stm32h7xx.h"
 
 typedef struct
@@ -25,6 +26,43 @@ static uint16_t g_audio_recorder_control_session;
 static uint8_t g_build_stream_registered;
 static sample_audio_key_t g_build_stream_key;
 static uint32_t g_build_stream_readable_frames;
+static uint16_t g_trace_stop_session;
+static uint8_t g_trace_stop_result;
+static uint16_t g_trace_start_session;
+static uint8_t g_trace_start_result;
+static uint16_t g_trace_cancel_session;
+static uint8_t g_trace_cancel_result;
+
+static void trace_rec(rec_sd_trace_event_t event, audio_recorder_state_t before,
+                      uint32_t detail, uint64_t sample)
+{
+    const uint32_t storage = (uint32_t)audio_recorder_storage_phase();
+    rec_sd_trace_log(event,
+        REC_SD_TRACE_STATES(before, g_audio_recorder.state, storage, storage),
+        REC_SD_TRACE_CONTEXT(0xFFU, 0xFFU, 0xFFU, 0xFFU), detail,
+        g_audio_recorder_capture.head_cursor, g_audio_recorder_control_session,
+        sample);
+}
+
+static void trace_start_result(audio_recorder_state_t before,
+                               uint8_t result, uint64_t sample)
+{
+    if ((g_trace_start_session == g_audio_recorder_control_session)
+            && (g_trace_start_result == result)) return;
+    g_trace_start_session = g_audio_recorder_control_session;
+    g_trace_start_result = result;
+    trace_rec(REC_SD_TRACE_START_REQUEST, before, result, sample);
+}
+
+static void trace_cancel_result(audio_recorder_state_t before,
+                                audio_recorder_lifecycle_result_t result)
+{
+    if ((g_trace_cancel_session == g_audio_recorder_control_session)
+            && (g_trace_cancel_result == (uint8_t)result)) return;
+    g_trace_cancel_session = g_audio_recorder_control_session;
+    g_trace_cancel_result = (uint8_t)result;
+    trace_rec(REC_SD_TRACE_CANCEL, before, (uint32_t)result, 0U);
+}
 
 static void forget_build_stream(void)
 {
@@ -35,8 +73,11 @@ static void forget_build_stream(void)
 
 static void reset_session(void)
 {
+    const audio_recorder_state_t before = g_audio_recorder.state;
     memset(&g_audio_recorder, 0, sizeof(g_audio_recorder));
     g_audio_recorder.state = AUDIO_RECORDER_STATE_IDLE;
+    if (before != AUDIO_RECORDER_STATE_IDLE)
+        trace_rec(REC_SD_TRACE_REC_STATE, before, 0U, 0U);
 }
 
 static uint8_t copy_path(char *dst, const char *src)
@@ -89,19 +130,37 @@ static uint8_t publish_start(audio_recorder_client_t client, uint64_t sample_tim
 {
     if((g_audio_recorder.state != AUDIO_RECORDER_STATE_PREPARED)
             || (g_audio_recorder.client != client)
-            || (g_audio_recorder_control_session == 0U)) return 0U;
+            || (g_audio_recorder_control_session == 0U))
+    {
+        trace_start_result(g_audio_recorder.state, 0U, sample_time);
+        return 0U;
+    }
     if(control_rt_publish_record(CONTROL_AUDIO_RECORD_START,
             g_audio_recorder.frame_limit, g_audio_recorder_control_session,
-            (uint8_t)client, sample_time) == 0U) return 0U;
+            (uint8_t)client, sample_time) == 0U)
+    {
+        trace_start_result(g_audio_recorder.state, 3U, sample_time);
+        return 0U;
+    }
     g_audio_recorder.state = AUDIO_RECORDER_STATE_RECORDING;
+    trace_start_result(AUDIO_RECORDER_STATE_PREPARED, 1U, sample_time);
     return 1U;
 }
 
 static uint8_t publish_stop(audio_recorder_client_t client, uint64_t sample_time)
 {
-    if(g_audio_recorder.client != client) return 0U;
-    return control_rt_publish_record(CONTROL_AUDIO_RECORD_STOP, 0U,
-        g_audio_recorder_control_session, (uint8_t)client, sample_time);
+    const uint8_t result = (g_audio_recorder.client == client)
+        ? control_rt_publish_record(CONTROL_AUDIO_RECORD_STOP, 0U,
+        g_audio_recorder_control_session, (uint8_t)client, sample_time)
+        : 0U;
+    if ((g_trace_stop_session != g_audio_recorder_control_session)
+            || (g_trace_stop_result != result))
+    {
+        trace_rec(REC_SD_TRACE_STOP_REQUEST, g_audio_recorder.state, result, sample_time);
+        g_trace_stop_session = g_audio_recorder_control_session;
+        g_trace_stop_result = result;
+    }
+    return result;
 }
 
 void audio_recorder_init(void)
@@ -110,6 +169,12 @@ void audio_recorder_init(void)
     audio_recorder_storage_init();
     rec_source_init();
     g_audio_recorder_control_session = 0U;
+    g_trace_stop_session = 0U;
+    g_trace_stop_result = 0xFFU;
+    g_trace_start_session = 0U;
+    g_trace_start_result = 0xFFU;
+    g_trace_cancel_session = 0U;
+    g_trace_cancel_result = 0xFFU;
     forget_build_stream();
 }
 
@@ -142,6 +207,8 @@ audio_recorder_lifecycle_result_t audio_recorder_prepare_client_cooperative(
     {
         g_audio_recorder.error = audio_recorder_storage_error();
         g_audio_recorder.state = AUDIO_RECORDER_STATE_FAILED;
+        trace_rec(REC_SD_TRACE_PREPARE, AUDIO_RECORDER_STATE_IDLE,
+            (uint32_t)g_audio_recorder.error << 8U, 0U);
         return AUDIO_RECORDER_LIFECYCLE_ERROR;
     }
     uint16_t session = (uint16_t)(g_audio_recorder_control_session + 1U);
@@ -150,6 +217,7 @@ audio_recorder_lifecycle_result_t audio_recorder_prepare_client_cooperative(
     rec_source_waveform_begin(g_audio_recorder.frame_limit);
     g_audio_recorder.state = AUDIO_RECORDER_STATE_PREPARED;
     g_audio_recorder.error = AUDIO_RECORDER_ERROR_NONE;
+    trace_rec(REC_SD_TRACE_PREPARE, AUDIO_RECORDER_STATE_IDLE, 1U, 0U);
     return AUDIO_RECORDER_LIFECYCLE_OK;
 }
 
@@ -165,7 +233,11 @@ uint8_t audio_recorder_prepare_client(audio_recorder_client_t client,
 uint8_t audio_recorder_start_client_at(audio_recorder_client_t client,
                                        uint64_t sample_time)
 {
-    if(project_replacement_is_active() != 0U) return 0U;
+    if(project_replacement_is_active() != 0U)
+    {
+        trace_start_result(g_audio_recorder.state, 2U, sample_time);
+        return 0U;
+    }
     return publish_start(client, sample_time);
 }
 
@@ -173,7 +245,12 @@ uint8_t audio_recorder_cancel_prepared_client(audio_recorder_client_t client)
 {
     if((client == AUDIO_RECORDER_CLIENT_NONE)
             || (g_audio_recorder.client != client)
-            || (g_audio_recorder.state != AUDIO_RECORDER_STATE_PREPARED)) return 0U;
+            || (g_audio_recorder.state != AUDIO_RECORDER_STATE_PREPARED))
+    {
+        trace_cancel_result(g_audio_recorder.state,
+            AUDIO_RECORDER_LIFECYCLE_ERROR);
+        return 0U;
+    }
     return (audio_recorder_discard_client(client)
         == AUDIO_RECORDER_LIFECYCLE_OK) ? 1U : 0U;
 }
@@ -181,6 +258,7 @@ uint8_t audio_recorder_cancel_prepared_client(audio_recorder_client_t client)
 audio_recorder_lifecycle_result_t audio_recorder_discard_client(
     audio_recorder_client_t client)
 {
+    const audio_recorder_state_t before = g_audio_recorder.state;
     if((client == AUDIO_RECORDER_CLIENT_NONE)
             || (g_audio_recorder.client != client))
         return (g_audio_recorder.state == AUDIO_RECORDER_STATE_IDLE)
@@ -188,26 +266,38 @@ audio_recorder_lifecycle_result_t audio_recorder_discard_client(
     if((g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING)
             || (g_audio_recorder.state == AUDIO_RECORDER_STATE_DRAINING)
             || (g_audio_recorder.state == AUDIO_RECORDER_STATE_FINALIZING))
+    {
+        trace_cancel_result(g_audio_recorder.state,
+            AUDIO_RECORDER_LIFECYCLE_NOT_NOW);
         return AUDIO_RECORDER_LIFECYCLE_NOT_NOW;
+    }
     if(g_audio_recorder.state == AUDIO_RECORDER_STATE_TAKE_READY)
     {
         audio_recorder_storage_release();
         reset_session();
+        trace_cancel_result(AUDIO_RECORDER_STATE_TAKE_READY,
+            AUDIO_RECORDER_LIFECYCLE_OK);
         return AUDIO_RECORDER_LIFECYCLE_OK;
     }
     const audio_recorder_lifecycle_result_t discarded =
         audio_recorder_storage_cancel();
-    if(discarded == AUDIO_RECORDER_LIFECYCLE_NOT_NOW) return discarded;
+    if(discarded == AUDIO_RECORDER_LIFECYCLE_NOT_NOW)
+    {
+        trace_cancel_result(before, discarded);
+        return discarded;
+    }
     if((discarded == AUDIO_RECORDER_LIFECYCLE_ERROR)
             && (audio_recorder_storage_phase() != AUDIO_RECORDER_STORAGE_IDLE))
     {
         g_audio_recorder.error = AUDIO_RECORDER_ERROR_SD_IO;
         g_audio_recorder.state = AUDIO_RECORDER_STATE_FAILED;
+        trace_cancel_result(before, AUDIO_RECORDER_LIFECYCLE_ERROR);
         return discarded;
     }
     rec_source_abort_building();
     forget_build_stream();
     reset_session();
+    trace_cancel_result(before, discarded);
     return discarded;
 }
 
@@ -226,6 +316,7 @@ uint8_t audio_recorder_request_stop_client_at(audio_recorder_client_t client,
 
 void audio_recorder_service(void)
 {
+    const audio_recorder_state_t before = g_audio_recorder.state;
     rec_source_service();
     audio_recorder_storage_service(g_audio_recorder_control_session,
         (uint8_t)((g_audio_recorder.state == AUDIO_RECORDER_STATE_RECORDING)
@@ -298,6 +389,9 @@ void audio_recorder_service(void)
             g_audio_recorder.state = AUDIO_RECORDER_STATE_TAKE_READY;
     }
     update_build_stream();
+    if (g_audio_recorder.state != before)
+        trace_rec(REC_SD_TRACE_REC_STATE, before,
+            (uint32_t)g_audio_recorder.error, 0U);
 }
 
 uint8_t audio_recorder_get_status_client(audio_recorder_client_t client,

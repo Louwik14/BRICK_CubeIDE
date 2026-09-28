@@ -9,6 +9,7 @@
 #include "Storage/sd_access_gate.h"
 #include "IPC/audio_recorder_capture_contract.h"
 #include "Storage/rec_source_waveform.h"
+#include "Storage/rec_sd_trace.h"
 #include "ff.h"
 #include "stm32h7xx_hal.h"
 #include "main.h"
@@ -64,6 +65,25 @@ STORAGE_STATE_SDRAM static audio_recorder_storage_runtime_t g_audio_recorder_sto
 RECORDER_SCRATCH_SDRAM static uint8_t
     g_audio_recorder_write_buffers[GENERIC_RECORDER_WRITE_BUFFER_COUNT]
                                   [AUDIO_RECORDER_WRITE_BUFFER_BYTES];
+static uint8_t g_trace_storage_phase;
+static uint8_t g_trace_final_phase;
+
+static void trace_storage_change(void)
+{
+    const uint8_t phase = (uint8_t)g_audio_recorder_storage.phase;
+    const uint8_t final_phase = (uint8_t)g_audio_recorder_storage.final_phase;
+    if ((phase == g_trace_storage_phase) && (final_phase == g_trace_final_phase))
+        return;
+    rec_sd_trace_log(REC_SD_TRACE_STORAGE,
+        REC_SD_TRACE_STATES(0xFFU, 0xFFU, g_trace_storage_phase, phase),
+        REC_SD_TRACE_CONTEXT(0xFFU, 0xFFU, 0xFFU, 0xFFU),
+        (uint32_t)final_phase | ((uint32_t)g_audio_recorder_storage.error << 8U)
+            | ((uint32_t)g_audio_recorder_storage.recorder.state << 16U),
+        g_audio_recorder_capture.head_cursor,
+        g_audio_recorder_storage.recorder.generation, 0U);
+    g_trace_storage_phase = phase;
+    g_trace_final_phase = final_phase;
+}
 
 static audio_recorder_error_t audio_recorder_storage_map_error(
     generic_recorder_error_t error)
@@ -486,6 +506,8 @@ void audio_recorder_storage_init(void)
     g_audio_recorder_capture.tail_cursor = 0U;
     recorder_file_reservation_init(&g_audio_recorder_storage.reservation);
     g_audio_recorder_storage.phase = AUDIO_RECORDER_STORAGE_IDLE;
+    g_trace_storage_phase = AUDIO_RECORDER_STORAGE_IDLE;
+    g_trace_final_phase = AUDIO_RECORDER_FINAL_NONE;
     const sd_scheduler_provider_t write_provider =
         generic_recorder_write_provider(&g_audio_recorder_storage.recorder);
     g_audio_recorder_storage.recorder_filesystem_provider =
@@ -537,6 +559,7 @@ audio_recorder_lifecycle_result_t audio_recorder_storage_prepare(
     g_audio_recorder_storage.filesystem_media_epoch = sd_access_media_epoch();
     g_audio_recorder_storage.prepare_phase = AUDIO_RECORDER_PREP_REMOVE_TEMPORARY;
     g_audio_recorder_storage.phase = AUDIO_RECORDER_STORAGE_PREPARING;
+    trace_storage_change();
     sd_access_gate_set_recorder_fs_logical_active(1U);
     return AUDIO_RECORDER_LIFECYCLE_NOT_NOW;
 }
@@ -558,6 +581,7 @@ audio_recorder_lifecycle_result_t audio_recorder_storage_cancel(void)
         {
             g_audio_recorder_storage.error = AUDIO_RECORDER_ERROR_SD_IO;
             g_audio_recorder_storage.phase = AUDIO_RECORDER_STORAGE_FAILED;
+            trace_storage_change();
             return AUDIO_RECORDER_LIFECYCLE_ERROR;
         }
     }
@@ -586,6 +610,7 @@ void audio_recorder_storage_release(void)
     g_audio_recorder_storage.temporary_path[0] = '\0';
     g_audio_recorder_storage.final_path[0] = '\0';
     sd_access_gate_set_recorder_fs_logical_active(0U);
+    trace_storage_change();
 }
 
 void audio_recorder_storage_service(uint32_t session_id,
@@ -593,6 +618,7 @@ void audio_recorder_storage_service(uint32_t session_id,
 {
     audio_recorder_storage_runtime_t *const runtime =
         &g_audio_recorder_storage;
+    trace_storage_change();
     if ((capture_is_active != 0U)
             || (runtime->phase == AUDIO_RECORDER_STORAGE_FINALIZING)
             || (runtime->phase == AUDIO_RECORDER_STORAGE_TAKE_READY))
@@ -617,6 +643,7 @@ void audio_recorder_storage_service(uint32_t session_id,
         runtime->recorder.state = GENERIC_RECORDER_ERROR;
         runtime->phase = AUDIO_RECORDER_STORAGE_FAILED;
         sd_access_gate_set_recorder_fs_logical_active(0U);
+        trace_storage_change();
         return;
     }
     if (capture_is_active != 0U)
@@ -679,6 +706,7 @@ void audio_recorder_storage_service(uint32_t session_id,
     }
     sd_scheduler_runtime_service();
     generic_recorder_service(&runtime->recorder);
+    trace_storage_change();
 }
 
 audio_recorder_storage_phase_t audio_recorder_storage_phase(void)

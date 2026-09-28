@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "IPC/audio_recorder_capture_contract.h"
+#include "Storage/rec_sd_trace.h"
 #include "stm32h7xx.h"
 
 typedef struct
@@ -19,6 +20,11 @@ static audio_recorder_capture_audio_state_t g_audio_capture;
 
 static void audio_recorder_capture_audio_close(audio_recorder_error_t fault)
 {
+    rec_sd_trace_log(REC_SD_TRACE_AUDIO_CLOSE,
+        REC_SD_TRACE_STATES(0xFFU, 0xFFU, 0xFFU, 0xFFU),
+        REC_SD_TRACE_CONTEXT(0xFFU, 0xFFU, 0xFFU, 0xFFU),
+        (uint32_t)fault, g_audio_recorder_capture.head_cursor,
+        g_audio_capture.session_id, 0U);
     g_audio_capture.active = 0U;
     g_audio_recorder_capture.capture_fault = (uint32_t)fault;
     __DMB();
@@ -42,6 +48,10 @@ uint8_t audio_recorder_capture_audio_start(uint8_t client,
             || (session_id == 0U) || (frame_limit == 0U)
             || (g_audio_capture.active != 0U))
     {
+        rec_sd_trace_log(REC_SD_TRACE_AUDIO_START,
+            REC_SD_TRACE_STATES(0xFFU, 0xFFU, 0xFFU, 0xFFU),
+            REC_SD_TRACE_CONTEXT(0xFFU, 0xFFU, 0xFFU, 0xFFU),
+            0U, g_audio_recorder_capture.head_cursor, session_id, 0U);
         return 0U;
     }
     g_audio_recorder_capture.head_cursor = 0U;
@@ -55,6 +65,10 @@ uint8_t audio_recorder_capture_audio_start(uint8_t client,
     g_audio_recorder_capture.capture_fault = AUDIO_RECORDER_ERROR_NONE;
     g_audio_recorder_capture.closed_session = 0U;
     __DMB();
+    rec_sd_trace_log(REC_SD_TRACE_AUDIO_START,
+        REC_SD_TRACE_STATES(0xFFU, 0xFFU, 0xFFU, 0xFFU),
+        REC_SD_TRACE_CONTEXT(0xFFU, 0xFFU, 0xFFU, 0xFFU),
+        1U, 0U, session_id, 0U);
     return 1U;
 }
 
@@ -68,7 +82,18 @@ uint8_t audio_recorder_capture_audio_stop(uint8_t client,
         return 1U;
     if ((g_audio_capture.active == 0U)
             || (g_audio_capture.client != client)
-            || (g_audio_capture.session_id != session_id)) return 0U;
+            || (g_audio_capture.session_id != session_id))
+    {
+        rec_sd_trace_log(REC_SD_TRACE_AUDIO_STOP,
+            REC_SD_TRACE_STATES(0xFFU, 0xFFU, 0xFFU, 0xFFU),
+            REC_SD_TRACE_CONTEXT(0xFFU, 0xFFU, 0xFFU, 0xFFU),
+            0U, g_audio_recorder_capture.head_cursor, session_id, 0U);
+        return 0U;
+    }
+    rec_sd_trace_log(REC_SD_TRACE_AUDIO_STOP,
+        REC_SD_TRACE_STATES(0xFFU, 0xFFU, 0xFFU, 0xFFU),
+        REC_SD_TRACE_CONTEXT(0xFFU, 0xFFU, 0xFFU, 0xFFU),
+        1U, g_audio_recorder_capture.head_cursor, session_id, 0U);
     audio_recorder_capture_audio_close(AUDIO_RECORDER_ERROR_NONE);
     return 1U;
 }

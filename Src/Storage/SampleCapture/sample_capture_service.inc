@@ -139,6 +139,8 @@ static void sample_capture_service_pattern_trigger(void)
                 return;
         }
         g_sample_capture.pending_quant_valid = 1U;
+        sample_capture_trace(REC_SD_TRACE_TRIGGER, 2U,
+            g_sample_capture.pending_quant_sample);
     }
     const uint64_t first_unpublished =
         control_music_output_first_unpublished_sample(now);
@@ -215,6 +217,7 @@ void sample_capture_model_service(void)
         if(trigger_current != 0U)
         {
             g_sample_capture.state.trigger_latched = 1U;
+            sample_capture_trace(REC_SD_TRACE_TRIGGER, 1U, 0U);
             g_sample_capture.state.armed_pending = 1U;
             const uint8_t transport_running = seq_runtime_is_running();
             g_sample_capture.state.phase = (transport_running != 0U)
@@ -255,6 +258,8 @@ void sample_capture_model_service(void)
             ? SAMPLE_CAPTURE_ERROR_SAMPLE_ACTIVE
             : ((status.error == AUDIO_RECORDER_ERROR_OVERDUB_UNDERRUN)
                 ? SAMPLE_CAPTURE_ERROR_OVERDUB : SAMPLE_CAPTURE_ERROR_SD_IO));
+        sample_capture_trace(REC_SD_TRACE_REC_STATE,
+            (uint32_t)status.error | ((uint32_t)g_sample_capture.state.error << 8U), 0U);
         return;
     }
 

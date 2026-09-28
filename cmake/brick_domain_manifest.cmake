@@ -92,6 +92,7 @@ set(DOMAIN_CONTROL
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_step_snapshot.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Seq/seq_transport_fsm.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/audio_recorder.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/rec_sd_trace.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/asset_ref.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/boot_context_sd.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Src/Storage/control_audio_rec_bus.c"

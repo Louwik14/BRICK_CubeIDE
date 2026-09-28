@@ -17,6 +17,8 @@
 #include "Seq/seq_runtime_control.h"
 #include "ControlRT/control_rt_publication.h"
 #include "Storage/audio_recorder_wav.h"
+#include "Storage/audio_recorder_storage.h"
+#include "Storage/rec_sd_trace.h"
 #include "Storage/rec_source.h"
 #include "Storage/project_control.h"
 #include "Storage/asset_ref.h"
@@ -116,8 +118,37 @@ typedef struct
 } sample_capture_model_t;
 
 static sample_capture_model_t g_sample_capture;
+static uint32_t g_trace_start_reject_epoch;
+static uint32_t g_trace_start_reject_reason;
 RECORDER_SCRATCH_SDRAM static uint8_t
     g_sample_capture_copy_buf[SAMPLE_CAPTURE_SAVE_CHUNK_BYTES];
+
+static void sample_capture_trace(rec_sd_trace_event_t event, uint32_t detail,
+                                 uint64_t sample)
+{
+    audio_recorder_status_t status;
+    const uint8_t status_valid = audio_recorder_get_status_client(
+        AUDIO_RECORDER_CLIENT_AUDIO_REC, &status);
+    const uint32_t rec = (status_valid != 0U)
+        ? (uint32_t)status.state : 0xFFU;
+    const uint32_t storage = (uint32_t)audio_recorder_storage_phase();
+    rec_sd_trace_log(event,
+        REC_SD_TRACE_STATES(rec, rec, storage, storage),
+        REC_SD_TRACE_CONTEXT(0xFFU, 0xFFU, g_sample_capture.state.arm,
+            g_sample_capture.state.trig),
+        detail, (status_valid != 0U) ? status.frames_received : 0U,
+        g_sample_capture.visible_rec_generation, sample);
+}
+
+static void sample_capture_trace_start_rejected(uint32_t reason,
+                                                uint64_t sample)
+{
+    if ((g_trace_start_reject_epoch == g_sample_capture.trigger_arm_epoch)
+            && (g_trace_start_reject_reason == reason)) return;
+    g_trace_start_reject_epoch = g_sample_capture.trigger_arm_epoch;
+    g_trace_start_reject_reason = reason;
+    sample_capture_trace(REC_SD_TRACE_START_REQUEST, reason, sample);
+}
 
 
 /* Capture, waveform caches, editor model, service and save/assign remain in their original sequence.
