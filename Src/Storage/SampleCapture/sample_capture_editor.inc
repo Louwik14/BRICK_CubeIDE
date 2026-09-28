@@ -36,7 +36,9 @@ sample_capture_rec_led_state_t sample_capture_model_rec_led_state(void)
 {
     if (g_sample_capture.state.armed_pending != 0U)
         return SAMPLE_CAPTURE_REC_LED_WAITING;
-    if (g_sample_capture.state.recording != 0U)
+    if ((g_sample_capture.state.recording != 0U)
+            && (audio_recorder_client_is_recording(
+                AUDIO_RECORDER_CLIENT_AUDIO_REC) != 0U))
         return SAMPLE_CAPTURE_REC_LED_ACTIVE;
     return SAMPLE_CAPTURE_REC_LED_OFF;
 }

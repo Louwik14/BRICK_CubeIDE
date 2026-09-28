@@ -144,8 +144,16 @@ static void sample_capture_service_pattern_trigger(void)
     }
     const uint64_t first_unpublished =
         control_music_output_first_unpublished_sample(now);
-    if (g_sample_capture.pending_quant_sample > first_unpublished) return;
-    (void)sample_capture_start_prepared_at(first_unpublished);
+    if (g_sample_capture.pending_quant_sample < first_unpublished)
+    {
+        /* The selected boundary is already sealed in AUDIO's FIFO. Wait for
+         * the next musical boundary instead of shifting START off the grid. */
+        g_sample_capture.pending_quant_valid = 0U;
+        return;
+    }
+    if ((g_sample_capture.pending_quant_sample - first_unpublished)
+            > CONTROL_AUDIO_MAX_PUBLICATION_HORIZON_FRAMES) return;
+    (void)sample_capture_start_prepared_at(g_sample_capture.pending_quant_sample);
 }
 
 static void sample_capture_sync_current_generation(void)

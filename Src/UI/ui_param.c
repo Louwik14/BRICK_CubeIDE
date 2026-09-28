@@ -189,7 +189,7 @@ static uint8_t ui_param_local_control_apply(param_id_t id, uint8_t track,
             if (moved >= (int32_t)count) moved = (int32_t)count - 1;
             pos = (uint16_t)moved;
         }
-        return project_control_track_asset_select_logical(track, role, list[pos]);
+        return project_control_track_asset_assign_logical(track, role, list[pos]);
     }
     if (id == UI_PARAM_LOCAL_FM_OPERATOR)
     {

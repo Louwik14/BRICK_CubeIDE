@@ -123,6 +123,9 @@ uint8_t project_control_track_asset_get_logical(uint8_t entity,
 uint8_t project_control_track_asset_select_logical(uint8_t entity,
                                                    project_control_asset_role_t role,
                                                    uint16_t logical);
+uint8_t project_control_track_asset_assign_logical(uint8_t entity,
+                                                   project_control_asset_role_t role,
+                                                   uint16_t logical);
 uint8_t project_control_track_asset_restore(uint8_t entity,
                                             project_control_asset_role_t role,
                                             const persist_control_asset_ref_t *asset);

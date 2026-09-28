@@ -53,9 +53,10 @@ Après STOP, STORAGE continue à drainer le ring. La finalisation progresse par
 écriture du header WAV, synchronisation, fermeture puis rename `.REC` vers
 `.WAV`. Aucun `f_write` FatFs ne se trouve dans le data-plane live.
 
-Le trigger `PATTERN` ne gouverne que le départ. Dès qu'une longueur fixe est
-configurée, le compteur de frames gouverne l'arrêt automatique, quel que soit
-le trigger qui a démarré la prise.
+Une longueur fixe gouverne l'arrêt automatique par compteur de frames. Avec le
+trigger `PATTERN`, l'unité de longueur est le cycle complet de la plus longue
+track active (traversée et division comprises), commun au calcul de la frontière
+de départ ; pour les autres triggers, l'unité reste la barre de 16 steps.
 L'armement reste en phase d'admission tant que PREPARE n'a pas publié une
 session Recorder prête ; `WAIT` commence ensuite. Si le transport est déjà
 actif, la prochaine frontière de pattern lance la prise, y compris avec
@@ -65,6 +66,17 @@ initiale.
 Avant de réserver un nouveau BUILDING, la session Recorder terminale de la
 prise précédente est fermée. Le fichier de `REC_SOURCE CURRENT` reste détenu
 par sa génération et ne fait pas partie du discard de cette session.
+
+Après SAVE, `REC_SOURCE CURRENT` conserve la génération et le fichier promu.
+ASSIGN vers une piste Streamer crée ou retrouve séparément un asset classique
+dans le POOL, attend qu'il soit jouable puis sélectionne cet asset et met
+`SOURCE=POOL`. Si le transport tourne, la création dans le POOL attend son arrêt.
+La restauration de projet conserve, elle, la valeur SOURCE sauvegardée.
+
+La LED REC suit la capture AUDIO effective, même pendant le drain et la
+finalisation. Lorsqu'une piste Streamer déjà en lecture rebinde une nouvelle
+génération `REC_SOURCE`, elle conserve sa phase de boucle : la date de
+publication du fichier ne devient pas un nouveau départ musical.
 
 ## REC_SOURCE et générations
 
@@ -214,8 +226,9 @@ la prise au départ. Si le transport tourne déjà, le service CONTROL programme
 le prochain cycle musical fourni par le moteur SEQ. La quantification BAR
 attend la prochaine barre du transport ; PATTERN attend le cycle de la plus
 longue track active. La limite calculée est conservée jusqu'à son échéance ;
-les commandes audio sont publiées seulement quand cette limite entre dans
-l'horizon non publié. Une prise finale de zéro frame libère son slot REC_SOURCE et remonte
+START porte le timestamp de cette limite quand elle entre dans le prochain bloc
+non publié. Si elle a déjà été publiée, le modèle attend la frontière musicale
+suivante au lieu de décaler START au présent. Une prise finale de zéro frame libère son slot REC_SOURCE et remonte
 au modèle comme fin de cycle, ce qui rend possible un nouvel armement.
 
 ## Trace GDB du cycle REC

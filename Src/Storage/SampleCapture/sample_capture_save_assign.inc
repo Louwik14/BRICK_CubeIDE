@@ -411,7 +411,7 @@ static uint8_t sample_capture_assign_commit(uint8_t track, uint32_t kind,
     uint16_t runtime;
     if(project_control_resolve_sample_runtime_kind(kind, logical, &runtime) == 0U)
         return 0U;
-    return project_control_track_asset_select_logical(
+    return project_control_track_asset_assign_logical(
         track, PROJECT_CONTROL_ASSET_SAMPLER, logical);
 }
 
@@ -424,27 +424,30 @@ uint8_t sample_capture_model_assign_selected_take(void)
             || (sample_capture_model_assign_selected(&track) == 0U)
             || (g_sample_capture.assign_loading != 0U)) return 0U;
     const track_type_t type = track_state_get_type(track);
+    if ((type != TRACK_TYPE_STREAM) && (type != TRACK_TYPE_RAM)) return 0U;
     const uint32_t kind = (type == TRACK_TYPE_RAM)
         ? PERSIST_ASSET_SAMPLE_RAM : PERSIST_ASSET_SAMPLE_STREAM;
     if(project_control_find_asset(kind, g_sample_capture.state.final_path,
                                   &logical) != 0U
             && project_control_resolve_sample_runtime_kind(kind, logical,
                                                            &runtime) != 0U)
+    {
+        if ((type == TRACK_TYPE_STREAM)
+                && (sample_global_pool_get_classic_state(runtime)
+                    != SAMPLE_CLASSIC_SLOT_LOADED))
+        {
+            g_sample_capture.assign_loading = 3U;
+            g_sample_capture.assign_target = track;
+            return 2U;
+        }
         return sample_capture_assign_commit(track, kind, logical);
+    }
     if(type == TRACK_TYPE_STREAM)
     {
-        const uint16_t slot = sample_global_pool_find_free_slot();
-        if((slot >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
-                || (sample_global_pool_load_classic(
-                    slot, g_sample_capture.state.final_path) == 0U)
-                || (project_control_register_sample_runtime(
-                    kind, g_sample_capture.state.final_path, slot, &logical) == 0U)
-                || (sample_capture_assign_commit(track, kind, logical) == 0U))
-        {
-            sample_capture_set_error(SAMPLE_CAPTURE_ERROR_LOAD_FAIL);
-            return 0U;
-        }
-        return 1U;
+        g_sample_capture.assign_loading = 2U;
+        g_sample_capture.assign_target = track;
+        g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
+        return 2U;
     }
     if(type == TRACK_TYPE_RAM)
     {
@@ -458,7 +461,7 @@ uint8_t sample_capture_model_assign_selected_take(void)
         }
         g_sample_capture.assign_loading = 1U;
         g_sample_capture.assign_target = track;
-        return 1U;
+        return 2U;
     }
     return 0U;
 }
@@ -466,6 +469,60 @@ uint8_t sample_capture_model_assign_selected_take(void)
 void sample_capture_model_assign_service(void)
 {
     if(g_sample_capture.assign_loading == 0U) return;
+    if(g_sample_capture.assign_loading == 2U)
+    {
+        if ((seq_runtime_is_running() != 0U)
+                || (seq_runtime_is_start_pending() != 0U)) return;
+        const uint16_t slot = sample_global_pool_find_free_slot();
+        uint16_t logical = 0U;
+        if (slot >= SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)
+        {
+            g_sample_capture.assign_loading = 0U;
+            sample_capture_set_error(SAMPLE_CAPTURE_ERROR_NO_SLOT);
+            return;
+        }
+        if (sample_global_pool_load_classic(
+                slot, g_sample_capture.state.final_path) == 0U)
+        {
+            if (sample_global_pool_get_last_classic_load_error()
+                    == SAMPLE_CLASSIC_LOAD_SD_GATE_REFUSED) return;
+            g_sample_capture.assign_loading = 0U;
+            sample_capture_set_error(SAMPLE_CAPTURE_ERROR_LOAD_FAIL);
+            return;
+        }
+        if (project_control_register_sample_runtime(
+                    PERSIST_ASSET_SAMPLE_STREAM,
+                    g_sample_capture.state.final_path, slot, &logical) == 0U)
+        {
+            sample_global_pool_clear_classic(slot);
+            g_sample_capture.assign_loading = 0U;
+            sample_capture_set_error(SAMPLE_CAPTURE_ERROR_LOAD_FAIL);
+            return;
+        }
+        g_sample_capture.assign_loading = 3U;
+    }
+    if(g_sample_capture.assign_loading == 3U)
+    {
+        uint16_t logical = 0U;
+        if (project_control_find_asset(PERSIST_ASSET_SAMPLE_STREAM,
+                g_sample_capture.state.final_path, &logical) == 0U)
+        {
+            g_sample_capture.assign_loading = 0U;
+            sample_capture_set_error(SAMPLE_CAPTURE_ERROR_LOAD_FAIL);
+            return;
+        }
+        const sample_classic_slot_state_t state =
+            sample_global_pool_get_classic_state(logical);
+        if (state == SAMPLE_CLASSIC_SLOT_PREPARING) return;
+        g_sample_capture.assign_loading = 0U;
+        if ((state != SAMPLE_CLASSIC_SLOT_LOADED)
+                || (sample_capture_assign_commit(g_sample_capture.assign_target,
+                    PERSIST_ASSET_SAMPLE_STREAM, logical) == 0U))
+            sample_capture_set_error(SAMPLE_CAPTURE_ERROR_LOAD_FAIL);
+        else
+            g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
+        return;
+    }
     project_control_ram_load_result_t result;
     if(project_control_ram_load_take_result(&result) == 0U) return;
     g_sample_capture.assign_loading = 0U;
@@ -477,10 +534,23 @@ void sample_capture_model_assign_service(void)
         g_sample_capture.state.error = SAMPLE_CAPTURE_ERROR_NONE;
 }
 
+uint8_t sample_capture_model_assign_pending(void)
+{
+    return (uint8_t)(g_sample_capture.assign_loading != 0U);
+}
+
+uint8_t sample_capture_model_assign_waiting_for_transport(void)
+{
+    return (uint8_t)((g_sample_capture.assign_loading == 2U)
+        && ((seq_runtime_is_running() != 0U)
+            || (seq_runtime_is_start_pending() != 0U)));
+}
+
 void sample_capture_model_assign_cancel(void)
 {
-    if(g_sample_capture.assign_loading == 0U)
+    if(g_sample_capture.assign_loading != 1U)
     {
+        g_sample_capture.assign_loading = 0U;
         g_sample_capture.assign_count = 0U;
         g_sample_capture.assign_index = 0U;
     }

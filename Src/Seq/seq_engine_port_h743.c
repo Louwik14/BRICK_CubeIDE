@@ -294,22 +294,12 @@ uint8_t seq_engine_playhead_view(uint8_t track,uint8_t *out_running,
     __set_PRIMASK(primask);return 1U;
 }
 
-uint8_t seq_engine_pattern_cycle_boundary(uint8_t *out_track,
-                                          uint64_t *out_sample)
+static uint16_t seq_engine_pattern_longest_cycle(
+    const seq_pattern_t *pattern, uint8_t *out_track)
 {
-    if ((out_track == 0) || (out_sample == 0)) return 0U;
-    const uint32_t primask = __get_PRIMASK();
-    __disable_irq();
-    const seq_pattern_t *const pattern = seq_engine_pattern_capture();
-    if ((pattern == 0) || (g_core.running == 0U)
-            || (g_core.samples_per_step_q16 == 0U))
-    {
-        __set_PRIMASK(primask);
-        return 0U;
-    }
-
     uint16_t longest_cycle = 0U;
     uint8_t boundary_track = 0U;
+    if (pattern == 0) return 0U;
     for (uint8_t track = 0U; track < SEQ_LANE_CAPACITY; ++track)
     {
         if ((pattern->track_exec[track].active == 0U)
@@ -329,6 +319,27 @@ uint8_t seq_engine_pattern_cycle_boundary(uint8_t *out_track,
             boundary_track = track;
         }
     }
+    if (out_track != 0) *out_track = boundary_track;
+    return longest_cycle;
+}
+
+uint8_t seq_engine_pattern_cycle_boundary(uint8_t *out_track,
+                                          uint64_t *out_sample)
+{
+    if ((out_track == 0) || (out_sample == 0)) return 0U;
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    const seq_pattern_t *const pattern = seq_engine_pattern_capture();
+    if ((pattern == 0) || (g_core.running == 0U)
+            || (g_core.samples_per_step_q16 == 0U))
+    {
+        __set_PRIMASK(primask);
+        return 0U;
+    }
+
+    uint8_t boundary_track = 0U;
+    const uint16_t longest_cycle = seq_engine_pattern_longest_cycle(
+        pattern, &boundary_track);
     if (longest_cycle == 0U)
     {
         __set_PRIMASK(primask);
@@ -355,6 +366,18 @@ uint8_t seq_engine_pattern_cycle_boundary(uint8_t *out_track,
     *out_sample = (boundary_q16 + UINT64_C(0x8000)) >> 16U;
     __set_PRIMASK(primask);
     return 1U;
+}
+
+uint8_t seq_engine_pattern_cycle_steps(uint16_t *out_steps)
+{
+    if (out_steps == 0) return 0U;
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    const uint16_t longest = seq_engine_pattern_longest_cycle(
+        seq_engine_pattern_capture(), 0);
+    __set_PRIMASK(primask);
+    *out_steps = longest;
+    return (uint8_t)(longest != 0U);
 }
 
 uint64_t seq_next_deadline(void) { return g_next_deadline; }

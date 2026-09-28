@@ -19,7 +19,10 @@ static void ui_page_audio_rec_render(void)
     }
     else
     {
-        (void)snprintf(line, sizeof(line), "LEN %u", (unsigned)state.len_bars);
+        (void)snprintf(line, sizeof(line),
+                       (state.trig == SAMPLE_CAPTURE_TRIG_PATTERN)
+                           ? "LEN %uC" : "LEN %uB",
+                       (unsigned)state.len_bars);
     }
     drv_display_draw_text(34U, live_label_y, line);
     (void)snprintf(line, sizeof(line), "THR %d", (int)state.threshold_dbfs);
@@ -82,19 +85,37 @@ static void ui_page_rec_edit_render(void)
     if(g_ui_rec_edit_assign_popup != 0U)
     {
         uint8_t target = 0U;
-        char target_label[16];
+        char target_label[20];
         if(sample_capture_model_assign_selected(&target) != 0U)
-            (void)snprintf(target_label, sizeof(target_label), "TRACK %u",
-                           (unsigned)(target + 1U));
+            (void)snprintf(target_label, sizeof(target_label), "TRACK %u  %s",
+                           (unsigned)(target + 1U),
+                           (track_state_get_type(target) == TRACK_TYPE_STREAM)
+                               ? "STREAM" : "RAM");
         else
             (void)snprintf(target_label, sizeof(target_label), "NO TRACK");
-        drv_display_fill_rect(24U, 26U, 80U, 20U);
-        drv_display_draw_text_inverted(42U, 28U, "ASSIGN?");
-        drv_display_draw_text_inverted(42U, 36U, target_label);
-        drv_display_draw_text(0U, 54U, "NO");
-        drv_display_draw_text(34U, 54U, "YES");
-        drv_display_draw_text(72U, 54U, "-");
-        drv_display_draw_text(120U, 54U, "-");
+        drv_display_clear_rect(4U, 19U, 120U, 39U);
+        drv_display_draw_rect(4U, 19U, 120U, 39U);
+        drv_display_fill_rect(5U, 20U, 118U, 9U);
+        drv_display_draw_text_inverted(8U, 21U, "ASSIGN SAVED TAKE");
+        drv_display_set_font(&FONT_5X7);
+        drv_display_draw_text(10U, 32U, target_label);
+        drv_display_set_font(&FONT_4X6);
+        if (g_ui_rec_edit_assign_popup == 2U)
+            drv_display_draw_text(10U, 43U,
+                (sample_capture_model_assign_waiting_for_transport() != 0U)
+                    ? "STOP PLAY TO LOAD" : "LOADING SAMPLE");
+        else if (state.error != SAMPLE_CAPTURE_ERROR_NONE)
+            drv_display_draw_text(10U, 43U,
+                                  ui_page_audio_rec_error_label(state.error));
+        else
+            drv_display_draw_text(10U, 43U, "ENC: SELECT TRACK");
+        if (g_ui_rec_edit_assign_popup == 2U)
+            drv_display_draw_text(8U, page_label_y, "CANCEL");
+        else
+        {
+            drv_display_draw_text(8U, page_label_y, "NO");
+            drv_display_draw_text(38U, page_label_y, "YES");
+        }
     }
     else
     {

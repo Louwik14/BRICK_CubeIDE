@@ -168,6 +168,8 @@ uint8_t sample_capture_model_assign_count(void);
 uint8_t sample_capture_model_assign_selected(uint8_t *out_track);
 uint8_t sample_capture_model_assign_step(int16_t delta);
 uint8_t sample_capture_model_assign_selected_take(void);
+uint8_t sample_capture_model_assign_pending(void);
+uint8_t sample_capture_model_assign_waiting_for_transport(void);
 void sample_capture_model_assign_service(void);
 void sample_capture_model_assign_cancel(void);
 uint8_t sample_capture_model_toggle_zcross(void);

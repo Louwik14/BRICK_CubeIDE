@@ -3,6 +3,7 @@
 #include "Board/board_audio_input.h"
 
 #include "IPC/control_audio_rec_bus.h"
+#include "IPC/control_audio_timing.h"
 #include "IPC/control_music_publication.h"
 #include "Track/track_input_ownership.h"
 #include "Track/track_runtime.h"

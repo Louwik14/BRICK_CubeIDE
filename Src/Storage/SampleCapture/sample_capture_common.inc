@@ -171,8 +171,15 @@ static uint32_t sample_capture_len_to_frames(uint8_t len_bars)
         return 0U;
     }
 
-    const uint64_t steps = (uint64_t)len_bars * SAMPLE_CAPTURE_STEPS_PER_BAR;
-    uint64_t frames = ((steps * (uint64_t)samples_per_step_q16) + 0xFFFFULL) >> 16;
+    uint16_t cycle_steps = SAMPLE_CAPTURE_STEPS_PER_BAR;
+    if ((g_sample_capture.state.trig == SAMPLE_CAPTURE_TRIG_PATTERN)
+            && (seq_engine_pattern_cycle_steps(&cycle_steps) == 0U))
+        return 0U;
+    const uint64_t steps = (uint64_t)len_bars * cycle_steps;
+    const uint64_t rounding = (g_sample_capture.state.trig
+        == SAMPLE_CAPTURE_TRIG_PATTERN) ? 0x8000ULL : 0xFFFFULL;
+    uint64_t frames = ((steps * (uint64_t)samples_per_step_q16)
+        + rounding) >> 16;
     if(frames > 0xFFFFFFFFULL)
     {
         frames = 0xFFFFFFFFULL;

@@ -593,8 +593,25 @@ static void brick6_sampler_runtime_clip_rebind_rec(uint8_t track_id)
     if ((rec_source_audio_resolve(&current) == 0U)
             || (sample_audio_key_equal(
                 &current.key, &voice->play_plan.key) != 0U)) return;
+    const uint32_t old_begin = voice->region_begin;
+    const uint32_t old_frames = voice->loop_frames;
+    const float old_position = voice->position;
     if (brick6_sampler_runtime_clip_start_playback(track_id) == 0U)
         clip->state = (uint8_t)BRICK6_SAMPLER_CLIP_STATE_STOPPED;
+    else if ((old_frames != 0U) && (voice->loop_frames != 0U)
+            && (old_position >= (float)old_begin))
+    {
+        const float phase = (old_position - (float)old_begin)
+            / (float)old_frames;
+        if ((phase >= 0.0f) && (phase < 1.0f))
+        {
+            uint32_t offset = (uint32_t)(phase * (float)voice->loop_frames);
+            if (offset >= voice->loop_frames) offset = voice->loop_frames - 1U;
+            const uint32_t frame = voice->region_begin + offset;
+            sample_voice_reader_seek(&voice->reader, frame);
+            voice->position = (float)frame;
+        }
+    }
 }
 
 static void brick6_sampler_runtime_clip_stop_playback_internal(uint8_t track_id,

@@ -629,6 +629,23 @@ uint8_t project_control_track_asset_select_logical(uint8_t entity,
     return 1U;
 }
 
+uint8_t project_control_track_asset_assign_logical(uint8_t entity,
+                                                   project_control_asset_role_t role,
+                                                   uint16_t logical)
+{
+    track_runtime_descriptor_t descriptor;
+    if ((role == PROJECT_CONTROL_ASSET_SAMPLER)
+            && (track_runtime_get_descriptor(entity, &descriptor) == 0U))
+        return 0U;
+    if (project_control_track_asset_select_logical(entity, role, logical) == 0U)
+        return 0U;
+    if ((role == PROJECT_CONTROL_ASSET_SAMPLER)
+            && (descriptor.type == TRACK_RUNTIME_TYPE_STREAM))
+        return param_registry_apply_track_value(
+            PARAM_SAMPLER_CLIP_SOURCE, entity, 0.0f);
+    return 1U;
+}
+
 static uint8_t project_control_track_asset_mark_unavailable(
     uint8_t entity, project_control_asset_role_t role,
     const persist_control_asset_ref_t *asset)
