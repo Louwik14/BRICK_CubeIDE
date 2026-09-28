@@ -9,3 +9,9 @@ The clock profile records missed ticks, maximum IRQ lateness, publication
 delay, USB ready delay, endpoint submit and completion delay, drops, and
 backlog. USB IRQ duration uses CPU cycles: minimum, maximum, count, and
 total. Divide total by count for the mean.
+
+If an IRQ finds the next absolute deadline already due, it schedules one
+catchup F8 on a separate TIM3 compare 1 ms later. The following IRQ advances
+past any further expired deadlines and resumes the original fractional
+timeline. `catchup_count` counts published catchup clocks;
+`catchup_suppressed` counts additional expired clocks omitted after catchup.

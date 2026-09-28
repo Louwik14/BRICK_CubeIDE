@@ -10,6 +10,8 @@ typedef struct {
     uint32_t f8_published;
     uint32_t f8_consumed;
     uint32_t missed_ticks;
+    uint32_t catchup_count;
+    uint32_t catchup_suppressed;
     uint32_t late_multi_count;
     uint32_t event_drops;
     uint32_t stale_drops;

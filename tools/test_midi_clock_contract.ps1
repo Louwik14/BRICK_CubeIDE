@@ -55,6 +55,12 @@ Assert-Contract ($timer.Contains('NVIC_SetPriority(TIM3_IRQn, 0U)')) `
     'TIM3 must preempt priority-1 audio'
 Assert-Contract ($timer.Contains('g_due_q16 +=') -and $timer.Contains('TIM3->CCR1 = compare')) `
     'absolute fractional deadline must drive the hardware compare'
+Assert-Contract ($timer.Contains('g_catchup_pending = 1U') -and `
+    $timer.Contains('g_catchup_pending = 0U') -and `
+    $timer.Contains('MIDI_CLOCK_CATCHUP_DELAY') -and `
+    $timer.Contains('prof->catchup_suppressed += skipped') -and `
+    $timer.Contains('midi_clock_timer_advance(skipped)')) `
+    'one delayed catchup compare must retain the absolute phase and suppress excess clocks'
 Assert-Contract (-not $timer.Contains('tud_')) `
     'TIM3 path must not call TinyUSB'
 Assert-Contract ($timer.Contains('midi_clock_irq_publish(deadline_tick, midi_clock_get_destination())') -and `

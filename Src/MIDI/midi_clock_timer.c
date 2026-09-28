@@ -8,6 +8,7 @@
 
 #define MIDI_CLOCK_COMPARE_HORIZON 60000U
 #define MIDI_CLOCK_COMPARE_GUARD 8U
+#define MIDI_CLOCK_CATCHUP_DELAY 1000U
 
 static volatile uint64_t g_due_q16;
 static volatile uint32_t g_due_tim5;
@@ -18,6 +19,7 @@ static volatile uint32_t g_phase_remainder;
 static volatile uint32_t g_pending_period_q16;
 static volatile uint32_t g_pending_period_remainder;
 static volatile uint8_t g_armed;
+static volatile uint8_t g_catchup_pending;
 
 volatile midi_clock_prof_t g_midi_clock_prof __attribute__((used));
 
@@ -68,6 +70,7 @@ void midi_clock_timer_init(void)
     TIM3->CNT = 0U;
     TIM3->CR1 = TIM_CR1_CEN;
     g_armed = 0U;
+    g_catchup_pending = 0U;
     g_period_q16 = 0U;
     g_period_remainder = 0U;
     g_phase_remainder = 0U;
@@ -130,6 +133,7 @@ void midi_clock_timer_arm(uint64_t start_sample, uint32_t sample_period_q16)
     const uint32_t primask = midi_clock_timer_critical();
     TIM3->DIER &= ~TIM_DIER_CC1IE;
     g_armed = 0U;
+    g_catchup_pending = 0U;
     g_period_q16 = period;
     g_period_remainder = (uint32_t)(numerator % 6U);
     g_phase_remainder = 0U;
@@ -155,6 +159,7 @@ void midi_clock_timer_stop(void)
     TIM3->DIER &= ~TIM_DIER_CC1IE;
     TIM3->SR = (uint16_t)~TIM_SR_CC1IF;
     g_armed = 0U;
+    g_catchup_pending = 0U;
     g_midi_clock_prof.armed = 0U;
     __set_PRIMASK(primask);
 }
@@ -178,10 +183,14 @@ void TIM3_IRQHandler(void)
     prof->irq_late_total += late;
     prof->last_missed = 0U;
 
-    if ((g_armed != 0U) && ((int32_t)(now5 - g_due_tim5) >= 0))
+    if ((g_armed != 0U) &&
+        ((g_catchup_pending != 0U) || ((int32_t)(now5 - g_due_tim5) >= 0)))
     {
+        const uint8_t is_catchup = g_catchup_pending;
+        g_catchup_pending = 0U;
         const uint32_t deadline_tick = g_due_tim5;
         const uint8_t publish_result = midi_clock_irq_publish(deadline_tick, midi_clock_get_destination());
+        if ((is_catchup != 0U) && (publish_result != 0U)) ++prof->catchup_count;
         ++prof->f8_published;
         prof->last_publish_tick = now5;
         prof->last_consume_tick = now5;
@@ -211,24 +220,42 @@ void TIM3_IRQHandler(void)
             g_pending_period_q16 = 0U;
         }
         midi_clock_timer_advance(1U);
-        if ((int32_t)(now5 - g_due_tim5) >= 0)
+        if ((is_catchup == 0U) && ((int32_t)(TIM5->CNT - g_due_tim5) >= 0))
         {
-            const uint32_t overdue = (uint32_t)(now5 - g_due_tim5);
+            /* One separate compare for one overdue clock; keep absolute phase. */
+            g_catchup_pending = 1U;
+        }
+        else if ((is_catchup != 0U) && ((int32_t)(TIM5->CNT - g_due_tim5) >= 0))
+        {
+            const uint32_t overdue = (uint32_t)(TIM5->CNT - g_due_tim5);
             const uint32_t skipped = (uint32_t)
                 ((((uint64_t)overdue << 16) / g_period_q16) + 1U);
             midi_clock_timer_advance(skipped);
             prof->missed_ticks += skipped;
+            prof->catchup_suppressed += skipped;
             prof->last_missed = skipped;
             ++prof->late_multi_count;
-            if ((int32_t)(now5 - g_due_tim5) >= 0)
+            if ((int32_t)(TIM5->CNT - g_due_tim5) >= 0)
             {
                 midi_clock_timer_advance(1U);
                 ++prof->missed_ticks;
+                ++prof->catchup_suppressed;
                 ++prof->last_missed;
             }
         }
     }
-    if (g_armed != 0U) midi_clock_timer_program(TIM5->CNT, (uint16_t)TIM3->CNT);
+    if (g_armed != 0U)
+    {
+        if (g_catchup_pending != 0U)
+        {
+            const uint32_t catchup_delay = MIDI_CLOCK_CATCHUP_DELAY;
+            const uint16_t compare = (uint16_t)(TIM3->CNT + catchup_delay);
+            g_compare_due_tim5 = TIM5->CNT + catchup_delay;
+            TIM3->CCR1 = compare;
+            prof->next_compare = compare;
+        }
+        else midi_clock_timer_program(TIM5->CNT, (uint16_t)TIM3->CNT);
+    }
     prof->period_ticks = g_period_q16 >> 16;
     prof->period_fraction_q16 = g_period_q16 & 0xFFFFU;
     prof->fraction_accum_q16 = (uint32_t)g_due_q16 & 0xFFFFU;
