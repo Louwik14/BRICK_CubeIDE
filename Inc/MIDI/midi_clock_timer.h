@@ -58,10 +58,10 @@ typedef struct {
     uint32_t f8_usb_completed;
     uint32_t usb_submit_busy;
     uint32_t f8_usb_failed;
-    uint32_t sof_target_error_max; /* absolute ideal deadline to selected SOF, us */
-    uint32_t sof_release_error_max; /* absolute ideal deadline to release, us */
-    uint32_t sof_late_count;        /* released one or more frames late */
-    uint32_t sof_late_frames_max;
+    uint32_t usb_irq_count;
+    uint32_t usb_irq_cycles_min;
+    uint32_t usb_irq_cycles_max;
+    uint64_t usb_irq_cycles_total;
 } midi_clock_prof_t;
 
 extern volatile midi_clock_prof_t g_midi_clock_prof;
@@ -74,7 +74,6 @@ void midi_clock_timer_note_usb_drop(void);
 void midi_clock_timer_note_usb_ready(uint32_t publish_tick);
 void midi_clock_timer_note_usb_submit(uint32_t deadline_tick, uint32_t submit_tick);
 void midi_clock_timer_note_usb_complete(uint32_t deadline_tick, uint32_t submit_tick, uint32_t complete_tick);
-void midi_clock_timer_on_sof(uint32_t sof_tick);
 uint8_t midi_clock_irq_publish(uint32_t publish_tick, midi_dest_t dest);
 
 #endif

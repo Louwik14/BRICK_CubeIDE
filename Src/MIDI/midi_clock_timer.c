@@ -6,18 +6,9 @@
 
 #include <limits.h>
 
-#define MIDI_CLOCK_EVENTS 16U
 #define MIDI_CLOCK_COMPARE_HORIZON 60000U
 #define MIDI_CLOCK_COMPARE_GUARD 8U
 
-typedef struct {
-    uint32_t tim5_tick;
-    uint32_t target_frame;
-    uint32_t target_tick;
-} midi_clock_event_t;
-static midi_clock_event_t g_events[MIDI_CLOCK_EVENTS];
-static volatile uint32_t g_head;
-static volatile uint32_t g_tail;
 static volatile uint64_t g_due_q16;
 static volatile uint32_t g_due_tim5;
 static volatile uint32_t g_compare_due_tim5;
@@ -27,9 +18,6 @@ static volatile uint32_t g_phase_remainder;
 static volatile uint32_t g_pending_period_q16;
 static volatile uint32_t g_pending_period_remainder;
 static volatile uint8_t g_armed;
-static volatile uint32_t g_sof_frame;
-static volatile uint32_t g_sof_tick;
-static volatile uint8_t g_sof_valid;
 
 volatile midi_clock_prof_t g_midi_clock_prof __attribute__((used));
 
@@ -79,11 +67,7 @@ void midi_clock_timer_init(void)
     TIM3->SR = 0U;
     TIM3->CNT = 0U;
     TIM3->CR1 = TIM_CR1_CEN;
-    g_head = g_tail = 0U;
     g_armed = 0U;
-    g_sof_frame = 0U;
-    g_sof_tick = 0U;
-    g_sof_valid = 0U;
     g_period_q16 = 0U;
     g_period_remainder = 0U;
     g_phase_remainder = 0U;
@@ -100,11 +84,10 @@ void midi_clock_timer_init(void)
     g_midi_clock_prof.usb_submit_delay_min = UINT32_MAX;
     g_midi_clock_prof.usb_complete_delay_min = UINT32_MAX;
     g_midi_clock_prof.usb_submit_to_complete_min = UINT32_MAX;
+    g_midi_clock_prof.usb_irq_cycles_min = UINT32_MAX;
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
-    /* MIDI clock scheduling must not preempt USB SOF/isochronous transfers
-     * (priority 1) or the SAI DMA audio producer (priority 2). */
-    NVIC_SetPriority(TIM3_IRQn, 3U);
+    NVIC_SetPriority(TIM3_IRQn, 0U);
     NVIC_ClearPendingIRQ(TIM3_IRQn);
     NVIC_EnableIRQ(TIM3_IRQn);
     __set_PRIMASK(primask);
@@ -147,7 +130,6 @@ void midi_clock_timer_arm(uint64_t start_sample, uint32_t sample_period_q16)
     const uint32_t primask = midi_clock_timer_critical();
     TIM3->DIER &= ~TIM_DIER_CC1IE;
     g_armed = 0U;
-    g_tail = g_head;
     g_period_q16 = period;
     g_period_remainder = (uint32_t)(numerator % 6U);
     g_phase_remainder = 0U;
@@ -174,7 +156,6 @@ void midi_clock_timer_stop(void)
     TIM3->SR = (uint16_t)~TIM_SR_CC1IF;
     g_armed = 0U;
     g_midi_clock_prof.armed = 0U;
-    g_tail = g_head;
     __set_PRIMASK(primask);
 }
 
@@ -199,33 +180,29 @@ void TIM3_IRQHandler(void)
 
     if ((g_armed != 0U) && ((int32_t)(now5 - g_due_tim5) >= 0))
     {
-        const uint32_t head = g_head;
-        if (head - g_tail < MIDI_CLOCK_EVENTS)
+        const uint32_t deadline_tick = g_due_tim5;
+        const uint8_t publish_result = midi_clock_irq_publish(deadline_tick, midi_clock_get_destination());
+        ++prof->f8_published;
+        prof->last_publish_tick = now5;
+        prof->last_consume_tick = now5;
+        if (publish_result != 0U)
         {
-            midi_clock_event_t *const event = &g_events[head & (MIDI_CLOCK_EVENTS - 1U)];
-            event->tim5_tick = g_due_tim5;
-            if ((g_sof_valid != 0U) && ((uint32_t)(now5 - g_sof_tick) < 2000U))
+            ++prof->f8_consumed;
+            if (publish_result == 1U)
             {
-                const int32_t until = (int32_t)(g_due_tim5 - g_sof_tick);
-                const uint32_t frames = (until > 0) ? ((uint32_t)until + 999U) / 1000U : 0U;
-                event->target_frame = g_sof_frame + frames;
-                event->target_tick = g_sof_tick + frames * 1000U;
+                ++prof->backlog;
+                if (prof->backlog > prof->backlog_max) prof->backlog_max = prof->backlog;
             }
-            else
-            {
-                event->target_frame = g_sof_frame + 1U;
-                event->target_tick = g_due_tim5;
-            }
-            __DMB();
-            g_head = head + 1U;
-            ++prof->f8_published;
-            prof->last_publish_tick = now5;
-            const uint32_t f8_cycles = DWT->CYCCNT - cycle_start;
-            prof->f8_irq_cycles_last = f8_cycles;
-            if (f8_cycles < prof->f8_irq_cycles_min) prof->f8_irq_cycles_min = f8_cycles;
-            if (f8_cycles > prof->f8_irq_cycles_max) prof->f8_irq_cycles_max = f8_cycles;
         }
-        else ++prof->event_drops;
+        else ++prof->usb_fifo_drops;
+        const uint32_t publish_delay = TIM5->CNT - deadline_tick;
+        prof->publish_delay_last = publish_delay;
+        if (publish_delay < prof->publish_delay_min) prof->publish_delay_min = publish_delay;
+        if (publish_delay > prof->publish_delay_max) prof->publish_delay_max = publish_delay;
+        const uint32_t f8_cycles = DWT->CYCCNT - cycle_start;
+        prof->f8_irq_cycles_last = f8_cycles;
+        if (f8_cycles < prof->f8_irq_cycles_min) prof->f8_irq_cycles_min = f8_cycles;
+        if (f8_cycles > prof->f8_irq_cycles_max) prof->f8_irq_cycles_max = f8_cycles;
 
         if (g_pending_period_q16 != 0U)
         {
@@ -250,14 +227,6 @@ void TIM3_IRQHandler(void)
                 ++prof->last_missed;
             }
         }
-        /* Never arm a compare that has already passed during this IRQ. */
-        if ((int32_t)(g_due_tim5 - TIM5->CNT) <= MIDI_CLOCK_COMPARE_GUARD)
-        {
-            midi_clock_timer_advance(1U);
-            ++prof->missed_ticks;
-            ++prof->last_missed;
-            ++prof->late_multi_count;
-        }
     }
     if (g_armed != 0U) midi_clock_timer_program(TIM5->CNT, (uint16_t)TIM3->CNT);
     prof->period_ticks = g_period_q16 >> 16;
@@ -269,54 +238,6 @@ void TIM3_IRQHandler(void)
     prof->irq_cycles_last = elapsed;
     if (elapsed < prof->irq_cycles_min) prof->irq_cycles_min = elapsed;
     if (elapsed > prof->irq_cycles_max) prof->irq_cycles_max = elapsed;
-}
-
-void midi_clock_timer_on_sof(uint32_t sof_tick)
-{
-    g_sof_valid = 0U;
-    g_sof_tick = sof_tick;
-    ++g_sof_frame;
-    g_sof_valid = 1U;
-    const uint32_t head = g_head;
-    if (g_tail == head) return;
-    if (head - g_tail > 1U)
-    {
-        g_midi_clock_prof.stale_drops += head - g_tail - 1U;
-        g_tail = head - 1U;
-    }
-
-    const midi_clock_event_t event = g_events[g_tail & (MIDI_CLOCK_EVENTS - 1U)];
-    if ((int32_t)(g_sof_frame - event.target_frame) < 0) return;
-    ++g_tail; /* At most one F8 per SOF; never catch up with a burst. */
-    volatile midi_clock_prof_t *const prof = &g_midi_clock_prof;
-    const uint32_t target_error = (uint32_t)((int32_t)(event.target_tick - event.tim5_tick) < 0
-        ? event.tim5_tick - event.target_tick : event.target_tick - event.tim5_tick);
-    if (target_error > prof->sof_target_error_max) prof->sof_target_error_max = target_error;
-    const uint32_t release_tick = TIM5->CNT;
-    const uint32_t release_error = release_tick - event.tim5_tick;
-    if (release_error > prof->sof_release_error_max) prof->sof_release_error_max = release_error;
-    const uint32_t late_frames = g_sof_frame - event.target_frame;
-    if (late_frames != 0U)
-    {
-        ++prof->sof_late_count;
-        if (late_frames > prof->sof_late_frames_max) prof->sof_late_frames_max = late_frames;
-    }
-    prof->last_consume_tick = release_tick;
-    const uint8_t publish_result = midi_clock_irq_publish(event.tim5_tick, midi_clock_get_destination());
-    if (publish_result != 0U)
-    {
-        ++prof->f8_consumed;
-        if (publish_result == 1U)
-        {
-            ++prof->backlog;
-            if (prof->backlog > prof->backlog_max) prof->backlog_max = prof->backlog;
-        }
-    }
-    else ++prof->usb_fifo_drops;
-    const uint32_t publish_delay = TIM5->CNT - event.tim5_tick;
-    prof->publish_delay_last = publish_delay;
-    if (publish_delay < prof->publish_delay_min) prof->publish_delay_min = publish_delay;
-    if (publish_delay > prof->publish_delay_max) prof->publish_delay_max = publish_delay;
 }
 
 void midi_clock_timer_note_usb_ready(uint32_t publish_tick)

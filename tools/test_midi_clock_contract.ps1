@@ -57,10 +57,15 @@ Assert-Contract ($timer.Contains('g_due_q16 +=') -and $timer.Contains('TIM3->CCR
     'absolute fractional deadline must drive the hardware compare'
 Assert-Contract (-not $timer.Contains('tud_')) `
     'TIM3 path must not call TinyUSB'
-Assert-Contract ($timer.Contains('void midi_clock_timer_on_sof(') -and `
-    $usb.Contains('midi_clock_timer_on_sof(sof_tick)') -and `
-    $usb.Contains('tud_sof_midi_clock_enable(true)')) `
-    'USB SOF IRQ must consume timer events without the MIDI main loop'
+Assert-Contract ($timer.Contains('midi_clock_irq_publish(deadline_tick, midi_clock_get_destination())') -and `
+    $midi.Contains('usb_tx_queue_push_timed(packet, publish_tick, 1U)') -and `
+    $midi.Contains('midi_usb_pend_irq();') -and `
+    $usb.Contains('midi_usb_service_from_irq();')) `
+    'TIM3 must publish F8 directly to the USB IRQ queue'
+Assert-Contract (-not $timer.Contains('sof_') -and -not $usb.Contains('midi_clock_timer_on_sof') -and `
+    -not $usb.Contains('tud_sof_midi_clock_enable(true)') -and `
+    -not $midi.Contains('midi_clock_timer_poll()')) `
+    'MIDI clock must have no SOF gate or superloop consumer'
 
 $numerator = [uint64]($quarter120.PeriodQ16 * 125)
 $whole = [uint64][math]::Floor($numerator / 6)
@@ -76,19 +81,6 @@ for ($i = 0; $i -lt 3; ++$i) {
 }
 Assert-Contract (($ticks[0] -eq 20833) -and ($ticks[1] -eq 41666) -and ($ticks[2] -eq 62500)) `
     '120 BPM must use 20833, 20833, 20834 us rather than a fixed rounded period'
-$deadline = [uint64]0
-$phase = [uint64]0
-$sofTargets = @()
-for ($i = 0; $i -lt 96; ++$i) {
-    $phase += $remainder
-    $deadline += $whole + [uint64][math]::Floor($phase / 6)
-    $phase %= 6
-    $sofTargets += [uint64][math]::Floor(($deadline + 65535999) / 65536000)
-}
-for ($i = 24; $i -lt $sofTargets.Count; ++$i) {
-    Assert-Contract (($sofTargets[$i] - $sofTargets[$i - 24]) -eq 500) `
-        'every 24-interval SOF window at 120 BPM must span 500 frames'
-}
 Assert-Contract ($midi.Contains('cable | 0x0FU')) `
     'USB System Realtime packets must use CIN 0xF'
 Assert-Contract ($midi.Contains('midi_usb_tx_drop_count')) `

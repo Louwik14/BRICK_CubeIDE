@@ -277,8 +277,9 @@ static bool usb_tx_queue_push(const uint8_t packet[4]) {
 uint8_t midi_clock_irq_publish(uint32_t publish_tick, midi_dest_t dest) {
   if (dest == MIDI_DEST_UART) return 2U;
   if ((dest != MIDI_DEST_USB) && (dest != MIDI_DEST_BOTH)) return 0U;
-  (void)publish_tick;
-  return 2U; /* Temporary ASIO test: suppress USB MIDI clock only. */
+  if (!usb_device_is_ready()) return 0U;
+  const uint8_t packet[4] = { (uint8_t)((MIDI_USB_CABLE << 4) | 0x0FU), 0xF8U, 0U, 0U };
+  return usb_tx_queue_push_timed(packet, publish_tick, 1U) ? 1U : 0U;
 }
 
 /**
@@ -636,7 +637,6 @@ static void usb_device_enqueue_packet(const uint8_t packet[4]) {
 static void backend_usb_device_send(const uint8_t *msg, size_t len) {
   uint8_t packet[4] = {0, 0, 0, 0};
   const uint8_t st = msg[0];
-  if ((st == 0xFAU) || (st == 0xFCU) || (st == 0xF8U)) return;
   const uint8_t cable = (uint8_t)(MIDI_USB_CABLE << 4);
   const bool is_rt_clock_transport = midi_is_realtime_clock_transport_status(st);
 
