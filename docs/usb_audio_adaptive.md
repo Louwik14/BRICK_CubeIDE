@@ -13,12 +13,7 @@ PC-to-BRICK ring. AUDIO starts consumption only at an accepted 64-frame
 SAI RX DMA boundary once at least 144 frames have accumulated. This is
 PREFILL to RUN; music transport does not affect it.
 
-In RUN, AUDIO normally consumes one source stereo frame per output frame.
-At or below 72 queued frames, it may consume one source frame less and
-repeat the last frame of that segment. At or above 216 frames, it may
-consume one source frame extra and discard the last frame of that segment.
-Both channels are adjusted together. A correction is allowed only after
-at least 5000 output frames since the previous correction (about 104 ms
-at 48 kHz), and only on a segment of at least two frames. The maximum
-adaptation is 200 ppm. Normal operation between the thresholds remains
-strictly 1:1. On insufficient data, AUDIO returns to PREFILL.
+For the 1:1 test, RUN always consumes exactly one source stereo frame per
+output frame. No frame is duplicated or discarded, regardless of ring fill.
+The ring may therefore drift with the difference between USB and SAI clocks.
+On insufficient data, AUDIO returns to PREFILL.
