@@ -13,7 +13,6 @@
 #define USB_DEVICE_MIDI_EP_IN   0x81U
 #define USB_DEVICE_MIDI_EP_SIZE 64U
 #define USB_DEVICE_AUDIO_EP_OUT 0x02U
-#define USB_DEVICE_AUDIO_EP_FB  0x83U
 #define USB_DEVICE_MIDI_RX_BUDGET 16U
 #define USB_DEVICE_AUDIO_CHANNELS 2U
 #define USB_DEVICE_AUDIO_SUBSLOT_BYTES 4U
@@ -36,7 +35,7 @@ enum {
 #define USB_DEVICE_DWC2_FS_RX_FIFO_WORDS \
     (13U + 1U + 2U * ((USB_DEVICE_AUDIO_EP_SIZE / 4U) + 1U) + 2U * 2U)
 #define USB_DEVICE_DWC2_FS_TX_FIFO_WORDS \
-    (64U / 4U + 4U / 4U + 64U / 4U)
+    (64U / 4U + 64U / 4U)
 
 #define USB_DEVICE_AUDIO_DESC_LEN (TUD_AUDIO20_DESC_IAD_LEN \
     + TUD_AUDIO20_DESC_STD_AC_LEN \
@@ -48,8 +47,7 @@ enum {
     + TUD_AUDIO20_DESC_CS_AS_INT_LEN \
     + TUD_AUDIO20_DESC_TYPE_I_FORMAT_LEN \
     + TUD_AUDIO20_DESC_STD_AS_ISO_EP_LEN \
-    + TUD_AUDIO20_DESC_CS_AS_ISO_EP_LEN \
-    + TUD_AUDIO20_DESC_STD_AS_ISO_FB_EP_LEN)
+    + TUD_AUDIO20_DESC_CS_AS_ISO_EP_LEN)
 
 _Static_assert(USB_DEVICE_AUDIO_EP_SIZE == 392U,
                "USB Audio FS endpoint maximum packet size changed");
@@ -148,10 +146,10 @@ static const uint8_t g_usb_configuration_descriptor[] = {
         AUDIO20_CTRL_NONE,
         USB_STR_PRODUCT),
 
-    /* Host to BRICK: asynchronous OUT data plus explicit feedback. */
+    /* Host to BRICK: adaptive OUT data, clock drift absorbed locally. */
     TUD_AUDIO20_DESC_STD_AS_INT(USB_DEVICE_AUDIO_OUT_ITF, 0U, 0U,
                                 USB_STR_PRODUCT),
-    TUD_AUDIO20_DESC_STD_AS_INT(USB_DEVICE_AUDIO_OUT_ITF, 1U, 2U,
+    TUD_AUDIO20_DESC_STD_AS_INT(USB_DEVICE_AUDIO_OUT_ITF, 1U, 1U,
                                 USB_STR_PRODUCT),
     TUD_AUDIO20_DESC_CS_AS_INT(
         0x04U, AUDIO20_CTRL_NONE, AUDIO20_FORMAT_TYPE_I,
@@ -162,7 +160,7 @@ static const uint8_t g_usb_configuration_descriptor[] = {
                                    USB_DEVICE_AUDIO_BIT_RESOLUTION),
     TUD_AUDIO20_DESC_STD_AS_ISO_EP(
         USB_DEVICE_AUDIO_EP_OUT,
-        (uint8_t)(TUSB_XFER_ISOCHRONOUS | TUSB_ISO_EP_ATT_ASYNCHRONOUS
+        (uint8_t)(TUSB_XFER_ISOCHRONOUS | TUSB_ISO_EP_ATT_ADAPTIVE
                   | TUSB_ISO_EP_ATT_DATA),
         USB_DEVICE_AUDIO_EP_SIZE,
         1U),
@@ -171,7 +169,6 @@ static const uint8_t g_usb_configuration_descriptor[] = {
         AUDIO20_CTRL_NONE,
         AUDIO20_CS_AS_ISO_DATA_EP_LOCK_DELAY_UNIT_UNDEFINED,
         0U),
-    TUD_AUDIO20_DESC_STD_AS_ISO_FB_EP(USB_DEVICE_AUDIO_EP_FB, 4U, 1U),
 
     USB_DEVICE_MIDI_DESCRIPTOR(USB_DEVICE_MIDI_AC_ITF, USB_STR_PRODUCT,
                                USB_DEVICE_MIDI_EP_OUT,
@@ -317,12 +314,6 @@ void usb_device_irq(void)
         tud_int_handler(USB_DEVICE_RHPORT);
         if (sof_pending != 0U) {
             midi_clock_timer_on_sof(sof_tick);
-            const USB_OTG_DeviceTypeDef *const usb_regs =
-                (const USB_OTG_DeviceTypeDef *)((uintptr_t)USB_OTG_FS
-                                                 + USB_OTG_DEVICE_BASE);
-            const uint16_t usb_frame = (uint16_t)((usb_regs->DSTS
-                & USB_OTG_DSTS_FNSOF_Msk) >> USB_OTG_DSTS_FNSOF_Pos);
-            usb_audio_feedback_sof(usb_frame);
         }
         midi_usb_service_from_irq();
     }
