@@ -5,8 +5,6 @@
 
 void usb_audio_transport_reset(void);
 void usb_audio_transport_process(void);
-void usb_audio_feedback_sof(void);
-void usb_audio_feedback_dma_half(void);
 void usb_audio_transport_set_interface(uint8_t interface_number,
                                        uint8_t alternate_setting);
 void usb_audio_transport_close_interface(uint8_t interface_number);

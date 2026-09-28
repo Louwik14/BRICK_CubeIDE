@@ -5,7 +5,6 @@
 #include <string.h>
 
 #include "IPC/usb_audio_float_ring.h"
-#include "Board/board_audio_format.h"
 #include "Audio/audio_probe.h"
 #include "Platform/memory_layout.h"
 #include "stm32h7xx.h"
@@ -23,21 +22,9 @@
 #define USB_AUDIO_IRQ_PACKET_MAX_BYTES   CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX
 #define USB_AUDIO_SAMPLES_PER_USB_FRAME  (USB_AUDIO_SAMPLE_RATE_HZ / 1000U)
 #define USB_AUDIO_FEEDBACK_NOMINAL       (USB_AUDIO_SAMPLES_PER_USB_FRAME << 16)
-#define USB_AUDIO_FEEDBACK_WINDOW_SOF    256U
-#define USB_AUDIO_FEEDBACK_GAIN_DENOM    4096U
-#define USB_AUDIO_FEEDBACK_CORRECTION_LIMIT (1U << 14) /* +/-0.25 frame/ms */
-#define USB_AUDIO_FEEDBACK_MIN           (USB_AUDIO_FEEDBACK_NOMINAL \
-                                         - USB_AUDIO_FEEDBACK_CORRECTION_LIMIT)
-#define USB_AUDIO_FEEDBACK_MAX           (USB_AUDIO_FEEDBACK_NOMINAL \
-                                         + USB_AUDIO_FEEDBACK_CORRECTION_LIMIT)
 
 static volatile uint8_t g_usb_audio_out_active;
 static volatile uint8_t g_usb_audio_in_active;
-static volatile uint32_t g_usb_audio_dma_frames;
-static uint32_t g_feedback_last_dma_frames;
-static uint16_t g_feedback_sof_count;
-static int32_t g_feedback_rate_q16 = USB_AUDIO_FEEDBACK_NOMINAL;
-static int32_t g_feedback_fill_sum;
 static uint8_t g_usb_audio_out_ready;
 static uint8_t g_usb_audio_in_ready;
 static ALIGN32 float g_usb_audio_in_float_scratch[
@@ -89,49 +76,6 @@ static float usb_audio_pcm24_in_32_to_float(int32_t sample)
     return (float)pcm24 * (1.0f / 8388608.0f);
 }
 
-static void usb_audio_feedback_update(void)
-{
-    const int32_t average_fill = g_feedback_fill_sum / (int32_t)USB_AUDIO_FEEDBACK_WINDOW_SOF;
-    const int32_t error = (int32_t)USB_AUDIO_FLOAT_RING_TARGET_FRAMES - average_fill;
-    int64_t feedback = g_feedback_rate_q16;
-
-    feedback += ((int64_t)error * 65536LL) /
-                (int64_t)USB_AUDIO_FEEDBACK_GAIN_DENOM;
-    if (feedback < (int64_t)USB_AUDIO_FEEDBACK_MIN) {
-        feedback = (int64_t)USB_AUDIO_FEEDBACK_MIN;
-    }
-    if (feedback > (int64_t)USB_AUDIO_FEEDBACK_MAX) {
-        feedback = (int64_t)USB_AUDIO_FEEDBACK_MAX;
-    }
-    (void)tud_audio_n_fb_set(0U, (uint32_t)feedback);
-}
-
-void usb_audio_feedback_dma_half(void)
-{
-    g_usb_audio_dma_frames += BOARD_AUDIO_CONTRACT_FRAMES_PER_HALF;
-}
-
-void usb_audio_feedback_sof(void)
-{
-    if (g_usb_audio_out_active == 0U) return;
-    g_feedback_fill_sum += (int32_t)usb_audio_float_pc_to_brick_available();
-    if (++g_feedback_sof_count < USB_AUDIO_FEEDBACK_WINDOW_SOF) return;
-
-    const uint32_t dma_frames = g_usb_audio_dma_frames;
-    const uint32_t delta = dma_frames - g_feedback_last_dma_frames;
-    g_feedback_last_dma_frames = dma_frames;
-    g_feedback_sof_count = 0U;
-    if (delta >= BOARD_AUDIO_CONTRACT_FRAMES_PER_HALF
-        && delta <= BOARD_AUDIO_CONTRACT_FRAMES_PER_HALF * 256U) {
-        const int32_t measured = (int32_t)(((uint64_t)delta << 16) /
-                                           USB_AUDIO_FEEDBACK_WINDOW_SOF);
-        /* Sixteen windows suppress the 64-frame DMA boundary quantization. */
-        g_feedback_rate_q16 += (measured - g_feedback_rate_q16) / 16;
-    }
-    usb_audio_feedback_update();
-    g_feedback_fill_sum = 0;
-}
-
 static void usb_audio_reset_cursors(void)
 {
     const uint32_t primask = __get_PRIMASK();
@@ -167,10 +111,6 @@ void usb_audio_transport_set_interface(uint8_t interface_number,
 
     if (interface_number == USB_AUDIO_AS_OUT_INTERFACE) {
         g_usb_audio_out_active = (alternate_setting != 0U) ? 1U : 0U;
-        g_feedback_last_dma_frames = g_usb_audio_dma_frames;
-        g_feedback_sof_count = 0U;
-        g_feedback_fill_sum = 0;
-        g_feedback_rate_q16 = USB_AUDIO_FEEDBACK_NOMINAL;
     } else {
         g_usb_audio_in_active = (alternate_setting != 0U) ? 1U : 0U;
     }
