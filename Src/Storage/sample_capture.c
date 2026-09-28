@@ -104,6 +104,8 @@ typedef struct
     uint16_t final_counter;
     uint32_t trigger_threshold_peak_abs_pcm24;
     uint32_t trigger_arm_epoch;
+    uint64_t pending_quant_sample;
+    uint8_t pending_quant_valid;
     uint8_t assign_tracks[BRICK_ENTITY_CAPACITY];
     uint8_t assign_count;
     uint8_t assign_index;

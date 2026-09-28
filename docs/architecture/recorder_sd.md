@@ -212,8 +212,10 @@ L'annulation du REC global libère aussi l'armement AUDIO REC.
 En mode PATTERN, un transport démarrant avec une quantification NOW déclenche
 la prise au départ. Si le transport tourne déjà, le service CONTROL programme
 le prochain cycle musical fourni par le moteur SEQ. La quantification BAR
-programme la prochaine barre du transport ; PATTERN utilise le cycle du
-pattern. Une prise finale de zéro frame libère son slot REC_SOURCE et remonte
+attend la prochaine barre du transport ; PATTERN attend le cycle de la plus
+longue track active. La limite calculée est conservée jusqu'à son échéance ;
+les commandes audio sont publiées seulement quand cette limite entre dans
+l'horizon non publié. Une prise finale de zéro frame libère son slot REC_SOURCE et remonte
 au modèle comme fin de cycle, ce qui rend possible un nouvel armement.
 
 ## Arbitrage SD et coopération

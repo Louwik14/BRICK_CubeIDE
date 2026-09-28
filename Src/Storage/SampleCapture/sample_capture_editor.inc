@@ -95,6 +95,7 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
     }
     if(arm == SAMPLE_CAPTURE_ARM_OFF)
     {
+        g_sample_capture.pending_quant_valid = 0U;
         g_sample_capture.state.arm = SAMPLE_CAPTURE_ARM_OFF;
         (void)sample_capture_next_trigger_arm_epoch();
         g_sample_capture.state.armed_pending = 0U;
@@ -135,6 +136,7 @@ uint8_t sample_capture_model_set_arm(sample_capture_arm_t arm)
     }
 
     g_sample_capture.state.arm = arm;
+    g_sample_capture.pending_quant_valid = 0U;
     (void)sample_capture_next_trigger_arm_epoch();
     g_sample_capture.state.armed_pending =
         ((arm == SAMPLE_CAPTURE_ARM_REC)
