@@ -338,17 +338,10 @@ bool tud_audio_set_req_entity_cb(uint8_t rhport,
                                  tusb_control_request_t const *p_request,
                                  uint8_t *pBuff)
 {
-    const uint8_t entity_id = TU_U16_HIGH(p_request->wIndex);
-    const uint8_t control = TU_U16_HIGH(p_request->wValue);
-
     (void)rhport;
-    if ((entity_id != USB_AUDIO_CLOCK_SOURCE_ID)
-        || (control != AUDIO20_CS_CTRL_SAM_FREQ)
-        || (p_request->bRequest != AUDIO20_CS_REQ_CUR)
-        || (p_request->wLength != sizeof(uint32_t))) {
-        return false;
-    }
-    return tu_unaligned_read32(pBuff) == USB_AUDIO_SAMPLE_RATE_HZ;
+    (void)p_request;
+    (void)pBuff;
+    return false;
 }
 
 bool tud_audio_set_req_ep_cb(uint8_t rhport,
