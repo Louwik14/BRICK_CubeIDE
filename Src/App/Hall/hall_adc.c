@@ -9,6 +9,7 @@
 #include "stm32h7xx_hal.h"
 #include "main.h"
 #include "adc.h"
+#include "tim.h"
 
 #define HALL_MUX_COUNT         8U
 #define HALL_MUX_SETTLE_DISCARD_PAIRS 6U
@@ -17,6 +18,8 @@ _Static_assert(sizeof(hall_capture_record_t) == 72U,
                "Hall capture dump layout changed");
 _Static_assert(sizeof(hall_fixed_record_t) == 40U,
                "Hall fixed-mux dump layout changed");
+_Static_assert(sizeof(hall_direct_record_t) == 16U,
+               "Hall direct ADC dump layout changed");
 _Static_assert((HALL_CAPTURE_CAPACITY & (HALL_CAPTURE_CAPACITY - 1U)) == 0U,
                "Hall capture ring capacity must be a power of two");
 
@@ -64,6 +67,13 @@ volatile uint8_t g_hall_fixed_mux __attribute__((used, externally_visible));
 volatile uint8_t g_hall_fixed_adc __attribute__((used, externally_visible));
 volatile uint16_t g_hall_fixed_baseline __attribute__((used, externally_visible));
 volatile uint16_t g_hall_fixed_trigger_raw __attribute__((used, externally_visible));
+CONTROL_STATE_SDRAM volatile hall_direct_record_t
+    g_hall_direct_trace[HALL_DIRECT_CAPACITY]
+    __attribute__((used, externally_visible));
+volatile uint32_t g_hall_direct_count __attribute__((used, externally_visible));
+volatile uint32_t g_hall_direct_error __attribute__((used, externally_visible));
+volatile uint8_t g_hall_direct_state __attribute__((used, externally_visible));
+volatile uint8_t g_hall_direct_restore_ok __attribute__((used, externally_visible));
 static uint16_t g_hall_stable_baseline[HALL_KEY_COUNT];
 static uint16_t g_hall_stable_count[HALL_KEY_COUNT];
 static uint16_t g_hall_held_count[HALL_KEY_COUNT];
@@ -207,11 +217,8 @@ static void hall_adc_process_pair(uint8_t completing_adc)
         {
             g_hall_fixed_active = 0U;
             g_hall_fixed_done = 1U;
-            g_hall_capture_frozen = 1U;
-            hall_mux_index = (uint8_t)((hall_mux_index + 1U) & 0x07U);
-            hall_mux_select(hall_mux_index);
-            ++g_hall_mux_generation;
-            hall_discard_count = HALL_MUX_SETTLE_DISCARD_PAIRS;
+            TIM6->CR1 &= ~TIM_CR1_CEN;
+            g_hall_direct_state = 1U;
         }
         return;
     }
@@ -329,6 +336,10 @@ void hall_adc_init(void)
     g_hall_fixed_adc = 0U;
     g_hall_fixed_baseline = 0U;
     g_hall_fixed_trigger_raw = 0U;
+    g_hall_direct_count = 0U;
+    g_hall_direct_error = 0U;
+    g_hall_direct_state = 0U;
+    g_hall_direct_restore_ok = 0U;
 
     adc1_dma[0U] = 0U;
     adc1_dma[1U] = 0U;
@@ -400,7 +411,8 @@ uint32_t hall_adc_get_sample_count(uint8_t key)
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
-    if (hadc == NULL)
+    if ((hadc == NULL) || (g_hall_direct_state == 1U)
+        || (g_hall_direct_state == 2U))
     {
         return;
     }
@@ -434,4 +446,92 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
         adc2_ready = 0U;
         hall_adc_process_pair((hadc->Instance == ADC1) ? 1U : 2U);
     }
+}
+
+void hall_adc_service_direct_probe(void)
+{
+    if (g_hall_direct_state != 1U) return;
+    g_hall_direct_state = 2U;
+
+    if (HAL_TIM_Base_Stop(&htim6) != HAL_OK) g_hall_direct_error |= 1U;
+    const HAL_StatusTypeDef stop1 = HAL_ADC_Stop_DMA(&hadc1);
+    const HAL_StatusTypeDef stop2 = HAL_ADC_Stop_DMA(&hadc2);
+    if (stop1 != HAL_OK) g_hall_direct_error |= 2U;
+    if (stop2 != HAL_OK) g_hall_direct_error |= 4U;
+
+    if ((stop1 == HAL_OK) && (stop2 == HAL_OK))
+    {
+        ADC_HandleTypeDef *direct_adc = (g_hall_fixed_adc == 1U) ? &hadc2 : &hadc1;
+        ADC_InjectionConfTypeDef config = {0};
+        config.InjectedChannel = (g_hall_fixed_adc == 0U) ? ADC_CHANNEL_11
+            : ((g_hall_fixed_adc == 1U) ? ADC_CHANNEL_18 : ADC_CHANNEL_19);
+        config.InjectedRank = ADC_INJECTED_RANK_1;
+        config.InjectedSamplingTime = ADC_SAMPLETIME_64CYCLES_5;
+        config.InjectedSingleDiff = ADC_SINGLE_ENDED;
+        config.InjectedOffsetNumber = ADC_OFFSET_NONE;
+        config.InjectedNbrOfConversion = 1U;
+        config.ExternalTrigInjecConv = ADC_INJECTED_SOFTWARE_START;
+        config.ExternalTrigInjecConvEdge = ADC_EXTERNALTRIGINJECCONV_EDGE_NONE;
+        if (HAL_ADCEx_InjectedConfigChannel(direct_adc, &config) != HAL_OK)
+        {
+            g_hall_direct_error |= 8U;
+        }
+        else
+        {
+            for (uint32_t i = 0U; i < HALL_DIRECT_CAPACITY; ++i)
+            {
+                if (HAL_ADCEx_InjectedStart(direct_adc) != HAL_OK)
+                {
+                    g_hall_direct_error |= 16U;
+                    break;
+                }
+                if (HAL_ADCEx_InjectedPollForConversion(direct_adc, 2U) != HAL_OK)
+                {
+                    g_hall_direct_error |= 32U;
+                    (void)HAL_ADCEx_InjectedStop(direct_adc);
+                    break;
+                }
+                volatile hall_direct_record_t *sample = &g_hall_direct_trace[i];
+                sample->sequence = 0U;
+                sample->tim5_tick = brick_media_clock_now_tick();
+                sample->adc_isr = direct_adc->Instance->ISR;
+                sample->raw = (uint16_t)HAL_ADCEx_InjectedGetValue(
+                    direct_adc, ADC_INJECTED_RANK_1);
+                sample->status = 0U;
+                __DMB();
+                sample->sequence = i + 1U;
+                g_hall_direct_count = i + 1U;
+                if (HAL_ADCEx_InjectedStop(direct_adc) != HAL_OK)
+                {
+                    g_hall_direct_error |= 64U;
+                    break;
+                }
+            }
+        }
+    }
+
+    adc1_ready = 0U;
+    adc2_ready = 0U;
+    hall_discard_count = HALL_MUX_SETTLE_DISCARD_PAIRS;
+    hall_mux_index = (uint8_t)((g_hall_fixed_mux + 1U) & 0x07U);
+    hall_mux_select(hall_mux_index);
+    ++g_hall_mux_generation;
+    if (board_surface_start_hall_adc_dma(adc1_dma, &adc2_dma) == 0U)
+    {
+        g_hall_direct_error |= 128U;
+        (void)HAL_ADC_Stop_DMA(&hadc1);
+        (void)HAL_ADC_Stop_DMA(&hadc2);
+    }
+    else if (board_surface_start_hall_scan_timer() == 0U)
+    {
+        g_hall_direct_error |= 256U;
+        (void)HAL_ADC_Stop_DMA(&hadc1);
+        (void)HAL_ADC_Stop_DMA(&hadc2);
+    }
+    else
+    {
+        g_hall_direct_restore_ok = 1U;
+    }
+    g_hall_capture_frozen = 1U;
+    g_hall_direct_state = 3U;
 }

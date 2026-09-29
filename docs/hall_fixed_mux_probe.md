@@ -11,8 +11,8 @@ Le mux reste alors sur cette adresse pendant au plus 5 ms. Chaque paire
 de callbacks enregistre les trois valeurs DMA, leurs ticks de callback,
 leurs compteurs, les NDTR, et l'adresse mux observée sur les GPIO. La sonde
 ne distribue pas ces échantillons au détecteur pendant cette brève pause;
-elle reprend ensuite le scan normal avec six paires rejetées et fige la
-trace pour GDB. La valeur de `g_hall_fixed_adc` désigne 0 = ADC1 Hall A,
+la sonde directe prend ensuite le relais avant la reprise du scan. La valeur
+de `g_hall_fixed_adc` désigne 0 = ADC1 Hall A,
 1 = ADC2 Hall B, 2 = ADC1 Hall C. L'absence de déclenchement donne
 `g_hall_fixed_done = 0`.
 

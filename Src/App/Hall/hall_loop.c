@@ -13,6 +13,7 @@ void hall_loop_init(void)
 
 void hall_loop_process(void)
 {
+    hall_adc_service_direct_probe();
     /* Musical Hall decisions are made by hall_engine_process_sample() in the
      * acquisition callback. Keep this hook for diagnostics/UI maintenance. */
     hall_engine_process();

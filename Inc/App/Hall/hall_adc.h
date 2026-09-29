@@ -6,6 +6,7 @@
 #include "App/Hall/hall_engine.h"
 
 void hall_adc_init(void);
+void hall_adc_service_direct_probe(void);
 
 uint16_t hall_adc_get_raw(uint8_t key);
 uint8_t hall_adc_get_mux_index(void);

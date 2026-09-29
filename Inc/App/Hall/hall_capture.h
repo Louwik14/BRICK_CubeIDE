@@ -65,6 +65,16 @@ typedef struct {
 
 #define HALL_FIXED_CAPACITY 128U
 
+typedef struct {
+    uint32_t sequence;
+    uint32_t tim5_tick;
+    uint32_t adc_isr;
+    uint16_t raw;
+    uint16_t status;
+} hall_direct_record_t;
+
+#define HALL_DIRECT_CAPACITY 64U
+
 extern volatile hall_capture_record_t g_hall_capture[HALL_CAPTURE_CAPACITY];
 extern volatile hall_capture_calibration_t
     g_hall_capture_calibration[HALL_KEY_COUNT];
@@ -82,6 +92,11 @@ extern volatile uint8_t g_hall_fixed_mux;
 extern volatile uint8_t g_hall_fixed_adc;
 extern volatile uint16_t g_hall_fixed_baseline;
 extern volatile uint16_t g_hall_fixed_trigger_raw;
+extern volatile hall_direct_record_t g_hall_direct_trace[HALL_DIRECT_CAPACITY];
+extern volatile uint32_t g_hall_direct_count;
+extern volatile uint32_t g_hall_direct_error;
+extern volatile uint8_t g_hall_direct_state;
+extern volatile uint8_t g_hall_direct_restore_ok;
 
 void hall_capture_note_release(uint8_t key, uint32_t held_ms);
 
