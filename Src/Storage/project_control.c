@@ -219,8 +219,8 @@ uint8_t project_control_get_asset_ordinal(uint16_t ordinal,persist_control_asset
 
 uint8_t project_control_register_sample_runtime(uint32_t kind,const char*path,uint16_t runtime,uint16_t*out_logical){if((kind!=PERSIST_ASSET_SAMPLE_STREAM&&kind!=PERSIST_ASSET_SAMPLE_RAM)||(runtime!=PROJECT_CONTROL_INVALID_RUNTIME&&runtime>=SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS))return 0U;if(kind==PERSIST_ASSET_SAMPLE_STREAM){uint16_t found;if(classic_find(path,&found)==0U||found!=runtime)return 0U;if(out_logical!=NULL)*out_logical=runtime;unavailable_remove(kind,path);return 1U;}const uint8_t ok=bank_register(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,kind,path,runtime,out_logical);if(ok!=0U&&runtime!=PROJECT_CONTROL_INVALID_RUNTIME)unavailable_remove(kind,path);return ok;}
 uint8_t project_control_register_wavetable_runtime(const char*path,uint16_t runtime,uint16_t*out_logical){if(runtime!=PROJECT_CONTROL_INVALID_RUNTIME&&runtime>=SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS)return 0U;const uint8_t ok=bank_register(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,PERSIST_ASSET_WAVETABLE,path,runtime,out_logical);if(ok!=0U&&runtime!=PROJECT_CONTROL_INVALID_RUNTIME)unavailable_remove(PERSIST_ASSET_WAVETABLE,path);return ok;}
-static void project_control_rebind_multi_tracks(uint16_t logical);
-uint8_t project_control_register_multi_runtime(const char*path,uint16_t runtime,uint16_t*out_logical){if(runtime!=PROJECT_CONTROL_INVALID_RUNTIME&&runtime>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)return 0U;uint16_t published=PROJECT_CONTROL_INVALID_RUNTIME;if(runtime!=PROJECT_CONTROL_INVALID_RUNTIME){const multi_sample_instrument_t*i=multi_sample_pool_get_instrument(runtime);if(i!=NULL&&multi_sample_pool_get_state(runtime)==MULTI_SAMPLE_INSTRUMENT_READY&&strcmp(i->index_path,path)==0)published=runtime;}uint16_t registered=0U;const uint8_t ok=bank_register(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,PERSIST_ASSET_MULTI,path,published,&registered);if(ok!=0U){if(out_logical!=NULL)*out_logical=registered;if(published!=PROJECT_CONTROL_INVALID_RUNTIME){unavailable_remove(PERSIST_ASSET_MULTI,path);project_control_rebind_multi_tracks(registered);}}return ok;}
+static uint8_t project_control_rebind_multi_tracks(uint16_t logical);
+uint8_t project_control_register_multi_runtime(const char*path,uint16_t runtime,uint16_t*out_logical){if(runtime!=PROJECT_CONTROL_INVALID_RUNTIME&&runtime>=MULTI_SAMPLE_POOL_MAX_INSTRUMENTS)return 0U;uint16_t published=PROJECT_CONTROL_INVALID_RUNTIME;if(runtime!=PROJECT_CONTROL_INVALID_RUNTIME){const multi_sample_instrument_t*i=multi_sample_pool_get_instrument(runtime);if(i!=NULL&&multi_sample_pool_get_state(runtime)==MULTI_SAMPLE_INSTRUMENT_READY&&strcmp(i->index_path,path)==0)published=runtime;}uint16_t registered=0U;const uint8_t ok=bank_register(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,PERSIST_ASSET_MULTI,path,published,&registered);if(ok!=0U){if(out_logical!=NULL)*out_logical=registered;if(published!=PROJECT_CONTROL_INVALID_RUNTIME){unavailable_remove(PERSIST_ASSET_MULTI,path);return project_control_rebind_multi_tracks(registered);}}return ok;}
 uint8_t project_control_find_asset(uint32_t kind,const char*path,uint16_t*out_logical){if(kind==PERSIST_ASSET_SAMPLE_STREAM)return classic_find(path,out_logical);if(kind==PERSIST_ASSET_SAMPLE_RAM)return bank_find(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,kind,path,out_logical);if(kind==PERSIST_ASSET_WAVETABLE)return bank_find(g_wavetable_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,kind,path,out_logical);if(kind==PERSIST_ASSET_MULTI)return bank_find(g_multi_bank,MULTI_SAMPLE_POOL_MAX_INSTRUMENTS,kind,path,out_logical);return 0U;}
 
 uint8_t project_control_ram_load_begin(uint16_t backend_slot,const char*path)
@@ -483,7 +483,12 @@ project_control_asset_result_t project_control_complete_multi_runtime(uint16_t l
     g_multi_bank[logical].runtime=runtime;
     g_multi_bank[logical].pending_runtime=PROJECT_CONTROL_INVALID_RUNTIME;
     unavailable_remove(PERSIST_ASSET_MULTI,path);
-    project_control_rebind_multi_tracks(logical);
+    if (project_control_rebind_multi_tracks(logical) == 0U)
+    {
+        (void)bank_remove(g_multi_bank, MULTI_SAMPLE_POOL_MAX_INSTRUMENTS, logical);
+        (void)unavailable_set(PERSIST_ASSET_MULTI, path);
+        return PROJECT_CONTROL_ASSET_FAILED_INTERNAL;
+    }
     return PROJECT_CONTROL_ASSET_READY;
 }
 uint8_t project_control_remove_sample(uint16_t logical){const sample_global_slot_t*s=sample_global_pool_get_slot(logical);if(s!=NULL&&s->kind==SAMPLE_GLOBAL_KIND_CLASSIC){sample_global_pool_clear_classic(logical);return 1U;}return bank_remove(g_sample_bank,SAMPLE_GLOBAL_POOL_ACTIVE_SLOTS,logical);}
@@ -631,13 +636,41 @@ uint8_t project_control_track_asset_select_logical(uint8_t entity,
     return 1U;
 }
 
+uint8_t project_control_republish_track_asset(uint8_t entity)
+{
+    if (entity >= BRICK_ENTITY_CAPACITY) return 0U;
+    track_runtime_descriptor_t descriptor;
+    if (track_runtime_get_descriptor(entity, &descriptor) == 0U) return 0U;
+    const uint8_t sampler = (uint8_t)(descriptor.type == TRACK_RUNTIME_TYPE_STREAM
+        || descriptor.type == TRACK_RUNTIME_TYPE_RAM
+        || descriptor.type == TRACK_RUNTIME_TYPE_MULTI);
+    if (sampler == 0U) return 1U;
+    const persist_control_asset_ref_t *const selected =
+        &g_track_assets[entity][PROJECT_CONTROL_ASSET_SAMPLER];
+    const uint32_t expected = (descriptor.type == TRACK_RUNTIME_TYPE_MULTI)
+        ? PERSIST_ASSET_MULTI : (descriptor.type == TRACK_RUNTIME_TYPE_RAM)
+            ? PERSIST_ASSET_SAMPLE_RAM : PERSIST_ASSET_SAMPLE_STREAM;
+    if (selected->path_length == 0U || selected->kind != expected
+        || g_track_asset_availability[entity][PROJECT_CONTROL_ASSET_SAMPLER]
+            != PROJECT_CONTROL_ASSET_LOADED)
+        return 1U;
+    if (project_control_track_asset_can_restore(entity,
+            PROJECT_CONTROL_ASSET_SAMPLER, selected) == 0U)
+        return 1U;
+    uint16_t logical;
+    if (project_control_track_asset_get_logical(entity,
+            PROJECT_CONTROL_ASSET_SAMPLER, &logical) == 0U)
+        return 1U;
+    return project_control_publish_sampler_asset(entity, logical);
+}
+
 /* Clearing a multi slot retires its note admission. A completed load must
  * reinstall every track projection whose canonical asset still names it. */
-static void project_control_rebind_multi_tracks(uint16_t logical)
+static uint8_t project_control_rebind_multi_tracks(uint16_t logical)
 {
     persist_control_asset_ref_t asset;
     if (project_control_get_logical_asset(PERSIST_ASSET_MULTI, logical, &asset) == 0U)
-        return;
+        return 0U;
     for (uint8_t entity = 0U; entity < BRICK_ENTITY_CAPACITY; ++entity)
     {
         track_runtime_descriptor_t descriptor;
@@ -650,9 +683,11 @@ static void project_control_rebind_multi_tracks(uint16_t logical)
             && selected->path_length == asset.path_length
             && memcmp(selected->canonical_path, asset.canonical_path,
                       asset.path_length) == 0)
-            (void)project_control_track_asset_select_logical(
-                entity, PROJECT_CONTROL_ASSET_SAMPLER, logical);
+            if (project_control_track_asset_select_logical(
+                    entity, PROJECT_CONTROL_ASSET_SAMPLER, logical) == 0U)
+                return 0U;
     }
+    return 1U;
 }
 
 uint8_t project_control_track_asset_assign_logical(uint8_t entity,

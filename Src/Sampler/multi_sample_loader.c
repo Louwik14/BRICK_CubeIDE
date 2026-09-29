@@ -887,15 +887,15 @@ static uint8_t multi_loader_bulk_finish_instrument(void)
         return 0U;
     }
 
+    if (multi_sample_pool_set_state(g_multi_load_status.instrument_id,
+            MULTI_SAMPLE_INSTRUMENT_READY) == 0U
+        || project_control_complete_multi_runtime(
+            g_multi_load_request.logical_id, g_multi_load_request.path,
+            g_multi_load_status.instrument_id, 1U) != PROJECT_CONTROL_ASSET_READY)
+        return 0U;
     g_multi_load_active = 0U;
     g_multi_load_status.state = MULTI_SAMPLE_INSTRUMENT_READY;
     g_multi_load_status.last_error = MULTI_SAMPLE_LOAD_OK;
-    (void)multi_sample_pool_set_state(g_multi_load_status.instrument_id,
-                                      MULTI_SAMPLE_INSTRUMENT_READY);
-    project_control_complete_multi_runtime(g_multi_load_request.logical_id,
-                                           g_multi_load_request.path,
-                                           g_multi_load_status.instrument_id,
-                                           1U);
     memset(&g_multi_load_request, 0, sizeof(g_multi_load_request));
     memset(&g_multi_bulk, 0, sizeof(g_multi_bulk));
     multi_loader_start_next_queued();

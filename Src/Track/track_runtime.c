@@ -15,6 +15,7 @@
 #include "Track/track_input_ownership.h"
 #include "Track/track_catalog.h"
 #include "Track/track_state.h"
+#include "Storage/project_control.h"
 #include "Track/tone_program_control.h"
 #include "Param/tone_param_catalog.h"
 #include "App/live_parameter_audio_publication.h"
@@ -635,6 +636,8 @@ void track_runtime_rebuild_all(void)
                 if (track_runtime_publish_program(entity,
                         &g_track_runtime_ctx[entity]) == 0U)
                     Error_Handler();
+                if (project_control_republish_track_asset(entity) == 0U)
+                    Error_Handler();
             }
             if (pass != 1U) continue;
             const uint8_t midi_changed = (uint8_t)(
@@ -663,6 +666,7 @@ uint8_t track_runtime_project_audio_state_all(void)
     {
         if ((track_runtime_publish_program(entity,
                 &g_track_runtime_ctx[entity]) == 0U)
+                || (project_control_republish_track_asset(entity) == 0U)
                 || (track_runtime_publish_midi_config(entity,
                     &g_track_runtime_ctx[entity]) == 0U))
             return 0U;
@@ -739,6 +743,8 @@ void track_runtime_rebuild_track(uint8_t track)
         {
             Error_Handler();
         }
+        if (project_control_republish_track_asset(track) == 0U)
+            Error_Handler();
     }
     else if (midi_changed != 0U)
         g_track_runtime_ctx[track] = next_ctx;

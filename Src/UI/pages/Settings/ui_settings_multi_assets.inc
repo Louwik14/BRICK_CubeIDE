@@ -185,6 +185,10 @@ static void ui_page_settings_multi_prepare_poll(void)
         g_ui_settings.multi_prepare_progress_total =
             (load_status.pages_requested == 0U)
                 ? 1U : load_status.pages_requested;
+        if (g_ui_settings.multi_prepare_progress_done
+                >= g_ui_settings.multi_prepare_progress_total)
+            g_ui_settings.multi_prepare_progress_done =
+                (uint16_t)(g_ui_settings.multi_prepare_progress_total - 1U);
         return;
     }
 
