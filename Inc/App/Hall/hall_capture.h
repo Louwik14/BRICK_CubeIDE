@@ -12,7 +12,7 @@ typedef struct {
     uint32_t held_before;
     uint32_t held_after;
     uint32_t calibration_generation;
-    uint16_t adc1_hall_a;
+    uint16_t adc3_hall_a;
     uint16_t adc2_hall_b;
     uint16_t adc1_hall_c;
     uint16_t adc1_volume;
@@ -33,6 +33,12 @@ typedef struct {
     uint32_t adc2_callback_generation;
     uint16_t adc1_callback_ndtr;
     uint16_t adc2_callback_ndtr;
+    uint32_t adc3_callback_tick;
+    uint32_t adc3_callback_generation;
+    uint16_t adc3_callbacks;
+    uint16_t adc3_error;
+    uint16_t adc3_callback_ndtr;
+    uint16_t adc3_dma_ndtr;
 } hall_capture_record_t;
 
 typedef struct {

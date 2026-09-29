@@ -14,7 +14,7 @@
 #define HALL_MUX_COUNT         8U
 #define HALL_MUX_SETTLE_DISCARD_PAIRS 6U
 
-_Static_assert(sizeof(hall_capture_record_t) == 72U,
+_Static_assert(sizeof(hall_capture_record_t) == 88U,
                "Hall capture dump layout changed");
 _Static_assert(sizeof(hall_fixed_record_t) == 40U,
                "Hall fixed-mux dump layout changed");
@@ -27,13 +27,14 @@ _Static_assert((HALL_CAPTURE_CAPACITY & (HALL_CAPTURE_CAPACITY - 1U)) == 0U,
 
 /*
  * ADC DMA mailboxes:
- * ADC1 writes Hall MUX 0/2 plus the master-volume pot,
- *   ADC2 writes Hall MUX 1
+ * ADC3 writes Hall A, ADC2 writes Hall B and ADC1 writes Hall C.
+ * adc1_dma[2] is a diagnostic full-scale volume sentinel, not a DMA rank.
  *
  * Placement in DMA_BUFFER prepares a non-cacheable policy at MPU stage.
  */
 static DMA_BUFFER volatile uint16_t adc1_dma[3U];
 static DMA_BUFFER volatile uint16_t adc2_dma;
+static DMA_BUFFER volatile uint16_t adc3_dma;
 
 static volatile uint16_t hall_raw[HALL_KEY_COUNT];
 static volatile uint32_t hall_sample_count[HALL_KEY_COUNT];
@@ -42,6 +43,7 @@ static volatile uint8_t hall_mux_index;
 static volatile uint8_t hall_discard_count;
 static volatile uint8_t adc1_ready;
 static volatile uint8_t adc2_ready;
+static volatile uint8_t adc3_ready;
 static volatile uint16_t hall_mux_raw[3U][HALL_MUX_COUNT];
 CONTROL_STATE_SDRAM volatile hall_capture_record_t
     g_hall_capture[HALL_CAPTURE_CAPACITY]
@@ -99,13 +101,17 @@ static uint8_t g_hall_fixed_active;
 static uint32_t g_hall_fixed_start_tick;
 static uint32_t g_hall_adc1_callbacks;
 static uint32_t g_hall_adc2_callbacks;
+static uint32_t g_hall_adc3_callbacks;
 static uint32_t g_hall_adc1_callback_tick;
 static uint32_t g_hall_adc2_callback_tick;
+static uint32_t g_hall_adc3_callback_tick;
 static volatile uint32_t g_hall_mux_generation;
 static uint32_t g_hall_adc1_callback_generation;
 static uint32_t g_hall_adc2_callback_generation;
+static uint32_t g_hall_adc3_callback_generation;
 static uint16_t g_hall_adc1_callback_ndtr;
 static uint16_t g_hall_adc2_callback_ndtr;
+static uint16_t g_hall_adc3_callback_ndtr;
 static uint32_t g_hall_capture_cluster_start;
 static uint8_t g_hall_capture_cluster_count;
 
@@ -215,9 +221,9 @@ static void hall_adc_process_pair(uint8_t completing_adc)
 {
     const uint16_t adc1_dma_ndtr_before =
         (uint16_t)((DMA_Stream_TypeDef *)hadc1.DMA_Handle->Instance)->NDTR;
-    const uint16_t v1 = adc1_dma[0U];
+    const uint16_t v1 = adc3_dma;
     const uint16_t v2 = adc2_dma;
-    const uint16_t v3 = adc1_dma[1U];
+    const uint16_t v3 = adc1_dma[0U];
     const uint16_t volume = adc1_dma[2U];
     const uint16_t adc1_dma_ndtr_after =
         (uint16_t)((DMA_Stream_TypeDef *)hadc1.DMA_Handle->Instance)->NDTR;
@@ -317,7 +323,7 @@ static void hall_adc_process_pair(uint8_t completing_adc)
         record->held_before = g_hall_capture_held_mask;
         record->calibration_generation =
             g_hall_capture_calibration_generation;
-        record->adc1_hall_a = v1;
+        record->adc3_hall_a = v1;
         record->adc2_hall_b = v2;
         record->adc1_hall_c = v3;
         record->adc1_volume = volume;
@@ -338,6 +344,15 @@ static void hall_adc_process_pair(uint8_t completing_adc)
         record->adc2_callback_generation = g_hall_adc2_callback_generation;
         record->adc1_callback_ndtr = g_hall_adc1_callback_ndtr;
         record->adc2_callback_ndtr = g_hall_adc2_callback_ndtr;
+        record->adc3_callback_tick = g_hall_adc3_callback_tick;
+        record->adc3_callback_generation = g_hall_adc3_callback_generation;
+        record->adc3_callbacks = (uint16_t)g_hall_adc3_callbacks;
+        record->adc3_error = (uint16_t)
+            ((ADC_HandleTypeDef *)board_surface_hall_adc3_handle())->ErrorCode;
+        record->adc3_callback_ndtr = g_hall_adc3_callback_ndtr;
+        record->adc3_dma_ndtr = (uint16_t)
+            ((DMA_Stream_TypeDef *)((ADC_HandleTypeDef *)
+                board_surface_hall_adc3_handle())->DMA_Handle->Instance)->NDTR;
     }
 
     hall_mux_raw[0U][hall_mux_index] = v1;
@@ -378,12 +393,14 @@ static void hall_adc_process_pair(uint8_t completing_adc)
         }
         adc1_ready = 0U;
         adc2_ready = 0U;
+        adc3_ready = 0U;
 
         hall_discard_count = ((g_hall_fixed_active != 0U)
             || (g_hall_hold_mode_active != 0U))
             ? 0U : HALL_MUX_SETTLE_DISCARD_PAIRS;
         adc1_ready = 0U;
         adc2_ready = 0U;
+        adc3_ready = 0U;
     }
 }
 
@@ -398,13 +415,20 @@ void hall_adc_init(void)
     g_hall_capture_cluster_count = 0U;
     g_hall_adc1_callbacks = 0U;
     g_hall_adc2_callbacks = 0U;
+    g_hall_adc3_callbacks = 0U;
     g_hall_adc1_callback_tick = 0U;
     g_hall_adc2_callback_tick = 0U;
+    g_hall_adc3_callback_tick = 0U;
     g_hall_mux_generation = 0U;
     g_hall_adc1_callback_generation = 0U;
     g_hall_adc2_callback_generation = 0U;
+    g_hall_adc3_callback_generation = 0U;
     g_hall_adc1_callback_ndtr = 0U;
     g_hall_adc2_callback_ndtr = 0U;
+    g_hall_adc3_callback_ndtr = 0U;
+    adc1_ready = 0U;
+    adc2_ready = 0U;
+    adc3_ready = 0U;
     g_hall_fixed_active = 0U;
     g_hall_fixed_done = 0U;
     g_hall_fixed_count = 0U;
@@ -432,6 +456,7 @@ void hall_adc_init(void)
     adc1_dma[1U] = 0U;
     adc1_dma[2U] = 0U;
     adc2_dma = 0U;
+    adc3_dma = 0U;
 
     hall_mux_select(hall_mux_index);
 
@@ -450,7 +475,8 @@ void hall_adc_init(void)
         hall_mux_raw[2U][mux] = 0U;
     }
 
-    if (board_surface_start_hall_adc_dma(adc1_dma, &adc2_dma) == 0U)
+    if (board_surface_start_hall_adc_dma(adc1_dma, &adc2_dma,
+                                         &adc3_dma) == 0U)
     {
         return;
     }
@@ -522,16 +548,27 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
             (uint16_t)((DMA_Stream_TypeDef *)hadc->DMA_Handle->Instance)->NDTR;
         adc2_ready = 1U;
     }
+    else if (board_surface_is_hall_adc3_callback(hadc) != 0U)
+    {
+        ++g_hall_adc3_callbacks;
+        g_hall_adc3_callback_tick = brick_media_clock_now_tick();
+        g_hall_adc3_callback_generation = g_hall_mux_generation;
+        g_hall_adc3_callback_ndtr =
+            (uint16_t)((DMA_Stream_TypeDef *)hadc->DMA_Handle->Instance)->NDTR;
+        adc3_ready = 1U;
+    }
     else
     {
         return;
     }
 
-    if ((adc1_ready != 0U) && (adc2_ready != 0U))
+    if ((adc1_ready != 0U) && (adc2_ready != 0U) && (adc3_ready != 0U))
     {
         adc1_ready = 0U;
         adc2_ready = 0U;
-        hall_adc_process_pair((hadc->Instance == ADC1) ? 1U : 2U);
+        adc3_ready = 0U;
+        hall_adc_process_pair((hadc->Instance == ADC1) ? 1U
+                              : ((hadc->Instance == ADC2) ? 2U : 3U));
     }
 }
 
@@ -543,12 +580,16 @@ void hall_adc_service_direct_probe(void)
     if (HAL_TIM_Base_Stop(&htim6) != HAL_OK) g_hall_direct_error |= 1U;
     const HAL_StatusTypeDef stop1 = HAL_ADC_Stop_DMA(&hadc1);
     const HAL_StatusTypeDef stop2 = HAL_ADC_Stop_DMA(&hadc2);
+    ADC_HandleTypeDef *adc3 = (ADC_HandleTypeDef *)board_surface_hall_adc3_handle();
+    const HAL_StatusTypeDef stop3 = HAL_ADC_Stop_DMA(adc3);
     if (stop1 != HAL_OK) g_hall_direct_error |= 2U;
     if (stop2 != HAL_OK) g_hall_direct_error |= 4U;
+    if (stop3 != HAL_OK) g_hall_direct_error |= 512U;
 
-    if ((stop1 == HAL_OK) && (stop2 == HAL_OK))
+    if ((stop1 == HAL_OK) && (stop2 == HAL_OK) && (stop3 == HAL_OK))
     {
-        ADC_HandleTypeDef *direct_adc = (g_hall_fixed_adc == 1U) ? &hadc2 : &hadc1;
+        ADC_HandleTypeDef *direct_adc = (g_hall_fixed_adc == 0U) ? adc3
+            : ((g_hall_fixed_adc == 1U) ? &hadc2 : &hadc1);
         ADC_InjectionConfTypeDef config = {0};
         config.InjectedChannel = (g_hall_fixed_adc == 0U) ? ADC_CHANNEL_11
             : ((g_hall_fixed_adc == 1U) ? ADC_CHANNEL_18 : ADC_CHANNEL_19);
@@ -599,21 +640,25 @@ void hall_adc_service_direct_probe(void)
 
     adc1_ready = 0U;
     adc2_ready = 0U;
+    adc3_ready = 0U;
     hall_discard_count = HALL_MUX_SETTLE_DISCARD_PAIRS;
     hall_mux_index = (uint8_t)((g_hall_fixed_mux + 1U) & 0x07U);
     hall_mux_select(hall_mux_index);
     ++g_hall_mux_generation;
-    if (board_surface_start_hall_adc_dma(adc1_dma, &adc2_dma) == 0U)
+    if (board_surface_start_hall_adc_dma(adc1_dma, &adc2_dma,
+                                         &adc3_dma) == 0U)
     {
         g_hall_direct_error |= 128U;
         (void)HAL_ADC_Stop_DMA(&hadc1);
         (void)HAL_ADC_Stop_DMA(&hadc2);
+        (void)HAL_ADC_Stop_DMA(adc3);
     }
     else if (board_surface_start_hall_scan_timer() == 0U)
     {
         g_hall_direct_error |= 256U;
         (void)HAL_ADC_Stop_DMA(&hadc1);
         (void)HAL_ADC_Stop_DMA(&hadc2);
+        (void)HAL_ADC_Stop_DMA(adc3);
     }
     else
     {

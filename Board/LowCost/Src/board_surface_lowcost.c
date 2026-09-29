@@ -8,9 +8,11 @@
 static board_surface_snapshot_t g_surface_snapshot;
 static volatile uint16_t *g_adc1_mailbox;
 static volatile uint8_t g_master_volume_valid;
+static ADC_HandleTypeDef g_hall_adc3;
+static DMA_HandleTypeDef g_hall_adc3_dma;
 
-/* Diagnostic: ADC1 scans Hall A and Hall C only. Keep boot gain at the
- * previously observed full-scale volume while the potentiometer is absent. */
+/* Diagnostic: each Hall output has its own ADC. The volume input remains
+ * excluded from the regular sequences while all three ADCs serve Hall. */
 static uint32_t read_shift_register_bits(void)
 {
     uint32_t raw = 0U;
@@ -44,32 +46,26 @@ void board_surface_select_hall_mux(uint8_t index)
 }
 
 uint8_t board_surface_start_hall_adc_dma(volatile uint16_t *adc1_mailbox,
-                                         volatile uint16_t *adc2_mailbox)
+                                         volatile uint16_t *adc2_mailbox,
+                                         volatile uint16_t *adc3_mailbox)
 {
     ADC_ChannelConfTypeDef sConfig = {0};
 
-    hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
-    hadc1.Init.EOCSelection = ADC_EOC_SEQ_CONV;
-    hadc1.Init.NbrOfConversion = 2U;
+    hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
+    hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+    hadc1.Init.NbrOfConversion = 1U;
     if (HAL_ADC_Init(&hadc1) != HAL_OK)
     {
         return 0U;
     }
 
-    sConfig.Channel = ADC_CHANNEL_11;
+    sConfig.Channel = ADC_CHANNEL_19;
     sConfig.Rank = ADC_REGULAR_RANK_1;
     sConfig.SamplingTime = ADC_SAMPLETIME_64CYCLES_5;
     sConfig.SingleDiff = ADC_SINGLE_ENDED;
     sConfig.OffsetNumber = ADC_OFFSET_NONE;
     sConfig.Offset = 0;
     sConfig.OffsetSignedSaturation = DISABLE;
-    if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-    {
-        return 0U;
-    }
-
-    sConfig.Channel = ADC_CHANNEL_19;
-    sConfig.Rank = ADC_REGULAR_RANK_2;
     if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
     {
         return 0U;
@@ -82,11 +78,24 @@ uint8_t board_surface_start_hall_adc_dma(volatile uint16_t *adc1_mailbox,
         return 0U;
     }
 
+    __HAL_RCC_ADC3_CLK_ENABLE();
+    g_hall_adc3.Instance = ADC3;
+    g_hall_adc3.Init = hadc2.Init;
+    if (HAL_ADC_Init(&g_hall_adc3) != HAL_OK)
+    {
+        return 0U;
+    }
+    sConfig.Channel = ADC_CHANNEL_11;
+    if (HAL_ADC_ConfigChannel(&g_hall_adc3, &sConfig) != HAL_OK)
+    {
+        return 0U;
+    }
+
     g_adc1_mailbox = adc1_mailbox;
     g_master_volume_valid = 0U;
     g_adc1_mailbox[2U] = UINT16_MAX;
 
-    if (hadc1.DMA_Handle == NULL)
+    if ((hadc1.DMA_Handle == NULL) || (hadc2.DMA_Handle == NULL))
     {
         return 0U;
     }
@@ -96,7 +105,19 @@ uint8_t board_surface_start_hall_adc_dma(volatile uint16_t *adc1_mailbox,
         return 0U;
     }
 
-    if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc1_mailbox, 2U) != HAL_OK)
+    g_hall_adc3_dma.Instance = DMA1_Stream6;
+    g_hall_adc3_dma.Init = hadc2.DMA_Handle->Init;
+    g_hall_adc3_dma.Init.Request = DMA_REQUEST_ADC3;
+    g_hall_adc3_dma.Init.MemInc = DMA_MINC_DISABLE;
+    if (HAL_DMA_Init(&g_hall_adc3_dma) != HAL_OK)
+    {
+        return 0U;
+    }
+    __HAL_LINKDMA(&g_hall_adc3, DMA_Handle, g_hall_adc3_dma);
+    HAL_NVIC_SetPriority(DMA1_Stream6_IRQn, 5U, 0U);
+    HAL_NVIC_EnableIRQ(DMA1_Stream6_IRQn);
+
+    if (HAL_ADC_Start_DMA(&hadc1, (uint32_t *)adc1_mailbox, 1U) != HAL_OK)
     {
         g_adc1_mailbox = 0;
         g_master_volume_valid = 0U;
@@ -105,6 +126,16 @@ uint8_t board_surface_start_hall_adc_dma(volatile uint16_t *adc1_mailbox,
 
     if (HAL_ADC_Start_DMA(&hadc2, (uint32_t *)adc2_mailbox, 1U) != HAL_OK)
     {
+        (void)HAL_ADC_Stop_DMA(&hadc1);
+        g_adc1_mailbox = 0;
+        g_master_volume_valid = 0U;
+        return 0U;
+    }
+
+    if (HAL_ADC_Start_DMA(&g_hall_adc3, (uint32_t *)adc3_mailbox, 1U) != HAL_OK)
+    {
+        (void)HAL_ADC_Stop_DMA(&hadc1);
+        (void)HAL_ADC_Stop_DMA(&hadc2);
         g_adc1_mailbox = 0;
         g_master_volume_valid = 0U;
         return 0U;
@@ -122,6 +153,22 @@ uint8_t board_surface_is_hall_adc2_callback(void *handle)
 {
     ADC_HandleTypeDef *hadc = (ADC_HandleTypeDef *)handle;
     return ((hadc != NULL) && (hadc->Instance == ADC2)) ? 1U : 0U;
+}
+
+uint8_t board_surface_is_hall_adc3_callback(void *handle)
+{
+    ADC_HandleTypeDef *hadc = (ADC_HandleTypeDef *)handle;
+    return ((hadc != NULL) && (hadc->Instance == ADC3)) ? 1U : 0U;
+}
+
+void *board_surface_hall_adc3_handle(void)
+{
+    return &g_hall_adc3;
+}
+
+void DMA1_Stream6_IRQHandler(void)
+{
+    HAL_DMA_IRQHandler(&g_hall_adc3_dma);
 }
 
 void board_surface_update_lane(uint8_t lane, uint16_t raw, uint32_t sample_count)
