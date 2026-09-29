@@ -29,6 +29,7 @@
 #include "pages/ui_page_settings.h"
 #include "pages/ui_page_template_cfg.h"
 #include "IPC/live_event.h"
+#include "IPC/note_audit_trace.h"
 
 #include <string.h>
 
@@ -50,6 +51,22 @@ static uint8_t g_keyboard_input_timed_context_active;
 static uint32_t g_keyboard_input_capture_tick;
 static uint32_t g_keyboard_input_ingress_serial;
 
+static uint16_t keyboard_input_held_mask(void)
+{
+    uint16_t mask = 0U;
+    for (uint8_t key = 0U; key < LOWCOST_KEY_COUNT && key < 16U; ++key)
+        if (g_lowcost_key_down[key] != 0U) mask |= (uint16_t)(1U << key);
+    return mask;
+}
+
+static uint8_t keyboard_input_held_count(void)
+{
+    uint8_t count = 0U;
+    for (uint8_t key = 0U; key < LOWCOST_KEY_COUNT; ++key)
+        count += (g_lowcost_key_down[key] != 0U) ? 1U : 0U;
+    return count;
+}
+
 static void keyboard_input_note_on_sink(uint8_t note, uint8_t velocity);
 static void keyboard_input_note_off_sink(uint8_t note);
 
@@ -63,6 +80,9 @@ static void keyboard_input_note_owner_push(uint8_t note, uint8_t track)
     uint8_t count = g_keyboard_input_note_owner_count[note];
     if (count >= KEYBOARD_INPUT_OWNER_STACK_DEPTH)
     {
+        note_audit_control(NOTE_AUDIT_OWNER, track, note, 2U,
+                           count, keyboard_input_held_mask(),
+                           g_keyboard_input_ingress_serial, 0U);
         for (uint8_t i = 1U; i < KEYBOARD_INPUT_OWNER_STACK_DEPTH; ++i)
         {
             g_keyboard_input_note_owner[note][i - 1U] =
@@ -73,6 +93,10 @@ static void keyboard_input_note_owner_push(uint8_t note, uint8_t track)
 
     g_keyboard_input_note_owner[note][count].track = track;
     g_keyboard_input_note_owner_count[note] = (uint8_t)(count + 1U);
+    note_audit_control(NOTE_AUDIT_OWNER, track, note, 1U,
+                       g_keyboard_input_note_owner_count[note],
+                       keyboard_input_held_mask(),
+                       g_keyboard_input_ingress_serial, 0U);
 }
 
 static uint8_t keyboard_input_note_owner_pop(uint8_t note,
@@ -87,6 +111,9 @@ static uint8_t keyboard_input_note_owner_pop(uint8_t note,
     const uint8_t index = (uint8_t)(g_keyboard_input_note_owner_count[note] - 1U);
     *out_owner = g_keyboard_input_note_owner[note][index];
     g_keyboard_input_note_owner_count[note] = index;
+    note_audit_control(NOTE_AUDIT_OWNER, out_owner->track, note, 0U,
+                       index, keyboard_input_held_mask(),
+                       g_keyboard_input_ingress_serial, 0U);
     return 1U;
 }
 
@@ -298,6 +325,12 @@ static void keyboard_input_process_lowcost_key(uint8_t key, bool pressed, uint8_
         return;
     }
 
+    note_audit_control(NOTE_AUDIT_KEY, key, g_lowcost_key_note[key],
+                       pressed ? 1U : 0U, keyboard_input_held_count(),
+                       keyboard_input_held_mask(), g_keyboard_input_ingress_serial,
+                       ((uint32_t)g_lowcost_key_consumed[key] << 16)
+                           | g_lowcost_key_down[key]);
+
     ui_keyboard_app_set_velocity(velocity);
 
     if (pressed)
@@ -337,6 +370,9 @@ static void keyboard_input_process_lowcost_key(uint8_t key, bool pressed, uint8_
             : keyboard_input_lowcost_chromatic_note(key);
         g_lowcost_key_note[key] = note;
         g_lowcost_key_down[key] = 1U;
+        note_audit_control(NOTE_AUDIT_KEY_ON, key, note, velocity,
+                           keyboard_input_held_count(), keyboard_input_held_mask(),
+                           g_keyboard_input_ingress_serial, ui_get_active_lane());
         keyboard_input_note_on_sink(note, velocity);
         return;
     }
@@ -344,6 +380,9 @@ static void keyboard_input_process_lowcost_key(uint8_t key, bool pressed, uint8_
     if (g_lowcost_key_down[key] != 0U)
     {
         g_lowcost_key_down[key] = 0U;
+        note_audit_control(NOTE_AUDIT_KEY_OFF, key, g_lowcost_key_note[key], 0U,
+                           keyboard_input_held_count(), keyboard_input_held_mask(),
+                           g_keyboard_input_ingress_serial, 0U);
         keyboard_input_note_off_sink(g_lowcost_key_note[key]);
     }
 }

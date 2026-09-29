@@ -6,6 +6,7 @@
 #include "Track/track_types.h"
 #include "Platform/memory_layout.h"
 #include "Platform/brick_media_clock.h"
+#include "IPC/note_audit_trace.h"
 #include "stm32h7xx.h"
 #include <limits.h>
 #include <string.h>
@@ -388,17 +389,25 @@ uint8_t seq_ingress_submit(const seq_ingress_event_t *event)
     else if(rate_window<g_ingress_rate_window){__set_PRIMASK(primask);return 0U;}
     if((g_ingress_rate_count>=SEQ_INGRESS_EVENTS_PER_WINDOW_MAX)
             ||(g_ingress_count>=SEQ_ENGINE_INGRESS_CAPACITY)){
+        note_audit_control(NOTE_AUDIT_INGRESS_FAIL, event->track,
+                           event->note, event->kind, g_ingress_count, 0U,
+                           event->occurrence_id, g_ingress_rate_count);
         __set_PRIMASK(primask);return 0U;}
     g_ingress[g_ingress_head]=*event;
     g_ingress_head=(uint8_t)((g_ingress_head+1U)%SEQ_ENGINE_INGRESS_CAPACITY);
     ++g_ingress_count;
     ++g_ingress_rate_count;
+    note_audit_control(NOTE_AUDIT_INGRESS, event->track, event->note,
+                       event->kind, g_ingress_count, 0U,
+                       event->occurrence_id, event->provenance);
     g_urgent_pending=1U;
     __set_PRIMASK(primask);NVIC_SetPendingIRQ(TIM4_IRQn);return 1U;
 }
 
 void seq_ingress_panic(void)
 {
+    note_audit_control(NOTE_AUDIT_PANIC, 0xFFU, 0U, 0U,
+                       g_ingress_count, 0U, 0U, 3U);
     const uint32_t primask=__get_PRIMASK();__disable_irq();
     g_ingress_count=0U;g_ingress_head=0U;g_ingress_tail=0U;g_ingress_panic=1U;
     __set_PRIMASK(primask);NVIC_SetPendingIRQ(TIM4_IRQn);

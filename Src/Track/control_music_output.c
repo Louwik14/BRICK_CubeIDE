@@ -1,4 +1,5 @@
 #include "Track/control_music_output.h"
+#include "IPC/note_audit_trace.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -398,6 +399,9 @@ static void control_music_output_mark_dead(brick_entity_id_t entity_id,
     if (output->alive == 0U)
         return;
     const uint32_t semantic_event_id = output->semantic_event_id;
+    note_audit_control(NOTE_AUDIT_OUTPUT_DEATH, entity_id, output->note,
+                       index, 0U, 0U, output->output_handle,
+                       semantic_event_id);
     output->alive = 0U;
     if ((g_control_music_window_active != 0U)
             || (g_control_music_window_prepared != 0U))
@@ -580,6 +584,10 @@ uint8_t control_music_output_trim_to_limit(brick_entity_id_t entity_id,
         excluded_mask |= (uint8_t)(1U << victims[i]);
         const control_music_output_t *const output =
             &control_music_output_ledger()[entity_id][victims[i]];
+        note_audit_control(NOTE_AUDIT_VICTIM, entity_id, output->note,
+                           (uint8_t)(0x10U | victims[i]), stop_count,
+                           0U, output->output_handle,
+                           output->semantic_event_id);
         stops[i] = (control_music_transition_t){
             .due_sample = due_sample,
             .output_handle = output->output_handle,
@@ -648,6 +656,10 @@ uint8_t control_music_output_admit_multi_transition(
         const control_music_output_t *const victim =
             &control_music_output_ledger()[victim_entities[i]]
                 [victim_indices[i]];
+        note_audit_control(NOTE_AUDIT_VICTIM, victim_entities[i],
+                           victim->note, (uint8_t)(0x20U | victim_indices[i]),
+                           victim_count, 0U, victim->output_handle,
+                           victim->semantic_event_id);
         stops[i] = (control_music_transition_t){
             .due_sample = due_sample,
             .output_handle = victim->output_handle,
@@ -766,6 +778,10 @@ uint8_t control_music_output_submit(const control_music_intent_t *intent,
     const brick_entity_id_t entity_id = intent->entity_id;
     const int8_t existing = control_music_output_find_semantic(entity_id,
         intent->semantic_event_id, causal_source_id, generation);
+    note_audit_control(NOTE_AUDIT_OUTPUT, entity_id, intent->note,
+                       control_music_intent_kind(intent),
+                       control_music_output_live_count(entity_id), 0U,
+                       intent->semantic_event_id, causal_source_id);
     if (control_music_intent_kind(intent)
             == (uint8_t)CONTROL_MUSIC_ACTION_STOP)
     {
@@ -781,6 +797,9 @@ uint8_t control_music_output_submit(const control_music_intent_t *intent,
         };
         if (control_music_output_publish(&stop) == 0U)
         {
+            note_audit_control(NOTE_AUDIT_PUBLISH_FAIL, entity_id,
+                               output->note, 0U, 0U, 0U,
+                               output->output_handle, intent->semantic_event_id);
             return 0U;
         }
         control_music_output_send_midi_off(
@@ -911,6 +930,9 @@ uint8_t control_music_output_submit(const control_music_intent_t *intent,
         const uint8_t victim_index = victim_indices[i];
         const control_music_output_t *const victim =
             &control_music_output_ledger()[victim_entity][victim_index];
+        note_audit_control(NOTE_AUDIT_VICTIM, victim_entity,
+                           victim->note, victim_index, victim_count,
+                           0U, victim->output_handle, victim->semantic_event_id);
         batch[count++] = (control_music_transition_t){
             .due_sample = intent->due_sample,
             .output_handle = victim->output_handle,
@@ -925,6 +947,9 @@ uint8_t control_music_output_submit(const control_music_intent_t *intent,
     batch[count++] = admitted_start;
     if (control_music_output_publish_batch(batch, count) == 0U)
     {
+        note_audit_control(NOTE_AUDIT_PUBLISH_FAIL, entity_id,
+                           intent->note, 1U, victim_count, 0U,
+                           output_handle, intent->semantic_event_id);
         return 0U;
     }
 
@@ -957,6 +982,9 @@ uint8_t control_music_output_submit(const control_music_intent_t *intent,
                 MIDI_DEST_BOTH, control_music_intent_channel(intent),
                 intent->note, intent->velocity),
         };
+    note_audit_control(NOTE_AUDIT_OUTPUT, entity_id, intent->note,
+                       0x81U, control_music_output_live_count(entity_id),
+                       0U, output_handle, intent->semantic_event_id);
     return 1U;
 }
 
@@ -1192,6 +1220,8 @@ static void control_music_output_close_all_midi(void)
 
 uint8_t control_music_output_panic_all(uint8_t send_transport_stop)
 {
+    note_audit_control(NOTE_AUDIT_PANIC, 0xFFU, 0U,
+                       send_transport_stop, 0U, 0U, 0U, 2U);
     uint64_t due_sample = 0U;
     if (control_rt_now_sample(&due_sample) == 0U)
     {

@@ -1,4 +1,6 @@
 #include "IPC/live_event.h"
+#include "IPC/note_audit_trace.h"
+#include "Platform/memory_layout.h"
 #include "Storage/project_load_quiesce.h"
 
 #include "stm32h7xx_hal.h"
@@ -10,6 +12,37 @@ static volatile uint16_t g_live_event_head;
 static volatile uint16_t g_live_event_tail;
 static volatile uint32_t g_live_event_serial;
 static volatile uint32_t g_live_event_drop_count;
+
+CONTROL_STATE_SDRAM volatile note_audit_record_t
+    g_note_audit_control[NOTE_AUDIT_CONTROL_CAPACITY]
+    __attribute__((used, externally_visible));
+volatile uint32_t g_note_audit_control_sequence
+    __attribute__((used, externally_visible));
+
+void note_audit_control(uint16_t event, uint8_t track, uint8_t note,
+                        uint8_t detail, uint8_t held_count,
+                        uint16_t held_mask, uint32_t id, uint32_t aux)
+{
+    const uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    uint32_t sequence = ++g_note_audit_control_sequence;
+    if (sequence == 0U) sequence = ++g_note_audit_control_sequence;
+    volatile note_audit_record_t *const record =
+        &g_note_audit_control[(sequence - 1U) % NOTE_AUDIT_CONTROL_CAPACITY];
+    record->sequence = 0U;
+    record->tick = HAL_GetTick();
+    record->id = id;
+    record->aux = aux;
+    record->event = event;
+    record->track = track;
+    record->note = note;
+    record->detail = detail;
+    record->held_count = held_count;
+    record->held_mask = held_mask;
+    __DMB();
+    record->sequence = sequence;
+    __set_PRIMASK(primask);
+}
 
 static uint32_t live_event_enter_critical(void)
 {
@@ -50,10 +83,16 @@ bool live_event_submit_from_hall(uint8_t key,
                                  uint32_t tim5_tick)
 {
     if (project_load_ingress_is_open() == 0U)
+    {
+        note_audit_control(NOTE_AUDIT_HALL_DROP, key, 0U,
+                           pressed ? 1U : 0U, 0U, 0U, 0U, 1U);
         return false;
+    }
     const uint32_t primask = live_event_enter_critical();
     if (project_load_ingress_is_open() == 0U)
     {
+        note_audit_control(NOTE_AUDIT_HALL_DROP, key, 0U,
+                           pressed ? 1U : 0U, 0U, 0U, 0U, 2U);
         live_event_exit_critical(primask);
         return false;
     }
@@ -63,6 +102,9 @@ bool live_event_submit_from_hall(uint8_t key,
     if (next == g_live_event_tail)
     {
         g_live_event_drop_count++;
+        note_audit_control(NOTE_AUDIT_HALL_DROP, key, 0U,
+                           pressed ? 1U : 0U, 0U, 0U,
+                           g_live_event_drop_count, 3U);
         live_event_exit_critical(primask);
         return false;
     }
@@ -85,6 +127,9 @@ bool live_event_submit_from_hall(uint8_t key,
     };
     __DMB();
     g_live_event_head = next;
+    note_audit_control(NOTE_AUDIT_HALL_QUEUED, key, 0U,
+                       pressed ? 1U : 0U, 0U, 0U, serial,
+                       ((uint32_t)velocity << 16) | (tim5_tick & 0xFFFFU));
 
     live_event_exit_critical(primask);
     return true;

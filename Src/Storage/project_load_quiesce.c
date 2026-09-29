@@ -1,4 +1,5 @@
 #include "Storage/project_load_quiesce.h"
+#include "IPC/note_audit_trace.h"
 
 #include "IPC/live_event.h"
 #include "ControlRT/control_rt_publication.h"
@@ -73,6 +74,8 @@ void project_load_quiesce_request(void)
     sd_preview_stop();
     seq_ingress_panic();
     g_project_load_requested = 1U;
+    note_audit_control(NOTE_AUDIT_PANIC, 0xFFU, 0U,
+                       0U, 0U, 0U, 0U, 6U);
     g_project_load_panic_committed = control_music_output_panic_all(0U);
     if (g_project_load_panic_committed != 0U)
     {

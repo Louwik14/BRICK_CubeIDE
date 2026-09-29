@@ -1,4 +1,5 @@
 #include "Audio/audio_command_executor.h"
+#include "IPC/note_audit_trace.h"
 
 #include <string.h>
 
@@ -372,6 +373,9 @@ static uint8_t audio_command_apply_transport(
     const control_audio_command_t *command)
 {
     const uint8_t kind = CONTROL_AUDIO_COMMAND_KIND(command);
+    note_audit_audio(NOTE_AUDIT_AUDIO_TRANSPORT, command->entity, 0U,
+                     kind, command->id,
+                     (uint32_t)command->effective_sample_time);
     if (kind == CONTROL_AUDIO_TRANSPORT_START)
     {
         audio_transport_runtime_set_running(1U);
@@ -401,6 +405,9 @@ static uint8_t audio_command_apply_record(const control_audio_command_t *command
 
 static uint8_t audio_command_apply_panic(const control_audio_command_t *command)
 {
+    note_audit_audio(NOTE_AUDIT_AUDIO_PANIC, command->entity, 0U,
+                     CONTROL_AUDIO_COMMAND_KIND(command), command->id,
+                     command->value);
     if ((CONTROL_AUDIO_COMMAND_KIND(command) > CONTROL_AUDIO_PANIC_ENTITY)
             || ((CONTROL_AUDIO_COMMAND_KIND(command)
                     == CONTROL_AUDIO_PANIC_ENTITY)

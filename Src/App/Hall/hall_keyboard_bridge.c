@@ -2,6 +2,7 @@
 
 #include "App/Hall/hall_engine.h"
 #include "IPC/live_event.h"
+#include "IPC/note_audit_trace.h"
 #include "Keyboard/keyboard_runtime.h"
 #include "pages/ui_page_audio_rec.h"
 #include "pages/ui_page_patch_assign.h"
@@ -51,6 +52,11 @@ void hall_keyboard_bridge_process(void)
         {
             injection_allowed = 1U;
         }
+
+        note_audit_control(NOTE_AUDIT_HALL_POP, key, velocity,
+                           pressed, 0U, 0U, event.ingress_serial,
+                           ((uint32_t)injection_allowed << 16)
+                               | g_separate_hall_key_injected[key]);
 
         if (injection_allowed == 0U)
         {

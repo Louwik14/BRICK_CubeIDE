@@ -19,6 +19,36 @@
 #include "Track/synth_polyphony.h"
 #include "Track/track_runtime.h"
 #include "Mod/mod_lfo_v1_audio.h"
+#include "IPC/note_audit_trace.h"
+#include "Platform/memory_layout.h"
+#include "stm32h7xx_hal.h"
+
+AUDIO_WARM volatile note_audit_record_t
+    g_note_audit_audio[NOTE_AUDIT_AUDIO_CAPACITY]
+    __attribute__((used, externally_visible));
+volatile uint32_t g_note_audit_audio_sequence
+    __attribute__((used, externally_visible));
+
+void note_audit_audio(uint16_t event, uint8_t track, uint8_t note,
+                      uint8_t detail, uint32_t id, uint32_t aux)
+{
+    uint32_t sequence = ++g_note_audit_audio_sequence;
+    if (sequence == 0U) sequence = ++g_note_audit_audio_sequence;
+    volatile note_audit_record_t *const record =
+        &g_note_audit_audio[(sequence - 1U) % NOTE_AUDIT_AUDIO_CAPACITY];
+    record->sequence = 0U;
+    record->tick = 0U;
+    record->id = id;
+    record->aux = aux;
+    record->event = event;
+    record->track = track;
+    record->note = note;
+    record->detail = detail;
+    record->held_count = 0U;
+    record->held_mask = 0U;
+    __DMB();
+    record->sequence = sequence;
+}
 
 static track_audio_runtime_ctx_t g_audio_track_ctx[BRICK_ENTITY_CAPACITY];
 static uint16_t g_audio_entity_mask_by_engine[TRACK_RUNTIME_ENGINE_COUNT];
@@ -418,6 +448,9 @@ static uint8_t audio_note_engine_adapter_apply_physical(
         program->type == TRACK_RUNTIME_TYPE_EXTERNAL);
     const uint8_t output_was_active = (uint8_t)(
         audio_note_engine_find_output(entity_id, output_id) >= 0);
+    note_audit_audio(NOTE_AUDIT_AUDIO_COMMAND, entity_id, note,
+                     is_note_on, output_id,
+                     ((uint32_t)engine << 16) | output_was_active);
     const uint8_t ram_hold = (uint8_t)((engine == TRACK_RUNTIME_ENGINE_SAMPLER)
         && (program->type == TRACK_RUNTIME_TYPE_RAM)
         && (brick6_sampler_runtime_ram_mode_is_hold(entity_id) != 0U));
@@ -458,6 +491,8 @@ static uint8_t audio_note_engine_adapter_apply_physical(
                 output_id));
     if ((uses_voice_allocator != 0U) && (voice == SYNTH_POLYPHONY_NO_VOICE))
     {
+        note_audit_audio(NOTE_AUDIT_AUDIO_VOICE, entity_id, note,
+                         SYNTH_POLYPHONY_NO_VOICE, output_id, 1U);
         (void)audio_note_engine_commit_output(entity_id, output_id,
             note, velocity, is_note_on);
         return 0U;
@@ -466,6 +501,9 @@ static uint8_t audio_note_engine_adapter_apply_physical(
             && (displaced_output[voice] != 0U)
             && (displaced_output[voice] != output_id))
     {
+        note_audit_audio(NOTE_AUDIT_AUDIO_VOICE, entity_id, note,
+                         (uint8_t)(voice | (displaced_was_held[voice] << 7)),
+                         output_id, displaced_output[voice]);
         /* The allocator has stolen this physical voice.  Keep the execution
          * mirror synchronous; SEQ still owns the displaced occurrence and
          * its later terminal OFF remains a legal idempotent no-op. */

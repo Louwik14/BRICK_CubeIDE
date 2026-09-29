@@ -1,4 +1,5 @@
 #include "App/Hall/hall_engine.h"
+#include "IPC/note_audit_trace.h"
 
 #include "Platform/brick_media_clock.h"
 #include "IPC/live_event.h"
@@ -101,6 +102,20 @@ static uint8_t hall_consume_flag(volatile uint8_t *flag)
 static void hall_publish_edge(uint8_t key, uint8_t pressed,
                               uint8_t velocity, uint32_t tim5_tick)
 {
+    uint32_t held = 0U;
+    uint8_t count = 0U;
+    for (uint8_t i = 0U; i < HALL_KEY_COUNT; ++i)
+    {
+        if (hall_pressed[i] == 0U) continue;
+        ++count;
+        if (i < 32U) held |= (uint32_t)(1UL << i);
+    }
+    note_audit_control(NOTE_AUDIT_HALL_EDGE, key, velocity, pressed,
+                       count, (uint16_t)held,
+                       (uint32_t)hall_raw_current[key]
+                           | ((uint32_t)(pressed ? hall_trig_lo[key]
+                                                : hall_trig_hi[key]) << 16),
+                       held);
     if (live_event_submit_from_hall(key, pressed != 0U, velocity, tim5_tick))
     {
         if (pressed != 0U)
