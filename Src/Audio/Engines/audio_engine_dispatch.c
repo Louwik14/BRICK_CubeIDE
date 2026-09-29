@@ -339,24 +339,23 @@ static __attribute__((noinline)) void brick6_render_prism_tracks(uint16_t entity
         const uint8_t poly_lfo_active = (mod_matrix_poly_route_mask(track) != 0U);
         {
             uint8_t published = 0U;
-            uint8_t renderable = synth_polyphony_get_renderable_voice_mask(track);
-            if (renderable == 0U)
-                continue;
-            if (mixer_begin_external_poly(ctx->program_route.mix_track_id, frames) == 0U)
-                continue;
-            while (renderable != 0U)
+            const uint8_t renderable = synth_polyphony_get_renderable_voice_mask(track);
+            const uint8_t mix_ready = (renderable != 0U)
+                ? mixer_begin_external_poly(ctx->program_route.mix_track_id, frames) : 0U;
+            for (uint8_t voice = 0U; voice < voice_count; ++voice)
             {
-                const uint8_t voice = (uint8_t)__builtin_ctz((unsigned int)renderable);
-                renderable &= (uint8_t)(renderable - 1U);
                 const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
                 brick6_braids_runtime_sync_voice(ctx->program_route.instance_id, instance);
-                if (poly_lfo_active != 0U)
+                const uint8_t audible = (uint8_t)((mix_ready != 0U)
+                    && ((renderable & (uint8_t)(1U << voice)) != 0U));
+                if ((audible != 0U) && (poly_lfo_active != 0U))
                 {
                     mixer_prepare_external_poly_voice(ctx->program_route.mix_track_id, track, voice);
                     mod_lfo_v1_process_poly_voice(track, instance, ctx, frames);
                 }
                 if (brick6_braids_runtime_render_instance(instance, prism_tmp, frames) == 0U)
                     memset(prism_tmp, 0, frames * sizeof(float));
+                if (audible == 0U) continue;
                 const uint8_t running = (poly_lfo_active != 0U)
                     ? mixer_process_external_poly_voice_prepared(
                         ctx->program_route.mix_track_id, track, voice, prism_tmp, frames,
@@ -537,24 +536,26 @@ static __attribute__((noinline)) void brick6_render_stack_tracks(uint16_t entity
         const uint8_t poly_lfo_active = (mod_matrix_poly_route_mask(track) != 0U);
         {
             uint8_t published = 0U;
-            uint8_t renderable = synth_polyphony_get_renderable_voice_mask(track);
-            if (renderable == 0U)
-                continue;
-            if (mixer_begin_external_poly(ctx->program_route.mix_track_id, frames) == 0U)
-                continue;
-            while (renderable != 0U)
+            const uint8_t renderable = synth_polyphony_get_renderable_voice_mask(track);
+            const uint8_t mix_ready = (renderable != 0U)
+                ? mixer_begin_external_poly(ctx->program_route.mix_track_id, frames) : 0U;
+            for (uint8_t voice = 0U; voice < voice_count; ++voice)
             {
-                const uint8_t voice = (uint8_t)__builtin_ctz((unsigned int)renderable);
-                renderable &= (uint8_t)(renderable - 1U);
                 const uint8_t instance = SYNTH_POLYPHONY_INSTANCE(track, voice);
                 brick6_stack_runtime_sync_voice(ctx->program_route.instance_id, instance);
-                if (poly_lfo_active != 0U)
+                const uint8_t voice_renderable =
+                    (uint8_t)((renderable & (uint8_t)(1U << voice)) != 0U);
+                const uint8_t audible = (uint8_t)((mix_ready != 0U)
+                    && (voice_renderable != 0U));
+                if ((audible != 0U) && (poly_lfo_active != 0U))
                 {
                     mixer_prepare_external_poly_voice(ctx->program_route.mix_track_id, track, voice);
                     mod_lfo_v1_process_poly_voice(track, instance, ctx, frames);
                 }
-                if (brick6_stack_runtime_render_instance(instance, stack_tmp, frames, 1U) == 0U)
+                if (brick6_stack_runtime_render_instance(
+                        instance, stack_tmp, frames, voice_renderable) == 0U)
                     memset(stack_tmp, 0, frames * sizeof(float));
+                if (audible == 0U) continue;
                 const uint8_t running = (poly_lfo_active != 0U)
                     ? mixer_process_external_poly_voice_prepared(
                         ctx->program_route.mix_track_id, track, voice, stack_tmp, frames,

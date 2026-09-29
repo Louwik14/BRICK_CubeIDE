@@ -221,13 +221,6 @@ class DigitalOscillator {
   inline uint32_t phase() const {
     return phase_;
   }
-
-  void AdvancePhase(uint64_t samples);
-  inline void ShiftPitch(int16_t semitones_q7) {
-    pitch_ += semitones_q7;
-    phase_increment_ = ComputePhaseIncrement(pitch_);
-    phase_increment_pitch_ = pitch_;
-  }
   
   inline void Strike() {
     strike_ = true;
@@ -267,7 +260,6 @@ class DigitalOscillator {
   // void RenderYourAlgo(const uint8_t*, int16_t*, size_t);
   
   uint32_t ComputePhaseIncrement(int16_t midi_pitch);
-  void AdvanceWaveParaphonic(uint32_t samples);
   int16_t InterpolateFormantParameter(
       const int16_t table[][kNumFormants][kNumFormants],
       int16_t x,

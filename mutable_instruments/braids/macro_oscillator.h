@@ -95,49 +95,6 @@ class MacroOscillator {
         : digital_oscillator_.phase_increment();
   }
 
-  inline void AdvancePhase(uint64_t samples) {
-    if (shape_ <= MACRO_OSC_SHAPE_TRIPLE_SINE) {
-      if (shape_ == MACRO_OSC_SHAPE_SQUARE_SYNC
-          || shape_ == MACRO_OSC_SHAPE_SAW_SYNC) {
-        AnalogOscillator& master = analog_oscillator_[0];
-        AnalogOscillator& slave = analog_oscillator_[1];
-        const uint32_t increment = master.phase_increment();
-        const uint32_t prior = master.phase();
-        master.AdvancePhase(samples);
-        if (increment != 0 && samples > (0xffffffffUL - prior) / increment) {
-          const uint32_t slave_increment = slave.phase_increment();
-          const uint32_t after_wrap = master.phase() / increment;
-          const uint32_t wrap_phase = master.phase() - after_wrap * increment;
-          const uint32_t sync_divisor = increment >> 7;
-          const uint32_t reset_time = sync_divisor != 0
-              ? (wrap_phase / sync_divisor) << 9 : 0;
-          slave.set_phase(reset_time * (slave_increment >> 16)
-              + after_wrap * slave_increment);
-        } else {
-          slave.AdvancePhase(samples);
-        }
-        return;
-      }
-      for (size_t i = 0; i < 3; ++i) {
-        analog_oscillator_[i].AdvancePhase(samples);
-      }
-    } else {
-      digital_oscillator_.AdvancePhase(samples);
-    }
-  }
-
-  inline void ShiftPitch(int16_t pitch) {
-    const int16_t delta = pitch - pitch_;
-    pitch_ = pitch;
-    if (shape_ <= MACRO_OSC_SHAPE_TRIPLE_SINE) {
-      for (size_t i = 0; i < 3; ++i) {
-        analog_oscillator_[i].ShiftPitch(delta);
-      }
-    } else {
-      digital_oscillator_.ShiftPitch(delta);
-    }
-  }
-
   inline void set_parameters(
       int16_t parameter_1,
       int16_t parameter_2) {

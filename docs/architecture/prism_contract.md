@@ -12,13 +12,12 @@ When enabled, NOTE ON sends Braids a sync pulse and a strike. When disabled,
 NOTE ON sends neither: in particular, Braids' digital strike must not restart
 model-specific oscillator phases. Oscillator initialization belongs to runtime
 instance creation; changing a model may initialize that model's own state.
-After a voice's release has finished, the allocator stops calling its renderer.
-For PHASE OFF, the voice retains the absolute AUDIO sample time at its last
-render and consumes any unplayed Braids block samples before advancing its
-phase accumulators by the elapsed sample count at the next configuration change
-or NOTE ON. The old pitch is used up to that event; a new pitch applies from
-that event onward. This keeps the free-running phase independent of note gaps
-without rendering silent Braids blocks. PHASE ON still syncs at NOTE ON.
+Every configured Prism voice renders both Braids oscillators on every AUDIO
+segment, including when the voice is silent or free in the allocator. Only
+renderable voices are submitted to the mixer. Braids' 24-sample cache is
+consumed continuously, so model state and phase evolve through note gaps with
+no elapsed-time reconstruction. CPU cost is therefore determined by the
+configured voice count, independently of the number of audible notes.
 
 `DETUNE` is the fixed bipolar pitch offset applied to OSC2 only (-24 to +24
 semitones). `DRIFT` adds an independent random pitch offset to each oscillator at NOTE ON.

@@ -92,11 +92,6 @@ static AUDIO_DMA_BUFFER_NONCACHEABLE int32_t tx_buffer[AUDIO_BUFFER_WORDS];
 
 static volatile audio_init_state_t g_audio_init_state = AUDIO_INIT_NOT_STARTED;
 static uint64_t g_audio_render_cursor;
-
-uint64_t audio_render_sample_time(void)
-{
-    return g_audio_render_cursor;
-}
 static uint64_t g_audio_dma_origin_sample;
 static uint64_t g_audio_last_block_start;
 static uint8_t g_audio_phase_valid;
@@ -233,9 +228,9 @@ static ITCM_TEXT void audio_process_half_common_hot(int32_t *rx, int32_t *tx,
         if (block_frames == 0U) continue;
 
         const uint64_t segment_start_sample = g_audio_render_cursor;
+        g_audio_render_cursor += (uint64_t)block_frames;
         audio_process_event_segment(rx, tx, half_cursor,
                                     segment_start_sample, block_frames);
-        g_audio_render_cursor += (uint64_t)block_frames;
         half_cursor += block_frames;
     }
 }
