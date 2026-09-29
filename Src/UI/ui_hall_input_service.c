@@ -8,6 +8,7 @@
 #include "Keyboard/keyboard_runtime.h"
 #include "ui_macro_interaction.h"
 #include "ui_hall_mode_flow.h"
+#include "ui_hall_mode_contract.h"
 #include "Track/entity_topology.h"
 #include "Seq/seq_types.h"
 #include "Seq/seq_edit.h"
@@ -50,9 +51,24 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
                           track_select_armed,
                           mute_active,
                           ui_macro_overlay_is_active()) != 0U));
+    uint8_t mode_trigger = 0U;
+    if (action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)
+    {
+        for (uint8_t mode = 0U; mode < (uint8_t)UI_HALL_MODE_COUNT; ++mode)
+        {
+            uint8_t trigger_hall;
+            if ((ui_hall_mode_get_trigger_hall((ui_hall_mode_t)mode, &trigger_hall) != 0U)
+                    && (trigger_hall == hall))
+            {
+                mode_trigger = 1U;
+                break;
+            }
+        }
+    }
     const uint8_t macro_overlay_hall_context =
         (uint8_t)((ui_macro_overlay_is_active() != 0U)
                   && (track_select_without_shift == 0U)
+                  && (mode_trigger == 0U)
                   && !((ui_macro_overlay_is_latched() != 0U)
                        && (shift_down != 0U)
                        && (action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)));
@@ -65,6 +81,7 @@ void ui_hall_input_service_handle_hall(uint8_t hall,
     if ((action == UI_HALL_DIRECT_ACTION_SHIFT_MODE)
         && (macro_overlay_hall_context == 0U)
         && (global_navigation_key == 0U)
+        && (mode_trigger == 0U)
         && (seq_edit_lowcost_range_length_candidate(ui_get_active_lane(), hall) != 0U))
     {
         lowcost_range_length_candidate = 1U;
