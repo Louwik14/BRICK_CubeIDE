@@ -1,6 +1,5 @@
 #include "App/Hall/hall_adc.h"
 #include "App/Hall/hall_capture.h"
-#include "App/Hall/hall_optimization_trial.h"
 
 #include "App/Hall/hall_engine.h"
 #include "App/Hall/hall_keymap.h"
@@ -14,7 +13,7 @@
 #define HALL_MUX_COUNT         8U
 #define HALL_MUX_SETTLE_DISCARD_PAIRS 6U
 
-_Static_assert(sizeof(hall_capture_record_t) == 56U,
+_Static_assert(sizeof(hall_capture_record_t) == 72U,
                "Hall capture dump layout changed");
 _Static_assert((HALL_CAPTURE_CAPACITY & (HALL_CAPTURE_CAPACITY - 1U)) == 0U,
                "Hall capture ring capacity must be a power of two");
@@ -57,6 +56,11 @@ static uint32_t g_hall_adc1_callbacks;
 static uint32_t g_hall_adc2_callbacks;
 static uint32_t g_hall_adc1_callback_tick;
 static uint32_t g_hall_adc2_callback_tick;
+static volatile uint32_t g_hall_mux_generation;
+static uint32_t g_hall_adc1_callback_generation;
+static uint32_t g_hall_adc2_callback_generation;
+static uint16_t g_hall_adc1_callback_ndtr;
+static uint16_t g_hall_adc2_callback_ndtr;
 static uint32_t g_hall_capture_cluster_start;
 static uint8_t g_hall_capture_cluster_count;
 
@@ -96,7 +100,7 @@ static void hall_mux_select(uint8_t index)
     board_surface_select_hall_mux(index);
 }
 
-static HALL_O0_NOIPA void hall_adc_queue_sample(uint8_t key, uint16_t raw)
+static void hall_adc_queue_sample(uint8_t key, uint16_t raw)
 {
     const uint32_t sample_count = hall_sample_count[key] + 1U;
     const uint32_t tim5_tick = brick_media_clock_now_tick();
@@ -109,7 +113,7 @@ static HALL_O0_NOIPA void hall_adc_queue_sample(uint8_t key, uint16_t raw)
     hall_engine_process_sample(key, raw, sample_count, tim5_tick);
 }
 
-static HALL_O0_NOIPA void hall_adc_process_pair(uint8_t completing_adc)
+static void hall_adc_process_pair(uint8_t completing_adc)
 {
     const uint16_t adc1_dma_ndtr_before =
         (uint16_t)((DMA_Stream_TypeDef *)hadc1.DMA_Handle->Instance)->NDTR;
@@ -155,6 +159,11 @@ static HALL_O0_NOIPA void hall_adc_process_pair(uint8_t completing_adc)
         record->adc2_error = (uint16_t)hadc2.ErrorCode;
         record->adc1_dma_ndtr_before = adc1_dma_ndtr_before;
         record->adc1_dma_ndtr_after = adc1_dma_ndtr_after;
+        record->mux_generation = g_hall_mux_generation;
+        record->adc1_callback_generation = g_hall_adc1_callback_generation;
+        record->adc2_callback_generation = g_hall_adc2_callback_generation;
+        record->adc1_callback_ndtr = g_hall_adc1_callback_ndtr;
+        record->adc2_callback_ndtr = g_hall_adc2_callback_ndtr;
     }
 
     hall_mux_raw[0U][hall_mux_index] = v1;
@@ -188,6 +197,7 @@ static HALL_O0_NOIPA void hall_adc_process_pair(uint8_t completing_adc)
 
         hall_mux_index = (uint8_t)((hall_mux_index + 1U) & 0x07U);
         hall_mux_select(hall_mux_index);
+        ++g_hall_mux_generation;
         adc1_ready = 0U;
         adc2_ready = 0U;
 
@@ -210,6 +220,11 @@ void hall_adc_init(void)
     g_hall_adc2_callbacks = 0U;
     g_hall_adc1_callback_tick = 0U;
     g_hall_adc2_callback_tick = 0U;
+    g_hall_mux_generation = 0U;
+    g_hall_adc1_callback_generation = 0U;
+    g_hall_adc2_callback_generation = 0U;
+    g_hall_adc1_callback_ndtr = 0U;
+    g_hall_adc2_callback_ndtr = 0U;
 
     adc1_dma[0U] = 0U;
     adc1_dma[1U] = 0U;
@@ -276,7 +291,7 @@ uint32_t hall_adc_get_sample_count(uint8_t key)
     return hall_sample_count[key];
 }
 
-HALL_O0_NOIPA void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
     if (hadc == NULL)
     {
@@ -287,12 +302,18 @@ HALL_O0_NOIPA void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
     {
         ++g_hall_adc1_callbacks;
         g_hall_adc1_callback_tick = brick_media_clock_now_tick();
+        g_hall_adc1_callback_generation = g_hall_mux_generation;
+        g_hall_adc1_callback_ndtr =
+            (uint16_t)((DMA_Stream_TypeDef *)hadc->DMA_Handle->Instance)->NDTR;
         adc1_ready = 1U;
     }
     else if (board_surface_is_hall_adc2_callback(hadc) != 0U)
     {
         ++g_hall_adc2_callbacks;
         g_hall_adc2_callback_tick = brick_media_clock_now_tick();
+        g_hall_adc2_callback_generation = g_hall_mux_generation;
+        g_hall_adc2_callback_ndtr =
+            (uint16_t)((DMA_Stream_TypeDef *)hadc->DMA_Handle->Instance)->NDTR;
         adc2_ready = 1U;
     }
     else

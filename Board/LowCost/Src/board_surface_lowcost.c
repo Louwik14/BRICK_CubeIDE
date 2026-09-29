@@ -1,6 +1,5 @@
 #include "Board/board_surface.h"
 #include "Board/board_controls.h"
-#include "App/Hall/hall_optimization_trial.h"
 
 #include "adc.h"
 #include "main.h"
@@ -31,7 +30,7 @@ static uint32_t read_shift_register_bits(void)
     return ~raw;
 }
 
-HALL_O0_NOIPA void board_surface_select_hall_mux(uint8_t index)
+void board_surface_select_hall_mux(uint8_t index)
 {
     const uint8_t mux = index & 0x07U;
     HAL_GPIO_WritePin(MUX_HALL_S0_GPIO_Port, MUX_HALL_S0_Pin,

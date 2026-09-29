@@ -38,19 +38,22 @@ x/3ub &g_hall_capture_release_keys
 x/3uw &g_hall_capture_release_ticks
 p/x &g_hall_capture
 p/x &g_hall_capture_calibration
-dump binary memory hall_capture.bin (char*)&g_hall_capture ((char*)&g_hall_capture+229376)
+dump binary memory hall_capture.bin (char*)&g_hall_capture ((char*)&g_hall_capture+294912)
 dump binary memory hall_calibration.bin (char*)&g_hall_capture_calibration ((char*)&g_hall_capture_calibration+192)
 set logging enabled off
 ```
 
-`hall_capture.bin` contient 4096 entrées de 56 octets little endian. Leur
+`hall_capture.bin` contient 4096 entrées de 72 octets little endian. Leur
 ordre en mémoire est : `sequence`, `tick_ms`, `tim5_tick`, `held_before`,
 `held_after`, `calibration_generation` (six u32), puis `adc1_hall_a`,
 `adc2_hall_b`, `adc1_hall_c`, `adc1_volume`, `adc1_callbacks`,
 `adc2_callbacks` (six u16), puis `mux_expected`, `mux_odr`, `mux_idr`,
 `completing_adc` (quatre u8), `adc1_callback_tick` et
 `adc2_callback_tick` (deux u32), puis `adc1_error` et `adc2_error` (deux
-u16), puis `adc1_dma_ndtr_before` et `adc1_dma_ndtr_after` (deux u16).
+u16), puis `adc1_dma_ndtr_before` et `adc1_dma_ndtr_after` (deux u16),
+`mux_generation`, `adc1_callback_generation` et
+`adc2_callback_generation` (trois u32), enfin les NDTR des deux DMA au
+moment de leur callback (deux u16).
 Trier les entrées non nulles par `sequence`.
 L'index mux revient à zéro après sept. Les touches 2, 7 et 11 sont
 respectivement (ADC1 A, mux 4), (ADC1 A, mux 5) et (ADC2 B, mux 6).

@@ -28,6 +28,11 @@ typedef struct {
     uint16_t adc2_error;
     uint16_t adc1_dma_ndtr_before;
     uint16_t adc1_dma_ndtr_after;
+    uint32_t mux_generation;
+    uint32_t adc1_callback_generation;
+    uint32_t adc2_callback_generation;
+    uint16_t adc1_callback_ndtr;
+    uint16_t adc2_callback_ndtr;
 } hall_capture_record_t;
 
 typedef struct {

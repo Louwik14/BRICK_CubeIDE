@@ -20,7 +20,7 @@ try {
 
 $reader = [System.IO.BinaryReader]::new([System.IO.File]::OpenRead($Capture))
 try {
-    if ($reader.BaseStream.Length -ne 229376) { throw 'Capture dump must be 229376 bytes' }
+    $recordSize = if ($reader.BaseStream.Length -eq 294912) { 72 } elseif ($reader.BaseStream.Length -eq 229376) { 56 } else { throw 'Capture dump must contain 4096 records of 56 or 72 bytes' }
     $rows = for ($i = 0; $i -lt 4096; $i++) {
         $seq = $reader.ReadUInt32()
         $tick = $reader.ReadUInt32()
@@ -44,6 +44,18 @@ try {
         $errorB = $reader.ReadUInt16()
         $ndtrBefore = $reader.ReadUInt16()
         $ndtrAfter = $reader.ReadUInt16()
+        $muxGeneration = 0
+        $callbackAGeneration = 0
+        $callbackBGeneration = 0
+        $callbackANdtr = 0
+        $callbackBNdtr = 0
+        if ($recordSize -eq 72) {
+            $muxGeneration = $reader.ReadUInt32()
+            $callbackAGeneration = $reader.ReadUInt32()
+            $callbackBGeneration = $reader.ReadUInt32()
+            $callbackANdtr = $reader.ReadUInt16()
+            $callbackBNdtr = $reader.ReadUInt16()
+        }
         if ($seq -eq 0 -or $mux -ge 8) { continue }
         [pscustomobject]@{
             sequence = $seq; tick_ms = $tick; tim5_tick = $tim5
@@ -66,6 +78,11 @@ try {
             adc1_error = $errorA; adc2_error = $errorB
             adc1_dma_ndtr_before = $ndtrBefore
             adc1_dma_ndtr_after = $ndtrAfter
+            mux_generation = $muxGeneration
+            adc1_callback_generation = $callbackAGeneration
+            adc2_callback_generation = $callbackBGeneration
+            adc1_callback_ndtr = $callbackANdtr
+            adc2_callback_ndtr = $callbackBNdtr
         }
     }
     $rows | Sort-Object sequence | ConvertTo-Csv -NoTypeInformation
