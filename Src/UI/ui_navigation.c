@@ -150,10 +150,7 @@ static void ui_navigation_leave_mute(void)
 
 static void ui_navigation_leave_macro(void)
 {
-    if (ui_get_hall_mode() == UI_HALL_MODE_MACRO)
-    {
-        ui_set_hall_mode(UI_HALL_MODE_SEQ);
-    }
+    ui_restore_hall_mode_before_macro();
 }
 
 void ui_navigation_request_ensemble_page(uint8_t page_id)

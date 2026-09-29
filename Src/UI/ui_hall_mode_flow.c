@@ -9,6 +9,7 @@
 #include "ui_core_feedback.h"
 #include "ui_hall_mode_contract.h"
 #include "ui_hall_mode_projection.h"
+#include "ui_hall_mode_state.h"
 #include "ui_navigation.h"
 #include "ui_macro_interaction.h"
 #include "ui_renderer_oled.h"
@@ -120,7 +121,8 @@ void ui_hall_mode_flow_enter_audio_rec(void)
     {
         ui_hall_mode_flow_leave_lowcost_modal_page();
         g_lowcost_rec_return_page = ui_page_get_id();
-        g_lowcost_rec_return_mode = ui_get_hall_mode();
+        g_lowcost_rec_return_mode = (ui_get_hall_mode() == UI_HALL_MODE_MACRO)
+            ? ui_get_hall_mode_before_macro() : ui_get_hall_mode();
         g_lowcost_rec_return_valid = 1U;
     }
 
@@ -212,7 +214,9 @@ static uint8_t ui_hall_mode_flow_handle_lowcost_shift_step(uint8_t hall,
                 return 1U;
             }
             ui_hall_mode_flow_leave_lowcost_modal_page();
-            ui_page_patch_assign_open(ui_get_active_track(), ui_get_hall_mode());
+            ui_page_patch_assign_open(ui_get_active_track(),
+                (ui_get_hall_mode() == UI_HALL_MODE_MACRO)
+                    ? ui_get_hall_mode_before_macro() : ui_get_hall_mode());
             return 1U;
 
         case 4U:
@@ -366,7 +370,8 @@ void ui_hall_mode_flow_handle_shift_hall_action(uint8_t hall,
         g_patch_pending.active = 1U;
         g_patch_pending.tap_ms = now_ms;
         g_patch_pending.target_track = ui_get_active_track();
-        g_patch_pending.previous_mode = ui_get_hall_mode();
+        g_patch_pending.previous_mode = (ui_get_hall_mode() == UI_HALL_MODE_MACRO)
+            ? ui_get_hall_mode_before_macro() : ui_get_hall_mode();
         return;
     }
 

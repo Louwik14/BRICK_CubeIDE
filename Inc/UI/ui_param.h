@@ -85,6 +85,11 @@ uint8_t ui_param_resolve_encoder_detent(const ui_param_encoder_context_t *ctx,
                                         int8_t direction,
                                         float current_value,
                                         ui_param_encoder_target_t *out_target);
+uint8_t ui_param_resolve_encoder_delta(const ui_param_encoder_context_t *ctx,
+                                       uint8_t encoder,
+                                       int16_t delta,
+                                       float current_value,
+                                       ui_param_encoder_target_t *out_target);
 void ui_param_handle_encoder(uint8_t encoder, int16_t delta);
 float ui_param_get_active_track_display_value(param_id_t param, uint8_t active_track);
 uint8_t ui_param_is_local_control(param_id_t id);

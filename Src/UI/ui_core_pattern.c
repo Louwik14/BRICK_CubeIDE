@@ -3,6 +3,7 @@
 #include "buttons.h"
 #include "App/Hall/hall_engine.h"
 #include "Storage/pattern_live_ram.h"
+#include "ui_hall_mode_state.h"
 
 typedef struct
 {
@@ -67,7 +68,8 @@ void ui_core_pattern_enter(ui_pattern_mode_t mode,
 
     if (current_hall_mode != UI_HALL_MODE_PATTERN)
     {
-        g_ui_core_pattern.prev_mode = current_hall_mode;
+        g_ui_core_pattern.prev_mode = (current_hall_mode == UI_HALL_MODE_MACRO)
+            ? ui_get_hall_mode_before_macro() : current_hall_mode;
         g_ui_core_pattern.prev_mode_valid = 1U;
     }
     g_ui_core_pattern.mode = mode;

@@ -135,6 +135,53 @@ uint8_t ui_param_resolve_encoder_detent(const ui_param_encoder_context_t *ctx,
     return 1U;
 }
 
+uint8_t ui_param_resolve_encoder_delta(const ui_param_encoder_context_t *ctx,
+                                       uint8_t encoder,
+                                       int16_t delta,
+                                       float current_value,
+                                       ui_param_encoder_target_t *out_target)
+{
+    if ((ctx == 0) || (ctx->valid == 0U) || (out_target == 0)
+            || (encoder >= 4U) || (delta == 0))
+    {
+        return 0U;
+    }
+
+    const param_id_t param = ctx->bank.params[encoder];
+    if (param >= PARAM_COUNT)
+    {
+        return 0U;
+    }
+
+    const uint8_t edit_track = ui_param_resolve_effective_edit_track(param, ctx->active_track);
+    float min_value = 0.0f;
+    float max_value = 0.0f;
+    if (ui_param_resolve_edit_bounds(param, edit_track, &min_value, &max_value) == 0U)
+    {
+        return 0U;
+    }
+
+    delta = ui_param_filter_stepped_encoder_delta(ctx, encoder, param,
+                                                   &param_registry[param], delta);
+    if (delta == 0)
+    {
+        return 0U;
+    }
+
+    if (ui_param_apply_delta_value(param, edit_track, current_value, delta,
+                                   min_value, max_value, ctx->shift_down,
+                                   &out_target->value) == 0U)
+    {
+        return 0U;
+    }
+
+    out_target->parameter_id = param;
+    out_target->scope = (ui_param_is_track_scoped(param) != 0U) ? 1U : 0U;
+    out_target->track = (ui_param_is_track_scoped(param) != 0U) ? edit_track : 0U;
+    out_target->slot = 0xFFU;
+    return 1U;
+}
+
 uint8_t ui_param_resolve_encoder_detent_from_binding(param_id_t param,
                                                      uint8_t scope,
                                                      uint8_t track,

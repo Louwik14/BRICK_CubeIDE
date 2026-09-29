@@ -28,18 +28,22 @@ Le contexte temporaire TRACK est resolu par `ui_hall_mode_track_overlay_active`,
 utilise par le dispatch Hall et la projection LED. Il prime sur la page active
 pour la selection des tracks, puis disparait au relachement de TRACK; la page
 reprend alors sa projection propre. MUTE et SHIFT restent prioritaires selon
-leur contrat. MACRO est un mode Hall autonome : SHIFT + STEP 8 y entre,
-un tap y alterne PRESSURE/TOGGLE apres la fenetre de double tap, et deux taps
-ouvrent ASSIGN. Les 14 touches blanches du clavier Hall pilotent les macros;
+leur contrat. MACRO est un overlay temporaire des modes Hall KBD et SEQ : son
+entree memorise le mode Hall courant et toute sortie restaure exactement ce
+mode. SHIFT + STEP 8 y entre. En LIVE, un tap alterne PRESSURE/TOGGLE apres la
+fenetre de double tap et deux taps ouvrent ASSIGN sans appliquer la bascule du
+premier tap. Depuis ASSIGN, un tap revient au dernier mode LIVE. Les 14 touches
+blanches du clavier Hall pilotent les macros;
 les dix noires passent par les raccourcis clavier SEQ existants. Les pads STEP
 conservent leur handler SEQ, sans projection LED STEP/TRIG en MACRO. Chaque
 scene LED reconstruit ses couches depuis zero, ce qui efface la projection du
-mode precedent. La navigation vers un autre ensemble ferme MACRO via
-`ui_set_hall_mode` apres la fermeture d'une eventuelle page modale REC : le
-mode Hall revient a SEQ et les gestes temporaires MACRO sont annules. Les
-flashes de valeur de l'edition MACRO sont effaces et la vue OLED est invalidee
-sur toute transition de mode Hall. Les transitions KBD et SEQ passent par la
-meme autorite de mode Hall et conservent leurs effets de sortie propres.
+mode precedent. Une navigation de page ou d'ensemble ferme MACRO et restaure
+KBD ou SEQ independamment de la destination UI. Les gestes temporaires MACRO,
+les flashes de valeur et la vue OLED sont nettoyes a cette transition. En
+ASSIGN, maintenir une blanche puis tourner un encodeur cree ou met a jour la
+valeur cible absolue du parametre selon les memes bornes, politiques de valeur
+et owners que l'edition normale. SHIFT + encodeur efface cette cible. Le
+relachement de la blanche ferme la capture sans modifier les autres locks.
 
 Audio REC est une page modale Low-Cost, mais les boutons d'ensemble restent
 navigables lorsqu'une destination est disponible. La navigation standard ferme

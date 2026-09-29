@@ -9,6 +9,7 @@
 #include "ui_page_manager.h"
 #include "ui_step_led_ownership.h"
 #include "Track/entity_topology.h"
+#include "ui_hall_mode_state.h"
 
 #define UI_TRACK_MOD_BUTTON BTN_TRACK
 
@@ -113,7 +114,9 @@ static void ui_core_mute_enter_quick(ui_core_mute_get_hall_mode_fn get_hall_mode
     if (g_ui_core_mute.active == 0U)
     {
         const ui_hall_mode_t current_mode = get_hall_mode();
-        g_ui_core_mute.prev_mode = (current_mode == UI_HALL_MODE_MUTE) ? UI_HALL_MODE_SEQ : current_mode;
+        g_ui_core_mute.prev_mode = (current_mode == UI_HALL_MODE_MACRO)
+            ? ui_get_hall_mode_before_macro()
+            : ((current_mode == UI_HALL_MODE_MUTE) ? UI_HALL_MODE_SEQ : current_mode);
         g_ui_core_mute.prev_mode_valid = 1U;
     }
 

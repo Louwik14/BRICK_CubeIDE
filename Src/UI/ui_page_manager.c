@@ -25,6 +25,7 @@
 #include "ui_navigation.h"
 #include "ui_param.h"
 #include "ui_renderer_oled.h"
+#include "ui_hall_mode_state.h"
 
 #define UI_PAGE_MANAGER_MAX_PAGES UI_PAGE_COUNT
 
@@ -103,6 +104,7 @@ void ui_page_set(uint8_t page_id)
 
     if (page_id != g_ui_current_page_id)
     {
+        ui_restore_hall_mode_before_macro();
         ui_track_overlay_on_context_changed();
     }
 

@@ -7,6 +7,7 @@
 #include "Storage/project_control.h"
 #include "Param/param_macro.h"
 #include "Track/track_runtime.h"
+#include "Track/entity_topology.h"
 #include "ui_core.h"
 
 #define UI_MACRO_DOUBLE_TAP_MS 400U
@@ -18,6 +19,15 @@ static uint8_t g_held_track = 0xFFU;
 static uint16_t g_pressed_whites;
 static uint8_t g_pending_tap;
 static uint32_t g_pending_tap_ms;
+
+static void ui_macro_interaction_clear_gesture(void)
+{
+    g_held_macro = 0xFFU;
+    g_held_track = 0xFFU;
+    g_pressed_whites = 0U;
+    g_pending_tap = 0U;
+    g_pending_tap_ms = 0U;
+}
 
 static uint8_t ui_macro_white_index(uint8_t hall, uint8_t *out)
 {
@@ -39,11 +49,7 @@ void ui_macro_interaction_init(void)
 void ui_macro_interaction_reset(void)
 {
     param_macro_reset();
-    g_held_macro = 0xFFU;
-    g_held_track = 0xFFU;
-    g_pressed_whites = 0U;
-    g_pending_tap = 0U;
-    g_pending_tap_ms = 0U;
+    ui_macro_interaction_clear_gesture();
 }
 
 void ui_macro_interaction_enter(void)
@@ -74,20 +80,28 @@ uint8_t ui_macro_interaction_get_held_macro(uint8_t *out_macro)
 
 void ui_macro_interaction_shift_tap(uint32_t now_ms)
 {
-    (void)ui_macro_interaction_service_navigation(now_ms);
     if (g_mode == UI_MACRO_ASSIGN)
     {
         g_mode = g_last_live;
-        ui_macro_interaction_reset();
+        param_macro_reset();
+        ui_macro_interaction_clear_gesture();
         return;
     }
+
     if (g_pending_tap != 0U
         && (uint32_t)(now_ms - g_pending_tap_ms) <= UI_MACRO_DOUBLE_TAP_MS)
     {
-        g_pending_tap = 0U;
         g_mode = UI_MACRO_ASSIGN;
-        ui_macro_interaction_reset();
+        param_macro_reset();
+        ui_macro_interaction_clear_gesture();
         return;
+    }
+
+    if (g_pending_tap != 0U)
+    {
+        g_mode = (g_mode == UI_MACRO_LIVE_PRESSURE)
+            ? UI_MACRO_LIVE_TOGGLE : UI_MACRO_LIVE_PRESSURE;
+        g_last_live = g_mode;
     }
     g_pending_tap = 1U;
     g_pending_tap_ms = now_ms;
@@ -101,7 +115,8 @@ uint8_t ui_macro_interaction_service_navigation(uint32_t now_ms)
     g_mode = g_mode == UI_MACRO_LIVE_PRESSURE
         ? UI_MACRO_LIVE_TOGGLE : UI_MACRO_LIVE_PRESSURE;
     g_last_live = g_mode;
-    ui_macro_interaction_reset();
+    param_macro_reset();
+    ui_macro_interaction_clear_gesture();
     return 1U;
 }
 
@@ -151,9 +166,26 @@ static uint8_t ui_macro_get_held_lock(param_id_t param,
                                       project_control_macro_lock_t *out)
 {
     if (g_mode != UI_MACRO_ASSIGN || g_held_macro >= PERSIST_CONTROL_MACRO_COUNT
-        || g_held_track >= TRACK_COUNT || param >= PARAM_COUNT) return 0U;
+        || g_held_track >= PERSIST_CONTROL_ENTITY_COUNT || param >= PARAM_COUNT) return 0U;
+    uint8_t target_track = g_held_track;
+    if (param_registry_is_modulation_source_param(param) != 0U)
+    {
+        brick_entity_id_t owner = target_track;
+        if (entity_topology_mod_owner(target_track, &owner) != 0U)
+            target_track = owner;
+    }
     return project_control_get_macro_lock_for_param(
-        g_held_macro, g_held_track, param, out);
+        g_held_macro, target_track, param, out);
+}
+
+static uint8_t ui_macro_get_lock(uint8_t macro,
+                                 uint8_t track,
+                                 param_id_t param,
+                                 project_control_macro_lock_t *out)
+{
+    if (macro >= PERSIST_CONTROL_MACRO_COUNT || track >= PERSIST_CONTROL_ENTITY_COUNT
+        || param >= PARAM_COUNT || out == NULL) return 0U;
+    return project_control_get_macro_lock_for_param(macro, track, param, out);
 }
 
 uint8_t ui_macro_interaction_note_encoder_delta_with_context(
@@ -161,32 +193,41 @@ uint8_t ui_macro_interaction_note_encoder_delta_with_context(
 {
     if (ctx == NULL || ctx->valid == 0U || encoder >= 4U || delta == 0
         || g_mode != UI_MACRO_ASSIGN || g_held_macro >= PERSIST_CONTROL_MACRO_COUNT
-        || g_held_track >= TRACK_COUNT) return 0U;
+        || g_held_track >= PERSIST_CONTROL_ENTITY_COUNT) return 0U;
     const param_id_t param = ctx->bank.params[encoder];
-    if (param >= PARAM_COUNT
-        || param_macro_lock_target_is_supported(g_held_track, param) == 0U)
+    if (param >= PARAM_COUNT) return 0U;
+
+    ui_param_encoder_context_t macro_ctx = *ctx;
+    macro_ctx.shift_down = 0U;
+    float value = ui_param_get_active_track_display_value(param, ctx->active_track);
+    if (value != value) return 0U;
+
+    ui_param_encoder_target_t target;
+    if (ui_param_resolve_encoder_detent(&macro_ctx, encoder,
+                                        (delta > 0) ? 1 : -1,
+                                        value, &target) == 0U
+        || target.scope == 0U
+        || param_macro_lock_target_is_supported(target.track, param) == 0U)
         return 0U;
+
+    project_control_macro_lock_t prior;
+    if (ui_macro_get_lock(g_held_macro, target.track, param, &prior) != 0U)
+        value = prior.target_value;
 
     if (button_down(BTN_SHIFT) != 0U)
     {
-        (void)project_control_clear_macro_lock(g_held_macro, g_held_track, param);
+        (void)project_control_clear_macro_lock(g_held_macro, target.track, param);
+        ui_param_clear_value_flash();
         return 1U;
     }
 
-    project_control_macro_lock_t prior;
-    float value = 0.0f;
-    if (ui_macro_get_held_lock(param, &prior) != 0U)
-        value = prior.target_value;
-    else if (param_registry_get_track_value(param, g_held_track, &value) == 0U)
-        return 0U;
-
-    const param_desc_t *desc = &param_registry[param];
-    value += (float)delta * desc->step;
-    if (value < desc->min) value = desc->min;
-    if (value > desc->max) value = desc->max;
-    if (project_control_assign_macro_lock(g_held_macro, g_held_track, param, value) == 0U)
+    if (ui_param_resolve_encoder_delta(&macro_ctx, encoder, delta,
+                                       value, &target) == 0U)
         return 1U;
-    ui_param_note_user_value_flash(encoder, param, g_held_track, value,
+    if (project_control_assign_macro_lock(g_held_macro, target.track,
+                                          param, target.value) == 0U)
+        return 1U;
+    ui_param_note_user_value_flash(encoder, param, target.track, target.value,
                                    UI_PARAM_VALUE_FLASH_MACRO_ASSIGN);
     return 1U;
 }

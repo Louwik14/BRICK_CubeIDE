@@ -10,10 +10,24 @@
 #include "Keyboard/keyboard_runtime.h"
 
 static ui_hall_mode_t g_ui_hall_mode = UI_HALL_MODE_SEQ;
+static ui_hall_mode_t g_ui_hall_mode_before_macro = UI_HALL_MODE_SEQ;
 
 ui_hall_mode_t ui_get_hall_mode(void)
 {
     return g_ui_hall_mode;
+}
+
+ui_hall_mode_t ui_get_hall_mode_before_macro(void)
+{
+    return g_ui_hall_mode_before_macro;
+}
+
+void ui_restore_hall_mode_before_macro(void)
+{
+    if (g_ui_hall_mode == UI_HALL_MODE_MACRO)
+    {
+        ui_set_hall_mode(g_ui_hall_mode_before_macro);
+    }
 }
 
 void ui_set_hall_mode(ui_hall_mode_t mode)
@@ -32,6 +46,13 @@ void ui_set_hall_mode(ui_hall_mode_t mode)
     if (g_ui_hall_mode == mode)
     {
         return;
+    }
+
+    if ((mode == UI_HALL_MODE_MACRO)
+            && ((g_ui_hall_mode == UI_HALL_MODE_KEYBOARD)
+                || (g_ui_hall_mode == UI_HALL_MODE_SEQ)))
+    {
+        g_ui_hall_mode_before_macro = g_ui_hall_mode;
     }
 
     if ((g_ui_hall_mode == UI_HALL_MODE_MUTE) && (mode != UI_HALL_MODE_MUTE))
